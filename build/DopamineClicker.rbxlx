@@ -1,0 +1,5815 @@
+<roblox version="4">
+  <Item class="ReplicatedStorage" referent="0">
+    <Properties>
+      <string name="Name">ReplicatedStorage</string>
+    </Properties>
+    <Item class="Folder" referent="1">
+      <Properties>
+        <string name="Name">Client</string>
+      </Properties>
+      <Item class="ModuleScript" referent="2">
+        <Properties>
+          <string name="Name">ClientState</string>
+          <string name="Source"><![CDATA[--[[
+	ClientState (ModuleScript)
+	Emplacement : ReplicatedStorage > Client > ClientState
+
+	Mémorise le dernier état envoyé par le serveur et prévient l'interface
+	(signal Changed). Gère aussi la "prédiction" des clics : on affiche le
+	gain tout de suite, sans attendre le serveur, pour une sensation
+	instantanée. Le serveur reste l'autorité : dès que sa réponse arrive,
+	l'affichage se recale sur la vraie valeur.
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Formulas = require(ReplicatedStorage.Shared.Formulas)
+local Net = require(ReplicatedStorage.Shared.Net)
+local Signal = require(ReplicatedStorage.Shared.Signal)
+
+local ClientState = {}
+
+ClientState.Data = nil :: any -- dernier état serveur (nil tant que pas chargé)
+ClientState.Changed = Signal.new() -- (data)
+ClientState.Rush = { Active = false, EndsAt = 0, Name = "", Multiplier = 1 }
+ClientState.RushChanged = Signal.new() -- (rush)
+ClientState.Leaderboard = {}
+ClientState.LeaderboardChanged = Signal.new() -- (top)
+
+-- Prédiction des clics
+local clickSeq = 0
+local pending = {} -- { { Seq = number, Amount = number } }
+local lastUpdateClock = os.clock()
+local displayDopamine = 0
+
+-- Combo local (même formule que le serveur, juste pour l'affichage)
+local comboMeter = 0
+local lastComboClick = 0
+local lastLocalClick = 0
+
+function ClientState.Init()
+	Net.Event("StateUpdate").OnClientEvent:Connect(function(data)
+		ClientState.Data = data
+		lastUpdateClock = os.clock()
+		-- On oublie les prédictions que le serveur a déjà traitées
+		while pending[1] and pending[1].Seq <= data.ClickSeq do
+			table.remove(pending, 1)
+		end
+		ClientState.Changed:Fire(data)
+	end)
+
+	Net.Event("EventUpdate").OnClientEvent:Connect(function(rush)
+		ClientState.Rush = rush
+		ClientState.RushChanged:Fire(rush)
+	end)
+
+	Net.Event("LeaderboardUpdate").OnClientEvent:Connect(function(top)
+		ClientState.Leaderboard = top
+		ClientState.LeaderboardChanged:Fire(top)
+	end)
+end
+
+-- Jauge de combo actuelle (avec la perte depuis le dernier clic)
+function ClientState.GetComboMeter(): number
+	local elapsed = os.clock() - lastComboClick
+	return math.max(0, comboMeter - Config.Combo.DecayPerSecond * elapsed)
+end
+
+function ClientState.GetComboMultiplier(): number
+	return Formulas.GetComboMultiplier(ClientState.GetComboMeter())
+end
+
+-- Appelé à chaque clic sur le gros bouton. Renvoie le gain prédit (ou nil si
+-- le clic est trop rapide, comme le serveur le refuserait).
+function ClientState.Click(): number?
+	local data = ClientState.Data
+	if not data then
+		return nil
+	end
+	local now = os.clock()
+	-- Même limite que le serveur : inutile d'envoyer des clics qui seront refusés
+	if now - lastLocalClick < 1 / Config.Game.MaxClicksPerSecond then
+		return nil
+	end
+	lastLocalClick = now
+
+	comboMeter = Formulas.StepCombo(comboMeter, now - lastComboClick)
+	lastComboClick = now
+
+	local gain = data.ClickValue * Formulas.GetComboMultiplier(comboMeter)
+	clickSeq += 1
+	table.insert(pending, { Seq = clickSeq, Amount = gain })
+	Net.Event("Click"):FireServer()
+	return gain
+end
+
+-- Valeur "cible" : état serveur + clics prédits + gains passifs depuis la dernière mise à jour
+function ClientState.GetTargetDopamine(): number
+	local data = ClientState.Data
+	if not data then
+		return 0
+	end
+	local total = data.Dopamine
+	for _, prediction in ipairs(pending) do
+		total += prediction.Amount
+	end
+	local elapsed = math.min(os.clock() - lastUpdateClock, 0.5)
+	return total + data.PerSecond * elapsed
+end
+
+-- Valeur affichée, lissée à chaque image (appelé par le HUD)
+function ClientState.UpdateDisplay(dt: number): number
+	local target = ClientState.GetTargetDopamine()
+	if target < displayDopamine then
+		displayDopamine = target -- achat : on descend immédiatement
+	else
+		displayDopamine += (target - displayDopamine) * (1 - math.exp(-14 * dt))
+		if target - displayDopamine < 0.01 then
+			displayDopamine = target
+		end
+	end
+	return displayDopamine
+end
+
+function ClientState.GetDisplayDopamine(): number
+	return displayDopamine
+end
+
+return ClientState
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="Folder" referent="3">
+        <Properties>
+          <string name="Name">Components</string>
+        </Properties>
+        <Item class="ModuleScript" referent="4">
+          <Properties>
+            <string name="Name">Background</string>
+            <string name="Source"><![CDATA[--[[
+	Background (ModuleScript)
+	Emplacement : ReplicatedStorage > Client > Components > Background
+
+	Fond dégradé animé (violet / rose / bleu nuit) + orbes néon qui flottent.
+	Pendant un Dopamine Rush, le fond s'accélère et devient plus vif.
+]]
+
+local RunService = game:GetService("RunService")
+
+local Theme = require(script.Parent.Parent.Theme)
+local UIUtil = require(script.Parent.Parent.UIUtil)
+
+local Background = {}
+
+local rushActive = false
+local random = Random.new()
+
+local ORB_COLORS = { Theme.Colors.Pink, Theme.Colors.Cyan, Theme.Colors.Purple }
+
+local function floatOrb(orb: Frame)
+	task.spawn(function()
+		while orb.Parent do
+			local duration = random:NextNumber(6, 12) / (rushActive and 3 or 1)
+			UIUtil.Tween(orb, duration, {
+				Position = UDim2.fromScale(random:NextNumber(0, 1), random:NextNumber(0, 1)),
+			}, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+			task.wait(duration)
+		end
+	end)
+end
+
+function Background.Build(screenGui: ScreenGui)
+	local frame = UIUtil.Create("Frame", {
+		Name = "Background",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		ZIndex = 1,
+		Parent = screenGui,
+	})
+	local gradient = UIUtil.Gradient(frame, nil, 45)
+
+	-- Orbes lumineux flous
+	for _ = 1, 12 do
+		local size = random:NextInteger(120, 320)
+		local orb = UIUtil.Create("Frame", {
+			Size = UDim2.fromOffset(size, size),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(random:NextNumber(0, 1), random:NextNumber(0, 1)),
+			BackgroundColor3 = ORB_COLORS[random:NextInteger(1, #ORB_COLORS)],
+			BackgroundTransparency = 0.88,
+			BorderSizePixel = 0,
+			ZIndex = 1,
+			Parent = frame,
+		})
+		UIUtil.Corner(orb, UDim.new(1, 0))
+		-- Dégradé radial simulé : bord transparent
+		UIUtil.Create("UIGradient", {
+			Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0),
+				NumberSequenceKeypoint.new(1, 1),
+			}),
+			Rotation = random:NextInteger(0, 360),
+			Parent = orb,
+		})
+		floatOrb(orb)
+	end
+
+	-- Animation du dégradé à chaque image
+	local time = 0
+	RunService.RenderStepped:Connect(function(dt)
+		local speed = rushActive and 4 or 1
+		time += dt * speed
+		gradient.Rotation = (45 + time * 8) % 360
+		gradient.Offset = Vector2.new(math.sin(time * 0.3) * 0.25, math.cos(time * 0.2) * 0.25)
+
+		local pulse = (math.sin(time * 0.5) + 1) / 2
+		local top = Theme.Colors.BackgroundTop:Lerp(Theme.Colors.Pink, rushActive and 0.35 or pulse * 0.12)
+		local mid = Theme.Colors.BackgroundMid:Lerp(Theme.Colors.Purple, pulse * 0.25)
+		local bottom = Theme.Colors.BackgroundBottom:Lerp(Theme.Colors.Cyan, rushActive and 0.3 or (1 - pulse) * 0.12)
+		gradient.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, top),
+			ColorSequenceKeypoint.new(0.5, mid),
+			ColorSequenceKeypoint.new(1, bottom),
+		})
+	end)
+
+	return frame
+end
+
+function Background.SetRush(active: boolean)
+	rushActive = active
+end
+
+return Background
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="5">
+          <Properties>
+            <string name="Name">Clicker</string>
+            <string name="Source"><![CDATA[--[[
+	Clicker (ModuleScript)
+	Emplacement : ReplicatedStorage > Client > Components > Clicker
+
+	Le GROS bouton "CLIQUE-MOI" + la barre de combo.
+	À chaque clic : squish/rebond, texte "+X" flottant, particules, son dont
+	la hauteur monte avec le combo. Le gain réel est calculé par le serveur.
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Client = script.Parent.Parent
+local Theme = require(Client.Theme)
+local UIUtil = require(Client.UIUtil)
+local ClientState = require(Client.ClientState)
+local Effects = require(Client.Effects)
+local SoundManager = require(Client.SoundManager)
+local HUD = require(script.Parent.HUD)
+local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
+
+local Clicker = {}
+
+local random = Random.new()
+
+function Clicker.Build(parent: Frame)
+	-- Conteneur carré (UIAspectRatioConstraint = toujours un cercle parfait)
+	local container = UIUtil.Create("Frame", {
+		Name = "Clicker",
+		Size = UDim2.fromOffset(300, 300),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, -125, 0.5, 30),
+		BackgroundTransparency = 1,
+		Parent = parent,
+	})
+	UIUtil.Create("UIAspectRatioConstraint", { AspectRatio = 1, Parent = container })
+
+	-- Halo qui pulse derrière le bouton
+	local halo = UIUtil.Create("Frame", {
+		Size = UDim2.fromScale(1.35, 1.35),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		BackgroundColor3 = Theme.Colors.Pink,
+		BackgroundTransparency = 0.75,
+		ZIndex = 1,
+		Parent = container,
+	})
+	UIUtil.Corner(halo, UDim.new(1, 0))
+	UIUtil.Create("UIGradient", {
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.2),
+			NumberSequenceKeypoint.new(1, 1),
+		}),
+		Rotation = 90,
+		Parent = halo,
+	})
+	local haloScale = UIUtil.Create("UIScale", { Parent = halo })
+
+	-- Anneau néon qui tourne
+	local ring = UIUtil.Create("Frame", {
+		Size = UDim2.fromScale(1.12, 1.12),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		BackgroundTransparency = 1,
+		ZIndex = 2,
+		Parent = container,
+	})
+	UIUtil.Corner(ring, UDim.new(1, 0))
+	local ringStroke = UIUtil.Stroke(ring, Color3.new(1, 1, 1), 5)
+	local ringGradient = UIUtil.Gradient(ringStroke)
+
+	-- Le bouton lui-même
+	local button = UIUtil.Create("TextButton", {
+		Name = "ClickButton",
+		Size = UDim2.fromScale(1, 1),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		AutoButtonColor = false,
+		Text = "",
+		ZIndex = 3,
+		Parent = container,
+	})
+	UIUtil.Corner(button, UDim.new(1, 0))
+	local buttonGradient = UIUtil.Gradient(button, nil, 45)
+	UIUtil.Stroke(button, Color3.new(1, 1, 1), 4, 0.2)
+
+	UIUtil.Label({
+		Text = "🧠",
+		Size = UDim2.fromScale(0.5, 0.36),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.fromScale(0.5, 0.14),
+		ZIndex = 4,
+		MaxTextSize = 100,
+		Parent = button,
+	})
+	local title = UIUtil.Label({
+		Text = "CLIQUE-MOI",
+		Font = Theme.Fonts.Title,
+		Size = UDim2.fromScale(0.8, 0.16),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.fromScale(0.5, 0.56),
+		ZIndex = 4,
+		MaxTextSize = 34,
+		Parent = button,
+	})
+	UIUtil.Stroke(title, Theme.Colors.TextDark, 2).ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+
+	-- Barre de combo
+	local comboBar = UIUtil.Create("Frame", {
+		Name = "ComboBar",
+		Size = UDim2.fromOffset(320, 30),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, -125, 0.5, 215),
+		BackgroundColor3 = Theme.Colors.Panel,
+		BackgroundTransparency = 0.2,
+		ClipsDescendants = true,
+		Parent = parent,
+	})
+	UIUtil.Corner(comboBar, 15)
+	UIUtil.Stroke(comboBar, Theme.Colors.Cyan, 2, 0.3)
+	local comboFill = UIUtil.Create("Frame", {
+		Size = UDim2.fromScale(0, 1),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		Parent = comboBar,
+	})
+	UIUtil.Corner(comboFill, 15)
+	UIUtil.Gradient(comboFill, ColorSequence.new(Theme.Colors.Cyan, Theme.Colors.Pink), 0)
+	local comboLabel = UIUtil.Label({
+		Text = "COMBO x1",
+		Font = Theme.Fonts.Title,
+		Size = UDim2.new(1, -10, 1, -6),
+		Position = UDim2.fromOffset(5, 3),
+		ZIndex = 2,
+		MaxTextSize = 18,
+		Parent = comboBar,
+	})
+	UIUtil.Stroke(comboLabel, Theme.Colors.TextDark, 1.5).ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+
+	-- Animation continue : rotation, halo, barre de combo
+	local wasMax = false
+	RunService.RenderStepped:Connect(function()
+		local t = os.clock()
+		local meter = ClientState.GetComboMeter()
+		local ratio = meter / 100
+
+		ringGradient.Rotation = (t * 90) % 360
+		buttonGradient.Rotation = (45 + t * 20) % 360
+		haloScale.Scale = 1 + math.sin(t * (3 + ratio * 8)) * (0.03 + ratio * 0.06)
+		halo.BackgroundTransparency = 0.75 - ratio * 0.35
+
+		comboFill.Size = UDim2.fromScale(ratio, 1)
+		comboLabel.Text = "COMBO " .. NumberFormatter.Multiplier(ClientState.GetComboMultiplier())
+
+		local isMax = meter >= 99.5
+		if isMax and not wasMax then
+			Effects.FloatingText(container, UDim2.fromScale(0.5, -0.05), "COMBO MAX !", Theme.Colors.Yellow, 44)
+			Effects.Burst(container, UDim2.fromScale(0.5, 0.5), Theme.Colors.Yellow, 20)
+		end
+		wasMax = isMax
+		comboBar.Rotation = isMax and math.sin(t * 30) * 1.5 or 0
+	end)
+
+	-- Gestion du clic (souris ET tactile, multi-touch compris)
+	local function onClick()
+		local gain = ClientState.Click()
+		if not gain then
+			return
+		end
+
+		-- Squish : on écrase le bouton puis il rebondit
+		button.Size = UDim2.fromScale(1.12, 0.86)
+		UIUtil.Tween(button, 0.45, { Size = UDim2.fromScale(1, 1) }, Enum.EasingStyle.Elastic)
+
+		-- Couleur du texte selon le combo
+		local ratio = ClientState.GetComboMeter() / 100
+		local color = Theme.Colors.Text:Lerp(Theme.Colors.Yellow, math.min(1, ratio * 2))
+		if ratio > 0.75 then
+			color = Theme.Colors.Pink
+		end
+
+		local position = UDim2.fromScale(0.5 + random:NextNumber(-0.3, 0.3), 0.3 + random:NextNumber(-0.15, 0.1))
+		Effects.FloatingText(container, position, "+" .. NumberFormatter.Format(gain), color, 34 + ratio * 14)
+		Effects.Burst(container, UDim2.fromScale(random:NextNumber(0.3, 0.7), random:NextNumber(0.3, 0.7)), nil, 5)
+
+		-- Le son monte dans les aigus avec le combo : effet "dopamine" garanti
+		SoundManager.Play("Click", 0.9 + ratio * 0.6 + random:NextNumber(0, 0.08))
+		HUD.Pop()
+	end
+
+	button.InputBegan:Connect(function(input: InputObject)
+		local inputType = input.UserInputType
+		if inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch then
+			onClick()
+		end
+	end)
+
+	-- Petit rappel au joueur tant qu'il n'a jamais cliqué
+	task.spawn(function()
+		while button.Parent do
+			local data = ClientState.Data
+			if data and data.Stats.TotalClicks == 0 then
+				UIUtil.Tween(container, 0.3, { Rotation = 6 }, Enum.EasingStyle.Sine)
+				task.wait(0.3)
+				UIUtil.Tween(container, 0.3, { Rotation = -6 }, Enum.EasingStyle.Sine)
+				task.wait(0.3)
+				UIUtil.Tween(container, 0.3, { Rotation = 0 }, Enum.EasingStyle.Sine)
+			end
+			task.wait(2)
+		end
+	end)
+
+	return container
+end
+
+return Clicker
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="6">
+          <Properties>
+            <string name="Name">DVDLogo</string>
+            <string name="Source"><![CDATA[--[[
+	DVDLogo (ModuleScript)
+	Emplacement : ReplicatedStorage > Client > Components > DVDLogo
+
+	Le logo qui rebondit comme l'écran de veille DVD.
+	  - La trajectoire vient du SERVEUR (DVDSetup) et est calculée avec
+	    DVDMath à partir de l'heure serveur : mouvement fluide et identique
+	    quel que soit l'écran ou le nombre d'images par seconde.
+	  - Change de couleur à chaque rebond.
+	  - Cliquable (bonus, avec temps de recharge).
+	  - Coin touché : le client prévient le serveur, qui VÉRIFIE puis
+	    envoie le jackpot.
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Client = script.Parent.Parent
+local Theme = require(Client.Theme)
+local UIUtil = require(Client.UIUtil)
+local Effects = require(Client.Effects)
+local SoundManager = require(Client.SoundManager)
+local Notifications = require(script.Parent.Notifications)
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local DVDMath = require(ReplicatedStorage.Shared.DVDMath)
+local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
+local Net = require(ReplicatedStorage.Shared.Net)
+
+local DVDLogo = {}
+
+function DVDLogo.Build(layer: Frame)
+	local settings = Config.DVD
+	local params: DVDMath.Params? = nil
+	local lastIndexX: number? = nil
+	local lastIndexY: number? = nil
+	local colorIndex = 1
+	local cooldownUntil = 0
+
+	-- Le logo : ImageButton (ton image) + texte de secours "DOPA / VIDEO"
+	local logo = UIUtil.Create("ImageButton", {
+		Name = "DVDLogo",
+		Size = UDim2.fromOffset(settings.LogoSize.X, settings.LogoSize.Y),
+		BackgroundTransparency = 1,
+		Image = settings.LogoImage,
+		ImageColor3 = settings.Colors[1],
+		ScaleType = Enum.ScaleType.Fit,
+		AutoButtonColor = false,
+		Visible = false,
+		Parent = layer,
+	})
+	UIUtil.Create("UIAspectRatioConstraint", {
+		AspectRatio = settings.LogoSize.X / settings.LogoSize.Y,
+		Parent = logo,
+	})
+
+	local fallbackLabels = {}
+	if settings.LogoImage == "" then
+		-- Logo "fait maison" si aucune image n'est fournie
+		local title = UIUtil.Label({
+			Text = "DOPA",
+			Font = Theme.Fonts.Number,
+			TextColor3 = settings.Colors[1],
+			Size = UDim2.fromScale(1, 0.62),
+			MaxTextSize = 60,
+			Parent = logo,
+		})
+		local disc = UIUtil.Create("Frame", {
+			Size = UDim2.fromScale(0.8, 0.3),
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.fromScale(0.5, 0.64),
+			BackgroundColor3 = settings.Colors[1],
+			Parent = logo,
+		})
+		UIUtil.Corner(disc, UDim.new(1, 0))
+		local sub = UIUtil.Label({
+			Text = "VIDEO",
+			Font = Theme.Fonts.Title,
+			TextColor3 = Theme.Colors.TextDark,
+			Size = UDim2.fromScale(0.8, 0.8),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			MaxTextSize = 20,
+			Parent = disc,
+		})
+		fallbackLabels = { Title = title, Disc = disc, Sub = sub }
+	end
+
+	local function applyColor(color: Color3)
+		logo.ImageColor3 = color
+		if fallbackLabels.Title then
+			fallbackLabels.Title.TextColor3 = color
+			fallbackLabels.Disc.BackgroundColor3 = color
+		end
+	end
+
+	local function nextColor()
+		colorIndex = colorIndex % #settings.Colors + 1
+		applyColor(settings.Colors[colorIndex])
+	end
+
+	-- Envoie la taille du logo (en fraction de l'écran) au serveur
+	local lastSentW, lastSentH = 0, 0
+	local function reportSize()
+		local parentSize = layer.AbsoluteSize
+		if parentSize.X < 1 or parentSize.Y < 1 then
+			return
+		end
+		local w = logo.AbsoluteSize.X / parentSize.X
+		local h = logo.AbsoluteSize.Y / parentSize.Y
+		if math.abs(w - lastSentW) > 0.002 or math.abs(h - lastSentH) > 0.002 then
+			lastSentW, lastSentH = w, h
+			Net.Event("DVDResize"):FireServer(w, h)
+		end
+	end
+	layer:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+		task.delay(0.6, reportSize) -- le serveur limite à 2 envois / seconde
+	end)
+
+	Net.Event("DVDSetup").OnClientEvent:Connect(function(newParams)
+		params = newParams
+		lastIndexX, lastIndexY = nil, nil
+		logo.Visible = true
+		task.defer(reportSize)
+	end)
+
+	-- Mouvement : recalculé à chaque image depuis l'heure serveur
+	RunService.RenderStepped:Connect(function()
+		local current = params
+		if not current then
+			return
+		end
+		local t = workspace:GetServerTimeNow()
+		local x, y = DVDMath.Position(current, t)
+		logo.Position = UDim2.fromScale(x, y)
+
+		local indexX, indexY = DVDMath.BounceIndex(current, t)
+		local bouncedX = lastIndexX ~= nil and indexX ~= lastIndexX
+		local bouncedY = lastIndexY ~= nil and indexY ~= lastIndexY
+
+		if bouncedX or bouncedY then
+			nextColor()
+			SoundManager.Play("Bounce", 1.5)
+		end
+
+		if bouncedX then
+			-- Numéro du bord touché = le plus grand des deux segments
+			local k = math.max(indexX, lastIndexX :: number)
+			if DVDMath.IsCornerAtBounceX(current, k, settings.CornerTolerance) then
+				Net.Event("DVDCorner"):FireServer(k)
+			end
+		end
+
+		lastIndexX, lastIndexY = indexX, indexY
+
+		-- Le logo est un peu transparent pendant le temps de recharge
+		local ready = os.clock() >= cooldownUntil
+		logo.ImageTransparency = ready and 0 or 0.6
+		if fallbackLabels.Title then
+			fallbackLabels.Title.TextTransparency = ready and 0 or 0.6
+			fallbackLabels.Disc.BackgroundTransparency = ready and 0 or 0.6
+		end
+	end)
+
+	-- Clic sur le logo
+	logo.Activated:Connect(function()
+		if os.clock() < cooldownUntil then
+			return
+		end
+		cooldownUntil = os.clock() + settings.ClickCooldown
+		Net.Event("DVDClick"):FireServer()
+		-- Centre du logo, en fraction de l'écran
+		local position = logo.Position
+		local w = logo.AbsoluteSize.X / math.max(1, layer.AbsoluteSize.X)
+		local h = logo.AbsoluteSize.Y / math.max(1, layer.AbsoluteSize.Y)
+		Effects.Burst(layer, UDim2.fromScale(position.X.Scale + w / 2, position.Y.Scale + h / 2), nil, 12)
+	end)
+
+	-- Le serveur confirme le bonus : "+X" au niveau du logo
+	Notifications.BonusHandlers.DVD = function(amount: number)
+		Effects.FloatingText(logo, UDim2.fromScale(0.5, 0), "+" .. NumberFormatter.Format(amount), Theme.Colors.Yellow, 38)
+	end
+
+	return logo
+end
+
+return DVDLogo
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="7">
+          <Properties>
+            <string name="Name">GoldenObject</string>
+            <string name="Source"><![CDATA[--[[
+	GoldenObject (ModuleScript)
+	Emplacement : ReplicatedStorage > Client > Components > GoldenObject
+
+	Objet doré qui apparaît au hasard (décidé par le serveur), tourne,
+	brille... et disparaît vite. Le cliquer donne un gros bonus (validé
+	par le serveur grâce à un identifiant unique).
+]]
+
+local Debris = game:GetService("Debris")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Client = script.Parent.Parent
+local Theme = require(Client.Theme)
+local UIUtil = require(Client.UIUtil)
+local Effects = require(Client.Effects)
+local SoundManager = require(Client.SoundManager)
+local Notifications = require(script.Parent.Notifications)
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
+local Net = require(ReplicatedStorage.Shared.Net)
+
+local GoldenObject = {}
+
+local lastPosition = UDim2.fromScale(0.5, 0.5)
+
+local function spawnGolden(layer: Frame, info)
+	local settings = Config.Events.Golden
+	local position = UDim2.fromScale(info.X, info.Y)
+	lastPosition = position
+
+	local button = UIUtil.Create("ImageButton", {
+		Name = "Golden",
+		Size = UDim2.fromOffset(110, 110),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = position,
+		BackgroundColor3 = Color3.new(1, 1, 1), -- couleurs données par le UIGradient
+		BackgroundTransparency = settings.Image == "" and 0 or 1,
+		Image = settings.Image,
+		AutoButtonColor = false,
+		Parent = layer,
+	})
+	UIUtil.Create("UIAspectRatioConstraint", { AspectRatio = 1, Parent = button })
+	if settings.Image == "" then
+		UIUtil.Corner(button, UDim.new(1, 0))
+		UIUtil.Stroke(button, Theme.Colors.Yellow, 4)
+		UIUtil.Gradient(button, ColorSequence.new(Theme.Colors.Yellow, Theme.Colors.Orange), 45)
+		UIUtil.Label({
+			Text = "🌟",
+			Size = UDim2.fromScale(0.7, 0.7),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			MaxTextSize = 70,
+			Parent = button,
+		})
+	end
+
+	-- Apparition
+	local scale = UIUtil.Create("UIScale", { Scale = 0, Parent = button })
+	UIUtil.Tween(scale, 0.4, { Scale = 1 }, Enum.EasingStyle.Back)
+	SoundManager.Play("Golden", 1.4)
+
+	-- Rotation + pulsation tant qu'il est là
+	local spawnTime = os.clock()
+	local connection = RunService.RenderStepped:Connect(function()
+		local t = os.clock()
+		button.Rotation = math.sin(t * 3) * 15
+		-- On attend la fin de l'animation d'apparition avant de pulser
+		if t - spawnTime > 0.4 then
+			scale.Scale = 1 + math.sin(t * 10) * 0.08
+		end
+	end)
+
+	local clicked = false
+	button.Activated:Connect(function()
+		if clicked then
+			return
+		end
+		clicked = true
+		connection:Disconnect()
+		Net.Event("GoldenClick"):FireServer(info.Id)
+		Effects.Burst(layer, position, Theme.Colors.Gold, 24)
+		Effects.Flash(Theme.Colors.Gold, 0.35)
+		UIUtil.Tween(scale, 0.25, { Scale = 1.6 })
+		UIUtil.Tween(button, 0.25, { BackgroundTransparency = 1, ImageTransparency = 1 })
+		Debris:AddItem(button, 0.3)
+	end)
+
+	-- Disparition automatique
+	task.delay(info.Lifetime, function()
+		if not clicked and button.Parent then
+			clicked = true
+			connection:Disconnect()
+			UIUtil.Tween(scale, 0.3, { Scale = 0 }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+			Debris:AddItem(button, 0.35)
+		end
+	end)
+end
+
+function GoldenObject.Build(layer: Frame)
+	Net.Event("GoldenSpawn").OnClientEvent:Connect(function(info)
+		spawnGolden(layer, info)
+	end)
+
+	-- Le serveur confirme : "+X" à l'endroit où était l'objet
+	Notifications.BonusHandlers.Golden = function(amount: number)
+		Effects.FloatingText(layer, lastPosition, "+" .. NumberFormatter.Format(amount), Theme.Colors.Gold, 48)
+	end
+end
+
+return GoldenObject
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="8">
+          <Properties>
+            <string name="Name">HUD</string>
+            <string name="Source"><![CDATA[--[[
+	HUD (ModuleScript)
+	Emplacement : ReplicatedStorage > Client > Components > HUD
+
+	Compteurs en haut de l'écran : Dopamine (lissée à chaque image),
+	Dopamine par clic, par seconde, multiplicateur total, bannière du Rush.
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Client = script.Parent.Parent
+local Theme = require(Client.Theme)
+local UIUtil = require(Client.UIUtil)
+local ClientState = require(Client.ClientState)
+local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
+
+local HUD = {}
+
+local counterScale: UIScale
+local rushBanner: Frame
+local rushLabel: TextLabel
+
+function HUD.Build(parent: Frame)
+	local frame = UIUtil.Create("Frame", {
+		Name = "HUD",
+		Size = UDim2.fromOffset(520, 130),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, -125, 0, 10),
+		BackgroundColor3 = Theme.Colors.Panel,
+		BackgroundTransparency = 0.25,
+		Parent = parent,
+	})
+	UIUtil.Corner(frame, 20)
+	local stroke = UIUtil.Stroke(frame, Color3.new(1, 1, 1), 3)
+	UIUtil.Gradient(stroke, nil, 0)
+
+	UIUtil.Label({
+		Text = "🧠 DOPAMINE",
+		Font = Theme.Fonts.Title,
+		TextColor3 = Theme.Colors.Cyan,
+		Size = UDim2.new(1, 0, 0, 22),
+		Position = UDim2.fromOffset(0, 8),
+		MaxTextSize = 20,
+		Parent = frame,
+	})
+
+	local counter = UIUtil.Label({
+		Name = "Counter",
+		Text = "0",
+		Font = Theme.Fonts.Number,
+		Size = UDim2.new(1, -20, 0, 58),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 30),
+		MaxTextSize = 58,
+		Parent = frame,
+	})
+	UIUtil.Gradient(counter, ColorSequence.new(Theme.Colors.Text, Theme.Colors.Yellow), 90)
+	counterScale = UIUtil.Create("UIScale", { Parent = counter })
+
+	-- Ligne de statistiques
+	local statsRow = UIUtil.Create("Frame", {
+		Size = UDim2.new(1, -24, 0, 28),
+		Position = UDim2.new(0, 12, 0, 94),
+		BackgroundTransparency = 1,
+		Parent = frame,
+	})
+	UIUtil.Create("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+		Padding = UDim.new(0, 10),
+		Parent = statsRow,
+	})
+
+	local function chip(order: number, width: number, color: Color3): TextLabel
+		local label = UIUtil.Label({
+			Size = UDim2.fromOffset(width, 28),
+			BackgroundTransparency = 0.2,
+			BackgroundColor3 = Theme.Colors.PanelLight,
+			TextColor3 = color,
+			LayoutOrder = order,
+			MaxTextSize = 18,
+			Parent = statsRow,
+		})
+		UIUtil.Corner(label, 14)
+		UIUtil.Stroke(label, color, 1.5, 0.3)
+		return label
+	end
+
+	local perClick = chip(1, 180, Theme.Colors.Pink)
+	local perSecond = chip(2, 180, Theme.Colors.Cyan)
+	local multiplier = chip(3, 110, Theme.Colors.Yellow)
+
+	-- Bannière Dopamine Rush (cachée par défaut)
+	rushBanner = UIUtil.Create("Frame", {
+		Name = "RushBanner",
+		Size = UDim2.fromOffset(440, 44),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, -125, 0, 150),
+		BackgroundColor3 = Color3.new(1, 1, 1), -- couleurs données par le UIGradient
+		Visible = false,
+		Parent = parent,
+	})
+	UIUtil.Corner(rushBanner, 22)
+	UIUtil.Stroke(rushBanner, Theme.Colors.Pink, 3)
+	UIUtil.Gradient(rushBanner, ColorSequence.new(Theme.Colors.Yellow, Theme.Colors.Orange), 0)
+	rushLabel = UIUtil.Label({
+		Font = Theme.Fonts.Title,
+		TextColor3 = Theme.Colors.TextDark,
+		Size = UDim2.new(1, -20, 1, -8),
+		Position = UDim2.fromOffset(10, 4),
+		MaxTextSize = 22,
+		Parent = rushBanner,
+	})
+
+	-- Mise à jour des statistiques quand le serveur envoie un nouvel état
+	ClientState.Changed:Connect(function(data)
+		perClick.Text = "👆 +" .. NumberFormatter.Format(data.ClickValue) .. " / clic"
+		perSecond.Text = "⏱️ +" .. NumberFormatter.Format(data.PerSecond) .. " / s"
+		multiplier.Text = "🔥 " .. NumberFormatter.Multiplier(data.GlobalMultiplier)
+	end)
+
+	-- Compteur lissé + compte à rebours du Rush, à chaque image
+	RunService.RenderStepped:Connect(function(dt)
+		counter.Text = NumberFormatter.Format(ClientState.UpdateDisplay(dt))
+
+		local rush = ClientState.Rush
+		local remaining = rush.EndsAt - workspace:GetServerTimeNow()
+		local active = rush.Active and remaining > 0
+		rushBanner.Visible = active
+		if active then
+			rushLabel.Text = string.format("⚡ %s x%s — %ds", rush.Name, tostring(rush.Multiplier), math.ceil(remaining))
+			rushBanner.Rotation = math.sin(os.clock() * 8) * 2
+		end
+	end)
+end
+
+-- Petit "pop" du compteur (appelé à chaque clic)
+function HUD.Pop()
+	counterScale.Scale = 1.12
+	UIUtil.Tween(counterScale, 0.2, { Scale = 1 }, Enum.EasingStyle.Back)
+end
+
+return HUD
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="9">
+          <Properties>
+            <string name="Name">Notifications</string>
+            <string name="Source"><![CDATA[--[[
+	Notifications (ModuleScript)
+	Emplacement : ReplicatedStorage > Client > Components > Notifications
+
+	Petits bandeaux ("toasts") en bas de l'écran + réaction aux
+	notifications du serveur (succès, quêtes, bonus, jackpot, rush...).
+]]
+
+local Debris = game:GetService("Debris")
+
+local Client = script.Parent.Parent
+local Theme = require(Client.Theme)
+local UIUtil = require(Client.UIUtil)
+local Effects = require(Client.Effects)
+local SoundManager = require(Client.SoundManager)
+
+local Notifications = {}
+
+-- Fonctions appelées pour les bonus selon leur source ("DVD", "Golden"...)
+Notifications.BonusHandlers = {} :: { [string]: (amount: number) -> () }
+
+local container: Frame? = nil
+local MAX_TOASTS = 4
+local order = 0
+
+function Notifications.Build(parent: Frame)
+	local frame = UIUtil.Create("Frame", {
+		Name = "Toasts",
+		Size = UDim2.fromOffset(520, 260),
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, -125, 1, -12),
+		BackgroundTransparency = 1,
+		Parent = parent,
+	})
+	UIUtil.Create("UIListLayout", {
+		VerticalAlignment = Enum.VerticalAlignment.Bottom,
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0, 6),
+		Parent = frame,
+	})
+	container = frame
+end
+
+-- Affiche un bandeau temporaire
+function Notifications.Toast(text: string, color: Color3?, duration: number?, title: string?)
+	local target = container
+	if not target then
+		return
+	end
+
+	-- Supprime les plus anciens s'il y en a trop
+	local existing = {}
+	for _, child in ipairs(target:GetChildren()) do
+		if child:IsA("Frame") then
+			table.insert(existing, child)
+		end
+	end
+	table.sort(existing, function(a, b)
+		return a.LayoutOrder < b.LayoutOrder
+	end)
+	while #existing >= MAX_TOASTS do
+		local oldest = table.remove(existing, 1)
+		if oldest then
+			oldest:Destroy()
+		end
+	end
+
+	order += 1
+	local accent = color or Theme.Colors.Cyan
+	local height = title and 62 or 42
+	local toast = UIUtil.Create("Frame", {
+		Size = UDim2.fromOffset(500, height),
+		BackgroundColor3 = Theme.Colors.Panel,
+		BackgroundTransparency = 0.1,
+		LayoutOrder = order,
+		Parent = target,
+	})
+	UIUtil.Corner(toast, 14)
+	UIUtil.Stroke(toast, accent, 2)
+
+	if title then
+		UIUtil.Label({
+			Text = title,
+			Font = Theme.Fonts.Title,
+			TextColor3 = accent,
+			Size = UDim2.new(1, -20, 0, 22),
+			Position = UDim2.fromOffset(10, 5),
+			MaxTextSize = 18,
+			Parent = toast,
+		})
+	end
+	UIUtil.Label({
+		Text = text,
+		TextColor3 = Theme.Colors.Text,
+		Size = UDim2.new(1, -20, 0, 28),
+		Position = UDim2.fromOffset(10, title and 29 or 7),
+		MaxTextSize = 18,
+		Parent = toast,
+	})
+
+	-- Apparition avec rebond
+	local scale = UIUtil.Create("UIScale", { Scale = 0.3, Parent = toast })
+	UIUtil.Tween(scale, 0.35, { Scale = 1 }, Enum.EasingStyle.Back)
+
+	task.delay(duration or 3.5, function()
+		if toast.Parent then
+			UIUtil.Tween(scale, 0.25, { Scale = 0 }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+			Debris:AddItem(toast, 0.3)
+		end
+	end)
+end
+
+-- Réagit à une notification envoyée par le serveur
+function Notifications.Handle(payload)
+	local kind = payload.Type
+
+	if kind == "Achievement" then
+		SoundManager.Play("Achievement", 1.1)
+		Effects.Confetti(50)
+		Effects.Flash(Theme.Colors.Yellow, 0.3)
+		Notifications.Toast(payload.Text, Theme.Colors.Yellow, 4.5, payload.Title)
+	elseif kind == "Quest" then
+		SoundManager.Play("Bonus", 1.2)
+		Effects.Flash(Theme.Colors.Green, 0.2)
+		Notifications.Toast(payload.Text, Theme.Colors.Green, 4, payload.Title)
+	elseif kind == "Bonus" then
+		SoundManager.Play("Bonus", 1.3)
+		local handler = payload.Source and Notifications.BonusHandlers[payload.Source]
+		if handler and payload.Amount then
+			handler(payload.Amount)
+		end
+		if payload.Text then
+			Notifications.Toast(payload.Text, Theme.Colors.Gold)
+		end
+	elseif kind == "Jackpot" then
+		SoundManager.Play("Jackpot", 0.8)
+		task.delay(0.15, SoundManager.Play, "Jackpot", 1.2)
+		task.delay(0.3, SoundManager.Play, "Jackpot", 1.6)
+		Effects.Flash(Color3.new(1, 1, 1), 0.9)
+		Effects.Confetti(150)
+		Effects.BigMessage("JACKPOT !!!\nCOIN PARFAIT", Theme.Colors.Yellow, 3.5)
+		Notifications.Toast(payload.Text, Theme.Colors.Yellow, 6, "📀 LE LOGO A TOUCHÉ LE COIN !")
+	elseif kind == "Rush" then
+		SoundManager.Play("Rush", 1)
+		Effects.Flash(Theme.Colors.Yellow, 0.5)
+		Effects.BigMessage("⚡ DOPAMINE RUSH ⚡", Theme.Colors.Yellow, 2)
+		Notifications.Toast(payload.Text, Theme.Colors.Yellow, 5)
+	elseif kind == "Error" then
+		SoundManager.Play("Error", 0.7)
+		Notifications.Toast(payload.Text, Theme.Colors.Red, 5)
+	else
+		Notifications.Toast(payload.Text or "", Theme.Colors.Cyan)
+	end
+end
+
+return Notifications
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="10">
+          <Properties>
+            <string name="Name">PanelManager</string>
+            <string name="Source"><![CDATA[--[[
+	PanelManager (ModuleScript)
+	Emplacement : ReplicatedStorage > Client > Components > PanelManager
+
+	Fenêtres "pop-up" (quêtes, succès, rebirth...). Une seule ouverte à la
+	fois, avec animation d'ouverture et fond assombri (clic dehors = fermer).
+	Chaque panneau est un module dans Components > Panels avec :
+	  Title, Color, Build(content), Update(data) (optionnel)
+]]
+
+local Client = script.Parent.Parent
+local Theme = require(Client.Theme)
+local UIUtil = require(Client.UIUtil)
+local ClientState = require(Client.ClientState)
+local SoundManager = require(Client.SoundManager)
+
+local PanelManager = {}
+
+local overlay: Frame
+local window: Frame
+local windowScale: UIScale
+local titleLabel: TextLabel
+local windowStroke: UIStroke
+local panels = {} -- [nom] = { Module, Content }
+local openName: string? = nil
+
+function PanelManager.Build(layer: Frame)
+	overlay = UIUtil.Create("Frame", {
+		Name = "Overlay",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Visible = false,
+		Parent = layer,
+	})
+
+	-- Fond sombre plein écran (bouton : un clic dehors ferme la fenêtre)
+	local dimmer = UIUtil.Create("TextButton", {
+		Name = "Dimmer",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Color3.new(0, 0, 0),
+		BackgroundTransparency = 0.45,
+		AutoButtonColor = false,
+		Text = "",
+		ZIndex = 1,
+		Parent = overlay,
+	})
+	dimmer.Activated:Connect(function()
+		PanelManager.Close()
+	end)
+
+	window = UIUtil.Create("Frame", {
+		Name = "Window",
+		Size = UDim2.fromOffset(640, 500),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		BackgroundColor3 = Color3.new(1, 1, 1), -- blanc : le UIGradient donne les vraies couleurs
+		Active = true, -- bloque les clics pour qu'ils n'atteignent pas le fond sombre
+		ZIndex = 2,
+		Parent = overlay,
+	})
+	UIUtil.Corner(window, 24)
+	windowStroke = UIUtil.Stroke(window, Theme.Colors.Cyan, 3)
+	UIUtil.Gradient(window, ColorSequence.new(Theme.Colors.PanelLight, Theme.Colors.Panel), 90)
+	windowScale = UIUtil.Create("UIScale", { Parent = window })
+
+	titleLabel = UIUtil.Label({
+		Font = Theme.Fonts.Title,
+		TextColor3 = Theme.Colors.Cyan,
+		Size = UDim2.new(1, -120, 0, 40),
+		Position = UDim2.fromOffset(24, 16),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		MaxTextSize = 28,
+		Parent = window,
+	})
+
+	local closeButton = UIUtil.NeonButton({
+		Text = "✕",
+		Size = UDim2.fromOffset(48, 48),
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -14, 0, 12),
+		Color = Theme.Colors.Red,
+		MaxTextSize = 26,
+		Parent = window,
+	})
+	closeButton.Activated:Connect(function()
+		PanelManager.Close()
+	end)
+
+	ClientState.Changed:Connect(function(data)
+		for _, panel in pairs(panels) do
+			if panel.Module.Update then
+				panel.Module.Update(data)
+			end
+		end
+	end)
+end
+
+function PanelManager.Register(name: string, module)
+	local content = UIUtil.Create("Frame", {
+		Name = name,
+		Size = UDim2.new(1, -40, 1, -84),
+		Position = UDim2.fromOffset(20, 70),
+		BackgroundTransparency = 1,
+		Visible = false,
+		Parent = window,
+	})
+	module.Build(content)
+	panels[name] = { Module = module, Content = content }
+end
+
+function PanelManager.Open(name: string)
+	local panel = panels[name]
+	if not panel then
+		return
+	end
+	for otherName, other in pairs(panels) do
+		other.Content.Visible = otherName == name
+	end
+	openName = name
+	titleLabel.Text = panel.Module.Title
+	local color = panel.Module.Color or Theme.Colors.Cyan
+	titleLabel.TextColor3 = color
+	windowStroke.Color = color
+
+	if panel.Module.Update and ClientState.Data then
+		panel.Module.Update(ClientState.Data)
+	end
+	if panel.Module.OnOpen then
+		panel.Module.OnOpen()
+	end
+
+	overlay.Visible = true
+	windowScale.Scale = 0.6
+	UIUtil.Tween(windowScale, 0.35, { Scale = 1 }, Enum.EasingStyle.Back)
+	SoundManager.Play("Open", 1)
+end
+
+function PanelManager.Close()
+	if not openName then
+		return
+	end
+	openName = nil
+	UIUtil.Tween(windowScale, 0.15, { Scale = 0.7 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	task.delay(0.15, function()
+		if not openName then
+			overlay.Visible = false
+		end
+	end)
+end
+
+function PanelManager.Toggle(name: string)
+	if openName == name then
+		PanelManager.Close()
+	else
+		PanelManager.Open(name)
+	end
+end
+
+return PanelManager
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="Folder" referent="11">
+          <Properties>
+            <string name="Name">Panels</string>
+          </Properties>
+          <Item class="ModuleScript" referent="12">
+            <Properties>
+              <string name="Name">Achievements</string>
+              <string name="Source"><![CDATA[--[[
+	Achievements (ModuleScript) — panneau des succès
+	Emplacement : ReplicatedStorage > Client > Components > Panels > Achievements
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Client = script.Parent.Parent.Parent
+local Theme = require(Client.Theme)
+local UIUtil = require(Client.UIUtil)
+local Config = require(ReplicatedStorage.Shared.Config)
+local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
+
+local Achievements = {
+	Title = "🏆 SUCCÈS",
+	Color = Theme.Colors.Yellow,
+}
+
+local header: TextLabel
+local items = {}
+
+local function statValue(data, statName: string): number
+	local value = data.Stats[statName]
+	if value == nil then
+		value = data[statName]
+	end
+	return (type(value) == "number") and value or 0
+end
+
+function Achievements.Build(content: Frame)
+	header = UIUtil.Label({
+		TextColor3 = Theme.Colors.TextDim,
+		Size = UDim2.new(1, 0, 0, 26),
+		MaxTextSize = 17,
+		Parent = content,
+	})
+
+	local list = UIUtil.Create("ScrollingFrame", {
+		Size = UDim2.new(1, 0, 1, -34),
+		Position = UDim2.fromOffset(0, 34),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 6,
+		ScrollBarImageColor3 = Theme.Colors.Yellow,
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		Parent = content,
+	})
+	UIUtil.Create("UIGridLayout", {
+		CellSize = UDim2.new(0.5, -8, 0, 74),
+		CellPadding = UDim2.fromOffset(8, 8),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = list,
+	})
+
+	for index, achievement in ipairs(Config.Achievements) do
+		local card = UIUtil.Create("Frame", {
+			BackgroundColor3 = Theme.Colors.Card,
+			LayoutOrder = index,
+			Parent = list,
+		})
+		UIUtil.Corner(card, 14)
+		local stroke = UIUtil.Stroke(card, Theme.Colors.Disabled, 2)
+
+		local icon = UIUtil.Label({
+			Text = achievement.Icon,
+			Size = UDim2.fromOffset(50, 50),
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 8, 0.5, 0),
+			MaxTextSize = 36,
+			Parent = card,
+		})
+		local name = UIUtil.Label({
+			Text = achievement.Name,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Size = UDim2.new(1, -70, 0, 22),
+			Position = UDim2.fromOffset(62, 8),
+			MaxTextSize = 16,
+			Parent = card,
+		})
+		local progress = UIUtil.Label({
+			TextColor3 = Theme.Colors.TextDim,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Size = UDim2.new(1, -70, 0, 18),
+			Position = UDim2.fromOffset(62, 30),
+			MaxTextSize = 13,
+			Parent = card,
+		})
+		UIUtil.Label({
+			Text = "🎁 +" .. NumberFormatter.Format(achievement.Reward),
+			TextColor3 = Theme.Colors.Yellow,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Size = UDim2.new(1, -70, 0, 16),
+			Position = UDim2.fromOffset(62, 50),
+			MaxTextSize = 13,
+			Parent = card,
+		})
+
+		items[achievement.Id] = { Stroke = stroke, Icon = icon, Name = name, Progress = progress, Achievement = achievement }
+	end
+end
+
+function Achievements.Update(data)
+	local unlocked = 0
+	for id, ui in pairs(items) do
+		local achievement = ui.Achievement
+		local done = data.Achievements[id] == true
+		if done then
+			unlocked += 1
+			ui.Stroke.Color = Theme.Colors.Yellow
+			ui.Icon.TextTransparency = 0
+			ui.Name.TextColor3 = Theme.Colors.Yellow
+			ui.Progress.Text = "✔ Débloqué"
+		else
+			ui.Stroke.Color = Theme.Colors.Disabled
+			ui.Icon.TextTransparency = 0.6
+			ui.Name.TextColor3 = Theme.Colors.TextDim
+			local value = math.min(statValue(data, achievement.Stat), achievement.Goal)
+			ui.Progress.Text = NumberFormatter.Format(value) .. " / " .. NumberFormatter.Format(achievement.Goal)
+		end
+	end
+	header.Text = string.format(
+		"%d / %d débloqués  •  bonus permanent +%d %%",
+		unlocked,
+		#Config.Achievements,
+		math.floor(unlocked * Config.AchievementBonus * 100 + 0.5)
+	)
+end
+
+return Achievements
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="13">
+            <Properties>
+              <string name="Name">Daily</string>
+              <string name="Source"><![CDATA[--[[
+	Daily (ModuleScript) — récompense quotidienne
+	Emplacement : ReplicatedStorage > Client > Components > Panels > Daily
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Client = script.Parent.Parent.Parent
+local Theme = require(Client.Theme)
+local UIUtil = require(Client.UIUtil)
+local ClientState = require(Client.ClientState)
+local Effects = require(Client.Effects)
+local SoundManager = require(Client.SoundManager)
+local Notifications = require(script.Parent.Parent.Notifications)
+local Config = require(ReplicatedStorage.Shared.Config)
+local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
+local Net = require(ReplicatedStorage.Shared.Net)
+
+local Daily = {
+	Title = "🎁 CADEAU DU JOUR",
+	Color = Theme.Colors.Orange,
+}
+
+local days = {}
+local rewardLabel: TextLabel
+local timerLabel: TextLabel
+local button: TextButton
+local lastInfoClock = 0
+
+function Daily.Build(content: Frame)
+	UIUtil.Label({
+		Text = "Reviens chaque jour pour augmenter ta série et tes récompenses !",
+		TextColor3 = Theme.Colors.TextDim,
+		Size = UDim2.new(1, 0, 0, 30),
+		MaxTextSize = 17,
+		Parent = content,
+	})
+
+	-- Les 7 jours de la série
+	local row = UIUtil.Create("Frame", {
+		Size = UDim2.new(1, 0, 0, 90),
+		Position = UDim2.fromOffset(0, 44),
+		BackgroundTransparency = 1,
+		Parent = content,
+	})
+	UIUtil.Create("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		Padding = UDim.new(0, 8),
+		Parent = row,
+	})
+	for day = 1, Config.Daily.MaxStreakBonus do
+		local box = UIUtil.Create("Frame", {
+			Size = UDim2.fromOffset(72, 90),
+			BackgroundColor3 = Theme.Colors.Card,
+			LayoutOrder = day,
+			Parent = row,
+		})
+		UIUtil.Corner(box, 14)
+		local stroke = UIUtil.Stroke(box, Theme.Colors.Disabled, 2)
+		UIUtil.Label({
+			Text = "Jour " .. day,
+			Size = UDim2.new(1, 0, 0, 22),
+			Position = UDim2.fromOffset(0, 6),
+			MaxTextSize = 15,
+			Parent = box,
+		})
+		UIUtil.Label({
+			Text = day == Config.Daily.MaxStreakBonus and "💎" or "🎁",
+			Size = UDim2.new(1, 0, 0, 44),
+			Position = UDim2.fromOffset(0, 34),
+			MaxTextSize = 36,
+			Parent = box,
+		})
+		days[day] = { Box = box, Stroke = stroke }
+	end
+
+	rewardLabel = UIUtil.Label({
+		Font = Theme.Fonts.Number,
+		TextColor3 = Theme.Colors.Yellow,
+		Size = UDim2.new(1, 0, 0, 44),
+		Position = UDim2.fromOffset(0, 150),
+		MaxTextSize = 34,
+		Parent = content,
+	})
+	timerLabel = UIUtil.Label({
+		TextColor3 = Theme.Colors.TextDim,
+		Size = UDim2.new(1, 0, 0, 24),
+		Position = UDim2.fromOffset(0, 198),
+		MaxTextSize = 17,
+		Parent = content,
+	})
+
+	button = UIUtil.NeonButton({
+		Text = "RÉCUPÉRER",
+		Font = Theme.Fonts.Title,
+		Size = UDim2.fromOffset(300, 66),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 240),
+		Color = Theme.Colors.Orange,
+		MaxTextSize = 26,
+		Parent = content,
+	})
+	button.Activated:Connect(function()
+		if not button:GetAttribute("Enabled") then
+			SoundManager.Play("Error", 0.7)
+			UIUtil.Shake(button)
+			return
+		end
+		local ok, success, message = pcall(function()
+			return Net.Function("ClaimDaily"):InvokeServer()
+		end)
+		if ok and success then
+			SoundManager.Play("Achievement", 1)
+			Effects.Confetti(80)
+			Effects.Flash(Theme.Colors.Orange, 0.4)
+			Notifications.Toast(message, Theme.Colors.Orange, 5, "🎁 CADEAU RÉCUPÉRÉ !")
+		else
+			SoundManager.Play("Error", 0.7)
+			Notifications.Toast(ok and message or "Erreur réseau, réessaie.", Theme.Colors.Red)
+		end
+	end)
+
+	-- Compte à rebours
+	task.spawn(function()
+		while content.Parent do
+			local data = ClientState.Data
+			if data and not data.Daily.Available then
+				local remaining = data.Daily.NextIn - (os.clock() - lastInfoClock)
+				timerLabel.Text = "Prochain cadeau dans " .. NumberFormatter.Time(remaining)
+			end
+			task.wait(1)
+		end
+	end)
+end
+
+function Daily.Update(data)
+	lastInfoClock = os.clock()
+	local info = data.Daily
+	local streak = math.min(info.Streak, Config.Daily.MaxStreakBonus)
+	for day, ui in pairs(days) do
+		local reached = day <= streak
+		ui.Stroke.Color = reached and Theme.Colors.Orange or Theme.Colors.Disabled
+		ui.Box.BackgroundColor3 = (day == streak and info.Available) and Theme.Colors.PanelLight or Theme.Colors.Card
+	end
+
+	if info.Available then
+		rewardLabel.Text = "Jour " .. info.Streak .. " : +" .. NumberFormatter.Format(info.Reward) .. " 💧"
+		timerLabel.Text = "Ton cadeau t'attend !"
+		button.Text = "RÉCUPÉRER"
+		UIUtil.SetButtonEnabled(button, true)
+	else
+		rewardLabel.Text = "Série actuelle : " .. info.Streak .. " jour(s) 🔥"
+		button.Text = "DÉJÀ RÉCUPÉRÉ"
+		UIUtil.SetButtonEnabled(button, false)
+	end
+end
+
+return Daily
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="14">
+            <Properties>
+              <string name="Name">Leaderboard</string>
+              <string name="Source"><![CDATA[--[[
+	Leaderboard (ModuleScript) — classement global
+	Emplacement : ReplicatedStorage > Client > Components > Panels > Leaderboard
+]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Client = script.Parent.Parent.Parent
+local Theme = require(Client.Theme)
+local UIUtil = require(Client.UIUtil)
+local ClientState = require(Client.ClientState)
+local Config = require(ReplicatedStorage.Shared.Config)
+local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
+
+local Leaderboard = {
+	Title = "🥇 CLASSEMENT MONDIAL",
+	Color = Theme.Colors.Cyan,
+}
+
+local MEDALS = { "🥇", "🥈", "🥉" }
+local rows = {}
+local emptyLabel: TextLabel
+
+local function refresh(top)
+	local localId = Players.LocalPlayer.UserId
+	for index, row in ipairs(rows) do
+		local entry = top[index]
+		row.Frame.Visible = entry ~= nil
+		if entry then
+			row.Rank.Text = MEDALS[entry.Rank] or ("#" .. entry.Rank)
+			row.Name.Text = entry.Name
+			row.Value.Text = NumberFormatter.Format(entry.Value) .. " 💧"
+			local isMe = entry.UserId == localId
+			row.Frame.BackgroundColor3 = isMe and Theme.Colors.PanelLight or Theme.Colors.Card
+			row.Name.TextColor3 = isMe and Theme.Colors.Cyan or Theme.Colors.Text
+		end
+	end
+	emptyLabel.Visible = #top == 0
+end
+
+function Leaderboard.Build(content: Frame)
+	UIUtil.Label({
+		Text = "Dopamine totale gagnée depuis toujours (mis à jour chaque minute)",
+		TextColor3 = Theme.Colors.TextDim,
+		Size = UDim2.new(1, 0, 0, 24),
+		MaxTextSize = 16,
+		Parent = content,
+	})
+
+	local list = UIUtil.Create("ScrollingFrame", {
+		Size = UDim2.new(1, 0, 1, -32),
+		Position = UDim2.fromOffset(0, 32),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 6,
+		ScrollBarImageColor3 = Theme.Colors.Cyan,
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		Parent = content,
+	})
+	UIUtil.Create("UIListLayout", {
+		Padding = UDim.new(0, 6),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = list,
+	})
+
+	for index = 1, Config.Leaderboard.Size do
+		local frame = UIUtil.Create("Frame", {
+			Size = UDim2.new(1, -10, 0, 36),
+			BackgroundColor3 = Theme.Colors.Card,
+			LayoutOrder = index,
+			Visible = false,
+			Parent = list,
+		})
+		UIUtil.Corner(frame, 10)
+		local rank = UIUtil.Label({ Size = UDim2.new(0, 60, 1, -6), Position = UDim2.fromOffset(6, 3), MaxTextSize = 20, Parent = frame })
+		local name = UIUtil.Label({
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Size = UDim2.new(0.55, -70, 1, -8),
+			Position = UDim2.fromOffset(70, 4),
+			MaxTextSize = 18,
+			Parent = frame,
+		})
+		local value = UIUtil.Label({
+			Font = Theme.Fonts.Number,
+			TextColor3 = Theme.Colors.Yellow,
+			TextXAlignment = Enum.TextXAlignment.Right,
+			Size = UDim2.new(0.45, -14, 1, -8),
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, -10, 0, 4),
+			MaxTextSize = 18,
+			Parent = frame,
+		})
+		rows[index] = { Frame = frame, Rank = rank, Name = name, Value = value }
+	end
+
+	emptyLabel = UIUtil.Label({
+		Text = "Classement en cours de chargement...\n(Il ne fonctionne que dans un jeu publié avec l'accès aux API activé.)",
+		TextColor3 = Theme.Colors.TextDim,
+		Size = UDim2.new(1, 0, 0, 60),
+		Position = UDim2.fromOffset(0, 60),
+		MaxTextSize = 17,
+		Parent = content,
+	})
+
+	refresh(ClientState.Leaderboard)
+	ClientState.LeaderboardChanged:Connect(refresh)
+end
+
+return Leaderboard
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="15">
+            <Properties>
+              <string name="Name">Quests</string>
+              <string name="Source"><![CDATA[--[[
+	Quests (ModuleScript) — panneau des quêtes
+	Emplacement : ReplicatedStorage > Client > Components > Panels > Quests
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Client = script.Parent.Parent.Parent
+local Theme = require(Client.Theme)
+local UIUtil = require(Client.UIUtil)
+local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
+local Config = require(ReplicatedStorage.Shared.Config)
+
+local Quests = {
+	Title = "📜 QUÊTES",
+	Color = Theme.Colors.Green,
+}
+
+local cards = {}
+
+function Quests.Build(content: Frame)
+	UIUtil.Create("UIListLayout", {
+		Padding = UDim.new(0, 12),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = content,
+	})
+
+	UIUtil.Label({
+		Text = "Termine des quêtes pour gagner des bonus ! Une nouvelle quête remplace chaque quête finie.",
+		TextColor3 = Theme.Colors.TextDim,
+		Size = UDim2.new(1, 0, 0, 36),
+		LayoutOrder = 0,
+		MaxTextSize = 16,
+		Parent = content,
+	})
+
+	for index = 1, Config.Quests.ActiveCount do
+		local card = UIUtil.Create("Frame", {
+			Size = UDim2.new(1, 0, 0, 100),
+			BackgroundColor3 = Theme.Colors.Card,
+			LayoutOrder = index,
+			Parent = content,
+		})
+		UIUtil.Corner(card, 16)
+		UIUtil.Stroke(card, Theme.Colors.Green, 2, 0.4)
+
+		local text = UIUtil.Label({
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Size = UDim2.new(1, -30, 0, 28),
+			Position = UDim2.fromOffset(15, 10),
+			MaxTextSize = 20,
+			Parent = card,
+		})
+		local reward = UIUtil.Label({
+			TextColor3 = Theme.Colors.Yellow,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Size = UDim2.new(1, -30, 0, 20),
+			Position = UDim2.fromOffset(15, 40),
+			MaxTextSize = 16,
+			Parent = card,
+		})
+
+		local bar = UIUtil.Create("Frame", {
+			Size = UDim2.new(1, -30, 0, 22),
+			Position = UDim2.fromOffset(15, 66),
+			BackgroundColor3 = Theme.Colors.Panel,
+			ClipsDescendants = true,
+			Parent = card,
+		})
+		UIUtil.Corner(bar, 11)
+		local fill = UIUtil.Create("Frame", {
+			Size = UDim2.fromScale(0, 1),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			Parent = bar,
+		})
+		UIUtil.Corner(fill, 11)
+		UIUtil.Gradient(fill, ColorSequence.new(Theme.Colors.Green, Theme.Colors.Cyan), 0)
+		local progress = UIUtil.Label({
+			Size = UDim2.fromScale(1, 1),
+			ZIndex = 2,
+			MaxTextSize = 15,
+			Parent = bar,
+		})
+
+		cards[index] = { Card = card, Text = text, Reward = reward, Fill = fill, Progress = progress }
+	end
+end
+
+function Quests.Update(data)
+	for index, ui in ipairs(cards) do
+		local quest = data.Quests[index]
+		ui.Card.Visible = quest ~= nil
+		if quest then
+			ui.Text.Text = quest.Text
+			ui.Reward.Text = "🎁 Récompense : +" .. NumberFormatter.Format(quest.Reward)
+			local ratio = math.clamp(quest.Progress / quest.Goal, 0, 1)
+			UIUtil.Tween(ui.Fill, 0.25, { Size = UDim2.fromScale(ratio, 1) })
+			ui.Progress.Text = NumberFormatter.Format(quest.Progress) .. " / " .. NumberFormatter.Format(quest.Goal)
+		end
+	end
+end
+
+return Quests
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="16">
+            <Properties>
+              <string name="Name">Rebirth</string>
+              <string name="Source"><![CDATA[--[[
+	Rebirth (ModuleScript) — panneau de prestige
+	Emplacement : ReplicatedStorage > Client > Components > Panels > Rebirth
+
+	Remet la Dopamine et les améliorations à zéro contre un multiplicateur
+	permanent. Double confirmation pour éviter les erreurs.
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Client = script.Parent.Parent.Parent
+local Theme = require(Client.Theme)
+local UIUtil = require(Client.UIUtil)
+local ClientState = require(Client.ClientState)
+local Effects = require(Client.Effects)
+local SoundManager = require(Client.SoundManager)
+local Notifications = require(script.Parent.Parent.Notifications)
+local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
+local Net = require(ReplicatedStorage.Shared.Net)
+
+local Rebirth = {
+	Title = "♻️ REBIRTH",
+	Color = Theme.Colors.Pink,
+}
+
+local countLabel: TextLabel
+local multLabel: TextLabel
+local costLabel: TextLabel
+local fill: Frame
+local button: TextButton
+local confirmUntil = 0
+
+function Rebirth.Build(content: Frame)
+	UIUtil.Label({
+		Text = "Recommence de zéro (Dopamine + améliorations) et gagne un MULTIPLICATEUR PERMANENT sur tous tes gains. Les succès et statistiques sont conservés.",
+		TextColor3 = Theme.Colors.TextDim,
+		Size = UDim2.new(1, 0, 0, 60),
+		MaxTextSize = 17,
+		Parent = content,
+	})
+
+	countLabel = UIUtil.Label({
+		Font = Theme.Fonts.Title,
+		Size = UDim2.new(1, 0, 0, 34),
+		Position = UDim2.fromOffset(0, 70),
+		MaxTextSize = 24,
+		Parent = content,
+	})
+	multLabel = UIUtil.Label({
+		Font = Theme.Fonts.Number,
+		TextColor3 = Theme.Colors.Yellow,
+		Size = UDim2.new(1, 0, 0, 50),
+		Position = UDim2.fromOffset(0, 110),
+		MaxTextSize = 40,
+		Parent = content,
+	})
+	costLabel = UIUtil.Label({
+		Size = UDim2.new(1, 0, 0, 26),
+		Position = UDim2.fromOffset(0, 170),
+		MaxTextSize = 18,
+		Parent = content,
+	})
+
+	local bar = UIUtil.Create("Frame", {
+		Size = UDim2.new(0.8, 0, 0, 24),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 204),
+		BackgroundColor3 = Theme.Colors.Card,
+		ClipsDescendants = true,
+		Parent = content,
+	})
+	UIUtil.Corner(bar, 12)
+	UIUtil.Stroke(bar, Theme.Colors.Pink, 2, 0.3)
+	fill = UIUtil.Create("Frame", {
+		Size = UDim2.fromScale(0, 1),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		Parent = bar,
+	})
+	UIUtil.Corner(fill, 12)
+	UIUtil.Gradient(fill, ColorSequence.new(Theme.Colors.Purple, Theme.Colors.Pink), 0)
+
+	button = UIUtil.NeonButton({
+		Text = "♻️ REBIRTH",
+		Font = Theme.Fonts.Title,
+		Size = UDim2.fromOffset(300, 70),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 250),
+		Color = Theme.Colors.Pink,
+		MaxTextSize = 28,
+		Parent = content,
+	})
+
+	button.Activated:Connect(function()
+		if not button:GetAttribute("Enabled") then
+			SoundManager.Play("Error", 0.7)
+			UIUtil.Shake(button)
+			return
+		end
+		-- Premier clic : demande de confirmation
+		if os.clock() > confirmUntil then
+			confirmUntil = os.clock() + 3
+			button.Text = "⚠️ CONFIRMER ?"
+			task.delay(3, function()
+				if os.clock() >= confirmUntil then
+					button.Text = "♻️ REBIRTH"
+				end
+			end)
+			return
+		end
+		confirmUntil = 0
+		button.Text = "♻️ REBIRTH"
+
+		local ok, success, message = pcall(function()
+			return Net.Function("Rebirth"):InvokeServer()
+		end)
+		if ok and success then
+			SoundManager.Play("Rebirth", 1)
+			Effects.Flash(Theme.Colors.Pink, 0.8)
+			Effects.Confetti(120)
+			Effects.BigMessage("♻️ REBIRTH !", Theme.Colors.Pink, 2.5)
+			Notifications.Toast(message, Theme.Colors.Pink, 5)
+		else
+			SoundManager.Play("Error", 0.7)
+			Notifications.Toast(ok and message or "Erreur réseau, réessaie.", Theme.Colors.Red)
+		end
+	end)
+end
+
+function Rebirth.Update(data)
+	countLabel.Text = "Rebirths : " .. data.Rebirths
+	multLabel.Text = NumberFormatter.Multiplier(data.RebirthMultiplier)
+		.. "  ➜  "
+		.. NumberFormatter.Multiplier(data.NextRebirthMultiplier)
+	local money = ClientState.GetDisplayDopamine()
+	costLabel.Text = "Coût : "
+		.. NumberFormatter.Format(data.RebirthCost)
+		.. " Dopamine  (tu as "
+		.. NumberFormatter.Format(money)
+		.. ")"
+	local ratio = math.clamp(data.Dopamine / data.RebirthCost, 0, 1)
+	fill.Size = UDim2.fromScale(ratio, 1)
+	UIUtil.SetButtonEnabled(button, data.Dopamine >= data.RebirthCost)
+end
+
+return Rebirth
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="17">
+            <Properties>
+              <string name="Name">Settings</string>
+              <string name="Source"><![CDATA[--[[
+	Settings (ModuleScript) — paramètres (son, musique, effets)
+	Emplacement : ReplicatedStorage > Client > Components > Panels > Settings
+
+	Les réglages sont sauvegardés côté serveur avec la progression.
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Client = script.Parent.Parent.Parent
+local Theme = require(Client.Theme)
+local UIUtil = require(Client.UIUtil)
+local SoundManager = require(Client.SoundManager)
+local Effects = require(Client.Effects)
+local Net = require(ReplicatedStorage.Shared.Net)
+
+local Settings = {
+	Title = "⚙️ PARAMÈTRES",
+	Color = Theme.Colors.Purple,
+}
+
+local OPTIONS = {
+	{ Key = "Sound", Label = "🔊 Effets sonores" },
+	{ Key = "Music", Label = "🎵 Musique" },
+	{ Key = "Effects", Label = "✨ Particules et confettis" },
+}
+
+local toggles = {} -- [clé] = { Button, Knob }
+local current = { Sound = true, Music = true, Effects = true }
+
+-- Applique un réglage localement (son / musique / effets)
+function Settings.Apply(key: string, value: boolean)
+	current[key] = value
+	if key == "Sound" then
+		SoundManager.SetSoundEnabled(value)
+	elseif key == "Music" then
+		SoundManager.SetMusicEnabled(value)
+	elseif key == "Effects" then
+		Effects.SetEnabled(value)
+	end
+
+	local ui = toggles[key]
+	if ui then
+		UIUtil.Tween(ui.Knob, 0.2, {
+			Position = value and UDim2.new(1, -4, 0.5, 0) or UDim2.new(0, 4, 0.5, 0),
+			AnchorPoint = value and Vector2.new(1, 0.5) or Vector2.new(0, 0.5),
+		}, Enum.EasingStyle.Back)
+		UIUtil.Tween(ui.Button, 0.2, { BackgroundColor3 = value and Theme.Colors.Green or Theme.Colors.Disabled })
+	end
+end
+
+function Settings.Build(content: Frame)
+	UIUtil.Create("UIListLayout", {
+		Padding = UDim.new(0, 14),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = content,
+	})
+
+	for index, option in ipairs(OPTIONS) do
+		local row = UIUtil.Create("Frame", {
+			Size = UDim2.new(1, 0, 0, 64),
+			BackgroundColor3 = Theme.Colors.Card,
+			LayoutOrder = index,
+			Parent = content,
+		})
+		UIUtil.Corner(row, 14)
+		UIUtil.Label({
+			Text = option.Label,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Size = UDim2.new(1, -140, 1, -16),
+			Position = UDim2.fromOffset(16, 8),
+			MaxTextSize = 22,
+			Parent = row,
+		})
+
+		-- Interrupteur ON/OFF
+		local button = UIUtil.Create("TextButton", {
+			Size = UDim2.fromOffset(90, 40),
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -16, 0.5, 0),
+			BackgroundColor3 = Theme.Colors.Green,
+			AutoButtonColor = false,
+			Text = "",
+			Parent = row,
+		})
+		UIUtil.Corner(button, UDim.new(1, 0))
+		UIUtil.Stroke(button, Color3.new(1, 1, 1), 2, 0.4)
+		local knob = UIUtil.Create("Frame", {
+			Size = UDim2.fromOffset(32, 32),
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -4, 0.5, 0),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			Parent = button,
+		})
+		UIUtil.Corner(knob, UDim.new(1, 0))
+		UIUtil.AnimateButton(button)
+		toggles[option.Key] = { Button = button, Knob = knob }
+
+		button.Activated:Connect(function()
+			local newValue = not current[option.Key]
+			Settings.Apply(option.Key, newValue)
+			SoundManager.Play("Open", newValue and 1.3 or 0.8)
+			-- On prévient le serveur pour sauvegarder le choix
+			task.spawn(function()
+				pcall(function()
+					Net.Function("SetSetting"):InvokeServer(option.Key, newValue)
+				end)
+			end)
+		end)
+	end
+
+	UIUtil.Label({
+		Text = "Astuce : clique vite pour remplir la jauge de combo (jusqu'à x3) !",
+		TextColor3 = Theme.Colors.TextDim,
+		Size = UDim2.new(1, 0, 0, 40),
+		LayoutOrder = 10,
+		MaxTextSize = 16,
+		Parent = content,
+	})
+end
+
+-- Au chargement, on applique les réglages sauvegardés (une seule fois)
+local applied = false
+function Settings.Update(data)
+	if applied then
+		return
+	end
+	applied = true
+	for _, option in ipairs(OPTIONS) do
+		Settings.Apply(option.Key, data.Settings[option.Key] ~= false)
+	end
+end
+
+return Settings
+]]></string>
+            </Properties>
+          </Item>
+        </Item>
+        <Item class="ModuleScript" referent="18">
+          <Properties>
+            <string name="Name">Shop</string>
+            <string name="Source"><![CDATA[--[[
+	Shop (ModuleScript)
+	Emplacement : ReplicatedStorage > Client > Components > Shop
+
+	Boutique d'améliorations (panneau de droite) :
+	  - onglets CLIC / PASSIF / MULTI ;
+	  - mode d'achat x1 / x10 / MAX ;
+	  - chaque carte affiche : icône, nom, niveau, bénéfice, total, coût ;
+	  - bouton grisé si pas assez de Dopamine.
+	Les cartes sont générées automatiquement depuis Config.Upgrades.
+	L'achat est une DEMANDE au serveur, qui vérifie tout.
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Client = script.Parent.Parent
+local Theme = require(Client.Theme)
+local UIUtil = require(Client.UIUtil)
+local ClientState = require(Client.ClientState)
+local Effects = require(Client.Effects)
+local SoundManager = require(Client.SoundManager)
+local Notifications = require(script.Parent.Notifications)
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Formulas = require(ReplicatedStorage.Shared.Formulas)
+local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
+local Net = require(ReplicatedStorage.Shared.Net)
+
+local Shop = {}
+
+local BUY_MODES = { "x1", "x10", "max" }
+local BUY_MODE_LABELS = { x1 = "x1", x10 = "x10", max = "MAX" }
+local CATEGORY_COLORS = {
+	Click = Theme.Colors.Pink,
+	Passive = Theme.Colors.Cyan,
+	Multiplier = Theme.Colors.Yellow,
+}
+
+local currentCategory = "Click"
+local buyMode = "x1"
+local cards = {} -- [upgradeId] = { Frame, Button, Level, Total }
+local tabButtons = {} -- [categoryId] = bouton
+
+-- Texte "total" : ce que rapporte actuellement l'amélioration
+local function totalText(upgrade, level: number): string
+	if upgrade.Category == "Click" then
+		return "Total : +" .. NumberFormatter.Format(upgrade.Value * level) .. " / clic"
+	elseif upgrade.Category == "Passive" then
+		return "Total : +" .. NumberFormatter.Format(upgrade.Value * level) .. " / s"
+	end
+	return level > 0 and "✔ Actif" or "Pas encore acheté"
+end
+
+local function requestBuy(upgradeId: string, card)
+	local ok, success, message = pcall(function()
+		return Net.Function("BuyUpgrade"):InvokeServer(upgradeId, buyMode)
+	end)
+	if ok and success then
+		SoundManager.Play("Buy", 1 + math.random() * 0.2)
+		Effects.Burst(card.Frame, UDim2.fromScale(0.85, 0.5), CATEGORY_COLORS[Config.UpgradesById[upgradeId].Category], 12)
+		card.Frame.BackgroundColor3 = Theme.Colors.PanelLight
+		UIUtil.Tween(card.Frame, 0.4, { BackgroundColor3 = Theme.Colors.Card })
+	else
+		SoundManager.Play("Error", 0.7)
+		UIUtil.Shake(card.Button)
+		if ok and message then
+			Notifications.Toast(message, Theme.Colors.Red)
+		end
+	end
+end
+
+local function createCard(list: ScrollingFrame, upgrade)
+	local color = CATEGORY_COLORS[upgrade.Category]
+
+	local frame = UIUtil.Create("Frame", {
+		Name = upgrade.Id,
+		Size = UDim2.new(1, -8, 0, 92),
+		BackgroundColor3 = Theme.Colors.Card,
+		LayoutOrder = upgrade.Order,
+		Parent = list,
+	})
+	UIUtil.Corner(frame, 14)
+	UIUtil.Stroke(frame, color, 2, 0.5)
+
+	-- Icône
+	local iconBack = UIUtil.Create("Frame", {
+		Size = UDim2.fromOffset(60, 60),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 10, 0.5, 0),
+		BackgroundColor3 = Theme.Colors.PanelLight,
+		Parent = frame,
+	})
+	UIUtil.Corner(iconBack, UDim.new(1, 0))
+	UIUtil.Stroke(iconBack, color, 2)
+	UIUtil.Label({
+		Text = upgrade.Icon,
+		Size = UDim2.fromScale(0.75, 0.75),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		MaxTextSize = 40,
+		Parent = iconBack,
+	})
+
+	-- Textes
+	UIUtil.Label({
+		Text = upgrade.Name,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -190, 0, 22),
+		Position = UDim2.fromOffset(78, 8),
+		MaxTextSize = 18,
+		Parent = frame,
+	})
+	local levelLabel = UIUtil.Label({
+		Text = "Niv. 0",
+		TextColor3 = color,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -190, 0, 18),
+		Position = UDim2.fromOffset(78, 30),
+		MaxTextSize = 15,
+		Parent = frame,
+	})
+	UIUtil.Label({
+		Text = Formulas.DescribeUpgrade(upgrade, NumberFormatter.Format),
+		TextColor3 = Theme.Colors.Text,
+		Font = Theme.Fonts.Body,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -190, 0, 18),
+		Position = UDim2.fromOffset(78, 50),
+		MaxTextSize = 14,
+		Parent = frame,
+	})
+	local totalLabel = UIUtil.Label({
+		Text = "",
+		TextColor3 = Theme.Colors.TextDim,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -190, 0, 16),
+		Position = UDim2.fromOffset(78, 70),
+		MaxTextSize = 13,
+		Parent = frame,
+	})
+
+	-- Bouton d'achat
+	local button = UIUtil.NeonButton({
+		Size = UDim2.fromOffset(100, 64),
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -10, 0.5, 0),
+		Color = color,
+		TextColor3 = Theme.Colors.TextDark,
+		MaxTextSize = 18,
+		Parent = frame,
+	})
+
+	local card = { Frame = frame, Button = button, Level = levelLabel, Total = totalLabel }
+	button.Activated:Connect(function()
+		if button:GetAttribute("Enabled") then
+			requestBuy(upgrade.Id, card)
+		else
+			SoundManager.Play("Error", 0.7)
+			UIUtil.Shake(button)
+		end
+	end)
+	cards[upgrade.Id] = card
+end
+
+-- Met à jour toutes les cartes de l'onglet affiché
+function Shop.Refresh()
+	local data = ClientState.Data
+	if not data then
+		return
+	end
+	local money = ClientState.GetDisplayDopamine()
+
+	for _, upgrade in ipairs(Config.Upgrades) do
+		local card = cards[upgrade.Id]
+		local visible = upgrade.Category == currentCategory
+		card.Frame.Visible = visible
+		if visible then
+			local level = data.Upgrades[upgrade.Id] or 0
+			local amount, cost = Formulas.GetPurchase(upgrade, level, buyMode, money)
+			local maxed = Formulas.GetRemainingLevels(upgrade, level) <= 0
+
+			card.Level.Text = upgrade.MaxLevel and upgrade.MaxLevel == 1 and "" or ("Niv. " .. level)
+			card.Total.Text = totalText(upgrade, level)
+
+			if maxed then
+				card.Button.Text = (upgrade.MaxLevel == 1) and "ACHETÉ ✔" or "MAX"
+				UIUtil.SetButtonEnabled(card.Button, false)
+			else
+				local prefix = amount > 1 and ("+" .. amount .. "\n") or ""
+				card.Button.Text = prefix .. "💧 " .. NumberFormatter.Format(cost)
+				UIUtil.SetButtonEnabled(card.Button, money >= cost)
+			end
+		end
+	end
+
+	for categoryId, tab in pairs(tabButtons) do
+		local selected = categoryId == currentCategory
+		tab.BackgroundColor3 = selected and CATEGORY_COLORS[categoryId] or Theme.Colors.PanelLight
+		tab.TextColor3 = selected and Theme.Colors.TextDark or Theme.Colors.Text
+	end
+end
+
+function Shop.Build(parent: Frame)
+	local panel = UIUtil.Create("Frame", {
+		Name = "Shop",
+		Size = UDim2.new(0, 340, 1, -86),
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -14, 0, 72),
+		BackgroundColor3 = Theme.Colors.Panel,
+		BackgroundTransparency = 0.15,
+		Parent = parent,
+	})
+	UIUtil.Corner(panel, 20)
+	local stroke = UIUtil.Stroke(panel, Color3.new(1, 1, 1), 3)
+	UIUtil.Gradient(stroke, nil, 90)
+
+	UIUtil.Label({
+		Text = "🛒 BOUTIQUE",
+		Font = Theme.Fonts.Title,
+		TextColor3 = Theme.Colors.Pink,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -120, 0, 34),
+		Position = UDim2.fromOffset(14, 10),
+		MaxTextSize = 22,
+		Parent = panel,
+	})
+
+	-- Mode d'achat (x1 -> x10 -> MAX)
+	local modeButton = UIUtil.NeonButton({
+		Text = "x1",
+		Size = UDim2.fromOffset(84, 34),
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -12, 0, 10),
+		Color = Theme.Colors.Purple,
+		MaxTextSize = 18,
+		Parent = panel,
+	})
+	modeButton.Activated:Connect(function()
+		local index = table.find(BUY_MODES, buyMode) or 1
+		buyMode = BUY_MODES[index % #BUY_MODES + 1]
+		modeButton.Text = BUY_MODE_LABELS[buyMode]
+		SoundManager.Play("Open", 1.3)
+		Shop.Refresh()
+	end)
+
+	-- Onglets
+	local tabs = UIUtil.Create("Frame", {
+		Size = UDim2.new(1, -24, 0, 36),
+		Position = UDim2.fromOffset(12, 52),
+		BackgroundTransparency = 1,
+		Parent = panel,
+	})
+	UIUtil.Create("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		Padding = UDim.new(0, 6),
+		Parent = tabs,
+	})
+	local tabCount = #Config.ShopCategories
+	for index, category in ipairs(Config.ShopCategories) do
+		local tab = UIUtil.NeonButton({
+			Text = category.Name,
+			Font = Theme.Fonts.Title,
+			Size = UDim2.new(1 / tabCount, -6 * (tabCount - 1) / tabCount, 1, 0),
+			Color = Theme.Colors.PanelLight,
+			LayoutOrder = index,
+			MaxTextSize = 14,
+			Parent = tabs,
+		})
+		tab.Activated:Connect(function()
+			currentCategory = category.Id
+			SoundManager.Play("Open", 1.1)
+			Shop.Refresh()
+		end)
+		tabButtons[category.Id] = tab
+	end
+
+	-- Liste défilante des cartes
+	local list = UIUtil.Create("ScrollingFrame", {
+		Name = "List",
+		Size = UDim2.new(1, -16, 1, -104),
+		Position = UDim2.fromOffset(10, 96),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 6,
+		ScrollBarImageColor3 = Theme.Colors.Cyan,
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		Parent = panel,
+	})
+	UIUtil.Create("UIListLayout", {
+		Padding = UDim.new(0, 8),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		Parent = list,
+	})
+	UIUtil.Create("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4), Parent = list })
+
+	for _, upgrade in ipairs(Config.Upgrades) do
+		createCard(list, upgrade)
+	end
+
+	ClientState.Changed:Connect(Shop.Refresh)
+	-- Rafraîchit aussi régulièrement (l'argent affiché augmente en continu)
+	task.spawn(function()
+		while panel.Parent do
+			Shop.Refresh()
+			task.wait(0.2)
+		end
+	end)
+
+	return panel
+end
+
+return Shop
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="19">
+          <Properties>
+            <string name="Name">SideMenu</string>
+            <string name="Source"><![CDATA[--[[
+	SideMenu (ModuleScript)
+	Emplacement : ReplicatedStorage > Client > Components > SideMenu
+
+	Colonne de boutons à gauche : Quêtes, Succès, Rebirth, Cadeau,
+	Classement, Paramètres. Une pastille rouge "!" signale ce qui est
+	disponible (cadeau à récupérer, rebirth possible).
+]]
+
+local RunService = game:GetService("RunService")
+
+local Client = script.Parent.Parent
+local Theme = require(Client.Theme)
+local UIUtil = require(Client.UIUtil)
+local ClientState = require(Client.ClientState)
+local PanelManager = require(script.Parent.PanelManager)
+
+local SideMenu = {}
+
+local ENTRIES = {
+	{ Panel = "Quests", Icon = "📜", Label = "Quêtes", Color = Theme.Colors.Green },
+	{ Panel = "Achievements", Icon = "🏆", Label = "Succès", Color = Theme.Colors.Yellow },
+	{ Panel = "Rebirth", Icon = "♻️", Label = "Rebirth", Color = Theme.Colors.Pink },
+	{ Panel = "Daily", Icon = "🎁", Label = "Cadeau", Color = Theme.Colors.Orange },
+	{ Panel = "Leaderboard", Icon = "🥇", Label = "Top", Color = Theme.Colors.Cyan },
+	{ Panel = "Settings", Icon = "⚙️", Label = "Options", Color = Theme.Colors.Purple },
+}
+
+local badges = {} -- [panel] = Frame
+
+function SideMenu.Build(parent: Frame)
+	local column = UIUtil.Create("Frame", {
+		Name = "SideMenu",
+		Size = UDim2.fromOffset(84, 6 * 76 + 5 * 8),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 14, 0.5, 36),
+		BackgroundTransparency = 1,
+		Parent = parent,
+	})
+	UIUtil.Create("UIListLayout", {
+		Padding = UDim.new(0, 8),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = column,
+	})
+
+	for index, entry in ipairs(ENTRIES) do
+		local button = UIUtil.NeonButton({
+			Name = entry.Panel,
+			Size = UDim2.fromOffset(84, 76),
+			Color = Theme.Colors.Panel,
+			StrokeColor = entry.Color,
+			LayoutOrder = index,
+			CornerRadius = 18,
+			Parent = column,
+		})
+		UIUtil.Label({
+			Text = entry.Icon,
+			Size = UDim2.new(1, 0, 0, 38),
+			Position = UDim2.fromOffset(0, 2),
+			MaxTextSize = 34,
+			Parent = button,
+		})
+		UIUtil.Label({
+			Text = entry.Label,
+			TextColor3 = entry.Color,
+			Size = UDim2.new(1, 0, 0, 18),
+			Position = UDim2.fromOffset(0, 44),
+			MaxTextSize = 14,
+			Parent = button,
+		})
+		button.Activated:Connect(function()
+			PanelManager.Toggle(entry.Panel)
+		end)
+
+		-- Pastille de notification
+		local badge = UIUtil.Create("Frame", {
+			Size = UDim2.fromOffset(22, 22),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(1, -4, 0, 4),
+			BackgroundColor3 = Theme.Colors.Red,
+			Visible = false,
+			ZIndex = 3,
+			Parent = button,
+		})
+		UIUtil.Corner(badge, UDim.new(1, 0))
+		UIUtil.Stroke(badge, Color3.new(1, 1, 1), 2)
+		UIUtil.Label({ Text = "!", Size = UDim2.fromScale(1, 1), ZIndex = 4, MaxTextSize = 16, Parent = badge })
+		badges[entry.Panel] = badge
+	end
+
+	-- Pastilles selon l'état
+	ClientState.Changed:Connect(function(data)
+		badges.Daily.Visible = data.Daily.Available
+		badges.Rebirth.Visible = data.Dopamine >= data.RebirthCost
+	end)
+
+	-- Les pastilles rebondissent pour attirer l'œil
+	RunService.RenderStepped:Connect(function()
+		local offset = math.abs(math.sin(os.clock() * 5)) * 4
+		for _, badge in pairs(badges) do
+			if badge.Visible then
+				badge.Position = UDim2.new(1, -4, 0, 4 - offset)
+			end
+		end
+	end)
+end
+
+return SideMenu
+]]></string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="ModuleScript" referent="20">
+        <Properties>
+          <string name="Name">Effects</string>
+          <string name="Source"><![CDATA[--[[
+	Effects (ModuleScript)
+	Emplacement : ReplicatedStorage > Client > Effects
+
+	Effets visuels 2D : textes flottants "+X", particules, confettis,
+	flash d'écran, gros messages. (Les ParticleEmitter ne fonctionnent pas
+	dans les interfaces, on anime donc de petits Frames.)
+]]
+
+local Debris = game:GetService("Debris")
+
+local Theme = require(script.Parent.Theme)
+local UIUtil = require(script.Parent.UIUtil)
+
+local Effects = {}
+
+local layer: Frame? = nil -- calque plein écran pour les effets
+local enabled = true -- paramètre "Effets" (particules / confettis)
+local random = Random.new()
+local activeParticles = 0
+local MAX_PARTICLES = 160 -- limite pour les petits appareils
+
+local CONFETTI_COLORS = {
+	Theme.Colors.Pink,
+	Theme.Colors.Cyan,
+	Theme.Colors.Purple,
+	Theme.Colors.Yellow,
+	Theme.Colors.Green,
+	Theme.Colors.Orange,
+}
+
+function Effects.Init(effectsLayer: Frame)
+	layer = effectsLayer
+end
+
+function Effects.SetEnabled(value: boolean)
+	enabled = value
+end
+
+-- Texte "+X" qui monte et disparaît
+function Effects.FloatingText(parent: GuiObject, position: UDim2, text: string, color: Color3?, size: number?)
+	local height = size or 34
+	local label = UIUtil.Label({
+		Text = text,
+		Font = Theme.Fonts.Number,
+		TextColor3 = color or Theme.Colors.Text,
+		Size = UDim2.fromOffset(height * 6, height),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = position,
+		Rotation = random:NextNumber(-12, 12),
+		ZIndex = 50,
+		MaxTextSize = height,
+		Parent = parent,
+	})
+	UIUtil.Stroke(label, Theme.Colors.TextDark, 2).ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+
+	local scale = UIUtil.Create("UIScale", { Scale = 0.4, Parent = label })
+	UIUtil.Tween(scale, 0.18, { Scale = 1.15 }, Enum.EasingStyle.Back)
+	UIUtil.Tween(label, 0.9, {
+		Position = position + UDim2.fromOffset(random:NextNumber(-30, 30), -110),
+		TextTransparency = 1,
+	}, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	local stroke = label:FindFirstChildOfClass("UIStroke")
+	if stroke then
+		UIUtil.Tween(stroke, 0.9, { Transparency = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	end
+	Debris:AddItem(label, 1)
+end
+
+-- Explosion de petites particules rondes autour d'un point
+function Effects.Burst(parent: GuiObject, position: UDim2, color: Color3?, count: number?)
+	if not enabled then
+		return
+	end
+	for _ = 1, count or 8 do
+		if activeParticles >= MAX_PARTICLES then
+			return
+		end
+		activeParticles += 1
+		local size = random:NextInteger(6, 14)
+		local particle = UIUtil.Create("Frame", {
+			Size = UDim2.fromOffset(size, size),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = position,
+			BackgroundColor3 = color or CONFETTI_COLORS[random:NextInteger(1, #CONFETTI_COLORS)],
+			BorderSizePixel = 0,
+			ZIndex = 40,
+			Parent = parent,
+		})
+		UIUtil.Corner(particle, UDim.new(1, 0))
+
+		local angle = random:NextNumber(0, math.pi * 2)
+		local distance = random:NextNumber(60, 160)
+		local duration = random:NextNumber(0.4, 0.7)
+		UIUtil.Tween(particle, duration, {
+			Position = position + UDim2.fromOffset(math.cos(angle) * distance, math.sin(angle) * distance),
+			BackgroundTransparency = 1,
+			Size = UDim2.fromOffset(2, 2),
+		}, Enum.EasingStyle.Quart)
+		task.delay(duration, function()
+			activeParticles -= 1
+			particle:Destroy()
+		end)
+	end
+end
+
+-- Pluie de confettis sur tout l'écran
+function Effects.Confetti(count: number?)
+	local target = layer
+	if not enabled or not target then
+		return
+	end
+	for _ = 1, count or 80 do
+		if activeParticles >= MAX_PARTICLES then
+			return
+		end
+		activeParticles += 1
+		local piece = UIUtil.Create("Frame", {
+			Size = UDim2.fromOffset(random:NextInteger(8, 16), random:NextInteger(14, 24)),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(random:NextNumber(0, 1), 0, 0, random:NextInteger(-200, -20)),
+			Rotation = random:NextNumber(0, 360),
+			BackgroundColor3 = CONFETTI_COLORS[random:NextInteger(1, #CONFETTI_COLORS)],
+			BorderSizePixel = 0,
+			ZIndex = 90,
+			Parent = target,
+		})
+		local duration = random:NextNumber(1.6, 3)
+		local start = piece.Position
+		UIUtil.Tween(piece, duration, {
+			Position = UDim2.new(start.X.Scale + random:NextNumber(-0.15, 0.15), 0, 1.1, 0),
+			Rotation = piece.Rotation + random:NextNumber(-720, 720),
+		}, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		task.delay(duration, function()
+			activeParticles -= 1
+			piece:Destroy()
+		end)
+	end
+end
+
+-- Flash coloré de tout l'écran
+function Effects.Flash(color: Color3?, strength: number?)
+	local target = layer
+	if not target then
+		return
+	end
+	local flash = UIUtil.Create("Frame", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = color or Color3.new(1, 1, 1),
+		BackgroundTransparency = 1 - (strength or 0.6),
+		BorderSizePixel = 0,
+		ZIndex = 95,
+		Parent = target,
+	})
+	UIUtil.Tween(flash, 0.6, { BackgroundTransparency = 1 })
+	Debris:AddItem(flash, 0.7)
+end
+
+-- Gros message au centre de l'écran (jackpot, rebirth...)
+function Effects.BigMessage(text: string, color: Color3?, duration: number?)
+	local target = layer
+	if not target then
+		return
+	end
+	local label = UIUtil.Label({
+		Text = text,
+		Font = Theme.Fonts.Title,
+		TextColor3 = color or Theme.Colors.Yellow,
+		Size = UDim2.new(0.9, 0, 0, 110),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.42),
+		ZIndex = 100,
+		MaxTextSize = 90,
+		Parent = target,
+	})
+	local stroke = UIUtil.Stroke(label, Theme.Colors.Pink, 4)
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+
+	local scale = UIUtil.Create("UIScale", { Scale = 0.1, Parent = label })
+	UIUtil.Tween(scale, 0.5, { Scale = 1 }, Enum.EasingStyle.Elastic)
+
+	-- Petit clignotement de couleur
+	task.spawn(function()
+		local colors = { Theme.Colors.Yellow, Theme.Colors.Cyan, Theme.Colors.Pink, Theme.Colors.Green }
+		local index = 0
+		local finish = os.clock() + (duration or 2.5)
+		while label.Parent and os.clock() < finish do
+			index = index % #colors + 1
+			label.TextColor3 = colors[index]
+			task.wait(0.12)
+		end
+		UIUtil.Tween(label, 0.4, { TextTransparency = 1 })
+		UIUtil.Tween(stroke, 0.4, { Transparency = 1 })
+		task.wait(0.4)
+		label:Destroy()
+	end)
+end
+
+return Effects
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="21">
+        <Properties>
+          <string name="Name">Interface</string>
+          <string name="Source"><![CDATA[--[[
+	Interface (ModuleScript)
+	Emplacement : ReplicatedStorage > Client > Interface
+
+	Crée la ScreenGui et la "toile virtuelle" responsive :
+	  - toute l'interface est pensée pour un écran de 1280x720 ;
+	  - un UIScale agrandit / réduit l'ensemble selon l'écran réel
+	    (PC, mobile, tablette) ;
+	  - le cadre "Root" s'étire pour toujours couvrir tout l'écran.
+
+	Calques (du plus bas au plus haut) :
+	  Main (HUD, bouton, boutique, menu) < DVD < Golden < Panels < Toasts < Effects
+]]
+
+local Players = game:GetService("Players")
+
+local Theme = require(script.Parent.Theme)
+local UIUtil = require(script.Parent.UIUtil)
+
+local Interface = {}
+
+Interface.ScreenGui = nil :: ScreenGui?
+Interface.Root = nil :: Frame?
+Interface.Layers = {} :: { [string]: Frame }
+Interface.Scale = 1
+
+local LAYER_ORDER = { "Main", "DVD", "Golden", "Panels", "Toasts", "Effects" }
+
+function Interface.Build(): ScreenGui
+	local player = Players.LocalPlayer
+	local playerGui = player:WaitForChild("PlayerGui") :: PlayerGui
+	-- Le jeu se joue en paysage sur mobile
+	playerGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeSensor
+
+	local old = playerGui:FindFirstChild("DopamineGui")
+	if old then
+		old:Destroy()
+	end
+
+	local screenGui = UIUtil.Create("ScreenGui", {
+		Name = "DopamineGui",
+		ResetOnSpawn = false,
+		IgnoreGuiInset = true,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		Parent = playerGui,
+	})
+
+	-- Toile virtuelle mise à l'échelle
+	local root = UIUtil.Create("Frame", {
+		Name = "Root",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 2,
+		Parent = screenGui,
+	})
+	local uiScale = UIUtil.Create("UIScale", { Parent = root })
+
+	for index, name in ipairs(LAYER_ORDER) do
+		Interface.Layers[name] = UIUtil.Create("Frame", {
+			Name = name,
+			BackgroundTransparency = 1,
+			Size = UDim2.fromScale(1, 1),
+			ZIndex = index,
+			Parent = root,
+		})
+	end
+
+	-- Recalcule l'échelle quand la taille de l'écran change
+	local function updateScale()
+		local camera = workspace.CurrentCamera
+		if not camera then
+			return
+		end
+		local viewport = camera.ViewportSize
+		if viewport.X < 1 or viewport.Y < 1 then
+			return
+		end
+		local design = Theme.DesignResolution
+		local scale = math.clamp(math.min(viewport.X / design.X, viewport.Y / design.Y), Theme.MinScale, Theme.MaxScale)
+		Interface.Scale = scale
+		uiScale.Scale = scale
+		-- Root fait (écran / échelle) pour couvrir exactement l'écran une fois agrandi
+		root.Size = UDim2.fromOffset(viewport.X / scale, viewport.Y / scale)
+	end
+
+	local function watchCamera()
+		local camera = workspace.CurrentCamera
+		if camera then
+			camera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
+		end
+		updateScale()
+	end
+	workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(watchCamera)
+	watchCamera()
+
+	Interface.ScreenGui = screenGui
+	Interface.Root = root
+	return screenGui
+end
+
+return Interface
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="22">
+        <Properties>
+          <string name="Name">SoundManager</string>
+          <string name="Source"><![CDATA[--[[
+	SoundManager (ModuleScript)
+	Emplacement : ReplicatedStorage > Client > SoundManager
+
+	Joue les sons et la musique (côté client uniquement).
+	Les IDs se changent dans Config.Sounds.
+]]
+
+local ContentProvider = game:GetService("ContentProvider")
+local Debris = game:GetService("Debris")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SoundService = game:GetService("SoundService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+
+local SoundManager = {}
+
+local soundEnabled = true
+local musicEnabled = true
+local templates: { [string]: Sound } = {}
+local music: Sound? = nil
+
+-- Crée un "modèle" de son pour chaque entrée de Config.Sounds
+function SoundManager.Init()
+	local folder = Instance.new("Folder")
+	folder.Name = "DopamineSounds"
+	folder.Parent = SoundService
+
+	local toPreload = {}
+	for name, info in pairs(Config.Sounds) do
+		if info.Id ~= "" then
+			local sound = Instance.new("Sound")
+			sound.Name = name
+			sound.SoundId = info.Id
+			sound.Volume = info.Volume
+			sound.Parent = folder
+			templates[name] = sound
+			table.insert(toPreload, sound)
+		end
+	end
+
+	-- Musique de fond
+	local musicTemplate = templates.Music
+	if musicTemplate then
+		musicTemplate.Looped = true
+		music = musicTemplate
+	end
+
+	-- Préchargement en arrière-plan (évite un petit délai au premier clic)
+	task.spawn(function()
+		pcall(function()
+			ContentProvider:PreloadAsync(toPreload)
+		end)
+	end)
+end
+
+-- Joue un son. `pitch` change la hauteur (1 = normal).
+function SoundManager.Play(name: string, pitch: number?)
+	if not soundEnabled then
+		return
+	end
+	local template = templates[name]
+	if not template then
+		return
+	end
+	local sound = template:Clone()
+	sound.PlaybackSpeed = pitch or 1
+	sound.Parent = SoundService
+	sound:Play()
+	Debris:AddItem(sound, math.max(2, sound.TimeLength + 0.5))
+end
+
+function SoundManager.SetSoundEnabled(enabled: boolean)
+	soundEnabled = enabled
+end
+
+function SoundManager.SetMusicEnabled(enabled: boolean)
+	musicEnabled = enabled
+	local track = music
+	if not track then
+		return
+	end
+	if musicEnabled and not track.IsPlaying then
+		track:Play()
+	elseif not musicEnabled and track.IsPlaying then
+		track:Stop()
+	end
+end
+
+return SoundManager
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="23">
+        <Properties>
+          <string name="Name">Theme</string>
+          <string name="Source"><![CDATA[--[[
+	Theme (ModuleScript)
+	Emplacement : ReplicatedStorage > Client > Theme
+
+	Direction artistique : néon / cyberpunk / arcade.
+	Change les couleurs et polices ici pour modifier TOUTE l'interface.
+]]
+
+local Theme = {}
+
+Theme.Colors = {
+	-- Fond
+	BackgroundTop = Color3.fromRGB(26, 6, 51),
+	BackgroundMid = Color3.fromRGB(58, 12, 94),
+	BackgroundBottom = Color3.fromRGB(6, 22, 56),
+
+	-- Néons
+	Purple = Color3.fromRGB(157, 78, 221),
+	Pink = Color3.fromRGB(255, 46, 136),
+	Cyan = Color3.fromRGB(0, 240, 255),
+	Yellow = Color3.fromRGB(255, 229, 59),
+	Green = Color3.fromRGB(57, 255, 20),
+	Orange = Color3.fromRGB(255, 140, 40),
+	Red = Color3.fromRGB(255, 60, 80),
+	Gold = Color3.fromRGB(255, 200, 40),
+
+	-- Panneaux
+	Panel = Color3.fromRGB(20, 10, 46),
+	PanelLight = Color3.fromRGB(38, 20, 78),
+	Card = Color3.fromRGB(30, 16, 62),
+	Disabled = Color3.fromRGB(70, 64, 90),
+
+	-- Texte
+	Text = Color3.fromRGB(255, 255, 255),
+	TextDim = Color3.fromRGB(190, 175, 225),
+	TextDark = Color3.fromRGB(20, 10, 40),
+}
+
+Theme.Fonts = {
+	Title = Enum.Font.Michroma, -- titres (style futuriste)
+	Body = Enum.Font.GothamBold, -- textes
+	Number = Enum.Font.GothamBlack, -- compteurs
+}
+
+-- Résolution de référence : toute l'interface est pensée en 1280x720,
+-- puis mise à l'échelle automatiquement (UIScale) selon l'écran.
+Theme.DesignResolution = Vector2.new(1280, 720)
+Theme.MinScale = 0.45
+Theme.MaxScale = 1.6
+
+-- Dégradé néon principal (rose -> violet -> cyan)
+Theme.NeonGradient = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Theme.Colors.Pink),
+	ColorSequenceKeypoint.new(0.5, Theme.Colors.Purple),
+	ColorSequenceKeypoint.new(1, Theme.Colors.Cyan),
+})
+
+return Theme
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="24">
+        <Properties>
+          <string name="Name">UIUtil</string>
+          <string name="Source"><![CDATA[--[[
+	UIUtil (ModuleScript)
+	Emplacement : ReplicatedStorage > Client > UIUtil
+
+	Fonctions utilitaires pour créer l'interface en code : création
+	d'instances, coins arrondis, contours néon, dégradés, boutons animés...
+]]
+
+local TweenService = game:GetService("TweenService")
+
+local Theme = require(script.Parent.Theme)
+
+local UIUtil = {}
+
+-- Crée une instance avec ses propriétés et ses enfants.
+-- Le Parent est appliqué en dernier (meilleures performances).
+function UIUtil.Create(className: string, props: { [string]: any }?, children: { Instance }?): any
+	local instance = Instance.new(className)
+	local parent = nil
+	if props then
+		for key, value in pairs(props) do
+			if key == "Parent" then
+				parent = value
+			else
+				(instance :: any)[key] = value
+			end
+		end
+	end
+	if children then
+		for _, child in ipairs(children) do
+			child.Parent = instance
+		end
+	end
+	if parent then
+		instance.Parent = parent
+	end
+	return instance
+end
+
+function UIUtil.Corner(parent: Instance, radius: (number | UDim)?): UICorner
+	local value = radius or 12
+	return UIUtil.Create("UICorner", {
+		CornerRadius = (typeof(value) == "UDim") and value or UDim.new(0, value :: number),
+		Parent = parent,
+	})
+end
+
+function UIUtil.Stroke(parent: Instance, color: Color3?, thickness: number?, transparency: number?): UIStroke
+	return UIUtil.Create("UIStroke", {
+		Color = color or Theme.Colors.Cyan,
+		Thickness = thickness or 2,
+		Transparency = transparency or 0,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		Parent = parent,
+	})
+end
+
+function UIUtil.Gradient(parent: Instance, color: ColorSequence?, rotation: number?): UIGradient
+	return UIUtil.Create("UIGradient", {
+		Color = color or Theme.NeonGradient,
+		Rotation = rotation or 0,
+		Parent = parent,
+	})
+end
+
+function UIUtil.Padding(parent: Instance, pixels: number): UIPadding
+	local padding = UDim.new(0, pixels)
+	return UIUtil.Create("UIPadding", {
+		PaddingTop = padding,
+		PaddingBottom = padding,
+		PaddingLeft = padding,
+		PaddingRight = padding,
+		Parent = parent,
+	})
+end
+
+-- Lance une animation (Tween) et la renvoie
+function UIUtil.Tween(
+	instance: Instance,
+	duration: number,
+	props: { [string]: any },
+	style: Enum.EasingStyle?,
+	direction: Enum.EasingDirection?
+): Tween
+	local tween = TweenService:Create(
+		instance,
+		TweenInfo.new(duration, style or Enum.EasingStyle.Quad, direction or Enum.EasingDirection.Out),
+		props
+	)
+	tween:Play()
+	return tween
+end
+
+-- Texte simple, transparent, avec la police du thème.
+-- MaxTextSize limite la taille du texte (TextScaled) pour éviter les textes géants.
+function UIUtil.Label(props: { [string]: any }): TextLabel
+	local maxTextSize = props.MaxTextSize or 48
+	local finalProps = {
+		BackgroundTransparency = 1,
+		Font = Theme.Fonts.Body,
+		TextColor3 = Theme.Colors.Text,
+		TextScaled = true,
+		Text = "",
+	}
+	for key, value in pairs(props) do
+		if key ~= "MaxTextSize" then
+			finalProps[key] = value
+		end
+	end
+	local label = UIUtil.Create("TextLabel", finalProps)
+	UIUtil.Create("UITextSizeConstraint", { MaxTextSize = maxTextSize, MinTextSize = 6, Parent = label })
+	return label
+end
+
+-- Ajoute les animations de survol / appui à n'importe quel bouton
+function UIUtil.AnimateButton(button: GuiButton, hoverScale: number?, pressScale: number?)
+	local uiScale = button:FindFirstChild("AnimScale") :: UIScale?
+	if not uiScale then
+		uiScale = UIUtil.Create("UIScale", { Name = "AnimScale", Parent = button })
+	end
+	local scale = uiScale :: UIScale
+	local hover = hoverScale or 1.06
+	local press = pressScale or 0.92
+	local hovering = false
+
+	button.MouseEnter:Connect(function()
+		hovering = true
+		UIUtil.Tween(scale, 0.15, { Scale = hover }, Enum.EasingStyle.Back)
+	end)
+	button.MouseLeave:Connect(function()
+		hovering = false
+		UIUtil.Tween(scale, 0.15, { Scale = 1 })
+	end)
+	button.MouseButton1Down:Connect(function()
+		UIUtil.Tween(scale, 0.08, { Scale = press })
+	end)
+	button.MouseButton1Up:Connect(function()
+		UIUtil.Tween(scale, 0.25, { Scale = hovering and hover or 1 }, Enum.EasingStyle.Back)
+	end)
+end
+
+-- Bouton néon standard (fond coloré, contour lumineux, animé)
+function UIUtil.NeonButton(props: { [string]: any }): TextButton
+	local color = props.Color or Theme.Colors.Pink
+	local button = UIUtil.Create("TextButton", {
+		Name = props.Name or "NeonButton",
+		Size = props.Size or UDim2.fromOffset(160, 48),
+		Position = props.Position or UDim2.new(),
+		AnchorPoint = props.AnchorPoint or Vector2.zero,
+		BackgroundColor3 = color,
+		AutoButtonColor = false,
+		Font = props.Font or Theme.Fonts.Body,
+		Text = props.Text or "",
+		TextColor3 = props.TextColor3 or Theme.Colors.Text,
+		TextScaled = true,
+		LayoutOrder = props.LayoutOrder or 0,
+		ZIndex = props.ZIndex or 1,
+		Parent = props.Parent,
+	})
+	UIUtil.Corner(button, props.CornerRadius or 12)
+	UIUtil.Stroke(button, props.StrokeColor or Theme.Colors.Text, 2, 0.4)
+	UIUtil.Create("UITextSizeConstraint", { MaxTextSize = props.MaxTextSize or 26, Parent = button })
+	UIUtil.Create("UIPadding", {
+		PaddingLeft = UDim.new(0, 8),
+		PaddingRight = UDim.new(0, 8),
+		PaddingTop = UDim.new(0, 4),
+		PaddingBottom = UDim.new(0, 4),
+		Parent = button,
+	})
+	-- Léger dégradé pour un effet "brillant"
+	UIUtil.Gradient(button, ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(200, 200, 200)), 90)
+	button:SetAttribute("BaseColor", color)
+	button:SetAttribute("Enabled", true)
+	UIUtil.AnimateButton(button)
+	return button
+end
+
+-- Active / grise un bouton (garde sa couleur d'origine en attribut).
+-- Le bouton reste cliquable : l'appelant joue un son "erreur" + secousse
+-- s'il est désactivé (meilleur retour pour le joueur).
+function UIUtil.SetButtonEnabled(button: GuiButton, enabled: boolean)
+	local baseColor = button:GetAttribute("BaseColor") or Theme.Colors.Pink
+	button.BackgroundColor3 = enabled and baseColor or Theme.Colors.Disabled
+	if button:IsA("TextButton") then
+		button.TextTransparency = enabled and 0 or 0.35
+	end
+	button:SetAttribute("Enabled", enabled)
+end
+
+-- Petite animation "non !" (secousse) sur un élément
+function UIUtil.Shake(guiObject: GuiObject)
+	if guiObject:GetAttribute("Shaking") then
+		return -- déjà en train de trembler : on ne décale pas la position d'origine
+	end
+	guiObject:SetAttribute("Shaking", true)
+	local origin = guiObject.Position
+	task.spawn(function()
+		for i = 1, 6 do
+			local offset = (i % 2 == 0) and 6 or -6
+			guiObject.Position = origin + UDim2.fromOffset(offset, 0)
+			task.wait(0.03)
+		end
+		guiObject.Position = origin
+		guiObject:SetAttribute("Shaking", nil)
+	end)
+end
+
+return UIUtil
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+    <Item class="Folder" referent="25">
+      <Properties>
+        <string name="Name">Shared</string>
+      </Properties>
+      <Item class="ModuleScript" referent="26">
+        <Properties>
+          <string name="Name">Config</string>
+          <string name="Source"><![CDATA[--[[
+	Config (ModuleScript)
+	Emplacement : ReplicatedStorage > Shared > Config
+
+	TOUTE la configuration du jeu est ici : améliorations, succès, quêtes,
+	événements, sons, rebirth... Modifie les valeurs librement, le reste du
+	code s'adapte automatiquement.
+
+	Ce module est lu par le serveur ET par le client. Le serveur reste la seule
+	source de vérité : changer ce fichier côté client (triche) ne change rien
+	aux gains réels.
+]]
+
+local Config = {}
+
+----------------------------------------------------------------------
+-- Réglages généraux
+----------------------------------------------------------------------
+Config.Game = {
+	CurrencyName = "Dopamine",
+	MaxClicksPerSecond = 20, -- anti-triche : au-delà, les clics sont ignorés
+	PassiveTickRate = 0.25, -- intervalle (s) entre deux ajouts de gains passifs
+	SyncRate = 0.2, -- intervalle (s) entre deux envois de l'état au client
+	MaxDopamine = 1e300, -- plafond de sécurité (évite l'infini)
+}
+
+----------------------------------------------------------------------
+-- Combo : cliquer vite remplit une jauge (0 à 100) qui multiplie les clics
+----------------------------------------------------------------------
+Config.Combo = {
+	GainPerClick = 5, -- points de jauge gagnés par clic
+	DecayPerSecond = 25, -- points perdus par seconde (il faut > 5 clics/s pour monter)
+	MaxMultiplier = 3, -- multiplicateur quand la jauge est pleine
+}
+
+----------------------------------------------------------------------
+-- Améliorations de la boutique
+--   Category : "Click" (+X par clic), "Passive" (+X par seconde),
+--              "Multiplier" (multiplie TOUS les gains par Value^niveau)
+--   Coût du niveau N = BaseCost * CostGrowth^N
+--   MaxLevel : optionnel (nil = infini)
+----------------------------------------------------------------------
+Config.Upgrades = {
+	-- Améliorations de clic
+	{ Id = "Finger", Category = "Click", Name = "Doigt agile", Icon = "👆", Value = 1, BaseCost = 15, CostGrowth = 1.15 },
+	{ Id = "Mouse", Category = "Click", Name = "Souris gaming", Icon = "🖱️", Value = 5, BaseCost = 250, CostGrowth = 1.15 },
+	{ Id = "Keyboard", Category = "Click", Name = "Clavier RGB", Icon = "⌨️", Value = 25, BaseCost = 3500, CostGrowth = 1.15 },
+	{ Id = "BionicHand", Category = "Click", Name = "Main bionique", Icon = "🦾", Value = 100, BaseCost = 45000, CostGrowth = 1.16 },
+	{ Id = "QuantumClick", Category = "Click", Name = "Clic quantique", Icon = "⚛️", Value = 500, BaseCost = 700000, CostGrowth = 1.17 },
+	{ Id = "GodFinger", Category = "Click", Name = "Doigt divin", Icon = "✨", Value = 2500, BaseCost = 1.2e7, CostGrowth = 1.18 },
+
+	-- Générateurs passifs
+	{ Id = "AutoClicker", Category = "Passive", Name = "Auto-clicker", Icon = "🤖", Value = 1, BaseCost = 50, CostGrowth = 1.15 },
+	{ Id = "Brain", Category = "Passive", Name = "Cerveau", Icon = "🧠", Value = 8, BaseCost = 600, CostGrowth = 1.15 },
+	{ Id = "NeuronLab", Category = "Passive", Name = "Labo de neurones", Icon = "🔬", Value = 47, BaseCost = 7000, CostGrowth = 1.15 },
+	{ Id = "Factory", Category = "Passive", Name = "Usine à dopamine", Icon = "🏭", Value = 260, BaseCost = 80000, CostGrowth = 1.15 },
+	{ Id = "SocialNetwork", Category = "Passive", Name = "Réseau social", Icon = "📱", Value = 1400, BaseCost = 1e6, CostGrowth = 1.15 },
+	{ Id = "LikeSatellite", Category = "Passive", Name = "Satellite à likes", Icon = "🛰️", Value = 7800, BaseCost = 1.4e7, CostGrowth = 1.15 },
+	{ Id = "GalacticDopamine", Category = "Passive", Name = "Dopamine galactique", Icon = "🌌", Value = 44000, BaseCost = 2e8, CostGrowth = 1.15 },
+
+	-- Multiplicateurs globaux (achat unique)
+	{ Id = "Coffee", Category = "Multiplier", Name = "Café serré", Icon = "☕", Value = 2, BaseCost = 25000, CostGrowth = 1, MaxLevel = 1 },
+	{ Id = "Endorphins", Category = "Multiplier", Name = "Endorphines", Icon = "💊", Value = 5, BaseCost = 5e6, CostGrowth = 1, MaxLevel = 1 },
+	{ Id = "MegaDose", Category = "Multiplier", Name = "Méga-dose", Icon = "💉", Value = 10, BaseCost = 1e9, CostGrowth = 1, MaxLevel = 1 },
+	{ Id = "Singularity", Category = "Multiplier", Name = "Singularité", Icon = "🌀", Value = 25, BaseCost = 1e12, CostGrowth = 1, MaxLevel = 1 },
+}
+
+-- Onglets de la boutique (ordre d'affichage)
+Config.ShopCategories = {
+	{ Id = "Click", Name = "CLIC" },
+	{ Id = "Passive", Name = "PASSIF" },
+	{ Id = "Multiplier", Name = "MULTI" },
+}
+
+-- Nombre maximum de niveaux achetés en une fois avec le mode "MAX"
+Config.MaxBulkBuy = 1000
+
+----------------------------------------------------------------------
+-- Rebirth (prestige)
+----------------------------------------------------------------------
+Config.Rebirth = {
+	BaseCost = 1e6, -- Dopamine nécessaire pour le 1er rebirth
+	CostGrowth = 8, -- chaque rebirth coûte x8 de plus
+	MultiplierPerRebirth = 0.5, -- +50 % de gains permanents par rebirth
+}
+
+----------------------------------------------------------------------
+-- Récompenses "à l'échelle" : beaucoup de récompenses valent
+-- "X secondes de production" pour rester intéressantes à tous les stades.
+-- Production estimée = Dopamine/s + (Dopamine/clic * EstimatedClicksPerSecond)
+----------------------------------------------------------------------
+Config.Rewards = {
+	EstimatedClicksPerSecond = 3,
+}
+
+-- Chaque succès débloqué donne +X % de gains permanents
+Config.AchievementBonus = 0.02
+
+----------------------------------------------------------------------
+-- Succès
+--   Stat : nom de la statistique suivie (voir Data.Stats côté serveur)
+--   Reward : Dopamine offerte au déblocage
+----------------------------------------------------------------------
+Config.Achievements = {
+	{ Id = "Clicks100", Name = "Doigt chaud", Icon = "👆", Stat = "TotalClicks", Goal = 100, Reward = 200 },
+	{ Id = "Clicks1K", Name = "Clic addict", Icon = "🔥", Stat = "TotalClicks", Goal = 1000, Reward = 5000 },
+	{ Id = "Clicks10K", Name = "Tendinite", Icon = "🩹", Stat = "TotalClicks", Goal = 10000, Reward = 250000 },
+	{ Id = "Clicks100K", Name = "Machine humaine", Icon = "🦿", Stat = "TotalClicks", Goal = 100000, Reward = 5e7 },
+	{ Id = "Earn1K", Name = "Premier shoot", Icon = "💧", Stat = "LifetimeDopamine", Goal = 1000, Reward = 100 },
+	{ Id = "Earn1M", Name = "Millionnaire du bonheur", Icon = "💰", Stat = "LifetimeDopamine", Goal = 1e6, Reward = 50000 },
+	{ Id = "Earn1B", Name = "Milliardaire neuronal", Icon = "💎", Stat = "LifetimeDopamine", Goal = 1e9, Reward = 5e7 },
+	{ Id = "Earn1T", Name = "Cerveau cosmique", Icon = "🪐", Stat = "LifetimeDopamine", Goal = 1e12, Reward = 5e10 },
+	{ Id = "Buy10", Name = "Shopping", Icon = "🛒", Stat = "UpgradesBought", Goal = 10, Reward = 500 },
+	{ Id = "Buy100", Name = "Accro aux achats", Icon = "🛍️", Stat = "UpgradesBought", Goal = 100, Reward = 100000 },
+	{ Id = "Combo1", Name = "Combo max !", Icon = "⚡", Stat = "CombosMaxed", Goal = 1, Reward = 1000 },
+	{ Id = "DVD1", Name = "Chasseur de logo", Icon = "📀", Stat = "DVDClicks", Goal = 1, Reward = 250 },
+	{ Id = "Corner1", Name = "LE COIN !!!", Icon = "📐", Stat = "DVDCorners", Goal = 1, Reward = 100000 },
+	{ Id = "Golden1", Name = "Main en or", Icon = "🌟", Stat = "GoldenClicks", Goal = 1, Reward = 1000 },
+	{ Id = "Golden10", Name = "Chercheur d'or", Icon = "🏆", Stat = "GoldenClicks", Goal = 10, Reward = 500000 },
+	{ Id = "Quests5", Name = "Aventurier", Icon = "📜", Stat = "QuestsCompleted", Goal = 5, Reward = 5000 },
+	{ Id = "Daily3", Name = "Fidèle", Icon = "📅", Stat = "DailyClaims", Goal = 3, Reward = 10000 },
+	{ Id = "Rebirth1", Name = "Renaissance", Icon = "♻️", Stat = "Rebirths", Goal = 1, Reward = 1000 },
+	{ Id = "Rebirth5", Name = "Phénix", Icon = "🦅", Stat = "Rebirths", Goal = 5, Reward = 1e8 },
+}
+
+----------------------------------------------------------------------
+-- Quêtes (3 actives en même temps, remplacées dès qu'elles sont finies)
+--   Goals : objectifs possibles (tirés au hasard)
+--   GoalSeconds : pour "Earn", l'objectif vaut X secondes de production
+--   RewardSeconds : récompense en secondes de production (minimum MinReward)
+--   Le "%s" de Text est remplacé par l'objectif.
+----------------------------------------------------------------------
+Config.Quests = {
+	ActiveCount = 3,
+	Pool = {
+		{ Type = "Clicks", Text = "Fais %s clics", Goals = { 50, 150, 300, 500 }, RewardSeconds = 60, MinReward = 100 },
+		{ Type = "Earn", Text = "Gagne %s Dopamine", GoalSeconds = { 60, 120, 300 }, MinGoal = 500, RewardSeconds = 90, MinReward = 150 },
+		{ Type = "Buy", Text = "Achète %s améliorations", Goals = { 3, 5, 10 }, RewardSeconds = 60, MinReward = 100 },
+		{ Type = "DVDClicks", Text = "Clique %s fois sur le logo DVD", Goals = { 1, 2, 3 }, RewardSeconds = 120, MinReward = 200 },
+		{ Type = "Golden", Text = "Attrape %s objet(s) doré(s)", Goals = { 1, 2 }, RewardSeconds = 180, MinReward = 300 },
+		{ Type = "Combo", Text = "Remplis la jauge de combo %s fois", Goals = { 1, 2, 3 }, RewardSeconds = 120, MinReward = 200 },
+	},
+}
+
+----------------------------------------------------------------------
+-- Récompense quotidienne (jour = jour UTC)
+----------------------------------------------------------------------
+Config.Daily = {
+	BaseRewardSeconds = 120, -- récompense du jour 1 (en secondes de production)
+	StreakBonusSeconds = 60, -- + X secondes par jour de série
+	MaxStreakBonus = 7, -- la série plafonne au jour 7
+	MinReward = 250, -- minimum (multiplié par le jour de série)
+}
+
+----------------------------------------------------------------------
+-- Événements aléatoires
+----------------------------------------------------------------------
+Config.Events = {
+	Rush = {
+		Name = "DOPAMINE RUSH",
+		Multiplier = 2,
+		Duration = 30,
+		MinInterval = 150, -- temps (s) minimum entre deux Rush
+		MaxInterval = 300,
+	},
+	Golden = {
+		MinInterval = 40, -- temps (s) entre deux objets dorés pour un joueur
+		MaxInterval = 100,
+		Lifetime = 6, -- durée d'affichage avant disparition
+		RewardSeconds = 90,
+		MinReward = 300,
+		Image = "", -- mets un "rbxassetid://..." ou laisse vide (emoji 🌟)
+	},
+	-- En test dans Studio, les événements arrivent X fois plus vite
+	StudioSpeedup = 5,
+}
+
+----------------------------------------------------------------------
+-- Logo DVD rebondissant
+--   Les positions sont "normalisées" (0 à 1 = largeur/hauteur de l'écran)
+--   pour fonctionner à l'identique sur PC, mobile et tablette.
+----------------------------------------------------------------------
+Config.DVD = {
+	Speed = 0.16, -- fraction de l'écran parcourue par seconde
+	LogoSize = Vector2.new(170, 90), -- taille en pixels "design" (1280x720)
+	LogoImage = "", -- "rbxassetid://..." (image BLANCHE, recolorée à chaque rebond) ou vide
+	CornerTolerance = 0.006, -- marge pour considérer qu'un coin est touché (0.6 % de l'écran)
+	ClickCooldown = 6, -- secondes entre deux clics récompensés sur le logo
+	ClickRewardSeconds = 15,
+	ClickMinReward = 25,
+	JackpotRewardSeconds = 600,
+	JackpotMinReward = 10000,
+	Colors = {
+		Color3.fromRGB(255, 46, 136),
+		Color3.fromRGB(0, 240, 255),
+		Color3.fromRGB(157, 78, 221),
+		Color3.fromRGB(57, 255, 20),
+		Color3.fromRGB(255, 229, 59),
+		Color3.fromRGB(255, 120, 30),
+	},
+}
+
+----------------------------------------------------------------------
+-- Classement global
+----------------------------------------------------------------------
+Config.Leaderboard = {
+	StoreName = "DopamineLeaderboard_v1",
+	UpdateInterval = 60, -- secondes
+	Size = 10,
+}
+
+----------------------------------------------------------------------
+-- Sauvegarde
+----------------------------------------------------------------------
+Config.DataStore = {
+	Name = "DopamineClickerData_v1", -- change le nom pour repartir de zéro
+	AutoSaveInterval = 120, -- sauvegarde périodique (s)
+	MaxRetries = 4,
+}
+
+----------------------------------------------------------------------
+-- Sons : remplace par tes propres IDs ("rbxassetid://123456789").
+-- Laisse "" pour désactiver un son.
+-- Les "rbxasset://sounds/..." sont des sons intégrés à Roblox (toujours dispo).
+----------------------------------------------------------------------
+Config.Sounds = {
+	Click = { Id = "rbxasset://sounds/clickfast.wav", Volume = 0.5 },
+	Buy = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.6 },
+	Error = { Id = "rbxasset://sounds/clickfast.wav", Volume = 0.3 },
+	Bounce = { Id = "rbxasset://sounds/clickfast.wav", Volume = 0.15 },
+	Bonus = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.6 },
+	Achievement = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.8 },
+	Jackpot = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 1 },
+	Golden = { Id = "rbxasset://sounds/swoosh.wav", Volume = 0.6 },
+	Rush = { Id = "rbxasset://sounds/swoosh.wav", Volume = 0.8 },
+	Rebirth = { Id = "rbxasset://sounds/swoosh.wav", Volume = 1 },
+	Open = { Id = "rbxasset://sounds/swoosh.wav", Volume = 0.3 },
+	Music = { Id = "", Volume = 0.3 }, -- musique de fond en boucle (mets ton ID)
+}
+
+----------------------------------------------------------------------
+-- Index calculés automatiquement (ne pas modifier)
+----------------------------------------------------------------------
+Config.UpgradesById = {}
+for index, upgrade in ipairs(Config.Upgrades) do
+	upgrade.Order = index
+	Config.UpgradesById[upgrade.Id] = upgrade
+end
+
+Config.AchievementsById = {}
+for _, achievement in ipairs(Config.Achievements) do
+	Config.AchievementsById[achievement.Id] = achievement
+end
+
+return Config
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="27">
+        <Properties>
+          <string name="Name">DVDMath</string>
+          <string name="Source"><![CDATA[--[[
+	DVDMath (ModuleScript)
+	Emplacement : ReplicatedStorage > Shared > DVDMath
+
+	Mathématiques du logo DVD, partagées entre serveur et client.
+
+	Le mouvement est DÉTERMINISTE : à partir de quelques paramètres
+	(position de départ, vitesse, heure de départ), on peut calculer la
+	position exacte à n'importe quel instant. Avantages :
+	  - mouvement parfaitement fluide, quel que soit le nombre d'images/s ;
+	  - le serveur peut vérifier qu'un "coin touché" est réel (anti-triche).
+
+	Coordonnées normalisées : 0 = bord gauche/haut, 1 = bord droit/bas.
+	Le coin haut-gauche du logo se déplace dans [0, 1 - largeurLogo].
+]]
+
+local DVDMath = {}
+
+export type Params = {
+	X0: number, -- position de départ (normalisée)
+	Y0: number,
+	VX: number, -- vitesse (fraction d'écran par seconde, signe = direction)
+	VY: number,
+	T0: number, -- heure serveur de départ (workspace:GetServerTimeNow())
+	W: number, -- taille du logo (fraction de l'écran)
+	H: number,
+}
+
+-- "Onde triangle" : fait rebondir une valeur qui avance tout droit entre 0 et range
+function DVDMath.Triangle(u: number, range: number): number
+	if range <= 0 then
+		return 0
+	end
+	local m = u % (2 * range) -- toujours positif en Luau
+	if m <= range then
+		return m
+	end
+	return 2 * range - m
+end
+
+function DVDMath.Ranges(params: Params): (number, number)
+	return math.max(0.001, 1 - params.W), math.max(0.001, 1 - params.H)
+end
+
+-- Distance "dépliée" parcourue (sans rebond) sur chaque axe au temps t
+function DVDMath.Unfolded(params: Params, t: number): (number, number)
+	local dt = t - params.T0
+	return params.X0 + params.VX * dt, params.Y0 + params.VY * dt
+end
+
+-- Position réelle (avec rebonds) au temps t
+function DVDMath.Position(params: Params, t: number): (number, number)
+	local rangeX, rangeY = DVDMath.Ranges(params)
+	local u, v = DVDMath.Unfolded(params, t)
+	return DVDMath.Triangle(u, rangeX), DVDMath.Triangle(v, rangeY)
+end
+
+-- Numéro du "segment" entre deux rebonds sur chaque axe.
+-- Quand ce numéro change, le logo vient de rebondir.
+function DVDMath.BounceIndex(params: Params, t: number): (number, number)
+	local rangeX, rangeY = DVDMath.Ranges(params)
+	local u, v = DVDMath.Unfolded(params, t)
+	return math.floor(u / rangeX), math.floor(v / rangeY)
+end
+
+-- Heure exacte du rebond horizontal numéro k (quand u = k * rangeX)
+function DVDMath.BounceTimeX(params: Params, k: number): number
+	local rangeX = DVDMath.Ranges(params)
+	return params.T0 + (k * rangeX - params.X0) / params.VX
+end
+
+-- Au moment du rebond horizontal k, le logo est-il aussi contre un bord
+-- vertical ? Si oui : COIN !
+function DVDMath.IsCornerAtBounceX(params: Params, k: number, tolerance: number): boolean
+	local _, rangeY = DVDMath.Ranges(params)
+	local t = DVDMath.BounceTimeX(params, k)
+	local _, y = DVDMath.Position(params, t)
+	return y <= tolerance or y >= rangeY - tolerance
+end
+
+-- Direction actuelle (+1 / -1) sur chaque axe, utile pour garder la
+-- continuité quand l'écran change de taille
+function DVDMath.Directions(params: Params, t: number): (number, number)
+	local rangeX, rangeY = DVDMath.Ranges(params)
+	local u, v = DVDMath.Unfolded(params, t)
+	local dirX = (u % (2 * rangeX) <= rangeX) and 1 or -1
+	local dirY = (v % (2 * rangeY) <= rangeY) and 1 or -1
+	return dirX * math.sign(params.VX), dirY * math.sign(params.VY)
+end
+
+return DVDMath
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="28">
+        <Properties>
+          <string name="Name">Formulas</string>
+          <string name="Source"><![CDATA[--[[
+	Formulas (ModuleScript)
+	Emplacement : ReplicatedStorage > Shared > Formulas
+
+	Toutes les formules de calcul du jeu (coûts, gains, combo, rebirth...).
+	Partagé entre serveur et client pour que l'affichage corresponde
+	exactement aux calculs du serveur. Le serveur reste l'autorité.
+]]
+
+local Config = require(script.Parent.Config)
+
+local Formulas = {}
+
+----------------------------------------------------------------------
+-- Coûts des améliorations
+----------------------------------------------------------------------
+
+-- Coût d'UN niveau quand on est au niveau `level`
+function Formulas.GetUpgradeCost(upgrade, level: number): number
+	return math.floor(upgrade.BaseCost * (upgrade.CostGrowth ^ level) + 0.5)
+end
+
+-- Nombre de niveaux restants avant le maximum (math.huge si illimité)
+function Formulas.GetRemainingLevels(upgrade, level: number): number
+	if upgrade.MaxLevel then
+		return math.max(0, upgrade.MaxLevel - level)
+	end
+	return math.huge
+end
+
+-- Coût total pour acheter `amount` niveaux à partir de `level`
+function Formulas.GetBulkCost(upgrade, level: number, amount: number): number
+	local total = 0
+	for i = 0, amount - 1 do
+		total += Formulas.GetUpgradeCost(upgrade, level + i)
+	end
+	return total
+end
+
+-- Combien de niveaux peut-on acheter avec `money` ? -> (nombre, coût total)
+function Formulas.GetMaxAffordable(upgrade, level: number, money: number): (number, number)
+	local remaining = math.min(Formulas.GetRemainingLevels(upgrade, level), Config.MaxBulkBuy)
+	local amount, total = 0, 0
+	while amount < remaining do
+		local nextCost = Formulas.GetUpgradeCost(upgrade, level + amount)
+		if total + nextCost > money then
+			break
+		end
+		total += nextCost
+		amount += 1
+	end
+	return amount, total
+end
+
+-- Selon le mode d'achat ("x1", "x10", "max") -> (nombre de niveaux, coût)
+-- Pour "max" sans assez d'argent, renvoie 1 niveau (pour afficher le prix).
+function Formulas.GetPurchase(upgrade, level: number, mode: string, money: number): (number, number)
+	local remaining = Formulas.GetRemainingLevels(upgrade, level)
+	if remaining <= 0 then
+		return 0, 0
+	end
+
+	if mode == "max" then
+		local amount, total = Formulas.GetMaxAffordable(upgrade, level, money)
+		if amount > 0 then
+			return amount, total
+		end
+		return 1, Formulas.GetUpgradeCost(upgrade, level)
+	end
+
+	local amount = (mode == "x10") and 10 or 1
+	amount = math.min(amount, remaining)
+	return amount, Formulas.GetBulkCost(upgrade, level, amount)
+end
+
+-- Texte du bénéfice d'une amélioration (ex. "+5 / clic")
+function Formulas.DescribeUpgrade(upgrade, format: (number) -> string): string
+	if upgrade.Category == "Click" then
+		return "+" .. format(upgrade.Value) .. " / clic"
+	elseif upgrade.Category == "Passive" then
+		return "+" .. format(upgrade.Value) .. " / seconde"
+	end
+	return "x" .. format(upgrade.Value) .. " sur TOUS les gains"
+end
+
+----------------------------------------------------------------------
+-- Rebirth
+----------------------------------------------------------------------
+
+function Formulas.GetRebirthCost(rebirths: number): number
+	return Config.Rebirth.BaseCost * (Config.Rebirth.CostGrowth ^ rebirths)
+end
+
+function Formulas.GetRebirthMultiplier(rebirths: number): number
+	return 1 + rebirths * Config.Rebirth.MultiplierPerRebirth
+end
+
+----------------------------------------------------------------------
+-- Combo
+----------------------------------------------------------------------
+
+-- Jauge 0-100 -> multiplicateur 1 à MaxMultiplier
+function Formulas.GetComboMultiplier(meter: number): number
+	local ratio = math.clamp(meter / 100, 0, 1)
+	return 1 + ratio * (Config.Combo.MaxMultiplier - 1)
+end
+
+-- Met à jour la jauge : on retire la perte depuis le dernier clic puis on ajoute un clic
+function Formulas.StepCombo(meter: number, elapsed: number): number
+	meter = math.max(0, meter - Config.Combo.DecayPerSecond * elapsed)
+	return math.min(100, meter + Config.Combo.GainPerClick)
+end
+
+----------------------------------------------------------------------
+-- Statistiques d'un joueur (gain par clic, par seconde, multiplicateurs)
+----------------------------------------------------------------------
+
+function Formulas.CountAchievements(data): number
+	local count = 0
+	for id in pairs(data.Achievements) do
+		if Config.AchievementsById[id] then
+			count += 1
+		end
+	end
+	return count
+end
+
+-- `data` = données sauvegardées du joueur, `eventMultiplier` = Rush en cours (ou 1)
+function Formulas.ComputeStats(data, eventMultiplier: number?)
+	local baseClick = 1
+	local basePerSecond = 0
+	local upgradeMultiplier = 1
+
+	for _, upgrade in ipairs(Config.Upgrades) do
+		local level = data.Upgrades[upgrade.Id] or 0
+		if level > 0 then
+			if upgrade.Category == "Click" then
+				baseClick += upgrade.Value * level
+			elseif upgrade.Category == "Passive" then
+				basePerSecond += upgrade.Value * level
+			elseif upgrade.Category == "Multiplier" then
+				upgradeMultiplier *= upgrade.Value ^ level
+			end
+		end
+	end
+
+	local rebirthMultiplier = Formulas.GetRebirthMultiplier(data.Rebirths)
+	local achievementMultiplier = 1 + Formulas.CountAchievements(data) * Config.AchievementBonus
+	local eventMult = eventMultiplier or 1
+	local globalMultiplier = upgradeMultiplier * rebirthMultiplier * achievementMultiplier * eventMult
+
+	return {
+		BaseClick = baseClick,
+		BasePerSecond = basePerSecond,
+		UpgradeMultiplier = upgradeMultiplier,
+		RebirthMultiplier = rebirthMultiplier,
+		AchievementMultiplier = achievementMultiplier,
+		EventMultiplier = eventMult,
+		GlobalMultiplier = globalMultiplier,
+		ClickValue = baseClick * globalMultiplier,
+		PerSecond = basePerSecond * globalMultiplier,
+	}
+end
+
+-- Récompense qui vaut `seconds` secondes de production (au moins `minimum`)
+function Formulas.ScaledReward(stats, seconds: number, minimum: number): number
+	local production = stats.PerSecond + stats.ClickValue * Config.Rewards.EstimatedClicksPerSecond
+	return math.floor(math.max(minimum, production * seconds))
+end
+
+return Formulas
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="29">
+        <Properties>
+          <string name="Name">Net</string>
+          <string name="Source"><![CDATA[--[[
+	Net (ModuleScript)
+	Emplacement : ReplicatedStorage > Shared > Net
+
+	Centralise les RemoteEvents / RemoteFunctions.
+	- Le SERVEUR appelle Net.Setup() au démarrage : il crée automatiquement le
+	  dossier ReplicatedStorage > Remotes et tous les remotes listés ci-dessous.
+	  => Tu n'as RIEN à créer à la main.
+	- Le CLIENT utilise Net.Event("Nom") / Net.Function("Nom") qui attendent
+	  que le remote existe.
+
+	Sens de communication :
+	  C -> S : le client demande, le serveur valide TOUT.
+	  S -> C : le serveur informe le client.
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Net = {}
+
+Net.Events = {
+	"ClientReady", -- C -> S : le client est prêt à recevoir les données
+	"Click", -- C -> S : un clic sur le gros bouton
+	"StateUpdate", -- S -> C : état complet du joueur (Dopamine, niveaux...)
+	"Notify", -- S -> C : notifications (succès, bonus, jackpot, erreurs...)
+	"DVDSetup", -- S -> C : paramètres du mouvement du logo DVD
+	"DVDResize", -- C -> S : taille du logo à l'écran (en fraction de l'écran)
+	"DVDClick", -- C -> S : clic sur le logo DVD
+	"DVDCorner", -- C -> S : le client pense que le logo a touché un coin
+	"GoldenSpawn", -- S -> C : un objet doré apparaît
+	"GoldenClick", -- C -> S : le joueur a cliqué l'objet doré
+	"EventUpdate", -- S -> C : début / fin d'un Dopamine Rush
+	"LeaderboardUpdate", -- S -> C : top du classement
+}
+
+Net.Functions = {
+	"BuyUpgrade", -- C -> S : (upgradeId, mode) -> (succès, message)
+	"Rebirth", -- C -> S : () -> (succès, message)
+	"ClaimDaily", -- C -> S : () -> (succès, message)
+	"SetSetting", -- C -> S : (nom, valeur) -> succès
+}
+
+local FOLDER_NAME = "Remotes"
+
+-- Serveur uniquement : crée tous les remotes
+function Net.Setup()
+	assert(RunService:IsServer(), "Net.Setup() doit être appelé par le serveur")
+
+	local folder = ReplicatedStorage:FindFirstChild(FOLDER_NAME)
+	if not folder then
+		folder = Instance.new("Folder")
+		folder.Name = FOLDER_NAME
+		folder.Parent = ReplicatedStorage
+	end
+
+	for _, name in ipairs(Net.Events) do
+		if not folder:FindFirstChild(name) then
+			local remote = Instance.new("RemoteEvent")
+			remote.Name = name
+			remote.Parent = folder
+		end
+	end
+
+	for _, name in ipairs(Net.Functions) do
+		if not folder:FindFirstChild(name) then
+			local remote = Instance.new("RemoteFunction")
+			remote.Name = name
+			remote.Parent = folder
+		end
+	end
+end
+
+local function getFolder(): Instance
+	return ReplicatedStorage:WaitForChild(FOLDER_NAME)
+end
+
+function Net.Event(name: string): RemoteEvent
+	return getFolder():WaitForChild(name) :: RemoteEvent
+end
+
+function Net.Function(name: string): RemoteFunction
+	return getFolder():WaitForChild(name) :: RemoteFunction
+end
+
+return Net
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="30">
+        <Properties>
+          <string name="Name">NumberFormatter</string>
+          <string name="Source"><![CDATA[--[[
+	NumberFormatter (ModuleScript)
+	Emplacement : ReplicatedStorage > Shared > NumberFormatter
+
+	Formate les grands nombres : 1 234 -> "1.23K", 5 600 000 -> "5.6M", etc.
+]]
+
+local NumberFormatter = {}
+
+-- Suffixes : K = mille, M = million, B = milliard, T = billion, puis notation anglaise courte
+local SUFFIXES = { "", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc", "UDc", "DDc", "TDc", "QaDc", "QiDc", "SxDc", "SpDc", "OcDc", "NoDc", "Vg" }
+
+-- Retire les zéros inutiles : "1.50" -> "1.5", "2.00" -> "2"
+local function trimZeros(text: string): string
+	if string.find(text, "%.") then
+		text = string.gsub(text, "0+$", "")
+		text = string.gsub(text, "%.$", "")
+	end
+	return text
+end
+
+-- Format court avec suffixe (ex. 1.23M)
+function NumberFormatter.Format(value: number, decimals: number?): string
+	decimals = decimals or 2
+	if value ~= value then
+		return "0" -- NaN
+	end
+	if value == math.huge then
+		return "∞"
+	end
+
+	local sign = value < 0 and "-" or ""
+	value = math.abs(value)
+
+	if value < 1000 then
+		-- Petits nombres : entier, ou une décimale si < 10 (ex. 2.5)
+		if value < 10 and value % 1 ~= 0 then
+			return sign .. trimZeros(string.format("%.1f", math.floor(value * 10) / 10))
+		end
+		return sign .. tostring(math.floor(value))
+	end
+
+	local tier = math.floor(math.log10(value) / 3)
+	-- Corrige les petites erreurs d'arrondi de log10 (ex. 999.999...)
+	if value / (10 ^ (tier * 3)) >= 1000 then
+		tier += 1
+	elseif value / (10 ^ (tier * 3)) < 1 then
+		tier -= 1
+	end
+	if tier >= #SUFFIXES then
+		-- Au-delà des suffixes connus : notation scientifique
+		return sign .. string.format("%.2e", value)
+	end
+
+	local scaled = value / (10 ^ (tier * 3))
+	-- On tronque (au lieu d'arrondir) pour ne jamais afficher plus que ce qu'on a
+	local factor = 10 ^ (decimals :: number)
+	-- (petite marge : 1e29 / 1e27 donne 99.9999999 en virgule flottante)
+	scaled = math.floor(scaled * factor + 1e-6) / factor
+	return sign .. trimZeros(string.format("%." .. tostring(decimals) .. "f", scaled)) .. SUFFIXES[tier + 1]
+end
+
+-- Format avec séparateurs de milliers (ex. 1 234 567), pour les petits nombres
+function NumberFormatter.WithSpaces(value: number): string
+	local text = tostring(math.floor(value))
+	local result = string.reverse(text)
+	result = string.gsub(result, "(%d%d%d)", "%1 ")
+	result = string.reverse(result)
+	return (string.gsub(result, "^%s+", ""))
+end
+
+-- Durée en secondes -> "1h 05m", "4m 12s", "9s"
+function NumberFormatter.Time(seconds: number): string
+	seconds = math.max(0, math.floor(seconds))
+	local h = math.floor(seconds / 3600)
+	local m = math.floor((seconds % 3600) / 60)
+	local s = seconds % 60
+	if h > 0 then
+		return string.format("%dh %02dm", h, m)
+	elseif m > 0 then
+		return string.format("%dm %02ds", m, s)
+	end
+	return string.format("%ds", s)
+end
+
+-- Multiplicateur lisible : 2 -> "x2", 1.5 -> "x1.5"
+function NumberFormatter.Multiplier(value: number): string
+	if value >= 1000 then
+		return "x" .. NumberFormatter.Format(value)
+	end
+	return "x" .. trimZeros(string.format("%.2f", value))
+end
+
+return NumberFormatter
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="31">
+        <Properties>
+          <string name="Name">Signal</string>
+          <string name="Source"><![CDATA[--[[
+	Signal (ModuleScript)
+	Emplacement : ReplicatedStorage > Shared > Signal
+
+	Petit système d'événements (comme un BindableEvent, mais sans copier les
+	tables passées en argument). Utilisé côté client pour prévenir l'interface
+	qu'un nouvel état est arrivé.
+]]
+
+local Signal = {}
+Signal.__index = Signal
+
+export type Connection = { Disconnect: (self: Connection) -> () }
+
+function Signal.new()
+	return setmetatable({ _listeners = {} }, Signal)
+end
+
+-- Ajoute une fonction appelée à chaque :Fire(...)
+function Signal:Connect(callback: (...any) -> ())
+	local listeners = self._listeners
+	local entry = { Callback = callback }
+	table.insert(listeners, entry)
+
+	return {
+		Disconnect = function()
+			local index = table.find(listeners, entry)
+			if index then
+				table.remove(listeners, index)
+			end
+		end,
+	}
+end
+
+-- Appelle toutes les fonctions connectées (chacune dans son propre thread)
+function Signal:Fire(...)
+	for _, entry in ipairs(table.clone(self._listeners)) do
+		task.spawn(entry.Callback, ...)
+	end
+end
+
+return Signal
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="ServerScriptService" referent="32">
+    <Properties>
+      <string name="Name">ServerScriptService</string>
+    </Properties>
+    <Item class="Script" referent="33">
+      <Properties>
+        <string name="Name">Main</string>
+        <token name="RunContext">0</token>
+        <string name="Source"><![CDATA[--[[
+	Main (Script)
+	Emplacement : ServerScriptService > Main
+
+	Point d'entrée du serveur :
+	  1. crée les RemoteEvents / RemoteFunctions (Net.Setup) ;
+	  2. initialise puis démarre tous les services ;
+	  3. gère l'arrivée et le départ des joueurs.
+]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Net = require(ReplicatedStorage.Shared.Net)
+Net.Setup() -- AVANT tout le reste : les clients attendent ces remotes
+
+local ServicesFolder = script.Parent:WaitForChild("Services")
+
+-- Ordre important : les données d'abord, puis le jeu, puis le reste
+local ORDER = {
+	"DataService",
+	"GameService",
+	"EventService",
+	"QuestService",
+	"AchievementService",
+	"DailyRewardService",
+	"DVDService",
+	"LeaderboardService",
+	"DebugService",
+}
+
+local services = {}
+for _, name in ipairs(ORDER) do
+	services[name] = require(ServicesFolder:WaitForChild(name))
+end
+
+-- Init : chaque service reçoit la liste des autres (évite les require circulaires)
+for _, name in ipairs(ORDER) do
+	local service = services[name]
+	if service.Init then
+		service:Init(services)
+	end
+end
+
+for _, name in ipairs(ORDER) do
+	local service = services[name]
+	if service.Start then
+		service:Start()
+	end
+end
+
+----------------------------------------------------------------------
+-- Joueurs
+----------------------------------------------------------------------
+
+local function onPlayerAdded(player: Player)
+	local data = services.DataService:LoadAsync(player)
+	if not data or not player.Parent then
+		return
+	end
+
+	for _, name in ipairs(ORDER) do
+		local service = services[name]
+		if service.PlayerReady then
+			local ok, err = pcall(service.PlayerReady, service, player, data)
+			if not ok then
+				warn("[Main] Erreur PlayerReady dans " .. name .. " :", err)
+			end
+		end
+	end
+
+	services.GameService:SendFullSync(player)
+end
+
+local function onPlayerRemoving(player: Player)
+	for _, name in ipairs(ORDER) do
+		local service = services[name]
+		if service.PlayerRemoving then
+			local ok, err = pcall(service.PlayerRemoving, service, player)
+			if not ok then
+				warn("[Main] Erreur PlayerRemoving dans " .. name .. " :", err)
+			end
+		end
+	end
+	services.DataService:ReleaseAsync(player)
+end
+
+Players.PlayerAdded:Connect(onPlayerAdded)
+Players.PlayerRemoving:Connect(onPlayerRemoving)
+
+-- Joueurs déjà présents (arrive parfois dans Studio)
+for _, player in ipairs(Players:GetPlayers()) do
+	task.spawn(onPlayerAdded, player)
+end
+]]></string>
+      </Properties>
+    </Item>
+    <Item class="Folder" referent="34">
+      <Properties>
+        <string name="Name">Services</string>
+      </Properties>
+      <Item class="ModuleScript" referent="35">
+        <Properties>
+          <string name="Name">AchievementService</string>
+          <string name="Source"><![CDATA[--[[
+	AchievementService (ModuleScript)
+	Emplacement : ServerScriptService > Services > AchievementService
+
+	Vérifie les succès (définis dans Config.Achievements) et donne les
+	récompenses. Appelé automatiquement par GameService quand l'état change.
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
+
+local AchievementService = {}
+
+local services
+
+function AchievementService:Init(allServices)
+	services = allServices
+end
+
+-- Valeur actuelle d'une statistique (dans data.Stats, ou à la racine comme Rebirths)
+function AchievementService:GetStatValue(data, statName: string): number
+	local value = data.Stats[statName]
+	if value == nil then
+		value = data[statName]
+	end
+	return (type(value) == "number") and value or 0
+end
+
+function AchievementService:Check(player: Player)
+	local data = services.DataService:GetData(player)
+	if not data then
+		return
+	end
+
+	for _, achievement in ipairs(Config.Achievements) do
+		if not data.Achievements[achievement.Id] then
+			local value = self:GetStatValue(data, achievement.Stat)
+			if value >= achievement.Goal then
+				data.Achievements[achievement.Id] = true
+				services.GameService:AddDopamine(player, achievement.Reward, false)
+				services.GameService:Notify(player, {
+					Type = "Achievement",
+					Icon = achievement.Icon,
+					Title = "SUCCÈS DÉBLOQUÉ !",
+					Text = achievement.Icon .. " " .. achievement.Name .. "  (+" .. NumberFormatter.Format(achievement.Reward) .. ")",
+				})
+			end
+		end
+	end
+end
+
+return AchievementService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="36">
+        <Properties>
+          <string name="Name">DVDService</string>
+          <string name="Source"><![CDATA[--[[
+	DVDService (ModuleScript)
+	Emplacement : ServerScriptService > Services > DVDService
+
+	Logo DVD rebondissant. Le SERVEUR choisit la trajectoire (position,
+	vitesse, heure de départ) et l'envoie au client, qui ne fait que
+	l'afficher. Comme la trajectoire est déterministe (voir DVDMath), le
+	serveur peut recalculer lui-même si un coin a vraiment été touché :
+	un tricheur ne peut pas inventer de jackpot.
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local DVDMath = require(ReplicatedStorage.Shared.DVDMath)
+local Formulas = require(ReplicatedStorage.Shared.Formulas)
+local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
+local Net = require(ReplicatedStorage.Shared.Net)
+local RateLimiter = require(script.Parent.RateLimiter)
+
+local DVDService = {}
+
+local services
+local random = Random.new()
+
+-- [Player] = { Params = DVDMath.Params, ClaimedCorners = { [k] = true }, LastClick = number }
+local states = {}
+
+function DVDService:Init(allServices)
+	services = allServices
+end
+
+local function now(): number
+	return workspace:GetServerTimeNow()
+end
+
+-- Nouvelle trajectoire aléatoire (angle entre 25° et 65° pour éviter les
+-- trajectoires trop horizontales ou verticales)
+local function randomParams(w: number, h: number): DVDMath.Params
+	local angle = math.rad(random:NextNumber(25, 65))
+	local speed = Config.DVD.Speed
+	local signX = random:NextNumber() < 0.5 and -1 or 1
+	local signY = random:NextNumber() < 0.5 and -1 or 1
+	return {
+		X0 = random:NextNumber(0, 1 - w),
+		Y0 = random:NextNumber(0, 1 - h),
+		VX = math.cos(angle) * speed * signX,
+		VY = math.sin(angle) * speed * signY,
+		T0 = now(),
+		W = w,
+		H = h,
+	}
+end
+
+function DVDService:SendSetup(player: Player)
+	local state = states[player]
+	if state then
+		Net.Event("DVDSetup"):FireClient(player, state.Params)
+	end
+end
+
+function DVDService:PlayerReady(player: Player)
+	-- Taille par défaut (corrigée dès que le client envoie la vraie taille)
+	states[player] = {
+		Params = randomParams(0.13, 0.12),
+		ClaimedCorners = {},
+		LastClick = 0,
+	}
+end
+
+function DVDService:PlayerRemoving(player: Player)
+	states[player] = nil
+end
+
+-- Le client indique la taille du logo à l'écran (en fraction de l'écran).
+-- On garde la position et la direction actuelles pour que le logo ne saute pas.
+local function onResize(player: Player, w: any, h: any)
+	local state = states[player]
+	if not state or not RateLimiter.Check(player, "DVDResize", 0.5) then
+		return
+	end
+	if type(w) ~= "number" or type(h) ~= "number" or w ~= w or h ~= h then
+		return
+	end
+	w = math.clamp(w, 0.03, 0.5)
+	h = math.clamp(h, 0.03, 0.5)
+
+	local params = state.Params
+	local t = now()
+	local x, y = DVDMath.Position(params, t)
+	local dirX, dirY = DVDMath.Directions(params, t)
+
+	state.Params = {
+		X0 = math.clamp(x, 0, 1 - w),
+		Y0 = math.clamp(y, 0, 1 - h),
+		VX = math.abs(params.VX) * dirX,
+		VY = math.abs(params.VY) * dirY,
+		T0 = t,
+		W = w,
+		H = h,
+	}
+	state.ClaimedCorners = {} -- nouvelle trajectoire = nouveaux numéros de rebond
+	DVDService:SendSetup(player)
+end
+
+-- Clic sur le logo : petit bonus, avec un temps de recharge
+local function onClick(player: Player)
+	local state = states[player]
+	local data = services.DataService:GetData(player)
+	if not state or not data then
+		return
+	end
+	local clock = os.clock()
+	-- 0.3 s de tolérance pour la latence
+	if clock - state.LastClick < Config.DVD.ClickCooldown - 0.3 then
+		return
+	end
+	state.LastClick = clock
+
+	local reward = Formulas.ScaledReward(
+		services.GameService:GetStats(player),
+		Config.DVD.ClickRewardSeconds,
+		Config.DVD.ClickMinReward
+	)
+	data.Stats.DVDClicks += 1
+	services.GameService:AddDopamine(player, reward, true)
+	services.QuestService:Progress(player, "DVDClicks", 1)
+	services.GameService:Notify(player, {
+		Type = "Bonus",
+		Source = "DVD",
+		Amount = reward,
+	})
+end
+
+-- Le client signale un coin au rebond horizontal numéro k : on VÉRIFIE
+local function onCorner(player: Player, k: any)
+	local state = states[player]
+	local data = services.DataService:GetData(player)
+	if not state or not data or not RateLimiter.Check(player, "DVDCorner", 0.3) then
+		return
+	end
+	if type(k) ~= "number" or k ~= math.floor(k) or math.abs(k) > 1e9 then
+		return
+	end
+	if state.ClaimedCorners[k] then
+		return -- déjà récompensé
+	end
+
+	local params = state.Params
+	local bounceTime = DVDMath.BounceTimeX(params, k)
+	local t = now()
+	-- Le rebond doit avoir eu lieu récemment (et après le début de la trajectoire)
+	if bounceTime < params.T0 or bounceTime > t + 0.5 or bounceTime < t - 5 then
+		return
+	end
+	if not DVDMath.IsCornerAtBounceX(params, k, Config.DVD.CornerTolerance) then
+		return -- pas un vrai coin : tentative de triche ou erreur d'arrondi
+	end
+
+	state.ClaimedCorners[k] = true
+	local reward = Formulas.ScaledReward(
+		services.GameService:GetStats(player),
+		Config.DVD.JackpotRewardSeconds,
+		Config.DVD.JackpotMinReward
+	)
+	data.Stats.DVDCorners += 1
+	services.GameService:AddDopamine(player, reward, true)
+	services.GameService:Notify(player, {
+		Type = "Jackpot",
+		Amount = reward,
+		Text = "📀 COIN PARFAIT ! +" .. NumberFormatter.Format(reward),
+	})
+	services.GameService:NotifyAll({
+		Type = "Info",
+		Text = "📀 " .. player.DisplayName .. " a touché le COIN PARFAIT !",
+	}, player)
+end
+
+-- TEST (Studio) : place le logo pour qu'il touche un coin dans 2 secondes
+function DVDService:DebugCorner(player: Player)
+	local state = states[player]
+	if not state then
+		return
+	end
+	local params = state.Params
+	local rangeX, rangeY = DVDMath.Ranges(params)
+	local speedX, speedY = math.abs(params.VX), math.abs(params.VY)
+	local delay = math.min(2, rangeX * 0.9 / speedX, rangeY * 0.9 / speedY)
+	state.Params = {
+		X0 = rangeX - speedX * delay,
+		Y0 = rangeY - speedY * delay,
+		VX = speedX,
+		VY = speedY,
+		T0 = now(),
+		W = params.W,
+		H = params.H,
+	}
+	state.ClaimedCorners = {}
+	self:SendSetup(player)
+end
+
+function DVDService:Start()
+	Net.Event("DVDResize").OnServerEvent:Connect(onResize)
+	Net.Event("DVDClick").OnServerEvent:Connect(onClick)
+	Net.Event("DVDCorner").OnServerEvent:Connect(onCorner)
+end
+
+return DVDService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="37">
+        <Properties>
+          <string name="Name">DailyRewardService</string>
+          <string name="Source"><![CDATA[--[[
+	DailyRewardService (ModuleScript)
+	Emplacement : ServerScriptService > Services > DailyRewardService
+
+	Récompense quotidienne : 1 fois par jour (jour UTC). Revenir le jour
+	suivant augmente la série (streak) et donc la récompense.
+	L'heure utilisée est celle du SERVEUR (impossible à tricher en changeant
+	l'heure de son PC).
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Formulas = require(ReplicatedStorage.Shared.Formulas)
+local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
+local Net = require(ReplicatedStorage.Shared.Net)
+local RateLimiter = require(script.Parent.RateLimiter)
+
+local DailyRewardService = {}
+
+local services
+local SECONDS_PER_DAY = 86400
+
+function DailyRewardService:Init(allServices)
+	services = allServices
+end
+
+local function today(): number
+	return math.floor(os.time() / SECONDS_PER_DAY)
+end
+
+-- Série qu'aurait le joueur s'il réclamait maintenant
+local function nextStreak(data): number
+	if data.Daily.LastDay == today() - 1 then
+		return data.Daily.Streak + 1
+	end
+	return 1
+end
+
+local function computeReward(stats, streak: number): number
+	local bonusDays = math.min(streak, Config.Daily.MaxStreakBonus) - 1
+	local seconds = Config.Daily.BaseRewardSeconds + bonusDays * Config.Daily.StreakBonusSeconds
+	return Formulas.ScaledReward(stats, seconds, Config.Daily.MinReward * math.min(streak, Config.Daily.MaxStreakBonus))
+end
+
+-- Infos affichées par le client
+function DailyRewardService:GetInfo(player: Player, stats)
+	local data = services.DataService:GetData(player)
+	local available = data.Daily.LastDay < today()
+	local streak = available and nextStreak(data) or data.Daily.Streak
+	return {
+		Available = available,
+		Streak = streak,
+		Reward = computeReward(stats, streak),
+		-- secondes avant le prochain jour UTC
+		NextIn = (today() + 1) * SECONDS_PER_DAY - os.time(),
+	}
+end
+
+local function onClaim(player: Player)
+	if not RateLimiter.Check(player, "Daily", 1) then
+		return false, "Doucement !"
+	end
+	local data = services.DataService:GetData(player)
+	if not data then
+		return false, "Chargement en cours..."
+	end
+	if data.Daily.LastDay >= today() then
+		return false, "Déjà récupéré aujourd'hui, reviens demain !"
+	end
+
+	local streak = nextStreak(data)
+	local reward = computeReward(services.GameService:GetStats(player), streak)
+
+	data.Daily.LastDay = today()
+	data.Daily.Streak = streak
+	data.Stats.DailyClaims += 1
+	services.GameService:AddDopamine(player, reward, false)
+	services.GameService:SendState(player)
+
+	return true, string.format("Jour %d : +%s %s !", streak, NumberFormatter.Format(reward), Config.Game.CurrencyName)
+end
+
+function DailyRewardService:Start()
+	Net.Function("ClaimDaily").OnServerInvoke = onClaim
+end
+
+return DailyRewardService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="38">
+        <Properties>
+          <string name="Name">DataService</string>
+          <string name="Source"><![CDATA[--[[
+	DataService (ModuleScript)
+	Emplacement : ServerScriptService > Services > DataService
+
+	Chargement / sauvegarde des données des joueurs avec DataStoreService :
+	  - pcall + plusieurs tentatives (retry) avec attente croissante ;
+	  - sauvegarde à la sortie du joueur, toutes les X secondes, et à la
+	    fermeture du serveur (BindToClose) ;
+	  - si le chargement échoue, on NE sauvegarde PAS (pour ne jamais écraser
+	    une vraie sauvegarde avec des données vides).
+]]
+
+local DataStoreService = game:GetService("DataStoreService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+
+local DataService = {}
+
+-- Profils chargés : [Player] = { Data = table, CanSave = bool, Saving = bool }
+local profiles = {}
+
+-- Données d'un nouveau joueur. Toute nouvelle clé ajoutée ici sera
+-- automatiquement ajoutée aux anciennes sauvegardes (voir reconcile).
+local TEMPLATE = {
+	Version = 1,
+	Dopamine = 0,
+	Rebirths = 0,
+	Upgrades = {}, -- [upgradeId] = niveau
+	Achievements = {}, -- [achievementId] = true
+	Quests = {}, -- liste des quêtes actives
+	Daily = { LastDay = 0, Streak = 0 },
+	Settings = { Sound = true, Music = true, Effects = true },
+	Stats = {
+		TotalClicks = 0,
+		LifetimeDopamine = 0, -- Dopamine gagnée depuis toujours (classement)
+		UpgradesBought = 0,
+		CombosMaxed = 0,
+		DVDClicks = 0,
+		DVDCorners = 0,
+		GoldenClicks = 0,
+		QuestsCompleted = 0,
+		DailyClaims = 0,
+	},
+}
+
+local services -- rempli par Init
+
+local dataStore: DataStore? = nil
+do
+	local ok, result = pcall(function()
+		return DataStoreService:GetDataStore(Config.DataStore.Name)
+	end)
+	if ok then
+		dataStore = result
+	else
+		warn("[DataService] DataStore indisponible (place non publiée ?) :", result)
+	end
+end
+
+----------------------------------------------------------------------
+-- Utilitaires
+----------------------------------------------------------------------
+
+local function deepCopy(value)
+	if type(value) ~= "table" then
+		return value
+	end
+	local copy = {}
+	for key, inner in pairs(value) do
+		copy[key] = deepCopy(inner)
+	end
+	return copy
+end
+
+-- Ajoute les clés manquantes (nouvelle version du jeu) sans toucher aux existantes
+local function reconcile(data, template)
+	for key, value in pairs(template) do
+		if data[key] == nil then
+			data[key] = deepCopy(value)
+		elseif type(value) == "table" and type(data[key]) == "table" and next(value) ~= nil then
+			reconcile(data[key], value)
+		end
+	end
+	return data
+end
+
+-- Erreurs pour lesquelles réessayer ne sert à rien (ex. Studio sans accès aux API)
+local function isFatalError(message: string): boolean
+	return string.find(message, "StudioAccessToApisNotAllowed", 1, true) ~= nil
+		or string.find(message, "publish", 1, true) ~= nil
+		or string.find(message, "403", 1, true) ~= nil
+end
+
+-- Exécute `callback` avec pcall et réessaie en cas d'échec
+local function retry(description: string, callback: () -> any): (boolean, any)
+	local lastError
+	for attempt = 1, Config.DataStore.MaxRetries do
+		local ok, result = pcall(callback)
+		if ok then
+			return true, result
+		end
+		lastError = result
+		warn(string.format("[DataService] %s : échec (tentative %d) : %s", description, attempt, tostring(result)))
+		if isFatalError(tostring(result)) then
+			warn("[DataService] Active 'Enable Studio Access to API Services' (Game Settings > Security) et publie le jeu.")
+			break
+		end
+		if attempt < Config.DataStore.MaxRetries then
+			task.wait(2 ^ attempt) -- 2s, 4s, 8s...
+		end
+	end
+	return false, lastError
+end
+
+local function keyFor(player: Player): string
+	return "Player_" .. player.UserId
+end
+
+----------------------------------------------------------------------
+-- API
+----------------------------------------------------------------------
+
+function DataService:Init(allServices)
+	services = allServices
+end
+
+-- Charge les données d'un joueur (bloquant). Renvoie la table de données.
+function DataService:LoadAsync(player: Player)
+	local canSave = dataStore ~= nil
+	local data
+
+	if dataStore then
+		local store = dataStore :: DataStore
+		local ok, result = retry("Chargement de " .. player.Name, function()
+			return store:GetAsync(keyFor(player))
+		end)
+		if ok then
+			data = (type(result) == "table") and result or nil
+		else
+			-- Échec total : on joue avec des données vides mais sans sauvegarder
+			canSave = false
+		end
+	end
+
+	data = reconcile(data or deepCopy(TEMPLATE), TEMPLATE)
+
+	-- Le joueur a pu partir pendant le chargement
+	if not player.Parent then
+		return nil
+	end
+
+	profiles[player] = { Data = data, CanSave = canSave, Saving = false }
+
+	if not canSave then
+		task.defer(function()
+			services.GameService:Notify(player, {
+				Type = "Error",
+				Text = "⚠️ Sauvegarde indisponible : ta progression ne sera pas enregistrée.",
+			})
+		end)
+	end
+
+	return data
+end
+
+function DataService:GetData(player: Player)
+	local profile = profiles[player]
+	return profile and profile.Data
+end
+
+function DataService:GetLoadedPlayers(): { Player }
+	local list = {}
+	for player in pairs(profiles) do
+		table.insert(list, player)
+	end
+	return list
+end
+
+-- Sauvegarde les données d'un joueur (bloquant)
+function DataService:SaveAsync(player: Player): boolean
+	local profile = profiles[player]
+	if not profile or not profile.CanSave or not dataStore then
+		return false
+	end
+	if profile.Saving then
+		return false -- une sauvegarde est déjà en cours
+	end
+
+	profile.Saving = true
+	local data = profile.Data
+	local store = dataStore :: DataStore
+	local ok = retry("Sauvegarde de " .. player.Name, function()
+		store:UpdateAsync(keyFor(player), function()
+			return data
+		end)
+	end)
+	profile.Saving = false
+	return ok
+end
+
+-- Sauvegarde puis oublie le joueur (à la sortie)
+function DataService:ReleaseAsync(player: Player)
+	local profile = profiles[player]
+	if not profile then
+		return
+	end
+	-- Si une sauvegarde automatique est en cours, on attend qu'elle finisse
+	local waited = 0
+	while profile.Saving and waited < 10 do
+		waited += task.wait(0.1)
+	end
+	self:SaveAsync(player)
+	profiles[player] = nil
+end
+
+function DataService:Start()
+	-- Sauvegarde périodique
+	task.spawn(function()
+		while true do
+			task.wait(Config.DataStore.AutoSaveInterval)
+			for player in pairs(profiles) do
+				task.spawn(function()
+					self:SaveAsync(player)
+				end)
+			end
+		end
+	end)
+
+	-- Fermeture du serveur : on sauvegarde tout le monde en parallèle
+	game:BindToClose(function()
+		local pending = 0
+		for _, player in ipairs(Players:GetPlayers()) do
+			if profiles[player] then
+				pending += 1
+				task.spawn(function()
+					self:ReleaseAsync(player)
+					pending -= 1
+				end)
+			end
+		end
+		local start = os.clock()
+		while pending > 0 and os.clock() - start < 25 do
+			task.wait(0.1)
+		end
+	end)
+end
+
+return DataService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="39">
+        <Properties>
+          <string name="Name">DebugService</string>
+          <string name="Source"><![CDATA[--[[
+	DebugService (ModuleScript)
+	Emplacement : ServerScriptService > Services > DebugService
+
+	Commandes de TEST, actives UNIQUEMENT dans Roblox Studio (jamais dans le
+	jeu publié). Tape-les dans le chat pendant un test "Play" :
+	  /rush        -> lance un Dopamine Rush
+	  /golden      -> fait apparaître un objet doré
+	  /give 1e6    -> donne de la Dopamine (ici 1 million)
+	  /corner      -> le logo DVD touchera un coin dans ~2 secondes
+	  /daily       -> rend la récompense quotidienne à nouveau disponible
+	  /save        -> force une sauvegarde
+]]
+
+local RunService = game:GetService("RunService")
+
+local DebugService = {}
+
+local services
+
+function DebugService:Init(allServices)
+	services = allServices
+end
+
+function DebugService:PlayerReady(player: Player)
+	if not RunService:IsStudio() then
+		return
+	end
+
+	player.Chatted:Connect(function(message: string)
+		local command, argument = string.match(string.lower(message), "^/(%a+)%s*(%S*)")
+		if not command then
+			return
+		end
+
+		if command == "rush" then
+			services.EventService:StartRush()
+		elseif command == "golden" then
+			services.EventService:SpawnGolden(player)
+		elseif command == "give" then
+			local amount = tonumber(argument) or 1e6
+			services.GameService:AddDopamine(player, amount, false)
+		elseif command == "corner" then
+			services.DVDService:DebugCorner(player)
+		elseif command == "daily" then
+			local data = services.DataService:GetData(player)
+			data.Daily.LastDay = 0
+			services.GameService:MarkDirty(player)
+		elseif command == "save" then
+			local ok = services.DataService:SaveAsync(player)
+			services.GameService:Notify(player, { Type = "Info", Text = ok and "💾 Sauvegardé !" or "💾 Sauvegarde impossible (voir la sortie)" })
+			return
+		else
+			return
+		end
+		services.GameService:Notify(player, { Type = "Info", Text = "🛠️ Commande de test : /" .. command })
+	end)
+end
+
+return DebugService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="40">
+        <Properties>
+          <string name="Name">EventService</string>
+          <string name="Source"><![CDATA[--[[
+	EventService (ModuleScript)
+	Emplacement : ServerScriptService > Services > EventService
+
+	Événements aléatoires :
+	  - "Dopamine Rush" : x2 sur tous les gains pendant 30 s, pour TOUT le serveur ;
+	  - Objet doré : apparaît chez un joueur, disparaît vite, donne un bonus.
+	Le serveur décide quand ils arrivent et valide les clics.
+]]
+
+local HttpService = game:GetService("HttpService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Formulas = require(ReplicatedStorage.Shared.Formulas)
+local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
+local Net = require(ReplicatedStorage.Shared.Net)
+local RateLimiter = require(script.Parent.RateLimiter)
+
+local EventService = {}
+
+local services
+local random = Random.new()
+
+-- Dans Studio, les événements arrivent plus vite pour pouvoir les tester
+local speedup = RunService:IsStudio() and Config.Events.StudioSpeedup or 1
+
+local rush = {
+	Active = false,
+	EndsAt = 0, -- heure serveur (workspace:GetServerTimeNow())
+}
+
+-- Objet doré actuellement affiché pour chaque joueur : [Player] = { Id, ExpiresAt }
+local goldenByPlayer = {}
+
+function EventService:Init(allServices)
+	services = allServices
+end
+
+function EventService:GetMultiplier(): number
+	return rush.Active and Config.Events.Rush.Multiplier or 1
+end
+
+local function rushPayload()
+	return {
+		Active = rush.Active,
+		EndsAt = rush.EndsAt,
+		Name = Config.Events.Rush.Name,
+		Multiplier = Config.Events.Rush.Multiplier,
+	}
+end
+
+function EventService:SendState(player: Player)
+	Net.Event("EventUpdate"):FireClient(player, rushPayload())
+end
+
+-- Lance un Dopamine Rush (peut aussi être appelé depuis la console pour tester)
+function EventService:StartRush()
+	if rush.Active then
+		return
+	end
+	local settings = Config.Events.Rush
+	rush.Active = true
+	rush.EndsAt = workspace:GetServerTimeNow() + settings.Duration
+	Net.Event("EventUpdate"):FireAllClients(rushPayload())
+	services.GameService:MarkAllDirty()
+
+	task.delay(settings.Duration, function()
+		rush.Active = false
+		Net.Event("EventUpdate"):FireAllClients(rushPayload())
+		services.GameService:MarkAllDirty()
+	end)
+end
+
+-- Fait apparaître un objet doré chez un joueur
+function EventService:SpawnGolden(player: Player)
+	local settings = Config.Events.Golden
+	local golden = {
+		Id = HttpService:GenerateGUID(false),
+		ExpiresAt = os.clock() + settings.Lifetime,
+	}
+	goldenByPlayer[player] = golden
+	Net.Event("GoldenSpawn"):FireClient(player, {
+		Id = golden.Id,
+		X = random:NextNumber(0.1, 0.6), -- évite la boutique à droite
+		Y = random:NextNumber(0.2, 0.8),
+		Lifetime = settings.Lifetime,
+	})
+end
+
+local function onGoldenClick(player: Player, id: any)
+	if not RateLimiter.Check(player, "Golden", 0.2) then
+		return
+	end
+	local golden = goldenByPlayer[player]
+	-- 0.5 s de marge pour la latence réseau
+	if type(id) ~= "string" or not golden or golden.Id ~= id or os.clock() > golden.ExpiresAt + 0.5 then
+		return
+	end
+	goldenByPlayer[player] = nil
+
+	local data = services.DataService:GetData(player)
+	if not data then
+		return
+	end
+	local settings = Config.Events.Golden
+	local reward = Formulas.ScaledReward(services.GameService:GetStats(player), settings.RewardSeconds, settings.MinReward)
+	data.Stats.GoldenClicks += 1
+	services.GameService:AddDopamine(player, reward, true)
+	services.QuestService:Progress(player, "Golden", 1)
+	services.GameService:Notify(player, {
+		Type = "Bonus",
+		Source = "Golden",
+		Amount = reward,
+		Text = "🌟 OBJET DORÉ : +" .. NumberFormatter.Format(reward) .. " !",
+	})
+end
+
+function EventService:PlayerReady(player: Player)
+	-- Boucle d'objets dorés propre à ce joueur
+	task.spawn(function()
+		local settings = Config.Events.Golden
+		while player.Parent do
+			task.wait(random:NextNumber(settings.MinInterval, settings.MaxInterval) / speedup)
+			if player.Parent and services.GameService:IsReady(player) then
+				self:SpawnGolden(player)
+			end
+		end
+	end)
+end
+
+function EventService:PlayerRemoving(player: Player)
+	goldenByPlayer[player] = nil
+end
+
+function EventService:Start()
+	Net.Event("GoldenClick").OnServerEvent:Connect(onGoldenClick)
+
+	-- Boucle des Dopamine Rush (globaux)
+	task.spawn(function()
+		local settings = Config.Events.Rush
+		while true do
+			task.wait(random:NextNumber(settings.MinInterval, settings.MaxInterval) / speedup)
+			self:StartRush()
+			services.GameService:NotifyAll({
+				Type = "Rush",
+				Text = "⚡ " .. settings.Name .. " : x" .. settings.Multiplier .. " pendant " .. settings.Duration .. " s !",
+			})
+			task.wait(settings.Duration)
+		end
+	end)
+end
+
+return EventService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="41">
+        <Properties>
+          <string name="Name">GameService</string>
+          <string name="Source"><![CDATA[--[[
+	GameService (ModuleScript)
+	Emplacement : ServerScriptService > Services > GameService
+
+	Cœur du jeu, 100 % côté serveur :
+	  - clics (avec limite de clics/seconde et combo calculé par le serveur) ;
+	  - achats d'améliorations (le serveur vérifie le prix et l'argent) ;
+	  - gains passifs (Dopamine/s) ;
+	  - rebirth ;
+	  - envoi régulier de l'état au client (StateUpdate) ;
+	  - leaderstats (liste des joueurs en haut à droite).
+]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage.Shared
+local Config = require(Shared.Config)
+local Formulas = require(Shared.Formulas)
+local NumberFormatter = require(Shared.NumberFormatter)
+local Net = require(Shared.Net)
+local RateLimiter = require(script.Parent.RateLimiter)
+
+local GameService = {}
+
+local services -- toutes les autres services (rempli par Init)
+
+-- Données "de session" (non sauvegardées) : [Player] = session
+local sessions = {}
+
+local VALID_SETTINGS = { Sound = true, Music = true, Effects = true }
+local VALID_BUY_MODES = { x1 = true, x10 = true, max = true }
+
+----------------------------------------------------------------------
+-- Utilitaires
+----------------------------------------------------------------------
+
+local function isValidNumber(value): boolean
+	return type(value) == "number" and value == value and value ~= math.huge and value ~= -math.huge
+end
+
+local function createLeaderstats(player: Player)
+	local folder = Instance.new("Folder")
+	folder.Name = "leaderstats"
+
+	-- StringValue pour afficher "1.5M" au lieu d'un nombre illisible
+	local dopamine = Instance.new("StringValue")
+	dopamine.Name = Config.Game.CurrencyName
+	dopamine.Value = "0"
+	dopamine.Parent = folder
+
+	local rebirths = Instance.new("IntValue")
+	rebirths.Name = "Rebirths"
+	rebirths.Value = 0
+	rebirths.Parent = folder
+
+	folder.Parent = player
+end
+
+local function updateLeaderstats(player: Player, data)
+	local folder = player:FindFirstChild("leaderstats")
+	if not folder then
+		return
+	end
+	local dopamine = folder:FindFirstChild(Config.Game.CurrencyName) :: StringValue?
+	local rebirths = folder:FindFirstChild("Rebirths") :: IntValue?
+	if dopamine then
+		local text = NumberFormatter.Format(data.Dopamine)
+		if dopamine.Value ~= text then
+			dopamine.Value = text
+		end
+	end
+	if rebirths and rebirths.Value ~= data.Rebirths then
+		rebirths.Value = data.Rebirths
+	end
+end
+
+----------------------------------------------------------------------
+-- API utilisée par les autres services
+----------------------------------------------------------------------
+
+function GameService:Init(allServices)
+	services = allServices
+end
+
+function GameService:IsReady(player: Player): boolean
+	return sessions[player] ~= nil
+end
+
+function GameService:GetSession(player: Player)
+	return sessions[player]
+end
+
+-- Calcule les statistiques actuelles du joueur (gain/clic, gain/s...)
+function GameService:GetStats(player: Player)
+	local data = services.DataService:GetData(player)
+	return Formulas.ComputeStats(data, services.EventService:GetMultiplier())
+end
+
+-- Ajoute de la Dopamine (seule façon de gagner de l'argent dans le jeu)
+-- countForQuests = false pour ne pas faire avancer les quêtes "Gagne X"
+function GameService:AddDopamine(player: Player, amount: number, countForQuests: boolean?)
+	local data = services.DataService:GetData(player)
+	if not data or not isValidNumber(amount) or amount <= 0 then
+		return
+	end
+	local maxValue = Config.Game.MaxDopamine
+	data.Dopamine = math.min(maxValue, data.Dopamine + amount)
+	data.Stats.LifetimeDopamine = math.min(maxValue, data.Stats.LifetimeDopamine + amount)
+	if countForQuests ~= false then
+		services.QuestService:Progress(player, "Earn", amount)
+	end
+	self:MarkDirty(player)
+end
+
+function GameService:MarkDirty(player: Player)
+	local session = sessions[player]
+	if session then
+		session.Dirty = true
+	end
+end
+
+function GameService:MarkAllDirty()
+	for _, session in pairs(sessions) do
+		session.Dirty = true
+	end
+end
+
+-- Envoie une notification à un joueur
+-- payload = { Type = "Info" | "Error" | "Achievement" | "Quest" | "Bonus" | "Jackpot" | ..., Text = "...", ... }
+function GameService:Notify(player: Player, payload)
+	Net.Event("Notify"):FireClient(player, payload)
+end
+
+-- Notifie tous les joueurs (sauf `except`, optionnel)
+function GameService:NotifyAll(payload, except: Player?)
+	local remote = Net.Event("Notify")
+	for _, other in ipairs(Players:GetPlayers()) do
+		if other ~= except then
+			remote:FireClient(other, payload)
+		end
+	end
+end
+
+-- Construit l'état envoyé au client (tout ce que l'interface doit afficher)
+function GameService:BuildState(player: Player)
+	local data = services.DataService:GetData(player)
+	local session = sessions[player]
+	local stats = self:GetStats(player)
+
+	return {
+		Dopamine = data.Dopamine,
+		Rebirths = data.Rebirths,
+		Upgrades = data.Upgrades,
+		Achievements = data.Achievements,
+		Quests = data.Quests,
+		Stats = data.Stats,
+		Settings = data.Settings,
+
+		ClickValue = stats.ClickValue,
+		PerSecond = stats.PerSecond,
+		GlobalMultiplier = stats.GlobalMultiplier,
+		UpgradeMultiplier = stats.UpgradeMultiplier,
+		RebirthMultiplier = stats.RebirthMultiplier,
+		AchievementMultiplier = stats.AchievementMultiplier,
+		EventMultiplier = stats.EventMultiplier,
+
+		RebirthCost = Formulas.GetRebirthCost(data.Rebirths),
+		NextRebirthMultiplier = Formulas.GetRebirthMultiplier(data.Rebirths + 1),
+
+		Daily = services.DailyRewardService:GetInfo(player, stats),
+
+		-- Nombre de clics reçus par le serveur (sert au client pour sa prédiction)
+		ClickSeq = session.ClickSeq,
+	}
+end
+
+function GameService:SendState(player: Player)
+	local session = sessions[player]
+	if not session then
+		return
+	end
+	session.Dirty = false
+	Net.Event("StateUpdate"):FireClient(player, self:BuildState(player))
+	updateLeaderstats(player, services.DataService:GetData(player))
+end
+
+-- Envoie tout ce dont le client a besoin (état, logo DVD, événements, classement)
+function GameService:SendFullSync(player: Player)
+	if not sessions[player] then
+		return
+	end
+	self:SendState(player)
+	services.DVDService:SendSetup(player)
+	services.EventService:SendState(player)
+	services.LeaderboardService:SendTo(player)
+end
+
+----------------------------------------------------------------------
+-- Cycle de vie du joueur (appelé par Main)
+----------------------------------------------------------------------
+
+function GameService:PlayerReady(player: Player, _data)
+	local now = os.clock()
+	sessions[player] = {
+		ClickSeq = 0,
+		Combo = 0, -- jauge de combo (0-100)
+		ComboMaxed = false, -- déjà compté comme "combo max" ?
+		LastClick = now,
+		Tokens = Config.Game.MaxClicksPerSecond, -- anti-autoclick (seau de jetons)
+		LastRefill = now,
+		Dirty = true,
+	}
+	createLeaderstats(player)
+end
+
+function GameService:PlayerRemoving(player: Player)
+	sessions[player] = nil
+end
+
+----------------------------------------------------------------------
+-- Actions des joueurs (toujours validées ici)
+----------------------------------------------------------------------
+
+local function onClick(player: Player)
+	local session = sessions[player]
+	local data = services.DataService:GetData(player)
+	if not session or not data then
+		return
+	end
+
+	-- Compté même si refusé : le client s'en sert pour corriger sa prédiction
+	session.ClickSeq += 1
+	session.Dirty = true
+
+	-- Seau de jetons : on regagne MaxClicksPerSecond jetons par seconde
+	local now = os.clock()
+	local maxClicks = Config.Game.MaxClicksPerSecond
+	session.Tokens = math.min(maxClicks, session.Tokens + (now - session.LastRefill) * maxClicks)
+	session.LastRefill = now
+	if session.Tokens < 1 then
+		return -- trop de clics : ignoré (autoclicker / exploit)
+	end
+	session.Tokens -= 1
+
+	data.Stats.TotalClicks += 1
+
+	-- Combo calculé par le serveur (le client ne fait que l'afficher)
+	session.Combo = Formulas.StepCombo(session.Combo, now - session.LastClick)
+	session.LastClick = now
+	if session.Combo >= 100 and not session.ComboMaxed then
+		session.ComboMaxed = true
+		data.Stats.CombosMaxed += 1
+		services.QuestService:Progress(player, "Combo", 1)
+	elseif session.Combo < 50 then
+		session.ComboMaxed = false
+	end
+
+	local stats = GameService:GetStats(player)
+	local gain = stats.ClickValue * Formulas.GetComboMultiplier(session.Combo)
+	GameService:AddDopamine(player, gain, true)
+	services.QuestService:Progress(player, "Clicks", 1)
+end
+
+local function onBuyUpgrade(player: Player, upgradeId: any, mode: any)
+	if not RateLimiter.Check(player, "Buy", 0.05) then
+		return false, "Doucement !"
+	end
+	local data = services.DataService:GetData(player)
+	if not data or not sessions[player] then
+		return false, "Chargement en cours..."
+	end
+	if type(upgradeId) ~= "string" or type(mode) ~= "string" or not VALID_BUY_MODES[mode] then
+		return false, "Requête invalide"
+	end
+	local upgrade = Config.UpgradesById[upgradeId]
+	if not upgrade then
+		return false, "Amélioration inconnue"
+	end
+
+	local level = data.Upgrades[upgradeId] or 0
+	local amount, cost = Formulas.GetPurchase(upgrade, level, mode, data.Dopamine)
+	if amount <= 0 then
+		return false, "Niveau maximum atteint"
+	end
+	if data.Dopamine < cost then
+		return false, "Pas assez de " .. Config.Game.CurrencyName
+	end
+
+	data.Dopamine -= cost
+	data.Upgrades[upgradeId] = level + amount
+	data.Stats.UpgradesBought += amount
+	services.QuestService:Progress(player, "Buy", amount)
+
+	GameService:SendState(player)
+	return true, string.format("%s %s niveau %d", upgrade.Icon, upgrade.Name, level + amount)
+end
+
+local function onRebirth(player: Player)
+	if not RateLimiter.Check(player, "Rebirth", 1) then
+		return false, "Doucement !"
+	end
+	local data = services.DataService:GetData(player)
+	local session = sessions[player]
+	if not data or not session then
+		return false, "Chargement en cours..."
+	end
+
+	local cost = Formulas.GetRebirthCost(data.Rebirths)
+	if data.Dopamine < cost then
+		return false, "Il te faut " .. NumberFormatter.Format(cost) .. " " .. Config.Game.CurrencyName
+	end
+
+	-- On remet la progression à zéro... contre un multiplicateur permanent
+	data.Dopamine = 0
+	data.Upgrades = {}
+	data.Rebirths += 1
+	session.Combo = 0
+
+	GameService:NotifyAll({
+		Type = "Info",
+		Text = "♻️ " .. player.DisplayName .. " vient de faire un REBIRTH (x" .. data.Rebirths .. ") !",
+	}, player)
+	GameService:SendState(player)
+	local multiplier = NumberFormatter.Multiplier(Formulas.GetRebirthMultiplier(data.Rebirths))
+	return true, "Rebirth réussi ! Gains permanents " .. multiplier
+end
+
+local function onSetSetting(player: Player, name: any, value: any)
+	if not RateLimiter.Check(player, "Setting", 0.2) then
+		return false
+	end
+	local data = services.DataService:GetData(player)
+	if not data or type(name) ~= "string" or not VALID_SETTINGS[name] or type(value) ~= "boolean" then
+		return false
+	end
+	data.Settings[name] = value
+	GameService:MarkDirty(player)
+	return true
+end
+
+----------------------------------------------------------------------
+-- Démarrage : branchements des remotes + boucles
+----------------------------------------------------------------------
+
+function GameService:Start()
+	Net.Event("Click").OnServerEvent:Connect(onClick)
+	Net.Event("ClientReady").OnServerEvent:Connect(function(player)
+		if RateLimiter.Check(player, "ClientReady", 2) then
+			self:SendFullSync(player)
+		end
+	end)
+	Net.Function("BuyUpgrade").OnServerInvoke = onBuyUpgrade
+	Net.Function("Rebirth").OnServerInvoke = onRebirth
+	Net.Function("SetSetting").OnServerInvoke = onSetSetting
+
+	-- Gains passifs
+	task.spawn(function()
+		local last = os.clock()
+		while true do
+			task.wait(Config.Game.PassiveTickRate)
+			local now = os.clock()
+			local elapsed = now - last
+			last = now
+			for player in pairs(sessions) do
+				local stats = self:GetStats(player)
+				if stats.PerSecond > 0 then
+					self:AddDopamine(player, stats.PerSecond * elapsed, true)
+				end
+			end
+		end
+	end)
+
+	-- Synchronisation vers les clients (seulement si quelque chose a changé)
+	task.spawn(function()
+		while true do
+			task.wait(Config.Game.SyncRate)
+			for player, session in pairs(sessions) do
+				if session.Dirty then
+					services.AchievementService:Check(player)
+					self:SendState(player)
+				end
+			end
+		end
+	end)
+
+	-- Petit rappel dans la console du serveur
+	print(string.format("[Dopamine Clicker] Serveur prêt (%d joueur(s))", #Players:GetPlayers()))
+end
+
+return GameService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="42">
+        <Properties>
+          <string name="Name">LeaderboardService</string>
+          <string name="Source"><![CDATA[--[[
+	LeaderboardService (ModuleScript)
+	Emplacement : ServerScriptService > Services > LeaderboardService
+
+	Classement global (tous serveurs confondus) sur la Dopamine totale gagnée,
+	avec un OrderedDataStore.
+
+	Astuce : un OrderedDataStore n'accepte que des entiers (max ~9.2e18),
+	alors que la Dopamine peut dépasser 1e30. On stocke donc
+	log10(valeur) * 1 000 000 (un entier), puis on refait l'inverse à la lecture.
+	L'ordre du classement reste exactement le même.
+]]
+
+local DataStoreService = game:GetService("DataStoreService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Net = require(ReplicatedStorage.Shared.Net)
+
+local LeaderboardService = {}
+
+local services
+local orderedStore: OrderedDataStore? = nil
+local cachedTop = {} -- dernier classement connu
+local nameCache = {} -- [userId] = nom
+
+do
+	local ok, result = pcall(function()
+		return DataStoreService:GetOrderedDataStore(Config.Leaderboard.StoreName)
+	end)
+	if ok then
+		orderedStore = result
+	else
+		warn("[LeaderboardService] Classement indisponible :", result)
+	end
+end
+
+local function encode(value: number): number
+	return math.floor(math.log10(math.max(0, value) + 1) * 1e6)
+end
+
+local function decode(stored: number): number
+	return 10 ^ (stored / 1e6) - 1
+end
+
+local function getName(userId: number): string
+	if nameCache[userId] then
+		return nameCache[userId]
+	end
+	local player = Players:GetPlayerByUserId(userId)
+	if player then
+		nameCache[userId] = player.DisplayName
+		return player.DisplayName
+	end
+	local ok, name = pcall(function()
+		return Players:GetNameFromUserIdAsync(userId)
+	end)
+	if ok and name then
+		nameCache[userId] = name
+		return name
+	end
+	return "Joueur " .. userId
+end
+
+function LeaderboardService:Init(allServices)
+	services = allServices
+end
+
+function LeaderboardService:SendTo(player: Player)
+	Net.Event("LeaderboardUpdate"):FireClient(player, cachedTop)
+end
+
+-- Écrit le score d'un joueur dans le classement
+function LeaderboardService:SubmitAsync(player: Player)
+	local data = services.DataService:GetData(player)
+	if not orderedStore or not data then
+		return
+	end
+	local store = orderedStore :: OrderedDataStore
+	local ok, err = pcall(function()
+		store:SetAsync("P_" .. player.UserId, encode(data.Stats.LifetimeDopamine))
+	end)
+	if not ok then
+		warn("[LeaderboardService] Échec d'envoi du score :", err)
+	end
+end
+
+-- Lit le top et l'envoie à tout le monde
+function LeaderboardService:RefreshAsync()
+	if not orderedStore then
+		return
+	end
+	local store = orderedStore :: OrderedDataStore
+	local ok, pages = pcall(function()
+		return store:GetSortedAsync(false, Config.Leaderboard.Size)
+	end)
+	if not ok then
+		warn("[LeaderboardService] Échec de lecture du classement :", pages)
+		return
+	end
+
+	local top = {}
+	for rank, entry in ipairs(pages:GetCurrentPage()) do
+		local userId = tonumber(string.sub(entry.key, 3))
+		if userId then
+			table.insert(top, {
+				Rank = rank,
+				UserId = userId,
+				Name = getName(userId),
+				Value = decode(entry.value),
+			})
+		end
+	end
+	cachedTop = top
+	Net.Event("LeaderboardUpdate"):FireAllClients(cachedTop)
+end
+
+function LeaderboardService:PlayerRemoving(player: Player)
+	task.spawn(function()
+		self:SubmitAsync(player)
+	end)
+end
+
+function LeaderboardService:Start()
+	task.spawn(function()
+		task.wait(5) -- laisse le temps aux premiers joueurs de charger
+		while true do
+			for _, player in ipairs(services.DataService:GetLoadedPlayers()) do
+				self:SubmitAsync(player)
+			end
+			self:RefreshAsync()
+			task.wait(Config.Leaderboard.UpdateInterval)
+		end
+	end)
+end
+
+return LeaderboardService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="43">
+        <Properties>
+          <string name="Name">QuestService</string>
+          <string name="Source"><![CDATA[--[[
+	QuestService (ModuleScript)
+	Emplacement : ServerScriptService > Services > QuestService
+
+	Quêtes simples (ex. "Fais 50 clics"). Le joueur a toujours
+	Config.Quests.ActiveCount quêtes actives. Une quête terminée donne sa
+	récompense automatiquement et est remplacée par une nouvelle.
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Formulas = require(ReplicatedStorage.Shared.Formulas)
+local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
+
+local QuestService = {}
+
+local services
+local random = Random.new()
+
+function QuestService:Init(allServices)
+	services = allServices
+end
+
+-- Crée une nouvelle quête en évitant les types déjà actifs
+local function generateQuest(player: Player, activeQuests)
+	local usedTypes = {}
+	for _, quest in ipairs(activeQuests) do
+		usedTypes[quest.Type] = true
+	end
+
+	local candidates = {}
+	for _, template in ipairs(Config.Quests.Pool) do
+		if not usedTypes[template.Type] then
+			table.insert(candidates, template)
+		end
+	end
+	if #candidates == 0 then
+		candidates = Config.Quests.Pool
+	end
+
+	local template = candidates[random:NextInteger(1, #candidates)]
+	local stats = services.GameService:GetStats(player)
+
+	local goal
+	if template.GoalSeconds then
+		-- Objectif "à l'échelle" : X secondes de production
+		local seconds = template.GoalSeconds[random:NextInteger(1, #template.GoalSeconds)]
+		goal = Formulas.ScaledReward(stats, seconds, template.MinGoal or 100)
+	else
+		goal = template.Goals[random:NextInteger(1, #template.Goals)]
+	end
+
+	return {
+		Type = template.Type,
+		Goal = goal,
+		Progress = 0,
+		Text = string.format(template.Text, NumberFormatter.Format(goal)),
+		Reward = Formulas.ScaledReward(stats, template.RewardSeconds, template.MinReward),
+	}
+end
+
+-- Complète la liste des quêtes si nécessaire (nouveau joueur, config modifiée...)
+function QuestService:PlayerReady(player: Player, data)
+	-- Nettoie les quêtes dont le type n'existe plus dans la config
+	for index = #data.Quests, 1, -1 do
+		local quest = data.Quests[index]
+		local exists = false
+		for _, template in ipairs(Config.Quests.Pool) do
+			if template.Type == quest.Type then
+				exists = true
+				break
+			end
+		end
+		if not exists then
+			table.remove(data.Quests, index)
+		end
+	end
+
+	while #data.Quests < Config.Quests.ActiveCount do
+		table.insert(data.Quests, generateQuest(player, data.Quests))
+	end
+end
+
+-- Fait avancer les quêtes d'un type donné
+function QuestService:Progress(player: Player, questType: string, amount: number)
+	local data = services.DataService:GetData(player)
+	if not data then
+		return
+	end
+
+	local completed = {}
+	for index, quest in ipairs(data.Quests) do
+		if quest.Type == questType and quest.Progress < quest.Goal then
+			quest.Progress = math.min(quest.Goal, quest.Progress + amount)
+			if quest.Progress >= quest.Goal then
+				table.insert(completed, index)
+			end
+		end
+	end
+
+	if #completed == 0 then
+		return
+	end
+
+	-- D'abord on remplace les quêtes terminées, ENSUITE on donne les récompenses
+	-- (évite de modifier la liste pendant qu'on la parcourt)
+	local rewards = {}
+	for _, index in ipairs(completed) do
+		local quest = data.Quests[index]
+		table.insert(rewards, quest)
+		data.Stats.QuestsCompleted += 1
+		local others = table.clone(data.Quests)
+		table.remove(others, index)
+		data.Quests[index] = generateQuest(player, others)
+	end
+
+	for _, quest in ipairs(rewards) do
+		services.GameService:AddDopamine(player, quest.Reward, false)
+		services.GameService:Notify(player, {
+			Type = "Quest",
+			Title = "QUÊTE TERMINÉE !",
+			Text = "📜 " .. quest.Text .. "  (+" .. NumberFormatter.Format(quest.Reward) .. ")",
+		})
+	end
+	services.GameService:MarkDirty(player)
+end
+
+return QuestService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="44">
+        <Properties>
+          <string name="Name">RateLimiter</string>
+          <string name="Source"><![CDATA[--[[
+	RateLimiter (ModuleScript)
+	Emplacement : ServerScriptService > Services > RateLimiter
+
+	Anti-spam simple : empêche un joueur d'appeler une action plus souvent
+	que l'intervalle donné (protection contre les exploits qui spamment
+	les RemoteEvents).
+]]
+
+local Players = game:GetService("Players")
+
+local RateLimiter = {}
+
+-- [Player] = { [clé] = dernière heure d'appel }
+local lastCalls = {}
+
+-- Renvoie true si l'action est autorisée, false si le joueur va trop vite
+function RateLimiter.Check(player: Player, key: string, interval: number): boolean
+	local now = os.clock()
+	local playerCalls = lastCalls[player]
+	if not playerCalls then
+		playerCalls = {}
+		lastCalls[player] = playerCalls
+	end
+
+	local last = playerCalls[key]
+	if last and now - last < interval then
+		return false
+	end
+	playerCalls[key] = now
+	return true
+end
+
+Players.PlayerRemoving:Connect(function(player)
+	lastCalls[player] = nil
+end)
+
+return RateLimiter
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="StarterPlayer" referent="45">
+    <Properties>
+      <string name="Name">StarterPlayer</string>
+    </Properties>
+    <Item class="StarterPlayerScripts" referent="46">
+      <Properties>
+        <string name="Name">StarterPlayerScripts</string>
+      </Properties>
+      <Item class="LocalScript" referent="47">
+        <Properties>
+          <string name="Name">ClientMain</string>
+          <string name="Source"><![CDATA[--[[
+	ClientMain (LocalScript)
+	Emplacement : StarterPlayer > StarterPlayerScripts > ClientMain
+
+	Point d'entrée du client : construit toute l'interface en code et
+	branche les RemoteEvents. Aucune logique de gain ici : le client
+	affiche et envoie des DEMANDES, le serveur décide.
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local StarterGui = game:GetService("StarterGui")
+
+local Client = ReplicatedStorage:WaitForChild("Client")
+local Components = Client:WaitForChild("Components")
+local Panels = Components:WaitForChild("Panels")
+
+local Net = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Net"))
+local Interface = require(Client:WaitForChild("Interface"))
+local ClientState = require(Client:WaitForChild("ClientState"))
+local SoundManager = require(Client:WaitForChild("SoundManager"))
+local Effects = require(Client:WaitForChild("Effects"))
+
+local Background = require(Components:WaitForChild("Background"))
+local HUD = require(Components:WaitForChild("HUD"))
+local Clicker = require(Components:WaitForChild("Clicker"))
+local Shop = require(Components:WaitForChild("Shop"))
+local SideMenu = require(Components:WaitForChild("SideMenu"))
+local Notifications = require(Components:WaitForChild("Notifications"))
+local DVDLogo = require(Components:WaitForChild("DVDLogo"))
+local GoldenObject = require(Components:WaitForChild("GoldenObject"))
+local PanelManager = require(Components:WaitForChild("PanelManager"))
+
+-- Le sac à dos (outils) ne sert à rien ici
+pcall(function()
+	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
+end)
+
+-- 1. Services de base
+SoundManager.Init()
+ClientState.Init()
+
+-- 2. Écran et calques
+local screenGui = Interface.Build()
+Background.Build(screenGui)
+local layers = Interface.Layers
+Effects.Init(layers.Effects)
+
+-- 3. Composants
+HUD.Build(layers.Main)
+Clicker.Build(layers.Main)
+Shop.Build(layers.Main)
+SideMenu.Build(layers.Main)
+Notifications.Build(layers.Toasts)
+DVDLogo.Build(layers.DVD)
+GoldenObject.Build(layers.Golden)
+
+-- 4. Fenêtres
+PanelManager.Build(layers.Panels)
+PanelManager.Register("Quests", require(Panels:WaitForChild("Quests")))
+PanelManager.Register("Achievements", require(Panels:WaitForChild("Achievements")))
+PanelManager.Register("Rebirth", require(Panels:WaitForChild("Rebirth")))
+PanelManager.Register("Daily", require(Panels:WaitForChild("Daily")))
+PanelManager.Register("Leaderboard", require(Panels:WaitForChild("Leaderboard")))
+PanelManager.Register("Settings", require(Panels:WaitForChild("Settings")))
+
+-- 5. Événements serveur
+Net.Event("Notify").OnClientEvent:Connect(Notifications.Handle)
+ClientState.RushChanged:Connect(function(rush)
+	Background.SetRush(rush.Active)
+end)
+
+-- Au premier état reçu : on ouvre le cadeau du jour s'il est disponible
+local firstState
+firstState = ClientState.Changed:Connect(function(data)
+	firstState:Disconnect()
+	if data.Daily.Available then
+		task.delay(1.5, PanelManager.Open, "Daily")
+	end
+end)
+
+-- 6. On prévient le serveur que l'interface est prête
+Net.Event("ClientReady"):FireServer()
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="Workspace" referent="48">
+    <Properties>
+      <string name="Name">Workspace</string>
+      <bool name="NeedsPivotMigration">false</bool>
+    </Properties>
+    <Item class="Part" referent="49">
+      <Properties>
+        <string name="Name">Baseplate</string>
+        <bool name="Anchored">true</bool>
+        <token name="BottomSurface">0</token>
+        <Color3uint8 name="Color3uint8">1706035</Color3uint8>
+        <bool name="Locked">true</bool>
+        <token name="Material">272</token>
+        <Vector3 name="Position">
+          <X>0</X>
+          <Y>-10</Y>
+          <Z>0</Z>
+        </Vector3>
+        <Vector3 name="size">
+          <X>512</X>
+          <Y>20</Y>
+          <Z>512</Z>
+        </Vector3>
+        <token name="TopSurface">0</token>
+      </Properties>
+    </Item>
+    <Item class="SpawnLocation" referent="50">
+      <Properties>
+        <string name="Name">SpawnLocation</string>
+        <bool name="Anchored">true</bool>
+        <bool name="CanCollide">true</bool>
+        <int name="Duration">0</int>
+        <Vector3 name="Position">
+          <X>0</X>
+          <Y>0.5</Y>
+          <Z>0</Z>
+        </Vector3>
+        <Vector3 name="size">
+          <X>12</X>
+          <Y>1</Y>
+          <Z>12</Z>
+        </Vector3>
+        <float name="Transparency">1</float>
+      </Properties>
+    </Item>
+  </Item>
+</roblox>
