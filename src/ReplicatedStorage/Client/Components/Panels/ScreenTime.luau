@@ -18,6 +18,7 @@ local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 
 local ScreenTime = {
 	Title = "⏱️ Temps d'écran",
+	Subtitle = "Le temps passé ici (on ne juge pas… un peu)",
 	Color = Theme.Colors.Dark,
 	Size = Vector2.new(660, 520),
 }

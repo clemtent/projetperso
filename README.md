@@ -27,6 +27,16 @@ Les autres méthodes (Rojo, copie manuelle) sont décrites dans [`docs/INSTALLAT
 
 ---
 
+## 🆕 Nouveautés v3
+
+- **🎵 Vraie musique lofi** : lecteur avec playlist, fondu enchaîné, bouton ⏭ et visualiseur dans la chambre lofi, volumes réglables dans ⚙️. **Ajoute tes musiques** dans `Config.Music.Playlist` : Studio > Boîte à outils > Audio > cherche « lofi », filtre par créateur **Roblox** (musiques sous licence utilisables partout), clic droit > *Copier l'ID de l'élément*, puis `Id = "rbxassetid://ID"`.
+- **🎨 Thèmes / fonds animés** : Classique, Kawaii 🌸, Matcha 🍵, Coucher de soleil 🌅, Océan 🐠, Nuit lofi 🌙 (Dopamine) + Bonbon 🍭 et Synthwave 🌆 (Premium / VIP). Chaque thème peut aussi avoir son Game Pass.
+- **💎 Boutique Robux** : Dopamine x10, x2, Auto-clic, VIP, packs de Dopamine, boosts x2/x5, Rush pour tout le serveur. Tu colles juste tes IDs : voir [`docs/MONETISATION.md`](docs/MONETISATION.md).
+- **Finition pro** : écran de chargement, ombres douces, transitions des fenêtres, indicateurs VIP / boost / auto-clic, chances des coffres affichées.
+- Commandes de test Studio en plus : `/pass X10`, `/boost 5 60`, `/theme Kawaii`.
+
+---
+
 ## 🗂️ Arborescence dans l'Explorer de Roblox Studio
 
 ```

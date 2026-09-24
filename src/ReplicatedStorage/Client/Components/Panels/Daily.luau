@@ -20,6 +20,7 @@ local Net = require(ReplicatedStorage.Shared.Net)
 
 local Daily = {
 	Title = "🎁 Cadeau du jour",
+	Subtitle = "Un nouveau cadeau chaque jour",
 	Color = Theme.Colors.Pink,
 }
 

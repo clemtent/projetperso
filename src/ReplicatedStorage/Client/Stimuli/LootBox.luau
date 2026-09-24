@@ -12,6 +12,8 @@
 	des rayons de la couleur du rang tournent, puis le rang (Commun, Rare,
 	Épique, LÉGENDAIRE) et le gain s'affichent. Légendaire = gros message
 	+ confettis.
+	Bouton "?" : affiche les chances (%) de chaque rang, calculées depuis
+	les poids (Weight) de Config.LootBox.Tiers.
 ]]
 
 local Debris = game:GetService("Debris")
@@ -99,8 +101,8 @@ function LootBox.Start(ctx)
 		Text = "Coffre mystère",
 		Font = Theme.Fonts.Title,
 		TextColor3 = Theme.Colors.TextDark,
-		Position = UDim2.fromOffset(10, 6),
-		Size = UDim2.new(1, -44, 0, 18),
+		Position = UDim2.fromOffset(34, 6),
+		Size = UDim2.new(1, -68, 0, 18),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		MaxTextSize = 15,
 		ZIndex = 2,
@@ -370,6 +372,142 @@ function LootBox.Start(ctx)
 	})
 
 	------------------------------------------------------------------
+	-- Chances de chaque rang (bouton "?")
+	------------------------------------------------------------------
+	local totalWeight = 0
+	for _, tier in ipairs(config.Tiers) do
+		totalWeight += math.max(0, tonumber(tier.Weight) or 0)
+	end
+
+	local function percentText(weight: number): string
+		if totalWeight <= 0 then
+			return "?"
+		end
+		local percent = weight / totalWeight * 100
+		if percent >= 10 or math.abs(percent - math.floor(percent + 0.5)) < 0.05 then
+			return tostring(math.floor(percent + 0.5)) .. " %"
+		end
+		return string.format("%.1f %%", percent)
+	end
+
+	local oddsButton = Create("TextButton", {
+		Name = "Odds",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromOffset(18, 16),
+		Size = UDim2.fromOffset(22, 22),
+		BackgroundColor3 = Color3.fromRGB(240, 236, 255),
+		AutoButtonColor = false,
+		Font = Theme.Fonts.Title,
+		Text = "?",
+		TextColor3 = Theme.Colors.Purple,
+		TextSize = 15,
+		ZIndex = 14,
+		Parent = card,
+	})
+	UIUtil.Corner(oddsButton, UDim.new(1, 0))
+	UIUtil.Stroke(oddsButton, Theme.Colors.Purple, 1.5, 0.2)
+
+	-- Carte des chances (par-dessus le coffre ; un appui la ferme)
+	local oddsPanel = Create("TextButton", {
+		Name = "OddsPanel",
+		Size = UDim2.new(1, -12, 1, -12),
+		Position = UDim2.fromOffset(6, 6),
+		BackgroundColor3 = white,
+		BackgroundTransparency = 0.02,
+		AutoButtonColor = false,
+		Text = "",
+		ZIndex = 30,
+		Visible = false,
+		Parent = card,
+	})
+	UIUtil.Corner(oddsPanel, 14)
+	UIUtil.Stroke(oddsPanel, Theme.Colors.Purple, 1.5, 0.3)
+	local oddsScale = Create("UIScale", { Parent = oddsPanel })
+	UIUtil.Label({
+		Text = "🎲 Chances",
+		Font = Theme.Fonts.Title,
+		TextColor3 = Theme.Colors.TextDark,
+		Position = UDim2.fromOffset(10, 6),
+		Size = UDim2.new(1, -20, 0, 20),
+		MaxTextSize = 16,
+		ZIndex = 31,
+		Parent = oddsPanel,
+	})
+	local rowCount = math.max(1, #config.Tiers)
+	local rowHeight = math.min(24, math.floor((height - 12 - 34 - 18) / rowCount))
+	for index, tier in ipairs(config.Tiers) do
+		local y = 30 + (index - 1) * rowHeight
+		local tierColor: Color3 = tier.Color or gold
+		local dot = Create("Frame", {
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.fromOffset(12, y + rowHeight / 2),
+			Size = UDim2.fromOffset(10, 10),
+			BackgroundColor3 = tierColor,
+			BorderSizePixel = 0,
+			ZIndex = 31,
+			Parent = oddsPanel,
+		})
+		UIUtil.Corner(dot, UDim.new(1, 0))
+		UIUtil.Label({
+			Text = tostring(tier.Name or tier.Id),
+			Font = Theme.Fonts.Title,
+			TextColor3 = tierColor:Lerp(Theme.Colors.TextDark, 0.35),
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Position = UDim2.fromOffset(28, y + 2),
+			Size = UDim2.new(1, -90, 0, rowHeight - 4),
+			MaxTextSize = 14,
+			ZIndex = 31,
+			Parent = oddsPanel,
+		})
+		UIUtil.Label({
+			Text = percentText(math.max(0, tonumber(tier.Weight) or 0)),
+			Font = Theme.Fonts.Number,
+			TextColor3 = Theme.Colors.TextDark,
+			TextXAlignment = Enum.TextXAlignment.Right,
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, -12, 0, y + 2),
+			Size = UDim2.fromOffset(60, rowHeight - 4),
+			MaxTextSize = 14,
+			ZIndex = 31,
+			Parent = oddsPanel,
+		})
+	end
+	UIUtil.Label({
+		Text = "Touche pour fermer",
+		TextColor3 = Theme.Colors.TextDim,
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -4),
+		Size = UDim2.new(1, -16, 0, 14),
+		MaxTextSize = 11,
+		ZIndex = 31,
+		Parent = oddsPanel,
+	})
+
+	local oddsToken = 0
+	local function setOdds(show: boolean)
+		oddsToken += 1
+		oddsPanel.Visible = show
+		if show then
+			oddsScale.Scale = 0.85
+			UIUtil.Tween(oddsScale, 0.2, { Scale = 1 }, Enum.EasingStyle.Back)
+			ctx.Sound.Play("Click", 1.4)
+			-- Fermeture automatique
+			local token = oddsToken
+			task.delay(6, function()
+				if token == oddsToken and oddsPanel.Parent then
+					oddsPanel.Visible = false
+				end
+			end)
+		end
+	end
+	ctx.Connect(oddsButton.Activated, function()
+		setOdds(not oddsPanel.Visible)
+	end)
+	ctx.Connect(oddsPanel.Activated, function()
+		setOdds(false)
+	end)
+
+	------------------------------------------------------------------
 	-- Suivi du stock et de la charge
 	------------------------------------------------------------------
 	local stored, serverProgress, maxStored = readChests()
@@ -553,6 +691,7 @@ function LootBox.Start(ctx)
 		UIUtil.Tween(amountStroke, 0.3, { Transparency = 1 })
 		UIUtil.Tween(title, 0.3, { TextTransparency = 0 })
 		UIUtil.Tween(hint, 0.3, { TextTransparency = 0 })
+		oddsButton.Visible = true
 		task.spawn(function()
 			local startAlpha = raysAlpha
 			for i = 1, 10 do
@@ -592,6 +731,8 @@ function LootBox.Start(ctx)
 		-- Rang + gain
 		title.TextTransparency = 1
 		hint.TextTransparency = 1
+		oddsButton.Visible = false
+		oddsPanel.Visible = false
 		tierLabel.Text = tostring(tier.Name or tier.Id)
 		tierLabel.TextColor3 = color
 		tierLabel.TextTransparency = 0

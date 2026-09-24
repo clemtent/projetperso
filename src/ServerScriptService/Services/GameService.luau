@@ -20,8 +20,12 @@
 	     gain = rebonds x BounceValue, Stats.Bounces, quête "Bounces" ;
 	  3. Temps de jeu : Stats.PlaySeconds, temps de la session et
 	     ScreenTime["jour UTC"] (on ne garde que Config.ScreenTime.DaysKept jours) ;
-	  4. Coffres : LootService:Charge remplit la jauge du coffre mystère.
-	Les stats (Rush compris) sont recalculées une seule fois par joueur et par tick.
+	  4. Coffres : LootService:Charge remplit la jauge du coffre mystère ;
+	  5. Auto-clic (Game Pass) : AutoClicksPerSecond clics/s, même gain qu'un
+	     clic sans combo, comptés dans Stats.TotalClicks.
+	Les stats (Rush et bonus Robux compris) sont recalculées une seule fois par
+	joueur et par tick. Bonus Robux = produit des multiplicateurs des Game Passes
+	possédés x boost actif (MonetizationService).
 ]]
 
 local Players = game:GetService("Players")
@@ -170,7 +174,11 @@ end
 -- Calcule les statistiques actuelles du joueur (gain/clic, gain/s...)
 function GameService:GetStats(player: Player)
 	local data = services.DataService:GetData(player)
-	return Formulas.ComputeStats(data, services.EventService:GetMultiplier())
+	return Formulas.ComputeStats(
+		data,
+		services.EventService:GetMultiplier(),
+		services.MonetizationService:GetBonusMultiplier(player)
+	)
 end
 
 -- Ajoute de la Dopamine (façon normale de gagner de l'argent dans le jeu)
@@ -203,7 +211,7 @@ function GameService:MarkAllDirty()
 end
 
 -- Envoie une notification à un joueur
--- payload = { Type = "Info" | "Error" | "Achievement" | "Quest" | "Bonus" | "Jackpot" | "Rush" | "Unlock" | "Detox", ... }
+-- payload = { Type = "Info" | "Error" | "Achievement" | "Quest" | "Bonus" | "Jackpot" | "Rush" | "Unlock" | "Detox" | "Purchase", ... }
 function GameService:Notify(player: Player, payload)
 	Net.Event("Notify"):FireClient(player, payload)
 end
@@ -240,6 +248,8 @@ function GameService:BuildState(player: Player)
 	local data = services.DataService:GetData(player)
 	local session = sessions[player]
 	local stats = self:GetStats(player)
+	local monetization = services.MonetizationService
+	local boostMultiplier, boostRemaining = monetization:GetBoost(data)
 
 	return {
 		Dopamine = data.Dopamine,
@@ -262,6 +272,7 @@ function GameService:BuildState(player: Player)
 		AchievementMultiplier = stats.AchievementMultiplier,
 		CosmeticMultiplier = stats.CosmeticMultiplier,
 		EventMultiplier = stats.EventMultiplier,
+		BonusMultiplier = stats.BonusMultiplier, -- Game Passes x boost actif
 		ComboEnabled = Formulas.HasFeature(data, "Combo"),
 
 		RebirthCost = Formulas.GetRebirthCost(data.Rebirths),
@@ -276,6 +287,13 @@ function GameService:BuildState(player: Player)
 		},
 		Cosmetics = data.Cosmetics,
 		ScreenTime = self:GetScreenTime(player),
+
+		-- Thèmes et boutique Robux
+		Themes = services.ThemeService:GetState(player), -- { Owned = { [id] = true }, Equipped = id }
+		Passes = monetization:GetOwnedPasses(player), -- { [passId] = true }
+		Boost = { Multiplier = boostMultiplier, Remaining = math.max(0, math.floor(boostRemaining)) },
+		CasinoEnabled = monetization:IsCasinoEnabled(),
+		IsVIP = monetization:IsVIP(player),
 
 		-- Nombre de clics reçus par le serveur (sert au client pour sa prédiction)
 		ClickSeq = session and session.ClickSeq or 0,
@@ -553,6 +571,13 @@ local function passiveTick(player: Player, session, elapsed: number)
 
 	-- 4. Coffre mystère
 	services.LootService:Charge(player, data, elapsed)
+
+	-- 5. Auto-clic (Game Pass) : comme un clic normal, sans combo
+	local autoClicks = services.MonetizationService:TakeAutoClicks(player, elapsed)
+	if autoClicks > 0 then
+		data.Stats.TotalClicks += autoClicks
+		GameService:AddDopamine(player, stats.ClickValue * autoClicks, true)
+	end
 end
 
 ----------------------------------------------------------------------

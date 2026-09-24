@@ -9,7 +9,8 @@
 	  - le cadre "Root" s'étire pour toujours couvrir toute la zone sûre
 	    (hors encoche et barre Roblox ; sa taille en pixels "design" est
 	    donc >= 1280x720 dans un sens) ;
-	  - une ScreenGui de fond séparée remplit tout l'écran (couleur seule).
+	  - une ScreenGui de fond séparée remplit tout l'écran (couleurs du
+	    thème équipé, ou fond sombre du mode néon).
 
 	Calques (du plus bas au plus haut), tous plein écran, transparents et
 	non "Active" (les clics passent à travers) :
@@ -22,6 +23,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Theme = require(script.Parent.Theme)
 local UIUtil = require(script.Parent.UIUtil)
 local Signal = require(ReplicatedStorage.Shared.Signal)
+local Config = require(ReplicatedStorage.Shared.Config)
 local ClientState = require(script.Parent.ClientState)
 
 local Interface = {}
@@ -66,12 +68,35 @@ function Interface.Build(): ScreenGui
 		Parent = backdropGui,
 	})
 	local backdropGradient = UIUtil.Gradient(backdrop, ColorSequence.new(Theme.Colors.Background, Theme.Colors.BackgroundBottom), 90)
-	local function applyBackdrop(dark: boolean)
-		backdrop.BackgroundColor3 = dark and Theme.DarkColors.Background or Color3.new(1, 1, 1)
-		backdropGradient.Enabled = not dark
+	local lastKey = ""
+	local function applyBackdrop()
+		local data = ClientState.Data
+		local themeId = (data and type(data.Themes) == "table" and data.Themes.Equipped) or "Classic"
+		local theme = Config.ThemesById[themeId]
+		local dark = ClientState.DarkMode
+		local key = tostring(themeId) .. (dark and ":dark" or ":light")
+		if key == lastKey then
+			return
+		end
+		lastKey = key
+		if theme and (theme.Dark or not dark) then
+			-- Couleurs du thème (sombre ou clair)
+			backdrop.BackgroundColor3 = Color3.new(1, 1, 1)
+			backdropGradient.Color = ColorSequence.new(theme.Top, theme.Bottom)
+			backdropGradient.Enabled = true
+		elseif dark then
+			-- Mode néon sur un thème clair : fond presque noir
+			backdrop.BackgroundColor3 = Theme.DarkColors.Background
+			backdropGradient.Enabled = false
+		else
+			backdrop.BackgroundColor3 = Color3.new(1, 1, 1)
+			backdropGradient.Color = ColorSequence.new(Theme.Colors.Background, Theme.Colors.BackgroundBottom)
+			backdropGradient.Enabled = true
+		end
 	end
 	ClientState.DarkModeChanged:Connect(applyBackdrop)
-	applyBackdrop(ClientState.DarkMode)
+	ClientState.Changed:Connect(applyBackdrop)
+	applyBackdrop()
 
 	-- L'interface du jeu reste dans la zone sûre : ni sous l'encoche des
 	-- téléphones, ni sous les boutons Roblox de la barre du haut

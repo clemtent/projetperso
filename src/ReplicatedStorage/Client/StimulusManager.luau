@@ -95,7 +95,8 @@ local function loadModule(name: string): any?
 end
 
 ----------------------------------------------------------------------
--- Mode sombre : actif si au moins un stimulus vivant le demande
+-- Mode sombre : la source "Stimuli" est active si au moins un stimulus
+-- vivant le demande (le thème équipé a sa propre source, voir ClientState)
 ----------------------------------------------------------------------
 
 local function refreshDarkMode()
@@ -106,7 +107,8 @@ local function refreshDarkMode()
 			break
 		end
 	end
-	ClientState.SetDarkMode(dark)
+	-- Source séparée du thème : un thème sombre reste sombre quand le néon s'arrête
+	ClientState.SetDarkSource("Stimuli", dark)
 end
 
 ----------------------------------------------------------------------

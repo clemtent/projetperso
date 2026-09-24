@@ -15,6 +15,9 @@
 	  /detox          -> va à l'océan gratuitement
 	  /chest 3        -> ajoute des coffres mystère
 	  /reset          -> remet toutes les données à zéro (sauf les réglages)
+	  /pass vip       -> active / désactive un Game Pass pour tester (x10, x2, autoclick, vip)
+	  /boost 5 60     -> boost x5 pendant 60 secondes
+	  /theme kawaii   -> donne et équipe un thème
 	  /help           -> liste des commandes
 ]]
 
@@ -35,10 +38,33 @@ for kind in pairs(Config.Spawners) do
 	spawnKinds[string.lower(kind)] = kind
 end
 
+-- "vip" -> "VIP", "kawaii" -> "Kawaii" (le chat est mis en minuscules)
+local passIds = {}
+for _, pass in ipairs(Config.Monetization.GamePasses) do
+	passIds[string.lower(pass.Id)] = pass.Id
+end
+local themeIds = {}
+for _, theme in ipairs(Config.Themes) do
+	themeIds[string.lower(theme.Id)] = theme.Id
+end
+
+local function listIds(map): string
+	local list = {}
+	for lower in pairs(map) do
+		table.insert(list, lower)
+	end
+	table.sort(list)
+	return table.concat(list, ", ")
+end
+
 -- Noms des commandes (déclarées comme TextChatCommand dans Studio)
-local COMMAND_NAMES = { "give", "rush", "daily", "save", "corner", "unlockall", "spawn", "golden", "detox", "chest", "reset", "help" }
+local COMMAND_NAMES = {
+	"give", "rush", "daily", "save", "corner", "unlockall", "spawn", "golden", "detox", "chest", "reset",
+	"pass", "boost", "theme", "help",
+}
 
 local HELP = "/give /rush /daily /save /corner /unlockall /spawn <golden|lightning|notif|email> /detox /chest /reset"
+	.. " /pass <id> /boost <mult> <secondes> /theme <id>"
 
 function DebugService:Init(allServices)
 	services = allServices
@@ -48,7 +74,7 @@ local function info(player: Player, text: string)
 	services.GameService:Notify(player, { Type = "Info", Text = "🛠️ " .. text })
 end
 
-local function runCommand(player: Player, command: string, argument: string)
+local function runCommand(player: Player, command: string, argument: string, second: string)
 	local gameService = services.GameService
 	local data = services.DataService:GetData(player)
 	if not data then
@@ -114,6 +140,38 @@ local function runCommand(player: Player, command: string, argument: string)
 		services.QuestService:PlayerReady(player, data)
 		gameService:SendFullSync(player)
 		info(player, "Données remises à zéro")
+	elseif command == "pass" then
+		local passId = passIds[argument]
+		if not passId then
+			info(player, "Pass inconnu : " .. listIds(passIds))
+			return
+		end
+		local owned = services.MonetizationService:DebugTogglePass(player, passId)
+		if owned == nil then
+			info(player, "Impossible de changer ce pass")
+			return
+		end
+		gameService:SendState(player)
+		info(player, "Pass " .. passId .. (owned and " activé" or " désactivé"))
+	elseif command == "boost" then
+		local multiplier = tonumber(argument) or 2
+		local seconds = tonumber(second) or 60
+		if multiplier ~= multiplier or multiplier < 1 or multiplier > 1000
+			or seconds ~= seconds or seconds < 0 or seconds > 7 * 86400 then
+			info(player, "Usage : /boost <mult 1-1000> <secondes>")
+			return
+		end
+		data.Boost = { Multiplier = multiplier, EndsAt = os.time() + math.floor(seconds) }
+		gameService:SendState(player)
+		info(player, string.format("Boost x%s pendant %d s", tostring(multiplier), math.floor(seconds)))
+	elseif command == "theme" then
+		local themeId = themeIds[argument]
+		if not themeId or not services.ThemeService:DebugGrant(player, themeId) then
+			info(player, "Thème inconnu : " .. listIds(themeIds))
+			return
+		end
+		gameService:SendState(player)
+		info(player, "Thème " .. themeId .. " donné et équipé")
 	elseif command == "help" then
 		info(player, HELP)
 	end
@@ -123,7 +181,7 @@ end
 -- (anti-doublon : le même message reçu deux fois en 1 s n'est exécuté qu'une fois)
 local lastMessage: { [Player]: { Text: string, Clock: number } } = {}
 local function handleMessage(player: Player, message: string)
-	local command, argument = string.match(string.lower(message), "^/(%a+)%s*(%S*)")
+	local command, argument, second = string.match(string.lower(message), "^/(%a+)%s*(%S*)%s*(%S*)")
 	if not command then
 		return
 	end
@@ -132,7 +190,7 @@ local function handleMessage(player: Player, message: string)
 		return
 	end
 	lastMessage[player] = { Text = message, Clock = os.clock() }
-	local ok, err = pcall(runCommand, player, command, argument or "")
+	local ok, err = pcall(runCommand, player, command, argument or "", second or "")
 	if not ok then
 		warn("[DebugService] Erreur de la commande /" .. command .. " :", err)
 	end

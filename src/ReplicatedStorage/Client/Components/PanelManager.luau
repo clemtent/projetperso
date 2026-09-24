@@ -3,11 +3,15 @@
 	Emplacement : ReplicatedStorage > Client > Components > PanelManager
 
 	Fenêtres "pop-up" (boutique, succès, quêtes, classement...). Une seule
-	ouverte à la fois, avec animation d'ouverture et fond assombri (clic
-	dehors = fermer). Style clair : fenêtre blanche, contour noir fin.
+	ouverte à la fois, avec fond assombri (clic dehors = fermer) et
+	transitions douces (fondu du fond + glissement / zoom de la fenêtre).
+	Style clair : fenêtre blanche, contour fin, ombre douce, en-tête avec
+	pastille d'icône colorée, titre, sous-titre optionnel et bouton ✕.
+
 	Chaque panneau est un module dans Components > Panels avec :
 	  Title, Color, Build(content), Update(data) (optionnel),
-	  OnOpen() (optionnel), Size (Vector2, optionnel : taille de la fenêtre)
+	  OnOpen() / OnClose() (optionnels), Size (Vector2, optionnel),
+	  Icon (optionnel : sinon le 1er emoji du titre), Subtitle (optionnel).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -25,20 +29,67 @@ PanelManager.Opened = Signal.new() -- (name)
 PanelManager.Closed = Signal.new() -- (name)
 
 local DEFAULT_SIZE = Vector2.new(640, 500)
+local HEADER_HEIGHT = 66
+local DIM_TRANSPARENCY = 0.45
 
 local overlay: Frame
+local dimmer: TextButton
+local holder: Frame -- support (taille de la fenêtre) : porte l'ombre et l'animation
+local holderScale: UIScale
 local window: Frame
-local windowScale: UIScale
+local iconBadge: Frame
+local iconLabel: TextLabel
 local titleLabel: TextLabel
-local titleBar: Frame
+local subtitleLabel: TextLabel
+local accentLine: Frame
 local panels = {} -- [nom] = { Module, Content }
 local openName: string? = nil
+local closeToken = 0
 
 local function callOnClose(name: string)
 	local panel = panels[name]
 	if panel and panel.Module.OnClose then
 		pcall(panel.Module.OnClose)
 	end
+end
+
+-- "🏆 Succès" -> ("🏆", "Succès") ; "Classement" -> (nil, "Classement")
+local function splitTitle(title: string): (string?, string)
+	local first, rest = string.match(title, "^(%S+)%s+(.+)$")
+	if first and rest and not string.find(first, "%w") then
+		return first, rest
+	end
+	return nil, title
+end
+
+-- Met l'en-tête aux couleurs du panneau
+local function applyHeader(module, name: string)
+	local icon, text = splitTitle(tostring(module.Title or name))
+	icon = module.Icon or icon
+	local color: Color3 = module.Color or Theme.Colors.Blue
+
+	iconBadge.Visible = icon ~= nil
+	iconLabel.Text = icon or ""
+	iconBadge.BackgroundColor3 = color
+	titleLabel.Text = text
+
+	local left = icon and 76 or 26
+	local subtitle = module.Subtitle
+	if type(subtitle) == "string" and subtitle ~= "" then
+		subtitleLabel.Visible = true
+		subtitleLabel.Text = subtitle
+		titleLabel.Position = UDim2.fromOffset(left, 12)
+		titleLabel.Size = UDim2.new(1, -(left + 70), 0, 28)
+		subtitleLabel.Position = UDim2.fromOffset(left, 40)
+		subtitleLabel.Size = UDim2.new(1, -(left + 70), 0, 18)
+	else
+		subtitleLabel.Visible = false
+		titleLabel.Position = UDim2.fromOffset(left, 17)
+		titleLabel.Size = UDim2.new(1, -(left + 70), 0, 32)
+	end
+
+	-- Liseré sous l'en-tête : couleur du panneau qui s'estompe sur les côtés
+	accentLine.BackgroundColor3 = color
 end
 
 function PanelManager.Build(layer: Frame)
@@ -52,11 +103,11 @@ function PanelManager.Build(layer: Frame)
 	})
 
 	-- Fond sombre plein écran (bouton : un clic dehors ferme la fenêtre)
-	local dimmer = UIUtil.Create("TextButton", {
+	dimmer = UIUtil.Create("TextButton", {
 		Name = "Dimmer",
 		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = Color3.new(0, 0, 0),
-		BackgroundTransparency = 0.5,
+		BackgroundColor3 = Color3.fromRGB(10, 10, 20),
+		BackgroundTransparency = 1,
 		AutoButtonColor = false,
 		Text = "",
 		ZIndex = 1,
@@ -66,38 +117,69 @@ function PanelManager.Build(layer: Frame)
 		PanelManager.Close()
 	end)
 
-	window = UIUtil.Create("Frame", {
-		Name = "Window",
+	holder = UIUtil.Create("Frame", {
+		Name = "WindowHolder",
 		Size = UDim2.fromOffset(DEFAULT_SIZE.X, DEFAULT_SIZE.Y),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		BackgroundColor3 = Theme.Colors.Panel,
-		Active = true, -- bloque les clics pour qu'ils n'atteignent pas le fond sombre
+		BackgroundTransparency = 1,
 		ZIndex = 2,
 		Parent = overlay,
 	})
-	UIUtil.Corner(window, 20)
-	UIUtil.Stroke(window, Theme.Colors.CardBorder, 2)
-	windowScale = UIUtil.Create("UIScale", { Parent = window })
+	holderScale = UIUtil.Create("UIScale", { Parent = holder })
 
-	-- Bandeau de titre (petite barre de couleur à gauche du titre)
-	titleBar = UIUtil.Create("Frame", {
-		Name = "TitleAccent",
-		Size = UDim2.fromOffset(8, 30),
-		Position = UDim2.fromOffset(22, 21),
+	window = UIUtil.Create("Frame", {
+		Name = "Window",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Theme.Colors.Panel,
+		Active = true, -- bloque les clics pour qu'ils n'atteignent pas le fond sombre
+		ZIndex = 3,
+		Parent = holder,
+	})
+	UIUtil.Corner(window, Theme.Radius.XL)
+	UIUtil.Stroke(window, Theme.Colors.CardBorder, 1.5, 0.1)
+	UIUtil.Shadow(window, 10, 0.72, 6)
+
+	-- En-tête : pastille d'icône, titre, sous-titre
+	iconBadge = UIUtil.Create("Frame", {
+		Name = "IconBadge",
+		Size = UDim2.fromOffset(42, 42),
+		Position = UDim2.fromOffset(22, 12),
 		BackgroundColor3 = Theme.Colors.Blue,
-		BorderSizePixel = 0,
+		ZIndex = 4,
 		Parent = window,
 	})
-	UIUtil.Corner(titleBar, 4)
+	UIUtil.Corner(iconBadge, Theme.Radius.M)
+	UIUtil.Stroke(iconBadge, Theme.Colors.Border, 1.5, 0.2)
+	UIUtil.Gradient(iconBadge, ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(205, 205, 205)), 90)
+	iconLabel = UIUtil.Label({
+		Size = UDim2.new(1, -8, 1, -8),
+		Position = UDim2.fromOffset(4, 4),
+		MaxTextSize = 26,
+		ZIndex = 5,
+		Parent = iconBadge,
+	})
 
 	titleLabel = UIUtil.Label({
+		Name = "Title",
 		Font = Theme.Fonts.Title,
 		TextColor3 = Theme.Colors.Text,
-		Size = UDim2.new(1, -130, 0, 36),
-		Position = UDim2.fromOffset(40, 18),
+		Size = UDim2.new(1, -146, 0, 32),
+		Position = UDim2.fromOffset(76, 17),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		MaxTextSize = 28,
+		MaxTextSize = Theme.TextSize.Title,
+		ZIndex = 4,
+		Parent = window,
+	})
+	subtitleLabel = UIUtil.Label({
+		Name = "Subtitle",
+		TextColor3 = Theme.Colors.TextDim,
+		Size = UDim2.new(1, -146, 0, 18),
+		Position = UDim2.fromOffset(76, 40),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		MaxTextSize = Theme.TextSize.Caption + 1,
+		Visible = false,
+		ZIndex = 4,
 		Parent = window,
 	})
 
@@ -105,24 +187,45 @@ function PanelManager.Build(layer: Frame)
 		Name = "Close",
 		Text = "✕",
 		Font = Theme.Fonts.Title,
-		TextSize = 22,
-		Size = UDim2.fromOffset(44, 44),
+		TextSize = 20,
+		Size = UDim2.fromOffset(40, 40),
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -14, 0, 14),
-		CornerRadius = 22,
+		Position = UDim2.new(1, -16, 0, 13),
+		CornerRadius = 20,
+		ZIndex = 4,
 		Parent = window,
 	})
 	closeButton.Activated:Connect(function()
 		PanelManager.Close()
 	end)
 
-	-- Séparateur
+	-- Séparateur + liseré de couleur
 	UIUtil.Create("Frame", {
+		Name = "Divider",
 		Size = UDim2.new(1, -40, 0, 1),
-		Position = UDim2.fromOffset(20, 64),
-		BackgroundColor3 = Theme.Colors.Disabled,
+		Position = UDim2.fromOffset(20, HEADER_HEIGHT),
+		BackgroundColor3 = Theme.Colors.Divider,
 		BorderSizePixel = 0,
+		ZIndex = 4,
 		Parent = window,
+	})
+	accentLine = UIUtil.Create("Frame", {
+		Name = "Accent",
+		Size = UDim2.new(0, 120, 0, 3),
+		Position = UDim2.fromOffset(22, HEADER_HEIGHT - 1),
+		BackgroundColor3 = Theme.Colors.Blue,
+		BorderSizePixel = 0,
+		ZIndex = 5,
+		Parent = window,
+	})
+	UIUtil.Corner(accentLine, 2)
+	UIUtil.Create("UIGradient", {
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0),
+			NumberSequenceKeypoint.new(0.6, 0.2),
+			NumberSequenceKeypoint.new(1, 1),
+		}),
+		Parent = accentLine,
 	})
 
 	ClientState.Changed:Connect(function(data)
@@ -138,12 +241,17 @@ function PanelManager.Build(layer: Frame)
 end
 
 function PanelManager.Register(name: string, module)
+	if type(module) ~= "table" or type(module.Build) ~= "function" then
+		warn("[PanelManager] Panneau invalide : " .. tostring(name))
+		return
+	end
 	local content = UIUtil.Create("Frame", {
 		Name = name,
-		Size = UDim2.new(1, -40, 1, -88),
-		Position = UDim2.fromOffset(20, 74),
+		Size = UDim2.new(1, -40, 1, -(HEADER_HEIGHT + 22)),
+		Position = UDim2.fromOffset(20, HEADER_HEIGHT + 10),
 		BackgroundTransparency = 1,
 		Visible = false,
+		ZIndex = 4,
 		Parent = window,
 	})
 	local ok, err = pcall(module.Build, content)
@@ -151,6 +259,14 @@ function PanelManager.Register(name: string, module)
 		warn("[PanelManager] Erreur dans " .. name .. ".Build : " .. tostring(err))
 	end
 	panels[name] = { Module = module, Content = content }
+	-- Première mise à jour si l'état est déjà là
+	if module.Update and ClientState.Data then
+		pcall(module.Update, ClientState.Data)
+	end
+end
+
+function PanelManager.IsRegistered(name: string): boolean
+	return panels[name] ~= nil
 end
 
 function PanelManager.IsOpen(name: string?): boolean
@@ -166,14 +282,15 @@ function PanelManager.Open(name: string)
 		return
 	end
 	local previous = openName
+	local wasVisible = overlay.Visible and previous ~= nil
 	for otherName, other in pairs(panels) do
 		other.Content.Visible = otherName == name
 	end
 	openName = name
-	titleLabel.Text = panel.Module.Title or name
-	titleBar.BackgroundColor3 = panel.Module.Color or Theme.Colors.Blue
+	closeToken += 1
+	applyHeader(panel.Module, name)
 	local size = panel.Module.Size or DEFAULT_SIZE
-	window.Size = UDim2.fromOffset(size.X, size.Y)
+	holder.Size = UDim2.fromOffset(size.X, size.Y)
 
 	if panel.Module.Update and ClientState.Data then
 		pcall(panel.Module.Update, ClientState.Data)
@@ -183,8 +300,18 @@ function PanelManager.Open(name: string)
 	end
 
 	overlay.Visible = true
-	windowScale.Scale = 0.6
-	UIUtil.Tween(windowScale, 0.35, { Scale = 1 }, Enum.EasingStyle.Back)
+	if wasVisible then
+		-- Changement de panneau : petit "pop" seulement
+		holderScale.Scale = 0.97
+		UIUtil.Tween(holderScale, 0.2, { Scale = 1 }, Enum.EasingStyle.Back)
+	else
+		dimmer.BackgroundTransparency = 1
+		UIUtil.Tween(dimmer, 0.25, { BackgroundTransparency = DIM_TRANSPARENCY })
+		holderScale.Scale = 0.88
+		holder.Position = UDim2.new(0.5, 0, 0.5, 26)
+		UIUtil.Tween(holderScale, 0.32, { Scale = 1 }, Enum.EasingStyle.Back)
+		UIUtil.Tween(holder, 0.32, { Position = UDim2.fromScale(0.5, 0.5) }, Enum.EasingStyle.Quint)
+	end
 	SoundManager.Play("Open", 1)
 	if previous and previous ~= name then
 		callOnClose(previous)
@@ -200,9 +327,14 @@ function PanelManager.Close()
 	end
 	openName = nil
 	callOnClose(name)
-	UIUtil.Tween(windowScale, 0.15, { Scale = 0.7 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-	task.delay(0.15, function()
-		if not openName then
+	closeToken += 1
+	local token = closeToken
+	UIUtil.Tween(dimmer, 0.18, { BackgroundTransparency = 1 })
+	UIUtil.Tween(holderScale, 0.18, { Scale = 0.9 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	UIUtil.Tween(holder, 0.18, { Position = UDim2.new(0.5, 0, 0.5, 18) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	task.delay(0.19, function()
+		-- Rouvert entre-temps : on ne cache rien
+		if token == closeToken and not openName then
 			overlay.Visible = false
 		end
 	end)

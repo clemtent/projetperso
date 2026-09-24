@@ -16,6 +16,7 @@ local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 
 local Achievements = {
 	Title = "🏆 Succès",
+	Subtitle = "Chaque succès donne un bonus permanent",
 	Color = Theme.Colors.Purple,
 }
 

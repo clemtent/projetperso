@@ -9,8 +9,13 @@
 	recale sur la vraie valeur.
 
 	Garde aussi en mémoire : les "Features" débloquées, la bourse, les
-	trajectoires des logos DVD, le mode sombre (néon), et relaie les
-	événements "Spawn" et "Notify" aux modules qui les écoutent.
+	trajectoires des logos DVD, le mode sombre (néon / thème sombre), et
+	relaie les événements "Spawn" et "Notify" aux modules qui les écoutent.
+
+	v3 : Game Passes possédés (Data.Passes), boost temporaire (Data.Boost,
+	compte à rebours prédit localement), VIP, signal "Loaded" (premier état).
+	Le mode sombre est la combinaison (OU) de plusieurs "sources" : le thème
+	équipé (SetDarkMode), les stimuli comme le mode néon (SetDarkSource).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -40,6 +45,10 @@ ClientState.DarkMode = false
 ClientState.DarkModeChanged = Signal.new() -- (enabled)
 ClientState.NotifyReceived = Signal.new() -- (payload) : chaque "Notify" (après le traitement intégré)
 
+-- Ajouts v3
+ClientState.Loaded = Signal.new() -- () : premier état reçu (écran de chargement)
+ClientState.IsLoaded = false
+
 -- Prédiction des clics
 local clickSeq = 0
 local pending = {} -- { { Seq = number, Amount = number } }
@@ -56,6 +65,13 @@ local knownFeatures: { [string]: boolean }? = nil
 
 -- Traitement "intégré" des Notify (branché par ClientMain)
 local notifyHandler: ((payload: any) -> ())? = nil
+
+-- Sources du mode sombre ([nom] = true) : le mode est actif si l'une l'est
+local darkSources: { [string]: boolean } = {}
+
+-- Boost temporaire : fin prévue (horloge locale os.clock)
+local boostMultiplier = 1
+local boostEndsClock = 0
 
 local function sameSet(a: { [string]: boolean }, b: { [string]: boolean }): boolean
 	for key, value in pairs(a) do
@@ -83,9 +99,26 @@ local function onState(data)
 	data.Achievements = data.Achievements or {}
 	data.Quests = data.Quests or {}
 	data.ClickSeq = data.ClickSeq or 0
+	data.Passes = data.Passes or {}
+	data.Themes = data.Themes or { Owned = { Classic = true }, Equipped = "Classic" }
+	data.Themes.Owned = data.Themes.Owned or { Classic = true }
+	data.Boost = data.Boost or { Multiplier = 1, Remaining = 0 }
 
 	ClientState.Data = data
 	lastUpdateClock = os.clock()
+	-- Boost : on mémorise sa fin pour un compte à rebours fluide entre deux états
+	local boost = data.Boost
+	local remaining = tonumber(boost.Remaining) or 0
+	boostMultiplier = tonumber(boost.Multiplier) or 1
+	if boostMultiplier > 1 and remaining > 0 then
+		local newEnd = os.clock() + remaining
+		-- Petit filtre : on ignore les écarts < 1 s (arrondi du serveur)
+		if math.abs(newEnd - boostEndsClock) > 1 then
+			boostEndsClock = newEnd
+		end
+	else
+		boostEndsClock = 0
+	end
 	-- On oublie les prédictions que le serveur a déjà traitées
 	while pending[1] and pending[1].Seq <= data.ClickSeq do
 		table.remove(pending, 1)
@@ -101,6 +134,10 @@ local function onState(data)
 	ClientState.Changed:Fire(data)
 	if changed then
 		ClientState.FeaturesChanged:Fire(features)
+	end
+	if not ClientState.IsLoaded then
+		ClientState.IsLoaded = true
+		ClientState.Loaded:Fire()
 	end
 end
 
@@ -176,14 +213,76 @@ function ClientState.GetLevel(upgradeId: string): number
 	return data.Upgrades[upgradeId] or 0
 end
 
--- Mode sombre (activé par le mode néon)
-function ClientState.SetDarkMode(enabled: boolean)
-	enabled = enabled == true
+-- Recalcule le mode sombre effectif (OU de toutes les sources)
+local function applyDarkSources()
+	local enabled = false
+	for _, value in pairs(darkSources) do
+		if value then
+			enabled = true
+			break
+		end
+	end
 	if ClientState.DarkMode == enabled then
 		return
 	end
 	ClientState.DarkMode = enabled
 	ClientState.DarkModeChanged:Fire(enabled)
+end
+
+-- Active / coupe une source du mode sombre (ex. "Stimuli" pour le mode néon)
+function ClientState.SetDarkSource(source: string, enabled: boolean)
+	if enabled == true then
+		darkSources[source] = true
+	else
+		darkSources[source] = nil
+	end
+	applyDarkSources()
+end
+
+-- Mode sombre "principal" (thème équipé, fond...). Les stimuli (mode néon)
+-- passent par une autre source : un thème sombre reste sombre même quand le
+-- mode néon s'arrête, et inversement.
+function ClientState.SetDarkMode(enabled: boolean)
+	ClientState.SetDarkSource("Main", enabled)
+end
+
+----------------------------------------------------------------------
+-- Robux : passes, boost, VIP
+----------------------------------------------------------------------
+
+-- Vrai si le joueur possède le Game Pass `passId` (Id de Config.Monetization.GamePasses)
+function ClientState.HasPass(passId: string): boolean
+	local data = ClientState.Data
+	return data ~= nil and type(data.Passes) == "table" and data.Passes[passId] == true
+end
+
+-- Vrai si le joueur est VIP
+function ClientState.IsVIP(): boolean
+	local data = ClientState.Data
+	return data ~= nil and (data.IsVIP == true or ClientState.HasPass("VIP"))
+end
+
+-- Multiplicateur permanent des Game Passes possédés (x10, x2, VIP...)
+function ClientState.GetPassMultiplier(): number
+	local multiplier = 1
+	for _, pass in ipairs(Config.Monetization.GamePasses) do
+		if pass.Multiplier and ClientState.HasPass(pass.Id) then
+			multiplier *= pass.Multiplier
+		end
+	end
+	return multiplier
+end
+
+-- Boost temporaire actif : (multiplicateur, secondes restantes) ; (1, 0) sinon
+function ClientState.GetBoost(): (number, number)
+	if boostMultiplier <= 1 or boostEndsClock <= 0 then
+		return 1, 0
+	end
+	local remaining = boostEndsClock - os.clock()
+	if remaining <= 0 then
+		return 1, 0
+	end
+	return boostMultiplier, remaining
 end
 
 -- Jauge de combo actuelle (avec la perte depuis le dernier clic)

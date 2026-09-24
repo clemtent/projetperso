@@ -50,6 +50,14 @@ Theme.Colors = {
 	Dark = hex("#2A2A2A"),
 }
 
+-- Ajouts v3 (boutique Robux, VIP, boost, ombres)
+Theme.Colors.Robux = hex("#00A86B") -- vert "achat"
+Theme.Colors.RobuxDark = hex("#007A4D")
+Theme.Colors.Premium = hex("#FFB800") -- VIP / Premium
+Theme.Colors.Boost = hex("#FF6A00")
+Theme.Colors.Divider = hex("#E6E6E6")
+Theme.Colors.Surface = hex("#F7F7F8") -- fond des sections dans les fenêtres
+
 -- Anciennes clés (v1) gardées pour compatibilité
 Theme.Colors.BackgroundTop = Theme.Colors.Background
 Theme.Colors.BackgroundMid = Theme.Colors.PanelLight
@@ -69,6 +77,40 @@ Theme.Fonts = {
 	Body = Enum.Font.BuilderSansMedium, -- textes
 	Number = Enum.Font.BuilderSansBold, -- compteurs
 	Mono = Enum.Font.RobotoMono, -- chiffres alignés (bourse...)
+}
+
+-- Hiérarchie typographique (tailles en pixels "design")
+Theme.TextSize = {
+	Display = 44, -- compteur principal
+	Title = 26, -- titres de fenêtres
+	Heading = 19, -- titres de sections / cartes
+	Body = 16, -- textes courants
+	Caption = 13, -- petites mentions
+}
+
+-- Espacements réguliers (multiples de 4)
+Theme.Spacing = {
+	XS = 4,
+	S = 8,
+	M = 12,
+	L = 16,
+	XL = 24,
+}
+
+-- Rayons des coins
+Theme.Radius = {
+	S = 8,
+	M = 12,
+	L = 18,
+	XL = 22,
+}
+
+-- Ombres douces (voir UIUtil.Shadow)
+Theme.ShadowStyle = {
+	Offset = 4, -- décalage vers le bas
+	Transparency = 0.86, -- couche la plus sombre
+	Layers = 3, -- nombre de couches (plus = plus doux)
+	Spread = 3, -- élargissement par couche
 }
 
 -- Résolution de référence : toute l'interface est pensée en 1280x720,
