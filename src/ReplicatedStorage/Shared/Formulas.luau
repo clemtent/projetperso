@@ -196,6 +196,38 @@ function Formulas.ScaledReward(stats, seconds: number, minimum: number): number
 end
 
 ----------------------------------------------------------------------
+-- Dopamine hors-ligne
+----------------------------------------------------------------------
+
+-- Niveau total des améliorations "Offline" (Mode veille)
+function Formulas.GetOfflineLevel(data): number
+	local level = 0
+	for _, upgrade in ipairs(Config.Upgrades) do
+		if upgrade.Effect == "Offline" then
+			level += Formulas.GetLevel(data, upgrade.Id)
+		end
+	end
+	return level
+end
+
+-- (taux 0..1, durée max en secondes)
+function Formulas.GetOfflineSettings(data): (number, number)
+	local level = Formulas.GetOfflineLevel(data)
+	local rate = Config.Offline.BaseRate + Config.Offline.RatePerLevel * level
+	local maxSeconds = (Config.Offline.BaseMaxHours + Config.Offline.HoursPerLevel * level) * 3600
+	return rate, maxSeconds
+end
+
+-- Gain hors-ligne pour `seconds` d'absence avec la production `perSecond`
+function Formulas.GetOfflineReward(data, perSecond: number, seconds: number): number
+	if seconds < Config.Offline.MinSeconds or perSecond <= 0 then
+		return 0
+	end
+	local rate, maxSeconds = Formulas.GetOfflineSettings(data)
+	return math.floor(perSecond * rate * math.min(seconds, maxSeconds))
+end
+
+----------------------------------------------------------------------
 -- Casino
 ----------------------------------------------------------------------
 

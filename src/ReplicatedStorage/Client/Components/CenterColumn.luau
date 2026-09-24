@@ -12,7 +12,8 @@
 	  - les indicateurs Robux : 👑 VIP, 💎 bonus des passes, ⏱️ boost avec
 	    compte à rebours, 🤖 auto-clic (+ petit robot qui tape le bouton) ;
 	  - les pastilles des menus (Temps d'écran, Boutique, Succès, Quêtes,
-	    Classement, Cadeau, 🎨 Thèmes, 💎 Robux, ⚙️) avec badges rouges ;
+	    Classement (toujours visible), Cadeau, 🎨 Thèmes, 💎 Robux, ⚙️, et
+	    🛠️ Test UNIQUEMENT dans Studio) avec badges rouges ;
 	  - la jauge de combo (si la Feature "Combo" est débloquée) ;
 	  - la barre d'améliorations (UpgradeBar).
 	Occupe x ∈ [centre-330, centre+330], y ∈ [28, ~430] de la toile.
@@ -41,17 +42,23 @@ local function robuxShopVisible(): boolean
 	return Config.IsSellingForRobux == true or RunService:IsStudio()
 end
 
+-- La pastille "🛠️ Test" (panneau de test) n'existe que dans Studio
+local function debugVisible(): boolean
+	return RunService:IsStudio()
+end
+
 -- Pastilles des menus (Feature = nil : toujours visible ; Visible = fonction optionnelle)
 local PILLS = {
 	{ Id = "ScreenTime", Text = "⏱️ Temps d'écran", Color = Theme.Colors.Dark, Feature = "ScreenTime", Panel = "ScreenTime" },
 	{ Id = "ItemShop", Text = "🛒 Boutique", Color = Theme.Colors.Green, Feature = "ItemShop", Panel = "ItemShop" },
 	{ Id = "Achievements", Text = "🏆 Succès", Color = Theme.Colors.Purple, Feature = "Achievements", Panel = "Achievements" },
 	{ Id = "Quests", Text = "📜 Quêtes", Color = Theme.Colors.Orange, Feature = "Quests", Panel = "Quests" },
-	{ Id = "Leaderboard", Text = "🥇 Classement", Color = Theme.Colors.Blue, Feature = "Leaderboard", Panel = "Leaderboard" },
+	{ Id = "Leaderboard", Text = "🥇 Classement", Color = Theme.Colors.Blue, Feature = nil, Panel = "Leaderboard" },
 	{ Id = "Daily", Text = "🎁 Cadeau", Color = Theme.Colors.Pink, Feature = "Daily", Panel = "Daily" },
 	{ Id = "Themes", Text = "🎨 Thèmes", Color = Theme.Colors.Cyan, Feature = nil, Panel = "Themes" },
 	{ Id = "RobuxShop", Text = "💎 Robux", Color = Theme.Colors.Robux, Feature = nil, Panel = "RobuxShop", Visible = robuxShopVisible },
 	{ Id = "Settings", Text = "⚙️", Color = Theme.Colors.ButtonBottom, Feature = nil, Panel = "Settings", Round = true },
+	{ Id = "Debug", Text = "🛠️ Test", Color = Theme.Colors.Red, Feature = nil, Panel = "Debug", Visible = debugVisible },
 }
 
 local BUTTON_SIZE = Vector2.new(184, 62)
@@ -190,8 +197,8 @@ local function onClick()
 	Effects.FloatingText(effectsLayer, position, "+" .. formatAmount(gain), color, 28 + ratio * 12)
 	Effects.Burst(effectsLayer, UDim2.fromOffset(center.X + random:NextNumber(-40, 40), center.Y), nil, 4)
 
-	-- Le son monte dans les aigus avec le combo
-	SoundManager.Play("Click", 0.95 + ratio * 0.6 + random:NextNumber(0, 0.08))
+	-- Son de clic choisi dans les paramètres ; il monte dans les aigus avec le combo
+	SoundManager.PlayClick(0.95 + ratio * 0.6 + random:NextNumber(0, 0.08))
 
 	counterScale.Scale = 1.08
 	UIUtil.Tween(counterScale, 0.2, { Scale = 1 }, Enum.EasingStyle.Back)
@@ -287,7 +294,7 @@ end
 local function buildPills(parent: Frame, order: number)
 	local row = UIUtil.Create("Frame", {
 		Name = "Pills",
-		Size = UDim2.fromOffset(640, 0),
+		Size = UDim2.fromOffset(664, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1,
 		LayoutOrder = order,
@@ -320,7 +327,7 @@ local function buildPills(parent: Frame, order: number)
 			Color = def.Color,
 			TextColor3 = def.Round and Theme.Colors.Text or Theme.Colors.TextLight,
 			Height = PILL_HEIGHT,
-			TextSize = def.Round and 20 or 17,
+			TextSize = def.Round and 20 or 16,
 			Round = def.Round,
 			Position = UDim2.fromOffset(0, 3),
 			Parent = holder,
@@ -657,6 +664,13 @@ local function refreshBadges()
 	local daily = pills.Daily
 	if daily then
 		UIUtil.SetBadge(daily.Badge, (data.Daily and data.Daily.Available) and "!" or "")
+	end
+
+	-- Classement : couronne quand tu es 1er du serveur (au moins 2 joueurs)
+	local leaderboard = pills.Leaderboard
+	if leaderboard then
+		local rank, count = ClientState.GetServerRank()
+		UIUtil.SetBadge(leaderboard.Badge, (rank == 1 and count >= 2) and "👑" or "")
 	end
 
 	-- Thèmes : thèmes achetables en Dopamine, pas encore possédés, qu'on peut se payer

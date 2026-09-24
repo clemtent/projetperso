@@ -27,6 +27,17 @@ Les autres méthodes (Rojo, copie manuelle) sont décrites dans [`docs/INSTALLAT
 
 ---
 
+## 🆕 Nouveautés v4
+
+- **Visuels refaits** : personnage lofi dessiné (casque qui pulse, notes de musique), nouveaux logos DVD, moulin, live ASMR avec streameuse dessinée, presse qui évolue à chaque niveau (bois → acier → industrielle → or → diamant néon), machine à sous de luxe, bourse pro, vrais nuages d'orage, mails (74 différents), flash info complet (150+ titres), thèmes redessinés, Temps d'écran.
+- **Musique lofi** : 4 musiques en boucle (déjà configurées). **Son de clic au choix** (5 claviers) dans ⚙️. Son de bulle et **beurre croustillant** 🧈 (*CROUNCH*) dans le live.
+- **Live** : le bouton « Suivre » débloque des **dons** à cliquer ; chat bien plus vivant (badges, raids, réactions).
+- **Dopamine hors-ligne** 😴 : tu gagnes une partie de ta production pendant ton absence, améliorable avec « Mode veille ». Fenêtre « Bon retour ! ».
+- **Classement dès le début** : onglets 🏠 Serveur (en direct) et 🌍 Monde.
+- **Succès = badges** : médailles dans le jeu + vrais **badges Roblox** (colle les IDs dans `Config.AchievementBadges`).
+- **Boutiques redessinées** (objets et Robux). Sauvegarde toutes les 60 s + à la sortie.
+- **Panneau 🛠️ Test** (Studio uniquement) : boutons pour tout tester (+Dopamine, tout débloquer, Rush, passes, boost, thème, hors-ligne...). Dans le chat : `/give`, `/unlockall`, `/aide`...
+
 ## 🆕 Nouveautés v3
 
 - **🎵 Vraie musique lofi** : lecteur avec playlist, fondu enchaîné, bouton ⏭ et visualiseur dans la chambre lofi, volumes réglables dans ⚙️. **Ajoute tes musiques** dans `Config.Music.Playlist` : Studio > Boîte à outils > Audio > cherche « lofi », filtre par créateur **Roblox** (musiques sous licence utilisables partout), clic droit > *Copier l'ID de l'élément*, puis `Id = "rbxassetid://ID"`.

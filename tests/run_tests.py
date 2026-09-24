@@ -123,7 +123,7 @@ test("Config : cohérence des améliorations", function(check)
 		check(type(u.Name) == "string" and type(u.Icon) == "string", "Name/Icon " .. u.Id)
 		check(type(u.Cost) == "number" and u.Cost >= 0, "Cost " .. u.Id)
 		check(type(u.CostGrowth) == "number" and u.CostGrowth >= 1, "CostGrowth " .. u.Id)
-		local okEffect = ({ Click = 1, PerSecond = 1, DVD = 1, BounceMultiplier = 1, ClickMultiplier = 1, Multiplier = 1, Feature = 1, Detox = 1 })[u.Effect]
+		local okEffect = ({ Click = 1, PerSecond = 1, DVD = 1, BounceMultiplier = 1, ClickMultiplier = 1, Multiplier = 1, Feature = 1, Detox = 1, Offline = 1 })[u.Effect]
 		check(okEffect ~= nil, "Effect inconnu " .. u.Id .. " " .. tostring(u.Effect))
 		if u.Effect ~= "Feature" and u.Effect ~= "Detox" and u.Effect ~= "DVD" then
 			check(type(u.Value) == "number", "Value manquante " .. u.Id)

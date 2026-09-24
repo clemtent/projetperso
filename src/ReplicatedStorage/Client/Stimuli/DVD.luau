@@ -3,14 +3,20 @@
 	Emplacement : ReplicatedStorage > Client > Stimuli > DVD
 
 	Les logos "DOPA" qui rebondissent partout sur l'écran, façon vieil
-	écran de veille (logo 100 % original dessiné en code : un disque
-	brillant qui tourne + "DOPA" + une pastille "DISQUE").
+	écran de veille. Logo 100 % original dessiné en code, style "badge"
+	premium : une plaque sombre vernie avec un liseré lumineux, un disque
+	brillant (anneau holographique qui tourne + reflet de lumière qui
+	passe), le mot "DOPA" en gras (dégradé + contour) et une pastille
+	"VIDÉO". Chaque logo a sa propre plaque opaque : quand plusieurs logos
+	se croisent, ils passent proprement l'un devant l'autre (lisibles).
 	  - Trajectoires données par le SERVEUR (ClientState.DVDSetup) et
 	    calculées avec DVDMath depuis l'heure serveur : fluide et identique
 	    quel que soit le nombre d'images par seconde.
-	  - À chaque rebond : nouvelle couleur, petit écrasement, "+X" flottant
-	    (purement visuel, le serveur compte les rebonds lui-même) et son
-	    "Bounce" si l'amélioration "DVDSound" est possédée.
+	  - Traînée : 2 "fantômes" colorés placés sur la trajectoire un peu
+	    plus tôt (DVDMath), halo coloré autour de la plaque.
+	  - À chaque rebond : nouvelle couleur, écrasement contre le mur, flash
+	    du halo, "+X" flottant (purement visuel, le serveur compte les
+	    rebonds lui-même) et son "Bounce" si "DVDSound" est possédé.
 	  - Coin touché : on prévient le serveur (DVDCorner), qui VÉRIFIE.
 	  - Clic sur un logo : bonus (DVDClick), temps de recharge commun à
 	    tous les logos (ils pâlissent pendant la recharge).
@@ -23,10 +29,40 @@ DVD.Slot = "Overlay"
 local RESIZE_INTERVAL = 0.6 -- temps minimum entre deux envois DVDResize
 local COOLDOWN_FADE = 0.55 -- transparence des logos pendant la recharge
 local MIN_SOUND_GAP = 0.07 -- évite la cacophonie avec 10 logos
+local TRAIL_LAG = 0.07 -- retard (s) de chaque fantôme de la traînée
+local TRAIL_ALPHA = { 0.8, 0.9 } -- transparence des 2 fantômes
+local GLOW_ALPHA = 0.8 -- transparence normale du halo
+
+local PLATE_COLOR = Color3.fromRGB(64, 56, 108) -- haut de la plaque (le bas est assombri)
+local INK = Color3.fromRGB(18, 14, 34) -- contours sombres
+local WHITE = Color3.new(1, 1, 1)
 
 -- Petites phrases quand un logo frôle un coin sans le toucher
 local NEAR_MISS = { "presque... 😩", "à un pixel !", "noooon 😭", "si près...", "la prochaine ?", "argh !" }
 local CORNER_TEXTS = { "COIN !!! 📀", "DANS LE COIN !!!", "PILE DANS LE COIN !" }
+
+-- Reflet "holographique" de l'anneau du disque
+local HOLO = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 120, 200)),
+	ColorSequenceKeypoint.new(0.25, Color3.fromRGB(255, 240, 150)),
+	ColorSequenceKeypoint.new(0.5, Color3.fromRGB(130, 255, 220)),
+	ColorSequenceKeypoint.new(0.75, Color3.fromRGB(140, 170, 255)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 120, 200)),
+})
+
+-- Bande de lumière (le reste est invisible) : on fait glisser son Offset
+local SWEEP = NumberSequence.new({
+	NumberSequenceKeypoint.new(0, 1),
+	NumberSequenceKeypoint.new(0.4, 1),
+	NumberSequenceKeypoint.new(0.5, 0.35),
+	NumberSequenceKeypoint.new(0.6, 1),
+	NumberSequenceKeypoint.new(1, 1),
+})
+
+-- Ombrage vertical "multiplié" sur la couleur de fond (clair en haut)
+local function shade(bottom: number): ColorSequence
+	return ColorSequence.new(WHITE, Color3.new(bottom, bottom, bottom))
+end
 
 function DVD.Start(ctx)
 	local UIUtil = ctx.UIUtil
@@ -40,6 +76,7 @@ function DVD.Start(ctx)
 
 	local logoSize: Vector2 = settings.LogoSize
 	local useImage = settings.LogoImage ~= nil and settings.LogoImage ~= ""
+	local W, H = logoSize.X, logoSize.Y
 
 	local logos = {} -- [index] = objet logo (voir createLogo)
 	local cooldownUntil = 0
@@ -55,12 +92,29 @@ function DVD.Start(ctx)
 		return not (data and data.Settings and data.Settings.Effects == false)
 	end
 
+	-- Couleur du mot "DOPA" : la couleur du logo, éclaircie pour rester lisible
+	local function inkFor(color: Color3): Color3
+		return color:Lerp(WHITE, 0.3)
+	end
+
+	-- Élément centré sur (cx, cy) en pixels du logo, mais exprimé en
+	-- proportions : l'écrasement (taille du corps) déforme tout le dessin
+	local function place(props: { [string]: any }, cx: number, cy: number, w: number, h: number): { [string]: any }
+		props.AnchorPoint = Vector2.new(0.5, 0.5)
+		props.Position = UDim2.fromScale(cx / W, cy / H)
+		props.Size = UDim2.fromScale(w / W, h / H)
+		if props.BorderSizePixel == nil then
+			props.BorderSizePixel = 0
+		end
+		return props
+	end
+
 	-- Sonde invisible de la taille d'un logo (sert à mesurer la taille réelle,
 	-- sans être faussée par les animations d'écrasement)
 	local probe = UIUtil.Create("Frame", {
 		Name = "SizeProbe",
 		BackgroundTransparency = 1,
-		Size = UDim2.fromOffset(logoSize.X, logoSize.Y),
+		Size = UDim2.fromOffset(W, H),
 		Visible = false,
 		Parent = container,
 	})
@@ -86,15 +140,34 @@ function DVD.Start(ctx)
 			LastY = nil :: number?,
 			ColorIndex = ((index - 1) % #colors) + 1,
 			Fades = {} :: { { any } }, -- { instance, propriété, valeur normale }
+			Ghosts = {} :: { Frame },
+			Tinted = {} :: { { any } }, -- { instance, propriété } recolorés à chaque rebond
 		}
 		local color = colors[logo.ColorIndex]
+
+		-- Traînée : 2 fantômes derrière tous les logos (ZIndex plus bas)
+		for k = 1, #TRAIL_ALPHA do
+			local ghost = UIUtil.Create("Frame", {
+				Name = "DVDTrail" .. index .. "_" .. k,
+				Size = UDim2.fromOffset(W, H),
+				BackgroundColor3 = color,
+				BackgroundTransparency = TRAIL_ALPHA[k],
+				BorderSizePixel = 0,
+				Visible = false,
+				ZIndex = 2,
+				Parent = container,
+			})
+			UIUtil.Corner(ghost, 18)
+			logo.Ghosts[k] = ghost
+			table.insert(logo.Tinted, { ghost, "BackgroundColor3" })
+		end
 
 		-- Racine = simple Frame (ne capte pas les clics) ; la zone cliquable
 		-- est un bouton enfant "Hit", masqué pendant la recharge pour que les
 		-- clics passent au bouton principal / aux cartes en dessous.
 		local button = UIUtil.Create("Frame", {
 			Name = "DVDLogo" .. index,
-			Size = UDim2.fromOffset(logoSize.X, logoSize.Y),
+			Size = UDim2.fromOffset(W, H),
 			BackgroundTransparency = 1,
 			Active = false,
 			Visible = false,
@@ -128,6 +201,22 @@ function DVD.Start(ctx)
 		logo.Body = body
 		logo.Scale = bodyScale
 
+		-- Halo coloré (déborde un peu de la plaque, flashe à chaque rebond)
+		local glow = UIUtil.Create("Frame", {
+			Name = "Glow",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.new(1, 14, 1, 14),
+			BackgroundColor3 = color,
+			BackgroundTransparency = GLOW_ALPHA,
+			BorderSizePixel = 0,
+			ZIndex = 1,
+			Parent = body,
+		})
+		UIUtil.Corner(glow, 24)
+		logo.Glow = glow
+		table.insert(logo.Tinted, { glow, "BackgroundColor3" })
+
 		if useImage then
 			-- Image personnalisée (blanche, recolorée)
 			local image = UIUtil.Create("ImageLabel", {
@@ -139,106 +228,131 @@ function DVD.Start(ctx)
 				ZIndex = 6,
 				Parent = body,
 			})
-			logo.Image = image
+			table.insert(logo.Tinted, { image, "ImageColor3" })
 			table.insert(logo.Fades, { image, "ImageTransparency", 0 })
 		else
-			-- Disque brillant (à gauche)
-			local discSize = math.floor(logoSize.Y * 0.78)
-			local disc = UIUtil.Create("Frame", {
-				Name = "Disc",
-				Size = UDim2.fromOffset(discSize, discSize),
-				AnchorPoint = Vector2.new(0, 0.5),
-				Position = UDim2.new(0, 2, 0.5, 0),
-				BackgroundColor3 = color,
-				ZIndex = 6,
+			-- Plaque vernie (sombre, dégradé vertical, liseré de la couleur du logo)
+			local plate = UIUtil.Create("Frame", {
+				Name = "Plate",
+				Size = UDim2.fromScale(1, 1),
+				BackgroundColor3 = PLATE_COLOR,
+				BackgroundTransparency = 0.04,
+				BorderSizePixel = 0,
+				ZIndex = 2,
 				Parent = body,
 			})
-			UIUtil.Corner(disc, UDim.new(1, 0))
-			local discStroke = UIUtil.Stroke(disc, Theme.Colors.Border, 2, 0.15)
-			-- Reflet arc-en-ciel qui tourne (effet "disque")
-			local shine = UIUtil.Gradient(disc, ColorSequence.new({
-				ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
-				ColorSequenceKeypoint.new(0.35, Color3.fromRGB(190, 190, 190)),
-				ColorSequenceKeypoint.new(0.5, Color3.new(1, 1, 1)),
-				ColorSequenceKeypoint.new(0.65, Color3.fromRGB(200, 200, 200)),
-				ColorSequenceKeypoint.new(1, Color3.new(1, 1, 1)),
-			}), 0)
-			-- Sillon du disque
-			local groove = UIUtil.Create("Frame", {
-				Size = UDim2.fromScale(0.62, 0.62),
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.fromScale(0.5, 0.5),
-				BackgroundTransparency = 1,
-				ZIndex = 7,
-				Parent = disc,
-			})
-			UIUtil.Corner(groove, UDim.new(1, 0))
-			local grooveStroke = UIUtil.Stroke(groove, Color3.new(1, 1, 1), 2, 0.45)
-			-- Trou central
-			local hole = UIUtil.Create("Frame", {
-				Size = UDim2.fromScale(0.24, 0.24),
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.fromScale(0.5, 0.5),
-				BackgroundColor3 = Color3.new(1, 1, 1),
-				ZIndex = 8,
-				Parent = disc,
-			})
-			UIUtil.Corner(hole, UDim.new(1, 0))
-			local holeStroke = UIUtil.Stroke(hole, Theme.Colors.Border, 1.5, 0.2)
+			UIUtil.Corner(plate, 18)
+			UIUtil.Gradient(plate, shade(0.3), 90)
+			local plateStroke = UIUtil.Stroke(plate, color, 2.5, 0.1)
+			table.insert(logo.Tinted, { plateStroke, "Color" })
 
-			-- "DOPA" en gros
-			local textLeft = discSize + 6
-			local title = UIUtil.Label({
+			-- Disque brillant
+			local DX, DY, DS = 37, H / 2, 58
+			local disc = UIUtil.Create("Frame", place({ Name = "Disc", BackgroundColor3 = color, ZIndex = 3, Parent = body }, DX, DY, DS, DS))
+			UIUtil.Corner(disc, UDim.new(1, 0))
+			UIUtil.Gradient(disc, shade(0.55), 45)
+			local discStroke = UIUtil.Stroke(disc, WHITE, 2, 0.25)
+			table.insert(logo.Tinted, { disc, "BackgroundColor3" })
+
+			-- Anneau holographique (dégradé arc-en-ciel sur le contour, qui tourne)
+			local ring = UIUtil.Create("Frame", place({ Name = "Ring", BackgroundTransparency = 1, ZIndex = 4, Parent = body }, DX, DY, 38, 38))
+			UIUtil.Corner(ring, UDim.new(1, 0))
+			local ringStroke = UIUtil.Stroke(ring, WHITE, 5, 0.3)
+			local holo = UIUtil.Gradient(ringStroke, HOLO, 0)
+
+			-- Moyeu
+			local hub = UIUtil.Create("Frame", place({ Name = "Hub", BackgroundColor3 = INK, ZIndex = 5, Parent = body }, DX, DY, 15, 15))
+			UIUtil.Corner(hub, UDim.new(1, 0))
+			local hubStroke = UIUtil.Stroke(hub, WHITE, 2, 0.15)
+
+			-- Reflet fixe (en haut à gauche)
+			local highlight = UIUtil.Create("Frame", place({
+				Name = "Highlight",
+				BackgroundColor3 = WHITE,
+				BackgroundTransparency = 0.45,
+				Rotation = -35,
+				ZIndex = 6,
+				Parent = body,
+			}, DX - 11, DY - 13, 20, 8))
+			UIUtil.Corner(highlight, UDim.new(1, 0))
+
+			-- Balayage de lumière qui traverse le disque de temps en temps
+			local sweep = UIUtil.Create("Frame", place({
+				Name = "Sweep",
+				BackgroundColor3 = WHITE,
+				ZIndex = 6,
+				Parent = body,
+			}, DX, DY, DS, DS))
+			UIUtil.Corner(sweep, UDim.new(1, 0))
+			local sweepGradient = UIUtil.Create("UIGradient", {
+				Transparency = SWEEP,
+				Rotation = 25,
+				Offset = Vector2.new(-1, 0),
+				Parent = sweep,
+			})
+
+			-- Mot "DOPA" : ombre portée + texte dégradé avec contour
+			local TX, TW = 72 + (W - 76) / 2, W - 76
+			local shadowLabel = UIUtil.Label(place({
+				Name = "TitleShadow",
+				Text = "DOPA",
+				Font = Enum.Font.FredokaOne,
+				TextColor3 = Color3.new(0, 0, 0),
+				TextTransparency = 0.45,
+				MaxTextSize = 40,
+				ZIndex = 6,
+				Parent = body,
+			}, TX + 1.5, 30.5, TW, 34))
+			local title = UIUtil.Label(place({
 				Name = "Title",
 				Text = "DOPA",
-				Font = Theme.Fonts.Title,
-				TextColor3 = color,
-				Size = UDim2.new(1, -textLeft, 0.6, 0),
-				Position = UDim2.new(0, textLeft, 0.02, 0),
-				MaxTextSize = 44,
-				ZIndex = 6,
+				Font = Enum.Font.FredokaOne,
+				TextColor3 = inkFor(color),
+				MaxTextSize = 40,
+				ZIndex = 7,
 				Parent = body,
-			})
-			local titleStroke = UIUtil.Stroke(title, Theme.Colors.Border, 2, 0.1)
+			}, TX, 28, TW, 34))
+			UIUtil.Gradient(title, shade(0.72), 90)
+			local titleStroke = UIUtil.Stroke(title, INK, 2, 0)
 			titleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 
-			-- Pastille "DISQUE"
-			local pill = UIUtil.Create("Frame", {
-				Name = "Pill",
-				Size = UDim2.new(1, -textLeft - 2, 0.3, 0),
-				Position = UDim2.new(0, textLeft, 0.64, 0),
-				BackgroundColor3 = color,
-				ZIndex = 6,
-				Parent = body,
-			})
+			-- Pastille "VIDÉO"
+			local pill = UIUtil.Create("Frame", place({ Name = "Pill", BackgroundColor3 = color, ZIndex = 6, Parent = body }, TX, 60, TW - 10, 17))
 			UIUtil.Corner(pill, UDim.new(1, 0))
-			local pillStroke = UIUtil.Stroke(pill, Theme.Colors.Border, 1.5, 0.15)
+			UIUtil.Gradient(pill, shade(0.7), 90)
+			local pillStroke = UIUtil.Stroke(pill, WHITE, 1, 0.45)
 			local pillText = UIUtil.Label({
-				Text = "DISQUE",
+				Name = "Text",
+				Text = "VIDÉO",
 				Font = Theme.Fonts.Title,
 				TextColor3 = Theme.ContrastText(color),
-				Size = UDim2.fromScale(0.9, 0.85),
+				Size = UDim2.fromScale(0.9, 0.9),
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				Position = UDim2.fromScale(0.5, 0.5),
-				MaxTextSize = 16,
+				MaxTextSize = 13,
 				ZIndex = 7,
 				Parent = pill,
 			})
+			table.insert(logo.Tinted, { pill, "BackgroundColor3" })
 
-			logo.Disc = disc
-			logo.Shine = shine
+			logo.Holo = holo
+			logo.Sweep = sweepGradient
 			logo.Title = title
-			logo.Pill = pill
 			logo.PillText = pillText
+			table.insert(logo.Fades, { plate, "BackgroundTransparency", 0.04 })
+			table.insert(logo.Fades, { plateStroke, "Transparency", 0.1 })
 			table.insert(logo.Fades, { disc, "BackgroundTransparency", 0 })
-			table.insert(logo.Fades, { discStroke, "Transparency", 0.15 })
-			table.insert(logo.Fades, { grooveStroke, "Transparency", 0.45 })
-			table.insert(logo.Fades, { hole, "BackgroundTransparency", 0 })
-			table.insert(logo.Fades, { holeStroke, "Transparency", 0.2 })
+			table.insert(logo.Fades, { discStroke, "Transparency", 0.25 })
+			table.insert(logo.Fades, { ringStroke, "Transparency", 0.3 })
+			table.insert(logo.Fades, { hub, "BackgroundTransparency", 0 })
+			table.insert(logo.Fades, { hubStroke, "Transparency", 0.15 })
+			table.insert(logo.Fades, { highlight, "BackgroundTransparency", 0.45 })
+			table.insert(logo.Fades, { sweep, "BackgroundTransparency", 0 })
+			table.insert(logo.Fades, { shadowLabel, "TextTransparency", 0.45 })
 			table.insert(logo.Fades, { title, "TextTransparency", 0 })
-			table.insert(logo.Fades, { titleStroke, "Transparency", 0.1 })
+			table.insert(logo.Fades, { titleStroke, "Transparency", 0 })
 			table.insert(logo.Fades, { pill, "BackgroundTransparency", 0 })
-			table.insert(logo.Fades, { pillStroke, "Transparency", 0.15 })
+			table.insert(logo.Fades, { pillStroke, "Transparency", 0.45 })
 			table.insert(logo.Fades, { pillText, "TextTransparency", 0 })
 		end
 
@@ -257,7 +371,7 @@ function DVD.Start(ctx)
 			if not ctx.IsAlive() then
 				return
 			end
-			local center = UDim2.new(button.Position.X.Scale, logoSize.X / 2, button.Position.Y.Scale, logoSize.Y / 2)
+			local center = UDim2.new(button.Position.X.Scale, W / 2, button.Position.Y.Scale, H / 2)
 			if os.clock() < cooldownUntil then
 				-- Encore en recharge : petit "non" et le temps restant
 				UIUtil.Shake(body)
@@ -279,14 +393,15 @@ function DVD.Start(ctx)
 
 	-- Applique une couleur à tout le logo (petite transition)
 	local function applyColor(logo, color: Color3)
-		if logo.Image then
-			UIUtil.Tween(logo.Image, 0.15, { ImageColor3 = color })
-			return
+		for _, entry in ipairs(logo.Tinted) do
+			UIUtil.Tween(entry[1], 0.15, { [entry[2]] = color })
 		end
-		UIUtil.Tween(logo.Disc, 0.15, { BackgroundColor3 = color })
-		UIUtil.Tween(logo.Title, 0.15, { TextColor3 = color })
-		UIUtil.Tween(logo.Pill, 0.15, { BackgroundColor3 = color })
-		logo.PillText.TextColor3 = Theme.ContrastText(color)
+		if logo.Title then
+			UIUtil.Tween(logo.Title, 0.15, { TextColor3 = inkFor(color) })
+		end
+		if logo.PillText then
+			logo.PillText.TextColor3 = Theme.ContrastText(color)
+		end
 	end
 
 	local function nextColor(logo)
@@ -376,9 +491,16 @@ function DVD.Start(ctx)
 			local logo = logos[index]
 			logos[index] = nil
 			local button = logo.Button
+			local ghosts = logo.Ghosts
 			UIUtil.Tween(logo.Scale, 0.25, { Scale = 0 }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+			for _, ghost in ipairs(ghosts) do
+				ghost.Visible = false
+			end
 			task.delay(0.3, function()
 				button:Destroy()
+				for _, ghost in ipairs(ghosts) do
+					ghost:Destroy()
+				end
 			end)
 		end
 		-- Nouveaux paramètres de trajectoire
@@ -415,10 +537,21 @@ function DVD.Start(ctx)
 	local function onBounce(logo, x: number, y: number, w: number, h: number, bouncedX: boolean, bouncedY: boolean)
 		nextColor(logo)
 
-		-- Écrasement contre le mur
-		local scale = logo.Scale
-		scale.Scale = bouncedX and 0.88 or 0.92
-		UIUtil.Tween(scale, 0.3, { Scale = 1 }, Enum.EasingStyle.Back)
+		-- Écrasement contre le mur (le corps s'aplatit puis reprend sa forme)
+		local body = logo.Body
+		if bouncedX and bouncedY then
+			body.Size = UDim2.fromScale(0.88, 0.88)
+		elseif bouncedX then
+			body.Size = UDim2.fromScale(0.82, 1.1)
+		else
+			body.Size = UDim2.fromScale(1.1, 0.8)
+		end
+		UIUtil.Tween(body, 0.4, { Size = UDim2.fromScale(1, 1) }, Enum.EasingStyle.Back)
+
+		-- Flash du halo
+		local glow = logo.Glow
+		glow.BackgroundTransparency = 0.35
+		UIUtil.Tween(glow, 0.5, { BackgroundTransparency = GLOW_ALPHA })
 
 		-- Point de contact (au milieu du bord touché)
 		local contactX = x + w / 2
@@ -464,6 +597,10 @@ function DVD.Start(ctx)
 		local scale = logo.Scale
 		scale.Scale = 1.5
 		UIUtil.Tween(scale, 0.6, { Scale = 1 }, Enum.EasingStyle.Elastic)
+		local glow = logo.Glow
+		glow.BackgroundColor3 = Theme.Colors.Gold
+		glow.BackgroundTransparency = 0.1
+		UIUtil.Tween(glow, 1.2, { BackgroundTransparency = GLOW_ALPHA, BackgroundColor3 = colors[logo.ColorIndex] })
 	end
 
 	------------------------------------------------------------------
@@ -476,8 +613,8 @@ function DVD.Start(ctx)
 		end
 		local t = workspace:GetServerTimeNow()
 		local w, h = measure()
-		w = w or (logoSize.X / 1280)
-		h = h or (logoSize.Y / 720)
+		w = w or (W / 1280)
+		h = h or (H / 720)
 
 		-- Fin de la recharge : les logos reprennent leurs couleurs
 		local isCooling = os.clock() < cooldownUntil
@@ -492,13 +629,33 @@ function DVD.Start(ctx)
 			end
 		end
 
+		-- Traînée seulement si les effets sont activés (et pas en recharge)
+		local wantTrail = effectsOn() and not cooling
+
 		for index, logo in ipairs(logos) do
 			local params = logo.Params
 			if params then
 				local x, y = DVDMath.Position(params, t)
 				logo.Button.Position = UDim2.fromScale(x, y)
-				if logo.Shine then
-					logo.Shine.Rotation = (t * 140 + index * 50) % 360
+
+				-- Fantômes : la même trajectoire, un peu plus tôt
+				for k, ghost in ipairs(logo.Ghosts) do
+					if wantTrail then
+						local gx, gy = DVDMath.Position(params, t - k * TRAIL_LAG)
+						ghost.Position = UDim2.fromScale(gx, gy)
+					end
+					if ghost.Visible ~= wantTrail then
+						ghost.Visible = wantTrail
+					end
+				end
+
+				-- Disque : anneau holographique qui tourne + reflet qui passe
+				if logo.Holo then
+					logo.Holo.Rotation = (t * 120 + index * 50) % 360
+				end
+				if logo.Sweep then
+					local p = (t / 2.8 + index * 0.37) % 1
+					logo.Sweep.Offset = Vector2.new(-1 + p * 3.2, 0)
 				end
 
 				local indexX, indexY = DVDMath.BounceIndex(params, t)
@@ -547,7 +704,7 @@ function DVD.Start(ctx)
 		local position = UDim2.fromScale(0.5, 0.4)
 		if logo then
 			local button = logo.Button
-			position = UDim2.new(button.Position.X.Scale, logoSize.X / 2, button.Position.Y.Scale, 0)
+			position = UDim2.new(button.Position.X.Scale, W / 2, button.Position.Y.Scale, 0)
 		end
 		-- (le son "Bonus" est déjà joué par StimulusManager)
 		ctx.FloatText(container, position, "+" .. ctx.Format.Format(tonumber(payload.Amount) or 0), Theme.Colors.Gold, 40)

@@ -6,6 +6,8 @@
 	le gestionnaire de stimuli et branche les RemoteEvents. Aucune logique
 	de gain ici : le client affiche et envoie des DEMANDES, le serveur décide.
 	Un écran de chargement (LoadingScreen) couvre tout jusqu'au premier état.
+	v4 : fenêtre "Bon retour !" (gain hors-ligne), panneau "🛠️ Test" et
+	commandes de chat de test (/give, /unlockall...) UNIQUEMENT dans Studio.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -30,6 +32,9 @@ local Notifications = require(Components:WaitForChild("Notifications"))
 local PanelManager = require(Components:WaitForChild("PanelManager"))
 local CenterColumn = require(Components:WaitForChild("CenterColumn"))
 local LoadingScreen = require(Components:WaitForChild("LoadingScreen"))
+local OfflinePopup = require(Components:WaitForChild("OfflinePopup"))
+local AchievementPopup = require(Components:WaitForChild("AchievementPopup"))
+local DebugTools = require(Components:WaitForChild("DebugTools"))
 
 -- Le sac à dos (outils) ne sert à rien ici. La liste des joueurs (leaderstats)
 -- et la fenêtre de chat recouvriraient les emplacements R1 / L1 et captureraient
@@ -68,6 +73,8 @@ Background.Build(layers.Background)
 
 -- 3. Toasts et fenêtres
 Notifications.Build(layers.Toasts)
+OfflinePopup.Build(layers.Toasts)
+AchievementPopup.Build(layers.Toasts)
 PanelManager.Build(layers.Panels)
 PanelManager.Register("ScreenTime", require(Panels:WaitForChild("ScreenTime")))
 PanelManager.Register("ItemShop", require(Panels:WaitForChild("ItemShop")))
@@ -77,6 +84,25 @@ PanelManager.Register("Leaderboard", require(Panels:WaitForChild("Leaderboard"))
 PanelManager.Register("Daily", require(Panels:WaitForChild("Daily")))
 PanelManager.Register("Settings", require(Panels:WaitForChild("Settings")))
 PanelManager.Register("RobuxShop", require(Panels:WaitForChild("RobuxShop")))
+
+-- Outils de test : UNIQUEMENT dans Studio (panneau "🛠️ Test" + commandes de chat)
+if DebugTools.Enabled then
+	local debugModule = Panels:FindFirstChild("Debug")
+	if debugModule and debugModule:IsA("ModuleScript") then
+		local ok, module = pcall(require, debugModule)
+		if ok and type(module) == "table" then
+			PanelManager.Register("Debug", module)
+		else
+			warn("[ClientMain] Erreur au chargement du panneau Debug : " .. tostring(module))
+		end
+	end
+	DebugTools.OpenPanel = function()
+		if PanelManager.IsRegistered("Debug") then
+			PanelManager.Open("Debug")
+		end
+	end
+	DebugTools.RegisterChatCommands()
+end
 
 -- Panneau des thèmes : chargé à part (sans bloquer le reste de l'interface)
 task.spawn(function()
@@ -115,12 +141,18 @@ ClientState.FeaturesChanged:Connect(function()
 end)
 
 -- 8. Au premier état reçu : on ouvre le cadeau du jour s'il est disponible
+-- (après l'écran de chargement, et après la fenêtre "Bon retour !" si elle est là)
 local firstState
 firstState = ClientState.Changed:Connect(function(data)
 	firstState:Disconnect()
 	if ClientState.HasFeature("Daily") and data.Daily and data.Daily.Available then
-		-- (après la disparition de l'écran de chargement)
 		task.delay(2.6, function()
+			if OfflinePopup.IsVisible() then
+				while OfflinePopup.IsVisible() do
+					task.wait(0.25)
+				end
+				task.wait(0.4)
+			end
 			if not PanelManager.IsOpen() then
 				PanelManager.Open("Daily")
 			end

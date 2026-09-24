@@ -5,8 +5,10 @@
 	Événements aléatoires :
 	  - "Dopamine Rush" : x2 sur tous les gains pendant 30 s, pour TOUT le serveur ;
 	  - objets à cliquer vite (Config.Spawners) : étoile dorée, éclair,
-	    notification de téléphone, e-mail. Chaque type apparaît chez un joueur
-	    seulement s'il possède la Feature correspondante.
+	    notification de téléphone, e-mail, don du live. Chaque type apparaît
+	    chez un joueur seulement s'il possède la Feature correspondante
+	    (et, si RequiresFollow, seulement s'il est abonné au live :
+	    data.LiveFollowed).
 	Le serveur décide quand ils arrivent et valide les clics.
 ]]
 
@@ -181,6 +183,17 @@ local function randomDelay(settings): number
 	return random:NextNumber(settings.MinInterval, settings.MaxInterval) / speedup
 end
 
+-- Le joueur remplit-il les conditions de ce type d'objet ?
+local function isSpawnerUnlocked(data, settings): boolean
+	if not Formulas.HasFeature(data, settings.Feature) then
+		return false
+	end
+	if settings.RequiresFollow and data.LiveFollowed ~= true then
+		return false -- dons du live : seulement après "Suivre"
+	end
+	return true
+end
+
 -- Boucle unique qui planifie les apparitions de chaque type pour chaque joueur
 -- (équivaut à une boucle par joueur et par type, sans créer de threads)
 local function schedulerStep()
@@ -189,7 +202,7 @@ local function schedulerStep()
 		local data = services.DataService:GetData(player)
 		if data and services.GameService:IsReady(player) then
 			for kind, settings in pairs(Config.Spawners) do
-				if not Formulas.HasFeature(data, settings.Feature) then
+				if not isSpawnerUnlocked(data, settings) then
 					state.NextAt[kind] = nil -- pas débloqué : rien ne se prépare
 				elseif state.NextAt[kind] == nil then
 					-- Tout juste débloqué (ou arrivée du joueur) : le premier arrive plus vite

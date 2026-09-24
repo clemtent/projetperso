@@ -5,8 +5,12 @@
 	Chargement / sauvegarde des données des joueurs avec DataStoreService
 	(format "version 2", magasin Config.DataStore.Name) :
 	  - pcall + plusieurs tentatives (retry) avec attente croissante ;
-	  - sauvegarde à la sortie du joueur, toutes les X secondes, et à la
+	  - sauvegarde à la sortie du joueur, toutes les 60 secondes (au plus),
+	    après certaines actions importantes (détox, achat Robux) et à la
 	    fermeture du serveur (BindToClose) ;
+	  - data.LastOnline (os.time) est mis à jour à chaque sauvegarde : au
+	    chargement, l'absence (en secondes) sert au gain hors-ligne
+	    (GameService, voir TakeOfflineSeconds) ;
 	  - si le chargement échoue, on NE sauvegarde PAS (pour ne jamais écraser
 	    une vraie sauvegarde avec des données vides).
 ]]
@@ -18,7 +22,8 @@ local Config = require(ReplicatedStorage.Shared.Config)
 
 local DataService = {}
 
--- Profils chargés : [Player] = { Data = table, CanSave = bool, Saving = bool, Releasing = bool }
+-- Profils chargés : [Player] = { Data = table, CanSave = bool, Saving = bool, Releasing = bool,
+--   OfflineSeconds = secondes d'absence depuis la dernière sauvegarde (0 = rien à donner) }
 local profiles = {}
 
 -- Données d'un nouveau joueur (version 2). Toute nouvelle clé ajoutée ici
@@ -31,7 +36,7 @@ local TEMPLATE = {
 	Achievements = {}, -- [achievementId] = true
 	Quests = {}, -- liste des quêtes actives
 	Daily = { LastDay = 0, Streak = 0 },
-	Settings = { Sound = true, Music = true, Effects = true },
+	Settings = { Sound = true, Music = true, Effects = true, ClickSound = "Default" }, -- ClickSound = Id de Config.ClickSounds
 	Cosmetics = {
 		Owned = {}, -- [cosmeticId] = true
 		Equipped = { Hat = "", Skin = "" }, -- "" = rien d'équipé
@@ -45,6 +50,8 @@ local TEMPLATE = {
 	},
 	Boost = { Multiplier = 1, EndsAt = 0 }, -- boost acheté (EndsAt = os.time() de fin)
 	Purchases = {}, -- PurchaseId (texte) des 50 derniers achats Robux traités (anti-doublon)
+	LastOnline = 0, -- os.time() de la dernière sauvegarde / sortie (0 = jamais)
+	LiveFollowed = false, -- abonné au live ASMR pendant cette partie (remis à false à la détox)
 	Stats = {
 		TotalClicks = 0,
 		LifetimeDopamine = 0, -- Dopamine gagnée depuis toujours (classement)
@@ -71,6 +78,10 @@ local TEMPLATE = {
 		PlaySeconds = 0,
 		RobuxPurchases = 0,
 		ThemesBought = 0,
+		Donations = 0, -- dons du live cliqués
+		Follows = 0, -- abonnements au live
+		ButterCrunches = 0, -- croquées de beurre
+		OfflineEarned = 0, -- Dopamine gagnée hors-ligne
 	},
 }
 
@@ -145,6 +156,23 @@ local function retry(description: string, callback: () -> any): (boolean, any)
 	return false, lastError
 end
 
+-- Plafond de l'absence prise en compte (sécurité contre une date abîmée) : 1 an
+local MAX_OFFLINE_SECONDS = 365 * 86400
+-- Sauvegarde automatique : au plus toutes les 60 secondes
+local AUTOSAVE_INTERVAL = math.min(Config.DataStore.AutoSaveInterval, 60)
+
+local function isValidNumber(value): boolean
+	return type(value) == "number" and value == value and value ~= math.huge and value ~= -math.huge
+end
+
+-- Secondes écoulées depuis `lastOnline` (0 si jamais connecté ou date invalide)
+local function offlineSecondsSince(lastOnline): number
+	if not isValidNumber(lastOnline) or lastOnline <= 0 then
+		return 0
+	end
+	return math.clamp(os.time() - lastOnline, 0, MAX_OFFLINE_SECONDS)
+end
+
 local function keyFor(player: Player): string
 	return "Player_" .. player.UserId
 end
@@ -178,12 +206,23 @@ function DataService:LoadAsync(player: Player)
 	data = reconcile(data or deepCopy(TEMPLATE), TEMPLATE)
 	data.Version = TEMPLATE.Version
 
+	-- Absence depuis la dernière sauvegarde (gain hors-ligne donné par
+	-- GameService quand le client est prêt), puis on repart de maintenant
+	local offlineSeconds = offlineSecondsSince(data.LastOnline)
+	data.LastOnline = os.time()
+
 	-- Le joueur a pu partir pendant le chargement
 	if not player.Parent then
 		return nil
 	end
 
-	profiles[player] = { Data = data, CanSave = canSave, Saving = false, Releasing = false }
+	profiles[player] = {
+		Data = data,
+		CanSave = canSave,
+		Saving = false,
+		Releasing = false,
+		OfflineSeconds = offlineSeconds,
+	}
 
 	if not canSave then
 		task.defer(function()
@@ -200,6 +239,17 @@ end
 function DataService:GetData(player: Player)
 	local profile = profiles[player]
 	return profile and profile.Data
+end
+
+-- Renvoie (une seule fois) les secondes d'absence calculées au chargement
+function DataService:TakeOfflineSeconds(player: Player): number
+	local profile = profiles[player]
+	if not profile then
+		return 0
+	end
+	local seconds = profile.OfflineSeconds or 0
+	profile.OfflineSeconds = 0
+	return seconds
 end
 
 function DataService:GetLoadedPlayers(): { Player }
@@ -233,6 +283,8 @@ function DataService:ResetData(player: Player): boolean
 	if type(purchases) == "table" then
 		data.Purchases = purchases
 	end
+	data.LastOnline = os.time()
+	profile.OfflineSeconds = 0
 	return true
 end
 
@@ -264,6 +316,7 @@ function DataService:SaveAsync(player: Player, waitIfBusy: boolean?): boolean
 
 	profile.Saving = true
 	local data = profile.Data
+	data.LastOnline = os.time() -- dernière présence connue (gain hors-ligne)
 	local store = dataStore :: DataStore
 	local ok = retry("Sauvegarde de " .. player.Name, function()
 		store:UpdateAsync(keyFor(player), function()
@@ -298,7 +351,7 @@ function DataService:Start()
 	-- Sauvegarde périodique
 	task.spawn(function()
 		while true do
-			task.wait(Config.DataStore.AutoSaveInterval)
+			task.wait(AUTOSAVE_INTERVAL)
 			for player in pairs(profiles) do
 				task.spawn(function()
 					self:SaveAsync(player)
