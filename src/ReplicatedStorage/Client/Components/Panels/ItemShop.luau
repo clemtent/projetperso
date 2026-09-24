@@ -23,6 +23,7 @@ local Net = require(ReplicatedStorage.Shared.Net)
 
 local ItemShop = {
 	Title = "🛒 Boutique",
+	Subtitle = "Chapeaux et couleurs pour ton bouton",
 	Color = Theme.Colors.Green,
 	Size = Vector2.new(720, 520),
 }

@@ -44,6 +44,7 @@ Net.Functions = {
 	"CasinoSpin", -- C -> S (fraction) -> (succès, résultat | message)
 	"OpenChest", -- C -> S () -> (succès, résultat | message)
 	"ItemShop", -- C -> S ("buy" | "equip" | "unequip", cosmeticId) -> (succès, message)
+	"ThemeShop", -- C -> S ("buy" | "equip", themeId) -> (succès, message)
 }
 
 local FOLDER_NAME = "Remotes"

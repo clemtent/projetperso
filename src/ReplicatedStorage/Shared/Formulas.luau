@@ -133,8 +133,9 @@ function Formulas.CountCosmetics(data): number
 	return countKeys(cosmetics.Owned, Config.CosmeticsById)
 end
 
--- `data` = données sauvegardées du joueur, `eventMultiplier` = Rush en cours (ou 1)
-function Formulas.ComputeStats(data, eventMultiplier: number?)
+-- `data` = données sauvegardées du joueur, `eventMultiplier` = Rush en cours (ou 1),
+-- `bonusMultiplier` = bonus Robux (Game Passes x Boost actif), calculé par le serveur (ou 1)
+function Formulas.ComputeStats(data, eventMultiplier: number?, bonusMultiplier: number?)
 	local baseClick = 1
 	local basePerSecond = 0
 	local clickMultiplier = 1
@@ -166,7 +167,8 @@ function Formulas.ComputeStats(data, eventMultiplier: number?)
 	local achievementMultiplier = 1 + Formulas.CountAchievements(data) * Config.AchievementBonus
 	local cosmeticMultiplier = 1 + Formulas.CountCosmetics(data) * Config.CosmeticBonus
 	local eventMult = eventMultiplier or 1
-	local globalMultiplier = upgradeMultiplier * rebirthMultiplier * achievementMultiplier * cosmeticMultiplier * eventMult
+	local bonusMult = bonusMultiplier or 1
+	local globalMultiplier = upgradeMultiplier * rebirthMultiplier * achievementMultiplier * cosmeticMultiplier * eventMult * bonusMult
 
 	return {
 		BaseClick = baseClick,
@@ -178,6 +180,7 @@ function Formulas.ComputeStats(data, eventMultiplier: number?)
 		AchievementMultiplier = achievementMultiplier,
 		CosmeticMultiplier = cosmeticMultiplier,
 		EventMultiplier = eventMult,
+		BonusMultiplier = bonusMult,
 		GlobalMultiplier = globalMultiplier,
 		ClickValue = baseClick * clickMultiplier * globalMultiplier,
 		PerSecond = basePerSecond * globalMultiplier,

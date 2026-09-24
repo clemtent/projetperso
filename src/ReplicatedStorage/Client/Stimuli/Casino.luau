@@ -11,6 +11,9 @@
 	Le résultat vient TOUJOURS du serveur (CasinoSpin) : les rouleaux se
 	lancent tout de suite puis s'arrêtent un par un sur les symboles reçus
 	(avec un petit suspense si les deux premiers sont identiques).
+	Fermée (State.Data.CasinoEnabled = false, ex. quand le jeu vend de la
+	Dopamine contre des Robux) : panneau "🚧 Fermé" par-dessus la machine,
+	et CasinoSpin n'est JAMAIS appelé.
 ]]
 
 local Casino = {}
@@ -511,33 +514,95 @@ function Casino.Start(ctx)
 		Parent = card,
 	})
 
-	-- Fermé (Config.Casino.Enabled = false)
-	local enabled = config.Enabled ~= false
-	if not enabled then
-		UIUtil.SetButtonEnabled(playButton, false)
-		local closed = Create("Frame", {
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromOffset(windowX + windowW / 2, windowY + (REEL_H + 8) / 2),
-			Size = UDim2.fromOffset(windowW + 10, 30),
-			Rotation = -8,
-			BackgroundColor3 = Theme.Colors.Yellow,
-			BorderSizePixel = 0,
-			ZIndex = 9,
-			Parent = card,
-		})
-		UIUtil.Stroke(closed, Theme.Colors.Border, 2)
-		UIUtil.Label({
-			Text = "🚧 FERMÉ POUR TRAVAUX 🚧",
-			Font = Theme.Fonts.Title,
-			TextColor3 = Theme.Colors.TextDark,
-			Size = UDim2.new(1, -8, 1, -6),
-			Position = UDim2.fromOffset(4, 3),
-			MaxTextSize = 16,
-			ZIndex = 10,
-			Parent = closed,
-		})
-		setInfo("Revenez plus tard (ou jamais) 😴", white)
+	------------------------------------------------------------------
+	-- Fermé : Data.CasinoEnabled = false (règle calculée par le serveur)
+	------------------------------------------------------------------
+	local function casinoEnabled(): boolean
+		local data = ctx.State.Data
+		if data and data.CasinoEnabled ~= nil then
+			return data.CasinoEnabled == true
+		end
+		-- Pas encore d'état (ou ancien serveur) : même règle que le serveur
+		if config.Enabled == false then
+			return false
+		end
+		local monetization = ctx.Config.Monetization
+		if ctx.Config.IsSellingForRobux and monetization and monetization.DisableCasinoWhenSelling then
+			return false
+		end
+		return true
 	end
+
+	-- Voile sombre + carte blanche (TextButton : bloque les clics sur la machine)
+	local closedVeil = Create("TextButton", {
+		Name = "Closed",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Color3.fromRGB(30, 6, 14),
+		BackgroundTransparency = 0.2,
+		AutoButtonColor = false,
+		Text = "",
+		ZIndex = 20,
+		Visible = false,
+		Parent = card,
+	})
+	UIUtil.Corner(closedVeil, 18)
+	local closedCard = Create("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(math.min(220, width - 40), 104),
+		BackgroundColor3 = white,
+		ZIndex = 21,
+		Parent = closedVeil,
+	})
+	UIUtil.Corner(closedCard, 14)
+	UIUtil.Stroke(closedCard, Theme.Colors.CardBorder, 1.5, 0.1)
+	UIUtil.Label({
+		Text = "🚧",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 8),
+		Size = UDim2.fromOffset(40, 36),
+		MaxTextSize = 32,
+		ZIndex = 22,
+		Parent = closedCard,
+	})
+	UIUtil.Label({
+		Text = "Fermé",
+		Font = Theme.Fonts.Title,
+		TextColor3 = Theme.Colors.TextDark,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 44),
+		Size = UDim2.new(1, -20, 0, 24),
+		MaxTextSize = 22,
+		ZIndex = 22,
+		Parent = closedCard,
+	})
+	UIUtil.Label({
+		Text = "La machine à sous fait une pause.",
+		TextColor3 = Theme.Colors.TextDim,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 70),
+		Size = UDim2.new(1, -20, 0, 18),
+		MaxTextSize = 13,
+		ZIndex = 22,
+		Parent = closedCard,
+	})
+
+	local enabled = true
+	local function applyEnabled()
+		local now = casinoEnabled()
+		closedVeil.Visible = not now
+		if now == enabled then
+			return
+		end
+		enabled = now
+		UIUtil.SetButtonEnabled(playButton, now)
+		if not now then
+			setInfo("Fermé pour le moment 😴", white)
+		end
+	end
+	enabled = not casinoEnabled() -- force la première application
+	applyEnabled()
+	ctx.Connect(ctx.State.Changed, applyEnabled)
 
 	------------------------------------------------------------------
 	-- Animation (rouleaux, ampoules)
@@ -724,7 +789,7 @@ function Casino.Start(ctx)
 		if spinning or not ctx.IsAlive() then
 			return
 		end
-		if not enabled then
+		if not enabled or not casinoEnabled() then
 			ctx.Sound.Play("Error", 1)
 			UIUtil.Shake(playButton)
 			return
@@ -800,7 +865,7 @@ function Casino.Start(ctx)
 			end
 
 			spinning = false
-			UIUtil.SetButtonEnabled(playButton, true)
+			UIUtil.SetButtonEnabled(playButton, enabled)
 		end)
 	end
 

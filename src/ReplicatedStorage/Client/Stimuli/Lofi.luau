@@ -7,11 +7,18 @@
 	tombe, un chat qui dort sur le rebord (avec ses "z z z"), une plante,
 	un étudiant avec son casque 🎧 qui hoche la tête en rythme, une tasse
 	fumante, une lampe de bureau dont la lueur respire, des post-it, une
-	horloge (heure réelle), et en bas : "lofi beats 🎧 pour réviser", le
-	nombre de personnes qui "révisent" et un égaliseur animé.
-
-	Purement visuel (la musique est gérée ailleurs, par SoundManager).
+	horloge (heure réelle), et en bas une barre "lecteur" :
+	  - un vinyle qui tourne, le morceau en cours (vraie musique de
+	    Config.Music, jouée par SoundManager) ou "lofi beats 🎧 pour
+	    réviser", le nombre de personnes qui "révisent" ;
+	  - un bouton ⏭ (morceau suivant : SoundManager.NextTrack) ;
+	  - un égaliseur piloté par le volume réel du morceau
+	    (Sound.PlaybackLoudness), ou animé tout seul sans musique.
+	Si la playlist est vide : dans Studio, un rappel "Ajoute une musique
+	dans Config.Music" ; en jeu, simplement la petite chambre.
 ]]
+
+local RunService = game:GetService("RunService")
 
 local Lofi = {}
 Lofi.Slot = "R3"
@@ -26,7 +33,7 @@ local GLASS_W, GLASS_H = WINDOW_W - 12, WINDOW_H - 12
 local SILL_Y = WINDOW_Y + WINDOW_H - 2
 local LAMP_X = 330
 local PERSON_X = 262
-local EQ_BARS = 12
+local EQ_BARS = 10
 local BEAT = 60 / 78 -- une pulsation (78 BPM, tranquille)
 
 local RAIN_COLOR = Color3.fromRGB(190, 210, 255)
@@ -681,8 +688,11 @@ function Lofi.Start(ctx)
 	end
 
 	------------------------------------------------------------------
-	-- Barre du bas : titre, spectateurs / morceau, égaliseur
+	-- Barre du bas : lecteur (vinyle, morceau, spectateurs, ⏭, égaliseur)
 	------------------------------------------------------------------
+	local Sound = ctx.Sound
+	local isStudio = RunService:IsStudio()
+
 	local bar = frame({
 		Name = "Bar",
 		Position = UDim2.fromOffset(SCENE_X, BAR_Y),
@@ -691,35 +701,99 @@ function Lofi.Start(ctx)
 		Parent = card,
 	})
 	UI.Corner(bar, 10)
-	UI.Label({
+	UI.Stroke(bar, Color3.fromRGB(90, 70, 140), 1, 0.5)
+
+	-- Vinyle qui tourne pendant la musique
+	local disc = circle({
+		Name = "Vinyl",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromOffset(22, BAR_H / 2),
+		Size = UDim2.fromOffset(30, 30),
+		BackgroundColor3 = Color3.fromRGB(28, 26, 34),
+		Parent = bar,
+	})
+	UI.Stroke(disc, Color3.fromRGB(70, 64, 90), 1.5)
+	local groove = circle({
+		Name = "Groove",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(21, 21),
+		BackgroundTransparency = 1,
+		Parent = disc,
+	})
+	UI.Stroke(groove, Color3.fromRGB(64, 60, 82), 1)
+	local labelDisc = circle({
+		Name = "Label",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(11, 11),
+		BackgroundColor3 = EQ_LOW,
+		Parent = disc,
+	})
+	UI.Gradient(labelDisc, ColorSequence.new(EQ_LOW, EQ_HIGH), 0)
+	frame({
+		Name = "Shine",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 0.5, -6),
+		Size = UDim2.fromOffset(2, 7),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BackgroundTransparency = 0.55,
+		Parent = disc,
+	})
+
+	local title = UI.Create("TextLabel", {
 		Name = "Title",
 		Text = "lofi beats 🎧 pour réviser",
 		Font = Theme.Fonts.Title,
+		TextSize = 15,
 		TextColor3 = Color3.new(1, 1, 1),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(10, 3),
-		Size = UDim2.fromOffset(236, 20),
-		MaxTextSize = 17,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(44, 4),
+		Size = UDim2.fromOffset(190, 18),
 		Parent = bar,
 	})
-	local subtitle = UI.Label({
+	local subtitle = UI.Create("TextLabel", {
 		Name = "Subtitle",
 		Text = "",
 		Font = Theme.Fonts.Body,
+		TextSize = 12,
 		TextColor3 = Color3.fromRGB(200, 186, 240),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(10, 23),
-		Size = UDim2.fromOffset(240, 15),
-		MaxTextSize = 12,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(44, 22),
+		Size = UDim2.fromOffset(190, 15),
 		Parent = bar,
 	})
 
-	local eqWidth = 94
+	-- Bouton "morceau suivant"
+	local skip = UI.Create("TextButton", {
+		Name = "Next",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -7, 0.5, 0),
+		Size = UDim2.fromOffset(30, 30),
+		BackgroundColor3 = Color3.fromRGB(46, 38, 72),
+		AutoButtonColor = false,
+		Font = Theme.Fonts.Title,
+		Text = "⏭",
+		TextColor3 = Color3.new(1, 1, 1),
+		TextSize = 15,
+		Visible = false,
+		Parent = bar,
+	})
+	UI.Corner(skip, UDim.new(1, 0))
+	UI.Stroke(skip, EQ_HIGH, 1.5, 0.4)
+	UI.AnimateButton(skip, 1.1, 0.88)
+
+	-- Égaliseur
+	local eqWidth = 78
 	local eq = frame({
 		Name = "Equalizer",
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -10, 0.5, 0),
-		Size = UDim2.fromOffset(eqWidth, 30),
+		Size = UDim2.fromOffset(eqWidth, 28),
 		BackgroundTransparency = 1,
 		Parent = bar,
 	})
@@ -745,21 +819,97 @@ function Lofi.Start(ctx)
 	end
 
 	------------------------------------------------------------------
-	-- Spectateurs + titre du morceau (alternent dans le sous-titre)
+	-- État du lecteur : vraie musique, musique coupée, ou pas de musique
 	------------------------------------------------------------------
 	local viewers = random:NextInteger(8000, 14000)
 	local trackIndex = random:NextInteger(1, #TRACKS)
-	local showTrack = false
+	local showAlt = false -- alterne les deux textes du sous-titre
+	local discSpin = 0 -- vitesse de rotation du vinyle (lissée)
+
+	local function hasPlaylist(): boolean
+		return type(Sound.HasPlaylist) == "function" and Sound.HasPlaylist()
+	end
+
+	-- (nom du morceau, Sound) si de la vraie musique joue, sinon nil
+	local function currentMusic(): (string?, Sound?)
+		if type(Sound.GetCurrentTrack) ~= "function" or type(Sound.IsMusicPlaying) ~= "function" then
+			return nil, nil
+		end
+		if not Sound.IsMusicPlaying() then
+			return nil, nil
+		end
+		return Sound.GetCurrentTrack()
+	end
+
+	local function viewersText(): string
+		local text = viewers >= 1e6 and Format.Format(viewers) or Format.WithSpaces(viewers)
+		return "🔴 " .. text .. " personnes révisent (ou pas)"
+	end
 
 	local function refreshSubtitle()
-		if showTrack then
-			subtitle.Text = "♫ " .. TRACKS[trackIndex]
+		local name = currentMusic()
+		local playlist = hasPlaylist()
+		skip.Visible = name ~= nil
+		eq.Position = name and UDim2.new(1, -44, 0.5, 0) or UDim2.new(1, -10, 0.5, 0)
+		-- Textes : toute la place jusqu'à l'égaliseur
+		local textWidth = name and 196 or 230
+		title.Size = UDim2.fromOffset(textWidth, 18)
+		subtitle.Size = UDim2.fromOffset(textWidth, 15)
+		subtitle.TextColor3 = Color3.fromRGB(200, 186, 240)
+
+		if name then
+			-- Vraie musique
+			title.Text = "♫ " .. name
+			subtitle.Text = showAlt and "lofi beats 🎧 pour réviser" or viewersText()
+		elseif playlist then
+			-- Musique disponible mais coupée (réglage) ou en chargement
+			title.Text = "lofi beats 🎧 pour réviser"
+			local musicOn = type(Sound.IsMusicEnabled) ~= "function" or Sound.IsMusicEnabled()
+			if showAlt then
+				subtitle.Text = musicOn and "♫ Chargement de la musique..." or "🔇 Musique coupée (⚙️ Paramètres)"
+			else
+				subtitle.Text = viewersText()
+			end
+		elseif isStudio then
+			-- Rappel pour le créateur du jeu (seulement dans Studio)
+			title.Text = "lofi beats 🎧 pour réviser"
+			subtitle.Text = "⚠️ Ajoute une musique dans Config.Music"
+			subtitle.TextColor3 = Color3.fromRGB(255, 200, 90)
 		else
-			local text = viewers >= 1e6 and Format.Format(viewers) or Format.WithSpaces(viewers)
-			subtitle.Text = "🔴 " .. text .. " personnes révisent (ou pas)"
+			-- Pas de musique : juste l'ambiance
+			title.Text = "lofi beats 🎧 pour réviser"
+			subtitle.Text = showAlt and ("♫ " .. TRACKS[trackIndex]) or viewersText()
 		end
 	end
 	refreshSubtitle()
+
+	-- Réagit tout de suite aux changements de morceau / de réglage
+	if Sound.TrackChanged then
+		ctx.Connect(Sound.TrackChanged, function()
+			if not ctx.IsAlive() then
+				return
+			end
+			refreshSubtitle()
+			title.TextTransparency = 1
+			UI.Tween(title, 0.4, { TextTransparency = 0 })
+		end)
+	end
+	if Sound.MusicStateChanged then
+		ctx.Connect(Sound.MusicStateChanged, function()
+			if ctx.IsAlive() then
+				refreshSubtitle()
+			end
+		end)
+	end
+
+	skip.Activated:Connect(function()
+		if not ctx.IsAlive() then
+			return
+		end
+		if type(Sound.NextTrack) == "function" and Sound.NextTrack() then
+			discSpin = 12 -- petit coup de vinyle
+		end
+	end)
 
 	local function refreshClock()
 		-- Roblox : os.date ne gère que "*t" / "!*t" (heure locale du joueur)
@@ -781,8 +931,8 @@ function Lofi.Start(ctx)
 			-- Spectateurs : petite marche aléatoire
 			viewers = math.clamp(viewers + random:NextInteger(-40, 55), 3000, 99999)
 			if tick % 6 == 0 then
-				showTrack = not showTrack
-				if showTrack and random:NextNumber() < 0.5 then
+				showAlt = not showAlt
+				if showAlt and random:NextNumber() < 0.5 then
 					trackIndex = trackIndex % #TRACKS + 1
 				end
 				subtitle.TextTransparency = 1
@@ -829,6 +979,8 @@ function Lofi.Start(ctx)
 	local clock = 0
 	local eqTimer = 0
 	local beatCount = 0
+	local loudPeak = 40 -- pic de volume récent (PlaybackLoudness)
+	local lastLevel = 0
 	local rainDX = math.tan(RAIN_ANGLE)
 	ctx.OnRender(function(dt: number)
 		clock += dt
@@ -912,27 +1064,59 @@ function Lofi.Start(ctx)
 			end
 		end
 
-		-- Égaliseur : nouvelles cibles ~ 9 fois par seconde, basses sur le temps
-		eqTimer -= dt
-		if eqTimer <= 0 then
-			eqTimer = 0.11
-			local newBeat = math.floor(clock / BEAT)
-			local onBeat = newBeat ~= beatCount
-			beatCount = newBeat
-			for i = 1, EQ_BARS do
-				local low = 1 - (i - 1) / (EQ_BARS - 1)
-				local base = 0.15 + random:NextNumber() * 0.55
-				if onBeat then
-					base += low * 0.45
-				end
-				eqTargets[i] = math.clamp(base, 0.1, 1)
-			end
+		-- Égaliseur : piloté par le volume réel de la musique si elle joue,
+		-- sinon animé tout seul (basses sur le temps)
+		local _, music = currentMusic()
+		local loudness = 0
+		if music and music.Parent and music.IsPlaying then
+			loudness = music.PlaybackLoudness
 		end
-		local k = math.min(1, dt * 14)
+		if music and music.IsPlaying then
+			-- Pic adaptatif : l'égaliseur reste expressif quel que soit le volume
+			loudPeak = math.max(loudness, loudPeak * (1 - math.min(1, dt * 0.35)), 40)
+			local level = math.clamp(loudness / loudPeak, 0, 1)
+			local rising = level > lastLevel + 0.12
+			lastLevel = level
+			eqTimer -= dt
+			if eqTimer <= 0 or rising then
+				eqTimer = 0.07
+				for i = 1, EQ_BARS do
+					local low = 1 - (i - 1) / (EQ_BARS - 1)
+					local base = level * (0.35 + random:NextNumber() * 0.5) + level * low * 0.3
+					if rising then
+						base += low * 0.25
+					end
+					eqTargets[i] = math.clamp(base, 0.06, 1)
+				end
+			end
+			discSpin += (4 - discSpin) * math.min(1, dt * 3)
+		else
+			lastLevel = 0
+			eqTimer -= dt
+			if eqTimer <= 0 then
+				eqTimer = 0.11
+				local newBeat = math.floor(clock / BEAT)
+				local onBeat = newBeat ~= beatCount
+				beatCount = newBeat
+				for i = 1, EQ_BARS do
+					local low = 1 - (i - 1) / (EQ_BARS - 1)
+					local base = 0.15 + random:NextNumber() * 0.55
+					if onBeat then
+						base += low * 0.45
+					end
+					eqTargets[i] = math.clamp(base, 0.1, 1)
+				end
+			end
+			discSpin += (0.6 - discSpin) * math.min(1, dt * 2)
+		end
+		local k = math.min(1, dt * 16)
 		for i, eqBar in ipairs(eqBars) do
 			eqHeights[i] += (eqTargets[i] - eqHeights[i]) * k
-			eqBar.Size = UDim2.fromOffset(barWidth, math.floor(3 + eqHeights[i] * 27))
+			eqBar.Size = UDim2.fromOffset(barWidth, math.floor(3 + eqHeights[i] * 25))
 		end
+
+		-- Vinyle
+		disc.Rotation = (disc.Rotation + discSpin * 60 * dt) % 360
 	end)
 end
 

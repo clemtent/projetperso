@@ -32,6 +32,7 @@ local SCHEDULER_STEP = 0.25 -- intervalle (s) de la boucle des apparitions
 local rush = {
 	Active = false,
 	EndsAt = 0, -- heure serveur (workspace:GetServerTimeNow())
+	Token = 0, -- change à chaque (re)programmation de la fin du Rush
 }
 
 --[[
@@ -68,26 +69,52 @@ function EventService:SendState(player: Player)
 	Net.Event("EventUpdate"):FireClient(player, rushPayload())
 end
 
--- Lance un Dopamine Rush (aussi utilisé par la commande de test /rush)
-function EventService:StartRush()
-	if rush.Active then
-		return
-	end
+-- Programme la fin du Rush en cours (un jeton évite qu'une ancienne fin
+-- programmée coupe un Rush prolongé entre-temps)
+local function scheduleRushEnd()
+	rush.Token += 1
+	local token = rush.Token
+	local remaining = math.max(0, rush.EndsAt - workspace:GetServerTimeNow())
+	task.delay(remaining, function()
+		if rush.Token ~= token or not rush.Active then
+			return
+		end
+		rush.Active = false
+		Net.Event("EventUpdate"):FireAllClients(rushPayload())
+		services.GameService:MarkAllDirty()
+	end)
+end
+
+-- Lance un Dopamine Rush (aussi utilisé par la commande de test /rush).
+-- `extend` = true (Rush acheté avec des Robux) : si un Rush est déjà en
+-- cours, il est prolongé de sa durée au lieu d'être ignoré.
+-- Renvoie true si un Rush a été lancé ou prolongé.
+function EventService:StartRush(extend: boolean?): boolean
 	local settings = Config.Events.Rush
+	if rush.Active then
+		if not extend then
+			return false
+		end
+		rush.EndsAt += settings.Duration
+		scheduleRushEnd()
+		Net.Event("EventUpdate"):FireAllClients(rushPayload())
+		services.GameService:MarkAllDirty()
+		services.GameService:NotifyAll({
+			Type = "Rush",
+			Text = "⚡ " .. settings.Name .. " prolongé de " .. settings.Duration .. " s !",
+		})
+		return true
+	end
 	rush.Active = true
 	rush.EndsAt = workspace:GetServerTimeNow() + settings.Duration
+	scheduleRushEnd()
 	Net.Event("EventUpdate"):FireAllClients(rushPayload())
 	services.GameService:MarkAllDirty()
 	services.GameService:NotifyAll({
 		Type = "Rush",
 		Text = "⚡ " .. settings.Name .. " : x" .. settings.Multiplier .. " pendant " .. settings.Duration .. " s !",
 	})
-
-	task.delay(settings.Duration, function()
-		rush.Active = false
-		Net.Event("EventUpdate"):FireAllClients(rushPayload())
-		services.GameService:MarkAllDirty()
-	end)
+	return true
 end
 
 ----------------------------------------------------------------------

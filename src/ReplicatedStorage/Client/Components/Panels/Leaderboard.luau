@@ -15,10 +15,17 @@ local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 
 local Leaderboard = {
 	Title = "🥇 Classement mondial",
+	Subtitle = "Les plus gros cerveaux du jeu",
 	Color = Theme.Colors.Blue,
 }
 
 local MEDALS = { "🥇", "🥈", "🥉" }
+-- Fond légèrement teinté pour le podium (or, argent, bronze)
+local PODIUM_COLORS = {
+	Color3.fromRGB(255, 246, 214),
+	Color3.fromRGB(240, 242, 246),
+	Color3.fromRGB(250, 234, 222),
+}
 local rows = {}
 local emptyLabel: TextLabel
 
@@ -34,7 +41,8 @@ local function refresh(top)
 			row.Name.Text = tostring(entry.Name or "?")
 			row.Value.Text = NumberFormatter.Format(entry.Value or 0) .. " 💧"
 			local isMe = entry.UserId == localId
-			row.Frame.BackgroundColor3 = isMe and Color3.fromRGB(225, 240, 255) or Theme.Colors.PanelLight
+			local podium = PODIUM_COLORS[rank]
+			row.Frame.BackgroundColor3 = isMe and Color3.fromRGB(225, 240, 255) or (podium or Theme.Colors.PanelLight)
 			row.Stroke.Color = isMe and Theme.Colors.Blue or Theme.Colors.Disabled
 			row.Name.TextColor3 = isMe and Theme.Colors.Blue or Theme.Colors.Text
 		end

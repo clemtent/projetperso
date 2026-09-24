@@ -15,6 +15,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 
 local Quests = {
 	Title = "📜 Quêtes",
+	Subtitle = "Objectifs du moment",
 	Color = Theme.Colors.Orange,
 }
 

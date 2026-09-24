@@ -39,6 +39,12 @@ local TEMPLATE = {
 	Stock = { Shares = 0, CostBasis = 0 }, -- actions de la bourse
 	Chests = { Stored = 0, Progress = 0 }, -- coffres mystère
 	ScreenTime = {}, -- ["numéro du jour UTC"] = secondes jouées ce jour-là
+	Themes = {
+		Owned = { Classic = true }, -- [themeId] = true (achetés, gardés pour toujours)
+		Equipped = "Classic",
+	},
+	Boost = { Multiplier = 1, EndsAt = 0 }, -- boost acheté (EndsAt = os.time() de fin)
+	Purchases = {}, -- PurchaseId (texte) des 50 derniers achats Robux traités (anti-doublon)
 	Stats = {
 		TotalClicks = 0,
 		LifetimeDopamine = 0, -- Dopamine gagnée depuis toujours (classement)
@@ -63,6 +69,8 @@ local TEMPLATE = {
 		QuestsCompleted = 0,
 		DailyClaims = 0,
 		PlaySeconds = 0,
+		RobuxPurchases = 0,
+		ThemesBought = 0,
 	},
 }
 
@@ -203,7 +211,7 @@ function DataService:GetLoadedPlayers(): { Player }
 end
 
 -- Remet les données d'un joueur à zéro (commande de test /reset), SAUF les
--- réglages. La table est vidée "sur place" : les autres services qui ont
+-- réglages et la liste des achats Robux traités (anti-doublon). La table est vidée "sur place" : les autres services qui ont
 -- gardé une référence vers elle restent valides.
 function DataService:ResetData(player: Player): boolean
 	local profile = profiles[player]
@@ -212,6 +220,7 @@ function DataService:ResetData(player: Player): boolean
 	end
 	local data = profile.Data
 	local settings = deepCopy(data.Settings)
+	local purchases = deepCopy(data.Purchases)
 	for key in pairs(data) do
 		data[key] = nil
 	end
@@ -221,14 +230,33 @@ function DataService:ResetData(player: Player): boolean
 	if type(settings) == "table" then
 		data.Settings = reconcile(settings, TEMPLATE.Settings)
 	end
+	if type(purchases) == "table" then
+		data.Purchases = purchases
+	end
 	return true
 end
 
--- Sauvegarde les données d'un joueur (bloquant)
-function DataService:SaveAsync(player: Player): boolean
+-- true si les données de ce joueur peuvent être sauvegardées
+-- (DataStore disponible et chargement réussi)
+function DataService:CanSave(player: Player): boolean
+	local profile = profiles[player]
+	return profile ~= nil and profile.CanSave and dataStore ~= nil
+end
+
+-- Sauvegarde les données d'un joueur (bloquant).
+-- `waitIfBusy` = true : si une sauvegarde est déjà en cours, on attend qu'elle
+-- finisse puis on sauvegarde à nouveau (utilisé après un achat Robux : la
+-- sauvegarde en cours ne contient peut-être pas l'achat).
+function DataService:SaveAsync(player: Player, waitIfBusy: boolean?): boolean
 	local profile = profiles[player]
 	if not profile or not profile.CanSave or not dataStore then
 		return false
+	end
+	if profile.Saving and waitIfBusy then
+		local waited = 0
+		while profile.Saving and waited < 30 do
+			waited += task.wait(0.1)
+		end
 	end
 	if profile.Saving then
 		return false -- une sauvegarde est déjà en cours

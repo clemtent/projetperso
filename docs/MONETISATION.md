@@ -1,8 +1,29 @@
 # 💰 Monétisation et 📣 promotion
 
-> **État actuel du code : aucune monétisation n'est implémentée.** Pas de Game Pass, pas de Developer Product, pas de `MarketplaceService`. Tout ce qui suit est une liste d'**idées** et la marche à suivre pour les ajouter.
+## ✅ Ce qui est déjà codé (v3)
 
----
+La **💎 Boutique Robux** est prête : il suffit de coller tes IDs dans `ReplicatedStorage > Shared > Config`, section `Config.Monetization` (un ID à `0` = offre cachée).
+
+| Offre | Type Roblox | Champ à remplir | Effet |
+|---|---|---|---|
+| 🚀 Dopamine x10 | Game Pass | `GamePasses > X10 > GamePassId` | Tous les gains x10, pour toujours |
+| ⚡ Dopamine x2 | Game Pass | `GamePasses > X2 > GamePassId` | Tous les gains x2, pour toujours |
+| 🤖 Auto-clic | Game Pass | `GamePasses > AutoClick > GamePassId` | 5 clics/s automatiques |
+| 👑 VIP | Game Pass | `GamePasses > VIP > GamePassId` | +25 % de gains + thèmes Premium (Bonbon, Synthwave) |
+| 💧💦🌊 Packs de Dopamine | Developer Product | `Products > PackS / PackM / PackL > ProductId` | 10 min / 1 h / 8 h de production |
+| ⏱️🔥 Boosts | Developer Product | `Products > Boost2 / Boost5 > ProductId` | x2 pendant 15 min / x5 pendant 10 min |
+| 🎉 Rush pour tous | Developer Product | `Products > ServerRush > ProductId` | Dopamine Rush pour tout le serveur |
+| 🎨 Thèmes | Game Pass (optionnel) | `Config.Themes > <thème> > GamePassId` | Débloque ce thème avec des Robux |
+
+### Où trouver les IDs
+1. Publie le jeu, puis va sur **create.roblox.com > Créations > ton expérience > Monétisation**.
+2. **Passes** : crée un pass (image + nom + prix), mets-le **en vente**, copie son **ID** (dans l'URL ou « Copier l'ID de l'élément »).
+3. **Developer Products** : crée un produit, fixe le prix, copie son **ID**.
+4. Colle chaque ID à la place du `0` correspondant, puis republie.
+
+Le serveur (`MonetizationService`) vérifie la possession des passes, traite les achats de produits avec `ProcessReceipt` (jamais deux fois le même achat) et sauvegarde avant de confirmer. Les prix affichés viennent de Roblox (`GetProductInfo`).
+
+> ⚠️ Dans Studio, les achats sont des **achats de test** (aucun Robux dépensé) : parfait pour vérifier.
 
 ## ⚠️ À lire avant de vendre quoi que ce soit : casino, coffres et règles Roblox
 
@@ -13,14 +34,8 @@ Dans la version actuelle :
 
 **Dès que tu vends de la Dopamine, des boosts de gains ou quoi que ce soit qui s'échange contre de la Dopamine** (packs, x2, auto-clic…), la Dopamine devient indirectement payante, et donc :
 
-1. **Désactive le casino** : dans `ReplicatedStorage > Shared > Config`, mets
-   ```lua
-   Config.Casino = {
-   	Enabled = false,
-   	...
-   ```
-   Le serveur refuse alors toutes les mises (`CasinoSpin` renvoie un refus) et la machine affiche « 🚧 FERMÉ POUR TRAVAUX 🚧 ». Les règles de Roblox interdisent les jeux d'argent qui utilisent des Robux ou des objets ayant une valeur réelle, même indirectement.
-2. **Affiche les probabilités des coffres** : un coffre mystère obtenu grâce à une ressource payante devient un « objet aléatoire payant » (paid random item / loot box). Roblox exige alors que **les chances de chaque récompense soient visibles avant l'ouverture**. Aujourd'hui, les chances sont uniquement dans `Config.LootBox.Tiers` (Commun 60 %, Rare 25 %, Épique 12 %, Légendaire 3 %) et **ne sont pas affichées** en jeu : ajoute-les dans l'interface du coffre (`Client > Stimuli > LootBox`) avant toute vente liée à la Dopamine ou aux coffres. Ne vends jamais de coffres directement contre des Robux sans cet affichage (et vérifie les restrictions par pays dans la politique Roblox).
+1. **Le casino se désactive automatiquement** dès qu'un ID Robux est rempli (`Config.Monetization.DisableCasinoWhenSelling = true`) : le serveur refuse les mises et la machine affiche « 🚧 Fermé ». Les règles de Roblox interdisent les jeux d'argent qui utilisent des Robux ou des objets ayant une valeur réelle, même indirectement.
+2. **Affiche les probabilités des coffres** : un coffre mystère obtenu grâce à une ressource payante devient un « objet aléatoire payant » (paid random item / loot box). Roblox exige alors que **les chances de chaque récompense soient visibles avant l'ouverture**. Les chances (Commun 60 %, Rare 25 %, Épique 12 %, Légendaire 3 %) sont **affichées en jeu** via le bouton « ? » du coffre. Les coffres ne s'achètent pas avec des Robux (ils se rechargent avec le temps de jeu). Ne vends jamais de coffres directement contre des Robux sans cet affichage (et vérifie les restrictions par pays dans la politique Roblox).
 3. **Remplis honnêtement le questionnaire de maturité** (Creator Dashboard > ton expérience > **Maturity & Compliance / Questionnaire**) : déclare la machine à sous (même en monnaie fictive), les coffres aléatoires et tout achat. Une déclaration fausse peut entraîner la modération de l'expérience.
 
 Consulte toujours la version à jour des **Roblox Community Standards**, des **Terms of Use** et des règles sur les **paid random items** : elles changent régulièrement.

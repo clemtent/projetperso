@@ -5,6 +5,7 @@
 	Point d'entrée du client : construit toute l'interface en code, lance
 	le gestionnaire de stimuli et branche les RemoteEvents. Aucune logique
 	de gain ici : le client affiche et envoie des DEMANDES, le serveur décide.
+	Un écran de chargement (LoadingScreen) couvre tout jusqu'au premier état.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -28,6 +29,7 @@ local Background = require(Components:WaitForChild("Background"))
 local Notifications = require(Components:WaitForChild("Notifications"))
 local PanelManager = require(Components:WaitForChild("PanelManager"))
 local CenterColumn = require(Components:WaitForChild("CenterColumn"))
+local LoadingScreen = require(Components:WaitForChild("LoadingScreen"))
 
 -- Le sac à dos (outils) ne sert à rien ici. La liste des joueurs (leaderstats)
 -- et la fenêtre de chat recouvriraient les emplacements R1 / L1 et captureraient
@@ -57,8 +59,9 @@ end)
 SoundManager.Init()
 ClientState.Init()
 
--- 2. Écran et calques
+-- 2. Écran et calques (+ écran de chargement par-dessus, jusqu'au premier état)
 Interface.Build()
+LoadingScreen.Show()
 local layers = Interface.Layers
 Effects.Init(layers.Effects)
 Background.Build(layers.Background)
@@ -73,6 +76,22 @@ PanelManager.Register("Quests", require(Panels:WaitForChild("Quests")))
 PanelManager.Register("Leaderboard", require(Panels:WaitForChild("Leaderboard")))
 PanelManager.Register("Daily", require(Panels:WaitForChild("Daily")))
 PanelManager.Register("Settings", require(Panels:WaitForChild("Settings")))
+PanelManager.Register("RobuxShop", require(Panels:WaitForChild("RobuxShop")))
+
+-- Panneau des thèmes : chargé à part (sans bloquer le reste de l'interface)
+task.spawn(function()
+	local moduleScript = Panels:WaitForChild("Themes", 15)
+	if not moduleScript or not moduleScript:IsA("ModuleScript") then
+		warn("[ClientMain] Panneau Themes introuvable")
+		return
+	end
+	local ok, module = pcall(require, moduleScript)
+	if ok and type(module) == "table" then
+		PanelManager.Register("Themes", module)
+	else
+		warn("[ClientMain] Erreur au chargement du panneau Themes : " .. tostring(module))
+	end
+end)
 
 -- 4. Colonne centrale (bouton, compteur, menus, améliorations).
 -- L'infobulle des améliorations va dans le calque Panels (au-dessus des stimuli).
@@ -100,7 +119,8 @@ local firstState
 firstState = ClientState.Changed:Connect(function(data)
 	firstState:Disconnect()
 	if ClientState.HasFeature("Daily") and data.Daily and data.Daily.Available then
-		task.delay(1.5, function()
+		-- (après la disparition de l'écran de chargement)
+		task.delay(2.6, function()
 			if not PanelManager.IsOpen() then
 				PanelManager.Open("Daily")
 			end

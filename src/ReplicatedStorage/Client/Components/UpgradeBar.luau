@@ -12,7 +12,9 @@
 	    (ou "Acheter") = achat ;
 	  - "Aller à l'océan" demande toujours une confirmation ;
 	  - style "Icônes HD" (Feature HDIcons) : cartes brillantes colorées ;
-	  - mode sombre : cartes sombres translucides, texte blanc.
+	  - mode sombre : cartes sombres translucides, texte blanc ;
+	  - finitions : ombre douce sous les cartes et l'infobulle, petit "pop"
+	    quand une carte devient abordable.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -53,6 +55,7 @@ type Card = {
 	PopScale: UIScale,
 	HD: Frame,
 	Level: number,
+	Affordable: boolean,
 	Removing: boolean,
 }
 
@@ -199,8 +202,9 @@ local function buildTooltip(layer: Frame)
 		Parent = layer,
 	})
 	UIUtil.Corner(tooltip, 14)
-	UIUtil.Stroke(tooltip, Theme.Colors.CardBorder, 2)
+	UIUtil.Stroke(tooltip, Theme.Colors.CardBorder, 1.5, 0.05)
 	UIUtil.Create("UIScale", { Parent = tooltip })
+	UIUtil.Shadow(tooltip, 5, 0.8, 3)
 	UIUtil.Create("UIPadding", {
 		PaddingTop = UDim.new(0, 10),
 		PaddingBottom = UDim.new(0, 12),
@@ -235,6 +239,16 @@ local function buildTooltip(layer: Frame)
 	tipName = textLine(1, Theme.Fonts.Title, 21, Theme.Colors.Text)
 	tipDesc = textLine(2, Theme.Fonts.Body, 16, Theme.Colors.TextDim)
 	tipLevel = textLine(3, Theme.Fonts.Body, 15, Theme.Colors.TextDim)
+	-- Fine ligne de séparation avant le prix
+	UIUtil.Create("Frame", {
+		Name = "Divider",
+		Size = UDim2.new(1, 0, 0, 1),
+		BackgroundColor3 = Theme.Colors.Divider,
+		BorderSizePixel = 0,
+		LayoutOrder = 3,
+		ZIndex = 6,
+		Parent = tooltip,
+	})
 	tipCost = textLine(4, Theme.Fonts.Title, 17, Theme.Colors.Text)
 
 	tipButton = UIUtil.PillButton({
@@ -370,6 +384,7 @@ local function createCard(upgrade): Card
 	local gradient = UIUtil.Gradient(button, ColorSequence.new(Color3.new(1, 1, 1)), 90)
 	gradient.Enabled = false
 	local popScale = UIUtil.Create("UIScale", { Name = "PopScale", Parent = button })
+	UIUtil.Shadow(button, 3, 0.84, 2)
 
 	-- Décor "Icônes HD" : rayons qui tournent, anneau blanc, reflet brillant
 	local hd = UIUtil.Create("Frame", {
@@ -461,6 +476,7 @@ local function createCard(upgrade): Card
 		PopScale = popScale,
 		HD = hd,
 		Level = ClientState.GetLevel(upgrade.Id),
+		Affordable = canAfford(upgrade),
 		Removing = false,
 	}
 
@@ -723,6 +739,12 @@ function UpgradeBar.Build(parent: GuiObject, tooltipLayer: Frame): Frame
 				local affordable = canAfford(card.Upgrade)
 				card.Icon.TextTransparency = affordable and 0 or 0.5
 				card.Stroke.Transparency = affordable and 0 or 0.45
+				-- Devient abordable : petit "pop" pour attirer l'œil
+				if affordable and not card.Affordable and tipUpgradeId ~= card.Upgrade.Id then
+					card.PopScale.Scale = 1.1
+					UIUtil.Tween(card.PopScale, 0.35, { Scale = 1 }, Enum.EasingStyle.Back)
+				end
+				card.Affordable = affordable
 			end
 		end
 		if tipUpgradeId then

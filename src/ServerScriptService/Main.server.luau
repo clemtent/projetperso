@@ -22,9 +22,12 @@ local ServicesFolder = script.Parent:WaitForChild("Services")
 -- Ordre important : les données d'abord, puis le jeu, puis le reste
 -- (PlayerReady est appelé dans cet ordre : QuestService a besoin des stats,
 -- DVDService crée les logos avant la synchro complète)
+-- (MonetizationService vérifie les Game Passes, ThemeService en a besoin)
 local ORDER = {
 	"DataService",
 	"GameService",
+	"MonetizationService",
+	"ThemeService",
 	"EventService",
 	"DVDService",
 	"InteractService",

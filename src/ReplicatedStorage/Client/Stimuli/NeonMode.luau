@@ -11,6 +11,11 @@
 	Au démarrage, le néon "grésille" puis s'allume (comme un vrai tube),
 	et l'interface passe en mode sombre (ctx.SetDarkMode). Pendant un
 	Dopamine Rush, tout s'accélère et devient plus vif.
+
+	v3 : si le joueur a équipé un thème (autre que "Classique"), le fond
+	néon devient un peu translucide pour laisser deviner le thème acheté.
+	À l'arrêt, le mode sombre suit de nouveau le thème (un thème sombre
+	reste sombre).
 ]]
 
 local NeonMode = {}
@@ -25,6 +30,15 @@ local HORIZON = 0.64 -- hauteur de l'horizon (fraction de l'écran)
 local BASE_TOP = Color3.fromRGB(18, 6, 40)
 local BASE_MID = Color3.fromRGB(44, 10, 78)
 local BASE_BOTTOM = Color3.fromRGB(6, 18, 48)
+local THEMED_TRANSPARENCY = 0.22 -- transparence du fond néon au-dessus d'un thème acheté
+
+-- Thème équipé (table de Config.Themes) ou nil
+local function equippedTheme(ctx): any
+	local data = ctx.State.Data
+	local themes = data and data.Themes
+	local id = themes and themes.Equipped
+	return type(id) == "string" and ctx.Config.ThemesById[id] or nil
+end
 
 function NeonMode.Start(ctx)
 	local UIUtil = ctx.UIUtil
@@ -261,9 +275,10 @@ function NeonMode.Start(ctx)
 	-- Allumage : le tube néon grésille puis s'allume
 	------------------------------------------------------------------
 	local brightness = 0 -- 0 = éteint, 1 = allumé (multiplie les transparences)
+	local baseTransparency = 0 -- 0 = néon opaque ; > 0 au-dessus d'un thème acheté
 	local function applyBrightness(value: number)
 		brightness = value
-		frame.BackgroundTransparency = 1 - value
+		frame.BackgroundTransparency = 1 - value * (1 - baseTransparency)
 		for _, fade in ipairs(fades) do
 			local instance = fade[1]
 			if instance.Parent then
@@ -272,6 +287,18 @@ function NeonMode.Start(ctx)
 			end
 		end
 	end
+
+	-- Thème acheté : on le laisse deviner sous le néon
+	local function refreshThemeBlend()
+		local theme = equippedTheme(ctx)
+		local target = (theme and theme.Id ~= "Classic") and THEMED_TRANSPARENCY or 0
+		if target ~= baseTransparency then
+			baseTransparency = target
+			applyBrightness(brightness)
+		end
+	end
+	ctx.Connect(ctx.State.Changed, refreshThemeBlend)
+	refreshThemeBlend()
 
 	task.spawn(function()
 		local steps = { 0.3, 0.05, 0.7, 0.2, 0.9, 0.5, 1 }
@@ -338,7 +365,15 @@ function NeonMode.Start(ctx)
 end
 
 function NeonMode.Stop(ctx)
+	-- Le néon ne demande plus le mode sombre...
 	ctx.SetDarkMode(false)
+	-- ... mais un thème sombre le garde : on recalcule depuis le thème
+	-- (après le gestionnaire de stimuli, qui recalcule aussi le mode sombre)
+	local State = ctx.State
+	task.defer(function()
+		local theme = equippedTheme(ctx)
+		State.SetDarkMode((theme ~= nil and theme.Dark == true) or State.HasFeature("NeonMode"))
+	end)
 end
 
 return NeonMode

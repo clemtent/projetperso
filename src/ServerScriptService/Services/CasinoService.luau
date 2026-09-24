@@ -3,7 +3,9 @@
 	Emplacement : ServerScriptService > Services > CasinoService
 
 	Machine à sous (débloquée par l'amélioration "Machine à sous").
-	UNIQUEMENT avec la Dopamine du jeu (jamais de Robux).
+	UNIQUEMENT avec la Dopamine du jeu (jamais de Robux). Fermée si
+	Config.Casino.Enabled = false, ou automatiquement dès qu'une offre Robux
+	est configurée (Config.Monetization.DisableCasinoWhenSelling).
 	Le SERVEUR tire les 3 symboles (selon leur poids dans Config.Casino) et
 	calcule le gain avec Formulas.GetCasinoMultiplier : le client ne fait
 	qu'afficher l'animation puis le résultat reçu.
@@ -68,7 +70,7 @@ local function onSpin(player: Player, fraction: any)
 	if not data or not services.GameService:IsReady(player) then
 		return false, "Chargement en cours..."
 	end
-	if not settings.Enabled then
+	if not services.MonetizationService:IsCasinoEnabled() then
 		return false, "Le casino est fermé"
 	end
 	if not Formulas.HasFeature(data, settings.Feature) then

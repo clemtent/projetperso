@@ -474,7 +474,98 @@ Config.Sounds = {
 	Chest = { Id = "rbxasset://sounds/swoosh.wav", Volume = 0.7 },
 	Cash = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.5 },
 	Megaphone = { Id = "rbxasset://sounds/swoosh.wav", Volume = 0.4 },
-	Music = { Id = "", Volume = 0.3 }, -- musique lofi en boucle (mets ton ID)
+}
+
+----------------------------------------------------------------------
+-- Musique lofi (jouée quand "Lofi Beats" est débloqué, réglable dans ⚙️)
+--   Mets des IDs de musiques PUBLIQUES utilisables dans tous les jeux :
+--   Studio > Boîte à outils (Toolbox) > Audio > cherche "lofi" / "chill",
+--   filtre par créateur "Roblox" (musiques sous licence, gratuites), clic
+--   droit > "Copier l'ID de l'élément", puis colle "rbxassetid://ID" ici.
+--   Les pistes avec Id = "" sont ignorées.
+----------------------------------------------------------------------
+Config.Music = {
+	DefaultVolume = 0.35,
+	Shuffle = true,
+	Playlist = {
+		{ Name = "Lofi chill #1", Id = "" },
+		{ Name = "Lofi chill #2", Id = "" },
+		{ Name = "Lofi chill #3", Id = "" },
+		{ Name = "Lofi chill #4", Id = "" },
+	},
+}
+
+----------------------------------------------------------------------
+-- Thèmes (fonds d'écran), achetables avec la Dopamine et/ou des Robux.
+--   Cost       : prix en Dopamine (0 = gratuit ; nil = uniquement Robux)
+--   GamePassId : Game Pass Roblox qui débloque ce thème (0 = pas de Robux)
+--   Premium    : true = aussi débloqué par le Game Pass "VIP"
+--   Top/Bottom : dégradé du fond ; Accent : couleur des décorations
+--   Decor      : animation du fond ("None", "Kawaii", "Stars", "Sunset",
+--                "Leaves", "Bubbles", "Candy", "Grid")
+--   Dark       : true = textes clairs (fond sombre)
+-- Les thèmes sont conservés pour toujours (même après l'océan).
+----------------------------------------------------------------------
+Config.Themes = {
+	{ Id = "Classic", Name = "Classique", Icon = "⬜", Cost = 0, GamePassId = 0, Decor = "None", Dark = false,
+		Top = Color3.fromRGB(255, 255, 255), Bottom = Color3.fromRGB(226, 226, 226), Accent = Color3.fromRGB(30, 30, 30) },
+	{ Id = "Kawaii", Name = "Kawaii", Icon = "🌸", Cost = 50000, GamePassId = 0, Decor = "Kawaii", Dark = false,
+		Top = Color3.fromRGB(255, 228, 240), Bottom = Color3.fromRGB(225, 210, 255), Accent = Color3.fromRGB(255, 120, 180) },
+	{ Id = "Matcha", Name = "Matcha", Icon = "🍵", Cost = 250000, GamePassId = 0, Decor = "Leaves", Dark = false,
+		Top = Color3.fromRGB(236, 248, 228), Bottom = Color3.fromRGB(190, 222, 180), Accent = Color3.fromRGB(90, 150, 80) },
+	{ Id = "Sunset", Name = "Coucher de soleil", Icon = "🌅", Cost = 1e6, GamePassId = 0, Decor = "Sunset", Dark = false,
+		Top = Color3.fromRGB(255, 200, 140), Bottom = Color3.fromRGB(255, 120, 150), Accent = Color3.fromRGB(255, 240, 180) },
+	{ Id = "Ocean", Name = "Océan", Icon = "🐠", Cost = 5e6, GamePassId = 0, Decor = "Bubbles", Dark = false,
+		Top = Color3.fromRGB(200, 240, 255), Bottom = Color3.fromRGB(90, 170, 230), Accent = Color3.fromRGB(255, 255, 255) },
+	{ Id = "LofiNight", Name = "Nuit lofi", Icon = "🌙", Cost = 2.5e7, GamePassId = 0, Decor = "Stars", Dark = true,
+		Top = Color3.fromRGB(30, 28, 60), Bottom = Color3.fromRGB(70, 50, 100), Accent = Color3.fromRGB(255, 220, 150) },
+	{ Id = "Candy", Name = "Bonbon", Icon = "🍭", Cost = nil, GamePassId = 0, Premium = true, Decor = "Candy", Dark = false,
+		Top = Color3.fromRGB(255, 240, 250), Bottom = Color3.fromRGB(180, 235, 255), Accent = Color3.fromRGB(255, 90, 170) },
+	{ Id = "Synthwave", Name = "Synthwave", Icon = "🌆", Cost = nil, GamePassId = 0, Premium = true, Decor = "Grid", Dark = true,
+		Top = Color3.fromRGB(40, 10, 70), Bottom = Color3.fromRGB(255, 70, 150), Accent = Color3.fromRGB(0, 230, 255) },
+}
+
+----------------------------------------------------------------------
+-- 💎 Boutique Robux
+--   Crée les Game Passes / Developer Products sur le Creator Dashboard
+--   (create.roblox.com > ton expérience > Monétisation), puis colle leurs
+--   IDs ici. Un ID à 0 = l'offre est cachée dans la boutique.
+--   PriceHint : prix affiché si Roblox ne répond pas (le vrai prix vient de
+--   MarketplaceService:GetProductInfo).
+----------------------------------------------------------------------
+Config.Monetization = {
+	-- Game Passes (achat unique, pour toujours)
+	GamePasses = {
+		{ Id = "X10", Name = "Dopamine x10", Icon = "🚀", Description = "Tous tes gains x10, pour toujours",
+			GamePassId = 0, PriceHint = 499, Multiplier = 10 },
+		{ Id = "X2", Name = "Dopamine x2", Icon = "⚡", Description = "Tous tes gains x2, pour toujours",
+			GamePassId = 0, PriceHint = 149, Multiplier = 2 },
+		{ Id = "AutoClick", Name = "Auto-clic", Icon = "🤖", Description = "Ton bouton se clique tout seul (5 clics/s)",
+			GamePassId = 0, PriceHint = 249, AutoClicksPerSecond = 5 },
+		{ Id = "VIP", Name = "VIP", Icon = "👑", Description = "+25 % de gains, tous les thèmes Premium et un tag VIP",
+			GamePassId = 0, PriceHint = 399, Multiplier = 1.25, UnlockPremiumThemes = true },
+	},
+	-- Developer Products (achetables plusieurs fois)
+	--   Kind "Dopamine" : Seconds de production (au moins Minimum)
+	--   Kind "Boost"    : multiplicateur temporaire (Multiplier pendant Duration s)
+	--   Kind "ServerRush" : lance un Dopamine Rush pour TOUT le serveur
+	Products = {
+		{ Id = "PackS", Name = "Petite dose", Icon = "💧", Description = "10 minutes de production",
+			ProductId = 0, PriceHint = 25, Kind = "Dopamine", Seconds = 600, Minimum = 5000 },
+		{ Id = "PackM", Name = "Grosse dose", Icon = "💦", Description = "1 heure de production",
+			ProductId = 0, PriceHint = 99, Kind = "Dopamine", Seconds = 3600, Minimum = 50000 },
+		{ Id = "PackL", Name = "Overdose", Icon = "🌊", Description = "8 heures de production",
+			ProductId = 0, PriceHint = 399, Kind = "Dopamine", Seconds = 28800, Minimum = 500000 },
+		{ Id = "Boost2", Name = "Boost x2", Icon = "⏱️", Description = "Gains x2 pendant 15 minutes",
+			ProductId = 0, PriceHint = 49, Kind = "Boost", Multiplier = 2, Duration = 900 },
+		{ Id = "Boost5", Name = "Boost x5", Icon = "🔥", Description = "Gains x5 pendant 10 minutes",
+			ProductId = 0, PriceHint = 129, Kind = "Boost", Multiplier = 5, Duration = 600 },
+		{ Id = "ServerRush", Name = "Rush pour tous", Icon = "🎉", Description = "Dopamine Rush x2 pour tout le serveur",
+			ProductId = 0, PriceHint = 79, Kind = "ServerRush" },
+	},
+	-- Règles Roblox : dès que de la Dopamine s'achète avec des Robux, la
+	-- machine à sous (jeu de hasard) est désactivée automatiquement.
+	DisableCasinoWhenSelling = true,
 }
 
 ----------------------------------------------------------------------
@@ -500,6 +591,44 @@ Config.CosmeticsById = {}
 for index, cosmetic in ipairs(Config.Cosmetics) do
 	cosmetic.Order = index
 	Config.CosmeticsById[cosmetic.Id] = cosmetic
+end
+
+Config.ThemesById = {}
+for index, theme in ipairs(Config.Themes) do
+	theme.Order = index
+	Config.ThemesById[theme.Id] = theme
+end
+
+Config.GamePassesById = {}
+for _, pass in ipairs(Config.Monetization.GamePasses) do
+	Config.GamePassesById[pass.Id] = pass
+end
+
+Config.ProductsById = {}
+Config.ProductsByProductId = {} -- [ProductId Roblox] = offre
+for _, product in ipairs(Config.Monetization.Products) do
+	Config.ProductsById[product.Id] = product
+	if product.ProductId ~= 0 then
+		Config.ProductsByProductId[product.ProductId] = product
+	end
+end
+
+-- true si au moins une offre Robux est configurée (ID ~= 0)
+Config.IsSellingForRobux = false
+for _, pass in ipairs(Config.Monetization.GamePasses) do
+	if pass.GamePassId ~= 0 then
+		Config.IsSellingForRobux = true
+	end
+end
+for _, product in ipairs(Config.Monetization.Products) do
+	if product.ProductId ~= 0 then
+		Config.IsSellingForRobux = true
+	end
+end
+for _, theme in ipairs(Config.Themes) do
+	if theme.GamePassId ~= 0 then
+		Config.IsSellingForRobux = true
+	end
 end
 
 Config.CasinoSymbolsById = {}
