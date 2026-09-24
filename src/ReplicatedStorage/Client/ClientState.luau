@@ -17,6 +17,8 @@
 	v4 : classement en deux parties (ClientState.Leaderboard = top mondial,
 	ClientState.ServerLeaderboard = joueurs du serveur en direct), son de
 	clic choisi (Data.Settings.ClickSound), Dopamine hors-ligne (Data.Offline).
+	Classement complet : ClientState.RebirthLeaderboard = top mondial des
+	renaissances (payload.GlobalRebirths). Les anciens formats restent acceptés.
 	Le mode sombre est la combinaison (OU) de plusieurs "sources" : le thème
 	équipé (SetDarkMode), les stimuli comme le mode néon (SetDarkSource).
 ]]
@@ -36,9 +38,11 @@ ClientState.Changed = Signal.new() -- (data)
 ClientState.Rush = { Active = false, EndsAt = 0, Name = "", Multiplier = 1 }
 ClientState.RushChanged = Signal.new() -- (rush)
 ClientState.Leaderboard = {} -- top mondial : { { Rank, UserId, Name, Value } }
-ClientState.LeaderboardChanged = Signal.new() -- (topMondial, classementServeur)
+ClientState.LeaderboardChanged = Signal.new() -- (topMondial, classementServeur, topRenaissances)
 -- Ajout v4 : classement du serveur en direct { { UserId, Name, Dopamine, Lifetime, Rebirths } } (trié)
 ClientState.ServerLeaderboard = {}
+-- Top mondial des renaissances : { { Rank, UserId, Name, Value (renaissances), Dopamine? } }
+ClientState.RebirthLeaderboard = {}
 
 -- Ajouts v2
 ClientState.FeaturesChanged = Signal.new() -- (features) : l'ensemble des Features a changé
@@ -162,10 +166,14 @@ function ClientState.Init()
 		if type(payload) ~= "table" then
 			return
 		end
-		if payload.Global ~= nil or payload.Server ~= nil then
-			-- Format v4 : { Global = {...}, Server = {...} } (une partie absente = inchangée)
+		if payload.Global ~= nil or payload.Server ~= nil or payload.GlobalRebirths ~= nil then
+			-- Format v4 : { Global = {...}, GlobalRebirths = {...}, Server = {...} }
+			-- (une partie absente = inchangée)
 			if type(payload.Global) == "table" then
 				ClientState.Leaderboard = payload.Global
+			end
+			if type(payload.GlobalRebirths) == "table" then
+				ClientState.RebirthLeaderboard = payload.GlobalRebirths
 			end
 			if type(payload.Server) == "table" then
 				ClientState.ServerLeaderboard = payload.Server
@@ -174,7 +182,11 @@ function ClientState.Init()
 			-- Ancien format : un simple tableau (top mondial)
 			ClientState.Leaderboard = payload
 		end
-		ClientState.LeaderboardChanged:Fire(ClientState.Leaderboard, ClientState.ServerLeaderboard)
+		ClientState.LeaderboardChanged:Fire(
+			ClientState.Leaderboard,
+			ClientState.ServerLeaderboard,
+			ClientState.RebirthLeaderboard
+		)
 	end)
 
 	Net.Event("StockUpdate").OnClientEvent:Connect(function(stock)
