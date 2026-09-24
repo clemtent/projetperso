@@ -5,7 +5,7 @@
 	Récompense quotidienne : 1 fois par jour (jour UTC). Revenir le jour
 	suivant augmente la série (streak) et donc la récompense.
 	L'heure utilisée est celle du SERVEUR (impossible à tricher en changeant
-	l'heure de son PC).
+	l'heure de son PC). Nécessite la Feature "Daily" (amélioration "Calendrier").
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -62,8 +62,11 @@ local function onClaim(player: Player)
 		return false, "Doucement !"
 	end
 	local data = services.DataService:GetData(player)
-	if not data then
+	if not data or not services.GameService:IsReady(player) then
 		return false, "Chargement en cours..."
+	end
+	if not Formulas.HasFeature(data, "Daily") then
+		return false, "Le calendrier n'est pas encore débloqué"
 	end
 	if data.Daily.LastDay >= today() then
 		return false, "Déjà récupéré aujourd'hui, reviens demain !"

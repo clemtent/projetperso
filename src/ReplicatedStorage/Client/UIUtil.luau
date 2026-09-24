@@ -3,7 +3,8 @@
 	Emplacement : ReplicatedStorage > Client > UIUtil
 
 	Fonctions utilitaires pour créer l'interface en code : création
-	d'instances, coins arrondis, contours néon, dégradés, boutons animés...
+	d'instances, coins arrondis, contours, dégradés, boutons animés,
+	pastilles ("pills"), badges rouges, ombres...
 ]]
 
 local TweenService = game:GetService("TweenService")
@@ -47,7 +48,7 @@ end
 
 function UIUtil.Stroke(parent: Instance, color: Color3?, thickness: number?, transparency: number?): UIStroke
 	return UIUtil.Create("UIStroke", {
-		Color = color or Theme.Colors.Cyan,
+		Color = color or Theme.Colors.Border,
 		Thickness = thickness or 2,
 		Transparency = transparency or 0,
 		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
@@ -139,7 +140,8 @@ function UIUtil.AnimateButton(button: GuiButton, hoverScale: number?, pressScale
 	end)
 end
 
--- Bouton néon standard (fond coloré, contour lumineux, animé)
+-- Bouton standard (fond coloré, léger contour, animé).
+-- Garde son nom v1 "NeonButton" : le style suit simplement le thème.
 function UIUtil.NeonButton(props: { [string]: any }): TextButton
 	local color = props.Color or Theme.Colors.Pink
 	local button = UIUtil.Create("TextButton", {
@@ -149,16 +151,16 @@ function UIUtil.NeonButton(props: { [string]: any }): TextButton
 		AnchorPoint = props.AnchorPoint or Vector2.zero,
 		BackgroundColor3 = color,
 		AutoButtonColor = false,
-		Font = props.Font or Theme.Fonts.Body,
+		Font = props.Font or Theme.Fonts.Title,
 		Text = props.Text or "",
-		TextColor3 = props.TextColor3 or Theme.Colors.Text,
+		TextColor3 = props.TextColor3 or Theme.ContrastText(color),
 		TextScaled = true,
 		LayoutOrder = props.LayoutOrder or 0,
 		ZIndex = props.ZIndex or 1,
 		Parent = props.Parent,
 	})
 	UIUtil.Corner(button, props.CornerRadius or 12)
-	UIUtil.Stroke(button, props.StrokeColor or Theme.Colors.Text, 2, 0.4)
+	UIUtil.Stroke(button, props.StrokeColor or Theme.Colors.Border, props.StrokeThickness or 2, props.StrokeTransparency or 0.1)
 	UIUtil.Create("UITextSizeConstraint", { MaxTextSize = props.MaxTextSize or 26, Parent = button })
 	UIUtil.Create("UIPadding", {
 		PaddingLeft = UDim.new(0, 8),
@@ -167,8 +169,8 @@ function UIUtil.NeonButton(props: { [string]: any }): TextButton
 		PaddingBottom = UDim.new(0, 4),
 		Parent = button,
 	})
-	-- Léger dégradé pour un effet "brillant"
-	UIUtil.Gradient(button, ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(200, 200, 200)), 90)
+	-- Léger dégradé pour un effet "bouton"
+	UIUtil.Gradient(button, ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(215, 215, 215)), 90)
 	button:SetAttribute("BaseColor", color)
 	button:SetAttribute("Enabled", true)
 	UIUtil.AnimateButton(button)
@@ -193,9 +195,30 @@ function UIUtil.Shake(guiObject: GuiObject)
 		return -- déjà en train de trembler : on ne décale pas la position d'origine
 	end
 	guiObject:SetAttribute("Shaking", true)
+	-- Placé par un UIListLayout / UIGridLayout : Position est ignorée,
+	-- on fait trembler la rotation à la place
+	local parent = guiObject.Parent
+	if parent and parent:FindFirstChildWhichIsA("UIGridStyleLayout") then
+		local originRotation = guiObject.Rotation
+		task.spawn(function()
+			for i = 1, 6 do
+				if not guiObject.Parent then
+					break
+				end
+				guiObject.Rotation = originRotation + ((i % 2 == 0) and 4 or -4)
+				task.wait(0.03)
+			end
+			guiObject.Rotation = originRotation
+			guiObject:SetAttribute("Shaking", nil)
+		end)
+		return
+	end
 	local origin = guiObject.Position
 	task.spawn(function()
 		for i = 1, 6 do
+			if not guiObject.Parent then
+				break
+			end
 			local offset = (i % 2 == 0) and 6 or -6
 			guiObject.Position = origin + UDim2.fromOffset(offset, 0)
 			task.wait(0.03)
@@ -203,6 +226,150 @@ function UIUtil.Shake(guiObject: GuiObject)
 		guiObject.Position = origin
 		guiObject:SetAttribute("Shaking", nil)
 	end)
+end
+
+----------------------------------------------------------------------
+-- Ajouts v2
+----------------------------------------------------------------------
+
+-- Ombre douce sous un cadre (un cadre noir transparent décalé, derrière)
+function UIUtil.Shadow(frame: GuiObject, offset: number?, transparency: number?): Frame?
+	local parent = frame.Parent
+	if not parent then
+		return nil
+	end
+	local shift = offset or 4
+	local shadow = UIUtil.Create("Frame", {
+		Name = frame.Name .. "Shadow",
+		Size = frame.Size,
+		AnchorPoint = frame.AnchorPoint,
+		Position = frame.Position + UDim2.fromOffset(0, shift),
+		BackgroundColor3 = Theme.Colors.Shadow,
+		BackgroundTransparency = transparency or 0.85,
+		BorderSizePixel = 0,
+		ZIndex = math.max(0, frame.ZIndex - 1),
+		LayoutOrder = frame.LayoutOrder,
+		Parent = parent,
+	})
+	local corner = frame:FindFirstChildOfClass("UICorner")
+	if corner then
+		UIUtil.Corner(shadow, corner.CornerRadius)
+	end
+	return shadow
+end
+
+-- Badge rouge rond (compteur) accroché en haut à droite d'un élément
+function UIUtil.Badge(parent: GuiObject, size: number?): TextLabel
+	local diameter = size or 24
+	local badge = UIUtil.Create("TextLabel", {
+		Name = "Badge",
+		Size = UDim2.fromOffset(diameter, diameter),
+		AutomaticSize = Enum.AutomaticSize.X,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(1, -4, 0, 4),
+		BackgroundColor3 = Theme.Colors.Red,
+		Font = Theme.Fonts.Number,
+		Text = "",
+		TextColor3 = Theme.Colors.TextLight,
+		TextSize = math.floor(diameter * 0.62),
+		ZIndex = parent.ZIndex + 5,
+		Visible = false,
+		Parent = parent,
+	})
+	UIUtil.Corner(badge, UDim.new(1, 0))
+	UIUtil.Stroke(badge, Theme.Colors.TextLight, 2)
+	UIUtil.Create("UIPadding", {
+		PaddingLeft = UDim.new(0, math.floor(diameter * 0.25)),
+		PaddingRight = UDim.new(0, math.floor(diameter * 0.25)),
+		Parent = badge,
+	})
+	return badge
+end
+
+-- Met à jour un badge : caché si 0, sinon affiche le nombre (ou un texte)
+function UIUtil.SetBadge(badge: TextLabel, value: number | string)
+	if type(value) == "number" then
+		badge.Visible = value > 0
+		badge.Text = value > 99 and "99+" or tostring(math.floor(value))
+	else
+		badge.Visible = value ~= ""
+		badge.Text = value
+	end
+end
+
+-- Pastille arrondie ("pill") à largeur automatique, comme
+-- "🛒 Boutique" ou "⚙️". props : Text, Color, TextColor3, Height, TextSize,
+-- LayoutOrder, Name, Parent, Round (true = cercle).
+function UIUtil.PillButton(props: { [string]: any }): TextButton
+	local color = props.Color or Theme.Colors.Dark
+	local height = props.Height or 36
+	local round = props.Round == true
+	local button = UIUtil.Create("TextButton", {
+		Name = props.Name or "Pill",
+		Size = UDim2.fromOffset(round and height or 0, height),
+		AutomaticSize = round and Enum.AutomaticSize.None or Enum.AutomaticSize.X,
+		Position = props.Position or UDim2.new(),
+		AnchorPoint = props.AnchorPoint or Vector2.zero,
+		BackgroundColor3 = color,
+		AutoButtonColor = false,
+		Font = props.Font or Theme.Fonts.Title,
+		Text = props.Text or "",
+		TextColor3 = props.TextColor3 or Theme.ContrastText(color),
+		TextSize = props.TextSize or math.floor(height * 0.5),
+		LayoutOrder = props.LayoutOrder or 0,
+		ZIndex = props.ZIndex or 1,
+		Parent = props.Parent,
+	})
+	UIUtil.Corner(button, UDim.new(1, 0))
+	UIUtil.Stroke(button, props.StrokeColor or Theme.Colors.Border, props.StrokeThickness or 1.5, props.StrokeTransparency or 0.2)
+	if not round then
+		UIUtil.Create("UIPadding", {
+			PaddingLeft = UDim.new(0, math.floor(height * 0.45)),
+			PaddingRight = UDim.new(0, math.floor(height * 0.45)),
+			Parent = button,
+		})
+	end
+	UIUtil.Gradient(button, ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(222, 222, 222)), 90)
+	button:SetAttribute("BaseColor", color)
+	button:SetAttribute("Enabled", true)
+	UIUtil.AnimateButton(button, 1.05, 0.93)
+	return button
+end
+
+-- Bouton "basique" gris clair à contour fin (style du bouton "Clique-moi")
+function UIUtil.BasicButton(props: { [string]: any }): TextButton
+	local button = UIUtil.Create("TextButton", {
+		Name = props.Name or "BasicButton",
+		Size = props.Size or UDim2.fromOffset(160, 48),
+		Position = props.Position or UDim2.new(),
+		AnchorPoint = props.AnchorPoint or Vector2.zero,
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		AutoButtonColor = false,
+		Font = props.Font or Theme.Fonts.Body,
+		Text = props.Text or "",
+		TextColor3 = props.TextColor3 or Theme.Colors.Text,
+		TextSize = props.TextSize or 22,
+		LayoutOrder = props.LayoutOrder or 0,
+		ZIndex = props.ZIndex or 1,
+		Parent = props.Parent,
+	})
+	UIUtil.Corner(button, props.CornerRadius or 10)
+	UIUtil.Stroke(button, Theme.Colors.Border, props.StrokeThickness or 1.5, 0)
+	UIUtil.Gradient(button, ColorSequence.new(Theme.Colors.Button, Theme.Colors.ButtonBottom), 90)
+	button:SetAttribute("BaseColor", Color3.new(1, 1, 1))
+	button:SetAttribute("Enabled", true)
+	UIUtil.AnimateButton(button, 1.04, 0.94)
+	return button
+end
+
+-- Déconnecte toutes les connexions d'une liste (RBXScriptConnection ou Signal) puis la vide
+function UIUtil.DisconnectAll(connections: { any })
+	for _, connection in ipairs(connections) do
+		pcall(function()
+			connection:Disconnect()
+		end)
+	end
+	table.clear(connections)
 end
 
 return UIUtil

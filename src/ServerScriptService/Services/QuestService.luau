@@ -5,6 +5,10 @@
 	Quêtes simples (ex. "Fais 50 clics"). Le joueur a toujours
 	Config.Quests.ActiveCount quêtes actives. Une quête terminée donne sa
 	récompense automatiquement et est remplacée par une nouvelle.
+	  - Un modèle avec une Feature n'est proposé que si le joueur la possède.
+	  - Les quêtes n'avancent qu'une fois le menu "Quêtes" débloqué.
+	  - Types : Clicks, Earn, Buy, Bounces, Bubbles, Spawns, Combo, Casino, Chests.
+	  - Les quêtes sont gardées après une détox.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -18,25 +22,41 @@ local QuestService = {}
 local services
 local random = Random.new()
 
+local QUESTS_FEATURE = "Quests"
+
+-- Types de quêtes existants (d'après la config)
+local validTypes = {}
+for _, template in ipairs(Config.Quests.Pool) do
+	validTypes[template.Type] = true
+end
+
 function QuestService:Init(allServices)
 	services = allServices
 end
 
+local function isTemplateAvailable(data, template): boolean
+	return template.Feature == nil or Formulas.HasFeature(data, template.Feature)
+end
+
 -- Crée une nouvelle quête en évitant les types déjà actifs
-local function generateQuest(player: Player, activeQuests)
+local function generateQuest(player: Player, data, activeQuests)
 	local usedTypes = {}
 	for _, quest in ipairs(activeQuests) do
 		usedTypes[quest.Type] = true
 	end
 
+	local available = {}
 	local candidates = {}
 	for _, template in ipairs(Config.Quests.Pool) do
-		if not usedTypes[template.Type] then
-			table.insert(candidates, template)
+		if isTemplateAvailable(data, template) then
+			table.insert(available, template)
+			if not usedTypes[template.Type] then
+				table.insert(candidates, template)
+			end
 		end
 	end
 	if #candidates == 0 then
-		candidates = Config.Quests.Pool
+		candidates = (#available > 0) and available or Config.Quests.Pool
 	end
 
 	local template = candidates[random:NextInteger(1, #candidates)]
@@ -60,33 +80,53 @@ local function generateQuest(player: Player, activeQuests)
 	}
 end
 
+local function isValidQuest(quest): boolean
+	return type(quest) == "table"
+		and type(quest.Type) == "string"
+		and validTypes[quest.Type] == true
+		and type(quest.Goal) == "number"
+		and type(quest.Progress) == "number"
+		and type(quest.Text) == "string"
+		and type(quest.Reward) == "number"
+end
+
 -- Complète la liste des quêtes si nécessaire (nouveau joueur, config modifiée...)
 function QuestService:PlayerReady(player: Player, data)
-	-- Nettoie les quêtes dont le type n'existe plus dans la config
-	for index = #data.Quests, 1, -1 do
-		local quest = data.Quests[index]
-		local exists = false
-		for _, template in ipairs(Config.Quests.Pool) do
-			if template.Type == quest.Type then
-				exists = true
-				break
-			end
-		end
-		if not exists then
-			table.remove(data.Quests, index)
+	-- Nettoie les quêtes invalides ou dont le type n'existe plus dans la config
+	local cleaned = {}
+	for _, quest in ipairs(data.Quests) do
+		if isValidQuest(quest) and #cleaned < Config.Quests.ActiveCount then
+			table.insert(cleaned, quest)
 		end
 	end
+	data.Quests = cleaned
 
 	while #data.Quests < Config.Quests.ActiveCount do
-		table.insert(data.Quests, generateQuest(player, data.Quests))
+		table.insert(data.Quests, generateQuest(player, data, data.Quests))
 	end
+end
+
+-- Remplace toutes les quêtes par des nouvelles (à l'échelle de la production actuelle)
+function QuestService:Regenerate(player: Player)
+	local data = services.DataService:GetData(player)
+	if not data then
+		return
+	end
+	data.Quests = {}
+	while #data.Quests < Config.Quests.ActiveCount do
+		table.insert(data.Quests, generateQuest(player, data, data.Quests))
+	end
+	services.GameService:MarkDirty(player)
 end
 
 -- Fait avancer les quêtes d'un type donné
 function QuestService:Progress(player: Player, questType: string, amount: number)
 	local data = services.DataService:GetData(player)
-	if not data then
+	if not data or type(amount) ~= "number" or amount ~= amount or amount <= 0 then
 		return
+	end
+	if not Formulas.HasFeature(data, QUESTS_FEATURE) then
+		return -- menu des quêtes pas encore débloqué
 	end
 
 	local completed = {}
@@ -112,7 +152,7 @@ function QuestService:Progress(player: Player, questType: string, amount: number
 		data.Stats.QuestsCompleted += 1
 		local others = table.clone(data.Quests)
 		table.remove(others, index)
-		data.Quests[index] = generateQuest(player, others)
+		data.Quests[index] = generateQuest(player, data, others)
 	end
 
 	for _, quest in ipairs(rewards) do
