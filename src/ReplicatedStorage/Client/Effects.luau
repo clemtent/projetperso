@@ -51,11 +51,46 @@ function Effects.GetLayer(): Frame?
 	return layer
 end
 
+-- Dans un emplacement de stimulus (calque "Slots", ClipsDescendants = true), un
+-- texte qui monte de 100 px serait coupé : on le redessine dans le calque
+-- "Overlay" (non coupé, sous les menus) à la même position à l'écran.
+local function unclip(parent: GuiObject, position: UDim2): (GuiObject, UDim2)
+	local root = layer and layer.Parent
+	local slots = root and root:FindFirstChild("Slots")
+	local overlay = root and root:FindFirstChild("Overlay")
+	if not root or not slots or not overlay or not overlay:IsA("GuiObject") or not parent:IsDescendantOf(slots) then
+		return parent, position
+	end
+	local clipped = false
+	local node: Instance? = parent
+	while node and node ~= slots do
+		if node:IsA("GuiObject") and node.ClipsDescendants then
+			clipped = true
+			break
+		end
+		node = node.Parent
+	end
+	if not clipped then
+		return parent, position
+	end
+	local uiScale = root:FindFirstChildOfClass("UIScale")
+	local scale = uiScale and uiScale.Scale or 1
+	if scale <= 0 then
+		return parent, position
+	end
+	local absolute = parent.AbsolutePosition
+		+ parent.AbsoluteSize * Vector2.new(position.X.Scale, position.Y.Scale)
+		+ Vector2.new(position.X.Offset, position.Y.Offset) * scale
+	local canvas = (absolute - overlay.AbsolutePosition) / scale
+	return overlay, UDim2.fromOffset(canvas.X, canvas.Y)
+end
+
 -- Texte "+X" qui monte et disparaît
 function Effects.FloatingText(parent: GuiObject, position: UDim2, text: string, color: Color3?, size: number?)
 	if activeTexts >= MAX_TEXTS or not parent or not parent.Parent then
 		return
 	end
+	parent, position = unclip(parent, position)
 	activeTexts += 1
 	local height = size or 34
 	local textColor = color or Theme.Colors.Text

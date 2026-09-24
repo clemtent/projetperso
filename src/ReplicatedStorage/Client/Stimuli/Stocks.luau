@@ -375,16 +375,24 @@ function Stocks.Start(ctx)
 	local buyWidth = math.floor((CHART_W - sellWidth - 4 * #buyFractions) / math.max(1, #buyFractions))
 
 	local function makeButton(text: string, color: Color3, width: number, order: number): TextButton
+		-- Support transparent placé par le UIListLayout : le bouton, lui, reste
+		-- libre de bouger (sinon UI.Shake, qui change Position, ne fait rien)
+		local holder = UI.Create("Frame", {
+			Name = "TradeHolder",
+			Size = UDim2.fromOffset(width, 30),
+			BackgroundTransparency = 1,
+			LayoutOrder = order,
+			Parent = buttonRow,
+		})
 		local button = UI.NeonButton({
 			Name = "Trade",
 			Text = text,
 			Color = color,
-			Size = UDim2.fromOffset(width, 30),
+			Size = UDim2.fromScale(1, 1),
 			CornerRadius = 9,
 			StrokeThickness = 1.5,
 			MaxTextSize = 14,
-			LayoutOrder = order,
-			Parent = buttonRow,
+			Parent = holder,
 		})
 		local padding = button:FindFirstChildOfClass("UIPadding")
 		if padding then
@@ -510,16 +518,20 @@ function Stocks.Start(ctx)
 	end
 
 	-- Texte du portefeuille (valeur + plus/moins-value)
+	local FEE = math.clamp(tonumber(stockConfig.Fee) or 0, 0, 1)
 	local function refreshHoldings()
 		local shares, costBasis = getHoldings()
 		local price = targetPrice
 		if shares <= 1e-9 then
-			valueLabel.Text = '💼 <font color="#777777">Aucune action</font>'
+			valueLabel.Text = '💼 <font color="#777777">Aucune action · frais '
+				.. tostring(math.floor(FEE * 100 + 0.5))
+				.. " %</font>"
 			profitLabel.Text = "Achète bas, vends haut 😏"
 			profitLabel.TextColor3 = Theme.Colors.TextDim
 			profitLabel.Font = Theme.Fonts.Body
 		else
-			local value = shares * price
+			-- Valeur NETTE des frais de vente : c'est ce que "Vendre" rapporte vraiment
+			local value = shares * price * (1 - FEE)
 			local sharesText = shares < 100 and string.format("%.2f", shares) or Format.Format(shares)
 			valueLabel.Text = "💼 <b>" .. formatAmount(value) .. '</b> <font color="#777777">· ' .. sharesText .. " act.</font>"
 			local profit = value - costBasis

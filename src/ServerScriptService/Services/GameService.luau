@@ -496,11 +496,15 @@ local function onBuyUpgrade(player: Player, upgradeId: any)
 end
 
 local function onSetSetting(player: Player, name: any, value: any)
-	if not RateLimiter.Check(player, "Setting", 0.2) then
+	if type(name) ~= "string" or not VALID_SETTINGS[name] or type(value) ~= "boolean" then
+		return false
+	end
+	-- Une limite par réglage : couper le son puis les effets rapidement reste possible
+	if not RateLimiter.Check(player, "Setting" .. name, 0.2) then
 		return false
 	end
 	local data = services.DataService:GetData(player)
-	if not data or type(name) ~= "string" or not VALID_SETTINGS[name] or type(value) ~= "boolean" then
+	if not data then
 		return false
 	end
 	data.Settings[name] = value

@@ -62,7 +62,7 @@ local cards: { [string]: Card } = {}
 local random = Random.new()
 
 -- Infobulle
-local tooltip: Frame
+local tooltip: TextButton
 local tipName: TextLabel
 local tipDesc: TextLabel
 local tipLevel: TextLabel
@@ -100,7 +100,7 @@ local function getCost(upgrade): number
 end
 
 local function canAfford(upgrade): boolean
-	return ClientState.GetTargetDopamine() >= getCost(upgrade) - 1e-6
+	return ClientState.GetConfirmedDopamine() >= getCost(upgrade) - 1e-6
 end
 
 local function isRepeatable(upgrade): boolean
@@ -184,8 +184,12 @@ local function showTooltip(upgradeId: string, pinned: boolean)
 end
 
 local function buildTooltip(layer: Frame)
-	tooltip = UIUtil.Create("Frame", {
+	-- TextButton (sans texte) : un appui DANS l'infobulle ne traverse pas vers les
+	-- stimuli en dessous et ne la ferme pas
+	tooltip = UIUtil.Create("TextButton", {
 		Name = "UpgradeTooltip",
+		Text = "",
+		AutoButtonColor = false,
 		Size = UDim2.fromOffset(280, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		AnchorPoint = Vector2.new(0.5, 0),
@@ -487,6 +491,12 @@ local function createCard(upgrade): Card
 				SoundManager.Play("Click", 1.3)
 			end
 		else
+			-- Une infobulle épinglée (ex. confirmation de l'océan) sur une AUTRE
+			-- carte : on la ferme, sinon elle resterait bloquée à l'écran
+			if tipPinned and tipUpgradeId ~= upgrade.Id then
+				hideTooltip()
+				showTooltip(upgrade.Id, false)
+			end
 			buy(upgrade.Id)
 		end
 	end)
@@ -633,6 +643,9 @@ function UpgradeBar.Build(parent: GuiObject, tooltipLayer: Frame): Frame
 	})
 
 	buildTooltip(tooltipLayer)
+	tooltip.Activated:Connect(function()
+		lastUiTapClock = os.clock()
+	end)
 	tipButton.Activated:Connect(function()
 		lastUiTapClock = os.clock()
 		local id = tipUpgradeId

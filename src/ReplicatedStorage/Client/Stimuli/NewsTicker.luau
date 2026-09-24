@@ -359,11 +359,19 @@ function NewsTicker.Start(ctx)
 	local speed = SPEED
 	local targetSpeed = SPEED
 
-	ctx.Connect(button.MouseEnter, function()
-		targetSpeed = SLOW_SPEED
-	end)
-	ctx.Connect(button.MouseLeave, function()
-		targetSpeed = SPEED
+	-- Survol à la SOURIS uniquement (MouseEnter est aussi émulé par un
+	-- toucher sur mobile, sans MouseLeave fiable : le bandeau resterait lent)
+	local function onHover(input: InputObject)
+		if input.UserInputType == Enum.UserInputType.MouseMovement then
+			targetSpeed = SLOW_SPEED
+		end
+	end
+	ctx.Connect(button.InputBegan, onHover)
+	ctx.Connect(button.InputChanged, onHover)
+	ctx.Connect(button.InputEnded, function(input: InputObject)
+		if input.UserInputType == Enum.UserInputType.MouseMovement then
+			targetSpeed = SPEED
+		end
 	end)
 
 	ctx.OnRender(function(dt: number)

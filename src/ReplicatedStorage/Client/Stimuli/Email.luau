@@ -111,7 +111,8 @@ function Email.Start(ctx)
 	end
 
 	------------------------------------------------------------------
-	-- Compteur "📬 non lus" (en haut à droite, sous le fil d'actu)
+	-- Compteur "📬 non lus" (dans le bandeau d'actu, juste à gauche de
+	-- l'horloge de 62 px : hors de toute carte, il ne cache pas la bourse)
 	------------------------------------------------------------------
 	local counter = UIUtil.Label({
 		Name = "Unread",
@@ -122,7 +123,7 @@ function Email.Start(ctx)
 		BackgroundTransparency = 0,
 		Size = UDim2.fromOffset(128, 22),
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -16, 0, 33),
+		Position = UDim2.new(1, -70, 0, 4),
 		Visible = false,
 		MaxTextSize = 15,
 		ZIndex = 40,
@@ -188,13 +189,17 @@ function Email.Start(ctx)
 		local ax = math.clamp(sx, 0.02, 0.98)
 		local ay = math.clamp(sy, 0.05, 0.95)
 
-		-- AnchorPoint = position : la fenêtre reste toujours dans l'écran
-		local root = UIUtil.Create("Frame", {
+		-- AnchorPoint = position : la fenêtre reste toujours dans l'écran.
+		-- Racine = TextButton vide : elle absorbe les clics sur la fenêtre
+		-- (sinon ils traversent jusqu'au bouton principal / aux cartes).
+		local root = UIUtil.Create("TextButton", {
 			Name = "MailPopup",
 			Size = UDim2.fromOffset(POPUP_W, POPUP_H),
 			AnchorPoint = Vector2.new(ax, ay),
 			Position = UDim2.fromScale(ax, ay),
 			BackgroundTransparency = 1,
+			Text = "",
+			AutoButtonColor = false,
 			ZIndex = 60,
 			Parent = container,
 		})

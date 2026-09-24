@@ -2,8 +2,9 @@
 	Disco (ModuleScript - stimulus)
 	Emplacement : ReplicatedStorage > Client > Stimuli > Disco
 
-	Boule disco (calque Overlay) suspendue en haut, à droite de la colonne
-	centrale (x = centre + 360) : une mosaïque de petites facettes qui
+	Boule disco (calque Overlay) accrochée au bandeau d'actu, à droite de la
+	colonne centrale (x = centre + 360, y = 20 : au-dessus des cartes du
+	haut, pour ne jamais cacher R1 / CR) : une mosaïque de petites facettes qui
 	"tournent" et scintillent, avec des reflets colorés.
 	Elle projette des faisceaux de lumière translucides qui balayent tout
 	l'écran en changeant de couleur, et quelques taches de lumière qui se
@@ -16,10 +17,11 @@ local Disco = {}
 Disco.Slot = "Overlay"
 
 local BALL_X = 360 -- décalage depuis le centre de l'écran
-local BALL_Y = 74
-local BALL_SIZE = 58
+local BALL_Y = 20 -- dans le bandeau d'actu (y 0-30) : les cartes commencent à y = 40
+local BALL_SIZE = 36
+local HALO_PAD = 20 -- le halo déborde de HALO_PAD / 2 autour de la boule
 local TILE = 8 -- taille d'une facette (avec 1 px d'écart)
-local GRID = 7 -- facettes par ligne / colonne
+local GRID = 4 -- facettes par ligne / colonne (GRID * TILE <= BALL_SIZE)
 local PATTERN_W = 14 -- largeur du motif qui "tourne"
 local BEAM_LENGTH = 1500
 local MAX_SPARKLES = 5
@@ -112,22 +114,11 @@ function Disco.Start(ctx)
 	------------------------------------------------------------------
 	local ballPosition = UDim2.new(0.5, BALL_X, 0, BALL_Y)
 
-	-- Fil (depuis le bas du bandeau d'actu)
-	Create("Frame", {
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, BALL_X, 0, 28),
-		Size = UDim2.fromOffset(2, BALL_Y - 28 - BALL_SIZE / 2 + 2),
-		BackgroundColor3 = Color3.fromRGB(70, 70, 80),
-		BorderSizePixel = 0,
-		ZIndex = 4,
-		Parent = root,
-	})
-
 	-- Halo coloré autour de la boule
 	local halo = Create("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = ballPosition,
-		Size = UDim2.fromOffset(BALL_SIZE + 34, BALL_SIZE + 34),
+		Size = UDim2.fromOffset(BALL_SIZE + HALO_PAD, BALL_SIZE + HALO_PAD),
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		BackgroundTransparency = 0.8,
 		BorderSizePixel = 0,
@@ -179,8 +170,8 @@ function Disco.Start(ctx)
 
 	-- Reflet
 	local highlight = Create("Frame", {
-		Position = UDim2.fromOffset(12, 10),
-		Size = UDim2.fromOffset(12, 9),
+		Position = UDim2.fromOffset(7, 6),
+		Size = UDim2.fromOffset(8, 6),
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		BackgroundTransparency = 0.15,
 		BorderSizePixel = 0,

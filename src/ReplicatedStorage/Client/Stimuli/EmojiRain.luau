@@ -21,6 +21,9 @@ local RARE = { "🦄", "🌈", "👑", "💎" } -- de temps en temps, plus gros
 
 function EmojiRain.Start(ctx)
 	local container: Frame = ctx.Container
+	-- Tout en dessous des autres stimuli du calque (notifications, mails...) :
+	-- la pluie reste un décor et ne recouvre jamais un élément à lire / cliquer
+	container.ZIndex = 0
 	local random = Random.new()
 
 	local pool = {} -- toutes les gouttes (actives ou non)

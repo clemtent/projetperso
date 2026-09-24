@@ -698,7 +698,9 @@ function Press.Start(ctx)
 				entry.Parts.Splat.Visible = false
 			end
 			shout("...elle est revenue", false)
-			task.delay(0.75, function()
+			-- Part avant la fin de la remontée (phaseDuration = durée de "Rise") :
+			-- sinon, à haute vitesse, l'objet suivant arrive sur l'éponge
+			task.delay(math.min(0.75, phaseDuration * 0.8), function()
 				if ctx.IsAlive() and holder.Parent then
 					sendToPile(entry)
 				end

@@ -195,9 +195,25 @@ function Weather.Start(ctx)
 		{ Min = 0.015, Max = 0.17, Anchor = 0 },
 		{ Min = 0.83, Max = 0.985, Anchor = 1 },
 	}
+	-- Dans le calque Background (sous les cartes des slots) : les nuages et
+	-- leur pluie ne cachent jamais le cours de la bourse (R1) ni le live (L1).
+	-- Les éclairs, cliquables, restent dans ctx.Container (Overlay).
+	local ambientHolder = UIUtil.Create("Frame", {
+		Name = "WeatherAmbient",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Active = false,
+		ZIndex = 1000, -- au-dessus du fond NeonMode
+		Parent = ctx.Interface.Layers.Background or container,
+	})
+	-- Détruit avec le conteneur (arrêt du stimulus, détox)
+	container.Destroying:Connect(function()
+		ambientHolder:Destroy()
+	end)
+
 	local dropCount = effectsOn() and DROPS_PER_CLOUD or DROPS_LOW_EFFECTS
 	for index, range in ipairs(ranges) do
-		local cloud = makeCloud(container, cloudColor, 5)
+		local cloud = makeCloud(ambientHolder, cloudColor, 5)
 		cloud.Root.AnchorPoint = Vector2.new(range.Anchor, 0)
 		cloud.Range = range
 		cloud.Phase = random:NextNumber(0, math.pi * 2) + index
@@ -532,7 +548,8 @@ function Weather.Start(ctx)
 end
 
 function Weather.Stop(_ctx)
-	-- Nuages et éclairs vivent dans ctx.Container (détruit par le StimulusManager)
+	-- Éclairs dans ctx.Container (détruit par le StimulusManager) ; nuages
+	-- d'ambiance dans le calque Background, détruits avec ce conteneur
 end
 
 return Weather

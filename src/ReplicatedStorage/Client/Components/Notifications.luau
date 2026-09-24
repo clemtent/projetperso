@@ -50,7 +50,7 @@ function Notifications.Toast(text: string, color: Color3?, duration: number?, ti
 	-- Supprime les plus anciens s'il y en a trop
 	local existing = {}
 	for _, child in ipairs(target:GetChildren()) do
-		if child:IsA("Frame") then
+		if child:IsA("GuiObject") then
 			table.insert(existing, child)
 		end
 	end
@@ -67,8 +67,12 @@ function Notifications.Toast(text: string, color: Color3?, duration: number?, ti
 	order += 1
 	local accent = color or Theme.Colors.Blue
 	local height = title and 62 or 44
-	local toast = UIUtil.Create("Frame", {
+	-- TextButton (et non Frame) : le bandeau capte les clics au lieu de les laisser
+	-- passer aux cartes / boutons en dessous ; un clic le ferme
+	local toast = UIUtil.Create("TextButton", {
 		Name = "Toast",
+		Text = "",
+		AutoButtonColor = false,
 		Size = UDim2.fromOffset(440, height),
 		BackgroundColor3 = Theme.Colors.Card,
 		LayoutOrder = order,
@@ -113,13 +117,19 @@ function Notifications.Toast(text: string, color: Color3?, duration: number?, ti
 	local scale = UIUtil.Create("UIScale", { Scale = 0.3, Parent = toast })
 	UIUtil.Tween(scale, 0.35, { Scale = 1 }, Enum.EasingStyle.Back)
 
-	task.delay(duration or 3.5, function()
-		if toast.Parent then
-			UIUtil.Tween(scale, 0.25, { Scale = 0 }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-			task.wait(0.3)
-			toast:Destroy()
+	local closing = false
+	local function close()
+		if closing or not toast.Parent then
+			return
 		end
-	end)
+		closing = true
+		UIUtil.Tween(scale, 0.25, { Scale = 0 }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+		task.delay(0.3, function()
+			toast:Destroy()
+		end)
+	end
+	toast.Activated:Connect(close)
+	task.delay(duration or 3.5, close)
 end
 
 -- Petite explosion au centre (vers le bouton) pour les déblocages

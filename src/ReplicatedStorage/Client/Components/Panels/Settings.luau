@@ -110,10 +110,26 @@ function Settings.Build(content: Frame)
 			Settings.Apply(option.Key, newValue)
 			SoundManager.Play("Open", newValue and 1.3 or 0.8)
 			-- On prévient le serveur pour sauvegarder le choix
+			-- (limite de débit côté serveur : on réessaie un peu plus tard, et si
+			-- ça échoue toujours on remet l'interrupteur comme le serveur l'a)
 			task.spawn(function()
-				pcall(function()
-					Net.Function("SetSetting"):InvokeServer(option.Key, newValue)
-				end)
+				for attempt = 1, 3 do
+					if current[option.Key] ~= newValue then
+						return -- un clic plus récent a pris le relais
+					end
+					local ok, success = pcall(function()
+						return Net.Function("SetSetting"):InvokeServer(option.Key, newValue)
+					end)
+					if ok and success == true then
+						return
+					end
+					if attempt < 3 then
+						task.wait(0.3)
+					end
+				end
+				if current[option.Key] == newValue then
+					Settings.Apply(option.Key, not newValue)
+				end
 			end)
 		end)
 	end

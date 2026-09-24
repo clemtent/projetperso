@@ -1032,6 +1032,7 @@ function Runner.Start(ctx)
 		-- Objets (déplacement, collisions)
 		for i = #objects, 1, -1 do
 			local object = objects[i]
+			local prevZ = object.Z
 			object.Z -= travel
 			if object.Z < Z_NEAR then
 				removeObject(i)
@@ -1048,7 +1049,9 @@ function Runner.Start(ctx)
 				frame.Size = UDim2.fromOffset(width, object.Height / z)
 				frame.ZIndex = depthZ(z)
 
-				if state == "run" and object.Lane == effLane and math.abs(z - CHAR_Z) < 0.12 then
+				-- Test sur le trajet parcouru pendant l'image ([z, prevZ]) et non sur
+				-- un seul point : à faible FPS, un objet peut sauter toute la fenêtre
+				if state == "run" and object.Lane == effLane and prevZ > CHAR_Z - 0.12 and z < CHAR_Z + 0.12 then
 					if object.Kind == "Coin" then
 						collectCoin(i)
 					elseif object.Kind == "Barrier" and height < 14 and z <= CHAR_Z then

@@ -195,6 +195,24 @@ function UIUtil.Shake(guiObject: GuiObject)
 		return -- déjà en train de trembler : on ne décale pas la position d'origine
 	end
 	guiObject:SetAttribute("Shaking", true)
+	-- Placé par un UIListLayout / UIGridLayout : Position est ignorée,
+	-- on fait trembler la rotation à la place
+	local parent = guiObject.Parent
+	if parent and parent:FindFirstChildWhichIsA("UIGridStyleLayout") then
+		local originRotation = guiObject.Rotation
+		task.spawn(function()
+			for i = 1, 6 do
+				if not guiObject.Parent then
+					break
+				end
+				guiObject.Rotation = originRotation + ((i % 2 == 0) and 4 or -4)
+				task.wait(0.03)
+			end
+			guiObject.Rotation = originRotation
+			guiObject:SetAttribute("Shaking", nil)
+		end)
+		return
+	end
 	local origin = guiObject.Position
 	task.spawn(function()
 		for i = 1, 6 do

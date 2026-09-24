@@ -9,6 +9,9 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
+local GuiService = game:GetService("GuiService")
+local RunService = game:GetService("RunService")
+local TextChatService = game:GetService("TextChatService")
 
 local Client = ReplicatedStorage:WaitForChild("Client")
 local Components = Client:WaitForChild("Components")
@@ -26,9 +29,28 @@ local Notifications = require(Components:WaitForChild("Notifications"))
 local PanelManager = require(Components:WaitForChild("PanelManager"))
 local CenterColumn = require(Components:WaitForChild("CenterColumn"))
 
--- Le sac à dos (outils) ne sert à rien ici
+-- Le sac à dos (outils) ne sert à rien ici. La liste des joueurs (leaderstats)
+-- et la fenêtre de chat recouvriraient les emplacements R1 / L1 et captureraient
+-- les clics : le jeu a déjà son propre classement.
 pcall(function()
 	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
+end)
+pcall(function()
+	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, false)
+end)
+-- (Dans Studio on garde le chat : il sert à taper les commandes de test /give, /rush...)
+if not RunService:IsStudio() then
+	pcall(function()
+		StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Chat, false)
+	end)
+	pcall(function()
+		TextChatService.ChatWindowConfiguration.Enabled = false
+	end)
+end
+-- Pas de joystick / bouton de saut tactiles : ils prendraient les appuis
+-- destinés aux emplacements du bas (Runner, Lofi...)
+pcall(function()
+	GuiService.TouchControlsEnabled = false
 end)
 
 -- 1. Services de base

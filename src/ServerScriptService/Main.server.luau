@@ -14,6 +14,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Net = require(ReplicatedStorage.Shared.Net)
 Net.Setup() -- AVANT tout le reste : les clients attendent ces remotes
 
+-- Jeu 100 % interface 2D : pas de personnage (sinon il bouge en fond avec ZQSD / espace)
+Players.CharacterAutoLoads = false
+
 local ServicesFolder = script.Parent:WaitForChild("Services")
 
 -- Ordre important : les données d'abord, puis le jeu, puis le reste

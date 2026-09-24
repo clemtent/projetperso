@@ -57,6 +57,15 @@ function Pinwheel.Start(ctx)
 	local width = container.Size.X.Offset > 0 and container.Size.X.Offset or 170
 	local height = container.Size.Y.Offset > 0 and container.Size.Y.Offset or 170
 	local hubX, hubY = width / 2, math.floor(height * 0.435)
+	-- Texte flottant dessiné dans le calque Overlay : il monte de 100 px et
+	-- serait coupé par le slot (ClipsDescendants). `point` = position en
+	-- pixels "design" dans `guiObject` (qui fait `designW` de large).
+	local function floatOnOverlay(guiObject: GuiObject, designW: number, point: Vector2, text: string, color: Color3?, size: number?)
+		local ratio = guiObject.AbsoluteSize.X / math.max(1, designW)
+		local canvas = ctx.Interface.ScreenToCanvas(guiObject.AbsolutePosition + point * ratio)
+		ctx.FloatText(ctx.Overlay, UDim2.fromOffset(canvas.X, canvas.Y), text, color, size)
+	end
+
 	local reach = math.ceil(BLADE * math.sqrt(2))
 
 	local function effectsOn(): boolean
@@ -358,7 +367,7 @@ function Pinwheel.Start(ctx)
 	ctx.OnBonus("Spin", function(payload)
 		local amount = tonumber(payload.Amount)
 		if amount then
-			ctx.FloatText(container, UDim2.fromOffset(hubX, hubY - 30), "+" .. ctx.Format.Format(amount), Theme.Colors.Gold, 26)
+			floatOnOverlay(container, width, Vector2.new(hubX, hubY - 30), "+" .. ctx.Format.Format(amount), Theme.Colors.Gold, 26)
 		end
 	end)
 

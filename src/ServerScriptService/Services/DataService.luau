@@ -12,14 +12,13 @@
 ]]
 
 local DataStoreService = game:GetService("DataStoreService")
-local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 
 local DataService = {}
 
--- Profils chargés : [Player] = { Data = table, CanSave = bool, Saving = bool }
+-- Profils chargés : [Player] = { Data = table, CanSave = bool, Saving = bool, Releasing = bool }
 local profiles = {}
 
 -- Données d'un nouveau joueur (version 2). Toute nouvelle clé ajoutée ici
@@ -176,7 +175,7 @@ function DataService:LoadAsync(player: Player)
 		return nil
 	end
 
-	profiles[player] = { Data = data, CanSave = canSave, Saving = false }
+	profiles[player] = { Data = data, CanSave = canSave, Saving = false, Releasing = false }
 
 	if not canSave then
 		task.defer(function()
@@ -253,6 +252,11 @@ function DataService:ReleaseAsync(player: Player)
 	if not profile then
 		return
 	end
+	-- Déjà en cours de libération (PlayerRemoving puis BindToClose) : rien à refaire
+	if profile.Releasing then
+		return
+	end
+	profile.Releasing = true
 	-- Si une sauvegarde automatique est en cours, on attend qu'elle finisse
 	local waited = 0
 	while profile.Saving and waited < 10 do
@@ -277,18 +281,19 @@ function DataService:Start()
 
 	-- Fermeture du serveur : on sauvegarde tout le monde en parallèle
 	game:BindToClose(function()
-		local pending = 0
-		for _, player in ipairs(Players:GetPlayers()) do
-			if profiles[player] then
-				pending += 1
+		-- On libère TOUS les profils chargés, y compris ceux des joueurs déjà
+		-- sortis de la liste Players (leur sauvegarde de sortie peut être en cours)
+		for player, profile in pairs(profiles) do
+			if not profile.Releasing then
 				task.spawn(function()
 					self:ReleaseAsync(player)
-					pending -= 1
 				end)
 			end
 		end
+		-- On attend aussi les sauvegardes lancées par PlayerRemoving :
+		-- ReleaseAsync retire le profil de la table quand il a fini
 		local start = os.clock()
-		while pending > 0 and os.clock() - start < 25 do
+		while next(profiles) ~= nil and os.clock() - start < 25 do
 			task.wait(0.1)
 		end
 	end)

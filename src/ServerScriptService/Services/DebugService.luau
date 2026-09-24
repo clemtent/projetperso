@@ -18,8 +18,10 @@
 	  /help           -> liste des commandes
 ]]
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TextChatService = game:GetService("TextChatService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 
@@ -32,6 +34,9 @@ local spawnKinds = {}
 for kind in pairs(Config.Spawners) do
 	spawnKinds[string.lower(kind)] = kind
 end
+
+-- Noms des commandes (déclarées comme TextChatCommand dans Studio)
+local COMMAND_NAMES = { "give", "rush", "daily", "save", "corner", "unlockall", "spawn", "golden", "detox", "chest", "reset", "help" }
 
 local HELP = "/give /rush /daily /save /corner /unlockall /spawn <golden|lightning|notif|email> /detox /chest /reset"
 
@@ -114,21 +119,60 @@ local function runCommand(player: Player, command: string, argument: string)
 	end
 end
 
+-- Exécute un message de chat s'il ressemble à une commande "/xxx"
+-- (anti-doublon : le même message reçu deux fois en 1 s n'est exécuté qu'une fois)
+local lastMessage: { [Player]: { Text: string, Clock: number } } = {}
+local function handleMessage(player: Player, message: string)
+	local command, argument = string.match(string.lower(message), "^/(%a+)%s*(%S*)")
+	if not command then
+		return
+	end
+	local last = lastMessage[player]
+	if last and last.Text == message and os.clock() - last.Clock < 1 then
+		return
+	end
+	lastMessage[player] = { Text = message, Clock = os.clock() }
+	local ok, err = pcall(runCommand, player, command, argument or "")
+	if not ok then
+		warn("[DebugService] Erreur de la commande /" .. command .. " :", err)
+	end
+end
+
+function DebugService:Start()
+	if not RunService:IsStudio() then
+		return
+	end
+	-- Avec le nouveau chat (TextChatService), un message "/xxx" inconnu peut ne
+	-- jamais arriver à Player.Chatted : on déclare donc de vraies commandes.
+	local folder = Instance.new("Folder")
+	folder.Name = "DopamineDebugCommands"
+	for _, name in ipairs(COMMAND_NAMES) do
+		local command = Instance.new("TextChatCommand")
+		command.Name = "Debug_" .. name
+		command.PrimaryAlias = "/" .. name
+		command.Triggered:Connect(function(textSource: TextSource, text: string)
+			local player = Players:GetPlayerByUserId(textSource.UserId)
+			if player and services.DataService:GetData(player) then
+				handleMessage(player, text)
+			end
+		end)
+		command.Parent = folder
+	end
+	folder.Parent = TextChatService
+end
+
 function DebugService:PlayerReady(player: Player)
 	if not RunService:IsStudio() then
 		return
 	end
-
+	-- Ancien chat (LegacyChatService) : Player.Chatted suffit
 	player.Chatted:Connect(function(message: string)
-		local command, argument = string.match(string.lower(message), "^/(%a+)%s*(%S*)")
-		if not command then
-			return
-		end
-		local ok, err = pcall(runCommand, player, command, argument or "")
-		if not ok then
-			warn("[DebugService] Erreur de la commande /" .. command .. " :", err)
-		end
+		handleMessage(player, message)
 	end)
+end
+
+function DebugService:PlayerRemoving(player: Player)
+	lastMessage[player] = nil
 end
 
 return DebugService

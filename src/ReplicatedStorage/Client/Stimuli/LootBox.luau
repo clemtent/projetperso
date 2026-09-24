@@ -86,6 +86,15 @@ function LootBox.Start(ctx)
 	UIUtil.Gradient(card, ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(234, 224, 255)), 90)
 	local cardScale = Create("UIScale", { Parent = card })
 
+	-- Texte flottant dessiné dans le calque Overlay : il monte de 100 px et
+	-- serait coupé par le slot (ClipsDescendants). `point` = position en
+	-- pixels "design" dans `guiObject` (qui fait `designW` de large).
+	local function floatOnOverlay(guiObject: GuiObject, designW: number, point: Vector2, text: string, color: Color3?, size: number?)
+		local ratio = guiObject.AbsoluteSize.X / math.max(1, designW)
+		local canvas = ctx.Interface.ScreenToCanvas(guiObject.AbsolutePosition + point * ratio)
+		ctx.FloatText(ctx.Overlay, UDim2.fromOffset(canvas.X, canvas.Y), text, color, size)
+	end
+
 	local title = UIUtil.Label({
 		Text = "Coffre mystère",
 		Font = Theme.Fonts.Title,
@@ -407,7 +416,7 @@ function LootBox.Start(ctx)
 				ctx.Sound.Play("Bonus", 1.4)
 				badgeScale.Scale = 1.6
 				UIUtil.Tween(badgeScale, 0.4, { Scale = 1 }, Enum.EasingStyle.Back)
-				ctx.FloatText(card, UDim2.fromOffset(centerX, CHEST_Y - 30), "+1 📦", Theme.Colors.Purple, 22)
+				floatOnOverlay(card, width, Vector2.new(centerX, CHEST_Y - 30), "+1 📦", Theme.Colors.Purple, 22)
 			end
 		end
 	end)
@@ -596,7 +605,7 @@ function LootBox.Start(ctx)
 		if effectsOn() then
 			ctx.Effects.Burst(card, UDim2.fromOffset(centerX, CHEST_Y - 10), color, 6 + tierIndex * 4)
 		end
-		ctx.FloatText(card, UDim2.fromOffset(centerX, CHEST_Y - 20), amountText, color, 26)
+		floatOnOverlay(card, width, Vector2.new(centerX, CHEST_Y - 20), amountText, color, 26)
 
 		if tier.Id == "Legendary" or tierIndex >= #config.Tiers then
 			ctx.Sound.Play("Jackpot", 1)

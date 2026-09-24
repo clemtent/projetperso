@@ -104,6 +104,15 @@ function Casino.Start(ctx)
 	UIUtil.Stroke(card, Theme.Colors.CardBorder, 2)
 	UIUtil.Gradient(card, ColorSequence.new(Color3.fromRGB(205, 36, 64), Color3.fromRGB(112, 12, 36)), 90)
 
+	-- Texte flottant dessiné dans le calque Overlay : il monte de 100 px et
+	-- serait coupé par le slot (ClipsDescendants). `point` = position en
+	-- pixels "design" dans `guiObject` (qui fait `designW` de large).
+	local function floatOnOverlay(guiObject: GuiObject, designW: number, point: Vector2, text: string, color: Color3?, size: number?)
+		local ratio = guiObject.AbsoluteSize.X / math.max(1, designW)
+		local canvas = ctx.Interface.ScreenToCanvas(guiObject.AbsolutePosition + point * ratio)
+		ctx.FloatText(ctx.Overlay, UDim2.fromOffset(canvas.X, canvas.Y), text, color, size)
+	end
+
 	-- Liseré doré intérieur
 	local trim = Create("Frame", {
 		Size = UDim2.new(1, -8, 1, -8),
@@ -671,13 +680,14 @@ function Casino.Start(ctx)
 		local payout = tonumber(result.Payout) or 0
 		local multiplier = tonumber(result.Multiplier) or 0
 		local center = UDim2.fromOffset(windowX + windowW / 2, windowY + REEL_H / 2)
+		local centerPoint = Vector2.new(windowX + windowW / 2, windowY + REEL_H / 2)
 
 		if payout > bet then
 			highlightWinners(result.Reels)
 			partyUntil = os.clock() + (multiplier >= 25 and 3.5 or 1.8)
 			ctx.Sound.Play("SlotWin", multiplier >= 25 and 1.1 or 1)
 			local text = "+" .. Format.Format(payout)
-			ctx.FloatText(card, center, text, gold, multiplier >= 10 and 34 or 26)
+			floatOnOverlay(card, width, centerPoint, text, gold, multiplier >= 10 and 34 or 26)
 			setInfo(WIN_TEXTS[random:NextInteger(1, #WIN_TEXTS)] .. " " .. Format.Multiplier(multiplier), gold, 3)
 			UIUtil.Tween(windowStroke, 0.1, { Color = white, Thickness = 4 })
 			task.delay(0.6, function()
@@ -701,7 +711,7 @@ function Casino.Start(ctx)
 		elseif payout > 0 then
 			highlightWinners(result.Reels)
 			ctx.Sound.Play("Cash", 0.8)
-			ctx.FloatText(card, center, "+" .. Format.Format(payout), white, 22)
+			floatOnOverlay(card, width, centerPoint, "+" .. Format.Format(payout), white, 22)
 			setInfo("Remboursé en partie (" .. Format.Multiplier(multiplier) .. ") 🙃", Color3.fromRGB(255, 225, 160), 2.5)
 		else
 			ctx.Sound.Play("Error", 0.75)

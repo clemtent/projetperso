@@ -89,15 +89,27 @@ function DVD.Start(ctx)
 		}
 		local color = colors[logo.ColorIndex]
 
-		local button = UIUtil.Create("TextButton", {
+		-- Racine = simple Frame (ne capte pas les clics) ; la zone cliquable
+		-- est un bouton enfant "Hit", masqué pendant la recharge pour que les
+		-- clics passent au bouton principal / aux cartes en dessous.
+		local button = UIUtil.Create("Frame", {
 			Name = "DVDLogo" .. index,
 			Size = UDim2.fromOffset(logoSize.X, logoSize.Y),
 			BackgroundTransparency = 1,
-			Text = "",
-			AutoButtonColor = false,
+			Active = false,
 			Visible = false,
 			ZIndex = 5,
 			Parent = container,
+		})
+		local hit = UIUtil.Create("TextButton", {
+			Name = "Hit",
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			Text = "",
+			AutoButtonColor = false,
+			Visible = not cooling,
+			ZIndex = 9,
+			Parent = button,
 		})
 
 		-- Corps visuel (le bouton garde sa taille, seul le corps s'écrase)
@@ -112,6 +124,7 @@ function DVD.Start(ctx)
 		})
 		local bodyScale = UIUtil.Create("UIScale", { Scale = 0, Parent = body })
 		logo.Button = button
+		logo.Hit = hit
 		logo.Body = body
 		logo.Scale = bodyScale
 
@@ -230,17 +243,17 @@ function DVD.Start(ctx)
 		end
 
 		-- Survol : le logo gonfle un peu (PC)
-		ctx.Connect(button.MouseEnter, function()
+		ctx.Connect(hit.MouseEnter, function()
 			if not cooling then
 				UIUtil.Tween(bodyScale, 0.15, { Scale = 1.08 }, Enum.EasingStyle.Back)
 			end
 		end)
-		ctx.Connect(button.MouseLeave, function()
+		ctx.Connect(hit.MouseLeave, function()
 			UIUtil.Tween(bodyScale, 0.15, { Scale = 1 })
 		end)
 
 		-- Clic : bonus avec temps de recharge commun
-		ctx.Connect(button.Activated, function()
+		ctx.Connect(hit.Activated, function()
 			if not ctx.IsAlive() then
 				return
 			end
@@ -288,6 +301,8 @@ function DVD.Start(ctx)
 
 	local function setFaded(faded: boolean)
 		for _, logo in ipairs(logos) do
+			-- Pendant la recharge, les logos ne captent plus les clics
+			logo.Hit.Visible = not faded
 			for _, entry in ipairs(logo.Fades) do
 				local target = faded and math.max(entry[3], COOLDOWN_FADE) or entry[3]
 				UIUtil.Tween(entry[1], 0.25, { [entry[2]] = target })

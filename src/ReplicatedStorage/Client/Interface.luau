@@ -6,8 +6,10 @@
 	  - toute l'interface est pensée pour un écran de 1280x720 ;
 	  - un UIScale agrandit / réduit l'ensemble selon l'écran réel
 	    (PC, mobile, tablette) ;
-	  - le cadre "Root" s'étire pour toujours couvrir tout l'écran
-	    (sa taille en pixels "design" est donc >= 1280x720 dans un sens).
+	  - le cadre "Root" s'étire pour toujours couvrir toute la zone sûre
+	    (hors encoche et barre Roblox ; sa taille en pixels "design" est
+	    donc >= 1280x720 dans un sens) ;
+	  - une ScreenGui de fond séparée remplit tout l'écran (couleur seule).
 
 	Calques (du plus bas au plus haut), tous plein écran, transparents et
 	non "Active" (les clics passent à travers) :
@@ -20,6 +22,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Theme = require(script.Parent.Theme)
 local UIUtil = require(script.Parent.UIUtil)
 local Signal = require(ReplicatedStorage.Shared.Signal)
+local ClientState = require(script.Parent.ClientState)
 
 local Interface = {}
 
@@ -38,18 +41,48 @@ function Interface.Build(): ScreenGui
 	-- Le jeu se joue en paysage sur mobile
 	playerGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeSensor
 
-	local old = playerGui:FindFirstChild("DopamineGui")
-	if old then
-		old:Destroy()
+	for _, name in ipairs({ "DopamineGui", "DopamineBackdrop" }) do
+		local old = playerGui:FindFirstChild(name)
+		if old then
+			old:Destroy()
+		end
 	end
 
+	-- Fond plein écran (sous l'encoche / la barre Roblox) : simple couleur,
+	-- pour ne jamais voir le monde 3D autour de la zone sûre
+	local backdropGui = UIUtil.Create("ScreenGui", {
+		Name = "DopamineBackdrop",
+		ResetOnSpawn = false,
+		IgnoreGuiInset = true,
+		DisplayOrder = 0,
+		Parent = playerGui,
+	})
+	local backdrop = UIUtil.Create("Frame", {
+		Name = "Backdrop",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		Active = false,
+		Size = UDim2.fromScale(1, 1),
+		Parent = backdropGui,
+	})
+	local backdropGradient = UIUtil.Gradient(backdrop, ColorSequence.new(Theme.Colors.Background, Theme.Colors.BackgroundBottom), 90)
+	local function applyBackdrop(dark: boolean)
+		backdrop.BackgroundColor3 = dark and Theme.DarkColors.Background or Color3.new(1, 1, 1)
+		backdropGradient.Enabled = not dark
+	end
+	ClientState.DarkModeChanged:Connect(applyBackdrop)
+	applyBackdrop(ClientState.DarkMode)
+
+	-- L'interface du jeu reste dans la zone sûre : ni sous l'encoche des
+	-- téléphones, ni sous les boutons Roblox de la barre du haut
 	local screenGui = UIUtil.Create("ScreenGui", {
 		Name = "DopamineGui",
 		ResetOnSpawn = false,
-		IgnoreGuiInset = true,
+		ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets,
+		DisplayOrder = 1,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		Parent = playerGui,
-	})
+	}) :: ScreenGui
 
 	-- Toile virtuelle mise à l'échelle
 	local root = UIUtil.Create("Frame", {
@@ -72,41 +105,25 @@ function Interface.Build(): ScreenGui
 		})
 	end
 
-	-- Recalcule l'échelle quand la taille de l'écran change
+	-- Recalcule l'échelle quand la zone sûre (taille de la ScreenGui) change
 	local function updateScale()
-		local camera = workspace.CurrentCamera
-		if not camera then
-			return
-		end
-		local viewport = camera.ViewportSize
-		if viewport.X < 1 or viewport.Y < 1 then
+		local available = screenGui.AbsoluteSize
+		if available.X < 1 or available.Y < 1 then
 			return
 		end
 		local design = Theme.DesignResolution
-		local scale = math.clamp(math.min(viewport.X / design.X, viewport.Y / design.Y), Theme.MinScale, Theme.MaxScale)
-		local canvas = Vector2.new(viewport.X / scale, viewport.Y / scale)
+		local scale = math.clamp(math.min(available.X / design.X, available.Y / design.Y), Theme.MinScale, Theme.MaxScale)
+		local canvas = Vector2.new(available.X / scale, available.Y / scale)
 		Interface.Scale = scale
 		Interface.CanvasSize = canvas
 		uiScale.Scale = scale
-		-- Root fait (écran / échelle) pour couvrir exactement l'écran une fois agrandi
+		-- Root fait (zone sûre / échelle) pour la couvrir exactement une fois agrandi
 		root.Size = UDim2.fromOffset(canvas.X, canvas.Y)
 		Interface.ScaleChanged:Fire(scale, canvas)
 	end
 
-	local cameraConnection: RBXScriptConnection? = nil
-	local function watchCamera()
-		if cameraConnection then
-			cameraConnection:Disconnect()
-			cameraConnection = nil
-		end
-		local camera = workspace.CurrentCamera
-		if camera then
-			cameraConnection = camera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
-		end
-		updateScale()
-	end
-	workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(watchCamera)
-	watchCamera()
+	screenGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateScale)
+	updateScale()
 
 	Interface.ScreenGui = screenGui
 	Interface.Root = root

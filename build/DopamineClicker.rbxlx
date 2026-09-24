@@ -255,11 +255,29 @@ function ClientState.GetTargetDopamine(): number
 	return total + (data.PerSecond or 0) * elapsed
 end
 
+-- Valeur "confirmée" : état serveur + clics prédits, SANS l'extrapolation des
+-- gains passifs (pour savoir si un achat sera accepté par le serveur)
+function ClientState.GetConfirmedDopamine(): number
+	local data = ClientState.Data
+	if not data then
+		return 0
+	end
+	local total = data.Dopamine or 0
+	for _, prediction in ipairs(pending) do
+		total += prediction.Amount
+	end
+	return total
+end
+
 -- Valeur affichée, lissée à chaque image (appelé UNE fois par image par la colonne centrale)
 function ClientState.UpdateDisplay(dt: number): number
 	local target = ClientState.GetTargetDopamine()
-	if target < displayDopamine then
-		displayDopamine = target -- achat : on descend immédiatement
+	local perSecond = (ClientState.Data and ClientState.Data.PerSecond) or 0
+	if target < displayDopamine - perSecond * 0.6 - 1e-6 then
+		displayDopamine = target -- vraie baisse (achat, détox) : on descend immédiatement
+	elseif target <= displayDopamine then
+		-- Petite baisse due au décalage entre ticks passifs et envois d'état :
+		-- on garde la valeur affichée jusqu'à ce que la cible la rattrape
 	else
 		displayDopamine += (target - displayDopamine) * (1 - math.exp(-14 * dt))
 		if target - displayDopamine < 0.01 then
@@ -701,12 +719,16 @@ local function buildPills(parent: Frame, order: number)
 	return row
 end
 
-local function buildRush(parent: Frame, order: number)
+-- Le bandeau Rush se superpose à la ligne "par seconde" (hors de la pile) :
+-- il ne pousse pas la barre d'améliorations sur les emplacements du bas
+local function buildRush(parent: GuiObject)
 	rushBanner = UIUtil.Create("Frame", {
 		Name = "RushBanner",
 		Size = UDim2.fromOffset(330, 28),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
 		BackgroundColor3 = Theme.Colors.Yellow,
-		LayoutOrder = order,
+		ZIndex = 2,
 		Visible = false,
 		Parent = parent,
 	})
@@ -806,7 +828,7 @@ local function refreshBadges()
 	local shop = pills.ItemShop
 	if shop then
 		local owned = (data.Cosmetics and data.Cosmetics.Owned) or {}
-		local dopamine = ClientState.GetTargetDopamine()
+		local dopamine = ClientState.GetConfirmedDopamine()
 		local affordable = 0
 		for _, cosmetic in ipairs(Config.Cosmetics) do
 			if not owned[cosmetic.Id] and dopamine >= cosmetic.Cost then
@@ -874,7 +896,7 @@ function CenterColumn.Build(parent: Frame, floatingLayer: Frame, fxLayer: Frame)
 		FillDirection = Enum.FillDirection.Vertical,
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
 		SortOrder = Enum.SortOrder.LayoutOrder,
-		Padding = UDim.new(0, 4),
+		Padding = UDim.new(0, 3), -- tout doit tenir au-dessus des emplacements du bas (y <= 425)
 		Parent = stack,
 	})
 
@@ -907,8 +929,7 @@ function CenterColumn.Build(parent: Frame, floatingLayer: Frame, fxLayer: Frame)
 	perSecondStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 	perSecondStroke.Enabled = false
 
-	buildRush(stack, 3)
-	UIUtil.Create("Frame", { Name = "Spacer", Size = UDim2.fromOffset(1, 2), BackgroundTransparency = 1, LayoutOrder = 4, Parent = stack })
+	buildRush(perSecondLabel)
 	buildPills(stack, 5)
 	buildCombo(stack, 6)
 	local upgradeBar = UpgradeBar.Build(stack, floatingLayer)
@@ -1041,7 +1062,7 @@ function Notifications.Toast(text: string, color: Color3?, duration: number?, ti
 	-- Supprime les plus anciens s'il y en a trop
 	local existing = {}
 	for _, child in ipairs(target:GetChildren()) do
-		if child:IsA("Frame") then
+		if child:IsA("GuiObject") then
 			table.insert(existing, child)
 		end
 	end
@@ -1058,8 +1079,12 @@ function Notifications.Toast(text: string, color: Color3?, duration: number?, ti
 	order += 1
 	local accent = color or Theme.Colors.Blue
 	local height = title and 62 or 44
-	local toast = UIUtil.Create("Frame", {
+	-- TextButton (et non Frame) : le bandeau capte les clics au lieu de les laisser
+	-- passer aux cartes / boutons en dessous ; un clic le ferme
+	local toast = UIUtil.Create("TextButton", {
 		Name = "Toast",
+		Text = "",
+		AutoButtonColor = false,
 		Size = UDim2.fromOffset(440, height),
 		BackgroundColor3 = Theme.Colors.Card,
 		LayoutOrder = order,
@@ -1104,13 +1129,19 @@ function Notifications.Toast(text: string, color: Color3?, duration: number?, ti
 	local scale = UIUtil.Create("UIScale", { Scale = 0.3, Parent = toast })
 	UIUtil.Tween(scale, 0.35, { Scale = 1 }, Enum.EasingStyle.Back)
 
-	task.delay(duration or 3.5, function()
-		if toast.Parent then
-			UIUtil.Tween(scale, 0.25, { Scale = 0 }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-			task.wait(0.3)
-			toast:Destroy()
+	local closing = false
+	local function close()
+		if closing or not toast.Parent then
+			return
 		end
-	end)
+		closing = true
+		UIUtil.Tween(scale, 0.25, { Scale = 0 }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+		task.delay(0.3, function()
+			toast:Destroy()
+		end)
+	end
+	toast.Activated:Connect(close)
+	task.delay(duration or 3.5, close)
 end
 
 -- Petite explosion au centre (vers le bouton) pour les déblocages
@@ -2651,10 +2682,26 @@ function Settings.Build(content: Frame)
 			Settings.Apply(option.Key, newValue)
 			SoundManager.Play("Open", newValue and 1.3 or 0.8)
 			-- On prévient le serveur pour sauvegarder le choix
+			-- (limite de débit côté serveur : on réessaie un peu plus tard, et si
+			-- ça échoue toujours on remet l'interrupteur comme le serveur l'a)
 			task.spawn(function()
-				pcall(function()
-					Net.Function("SetSetting"):InvokeServer(option.Key, newValue)
-				end)
+				for attempt = 1, 3 do
+					if current[option.Key] ~= newValue then
+						return -- un clic plus récent a pris le relais
+					end
+					local ok, success = pcall(function()
+						return Net.Function("SetSetting"):InvokeServer(option.Key, newValue)
+					end)
+					if ok and success == true then
+						return
+					end
+					if attempt < 3 then
+						task.wait(0.3)
+					end
+				end
+				if current[option.Key] == newValue then
+					Settings.Apply(option.Key, not newValue)
+				end
 			end)
 		end)
 	end
@@ -2753,7 +2800,7 @@ local cards: { [string]: Card } = {}
 local random = Random.new()
 
 -- Infobulle
-local tooltip: Frame
+local tooltip: TextButton
 local tipName: TextLabel
 local tipDesc: TextLabel
 local tipLevel: TextLabel
@@ -2791,7 +2838,7 @@ local function getCost(upgrade): number
 end
 
 local function canAfford(upgrade): boolean
-	return ClientState.GetTargetDopamine() >= getCost(upgrade) - 1e-6
+	return ClientState.GetConfirmedDopamine() >= getCost(upgrade) - 1e-6
 end
 
 local function isRepeatable(upgrade): boolean
@@ -2875,8 +2922,12 @@ local function showTooltip(upgradeId: string, pinned: boolean)
 end
 
 local function buildTooltip(layer: Frame)
-	tooltip = UIUtil.Create("Frame", {
+	-- TextButton (sans texte) : un appui DANS l'infobulle ne traverse pas vers les
+	-- stimuli en dessous et ne la ferme pas
+	tooltip = UIUtil.Create("TextButton", {
 		Name = "UpgradeTooltip",
+		Text = "",
+		AutoButtonColor = false,
 		Size = UDim2.fromOffset(280, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		AnchorPoint = Vector2.new(0.5, 0),
@@ -3178,6 +3229,12 @@ local function createCard(upgrade): Card
 				SoundManager.Play("Click", 1.3)
 			end
 		else
+			-- Une infobulle épinglée (ex. confirmation de l'océan) sur une AUTRE
+			-- carte : on la ferme, sinon elle resterait bloquée à l'écran
+			if tipPinned and tipUpgradeId ~= upgrade.Id then
+				hideTooltip()
+				showTooltip(upgrade.Id, false)
+			end
 			buy(upgrade.Id)
 		end
 	end)
@@ -3324,6 +3381,9 @@ function UpgradeBar.Build(parent: GuiObject, tooltipLayer: Frame): Frame
 	})
 
 	buildTooltip(tooltipLayer)
+	tooltip.Activated:Connect(function()
+		lastUiTapClock = os.clock()
+	end)
 	tipButton.Activated:Connect(function()
 		lastUiTapClock = os.clock()
 		local id = tipUpgradeId
@@ -3482,11 +3542,46 @@ function Effects.GetLayer(): Frame?
 	return layer
 end
 
+-- Dans un emplacement de stimulus (calque "Slots", ClipsDescendants = true), un
+-- texte qui monte de 100 px serait coupé : on le redessine dans le calque
+-- "Overlay" (non coupé, sous les menus) à la même position à l'écran.
+local function unclip(parent: GuiObject, position: UDim2): (GuiObject, UDim2)
+	local root = layer and layer.Parent
+	local slots = root and root:FindFirstChild("Slots")
+	local overlay = root and root:FindFirstChild("Overlay")
+	if not root or not slots or not overlay or not overlay:IsA("GuiObject") or not parent:IsDescendantOf(slots) then
+		return parent, position
+	end
+	local clipped = false
+	local node: Instance? = parent
+	while node and node ~= slots do
+		if node:IsA("GuiObject") and node.ClipsDescendants then
+			clipped = true
+			break
+		end
+		node = node.Parent
+	end
+	if not clipped then
+		return parent, position
+	end
+	local uiScale = root:FindFirstChildOfClass("UIScale")
+	local scale = uiScale and uiScale.Scale or 1
+	if scale <= 0 then
+		return parent, position
+	end
+	local absolute = parent.AbsolutePosition
+		+ parent.AbsoluteSize * Vector2.new(position.X.Scale, position.Y.Scale)
+		+ Vector2.new(position.X.Offset, position.Y.Offset) * scale
+	local canvas = (absolute - overlay.AbsolutePosition) / scale
+	return overlay, UDim2.fromOffset(canvas.X, canvas.Y)
+end
+
 -- Texte "+X" qui monte et disparaît
 function Effects.FloatingText(parent: GuiObject, position: UDim2, text: string, color: Color3?, size: number?)
 	if activeTexts >= MAX_TEXTS or not parent or not parent.Parent then
 		return
 	end
+	parent, position = unclip(parent, position)
 	activeTexts += 1
 	local height = size or 34
 	local textColor = color or Theme.Colors.Text
@@ -3667,8 +3762,10 @@ return Effects
 	  - toute l'interface est pensée pour un écran de 1280x720 ;
 	  - un UIScale agrandit / réduit l'ensemble selon l'écran réel
 	    (PC, mobile, tablette) ;
-	  - le cadre "Root" s'étire pour toujours couvrir tout l'écran
-	    (sa taille en pixels "design" est donc >= 1280x720 dans un sens).
+	  - le cadre "Root" s'étire pour toujours couvrir toute la zone sûre
+	    (hors encoche et barre Roblox ; sa taille en pixels "design" est
+	    donc >= 1280x720 dans un sens) ;
+	  - une ScreenGui de fond séparée remplit tout l'écran (couleur seule).
 
 	Calques (du plus bas au plus haut), tous plein écran, transparents et
 	non "Active" (les clics passent à travers) :
@@ -3681,6 +3778,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Theme = require(script.Parent.Theme)
 local UIUtil = require(script.Parent.UIUtil)
 local Signal = require(ReplicatedStorage.Shared.Signal)
+local ClientState = require(script.Parent.ClientState)
 
 local Interface = {}
 
@@ -3699,18 +3797,48 @@ function Interface.Build(): ScreenGui
 	-- Le jeu se joue en paysage sur mobile
 	playerGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeSensor
 
-	local old = playerGui:FindFirstChild("DopamineGui")
-	if old then
-		old:Destroy()
+	for _, name in ipairs({ "DopamineGui", "DopamineBackdrop" }) do
+		local old = playerGui:FindFirstChild(name)
+		if old then
+			old:Destroy()
+		end
 	end
 
+	-- Fond plein écran (sous l'encoche / la barre Roblox) : simple couleur,
+	-- pour ne jamais voir le monde 3D autour de la zone sûre
+	local backdropGui = UIUtil.Create("ScreenGui", {
+		Name = "DopamineBackdrop",
+		ResetOnSpawn = false,
+		IgnoreGuiInset = true,
+		DisplayOrder = 0,
+		Parent = playerGui,
+	})
+	local backdrop = UIUtil.Create("Frame", {
+		Name = "Backdrop",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		Active = false,
+		Size = UDim2.fromScale(1, 1),
+		Parent = backdropGui,
+	})
+	local backdropGradient = UIUtil.Gradient(backdrop, ColorSequence.new(Theme.Colors.Background, Theme.Colors.BackgroundBottom), 90)
+	local function applyBackdrop(dark: boolean)
+		backdrop.BackgroundColor3 = dark and Theme.DarkColors.Background or Color3.new(1, 1, 1)
+		backdropGradient.Enabled = not dark
+	end
+	ClientState.DarkModeChanged:Connect(applyBackdrop)
+	applyBackdrop(ClientState.DarkMode)
+
+	-- L'interface du jeu reste dans la zone sûre : ni sous l'encoche des
+	-- téléphones, ni sous les boutons Roblox de la barre du haut
 	local screenGui = UIUtil.Create("ScreenGui", {
 		Name = "DopamineGui",
 		ResetOnSpawn = false,
-		IgnoreGuiInset = true,
+		ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets,
+		DisplayOrder = 1,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		Parent = playerGui,
-	})
+	}) :: ScreenGui
 
 	-- Toile virtuelle mise à l'échelle
 	local root = UIUtil.Create("Frame", {
@@ -3733,41 +3861,25 @@ function Interface.Build(): ScreenGui
 		})
 	end
 
-	-- Recalcule l'échelle quand la taille de l'écran change
+	-- Recalcule l'échelle quand la zone sûre (taille de la ScreenGui) change
 	local function updateScale()
-		local camera = workspace.CurrentCamera
-		if not camera then
-			return
-		end
-		local viewport = camera.ViewportSize
-		if viewport.X < 1 or viewport.Y < 1 then
+		local available = screenGui.AbsoluteSize
+		if available.X < 1 or available.Y < 1 then
 			return
 		end
 		local design = Theme.DesignResolution
-		local scale = math.clamp(math.min(viewport.X / design.X, viewport.Y / design.Y), Theme.MinScale, Theme.MaxScale)
-		local canvas = Vector2.new(viewport.X / scale, viewport.Y / scale)
+		local scale = math.clamp(math.min(available.X / design.X, available.Y / design.Y), Theme.MinScale, Theme.MaxScale)
+		local canvas = Vector2.new(available.X / scale, available.Y / scale)
 		Interface.Scale = scale
 		Interface.CanvasSize = canvas
 		uiScale.Scale = scale
-		-- Root fait (écran / échelle) pour couvrir exactement l'écran une fois agrandi
+		-- Root fait (zone sûre / échelle) pour la couvrir exactement une fois agrandi
 		root.Size = UDim2.fromOffset(canvas.X, canvas.Y)
 		Interface.ScaleChanged:Fire(scale, canvas)
 	end
 
-	local cameraConnection: RBXScriptConnection? = nil
-	local function watchCamera()
-		if cameraConnection then
-			cameraConnection:Disconnect()
-			cameraConnection = nil
-		end
-		local camera = workspace.CurrentCamera
-		if camera then
-			cameraConnection = camera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
-		end
-		updateScale()
-	end
-	workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(watchCamera)
-	watchCamera()
+	screenGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateScale)
+	updateScale()
 
 	Interface.ScreenGui = screenGui
 	Interface.Root = root
@@ -4560,6 +4672,15 @@ function Casino.Start(ctx)
 	UIUtil.Stroke(card, Theme.Colors.CardBorder, 2)
 	UIUtil.Gradient(card, ColorSequence.new(Color3.fromRGB(205, 36, 64), Color3.fromRGB(112, 12, 36)), 90)
 
+	-- Texte flottant dessiné dans le calque Overlay : il monte de 100 px et
+	-- serait coupé par le slot (ClipsDescendants). `point` = position en
+	-- pixels "design" dans `guiObject` (qui fait `designW` de large).
+	local function floatOnOverlay(guiObject: GuiObject, designW: number, point: Vector2, text: string, color: Color3?, size: number?)
+		local ratio = guiObject.AbsoluteSize.X / math.max(1, designW)
+		local canvas = ctx.Interface.ScreenToCanvas(guiObject.AbsolutePosition + point * ratio)
+		ctx.FloatText(ctx.Overlay, UDim2.fromOffset(canvas.X, canvas.Y), text, color, size)
+	end
+
 	-- Liseré doré intérieur
 	local trim = Create("Frame", {
 		Size = UDim2.new(1, -8, 1, -8),
@@ -5127,13 +5248,14 @@ function Casino.Start(ctx)
 		local payout = tonumber(result.Payout) or 0
 		local multiplier = tonumber(result.Multiplier) or 0
 		local center = UDim2.fromOffset(windowX + windowW / 2, windowY + REEL_H / 2)
+		local centerPoint = Vector2.new(windowX + windowW / 2, windowY + REEL_H / 2)
 
 		if payout > bet then
 			highlightWinners(result.Reels)
 			partyUntil = os.clock() + (multiplier >= 25 and 3.5 or 1.8)
 			ctx.Sound.Play("SlotWin", multiplier >= 25 and 1.1 or 1)
 			local text = "+" .. Format.Format(payout)
-			ctx.FloatText(card, center, text, gold, multiplier >= 10 and 34 or 26)
+			floatOnOverlay(card, width, centerPoint, text, gold, multiplier >= 10 and 34 or 26)
 			setInfo(WIN_TEXTS[random:NextInteger(1, #WIN_TEXTS)] .. " " .. Format.Multiplier(multiplier), gold, 3)
 			UIUtil.Tween(windowStroke, 0.1, { Color = white, Thickness = 4 })
 			task.delay(0.6, function()
@@ -5157,7 +5279,7 @@ function Casino.Start(ctx)
 		elseif payout > 0 then
 			highlightWinners(result.Reels)
 			ctx.Sound.Play("Cash", 0.8)
-			ctx.FloatText(card, center, "+" .. Format.Format(payout), white, 22)
+			floatOnOverlay(card, width, centerPoint, "+" .. Format.Format(payout), white, 22)
 			setInfo("Remboursé en partie (" .. Format.Multiplier(multiplier) .. ") 🙃", Color3.fromRGB(255, 225, 160), 2.5)
 		else
 			ctx.Sound.Play("Error", 0.75)
@@ -5612,15 +5734,27 @@ function DVD.Start(ctx)
 		}
 		local color = colors[logo.ColorIndex]
 
-		local button = UIUtil.Create("TextButton", {
+		-- Racine = simple Frame (ne capte pas les clics) ; la zone cliquable
+		-- est un bouton enfant "Hit", masqué pendant la recharge pour que les
+		-- clics passent au bouton principal / aux cartes en dessous.
+		local button = UIUtil.Create("Frame", {
 			Name = "DVDLogo" .. index,
 			Size = UDim2.fromOffset(logoSize.X, logoSize.Y),
 			BackgroundTransparency = 1,
-			Text = "",
-			AutoButtonColor = false,
+			Active = false,
 			Visible = false,
 			ZIndex = 5,
 			Parent = container,
+		})
+		local hit = UIUtil.Create("TextButton", {
+			Name = "Hit",
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			Text = "",
+			AutoButtonColor = false,
+			Visible = not cooling,
+			ZIndex = 9,
+			Parent = button,
 		})
 
 		-- Corps visuel (le bouton garde sa taille, seul le corps s'écrase)
@@ -5635,6 +5769,7 @@ function DVD.Start(ctx)
 		})
 		local bodyScale = UIUtil.Create("UIScale", { Scale = 0, Parent = body })
 		logo.Button = button
+		logo.Hit = hit
 		logo.Body = body
 		logo.Scale = bodyScale
 
@@ -5753,17 +5888,17 @@ function DVD.Start(ctx)
 		end
 
 		-- Survol : le logo gonfle un peu (PC)
-		ctx.Connect(button.MouseEnter, function()
+		ctx.Connect(hit.MouseEnter, function()
 			if not cooling then
 				UIUtil.Tween(bodyScale, 0.15, { Scale = 1.08 }, Enum.EasingStyle.Back)
 			end
 		end)
-		ctx.Connect(button.MouseLeave, function()
+		ctx.Connect(hit.MouseLeave, function()
 			UIUtil.Tween(bodyScale, 0.15, { Scale = 1 })
 		end)
 
 		-- Clic : bonus avec temps de recharge commun
-		ctx.Connect(button.Activated, function()
+		ctx.Connect(hit.Activated, function()
 			if not ctx.IsAlive() then
 				return
 			end
@@ -5811,6 +5946,8 @@ function DVD.Start(ctx)
 
 	local function setFaded(faded: boolean)
 		for _, logo in ipairs(logos) do
+			-- Pendant la recharge, les logos ne captent plus les clics
+			logo.Hit.Visible = not faded
 			for _, entry in ipairs(logo.Fades) do
 				local target = faded and math.max(entry[3], COOLDOWN_FADE) or entry[3]
 				UIUtil.Tween(entry[1], 0.25, { [entry[2]] = target })
@@ -6077,8 +6214,9 @@ return DVD
 	Disco (ModuleScript - stimulus)
 	Emplacement : ReplicatedStorage > Client > Stimuli > Disco
 
-	Boule disco (calque Overlay) suspendue en haut, à droite de la colonne
-	centrale (x = centre + 360) : une mosaïque de petites facettes qui
+	Boule disco (calque Overlay) accrochée au bandeau d'actu, à droite de la
+	colonne centrale (x = centre + 360, y = 20 : au-dessus des cartes du
+	haut, pour ne jamais cacher R1 / CR) : une mosaïque de petites facettes qui
 	"tournent" et scintillent, avec des reflets colorés.
 	Elle projette des faisceaux de lumière translucides qui balayent tout
 	l'écran en changeant de couleur, et quelques taches de lumière qui se
@@ -6091,10 +6229,11 @@ local Disco = {}
 Disco.Slot = "Overlay"
 
 local BALL_X = 360 -- décalage depuis le centre de l'écran
-local BALL_Y = 74
-local BALL_SIZE = 58
+local BALL_Y = 20 -- dans le bandeau d'actu (y 0-30) : les cartes commencent à y = 40
+local BALL_SIZE = 36
+local HALO_PAD = 20 -- le halo déborde de HALO_PAD / 2 autour de la boule
 local TILE = 8 -- taille d'une facette (avec 1 px d'écart)
-local GRID = 7 -- facettes par ligne / colonne
+local GRID = 4 -- facettes par ligne / colonne (GRID * TILE <= BALL_SIZE)
 local PATTERN_W = 14 -- largeur du motif qui "tourne"
 local BEAM_LENGTH = 1500
 local MAX_SPARKLES = 5
@@ -6187,22 +6326,11 @@ function Disco.Start(ctx)
 	------------------------------------------------------------------
 	local ballPosition = UDim2.new(0.5, BALL_X, 0, BALL_Y)
 
-	-- Fil (depuis le bas du bandeau d'actu)
-	Create("Frame", {
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, BALL_X, 0, 28),
-		Size = UDim2.fromOffset(2, BALL_Y - 28 - BALL_SIZE / 2 + 2),
-		BackgroundColor3 = Color3.fromRGB(70, 70, 80),
-		BorderSizePixel = 0,
-		ZIndex = 4,
-		Parent = root,
-	})
-
 	-- Halo coloré autour de la boule
 	local halo = Create("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = ballPosition,
-		Size = UDim2.fromOffset(BALL_SIZE + 34, BALL_SIZE + 34),
+		Size = UDim2.fromOffset(BALL_SIZE + HALO_PAD, BALL_SIZE + HALO_PAD),
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		BackgroundTransparency = 0.8,
 		BorderSizePixel = 0,
@@ -6254,8 +6382,8 @@ function Disco.Start(ctx)
 
 	-- Reflet
 	local highlight = Create("Frame", {
-		Position = UDim2.fromOffset(12, 10),
-		Size = UDim2.fromOffset(12, 9),
+		Position = UDim2.fromOffset(7, 6),
+		Size = UDim2.fromOffset(8, 6),
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		BackgroundTransparency = 0.15,
 		BorderSizePixel = 0,
@@ -6491,7 +6619,8 @@ function Email.Start(ctx)
 	end
 
 	------------------------------------------------------------------
-	-- Compteur "📬 non lus" (en haut à droite, sous le fil d'actu)
+	-- Compteur "📬 non lus" (dans le bandeau d'actu, juste à gauche de
+	-- l'horloge de 62 px : hors de toute carte, il ne cache pas la bourse)
 	------------------------------------------------------------------
 	local counter = UIUtil.Label({
 		Name = "Unread",
@@ -6502,7 +6631,7 @@ function Email.Start(ctx)
 		BackgroundTransparency = 0,
 		Size = UDim2.fromOffset(128, 22),
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -16, 0, 33),
+		Position = UDim2.new(1, -70, 0, 4),
 		Visible = false,
 		MaxTextSize = 15,
 		ZIndex = 40,
@@ -6568,13 +6697,17 @@ function Email.Start(ctx)
 		local ax = math.clamp(sx, 0.02, 0.98)
 		local ay = math.clamp(sy, 0.05, 0.95)
 
-		-- AnchorPoint = position : la fenêtre reste toujours dans l'écran
-		local root = UIUtil.Create("Frame", {
+		-- AnchorPoint = position : la fenêtre reste toujours dans l'écran.
+		-- Racine = TextButton vide : elle absorbe les clics sur la fenêtre
+		-- (sinon ils traversent jusqu'au bouton principal / aux cartes).
+		local root = UIUtil.Create("TextButton", {
 			Name = "MailPopup",
 			Size = UDim2.fromOffset(POPUP_W, POPUP_H),
 			AnchorPoint = Vector2.new(ax, ay),
 			Position = UDim2.fromScale(ax, ay),
 			BackgroundTransparency = 1,
+			Text = "",
+			AutoButtonColor = false,
 			ZIndex = 60,
 			Parent = container,
 		})
@@ -7049,6 +7182,9 @@ local RARE = { "🦄", "🌈", "👑", "💎" } -- de temps en temps, plus gros
 
 function EmojiRain.Start(ctx)
 	local container: Frame = ctx.Container
+	-- Tout en dessous des autres stimuli du calque (notifications, mails...) :
+	-- la pluie reste un décor et ne recouvre jamais un élément à lire / cliquer
+	container.ZIndex = 0
 	local random = Random.new()
 
 	local pool = {} -- toutes les gouttes (actives ou non)
@@ -9326,6 +9462,15 @@ function LootBox.Start(ctx)
 	UIUtil.Gradient(card, ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(234, 224, 255)), 90)
 	local cardScale = Create("UIScale", { Parent = card })
 
+	-- Texte flottant dessiné dans le calque Overlay : il monte de 100 px et
+	-- serait coupé par le slot (ClipsDescendants). `point` = position en
+	-- pixels "design" dans `guiObject` (qui fait `designW` de large).
+	local function floatOnOverlay(guiObject: GuiObject, designW: number, point: Vector2, text: string, color: Color3?, size: number?)
+		local ratio = guiObject.AbsoluteSize.X / math.max(1, designW)
+		local canvas = ctx.Interface.ScreenToCanvas(guiObject.AbsolutePosition + point * ratio)
+		ctx.FloatText(ctx.Overlay, UDim2.fromOffset(canvas.X, canvas.Y), text, color, size)
+	end
+
 	local title = UIUtil.Label({
 		Text = "Coffre mystère",
 		Font = Theme.Fonts.Title,
@@ -9647,7 +9792,7 @@ function LootBox.Start(ctx)
 				ctx.Sound.Play("Bonus", 1.4)
 				badgeScale.Scale = 1.6
 				UIUtil.Tween(badgeScale, 0.4, { Scale = 1 }, Enum.EasingStyle.Back)
-				ctx.FloatText(card, UDim2.fromOffset(centerX, CHEST_Y - 30), "+1 📦", Theme.Colors.Purple, 22)
+				floatOnOverlay(card, width, Vector2.new(centerX, CHEST_Y - 30), "+1 📦", Theme.Colors.Purple, 22)
 			end
 		end
 	end)
@@ -9836,7 +9981,7 @@ function LootBox.Start(ctx)
 		if effectsOn() then
 			ctx.Effects.Burst(card, UDim2.fromOffset(centerX, CHEST_Y - 10), color, 6 + tierIndex * 4)
 		end
-		ctx.FloatText(card, UDim2.fromOffset(centerX, CHEST_Y - 20), amountText, color, 26)
+		floatOnOverlay(card, width, Vector2.new(centerX, CHEST_Y - 20), amountText, color, 26)
 
 		if tier.Id == "Legendary" or tierIndex >= #config.Tiers then
 			ctx.Sound.Play("Jackpot", 1)
@@ -10929,11 +11074,19 @@ function NewsTicker.Start(ctx)
 	local speed = SPEED
 	local targetSpeed = SPEED
 
-	ctx.Connect(button.MouseEnter, function()
-		targetSpeed = SLOW_SPEED
-	end)
-	ctx.Connect(button.MouseLeave, function()
-		targetSpeed = SPEED
+	-- Survol à la SOURIS uniquement (MouseEnter est aussi émulé par un
+	-- toucher sur mobile, sans MouseLeave fiable : le bandeau resterait lent)
+	local function onHover(input: InputObject)
+		if input.UserInputType == Enum.UserInputType.MouseMovement then
+			targetSpeed = SLOW_SPEED
+		end
+	end
+	ctx.Connect(button.InputBegan, onHover)
+	ctx.Connect(button.InputChanged, onHover)
+	ctx.Connect(button.InputEnded, function(input: InputObject)
+		if input.UserInputType == Enum.UserInputType.MouseMovement then
+			targetSpeed = SPEED
+		end
 	end)
 
 	ctx.OnRender(function(dt: number)
@@ -11907,6 +12060,15 @@ function Pinwheel.Start(ctx)
 	local width = container.Size.X.Offset > 0 and container.Size.X.Offset or 170
 	local height = container.Size.Y.Offset > 0 and container.Size.Y.Offset or 170
 	local hubX, hubY = width / 2, math.floor(height * 0.435)
+	-- Texte flottant dessiné dans le calque Overlay : il monte de 100 px et
+	-- serait coupé par le slot (ClipsDescendants). `point` = position en
+	-- pixels "design" dans `guiObject` (qui fait `designW` de large).
+	local function floatOnOverlay(guiObject: GuiObject, designW: number, point: Vector2, text: string, color: Color3?, size: number?)
+		local ratio = guiObject.AbsoluteSize.X / math.max(1, designW)
+		local canvas = ctx.Interface.ScreenToCanvas(guiObject.AbsolutePosition + point * ratio)
+		ctx.FloatText(ctx.Overlay, UDim2.fromOffset(canvas.X, canvas.Y), text, color, size)
+	end
+
 	local reach = math.ceil(BLADE * math.sqrt(2))
 
 	local function effectsOn(): boolean
@@ -12208,7 +12370,7 @@ function Pinwheel.Start(ctx)
 	ctx.OnBonus("Spin", function(payload)
 		local amount = tonumber(payload.Amount)
 		if amount then
-			ctx.FloatText(container, UDim2.fromOffset(hubX, hubY - 30), "+" .. ctx.Format.Format(amount), Theme.Colors.Gold, 26)
+			floatOnOverlay(container, width, Vector2.new(hubX, hubY - 30), "+" .. ctx.Format.Format(amount), Theme.Colors.Gold, 26)
 		end
 	end)
 
@@ -12996,7 +13158,9 @@ function Press.Start(ctx)
 				entry.Parts.Splat.Visible = false
 			end
 			shout("...elle est revenue", false)
-			task.delay(0.75, function()
+			-- Part avant la fin de la remontée (phaseDuration = durée de "Rise") :
+			-- sinon, à haute vitesse, l'objet suivant arrive sur l'éponge
+			task.delay(math.min(0.75, phaseDuration * 0.8), function()
 				if ctx.IsAlive() and holder.Parent then
 					sendToPile(entry)
 				end
@@ -14205,6 +14369,7 @@ function Runner.Start(ctx)
 		-- Objets (déplacement, collisions)
 		for i = #objects, 1, -1 do
 			local object = objects[i]
+			local prevZ = object.Z
 			object.Z -= travel
 			if object.Z < Z_NEAR then
 				removeObject(i)
@@ -14221,7 +14386,9 @@ function Runner.Start(ctx)
 				frame.Size = UDim2.fromOffset(width, object.Height / z)
 				frame.ZIndex = depthZ(z)
 
-				if state == "run" and object.Lane == effLane and math.abs(z - CHAR_Z) < 0.12 then
+				-- Test sur le trajet parcouru pendant l'image ([z, prevZ]) et non sur
+				-- un seul point : à faible FPS, un objet peut sauter toute la fenêtre
+				if state == "run" and object.Lane == effLane and prevZ > CHAR_Z - 0.12 and z < CHAR_Z + 0.12 then
 					if object.Kind == "Coin" then
 						collectCoin(i)
 					elseif object.Kind == "Barrier" and height < 14 and z <= CHAR_Z then
@@ -14677,16 +14844,24 @@ function Stocks.Start(ctx)
 	local buyWidth = math.floor((CHART_W - sellWidth - 4 * #buyFractions) / math.max(1, #buyFractions))
 
 	local function makeButton(text: string, color: Color3, width: number, order: number): TextButton
+		-- Support transparent placé par le UIListLayout : le bouton, lui, reste
+		-- libre de bouger (sinon UI.Shake, qui change Position, ne fait rien)
+		local holder = UI.Create("Frame", {
+			Name = "TradeHolder",
+			Size = UDim2.fromOffset(width, 30),
+			BackgroundTransparency = 1,
+			LayoutOrder = order,
+			Parent = buttonRow,
+		})
 		local button = UI.NeonButton({
 			Name = "Trade",
 			Text = text,
 			Color = color,
-			Size = UDim2.fromOffset(width, 30),
+			Size = UDim2.fromScale(1, 1),
 			CornerRadius = 9,
 			StrokeThickness = 1.5,
 			MaxTextSize = 14,
-			LayoutOrder = order,
-			Parent = buttonRow,
+			Parent = holder,
 		})
 		local padding = button:FindFirstChildOfClass("UIPadding")
 		if padding then
@@ -14812,16 +14987,20 @@ function Stocks.Start(ctx)
 	end
 
 	-- Texte du portefeuille (valeur + plus/moins-value)
+	local FEE = math.clamp(tonumber(stockConfig.Fee) or 0, 0, 1)
 	local function refreshHoldings()
 		local shares, costBasis = getHoldings()
 		local price = targetPrice
 		if shares <= 1e-9 then
-			valueLabel.Text = '💼 <font color="#777777">Aucune action</font>'
+			valueLabel.Text = '💼 <font color="#777777">Aucune action · frais '
+				.. tostring(math.floor(FEE * 100 + 0.5))
+				.. " %</font>"
 			profitLabel.Text = "Achète bas, vends haut 😏"
 			profitLabel.TextColor3 = Theme.Colors.TextDim
 			profitLabel.Font = Theme.Fonts.Body
 		else
-			local value = shares * price
+			-- Valeur NETTE des frais de vente : c'est ce que "Vendre" rapporte vraiment
+			local value = shares * price * (1 - FEE)
 			local sharesText = shares < 100 and string.format("%.2f", shares) or Format.Format(shares)
 			valueLabel.Text = "💼 <b>" .. formatAmount(value) .. '</b> <font color="#777777">· ' .. sharesText .. " act.</font>"
 			local profit = value - costBasis
@@ -15236,9 +15415,25 @@ function Weather.Start(ctx)
 		{ Min = 0.015, Max = 0.17, Anchor = 0 },
 		{ Min = 0.83, Max = 0.985, Anchor = 1 },
 	}
+	-- Dans le calque Background (sous les cartes des slots) : les nuages et
+	-- leur pluie ne cachent jamais le cours de la bourse (R1) ni le live (L1).
+	-- Les éclairs, cliquables, restent dans ctx.Container (Overlay).
+	local ambientHolder = UIUtil.Create("Frame", {
+		Name = "WeatherAmbient",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Active = false,
+		ZIndex = 1000, -- au-dessus du fond NeonMode
+		Parent = ctx.Interface.Layers.Background or container,
+	})
+	-- Détruit avec le conteneur (arrêt du stimulus, détox)
+	container.Destroying:Connect(function()
+		ambientHolder:Destroy()
+	end)
+
 	local dropCount = effectsOn() and DROPS_PER_CLOUD or DROPS_LOW_EFFECTS
 	for index, range in ipairs(ranges) do
-		local cloud = makeCloud(container, cloudColor, 5)
+		local cloud = makeCloud(ambientHolder, cloudColor, 5)
 		cloud.Root.AnchorPoint = Vector2.new(range.Anchor, 0)
 		cloud.Range = range
 		cloud.Phase = random:NextNumber(0, math.pi * 2) + index
@@ -15573,7 +15768,8 @@ function Weather.Start(ctx)
 end
 
 function Weather.Stop(_ctx)
-	-- Nuages et éclairs vivent dans ctx.Container (détruit par le StimulusManager)
+	-- Éclairs dans ctx.Container (détruit par le StimulusManager) ; nuages
+	-- d'ambiance dans le calque Background, détruits avec ce conteneur
 end
 
 return Weather
@@ -16467,6 +16663,24 @@ function UIUtil.Shake(guiObject: GuiObject)
 		return -- déjà en train de trembler : on ne décale pas la position d'origine
 	end
 	guiObject:SetAttribute("Shaking", true)
+	-- Placé par un UIListLayout / UIGridLayout : Position est ignorée,
+	-- on fait trembler la rotation à la place
+	local parent = guiObject.Parent
+	if parent and parent:FindFirstChildWhichIsA("UIGridStyleLayout") then
+		local originRotation = guiObject.Rotation
+		task.spawn(function()
+			for i = 1, 6 do
+				if not guiObject.Parent then
+					break
+				end
+				guiObject.Rotation = originRotation + ((i % 2 == 0) and 4 or -4)
+				task.wait(0.03)
+			end
+			guiObject.Rotation = originRotation
+			guiObject:SetAttribute("Shaking", nil)
+		end)
+		return
+	end
 	local origin = guiObject.Position
 	task.spawn(function()
 		for i = 1, 6 do
@@ -16988,7 +17202,8 @@ Config.Stocks = {
 	Symbol = "DOPA",
 	StartPrice = 100,
 	Volatility = 0.03, -- variation aléatoire par mise à jour (3 %)
-	MeanReversion = 0.02, -- tendance à revenir vers StartPrice
+	MeanReversion = 0.002, -- tendance (faible) à revenir vers StartPrice : trop forte, elle rend le cours prévisible
+	Fee = 0.05, -- frais prélevés à l'achat ET à la vente (5 %) : empêche l'achat/vente en boucle
 	MinPrice = 5,
 	MaxPrice = 2000,
 	UpdateInterval = 1, -- secondes
@@ -17770,6 +17985,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Net = require(ReplicatedStorage.Shared.Net)
 Net.Setup() -- AVANT tout le reste : les clients attendent ces remotes
 
+-- Jeu 100 % interface 2D : pas de personnage (sinon il bouge en fond avec ZQSD / espace)
+Players.CharacterAutoLoads = false
+
 local ServicesFolder = script.Parent:WaitForChild("Services")
 
 -- Ordre important : les données d'abord, puis le jeu, puis le reste
@@ -17952,6 +18170,12 @@ local settings = Config.Casino
 
 local BIG_WIN_MULTIPLIER = 25 -- à partir de ce multiplicateur, tout le serveur est prévenu
 
+-- Gain net cumulé au casino (pertes comprises) et son record, par joueur (session).
+-- Seul ce qui dépasse le record compte dans LifetimeDopamine : sinon jouer
+-- en boucle gonflerait le classement (les gains comptent, pas les pertes).
+local casinoNet = {}
+local casinoPeak = {}
+
 function CasinoService:Init(allServices)
 	services = allServices
 end
@@ -18017,7 +18241,13 @@ local function onSpin(player: Player, fraction: any)
 	data.Stats.SlotSpins += 1
 	if payout > bet then
 		data.Stats.SlotWins += 1
-		data.Stats.LifetimeDopamine = math.min(maxValue, data.Stats.LifetimeDopamine + (payout - bet))
+	end
+	local net = (casinoNet[player] or 0) + (payout - bet)
+	casinoNet[player] = net
+	local peak = casinoPeak[player] or 0
+	if net > peak then
+		data.Stats.LifetimeDopamine = math.min(maxValue, data.Stats.LifetimeDopamine + (net - peak))
+		casinoPeak[player] = net
 	end
 	services.QuestService:Progress(player, "Casino", 1)
 	services.GameService:SendState(player)
@@ -18035,6 +18265,11 @@ local function onSpin(player: Player, fraction: any)
 		Payout = payout,
 		Multiplier = multiplier,
 	}
+end
+
+function CasinoService:PlayerRemoving(player: Player)
+	casinoNet[player] = nil
+	casinoPeak[player] = nil
 end
 
 function CasinoService:Start()
@@ -18170,13 +18405,23 @@ local random = Random.new()
 -- client envoie la vraie taille (DVDResize)
 local DEFAULT_W = Config.DVD.LogoSize.X / 1280
 local DEFAULT_H = Config.DVD.LogoSize.Y / 720
+-- Zone de déplacement "de référence" : les gains de rebond sont ramenés à
+-- cette taille, quelle que soit la taille envoyée par le client
+local DEFAULT_RX, DEFAULT_RY = 1 - DEFAULT_W, 1 - DEFAULT_H
+-- Après un redimensionnement, aucun coin n'est accepté pendant ce délai
+-- (sinon le client pourrait choisir une taille qui "fabrique" un coin)
+local RESIZE_CORNER_LOCK = 10
+-- Temps minimum entre deux jackpots d'un même joueur (sécurité anti-abus)
+local JACKPOT_COOLDOWN = 45
 
 --[[
 	[Player] = {
-		Logos = { { Params, ClaimedCorners = { [k] = true }, LastBX, LastBY } },
+		Logos = { { Params, ClaimedCorners = { [k] = true }, LastBX, LastBY, Frac } },
 		W, H = taille commune des logos,
 		Carry = rebonds pas encore comptés (avant un changement de trajectoire),
 		LastClick = os.clock() du dernier clic récompensé (recharge commune),
+		LastResize = os.clock() du dernier redimensionnement appliqué,
+		LastJackpot = os.clock() du dernier jackpot payé,
 	}
 ]]
 local states = {}
@@ -18216,20 +18461,29 @@ local function setParams(logo, params: DVDMath.Params)
 end
 
 local function newLogo(w: number, h: number)
-	local logo = {}
+	local logo = { Frac = 0 }
 	setParams(logo, randomParams(w, h))
 	return logo
 end
 
--- Rebonds d'un logo depuis le dernier comptage (plafonnés)
+-- Rebonds d'un logo depuis le dernier comptage (plafonnés).
+-- Chaque rebond est pondéré par (zone réelle / zone de référence) : un logo
+-- plus gros (zone plus petite) rebondit plus souvent mais chaque rebond vaut
+-- moins, donc la taille envoyée par le client ne change pas les gains.
 local function countBounces(logo, t: number): number
-	local bx, by = DVDMath.BounceIndex(logo.Params, t)
-	local count = math.abs(bx - logo.LastBX) + math.abs(by - logo.LastBY)
+	local params = logo.Params
+	local bx, by = DVDMath.BounceIndex(params, t)
+	local rx, ry = DVDMath.Ranges(params)
+	local weighted = math.abs(bx - logo.LastBX) * rx / DEFAULT_RX + math.abs(by - logo.LastBY) * ry / DEFAULT_RY
 	logo.LastBX, logo.LastBY = bx, by
-	if count ~= count then
+	if weighted ~= weighted or weighted == math.huge then
 		return 0
 	end
-	return math.min(count, Config.DVD.MaxBouncesPerTick)
+	-- On garde la partie décimale pour le prochain comptage
+	logo.Frac = (logo.Frac or 0) + weighted
+	local whole = math.floor(logo.Frac)
+	logo.Frac -= whole
+	return math.min(whole, Config.DVD.MaxBouncesPerTick)
 end
 
 -- Avant de changer une trajectoire : on met de côté les rebonds pas encore comptés
@@ -18330,6 +18584,9 @@ function DVDService:PlayerReady(player: Player)
 		H = DEFAULT_H,
 		Carry = 0,
 		LastClick = 0,
+		-- -math.huge (et pas 0) : os.clock() peut être petit juste après le démarrage du serveur
+		LastResize = -math.huge,
+		LastJackpot = -math.huge,
 		PendingResize = nil, -- taille reçue trop tôt, appliquée plus tard
 		ResizeScheduled = false,
 	}
@@ -18356,14 +18613,17 @@ local function applyResize(player: Player, state, w: number, h: number)
 	end
 	flushBounces(state)
 	state.W, state.H = w, h
+	state.LastResize = os.clock()
 	local t = now()
 	for _, logo in ipairs(state.Logos) do
 		local params = logo.Params
 		local x, y = DVDMath.Position(params, t)
 		local dirX, dirY = DVDMath.Directions(params, t)
+		-- Borné juste AVANT le bord : un logo collé au bord ne compte pas un
+		-- faux rebond et ne se retrouve pas pile sur un "coin"
 		setParams(logo, {
-			X0 = math.clamp(x, 0, math.max(0, 1 - w)),
-			Y0 = math.clamp(y, 0, math.max(0, 1 - h)),
+			X0 = math.clamp(x, 0, math.max(0, 1 - w - 1e-6)),
+			Y0 = math.clamp(y, 0, math.max(0, 1 - h - 1e-6)),
 			VX = math.abs(params.VX) * dirX,
 			VY = math.abs(params.VY) * dirY,
 			T0 = t,
@@ -18450,6 +18710,11 @@ local function onCorner(player: Player, index: any, k: any)
 	if not RateLimiter.Check(player, "DVDCorner" .. index, 0.3) then
 		return
 	end
+	local clock = os.clock()
+	-- Trajectoire tout juste imposée par un redimensionnement, ou jackpot trop récent : refusé
+	if clock - state.LastResize < RESIZE_CORNER_LOCK or clock - state.LastJackpot < JACKPOT_COOLDOWN then
+		return
+	end
 	local logo = state.Logos[index]
 	if logo.ClaimedCorners[k] then
 		return -- déjà récompensé
@@ -18458,8 +18723,9 @@ local function onCorner(player: Player, index: any, k: any)
 	local params = logo.Params
 	local bounceTime = DVDMath.BounceTimeX(params, k)
 	local t = now()
-	-- Le rebond doit avoir eu lieu récemment (et après le début de la trajectoire)
-	if bounceTime ~= bounceTime or bounceTime < params.T0 or bounceTime > t + 0.5 or bounceTime < t - 5 then
+	-- Le rebond doit avoir eu lieu récemment (et nettement après le début de la
+	-- trajectoire : un "rebond" pile au départ n'est qu'un logo posé contre le bord)
+	if bounceTime ~= bounceTime or bounceTime < params.T0 + 0.25 or bounceTime > t + 0.5 or bounceTime < t - 5 then
 		return
 	end
 	if not DVDMath.IsCornerAtBounceX(params, k, Config.DVD.CornerTolerance) then
@@ -18467,6 +18733,7 @@ local function onCorner(player: Player, index: any, k: any)
 	end
 
 	logo.ClaimedCorners[k] = true
+	state.LastJackpot = clock
 	local reward = Formulas.ScaledReward(
 		services.GameService:GetStats(player),
 		Config.DVD.JackpotRewardSeconds,
@@ -18493,6 +18760,8 @@ function DVDService:DebugCorner(player: Player): boolean
 		return false
 	end
 	flushBounces(state)
+	-- Test : on lève les sécurités anti-abus des jackpots
+	state.LastResize, state.LastJackpot = -math.huge, -math.huge
 	local logo = state.Logos[1]
 	local params = logo.Params
 	local rangeX, rangeY = DVDMath.Ranges(params)
@@ -18635,14 +18904,13 @@ return DailyRewardService
 ]]
 
 local DataStoreService = game:GetService("DataStoreService")
-local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 
 local DataService = {}
 
--- Profils chargés : [Player] = { Data = table, CanSave = bool, Saving = bool }
+-- Profils chargés : [Player] = { Data = table, CanSave = bool, Saving = bool, Releasing = bool }
 local profiles = {}
 
 -- Données d'un nouveau joueur (version 2). Toute nouvelle clé ajoutée ici
@@ -18799,7 +19067,7 @@ function DataService:LoadAsync(player: Player)
 		return nil
 	end
 
-	profiles[player] = { Data = data, CanSave = canSave, Saving = false }
+	profiles[player] = { Data = data, CanSave = canSave, Saving = false, Releasing = false }
 
 	if not canSave then
 		task.defer(function()
@@ -18876,6 +19144,11 @@ function DataService:ReleaseAsync(player: Player)
 	if not profile then
 		return
 	end
+	-- Déjà en cours de libération (PlayerRemoving puis BindToClose) : rien à refaire
+	if profile.Releasing then
+		return
+	end
+	profile.Releasing = true
 	-- Si une sauvegarde automatique est en cours, on attend qu'elle finisse
 	local waited = 0
 	while profile.Saving and waited < 10 do
@@ -18900,18 +19173,19 @@ function DataService:Start()
 
 	-- Fermeture du serveur : on sauvegarde tout le monde en parallèle
 	game:BindToClose(function()
-		local pending = 0
-		for _, player in ipairs(Players:GetPlayers()) do
-			if profiles[player] then
-				pending += 1
+		-- On libère TOUS les profils chargés, y compris ceux des joueurs déjà
+		-- sortis de la liste Players (leur sauvegarde de sortie peut être en cours)
+		for player, profile in pairs(profiles) do
+			if not profile.Releasing then
 				task.spawn(function()
 					self:ReleaseAsync(player)
-					pending -= 1
 				end)
 			end
 		end
+		-- On attend aussi les sauvegardes lancées par PlayerRemoving :
+		-- ReleaseAsync retire le profil de la table quand il a fini
 		local start = os.clock()
-		while pending > 0 and os.clock() - start < 25 do
+		while next(profiles) ~= nil and os.clock() - start < 25 do
 			task.wait(0.1)
 		end
 	end)
@@ -18944,8 +19218,10 @@ return DataService
 	  /help           -> liste des commandes
 ]]
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TextChatService = game:GetService("TextChatService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 
@@ -18958,6 +19234,9 @@ local spawnKinds = {}
 for kind in pairs(Config.Spawners) do
 	spawnKinds[string.lower(kind)] = kind
 end
+
+-- Noms des commandes (déclarées comme TextChatCommand dans Studio)
+local COMMAND_NAMES = { "give", "rush", "daily", "save", "corner", "unlockall", "spawn", "golden", "detox", "chest", "reset", "help" }
 
 local HELP = "/give /rush /daily /save /corner /unlockall /spawn <golden|lightning|notif|email> /detox /chest /reset"
 
@@ -19040,21 +19319,60 @@ local function runCommand(player: Player, command: string, argument: string)
 	end
 end
 
+-- Exécute un message de chat s'il ressemble à une commande "/xxx"
+-- (anti-doublon : le même message reçu deux fois en 1 s n'est exécuté qu'une fois)
+local lastMessage: { [Player]: { Text: string, Clock: number } } = {}
+local function handleMessage(player: Player, message: string)
+	local command, argument = string.match(string.lower(message), "^/(%a+)%s*(%S*)")
+	if not command then
+		return
+	end
+	local last = lastMessage[player]
+	if last and last.Text == message and os.clock() - last.Clock < 1 then
+		return
+	end
+	lastMessage[player] = { Text = message, Clock = os.clock() }
+	local ok, err = pcall(runCommand, player, command, argument or "")
+	if not ok then
+		warn("[DebugService] Erreur de la commande /" .. command .. " :", err)
+	end
+end
+
+function DebugService:Start()
+	if not RunService:IsStudio() then
+		return
+	end
+	-- Avec le nouveau chat (TextChatService), un message "/xxx" inconnu peut ne
+	-- jamais arriver à Player.Chatted : on déclare donc de vraies commandes.
+	local folder = Instance.new("Folder")
+	folder.Name = "DopamineDebugCommands"
+	for _, name in ipairs(COMMAND_NAMES) do
+		local command = Instance.new("TextChatCommand")
+		command.Name = "Debug_" .. name
+		command.PrimaryAlias = "/" .. name
+		command.Triggered:Connect(function(textSource: TextSource, text: string)
+			local player = Players:GetPlayerByUserId(textSource.UserId)
+			if player and services.DataService:GetData(player) then
+				handleMessage(player, text)
+			end
+		end)
+		command.Parent = folder
+	end
+	folder.Parent = TextChatService
+end
+
 function DebugService:PlayerReady(player: Player)
 	if not RunService:IsStudio() then
 		return
 	end
-
+	-- Ancien chat (LegacyChatService) : Player.Chatted suffit
 	player.Chatted:Connect(function(message: string)
-		local command, argument = string.match(string.lower(message), "^/(%a+)%s*(%S*)")
-		if not command then
-			return
-		end
-		local ok, err = pcall(runCommand, player, command, argument or "")
-		if not ok then
-			warn("[DebugService] Erreur de la commande /" .. command .. " :", err)
-		end
+		handleMessage(player, message)
 	end)
+end
+
+function DebugService:PlayerRemoving(player: Player)
+	lastMessage[player] = nil
 end
 
 return DebugService
@@ -19083,7 +19401,6 @@ local RunService = game:GetService("RunService")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Formulas = require(ReplicatedStorage.Shared.Formulas)
 local Net = require(ReplicatedStorage.Shared.Net)
-local RateLimiter = require(script.Parent.RateLimiter)
 
 local EventService = {}
 
@@ -19243,10 +19560,9 @@ local function schedulerStep()
 	end
 end
 
+-- Pas de limite de fréquence ici : chaque id est à usage unique (supprimé de
+-- Pending dès le premier clic), donc deux clics rapides légitimes passent
 local function onSpawnClick(player: Player, id: any)
-	if not RateLimiter.Check(player, "SpawnClick", 0.1) then
-		return
-	end
 	local state = spawnStates[player]
 	if not state or type(id) ~= "string" or #id > 64 then
 		return
@@ -19821,11 +20137,15 @@ local function onBuyUpgrade(player: Player, upgradeId: any)
 end
 
 local function onSetSetting(player: Player, name: any, value: any)
-	if not RateLimiter.Check(player, "Setting", 0.2) then
+	if type(name) ~= "string" or not VALID_SETTINGS[name] or type(value) ~= "boolean" then
+		return false
+	end
+	-- Une limite par réglage : couper le son puis les effets rapidement reste possible
+	if not RateLimiter.Check(player, "Setting" .. name, 0.2) then
 		return false
 	end
 	local data = services.DataService:GetData(player)
-	if not data or type(name) ~= "string" or not VALID_SETTINGS[name] or type(value) ~= "boolean" then
+	if not data then
 		return false
 	end
 	data.Settings[name] = value
@@ -20546,10 +20866,13 @@ return RateLimiter
 
 	Bourse (débloquée par l'amélioration "Bourse") :
 	  - un cours COMMUN à tout le serveur, qui suit une marche aléatoire :
-	      prix *= exp(N(0, Volatility)) ; prix += (StartPrice - prix) * MeanReversion
+	      prix *= exp(N(0, Volatility) - Volatility² / 2) ; prix += (StartPrice - prix) * MeanReversion
 	    puis borné entre MinPrice et MaxPrice ;
 	  - envoyé à tous les joueurs toutes les UpdateInterval secondes (StockUpdate) ;
-	  - achat / vente validés par le serveur (RemoteFunction StockTrade).
+	  - achat / vente validés par le serveur (RemoteFunction StockTrade),
+	    avec des frais (Fee) à l'achat et à la vente ;
+	  - seul le bénéfice NET cumulé de la session (au-dessus de son record)
+	    compte dans LifetimeDopamine : acheter/vendre en boucle ne gonfle rien.
 	Uniquement avec la Dopamine du jeu.
 ]]
 
@@ -20570,6 +20893,10 @@ local settings = Config.Stocks
 
 local price = settings.StartPrice
 local history = { price } -- du plus ancien au plus récent
+
+-- Bénéfice net cumulé (pertes comprises) et son record, par joueur (session)
+local tradeNet = {}
+local tradePeak = {}
 
 function StockService:Init(allServices)
 	services = allServices
@@ -20599,7 +20926,8 @@ local function gaussian(): number
 end
 
 local function step()
-	price *= math.exp(gaussian() * settings.Volatility)
+	-- Le terme -Volatility²/2 enlève la dérive à la hausse de exp(N(0, σ))
+	price *= math.exp(gaussian() * settings.Volatility - settings.Volatility ^ 2 / 2)
 	price += (settings.StartPrice - price) * settings.MeanReversion
 	if price ~= price then
 		price = settings.StartPrice
@@ -20625,7 +20953,8 @@ local function isAllowedFraction(fraction: any): boolean
 end
 
 local function onTrade(player: Player, action: any, fraction: any)
-	if not RateLimiter.Check(player, "StockTrade", settings.TradeCooldown) then
+	-- Petite marge pour la latence réseau (le client attend TradeCooldown entre deux clics)
+	if not RateLimiter.Check(player, "StockTrade", math.max(0, settings.TradeCooldown - 0.1)) then
 		return false, "Doucement !"
 	end
 	local data = services.DataService:GetData(player)
@@ -20641,13 +20970,14 @@ local function onTrade(player: Player, action: any, fraction: any)
 
 	local stock = data.Stock
 	local maxValue = Config.Game.MaxDopamine
+	local fee = settings.Fee or 0
 
 	if action == "buy" then
 		local spend = data.Dopamine * fraction
 		if not (spend >= 1) then
 			return false, "Pas assez de " .. Config.Game.CurrencyName
 		end
-		local shares = spend / price
+		local shares = spend * (1 - fee) / price
 		data.Dopamine -= spend
 		stock.Shares += shares
 		stock.CostBasis += spend
@@ -20666,7 +20996,7 @@ local function onTrade(player: Player, action: any, fraction: any)
 		shares = stock.Shares
 		costPart = stock.CostBasis
 	end
-	local proceeds = shares * price
+	local proceeds = shares * price * (1 - fee)
 	local profit = proceeds - costPart
 
 	stock.Shares = math.max(0, stock.Shares - shares)
@@ -20676,8 +21006,13 @@ local function onTrade(player: Player, action: any, fraction: any)
 		stock.CostBasis = 0
 	end
 	data.Dopamine = math.min(maxValue, data.Dopamine + proceeds)
-	if profit > 0 then
-		data.Stats.LifetimeDopamine = math.min(maxValue, data.Stats.LifetimeDopamine + profit)
+	-- Seul le bénéfice net qui dépasse le record précédent compte (les pertes sont déduites)
+	local net = (tradeNet[player] or 0) + profit
+	tradeNet[player] = net
+	local peak = tradePeak[player] or 0
+	if net > peak then
+		data.Stats.LifetimeDopamine = math.min(maxValue, data.Stats.LifetimeDopamine + (net - peak))
+		tradePeak[player] = net
 	end
 	data.Stats.StockTrades += 1
 	services.GameService:SendState(player)
@@ -20685,6 +21020,11 @@ local function onTrade(player: Player, action: any, fraction: any)
 	local result = profit >= 0 and ("bénéfice +" .. NumberFormatter.Format(profit))
 		or ("perte -" .. NumberFormatter.Format(-profit))
 	return true, string.format("💰 Vendu pour %s (%s)", NumberFormatter.Format(proceeds), result)
+end
+
+function StockService:PlayerRemoving(player: Player)
+	tradeNet[player] = nil
+	tradePeak[player] = nil
 end
 
 function StockService:Start()
@@ -20729,6 +21069,9 @@ return StockService
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
+local GuiService = game:GetService("GuiService")
+local RunService = game:GetService("RunService")
+local TextChatService = game:GetService("TextChatService")
 
 local Client = ReplicatedStorage:WaitForChild("Client")
 local Components = Client:WaitForChild("Components")
@@ -20746,9 +21089,28 @@ local Notifications = require(Components:WaitForChild("Notifications"))
 local PanelManager = require(Components:WaitForChild("PanelManager"))
 local CenterColumn = require(Components:WaitForChild("CenterColumn"))
 
--- Le sac à dos (outils) ne sert à rien ici
+-- Le sac à dos (outils) ne sert à rien ici. La liste des joueurs (leaderstats)
+-- et la fenêtre de chat recouvriraient les emplacements R1 / L1 et captureraient
+-- les clics : le jeu a déjà son propre classement.
 pcall(function()
 	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
+end)
+pcall(function()
+	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, false)
+end)
+-- (Dans Studio on garde le chat : il sert à taper les commandes de test /give, /rush...)
+if not RunService:IsStudio() then
+	pcall(function()
+		StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Chat, false)
+	end)
+	pcall(function()
+		TextChatService.ChatWindowConfiguration.Enabled = false
+	end)
+end
+-- Pas de joystick / bouton de saut tactiles : ils prendraient les appuis
+-- destinés aux emplacements du bas (Runner, Lofi...)
+pcall(function()
+	GuiService.TouchControlsEnabled = false
 end)
 
 -- 1. Services de base

@@ -243,11 +243,29 @@ function ClientState.GetTargetDopamine(): number
 	return total + (data.PerSecond or 0) * elapsed
 end
 
+-- Valeur "confirmée" : état serveur + clics prédits, SANS l'extrapolation des
+-- gains passifs (pour savoir si un achat sera accepté par le serveur)
+function ClientState.GetConfirmedDopamine(): number
+	local data = ClientState.Data
+	if not data then
+		return 0
+	end
+	local total = data.Dopamine or 0
+	for _, prediction in ipairs(pending) do
+		total += prediction.Amount
+	end
+	return total
+end
+
 -- Valeur affichée, lissée à chaque image (appelé UNE fois par image par la colonne centrale)
 function ClientState.UpdateDisplay(dt: number): number
 	local target = ClientState.GetTargetDopamine()
-	if target < displayDopamine then
-		displayDopamine = target -- achat : on descend immédiatement
+	local perSecond = (ClientState.Data and ClientState.Data.PerSecond) or 0
+	if target < displayDopamine - perSecond * 0.6 - 1e-6 then
+		displayDopamine = target -- vraie baisse (achat, détox) : on descend immédiatement
+	elseif target <= displayDopamine then
+		-- Petite baisse due au décalage entre ticks passifs et envois d'état :
+		-- on garde la valeur affichée jusqu'à ce que la cible la rattrape
 	else
 		displayDopamine += (target - displayDopamine) * (1 - math.exp(-14 * dt))
 		if target - displayDopamine < 0.01 then

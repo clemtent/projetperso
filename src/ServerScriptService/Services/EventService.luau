@@ -17,7 +17,6 @@ local RunService = game:GetService("RunService")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Formulas = require(ReplicatedStorage.Shared.Formulas)
 local Net = require(ReplicatedStorage.Shared.Net)
-local RateLimiter = require(script.Parent.RateLimiter)
 
 local EventService = {}
 
@@ -177,10 +176,9 @@ local function schedulerStep()
 	end
 end
 
+-- Pas de limite de fréquence ici : chaque id est à usage unique (supprimé de
+-- Pending dès le premier clic), donc deux clics rapides légitimes passent
 local function onSpawnClick(player: Player, id: any)
-	if not RateLimiter.Check(player, "SpawnClick", 0.1) then
-		return
-	end
 	local state = spawnStates[player]
 	if not state or type(id) ~= "string" or #id > 64 then
 		return

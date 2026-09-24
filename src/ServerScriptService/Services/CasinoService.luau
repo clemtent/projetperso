@@ -25,6 +25,12 @@ local settings = Config.Casino
 
 local BIG_WIN_MULTIPLIER = 25 -- à partir de ce multiplicateur, tout le serveur est prévenu
 
+-- Gain net cumulé au casino (pertes comprises) et son record, par joueur (session).
+-- Seul ce qui dépasse le record compte dans LifetimeDopamine : sinon jouer
+-- en boucle gonflerait le classement (les gains comptent, pas les pertes).
+local casinoNet = {}
+local casinoPeak = {}
+
 function CasinoService:Init(allServices)
 	services = allServices
 end
@@ -90,7 +96,13 @@ local function onSpin(player: Player, fraction: any)
 	data.Stats.SlotSpins += 1
 	if payout > bet then
 		data.Stats.SlotWins += 1
-		data.Stats.LifetimeDopamine = math.min(maxValue, data.Stats.LifetimeDopamine + (payout - bet))
+	end
+	local net = (casinoNet[player] or 0) + (payout - bet)
+	casinoNet[player] = net
+	local peak = casinoPeak[player] or 0
+	if net > peak then
+		data.Stats.LifetimeDopamine = math.min(maxValue, data.Stats.LifetimeDopamine + (net - peak))
+		casinoPeak[player] = net
 	end
 	services.QuestService:Progress(player, "Casino", 1)
 	services.GameService:SendState(player)
@@ -108,6 +120,11 @@ local function onSpin(player: Player, fraction: any)
 		Payout = payout,
 		Multiplier = multiplier,
 	}
+end
+
+function CasinoService:PlayerRemoving(player: Player)
+	casinoNet[player] = nil
+	casinoPeak[player] = nil
 end
 
 function CasinoService:Start()

@@ -310,12 +310,16 @@ local function buildPills(parent: Frame, order: number)
 	return row
 end
 
-local function buildRush(parent: Frame, order: number)
+-- Le bandeau Rush se superpose à la ligne "par seconde" (hors de la pile) :
+-- il ne pousse pas la barre d'améliorations sur les emplacements du bas
+local function buildRush(parent: GuiObject)
 	rushBanner = UIUtil.Create("Frame", {
 		Name = "RushBanner",
 		Size = UDim2.fromOffset(330, 28),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
 		BackgroundColor3 = Theme.Colors.Yellow,
-		LayoutOrder = order,
+		ZIndex = 2,
 		Visible = false,
 		Parent = parent,
 	})
@@ -415,7 +419,7 @@ local function refreshBadges()
 	local shop = pills.ItemShop
 	if shop then
 		local owned = (data.Cosmetics and data.Cosmetics.Owned) or {}
-		local dopamine = ClientState.GetTargetDopamine()
+		local dopamine = ClientState.GetConfirmedDopamine()
 		local affordable = 0
 		for _, cosmetic in ipairs(Config.Cosmetics) do
 			if not owned[cosmetic.Id] and dopamine >= cosmetic.Cost then
@@ -483,7 +487,7 @@ function CenterColumn.Build(parent: Frame, floatingLayer: Frame, fxLayer: Frame)
 		FillDirection = Enum.FillDirection.Vertical,
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
 		SortOrder = Enum.SortOrder.LayoutOrder,
-		Padding = UDim.new(0, 4),
+		Padding = UDim.new(0, 3), -- tout doit tenir au-dessus des emplacements du bas (y <= 425)
 		Parent = stack,
 	})
 
@@ -516,8 +520,7 @@ function CenterColumn.Build(parent: Frame, floatingLayer: Frame, fxLayer: Frame)
 	perSecondStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 	perSecondStroke.Enabled = false
 
-	buildRush(stack, 3)
-	UIUtil.Create("Frame", { Name = "Spacer", Size = UDim2.fromOffset(1, 2), BackgroundTransparency = 1, LayoutOrder = 4, Parent = stack })
+	buildRush(perSecondLabel)
 	buildPills(stack, 5)
 	buildCombo(stack, 6)
 	local upgradeBar = UpgradeBar.Build(stack, floatingLayer)
