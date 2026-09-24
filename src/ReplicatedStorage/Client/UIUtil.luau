@@ -599,4 +599,179 @@ function UIUtil.DisconnectAll(connections: { any })
 	table.clear(connections)
 end
 
+----------------------------------------------------------------------
+-- Ajouts v4 (boutiques, classement)
+----------------------------------------------------------------------
+
+export type Tabs = {
+	Frame: Frame,
+	Select: (id: string, silent: boolean?) -> (),
+	GetSelected: () -> string,
+	SetText: (id: string, text: string) -> (),
+}
+
+-- Onglets (contrôle segmenté) : fond gris clair arrondi et curseur blanc qui
+-- glisse sous l'onglet choisi. props : Parent, Tabs = { { Id, Text } },
+-- Color (accent), Size, Position, AnchorPoint, LayoutOrder, ZIndex,
+-- TextSize, Selected (Id de départ), OnSelect(id).
+function UIUtil.Tabs(props: { [string]: any }): Tabs
+	local list = props.Tabs or {}
+	local count = math.max(1, #list)
+	local accent: Color3 = props.Color or Theme.Colors.Blue
+	local selectedColor = accent:Lerp(Color3.new(0, 0, 0), 0.25)
+	local zIndex = props.ZIndex or 1
+	local frame = UIUtil.Create("Frame", {
+		Name = props.Name or "Tabs",
+		Size = props.Size or UDim2.new(1, 0, 0, 38),
+		Position = props.Position or UDim2.new(),
+		AnchorPoint = props.AnchorPoint or Vector2.zero,
+		BackgroundColor3 = Theme.Colors.Surface,
+		LayoutOrder = props.LayoutOrder or 0,
+		ZIndex = zIndex,
+		Parent = props.Parent,
+	})
+	UIUtil.Corner(frame, UDim.new(1, 0))
+	UIUtil.Stroke(frame, Theme.Colors.Divider, 1)
+
+	local indicator = UIUtil.Create("Frame", {
+		Name = "Indicator",
+		Size = UDim2.new(1 / count, -6, 1, -6),
+		Position = UDim2.new(0, 3, 0, 3),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		ZIndex = zIndex + 1,
+		Parent = frame,
+	})
+	UIUtil.Corner(indicator, UDim.new(1, 0))
+	UIUtil.Stroke(indicator, accent, 1.5, 0.35)
+
+	local buttons: { [string]: TextButton } = {}
+	local indexOf: { [string]: number } = {}
+	local selected = ""
+	local tabs: Tabs
+
+	local function paint()
+		for id, button in pairs(buttons) do
+			button.TextColor3 = id == selected and selectedColor or Theme.Colors.TextDim
+		end
+	end
+
+	for index, tab in ipairs(list) do
+		local button = UIUtil.Create("TextButton", {
+			Name = tostring(tab.Id),
+			Size = UDim2.new(1 / count, 0, 1, 0),
+			Position = UDim2.fromScale((index - 1) / count, 0),
+			BackgroundTransparency = 1,
+			AutoButtonColor = false,
+			Font = Theme.Fonts.Title,
+			Text = tostring(tab.Text or tab.Id),
+			TextColor3 = Theme.Colors.TextDim,
+			TextSize = props.TextSize or 16,
+			ZIndex = zIndex + 2,
+			Parent = frame,
+		})
+		buttons[tab.Id] = button
+		indexOf[tab.Id] = index
+		button.MouseEnter:Connect(function()
+			if tab.Id ~= selected then
+				button.TextColor3 = Theme.Colors.Text
+			end
+		end)
+		button.MouseLeave:Connect(paint)
+		button.Activated:Connect(function()
+			tabs.Select(tab.Id)
+		end)
+	end
+
+	tabs = {
+		Frame = frame,
+		Select = function(id: string, silent: boolean?)
+			local index = indexOf[id]
+			if not index then
+				return
+			end
+			local changed = id ~= selected
+			selected = id
+			UIUtil.Tween(indicator, 0.25, {
+				Position = UDim2.new((index - 1) / count, 3, 0, 3),
+			}, Enum.EasingStyle.Quint)
+			paint()
+			if changed and not silent and props.OnSelect then
+				props.OnSelect(id)
+			end
+		end,
+		GetSelected = function(): string
+			return selected
+		end,
+		SetText = function(id: string, text: string)
+			local button = buttons[id]
+			if button then
+				button.Text = text
+			end
+		end,
+	}
+
+	local first = props.Selected or (list[1] and list[1].Id)
+	if first then
+		local index = indexOf[first] or 1
+		selected = first
+		indicator.Position = UDim2.new((index - 1) / count, 3, 0, 3)
+		paint()
+	end
+	return tabs
+end
+
+-- Rayons de lumière en étoile (fines bandes qui s'estompent vers
+-- l'extérieur), à placer derrière une icône. Renvoie le cadre (carré,
+-- centré sur `position`) : fais-le tourner pour un effet "vitrine".
+function UIUtil.Rays(parent: Instance, color: Color3, count: number?, size: number?, position: UDim2?, zIndex: number?): Frame
+	local total = count or 6
+	local diameter = size or 160
+	local z = zIndex or 1
+	local holder = UIUtil.Create("Frame", {
+		Name = "Rays",
+		Size = UDim2.fromOffset(diameter, diameter),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = position or UDim2.fromScale(0.5, 0.5),
+		BackgroundTransparency = 1,
+		ZIndex = z,
+		Parent = parent,
+	})
+	for index = 1, total do
+		local bar = UIUtil.Create("Frame", {
+			Name = "Ray" .. index,
+			Size = UDim2.new(0, math.max(6, math.floor(diameter * 0.09)), 1, 0),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Rotation = (index - 1) * 180 / total,
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			ZIndex = z,
+			Parent = holder,
+		})
+		UIUtil.Create("UIGradient", {
+			Rotation = 90,
+			Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 1),
+				NumberSequenceKeypoint.new(0.5, 0.45),
+				NumberSequenceKeypoint.new(1, 1),
+			}),
+			Parent = bar,
+		})
+	end
+	return holder
+end
+
+-- Dégradé vertical clair -> foncé d'une couleur (fonds de cartes "premium")
+function UIUtil.SoftGradient(parent: Instance, color: Color3, rotation: number?): UIGradient
+	return UIUtil.Gradient(parent, ColorSequence.new({
+		ColorSequenceKeypoint.new(0, color:Lerp(Color3.new(1, 1, 1), 0.55)),
+		ColorSequenceKeypoint.new(1, color:Lerp(Color3.new(1, 1, 1), 0.08)),
+	}), rotation or 90)
+end
+
+-- Avatar (tête) d'un joueur sans requête bloquante (URL rbxthumb://)
+function UIUtil.HeadshotUrl(userId: number, size: number?): string
+	return string.format("rbxthumb://type=AvatarHeadShot&id=%d&w=%d&h=%d", math.floor(userId), size or 48, size or 48)
+end
+
 return UIUtil

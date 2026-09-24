@@ -5,13 +5,23 @@
 	Une presse hydraulique qui écrase des trucs, en boucle, et c'est très
 	satisfaisant :
 	  - un objet arrive par le tapis roulant (piles de macarons colorés,
-	    pastèque, canard en plastique, gâteau, éponge...) ;
-	  - le piston descend lentement, l'objet se tasse, la machine tremble,
-	    le manomètre grimpe dans le rouge... puis CRUNCH ! (miettes,
-	    vapeur, secousse, onomatopée) ;
-	  - la galette obtenue part sur le tas à gauche, qui finit à la poubelle,
-	    et la file d'attente à droite se remplit toute seule.
-	La vitesse augmente avec le niveau de l'amélioration "Presse hydraulique".
+	    pastèque, canard en plastique, gâteau, éponge... et des objets
+	    propres à chaque palier de la presse) ;
+	  - le piston descend, l'objet se tasse, la machine tremble, le
+	    manomètre grimpe dans le rouge... puis CRUNCH ! (écrasement avec
+	    rebond, onde de choc, éclats, vapeur, secousse de toute la carte,
+	    son "Crush", onomatopée) ;
+	  - la galette part sur le tas à gauche, qui finit à la poubelle.
+
+	Paliers visuels selon le niveau de l'amélioration "Presse hydraulique"
+	(ctx.GetLevel("Press")) :
+	  1-2 bois & corde, 3-4 acier, 5-6 industrielle (manomètres, tuyaux,
+	  vapeur, gyrophare), 7-8 or (reflets, étincelles dorées),
+	  9-10 diamant néon (contours lumineux, gerbes d'étincelles).
+	Une pastille "Niv. X" affiche le niveau et le nom du palier ; changer
+	de palier joue une petite animation. La vitesse augmente aussi avec le
+	niveau.
+
 	Avec "Presse turbo" (Feature PressStart), un gros bouton START rouge
 	permet d'écraser soi-même : Interact("Press") (recharge côté serveur,
 	compte à rebours affiché) et le bonus s'affiche via OnBonus("Press").
@@ -38,14 +48,15 @@ local QUEUE_X = { 322, 360 } -- places dans la file d'attente
 local QUEUE_Y = 222 -- dessus du tapis roulant
 local QUEUE_SIZE = 34
 local BELT_STRIPES_W = 110 -- bande de rayures du tapis (10 rayures, période = 1/5)
+local COLUMN_X = { MX - 110, MX + 94 }
 
 -- Durées de base (niveau 1), divisées par le facteur de vitesse
 local DURATIONS = {
 	Load = 0.55,
 	Descend = 1.25,
 	Squeeze = 0.5,
-	Crunch = 0.09,
-	Hold = 0.4,
+	Crunch = 0.08,
+	Hold = 0.45,
 	Rise = 0.85,
 }
 
@@ -79,9 +90,19 @@ local EMOJI_ITEMS = {
 	{ Icon = "🍋", Color = Color3.fromRGB(255, 230, 60), Words = { "PSCHIT !", "Limonade !" } },
 }
 
--- Petite fonction utilitaire : mélange de deux couleurs
-local function mix(a: Color3, b: Color3, t: number): Color3
-	return a:Lerp(b, t)
+----------------------------------------------------------------------
+-- Paliers visuels
+----------------------------------------------------------------------
+local function seq(...: Color3): ColorSequence
+	local colors = { ... }
+	local keypoints = {}
+	for i, color in ipairs(colors) do
+		table.insert(keypoints, ColorSequenceKeypoint.new((i - 1) / math.max(1, #colors - 1), color))
+	end
+	if #keypoints == 1 then
+		table.insert(keypoints, ColorSequenceKeypoint.new(1, colors[1]))
+	end
+	return ColorSequence.new(keypoints)
 end
 
 -- Rayures nettes (dégradé à bords francs)
@@ -96,12 +117,190 @@ local function stripes(n: number, c1: Color3, c2: Color3): ColorSequence
 	return ColorSequence.new(keypoints)
 end
 
+local rgb = Color3.fromRGB
+
+type TierStyle = {
+	Name: string,
+	Icon: string,
+	Shout: string,
+	Chip: Color3,
+	ChipText: Color3,
+	CardTop: Color3,
+	CardBottom: Color3,
+	CardStroke: Color3,
+	Title: Color3,
+	Column: ColorSequence,
+	Outline: Color3,
+	Beam: ColorSequence,
+	BeamRotation: number,
+	Housing: ColorSequence,
+	Rod: ColorSequence,
+	RodRotation: number,
+	Plate: ColorSequence,
+	Stripe: ColorSequence,
+	Base: ColorSequence,
+	Debris: { Color3 },
+	Items: { any },
+}
+
+local TIERS: { TierStyle } = {
+	{
+		Name = "Bois & corde",
+		Shout = "PRESSE EN BOIS !",
+		Icon = "🪵",
+		Chip = rgb(170, 112, 64),
+		ChipText = rgb(255, 255, 255),
+		CardTop = rgb(255, 249, 238),
+		CardBottom = rgb(236, 218, 190),
+		CardStroke = rgb(96, 62, 34),
+		Title = rgb(80, 50, 26),
+		Column = seq(rgb(140, 92, 54), rgb(200, 146, 96), rgb(122, 78, 44)),
+		Outline = rgb(92, 58, 32),
+		Beam = stripes(8, rgb(186, 128, 78), rgb(168, 112, 66)),
+		BeamRotation = 90,
+		Housing = seq(rgb(150, 98, 58), rgb(110, 70, 40)),
+		Rod = stripes(8, rgb(226, 196, 138), rgb(186, 150, 92)),
+		RodRotation = 60,
+		Plate = seq(rgb(206, 150, 98), rgb(130, 84, 48)),
+		Stripe = stripes(6, rgb(226, 196, 138), rgb(186, 150, 92)),
+		Base = seq(rgb(170, 116, 70), rgb(96, 60, 34)),
+		Debris = { rgb(170, 112, 64), rgb(226, 196, 138) },
+		Items = {
+			{ Icon = "🥥", Color = rgb(130, 86, 52), Words = { "CRAC !", "Noix de coco ouverte !" } },
+			{ Icon = "🥖", Color = rgb(222, 170, 92), Words = { "CROUSTI !", "Baguette à plat !" } },
+			{ Icon = "🌰", Color = rgb(150, 90, 50), Words = { "CRIC !", "Châtaigne pilée !" } },
+		},
+	},
+	{
+		Name = "Acier",
+		Shout = "PRESSE EN ACIER !",
+		Icon = "⚙️",
+		Chip = rgb(96, 104, 120),
+		ChipText = rgb(255, 255, 255),
+		CardTop = rgb(250, 251, 253),
+		CardBottom = rgb(214, 221, 232),
+		CardStroke = rgb(30, 30, 36),
+		Title = rgb(24, 24, 30),
+		Column = seq(rgb(150, 156, 170), rgb(250, 252, 255), rgb(120, 126, 140)),
+		Outline = rgb(58, 62, 74),
+		Beam = stripes(10, rgb(255, 200, 30), rgb(34, 34, 40)),
+		BeamRotation = 35,
+		Housing = seq(rgb(170, 176, 190), rgb(70, 74, 88)),
+		Rod = seq(rgb(190, 196, 206), rgb(255, 255, 255), rgb(170, 176, 188)),
+		RodRotation = 0,
+		Plate = seq(rgb(160, 168, 185), rgb(70, 74, 88)),
+		Stripe = stripes(10, rgb(255, 200, 30), rgb(34, 34, 40)),
+		Base = seq(rgb(140, 146, 160), rgb(50, 54, 64)),
+		Debris = { rgb(200, 205, 215) },
+		Items = {
+			{ Icon = "🔩", Color = rgb(150, 150, 165), Words = { "CLONK !", "Boulon aplati !" } },
+			{ Icon = "🥫", Color = rgb(205, 60, 45), Words = { "CRONCH !", "Conserve compacte !" } },
+		},
+	},
+	{
+		Name = "Industrielle",
+		Shout = "PRESSE INDUSTRIELLE !",
+		Icon = "🏭",
+		Chip = rgb(232, 110, 30),
+		ChipText = rgb(255, 255, 255),
+		CardTop = rgb(236, 240, 244),
+		CardBottom = rgb(176, 186, 198),
+		CardStroke = rgb(40, 44, 52),
+		Title = rgb(30, 34, 40),
+		Column = seq(rgb(88, 96, 110), rgb(160, 168, 182), rgb(66, 72, 84)),
+		Outline = rgb(36, 40, 48),
+		Beam = stripes(10, rgb(255, 130, 30), rgb(30, 32, 38)),
+		BeamRotation = 35,
+		Housing = seq(rgb(110, 118, 132), rgb(44, 48, 58)),
+		Rod = seq(rgb(170, 176, 188), rgb(240, 244, 250), rgb(140, 146, 158)),
+		RodRotation = 0,
+		Plate = seq(rgb(120, 128, 144), rgb(44, 48, 58)),
+		Stripe = stripes(10, rgb(255, 130, 30), rgb(30, 32, 38)),
+		Base = seq(rgb(100, 106, 120), rgb(34, 38, 46)),
+		Debris = { rgb(120, 126, 140), rgb(255, 150, 60) },
+		Items = {
+			{ Icon = "🚗", Color = rgb(220, 50, 50), Words = { "CRUNCH !", "Compression auto !" } },
+			{ Icon = "📺", Color = rgb(90, 90, 104), Words = { "KRZZT !", "Écran plat !" } },
+			{ Icon = "🧯", Color = rgb(220, 40, 40), Words = { "PSCHHHT !", "Extincteur éteint !" } },
+		},
+	},
+	{
+		Name = "Or massif",
+		Shout = "PRESSE EN OR !",
+		Icon = "👑",
+		Chip = rgb(255, 194, 26),
+		ChipText = rgb(70, 44, 0),
+		CardTop = rgb(255, 252, 236),
+		CardBottom = rgb(255, 226, 150),
+		CardStroke = rgb(150, 100, 10),
+		Title = rgb(100, 64, 0),
+		Column = seq(rgb(214, 150, 20), rgb(255, 244, 170), rgb(196, 130, 10)),
+		Outline = rgb(150, 100, 10),
+		Beam = stripes(10, rgb(255, 214, 70), rgb(255, 246, 200)),
+		BeamRotation = 35,
+		Housing = seq(rgb(255, 230, 130), rgb(200, 140, 20)),
+		Rod = seq(rgb(230, 180, 60), rgb(255, 250, 210), rgb(210, 150, 30)),
+		RodRotation = 0,
+		Plate = seq(rgb(255, 236, 140), rgb(190, 126, 10)),
+		Stripe = stripes(10, rgb(255, 250, 220), rgb(230, 170, 30)),
+		Base = seq(rgb(250, 210, 90), rgb(160, 100, 10)),
+		Debris = { rgb(255, 214, 70), rgb(255, 246, 200) },
+		Items = {
+			{ Icon = "🏆", Color = rgb(255, 196, 40), Words = { "CLANG !", "Trophée à plat !" } },
+			{ Icon = "💰", Color = rgb(230, 190, 60), Words = { "KA-CHING !", "Pluie de pièces !" } },
+			{ Icon = "👑", Color = rgb(255, 204, 40), Words = { "CRONCH !", "Couronne aplatie !" } },
+		},
+	},
+	{
+		Name = "Diamant néon",
+		Shout = "PRESSE DIAMANT !",
+		Icon = "💎",
+		Chip = rgb(0, 214, 255),
+		ChipText = rgb(10, 20, 40),
+		CardTop = rgb(40, 26, 70),
+		CardBottom = rgb(12, 10, 26),
+		CardStroke = rgb(0, 230, 255),
+		Title = rgb(255, 255, 255),
+		Column = seq(rgb(150, 240, 255), rgb(255, 255, 255), rgb(190, 150, 255)),
+		Outline = rgb(0, 230, 255),
+		Beam = stripes(10, rgb(0, 230, 255), rgb(255, 60, 200)),
+		BeamRotation = 35,
+		Housing = seq(rgb(200, 250, 255), rgb(120, 90, 220)),
+		Rod = seq(rgb(190, 250, 255), rgb(255, 255, 255), rgb(170, 140, 255)),
+		RodRotation = 0,
+		Plate = seq(rgb(190, 250, 255), rgb(110, 80, 210)),
+		Stripe = stripes(10, rgb(0, 230, 255), rgb(255, 60, 200)),
+		Base = seq(rgb(80, 60, 150), rgb(20, 14, 40)),
+		Debris = { rgb(0, 230, 255), rgb(255, 60, 200), rgb(255, 255, 255) },
+		Items = {
+			{ Icon = "💎", Color = rgb(120, 220, 255), Words = { "CRIIING !", "Diamant ?? Non, du verre." } },
+			{ Icon = "🔮", Color = rgb(190, 120, 255), Words = { "PSHIIIT !", "Avenir écrasé !" } },
+			{ Icon = "🌟", Color = rgb(255, 230, 90), Words = { "SHIIING !", "Étoile filante... à plat" } },
+		},
+	},
+}
+
+local function tierForLevel(level: number): number
+	return math.clamp(math.floor((math.max(1, level) - 1) / 2) + 1, 1, #TIERS)
+end
+
+local function mix(a: Color3, b: Color3, t: number): Color3
+	return a:Lerp(b, t)
+end
+
 local function easeInOut(t: number): number
 	return t < 0.5 and 2 * t * t or 1 - (-2 * t + 2) ^ 2 / 2
 end
 
 local function easeOut(t: number): number
 	return 1 - (1 - t) * (1 - t)
+end
+
+-- Rebond façon "Back" (dépasse puis revient) : 0 -> 1
+local function easeOutBack(t: number): number
+	local c1 = 1.70158
+	local c3 = c1 + 1
+	return 1 + c3 * (t - 1) ^ 3 + c1 * (t - 1) ^ 2
 end
 
 function Press.Start(ctx)
@@ -117,24 +316,27 @@ function Press.Start(ctx)
 		return not (data and data.Settings and data.Settings.Effects == false)
 	end
 
+	local function currentLevel(): number
+		return math.max(1, ctx.GetLevel("Press") or 1)
+	end
+
 	local function speedFactor(): number
-		local level = math.max(1, ctx.GetLevel("Press"))
-		return 1 + (level - 1) * 0.2
+		return 1 + (currentLevel() - 1) * 0.2
 	end
 
 	------------------------------------------------------------------
-	-- Carte + "rig" (tout ce qui tremble)
+	-- Carte (secouée en entier au CRUNCH) + "rig" (la machine)
 	------------------------------------------------------------------
 	local card = Create("Frame", {
 		Name = "Card",
 		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = Theme.Colors.Card,
+		BackgroundColor3 = Color3.new(1, 1, 1),
 		BorderSizePixel = 0,
 		Parent = container,
 	})
 	UIUtil.Corner(card, 18)
-	UIUtil.Stroke(card, Theme.Colors.CardBorder, 2)
-	UIUtil.Gradient(card, ColorSequence.new(Color3.fromRGB(250, 251, 253), Color3.fromRGB(214, 221, 232)), 90)
+	local cardStroke = UIUtil.Stroke(card, Theme.Colors.CardBorder, 2)
+	local cardGradient = UIUtil.Gradient(card, ColorSequence.new(Color3.fromRGB(250, 251, 253), Color3.fromRGB(214, 221, 232)), 90)
 
 	local rig = Create("Frame", {
 		Name = "Rig",
@@ -144,7 +346,7 @@ function Press.Start(ctx)
 		Parent = card,
 	})
 
-	local function box(props: { [string]: any }, radius: number?): Frame
+	local function box(props: { [string]: any }, radius: (number | UDim)?): Frame
 		props.BorderSizePixel = 0
 		if props.Parent == nil then
 			props.Parent = rig
@@ -156,84 +358,94 @@ function Press.Start(ctx)
 		return frame
 	end
 
-	-- En-tête
-	UIUtil.Label({
-		Text = "🗜️ PRESSE HYDRAULIQUE",
+	-- En-tête : titre, pastille de palier "Niv. X", compteur, vitesse
+	local titleLabel = UIUtil.Label({
+		Text = "🗜️ PRESSE",
 		Font = Theme.Fonts.Title,
 		TextColor3 = Theme.Colors.TextDark,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Position = UDim2.fromOffset(14, 7),
-		Size = UDim2.fromOffset(200, 20),
+		Size = UDim2.fromOffset(96, 20),
 		MaxTextSize = 16,
 		ZIndex = 12,
 		Parent = card,
 	})
-	local speedPill = UIUtil.Label({
-		Text = "⚡ x1",
-		Font = Theme.Fonts.Number,
-		TextColor3 = Color3.new(1, 1, 1),
-		BackgroundColor3 = Theme.Colors.Orange,
-		BackgroundTransparency = 0,
-		Position = UDim2.fromOffset(216, 8),
-		Size = UDim2.fromOffset(58, 18),
-		MaxTextSize = 13,
+	local tierChip = UIUtil.Chip({
+		Name = "TierChip",
+		Text = "",
+		Color = TIERS[1].Chip,
+		TextColor3 = TIERS[1].ChipText,
+		Height = 19,
+		TextSize = 11,
 		ZIndex = 12,
 		Parent = card,
 	})
-	UIUtil.Corner(speedPill, UDim.new(1, 0))
+	tierChip.Position = UDim2.fromOffset(110, 8)
+	local tierChipLabel = tierChip:FindFirstChild("Label") :: TextLabel?
+	local tierChipScale = Create("UIScale", { Parent = tierChip })
 	local counterLabel = UIUtil.Label({
 		Text = "💥 0",
 		Font = Theme.Fonts.Number,
 		TextColor3 = Theme.Colors.TextDark,
 		TextXAlignment = Enum.TextXAlignment.Right,
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -14, 0, 6),
-		Size = UDim2.fromOffset(96, 22),
-		MaxTextSize = 18,
+		Position = UDim2.new(1, -14, 0, 5),
+		Size = UDim2.fromOffset(80, 20),
+		MaxTextSize = 17,
 		ZIndex = 12,
 		Parent = card,
 	})
 	local counterScale = Create("UIScale", { Parent = counterLabel })
-
-	------------------------------------------------------------------
-	-- La machine
-	------------------------------------------------------------------
-	local steel = Color3.fromRGB(96, 104, 120)
-	local steelDark = Color3.fromRGB(58, 62, 74)
-	local hazardYellow = Color3.fromRGB(255, 200, 30)
-	local hazardBlack = Color3.fromRGB(34, 34, 40)
-	local metalShine = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(170, 176, 190)),
-		ColorSequenceKeypoint.new(0.35, Color3.fromRGB(255, 255, 255)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(150, 156, 170)),
+	local speedLabel = UIUtil.Label({
+		Text = "⚡ x1",
+		Font = Theme.Fonts.Number,
+		TextColor3 = Theme.Colors.Orange,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -14, 0, 24),
+		Size = UDim2.fromOffset(60, 12),
+		MaxTextSize = 11,
+		ZIndex = 12,
+		Parent = card,
 	})
 
+	------------------------------------------------------------------
+	-- La machine (couleurs appliquées par applyTier)
+	------------------------------------------------------------------
+	local white = Color3.new(1, 1, 1)
+	local hazardBlack = Color3.fromRGB(34, 34, 40)
+
 	-- Colonnes
-	for _, x in ipairs({ MX - 110, MX + 94 }) do
-		local column = box({ Position = UDim2.fromOffset(x, 40), Size = UDim2.fromOffset(16, ANVIL_Y - 40), BackgroundColor3 = steel, ZIndex = 2 }, 3)
-		UIUtil.Gradient(column, metalShine, 0)
+	local columns: { { Frame: Frame, Gradient: UIGradient, Stroke: UIStroke } } = {}
+	for _, x in ipairs(COLUMN_X) do
+		local column = box({ Position = UDim2.fromOffset(x, 40), Size = UDim2.fromOffset(16, ANVIL_Y - 40), BackgroundColor3 = white, ZIndex = 2 }, 3)
+		local gradient = UIUtil.Gradient(column, TIERS[2].Column, 0)
+		local stroke = UIUtil.Stroke(column, TIERS[2].Outline, 1, 0.4)
+		table.insert(columns, { Frame = column, Gradient = gradient, Stroke = stroke })
 	end
 
-	-- Traverse du haut (rayures de sécurité)
-	local beam = box({ Position = UDim2.fromOffset(MX - 120, 34), Size = UDim2.fromOffset(240, 26), BackgroundColor3 = Color3.new(1, 1, 1), ZIndex = 7 }, 6)
-	UIUtil.Gradient(beam, stripes(10, hazardYellow, hazardBlack), 35)
-	UIUtil.Stroke(beam, hazardBlack, 2)
+	-- Traverse du haut (coupe ses reflets)
+	local beam = box({ Position = UDim2.fromOffset(MX - 120, 34), Size = UDim2.fromOffset(240, 26), BackgroundColor3 = white, ClipsDescendants = true, ZIndex = 7 }, 6)
+	local beamGradient = UIUtil.Gradient(beam, TIERS[2].Beam, 35)
+	local beamStroke = UIUtil.Stroke(beam, hazardBlack, 2)
 
 	-- Vérin (boîtier + tige)
-	local housing = box({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(MX, 56), Size = UDim2.fromOffset(46, 16), BackgroundColor3 = steelDark, ZIndex = 8 }, 4)
-	UIUtil.Gradient(housing, metalShine, 0)
-	local rod = box({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(MX, 66), Size = UDim2.fromOffset(18, 10), BackgroundColor3 = Color3.fromRGB(215, 220, 230), ZIndex = 5 })
-	UIUtil.Gradient(rod, metalShine, 0)
+	local housing = box({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(MX, 56), Size = UDim2.fromOffset(46, 16), BackgroundColor3 = white, ZIndex = 8 }, 4)
+	local housingGradient = UIUtil.Gradient(housing, TIERS[2].Housing, 90)
+	local rod = box({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(MX, 66), Size = UDim2.fromOffset(18, 10), BackgroundColor3 = white, ZIndex = 5 })
+	local rodGradient = UIUtil.Gradient(rod, TIERS[2].Rod, 0)
 
-	-- Plateau
-	local plate = box({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(MX, PLATE_TOP), Size = UDim2.fromOffset(PLATE_W, PLATE_H), BackgroundColor3 = steelDark, ZIndex = 6 }, 5)
-	UIUtil.Gradient(plate, ColorSequence.new(Color3.fromRGB(150, 158, 175), Color3.fromRGB(70, 74, 88)), 90)
-	local plateStripe = box({ Position = UDim2.fromOffset(6, 3), Size = UDim2.new(1, -12, 0, 6), BackgroundColor3 = Color3.new(1, 1, 1), ZIndex = 7, Parent = plate }, 2)
-	UIUtil.Gradient(plateStripe, stripes(10, hazardYellow, hazardBlack), 35)
+	-- Plateau (+ éclair blanc au moment du choc)
+	local plate = box({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(MX, PLATE_TOP), Size = UDim2.fromOffset(PLATE_W, PLATE_H), BackgroundColor3 = white, ZIndex = 6 }, 5)
+	local plateGradient = UIUtil.Gradient(plate, TIERS[2].Plate, 90)
+	local plateStroke = UIUtil.Stroke(plate, TIERS[2].Outline, 1, 0.4)
+	local plateStripe = box({ Position = UDim2.fromOffset(6, 3), Size = UDim2.new(1, -12, 0, 6), BackgroundColor3 = white, ZIndex = 7, Parent = plate }, 2)
+	local plateStripeGradient = UIUtil.Gradient(plateStripe, TIERS[2].Stripe, 35)
+	local plateFlash = box({ Size = UDim2.fromScale(1, 1), BackgroundColor3 = white, BackgroundTransparency = 1, ZIndex = 8, Parent = plate }, 5)
 
 	-- Manomètre (aiguille qui monte dans le rouge)
-	local gauge = box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(MX + 84, 47), Size = UDim2.fromOffset(22, 22), BackgroundColor3 = Color3.new(1, 1, 1), ZIndex = 9 }, 11)
-	UIUtil.Stroke(gauge, hazardBlack, 2)
+	local gauge = box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(MX + 84, 47), Size = UDim2.fromOffset(22, 22), BackgroundColor3 = white, ZIndex = 9 }, 11)
+	local gaugeStroke = UIUtil.Stroke(gauge, hazardBlack, 2)
 	box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.72, 0.28), Size = UDim2.fromOffset(6, 6), BackgroundColor3 = Theme.Colors.Red, ZIndex = 10, Parent = gauge }, 3)
 	local needlePivot = Create("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -246,11 +458,15 @@ function Press.Start(ctx)
 	box({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0, 2, 0.42, 0), BackgroundColor3 = Theme.Colors.Red, ZIndex = 11, Parent = needlePivot })
 
 	-- Socle + enclume
-	local base = box({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(MX, ANVIL_Y), Size = UDim2.fromOffset(250, 28), BackgroundColor3 = steelDark, ZIndex = 3 }, 5)
-	UIUtil.Gradient(base, ColorSequence.new(Color3.fromRGB(130, 136, 150), Color3.fromRGB(50, 54, 64)), 90)
-	local baseStripe = box({ Position = UDim2.fromOffset(4, 0), Size = UDim2.new(1, -8, 0, 5), BackgroundColor3 = Color3.new(1, 1, 1), ZIndex = 4, Parent = base })
-	UIUtil.Gradient(baseStripe, stripes(10, hazardYellow, hazardBlack), 35)
+	local base = box({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(MX, ANVIL_Y), Size = UDim2.fromOffset(250, 28), BackgroundColor3 = white, ZIndex = 3 }, 5)
+	local baseGradient = UIUtil.Gradient(base, TIERS[2].Base, 90)
+	local baseStripe = box({ Position = UDim2.fromOffset(4, 0), Size = UDim2.new(1, -8, 0, 5), BackgroundColor3 = white, ZIndex = 4, Parent = base })
+	local baseStripeGradient = UIUtil.Gradient(baseStripe, TIERS[2].Stripe, 35)
 	local led = box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1, -14, 0.6, 0), Size = UDim2.fromOffset(8, 8), BackgroundColor3 = Theme.Colors.Green, ZIndex = 5, Parent = base }, 4)
+
+	-- Onde de choc (ellipse réutilisée)
+	local shockRing = box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(MX, ANVIL_Y), Size = UDim2.fromOffset(20, 6), BackgroundTransparency = 1, ZIndex = 9 }, UDim.new(1, 0))
+	local shockStroke = UIUtil.Stroke(shockRing, white, 3, 1)
 
 	-- Poubelle (à gauche)
 	local bin = box({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(BIN_X, BIN_TOP), Size = UDim2.fromOffset(48, 256 - BIN_TOP), BackgroundColor3 = Color3.fromRGB(120, 170, 130), ZIndex = 5 }, 5)
@@ -266,13 +482,18 @@ function Press.Start(ctx)
 	})
 
 	-- Tapis roulant (à droite) : rayures qui défilent
+	local steel = Color3.fromRGB(96, 104, 120)
 	local belt = box({ Position = UDim2.fromOffset(296, QUEUE_Y), Size = UDim2.fromOffset(84, 10), BackgroundColor3 = hazardBlack, ClipsDescendants = true, ZIndex = 3 })
-	local beltStripes = box({ Size = UDim2.fromOffset(BELT_STRIPES_W, 10), BackgroundColor3 = Color3.new(1, 1, 1), ZIndex = 3, Parent = belt })
+	local beltStripes = box({ Size = UDim2.fromOffset(BELT_STRIPES_W, 10), BackgroundColor3 = white, ZIndex = 3, Parent = belt })
 	UIUtil.Gradient(beltStripes, stripes(10, Color3.fromRGB(78, 82, 96), Color3.fromRGB(40, 42, 50)), 0)
 	for _, x in ipairs({ 302, 374 }) do
 		box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(x, QUEUE_Y + 5), Size = UDim2.fromOffset(12, 12), BackgroundColor3 = steel, ZIndex = 4 }, 6)
 	end
 	box({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(338, QUEUE_Y + 10), Size = UDim2.fromOffset(8, 256 - QUEUE_Y - 10), BackgroundColor3 = steel, ZIndex = 2 })
+
+	-- Décors propres au palier (reconstruits à chaque changement de palier)
+	local decorBack = Create("Frame", { Name = "DecorBack", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = 3, Parent = rig })
+	local decorFront = Create("Frame", { Name = "DecorFront", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = 9, Parent = rig })
 
 	------------------------------------------------------------------
 	-- Bouton START (Presse turbo) ou panneau d'avertissement
@@ -354,17 +575,216 @@ function Press.Start(ctx)
 	end
 
 	------------------------------------------------------------------
+	-- Paliers : couleurs + décors
+	------------------------------------------------------------------
+	local tierIndex = 0
+	local shownLevel = 0
+	-- Éléments animés du palier courant (voir OnRender)
+	local tierAnim = {
+		Needles = {} :: { Frame },
+		Twinkles = {} :: { TextLabel },
+		Beacon = nil :: Frame?,
+		Shine = nil :: Frame?,
+		Glow = nil :: Frame?,
+		SteamX = 0,
+		SteamTimer = 1,
+	}
+
+	local function dot(parent: Instance, x: number, y: number, size: number, color: Color3, z: number): Frame
+		return box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(size, size), BackgroundColor3 = color, ZIndex = z, Parent = parent }, UDim.new(1, 0))
+	end
+
+	local function buildDecor(index: number)
+		decorBack:ClearAllChildren()
+		decorFront:ClearAllChildren()
+		if tierAnim.Shine then
+			tierAnim.Shine:Destroy()
+		end
+		tierAnim.Needles = {}
+		tierAnim.Twinkles = {}
+		tierAnim.Beacon = nil
+		tierAnim.Shine = nil
+		tierAnim.Glow = nil
+
+		if index == 1 then
+			-- Bois & corde : cordes enroulées sur les colonnes, clous sur la traverse
+			for _, x in ipairs(COLUMN_X) do
+				for _, y in ipairs({ 78, 132, 186 }) do
+					local rope = box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(x + 8, y), Size = UDim2.fromOffset(22, 8), BackgroundColor3 = white, ZIndex = 1, Parent = decorBack }, 3)
+					UIUtil.Gradient(rope, stripes(6, Color3.fromRGB(230, 200, 140), Color3.fromRGB(180, 142, 86)), 60)
+				end
+			end
+			for _, x in ipairs({ MX - 108, MX - 60, MX + 60, MX + 108 }) do
+				dot(decorFront, x, 47, 4, Color3.fromRGB(70, 60, 56), 1)
+			end
+		elseif index == 2 then
+			-- Acier : rivets
+			for i = 0, 5 do
+				dot(decorFront, MX - 110 + i * 44, 38, 4, Color3.fromRGB(230, 232, 240), 1)
+			end
+		elseif index == 3 then
+			-- Industrielle : tuyau + vanne (derrière), manomètres + gyrophare (devant)
+			box({ Position = UDim2.fromOffset(36, 70), Size = UDim2.fromOffset(8, 118), BackgroundColor3 = Color3.fromRGB(110, 118, 132), ZIndex = 1, Parent = decorBack }, 3)
+			box({ Position = UDim2.fromOffset(36, 70), Size = UDim2.fromOffset(28, 8), BackgroundColor3 = Color3.fromRGB(110, 118, 132), ZIndex = 1, Parent = decorBack }, 3)
+			local valve = dot(decorBack, 40, 128, 16, Color3.fromRGB(220, 50, 40), 2)
+			valve.BackgroundTransparency = 1
+			UIUtil.Stroke(valve, Color3.fromRGB(220, 50, 40), 3)
+			box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(16, 3), BackgroundColor3 = Color3.fromRGB(220, 50, 40), ZIndex = 2, Parent = valve })
+			tierAnim.SteamX = 40
+			for _, x in ipairs({ MX - 92, MX - 66 }) do
+				local small = dot(decorFront, x, 47, 16, white, 1)
+				UIUtil.Stroke(small, hazardBlack, 2)
+				local pivot = Create("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = 2, Parent = small })
+				box({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0, 2, 0.4, 0), BackgroundColor3 = hazardBlack, ZIndex = 2, Parent = pivot })
+				table.insert(tierAnim.Needles, pivot)
+			end
+			local beacon = box({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(MX + 40, 35), Size = UDim2.fromOffset(12, 8), BackgroundColor3 = Color3.fromRGB(255, 140, 20), ZIndex = 1, Parent = decorFront }, 4)
+			tierAnim.Beacon = beacon
+		elseif index == 4 then
+			-- Or : reflet qui passe sur la traverse + étoiles scintillantes
+			local shine = box({ Position = UDim2.fromOffset(-40, 0), Size = UDim2.new(0, 34, 1, 0), BackgroundColor3 = white, ZIndex = 8, Parent = beam })
+			local shineGradient = UIUtil.Gradient(shine, ColorSequence.new(white), 0)
+			shineGradient.Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 1),
+				NumberSequenceKeypoint.new(0.5, 0.25),
+				NumberSequenceKeypoint.new(1, 1),
+			})
+			tierAnim.Shine = shine
+			for _, pos in ipairs({ Vector2.new(MX - 118, 84), Vector2.new(MX + 118, 120), Vector2.new(MX - 100, 170), Vector2.new(MX + 104, 196), Vector2.new(MX, 30) }) do
+				local star = UIUtil.Label({
+					Text = "✦",
+					Font = Theme.Fonts.Title,
+					TextColor3 = Color3.fromRGB(255, 220, 90),
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					Position = UDim2.fromOffset(pos.X, pos.Y),
+					Size = UDim2.fromOffset(14, 14),
+					MaxTextSize = 14,
+					ZIndex = 2,
+					Parent = decorFront,
+				})
+				table.insert(tierAnim.Twinkles, star)
+			end
+		elseif index == 5 then
+			-- Diamant néon : reflet, gemmes sur la traverse, lueur sous l'enclume
+			local shine = box({ Position = UDim2.fromOffset(-40, 0), Size = UDim2.new(0, 28, 1, 0), BackgroundColor3 = white, ZIndex = 8, Parent = beam })
+			local shineGradient = UIUtil.Gradient(shine, ColorSequence.new(white), 0)
+			shineGradient.Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 1),
+				NumberSequenceKeypoint.new(0.5, 0.35),
+				NumberSequenceKeypoint.new(1, 1),
+			})
+			tierAnim.Shine = shine
+			for _, x in ipairs({ MX - 100, MX + 100 }) do
+				local gem = UIUtil.Label({
+					Text = "💎",
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					Position = UDim2.fromOffset(x, 47),
+					Size = UDim2.fromOffset(18, 18),
+					MaxTextSize = 16,
+					ZIndex = 2,
+					Parent = decorFront,
+				})
+				table.insert(tierAnim.Twinkles, gem)
+			end
+			local glow = box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(MX, ANVIL_Y + 2), Size = UDim2.fromOffset(230, 10), BackgroundColor3 = Color3.fromRGB(0, 230, 255), BackgroundTransparency = 0.5, ZIndex = 1, Parent = decorBack }, UDim.new(1, 0))
+			tierAnim.Glow = glow
+		end
+	end
+
+	local function applyTier(index: number)
+		local style = TIERS[index]
+		cardGradient.Color = ColorSequence.new(style.CardTop, style.CardBottom)
+		cardStroke.Color = style.CardStroke
+		titleLabel.TextColor3 = style.Title
+		counterLabel.TextColor3 = style.Title
+		for _, column in ipairs(columns) do
+			column.Gradient.Color = style.Column
+			column.Stroke.Color = style.Outline
+			column.Stroke.Thickness = index == 5 and 2 or 1
+			column.Stroke.Transparency = index == 5 and 0 or 0.4
+		end
+		beamGradient.Color = style.Beam
+		beamGradient.Rotation = style.BeamRotation
+		beamStroke.Color = index == 5 and style.Outline or mix(style.Outline, hazardBlack, 0.4)
+		housingGradient.Color = style.Housing
+		rodGradient.Color = style.Rod
+		rodGradient.Rotation = style.RodRotation
+		plateGradient.Color = style.Plate
+		plateStroke.Color = style.Outline
+		plateStroke.Transparency = index == 5 and 0 or 0.4
+		plateStroke.Thickness = index == 5 and 2 or 1
+		plateStripeGradient.Color = style.Stripe
+		baseGradient.Color = style.Base
+		baseStripeGradient.Color = style.Stripe
+		gaugeStroke.Color = index == 5 and style.Outline or hazardBlack
+		tierChip.BackgroundColor3 = style.Chip
+		buildDecor(index)
+	end
+
+	-- Petit flash blanc sur toute la carte (changement de palier)
+	local function flashCard()
+		local flash = Create("Frame", {
+			Size = UDim2.fromScale(1, 1),
+			BackgroundColor3 = white,
+			BackgroundTransparency = 0.2,
+			BorderSizePixel = 0,
+			ZIndex = 20,
+			Parent = card,
+		})
+		UIUtil.Corner(flash, 18)
+		UIUtil.Tween(flash, 0.6, { BackgroundTransparency = 1 })
+		Debris:AddItem(flash, 0.65)
+	end
+
+	local shout: (text: string, color: Color3?, y: number?) -> ()
+
+	local function refreshLevel(celebrate: boolean)
+		local level = currentLevel()
+		if level == shownLevel then
+			return
+		end
+		local newTier = tierForLevel(level)
+		local tierChanged = newTier ~= tierIndex
+		shownLevel = level
+		tierIndex = newTier
+		local style = TIERS[newTier]
+		if tierChipLabel then
+			tierChipLabel.Text = style.Icon .. " Niv. " .. level .. " · " .. style.Name
+			tierChipLabel.TextColor3 = style.ChipText
+		end
+		if tierChanged then
+			applyTier(newTier)
+		end
+		if celebrate then
+			tierChipScale.Scale = 1.35
+			UIUtil.Tween(tierChipScale, 0.45, { Scale = 1 }, Enum.EasingStyle.Back)
+			if tierChanged then
+				flashCard()
+				ctx.Sound.Play("Buy", 1.1)
+				ctx.Effects.Burst(card, UDim2.fromOffset(MX, 120), style.Chip, 14)
+				shout(style.Icon .. " " .. style.Shout, style.Chip, 150)
+			end
+		end
+	end
+
+	------------------------------------------------------------------
 	-- Objets à écraser
 	------------------------------------------------------------------
 	local function randomDef()
-		if random:NextNumber() < 0.45 then
+		if random:NextNumber() < 0.4 then
 			local colors = {}
 			for i = 1, 3 do
 				colors[i] = MACARON_COLORS[random:NextInteger(1, #MACARON_COLORS)]
 			end
 			return { Kind = "Macaron", Colors = colors, Color = colors[2], Words = MACARON_WORDS, W = 80, H = 78 }
 		end
-		local item = EMOJI_ITEMS[random:NextInteger(1, #EMOJI_ITEMS)]
+		local item
+		local tierItems = TIERS[math.max(1, tierIndex)].Items
+		if random:NextNumber() < 0.4 and #tierItems > 0 then
+			item = tierItems[random:NextInteger(1, #tierItems)]
+		else
+			item = EMOJI_ITEMS[random:NextInteger(1, #EMOJI_ITEMS)]
+		end
 		return { Kind = "Emoji", Icon = item.Icon, Color = item.Color, Colors = { item.Color }, Words = item.Words, Special = item.Special, W = 72, H = 72 }
 	end
 
@@ -403,6 +823,7 @@ function Press.Start(ctx)
 			local splat = box({ Size = UDim2.fromScale(1, 1), BackgroundColor3 = def.Color, Visible = false, ZIndex = 1, Parent = holder })
 			UIUtil.Corner(splat, UDim.new(0.5, 0))
 			UIUtil.Stroke(splat, mix(def.Color, Color3.new(0, 0, 0), 0.35), 1.5)
+			UIUtil.Gradient(splat, ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(190, 190, 190)), 90)
 			parts.Splat = splat
 		end
 		return parts
@@ -418,7 +839,7 @@ function Press.Start(ctx)
 		local holder = Create("Frame", {
 			Name = "Item",
 			AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.fromOffset(QUEUE_X[slot], dropIn and QUEUE_Y - 90 or QUEUE_Y),
+			Position = UDim2.fromOffset(QUEUE_X[slot] or QUEUE_X[#QUEUE_X], dropIn and QUEUE_Y - 90 or QUEUE_Y),
 			Size = UDim2.fromOffset(def.W * scale, def.H * scale),
 			BackgroundTransparency = 1,
 			ZIndex = 4,
@@ -427,11 +848,8 @@ function Press.Start(ctx)
 		local parts = buildVisual(def, holder)
 		table.insert(queue, { Def = def, Holder = holder, Parts = parts })
 		if dropIn then
-			UIUtil.Tween(holder, 0.5, { Position = UDim2.fromOffset(QUEUE_X[slot], QUEUE_Y) }, Enum.EasingStyle.Bounce)
+			UIUtil.Tween(holder, 0.5, { Position = UDim2.fromOffset(QUEUE_X[slot] or QUEUE_X[#QUEUE_X], QUEUE_Y) }, Enum.EasingStyle.Bounce)
 		end
-	end
-	for _ = 1, #QUEUE_X do
-		addToQueue(false)
 	end
 
 	-- Tas de galettes (au-dessus de la poubelle)
@@ -469,6 +887,7 @@ function Press.Start(ctx)
 	-- Effets du CRUNCH
 	------------------------------------------------------------------
 	local shakeTime = 0
+	local shakePower = 1
 
 	local function crumbs(colors: { Color3 }, count: number, origin: Vector2)
 		for _ = 1, count do
@@ -498,34 +917,77 @@ function Press.Start(ctx)
 		end
 	end
 
-	local function steam()
+	-- Bouffée de vapeur (disque blanc qui gonfle, monte et s'efface)
+	local function puff(x: number, y: number, size: number, dx: number, dy: number)
+		local cloud = box({
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromOffset(x, y),
+			Size = UDim2.fromOffset(size, size),
+			BackgroundColor3 = white,
+			BackgroundTransparency = 0.25,
+			ZIndex = 11,
+		}, UDim.new(1, 0))
+		UIUtil.Tween(cloud, 0.7, {
+			Position = UDim2.fromOffset(x + dx, y + dy),
+			Size = UDim2.fromOffset(size * 2.2, size * 2.2),
+			BackgroundTransparency = 1,
+		}, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+		Debris:AddItem(cloud, 0.75)
+	end
+
+	local function steam(big: boolean)
 		for _, dir in ipairs({ -1, 1 }) do
-			local puff = UIUtil.Label({
-				Text = "💨",
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.fromOffset(MX + dir * 70, ANVIL_Y - 14),
-				Size = UDim2.fromOffset(30, 30),
-				Rotation = dir < 0 and 180 or 0,
-				MaxTextSize = 28,
-				ZIndex = 11,
-				Parent = rig,
-			})
-			UIUtil.Tween(puff, 0.6, { Position = UDim2.fromOffset(MX + dir * 118, ANVIL_Y - 30), TextTransparency = 1 })
-			Debris:AddItem(puff, 0.65)
+			puff(MX + dir * 70, ANVIL_Y - 10, big and 16 or 12, dir * 48, -22)
+			if big then
+				puff(MX + dir * 90, ANVIL_Y - 6, 12, dir * 60, -34)
+			end
 		end
 	end
 
-	local function shout(text: string, turbo: boolean)
-		local long = #text > 12
+	-- Gerbe d'étincelles (traits lumineux qui partent en étoile)
+	local function sparks(colors: { Color3 }, count: number)
+		for _ = 1, count do
+			local angle = random:NextNumber(-math.pi, 0)
+			local distance = random:NextNumber(50, 120)
+			local spark = box({
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromOffset(MX, ANVIL_Y - 6),
+				Size = UDim2.fromOffset(12, 2),
+				BackgroundColor3 = colors[random:NextInteger(1, #colors)],
+				Rotation = math.deg(angle),
+				ZIndex = 12,
+			}, 1)
+			UIUtil.Tween(spark, 0.4, {
+				Position = UDim2.fromOffset(MX + math.cos(angle) * distance, ANVIL_Y - 6 + math.sin(angle) * distance),
+				Size = UDim2.fromOffset(4, 2),
+				BackgroundTransparency = 1,
+			}, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+			Debris:AddItem(spark, 0.45)
+		end
+	end
+
+	-- Onde de choc au ras de l'enclume
+	local function shockwave(color: Color3)
+		shockRing.Size = UDim2.fromOffset(40, 8)
+		shockStroke.Color = color
+		shockStroke.Transparency = 0
+		UIUtil.Tween(shockRing, 0.35, { Size = UDim2.fromOffset(280, 36) }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+		UIUtil.Tween(shockStroke, 0.35, { Transparency = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	end
+
+	shout = function(text: string, color: Color3?, y: number?)
+		local long = utf8.len(text) or #text
+		local isLong = long > 12
+		local startY = y or 124
 		local label = UIUtil.Label({
 			Text = text,
 			Font = Enum.Font.LuckiestGuy,
-			TextColor3 = turbo and Color3.fromRGB(255, 90, 60) or Color3.fromRGB(255, 220, 50),
+			TextColor3 = color or Color3.fromRGB(255, 220, 50),
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromOffset(MX, 124),
-			Size = UDim2.fromOffset(230, long and 30 or 46),
+			Position = UDim2.fromOffset(MX, startY),
+			Size = UDim2.fromOffset(240, isLong and 30 or 46),
 			Rotation = random:NextNumber(-10, 10),
-			MaxTextSize = long and 24 or 42,
+			MaxTextSize = isLong and 24 or 42,
 			ZIndex = 13,
 			Parent = rig,
 		})
@@ -533,13 +995,13 @@ function Press.Start(ctx)
 		stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 		local scale = Create("UIScale", { Scale = 0.3, Parent = label })
 		UIUtil.Tween(scale, 0.22, { Scale = 1.1 }, Enum.EasingStyle.Back)
-		task.delay(0.45, function()
+		task.delay(0.5, function()
 			if label.Parent then
-				UIUtil.Tween(label, 0.4, { Position = UDim2.fromOffset(MX, 96), TextTransparency = 1 })
+				UIUtil.Tween(label, 0.4, { Position = UDim2.fromOffset(MX, startY - 28), TextTransparency = 1 })
 				UIUtil.Tween(stroke, 0.4, { Transparency = 1 })
 			end
 		end)
-		Debris:AddItem(label, 0.9)
+		Debris:AddItem(label, 1)
 	end
 
 	------------------------------------------------------------------
@@ -582,7 +1044,7 @@ function Press.Start(ctx)
 	-- Charge le prochain objet de la file sur l'enclume
 	local function loadNext()
 		factor = speedFactor()
-		speedPill.Text = "⚡ x" .. (math.floor(factor * 10 + 0.5) / 10)
+		speedLabel.Text = "⚡ x" .. (math.floor(factor * 10 + 0.5) / 10)
 		local entry = table.remove(queue, 1)
 		if not entry then
 			addToQueue(false)
@@ -595,9 +1057,11 @@ function Press.Start(ctx)
 		UIUtil.Tween(entry.Holder, phaseDuration, { Position = UDim2.fromOffset(MX, ANVIL_Y), Size = UDim2.fromOffset(def.W, def.H) }, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
 		-- Le reste de la file avance, et on remplit
 		for i, other in ipairs(queue) do
-			UIUtil.Tween(other.Holder, 0.35, { Position = UDim2.fromOffset(QUEUE_X[i], QUEUE_Y) }, Enum.EasingStyle.Quad)
+			UIUtil.Tween(other.Holder, 0.35, { Position = UDim2.fromOffset(QUEUE_X[i] or QUEUE_X[#QUEUE_X], QUEUE_Y) }, Enum.EasingStyle.Quad)
 		end
-		addToQueue(true)
+		while #queue < #QUEUE_X do
+			addToQueue(true)
+		end
 	end
 
 	-- Le moment CRUNCH
@@ -608,24 +1072,44 @@ function Press.Start(ctx)
 		local def = current.Def
 		local parts = current.Parts
 		local effects = effectsOn()
+		local style = TIERS[math.max(1, tierIndex)]
 		crushed += 1
 		counterLabel.Text = "💥 " .. crushed
-		counterScale.Scale = 1.3
+		counterScale.Scale = 1.35
 		UIUtil.Tween(counterScale, 0.3, { Scale = 1 }, Enum.EasingStyle.Back)
-		ctx.Sound.Play("Crush", random:NextNumber(0.85, 1.15))
-		shakeTime = turbo and 0.35 or 0.22
+		ctx.Sound.Play("Crush", random:NextNumber(0.85, 1.15) * (turbo and 0.85 or 1))
+
+		-- Secousse de toute la carte (plus forte aux paliers élevés et en turbo)
+		shakeTime = turbo and 0.38 or 0.26
+		shakePower = 1 + (tierIndex - 1) * 0.15 + (turbo and 0.4 or 0)
 
 		local words = def.Words
-		local text = words[random:NextInteger(1, #words)]
+		local word = words[random:NextInteger(1, #words)]
 		if turbo then
-			text = "TURBO " .. text
+			word = "TURBO " .. word
 		end
-		shout(text, turbo)
+		shout(word, turbo and Color3.fromRGB(255, 90, 60) or nil, nil)
+
+		-- Éclair sur le plateau + onde de choc
+		plateFlash.BackgroundTransparency = 0.15
+		UIUtil.Tween(plateFlash, 0.3, { BackgroundTransparency = 1 })
+		shockwave(tierIndex == 5 and Color3.fromRGB(0, 230, 255) or white)
 
 		local origin = Vector2.new(MX, ANVIL_Y - 10)
-		crumbs(def.Colors, effects and (turbo and 16 or 11) or 4, origin)
+		local debrisColors = table.clone(def.Colors)
+		for _, color in ipairs(style.Debris) do
+			table.insert(debrisColors, color)
+		end
+		crumbs(debrisColors, effects and (turbo and 16 or 11) or 4, origin)
 		if effects then
-			steam()
+			steam(tierIndex >= 3)
+			if tierIndex == 4 then
+				sparks({ Color3.fromRGB(255, 220, 80), Color3.fromRGB(255, 250, 210) }, 8)
+			elseif tierIndex == 5 then
+				sparks(style.Debris, 14)
+			elseif turbo then
+				sparks({ Color3.fromRGB(255, 200, 60) }, 6)
+			end
 		end
 
 		if parts.Label then
@@ -697,7 +1181,7 @@ function Press.Start(ctx)
 			if entry.Parts.Splat then
 				entry.Parts.Splat.Visible = false
 			end
-			shout("...elle est revenue", false)
+			shout("...elle est revenue", nil, nil)
 			-- Part avant la fin de la remontée (phaseDuration = durée de "Rise") :
 			-- sinon, à haute vitesse, l'objet suivant arrive sur l'éponge
 			task.delay(math.min(0.75, phaseDuration * 0.8), function()
@@ -754,12 +1238,26 @@ function Press.Start(ctx)
 	end)
 
 	------------------------------------------------------------------
+	-- Palier initial + suivi du niveau
+	------------------------------------------------------------------
+	refreshLevel(false)
+	ctx.Connect(ctx.State.Changed, function()
+		refreshLevel(true)
+	end)
+
+	for _ = 1, #QUEUE_X do
+		addToQueue(false)
+	end
+
+	------------------------------------------------------------------
 	-- Boucle
 	------------------------------------------------------------------
 	loadNext()
 
+	local clock = 0
 	ctx.OnRender(function(dt: number)
 		dt = math.min(dt, 0.1)
+		clock += dt
 		phaseTime += dt
 		local t = phaseDuration > 0 and math.clamp(phaseTime / phaseDuration, 0, 1) or 1
 		local targetPressure = 0
@@ -782,8 +1280,10 @@ function Press.Start(ctx)
 		elseif phase == "Squeeze" then
 			if current then
 				local def = current.Def
+				-- Se tasse en tremblant, s'élargit un peu
 				local height = def.H - squeezeDepth * (t * t)
-				current.Holder.Size = UDim2.fromOffset(def.W * (1 + 0.1 * t), height)
+				local wobble = math.sin(clock * 60) * 2 * t
+				current.Holder.Size = UDim2.fromOffset(def.W * (1 + 0.1 * t) + wobble, height)
 				if current.Parts.Label then
 					current.Parts.Label.Rotation = random:NextNumber(-6, 6) * t
 				end
@@ -796,23 +1296,33 @@ function Press.Start(ctx)
 				onCrunch()
 			end
 		elseif phase == "Crunch" then
+			-- Écrasé d'un coup, un peu plus bas que la galette finale
+			local squashed = FLAT_H * 0.6
 			if current then
 				local def = current.Def
 				local startH = def.H - squeezeDepth
-				local height = startH + (FLAT_H - startH) * t
-				current.Holder.Size = UDim2.fromOffset(def.W * (1.1 + 0.5 * t), height)
+				local height = startH + (squashed - startH) * t
+				current.Holder.Size = UDim2.fromOffset(def.W * (1.1 + 0.6 * t), height)
 				if current.Parts.Label then
 					current.Parts.Label.Rotation = 0
 				end
 				plateY = ANVIL_Y - height - PLATE_H
 			else
-				plateY = ANVIL_Y - FLAT_H - PLATE_H
+				plateY = ANVIL_Y - squashed - PLATE_H
 			end
 			targetPressure = 1
 			if t >= 1 then
 				setPhase("Hold")
 			end
 		elseif phase == "Hold" then
+			-- Petit rebond de la galette (et du plateau) : "boing"
+			local squashed = FLAT_H * 0.6
+			local height = squashed + (FLAT_H - squashed) * easeOutBack(t)
+			if current then
+				local def = current.Def
+				current.Holder.Size = UDim2.fromOffset(def.W * (1.7 - 0.2 * easeOut(t)), height)
+			end
+			plateY = ANVIL_Y - height - PLATE_H
 			targetPressure = 0.9
 			if t >= 1 then
 				setPhase("Rise")
@@ -835,19 +1345,61 @@ function Press.Start(ctx)
 		-- Manomètre
 		pressure += (targetPressure - pressure) * math.min(1, dt * 8)
 		needlePivot.Rotation = -120 + pressure * 240
-		led.BackgroundColor3 = (phase == "Squeeze" or phase == "Crunch" or phase == "Hold") and Theme.Colors.Red or Theme.Colors.Green
+		local pressing = phase == "Squeeze" or phase == "Crunch" or phase == "Hold"
+		led.BackgroundColor3 = pressing and Theme.Colors.Red or Theme.Colors.Green
 
 		-- Tapis roulant
 		beltOffset = (beltOffset + dt * 30) % (BELT_STRIPES_W / 5)
 		beltStripes.Position = UDim2.fromOffset(-beltOffset, 0)
 
-		-- Secousse
+		-- Animations du palier
+		for i, needle in ipairs(tierAnim.Needles) do
+			needle.Rotation = -100 + pressure * 200 + math.sin(clock * (7 + i * 3)) * 8
+		end
+		for i, star in ipairs(tierAnim.Twinkles) do
+			local wave = 0.5 + 0.5 * math.sin(clock * 3 + i * 1.9)
+			star.TextTransparency = 0.1 + (1 - wave) * 0.8
+			star.Rotation = math.sin(clock + i) * 15
+		end
+		local beacon = tierAnim.Beacon
+		if beacon then
+			beacon.BackgroundTransparency = (math.sin(clock * 8) > 0) and 0 or 0.6
+		end
+		local shineFrame = tierAnim.Shine
+		if shineFrame then
+			local sweep = (clock * 0.45) % 1.6 -- passe puis marque une pause
+			shineFrame.Position = UDim2.fromOffset(-40 + sweep * 200, 0)
+		end
+		local glow = tierAnim.Glow
+		if glow then
+			glow.BackgroundTransparency = 0.45 + 0.3 * math.sin(clock * 4)
+		end
+		if tierIndex == 5 then
+			-- Contours néon qui changent de couleur
+			local hue = (clock * 0.12) % 1
+			local neon = Color3.fromHSV(hue, 0.75, 1)
+			for _, column in ipairs(columns) do
+				column.Stroke.Color = neon
+			end
+			plateStroke.Color = neon
+			beamStroke.Color = neon
+			cardStroke.Color = Color3.fromHSV((hue + 0.5) % 1, 0.7, 1)
+		elseif tierIndex == 3 and effectsOn() then
+			-- Vapeur qui s'échappe du tuyau de temps en temps
+			tierAnim.SteamTimer -= dt
+			if tierAnim.SteamTimer <= 0 then
+				tierAnim.SteamTimer = random:NextNumber(1.2, 2.6)
+				puff(tierAnim.SteamX, 66, 8, random:NextNumber(-6, 6), -26)
+			end
+		end
+
+		-- Secousse de toute la carte
 		if shakeTime > 0 then
 			shakeTime -= dt
-			local strength = math.clamp(shakeTime * 18, 0.6, 4)
-			rig.Position = UDim2.fromOffset(random:NextNumber(-strength, strength), random:NextNumber(-strength, strength))
-		elseif rig.Position ~= UDim2.new() then
-			rig.Position = UDim2.new()
+			local strength = math.clamp(shakeTime * 18, 0.6, 4) * shakePower
+			card.Position = UDim2.fromOffset(random:NextNumber(-strength, strength), random:NextNumber(-strength, strength))
+		elseif card.Position ~= UDim2.new() then
+			card.Position = UDim2.new()
 		end
 
 		-- Compte à rebours du bouton START

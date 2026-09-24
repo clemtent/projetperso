@@ -39,6 +39,7 @@ local MAX_BOOST_MULTIPLIER = 1000 -- sécurité contre une sauvegarde abîmée
 		Themes = { [themeId] = true }, -- thèmes vendus en Game Pass
 		Debug = { [passId] = true | false }, -- commande de test /pass (Studio)
 		AutoClickCarry = number, -- fraction de clic automatique en attente
+		PendingChecks = number, -- vérifications Roblox encore en cours (arrivée)
 	}
 ]]
 local owners = {}
@@ -187,17 +188,23 @@ function MonetizationService:GetBoost(data): (number, number)
 	return boost.Multiplier, remaining
 end
 
--- Produit des multiplicateurs des Game Passes possédés x boost actif
-function MonetizationService:GetBonusMultiplier(player: Player): number
+-- Produit des multiplicateurs des Game Passes possédés (sans le boost :
+-- sert aussi au gain hors-ligne, un boost ne dure pas pendant l'absence)
+function MonetizationService:GetPassMultiplier(player: Player): number
 	local multiplier = 1
 	for _, pass in ipairs(Config.Monetization.GamePasses) do
 		if isValidNumber(pass.Multiplier) and pass.Multiplier > 0 and self:OwnsPass(player, pass.Id) then
 			multiplier *= pass.Multiplier
 		end
 	end
+	return multiplier
+end
+
+-- Produit des multiplicateurs des Game Passes possédés x boost actif
+function MonetizationService:GetBonusMultiplier(player: Player): number
 	local data = services.DataService:GetData(player)
 	local boostMultiplier = self:GetBoost(data)
-	return multiplier * boostMultiplier
+	return self:GetPassMultiplier(player) * boostMultiplier
 end
 
 -- Ajoute un boost : si un boost au moins aussi fort est actif, on le
@@ -264,13 +271,33 @@ local function checkAllPasses(player: Player)
 	for gamePassId in pairs(themesByGamePassId) do
 		ids[gamePassId] = true
 	end
+	local owner = owners[player]
 	for gamePassId in pairs(ids) do
+		if owner then
+			owner.PendingChecks += 1
+		end
 		task.spawn(function()
-			local owned = checkOwnership(player, gamePassId)
-			if owned and owners[player] then
+			local ok, owned = pcall(checkOwnership, player, gamePassId)
+			if ok and owned and owners[player] then
 				grantGamePass(player, gamePassId, false)
 			end
+			if owner then
+				owner.PendingChecks -= 1
+			end
 		end)
+	end
+end
+
+-- Attend (au plus `timeout` secondes) la fin des vérifications des Game
+-- Passes lancées à l'arrivée du joueur (utilisé avant le gain hors-ligne)
+function MonetizationService:WaitForPassChecks(player: Player, timeout: number)
+	local start = os.clock()
+	while os.clock() - start < timeout do
+		local owner = owners[player]
+		if not owner or owner.PendingChecks <= 0 then
+			return
+		end
+		task.wait(0.1)
 	end
 end
 
@@ -478,7 +505,7 @@ end
 ----------------------------------------------------------------------
 
 function MonetizationService:PlayerReady(player: Player, data)
-	owners[player] = { Passes = {}, Themes = {}, Debug = {}, AutoClickCarry = 0 }
+	owners[player] = { Passes = {}, Themes = {}, Debug = {}, AutoClickCarry = 0, PendingChecks = 0 }
 	sanitizeData(data)
 	checkAllPasses(player)
 end

@@ -61,6 +61,7 @@ Config.UpgradeBar = {
 --                 "Multiplier"       TOUS les gains x Value (par niveau)
 --                 "Feature"          aucun effet économique, débloque juste Feature
 --                 "Detox"            "Aller à l'océan" = rebirth (prix : Config.Rebirth)
+--                 "Offline"          améliore la Dopamine hors-ligne (voir Config.Offline)
 --   Feature     : ce que l'amélioration fait apparaître à l'écran / débloque
 --                 (nom d'un module client dans Client > Stimuli, ou d'un menu)
 --   Permanent   : true = conservée après "Aller à l'océan" (menus utiles)
@@ -96,7 +97,7 @@ Config.Upgrades = {
 	{ Id = "Lofi", Name = "Lofi Beats", Icon = "🎧", Description = "Pour étudier et se détendre. +%s Dopamine / s",
 		Cost = 12000, MaxLevel = 1, Effect = "PerSecond", Value = 40, Feature = "Lofi",
 		Color = Color3.fromRGB(120, 90, 200) },
-	{ Id = "Press", Name = "Presse hydraulique", Icon = "🗜️", Description = "Écrase des trucs, c'est satisfaisant. +%s Dopamine / s",
+	{ Id = "Press", Name = "Presse hydraulique", Icon = "🗜️", Description = "Écrase des trucs. Chaque niveau améliore la presse (bois, acier, or, diamant...). +%s Dopamine / s",
 		Cost = 18000, CostGrowth = 1.75, MaxLevel = 10, Effect = "PerSecond", Value = 20, Feature = "Press",
 		Color = Color3.fromRGB(255, 200, 0) },
 	{ Id = "Achievements", Name = "Succès", Icon = "🏆", Description = "Débloque le menu des succès (conservé pour toujours)",
@@ -105,6 +106,9 @@ Config.Upgrades = {
 	{ Id = "Pinwheel", Name = "Moulin à vent", Icon = "🌀", Description = "Il tourne. Souffle dessus ! +%s Dopamine / s",
 		Cost = 28000, MaxLevel = 1, Effect = "PerSecond", Value = 75, Feature = "Pinwheel",
 		Color = Color3.fromRGB(80, 200, 255) },
+	{ Id = "SleepMode", Name = "Mode veille", Icon = "😴", Description = "Gagne plus de Dopamine quand tu n'es pas là (conservé pour toujours)",
+		Cost = 20000, CostGrowth = 3, MaxLevel = 5, Effect = "Offline", Value = 1, Permanent = true,
+		Color = Color3.fromRGB(90, 110, 200) },
 	{ Id = "BubbleWrap", Name = "Papier bulle", Icon = "🔘", Description = "Éclate les bulles pour gagner de la Dopamine",
 		Cost = 30000, MaxLevel = 1, Effect = "Feature", Feature = "BubbleWrap",
 		Color = Color3.fromRGB(160, 220, 255) },
@@ -123,6 +127,9 @@ Config.Upgrades = {
 	{ Id = "LiveStream", Name = "Live ASMR", Icon = "🥪", Description = "Quelqu'un mange en direct. +%s Dopamine / s",
 		Cost = 100000, MaxLevel = 1, Effect = "PerSecond", Value = 120, Feature = "LiveStream",
 		Color = Color3.fromRGB(240, 170, 90) },
+	{ Id = "Butter", Name = "Beurre croustillant", Icon = "🧈", Description = "Un bloc de beurre à croquer dans le live. *CROUNCH*",
+		Cost = 140000, MaxLevel = 1, Effect = "Feature", Feature = "Butter",
+		Color = Color3.fromRGB(255, 215, 90) },
 	{ Id = "Followers", Name = "Abonnés", Icon = "👥", Description = "Plus de spectateurs sur le live. +%s Dopamine / s",
 		Cost = 150000, CostGrowth = 1.6, MaxLevel = 15, Effect = "PerSecond", Value = 50, Feature = "Followers",
 		Color = Color3.fromRGB(255, 60, 100) },
@@ -162,9 +169,6 @@ Config.Upgrades = {
 	{ Id = "GoldenStar", Name = "Étoile dorée", Icon = "🌟", Description = "Des étoiles dorées apparaissent. Attrape-les !",
 		Cost = 2.8e6, MaxLevel = 1, Effect = "Feature", Feature = "GoldenStar",
 		Color = Color3.fromRGB(255, 190, 0) },
-	{ Id = "Leaderboard", Name = "Classement", Icon = "🥇", Description = "Compare-toi au monde entier (conservé pour toujours)",
-		Cost = 3.8e6, MaxLevel = 1, Effect = "Feature", Feature = "Leaderboard", Permanent = true,
-		Color = Color3.fromRGB(0, 150, 220) },
 	{ Id = "NeonMode", Name = "Mode néon", Icon = "🌈", Description = "L'écran passe en mode néon. Gains x%s",
 		Cost = 4.5e6, MaxLevel = 1, Effect = "Multiplier", Value = 2, Feature = "NeonMode",
 		Color = Color3.fromRGB(157, 78, 221) },
@@ -243,6 +247,22 @@ Config.Achievements = {
 }
 
 ----------------------------------------------------------------------
+-- 🏅 Badges Roblox des succès
+--   Crée un badge par succès sur create.roblox.com > ton expérience >
+--   Engagement > Badges, puis colle son ID ici. 0 = pas de badge Roblox
+--   (le succès reste visible dans le jeu). Exemple : Clicks100 = 1234567890,
+----------------------------------------------------------------------
+Config.AchievementBadges = {
+	Clicks100 = 0,
+	Clicks1K = 0,
+	Earn1M = 0,
+	Corner1 = 0,
+	Golden1 = 0,
+	Rebirth1 = 0,
+	Play1h = 0,
+}
+
+----------------------------------------------------------------------
 -- Quêtes (3 actives ; une quête finie est remplacée tout de suite)
 --   Feature : la quête n'est proposée que si le joueur possède cette Feature
 --   Goals : objectifs possibles ; GoalSeconds : objectif "Earn" en secondes de production
@@ -296,6 +316,7 @@ Config.Spawners = {
 	Golden = { Feature = "GoldenStar", MinInterval = 40, MaxInterval = 90, Lifetime = 6, RewardSeconds = 30, MinReward = 300, Stat = "GoldenClicks" },
 	Lightning = { Feature = "Weather", MinInterval = 15, MaxInterval = 35, Lifetime = 2.5, RewardSeconds = 8, MinReward = 50, Stat = "LightningClicks" },
 	Notif = { Feature = "PhoneNotifs", MinInterval = 8, MaxInterval = 20, Lifetime = 6, RewardSeconds = 3, MinReward = 20, Stat = "NotifsOpened" },
+	Donation = { Feature = "LiveStream", RequiresFollow = true, MinInterval = 25, MaxInterval = 50, Lifetime = 10, RewardSeconds = 10, MinReward = 30, Stat = "Donations" },
 	Email = { Feature = "Email", MinInterval = 20, MaxInterval = 45, Lifetime = 15, RewardSeconds = 8, MinReward = 50, Stat = "EmailsRead" },
 }
 Config.MaxPendingSpawnsPerKind = 3
@@ -310,6 +331,8 @@ Config.Interactions = {
 	Bubble = { Feature = "BubbleWrap", MaxPerSecond = 12, ClickFraction = 0.5, Stat = "BubblesPopped" },
 	Spin = { Feature = "Pinwheel", Cooldown = 2, RewardSeconds = 0.5, MinReward = 5, Stat = "Spins" },
 	Headline = { Feature = "NewsTicker", Cooldown = 8, RewardSeconds = 2, MinReward = 5, Stat = "HeadlinesClicked" },
+	Follow = { Feature = "LiveStream", OneTime = true, RewardSeconds = 30, MinReward = 100, Stat = "Follows" },
+	Butter = { Feature = "Butter", MaxPerSecond = 8, ClickFraction = 0.75, Stat = "ButterCrunches" },
 	Press = { Feature = "PressStart", Cooldown = 3, RewardSeconds = 1, MinReward = 20, Stat = "PressCrushes" },
 }
 
@@ -443,7 +466,7 @@ Config.Leaderboard = {
 ----------------------------------------------------------------------
 Config.DataStore = {
 	Name = "DopamineClickerData_v2", -- change le nom pour repartir de zéro
-	AutoSaveInterval = 120,
+	AutoSaveInterval = 60,
 	MaxRetries = 4,
 }
 
@@ -464,7 +487,8 @@ Config.Sounds = {
 	Rush = { Id = "rbxasset://sounds/swoosh.wav", Volume = 0.8 },
 	Detox = { Id = "rbxasset://sounds/swoosh.wav", Volume = 1 },
 	Open = { Id = "rbxasset://sounds/swoosh.wav", Volume = 0.3 },
-	Pop = { Id = "rbxasset://sounds/clickfast.wav", Volume = 0.5 },
+	Pop = { Id = "rbxassetid://140323850218372", Volume = 0.6 },
+	Crunch = { Id = "rbxassetid://119687340156238", Volume = 0.8 }, -- beurre croustillant
 	Crush = { Id = "rbxasset://sounds/swoosh.wav", Volume = 0.5 },
 	Thunder = { Id = "rbxasset://sounds/swoosh.wav", Volume = 0.7 },
 	Notif = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.4 },
@@ -488,11 +512,37 @@ Config.Music = {
 	DefaultVolume = 0.35,
 	Shuffle = true,
 	Playlist = {
-		{ Name = "Lofi chill #1", Id = "" },
-		{ Name = "Lofi chill #2", Id = "" },
-		{ Name = "Lofi chill #3", Id = "" },
-		{ Name = "Lofi chill #4", Id = "" },
+		{ Name = "Lofi chill #1", Id = "rbxassetid://105526677737534" },
+		{ Name = "Lofi chill #2", Id = "rbxassetid://84166235077508" },
+		{ Name = "Lofi chill #3", Id = "rbxassetid://78354523278392" },
+		{ Name = "Lofi chill #4", Id = "rbxassetid://73874153787004" },
 	},
+
+}
+
+----------------------------------------------------------------------
+-- Sons de clic au choix (⚙️ Paramètres). Le choix est sauvegardé.
+----------------------------------------------------------------------
+Config.ClickSounds = {
+	{ Id = "Default", Name = "Classique", Sound = "rbxasset://sounds/clickfast.wav", Volume = 0.5 },
+	{ Id = "Keyboard1", Name = "Clavier 1", Sound = "rbxassetid://127105730240202", Volume = 0.7 },
+	{ Id = "Keyboard2", Name = "Clavier 2", Sound = "rbxassetid://72826565018765", Volume = 0.7 },
+	{ Id = "Keyboard3", Name = "Clavier 3", Sound = "rbxassetid://96591611478915", Volume = 0.7 },
+	{ Id = "Keyboard4", Name = "Clavier 4", Sound = "rbxassetid://113108830240353", Volume = 0.7 },
+	{ Id = "Keyboard5", Name = "Clavier 5", Sound = "rbxassetid://125615721658437", Volume = 0.7 },
+}
+
+----------------------------------------------------------------------
+-- Dopamine hors-ligne : quand tu reviens, tu gagnes une partie de ta
+-- production pendant ton absence. L'amélioration "Mode veille" l'améliore.
+--   Taux = BaseRate + RatePerLevel x niveau ; Durée max = BaseMaxHours + HoursPerLevel x niveau
+----------------------------------------------------------------------
+Config.Offline = {
+	BaseRate = 0.1, -- 10 % de la production par seconde
+	RatePerLevel = 0.1, -- +10 % par niveau de "Mode veille"
+	BaseMaxHours = 2,
+	HoursPerLevel = 2,
+	MinSeconds = 60, -- en dessous d'une minute d'absence : rien
 }
 
 ----------------------------------------------------------------------
@@ -584,6 +634,7 @@ end
 
 Config.AchievementsById = {}
 for _, achievement in ipairs(Config.Achievements) do
+	achievement.BadgeId = achievement.BadgeId or Config.AchievementBadges[achievement.Id] or 0
 	Config.AchievementsById[achievement.Id] = achievement
 end
 

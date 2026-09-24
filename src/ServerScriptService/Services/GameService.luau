@@ -10,7 +10,12 @@
 	  - gains passifs (voir le pipeline ci-dessous) ;
 	  - temps d'écran (par session, par jour UTC, total) ;
 	  - envoi régulier de l'état au client (StateUpdate) ;
-	  - leaderstats (liste des joueurs en haut à droite).
+	  - leaderstats (liste des joueurs en haut à droite) ;
+	  - Dopamine hors-ligne : l'absence est calculée au chargement
+	    (DataService:TakeOfflineSeconds), le gain est donné et notifié
+	    (Notify { Type = "Offline" }) seulement quand le client est prêt
+	    (ClientReady), pour que la fenêtre "Bon retour !" s'affiche.
+	    Si le joueur part avant, le gain est donné sans notification.
 
 	Pipeline du tick passif (toutes les Config.Game.PassiveTickRate secondes,
 	pour chaque joueur chargé) :
@@ -45,7 +50,18 @@ local services -- toutes les autres services (rempli par Init)
 -- Données "de session" (non sauvegardées) : [Player] = session
 local sessions = {}
 
+-- Réglages booléens acceptés par SetSetting (+ "ClickSound", voir plus bas)
 local VALID_SETTINGS = { Sound = true, Music = true, Effects = true }
+-- Sons de clic existants : [Id] = true
+local CLICK_SOUNDS = {}
+for _, clickSound in ipairs(Config.ClickSounds) do
+	CLICK_SOUNDS[clickSound.Id] = true
+end
+local DEFAULT_CLICK_SOUND = "Default"
+
+-- Clients qui ont envoyé ClientReady (l'interface peut afficher les notifications).
+-- Peut arriver AVANT la fin du chargement des données : on le retient à part.
+local readyClients: { [Player]: boolean } = {}
 local SECONDS_PER_DAY = 86400
 
 ----------------------------------------------------------------------
@@ -147,6 +163,15 @@ local function sanitizeData(data)
 	end
 
 	pruneScreenTime(data)
+
+	-- Son de clic supprimé de la config -> son par défaut
+	if type(data.Settings.ClickSound) ~= "string" or not CLICK_SOUNDS[data.Settings.ClickSound] then
+		data.Settings.ClickSound = DEFAULT_CLICK_SOUND
+	end
+	-- Abonné au live sans posséder le live (sauvegarde incohérente)
+	if data.LiveFollowed and not Formulas.HasFeature(data, "LiveStream") then
+		data.LiveFollowed = false
+	end
 end
 
 ----------------------------------------------------------------------
@@ -250,6 +275,7 @@ function GameService:BuildState(player: Player)
 	local stats = self:GetStats(player)
 	local monetization = services.MonetizationService
 	local boostMultiplier, boostRemaining = monetization:GetBoost(data)
+	local offlineRate, offlineMaxSeconds = Formulas.GetOfflineSettings(data)
 
 	return {
 		Dopamine = data.Dopamine,
@@ -259,7 +285,8 @@ function GameService:BuildState(player: Player)
 		Achievements = data.Achievements,
 		Quests = data.Quests,
 		Stats = data.Stats,
-		Settings = data.Settings,
+		Settings = data.Settings, -- { Sound, Music, Effects, ClickSound }
+		LiveFollowed = data.LiveFollowed == true, -- abonné au live (bouton "Suivre")
 
 		ClickValue = stats.ClickValue,
 		PerSecond = stats.PerSecond,
@@ -295,6 +322,9 @@ function GameService:BuildState(player: Player)
 		CasinoEnabled = monetization:IsCasinoEnabled(),
 		IsVIP = monetization:IsVIP(player),
 
+		-- Dopamine hors-ligne : taux (0..1) de la production et durée max prise en compte
+		Offline = { Rate = offlineRate, MaxSeconds = offlineMaxSeconds },
+
 		-- Nombre de clics reçus par le serveur (sert au client pour sa prédiction)
 		ClickSeq = session and session.ClickSeq or 0,
 	}
@@ -311,7 +341,69 @@ function GameService:SendState(player: Player)
 	updateLeaderstats(player, data)
 end
 
--- Envoie tout ce dont le client a besoin (état, logos DVD, Rush, classement, bourse)
+-- Dopamine hors-ligne : calcule le gain pour `seconds` d'absence (production
+-- sans Rush ni boost, avec les Game Passes), le donne (sans faire avancer les
+-- quêtes) et, si `notify`, envoie la fenêtre "Bon retour !" au client.
+-- Renvoie le montant donné (0 si rien).
+function GameService:GrantOffline(player: Player, seconds: number, notify: boolean?): number
+	local data = services.DataService:GetData(player)
+	if not data or not isValidNumber(seconds) or seconds <= 0 then
+		return 0
+	end
+	local stats = Formulas.ComputeStats(data, 1, services.MonetizationService:GetPassMultiplier(player))
+	local reward = Formulas.GetOfflineReward(data, stats.PerSecond, seconds)
+	if not isValidNumber(reward) or reward <= 0 then
+		return 0
+	end
+	local rate, maxSeconds = Formulas.GetOfflineSettings(data)
+
+	self:AddDopamine(player, reward, false)
+	data.Stats.OfflineEarned = math.min(Config.Game.MaxDopamine, data.Stats.OfflineEarned + reward)
+
+	if notify and sessions[player] then
+		self:SendState(player) -- le compteur inclut déjà le gain quand la fenêtre s'ouvre
+		self:Notify(player, {
+			Type = "Offline",
+			Amount = reward,
+			Seconds = math.floor(seconds), -- durée réelle de l'absence (non plafonnée)
+			Rate = rate, -- 0..1
+			MaxSeconds = maxSeconds, -- durée max prise en compte
+			Text = "😴 Bon retour ! +" .. NumberFormatter.Format(reward) .. " " .. Config.Game.CurrencyName .. " gagnée hors-ligne",
+		})
+	end
+	return reward
+end
+
+-- Donne le gain hors-ligne en attente, seulement si le client est prêt.
+-- On attend d'abord (5 s max) la vérification des Game Passes pour que leurs
+-- multiplicateurs comptent. Si le joueur part pendant l'attente,
+-- PlayerRemoving donne le gain (PendingOffline n'est remis à 0 qu'au don).
+local OFFLINE_PASS_WAIT = 5
+local function deliverPendingOffline(player: Player)
+	local session = sessions[player]
+	if not session or not readyClients[player] or session.PendingOffline <= 0 or session.OfflineDelivering then
+		return
+	end
+	session.OfflineDelivering = true
+	task.spawn(function()
+		services.MonetizationService:WaitForPassChecks(player, OFFLINE_PASS_WAIT)
+		session.OfflineDelivering = false
+		if sessions[player] ~= session then
+			return -- parti entre-temps : déjà donné par PlayerRemoving
+		end
+		local seconds = session.PendingOffline
+		session.PendingOffline = 0 -- avant tout : jamais donné deux fois
+		if seconds > 0 then
+			local ok, err = pcall(GameService.GrantOffline, GameService, player, seconds, true)
+			if not ok then
+				warn("[GameService] Erreur du gain hors-ligne pour " .. player.Name .. " :", err)
+			end
+		end
+	end)
+end
+
+-- Envoie tout ce dont le client a besoin (état, logos DVD, Rush, classement,
+-- bourse) puis le gain hors-ligne si le client est prêt
 function GameService:SendFullSync(player: Player)
 	if not sessions[player] then
 		return
@@ -321,6 +413,7 @@ function GameService:SendFullSync(player: Player)
 	services.EventService:SendState(player)
 	services.LeaderboardService:SendTo(player)
 	services.StockService:SendTo(player)
+	deliverPendingOffline(player)
 end
 
 -- Remet le combo à zéro (détox, reset...)
@@ -354,6 +447,7 @@ function GameService:Detox(player: Player)
 	data.Stock.Shares = 0
 	data.Stock.CostBasis = 0
 	data.Rebirths += 1
+	data.LiveFollowed = false -- le live repart de zéro : il faudra se réabonner
 	self:ResetCombo(player)
 
 	services.DVDService:Reset(player)
@@ -372,6 +466,11 @@ function GameService:Detox(player: Player)
 		Text = "🌊 " .. player.DisplayName .. " est allé(e) à l'océan (x" .. data.Rebirths .. ")",
 	}, player)
 	self:SendState(player)
+
+	-- Étape importante : on sauvegarde tout de suite (sans bloquer l'appelant)
+	task.spawn(function()
+		services.DataService:SaveAsync(player, true)
+	end)
 end
 
 -- Appelé après un changement d'améliorations fait "à la main" (commandes de test)
@@ -394,6 +493,8 @@ function GameService:PlayerReady(player: Player, data)
 		Tokens = Config.Game.MaxClicksPerSecond, -- anti-autoclick (seau de jetons)
 		LastRefill = now,
 		SessionSeconds = 0, -- temps de jeu de cette session
+		PendingOffline = services.DataService:TakeOfflineSeconds(player), -- absence à récompenser
+		OfflineDelivering = false, -- don du gain hors-ligne programmé
 		Dirty = true,
 	}
 	sanitizeData(data)
@@ -401,7 +502,19 @@ function GameService:PlayerReady(player: Player, data)
 end
 
 function GameService:PlayerRemoving(player: Player)
+	-- Gain hors-ligne jamais notifié (client jamais prêt) : donné quand même,
+	-- avant la sauvegarde de sortie (Main appelle ReleaseAsync après)
+	local session = sessions[player]
+	if session and session.PendingOffline > 0 then
+		local seconds = session.PendingOffline
+		session.PendingOffline = 0
+		local ok, err = pcall(self.GrantOffline, self, player, seconds, false)
+		if not ok then
+			warn("[GameService] Erreur du gain hors-ligne pour " .. player.Name .. " :", err)
+		end
+	end
 	sessions[player] = nil
+	readyClients[player] = nil
 end
 
 ----------------------------------------------------------------------
@@ -514,7 +627,15 @@ local function onBuyUpgrade(player: Player, upgradeId: any)
 end
 
 local function onSetSetting(player: Player, name: any, value: any)
-	if type(name) ~= "string" or not VALID_SETTINGS[name] or type(value) ~= "boolean" then
+	if type(name) ~= "string" then
+		return false
+	end
+	if name == "ClickSound" then
+		-- Son de clic : l'Id doit exister dans Config.ClickSounds
+		if type(value) ~= "string" or #value > 64 or not CLICK_SOUNDS[value] then
+			return false
+		end
+	elseif not VALID_SETTINGS[name] or type(value) ~= "boolean" then
 		return false
 	end
 	-- Une limite par réglage : couper le son puis les effets rapidement reste possible
@@ -587,6 +708,11 @@ end
 function GameService:Start()
 	Net.Event("Click").OnServerEvent:Connect(onClick)
 	Net.Event("ClientReady").OnServerEvent:Connect(function(player)
+		-- Retenu même si les données chargent encore : Main enverra la synchro
+		-- complète (et le gain hors-ligne) à la fin du chargement
+		if player.Parent then
+			readyClients[player] = true
+		end
 		if RateLimiter.Check(player, "ClientReady", 2) then
 			self:SendFullSync(player)
 		end

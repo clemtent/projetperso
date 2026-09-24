@@ -2,19 +2,24 @@
 	RobuxShop (ModuleScript) — "💎 Boutique Robux"
 	Emplacement : ReplicatedStorage > Client > Components > Panels > RobuxShop
 
-	Deux sections construites depuis Config.Monetization :
-	  - "Game Passes" (achat unique, pour toujours) : x10, x2, Auto-clic, VIP...
-	  - "Packs & Boosts" (Developer Products, rachetables) : doses de
-	    Dopamine, boosts temporaires, Rush pour tout le serveur.
-	Les offres dont l'ID vaut 0 sont cachées. Si TOUT est à 0 : message
-	"Bientôt disponible" (et, dans Studio, l'aide pour le propriétaire du jeu).
+	Présentation "premium" construite depuis Config.Monetization :
+	  - bannière violette animée (diamant, rayons, étincelles) avec ton état :
+	    VIP, bonus des Game Passes, boost en cours (compte à rebours) ;
+	  - onglets Tout / Passes / Dopamine / Boosts ;
+	  - grandes cartes illustrées : vitrine au dégradé de l'offre, rayons,
+	    rubans ("MEILLEURE OFFRE", "POPULAIRE"...), avantages en pastilles,
+	    bouton prix R$ (vrai prix Roblox), "✔ Acheté" pour les passes possédés.
+	Les offres dont l'ID vaut 0 sont cachées dans le jeu publié. Dans Studio,
+	elles restent visibles en APERÇU (bouton "ID à configurer") pour que le
+	propriétaire voie la boutique ; s'il n'y a rien à vendre dans le jeu
+	publié : "Bientôt disponible".
 
 	Le vrai prix vient de MarketplaceService:GetProductInfo (dans un thread
 	séparé, protégé par pcall, mis en cache) ; en attendant ou en cas
 	d'erreur, on affiche Config PriceHint.
 	L'achat ouvre la fenêtre Roblox (PromptGamePassPurchase /
 	PromptProductPurchase). Le SERVEUR vérifie et donne l'achat, puis
-	envoie Notify { Type = "Purchase" } (fête gérée par Notifications).
+	envoie Notify { Type = "Purchase" } (fête + confettis gérés par Notifications).
 ]]
 
 local MarketplaceService = game:GetService("MarketplaceService")
@@ -36,8 +41,12 @@ local RobuxShop = {
 	Title = "💎 Boutique Robux",
 	Subtitle = "Merci de soutenir le jeu 💖",
 	Color = Theme.Colors.Robux,
-	Size = Vector2.new(760, 540),
+	Size = Vector2.new(800, 600),
 }
+
+local WHITE = Color3.new(1, 1, 1)
+local HERO_TOP = Color3.fromRGB(64, 28, 140)
+local HERO_BOTTOM = Color3.fromRGB(200, 50, 160)
 
 local PASS_COLORS = {
 	X10 = Theme.Colors.Purple,
@@ -50,6 +59,13 @@ local PRODUCT_COLORS = {
 	Boost = Theme.Colors.Boost,
 	ServerRush = Theme.Colors.Pink,
 }
+-- Rubans de mise en avant (Id de l'offre -> texte)
+local HIGHLIGHTS = {
+	X10 = "🔥 MEILLEURE OFFRE",
+	VIP = "⭐ POPULAIRE",
+	PackL = "💰 MEILLEUR PRIX",
+	Boost5 = "⚡ PUISSANT",
+}
 
 local PENDING_TIMEOUT = 20 -- secondes d'attente max de l'activation d'un pass acheté
 local PROMPT_COOLDOWN = 1
@@ -59,10 +75,16 @@ type Offer = {
 	Def: any,
 	IsPass: boolean,
 	Id: number,
+	Category: string, -- "Passes" | "Dopamine" | "Boosts"
+	Color: Color3,
+	Cell: Frame,
 	Card: Frame,
 	Stroke: UIStroke,
 	Button: TextButton,
 	Extra: TextLabel?,
+	Owned: Frame?,
+	Rays: Frame,
+	Hovered: boolean,
 }
 
 local player = Players.LocalPlayer
@@ -73,10 +95,16 @@ local lastFailure: { [string]: number } = {}
 local pendingPasses: { [number]: number } = {} -- [GamePassId] = os.clock() de l'achat
 local lastPrompt = 0
 local visible = false
+local filter = "All"
+local animation: RBXScriptConnection? = nil
+local refreshClock = 0
 
-local statusLabel: TextLabel
-local bonusChip: Frame
-local statusBar: Frame
+local heroStatus: TextLabel
+local heroChips: { VIP: Frame, Bonus: Frame, Boost: Frame } = {} :: any
+local heroDiamond: TextLabel
+local heroRays: Frame
+local sparkles: { TextLabel } = {}
+local filterEmpty: TextLabel
 
 ----------------------------------------------------------------------
 -- Prix (MarketplaceService, jamais sur le thread de rendu)
@@ -89,6 +117,9 @@ end
 local refreshOffer: (offer: Offer) -> () -- défini plus bas
 
 local function fetchPrice(offer: Offer)
+	if offer.Id == 0 then
+		return
+	end
 	local key = cacheKey(offer.IsPass, offer.Id)
 	if priceCache[key] or fetching[key] then
 		return
@@ -121,7 +152,11 @@ local function fetchPrice(offer: Offer)
 	end)
 end
 
+-- (texte du prix, en vente ?)
 local function priceText(offer: Offer): (string, boolean)
+	if offer.Id == 0 then
+		return "R$ " .. NumberFormatter.WithSpaces(tonumber(offer.Def.PriceHint) or 0), false
+	end
 	local cached = priceCache[cacheKey(offer.IsPass, offer.Id)]
 	if cached then
 		if not cached.ForSale or not cached.Price then
@@ -141,6 +176,19 @@ local function prompt(offer: Offer)
 		return
 	end
 	lastPrompt = os.clock()
+	if offer.Id == 0 then
+		SoundManager.Play("Error", 0.8)
+		UIUtil.Shake(offer.Button)
+		Notifications.Toast(
+			"Colle l'ID de « " .. tostring(offer.Def.Name) .. " » dans Config.Monetization pour le vendre.",
+			Theme.Colors.Orange,
+			5,
+			"Aperçu Studio",
+			false,
+			"🛠️"
+		)
+		return
+	end
 	if offer.IsPass and ClientState.HasPass(offer.Def.Id) then
 		SoundManager.Play("Error", 0.8)
 		return
@@ -153,6 +201,7 @@ local function prompt(offer: Offer)
 		return
 	end
 	SoundManager.Play("Click", 1.2)
+	UIUtil.Pop(offer.Card, 1.05, 0.3)
 	local ok, err = pcall(function()
 		if offer.IsPass then
 			MarketplaceService:PromptGamePassPurchase(player, offer.Id)
@@ -171,7 +220,9 @@ end
 ----------------------------------------------------------------------
 
 local function styleButton(button: TextButton, text: string, background: Color3, textColor: Color3, enabled: boolean)
-	button.Text = text
+	if button.Text ~= text then
+		button.Text = text
+	end
 	button:SetAttribute("BaseColor", background)
 	button.BackgroundColor3 = background
 	button.TextColor3 = textColor
@@ -181,24 +232,30 @@ end
 
 function refreshOffer(offer: Offer)
 	local def = offer.Def
-	if offer.IsPass then
-		local owned = ClientState.HasPass(def.Id)
-		local pendingSince = pendingPasses[offer.Id]
-		if owned then
-			pendingPasses[offer.Id] = nil
-			styleButton(offer.Button, "✔ Acheté", Color3.fromRGB(222, 247, 232), Theme.Colors.RobuxDark, false)
-			offer.Stroke.Color = Theme.Colors.Robux
-			offer.Stroke.Thickness = 2
-			offer.Stroke.Transparency = 0
-			return
-		elseif pendingSince and os.clock() - pendingSince < PENDING_TIMEOUT then
-			styleButton(offer.Button, "⏳ Activation…", Theme.Colors.PanelLight, Theme.Colors.TextDim, false)
-			return
-		end
+	local owned = offer.IsPass and ClientState.HasPass(def.Id)
+	if offer.Owned then
+		offer.Owned.Visible = owned
 	end
-	offer.Stroke.Color = Theme.Colors.CardBorder
-	offer.Stroke.Thickness = 1.5
-	offer.Stroke.Transparency = 0.15
+	if owned then
+		pendingPasses[offer.Id] = nil
+		styleButton(offer.Button, "✔ Acheté", Color3.fromRGB(222, 247, 232), Theme.Colors.RobuxDark, false)
+		offer.Stroke.Color = Theme.Colors.Robux
+		offer.Stroke.Thickness = 2
+		offer.Stroke.Transparency = 0
+		return
+	end
+	offer.Stroke.Color = offer.Color:Lerp(Color3.new(0, 0, 0), 0.2)
+	offer.Stroke.Thickness = offer.Hovered and 2 or 1.5
+	offer.Stroke.Transparency = offer.Hovered and 0 or 0.35
+	local pendingSince = offer.IsPass and pendingPasses[offer.Id]
+	if pendingSince and os.clock() - pendingSince < PENDING_TIMEOUT then
+		styleButton(offer.Button, "⏳ Activation…", Theme.Colors.PanelLight, Theme.Colors.TextDim, false)
+		return
+	end
+	if offer.Id == 0 then
+		styleButton(offer.Button, "🛠️ ID à configurer", Theme.Colors.PanelLight, Theme.Colors.TextDim, false)
+		return
+	end
 	local text, forSale = priceText(offer)
 	if forSale then
 		styleButton(offer.Button, text, Theme.Colors.Robux, Theme.Colors.TextLight, true)
@@ -207,68 +264,218 @@ function refreshOffer(offer: Offer)
 	end
 end
 
--- Ligne "extra" des produits : estimation du gain / boost actif
+-- Ligne "extra" : estimation du gain / boost actif / effet
 local function refreshExtra(offer: Offer, data)
 	local extra = offer.Extra
 	if not extra then
 		return
 	end
 	local def = offer.Def
-	if def.Kind == "Dopamine" then
+	local text = ""
+	local color = Theme.Colors.TextDim
+	if offer.IsPass then
+		if def.Multiplier then
+			text = "📈 Gains " .. NumberFormatter.Multiplier(def.Multiplier) .. " pour toujours"
+			color = offer.Color:Lerp(Color3.new(0, 0, 0), 0.35)
+		elseif def.AutoClicksPerSecond then
+			text = "🤖 " .. tostring(def.AutoClicksPerSecond) .. " clics / seconde"
+			color = offer.Color:Lerp(Color3.new(0, 0, 0), 0.35)
+		end
+		if def.UnlockPremiumThemes then
+			text = (text ~= "" and (text .. " • ") or "") .. "🎨 Thèmes Premium"
+		end
+	elseif def.Kind == "Dopamine" then
 		local stats = { PerSecond = tonumber(data and data.PerSecond) or 0, ClickValue = tonumber(data and data.ClickValue) or 0 }
 		local amount = Formulas.ScaledReward(stats, tonumber(def.Seconds) or 0, tonumber(def.Minimum) or 0)
-		extra.Text = "≈ +" .. NumberFormatter.Format(amount) .. " Dopamine"
-		extra.TextColor3 = Theme.Colors.Blue
+		text = "≈ +" .. NumberFormatter.Format(amount) .. " Dopamine"
+		color = Theme.Colors.Blue
 	elseif def.Kind == "Boost" then
 		local multiplier, remaining = ClientState.GetBoost()
 		if remaining > 0 then
-			extra.Text = string.format("⏱️ Actif : x%s • %s", tostring(multiplier), UIUtil.FormatClock(remaining))
-			extra.TextColor3 = Theme.Colors.Boost
+			text = string.format("⏱️ Actif : %s • %s", NumberFormatter.Multiplier(multiplier), UIUtil.FormatClock(remaining))
+			color = Theme.Colors.Boost
 		else
-			extra.Text = "Durée : " .. NumberFormatter.Time(tonumber(def.Duration) or 0)
-			extra.TextColor3 = Theme.Colors.TextDim
+			text = "⏱️ Durée : " .. NumberFormatter.Time(tonumber(def.Duration) or 0)
 		end
 	elseif def.Kind == "ServerRush" then
-		extra.Text = "Tout le serveur en profite 🎉"
-		extra.TextColor3 = Theme.Colors.Pink
-	else
-		extra.Text = ""
+		text = "🎉 Tout le serveur en profite"
+		color = Theme.Colors.Pink
 	end
+	if extra.Text ~= text then
+		extra.Text = text
+	end
+	extra.TextColor3 = color
+end
+
+----------------------------------------------------------------------
+-- Bannière
+----------------------------------------------------------------------
+
+local function setChip(chip: Frame, show: boolean, text: string?)
+	if chip.Visible ~= show then
+		chip.Visible = show
+		if show then
+			UIUtil.Pop(chip, 0.4, 0.35)
+		end
+	end
+	if show and text then
+		local label = chip:FindFirstChild("Label") :: TextLabel?
+		if label and label.Text ~= text then
+			label.Text = text
+		end
+	end
+end
+
+local function refreshStatus(data)
+	if not heroStatus then
+		return
+	end
+	local multiplier, remaining = ClientState.GetBoost()
+	local vip = ClientState.IsVIP()
+	if remaining > 0 then
+		heroStatus.Text = "🔥 Ton boost est actif : profites-en !"
+	elseif vip then
+		heroStatus.Text = "👑 Tu es VIP — merci pour ton soutien !"
+	else
+		heroStatus.Text = "Les achats sont liés à ton compte et gardés pour toujours."
+	end
+	local bonus = tonumber(data and data.BonusMultiplier) or ClientState.GetPassMultiplier()
+	setChip(heroChips.VIP, vip, "👑 VIP")
+	setChip(heroChips.Bonus, bonus > 1.001, "💎 Bonus " .. NumberFormatter.Multiplier(bonus))
+	setChip(heroChips.Boost, remaining > 0, string.format("⏱️ %s • %s", NumberFormatter.Multiplier(multiplier), UIUtil.FormatClock(remaining)))
+end
+
+local function buildHero(content: Frame)
+	local hero = UIUtil.Create("Frame", {
+		Name = "Hero",
+		Size = UDim2.new(1, 0, 0, 110),
+		BackgroundColor3 = WHITE,
+		ClipsDescendants = true,
+		Parent = content,
+	})
+	UIUtil.Corner(hero, Theme.Radius.L)
+	UIUtil.Stroke(hero, HERO_TOP, 1.5, 0.3)
+	UIUtil.Gradient(hero, ColorSequence.new(HERO_TOP, HERO_BOTTOM), 15)
+
+	-- Étincelles
+	local random = Random.new(42)
+	for index = 1, 12 do
+		local star = UIUtil.Label({
+			Name = "Sparkle" .. index,
+			Text = index % 3 == 0 and "✦" or "•",
+			TextColor3 = WHITE,
+			Size = UDim2.fromOffset(14, 14),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(random:NextNumber(0.35, 0.98), random:NextNumber(0.08, 0.92)),
+			MaxTextSize = index % 3 == 0 and 14 or 10,
+			ZIndex = 2,
+			Parent = hero,
+		})
+		star:SetAttribute("Phase", random:NextNumber(0, math.pi * 2))
+		table.insert(sparkles, star)
+	end
+
+	-- Gros diamant à droite, devant des rayons
+	heroRays = UIUtil.Rays(hero, WHITE, 8, 220, UDim2.new(1, -80, 0.5, 0), 2)
+	local halo = UIUtil.Create("Frame", {
+		Name = "Halo",
+		Size = UDim2.fromOffset(92, 92),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(1, -80, 0.5, 0),
+		BackgroundColor3 = WHITE,
+		BackgroundTransparency = 0.8,
+		ZIndex = 2,
+		Parent = hero,
+	})
+	UIUtil.Corner(halo, UDim.new(1, 0))
+	heroDiamond = UIUtil.Label({
+		Name = "Diamond",
+		Text = "💎",
+		Size = UDim2.fromOffset(76, 76),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(1, -80, 0.5, 0),
+		MaxTextSize = 64,
+		ZIndex = 3,
+		Parent = hero,
+	})
+
+	local title = UIUtil.Label({
+		Name = "HeroTitle",
+		Text = "Boutique Robux",
+		Font = Theme.Fonts.Title,
+		TextColor3 = WHITE,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -200, 0, 30),
+		Position = UDim2.fromOffset(18, 12),
+		MaxTextSize = 26,
+		ZIndex = 3,
+		Parent = hero,
+	})
+	local stroke = UIUtil.Stroke(title, Color3.fromRGB(40, 10, 80), 1.5, 0.4)
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	heroStatus = UIUtil.Label({
+		Name = "Status",
+		Text = "",
+		TextColor3 = WHITE,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -200, 0, 18),
+		Position = UDim2.fromOffset(18, 44),
+		MaxTextSize = 15,
+		ZIndex = 3,
+		Parent = hero,
+	})
+
+	local chips = UIUtil.Create("Frame", {
+		Name = "Chips",
+		Size = UDim2.new(1, -200, 0, 26),
+		Position = UDim2.fromOffset(18, 72),
+		BackgroundTransparency = 1,
+		ZIndex = 3,
+		Parent = hero,
+	})
+	UIUtil.Create("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		Padding = UDim.new(0, 8),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+		Parent = chips,
+	})
+	local function chip(order: number, color: Color3, textColor: Color3): Frame
+		return UIUtil.Chip({
+			Text = "",
+			Color = color,
+			TextColor3 = textColor,
+			Height = 24,
+			TextSize = 13,
+			LayoutOrder = order,
+			ZIndex = 4,
+			StrokeColor = WHITE,
+			Visible = false,
+			Parent = chips,
+		})
+	end
+	heroChips = {
+		VIP = chip(1, Theme.Colors.Premium, Theme.Colors.TextDark),
+		Bonus = chip(2, WHITE, HERO_TOP),
+		Boost = chip(3, Theme.Colors.Boost, Theme.Colors.TextLight),
+	}
+	-- Toujours visible : rappel "achat sécurisé"
+	local safe = chip(4, WHITE, Theme.Colors.RobuxDark)
+	safe.Visible = true
+	setChip(safe, true, "🔒 Paiement Roblox sécurisé")
 end
 
 ----------------------------------------------------------------------
 -- Construction des cartes
 ----------------------------------------------------------------------
 
--- Tuile colorée avec l'emoji de l'offre
-local function iconTile(parent: GuiObject, icon: string, color: Color3, size: number, position: UDim2, anchor: Vector2?)
-	local tile = UIUtil.Create("Frame", {
-		Name = "Icon",
-		Size = UDim2.fromOffset(size, size),
-		Position = position,
-		AnchorPoint = anchor or Vector2.zero,
-		BackgroundColor3 = color,
-		ZIndex = 3,
-		Parent = parent,
-	})
-	UIUtil.Corner(tile, math.floor(size * 0.26))
-	UIUtil.Stroke(tile, Theme.Colors.Border, 1.5, 0.25)
-	UIUtil.Gradient(tile, ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(200, 200, 200)), 90)
-	UIUtil.Label({
-		Text = icon,
-		Size = UDim2.new(1, -8, 1, -8),
-		Position = UDim2.fromOffset(4, 4),
-		MaxTextSize = math.floor(size * 0.62),
-		ZIndex = 4,
-		Parent = tile,
-	})
-	return tile
-end
+local function buildCard(grid: ScrollingFrame, def, isPass: boolean, order: number)
+	local color: Color3 = isPass and (PASS_COLORS[def.Id] or Theme.Colors.Purple)
+		or (PRODUCT_COLORS[def.Kind] or Theme.Colors.Cyan)
+	local category = isPass and "Passes" or (def.Kind == "Dopamine" and "Dopamine" or "Boosts")
 
--- Carte "support" dans une grille : un cadre transparent (cellule) qui porte
--- la carte blanche et son ombre
-local function cardShell(grid: Frame, order: number): (Frame, Frame, UIStroke)
 	local cell = UIUtil.Create("Frame", {
+		Name = tostring(def.Id),
 		BackgroundTransparency = 1,
 		LayoutOrder = order,
 		Parent = grid,
@@ -276,120 +483,113 @@ local function cardShell(grid: Frame, order: number): (Frame, Frame, UIStroke)
 	local card = UIUtil.Create("Frame", {
 		Name = "Card",
 		Size = UDim2.new(1, 0, 1, -6),
+		Position = UDim2.fromOffset(0, 5),
 		BackgroundColor3 = Theme.Colors.Card,
 		ZIndex = 2,
 		Parent = cell,
 	})
 	UIUtil.Corner(card, Theme.Radius.L)
-	local stroke = UIUtil.Stroke(card, Theme.Colors.CardBorder, 1.5, 0.15)
-	UIUtil.Shadow(card, 3, 0.86)
-	UIUtil.Create("UIScale", { Name = "PopScale", Parent = card })
-	return cell, card, stroke
-end
+	local stroke = UIUtil.Stroke(card, color:Lerp(Color3.new(0, 0, 0), 0.2), 1.5, 0.35)
+	UIUtil.Shadow(card, 3, 0.86, 2)
 
-local function priceButton(card: Frame, size: UDim2, position: UDim2, anchor: Vector2): TextButton
-	return UIUtil.NeonButton({
-		Name = "Price",
-		Text = "",
-		Color = Theme.Colors.Robux,
-		TextColor3 = Theme.Colors.TextLight,
-		Size = size,
-		Position = position,
-		AnchorPoint = anchor,
-		CornerRadius = 17,
-		MaxTextSize = 17,
+	-- Vitrine
+	local showcase = UIUtil.Create("Frame", {
+		Name = "Showcase",
+		Size = UDim2.new(1, -10, 0, 104),
+		Position = UDim2.fromOffset(5, 5),
+		BackgroundColor3 = WHITE,
+		ClipsDescendants = true,
+		ZIndex = 3,
+		Parent = card,
+	})
+	UIUtil.Corner(showcase, Theme.Radius.M)
+	UIUtil.SoftGradient(showcase, color, 90)
+	local rays = UIUtil.Rays(showcase, WHITE, 6, 190, UDim2.fromScale(0.5, 0.55), 3)
+	local glow = UIUtil.Create("Frame", {
+		Name = "Glow",
+		Size = UDim2.fromOffset(74, 74),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.55),
+		BackgroundColor3 = WHITE,
+		BackgroundTransparency = 0.55,
+		ZIndex = 3,
+		Parent = showcase,
+	})
+	UIUtil.Corner(glow, UDim.new(1, 0))
+	UIUtil.Label({
+		Name = "Icon",
+		Text = tostring(def.Icon or (isPass and "🎟️" or "💧")),
+		Size = UDim2.fromOffset(64, 64),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.56),
+		MaxTextSize = 54,
 		ZIndex = 4,
-		Parent = card,
+		Parent = showcase,
 	})
-end
 
-local function buildPassCard(grid: Frame, def, order: number)
-	local _, card, stroke = cardShell(grid, order)
-	local color = PASS_COLORS[def.Id] or Theme.Colors.Purple
-	iconTile(card, def.Icon or "🎟️", color, 64, UDim2.new(0, 12, 0.5, 0), Vector2.new(0, 0.5))
-
-	UIUtil.Label({
-		Text = tostring(def.Name),
-		Font = Theme.Fonts.Title,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Size = UDim2.new(1, -100, 0, 22),
-		Position = UDim2.fromOffset(88, 10),
-		MaxTextSize = Theme.TextSize.Heading,
-		ZIndex = 3,
-		Parent = card,
+	-- "Pour toujours" / "Rachetable"
+	local kindChip = UIUtil.Chip({
+		Name = "Kind",
+		Text = isPass and "♾️ POUR TOUJOURS" or "🔁 RACHETABLE",
+		Color = WHITE,
+		TextColor3 = color:Lerp(Color3.new(0, 0, 0), 0.45),
+		Height = 18,
+		TextSize = 10,
+		ZIndex = 5,
+		StrokeColor = WHITE,
+		Parent = showcase,
 	})
-	local desc = UIUtil.Create("TextLabel", {
-		Text = tostring(def.Description or ""),
-		Font = Theme.Fonts.Body,
-		TextSize = 14,
-		TextColor3 = Theme.Colors.TextDim,
-		TextWrapped = true,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextYAlignment = Enum.TextYAlignment.Top,
-		BackgroundTransparency = 1,
-		Size = UDim2.new(1, -100, 0, 34),
-		Position = UDim2.fromOffset(88, 34),
-		ZIndex = 3,
-		Parent = card,
-	})
-	desc.TextTruncate = Enum.TextTruncate.AtEnd
+	kindChip.Position = UDim2.fromOffset(6, 6)
 
-	-- Petite étiquette de l'avantage principal
-	local perk = ""
-	if def.Multiplier then
-		perk = NumberFormatter.Multiplier(def.Multiplier)
-	elseif def.AutoClicksPerSecond then
-		perk = tostring(def.AutoClicksPerSecond) .. " clics/s"
-	end
-	if def.UnlockPremiumThemes then
-		perk = (perk ~= "" and (perk .. " • ") or "") .. "Thèmes Premium"
-	end
-	if perk ~= "" then
-		local chip = UIUtil.Chip({
-			Text = perk,
-			Color = color:Lerp(Color3.new(1, 1, 1), 0.75),
+	-- Ruban de mise en avant
+	local highlight = HIGHLIGHTS[def.Id]
+	if highlight then
+		local ribbon = UIUtil.Chip({
+			Name = "Highlight",
+			Text = highlight,
+			Color = Theme.Colors.Premium,
 			TextColor3 = Theme.Colors.TextDark,
-			Height = 22,
-			TextSize = 13,
-			ZIndex = 3,
-			Parent = card,
+			Height = 18,
+			TextSize = 10,
+			ZIndex = 5,
+			Parent = showcase,
 		})
-		chip.AnchorPoint = Vector2.new(0, 1)
-		chip.Position = UDim2.new(0, 88, 1, -12)
+		ribbon.AnchorPoint = Vector2.new(1, 0)
+		ribbon.Position = UDim2.new(1, -6, 0, 6)
 	end
 
-	local button = priceButton(card, UDim2.fromOffset(118, 32), UDim2.new(1, -12, 1, -10), Vector2.new(1, 1))
-	local offer: Offer = {
-		Def = def,
-		IsPass = true,
-		Id = def.GamePassId,
-		Card = card,
-		Stroke = stroke,
-		Button = button,
-		Extra = nil,
-	}
-	button.Activated:Connect(function()
-		prompt(offer)
-	end)
-	table.insert(offers, offer)
-	refreshOffer(offer)
-end
-
-local function buildProductCard(grid: Frame, def, order: number)
-	local _, card, stroke = cardShell(grid, order)
-	local color = PRODUCT_COLORS[def.Kind] or Theme.Colors.Cyan
-	iconTile(card, def.Icon or "💧", color, 56, UDim2.new(0.5, 0, 0, 12), Vector2.new(0.5, 0))
+	-- Ruban "✔ ACHETÉ" (passes possédés)
+	local owned: Frame? = nil
+	if isPass then
+		local ownedChip = UIUtil.Chip({
+			Name = "Owned",
+			Text = "✔ ACHETÉ",
+			Color = Theme.Colors.Robux,
+			TextColor3 = WHITE,
+			Height = 22,
+			TextSize = 12,
+			ZIndex = 6,
+			Visible = false,
+			StrokeColor = WHITE,
+			Parent = showcase,
+		})
+		ownedChip.AnchorPoint = Vector2.new(0.5, 1)
+		ownedChip.Position = UDim2.new(0.5, 0, 1, -6)
+		owned = ownedChip
+	end
 
 	UIUtil.Label({
+		Name = "OfferName",
 		Text = tostring(def.Name),
 		Font = Theme.Fonts.Title,
 		Size = UDim2.new(1, -16, 0, 22),
-		Position = UDim2.fromOffset(8, 74),
+		Position = UDim2.fromOffset(8, 114),
 		MaxTextSize = 18,
 		ZIndex = 3,
 		Parent = card,
 	})
 	local desc = UIUtil.Create("TextLabel", {
+		Name = "Description",
 		Text = tostring(def.Description or ""),
 		Font = Theme.Fonts.Body,
 		TextSize = 14,
@@ -397,65 +597,82 @@ local function buildProductCard(grid: Frame, def, order: number)
 		TextWrapped = true,
 		BackgroundTransparency = 1,
 		Size = UDim2.new(1, -20, 0, 32),
-		Position = UDim2.fromOffset(10, 97),
+		Position = UDim2.fromOffset(10, 137),
 		ZIndex = 3,
 		Parent = card,
 	})
 	desc.TextTruncate = Enum.TextTruncate.AtEnd
 	local extra = UIUtil.Label({
+		Name = "Extra",
 		Text = "",
 		Font = Theme.Fonts.Title,
 		TextColor3 = Theme.Colors.TextDim,
 		Size = UDim2.new(1, -16, 0, 16),
-		Position = UDim2.fromOffset(8, 130),
+		Position = UDim2.fromOffset(8, 171),
 		MaxTextSize = 13,
 		ZIndex = 3,
 		Parent = card,
 	})
 
-	local button = priceButton(card, UDim2.new(1, -24, 0, 34), UDim2.new(0.5, 0, 1, -10), Vector2.new(0.5, 1))
+	local button = UIUtil.NeonButton({
+		Name = "Price",
+		Text = "",
+		Color = Theme.Colors.Robux,
+		TextColor3 = Theme.Colors.TextLight,
+		Size = UDim2.new(1, -20, 0, 36),
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -9),
+		CornerRadius = 18,
+		MaxTextSize = 17,
+		ZIndex = 4,
+		Parent = card,
+	})
+
 	local offer: Offer = {
 		Def = def,
-		IsPass = false,
-		Id = def.ProductId,
+		IsPass = isPass,
+		Id = tonumber(isPass and def.GamePassId or def.ProductId) or 0,
+		Category = category,
+		Color = color,
+		Cell = cell,
 		Card = card,
 		Stroke = stroke,
 		Button = button,
 		Extra = extra,
+		Owned = owned,
+		Rays = rays,
+		Hovered = false,
 	}
 	button.Activated:Connect(function()
 		prompt(offer)
+	end)
+	local function hover(on: boolean)
+		offer.Hovered = on
+		UIUtil.Tween(card, 0.18, { Position = UDim2.fromOffset(0, on and 0 or 5) }, Enum.EasingStyle.Quad)
+		refreshOffer(offer)
+	end
+	card.MouseEnter:Connect(function()
+		hover(true)
+	end)
+	card.MouseLeave:Connect(function()
+		hover(false)
 	end)
 	table.insert(offers, offer)
 	refreshOffer(offer)
 	refreshExtra(offer, ClientState.Data)
 end
 
-----------------------------------------------------------------------
--- Barre d'état (boost / VIP / bonus)
-----------------------------------------------------------------------
-
-local function refreshStatus(data)
-	if not statusLabel then
-		return
+local function applyFilter()
+	local shown = 0
+	for _, offer in ipairs(offers) do
+		local show = filter == "All" or offer.Category == filter
+		offer.Cell.Visible = show
+		if show then
+			shown += 1
+		end
 	end
-	local multiplier, remaining = ClientState.GetBoost()
-	if remaining > 0 then
-		statusLabel.Text = string.format("🔥 Boost x%s actif • encore %s", tostring(multiplier), UIUtil.FormatClock(remaining))
-		statusLabel.TextColor3 = Theme.Colors.Boost
-	elseif ClientState.IsVIP() then
-		statusLabel.Text = "👑 Tu es VIP — merci pour ton soutien !"
-		statusLabel.TextColor3 = Theme.Colors.Text
-	else
-		statusLabel.Text = "Les achats sont liés à ton compte et gardés pour toujours."
-		statusLabel.TextColor3 = Theme.Colors.TextDim
-	end
-
-	local bonus = tonumber(data and data.BonusMultiplier) or 1
-	local label = bonusChip:FindFirstChild("Label") :: TextLabel?
-	bonusChip.Visible = bonus > 1.001
-	if label and bonusChip.Visible then
-		label.Text = "💎 Bonus Robux " .. NumberFormatter.Multiplier(bonus)
+	if filterEmpty then
+		filterEmpty.Visible = shown == 0 and #offers > 0
 	end
 end
 
@@ -464,45 +681,82 @@ end
 ----------------------------------------------------------------------
 
 function RobuxShop.Build(content: Frame)
-	-- Barre d'état
-	statusBar = UIUtil.Create("Frame", {
-		Name = "Status",
-		Size = UDim2.new(1, 0, 0, 38),
-		BackgroundColor3 = Theme.Colors.Surface,
-		Parent = content,
-	})
-	UIUtil.Corner(statusBar, Theme.Radius.M)
-	UIUtil.Stroke(statusBar, Theme.Colors.Divider, 1)
-	statusLabel = UIUtil.Label({
-		Text = "",
-		Font = Theme.Fonts.Title,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Size = UDim2.new(1, -220, 1, -10),
-		Position = UDim2.fromOffset(14, 5),
-		MaxTextSize = 15,
-		Parent = statusBar,
-	})
-	bonusChip = UIUtil.Chip({
-		Name = "Bonus",
-		Text = "",
-		Color = Theme.Colors.Robux,
-		TextColor3 = Theme.Colors.TextLight,
-		Height = 26,
-		TextSize = 14,
-		Visible = false,
-		Parent = statusBar,
-	})
-	bonusChip.AnchorPoint = Vector2.new(1, 0.5)
-	bonusChip.Position = UDim2.new(1, -8, 0.5, 0)
+	local studio = RunService:IsStudio()
+	buildHero(content)
 
-	local list = UIUtil.Create("ScrollingFrame", {
+	UIUtil.Tabs({
+		Parent = content,
+		Tabs = {
+			{ Id = "All", Text = "⭐ Tout" },
+			{ Id = "Passes", Text = "🎟️ Passes" },
+			{ Id = "Dopamine", Text = "💧 Dopamine" },
+			{ Id = "Boosts", Text = "⚡ Boosts" },
+		},
+		Color = Theme.Colors.Purple,
+		Size = UDim2.new(1, 0, 0, 36),
+		Position = UDim2.fromOffset(0, 118),
+		Selected = filter,
+		OnSelect = function(id: string)
+			filter = id
+			applyFilter()
+			SoundManager.Play("Click", 1.3)
+		end,
+	})
+
+	-- Offres affichées : configurées (ID ~= 0) ; dans Studio, aussi les autres (aperçu)
+	local passes, products = {}, {}
+	local hidden = 0
+	for _, pass in ipairs(Config.Monetization.GamePasses) do
+		if (tonumber(pass.GamePassId) or 0) ~= 0 or studio then
+			table.insert(passes, pass)
+		end
+		if (tonumber(pass.GamePassId) or 0) == 0 then
+			hidden += 1
+		end
+	end
+	for _, product in ipairs(Config.Monetization.Products) do
+		if (tonumber(product.ProductId) or 0) ~= 0 or studio then
+			table.insert(products, product)
+		end
+		if (tonumber(product.ProductId) or 0) == 0 then
+			hidden += 1
+		end
+	end
+
+	local top = 162
+	if studio and hidden > 0 then
+		-- Bandeau d'aide pour le propriétaire (Studio uniquement)
+		local notice = UIUtil.Create("Frame", {
+			Name = "StudioNotice",
+			Size = UDim2.new(1, 0, 0, 26),
+			Position = UDim2.fromOffset(0, top),
+			BackgroundColor3 = Color3.fromRGB(255, 244, 220),
+			Parent = content,
+		})
+		UIUtil.Corner(notice, Theme.Radius.S)
+		UIUtil.Stroke(notice, Theme.Colors.Orange, 1, 0.5)
+		UIUtil.Label({
+			Text = string.format(
+				"🛠️ Aperçu Studio : %d offre(s) sans ID (0) — cachées dans le jeu publié. Colle tes IDs dans Config.Monetization.",
+				hidden
+			),
+			TextColor3 = Color3.fromRGB(150, 80, 0),
+			Size = UDim2.new(1, -16, 1, -8),
+			Position = UDim2.fromOffset(8, 4),
+			MaxTextSize = 13,
+			Parent = notice,
+		})
+		top += 32
+	end
+
+	local grid = UIUtil.Create("ScrollingFrame", {
 		Name = "Offers",
-		Size = UDim2.new(1, 0, 1, -48),
-		Position = UDim2.fromOffset(0, 48),
+		Size = UDim2.new(1, 0, 1, -top),
+		Position = UDim2.fromOffset(0, top),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		ScrollBarThickness = 6,
-		ScrollBarImageColor3 = Theme.Colors.Robux,
+		ScrollBarThickness = 5,
+		ScrollBarImageColor3 = Theme.Colors.Purple,
 		CanvasSize = UDim2.new(),
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		ScrollingDirection = Enum.ScrollingDirection.Y,
@@ -511,139 +765,81 @@ function RobuxShop.Build(content: Frame)
 	UIUtil.Create("UIPadding", {
 		PaddingTop = UDim.new(0, 2),
 		PaddingLeft = UDim.new(0, 4),
-		PaddingRight = UDim.new(0, 14),
-		PaddingBottom = UDim.new(0, 8),
-		Parent = list,
+		PaddingRight = UDim.new(0, 12),
+		PaddingBottom = UDim.new(0, 10),
+		Parent = grid,
 	})
-	UIUtil.Create("UIListLayout", {
-		Padding = UDim.new(0, 10),
+	UIUtil.Create("UIGridLayout", {
+		CellSize = UDim2.new(1 / 3, -10, 0, 238),
+		CellPadding = UDim2.fromOffset(10, 6),
 		SortOrder = Enum.SortOrder.LayoutOrder,
-		Parent = list,
+		Parent = grid,
 	})
 
-	local function grid(order: number, cellSize: UDim2): Frame
-		local frame = UIUtil.Create("Frame", {
-			Size = UDim2.fromScale(1, 0),
-			AutomaticSize = Enum.AutomaticSize.Y,
-			BackgroundTransparency = 1,
-			LayoutOrder = order,
-			Parent = list,
-		})
-		UIUtil.Create("UIGridLayout", {
-			CellSize = cellSize,
-			CellPadding = UDim2.fromOffset(12, 10),
-			SortOrder = Enum.SortOrder.LayoutOrder,
-			Parent = frame,
-		})
-		return frame
+	local order = 0
+	for _, pass in ipairs(passes) do
+		order += 1
+		buildCard(grid, pass, true, order)
+	end
+	for _, product in ipairs(products) do
+		order += 1
+		buildCard(grid, product, false, order)
 	end
 
-	local function caption(section: Frame, text: string)
-		UIUtil.Label({
-			Text = text,
-			TextColor3 = Theme.Colors.TextDim,
-			TextXAlignment = Enum.TextXAlignment.Right,
-			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, 0, 0.5, 0),
-			Size = UDim2.new(0.5, 0, 0, 18),
-			MaxTextSize = 14,
-			Parent = section,
-		})
-	end
+	filterEmpty = UIUtil.Label({
+		Name = "FilterEmpty",
+		Text = "Rien dans cette catégorie pour le moment.",
+		TextColor3 = Theme.Colors.TextDim,
+		Size = UDim2.new(1, 0, 0, 30),
+		Position = UDim2.fromOffset(0, top + 40),
+		MaxTextSize = 16,
+		Visible = false,
+		Parent = content,
+	})
 
-	-- Offres configurées (ID ~= 0) et cachées (ID = 0)
-	local passes, products = {}, {}
-	local hidden = 0
-	for _, pass in ipairs(Config.Monetization.GamePasses) do
-		if (tonumber(pass.GamePassId) or 0) ~= 0 then
-			table.insert(passes, pass)
-		else
-			hidden += 1
-		end
-	end
-	for _, product in ipairs(Config.Monetization.Products) do
-		if (tonumber(product.ProductId) or 0) ~= 0 then
-			table.insert(products, product)
-		else
-			hidden += 1
-		end
-	end
-
-	if #passes > 0 then
-		local section = UIUtil.SectionHeader(list, "🎟️ Game Passes", 1, Theme.Colors.Purple)
-		caption(section, "Achat unique • pour toujours")
-		local passGrid = grid(2, UDim2.new(0.5, -6, 0, 114))
-		for index, pass in ipairs(passes) do
-			buildPassCard(passGrid, pass, index)
-		end
-	end
-	if #products > 0 then
-		local section = UIUtil.SectionHeader(list, "📦 Packs & Boosts", 3, Theme.Colors.Boost)
-		caption(section, "Rachetables à volonté")
-		local productGrid = grid(4, UDim2.new(1 / 3, -8, 0, 202))
-		for index, product in ipairs(products) do
-			buildProductCard(productGrid, product, index)
-		end
-	end
-
-	-- Rien à vendre : état vide propre
-	if #passes == 0 and #products == 0 then
-		local studio = RunService:IsStudio()
+	-- Rien à vendre (jeu publié) : état vide propre
+	if #offers == 0 then
 		local empty = UIUtil.Create("Frame", {
 			Name = "Empty",
-			Size = UDim2.new(1, 0, 0, 300),
+			Size = UDim2.new(1, 0, 1, -top),
+			Position = UDim2.fromOffset(0, top),
 			BackgroundTransparency = 1,
-			LayoutOrder = 5,
-			Parent = list,
+			Parent = content,
 		})
 		local bubble = UIUtil.Create("Frame", {
 			Size = UDim2.fromOffset(110, 110),
 			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(0.5, 0, 0, 20),
+			Position = UDim2.new(0.5, 0, 0, 30),
 			BackgroundColor3 = Theme.Colors.Surface,
 			Parent = empty,
 		})
 		UIUtil.Corner(bubble, UDim.new(1, 0))
 		UIUtil.Stroke(bubble, Theme.Colors.Divider, 2)
 		UIUtil.Label({
-			Text = studio and "🛠️" or "💎",
+			Text = "💎",
 			Size = UDim2.new(1, -24, 1, -24),
 			Position = UDim2.fromOffset(12, 12),
 			MaxTextSize = 60,
 			Parent = bubble,
 		})
 		UIUtil.Label({
-			Text = studio and "Ajoute tes IDs dans Config.Monetization" or "Bientôt disponible",
+			Text = "Bientôt disponible",
 			Font = Theme.Fonts.Title,
 			Size = UDim2.new(1, -40, 0, 30),
-			Position = UDim2.fromOffset(20, 146),
+			Position = UDim2.fromOffset(20, 156),
 			MaxTextSize = 24,
 			Parent = empty,
 		})
-		local body = UIUtil.Create("TextLabel", {
-			Text = studio
-					and "Crée tes Game Passes et Developer Products sur create.roblox.com (ton expérience > Monétisation), puis colle leurs IDs dans ReplicatedStorage > Shared > Config (Config.Monetization). Les offres à 0 restent cachées.\n(Ce message n'apparaît que dans Studio.)"
-				or "La boutique ouvre très bientôt. Reviens nous voir ! 💖",
-			Font = Theme.Fonts.Body,
-			TextSize = 16,
+		UIUtil.Label({
+			Text = "La boutique ouvre très bientôt. Reviens nous voir ! 💖",
 			TextColor3 = Theme.Colors.TextDim,
-			TextWrapped = true,
-			BackgroundTransparency = 1,
-			Size = UDim2.new(1, -80, 0, 90),
-			Position = UDim2.fromOffset(40, 182),
+			Size = UDim2.new(1, -80, 0, 22),
+			Position = UDim2.fromOffset(40, 192),
+			MaxTextSize = 16,
 			Parent = empty,
 		})
-		body.TextYAlignment = Enum.TextYAlignment.Top
-	elseif hidden > 0 and RunService:IsStudio() then
-		UIUtil.Label({
-			Text = string.format("🛠️ Studio : %d offre(s) cachée(s) (ID = 0 dans Config.Monetization)", hidden),
-			TextColor3 = Theme.Colors.TextDim,
-			Size = UDim2.new(1, 0, 0, 20),
-			LayoutOrder = 6,
-			MaxTextSize = 14,
-			Parent = list,
-		})
 	end
+	applyFilter()
 
 	-- Pass acheté : "⏳ Activation…" jusqu'à la confirmation du serveur
 	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(who: Player, passId: number, purchased: boolean)
@@ -658,25 +854,6 @@ function RobuxShop.Build(content: Frame)
 		end
 	end)
 
-	-- Comptes à rebours (boost, activation) : 2 fois par seconde, seulement si ouvert
-	task.spawn(function()
-		while content.Parent do
-			if visible then
-				local data = ClientState.Data
-				refreshStatus(data)
-				for _, offer in ipairs(offers) do
-					if offer.Extra and offer.Def.Kind == "Boost" then
-						refreshExtra(offer, data)
-					end
-					if offer.IsPass and pendingPasses[offer.Id] then
-						refreshOffer(offer)
-					end
-				end
-			end
-			task.wait(0.5)
-		end
-	end)
-
 	refreshStatus(ClientState.Data)
 end
 
@@ -686,10 +863,52 @@ function RobuxShop.OnOpen()
 	for _, offer in ipairs(offers) do
 		fetchPrice(offer)
 	end
+	refreshStatus(ClientState.Data)
+
+	-- Animations (seulement fenêtre ouverte) : rayons, diamant, étincelles,
+	-- et comptes à rebours (boost, activation) 2 fois par seconde
+	if animation then
+		animation:Disconnect()
+	end
+	local started = os.clock()
+	animation = RunService.RenderStepped:Connect(function(dt: number)
+		local t = os.clock() - started
+		heroRays.Rotation = (heroRays.Rotation + dt * 14) % 360
+		heroDiamond.Position = UDim2.new(1, -80, 0.5, math.sin(t * 2) * 4)
+		heroDiamond.Rotation = math.sin(t * 1.3) * 6
+		for _, star in ipairs(sparkles) do
+			local phase = star:GetAttribute("Phase") or 0
+			star.TextTransparency = 0.2 + 0.6 * (0.5 + 0.5 * math.sin(t * 2.5 + phase))
+		end
+		for _, offer in ipairs(offers) do
+			if offer.Cell.Visible then
+				offer.Rays.Rotation = (offer.Rays.Rotation + dt * (offer.Hovered and 60 or 12)) % 360
+			end
+		end
+		refreshClock += dt
+		if refreshClock >= 0.5 then
+			refreshClock = 0
+			local data = ClientState.Data
+			refreshStatus(data)
+			for _, offer in ipairs(offers) do
+				if offer.Def.Kind == "Boost" then
+					refreshExtra(offer, data)
+				end
+				if offer.IsPass and pendingPasses[offer.Id] then
+					refreshOffer(offer)
+				end
+			end
+		end
+	end)
 end
 
 function RobuxShop.OnClose()
 	visible = false
+	local connection = animation
+	if connection then
+		connection:Disconnect()
+		animation = nil
+	end
 end
 
 function RobuxShop.Update(data)
@@ -703,6 +922,11 @@ end
 -- Vrai si au moins une offre Robux est configurée (utilisé par la colonne centrale)
 function RobuxShop.HasOffers(): boolean
 	return Config.IsSellingForRobux == true
+end
+
+-- Vrai si la boutique est ouverte
+function RobuxShop.IsOpen(): boolean
+	return visible
 end
 
 return RobuxShop

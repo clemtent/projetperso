@@ -2,12 +2,23 @@
 	NewsTicker (ModuleScript - stimulus)
 	Emplacement : ReplicatedStorage > Client > Stimuli > NewsTicker
 
-	Bandeau rouge "FLASH INFO" tout en haut de l'écran : des titres
-	absurdes (en majuscules, gras, italique) défilent de droite à gauche,
-	à l'infini, séparés par des "•". Survoler le bandeau le ralentit (pour
-	lire tranquillement). Cliquer sur un titre = Interact("Headline") : le
-	serveur limite les récompenses (Config.Interactions.Headline) et le
-	"+X" confirmé (OnBonus "Headline") s'affiche juste sous le bandeau.
+	Bandeau "FLASH INFO" façon chaîne d'info en continu, tout en haut :
+	  - à gauche : bloc "● DIRECT" (point rouge qui clignote) + cartouche
+	    blanc "FLASH INFO" en biais (qui vire au jaune "URGENT !" quand un
+	    titre urgent passe) ;
+	  - au centre : titres absurdes (majuscules, gras, italique) qui défilent
+	    de droite à gauche, chacun précédé d'une étiquette de rubrique colorée
+	    (SPORT, MÉTÉO, BOURSE, INSOLITE, POLITIQUE, SCIENCE...), séparés par
+	    des losanges ; plus de 120 titres + des titres "dynamiques" qui
+	    utilisent les stats du joueur en direct (Dopamine/s, renaissances,
+	    cours de l'action, clics, éclairs, rang sur le serveur...) ;
+	  - à droite : logo de la chaîne + horloge (deux-points qui clignotent) ;
+	  - de temps en temps, un bandeau "ALERTE INFO" descend sous le ticker
+	    (calque Overlay, non cliquable) avec un titre spécial.
+	Survoler le bandeau à la souris le ralentit. Cliquer sur un titre =
+	Interact("Headline") : le serveur limite les récompenses
+	(Config.Interactions.Headline) et le "+X" confirmé (OnBonus "Headline")
+	s'affiche juste sous le bandeau.
 ]]
 
 local Players = game:GetService("Players")
@@ -17,63 +28,198 @@ local NewsTicker = {}
 NewsTicker.Slot = "Ticker"
 
 local HEIGHT = 30 -- hauteur du slot (pixels "design")
-local LEFT_W = 136 -- bloc "FLASH INFO"
-local RIGHT_W = 62 -- bloc horloge
-local TEXT_SIZE = 19
-local SEPARATOR_W = 46
+local LIVE_W = 78 -- bloc "● DIRECT"
+local FLASH_W = 118 -- cartouche "FLASH INFO"
+local LEFT_W = LIVE_W + FLASH_W + 10
+local RIGHT_W = 104 -- bloc logo + horloge
+local TEXT_SIZE = 18
+local CHIP_TEXT_SIZE = 11
+local SEPARATOR_W = 34
 local SPEED = 95 -- pixels "design" par seconde
 local SLOW_SPEED = 28 -- vitesse quand la souris survole le bandeau
 local MAX_ITEMS = 14 -- sécurité : titres vivants au maximum
-local URGENT_CHANCE = 1 / 7
+local URGENT_CHANCE = 1 / 8
+local DYNAMIC_CHANCE = 0.22 -- part des titres "dynamiques" (stats du joueur)
+local BREAKING_MIN, BREAKING_MAX = 70, 130 -- secondes entre deux "ALERTE INFO"
+local BREAKING_TIME = 5
+local BANNER_W, BANNER_H = 540, 46
 
--- Titres absurdes (déjà en majuscules)
+-- Rubriques : texte de l'étiquette + couleur
+local CATEGORIES = {
+	SPORT = { Text = "SPORT", Color = Color3.fromRGB(30, 170, 80) },
+	METEO = { Text = "MÉTÉO", Color = Color3.fromRGB(0, 160, 220) },
+	BOURSE = { Text = "BOURSE", Color = Color3.fromRGB(235, 170, 0) },
+	INSOLITE = { Text = "INSOLITE", Color = Color3.fromRGB(150, 70, 225) },
+	POLITIQUE = { Text = "POLITIQUE", Color = Color3.fromRGB(40, 90, 210) },
+	SCIENCE = { Text = "SCIENCE", Color = Color3.fromRGB(0, 150, 140) },
+	TECH = { Text = "TECH", Color = Color3.fromRGB(70, 90, 125) },
+	CULTURE = { Text = "CULTURE", Color = Color3.fromRGB(230, 70, 140) },
+	SANTE = { Text = "SANTÉ", Color = Color3.fromRGB(110, 190, 40) },
+	PEOPLE = { Text = "PEOPLE", Color = Color3.fromRGB(255, 120, 30) },
+	ANIMAUX = { Text = "ANIMAUX", Color = Color3.fromRGB(170, 110, 50) },
+	URGENT = { Text = "URGENT", Color = Color3.fromRGB(255, 210, 30) },
+}
+
+-- Titres absurdes { rubrique, texte } (déjà en majuscules)
 local HEADLINES = {
-	"LES GRENOUILLES ONT DISPARU... OU PAS, IL N'EST PAS SÛR",
-	"UN HOMME CLIQUE DEPUIS 3 JOURS, IL VA BIEN",
-	"LES DOUCHES FROIDES SONT-ELLES LE FUTUR ?",
-	"UN PIGEON ÉLU MAIRE D'UN PETIT VILLAGE, IL PROMET PLUS DE MIETTES",
-	"ALERTE : LE LUNDI ARRIVE ENCORE CETTE SEMAINE",
-	"DES SCIENTIFIQUES CONFIRMENT QUE LE CANAPÉ EST TRÈS CONFORTABLE",
-	"UNE CHAUSSETTE RETROUVÉE APRÈS 12 ANS DE CAVALE",
-	"LE WIFI TOMBE EN PANNE, UNE FAMILLE DÉCOUVRE QU'ELLE A UN JARDIN",
-	"UN CHAT REFUSE DE DESCENDRE DU CLAVIER, LES NÉGOCIATIONS ÉCHOUENT",
-	"LA LUNE ANNONCE UNE PAUSE CARRIÈRE, LES MARÉES INQUIÈTES",
-	"UN ESCARGOT BAT LE RECORD DU MONDE DE LENTEUR... POUR LA 3E FOIS",
-	"LES NUAGES EN GRÈVE : SOLEIL PAR DÉFAUT TOUTE LA SEMAINE",
-	"UN BOUTON A ÉTÉ CLIQUÉ, PERSONNE NE SAIT POURQUOI",
-	"LA DOPAMINE ATTEINT UN NIVEAU HISTORIQUE, LES ÉCONOMISTES APPLAUDISSENT",
-	"UNE BAGUETTE DE PAIN ÉLUE MEILLEUR ACCESSOIRE DE L'ANNÉE",
-	"UN POISSON ROUGE OUBLIE SON PROPRE ANNIVERSAIRE, ENCORE",
-	"LES CHERCHEURS SONT FORMELS : IL FAUT BOIRE DE L'EAU",
-	"UN PAPY INVENTE LE CLIC À DEUX DOIGTS, LE MONDE S'INCLINE",
-	"LA MACHINE À CAFÉ DU BUREAU PORTE PLAINTE POUR SURMENAGE",
-	"UN CANARD TRAVERSE LA ROUTE : ON NE SAIT TOUJOURS PAS POURQUOI",
-	"LES HARICOTS VERTS SE PLAIGNENT D'ÊTRE LAISSÉS DANS L'ASSIETTE",
-	"UN NUAGE EN FORME DE HAMSTER APERÇU AU-DESSUS DE LA VILLE",
-	"UN EXPERT : « CLIQUER, C'EST COMME RESPIRER, MAIS AVEC LE DOIGT »",
-	"UN ENFANT DEMANDE « POURQUOI ? » 400 FOIS, SES PARENTS PARTENT EN VACANCES",
-	"UNE PLANTE VERTE ARROSÉE DEUX FOIS LE MÊME JOUR, ELLE EST SOUS LE CHOC",
-	"LE SOLEIL SE LÈVE À L'EST, PERSONNE N'EST SURPRIS",
-	"UN LOGO QUI REBONDIT FRÔLE LE COIN, LE PAYS RETIENT SON SOUFFLE",
-	"RECORD : 47 ONGLETS OUVERTS, L'ORDINATEUR DEMANDE PITIÉ",
-	"UNE PIZZA À L'ANANAS DIVISE UN VILLAGE, LE CONSEIL MUNICIPAL SE RÉUNIT",
-	"LES ÉTOILES DORÉES SONT ÉPHÉMÈRES, RAPPELLENT LES PHILOSOPHES",
-	"UN HAMSTER COURT 30 KM DANS SA ROUE, IL N'EST TOUJOURS ARRIVÉ NULLE PART",
-	"LA SIESTE RECONNUE SPORT OLYMPIQUE, LA FRANCE GRANDE FAVORITE",
-	"UNE MOUCHE ENTRE DANS LE SALON : PANIQUE GÉNÉRALE",
-	"LE PAPIER BULLE ENFIN RECONNU COMME THÉRAPIE",
-	"UN ROBOT ASPIRATEUR DEVIENT CONSCIENT, IL VEUT JUSTE ÊTRE AIMÉ",
-	"SONDAGE : 100 % DES PERSONNES INTERROGÉES ONT RÉPONDU AU SONDAGE",
-	"LES GRENOUILLES SONT REVENUES, ELLES ÉTAIENT JUSTE EN VACANCES",
-	"UNE TARTINE TOMBE CÔTÉ BEURRE, LES SCIENTIFIQUES N'EN REVIENNENT PAS",
-	"MÉTÉO : 100 % DE CHANCES QU'IL FASSE UN TEMPS",
-	"UN GARÇON DIT « ENCORE 5 MINUTES », IL EST 3 HEURES DU MATIN",
-	"LES CHAUSSONS EN GRÈVE : ILS EXIGENT DES PIEDS PLUS PROPRES",
-	"LA BOURSE DE LA DOPAMINE MONTE, DESCEND, PUIS REMONTE. AFFAIRE À SUIVRE",
-	"UN TOURNESOL SE TROMPE ET FIXE LA LAMPE DU SALON DEPUIS MARDI",
-	"L'OCÉAN RAPPELLE QU'IL EST TOUJOURS LÀ, SI JAMAIS",
-	"UN MOUTON COMPTE DES HUMAINS POUR S'ENDORMIR, IL EN EST À 8 MILLIARDS",
-	"UNE LICORNE APERÇUE EN BANLIEUE, C'ÉTAIT UN CHEVAL AVEC UN CORNET DE GLACE",
+	{ "ANIMAUX", "LES GRENOUILLES ONT DISPARU... OU PAS, IL N'EST PAS SÛR" },
+	{ "INSOLITE", "UN HOMME CLIQUE DEPUIS 3 JOURS, IL VA BIEN" },
+	{ "SANTE", "LES DOUCHES FROIDES SONT-ELLES LE FUTUR ?" },
+	{ "POLITIQUE", "UN PIGEON ÉLU MAIRE D'UN PETIT VILLAGE, IL PROMET PLUS DE MIETTES" },
+	{ "INSOLITE", "ALERTE : LE LUNDI ARRIVE ENCORE CETTE SEMAINE" },
+	{ "SCIENCE", "DES SCIENTIFIQUES CONFIRMENT QUE LE CANAPÉ EST TRÈS CONFORTABLE" },
+	{ "INSOLITE", "UNE CHAUSSETTE RETROUVÉE APRÈS 12 ANS DE CAVALE" },
+	{ "TECH", "LE WIFI TOMBE EN PANNE, UNE FAMILLE DÉCOUVRE QU'ELLE A UN JARDIN" },
+	{ "ANIMAUX", "UN CHAT REFUSE DE DESCENDRE DU CLAVIER, LES NÉGOCIATIONS ÉCHOUENT" },
+	{ "SCIENCE", "LA LUNE ANNONCE UNE PAUSE CARRIÈRE, LES MARÉES INQUIÈTES" },
+	{ "SPORT", "UN ESCARGOT BAT LE RECORD DU MONDE DE LENTEUR... POUR LA 3E FOIS" },
+	{ "METEO", "LES NUAGES EN GRÈVE : SOLEIL PAR DÉFAUT TOUTE LA SEMAINE" },
+	{ "INSOLITE", "UN BOUTON A ÉTÉ CLIQUÉ, PERSONNE NE SAIT POURQUOI" },
+	{ "BOURSE", "LA DOPAMINE ATTEINT UN NIVEAU HISTORIQUE, LES ÉCONOMISTES APPLAUDISSENT" },
+	{ "CULTURE", "UNE BAGUETTE DE PAIN ÉLUE MEILLEUR ACCESSOIRE DE L'ANNÉE" },
+	{ "ANIMAUX", "UN POISSON ROUGE OUBLIE SON PROPRE ANNIVERSAIRE, ENCORE" },
+	{ "SANTE", "LES CHERCHEURS SONT FORMELS : IL FAUT BOIRE DE L'EAU" },
+	{ "TECH", "UN PAPY INVENTE LE CLIC À DEUX DOIGTS, LE MONDE S'INCLINE" },
+	{ "INSOLITE", "LA MACHINE À CAFÉ DU BUREAU PORTE PLAINTE POUR SURMENAGE" },
+	{ "ANIMAUX", "UN CANARD TRAVERSE LA ROUTE : ON NE SAIT TOUJOURS PAS POURQUOI" },
+	{ "INSOLITE", "LES HARICOTS VERTS SE PLAIGNENT D'ÊTRE LAISSÉS DANS L'ASSIETTE" },
+	{ "METEO", "UN NUAGE EN FORME DE HAMSTER APERÇU AU-DESSUS DE LA VILLE" },
+	{ "TECH", "UN EXPERT : « CLIQUER, C'EST COMME RESPIRER, MAIS AVEC LE DOIGT »" },
+	{ "INSOLITE", "UN ENFANT DEMANDE « POURQUOI ? » 400 FOIS, SES PARENTS PARTENT EN VACANCES" },
+	{ "INSOLITE", "UNE PLANTE VERTE ARROSÉE DEUX FOIS LE MÊME JOUR, ELLE EST SOUS LE CHOC" },
+	{ "SCIENCE", "LE SOLEIL SE LÈVE À L'EST, PERSONNE N'EST SURPRIS" },
+	{ "SPORT", "UN LOGO QUI REBONDIT FRÔLE LE COIN, LE PAYS RETIENT SON SOUFFLE" },
+	{ "TECH", "RECORD : 47 ONGLETS OUVERTS, L'ORDINATEUR DEMANDE PITIÉ" },
+	{ "POLITIQUE", "UNE PIZZA À L'ANANAS DIVISE UN VILLAGE, LE CONSEIL MUNICIPAL SE RÉUNIT" },
+	{ "CULTURE", "LES ÉTOILES DORÉES SONT ÉPHÉMÈRES, RAPPELLENT LES PHILOSOPHES" },
+	{ "SPORT", "UN HAMSTER COURT 30 KM DANS SA ROUE, IL N'EST TOUJOURS ARRIVÉ NULLE PART" },
+	{ "SPORT", "LA SIESTE RECONNUE SPORT OLYMPIQUE, LA FRANCE GRANDE FAVORITE" },
+	{ "INSOLITE", "UNE MOUCHE ENTRE DANS LE SALON : PANIQUE GÉNÉRALE" },
+	{ "SANTE", "LE PAPIER BULLE ENFIN RECONNU COMME THÉRAPIE" },
+	{ "TECH", "UN ROBOT ASPIRATEUR DEVIENT CONSCIENT, IL VEUT JUSTE ÊTRE AIMÉ" },
+	{ "POLITIQUE", "SONDAGE : 100 % DES PERSONNES INTERROGÉES ONT RÉPONDU AU SONDAGE" },
+	{ "ANIMAUX", "LES GRENOUILLES SONT REVENUES, ELLES ÉTAIENT JUSTE EN VACANCES" },
+	{ "SCIENCE", "UNE TARTINE TOMBE CÔTÉ BEURRE, LES SCIENTIFIQUES N'EN REVIENNENT PAS" },
+	{ "METEO", "100 % DE CHANCES QU'IL FASSE UN TEMPS DEMAIN" },
+	{ "INSOLITE", "UN GARÇON DIT « ENCORE 5 MINUTES », IL EST 3 HEURES DU MATIN" },
+	{ "INSOLITE", "LES CHAUSSONS EN GRÈVE : ILS EXIGENT DES PIEDS PLUS PROPRES" },
+	{ "BOURSE", "LA BOURSE DE LA DOPAMINE MONTE, DESCEND, PUIS REMONTE. AFFAIRE À SUIVRE" },
+	{ "INSOLITE", "UN TOURNESOL SE TROMPE ET FIXE LA LAMPE DU SALON DEPUIS MARDI" },
+	{ "METEO", "L'OCÉAN RAPPELLE QU'IL EST TOUJOURS LÀ, SI JAMAIS" },
+	{ "ANIMAUX", "UN MOUTON COMPTE DES HUMAINS POUR S'ENDORMIR, IL EN EST À 8 MILLIARDS" },
+	{ "INSOLITE", "UNE LICORNE APERÇUE EN BANLIEUE, C'ÉTAIT UN CHEVAL AVEC UN CORNET DE GLACE" },
+	-- Sport
+	{ "SPORT", "MONDIAL DE PIERRE-FEUILLE-CISEAUX ANNULÉ : TOUT LE MONDE A FAIT PIERRE" },
+	{ "SPORT", "UN MARATHONIEN S'ARRÊTE AU KILOMÈTRE 2 POUR CARESSER UN CHIEN, LE PUBLIC APPROUVE" },
+	{ "SPORT", "LE CURLING ÉLU SPORT LE PLUS CALME, LES BALAIS FÊTENT ÇA EN SILENCE" },
+	{ "SPORT", "UNE ÉQUIPE DE FOOT MARQUE CONTRE SON CAMP PAR POLITESSE" },
+	{ "SPORT", "RECORD DU MONDE DE SAUT EN HAUTEUR POUR UNE PUCE, ELLE REFUSE LES INTERVIEWS" },
+	{ "SPORT", "TOUR DE FRANCE EN TROTTINETTE : LE PELOTON ARRIVE AVEC 3 SEMAINES DE RETARD" },
+	{ "SPORT", "UN ARBITRE SIFFLE LA FIN DU MATCH PAR ERREUR, IL AVAIT JUSTE LE HOQUET" },
+	{ "SPORT", "LA NATATION SYNCHRONISÉE DES CANARDS ÉBLOUIT LE JURY" },
+	{ "SPORT", "UN JOUEUR DE PING-PONG PERD SA BALLE, LE MATCH DURE DEPUIS 4 HEURES" },
+	-- Météo
+	{ "METEO", "ALERTE ORANGE AUX CONFETTIS SUR TOUT LE NORD DU PAYS" },
+	{ "METEO", "IL PLEUT DES CORDES, LES ALPINISTES SONT RAVIS" },
+	{ "METEO", "UN ARC-EN-CIEL S'EXCUSE D'AVOIR OUBLIÉ LE VIOLET" },
+	{ "METEO", "LE VENT SOUFFLE SI FORT QU'UN PARAPLUIE DEMANDE L'ASILE POLITIQUE" },
+	{ "METEO", "BROUILLARD ÉPAIS : UN HOMME CHERCHE SA VOITURE, IL ÉTAIT DEDANS" },
+	{ "METEO", "CANICULE : LES GLAÇONS ORGANISENT UNE MANIFESTATION... QUI FOND" },
+	{ "METEO", "LA NEIGE ARRIVE, REPART, PUIS REVIENT : ELLE AVAIT OUBLIÉ SES CLÉS" },
+	{ "METEO", "UN ÉCLAIR TOMBE DEUX FOIS AU MÊME ENDROIT, IL AVAIT OUBLIÉ SON PARAPLUIE" },
+	-- Bourse
+	{ "BOURSE", "LA BAGUETTE DE PAIN ENTRE EN BOURSE, LES CROISSANTS INQUIETS" },
+	{ "BOURSE", "LE COURS DU PAPIER BULLE EXPLOSE, LITTÉRALEMENT : POP" },
+	{ "BOURSE", "UN TRADER CONFOND « ACHETER » ET « ACHETER DES CHIPS », LES MARCHÉS APPRÉCIENT" },
+	{ "BOURSE", "LA CRYPTO-CAROTTE S'EFFONDRE APRÈS QU'UN LAPIN A TOUT MANGÉ" },
+	{ "BOURSE", "KRACH DU CAFÉ : LES LUNDIS DEVIENNENT OFFICIELLEMENT IMPOSSIBLES" },
+	{ "BOURSE", "LES ANALYSTES PRÉDISENT UNE HAUSSE, UNE BAISSE, OU LES DEUX EN MÊME TEMPS" },
+	{ "BOURSE", "LA BANQUE CENTRALE IMPRIME DES POINTS DE FIDÉLITÉ PAR ERREUR" },
+	{ "BOURSE", "RÉCESSION DE CÂLINS : LES OURS EN PELUCHE LANCENT UN PLAN DE RELANCE" },
+	-- Insolite
+	{ "INSOLITE", "UN HOMME RANGE SA CHAMBRE, SA MÈRE APPELLE LES POMPIERS" },
+	{ "INSOLITE", "UNE FOURCHETTE DÉCOUVERTE DANS LE TIROIR DES CUILLÈRES : ENQUÊTE OUVERTE" },
+	{ "INSOLITE", "UN AIMANT DE FRIGO TOMBE, TOUTE LA FAMILLE SOUS LE CHOC" },
+	{ "INSOLITE", "UN RÉVEIL SONNE UN DIMANCHE, IL EST ACTIVEMENT RECHERCHÉ" },
+	{ "INSOLITE", "UNE TÉLÉCOMMANDE RETROUVÉE ENTRE DEUX COUSSINS APRÈS 3 SEMAINES DE RECHERCHES" },
+	{ "INSOLITE", "UN SANDWICH TOMBE CÔTÉ JAMBON, LES EXPERTS PARLENT D'UN MIRACLE" },
+	{ "INSOLITE", "UN HOMME RÉUSSIT À PLIER UN DRAP-HOUSSE, LA SCIENCE N'A PAS D'EXPLICATION" },
+	{ "INSOLITE", "UN STYLO FONCTIONNE DU PREMIER COUP, LE BUREAU EST EN ÉMOI" },
+	{ "INSOLITE", "LE BOUTON « FERMER LES PORTES » DE L'ASCENSEUR FONCTIONNAIT DEPUIS LE DÉBUT" },
+	{ "INSOLITE", "UN GRILLE-PAIN ÉJECTE UNE TARTINE JUSQU'AU PLAFOND, RECORD HOMOLOGUÉ" },
+	{ "INSOLITE", "UNE FILE D'ATTENTE AVANCE ENFIN, LES GENS NE SAVENT PLUS QUOI FAIRE" },
+	{ "INSOLITE", "UN SAC DE CHIPS CONTENAIT PLUS DE CHIPS QUE D'AIR, LE FABRICANT S'EXCUSE" },
+	-- Politique
+	{ "POLITIQUE", "LE MINISTRE DE LA SIESTE PROMET UNE HEURE DE PLUS PAR JOUR" },
+	{ "POLITIQUE", "UN NOUVEAU PARTI PROPOSE DE REMPLACER LES LUNDIS PAR DES SAMEDIS" },
+	{ "POLITIQUE", "LE CONSEIL DES CHATS VOTE À L'UNANIMITÉ POUR DES CROQUETTES GRATUITES" },
+	{ "POLITIQUE", "DÉBAT HOULEUX : FAUT-IL DIRE « PAIN AU CHOCOLAT » OU « CHOCOLATINE » ?" },
+	{ "POLITIQUE", "UN MAIRE INAUGURE UN ROND-POINT AUTOUR D'UN AUTRE ROND-POINT" },
+	{ "POLITIQUE", "LE PRÉSIDENT DU CLUB DES PARESSEUX ÉLU... MAIS IL NE S'EST PAS DÉPLACÉ" },
+	{ "POLITIQUE", "LOI ADOPTÉE : IL SERA INTERDIT DE RACONTER LA FIN DES SÉRIES AVANT MIDI" },
+	-- Science
+	{ "SCIENCE", "DES CHERCHEURS DÉCOUVRENT QUE LE WEEK-END PASSE PLUS VITE QUE LA SEMAINE" },
+	{ "SCIENCE", "UNE ÉTUDE PROUVE QUE LES CHATS NOUS IGNORENT EXPRÈS" },
+	{ "SCIENCE", "C'EST CONFIRMÉ : LA LUNE N'EST PAS EN FROMAGE, DÉCEPTION GÉNÉRALE" },
+	{ "SCIENCE", "DES SCIENTIFIQUES CLONENT UNE CHAUSSETTE POUR RÉSOUDRE LE MYSTÈRE DES PAIRES" },
+	{ "SCIENCE", "UN ASTRONAUTE OUBLIE SES CLÉS SUR MARS, IL DOIT Y RETOURNER" },
+	{ "SCIENCE", "LA GRAVITÉ PREND UN JOUR DE CONGÉ, TOUT LE MONDE EST EN RETARD" },
+	{ "SCIENCE", "LES CHERCHEURS CONFIRMENT QUE « JUSTE UN ÉPISODE » N'EXISTE PAS" },
+	{ "SCIENCE", "UNE NOUVELLE PLANÈTE DÉCOUVERTE, ELLE EST ENTIÈREMENT EN PAPIER BULLE" },
+	-- Tech
+	{ "TECH", "UNE MISE À JOUR DE 45 MINUTES AJOUTE UN NOUVEL EMOJI CAROTTE" },
+	{ "TECH", "UNE INTELLIGENCE ARTIFICIELLE DEMANDE UNE PAUSE CAFÉ, SES COLLÈGUES COMPRENNENT" },
+	{ "TECH", "RECORD : UN HOMME LIT ENTIÈREMENT DES CONDITIONS D'UTILISATION" },
+	{ "TECH", "UNE IMPRIMANTE FONCTIONNE DU PREMIER COUP, LES EXPERTS RESTENT PRUDENTS" },
+	{ "TECH", "LE MOT DE PASSE « 1234 » PIRATÉ EN 0,2 SECONDE, SON PROPRIÉTAIRE CHOQUÉ" },
+	{ "TECH", "UN CHARGEUR QUI MARCHE SANS TENIR LE CÂBLE DE TRAVERS ? LES EXPERTS DOUTENT" },
+	{ "TECH", "LA SOURIS D'ORDINATEUR RÉCLAME DU FROMAGE, LE SERVICE INFORMATIQUE DÉPASSÉ" },
+	-- Culture
+	{ "CULTURE", "UN MUSÉE EXPOSE UN BOUTON « CLIQUE-MOI », 3 MILLIONS DE VISITEURS" },
+	{ "CULTURE", "UN FILM DE 4 HEURES SANS AUCUNE EXPLOSION : LE PUBLIC S'ENDORT PAISIBLEMENT" },
+	{ "CULTURE", "UN ROMAN DE 900 PAGES RÉSUMÉ EN UN SEUL EMOJI" },
+	{ "CULTURE", "LE CONCERT DE FLÛTE À BEC DE L'ÉCOLE REPORTÉ POUR PROTÉGER LES OREILLES" },
+	{ "CULTURE", "UNE STATUE DÉMÉNAGE DE TROIS CENTIMÈTRES, LE VILLAGE EN PARLE ENCORE" },
+	{ "CULTURE", "UN ARTISTE VEND UNE TOILE BLANCHE, L'ACHETEUR DEMANDE LA VERSION EN COULEUR" },
+	{ "CULTURE", "LE KARAOKÉ DU QUARTIER BAT LE RECORD DE FAUSSES NOTES" },
+	-- Santé
+	{ "SANTE", "LES MÉDECINS RECOMMANDENT 8 HEURES DE SOMMEIL, LE TÉLÉPHONE EN RECOMMANDE 3" },
+	{ "SANTE", "UNE POMME PAR JOUR ÉLOIGNE LE MÉDECIN, SURTOUT SI ON LA LANCE FORT" },
+	{ "SANTE", "ÉTUDE : BÂILLER EST CONTAGIEUX. VOUS VENEZ DE BÂILLER, AVOUEZ" },
+	{ "SANTE", "LES ÉTIREMENTS DU MATIN ENFIN RECONNUS COMME SPORT COMPLET" },
+	{ "SANTE", "UN NUTRITIONNISTE DÉCLARE LA FRITE « LÉGUME HONORAIRE »" },
+	-- People
+	{ "PEOPLE", "UNE STAR DE LA TÉLÉ CHERCHE SES LUNETTES DEPUIS 2 HEURES (SUR SA TÊTE)" },
+	{ "PEOPLE", "LE CHAT LE PLUS CÉLÈBRE D'INTERNET REFUSE UNE INTERVIEW, IL DORMAIT" },
+	{ "PEOPLE", "UN INFLUENCEUR PUBLIE SA SOUPE : 12 LIKES, DONT 11 DE SA MÈRE" },
+	{ "PEOPLE", "UN CHANTEUR OUBLIE LES PAROLES DE SA PROPRE CHANSON, LE PUBLIC LES LUI SOUFFLE" },
+	-- Animaux
+	{ "ANIMAUX", "UNE VACHE REFUSE DE MEUGLER EN PUBLIC, ELLE PRÉPARE UN ALBUM" },
+	{ "ANIMAUX", "UN CHIEN ARRÊTÉ POUR EXCÈS DE REMUAGE DE QUEUE" },
+	{ "ANIMAUX", "LES PINGOUINS PORTENT LE SMOKING POUR LA 10 000E ANNÉE CONSÉCUTIVE" },
+	{ "ANIMAUX", "UN ÉCUREUIL OUBLIE OÙ IL A CACHÉ SES NOISETTES, UNE FORÊT ENTIÈRE POUSSE" },
+	{ "ANIMAUX", "UN PERROQUET RÉPÈTE UN SECRET D'ÉTAT, LE GOUVERNEMENT DÉMENT" },
+	{ "ANIMAUX", "UNE TORTUE ARRIVE ENFIN À LA FÊTE DE SES 18 ANS, ELLE EN A 80" },
+	{ "ANIMAUX", "UNE ARAIGNÉE PAIE ENFIN SON LOYER DANS LE COIN DU PLAFOND" },
+	{ "ANIMAUX", "UN LAMA CRACHE SUR UN CRITIQUE GASTRONOMIQUE, LA CRITIQUE EST MITIGÉE" },
+	-- Le jeu lui-même
+	{ "INSOLITE", "UNE ÉTOILE DORÉE APERÇUE EN VILLE, PERSONNE N'A EU LE TEMPS DE CLIQUER" },
+	{ "BOURSE", "PÉNURIE MONDIALE DE PAPIER BULLE, UN JOUEUR SOUPÇONNÉ" },
+	{ "BOURSE", "LA MACHINE À SOUS DU COIN AVOUE : « LA MAISON GAGNE TOUJOURS »" },
+	{ "CULTURE", "UNE PRESSE HYDRAULIQUE ÉCRASE UN MACARON, LES PÂTISSIERS EN LARMES" },
+	{ "PEOPLE", "UN STREAMER CROQUE DU BEURRE EN DIRECT, 40 000 SPECTATEURS FASCINÉS" },
+	{ "METEO", "UN MOULIN À VENT TOURNE SANS VENT, LES MÉTÉOROLOGUES PERPLEXES" },
+	{ "TECH", "UNE BOÎTE MAIL ATTEINT 10 000 NON LUS, ELLE DEMANDE DE L'AIDE" },
+	{ "METEO", "LES ÉCLAIRS DE LA RÉGION RÉCLAMENT DES CLICS SUPPLÉMENTAIRES" },
+}
+
+-- Sous-titres du bandeau "ALERTE INFO"
+local BREAKING_SUBTITLES = {
+	"Notre envoyé spécial est sur place (il clique aussi)",
+	"Plus d'informations dans quelques instants...",
+	"Les experts sont formels : c'est incroyable",
+	"Restez avec nous, on revient après la pub (il n'y a pas de pub)",
+	"La rédaction est en émoi, le stagiaire aussi",
 }
 
 -- Petites réactions quand on clique sur un titre
@@ -82,25 +228,50 @@ local REACTIONS = { "😂", "🤯", "😱", "🤔", "👀", "🙃", "😮", "�
 function NewsTicker.Start(ctx)
 	local UIUtil = ctx.UIUtil
 	local Theme = ctx.Theme
+	local Format = ctx.Format
 	local container: Frame = ctx.Container
 	local overlay: Frame = ctx.Overlay
 	local random = Random.new()
 
-	local red = Theme.Colors.Red
-	local darkRed = Color3.fromRGB(150, 12, 18)
+	local red = Color3.fromRGB(220, 26, 38)
+	local darkRed = Color3.fromRGB(140, 8, 18)
+	local navy = Color3.fromRGB(16, 22, 40)
 	local yellow = Theme.Colors.Yellow
 	local white = Color3.new(1, 1, 1)
 
 	-- Police gras + italique (BuilderSans)
 	local italicFont = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Bold, Enum.FontStyle.Italic)
+	local boldFont = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.ExtraBold, Enum.FontStyle.Normal)
+
+	local function effectsOn(): boolean
+		local data = ctx.State.Data
+		return not (data and data.Settings and data.Settings.Effects == false)
+	end
+
+	local function frame(props: { [string]: any }): Frame
+		props.BorderSizePixel = 0
+		if props.BackgroundTransparency == nil and props.BackgroundColor3 == nil then
+			props.BackgroundTransparency = 1
+		end
+		return UIUtil.Create("Frame", props)
+	end
 
 	------------------------------------------------------------------
-	-- Titres "dynamiques" (utilisent l'état du joueur)
+	-- Titres "dynamiques" (utilisent l'état du joueur en direct)
 	------------------------------------------------------------------
+	local function data(): any
+		return ctx.State.Data
+	end
+
 	local function stat(name: string): number
-		local data = ctx.State.Data
-		local stats = data and data.Stats
+		local current = data()
+		local stats = current and current.Stats
 		return (stats and tonumber(stats[name])) or 0
+	end
+
+	local function field(name: string): number
+		local current = data()
+		return (current and tonumber(current[name])) or 0
 	end
 
 	local function playerName(): string
@@ -109,153 +280,341 @@ function NewsTicker.Start(ctx)
 		return string.upper(name)
 	end
 
-	local DYNAMIC = {
+	local function big(value: number): string
+		if value < 1e6 then
+			return Format.WithSpaces(value)
+		end
+		return Format.Format(value)
+	end
+
+	-- Chaque générateur renvoie (rubrique, texte) ou nil s'il n'a rien à dire
+	local DYNAMIC: { () -> (string?, string?) } = {
 		function()
-			local data = ctx.State.Data
-			local amount = data and tonumber(data.Dopamine) or 0
-			return "RECORD : UN JOUEUR POSSÈDE " .. ctx.Format.Format(amount) .. " DOPAMINE, SES VOISINS INQUIETS"
+			return "BOURSE", "RECORD : " .. playerName() .. " POSSÈDE " .. big(field("Dopamine")) .. " DOPAMINE, SES VOISINS INQUIETS"
 		end,
 		function()
-			return "LE BOUTON « CLIQUE-MOI » A ÉTÉ CLIQUÉ " .. ctx.Format.WithSpaces(stat("TotalClicks")) .. " FOIS, IL DEMANDE DES VACANCES"
+			local perSecond = field("PerSecond")
+			if perSecond <= 0 then
+				return nil
+			end
+			return "BOURSE", "PRODUCTION RECORD : " .. big(perSecond) .. " DOPAMINE PAR SECONDE, LES USINES À SOURIRES TOURNENT À PLEIN RÉGIME"
 		end,
 		function()
-			return "EXCLUSIF : " .. playerName() .. " N'A PAS CLIGNÉ DES YEUX DEPUIS 20 MINUTES"
+			return "INSOLITE", "LE BOUTON « CLIQUE-MOI » A ÉTÉ CLIQUÉ " .. big(stat("TotalClicks")) .. " FOIS, IL DEMANDE DES VACANCES"
 		end,
 		function()
-			return "INTERVIEW : " .. playerName() .. " AFFIRME POUVOIR « ARRÊTER QUAND IL VEUT »"
+			return "PEOPLE", "EXCLUSIF : " .. playerName() .. " N'A PAS CLIGNÉ DES YEUX DEPUIS 20 MINUTES"
+		end,
+		function()
+			return "PEOPLE", "INTERVIEW : " .. playerName() .. " AFFIRME POUVOIR « ARRÊTER QUAND IL VEUT »"
+		end,
+		function()
+			if not ctx.HasFeature("Stocks") then
+				return nil
+			end
+			local stock = ctx.State.Stock
+			local price = stock and tonumber(stock.Price)
+			if not price then
+				return nil
+			end
+			local symbol = tostring(stock.Symbol or "DOPA")
+			return "BOURSE", "L'ACTION " .. symbol .. " COTE À " .. string.format("%.2f", price) .. ", LES ANALYSTES PARLENT D'UNE « COURBE TRÈS JOLIE »"
+		end,
+		function()
+			local rebirths = field("Rebirths")
+			if rebirths <= 0 then
+				return "SANTE", playerName() .. " N'EST ENCORE JAMAIS ALLÉ À L'OCÉAN, LES MOUETTES S'INQUIÈTENT"
+			end
+			return "SANTE", playerName() .. " EST ALLÉ " .. big(rebirths) .. " FOIS À L'OCÉAN... ET REVIENT TOUJOURS CLIQUER"
+		end,
+		function()
+			local current = data()
+			local screen = current and current.ScreenTime
+			local today = screen and tonumber(screen.Today)
+			if not today or today < 60 then
+				return nil
+			end
+			return "SANTE", "TEMPS D'ÉCRAN : " .. playerName() .. " A PASSÉ " .. string.upper(Format.Time(today)) .. " DEVANT UN BOUTON AUJOURD'HUI"
+		end,
+		function()
+			local count = stat("LightningClicks")
+			if count <= 0 then
+				return nil
+			end
+			return "SPORT", big(count) .. " ÉCLAIRS ATTRAPÉS À MAINS NUES : " .. playerName() .. " ENTRE DANS LA LÉGENDE"
+		end,
+		function()
+			local count = stat("BubblesPopped")
+			if count <= 0 then
+				return nil
+			end
+			return "INSOLITE", big(count) .. " BULLES ÉCLATÉES : LES FABRICANTS DE PAPIER BULLE REMERCIENT " .. playerName()
+		end,
+		function()
+			local count = stat("SlotSpins")
+			if count <= 0 then
+				return nil
+			end
+			return "BOURSE", "CASINO : " .. big(count) .. " PARTIES JOUÉES PAR " .. playerName() .. ", LA MAISON DIT MERCI"
+		end,
+		function()
+			local count = stat("EmailsRead")
+			if count <= 0 then
+				return nil
+			end
+			return "TECH", big(count) .. " MAILS LUS PAR " .. playerName() .. ", IL EN RESTE TOUJOURS PLUS"
+		end,
+		function()
+			local count = stat("Bounces")
+			if count <= 0 then
+				return nil
+			end
+			return "SPORT", "LE LOGO A REBONDI " .. big(count) .. " FOIS, IL A LE TOURNIS MAIS VISE TOUJOURS LE COIN"
+		end,
+		function()
+			local ok, rank, total = pcall(ctx.State.GetServerRank)
+			if not ok or type(rank) ~= "number" or type(total) ~= "number" or total < 2 then
+				return nil
+			end
+			if rank == 1 then
+				return "POLITIQUE", "CLASSEMENT : " .. playerName() .. " EST N°1 DU SERVEUR, LES AUTRES JOUEURS DEMANDENT UN RECOMPTAGE"
+			end
+			return "POLITIQUE", "CLASSEMENT : " .. playerName() .. " EST " .. rank .. "E SUR " .. total .. ", LA TENSION MONTE"
+		end,
+		function()
+			local multiplier = field("RebirthMultiplier")
+			if multiplier <= 1 then
+				return nil
+			end
+			return "BOURSE", "MULTIPLICATEUR DE RENAISSANCE : " .. string.upper(Format.Multiplier(multiplier)) .. ", LES ÉCONOMISTES N'Y COMPRENNENT RIEN"
+		end,
+		function()
+			local rush = ctx.State.Rush
+			if type(rush) ~= "table" or not rush.Active then
+				return nil
+			end
+			local name = type(rush.Name) == "string" and rush.Name ~= "" and string.upper(rush.Name) or "RUSH"
+			return "URGENT", "EN CE MOMENT : " .. name .. " " .. string.upper(Format.Multiplier(tonumber(rush.Multiplier) or 1)) .. " ! TOUT LE MONDE CLIQUE !"
 		end,
 	}
 
-	-- Paquet mélangé : chaque titre passe une fois avant de revenir
+	-- Paquets mélangés : chaque titre passe une fois avant de revenir
 	local deck: { any } = {}
-	local function refillDeck()
-		table.clear(deck)
-		for _, text in ipairs(HEADLINES) do
-			table.insert(deck, text)
-		end
-		for _, generator in ipairs(DYNAMIC) do
-			table.insert(deck, generator)
-		end
-		for i = #deck, 2, -1 do
+	local dynamicDeck: { any } = {}
+	local function shuffle(list: { any })
+		for i = #list, 2, -1 do
 			local j = random:NextInteger(1, i)
-			deck[i], deck[j] = deck[j], deck[i]
+			list[i], list[j] = list[j], list[i]
 		end
 	end
 
-	local function nextHeadline(): string
-		if #deck == 0 then
-			refillDeck()
-		end
-		local entry = table.remove(deck)
-		if type(entry) == "function" then
-			local ok, text = pcall(entry)
-			if ok and type(text) == "string" then
-				return text
+	local function nextDynamic(): (string?, string?)
+		for _ = 1, #DYNAMIC do
+			if #dynamicDeck == 0 then
+				for _, generator in ipairs(DYNAMIC) do
+					table.insert(dynamicDeck, generator)
+				end
+				shuffle(dynamicDeck)
 			end
-			return HEADLINES[random:NextInteger(1, #HEADLINES)]
+			local generator = table.remove(dynamicDeck)
+			local ok, category, text = pcall(generator)
+			if ok and type(category) == "string" and type(text) == "string" then
+				return category, text
+			end
 		end
-		return entry
+		return nil, nil
+	end
+
+	local function nextHeadline(): (string, string)
+		if random:NextNumber() < DYNAMIC_CHANCE then
+			local category, text = nextDynamic()
+			if category and text then
+				return category, text
+			end
+		end
+		if #deck == 0 then
+			for _, entry in ipairs(HEADLINES) do
+				table.insert(deck, entry)
+			end
+			shuffle(deck)
+		end
+		local entry = table.remove(deck) or HEADLINES[1]
+		return entry[1], entry[2]
 	end
 
 	------------------------------------------------------------------
 	-- Construction du bandeau
 	------------------------------------------------------------------
-	local strip = UIUtil.Create("Frame", {
+	local strip = frame({
 		Name = "Strip",
 		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = red,
-		BorderSizePixel = 0,
+		BackgroundColor3 = white,
 		ZIndex = 1,
 		Parent = container,
 	})
-	UIUtil.Gradient(strip, ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(200, 200, 200)), 90)
-	-- Liseré sombre en bas
-	UIUtil.Create("Frame", {
+	UIUtil.Gradient(strip, ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(236, 40, 52)),
+		ColorSequenceKeypoint.new(0.5, red),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(170, 12, 24)),
+	}), 90)
+	-- Reflet en haut + liseré sombre en bas
+	frame({
+		Name = "TopLine",
+		Size = UDim2.new(1, 0, 0, 1),
+		BackgroundColor3 = white,
+		BackgroundTransparency = 0.6,
+		ZIndex = 6,
+		Parent = container,
+	})
+	frame({
 		Name = "BottomLine",
 		Size = UDim2.new(1, 0, 0, 2),
 		Position = UDim2.new(0, 0, 1, -2),
 		BackgroundColor3 = darkRed,
-		BorderSizePixel = 0,
 		ZIndex = 6,
 		Parent = container,
 	})
 
 	-- Zone de défilement
-	local clip = UIUtil.Create("Frame", {
+	local clip = frame({
 		Name = "Clip",
 		Size = UDim2.new(1, -(LEFT_W + RIGHT_W), 1, 0),
 		Position = UDim2.fromOffset(LEFT_W, 0),
-		BackgroundTransparency = 1,
 		ClipsDescendants = true,
 		ZIndex = 2,
 		Parent = container,
 	})
-
-	-- Bloc gauche "FLASH INFO" (blanc, bord en biais)
-	local left = UIUtil.Create("Frame", {
-		Name = "FlashInfo",
-		Size = UDim2.new(0, LEFT_W - 12, 1, 0),
+	-- Bloc "● DIRECT" (bleu nuit)
+	local live = frame({
+		Name = "Live",
+		Size = UDim2.new(0, LIVE_W, 1, 0),
 		BackgroundColor3 = white,
-		BorderSizePixel = 0,
 		ZIndex = 4,
 		Parent = container,
 	})
-	local slant = UIUtil.Create("Frame", {
+	UIUtil.Gradient(live, ColorSequence.new(Color3.fromRGB(34, 44, 74), navy), 90)
+	local liveDot = frame({
+		Name = "LiveDot",
+		Size = UDim2.fromOffset(9, 9),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0, 13, 0.5, 0),
+		BackgroundColor3 = Color3.fromRGB(255, 50, 60),
+		ZIndex = 6,
+		Parent = live,
+	})
+	UIUtil.Corner(liveDot, UDim.new(1, 0))
+	local liveHalo = frame({
+		Size = UDim2.fromOffset(9, 9),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = liveDot.Position,
+		BackgroundColor3 = Color3.fromRGB(255, 50, 60),
+		BackgroundTransparency = 0.5,
+		ZIndex = 5,
+		Parent = live,
+	})
+	UIUtil.Corner(liveHalo, UDim.new(1, 0))
+	local liveHaloScale = UIUtil.Create("UIScale", { Parent = liveHalo })
+	local liveLabel = UIUtil.Create("TextLabel", {
+		Size = UDim2.new(1, -24, 1, 0),
+		Position = UDim2.fromOffset(22, 0),
+		BackgroundTransparency = 1,
+		Text = "DIRECT",
+		TextColor3 = white,
+		TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 6,
+		Parent = live,
+	})
+	liveLabel.FontFace = boldFont
+
+	-- Cartouche "FLASH INFO" (blanc, bord droit en biais)
+	local flash = frame({
+		Name = "FlashInfo",
+		Position = UDim2.fromOffset(LIVE_W, 0),
+		Size = UDim2.new(0, FLASH_W, 1, 0),
+		BackgroundColor3 = white,
+		ClipsDescendants = false,
+		ZIndex = 4,
+		Parent = container,
+	})
+	local slant = frame({
 		Name = "Slant",
-		Size = UDim2.fromOffset(22, HEIGHT + 20),
+		Size = UDim2.fromOffset(20, HEIGHT + 20),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(1, 0, 0.5, 0),
 		Rotation = 18,
 		BackgroundColor3 = white,
-		BorderSizePixel = 0,
 		ZIndex = 4,
-		Parent = left,
+		Parent = flash,
 	})
-	local liveDot = UIUtil.Create("Frame", {
-		Name = "LiveDot",
-		Size = UDim2.fromOffset(10, 10),
+	-- Petite ombre du biais (donne du relief)
+	frame({
+		Size = UDim2.fromOffset(6, HEIGHT + 20),
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0, 14, 0.5, 0),
-		BackgroundColor3 = red,
-		BorderSizePixel = 0,
-		ZIndex = 5,
-		Parent = left,
+		Position = UDim2.new(1, 12, 0.5, 0),
+		Rotation = 18,
+		BackgroundColor3 = darkRed,
+		BackgroundTransparency = 0.3,
+		ZIndex = 3,
+		Parent = flash,
 	})
-	UIUtil.Corner(liveDot, UDim.new(1, 0))
 	local flashLabel = UIUtil.Create("TextLabel", {
 		Name = "Title",
-		Size = UDim2.new(1, -24, 1, 0),
-		Position = UDim2.fromOffset(24, 0),
+		Size = UDim2.new(1, -4, 1, 0),
+		Position = UDim2.fromOffset(8, 0),
 		BackgroundTransparency = 1,
 		Text = "FLASH INFO",
 		TextColor3 = red,
 		TextSize = 18,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		ZIndex = 5,
-		Parent = left,
+		Parent = flash,
 	})
 	flashLabel.FontFace = italicFont
 
-	-- Bloc droit : horloge
-	local right = UIUtil.Create("Frame", {
+	-- Bloc droit : logo de la chaîne + horloge
+	local right = frame({
 		Name = "Clock",
 		Size = UDim2.new(0, RIGHT_W, 1, 0),
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.fromScale(1, 0),
-		BackgroundColor3 = darkRed,
-		BorderSizePixel = 0,
+		BackgroundColor3 = white,
 		ZIndex = 4,
 		Parent = container,
 	})
+	UIUtil.Gradient(right, ColorSequence.new(Color3.fromRGB(34, 44, 74), navy), 90)
+	local logo = frame({
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 6, 0.5, 0),
+		Size = UDim2.fromOffset(38, 18),
+		BackgroundColor3 = white,
+		ZIndex = 5,
+		Parent = right,
+	})
+	UIUtil.Corner(logo, 4)
+	UIUtil.Gradient(logo, ColorSequence.new(Color3.fromRGB(255, 70, 80), darkRed), 90)
+	local logoLabel = UIUtil.Create("TextLabel", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Text = "DC24",
+		TextColor3 = white,
+		TextSize = 12,
+		ZIndex = 6,
+		Parent = logo,
+	})
+	logoLabel.FontFace = boldFont
 	local clockLabel = UIUtil.Create("TextLabel", {
 		Name = "Time",
-		Size = UDim2.fromScale(1, 1),
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -6, 0, 0),
+		Size = UDim2.new(1, -52, 1, 0),
 		BackgroundTransparency = 1,
 		Font = Theme.Fonts.Mono,
 		Text = "--:--",
 		TextColor3 = white,
-		TextSize = 16,
-		ZIndex = 5,
+		TextSize = 15,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		ZIndex = 6,
 		Parent = right,
 	})
 
@@ -275,7 +634,7 @@ function NewsTicker.Start(ctx)
 	------------------------------------------------------------------
 	local items: { any } = {}
 
-	-- Pixels réels par pixel "design" (la toile est mise à l'échelle)
+	-- Largeur "design" d'un élément (la toile est mise à l'échelle)
 	local function designWidth(guiObject: GuiObject): number
 		local absHeight = container.AbsoluteSize.Y
 		if absHeight <= 0 then
@@ -284,62 +643,88 @@ function NewsTicker.Start(ctx)
 		return guiObject.AbsoluteSize.X * (HEIGHT / absHeight)
 	end
 
-	local function measure(text: string): number
-		local ok, size = pcall(function()
-			return TextService:GetTextSize(text, TEXT_SIZE, Enum.Font.BuilderSansBold, Vector2.new(10000, HEIGHT))
+	local function measure(text: string, size: number): number
+		local ok, result = pcall(function()
+			return TextService:GetTextSize(text, size, Enum.Font.BuilderSansBold, Vector2.new(10000, HEIGHT))
 		end)
-		if ok and size then
-			return size.X + 8 -- un peu de marge pour l'italique
+		if ok and result then
+			return result.X
 		end
-		return #text * 11
+		return #text * size * 0.6
 	end
 
 	local function addItem(x: number)
-		local urgent = random:NextNumber() < URGENT_CHANCE
-		local text = nextHeadline()
+		local categoryId, text = nextHeadline()
+		local urgent = categoryId == "URGENT" or random:NextNumber() < URGENT_CHANCE
+		local category = CATEGORIES[categoryId] or CATEGORIES.INSOLITE
 		if urgent then
-			text = "🚨 URGENT : " .. text
+			category = CATEGORIES.URGENT
 		end
-		local textWidth = measure(text)
-		local width = textWidth + SEPARATOR_W
+		local chipW = measure(category.Text, CHIP_TEXT_SIZE) + 14
+		local textWidth = measure(text, TEXT_SIZE) + 10 -- un peu de marge pour l'italique
+		local width = chipW + 8 + textWidth + SEPARATOR_W
 
-		local frame = UIUtil.Create("Frame", {
+		local itemFrame = frame({
 			Name = "Headline",
 			Size = UDim2.fromOffset(width, HEIGHT),
 			Position = UDim2.fromOffset(x, 0),
-			BackgroundTransparency = 1,
 			ZIndex = 2,
 			Parent = clip,
+		})
+		local chip = frame({
+			Name = "Category",
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 0, 0.5, -1),
+			Size = UDim2.fromOffset(chipW, 17),
+			BackgroundColor3 = category.Color,
+			ZIndex = 3,
+			Parent = itemFrame,
+		})
+		UIUtil.Corner(chip, 4)
+		UIUtil.Stroke(chip, white, 1, 0.55)
+		local chipLabel = UIUtil.Create("TextLabel", {
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			Font = Theme.Fonts.Title,
+			Text = category.Text,
+			TextColor3 = urgent and Theme.Colors.TextDark or white,
+			TextSize = CHIP_TEXT_SIZE,
+			ZIndex = 4,
+			Parent = chip,
 		})
 		local label = UIUtil.Create("TextLabel", {
 			Name = "Text",
 			Size = UDim2.fromOffset(textWidth, HEIGHT - 2),
-			Position = UDim2.fromOffset(0, 0),
+			Position = UDim2.fromOffset(chipW + 8, 0),
 			BackgroundTransparency = 1,
 			Text = text,
 			TextColor3 = urgent and yellow or white,
 			TextSize = TEXT_SIZE,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			ZIndex = 3,
-			Parent = frame,
+			Parent = itemFrame,
 		})
 		label.FontFace = italicFont
+		local textStroke = UIUtil.Stroke(label, darkRed, 1, 0.5)
+		textStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 		UIUtil.Create("TextLabel", {
 			Name = "Separator",
 			Size = UDim2.fromOffset(SEPARATOR_W, HEIGHT - 2),
-			Position = UDim2.fromOffset(textWidth, 0),
+			Position = UDim2.fromOffset(chipW + 8 + textWidth, 0),
 			BackgroundTransparency = 1,
 			Font = Theme.Fonts.Title,
-			Text = "•",
-			TextColor3 = yellow,
-			TextSize = 22,
+			Text = "◆",
+			TextColor3 = Color3.fromRGB(255, 200, 200),
+			TextSize = 12,
 			ZIndex = 3,
-			Parent = frame,
+			Parent = itemFrame,
 		})
 
 		table.insert(items, {
-			Frame = frame,
+			Frame = itemFrame,
 			Label = label,
+			Chip = chip,
+			ChipLabel = chipLabel,
 			Width = width,
 			X = x,
 			Urgent = urgent,
@@ -348,7 +733,7 @@ function NewsTicker.Start(ctx)
 		})
 	end
 
-	-- Alerte "URGENT" : le bloc gauche clignote en jaune
+	-- Alerte "URGENT" : le cartouche clignote en jaune
 	local alertUntil = 0
 	local function triggerAlert()
 		alertUntil = os.clock() + 2.5
@@ -356,6 +741,170 @@ function NewsTicker.Start(ctx)
 		ctx.Sound.Play("Notif", 0.8)
 	end
 
+	------------------------------------------------------------------
+	-- Bandeau "ALERTE INFO" (descend sous le ticker, calque Overlay)
+	------------------------------------------------------------------
+	local banner = frame({
+		Name = "BreakingNews",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, -BANNER_H - 20),
+		Size = UDim2.fromOffset(BANNER_W, BANNER_H),
+		Visible = false,
+		ZIndex = 50,
+		Parent = overlay,
+	})
+	-- Détruit avec le conteneur (arrêt du stimulus, détox)
+	container.Destroying:Connect(function()
+		banner:Destroy()
+	end)
+	local bannerShadow = frame({
+		Size = UDim2.new(1, 6, 1, 6),
+		Position = UDim2.fromOffset(-3, 4),
+		BackgroundColor3 = Color3.new(0, 0, 0),
+		BackgroundTransparency = 0.8,
+		ZIndex = 50,
+		Parent = banner,
+	})
+	UIUtil.Corner(bannerShadow, 10)
+	local bannerBody = frame({
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = white,
+		ZIndex = 51,
+		Parent = banner,
+	})
+	UIUtil.Corner(bannerBody, 8)
+	UIUtil.Gradient(bannerBody, ColorSequence.new(white, Color3.fromRGB(226, 230, 240)), 90)
+	UIUtil.Stroke(bannerBody, navy, 1.5, 0.2)
+	local alertBox = frame({
+		Size = UDim2.new(0, 118, 1, 0),
+		BackgroundColor3 = red,
+		ZIndex = 52,
+		Parent = bannerBody,
+	})
+	UIUtil.Corner(alertBox, 8)
+	UIUtil.Gradient(alertBox, ColorSequence.new(white, Color3.fromRGB(190, 190, 190)), 90)
+	local alertTitle = UIUtil.Create("TextLabel", {
+		Size = UDim2.new(1, -8, 0, 22),
+		Position = UDim2.fromOffset(4, 4),
+		BackgroundTransparency = 1,
+		Text = "ALERTE",
+		TextColor3 = white,
+		TextSize = 20,
+		ZIndex = 53,
+		Parent = alertBox,
+	})
+	alertTitle.FontFace = italicFont
+	local alertSub = UIUtil.Create("TextLabel", {
+		Size = UDim2.new(1, -8, 0, 14),
+		Position = UDim2.fromOffset(4, 26),
+		BackgroundTransparency = 1,
+		Font = Theme.Fonts.Title,
+		Text = "INFO ● DIRECT",
+		TextColor3 = Color3.fromRGB(255, 225, 225),
+		TextSize = 11,
+		ZIndex = 53,
+		Parent = alertBox,
+	})
+	local bannerHeadline = UIUtil.Label({
+		Text = "",
+		Font = Theme.Fonts.Title,
+		TextColor3 = navy,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextWrapped = true,
+		Position = UDim2.fromOffset(128, 4),
+		Size = UDim2.new(1, -138, 0, 26),
+		MaxTextSize = 17,
+		ZIndex = 52,
+		Parent = bannerBody,
+	})
+	bannerHeadline.FontFace = italicFont
+	local bannerSub = UIUtil.Create("TextLabel", {
+		Position = UDim2.fromOffset(128, 30),
+		Size = UDim2.new(1, -138, 0, 12),
+		BackgroundTransparency = 1,
+		Font = Theme.Fonts.Body,
+		Text = "",
+		TextColor3 = Color3.fromRGB(100, 108, 128),
+		TextSize = 11,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 52,
+		Parent = bannerBody,
+	})
+	-- Reflet qui balaie le bandeau
+	local gleam = frame({
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(-0.2, 0, 0.5, 0),
+		Size = UDim2.new(0, 40, 1.6, 0),
+		Rotation = 20,
+		BackgroundColor3 = white,
+		BackgroundTransparency = 0.55,
+		ZIndex = 54,
+		Parent = bannerBody,
+	})
+	UIUtil.Create("UIGradient", {
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 1),
+			NumberSequenceKeypoint.new(0.5, 0.2),
+			NumberSequenceKeypoint.new(1, 1),
+		}),
+		Parent = gleam,
+	})
+
+	local bannerUntil = 0
+	local bannerToken = 0
+	local function showBreaking()
+		if not ctx.IsAlive() then
+			return
+		end
+		-- Titre spécial : dynamique si possible, sinon un titre du paquet
+		local _, text = nextDynamic()
+		if not text then
+			local _, fallback = nextHeadline()
+			text = fallback
+		end
+		bannerToken += 1
+		local token = bannerToken
+		bannerHeadline.Text = text or ""
+		bannerSub.Text = BREAKING_SUBTITLES[random:NextInteger(1, #BREAKING_SUBTITLES)] .. " · " .. clockLabel.Text
+		banner.Visible = true
+		banner.Position = UDim2.new(0.5, 0, 0, -BANNER_H - 20)
+		UIUtil.Tween(banner, 0.5, { Position = UDim2.new(0.5, 0, 0, HEIGHT + 4) }, Enum.EasingStyle.Back)
+		gleam.Position = UDim2.new(-0.2, 0, 0.5, 0)
+		UIUtil.Tween(gleam, 1.1, { Position = UDim2.new(1.2, 0, 0.5, 0) }, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
+		bannerUntil = os.clock() + BREAKING_TIME
+		triggerAlert()
+		task.delay(BREAKING_TIME, function()
+			if token ~= bannerToken or not banner.Parent then
+				return
+			end
+			UIUtil.Tween(banner, 0.35, { Position = UDim2.new(0.5, 0, 0, -BANNER_H - 20) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+			task.delay(0.4, function()
+				if token == bannerToken and banner.Parent then
+					banner.Visible = false
+				end
+			end)
+		end)
+	end
+
+	task.spawn(function()
+		local waitTime = random:NextNumber(25, 45)
+		while ctx.IsAlive() do
+			local finish = os.clock() + waitTime
+			while ctx.IsAlive() and os.clock() < finish do
+				task.wait(1)
+			end
+			if not ctx.IsAlive() then
+				break
+			end
+			showBreaking()
+			waitTime = random:NextNumber(BREAKING_MIN, BREAKING_MAX)
+		end
+	end)
+
+	------------------------------------------------------------------
+	-- Animation (une seule connexion)
+	------------------------------------------------------------------
 	local speed = SPEED
 	local targetSpeed = SPEED
 
@@ -378,6 +927,7 @@ function NewsTicker.Start(ctx)
 		dt = math.min(dt, 0.1)
 		speed += (targetSpeed - speed) * math.min(1, dt * 6)
 		local clipWidth = designWidth(clip)
+		local now = os.clock()
 
 		-- Déplacement + suppression des titres sortis à gauche
 		local i = 1
@@ -389,9 +939,14 @@ function NewsTicker.Start(ctx)
 				table.remove(items, i)
 			else
 				item.Frame.Position = UDim2.fromOffset(item.X, 0)
-				if item.Urgent and not item.Alerted and item.X < clipWidth * 0.6 then
-					item.Alerted = true
-					triggerAlert()
+				if item.Urgent then
+					-- Étiquette URGENT qui clignote
+					local blink = math.floor(now * 4) % 2 == 0
+					item.Chip.BackgroundColor3 = blink and yellow or white
+					if not item.Alerted and item.X < clipWidth * 0.6 then
+						item.Alerted = true
+						triggerAlert()
+					end
 				end
 				i += 1
 			end
@@ -409,30 +964,44 @@ function NewsTicker.Start(ctx)
 			guard += 1
 		end
 
-		-- Bloc gauche : point "en direct" qui clignote, alerte urgente
-		local now = os.clock()
-		liveDot.BackgroundTransparency = (math.floor(now * 2) % 2 == 0) and 0 or 0.7
+		-- Point "en direct" : clignote + halo qui s'élargit
+		local pulse = (now % 1.2) / 1.2
+		liveDot.BackgroundTransparency = (math.floor(now * 2) % 2 == 0) and 0 or 0.45
+		liveHaloScale.Scale = 1 + pulse * 1.4
+		liveHalo.BackgroundTransparency = 0.4 + pulse * 0.6
+
+		-- Cartouche : alerte urgente (jaune clignotant)
 		if now < alertUntil then
 			local blink = math.floor(now * 6) % 2 == 0
-			left.BackgroundColor3 = blink and yellow or white
-			slant.BackgroundColor3 = left.BackgroundColor3
+			local color = blink and yellow or white
+			flash.BackgroundColor3 = color
+			slant.BackgroundColor3 = color
 			flashLabel.TextColor3 = blink and Theme.Colors.TextDark or red
 		elseif flashLabel.Text ~= "FLASH INFO" then
 			flashLabel.Text = "FLASH INFO"
-			left.BackgroundColor3 = white
+			flash.BackgroundColor3 = white
 			slant.BackgroundColor3 = white
 			flashLabel.TextColor3 = red
 		end
+
+		-- Bandeau "ALERTE INFO" : fond rouge qui pulse
+		if banner.Visible and now < bannerUntil + 0.5 then
+			local blink = math.floor(now * 3) % 2 == 0
+			alertBox.BackgroundColor3 = blink and red or darkRed
+			alertSub.TextTransparency = blink and 0 or 0.3
+		end
 	end)
 
-	-- Horloge (heure locale)
+	-- Horloge (heure locale, deux-points qui clignotent)
 	task.spawn(function()
+		local colon = true
 		while ctx.IsAlive() do
 			local now = os.date("*t")
 			if now and now.hour and now.min then
-				clockLabel.Text = string.format("%02d:%02d", now.hour, now.min)
+				clockLabel.Text = string.format(colon and "%02d:%02d" or "%02d %02d", now.hour, now.min)
 			end
-			task.wait(5)
+			colon = not colon
+			task.wait(0.5)
 		end
 	end)
 
@@ -443,11 +1012,6 @@ function NewsTicker.Start(ctx)
 	local cooldown = (interaction and tonumber(interaction.Cooldown)) or 8
 	local lastInteract = -math.huge
 	local lastScaleX = 0.5
-
-	local function effectsOn(): boolean
-		local data = ctx.State.Data
-		return not (data and data.Settings and data.Settings.Effects == false)
-	end
 
 	ctx.Connect(button.Activated, function(input)
 		-- Position X du clic (pixels réels ; milieu du bandeau par défaut)
@@ -484,8 +1048,8 @@ function NewsTicker.Start(ctx)
 			label.TextColor3 = Theme.Colors.TextDark
 			label.BackgroundTransparency = 0
 			label.BackgroundColor3 = yellow
-			label.Position = UDim2.fromOffset(0, -3)
-			UIUtil.Tween(label, 0.35, { Position = UDim2.fromOffset(0, 0) }, Enum.EasingStyle.Bounce)
+			label.Position = UDim2.new(label.Position.X, UDim.new(0, -3))
+			UIUtil.Tween(label, 0.35, { Position = UDim2.new(label.Position.X, UDim.new(0, 0)) }, Enum.EasingStyle.Bounce)
 			task.delay(0.7, function()
 				if label.Parent then
 					label.TextColor3 = hit.BaseColor
@@ -513,13 +1077,14 @@ function NewsTicker.Start(ctx)
 			return
 		end
 		local amount = tonumber(payload.Amount) or 0
-		ctx.FloatText(overlay, UDim2.new(lastScaleX, 0, 0, 84), "+" .. ctx.Format.Format(amount), Theme.Colors.Gold, 34)
+		ctx.FloatText(overlay, UDim2.new(lastScaleX, 0, 0, 84), "+" .. Format.Format(amount), Theme.Colors.Gold, 34)
 	end)
 end
 
 function NewsTicker.Stop(_ctx)
-	-- Tout vit dans ctx.Container (détruit par le StimulusManager) ;
-	-- les textes flottants de l'overlay se détruisent tout seuls.
+	-- Tout vit dans ctx.Container (détruit par le StimulusManager), sauf le
+	-- bandeau "ALERTE INFO" (Overlay) détruit avec le conteneur ; les textes
+	-- flottants de l'overlay se détruisent tout seuls.
 end
 
 return NewsTicker

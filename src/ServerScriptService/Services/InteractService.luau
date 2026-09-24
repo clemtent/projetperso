@@ -4,9 +4,13 @@
 
 	Interactions "satisfaisantes" avec les éléments de l'écran
 	(RemoteEvent Interact, réglages dans Config.Interactions) :
-	  - "Bubble"   : papier bulle. Seau de jetons (MaxPerSecond), gain =
-	                 gain par clic x ClickFraction, SANS notification (le
-	                 client affiche lui-même le "+X") ;
+	  - "Bubble", "Butter" : papier bulle / beurre croustillant. Seau de
+	                 jetons (MaxPerSecond), gain = gain par clic x ClickFraction,
+	                 SANS notification (le client affiche lui-même le "+X") ;
+	  - "Follow"   : bouton "Suivre" du live (OneTime) : UNE fois par partie
+	                 (data.LiveFollowed, remis à false à la détox), gain = X
+	                 secondes de production, notification "Bonus" ; les dons
+	                 du live (spawner "Donation") ne viennent qu'après ;
 	  - "Spin", "Headline", "Press" : temps de recharge, gain = X secondes de
 	                 production, notification "Bonus".
 	Chaque interaction exige la Feature correspondante.
@@ -25,6 +29,11 @@ local COOLDOWN_TOLERANCE = 0.2 -- marge (s) pour la latence réseau
 
 -- [Player] = { Tokens = { [kind] = n }, LastRefill = { [kind] = clock }, LastUse = { [kind] = clock } }
 local states = {}
+
+-- Interactions "une seule fois par partie" : [kind] = clé booléenne dans data
+local ONE_TIME_FLAGS = {
+	Follow = "LiveFollowed",
+}
 
 function InteractService:Init(allServices)
 	services = allServices
@@ -73,6 +82,27 @@ local function onInteract(player: Player, kind: any, _arg: any)
 		if kind == "Bubble" then
 			services.QuestService:Progress(player, "Bubbles", 1)
 		end
+		return
+	end
+
+	-- Une seule fois par partie (ex. s'abonner au live)
+	if settings.OneTime then
+		local flag = ONE_TIME_FLAGS[kind]
+		if not flag or data[flag] == true then
+			return -- déjà fait (ou interaction sans drapeau connu : refusée)
+		end
+		data[flag] = true
+		local reward = Formulas.ScaledReward(stats, settings.RewardSeconds or 1, settings.MinReward or 1)
+		if settings.Stat then
+			data.Stats[settings.Stat] = (data.Stats[settings.Stat] or 0) + 1
+		end
+		services.GameService:AddDopamine(player, reward, true)
+		services.GameService:SendState(player) -- le client voit tout de suite "✔ Abonné"
+		services.GameService:Notify(player, {
+			Type = "Bonus",
+			Source = kind,
+			Amount = reward,
+		})
 		return
 	end
 

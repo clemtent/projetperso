@@ -16,11 +16,17 @@
 	Volumes (0 à 1, gardés en mémoire pour la session) : SetMusicVolume /
 	SetEffectsVolume, appliqués via deux SoundGroups ("Musique", "Effets").
 
+	Son du clic (v4) : le joueur choisit son son de clic dans ⚙️ Paramètres
+	(Config.ClickSounds, sauvegardé côté serveur dans Settings.ClickSound).
+	SoundManager.PlayClick(hauteur) joue le son choisi pour le gros bouton
+	(repli : Config.Sounds.Click). Play("Click") reste le petit clic de l'interface.
+
 	Signaux :
 	  SoundManager.TrackChanged (nom?, sound?)  : un nouveau morceau commence
 	                                             (nil, nil quand la musique s'arrête)
 	  SoundManager.MusicStateChanged (joue)      : la musique démarre / s'arrête
 	  SoundManager.VolumeChanged (musique, effets)
+	  SoundManager.ClickSoundChanged (id)        : le son du clic a changé
 ]]
 
 local ContentProvider = game:GetService("ContentProvider")
@@ -38,6 +44,7 @@ local SoundManager = {}
 SoundManager.TrackChanged = Signal.new() -- (name: string?, sound: Sound?)
 SoundManager.MusicStateChanged = Signal.new() -- (playing: boolean)
 SoundManager.VolumeChanged = Signal.new() -- (musicVolume, effectsVolume)
+SoundManager.ClickSoundChanged = Signal.new() -- (clickSoundId)
 
 local MIN_INTERVAL = 0.035 -- évite d'empiler 20 fois le même son dans la même image
 local CROSSFADE = 2.5 -- durée (s) du fondu enchaîné entre deux morceaux
@@ -57,6 +64,12 @@ local effectsGroup: SoundGroup? = nil
 local musicGroup: SoundGroup? = nil
 local templates: { [string]: Sound } = {}
 local lastPlayed: { [string]: number } = {}
+
+-- Sons de clic au choix (Config.ClickSounds)
+local DEFAULT_CLICK_SOUND = "Default"
+local clickTemplates: { [string]: Sound } = {} -- [Id] = modèle de son
+local clickSoundId = DEFAULT_CLICK_SOUND
+local lastClick = 0
 
 -- Playlist
 type Track = { Name: string, Id: string }
@@ -327,6 +340,22 @@ function SoundManager.Init()
 		end
 	end
 
+	-- Sons de clic au choix
+	table.clear(clickTemplates)
+	for _, entry in ipairs(Config.ClickSounds or {}) do
+		local id = normalizeId(entry.Sound)
+		if type(entry.Id) == "string" and id ~= "" then
+			local sound = Instance.new("Sound")
+			sound.Name = "ClickSound_" .. entry.Id
+			sound.SoundId = id
+			sound.Volume = tonumber(entry.Volume) or 0.5
+			sound.SoundGroup = fx
+			sound.Parent = newFolder
+			clickTemplates[entry.Id] = sound
+			table.insert(toPreload, sound)
+		end
+	end
+
 	-- Playlist : on garde seulement les pistes avec un ID
 	table.clear(tracks)
 	local playlist = (Config.Music and Config.Music.Playlist) or {}
@@ -368,6 +397,15 @@ function SoundManager.Init()
 	refreshMusic()
 end
 
+-- Joue un modèle de son (clone temporaire)
+local function playTemplate(template: Sound, pitch: number)
+	local sound = template:Clone()
+	sound.PlaybackSpeed = pitch
+	sound.Parent = SoundService
+	sound:Play()
+	Debris:AddItem(sound, math.max(2, sound.TimeLength / math.max(0.1, sound.PlaybackSpeed) + 0.5))
+end
+
 -- Joue un son. `pitch` change la hauteur (1 = normal).
 function SoundManager.Play(name: string, pitch: number?)
 	if not soundEnabled or effectsVolume <= 0 or name == "Music" then
@@ -382,11 +420,61 @@ function SoundManager.Play(name: string, pitch: number?)
 		return
 	end
 	lastPlayed[name] = now
-	local sound = template:Clone()
-	sound.PlaybackSpeed = pitch or 1
-	sound.Parent = SoundService
-	sound:Play()
-	Debris:AddItem(sound, math.max(2, sound.TimeLength / math.max(0.1, sound.PlaybackSpeed) + 0.5))
+	playTemplate(template, pitch or 1)
+end
+
+----------------------------------------------------------------------
+-- Son du clic (v4)
+----------------------------------------------------------------------
+
+-- Choisit le son du clic (Id de Config.ClickSounds ; inconnu = "Default")
+function SoundManager.SetClickSound(id: string)
+	local newId = (type(id) == "string" and clickTemplates[id] ~= nil) and id or DEFAULT_CLICK_SOUND
+	if newId == clickSoundId then
+		return
+	end
+	clickSoundId = newId
+	SoundManager.ClickSoundChanged:Fire(newId)
+end
+
+function SoundManager.GetClickSound(): string
+	return clickSoundId
+end
+
+-- Joue le son de clic choisi (gros bouton). `pitch` : hauteur (1 = normal).
+-- Les sons de clavier gardent une hauteur plus naturelle (variation réduite).
+function SoundManager.PlayClick(pitch: number?)
+	if not soundEnabled or effectsVolume <= 0 then
+		return
+	end
+	local template = clickTemplates[clickSoundId]
+	if not template then
+		SoundManager.Play("Click", pitch)
+		return
+	end
+	local now = os.clock()
+	if now - lastClick < MIN_INTERVAL then
+		return
+	end
+	lastClick = now
+	local speed = pitch or 1
+	if clickSoundId ~= DEFAULT_CLICK_SOUND then
+		speed = 1 + (speed - 1) * 0.35
+	end
+	playTemplate(template, speed)
+end
+
+-- Fait écouter un son de clic (bouton ▶ des paramètres), même s'il n'est pas choisi
+function SoundManager.PreviewClickSound(id: string)
+	if not soundEnabled or effectsVolume <= 0 then
+		return
+	end
+	local template = clickTemplates[id]
+	if template then
+		playTemplate(template, 1)
+	else
+		SoundManager.Play("Click", 1)
+	end
 end
 
 function SoundManager.SetSoundEnabled(enabled: boolean)

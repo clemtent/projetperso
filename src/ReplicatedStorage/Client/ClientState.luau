@@ -14,10 +14,14 @@
 
 	v3 : Game Passes possédés (Data.Passes), boost temporaire (Data.Boost,
 	compte à rebours prédit localement), VIP, signal "Loaded" (premier état).
+	v4 : classement en deux parties (ClientState.Leaderboard = top mondial,
+	ClientState.ServerLeaderboard = joueurs du serveur en direct), son de
+	clic choisi (Data.Settings.ClickSound), Dopamine hors-ligne (Data.Offline).
 	Le mode sombre est la combinaison (OU) de plusieurs "sources" : le thème
 	équipé (SetDarkMode), les stimuli comme le mode néon (SetDarkSource).
 ]]
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
@@ -31,8 +35,10 @@ ClientState.Data = nil :: any -- dernier état serveur (nil tant que pas chargé
 ClientState.Changed = Signal.new() -- (data)
 ClientState.Rush = { Active = false, EndsAt = 0, Name = "", Multiplier = 1 }
 ClientState.RushChanged = Signal.new() -- (rush)
-ClientState.Leaderboard = {}
-ClientState.LeaderboardChanged = Signal.new() -- (top)
+ClientState.Leaderboard = {} -- top mondial : { { Rank, UserId, Name, Value } }
+ClientState.LeaderboardChanged = Signal.new() -- (topMondial, classementServeur)
+-- Ajout v4 : classement du serveur en direct { { UserId, Name, Dopamine, Lifetime, Rebirths } } (trié)
+ClientState.ServerLeaderboard = {}
 
 -- Ajouts v2
 ClientState.FeaturesChanged = Signal.new() -- (features) : l'ensemble des Features a changé
@@ -95,6 +101,9 @@ local function onState(data)
 	data.Features = data.Features or {}
 	data.Upgrades = data.Upgrades or {}
 	data.Settings = data.Settings or { Sound = true, Music = true, Effects = true }
+	if type(data.Settings.ClickSound) ~= "string" then
+		data.Settings.ClickSound = "Default"
+	end
 	data.Stats = data.Stats or {}
 	data.Achievements = data.Achievements or {}
 	data.Quests = data.Quests or {}
@@ -149,9 +158,23 @@ function ClientState.Init()
 		ClientState.RushChanged:Fire(rush)
 	end)
 
-	Net.Event("LeaderboardUpdate").OnClientEvent:Connect(function(top)
-		ClientState.Leaderboard = top or {}
-		ClientState.LeaderboardChanged:Fire(ClientState.Leaderboard)
+	Net.Event("LeaderboardUpdate").OnClientEvent:Connect(function(payload)
+		if type(payload) ~= "table" then
+			return
+		end
+		if payload.Global ~= nil or payload.Server ~= nil then
+			-- Format v4 : { Global = {...}, Server = {...} } (une partie absente = inchangée)
+			if type(payload.Global) == "table" then
+				ClientState.Leaderboard = payload.Global
+			end
+			if type(payload.Server) == "table" then
+				ClientState.ServerLeaderboard = payload.Server
+			end
+		else
+			-- Ancien format : un simple tableau (top mondial)
+			ClientState.Leaderboard = payload
+		end
+		ClientState.LeaderboardChanged:Fire(ClientState.Leaderboard, ClientState.ServerLeaderboard)
 	end)
 
 	Net.Event("StockUpdate").OnClientEvent:Connect(function(stock)
@@ -283,6 +306,25 @@ function ClientState.GetBoost(): (number, number)
 		return 1, 0
 	end
 	return boostMultiplier, remaining
+end
+
+----------------------------------------------------------------------
+-- Classement du serveur (v4)
+----------------------------------------------------------------------
+
+-- Place du joueur local dans le classement du serveur : (rang ou nil, nombre de joueurs)
+function ClientState.GetServerRank(): (number?, number)
+	local list = ClientState.ServerLeaderboard
+	if type(list) ~= "table" then
+		return nil, 0
+	end
+	local localId = Players.LocalPlayer and Players.LocalPlayer.UserId
+	for index, entry in ipairs(list) do
+		if type(entry) == "table" and entry.UserId == localId then
+			return index, #list
+		end
+	end
+	return nil, #list
 end
 
 -- Jauge de combo actuelle (avec la perte depuis le dernier clic)

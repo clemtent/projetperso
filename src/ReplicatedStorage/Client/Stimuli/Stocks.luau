@@ -2,36 +2,53 @@
 	Stocks (ModuleScript - stimulus)
 	Emplacement : ReplicatedStorage > Client > Stimuli > Stocks
 
-	Carte "bourse" (slot R1, 288x190) : cours en direct de l'action DOPA
-	(commun à tout le serveur, voir StockService) avec un graphique en
-	ligne qui défile en douceur, le prix, la variation en %, une petite
-	humeur ("🚀 Vers la lune !", "🐻 Aïe aïe aïe"...), le portefeuille du
-	joueur (valeur, plus/moins-value, prix moyen d'achat sur le graphique)
-	et les boutons Acheter 10 % / 50 % / 100 % et Vendre tout.
+	Widget de trading "pro" (slot R1, 288x190), cours en direct de l'action
+	DOPA (commun à tout le serveur, voir StockService) :
+	  - en-tête : logo, symbole, "EN DIRECT" qui clignote, prix qui "compte"
+	    et pastille de variation colorée (▲ vert / ▼ rouge) ;
+	  - graphique en aire : grille, courbe lissée qui glisse à chaque point,
+	    remplissage en dégradé sous la courbe, point lumineux qui pulse,
+	    étiquette de prix qui suit la courbe sur l'axe de droite, ligne de
+	    ton prix moyen d'achat, humeur du marché ("🚀 Vers la lune !"...) ;
+	  - carte portefeuille : valeur nette des frais, nombre d'actions,
+	    plus/moins-value colorée, rappel des frais (Config.Stocks.Fee) ;
+	  - boutons Acheter 10 % / 50 % / 100 % et Vendre (survol animé) ;
+	  - bandeau de fausses actus boursières qui défile en bas.
 
 	Les achats / ventes passent par la RemoteFunction "StockTrade" : le
 	serveur valide tout, on affiche juste son message.
 ]]
+
+local TextService = game:GetService("TextService")
 
 local Stocks = {}
 Stocks.Slot = "R1"
 
 -- Dimensions (pixels "design") : la carte est rentrée de 2 px pour que le
 -- contour ne soit pas coupé par le slot (ClipsDescendants)
-local CARD_W = 284
-local CHART_X, CHART_Y = 10, 34
-local CHART_W, CHART_H = CARD_W - 20, 78
-local PLOT_LEFT, PLOT_TOP = 6, 9
-local PLOT_W = CHART_W - PLOT_LEFT - 46 -- place à droite pour les étiquettes min / max
-local PLOT_H = CHART_H - 18
-local LINE_THICKNESS = 2.5
+local CARD_W, CARD_H = 284, 186
+local CHART_X, CHART_Y = 8, 38
+local CHART_W, CHART_H = CARD_W - 16, 68
+local PLOT_LEFT, PLOT_TOP = 4, 8
+local AXIS_W = 44 -- place à droite pour l'étiquette de prix et les min / max
+local PLOT_W = CHART_W - PLOT_LEFT - AXIS_W
+local PLOT_H = CHART_H - 16
+local DISPLAY_POINTS = 40 -- points dessinés au maximum (limite d'instances)
+local LINE_THICKNESS = 2.2
 local SLIDE_TIME = 0.35 -- durée du glissement quand un nouveau point arrive
+local TAPE_SPEED = 32 -- pixels "design" / seconde du bandeau d'actus
 
-local UP_COLOR = Color3.fromRGB(22, 170, 80)
-local DOWN_COLOR = Color3.fromRGB(225, 45, 55)
-local FLAT_COLOR = Color3.fromRGB(120, 120, 130)
-local BUY_COLOR = Color3.fromRGB(28, 160, 78)
-local AVG_COLOR = Color3.fromRGB(30, 136, 229)
+local CARD_TOP = Color3.fromRGB(24, 31, 50)
+local CARD_BOTTOM = Color3.fromRGB(11, 15, 26)
+local PANEL = Color3.fromRGB(30, 38, 60)
+local GRID = Color3.fromRGB(120, 140, 190)
+local TEXT = Color3.fromRGB(240, 244, 255)
+local TEXT_DIM = Color3.fromRGB(140, 152, 180)
+local UP_COLOR = Color3.fromRGB(34, 211, 122)
+local DOWN_COLOR = Color3.fromRGB(255, 77, 94)
+local FLAT_COLOR = Color3.fromRGB(150, 160, 185)
+local AVG_COLOR = Color3.fromRGB(80, 170, 255)
+local WHITE = Color3.new(1, 1, 1)
 
 -- Humeur du marché selon la variation sur le graphique
 local function getMood(change: number): string
@@ -51,6 +68,26 @@ end
 local BUY_JOKES = { "📈 Investi !", "🤑 Pari osé !", "💼 Trader pro", "🙏 Pourvu que ça monte" }
 local SELL_JOKES = { "💰 Vendu !", "💸 Encaissé !", "😎 Bien joué", "🏃 On se retire" }
 
+-- Fausses actus du bandeau (%s = symbole)
+local TAPE_NEWS = {
+	"%s : un analyste confond le graphique avec un électrocardiogramme",
+	"Rumeur : le PDG de %s serait un chat. Le cours bondit",
+	"%s annonce un bouton encore plus cliquable, les marchés s'emballent",
+	"Un trader achète %s « parce que la courbe est jolie »",
+	"Les experts prédisent que %s va monter, descendre, ou rester pareil",
+	"%s : la réunion des actionnaires reportée pour cause de sieste",
+	"Un hamster gère désormais le fonds d'investissement %s",
+	"%s ouvre un bureau sur la Lune, le loyer est astronomique",
+	"Scandale : un stagiaire a cliqué 3 fois sur « vendre » chez %s",
+	"%s : « nos résultats sont excellents, enfin on croit »",
+	"Le cours de %s suit de près celui de la baguette tradition",
+	"Un pigeon mise tout sur %s, les marchés retiennent leur souffle",
+	"%s promet un dividende en câlins pour le prochain trimestre",
+	"Alerte : les graphiques de %s ressemblent à des montagnes russes",
+	"%s rachète une usine de papier bulle, stratégie « pop »",
+	"Achète bas, vends haut : le conseil secret enfin révélé",
+}
+
 local function formatPrice(price: number): string
 	if price >= 1000 then
 		return string.format("%.0f", price)
@@ -67,7 +104,8 @@ function Stocks.Start(ctx)
 	local Theme = ctx.Theme
 	local Format = ctx.Format
 	local stockConfig = ctx.Config.Stocks
-	local maxPoints = math.max(2, stockConfig.HistoryLength or 60)
+	local symbolName = tostring(stockConfig.Symbol or "DOPA")
+	local maxPoints = math.clamp(math.floor(tonumber(stockConfig.HistoryLength) or 60), 2, DISPLAY_POINTS)
 	local random = Random.new()
 
 	local function effectsOn(): boolean
@@ -82,30 +120,87 @@ function Stocks.Start(ctx)
 		return Format.Format(value)
 	end
 
+	local function frame(props: { [string]: any }): Frame
+		props.BorderSizePixel = 0
+		if props.BackgroundTransparency == nil and props.BackgroundColor3 == nil then
+			props.BackgroundTransparency = 1
+		end
+		return UI.Create("Frame", props)
+	end
+
+	local function fade(parent: Instance, top: number, bottom: number, rotation: number?): UIGradient
+		return UI.Create("UIGradient", {
+			Rotation = rotation or 90,
+			Transparency = NumberSequence.new(top, bottom),
+			Parent = parent,
+		})
+	end
+
 	------------------------------------------------------------------
-	-- Carte
+	-- Carte (bleu nuit, style terminal de trading)
 	------------------------------------------------------------------
-	local card = UI.Create("Frame", {
+	local card = frame({
 		Name = "Card",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.new(1, -4, 1, -4),
-		BackgroundColor3 = Theme.Colors.Card,
-		BorderSizePixel = 0,
+		Size = UDim2.fromOffset(CARD_W, CARD_H),
+		BackgroundColor3 = WHITE,
 		Parent = ctx.Container,
 	})
 	UI.Corner(card, 14)
-	UI.Stroke(card, Theme.Colors.CardBorder, 2)
+	UI.Gradient(card, ColorSequence.new(CARD_TOP, CARD_BOTTOM), 90)
+	local cardStroke = UI.Stroke(card, WHITE, 1.5, 0)
+	UI.Gradient(cardStroke, ColorSequence.new(Color3.fromRGB(90, 110, 170), Color3.fromRGB(30, 38, 60)), 90)
 
-	-- En-tête : titre, prix, variation
+	-- Logo (carré arrondi dégradé)
+	local logo = frame({
+		Name = "Logo",
+		Position = UDim2.fromOffset(8, 7),
+		Size = UDim2.fromOffset(26, 26),
+		BackgroundColor3 = WHITE,
+		Parent = card,
+	})
+	UI.Corner(logo, 8)
+	UI.Gradient(logo, ColorSequence.new(Color3.fromRGB(60, 230, 150), Color3.fromRGB(20, 140, 200)), 45)
 	UI.Label({
-		Name = "Title",
-		Text = "📈 " .. tostring(stockConfig.Symbol or "DOPA"),
+		Text = "🧠",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.8, 0.8),
+		MaxTextSize = 18,
+		ZIndex = 2,
+		Parent = logo,
+	})
+
+	UI.Label({
+		Name = "Symbol",
+		Text = symbolName,
 		Font = Theme.Fonts.Title,
+		TextColor3 = TEXT,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(10, 6),
-		Size = UDim2.fromOffset(92, 22),
-		MaxTextSize = 19,
+		Position = UDim2.fromOffset(40, 5),
+		Size = UDim2.fromOffset(70, 17),
+		MaxTextSize = 17,
+		Parent = card,
+	})
+	local liveDot = frame({
+		Name = "LiveDot",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.fromOffset(40, 28),
+		Size = UDim2.fromOffset(6, 6),
+		BackgroundColor3 = DOWN_COLOR,
+		Parent = card,
+	})
+	UI.Corner(liveDot, UDim.new(1, 0))
+	local feePercent = tostring(math.floor(math.clamp(tonumber(stockConfig.Fee) or 0, 0, 1) * 100 + 0.5)) .. " %"
+	UI.Label({
+		Text = "EN DIRECT · frais " .. feePercent,
+		Font = Theme.Fonts.Body,
+		TextColor3 = TEXT_DIM,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.fromOffset(49, 22),
+		Size = UDim2.fromOffset(110, 12),
+		MaxTextSize = 10,
 		Parent = card,
 	})
 
@@ -113,59 +208,72 @@ function Stocks.Start(ctx)
 		Name = "Price",
 		Text = "--",
 		Font = Theme.Fonts.Number,
+		TextColor3 = TEXT,
 		TextXAlignment = Enum.TextXAlignment.Right,
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -78, 0, 5),
-		Size = UDim2.fromOffset(104, 24),
-		MaxTextSize = 21,
+		Position = UDim2.new(1, -76, 0, 6),
+		Size = UDim2.fromOffset(96, 24),
+		MaxTextSize = 22,
 		Parent = card,
 	})
 	local priceScale = UI.Create("UIScale", { Parent = priceLabel })
 
-	local changePill = UI.Create("Frame", {
+	local changePill = frame({
 		Name = "Change",
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -10, 0, 7),
-		Size = UDim2.fromOffset(62, 20),
+		Position = UDim2.new(1, -8, 0, 9),
+		Size = UDim2.fromOffset(64, 20),
 		BackgroundColor3 = FLAT_COLOR,
-		BorderSizePixel = 0,
 		Parent = card,
 	})
 	UI.Corner(changePill, UDim.new(1, 0))
+	UI.Gradient(changePill, ColorSequence.new(WHITE, Color3.fromRGB(200, 200, 200)), 90)
 	local changeLabel = UI.Label({
 		Text = "0.0 %",
 		Font = Theme.Fonts.Number,
-		TextColor3 = Theme.Colors.TextLight,
+		TextColor3 = Color3.fromRGB(10, 20, 20),
 		Size = UDim2.new(1, -8, 1, -4),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
 		MaxTextSize = 13,
+		ZIndex = 2,
 		Parent = changePill,
 	})
 
 	------------------------------------------------------------------
 	-- Graphique
 	------------------------------------------------------------------
-	local chart = UI.Create("Frame", {
+	local chart = frame({
 		Name = "Chart",
 		Position = UDim2.fromOffset(CHART_X, CHART_Y),
 		Size = UDim2.fromOffset(CHART_W, CHART_H),
-		BackgroundColor3 = Color3.fromRGB(246, 248, 250),
-		BorderSizePixel = 0,
+		BackgroundColor3 = Color3.fromRGB(8, 12, 22),
+		BackgroundTransparency = 0.25,
 		ClipsDescendants = true,
 		Parent = card,
 	})
 	UI.Corner(chart, 8)
-	UI.Stroke(chart, Color3.fromRGB(210, 214, 220), 1)
+	UI.Stroke(chart, Color3.fromRGB(50, 62, 95), 1, 0.2)
 
-	-- Lignes de repère
-	for i = 0, 2 do
-		UI.Create("Frame", {
-			Name = "Grid",
-			Position = UDim2.fromOffset(PLOT_LEFT, PLOT_TOP + math.floor(PLOT_H * i / 2)),
+	-- Grille : 4 lignes horizontales, 5 verticales (très discrètes)
+	for i = 0, 3 do
+		frame({
+			Name = "GridH",
+			Position = UDim2.fromOffset(PLOT_LEFT, PLOT_TOP + math.floor(PLOT_H * i / 3)),
 			Size = UDim2.fromOffset(PLOT_W, 1),
-			BackgroundColor3 = Color3.fromRGB(222, 226, 232),
-			BorderSizePixel = 0,
+			BackgroundColor3 = GRID,
+			BackgroundTransparency = 0.86,
+			ZIndex = 1,
+			Parent = chart,
+		})
+	end
+	for i = 1, 5 do
+		frame({
+			Name = "GridV",
+			Position = UDim2.fromOffset(PLOT_LEFT + math.floor(PLOT_W * i / 6), PLOT_TOP),
+			Size = UDim2.fromOffset(1, PLOT_H),
+			BackgroundColor3 = GRID,
+			BackgroundTransparency = 0.92,
 			ZIndex = 1,
 			Parent = chart,
 		})
@@ -175,12 +283,12 @@ function Stocks.Start(ctx)
 		return UI.Label({
 			Text = "",
 			Font = Theme.Fonts.Mono,
-			TextColor3 = Theme.Colors.TextDim,
+			TextColor3 = TEXT_DIM,
 			TextXAlignment = Enum.TextXAlignment.Right,
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, -4, 0, y),
-			Size = UDim2.fromOffset(42, 12),
-			MaxTextSize = 10,
+			Size = UDim2.fromOffset(AXIS_W - 6, 11),
+			MaxTextSize = 9,
 			ZIndex = 2,
 			Parent = chart,
 		})
@@ -189,15 +297,14 @@ function Stocks.Start(ctx)
 	local minLabel = axisLabel(PLOT_TOP + PLOT_H)
 
 	-- Prix moyen d'achat du joueur (ligne bleue)
-	local avgLine = UI.Create("Frame", {
+	local avgLine = frame({
 		Name = "AvgLine",
 		Position = UDim2.fromOffset(PLOT_LEFT, 0),
 		Size = UDim2.fromOffset(PLOT_W, 1),
 		BackgroundColor3 = AVG_COLOR,
-		BackgroundTransparency = 0.25,
-		BorderSizePixel = 0,
+		BackgroundTransparency = 0.2,
 		Visible = false,
-		ZIndex = 2,
+		ZIndex = 4,
 		Parent = chart,
 	})
 	UI.Label({
@@ -209,21 +316,21 @@ function Stocks.Start(ctx)
 		Position = UDim2.fromOffset(2, -1),
 		Size = UDim2.fromOffset(80, 10),
 		MaxTextSize = 9,
-		ZIndex = 2,
+		ZIndex = 4,
 		Parent = avgLine,
 	})
 
-	-- Réserve de segments (réutilisés à chaque mise à jour)
+	-- Réserves de segments (courbe) et de tranches (aire), réutilisés
 	local segments: { Frame } = {}
+	local slices: { Frame } = {}
 	local function getSegment(index: number): Frame
 		local segment = segments[index]
 		if not segment then
-			segment = UI.Create("Frame", {
+			segment = frame({
 				Name = "Segment",
 				AnchorPoint = Vector2.new(0.5, 0.5),
-				BorderSizePixel = 0,
 				BackgroundColor3 = FLAT_COLOR,
-				ZIndex = 3,
+				ZIndex = 5,
 				Parent = chart,
 			})
 			UI.Corner(segment, UDim.new(1, 0))
@@ -231,51 +338,97 @@ function Stocks.Start(ctx)
 		end
 		return segment
 	end
+	local function getSlice(index: number): Frame
+		local slice = slices[index]
+		if not slice then
+			slice = frame({
+				Name = "Fill",
+				BackgroundColor3 = FLAT_COLOR,
+				ZIndex = 2,
+				Parent = chart,
+			})
+			fade(slice, 0.55, 1)
+			slices[index] = slice
+		end
+		return slice
+	end
 
-	-- Point "en direct" au bout de la courbe (+ anneau qui pulse)
-	local dotRing = UI.Create("Frame", {
+	-- Ligne pointillée du prix actuel + étiquette de prix sur l'axe
+	local priceLine = frame({
+		Name = "PriceLine",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Size = UDim2.fromOffset(PLOT_W, 1),
+		BackgroundColor3 = FLAT_COLOR,
+		BackgroundTransparency = 0.5,
+		Visible = false,
+		ZIndex = 3,
+		Parent = chart,
+	})
+	fade(priceLine, 1, 0.2, 0)
+	local priceTag = frame({
+		Name = "PriceTag",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Size = UDim2.fromOffset(AXIS_W - 2, 14),
+		BackgroundColor3 = FLAT_COLOR,
+		Visible = false,
+		ZIndex = 7,
+		Parent = chart,
+	})
+	UI.Corner(priceTag, 4)
+	local priceTagLabel = UI.Label({
+		Text = "",
+		Font = Theme.Fonts.Mono,
+		TextColor3 = Color3.fromRGB(8, 12, 22),
+		Size = UDim2.new(1, -4, 1, -2),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		MaxTextSize = 10,
+		ZIndex = 8,
+		Parent = priceTag,
+	})
+
+	-- Point "en direct" au bout de la courbe (+ halo qui pulse)
+	local dotRing = frame({
 		Name = "DotRing",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Size = UDim2.fromOffset(9, 9),
+		Size = UDim2.fromOffset(10, 10),
 		BackgroundColor3 = FLAT_COLOR,
 		BackgroundTransparency = 0.6,
-		BorderSizePixel = 0,
 		Visible = false,
-		ZIndex = 4,
+		ZIndex = 6,
 		Parent = chart,
 	})
 	UI.Corner(dotRing, UDim.new(1, 0))
 	local dotRingScale = UI.Create("UIScale", { Parent = dotRing })
-	local dot = UI.Create("Frame", {
+	local dot = frame({
 		Name = "Dot",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Size = UDim2.fromOffset(8, 8),
+		Size = UDim2.fromOffset(7, 7),
 		BackgroundColor3 = FLAT_COLOR,
-		BorderSizePixel = 0,
 		Visible = false,
-		ZIndex = 5,
+		ZIndex = 7,
 		Parent = chart,
 	})
 	UI.Corner(dot, UDim.new(1, 0))
-	UI.Stroke(dot, Color3.new(1, 1, 1), 1.5)
+	UI.Stroke(dot, WHITE, 1.5)
 
 	-- Humeur du marché (petite étiquette en haut à gauche)
 	local moodLabel = UI.Create("TextLabel", {
 		Name = "Mood",
 		Text = "⏳ Ouverture...",
 		Font = Theme.Fonts.Title,
-		TextSize = 11,
-		TextColor3 = Theme.Colors.Text,
+		TextSize = 10,
+		TextColor3 = TEXT,
 		AutomaticSize = Enum.AutomaticSize.X,
-		Size = UDim2.fromOffset(0, 16),
-		Position = UDim2.fromOffset(5, 4),
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		BackgroundTransparency = 0.1,
+		Size = UDim2.fromOffset(0, 14),
+		Position = UDim2.fromOffset(5, 3),
+		BackgroundColor3 = PANEL,
+		BackgroundTransparency = 0.15,
 		BorderSizePixel = 0,
-		ZIndex = 6,
+		ZIndex = 9,
 		Parent = chart,
 	})
-	UI.Corner(moodLabel, 6)
+	UI.Corner(moodLabel, 5)
 	UI.Create("UIPadding", {
 		PaddingLeft = UDim.new(0, 5),
 		PaddingRight = UDim.new(0, 5),
@@ -284,47 +437,59 @@ function Stocks.Start(ctx)
 
 	local loadingLabel = UI.Label({
 		Text = "Chargement du cours... ⏳",
-		TextColor3 = Theme.Colors.TextDim,
+		TextColor3 = TEXT_DIM,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(0.5, 0, 0.5, 6),
 		Size = UDim2.fromOffset(200, 18),
 		MaxTextSize = 13,
-		ZIndex = 6,
+		ZIndex = 9,
 		Parent = chart,
 	})
 
 	------------------------------------------------------------------
-	-- Portefeuille
+	-- Carte portefeuille
 	------------------------------------------------------------------
-	local holdings = UI.Create("Frame", {
+	local holdings = frame({
 		Name = "Holdings",
-		Position = UDim2.fromOffset(10, 116),
-		Size = UDim2.fromOffset(CHART_W, 28),
-		BackgroundColor3 = Theme.Colors.PanelLight,
-		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(8, 110),
+		Size = UDim2.fromOffset(CHART_W, 26),
+		BackgroundColor3 = PANEL,
+		BackgroundTransparency = 0.1,
 		Parent = card,
 	})
 	UI.Corner(holdings, 8)
+	UI.Stroke(holdings, Color3.fromRGB(60, 74, 110), 1, 0.3)
 	local valueLabel = UI.Label({
 		Name = "Value",
 		Text = "",
 		RichText = true,
+		TextColor3 = TEXT,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Position = UDim2.fromOffset(8, 4),
-		Size = UDim2.new(0.55, -8, 1, -8),
-		MaxTextSize = 14,
-		Parent = holdings,
-	})
-	local profitLabel = UI.Label({
-		Name = "Profit",
-		Text = "",
-		Font = Theme.Fonts.Number,
-		TextXAlignment = Enum.TextXAlignment.Right,
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -8, 0, 4),
-		Size = UDim2.new(0.45, -8, 1, -8),
+		Size = UDim2.new(0.56, -8, 1, -8),
 		MaxTextSize = 13,
 		Parent = holdings,
+	})
+	local profitPill = frame({
+		Name = "Profit",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -4, 0.5, 0),
+		Size = UDim2.new(0.44, -6, 1, -8),
+		BackgroundColor3 = FLAT_COLOR,
+		BackgroundTransparency = 0.8,
+		Parent = holdings,
+	})
+	UI.Corner(profitPill, UDim.new(1, 0))
+	local profitLabel = UI.Label({
+		Text = "",
+		Font = Theme.Fonts.Number,
+		TextColor3 = TEXT_DIM,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(1, -8, 1, -2),
+		MaxTextSize = 12,
+		ZIndex = 2,
+		Parent = profitPill,
 	})
 
 	------------------------------------------------------------------
@@ -355,11 +520,10 @@ function Stocks.Start(ctx)
 		end
 	end
 
-	local buttonRow = UI.Create("Frame", {
+	local buttonRow = frame({
 		Name = "Buttons",
-		Position = UDim2.fromOffset(10, 150),
-		Size = UDim2.fromOffset(CHART_W, 30),
-		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(8, 140),
+		Size = UDim2.fromOffset(CHART_W, 26),
 		Parent = card,
 	})
 	UI.Create("UIListLayout", {
@@ -371,45 +535,145 @@ function Stocks.Start(ctx)
 		Parent = buttonRow,
 	})
 
-	local sellWidth = 72
+	local sellWidth = 74
 	local buyWidth = math.floor((CHART_W - sellWidth - 4 * #buyFractions) / math.max(1, #buyFractions))
+	local DISABLED_COLOR = Color3.fromRGB(62, 70, 92)
 
 	local function makeButton(text: string, color: Color3, width: number, order: number): TextButton
 		-- Support transparent placé par le UIListLayout : le bouton, lui, reste
 		-- libre de bouger (sinon UI.Shake, qui change Position, ne fait rien)
-		local holder = UI.Create("Frame", {
+		local holder = frame({
 			Name = "TradeHolder",
-			Size = UDim2.fromOffset(width, 30),
-			BackgroundTransparency = 1,
+			Size = UDim2.fromOffset(width, 26),
 			LayoutOrder = order,
 			Parent = buttonRow,
 		})
-		local button = UI.NeonButton({
+		local button = UI.Create("TextButton", {
 			Name = "Trade",
-			Text = text,
-			Color = color,
 			Size = UDim2.fromScale(1, 1),
-			CornerRadius = 9,
-			StrokeThickness = 1.5,
-			MaxTextSize = 14,
+			BackgroundColor3 = color,
+			AutoButtonColor = false,
+			Font = Theme.Fonts.Title,
+			Text = text,
+			TextColor3 = WHITE,
+			TextSize = 13,
 			Parent = holder,
 		})
-		local padding = button:FindFirstChildOfClass("UIPadding")
-		if padding then
-			padding.PaddingLeft = UDim.new(0, 3)
-			padding.PaddingRight = UDim.new(0, 3)
-		end
+		UI.Corner(button, 8)
+		UI.Gradient(button, ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(175, 175, 175)), 90)
+		local stroke = UI.Stroke(button, color:Lerp(WHITE, 0.35), 1, 0.3)
+		local textStroke = UI.Stroke(button, Color3.new(0, 0, 0), 1, 0.7)
+		textStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+		-- Reflet en haut
+		local shine = frame({
+			Position = UDim2.fromOffset(3, 2),
+			Size = UDim2.new(1, -6, 0.42, 0),
+			BackgroundColor3 = WHITE,
+			BackgroundTransparency = 0.8,
+			ZIndex = 2,
+			Parent = button,
+		})
+		UI.Corner(shine, 6)
+		button:SetAttribute("BaseColor", color)
+		button:SetAttribute("Enabled", true)
+		UI.AnimateButton(button, 1.06, 0.92)
+
+		-- Survol : un peu plus lumineux
+		ctx.Connect(button.MouseEnter, function()
+			if button:GetAttribute("Enabled") ~= false then
+				UI.Tween(button, 0.15, { BackgroundColor3 = color:Lerp(WHITE, 0.2) })
+				UI.Tween(stroke, 0.15, { Transparency = 0 })
+			end
+		end)
+		ctx.Connect(button.MouseLeave, function()
+			if button:GetAttribute("Enabled") ~= false then
+				UI.Tween(button, 0.15, { BackgroundColor3 = color })
+			end
+			UI.Tween(stroke, 0.15, { Transparency = 0.3 })
+		end)
 		return button
+	end
+
+	local function setEnabled(button: TextButton, value: boolean)
+		if button:GetAttribute("Enabled") == value then
+			return
+		end
+		button:SetAttribute("Enabled", value)
+		local base = button:GetAttribute("BaseColor")
+		button.BackgroundColor3 = value and (typeof(base) == "Color3" and base or FLAT_COLOR) or DISABLED_COLOR
+		button.TextTransparency = value and 0 or 0.45
 	end
 
 	local buyButtons: { TextButton } = {}
 	for i, fraction in ipairs(buyFractions) do
-		local text = "📈 " .. tostring(math.floor(fraction * 100 + 0.5)) .. "%"
-		local button = makeButton(text, BUY_COLOR, buyWidth, i)
+		local text = "▲ " .. tostring(math.floor(fraction * 100 + 0.5)) .. "%"
+		local button = makeButton(text, Color3.fromRGB(22, 170, 96), buyWidth, i)
 		button:SetAttribute("Fraction", fraction)
 		table.insert(buyButtons, button)
 	end
-	local sellButton = makeButton("💸 Vendre", Theme.Colors.Red, sellWidth, 10)
+	local sellButton = makeButton("▼ Vendre", Color3.fromRGB(220, 50, 70), sellWidth, 10)
+
+	------------------------------------------------------------------
+	-- Bandeau de fausses actus (défile en bas de la carte)
+	------------------------------------------------------------------
+	local tape = frame({
+		Name = "Tape",
+		Position = UDim2.fromOffset(8, 170),
+		Size = UDim2.fromOffset(CHART_W, 12),
+		BackgroundColor3 = Color3.fromRGB(6, 9, 16),
+		BackgroundTransparency = 0.2,
+		ClipsDescendants = true,
+		Parent = card,
+	})
+	UI.Corner(tape, 4)
+	local tapeItems = {}
+	local newsDeck: { string } = {}
+	local function nextNews(): string
+		if #newsDeck == 0 then
+			for _, text in ipairs(TAPE_NEWS) do
+				table.insert(newsDeck, text)
+			end
+			for i = #newsDeck, 2, -1 do
+				local j = random:NextInteger(1, i)
+				newsDeck[i], newsDeck[j] = newsDeck[j], newsDeck[i]
+			end
+		end
+		local text = table.remove(newsDeck) or TAPE_NEWS[1]
+		return "📰 " .. string.format(text, symbolName) .. "   •"
+	end
+	local function measure(text: string): number
+		local ok, size = pcall(function()
+			return TextService:GetTextSize(text, 10, Enum.Font.BuilderSansMedium, Vector2.new(4000, 12))
+		end)
+		if ok and size then
+			return size.X + 14
+		end
+		return #text * 5
+	end
+	for i = 1, 2 do
+		local label = UI.Create("TextLabel", {
+			Name = "News",
+			BackgroundTransparency = 1,
+			Font = Theme.Fonts.Body,
+			Text = "",
+			TextColor3 = Color3.fromRGB(255, 205, 110),
+			TextSize = 10,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Size = UDim2.fromOffset(10, 12),
+			ZIndex = 2,
+			Parent = tape,
+		})
+		tapeItems[i] = { Label = label, X = 0, Width = 10 }
+	end
+	local function loadTape(item, x: number)
+		local text = nextNews()
+		item.Label.Text = text
+		item.Width = measure(text)
+		item.Label.Size = UDim2.fromOffset(item.Width, 12)
+		item.X = x
+	end
+	loadTape(tapeItems[1], CHART_W * 0.3)
+	loadTape(tapeItems[2], tapeItems[1].X + tapeItems[1].Width)
 
 	------------------------------------------------------------------
 	-- Données et rendu
@@ -423,6 +687,7 @@ function Stocks.Start(ctx)
 	local displayPrice = 0
 	local targetPrice = 0
 	local dirty = true
+	local tagY = -1
 
 	local function getHoldings(): (number, number)
 		local data = ctx.State.Data
@@ -460,9 +725,14 @@ function Stocks.Start(ctx)
 			for _, segment in ipairs(segments) do
 				segment.Visible = false
 			end
+			for _, slice in ipairs(slices) do
+				slice.Visible = false
+			end
 			dot.Visible = false
 			dotRing.Visible = false
 			avgLine.Visible = false
+			priceLine.Visible = false
+			priceTag.Visible = false
 			loadingLabel.Visible = true
 			return
 		end
@@ -471,6 +741,7 @@ function Stocks.Start(ctx)
 		local spacing = PLOT_W / (maxPoints - 1)
 		local span = math.max(rangeMax - rangeMin, 1e-6)
 		local offset = (1 - alpha) * spacing
+		local bottom = PLOT_TOP + PLOT_H
 		local prevX, prevY = 0, 0
 		for i = 1, count do
 			local value = values[i]
@@ -488,11 +759,22 @@ function Stocks.Start(ctx)
 				segment.Rotation = math.deg(math.atan2(dy, dx))
 				segment.BackgroundColor3 = lineColor
 				segment.Visible = true
+
+				-- Tranche d'aire sous le segment (dégradé vers le bas)
+				local slice = getSlice(i - 1)
+				local top = math.min(y, prevY) + math.abs(dy) * 0.5
+				slice.Position = UDim2.fromOffset(prevX, top)
+				slice.Size = UDim2.fromOffset(dx + 1, math.max(0, bottom - top))
+				slice.BackgroundColor3 = lineColor
+				slice.Visible = true
 			end
 			prevX, prevY = x, y
 		end
 		for j = count, #segments do
 			segments[j].Visible = false
+		end
+		for j = count, #slices do
+			slices[j].Visible = false
 		end
 
 		dot.Position = UDim2.fromOffset(prevX, prevY)
@@ -501,6 +783,17 @@ function Stocks.Start(ctx)
 		dotRing.Position = dot.Position
 		dotRing.BackgroundColor3 = lineColor
 		dotRing.Visible = true
+
+		-- Étiquette de prix : suit la fin de courbe (lissée dans OnRender)
+		local clampedY = math.clamp(prevY, 7, CHART_H - 7)
+		if tagY < 0 then
+			tagY = clampedY
+		end
+		priceLine.Position = UDim2.fromOffset(PLOT_LEFT, prevY)
+		priceLine.BackgroundColor3 = lineColor
+		priceLine.Visible = true
+		priceTag.BackgroundColor3 = lineColor
+		priceTag.Visible = true
 
 		-- Prix moyen d'achat (seulement s'il est dans le cadre)
 		local shares, costBasis = getHoldings()
@@ -517,38 +810,42 @@ function Stocks.Start(ctx)
 		minLabel.Text = formatPrice(math.max(0, rangeMin))
 	end
 
-	-- Texte du portefeuille (valeur + plus/moins-value)
+	-- Portefeuille (valeur + plus/moins-value + frais)
 	local FEE = math.clamp(tonumber(stockConfig.Fee) or 0, 0, 1)
+	local feeText = tostring(math.floor(FEE * 100 + 0.5)) .. " %"
 	local function refreshHoldings()
 		local shares, costBasis = getHoldings()
 		local price = targetPrice
 		if shares <= 1e-9 then
-			valueLabel.Text = '💼 <font color="#777777">Aucune action · frais '
-				.. tostring(math.floor(FEE * 100 + 0.5))
-				.. " %</font>"
+			valueLabel.Text = '💼 <font color="#8C98B4">Aucune action · frais ' .. feeText .. "</font>"
 			profitLabel.Text = "Achète bas, vends haut 😏"
-			profitLabel.TextColor3 = Theme.Colors.TextDim
-			profitLabel.Font = Theme.Fonts.Body
+			profitLabel.TextColor3 = TEXT_DIM
+			profitPill.BackgroundColor3 = FLAT_COLOR
 		else
 			-- Valeur NETTE des frais de vente : c'est ce que "Vendre" rapporte vraiment
 			local value = shares * price * (1 - FEE)
 			local sharesText = shares < 100 and string.format("%.2f", shares) or Format.Format(shares)
-			valueLabel.Text = "💼 <b>" .. formatAmount(value) .. '</b> <font color="#777777">· ' .. sharesText .. " act.</font>"
+			valueLabel.Text = "💼 <b>"
+				.. formatAmount(value)
+				.. '</b> <font color="#8C98B4">· '
+				.. sharesText
+				.. " act.</font>"
 			local profit = value - costBasis
 			local ratio = costBasis > 0 and profit / costBasis or 0
 			local sign = profit >= 0 and "+" or "-"
-			profitLabel.Text = formatPercent(ratio) .. " (" .. sign .. formatAmount(math.abs(profit)) .. ")"
-			profitLabel.TextColor3 = profit >= 0 and UP_COLOR or DOWN_COLOR
-			profitLabel.Font = Theme.Fonts.Number
+			profitLabel.Text = (profit >= 0 and "▲ " or "▼ ") .. formatPercent(ratio) .. " (" .. sign .. formatAmount(math.abs(profit)) .. ")"
+			local color = profit >= 0 and UP_COLOR or DOWN_COLOR
+			profitLabel.TextColor3 = color
+			profitPill.BackgroundColor3 = color
 		end
 
 		-- Boutons : grisés si impossible
 		local data = ctx.State.Data
 		local dopamine = data and tonumber(data.Dopamine) or 0
 		for _, button in ipairs(buyButtons) do
-			UI.SetButtonEnabled(button, dopamine >= 1)
+			setEnabled(button, dopamine >= 1)
 		end
-		UI.SetButtonEnabled(sellButton, shares > 1e-9)
+		setEnabled(sellButton, shares > 1e-9)
 	end
 
 	local function applyStock(stock)
@@ -596,7 +893,7 @@ function Stocks.Start(ctx)
 			lineColor = FLAT_COLOR
 		end
 		changePill.BackgroundColor3 = lineColor
-		changeLabel.Text = formatPercent(change)
+		changeLabel.Text = (change > 0.0005 and "▲ " or (change < -0.0005 and "▼ " or "")) .. formatPercent(change)
 		if #values >= 2 then
 			local mood = getMood(change)
 			if moodLabel.Text ~= mood then
@@ -609,8 +906,8 @@ function Stocks.Start(ctx)
 		-- Petit "flash" du prix
 		if previousLast ~= nil and last ~= previousLast then
 			priceLabel.TextColor3 = last > previousLast and UP_COLOR or DOWN_COLOR
-			UI.Tween(priceLabel, 0.7, { TextColor3 = Theme.Colors.Text })
-			priceScale.Scale = 1.12
+			UI.Tween(priceLabel, 0.7, { TextColor3 = TEXT })
+			priceScale.Scale = 1.1
 			UI.Tween(priceScale, 0.3, { Scale = 1 }, Enum.EasingStyle.Back)
 		end
 
@@ -630,9 +927,10 @@ function Stocks.Start(ctx)
 	end)
 	refreshHoldings()
 
-	-- Rendu : glissement, plage lissée, prix qui "compte", anneau qui pulse
+	-- Rendu : glissement, plage lissée, prix qui "compte", halo, bandeau
 	local clock = 0
 	ctx.OnRender(function(dt: number)
+		dt = math.min(dt, 0.1)
 		clock += dt
 		local elapsed = os.clock() - slideStart
 		local alpha = 1
@@ -654,19 +952,41 @@ function Stocks.Start(ctx)
 			redraw(alpha)
 		end
 
+		-- Étiquette de prix : glisse vers la fin de courbe
+		if priceTag.Visible then
+			local wanted = math.clamp(dot.Position.Y.Offset, 7, CHART_H - 7)
+			tagY += (wanted - tagY) * math.min(1, dt * 10)
+			priceTag.Position = UDim2.fromOffset(PLOT_LEFT + PLOT_W + 1, tagY)
+		end
+
 		if math.abs(displayPrice - targetPrice) > 0.004 then
 			displayPrice += (targetPrice - displayPrice) * math.min(1, dt * 8)
 			if math.abs(displayPrice - targetPrice) <= 0.004 then
 				displayPrice = targetPrice
 			end
 			priceLabel.Text = formatPrice(displayPrice)
+			priceTagLabel.Text = formatPrice(displayPrice)
 		elseif priceLabel.Text == "--" and targetPrice > 0 then
 			priceLabel.Text = formatPrice(targetPrice)
+			priceTagLabel.Text = formatPrice(targetPrice)
 		end
 
 		local pulse = (clock % 1.2) / 1.2
 		dotRingScale.Scale = 1 + pulse * 1.6
 		dotRing.BackgroundTransparency = 0.45 + pulse * 0.55
+		liveDot.BackgroundTransparency = (math.floor(clock * 1.6) % 2 == 0) and 0 or 0.7
+
+		-- Bandeau d'actus : défilement continu, le texte sorti repasse derrière
+		for _, item in ipairs(tapeItems) do
+			item.X -= TAPE_SPEED * dt
+		end
+		for index, item in ipairs(tapeItems) do
+			if item.X + item.Width < 0 then
+				local other = tapeItems[3 - index]
+				loadTape(item, math.max(CHART_W, other.X + other.Width))
+			end
+			item.Label.Position = UDim2.fromOffset(math.floor(item.X), 0)
+		end
 	end)
 
 	------------------------------------------------------------------
@@ -685,7 +1005,7 @@ function Stocks.Start(ctx)
 			x = (button.AbsolutePosition.X + button.AbsoluteSize.X / 2 - card.AbsolutePosition.X) / scale
 		end
 		x = math.clamp(x, 60, CARD_W - 60)
-		ctx.FloatText(card, UDim2.fromOffset(x, 136), text, color, 22)
+		ctx.FloatText(card, UDim2.fromOffset(x, 126), text, color, 22)
 		if effectsOn() then
 			ctx.Effects.Burst(card, UDim2.fromOffset(x, 150), Theme.Colors.Gold, 8)
 		end

@@ -3,7 +3,7 @@
 	Emplacement : ReplicatedStorage > Client > Components > Panels > Themes
 
 	Grille de cartes (Config.Themes) avec un mini-aperçu animé de chaque
-	fond, son nom, son prix en Dopamine et/ou un bouton "💎" (Game Pass
+	fond (le VRAI décor du fond d'écran en miniature, Background.BuildPreview), son nom, son prix en Dopamine et/ou un bouton "💎" (Game Pass
 	Robux), un badge "👑 VIP" pour les thèmes Premium, et l'état
 	possédé / équipé (ClientState.Data.Themes).
 	- Achat / équipement : RemoteFunction "ThemeShop" ("buy" | "equip", id).
@@ -24,6 +24,7 @@ local ClientState = require(Client.ClientState)
 local Effects = require(Client.Effects)
 local SoundManager = require(Client.SoundManager)
 local Notifications = require(script.Parent.Parent.Notifications)
+local Background = require(script.Parent.Parent.Background)
 local Config = require(ReplicatedStorage.Shared.Config)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local Net = require(ReplicatedStorage.Shared.Net)
@@ -51,11 +52,9 @@ type Card = {
 	Action: string, -- action du bouton principal : "equip" | "buy" | "vip" | "robux" | "none"
 }
 
-type Bob = { Obj: GuiObject, Base: UDim2, Phase: number, Amp: number, Speed: number, Spin: number }
-
 local header: TextLabel
 local cards: { [string]: Card } = {}
-local bobs: { Bob } = {}
+local previews: { Background.Preview } = {}
 local animation: RBXScriptConnection? = nil
 local busy = false
 
@@ -117,148 +116,39 @@ local function chip(parent: Instance, text: string, color: Color3, props: { [str
 	return frame
 end
 
-local function addBob(obj: GuiObject, amp: number, spin: number?)
-	table.insert(bobs, {
-		Obj = obj,
-		Base = obj.Position,
-		Phase = math.random() * math.pi * 2,
-		Amp = amp,
-		Speed = 1 + math.random() * 1.2,
-		Spin = spin or 0,
-	})
-end
-
 ----------------------------------------------------------------------
--- Mini-aperçu du fond (dégradé + quelques éléments du décor)
+-- Mini-aperçu du fond : le vrai décor animé, en miniature
 ----------------------------------------------------------------------
-
-local PREVIEW_EMOJI = {
-	None = {},
-	Kawaii = { { "💗", 0.12, 0.25, 16 }, { "⭐", 0.88, 0.22, 14 }, { "☁️", 0.82, 0.74, 20 }, { "✨", 0.16, 0.76, 14 } },
-	Stars = { { "🌙", 0.85, 0.26, 20 }, { "✨", 0.14, 0.24, 12 }, { "✨", 0.3, 0.8, 10 } },
-	Sunset = { { "☁️", 0.16, 0.24, 18 }, { "☁️", 0.84, 0.3, 14 } },
-	Leaves = { { "🍃", 0.12, 0.26, 16 }, { "🌿", 0.88, 0.7, 18 }, { "🍂", 0.82, 0.2, 14 }, { "🍃", 0.2, 0.78, 12 } },
-	Bubbles = { { "🐠", 0.84, 0.28, 18 }, { "🐟", 0.16, 0.74, 14 } },
-	Candy = { { "🍭", 0.13, 0.28, 18 }, { "🍬", 0.87, 0.24, 16 }, { "🍩", 0.84, 0.76, 16 } },
-	Grid = { { "✨", 0.14, 0.2, 10 }, { "✨", 0.86, 0.16, 10 } },
-}
-
-local function dot(parent: Instance, x: number, y: number, size: number, color: Color3, transparency: number, z: number): Frame
-	local frame = UIUtil.Create("Frame", {
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(x, y),
-		Size = UDim2.fromOffset(size, size),
-		BackgroundColor3 = color,
-		BackgroundTransparency = transparency,
-		BorderSizePixel = 0,
-		ZIndex = z,
-		Parent = parent,
-	})
-	UIUtil.Corner(frame, UDim.new(1, 0))
-	return frame
-end
 
 local function buildPreviewDecor(preview: GuiObject, theme)
-	local decor = theme.Decor
-	local accent: Color3 = theme.Accent
-
-	-- Formes dessinées propres à chaque décor
-	if decor == "None" then
-		dot(preview, 0.2, 0.3, 60, WHITE, 0.5, 2)
-		dot(preview, 0.85, 0.8, 70, Color3.fromRGB(200, 200, 208), 0.8, 2)
-	elseif decor == "Stars" then
-		for i = 1, 8 do
-			local star = dot(preview, (i * 0.37) % 1, 0.1 + ((i * 0.53) % 0.6), 3, WHITE, 0.2, 2)
-			addBob(star, 1.5)
-		end
-		-- Ville au loin
-		for i = 0, 6 do
-			UIUtil.Create("Frame", {
-				AnchorPoint = Vector2.new(0, 1),
-				Position = UDim2.fromScale(i / 7, 1),
-				Size = UDim2.new(1 / 7, 1, 0, 10 + ((i * 7) % 16)),
-				BackgroundColor3 = (theme.Bottom :: Color3):Lerp(Color3.new(0, 0, 0), 0.55),
-				BorderSizePixel = 0,
-				ZIndex = 2,
-				Parent = preview,
-			})
-		end
-	elseif decor == "Sunset" then
-		dot(preview, 0.5, 0.78, 54, accent, 0, 2)
-		dot(preview, 0.25, 1.25, 110, (theme.Bottom :: Color3):Lerp(Color3.fromRGB(110, 45, 110), 0.6), 0, 3)
-		dot(preview, 0.8, 1.3, 120, (theme.Bottom :: Color3):Lerp(Color3.fromRGB(70, 30, 80), 0.75), 0, 3)
-	elseif decor == "Bubbles" then
-		for i = 1, 4 do
-			local bubble = dot(preview, 0.1 + i * 0.2, 0.9 - (i % 2) * 0.35, 8 + (i % 3) * 4, WHITE, 0.85, 3)
-			UIUtil.Stroke(bubble, WHITE, 1, 0.3)
-			addBob(bubble, 4)
-		end
-	elseif decor == "Candy" then
-		for i = 0, 5 do
-			UIUtil.Create("Frame", {
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.fromScale(i / 5, 0.5),
-				Size = UDim2.new(0, 12, 1.6, 0),
-				Rotation = 35,
-				BackgroundColor3 = accent,
-				BackgroundTransparency = 0.85,
-				BorderSizePixel = 0,
-				ZIndex = 2,
-				Parent = preview,
-			})
-		end
-	elseif decor == "Grid" then
-		local sun = dot(preview, 0.5, 0.52, 46, WHITE, 0, 2)
-		UIUtil.Gradient(sun, ColorSequence.new(Color3.fromRGB(255, 236, 110), Color3.fromRGB(255, 50, 150)), 90)
-		local ground = UIUtil.Create("Frame", {
-			Position = UDim2.fromScale(0, 0.66),
-			Size = UDim2.fromScale(1, 0.34),
-			BackgroundColor3 = Color3.fromRGB(20, 2, 40),
-			BorderSizePixel = 0,
-			ZIndex = 3,
-			Parent = preview,
-		})
-		for i = 1, 3 do
-			UIUtil.Create("Frame", {
-				Position = UDim2.fromScale(0, (i / 3) ^ 1.8),
-				Size = UDim2.new(1, 0, 0, 1),
-				BackgroundColor3 = accent,
-				BackgroundTransparency = 0.2,
-				BorderSizePixel = 0,
-				ZIndex = 3,
-				Parent = ground,
-			})
-		end
-	elseif decor == "Leaves" then
-		for _, x in ipairs({ 0.04, 0.96 }) do
-			UIUtil.Create("Frame", {
-				AnchorPoint = Vector2.new(0.5, 0),
-				Position = UDim2.fromScale(x, 0),
-				Size = UDim2.new(0, 7, 1, 0),
-				BackgroundColor3 = accent,
-				BackgroundTransparency = 0.35,
-				BorderSizePixel = 0,
-				ZIndex = 2,
-				Parent = preview,
-			})
-		end
+	local ok, result = pcall(Background.BuildPreview, preview, theme.Id)
+	if ok then
+		table.insert(previews, result)
+	else
+		warn("[Themes] Aperçu impossible pour " .. tostring(theme.Id) .. " : " .. tostring(result))
 	end
 
-	-- Emojis du décor (qui flottent doucement quand la fenêtre est ouverte)
-	for _, spec in ipairs(PREVIEW_EMOJI[decor] or {}) do
-		local label = UIUtil.Create("TextLabel", {
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(spec[2], spec[3]),
-			Size = UDim2.fromOffset(spec[4] + 6, spec[4] + 6),
-			BackgroundTransparency = 1,
-			Font = Theme.Fonts.Body,
-			Text = spec[1],
-			TextSize = spec[4],
-			ZIndex = 4,
-			Parent = preview,
-		})
-		addBob(label, 3, 8)
-	end
+	-- Voile doux derrière le bouton (lisibilité)
+	local veil = UIUtil.Create("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.46),
+		Size = UDim2.fromOffset(120, 56),
+		BackgroundColor3 = theme.Dark and Color3.new(0, 0, 0) or WHITE,
+		BackgroundTransparency = 0.55,
+		BorderSizePixel = 0,
+		ZIndex = 4,
+		Parent = preview,
+	})
+	UIUtil.Corner(veil, UDim.new(1, 0))
+	UIUtil.Create("UIGradient", {
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 1),
+			NumberSequenceKeypoint.new(0.3, 0.4),
+			NumberSequenceKeypoint.new(0.7, 0.4),
+			NumberSequenceKeypoint.new(1, 1),
+		}),
+		Parent = veil,
+	})
 
 	-- Mini bouton "Clique-moi" (montre la lisibilité du thème)
 	local dark = theme.Dark == true
@@ -422,7 +312,7 @@ local function buildCard(list: ScrollingFrame, theme)
 	local preview = UIUtil.Create("CanvasGroup", {
 		Name = "Preview",
 		Position = UDim2.fromOffset(8, 8),
-		Size = UDim2.new(1, -16, 0, 88),
+		Size = UDim2.new(1, -16, 0, 104),
 		BackgroundColor3 = WHITE,
 		BackgroundTransparency = 1,
 		ZIndex = 2,
@@ -483,7 +373,7 @@ local function buildCard(list: ScrollingFrame, theme)
 	-- Nom + statut
 	UIUtil.Create("TextLabel", {
 		Name = "Name",
-		Position = UDim2.fromOffset(10, 101),
+		Position = UDim2.fromOffset(10, 118),
 		Size = UDim2.new(1, -20, 0, 20),
 		BackgroundTransparency = 1,
 		Font = Theme.Fonts.Title,
@@ -497,7 +387,7 @@ local function buildCard(list: ScrollingFrame, theme)
 	})
 	local status = UIUtil.Create("TextLabel", {
 		Name = "Status",
-		Position = UDim2.fromOffset(10, 121),
+		Position = UDim2.fromOffset(10, 138),
 		Size = UDim2.new(1, -20, 0, 16),
 		BackgroundTransparency = 1,
 		Font = Theme.Fonts.Body,
@@ -600,7 +490,7 @@ function Themes.Build(content: Frame)
 		Parent = list,
 	})
 	UIUtil.Create("UIGridLayout", {
-		CellSize = UDim2.new(0.25, -9, 0, 196),
+		CellSize = UDim2.new(0.25, -9, 0, 214),
 		CellPadding = UDim2.fromOffset(12, 14),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = list,
@@ -735,15 +625,9 @@ function Themes.OnOpen()
 	if animation then
 		return
 	end
-	local clock = 0
 	animation = RunService.Heartbeat:Connect(function(dt: number)
-		clock += dt
-		for _, bob in ipairs(bobs) do
-			local s = math.sin(clock * bob.Speed + bob.Phase)
-			bob.Obj.Position = bob.Base + UDim2.fromOffset(0, s * bob.Amp)
-			if bob.Spin ~= 0 then
-				bob.Obj.Rotation = s * bob.Spin
-			end
+		for _, preview in ipairs(previews) do
+			preview.Update(dt)
 		end
 	end)
 end

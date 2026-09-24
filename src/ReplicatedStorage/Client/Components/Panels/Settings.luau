@@ -1,9 +1,12 @@
 --[[
-	Settings (ModuleScript) — paramètres (son, musique, effets)
+	Settings (ModuleScript) — paramètres (son, musique, son du clic, effets)
 	Emplacement : ReplicatedStorage > Client > Components > Panels > Settings
 
 	- Interrupteurs Son / Musique / Particules : sauvegardés côté serveur
 	  avec la progression (RemoteFunction "SetSetting").
+	- Son du clic (v4) : liste de Config.ClickSounds (▶ pour écouter, clic
+	  pour choisir), sauvegardé avec SetSetting("ClickSound", id) et joué par
+	  SoundManager.PlayClick sur le gros bouton.
 	- Curseurs de volume (musique, effets) : gardés en mémoire pour la
 	  session (SoundManager.SetMusicVolume / SetEffectsVolume). Ils se
 	  glissent à la souris ET au doigt (écran tactile).
@@ -22,12 +25,13 @@ local SoundManager = require(Client.SoundManager)
 local Effects = require(Client.Effects)
 local ClientState = require(Client.ClientState)
 local Net = require(ReplicatedStorage.Shared.Net)
+local Config = require(ReplicatedStorage.Shared.Config)
 
 local Settings = {
 	Title = "⚙️ Paramètres",
-	Subtitle = "Son, musique et effets",
+	Subtitle = "Son, musique, clic et effets",
 	Color = Theme.Colors.Dark,
-	Size = Vector2.new(640, 520),
+	Size = Vector2.new(660, 580),
 }
 
 local ROW_COLOR = Theme.Colors.Surface or Theme.Colors.PanelLight
@@ -42,6 +46,12 @@ local current = { Sound = true, Music = true, Effects = true }
 
 local musicInfo: TextLabel? = nil
 local nextButton: TextButton? = nil
+
+-- Son du clic
+type ClickOption = { Id: string, Card: TextButton, Stroke: UIStroke, Check: Frame, Name: TextLabel }
+local clickOptions: { ClickOption } = {}
+local clickSaveToken = 0 -- change à chaque choix (annule les sauvegardes périmées)
+local clickSaving = false -- une sauvegarde est en cours (on ne recale pas sur l'état serveur)
 
 ----------------------------------------------------------------------
 -- Réglages
@@ -127,6 +137,155 @@ local function saveSetting(key: string, newValue: boolean)
 			Settings.Apply(key, not newValue)
 		end
 	end)
+end
+
+----------------------------------------------------------------------
+-- Son du clic
+----------------------------------------------------------------------
+
+-- Met en valeur l'option choisie
+local function paintClickOptions()
+	local selected = SoundManager.GetClickSound()
+	for _, option in ipairs(clickOptions) do
+		local isSelected = option.Id == selected
+		option.Card.BackgroundColor3 = isSelected and Color3.fromRGB(230, 242, 255) or Theme.Colors.Card
+		option.Stroke.Color = isSelected and Theme.Colors.Blue or ROW_BORDER
+		option.Stroke.Thickness = isSelected and 2 or 1.5
+		option.Name.TextColor3 = isSelected and Theme.Colors.Blue:Lerp(Color3.new(0, 0, 0), 0.3) or Theme.Colors.Text
+		if option.Check.Visible ~= isSelected then
+			option.Check.Visible = isSelected
+			if isSelected then
+				UIUtil.Pop(option.Check, 0.3, 0.35)
+			end
+		end
+	end
+end
+
+-- Choisit un son de clic : appliqué tout de suite, puis sauvegardé (3 essais)
+local function chooseClickSound(id: string)
+	local previous = SoundManager.GetClickSound()
+	SoundManager.SetClickSound(id)
+	SoundManager.PreviewClickSound(id)
+	paintClickOptions()
+	if previous == SoundManager.GetClickSound() then
+		return
+	end
+	clickSaveToken += 1
+	local token = clickSaveToken
+	clickSaving = true
+	task.spawn(function()
+		for attempt = 1, 3 do
+			if token ~= clickSaveToken then
+				return -- un choix plus récent a pris le relais
+			end
+			local ok, success = pcall(function()
+				return Net.Function("SetSetting"):InvokeServer("ClickSound", id)
+			end)
+			if ok and success == true then
+				if token == clickSaveToken then
+					clickSaving = false
+				end
+				return
+			end
+			if attempt < 3 then
+				task.wait(0.3)
+			end
+		end
+		if token == clickSaveToken then
+			clickSaving = false
+			-- Refusé : on revient au choix précédent
+			SoundManager.SetClickSound(previous)
+			paintClickOptions()
+		end
+	end)
+end
+
+local function buildClickOption(grid: Frame, entry, order: number)
+	local card = UIUtil.Create("TextButton", {
+		Name = tostring(entry.Id),
+		BackgroundColor3 = Theme.Colors.Card,
+		AutoButtonColor = false,
+		Text = "",
+		LayoutOrder = order,
+		Parent = grid,
+	})
+	UIUtil.Corner(card, Theme.Radius.M)
+	local stroke = UIUtil.Stroke(card, ROW_BORDER, 1.5)
+	UIUtil.AnimateButton(card, 1.03, 0.96)
+
+	-- Bouton ▶ (écouter sans choisir)
+	local play = UIUtil.Create("TextButton", {
+		Name = "Preview",
+		Size = UDim2.fromOffset(34, 34),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 10, 0.5, 0),
+		BackgroundColor3 = Theme.Colors.Dark,
+		AutoButtonColor = false,
+		Font = Theme.Fonts.Title,
+		Text = "▶",
+		TextColor3 = Theme.Colors.TextLight,
+		TextSize = 14,
+		ZIndex = 2,
+		Parent = card,
+	})
+	UIUtil.Corner(play, UDim.new(1, 0))
+	UIUtil.AnimateButton(play, 1.1, 0.9)
+	play.Activated:Connect(function()
+		SoundManager.PreviewClickSound(entry.Id)
+		UIUtil.Pop(play, 1.25, 0.3)
+	end)
+
+	local isKeyboard = string.find(string.lower(tostring(entry.Id)), "keyboard") ~= nil
+	local name = UIUtil.Label({
+		Name = "SoundName",
+		Text = tostring(entry.Name or entry.Id),
+		Font = Theme.Fonts.Title,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -86, 0, 20),
+		Position = UDim2.fromOffset(52, 9),
+		MaxTextSize = 16,
+		ZIndex = 2,
+		Parent = card,
+	})
+	UIUtil.Label({
+		Name = "Kind",
+		Text = isKeyboard and "⌨️ Clavier" or "🖱️ Clic",
+		TextColor3 = Theme.Colors.TextDim,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -86, 0, 15),
+		Position = UDim2.fromOffset(52, 30),
+		MaxTextSize = 13,
+		ZIndex = 2,
+		Parent = card,
+	})
+
+	-- Coche "choisi"
+	local check = UIUtil.Create("Frame", {
+		Name = "Check",
+		Size = UDim2.fromOffset(24, 24),
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -10, 0.5, 0),
+		BackgroundColor3 = Theme.Colors.Blue,
+		Visible = false,
+		ZIndex = 2,
+		Parent = card,
+	})
+	UIUtil.Corner(check, UDim.new(1, 0))
+	UIUtil.Label({
+		Text = "✔",
+		Font = Theme.Fonts.Title,
+		TextColor3 = Theme.Colors.TextLight,
+		Size = UDim2.new(1, -6, 1, -6),
+		Position = UDim2.fromOffset(3, 3),
+		MaxTextSize = 14,
+		ZIndex = 3,
+		Parent = check,
+	})
+
+	card.Activated:Connect(function()
+		chooseClickSound(entry.Id)
+	end)
+	table.insert(clickOptions, { Id = entry.Id, Card = card, Stroke = stroke, Check = check, Name = name })
 end
 
 ----------------------------------------------------------------------
@@ -373,7 +532,27 @@ end
 -- Construction
 ----------------------------------------------------------------------
 
-function Settings.Build(content: Frame)
+function Settings.Build(panel: Frame)
+	-- Contenu défilant (tout ne tient pas toujours en hauteur)
+	local content = UIUtil.Create("ScrollingFrame", {
+		Name = "Scroll",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 5,
+		ScrollBarImageColor3 = Theme.Colors.Dark,
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		Parent = panel,
+	})
+	UIUtil.Create("UIPadding", {
+		PaddingTop = UDim.new(0, 2),
+		PaddingLeft = UDim.new(0, 2),
+		PaddingRight = UDim.new(0, 12),
+		PaddingBottom = UDim.new(0, 8),
+		Parent = content,
+	})
 	UIUtil.Create("UIListLayout", {
 		Padding = UDim.new(0, 10),
 		SortOrder = Enum.SortOrder.LayoutOrder,
@@ -430,9 +609,33 @@ function Settings.Build(content: Frame)
 	end)
 	nextButton = skip
 
-	sectionHeader(content, "Affichage", 4)
+	-- Son du clic (gros bouton)
+	sectionHeader(content, "Son du clic", 4)
+	local clickGrid = UIUtil.Create("Frame", {
+		Name = "ClickSounds",
+		Size = UDim2.fromScale(1, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		LayoutOrder = 5,
+		Parent = content,
+	})
+	UIUtil.Create("UIGridLayout", {
+		CellSize = UDim2.new(1 / 3, -7, 0, 54),
+		CellPadding = UDim2.fromOffset(10, 10),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = clickGrid,
+	})
+	for index, entry in ipairs(Config.ClickSounds or {}) do
+		if type(entry) == "table" and type(entry.Id) == "string" then
+			buildClickOption(clickGrid, entry, index)
+		end
+	end
+	paintClickOptions()
+	SoundManager.ClickSoundChanged:Connect(paintClickOptions)
 
-	local fxRow = buildRow(content, 5, 60)
+	sectionHeader(content, "Affichage", 6)
+
+	local fxRow = buildRow(content, 7, 60)
 	rowTitle(fxRow, "✨ Particules et confettis")
 	rowSubtitle(fxRow, "Désactive pour un écran plus calme")
 	buildToggle(fxRow, "Effects")
@@ -472,15 +675,22 @@ function Settings.OnOpen()
 	refreshMusicInfo()
 end
 
--- Au chargement, on applique les réglages sauvegardés (une seule fois)
+-- Au chargement, on applique les réglages sauvegardés (une seule fois) ;
+-- le son du clic suit ensuite l'état du serveur (sauf pendant une sauvegarde)
 local applied = false
 function Settings.Update(data)
-	if applied or not data.Settings then
+	if not data.Settings then
 		return
 	end
-	applied = true
-	for _, key in ipairs({ "Sound", "Music", "Effects" }) do
-		Settings.Apply(key, data.Settings[key] ~= false)
+	if not applied then
+		applied = true
+		for _, key in ipairs({ "Sound", "Music", "Effects" }) do
+			Settings.Apply(key, data.Settings[key] ~= false)
+		end
+	end
+	local clickSound = data.Settings.ClickSound
+	if not clickSaving and type(clickSound) == "string" and clickSound ~= SoundManager.GetClickSound() then
+		SoundManager.SetClickSound(clickSound)
 	end
 end
 
