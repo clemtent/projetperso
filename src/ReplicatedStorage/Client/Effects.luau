@@ -5,6 +5,7 @@
 	Effets visuels 2D : textes flottants "+X", particules, confettis,
 	flash d'écran, gros messages. (Les ParticleEmitter ne fonctionnent pas
 	dans les interfaces, on anime donc de petits Frames.)
+	Le réglage "Effets" (SetEnabled) coupe particules et confettis.
 ]]
 
 local Debris = game:GetService("Debris")
@@ -18,7 +19,9 @@ local layer: Frame? = nil -- calque plein écran pour les effets
 local enabled = true -- paramètre "Effets" (particules / confettis)
 local random = Random.new()
 local activeParticles = 0
+local activeTexts = 0
 local MAX_PARTICLES = 160 -- limite pour les petits appareils
+local MAX_TEXTS = 60
 
 local CONFETTI_COLORS = {
 	Theme.Colors.Pink,
@@ -27,6 +30,8 @@ local CONFETTI_COLORS = {
 	Theme.Colors.Yellow,
 	Theme.Colors.Green,
 	Theme.Colors.Orange,
+	Theme.Colors.Red,
+	Theme.Colors.Blue,
 }
 
 function Effects.Init(effectsLayer: Frame)
@@ -37,39 +42,56 @@ function Effects.SetEnabled(value: boolean)
 	enabled = value
 end
 
+function Effects.IsEnabled(): boolean
+	return enabled
+end
+
+-- Calque plein écran des effets (nil avant Init)
+function Effects.GetLayer(): Frame?
+	return layer
+end
+
 -- Texte "+X" qui monte et disparaît
 function Effects.FloatingText(parent: GuiObject, position: UDim2, text: string, color: Color3?, size: number?)
+	if activeTexts >= MAX_TEXTS or not parent or not parent.Parent then
+		return
+	end
+	activeTexts += 1
 	local height = size or 34
+	local textColor = color or Theme.Colors.Text
 	local label = UIUtil.Label({
 		Text = text,
 		Font = Theme.Fonts.Number,
-		TextColor3 = color or Theme.Colors.Text,
+		TextColor3 = textColor,
 		Size = UDim2.fromOffset(height * 6, height),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = position,
-		Rotation = random:NextNumber(-12, 12),
+		Rotation = random:NextNumber(-10, 10),
 		ZIndex = 50,
 		MaxTextSize = height,
 		Parent = parent,
 	})
-	UIUtil.Stroke(label, Theme.Colors.TextDark, 2).ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	-- Contour contrasté : blanc autour d'un texte foncé, noir autour d'un texte clair
+	local strokeColor = Theme.Luminance(textColor) > 0.5 and Theme.Colors.TextDark or Theme.Colors.TextLight
+	local stroke = UIUtil.Stroke(label, strokeColor, 2)
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 
 	local scale = UIUtil.Create("UIScale", { Scale = 0.4, Parent = label })
-	UIUtil.Tween(scale, 0.18, { Scale = 1.15 }, Enum.EasingStyle.Back)
+	UIUtil.Tween(scale, 0.18, { Scale = 1.1 }, Enum.EasingStyle.Back)
 	UIUtil.Tween(label, 0.9, {
-		Position = position + UDim2.fromOffset(random:NextNumber(-30, 30), -110),
+		Position = position + UDim2.fromOffset(random:NextNumber(-30, 30), -100),
 		TextTransparency = 1,
 	}, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-	local stroke = label:FindFirstChildOfClass("UIStroke")
-	if stroke then
-		UIUtil.Tween(stroke, 0.9, { Transparency = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-	end
-	Debris:AddItem(label, 1)
+	UIUtil.Tween(stroke, 0.9, { Transparency = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	task.delay(1, function()
+		activeTexts -= 1
+		label:Destroy()
+	end)
 end
 
 -- Explosion de petites particules rondes autour d'un point
 function Effects.Burst(parent: GuiObject, position: UDim2, color: Color3?, count: number?)
-	if not enabled then
+	if not enabled or not parent or not parent.Parent then
 		return
 	end
 	for _ = 1, count or 8 do
@@ -90,7 +112,7 @@ function Effects.Burst(parent: GuiObject, position: UDim2, color: Color3?, count
 		UIUtil.Corner(particle, UDim.new(1, 0))
 
 		local angle = random:NextNumber(0, math.pi * 2)
-		local distance = random:NextNumber(60, 160)
+		local distance = random:NextNumber(50, 140)
 		local duration = random:NextNumber(0.4, 0.7)
 		UIUtil.Tween(particle, duration, {
 			Position = position + UDim2.fromOffset(math.cos(angle) * distance, math.sin(angle) * distance),
@@ -156,7 +178,7 @@ function Effects.Flash(color: Color3?, strength: number?)
 	Debris:AddItem(flash, 0.7)
 end
 
--- Gros message au centre de l'écran (jackpot, rebirth...)
+-- Gros message au centre de l'écran (jackpot, rush...)
 function Effects.BigMessage(text: string, color: Color3?, duration: number?)
 	local target = layer
 	if not target then
@@ -173,7 +195,7 @@ function Effects.BigMessage(text: string, color: Color3?, duration: number?)
 		MaxTextSize = 90,
 		Parent = target,
 	})
-	local stroke = UIUtil.Stroke(label, Theme.Colors.Pink, 4)
+	local stroke = UIUtil.Stroke(label, Theme.Colors.TextDark, 4)
 	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 
 	local scale = UIUtil.Create("UIScale", { Scale = 0.1, Parent = label })
@@ -181,13 +203,16 @@ function Effects.BigMessage(text: string, color: Color3?, duration: number?)
 
 	-- Petit clignotement de couleur
 	task.spawn(function()
-		local colors = { Theme.Colors.Yellow, Theme.Colors.Cyan, Theme.Colors.Pink, Theme.Colors.Green }
+		local colors = { color or Theme.Colors.Yellow, Theme.Colors.Cyan, Theme.Colors.Pink, Theme.Colors.Green }
 		local index = 0
 		local finish = os.clock() + (duration or 2.5)
 		while label.Parent and os.clock() < finish do
 			index = index % #colors + 1
 			label.TextColor3 = colors[index]
 			task.wait(0.12)
+		end
+		if not label.Parent then
+			return
 		end
 		UIUtil.Tween(label, 0.4, { TextTransparency = 1 })
 		UIUtil.Tween(stroke, 0.4, { Transparency = 1 })

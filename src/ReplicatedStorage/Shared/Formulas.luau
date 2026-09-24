@@ -2,9 +2,9 @@
 	Formulas (ModuleScript)
 	Emplacement : ReplicatedStorage > Shared > Formulas
 
-	Toutes les formules de calcul du jeu (coûts, gains, combo, rebirth...).
-	Partagé entre serveur et client pour que l'affichage corresponde
-	exactement aux calculs du serveur. Le serveur reste l'autorité.
+	Toutes les formules de calcul du jeu (coûts, gains, combo, rebirth,
+	casino...). Partagé entre serveur et client pour que l'affichage
+	corresponde exactement aux calculs du serveur. Le serveur reste l'autorité.
 ]]
 
 local Config = require(script.Parent.Config)
@@ -12,87 +12,83 @@ local Config = require(script.Parent.Config)
 local Formulas = {}
 
 ----------------------------------------------------------------------
--- Coûts des améliorations
+-- Améliorations
 ----------------------------------------------------------------------
 
--- Coût d'UN niveau quand on est au niveau `level`
-function Formulas.GetUpgradeCost(upgrade, level: number): number
-	return math.floor(upgrade.BaseCost * (upgrade.CostGrowth ^ level) + 0.5)
+-- Niveau actuel d'une amélioration
+function Formulas.GetLevel(data, upgradeId: string): number
+	return data.Upgrades[upgradeId] or 0
 end
 
--- Nombre de niveaux restants avant le maximum (math.huge si illimité)
-function Formulas.GetRemainingLevels(upgrade, level: number): number
-	if upgrade.MaxLevel then
-		return math.max(0, upgrade.MaxLevel - level)
-	end
-	return math.huge
-end
-
--- Coût total pour acheter `amount` niveaux à partir de `level`
-function Formulas.GetBulkCost(upgrade, level: number, amount: number): number
-	local total = 0
-	for i = 0, amount - 1 do
-		total += Formulas.GetUpgradeCost(upgrade, level + i)
-	end
-	return total
-end
-
--- Combien de niveaux peut-on acheter avec `money` ? -> (nombre, coût total)
-function Formulas.GetMaxAffordable(upgrade, level: number, money: number): (number, number)
-	local remaining = math.min(Formulas.GetRemainingLevels(upgrade, level), Config.MaxBulkBuy)
-	local amount, total = 0, 0
-	while amount < remaining do
-		local nextCost = Formulas.GetUpgradeCost(upgrade, level + amount)
-		if total + nextCost > money then
-			break
-		end
-		total += nextCost
-		amount += 1
-	end
-	return amount, total
-end
-
--- Selon le mode d'achat ("x1", "x10", "max") -> (nombre de niveaux, coût)
--- Pour "max" sans assez d'argent, renvoie 1 niveau (pour afficher le prix).
-function Formulas.GetPurchase(upgrade, level: number, mode: string, money: number): (number, number)
-	local remaining = Formulas.GetRemainingLevels(upgrade, level)
-	if remaining <= 0 then
-		return 0, 0
-	end
-
-	if mode == "max" then
-		local amount, total = Formulas.GetMaxAffordable(upgrade, level, money)
-		if amount > 0 then
-			return amount, total
-		end
-		return 1, Formulas.GetUpgradeCost(upgrade, level)
-	end
-
-	local amount = (mode == "x10") and 10 or 1
-	amount = math.min(amount, remaining)
-	return amount, Formulas.GetBulkCost(upgrade, level, amount)
-end
-
--- Texte du bénéfice d'une amélioration (ex. "+5 / clic")
-function Formulas.DescribeUpgrade(upgrade, format: (number) -> string): string
-	if upgrade.Category == "Click" then
-		return "+" .. format(upgrade.Value) .. " / clic"
-	elseif upgrade.Category == "Passive" then
-		return "+" .. format(upgrade.Value) .. " / seconde"
-	end
-	return "x" .. format(upgrade.Value) .. " sur TOUS les gains"
-end
-
-----------------------------------------------------------------------
--- Rebirth
-----------------------------------------------------------------------
-
+-- Rebirth ("Aller à l'océan")
 function Formulas.GetRebirthCost(rebirths: number): number
 	return Config.Rebirth.BaseCost * (Config.Rebirth.CostGrowth ^ rebirths)
 end
 
 function Formulas.GetRebirthMultiplier(rebirths: number): number
 	return 1 + rebirths * Config.Rebirth.MultiplierPerRebirth
+end
+
+-- Prix du PROCHAIN niveau (level = niveau actuel)
+function Formulas.GetUpgradeCost(upgrade, level: number, rebirths: number?): number
+	if upgrade.Effect == "Detox" then
+		return Formulas.GetRebirthCost(rebirths or 0)
+	end
+	return math.floor(upgrade.Cost * (upgrade.CostGrowth ^ level) + 0.5)
+end
+
+function Formulas.IsMaxed(upgrade, level: number): boolean
+	return upgrade.MaxLevel ~= nil and level >= upgrade.MaxLevel
+end
+
+-- Texte de l'infobulle ("%s" remplacé par la valeur formatée)
+function Formulas.DescribeUpgrade(upgrade, format: (number) -> string, rebirths: number?): string
+	local text = upgrade.Description or ""
+	if not string.find(text, "%s", 1, true) then
+		return text
+	end
+	local value = upgrade.Value or 0
+	if upgrade.Effect == "Detox" then
+		value = Formulas.GetRebirthMultiplier((rebirths or 0) + 1)
+	elseif upgrade.Effect == "DVD" then
+		value = Config.DVD.BaseBounceValue
+	end
+	return (string.gsub(text, "%%s", format(value), 1))
+end
+
+-- Liste des améliorations visibles dans la barre : celles déjà possédées
+-- (et pas au maximum) + les Config.UpgradeBar.RevealAhead suivantes.
+function Formulas.GetVisibleUpgrades(data): { any }
+	local list = {}
+	local revealed = 0
+	for _, upgrade in ipairs(Config.Upgrades) do
+		local level = Formulas.GetLevel(data, upgrade.Id)
+		if not Formulas.IsMaxed(upgrade, level) then
+			if level > 0 then
+				table.insert(list, upgrade)
+			elseif revealed < Config.UpgradeBar.RevealAhead then
+				table.insert(list, upgrade)
+				revealed += 1
+			end
+		end
+	end
+	return list
+end
+
+-- Ensemble des "Features" débloquées : { [Feature] = true }
+function Formulas.GetFeatures(data): { [string]: boolean }
+	local features = {}
+	for _, upgrade in ipairs(Config.Upgrades) do
+		if upgrade.Feature and Formulas.GetLevel(data, upgrade.Id) > 0 then
+			features[upgrade.Feature] = true
+		end
+	end
+	return features
+end
+
+function Formulas.HasFeature(data, feature: string): boolean
+	local upgradeId = Config.FeatureToUpgrade[feature]
+	return upgradeId ~= nil and Formulas.GetLevel(data, upgradeId) > 0
 end
 
 ----------------------------------------------------------------------
@@ -112,33 +108,55 @@ function Formulas.StepCombo(meter: number, elapsed: number): number
 end
 
 ----------------------------------------------------------------------
--- Statistiques d'un joueur (gain par clic, par seconde, multiplicateurs)
+-- Statistiques d'un joueur
 ----------------------------------------------------------------------
 
-function Formulas.CountAchievements(data): number
+local function countKeys(map, lookup): number
 	local count = 0
-	for id in pairs(data.Achievements) do
-		if Config.AchievementsById[id] then
+	for id, value in pairs(map) do
+		if value and lookup[id] then
 			count += 1
 		end
 	end
 	return count
 end
 
+function Formulas.CountAchievements(data): number
+	return countKeys(data.Achievements, Config.AchievementsById)
+end
+
+function Formulas.CountCosmetics(data): number
+	local cosmetics = data.Cosmetics
+	if not cosmetics or not cosmetics.Owned then
+		return 0
+	end
+	return countKeys(cosmetics.Owned, Config.CosmeticsById)
+end
+
 -- `data` = données sauvegardées du joueur, `eventMultiplier` = Rush en cours (ou 1)
 function Formulas.ComputeStats(data, eventMultiplier: number?)
 	local baseClick = 1
 	local basePerSecond = 0
+	local clickMultiplier = 1
+	local bounceMultiplier = 1
 	local upgradeMultiplier = 1
+	local dvdCount = 0
 
 	for _, upgrade in ipairs(Config.Upgrades) do
-		local level = data.Upgrades[upgrade.Id] or 0
+		local level = Formulas.GetLevel(data, upgrade.Id)
 		if level > 0 then
-			if upgrade.Category == "Click" then
+			local effect = upgrade.Effect
+			if effect == "Click" then
 				baseClick += upgrade.Value * level
-			elseif upgrade.Category == "Passive" then
+			elseif effect == "PerSecond" then
 				basePerSecond += upgrade.Value * level
-			elseif upgrade.Category == "Multiplier" then
+			elseif effect == "DVD" then
+				dvdCount += level
+			elseif effect == "BounceMultiplier" then
+				bounceMultiplier *= upgrade.Value ^ level
+			elseif effect == "ClickMultiplier" then
+				clickMultiplier *= upgrade.Value ^ level
+			elseif effect == "Multiplier" then
 				upgradeMultiplier *= upgrade.Value ^ level
 			end
 		end
@@ -146,19 +164,25 @@ function Formulas.ComputeStats(data, eventMultiplier: number?)
 
 	local rebirthMultiplier = Formulas.GetRebirthMultiplier(data.Rebirths)
 	local achievementMultiplier = 1 + Formulas.CountAchievements(data) * Config.AchievementBonus
+	local cosmeticMultiplier = 1 + Formulas.CountCosmetics(data) * Config.CosmeticBonus
 	local eventMult = eventMultiplier or 1
-	local globalMultiplier = upgradeMultiplier * rebirthMultiplier * achievementMultiplier * eventMult
+	local globalMultiplier = upgradeMultiplier * rebirthMultiplier * achievementMultiplier * cosmeticMultiplier * eventMult
 
 	return {
 		BaseClick = baseClick,
 		BasePerSecond = basePerSecond,
+		ClickMultiplier = clickMultiplier,
+		BounceMultiplier = bounceMultiplier,
 		UpgradeMultiplier = upgradeMultiplier,
 		RebirthMultiplier = rebirthMultiplier,
 		AchievementMultiplier = achievementMultiplier,
+		CosmeticMultiplier = cosmeticMultiplier,
 		EventMultiplier = eventMult,
 		GlobalMultiplier = globalMultiplier,
-		ClickValue = baseClick * globalMultiplier,
+		ClickValue = baseClick * clickMultiplier * globalMultiplier,
 		PerSecond = basePerSecond * globalMultiplier,
+		BounceValue = Config.DVD.BaseBounceValue * bounceMultiplier * globalMultiplier,
+		DVDCount = dvdCount,
 	}
 end
 
@@ -166,6 +190,57 @@ end
 function Formulas.ScaledReward(stats, seconds: number, minimum: number): number
 	local production = stats.PerSecond + stats.ClickValue * Config.Rewards.EstimatedClicksPerSecond
 	return math.floor(math.max(minimum, production * seconds))
+end
+
+----------------------------------------------------------------------
+-- Casino
+----------------------------------------------------------------------
+
+-- Multiplicateur de gain pour 3 symboles (ids). 0 = perdu.
+function Formulas.GetCasinoMultiplier(reels: { string }): number
+	local counts = {}
+	for _, id in ipairs(reels) do
+		counts[id] = (counts[id] or 0) + 1
+	end
+	local best = 0
+	for id, count in pairs(counts) do
+		local symbol = Config.CasinoSymbolsById[id]
+		if symbol then
+			if count == 3 then
+				best = math.max(best, symbol.Triple)
+			elseif count == 2 then
+				best = math.max(best, symbol.Pair)
+			end
+		end
+	end
+	return best
+end
+
+-- Taux de retour théorique (ex. 0.93 = on récupère 93 % des mises en moyenne)
+function Formulas.GetCasinoRTP(): number
+	local symbols = Config.Casino.Symbols
+	local totalWeight = 0
+	for _, symbol in ipairs(symbols) do
+		totalWeight += symbol.Weight
+	end
+	local expected = 0
+	for _, a in ipairs(symbols) do
+		for _, b in ipairs(symbols) do
+			for _, c in ipairs(symbols) do
+				local probability = (a.Weight / totalWeight) * (b.Weight / totalWeight) * (c.Weight / totalWeight)
+				expected += probability * Formulas.GetCasinoMultiplier({ a.Id, b.Id, c.Id })
+			end
+		end
+	end
+	return expected
+end
+
+----------------------------------------------------------------------
+-- Bourse
+----------------------------------------------------------------------
+
+function Formulas.GetStockValue(stock, price: number): number
+	return (stock and stock.Shares or 0) * price
 end
 
 return Formulas

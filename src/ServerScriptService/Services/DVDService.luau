@@ -2,11 +2,13 @@
 	DVDService (ModuleScript)
 	Emplacement : ServerScriptService > Services > DVDService
 
-	Logo DVD rebondissant. Le SERVEUR choisit la trajectoire (position,
-	vitesse, heure de départ) et l'envoie au client, qui ne fait que
-	l'afficher. Comme la trajectoire est déterministe (voir DVDMath), le
-	serveur peut recalculer lui-même si un coin a vraiment été touché :
-	un tricheur ne peut pas inventer de jackpot.
+	Logos DVD rebondissants (un par niveau de l'amélioration "Logo DVD").
+	Le SERVEUR choisit la trajectoire de chaque logo (position, vitesse, heure
+	de départ) et l'envoie au client, qui ne fait que l'afficher. Comme les
+	trajectoires sont déterministes (voir DVDMath), le serveur peut :
+	  - compter lui-même les rebonds (gain passif à chaque rebond) ;
+	  - vérifier si un coin a vraiment été touché : un tricheur ne peut pas
+	    inventer de jackpot.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -23,7 +25,19 @@ local DVDService = {}
 local services
 local random = Random.new()
 
--- [Player] = { Params = DVDMath.Params, ClaimedCorners = { [k] = true }, LastClick = number }
+-- Taille par défaut d'un logo (fraction de l'écran), corrigée dès que le
+-- client envoie la vraie taille (DVDResize)
+local DEFAULT_W = Config.DVD.LogoSize.X / 1280
+local DEFAULT_H = Config.DVD.LogoSize.Y / 720
+
+--[[
+	[Player] = {
+		Logos = { { Params, ClaimedCorners = { [k] = true }, LastBX, LastBY } },
+		W, H = taille commune des logos,
+		Carry = rebonds pas encore comptés (avant un changement de trajectoire),
+		LastClick = os.clock() du dernier clic récompensé (recharge commune),
+	}
+]]
 local states = {}
 
 function DVDService:Init(allServices)
@@ -38,12 +52,13 @@ end
 -- trajectoires trop horizontales ou verticales)
 local function randomParams(w: number, h: number): DVDMath.Params
 	local angle = math.rad(random:NextNumber(25, 65))
-	local speed = Config.DVD.Speed
+	local variation = Config.DVD.SpeedVariation or 0
+	local speed = Config.DVD.Speed * (1 + random:NextNumber(-variation, variation))
 	local signX = random:NextNumber() < 0.5 and -1 or 1
 	local signY = random:NextNumber() < 0.5 and -1 or 1
 	return {
-		X0 = random:NextNumber(0, 1 - w),
-		Y0 = random:NextNumber(0, 1 - h),
+		X0 = random:NextNumber(0, math.max(0, 1 - w)),
+		Y0 = random:NextNumber(0, math.max(0, 1 - h)),
 		VX = math.cos(angle) * speed * signX,
 		VY = math.sin(angle) * speed * signY,
 		T0 = now(),
@@ -52,31 +67,177 @@ local function randomParams(w: number, h: number): DVDMath.Params
 	}
 end
 
+-- (Re)définit la trajectoire d'un logo en repartant les compteurs de rebonds
+local function setParams(logo, params: DVDMath.Params)
+	logo.Params = params
+	logo.ClaimedCorners = {} -- nouvelle trajectoire = nouveaux numéros de rebond
+	logo.LastBX, logo.LastBY = DVDMath.BounceIndex(params, now())
+end
+
+local function newLogo(w: number, h: number)
+	local logo = {}
+	setParams(logo, randomParams(w, h))
+	return logo
+end
+
+-- Rebonds d'un logo depuis le dernier comptage (plafonnés)
+local function countBounces(logo, t: number): number
+	local bx, by = DVDMath.BounceIndex(logo.Params, t)
+	local count = math.abs(bx - logo.LastBX) + math.abs(by - logo.LastBY)
+	logo.LastBX, logo.LastBY = bx, by
+	if count ~= count then
+		return 0
+	end
+	return math.min(count, Config.DVD.MaxBouncesPerTick)
+end
+
+-- Avant de changer une trajectoire : on met de côté les rebonds pas encore comptés
+local function flushBounces(state)
+	local t = now()
+	for _, logo in ipairs(state.Logos) do
+		state.Carry += countBounces(logo, t)
+	end
+	state.Carry = math.min(state.Carry, Config.DVD.MaxBouncesPerTick * math.max(1, #state.Logos))
+end
+
+-- Nombre de logos que le joueur doit avoir (niveau de "Logo DVD")
+local function desiredCount(player: Player): number
+	local data = services.DataService:GetData(player)
+	if not data then
+		return 0
+	end
+	return Formulas.ComputeStats(data).DVDCount
+end
+
+local function isValidIndex(state, index: any): boolean
+	return type(index) == "number" and index == math.floor(index) and index >= 1 and index <= #state.Logos
+end
+
+----------------------------------------------------------------------
+-- API
+----------------------------------------------------------------------
+
 function DVDService:SendSetup(player: Player)
 	local state = states[player]
-	if state then
-		Net.Event("DVDSetup"):FireClient(player, state.Params)
+	if not state then
+		return
+	end
+	local list = {}
+	for _, logo in ipairs(state.Logos) do
+		local p = logo.Params
+		table.insert(list, { X0 = p.X0, Y0 = p.Y0, VX = p.VX, VY = p.VY, T0 = p.T0, W = p.W, H = p.H })
+	end
+	Net.Event("DVDSetup"):FireClient(player, { Logos = list })
+end
+
+-- Ajoute / retire des logos pour correspondre au niveau de l'amélioration.
+-- Les logos existants gardent leur trajectoire. Renvoie true si ça a changé.
+function DVDService:SyncLogos(player: Player): boolean
+	local state = states[player]
+	if not state then
+		return false
+	end
+	local wanted = desiredCount(player)
+	local logos = state.Logos
+	if #logos == wanted then
+		return false
+	end
+	flushBounces(state)
+	while #logos < wanted do
+		table.insert(logos, newLogo(state.W, state.H))
+	end
+	while #logos > wanted do
+		table.remove(logos)
+	end
+	self:SendSetup(player)
+	return true
+end
+
+-- Détox / reset : tous les logos disparaissent (puis on recrée ceux encore dus)
+function DVDService:Reset(player: Player)
+	local state = states[player]
+	if not state then
+		return
+	end
+	state.Logos = {}
+	state.Carry = 0
+	state.LastClick = 0
+	if not self:SyncLogos(player) then
+		self:SendSetup(player) -- toujours prévenir le client (liste vide)
 	end
 end
 
+-- Appelé par le tick passif de GameService : nombre total de rebonds
+-- (tous les logos, horizontaux + verticaux) depuis le dernier appel
+function DVDService:CollectBounces(player: Player, t: number): number
+	local state = states[player]
+	if not state then
+		return 0
+	end
+	local total = state.Carry
+	state.Carry = 0
+	for _, logo in ipairs(state.Logos) do
+		total += countBounces(logo, t)
+	end
+	return total
+end
+
 function DVDService:PlayerReady(player: Player)
-	-- Taille par défaut (corrigée dès que le client envoie la vraie taille)
 	states[player] = {
-		Params = randomParams(0.13, 0.12),
-		ClaimedCorners = {},
+		Logos = {},
+		W = DEFAULT_W,
+		H = DEFAULT_H,
+		Carry = 0,
 		LastClick = 0,
+		PendingResize = nil, -- taille reçue trop tôt, appliquée plus tard
+		ResizeScheduled = false,
 	}
+	-- Crée les logos déjà achetés (le client recevra DVDSetup avec la synchro complète)
+	local wanted = desiredCount(player)
+	for _ = 1, wanted do
+		table.insert(states[player].Logos, newLogo(DEFAULT_W, DEFAULT_H))
+	end
 end
 
 function DVDService:PlayerRemoving(player: Player)
 	states[player] = nil
 end
 
--- Le client indique la taille du logo à l'écran (en fraction de l'écran).
--- On garde la position et la direction actuelles pour que le logo ne saute pas.
+----------------------------------------------------------------------
+-- Remotes
+----------------------------------------------------------------------
+
+-- Applique une nouvelle taille à tous les logos en gardant la position et
+-- la direction actuelles de chacun (pour qu'aucun logo ne "saute")
+local function applyResize(player: Player, state, w: number, h: number)
+	if math.abs(w - state.W) < 1e-4 and math.abs(h - state.H) < 1e-4 then
+		return -- rien ne change
+	end
+	flushBounces(state)
+	state.W, state.H = w, h
+	local t = now()
+	for _, logo in ipairs(state.Logos) do
+		local params = logo.Params
+		local x, y = DVDMath.Position(params, t)
+		local dirX, dirY = DVDMath.Directions(params, t)
+		setParams(logo, {
+			X0 = math.clamp(x, 0, math.max(0, 1 - w)),
+			Y0 = math.clamp(y, 0, math.max(0, 1 - h)),
+			VX = math.abs(params.VX) * dirX,
+			VY = math.abs(params.VY) * dirY,
+			T0 = t,
+			W = w,
+			H = h,
+		})
+	end
+	DVDService:SendSetup(player)
+end
+
+-- Le client indique la taille d'un logo à l'écran (en fraction de l'écran).
+-- Trop rapproché (< 0.5 s) : la dernière taille reçue est appliquée un peu plus tard.
 local function onResize(player: Player, w: any, h: any)
 	local state = states[player]
-	if not state or not RateLimiter.Check(player, "DVDResize", 0.5) then
+	if not state then
 		return
 	end
 	if type(w) ~= "number" or type(h) ~= "number" or w ~= w or h ~= h then
@@ -85,29 +246,32 @@ local function onResize(player: Player, w: any, h: any)
 	w = math.clamp(w, 0.03, 0.5)
 	h = math.clamp(h, 0.03, 0.5)
 
-	local params = state.Params
-	local t = now()
-	local x, y = DVDMath.Position(params, t)
-	local dirX, dirY = DVDMath.Directions(params, t)
-
-	state.Params = {
-		X0 = math.clamp(x, 0, 1 - w),
-		Y0 = math.clamp(y, 0, 1 - h),
-		VX = math.abs(params.VX) * dirX,
-		VY = math.abs(params.VY) * dirY,
-		T0 = t,
-		W = w,
-		H = h,
-	}
-	state.ClaimedCorners = {} -- nouvelle trajectoire = nouveaux numéros de rebond
-	DVDService:SendSetup(player)
+	if RateLimiter.Check(player, "DVDResize", 0.5) then
+		state.PendingResize = nil
+		applyResize(player, state, w, h)
+		return
+	end
+	state.PendingResize = { W = w, H = h }
+	if state.ResizeScheduled then
+		return
+	end
+	state.ResizeScheduled = true
+	task.delay(0.55, function()
+		state.ResizeScheduled = false
+		local pending = state.PendingResize
+		state.PendingResize = nil
+		-- Le joueur a pu partir (ou tout a été réinitialisé) entre-temps
+		if pending and states[player] == state then
+			applyResize(player, state, pending.W, pending.H)
+		end
+	end)
 end
 
--- Clic sur le logo : petit bonus, avec un temps de recharge
-local function onClick(player: Player)
+-- Clic sur un logo : petit bonus, avec un temps de recharge commun à tous les logos
+local function onClick(player: Player, index: any)
 	local state = states[player]
 	local data = services.DataService:GetData(player)
-	if not state or not data then
+	if not state or not data or not isValidIndex(state, index) then
 		return
 	end
 	local clock = os.clock()
@@ -124,40 +288,44 @@ local function onClick(player: Player)
 	)
 	data.Stats.DVDClicks += 1
 	services.GameService:AddDopamine(player, reward, true)
-	services.QuestService:Progress(player, "DVDClicks", 1)
 	services.GameService:Notify(player, {
 		Type = "Bonus",
 		Source = "DVD",
 		Amount = reward,
+		Index = index,
 	})
 end
 
--- Le client signale un coin au rebond horizontal numéro k : on VÉRIFIE
-local function onCorner(player: Player, k: any)
+-- Le client signale un coin du logo `index` au rebond horizontal numéro k : on VÉRIFIE
+local function onCorner(player: Player, index: any, k: any)
 	local state = states[player]
 	local data = services.DataService:GetData(player)
-	if not state or not data or not RateLimiter.Check(player, "DVDCorner", 0.3) then
+	if not state or not data or not isValidIndex(state, index) then
 		return
 	end
 	if type(k) ~= "number" or k ~= math.floor(k) or math.abs(k) > 1e9 then
 		return
 	end
-	if state.ClaimedCorners[k] then
+	if not RateLimiter.Check(player, "DVDCorner" .. index, 0.3) then
+		return
+	end
+	local logo = state.Logos[index]
+	if logo.ClaimedCorners[k] then
 		return -- déjà récompensé
 	end
 
-	local params = state.Params
+	local params = logo.Params
 	local bounceTime = DVDMath.BounceTimeX(params, k)
 	local t = now()
 	-- Le rebond doit avoir eu lieu récemment (et après le début de la trajectoire)
-	if bounceTime < params.T0 or bounceTime > t + 0.5 or bounceTime < t - 5 then
+	if bounceTime ~= bounceTime or bounceTime < params.T0 or bounceTime > t + 0.5 or bounceTime < t - 5 then
 		return
 	end
 	if not DVDMath.IsCornerAtBounceX(params, k, Config.DVD.CornerTolerance) then
 		return -- pas un vrai coin : tentative de triche ou erreur d'arrondi
 	end
 
-	state.ClaimedCorners[k] = true
+	logo.ClaimedCorners[k] = true
 	local reward = Formulas.ScaledReward(
 		services.GameService:GetStats(player),
 		Config.DVD.JackpotRewardSeconds,
@@ -168,6 +336,7 @@ local function onCorner(player: Player, k: any)
 	services.GameService:Notify(player, {
 		Type = "Jackpot",
 		Amount = reward,
+		Index = index,
 		Text = "📀 COIN PARFAIT ! +" .. NumberFormatter.Format(reward),
 	})
 	services.GameService:NotifyAll({
@@ -176,17 +345,19 @@ local function onCorner(player: Player, k: any)
 	}, player)
 end
 
--- TEST (Studio) : place le logo pour qu'il touche un coin dans 2 secondes
-function DVDService:DebugCorner(player: Player)
+-- TEST (Studio) : place le 1er logo pour qu'il touche un coin dans ~2 secondes
+function DVDService:DebugCorner(player: Player): boolean
 	local state = states[player]
-	if not state then
-		return
+	if not state or #state.Logos == 0 then
+		return false
 	end
-	local params = state.Params
+	flushBounces(state)
+	local logo = state.Logos[1]
+	local params = logo.Params
 	local rangeX, rangeY = DVDMath.Ranges(params)
 	local speedX, speedY = math.abs(params.VX), math.abs(params.VY)
 	local delay = math.min(2, rangeX * 0.9 / speedX, rangeY * 0.9 / speedY)
-	state.Params = {
+	setParams(logo, {
 		X0 = rangeX - speedX * delay,
 		Y0 = rangeY - speedY * delay,
 		VX = speedX,
@@ -194,9 +365,9 @@ function DVDService:DebugCorner(player: Player)
 		T0 = now(),
 		W = params.W,
 		H = params.H,
-	}
-	state.ClaimedCorners = {}
+	})
 	self:SendSetup(player)
+	return true
 end
 
 function DVDService:Start()

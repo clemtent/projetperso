@@ -10,7 +10,7 @@
 	  que le remote existe.
 
 	Sens de communication :
-	  C -> S : le client demande, le serveur valide TOUT.
+	  C -> S : le client DEMANDE, le serveur valide TOUT.
 	  S -> C : le serveur informe le client.
 ]]
 
@@ -20,25 +20,30 @@ local RunService = game:GetService("RunService")
 local Net = {}
 
 Net.Events = {
-	"ClientReady", -- C -> S : le client est prêt à recevoir les données
-	"Click", -- C -> S : un clic sur le gros bouton
-	"StateUpdate", -- S -> C : état complet du joueur (Dopamine, niveaux...)
-	"Notify", -- S -> C : notifications (succès, bonus, jackpot, erreurs...)
-	"DVDSetup", -- S -> C : paramètres du mouvement du logo DVD
-	"DVDResize", -- C -> S : taille du logo à l'écran (en fraction de l'écran)
-	"DVDClick", -- C -> S : clic sur le logo DVD
-	"DVDCorner", -- C -> S : le client pense que le logo a touché un coin
-	"GoldenSpawn", -- S -> C : un objet doré apparaît
-	"GoldenClick", -- C -> S : le joueur a cliqué l'objet doré
-	"EventUpdate", -- S -> C : début / fin d'un Dopamine Rush
-	"LeaderboardUpdate", -- S -> C : top du classement
+	"ClientReady", -- C -> S () : l'interface est prête, envoie-moi tout
+	"Click", -- C -> S () : un clic sur le bouton
+	"StateUpdate", -- S -> C (state) : état complet du joueur
+	"Notify", -- S -> C (payload) : succès, quêtes, bonus, jackpot, détox...
+	"DVDSetup", -- S -> C ({ Logos = { params... } }) : trajectoires des logos DVD
+	"DVDResize", -- C -> S (w, h) : taille d'un logo à l'écran (fraction de l'écran)
+	"DVDClick", -- C -> S (index) : clic sur le logo numéro `index`
+	"DVDCorner", -- C -> S (index, k) : le logo `index` a touché un coin au rebond k
+	"Spawn", -- S -> C (info) : un objet à cliquer apparaît (étoile, éclair, notif, mail)
+	"SpawnClick", -- C -> S (id) : le joueur a cliqué cet objet
+	"Interact", -- C -> S (kind, arg) : papier bulle, moulin, titre du fil d'actu, presse
+	"EventUpdate", -- S -> C (rush) : début / fin d'un Dopamine Rush
+	"LeaderboardUpdate", -- S -> C (top) : top du classement
+	"StockUpdate", -- S -> C ({ Symbol, Price, History }) : cours de la bourse
 }
 
 Net.Functions = {
-	"BuyUpgrade", -- C -> S : (upgradeId, mode) -> (succès, message)
-	"Rebirth", -- C -> S : () -> (succès, message)
-	"ClaimDaily", -- C -> S : () -> (succès, message)
-	"SetSetting", -- C -> S : (nom, valeur) -> succès
+	"BuyUpgrade", -- C -> S (upgradeId) -> (succès, message)
+	"ClaimDaily", -- C -> S () -> (succès, message)
+	"SetSetting", -- C -> S (nom, valeur) -> succès
+	"StockTrade", -- C -> S ("buy" | "sell", fraction) -> (succès, message)
+	"CasinoSpin", -- C -> S (fraction) -> (succès, résultat | message)
+	"OpenChest", -- C -> S () -> (succès, résultat | message)
+	"ItemShop", -- C -> S ("buy" | "equip" | "unequip", cosmeticId) -> (succès, message)
 }
 
 local FOLDER_NAME = "Remotes"

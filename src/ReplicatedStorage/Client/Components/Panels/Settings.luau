@@ -3,6 +3,8 @@
 	Emplacement : ReplicatedStorage > Client > Components > Panels > Settings
 
 	Les réglages sont sauvegardés côté serveur avec la progression.
+	La musique ne joue que si le réglage est actif ET que "Lofi Beats" est
+	débloqué (voir SoundManager.SetMusicAllowed).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -15,13 +17,13 @@ local Effects = require(Client.Effects)
 local Net = require(ReplicatedStorage.Shared.Net)
 
 local Settings = {
-	Title = "⚙️ PARAMÈTRES",
-	Color = Theme.Colors.Purple,
+	Title = "⚙️ Paramètres",
+	Color = Theme.Colors.Dark,
 }
 
 local OPTIONS = {
 	{ Key = "Sound", Label = "🔊 Effets sonores" },
-	{ Key = "Music", Label = "🎵 Musique" },
+	{ Key = "Music", Label = "🎵 Musique (avec Lofi Beats)" },
 	{ Key = "Effects", Label = "✨ Particules et confettis" },
 }
 
@@ -49,33 +51,39 @@ function Settings.Apply(key: string, value: boolean)
 	end
 end
 
+function Settings.Get(key: string): boolean
+	return current[key] ~= false
+end
+
 function Settings.Build(content: Frame)
 	UIUtil.Create("UIListLayout", {
-		Padding = UDim.new(0, 14),
+		Padding = UDim.new(0, 12),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = content,
 	})
 
 	for index, option in ipairs(OPTIONS) do
 		local row = UIUtil.Create("Frame", {
-			Size = UDim2.new(1, 0, 0, 64),
-			BackgroundColor3 = Theme.Colors.Card,
+			Size = UDim2.new(1, 0, 0, 62),
+			BackgroundColor3 = Theme.Colors.PanelLight,
 			LayoutOrder = index,
 			Parent = content,
 		})
 		UIUtil.Corner(row, 14)
+		UIUtil.Stroke(row, Theme.Colors.Disabled, 1.5)
 		UIUtil.Label({
 			Text = option.Label,
+			Font = Theme.Fonts.Title,
 			TextXAlignment = Enum.TextXAlignment.Left,
-			Size = UDim2.new(1, -140, 1, -16),
-			Position = UDim2.fromOffset(16, 8),
-			MaxTextSize = 22,
+			Size = UDim2.new(1, -140, 1, -18),
+			Position = UDim2.fromOffset(16, 9),
+			MaxTextSize = 21,
 			Parent = row,
 		})
 
 		-- Interrupteur ON/OFF
 		local button = UIUtil.Create("TextButton", {
-			Size = UDim2.fromOffset(90, 40),
+			Size = UDim2.fromOffset(84, 40),
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, -16, 0.5, 0),
 			BackgroundColor3 = Theme.Colors.Green,
@@ -84,7 +92,7 @@ function Settings.Build(content: Frame)
 			Parent = row,
 		})
 		UIUtil.Corner(button, UDim.new(1, 0))
-		UIUtil.Stroke(button, Color3.new(1, 1, 1), 2, 0.4)
+		UIUtil.Stroke(button, Theme.Colors.Border, 1.5)
 		local knob = UIUtil.Create("Frame", {
 			Size = UDim2.fromOffset(32, 32),
 			AnchorPoint = Vector2.new(1, 0.5),
@@ -93,6 +101,7 @@ function Settings.Build(content: Frame)
 			Parent = button,
 		})
 		UIUtil.Corner(knob, UDim.new(1, 0))
+		UIUtil.Stroke(knob, Theme.Colors.Border, 1.5)
 		UIUtil.AnimateButton(button)
 		toggles[option.Key] = { Button = button, Knob = knob }
 
@@ -110,7 +119,7 @@ function Settings.Build(content: Frame)
 	end
 
 	UIUtil.Label({
-		Text = "Astuce : clique vite pour remplir la jauge de combo (jusqu'à x3) !",
+		Text = "Astuce : chaque amélioration ajoute quelque chose à l'écran. Jusqu'où iras-tu ?",
 		TextColor3 = Theme.Colors.TextDim,
 		Size = UDim2.new(1, 0, 0, 40),
 		LayoutOrder = 10,
@@ -122,7 +131,7 @@ end
 -- Au chargement, on applique les réglages sauvegardés (une seule fois)
 local applied = false
 function Settings.Update(data)
-	if applied then
+	if applied or not data.Settings then
 		return
 	end
 	applied = true

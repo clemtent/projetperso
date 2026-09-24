@@ -2,7 +2,8 @@
 	DataService (ModuleScript)
 	Emplacement : ServerScriptService > Services > DataService
 
-	Chargement / sauvegarde des données des joueurs avec DataStoreService :
+	Chargement / sauvegarde des données des joueurs avec DataStoreService
+	(format "version 2", magasin Config.DataStore.Name) :
 	  - pcall + plusieurs tentatives (retry) avec attente croissante ;
 	  - sauvegarde à la sortie du joueur, toutes les X secondes, et à la
 	    fermeture du serveur (BindToClose) ;
@@ -21,10 +22,10 @@ local DataService = {}
 -- Profils chargés : [Player] = { Data = table, CanSave = bool, Saving = bool }
 local profiles = {}
 
--- Données d'un nouveau joueur. Toute nouvelle clé ajoutée ici sera
--- automatiquement ajoutée aux anciennes sauvegardes (voir reconcile).
+-- Données d'un nouveau joueur (version 2). Toute nouvelle clé ajoutée ici
+-- sera automatiquement ajoutée aux anciennes sauvegardes (voir reconcile).
 local TEMPLATE = {
-	Version = 1,
+	Version = 2,
 	Dopamine = 0,
 	Rebirths = 0,
 	Upgrades = {}, -- [upgradeId] = niveau
@@ -32,6 +33,13 @@ local TEMPLATE = {
 	Quests = {}, -- liste des quêtes actives
 	Daily = { LastDay = 0, Streak = 0 },
 	Settings = { Sound = true, Music = true, Effects = true },
+	Cosmetics = {
+		Owned = {}, -- [cosmeticId] = true
+		Equipped = { Hat = "", Skin = "" }, -- "" = rien d'équipé
+	},
+	Stock = { Shares = 0, CostBasis = 0 }, -- actions de la bourse
+	Chests = { Stored = 0, Progress = 0 }, -- coffres mystère
+	ScreenTime = {}, -- ["numéro du jour UTC"] = secondes jouées ce jour-là
 	Stats = {
 		TotalClicks = 0,
 		LifetimeDopamine = 0, -- Dopamine gagnée depuis toujours (classement)
@@ -39,9 +47,23 @@ local TEMPLATE = {
 		CombosMaxed = 0,
 		DVDClicks = 0,
 		DVDCorners = 0,
+		Bounces = 0,
 		GoldenClicks = 0,
+		LightningClicks = 0,
+		NotifsOpened = 0,
+		EmailsRead = 0,
+		BubblesPopped = 0,
+		Spins = 0,
+		HeadlinesClicked = 0,
+		PressCrushes = 0,
+		SlotSpins = 0,
+		SlotWins = 0,
+		StockTrades = 0,
+		ChestsOpened = 0,
+		CosmeticsBought = 0,
 		QuestsCompleted = 0,
 		DailyClaims = 0,
+		PlaySeconds = 0,
 	},
 }
 
@@ -74,13 +96,15 @@ local function deepCopy(value)
 	return copy
 end
 
--- Ajoute les clés manquantes (nouvelle version du jeu) sans toucher aux existantes
+-- Ajoute les clés manquantes (nouvelle version du jeu) sans toucher aux
+-- existantes. Une valeur du mauvais type (sauvegarde corrompue) est remplacée.
 local function reconcile(data, template)
 	for key, value in pairs(template) do
-		if data[key] == nil then
+		local current = data[key]
+		if current == nil or type(current) ~= type(value) or (type(value) == "number" and current ~= current) then
 			data[key] = deepCopy(value)
-		elseif type(value) == "table" and type(data[key]) == "table" and next(value) ~= nil then
-			reconcile(data[key], value)
+		elseif type(value) == "table" and next(value) ~= nil then
+			reconcile(current, value)
 		end
 	end
 	return data
@@ -145,6 +169,7 @@ function DataService:LoadAsync(player: Player)
 	end
 
 	data = reconcile(data or deepCopy(TEMPLATE), TEMPLATE)
+	data.Version = TEMPLATE.Version
 
 	-- Le joueur a pu partir pendant le chargement
 	if not player.Parent then
@@ -176,6 +201,28 @@ function DataService:GetLoadedPlayers(): { Player }
 		table.insert(list, player)
 	end
 	return list
+end
+
+-- Remet les données d'un joueur à zéro (commande de test /reset), SAUF les
+-- réglages. La table est vidée "sur place" : les autres services qui ont
+-- gardé une référence vers elle restent valides.
+function DataService:ResetData(player: Player): boolean
+	local profile = profiles[player]
+	if not profile then
+		return false
+	end
+	local data = profile.Data
+	local settings = deepCopy(data.Settings)
+	for key in pairs(data) do
+		data[key] = nil
+	end
+	for key, value in pairs(TEMPLATE) do
+		data[key] = deepCopy(value)
+	end
+	if type(settings) == "table" then
+		data.Settings = reconcile(settings, TEMPLATE.Settings)
+	end
+	return true
 end
 
 -- Sauvegarde les données d'un joueur (bloquant)

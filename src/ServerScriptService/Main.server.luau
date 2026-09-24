@@ -17,14 +17,21 @@ Net.Setup() -- AVANT tout le reste : les clients attendent ces remotes
 local ServicesFolder = script.Parent:WaitForChild("Services")
 
 -- Ordre important : les données d'abord, puis le jeu, puis le reste
+-- (PlayerReady est appelé dans cet ordre : QuestService a besoin des stats,
+-- DVDService crée les logos avant la synchro complète)
 local ORDER = {
 	"DataService",
 	"GameService",
 	"EventService",
+	"DVDService",
+	"InteractService",
+	"StockService",
+	"CasinoService",
+	"LootService",
+	"CosmeticService",
 	"QuestService",
 	"AchievementService",
 	"DailyRewardService",
-	"DVDService",
 	"LeaderboardService",
 	"DebugService",
 }

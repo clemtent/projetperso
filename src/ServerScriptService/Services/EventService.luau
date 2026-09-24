@@ -4,7 +4,9 @@
 
 	Événements aléatoires :
 	  - "Dopamine Rush" : x2 sur tous les gains pendant 30 s, pour TOUT le serveur ;
-	  - Objet doré : apparaît chez un joueur, disparaît vite, donne un bonus.
+	  - objets à cliquer vite (Config.Spawners) : étoile dorée, éclair,
+	    notification de téléphone, e-mail. Chaque type apparaît chez un joueur
+	    seulement s'il possède la Feature correspondante.
 	Le serveur décide quand ils arrivent et valide les clics.
 ]]
 
@@ -14,7 +16,6 @@ local RunService = game:GetService("RunService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Formulas = require(ReplicatedStorage.Shared.Formulas)
-local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local Net = require(ReplicatedStorage.Shared.Net)
 local RateLimiter = require(script.Parent.RateLimiter)
 
@@ -26,17 +27,30 @@ local random = Random.new()
 -- Dans Studio, les événements arrivent plus vite pour pouvoir les tester
 local speedup = RunService:IsStudio() and Config.Events.StudioSpeedup or 1
 
+local SPAWN_GRACE = 0.5 -- marge (s) pour la latence réseau
+local SCHEDULER_STEP = 0.25 -- intervalle (s) de la boucle des apparitions
+
 local rush = {
 	Active = false,
 	EndsAt = 0, -- heure serveur (workspace:GetServerTimeNow())
 }
 
--- Objet doré actuellement affiché pour chaque joueur : [Player] = { Id, ExpiresAt }
-local goldenByPlayer = {}
+--[[
+	Apparitions par joueur :
+	[Player] = {
+		Pending = { [id] = { Kind, ExpiresAt } }, -- objets affichés, pas encore cliqués
+		NextAt = { [kind] = os.clock() de la prochaine apparition (nil = Feature absente) },
+	}
+]]
+local spawnStates = {}
 
 function EventService:Init(allServices)
 	services = allServices
 end
+
+----------------------------------------------------------------------
+-- Dopamine Rush (global)
+----------------------------------------------------------------------
 
 function EventService:GetMultiplier(): number
 	return rush.Active and Config.Events.Rush.Multiplier or 1
@@ -55,7 +69,7 @@ function EventService:SendState(player: Player)
 	Net.Event("EventUpdate"):FireClient(player, rushPayload())
 end
 
--- Lance un Dopamine Rush (peut aussi être appelé depuis la console pour tester)
+-- Lance un Dopamine Rush (aussi utilisé par la commande de test /rush)
 function EventService:StartRush()
 	if rush.Active then
 		return
@@ -65,6 +79,10 @@ function EventService:StartRush()
 	rush.EndsAt = workspace:GetServerTimeNow() + settings.Duration
 	Net.Event("EventUpdate"):FireAllClients(rushPayload())
 	services.GameService:MarkAllDirty()
+	services.GameService:NotifyAll({
+		Type = "Rush",
+		Text = "⚡ " .. settings.Name .. " : x" .. settings.Multiplier .. " pendant " .. settings.Duration .. " s !",
+	})
 
 	task.delay(settings.Duration, function()
 		rush.Active = false
@@ -73,69 +91,153 @@ function EventService:StartRush()
 	end)
 end
 
--- Fait apparaître un objet doré chez un joueur
-function EventService:SpawnGolden(player: Player)
-	local settings = Config.Events.Golden
-	local golden = {
-		Id = HttpService:GenerateGUID(false),
+----------------------------------------------------------------------
+-- Objets à cliquer (Config.Spawners)
+----------------------------------------------------------------------
+
+-- Retire les objets expirés et renvoie le nombre d'objets encore en attente pour ce type
+local function cleanPending(state, kind: string): number
+	local clock = os.clock()
+	local count = 0
+	for id, spawn in pairs(state.Pending) do
+		if clock > spawn.ExpiresAt + SPAWN_GRACE then
+			state.Pending[id] = nil
+		elseif spawn.Kind == kind then
+			count += 1
+		end
+	end
+	return count
+end
+
+-- Fait apparaître un objet chez un joueur (ignore la Feature : utilisé aussi par /spawn).
+-- Renvoie false si trop d'objets de ce type sont déjà affichés.
+function EventService:Spawn(player: Player, kind: string): boolean
+	local state = spawnStates[player]
+	local settings = Config.Spawners[kind]
+	if not state or not settings then
+		return false
+	end
+	if cleanPending(state, kind) >= Config.MaxPendingSpawnsPerKind then
+		return false
+	end
+
+	local id = HttpService:GenerateGUID(false)
+	state.Pending[id] = {
+		Kind = kind,
 		ExpiresAt = os.clock() + settings.Lifetime,
 	}
-	goldenByPlayer[player] = golden
-	Net.Event("GoldenSpawn"):FireClient(player, {
-		Id = golden.Id,
-		X = random:NextNumber(0.1, 0.6), -- évite la boutique à droite
-		Y = random:NextNumber(0.2, 0.8),
+	Net.Event("Spawn"):FireClient(player, {
+		Kind = kind,
+		Id = id,
+		X = random:NextNumber(0.08, 0.72),
+		Y = random:NextNumber(0.15, 0.85),
 		Lifetime = settings.Lifetime,
+		Variant = random:NextInteger(1, 1000),
 	})
+	return true
 end
 
-local function onGoldenClick(player: Player, id: any)
-	if not RateLimiter.Check(player, "Golden", 0.2) then
-		return
-	end
-	local golden = goldenByPlayer[player]
-	-- 0.5 s de marge pour la latence réseau
-	if type(id) ~= "string" or not golden or golden.Id ~= id or os.clock() > golden.ExpiresAt + 0.5 then
-		return
-	end
-	goldenByPlayer[player] = nil
-
-	local data = services.DataService:GetData(player)
-	if not data then
-		return
-	end
-	local settings = Config.Events.Golden
-	local reward = Formulas.ScaledReward(services.GameService:GetStats(player), settings.RewardSeconds, settings.MinReward)
-	data.Stats.GoldenClicks += 1
-	services.GameService:AddDopamine(player, reward, true)
-	services.QuestService:Progress(player, "Golden", 1)
-	services.GameService:Notify(player, {
-		Type = "Bonus",
-		Source = "Golden",
-		Amount = reward,
-		Text = "🌟 OBJET DORÉ : +" .. NumberFormatter.Format(reward) .. " !",
-	})
+-- Ancien nom (v1), gardé pour compatibilité
+function EventService:SpawnGolden(player: Player)
+	return self:Spawn(player, "Golden")
 end
 
-function EventService:PlayerReady(player: Player)
-	-- Boucle d'objets dorés propre à ce joueur
-	task.spawn(function()
-		local settings = Config.Events.Golden
-		while player.Parent do
-			task.wait(random:NextNumber(settings.MinInterval, settings.MaxInterval) / speedup)
-			if player.Parent and services.GameService:IsReady(player) then
-				self:SpawnGolden(player)
+-- Oublie tous les objets en attente (détox, reset)
+function EventService:ClearSpawns(player: Player)
+	local state = spawnStates[player]
+	if state then
+		state.Pending = {}
+		state.NextAt = {}
+	end
+end
+
+local function randomDelay(settings): number
+	return random:NextNumber(settings.MinInterval, settings.MaxInterval) / speedup
+end
+
+-- Boucle unique qui planifie les apparitions de chaque type pour chaque joueur
+-- (équivaut à une boucle par joueur et par type, sans créer de threads)
+local function schedulerStep()
+	local clock = os.clock()
+	for player, state in pairs(spawnStates) do
+		local data = services.DataService:GetData(player)
+		if data and services.GameService:IsReady(player) then
+			for kind, settings in pairs(Config.Spawners) do
+				if not Formulas.HasFeature(data, settings.Feature) then
+					state.NextAt[kind] = nil -- pas débloqué : rien ne se prépare
+				elseif state.NextAt[kind] == nil then
+					-- Tout juste débloqué (ou arrivée du joueur) : le premier arrive plus vite
+					state.NextAt[kind] = clock + randomDelay(settings) * 0.5
+				elseif clock >= state.NextAt[kind] then
+					state.NextAt[kind] = clock + randomDelay(settings)
+					EventService:Spawn(player, kind)
+				end
 			end
 		end
-	end)
+	end
+end
+
+local function onSpawnClick(player: Player, id: any)
+	if not RateLimiter.Check(player, "SpawnClick", 0.1) then
+		return
+	end
+	local state = spawnStates[player]
+	if not state or type(id) ~= "string" or #id > 64 then
+		return
+	end
+	local spawn = state.Pending[id]
+	if not spawn then
+		return
+	end
+	state.Pending[id] = nil
+	if os.clock() > spawn.ExpiresAt + SPAWN_GRACE then
+		return -- trop tard
+	end
+
+	local data = services.DataService:GetData(player)
+	local settings = Config.Spawners[spawn.Kind]
+	if not data or not settings then
+		return
+	end
+	local reward = Formulas.ScaledReward(services.GameService:GetStats(player), settings.RewardSeconds, settings.MinReward)
+	if settings.Stat then
+		data.Stats[settings.Stat] = (data.Stats[settings.Stat] or 0) + 1
+	end
+	services.GameService:AddDopamine(player, reward, true)
+	services.QuestService:Progress(player, "Spawns", 1)
+	services.GameService:Notify(player, {
+		Type = "Bonus",
+		Source = spawn.Kind,
+		Amount = reward,
+		SpawnId = id,
+	})
+end
+
+----------------------------------------------------------------------
+-- Cycle de vie
+----------------------------------------------------------------------
+
+function EventService:PlayerReady(player: Player)
+	spawnStates[player] = { Pending = {}, NextAt = {} }
 end
 
 function EventService:PlayerRemoving(player: Player)
-	goldenByPlayer[player] = nil
+	spawnStates[player] = nil
 end
 
 function EventService:Start()
-	Net.Event("GoldenClick").OnServerEvent:Connect(onGoldenClick)
+	Net.Event("SpawnClick").OnServerEvent:Connect(onSpawnClick)
+
+	-- Boucle des apparitions (par joueur et par type)
+	task.spawn(function()
+		while true do
+			task.wait(SCHEDULER_STEP)
+			local ok, err = pcall(schedulerStep)
+			if not ok then
+				warn("[EventService] Erreur des apparitions :", err)
+			end
+		end
+	end)
 
 	-- Boucle des Dopamine Rush (globaux)
 	task.spawn(function()
@@ -143,10 +245,6 @@ function EventService:Start()
 		while true do
 			task.wait(random:NextNumber(settings.MinInterval, settings.MaxInterval) / speedup)
 			self:StartRush()
-			services.GameService:NotifyAll({
-				Type = "Rush",
-				Text = "⚡ " .. settings.Name .. " : x" .. settings.Multiplier .. " pendant " .. settings.Duration .. " s !",
-			})
 			task.wait(settings.Duration)
 		end
 	end)

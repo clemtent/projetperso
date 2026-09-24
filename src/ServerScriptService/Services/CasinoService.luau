@@ -1,0 +1,117 @@
+--[[
+	CasinoService (ModuleScript)
+	Emplacement : ServerScriptService > Services > CasinoService
+
+	Machine à sous (débloquée par l'amélioration "Machine à sous").
+	UNIQUEMENT avec la Dopamine du jeu (jamais de Robux).
+	Le SERVEUR tire les 3 symboles (selon leur poids dans Config.Casino) et
+	calcule le gain avec Formulas.GetCasinoMultiplier : le client ne fait
+	qu'afficher l'animation puis le résultat reçu.
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Formulas = require(ReplicatedStorage.Shared.Formulas)
+local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
+local Net = require(ReplicatedStorage.Shared.Net)
+local RateLimiter = require(script.Parent.RateLimiter)
+
+local CasinoService = {}
+
+local services
+local random = Random.new()
+local settings = Config.Casino
+
+local BIG_WIN_MULTIPLIER = 25 -- à partir de ce multiplicateur, tout le serveur est prévenu
+
+function CasinoService:Init(allServices)
+	services = allServices
+end
+
+-- Tire un symbole au hasard selon son poids
+local function pickSymbol(): string
+	local total = 0
+	for _, symbol in ipairs(settings.Symbols) do
+		total += symbol.Weight
+	end
+	local roll = random:NextNumber(0, total)
+	for _, symbol in ipairs(settings.Symbols) do
+		roll -= symbol.Weight
+		if roll <= 0 then
+			return symbol.Id
+		end
+	end
+	return settings.Symbols[#settings.Symbols].Id
+end
+
+local function isAllowedFraction(fraction: any): boolean
+	if type(fraction) ~= "number" or fraction ~= fraction then
+		return false
+	end
+	for _, allowed in ipairs(settings.BetFractions) do
+		if math.abs(allowed - fraction) < 1e-9 then
+			return true
+		end
+	end
+	return false
+end
+
+local function onSpin(player: Player, fraction: any)
+	local data = services.DataService:GetData(player)
+	if not data or not services.GameService:IsReady(player) then
+		return false, "Chargement en cours..."
+	end
+	if not settings.Enabled then
+		return false, "Le casino est fermé"
+	end
+	if not Formulas.HasFeature(data, settings.Feature) then
+		return false, "La machine à sous n'est pas encore débloquée"
+	end
+	if not isAllowedFraction(fraction) then
+		return false, "Mise invalide"
+	end
+	-- Petite marge pour la latence réseau
+	if not RateLimiter.Check(player, "CasinoSpin", math.max(0, settings.Cooldown - 0.1)) then
+		return false, "La machine tourne encore..."
+	end
+
+	local bet = math.max(settings.MinBet, math.floor(data.Dopamine * fraction))
+	if bet > data.Dopamine then
+		return false, "Il faut au moins " .. NumberFormatter.Format(settings.MinBet) .. " " .. Config.Game.CurrencyName
+	end
+
+	local reels = { pickSymbol(), pickSymbol(), pickSymbol() }
+	local multiplier = Formulas.GetCasinoMultiplier(reels)
+	local payout = math.floor(bet * multiplier)
+
+	local maxValue = Config.Game.MaxDopamine
+	data.Dopamine = math.min(maxValue, data.Dopamine - bet + payout)
+	data.Stats.SlotSpins += 1
+	if payout > bet then
+		data.Stats.SlotWins += 1
+		data.Stats.LifetimeDopamine = math.min(maxValue, data.Stats.LifetimeDopamine + (payout - bet))
+	end
+	services.QuestService:Progress(player, "Casino", 1)
+	services.GameService:SendState(player)
+
+	if multiplier >= BIG_WIN_MULTIPLIER then
+		services.GameService:NotifyAll({
+			Type = "Info",
+			Text = "🎰 " .. player.DisplayName .. " a gagné x" .. multiplier .. " à la machine à sous !",
+		}, player)
+	end
+
+	return true, {
+		Reels = reels,
+		Bet = bet,
+		Payout = payout,
+		Multiplier = multiplier,
+	}
+end
+
+function CasinoService:Start()
+	Net.Function("CasinoSpin").OnServerInvoke = onSpin
+end
+
+return CasinoService
