@@ -453,12 +453,14 @@ Config.ScreenTime = {
 }
 
 ----------------------------------------------------------------------
--- Classement global
+-- Classement global (deux OrderedDataStore : Dopamine gagnée et renaissances)
 ----------------------------------------------------------------------
 Config.Leaderboard = {
-	StoreName = "DopamineLeaderboard_v2",
-	UpdateInterval = 60,
-	Size = 10,
+	StoreName = "DopamineLeaderboard_v2", -- Dopamine gagnée depuis toujours
+	RebirthStoreName = "RebirthLeaderboard_v1", -- nombre de renaissances (visites à l'océan)
+	UpdateInterval = 60, -- secondes entre deux lectures / écritures du top mondial
+	Size = 10, -- nombre de joueurs dans chaque top mondial
+	CrossLookupCacheTime = 300, -- secondes : garde la "valeur croisée" (renaissances d'un top Dopamine...)
 }
 
 ----------------------------------------------------------------------

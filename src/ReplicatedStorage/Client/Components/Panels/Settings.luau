@@ -2,11 +2,21 @@
 	Settings (ModuleScript) — paramètres (son, musique, son du clic, effets)
 	Emplacement : ReplicatedStorage > Client > Components > Panels > Settings
 
+	Présentation "premium" en cartes de section (icône, titre, sous-titre) :
+	  - 🔊 Audio : Effets sonores / Musique lofi (interrupteur animé +
+	    curseur de volume à halo lumineux), puis le choix du son du clic
+	    (▶ pour écouter, clic pour choisir) ;
+	  - 🖥️ Affichage : particules et confettis ;
+	  - 🎮 Jeu : musique en cours (égaliseur animé, ⏭ morceau suivant),
+	    crédits et version.
+
+	Comportements (inchangés) :
 	- Interrupteurs Son / Musique / Particules : sauvegardés côté serveur
-	  avec la progression (RemoteFunction "SetSetting").
-	- Son du clic (v4) : liste de Config.ClickSounds (▶ pour écouter, clic
-	  pour choisir), sauvegardé avec SetSetting("ClickSound", id) et joué par
-	  SoundManager.PlayClick sur le gros bouton.
+	  avec la progression (RemoteFunction "SetSetting", booléens), 3 essais
+	  puis retour en arrière si le serveur refuse.
+	- Son du clic (v4) : liste de Config.ClickSounds, sauvegardé avec
+	  SetSetting("ClickSound", id) et joué par SoundManager.PlayClick sur le
+	  gros bouton.
 	- Curseurs de volume (musique, effets) : gardés en mémoire pour la
 	  session (SoundManager.SetMusicVolume / SetEffectsVolume). Ils se
 	  glissent à la souris ET au doigt (écran tactile).
@@ -31,24 +41,38 @@ local Settings = {
 	Title = "⚙️ Paramètres",
 	Subtitle = "Son, musique, clic et effets",
 	Color = Theme.Colors.Dark,
-	Size = Vector2.new(660, 580),
+	Size = Vector2.new(680, 600),
 }
 
-local ROW_COLOR = Theme.Colors.Surface or Theme.Colors.PanelLight
+local VERSION = "v4"
+local WHITE = Color3.new(1, 1, 1)
+local BLACK = Color3.new(0, 0, 0)
+local ROW_HOVER = Theme.Colors.Surface or Theme.Colors.PanelLight
 local ROW_BORDER = Theme.Colors.Divider or Theme.Colors.Disabled
+local ON_COLOR = Theme.Colors.Green
+local OFF_COLOR = Theme.Colors.Disabled
+local SELECTED_SOFT = Color3.fromRGB(230, 242, 255)
 
-type Toggle = { Button: TextButton, Knob: Frame }
+local SECTION_AUDIO = Theme.Colors.Blue
+local SECTION_DISPLAY = Theme.Colors.Purple
+local SECTION_GAME = Theme.Colors.Orange
+
+type Toggle = { Button: TextButton, Knob: Frame, Stroke: UIStroke, Glyph: TextLabel }
 type Slider = { Set: (value: number) -> (), SetEnabled: (enabled: boolean) -> () }
 
 local toggles: { [string]: Toggle } = {} -- [clé] = interrupteur
 local sliders: { [string]: Slider } = {} -- [clé du réglage lié] = curseur
 local current = { Sound = true, Music = true, Effects = true }
 
-local musicInfo: TextLabel? = nil
+local musicInfo: TextLabel? = nil -- sous-titre de la ligne "Musique lofi"
+local nowPlayingLabel: TextLabel? = nil -- grand texte de la carte "En cours de lecture"
+local nowPlayingStatus: TextLabel? = nil -- petite ligne au-dessus ("♫ En cours de lecture"...)
 local nextButton: TextButton? = nil
+local equalizerBars: { Frame } = {}
+local equalizerConnection: RBXScriptConnection? = nil
 
 -- Son du clic
-type ClickOption = { Id: string, Card: TextButton, Stroke: UIStroke, Check: Frame, Name: TextLabel }
+type ClickOption = { Id: string, Card: TextButton, Stroke: UIStroke, Check: Frame, Name: TextLabel, Hovered: boolean }
 local clickOptions: { ClickOption } = {}
 local clickSaveToken = 0 -- change à chaque choix (annule les sauvegardes périmées)
 local clickSaving = false -- une sauvegarde est en cours (on ne recale pas sur l'état serveur)
@@ -57,31 +81,57 @@ local clickSaving = false -- une sauvegarde est en cours (on ne recale pas sur l
 -- Réglages
 ----------------------------------------------------------------------
 
--- Texte sous "Musique" : morceau en cours, verrou Lofi, playlist vide...
+-- Textes de la musique : morceau en cours, verrou Lofi, playlist vide...
 local function refreshMusicInfo()
-	local label = musicInfo
-	if not label then
-		return
-	end
 	local name = SoundManager.GetCurrentTrack()
 	local playing = SoundManager.IsMusicPlaying()
 	local text
+	local status
 	if not ClientState.HasFeature("Lofi") then
 		text = "🔒 Se débloque avec 🎧 Lofi Beats"
+		status = "Verrouillé"
 	elseif not SoundManager.HasPlaylist() then
 		text = RunService:IsStudio() and "⚠️ Ajoute des IDs de musique dans Config.Music" or "Aucune musique pour le moment"
+		status = "Playlist vide"
 	elseif not current.Music then
 		text = "Musique coupée"
+		status = "En pause"
 	elseif playing and name then
 		text = "♫ " .. name
+		status = "♫ En cours de lecture"
 	else
 		text = "Chargement..."
+		status = "Chargement"
 	end
-	label.Text = text
+	local label = musicInfo
+	if label then
+		label.Text = text
+	end
+	local big = nowPlayingLabel
+	if big then
+		big.Text = (playing and name and current.Music) and tostring(name) or text
+	end
+	local small = nowPlayingStatus
+	if small then
+		small.Text = string.upper(status)
+	end
 	local button = nextButton
 	if button then
 		button.Visible = playing and current.Music and SoundManager.HasPlaylist()
 	end
+end
+
+-- Dessine un interrupteur (animé) selon sa valeur
+local function paintToggle(ui: Toggle, value: boolean, animate: boolean)
+	local duration = animate and 0.22 or 0
+	UIUtil.Tween(ui.Knob, duration, {
+		Position = value and UDim2.new(1, -3, 0.5, 0) or UDim2.new(0, 3, 0.5, 0),
+		AnchorPoint = value and Vector2.new(1, 0.5) or Vector2.new(0, 0.5),
+	}, Enum.EasingStyle.Back)
+	UIUtil.Tween(ui.Button, duration, { BackgroundColor3 = value and ON_COLOR or OFF_COLOR })
+	UIUtil.Tween(ui.Stroke, duration, { Color = (value and ON_COLOR or OFF_COLOR):Lerp(BLACK, 0.25) })
+	ui.Glyph.Text = value and "✓" or "✕"
+	ui.Glyph.TextColor3 = (value and ON_COLOR or OFF_COLOR):Lerp(BLACK, 0.2)
 end
 
 -- Applique un réglage localement (son / musique / effets)
@@ -97,11 +147,7 @@ function Settings.Apply(key: string, value: boolean)
 
 	local ui = toggles[key]
 	if ui then
-		UIUtil.Tween(ui.Knob, 0.2, {
-			Position = value and UDim2.new(1, -4, 0.5, 0) or UDim2.new(0, 4, 0.5, 0),
-			AnchorPoint = value and Vector2.new(1, 0.5) or Vector2.new(0, 0.5),
-		}, Enum.EasingStyle.Back)
-		UIUtil.Tween(ui.Button, 0.2, { BackgroundColor3 = value and Theme.Colors.Green or Theme.Colors.Disabled })
+		paintToggle(ui, value, true)
 	end
 	local slider = sliders[key]
 	if slider then
@@ -143,15 +189,16 @@ end
 -- Son du clic
 ----------------------------------------------------------------------
 
--- Met en valeur l'option choisie
+-- Met en valeur l'option choisie (et celle survolée)
 local function paintClickOptions()
 	local selected = SoundManager.GetClickSound()
 	for _, option in ipairs(clickOptions) do
 		local isSelected = option.Id == selected
-		option.Card.BackgroundColor3 = isSelected and Color3.fromRGB(230, 242, 255) or Theme.Colors.Card
-		option.Stroke.Color = isSelected and Theme.Colors.Blue or ROW_BORDER
+		option.Card.BackgroundColor3 = isSelected and SELECTED_SOFT or (option.Hovered and ROW_HOVER or Theme.Colors.Card)
+		option.Stroke.Color = (isSelected or option.Hovered) and Theme.Colors.Blue or ROW_BORDER
+		option.Stroke.Transparency = (option.Hovered and not isSelected) and 0.5 or 0
 		option.Stroke.Thickness = isSelected and 2 or 1.5
-		option.Name.TextColor3 = isSelected and Theme.Colors.Blue:Lerp(Color3.new(0, 0, 0), 0.3) or Theme.Colors.Text
+		option.Name.TextColor3 = isSelected and Theme.Colors.Blue:Lerp(BLACK, 0.3) or Theme.Colors.Text
 		if option.Check.Visible ~= isSelected then
 			option.Check.Visible = isSelected
 			if isSelected then
@@ -219,7 +266,7 @@ local function buildClickOption(grid: Frame, entry, order: number)
 		Size = UDim2.fromOffset(34, 34),
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(0, 10, 0.5, 0),
-		BackgroundColor3 = Theme.Colors.Dark,
+		BackgroundColor3 = WHITE,
 		AutoButtonColor = false,
 		Font = Theme.Fonts.Title,
 		Text = "▶",
@@ -229,10 +276,21 @@ local function buildClickOption(grid: Frame, entry, order: number)
 		Parent = card,
 	})
 	UIUtil.Corner(play, UDim.new(1, 0))
-	UIUtil.AnimateButton(play, 1.1, 0.9)
+	UIUtil.Gradient(play, ColorSequence.new(Theme.Colors.Blue:Lerp(WHITE, 0.2), Theme.Colors.Blue:Lerp(BLACK, 0.2)), 90)
+	UIUtil.AnimateButton(play, 1.12, 0.9)
+	local previewToken = 0
 	play.Activated:Connect(function()
 		SoundManager.PreviewClickSound(entry.Id)
 		UIUtil.Pop(play, 1.25, 0.3)
+		-- Petite note pendant l'écoute
+		previewToken += 1
+		local token = previewToken
+		play.Text = "♪"
+		task.delay(0.45, function()
+			if token == previewToken then
+				play.Text = "▶"
+			end
+		end)
 	end)
 
 	local isKeyboard = string.find(string.lower(tostring(entry.Id)), "keyboard") ~= nil
@@ -282,42 +340,227 @@ local function buildClickOption(grid: Frame, entry, order: number)
 		Parent = check,
 	})
 
+	local option: ClickOption = { Id = entry.Id, Card = card, Stroke = stroke, Check = check, Name = name, Hovered = false }
+	card.MouseEnter:Connect(function()
+		option.Hovered = true
+		paintClickOptions()
+	end)
+	card.MouseLeave:Connect(function()
+		option.Hovered = false
+		paintClickOptions()
+	end)
 	card.Activated:Connect(function()
 		chooseClickSound(entry.Id)
 	end)
-	table.insert(clickOptions, { Id = entry.Id, Card = card, Stroke = stroke, Check = check, Name = name })
+	table.insert(clickOptions, option)
 end
 
 ----------------------------------------------------------------------
 -- Composants
 ----------------------------------------------------------------------
 
--- Interrupteur ON/OFF (en haut à droite de la ligne)
+-- Carte de section (icône colorée, titre, sous-titre). Renvoie la carte :
+-- ses lignes s'empilent en dessous (LayoutOrder >= 1).
+local function buildSection(content: Instance, order: number, icon: string, title: string, subtitle: string, accent: Color3): Frame
+	local card = UIUtil.Create("Frame", {
+		Name = "Section" .. order,
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = WHITE,
+		LayoutOrder = order,
+		Parent = content,
+	})
+	UIUtil.Corner(card, Theme.Radius.L)
+	UIUtil.Stroke(card, ROW_BORDER, 1.5)
+	-- Léger voile de la couleur de la section en haut de la carte
+	UIUtil.Create("UIGradient", {
+		Rotation = 90,
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, accent:Lerp(WHITE, 0.9)),
+			ColorSequenceKeypoint.new(0.3, WHITE),
+			ColorSequenceKeypoint.new(1, WHITE),
+		}),
+		Parent = card,
+	})
+	UIUtil.Create("UIPadding", {
+		PaddingTop = UDim.new(0, 12),
+		PaddingBottom = UDim.new(0, 12),
+		PaddingLeft = UDim.new(0, 12),
+		PaddingRight = UDim.new(0, 12),
+		Parent = card,
+	})
+	UIUtil.Create("UIListLayout", {
+		Padding = UDim.new(0, 6),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = card,
+	})
+
+	local header = UIUtil.Create("Frame", {
+		Name = "Header",
+		Size = UDim2.new(1, 0, 0, 44),
+		BackgroundTransparency = 1,
+		LayoutOrder = 0,
+		Parent = card,
+	})
+	local badge = UIUtil.Create("Frame", {
+		Name = "Icon",
+		Size = UDim2.fromOffset(40, 40),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 2, 0.5, 0),
+		BackgroundColor3 = WHITE,
+		Parent = header,
+	})
+	UIUtil.Corner(badge, Theme.Radius.M)
+	UIUtil.Stroke(badge, accent:Lerp(BLACK, 0.25), 1.5, 0.35)
+	UIUtil.SoftGradient(badge, accent, 90)
+	UIUtil.Label({
+		Text = icon,
+		Size = UDim2.new(1, -12, 1, -12),
+		Position = UDim2.fromOffset(6, 6),
+		MaxTextSize = 22,
+		Parent = badge,
+	})
+	UIUtil.Label({
+		Name = "Title",
+		Text = title,
+		Font = Theme.Fonts.Title,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -60, 0, 22),
+		Position = UDim2.fromOffset(54, 2),
+		MaxTextSize = Theme.TextSize.Heading,
+		Parent = header,
+	})
+	UIUtil.Label({
+		Name = "Subtitle",
+		Text = subtitle,
+		TextColor3 = Theme.Colors.TextDim,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -60, 0, 16),
+		Position = UDim2.fromOffset(54, 25),
+		MaxTextSize = Theme.TextSize.Caption,
+		Parent = header,
+	})
+	return card
+end
+
+-- Fine ligne de séparation dans une section
+local function divider(section: Frame, order: number)
+	UIUtil.Create("Frame", {
+		Name = "Divider",
+		Size = UDim2.new(1, -16, 0, 1),
+		BackgroundColor3 = ROW_BORDER,
+		BorderSizePixel = 0,
+		LayoutOrder = order,
+		Parent = section,
+	})
+end
+
+-- Ligne d'une section : pastille d'icône, titre, sous-titre (fond au survol)
+local function buildRow(section: Frame, order: number, height: number, icon: string, title: string, accent: Color3): (Frame, TextLabel)
+	local row = UIUtil.Create("Frame", {
+		Name = "Row" .. order,
+		Size = UDim2.new(1, 0, 0, height),
+		BackgroundColor3 = ROW_HOVER,
+		BackgroundTransparency = 1,
+		LayoutOrder = order,
+		Parent = section,
+	})
+	UIUtil.Corner(row, Theme.Radius.M)
+	row.MouseEnter:Connect(function()
+		UIUtil.Tween(row, 0.15, { BackgroundTransparency = 0 })
+	end)
+	row.MouseLeave:Connect(function()
+		UIUtil.Tween(row, 0.2, { BackgroundTransparency = 1 })
+	end)
+
+	local bubble = UIUtil.Create("Frame", {
+		Name = "Icon",
+		Size = UDim2.fromOffset(36, 36),
+		Position = UDim2.fromOffset(8, 12),
+		BackgroundColor3 = accent:Lerp(WHITE, 0.85),
+		Parent = row,
+	})
+	UIUtil.Corner(bubble, UDim.new(1, 0))
+	UIUtil.Stroke(bubble, accent, 1, 0.6)
+	UIUtil.Label({
+		Text = icon,
+		Size = UDim2.new(1, -10, 1, -10),
+		Position = UDim2.fromOffset(5, 5),
+		MaxTextSize = 20,
+		Parent = bubble,
+	})
+	UIUtil.Label({
+		Name = "Title",
+		Text = title,
+		Font = Theme.Fonts.Title,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -150, 0, 20),
+		Position = UDim2.fromOffset(56, 10),
+		MaxTextSize = 17,
+		Parent = row,
+	})
+	local subtitle = UIUtil.Create("TextLabel", {
+		Name = "Subtitle",
+		Size = UDim2.new(1, -150, 0, 17),
+		Position = UDim2.fromOffset(56, 31),
+		BackgroundTransparency = 1,
+		Font = Theme.Fonts.Body,
+		Text = "",
+		TextColor3 = Theme.Colors.TextDim,
+		TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Parent = row,
+	})
+	return row, subtitle
+end
+
+-- Interrupteur ON/OFF animé (en haut à droite de la ligne)
 local function buildToggle(row: Frame, key: string)
 	local button = UIUtil.Create("TextButton", {
 		Name = "Toggle",
-		Size = UDim2.fromOffset(76, 38),
+		Size = UDim2.fromOffset(60, 32),
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -14, 0, 10),
-		BackgroundColor3 = Theme.Colors.Green,
+		Position = UDim2.new(1, -12, 0, 14),
+		BackgroundColor3 = ON_COLOR,
 		AutoButtonColor = false,
 		Text = "",
 		Parent = row,
 	})
 	UIUtil.Corner(button, UDim.new(1, 0))
-	UIUtil.Stroke(button, Theme.Colors.Border, 1.5)
+	local stroke = UIUtil.Stroke(button, ON_COLOR:Lerp(BLACK, 0.25), 1.5, 0.2)
+	-- Reflet (haut plus clair)
+	UIUtil.Create("UIGradient", {
+		Rotation = 90,
+		Color = ColorSequence.new(WHITE, Color3.fromRGB(215, 215, 215)),
+		Parent = button,
+	})
 	local knob = UIUtil.Create("Frame", {
 		Name = "Knob",
-		Size = UDim2.fromOffset(30, 30),
+		Size = UDim2.fromOffset(26, 26),
 		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -4, 0.5, 0),
-		BackgroundColor3 = Color3.new(1, 1, 1),
+		Position = UDim2.new(1, -3, 0.5, 0),
+		BackgroundColor3 = WHITE,
+		ZIndex = 2,
 		Parent = button,
 	})
 	UIUtil.Corner(knob, UDim.new(1, 0))
-	UIUtil.Stroke(knob, Theme.Colors.Border, 1.5)
-	UIUtil.AnimateButton(button)
-	toggles[key] = { Button = button, Knob = knob }
+	UIUtil.Stroke(knob, BLACK, 1, 0.8)
+	local glyph = UIUtil.Label({
+		Name = "Glyph",
+		Text = "✓",
+		Font = Theme.Fonts.Title,
+		TextColor3 = ON_COLOR,
+		Size = UDim2.new(1, -10, 1, -10),
+		Position = UDim2.fromOffset(5, 5),
+		MaxTextSize = 13,
+		ZIndex = 3,
+		Parent = knob,
+	})
+	UIUtil.AnimateButton(button, 1.06, 0.93)
+	local ui: Toggle = { Button = button, Knob = knob, Stroke = stroke, Glyph = glyph }
+	toggles[key] = ui
+	paintToggle(ui, current[key] ~= false, false)
 
 	button.Activated:Connect(function()
 		local newValue = not current[key]
@@ -327,16 +570,40 @@ local function buildToggle(row: Frame, key: string)
 	end)
 end
 
--- Curseur de volume 0..100 % (souris + tactile). `onChanged(valeur, relâché)`
+-- Icône de volume selon le niveau
+local function volumeIcon(value: number): string
+	if value <= 0.001 then
+		return "🔇"
+	elseif value < 0.34 then
+		return "🔈"
+	elseif value < 0.67 then
+		return "🔉"
+	end
+	return "🔊"
+end
+
+-- Curseur de volume 0..100 % (souris + tactile), halo lumineux autour du
+-- bouton (survol / glissement). `onChanged(valeur, relâché)`
 local function buildSlider(row: Frame, initial: number, color: Color3, onChanged: (value: number, released: boolean) -> ()): Slider
 	local value = math.clamp(initial, 0, 1)
+	local enabled = true
+	local hovering = false
+
+	local icon = UIUtil.Label({
+		Name = "VolumeIcon",
+		Size = UDim2.fromOffset(24, 24),
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 56, 1, -9),
+		MaxTextSize = 18,
+		Parent = row,
+	})
 
 	-- Zone de saisie plus haute que la piste (plus facile au doigt)
 	local hit = UIUtil.Create("TextButton", {
 		Name = "Slider",
 		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(0, 16, 1, -6),
-		Size = UDim2.new(1, -96, 0, 30),
+		Position = UDim2.new(0, 92, 1, -6),
+		Size = UDim2.new(1, -170, 0, 30),
 		BackgroundTransparency = 1,
 		AutoButtonColor = false,
 		Text = "",
@@ -347,7 +614,7 @@ local function buildSlider(row: Frame, initial: number, color: Color3, onChanged
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.fromScale(0, 0.5),
 		Size = UDim2.new(1, 0, 0, 8),
-		BackgroundColor3 = Theme.Colors.Disabled,
+		BackgroundColor3 = Color3.fromRGB(226, 226, 230),
 		BorderSizePixel = 0,
 		Parent = hit,
 	})
@@ -355,45 +622,71 @@ local function buildSlider(row: Frame, initial: number, color: Color3, onChanged
 	local fill = UIUtil.Create("Frame", {
 		Name = "Fill",
 		Size = UDim2.fromScale(value, 1),
-		BackgroundColor3 = color,
+		BackgroundColor3 = WHITE,
 		BorderSizePixel = 0,
 		Parent = track,
 	})
 	UIUtil.Corner(fill, UDim.new(1, 0))
-	local knob = UIUtil.Create("Frame", {
-		Name = "Knob",
+	local fillGradient = UIUtil.Gradient(fill, ColorSequence.new(color:Lerp(WHITE, 0.35), color), 0)
+
+	-- Halo (derrière le bouton)
+	local glow = UIUtil.Create("Frame", {
+		Name = "Glow",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(value, 0.5),
-		Size = UDim2.fromOffset(24, 24),
-		BackgroundColor3 = Color3.new(1, 1, 1),
+		Size = UDim2.fromOffset(32, 32),
+		BackgroundColor3 = color,
+		BackgroundTransparency = 0.88,
 		BorderSizePixel = 0,
 		ZIndex = 2,
 		Parent = hit,
 	})
+	UIUtil.Corner(glow, UDim.new(1, 0))
+	local knob = UIUtil.Create("Frame", {
+		Name = "Knob",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(value, 0.5),
+		Size = UDim2.fromOffset(22, 22),
+		BackgroundColor3 = WHITE,
+		BorderSizePixel = 0,
+		ZIndex = 3,
+		Parent = hit,
+	})
 	UIUtil.Corner(knob, UDim.new(1, 0))
-	UIUtil.Stroke(knob, Theme.Colors.Border, 1.5)
+	local knobStroke = UIUtil.Stroke(knob, color, 2.5, 0)
 	local knobScale = UIUtil.Create("UIScale", { Parent = knob })
 
 	local percent = UIUtil.Create("TextLabel", {
 		Name = "Percent",
 		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.new(1, -14, 1, -6),
-		Size = UDim2.fromOffset(62, 30),
-		BackgroundTransparency = 1,
+		Position = UDim2.new(1, -12, 1, -9),
+		Size = UDim2.fromOffset(60, 24),
+		BackgroundColor3 = WHITE,
 		Font = Theme.Fonts.Number,
 		Text = "",
 		TextColor3 = Theme.Colors.Text,
-		TextSize = 17,
-		TextXAlignment = Enum.TextXAlignment.Right,
+		TextSize = 15,
 		Parent = row,
 	})
+	UIUtil.Corner(percent, UDim.new(1, 0))
+	UIUtil.Stroke(percent, ROW_BORDER, 1.5)
 
 	local function render()
 		fill.Size = UDim2.fromScale(value, 1)
 		knob.Position = UDim2.fromScale(value, 0.5)
+		glow.Position = UDim2.fromScale(value, 0.5)
 		percent.Text = tostring(math.floor(value * 100 + 0.5)) .. " %"
+		icon.Text = enabled and volumeIcon(value) or "🔇"
 	end
 	render()
+
+	-- Halo : 0 = repos, 1 = survol, 2 = glissement
+	local function setGlow(level: number)
+		local size = level == 2 and 46 or (level == 1 and 40 or 32)
+		local transparency = level == 2 and 0.62 or (level == 1 and 0.74 or 0.88)
+		UIUtil.Tween(glow, 0.15, { Size = UDim2.fromOffset(size, size), BackgroundTransparency = transparency })
+		UIUtil.Tween(knobScale, 0.15, { Scale = level == 2 and 1.2 or (level == 1 and 1.1 or 1) }, Enum.EasingStyle.Back)
+	end
 
 	local dragInput: InputObject? = nil
 	local function setFromX(x: number, released: boolean)
@@ -410,18 +703,20 @@ local function buildSlider(row: Frame, initial: number, color: Color3, onChanged
 		local kind = input.UserInputType
 		if kind == Enum.UserInputType.MouseButton1 or kind == Enum.UserInputType.Touch then
 			dragInput = input
-			UIUtil.Tween(knobScale, 0.12, { Scale = 1.25 }, Enum.EasingStyle.Back)
+			setGlow(2)
 			setFromX(input.Position.X, false)
 		end
 	end)
 	hit.MouseEnter:Connect(function()
+		hovering = true
 		if not dragInput then
-			UIUtil.Tween(knobScale, 0.12, { Scale = 1.12 })
+			setGlow(1)
 		end
 	end)
 	hit.MouseLeave:Connect(function()
+		hovering = false
 		if not dragInput then
-			UIUtil.Tween(knobScale, 0.12, { Scale = 1 })
+			setGlow(0)
 		end
 	end)
 	UserInputService.InputChanged:Connect(function(input: InputObject)
@@ -446,7 +741,7 @@ local function buildSlider(row: Frame, initial: number, color: Color3, onChanged
 			or (kind == Enum.UserInputType.Touch and input == dragging)
 		then
 			dragInput = nil
-			UIUtil.Tween(knobScale, 0.15, { Scale = 1 })
+			setGlow(hovering and 1 or 0)
 			onChanged(value, true)
 		end
 	end)
@@ -456,81 +751,290 @@ local function buildSlider(row: Frame, initial: number, color: Color3, onChanged
 			value = math.clamp(newValue, 0, 1)
 			render()
 		end,
-		SetEnabled = function(enabled: boolean)
-			fill.BackgroundColor3 = enabled and color or Theme.Colors.Disabled
-			percent.TextTransparency = enabled and 0 or 0.5
-			knob.BackgroundTransparency = enabled and 0 or 0.3
+		SetEnabled = function(isEnabled: boolean)
+			enabled = isEnabled
+			local tint = isEnabled and color or Theme.Colors.Disabled
+			fillGradient.Color = ColorSequence.new(tint:Lerp(WHITE, 0.35), tint)
+			glow.BackgroundColor3 = tint
+			knobStroke.Color = tint
+			percent.TextTransparency = isEnabled and 0 or 0.5
+			knob.BackgroundTransparency = isEnabled and 0 or 0.3
+			render()
 		end,
 	}
 	return slider
 end
 
--- Ligne blanche arrondie (fond léger + contour fin)
-local function buildRow(content: Frame, order: number, height: number): Frame
-	local row = UIUtil.Create("Frame", {
-		Name = "Row" .. order,
-		Size = UDim2.new(1, 0, 0, height),
-		BackgroundColor3 = ROW_COLOR,
-		LayoutOrder = order,
-		Parent = content,
-	})
-	UIUtil.Corner(row, 14)
-	UIUtil.Stroke(row, ROW_BORDER, 1.5)
-	return row
-end
-
-local function rowTitle(row: Frame, text: string)
-	UIUtil.Create("TextLabel", {
-		Name = "Title",
-		Size = UDim2.new(1, -120, 0, 24),
-		Position = UDim2.fromOffset(16, 8),
-		BackgroundTransparency = 1,
-		Font = Theme.Fonts.Title,
-		Text = text,
-		TextColor3 = Theme.Colors.Text,
-		TextSize = 19,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Parent = row,
-	})
-end
-
-local function rowSubtitle(row: Frame, text: string): TextLabel
-	return UIUtil.Create("TextLabel", {
-		Name = "Subtitle",
-		Size = UDim2.new(1, -150, 0, 18),
-		Position = UDim2.fromOffset(16, 31),
-		BackgroundTransparency = 1,
-		Font = Theme.Fonts.Body,
-		Text = text,
-		TextColor3 = Theme.Colors.TextDim,
-		TextSize = 14,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		Parent = row,
-	})
-end
-
-local function sectionHeader(content: Frame, text: string, order: number)
-	if UIUtil.SectionHeader then
-		UIUtil.SectionHeader(content, text, order, Theme.Colors.Dark)
-	else
-		UIUtil.Create("TextLabel", {
-			Size = UDim2.new(1, 0, 0, 26),
-			BackgroundTransparency = 1,
-			Font = Theme.Fonts.Title,
-			Text = text,
-			TextColor3 = Theme.Colors.Text,
-			TextSize = 19,
-			TextXAlignment = Enum.TextXAlignment.Left,
-			LayoutOrder = order,
-			Parent = content,
-		})
+-- Égaliseur de la carte "En cours de lecture" (barres qui dansent)
+local function stepEqualizer()
+	local playing = SoundManager.IsMusicPlaying() and current.Music
+	local now = os.clock()
+	for index, bar in ipairs(equalizerBars) do
+		local height = 4
+		if playing then
+			local wave = math.sin(now * (5 + index * 1.7) + index * 1.3) * 0.5 + 0.5
+			local wave2 = math.sin(now * (2.3 + index * 0.9)) * 0.5 + 0.5
+			height = 5 + math.floor((wave * 0.7 + wave2 * 0.3) * 17)
+		end
+		bar.Size = UDim2.fromOffset(4, height)
 	end
 end
 
 ----------------------------------------------------------------------
 -- Construction
 ----------------------------------------------------------------------
+
+local function buildAudio(content: Instance)
+	local section = buildSection(content, 1, "🔊", "Audio", "Effets sonores, musique et son du clic", SECTION_AUDIO)
+
+	-- Effets sonores : interrupteur + volume
+	local soundRow, soundSubtitle = buildRow(section, 1, 96, "🔔", "Effets sonores", SECTION_AUDIO)
+	soundSubtitle.Text = "Clics, achats, bonus..."
+	buildToggle(soundRow, "Sound")
+	local lastPreview = 0
+	sliders.Sound = buildSlider(soundRow, SoundManager.GetEffectsVolume(), Theme.Colors.Blue, function(value, released)
+		SoundManager.SetEffectsVolume(value)
+		-- Petit son d'essai (pas trop souvent pendant le glissement)
+		local now = os.clock()
+		if released or now - lastPreview > 0.15 then
+			lastPreview = now
+			SoundManager.Play("Click", 0.9 + value * 0.4)
+		end
+	end)
+
+	divider(section, 2)
+
+	-- Musique : interrupteur + volume (morceau en cours dans le sous-titre)
+	local musicRow, musicSubtitle = buildRow(section, 3, 96, "🎵", "Musique lofi", Theme.Colors.Purple)
+	musicInfo = musicSubtitle
+	buildToggle(musicRow, "Music")
+	sliders.Music = buildSlider(musicRow, SoundManager.GetMusicVolume(), Theme.Colors.Purple, function(value)
+		SoundManager.SetMusicVolume(value)
+	end)
+
+	divider(section, 4)
+
+	-- Son du clic (gros bouton)
+	local clickHeader = UIUtil.Create("Frame", {
+		Name = "ClickHeader",
+		Size = UDim2.new(1, 0, 0, 40),
+		BackgroundTransparency = 1,
+		LayoutOrder = 5,
+		Parent = section,
+	})
+	UIUtil.Label({
+		Text = "🖱️ Son du clic",
+		Font = Theme.Fonts.Title,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -16, 0, 20),
+		Position = UDim2.fromOffset(8, 2),
+		MaxTextSize = 17,
+		Parent = clickHeader,
+	})
+	UIUtil.Label({
+		Text = "▶ pour écouter, clic sur la carte pour choisir",
+		TextColor3 = Theme.Colors.TextDim,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -16, 0, 15),
+		Position = UDim2.fromOffset(8, 23),
+		MaxTextSize = 13,
+		Parent = clickHeader,
+	})
+	local clickGrid = UIUtil.Create("Frame", {
+		Name = "ClickSounds",
+		Size = UDim2.fromScale(1, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		LayoutOrder = 6,
+		Parent = section,
+	})
+	UIUtil.Create("UIPadding", {
+		PaddingLeft = UDim.new(0, 4),
+		PaddingRight = UDim.new(0, 4),
+		PaddingTop = UDim.new(0, 2),
+		PaddingBottom = UDim.new(0, 2),
+		Parent = clickGrid,
+	})
+	UIUtil.Create("UIGridLayout", {
+		CellSize = UDim2.new(1 / 3, -7, 0, 54),
+		CellPadding = UDim2.fromOffset(10, 10),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = clickGrid,
+	})
+	for index, entry in ipairs(Config.ClickSounds or {}) do
+		if type(entry) == "table" and type(entry.Id) == "string" then
+			buildClickOption(clickGrid, entry, index)
+		end
+	end
+	paintClickOptions()
+	SoundManager.ClickSoundChanged:Connect(paintClickOptions)
+end
+
+local function buildDisplay(content: Instance)
+	local section = buildSection(content, 2, "🖥️", "Affichage", "Ce qui bouge à l'écran", SECTION_DISPLAY)
+	local fxRow, fxSubtitle = buildRow(section, 1, 60, "✨", "Particules et confettis", SECTION_DISPLAY)
+	fxSubtitle.Text = "Désactive pour un écran plus calme"
+	buildToggle(fxRow, "Effects")
+end
+
+local function buildGame(content: Instance)
+	local section = buildSection(content, 3, "🎮", "Jeu", "Musique en cours et crédits", SECTION_GAME)
+
+	-- Carte "En cours de lecture"
+	local nowPlaying = UIUtil.Create("Frame", {
+		Name = "NowPlaying",
+		Size = UDim2.new(1, 0, 0, 72),
+		BackgroundColor3 = WHITE,
+		LayoutOrder = 1,
+		Parent = section,
+	})
+	UIUtil.Corner(nowPlaying, Theme.Radius.M)
+	UIUtil.Stroke(nowPlaying, Theme.Colors.Purple, 1.5, 0.6)
+	UIUtil.Gradient(nowPlaying, ColorSequence.new(Color3.fromRGB(246, 238, 255), Color3.fromRGB(255, 240, 248)), 0)
+	local cover = UIUtil.Create("Frame", {
+		Name = "Cover",
+		Size = UDim2.fromOffset(52, 52),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 10, 0.5, 0),
+		BackgroundColor3 = WHITE,
+		Parent = nowPlaying,
+	})
+	UIUtil.Corner(cover, Theme.Radius.M)
+	UIUtil.Gradient(cover, ColorSequence.new(Theme.Colors.Purple, Theme.Colors.Pink), 45)
+	UIUtil.Label({
+		Text = "🎧",
+		Size = UDim2.new(1, -16, 1, -16),
+		Position = UDim2.fromOffset(8, 8),
+		MaxTextSize = 26,
+		Parent = cover,
+	})
+	nowPlayingStatus = UIUtil.Label({
+		Name = "Status",
+		Font = Theme.Fonts.Title,
+		TextColor3 = Theme.Colors.Purple,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -190, 0, 14),
+		Position = UDim2.fromOffset(74, 14),
+		MaxTextSize = 12,
+		Parent = nowPlaying,
+	})
+	nowPlayingLabel = UIUtil.Label({
+		Name = "Track",
+		Font = Theme.Fonts.Title,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -190, 0, 22),
+		Position = UDim2.fromOffset(74, 32),
+		MaxTextSize = 18,
+		Parent = nowPlaying,
+	})
+	-- Égaliseur (4 barres) à droite du titre
+	local equalizer = UIUtil.Create("Frame", {
+		Name = "Equalizer",
+		Size = UDim2.fromOffset(34, 24),
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -62, 0.5, 0),
+		BackgroundTransparency = 1,
+		Parent = nowPlaying,
+	})
+	UIUtil.Create("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Bottom,
+		Padding = UDim.new(0, 4),
+		Parent = equalizer,
+	})
+	table.clear(equalizerBars)
+	for index = 1, 4 do
+		local bar = UIUtil.Create("Frame", {
+			Name = "Bar" .. index,
+			Size = UDim2.fromOffset(4, 4),
+			BackgroundColor3 = Theme.Colors.Purple:Lerp(Theme.Colors.Pink, (index - 1) / 3),
+			BorderSizePixel = 0,
+			LayoutOrder = index,
+			Parent = equalizer,
+		})
+		UIUtil.Corner(bar, 2)
+		table.insert(equalizerBars, bar)
+	end
+	local skip = UIUtil.Create("TextButton", {
+		Name = "Next",
+		Size = UDim2.fromOffset(40, 40),
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -12, 0.5, 0),
+		BackgroundColor3 = WHITE,
+		AutoButtonColor = false,
+		Font = Theme.Fonts.Title,
+		Text = "⏭",
+		TextColor3 = Theme.Colors.Text,
+		TextSize = 18,
+		Visible = false,
+		Parent = nowPlaying,
+	})
+	UIUtil.Corner(skip, UDim.new(1, 0))
+	UIUtil.Stroke(skip, Theme.Colors.Purple, 1.5, 0.3)
+	UIUtil.AnimateButton(skip)
+	skip.Activated:Connect(function()
+		if SoundManager.NextTrack() then
+			SoundManager.Play("Open", 1.2)
+		end
+	end)
+	nextButton = skip
+
+	-- Crédits et version
+	local credits = UIUtil.Create("Frame", {
+		Name = "Credits",
+		Size = UDim2.new(1, 0, 0, 64),
+		BackgroundTransparency = 1,
+		LayoutOrder = 2,
+		Parent = section,
+	})
+	local logo = UIUtil.Create("Frame", {
+		Size = UDim2.fromOffset(44, 44),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 14, 0.5, 0),
+		BackgroundColor3 = WHITE,
+		Parent = credits,
+	})
+	UIUtil.Corner(logo, UDim.new(1, 0))
+	UIUtil.Stroke(logo, SECTION_GAME, 1.5, 0.4)
+	UIUtil.SoftGradient(logo, Theme.Colors.Pink, 90)
+	UIUtil.Label({
+		Text = "🧠",
+		Size = UDim2.new(1, -12, 1, -12),
+		Position = UDim2.fromOffset(6, 6),
+		MaxTextSize = 24,
+		Parent = logo,
+	})
+	UIUtil.Label({
+		Text = "Dopamine Clicker",
+		Font = Theme.Fonts.Title,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -170, 0, 20),
+		Position = UDim2.fromOffset(70, 12),
+		MaxTextSize = 17,
+		Parent = credits,
+	})
+	UIUtil.Label({
+		Text = "Un jeu Roblox  •  merci de jouer 💙",
+		TextColor3 = Theme.Colors.TextDim,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -170, 0, 16),
+		Position = UDim2.fromOffset(70, 34),
+		MaxTextSize = 13,
+		Parent = credits,
+	})
+	local versionChip = UIUtil.Chip({
+		Name = "Version",
+		Text = "Version " .. VERSION,
+		Color = SECTION_GAME,
+		TextColor3 = Theme.Colors.TextLight,
+		Height = 26,
+		TextSize = 13,
+		Parent = credits,
+	})
+	versionChip.AnchorPoint = Vector2.new(1, 0.5)
+	versionChip.Position = UDim2.new(1, -12, 0.5, 0)
+end
 
 function Settings.Build(panel: Frame)
 	-- Contenu défilant (tout ne tient pas toujours en hauteur)
@@ -554,91 +1058,14 @@ function Settings.Build(panel: Frame)
 		Parent = content,
 	})
 	UIUtil.Create("UIListLayout", {
-		Padding = UDim.new(0, 10),
+		Padding = UDim.new(0, 12),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = content,
 	})
 
-	sectionHeader(content, "Audio", 1)
-
-	-- Effets sonores : interrupteur + volume
-	local soundRow = buildRow(content, 2, 92)
-	rowTitle(soundRow, "🔊 Effets sonores")
-	rowSubtitle(soundRow, "Clics, achats, bonus...")
-	buildToggle(soundRow, "Sound")
-	local lastPreview = 0
-	sliders.Sound = buildSlider(soundRow, SoundManager.GetEffectsVolume(), Theme.Colors.Blue, function(value, released)
-		SoundManager.SetEffectsVolume(value)
-		-- Petit son d'essai (pas trop souvent pendant le glissement)
-		local now = os.clock()
-		if released or now - lastPreview > 0.15 then
-			lastPreview = now
-			SoundManager.Play("Click", 0.9 + value * 0.4)
-		end
-	end)
-
-	-- Musique : interrupteur + volume + morceau en cours
-	local musicRow = buildRow(content, 3, 92)
-	rowTitle(musicRow, "🎵 Musique lofi")
-	musicInfo = rowSubtitle(musicRow, "")
-	buildToggle(musicRow, "Music")
-	sliders.Music = buildSlider(musicRow, SoundManager.GetMusicVolume(), Theme.Colors.Purple, function(value)
-		SoundManager.SetMusicVolume(value)
-	end)
-	local skip = UIUtil.Create("TextButton", {
-		Name = "Next",
-		Size = UDim2.fromOffset(38, 38),
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -100, 0, 10),
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		AutoButtonColor = false,
-		Font = Theme.Fonts.Title,
-		Text = "⏭",
-		TextColor3 = Theme.Colors.Text,
-		TextSize = 18,
-		Visible = false,
-		Parent = musicRow,
-	})
-	UIUtil.Corner(skip, UDim.new(1, 0))
-	UIUtil.Stroke(skip, Theme.Colors.Border, 1.5)
-	UIUtil.AnimateButton(skip)
-	skip.Activated:Connect(function()
-		if SoundManager.NextTrack() then
-			SoundManager.Play("Open", 1.2)
-		end
-	end)
-	nextButton = skip
-
-	-- Son du clic (gros bouton)
-	sectionHeader(content, "Son du clic", 4)
-	local clickGrid = UIUtil.Create("Frame", {
-		Name = "ClickSounds",
-		Size = UDim2.fromScale(1, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundTransparency = 1,
-		LayoutOrder = 5,
-		Parent = content,
-	})
-	UIUtil.Create("UIGridLayout", {
-		CellSize = UDim2.new(1 / 3, -7, 0, 54),
-		CellPadding = UDim2.fromOffset(10, 10),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		Parent = clickGrid,
-	})
-	for index, entry in ipairs(Config.ClickSounds or {}) do
-		if type(entry) == "table" and type(entry.Id) == "string" then
-			buildClickOption(clickGrid, entry, index)
-		end
-	end
-	paintClickOptions()
-	SoundManager.ClickSoundChanged:Connect(paintClickOptions)
-
-	sectionHeader(content, "Affichage", 6)
-
-	local fxRow = buildRow(content, 7, 60)
-	rowTitle(fxRow, "✨ Particules et confettis")
-	rowSubtitle(fxRow, "Désactive pour un écran plus calme")
-	buildToggle(fxRow, "Effects")
+	buildAudio(content)
+	buildDisplay(content)
+	buildGame(content)
 
 	UIUtil.Create("TextLabel", {
 		Name = "Tip",
@@ -648,7 +1075,7 @@ function Settings.Build(panel: Frame)
 		Font = Theme.Fonts.Body,
 		TextSize = 14,
 		TextWrapped = true,
-		Size = UDim2.new(1, 0, 0, 36),
+		Size = UDim2.new(1, 0, 0, 30),
 		LayoutOrder = 10,
 		Parent = content,
 	})
@@ -669,17 +1096,30 @@ function Settings.Build(panel: Frame)
 	end)
 	ClientState.FeaturesChanged:Connect(refreshMusicInfo)
 	refreshMusicInfo()
+	stepEqualizer()
 end
 
 function Settings.OnOpen()
 	refreshMusicInfo()
+	-- Égaliseur animé seulement quand la fenêtre est ouverte
+	if not equalizerConnection then
+		equalizerConnection = RunService.Heartbeat:Connect(stepEqualizer)
+	end
+end
+
+function Settings.OnClose()
+	local connection = equalizerConnection
+	if connection then
+		connection:Disconnect()
+		equalizerConnection = nil
+	end
 end
 
 -- Au chargement, on applique les réglages sauvegardés (une seule fois) ;
 -- le son du clic suit ensuite l'état du serveur (sauf pendant une sauvegarde)
 local applied = false
 function Settings.Update(data)
-	if not data.Settings then
+	if type(data) ~= "table" or type(data.Settings) ~= "table" then
 		return
 	end
 	if not applied then

@@ -2,7 +2,8 @@
 	LiveStream (ModuleScript - stimulus)
 	Emplacement : ReplicatedStorage > Client > Stimuli > LiveStream
 
-	Faux live "ASMR mukbang" (slot L1, 288x190), façon appli de streaming :
+	Faux live "ASMR mukbang" (slot L3, 384x268, en bas à gauche), façon
+	appli de streaming :
 	  - en-tête : avatar dessiné, pseudo certifié, badge "● LIVE" qui pulse,
 	    spectateurs (animés, montent avec l'amélioration "Abonnés"), likes ;
 	  - la vidéo : une streameuse DESSINÉE en formes (cheveux, casque
@@ -31,27 +32,41 @@ local Debris = game:GetService("Debris")
 local TweenService = game:GetService("TweenService")
 
 local LiveStream = {}
-LiveStream.Slot = "L1"
+LiveStream.Slot = "L3"
 
 ----------------------------------------------------------------------
--- Disposition (pixels "design", carte 284 x 186 rentrée de 2 px)
+-- Disposition (pixels "design"). Tout découle de la taille du slot L3
+-- (voir Client > Slots) : la carte est rentrée de 2 px, la vidéo et le
+-- chat se calent sur la largeur de la carte (Scale), la scène de la vidéo
+-- est placée depuis le haut de la vidéo.
 ----------------------------------------------------------------------
-local CARD_W = 284
-local VIDEO_X, VIDEO_Y = 6, 34
-local VIDEO_H = 146
-local CHAT_W = 100
-local GAP = 4
-local TABLE_Y = 104 -- haut de la table dans la vidéo
-local PLATE_Y = 114 -- centre de l'assiette
-local MOUTH_Y = TABLE_Y - 36 -- bouche de la streameuse (vidéo)
+local SLOT_W, SLOT_H = 384, 268 -- = Slots.Definitions.L3
+local CARD_W, CARD_H = SLOT_W - 4, SLOT_H - 4 -- 380 x 264
+local PAD = 8 -- marge intérieure de la carte (côtés et bas)
+local HEADER_H = 46 -- en-tête : avatar, pseudo, LIVE, Suivre
+local HEADER_MID = HEADER_H / 2 -- ligne centrale de l'en-tête
+local VIDEO_X, VIDEO_Y = PAD, HEADER_H
+local VIDEO_H = CARD_H - VIDEO_Y - PAD -- 210
+local CHAT_W = 138 -- colonne de chat (Feature "LiveChat")
+local GAP = 6 -- espace entre la vidéo et le chat
+local FOLLOW_W, FOLLOW_H = 100, 30 -- bouton "Suivre"
+local LIVE_W, LIVE_H = 52, 20 -- badge "● LIVE"
+local TABLE_Y = VIDEO_H - 60 -- haut de la table dans la vidéo (150)
+local PLATE_Y = TABLE_Y + 13 -- centre de l'assiette
+-- La streameuse est dessinée sur une grille de 80 x 80 puis agrandie
+local STREAMER_SCALE = 1.4
+local STREAMER_Y = TABLE_Y + 8 -- bas de la streameuse (caché par la table)
+local MOUTH_Y = STREAMER_Y - 41 * STREAMER_SCALE -- bouche de la streameuse (vidéo)
+local HEAD_Y = STREAMER_Y - 55 * STREAMER_SCALE -- centre du ring light (derrière la tête)
 local BUTTER_X = 0.85 -- position (Scale) du beurre sur la table
+local BUTTER_Y = TABLE_Y + 26 -- bas de la coupelle de beurre
 local MIC_X = 0.12
-local MAX_CHAT = 16 -- messages gardés (les plus vieux sont hors champ, en haut)
-local MAX_HEARTS = 6
+local MAX_CHAT = 18 -- messages gardés (les plus vieux sont hors champ, en haut)
+local MAX_HEARTS = 7
 local BUTTER_BITES = 8 -- bouchées avant qu'il ne reste plus rien
 
 local FOODS = { "🥪", "🍟", "🍔", "🌭", "🍕", "🥓", "🍗", "🌮", "🍩", "🥐", "🍪", "🌯", "🍙", "🧁" }
-local FOOD_OFFSETS = { -22, -8, 8, 22 }
+local FOOD_OFFSETS = { -29, -10, 10, 29 }
 
 local CRUNCH_WORDS = { "CRUNCH !", "MIAM", "CROC !", "*crounch*", "SLURP", "CRAC !", "NOM NOM", "CRISP !", "MMMH", "SCROUNCH" }
 local BUTTER_WORDS = { "CROUNCH !", "*CROUNCH*", "CRAC !", "SCRONCH", "CRUNCH !!" }
@@ -222,7 +237,7 @@ function LiveStream.Start(ctx)
 		Size = UDim2.new(1, -4, 1, -4),
 		BackgroundColor3 = Color3.fromRGB(24, 20, 34),
 		Parent = ctx.Container,
-	}, 14)
+	}, 16)
 	UI.Gradient(card, ColorSequence.new(Color3.fromRGB(46, 36, 66), Color3.fromRGB(20, 17, 28)), 90)
 	local cardStroke = UI.Stroke(card, Color3.fromRGB(150, 90, 255), 2)
 	UI.Gradient(cardStroke, ColorSequence.new({
@@ -232,11 +247,10 @@ function LiveStream.Start(ctx)
 	}), 0)
 	local strokeGradient = cardStroke:FindFirstChildOfClass("UIGradient")
 
-	local function videoWidth(chat: boolean): number
-		if chat then
-			return CARD_W - VIDEO_X * 2 - CHAT_W - GAP
-		end
-		return CARD_W - VIDEO_X * 2
+	-- Taille de la vidéo : toute la largeur de la carte, moins le chat s'il est là
+	local function videoSize(chat: boolean): UDim2
+		local inset = VIDEO_X * 2 + (chat and (CHAT_W + GAP) or 0)
+		return UDim2.new(1, -inset, 0, VIDEO_H)
 	end
 
 	------------------------------------------------------------------
@@ -245,18 +259,21 @@ function LiveStream.Start(ctx)
 	local header = box({
 		Name = "Header",
 		Position = UDim2.fromOffset(0, 0),
-		Size = UDim2.new(1, 0, 0, VIDEO_Y),
+		Size = UDim2.new(1, 0, 0, HEADER_H),
 		BackgroundTransparency = 1,
 		ZIndex = 5,
 		Parent = card,
 	})
 
 	-- Avatar : mini portrait dessiné (anneau dégradé + visage + cheveux)
+	local AVATAR = 36 -- diamètre de l'anneau
+	local FACE = 30 -- diamètre du visage
+	local TEXT_X = PAD + AVATAR + 8 -- début du pseudo / des compteurs
 	local avatarRing = box({
 		Name = "Avatar",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromOffset(19, 18),
-		Size = UDim2.fromOffset(26, 26),
+		Position = UDim2.fromOffset(PAD + AVATAR / 2 + 2, HEADER_MID),
+		Size = UDim2.fromOffset(AVATAR, AVATAR),
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		ZIndex = 5,
 		Parent = header,
@@ -265,27 +282,32 @@ function LiveStream.Start(ctx)
 	local avatarFace = box({
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(21, 21),
+		Size = UDim2.fromOffset(FACE, FACE),
 		BackgroundColor3 = Color3.fromRGB(255, 214, 186),
 		ZIndex = 6,
 		Parent = avatarRing,
 	}, UDim.new(1, 0))
-	box({ Position = UDim2.fromOffset(0, -1), Size = UDim2.fromOffset(21, 10), BackgroundColor3 = Color3.fromRGB(74, 52, 94), ZIndex = 7, Parent = avatarFace }, 5)
-	for _, x in ipairs({ 7, 14 }) do
-		box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(x, 12), Size = UDim2.fromOffset(3, 3), BackgroundColor3 = Color3.fromRGB(40, 30, 50), ZIndex = 7, Parent = avatarFace }, UDim.new(1, 0))
+	box({ Position = UDim2.fromOffset(0, -1), Size = UDim2.fromOffset(FACE, 14), BackgroundColor3 = Color3.fromRGB(74, 52, 94), ZIndex = 7, Parent = avatarFace }, 7)
+	for _, x in ipairs({ 10, 20 }) do
+		box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(x, 17), Size = UDim2.fromOffset(4, 4), BackgroundColor3 = Color3.fromRGB(40, 30, 50), ZIndex = 7, Parent = avatarFace }, UDim.new(1, 0))
 	end
-	box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(10.5, 16), Size = UDim2.fromOffset(5, 2), BackgroundColor3 = Color3.fromRGB(190, 70, 100), ZIndex = 7, Parent = avatarFace }, UDim.new(1, 0))
+	for _, x in ipairs({ 7, 23 }) do
+		box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(x, 21), Size = UDim2.fromOffset(5, 3), BackgroundColor3 = Color3.fromRGB(255, 120, 150), BackgroundTransparency = 0.4, ZIndex = 7, Parent = avatarFace }, UDim.new(1, 0))
+	end
+	box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(FACE / 2, 23), Size = UDim2.fromOffset(7, 3), BackgroundColor3 = Color3.fromRGB(190, 70, 100), ZIndex = 7, Parent = avatarFace }, UDim.new(1, 0))
 
+	-- Pseudo : de l'avatar jusqu'au badge LIVE (lui-même collé au bouton Suivre)
+	local RIGHT_BLOCK = PAD + 2 + FOLLOW_W + 8 + LIVE_W + 8 -- Suivre + LIVE + espaces
 	text({
 		Name = "Streamer",
 		Text = "<b>" .. HOST .. '</b> <font color="#5CC8FF">✔</font>',
 		RichText = true,
 		Font = Theme.Fonts.Title,
-		TextSize = 12,
+		TextSize = 14,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
-		Position = UDim2.fromOffset(36, 4),
-		Size = UDim2.fromOffset(108, 14),
+		Position = UDim2.fromOffset(TEXT_X, 5),
+		Size = UDim2.new(1, -(TEXT_X + RIGHT_BLOCK), 0, 18),
 		ZIndex = 5,
 		Parent = header,
 	})
@@ -293,11 +315,11 @@ function LiveStream.Start(ctx)
 		Name = "Viewers",
 		Text = "👁 0",
 		Font = Theme.Fonts.Number,
-		TextSize = 10,
+		TextSize = 12,
 		TextColor3 = Color3.fromRGB(200, 192, 230),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(36, 18),
-		Size = UDim2.fromOffset(56, 12),
+		Position = UDim2.fromOffset(TEXT_X, 25),
+		Size = UDim2.fromOffset(74, 15),
 		ZIndex = 5,
 		Parent = header,
 	})
@@ -305,30 +327,31 @@ function LiveStream.Start(ctx)
 		Name = "Likes",
 		Text = "❤ 0",
 		Font = Theme.Fonts.Number,
-		TextSize = 10,
+		TextSize = 12,
 		TextColor3 = Color3.fromRGB(255, 150, 190),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(94, 18),
-		Size = UDim2.fromOffset(52, 12),
+		Position = UDim2.fromOffset(TEXT_X + 78, 25),
+		Size = UDim2.fromOffset(74, 15),
 		ZIndex = 5,
 		Parent = header,
 	})
 	local likesScale = UI.Create("UIScale", { Parent = likesLabel })
 
-	-- Badge LIVE (point blanc qui pulse)
+	-- Badge LIVE (point blanc qui pulse), juste à gauche du bouton Suivre
 	local liveBadge = box({
 		Name = "Live",
-		Position = UDim2.fromOffset(148, 9),
-		Size = UDim2.fromOffset(42, 17),
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -(PAD + 2 + FOLLOW_W + 8), 0, HEADER_MID),
+		Size = UDim2.fromOffset(LIVE_W, LIVE_H),
 		BackgroundColor3 = Color3.fromRGB(235, 35, 60),
 		ZIndex = 5,
 		Parent = header,
-	}, 5)
+	}, 6)
 	UI.Gradient(liveBadge, ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(200, 200, 200)), 90)
 	local liveDot = box({
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromOffset(8, 8.5),
-		Size = UDim2.fromOffset(6, 6),
+		Position = UDim2.new(0, 10, 0.5, 0),
+		Size = UDim2.fromOffset(7, 7),
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		ZIndex = 6,
 		Parent = liveBadge,
@@ -336,9 +359,9 @@ function LiveStream.Start(ctx)
 	text({
 		Text = "LIVE",
 		Font = Theme.Fonts.Title,
-		TextSize = 11,
-		Position = UDim2.fromOffset(13, 0),
-		Size = UDim2.new(1, -14, 1, 0),
+		TextSize = 13,
+		Position = UDim2.fromOffset(16, 0),
+		Size = UDim2.new(1, -18, 1, 0),
 		ZIndex = 6,
 		Parent = liveBadge,
 	})
@@ -351,13 +374,13 @@ function LiveStream.Start(ctx)
 		Name = "Follow",
 		Text = "💜 Suivre",
 		Font = Theme.Fonts.Title,
-		TextSize = 12,
+		TextSize = 14,
 		TextColor3 = Color3.new(1, 1, 1),
 		BackgroundColor3 = FOLLOW_COLOR,
 		AutoButtonColor = false,
 		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -7, 0, 18),
-		Size = UDim2.fromOffset(74, 22),
+		Position = UDim2.new(1, -(PAD + 2), 0, HEADER_MID),
+		Size = UDim2.fromOffset(FOLLOW_W, FOLLOW_H),
 		BorderSizePixel = 0,
 		ZIndex = 5,
 		Parent = header,
@@ -373,12 +396,12 @@ function LiveStream.Start(ctx)
 	local video = box({
 		Name = "Video",
 		Position = UDim2.fromOffset(VIDEO_X, VIDEO_Y),
-		Size = UDim2.fromOffset(videoWidth(hasChat()), VIDEO_H),
+		Size = videoSize(hasChat()),
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		ClipsDescendants = true,
 		ZIndex = 2,
 		Parent = card,
-	}, 10)
+	}, 12)
 	UI.Gradient(video, ColorSequence.new({
 		ColorSequenceKeypoint.new(0, Color3.fromRGB(96, 74, 150)),
 		ColorSequenceKeypoint.new(0.55, Color3.fromRGB(178, 112, 176)),
@@ -388,8 +411,8 @@ function LiveStream.Start(ctx)
 	-- Ruban LED en haut du mur (arc-en-ciel qui défile) + halo
 	local led = box({
 		Name = "LED",
-		Position = UDim2.fromOffset(0, 6),
-		Size = UDim2.new(1, 0, 0, 3),
+		Position = UDim2.fromOffset(0, 7),
+		Size = UDim2.new(1, 0, 0, 4),
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		ZIndex = 1,
 		Parent = video,
@@ -402,8 +425,8 @@ function LiveStream.Start(ctx)
 		ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 80, 160)),
 	}), 0)
 	local ledGlow = box({
-		Position = UDim2.fromOffset(0, 9),
-		Size = UDim2.new(1, 0, 0, 22),
+		Position = UDim2.fromOffset(0, 11),
+		Size = UDim2.new(1, 0, 0, 30),
 		BackgroundColor3 = Color3.fromRGB(255, 170, 230),
 		BackgroundTransparency = 0.2,
 		ZIndex = 1,
@@ -414,25 +437,25 @@ function LiveStream.Start(ctx)
 
 	-- Étagère + plante (à gauche)
 	local shelf = box({
-		Position = UDim2.new(0.03, 0, 0, 42),
-		Size = UDim2.fromOffset(40, 4),
+		Position = UDim2.new(0.03, 0, 0, 64),
+		Size = UDim2.fromOffset(52, 5),
 		BackgroundColor3 = Color3.fromRGB(120, 78, 60),
 		ZIndex = 2,
 		Parent = video,
 	}, 2)
 	local pot = box({
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.fromOffset(12, 0),
-		Size = UDim2.fromOffset(12, 10),
+		Position = UDim2.fromOffset(15, 0),
+		Size = UDim2.fromOffset(15, 13),
 		BackgroundColor3 = Color3.fromRGB(240, 130, 110),
 		ZIndex = 3,
 		Parent = shelf,
-	}, 3)
+	}, 4)
 	for i, rotation in ipairs({ -30, 0, 30 }) do
 		box({
 			AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.new(0.5, (i - 2) * 3, 0, 1),
-			Size = UDim2.fromOffset(5, 13),
+			Position = UDim2.new(0.5, (i - 2) * 4, 0, 1),
+			Size = UDim2.fromOffset(6, 17),
 			Rotation = rotation,
 			BackgroundColor3 = Color3.fromRGB(90, 200, 120),
 			ZIndex = 2,
@@ -442,8 +465,8 @@ function LiveStream.Start(ctx)
 	-- Petit cadre photo
 	local frameArt = box({
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.fromOffset(30, 0),
-		Size = UDim2.fromOffset(12, 14),
+		Position = UDim2.fromOffset(39, 0),
+		Size = UDim2.fromOffset(15, 18),
 		BackgroundColor3 = Color3.fromRGB(255, 240, 220),
 		ZIndex = 3,
 		Parent = shelf,
@@ -455,30 +478,31 @@ function LiveStream.Start(ctx)
 		Name = "Neon",
 		Text = "miam ♥",
 		Font = Enum.Font.FredokaOne,
-		TextSize = 13,
+		TextSize = 17,
 		TextColor3 = Color3.fromRGB(255, 120, 200),
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(0.97, 0, 0, 16),
-		Size = UDim2.fromOffset(52, 16),
+		Position = UDim2.new(0.97, 0, 0, 20),
+		Size = UDim2.fromOffset(66, 22),
 		Rotation = 5,
 		ZIndex = 2,
 		Parent = video,
 	})
-	local neonStroke = UI.Stroke(neonSign, Color3.fromRGB(255, 200, 240), 1.2, 0.35)
+	local neonStroke = UI.Stroke(neonSign, Color3.fromRGB(255, 200, 240), 1.5, 0.35)
 	neonStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 
 	-- Ring light derrière la tête
+	local RING = math.floor(78 * STREAMER_SCALE)
 	local ringLight = box({
 		Name = "RingLight",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 0, 0, TABLE_Y - 50),
-		Size = UDim2.fromOffset(78, 78),
+		Position = UDim2.new(0.5, 0, 0, HEAD_Y),
+		Size = UDim2.fromOffset(RING, RING),
 		BackgroundColor3 = Color3.fromRGB(255, 245, 250),
 		BackgroundTransparency = 0.82,
 		ZIndex = 2,
 		Parent = video,
 	}, UDim.new(1, 0))
-	local ringStroke = UI.Stroke(ringLight, Color3.fromRGB(255, 250, 255), 4, 0.1)
+	local ringStroke = UI.Stroke(ringLight, Color3.fromRGB(255, 250, 255), 5, 0.1)
 
 	------------------------------------------------------------------
 	-- La streameuse (dessinée en formes)
@@ -490,16 +514,18 @@ function LiveStream.Start(ctx)
 	local HOODIE_DARK = Color3.fromRGB(226, 104, 150)
 	local INK = Color3.fromRGB(44, 30, 52)
 
-	local streamerY = TABLE_Y + 6
+	-- Dessinée sur une grille de 80 x 80, agrandie par un UIScale (autour
+	-- de son AnchorPoint : le bas reste posé derrière la table)
 	local streamer = box({
 		Name = "Streamer",
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 0, streamerY),
+		Position = UDim2.new(0.5, 0, 0, STREAMER_Y),
 		Size = UDim2.fromOffset(80, 80),
 		BackgroundTransparency = 1,
 		ZIndex = 4,
 		Parent = video,
 	})
+	UI.Create("UIScale", { Scale = STREAMER_SCALE, Parent = streamer })
 
 	-- Cheveux (arrière) : longs, tombent sur les épaules
 	box({ Position = UDim2.fromOffset(13, 6), Size = UDim2.fromOffset(54, 48), BackgroundColor3 = HAIR, ZIndex = 1, Parent = streamer }, 20)
@@ -615,15 +641,15 @@ function LiveStream.Start(ctx)
 	local tableFrame = box({
 		Name = "Table",
 		Position = UDim2.fromOffset(0, TABLE_Y),
-		Size = UDim2.new(1, 0, 0, VIDEO_H - TABLE_Y),
+		Size = UDim2.new(1, 0, 1, -TABLE_Y),
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		ZIndex = 10,
 		Parent = video,
 	})
 	UI.Gradient(tableFrame, ColorSequence.new(Color3.fromRGB(196, 132, 90), Color3.fromRGB(120, 74, 48)), 90)
-	box({ Size = UDim2.new(1, 0, 0, 3), BackgroundColor3 = Color3.fromRGB(230, 170, 120), ZIndex = 10, Parent = tableFrame })
+	box({ Size = UDim2.new(1, 0, 0, 4), BackgroundColor3 = Color3.fromRGB(230, 170, 120), ZIndex = 10, Parent = tableFrame })
 	-- Veines du bois
-	for i, y in ipairs({ 14, 26 }) do
+	for i, y in ipairs({ 18, 32, 46 }) do
 		box({ Position = UDim2.new(0.1 * i, 0, 0, y), Size = UDim2.new(0.5, 0, 0, 1), BackgroundColor3 = Color3.fromRGB(110, 66, 40), BackgroundTransparency = 0.5, ZIndex = 10, Parent = tableFrame })
 	end
 
@@ -632,27 +658,27 @@ function LiveStream.Start(ctx)
 		Name = "Plate",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(0.5, 0, 0, PLATE_Y),
-		Size = UDim2.fromOffset(72, 16),
+		Size = UDim2.fromOffset(88, 20),
 		BackgroundColor3 = Color3.fromRGB(252, 252, 255),
 		ZIndex = 11,
 		Parent = video,
 	}, UDim.new(1, 0))
 	UI.Stroke(plate, Color3.fromRGB(180, 180, 200), 1.5)
-	box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, -18, 1, -6), BackgroundColor3 = Color3.fromRGB(232, 232, 242), ZIndex = 11, Parent = plate }, UDim.new(1, 0))
+	box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, -22, 1, -8), BackgroundColor3 = Color3.fromRGB(232, 232, 242), ZIndex = 11, Parent = plate }, UDim.new(1, 0))
 
 	local foods: { TextLabel } = {}
 	local foodScales: { UIScale } = {}
 	local function foodHome(index: number): UDim2
-		return UDim2.new(0.5, FOOD_OFFSETS[index], 0, PLATE_Y - 5)
+		return UDim2.new(0.5, FOOD_OFFSETS[index], 0, PLATE_Y - 6)
 	end
 	for i = 1, #FOOD_OFFSETS do
 		local food = text({
 			Name = "Food",
 			Text = pick(FOODS, random),
-			TextSize = 18,
+			TextSize = 22,
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = foodHome(i),
-			Size = UDim2.fromOffset(22, 22),
+			Size = UDim2.fromOffset(26, 26),
 			Rotation = random:NextNumber(-12, 12),
 			ZIndex = 12 + i % 2,
 			Parent = video,
@@ -664,18 +690,18 @@ function LiveStream.Start(ctx)
 	-- Micro ASMR "moumoute" sur pied + voyant ON
 	local micStand = box({
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(MIC_X, 0, 0, TABLE_Y + 8),
-		Size = UDim2.fromOffset(3, 26),
+		Position = UDim2.new(MIC_X, 0, 0, TABLE_Y + 11),
+		Size = UDim2.fromOffset(4, 36),
 		BackgroundColor3 = Color3.fromRGB(60, 60, 70),
 		ZIndex = 11,
 		Parent = video,
 	})
-	box({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale(0.5, 1), Size = UDim2.fromOffset(18, 4), BackgroundColor3 = Color3.fromRGB(60, 60, 70), ZIndex = 11, Parent = micStand }, 2)
+	box({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale(0.5, 1), Size = UDim2.fromOffset(24, 5), BackgroundColor3 = Color3.fromRGB(60, 60, 70), ZIndex = 11, Parent = micStand }, 2)
 	local mic = box({
 		Name = "Mic",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(MIC_X, 0, 0, TABLE_Y - 24),
-		Size = UDim2.fromOffset(20, 24),
+		Position = UDim2.new(MIC_X, 0, 0, TABLE_Y - 30),
+		Size = UDim2.fromOffset(25, 30),
 		BackgroundColor3 = Color3.fromRGB(150, 146, 160),
 		ZIndex = 12,
 		Parent = video,
@@ -686,20 +712,20 @@ function LiveStream.Start(ctx)
 		local angle = i / 6 * math.pi * 2
 		box({
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(0.5, math.cos(angle) * 9, 0.5, math.sin(angle) * 11),
-			Size = UDim2.fromOffset(9, 9),
+			Position = UDim2.new(0.5, math.cos(angle) * 11, 0.5, math.sin(angle) * 14),
+			Size = UDim2.fromOffset(11, 11),
 			BackgroundColor3 = Color3.fromRGB(165, 160, 175),
 			ZIndex = 11,
 			Parent = mic,
 		}, UDim.new(1, 0))
 	end
-	local micLed = box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 1, 5), Size = UDim2.fromOffset(4, 4), BackgroundColor3 = Color3.fromRGB(255, 50, 70), ZIndex = 13, Parent = mic }, UDim.new(1, 0))
+	local micLed = box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 1, 7), Size = UDim2.fromOffset(5, 5), BackgroundColor3 = Color3.fromRGB(255, 50, 70), ZIndex = 13, Parent = mic }, UDim.new(1, 0))
 
 	-- Ondes sonores (réserve de 2 anneaux)
 	local waves: { Frame } = {}
 	for i = 1, 2 do
-		local ring = box({ Name = "Wave" .. i, AnchorPoint = Vector2.new(0.5, 0.5), Position = mic.Position, Size = UDim2.fromOffset(20, 20), BackgroundTransparency = 1, ZIndex = 12, Parent = video }, UDim.new(1, 0))
-		UI.Stroke(ring, Color3.fromRGB(255, 255, 255), 1.5, 1)
+		local ring = box({ Name = "Wave" .. i, AnchorPoint = Vector2.new(0.5, 0.5), Position = mic.Position, Size = UDim2.fromOffset(24, 24), BackgroundTransparency = 1, ZIndex = 12, Parent = video }, UDim.new(1, 0))
+		UI.Stroke(ring, Color3.fromRGB(255, 255, 255), 2, 1)
 		waves[i] = ring
 	end
 	local waveIndex = 0
@@ -711,8 +737,8 @@ function LiveStream.Start(ctx)
 		local ring = waves[waveIndex]
 		local stroke = ring:FindFirstChildOfClass("UIStroke")
 		ring.Position = origin or mic.Position
-		ring.Size = UDim2.fromOffset(18, 18)
-		UI.Tween(ring, 0.55, { Size = UDim2.fromOffset(54, 54) }, Enum.EasingStyle.Quad)
+		ring.Size = UDim2.fromOffset(22, 22)
+		UI.Tween(ring, 0.55, { Size = UDim2.fromOffset(68, 68) }, Enum.EasingStyle.Quad)
 		if stroke then
 			stroke.Transparency = 0.1
 			UI.Tween(stroke, 0.55, { Transparency = 1 }, Enum.EasingStyle.Quad)
@@ -722,15 +748,17 @@ function LiveStream.Start(ctx)
 	------------------------------------------------------------------
 	-- Le beurre croustillant (Feature "Butter")
 	------------------------------------------------------------------
-	local BUTTER_W, BUTTER_H = 34, 22
+	local BUTTER_W, BUTTER_H = 42, 27
+	local BUTTON_W, BUTTON_H = 62, 50 -- zone cliquable (coupelle + bloc)
+	local butterHome = UDim2.new(BUTTER_X, 0, 0, BUTTER_Y)
 	local butterButton = UI.Create("TextButton", {
 		Name = "Butter",
 		Text = "",
 		AutoButtonColor = false,
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(BUTTER_X, 0, 0, TABLE_Y + 20),
-		Size = UDim2.fromOffset(48, 40),
+		Position = butterHome,
+		Size = UDim2.fromOffset(BUTTON_W, BUTTON_H),
 		Visible = hasButter(),
 		ZIndex = 14,
 		Parent = video,
@@ -740,24 +768,24 @@ function LiveStream.Start(ctx)
 	local dish = box({
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, 0),
-		Size = UDim2.fromOffset(46, 11),
+		Size = UDim2.fromOffset(BUTTON_W - 4, 13),
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		ZIndex = 14,
 		Parent = butterButton,
 	}, UDim.new(1, 0))
 	UI.Gradient(dish, ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(150, 190, 240)), 90)
-	UI.Stroke(dish, Color3.fromRGB(90, 130, 200), 1.2)
+	UI.Stroke(dish, Color3.fromRGB(90, 130, 200), 1.5)
 	-- Bloc (les traces de dents sont dedans, coupées par ClipsDescendants)
 	local block = box({
 		Name = "Block",
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -5),
+		Position = UDim2.new(0.5, 0, 1, -6),
 		Size = UDim2.fromOffset(BUTTER_W, BUTTER_H),
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		ClipsDescendants = true,
 		ZIndex = 15,
 		Parent = butterButton,
-	}, 4)
+	}, 5)
 	UI.Gradient(block, ColorSequence.new({
 		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 244, 160)),
 		ColorSequenceKeypoint.new(0.3, Color3.fromRGB(255, 226, 96)),
@@ -765,40 +793,42 @@ function LiveStream.Start(ctx)
 	}), 90)
 	UI.Stroke(block, Color3.fromRGB(196, 140, 30), 1.5)
 	-- Face du dessus (plus claire) + reflet brillant
-	box({ Size = UDim2.new(1, 0, 0, 6), BackgroundColor3 = Color3.fromRGB(255, 250, 200), BackgroundTransparency = 0.2, ZIndex = 16, Parent = block })
-	local shine = box({ Position = UDim2.fromOffset(4, 8), Size = UDim2.fromOffset(12, 3), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.25, ZIndex = 17, Parent = block }, 2)
+	box({ Size = UDim2.new(1, 0, 0, 7), BackgroundColor3 = Color3.fromRGB(255, 250, 200), BackgroundTransparency = 0.2, ZIndex = 16, Parent = block })
+	local shine = box({ Position = UDim2.fromOffset(5, 10), Size = UDim2.fromOffset(15, 4), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.25, ZIndex = 17, Parent = block }, 2)
 	local sparkle = text({
 		Text = "✨",
-		TextSize = 11,
+		TextSize = 13,
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 14, 0, 8),
-		Size = UDim2.fromOffset(12, 12),
+		Position = UDim2.new(0.5, 17, 0, 24),
+		Size = UDim2.fromOffset(14, 14),
 		TextTransparency = 1,
 		ZIndex = 18,
 		Parent = butterButton,
 	})
-	-- Indice "CROQUE !" tant qu'on ne l'a pas croqué
+	-- Indice "CROQUE !" tant qu'on ne l'a pas croqué (flotte au-dessus du bloc)
+	local HINT_Y = BUTTON_H - 6 - BUTTER_H - 3 -- bas de l'indice (juste au-dessus du beurre)
 	local butterHint = text({
 		Text = "CROQUE !",
 		Font = Theme.Fonts.Title,
-		TextSize = 9,
+		TextSize = 11,
 		TextColor3 = Color3.fromRGB(90, 50, 0),
 		BackgroundColor3 = Color3.fromRGB(255, 226, 96),
 		BackgroundTransparency = 0,
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 0, 2),
-		Size = UDim2.fromOffset(46, 12),
+		Position = UDim2.new(0.5, 0, 0, HINT_Y),
+		Size = UDim2.fromOffset(BUTTON_W, 15),
 		ZIndex = 18,
 		Parent = butterButton,
 	})
 	UI.Corner(butterHint, UDim.new(1, 0))
+	UI.Stroke(butterHint, Color3.fromRGB(196, 140, 30), 1)
 
 	local bites: { Frame } = {}
 	local regenerating = false
 
 	-- Une trace de dents : demi-disque "intérieur" sur le bord du dessus
 	local function addBite()
-		local size = random:NextInteger(11, 15)
+		local size = random:NextInteger(13, 18)
 		local slot = #bites
 		-- Les bouchées avancent de droite à gauche (puis au hasard)
 		local x = slot < 5 and (1 - slot * 0.2 - 0.05) or random:NextNumber(0.1, 0.9)
@@ -820,7 +850,7 @@ function LiveStream.Start(ctx)
 			return
 		end
 		for _ = 1, 4 do
-			local size = random:NextInteger(3, 6)
+			local size = random:NextInteger(3, 7)
 			local chunk = box({
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				Position = position,
@@ -830,12 +860,12 @@ function LiveStream.Start(ctx)
 				ZIndex = 20,
 				Parent = video,
 			}, 1)
-			local dx = random:NextNumber(-26, 26)
-			UI.Tween(chunk, 0.18, { Position = position + UDim2.fromOffset(dx * 0.5, -random:NextNumber(8, 20)) }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+			local dx = random:NextNumber(-32, 32)
+			UI.Tween(chunk, 0.18, { Position = position + UDim2.fromOffset(dx * 0.5, -random:NextNumber(10, 24)) }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 			task.delay(0.18, function()
 				if chunk.Parent then
 					UI.Tween(chunk, 0.3, {
-						Position = position + UDim2.fromOffset(dx, 18),
+						Position = position + UDim2.fromOffset(dx, 22),
 						Rotation = chunk.Rotation + 180,
 						BackgroundTransparency = 1,
 					}, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
@@ -874,14 +904,14 @@ function LiveStream.Start(ctx)
 			Name = "Pop" .. i,
 			Text = "",
 			Font = Enum.Font.LuckiestGuy,
-			TextSize = 17,
+			TextSize = 22,
 			TextTransparency = 1,
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Size = UDim2.fromOffset(110, 24),
+			Size = UDim2.fromOffset(150, 30),
 			ZIndex = 22,
 			Parent = video,
 		})
-		local stroke = UI.Stroke(label, Color3.fromRGB(40, 20, 30), 2, 1)
+		local stroke = UI.Stroke(label, Color3.fromRGB(40, 20, 30), 2.5, 1)
 		stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 		UI.Create("UIScale", { Parent = label })
 		popLabels[i] = label
@@ -906,7 +936,7 @@ function LiveStream.Start(ctx)
 			UI.Tween(scale, 0.22, { Scale = 1.15 }, Enum.EasingStyle.Back)
 		end
 		UI.Tween(label, 0.8, {
-			Position = position + UDim2.fromOffset(random:NextInteger(-8, 8), -24),
+			Position = position + UDim2.fromOffset(random:NextInteger(-10, 10), -30),
 			TextTransparency = 1,
 		}, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 	end
@@ -916,10 +946,10 @@ function LiveStream.Start(ctx)
 			return
 		end
 		for _ = 1, 4 do
-			local size = random:NextInteger(2, 4)
+			local size = random:NextInteger(2, 5)
 			local crumb = box({
 				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.new(0.5, random:NextInteger(-6, 6), 0, MOUTH_Y + 4),
+				Position = UDim2.new(0.5, random:NextInteger(-8, 8), 0, MOUTH_Y + 5),
 				Size = UDim2.fromOffset(size, size),
 				BackgroundColor3 = Color3.fromRGB(230, 170, 90),
 				Rotation = random:NextNumber(0, 90),
@@ -927,7 +957,7 @@ function LiveStream.Start(ctx)
 				Parent = video,
 			})
 			UI.Tween(crumb, 0.55, {
-				Position = UDim2.new(0.5, random:NextInteger(-30, 30), 0, PLATE_Y - 4),
+				Position = UDim2.new(0.5, random:NextInteger(-40, 40), 0, PLATE_Y - 5),
 				Rotation = random:NextNumber(90, 360),
 				BackgroundTransparency = 0.4,
 			}, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
@@ -940,9 +970,9 @@ function LiveStream.Start(ctx)
 		local label = text({
 			Name = "Heart" .. i,
 			Text = "❤️",
-			TextSize = 13,
+			TextSize = 16,
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Size = UDim2.fromOffset(16, 16),
+			Size = UDim2.fromOffset(20, 20),
 			Visible = false,
 			ZIndex = 21,
 			Parent = video,
@@ -955,7 +985,7 @@ function LiveStream.Start(ctx)
 				heart.Label.Text = emoji or pick(HEARTS, random)
 				heart.Start = os.clock()
 				heart.Life = random:NextNumber(1.3, 2)
-				heart.X = random:NextNumber(-10, 4)
+				heart.X = random:NextNumber(-12, 4)
 				heart.Sway = random:NextNumber(0, math.pi * 2)
 				heart.Label.Visible = true
 				return
@@ -991,8 +1021,10 @@ function LiveStream.Start(ctx)
 	-- en douceur (fondu en haut)
 	------------------------------------------------------------------
 	local CHAT_BG = Color3.fromRGB(32, 28, 46)
-	local LIST_Y = 44
-	local LIST_H = VIDEO_H - LIST_Y - 2
+	local TITLE_H = 20 -- ligne de titre "💬 Chat"
+	local PINNED_Y, PINNED_H = TITLE_H + 5, 30 -- message épinglé
+	local LIST_Y = PINNED_Y + PINNED_H + 3 -- début de la liste des messages
+	local LIST_H = VIDEO_H - LIST_Y - 3
 	local chat = box({
 		Name = "Chat",
 		AnchorPoint = Vector2.new(1, 0),
@@ -1003,31 +1035,31 @@ function LiveStream.Start(ctx)
 		Visible = hasChat(),
 		ZIndex = 2,
 		Parent = card,
-	}, 10)
+	}, 12)
 	UI.Stroke(chat, Color3.fromRGB(70, 60, 100), 1)
 	local chatTitle = text({
 		Name = "Title",
 		Text = "💬 <b>Chat</b>",
 		RichText = true,
-		TextSize = 10,
+		TextSize = 13,
 		TextColor3 = Color3.fromRGB(220, 212, 245),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(6, 2),
-		Size = UDim2.new(1, -8, 0, 14),
+		Position = UDim2.fromOffset(8, 2),
+		Size = UDim2.new(1, -12, 0, TITLE_H - 2),
 		ZIndex = 3,
 		Parent = chat,
 	})
-	box({ Position = UDim2.fromOffset(6, 17), Size = UDim2.new(1, -12, 0, 1), BackgroundColor3 = Color3.fromRGB(80, 70, 110), ZIndex = 3, Parent = chat })
+	box({ Position = UDim2.fromOffset(8, TITLE_H + 1), Size = UDim2.new(1, -16, 0, 1), BackgroundColor3 = Color3.fromRGB(80, 70, 110), ZIndex = 3, Parent = chat })
 
 	-- Message épinglé
 	local pinned = box({
 		Name = "Pinned",
-		Position = UDim2.fromOffset(4, 20),
-		Size = UDim2.new(1, -8, 0, 22),
+		Position = UDim2.fromOffset(5, PINNED_Y),
+		Size = UDim2.new(1, -10, 0, PINNED_H),
 		BackgroundColor3 = Color3.fromRGB(64, 50, 100),
 		ZIndex = 3,
 		Parent = chat,
-	}, 5)
+	}, 6)
 	UI.Stroke(pinned, Color3.fromRGB(150, 110, 230), 1, 0.4)
 	local pinnedLabel = UI.Label({
 		Text = "",
@@ -1035,9 +1067,9 @@ function LiveStream.Start(ctx)
 		Font = Theme.Fonts.Body,
 		TextColor3 = Color3.fromRGB(235, 225, 255),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(3, 1),
-		Size = UDim2.new(1, -5, 1, -2),
-		MaxTextSize = 9,
+		Position = UDim2.fromOffset(5, 2),
+		Size = UDim2.new(1, -8, 1, -4),
+		MaxTextSize = 11,
 		ZIndex = 4,
 		Parent = pinned,
 	})
@@ -1065,19 +1097,19 @@ function LiveStream.Start(ctx)
 	})
 	UI.Create("UIListLayout", {
 		SortOrder = Enum.SortOrder.LayoutOrder,
-		Padding = UDim.new(0, 2),
+		Padding = UDim.new(0, 3),
 		Parent = scroller,
 	})
 	UI.Create("UIPadding", {
-		PaddingLeft = UDim.new(0, 4),
-		PaddingRight = UDim.new(0, 3),
-		PaddingBottom = UDim.new(0, 2),
+		PaddingLeft = UDim.new(0, 6),
+		PaddingRight = UDim.new(0, 5),
+		PaddingBottom = UDim.new(0, 3),
 		Parent = scroller,
 	})
 	-- Fondu en haut de la liste
 	local fade = box({
 		Name = "Fade",
-		Size = UDim2.new(1, 0, 0, 22),
+		Size = UDim2.new(1, 0, 0, 30),
 		BackgroundColor3 = CHAT_BG,
 		ZIndex = 8,
 		Parent = chatList,
@@ -1096,7 +1128,7 @@ function LiveStream.Start(ctx)
 		if delta <= 0 or ratio <= 0 then
 			return
 		end
-		local offset = math.min(scroller.Position.Y.Offset + delta / ratio, 80)
+		local offset = math.min(scroller.Position.Y.Offset + delta / ratio, 100)
 		if scrollTween then
 			scrollTween:Cancel()
 		end
@@ -1108,15 +1140,18 @@ function LiveStream.Start(ctx)
 	local donationStack = box({
 		Name = "Donations",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 12),
-		Size = UDim2.new(1, -14, 0, 100),
+		Position = UDim2.new(0.5, 0, 0, 16),
+		Size = UDim2.new(1, -24, 0, 150),
 		BackgroundTransparency = 1,
 		ZIndex = 24,
 		Parent = video,
 	})
+	-- (vidéo large sans chat : les cartes gardent une largeur de bannière)
+	UI.Create("UISizeConstraint", { MaxSize = Vector2.new(250, 150), Parent = donationStack })
 	UI.Create("UIListLayout", {
 		SortOrder = Enum.SortOrder.LayoutOrder,
-		Padding = UDim.new(0, 3),
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		Padding = UDim.new(0, 4),
 		Parent = donationStack,
 	})
 
@@ -1176,7 +1211,7 @@ function LiveStream.Start(ctx)
 			Name = "Msg",
 			Text = richText,
 			RichText = true,
-			TextSize = 10,
+			TextSize = 12,
 			TextWrapped = true,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextTransparency = 1,
@@ -1189,12 +1224,12 @@ function LiveStream.Start(ctx)
 			Parent = scroller,
 		})
 		if highlight then
-			UI.Corner(label, 4)
+			UI.Corner(label, 5)
 			UI.Create("UIPadding", {
-				PaddingLeft = UDim.new(0, 2),
-				PaddingRight = UDim.new(0, 2),
-				PaddingTop = UDim.new(0, 1),
-				PaddingBottom = UDim.new(0, 1),
+				PaddingLeft = UDim.new(0, 4),
+				PaddingRight = UDim.new(0, 3),
+				PaddingTop = UDim.new(0, 2),
+				PaddingBottom = UDim.new(0, 2),
 				Parent = label,
 			})
 		end
@@ -1210,7 +1245,7 @@ function LiveStream.Start(ctx)
 		local prefix = badge ~= "" and (badge .. " ") or ""
 		local body = escape(message)
 		if options and options.Emote then
-			body = '<font size="14">' .. body .. "</font>"
+			body = '<font size="17">' .. body .. "</font>"
 		end
 		addChatLabel(prefix .. '<font color="' .. nameColor(name) .. '"><b>' .. escape(name) .. "</b></font> " .. body, options and options.Highlight)
 	end
@@ -1270,7 +1305,7 @@ function LiveStream.Start(ctx)
 			return
 		end
 		chatShown = shown
-		UI.Tween(video, 0.35, { Size = UDim2.fromOffset(videoWidth(shown), VIDEO_H) }, Enum.EasingStyle.Back)
+		UI.Tween(video, 0.35, { Size = videoSize(shown) }, Enum.EasingStyle.Back)
 		if shown then
 			chat.Visible = true
 			chat.Position = UDim2.new(1, CHAT_W, 0, VIDEO_Y)
@@ -1391,10 +1426,12 @@ function LiveStream.Start(ctx)
 
 	ctx.OnBonus("Follow", function(payload)
 		local amount = tonumber(payload.Amount)
+		-- (au centre du bouton Suivre)
+		local followX = CARD_W - (PAD + 2) - FOLLOW_W / 2
 		if amount then
-			ctx.FloatText(card, UDim2.fromOffset(CARD_W - 44, 30), "+" .. Format.Format(amount), Theme.Colors.Gold, 22)
+			ctx.FloatText(card, UDim2.fromOffset(followX, HEADER_MID + 14), "+" .. Format.Format(amount), Theme.Colors.Gold, 24)
 		end
-		ctx.Effects.Burst(card, UDim2.fromOffset(CARD_W - 44, 18), Color3.fromRGB(190, 120, 255), 10)
+		ctx.Effects.Burst(card, UDim2.fromOffset(followX, HEADER_MID), Color3.fromRGB(190, 120, 255), 12)
 		ctx.Sound.Play("Bonus", 1.1)
 	end)
 
@@ -1454,7 +1491,7 @@ function LiveStream.Start(ctx)
 		local line = DONATION_LINES[(variant - 1) % #DONATION_LINES + 1]
 		local lifetime = tonumber(info.Lifetime) or 10
 		local inChat = chat.Visible
-		local height = inChat and 34 or 28
+		local height = inChat and 42 or 36
 
 		chatOrder += 1
 		local button = UI.Create("TextButton", {
@@ -1468,46 +1505,55 @@ function LiveStream.Start(ctx)
 			ZIndex = 25,
 			Parent = inChat and scroller or donationStack,
 		})
-		UI.Corner(button, 6)
+		UI.Corner(button, 8)
 		UI.Gradient(button, ColorSequence.new(Color3.fromRGB(255, 226, 110), Color3.fromRGB(255, 160, 50)), 20)
 		UI.Stroke(button, Color3.fromRGB(190, 110, 0), 1.5)
+		local ICON = inChat and 22 or 26 -- colonne de l'icône
 		local icon = text({
 			Text = "💸",
-			TextSize = inChat and 13 or 15,
-			AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.new(0, 2, 0.5, 0),
-			Size = UDim2.fromOffset(18, 18),
+			TextSize = inChat and 16 or 20,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0, 3 + ICON / 2, 0.5, -1),
+			Size = UDim2.fromOffset(ICON, ICON),
 			ZIndex = 26,
 			Parent = button,
 		})
+		local textX = ICON + 6
 		local title = text({
 			Text = "<b>" .. escape(name) .. "</b> " .. line,
 			RichText = true,
-			TextSize = inChat and 9 or 10,
+			TextSize = inChat and 11 or 13,
 			TextColor3 = Color3.fromRGB(70, 36, 0),
 			TextXAlignment = Enum.TextXAlignment.Left,
+			TextYAlignment = Enum.TextYAlignment.Top,
 			TextWrapped = inChat,
 			TextTruncate = inChat and Enum.TextTruncate.None or Enum.TextTruncate.AtEnd,
-			Position = UDim2.fromOffset(21, 2),
-			Size = UDim2.new(1, -23, 0, inChat and 20 or 13),
+			Position = UDim2.fromOffset(textX, 3),
+			Size = UDim2.new(1, -(textX + 4), 0, inChat and 22 or 16),
 			ZIndex = 26,
 			Parent = button,
 		})
+		if inChat then
+			-- Colonne étroite : 2 lignes max, le texte rétrécit un peu si besoin
+			title.TextScaled = true
+			UI.Create("UITextSizeConstraint", { MaxTextSize = 11, MinTextSize = 8, Parent = title })
+		end
 		local sub = text({
 			Text = "Clique pour récupérer ✨",
 			Font = Theme.Fonts.Title,
-			TextSize = 9,
+			TextSize = inChat and 10 or 11,
 			TextColor3 = Color3.fromRGB(140, 60, 0),
 			TextXAlignment = Enum.TextXAlignment.Left,
-			Position = UDim2.new(0, 21, 1, -13),
-			Size = UDim2.new(1, -23, 0, 10),
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			Position = UDim2.new(0, textX, 1, -16),
+			Size = UDim2.new(1, -(textX + 4), 0, 12),
 			ZIndex = 26,
 			Parent = button,
 		})
 		local timer = box({
 			AnchorPoint = Vector2.new(0, 1),
-			Position = UDim2.new(0, 4, 1, -1),
-			Size = UDim2.new(1, -8, 0, 2),
+			Position = UDim2.new(0, 6, 1, -2),
+			Size = UDim2.new(1, -12, 0, 2),
 			BackgroundColor3 = Color3.fromRGB(255, 255, 255),
 			BackgroundTransparency = 0.2,
 			ZIndex = 27,
@@ -1577,7 +1623,7 @@ function LiveStream.Start(ctx)
 			end
 			ctx.Effects.Burst(donation.Card, UDim2.fromScale(0.5, 0.5), Theme.Colors.Gold, 8)
 		elseif amount then
-			ctx.FloatText(video, UDim2.new(0.5, 0, 0, 40), amountText, Theme.Colors.Gold, 22)
+			ctx.FloatText(video, UDim2.new(0.5, 0, 0, 56), amountText, Theme.Colors.Gold, 24)
 		end
 		for _ = 1, 3 do
 			spawnHeart("💸")
@@ -1585,7 +1631,7 @@ function LiveStream.Start(ctx)
 		addLikes(random:NextInteger(20, 60), true)
 		wow(0.9)
 		soundWave(nil)
-		popWord("MERCI !!", UDim2.new(0.5, 0, 0, MOUTH_Y - 20), Color3.fromRGB(255, 214, 40))
+		popWord("MERCI !!", UDim2.new(0.5, 0, 0, MOUTH_Y - 28), Color3.fromRGB(255, 214, 40))
 		task.delay(0.4, function()
 			if ctx.IsAlive() then
 				react("donation", 0.8, DONATION_REACTIONS, 2)
@@ -1611,8 +1657,8 @@ function LiveStream.Start(ctx)
 		if now - lastButter < butterInterval then
 			-- Trop rapide : petite secousse seulement (pas de rotation : le
 			-- bloc découpe ses traces de dents avec ClipsDescendants)
-			butterButton.Position = UDim2.new(BUTTER_X, random:NextInteger(-2, 2), 0, TABLE_Y + 20)
-			UI.Tween(butterButton, 0.12, { Position = UDim2.new(BUTTER_X, 0, 0, TABLE_Y + 20) })
+			butterButton.Position = butterHome + UDim2.fromOffset(random:NextInteger(-3, 3), 0)
+			UI.Tween(butterButton, 0.12, { Position = butterHome })
 			return
 		end
 		lastButter = now
@@ -1631,16 +1677,16 @@ function LiveStream.Start(ctx)
 			butterHint.Visible = false
 		end
 
-		local butterTop = UDim2.new(BUTTER_X, 0, 0, TABLE_Y + 2)
+		local butterTop = UDim2.new(BUTTER_X, 0, 0, BUTTER_Y - 6 - BUTTER_H * 0.6) -- haut du bloc
 		butterChunks(butterTop)
 		soundWave(butterTop)
-		popWord(pick(BUTTER_WORDS, random), UDim2.new(BUTTER_X, -10, 0, TABLE_Y - 18), Color3.fromRGB(255, 226, 96))
+		popWord(pick(BUTTER_WORDS, random), UDim2.new(BUTTER_X, -12, 0, BUTTER_Y - BUTTON_H - 4), Color3.fromRGB(255, 226, 96))
 
 		-- "+X" prédit (le serveur donne gain par clic x ClickFraction)
 		local data = ctx.State.Data
 		local value = (data and tonumber(data.ClickValue) or 0) * butterFraction
 		if value > 0 then
-			ctx.FloatText(video, UDim2.new(BUTTER_X, 0, 0, TABLE_Y - 6), "+" .. Format.Format(value), Theme.Colors.Gold, 18)
+			ctx.FloatText(video, UDim2.new(BUTTER_X, 0, 0, BUTTER_Y - BUTTON_H + 12), "+" .. Format.Format(value), Theme.Colors.Gold, 20)
 		end
 
 		wow(0.4)
@@ -1674,8 +1720,8 @@ function LiveStream.Start(ctx)
 
 		-- Balancement doux (plus rapide quand elle mâche)
 		local chewing = now < chewUntil
-		local bob = chewing and math.abs(math.sin(clock * 9)) * 2 or math.sin(clock * 2) * 1.5
-		streamer.Position = UDim2.new(0.5, 0, 0, streamerY + bob)
+		local bob = (chewing and math.abs(math.sin(clock * 9)) * 2 or math.sin(clock * 2) * 1.5) * STREAMER_SCALE
+		streamer.Position = UDim2.new(0.5, 0, 0, STREAMER_Y + bob)
 		head.Rotation = chewing and math.sin(clock * 7) * 4 or math.sin(clock * 1.3) * 3
 
 		-- Yeux : clignement, fermés (contente) quand elle mâche, grands ouverts si "wow"
@@ -1734,11 +1780,11 @@ function LiveStream.Start(ctx)
 			if sparkleTimer <= 0 then
 				sparkleTimer = random:NextNumber(1.5, 3.5)
 				sparkle.TextTransparency = 0
-				sparkle.Position = UDim2.new(0.5, random:NextInteger(-12, 14), 0, random:NextInteger(6, 16))
+				sparkle.Position = UDim2.new(0.5, random:NextInteger(-15, 17), 0, random:NextInteger(BUTTON_H - 6 - BUTTER_H + 3, BUTTON_H - 12))
 				UI.Tween(sparkle, 0.6, { TextTransparency = 1 })
 			end
 			if butterHint.Visible then
-				butterHint.Position = UDim2.new(0.5, 0, 0, 2 - math.abs(math.sin(clock * 4)) * 3)
+				butterHint.Position = UDim2.new(0.5, 0, 0, HINT_Y - math.abs(math.sin(clock * 4)) * 3)
 			end
 		end
 
@@ -1750,7 +1796,7 @@ function LiveStream.Start(ctx)
 				if t >= 1 then
 					label.Visible = false
 				else
-					label.Position = UDim2.new(1, -14 + heart.X + math.sin(heart.Sway + t * 6) * 5, 0, TABLE_Y - 20 - t * 70)
+					label.Position = UDim2.new(1, -18 + heart.X + math.sin(heart.Sway + t * 6) * 6, 0, TABLE_Y - 34 - t * 100)
 					label.TextTransparency = t * t
 					label.Rotation = math.sin(heart.Sway + t * 4) * 15
 				end
@@ -1819,7 +1865,7 @@ function LiveStream.Start(ctx)
 			food.Text = pick(FOODS, random)
 			food.Rotation = random:NextNumber(-12, 12)
 			foodScales[i].Scale = 1
-			food.Position = foodHome(i) - UDim2.fromOffset(0, 60)
+			food.Position = foodHome(i) - UDim2.fromOffset(0, 80)
 			food.Visible = true
 			task.delay((i - 1) * 0.08, function()
 				if ctx.IsAlive() and food.Parent then
@@ -1848,7 +1894,7 @@ function LiveStream.Start(ctx)
 			if not index then
 				-- Assiette vide : on ressert !
 				wow(0.8)
-				popWord("RESSERVI !", UDim2.new(0.5, 0, 0, MOUTH_Y - 16), nil)
+				popWord("RESSERVI !", UDim2.new(0.5, 0, 0, MOUTH_Y - 24), nil)
 				task.wait(0.5)
 				if not ctx.IsAlive() then
 					break
@@ -1862,7 +1908,7 @@ function LiveStream.Start(ctx)
 				-- Le bras apporte l'aliment à la bouche grande ouverte
 				openUntil = os.clock() + 0.5
 				UI.Tween(armRight, 0.3, { Rotation = ARM_EAT }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-				UI.Tween(food, 0.3, { Position = UDim2.new(0.5, 4, 0, MOUTH_Y + 2), Rotation = 0 }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+				UI.Tween(food, 0.3, { Position = UDim2.new(0.5, 5, 0, MOUTH_Y + 3), Rotation = 0 }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 				UI.Tween(scale, 0.3, { Scale = 0.6 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 				task.wait(0.32)
 				if not ctx.IsAlive() then
@@ -1873,7 +1919,7 @@ function LiveStream.Start(ctx)
 				openUntil = 0
 				chewUntil = os.clock() + 1
 				UI.Tween(armRight, 0.4, { Rotation = ARM_REST_R }, Enum.EasingStyle.Back)
-				popWord(pick(CRUNCH_WORDS, random), UDim2.new(0.5, random:NextNumber() < 0.5 and -34 or 34, 0, MOUTH_Y - 6), nil)
+				popWord(pick(CRUNCH_WORDS, random), UDim2.new(0.5, random:NextNumber() < 0.5 and -50 or 50, 0, MOUTH_Y - 8), nil)
 				crumbs()
 				soundWave(nil)
 				ctx.Sound.Play("Pop", random:NextNumber(0.55, 0.75))
@@ -1922,7 +1968,7 @@ function LiveStream.Start(ctx)
 		addLikes(count, true)
 		chatTitle.Text = '🚨 <b><font color="#FF9F45">RAID !</font></b>'
 		systemMessage("🚨 RAID de <b>" .. escape(raider) .. "</b> avec " .. count .. " spectateurs !", Color3.fromRGB(230, 110, 20))
-		popWord("RAID !", UDim2.new(0.5, 0, 0, 28), Color3.fromRGB(255, 159, 69))
+		popWord("RAID !", UDim2.new(0.5, 0, 0, 40), Color3.fromRGB(255, 159, 69))
 		wow(1)
 		for _ = 1, 3 do
 			spawnHeart("🎉")
