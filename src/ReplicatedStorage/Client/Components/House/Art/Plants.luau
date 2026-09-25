@@ -29,10 +29,10 @@ local function pot(parent, kit, cx, bottom, w, h, color, z)
 end
 
 -- Feuille ovale partant de (px, py) dans la direction `angle` (degrés, 0 = droite, -90 = haut)
-local function leaf(parent, kit, px, py, angle, len, wid, color, z, vein)
+local function leaf(parent, kit, px, py, angle, len, wid, color, z, vein, thickness)
 	local a = math.rad(angle)
 	local cx, cy = px + math.cos(a) * len / 2, py + math.sin(a) * len / 2
-	local frame = kit.Blob(parent, cx, cy, len, wid, color, { Z = z, Rotation = angle, Shade = false, Thickness = 1.4 })
+	local frame = kit.Blob(parent, cx, cy, len, wid, color, { Z = z, Rotation = angle, Shade = false, Thickness = thickness or 1.4 })
 	if vein ~= false then
 		kit.Line(frame, len * 0.14, wid / 2, len * 0.78, wid / 2, math.max(1, wid * 0.1), kit.Darken(color, 0.2), 0.25, 2)
 	end
@@ -366,24 +366,24 @@ Art.RedRose = function(body, kit, _item)
 	return nil
 end
 
--- Feuille de monstera (fentes sombres et nervure)
+-- Feuille de monstera : nervure + lobes séparés (les trous entre lobes font les fentes)
+-- `angle` = direction de la feuille depuis (px, py)
 local function monsteraLeaf(parent, kit, px, py, angle, size, color, z)
-	local a = math.rad(angle)
-	local len, wid = size, size * 0.86
-	local frame = kit.Blob(parent, px + math.cos(a) * len / 2, py + math.sin(a) * len / 2, len, wid, color, {
-		Z = z,
-		Rotation = angle,
-		Shade = false,
-		Thickness = 1.6,
-	})
-	local dark = kit.Darken(color, 0.28)
-	kit.Line(frame, len * 0.06, wid / 2, len * 0.88, wid / 2, 1.6, dark, 0, 2)
-	local ks = if size >= 28 then { 0.3, 0.5, 0.7 } else { 0.38, 0.64 }
-	for _, k in ipairs(ks) do
-		local e = 0.5 - 0.5 * math.sqrt(1 - (2 * k - 1) ^ 2) -- bord de l'ovale à cette abscisse
-		kit.Line(frame, len * (k - 0.03), wid * e + 1.2, len * k + len * 0.04, wid * 0.4, 2.2, dark, 0, 2)
-		kit.Line(frame, len * (k - 0.03), wid * (1 - e) - 1.2, len * k + len * 0.04, wid * 0.6, 2.2, dark, 0, 2)
+	local holder = kit.Pivot(parent, px, py, z)
+	holder.Rotation = angle + 90 -- repère local : la feuille pousse vers le haut (-y)
+	local L = size
+	local opts = { Z = 1, Shade = false, Thickness = 1.4 }
+	for index, t in ipairs({ 0.22, 0.47, 0.72 }) do
+		local len = L * (0.62 - t * 0.26)
+		for _, side in ipairs({ -1, 1 }) do
+			local o = table.clone(opts)
+			o.Rotation = side * -(16 + index * 10)
+			kit.Blob(holder, side * L * 0.24, -t * L - L * 0.02, len, L * 0.25, color, o)
+		end
 	end
+	kit.Blob(holder, 0, -L * 0.86, L * 0.3, L * 0.34, color, opts)
+	kit.Line(holder, 0, -L * 0.02, 0, -L * 0.86, 1.6, kit.Darken(color, 0.25), 0, 2)
+	return holder
 end
 
 -- Monstera : grandes feuilles fendues sur un pot blanc façon terrazzo
@@ -392,11 +392,11 @@ Art.Monstera = function(body, kit, _item)
 	local plant = kit.Pivot(body, 50, 66, 3)
 	local green, deep = Color3.fromRGB(95, 185, 110), Color3.fromRGB(80, 165, 100)
 	local leaves = {
-		{ -24, -6, -172, 24, deep },
-		{ 24, -8, -8, 24, deep },
-		{ -16, -26, -140, 30, green },
-		{ 16, -32, -48, 32, green },
-		{ -1, -36, -94, 28, Color3.fromRGB(110, 200, 120) },
+		{ -22, -8, -165, 28, deep },
+		{ 22, -10, -15, 28, deep },
+		{ -14, -28, -128, 34, green },
+		{ 14, -30, -52, 34, green },
+		{ 0, -36, -90, 30, Color3.fromRGB(110, 200, 120) },
 	}
 	for index, l in ipairs(leaves) do
 		kit.Line(plant, 0, 0, l[1], l[2], 2.4, C.LeafDark, 0, 1)
@@ -593,28 +593,28 @@ end
 -- Arbre d'intérieur : feuillage en nuage avec petites pommes, grand pot rose qui sourit
 Art.IndoorTree = function(body, kit, _item)
 	local C = kit.C
-	local tree = kit.Pivot(body, 50, 64, 3)
+	local tree = kit.Pivot(body, 50, 70, 3)
 	kit.Part(tree, -4, -34, 8, 36, C.WoodDark, { Radius = 3, Z = 1 })
-	kit.Line(tree, 0, -20, 10, -30, 3, C.WoodDark, 0, 1)
+	kit.Line(tree, 0, -18, 10, -28, 3, C.WoodDark, 0, 1)
 	local g1, g2, g3 = C.LeafDark, C.Leaf, Color3.fromRGB(150, 220, 130)
 	local puffs = {
-		{ -22, -40, 34, 30, g1 },
-		{ 22, -42, 34, 30, g1 },
-		{ -14, -58, 36, 32, g2 },
-		{ 14, -60, 36, 32, g2 },
-		{ 0, -50, 44, 36, g2 },
-		{ 0, -72, 34, 26, g3 },
+		{ -24, -36, 34, 28, g1 },
+		{ 24, -38, 34, 28, g1 },
+		{ -14, -52, 36, 30, g2 },
+		{ 14, -54, 36, 30, g2 },
+		{ 0, -44, 46, 34, g2 },
+		{ 0, -64, 32, 24, g3 },
 	}
 	for index, p in ipairs(puffs) do
 		kit.Blob(tree, p[1], p[2], p[3], p[4], p[5], { Z = index + 1, Shade = 0.08, Thickness = 1.6 })
 	end
-	kit.Shine(tree, -8, -80, 12, 4, 9, 0.45)
-	for _, a in ipairs({ { -22, -44 }, { 18, -52 }, { -6, -62 }, { 26, -38 }, { 6, -40 } }) do
+	kit.Shine(tree, -8, -71, 12, 4, 9, 0.45)
+	for _, a in ipairs({ { -24, -40 }, { 18, -48 }, { -6, -56 }, { 28, -34 }, { 6, -36 } }) do
 		local apple = kit.Blob(tree, a[1], a[2], 7, 7, C.Red, { Z = 8, Thickness = 1.1 })
 		kit.Circle(apple, 2.2, 2.2, 2, 2, C.White, 0.2, 2)
 	end
 	kit.Animate(tree, "Sway", 1.2, 0.5, 1.7)
-	local potBody, faceY = pot(body, kit, 50, 100, 54, 38, C.PinkSoft)
+	local potBody, faceY = pot(body, kit, 50, 100, 54, 32, C.PinkSoft)
 	kit.Face(body, 50, faceY, 24, { Z = 8 })
 	kit.Box(potBody, 0, 4, potBody.Size.X.Offset, 3, C.Pink, 0.3, 2)
 	return nil
@@ -625,7 +625,7 @@ Art.Bamboo = function(body, kit, _item)
 	local C = kit.C
 	local plant = kit.Pivot(body, 50, 80, 3)
 	local green = Color3.fromRGB(130, 200, 110)
-	local stalks = { { -10, -70 }, { 2, -80 }, { 13, -62 } }
+	local stalks = { { -10, -66 }, { 2, -74 }, { 13, -58 } }
 	for index, s in ipairs(stalks) do
 		local x, top = s[1], s[2]
 		local stalk = kit.Part(plant, x - 4, top, 8, -top + 2, kit.Lighten(green, (index - 1) * 0.08), { Radius = 4, Z = 2 + index, Shine = true })
@@ -633,29 +633,33 @@ Art.Bamboo = function(body, kit, _item)
 			kit.Box(stalk, -0.5, y, 9, 2, kit.Darken(green, 0.3), 0.2, 2)
 		end
 	end
-	local leaves = {
-		{ -10, -64, -150, 22 },
-		{ -10, -50, -170, 18 },
-		{ 2, -76, -60, 22 },
-		{ 2, -72, -115, 20 },
-		{ 13, -56, -25, 22 },
-		{ 13, -44, -5, 18 },
-		{ -10, -36, -165, 16 },
+	-- rameaux + touffes de feuilles fines et tombantes
+	local light = Color3.fromRGB(150, 215, 120)
+	local twigs = {
+		{ -10, -50, -26, -60, { -170, 160, -140 } },
+		{ 2, -62, 18, -72, { -20, 25, -60 } },
+		{ 13, -42, 30, -48, { -10, 30 } },
+		{ -10, -28, -26, -32, { 175, 145 } },
 	}
-	for _, l in ipairs(leaves) do
-		leaf(plant, kit, l[1], l[2], l[3], l[4], 6.5, C.Leaf, 6, false)
+	for index, t in ipairs(twigs) do
+		kit.Line(plant, t[1], t[2], t[3], t[4], 1.8, kit.Darken(green, 0.15), 0, 2)
+		for n, a in ipairs(t[5]) do
+			leaf(plant, kit, t[3], t[4], a, 21 - n * 1.5, 8, (index + n) % 2 == 0 and C.Leaf or light, 6, false, 1.1)
+		end
+	end
+	for _, l in ipairs({ { 2, -73, -110 }, { 2, -73, -65 }, { -10, -65, -125 }, { 13, -57, -55 } }) do
+		leaf(plant, kit, l[1], l[2], l[3], 14, 7, light, 6, false, 1.1)
 	end
 	local papers = {
-		{ -26, -62, C.Pink },
-		{ -24, -40, C.Sky },
-		{ 22, -70, C.Butter },
-		{ 30, -48, C.Lilac },
-		{ 26, -30, C.Mint },
+		{ -21, -57, C.Pink },
+		{ 14, -69, C.Butter },
+		{ 25, -47, C.Lilac },
+		{ -21, -31, C.Sky },
 	}
 	for index, p in ipairs(papers) do
 		local strip = kit.Pivot(plant, p[1], p[2], 7)
-		kit.Line(strip, 0, 0, 0, 5, 1, C.Ink, 0.3, 1)
-		kit.Part(strip, -3.5, 4, 7, 14, p[3], { Radius = 1.5, Z = 2, Thickness = 1.2 })
+		kit.Line(strip, 0, 0, 0, 6, 1, C.Ink, 0.3, 1)
+		kit.Part(strip, -3.5, 5, 7, 14, p[3], { Radius = 1.5, Z = 2, Thickness = 1.2 })
 		kit.Animate(strip, "Sway", 6, 0.9, index * 1.3)
 	end
 	kit.Animate(plant, "Sway", 1, 0.4, 0.9)
@@ -675,18 +679,18 @@ Art.PalmTree = function(body, kit, _item)
 	for index, t in ipairs(trunk) do
 		kit.Blob(palm, t[1], t[2], 15 - index * 0.6, 11, index % 2 == 0 and C.Wood or C.WoodLight, { Z = index, Thickness = 1.4 })
 	end
-	local top = kit.Pivot(palm, 7, -56, 9)
+	local top = kit.Pivot(palm, 7, -54, 9)
 	local fronds = {
-		{ -165, 36, C.LeafDark },
-		{ -15, 36, C.LeafDark },
-		{ -125, 34, C.Leaf },
-		{ -55, 34, C.Leaf },
-		{ 160, 32, C.Green },
-		{ 20, 32, C.Green },
-		{ -90, 26, Color3.fromRGB(150, 220, 130) },
+		{ 140, 32, C.Green },
+		{ 40, 32, C.Green },
+		{ -172, 38, C.LeafDark },
+		{ -8, 38, C.LeafDark },
+		{ -140, 34, C.Leaf },
+		{ -40, 34, C.Leaf },
+		{ -95, 24, Color3.fromRGB(150, 220, 130) },
 	}
 	for index, f in ipairs(fronds) do
-		leaf(top, kit, 0, 0, f[1], f[2], 13, f[3], index)
+		leaf(top, kit, 0, 0, f[1], f[2], 12, f[3], index)
 	end
 	for _, c in ipairs({ { -5, 4 }, { 4, 5 }, { 0, -1 } }) do
 		local nut = kit.Blob(top, c[1], c[2], 9, 9, C.Brown, { Z = 9, Thickness = 1.2 })

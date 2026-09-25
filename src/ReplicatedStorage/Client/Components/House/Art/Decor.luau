@@ -31,16 +31,17 @@ local function outlinedStar(kit, parent, cx, cy, r, color, z)
 	return holder
 end
 
--- Croissant de lune (ronds alignés sur un arc, ouvert vers la droite)
+-- Croissant de lune (pilules qui s'affinent le long d'un arc, ouvert vers la droite)
 local function crescent(kit, parent, cx, cy, r, color, z, count)
 	local holder = kit.Group(parent, cx - r, cy - r, r * 2, r * 2, z)
-	local n = count or 9
-	local arc = r * 0.6
+	local n = count or 12
 	for i = 0, n - 1 do
-		local k = i / (n - 1) * 2 - 1 -- -1..1
-		local a = math.rad(k * 145)
-		local d = r * (0.8 - 0.55 * math.abs(k) ^ 1.4)
-		kit.Circle(holder, r - math.cos(a) * arc, r + math.sin(a) * arc, d, d, color, 0, 1)
+		local k0, k1 = i / n * 2 - 1, (i + 1) / n * 2 - 1
+		local km = (k0 + k1) / 2
+		local th = r * (0.84 - 0.68 * math.abs(km) ^ 1.5)
+		local dist = r - th / 2 -- tangent au bord extérieur
+		local a0, a1 = math.rad(k0 * 148), math.rad(k1 * 148)
+		kit.Line(holder, r - math.cos(a0) * dist, r + math.sin(a0) * dist, r - math.cos(a1) * dist, r + math.sin(a1) * dist, th, color, 0, 1)
 	end
 	return holder
 end
@@ -189,7 +190,7 @@ Art.WallCalendar = function(body, kit, _item)
 	local page = kit.Part(body, 18, 18, 64, 72, C.White, { Radius = 6, Z = 2 })
 	kit.Part(body, 22, 88, 58, 5, kit.Darken(C.Cream, 0.04), { Radius = 3, Z = 1 })
 	local head = kit.Part(page, 0, 0, 64, 22, C.Pink, { Radius = 6, Z = 2, Shade = 0.1 })
-	kit.Text(head, "JUNE", 32, 13, 11, C.White, 3)
+	kit.Text(head, "JUNE", 32, 12.5, 10, C.White, 3)
 	for _, x in ipairs({ 14, 26, 38, 50 }) do
 		kit.Part(page, x - 2, -5, 4, 9, C.GreyDark, { Radius = -1, Z = 4, Outline = false, Shade = false })
 	end
@@ -220,11 +221,11 @@ Art.FramedPicture = function(body, kit, _item)
 	local sun = kit.Circle(view, 48, 16, 16, 16, C.Butter, 0, 2)
 	kit.Face(sun, 8, 8.5, 12, { Eyes = "happy", Mouth = "none", Z = 3 })
 	kit.Cloud(view, 20, 22, 20, C.White, 0.05, 2)
-	kit.Blob(view, 14, 58, 60, 34, C.Mint, { Z = 3, Outline = false, Shade = 0.1 })
-	kit.Blob(view, 54, 60, 64, 30, C.Leaf, { Z = 4, Outline = false, Shade = 0.1 })
-	kit.Circle(view, 30, 44, 4, 4, C.Pink, 0, 5)
-	kit.Circle(view, 40, 49, 3.5, 3.5, C.White, 0, 5)
-	kit.Circle(view, 52, 47, 3.5, 3.5, C.Pink, 0, 5)
+	kit.Blob(view, 14, 54, 64, 36, C.Mint, { Z = 3, Outline = false, Shade = 0.1 })
+	kit.Blob(view, 56, 58, 66, 34, C.Leaf, { Z = 4, Outline = false, Shade = 0.1 })
+	kit.Circle(view, 14, 42, 4, 4, C.Pink, 0, 5)
+	kit.Circle(view, 40, 46, 3.5, 3.5, C.White, 0, 5)
+	kit.Circle(view, 52, 44, 3.5, 3.5, C.Pink, 0, 5)
 	for _, p in ipairs({ { 4, 4 }, { 84, 4 }, { 4, 70 }, { 84, 70 } }) do
 		kit.Circle(frame, p[1], p[2], 5, 5, kit.Lighten(C.Gold, 0.4), 0, 4)
 	end
@@ -404,7 +405,7 @@ Art.GlowStars = function(body, kit, _item)
 	kit.Circle(halo, 30, 30, 40, 40, glow, 0.5, 1)
 	local big = outlinedStar(kit, body, 42, 50, 24, glow, 3)
 	kit.Face(big, 26, 28, 18, { Eyes = "happy", Mouth = "smile", Z = 4 })
-	local moon = crescent(kit, body, 78, 24, 16, Color3.fromRGB(255, 245, 180), 3, 8)
+	local moon = crescent(kit, body, 78, 24, 16, Color3.fromRGB(255, 245, 180), 3, 10)
 	kit.Animate(moon, "Bob", 1.5, 0.8, 1)
 	for index, s in ipairs({ { 14, 18, 8 }, { 82, 70, 10 }, { 22, 84, 7 } }) do
 		local small = star(kit, body, s[1], s[2], s[3], if index % 2 == 0 then glow else Color3.fromRGB(210, 250, 230), 2)
@@ -438,16 +439,16 @@ Art.DreamCatcher = function(body, kit, _item)
 	end
 	-- plumes suspendues
 	local feathers = {
-		{ a = 130, len = 12, color = C.Lilac },
-		{ a = 90, len = 18, color = C.Pink },
-		{ a = 50, len = 12, color = C.Mint },
+		{ a = 130, len = 12, color = C.Lilac, tilt = 8 },
+		{ a = 90, len = 18, color = C.Pink, tilt = 0 },
+		{ a = 50, len = 12, color = C.Mint, tilt = -8 },
 	}
 	for index, f in ipairs(feathers) do
 		local a = math.rad(f.a)
 		local p = kit.Pivot(body, cx + math.cos(a) * r, cy + math.sin(a) * r, 3)
 		kit.Line(p, 0, 0, 0, f.len, 1, C.WoodDark, 0, 1)
 		kit.Circle(p, 0, f.len - 3, 5, 5, C.Butter, 0, 3)
-		local feather = kit.Blob(p, 0, f.len + 12, 10, 26, f.color, { Z = 2, Shine = true })
+		local feather = kit.Blob(p, 0, f.len + 12, 10, 26, f.color, { Z = 2, Shine = true, Rotation = f.tilt })
 		kit.Line(feather, 5, 3, 5, 26, 1, kit.OutlineOf(f.color), 0.3, 2)
 		kit.Line(feather, 5, 12, 9, 9, 1, C.White, 0.3, 2)
 		kit.Line(feather, 5, 18, 1, 15, 1, C.White, 0.3, 2)
@@ -521,8 +522,7 @@ Art.DeskGlobe = function(body, kit, _item)
 	kit.Blob(lands, 38, 20, 16, 12, land, o)
 	kit.Blob(lands, 38, 38, 12, 12, Color3.fromRGB(250, 220, 150), { Z = 1, Thickness = 1.2, Outline = C.WoodDark, Shade = false })
 	kit.Animate(lands, "Drift", 1.5, 0.4, 0)
-	local equator = kit.Blob(globe, 28, 28, 56, 14, C.White, { Z = 3, T = 1, Outline = false, Shade = false })
-	kit.Stroke(equator, C.White, 1, 0.45)
+	kit.Cloud(globe, 42, 50, 12, C.White, 0.3, 3)
 	kit.Shine(globe, 10, 9, 12, 6, 4, 0.3).Rotation = -35
 	kit.Circle(body, 50, 11, 6, 6, C.Gold, 0, 5)
 	kit.Circle(body, 50, 77, 6, 6, C.Gold, 0, 5)
@@ -572,7 +572,8 @@ end
 Art.WallShelf = function(body, kit, _item)
 	local C = kit.C
 	for i = 0, 8 do
-		kit.Circle(body, 12 + i * 9.5, 69, 8, 8, C.PinkSoft, 0, 1)
+		kit.Circle(body, 12 + i * 9.5, 70, 8, 8, C.Pink, 0.15, 1)
+		kit.Circle(body, 12 + i * 9.5, 71, 3, 3, C.White, 0.2, 2)
 	end
 	kit.Part(body, 4, 60, 92, 9, C.Wood, { Radius = 3, Z = 3, Shine = true })
 	for _, x in ipairs({ 16, 78 }) do
@@ -638,11 +639,11 @@ Art.MoonGarland = function(body, kit, _item)
 	local yAt = sagString(kit, body, -2, 102, 12, 8, 4, C.WoodDark, 1.2, 1)
 	local moon = Color3.fromRGB(255, 232, 150)
 	local items = {
-		{ x = 12, len = 16, kind = "star", color = C.Lilac },
-		{ x = 31, len = 34, kind = "moon", r = 11 },
-		{ x = 50, len = 18, kind = "bigmoon", r = 19 },
-		{ x = 69, len = 32, kind = "cloud" },
-		{ x = 88, len = 18, kind = "star", color = C.Pink },
+		{ x = 8, len = 18, kind = "star", color = C.Lilac },
+		{ x = 24, len = 30, kind = "moon", r = 11 },
+		{ x = 50, len = 14, kind = "bigmoon", r = 20 },
+		{ x = 80, len = 46, kind = "cloud" },
+		{ x = 94, len = 14, kind = "star", color = C.Pink },
 	}
 	for index, it in ipairs(items) do
 		local p = kit.Pivot(body, it.x, yAt(it.x), 2)
@@ -650,12 +651,12 @@ Art.MoonGarland = function(body, kit, _item)
 		if it.kind == "star" then
 			star(kit, p, 0, it.len + 8, 9, it.color, 2)
 		elseif it.kind == "moon" then
-			crescent(kit, p, 4, it.len + it.r - 2, it.r, moon, 2, 7)
+			crescent(kit, p, 3, it.len + it.r - 2, it.r, moon, 2, 8)
 		elseif it.kind == "bigmoon" then
-			local m = crescent(kit, p, 6, it.len + it.r - 3, it.r, moon, 2, 9)
-			kit.Face(m, it.r * 0.42, it.r * 1.05, 11, { Eyes = "closed", Mouth = "none", Z = 3 })
+			local m = crescent(kit, p, 12, it.len + it.r - 3, it.r, moon, 2, 12)
+			kit.Face(m, it.r * 0.5, it.r * 1.0, 13, { Eyes = "closed", Mouth = "smile", Z = 3, Color = C.WoodDark })
 		else
-			kit.Cloud(p, 0, it.len + 13, 22, C.White, 0, 2)
+			kit.Cloud(p, 0, it.len + 12, 20, C.White, 0, 2)
 		end
 		kit.Animate(p, "Sway", 5, 0.7, index * 1.3)
 	end
@@ -717,9 +718,13 @@ Art.Aquarium = function(body, kit, _item)
 		kit.Line(p, 0, 0, 5, -a[3] * 0.6, 4, C.Leaf, 0, 1)
 		kit.Animate(p, "Sway", 6, 0.6, index * 1.5)
 	end
-	-- corail rose
-	kit.Blob(view, 64, 44, 8, 16, C.Pink, { Z = 3, Rotation = -20 })
-	kit.Blob(view, 69, 42, 7, 18, C.Pink, { Z = 3, Rotation = 15 })
+	-- petit château
+	local castle = kit.Part(view, 56, 34, 18, 18, C.LilacSoft, { Z = 3, Radius = 2, Thickness = 1.2 })
+	kit.Part(castle, 6, 8, 6, 10, C.Purple, { Radius = 3, Z = 2, Outline = false, Shade = false })
+	for _, x in ipairs({ 52, 72 }) do
+		kit.Part(view, x, 29, 7, 23, C.LilacSoft, { Z = 3, Radius = 2, Thickness = 1.2 })
+		kit.Triangle(view, x + 3.5, 21, 9, 8, C.Pink, 4, nil, 5)
+	end
 	-- poissons
 	local function fish(x, y, w, color, stripes, phase)
 		local g = kit.Group(view, x - w / 2, y - w * 0.35, w * 1.3, w * 0.7, 6)
@@ -751,7 +756,7 @@ end
 -- Piñata lama : bandes de papier pastel à franges, tête avec visage et fleur, corde
 Art.Pinata = function(body, kit, _item)
 	local C = kit.C
-	local p = kit.Pivot(body, 56, -14, 2)
+	local p = kit.Pivot(body, 56, -10, 2)
 	kit.Line(p, 0, 0, 0, 56, 1.4, C.WoodDark, 0, 1)
 	local colors = { C.Pink, C.Butter, C.Mint, C.Sky, C.Lilac }
 	local function stripes(x, y, w, h, n, z, offset, fringe)
@@ -765,22 +770,22 @@ Art.Pinata = function(body, kit, _item)
 		end
 	end
 	for i, x in ipairs({ -24, -13, 8, 19 }) do
-		stripes(x, 60, 8, 22, 2, 1, i + 1, false) -- pattes
+		stripes(x, 76, 8, 22, 2, 1, i + 1, false) -- pattes
 	end
-	kit.Blob(p, 32, 46, 10, 14, C.Heart, { Z = 1, Rotation = 35 }) -- queue
-	stripes(-28, 38, 60, 28, 4, 2, 0, true) -- corps
-	stripes(-38, 16, 16, 26, 3, 3, 3, true) -- cou
+	kit.Blob(p, 32, 62, 10, 14, C.Heart, { Z = 1, Rotation = 35 }) -- queue
+	stripes(-28, 54, 60, 28, 4, 2, 0, true) -- corps
+	stripes(-38, 32, 16, 26, 3, 3, 3, true) -- cou
 	-- tête
-	kit.Part(p, -40, -8, 7, 14, C.Pink, { Radius = -1, Z = 3, Rotation = -14 })
-	kit.Part(p, -27, -8, 7, 14, C.Pink, { Radius = -1, Z = 3, Rotation = 14 })
-	local head = kit.Part(p, -46, -1, 30, 22, C.Pink, { Radius = 9, Z = 4, Shine = true })
+	kit.Part(p, -40, 8, 7, 14, C.Pink, { Radius = -1, Z = 3, Rotation = -14 })
+	kit.Part(p, -27, 8, 7, 14, C.Pink, { Radius = -1, Z = 3, Rotation = 14 })
+	local head = kit.Part(p, -46, 15, 30, 22, C.Pink, { Radius = 9, Z = 4, Shine = true })
 	kit.Blob(head, 15, 16, 16, 9, C.PinkSoft, { Z = 2, Outline = false, Shade = false })
 	kit.Face(head, 15, 11, 17, { Eyes = "dot", Mouth = "smile", Z = 3 })
 	for i = 0, 3 do
 		local a = i / 4 * math.pi * 2
-		kit.Circle(p, -22 + math.cos(a) * 3, -3 + math.sin(a) * 3, 5, 5, C.Butter, 0, 5)
+		kit.Circle(p, -22 + math.cos(a) * 3, 13 + math.sin(a) * 3, 5, 5, C.Butter, 0, 5)
 	end
-	kit.Circle(p, -22, -3, 3.5, 3.5, C.Orange, 0, 6)
+	kit.Circle(p, -22, 13, 3.5, 3.5, C.Orange, 0, 6)
 	kit.Animate(p, "Sway", 4, 0.8, 0)
 	return { WallShadow = Vector2.new(0.75, 0.7) }
 end
@@ -850,7 +855,7 @@ Art.MoaiStatue = function(body, kit, _item)
 	end
 	local head = kit.Part(body, 27, 12, 46, 58, stone, { Radius = 12, Z = 4, Shine = true })
 	kit.Part(body, 31, 3, 38, 13, Color3.fromRGB(235, 160, 150), { Radius = 5, Z = 5, Shine = true })
-	kit.Part(head, -2, 14, 50, 9, dark, { Radius = 4, Z = 2, Shade = false })
+	kit.Part(head, 3, 15, 40, 8, dark, { Radius = 4, Z = 2, Shade = false })
 	kit.Face(head, 23, 28, 34, { Eyes = "closed", Mouth = "none", Z = 3 })
 	local nose = kit.Part(head, 17, 18, 12, 28, kit.Lighten(stone, 0.12), { Radius = 5, Z = 4 })
 	kit.Circle(nose, 3.5, 24, 3, 2.5, dark, 0, 2)
@@ -966,9 +971,9 @@ Art.FloatingPlanet = function(body, kit, _item)
 	local ringA = C.Butter
 	local ringB = C.Peach
 	local function ring(parent, cx, cy, z)
-		kit.Part(parent, cx - 50, cy - 13, 100, 26, C.White, { Radius = -1, T = 1, Outline = kit.OutlineOf(ringA), Thickness = 7, Shade = false, Z = z })
-		kit.Part(parent, cx - 50, cy - 13, 100, 26, C.White, { Radius = -1, T = 1, Outline = ringA, Thickness = 5, Shade = false, Z = z + 1 })
-		kit.Part(parent, cx - 41, cy - 9, 82, 18, C.White, { Radius = -1, T = 1, Outline = ringB, Thickness = 2.5, Shade = false, Z = z + 1 })
+		kit.Part(parent, cx - 51, cy - 11, 102, 22, C.White, { Radius = -1, T = 1, Outline = kit.OutlineOf(ringA), Thickness = 5.5, Shade = false, Z = z })
+		kit.Part(parent, cx - 51, cy - 11, 102, 22, C.White, { Radius = -1, T = 1, Outline = ringA, Thickness = 3.5, Shade = false, Z = z + 1 })
+		kit.Part(parent, cx - 43, cy - 7.5, 86, 15, C.White, { Radius = -1, T = 1, Outline = ringB, Thickness = 2, Shade = false, Z = z + 1 })
 	end
 	ring(g, 50, 54, 1)
 	local planet = kit.Blob(g, 50, 50, 56, 56, Color3.fromRGB(200, 172, 255), { Z = 4, Shine = true })

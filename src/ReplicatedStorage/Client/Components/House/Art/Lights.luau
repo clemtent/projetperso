@@ -65,22 +65,27 @@ local function flame(parent, kit, cx, baseY, size, z, phase)
 	return holder, h
 end
 
--- Étoile à 5 branches (triangles autour d'un cœur rond), centrée en (cx, cy)
-local function star(parent, kit, cx, cy, radius, color, z, slices)
+-- Étoile dodue à 5 branches : carrés arrondis (une pointe vers l'extérieur)
+-- autour d'un disque ; un seul contour (calque contour + calque couleur)
+local function star(parent, kit, cx, cy, radius, color, z, ink)
 	local holder = kit.Group(parent, 0, 0, 100, 100, z)
-	local inner = radius * 0.47
-	local baseW = 2 * inner * math.sin(math.rad(36))
-	local d = inner * math.cos(math.rad(36))
-	local h = radius - d
-	for index = 0, 4 do
-		local a = index * 72
-		local dist = d + h / 2
-		local px = cx + math.sin(math.rad(a)) * dist
-		local py = cy - math.cos(math.rad(a)) * dist
-		local tri = kit.Triangle(holder, px, py - h / 2, baseW, h, color, 1, nil, slices or 7)
-		tri.Rotation = a
+	ink = ink or kit.OutlineOf(color)
+	local t = 1.8
+	local side = radius * 0.64
+	local dist = radius - side / math.sqrt(2) - side * 0.04
+	for layer = 1, 2 do
+		local grow = if layer == 1 then t * 2 else 0
+		local fill = if layer == 1 then ink else color
+		for index = 0, 4 do
+			local a = math.rad(index * 72)
+			local arm = kit.Box(holder, 0, 0, side + grow, side + grow, fill, 0, layer)
+			arm.AnchorPoint = Vector2.new(0.5, 0.5)
+			arm.Position = UDim2.fromOffset(cx + math.sin(a) * dist, cy - math.cos(a) * dist)
+			arm.Rotation = 45 + index * 72
+			kit.Round(arm, radius * 0.08 + grow / 2)
+		end
+		kit.Circle(holder, cx, cy, radius * 1.04 + grow, radius * 1.04 + grow, fill, 0, layer)
 	end
-	kit.Circle(holder, cx, cy, inner * 2.1, inner * 2.1, color, 0, 2)
 	return holder
 end
 
@@ -194,8 +199,6 @@ Art.FloorLamp = function(body, kit, _item)
 	kit.Part(body, 28, 90, 44, 10, C.Mint, { Radius = -1, Z = 2, Shine = true })
 	kit.Part(body, 47, 34, 6, 58, C.MintSoft, { Radius = 3, Z = 1 })
 	kit.Blob(body, 50, 62, 12, 7, C.Mint, { Z = 2 })
-	local beam = kit.Triangle(body, 50, 36, 46, 30, C.Butter, 1, 0.8, 6)
-	pulseAll(kit, beam, 0.15, 0.7, 0)
 	kit.Blob(body, 50, 38, 16, 9, C.Butter, { Z = 2, Outline = false })
 	-- dôme (moitié haute d'un ovale) + bordure + franges
 	local dome = kit.Group(body, 18, 4, 64, 32, 3, true)
@@ -236,8 +239,7 @@ Art.StarNightLight = function(body, kit, _item)
 	local C = kit.C
 	local halo = kit.Circle(body, 50, 46, 84, 84, C.Butter, 0.78, 1)
 	kit.Animate(halo, "Pulse", 0.15, 0.6, 0)
-	star(body, kit, 50, 48, 45, C.Gold, 2, 7)
-	star(body, kit, 50, 49, 40, C.Butter, 3, 7)
+	star(body, kit, 50, 50, 47, C.Butter, 2, kit.Darken(C.Gold, 0.15))
 	kit.Shine(body, 36, 36, 8, 5, 5, 0.3)
 	kit.Face(body, 50, 52, 30, { Eyes = "closed", Mouth = "smile", Z = 6 })
 	kit.Part(body, 28, 86, 44, 14, C.Lilac, { Radius = 6, Z = 7, Shine = true }) -- socle
@@ -299,7 +301,7 @@ Art.CloudLamp = function(body, kit, _item)
 		{ 38, 20, 40, 40 },
 		{ 62, 34, 28, 28 },
 	}, Color3.fromRGB(255, 252, 240), 1, 2)
-	local warm = kit.Circle(cloud, 52, 52, 48, 26, C.Butter, 0.6, 2)
+	local warm = kit.Circle(cloud, 52, 50, 56, 30, C.Butter, 0.72, 2)
 	kit.Animate(warm, "Pulse", 0.3, 0.7, 0)
 	kit.Shine(cloud, 44, 26, 12, 5, 3, 0.2)
 	kit.Face(cloud, 50, 54, 30, { Eyes = "closed", Mouth = "smile", Z = 4 })
@@ -346,7 +348,7 @@ Art.MoonLamp = function(body, kit, _item)
 	kit.Face(moon, 34, 36, 32, { Eyes = "closed", Mouth = "smile", Z = 4 })
 	kit.Animate(moon, "Breathe", 0.015, 0.6, 0)
 	kit.Sparkle(body, 86, 22, 12, C.Butter, 0, 5)
-	kit.Text(body, "z", 80, 36, 9, C.Lilac, 5)
+	kit.Sparkle(body, 14, 30, 8, C.Butter, 0, 5)
 	return { Glow = Color3.fromRGB(255, 244, 200) }
 end
 
@@ -429,13 +431,13 @@ Art.LavaLamp = function(body, kit, _item)
 	kit.Part(body, 33, 72, 34, 6, C.Gold, { Radius = -1, Z = 4 })
 	kit.Part(body, 38, 6, 24, 12, C.Purple, { Radius = 6, Z = 4 }) -- chapeau
 	kit.Part(body, 36, 15, 28, 4, C.Gold, { Radius = -1, Z = 5 })
-	local glass = kit.Part(body, 32, 16, 36, 58, C.Pink, { Radius = 15, Z = 3, Shade = false })
-	kit.Gradient(glass, Color3.fromRGB(255, 225, 240), Color3.fromRGB(255, 170, 200), 90)
+	local glass = kit.Part(body, 32, 16, 36, 58, Color3.fromRGB(255, 190, 220), { Radius = 15, Z = 3, Shade = false, Outline = C.Purple })
+	kit.Gradient(glass, Color3.fromRGB(250, 235, 255), WHITE, 90)
 	local lava = kit.Group(body, 34, 18, 32, 54, 4, true)
-	local blobColor = Color3.fromRGB(255, 110, 120)
+	local blobColor = Color3.fromRGB(255, 120, 150)
 	for index, b in ipairs({ { 16, 12, 11, 12 }, { 11, 27, 14, 15 }, { 21, 38, 10, 9 }, { 16, 54, 30, 14 } }) do
 		local blob = kit.Circle(lava, b[1], b[2], b[3], b[4], blobColor, 0, 1)
-		kit.Gradient(blob, Color3.fromRGB(255, 200, 120), WHITE, 90)
+		kit.Gradient(blob, Color3.fromRGB(255, 225, 170), WHITE, 90)
 		if index < 4 then
 			kit.Animate(blob, "Bob", 3 + index, 0.35, index * 1.9)
 		end
@@ -449,8 +451,14 @@ end
 Art.UFOLamp = function(body, kit, _item)
 	local C = kit.C
 	local layer = hang(body, kit, 26, C.GreyDark, 3, 2)
-	local beam = kit.Triangle(layer, 50, 56, 50, 38, C.Mint, 1, 0.7, 8)
-	pulseAll(kit, beam, 0.2, 0.9, 0)
+	local beam = kit.Box(layer, 34, 62, 32, 34, C.Mint, 0.35, 1)
+	kit.Round(beam, 10)
+	kit.Fade(beam, 0, 1, 90)
+	kit.Animate(beam, "Pulse", 0.3, 0.9, 0)
+	for index, p in ipairs({ { 44, 76 }, { 56, 84 } }) do
+		local sp = kit.Sparkle(layer, p[1], p[2], 7, WHITE, 0, 2)
+		pulseAll(kit, sp, 0.8, 1.2, index * 1.5)
+	end
 	-- alien
 	kit.Line(layer, 50, 30, 50, 24, 1.4, C.LeafDark, 0, 2)
 	kit.Circle(layer, 50, 24, 5, 5, C.Pink, 0, 2)
@@ -475,8 +483,10 @@ Art.CrystalChandelier = function(body, kit, _item)
 	local C = kit.C
 	local gold = C.Gold
 	local layer = hang(body, kit, 12, gold, 2, 0.8)
-	kit.Part(layer, 42, 8, 16, 8, gold, { Radius = 3, Z = 3 })
 	kit.Line(layer, 50, 14, 50, 50, 4, gold, 0, 2)
+	kit.Part(layer, 43, 12, 14, 7, gold, { Radius = 3, Z = 3 })
+	kit.Circle(layer, 50, 32, 7, 7, gold, 0, 3)
+	kit.Circle(layer, 50, 42, 5, 5, C.PinkSoft, 0, 3)
 	-- bras (moitié basse d'un ovale doré)
 	local arms = kit.Group(layer, 10, 44, 80, 24, 3, true)
 	local ring = kit.Circle(arms, 40, 0, 72, 34, gold, 1, 1)
@@ -500,8 +510,8 @@ Art.CrystalChandelier = function(body, kit, _item)
 		kit.Blob(layer, x, y, 13, 6, gold, { Z = 5 })
 		flame(layer, kit, x, y - 12, 12, 5, index * 0.9)
 	end
-	for index, p in ipairs({ { 50, 30 }, { 8, 72 }, { 92, 70 } }) do
-		local sp = kit.Sparkle(layer, p[1], p[2], if index == 1 then 12 else 9, WHITE, 0, 6)
+	for index, p in ipairs({ { 30, 24 }, { 8, 72 }, { 92, 70 } }) do
+		local sp = kit.Sparkle(layer, p[1], p[2], if index == 1 then 11 else 9, WHITE, 0, 6)
 		pulseAll(kit, sp, 0.8, 1.1, index * 1.4)
 	end
 	return { Glow = Color3.fromRGB(190, 230, 255), WallShadow = Vector2.new(0.7, 0.5) }

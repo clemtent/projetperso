@@ -954,8 +954,9 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 					entry.X += (current.Target.X - entry.X) * alpha
 					entry.Y += (current.Target.Y - entry.Y) * alpha
 					sticker.Frame.Position = UDim2.fromScale(entry.X, entry.Y)
-					-- Petit balancement pendant le transport
-					sticker.Body.Rotation = math.sin(clock * 9) * 4
+					-- Petit rebond pendant le transport (pas de rotation : certains
+					-- dessins découpent leurs formes, ce qui ne marche pas si on les tourne)
+					sticker.Body.Position = UDim2.fromOffset(0, -8 + math.sin(clock * 9) * 2.5)
 				end
 			end
 			-- Contour de sélection qui "respire"
