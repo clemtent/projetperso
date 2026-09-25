@@ -389,6 +389,172 @@ test("DVDMath : coins et directions", function(check)
 	eq(check, DVD.Triangle(1.3, 1), 0.7, "triangle")
 	check(near(DVD.Triangle(-0.25, 1), 0.25), "triangle négatif")
 end)
+
+------------------------------------------------------------------ Maison 🏠
+-- Un seul emoji : pas de ZWJ (U+200D) ni de couleur de peau (U+1F3FB..1F3FF),
+-- au plus 2 points de code (le 2e ne peut être que le sélecteur U+FE0F)
+local function isSingleEmoji(text)
+	if type(text) ~= "string" or #text == 0 or not utf8.len(text) then return false end
+	local codes = {}
+	for _, code in utf8.codes(text) do table.insert(codes, code) end
+	if #codes == 0 or #codes > 2 then return false end
+	if codes[1] < 0x2000 then return false end
+	if #codes == 2 and codes[2] ~= 0xFE0F then return false end
+	for _, code in ipairs(codes) do
+		if code == 0x200D or (code >= 0x1F3FB and code <= 0x1F3FF) then return false end
+	end
+	return true
+end
+
+test("Config.House : catalogue (ids, catégories, zones, motifs, prix)", function(check)
+	local H = Config.House
+	check(type(H) == "table", "Config.House manquant")
+	check(near(H.ComfortBonusPerPoint, 0.005) and H.MaxComfortBonus == 1 and H.WallRatio > 0.3 and H.WallRatio < 0.6, "réglages")
+
+	-- Tailles : dans l'ordre, de plus en plus grandes
+	local sizeIds = { "Studio", "Apartment", "Loft", "Mansion" }
+	eq(check, #H.Sizes, 4, "nombre de tailles")
+	for i, size in ipairs(H.Sizes) do
+		eq(check, size.Id, sizeIds[i], "taille " .. i)
+		check(type(size.Name) == "string" and isSingleEmoji(size.Icon), "Name/Icon taille " .. tostring(size.Id))
+		eq(check, Config.HouseSizesById[size.Id], size, "index taille " .. size.Id)
+		eq(check, size.Order, i, "Order taille " .. size.Id)
+		if i > 1 then
+			local prev = H.Sizes[i - 1]
+			check(size.Cost > prev.Cost and size.Width > prev.Width and size.MaxItems > prev.MaxItems, "taille croissante " .. size.Id)
+		end
+	end
+	eq(check, H.Sizes[1].Cost, 0, "studio gratuit")
+	eq(check, H.Sizes[1].MaxItems, 25, "studio 25 objets")
+	eq(check, H.Sizes[4].MaxItems, 90, "manoir 90 objets")
+
+	-- Papiers peints et sols
+	local function checkSkins(list, lookup, patterns, minCount, label)
+		check(#list >= minCount, label .. " : " .. #list .. " < " .. minCount)
+		eq(check, list[1].Cost, 0, label .. " : le 1er est gratuit")
+		local ids = {}
+		for i, skin in ipairs(list) do
+			check(type(skin.Id) == "string" and not ids[skin.Id], label .. " Id en double " .. tostring(skin.Id))
+			ids[skin.Id] = true
+			eq(check, lookup[skin.Id], skin, label .. " index " .. skin.Id)
+			check(type(skin.Name) == "string" and #skin.Name > 0, label .. " Name " .. skin.Id)
+			check(skin.Icon == nil or isSingleEmoji(skin.Icon), label .. " Icon " .. skin.Id)
+			check(patterns[skin.Pattern] == true, label .. " Pattern invalide " .. skin.Id .. " " .. tostring(skin.Pattern))
+			check(type(skin.A) == "table" and type(skin.B) == "table", label .. " couleurs " .. skin.Id)
+			check(type(skin.Cost) == "number" and skin.Cost >= 0 and skin.Cost == math.floor(skin.Cost), label .. " Cost " .. skin.Id)
+			if i > 1 then check(skin.Cost > 0, label .. " seul le 1er est gratuit : " .. skin.Id) end
+		end
+	end
+	checkSkins(H.Wallpapers, Config.HouseWallpapersById, { Plain = true, Stripes = true, Checker = true, Dots = true, Hearts = true,
+		Stars = true, Clouds = true, Bricks = true, Wood = true, Waves = true }, 12, "Papier peint")
+	checkSkins(H.Floors, Config.HouseFloorsById, { Plain = true, Checker = true, Wood = true, Tiles = true, Carpet = true,
+		Marble = true, Herringbone = true }, 10, "Sol")
+	eq(check, H.Wallpapers[1].Pattern, "Stripes", "1er papier peint : rayures roses")
+	eq(check, H.Floors[1].Pattern, "Checker", "1er sol : damier prune")
+
+	-- Catégories
+	local categoryIds = { "Furniture", "Decor", "Toys", "Plants", "Electronics", "Kitchen", "Doors", "Windows", "Lights" }
+	eq(check, #H.Categories, #categoryIds, "nombre de catégories")
+	for i, category in ipairs(H.Categories) do
+		eq(check, category.Id, categoryIds[i], "catégorie " .. i)
+		check(type(category.Name) == "string" and isSingleEmoji(category.Icon), "Name/Icon catégorie " .. tostring(category.Id))
+		eq(check, Config.HouseCategoriesById[category.Id], category, "index catégorie " .. category.Id)
+	end
+
+	-- Objets
+	check(#H.Items >= 90, "au moins 90 objets : " .. #H.Items)
+	local ids, perCategory, placements = {}, {}, { Floor = 0, Wall = 0 }
+	local minCost, maxCost = math.huge, 0
+	for i, item in ipairs(H.Items) do
+		local id = tostring(item.Id)
+		check(type(item.Id) == "string" and #item.Id > 0 and #item.Id <= 64 and not ids[item.Id], "Id objet invalide/en double " .. id)
+		ids[id] = true
+		eq(check, item.Order, i, "Order " .. id)
+		eq(check, Config.HouseItemsById[id], item, "index " .. id)
+		check(type(item.Name) == "string" and #item.Name > 0, "Name " .. id)
+		check(isSingleEmoji(item.Icon), "Icon (un seul emoji) " .. id .. " " .. tostring(item.Icon))
+		check(Config.HouseCategoriesById[item.Category] ~= nil, "Category " .. id .. " " .. tostring(item.Category))
+		perCategory[item.Category] = (perCategory[item.Category] or 0) + 1
+		check(item.Placement == "Floor" or item.Placement == "Wall", "Placement " .. id)
+		placements[item.Placement] = (placements[item.Placement] or 0) + 1
+		if item.Category == "Windows" then eq(check, item.Placement, "Wall", "fenêtre au mur " .. id) end
+		if item.Category == "Doors" then eq(check, item.Placement, "Floor", "porte au sol " .. id) end
+		check(type(item.Size) == "number" and item.Size >= 40 and item.Size <= 160, "Size 40..160 " .. id)
+		check(type(item.Cost) == "number" and item.Cost >= 100 and item.Cost <= 2e9 and item.Cost == math.floor(item.Cost), "Cost " .. id)
+		check(type(item.CostGrowth) == "number" and item.CostGrowth >= 1.1 and item.CostGrowth <= 2, "CostGrowth " .. id)
+		check(type(item.Comfort) == "number" and item.Comfort >= 1 and item.Comfort <= 25 and item.Comfort == math.floor(item.Comfort), "Comfort 1..25 " .. id)
+		check(item.MaxOwned == nil or (type(item.MaxOwned) == "number" and item.MaxOwned >= 1 and item.MaxOwned == math.floor(item.MaxOwned)), "MaxOwned " .. id)
+		minCost = math.min(minCost, item.Cost)
+		maxCost = math.max(maxCost, item.Cost)
+	end
+	for _, category in ipairs(H.Categories) do
+		check((perCategory[category.Id] or 0) >= 5, "catégorie trop vide : " .. category.Id .. " (" .. tostring(perCategory[category.Id] or 0) .. ")")
+		eq(check, #Config.HouseItemsByCategory[category.Id], perCategory[category.Id] or 0, "HouseItemsByCategory " .. category.Id)
+	end
+	check(placements.Wall >= 15 and placements.Floor >= 40, "zones : mur " .. placements.Wall .. ", sol " .. placements.Floor)
+	check(minCost <= 1000, "objet le moins cher : " .. minCost)
+	check(maxCost >= 5e8, "objet le plus cher : " .. maxCost)
+	check(Config.HouseItemsById.LoftBed ~= nil, "LoftBed existe")
+	print(string.format("    %d objets, prix %s .. %s", #H.Items, N.Format(minCost), N.Format(maxCost)))
+end)
+
+test("Formulas maison (prix, confort, bonus)", function(check)
+	local H = Config.House
+	local bed = Config.HouseItemsById.LoftBed
+	eq(check, Formulas.GetHouseItemPrice(bed, 0), bed.Cost, "prix 0")
+	eq(check, Formulas.GetHouseItemPrice(bed, 1), math.floor(bed.Cost * bed.CostGrowth), "prix 1")
+	eq(check, Formulas.GetHouseItemPrice(bed, 3), math.floor(bed.Cost * bed.CostGrowth ^ 3), "prix 3")
+	eq(check, Formulas.GetHouseItemPrice(bed, nil), bed.Cost, "prix nil")
+	eq(check, Formulas.GetHouseItemPrice(bed, -4), bed.Cost, "prix négatif")
+	eq(check, Formulas.GetHouseItemPrice(bed, 0 / 0), bed.Cost, "prix NaN")
+	for _, item in ipairs(H.Items) do
+		local last = 0
+		for owned = 0, (item.MaxOwned or 10) - 1 do
+			local price = Formulas.GetHouseItemPrice(item, owned)
+			check(price == price and price >= last and price < 1e300, "prix croissant " .. item.Id .. " x" .. owned)
+			last = price
+		end
+	end
+
+	-- Confort : objets connus, possédés, au plus MaxItems
+	eq(check, Formulas.GetHouseComfort(nil), 0, "sans données")
+	eq(check, Formulas.GetHouseComfort({}), 0, "sans maison")
+	eq(check, Formulas.GetHouseComfort({ House = { Placed = "x" } }), 0, "Placed invalide")
+	local sofa, rug = Config.HouseItemsById.Sofa, Config.HouseItemsById.KnittedRug
+	local data = { House = { Size = "Studio", Items = { LoftBed = 1, Sofa = 2 }, Placed = {
+		{ I = "LoftBed", X = 0.5, Y = 0.8, S = 1, Z = 0 },
+		{ I = "Sofa", X = 0.2, Y = 0.8, S = 1, Z = 1 },
+		{ I = "Sofa", X = 0.3, Y = 0.8, S = 1, Z = 2 },
+		{ I = "Sofa", X = 0.4, Y = 0.8, S = 1, Z = 3 }, -- 3e canapé : seulement 2 possédés
+		{ I = "KnittedRug", X = 0.4, Y = 0.8, S = 1, Z = 3 }, -- pas possédé
+		{ I = "Bogus", X = 0.4, Y = 0.8 }, -- inconnu
+		"pas une table",
+	} } }
+	eq(check, Formulas.GetHouseComfort(data), bed.Comfort + 2 * sofa.Comfort, "confort compté")
+	data.House.Items.KnittedRug = 1
+	eq(check, Formulas.GetHouseComfort(data), bed.Comfort + 2 * sofa.Comfort + rug.Comfort, "confort + tapis")
+	-- Plafond MaxItems de la taille actuelle
+	local many = { House = { Size = "Studio", Items = { KnittedRug = 1000 }, Placed = {} } }
+	for i = 1, 100 do many.House.Placed[i] = { I = "KnittedRug", X = 0.5, Y = 0.9, S = 1, Z = i } end
+	eq(check, Formulas.GetHouseComfort(many), H.Sizes[1].MaxItems * rug.Comfort, "studio plafonné")
+	many.House.Size = "Mansion"
+	eq(check, Formulas.GetHouseComfort(many), H.Sizes[4].MaxItems * rug.Comfort, "manoir plafonné")
+	many.House.Size = "Inconnu"
+	eq(check, Formulas.GetHouseSize(many), H.Sizes[1], "taille inconnue -> studio")
+
+	-- Bonus : 1 + min(Max, confort x par point)
+	eq(check, Formulas.GetHouseBonus(0), 1, "bonus 0")
+	check(near(Formulas.GetHouseBonus(10), 1 + 10 * H.ComfortBonusPerPoint), "bonus 10")
+	eq(check, Formulas.GetHouseBonus(1e9), 1 + H.MaxComfortBonus, "bonus plafonné")
+	eq(check, Formulas.GetHouseBonus(-5), 1, "bonus négatif")
+	eq(check, Formulas.GetHouseBonus(nil), 1, "bonus nil")
+	eq(check, Formulas.GetHouseBonus(0 / 0), 1, "bonus NaN")
+	-- Le bonus multiplie bien tous les gains
+	local d = emptyData()
+	local base = Formulas.ComputeStats(d, 1, 1)
+	local boosted = Formulas.ComputeStats(d, 1, Formulas.GetHouseBonus(40))
+	check(near(boosted.ClickValue, base.ClickValue * (1 + 40 * H.ComfortBonusPerPoint)), "bonus appliqué au clic")
+end)
 """
 
 
@@ -411,7 +577,7 @@ def build_bundle(extra):
     return "\n".join(parts)
 
 
-CONFIG_PATH_RE = re.compile(r"(?<![A-Za-z0-9_])Config((?:\.[A-Za-z_][A-Za-z0-9_]*)+)")
+CONFIG_PATH_RE = re.compile(r"(?<![A-Za-z0-9_.])Config((?:\.[A-Za-z_][A-Za-z0-9_]*)+)")
 
 
 def config_key_test():
@@ -478,6 +644,22 @@ test("Lang : dictionnaires (placeholders, clés de FR_Config)", function(check)
 					check(configTexts[en] == true, "FR_Config : clé absente de Config : " .. en)
 				end
 			end
+		end
+	end
+end)
+
+test("Lang : tous les textes de Config.House ont une traduction française", function(check)
+	check(LANG.FR_House ~= nil, "FR_House.luau manquant")
+	local fr = {}
+	for _, dict in pairs(LANG) do
+		if type(dict) == "table" and type(dict.fr) == "table" then
+			for en, text in pairs(dict.fr) do fr[en] = text end
+		end
+	end
+	local H = Config.House
+	for _, list in ipairs({ H.Sizes, H.Wallpapers, H.Floors, H.Categories, H.Items }) do
+		for _, entry in ipairs(list) do
+			check(type(fr[entry.Name]) == "string", "pas de traduction : " .. tostring(entry.Name))
 		end
 	end
 end)''')

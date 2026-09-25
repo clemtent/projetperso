@@ -23,6 +23,7 @@ local ServicesFolder = script.Parent:WaitForChild("Services")
 -- (PlayerReady est appelé dans cet ordre : QuestService a besoin des stats,
 -- DVDService crée les logos avant la synchro complète)
 -- (MonetizationService vérifie les Game Passes, ThemeService en a besoin)
+-- (HouseService corrige la maison avant QuestService : le confort compte dans les stats)
 local ORDER = {
 	"DataService",
 	"GameService",
@@ -35,6 +36,7 @@ local ORDER = {
 	"CasinoService",
 	"LootService",
 	"CosmeticService",
+	"HouseService",
 	"QuestService",
 	"AchievementService",
 	"DailyRewardService",

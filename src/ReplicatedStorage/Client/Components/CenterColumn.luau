@@ -21,6 +21,10 @@
 	tiennent sur UNE ligne qui défile horizontalement (zones tactiles de
 	44 px), la largeur est limitée par les slots de côté (Slots) et tout se
 	réajuste si l'écran change (Interface.DeviceChanged).
+	Maison : bouton rond "🏠" juste à DROITE du bouton "Click me" (ouvre
+	"Ma maison"), avec un badge quand un nouvel objet de maison devient
+	abordable (remis à zéro à l'ouverture) ; la carte du boost ⏱️ est
+	décalée à droite de ce bouton.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -40,6 +44,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Formulas = require(ReplicatedStorage.Shared.Formulas)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local Locale = require(ReplicatedStorage.Shared.Locale)
+local HouseCommon = require(script.Parent:WaitForChild("House"):WaitForChild("HouseCommon"))
 
 local CenterColumn = {}
 
@@ -70,6 +75,8 @@ local PILLS = {
 
 local BUTTON_SIZE = Vector2.new(184, 62)
 local PILL_HEIGHT = 36
+local HOUSE_BUTTON_SIZE = 54 -- bouton "🏠" (zone tactile >= 44 px)
+local HOUSE_GAP = 10 -- écart entre "Click me" et "🏠"
 
 local random = Random.new()
 local effectsLayer: Frame
@@ -100,6 +107,12 @@ local pills = {} -- [Id] = { Button, Holder, Badge, Def }
 local pillsStack: Frame -- pile verticale qui contient la rangée des pastilles
 local pillsRow: GuiObject? = nil
 local pillsDevice = "" -- profil pour lequel la rangée a été construite
+local houseButton: TextButton
+local houseBadge: TextLabel
+local houseTip: Frame
+local houseSeen: { [string]: boolean } = {} -- objets abordables déjà vus (badge "🏠")
+local houseBadgeCount = 0
+local houseWiggleAt = 0
 
 local seenAchievements: number? = nil -- succès déjà vus (badge "Succès")
 local counterFlashUntil = 0 -- le compteur brille en doré (gros gain) jusqu'à cette heure
@@ -301,6 +314,92 @@ local function buildButton(column: Frame)
 	end)
 end
 
+-- Bouton rond "🏠 Ma maison", à droite du bouton "Click me".
+-- `buttonCenterX` / `buttonCenterY` : centre du bouton "Click me" dans la colonne.
+local function buildHouseButton(column: Frame, buttonCenterX: number, buttonCenterY: number)
+	local holder = UIUtil.Create("Frame", {
+		Name = "HouseHolder",
+		Size = UDim2.fromOffset(HOUSE_BUTTON_SIZE, HOUSE_BUTTON_SIZE),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.fromOffset(buttonCenterX + BUTTON_SIZE.X / 2 + HOUSE_GAP, buttonCenterY),
+		BackgroundTransparency = 1,
+		ZIndex = 2,
+		Parent = column,
+	})
+	houseButton = UIUtil.PillButton({
+		Name = "HouseButton",
+		Text = "🏠",
+		Color = HouseCommon.Colors.Pink,
+		TextColor3 = Theme.Colors.TextDark,
+		Height = HOUSE_BUTTON_SIZE,
+		TextSize = 30,
+		Round = true,
+		StrokeColor = Theme.Colors.Border,
+		ZIndex = 3,
+		Parent = holder,
+	})
+	-- Dégradé rose pastel (au lieu du dégradé gris des pastilles)
+	local gradient = houseButton:FindFirstChildOfClass("UIGradient")
+	if gradient then
+		gradient.Color = ColorSequence.new(Color3.fromRGB(255, 236, 246), Color3.fromRGB(255, 188, 220))
+	end
+	UIUtil.Shadow(houseButton, 3, 0.8, 2)
+	houseBadge = UIUtil.Badge(houseButton, 22)
+	houseBadge.Position = UDim2.new(1, -4, 0, 4)
+
+	-- Petite bulle "Ma maison" au survol (au-dessus du bouton)
+	houseTip = UIUtil.Chip({
+		Name = "HouseTip",
+		Text = Locale.T("🏠 My house"),
+		Color = Theme.Colors.Dark,
+		TextColor3 = Theme.Colors.TextLight,
+		Height = 24,
+		TextSize = 13,
+		ZIndex = 6,
+		Visible = false,
+		Parent = holder,
+	})
+	houseTip.AnchorPoint = Vector2.new(0.5, 1)
+	houseTip.Position = UDim2.new(0.5, 0, 0, -4)
+	houseButton.MouseEnter:Connect(function()
+		if not Interface.IsTouch() then
+			houseTip.Visible = true
+			UIUtil.Pop(houseTip, 0.6, 0.25)
+		end
+	end)
+	houseButton.MouseLeave:Connect(function()
+		houseTip.Visible = false
+	end)
+
+	houseButton.Activated:Connect(function()
+		houseTip.Visible = false
+		if not PanelManager.IsRegistered("House") then
+			SoundManager.Play("Error", 0.8)
+			UIUtil.Shake(houseButton)
+			return
+		end
+		PanelManager.Toggle("House")
+	end)
+end
+
+-- Badge "🏠" : objets de maison jamais achetés devenus abordables, pas encore vus
+local function refreshHouseBadge(data)
+	if not houseBadge then
+		return
+	end
+	local isOpen = PanelManager.IsOpen("House")
+	local count = 0
+	for _, id in ipairs(HouseCommon.AffordableNew(data, ClientState.GetConfirmedDopamine())) do
+		if isOpen then
+			houseSeen[id] = true
+		elseif not houseSeen[id] then
+			count += 1
+		end
+	end
+	houseBadgeCount = count
+	UIUtil.SetBadge(houseBadge, count)
+end
+
 -- Largeur max de la rangée des pastilles (téléphone : entre les slots de côté)
 local function pillsRowWidth(): number
 	if Interface.IsPhone() then
@@ -480,7 +579,7 @@ end
 
 -- Indicateurs Robux, de chaque côté du bouton (hors de la pile : ils ne
 -- poussent jamais la barre d'améliorations sur les emplacements du bas).
---   gauche : 👑 VIP, 💎 bonus des Game Passes ; droite : ⏱️ boost + minuteur.
+--   gauche : 👑 VIP, 💎 bonus des Game Passes ; droite (après "🏠") : ⏱️ boost + minuteur.
 -- `buttonCenterX` / `buttonCenterY` : centre du bouton dans la colonne.
 local function buildStatus(column: Frame, buttonCenterX: number, buttonCenterY: number)
 	statusLeft = UIUtil.Create("Frame", {
@@ -518,12 +617,12 @@ local function buildStatus(column: Frame, buttonCenterX: number, buttonCenterY: 
 	vipChip = chip("VIP", "👑 VIP", Theme.Colors.Premium, Theme.Colors.TextDark, 1)
 	bonusChip = chip("Bonus", "💎 x1", Theme.Colors.Purple, Theme.Colors.TextLight, 2)
 
-	-- Carte du boost : "⏱️ x2" + minuteur
+	-- Carte du boost : "⏱️ x2" + minuteur (à droite du bouton "🏠")
 	boostCard = UIUtil.Create("Frame", {
 		Name = "Boost",
 		Size = UDim2.fromOffset(62, 50),
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.fromOffset(buttonCenterX + BUTTON_SIZE.X / 2 + 8, buttonCenterY),
+		Position = UDim2.fromOffset(buttonCenterX + BUTTON_SIZE.X / 2 + HOUSE_GAP + HOUSE_BUTTON_SIZE + 14, buttonCenterY),
 		BackgroundColor3 = Theme.Colors.Boost,
 		Visible = false,
 		Parent = column,
@@ -730,6 +829,9 @@ local function refreshBadges()
 		UIUtil.SetBadge(leaderboard.Badge, (rank == 1 and count >= 2) and "👑" or "")
 	end
 
+	-- Maison : nouveaux objets abordables
+	refreshHouseBadge(data)
+
 	-- Thèmes : thèmes achetables en Dopamine, pas encore possédés, qu'on peut se payer
 	local themes = pills.Themes
 	if themes then
@@ -774,6 +876,7 @@ function CenterColumn.Build(parent: Frame, floatingLayer: Frame, fxLayer: Frame)
 	})
 
 	buildButton(column)
+	buildHouseButton(column, 350, 40 + BUTTON_SIZE.Y / 2)
 	buildStatus(column, 350, 40 + BUTTON_SIZE.Y / 2)
 
 	-- Pile verticale sous le bouton (les éléments cachés ne prennent pas de place)
@@ -879,6 +982,9 @@ function CenterColumn.Build(parent: Frame, floatingLayer: Frame, fxLayer: Frame)
 	ClientState.DarkModeChanged:Connect(applyDarkMode)
 	applyDarkMode(ClientState.DarkMode)
 	PanelManager.Opened:Connect(function(name: string)
+		if name == "House" and ClientState.Data then
+			refreshHouseBadge(ClientState.Data)
+		end
 		if name == "Achievements" and ClientState.Data then
 			seenAchievements = countTrue(ClientState.Data.Achievements)
 			local pill = pills.Achievements
@@ -924,6 +1030,13 @@ function CenterColumn.Build(parent: Frame, floatingLayer: Frame, fxLayer: Frame)
 				math.ceil(remaining)
 			)
 			rushBanner.Rotation = math.sin(os.clock() * 8) * 1.5
+		end
+
+		-- Bouton "🏠" : petit sautillement quand un nouvel objet est abordable
+		if houseBadgeCount > 0 and os.clock() >= houseWiggleAt then
+			houseWiggleAt = os.clock() + 4
+			houseButton.Rotation = -12
+			UIUtil.Tween(houseButton, 0.6, { Rotation = 0 }, Enum.EasingStyle.Elastic)
 		end
 
 		-- Badges (4 fois par seconde : la Dopamine monte en continu)

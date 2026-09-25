@@ -291,4 +291,65 @@ function Formulas.GetStockValue(stock, price: number): number
 	return (stock and stock.Shares or 0) * price
 end
 
+----------------------------------------------------------------------
+-- 🏠 Maison
+----------------------------------------------------------------------
+
+-- Prix du PROCHAIN exemplaire d'un objet (ownedCount = exemplaires déjà possédés)
+function Formulas.GetHouseItemPrice(item, ownedCount: number?): number
+	local owned = tonumber(ownedCount) or 0
+	if owned ~= owned or owned < 0 then
+		owned = 0
+	end
+	return math.floor(item.Cost * ((item.CostGrowth or 1) ^ math.floor(owned)))
+end
+
+-- Taille de maison actuelle (config) : la 1re si la sauvegarde est invalide
+function Formulas.GetHouseSize(data)
+	local house = type(data) == "table" and data.House or nil
+	local sizeId = type(house) == "table" and house.Size or nil
+	return (type(sizeId) == "string" and Config.HouseSizesById[sizeId]) or Config.House.Sizes[1]
+end
+
+-- Confort total = somme des Comfort des objets POSÉS. On ne compte que les
+-- objets connus, jamais plus d'exemplaires que possédés, et au plus
+-- MaxItems objets (taille de la maison) : une sauvegarde abîmée ne donne rien de plus.
+function Formulas.GetHouseComfort(data): number
+	local house = type(data) == "table" and data.House or nil
+	if type(house) ~= "table" or type(house.Placed) ~= "table" then
+		return 0
+	end
+	local owned = type(house.Items) == "table" and house.Items or {}
+	local maxItems = Formulas.GetHouseSize(data).MaxItems
+	local used = {}
+	local count, total = 0, 0
+	for _, entry in ipairs(house.Placed) do
+		if count >= maxItems then
+			break
+		end
+		local id = type(entry) == "table" and entry.I or nil
+		local item = type(id) == "string" and Config.HouseItemsById[id] or nil
+		if item then
+			local n = (used[id] or 0) + 1
+			local have = tonumber(owned[id]) or 0
+			if n <= have then
+				used[id] = n
+				count += 1
+				total += item.Comfort
+			end
+		end
+	end
+	return total
+end
+
+-- Multiplicateur de gains du confort : 1 + min(Max, confort x bonus par point)
+function Formulas.GetHouseBonus(comfort: number?): number
+	local points = tonumber(comfort) or 0
+	if points ~= points or points < 0 then
+		points = 0
+	end
+	local house = Config.House
+	return 1 + math.min(house.MaxComfortBonus, points * house.ComfortBonusPerPoint)
+end
+
 return Formulas

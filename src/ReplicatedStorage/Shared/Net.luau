@@ -45,6 +45,7 @@ Net.Functions = {
 	"OpenChest", -- C -> S () -> (succès, résultat | message)
 	"ItemShop", -- C -> S ("buy" | "equip" | "unequip", cosmeticId) -> (succès, message)
 	"ThemeShop", -- C -> S ("buy" | "equip", themeId) -> (succès, message)
+	"House", -- C -> S (action, argument) -> (succès, message) : maison (achats, papier peint, sol, disposition)
 	"DebugCommand", -- C -> S (commande, argument) -> (succès, message) : UNIQUEMENT dans Studio
 }
 

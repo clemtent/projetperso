@@ -18,6 +18,8 @@
 	haute ; le contenu est alors raccourci (ses listes défilent déjà) ou,
 	pour un panneau à mise en page fixe (Module.FixedLayout = true), il
 	défile dans la fenêtre. Le mode sombre est appliqué par DarkSkin.
+	Maison : un panneau peut donner sa taille selon l'écran avec
+	Module.GetSize() (Vector2, relu à l'ouverture et quand l'écran change).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -96,6 +98,17 @@ local function applyFit(name: string?)
 			viewport.CanvasPosition = Vector2.zero
 		end
 	end
+end
+
+-- Taille voulue d'un panneau : GetSize() (selon l'écran) sinon Size
+local function moduleSize(module): Vector2
+	if type(module.GetSize) == "function" then
+		local ok, size = pcall(module.GetSize)
+		if ok and typeof(size) == "Vector2" then
+			return size
+		end
+	end
+	return module.Size or DEFAULT_SIZE
 end
 
 local function callOnClose(name: string)
@@ -271,6 +284,10 @@ function PanelManager.Build(layer: Frame)
 	Interface.ScaleChanged:Connect(function()
 		closeHitbox.Visible = Interface.IsTouch()
 		if openName then
+			local panel = panels[openName]
+			if panel then
+				currentSize = moduleSize(panel.Module)
+			end
 			applyFit(openName)
 			holderScale.Scale = fitScale
 		end
@@ -385,7 +402,7 @@ function PanelManager.Open(name: string)
 	openName = name
 	closeToken += 1
 	applyHeader(panel.Module, name)
-	currentSize = panel.Module.Size or DEFAULT_SIZE
+	currentSize = moduleSize(panel.Module)
 	applyFit(name)
 	panel.Viewport.CanvasPosition = Vector2.zero
 

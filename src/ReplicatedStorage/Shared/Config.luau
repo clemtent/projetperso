@@ -341,7 +341,7 @@ Config.Interactions = {
 	Spin = { Feature = "Pinwheel", Cooldown = 2, RewardSeconds = 0.5, MinReward = 5, Stat = "Spins" },
 	Headline = { Feature = "NewsTicker", Cooldown = 8, RewardSeconds = 2, MinReward = 5, Stat = "HeadlinesClicked" },
 	Follow = { Feature = "LiveStream", OneTime = true, RewardSeconds = 30, MinReward = 100, Stat = "Follows" },
-	Butter = { Feature = "Butter", MaxPerSecond = 8, ClickFraction = 0.75, Stat = "ButterCrunches" },
+	Butter = { Feature = "Butter", MaxPerSecond = 8, ClickFraction = 3, Stat = "ButterCrunches" },
 	Press = { Feature = "PressStart", Cooldown = 3, RewardSeconds = 1, MinReward = 20, Stat = "PressCrushes" },
 }
 
@@ -630,6 +630,447 @@ Config.Monetization = {
 }
 
 ----------------------------------------------------------------------
+-- 🏠 Ma maison : une pièce kawaii en coupe à décorer (bouton à droite
+-- de "Click me"). Tout est gardé pour toujours (même après l'océan).
+--   Les objets POSÉS dans la pièce donnent du Confort : chaque point de
+--   Confort = +ComfortBonusPerPoint sur TOUS les gains (plafond MaxComfortBonus).
+--   Sizes      : tailles de maison, dans l'ordre (plus grande = plus large
+--                + plus d'objets posés : MaxItems). Width = largeur relative.
+--   Wallpapers : papiers peints (Pattern = "Plain" | "Stripes" | "Checker" |
+--                "Dots" | "Hearts" | "Stars" | "Clouds" | "Bricks" | "Wood" |
+--                "Waves" ; A = couleur de fond, B = couleur du motif)
+--   Floors     : sols (Pattern = "Plain" | "Checker" | "Wood" | "Tiles" |
+--                "Carpet" | "Marble" | "Herringbone" ; A = fond, B = motif)
+--   Items      : Category = Id de Categories ; Placement "Floor" (zone du bas)
+--                ou "Wall" (zone du haut) ; Size = taille d'affichage de base
+--                (px de maquette, 40..160) ; Cost = prix du 1er exemplaire,
+--                x CostGrowth par exemplaire déjà possédé ; Comfort = 1..25 ;
+--                MaxOwned = nombre max d'exemplaires (nil = illimité).
+--   Le 1er papier peint, le 1er sol et la 1re taille sont gratuits.
+--   Icônes : un seul emoji (pas de séquence ZWJ ni de couleur de peau).
+----------------------------------------------------------------------
+Config.House = {
+	ComfortBonusPerPoint = 0.005, -- +0,5 % de TOUS les gains par point de confort des objets posés
+	MaxComfortBonus = 1.0, -- plafonné à +100 %
+	WallRatio = 0.46, -- haut de la pièce = murs, bas = sol (rendu client + limites du serveur)
+
+	Sizes = {
+		{ Id = "Studio", Name = "Cozy studio", Icon = "🏠", Cost = 0, Width = 1.0, MaxItems = 25 },
+		{ Id = "Apartment", Name = "Sweet apartment", Icon = "🏡", Cost = 2e5, Width = 1.25, MaxItems = 40 },
+		{ Id = "Loft", Name = "Dreamy loft", Icon = "🏘️", Cost = 5e6, Width = 1.5, MaxItems = 60 },
+		{ Id = "Mansion", Name = "Kawaii mansion", Icon = "🏰", Cost = 2e8, Width = 1.85, MaxItems = 90 },
+	},
+
+	Wallpapers = {
+		{ Id = "PinkStripes", Name = "Pink stripes", Icon = "🎀", Cost = 0, Pattern = "Stripes",
+			A = Color3.fromRGB(255, 214, 229), B = Color3.fromRGB(255, 186, 211) },
+		{ Id = "VanillaCream", Name = "Vanilla cream", Icon = "🍦", Cost = 500, Pattern = "Plain",
+			A = Color3.fromRGB(255, 246, 230), B = Color3.fromRGB(250, 232, 205) },
+		{ Id = "LilacDots", Name = "Lilac polka dots", Icon = "🟣", Cost = 2000, Pattern = "Dots",
+			A = Color3.fromRGB(234, 222, 255), B = Color3.fromRGB(206, 186, 250) },
+		{ Id = "MintGingham", Name = "Mint gingham", Icon = "🍃", Cost = 6000, Pattern = "Checker",
+			A = Color3.fromRGB(224, 248, 236), B = Color3.fromRGB(188, 236, 212) },
+		{ Id = "PeachHearts", Name = "Peach hearts", Icon = "🍑", Cost = 15000, Pattern = "Hearts",
+			A = Color3.fromRGB(255, 231, 216), B = Color3.fromRGB(255, 178, 172) },
+		{ Id = "CloudySky", Name = "Cloudy sky", Icon = "☁️", Cost = 40000, Pattern = "Clouds",
+			A = Color3.fromRGB(200, 230, 255), B = Color3.fromRGB(255, 255, 255) },
+		{ Id = "BabyBlueWaves", Name = "Baby blue waves", Icon = "🌊", Cost = 100000, Pattern = "Waves",
+			A = Color3.fromRGB(216, 237, 255), B = Color3.fromRGB(172, 212, 250) },
+		{ Id = "StrawberryBricks", Name = "Strawberry milk bricks", Icon = "🍓", Cost = 250000, Pattern = "Bricks",
+			A = Color3.fromRGB(255, 212, 222), B = Color3.fromRGB(244, 172, 192) },
+		{ Id = "HoneyPanels", Name = "Honey wood panels", Icon = "🍯", Cost = 600000, Pattern = "Wood",
+			A = Color3.fromRGB(242, 208, 164), B = Color3.fromRGB(222, 182, 132) },
+		{ Id = "StarryNight", Name = "Starry night", Icon = "🌙", Cost = 1.5e6, Pattern = "Stars",
+			A = Color3.fromRGB(78, 68, 128), B = Color3.fromRGB(255, 236, 160) },
+		{ Id = "CottonCandy", Name = "Cotton candy stripes", Icon = "🍬", Cost = 4e6, Pattern = "Stripes",
+			A = Color3.fromRGB(255, 222, 244), B = Color3.fromRGB(204, 230, 255) },
+		{ Id = "LavenderLove", Name = "Lavender love", Icon = "💜", Cost = 1e7, Pattern = "Hearts",
+			A = Color3.fromRGB(238, 227, 255), B = Color3.fromRGB(214, 162, 240) },
+		{ Id = "MatchaLatte", Name = "Matcha latte", Icon = "🍵", Cost = 2.5e7, Pattern = "Dots",
+			A = Color3.fromRGB(230, 241, 212), B = Color3.fromRGB(172, 206, 142) },
+		{ Id = "SunsetWaves", Name = "Sunset waves", Icon = "🌅", Cost = 6e7, Pattern = "Waves",
+			A = Color3.fromRGB(255, 216, 184), B = Color3.fromRGB(255, 162, 182) },
+		{ Id = "GalaxyDream", Name = "Galaxy dream", Icon = "🌌", Cost = 1.5e8, Pattern = "Stars",
+			A = Color3.fromRGB(64, 44, 106), B = Color3.fromRGB(255, 184, 240) },
+		{ Id = "PastelClouds", Name = "Pastel dream clouds", Icon = "🦄", Cost = 4e8, Pattern = "Clouds",
+			A = Color3.fromRGB(246, 214, 242), B = Color3.fromRGB(255, 255, 255) },
+	},
+
+	Floors = {
+		{ Id = "PlumChecker", Name = "Plum checker", Icon = "🍇", Cost = 0, Pattern = "Checker",
+			A = Color3.fromRGB(188, 132, 192), B = Color3.fromRGB(152, 100, 162) },
+		{ Id = "LightOak", Name = "Light oak", Icon = "🪵", Cost = 600, Pattern = "Wood",
+			A = Color3.fromRGB(236, 206, 166), B = Color3.fromRGB(214, 180, 136) },
+		{ Id = "SoftCream", Name = "Soft cream", Icon = "🥛", Cost = 1500, Pattern = "Plain",
+			A = Color3.fromRGB(250, 238, 222), B = Color3.fromRGB(238, 222, 202) },
+		{ Id = "PinkCarpet", Name = "Fluffy pink carpet", Icon = "🌸", Cost = 5000, Pattern = "Carpet",
+			A = Color3.fromRGB(255, 202, 222), B = Color3.fromRGB(245, 182, 206) },
+		{ Id = "MintTiles", Name = "Mint tiles", Icon = "🧼", Cost = 12000, Pattern = "Tiles",
+			A = Color3.fromRGB(212, 245, 230), B = Color3.fromRGB(172, 226, 206) },
+		{ Id = "HoneyHerringbone", Name = "Honey herringbone", Icon = "🐝", Cost = 35000, Pattern = "Herringbone",
+			A = Color3.fromRGB(232, 188, 124), B = Color3.fromRGB(206, 158, 98) },
+		{ Id = "CloudMarble", Name = "Cloud marble", Icon = "☁️", Cost = 90000, Pattern = "Marble",
+			A = Color3.fromRGB(248, 246, 252), B = Color3.fromRGB(216, 210, 236) },
+		{ Id = "LilacShag", Name = "Lilac shag carpet", Icon = "💜", Cost = 250000, Pattern = "Carpet",
+			A = Color3.fromRGB(216, 196, 246), B = Color3.fromRGB(196, 172, 236) },
+		{ Id = "CherryWood", Name = "Cherry wood", Icon = "🍒", Cost = 700000, Pattern = "Wood",
+			A = Color3.fromRGB(204, 124, 112), B = Color3.fromRGB(172, 96, 90) },
+		{ Id = "PeachChecker", Name = "Peach checker", Icon = "🍑", Cost = 2e6, Pattern = "Checker",
+			A = Color3.fromRGB(255, 222, 202), B = Color3.fromRGB(255, 190, 170) },
+		{ Id = "SkyTiles", Name = "Sky tiles", Icon = "💙", Cost = 6e6, Pattern = "Tiles",
+			A = Color3.fromRGB(206, 231, 255), B = Color3.fromRGB(166, 206, 246) },
+		{ Id = "RoseQuartz", Name = "Rose quartz marble", Icon = "💗", Cost = 2e7, Pattern = "Marble",
+			A = Color3.fromRGB(250, 216, 226), B = Color3.fromRGB(230, 172, 196) },
+		{ Id = "WalnutHerringbone", Name = "Walnut herringbone", Icon = "🌰", Cost = 6e7, Pattern = "Herringbone",
+			A = Color3.fromRGB(152, 108, 82), B = Color3.fromRGB(122, 84, 64) },
+		{ Id = "GoldenMarble", Name = "Golden marble", Icon = "👑", Cost = 3e8, Pattern = "Marble",
+			A = Color3.fromRGB(255, 241, 196), B = Color3.fromRGB(232, 196, 112) },
+	},
+
+	Categories = {
+		{ Id = "Furniture", Name = "Furniture", Icon = "🛋️" },
+		{ Id = "Decor", Name = "Decor", Icon = "🖼️" },
+		{ Id = "Toys", Name = "Toys", Icon = "🧸" },
+		{ Id = "Plants", Name = "Plants", Icon = "🪴" },
+		{ Id = "Electronics", Name = "Electronics", Icon = "📺" },
+		{ Id = "Kitchen", Name = "Kitchen", Icon = "🍰" },
+		{ Id = "Doors", Name = "Doors", Icon = "🚪" },
+		{ Id = "Windows", Name = "Windows", Icon = "🪟" },
+		{ Id = "Lights", Name = "Lights", Icon = "💡" },
+	},
+
+	Items = {
+		-- 🛋️ Meubles
+		{ Id = "WoodenChair", Name = "Wooden chair", Icon = "🪑", Category = "Furniture", Placement = "Floor", Size = 70,
+			Cost = 600, CostGrowth = 1.25, Comfort = 1 },
+		{ Id = "StorageBox", Name = "Storage box", Icon = "📦", Category = "Furniture", Placement = "Floor", Size = 60,
+			Cost = 900, CostGrowth = 1.2, Comfort = 1 },
+		{ Id = "Ladder", Name = "Wooden ladder", Icon = "🪜", Category = "Furniture", Placement = "Floor", Size = 120,
+			Cost = 1500, CostGrowth = 1.3, Comfort = 1, MaxOwned = 3 },
+		{ Id = "Suitcase", Name = "Travel suitcase", Icon = "🧳", Category = "Furniture", Placement = "Floor", Size = 70,
+			Cost = 2500, CostGrowth = 1.25, Comfort = 2 },
+		{ Id = "Toilet", Name = "Royal toilet", Icon = "🚽", Category = "Furniture", Placement = "Floor", Size = 75,
+			Cost = 3000, CostGrowth = 1.5, Comfort = 2, MaxOwned = 2 },
+		{ Id = "DrawerCabinet", Name = "Drawer cabinet", Icon = "🗄️", Category = "Furniture", Placement = "Floor", Size = 90,
+			Cost = 4000, CostGrowth = 1.3, Comfort = 3 },
+		{ Id = "LoftBed", Name = "Loft bed", Icon = "🛏️", Category = "Furniture", Placement = "Floor", Size = 120,
+			Cost = 5000, CostGrowth = 1.25, Comfort = 6 },
+		{ Id = "Bookshelf", Name = "Bookshelf", Icon = "📚", Category = "Furniture", Placement = "Floor", Size = 110,
+			Cost = 9000, CostGrowth = 1.3, Comfort = 5 },
+		{ Id = "Sofa", Name = "Comfy sofa", Icon = "🛋️", Category = "Furniture", Placement = "Floor", Size = 140,
+			Cost = 12000, CostGrowth = 1.3, Comfort = 7 },
+		{ Id = "GamingChair", Name = "Gaming chair", Icon = "💺", Category = "Furniture", Placement = "Floor", Size = 90,
+			Cost = 60000, CostGrowth = 1.35, Comfort = 6 },
+		{ Id = "Shower", Name = "Rain shower", Icon = "🚿", Category = "Furniture", Placement = "Floor", Size = 110,
+			Cost = 90000, CostGrowth = 1.5, Comfort = 6, MaxOwned = 2 },
+		{ Id = "Bathtub", Name = "Bubble bathtub", Icon = "🛁", Category = "Furniture", Placement = "Floor", Size = 130,
+			Cost = 250000, CostGrowth = 1.4, Comfort = 9 },
+		{ Id = "Fireplace", Name = "Cozy fireplace", Icon = "🔥", Category = "Furniture", Placement = "Floor", Size = 130,
+			Cost = 1.5e6, CostGrowth = 1.45, Comfort = 12 },
+		{ Id = "CloudBed", Name = "Cloud bed", Icon = "☁️", Category = "Furniture", Placement = "Floor", Size = 150,
+			Cost = 2e7, CostGrowth = 1.5, Comfort = 17 },
+		{ Id = "HotSpring", Name = "Hot spring tub", Icon = "♨️", Category = "Furniture", Placement = "Floor", Size = 150,
+			Cost = 1.5e8, CostGrowth = 1.55, Comfort = 22 },
+
+		-- 🖼️ Déco
+		{ Id = "KnittedRug", Name = "Knitted rug", Icon = "🧶", Category = "Decor", Placement = "Floor", Size = 90,
+			Cost = 500, CostGrowth = 1.2, Comfort = 1 },
+		{ Id = "HeartSticker", Name = "Heart sticker", Icon = "💖", Category = "Decor", Placement = "Wall", Size = 50,
+			Cost = 600, CostGrowth = 1.2, Comfort = 1 },
+		{ Id = "GiantBow", Name = "Giant bow", Icon = "🎀", Category = "Decor", Placement = "Wall", Size = 60,
+			Cost = 700, CostGrowth = 1.2, Comfort = 1 },
+		{ Id = "WallCalendar", Name = "Wall calendar", Icon = "📅", Category = "Decor", Placement = "Wall", Size = 55,
+			Cost = 1000, CostGrowth = 1.25, Comfort = 1 },
+		{ Id = "FramedPicture", Name = "Framed picture", Icon = "🖼️", Category = "Decor", Placement = "Wall", Size = 80,
+			Cost = 1200, CostGrowth = 1.25, Comfort = 2 },
+		{ Id = "Balloons", Name = "Balloon bunch", Icon = "🎈", Category = "Decor", Placement = "Wall", Size = 70,
+			Cost = 1500, CostGrowth = 1.2, Comfort = 1 },
+		{ Id = "MantelClock", Name = "Mantel clock", Icon = "🕰️", Category = "Decor", Placement = "Floor", Size = 60,
+			Cost = 2000, CostGrowth = 1.25, Comfort = 2 },
+		{ Id = "MapPoster", Name = "World map poster", Icon = "🗺️", Category = "Decor", Placement = "Wall", Size = 90,
+			Cost = 2500, CostGrowth = 1.25, Comfort = 2 },
+		{ Id = "HeartMirror", Name = "Heart mirror", Icon = "🪞", Category = "Decor", Placement = "Wall", Size = 80,
+			Cost = 3500, CostGrowth = 1.3, Comfort = 3 },
+		{ Id = "GiftPile", Name = "Gift pile", Icon = "🎁", Category = "Decor", Placement = "Floor", Size = 70,
+			Cost = 5000, CostGrowth = 1.25, Comfort = 2 },
+		{ Id = "Vase", Name = "Amphora vase", Icon = "🏺", Category = "Decor", Placement = "Floor", Size = 60,
+			Cost = 6000, CostGrowth = 1.3, Comfort = 3 },
+		{ Id = "GlowStars", Name = "Glow-in-the-dark stars", Icon = "💫", Category = "Decor", Placement = "Wall", Size = 60,
+			Cost = 8000, CostGrowth = 1.25, Comfort = 2 },
+		{ Id = "DeskGlobe", Name = "Desk globe", Icon = "🌍", Category = "Decor", Placement = "Floor", Size = 55,
+			Cost = 20000, CostGrowth = 1.3, Comfort = 3 },
+		{ Id = "WindChime", Name = "Wind chime", Icon = "🎐", Category = "Decor", Placement = "Wall", Size = 60,
+			Cost = 30000, CostGrowth = 1.3, Comfort = 3 },
+		{ Id = "MoonGarland", Name = "Moon garland", Icon = "🌙", Category = "Decor", Placement = "Wall", Size = 80,
+			Cost = 45000, CostGrowth = 1.3, Comfort = 4 },
+		{ Id = "CarpStreamer", Name = "Carp streamer", Icon = "🎏", Category = "Decor", Placement = "Wall", Size = 90,
+			Cost = 120000, CostGrowth = 1.35, Comfort = 5 },
+		{ Id = "Aquarium", Name = "Aquarium", Icon = "🐠", Category = "Decor", Placement = "Floor", Size = 110,
+			Cost = 150000, CostGrowth = 1.35, Comfort = 8 },
+		{ Id = "Pinata", Name = "Piñata", Icon = "🪅", Category = "Decor", Placement = "Wall", Size = 80,
+			Cost = 250000, CostGrowth = 1.35, Comfort = 6 },
+		{ Id = "GoldenTrophy", Name = "Golden trophy", Icon = "🏆", Category = "Decor", Placement = "Floor", Size = 60,
+			Cost = 400000, CostGrowth = 1.4, Comfort = 7 },
+		{ Id = "CrystalBall", Name = "Crystal ball", Icon = "🔮", Category = "Decor", Placement = "Floor", Size = 55,
+			Cost = 800000, CostGrowth = 1.4, Comfort = 8 },
+		{ Id = "MoaiStatue", Name = "Moai statue", Icon = "🗿", Category = "Decor", Placement = "Floor", Size = 110,
+			Cost = 5e6, CostGrowth = 1.45, Comfort = 13 },
+		{ Id = "Fountain", Name = "Indoor fountain", Icon = "⛲", Category = "Decor", Placement = "Floor", Size = 140,
+			Cost = 1.2e7, CostGrowth = 1.5, Comfort = 15 },
+		{ Id = "GiantGem", Name = "Giant gem", Icon = "💎", Category = "Decor", Placement = "Floor", Size = 70,
+			Cost = 8e7, CostGrowth = 1.55, Comfort = 20 },
+		{ Id = "FloatingPlanet", Name = "Floating planet", Icon = "🪐", Category = "Decor", Placement = "Wall", Size = 100,
+			Cost = 3e8, CostGrowth = 1.6, Comfort = 24 },
+
+		-- 🧸 Jouets
+		{ Id = "YoYo", Name = "Yo-yo", Icon = "🪀", Category = "Toys", Placement = "Floor", Size = 40,
+			Cost = 500, CostGrowth = 1.2, Comfort = 1 },
+		{ Id = "BeachBall", Name = "Beach ball", Icon = "🏐", Category = "Toys", Placement = "Floor", Size = 50,
+			Cost = 600, CostGrowth = 1.2, Comfort = 1 },
+		{ Id = "RubberDucky", Name = "Rubber ducky", Icon = "🦆", Category = "Toys", Placement = "Floor", Size = 40,
+			Cost = 700, CostGrowth = 1.2, Comfort = 1 },
+		{ Id = "TeddyBear", Name = "Teddy bear", Icon = "🧸", Category = "Toys", Placement = "Floor", Size = 70,
+			Cost = 800, CostGrowth = 1.2, Comfort = 2 },
+		{ Id = "PuzzlePieces", Name = "Puzzle pieces", Icon = "🧩", Category = "Toys", Placement = "Floor", Size = 50,
+			Cost = 1200, CostGrowth = 1.2, Comfort = 1 },
+		{ Id = "BunnyPlush", Name = "Bunny plush", Icon = "🐰", Category = "Toys", Placement = "Floor", Size = 60,
+			Cost = 1500, CostGrowth = 1.2, Comfort = 2 },
+		{ Id = "Kite", Name = "Rainbow kite", Icon = "🪁", Category = "Toys", Placement = "Wall", Size = 80,
+			Cost = 2500, CostGrowth = 1.25, Comfort = 2 },
+		{ Id = "GiantDice", Name = "Giant dice", Icon = "🎲", Category = "Toys", Placement = "Floor", Size = 50,
+			Cost = 3000, CostGrowth = 1.25, Comfort = 2 },
+		{ Id = "KittyPlush", Name = "Kitty plush", Icon = "🐱", Category = "Toys", Placement = "Floor", Size = 60,
+			Cost = 4000, CostGrowth = 1.25, Comfort = 3 },
+		{ Id = "PuppyPlush", Name = "Puppy plush", Icon = "🐶", Category = "Toys", Placement = "Floor", Size = 60,
+			Cost = 5000, CostGrowth = 1.25, Comfort = 3 },
+		{ Id = "FroggyPlush", Name = "Froggy plush", Icon = "🐸", Category = "Toys", Placement = "Floor", Size = 55,
+			Cost = 8000, CostGrowth = 1.25, Comfort = 3 },
+		{ Id = "MagicWand", Name = "Magic wand", Icon = "🪄", Category = "Toys", Placement = "Floor", Size = 50,
+			Cost = 10000, CostGrowth = 1.3, Comfort = 3 },
+		{ Id = "HamsterPlush", Name = "Hamster plush", Icon = "🐹", Category = "Toys", Placement = "Floor", Size = 50,
+			Cost = 12000, CostGrowth = 1.3, Comfort = 3 },
+		{ Id = "ToyRobot", Name = "Toy robot", Icon = "🤖", Category = "Toys", Placement = "Floor", Size = 70,
+			Cost = 15000, CostGrowth = 1.3, Comfort = 4 },
+		{ Id = "ToyDrum", Name = "Toy drum", Icon = "🥁", Category = "Toys", Placement = "Floor", Size = 60,
+			Cost = 20000, CostGrowth = 1.3, Comfort = 3 },
+		{ Id = "PandaPlush", Name = "Panda plush", Icon = "🐼", Category = "Toys", Placement = "Floor", Size = 70,
+			Cost = 25000, CostGrowth = 1.3, Comfort = 4 },
+		{ Id = "NestingDolls", Name = "Nesting dolls", Icon = "🪆", Category = "Toys", Placement = "Floor", Size = 60,
+			Cost = 40000, CostGrowth = 1.3, Comfort = 4 },
+		{ Id = "PinkGuitar", Name = "Pink guitar", Icon = "🎸", Category = "Toys", Placement = "Floor", Size = 90,
+			Cost = 60000, CostGrowth = 1.3, Comfort = 5 },
+		{ Id = "BigBear", Name = "Giant bear plush", Icon = "🐻", Category = "Toys", Placement = "Floor", Size = 110,
+			Cost = 90000, CostGrowth = 1.35, Comfort = 6 },
+		{ Id = "ToyTrain", Name = "Toy train", Icon = "🚂", Category = "Toys", Placement = "Floor", Size = 90,
+			Cost = 180000, CostGrowth = 1.35, Comfort = 6 },
+		{ Id = "UnicornPlush", Name = "Unicorn plush", Icon = "🦄", Category = "Toys", Placement = "Floor", Size = 80,
+			Cost = 300000, CostGrowth = 1.4, Comfort = 8 },
+		{ Id = "BlanketFort", Name = "Blanket fort", Icon = "⛺", Category = "Toys", Placement = "Floor", Size = 150,
+			Cost = 450000, CostGrowth = 1.4, Comfort = 10 },
+		{ Id = "DollCastle", Name = "Dollhouse castle", Icon = "🏯", Category = "Toys", Placement = "Floor", Size = 120,
+			Cost = 1.5e6, CostGrowth = 1.45, Comfort = 11 },
+		{ Id = "CarouselHorse", Name = "Carousel horse", Icon = "🎠", Category = "Toys", Placement = "Floor", Size = 130,
+			Cost = 6e6, CostGrowth = 1.5, Comfort = 14 },
+		{ Id = "ToyRocket", Name = "Toy rocket", Icon = "🚀", Category = "Toys", Placement = "Floor", Size = 110,
+			Cost = 1.2e7, CostGrowth = 1.5, Comfort = 15 },
+		{ Id = "FerrisWheel", Name = "Mini ferris wheel", Icon = "🎡", Category = "Toys", Placement = "Floor", Size = 150,
+			Cost = 4e7, CostGrowth = 1.55, Comfort = 18 },
+
+		-- 🪴 Plantes
+		{ Id = "Sprout", Name = "Little sprout", Icon = "🌱", Category = "Plants", Placement = "Floor", Size = 40,
+			Cost = 500, CostGrowth = 1.2, Comfort = 1 },
+		{ Id = "TulipPot", Name = "Tulip pot", Icon = "🌷", Category = "Plants", Placement = "Floor", Size = 50,
+			Cost = 900, CostGrowth = 1.2, Comfort = 1 },
+		{ Id = "TinyCactus", Name = "Tiny cactus", Icon = "🌵", Category = "Plants", Placement = "Floor", Size = 50,
+			Cost = 1400, CostGrowth = 1.2, Comfort = 2 },
+		{ Id = "DaisyPot", Name = "Daisy pot", Icon = "🌼", Category = "Plants", Placement = "Floor", Size = 50,
+			Cost = 2000, CostGrowth = 1.2, Comfort = 2 },
+		{ Id = "PottedPlant", Name = "Potted plant", Icon = "🪴", Category = "Plants", Placement = "Floor", Size = 80,
+			Cost = 3000, CostGrowth = 1.25, Comfort = 3 },
+		{ Id = "HangingHerbs", Name = "Hanging herbs", Icon = "🌿", Category = "Plants", Placement = "Wall", Size = 70,
+			Cost = 5000, CostGrowth = 1.25, Comfort = 2 },
+		{ Id = "Sunflower", Name = "Sunflower", Icon = "🌻", Category = "Plants", Placement = "Floor", Size = 80,
+			Cost = 7000, CostGrowth = 1.25, Comfort = 3 },
+		{ Id = "Bouquet", Name = "Flower bouquet", Icon = "💐", Category = "Plants", Placement = "Floor", Size = 60,
+			Cost = 12000, CostGrowth = 1.3, Comfort = 4 },
+		{ Id = "RedRose", Name = "Red rose", Icon = "🌹", Category = "Plants", Placement = "Floor", Size = 50,
+			Cost = 20000, CostGrowth = 1.3, Comfort = 4 },
+		{ Id = "Hibiscus", Name = "Hibiscus", Icon = "🌺", Category = "Plants", Placement = "Floor", Size = 60,
+			Cost = 35000, CostGrowth = 1.3, Comfort = 4 },
+		{ Id = "LuckyClover", Name = "Lucky clover", Icon = "🍀", Category = "Plants", Placement = "Floor", Size = 45,
+			Cost = 50000, CostGrowth = 1.3, Comfort = 5 },
+		{ Id = "CherryBlossom", Name = "Cherry blossom branch", Icon = "🌸", Category = "Plants", Placement = "Floor", Size = 90,
+			Cost = 80000, CostGrowth = 1.35, Comfort = 6 },
+		{ Id = "MiniPine", Name = "Mini pine tree", Icon = "🌲", Category = "Plants", Placement = "Floor", Size = 120,
+			Cost = 150000, CostGrowth = 1.35, Comfort = 6 },
+		{ Id = "GiantMushroom", Name = "Giant mushroom", Icon = "🍄", Category = "Plants", Placement = "Floor", Size = 90,
+			Cost = 300000, CostGrowth = 1.4, Comfort = 7 },
+		{ Id = "IndoorTree", Name = "Indoor tree", Icon = "🌳", Category = "Plants", Placement = "Floor", Size = 140,
+			Cost = 600000, CostGrowth = 1.4, Comfort = 9 },
+		{ Id = "Bamboo", Name = "Wishing bamboo", Icon = "🎋", Category = "Plants", Placement = "Floor", Size = 130,
+			Cost = 1.2e6, CostGrowth = 1.45, Comfort = 10 },
+		{ Id = "PalmTree", Name = "Palm tree", Icon = "🌴", Category = "Plants", Placement = "Floor", Size = 150,
+			Cost = 2.5e6, CostGrowth = 1.45, Comfort = 12 },
+		{ Id = "HolidayTree", Name = "Holiday tree", Icon = "🎄", Category = "Plants", Placement = "Floor", Size = 140,
+			Cost = 8e6, CostGrowth = 1.5, Comfort = 15 },
+
+		-- 📺 Électronique
+		{ Id = "RotaryPhone", Name = "Rotary phone", Icon = "☎️", Category = "Electronics", Placement = "Floor", Size = 50,
+			Cost = 1800, CostGrowth = 1.2, Comfort = 1 },
+		{ Id = "RetroRadio", Name = "Retro radio", Icon = "📻", Category = "Electronics", Placement = "Floor", Size = 60,
+			Cost = 2000, CostGrowth = 1.25, Comfort = 2 },
+		{ Id = "Smartphone", Name = "Smartphone", Icon = "📱", Category = "Electronics", Placement = "Floor", Size = 40,
+			Cost = 5000, CostGrowth = 1.25, Comfort = 2 },
+		{ Id = "InstantCamera", Name = "Instant camera", Icon = "📷", Category = "Electronics", Placement = "Floor", Size = 50,
+			Cost = 8000, CostGrowth = 1.25, Comfort = 2 },
+		{ Id = "Laptop", Name = "Laptop", Icon = "💻", Category = "Electronics", Placement = "Floor", Size = 70,
+			Cost = 15000, CostGrowth = 1.3, Comfort = 3 },
+		{ Id = "RetroTV", Name = "Retro TV", Icon = "📺", Category = "Electronics", Placement = "Floor", Size = 100,
+			Cost = 25000, CostGrowth = 1.3, Comfort = 5 },
+		{ Id = "CatHeadphones", Name = "Cat headphones", Icon = "🎧", Category = "Electronics", Placement = "Floor", Size = 50,
+			Cost = 30000, CostGrowth = 1.3, Comfort = 3 },
+		{ Id = "Speaker", Name = "Bass speaker", Icon = "🔊", Category = "Electronics", Placement = "Floor", Size = 70,
+			Cost = 40000, CostGrowth = 1.3, Comfort = 4 },
+		{ Id = "AirConditioner", Name = "Air conditioner", Icon = "❄️", Category = "Electronics", Placement = "Wall", Size = 110,
+			Cost = 45000, CostGrowth = 1.35, Comfort = 5 },
+		{ Id = "DesktopPC", Name = "Desktop PC", Icon = "🖥️", Category = "Electronics", Placement = "Floor", Size = 90,
+			Cost = 60000, CostGrowth = 1.35, Comfort = 5 },
+		{ Id = "GameConsole", Name = "Game console", Icon = "🎮", Category = "Electronics", Placement = "Floor", Size = 60,
+			Cost = 100000, CostGrowth = 1.35, Comfort = 6 },
+		{ Id = "KaraokeMic", Name = "Karaoke mic", Icon = "🎤", Category = "Electronics", Placement = "Floor", Size = 50,
+			Cost = 150000, CostGrowth = 1.35, Comfort = 5 },
+		{ Id = "ArcadeMachine", Name = "Arcade machine", Icon = "🕹️", Category = "Electronics", Placement = "Floor", Size = 120,
+			Cost = 800000, CostGrowth = 1.4, Comfort = 10 },
+		{ Id = "Projector", Name = "Movie projector", Icon = "📽️", Category = "Electronics", Placement = "Floor", Size = 90,
+			Cost = 1.5e6, CostGrowth = 1.45, Comfort = 11 },
+		{ Id = "GrandPiano", Name = "Grand piano", Icon = "🎹", Category = "Electronics", Placement = "Floor", Size = 140,
+			Cost = 2.5e6, CostGrowth = 1.45, Comfort = 12 },
+		{ Id = "Telescope", Name = "Star telescope", Icon = "🔭", Category = "Electronics", Placement = "Floor", Size = 100,
+			Cost = 4e6, CostGrowth = 1.45, Comfort = 12 },
+		{ Id = "SlotMachine", Name = "Mini slot machine", Icon = "🎰", Category = "Electronics", Placement = "Floor", Size = 110,
+			Cost = 1e7, CostGrowth = 1.5, Comfort = 14 },
+		{ Id = "SatelliteDish", Name = "Satellite dish", Icon = "📡", Category = "Electronics", Placement = "Wall", Size = 80,
+			Cost = 2e7, CostGrowth = 1.5, Comfort = 15 },
+		{ Id = "VRGoggles", Name = "VR goggles", Icon = "🥽", Category = "Electronics", Placement = "Floor", Size = 50,
+			Cost = 4e7, CostGrowth = 1.55, Comfort = 17 },
+		{ Id = "HomeCinema", Name = "Home cinema", Icon = "🎬", Category = "Electronics", Placement = "Floor", Size = 150,
+			Cost = 2e8, CostGrowth = 1.6, Comfort = 23 },
+
+		-- 🍰 Cuisine
+		{ Id = "CocoaMug", Name = "Cocoa mug", Icon = "☕", Category = "Kitchen", Placement = "Floor", Size = 40,
+			Cost = 600, CostGrowth = 1.2, Comfort = 1 },
+		{ Id = "Watermelon", Name = "Watermelon", Icon = "🍉", Category = "Kitchen", Placement = "Floor", Size = 50,
+			Cost = 1000, CostGrowth = 1.2, Comfort = 1 },
+		{ Id = "Teapot", Name = "Teapot", Icon = "🫖", Category = "Kitchen", Placement = "Floor", Size = 50,
+			Cost = 1200, CostGrowth = 1.2, Comfort = 2 },
+		{ Id = "DonutBox", Name = "Donut box", Icon = "🍩", Category = "Kitchen", Placement = "Floor", Size = 50,
+			Cost = 1500, CostGrowth = 1.2, Comfort = 1 },
+		{ Id = "Pudding", Name = "Wobbly pudding", Icon = "🍮", Category = "Kitchen", Placement = "Floor", Size = 45,
+			Cost = 2000, CostGrowth = 1.2, Comfort = 2 },
+		{ Id = "StrawberryCake", Name = "Strawberry cake", Icon = "🍰", Category = "Kitchen", Placement = "Floor", Size = 50,
+			Cost = 2500, CostGrowth = 1.25, Comfort = 2 },
+		{ Id = "BubbleTea", Name = "Bubble tea", Icon = "🧋", Category = "Kitchen", Placement = "Floor", Size = 45,
+			Cost = 3000, CostGrowth = 1.25, Comfort = 2 },
+		{ Id = "CupcakeStand", Name = "Cupcake stand", Icon = "🧁", Category = "Kitchen", Placement = "Floor", Size = 55,
+			Cost = 4000, CostGrowth = 1.25, Comfort = 2 },
+		{ Id = "RamenBowl", Name = "Ramen bowl", Icon = "🍜", Category = "Kitchen", Placement = "Floor", Size = 50,
+			Cost = 6000, CostGrowth = 1.25, Comfort = 3 },
+		{ Id = "HoneyPot", Name = "Honey pot", Icon = "🍯", Category = "Kitchen", Placement = "Floor", Size = 45,
+			Cost = 7000, CostGrowth = 1.25, Comfort = 2 },
+		{ Id = "BentoBox", Name = "Bento box", Icon = "🍱", Category = "Kitchen", Placement = "Floor", Size = 50,
+			Cost = 9000, CostGrowth = 1.25, Comfort = 3 },
+		{ Id = "CookieJar", Name = "Cookie jar", Icon = "🍪", Category = "Kitchen", Placement = "Floor", Size = 50,
+			Cost = 20000, CostGrowth = 1.3, Comfort = 3 },
+		{ Id = "Fridge", Name = "Pastel fridge", Icon = "🧊", Category = "Kitchen", Placement = "Floor", Size = 120,
+			Cost = 30000, CostGrowth = 1.35, Comfort = 5 },
+		{ Id = "Stove", Name = "Cooking stove", Icon = "🍳", Category = "Kitchen", Placement = "Floor", Size = 100,
+			Cost = 50000, CostGrowth = 1.35, Comfort = 5 },
+		{ Id = "SushiPlatter", Name = "Sushi platter", Icon = "🍣", Category = "Kitchen", Placement = "Floor", Size = 60,
+			Cost = 70000, CostGrowth = 1.3, Comfort = 5 },
+		{ Id = "BirthdayCake", Name = "Birthday cake", Icon = "🎂", Category = "Kitchen", Placement = "Floor", Size = 70,
+			Cost = 250000, CostGrowth = 1.35, Comfort = 7 },
+		{ Id = "PancakeTower", Name = "Pancake tower", Icon = "🥞", Category = "Kitchen", Placement = "Floor", Size = 60,
+			Cost = 400000, CostGrowth = 1.4, Comfort = 7 },
+		{ Id = "GiantLollipop", Name = "Giant lollipop", Icon = "🍭", Category = "Kitchen", Placement = "Floor", Size = 90,
+			Cost = 900000, CostGrowth = 1.4, Comfort = 9 },
+		{ Id = "SundaeBar", Name = "Sundae bar", Icon = "🍨", Category = "Kitchen", Placement = "Floor", Size = 90,
+			Cost = 2e6, CostGrowth = 1.45, Comfort = 11 },
+		{ Id = "ChocolateFountain", Name = "Chocolate fountain", Icon = "🍫", Category = "Kitchen", Placement = "Floor", Size = 100,
+			Cost = 6e6, CostGrowth = 1.45, Comfort = 13 },
+		{ Id = "ShavedIceMachine", Name = "Shaved ice machine", Icon = "🍧", Category = "Kitchen", Placement = "Floor", Size = 100,
+			Cost = 3e7, CostGrowth = 1.55, Comfort = 16 },
+
+		-- 🚪 Portes (posées au sol, contre le mur)
+		{ Id = "WoodenDoor", Name = "Wooden door", Icon = "🚪", Category = "Doors", Placement = "Floor", Size = 130,
+			Cost = 1000, CostGrowth = 1.5, Comfort = 1, MaxOwned = 3 },
+		{ Id = "MouseHole", Name = "Mouse hole", Icon = "🐭", Category = "Doors", Placement = "Floor", Size = 40,
+			Cost = 3000, CostGrowth = 1.5, Comfort = 2, MaxOwned = 3 },
+		{ Id = "GardenDoor", Name = "Garden door", Icon = "🏡", Category = "Doors", Placement = "Floor", Size = 130,
+			Cost = 20000, CostGrowth = 1.5, Comfort = 3, MaxOwned = 2 },
+		{ Id = "HeartDoor", Name = "Heart door", Icon = "💗", Category = "Doors", Placement = "Floor", Size = 130,
+			Cost = 60000, CostGrowth = 1.5, Comfort = 5, MaxOwned = 2 },
+		{ Id = "ToriiGate", Name = "Torii gate", Icon = "⛩️", Category = "Doors", Placement = "Floor", Size = 150,
+			Cost = 500000, CostGrowth = 1.6, Comfort = 8, MaxOwned = 2 },
+		{ Id = "Elevator", Name = "Private elevator", Icon = "🛗", Category = "Doors", Placement = "Floor", Size = 140,
+			Cost = 2e6, CostGrowth = 1.6, Comfort = 10, MaxOwned = 1 },
+		{ Id = "CandyDoor", Name = "Candy door", Icon = "🍬", Category = "Doors", Placement = "Floor", Size = 130,
+			Cost = 8e6, CostGrowth = 1.6, Comfort = 13, MaxOwned = 2 },
+		{ Id = "DreamPortal", Name = "Dream portal", Icon = "🌀", Category = "Doors", Placement = "Floor", Size = 150,
+			Cost = 1e8, CostGrowth = 1.7, Comfort = 21, MaxOwned = 1 },
+
+		-- 🪟 Fenêtres (au mur)
+		{ Id = "CurtainWindow", Name = "Window with curtains", Icon = "🪟", Category = "Windows", Placement = "Wall", Size = 110,
+			Cost = 1500, CostGrowth = 1.4, Comfort = 2, MaxOwned = 4 },
+		{ Id = "CloudyWindow", Name = "Cloudy window", Icon = "⛅", Category = "Windows", Placement = "Wall", Size = 110,
+			Cost = 6000, CostGrowth = 1.4, Comfort = 3, MaxOwned = 3 },
+		{ Id = "RainyWindow", Name = "Rainy window", Icon = "🌧️", Category = "Windows", Placement = "Wall", Size = 110,
+			Cost = 25000, CostGrowth = 1.4, Comfort = 4, MaxOwned = 3 },
+		{ Id = "SunsetWindow", Name = "Sunset window", Icon = "🌇", Category = "Windows", Placement = "Wall", Size = 120,
+			Cost = 150000, CostGrowth = 1.45, Comfort = 6, MaxOwned = 3 },
+		{ Id = "CityNightWindow", Name = "City night window", Icon = "🌃", Category = "Windows", Placement = "Wall", Size = 120,
+			Cost = 600000, CostGrowth = 1.45, Comfort = 8, MaxOwned = 3 },
+		{ Id = "MountainWindow", Name = "Mountain view", Icon = "🏔️", Category = "Windows", Placement = "Wall", Size = 130,
+			Cost = 3e6, CostGrowth = 1.5, Comfort = 11, MaxOwned = 2 },
+		{ Id = "BeachWindow", Name = "Beach view", Icon = "🏖️", Category = "Windows", Placement = "Wall", Size = 130,
+			Cost = 1.5e7, CostGrowth = 1.5, Comfort = 15, MaxOwned = 2 },
+		{ Id = "ShootingStarWindow", Name = "Shooting star window", Icon = "🌠", Category = "Windows", Placement = "Wall", Size = 130,
+			Cost = 6e7, CostGrowth = 1.55, Comfort = 19, MaxOwned = 2 },
+		{ Id = "GalaxyWindow", Name = "Galaxy window", Icon = "🌌", Category = "Windows", Placement = "Wall", Size = 140,
+			Cost = 4e8, CostGrowth = 1.6, Comfort = 24, MaxOwned = 2 },
+
+		-- 💡 Lumières
+		{ Id = "ScentedCandle", Name = "Scented candle", Icon = "🕯️", Category = "Lights", Placement = "Floor", Size = 40,
+			Cost = 700, CostGrowth = 1.2, Comfort = 1 },
+		{ Id = "HangingBulb", Name = "Hanging bulb", Icon = "💡", Category = "Lights", Placement = "Wall", Size = 50,
+			Cost = 1200, CostGrowth = 1.2, Comfort = 1 },
+		{ Id = "FairyLights", Name = "Fairy lights", Icon = "✨", Category = "Lights", Placement = "Wall", Size = 140,
+			Cost = 4000, CostGrowth = 1.25, Comfort = 3 },
+		{ Id = "PaperLantern", Name = "Paper lantern", Icon = "🏮", Category = "Lights", Placement = "Wall", Size = 70,
+			Cost = 10000, CostGrowth = 1.3, Comfort = 3 },
+		{ Id = "OilLamp", Name = "Little oil lamp", Icon = "🪔", Category = "Lights", Placement = "Floor", Size = 50,
+			Cost = 25000, CostGrowth = 1.3, Comfort = 4 },
+		{ Id = "StarNightLight", Name = "Star night-light", Icon = "⭐", Category = "Lights", Placement = "Floor", Size = 60,
+			Cost = 60000, CostGrowth = 1.3, Comfort = 5 },
+		{ Id = "SparklerLights", Name = "Sparkler lights", Icon = "🎇", Category = "Lights", Placement = "Wall", Size = 80,
+			Cost = 90000, CostGrowth = 1.35, Comfort = 5 },
+		{ Id = "NeonHeart", Name = "Neon heart sign", Icon = "💞", Category = "Lights", Placement = "Wall", Size = 90,
+			Cost = 200000, CostGrowth = 1.35, Comfort = 7 },
+		{ Id = "MoonLamp", Name = "Moon lamp", Icon = "🌕", Category = "Lights", Placement = "Floor", Size = 70,
+			Cost = 400000, CostGrowth = 1.4, Comfort = 8 },
+		{ Id = "RainbowProjector", Name = "Rainbow projector", Icon = "🌈", Category = "Lights", Placement = "Wall", Size = 100,
+			Cost = 1e6, CostGrowth = 1.4, Comfort = 10 },
+		{ Id = "LavaLamp", Name = "Lava lamp", Icon = "🌋", Category = "Lights", Placement = "Floor", Size = 60,
+			Cost = 3e6, CostGrowth = 1.45, Comfort = 12 },
+		{ Id = "UFOLamp", Name = "UFO lamp", Icon = "🛸", Category = "Lights", Placement = "Wall", Size = 90,
+			Cost = 6e6, CostGrowth = 1.45, Comfort = 13 },
+		{ Id = "CrystalChandelier", Name = "Crystal chandelier", Icon = "💠", Category = "Lights", Placement = "Wall", Size = 120,
+			Cost = 3e7, CostGrowth = 1.55, Comfort = 17 },
+		{ Id = "PocketSun", Name = "Pocket sun", Icon = "☀️", Category = "Lights", Placement = "Wall", Size = 100,
+			Cost = 1e9, CostGrowth = 1.7, Comfort = 25, MaxOwned = 1 },
+	},
+}
+
+----------------------------------------------------------------------
 -- Index calculés automatiquement (ne pas modifier)
 ----------------------------------------------------------------------
 Config.UpgradesById = {}
@@ -696,6 +1137,46 @@ end
 Config.CasinoSymbolsById = {}
 for _, symbol in ipairs(Config.Casino.Symbols) do
 	Config.CasinoSymbolsById[symbol.Id] = symbol
+end
+
+-- 🏠 Maison
+Config.HouseSizesById = {}
+for index, size in ipairs(Config.House.Sizes) do
+	size.Order = index -- plus grand = plus grande maison
+	Config.HouseSizesById[size.Id] = size
+end
+
+Config.HouseWallpapersById = {}
+for index, wallpaper in ipairs(Config.House.Wallpapers) do
+	wallpaper.Order = index
+	Config.HouseWallpapersById[wallpaper.Id] = wallpaper
+end
+
+Config.HouseFloorsById = {}
+for index, floor in ipairs(Config.House.Floors) do
+	floor.Order = index
+	Config.HouseFloorsById[floor.Id] = floor
+end
+
+Config.HouseCategoriesById = {}
+for index, category in ipairs(Config.House.Categories) do
+	category.Order = index
+	Config.HouseCategoriesById[category.Id] = category
+end
+
+Config.HouseItemsById = {}
+Config.HouseItemsByCategory = {} -- [categoryId] = { objets dans l'ordre de la config }
+for _, category in ipairs(Config.House.Categories) do
+	Config.HouseItemsByCategory[category.Id] = {}
+end
+for index, item in ipairs(Config.House.Items) do
+	item.Order = index
+	item.CostGrowth = item.CostGrowth or 1
+	Config.HouseItemsById[item.Id] = item
+	local list = Config.HouseItemsByCategory[item.Category]
+	if list then
+		table.insert(list, item)
+	end
 end
 
 return Config

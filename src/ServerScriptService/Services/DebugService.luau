@@ -26,6 +26,7 @@
 	  /theme kawaii     -> donne et équipe un thème
 	  /offline 7200     -> simule un retour après 7200 s d'absence (gain hors-ligne)
 	  /lang fr          -> langue du jeu : auto, en ou fr (appliquée au prochain lancement)
+	  /house            -> 🏠 toutes les tailles, papiers peints, sols et 1 exemplaire de chaque objet
 	  /help             -> liste des commandes
 	Les messages sont écrits en anglais puis traduits dans la langue du
 	joueur (Locale.TFor, traductions dans Shared > Lang > FR_Server).
@@ -79,7 +80,7 @@ end
 -- Noms des commandes (déclarées comme TextChatCommand dans Studio)
 local COMMAND_NAMES = {
 	"give", "rush", "daily", "save", "corner", "unlockall", "spawn", "golden", "detox", "chest", "reset",
-	"pass", "boost", "theme", "offline", "lang", "help", "aide",
+	"pass", "boost", "theme", "offline", "lang", "house", "help", "aide",
 }
 
 -- Aide : "%s" = types d'objets de /spawn
@@ -226,6 +227,11 @@ local function runCommand(player: Player, command: string, argument: string, sec
 		-- Message dans la NOUVELLE langue (celle du prochain lancement)
 		return true, Locale.TFor(Locale.ForPlayer(player, language),
 			"🌐 Language: %s (takes effect after rejoining)", language)
+	elseif command == "house" then
+		if not services.HouseService:DebugGrantAll(player) then
+			return false, T(player, "Loading...")
+		end
+		return true, T(player, "🏠 Everything in the house shop unlocked!")
 	elseif command == "help" or command == "aide" then
 		return true, helpText(player)
 	end

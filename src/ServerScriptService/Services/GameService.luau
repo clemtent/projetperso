@@ -28,9 +28,10 @@
 	  4. Coffres : LootService:Charge remplit la jauge du coffre mystère ;
 	  5. Auto-clic (Game Pass) : AutoClicksPerSecond clics/s, même gain qu'un
 	     clic sans combo, comptés dans Stats.TotalClicks.
-	Les stats (Rush et bonus Robux compris) sont recalculées une seule fois par
-	joueur et par tick. Bonus Robux = produit des multiplicateurs des Game Passes
-	possédés x boost actif (MonetizationService).
+	Les stats (Rush et bonus compris) sont recalculées une seule fois par
+	joueur et par tick. Bonus = produit des multiplicateurs des Game Passes
+	possédés x boost actif (MonetizationService) x confort de la maison
+	(HouseService, objets posés dans 🏠).
 ]]
 
 local Players = game:GetService("Players")
@@ -205,12 +206,13 @@ function GameService:HasFeature(player: Player, feature: string): boolean
 end
 
 -- Calcule les statistiques actuelles du joueur (gain/clic, gain/s...)
+-- Bonus = Game Passes x boost actif x confort de la maison 🏠
 function GameService:GetStats(player: Player)
 	local data = services.DataService:GetData(player)
 	return Formulas.ComputeStats(
 		data,
 		services.EventService:GetMultiplier(),
-		services.MonetizationService:GetBonusMultiplier(player)
+		services.MonetizationService:GetBonusMultiplier(player) * services.HouseService:GetBonus(player)
 	)
 end
 
@@ -308,6 +310,7 @@ function GameService:BuildState(player: Player)
 	local monetization = services.MonetizationService
 	local boostMultiplier, boostRemaining = monetization:GetBoost(data)
 	local offlineRate, offlineMaxSeconds = Formulas.GetOfflineSettings(data)
+	local houseComfort = Formulas.GetHouseComfort(data)
 
 	return {
 		Dopamine = data.Dopamine,
@@ -331,7 +334,7 @@ function GameService:BuildState(player: Player)
 		AchievementMultiplier = stats.AchievementMultiplier,
 		CosmeticMultiplier = stats.CosmeticMultiplier,
 		EventMultiplier = stats.EventMultiplier,
-		BonusMultiplier = stats.BonusMultiplier, -- Game Passes x boost actif
+		BonusMultiplier = monetization:GetBonusMultiplier(player), -- Game Passes x boost actif (sans la maison)
 		ComboEnabled = Formulas.HasFeature(data, "Combo"),
 
 		RebirthCost = Formulas.GetRebirthCost(data.Rebirths),
@@ -354,6 +357,12 @@ function GameService:BuildState(player: Player)
 		CasinoEnabled = monetization:IsCasinoEnabled(),
 		IsVIP = monetization:IsVIP(player),
 
+		-- 🏠 Maison (gardée pour toujours) : données, confort des objets posés
+		-- et multiplicateur de gains (ex. 1.23 = +23 %, déjà compris dans GlobalMultiplier)
+		House = data.House,
+		HouseComfort = houseComfort,
+		HouseBonus = Formulas.GetHouseBonus(houseComfort),
+
 		-- Dopamine hors-ligne : taux (0..1) de la production et durée max prise en compte
 		Offline = { Rate = offlineRate, MaxSeconds = offlineMaxSeconds },
 
@@ -374,7 +383,7 @@ function GameService:SendState(player: Player)
 end
 
 -- Dopamine hors-ligne : calcule le gain pour `seconds` d'absence (production
--- sans Rush ni boost, avec les Game Passes), le donne (sans faire avancer les
+-- sans Rush ni boost, avec les Game Passes et le confort de la maison), le donne (sans faire avancer les
 -- quêtes) et, si `notify`, envoie la fenêtre "Bon retour !" au client.
 -- Renvoie le montant donné (0 si rien).
 function GameService:GrantOffline(player: Player, seconds: number, notify: boolean?): number
@@ -382,7 +391,8 @@ function GameService:GrantOffline(player: Player, seconds: number, notify: boole
 	if not data or not isValidNumber(seconds) or seconds <= 0 then
 		return 0
 	end
-	local stats = Formulas.ComputeStats(data, 1, services.MonetizationService:GetPassMultiplier(player))
+	local permanentBonus = services.MonetizationService:GetPassMultiplier(player) * services.HouseService:GetBonus(player)
+	local stats = Formulas.ComputeStats(data, 1, permanentBonus)
 	local reward = Formulas.GetOfflineReward(data, stats.PerSecond, seconds)
 	if not isValidNumber(reward) or reward <= 0 then
 		return 0
@@ -460,7 +470,8 @@ end
 
 -- "Aller à l'océan" : remet la progression à zéro contre un multiplicateur
 -- permanent. On garde : succès, stats, cosmétiques, cadeau, réglages,
--- coffres, temps d'écran, quêtes et les améliorations "Permanent".
+-- coffres, temps d'écran, quêtes, la maison 🏠 (data.House n'est pas
+-- touchée) et les améliorations "Permanent".
 function GameService:Detox(player: Player)
 	local data = services.DataService:GetData(player)
 	if not data or not sessions[player] then
