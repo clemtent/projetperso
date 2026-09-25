@@ -53,17 +53,17 @@ local TEMPLATE = {
 	},
 	Boost = { Multiplier = 1, EndsAt = 0 }, -- boost acheté (EndsAt = os.time() de fin)
 	-- 🏠 Maison (Config.House), gardée pour toujours (même après l'océan).
-	-- Items = { [itemId] = nombre possédé } ;
-	-- Placed = { { I = itemId, X = 0..1, Y = 0..1, S = 0.6..1.6, Z = 0..999 }, ... }
+	-- Items = { [itemId] = nombre possédé } ; Rooms = pièces (voir HouseService :
+	-- vide ici, HouseService crée le salon de départ ou convertit l'ancienne
+	-- maison à une pièce)
 	House = {
 		Size = Config.House.Sizes[1].Id,
-		Wallpaper = Config.House.Wallpapers[1].Id,
-		Floor = Config.House.Floors[1].Id,
 		OwnedSizes = { [Config.House.Sizes[1].Id] = true },
 		OwnedWallpapers = { [Config.House.Wallpapers[1].Id] = true },
 		OwnedFloors = { [Config.House.Floors[1].Id] = true },
 		Items = {},
-		Placed = {},
+		Rooms = {},
+		NextRoom = 2,
 	},
 	Purchases = {}, -- PurchaseId (texte) des 50 derniers achats Robux traités (anti-doublon)
 	LastOnline = 0, -- os.time() de la dernière sauvegarde / sortie (0 = jamais)

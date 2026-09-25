@@ -421,12 +421,34 @@ test("Config.House : catalogue (ids, catégories, zones, motifs, prix)", functio
 		eq(check, size.Order, i, "Order taille " .. size.Id)
 		if i > 1 then
 			local prev = H.Sizes[i - 1]
-			check(size.Cost > prev.Cost and size.Width > prev.Width and size.MaxItems > prev.MaxItems, "taille croissante " .. size.Id)
+			check(size.Cost > prev.Cost and size.Width >= prev.Width and size.RoomItems >= prev.RoomItems
+				and size.MaxRooms > prev.MaxRooms, "taille croissante " .. size.Id)
 		end
+		check(size.Floors >= 1 and size.Columns >= 1 and size.MaxRooms == size.Floors * size.Columns, "grille " .. size.Id)
+		check(({ Cottage = true, Townhouse = true, Loft = true, Mansion = true })[size.Exterior] == true, "Exterior " .. size.Id)
 	end
 	eq(check, H.Sizes[1].Cost, 0, "studio gratuit")
-	eq(check, H.Sizes[1].MaxItems, 25, "studio 25 objets")
-	eq(check, H.Sizes[4].MaxItems, 90, "manoir 90 objets")
+	eq(check, H.Sizes[1].MaxRooms, 2, "studio 2 pièces")
+	eq(check, H.Sizes[4].MaxRooms, 12, "manoir 12 pièces")
+
+	-- Types de pièces : styles et objets préférés existants
+	check(#H.RoomTypes >= 10, "au moins 10 types de pièces")
+	eq(check, H.RoomTypes[1].Id, "Living", "1er type = salon")
+	for _, roomType in ipairs(H.RoomTypes) do
+		local id = tostring(roomType.Id)
+		eq(check, Config.HouseRoomTypesById[roomType.Id], roomType, "index type " .. id)
+		check(type(roomType.Name) == "string" and isSingleEmoji(roomType.Icon), "Name/Icon type " .. id)
+		check(Config.HouseWallpapersById[roomType.Wallpaper] ~= nil, "papier peint du type " .. id)
+		check(Config.HouseFloorsById[roomType.Floor] ~= nil, "sol du type " .. id)
+		for _, categoryId in ipairs(roomType.Categories) do
+			check(Config.HouseCategoriesById[categoryId] ~= nil, "catégorie préférée " .. id .. " " .. tostring(categoryId))
+		end
+		for _, itemId in ipairs(roomType.Items) do
+			check(Config.HouseItemsById[itemId] ~= nil, "objet préféré " .. id .. " " .. tostring(itemId))
+		end
+		check(#roomType.Categories + #roomType.Items > 0, "type sans préférés " .. id)
+	end
+	check(H.RoomCost > 0 and H.RoomCostGrowth > 1 and H.HarmonyBonus > 0, "prix des pièces / harmonie")
 
 	-- Papiers peints et sols
 	local function checkSkins(list, lookup, patterns, minCount, label)
@@ -516,11 +538,16 @@ test("Formulas maison (prix, confort, bonus)", function(check)
 		end
 	end
 
-	-- Confort : objets connus, possédés, au plus MaxItems
+	-- Confort : objets connus, possédés (toutes pièces), au plus RoomItems par pièce
 	eq(check, Formulas.GetHouseComfort(nil), 0, "sans données")
 	eq(check, Formulas.GetHouseComfort({}), 0, "sans maison")
 	eq(check, Formulas.GetHouseComfort({ House = { Placed = "x" } }), 0, "Placed invalide")
 	local sofa, rug = Config.HouseItemsById.Sofa, Config.HouseItemsById.KnittedRug
+	local living, bedroom = Config.HouseRoomTypesById.Living, Config.HouseRoomTypesById.Bedroom
+	local harmony = 1 + H.HarmonyBonus
+	check(Formulas.IsRoomFavorite(living, sofa) and not Formulas.IsRoomFavorite(living, bed), "préférés du salon")
+	check(Formulas.IsRoomFavorite(bedroom, bed) and Formulas.IsRoomFavorite(living, rug), "préférés (objet / catégorie)")
+	-- Ancienne sauvegarde (une seule pièce) : vue comme un salon
 	local data = { House = { Size = "Studio", Items = { LoftBed = 1, Sofa = 2 }, Placed = {
 		{ I = "LoftBed", X = 0.5, Y = 0.8, S = 1, Z = 0 },
 		{ I = "Sofa", X = 0.2, Y = 0.8, S = 1, Z = 1 },
@@ -530,17 +557,34 @@ test("Formulas maison (prix, confort, bonus)", function(check)
 		{ I = "Bogus", X = 0.4, Y = 0.8 }, -- inconnu
 		"pas une table",
 	} } }
-	eq(check, Formulas.GetHouseComfort(data), bed.Comfort + 2 * sofa.Comfort, "confort compté")
+	check(near(Formulas.GetHouseComfort(data), bed.Comfort + 2 * sofa.Comfort * harmony), "confort compté (ancienne maison)")
 	data.House.Items.KnittedRug = 1
-	eq(check, Formulas.GetHouseComfort(data), bed.Comfort + 2 * sofa.Comfort + rug.Comfort, "confort + tapis")
-	-- Plafond MaxItems de la taille actuelle
-	local many = { House = { Size = "Studio", Items = { KnittedRug = 1000 }, Placed = {} } }
-	for i = 1, 100 do many.House.Placed[i] = { I = "KnittedRug", X = 0.5, Y = 0.9, S = 1, Z = i } end
-	eq(check, Formulas.GetHouseComfort(many), H.Sizes[1].MaxItems * rug.Comfort, "studio plafonné")
+	check(near(Formulas.GetHouseComfort(data), bed.Comfort + 2 * sofa.Comfort * harmony + rug.Comfort * harmony), "confort + tapis")
+	-- Plusieurs pièces : les exemplaires sont comptés toutes pièces confondues
+	local rooms = { House = { Size = "Apartment", Items = { LoftBed = 1, Sofa = 1 }, Rooms = {
+		{ Id = "R1", Type = "Living", Slot = 1, Placed = { { I = "Sofa" }, { I = "LoftBed" } } },
+		{ Id = "R2", Type = "Bedroom", Slot = 2, Placed = { { I = "LoftBed" }, { I = "Sofa" } } }, -- déjà posés au salon
+	} } }
+	check(near(Formulas.GetHouseComfort(rooms), sofa.Comfort * harmony + bed.Comfort), "exemplaires partagés entre pièces")
+	rooms.House.Items.LoftBed = 2
+	check(near(Formulas.GetHouseComfort(rooms), sofa.Comfort * harmony + bed.Comfort + bed.Comfort * harmony), "lit harmonieux dans la chambre")
+	-- Plafonds : RoomItems par pièce, MaxRooms pièces
+	local many = { House = { Size = "Studio", Items = { KnittedRug = 1000 }, Rooms = {} } }
+	for r = 1, 3 do
+		local placed = {}
+		for i = 1, 100 do placed[i] = { I = "KnittedRug", X = 0.5, Y = 0.9, S = 1, Z = i } end
+		many.House.Rooms[r] = { Id = "R" .. r, Type = "Kitchen", Slot = r, Placed = placed }
+	end
+	eq(check, Formulas.GetHouseComfort(many), H.Sizes[1].MaxRooms * H.Sizes[1].RoomItems * rug.Comfort, "studio plafonné")
 	many.House.Size = "Mansion"
-	eq(check, Formulas.GetHouseComfort(many), H.Sizes[4].MaxItems * rug.Comfort, "manoir plafonné")
+	eq(check, Formulas.GetHouseComfort(many), 3 * H.Sizes[4].RoomItems * rug.Comfort, "manoir plafonné")
 	many.House.Size = "Inconnu"
 	eq(check, Formulas.GetHouseSize(many), H.Sizes[1], "taille inconnue -> studio")
+	-- Prix des pièces
+	eq(check, Formulas.GetRoomCost(1), H.RoomCost, "2e pièce")
+	eq(check, Formulas.GetRoomCost(3), math.floor(H.RoomCost * H.RoomCostGrowth ^ 2), "4e pièce")
+	eq(check, Formulas.GetRoomCost(nil), H.RoomCost, "prix pièce nil")
+	eq(check, Formulas.GetRoomType("Inconnu"), H.RoomTypes[1], "type inconnu -> salon")
 
 	-- Bonus : 1 + min(Max, confort x par point)
 	eq(check, Formulas.GetHouseBonus(0), 1, "bonus 0")
@@ -657,7 +701,7 @@ test("Lang : tous les textes de Config.House ont une traduction française", fun
 		end
 	end
 	local H = Config.House
-	for _, list in ipairs({ H.Sizes, H.Wallpapers, H.Floors, H.Categories, H.Items }) do
+	for _, list in ipairs({ H.Sizes, H.Wallpapers, H.Floors, H.Categories, H.Items, H.RoomTypes }) do
 		for _, entry in ipairs(list) do
 			check(type(fr[entry.Name]) == "string", "pas de traduction : " .. tostring(entry.Name))
 		end

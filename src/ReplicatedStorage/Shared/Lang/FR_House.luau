@@ -277,6 +277,28 @@ return {
 		["Fluffy fox"] = "Renard tout doux",
 		["Baby dragon"] = "Bébé dragon",
 
+		-- Types de pièces et messages des pièces (v7)
+		["Living room"] = "Salon",
+		["Bedroom"] = "Chambre",
+		["Bathroom"] = "Salle de bain",
+		["Kids room"] = "Chambre d'enfant",
+		["Game room"] = "Salle de jeux",
+		["Greenhouse"] = "Serre",
+		["Pet corner"] = "Coin des animaux",
+		["Library"] = "Bibliothèque",
+		["Music room"] = "Salle de musique",
+		["Spa"] = "Spa",
+		["Starry attic"] = "Grenier étoilé",
+		["Too many rooms for this house (max %d)"] = "Trop de pièces pour cette maison (max %d)",
+		["Unknown room type"] = "Type de pièce inconnu",
+		["Your house is full: move to a bigger house!"] = "Ta maison est pleine : passe à une maison plus grande !",
+		["This spot is already taken"] = "Cet emplacement est déjà pris",
+		["%s New room: %s! (%s)"] = "%s Nouvelle pièce : %s ! (%s)",
+		["🏠 Room moved"] = "🏠 Pièce déplacée",
+		["%s This room is now: %s"] = "%s Cette pièce est maintenant : %s",
+		["Too many items in this room (max %d)"] = "Trop d'objets dans cette pièce (max %d)",
+		["Unknown room"] = "Pièce inconnue",
+
 		-- Messages du serveur (HouseService)
 		["Unknown house item"] = "Objet de maison inconnu",
 		["You can't have more %s %s"] = "Tu ne peux pas avoir plus de %s %s",
