@@ -18,6 +18,8 @@
 local Debris = game:GetService("Debris")
 local UserInputService = game:GetService("UserInputService")
 
+local Locale = require(game:GetService("ReplicatedStorage").Shared.Locale)
+
 local BubbleWrap = {}
 BubbleWrap.Slot = "L2"
 
@@ -28,14 +30,26 @@ local PITCH_Y = 28
 local DIAMETER = 26
 
 local CAPTIONS = {
-	"Encore ! 🔁",
-	"Nouvelle feuille 📦",
-	"Livraison de bulles !",
-	"Tu en veux encore ?",
-	"Pop pop pop !",
-	"La feuille était innocente.",
-	"Zéro bulle survivante.",
-	"C'est thérapeutique.",
+	en = {
+		"Again! 🔁",
+		"Fresh sheet 📦",
+		"Bubble delivery!",
+		"Want some more?",
+		"Pop pop pop!",
+		"That sheet was innocent.",
+		"Zero bubble survivors.",
+		"It's therapeutic.",
+	},
+	fr = {
+		"Encore ! 🔁",
+		"Nouvelle feuille 📦",
+		"Livraison de bulles !",
+		"Tu en veux encore ?",
+		"Pop pop pop !",
+		"La feuille était innocente.",
+		"Zéro bulle survivante.",
+		"C'est thérapeutique.",
+	},
 }
 
 function BubbleWrap.Start(ctx)
@@ -73,7 +87,7 @@ function BubbleWrap.Start(ctx)
 	UIUtil.Stroke(card, Theme.Colors.CardBorder, 2)
 
 	UIUtil.Label({
-		Text = "🔘 PAPIER BULLE",
+		Text = Locale.T("🔘 BUBBLE WRAP"),
 		Font = Theme.Fonts.Title,
 		TextColor3 = Theme.Colors.TextDark,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -337,7 +351,8 @@ function BubbleWrap.Start(ctx)
 				return
 			end
 			-- Message au milieu, visible pendant que la feuille glisse
-			caption.Text = CAPTIONS[random:NextInteger(1, #CAPTIONS)]
+			local captions = Locale.Pick(CAPTIONS)
+			caption.Text = captions[random:NextInteger(1, #captions)]
 			caption.TextTransparency = 0
 			captionStroke.Transparency = 0
 			local width = (container.Size.X.Offset > 0 and container.Size.X.Offset or 288) - 16

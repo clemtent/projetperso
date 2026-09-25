@@ -27,6 +27,8 @@
 local Casino = {}
 Casino.Slot = "R2"
 
+local Locale = require(game:GetService("ReplicatedStorage").Shared.Locale)
+
 -- Dimensions (pixels "design") : la carrosserie est rentrée de 2 px pour
 -- que son contour ne soit pas coupé par le slot (ClipsDescendants)
 local W = 284
@@ -69,28 +71,56 @@ local CHIP_COLORS = {
 }
 
 local LOSS_TEXTS = {
-	"Presque ! (non)",
-	"La maison gagne toujours 🏠",
-	"Retente, ça va passer… peut-être",
-	"Ta Dopamine est partie en vacances 🏖️",
-	"Aïe. On dira que c'était un test.",
-	"Le cerveau a dit non 🧠❌",
-	"C'était pour du beurre… ah non.",
-	"Les rouleaux ont le trac aujourd'hui",
+	en = {
+		"So close! (not really)",
+		"The house always wins 🏠",
+		"Try again, it'll hit… maybe",
+		"Your Dopamine went on vacation 🏖️",
+		"Ouch. Let's call that a test run.",
+		"The brain said no 🧠❌",
+		"That was just practice… oh wait, no.",
+		"The reels have stage fright today",
+	},
+	fr = {
+		"Presque ! (non)",
+		"La maison gagne toujours 🏠",
+		"Retente, ça va passer… peut-être",
+		"Ta Dopamine est partie en vacances 🏖️",
+		"Aïe. On dira que c'était un test.",
+		"Le cerveau a dit non 🧠❌",
+		"C'était pour du beurre… ah non.",
+		"Les rouleaux ont le trac aujourd'hui",
+	},
 }
 
 local WIN_TEXTS = {
-	"GAGNÉ ! 🎉",
-	"Ça tourne bien ! 💸",
-	"La chance te sourit 😎",
-	"Dopamine en cascade ! 🤑",
+	en = {
+		"WINNER! 🎉",
+		"Now we're rolling! 💸",
+		"Lady Luck is smiling 😎",
+		"Dopamine waterfall! 🤑",
+	},
+	fr = {
+		"GAGNÉ ! 🎉",
+		"Ça tourne bien ! 💸",
+		"La chance te sourit 😎",
+		"Dopamine en cascade ! 🤑",
+	},
 }
 
 local ATTRACT_TEXTS = {
-	"Tente ta chance ! 🍀",
-	"Paire = remboursé (ou presque)",
-	"Aucun Robux ici, promis 🤞",
-	"Touche GAINS pour voir les gains 📜",
+	en = {
+		"Try your luck! 🍀",
+		"Pair = money back (almost)",
+		"No Robux here, promise 🤞",
+		"Tap PAYOUTS to see the prizes 📜",
+	},
+	fr = {
+		"Tente ta chance ! 🍀",
+		"Paire = remboursé (ou presque)",
+		"Aucun Robux ici, promis 🤞",
+		"Touche GAINS pour voir les gains 📜",
+	},
 }
 
 -- Recul "Back" plus doux que la version standard (petit rebond à l'arrêt)
@@ -642,7 +672,7 @@ function Casino.Start(ctx)
 		BackgroundColor3 = WHITE,
 		AutoButtonColor = false,
 		Font = Theme.Fonts.Title,
-		Text = "📜 GAINS",
+		Text = Locale.T("📜 PAYOUTS"),
 		TextColor3 = Color3.fromRGB(60, 20, 0),
 		TextSize = 10,
 		ZIndex = 5,
@@ -693,12 +723,12 @@ function Casino.Start(ctx)
 			Parent = paytable,
 		})
 	end
-	local rtpText = "Paire = petit gain · Triple = gros gain"
+	local rtpText = Locale.T("Pair = small win · Triple = big win")
 	local rtpOk, rtp = pcall(function()
 		return ctx.Formulas.GetCasinoRTP()
 	end)
 	if rtpOk and type(rtp) == "number" and rtp > 0 then
-		rtpText = string.format("Retour moyen : %d %% · la maison gagne un peu 🏠", math.floor(rtp * 100 + 0.5))
+		rtpText = Locale.T("Average return: %d %% · the house wins a little 🏠", math.floor(rtp * 100 + 0.5))
 	end
 	UIUtil.Label({
 		Text = rtpText,
@@ -760,7 +790,7 @@ function Casino.Start(ctx)
 	local betLabel: TextLabel? = nil
 	local function refreshBetLabel()
 		if betLabel then
-			betLabel.Text = "Mise " .. Format.Format(currentBet())
+			betLabel.Text = Locale.T("Bet %s", Format.Format(currentBet()))
 		end
 	end
 
@@ -860,7 +890,7 @@ function Casino.Start(ctx)
 			selected = index
 			refreshChips()
 			ctx.Sound.Play("Click", 1.3 + index * 0.08)
-			setInfo("Mise : " .. Format.Format(currentBet()) .. " Dopamine", GOLD_LIGHT, 1.5)
+			setInfo(Locale.T("Bet: %s Dopamine", Format.Format(currentBet())), GOLD_LIGHT, 1.5)
 		end)
 	end
 
@@ -889,7 +919,7 @@ function Casino.Start(ctx)
 	})
 	round(playShine, 9)
 	playLabel = UIUtil.Label({
-		Text = "JOUER",
+		Text = Locale.T("SPIN"),
 		Font = Theme.Fonts.Title,
 		TextColor3 = Color3.fromRGB(80, 20, 0),
 		AnchorPoint = Vector2.new(0.5, 0),
@@ -988,7 +1018,7 @@ function Casino.Start(ctx)
 	round(jackpotBg, 9)
 	local rays = UIUtil.Rays(jackpot, GOLD, 8, 260, UDim2.fromScale(0.5, 0.5), 17)
 	local jackpotLabel = UIUtil.Label({
-		Text = "JACKPOT !",
+		Text = Locale.T("JACKPOT!"),
 		Font = Theme.Fonts.Title,
 		TextColor3 = WHITE,
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -1080,7 +1110,7 @@ function Casino.Start(ctx)
 	vGradient(sign, { { 0, Color3.fromRGB(235, 60, 70) }, { 1, Color3.fromRGB(150, 10, 30) } })
 	goldStroke(sign, 2)
 	UIUtil.Label({
-		Text = "🚧 FERMÉ 🚧",
+		Text = Locale.T("🚧 CLOSED 🚧"),
 		Font = Theme.Fonts.Title,
 		TextColor3 = GOLD_LIGHT,
 		AnchorPoint = Vector2.new(0.5, 0),
@@ -1091,7 +1121,7 @@ function Casino.Start(ctx)
 		Parent = sign,
 	})
 	UIUtil.Label({
-		Text = "La machine à sous fait une pause.",
+		Text = Locale.T("The slot machine is taking a break."),
 		Font = Theme.Fonts.Body,
 		TextColor3 = WHITE,
 		AnchorPoint = Vector2.new(0.5, 0),
@@ -1102,7 +1132,7 @@ function Casino.Start(ctx)
 		Parent = sign,
 	})
 	UIUtil.Label({
-		Text = "Reviens plus tard 😴",
+		Text = Locale.T("Come back later 😴"),
 		Font = Theme.Fonts.Body,
 		TextColor3 = Color3.fromRGB(255, 210, 210),
 		AnchorPoint = Vector2.new(0.5, 0),
@@ -1121,7 +1151,7 @@ function Casino.Start(ctx)
 		if now ~= enabled then
 			enabled = now
 			if not now then
-				setInfo("Fermé pour le moment 😴", LED_TEXT)
+				setInfo(Locale.T("Closed for now 😴"), LED_TEXT)
 				setPaytable(false)
 			end
 		end
@@ -1341,7 +1371,8 @@ function Casino.Start(ctx)
 			ctx.Sound.Play("SlotWin", multiplier >= 25 and 1.1 or 1)
 			local text = "+" .. Format.Format(payout)
 			floatOnOverlay(centerPoint, text, GOLD, multiplier >= 10 and 34 or 26)
-			setInfo(WIN_TEXTS[random:NextInteger(1, #WIN_TEXTS)] .. " " .. Format.Multiplier(multiplier), GOLD_LIGHT, 3)
+			local winTexts = Locale.Pick(WIN_TEXTS)
+			setInfo(winTexts[random:NextInteger(1, #winTexts)] .. " " .. Format.Multiplier(multiplier), GOLD_LIGHT, 3)
 			UIUtil.Tween(windowStroke, 0.1, { Color = WHITE, Thickness = 3, Transparency = 0 })
 			task.delay(0.6, function()
 				if windowStroke.Parent then
@@ -1356,7 +1387,7 @@ function Casino.Start(ctx)
 				showJackpot(text .. " " .. Format.Multiplier(multiplier))
 				ctx.Sound.Play("Jackpot", 1)
 				ctx.Effects.Flash(GOLD, 0.45)
-				ctx.Effects.BigMessage("🎰 JACKPOT ! " .. text, GOLD, 2.5)
+				ctx.Effects.BigMessage(Locale.T("🎰 JACKPOT! %s", text), GOLD, 2.5)
 				if effectsOn() then
 					ctx.Effects.Confetti(70)
 				end
@@ -1368,11 +1399,12 @@ function Casino.Start(ctx)
 			winGlowUntil = os.clock() + 1
 			ctx.Sound.Play("Cash", 0.8)
 			floatOnOverlay(centerPoint, "+" .. Format.Format(payout), WHITE, 22)
-			setInfo("Remboursé en partie (" .. Format.Multiplier(multiplier) .. ") 🙃", Color3.fromRGB(255, 225, 160), 2.5)
+			setInfo(Locale.T("Partly refunded (%s) 🙃", Format.Multiplier(multiplier)), Color3.fromRGB(255, 225, 160), 2.5)
 		else
 			ctx.Sound.Play("Error", 0.75)
 			UIUtil.Shake(window)
-			setInfo(LOSS_TEXTS[random:NextInteger(1, #LOSS_TEXTS)], Color3.fromRGB(255, 150, 150), 2.5)
+			local lossTexts = Locale.Pick(LOSS_TEXTS)
+			setInfo(lossTexts[random:NextInteger(1, #lossTexts)], Color3.fromRGB(255, 150, 150), 2.5)
 		end
 	end
 
@@ -1389,7 +1421,7 @@ function Casino.Start(ctx)
 		if getDopamine() < minBet then
 			ctx.Sound.Play("Error", 1)
 			UIUtil.Shake(playButton)
-			setInfo("Il faut au moins " .. Format.Format(minBet) .. " Dopamine 😬", Color3.fromRGB(255, 150, 150), 2)
+			setInfo(Locale.T("You need at least %s Dopamine 😬", Format.Format(minBet)), Color3.fromRGB(255, 150, 150), 2)
 			return
 		end
 
@@ -1403,7 +1435,7 @@ function Casino.Start(ctx)
 			reel.Mode = "spin"
 			reel.Glow.BackgroundTransparency = 1
 		end
-		setInfo("Ça tourne… 🎲", LED_TEXT)
+		setInfo(Locale.T("Spinning… 🎲"), LED_TEXT)
 
 		local fraction = fractions[selected] or fractions[1]
 		task.spawn(function()
@@ -1433,7 +1465,7 @@ function Casino.Start(ctx)
 			for index = 1, 3 do
 				local suspense = valid and index == 3 and ids[1] == ids[2]
 				if suspense then
-					setInfo("🤞 Allez… allez…", Theme.Colors.Yellow)
+					setInfo(Locale.T("🤞 Come on… come on…"), Theme.Colors.Yellow)
 					partyUntil = os.clock() + 1
 				end
 				stopReel(reels[index], ids[index], suspense and 1 or nil)
@@ -1451,7 +1483,7 @@ function Casino.Start(ctx)
 			if valid then
 				showResult(result)
 			else
-				local message = (callOk and type(result) == "string") and result or "La machine fait grève 🔧"
+				local message = (callOk and type(result) == "string") and result or Locale.T("The machine is on strike 🔧")
 				ctx.Sound.Play("Error", 1)
 				UIUtil.Shake(window)
 				setInfo(message, Color3.fromRGB(255, 150, 150), 2.5)
@@ -1475,9 +1507,9 @@ function Casino.Start(ctx)
 			bestSymbol = symbol
 		end
 	end
-	local attract = table.clone(ATTRACT_TEXTS)
+	local attract = table.clone(Locale.Pick(ATTRACT_TEXTS))
 	if bestSymbol then
-		table.insert(attract, "Triple " .. bestSymbol.Icon .. " = " .. Format.Multiplier(bestSymbol.Triple or 0) .. " !")
+		table.insert(attract, Locale.T("Triple %s = %s!", bestSymbol.Icon, Format.Multiplier(bestSymbol.Triple or 0)))
 	end
 
 	task.spawn(function()
@@ -1488,7 +1520,7 @@ function Casino.Start(ctx)
 				if tick % 8 == 0 then
 					setInfo(attract[random:NextInteger(1, #attract)], Color3.fromRGB(255, 220, 150), 2)
 				else
-					setInfo("Mise : " .. Format.Format(currentBet()) .. " Dopamine", LED_TEXT)
+					setInfo(Locale.T("Bet: %s Dopamine", Format.Format(currentBet())), LED_TEXT)
 				end
 			end
 			task.wait(0.5)

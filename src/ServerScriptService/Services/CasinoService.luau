@@ -15,6 +15,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Formulas = require(ReplicatedStorage.Shared.Formulas)
+local Locale = require(ReplicatedStorage.Shared.Locale)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local Net = require(ReplicatedStorage.Shared.Net)
 local RateLimiter = require(script.Parent.RateLimiter)
@@ -65,28 +66,33 @@ local function isAllowedFraction(fraction: any): boolean
 	return false
 end
 
+-- Texte dans la langue du joueur
+local function T(player: Player, text: string, ...): string
+	return services.GameService:T(player, text, ...)
+end
+
 local function onSpin(player: Player, fraction: any)
 	local data = services.DataService:GetData(player)
 	if not data or not services.GameService:IsReady(player) then
-		return false, "Chargement en cours..."
+		return false, T(player, "Loading...")
 	end
 	if not services.MonetizationService:IsCasinoEnabled() then
-		return false, "Le casino est fermé"
+		return false, T(player, "The casino is closed")
 	end
 	if not Formulas.HasFeature(data, settings.Feature) then
-		return false, "La machine à sous n'est pas encore débloquée"
+		return false, T(player, "The slot machine isn't unlocked yet")
 	end
 	if not isAllowedFraction(fraction) then
-		return false, "Mise invalide"
+		return false, T(player, "Invalid bet")
 	end
 	-- Petite marge pour la latence réseau
 	if not RateLimiter.Check(player, "CasinoSpin", math.max(0, settings.Cooldown - 0.1)) then
-		return false, "La machine tourne encore..."
+		return false, T(player, "The machine is still spinning...")
 	end
 
 	local bet = math.max(settings.MinBet, math.floor(data.Dopamine * fraction))
 	if bet > data.Dopamine then
-		return false, "Il faut au moins " .. NumberFormatter.Format(settings.MinBet) .. " " .. Config.Game.CurrencyName
+		return false, T(player, "You need at least %s %s", NumberFormatter.Format(settings.MinBet), Config.Game.CurrencyName)
 	end
 
 	local reels = { pickSymbol(), pickSymbol(), pickSymbol() }
@@ -110,10 +116,13 @@ local function onSpin(player: Player, fraction: any)
 	services.GameService:SendState(player)
 
 	if multiplier >= BIG_WIN_MULTIPLIER then
-		services.GameService:NotifyAll({
-			Type = "Info",
-			Text = "🎰 " .. player.DisplayName .. " a gagné x" .. multiplier .. " à la machine à sous !",
-		}, player)
+		local displayName = player.DisplayName
+		services.GameService:NotifyAll(function(lang)
+			return {
+				Type = "Info",
+				Text = Locale.TFor(lang, "🎰 %s won x%s on the slot machine!", displayName, tostring(multiplier)),
+			}
+		end, player)
 	end
 
 	return true, {

@@ -19,6 +19,7 @@ local DataStoreService = game:GetService("DataStoreService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local Locale = require(ReplicatedStorage.Shared.Locale)
 
 local DataService = {}
 
@@ -36,7 +37,9 @@ local TEMPLATE = {
 	Achievements = {}, -- [achievementId] = true
 	Quests = {}, -- liste des quêtes actives
 	Daily = { LastDay = 0, Streak = 0 },
-	Settings = { Sound = true, Music = true, Effects = true, ClickSound = "Default" }, -- ClickSound = Id de Config.ClickSounds
+	-- ClickSound = Id de Config.ClickSounds ; Language = "Auto" | "en" | "fr"
+	-- ("Auto" = langue de Roblox du joueur) ; DarkMode = mode sombre de l'interface
+	Settings = { Sound = true, Music = true, Effects = true, ClickSound = "Default", Language = "Auto", DarkMode = false },
 	Cosmetics = {
 		Owned = {}, -- [cosmeticId] = true
 		Equipped = { Hat = "", Skin = "" }, -- "" = rien d'équipé
@@ -225,10 +228,11 @@ function DataService:LoadAsync(player: Player)
 	}
 
 	if not canSave then
+		local language = Locale.ForPlayer(player, data.Settings.Language)
 		task.defer(function()
 			services.GameService:Notify(player, {
 				Type = "Error",
-				Text = "⚠️ Sauvegarde indisponible : ta progression ne sera pas enregistrée.",
+				Text = Locale.TFor(language, "⚠️ Saving is unavailable: your progress won't be saved."),
 			})
 		end)
 	end

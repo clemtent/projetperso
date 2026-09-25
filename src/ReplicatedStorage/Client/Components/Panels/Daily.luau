@@ -41,14 +41,17 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Formulas = require(ReplicatedStorage.Shared.Formulas)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local Net = require(ReplicatedStorage.Shared.Net)
+local Locale = require(ReplicatedStorage.Shared.Locale)
 
 local PANEL_SIZE = Vector2.new(780, 590)
 
+-- Title / Subtitle en anglais : traduits par PanelManager
 local Daily = {
-	Title = "🎁 Cadeau du jour",
-	Subtitle = "Reviens chaque jour : ta série fait grossir le cadeau",
+	Title = "🎁 Daily Gift",
+	Subtitle = "Come back every day: your streak makes the gift bigger",
 	Color = Theme.Colors.Pink,
 	Size = PANEL_SIZE,
+	FixedLayout = true, -- mise en page fixe : défile dans la fenêtre sur petit écran
 }
 
 ----------------------------------------------------------------------
@@ -286,15 +289,26 @@ end
 ----------------------------------------------------------------------
 
 local function artFrame(parent: Instance, size: number, z: number, name: string): Frame
-	return UIUtil.Create("Frame", {
+	local frame = UIUtil.Create("Frame", {
 		Name = name,
 		Size = UDim2.fromOffset(size, size),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
 		BackgroundTransparency = 1,
 		ZIndex = z,
-		Parent = parent,
 	})
+	-- Les dessins (paquet, coffre) gardent leurs couleurs en mode sombre
+	frame:SetAttribute("DarkSkinIgnore", true)
+	frame.Parent = parent
+	return frame
+end
+
+-- "s" du pluriel ("1 day" / "2 days", "1 jour" / "2 jours", "0 day(s)" selon la langue)
+local function pluralS(count: number): string
+	if Locale.IsFrench() then
+		return count > 1 and "s" or ""
+	end
+	return count ~= 1 and "s" or ""
 end
 
 -- Paquet : boîte + couvercle + ruban en croix + nœud à deux boucles
@@ -586,7 +600,7 @@ local function buildHero(content: Frame)
 
 	local title = UIUtil.Label({
 		Name = "HeroTitle",
-		Text = "Calendrier des cadeaux",
+		Text = Locale.T("Gift Calendar"),
 		Font = Theme.Fonts.Title,
 		TextColor3 = WHITE,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -627,7 +641,7 @@ local function buildHero(content: Frame)
 	})
 	streakChip = UIUtil.Chip({
 		Name = "StreakChip",
-		Text = "🔥 Série : –",
+		Text = Locale.T("🔥 Streak: –"),
 		Color = WHITE,
 		TextColor3 = PINK_DARK,
 		StrokeColor = WHITE,
@@ -773,7 +787,7 @@ local function buildCard(row: Frame, day: number): Card
 
 	local title = UIUtil.Label({
 		Name = "DayTitle",
-		Text = big and ("JOUR " .. day .. " • MÉGA") or ("JOUR " .. day),
+		Text = big and Locale.T("DAY %s • MEGA", tostring(day)) or Locale.T("DAY %s", tostring(day)),
 		Font = Theme.Fonts.Title,
 		TextColor3 = Theme.Colors.TextDim,
 		Size = UDim2.new(1, -12, 0, 16),
@@ -926,7 +940,7 @@ local function buildCard(row: Frame, day: number): Card
 	UIUtil.Stroke(ribbon, WHITE, 1.5)
 	shade(ribbon)
 	local ribbonLabel = UIUtil.Label({
-		Text = "AUJOURD'HUI",
+		Text = Locale.T("TODAY"),
 		Font = Theme.Fonts.Title,
 		TextColor3 = WHITE,
 		Size = UDim2.new(1, -8, 1, -4),
@@ -987,7 +1001,7 @@ local function buildMeter(content: Frame)
 	})
 	streakLabel = UIUtil.Label({
 		Name = "Streak",
-		Text = "Série : –",
+		Text = Locale.T("Streak: –"),
 		Font = Theme.Fonts.Title,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Size = UDim2.new(0, 146, 1, 0),
@@ -1203,7 +1217,7 @@ local function setCardState(card: Card, state: string, text: string)
 	card.LockLabel.Text = tomorrow and "⏳" or "🔒"
 	card.Ribbon.Visible = today or tomorrow
 	card.Ribbon.BackgroundColor3 = today and Theme.Colors.Pink or Theme.Colors.Blue
-	card.RibbonLabel.Text = today and "AUJOURD'HUI" or "DEMAIN"
+	card.RibbonLabel.Text = today and Locale.T("TODAY") or Locale.T("TOMORROW")
 	card.Title.TextColor3 = today and PINK_DARK or Theme.Colors.TextDim
 
 	card.Pill.BackgroundColor3 = (today and Theme.Colors.Pink)
@@ -1235,37 +1249,37 @@ local function setMeter(claimedCount: number, activeStreak: number, todayIsLast:
 		UIUtil.Tween(flameTip, 0.5, { Position = UDim2.fromScale(ratio, 0.5) }, Enum.EasingStyle.Quint)
 	end
 	flameTip.TextTransparency = claimedCount > 0 and 0 or 0.45
-	streakLabel.Text = string.format("Série : %d jour%s", activeStreak, activeStreak > 1 and "s" or "")
+	streakLabel.Text = Locale.T("Streak: %d day%s", activeStreak, pluralS(activeStreak))
 	local left = DAYS - claimedCount
 	if left <= 0 then
-		goalLabel.Text = "💎 MAX !"
+		goalLabel.Text = Locale.T("💎 MAX!")
 	elseif todayIsLast then
-		goalLabel.Text = "💎 aujourd'hui !"
+		goalLabel.Text = Locale.T("💎 today!")
 	else
-		goalLabel.Text = string.format("💎 dans %d j", left)
+		goalLabel.Text = Locale.T("💎 in %d d", left)
 	end
 end
 
 local function setButton(mode: string)
 	if mode == "ready" then
 		UIUtil.SetButtonEnabled(button, true)
-		buttonLabel.Text = "🎁  RÉCUPÉRER"
+		buttonLabel.Text = Locale.T("🎁  CLAIM")
 		buttonLabel.TextTransparency = 0
 	elseif mode == "busy" then
 		button:SetAttribute("Enabled", false)
-		buttonLabel.Text = "OUVERTURE…"
+		buttonLabel.Text = Locale.T("OPENING…")
 		buttonLabel.TextTransparency = 0
 	elseif mode == "party" then
 		button:SetAttribute("Enabled", false)
-		buttonLabel.Text = "🎉  BRAVO !"
+		buttonLabel.Text = Locale.T("🎉  WELL DONE!")
 		buttonLabel.TextTransparency = 0
 	elseif mode == "claimed" then
 		UIUtil.SetButtonEnabled(button, false)
-		buttonLabel.Text = "✔  DÉJÀ RÉCUPÉRÉ"
+		buttonLabel.Text = Locale.T("✔  ALREADY CLAIMED")
 		buttonLabel.TextTransparency = 0.1
 	else
 		UIUtil.SetButtonEnabled(button, false)
-		buttonLabel.Text = "Chargement…"
+		buttonLabel.Text = Locale.T("Loading…")
 		buttonLabel.TextTransparency = 0.2
 	end
 end
@@ -1308,22 +1322,22 @@ local function refreshTimers()
 	local info = currentInfo
 	if not info then
 		ringTime.Text = "…"
-		ringCaption.Text = "chargement"
+		ringCaption.Text = Locale.T("loading")
 		return
 	end
 	if info.Available == true then
-		ringTime.Text = "PRÊT !"
-		ringCaption.Text = "ouvre-le vite"
+		ringTime.Text = Locale.T("READY!")
+		ringCaption.Text = Locale.T("open it quick")
 		return
 	end
 	local remaining = remainingSeconds()
 	ringTime.Text = UIUtil.FormatClock(remaining)
 	if remaining <= 0 then
-		ringCaption.Text = "ça arrive…"
-		hintLabel.Text = "⏳ Ton prochain cadeau arrive…"
+		ringCaption.Text = Locale.T("almost here…")
+		hintLabel.Text = Locale.T("⏳ Your next gift is on its way…")
 	else
-		ringCaption.Text = "prochain cadeau"
-		hintLabel.Text = "⏳ Prochain cadeau dans " .. NumberFormatter.Time(remaining) .. tomorrowText
+		ringCaption.Text = Locale.T("next gift")
+		hintLabel.Text = Locale.T("⏳ Next gift in %s", NumberFormatter.Time(remaining)) .. tomorrowText
 	end
 end
 
@@ -1336,18 +1350,18 @@ local function apply(data)
 	if type(info) ~= "table" then
 		-- Pas encore d'état (ou calendrier absent) : squelette propre
 		currentInfo = nil
-		heroStatus.Text = "Chargement du calendrier..."
-		setChipText(streakChip, "🔥 Série : –")
+		heroStatus.Text = Locale.T("Loading the calendar...")
+		setChipText(streakChip, Locale.T("🔥 Streak: –"))
 		rewardChip.Visible = false
 		for _, card in ipairs(cards) do
 			setCardState(card, "locked", "…")
 		end
 		setMeter(0, 0, false)
-		amountCaption.Text = "RÉCOMPENSE DU JOUR"
+		amountCaption.Text = Locale.T("TODAY'S REWARD")
 		amountLabel.Text = "…"
 		amountLabel.TextColor3 = Theme.Colors.TextDim
 		setButton("loading")
-		hintLabel.Text = "Chargement..."
+		hintLabel.Text = Locale.T("Loading...")
 		refreshTimers()
 		return
 	end
@@ -1374,7 +1388,7 @@ local function apply(data)
 		end
 		local text
 		if state == "claimed" then
-			text = "✔ Récupéré"
+			text = Locale.T("✔ Claimed")
 		elseif state == "today" then
 			text = formatReward(reward)
 		else
@@ -1394,34 +1408,34 @@ local function apply(data)
 	if not available then
 		local tomorrow = estimateReward(data, streak + 1)
 		if tomorrow then
-			tomorrowText = "  •  demain ≈ " .. formatReward(tomorrow)
+			tomorrowText = Locale.T("  •  tomorrow ≈ %s", formatReward(tomorrow))
 		end
 	end
 
 	-- En-tête
 	if available then
-		heroStatus.Text = streak > 1 and string.format("Jour %d de ta série : ton cadeau t'attend !", streak)
-			or "Ton cadeau du jour t'attend !"
+		heroStatus.Text = streak > 1 and Locale.T("Day %d of your streak: your gift is waiting!", streak)
+			or Locale.T("Your daily gift is waiting!")
 		setChipText(rewardChip, "🎁 " .. formatReward(reward))
 	else
-		heroStatus.Text = streak >= DAYS and "Série au max ! Un coffre 💎 t'attend chaque jour."
-			or string.format("Bien joué ! Reviens demain pour le jour %d.", claimedCount + 1)
-		setChipText(rewardChip, "✔ Récupéré aujourd'hui")
+		heroStatus.Text = streak >= DAYS and Locale.T("Max streak! A 💎 chest awaits you every day.")
+			or Locale.T("Well done! Come back tomorrow for day %d.", claimedCount + 1)
+		setChipText(rewardChip, Locale.T("✔ Claimed today"))
 	end
 	rewardChip.Visible = true
-	setChipText(streakChip, string.format("🔥 Série : %d jour%s", activeStreak, activeStreak > 1 and "s" or ""))
+	setChipText(streakChip, Locale.T("🔥 Streak: %d day%s", activeStreak, pluralS(activeStreak)))
 
 	setMeter(claimedCount, activeStreak, todayIndex == DAYS)
 
 	-- Montant + bouton
 	if available then
-		amountCaption.Text = string.format("RÉCOMPENSE DU JOUR %d", todayIndex or 1)
+		amountCaption.Text = Locale.T("DAY %d REWARD", todayIndex or 1)
 		amountLabel.Text = formatReward(reward)
 		amountLabel.TextColor3 = PINK_DARK
 		setButton("ready")
-		hintLabel.Text = "Reviens chaque jour : la récompense grandit avec ta série 🔥"
+		hintLabel.Text = Locale.T("Come back every day: the reward grows with your streak 🔥")
 	else
-		amountCaption.Text = "✔ RÉCUPÉRÉ AUJOURD'HUI"
+		amountCaption.Text = Locale.T("✔ CLAIMED TODAY")
 		amountLabel.Text = formatReward(reward)
 		amountLabel.TextColor3 = GREEN_DARK
 		setButton("claimed")
@@ -1529,7 +1543,7 @@ local function stampCard(card: Card)
 	card.Stroke.Color = Theme.Colors.Divider
 	card.Stroke.Thickness = 1.5
 	card.Pill.BackgroundColor3 = Theme.Colors.Green:Lerp(WHITE, 0.72)
-	card.Amount.Text = "✔ Récupéré"
+	card.Amount.Text = Locale.T("✔ Claimed")
 	card.Amount.TextColor3 = GREEN_DARK
 	task.delay(0.2, function()
 		if not card.Card.Parent then
@@ -1579,14 +1593,14 @@ local function claimSequence(card: Card?, amount: number, message: string)
 	Effects.FloatingText(contentFrame, origin + UDim2.fromOffset(0, -40), formatReward(amount), GOLD, 30)
 
 	-- 3. Le montant défile
-	amountCaption.Text = "🎉 CADEAU RÉCUPÉRÉ !"
+	amountCaption.Text = Locale.T("🎉 GIFT CLAIMED!")
 	countUp(amount, 1)
 
 	-- 4. Tampon sur la carte + notification
 	if card then
 		stampCard(card)
 	end
-	Notifications.Toast(tostring(message or ""), Theme.Colors.Pink, 5, "🎁 Cadeau récupéré !")
+	Notifications.Toast(tostring(message or ""), Theme.Colors.Pink, 5, Locale.T("🎁 Gift claimed!"))
 	task.wait(0.9)
 	closeLid(heroGift)
 	if card then
@@ -1606,7 +1620,7 @@ local function onClaim()
 		if currentInfo and not isAvailable() and os.clock() - lastRefusal > 3 then
 			lastRefusal = os.clock()
 			Notifications.Toast(
-				"Déjà récupéré aujourd'hui ! Prochain cadeau dans " .. NumberFormatter.Time(remainingSeconds()) .. ".",
+				Locale.T("Already claimed today! Next gift in %s.", NumberFormatter.Time(remainingSeconds())),
 				Theme.Colors.Orange,
 				3
 			)
@@ -1656,7 +1670,7 @@ local function onClaim()
 		claiming = false
 		SoundManager.Play("Error", 0.7)
 		Notifications.Toast(
-			ok and tostring(message or "Impossible pour le moment.") or "Erreur réseau, réessaie.",
+			ok and tostring(message or Locale.T("Not possible right now.")) or Locale.T("Network error, try again."),
 			Theme.Colors.Red
 		)
 		apply(latestData or ClientState.Data)

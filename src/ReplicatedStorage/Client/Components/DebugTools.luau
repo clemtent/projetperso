@@ -23,6 +23,7 @@ local TextChatService = game:GetService("TextChatService")
 local Client = script.Parent.Parent
 local Theme = require(Client.Theme)
 local Signal = require(ReplicatedStorage.Shared.Signal)
+local Locale = require(ReplicatedStorage.Shared.Locale)
 local Notifications = require(script.Parent.Notifications)
 
 local DebugTools = {}
@@ -58,6 +59,7 @@ local CHAT_COMMANDS = {
 }
 
 local registered = false
+local lastDuplicate = false -- la dernière commande était un doublon (déjà exécutée)
 local myCommands: { [TextChatCommand]: boolean } = {}
 local myAliases: { [string]: boolean } = {} -- "/give" -> true
 
@@ -88,22 +90,26 @@ end
 -- Renvoie (succès, message).
 function DebugTools.Run(command: string, argument: string?): (boolean, string)
 	if not DebugTools.Enabled then
-		return false, "Commandes de test disponibles uniquement dans Studio"
+		return false, Locale.T("Test commands are only available in Studio")
 	end
 	local remote = getRemote()
 	if not remote then
-		return false, "RemoteFunction DebugCommand introuvable (serveur pas à jour ?)"
+		return false, Locale.T("DebugCommand RemoteFunction not found (server out of date?)")
 	end
-	local ok, success, message = pcall(function()
+	local ok, success, message, duplicate = pcall(function()
 		return remote:InvokeServer(command, argument or "")
 	end)
 	local result: boolean
 	local text: string
 	if not ok then
-		result, text = false, "Erreur réseau : " .. tostring(success)
+		result, text = false, Locale.T("Network error: %s", tostring(success))
 	else
 		result = success == true
-		text = message ~= nil and tostring(message) or (result and "OK" or "Refusé")
+		text = message ~= nil and tostring(message) or (result and "OK" or Locale.T("Refused"))
+		-- 3e valeur du serveur : commande déjà exécutée (doublon du chat)
+		if duplicate == true then
+			lastDuplicate = true
+		end
 	end
 	DebugTools.Ran:Fire(command, argument or "", result, text)
 	return result, text
@@ -142,13 +148,14 @@ local function onTriggered(entry, text: string)
 	-- "/give 1e6" -> argument "1e6" ; "/boost 5 60" -> "5 60"
 	local argument = string.match(text, "^%s*/%S+%s*(.-)%s*$") or ""
 	task.spawn(function()
+		lastDuplicate = false
 		local ok, message = DebugTools.Run(entry.Command, argument)
-		if message == "(déjà exécutée)" then
+		if lastDuplicate or message == "(already run)" or message == "(déjà exécutée)" then
 			return
 		end
 		systemMessage((ok and "🛠️ " or "❌ ") .. message)
 		if not ok then
-			Notifications.Toast(message, Theme.Colors.Red, 4, "Commande /" .. entry.Alias, false, "🛠️")
+			Notifications.Toast(message, Theme.Colors.Red, 4, Locale.T("Command /%s", entry.Alias), false, "🛠️")
 		end
 	end)
 end

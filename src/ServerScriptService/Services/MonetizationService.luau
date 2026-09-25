@@ -23,6 +23,7 @@ local RunService = game:GetService("RunService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Formulas = require(ReplicatedStorage.Shared.Formulas)
+local Locale = require(ReplicatedStorage.Shared.Locale)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 
 local MonetizationService = {}
@@ -69,6 +70,11 @@ end
 
 function MonetizationService:Init(allServices)
 	services = allServices
+end
+
+-- Texte dans la langue du joueur
+local function T(player: Player, text: string, ...): string
+	return services.GameService:T(player, text, ...)
 end
 
 ----------------------------------------------------------------------
@@ -229,13 +235,13 @@ local function grantGamePass(player: Player, gamePassId: number, purchased: bool
 	for _, pass in ipairs(passesByGamePassId[gamePassId] or {}) do
 		if not owner.Passes[pass.Id] then
 			owner.Passes[pass.Id] = true
-			table.insert(names, pass.Icon .. " " .. pass.Name)
+			table.insert(names, pass.Icon .. " " .. T(player, pass.Name))
 		end
 	end
 	for _, theme in ipairs(themesByGamePassId[gamePassId] or {}) do
 		if not owner.Themes[theme.Id] then
 			owner.Themes[theme.Id] = true
-			table.insert(names, theme.Icon .. " Thème " .. theme.Name)
+			table.insert(names, T(player, "%s %s theme", theme.Icon, T(player, theme.Name)))
 		end
 	end
 	if #names == 0 then
@@ -256,7 +262,7 @@ local function grantGamePass(player: Player, gamePassId: number, purchased: bool
 			Type = "Purchase",
 			Kind = "Pass",
 			Id = (passesByGamePassId[gamePassId] and passesByGamePassId[gamePassId][1].Id) or nil,
-			Text = "💎 Merci ! " .. table.concat(names, ", ") .. " débloqué !",
+			Text = T(player, "💎 Thank you! %s unlocked!", table.concat(names, ", ")),
 		})
 	end
 	services.GameService:MarkDirty(player)
@@ -369,7 +375,7 @@ local function grantProduct(player: Player, data, product): string
 		end
 		-- Compté comme gagné (classement), mais ne fait pas avancer les quêtes
 		services.GameService:AddDopamine(player, amount, false)
-		return string.format("💎 Merci ! %s %s : +%s %s", product.Icon, product.Name,
+		return T(player, "💎 Thank you! %s %s: +%s %s", product.Icon, T(player, product.Name),
 			NumberFormatter.Format(amount), Config.Game.CurrencyName)
 	elseif kind == "Boost" then
 		local multiplier, duration = product.Multiplier, product.Duration
@@ -378,15 +384,18 @@ local function grantProduct(player: Player, data, product): string
 		end
 		MonetizationService:AddBoost(data, multiplier, duration)
 		local _, remaining = MonetizationService:GetBoost(data)
-		return string.format("💎 Merci ! %s %s actif (%d min restantes)", product.Icon, product.Name,
+		return T(player, "💎 Thank you! %s %s active (%d min left)", product.Icon, T(player, product.Name),
 			math.ceil(remaining / 60))
 	elseif kind == "ServerRush" then
 		services.EventService:StartRush(true)
-		services.GameService:NotifyAll({
-			Type = "Info",
-			Text = "🎉 " .. player.DisplayName .. " offre un Dopamine Rush à tout le serveur !",
-		}, player)
-		return "💎 Merci ! " .. product.Icon .. " Rush lancé pour tout le serveur !"
+		local displayName = player.DisplayName
+		services.GameService:NotifyAll(function(lang)
+			return {
+				Type = "Info",
+				Text = Locale.TFor(lang, "🎉 %s is treating the whole server to a Dopamine Rush!", displayName),
+			}
+		end, player)
+		return T(player, "💎 Thank you! %s Rush started for the whole server!", product.Icon)
 	end
 	error("type de produit inconnu : " .. tostring(kind))
 end

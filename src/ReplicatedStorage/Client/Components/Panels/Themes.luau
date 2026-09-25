@@ -28,10 +28,12 @@ local Background = require(script.Parent.Parent.Background)
 local Config = require(ReplicatedStorage.Shared.Config)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local Net = require(ReplicatedStorage.Shared.Net)
+local Locale = require(ReplicatedStorage.Shared.Locale)
 
+-- Title / Subtitle en anglais : traduits par PanelManager
 local Themes = {
-	Title = "🎨 Thèmes",
-	Subtitle = "Change le fond d'écran du jeu",
+	Title = "🎨 Themes",
+	Subtitle = "Change the game's background",
 	Color = Theme.Colors.Cyan,
 	Size = Vector2.new(760, 540),
 }
@@ -170,7 +172,7 @@ local function buildPreviewDecor(preview: GuiObject, theme)
 		Size = UDim2.fromScale(1, 1),
 		BackgroundTransparency = 1,
 		Font = Theme.Fonts.Body,
-		Text = "Clique-moi",
+		Text = Locale.T("Click me"),
 		TextColor3 = dark and WHITE or Theme.Colors.Text,
 		TextSize = 11,
 		ZIndex = 6,
@@ -182,7 +184,7 @@ local function buildPreviewDecor(preview: GuiObject, theme)
 		Size = UDim2.fromOffset(90, 14),
 		BackgroundTransparency = 1,
 		Font = Theme.Fonts.Title,
-		Text = "123 Dopamine",
+		Text = "123 " .. Locale.T("Dopamine"),
 		TextColor3 = dark and WHITE or Theme.Colors.Text,
 		TextSize = 11,
 		ZIndex = 5,
@@ -207,7 +209,7 @@ local function invoke(action: string, themeId: string): (boolean, string?)
 		return Net.Function("ThemeShop"):InvokeServer(action, themeId)
 	end)
 	if not ok then
-		return false, "Erreur réseau, réessaie."
+		return false, Locale.T("Network error, try again.")
 	end
 	return success == true, message and tostring(message) or nil
 end
@@ -223,14 +225,14 @@ local function request(action: string, theme)
 		-- Acheté : on l'équipe tout de suite
 		SoundManager.Play("Buy", 1.1)
 		Effects.Confetti(50)
-		Notifications.Toast(theme.Icon .. " " .. theme.Name .. " : à toi pour toujours !", Theme.Colors.Green, 4, "Nouveau thème")
+		Notifications.Toast(Locale.T("%s: yours forever!", theme.Icon .. " " .. Locale.T(theme.Name)), Theme.Colors.Green, 4, Locale.T("New theme"))
 		-- (le serveur l'équipe automatiquement après l'achat)
 	elseif ok then
 		SoundManager.Play("Open", 1.25)
-		Notifications.Toast("🎨 Thème équipé : " .. theme.Icon .. " " .. theme.Name, Theme.Colors.Cyan, 2.5)
+		Notifications.Toast(Locale.T("🎨 Theme equipped: %s", theme.Icon .. " " .. Locale.T(theme.Name)), Theme.Colors.Cyan, 2.5)
 	else
 		SoundManager.Play("Error", 0.7)
-		Notifications.Toast(message or "Impossible pour le moment.", Theme.Colors.Red)
+		Notifications.Toast(message or Locale.T("Not possible right now."), Theme.Colors.Red)
 		if card then
 			UIUtil.Shake(card.Primary)
 		end
@@ -246,9 +248,9 @@ local function promptPass(passId: number, what: string)
 	if passId == 0 then
 		SoundManager.Play("Error", 0.7)
 		if RunService:IsStudio() then
-			Notifications.Toast("Ajoute l'ID du Game Pass dans Config (" .. what .. ")", Theme.Colors.Orange, 4)
+			Notifications.Toast(Locale.T("Add the Game Pass ID in Config (%s)", what), Theme.Colors.Orange, 4)
 		else
-			Notifications.Toast("Bientôt disponible !", Theme.Colors.Orange)
+			Notifications.Toast(Locale.T("Coming soon!"), Theme.Colors.Orange)
 		end
 		return
 	end
@@ -257,7 +259,7 @@ local function promptPass(passId: number, what: string)
 	end)
 	if not ok then
 		warn("[Themes] PromptGamePassPurchase : " .. tostring(err))
-		Notifications.Toast("La boutique Roblox ne répond pas, réessaie.", Theme.Colors.Red)
+		Notifications.Toast(Locale.T("The Roblox store isn't responding, try again."), Theme.Colors.Red)
 	end
 end
 
@@ -271,7 +273,7 @@ local function onPrimary(card: Card)
 			SoundManager.Play("Error", 0.7)
 			UIUtil.Shake(card.Primary)
 			local missing = math.max(0, (tonumber(theme.Cost) or 0) - getDopamine())
-			Notifications.Toast("Il te manque " .. NumberFormatter.Format(missing) .. " Dopamine", Theme.Colors.Red)
+			Notifications.Toast(Locale.T("You need %s more Dopamine", NumberFormatter.Format(missing)), Theme.Colors.Red)
 			return
 		end
 		task.spawn(request, "buy", theme)
@@ -318,6 +320,8 @@ local function buildCard(list: ScrollingFrame, theme)
 		ZIndex = 2,
 		Parent = card,
 	})
+	-- L'aperçu montre les vraies couleurs du thème (pas d'habillage sombre)
+	preview:SetAttribute("DarkSkinIgnore", true)
 	UIUtil.Corner(preview, 11)
 	UIUtil.Stroke(preview, Theme.Colors.Border, 1, 0.75)
 	-- (un UIGradient directement sur le CanvasGroup teinterait tout son contenu)
@@ -377,7 +381,7 @@ local function buildCard(list: ScrollingFrame, theme)
 		Size = UDim2.new(1, -20, 0, 20),
 		BackgroundTransparency = 1,
 		Font = Theme.Fonts.Title,
-		Text = theme.Icon .. " " .. theme.Name,
+		Text = theme.Icon .. " " .. Locale.T(theme.Name),
 		TextColor3 = Theme.Colors.Text,
 		TextSize = 16,
 		TextTruncate = Enum.TextTruncate.AtEnd,
@@ -509,7 +513,12 @@ function Themes.Build(content: Frame)
 			if theme.GamePassId ~= 0 and theme.GamePassId == passId then
 				SoundManager.Play("Buy", 1.1)
 				Effects.Confetti(60)
-				Notifications.Toast(theme.Icon .. " " .. theme.Name .. " débloqué, merci !", ROBUX_COLOR, 4, "💎 Achat réussi")
+				Notifications.Toast(
+					Locale.T("%s unlocked, thank you!", theme.Icon .. " " .. Locale.T(theme.Name)),
+					ROBUX_COLOR,
+					4,
+					Locale.T("💎 Purchase successful")
+				)
 				return
 			end
 		end
@@ -539,22 +548,22 @@ function Themes.Update(data)
 
 		if isEquipped then
 			card.Action = "none"
-			primary.Text = "✔ Équipé"
+			primary.Text = Locale.T("✔ Equipped")
 			primary:SetAttribute("BaseColor", Theme.Colors.ButtonBottom)
 			UIUtil.SetButtonEnabled(primary, true)
 			primary.TextColor3 = Theme.Colors.Text
-			card.Status.Text = "Ton fond actuel"
+			card.Status.Text = Locale.T("Your current background")
 			card.Status.TextColor3 = Theme.Colors.Green
 			card.Stroke.Color = Theme.Colors.Green
 			card.Stroke.Thickness = 3
 			card.Stroke.Transparency = 0
 		elseif isOwned then
 			card.Action = "equip"
-			primary.Text = "Équiper"
+			primary.Text = Locale.T("Equip")
 			primary:SetAttribute("BaseColor", Theme.Colors.Blue)
 			UIUtil.SetButtonEnabled(primary, true)
 			primary.TextColor3 = Theme.Colors.TextLight
-			card.Status.Text = (theme.Premium and isVIP) and "👑 Offert par le VIP" or "✔ Possédé"
+			card.Status.Text = (theme.Premium and isVIP) and Locale.T("👑 Included with VIP") or Locale.T("✔ Owned")
 			card.Status.TextColor3 = Theme.Colors.TextDim
 			card.Stroke.Color = Theme.Colors.CardBorder
 			card.Stroke.Thickness = 1.5
@@ -567,17 +576,17 @@ function Themes.Update(data)
 				-- Achetable en Dopamine (et peut-être aussi en Robux)
 				local affordable = dopamine >= cost
 				card.Action = "buy"
-				primary.Text = cost <= 0 and "Gratuit" or ("💧 " .. NumberFormatter.Format(cost))
+				primary.Text = cost <= 0 and Locale.T("Free") or ("💧 " .. NumberFormatter.Format(cost))
 				primary:SetAttribute("BaseColor", Theme.Colors.Green)
 				UIUtil.SetButtonEnabled(primary, affordable)
 				primary.TextColor3 = Theme.Colors.TextDark
 				showRobux = passId ~= 0
 				if theme.Premium then
-					card.Status.Text = "Ou gratuit avec le pass VIP"
+					card.Status.Text = Locale.T("Or free with the VIP pass")
 				elseif showRobux then
-					card.Status.Text = "Dopamine ou 💎 Robux"
+					card.Status.Text = Locale.T("Dopamine or 💎 Robux")
 				else
-					card.Status.Text = affordable and "Tu peux te l'offrir !" or "Pas encore assez de Dopamine"
+					card.Status.Text = affordable and Locale.T("You can afford it!") or Locale.T("Not enough Dopamine yet")
 				end
 				card.Status.TextColor3 = affordable and Theme.Colors.TextDim or Theme.Colors.Red
 			elseif passId ~= 0 then
@@ -587,23 +596,23 @@ function Themes.Update(data)
 				primary:SetAttribute("BaseColor", ROBUX_COLOR)
 				UIUtil.SetButtonEnabled(primary, true)
 				primary.TextColor3 = Theme.Colors.TextLight
-				card.Status.Text = theme.Premium and "Robux ou pass VIP" or "Exclusif Robux"
+				card.Status.Text = theme.Premium and Locale.T("Robux or VIP pass") or Locale.T("Robux exclusive")
 				card.Status.TextColor3 = Theme.Colors.TextDim
 			elseif theme.Premium then
 				-- Uniquement avec le pass VIP
 				card.Action = "vip"
-				primary.Text = "👑 Pass VIP"
+				primary.Text = Locale.T("👑 VIP Pass")
 				primary:SetAttribute("BaseColor", PREMIUM_COLOR)
 				UIUtil.SetButtonEnabled(primary, true)
 				primary.TextColor3 = Theme.Colors.TextDark
-				card.Status.Text = "Exclusif VIP"
+				card.Status.Text = Locale.T("VIP exclusive")
 				card.Status.TextColor3 = Theme.Colors.TextDim
 			else
 				card.Action = "none"
-				primary.Text = "Bientôt"
+				primary.Text = Locale.T("Soon")
 				primary:SetAttribute("BaseColor", Theme.Colors.Disabled)
 				UIUtil.SetButtonEnabled(primary, false)
-				card.Status.Text = "Pas encore en vente"
+				card.Status.Text = Locale.T("Not on sale yet")
 				card.Status.TextColor3 = Theme.Colors.TextDim
 			end
 		end
@@ -612,8 +621,8 @@ function Themes.Update(data)
 		primary.Size = showRobux and UDim2.new(1, -62, 0, 34) or UDim2.new(1, -16, 0, 34)
 	end
 
-	header.Text = string.format(
-		"%d / %d thèmes débloqués  •  gardés pour toujours, même après l'océan 🌊%s",
+	header.Text = Locale.T(
+		"%d / %d themes unlocked  •  kept forever, even after the ocean 🌊%s",
 		ownedCount,
 		#Config.Themes,
 		isVIP and "  •  👑 VIP" or ""

@@ -21,10 +21,12 @@ local UIUtil = require(Client.UIUtil)
 local AchievementPopup = require(script.Parent.Parent.AchievementPopup)
 local Config = require(ReplicatedStorage.Shared.Config)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
+local Locale = require(ReplicatedStorage.Shared.Locale)
 
+-- Title / Subtitle en anglais : traduits par PanelManager
 local Achievements = {
-	Title = "🏆 Succès",
-	Subtitle = "Chaque succès donne un bonus permanent",
+	Title = "🏆 Achievements",
+	Subtitle = "Every achievement gives a permanent bonus",
 	Color = Theme.Colors.Purple,
 	Size = Vector2.new(760, 590),
 }
@@ -197,7 +199,7 @@ local function buildItem(grid: ScrollingFrame, achievement, order: number)
 	if hasBadge(achievement) then
 		local badge = UIUtil.Chip({
 			Name = "Badge",
-			Text = "🏅 Badge Roblox",
+			Text = Locale.T("🏅 Roblox Badge"),
 			Color = Theme.Colors.Robux,
 			TextColor3 = Theme.Colors.TextLight,
 			Height = 18,
@@ -210,7 +212,7 @@ local function buildItem(grid: ScrollingFrame, achievement, order: number)
 	end
 	local tierChip = UIUtil.Chip({
 		Name = "Tier",
-		Text = tier.Name,
+		Text = Locale.T(tier.Name),
 		Color = tier.Bottom,
 		TextColor3 = Theme.ContrastText(tier.Bottom),
 		Height = 16,
@@ -222,7 +224,7 @@ local function buildItem(grid: ScrollingFrame, achievement, order: number)
 
 	local name = UIUtil.Label({
 		Name = "AchievementName",
-		Text = tostring(achievement.Name),
+		Text = Locale.T(tostring(achievement.Name)),
 		Font = Theme.Fonts.Title,
 		Size = UDim2.new(1, -12, 0, 20),
 		Position = UDim2.fromOffset(6, 90),
@@ -288,9 +290,9 @@ function Achievements.Build(content: Frame)
 	UIUtil.Tabs({
 		Parent = content,
 		Tabs = {
-			{ Id = "All", Text = "🏆 Tous" },
-			{ Id = "Done", Text = "✔ Débloqués" },
-			{ Id = "Todo", Text = "🎯 À faire" },
+			{ Id = "All", Text = Locale.T("🏆 All") },
+			{ Id = "Done", Text = Locale.T("✔ Unlocked") },
+			{ Id = "Todo", Text = Locale.T("🎯 To do") },
 		},
 		Color = Theme.Colors.Purple,
 		Size = UDim2.new(1, 0, 0, 34),
@@ -364,7 +366,7 @@ function Achievements.Update(data)
 			item.Stroke.Transparency = 0.2
 			item.Card.BackgroundColor3 = tier.Top:Lerp(Color3.new(1, 1, 1), 0.75)
 			item.Name.TextColor3 = Theme.Colors.Text
-			item.Status.Text = "✔ Débloqué  •  🎁 +" .. NumberFormatter.Format(tonumber(achievement.Reward) or 0)
+			item.Status.Text = Locale.T("✔ Unlocked  •  🎁 +%s", NumberFormatter.Format(tonumber(achievement.Reward) or 0))
 			item.Status.TextColor3 = tier.Ring
 			item.Track.Visible = false
 		else
@@ -383,12 +385,12 @@ function Achievements.Update(data)
 	applyFilter()
 
 	local total = #Config.Achievements
-	summaryLabel.Text = string.format("%d / %d succès débloqués", unlocked, total)
+	summaryLabel.Text = Locale.T("%d / %d achievements unlocked", unlocked, total)
 	progressFill.Size = UDim2.fromScale(total > 0 and unlocked / total or 0, 1)
-	setChipText(bonusChip, string.format("📈 Bonus +%d %%", math.floor(unlocked * Config.AchievementBonus * 100 + 0.5)))
+	setChipText(bonusChip, Locale.T("📈 Bonus +%d%%", math.floor(unlocked * Config.AchievementBonus * 100 + 0.5)))
 	badgeChip.Visible = badgesTotal > 0
 	if badgesTotal > 0 then
-		setChipText(badgeChip, string.format("🏅 %d / %d badges", badges, badgesTotal))
+		setChipText(badgeChip, Locale.T("🏅 %d / %d badges", badges, badgesTotal))
 	end
 end
 

@@ -25,7 +25,10 @@
 	  /boost 5 60       -> boost x5 pendant 60 secondes
 	  /theme kawaii     -> donne et équipe un thème
 	  /offline 7200     -> simule un retour après 7200 s d'absence (gain hors-ligne)
+	  /lang fr          -> langue du jeu : auto, en ou fr (appliquée au prochain lancement)
 	  /help             -> liste des commandes
+	Les messages sont écrits en anglais puis traduits dans la langue du
+	joueur (Locale.TFor, traductions dans Shared > Lang > FR_Server).
 ]]
 
 local Players = game:GetService("Players")
@@ -34,6 +37,7 @@ local RunService = game:GetService("RunService")
 local TextChatService = game:GetService("TextChatService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local Locale = require(ReplicatedStorage.Shared.Locale)
 local Net = require(ReplicatedStorage.Shared.Net)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 
@@ -75,14 +79,27 @@ end
 -- Noms des commandes (déclarées comme TextChatCommand dans Studio)
 local COMMAND_NAMES = {
 	"give", "rush", "daily", "save", "corner", "unlockall", "spawn", "golden", "detox", "chest", "reset",
-	"pass", "boost", "theme", "offline", "aide",
+	"pass", "boost", "theme", "offline", "lang", "help", "aide",
 }
 
-local HELP = "/give /rush /daily /save /corner /unlockall /spawn <" .. listIds(spawnKinds) .. "> /detox /chest /reset"
-	.. " /pass <id> /boost <mult> <secondes> /theme <id> /offline <secondes>"
+-- Aide : "%s" = types d'objets de /spawn
+local HELP = "/give /rush /daily /save /corner /unlockall /spawn <%s> /detox /chest /reset"
+	.. " /pass <id> /boost <mult> <seconds> /theme <id> /offline <seconds> /lang <auto|en|fr>"
+
+-- /lang : argument (minuscules) -> valeur de Settings.Language
+local LANGUAGE_ARGS = { auto = "Auto", en = "en", fr = "fr" }
 
 function DebugService:Init(allServices)
 	services = allServices
+end
+
+-- Texte dans la langue du joueur
+local function T(player: Player, text: string, ...): string
+	return services.GameService:T(player, text, ...)
+end
+
+local function helpText(player: Player): string
+	return T(player, HELP, listIds(spawnKinds))
 end
 
 local function info(player: Player, text: string)
@@ -97,33 +114,33 @@ local function runCommand(player: Player, command: string, argument: string, sec
 	local gameService = services.GameService
 	local data = services.DataService:GetData(player)
 	if not data or not gameService:IsReady(player) then
-		return false, "Chargement en cours..."
+		return false, T(player, "Loading...")
 	end
 
 	if command == "give" then
 		local amount = tonumber(argument) or 1e6
 		if amount ~= amount or amount <= 0 or amount == math.huge then
-			return false, "Montant invalide"
+			return false, T(player, "Invalid amount")
 		end
 		gameService:AddDopamine(player, amount, false)
 		return true, "+" .. NumberFormatter.Format(amount) .. " " .. Config.Game.CurrencyName
 	elseif command == "rush" then
 		if services.EventService:StartRush() then
-			return true, "Dopamine Rush lancé !"
+			return true, T(player, "Dopamine Rush started!")
 		end
-		return false, "Un Rush est déjà en cours"
+		return false, T(player, "A Rush is already running")
 	elseif command == "daily" then
 		data.Daily.LastDay = 0
 		gameService:MarkDirty(player)
-		return true, "Cadeau quotidien disponible"
+		return true, T(player, "Daily gift available")
 	elseif command == "save" then
 		local ok = services.DataService:SaveAsync(player, true)
-		return ok, ok and "💾 Sauvegardé !" or "💾 Sauvegarde impossible (voir la sortie)"
+		return ok, ok and T(player, "💾 Saved!") or T(player, "💾 Couldn't save (see the Output)")
 	elseif command == "corner" then
 		if services.DVDService:DebugCorner(player) then
-			return true, "Coin dans ~2 secondes..."
+			return true, T(player, "Corner in ~2 seconds...")
 		end
-		return false, "Il faut au moins un logo DVD"
+		return false, T(player, "You need at least one DVD logo")
 	elseif command == "unlockall" then
 		for _, upgrade in ipairs(Config.Upgrades) do
 			if upgrade.Effect ~= "Detox" then
@@ -133,26 +150,26 @@ local function runCommand(player: Player, command: string, argument: string, sec
 		end
 		services.QuestService:Regenerate(player)
 		gameService:RefreshAfterUpgradeChange(player)
-		return true, "Tout est débloqué !"
+		return true, T(player, "Everything unlocked!")
 	elseif command == "spawn" or command == "golden" then
 		local kind = (command == "golden") and "Golden" or spawnKinds[argument]
 		if not kind then
-			return false, "Type inconnu : " .. listIds(spawnKinds)
+			return false, T(player, "Unknown type: %s", listIds(spawnKinds))
 		end
 		if not services.EventService:Spawn(player, kind) then
-			return false, "Trop d'objets " .. kind .. " à l'écran"
+			return false, T(player, "Too many %s objects on screen", kind)
 		end
-		return true, "Objet " .. kind .. " envoyé"
+		return true, T(player, "%s object sent", kind)
 	elseif command == "detox" then
 		gameService:Detox(player)
-		return true, "🌊 Détox gratuite"
+		return true, T(player, "🌊 Free detox")
 	elseif command == "chest" then
 		local count = math.floor(tonumber(argument) or 1)
 		if count ~= count or count < 1 or count == math.huge then
 			count = 1
 		end
 		services.LootService:AddChests(player, count)
-		return true, "Coffres ajoutés"
+		return true, T(player, "Chests added")
 	elseif command == "reset" then
 		services.DataService:ResetData(player)
 		gameService:ResetCombo(player)
@@ -160,49 +177,59 @@ local function runCommand(player: Player, command: string, argument: string, sec
 		services.DVDService:Reset(player)
 		services.QuestService:PlayerReady(player, data)
 		gameService:SendFullSync(player)
-		return true, "Données remises à zéro"
+		return true, T(player, "Data reset")
 	elseif command == "pass" then
 		local passId = passIds[argument]
 		if not passId then
-			return false, "Pass inconnu : " .. listIds(passIds)
+			return false, T(player, "Unknown pass: %s", listIds(passIds))
 		end
 		local owned = services.MonetizationService:DebugTogglePass(player, passId)
 		if owned == nil then
-			return false, "Impossible de changer ce pass"
+			return false, T(player, "Couldn't toggle this pass")
 		end
 		gameService:SendState(player)
-		return true, "Pass " .. passId .. (owned and " activé" or " désactivé")
+		return true, owned and T(player, "Pass %s enabled", passId) or T(player, "Pass %s disabled", passId)
 	elseif command == "boost" then
 		local multiplier = tonumber(argument) or 2
 		local seconds = tonumber(second) or 60
 		if multiplier ~= multiplier or multiplier < 1 or multiplier > 1000
 			or seconds ~= seconds or seconds < 0 or seconds > 7 * 86400 then
-			return false, "Usage : /boost <mult 1-1000> <secondes>"
+			return false, T(player, "Usage: /boost <mult 1-1000> <seconds>")
 		end
 		data.Boost = { Multiplier = multiplier, EndsAt = os.time() + math.floor(seconds) }
 		gameService:SendState(player)
-		return true, string.format("Boost x%s pendant %d s", tostring(multiplier), math.floor(seconds))
+		return true, T(player, "Boost x%s for %d s", tostring(multiplier), math.floor(seconds))
 	elseif command == "theme" then
 		local themeId = themeIds[argument]
 		if not themeId or not services.ThemeService:DebugGrant(player, themeId) then
-			return false, "Thème inconnu : " .. listIds(themeIds)
+			return false, T(player, "Unknown theme: %s", listIds(themeIds))
 		end
 		gameService:SendState(player)
-		return true, "Thème " .. themeId .. " donné et équipé"
+		return true, T(player, "Theme %s given and equipped", themeId)
 	elseif command == "offline" then
 		local seconds = tonumber(argument) or 7200
 		if seconds ~= seconds or seconds <= 0 or seconds > MAX_OFFLINE_SECONDS then
-			return false, "Usage : /offline <secondes 1-" .. MAX_OFFLINE_SECONDS .. ">"
+			return false, T(player, "Usage: /offline <seconds 1-%s>", tostring(MAX_OFFLINE_SECONDS))
 		end
 		local amount = gameService:GrantOffline(player, math.floor(seconds), true)
 		if amount <= 0 then
-			return false, "Rien gagné (production nulle ou absence < " .. Config.Offline.MinSeconds .. " s)"
+			return false, T(player, "Nothing earned (no production or away < %s s)", tostring(Config.Offline.MinSeconds))
 		end
-		return true, "Hors-ligne simulé : +" .. NumberFormatter.Format(amount) .. " " .. Config.Game.CurrencyName
+		return true, T(player, "Offline simulated: +%s %s", NumberFormatter.Format(amount), Config.Game.CurrencyName)
+	elseif command == "lang" then
+		local language = LANGUAGE_ARGS[argument]
+		if not language then
+			return false, T(player, "Usage: /lang <auto|en|fr>")
+		end
+		data.Settings.Language = language
+		gameService:MarkDirty(player)
+		-- Message dans la NOUVELLE langue (celle du prochain lancement)
+		return true, Locale.TFor(Locale.ForPlayer(player, language),
+			"🌐 Language: %s (takes effect after rejoining)", language)
 	elseif command == "help" or command == "aide" then
-		return true, HELP
+		return true, helpText(player)
 	end
-	return false, "Commande inconnue. " .. HELP
+	return false, T(player, "Unknown command. %s", helpText(player))
 end
 
 ----------------------------------------------------------------------
@@ -221,26 +248,27 @@ end
 -- `source` = "chat" ou "remote". Doublon ignoré si la même ligne arrive dans
 -- la seconde par un autre chemin (ou deux fois par le chat) ; deux clics
 -- rapides sur le même bouton du panneau de test restent exécutés.
-local function execute(player: Player, line: string, source: string): (boolean, string)
+-- 3e valeur renvoyée : true si c'était un doublon (rien n'a été exécuté).
+local function execute(player: Player, line: string, source: string): (boolean, string, boolean)
 	local command, argument, second = parse(line)
 	if not command then
-		return false, "Commande invalide"
+		return false, T(player, "Invalid command"), false
 	end
 	local normalized = command .. " " .. argument .. " " .. second
 	local clock = os.clock()
 	local last = lastRun[player]
 	if last and last.Line == normalized and clock - last.Clock < DUPLICATE_WINDOW
 		and (last.Source ~= source or source == "chat") then
-		return true, "(déjà exécutée)"
+		return true, T(player, "(already run)"), true
 	end
 	lastRun[player] = { Line = normalized, Clock = clock, Source = source }
 
 	local ok, success, message = pcall(runCommand, player, command, argument, second)
 	if not ok then
 		warn("[DebugService] Erreur de la commande /" .. command .. " :", success)
-		return false, "Erreur : " .. tostring(success)
+		return false, T(player, "Error: %s", tostring(success)), false
 	end
-	return success, message
+	return success, message, false
 end
 
 -- Message de chat : exécuté s'il ressemble à une commande "/xxx", résultat en notification
@@ -248,8 +276,8 @@ local function handleChat(player: Player, message: string)
 	if not string.match(message, "^%s*/%a") then
 		return
 	end
-	local ok, text = execute(player, message, "chat")
-	if text ~= "(déjà exécutée)" then
+	local ok, text, duplicate = execute(player, message, "chat")
+	if not duplicate then
 		info(player, (ok and "" or "❌ ") .. text)
 	end
 end
@@ -257,15 +285,16 @@ end
 -- RemoteFunction DebugCommand (command: string, arg: string?) -> (ok, message)
 local function onDebugCommand(player: Player, command: any, argument: any): (boolean, string)
 	if not IS_STUDIO then
-		return false, "Commandes de test disponibles uniquement dans Studio"
+		return false, T(player, "Test commands are only available in Studio")
 	end
 	if type(command) ~= "string" or #command == 0 or #command > 64 then
-		return false, "Commande invalide"
+		return false, T(player, "Invalid command")
 	end
 	if argument ~= nil and (type(argument) ~= "string" or #argument > 64) then
-		return false, "Argument invalide"
+		return false, T(player, "Invalid argument")
 	end
-	return execute(player, command .. " " .. (argument or ""), "remote")
+	local ok, message = execute(player, command .. " " .. (argument or ""), "remote")
+	return ok, message
 end
 
 ----------------------------------------------------------------------

@@ -90,20 +90,25 @@ local function isAllowedFraction(fraction: any): boolean
 	return false
 end
 
+-- Texte dans la langue du joueur
+local function T(player: Player, text: string, ...): string
+	return services.GameService:T(player, text, ...)
+end
+
 local function onTrade(player: Player, action: any, fraction: any)
 	-- Petite marge pour la latence réseau (le client attend TradeCooldown entre deux clics)
 	if not RateLimiter.Check(player, "StockTrade", math.max(0, settings.TradeCooldown - 0.1)) then
-		return false, "Doucement !"
+		return false, T(player, "Slow down!")
 	end
 	local data = services.DataService:GetData(player)
 	if not data or not services.GameService:IsReady(player) then
-		return false, "Chargement en cours..."
+		return false, T(player, "Loading...")
 	end
 	if not Formulas.HasFeature(data, settings.Feature) then
-		return false, "La bourse n'est pas encore débloquée"
+		return false, T(player, "The stock market isn't unlocked yet")
 	end
 	if (action ~= "buy" and action ~= "sell") or not isAllowedFraction(fraction) then
-		return false, "Requête invalide"
+		return false, T(player, "Invalid request")
 	end
 
 	local stock = data.Stock
@@ -113,7 +118,7 @@ local function onTrade(player: Player, action: any, fraction: any)
 	if action == "buy" then
 		local spend = data.Dopamine * fraction
 		if not (spend >= 1) then
-			return false, "Pas assez de " .. Config.Game.CurrencyName
+			return false, T(player, "Not enough %s", Config.Game.CurrencyName)
 		end
 		local shares = spend * (1 - fee) / price
 		data.Dopamine -= spend
@@ -121,12 +126,12 @@ local function onTrade(player: Player, action: any, fraction: any)
 		stock.CostBasis += spend
 		data.Stats.StockTrades += 1
 		services.GameService:SendState(player)
-		return true, string.format("📈 %s action(s) %s achetée(s)", NumberFormatter.Format(shares), settings.Symbol)
+		return true, T(player, "📈 Bought %s %s share(s)", NumberFormatter.Format(shares), settings.Symbol)
 	end
 
 	-- Vente
 	if not (stock.Shares > 0) then
-		return false, "Tu n'as aucune action"
+		return false, T(player, "You don't own any shares")
 	end
 	local shares = stock.Shares * fraction
 	local costPart = stock.CostBasis * fraction
@@ -155,9 +160,9 @@ local function onTrade(player: Player, action: any, fraction: any)
 	data.Stats.StockTrades += 1
 	services.GameService:SendState(player)
 
-	local result = profit >= 0 and ("bénéfice +" .. NumberFormatter.Format(profit))
-		or ("perte -" .. NumberFormatter.Format(-profit))
-	return true, string.format("💰 Vendu pour %s (%s)", NumberFormatter.Format(proceeds), result)
+	local result = profit >= 0 and T(player, "profit +%s", NumberFormatter.Format(profit))
+		or T(player, "loss -%s", NumberFormatter.Format(-profit))
+	return true, T(player, "💰 Sold for %s (%s)", NumberFormatter.Format(proceeds), result)
 end
 
 function StockService:PlayerRemoving(player: Player)

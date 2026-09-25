@@ -29,6 +29,8 @@
 
 local RunService = game:GetService("RunService")
 
+local Locale = require(game:GetService("ReplicatedStorage").Shared.Locale)
+
 local Lofi = {}
 Lofi.Slot = "R3"
 
@@ -69,14 +71,26 @@ local LINE_INK = Color3.fromRGB(72, 44, 78)
 local NOTE_COLORS = { PHONES_GLOW, EQ_HIGH, Color3.fromRGB(255, 226, 120), Color3.fromRGB(196, 170, 255) }
 
 local TRACKS = {
-	"pluie_de_minuit.mp3",
-	"chat_qui_ronronne.wav",
-	"cafe_froid_a_3h.mp3",
-	"revisions_infinies.mp3",
-	"nuages_en_pyjama.mp3",
-	"le_controle_c_est_demain.mp3",
-	"flemme_douce.wav",
-	"encore_5_minutes.mp3",
+	en = {
+		"midnight_rain.mp3",
+		"purring_cat.wav",
+		"cold_coffee_at_3am.mp3",
+		"endless_revision.mp3",
+		"clouds_in_pajamas.mp3",
+		"the_test_is_tomorrow.mp3",
+		"soft_laziness.wav",
+		"5_more_minutes.mp3",
+	},
+	fr = {
+		"pluie_de_minuit.mp3",
+		"chat_qui_ronronne.wav",
+		"cafe_froid_a_3h.mp3",
+		"revisions_infinies.mp3",
+		"nuages_en_pyjama.mp3",
+		"le_controle_c_est_demain.mp3",
+		"flemme_douce.wav",
+		"encore_5_minutes.mp3",
+	},
 }
 
 -- Arc "bas de cercle" (yeux fermés, sourire) : on cache la moitié haute
@@ -557,7 +571,7 @@ function Lofi.Start(ctx)
 	gradient(note, Color3.fromRGB(255, 240, 140), Color3.fromRGB(250, 214, 96))
 	UI.Stroke(note, Color3.fromRGB(0, 0, 0), 1, 0.8)
 	UI.Label({
-		Text = "<s>réviser</s>\ncliquer ✅",
+		Text = Locale.T("<s>study</s>\nclick ✅"),
 		RichText = true,
 		TextColor3 = Color3.fromRGB(50, 40, 40),
 		TextWrapped = true,
@@ -1001,7 +1015,7 @@ function Lofi.Start(ctx)
 
 	local title = UI.Create("TextLabel", {
 		Name = "Title",
-		Text = "lofi beats 🎧 pour réviser",
+		Text = Locale.T("lofi beats 🎧 to study to"),
 		Font = Theme.Fonts.Title,
 		TextSize = 15,
 		TextColor3 = WHITE,
@@ -1080,7 +1094,8 @@ function Lofi.Start(ctx)
 	-- État du lecteur : vraie musique, musique coupée, ou pas de musique
 	------------------------------------------------------------------
 	local viewers = random:NextInteger(8000, 14000)
-	local trackIndex = random:NextInteger(1, #TRACKS)
+	local tracks = Locale.Pick(TRACKS)
+	local trackIndex = random:NextInteger(1, #tracks)
 	local showAlt = false -- alterne les deux textes du sous-titre
 	local discSpin = 0 -- vitesse de rotation du vinyle (lissée)
 
@@ -1101,7 +1116,7 @@ function Lofi.Start(ctx)
 
 	local function viewersText(): string
 		local text = viewers >= 1e6 and Format.Format(viewers) or Format.WithSpaces(viewers)
-		return "🔴 " .. text .. " personnes révisent (ou pas)"
+		return "🔴 " .. Locale.T("%s people studying (or not)", text)
 	end
 
 	local function refreshSubtitle()
@@ -1117,26 +1132,26 @@ function Lofi.Start(ctx)
 
 		if name then
 			-- Vraie musique
-			title.Text = "♫ " .. name
-			subtitle.Text = showAlt and "lofi beats 🎧 pour réviser" or viewersText()
+			title.Text = "♫ " .. Locale.T(name)
+			subtitle.Text = showAlt and Locale.T("lofi beats 🎧 to study to") or viewersText()
 		elseif playlist then
 			-- Musique disponible mais coupée (réglage) ou en chargement
-			title.Text = "lofi beats 🎧 pour réviser"
+			title.Text = Locale.T("lofi beats 🎧 to study to")
 			local musicOn = type(Sound.IsMusicEnabled) ~= "function" or Sound.IsMusicEnabled()
 			if showAlt then
-				subtitle.Text = musicOn and "♫ Chargement de la musique..." or "🔇 Musique coupée (⚙️ Paramètres)"
+				subtitle.Text = musicOn and Locale.T("♫ Loading music...") or Locale.T("🔇 Music off (⚙️ Settings)")
 			else
 				subtitle.Text = viewersText()
 			end
 		elseif isStudio then
 			-- Rappel pour le créateur du jeu (seulement dans Studio)
-			title.Text = "lofi beats 🎧 pour réviser"
-			subtitle.Text = "⚠️ Ajoute une musique dans Config.Music"
+			title.Text = Locale.T("lofi beats 🎧 to study to")
+			subtitle.Text = Locale.T("⚠️ Add some music in Config.Music")
 			subtitle.TextColor3 = Color3.fromRGB(255, 200, 90)
 		else
 			-- Pas de musique : juste l'ambiance
-			title.Text = "lofi beats 🎧 pour réviser"
-			subtitle.Text = showAlt and ("♫ " .. TRACKS[trackIndex]) or viewersText()
+			title.Text = Locale.T("lofi beats 🎧 to study to")
+			subtitle.Text = showAlt and ("♫ " .. tracks[trackIndex]) or viewersText()
 		end
 	end
 	refreshSubtitle()
@@ -1191,7 +1206,7 @@ function Lofi.Start(ctx)
 			if tick % 6 == 0 then
 				showAlt = not showAlt
 				if showAlt and random:NextNumber() < 0.5 then
-					trackIndex = trackIndex % #TRACKS + 1
+					trackIndex = trackIndex % #tracks + 1
 				end
 				subtitle.TextTransparency = 1
 				UI.Tween(subtitle, 0.4, { TextTransparency = 0 })

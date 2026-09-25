@@ -11,25 +11,44 @@
 
 local Debris = game:GetService("Debris")
 
+local Locale = require(game:GetService("ReplicatedStorage").Shared.Locale)
+
 local Megaphone = {}
 Megaphone.Slot = "Overlay"
 
 local MAX_ACTIVE = 2
 
 local WORDS = {
-	"INCROYABLE !!!", "WOW", "ÉNORME", "LET'S GO", "MAGNIFIQUE", "QUEL CLIC !", "LÉGENDAIRE",
-	"PHÉNOMÉNAL", "OUI OUI OUI", "C'EST FOU", "TROP FORT", "MONSTRUEUX", "INARRÊTABLE",
-	"DOPAMINE !!!", "ALLEZ ALLEZ", "BRAVO CHAMPION", "IMPRESSIONNANT", "WAOUH", "ON Y CROIT",
-	"RECORD ?!", "EXTRAORDINAIRE", "LA FOLIE", "PLUS VITE !", "ENCORE !!!", "GIGANTESQUE",
-	"SPECTACULAIRE", "HISTORIQUE", "ÇA CLIQUE SEC", "OH LÀ LÀ", "SENSATIONNEL", "QUEL TALENT",
-	"CLIQUE CLIQUE", "TU ES EN FEU", "IN-CRO-YABLE", "PERSONNE N'Y CROYAIT",
+	en = {
+		"INCREDIBLE!!!", "WOW", "HUGE", "LET'S GO", "MAGNIFICENT", "WHAT A CLICK!", "LEGENDARY",
+		"PHENOMENAL", "YES YES YES", "INSANE", "SO GOOD", "MONSTROUS", "UNSTOPPABLE",
+		"DOPAMINE!!!", "COME ON COME ON", "BRAVO CHAMP", "IMPRESSIVE", "WHOA", "BELIEVE IT",
+		"RECORD?!", "EXTRAORDINARY", "MADNESS", "FASTER!", "MORE!!!", "GIGANTIC",
+		"SPECTACULAR", "HISTORIC", "CLICKING HARD", "OH MY", "SENSATIONAL", "WHAT TALENT",
+		"CLICK CLICK", "YOU'RE ON FIRE", "UN-BE-LIEV-ABLE", "NOBODY SAW THIS COMING",
+	},
+	fr = {
+		"INCROYABLE !!!", "WOW", "ÉNORME", "LET'S GO", "MAGNIFIQUE", "QUEL CLIC !", "LÉGENDAIRE",
+		"PHÉNOMÉNAL", "OUI OUI OUI", "C'EST FOU", "TROP FORT", "MONSTRUEUX", "INARRÊTABLE",
+		"DOPAMINE !!!", "ALLEZ ALLEZ", "BRAVO CHAMPION", "IMPRESSIONNANT", "WAOUH", "ON Y CROIT",
+		"RECORD ?!", "EXTRAORDINAIRE", "LA FOLIE", "PLUS VITE !", "ENCORE !!!", "GIGANTESQUE",
+		"SPECTACULAIRE", "HISTORIQUE", "ÇA CLIQUE SEC", "OH LÀ LÀ", "SENSATIONNEL", "QUEL TALENT",
+		"CLIQUE CLIQUE", "TU ES EN FEU", "IN-CRO-YABLE", "PERSONNE N'Y CROYAIT",
+	},
 }
 
 -- Petits commentaires (parfois) sous le mot crié
 local ASIDES = {
-	"(le voisin a entendu)", "(pardon pour le bruit)", "(ton chat s'est réveillé)",
-	"(volume au maximum)", "(c'est le mégaphone qui parle)", "(même ta plante est fière)",
-	"(on ne sait pas pourquoi on crie)", "(les piles sont presque vides)", "(ça résonne jusqu'à Brest)",
+	en = {
+		"(the neighbors heard that)", "(sorry about the noise)", "(your cat woke up)",
+		"(volume at max)", "(this is the megaphone talking)", "(even your plant is proud)",
+		"(we don't know why we're yelling)", "(batteries almost dead)", "(they heard it in Alaska)",
+	},
+	fr = {
+		"(le voisin a entendu)", "(pardon pour le bruit)", "(ton chat s'est réveillé)",
+		"(volume au maximum)", "(c'est le mégaphone qui parle)", "(même ta plante est fière)",
+		"(on ne sait pas pourquoi on crie)", "(les piles sont presque vides)", "(ça résonne jusqu'à Brest)",
+	},
 }
 
 -- Dégradés "hype" (haut -> bas)
@@ -130,8 +149,9 @@ function Megaphone.Start(ctx)
 		-- Petit commentaire en dessous
 		local aside: TextLabel? = nil
 		if withAside ~= false and random:NextNumber() < 0.4 then
+			local asides = Locale.Pick(ASIDES)
 			local sub = UIUtil.Label({
-				Text = ASIDES[random:NextInteger(1, #ASIDES)],
+				Text = asides[random:NextInteger(1, #asides)],
 				Font = Theme.Fonts.Body,
 				TextColor3 = Theme.Colors.TextDark,
 				BackgroundColor3 = Color3.new(1, 1, 1),
@@ -223,17 +243,18 @@ function Megaphone.Start(ctx)
 	task.spawn(function()
 		task.wait(random:NextNumber(1.5, 3))
 		while ctx.IsAlive() do
-			shout(WORDS[random:NextInteger(1, #WORDS)])
+			local words = Locale.Pick(WORDS)
+			shout(words[random:NextInteger(1, #words)])
 			task.wait(random:NextNumber(4, 9))
 		end
 	end)
 
-	-- Cris spéciaux quand il se passe quelque chose
+	-- Cris spéciaux quand il se passe quelque chose (texte anglais traduit au moment du cri)
 	local specials = {
-		Jackpot = { "JACKPOT !!!", PALETTES[1] },
-		Rush = { "C'EST LE RUSH !!!", PALETTES[5] },
-		Achievement = { "SUCCÈS !!!", PALETTES[4] },
-		Unlock = { "NOUVEAUTÉ !", PALETTES[2] },
+		Jackpot = { "JACKPOT!!!", PALETTES[1] },
+		Rush = { "IT'S RUSH TIME!!!", PALETTES[5] },
+		Achievement = { "ACHIEVEMENT!!!", PALETTES[4] },
+		Unlock = { "NEW STUFF!", PALETTES[2] },
 	}
 	if ctx.State.NotifyReceived then
 		ctx.Connect(ctx.State.NotifyReceived, function(payload)
@@ -253,7 +274,7 @@ function Megaphone.Start(ctx)
 				return
 			end
 			lastSpecial = now
-			shout(special[1], special[2], false)
+			shout(Locale.T(special[1]), special[2], false)
 		end)
 	end
 end

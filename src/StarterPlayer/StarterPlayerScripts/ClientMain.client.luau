@@ -8,6 +8,10 @@
 	Un écran de chargement (LoadingScreen) couvre tout jusqu'au premier état.
 	v4 : fenêtre "Bon retour !" (gain hors-ligne), panneau "🛠️ Test" et
 	commandes de chat de test (/give, /unlockall...) UNIQUEMENT dans Studio.
+	v5 : langue (anglais par défaut, français automatique) choisie AVANT de
+	construire l'interface : on attend le premier état (3 s au plus) pour
+	lire le réglage "Language", sinon langue Roblox du joueur. Mode sombre
+	(DarkSkin) appliqué à la colonne centrale, aux fenêtres et aux bandeaux.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -19,22 +23,17 @@ local TextChatService = game:GetService("TextChatService")
 local Client = ReplicatedStorage:WaitForChild("Client")
 local Components = Client:WaitForChild("Components")
 local Panels = Components:WaitForChild("Panels")
+local Shared = ReplicatedStorage:WaitForChild("Shared")
 
-local Net = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Net"))
+local Net = require(Shared:WaitForChild("Net"))
+local Locale = require(Shared:WaitForChild("Locale"))
 local Interface = require(Client:WaitForChild("Interface"))
 local ClientState = require(Client:WaitForChild("ClientState"))
 local SoundManager = require(Client:WaitForChild("SoundManager"))
-local Effects = require(Client:WaitForChild("Effects"))
-local StimulusManager = require(Client:WaitForChild("StimulusManager"))
-
-local Background = require(Components:WaitForChild("Background"))
-local Notifications = require(Components:WaitForChild("Notifications"))
-local PanelManager = require(Components:WaitForChild("PanelManager"))
-local CenterColumn = require(Components:WaitForChild("CenterColumn"))
+local DarkSkin = require(Client:WaitForChild("DarkSkin"))
 local LoadingScreen = require(Components:WaitForChild("LoadingScreen"))
-local OfflinePopup = require(Components:WaitForChild("OfflinePopup"))
-local AchievementPopup = require(Components:WaitForChild("AchievementPopup"))
-local DebugTools = require(Components:WaitForChild("DebugTools"))
+
+local FIRST_STATE_WAIT = 3 -- (s) attente max du premier état avant de choisir la langue
 
 -- Le sac à dos (outils) ne sert à rien ici. La liste des joueurs (leaderstats)
 -- et la fenêtre de chat recouvriraient les emplacements R1 / L1 et captureraient
@@ -67,11 +66,46 @@ ClientState.Init()
 -- 2. Écran et calques (+ écran de chargement par-dessus, jusqu'au premier état)
 Interface.Build()
 LoadingScreen.Show()
+
+-- Mode sombre de l'interface (réglage ⚙️, thème sombre ou mode néon)
+ClientState.DarkModeChanged:Connect(DarkSkin.SetEnabled)
+DarkSkin.SetEnabled(ClientState.DarkMode)
+
+-- 3. Langue : réglage sauvegardé (premier état) sinon langue Roblox du joueur,
+-- choisie AVANT de construire l'interface (pas de reconstruction ensuite)
+if not ClientState.IsLoaded then
+	local received = false
+	local connection = ClientState.Loaded:Connect(function()
+		received = true
+	end)
+	local started = os.clock()
+	while not received and os.clock() - started < FIRST_STATE_WAIT do
+		task.wait(0.05)
+	end
+	connection:Disconnect()
+end
+Locale.SetLanguage(ClientState.ResolveLanguage())
+
+-- Modules d'interface (chargés après le choix de la langue)
+local Effects = require(Client:WaitForChild("Effects"))
+local Slots = require(Client:WaitForChild("Slots"))
+local StimulusManager = require(Client:WaitForChild("StimulusManager"))
+local Background = require(Components:WaitForChild("Background"))
+local Notifications = require(Components:WaitForChild("Notifications"))
+local PanelManager = require(Components:WaitForChild("PanelManager"))
+local CenterColumn = require(Components:WaitForChild("CenterColumn"))
+local OfflinePopup = require(Components:WaitForChild("OfflinePopup"))
+local AchievementPopup = require(Components:WaitForChild("AchievementPopup"))
+local DebugTools = require(Components:WaitForChild("DebugTools"))
+
 local layers = Interface.Layers
 Effects.Init(layers.Effects)
 Background.Build(layers.Background)
+DarkSkin.Register(layers.Main)
+DarkSkin.Register(layers.Panels)
+DarkSkin.Register(layers.Toasts)
 
--- 3. Toasts et fenêtres
+-- 4. Toasts et fenêtres
 Notifications.Build(layers.Toasts)
 OfflinePopup.Build(layers.Toasts)
 AchievementPopup.Build(layers.Toasts)
@@ -119,14 +153,17 @@ task.spawn(function()
 	end
 end)
 
--- 4. Colonne centrale (bouton, compteur, menus, améliorations).
+-- 5. Colonne centrale (bouton, compteur, menus, améliorations).
+-- (les emplacements des stimuli s'adaptent d'abord à l'écran : la colonne
+-- en a besoin sur téléphone)
 -- L'infobulle des améliorations va dans le calque Panels (au-dessus des stimuli).
+Slots.Bind(Interface)
 CenterColumn.Build(layers.Main, layers.Panels, layers.Effects)
 
--- 5. Stimuli (tout ce qui apparaît à l'écran avec les améliorations)
+-- 6. Stimuli (tout ce qui apparaît à l'écran avec les améliorations)
 StimulusManager.Init()
 
--- 6. Notifications du serveur : toasts + stimuli (bonus, océan)
+-- 7. Notifications du serveur : toasts + stimuli (bonus, océan)
 ClientState.SetNotifyHandler(function(payload)
 	Notifications.Handle(payload)
 	StimulusManager.HandleNotify(payload)
@@ -135,12 +172,12 @@ ClientState.RushChanged:Connect(function(rush)
 	Background.SetRush(rush.Active == true)
 end)
 
--- 7. Musique : seulement avec "Lofi Beats" (le réglage Musique est géré par le panneau Paramètres)
+-- 8. Musique : seulement avec "Lofi Beats" (le réglage Musique est géré par le panneau Paramètres)
 ClientState.FeaturesChanged:Connect(function()
 	SoundManager.SetMusicAllowed(ClientState.HasFeature("Lofi"))
 end)
 
--- 8. Au premier état reçu : on ouvre le cadeau du jour s'il est disponible
+-- 9. Au premier état reçu : on ouvre le cadeau du jour s'il est disponible
 -- (après l'écran de chargement, et après la fenêtre "Bon retour !" si elle est là)
 local firstState
 firstState = ClientState.Changed:Connect(function(data)
@@ -160,5 +197,5 @@ firstState = ClientState.Changed:Connect(function(data)
 	end
 end)
 
--- 9. On prévient le serveur que l'interface est prête
+-- 10. On prévient le serveur que l'interface est prête
 Net.Event("ClientReady"):FireServer()

@@ -113,11 +113,37 @@ Theme.ShadowStyle = {
 	Spread = 3, -- élargissement par couche
 }
 
+-- Palette du mode sombre choisi par le joueur (⚙️ "Mode sombre") : appliquée
+-- automatiquement à toute l'interface par DarkSkin (fenêtres, bandeaux,
+-- colonne centrale, écran de chargement). Les couleurs vives ne changent pas.
+Theme.DarkUI = {
+	Background = hex("#121218"), -- fond du jeu (thème Classique)
+	BackgroundBottom = hex("#1C1C27"),
+	Card = hex("#1E1E28"), -- fenêtres, cartes (ancien blanc)
+	Raised = hex("#464656"), -- gris clairs -> surfaces un peu plus claires
+	Text = hex("#EDEDF2"),
+	TextDim = hex("#A6A6B8"),
+	Border = hex("#4A4A5E"), -- contours plus doux que le noir
+	Divider = hex("#34343F"),
+	Scroll = hex("#6A6A80"),
+	TintedDark = 0.32, -- luminosité des fonds pastel une fois assombris
+}
+
 -- Résolution de référence : toute l'interface est pensée en 1280x720,
 -- puis mise à l'échelle automatiquement (UIScale) selon l'écran.
 Theme.DesignResolution = Vector2.new(1280, 720)
 Theme.MinScale = 0.45
 Theme.MaxScale = 1.6
+
+-- Toile "design" selon l'appareil (voir Interface.Device) : plus petite sur
+-- téléphone / tablette, donc tout y est affiché plus gros et lisible.
+Theme.DeviceResolutions = {
+	Phone = Vector2.new(960, 540),
+	Tablet = Vector2.new(1120, 630),
+	Desktop = Vector2.new(1280, 720),
+}
+-- Taille minimale (pixels "design") des zones tactiles sur téléphone / tablette
+Theme.TouchTarget = 44
 
 -- Dégradé néon (rose -> violet -> cyan), utilisé par le mode néon
 Theme.NeonGradient = ColorSequence.new({

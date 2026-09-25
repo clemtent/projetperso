@@ -20,6 +20,10 @@
 	API :
 	  Notifications.Toast(texte, couleur?, durée?, titre?, fête?, icône?)
 	  Notifications.Show({ Text, Title, Color, Duration, Icon, Celebrate })
+
+	v5 : textes du client traduits (Locale) ; les textes envoyés par le
+	serveur arrivent déjà dans la langue du joueur. Bandeaux un peu réduits
+	sur téléphone ; mode sombre via DarkSkin (calque Toasts).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -33,6 +37,8 @@ local ClientState = require(Client.ClientState)
 local OfflinePopup = require(script.Parent.OfflinePopup)
 local AchievementPopup = require(script.Parent.AchievementPopup)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
+local Locale = require(ReplicatedStorage.Shared.Locale)
+local Interface = require(Client.Interface)
 
 local Notifications = {}
 
@@ -72,6 +78,14 @@ function Notifications.Build(parent: Frame)
 		BackgroundTransparency = 1,
 		Parent = parent,
 	})
+	-- Téléphone : bandeaux un peu plus petits (la toile est agrandie) pour ne
+	-- pas cacher tout le bas de l'écran
+	local toastScale = UIUtil.Create("UIScale", { Parent = frame })
+	local function applyDevice()
+		toastScale.Scale = Interface.IsPhone() and 0.9 or 1
+	end
+	Interface.DeviceChanged:Connect(applyDevice)
+	applyDevice()
 	UIUtil.Create("UIListLayout", {
 		VerticalAlignment = Enum.VerticalAlignment.Bottom,
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
@@ -355,10 +369,10 @@ local function celebratePurchase(payload)
 	Effects.Flash(Theme.Colors.Premium, 0.35)
 	Effects.Confetti(120)
 	centerBurst(Theme.Colors.Premium)
-	Effects.BigMessage("💎 MERCI ! 💎", Theme.Colors.Premium, 2.2)
+	Effects.BigMessage(Locale.T("💎 THANK YOU! 💎"), Theme.Colors.Premium, 2.2)
 	Notifications.Show({
-		Text = tostring(payload.Text or "Ton achat est arrivé !"),
-		Title = payload.Title or "ACHAT CONFIRMÉ",
+		Text = tostring(payload.Text or Locale.T("Your purchase has arrived!")),
+		Title = payload.Title or Locale.T("PURCHASE CONFIRMED"),
 		Icon = "💎",
 		Color = Theme.Colors.Robux,
 		Duration = 6,
@@ -373,16 +387,16 @@ local function liveBonus(payload)
 	if payload.Source == "Follow" then
 		SoundManager.Play("Achievement", 1.25)
 		Notifications.Show({
-			Title = "Tu es abonné(e) au live !",
-			Text = gain ~= "" and (gain .. " • les dons vont commencer 💸") or "Les dons vont commencer 💸",
+			Title = Locale.T("You followed the stream!"),
+			Text = gain ~= "" and Locale.T("%s • donations are about to start 💸", gain) or Locale.T("Donations are about to start 💸"),
 			Icon = "💜",
 			Color = Theme.Colors.Pink,
 			Duration = 4.5,
 		})
 	elseif payload.Source == "Donation" then
 		Notifications.Show({
-			Title = "Don reçu !",
-			Text = gain ~= "" and (gain .. " • merci les viewers") or "Merci les viewers",
+			Title = Locale.T("Donation received!"),
+			Text = gain ~= "" and Locale.T("%s • thanks, viewers", gain) or Locale.T("Thanks, viewers"),
 			Icon = "💸",
 			Color = Theme.Colors.Robux,
 			Duration = 3.5,
@@ -406,7 +420,7 @@ function Notifications.Handle(payload)
 		SoundManager.Play("Bonus", 1.2)
 		Effects.Flash(Theme.Colors.Orange, 0.15)
 		Notifications.Show({
-			Title = payload.Title or "QUÊTE TERMINÉE !",
+			Title = payload.Title or Locale.T("QUEST COMPLETE!"),
 			Text = text or "",
 			Icon = "📜",
 			Color = Theme.Colors.Orange,
@@ -418,9 +432,9 @@ function Notifications.Handle(payload)
 		task.delay(0.3, SoundManager.Play, "Jackpot", 1.6)
 		Effects.Flash(Color3.new(1, 1, 1), 0.9)
 		Effects.Confetti(150)
-		Effects.BigMessage("JACKPOT !!!\nCOIN PARFAIT", Theme.Colors.Yellow, 3.5)
+		Effects.BigMessage(Locale.T("JACKPOT!!!\nPERFECT CORNER"), Theme.Colors.Yellow, 3.5)
 		Notifications.Show({
-			Title = "LE LOGO A TOUCHÉ LE COIN !",
+			Title = Locale.T("THE LOGO HIT THE CORNER!"),
 			Text = text or "",
 			Icon = "📀",
 			Color = Theme.Colors.Gold,
@@ -435,7 +449,7 @@ function Notifications.Handle(payload)
 	elseif kind == "Unlock" then
 		SoundManager.Play("Achievement", 1.3)
 		centerBurst(nil)
-		Notifications.Show({ Text = text or "✨ Nouveau !", Icon = "✨", Color = Theme.Colors.Green, Duration = 4 })
+		Notifications.Show({ Text = text or Locale.T("✨ New!"), Icon = "✨", Color = Theme.Colors.Green, Duration = 4 })
 	elseif kind == "Purchase" then
 		celebratePurchase(payload)
 	elseif kind == "Offline" then
@@ -445,9 +459,9 @@ function Notifications.Handle(payload)
 		local multiplier = tonumber(payload.Multiplier) or 1
 		task.delay(6.5, function()
 			Notifications.Show({
-				Title = "Bienvenue de retour (visite n°" .. tostring(payload.Rebirths or 1) .. ")",
-				Text = string.format(
-					"Tes gains sont maintenant multipliés par %s pour toujours.",
+				Title = Locale.T("Welcome back (visit #%s)", tostring(payload.Rebirths or 1)),
+				Text = Locale.T(
+					"Your gains are now multiplied by %s forever.",
 					tostring(math.floor(multiplier * 100 + 0.5) / 100)
 				),
 				Icon = "🌊",
@@ -457,7 +471,7 @@ function Notifications.Handle(payload)
 		end)
 	elseif kind == "Error" then
 		SoundManager.Play("Error", 0.7)
-		Notifications.Show({ Text = text or "Erreur", Color = Theme.Colors.Red, Duration = 5 })
+		Notifications.Show({ Text = text or Locale.T("Error"), Color = Theme.Colors.Red, Duration = 5 })
 	elseif kind == "Bonus" then
 		-- Texte flottant géré par StimulusManager ; le live a aussi son bandeau
 		if payload.Source == "Follow" or payload.Source == "Donation" then

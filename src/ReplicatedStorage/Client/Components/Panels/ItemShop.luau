@@ -29,26 +29,34 @@ local Notifications = require(script.Parent.Parent.Notifications)
 local Config = require(ReplicatedStorage.Shared.Config)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local Net = require(ReplicatedStorage.Shared.Net)
+local Locale = require(ReplicatedStorage.Shared.Locale)
 
+-- Title / Subtitle en anglais : traduits par PanelManager
 local ItemShop = {
-	Title = "🛒 Boutique",
-	Subtitle = "Chapeaux et couleurs pour ton bouton",
+	Title = "🛒 Shop",
+	Subtitle = "Hats and colors for your button",
 	Color = Theme.Colors.Green,
 	Size = Vector2.new(780, 600),
 }
 
-local SLOT_NAMES = { Hat = "Chapeau", Skin = "Couleur du bouton" }
+-- Noms des emplacements (anglais, traduits à l'affichage)
+local SLOT_NAMES = { Hat = "Hat", Skin = "Button color" }
+
+local function slotName(slot: string?): string
+	local name = slot and SLOT_NAMES[slot]
+	return name and Locale.T(name) or ""
+end
 local HERO_TOP = Color3.fromRGB(40, 190, 120)
 local HERO_BOTTOM = Color3.fromRGB(0, 160, 190)
 local WHITE = Color3.new(1, 1, 1)
 
 -- Rareté (d'après le prix)
 local RARITIES = {
-	{ Max = 1e5, Name = "Commun", Color = Color3.fromRGB(120, 200, 140) },
+	{ Max = 1e5, Name = "Common", Color = Color3.fromRGB(120, 200, 140) },
 	{ Max = 1e6, Name = "Rare", Color = Color3.fromRGB(60, 150, 255) },
-	{ Max = 1e7, Name = "Épique", Color = Color3.fromRGB(170, 90, 240) },
-	{ Max = 1e8, Name = "Légendaire", Color = Color3.fromRGB(255, 170, 20) },
-	{ Max = math.huge, Name = "Mythique", Color = Color3.fromRGB(255, 70, 150) },
+	{ Max = 1e7, Name = "Epic", Color = Color3.fromRGB(170, 90, 240) },
+	{ Max = 1e8, Name = "Legendary", Color = Color3.fromRGB(255, 170, 20) },
+	{ Max = math.huge, Name = "Mythic", Color = Color3.fromRGB(255, 70, 150) },
 }
 
 type Rarity = { Max: number, Name: string, Color: Color3 }
@@ -154,7 +162,7 @@ local function refreshPreview()
 	local _, equipped = getCosmetics(ClientState.Data)
 	local skinId = equipped.Skin or ""
 	local hatId = equipped.Hat or ""
-	local caption = "Ton bouton"
+	local caption = Locale.T("Your button")
 	local hovered = hoverId and Config.CosmeticsById[hoverId]
 	if hovered then
 		if hovered.Slot == "Skin" then
@@ -162,7 +170,7 @@ local function refreshPreview()
 		else
 			hatId = hovered.Id
 		end
-		caption = "Essai : " .. tostring(hovered.Name)
+		caption = Locale.T("Trying: %s", Locale.T(tostring(hovered.Name)))
 	end
 	showPreview(skinId, hatId, caption)
 end
@@ -203,8 +211,8 @@ local function request(action: string, cosmetic)
 				celebrate(ui)
 			end
 			Notifications.Show({
-				Title = cosmetic.Name .. " : à toi !",
-				Text = "+" .. math.floor(Config.CosmeticBonus * 100 + 0.5) .. " % de gains pour toujours • équipé automatiquement",
+				Title = Locale.T("%s: it's yours!", Locale.T(cosmetic.Name)),
+				Text = Locale.T("+%s%% gains forever • equipped automatically", tostring(math.floor(Config.CosmeticBonus * 100 + 0.5))),
 				Icon = cosmetic.Icon,
 				Color = Theme.Colors.Green,
 				Duration = 4,
@@ -220,7 +228,7 @@ local function request(action: string, cosmetic)
 		if ui then
 			UIUtil.Shake(ui.Button)
 		end
-		local text = ok and tostring(message or "Impossible pour le moment.") or "Erreur réseau, réessaie."
+		local text = ok and tostring(message or Locale.T("Not possible right now.")) or Locale.T("Network error, try again.")
 		Notifications.Toast(text, Theme.Colors.Red)
 	end
 	if ClientState.Data then
@@ -301,7 +309,7 @@ local function buildHero(content: Frame)
 	UIUtil.Stroke(previewButton, Theme.Colors.Border, 1.5)
 	previewGradient = UIUtil.Gradient(previewButton, ColorSequence.new(Theme.Colors.Button, Theme.Colors.ButtonBottom), 90)
 	previewLabel = UIUtil.Label({
-		Text = "Clique-moi",
+		Text = Locale.T("Click me"),
 		Size = UDim2.new(1, -12, 1, -10),
 		Position = UDim2.fromOffset(6, 5),
 		MaxTextSize = 17,
@@ -321,7 +329,7 @@ local function buildHero(content: Frame)
 	})
 	previewCaption = UIUtil.Label({
 		Name = "Caption",
-		Text = "Ton bouton",
+		Text = Locale.T("Your button"),
 		Font = Theme.Fonts.Title,
 		TextColor3 = Theme.Colors.TextDim,
 		Size = UDim2.new(1, -12, 0, 14),
@@ -335,7 +343,7 @@ local function buildHero(content: Frame)
 	-- Titre, sous-titre et statistiques (à droite)
 	local title = UIUtil.Label({
 		Name = "HeroTitle",
-		Text = "Boutique d'objets",
+		Text = Locale.T("Item Shop"),
 		Font = Theme.Fonts.Title,
 		TextColor3 = WHITE,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -349,7 +357,7 @@ local function buildHero(content: Frame)
 	titleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 	UIUtil.Label({
 		Name = "HeroSubtitle",
-		Text = string.format("Chaque objet possédé : +%d %% de gains pour toujours", math.floor(Config.CosmeticBonus * 100 + 0.5)),
+		Text = Locale.T("Each item owned: +%d%% gains forever", math.floor(Config.CosmeticBonus * 100 + 0.5)),
 		TextColor3 = WHITE,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Size = UDim2.new(1, -210, 0, 16),
@@ -473,7 +481,7 @@ local function buildCard(grid: ScrollingFrame, cosmetic)
 		UIUtil.Stroke(swatch, Theme.Colors.Border, 1.5)
 		UIUtil.Gradient(swatch, ColorSequence.new(cosmetic.Top, cosmetic.Bottom), 90)
 		UIUtil.Label({
-			Text = "Clique-moi",
+			Text = Locale.T("Click me"),
 			TextColor3 = Theme.ContrastText(cosmetic.Top:Lerp(cosmetic.Bottom, 0.5)),
 			Size = UDim2.new(1, -8, 1, -8),
 			Position = UDim2.fromOffset(4, 4),
@@ -497,7 +505,7 @@ local function buildCard(grid: ScrollingFrame, cosmetic)
 	-- Pastille de rareté
 	local rarityChip = UIUtil.Chip({
 		Name = "Rarity",
-		Text = rarity.Name,
+		Text = Locale.T(rarity.Name),
 		Color = rarity.Color:Lerp(Color3.new(0, 0, 0), 0.1),
 		TextColor3 = WHITE,
 		Height = 18,
@@ -511,7 +519,7 @@ local function buildCard(grid: ScrollingFrame, cosmetic)
 	-- Ruban "ÉQUIPÉ" / "POSSÉDÉ"
 	local ribbon = UIUtil.Chip({
 		Name = "Ribbon",
-		Text = "ÉQUIPÉ",
+		Text = Locale.T("EQUIPPED"),
 		Color = Theme.Colors.Green,
 		TextColor3 = Theme.Colors.TextDark,
 		Height = 18,
@@ -525,7 +533,7 @@ local function buildCard(grid: ScrollingFrame, cosmetic)
 
 	UIUtil.Label({
 		Name = "ItemName",
-		Text = cosmetic.Name,
+		Text = Locale.T(cosmetic.Name),
 		Font = Theme.Fonts.Title,
 		Size = UDim2.new(1, -14, 0, 20),
 		Position = UDim2.fromOffset(7, 110),
@@ -625,9 +633,9 @@ function ItemShop.Build(content: Frame)
 	UIUtil.Tabs({
 		Parent = content,
 		Tabs = {
-			{ Id = "All", Text = "✨ Tout" },
-			{ Id = "Hat", Text = "🎩 Chapeaux" },
-			{ Id = "Skin", Text = "🎨 Couleurs" },
+			{ Id = "All", Text = Locale.T("✨ All") },
+			{ Id = "Hat", Text = Locale.T("🎩 Hats") },
+			{ Id = "Skin", Text = Locale.T("🎨 Colors") },
 		},
 		Color = Theme.Colors.Green,
 		Size = UDim2.new(1, 0, 0, 36),
@@ -689,28 +697,28 @@ function ItemShop.Update(data)
 
 		local ribbonLabel = ui.Ribbon:FindFirstChild("Label") :: TextLabel?
 		if isEquipped then
-			ui.Button.Text = "Retirer"
+			ui.Button.Text = Locale.T("Remove")
 			ui.Button:SetAttribute("BaseColor", Theme.Colors.ButtonBottom)
 			UIUtil.SetButtonEnabled(ui.Button, true)
 			ui.Button.TextColor3 = Theme.Colors.Text
-			ui.Status.Text = "✔ Sur ton bouton"
+			ui.Status.Text = Locale.T("✔ On your button")
 			ui.Status.TextColor3 = Theme.Colors.Green:Lerp(Color3.new(0, 0, 0), 0.35)
 			ui.Ribbon.Visible = true
 			ui.Ribbon.BackgroundColor3 = Theme.Colors.Green
 			if ribbonLabel then
-				ribbonLabel.Text = "ÉQUIPÉ"
+				ribbonLabel.Text = Locale.T("EQUIPPED")
 			end
 		elseif isOwned then
-			ui.Button.Text = "Équiper"
+			ui.Button.Text = Locale.T("Equip")
 			ui.Button:SetAttribute("BaseColor", Theme.Colors.Blue)
 			UIUtil.SetButtonEnabled(ui.Button, true)
 			ui.Button.TextColor3 = Theme.Colors.TextLight
-			ui.Status.Text = "Possédé • " .. (SLOT_NAMES[cosmetic.Slot] or "")
+			ui.Status.Text = Locale.T("Owned • %s", slotName(cosmetic.Slot))
 			ui.Status.TextColor3 = Theme.Colors.TextDim
 			ui.Ribbon.Visible = true
 			ui.Ribbon.BackgroundColor3 = WHITE
 			if ribbonLabel then
-				ribbonLabel.Text = "✔ POSSÉDÉ"
+				ribbonLabel.Text = Locale.T("✔ OWNED")
 			end
 		else
 			local cost = tonumber(cosmetic.Cost) or 0
@@ -720,10 +728,10 @@ function ItemShop.Update(data)
 			UIUtil.SetButtonEnabled(ui.Button, affordable)
 			ui.Button.TextColor3 = Theme.Colors.TextDark
 			if affordable then
-				ui.Status.Text = SLOT_NAMES[cosmetic.Slot] or ""
+				ui.Status.Text = slotName(cosmetic.Slot)
 				ui.Status.TextColor3 = Theme.Colors.TextDim
 			else
-				ui.Status.Text = "Il manque " .. NumberFormatter.Format(cost - dopamine)
+				ui.Status.Text = Locale.T("%s short", NumberFormatter.Format(cost - dopamine))
 				ui.Status.TextColor3 = Theme.Colors.Red
 			end
 			ui.Ribbon.Visible = false
@@ -734,7 +742,7 @@ function ItemShop.Update(data)
 	if collectionChip then
 		local total = #Config.Cosmetics
 		setChipText(collectionChip, string.format("🎒 %d / %d", ownedCount, total))
-		setChipText(bonusChip, string.format("📈 +%d %%", math.floor(ownedCount * Config.CosmeticBonus * 100 + 0.5)))
+		setChipText(bonusChip, Locale.T("📈 +%d%%", math.floor(ownedCount * Config.CosmeticBonus * 100 + 0.5)))
 		setChipText(walletChip, "💧 " .. NumberFormatter.Format(dopamine))
 		collectionBar.Size = UDim2.fromScale(total > 0 and ownedCount / total or 0, 1)
 		refreshPreview()

@@ -22,6 +22,8 @@
 	aucun appel serveur. Toutes les tailles dérivent de la taille du cadre.
 ]]
 
+local Locale = require(game:GetService("ReplicatedStorage").Shared.Locale)
+
 local Runner = {}
 Runner.Slot = "L1"
 
@@ -97,7 +99,10 @@ local SIDE_DEFS = {
 local GROUND_COLOR = Color3.fromRGB(212, 196, 172)
 local BED_COLOR = Color3.fromRGB(128, 114, 108)
 
-local GRAFFITI_WORDS = { "DOPA", "WOW", "GG", "LOL", "YOLO", "RUN", "+1", "OMG", "EZ", "POG", "VITE", "GO!" }
+local GRAFFITI_WORDS = {
+	en = { "DOPA", "WOW", "GG", "LOL", "YOLO", "RUN", "+1", "OMG", "EZ", "POG", "FAST", "GO!" },
+	fr = { "DOPA", "WOW", "GG", "LOL", "YOLO", "RUN", "+1", "OMG", "EZ", "POG", "VITE", "GO!" },
+}
 local GRAFFITI_COLORS = {
 	{ Color3.fromRGB(255, 70, 160), Color3.fromRGB(255, 190, 40) },
 	{ Color3.fromRGB(40, 210, 230), Color3.fromRGB(150, 80, 240) },
@@ -530,7 +535,8 @@ function Runner.Start(ctx)
 		local colors = GRAFFITI_COLORS[random:NextInteger(1, #GRAFFITI_COLORS)]
 		panel.Gradient.Color = ColorSequence.new(colors[1], colors[2])
 		panel.Gradient.Rotation = random:NextInteger(0, 1) * 90 + random:NextNumber(-20, 20)
-		panel.Label.Text = GRAFFITI_WORDS[random:NextInteger(1, #GRAFFITI_WORDS)]
+		local graffitiWords = Locale.Pick(GRAFFITI_WORDS)
+		panel.Label.Text = graffitiWords[random:NextInteger(1, #graffitiWords)]
 		panel.Label.Rotation = random:NextNumber(-10, 10)
 	end
 	for i = 1, 2 do
@@ -1351,13 +1357,13 @@ function Runner.Start(ctx)
 			jumpT, rollT = -1, -1
 			powerIcon.Text = "🚀"
 			powerFill.BackgroundColor3 = Color3.fromRGB(80, 200, 255)
-			popText("JETPACK !", CX, HY + 20 * U, Color3.fromRGB(120, 220, 255), 120 * U, 26 * U)
+			popText(Locale.T("JETPACK!"), CX, HY + 20 * U, Color3.fromRGB(120, 220, 255), 120 * U, 26 * U)
 		else
 			magnetTime = MAGNET_TIME
 			jetTime = 0
 			powerIcon.Text = "🧲"
 			powerFill.BackgroundColor3 = Color3.fromRGB(255, 90, 170)
-			popText("AIMANT !", CX, HY + 20 * U, Color3.fromRGB(255, 120, 190), 120 * U, 26 * U)
+			popText(Locale.T("MAGNET!"), CX, HY + 20 * U, Color3.fromRGB(255, 120, 190), 120 * U, 26 * U)
 		end
 		powerPill.Visible = true
 		spawnSparkles(px, py, 5)

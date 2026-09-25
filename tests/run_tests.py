@@ -279,6 +279,14 @@ test("Formulas.DescribeUpgrade (aucun %s restant)", function(check)
 	end
 	local ocean = Formulas.DescribeUpgrade(Config.UpgradesById.Ocean, N.Multiplier, 1)
 	check(ocean:find(N.Multiplier(Formulas.GetRebirthMultiplier(2)), 1, true) ~= nil, "océan montre le prochain mult : " .. ocean)
+	-- Traduction (optionnelle) appliquée AVANT de remplacer %s
+	local fake = { Description = "+%s per click", Value = 3, Effect = "Click" }
+	local translated = Formulas.DescribeUpgrade(fake, N.Format, 0, function(text)
+		return text == "+%s per click" and "+%s par clic" or text
+	end)
+	eq(check, translated, "+3 par clic", "traduction")
+	eq(check, Formulas.DescribeUpgrade(fake, N.Format, 0), "+3 per click", "sans traduction")
+	eq(check, Formulas.DescribeUpgrade(fake, N.Format, 0, function() error("x") end), "+3 per click", "traduction en erreur")
 end)
 
 test("Formulas casino (RTP 0.90-0.95, multiplicateurs)", function(check)
@@ -432,11 +440,55 @@ def config_key_test():
     return "\n".join(lines)
 
 
+def lang_test():
+    """Génère un test Luau : dictionnaires de Shared/Lang (mêmes %s/%d des deux
+    côtés ; chaque clé de FR_Config est un vrai texte de Config)."""
+    lang_dir = os.path.join(SHARED, "Lang")
+    lines = ["local LANG = {}"]
+    if os.path.isdir(lang_dir):
+        for fname in sorted(os.listdir(lang_dir)):
+            if fname.endswith(".luau"):
+                body = read(os.path.join(lang_dir, fname))
+                lines.append('do local ok, r = pcall(function()\n%s\nend) LANG["%s"] = ok and r or { erreur = tostring(r) } end'
+                             % (body, fname[:-5]))
+    lines.append(r'''
+test("Lang : dictionnaires (placeholders, clés de FR_Config)", function(check)
+	local configTexts, seen = {}, {}
+	local function collect(t)
+		if seen[t] then return end
+		seen[t] = true
+		for k, v in pairs(t) do
+			if type(v) == "string" and (k == "Name" or k == "Description" or k == "Text") then
+				configTexts[v] = true
+			elseif type(v) == "table" then
+				collect(v)
+			end
+		end
+	end
+	collect(Config)
+	local function count(s, p) local n = 0 for _ in s:gmatch(p) do n += 1 end return n end
+	for name, dict in pairs(LANG) do
+		check(type(dict) == "table" and type(dict.fr) == "table", name .. " : { fr = {...} } attendu " .. tostring(dict.erreur or ""))
+		for en, fr in pairs(dict.fr or {}) do
+			check(type(en) == "string" and type(fr) == "string", name .. " : entrée non texte")
+			if type(en) == "string" and type(fr) == "string" then
+				eq(check, count(fr, "%%s"), count(en, "%%s"), name .. " %s : " .. en)
+				eq(check, count(fr, "%%d"), count(en, "%%d"), name .. " %d : " .. en)
+				if name == "FR_Config" then
+					check(configTexts[en] == true, "FR_Config : clé absente de Config : " .. en)
+				end
+			end
+		end
+	end
+end)''')
+    return "\n".join(lines)
+
+
 def main():
     if not os.path.exists(LUAU):
         print("FAIL : Luau CLI introuvable (%s)" % LUAU)
         return 1
-    bundle = build_bundle(config_key_test())
+    bundle = build_bundle(config_key_test() + "\n" + lang_test())
     with tempfile.NamedTemporaryFile("w", suffix=".luau", delete=False, encoding="utf-8") as f:
         f.write(bundle)
         path = f.name

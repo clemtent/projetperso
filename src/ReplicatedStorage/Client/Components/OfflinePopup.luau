@@ -29,6 +29,7 @@ local LoadingScreen = require(script.Parent.LoadingScreen)
 local Config = require(ReplicatedStorage.Shared.Config)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local Signal = require(ReplicatedStorage.Shared.Signal)
+local Locale = require(ReplicatedStorage.Shared.Locale)
 
 local OfflinePopup = {}
 
@@ -327,8 +328,11 @@ local function build(payload)
 		ZIndex = 2,
 		Parent = window,
 	})
-	local cardScale = UIUtil.Create("UIScale", { Scale = 0.7, Parent = card })
-	UIUtil.Tween(cardScale, 0.45, { Scale = 1 }, Enum.EasingStyle.Back)
+	-- Tient dans 94 % de l'écran (téléphone)
+	local canvas = Interface.CanvasSize
+	local fit = math.min(1, canvas.X * 0.94 / CARD_SIZE.X, canvas.Y * 0.94 / CARD_SIZE.Y)
+	local cardScale = UIUtil.Create("UIScale", { Scale = 0.7 * fit, Parent = card })
+	UIUtil.Tween(cardScale, 0.45, { Scale = fit }, Enum.EasingStyle.Back)
 
 	-- Tout le contenu dans un CanvasGroup (fondu d'ensemble à la fermeture)
 	local fade = UIUtil.Create("CanvasGroup", {
@@ -357,7 +361,7 @@ local function build(payload)
 	-- Titre et durée
 	UIUtil.Label({
 		Name = "Title",
-		Text = "Bon retour !",
+		Text = Locale.T("Welcome back!"),
 		Font = Theme.Fonts.Title,
 		Size = UDim2.new(1, -40, 0, 34),
 		Position = UDim2.fromOffset(20, SKY_HEIGHT + 12),
@@ -367,7 +371,7 @@ local function build(payload)
 	})
 	UIUtil.Label({
 		Name = "Away",
-		Text = "Tu étais absent(e) pendant " .. NumberFormatter.Time(seconds),
+		Text = Locale.T("You were away for %s", NumberFormatter.Time(seconds)),
 		TextColor3 = Theme.Colors.TextDim,
 		Size = UDim2.new(1, -40, 0, 20),
 		Position = UDim2.fromOffset(20, SKY_HEIGHT + 46),
@@ -403,7 +407,7 @@ local function build(payload)
 	amountStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 	UIUtil.Label({
 		Name = "Unit",
-		Text = Config.Game.CurrencyName .. " gagnée pendant ton absence 💧",
+		Text = Locale.T("%s earned while you were away 💧", Locale.T(Config.Game.CurrencyName)),
 		TextColor3 = Theme.Colors.TextDim,
 		Size = UDim2.new(1, -40, 0, 18),
 		Position = UDim2.fromOffset(20, SKY_HEIGHT + 118),
@@ -431,18 +435,20 @@ local function build(payload)
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = chips,
 	})
-	infoChip(chips, "⚡", "Taux", tostring(math.floor(rate * 100 + 0.5)) .. " %", Theme.Colors.Orange, 1)
-	infoChip(chips, "⏳", "Durée max", NumberFormatter.Time(maxSeconds), Theme.Colors.Blue, 2)
-	infoChip(chips, upgrade and upgrade.Icon or "😴", "Mode veille", "Niv. " .. tostring(level), Theme.Colors.Purple, 3)
+	local sleepName = Locale.T(upgrade and upgrade.Name or "Sleep Mode")
+	infoChip(chips, "⚡", Locale.T("Rate"), tostring(math.floor(rate * 100 + 0.5)) .. " %", Theme.Colors.Orange, 1)
+	infoChip(chips, "⏳", Locale.T("Max duration"), NumberFormatter.Time(maxSeconds), Theme.Colors.Blue, 2)
+	infoChip(chips, upgrade and upgrade.Icon or "😴", sleepName, Locale.T("Lv. %s", tostring(level)), Theme.Colors.Purple, 3)
 
 	-- Jauge : temps comptabilisé / durée max
 	local gaugeY = SKY_HEIGHT + 204
 	UIUtil.Label({
 		Name = "GaugeText",
-		Text = (capped and "⚠️ Plafond atteint : " or "Temps comptabilisé : ")
-			.. NumberFormatter.Time(counted)
-			.. " / "
-			.. NumberFormatter.Time(maxSeconds),
+		Text = Locale.T(
+			capped and "⚠️ Limit reached: %s / %s" or "Time counted: %s / %s",
+			NumberFormatter.Time(counted),
+			NumberFormatter.Time(maxSeconds)
+		),
 		TextColor3 = capped and Theme.Colors.Red or Theme.Colors.TextDim,
 		Font = Theme.Fonts.Title,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -479,7 +485,7 @@ local function build(payload)
 	if canUpgrade then
 		UIUtil.Label({
 			Name = "Hint",
-			Text = "💡 Améliore Mode veille 😴 pour gagner plus quand tu n'es pas là",
+			Text = Locale.T("💡 Upgrade %s 😴 to earn more while you're away", sleepName),
 			TextColor3 = Theme.Colors.Purple,
 			Font = Theme.Fonts.Title,
 			Size = UDim2.new(1, -40, 0, 16),
@@ -493,7 +499,7 @@ local function build(payload)
 	-- Bouton "Récupérer"
 	local button = UIUtil.NeonButton({
 		Name = "Collect",
-		Text = "Récupérer",
+		Text = Locale.T("Collect"),
 		Color = Theme.Colors.Green,
 		TextColor3 = Theme.Colors.TextDark,
 		Size = UDim2.new(1, -80, 0, 52),

@@ -31,6 +31,8 @@
 local LootBox = {}
 LootBox.Slot = "CR"
 
+local Locale = require(game:GetService("ReplicatedStorage").Shared.Locale)
+
 -- Géométrie (pixels "design" de la carte 170x170)
 local RING_SEGMENTS = 24 -- segments de l'anneau de charge
 local RING_RADIUS = 67
@@ -767,7 +769,7 @@ function LootBox.Start(ctx)
 	-- Bulle "PRÊT !", pastille de stock, bouton "?"
 	------------------------------------------------------------------
 	local callout = UIUtil.Label({
-		Text = "PRÊT !",
+		Text = Locale.T("READY!"),
 		Font = Theme.Fonts.Title,
 		TextColor3 = Color3.fromRGB(70, 30, 0),
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -866,7 +868,7 @@ function LootBox.Start(ctx)
 	vGradient(oddsPanel, WHITE, Color3.fromRGB(240, 234, 255))
 	local oddsScale = Create("UIScale", { Parent = oddsPanel })
 	UIUtil.Label({
-		Text = "🎲 Chances",
+		Text = Locale.T("🎲 Odds"),
 		Font = Theme.Fonts.Title,
 		TextColor3 = Theme.Colors.TextDark,
 		Position = UDim2.fromOffset(10, 5),
@@ -884,7 +886,7 @@ function LootBox.Start(ctx)
 		local tierColor: Color3 = tier.Color or GOLD
 		local percent = percentOf(tier)
 		UIUtil.Label({
-			Text = tostring(tier.Name or tier.Id),
+			Text = Locale.T(tostring(tier.Name or tier.Id)),
 			Font = Theme.Fonts.Title,
 			TextColor3 = tierColor:Lerp(Theme.Colors.TextDark, 0.3),
 			TextXAlignment = Enum.TextXAlignment.Left,
@@ -924,7 +926,7 @@ function LootBox.Start(ctx)
 		oddsFills[index] = { Frame = fill, Target = math.max(0.04, percent / 100) }
 	end
 	UIUtil.Label({
-		Text = "Touche pour fermer",
+		Text = Locale.T("Tap to close"),
 		TextColor3 = Theme.Colors.TextDim,
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -4),
@@ -1007,7 +1009,7 @@ function LootBox.Start(ctx)
 	local function refreshStock()
 		badge.Visible = stored > 0
 		badgeText.Text = stored > 99 and "99+" or tostring(math.floor(stored))
-		callout.Text = stored >= maxStored and "PLEIN !" or "PRÊT !"
+		callout.Text = stored >= maxStored and Locale.T("FULL!") or Locale.T("READY!")
 		setCallout(stored >= 1 and not opening)
 	end
 	refreshStock()
@@ -1093,7 +1095,7 @@ function LootBox.Start(ctx)
 		if os.clock() < pillOverrideUntil then
 			text = pillOverride
 		elseif full then
-			text = "PLEIN"
+			text = Locale.T("FULL")
 		else
 			text = math.floor(target * 100) .. " %"
 		end
@@ -1301,7 +1303,7 @@ function LootBox.Start(ctx)
 
 	local function showReward(tier, tierIndex: number, color: Color3, amount: number, legendary: boolean)
 		rewardToken += 1
-		tierLabel.Text = tostring(tier.Name or tier.Id)
+		tierLabel.Text = Locale.T(tostring(tier.Name or tier.Id))
 		tierLabel.TextColor3 = color
 		legendaryName = legendary and color or nil
 		rewardStroke.Color = color
@@ -1420,7 +1422,7 @@ function LootBox.Start(ctx)
 		if legendary then
 			ctx.Sound.Play("Jackpot", 1)
 			ctx.Effects.Flash(color, 0.45)
-			ctx.Effects.BigMessage("🏆 COFFRE " .. tostring(tier.Name) .. " ! " .. amountText, color, 2.8)
+			ctx.Effects.BigMessage(Locale.T("🏆 %s CHEST! %s", Locale.T(tostring(tier.Name)), amountText), color, 2.8)
 			jolt()
 			if effectsOn() then
 				ctx.Effects.Confetti(90)
@@ -1474,7 +1476,7 @@ function LootBox.Start(ctx)
 		if stored < 1 then
 			ctx.Sound.Play("Error", 1)
 			wobble()
-			showPillMessage("Pas encore !", 1.4)
+			showPillMessage(Locale.T("Not yet!"), 1.4)
 			return
 		end
 
@@ -1518,7 +1520,7 @@ function LootBox.Start(ctx)
 					return
 				end
 			else
-				local message = (callOk and type(result) == "string") and result or "Le coffre est coincé 🔒"
+				local message = (callOk and type(result) == "string") and result or Locale.T("The chest is stuck 🔒")
 				charge = 0
 				chestScale.Scale = 1
 				ctx.Sound.Play("Error", 1)

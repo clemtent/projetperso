@@ -24,6 +24,8 @@ local TextService = game:GetService("TextService")
 local Stocks = {}
 Stocks.Slot = "R1"
 
+local Locale = require(game:GetService("ReplicatedStorage").Shared.Locale)
+
 -- Dimensions (pixels "design") : la carte est rentrée de 2 px pour que le
 -- contour ne soit pas coupé par le slot (ClipsDescendants)
 local CARD_W, CARD_H = 284, 186
@@ -53,39 +55,65 @@ local WHITE = Color3.new(1, 1, 1)
 -- Humeur du marché selon la variation sur le graphique
 local function getMood(change: number): string
 	if change >= 0.05 then
-		return "🚀 Vers la lune !"
+		return Locale.T("🚀 To the moon!")
 	elseif change >= 0.015 then
-		return "🐂 Ça monte !"
+		return Locale.T("🐂 Going up!")
 	elseif change <= -0.05 then
-		return "💀 C'est la chute..."
+		return Locale.T("💀 It's crashing...")
 	elseif change <= -0.015 then
-		return "🐻 Aïe aïe aïe"
+		return Locale.T("🐻 Oof, oof, oof")
 	end
-	return "😐 Ça stagne..."
+	return Locale.T("😐 Going nowhere...")
 end
 
 -- Petites phrases après une transaction réussie
-local BUY_JOKES = { "📈 Investi !", "🤑 Pari osé !", "💼 Trader pro", "🙏 Pourvu que ça monte" }
-local SELL_JOKES = { "💰 Vendu !", "💸 Encaissé !", "😎 Bien joué", "🏃 On se retire" }
+local BUY_JOKES = {
+	en = { "📈 Invested!", "🤑 Bold bet!", "💼 Pro trader", "🙏 Please go up" },
+	fr = { "📈 Investi !", "🤑 Pari osé !", "💼 Trader pro", "🙏 Pourvu que ça monte" },
+}
+local SELL_JOKES = {
+	en = { "💰 Sold!", "💸 Cashed out!", "😎 Nicely done", "🏃 Getting out" },
+	fr = { "💰 Vendu !", "💸 Encaissé !", "😎 Bien joué", "🏃 On se retire" },
+}
 
 -- Fausses actus du bandeau (%s = symbole)
 local TAPE_NEWS = {
-	"%s : un analyste confond le graphique avec un électrocardiogramme",
-	"Rumeur : le PDG de %s serait un chat. Le cours bondit",
-	"%s annonce un bouton encore plus cliquable, les marchés s'emballent",
-	"Un trader achète %s « parce que la courbe est jolie »",
-	"Les experts prédisent que %s va monter, descendre, ou rester pareil",
-	"%s : la réunion des actionnaires reportée pour cause de sieste",
-	"Un hamster gère désormais le fonds d'investissement %s",
-	"%s ouvre un bureau sur la Lune, le loyer est astronomique",
-	"Scandale : un stagiaire a cliqué 3 fois sur « vendre » chez %s",
-	"%s : « nos résultats sont excellents, enfin on croit »",
-	"Le cours de %s suit de près celui de la baguette tradition",
-	"Un pigeon mise tout sur %s, les marchés retiennent leur souffle",
-	"%s promet un dividende en câlins pour le prochain trimestre",
-	"Alerte : les graphiques de %s ressemblent à des montagnes russes",
-	"%s rachète une usine de papier bulle, stratégie « pop »",
-	"Achète bas, vends haut : le conseil secret enfin révélé",
+	en = {
+		"%s: analyst mistakes the chart for a heart monitor",
+		"Rumor: %s's CEO may be a cat. Stock jumps",
+		"%s unveils an even more clickable button, markets go wild",
+		"Trader buys %s \"because the line looks pretty\"",
+		"Experts predict %s will go up, go down, or stay the same",
+		"%s: shareholder meeting postponed due to nap time",
+		"A hamster now manages the %s investment fund",
+		"%s opens an office on the Moon, rent is astronomical",
+		"Scandal: intern clicked \"sell\" 3 times at %s",
+		"%s: \"our results are excellent, we think\"",
+		"%s stock closely tracks the price of pizza",
+		"A pigeon bets it all on %s, markets hold their breath",
+		"%s promises a dividend paid in hugs next quarter",
+		"Alert: %s charts now look like a roller coaster",
+		"%s buys a bubble-wrap factory, a \"pop\" strategy",
+		"Buy low, sell high: the secret tip finally revealed",
+	},
+	fr = {
+		"%s : un analyste confond le graphique avec un électrocardiogramme",
+		"Rumeur : le PDG de %s serait un chat. Le cours bondit",
+		"%s annonce un bouton encore plus cliquable, les marchés s'emballent",
+		"Un trader achète %s « parce que la courbe est jolie »",
+		"Les experts prédisent que %s va monter, descendre, ou rester pareil",
+		"%s : la réunion des actionnaires reportée pour cause de sieste",
+		"Un hamster gère désormais le fonds d'investissement %s",
+		"%s ouvre un bureau sur la Lune, le loyer est astronomique",
+		"Scandale : un stagiaire a cliqué 3 fois sur « vendre » chez %s",
+		"%s : « nos résultats sont excellents, enfin on croit »",
+		"Le cours de %s suit de près celui de la baguette tradition",
+		"Un pigeon mise tout sur %s, les marchés retiennent leur souffle",
+		"%s promet un dividende en câlins pour le prochain trimestre",
+		"Alerte : les graphiques de %s ressemblent à des montagnes russes",
+		"%s rachète une usine de papier bulle, stratégie « pop »",
+		"Achète bas, vends haut : le conseil secret enfin révélé",
+	},
 }
 
 local function formatPrice(price: number): string
@@ -194,7 +222,7 @@ function Stocks.Start(ctx)
 	UI.Corner(liveDot, UDim.new(1, 0))
 	local feePercent = tostring(math.floor(math.clamp(tonumber(stockConfig.Fee) or 0, 0, 1) * 100 + 0.5)) .. " %"
 	UI.Label({
-		Text = "EN DIRECT · frais " .. feePercent,
+		Text = Locale.T("LIVE · %s fee", feePercent),
 		Font = Theme.Fonts.Body,
 		TextColor3 = TEXT_DIM,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -308,7 +336,7 @@ function Stocks.Start(ctx)
 		Parent = chart,
 	})
 	UI.Label({
-		Text = "ton prix moyen",
+		Text = Locale.T("your avg price"),
 		Font = Theme.Fonts.Body,
 		TextColor3 = AVG_COLOR,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -415,7 +443,7 @@ function Stocks.Start(ctx)
 	-- Humeur du marché (petite étiquette en haut à gauche)
 	local moodLabel = UI.Create("TextLabel", {
 		Name = "Mood",
-		Text = "⏳ Ouverture...",
+		Text = Locale.T("⏳ Opening..."),
 		Font = Theme.Fonts.Title,
 		TextSize = 10,
 		TextColor3 = TEXT,
@@ -436,7 +464,7 @@ function Stocks.Start(ctx)
 	})
 
 	local loadingLabel = UI.Label({
-		Text = "Chargement du cours... ⏳",
+		Text = Locale.T("Loading price... ⏳"),
 		TextColor3 = TEXT_DIM,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(0.5, 0, 0.5, 6),
@@ -611,7 +639,7 @@ function Stocks.Start(ctx)
 		button:SetAttribute("Fraction", fraction)
 		table.insert(buyButtons, button)
 	end
-	local sellButton = makeButton("▼ Vendre", Color3.fromRGB(220, 50, 70), sellWidth, 10)
+	local sellButton = makeButton(Locale.T("▼ Sell"), Color3.fromRGB(220, 50, 70), sellWidth, 10)
 
 	------------------------------------------------------------------
 	-- Bandeau de fausses actus (défile en bas de la carte)
@@ -630,7 +658,7 @@ function Stocks.Start(ctx)
 	local newsDeck: { string } = {}
 	local function nextNews(): string
 		if #newsDeck == 0 then
-			for _, text in ipairs(TAPE_NEWS) do
+			for _, text in ipairs(Locale.Pick(TAPE_NEWS)) do
 				table.insert(newsDeck, text)
 			end
 			for i = #newsDeck, 2, -1 do
@@ -638,7 +666,7 @@ function Stocks.Start(ctx)
 				newsDeck[i], newsDeck[j] = newsDeck[j], newsDeck[i]
 			end
 		end
-		local text = table.remove(newsDeck) or TAPE_NEWS[1]
+		local text = table.remove(newsDeck) or Locale.Pick(TAPE_NEWS)[1]
 		return "📰 " .. string.format(text, symbolName) .. "   •"
 	end
 	local function measure(text: string): number
@@ -817,19 +845,15 @@ function Stocks.Start(ctx)
 		local shares, costBasis = getHoldings()
 		local price = targetPrice
 		if shares <= 1e-9 then
-			valueLabel.Text = '💼 <font color="#8C98B4">Aucune action · frais ' .. feeText .. "</font>"
-			profitLabel.Text = "Achète bas, vends haut 😏"
+			valueLabel.Text = Locale.T('💼 <font color="#8C98B4">No shares · %s fee</font>', feeText)
+			profitLabel.Text = Locale.T("Buy low, sell high 😏")
 			profitLabel.TextColor3 = TEXT_DIM
 			profitPill.BackgroundColor3 = FLAT_COLOR
 		else
 			-- Valeur NETTE des frais de vente : c'est ce que "Vendre" rapporte vraiment
 			local value = shares * price * (1 - FEE)
 			local sharesText = shares < 100 and string.format("%.2f", shares) or Format.Format(shares)
-			valueLabel.Text = "💼 <b>"
-				.. formatAmount(value)
-				.. '</b> <font color="#8C98B4">· '
-				.. sharesText
-				.. " act.</font>"
+			valueLabel.Text = Locale.T('💼 <b>%s</b> <font color="#8C98B4">· %s shares</font>', formatAmount(value), sharesText)
 			local profit = value - costBasis
 			local ratio = costBasis > 0 and profit / costBasis or 0
 			local sign = profit >= 0 and "+" or "-"
@@ -1020,9 +1044,9 @@ function Stocks.Start(ctx)
 			ctx.Sound.Play("Error")
 			UI.Shake(button)
 			if action == "sell" then
-				ctx.Notify("Tu n'as aucune action à vendre 🤷", Theme.Colors.Red)
+				ctx.Notify(Locale.T("You don't have any shares to sell 🤷"), Theme.Colors.Red)
 			else
-				ctx.Notify("Pas assez de Dopamine pour investir 😅", Theme.Colors.Red)
+				ctx.Notify(Locale.T("Not enough Dopamine to invest 😅"), Theme.Colors.Red)
 			end
 			return
 		end
@@ -1038,14 +1062,14 @@ function Stocks.Start(ctx)
 			end
 			if ok and success then
 				ctx.Sound.Play("Cash", action == "sell" and 1.15 or 1)
-				local jokes = action == "sell" and SELL_JOKES or BUY_JOKES
+				local jokes = Locale.Pick(action == "sell" and SELL_JOKES or BUY_JOKES)
 				local text = jokes[random:NextInteger(1, #jokes)]
 				feedback(button, text, action == "sell" and Theme.Colors.Gold or UP_COLOR)
 				ctx.Notify(type(message) == "string" and message or text, action == "sell" and Theme.Colors.Gold or UP_COLOR)
 			else
 				ctx.Sound.Play("Error")
 				UI.Shake(button)
-				local text = ok and type(message) == "string" and message or "La bourse ne répond pas... 😵"
+				local text = ok and type(message) == "string" and message or Locale.T("The market isn't responding... 😵")
 				ctx.Notify(text, Theme.Colors.Red)
 			end
 		end)

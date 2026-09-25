@@ -17,6 +17,10 @@
 	  - la jauge de combo (si la Feature "Combo" est débloquée) ;
 	  - la barre d'améliorations (UpgradeBar).
 	Occupe x ∈ [centre-330, centre+330], y ∈ [28, ~430] de la toile.
+	v5 : textes traduits (Locale) ; sur téléphone les pastilles des menus
+	tiennent sur UNE ligne qui défile horizontalement (zones tactiles de
+	44 px), la largeur est limitée par les slots de côté (Slots) et tout se
+	réajuste si l'écran change (Interface.DeviceChanged).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -31,9 +35,11 @@ local Effects = require(Client.Effects)
 local SoundManager = require(Client.SoundManager)
 local PanelManager = require(script.Parent.PanelManager)
 local UpgradeBar = require(script.Parent.UpgradeBar)
+local Slots = require(Client.Slots)
 local Config = require(ReplicatedStorage.Shared.Config)
 local Formulas = require(ReplicatedStorage.Shared.Formulas)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
+local Locale = require(ReplicatedStorage.Shared.Locale)
 
 local CenterColumn = {}
 
@@ -47,15 +53,16 @@ local function debugVisible(): boolean
 	return RunService:IsStudio()
 end
 
--- Pastilles des menus (Feature = nil : toujours visible ; Visible = fonction optionnelle)
+-- Pastilles des menus (Feature = nil : toujours visible ; Visible = fonction optionnelle).
+-- Text : anglais, traduit à la construction (Locale.T)
 local PILLS = {
-	{ Id = "ScreenTime", Text = "⏱️ Temps d'écran", Color = Theme.Colors.Dark, Feature = "ScreenTime", Panel = "ScreenTime" },
-	{ Id = "ItemShop", Text = "🛒 Boutique", Color = Theme.Colors.Green, Feature = "ItemShop", Panel = "ItemShop" },
-	{ Id = "Achievements", Text = "🏆 Succès", Color = Theme.Colors.Purple, Feature = "Achievements", Panel = "Achievements" },
-	{ Id = "Quests", Text = "📜 Quêtes", Color = Theme.Colors.Orange, Feature = "Quests", Panel = "Quests" },
-	{ Id = "Leaderboard", Text = "🥇 Classement", Color = Theme.Colors.Blue, Feature = nil, Panel = "Leaderboard" },
-	{ Id = "Daily", Text = "🎁 Cadeau", Color = Theme.Colors.Pink, Feature = "Daily", Panel = "Daily" },
-	{ Id = "Themes", Text = "🎨 Thèmes", Color = Theme.Colors.Cyan, Feature = nil, Panel = "Themes" },
+	{ Id = "ScreenTime", Text = "⏱️ Screen Time", Color = Theme.Colors.Dark, Feature = "ScreenTime", Panel = "ScreenTime" },
+	{ Id = "ItemShop", Text = "🛒 Shop", Color = Theme.Colors.Green, Feature = "ItemShop", Panel = "ItemShop" },
+	{ Id = "Achievements", Text = "🏆 Achievements", Color = Theme.Colors.Purple, Feature = "Achievements", Panel = "Achievements" },
+	{ Id = "Quests", Text = "📜 Quests", Color = Theme.Colors.Orange, Feature = "Quests", Panel = "Quests" },
+	{ Id = "Leaderboard", Text = "🥇 Leaderboard", Color = Theme.Colors.Blue, Feature = nil, Panel = "Leaderboard" },
+	{ Id = "Daily", Text = "🎁 Gift", Color = Theme.Colors.Pink, Feature = "Daily", Panel = "Daily" },
+	{ Id = "Themes", Text = "🎨 Themes", Color = Theme.Colors.Cyan, Feature = nil, Panel = "Themes" },
 	{ Id = "RobuxShop", Text = "💎 Robux", Color = Theme.Colors.Robux, Feature = nil, Panel = "RobuxShop", Visible = robuxShopVisible },
 	{ Id = "Settings", Text = "⚙️", Color = Theme.Colors.ButtonBottom, Feature = nil, Panel = "Settings", Round = true },
 	{ Id = "Debug", Text = "🛠️ Test", Color = Theme.Colors.Red, Feature = nil, Panel = "Debug", Visible = debugVisible },
@@ -90,6 +97,9 @@ local comboBar: Frame
 local comboFill: Frame
 local comboLabel: TextLabel
 local pills = {} -- [Id] = { Button, Holder, Badge, Def }
+local pillsStack: Frame -- pile verticale qui contient la rangée des pastilles
+local pillsRow: GuiObject? = nil
+local pillsDevice = "" -- profil pour lequel la rangée a été construite
 
 local seenAchievements: number? = nil -- succès déjà vus (badge "Succès")
 local counterFlashUntil = 0 -- le compteur brille en doré (gros gain) jusqu'à cette heure
@@ -235,7 +245,7 @@ local function buildButton(column: Frame)
 	UIUtil.Shadow(clickButton, 4, 0.8, 3)
 
 	clickLabel = UIUtil.Label({
-		Text = "Clique-moi",
+		Text = Locale.T("Click me"),
 		Font = Theme.Fonts.Body,
 		Size = UDim2.new(1, -20, 1, -16),
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -291,20 +301,66 @@ local function buildButton(column: Frame)
 	end)
 end
 
+-- Largeur max de la rangée des pastilles (téléphone : entre les slots de côté)
+local function pillsRowWidth(): number
+	if Interface.IsPhone() then
+		return math.clamp(Slots.GetCenterClearWidth(), 360, 664)
+	end
+	return 664
+end
+
+-- (Re)construit la rangée des pastilles selon l'appareil :
+--   PC / tablette : lignes qui passent à la ligne (Wraps) ;
+--   téléphone : UNE ligne qui défile horizontalement.
 local function buildPills(parent: Frame, order: number)
-	local row = UIUtil.Create("Frame", {
-		Name = "Pills",
-		Size = UDim2.fromOffset(664, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundTransparency = 1,
-		LayoutOrder = order,
-		Parent = parent,
-	})
+	if pillsRow then
+		pillsRow:Destroy()
+		pillsRow = nil
+	end
+	table.clear(pills)
+	local phone = Interface.IsPhone()
+	local height = Interface.IsTouch() and Theme.TouchTarget or PILL_HEIGHT
+	-- Marge verticale du support (place pour le badge rouge sur téléphone)
+	local holderPad = phone and 12 or 6
+	local buttonY = phone and 7 or 3
+	pillsDevice = Interface.Device
+
+	local row: GuiObject
+	if phone then
+		row = UIUtil.Create("ScrollingFrame", {
+			Name = "Pills",
+			Size = UDim2.fromOffset(pillsRowWidth(), height + holderPad),
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			ScrollingDirection = Enum.ScrollingDirection.X,
+			AutomaticCanvasSize = Enum.AutomaticSize.X,
+			CanvasSize = UDim2.new(),
+			ScrollBarThickness = 0,
+			ElasticBehavior = Enum.ElasticBehavior.WhenScrollable,
+			LayoutOrder = order,
+			Parent = parent,
+		})
+		UIUtil.Create("UIPadding", {
+			PaddingLeft = UDim.new(0, 6),
+			PaddingRight = UDim.new(0, 6),
+			Parent = row,
+		})
+	else
+		row = UIUtil.Create("Frame", {
+			Name = "Pills",
+			Size = UDim2.fromOffset(664, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			BackgroundTransparency = 1,
+			LayoutOrder = order,
+			Parent = parent,
+		})
+	end
+	pillsRow = row
 	UIUtil.Create("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
 		VerticalAlignment = Enum.VerticalAlignment.Center,
-		Wraps = true,
+		Wraps = not phone,
 		Padding = UDim.new(0, 8),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = row,
@@ -314,7 +370,7 @@ local function buildPills(parent: Frame, order: number)
 		-- Support (6 px de marge verticale entre deux lignes de pastilles)
 		local holder = UIUtil.Create("Frame", {
 			Name = def.Id,
-			Size = UDim2.fromOffset(def.Round and PILL_HEIGHT or 0, PILL_HEIGHT + 6),
+			Size = UDim2.fromOffset(def.Round and height or 0, height + holderPad),
 			AutomaticSize = def.Round and Enum.AutomaticSize.None or Enum.AutomaticSize.X,
 			BackgroundTransparency = 1,
 			LayoutOrder = index,
@@ -323,13 +379,13 @@ local function buildPills(parent: Frame, order: number)
 		})
 		local button = UIUtil.PillButton({
 			Name = "Button",
-			Text = def.Text,
+			Text = Locale.T(def.Text),
 			Color = def.Color,
 			TextColor3 = def.Round and Theme.Colors.Text or Theme.Colors.TextLight,
-			Height = PILL_HEIGHT,
-			TextSize = def.Round and 20 or 16,
+			Height = height,
+			TextSize = def.Round and math.floor(height * 0.56) or math.floor(height * 0.45),
 			Round = def.Round,
-			Position = UDim2.fromOffset(0, 3),
+			Position = UDim2.fromOffset(0, buttonY),
 			Parent = holder,
 		})
 		if not def.Round then
@@ -345,7 +401,7 @@ local function buildPills(parent: Frame, order: number)
 		end
 		UIUtil.Shadow(button, 2, 0.86, 2)
 		local badge = UIUtil.Badge(button, 22)
-		badge.Position = UDim2.new(1, -2, 0, 2)
+		badge.Position = UDim2.new(1, -2, 0, phone and 6 or 2)
 		UIUtil.Create("UIScale", { Name = "PopScale", Parent = holder })
 
 		button.Activated:Connect(function()
@@ -412,7 +468,7 @@ local function buildCombo(parent: Frame, order: number)
 		ColorSequenceKeypoint.new(1, Theme.Colors.Red),
 	}), 0)
 	comboLabel = UIUtil.Label({
-		Text = "COMBO x1",
+		Text = Locale.T("COMBO %s", "x1"),
 		Font = Theme.Fonts.Title,
 		Size = UDim2.new(1, -10, 1, -4),
 		Position = UDim2.fromOffset(5, 2),
@@ -609,7 +665,8 @@ local function applyDarkMode(dark: boolean)
 	end
 end
 
-local function refreshPills()
+local function refreshPills(instant: boolean?)
+	local skipPop = instant == true
 	for _, pill in pairs(pills) do
 		local feature = pill.Def.Feature
 		local shouldShow = (feature == nil or ClientState.HasFeature(feature))
@@ -617,7 +674,7 @@ local function refreshPills()
 		if shouldShow and not pill.Holder.Visible then
 			pill.Holder.Visible = true
 			local scale = pill.Holder:FindFirstChild("PopScale") :: UIScale?
-			if scale then
+			if scale and not skipPop then
 				scale.Scale = 0.2
 				UIUtil.Tween(scale, 0.4, { Scale = 1 }, Enum.EasingStyle.Back)
 			end
@@ -690,7 +747,7 @@ local function refreshBadges()
 end
 
 local function onState(data)
-	perSecondLabel.Text = formatAmount(data.PerSecond or 0) .. " Dopamine par seconde"
+	perSecondLabel.Text = Locale.T("%s Dopamine per second", formatAmount(data.PerSecond or 0))
 	comboBar.Visible = data.ComboEnabled == true
 	local equipped = data.Cosmetics and data.Cosmetics.Equipped
 	applySkin((equipped and equipped.Skin) or "")
@@ -787,7 +844,7 @@ function CenterColumn.Build(parent: Frame, floatingLayer: Frame, fxLayer: Frame)
 
 	perSecondLabel = UIUtil.Label({
 		Name = "PerSecond",
-		Text = "0 Dopamine par seconde",
+		Text = Locale.T("%s Dopamine per second", "0"),
 		TextColor3 = Theme.Colors.TextDim,
 		Size = UDim2.fromOffset(320, 22),
 		LayoutOrder = 2,
@@ -800,6 +857,7 @@ function CenterColumn.Build(parent: Frame, floatingLayer: Frame, fxLayer: Frame)
 	perSecondStroke.Enabled = false
 
 	buildRush(perSecondLabel)
+	pillsStack = stack
 	buildPills(stack, 5)
 	buildCombo(stack, 6)
 	local upgradeBar = UpgradeBar.Build(stack, floatingLayer)
@@ -815,7 +873,9 @@ function CenterColumn.Build(parent: Frame, floatingLayer: Frame, fxLayer: Frame)
 			counterCelebrate(1)
 		end
 	end)
-	ClientState.FeaturesChanged:Connect(refreshPills)
+	ClientState.FeaturesChanged:Connect(function()
+		refreshPills()
+	end)
 	ClientState.DarkModeChanged:Connect(applyDarkMode)
 	applyDarkMode(ClientState.DarkMode)
 	PanelManager.Opened:Connect(function(name: string)
@@ -846,7 +906,7 @@ function CenterColumn.Build(parent: Frame, floatingLayer: Frame, fxLayer: Frame)
 		if comboBar.Visible then
 			local meter = ClientState.GetComboMeter()
 			comboFill.Size = UDim2.fromScale(meter / 100, 1)
-			comboLabel.Text = "COMBO " .. NumberFormatter.Multiplier(Formulas.GetComboMultiplier(meter))
+			comboLabel.Text = Locale.T("COMBO %s", NumberFormatter.Multiplier(Formulas.GetComboMultiplier(meter)))
 			comboBar.Rotation = meter >= 99.5 and math.sin(os.clock() * 30) * 1.5 or 0
 		end
 
@@ -857,7 +917,12 @@ function CenterColumn.Build(parent: Frame, floatingLayer: Frame, fxLayer: Frame)
 			rushBanner.Visible = active
 		end
 		if active then
-			rushLabel.Text = string.format("⚡ %s x%s — %ds", tostring(rush.Name or "RUSH"), tostring(rush.Multiplier or 2), math.ceil(remaining))
+			rushLabel.Text = string.format(
+				"⚡ %s x%s — %ds",
+				Locale.T(tostring(rush.Name or "RUSH")),
+				tostring(rush.Multiplier or 2),
+				math.ceil(remaining)
+			)
 			rushBanner.Rotation = math.sin(os.clock() * 8) * 1.5
 		end
 
@@ -883,6 +948,20 @@ function CenterColumn.Build(parent: Frame, floatingLayer: Frame, fxLayer: Frame)
 			task.wait(2)
 		end
 	end)
+
+	-- Écran qui change (téléphone <-> tablette, rotation) : pastilles et largeurs
+	local function relayout()
+		if Interface.Device ~= pillsDevice then
+			buildPills(pillsStack, 5)
+			refreshPills(true)
+			refreshBadges()
+		elseif pillsRow and pillsRow:IsA("ScrollingFrame") then
+			local row = pillsRow :: ScrollingFrame
+			row.Size = UDim2.fromOffset(pillsRowWidth(), row.Size.Y.Offset)
+		end
+	end
+	Interface.DeviceChanged:Connect(relayout)
+	Slots.Changed:Connect(relayout)
 
 	if ClientState.Data then
 		onState(ClientState.Data)

@@ -22,6 +22,8 @@
 	    et la couleur suivent la vitesse, et les tours / minute.
 ]]
 
+local Locale = require(game:GetService("ReplicatedStorage").Shared.Locale)
+
 local Pinwheel = {}
 Pinwheel.Slot = "CL"
 
@@ -43,7 +45,10 @@ local BLADE_COLORS = {
 	Color3.fromRGB(70, 206, 140), -- menthe
 }
 
-local LIFT_TEXTS = { "Il va décoller ! 🚁", "Accroche-toi !", "Trop de vent !!", "WOUUUSH" }
+local LIFT_TEXTS = {
+	en = { "It's gonna take off! 🚁", "Hold on tight!", "Too much wind!!", "WHOOOOSH" },
+	fr = { "Il va décoller ! 🚁", "Accroche-toi !", "Trop de vent !!", "WOUUUSH" },
+}
 
 -- Transparence "demi-carré" : une moitié opaque, l'autre invisible (bord net)
 local function halfTransparency(opaqueFirst: boolean): NumberSequence
@@ -534,9 +539,10 @@ function Pinwheel.Start(ctx)
 		ZIndex = 13,
 		Parent = dial,
 	})
+	local rpmFormat = Locale.T("%d rpm")
 	local rpmLabel = UIUtil.Label({
 		Name = "Rpm",
-		Text = "12 tr/min",
+		Text = Locale.T("%d rpm", 12),
 		Font = Theme.Fonts.Number,
 		TextColor3 = WHITE,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -549,7 +555,7 @@ function Pinwheel.Start(ctx)
 
 	local hint = UIUtil.Label({
 		Name = "Hint",
-		Text = "Souffle ! 🌬️",
+		Text = Locale.T("Blow! 🌬️"),
 		Font = Theme.Fonts.Title,
 		TextColor3 = Theme.Colors.TextDark,
 		BackgroundColor3 = WHITE,
@@ -710,7 +716,8 @@ function Pinwheel.Start(ctx)
 		end
 		if liftAmount > 0.3 and not lifting then
 			lifting = true
-			liftLabel.Text = LIFT_TEXTS[random:NextInteger(1, #LIFT_TEXTS)]
+			local liftTexts = Locale.Pick(LIFT_TEXTS)
+			liftLabel.Text = liftTexts[random:NextInteger(1, #liftTexts)]
 			UIUtil.Tween(liftLabel, 0.2, { TextTransparency = 0 })
 			UIUtil.Tween(liftStroke, 0.2, { Transparency = 0 })
 		elseif liftAmount < 0.1 and lifting then
@@ -736,7 +743,7 @@ function Pinwheel.Start(ctx)
 		rpmTimer -= dt
 		if rpmTimer <= 0 then
 			rpmTimer = 0.12
-			rpmLabel.Text = math.floor(speed / 6 + 0.5) .. " tr/min"
+			rpmLabel.Text = string.format(rpmFormat, math.floor(speed / 6 + 0.5))
 			dialStroke.Color = ratio < 0.5 and SLOW_COLOR:Lerp(MID_COLOR, ratio * 2) or MID_COLOR:Lerp(FAST_COLOR, (ratio - 0.5) * 2)
 		end
 

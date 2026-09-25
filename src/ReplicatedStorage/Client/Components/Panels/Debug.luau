@@ -10,18 +10,27 @@
 	et affiche le message renvoyé par le serveur dans la barre du haut.
 	Les mêmes commandes existent dans le chat (/give, /unlockall, /aide...).
 	Le panneau n'est enregistré que dans Studio (voir ClientMain).
+	v5 : section "🌐 Langue & écran" : 🌐 EN/FR (réglage Language, effectif
+	au prochain passage), 🌙 mode sombre, 📱 profil d'appareil forcé
+	(Téléphone / Tablette / PC) pour tester l'interface responsive.
 ]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Client = script.Parent.Parent.Parent
 local Theme = require(Client.Theme)
 local UIUtil = require(Client.UIUtil)
 local ClientState = require(Client.ClientState)
 local SoundManager = require(Client.SoundManager)
+local Interface = require(Client.Interface)
 local DebugTools = require(script.Parent.Parent.DebugTools)
+local Net = require(ReplicatedStorage.Shared.Net)
+local Locale = require(ReplicatedStorage.Shared.Locale)
 
+-- Title / Subtitle en anglais : traduits par PanelManager
 local Debug = {
-	Title = "🛠️ Outils de test",
-	Subtitle = "Studio uniquement : jamais visible dans le jeu publié",
+	Title = "🛠️ Test tools",
+	Subtitle = "Studio only: never visible in the published game",
 	Color = Theme.Colors.Red,
 	Size = Vector2.new(740, 580),
 }
@@ -34,9 +43,55 @@ type Action = {
 	Color: Color3,
 	Confirm: boolean?,
 	Pass: string?, -- Id du Game Pass (affiche ON / OFF)
+	Run: (() -> (boolean, string))?, -- action locale (sans commande serveur)
 }
 
+-- Actions locales de la section "Langue & écran"
+local DEVICE_CYCLE = { "Auto", "Phone", "Tablet", "Desktop" }
+local deviceIndex = 1
+
+local function toggleLanguage(): (boolean, string)
+	local target = Locale.GetLanguage() == "fr" and "en" or "fr"
+	local ok, success = pcall(function()
+		return Net.Function("SetSetting"):InvokeServer("Language", target)
+	end)
+	if not ok or success ~= true then
+		return false, Locale.T("Couldn't save the language, try again.")
+	end
+	local data = ClientState.Data
+	if data and type(data.Settings) == "table" then
+		data.Settings.Language = target
+	end
+	return true, Locale.TFor(target, "Language will change after rejoining") .. " (" .. string.upper(target) .. ")"
+end
+
+local function toggleDarkMode(): (boolean, string)
+	local enabled = not ClientState.IsUserDarkMode()
+	ClientState.SetUserDarkMode(enabled)
+	pcall(function()
+		Net.Function("SetSetting"):InvokeServer("DarkMode", enabled)
+	end)
+	return true, enabled and Locale.T("Dark mode on") or Locale.T("Dark mode off")
+end
+
+local function cycleDevice(): (boolean, string)
+	deviceIndex = deviceIndex % #DEVICE_CYCLE + 1
+	local device = DEVICE_CYCLE[deviceIndex]
+	Interface.SetDeviceOverride(device ~= "Auto" and device or nil)
+	return true, Locale.T("Screen profile: %s", Interface.Device .. (device == "Auto" and " (auto)" or ""))
+end
+
+-- Textes en anglais, traduits à la construction
 local SECTIONS = {
+	{
+		Title = "🌐 Language & screen",
+		Color = Theme.Colors.Blue,
+		Actions = {
+			{ Text = "EN/FR", Icon = "🌐", Command = "language", Color = Theme.Colors.Blue, Run = toggleLanguage },
+			{ Text = "Dark mode", Icon = "🌙", Command = "darkmode", Color = Theme.Colors.Dark, Run = toggleDarkMode },
+			{ Text = "Phone/Tablet/PC", Icon = "📱", Command = "device", Color = Theme.Colors.Cyan, Run = cycleDevice },
+		},
+	},
 	{
 		Title = "💧 Dopamine",
 		Color = Theme.Colors.Cyan,
@@ -51,51 +106,51 @@ local SECTIONS = {
 		Title = "🚀 Progression",
 		Color = Theme.Colors.Green,
 		Actions = {
-			{ Text = "Tout débloquer", Icon = "🔓", Command = "unlockall", Color = Theme.Colors.Green },
+			{ Text = "Unlock all", Icon = "🔓", Command = "unlockall", Color = Theme.Colors.Green },
 			{ Text = "Rush", Icon = "⚡", Command = "rush", Color = Theme.Colors.Yellow },
-			{ Text = "Océan", Icon = "🌊", Command = "detox", Color = Theme.Colors.Cyan },
-			{ Text = "+3 coffres", Icon = "📦", Command = "chest", Arg = "3", Color = Theme.Colors.Orange },
-			{ Text = "Cadeau dispo", Icon = "🎁", Command = "daily", Color = Theme.Colors.Pink },
-			{ Text = "Coin DVD", Icon = "📀", Command = "corner", Color = Theme.Colors.Purple },
-			{ Text = "Sauvegarder", Icon = "💾", Command = "save", Color = Theme.Colors.Dark },
+			{ Text = "Ocean", Icon = "🌊", Command = "detox", Color = Theme.Colors.Cyan },
+			{ Text = "+3 chests", Icon = "📦", Command = "chest", Arg = "3", Color = Theme.Colors.Orange },
+			{ Text = "Gift ready", Icon = "🎁", Command = "daily", Color = Theme.Colors.Pink },
+			{ Text = "DVD corner", Icon = "📀", Command = "corner", Color = Theme.Colors.Purple },
+			{ Text = "Save", Icon = "💾", Command = "save", Color = Theme.Colors.Dark },
 		},
 	},
 	{
-		Title = "✨ Apparitions",
+		Title = "✨ Spawns",
 		Color = Theme.Colors.Gold,
 		Actions = {
-			{ Text = "Étoile", Icon = "🌟", Command = "spawn", Arg = "golden", Color = Theme.Colors.Gold },
-			{ Text = "Éclair", Icon = "⚡", Command = "spawn", Arg = "lightning", Color = Theme.Colors.Yellow },
+			{ Text = "Star", Icon = "🌟", Command = "spawn", Arg = "golden", Color = Theme.Colors.Gold },
+			{ Text = "Lightning", Icon = "⚡", Command = "spawn", Arg = "lightning", Color = Theme.Colors.Yellow },
 			{ Text = "Notif", Icon = "🔔", Command = "spawn", Arg = "notif", Color = Theme.Colors.Blue },
 			{ Text = "Mail", Icon = "✉️", Command = "spawn", Arg = "email", Color = Theme.Colors.Orange },
-			{ Text = "Don (live)", Icon = "💸", Command = "spawn", Arg = "donation", Color = Theme.Colors.Robux },
+			{ Text = "Donation (live)", Icon = "💸", Command = "spawn", Arg = "donation", Color = Theme.Colors.Robux },
 		},
 	},
 	{
-		Title = "💎 Robux (simulation)",
+		Title = "💎 Robux (simulated)",
 		Color = Theme.Colors.Robux,
 		Actions = {
 			{ Text = "Pass x10", Icon = "🚀", Command = "pass", Arg = "x10", Color = Theme.Colors.Purple, Pass = "X10" },
 			{ Text = "Pass x2", Icon = "⚡", Command = "pass", Arg = "x2", Color = Theme.Colors.Blue, Pass = "X2" },
-			{ Text = "Auto-clic", Icon = "🤖", Command = "pass", Arg = "autoclick", Color = Theme.Colors.Cyan, Pass = "AutoClick" },
+			{ Text = "Auto-click", Icon = "🤖", Command = "pass", Arg = "autoclick", Color = Theme.Colors.Cyan, Pass = "AutoClick" },
 			{ Text = "VIP", Icon = "👑", Command = "pass", Arg = "vip", Color = Theme.Colors.Premium, Pass = "VIP" },
 			{ Text = "Boost x5 60 s", Icon = "🔥", Command = "boost", Arg = "5 60", Color = Theme.Colors.Boost },
-			{ Text = "Thème Kawaii", Icon = "🌸", Command = "theme", Arg = "kawaii", Color = Theme.Colors.Pink },
+			{ Text = "Kawaii theme", Icon = "🌸", Command = "theme", Arg = "kawaii", Color = Theme.Colors.Pink },
 		},
 	},
 	{
-		Title = "😴 Hors-ligne",
+		Title = "😴 Offline",
 		Color = Theme.Colors.Purple,
 		Actions = {
-			{ Text = "Absent 2 h", Icon = "🌙", Command = "offline", Arg = "7200", Color = Theme.Colors.Purple },
-			{ Text = "Absent 12 h", Icon = "🛌", Command = "offline", Arg = "43200", Color = Theme.Colors.Blue },
+			{ Text = "Away 2 h", Icon = "🌙", Command = "offline", Arg = "7200", Color = Theme.Colors.Purple },
+			{ Text = "Away 12 h", Icon = "🛌", Command = "offline", Arg = "43200", Color = Theme.Colors.Blue },
 		},
 	},
 	{
 		Title = "⚠️ Danger",
 		Color = Theme.Colors.Red,
 		Actions = {
-			{ Text = "Tout remettre à zéro", Icon = "🧨", Command = "reset", Color = Theme.Colors.Red, Confirm = true },
+			{ Text = "Reset everything", Icon = "🧨", Command = "reset", Color = Theme.Colors.Red, Confirm = true },
 		},
 	},
 }
@@ -154,21 +209,33 @@ local function run(tile: Tile)
 	-- Action dangereuse : deuxième clic pour confirmer
 	if action.Confirm and not tile.Button:GetAttribute("Armed") then
 		tile.Button:SetAttribute("Armed", true)
-		tile.Label.Text = "Sûr ? Reclique !"
+		tile.Label.Text = Locale.T("Sure? Click again!")
 		SoundManager.Play("Error", 1)
 		UIUtil.Shake(tile.Button)
 		task.delay(CONFIRM_TIME, function()
 			if tile.Button:GetAttribute("Armed") then
 				tile.Button:SetAttribute("Armed", nil)
-				tile.Label.Text = action.Text
+				tile.Label.Text = Locale.T(action.Text)
 			end
 		end)
 		return
 	end
 	tile.Button:SetAttribute("Armed", nil)
-	tile.Label.Text = action.Text
+	tile.Label.Text = Locale.T(action.Text)
 
 	SoundManager.Play("Click", 1.2)
+	-- Action locale (langue, mode sombre, profil d'écran)
+	local localRun = action.Run
+	if localRun then
+		busyCount += 1
+		task.spawn(function()
+			local ok, message = localRun()
+			busyCount -= 1
+			setStatus(ok, message)
+			SoundManager.Play(ok and "Bonus" or "Error", ok and 1.3 or 0.8)
+		end)
+		return
+	end
 	busyCount += 1
 	setStatus(nil, "/" .. action.Command .. (action.Arg and (" " .. action.Arg) or "") .. " ...")
 	task.spawn(function()
@@ -221,7 +288,7 @@ local function buildTile(grid: Frame, action: Action, order: number)
 	})
 	local label = UIUtil.Label({
 		Name = "Text",
-		Text = action.Text,
+		Text = Locale.T(action.Text),
 		Font = Theme.Fonts.Title,
 		TextColor3 = Theme.ContrastText(action.Color),
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -285,7 +352,7 @@ function Debug.Build(content: Frame)
 		Parent = statusBar,
 	})
 	statusText = UIUtil.Label({
-		Text = "Clique un bouton : le message du serveur s'affiche ici.",
+		Text = Locale.T("Click a button: the server's message shows up here."),
 		Font = Theme.Fonts.Title,
 		TextColor3 = Theme.Colors.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -324,7 +391,7 @@ function Debug.Build(content: Frame)
 	local order = 0
 	for _, section in ipairs(SECTIONS) do
 		order += 1
-		UIUtil.SectionHeader(list, section.Title, order, section.Color)
+		UIUtil.SectionHeader(list, Locale.T(section.Title), order, section.Color)
 		order += 1
 		local grid = UIUtil.Create("Frame", {
 			Name = "Grid",
@@ -348,7 +415,7 @@ function Debug.Build(content: Frame)
 	-- Aide : commandes de chat
 	local help = UIUtil.Create("TextLabel", {
 		Name = "ChatHelp",
-		Text = "💬 Dans le chat : " .. DebugTools.HelpText(),
+		Text = Locale.T("💬 In chat: %s", DebugTools.HelpText()),
 		Font = Theme.Fonts.Body,
 		TextSize = 13,
 		TextColor3 = Theme.Colors.TextDim,

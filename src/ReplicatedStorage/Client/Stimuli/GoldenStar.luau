@@ -14,13 +14,30 @@ local Debris = game:GetService("Debris")
 local GoldenStar = {}
 GoldenStar.Slot = "Overlay"
 
+local Locale = require(game:GetService("ReplicatedStorage").Shared.Locale)
+
 local MAX_STARS = 5
 local RAY_COUNT = 6
 local WARNING_TIME = 1.5 -- dernières secondes : l'étoile s'impatiente
 
-local TAGS = { "vite !!", "attrape-moi", "clique ici ✨", "je brille !", "c'est moi 🌟", "par ici !" }
-local HURRY_TAGS = { "trop tard ?", "je pars !", "bye bye...", "dépêche !" }
-local CHEERS = { "QUELLE CHANCE !", "ÉTOILE ATTRAPÉE !", "DORÉ !!!", "BRILLANT !", "RÉFLEXES DE CHAT !" }
+local TAGS = {
+	en = { "quick!!", "catch me", "click here ✨", "I'm shiny!", "it's me 🌟", "over here!" },
+	fr = { "vite !!", "attrape-moi", "clique ici ✨", "je brille !", "c'est moi 🌟", "par ici !" },
+}
+local HURRY_TAGS = {
+	en = { "too late?", "I'm leaving!", "bye bye...", "hurry up!" },
+	fr = { "trop tard ?", "je pars !", "bye bye...", "dépêche !" },
+}
+local CHEERS = {
+	en = { "SO LUCKY!", "STAR CAUGHT!", "GOLDEN!!!", "BRILLIANT!", "CAT-LIKE REFLEXES!" },
+	fr = { "QUELLE CHANCE !", "ÉTOILE ATTRAPÉE !", "DORÉ !!!", "BRILLANT !", "RÉFLEXES DE CHAT !" },
+}
+
+-- Tire une phrase au hasard dans la liste de la langue du joueur
+local function pickLine(variants, random: Random): string
+	local list = Locale.Pick(variants)
+	return list[random:NextInteger(1, #list)]
+end
 
 function GoldenStar.Start(ctx)
 	local UIUtil = ctx.UIUtil
@@ -191,7 +208,7 @@ function GoldenStar.Start(ctx)
 
 		-- Petite étiquette "vite !!"
 		local tag = UIUtil.Label({
-			Text = TAGS[random:NextInteger(1, #TAGS)],
+			Text = pickLine(TAGS, random),
 			Font = Theme.Fonts.Title,
 			TextColor3 = Theme.Colors.TextDark,
 			BackgroundColor3 = Color3.new(1, 1, 1),
@@ -285,7 +302,7 @@ function GoldenStar.Start(ctx)
 						-- Pressée de partir : tremble et clignote
 						if not star.Hurry then
 							star.Hurry = true
-							star.Tag.Text = HURRY_TAGS[random:NextInteger(1, #HURRY_TAGS)]
+							star.Tag.Text = pickLine(HURRY_TAGS, random)
 							star.Tag.BackgroundColor3 = Theme.Colors.Red
 							star.Tag.TextColor3 = Theme.Colors.TextLight
 						end
@@ -310,7 +327,7 @@ function GoldenStar.Start(ctx)
 		end
 		local position = (payload.SpawnId and positions[payload.SpawnId]) or lastPosition
 		ctx.FloatText(container, position, "+" .. ctx.Format.Format(tonumber(payload.Amount) or 0), gold, 60)
-		ctx.FloatText(container, position + UDim2.fromOffset(0, 50), CHEERS[random:NextInteger(1, #CHEERS)], orange, 26)
+		ctx.FloatText(container, position + UDim2.fromOffset(0, 50), pickLine(CHEERS, random), orange, 26)
 	end)
 end
 

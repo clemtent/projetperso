@@ -29,6 +29,8 @@
 
 local Debris = game:GetService("Debris")
 
+local Locale = require(game:GetService("ReplicatedStorage").Shared.Locale)
+
 local Press = {}
 Press.Slot = "C3"
 
@@ -71,23 +73,26 @@ local MACARON_COLORS = {
 	Color3.fromRGB(236, 86, 124), -- fraise
 }
 
-local MACARON_WORDS = { "CRUNCH !", "SCRONCH !", "CRAC !", "Macaron à plat !", "CROUNCH !" }
+local MACARON_WORDS = {
+	en = { "CRUNCH!", "SCRUNCH!", "CRACK!", "Flat macaron!", "CRONCH!" },
+	fr = { "CRUNCH !", "SCRONCH !", "CRAC !", "Macaron à plat !", "CROUNCH !" },
+}
 
 local EMOJI_ITEMS = {
-	{ Icon = "🍉", Color = Color3.fromRGB(235, 70, 80), Words = { "SPLOTCH !", "SCHPLOUF !" } },
-	{ Icon = "🥫", Color = Color3.fromRGB(205, 60, 45), Words = { "CRONCH !", "CLONK !" } },
-	{ Icon = "🧸", Color = Color3.fromRGB(190, 130, 70), Words = { "POUF !", "Pardon nounours..." } },
-	{ Icon = "🎂", Color = Color3.fromRGB(255, 190, 215), Words = { "SPLAF !", "Joyeux écrasement !" } },
-	{ Icon = "🥚", Color = Color3.fromRGB(255, 214, 60), Words = { "CRAC !", "Omelette !" } },
-	{ Icon = "🍩", Color = Color3.fromRGB(255, 140, 190), Words = { "SCRONCH !", "Donut plat !" } },
-	{ Icon = "🧊", Color = Color3.fromRGB(170, 225, 255), Words = { "CRIIIC !", "Glace pilée !" } },
-	{ Icon = "🎈", Color = Color3.fromRGB(240, 60, 80), Words = { "POP !!!", "BANG !" }, Special = "Pop" },
-	{ Icon = "🦆", Color = Color3.fromRGB(255, 212, 40), Words = { "POUIC !", "COIN !" } },
-	{ Icon = "🍅", Color = Color3.fromRGB(230, 40, 30), Words = { "SPLOTCH !", "Ketchup maison !" } },
-	{ Icon = "🧽", Color = Color3.fromRGB(250, 220, 70), Words = { "SCHLURP !" }, Special = "Sponge" },
-	{ Icon = "🍔", Color = Color3.fromRGB(200, 120, 50), Words = { "SMASH !", "Smash burger !" } },
-	{ Icon = "📦", Color = Color3.fromRGB(190, 140, 80), Words = { "CRAC !", "Colis livré (à plat)" } },
-	{ Icon = "🍋", Color = Color3.fromRGB(255, 230, 60), Words = { "PSCHIT !", "Limonade !" } },
+	{ Icon = "🍉", Color = Color3.fromRGB(235, 70, 80), Words = { en = { "SPLOTCH!", "SPLOOSH!" }, fr = { "SPLOTCH !", "SCHPLOUF !" } } },
+	{ Icon = "🥫", Color = Color3.fromRGB(205, 60, 45), Words = { en = { "CRONCH!", "CLONK!" }, fr = { "CRONCH !", "CLONK !" } } },
+	{ Icon = "🧸", Color = Color3.fromRGB(190, 130, 70), Words = { en = { "POOF!", "Sorry, teddy..." }, fr = { "POUF !", "Pardon nounours..." } } },
+	{ Icon = "🎂", Color = Color3.fromRGB(255, 190, 215), Words = { en = { "SPLAT!", "Happy squish-day!" }, fr = { "SPLAF !", "Joyeux écrasement !" } } },
+	{ Icon = "🥚", Color = Color3.fromRGB(255, 214, 60), Words = { en = { "CRACK!", "Omelette!" }, fr = { "CRAC !", "Omelette !" } } },
+	{ Icon = "🍩", Color = Color3.fromRGB(255, 140, 190), Words = { en = { "SCRUNCH!", "Flat donut!" }, fr = { "SCRONCH !", "Donut plat !" } } },
+	{ Icon = "🧊", Color = Color3.fromRGB(170, 225, 255), Words = { en = { "CRIIICK!", "Crushed ice!" }, fr = { "CRIIIC !", "Glace pilée !" } } },
+	{ Icon = "🎈", Color = Color3.fromRGB(240, 60, 80), Words = { en = { "POP!!!", "BANG!" }, fr = { "POP !!!", "BANG !" } }, Special = "Pop" },
+	{ Icon = "🦆", Color = Color3.fromRGB(255, 212, 40), Words = { en = { "SQUEAK!", "QUACK!" }, fr = { "POUIC !", "COIN !" } } },
+	{ Icon = "🍅", Color = Color3.fromRGB(230, 40, 30), Words = { en = { "SPLOTCH!", "Homemade ketchup!" }, fr = { "SPLOTCH !", "Ketchup maison !" } } },
+	{ Icon = "🧽", Color = Color3.fromRGB(250, 220, 70), Words = { en = { "SCHLURP!" }, fr = { "SCHLURP !" } }, Special = "Sponge" },
+	{ Icon = "🍔", Color = Color3.fromRGB(200, 120, 50), Words = { en = { "SMASH!", "Smash burger!" }, fr = { "SMASH !", "Smash burger !" } } },
+	{ Icon = "📦", Color = Color3.fromRGB(190, 140, 80), Words = { en = { "CRACK!", "Package delivered (flat)" }, fr = { "CRAC !", "Colis livré (à plat)" } } },
+	{ Icon = "🍋", Color = Color3.fromRGB(255, 230, 60), Words = { en = { "PSSHT!", "Lemonade!" }, fr = { "PSCHIT !", "Limonade !" } } },
 }
 
 ----------------------------------------------------------------------
@@ -119,10 +124,13 @@ end
 
 local rgb = Color3.fromRGB
 
+-- Texte traduit : { en = "...", fr = "..." } (choisi avec Locale.Pick)
+type Localized = { en: string, fr: string }
+
 type TierStyle = {
-	Name: string,
+	Name: Localized,
 	Icon: string,
-	Shout: string,
+	Shout: Localized,
 	Chip: Color3,
 	ChipText: Color3,
 	CardTop: Color3,
@@ -145,8 +153,8 @@ type TierStyle = {
 
 local TIERS: { TierStyle } = {
 	{
-		Name = "Bois & corde",
-		Shout = "PRESSE EN BOIS !",
+		Name = { en = "Wood & rope", fr = "Bois & corde" },
+		Shout = { en = "WOODEN PRESS!", fr = "PRESSE EN BOIS !" },
 		Icon = "🪵",
 		Chip = rgb(170, 112, 64),
 		ChipText = rgb(255, 255, 255),
@@ -166,14 +174,14 @@ local TIERS: { TierStyle } = {
 		Base = seq(rgb(170, 116, 70), rgb(96, 60, 34)),
 		Debris = { rgb(170, 112, 64), rgb(226, 196, 138) },
 		Items = {
-			{ Icon = "🥥", Color = rgb(130, 86, 52), Words = { "CRAC !", "Noix de coco ouverte !" } },
-			{ Icon = "🥖", Color = rgb(222, 170, 92), Words = { "CROUSTI !", "Baguette à plat !" } },
-			{ Icon = "🌰", Color = rgb(150, 90, 50), Words = { "CRIC !", "Châtaigne pilée !" } },
+			{ Icon = "🥥", Color = rgb(130, 86, 52), Words = { en = { "CRACK!", "Coconut: opened!" }, fr = { "CRAC !", "Noix de coco ouverte !" } } },
+			{ Icon = "🥖", Color = rgb(222, 170, 92), Words = { en = { "CRUNCHY!", "Flat baguette!" }, fr = { "CROUSTI !", "Baguette à plat !" } } },
+			{ Icon = "🌰", Color = rgb(150, 90, 50), Words = { en = { "CRICK!", "Mashed chestnut!" }, fr = { "CRIC !", "Châtaigne pilée !" } } },
 		},
 	},
 	{
-		Name = "Acier",
-		Shout = "PRESSE EN ACIER !",
+		Name = { en = "Steel", fr = "Acier" },
+		Shout = { en = "STEEL PRESS!", fr = "PRESSE EN ACIER !" },
 		Icon = "⚙️",
 		Chip = rgb(96, 104, 120),
 		ChipText = rgb(255, 255, 255),
@@ -193,13 +201,13 @@ local TIERS: { TierStyle } = {
 		Base = seq(rgb(140, 146, 160), rgb(50, 54, 64)),
 		Debris = { rgb(200, 205, 215) },
 		Items = {
-			{ Icon = "🔩", Color = rgb(150, 150, 165), Words = { "CLONK !", "Boulon aplati !" } },
-			{ Icon = "🥫", Color = rgb(205, 60, 45), Words = { "CRONCH !", "Conserve compacte !" } },
+			{ Icon = "🔩", Color = rgb(150, 150, 165), Words = { en = { "CLONK!", "Flattened bolt!" }, fr = { "CLONK !", "Boulon aplati !" } } },
+			{ Icon = "🥫", Color = rgb(205, 60, 45), Words = { en = { "CRONCH!", "Compact can!" }, fr = { "CRONCH !", "Conserve compacte !" } } },
 		},
 	},
 	{
-		Name = "Industrielle",
-		Shout = "PRESSE INDUSTRIELLE !",
+		Name = { en = "Industrial", fr = "Industrielle" },
+		Shout = { en = "INDUSTRIAL PRESS!", fr = "PRESSE INDUSTRIELLE !" },
 		Icon = "🏭",
 		Chip = rgb(232, 110, 30),
 		ChipText = rgb(255, 255, 255),
@@ -219,14 +227,14 @@ local TIERS: { TierStyle } = {
 		Base = seq(rgb(100, 106, 120), rgb(34, 38, 46)),
 		Debris = { rgb(120, 126, 140), rgb(255, 150, 60) },
 		Items = {
-			{ Icon = "🚗", Color = rgb(220, 50, 50), Words = { "CRUNCH !", "Compression auto !" } },
-			{ Icon = "📺", Color = rgb(90, 90, 104), Words = { "KRZZT !", "Écran plat !" } },
-			{ Icon = "🧯", Color = rgb(220, 40, 40), Words = { "PSCHHHT !", "Extincteur éteint !" } },
+			{ Icon = "🚗", Color = rgb(220, 50, 50), Words = { en = { "CRUNCH!", "Car compactor!" }, fr = { "CRUNCH !", "Compression auto !" } } },
+			{ Icon = "📺", Color = rgb(90, 90, 104), Words = { en = { "KRZZT!", "Flat screen TV!" }, fr = { "KRZZT !", "Écran plat !" } } },
+			{ Icon = "🧯", Color = rgb(220, 40, 40), Words = { en = { "PSSHHHT!", "Extinguisher: extinguished!" }, fr = { "PSCHHHT !", "Extincteur éteint !" } } },
 		},
 	},
 	{
-		Name = "Or massif",
-		Shout = "PRESSE EN OR !",
+		Name = { en = "Solid gold", fr = "Or massif" },
+		Shout = { en = "GOLDEN PRESS!", fr = "PRESSE EN OR !" },
 		Icon = "👑",
 		Chip = rgb(255, 194, 26),
 		ChipText = rgb(70, 44, 0),
@@ -246,14 +254,14 @@ local TIERS: { TierStyle } = {
 		Base = seq(rgb(250, 210, 90), rgb(160, 100, 10)),
 		Debris = { rgb(255, 214, 70), rgb(255, 246, 200) },
 		Items = {
-			{ Icon = "🏆", Color = rgb(255, 196, 40), Words = { "CLANG !", "Trophée à plat !" } },
-			{ Icon = "💰", Color = rgb(230, 190, 60), Words = { "KA-CHING !", "Pluie de pièces !" } },
-			{ Icon = "👑", Color = rgb(255, 204, 40), Words = { "CRONCH !", "Couronne aplatie !" } },
+			{ Icon = "🏆", Color = rgb(255, 196, 40), Words = { en = { "CLANG!", "Flat trophy!" }, fr = { "CLANG !", "Trophée à plat !" } } },
+			{ Icon = "💰", Color = rgb(230, 190, 60), Words = { en = { "KA-CHING!", "It's raining coins!" }, fr = { "KA-CHING !", "Pluie de pièces !" } } },
+			{ Icon = "👑", Color = rgb(255, 204, 40), Words = { en = { "CRONCH!", "Crown: flattened!" }, fr = { "CRONCH !", "Couronne aplatie !" } } },
 		},
 	},
 	{
-		Name = "Diamant néon",
-		Shout = "PRESSE DIAMANT !",
+		Name = { en = "Neon diamond", fr = "Diamant néon" },
+		Shout = { en = "DIAMOND PRESS!", fr = "PRESSE DIAMANT !" },
 		Icon = "💎",
 		Chip = rgb(0, 214, 255),
 		ChipText = rgb(10, 20, 40),
@@ -273,9 +281,9 @@ local TIERS: { TierStyle } = {
 		Base = seq(rgb(80, 60, 150), rgb(20, 14, 40)),
 		Debris = { rgb(0, 230, 255), rgb(255, 60, 200), rgb(255, 255, 255) },
 		Items = {
-			{ Icon = "💎", Color = rgb(120, 220, 255), Words = { "CRIIING !", "Diamant ?? Non, du verre." } },
-			{ Icon = "🔮", Color = rgb(190, 120, 255), Words = { "PSHIIIT !", "Avenir écrasé !" } },
-			{ Icon = "🌟", Color = rgb(255, 230, 90), Words = { "SHIIING !", "Étoile filante... à plat" } },
+			{ Icon = "💎", Color = rgb(120, 220, 255), Words = { en = { "CRIIING!", "Diamond?? Nope, glass." }, fr = { "CRIIING !", "Diamant ?? Non, du verre." } } },
+			{ Icon = "🔮", Color = rgb(190, 120, 255), Words = { en = { "PSHIIIT!", "Future: crushed!" }, fr = { "PSHIIIT !", "Avenir écrasé !" } } },
+			{ Icon = "🌟", Color = rgb(255, 230, 90), Words = { en = { "SHIIING!", "Shooting star... flattened" }, fr = { "SHIIING !", "Étoile filante... à plat" } } },
 		},
 	},
 }
@@ -360,7 +368,7 @@ function Press.Start(ctx)
 
 	-- En-tête : titre, pastille de palier "Niv. X", compteur, vitesse
 	local titleLabel = UIUtil.Label({
-		Text = "🗜️ PRESSE",
+		Text = Locale.T("🗜️ PRESS"),
 		Font = Theme.Fonts.Title,
 		TextColor3 = Theme.Colors.TextDark,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -519,7 +527,7 @@ function Press.Start(ctx)
 		Parent = warning,
 	})
 	UIUtil.Label({
-		Text = "NE PAS METTRE LES DOIGTS",
+		Text = Locale.T("KEEP FINGERS CLEAR"),
 		Font = Theme.Fonts.Title,
 		TextColor3 = hazardBlack,
 		Position = UDim2.fromOffset(4, 36),
@@ -749,7 +757,7 @@ function Press.Start(ctx)
 		tierIndex = newTier
 		local style = TIERS[newTier]
 		if tierChipLabel then
-			tierChipLabel.Text = style.Icon .. " Niv. " .. level .. " · " .. style.Name
+			tierChipLabel.Text = style.Icon .. " " .. Locale.T("Lv. %s", tostring(level)) .. " · " .. Locale.Pick(style.Name)
 			tierChipLabel.TextColor3 = style.ChipText
 		end
 		if tierChanged then
@@ -762,7 +770,7 @@ function Press.Start(ctx)
 				flashCard()
 				ctx.Sound.Play("Buy", 1.1)
 				ctx.Effects.Burst(card, UDim2.fromOffset(MX, 120), style.Chip, 14)
-				shout(style.Icon .. " " .. style.Shout, style.Chip, 150)
+				shout(style.Icon .. " " .. Locale.Pick(style.Shout), style.Chip, 150)
 			end
 		end
 	end
@@ -1083,7 +1091,7 @@ function Press.Start(ctx)
 		shakeTime = turbo and 0.38 or 0.26
 		shakePower = 1 + (tierIndex - 1) * 0.15 + (turbo and 0.4 or 0)
 
-		local words = def.Words
+		local words = Locale.Pick(def.Words)
 		local word = words[random:NextInteger(1, #words)]
 		if turbo then
 			word = "TURBO " .. word
@@ -1181,7 +1189,7 @@ function Press.Start(ctx)
 			if entry.Parts.Splat then
 				entry.Parts.Splat.Visible = false
 			end
-			shout("...elle est revenue", nil, nil)
+			shout(Locale.T("...and it's back"), nil, nil)
 			-- Part avant la fin de la remontée (phaseDuration = durée de "Rise") :
 			-- sinon, à haute vitesse, l'objet suivant arrive sur l'éponge
 			task.delay(math.min(0.75, phaseDuration * 0.8), function()
