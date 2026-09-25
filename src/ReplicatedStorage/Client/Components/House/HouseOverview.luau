@@ -128,6 +128,7 @@ type Card = {
 	Hit: TextButton,
 	Slot: number,
 	Hovered: boolean,
+	ChipKey: string,
 }
 
 type EmptySlot = {
@@ -413,6 +414,32 @@ function HouseOverview.new(parent: Frame, handlers: Handlers): Overview
 		table.insert(hills, hill)
 	end
 
+	-- Ciel de HouseExterior (Contrat A, facultatif) : remplace le nôtre
+	type Backdrop = { Frame: Frame, SetDark: (dark: boolean) -> (), Update: (dt: number) -> (), Destroy: () -> () }
+	local backdrop: Backdrop? = nil
+	do
+		local moduleScript = script.Parent:FindFirstChild("HouseExterior")
+		if moduleScript and moduleScript:IsA("ModuleScript") then
+			local ok, result = pcall(function()
+				local module = (require :: any)(moduleScript)
+				if type(module.BuildBackdrop) ~= "function" then
+					return nil
+				end
+				local built = module.BuildBackdrop(root, nil)
+				assert(type(built) == "table" and typeof(built.Frame) == "Instance", "bad backdrop")
+				return built
+			end)
+			if ok and result then
+				local built = result :: any
+				built.Frame.ZIndex = 1
+				backdrop = built :: Backdrop
+				sky.Visible = false
+			elseif not ok then
+				warn("[HouseOverview] Ciel de HouseExterior : " .. tostring(result))
+			end
+		end
+	end
+
 	------------------------------------------------------------------
 	-- Immeuble (zoom) et calque de glissement
 	------------------------------------------------------------------
@@ -570,9 +597,19 @@ function HouseOverview.new(parent: Frame, handlers: Handlers): Overview
 		table.insert(candidates, roomType.Icon)
 		local rect = rectOf(card.Slot) or rectOf(slotOf(room))
 		local s = card.ChipScale.Scale
+		-- (rien n'a changé : pas de nouvelles mesures de texte)
+		local key = table.concat(candidates, "|") .. string.format("|%.3f|%s|%s|%d", s, tostring(arranging), tostring(card.Hovered), rect and rect.W or 0)
+		if key == card.ChipKey then
+			return
+		end
+		card.ChipKey = key
 		local maxWidth = (rect and rect.W or 300) - 12 * s - (arranging and 44 * s or 0)
 		local chosen = candidates[#candidates]
-		for _, text in ipairs(candidates) do
+		-- (survol : le nom complet, même s'il dépasse un peu de la case)
+		if card.Hovered then
+			chosen = candidates[1]
+		end
+		for _, text in ipairs(card.Hovered and {} or candidates) do
 			if (textWidth(text) + 26) * s <= maxWidth then
 				chosen = text
 				break
@@ -703,18 +740,33 @@ function HouseOverview.new(parent: Frame, handlers: Handlers): Overview
 			Hit = hit,
 			Slot = slotOf(room),
 			Hovered = false,
+			ChipKey = "",
 		}
 		hit.MouseEnter:Connect(function()
 			if drag then
 				return
 			end
 			card.Hovered = true
+			frame.ZIndex = 3
 			paintCard(card)
+			local currentHouse = house
+			local roomData = currentHouse and HouseCommon.GetRoom(currentHouse, card.RoomId)
+			if roomData then
+				fitChip(card, roomData)
+			end
 			UIUtil.Pop(chip, 1.1, 0.25)
 		end)
 		hit.MouseLeave:Connect(function()
 			card.Hovered = false
+			if frame.Parent ~= dragLayer then
+				frame.ZIndex = 2
+			end
 			paintCard(card)
+			local currentHouse = house
+			local roomData = currentHouse and HouseCommon.GetRoom(currentHouse, card.RoomId)
+			if roomData then
+				fitChip(card, roomData)
+			end
 		end)
 		hit.InputBegan:Connect(function(input: InputObject)
 			local kind = input.UserInputType
@@ -926,11 +978,12 @@ function HouseOverview.new(parent: Frame, handlers: Handlers): Overview
 				empty = newEmpty(slot)
 				empties[slot] = empty
 				applyLabelScales()
+				empty.Frame.BackgroundColor3 = dark and Color3.fromRGB(186, 174, 226) or Color3.fromRGB(255, 244, 250)
 			end
 			if empty then
 				empty.Frame.Visible = isEmpty
 				empty.Price.Text = "💧 " .. NumberFormatter.Format(cost)
-				empty.Price.TextColor3 = affordable and Theme.Colors.Green or C.PinkDeep
+				empty.Price.TextColor3 = affordable and Color3.fromRGB(34, 150, 92) or C.PinkDeep
 			end
 		end
 	end
@@ -1167,7 +1220,7 @@ function HouseOverview.new(parent: Frame, handlers: Handlers): Overview
 			minY, maxY = math.max(0, minY - 150), math.min(ext.Height, maxY + 70)
 			local focus = math.max(0.05, math.min(availW / (maxX - minX), availH / (maxY - minY)))
 			-- (PC / tablette : l'immeuble entier tant qu'il reste assez grand)
-			if full < focus * (Interface.IsPhone() and 0.85 or 0.62) then
+			if full < focus * (Interface.IsPhone() and 0.85 or 0.5) then
 				local cx = (minX + maxX) / 2 - ext.Width / 2
 				local cy = (minY + maxY) / 2 - ext.Height / 2
 				return focus, UDim2.new(0.5, -cx * focus, 0.5, -cy * focus - HINT_SPACE / 2 + 4)
@@ -1267,6 +1320,10 @@ function HouseOverview.new(parent: Frame, handlers: Handlers): Overview
 		end,
 		SetDark = function(value: boolean)
 			dark = value
+			local currentBackdrop = backdrop
+			if currentBackdrop then
+				pcall(currentBackdrop.SetDark, value)
+			end
 			skyGradient.Color = value and SKY_NIGHT or SKY_DAY
 			sunDisc.BackgroundColor3 = value and Color3.fromRGB(255, 244, 200) or Color3.fromRGB(255, 226, 130)
 			sunGlow.BackgroundColor3 = value and Color3.fromRGB(200, 200, 255) or Color3.fromRGB(255, 240, 180)
@@ -1296,6 +1353,9 @@ function HouseOverview.new(parent: Frame, handlers: Handlers): Overview
 			for _, card in pairs(cards) do
 				card.Mini.SetDark(value)
 			end
+			for _, empty in pairs(empties) do
+				empty.Frame.BackgroundColor3 = value and Color3.fromRGB(186, 174, 226) or Color3.fromRGB(255, 244, 250)
+			end
 		end,
 		SetArranging = function(on: boolean)
 			if arranging == on then
@@ -1318,11 +1378,15 @@ function HouseOverview.new(parent: Frame, handlers: Handlers): Overview
 		end,
 		Update = function(dt: number)
 			clock += dt
-			for _, cloud in ipairs(clouds) do
+			local currentBackdrop = backdrop
+			if currentBackdrop then
+				currentBackdrop.Update(dt)
+			end
+			for _, cloud in ipairs(currentBackdrop and {} or clouds) do
 				cloud.X = (cloud.X + cloud.Speed * dt) % 1.3
 				cloud.Frame.Position = UDim2.fromScale(cloud.X - 0.15, cloud.Y)
 			end
-			if dark then
+			if dark and not currentBackdrop then
 				for _, star in ipairs(stars) do
 					local phase = tonumber(star:GetAttribute("Phase")) or 0
 					local wave = 0.5 + 0.5 * math.sin(clock * 2 + phase)

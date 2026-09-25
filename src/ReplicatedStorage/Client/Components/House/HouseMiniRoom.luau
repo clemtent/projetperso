@@ -128,7 +128,7 @@ function HouseMiniRoom.new(parent: Instance, width: number, height: number): Min
 		ZIndex = 5,
 		Parent = frame,
 	})
-	for index, ring in ipairs({ { 1.5, 0.93 }, { 1.05, 0.9 }, { 0.65, 0.86 } }) do
+	for index, ring in ipairs({ { 1.4, 0.93 }, { 0.8, 0.88 } }) do
 		local size = height * ring[1]
 		local glow = Circle(lampGlow, width / 2, height * 0.12, size * 1.6, size, Color3.fromRGB(255, 214, 140), ring[2], index)
 		glow.Name = "Glow" .. index
@@ -138,7 +138,7 @@ function HouseMiniRoom.new(parent: Instance, width: number, height: number): Min
 	frame.Parent = parent
 
 	local function paintNight()
-		night.BackgroundTransparency = dark and 0.5 or 1
+		night.BackgroundTransparency = dark and 0.72 or 1
 		lampGlow.Visible = dark
 		for _, lamp in ipairs(lamps) do
 			lamp.BackgroundTransparency = dark and 0.72 or 0.9

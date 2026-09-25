@@ -398,33 +398,36 @@ local function refreshTabs()
 	for index, roomData in ipairs(rooms) do
 		local roomType = HouseCommon.GetRoomType(roomData)
 		local isCurrent = roomData.Id == currentRoomId
+		local named = isCurrent and Interface.Device == "Desktop"
 		local tab = UIUtil.Create("TextButton", {
 			Name = "Tab_" .. roomData.Id,
-			Size = UDim2.fromOffset(isCurrent and 0 or height + 4, height),
-			AutomaticSize = isCurrent and Enum.AutomaticSize.X or Enum.AutomaticSize.None,
+			Size = UDim2.fromOffset(named and 0 or height + 4, height),
+			AutomaticSize = named and Enum.AutomaticSize.X or Enum.AutomaticSize.None,
 			BackgroundColor3 = isCurrent and C.PinkDeep or WHITE,
 			AutoButtonColor = false,
 			Font = Theme.Fonts.Title,
-			Text = isCurrent and (isPhone() and roomType.Icon or roomLabel(roomData)) or roomType.Icon,
+			Text = (isCurrent and Interface.Device == "Desktop") and roomLabel(roomData) or roomType.Icon,
 			TextColor3 = isCurrent and WHITE or C.Ink,
-			TextSize = isCurrent and 15 or 20,
+			TextSize = named and 15 or 20,
 			LayoutOrder = index,
 			ZIndex = 7,
 			Parent = tabsScroller,
 		})
 		UIUtil.Corner(tab, UDim.new(1, 0))
 		UIUtil.Stroke(tab, isCurrent and WHITE or C.Pink, isCurrent and 2 or 1.5, isCurrent and 0.1 or 0.35)
-		if isCurrent then
+		if named then
 			UIUtil.Create("UIPadding", {
 				PaddingLeft = UDim.new(0, 12),
 				PaddingRight = UDim.new(0, 12),
 				Parent = tab,
 			})
+		end
+		if isCurrent then
 			UIUtil.Gradient(tab, ColorSequence.new(WHITE, Color3.fromRGB(226, 226, 226)), 90)
 			currentButton = tab
 		end
 		UIUtil.AnimateButton(tab, 1.08, 0.92)
-		total += (isCurrent and textWidth(tab.Text, tab.TextSize, tab.Font) + 28 or height + 4) + 5
+		total += (named and textWidth(tab.Text, tab.TextSize, tab.Font) + 28 or height + 4) + 5
 		tab.Activated:Connect(function()
 			if roomData.Id ~= currentRoomId then
 				SoundManager.Play("Click", 1.2)
@@ -603,6 +606,8 @@ local function layoutLeft(animate: boolean)
 	else
 		stage.Size = stageTarget
 	end
+	task.defer(layoutStageChips)
+	task.delay(0.32, layoutStageChips)
 end
 
 local function refreshEditUi()
