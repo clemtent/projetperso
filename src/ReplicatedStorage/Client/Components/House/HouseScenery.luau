@@ -19,6 +19,7 @@
 	  HouseScenery.new(stage, roomFrame, shell, ceil, zMotes) -> Scenery
 	    :Rebuild(width, height, wallHeight)
 	    :SetDark(dark)
+	    :SetPalette(exterior)   (toit assorti : Cottage, Townhouse, Loft, Mansion)
 	    :Update(dt)
 ]]
 
@@ -39,8 +40,13 @@ local Box = HousePatterns.Box
 local Circle = HousePatterns.Circle
 local Round = HousePatterns.Round
 
-local ROOF_COLOR = Color3.fromRGB(255, 150, 190)
-local ROOF_DARK = Color3.fromRGB(226, 104, 156)
+-- Couleurs du toit selon le style de l'immeuble (House/HouseExterior)
+local ROOF_PALETTES: { [string]: { Color3 } } = {
+	Cottage = { Color3.fromRGB(255, 150, 190), Color3.fromRGB(226, 104, 156) },
+	Townhouse = { Color3.fromRGB(176, 166, 246), Color3.fromRGB(132, 118, 216) },
+	Loft = { Color3.fromRGB(232, 142, 120), Color3.fromRGB(190, 98, 88) },
+	Mansion = { Color3.fromRGB(162, 140, 232), Color3.fromRGB(112, 90, 196) },
+}
 local GRASS = Color3.fromRGB(150, 222, 150)
 local GRASS_DARK = Color3.fromRGB(108, 190, 118)
 
@@ -59,6 +65,7 @@ export type Scenery = {
 	Rebuild: (self: Scenery, width: number, height: number, wallHeight: number) -> (),
 	SetDark: (self: Scenery, dark: boolean) -> (),
 	Update: (self: Scenery, dt: number) -> (),
+	SetPalette: (self: Scenery, exterior: string?) -> (),
 }
 
 type Cloud = { Frame: Frame, Speed: number, Y: number, X: number }
@@ -75,6 +82,9 @@ function HouseScenery.new(stage: Frame, room: Frame, shellSize: number, ceil: nu
 	local dark = false
 	local clock = 0
 	local width, height = 760, 440
+	local ROOF_COLOR = ROOF_PALETTES.Cottage[1]
+	local ROOF_DARK = ROOF_PALETTES.Cottage[2]
+	local paletteName = "Cottage"
 
 	------------------------------------------------------------------
 	-- Fond de scène (derrière la pièce, dans le Stage)
@@ -341,6 +351,18 @@ function HouseScenery.new(stage: Frame, room: Frame, shellSize: number, ceil: nu
 		buildRoof()
 		buildGround()
 		buildMotes()
+		paint()
+	end
+
+	-- Toit assorti à l'immeuble (reconstruit seulement si le style change)
+	function scenery:SetPalette(exterior: string?)
+		local name = exterior and ROOF_PALETTES[exterior :: string] and exterior :: string or "Cottage"
+		if name == paletteName then
+			return
+		end
+		paletteName = name
+		ROOF_COLOR, ROOF_DARK = ROOF_PALETTES[name][1], ROOF_PALETTES[name][2]
+		buildRoof()
 		paint()
 	end
 
