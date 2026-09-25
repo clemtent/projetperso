@@ -365,7 +365,7 @@ Art.CatHeadphones = function(body, kit, _item)
 		-- coussinet de patte
 		kit.Circle(cup, 14, 23, 11, 9, C.PinkSoft, 0, 3)
 		for i = -1, 1 do
-			kit.Circle(cup, 14 + i * 5, 14.5 - math.abs(i) * -1 - (i == 0 and 2 or 0), 5, 5, C.PinkSoft, 0, 3)
+			kit.Circle(cup, 14 + i * 5, i == 0 and 12.5 or 15.5, 5, 5, C.PinkSoft, 0, 3)
 		end
 	end
 	for i, pos in ipairs({ { 46, 40 }, { 58, 30 } }) do

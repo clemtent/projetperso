@@ -100,7 +100,7 @@ local function horse(parent, kit, o)
 	local mane = o.Mane
 	-- queue (derrière)
 	for index, color in ipairs(mane) do
-		kit.Blob(parent, X(-25 - index * 3), Y(-4 + index * 5), 10 * k, 22 * k, color, { Z = 1, Rotation = 30 + index * 14, Thickness = 1.3 })
+		kit.Blob(parent, X(-25 - index * 3), Y(-4 + index * 5), 8 * k, 22 * k, color, { Z = 1, Rotation = 30 + index * 14, Thickness = 1.3 })
 	end
 	-- jambes (le haut est caché par le corps)
 	local legT = 6 * k
@@ -117,7 +117,7 @@ local function horse(parent, kit, o)
 	end
 	-- corps, cou, tête
 	kit.Blob(parent, X(0), Y(0), 50 * k, 28 * k, coat, { Z = 3, Shine = true })
-	kit.Blob(parent, X(17), Y(-15), 17 * k, 32 * k, coat, { Z = 4, Rotation = 30, Shade = false })
+	kit.Blob(parent, X(17), Y(-15), 17 * k, 34 * k, coat, { Z = 2, Rotation = 30, Shade = false })
 	local headFrame = kit.Blob(parent, X(29), Y(-29), 30 * k, 16 * k, coat, { Z = 5, Rotation = 32, Shade = false })
 	kit.Blob(parent, X(39), Y(-22), 13 * k, 12 * k, C.PinkSoft, { Z = 6, Thickness = 1.3 })
 	kit.Circle(parent, X(41), Y(-22.5), 2 * k, 2.4 * k, C.Ink, 0.3, 7)
@@ -232,19 +232,19 @@ Art.GiantDice = function(body, kit, _item)
 	local C = kit.C
 	local white = Color3.fromRGB(255, 252, 250)
 	local pip = C.PinkDeep
-	kit.Part(body, 26, 32, 56, 22, kit.Lighten(C.PinkMist, 0.3), { Radius = 9, Z = 2, Shade = false })
-	kit.Part(body, 62, 38, 20, 56, C.PinkSoft, { Radius = 9, Z = 1, Shade = 0.1 })
+	local back = kit.Part(body, 24, 34, 56, 54, kit.Lighten(C.PinkSoft, 0.45), { Radius = 11, Z = 2, Shade = false })
+	kit.Part(back, 44, 12, 11, 40, C.PinkSoft, { Radius = 6, Z = 2, Outline = false, Shade = false })
 	local front = kit.Part(body, 14, 44, 56, 54, white, { Radius = 11, Z = 3, Shine = true, Shade = 0.08 })
 	for _, p in ipairs({ { 14, 14 }, { 42, 14 }, { 14, 40 }, { 42, 40 } }) do
 		local dot = kit.Circle(front, p[1], p[2], 9, 9, pip, 0, 2)
 		kit.Circle(dot, 3, 3, 3, 3, C.White, 0.4, 2)
 	end
 	kit.Heart(front, 28, 27, 13, C.Heart, 0, 2)
-	for _, p in ipairs({ { 42, 38 }, { 54, 38 }, { 66, 38 } }) do
-		kit.Circle(body, p[1] + 6, p[2] + 5, 7, 4, pip, 0, 4)
+	for _, p in ipairs({ { 34, 40 }, { 50, 39 }, { 66, 38 } }) do
+		kit.Circle(body, p[1], p[2], 6, 3.4, pip, 0.1, 4)
 	end
-	kit.Circle(body, 76, 56, 4, 7, pip, 0.1, 2)
-	kit.Circle(body, 76, 78, 4, 7, pip, 0.1, 2)
+	kit.Circle(body, 74.5, 56, 3.4, 6, pip, 0.15, 4)
+	kit.Circle(body, 74.5, 76, 3.4, 6, pip, 0.15, 4)
 	return nil
 end
 
@@ -329,8 +329,9 @@ Art.KittyPlush = function(body, kit, _item)
 	local stripe = kit.Darken(fur, 0.2)
 	local root = breathing(body, kit, 0.012, 2.1)
 	local tailPivot, tail = rig(root, kit, 70, 92, 1)
-	kit.Blob(tail, 80, 76, 11, 32, fur, { Z = 1, Rotation = 22 })
-	kit.Blob(tail, 85.5, 63, 9, 9, stripe, { Z = 2, Outline = false, Shade = false })
+	local tailFrame = kit.Blob(tail, 78, 76, 13, 34, fur, { Z = 1, Rotation = 18 })
+	kit.Box(tailFrame, 1, 5, 11, 2.4, stripe, 0, 2)
+	kit.Box(tailFrame, 0.5, 11, 12, 2.4, stripe, 0, 2)
 	local p = plush(root, kit, { Color = fur, Light = C.Cream, Paw = C.PinkSoft, BodyW = 48, BodyH = 36, HeadY = 42, HeadW = 62, HeadH = 44 })
 	point(p.Head, kit, 30, 24, 19, fur, 33, 2, C.PinkSoft)
 	point(p.Head, kit, 70, 24, 19, fur, 57, 2, C.PinkSoft)
@@ -361,16 +362,16 @@ Art.PuppyPlush = function(body, kit, _item)
 	kit.Blob(tail, 76, 78, 10, 18, brown, { Z = 1, Rotation = 40 })
 	local p = plush(root, kit, { Color = fur, Light = C.Cream, Paw = brown, BodyW = 50, BodyH = 38, HeadY = 40, HeadW = 60, HeadH = 46 })
 	kit.Circle(p.Head, 60, 37, 14, 13, kit.Lighten(brown, 0.25), 0, 5)
-	kit.Blob(p.Head, 50, 58, 7, 8, C.Pink, { Z = 4, Thickness = 1.2 })
-	muzzle(p.Head, kit, 50, 51, 22, 14, C.White, C.Ink, 5)
+	kit.Blob(p.Head, 50, 55, 7, 9, C.Pink, { Z = 4, Thickness = 1.2 })
+	muzzle(p.Head, kit, 50, 48, 22, 14, C.White, C.Ink, 5)
 	kit.Face(p.Head, 50, 40, 32, { Eyes = "happy", Mouth = "none", Z = 6 })
 	for _, side in ipairs({ -1, 1 }) do
-		local earPivot, ear = rig(p.Head, kit, 50 + side * 25, 26, 7)
-		kit.Blob(ear, 50 + side * 28, 40, 15, 28, brown, { Z = 1, Rotation = -side * 14 })
+		local earPivot, ear = rig(p.Head, kit, 50 + side * 22, 24, 7)
+		kit.Blob(ear, 50 + side * 28, 38, 15, 30, brown, { Z = 1, Rotation = -side * 18 })
 		kit.Animate(earPivot, "Sway", 3, 0.6, side)
 	end
-	kit.Part(root, 35, 60, 30, 6, C.Red, { Radius = 3, Z = 7, Shade = false })
-	kit.Blob(root, 50, 67, 8, 8, C.Gold, { Z = 8, Thickness = 1.2 })
+	kit.Part(root, 35, 63, 30, 6, C.Red, { Radius = 3, Z = 5, Shade = false })
+	kit.Blob(root, 50, 70, 8, 8, C.Gold, { Z = 5, Thickness = 1.2 })
 	kit.Animate(tailPivot, "Sway", 14, 2.2, 0.1)
 	return nil
 end
@@ -447,10 +448,11 @@ Art.HamsterPlush = function(body, kit, _item)
 	end
 	kit.Face(root, 50, 60, 32, { Eyes = "dot", Mouth = "cat", Z = 6 })
 	kit.Blob(root, 50, 61.4, 4, 3, C.Pink, { Z = 7, Outline = false, Shade = false })
-	local seed = kit.Blob(root, 50, 80, 10, 14, C.GreyDark, { Z = 7 })
-	kit.Box(seed, 4.2, 2, 1.6, 10, C.White, 0.2, 2)
+	local seed = kit.Blob(root, 50, 76, 9, 16, C.GreyDark, { Z = 7, Rotation = 12 })
+	kit.Box(seed, 2.2, 2.5, 1.4, 11, C.White, 0.25, 2)
+	kit.Box(seed, 5.4, 2.5, 1.4, 11, C.White, 0.25, 2)
 	for _, side in ipairs({ -1, 1 }) do
-		kit.Blob(root, 50 + side * 6, 80, 8, 7, fur, { Z = 8, Thickness = 1.2 })
+		kit.Blob(root, 50 + side * 5.5, 83, 8, 7, fur, { Z = 8, Thickness = 1.2 })
 	end
 	return nil
 end
@@ -494,11 +496,12 @@ Art.PandaPlush = function(body, kit, _item)
 	local black = Color3.fromRGB(78, 70, 92)
 	local root = breathing(body, kit, 0.012, 8.2)
 	-- bambou
-	local bamboo = kit.Part(root, 64, 46, 7, 50, C.Leaf, { Radius = 3, Z = 4, Rotation = 18 })
-	for _, y in ipairs({ 14, 30 }) do
+	local bamboo = kit.Part(root, 55, 52, 7, 46, C.Leaf, { Radius = 3, Z = 4, Rotation = 34 })
+	for _, y in ipairs({ 12, 26 }) do
 		kit.Box(bamboo, 0, y, 7, 1.6, C.LeafDark, 0, 2)
 	end
-	kit.Blob(root, 79, 44, 7, 16, C.Leaf, { Z = 4, Rotation = 55, Thickness = 1.2 })
+	kit.Blob(root, 77, 55, 7, 16, C.Leaf, { Z = 4, Rotation = 70, Thickness = 1.2 })
+	kit.Blob(root, 75, 62, 6, 13, C.Leaf, { Z = 4, Rotation = 120, Thickness = 1.2 })
 	local p = plush(root, kit, { Color = white, Limb = black, Belly = false, Paw = kit.Lighten(black, 0.25), BodyW = 52, BodyH = 38, HeadY = 40, HeadW = 60, HeadH = 46 })
 	kit.Blob(p.Torso, 26, 6, 46, 12, black, { Z = 2, Outline = false, Shade = false })
 	for _, side in ipairs({ -1, 1 }) do
@@ -510,8 +513,8 @@ Art.PandaPlush = function(body, kit, _item)
 		kit.Circle(p.Head, 50 + side * 18, 50, 8, 5, C.Blush, 0.35, 6)
 	end
 	kit.Blob(p.Head, 50, 48, 7, 4.5, black, { Z = 6, Outline = false, Shade = false })
-	kit.Line(p.Head, 47, 53, 50, 51.5, 1.3, black, 0, 6)
-	kit.Line(p.Head, 50, 51.5, 53, 53, 1.3, black, 0, 6)
+	kit.Line(p.Head, 47, 51.5, 50, 53, 1.3, black, 0, 6)
+	kit.Line(p.Head, 50, 53, 53, 51.5, 1.3, black, 0, 6)
 	kit.Animate(p.Neck, "Sway", 2.5, 0.5, 8.6)
 	return nil
 end
@@ -535,20 +538,18 @@ Art.UnicornPlush = function(body, kit, _item)
 	for index, s in ipairs({ { 38, 27, 12 }, { 46, 25, 11 }, { 58, 25, 11 }, { 64, 29, 9 } }) do
 		kit.Blob(p.Head, s[1], s[2], s[3], s[3], rainbow[index], { Z = 5, Thickness = 1.3 })
 	end
-	kit.Triangle(p.Head, 50, 1.5, 14, 25, kit.OutlineOf(C.Butter), 6, 0, 8)
-	kit.Triangle(p.Head, 50, 4, 10, 21, C.Butter, 7, 0, 8)
-	kit.Line(p.Head, 46.5, 20, 53.5, 18, 1.4, C.Gold, 0, 8)
-	kit.Line(p.Head, 47.5, 14, 52.5, 12.5, 1.4, C.Gold, 0, 8)
+	-- corne torsadée (3 boules dorées empilées)
+	kit.Blob(p.Head, 50, 21, 13, 9, C.Butter, { Z = 6, Thickness = 1.3 })
+	kit.Blob(p.Head, 50, 14.5, 10, 8, C.Butter, { Z = 7, Thickness = 1.3 })
+	kit.Blob(p.Head, 50, 8.5, 6.5, 7, C.Butter, { Z = 8, Thickness = 1.3, Shine = true })
 	kit.Face(p.Head, 50, 42, 30, { Eyes = "closed", Mouth = "none", Z = 6 })
 	for _, side in ipairs({ -1, 1 }) do
 		local ex = 50 + side * 14.8
 		kit.Line(p.Head, ex + side * 3.5, 39.6, ex + side * 5.5, 37.4, 1.2, C.Ink, 0, 6)
 	end
-	local snout = kit.Blob(p.Head, 50, 53, 28, 15, C.PinkSoft, { Z = 5, Thickness = 1.3 })
-	kit.Circle(snout, 9, 5, 2.4, 2, C.Ink, 0.4, 2)
-	kit.Circle(snout, 19, 5, 2.4, 2, C.Ink, 0.4, 2)
-	kit.Line(snout, 11.5, 10, 14, 11.5, 1.3, C.Ink, 0, 2)
-	kit.Line(snout, 14, 11.5, 16.5, 10, 1.3, C.Ink, 0, 2)
+	local snout = kit.Blob(p.Head, 50, 53, 22, 11, Color3.fromRGB(255, 236, 244), { Z = 5, Thickness = 1.2, Shade = false })
+	kit.Line(snout, 9, 5.5, 12, 8, 1.3, C.Ink, 0, 2)
+	kit.Line(snout, 12, 8, 15, 5.5, 1.3, C.Ink, 0, 2)
 	local sparkle = kit.Sparkle(root, 76, 12, 10, C.Butter, 0, 8)
 	kit.Animate(sparkle, "Bob", 2, 0.7, 0.3)
 	kit.Animate(tailPivot, "Sway", 6, 0.6, 9.4)
@@ -686,7 +687,9 @@ local function doll(parent, kit, cx, h, color, eyes, z)
 	kit.Blob(face, headD * 0.33, headD * 0.08, headD * 0.5, headD * 0.22, C.WoodDark, { Z = 2, Outline = false, Shade = false })
 	kit.Face(g, cx, headCy + headD * 0.14, headD * 0.5, { Eyes = eyes, Z = 6 })
 	kit.Blob(g, cx, 98 - bodyH * 0.4, w * 0.6, bodyH * 0.56, C.Cream, { Z = 4, Thickness = 1.2, Shade = false })
-	kit.Heart(g, cx, 98 - bodyH * 0.42, w * 0.3, kit.Darken(color, 0.05), 0, 5)
+	-- fleur sur le tablier
+	local flower = kit.Circle(g, cx, 98 - bodyH * 0.42, w * 0.3, w * 0.3, color, 0, 5)
+	kit.Circle(flower, w * 0.15, w * 0.15, w * 0.12, w * 0.12, C.Butter, 0, 2)
 	return g
 end
 
@@ -712,7 +715,7 @@ Art.PinkGuitar = function(body, kit, _item)
 	kit.Box(layer, 36, 60, 28, 10, pink, 0, 4)
 	kit.Blob(layer, 50, 67, 15, 15, C.Cream, { Z = 5, Thickness = 1.3 })
 	kit.Circle(layer, 50, 67, 10, 10, kit.OutlineOf(pink), 0, 6)
-	kit.Part(layer, 46.5, 6, 7, 58, C.WoodLight, { Radius = 2, Z = 7, Shade = false })
+	kit.Part(layer, 46.5, 6, 7, 52, C.WoodLight, { Radius = 2, Z = 7, Shade = false })
 	for _, y in ipairs({ 18, 30, 42 }) do
 		kit.Box(layer, 46.5, y, 7, 1.2, C.Gold, 0, 8)
 	end
@@ -863,7 +866,7 @@ Art.DollCastle = function(body, kit, _item)
 	local tower = Color3.fromRGB(236, 224, 255)
 	-- tour centrale (derrière)
 	kit.Part(body, 39, 22, 22, 24, wall, { Radius = 3, Z = 1 })
-	kit.Triangle(body, 50, 4, 28, 20, C.Pink, 1, 0, 8)
+	kit.Triangle(body, 50, 4, 28, 20, C.Pink, 1, 0, 6)
 	kit.Circle(body, 50, 4, 5, 5, C.Gold, 0, 2)
 	-- donjon
 	for index = 0, 3 do
@@ -881,7 +884,7 @@ Art.DollCastle = function(body, kit, _item)
 		local t = kit.Part(body, x, 38, 22, 60, tower, { Radius = 4, Z = 4, Shine = true })
 		kit.Part(t, 7, 12, 8, 13, C.Sky, { Radius = 4, Z = 2, Thickness = 1.2 })
 		kit.Part(t, 7, 34, 8, 11, C.Sky, { Radius = 4, Z = 2, Thickness = 1.2 })
-		kit.Triangle(body, x + 11, 12, 30, 26, C.Pink, 5, 0, 10)
+		kit.Triangle(body, x + 11, 12, 30, 26, C.Pink, 5, 0, 9)
 		kit.Part(body, x - 3, 35, 28, 6, C.PinkDeep, { Radius = 3, Z = 6 })
 		kit.Line(body, x + 11, 12, x + 11, 2, 1.4, C.GreyDark, 0, 5)
 		local fp, flag = rig(body, kit, x + 11, 3, 6)

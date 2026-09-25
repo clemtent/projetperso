@@ -90,7 +90,6 @@ Art.MouseHole = function(body, kit, _item)
 	arch(body, kit, 10, 20, 80, C.WoodLight, 40, 1, { Shade = 0.15 })
 	local hole = arch(body, kit, 18, 28, 64, Color3.fromRGB(78, 52, 72), 32, 2, { Outline = C.WoodDark, Shade = false })
 	kit.Gradient(hole, Color3.fromRGB(150, 150, 150), WHITE, 90)
-	kit.Circle(hole, 22, 30, 10, 5, C.Butter, 0.75, 2) -- petite lueur au fond
 	-- souris qui dépasse
 	local mouse = kit.Group(body, 20, 50, 50, 50, 3)
 	kit.Animate(mouse, "Bob", 1.5, 0.8, 0)
@@ -441,17 +440,17 @@ Art.DreamPortal = function(body, kit, _item)
 	kit.Gradient(portal, Color3.fromRGB(110, 70, 200), Color3.fromRGB(255, 130, 200), 90)
 	-- tourbillon (bras en spirale) qui tourne
 	local swirl = kit.Pivot(body, 50, 56, 3)
-	local colors = { C.PinkSoft, C.Sky, WHITE, C.LilacSoft, C.PinkSoft, C.Sky }
-	for i = 0, 5 do
-		local a0 = math.rad(i * 60)
+	local colors = { C.PinkSoft, kit.Lighten(C.Sky, 0.3), C.LilacSoft, kit.Lighten(C.Pink, 0.3), kit.Lighten(C.Mint, 0.4) }
+	for i = 0, 4 do
+		local a0 = math.rad(i * 72)
 		local pts = {}
-		for k = 0, 2 do
-			local r = 6 + k * 11
-			local a = a0 + math.rad(k * 38)
+		for k = 0, 3 do
+			local r = 5 + k * 7.5
+			local a = a0 + math.rad(k * 42)
 			table.insert(pts, { math.cos(a) * r, math.sin(a) * r })
 		end
-		for k = 1, 2 do
-			kit.Line(swirl, pts[k][1], pts[k][2], pts[k + 1][1], pts[k + 1][2], 6 - k * 1.5, colors[i + 1], 0.15 + k * 0.15, 1)
+		for k = 1, 3 do
+			kit.Line(swirl, pts[k][1], pts[k][2], pts[k + 1][1], pts[k + 1][2], 6.5 - k * 1.4, colors[i + 1], 0, 1)
 		end
 	end
 	kit.Animate(swirl, "Spin", 1, 0.18, 0)
@@ -461,7 +460,7 @@ Art.DreamPortal = function(body, kit, _item)
 	kit.Animate(core, "Breathe", 0.1, 1.5, 0)
 	kit.Heart(body, 50, 56, 8, C.Heart, 0, 6)
 	-- étoiles dans le portail
-	for i, s in ipairs({ { 34, 30, 6 }, { 66, 36, 5 }, { 36, 80, 5 }, { 64, 76, 7 } }) do
+	for i, s in ipairs({ { 34, 30, 6 }, { 64, 78, 7 } }) do
 		local star = kit.Sparkle(body, s[1], s[2], s[3], WHITE, 0, 5)
 		kit.Animate(star, "Bob", 2, 0.9, i * 1.3)
 	end

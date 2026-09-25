@@ -102,7 +102,8 @@ local function donut(parent, kit, cx, cy, w, icing, sprinkles, z, rot)
 	local h = w * 0.84
 	kit.Blob(g, w / 2, h / 2, w, h, Color3.fromRGB(235, 175, 105), { Z = 1 })
 	local top = kit.Blob(g, w / 2, h * 0.45, w * 0.88, h * 0.72, icing, { Z = 2, Shine = true })
-	kit.Blob(g, w / 2, h * 0.42, w * 0.24, h * 0.16, kit.Darken(icing, 0.3), { Z = 3, Thickness = 1, Shade = false })
+	local hole = kit.Blob(g, w / 2, h * 0.4, w * 0.22, h * 0.14, Color3.fromRGB(205, 140, 90), { Z = 3, Outline = false, Shade = false })
+	kit.Box(hole, w * 0.03, 0, w * 0.16, h * 0.05, Color3.fromRGB(150, 95, 70), 0.3, 2)
 	for i, p in ipairs({ { 0.2, 0.55, 30 }, { 0.72, 0.3, -40 }, { 0.8, 0.62, 70 }, { 0.36, 0.22, -10 } }) do
 		local sp = kit.Box(top, w * 0.88 * p[1], h * 0.72 * p[2], w * 0.1, 1.6, sprinkles[(i - 1) % #sprinkles + 1], 0, 4)
 		sp.Rotation = p[3]
@@ -255,8 +256,8 @@ Art.StrawberryCake = function(body, kit, _item)
 	end
 	kit.Part(body, 16, 54, 68, 12, sponge, { Radius = 3, Z = 3 })
 	kit.Part(body, 14, 46, 72, 11, WHITE, { Radius = 5, Z = 5, Outline = kit.OutlineOf(C.PinkSoft) })
-	for _, d in ipairs({ { 22, 14 }, { 38, 10 }, { 64, 15 }, { 78, 9 } }) do
-		drip(body, kit, d[1], 50, 5, d[2], WHITE, 4, kit.OutlineOf(C.PinkSoft))
+	for _, d in ipairs({ { 22, 13 }, { 38, 9 }, { 64, 14 }, { 78, 8 } }) do
+		drip(body, kit, d[1], 52, 5, d[2], WHITE, 6)
 	end
 	kit.Blob(body, 32, 44, 20, 10, WHITE, { Z = 6, Outline = kit.OutlineOf(C.PinkSoft) })
 	kit.Blob(body, 68, 44, 14, 8, WHITE, { Z = 6, Outline = kit.OutlineOf(C.PinkSoft) })
@@ -736,28 +737,27 @@ Art.SundaeBar = function(body, kit, _item)
 	-- Coupe glacée
 	kit.Blob(body, 50, 54, 20, 5, C.LilacSoft, { Z = 6 })
 	kit.Part(body, 48, 46, 4, 8, C.LilacSoft, { Radius = 1, Z = 6 })
-	local wafer = kit.Part(body, 58, 15, 8, 16, C.Butter, { Radius = 2, Z = 6, Rotation = 18 })
-	kit.Box(wafer, 0, 5, 8, 1.2, C.Gold, 0, 2)
-	kit.Box(wafer, 0, 10, 8, 1.2, C.Gold, 0, 2)
-	kit.Blob(body, 42, 34, 17, 15, C.Pink, { Z = 7, Shine = true })
-	kit.Blob(body, 58, 34, 17, 15, C.Mint, { Z = 7 })
-	local mid = kit.Blob(body, 50, 27, 18, 16, C.Butter, { Z = 8, Shine = true })
-	kit.Face(mid, 9, 9.5, 13, { Eyes = "happy", Mouth = "smile", Z = 3 })
-	kit.Blob(body, 50, 18, 12, 7, WHITE, { Z = 9 })
-	kit.Blob(body, 50, 12, 7, 7, C.Red, { Z = 10, Shine = true })
-	local coupe = kit.Group(body, 32, 38, 36, 12, 9, true)
-	local cg = kit.Circle(coupe, 18, 0, 36, 24, C.LilacSoft, 0, 1)
+	kit.Line(body, 60, 30, 67, 10, 3.2, Color3.fromRGB(120, 75, 60), 0, 6)
+	kit.Line(body, 62, 24, 64, 18, 3.4, C.Butter, 0, 6)
+	kit.Blob(body, 40, 35, 21, 18, C.Pink, { Z = 7, Shine = true })
+	kit.Blob(body, 60, 35, 21, 18, C.Mint, { Z = 7 })
+	local mid = kit.Blob(body, 50, 25, 21, 18, C.Butter, { Z = 8, Shine = true })
+	kit.Face(mid, 10.5, 10.5, 14, { Eyes = "happy", Mouth = "smile", Z = 3 })
+	kit.Blob(body, 50, 15, 13, 8, WHITE, { Z = 9 })
+	kit.Blob(body, 50, 9, 7, 7, C.Red, { Z = 10, Shine = true })
+	local coupe = kit.Group(body, 29, 40, 42, 12, 9, true)
+	local cg = kit.Circle(coupe, 21, 0, 42, 24, C.LilacSoft, 0, 1)
 	kit.Stroke(cg, kit.OutlineOf(C.Lilac), 1.6)
-	kit.Box(coupe, 6, 3, 24, 2, WHITE, 0.3, 2)
-	kit.Part(body, 31, 36, 38, 4, kit.Lighten(C.Lilac, 0.5), { Radius = -1, Z = 10 })
+	kit.Box(coupe, 8, 3, 26, 2, WHITE, 0.3, 2)
+	kit.Part(body, 28, 38, 44, 4, kit.Lighten(C.Lilac, 0.5), { Radius = -1, Z = 10 })
 	-- Bocal de vermicelles et cornet
-	local jar = kit.Part(body, 17, 40, 13, 15, C.Glass, { Radius = 3, Z = 6, T = 0.3 })
+	local jar = kit.Part(body, 13, 40, 13, 15, C.Glass, { Radius = 3, Z = 6, T = 0.3 })
 	for _, p in ipairs({ { 3, 5, C.Pink }, { 8, 8, C.Sky }, { 4, 11, C.Butter }, { 9, 3, C.Mint } }) do
 		kit.Box(jar, p[1], p[2], 3, 1.6, p[3], 0, 2)
 	end
-	kit.Part(body, 16, 36, 15, 5, C.Pink, { Radius = 2, Z = 7 })
-	kit.TriangleDown(body, 79, 40, 12, 14, C.WoodLight, 6, 0, 6)
-	kit.Blob(body, 79, 37, 14, 11, C.Lilac, { Z = 7, Shine = true })
+	kit.Part(body, 12, 36, 15, 5, C.Pink, { Radius = 2, Z = 7 })
+	kit.TriangleDown(body, 83, 40, 12, 14, C.WoodLight, 6, 0, 6)
+	kit.Blob(body, 83, 37, 14, 11, C.Lilac, { Z = 7, Shine = true })
 	return nil
 end
 
@@ -766,7 +766,7 @@ Art.ChocolateFountain = function(body, kit, _item)
 	local C = kit.C
 	local choco = Color3.fromRGB(160, 95, 70)
 	local metal = Color3.fromRGB(255, 200, 220)
-	kit.Part(body, 47, 10, 6, 64, C.Gold, { Radius = 3, Z = 1 })
+	kit.Part(body, 47, 8, 6, 66, C.Gold, { Radius = 3, Z = 1 })
 	-- Socle rempli de chocolat
 	local base = kit.Part(body, 16, 72, 68, 24, metal, { Radius = 10, Z = 2, Shine = true })
 	kit.Box(base, 4, 16, 60, 2, WHITE, 0.5, 2)
@@ -774,19 +774,19 @@ Art.ChocolateFountain = function(body, kit, _item)
 	kit.Blob(body, 50, 72, 60, 7, choco, { Z = 4, Outline = false })
 	kit.Face(base, 34, 11, 24, { Eyes = "happy", Mouth = "smile", Z = 3 })
 	-- Plateaux et rideaux
-	local tiers = { { 22, 24 }, { 38, 38 }, { 54, 52 } }
+	local tiers = { { 18, 22 }, { 36, 36 }, { 54, 50 } }
 	for i, t in ipairs(tiers) do
 		local y, w = t[1], t[2]
 		local nextY = if i < #tiers then tiers[i + 1][1] else 72
-		local curtain = kit.Part(body, 50 - w / 2 + 1, y, w - 2, nextY - y, choco, { Radius = 2, Z = 3 + i * 2, Outline = false, T = 0.2 })
+		local curtain = kit.Part(body, 50 - w / 2 + 1, y, w - 2, nextY - y, choco, { Radius = 2, Z = 3 + i * 2, Outline = false, T = 0.3 })
 		kit.Box(curtain, w * 0.22, 3, 1.8, nextY - y - 6, WHITE, 0.7, 2)
 		kit.Box(curtain, w * 0.62, 5, 1.8, nextY - y - 9, WHITE, 0.75, 2)
 		kit.Animate(curtain, "Pulse", 0.15, 1, i)
-		kit.Blob(body, 50, y + 2, w + 4, 10, metal, { Z = 4 + i * 2, Shine = true })
-		kit.Blob(body, 50, y, w, 6, choco, { Z = 4 + i * 2, Outline = C.Gold, Thickness = 1.4 })
+		kit.Blob(body, 50, y + 2, w + 4, 8, metal, { Z = 4 + i * 2 })
+		kit.Blob(body, 50, y, w, 5, choco, { Z = 4 + i * 2, Outline = C.Gold, Thickness = 1.4 })
 	end
-	kit.Blob(body, 50, 13, 10, 10, metal, { Z = 12, Shine = true })
-	kit.Heart(body, 50, 5, 10, C.Pink, 0, 12)
+	kit.Blob(body, 50, 10, 9, 9, metal, { Z = 12, Shine = true })
+	kit.Heart(body, 50, 3, 9, C.Pink, 0, 12)
 	-- Brochettes de fraises et guimauves
 	kit.Line(body, 8, 96, 14, 64, 1.8, C.WoodLight, 0, 12)
 	strawberry(body, kit, 14, 62, 10, 13)
@@ -801,42 +801,52 @@ end
 -- Machine à glace pilée : manivelle qui tourne, bloc de glace, dôme aux sirops
 Art.ShavedIceMachine = function(body, kit, _item)
 	local C = kit.C
-	local mint = Color3.fromRGB(170, 225, 240)
-	kit.Part(body, 8, 88, 84, 10, kit.Darken(mint, 0.1), { Radius = 5, Z = 2 })
-	kit.Part(body, 10, 18, 16, 72, mint, { Radius = 6, Z = 2 })
-	kit.Part(body, 10, 12, 72, 16, mint, { Radius = 8, Z = 3, Shine = true })
+	local blue = Color3.fromRGB(170, 222, 245)
+	kit.Part(body, 6, 88, 88, 10, kit.Darken(blue, 0.08), { Radius = 5, Z = 2, Shine = true })
+	kit.Part(body, 10, 18, 18, 72, blue, { Radius = 7, Z = 2 })
+	local arm = kit.Part(body, 10, 10, 74, 18, blue, { Radius = 9, Z = 3, Shine = true })
+	kit.Heart(arm, 16, 9, 7, C.Pink, 0, 3)
 	-- Manivelle
-	local crank = kit.Pivot(body, 60, 10, 4)
-	kit.Blob(crank, 0, 0, 12, 12, C.Pink, { Z = 2 })
-	kit.Line(crank, 0, 0, 12, -4, 2.6, C.PinkDeep, 0, 1)
-	kit.Blob(crank, 12, -4, 7, 7, WHITE, { Z = 3 })
+	kit.Part(body, 56, 4, 8, 8, kit.Darken(blue, 0.1), { Radius = 2, Z = 2 })
+	local crank = kit.Pivot(body, 60, 5, 4)
+	kit.Blob(crank, 0, 0, 12, 12, C.Pink, { Z = 2, Shine = true })
+	kit.Line(crank, 0, 0, 14, -5, 3, C.PinkDeep, 0, 1)
+	kit.Blob(crank, 14, -5, 7, 7, WHITE, { Z = 3 })
 	kit.Animate(crank, "Spin", 1, 0.25, 0)
-	-- Bloc de glace
-	local drum = kit.Part(body, 46, 28, 28, 18, C.Glass, { Radius = 4, Z = 2, T = 0.35 })
-	kit.Part(drum, 4, 3, 20, 12, WHITE, { Radius = 3, Z = 2, T = 0.2, Outline = C.Sky })
+	-- Bloc de glace sous le bras
+	kit.Part(body, 56, 27, 8, 4, C.GreyDark, { Radius = 1, Z = 2 })
+	local ice = kit.Part(body, 48, 30, 24, 17, Color3.fromRGB(195, 238, 255), { Radius = 3, Z = 3, Outline = kit.OutlineOf(C.Sky), Shade = 0.2 })
+	kit.Box(ice, 0, 0, 24, 5, WHITE, 0.35, 2)
+	kit.Line(ice, 4, 8, 4, 13, 2, WHITE, 0.2, 2)
+	kit.Sparkle(ice, 18, 10, 7, WHITE, 0, 3)
+	kit.Part(body, 46, 46, 28, 4, C.Grey, { Radius = 2, Z = 4 })
 	for i = 0, 2 do
-		local flake = kit.Circle(body, 54 + i * 6, 50 + (i % 2) * 4, 2.6, 2.6, WHITE, 0.1, 3)
+		local flake = kit.Circle(body, 54 + i * 6, 53 + (i % 2) * 3, 2.6, 2.6, WHITE, 0, 3)
 		kit.Animate(flake, "Bob", 1.5, 1.4, i)
 	end
-	-- Coupe et glace pilée
-	kit.Part(body, 50, 84, 20, 5, C.LilacSoft, { Radius = 2, Z = 3 })
-	local dome = kit.Blob(body, 60, 68, 40, 30, WHITE, { Z = 4, Outline = kit.OutlineOf(C.Sky) })
-	kit.Blob(dome, 11, 12, 18, 16, C.Pink, { Z = 2, T = 0.25, Outline = false })
-	kit.Blob(dome, 29, 13, 16, 16, C.Sky, { Z = 2, T = 0.25, Outline = false })
-	kit.Blob(dome, 20, 6, 14, 9, C.Butter, { Z = 2, T = 0.2, Outline = false })
-	kit.Blob(body, 60, 55, 7, 7, C.Red, { Z = 6, Shine = true })
-	kit.Face(dome, 20, 17, 18, { Eyes = "dot", Mouth = "smile", Z = 3 })
-	local cup = kit.Blob(body, 60, 80, 44, 14, C.Glass, { Z = 5, T = 0.2 })
-	kit.Box(cup, 4, 5, 36, 2, C.Pink, 0.2, 2)
+	-- Montagne de glace pilée aux sirops dans sa coupe
+	local dome = kit.Blob(body, 60, 70, 40, 30, WHITE, { Z = 4, Outline = kit.OutlineOf(C.Sky) })
+	kit.Blob(dome, 11, 14, 18, 18, C.Pink, { Z = 2, T = 0.3, Outline = false })
+	kit.Blob(dome, 29, 14, 18, 18, C.Sky, { Z = 2, T = 0.3, Outline = false })
+	kit.Blob(dome, 20, 6, 16, 10, C.Butter, { Z = 2, T = 0.2, Outline = false })
+	kit.Face(dome, 20, 16, 17, { Eyes = "dot", Mouth = "cat", Z = 3 })
+	kit.Blob(body, 60, 56, 7, 7, C.Red, { Z = 6, Shine = true })
+	local bowl = kit.Group(body, 36, 76, 48, 12, 5, true)
+	local cup = kit.Circle(bowl, 24, 0, 48, 24, C.LilacSoft, 0, 1)
+	kit.Stroke(cup, kit.OutlineOf(C.Lilac), 1.6)
+	kit.Box(bowl, 6, 3, 36, 2.4, C.Pink, 0.2, 2)
+	kit.Part(body, 35, 74, 50, 4, kit.Lighten(C.Lilac, 0.5), { Radius = -1, Z = 6 })
+	kit.Part(body, 52, 86, 16, 3, C.Lilac, { Radius = 1, Z = 4 })
 	-- Fanion 氷
-	local flag = kit.Part(body, 11, 38, 14, 22, WHITE, { Radius = 2, Z = 4 })
-	kit.Box(flag, 0, 16, 14, 6, C.Blue, 0.1, 2)
-	kit.Text(flag, "氷", 7, 8, 10, C.Red, 3)
-	-- Sirop
-	kit.Part(body, 82, 70, 10, 18, C.Pink, { Radius = 3, Z = 3, Shine = true })
-	kit.Part(body, 85, 64, 4, 7, WHITE, { Radius = 1, Z = 3 })
-	kit.Sparkle(body, 90, 36, 8, C.Sky, 0, 7)
-	kit.Sparkle(body, 36, 50, 6, WHITE, 0, 7)
+	local flag = kit.Part(body, 12, 38, 14, 24, WHITE, { Radius = 2, Z = 4 })
+	kit.Box(flag, 0, 17, 14, 7, C.Blue, 0.1, 2)
+	kit.Text(flag, "氷", 7, 9, 10, C.Red, 3)
+	-- Bouteille de sirop
+	kit.Part(body, 84, 64, 4, 7, WHITE, { Radius = 1, Z = 3 })
+	kit.Part(body, 80, 70, 12, 18, C.Pink, { Radius = 4, Z = 4, Shine = true })
+	kit.Heart(body, 86, 81, 6, WHITE, 0, 5)
+	kit.Sparkle(body, 90, 38, 8, C.Sky, 0, 7)
+	kit.Sparkle(body, 36, 56, 6, WHITE, 0, 7)
 	return nil
 end
 

@@ -82,7 +82,7 @@ local function star(parent, kit, cx, cy, radius, color, z, ink)
 			arm.AnchorPoint = Vector2.new(0.5, 0.5)
 			arm.Position = UDim2.fromOffset(cx + math.sin(a) * dist, cy - math.cos(a) * dist)
 			arm.Rotation = 45 + index * 72
-			kit.Round(arm, radius * 0.08 + grow / 2)
+			kit.Round(arm, radius * 0.06 + grow / 2)
 		end
 		kit.Circle(holder, cx, cy, radius * 1.04 + grow, radius * 1.04 + grow, fill, 0, layer)
 	end
@@ -117,7 +117,7 @@ end
 Art.HangingBulb = function(body, kit, _item)
 	local C = kit.C
 	local layer = hang(body, kit, 22, C.Ink, 4, 0.5)
-	local glow = kit.Circle(layer, 50, 58, 70, 70, C.Butter, 0.75, 1)
+	local glow = kit.Circle(layer, 50, 58, 66, 66, C.Butter, 0.8, 1)
 	kit.Animate(glow, "Pulse", 0.15, 0.8, 0)
 	kit.Part(layer, 40, 16, 20, 18, C.Lilac, { Radius = 4, Z = 5, Shine = true }) -- douille
 	kit.Line(layer, 41, 23, 59, 23, 1.6, kit.OutlineOf(C.Lilac), 0.3, 6)
@@ -158,15 +158,19 @@ Art.FairyLights = function(body, kit, _item)
 		local x, y = wireAt(u)
 		kit.Circle(body, x, y, 6, 6, C.PinkDeep, 0, 3) -- punaise
 	end
-	for index = 0, 9 do
-		local u = (index + 0.5) / 10
-		local x, y = wireAt(u)
-		local color = colors[index % #colors + 1]
-		local halo = kit.Circle(body, x, y + 9, 20, 20, color, 0.72, 1)
-		kit.Part(body, x - 2.5, y - 1, 5, 5, C.LeafDark, { Radius = 1.5, Z = 4, Outline = false, Shade = false })
-		local bulb = kit.Part(body, x - 4.5, y + 3, 9, 12, color, { Radius = -1, Z = 3, Thickness = 1.2 })
-		kit.Animate(bulb, "Pulse", 0.4, 1.1, index * 1.7)
-		kit.Animate(halo, "Pulse", 0.28, 1.1, index * 1.7)
+	local index = 0
+	for _, swoop in ipairs({ 0, 0.5 }) do
+		for _, v in ipairs({ 0.16, 0.39, 0.61, 0.84 }) do
+			local x, y = wireAt(swoop + v * 0.5)
+			local color = colors[index % #colors + 1]
+			local halo = kit.Circle(body, x, y + 9, 18, 18, color, 0.75, 1)
+			kit.Part(body, x - 3, y - 1.5, 6, 5, C.LeafDark, { Radius = 1.5, Z = 4, Outline = false, Shade = false })
+			local bulb = kit.Part(body, x - 5, y + 3, 10, 13, color, { Radius = -1, Z = 3, Thickness = 1.2 })
+			kit.Shine(bulb, 2, 2.5, 2.5, 4, 3, 0.3)
+			kit.Animate(bulb, "Pulse", 0.4, 1.1, index * 1.7)
+			kit.Animate(halo, "Pulse", 0.25, 1.1, index * 1.7)
+			index += 1
+		end
 	end
 	return { Glow = Color3.fromRGB(255, 220, 170), WallShadow = Vector2.new(0, 0) }
 end
@@ -218,19 +222,19 @@ Art.OilLamp = function(body, kit, _item)
 	local C = kit.C
 	local clay = Color3.fromRGB(255, 176, 140)
 	kit.Part(body, 38, 88, 24, 12, kit.Darken(clay, 0.08), { Radius = 4, Z = 2 })
-	kit.Part(body, 66, 54, 24, 13, clay, { Radius = -1, Z = 2, Rotation = -18 }) -- bec
 	local bowl = kit.Group(body, 12, 60, 76, 32, 3, true)
 	kit.Blob(bowl, 38, 0, 72, 60, clay, { Shine = false })
 	kit.Blob(body, 49, 61, 76, 13, kit.Lighten(clay, 0.2), { Z = 4 }) -- rebord
 	kit.Blob(body, 49, 61, 60, 7, Color3.fromRGB(240, 190, 90), { Z = 5, Outline = false, Shade = false }) -- huile
+	kit.Part(body, 68, 51, 24, 12, kit.Lighten(clay, 0.2), { Radius = -1, Z = 5, Rotation = -22 }) -- bec
 	for _, x in ipairs({ 24, 76 }) do
 		kit.Circle(body, x, 74, 5, 5, C.PinkSoft, 0, 5)
 	end
 	kit.Face(body, 50, 76, 24, { Eyes = "happy", Mouth = "smile", Z = 6 })
-	kit.Line(body, 80, 52, 83, 46, 2.4, C.Ink, 0, 5)
-	local glow = kit.Circle(body, 83, 32, 30, 30, C.Butter, 0.72, 1)
+	kit.Line(body, 85, 50, 87, 44, 2.4, C.Ink, 0, 6)
+	local glow = kit.Circle(body, 87, 30, 30, 30, C.Butter, 0.72, 1)
 	kit.Animate(glow, "Pulse", 0.2, 0.9, 1)
-	flame(body, kit, 83, 48, 24, 6, 0.7)
+	flame(body, kit, 87, 46, 24, 7, 0.7)
 	return { Glow = Color3.fromRGB(255, 196, 110) }
 end
 
