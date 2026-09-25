@@ -714,14 +714,14 @@ Art.SundaeBar = function(body, kit, _item)
 	local C = kit.C
 	local mint = Color3.fromRGB(185, 235, 218)
 	for _, x in ipairs({ 11, 85 }) do
-		kit.Part(body, x, 14, 4, 46, WHITE, { Radius = 2, Z = 1 })
+		kit.Part(body, x, 8, 4, 52, WHITE, { Radius = 2, Z = 1 })
 	end
-	local awning = kit.Part(body, 4, 4, 92, 14, C.Pink, { Radius = 6, Z = 4 })
+	local awning = kit.Part(body, 4, -2, 92, 13, C.Pink, { Radius = 6, Z = 4 })
 	for i = 0, 3 do
-		kit.Box(awning, 8 + i * 22, 0, 11, 14, WHITE, 0.1, 2)
+		kit.Box(awning, 8 + i * 22, 0, 11, 13, WHITE, 0.1, 2)
 	end
 	for i = 0, 5 do
-		kit.Blob(body, 11.7 + i * 15.3, 18, 15.3, 10, if i % 2 == 0 then C.Pink else WHITE, { Z = 3 })
+		kit.Blob(body, 11.7 + i * 15.3, 11, 15.3, 9, if i % 2 == 0 then C.Pink else WHITE, { Z = 3 })
 	end
 	for _, x in ipairs({ 20, 80 }) do
 		kit.Blob(body, x, 93, 13, 13, C.GreyDark, { Z = 2 })
@@ -737,13 +737,13 @@ Art.SundaeBar = function(body, kit, _item)
 	-- Coupe glacée
 	kit.Blob(body, 50, 54, 20, 5, C.LilacSoft, { Z = 6 })
 	kit.Part(body, 48, 46, 4, 8, C.LilacSoft, { Radius = 1, Z = 6 })
-	kit.Line(body, 60, 30, 67, 10, 3.2, Color3.fromRGB(120, 75, 60), 0, 6)
-	kit.Line(body, 62, 24, 64, 18, 3.4, C.Butter, 0, 6)
-	kit.Blob(body, 40, 35, 21, 18, C.Pink, { Z = 7, Shine = true })
-	kit.Blob(body, 60, 35, 21, 18, C.Mint, { Z = 7 })
-	local mid = kit.Blob(body, 50, 25, 21, 18, C.Butter, { Z = 8, Shine = true })
+	kit.Line(body, 60, 30, 68, 14, 3.2, Color3.fromRGB(120, 75, 60), 0, 6)
+	kit.Line(body, 62.5, 25, 64.5, 21, 3.4, C.Butter, 0, 6)
+	kit.Blob(body, 40, 33, 21, 18, C.Pink, { Z = 7, Shine = true })
+	kit.Blob(body, 60, 33, 21, 18, C.Mint, { Z = 7 })
+	local mid = kit.Blob(body, 50, 24, 21, 18, C.Butter, { Z = 8, Shine = true })
 	kit.Face(mid, 10.5, 10.5, 14, { Eyes = "happy", Mouth = "smile", Z = 3 })
-	kit.Blob(body, 50, 15, 13, 8, WHITE, { Z = 9 })
+	kit.Blob(body, 50, 14.5, 13, 8, WHITE, { Z = 9 })
 	kit.Blob(body, 50, 9, 7, 7, C.Red, { Z = 10, Shine = true })
 	local coupe = kit.Group(body, 29, 40, 42, 12, 9, true)
 	local cg = kit.Circle(coupe, 21, 0, 42, 24, C.LilacSoft, 0, 1)
