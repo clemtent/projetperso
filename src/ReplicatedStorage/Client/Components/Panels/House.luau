@@ -119,6 +119,7 @@ local pendingSlotPulse: { [number]: number } = {}
 local lastComfort: number? = nil
 local traySignature = ""
 local tabsSignature = ""
+local tabsContentWidth = 300
 local savedToken = 0
 local refreshClock = 0
 local closeWatcher = 0
@@ -341,10 +342,32 @@ local function layoutHeader()
 		if not comfortPill.Visible then
 			tabsWidth = leftWidth - backWidth - gap - 4
 		end
-		tabsScroller.Size = UDim2.new(0, math.max(80, tabsWidth), 1, 0)
+		tabsScroller.Size = UDim2.new(0, math.clamp(tabsContentWidth, 80, math.max(80, tabsWidth)), 1, 0)
 	else
 		comfortPill.Visible = true
 	end
+end
+
+-- Dock d'édition : à droite de la barre de la pièce, ou dessous si la
+-- place manque (téléphone, boutique ouverte)
+local function layoutStageChips()
+	local factor = Interface.Scale > 0 and Interface.Scale or 1
+	local stageWidth = stage.AbsoluteSize.X / factor
+	if stageWidth <= 0 then
+		return
+	end
+	local statsLabel = statsChip:FindFirstChild("Label") :: TextLabel?
+	local barWidth = pillWidth(typeButton) + 6 + (statsLabel and textWidth(statsLabel.Text, statsLabel.TextSize, statsLabel.Font) + 26 or 120)
+	if savedChip.Visible then
+		barWidth += 130
+	end
+	local dockWidth = 12
+	for _, button in ipairs({ undoButton, redoButton, snapButton }) do
+		dockWidth += pillWidth(button) + 5
+	end
+	local rowHeight = (Interface.IsTouch() and Theme.TouchTarget or 34) + 8
+	local below = 20 + barWidth + 10 + dockWidth > stageWidth
+	dock.Position = UDim2.new(1, -10, 0, below and 8 + rowHeight or 8)
 end
 
 ----------------------------------------------------------------------
@@ -371,6 +394,7 @@ local function refreshTabs()
 	end
 	local height = Interface.IsTouch() and 40 or 34
 	local currentButton: TextButton? = nil
+	local total = 6
 	for index, roomData in ipairs(rooms) do
 		local roomType = HouseCommon.GetRoomType(roomData)
 		local isCurrent = roomData.Id == currentRoomId
@@ -400,6 +424,7 @@ local function refreshTabs()
 			currentButton = tab
 		end
 		UIUtil.AnimateButton(tab, 1.08, 0.92)
+		total += (isCurrent and textWidth(tab.Text, tab.TextSize, tab.Font) + 28 or height + 4) + 5
 		tab.Activated:Connect(function()
 			if roomData.Id ~= currentRoomId then
 				SoundManager.Play("Click", 1.2)
@@ -407,6 +432,8 @@ local function refreshTabs()
 			end
 		end)
 	end
+	tabsContentWidth = total
+	task.defer(layoutHeader)
 	-- L'onglet courant reste visible
 	local current = currentButton
 	if current then
@@ -552,8 +579,8 @@ local function refreshDock()
 	snapButton.BackgroundColor3 = snap and C.Mint or WHITE
 	snapButton.TextColor3 = snap and WHITE or C.Ink
 	local phone = isPhone()
-	undoButton.Text = phone and "↶" or Locale.T("↶ Undo")
-	redoButton.Text = phone and "↷" or Locale.T("↷ Redo")
+	undoButton.Text = phone and "↩️" or Locale.T("↩️ Undo")
+	redoButton.Text = phone and "↪️" or Locale.T("↪️ Redo")
 	snapButton.Text = phone and "🧲" or (snap and Locale.T("🧲 Snap: on") or Locale.T("🧲 Snap: off"))
 end
 
@@ -585,7 +612,7 @@ local function refreshEditUi()
 	editButton:SetAttribute("BaseColor", editing and Theme.Colors.Green or C.Lilac)
 	editButton.BackgroundColor3 = editing and Theme.Colors.Green or C.Lilac
 	local arranging = isArranging()
-	arrangeButton.Text = arranging and Locale.T("✅ Done") or Locale.T("↔ Arrange")
+	arrangeButton.Text = arranging and Locale.T("✅ Done") or Locale.T("↔️ Arrange")
 	arrangeButton:SetAttribute("BaseColor", arranging and Theme.Colors.Green or C.Lilac)
 	arrangeButton.BackgroundColor3 = arranging and Theme.Colors.Green or C.Lilac
 	local empty = #currentLayout() == 0
@@ -595,6 +622,7 @@ local function refreshEditUi()
 	dock.Visible = inRoom and editing
 	refreshDock()
 	task.defer(layoutHeader)
+	task.defer(layoutStageChips)
 end
 
 local function setEditing(value: boolean)
@@ -1239,7 +1267,7 @@ function House.Build(frame: Frame)
 		Padding = UDim.new(0, 8),
 		Parent = rightGroup,
 	})
-	arrangeButton = barButton("Arrange", Locale.T("↔ Arrange"), C.Lilac, 1)
+	arrangeButton = barButton("Arrange", Locale.T("↔️ Arrange"), C.Lilac, 1)
 	arrangeButton.Parent = rightGroup
 	editButton = barButton("Edit", Locale.T("✏️ Edit"), C.Lilac, 2)
 	editButton.Parent = rightGroup
@@ -1298,6 +1326,9 @@ function House.Build(frame: Frame)
 	})
 	UIUtil.Corner(stage, 20)
 	UIUtil.Gradient(stage, ColorSequence.new(WHITE, Color3.fromRGB(236, 236, 240)), 90)
+	stage:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+		layoutStageChips()
+	end)
 	stageFade = UIUtil.Create("Frame", {
 		Name = "Fade",
 		Size = UDim2.fromScale(1, 1),
@@ -1383,8 +1414,8 @@ function House.Build(frame: Frame)
 		Padding = UDim.new(0, 5),
 		Parent = dock,
 	})
-	undoButton = smallButton("Undo", "↶", 1, dock)
-	redoButton = smallButton("Redo", "↷", 2, dock)
+	undoButton = smallButton("Undo", "↩️", 1, dock)
+	redoButton = smallButton("Redo", "↪️", 2, dock)
 	snapButton = smallButton("Snap", "🧲", 3, dock)
 
 	-- "Aperçu" (essai d'un papier peint / sol)

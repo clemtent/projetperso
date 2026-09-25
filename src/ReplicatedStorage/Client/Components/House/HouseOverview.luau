@@ -29,6 +29,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
+local TextService = game:GetService("TextService")
 
 local Client = script.Parent.Parent.Parent
 local Theme = require(Client.Theme)
@@ -432,16 +433,25 @@ function HouseOverview.new(parent: Frame, handlers: Handlers): Overview
 		ZIndex = 5,
 		Parent = zoom,
 	})
+	-- Case visée : fond rose sous la carte, contour + étiquette par-dessus
 	local dropMark = UIUtil.Create("Frame", {
 		Name = "Drop",
 		BackgroundColor3 = C.Pink,
-		BackgroundTransparency = 0.72,
+		BackgroundTransparency = 0.6,
 		Visible = false,
 		ZIndex = 1,
 		Parent = dragLayer,
 	})
 	UIUtil.Corner(dropMark, 14)
-	UIUtil.Stroke(dropMark, WHITE, 5, 0)
+	local dropOutline = UIUtil.Create("Frame", {
+		Name = "DropOutline",
+		BackgroundTransparency = 1,
+		Visible = false,
+		ZIndex = 10,
+		Parent = dragLayer,
+	})
+	UIUtil.Corner(dropOutline, 14)
+	local dropStroke = UIUtil.Stroke(dropOutline, C.PinkDeep, 6, 0)
 	local dropChip = UIUtil.Chip({
 		Name = "DropChip",
 		Text = "",
@@ -449,11 +459,12 @@ function HouseOverview.new(parent: Frame, handlers: Handlers): Overview
 		TextColor3 = WHITE,
 		Height = 28,
 		TextSize = 16,
-		ZIndex = 2,
-		Parent = dropMark,
+		ZIndex = 11,
+		Visible = false,
+		Parent = dragLayer,
 	})
 	dropChip.AnchorPoint = Vector2.new(0.5, 0.5)
-	dropChip.Position = UDim2.fromScale(0.5, 0.5)
+	UIUtil.Stroke(dropChip, WHITE, 2, 0)
 	local dropChipScale = UIUtil.Create("UIScale", { Parent = dropChip })
 
 	-- Astuce en bas
@@ -531,18 +542,58 @@ function HouseOverview.new(parent: Frame, handlers: Handlers): Overview
 		return comfort, favorites, #placed
 	end
 
-	local function chipText(room: Room): string
+	local function textWidth(text: string): number
+		local ok, bounds = pcall(function()
+			return TextService:GetTextSize(text, 14, Theme.Fonts.Title, Vector2.new(2000, 100))
+		end)
+		if ok and typeof(bounds) == "Vector2" then
+			return bounds.X
+		end
+		return #text * 8
+	end
+
+	-- Texte de la pastille : le plus complet qui tient dans la case
+	local function fitChip(card: Card, room: Room)
 		local roomType = HouseCommon.GetRoomType(room)
 		local comfort, favorites = roomStats(room)
 		local comfortText = string.format("❤️ %d", math.floor(comfort + 0.5))
-		if Interface.IsPhone() then
-			return string.format("%s %s", roomType.Icon, comfortText)
-		end
-		local text = string.format("%s %s  %s", roomType.Icon, HouseCommon.Name(roomType), comfortText)
+		local name = HouseCommon.Name(roomType)
+		local candidates = {}
 		if favorites > 0 then
-			text ..= string.format("  ✨%d", favorites)
+			table.insert(candidates, string.format("%s %s  %s  ✨%d", roomType.Icon, name, comfortText, favorites))
 		end
-		return text
+		table.insert(candidates, string.format("%s %s  %s", roomType.Icon, name, comfortText))
+		if favorites > 0 then
+			table.insert(candidates, string.format("%s %s  ✨%d", roomType.Icon, comfortText, favorites))
+		end
+		table.insert(candidates, string.format("%s %s", roomType.Icon, comfortText))
+		table.insert(candidates, roomType.Icon)
+		local rect = rectOf(card.Slot) or rectOf(slotOf(room))
+		local s = card.ChipScale.Scale
+		local maxWidth = (rect and rect.W or 300) - 12 * s - (arranging and 44 * s or 0)
+		local chosen = candidates[#candidates]
+		for _, text in ipairs(candidates) do
+			if (textWidth(text) + 26) * s <= maxWidth then
+				chosen = text
+				break
+			end
+		end
+		if card.ChipLabel.Text ~= chosen then
+			card.ChipLabel.Text = chosen
+		end
+	end
+
+	local function fitAllChips()
+		local currentHouse = house
+		if not currentHouse then
+			return
+		end
+		for _, room in ipairs(currentHouse.Rooms) do
+			local card = cards[room.Id]
+			if card then
+				fitChip(card, room)
+			end
+		end
 	end
 
 	local function paintCard(card: Card)
@@ -929,14 +980,22 @@ function HouseOverview.new(parent: Frame, handlers: Handlers): Overview
 		local current = drag
 		if not slot or not current or slot == current.FromSlot then
 			dropMark.Visible = false
+			dropOutline.Visible = false
+			dropChip.Visible = false
 			return
 		end
 		local rect = rectOf(slot) :: Rect
 		dropMark.Position = UDim2.fromOffset(rect.X - 4, rect.Y - 4)
 		dropMark.Size = UDim2.fromOffset(rect.W + 8, rect.H + 8)
+		dropOutline.Position = dropMark.Position
+		dropOutline.Size = dropMark.Size
+		dropOutline.Visible = true
+		dropStroke.Thickness = 3 * labelScale()
+		dropChip.Position = UDim2.fromOffset(rect.X + rect.W / 2, rect.Y + 4)
+		dropChip.Visible = true
 		local label = dropChip:FindFirstChild("Label") :: TextLabel?
 		if label then
-			label.Text = roomAt(slot) and Locale.T("⇄ Swap") or Locale.T("📍 Move here")
+			label.Text = roomAt(slot) and Locale.T("🔀 Swap") or Locale.T("📍 Move here")
 		end
 		if not dropMark.Visible then
 			dropMark.Visible = true
@@ -987,7 +1046,6 @@ function HouseOverview.new(parent: Frame, handlers: Handlers): Overview
 		end
 		local point = screenToBuilding(screenPos)
 		current.Target = point + current.Offset
-		local rect = rectOf(current.FromSlot) :: Rect
 		local over = slotAt(point)
 		if over ~= current.Over then
 			current.Over = over
@@ -995,10 +1053,6 @@ function HouseOverview.new(parent: Frame, handlers: Handlers): Overview
 			if over and over ~= current.FromSlot then
 				SoundManager.Play("Click", 1.5)
 			end
-		end
-		-- (au premier appel, la carte saute presque sous le doigt)
-		if (current.Current - Vector2.new(rect.X, rect.Y)).Magnitude < 1 then
-			current.Current = current.Current:Lerp(current.Target, 0.5)
 		end
 	end
 
@@ -1009,6 +1063,8 @@ function HouseOverview.new(parent: Frame, handlers: Handlers): Overview
 		end
 		drag = nil
 		dropMark.Visible = false
+		dropOutline.Visible = false
+		dropChip.Visible = false
 		local card = current.Card
 		local ext = exterior
 		card.Frame.Parent = ext and ext.CellLayer or dragLayer
@@ -1092,22 +1148,49 @@ function HouseOverview.new(parent: Frame, handlers: Handlers): Overview
 		return root.AbsoluteSize / factor
 	end
 
+	-- Échelle / position "tout l'immeuble" ; si la place est très plate
+	-- (téléphone), on cadre plutôt les pièces (le jardin et le haut du toit
+	-- peuvent sortir un peu du cadre)
+	local HINT_SPACE = 34
+	local function fitTarget(): (number, UDim2)
+		local ext = exterior :: Exterior
+		local space = available()
+		local availW, availH = space.X - 24, space.Y - HINT_SPACE - 16
+		local full = math.max(0.05, math.min(availW / ext.Width, availH / ext.Height))
+		local minX, minY, maxX, maxY = math.huge, math.huge, -math.huge, -math.huge
+		for _, rect in pairs(ext.Cells) do
+			minX, minY = math.min(minX, rect.X), math.min(minY, rect.Y)
+			maxX, maxY = math.max(maxX, rect.X + rect.W), math.max(maxY, rect.Y + rect.H)
+		end
+		if minX < maxX then
+			minX, maxX = math.max(0, minX - 90), math.min(ext.Width, maxX + 90)
+			minY, maxY = math.max(0, minY - 150), math.min(ext.Height, maxY + 70)
+			local focus = math.max(0.05, math.min(availW / (maxX - minX), availH / (maxY - minY)))
+			-- (PC / tablette : l'immeuble entier tant qu'il reste assez grand)
+			if full < focus * (Interface.IsPhone() and 0.85 or 0.62) then
+				local cx = (minX + maxX) / 2 - ext.Width / 2
+				local cy = (minY + maxY) / 2 - ext.Height / 2
+				return focus, UDim2.new(0.5, -cx * focus, 0.5, -cy * focus - HINT_SPACE / 2 + 4)
+			end
+		end
+		return full, UDim2.new(0.5, 0, 0.5, -HINT_SPACE / 2 + 4)
+	end
+
 	refit = function(force: boolean?)
 		local ext = exterior
 		if not ext then
 			return
 		end
-		local space = available()
-		local bottom = 34 -- place de l'astuce
-		local newScale = math.max(0.05, math.min((space.X - 24) / ext.Width, (space.Y - bottom - 16) / ext.Height))
+		local newScale, position = fitTarget()
 		local changed = math.abs(newScale - fitScale) > 1e-4
 		fitScale = newScale
 		if not zoomed then
 			zoomScale.Scale = newScale
-			zoom.Position = UDim2.new(0.5, 0, 0.5, -bottom / 2 + 4)
+			zoom.Position = position
 		end
 		if changed or force == true then
 			applyLabelScales()
+			fitAllChips()
 		end
 	end
 
@@ -1170,10 +1253,7 @@ function HouseOverview.new(parent: Frame, handlers: Handlers): Overview
 					local placed = (overrides and overrides[room.Id]) or room.Placed
 					card.Mini.Set(room, newSize, placed)
 					card.Mini.SetDark(dark)
-					local text = chipText(room)
-					if card.ChipLabel.Text ~= text then
-						card.ChipLabel.Text = text
-					end
+					fitChip(card, room)
 				end
 			end
 			for roomId, card in pairs(cards) do
@@ -1229,6 +1309,7 @@ function HouseOverview.new(parent: Frame, handlers: Handlers): Overview
 			for _, card in pairs(cards) do
 				paintCard(card)
 			end
+			fitAllChips()
 			refreshHint()
 			UIUtil.Pop(hint, 1.1, 0.3)
 		end,
@@ -1300,15 +1381,14 @@ function HouseOverview.new(parent: Frame, handlers: Handlers): Overview
 				zoom.Position = position
 			end
 			zoomed = false
-			local space = available()
 			local ext = exterior
 			if ext then
-				local bottom = 34
-				local target = math.max(0.05, math.min((space.X - 24) / ext.Width, (space.Y - bottom - 16) / ext.Height))
+				local target, position = fitTarget()
 				fitScale = target
 				UIUtil.Tween(zoomScale, ZOOM_TIME, { Scale = target }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-				UIUtil.Tween(zoom, ZOOM_TIME, { Position = UDim2.new(0.5, 0, 0.5, -bottom / 2 + 4) }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+				UIUtil.Tween(zoom, ZOOM_TIME, { Position = position }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 				applyLabelScales()
+				fitAllChips()
 			end
 		end,
 		Pulse = function(roomId: string)
@@ -1348,15 +1428,7 @@ function HouseOverview.new(parent: Frame, handlers: Handlers): Overview
 	end)
 	Interface.DeviceChanged:Connect(function()
 		refit(true)
-		local currentHouse = house
-		if currentHouse then
-			for _, room in ipairs(currentHouse.Rooms) do
-				local card = cards[room.Id]
-				if card then
-					card.ChipLabel.Text = chipText(room)
-				end
-			end
-		end
+		fitAllChips()
 	end)
 	refreshHint()
 	return overview

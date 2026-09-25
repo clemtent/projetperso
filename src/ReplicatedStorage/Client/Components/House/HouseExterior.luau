@@ -363,6 +363,7 @@ type WindowOpts = {
 	Z: number?,
 	Glass: Color3?,
 	NightColor: Color3?,
+	Shine: boolean?, -- reflet (défaut true)
 }
 
 -- Fenêtre kawaii : contour, cadre, vitre (allumée la nuit), croisillon, reflet
@@ -407,6 +408,12 @@ local function window(ctx: Ctx, parent: Instance, x: number, y: number, w: numbe
 		box(parent, x + b, cy - 1.5, w - b * 2, 3, fc, 0, z + 3)
 	end
 	-- Reflet
+	if o.Shine == false then
+		if o.Sill ~= false and not o.Round then
+			part(parent, x - 5, y + h - 3, w + 10, 7, fc, { R = 3, Z = z + 4, Line = ink, Th = 1.5, Shade = false })
+		end
+		return
+	end
 	local shine = box(parent, x + b + 2, y + b + (if o.Arch or o.Round then w * 0.12 else 2), math.max(3, w * 0.16), math.max(3, h * 0.1), WHITE, 0.45, z + 3)
 	round(shine)
 	if o.Sill ~= false and not o.Round then
@@ -460,13 +467,12 @@ end
 
 -- Drapeau qui ondule (mât + fanion en cœur) ; (x, y) = pied du mât
 local function flag(ctx: Ctx, parent: Instance, x: number, y: number, height: number, color: Color3, z: number, phase: number)
-	part(parent, x - 2.5, y - height, 5, height, C.Cream, { R = -1, Z = z, Th = 1.5, Shade = false })
-	circle(parent, x, y - height - 2, 9, 9, P.Gold, 0, z + 1)
-	local pivot = group(parent, x, y - height + 5, 0, 0, z + 2)
-	local cloth = part(pivot, 1, -2, 46, 26, color, { R = 6, Z = 1, Th = 2, Shade = 0.15 })
-	local tail = part(pivot, 34, 2, 22, 18, color:Lerp(BLACK, 0.06), { R = 5, Z = 0, Th = 2, Shade = false })
-	heart(cloth, 20, 13, 13, WHITE, 0, 2)
-	local _ = tail
+	part(parent, x - 3, y - height, 6, height, C.Cream, { R = -1, Z = z, Th = 1.5, Shade = false })
+	circle(parent, x, y - height - 3, 11, 11, P.Gold, 0, z + 1)
+	local pivot = group(parent, x, y - height + 6, 0, 0, z + 2)
+	local cloth = part(pivot, 2, -2, 62, 36, color, { R = 10, Z = 1, Th = 2, Shade = 0.15 })
+	box(cloth, 0, 26, 62, 4, WHITE, 0.4, 2)
+	heart(cloth, 31, 15, 18, WHITE, 0, 3)
 	table.insert(ctx.Anims, function(clock)
 		pivot.Rotation = math.sin(clock * 2.4 + phase) * 7 + math.sin(clock * 5.1 + phase) * 2
 	end)
@@ -634,7 +640,7 @@ STYLES.Cottage = function(ctx, size, cellW)
 	local lawn = part(back, 6, groundY - 14, width - 12, height - groundY + 8, P.Grass, { R = 24, Z = 1, Line = P.GrassDark, Shade = 0.12 })
 	local _ = lawn
 	-- Arbre à gauche (derrière le mur) avec des pommes roses
-	tree(back, 62, groundY + 6, 1.05, 2, C.Pink)
+	tree(back, 94, groundY + 6, 1.05, 2, C.Pink)
 
 	-- Cheminée (derrière le toit) + fumée
 	local chimneyX = cx + 150
@@ -799,7 +805,7 @@ STYLES.Townhouse = function(ctx, size, cellW)
 	local cols, floors = size.Columns, size.Floors
 	local bodyW = cols * cellW + (cols - 1) * T + M * 2
 	local bodyX = left
-	local roofTop = 66
+	local roofTop = 126
 	local roofH = 132
 	local corniceY = roofTop + roofH - 4
 	local cellTop = corniceY + 44
@@ -820,13 +826,13 @@ STYLES.Townhouse = function(ctx, size, cellW)
 	local TRIM = C.Cream
 
 	-- Trottoir, bordure, rue
-	part(back, -4, groundY - 8, width + 8, 64, P.Pave, { R = 0, Z = 1, Line = false, Shade = 0.08 })
+	part(back, 0, groundY - 8, width, 64, P.Pave, { R = 0, Z = 1, Line = false, Shade = 0.08 })
 	for index = 0, math.floor(width / 72) do
 		box(back, 30 + index * 72, groundY + 4, 3, 44, P.StoneDark, 0.4, 2)
 	end
-	part(back, -4, groundY + 50, width + 8, 12, P.StoneDark, { R = 0, Z = 2, Line = false, Shade = 0.15 })
-	part(back, -4, groundY + 62, width + 8, height - groundY - 62, Color3.fromRGB(176, 164, 200), { R = 0, Z = 1, Line = false, Shade = 0.2 })
-	for index = 0, math.floor(width / 90) do
+	part(back, 0, groundY + 50, width, 12, P.StoneDark, { R = 0, Z = 2, Line = false, Shade = 0.15 })
+	part(back, 0, groundY + 62, width, height - groundY - 62, Color3.fromRGB(176, 164, 200), { R = 0, Z = 1, Line = false, Shade = 0.2 })
+	for index = 0, math.floor((width - 60) / 90) do
 		round(box(back, 20 + index * 90, groundY + 72, 40, 5, WHITE, 0.35, 2))
 	end
 
@@ -946,8 +952,8 @@ STYLES.Townhouse = function(ctx, size, cellW)
 
 	-- Pilastres crème autour des pièces
 	for index = 0, cols do
-		local x = if index == 0 then bodyX + 8 elseif index == cols then bodyX + bodyW - M + 1 else colX[index] + cellW - 3
-		local w = if index == 0 or index == cols then M - 9 + 3 else T + 6
+		local x = if index == 0 then bodyX + M - 15 elseif index == cols then bodyX + bodyW - M - 3 else colX[index] + cellW - 3
+		local w = if index == 0 or index == cols then 18 else T + 6
 		part(front, x, cellTop - 6, w, gridH + 10, TRIM, { R = 4, Z = 4, Th = 2 })
 	end
 	-- Dalles + balcons en fer forgé (étages supérieurs)
@@ -974,7 +980,7 @@ STYLES.Townhouse = function(ctx, size, cellW)
 	box(front, bodyX + 6, cellBottom + 14, bodyW - 12, 2, P.StoneDark, 0.3, 6)
 
 	-- Lampadaire + vélo (à gauche, sur le trottoir)
-	postLantern(ctx, front, 100, groundY + 30, 250, 10)
+	postLantern(ctx, front, 118, groundY + 30, 250, 10)
 	local bikeY = groundY + 38
 	local bikeColor = C.Mint:Lerp(C.Sky, 0.3)
 	for _, wx in ipairs({ 22, 86 }) do
@@ -1022,11 +1028,11 @@ STYLES.Loft = function(ctx, size, cellW)
 	local bayX = bodyX + bodyW - MR
 
 	-- Trottoir + bordure
-	part(back, -4, groundY - 8, width + 8, 58, P.Pave, { R = 0, Z = 1, Line = false, Shade = 0.08 })
+	part(back, 0, groundY - 8, width, 58, P.Pave, { R = 0, Z = 1, Line = false, Shade = 0.08 })
 	for index = 0, math.floor(width / 80) do
 		box(back, 40 + index * 80, groundY + 4, 3, 40, P.StoneDark, 0.4, 2)
 	end
-	part(back, -4, groundY + 48, width + 8, height - groundY - 48, P.StoneDark, { R = 0, Z = 2, Line = false, Shade = 0.25 })
+	part(back, 0, groundY + 48, width, height - groundY - 48, P.StoneDark, { R = 0, Z = 2, Line = false, Shade = 0.25 })
 
 	-- ░ Toit-terrasse (derrière le parapet) ░
 	-- Château d'eau
@@ -1067,14 +1073,14 @@ STYLES.Loft = function(ctx, size, cellW)
 			local color = bulbColors[index % #bulbColors + 1]
 			local bulb = circle(back, bx, by + 6, 10, 13, color, 0, 5)
 			stroke(bulb, color:Lerp(INK, 0.5), 1.5)
-			ctx.Lit[bulb] = color:Lerp(WHITE, 0.25)
+			ctx.Lit[bulb] = color:Lerp(LIT, 0.35):Lerp(WHITE, 0.3)
 			table.insert(bulbs, bulb)
 		end
 	end
 	table.insert(ctx.Anims, function(clock, dark)
 		for index, bulb in ipairs(bulbs) do
 			local wave = 0.5 + 0.5 * math.sin(clock * 2.2 + index * 1.3)
-			bulb.BackgroundTransparency = if dark then wave * 0.35 else 0.05 + wave * 0.15
+			bulb.BackgroundTransparency = if dark then wave * 0.2 else 0.05 + wave * 0.15
 		end
 	end)
 	-- Parasol + plantes qui dépassent du parapet
@@ -1154,7 +1160,7 @@ STYLES.Loft = function(ctx, size, cellW)
 	for _, by in ipairs({ signY + 30, signY + signH - 30 }) do
 		part(back, signX + signW - 6, by - 4, bodyX - signX - signW + 16, 8, P.SteelDark, { R = 2, Z = 11, Th = 1.5, Shade = false })
 	end
-	glow(ctx, back, signX + signW / 2, signY + signH / 2, 250, C.Pink, 12)
+	glow(ctx, back, signX + signW / 2, signY + signH / 2, 200, C.Pink, 12)
 	local board = part(back, signX, signY, signW, signH, Color3.fromRGB(86, 64, 120), { R = 16, Z = 15, Line = INK, Th = 3, Shade = false })
 	local neonA = Color3.fromRGB(255, 150, 206)
 	local neonB = Color3.fromRGB(150, 236, 255)
@@ -1238,7 +1244,11 @@ STYLES.Loft = function(ctx, size, cellW)
 	local sx1, sy1 = fx1 + 18, landingY - 6
 	local sx2, sy2 = fx2 - 14, parapetY + 4
 	line(front, sx1, sy1, sx2, sy2, 6, steel, 0, 11)
-	line(front, sx1 + 22, sy1 - 6, sx2 + 12, sy2 - 20, 4, steel, 0, 11)
+	line(front, sx1, sy1 - 30, sx2, sy2 - 30, 4, steel, 0, 11)
+	for k = 1, 3 do
+		local t = k / 4
+		box(front, sx1 + (sx2 - sx1) * t - 1.5, sy1 + (sy2 - sy1) * t - 30, 3, 30, steel, 0, 11)
+	end
 	for index = 1, 9 do
 		local k = index / 10
 		local tx = sx1 + (sx2 - sx1) * k
@@ -1296,13 +1306,13 @@ STYLES.Mansion = function(ctx, size, cellW)
 	local bodyW = gridW + M * 2
 	local bodyX = margin + towerOut
 	local cx = bodyX + bodyW / 2
-	local roofTop = 196
+	local roofTop = 246
 	local roofH = 150
 	local corniceY = roofTop + roofH - 6
 	local cellTop = corniceY + 48
 	local gridH = floors * cellH + (floors - 1) * S
 	local cellBottom = cellTop + gridH
-	local plinthH = 78
+	local plinthH = 96
 	local groundY = cellBottom + plinthH
 	local width = bodyX + bodyW + towerOut + margin
 	local height = groundY + 262
@@ -1319,8 +1329,11 @@ STYLES.Mansion = function(ctx, size, cellW)
 
 	-- ░ Jardin (fond) : pelouse, allée ░
 	part(back, 10, groundY - 20, width - 20, height - groundY + 14, P.Grass, { R = 30, Z = 1, Line = P.GrassDark, Shade = 0.14 })
-	local path = group(back, 0, 0, width, height, 2)
-	local pathSlices = 8
+	for index = 0, 2 do
+		round(box(back, 30, groundY + 40 + index * 64, width - 60, 26, WHITE, 0.82, 2), 13)
+	end
+	local path = group(back, 0, 0, width, height, 3)
+	local pathSlices = 6
 	for index = 0, pathSlices - 1 do
 		local k = index / pathSlices
 		local w = 150 + k * 170
@@ -1340,18 +1353,22 @@ STYLES.Mansion = function(ctx, size, cellW)
 			smoke(ctx, back, chx + 20, roofTop - 62, 2)
 		end
 	end
-	trapezoid(back, cx, roofTop, roofTopW, roofBase, roofH, ROOF, ROOF_DARK, 5, 22)
+	trapezoid(back, cx, roofTop, roofTopW, roofBase, roofH, ROOF, ROOF_DARK, 5, 16)
+	for _, side in ipairs({ -1, 1 }) do
+		local rake = line(back, cx + side * (roofTopW / 2 + 2), roofTop, cx + side * (roofBase / 2 - 2), corniceY + 4, 12, ROOF_DARK, 0, 8)
+		stroke(rake, ROOF_DARK:Lerp(INK, 0.35), 2)
+	end
 	-- Tuiles (hors fronton)
 	for row = 1, 3 do
 		local y = roofH * row / 4
 		local w = roofTopW + (roofBase - roofTopW) * (y / roofH) - 30
-		local tile = 40
-		scallops(back, cx - w / 2, cx - 300, roofTop + y, tile, 18, ROOF_DARK, 0.45, 6, (row % 2) * tile / 2)
-		scallops(back, cx + 300, cx + w / 2, roofTop + y, tile, 18, ROOF_DARK, 0.45, 6, (row % 2) * tile / 2)
+		local tile = 50
+		scallops(back, cx - w / 2, cx - 330, roofTop + y, tile, 20, ROOF_DARK, 0.45, 6, (row % 2) * tile / 2)
+		scallops(back, cx + 330, cx + w / 2, roofTop + y, tile, 20, ROOF_DARK, 0.45, 6, (row % 2) * tile / 2)
 	end
 	part(back, cx - roofTopW / 2 - 10, roofTop - 10, roofTopW + 20, 14, ROOF_DARK, { R = -1, Z = 8, Line = ROOF_DARK:Lerp(INK, 0.35) })
 	-- Crête dorée
-	local crestCount = math.floor(roofTopW / 96)
+	local crestCount = math.floor(roofTopW / 110)
 	for index = 0, crestCount do
 		local px = cx - roofTopW / 2 + index * roofTopW / crestCount
 		box(back, px - 1.5, roofTop - 24, 3, 16, P.Gold:Lerp(INK, 0.2), 0, 7)
@@ -1363,7 +1380,7 @@ STYLES.Mansion = function(ctx, size, cellW)
 		local dw, dh = 84, 96
 		local dy = roofTop + 30
 		part(back, dx - dw / 2, dy, dw, dh + 20, TRIM, { R = 8, Z = 9, Th = 2.5 })
-		trapezoid(back, dx, dy - 38, 8, dw + 26, 42, C.Pink, C.PinkDeep:Lerp(C.Pink, 0.55), 10, 9)
+		trapezoid(back, dx, dy - 38, 8, dw + 26, 42, C.Pink, C.PinkDeep:Lerp(C.Pink, 0.55), 10, 6)
 		line(back, dx - 2, dy - 38, dx - dw / 2 - 14, dy + 4, 9, C.PinkDeep, 0, 11)
 		line(back, dx + 2, dy - 38, dx + dw / 2 + 14, dy + 4, 9, C.PinkDeep, 0, 11)
 		circle(back, dx, dy - 42, 10, 10, P.Gold, 0, 12)
@@ -1376,11 +1393,14 @@ STYLES.Mansion = function(ctx, size, cellW)
 	end
 
 	-- ░ Fronton central + horloge-cœur ░
-	local pedW = 560
-	local pedH = 190
+	local pedW = 660
+	local pedH = 236
 	local pedTop = corniceY - pedH + 4
-	trapezoid(back, cx, pedTop, 20, pedW, pedH, TRIM, WALL_SHADE, 13, 24)
-	trapezoid(back, cx, pedTop + 34, 10, pedW - 110, pedH - 52, WALL, WALL:Lerp(C.Pink, 0.25), 14, 18)
+	trapezoid(back, cx, pedTop, 20, pedW, pedH, TRIM, WALL_SHADE, 13, 16)
+	trapezoid(back, cx, pedTop + 38, 10, pedW - 120, pedH - 56, WALL, WALL:Lerp(C.Pink, 0.3), 14, 12)
+	for _, side in ipairs({ -1, 1 }) do
+		line(back, cx + side * 5, pedTop + 38, cx + side * (pedW / 2 - 60), pedTop + pedH - 18, 5, TRIM:Lerp(C.Pink, 0.35), 0, 15)
+	end
 	for _, side in ipairs({ -1, 1 }) do
 		local rake = line(back, cx + side * 6, pedTop + 2, cx + side * (pedW / 2 + 6), corniceY + 2, 18, TRIM, 0, 15)
 		stroke(rake, TRIM:Lerp(INK, 0.45), 2.5)
@@ -1388,22 +1408,21 @@ STYLES.Mansion = function(ctx, size, cellW)
 	end
 	heart(back, cx, pedTop - 12, 34, C.Heart, 0, 16)
 	-- Horloge : cœur rose, cadran crème, aiguilles qui tournent
-	local clockY = pedTop + pedH * 0.6
-	local ch = heart(back, cx, clockY, 112, C.PinkDeep:Lerp(INK, 0.25), 0, 16)
-	local _ = ch
-	heart(back, cx, clockY, 102, C.Pink, 0, 17)
-	local face = circle(back, cx, clockY + 2, 62, 62, C.Cream, 0, 18)
-	stroke(face, P.Gold, 3)
+	local clockY = pedTop + pedH * 0.62
+	heart(back, cx, clockY, 146, C.PinkDeep:Lerp(INK, 0.25), 0, 16)
+	heart(back, cx, clockY, 136, C.Pink, 0, 17)
+	local face = circle(back, cx, clockY + 3, 82, 82, C.Cream, 0, 18)
+	stroke(face, P.Gold, 4)
 	lit(ctx, face, LIT_SOFT)
 	for index = 0, 3 do
 		local a = index * math.pi / 2
-		circle(back, cx + math.sin(a) * 23, clockY + 2 - math.cos(a) * 23, 6, 6, C.PinkDeep, 0, 19)
+		circle(back, cx + math.sin(a) * 31, clockY + 3 - math.cos(a) * 31, 7, 7, C.PinkDeep, 0, 19)
 	end
-	local hourPivot = group(back, cx, clockY + 2, 0, 0, 20)
-	local minutePivot = group(back, cx, clockY + 2, 0, 0, 20)
-	round(box(hourPivot, -2.5, -15, 5, 17, INK, 0, 1))
-	round(box(minutePivot, -1.5, -23, 3, 25, INK, 0, 1))
-	circle(back, cx, clockY + 2, 8, 8, P.Gold, 0, 21)
+	local hourPivot = group(back, cx, clockY + 3, 0, 0, 20)
+	local minutePivot = group(back, cx, clockY + 3, 0, 0, 20)
+	round(box(hourPivot, -3, -20, 6, 22, INK, 0, 1))
+	round(box(minutePivot, -2, -30, 4, 32, INK, 0, 1))
+	circle(back, cx, clockY + 3, 10, 10, P.Gold, 0, 21)
 	table.insert(ctx.Anims, function(clock)
 		minutePivot.Rotation = (clock * 36) % 360
 		hourPivot.Rotation = (clock * 3 + 300) % 360
@@ -1450,6 +1469,8 @@ STYLES.Mansion = function(ctx, size, cellW)
 		})
 		g.Rotation = 0
 		g.Parent = tower
+		-- Socle de pierre (même soubassement que le corps)
+		part(back, tx - 4, cellBottom - 4, towerW + 8, groundY - cellBottom + 4, P.Stone, { R = 8, Z = 41, Line = P.StoneDark:Lerp(INK, 0.3), Shade = 0.12 })
 		-- Bandeaux de pierre aux étages
 		for floorIndex = 1, floors do
 			local by = floorY[floorIndex] + cellH + S / 2 - 7
@@ -1457,7 +1478,7 @@ STYLES.Mansion = function(ctx, size, cellW)
 		end
 		-- Fenêtres cintrées (une par étage) + œil-de-bœuf en haut
 		for floorIndex = 1, floors do
-			window(ctx, back, tcx - 30, floorY[floorIndex] + 36, 60, 106, { Arch = true, Z = 42, Frame = TRIM })
+			window(ctx, back, tcx - 30, floorY[floorIndex] + 36, 60, 106, { Arch = true, Z = 42, Frame = TRIM, Shine = false })
 		end
 		window(ctx, back, tcx - 22, bodyTop + 22, 44, 44, { Round = true, Z = 42, Frame = TRIM })
 		-- Couronnement : corniche + festons
@@ -1465,8 +1486,8 @@ STYLES.Mansion = function(ctx, size, cellW)
 		scallops(back, tx - 8, tx + towerW + 8, bodyTop + 8, 26, 14, C.Pink, 0, 46)
 		-- Toit conique + tuiles + rives + drapeau
 		local coneBase = towerW + 44
-		trapezoid(back, tcx, bodyTop - 16 - coneH, 6, coneBase, coneH, ROOF, ROOF_DARK, 48, 26)
-		tileRows(back, tcx, bodyTop - 16 - coneH, 6, coneBase, coneH, 4, 36, ROOF_DARK, 0.45, 49)
+		trapezoid(back, tcx, bodyTop - 16 - coneH, 6, coneBase, coneH, ROOF, ROOF_DARK, 48, 16)
+		tileRows(back, tcx, bodyTop - 16 - coneH, 6, coneBase, coneH, 3, 40, ROOF_DARK, 0.45, 49)
 		for _, s2 in ipairs({ -1, 1 }) do
 			local rake = line(back, tcx + s2 * 2, bodyTop - 14 - coneH, tcx + s2 * (coneBase / 2 + 2), bodyTop - 12, 12, ROOF_DARK, 0, 50)
 			stroke(rake, ROOF_DARK:Lerp(INK, 0.35), 2)
@@ -1479,7 +1500,7 @@ STYLES.Mansion = function(ctx, size, cellW)
 	-- ░ Avant : corniche, colonnes, balustrades ░
 	part(front, bodyX - 18, corniceY, bodyW + 36, 24, TRIM, { R = 6, Z = 2, Th = 2.5 })
 	box(front, bodyX - 10, corniceY + 16, bodyW + 20, 3, P.Gold, 0, 3)
-	local modCount = math.floor(bodyW / 62)
+	local modCount = math.floor(bodyW / 90)
 	for index = 0, modCount do
 		part(front, bodyX + 2 + index * (bodyW - 16) / modCount, corniceY + 24, 12, 13, TRIM, { R = 3, Z = 1, Th = 1.5, Shade = false })
 	end
@@ -1524,7 +1545,7 @@ STYLES.Mansion = function(ctx, size, cellW)
 			local rx = colX[c] - 2
 			local rw = cellW + 4
 			part(front, rx, y - 14, rw, 8, TRIM, { R = -1, Z = 11, Th = 2 })
-			local count = math.floor(rw / 31)
+			local count = math.floor(rw / 40)
 			for index = 1, count - 1 do
 				local bx = rx + index * rw / count
 				part(front, bx - 4.5, y - 8, 9, S - 6, TRIM, { R = -1, Z = 10, Th = 1.5, Shade = 0.15 })
@@ -1537,30 +1558,24 @@ STYLES.Mansion = function(ctx, size, cellW)
 	part(front, bodyX - 4, cellBottom - 6, bodyW + 8, plinthH + 6, P.Stone, { R = 6, Z = 8, Line = P.StoneDark:Lerp(INK, 0.3) })
 	part(front, bodyX - 8, cellBottom - 8, bodyW + 16, 12, TRIM, { R = -1, Z = 9, Th = 2 })
 	for row = 0, 1 do
-		local y = cellBottom + 20 + row * 26
-		box(front, bodyX + 4, y, bodyW - 8, 2, P.StoneDark, 0.2, 9)
-		local count = math.floor(bodyW / 130)
-		for index = 0, count do
-			box(front, bodyX + 40 + index * 130 + (row % 2) * 65, y + 2, 2, 24, P.StoneDark, 0.3, 9)
-		end
+		box(front, bodyX + 4, cellBottom + 22 + row * 26, bodyW - 8, 2, P.StoneDark, 0.2, 9)
 	end
 
 	-- ░ Grand escalier double (deux volées qui descendent du perron) ░
-	local landW = 176
+	local landW = 196
 	local landY = cellBottom
 	part(front, bayCx - landW / 2, landY - 4, landW, 18, TRIM, { R = 4, Z = 20, Th = 2.5 })
 	box(front, bayCx - landW / 2 + 6, landY + 6, landW - 12, 3, P.Gold, 0, 21)
-	local steps = 6
-	local run = 30
+	local steps = 7
+	local run = 34
 	local rise = (groundY - landY + 6) / steps
 	local flightEnd = landW / 2 + steps * run
 	for _, side in ipairs({ -1, 1 }) do
 		local startX = bayCx + side * landW / 2
 		for step = 1, steps do
-			local sx = startX + side * (step - 1) * run
 			local sy = landY + 12 + (step - 1) * rise
-			local w = run + 18
-			part(front, if side < 0 then sx - w else sx, sy, w, rise + 5, P.Stone, { R = 4, Z = 18 + step, Line = P.StoneDark:Lerp(INK, 0.3), Shade = 0.22 })
+			local w = step * run + 30
+			part(front, if side < 0 then startX + 12 - w else startX - 12, sy, w, rise + 5, P.Stone, { R = 4, Z = 18 + step, Line = P.StoneDark:Lerp(INK, 0.3), Shade = 0.22 })
 		end
 		-- Rampe à balustres
 		local x1, y1 = startX, landY - 2
@@ -1586,12 +1601,12 @@ STYLES.Mansion = function(ctx, size, cellW)
 		local x1 = if side < 0 then bodyX - towerOut + 14 else bayCx + flightEnd + 40
 		local x2 = if side < 0 then bayCx - flightEnd - 40 else bodyX + bodyW + towerOut - 14
 		part(front, x1, hedgeY - 38, x2 - x1, 46, P.Leaf, { R = 18, Z = 14, Line = P.LeafDark:Lerp(INK, 0.3), Shade = 0.22 })
-		local bumps = math.floor((x2 - x1) / 70)
+		local bumps = math.floor((x2 - x1) / 90)
 		for index = 0, bumps - 1 do
 			circle(front, x1 + 34 + index * (x2 - x1 - 68) / math.max(1, bumps - 1), hedgeY - 36, 58, 24, P.Leaf, 0, 15)
 		end
-		for index = 0, 6 do
-			local fx = x1 + 30 + index * (x2 - x1 - 60) / 6
+		for index = 0, 4 do
+			local fx = x1 + 30 + index * (x2 - x1 - 60) / 4
 			flower(front, fx, hedgeY - 14 + (index % 2) * 10, 13, if index % 2 == 0 then C.Pink else WHITE, 16)
 		end
 		-- Topiaire à étages (près de la tour)
@@ -1607,8 +1622,8 @@ STYLES.Mansion = function(ctx, size, cellW)
 		-- Parterre rond fleuri
 		local bx, by = bayCx + side * 360, groundY + 150
 		blob(front, bx, by, 190, 58, P.LeafDark:Lerp(P.Leaf, 0.4), { Z = 24, Line = P.LeafDark:Lerp(INK, 0.3), Shade = 0.2 })
-		for index = 0, 6 do
-			local a = index / 7 * math.pi * 2
+		for index = 0, 5 do
+			local a = index / 6 * math.pi * 2
 			flower(front, bx + math.cos(a) * 62, by + math.sin(a) * 15, 17, ({ C.Pink, C.Butter, WHITE, C.Lilac })[index % 4 + 1], 25)
 		end
 		flower(front, bx, by - 2, 20, C.Heart, 25)
@@ -1628,10 +1643,10 @@ STYLES.Mansion = function(ctx, size, cellW)
 	blob(front, bayCx, fy - 126, 60, 16, TRIM, { Z = 38, Th = 2 })
 	heart(front, bayCx, fy - 140, 22, C.Pink, 0, 39)
 	local drops = {}
-	for index = 1, 12 do
+	for index = 1, 10 do
 		local drop = circle(front, bayCx, fy - 100, 7, 9, P.Water:Lerp(WHITE, 0.35), 0.1, 40)
 		stroke(drop, P.Water:Lerp(INK, 0.35), 1)
-		table.insert(drops, { Frame = drop, Side = if index % 2 == 0 then 1 else -1, Phase = (index - 1) / 12, High = index % 4 < 2 })
+		table.insert(drops, { Frame = drop, Side = if index % 2 == 0 then 1 else -1, Phase = (index - 1) / 10, High = index % 4 < 2 })
 	end
 	table.insert(ctx.Anims, function(clock)
 		for _, drop in ipairs(drops) do
@@ -1655,13 +1670,13 @@ STYLES.Mansion = function(ctx, size, cellW)
 		local x2 = if side < 0 then bayCx - gateGap / 2 - 18 else width - 24
 		part(front, x1, fenceTop + 12, x2 - x1, 5, iron, { R = 2, Z = 40, Line = false, Shade = false })
 		part(front, x1, fenceTop + 42, x2 - x1, 5, iron, { R = 2, Z = 40, Line = false, Shade = false })
-		local count = math.floor((x2 - x1) / 30)
+		local count = math.floor((x2 - x1) / 38)
 		for index = 0, count do
 			local bx = x1 + index * (x2 - x1) / count
 			local bar = box(front, bx - 2, fenceTop - 4, 4, 58, iron, 0, 41)
 			round(bar, 2)
 			if index % 3 == 1 then
-				heart(front, bx, fenceTop + 28, 12, P.Gold, 0, 42)
+				circle(front, bx, fenceTop + 29, 11, 11, P.Gold, 0, 42)
 			end
 		end
 		-- Pilier du portail + lanterne
@@ -1676,7 +1691,7 @@ STYLES.Mansion = function(ctx, size, cellW)
 		heart(front, gx, fenceTop + 18, 14, P.Gold, 0, 43)
 	end
 
-	fireflies(ctx, ctx.Fx, 60, groundY - 30, width - 120, 250, 10, 1)
+	fireflies(ctx, ctx.Fx, 60, groundY - 30, width - 120, 250, 8, 1)
 	return { Width = width, Height = height, Cells = cells }
 end
 
@@ -1873,9 +1888,13 @@ function HouseExterior.BuildBackdrop(parent: Instance, _size: SizeDef?): Backdro
 	circle(sun, 45, 45, 90, 90, Color3.fromRGB(255, 240, 180), 0.6, 1)
 	circle(sun, 45, 45, 58, 58, Color3.fromRGB(255, 226, 130), 0, 2)
 	local moon = scaled(0.86, 0.16, 90, 90, 2)
-	circle(moon, 45, 45, 90, 90, Color3.fromRGB(255, 244, 200), 0.82, 1)
-	circle(moon, 45, 45, 54, 54, Color3.fromRGB(255, 244, 200), 0, 2)
-	circle(moon, 58, 36, 44, 44, Color3.fromRGB(52, 44, 110), 0, 3)
+	circle(moon, 45, 45, 96, 96, Color3.fromRGB(255, 244, 200), 0.86, 1)
+	circle(moon, 45, 45, 72, 72, Color3.fromRGB(255, 244, 200), 0.8, 1)
+	local disc = circle(moon, 45, 45, 54, 54, Color3.fromRGB(255, 246, 214), 0, 2)
+	grad(disc, WHITE, Color3.fromRGB(240, 226, 200), 45)
+	circle(moon, 36, 38, 12, 10, Color3.fromRGB(238, 224, 190), 0, 3)
+	circle(moon, 54, 54, 9, 8, Color3.fromRGB(238, 224, 190), 0, 3)
+	circle(moon, 55, 34, 6, 5, Color3.fromRGB(238, 224, 190), 0, 3)
 
 	-- Collines lointaines
 	local hills = {}

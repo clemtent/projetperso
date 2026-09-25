@@ -192,14 +192,24 @@ function HousePicker.new(parent: Frame): Picker
 		end)
 	end
 
-	local function open(titleText: string, subtitleText: string, columns: number, cellHeight: number, height: number?)
+	-- rows : nombre de rangées (la fenêtre prend juste la hauteur utile)
+	local function open(titleText: string, subtitleText: string, columns: number, cellHeight: number, rows: number, maxWidth: number?)
 		closeToken += 1
-		card.Size = height and UDim2.new(1, -24, 0, height :: number) or UDim2.new(1, -24, 1, -16)
+		local height = 84 + rows * (cellHeight + 10) + 6
+		card.Size = UDim2.new(1, -24, 0, height)
 		clearList()
 		title.Text = titleText
 		subtitle.Text = subtitleText
 		local phone = Interface.IsPhone()
-		sizeLimit.MaxSize = phone and Vector2.new(900, 480) or Vector2.new(820, 480)
+		sizeLimit.MaxSize = Vector2.new(maxWidth or (phone and 900 or 820), 480)
+		-- (plus haute que la place : elle défile, sans dépasser de la fenêtre)
+		task.defer(function()
+			local factor = Interface.Scale > 0 and Interface.Scale or 1
+			local space = overlay.AbsoluteSize.Y / factor
+			if space > 0 and height > space - 16 then
+				card.Size = UDim2.new(1, -24, 1, -16)
+			end
+		end)
 		grid.CellSize = UDim2.new(1 / columns, -10, 0, cellHeight)
 		overlay.Visible = true
 		cardScale.Scale = 0.85
@@ -264,10 +274,17 @@ function HousePicker.new(parent: Frame): Picker
 			local phone = Interface.IsPhone()
 			local columns = phone and 6 or 4
 			local cellHeight = phone and 116 or 124
-			open(options.Title, options.Subtitle, columns, cellHeight)
-			for index, roomType in ipairs(HouseCommon.Config.RoomTypes) do
+			local types = HouseCommon.Config.RoomTypes
+			open(options.Title, options.Subtitle, columns, cellHeight, math.ceil(#types / columns))
+			for index, roomType in ipairs(types) do
 				local wallpaper = HouseCommon.WallpapersById[roomType.Wallpaper]
-				local tint = wallpaper and wallpaper.A:Lerp(WHITE, 0.35) or C.PinkMist
+				local tint = C.PinkMist
+				if wallpaper then
+					-- (papiers peints sombres : fond bien éclairci, le texte reste lisible)
+					local a = wallpaper.A
+					local luminance = 0.3 * a.R + 0.59 * a.G + 0.11 * a.B
+					tint = a:Lerp(WHITE, luminance < 0.6 and 0.72 or 0.35)
+				end
 				local isCurrent = options.Current == roomType.Id
 				local button = cell(index, tint, not isCurrent, function()
 					options.OnPick(roomType.Id)
@@ -350,8 +367,8 @@ function HousePicker.new(parent: Frame): Picker
 			local phone = Interface.IsPhone()
 			local columns = phone and 4 or 3
 			local cellHeight = phone and 128 or 150
-			open(options.Title, options.Subtitle, columns, cellHeight)
 			local house = options.House
+			open(options.Title, options.Subtitle, columns, cellHeight, math.max(1, math.ceil((#house.Rooms - 1) / columns)))
 			local size = HouseCommon.GetSize(house)
 			local rooms = table.clone(house.Rooms)
 			table.sort(rooms, function(a, b)
@@ -407,7 +424,7 @@ function HousePicker.new(parent: Frame): Picker
 			local columns = math.max(1, math.min(count, 3))
 			local cellHeight = Interface.IsTouch() and 64 or 56
 			local rows = math.ceil(count / columns)
-			open(options.Title, options.Subtitle, columns, cellHeight, 84 + rows * (cellHeight + 10) + 10)
+			open(options.Title, options.Subtitle, columns, cellHeight, rows, 560)
 			for index, info in ipairs(options.Buttons) do
 				local button = cell(index, info.Color, true, info.OnClick)
 				text(button, info.Text, UDim2.fromOffset(8, 0), UDim2.new(1, -16, 1, 0), 18, C.Ink, true)
