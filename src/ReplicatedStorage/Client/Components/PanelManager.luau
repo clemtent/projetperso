@@ -40,6 +40,7 @@ PanelManager.Closed = Signal.new() -- (name)
 
 local DEFAULT_SIZE = Vector2.new(640, 500)
 local HEADER_HEIGHT = 66
+local VIEWPORT_MARGIN = 3 -- (px) marge autour du contenu : contours des cartes au bord jamais coupés
 local DIM_TRANSPARENCY = 0.45
 local SCREEN_FIT = 0.94 -- la fenêtre occupe au plus 94 % de l'écran
 local MIN_FIT_SCALE = 0.9 -- réduction max avant de raccourcir la fenêtre
@@ -91,7 +92,7 @@ local function applyFit(name: string?)
 		local contentHeight = (scrolls and currentSize.Y or visibleHeight) - (HEADER_HEIGHT + 22)
 		panel.Content.Size = UDim2.new(1, 0, 0, contentHeight)
 		local viewport = panel.Viewport :: ScrollingFrame
-		viewport.CanvasSize = UDim2.fromOffset(0, contentHeight)
+		viewport.CanvasSize = UDim2.fromOffset(0, contentHeight + VIEWPORT_MARGIN * 2)
 		viewport.ScrollingEnabled = scrolls
 		viewport.ScrollBarThickness = scrolls and 6 or 0
 		if not scrolls then
@@ -342,22 +343,25 @@ function PanelManager.Register(name: string, module)
 	-- Zone de défilement (utile seulement quand la fenêtre est moins haute
 	-- que prévu, ex. téléphone) ; le contenu garde sa taille normale
 	local size: Vector2 = module.Size or DEFAULT_SIZE
+	-- (zone agrandie de VIEWPORT_MARGIN px de chaque côté + UIPadding : le contenu
+	-- garde sa place, mais les contours des cartes collées au bord ne sont plus coupés)
 	local viewport = UIUtil.Create("ScrollingFrame", {
 		Name = name .. "Viewport",
-		Size = UDim2.new(1, -40, 1, -(HEADER_HEIGHT + 22)),
-		Position = UDim2.fromOffset(20, HEADER_HEIGHT + 10),
+		Size = UDim2.new(1, -40 + VIEWPORT_MARGIN * 2, 1, -(HEADER_HEIGHT + 22) + VIEWPORT_MARGIN * 2),
+		Position = UDim2.fromOffset(20 - VIEWPORT_MARGIN, HEADER_HEIGHT + 10 - VIEWPORT_MARGIN),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 		ScrollingEnabled = false,
 		ScrollBarThickness = 0,
 		ScrollBarImageColor3 = Theme.Colors.Dark,
-		CanvasSize = UDim2.fromOffset(0, size.Y - (HEADER_HEIGHT + 22)),
+		CanvasSize = UDim2.fromOffset(0, size.Y - (HEADER_HEIGHT + 22) + VIEWPORT_MARGIN * 2),
 		ElasticBehavior = Enum.ElasticBehavior.WhenScrollable,
 		Visible = false,
 		ZIndex = 4,
 		Parent = window,
 	})
+	UIUtil.Padding(viewport, VIEWPORT_MARGIN)
 	local content = UIUtil.Create("Frame", {
 		Name = name,
 		Size = UDim2.new(1, 0, 0, size.Y - (HEADER_HEIGHT + 22)),

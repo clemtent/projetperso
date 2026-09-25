@@ -78,7 +78,10 @@ function BubbleWrap.Start(ctx)
 	------------------------------------------------------------------
 	local card = Create("Frame", {
 		Name = "Card",
-		Size = UDim2.fromScale(1, 1),
+		-- 2 px de marge : le contour de la carte n'est pas coupé par le slot
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(1, -4, 1, -4),
 		BackgroundColor3 = Theme.Colors.Card,
 		BorderSizePixel = 0,
 		Parent = container,
@@ -355,7 +358,8 @@ function BubbleWrap.Start(ctx)
 			caption.Text = captions[random:NextInteger(1, #captions)]
 			caption.TextTransparency = 0
 			captionStroke.Transparency = 0
-			local width = (container.Size.X.Offset > 0 and container.Size.X.Offset or 288) - 16
+			local slotWidth = ctx.GetSlotSize and ctx.GetSlotSize().X or 288
+			local width = (slotWidth > 0 and slotWidth or 288) - 16
 			UIUtil.Tween(sheet, 0.35, { Position = UDim2.fromOffset(-(width + 10), 0) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 			ctx.Sound.Play("Open", 0.9)
 			task.wait(0.75)

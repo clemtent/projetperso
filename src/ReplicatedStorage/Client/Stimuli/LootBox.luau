@@ -81,8 +81,10 @@ function LootBox.Start(ctx)
 	local container: Frame = ctx.Container
 	local random = Random.new()
 
-	local width = container.Size.X.Offset > 0 and container.Size.X.Offset or 170
-	local height = container.Size.Y.Offset > 0 and container.Size.Y.Offset or 170
+	-- Taille de la carte = slot - 2 x 2 px (marge pour que son contour ne soit pas coupé)
+	local slotSize = ctx.GetSlotSize and ctx.GetSlotSize() or Vector2.new(170, 170)
+	local width = (slotSize.X > 0 and slotSize.X or 170) - 4
+	local height = (slotSize.Y > 0 and slotSize.Y or 170) - 4
 	local cx = width / 2
 	local cy = height / 2 - 1 -- centre de l'anneau
 	local chestCY = cy + 2 -- centre du coffre
@@ -179,7 +181,10 @@ function LootBox.Start(ctx)
 	------------------------------------------------------------------
 	local card = Create("TextButton", {
 		Name = "Card",
-		Size = UDim2.fromScale(1, 1),
+		-- 2 px de marge : le contour de la carte n'est pas coupé par le slot
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(1, -4, 1, -4),
 		BackgroundColor3 = WHITE,
 		AutoButtonColor = false,
 		Text = "",
@@ -773,7 +778,7 @@ function LootBox.Start(ctx)
 		Font = Theme.Fonts.Title,
 		TextColor3 = Color3.fromRGB(70, 30, 0),
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromOffset(cx, 16),
+		Position = UDim2.fromOffset(cx, 20),
 		Size = UDim2.fromOffset(66, 22),
 		BackgroundTransparency = 0,
 		BackgroundColor3 = WHITE,
@@ -1163,8 +1168,9 @@ function LootBox.Start(ctx)
 
 		-- Bulle "PRÊT !" qui rebondit
 		if calloutShown then
-			callout.Position = UDim2.fromOffset(cx, 16 - math.abs(math.sin(elapsed * 4.5)) * 4)
-			callout.Rotation = math.sin(elapsed * 2.2) * 5
+			-- (rebond limité : la bulle ne touche jamais le bord de la carte)
+			callout.Position = UDim2.fromOffset(cx, 20 - math.abs(math.sin(elapsed * 4.5)) * 3)
+			callout.Rotation = math.sin(elapsed * 2.2) * 3
 		end
 
 		-- Reflets : étincelles autour du coffre prêt, reflets sur le métal sinon

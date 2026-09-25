@@ -203,7 +203,7 @@ function Casino.Start(ctx)
 	})
 	round(card, 18)
 	vGradient(card, { { 0, LACQUER_TOP }, { 0.55, Color3.fromRGB(150, 16, 44) }, { 1, LACQUER_BOTTOM } })
-	goldStroke(card, 2.5)
+	goldStroke(card, 2) -- (2 px comme les autres cartes : 284 + 2 x 2 = largeur du slot, contour jamais coupé)
 
 	-- Reflet laqué (bande claire en diagonale)
 	local sheen = frame({
@@ -675,9 +675,12 @@ function Casino.Start(ctx)
 		Text = Locale.T("📜 PAYOUTS"),
 		TextColor3 = Color3.fromRGB(60, 20, 0),
 		TextSize = 10,
+		TextScaled = true, -- le texte (traduit) reste dans la pastille
 		ZIndex = 5,
 		Parent = led,
 	})
+	Create("UITextSizeConstraint", { MaxTextSize = 10, MinTextSize = 6, Parent = payButton })
+	Create("UIPadding", { PaddingLeft = UDim.new(0, 3), PaddingRight = UDim.new(0, 3), Parent = payButton })
 	round(payButton)
 	vGradient(payButton, { { 0, GOLD_LIGHT }, { 1, GOLD } })
 

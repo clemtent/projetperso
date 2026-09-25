@@ -75,8 +75,9 @@ local PILLS = {
 
 local BUTTON_SIZE = Vector2.new(184, 62)
 local PILL_HEIGHT = 36
+local PILL_BADGE_CLEAR = 27 -- place réservée à droite du texte d'une pastille qui a un badge (marge comprise)
 local HOUSE_BUTTON_SIZE = 54 -- bouton "🏠" (zone tactile >= 44 px)
-local HOUSE_GAP = 10 -- écart entre "Click me" et "🏠"
+local HOUSE_GAP = 6 -- écart entre "Click me" et "🏠" (le badge "99+" reste loin du slot CR)
 
 local random = Random.new()
 local effectsLayer: Frame
@@ -345,7 +346,7 @@ local function buildHouseButton(column: Frame, buttonCenterX: number, buttonCent
 	end
 	UIUtil.Shadow(houseButton, 3, 0.8, 2)
 	houseBadge = UIUtil.Badge(houseButton, 22)
-	houseBadge.Position = UDim2.new(1, -4, 0, 4)
+	houseBadge.Position = UDim2.new(1, -8, 0, 2)
 
 	-- Petite bulle "Ma maison" au survol (au-dessus du bouton)
 	houseTip = UIUtil.Chip({
@@ -419,9 +420,9 @@ local function buildPills(parent: Frame, order: number)
 	table.clear(pills)
 	local phone = Interface.IsPhone()
 	local height = Interface.IsTouch() and Theme.TouchTarget or PILL_HEIGHT
-	-- Marge verticale du support (place pour le badge rouge sur téléphone)
-	local holderPad = phone and 12 or 6
-	local buttonY = phone and 7 or 3
+	-- Marge verticale du support (4 px d'air entre deux lignes de pastilles sur PC)
+	local holderPad = phone and 12 or 4
+	local buttonY = phone and 7 or 2
 	pillsDevice = Interface.Device
 
 	local row: GuiObject
@@ -453,6 +454,11 @@ local function buildPills(parent: Frame, order: number)
 			LayoutOrder = order,
 			Parent = parent,
 		})
+		if Interface.Device == "Desktop" then
+			-- PC : la 1re ligne passe sous les slots CL / CR (bas à y = 210) :
+			-- 8 px d'air pour qu'aucune pastille ne touche ces cartes
+			UIUtil.Create("UIPadding", { PaddingTop = UDim.new(0, 8), Parent = row })
+		end
 	end
 	pillsRow = row
 	UIUtil.Create("UIListLayout", {
@@ -460,7 +466,7 @@ local function buildPills(parent: Frame, order: number)
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
 		VerticalAlignment = Enum.VerticalAlignment.Center,
 		Wraps = not phone,
-		Padding = UDim.new(0, 8),
+		Padding = UDim.new(0, phone and 8 or 6),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = row,
 	})
@@ -499,8 +505,25 @@ local function buildPills(parent: Frame, order: number)
 			stroke.Name = "TextStroke"
 		end
 		UIUtil.Shadow(button, 2, 0.86, 2)
-		local badge = UIUtil.Badge(button, 22)
-		badge.Position = UDim2.new(1, -2, 0, phone and 6 or 2)
+		local badge = UIUtil.Badge(button, def.Round and 22 or 18)
+		if def.Round then
+			badge.Position = UDim2.new(1, -2, 0, phone and 6 or 2)
+		else
+			-- Badge DANS la pastille, à droite du texte : il ne recouvre ni le
+			-- texte ni la pastille voisine (la pastille s'élargit quand il est là)
+			local padding = button:FindFirstChildOfClass("UIPadding")
+			local basePad = math.floor(height * 0.45)
+			badge.AnchorPoint = Vector2.new(1, 0.5)
+			local function placeBadge()
+				local right = badge.Visible and math.max(basePad, PILL_BADGE_CLEAR) or basePad
+				if padding then
+					padding.PaddingRight = UDim.new(0, right)
+				end
+				badge.Position = UDim2.new(1, right - 2, 0.5, 0)
+			end
+			badge:GetPropertyChangedSignal("Visible"):Connect(placeBadge)
+			placeBadge()
+		end
 		UIUtil.Create("UIScale", { Name = "PopScale", Parent = holder })
 
 		button.Activated:Connect(function()

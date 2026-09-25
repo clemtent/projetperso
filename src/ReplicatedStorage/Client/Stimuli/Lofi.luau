@@ -40,6 +40,7 @@ local SCENE_W, SCENE_H = 368, 204
 local BAR_Y, BAR_H = 214, 42
 local DESK_Y = 148 -- dessus du bureau (plateau vu en perspective)
 local DESK_FRONT = 164 -- face avant du bureau
+local SCENE_RADIUS = 10 -- coins arrondis de la scène (repris par la face avant du bureau)
 local ITEM_BASE = 158 -- les objets "posés" sur le plateau
 local WINDOW_X, WINDOW_Y, WINDOW_W, WINDOW_H = 12, 12, 164, 108
 local GLASS_W, GLASS_H = WINDOW_W - 12, WINDOW_H - 12
@@ -202,7 +203,7 @@ function Lofi.Start(ctx)
 		ClipsDescendants = true,
 		Parent = card,
 	})
-	UI.Corner(scene, 10)
+	UI.Corner(scene, SCENE_RADIUS)
 	gradient(scene, Color3.fromRGB(84, 62, 130), Color3.fromRGB(46, 34, 80))
 
 	------------------------------------------------------------------
@@ -763,6 +764,19 @@ function Lofi.Start(ctx)
 	------------------------------------------------------------------
 	-- Bureau
 	------------------------------------------------------------------
+	-- Face avant créée AVANT le plateau (même ZIndex : le plateau passe devant) :
+	-- elle remonte derrière lui et ses coins du bas sont arrondis comme la scène
+	-- (ClipsDescendants découpe en rectangle : sinon coins carrés qui dépassent)
+	local deskFront = frame({
+		Name = "DeskFront",
+		Position = UDim2.fromOffset(0, DESK_FRONT - SCENE_RADIUS),
+		Size = UDim2.new(1, 0, 0, SCENE_H - DESK_FRONT + SCENE_RADIUS),
+		BackgroundColor3 = WHITE,
+		ZIndex = 10,
+		Parent = scene,
+	})
+	UI.Corner(deskFront, SCENE_RADIUS)
+	gradient(deskFront, Color3.fromRGB(116, 76, 56), Color3.fromRGB(78, 50, 40))
 	local deskTop = frame({
 		Name = "DeskTop",
 		Position = UDim2.fromOffset(0, DESK_Y),
@@ -777,15 +791,6 @@ function Lofi.Start(ctx)
 		ColorSequenceKeypoint.new(0.9, Color3.fromRGB(214, 164, 118)),
 		ColorSequenceKeypoint.new(1, Color3.fromRGB(214, 164, 118)),
 	}), 90)
-	local deskFront = frame({
-		Name = "DeskFront",
-		Position = UDim2.fromOffset(0, DESK_FRONT),
-		Size = UDim2.new(1, 0, 0, SCENE_H - DESK_FRONT),
-		BackgroundColor3 = WHITE,
-		ZIndex = 10,
-		Parent = scene,
-	})
-	gradient(deskFront, Color3.fromRGB(116, 76, 56), Color3.fromRGB(78, 50, 40))
 
 	-- Pile de livres
 	for i, spec in ipairs({

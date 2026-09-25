@@ -54,6 +54,7 @@ local GAP = 6 -- espace entre la vidéo et le chat
 local FOLLOW_W, FOLLOW_H = 100, 30 -- bouton "Suivre"
 local LIVE_W, LIVE_H = 52, 20 -- badge "● LIVE"
 local TABLE_Y = VIDEO_H - 60 -- haut de la table dans la vidéo (150)
+local VIDEO_RADIUS = 12 -- coins arrondis de la vidéo (repris par la table)
 local PLATE_Y = TABLE_Y + 13 -- centre de l'assiette
 -- La streameuse est dessinée sur une grille de 80 x 80 puis agrandie
 local STREAMER_SCALE = 1.4
@@ -536,7 +537,7 @@ function LiveStream.Start(ctx)
 		ClipsDescendants = true,
 		ZIndex = 2,
 		Parent = card,
-	}, 12)
+	}, VIDEO_RADIUS)
 	UI.Gradient(video, ColorSequence.new({
 		ColorSequenceKeypoint.new(0, Color3.fromRGB(96, 74, 150)),
 		ColorSequenceKeypoint.new(0.55, Color3.fromRGB(178, 112, 176)),
@@ -773,6 +774,9 @@ function LiveStream.Start(ctx)
 	------------------------------------------------------------------
 	-- Table, assiette, micro
 	------------------------------------------------------------------
+	-- Coins du bas arrondis comme la vidéo (ClipsDescendants découpe en
+	-- rectangle : sans ça, coins carrés qui dépassent du cadre arrondi)
+	local tableTop, tableBottom = Color3.fromRGB(196, 132, 90), Color3.fromRGB(120, 74, 48)
 	local tableFrame = box({
 		Name = "Table",
 		Position = UDim2.fromOffset(0, TABLE_Y),
@@ -780,8 +784,11 @@ function LiveStream.Start(ctx)
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		ZIndex = 10,
 		Parent = video,
-	})
-	UI.Gradient(tableFrame, ColorSequence.new(Color3.fromRGB(196, 132, 90), Color3.fromRGB(120, 74, 48)), 90)
+	}, VIDEO_RADIUS)
+	UI.Gradient(tableFrame, ColorSequence.new(tableTop, tableBottom), 90)
+	-- ... et coins du haut bien carrés (bande du même dégradé par-dessus)
+	local tableCap = box({ Size = UDim2.new(1, 0, 0, VIDEO_RADIUS), BackgroundColor3 = Color3.new(1, 1, 1), ZIndex = 10, Parent = tableFrame })
+	UI.Gradient(tableCap, ColorSequence.new(tableTop, tableTop:Lerp(tableBottom, VIDEO_RADIUS / (VIDEO_H - TABLE_Y))), 90)
 	box({ Size = UDim2.new(1, 0, 0, 4), BackgroundColor3 = Color3.fromRGB(230, 170, 120), ZIndex = 10, Parent = tableFrame })
 	-- Veines du bois
 	for i, y in ipairs({ 18, 32, 46 }) do

@@ -191,9 +191,10 @@ local function buildItem(grid: ScrollingFrame, achievement, order: number)
 	UIUtil.Corner(card, Theme.Radius.L)
 	local stroke = UIUtil.Stroke(card, Theme.Colors.Divider, 1.5)
 
-	local medallion = AchievementPopup.Medallion(card, 64, achievement)
+	-- Médaille SOUS les pastilles du haut (palier, badge Roblox) : rien ne se chevauche
+	local medallion = AchievementPopup.Medallion(card, 56, achievement)
 	medallion.Frame.AnchorPoint = Vector2.new(0.5, 0)
-	medallion.Frame.Position = UDim2.new(0.5, 0, 0, 10)
+	medallion.Frame.Position = UDim2.new(0.5, 0, 0, 25)
 	medallion.Frame.ZIndex = 3
 
 	if hasBadge(achievement) then
