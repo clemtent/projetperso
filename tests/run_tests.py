@@ -577,7 +577,7 @@ def build_bundle(extra):
     return "\n".join(parts)
 
 
-CONFIG_PATH_RE = re.compile(r"(?<![A-Za-z0-9_])Config((?:\.[A-Za-z_][A-Za-z0-9_]*)+)")
+CONFIG_PATH_RE = re.compile(r"(?<![A-Za-z0-9_.])Config((?:\.[A-Za-z_][A-Za-z0-9_]*)+)")
 
 
 def config_key_test():
