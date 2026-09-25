@@ -52,6 +52,19 @@ local TEMPLATE = {
 		Equipped = "Classic",
 	},
 	Boost = { Multiplier = 1, EndsAt = 0 }, -- boost acheté (EndsAt = os.time() de fin)
+	-- 🏠 Maison (Config.House), gardée pour toujours (même après l'océan).
+	-- Items = { [itemId] = nombre possédé } ;
+	-- Placed = { { I = itemId, X = 0..1, Y = 0..1, S = 0.6..1.6, Z = 0..999 }, ... }
+	House = {
+		Size = Config.House.Sizes[1].Id,
+		Wallpaper = Config.House.Wallpapers[1].Id,
+		Floor = Config.House.Floors[1].Id,
+		OwnedSizes = { [Config.House.Sizes[1].Id] = true },
+		OwnedWallpapers = { [Config.House.Wallpapers[1].Id] = true },
+		OwnedFloors = { [Config.House.Floors[1].Id] = true },
+		Items = {},
+		Placed = {},
+	},
 	Purchases = {}, -- PurchaseId (texte) des 50 derniers achats Robux traités (anti-doublon)
 	LastOnline = 0, -- os.time() de la dernière sauvegarde / sortie (0 = jamais)
 	LiveFollowed = false, -- abonné au live ASMR pendant cette partie (remis à false à la détox)
@@ -85,6 +98,8 @@ local TEMPLATE = {
 		Follows = 0, -- abonnements au live
 		ButterCrunches = 0, -- croquées de beurre
 		OfflineEarned = 0, -- Dopamine gagnée hors-ligne
+		HouseItemsBought = 0, -- objets de maison achetés
+		HouseComfort = 0, -- meilleur confort de maison atteint
 	},
 }
 

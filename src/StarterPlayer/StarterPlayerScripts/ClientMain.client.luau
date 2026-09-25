@@ -12,6 +12,8 @@
 	construire l'interface : on attend le premier état (3 s au plus) pour
 	lire le réglage "Language", sinon langue Roblox du joueur. Mode sombre
 	(DarkSkin) appliqué à la colonne centrale, aux fenêtres et aux bandeaux.
+	Maison : fenêtre "🏠 Ma maison" (Panels > House), ouverte par le bouton
+	🏠 à droite de "Click me" (chargée sans bloquer le reste en cas d'erreur).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -118,6 +120,16 @@ PanelManager.Register("Leaderboard", require(Panels:WaitForChild("Leaderboard"))
 PanelManager.Register("Daily", require(Panels:WaitForChild("Daily")))
 PanelManager.Register("Settings", require(Panels:WaitForChild("Settings")))
 PanelManager.Register("RobuxShop", require(Panels:WaitForChild("RobuxShop")))
+
+-- 🏠 Ma maison : une erreur de chargement ne doit pas bloquer le reste de l'interface
+do
+	local ok, module = pcall(require, Panels:WaitForChild("House"))
+	if ok and type(module) == "table" then
+		PanelManager.Register("House", module)
+	else
+		warn("[ClientMain] Erreur au chargement du panneau House : " .. tostring(module))
+	end
+end
 
 -- Outils de test : UNIQUEMENT dans Studio (panneau "🛠️ Test" + commandes de chat)
 if DebugTools.Enabled then
