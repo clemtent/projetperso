@@ -27,6 +27,15 @@ Les autres méthodes (Rojo, copie manuelle) sont décrites dans [`docs/INSTALLAT
 
 ---
 
+## 🆕 Nouveautés v7 — 🏰 de vraies maisons à pièces
+
+- **Vraies maisons de poupée** vues en coupe (`House/HouseExterior`) : chalet (Studio, 2 pièces), maison de ville (Appart, 2×2), loft industriel (Loft, 2×3) et **grand manoir** (3×4 : tours, fronton à horloge cœur, balcons, grand escalier, jardin à la française, fontaine, portail). Jour / nuit animés.
+- **Des pièces** : on les achète (onglet 🚪 Pièces de la boutique ou ➕ sur un emplacement vide), 12 types (salon, chambre, cuisine, salle de bain, chambre d'enfant, salle de jeux, serre, coin des animaux, bibliothèque, salle de musique, spa, grenier étoilé). **Harmonie** : un objet « préféré » de sa pièce donne +50 % de confort.
+- **Vue d'ensemble** cliquable : touche une pièce pour y entrer (onglets pour passer d'une pièce à l'autre, ⬅ Maison pour revenir). **↔️ Ranger** : glisse les pièces où tu veux dans la maison (échange), ⋯ pour changer le type.
+- **Papier peint et sol par pièce**.
+- **Éditeur complet** : annuler / rétablir (Ctrl+Z / Ctrl+Y), copier (Ctrl+D), envoyer un objet dans une autre pièce, aimant de grille (G), flèches pour déplacer (Maj = plus loin), +/- taille, PgHaut/PgBas couche, Suppr ranger.
+- Les anciennes sauvegardes (une seule pièce) deviennent automatiquement un salon. Commande de test `/house` : manoir + une pièce de chaque type.
+
 ## 🆕 Nouveautés v6.1 — 🏠 la maison en mieux
 
 - **Tous les objets sont de vrais dessins kawaii** (plus de simples emojis) : contours doux, reflets, petits visages, motifs… faits uniquement avec des Frames (`House/HouseArt` + un fichier par catégorie dans `House/Art/`). Ils sont animés dans la pièce : les animaux respirent et clignent des yeux, les flammes vacillent, les roues tournent, les balanciers se balancent.

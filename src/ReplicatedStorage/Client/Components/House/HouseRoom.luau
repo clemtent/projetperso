@@ -93,6 +93,8 @@ export type Room = {
 	ShowRing: (sticker: Sticker, visible: boolean) -> (),
 	DestroySticker: (sticker: Sticker) -> (),
 	SetZoneHint: (placement: string?) -> (),
+	SetGrid: (visible: boolean, step: number?) -> (),
+	SetExterior: (exterior: string?) -> (),
 	Update: (dt: number) -> (),
 	Refit: () -> (),
 }
@@ -228,6 +230,16 @@ function HouseRoom.new(stage: Frame): Room
 		ZIndex = 7,
 		Parent = frame,
 	})
+	-- Grille de l'aimant (visible pendant un glissement, aimant activé)
+	local grid = UIUtil.Create("Frame", {
+		Name = "Grid",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Visible = false,
+		ZIndex = 7,
+		Parent = frame,
+	})
+	local gridKey = ""
 	local items = UIUtil.Create("Frame", {
 		Name = "Items",
 		Size = UDim2.fromScale(1, 1),
@@ -718,6 +730,33 @@ function HouseRoom.new(stage: Frame): Room
 		DestroySticker = function(sticker: Sticker)
 			stickers[sticker] = nil
 			sticker.Frame:Destroy()
+		end,
+		SetGrid = function(visible: boolean, step: number?)
+			if visible then
+				local gridStep = math.max(8, step or 20)
+				local key = string.format("%d|%d|%d", width, height, gridStep)
+				if key ~= gridKey then
+					gridKey = key
+					for _, child in ipairs(grid:GetChildren()) do
+						child:Destroy()
+					end
+					-- Lignes fines (une Frame par ligne : ~60 au total)
+					local x = gridStep
+					while x < width do
+						Box(grid, x - 0.5, 0, 1, height, WHITE, 0.55, 1)
+						x += gridStep
+					end
+					local y = gridStep
+					while y < height do
+						Box(grid, 0, y - 0.5, width, 1, WHITE, 0.55, 1)
+						y += gridStep
+					end
+				end
+			end
+			grid.Visible = visible
+		end,
+		SetExterior = function(exterior: string?)
+			scenery:SetPalette(exterior)
 		end,
 		SetZoneHint = function(placement: string?)
 			local function set(zone: Frame, stroke: UIStroke, state: string)

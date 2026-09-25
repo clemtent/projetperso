@@ -4,7 +4,9 @@
 
 	Outils partagés de "🏠 Ma maison" côté client :
 	  - accès typé à Config.House (tailles, papiers peints, sols, objets) ;
-	  - lecture de ClientState.Data.House (avec valeurs par défaut) ;
+	  - lecture de ClientState.Data.House (avec valeurs par défaut) : la
+	    maison est une grille de pièces (Rooms), chacune avec son type, son
+	    emplacement (Slot), son papier peint, son sol et ses objets ;
 	  - prix (Formulas.GetHouseItemPrice), exemplaires possédés / posés,
 	    confort et bonus (mêmes formules que le serveur) ;
 	  - bornes des zones "Wall" (haut) / "Floor" (bas) de la pièce ;
@@ -43,8 +45,25 @@ export type SizeDef = {
 	Name: string,
 	Icon: string,
 	Cost: number,
-	Width: number,
-	MaxItems: number,
+	Floors: number, -- étages
+	Columns: number, -- pièces par étage
+	MaxRooms: number, -- Floors x Columns
+	Width: number, -- largeur relative d'une pièce
+	RoomItems: number, -- objets posés max par pièce
+	Exterior: string, -- "Cottage" | "Townhouse" | "Loft" | "Mansion"
+	Order: number?,
+}
+
+export type RoomTypeDef = {
+	Id: string,
+	Name: string,
+	Icon: string,
+	Wallpaper: string,
+	Floor: string,
+	Categories: { string },
+	Items: { string },
+	FavoriteCategories: { [string]: boolean },
+	FavoriteItems: { [string]: boolean },
 	Order: number?,
 }
 
@@ -64,22 +83,35 @@ export type Category = { Id: string, Name: string, Icon: string, Order: number? 
 -- Un objet posé (format du serveur)
 export type Placed = { I: string, X: number, Y: number, S: number, Z: number }
 
-export type HouseData = {
-	Size: string,
+-- Une pièce (format du serveur) ; Slot = (étage - 1) x Columns + colonne,
+-- étage 1 = rez-de-chaussée
+export type Room = {
+	Id: string,
+	Type: string,
+	Slot: number,
 	Wallpaper: string,
 	Floor: string,
+	Placed: { Placed },
+}
+
+export type HouseData = {
+	Size: string,
 	OwnedSizes: { [string]: boolean },
 	OwnedWallpapers: { [string]: boolean },
 	OwnedFloors: { [string]: boolean },
 	Items: { [string]: number },
-	Placed: { Placed },
+	Rooms: { Room },
 }
 
 export type HouseConfig = {
 	ComfortBonusPerPoint: number,
 	MaxComfortBonus: number,
 	WallRatio: number,
+	RoomCost: number,
+	RoomCostGrowth: number,
+	HarmonyBonus: number,
 	Sizes: { SizeDef },
+	RoomTypes: { RoomTypeDef },
 	Wallpapers: { Style },
 	Floors: { Style },
 	Categories: { Category },
@@ -94,7 +126,14 @@ local EMPTY_CONFIG: HouseConfig = {
 	ComfortBonusPerPoint = 0,
 	MaxComfortBonus = 0,
 	WallRatio = 0.46,
-	Sizes = { { Id = "Studio", Name = "Cozy studio", Icon = "🏠", Cost = 0, Width = 1, MaxItems = 25 } },
+	RoomCost = 0,
+	RoomCostGrowth = 1,
+	HarmonyBonus = 0,
+	Sizes = {
+		{ Id = "Studio", Name = "Cozy studio", Icon = "🏠", Cost = 0, Floors = 1, Columns = 1, MaxRooms = 1, Width = 1,
+			RoomItems = 25, Exterior = "Cottage" },
+	},
+	RoomTypes = {},
 	Wallpapers = {},
 	Floors = {},
 	Categories = {},
@@ -107,6 +146,7 @@ HouseCommon.SizesById = ((Config :: any).HouseSizesById or {}) :: { [string]: Si
 HouseCommon.WallpapersById = ((Config :: any).HouseWallpapersById or {}) :: { [string]: Style }
 HouseCommon.FloorsById = ((Config :: any).HouseFloorsById or {}) :: { [string]: Style }
 HouseCommon.CategoriesById = ((Config :: any).HouseCategoriesById or {}) :: { [string]: Category }
+HouseCommon.RoomTypesById = ((Config :: any).HouseRoomTypesById or {}) :: { [string]: RoomTypeDef }
 
 -- Échelle des objets posés (bornes du serveur) et pas des boutons ➕ / ➖
 HouseCommon.MIN_SCALE = 0.6
@@ -165,19 +205,10 @@ local function mapOf(value): { [string]: any }
 	return {}
 end
 
--- Maison du joueur (jamais nil : valeurs par défaut avant le premier état)
-function HouseCommon.GetHouse(data: any): HouseData
-	local house = type(data) == "table" and data.House or nil
-	local config = HouseCommon.Config
-	local firstSize = config.Sizes[1]
-	local firstWallpaper = config.Wallpapers[1]
-	local firstFloor = config.Floors[1]
-	if type(house) ~= "table" then
-		house = {}
-	end
+local function readPlaced(list: any): { Placed }
 	local placed = {}
-	if type(house.Placed) == "table" then
-		for _, entry in ipairs(house.Placed) do
+	if type(list) == "table" then
+		for _, entry in ipairs(list) do
 			if type(entry) == "table" and type(entry.I) == "string" then
 				table.insert(placed, {
 					I = entry.I,
@@ -189,15 +220,58 @@ function HouseCommon.GetHouse(data: any): HouseData
 			end
 		end
 	end
+	return placed
+end
+
+-- Maison du joueur (jamais nil : valeurs par défaut avant le premier état ;
+-- une ancienne maison à une seule pièce devient un salon)
+function HouseCommon.GetHouse(data: any): HouseData
+	local house = type(data) == "table" and data.House or nil
+	local config = HouseCommon.Config
+	local firstSize = config.Sizes[1]
+	local firstWallpaper = config.Wallpapers[1]
+	local firstFloor = config.Floors[1]
+	local firstType = config.RoomTypes[1]
+	if type(house) ~= "table" then
+		house = {}
+	end
+	local rooms: { Room } = {}
+	local ok, rawRooms = pcall(Formulas.GetHouseRooms, house)
+	if ok and type(rawRooms) == "table" then
+		for index, raw in ipairs(rawRooms) do
+			if type(raw) == "table" then
+				table.insert(rooms, {
+					Id = type(raw.Id) == "string" and raw.Id or ("R" .. index),
+					Type = type(raw.Type) == "string" and raw.Type or (firstType and firstType.Id or "Living"),
+					Slot = tonumber(raw.Slot) or index,
+					Wallpaper = type(raw.Wallpaper) == "string" and raw.Wallpaper
+						or (type(house.Wallpaper) == "string" and house.Wallpaper)
+						or (firstWallpaper and firstWallpaper.Id or ""),
+					Floor = type(raw.Floor) == "string" and raw.Floor
+						or (type(house.Floor) == "string" and house.Floor)
+						or (firstFloor and firstFloor.Id or ""),
+					Placed = readPlaced(raw.Placed),
+				})
+			end
+		end
+	end
+	if #rooms == 0 then
+		table.insert(rooms, {
+			Id = "R1",
+			Type = firstType and firstType.Id or "Living",
+			Slot = 1,
+			Wallpaper = firstWallpaper and firstWallpaper.Id or "",
+			Floor = firstFloor and firstFloor.Id or "",
+			Placed = {},
+		})
+	end
 	return {
 		Size = type(house.Size) == "string" and house.Size or (firstSize and firstSize.Id or "Studio"),
-		Wallpaper = type(house.Wallpaper) == "string" and house.Wallpaper or (firstWallpaper and firstWallpaper.Id or ""),
-		Floor = type(house.Floor) == "string" and house.Floor or (firstFloor and firstFloor.Id or ""),
 		OwnedSizes = mapOf(house.OwnedSizes),
 		OwnedWallpapers = mapOf(house.OwnedWallpapers),
 		OwnedFloors = mapOf(house.OwnedFloors),
 		Items = mapOf(house.Items),
-		Placed = placed,
+		Rooms = rooms,
 	}
 end
 
@@ -205,12 +279,79 @@ function HouseCommon.GetSize(house: HouseData): SizeDef
 	return HouseCommon.SizesById[house.Size] or HouseCommon.Config.Sizes[1]
 end
 
+-- Pièce par Id (nil si elle n'existe pas)
+function HouseCommon.GetRoom(house: HouseData, roomId: string?): Room?
+	for _, room in ipairs(house.Rooms) do
+		if room.Id == roomId then
+			return room
+		end
+	end
+	return nil
+end
+
+-- Pièce à un emplacement de la grille (nil si vide)
+function HouseCommon.RoomAtSlot(house: HouseData, slot: number): Room?
+	for _, room in ipairs(house.Rooms) do
+		if room.Slot == slot then
+			return room
+		end
+	end
+	return nil
+end
+
+-- Emplacement -> (étage, colonne) ; étage 1 = rez-de-chaussée
+function HouseCommon.SlotCell(size: SizeDef, slot: number): (number, number)
+	return math.floor((slot - 1) / size.Columns) + 1, (slot - 1) % size.Columns + 1
+end
+
+function HouseCommon.CellSlot(size: SizeDef, floor: number, column: number): number
+	return (floor - 1) * size.Columns + column
+end
+
+function HouseCommon.GetRoomType(room: Room?): RoomTypeDef
+	local roomType = room and HouseCommon.RoomTypesById[room.Type]
+	return roomType or HouseCommon.Config.RoomTypes[1]
+end
+
+function HouseCommon.GetRoomWallpaper(room: Room?): Style?
+	return (room and HouseCommon.WallpapersById[room.Wallpaper]) or HouseCommon.Config.Wallpapers[1]
+end
+
+function HouseCommon.GetRoomFloor(room: Room?): Style?
+	return (room and HouseCommon.FloorsById[room.Floor]) or HouseCommon.Config.Floors[1]
+end
+
+-- Vrai si l'objet est un "préféré" de la pièce (bonus d'harmonie)
+function HouseCommon.IsFavorite(room: Room?, item: Item): boolean
+	local ok, value = pcall(Formulas.IsRoomFavorite, HouseCommon.GetRoomType(room), item)
+	return ok and value == true
+end
+
+-- Confort d'un objet dans une pièce (harmonie comprise)
+function HouseCommon.PlacedComfort(room: Room?, item: Item): number
+	local ok, value = pcall(Formulas.GetPlacedComfort, HouseCommon.GetRoomType(room), item)
+	if ok and type(value) == "number" then
+		return value
+	end
+	return item.Comfort
+end
+
+-- Prix de la prochaine pièce
+function HouseCommon.RoomCost(house: HouseData): number
+	local ok, value = pcall(Formulas.GetRoomCost, #house.Rooms)
+	if ok and type(value) == "number" then
+		return value
+	end
+	return math.huge
+end
+
+-- Anciennes fonctions (1re pièce) : pour le code qui ne connaît qu'une pièce
 function HouseCommon.GetWallpaper(house: HouseData): Style?
-	return HouseCommon.WallpapersById[house.Wallpaper] or HouseCommon.Config.Wallpapers[1]
+	return HouseCommon.GetRoomWallpaper(house.Rooms[1])
 end
 
 function HouseCommon.GetFloor(house: HouseData): Style?
-	return HouseCommon.FloorsById[house.Floor] or HouseCommon.Config.Floors[1]
+	return HouseCommon.GetRoomFloor(house.Rooms[1])
 end
 
 -- Exemplaires possédés d'un objet
@@ -248,11 +389,51 @@ function HouseCommon.Dopamine(): number
 	return 0
 end
 
--- Confort d'une disposition (même calcul que le serveur : objets possédés,
--- au plus MaxItems de la taille)
-function HouseCommon.Comfort(house: HouseData, placed: { Placed }): number
+-- Dispositions "en cours" : { [roomId] = objets posés } remplace celles du serveur
+export type Overrides = { [string]: { Placed } }
+
+local function layoutOf(room: Room, overrides: Overrides?): { Placed }
+	return (overrides and overrides[room.Id]) or room.Placed
+end
+
+-- Exemplaires d'un objet posés dans TOUTES les pièces
+function HouseCommon.PlacedTotal(house: HouseData, itemId: string, overrides: Overrides?): number
+	local count = 0
+	for _, room in ipairs(house.Rooms) do
+		count += HouseCommon.PlacedCount(layoutOf(room, overrides), itemId)
+	end
+	return count
+end
+
+-- Exemplaires encore rangés (possédés - posés partout)
+function HouseCommon.Available(house: HouseData, itemId: string, overrides: Overrides?): number
+	return math.max(0, HouseCommon.Owned(house, itemId) - HouseCommon.PlacedTotal(house, itemId, overrides))
+end
+
+-- Confort total de la maison (même calcul que le serveur : objets possédés,
+-- RoomItems par pièce, harmonie), avec des dispositions en cours éventuelles
+function HouseCommon.Comfort(house: HouseData, overrides: Overrides?): number
+	local rooms = {}
+	for _, room in ipairs(house.Rooms) do
+		table.insert(rooms, { Id = room.Id, Type = room.Type, Slot = room.Slot, Placed = layoutOf(room, overrides) })
+	end
 	local ok, value = pcall(Formulas.GetHouseComfort, {
-		House = { Size = house.Size, Items = house.Items, Placed = placed },
+		House = { Size = house.Size, Items = house.Items, Rooms = rooms },
+	})
+	if ok and type(value) == "number" then
+		return value
+	end
+	return 0
+end
+
+-- Confort d'une seule pièce (sans tenir compte des autres pièces)
+function HouseCommon.RoomComfort(house: HouseData, room: Room, placed: { Placed }?): number
+	local ok, value = pcall(Formulas.GetHouseComfort, {
+		House = {
+			Size = house.Size,
+			Items = house.Items,
+			Rooms = { { Id = room.Id, Type = room.Type, Slot = 1, Placed = placed or room.Placed } },
+		},
 	})
 	if ok and type(value) == "number" then
 		return value

@@ -634,8 +634,17 @@ Config.Monetization = {
 -- de "Click me"). Tout est gardé pour toujours (même après l'océan).
 --   Les objets POSÉS dans la pièce donnent du Confort : chaque point de
 --   Confort = +ComfortBonusPerPoint sur TOUS les gains (plafond MaxComfortBonus).
---   Sizes      : tailles de maison, dans l'ordre (plus grande = plus large
---                + plus d'objets posés : MaxItems). Width = largeur relative.
+--   Sizes      : maisons, dans l'ordre (plus grande = plus de pièces). Une
+--                maison est une grille de pièces vue en coupe (maison de
+--                poupée) : Floors étages x Columns pièces par étage.
+--                Width = largeur relative d'une pièce, RoomItems = objets
+--                posés max PAR pièce, Exterior = style dessiné de la façade
+--                ("Cottage" | "Townhouse" | "Loft" | "Mansion").
+--   RoomTypes  : types de pièces (salon, chambre, cuisine...). Les objets
+--                "préférés" d'une pièce (Categories / Items) y donnent
+--                +HarmonyBonus de confort. Wallpaper / Floor = style de départ
+--                (s'il est possédé, sinon le 1er gratuit).
+--   RoomCost   : prix de la pièce n°2, x RoomCostGrowth pour chaque suivante.
 --   Wallpapers : papiers peints (Pattern = "Plain" | "Stripes" | "Checker" |
 --                "Dots" | "Hearts" | "Stars" | "Clouds" | "Bricks" | "Wood" |
 --                "Waves" ; A = couleur de fond, B = couleur du motif)
@@ -655,10 +664,49 @@ Config.House = {
 	WallRatio = 0.46, -- haut de la pièce = murs, bas = sol (rendu client + limites du serveur)
 
 	Sizes = {
-		{ Id = "Studio", Name = "Cozy studio", Icon = "🏠", Cost = 0, Width = 1.0, MaxItems = 25 },
-		{ Id = "Apartment", Name = "Sweet apartment", Icon = "🏡", Cost = 5e6, Width = 1.25, MaxItems = 40 },
-		{ Id = "Loft", Name = "Dreamy loft", Icon = "🏘️", Cost = 5e8, Width = 1.5, MaxItems = 60 },
-		{ Id = "Mansion", Name = "Kawaii mansion", Icon = "🏰", Cost = 5e10, Width = 1.85, MaxItems = 90 },
+		{ Id = "Studio", Name = "Cozy studio", Icon = "🏠", Cost = 0, Floors = 1, Columns = 2,
+			Width = 1.0, RoomItems = 25, Exterior = "Cottage" },
+		{ Id = "Apartment", Name = "Sweet apartment", Icon = "🏡", Cost = 5e6, Floors = 2, Columns = 2,
+			Width = 1.05, RoomItems = 28, Exterior = "Townhouse" },
+		{ Id = "Loft", Name = "Dreamy loft", Icon = "🏘️", Cost = 5e8, Floors = 2, Columns = 3,
+			Width = 1.2, RoomItems = 32, Exterior = "Loft" },
+		{ Id = "Mansion", Name = "Kawaii mansion", Icon = "🏰", Cost = 5e10, Floors = 3, Columns = 4,
+			Width = 1.25, RoomItems = 36, Exterior = "Mansion" },
+	},
+
+	RoomCost = 25000, -- 2e pièce
+	RoomCostGrowth = 5, -- x5 pour chaque pièce suivante
+	HarmonyBonus = 0.5, -- +50 % de confort pour un objet "préféré" de sa pièce
+
+	RoomTypes = {
+		{ Id = "Living", Name = "Living room", Icon = "🛋️", Wallpaper = "PinkStripes", Floor = "PlumChecker",
+			Categories = { "Decor" }, Items = { "Sofa", "Beanbag", "Fireplace", "RetroTV", "HomeCinema", "Bookshelf", "DrawerCabinet" } },
+		{ Id = "Bedroom", Name = "Bedroom", Icon = "🛏️", Wallpaper = "LilacDots", Floor = "PinkCarpet",
+			Categories = { "Lights" }, Items = { "LoftBed", "CloudBed", "CanopyBed", "Nightstand", "Wardrobe", "VanityTable", "TeddyBear", "BigBear" } },
+		{ Id = "Kitchen", Name = "Kitchen", Icon = "🍳", Wallpaper = "MintGingham", Floor = "MintTiles",
+			Categories = { "Kitchen" }, Items = {} },
+		{ Id = "Bathroom", Name = "Bathroom", Icon = "🛁", Wallpaper = "BabyBlueWaves", Floor = "SkyTiles",
+			Categories = {}, Items = { "Toilet", "Shower", "Bathtub", "HeartMirror", "RubberDucky", "Vase", "ScentedCandle" } },
+		{ Id = "KidsRoom", Name = "Kids room", Icon = "🧸", Wallpaper = "PeachHearts", Floor = "SoftCream",
+			Categories = { "Toys" }, Items = {} },
+		{ Id = "GameRoom", Name = "Game room", Icon = "🎮", Wallpaper = "StarryNight", Floor = "LilacShag",
+			Categories = { "Electronics" }, Items = { "GamingChair", "Beanbag" } },
+		{ Id = "Greenhouse", Name = "Greenhouse", Icon = "🌿", Wallpaper = "MatchaLatte", Floor = "LightOak",
+			Categories = { "Plants" }, Items = { "Fountain", "WindChime" } },
+		{ Id = "PetRoom", Name = "Pet corner", Icon = "🐾", Wallpaper = "VanillaCream", Floor = "HoneyHerringbone",
+			Categories = { "Pets" }, Items = { "Aquarium", "KnittedRug" } },
+		{ Id = "Library", Name = "Library", Icon = "📚", Wallpaper = "HoneyPanels", Floor = "CherryWood",
+			Categories = {}, Items = { "Bookshelf", "StudyDesk", "DeskGlobe", "WallShelf", "MapPoster", "Telescope",
+				"MantelClock", "CuckooClock", "Laptop", "WoodenChair", "FloorLamp", "SecretDoor" } },
+		{ Id = "MusicRoom", Name = "Music room", Icon = "🎹", Wallpaper = "LavenderLove", Floor = "WalnutHerringbone",
+			Categories = {}, Items = { "GrandPiano", "PinkGuitar", "RecordPlayer", "KaraokeMic", "Speaker", "ToyDrum",
+				"RetroRadio", "CatHeadphones", "DiscoBall" } },
+		{ Id = "Spa", Name = "Spa", Icon = "♨️", Wallpaper = "CloudySky", Floor = "CloudMarble",
+			Categories = {}, Items = { "HotSpring", "Bathtub", "Shower", "Fountain", "ScentedCandle", "OilLamp",
+				"Bamboo", "Hibiscus", "Vase", "Beanbag" } },
+		{ Id = "Attic", Name = "Starry attic", Icon = "🌙", Wallpaper = "GalaxyDream", Floor = "RoseQuartz",
+			Categories = {}, Items = { "Telescope", "FloatingPlanet", "GlowStars", "MoonGarland", "MoonLamp",
+				"StarNightLight", "ShootingStarWindow", "GalaxyWindow", "CrystalBall", "Suitcase", "StorageBox", "Ladder" } },
 	},
 
 	Wallpapers = {
@@ -1226,7 +1274,23 @@ end
 Config.HouseSizesById = {}
 for index, size in ipairs(Config.House.Sizes) do
 	size.Order = index -- plus grand = plus grande maison
+	size.MaxRooms = size.Floors * size.Columns
 	Config.HouseSizesById[size.Id] = size
+end
+
+-- Types de pièces : objets / catégories préférés en tables { [id] = true }
+Config.HouseRoomTypesById = {}
+for index, roomType in ipairs(Config.House.RoomTypes) do
+	roomType.Order = index
+	roomType.FavoriteCategories = {}
+	for _, categoryId in ipairs(roomType.Categories) do
+		roomType.FavoriteCategories[categoryId] = true
+	end
+	roomType.FavoriteItems = {}
+	for _, itemId in ipairs(roomType.Items) do
+		roomType.FavoriteItems[itemId] = true
+	end
+	Config.HouseRoomTypesById[roomType.Id] = roomType
 end
 
 Config.HouseWallpapersById = {}

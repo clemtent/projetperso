@@ -311,31 +311,87 @@ function Formulas.GetHouseSize(data)
 	return (type(sizeId) == "string" and Config.HouseSizesById[sizeId]) or Config.House.Sizes[1]
 end
 
--- Confort total = somme des Comfort des objets POSÉS. On ne compte que les
--- objets connus, jamais plus d'exemplaires que possédés, et au plus
--- MaxItems objets (taille de la maison) : une sauvegarde abîmée ne donne rien de plus.
+-- Type de pièce (config) : le 1er (salon) si l'id est inconnu
+function Formulas.GetRoomType(typeId: any)
+	return (type(typeId) == "string" and Config.HouseRoomTypesById[typeId]) or Config.House.RoomTypes[1]
+end
+
+-- Vrai si l'objet est un "préféré" de ce type de pièce (bonus d'harmonie)
+function Formulas.IsRoomFavorite(roomType, item): boolean
+	if type(roomType) ~= "table" or type(item) ~= "table" then
+		return false
+	end
+	return roomType.FavoriteItems[item.Id] == true or roomType.FavoriteCategories[item.Category] == true
+end
+
+-- Confort d'un objet posé dans une pièce (harmonie comprise)
+function Formulas.GetPlacedComfort(roomType, item): number
+	local comfort = item.Comfort
+	if Formulas.IsRoomFavorite(roomType, item) then
+		comfort *= 1 + Config.House.HarmonyBonus
+	end
+	return comfort
+end
+
+-- Pièces de la maison (format sauvegardé). Une ancienne sauvegarde (une seule
+-- pièce : house.Placed) est vue comme un salon unique.
+function Formulas.GetHouseRooms(house): { any }
+	if type(house) ~= "table" then
+		return {}
+	end
+	if type(house.Rooms) == "table" and #house.Rooms > 0 then
+		return house.Rooms
+	end
+	if type(house.Placed) == "table" then
+		return { { Id = "R1", Type = "Living", Slot = 1, Placed = house.Placed } }
+	end
+	return {}
+end
+
+-- Prix de la PROCHAINE pièce quand on en a déjà `roomCount`
+function Formulas.GetRoomCost(roomCount: number?): number
+	local count = math.max(1, math.floor(tonumber(roomCount) or 1))
+	local house = Config.House
+	return math.floor(house.RoomCost * (house.RoomCostGrowth ^ (count - 1)))
+end
+
+-- Confort total = somme des Comfort des objets POSÉS dans toutes les pièces
+-- (x (1 + HarmonyBonus) pour les objets préférés de leur pièce). On ne compte
+-- que les objets connus, jamais plus d'exemplaires que possédés (toutes
+-- pièces confondues), au plus RoomItems objets par pièce et MaxRooms pièces :
+-- une sauvegarde abîmée ne donne rien de plus.
 function Formulas.GetHouseComfort(data): number
 	local house = type(data) == "table" and data.House or nil
-	if type(house) ~= "table" or type(house.Placed) ~= "table" then
+	if type(house) ~= "table" then
 		return 0
 	end
 	local owned = type(house.Items) == "table" and house.Items or {}
-	local maxItems = Formulas.GetHouseSize(data).MaxItems
+	local size = Formulas.GetHouseSize(data)
+	local perRoom = size.RoomItems
 	local used = {}
-	local count, total = 0, 0
-	for _, entry in ipairs(house.Placed) do
-		if count >= maxItems then
+	local total = 0
+	for roomIndex, room in ipairs(Formulas.GetHouseRooms(house)) do
+		if roomIndex > size.MaxRooms then
 			break
 		end
-		local id = type(entry) == "table" and entry.I or nil
-		local item = type(id) == "string" and Config.HouseItemsById[id] or nil
-		if item then
-			local n = (used[id] or 0) + 1
-			local have = tonumber(owned[id]) or 0
-			if n <= have then
-				used[id] = n
-				count += 1
-				total += item.Comfort
+		if type(room) == "table" and type(room.Placed) == "table" then
+			local roomType = Formulas.GetRoomType(room.Type)
+			local count = 0
+			for _, entry in ipairs(room.Placed) do
+				if count >= perRoom then
+					break
+				end
+				local id = type(entry) == "table" and entry.I or nil
+				local item = type(id) == "string" and Config.HouseItemsById[id] or nil
+				if item then
+					local n = (used[id] or 0) + 1
+					local have = tonumber(owned[id]) or 0
+					if n <= have then
+						used[id] = n
+						count += 1
+						total += Formulas.GetPlacedComfort(roomType, item)
+					end
+				end
 			end
 		end
 	end
