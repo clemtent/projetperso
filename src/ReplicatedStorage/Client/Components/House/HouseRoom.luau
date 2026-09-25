@@ -103,10 +103,16 @@ export type Room = {
 
 -- Halo de lumière : 3 cercles concentriques (un UIGradient ne fait que des
 -- dégradés linéaires, pas radiaux). Plus visible et plus grand la nuit.
-local GLOW_RINGS = { { Size = 1, Day = 0.92, Night = 0.82 }, { Size = 0.7, Day = 0.87, Night = 0.72 }, { Size = 0.44, Day = 0.8, Night = 0.6 } }
+local GLOW_RINGS = {
+	{ Size = 1, Day = 0.96, Night = 0.92 },
+	{ Size = 0.8, Day = 0.94, Night = 0.88 },
+	{ Size = 0.62, Day = 0.91, Night = 0.83 },
+	{ Size = 0.46, Day = 0.88, Night = 0.77 },
+	{ Size = 0.32, Day = 0.85, Night = 0.7 },
+}
 
 local function paintGlow(glow: Frame, dark: boolean)
-	glow.Size = dark and UDim2.fromOffset(185, 185) or UDim2.fromOffset(145, 145)
+	glow.Size = dark and UDim2.fromOffset(150, 150) or UDim2.fromOffset(120, 120)
 	for index, ring in ipairs(GLOW_RINGS) do
 		local circle = glow:FindFirstChild("Ring" .. index) :: Frame?
 		if circle then
