@@ -3,6 +3,9 @@
 	Emplacement : ReplicatedStorage > Client > Components > Panels > Quests
 
 	Les quêtes actives (une quête finie est remplacée tout de suite).
+	v5 : le texte d'une quête est rendu ici dans la langue du joueur à
+	partir de Config.Quests.Pool (même Type) + objectif ; à défaut, le
+	texte envoyé par le serveur (quest.Text).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -12,12 +15,32 @@ local Theme = require(Client.Theme)
 local UIUtil = require(Client.UIUtil)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local Config = require(ReplicatedStorage.Shared.Config)
+local Locale = require(ReplicatedStorage.Shared.Locale)
 
+-- Title / Subtitle en anglais : traduits par PanelManager
 local Quests = {
-	Title = "📜 Quêtes",
-	Subtitle = "Objectifs du moment",
+	Title = "📜 Quests",
+	Subtitle = "Current goals",
 	Color = Theme.Colors.Orange,
 }
+
+-- Modèles de quêtes par Type (Config.Quests.Pool)
+local templatesByType: { [string]: any } = {}
+for _, template in ipairs(Config.Quests.Pool) do
+	if type(template.Type) == "string" then
+		templatesByType[template.Type] = template
+	end
+end
+
+-- Texte d'une quête dans la langue du joueur ("Click 50 times" / "Fais 50 clics")
+local function questText(quest): string
+	local template = type(quest.Type) == "string" and templatesByType[quest.Type] or nil
+	local goal = tonumber(quest.Goal)
+	if template and type(template.Text) == "string" and goal then
+		return Locale.T(template.Text, NumberFormatter.Format(goal))
+	end
+	return tostring(quest.Text or "")
+end
 
 local cards = {}
 local emptyLabel: TextLabel
@@ -30,7 +53,7 @@ function Quests.Build(content: Frame)
 	})
 
 	UIUtil.Label({
-		Text = "Termine des quêtes pour gagner des bonus ! Une nouvelle quête remplace chaque quête finie.",
+		Text = Locale.T("Complete quests to earn bonuses! A new quest replaces each finished one."),
 		TextColor3 = Theme.Colors.TextDim,
 		Size = UDim2.new(1, 0, 0, 36),
 		LayoutOrder = 0,
@@ -93,7 +116,7 @@ function Quests.Build(content: Frame)
 	end
 
 	emptyLabel = UIUtil.Label({
-		Text = "Aucune quête pour l'instant...",
+		Text = Locale.T("No quests for now..."),
 		TextColor3 = Theme.Colors.TextDim,
 		Size = UDim2.new(1, 0, 0, 30),
 		LayoutOrder = 99,
@@ -109,8 +132,8 @@ function Quests.Update(data)
 		local quest = quests[index]
 		ui.Card.Visible = quest ~= nil
 		if quest then
-			ui.Text.Text = quest.Text or ""
-			ui.Reward.Text = "🎁 Récompense : +" .. NumberFormatter.Format(quest.Reward or 0) .. " Dopamine"
+			ui.Text.Text = questText(quest)
+			ui.Reward.Text = Locale.T("🎁 Reward: +%s Dopamine", NumberFormatter.Format(quest.Reward or 0))
 			local goal = math.max(1, quest.Goal or 1)
 			local ratio = math.clamp((quest.Progress or 0) / goal, 0, 1)
 			UIUtil.Tween(ui.Fill, 0.25, { Size = UDim2.fromScale(ratio, 1) })

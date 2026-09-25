@@ -38,8 +38,17 @@ local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Signal = require(ReplicatedStorage.Shared.Signal)
+local Locale = require(ReplicatedStorage.Shared.Locale)
 
 local SoundManager = {}
+
+-- Nom affiché d'un morceau, dans la langue du joueur ("Track 2" sans nom)
+local function trackName(track): string
+	if track.Name then
+		return Locale.T(track.Name)
+	end
+	return Locale.T("Track %d", track.Index or 1)
+end
 
 SoundManager.TrackChanged = Signal.new() -- (name: string?, sound: Sound?)
 SoundManager.MusicStateChanged = Signal.new() -- (playing: boolean)
@@ -72,7 +81,7 @@ local clickSoundId = DEFAULT_CLICK_SOUND
 local lastClick = 0
 
 -- Playlist
-type Track = { Name: string, Id: string }
+type Track = { Name: string?, Index: number?, Id: string }
 local tracks: { Track } = {} -- pistes valides (Id non vide)
 local order: { number } = {} -- ordre de lecture (indices dans `tracks`)
 local orderPosition = 0
@@ -225,6 +234,7 @@ startNext = function(crossfade: number)
 	end
 	local track = tracks[index]
 	generation += 1
+	local displayName = trackName(track)
 	local myGeneration = generation
 
 	-- L'ancien morceau s'efface
@@ -234,7 +244,7 @@ startNext = function(crossfade: number)
 	end
 
 	local sound = Instance.new("Sound")
-	sound.Name = "Music_" .. track.Name
+	sound.Name = "Music_" .. tostring(track.Name or track.Index)
 	sound.SoundId = track.Id
 	sound.Volume = 0
 	sound.Looped = #tracks == 1 -- un seul morceau : il boucle tout seul
@@ -254,7 +264,7 @@ startNext = function(crossfade: number)
 	fade(sound, 1, math.max(0.2, crossfade))
 	watchLoading(sound, myGeneration)
 	setPlaying(true)
-	SoundManager.TrackChanged:Fire(track.Name, sound)
+	SoundManager.TrackChanged:Fire(displayName, sound)
 end
 
 -- Démarre / reprend / coupe la musique selon les réglages
@@ -362,7 +372,7 @@ function SoundManager.Init()
 	for index, entry in ipairs(playlist) do
 		local id = normalizeId(entry.Id)
 		if id ~= "" then
-			table.insert(tracks, { Name = tostring(entry.Name or ("Morceau " .. index)), Id = id })
+			table.insert(tracks, { Name = entry.Name and tostring(entry.Name) or nil, Index = index, Id = id })
 		end
 	end
 	buildOrder()
@@ -560,7 +570,7 @@ function SoundManager.GetCurrentTrack(): (string?, Sound?)
 	if not track or not current then
 		return nil, nil
 	end
-	return track.Name, current
+	return trackName(track), current
 end
 
 return SoundManager

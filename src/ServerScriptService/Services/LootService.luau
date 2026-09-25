@@ -14,6 +14,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Formulas = require(ReplicatedStorage.Shared.Formulas)
+local Locale = require(ReplicatedStorage.Shared.Locale)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local Net = require(ReplicatedStorage.Shared.Net)
 local RateLimiter = require(script.Parent.RateLimiter)
@@ -75,19 +76,24 @@ local function pickTier()
 	return settings.Tiers[1]
 end
 
+-- Texte dans la langue du joueur
+local function T(player: Player, text: string, ...): string
+	return services.GameService:T(player, text, ...)
+end
+
 local function onOpen(player: Player)
 	local data = services.DataService:GetData(player)
 	if not data or not services.GameService:IsReady(player) then
-		return false, "Chargement en cours..."
+		return false, T(player, "Loading...")
 	end
 	if not Formulas.HasFeature(data, settings.Feature) then
-		return false, "Le coffre mystère n'est pas encore débloqué"
+		return false, T(player, "The mystery chest isn't unlocked yet")
 	end
 	if data.Chests.Stored < 1 then
-		return false, "Aucun coffre à ouvrir, patience..."
+		return false, T(player, "No chests to open, be patient...")
 	end
 	if not RateLimiter.Check(player, "OpenChest", settings.OpenCooldown) then
-		return false, "Doucement !"
+		return false, T(player, "Slow down!")
 	end
 
 	local tier = pickTier()
@@ -100,10 +106,13 @@ local function onOpen(player: Player)
 	services.GameService:SendState(player)
 
 	if tier.Id == "Legendary" then
-		services.GameService:NotifyAll({
-			Type = "Info",
-			Text = "📦 " .. player.DisplayName .. " a ouvert un coffre " .. tier.Name .. " (+" .. NumberFormatter.Format(amount) .. ") !",
-		}, player)
+		local displayName, formatted = player.DisplayName, NumberFormatter.Format(amount)
+		services.GameService:NotifyAll(function(lang)
+			return {
+				Type = "Info",
+				Text = Locale.TFor(lang, "📦 %s opened a %s chest (+%s)!", displayName, Locale.TFor(lang, tier.Name), formatted),
+			}
+		end, player)
 	end
 
 	return true, { Tier = tier.Id, Amount = amount }

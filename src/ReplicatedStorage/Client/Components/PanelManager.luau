@@ -12,6 +12,12 @@
 	  Title, Color, Build(content), Update(data) (optionnel),
 	  OnOpen() / OnClose() (optionnels), Size (Vector2, optionnel),
 	  Icon (optionnel : sinon le 1er emoji du titre), Subtitle (optionnel).
+	v5 : Title / Subtitle sont écrits en ANGLAIS dans les modules et traduits
+	ici (Locale.T) à l'ouverture. La fenêtre tient toujours dans 94 % de
+	l'écran (ex. téléphone) : un peu réduite (jusqu'à 90 %), puis moins
+	haute ; le contenu est alors raccourci (ses listes défilent déjà) ou,
+	pour un panneau à mise en page fixe (Module.FixedLayout = true), il
+	défile dans la fenêtre. Le mode sombre est appliqué par DarkSkin.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -19,9 +25,11 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Client = script.Parent.Parent
 local Theme = require(Client.Theme)
 local UIUtil = require(Client.UIUtil)
+local Interface = require(Client.Interface)
 local ClientState = require(Client.ClientState)
 local SoundManager = require(Client.SoundManager)
 local Signal = require(ReplicatedStorage.Shared.Signal)
+local Locale = require(ReplicatedStorage.Shared.Locale)
 
 local PanelManager = {}
 
@@ -31,6 +39,8 @@ PanelManager.Closed = Signal.new() -- (name)
 local DEFAULT_SIZE = Vector2.new(640, 500)
 local HEADER_HEIGHT = 66
 local DIM_TRANSPARENCY = 0.45
+local SCREEN_FIT = 0.94 -- la fenêtre occupe au plus 94 % de l'écran
+local MIN_FIT_SCALE = 0.9 -- réduction max avant de raccourcir la fenêtre
 
 local overlay: Frame
 local dimmer: TextButton
@@ -42,9 +52,51 @@ local iconLabel: TextLabel
 local titleLabel: TextLabel
 local subtitleLabel: TextLabel
 local accentLine: Frame
-local panels = {} -- [nom] = { Module, Content }
+local panels = {} -- [nom] = { Module, Content, Viewport }
 local openName: string? = nil
 local closeToken = 0
+local fitScale = 1 -- réduction pour tenir dans l'écran (1 = taille normale)
+local currentSize = DEFAULT_SIZE
+
+-- Place de la fenêtre dans 94 % de la toile : (échelle, hauteur visible).
+-- Trop large : on réduit (UIScale). Trop haute : petite réduction si l'écart
+-- est faible, sinon la fenêtre est moins haute et son contenu défile.
+local function computeFit(size: Vector2): (number, number)
+	local canvas = Interface.CanvasSize
+	if canvas.X < 1 or canvas.Y < 1 then
+		return 1, size.Y
+	end
+	local scale = math.min(1, canvas.X * SCREEN_FIT / size.X)
+	local ratio = canvas.Y * SCREEN_FIT / (size.Y * scale)
+	if ratio >= 1 then
+		return scale, size.Y
+	end
+	scale *= math.max(ratio, MIN_FIT_SCALE)
+	return scale, math.min(size.Y, math.floor(canvas.Y * SCREEN_FIT / scale))
+end
+
+-- Taille de la fenêtre + zone de défilement du contenu du panneau `name`
+local function applyFit(name: string?)
+	local visibleHeight
+	fitScale, visibleHeight = computeFit(currentSize)
+	holder.Size = UDim2.fromOffset(currentSize.X, visibleHeight)
+	local panel = name and panels[name]
+	if panel then
+		local shortened = visibleHeight < currentSize.Y
+		-- Mise en page fixe : le contenu garde sa hauteur et défile ;
+		-- sinon il est raccourci (ses propres listes défilent)
+		local scrolls = shortened and panel.Module.FixedLayout == true
+		local contentHeight = (scrolls and currentSize.Y or visibleHeight) - (HEADER_HEIGHT + 22)
+		panel.Content.Size = UDim2.new(1, 0, 0, contentHeight)
+		local viewport = panel.Viewport :: ScrollingFrame
+		viewport.CanvasSize = UDim2.fromOffset(0, contentHeight)
+		viewport.ScrollingEnabled = scrolls
+		viewport.ScrollBarThickness = scrolls and 6 or 0
+		if not scrolls then
+			viewport.CanvasPosition = Vector2.zero
+		end
+	end
+end
 
 local function callOnClose(name: string)
 	local panel = panels[name]
@@ -64,7 +116,7 @@ end
 
 -- Met l'en-tête aux couleurs du panneau
 local function applyHeader(module, name: string)
-	local icon, text = splitTitle(tostring(module.Title or name))
+	local icon, text = splitTitle(Locale.T(tostring(module.Title or name)))
 	icon = module.Icon or icon
 	local color: Color3 = module.Color or Theme.Colors.Blue
 
@@ -77,7 +129,7 @@ local function applyHeader(module, name: string)
 	local subtitle = module.Subtitle
 	if type(subtitle) == "string" and subtitle ~= "" then
 		subtitleLabel.Visible = true
-		subtitleLabel.Text = subtitle
+		subtitleLabel.Text = Locale.T(subtitle)
 		titleLabel.Position = UDim2.fromOffset(left, 12)
 		titleLabel.Size = UDim2.new(1, -(left + 70), 0, 28)
 		subtitleLabel.Position = UDim2.fromOffset(left, 40)
@@ -198,6 +250,31 @@ function PanelManager.Build(layer: Frame)
 	closeButton.Activated:Connect(function()
 		PanelManager.Close()
 	end)
+	-- Zone tactile agrandie (bouton invisible autour du ✕) sur téléphone / tablette
+	local closeHitbox = UIUtil.Create("TextButton", {
+		Name = "CloseHitbox",
+		Text = "",
+		BackgroundTransparency = 1,
+		AutoButtonColor = false,
+		Size = UDim2.fromOffset(64, 64),
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -4, 0, 1),
+		ZIndex = 3,
+		Visible = Interface.IsTouch(),
+		Parent = window,
+	})
+	closeHitbox.Activated:Connect(function()
+		PanelManager.Close()
+	end)
+
+	-- L'écran change (rotation, fenêtre redimensionnée) : la fenêtre ouverte se réajuste
+	Interface.ScaleChanged:Connect(function()
+		closeHitbox.Visible = Interface.IsTouch()
+		if openName then
+			applyFit(openName)
+			holderScale.Scale = fitScale
+		end
+	end)
 
 	-- Séparateur + liseré de couleur
 	UIUtil.Create("Frame", {
@@ -245,20 +322,38 @@ function PanelManager.Register(name: string, module)
 		warn("[PanelManager] Panneau invalide : " .. tostring(name))
 		return
 	end
-	local content = UIUtil.Create("Frame", {
-		Name = name,
+	-- Zone de défilement (utile seulement quand la fenêtre est moins haute
+	-- que prévu, ex. téléphone) ; le contenu garde sa taille normale
+	local size: Vector2 = module.Size or DEFAULT_SIZE
+	local viewport = UIUtil.Create("ScrollingFrame", {
+		Name = name .. "Viewport",
 		Size = UDim2.new(1, -40, 1, -(HEADER_HEIGHT + 22)),
 		Position = UDim2.fromOffset(20, HEADER_HEIGHT + 10),
 		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		ScrollingEnabled = false,
+		ScrollBarThickness = 0,
+		ScrollBarImageColor3 = Theme.Colors.Dark,
+		CanvasSize = UDim2.fromOffset(0, size.Y - (HEADER_HEIGHT + 22)),
+		ElasticBehavior = Enum.ElasticBehavior.WhenScrollable,
 		Visible = false,
 		ZIndex = 4,
 		Parent = window,
+	})
+	local content = UIUtil.Create("Frame", {
+		Name = name,
+		Size = UDim2.new(1, 0, 0, size.Y - (HEADER_HEIGHT + 22)),
+		BackgroundTransparency = 1,
+		Visible = false,
+		ZIndex = 4,
+		Parent = viewport,
 	})
 	local ok, err = pcall(module.Build, content)
 	if not ok then
 		warn("[PanelManager] Erreur dans " .. name .. ".Build : " .. tostring(err))
 	end
-	panels[name] = { Module = module, Content = content }
+	panels[name] = { Module = module, Content = content, Viewport = viewport }
 	-- Première mise à jour si l'état est déjà là
 	if module.Update and ClientState.Data then
 		pcall(module.Update, ClientState.Data)
@@ -285,12 +380,14 @@ function PanelManager.Open(name: string)
 	local wasVisible = overlay.Visible and previous ~= nil
 	for otherName, other in pairs(panels) do
 		other.Content.Visible = otherName == name
+		other.Viewport.Visible = otherName == name
 	end
 	openName = name
 	closeToken += 1
 	applyHeader(panel.Module, name)
-	local size = panel.Module.Size or DEFAULT_SIZE
-	holder.Size = UDim2.fromOffset(size.X, size.Y)
+	currentSize = panel.Module.Size or DEFAULT_SIZE
+	applyFit(name)
+	panel.Viewport.CanvasPosition = Vector2.zero
 
 	if panel.Module.Update and ClientState.Data then
 		pcall(panel.Module.Update, ClientState.Data)
@@ -302,14 +399,14 @@ function PanelManager.Open(name: string)
 	overlay.Visible = true
 	if wasVisible then
 		-- Changement de panneau : petit "pop" seulement
-		holderScale.Scale = 0.97
-		UIUtil.Tween(holderScale, 0.2, { Scale = 1 }, Enum.EasingStyle.Back)
+		holderScale.Scale = 0.97 * fitScale
+		UIUtil.Tween(holderScale, 0.2, { Scale = fitScale }, Enum.EasingStyle.Back)
 	else
 		dimmer.BackgroundTransparency = 1
 		UIUtil.Tween(dimmer, 0.25, { BackgroundTransparency = DIM_TRANSPARENCY })
-		holderScale.Scale = 0.88
+		holderScale.Scale = 0.88 * fitScale
 		holder.Position = UDim2.new(0.5, 0, 0.5, 26)
-		UIUtil.Tween(holderScale, 0.32, { Scale = 1 }, Enum.EasingStyle.Back)
+		UIUtil.Tween(holderScale, 0.32, { Scale = fitScale }, Enum.EasingStyle.Back)
 		UIUtil.Tween(holder, 0.32, { Position = UDim2.fromScale(0.5, 0.5) }, Enum.EasingStyle.Quint)
 	end
 	SoundManager.Play("Open", 1)
@@ -330,7 +427,7 @@ function PanelManager.Close()
 	closeToken += 1
 	local token = closeToken
 	UIUtil.Tween(dimmer, 0.18, { BackgroundTransparency = 1 })
-	UIUtil.Tween(holderScale, 0.18, { Scale = 0.9 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	UIUtil.Tween(holderScale, 0.18, { Scale = 0.9 * fitScale }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 	UIUtil.Tween(holder, 0.18, { Position = UDim2.new(0.5, 0, 0.5, 18) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 	task.delay(0.19, function()
 		-- Rouvert entre-temps : on ne cache rien
@@ -339,6 +436,11 @@ function PanelManager.Close()
 		end
 	end)
 	PanelManager.Closed:Fire(name)
+end
+
+-- Échelle actuelle de la fenêtre (1 = taille normale ; < 1 si réduite pour tenir à l'écran)
+function PanelManager.GetFitScale(): number
+	return fitScale
 end
 
 function PanelManager.Toggle(name: string)

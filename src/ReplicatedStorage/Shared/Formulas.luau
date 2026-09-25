@@ -41,9 +41,22 @@ function Formulas.IsMaxed(upgrade, level: number): boolean
 	return upgrade.MaxLevel ~= nil and level >= upgrade.MaxLevel
 end
 
--- Texte de l'infobulle ("%s" remplacé par la valeur formatée)
-function Formulas.DescribeUpgrade(upgrade, format: (number) -> string, rebirths: number?): string
+-- Texte de l'infobulle ("%s" remplacé par la valeur formatée).
+-- `translate` (optionnel, ex. Locale.T) traduit la description AVANT de
+-- remplacer "%s" : Formulas.DescribeUpgrade(upgrade, NumberFormatter.Format, rebirths, Locale.T)
+function Formulas.DescribeUpgrade(
+	upgrade,
+	format: (number) -> string,
+	rebirths: number?,
+	translate: ((string) -> string)?
+): string
 	local text = upgrade.Description or ""
+	if translate then
+		local ok, translated = pcall(translate, text)
+		if ok and type(translated) == "string" then
+			text = translated
+		end
+	end
 	if not string.find(text, "%s", 1, true) then
 		return text
 	end

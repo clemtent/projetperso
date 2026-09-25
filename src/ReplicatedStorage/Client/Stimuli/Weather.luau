@@ -26,6 +26,8 @@ local UserInputService = game:GetService("UserInputService")
 local Weather = {}
 Weather.Slot = "Overlay"
 
+local Locale = require(game:GetService("ReplicatedStorage").Shared.Locale)
+
 local MAX_BOLTS = 2
 local DROPS_PER_CLOUD = 10
 local DROPS_LOW_EFFECTS = 4
@@ -87,8 +89,20 @@ local SHAPES = {
 	},
 }
 
-local TAGS = { "⚡ attrape !", "⚡ vite !", "⚡ zap ?", "⚡ clique !", "⚡ ici !" }
-local CHEERS = { "ÉLECTRISANT !", "ZAP !", "QUEL RÉFLEXE !", "FOUDROYANT !", "CHOC !", "100 000 VOLTS !" }
+local TAGS = {
+	en = { "⚡ catch it!", "⚡ quick!", "⚡ zap?", "⚡ click!", "⚡ here!" },
+	fr = { "⚡ attrape !", "⚡ vite !", "⚡ zap ?", "⚡ clique !", "⚡ ici !" },
+}
+local CHEERS = {
+	en = { "ELECTRIFYING!", "ZAP!", "WHAT REFLEXES!", "SHOCKING!", "JOLT!", "100,000 VOLTS!" },
+	fr = { "ÉLECTRISANT !", "ZAP !", "QUEL RÉFLEXE !", "FOUDROYANT !", "CHOC !", "100 000 VOLTS !" },
+}
+
+-- Tire une phrase au hasard dans la liste de la langue du joueur
+local function pickLine(variants, random: Random): string
+	local list = Locale.Pick(variants)
+	return list[random:NextInteger(1, #list)]
+end
 
 function Weather.Start(ctx)
 	local UIUtil = ctx.UIUtil
@@ -539,7 +553,7 @@ function Weather.Start(ctx)
 
 		-- Étiquette
 		local tag = UIUtil.Label({
-			Text = TAGS[random:NextInteger(1, #TAGS)],
+			Text = pickLine(TAGS, random),
 			Font = Theme.Fonts.Title,
 			TextColor3 = Theme.Colors.TextDark,
 			BackgroundColor3 = yellow,
@@ -745,7 +759,7 @@ function Weather.Start(ctx)
 		end
 		local position = (payload.SpawnId and positions[payload.SpawnId]) or lastPosition
 		ctx.FloatText(container, position, "+" .. ctx.Format.Format(tonumber(payload.Amount) or 0) .. " ⚡", Theme.Colors.Gold, 44)
-		ctx.FloatText(container, position + UDim2.fromOffset(0, 44), CHEERS[random:NextInteger(1, #CHEERS)], Theme.Colors.Orange, 24)
+		ctx.FloatText(container, position + UDim2.fromOffset(0, 44), pickLine(CHEERS, random), Theme.Colors.Orange, 24)
 	end)
 end
 

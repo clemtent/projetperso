@@ -30,6 +30,9 @@
 	possède le mode néon (Feature "NeonMode") -> ClientState.SetDarkMode.
 	Dopamine Rush : une lueur jaune pulse doucement en bas de l'écran
 	(Background.SetRush).
+	v5 : mode sombre du joueur (⚙️, source "User" de ClientState) : le thème
+	Classique passe en version nuit (dégradé presque noir, halos discrets) ;
+	les autres thèmes gardent leur décor.
 
 	Background.BuildPreview(parent, themeId) : même illustration en
 	miniature (panneau des thèmes), animée par l'appelant.
@@ -79,6 +82,7 @@ local glow: Frame? = nil
 local rushActive = false
 local currentThemeId: string? = nil
 local currentReduced = false
+local currentNight = false -- Classique en version sombre (mode sombre du joueur)
 local layers: { Layer } = {} -- couches animées (actuelle + celles qui s'effacent)
 local parallax = Vector2.zero -- décalage lissé (-1..1)
 local buildingPlanes: { Plane }? = nil -- plans du décor en cours de construction
@@ -422,13 +426,20 @@ type DecorBuilder = (frame: Frame, theme: any, reduced: boolean, random: Random)
 local Decors: { [string]: DecorBuilder } = {}
 
 -- Classique : blanc / gris épuré, halos presque invisibles et reflet lent
-Decors.None = function(frame, _theme, reduced, random)
+-- (version nuit si theme.Night : halos bleutés très discrets)
+Decors.None = function(frame, theme, reduced, random)
+	local night = theme.Night == true
 	local far = plane(frame, 0.25, 1)
 	local blobs = {}
 	local count = reduced and 3 or 5
 	for i = 1, count do
 		local color = (i % 2 == 0) and Color3.fromRGB(200, 200, 208) or WHITE
-		local blob = softGlow(far, random:NextInteger(280, 460), color, i % 2 == 0 and 0.05 or 0.35, 1)
+		local opacity = i % 2 == 0 and 0.05 or 0.35
+		if night then
+			color = (i % 2 == 0) and Color3.fromRGB(90, 70, 150) or Color3.fromRGB(60, 70, 120)
+			opacity = i % 2 == 0 and 0.06 or 0.08
+		end
+		local blob = softGlow(far, random:NextInteger(280, 460), color, opacity, 1)
 		table.insert(blobs, {
 			Obj = blob,
 			X = random:NextNumber(0.05, 0.95),
@@ -445,7 +456,7 @@ Decors.None = function(frame, _theme, reduced, random)
 		Size = UDim2.new(0, 260, 1.6, 0),
 		Rotation = 25,
 		BackgroundColor3 = WHITE,
-		BackgroundTransparency = 0.55,
+		BackgroundTransparency = night and 0.94 or 0.55,
 		ZIndex = 1,
 		Parent = frame,
 	})
@@ -455,7 +466,7 @@ Decors.None = function(frame, _theme, reduced, random)
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.fromScale(0, 1),
 		Size = UDim2.fromScale(1, 0.35),
-		BackgroundColor3 = Color3.fromRGB(190, 190, 196),
+		BackgroundColor3 = night and BLACK or Color3.fromRGB(190, 190, 196),
 		ZIndex = 1,
 		Parent = frame,
 	})
@@ -2096,6 +2107,23 @@ local function getTheme(id: string?): any
 	return Config.ThemesById[DEFAULT_THEME] or Config.Themes[1]
 end
 
+-- Mode sombre du joueur sur le thème Classique -> version nuit
+local function wantsNight(themeId: string?): boolean
+	return ClientState.HasDarkSource("User") and (themeId or DEFAULT_THEME) == DEFAULT_THEME
+end
+
+-- Thème à dessiner : version nuit (copie modifiée) du Classique si besoin
+local function displayTheme(theme, night: boolean): any
+	if not night then
+		return theme
+	end
+	local copy = table.clone(theme)
+	copy.Top = Theme.DarkUI.Background
+	copy.Bottom = Theme.DarkUI.BackgroundBottom
+	copy.Night = true
+	return copy
+end
+
 local function equippedId(): string
 	local data = ClientState.Data
 	local themes = data and data.Themes
@@ -2193,9 +2221,10 @@ local function showTheme(themeId: string, reduced: boolean, instant: boolean)
 	local changedTheme = currentThemeId ~= theme.Id
 	currentThemeId = theme.Id
 	currentReduced = reduced
+	currentNight = wantsNight(theme.Id)
 
 	local previous = layers[#layers]
-	local layer = buildLayer(theme, reduced)
+	local layer = buildLayer(displayTheme(theme, currentNight), reduced)
 
 	-- L'ancien décor passe AU-DESSUS du nouveau (dans un CanvasGroup) et s'efface
 	if previous and previous ~= layer then
@@ -2239,7 +2268,7 @@ end
 local function refresh()
 	local id = equippedId()
 	local reduced = isReduced()
-	if id ~= currentThemeId or reduced ~= currentReduced then
+	if id ~= currentThemeId or reduced ~= currentReduced or wantsNight(id) ~= currentNight then
 		showTheme(id, reduced, false)
 	end
 end
@@ -2326,6 +2355,7 @@ function Background.Build(parent: Instance)
 	end)
 
 	ClientState.Changed:Connect(refresh)
+	ClientState.DarkSourcesChanged:Connect(refresh)
 	ClientState.FeaturesChanged:Connect(applyDark)
 	applyDark()
 	return bg
@@ -2364,6 +2394,8 @@ function Background.BuildPreview(parent: GuiObject, themeId: string): Preview
 		BackgroundTransparency = 1,
 		ZIndex = 2,
 	})
+	-- La miniature garde les vraies couleurs du thème (pas d'habillage sombre)
+	holder:SetAttribute("DarkSkinIgnore", true)
 	local scale = Create("UIScale", { Scale = 0.12, Parent = holder })
 	local frame, update, layout, _ = buildDecor(theme, true, Random.new(7))
 	frame.Parent = holder

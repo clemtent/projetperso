@@ -21,6 +21,9 @@
 	renaissances (payload.GlobalRebirths). Les anciens formats restent acceptés.
 	Le mode sombre est la combinaison (OU) de plusieurs "sources" : le thème
 	équipé (SetDarkMode), les stimuli comme le mode néon (SetDarkSource).
+	v5 : source "User" = réglage ⚙️ "Mode sombre" (Data.Settings.DarkMode),
+	appliqué tout de suite (SetUserDarkMode) ; langue : Data.Settings.Language
+	("Auto" | "en" | "fr") -> ClientState.ResolveLanguage().
 ]]
 
 local Players = game:GetService("Players")
@@ -30,6 +33,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Formulas = require(ReplicatedStorage.Shared.Formulas)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Signal = require(ReplicatedStorage.Shared.Signal)
+local Locale = require(ReplicatedStorage.Shared.Locale)
 
 local ClientState = {}
 
@@ -54,6 +58,7 @@ ClientState.DVDSetupChanged = Signal.new() -- (setup)
 ClientState.DarkMode = false
 ClientState.DarkModeChanged = Signal.new() -- (enabled)
 ClientState.NotifyReceived = Signal.new() -- (payload) : chaque "Notify" (après le traitement intégré)
+ClientState.DarkSourcesChanged = Signal.new() -- () : une source du mode sombre a changé
 
 -- Ajouts v3
 ClientState.Loaded = Signal.new() -- () : premier état reçu (écran de chargement)
@@ -82,6 +87,11 @@ local darkSources: { [string]: boolean } = {}
 -- Boost temporaire : fin prévue (horloge locale os.clock)
 local boostMultiplier = 1
 local boostEndsClock = 0
+
+-- Mode sombre du joueur changé localement : on ignore la valeur du serveur
+-- quelques secondes (le temps qu'il enregistre le nouveau réglage)
+local userDarkLocalUntil = 0
+local applyUserDark: (data: any) -> () = function() end
 
 local function sameSet(a: { [string]: boolean }, b: { [string]: boolean }): boolean
 	for key, value in pairs(a) do
@@ -118,6 +128,7 @@ local function onState(data)
 	data.Boost = data.Boost or { Multiplier = 1, Remaining = 0 }
 
 	ClientState.Data = data
+	applyUserDark(data)
 	lastUpdateClock = os.clock()
 	-- Boost : on mémorise sa fin pour un compte à rebours fluide entre deux états
 	local boost = data.Boost
@@ -266,12 +277,70 @@ end
 
 -- Active / coupe une source du mode sombre (ex. "Stimuli" pour le mode néon)
 function ClientState.SetDarkSource(source: string, enabled: boolean)
+	local before = darkSources[source] == true
 	if enabled == true then
 		darkSources[source] = true
 	else
 		darkSources[source] = nil
 	end
 	applyDarkSources()
+	if before ~= (enabled == true) then
+		ClientState.DarkSourcesChanged:Fire()
+	end
+end
+
+-- Vrai si la source du mode sombre `source` est active ("Main", "Stimuli", "User")
+function ClientState.HasDarkSource(source: string): boolean
+	return darkSources[source] == true
+end
+
+-- Réglage ⚙️ "Mode sombre" : appliqué tout de suite (la sauvegarde est
+-- demandée au serveur par le panneau Paramètres)
+function ClientState.SetUserDarkMode(enabled: boolean)
+	userDarkLocalUntil = os.clock() + 4
+	local data = ClientState.Data
+	if data and type(data.Settings) == "table" then
+		data.Settings.DarkMode = enabled == true
+	end
+	ClientState.SetDarkSource("User", enabled == true)
+end
+
+-- Vrai si le joueur a choisi le mode sombre
+function ClientState.IsUserDarkMode(): boolean
+	return darkSources.User == true
+end
+
+applyUserDark = function(data)
+	if os.clock() < userDarkLocalUntil then
+		-- Changement local récent : on garde notre valeur dans l'état reçu
+		if type(data.Settings) == "table" then
+			data.Settings.DarkMode = darkSources.User == true
+		end
+		return
+	end
+	local settings = data.Settings
+	ClientState.SetDarkSource("User", type(settings) == "table" and settings.DarkMode == true)
+end
+
+----------------------------------------------------------------------
+-- Langue
+----------------------------------------------------------------------
+
+-- Réglage de langue sauvegardé : "Auto" | "en" | "fr" ("Auto" avant le premier état)
+function ClientState.GetLanguageSetting(): string
+	local data = ClientState.Data
+	local settings = data and data.Settings
+	local value = type(settings) == "table" and settings.Language or nil
+	if value == "en" or value == "fr" then
+		return value
+	end
+	return "Auto"
+end
+
+-- Langue finale ("en" | "fr") : réglage sauvegardé, sinon langue Roblox du joueur
+function ClientState.ResolveLanguage(): string
+	local player = Players.LocalPlayer
+	return Locale.Resolve(ClientState.GetLanguageSetting(), player and player.LocaleId or nil)
 end
 
 -- Mode sombre "principal" (thème équipé, fond...). Les stimuli (mode néon)

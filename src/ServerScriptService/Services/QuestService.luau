@@ -9,12 +9,17 @@
 	  - Les quêtes n'avancent qu'une fois le menu "Quêtes" débloqué.
 	  - Types : Clicks, Earn, Buy, Bounces, Bubbles, Spawns, Combo, Casino, Chests.
 	  - Les quêtes sont gardées après une détox.
+	  - Chaque quête contient Type, Goal, Progress, Reward et Text. Text est
+	    écrit dans la langue du joueur (compatibilité) ; le client devrait
+	    plutôt afficher Locale.T(Config.Quests.Pool[Type].Text, Format(Goal))
+	    (voir QuestService.GetTemplate / FormatText).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Formulas = require(ReplicatedStorage.Shared.Formulas)
+local Locale = require(ReplicatedStorage.Shared.Locale)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 
 local QuestService = {}
@@ -24,10 +29,26 @@ local random = Random.new()
 
 local QUESTS_FEATURE = "Quests"
 
--- Types de quêtes existants (d'après la config)
+-- Types de quêtes existants (d'après la config) : [Type] = modèle
 local validTypes = {}
+local templatesByType = {}
 for _, template in ipairs(Config.Quests.Pool) do
 	validTypes[template.Type] = true
+	templatesByType[template.Type] = template
+end
+
+-- Modèle (Config.Quests.Pool) d'un type de quête
+function QuestService.GetTemplate(questType: string)
+	return templatesByType[questType]
+end
+
+-- Texte d'une quête dans la langue `lang` (ex. "Click 50 times" / "Fais 50 clics")
+function QuestService.FormatText(lang: string, questType: string, goal: number): string
+	local template = templatesByType[questType]
+	if not template then
+		return ""
+	end
+	return Locale.TFor(lang, template.Text, NumberFormatter.Format(goal))
 end
 
 function QuestService:Init(allServices)
@@ -75,7 +96,8 @@ local function generateQuest(player: Player, data, activeQuests)
 		Type = template.Type,
 		Goal = goal,
 		Progress = 0,
-		Text = string.format(template.Text, NumberFormatter.Format(goal)),
+		-- Texte dans la langue du joueur (le client peut le recalculer depuis Type + Goal)
+		Text = QuestService.FormatText(services.GameService:GetLanguage(player), template.Type, goal),
 		Reward = Formulas.ScaledReward(stats, template.RewardSeconds, template.MinReward),
 	}
 end
@@ -100,6 +122,13 @@ function QuestService:PlayerReady(player: Player, data)
 		end
 	end
 	data.Quests = cleaned
+
+	-- Texte réécrit dans la langue actuelle du joueur (elle a pu changer depuis
+	-- la dernière partie, ou venir d'une ancienne sauvegarde en français)
+	local lang = Locale.ForPlayer(player, data.Settings.Language)
+	for _, quest in ipairs(data.Quests) do
+		quest.Text = QuestService.FormatText(lang, quest.Type, quest.Goal)
+	end
 
 	while #data.Quests < Config.Quests.ActiveCount do
 		table.insert(data.Quests, generateQuest(player, data, data.Quests))
@@ -155,12 +184,18 @@ function QuestService:Progress(player: Player, questType: string, amount: number
 		data.Quests[index] = generateQuest(player, data, others)
 	end
 
+	local lang = services.GameService:GetLanguage(player)
 	for _, quest in ipairs(rewards) do
 		services.GameService:AddDopamine(player, quest.Reward, false)
 		services.GameService:Notify(player, {
 			Type = "Quest",
-			Title = "QUÊTE TERMINÉE !",
-			Text = "📜 " .. quest.Text .. "  (+" .. NumberFormatter.Format(quest.Reward) .. ")",
+			Title = Locale.TFor(lang, "QUEST COMPLETE!"),
+			Text = "📜 " .. QuestService.FormatText(lang, quest.Type, quest.Goal)
+				.. "  (+" .. NumberFormatter.Format(quest.Reward) .. ")",
+			-- Pour que le client puisse réécrire le texte lui-même
+			QuestType = quest.Type,
+			Goal = quest.Goal,
+			Reward = quest.Reward,
 		})
 	end
 	services.GameService:MarkDirty(player)

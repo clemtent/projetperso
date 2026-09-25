@@ -16,6 +16,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
 local DVDMath = require(ReplicatedStorage.Shared.DVDMath)
 local Formulas = require(ReplicatedStorage.Shared.Formulas)
+local Locale = require(ReplicatedStorage.Shared.Locale)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local Net = require(ReplicatedStorage.Shared.Net)
 local RateLimiter = require(script.Parent.RateLimiter)
@@ -369,12 +370,15 @@ local function onCorner(player: Player, index: any, k: any)
 		Type = "Jackpot",
 		Amount = reward,
 		Index = index,
-		Text = "📀 COIN PARFAIT ! +" .. NumberFormatter.Format(reward),
+		Text = services.GameService:T(player, "📀 PERFECT CORNER! +%s", NumberFormatter.Format(reward)),
 	})
-	services.GameService:NotifyAll({
-		Type = "Info",
-		Text = "📀 " .. player.DisplayName .. " a touché le COIN PARFAIT !",
-	}, player)
+	local displayName = player.DisplayName
+	services.GameService:NotifyAll(function(lang)
+		return {
+			Type = "Info",
+			Text = Locale.TFor(lang, "📀 %s hit the PERFECT CORNER!", displayName),
+		}
+	end, player)
 end
 
 -- TEST (Studio) : place le 1er logo pour qu'il touche un coin dans ~2 secondes

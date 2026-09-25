@@ -32,10 +32,12 @@ local Theme = require(Client.Theme)
 local UIUtil = require(Client.UIUtil)
 local ClientState = require(Client.ClientState)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
+local Locale = require(ReplicatedStorage.Shared.Locale)
 
+-- Title / Subtitle en anglais : traduits par PanelManager
 local Leaderboard = {
-	Title = "🥇 Classement",
-	Subtitle = "Qui a le plus gros cerveau ? Et qui est allé le plus loin ?",
+	Title = "🥇 Leaderboard",
+	Subtitle = "Who has the biggest brain? And who went the furthest?",
 	Color = Theme.Colors.Blue,
 	Size = Vector2.new(700, 600),
 }
@@ -164,13 +166,24 @@ local function formatValue(value: number): string
 	return NumberFormatter.Format(value)
 end
 
+-- "rebirth" / "rebirths" (pluriel dès 2 en français, sauf 1 en anglais)
 local function rebirthWord(count: number): string
-	return count >= 2 and "renaissances" or "renaissance"
+	local plural = if Locale.IsFrench() then count >= 2 else count ~= 1
+	return plural and Locale.T("rebirths") or Locale.T("rebirth")
 end
 
--- "1er", "2e", "3e"...
+-- "1st", "2nd", "3rd"... / "1er", "2e", "3e"...
 local function ordinal(rank: number): string
-	return rank == 1 and "1er" or (tostring(rank) .. "e")
+	if Locale.IsFrench() then
+		return rank == 1 and "1er" or (tostring(rank) .. "e")
+	end
+	local lastTwo = rank % 100
+	local suffix = "th"
+	if lastTwo < 11 or lastTwo > 13 then
+		local last = rank % 10
+		suffix = last == 1 and "st" or (last == 2 and "nd" or (last == 3 and "rd" or "th"))
+	end
+	return tostring(rank) .. suffix
 end
 
 local function palette(): Palette
@@ -241,7 +254,7 @@ end
 local function meChip(parent: Instance, zIndex: number): Frame
 	return UIUtil.Chip({
 		Name = "Me",
-		Text = "TOI",
+		Text = Locale.T("YOU"),
 		Color = Theme.Colors.Blue,
 		TextColor3 = Theme.Colors.TextLight,
 		Height = 18,
@@ -392,21 +405,21 @@ local function detailText(entry: Entry): string
 			table.insert(parts, "♻️ " .. formatValue(entry.Rebirths) .. " " .. rebirthWord(entry.Rebirths))
 		end
 		if scope == "Server" and entry.Lifetime then
-			table.insert(parts, "Total " .. NumberFormatter.Format(entry.Lifetime))
+			table.insert(parts, Locale.T("Total %s", NumberFormatter.Format(entry.Lifetime)))
 		end
 		if #parts == 0 then
-			return "Dopamine gagnée au total"
+			return Locale.T("Total Dopamine earned")
 		end
 	else
 		if entry.Dopamine then
-			local suffix = scope == "Server" and "" or " gagnés"
-			table.insert(parts, "💧 " .. NumberFormatter.Format(entry.Dopamine) .. suffix)
+			local amount = NumberFormatter.Format(entry.Dopamine)
+			table.insert(parts, "💧 " .. (scope == "Server" and amount or Locale.T("%s earned", amount)))
 		end
 		if scope == "Server" and entry.Lifetime then
-			table.insert(parts, "Total " .. NumberFormatter.Format(entry.Lifetime))
+			table.insert(parts, Locale.T("Total %s", NumberFormatter.Format(entry.Lifetime)))
 		end
 		if #parts == 0 then
-			return "Visites à l'océan"
+			return Locale.T("Ocean visits")
 		end
 	end
 	return table.concat(parts, "  •  ")
@@ -578,55 +591,55 @@ local function refreshFooter(entries: { Entry })
 	if scope == "Server" then
 		if myIndex then
 			local me = entries[myIndex]
-			footerLabel.Text = string.format("Ta place : %s sur %d", ordinal(myIndex), #entries)
+			footerLabel.Text = Locale.T("Your rank: %s of %d", ordinal(myIndex), #entries)
 			if myIndex == 1 then
 				if #entries <= 1 then
-					footerDetail.Text = "Seul(e) sur le serveur : invite tes amis !"
+					footerDetail.Text = Locale.T("Alone on the server: invite your friends!")
 				elseif board == "Rebirths" then
-					footerDetail.Text = "♻️ Tu es le plus grand voyageur du serveur !"
+					footerDetail.Text = Locale.T("♻️ You're the greatest traveler on the server!")
 				else
-					footerDetail.Text = "👑 Tu es le plus gros cerveau du serveur !"
+					footerDetail.Text = Locale.T("👑 You have the biggest brain on the server!")
 				end
 			else
 				local ahead = entries[myIndex - 1]
 				local gap = math.max(0, ahead.Primary - me.Primary)
 				if board == "Rebirths" then
 					local needed = math.floor(gap) + 1
-					footerDetail.Text = string.format("Encore %d %s pour dépasser %s", needed, rebirthWord(needed), ahead.Name)
+					footerDetail.Text = Locale.T("%d more %s to pass %s", needed, rebirthWord(needed), ahead.Name)
 				else
-					footerDetail.Text = string.format("Encore %s 💧 pour dépasser %s", formatValue(gap + 1), ahead.Name)
+					footerDetail.Text = Locale.T("%s more 💧 to pass %s", formatValue(gap + 1), ahead.Name)
 				end
 			end
 		else
-			footerLabel.Text = "Ta place : ..."
-			footerDetail.Text = "Chargement du classement du serveur"
+			footerLabel.Text = Locale.T("Your rank: ...")
+			footerDetail.Text = Locale.T("Loading the server leaderboard")
 		end
 		return
 	end
 
 	-- Monde
 	if myIndex then
-		footerLabel.Text = string.format("Ta place : %s du monde !", ordinal(myIndex))
-		footerDetail.Text = myIndex == 1 and "👑 Personne n'a fait mieux, nulle part." or "Tu fais partie des légendes 🌍"
+		footerLabel.Text = Locale.T("Your rank: %s in the world!", ordinal(myIndex))
+		footerDetail.Text = myIndex == 1 and Locale.T("👑 Nobody has done better, anywhere.") or Locale.T("You're one of the legends 🌍")
 		return
 	end
 	local size = math.max(#entries, 10)
-	footerLabel.Text = "Pas encore dans le top " .. tostring(size)
+	footerLabel.Text = Locale.T("Not in the top %s yet", tostring(size))
 	local last = entries[#entries]
 	if board == "Rebirths" then
 		if last and #entries >= size then
 			local needed = math.max(0, math.floor(last.Primary) - myRebirths) + 1
-			footerDetail.Text = string.format("Encore %d %s pour y entrer", needed, rebirthWord(needed))
+			footerDetail.Text = Locale.T("%d more %s to get in", needed, rebirthWord(needed))
 		elseif myRebirths <= 0 then
-			footerDetail.Text = "Va à l'océan 🌊 pour ta première renaissance !"
+			footerDetail.Text = Locale.T("Go to the ocean 🌊 for your first rebirth!")
 		else
-			footerDetail.Text = "Ta place arrive à la prochaine mise à jour"
+			footerDetail.Text = Locale.T("Your rank shows up at the next update")
 		end
 	else
 		if last then
-			footerDetail.Text = string.format("Encore %s 💧 gagnés pour y entrer", formatValue(math.max(0, last.Primary - myLifetime) + 1))
+			footerDetail.Text = Locale.T("%s more 💧 earned to get in", formatValue(math.max(0, last.Primary - myLifetime) + 1))
 		else
-			footerDetail.Text = "Continue de cliquer !"
+			footerDetail.Text = Locale.T("Keep clicking!")
 		end
 	end
 end
@@ -645,11 +658,11 @@ local function refreshInfo()
 	infoLabel.Position = UDim2.fromOffset(live and 16 or 0, INFO_Y)
 	infoLabel.Size = UDim2.new(1, live and -16 or 0, 0, 18)
 	if live then
-		infoLabel.Text = board == "Rebirths" and "En direct  •  classé par renaissances (visites à l'océan)"
-			or "En direct  •  classé par Dopamine actuelle"
+		infoLabel.Text = board == "Rebirths" and Locale.T("Live  •  ranked by rebirths (ocean visits)")
+			or Locale.T("Live  •  ranked by current Dopamine")
 	else
-		infoLabel.Text = board == "Rebirths" and "🌍 Renaissances de tous les serveurs  •  mis à jour chaque minute"
-			or "🌍 Dopamine gagnée depuis toujours  •  mis à jour chaque minute"
+		infoLabel.Text = board == "Rebirths" and Locale.T("🌍 Rebirths across all servers  •  updated every minute")
+			or Locale.T("🌍 All-time Dopamine earned  •  updated every minute")
 	end
 end
 
@@ -671,20 +684,20 @@ local function refresh()
 	if isEmpty then
 		if scope == "Server" then
 			emptyIcon.Text = "⏳"
-			emptyTitle.Text = "Chargement..."
-			emptyBody.Text = "Le classement du serveur arrive dans un instant."
+			emptyTitle.Text = Locale.T("Loading...")
+			emptyBody.Text = Locale.T("The server leaderboard will be here in a moment.")
 		elseif board == "Rebirths" then
 			emptyIcon.Text = "🌊"
-			emptyTitle.Text = "Aucune renaissance pour l'instant"
+			emptyTitle.Text = Locale.T("No rebirths yet")
 			emptyBody.Text = RunService:IsStudio()
-					and "Dans Studio, le classement mondial ne fonctionne que si l'accès aux API (DataStore) est activé dans les paramètres du jeu."
-				or "Va à l'océan pour être le premier du monde ! (mise à jour chaque minute)"
+					and Locale.T("In Studio, the world leaderboard only works if API access (DataStore) is enabled in the game settings.")
+				or Locale.T("Go to the ocean to be the first in the world! (updated every minute)")
 		else
 			emptyIcon.Text = "🌍"
-			emptyTitle.Text = "Classement mondial en chargement..."
+			emptyTitle.Text = Locale.T("World leaderboard loading...")
 			emptyBody.Text = RunService:IsStudio()
-					and "Dans Studio, le classement mondial ne fonctionne que si l'accès aux API (DataStore) est activé dans les paramètres du jeu."
-				or "Reviens dans une minute : le top du monde arrive !"
+					and Locale.T("In Studio, the world leaderboard only works if API access (DataStore) is enabled in the game settings.")
+				or Locale.T("Come back in a minute: the world's top is on its way!")
 		end
 	end
 
@@ -705,7 +718,7 @@ local function refresh()
 		row.RankBubble.BackgroundColor3 = isMe and colors.Accent or Theme.Colors.Surface
 		row.Rank.TextColor3 = isMe and Theme.Colors.TextLight or Theme.Colors.TextDim
 		setAvatar(row.Avatar, entry.UserId, entry.Name)
-		row.Name.Text = isMe and (entry.Name .. "  (toi)") or entry.Name
+		row.Name.Text = isMe and Locale.T("%s  (you)", entry.Name) or entry.Name
 		row.Name.TextColor3 = isMe and colors.Deep or Theme.Colors.Text
 		row.Detail.Text = detailText(entry)
 		row.Value.Text = primaryText(entry.Primary)
@@ -716,7 +729,8 @@ local function refresh()
 	end
 	-- Pas de 4e place : petit message à la place de la liste
 	hintLabel.Visible = shown == 0
-	hintLabel.Text = scope == "Server" and "Plus il y a de joueurs, plus c'est drôle 👀" or "Le reste du top arrive avec de nouveaux joueurs 🌍"
+	hintLabel.Text = scope == "Server" and Locale.T("The more players, the funnier it gets 👀")
+		or Locale.T("The rest of the top arrives with new players 🌍")
 
 	refreshFooter(entries)
 end
@@ -977,7 +991,7 @@ function Leaderboard.Build(content: Frame)
 		Parent = content,
 		Tabs = {
 			{ Id = "Dopamine", Text = "💧 Dopamine" },
-			{ Id = "Rebirths", Text = "♻️ Renaissances" },
+			{ Id = "Rebirths", Text = Locale.T("♻️ Rebirths") },
 		},
 		Color = Theme.Colors.Blue,
 		Size = UDim2.new(1, -236, 0, TOP_HEIGHT),
@@ -992,8 +1006,8 @@ function Leaderboard.Build(content: Frame)
 	scopeTabs = UIUtil.Tabs({
 		Parent = content,
 		Tabs = {
-			{ Id = "Server", Text = "🏠 Serveur" },
-			{ Id = "World", Text = "🌍 Monde" },
+			{ Id = "Server", Text = Locale.T("🏠 Server") },
+			{ Id = "World", Text = Locale.T("🌍 World") },
 		},
 		Color = Theme.Colors.Dark,
 		Size = UDim2.new(0, 224, 0, TOP_HEIGHT),

@@ -15,6 +15,10 @@
 	  - mode sombre : cartes sombres translucides, texte blanc ;
 	  - finitions : ombre douce sous les cartes et l'infobulle, petit "pop"
 	    quand une carte devient abordable.
+	v5 : noms / descriptions traduits (Locale.T sur les textes anglais de
+	Config) ; sur téléphone : cartes plus petites (84), rangée limitée à la
+	place entre les slots de côté, infobulle plus large avec de plus gros
+	textes ; tout se réajuste quand l'écran change.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -30,9 +34,11 @@ local Effects = require(Client.Effects)
 local SoundManager = require(Client.SoundManager)
 local Notifications = require(script.Parent.Notifications)
 local PanelManager = require(script.Parent.PanelManager)
+local Slots = require(Client.Slots)
 local Formulas = require(ReplicatedStorage.Shared.Formulas)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local Net = require(ReplicatedStorage.Shared.Net)
+local Locale = require(ReplicatedStorage.Shared.Locale)
 
 local UpgradeBar = {}
 
@@ -40,9 +46,25 @@ local MAX_WIDTH = 660 -- largeur max de la rangée (au-delà : défilement horiz
 local GAP = 14
 local CARD_SIZE = 100
 local MIN_CARD_SIZE = 78
+local PHONE_CARD_SIZE = 84 -- téléphone : cartes un peu plus petites (la toile est déjà agrandie)
+local PHONE_MIN_CARD_SIZE = 70
 local PAD_TOP = 10 -- place pour les pastilles qui dépassent
 local PAD_SIDE = 10
 UpgradeBar.Height = CARD_SIZE + PAD_TOP + 6
+
+-- Mesures selon l'appareil : (taille de carte, taille min, largeur max de la rangée)
+local function metrics(): (number, number, number)
+	if Interface.IsPhone() then
+		local clear = Slots.GetCenterClearWidth() - PAD_SIDE * 2
+		return PHONE_CARD_SIZE, PHONE_MIN_CARD_SIZE, math.clamp(clear, 340, MAX_WIDTH)
+	end
+	return CARD_SIZE, MIN_CARD_SIZE, MAX_WIDTH
+end
+
+-- Traduction des textes de Config (anglais -> langue du joueur)
+local function translate(text: string): string
+	return Locale.T(text)
+end
 
 type Card = {
 	Upgrade: any,
@@ -137,25 +159,25 @@ local function refreshTooltip()
 	local cost = getCost(upgrade)
 	local affordable = canAfford(upgrade)
 
-	tipName.Text = upgrade.Icon .. "  " .. upgrade.Name
-	tipDesc.Text = Formulas.DescribeUpgrade(upgrade, NumberFormatter.Format, getRebirths())
+	tipName.Text = upgrade.Icon .. "  " .. Locale.T(upgrade.Name)
+	tipDesc.Text = Formulas.DescribeUpgrade(upgrade, NumberFormatter.Format, getRebirths(), translate)
 	if upgrade.Effect == "Detox" then
 		local rebirths = getRebirths()
 		tipLevel.Visible = rebirths > 0
-		tipLevel.Text = "Visites à l'océan : " .. tostring(rebirths)
+		tipLevel.Text = Locale.T("Ocean visits: %s", tostring(rebirths))
 	elseif isRepeatable(upgrade) then
 		tipLevel.Visible = true
-		tipLevel.Text = upgrade.MaxLevel and string.format("Niveau %d / %d", level, upgrade.MaxLevel) or ("Niveau " .. level)
+		tipLevel.Text = upgrade.MaxLevel and Locale.T("Level %d / %d", level, upgrade.MaxLevel) or Locale.T("Level %d", level)
 	else
 		tipLevel.Visible = false
 	end
-	tipCost.Text = "Coût : " .. formatAmount(cost) .. " Dopamine"
+	tipCost.Text = Locale.T("Cost: %s Dopamine", formatAmount(cost))
 	tipCost.TextColor3 = affordable and Theme.Colors.Text or Theme.Colors.Red
 
 	local needsButton = tipPinned
 	tipButton.Visible = needsButton
 	if needsButton then
-		tipButton.Text = upgrade.Effect == "Detox" and "🌊 J'y vais" or "Acheter"
+		tipButton.Text = upgrade.Effect == "Detox" and Locale.T("🌊 Let's go") or Locale.T("Buy")
 		UIUtil.SetButtonEnabled(tipButton, affordable)
 	end
 
@@ -239,6 +261,9 @@ local function buildTooltip(layer: Frame)
 	tipName = textLine(1, Theme.Fonts.Title, 21, Theme.Colors.Text)
 	tipDesc = textLine(2, Theme.Fonts.Body, 16, Theme.Colors.TextDim)
 	tipLevel = textLine(3, Theme.Fonts.Body, 15, Theme.Colors.TextDim)
+	tipName:SetAttribute("BaseTextSize", 21)
+	tipDesc:SetAttribute("BaseTextSize", 16)
+	tipLevel:SetAttribute("BaseTextSize", 15)
 	-- Fine ligne de séparation avant le prix
 	UIUtil.Create("Frame", {
 		Name = "Divider",
@@ -250,10 +275,11 @@ local function buildTooltip(layer: Frame)
 		Parent = tooltip,
 	})
 	tipCost = textLine(4, Theme.Fonts.Title, 17, Theme.Colors.Text)
+	tipCost:SetAttribute("BaseTextSize", 17)
 
 	tipButton = UIUtil.PillButton({
 		Name = "Buy",
-		Text = "Acheter",
+		Text = Locale.T("Buy"),
 		Color = Theme.Colors.Green,
 		TextColor3 = Theme.Colors.TextDark,
 		Height = 38,
@@ -307,7 +333,7 @@ local function buy(upgradeId: string)
 		else
 			failFeedback(card)
 			if not ok then
-				Notifications.Toast("Erreur réseau, réessaie.", Theme.Colors.Red)
+				Notifications.Toast(Locale.T("Network error, try again."), Theme.Colors.Red)
 			elseif type(message) == "string" and message ~= "" then
 				local layer = Effects.GetLayer()
 				if layer and card.Button.Parent then
@@ -541,12 +567,19 @@ end
 -- Les cartes de `created` arrivent en glissant depuis le bas.
 local function layout(order: { any }, created: { [string]: boolean })
 	local count = #order
-	local size = CARD_SIZE
+	local cardSize, minCardSize, maxWidth = metrics()
+	local size = cardSize
 	if count > 0 then
-		size = math.clamp(math.floor((MAX_WIDTH - GAP * (count - 1)) / count), MIN_CARD_SIZE, CARD_SIZE)
+		size = math.clamp(math.floor((maxWidth - GAP * (count - 1)) / count), minCardSize, cardSize)
+	end
+	-- Hauteur de la barre selon l'appareil
+	local barHeight = cardSize + PAD_TOP + 6
+	UpgradeBar.Height = barHeight
+	if bar.Size.Y.Offset ~= barHeight then
+		bar.Size = UDim2.new(1, 0, 0, barHeight)
 	end
 	local contentWidth = count * size + math.max(0, count - 1) * GAP + PAD_SIDE * 2
-	local viewWidth = math.min(contentWidth, MAX_WIDTH + PAD_SIDE * 2)
+	local viewWidth = math.min(contentWidth, maxWidth + PAD_SIDE * 2)
 	scroll.Size = UDim2.new(0, viewWidth, 1, 0)
 	scroll.CanvasSize = UDim2.fromOffset(contentWidth, 0)
 	scroll.ScrollBarThickness = contentWidth > viewWidth + 1 and 4 or 0
@@ -555,7 +588,7 @@ local function layout(order: { any }, created: { [string]: boolean })
 		local card = cards[upgrade.Id]
 		if card then
 			local x = PAD_SIDE + (index - 1) * (size + GAP)
-			local y = PAD_TOP + (CARD_SIZE - size)
+			local y = PAD_TOP + (cardSize - size)
 			local target = UDim2.fromOffset(x, y)
 			local targetSize = UDim2.fromOffset(size, size)
 			if created[upgrade.Id] then
@@ -704,6 +737,25 @@ function UpgradeBar.Build(parent: GuiObject, tooltipLayer: Frame): Frame
 	end)
 
 	PanelManager.Opened:Connect(hideTooltip)
+
+	-- Écran qui change : cartes, largeur et infobulle réajustées
+	local function applyDevice()
+		local touch = Interface.IsTouch()
+		tooltip.Size = UDim2.fromOffset(touch and 330 or 280, 0)
+		-- Bouton "Acheter" : zone tactile de 44 px au moins
+		tipButton.Size = UDim2.fromOffset(0, touch and Theme.TouchTarget or 38)
+		tipButton.TextSize = touch and 20 or 18
+		for _, line in ipairs({ tipName, tipDesc, tipLevel, tipCost }) do
+			local base = line:GetAttribute("BaseTextSize") or 16
+			line.TextSize = touch and base + 3 or base
+		end
+		if ClientState.Data then
+			refresh(ClientState.Data)
+		end
+	end
+	Interface.DeviceChanged:Connect(applyDevice)
+	Slots.Changed:Connect(applyDevice)
+	applyDevice()
 
 	-- Mises à jour
 	ClientState.Changed:Connect(refresh)

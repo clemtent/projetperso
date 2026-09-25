@@ -64,52 +64,61 @@ function ThemeService:GetState(player: Player)
 	return { Owned = owned, Equipped = equipped }
 end
 
+-- Texte dans la langue du joueur
+local function T(player: Player, text: string, ...): string
+	return services.GameService:T(player, text, ...)
+end
+
 local function onThemeShop(player: Player, action: any, themeId: any)
 	if not RateLimiter.Check(player, "ThemeShop", 0.2) then
-		return false, "Doucement !"
+		return false, T(player, "Slow down!")
 	end
 	local data = services.DataService:GetData(player)
 	if not data or not services.GameService:IsReady(player) then
-		return false, "Chargement en cours..."
+		return false, T(player, "Loading...")
 	end
 	if type(action) ~= "string" or type(themeId) ~= "string" or #themeId > 64 then
-		return false, "Requête invalide"
+		return false, T(player, "Invalid request")
 	end
 	local theme = Config.ThemesById[themeId]
 	if not theme then
-		return false, "Thème inconnu"
+		return false, T(player, "Unknown theme")
 	end
 	local themes = data.Themes
+	local name = T(player, theme.Name)
 
 	if action == "buy" then
 		if ThemeService:Owns(player, themeId) then
-			return false, "Tu as déjà ce thème"
+			return false, T(player, "You already own this theme")
 		end
 		local cost = theme.Cost
 		if cost == nil then
-			return false, "Ce thème s'obtient avec des Robux" .. (theme.Premium and " (ou le pass VIP)" or "")
+			if theme.Premium then
+				return false, T(player, "This theme is unlocked with Robux (or the VIP pass)")
+			end
+			return false, T(player, "This theme is unlocked with Robux")
 		end
 		if not isValidNumber(cost) or cost < 0 then
-			return false, "Thème indisponible"
+			return false, T(player, "Theme unavailable")
 		end
 		if data.Dopamine < cost then
-			return false, "Pas assez de " .. Config.Game.CurrencyName
+			return false, T(player, "Not enough %s", Config.Game.CurrencyName)
 		end
 		data.Dopamine -= cost
 		themes.Owned[themeId] = true
 		themes.Equipped = themeId -- équipé tout de suite
 		data.Stats.ThemesBought += 1
 		services.GameService:SendState(player)
-		return true, string.format("%s Thème %s acheté ! (%s)", theme.Icon, theme.Name, NumberFormatter.Format(cost))
+		return true, T(player, "%s %s theme bought! (%s)", theme.Icon, name, NumberFormatter.Format(cost))
 	elseif action == "equip" then
 		if not ThemeService:Owns(player, themeId) then
-			return false, "Tu ne possèdes pas ce thème"
+			return false, T(player, "You don't own this theme")
 		end
 		themes.Equipped = themeId
 		services.GameService:SendState(player)
-		return true, theme.Icon .. " Thème " .. theme.Name .. " équipé"
+		return true, T(player, "%s %s theme equipped", theme.Icon, name)
 	end
-	return false, "Requête invalide"
+	return false, T(player, "Invalid request")
 end
 
 -- Commande de test /theme (Studio) : donne et équipe un thème

@@ -9,6 +9,7 @@
 	   statistique, le plus petit objectif est en bronze, puis argent, or,
 	   diamant (un succès seul dans sa statistique : palier selon sa récompense).
 	   Verrouillé : médaillon gris, icône fantôme et petit cadenas.
+	   (Name du palier en anglais : afficher avec Locale.T(tier.Name).)
 
 	2) Grande fenêtre de fête quand un succès est débloqué
 	   (Notify { Type = "Achievement", Id, Name, Icon, Reward, BadgeAwarded }) :
@@ -28,6 +29,7 @@ local Effects = require(Client.Effects)
 local SoundManager = require(Client.SoundManager)
 local Config = require(ReplicatedStorage.Shared.Config)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
+local Locale = require(ReplicatedStorage.Shared.Locale)
 
 local AchievementPopup = {}
 
@@ -36,9 +38,9 @@ export type Medallion = { Frame: Frame, Set: (unlocked: boolean) -> () }
 
 local TIERS: { Tier } = {
 	{ Name = "Bronze", Top = Color3.fromRGB(245, 190, 130), Bottom = Color3.fromRGB(176, 106, 52), Ring = Color3.fromRGB(125, 68, 28) },
-	{ Name = "Argent", Top = Color3.fromRGB(250, 252, 255), Bottom = Color3.fromRGB(160, 170, 188), Ring = Color3.fromRGB(105, 115, 132) },
-	{ Name = "Or", Top = Color3.fromRGB(255, 240, 150), Bottom = Color3.fromRGB(232, 162, 20), Ring = Color3.fromRGB(165, 105, 0) },
-	{ Name = "Diamant", Top = Color3.fromRGB(210, 248, 255), Bottom = Color3.fromRGB(90, 165, 255), Ring = Color3.fromRGB(40, 105, 200) },
+	{ Name = "Silver", Top = Color3.fromRGB(250, 252, 255), Bottom = Color3.fromRGB(160, 170, 188), Ring = Color3.fromRGB(105, 115, 132) },
+	{ Name = "Gold", Top = Color3.fromRGB(255, 240, 150), Bottom = Color3.fromRGB(232, 162, 20), Ring = Color3.fromRGB(165, 105, 0) },
+	{ Name = "Diamond", Top = Color3.fromRGB(210, 248, 255), Bottom = Color3.fromRGB(90, 165, 255), Ring = Color3.fromRGB(40, 105, 200) },
 }
 local LOCKED = { Top = Color3.fromRGB(236, 236, 240), Bottom = Color3.fromRGB(185, 185, 192), Ring = Color3.fromRGB(150, 150, 158) }
 
@@ -291,7 +293,7 @@ local function present(payload, summary: string?)
 	-- Textes
 	UIUtil.Label({
 		Name = "Title",
-		Text = summary and "SUCCÈS EN RAFALE !" or "SUCCÈS DÉBLOQUÉ !",
+		Text = summary and Locale.T("ACHIEVEMENT SPREE!") or Locale.T("ACHIEVEMENT UNLOCKED!"),
 		Font = Theme.Fonts.Title,
 		TextColor3 = tier.Ring,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -303,7 +305,10 @@ local function present(payload, summary: string?)
 	})
 	UIUtil.Label({
 		Name = "AchievementName",
-		Text = summary or tostring(payload.Name or (achievement and achievement.Name) or payload.Text or ""),
+		-- Nom rendu depuis Config (traduit) ; sinon le texte envoyé par le serveur
+		Text = summary
+			or (achievement and Locale.T(achievement.Name))
+			or tostring(payload.Name or payload.Text or ""),
 		Font = Theme.Fonts.Title,
 		TextColor3 = Theme.Colors.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -316,9 +321,9 @@ local function present(payload, summary: string?)
 	local reward = summary and 0 or (tonumber(payload.Reward) or (achievement and tonumber(achievement.Reward)) or 0)
 	UIUtil.Label({
 		Name = "Reward",
-		Text = (summary and "Chaque succès : " or "")
+		Text = (summary and Locale.T("Each achievement: ") or "")
 			.. (reward > 0 and ("🎁 +" .. NumberFormatter.Format(reward) .. " Dopamine  •  ") or "")
-			.. "+" .. tostring(math.floor(Config.AchievementBonus * 100 + 0.5)) .. " % pour toujours",
+			.. Locale.T("+%s%% forever", tostring(math.floor(Config.AchievementBonus * 100 + 0.5))),
 		TextColor3 = Theme.Colors.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Size = UDim2.new(1, -150, 0, 18),
@@ -342,7 +347,7 @@ local function present(payload, summary: string?)
 		Parent = chips,
 	})
 	UIUtil.Chip({
-		Text = "Palier " .. tier.Name,
+		Text = Locale.T("%s tier", Locale.T(tier.Name)),
 		Color = tier.Bottom,
 		TextColor3 = Theme.ContrastText(tier.Bottom),
 		Height = 22,
@@ -353,7 +358,7 @@ local function present(payload, summary: string?)
 	})
 	if badge then
 		UIUtil.Chip({
-			Text = "🏅 Badge Roblox obtenu !",
+			Text = Locale.T("🏅 Roblox badge earned!"),
 			Color = Theme.Colors.Robux,
 			TextColor3 = Theme.Colors.TextLight,
 			Height = 22,
@@ -401,7 +406,7 @@ showNext = function()
 	if skipped > 0 then
 		local count = skipped
 		skipped = 0
-		present({ Icon = "🏆" }, string.format("+%d autres succès !", count))
+		present({ Icon = "🏆" }, Locale.T("+%d more achievements!", count))
 		return
 	end
 	showing = false

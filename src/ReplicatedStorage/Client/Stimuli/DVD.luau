@@ -26,6 +26,8 @@
 local DVD = {}
 DVD.Slot = "Overlay"
 
+local Locale = require(game:GetService("ReplicatedStorage").Shared.Locale)
+
 local RESIZE_INTERVAL = 0.6 -- temps minimum entre deux envois DVDResize
 local COOLDOWN_FADE = 0.55 -- transparence des logos pendant la recharge
 local MIN_SOUND_GAP = 0.07 -- évite la cacophonie avec 10 logos
@@ -38,8 +40,20 @@ local INK = Color3.fromRGB(18, 14, 34) -- contours sombres
 local WHITE = Color3.new(1, 1, 1)
 
 -- Petites phrases quand un logo frôle un coin sans le toucher
-local NEAR_MISS = { "presque... 😩", "à un pixel !", "noooon 😭", "si près...", "la prochaine ?", "argh !" }
-local CORNER_TEXTS = { "COIN !!! 📀", "DANS LE COIN !!!", "PILE DANS LE COIN !" }
+local NEAR_MISS = {
+	en = { "almost... 😩", "one pixel off!", "noooo 😭", "so close...", "next time?", "argh!" },
+	fr = { "presque... 😩", "à un pixel !", "noooon 😭", "si près...", "la prochaine ?", "argh !" },
+}
+local CORNER_TEXTS = {
+	en = { "CORNER!!! 📀", "RIGHT IN THE CORNER!!!", "PERFECT CORNER HIT!" },
+	fr = { "COIN !!! 📀", "DANS LE COIN !!!", "PILE DANS LE COIN !" },
+}
+
+-- Tire une phrase au hasard dans la liste de la langue du joueur
+local function pickLine(variants, random: Random): string
+	local list = Locale.Pick(variants)
+	return list[random:NextInteger(1, #list)]
+end
 
 -- Reflet "holographique" de l'anneau du disque
 local HOLO = ColorSequence.new({
@@ -323,7 +337,7 @@ function DVD.Start(ctx)
 			local pillStroke = UIUtil.Stroke(pill, WHITE, 1, 0.45)
 			local pillText = UIUtil.Label({
 				Name = "Text",
-				Text = "VIDÉO",
+				Text = Locale.T("VIDEO"),
 				Font = Theme.Fonts.Title,
 				TextColor3 = Theme.ContrastText(color),
 				Size = UDim2.fromScale(0.9, 0.9),
@@ -375,7 +389,7 @@ function DVD.Start(ctx)
 			if os.clock() < cooldownUntil then
 				-- Encore en recharge : petit "non" et le temps restant
 				UIUtil.Shake(body)
-				ctx.FloatText(container, center, "⏳ " .. math.ceil(cooldownUntil - os.clock()) .. " s", Theme.Colors.TextDim, 20)
+				ctx.FloatText(container, center, Locale.T("⏳ %ds", math.ceil(cooldownUntil - os.clock())), Theme.Colors.TextDim, 20)
 				return
 			end
 			cooldownUntil = os.clock() + settings.ClickCooldown
@@ -589,7 +603,7 @@ function DVD.Start(ctx)
 
 	local function onCorner(logo, x: number, y: number, w: number, h: number)
 		local center = UDim2.fromScale(x + w / 2, y + h / 2)
-		ctx.FloatText(container, center, CORNER_TEXTS[random:NextInteger(1, #CORNER_TEXTS)], Theme.Colors.Gold, 44)
+		ctx.FloatText(container, center, pickLine(CORNER_TEXTS, random), Theme.Colors.Gold, 44)
 		if effectsOn() then
 			ctx.Effects.Burst(container, center, Theme.Colors.Gold, 30)
 			ctx.Effects.Burst(container, center, nil, 20)
@@ -680,7 +694,7 @@ function DVD.Start(ctx)
 							ctx.FloatText(
 								container,
 								UDim2.fromScale(x + w / 2, y + h / 2 + 0.06),
-								NEAR_MISS[random:NextInteger(1, #NEAR_MISS)],
+								pickLine(NEAR_MISS, random),
 								Theme.Colors.TextDim,
 								22
 							)

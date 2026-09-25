@@ -20,26 +20,32 @@ local UIUtil = require(Client.UIUtil)
 local ClientState = require(Client.ClientState)
 local Config = require(ReplicatedStorage.Shared.Config)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
+local Locale = require(ReplicatedStorage.Shared.Locale)
 
+-- Title / Subtitle en anglais : traduits par PanelManager
 local ScreenTime = {
-	Title = "⏱️ Temps d'écran",
-	Subtitle = "Le temps passé ici (on ne juge pas… un peu)",
+	Title = "⏱️ Screen Time",
+	Subtitle = "Time spent here (no judgment… well, a little)",
 	Color = Theme.Colors.Dark,
 	Size = Vector2.new(660, 540),
 }
 
-local DAY_NAMES = { "Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam" } -- index = wday (1 = dimanche)
+-- index = wday (1 = dimanche)
+local DAY_NAMES = {
+	en = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" },
+	fr = { "Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam" },
+}
 local MAX_EXTRAPOLATION = 30 -- secondes ajoutées localement entre deux mises à jour
 local PLOT_TOP = 30 -- place au-dessus des barres (valeurs)
 local BAR_AREA = 0.78 -- part de la hauteur utile occupée par la plus grande barre
 
--- Commentaires selon le temps passé aujourd'hui (secondes)
+-- Commentaires selon le temps passé aujourd'hui (secondes) ; Text en anglais, traduit à l'affichage
 local COMMENTS = {
-	{ Limit = 10 * 60, Icon = "🙂", Text = "C'est raisonnable.", Color = Theme.Colors.Green },
-	{ Limit = 30 * 60, Icon = "🤔", Text = "Ça commence à faire beaucoup...", Color = Theme.Colors.Orange },
-	{ Limit = 60 * 60, Icon = "🌳", Text = "Il faudrait peut-être sortir...", Color = Theme.Colors.Orange },
-	{ Limit = 3 * 3600, Icon = "👀", Text = "Tes yeux ne te remercient pas.", Color = Theme.Colors.Red },
-	{ Limit = math.huge, Icon = "🚨", Text = "Tu as un problème.", Color = Theme.Colors.Red },
+	{ Limit = 10 * 60, Icon = "🙂", Text = "That's reasonable.", Color = Theme.Colors.Green },
+	{ Limit = 30 * 60, Icon = "🤔", Text = "It's starting to add up...", Color = Theme.Colors.Orange },
+	{ Limit = 60 * 60, Icon = "🌳", Text = "Maybe go outside for a bit...", Color = Theme.Colors.Orange },
+	{ Limit = 3 * 3600, Icon = "👀", Text = "Your eyes are not thanking you.", Color = Theme.Colors.Red },
+	{ Limit = math.huge, Icon = "🚨", Text = "You have a problem.", Color = Theme.Colors.Red },
 }
 
 type Stat = { Value: TextLabel, Sub: TextLabel }
@@ -142,13 +148,13 @@ end
 local function funnyTotal(seconds: number): string
 	local films = seconds / (2 * 3600)
 	if films >= 1 then
-		return string.format("≈ %s film%s de 2 h 🎬", NumberFormatter.Format(films, 1), films >= 2 and "s" or "")
+		return Locale.T("≈ %s two-hour movie%s 🎬", NumberFormatter.Format(films, 1), films >= 2 and "s" or "")
 	end
 	local episodes = seconds / (22 * 60)
 	if episodes >= 1 then
-		return string.format("≈ %s épisode%s de série 📺", NumberFormatter.Format(episodes, 1), episodes >= 2 and "s" or "")
+		return Locale.T("≈ %s TV episode%s 📺", NumberFormatter.Format(episodes, 1), episodes >= 2 and "s" or "")
 	end
-	return "≈ " .. tostring(math.floor(seconds / 3 + 0.5)) .. " vidéos de 3 s 📱"
+	return Locale.T("≈ %s three-second videos 📱", tostring(math.floor(seconds / 3 + 0.5)))
 end
 
 local function refreshTimes()
@@ -159,13 +165,13 @@ local function refreshTimes()
 	stats.Session.Value.Text = NumberFormatter.Time(session)
 	stats.Today.Value.Text = NumberFormatter.Time(today)
 	stats.Total.Value.Text = NumberFormatter.Time(total)
-	stats.Session.Sub.Text = "● en direct depuis ton arrivée"
-	stats.Today.Sub.Text = string.format("%.1f %% de ta journée", today / 864)
+	stats.Session.Sub.Text = Locale.T("● live since you arrived")
+	stats.Today.Sub.Text = Locale.T("%.1f%% of your day", today / 864)
 	stats.Total.Sub.Text = funnyTotal(total)
 
 	local comment = commentFor(today)
 	commentIcon.Text = comment.Icon
-	commentText.Text = comment.Text
+	commentText.Text = Locale.T(comment.Text)
 	commentText.TextColor3 = comment.Color:Lerp(Color3.new(0, 0, 0), 0.35)
 	commentChip.BackgroundColor3 = comment.Color:Lerp(Color3.new(1, 1, 1), 0.85)
 	local stroke = commentChip:FindFirstChildOfClass("UIStroke")
@@ -206,9 +212,9 @@ function ScreenTime.Build(content: Frame)
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = row,
 	})
-	stats.Session = statCard(row, 1, "⏳", "Cette session", Theme.Colors.Blue)
-	stats.Today = statCard(row, 2, "📅", "Aujourd'hui", Theme.Colors.Orange)
-	stats.Total = statCard(row, 3, "♾️", "Depuis toujours", Theme.Colors.Purple)
+	stats.Session = statCard(row, 1, "⏳", Locale.T("This session"), Theme.Colors.Blue)
+	stats.Today = statCard(row, 2, "📅", Locale.T("Today"), Theme.Colors.Orange)
+	stats.Total = statCard(row, 3, "♾️", Locale.T("All time"), Theme.Colors.Purple)
 
 	-- Point "en direct" qui pulse sur la carte Session
 	local sessionCard = row:FindFirstChild("Stat1") :: Frame?
@@ -282,7 +288,7 @@ function ScreenTime.Build(content: Frame)
 	UIUtil.Corner(chart, Theme.Radius.L)
 	UIUtil.Stroke(chart, Theme.Colors.Divider, 1.5)
 	UIUtil.Label({
-		Text = "📊 Les " .. Config.ScreenTime.DaysKept .. " derniers jours",
+		Text = Locale.T("📊 Last %s days", tostring(Config.ScreenTime.DaysKept)),
 		Font = Theme.Fonts.Title,
 		TextColor3 = Theme.Colors.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -487,7 +493,7 @@ function ScreenTime.Update(data)
 		ui.Value.Text = value > 0 and NumberFormatter.Time(value) or ""
 		local offset = count - i -- jours avant aujourd'hui
 		local wday = ((todayWday - 1 - offset) % 7) + 1
-		ui.Day.Text = offset == 0 and "Auj." or DAY_NAMES[wday]
+		ui.Day.Text = offset == 0 and Locale.T("Today") or Locale.Pick(DAY_NAMES)[wday]
 	end
 
 	-- Moyenne des jours joués
@@ -495,7 +501,7 @@ function ScreenTime.Update(data)
 	averageLine.Visible = average > 0
 	if average > 0 then
 		averageLine.Position = UDim2.fromScale(0, 1 - math.clamp(average / maxValue, 0, 1) * BAR_AREA)
-		averageLabel.Text = "Moyenne " .. NumberFormatter.Time(average)
+		averageLabel.Text = Locale.T("Average %s", NumberFormatter.Time(average))
 	end
 end
 

@@ -39,6 +39,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage.Shared
 local Config = require(Shared.Config)
 local Formulas = require(Shared.Formulas)
+local Locale = require(Shared.Locale)
 local NumberFormatter = require(Shared.NumberFormatter)
 local Net = require(Shared.Net)
 local RateLimiter = require(script.Parent.RateLimiter)
@@ -50,8 +51,11 @@ local services -- toutes les autres services (rempli par Init)
 -- Données "de session" (non sauvegardées) : [Player] = session
 local sessions = {}
 
--- Réglages booléens acceptés par SetSetting (+ "ClickSound", voir plus bas)
-local VALID_SETTINGS = { Sound = true, Music = true, Effects = true }
+-- Réglages booléens acceptés par SetSetting (+ "ClickSound" et "Language", voir plus bas)
+local VALID_SETTINGS = { Sound = true, Music = true, Effects = true, DarkMode = true }
+-- Langues acceptées pour Settings.Language ("Auto" = langue de Roblox)
+local VALID_LANGUAGES = { Auto = true, en = true, fr = true }
+local DEFAULT_LANGUAGE = "Auto"
 -- Sons de clic existants : [Id] = true
 local CLICK_SOUNDS = {}
 for _, clickSound in ipairs(Config.ClickSounds) do
@@ -168,6 +172,10 @@ local function sanitizeData(data)
 	if type(data.Settings.ClickSound) ~= "string" or not CLICK_SOUNDS[data.Settings.ClickSound] then
 		data.Settings.ClickSound = DEFAULT_CLICK_SOUND
 	end
+	-- Langue inconnue (sauvegarde abîmée) -> automatique
+	if type(data.Settings.Language) ~= "string" or not VALID_LANGUAGES[data.Settings.Language] then
+		data.Settings.Language = DEFAULT_LANGUAGE
+	end
 	-- Abonné au live sans posséder le live (sauvegarde incohérente)
 	if data.LiveFollowed and not Formulas.HasFeature(data, "LiveStream") then
 		data.LiveFollowed = false
@@ -235,18 +243,42 @@ function GameService:MarkAllDirty()
 	end
 end
 
+-- Langue d'un joueur ("en" | "fr") : réglage Settings.Language sinon langue Roblox
+function GameService:GetLanguage(player: Player): string
+	local data = services and services.DataService:GetData(player)
+	local settings = data and data.Settings
+	return Locale.ForPlayer(player, settings and settings.Language)
+end
+
+-- Traduit un texte anglais dans la langue du joueur (puis string.format)
+-- Ex. : GameService:T(player, "Not enough %s", "Dopamine")
+function GameService:T(player: Player, text: string, ...): string
+	return Locale.TFor(self:GetLanguage(player), text, ...)
+end
+
 -- Envoie une notification à un joueur
 -- payload = { Type = "Info" | "Error" | "Achievement" | "Quest" | "Bonus" | "Jackpot" | "Rush" | "Unlock" | "Detox" | "Purchase", ... }
+-- Le Text éventuel doit déjà être dans la langue du joueur (GameService:T).
 function GameService:Notify(player: Player, payload)
 	Net.Event("Notify"):FireClient(player, payload)
 end
 
--- Notifie tous les joueurs (sauf `except`, optionnel)
-function GameService:NotifyAll(payload, except: Player?)
+-- Notifie tous les joueurs (sauf `except`, optionnel).
+-- `payload` peut être une table (identique pour tous) ou une fonction
+-- (langue) -> table, appelée pour chaque joueur afin que le texte soit
+-- dans SA langue : NotifyAll(function(lang) return { Text = Locale.TFor(lang, ...) } end)
+function GameService:NotifyAll(payload: any, except: Player?)
 	local remote = Net.Event("Notify")
 	for _, other in ipairs(Players:GetPlayers()) do
 		if other ~= except then
-			remote:FireClient(other, payload)
+			local message = payload
+			if type(payload) == "function" then
+				local ok, result = pcall(payload, self:GetLanguage(other))
+				message = ok and result or nil
+			end
+			if type(message) == "table" then
+				remote:FireClient(other, message)
+			end
 		end
 	end
 end
@@ -285,7 +317,7 @@ function GameService:BuildState(player: Player)
 		Achievements = data.Achievements,
 		Quests = data.Quests,
 		Stats = data.Stats,
-		Settings = data.Settings, -- { Sound, Music, Effects, ClickSound }
+		Settings = data.Settings, -- { Sound, Music, Effects, ClickSound, Language, DarkMode }
 		LiveFollowed = data.LiveFollowed == true, -- abonné au live (bouton "Suivre")
 
 		ClickValue = stats.ClickValue,
@@ -368,7 +400,8 @@ function GameService:GrantOffline(player: Player, seconds: number, notify: boole
 			Seconds = math.floor(seconds), -- durée réelle de l'absence (non plafonnée)
 			Rate = rate, -- 0..1
 			MaxSeconds = maxSeconds, -- durée max prise en compte
-			Text = "😴 Bon retour ! +" .. NumberFormatter.Format(reward) .. " " .. Config.Game.CurrencyName .. " gagnée hors-ligne",
+			Text = self:T(player, "😴 Welcome back! +%s %s earned while you were away",
+				NumberFormatter.Format(reward), Config.Game.CurrencyName),
 		})
 	end
 	return reward
@@ -461,10 +494,13 @@ function GameService:Detox(player: Player)
 		Rebirths = data.Rebirths,
 		Multiplier = multiplier,
 	})
-	self:NotifyAll({
-		Type = "Info",
-		Text = "🌊 " .. player.DisplayName .. " est allé(e) à l'océan (x" .. data.Rebirths .. ")",
-	}, player)
+	local displayName, rebirths = player.DisplayName, tostring(data.Rebirths)
+	self:NotifyAll(function(lang)
+		return {
+			Type = "Info",
+			Text = Locale.TFor(lang, "🌊 %s went to the ocean (x%s)", displayName, rebirths),
+		}
+	end, player)
 	self:SendState(player)
 
 	-- Étape importante : on sauvegarde tout de suite (sans bloquer l'appelant)
@@ -570,37 +606,37 @@ end
 
 local function onBuyUpgrade(player: Player, upgradeId: any)
 	if not RateLimiter.Check(player, "Buy", 0.05) then
-		return false, "Doucement !"
+		return false, GameService:T(player, "Slow down!")
 	end
 	local data = services.DataService:GetData(player)
 	if not data or not sessions[player] then
-		return false, "Chargement en cours..."
+		return false, GameService:T(player, "Loading...")
 	end
 	if type(upgradeId) ~= "string" or #upgradeId > 64 then
-		return false, "Requête invalide"
+		return false, GameService:T(player, "Invalid request")
 	end
 	local upgrade = Config.UpgradesById[upgradeId]
 	if not upgrade then
-		return false, "Amélioration inconnue"
+		return false, GameService:T(player, "Unknown upgrade")
 	end
 
 	local level = data.Upgrades[upgradeId] or 0
 	if Formulas.IsMaxed(upgrade, level) then
-		return false, "Niveau maximum atteint"
+		return false, GameService:T(player, "Max level reached")
 	end
 	local cost = Formulas.GetUpgradeCost(upgrade, level, data.Rebirths)
 	if not isValidNumber(cost) or data.Dopamine < cost then
-		return false, "Pas assez de " .. Config.Game.CurrencyName
+		return false, GameService:T(player, "Not enough %s", Config.Game.CurrencyName)
 	end
 
 	-- "Aller à l'océan" : la détox
 	if upgrade.Effect == "Detox" then
 		if not RateLimiter.Check(player, "Detox", 2) then
-			return false, "Doucement !"
+			return false, GameService:T(player, "Slow down!")
 		end
 		GameService:Detox(player)
 		local multiplier = NumberFormatter.Multiplier(Formulas.GetRebirthMultiplier(data.Rebirths))
-		return true, "🌊 Respire... Gains permanents " .. multiplier
+		return true, GameService:T(player, "🌊 Breathe... Permanent earnings %s", multiplier)
 	end
 
 	data.Dopamine -= cost
@@ -613,7 +649,7 @@ local function onBuyUpgrade(player: Player, upgradeId: any)
 			Type = "Unlock",
 			Feature = upgrade.Feature,
 			UpgradeId = upgrade.Id,
-			Text = "✨ Nouveau : " .. upgrade.Icon .. " " .. upgrade.Name .. " !",
+			Text = GameService:T(player, "✨ New: %s %s!", upgrade.Icon, GameService:T(player, upgrade.Name)),
 		})
 		if upgrade.Feature == "Quests" then
 			-- Les quêtes deviennent visibles : on en propose des toutes neuves, à l'échelle
@@ -623,7 +659,7 @@ local function onBuyUpgrade(player: Player, upgradeId: any)
 
 	services.DVDService:SyncLogos(player)
 	GameService:SendState(player)
-	return true, string.format("%s %s niveau %d", upgrade.Icon, upgrade.Name, level + 1)
+	return true, GameService:T(player, "%s %s level %d", upgrade.Icon, GameService:T(player, upgrade.Name), level + 1)
 end
 
 local function onSetSetting(player: Player, name: any, value: any)
@@ -633,6 +669,11 @@ local function onSetSetting(player: Player, name: any, value: any)
 	if name == "ClickSound" then
 		-- Son de clic : l'Id doit exister dans Config.ClickSounds
 		if type(value) ~= "string" or #value > 64 or not CLICK_SOUNDS[value] then
+			return false
+		end
+	elseif name == "Language" then
+		-- Langue : "Auto" | "en" | "fr" (appliquée par le client au prochain lancement)
+		if type(value) ~= "string" or not VALID_LANGUAGES[value] then
 			return false
 		end
 	elseif not VALID_SETTINGS[name] or type(value) ~= "boolean" then

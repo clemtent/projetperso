@@ -10,9 +10,13 @@
 	(ClientState.Loaded), ou au bout de 8 secondes au plus tard.
 
 	API : LoadingScreen.Show() puis LoadingScreen.Hide() (appelé tout seul).
+	v5 : textes traduits (Locale ; mis à jour si la langue est choisie
+	pendant le chargement), toile à la taille de l'écran (téléphone), mode
+	sombre (DarkSkin).
 ]]
 
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Client = script.Parent.Parent
@@ -20,6 +24,8 @@ local Theme = require(Client.Theme)
 local UIUtil = require(Client.UIUtil)
 local Interface = require(Client.Interface)
 local ClientState = require(Client.ClientState)
+local DarkSkin = require(Client.DarkSkin)
+local Locale = require(ReplicatedStorage.Shared.Locale)
 
 local LoadingScreen = {}
 
@@ -27,14 +33,29 @@ local TIMEOUT = 8 -- secondes max d'affichage
 local MIN_TIME = 1.2 -- durée minimale (pour que l'animation se voie)
 local FADE_TIME = 0.6
 
+-- Astuces (une liste par langue, même nombre d'éléments)
 local TIPS = {
-	"Astuce : chaque amélioration ajoute quelque chose à l'écran.",
-	"Astuce : clique vite pour remplir la jauge de combo 🔥",
-	"Astuce : le logo DVD qui touche un coin, c'est le jackpot 📀",
-	"Astuce : l'océan 🌊 remet tout à zéro… mais multiplie tes gains.",
-	"Astuce : change de fond dans 🎨 Thèmes.",
-	"Préparation de ta dose de dopamine…",
+	en = {
+		"Tip: every upgrade adds something new to the screen.",
+		"Tip: click fast to fill the combo meter 🔥",
+		"Tip: the DVD logo hitting a corner is the jackpot 📀",
+		"Tip: the ocean 🌊 resets everything… but multiplies your gains.",
+		"Tip: change the background in 🎨 Themes.",
+		"Preparing your dose of dopamine…",
+	},
+	fr = {
+		"Astuce : chaque amélioration ajoute quelque chose à l'écran.",
+		"Astuce : clique vite pour remplir la jauge de combo 🔥",
+		"Astuce : le logo DVD qui touche un coin, c'est le jackpot 📀",
+		"Astuce : l'océan 🌊 remet tout à zéro… mais multiplie tes gains.",
+		"Astuce : change de fond dans 🎨 Thèmes.",
+		"Préparation de ta dose de dopamine…",
+	},
 }
+
+local function getTips(): { string }
+	return Locale.Pick(TIPS)
+end
 
 local gui: ScreenGui? = nil
 local renderConnection: RBXScriptConnection? = nil
@@ -94,10 +115,11 @@ function LoadingScreen.Show()
 		ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 232, 244)),
 	}), 90)
 
-	-- Toile 1280x720 centrée, mise à l'échelle comme le jeu
+	-- Toile centrée à la taille de celle du jeu, mise à l'échelle comme lui
+	local canvasSize = Interface.CanvasSize
 	local canvas = UIUtil.Create("Frame", {
 		Name = "Canvas",
-		Size = UDim2.fromOffset(Theme.DesignResolution.X, Theme.DesignResolution.Y),
+		Size = UDim2.fromOffset(canvasSize.X, canvasSize.Y),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
 		BackgroundTransparency = 1,
@@ -105,8 +127,9 @@ function LoadingScreen.Show()
 		Parent = screen,
 	})
 	local canvasScale = UIUtil.Create("UIScale", { Scale = Interface.Scale, Parent = canvas })
-	local scaleConnection = Interface.ScaleChanged:Connect(function(scale: number)
+	local scaleConnection = Interface.ScaleChanged:Connect(function(scale: number, size: Vector2)
 		canvasScale.Scale = scale
+		canvas.Size = UDim2.fromOffset(size.X, size.Y)
 	end)
 	screen.Destroying:Connect(function()
 		scaleConnection:Disconnect()
@@ -215,7 +238,7 @@ function LoadingScreen.Show()
 
 	local status = UIUtil.Label({
 		Name = "Status",
-		Text = "Chargement",
+		Text = Locale.T("Loading"),
 		Font = Theme.Fonts.Title,
 		TextColor3 = Theme.Colors.TextDim,
 		Size = UDim2.fromOffset(300, 22),
@@ -227,7 +250,7 @@ function LoadingScreen.Show()
 	})
 	local tip = UIUtil.Label({
 		Name = "Tip",
-		Text = TIPS[math.random(1, #TIPS)],
+		Text = getTips()[1],
 		TextColor3 = Theme.Colors.TextDim,
 		Size = UDim2.fromOffset(620, 22),
 		AnchorPoint = Vector2.new(0.5, 1),
@@ -253,7 +276,17 @@ function LoadingScreen.Show()
 	local progress = 0
 	local elapsed = 0
 	local tipClock = 0
-	local tipIndex = math.random(1, #TIPS)
+	local tipIndex = math.random(1, #getTips())
+	tip.Text = getTips()[tipIndex]
+	-- Langue choisie pendant le chargement : l'astuce change tout de suite
+	Locale.OnChanged(function()
+		if tip.Parent and not hiding then
+			local tips = getTips()
+			tipIndex = math.clamp(tipIndex, 1, #tips)
+			tip.Text = tips[tipIndex]
+		end
+	end)
+	DarkSkin.Register(screen)
 	renderConnection = RunService.RenderStepped:Connect(function(dt: number)
 		elapsed += dt
 		gradient.Rotation = 90 + math.sin(elapsed * 0.6) * 25
@@ -269,14 +302,15 @@ function LoadingScreen.Show()
 
 		if not hiding then
 			local dots = string.rep(".", math.floor(elapsed * 3) % 4)
-			status.Text = (loaded and "C'est parti" or "Chargement") .. dots
+			status.Text = (loaded and Locale.T("Let's go") or Locale.T("Loading")) .. dots
 		end
 
 		tipClock += dt
 		if tipClock > 2.6 and not hiding then
 			tipClock = 0
-			tipIndex = tipIndex % #TIPS + 1
-			tip.Text = TIPS[tipIndex]
+			local tips = getTips()
+			tipIndex = tipIndex % #tips + 1
+			tip.Text = tips[tipIndex]
 		end
 	end)
 

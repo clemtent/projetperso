@@ -15,10 +15,18 @@
 	Calques (du plus bas au plus haut), tous plein écran, transparents et
 	non "Active" (les clics passent à travers) :
 	  Background < Slots < Main < Overlay < Panels < Toasts < Effects < Cinematic
+
+	v5 : profil d'appareil (Interface.Device = "Phone" | "Tablet" | "Desktop",
+	signal Interface.DeviceChanged). Sur téléphone / tablette, la toile de
+	référence est plus petite (Theme.DeviceResolutions : 960x540, 1120x630) :
+	tout est donc affiché plus gros. Les composants s'adaptent (colonne
+	centrale, fenêtres, bandeaux) et les emplacements des stimuli rétrécissent
+	si besoin (voir Slots). Sur PC rien ne change (toile 1280x720).
 ]]
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
 
 local Theme = require(script.Parent.Theme)
 local UIUtil = require(script.Parent.UIUtil)
@@ -34,6 +42,31 @@ Interface.Layers = {} :: { [string]: Frame }
 Interface.Scale = 1
 Interface.CanvasSize = Theme.DesignResolution -- taille de la toile en pixels "design"
 Interface.ScaleChanged = Signal.new() -- (scale, canvasSize)
+Interface.Device = "Desktop" -- "Phone" | "Tablet" | "Desktop"
+Interface.DeviceChanged = Signal.new() -- (device)
+Interface.DesignResolution = Theme.DesignResolution -- toile de référence de l'appareil
+
+-- Forçage du profil (tests dans Studio) : nil = détection automatique
+local deviceOverride: string? = nil
+local updateScaleFn: (() -> ())? = nil
+
+-- Profil d'appareil : téléphone = tactile ET petit écran (< 500 px de côté),
+-- tablette = tactile et plus grand, sinon PC (un PC tactile avec souris reste "Desktop")
+local function detectDevice(): string
+	if deviceOverride then
+		return deviceOverride
+	end
+	local touch = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
+	if not touch then
+		return "Desktop"
+	end
+	local camera = workspace.CurrentCamera
+	local viewport = camera and camera.ViewportSize or Vector2.new(1280, 720)
+	if math.min(viewport.X, viewport.Y) < 500 then
+		return "Phone"
+	end
+	return "Tablet"
+end
 
 Interface.LayerOrder = { "Background", "Slots", "Main", "Overlay", "Panels", "Toasts", "Effects", "Cinematic" }
 
@@ -74,12 +107,20 @@ function Interface.Build(): ScreenGui
 		local themeId = (data and type(data.Themes) == "table" and data.Themes.Equipped) or "Classic"
 		local theme = Config.ThemesById[themeId]
 		local dark = ClientState.DarkMode
-		local key = tostring(themeId) .. (dark and ":dark" or ":light")
+		-- Mode sombre du joueur : seul le thème Classique passe en fond sombre
+		-- (les autres thèmes gardent leur fond ; le néon reste presque noir)
+		local userDarkClassic = ClientState.HasDarkSource("User") and themeId == "Classic"
+		local neonDark = dark and not userDarkClassic and (ClientState.HasDarkSource("Stimuli") or ClientState.HasDarkSource("Main"))
+		local key = tostring(themeId) .. (dark and ":dark" or ":light") .. (userDarkClassic and ":user" or "") .. (neonDark and ":neon" or "")
 		if key == lastKey then
 			return
 		end
 		lastKey = key
-		if theme and (theme.Dark or not dark) then
+		if userDarkClassic and not neonDark then
+			backdrop.BackgroundColor3 = Color3.new(1, 1, 1)
+			backdropGradient.Color = ColorSequence.new(Theme.DarkUI.Background, Theme.DarkUI.BackgroundBottom)
+			backdropGradient.Enabled = true
+		elseif theme and (theme.Dark or not neonDark) then
 			-- Couleurs du thème (sombre ou clair)
 			backdrop.BackgroundColor3 = Color3.new(1, 1, 1)
 			backdropGradient.Color = ColorSequence.new(theme.Top, theme.Bottom)
@@ -95,6 +136,7 @@ function Interface.Build(): ScreenGui
 		end
 	end
 	ClientState.DarkModeChanged:Connect(applyBackdrop)
+	ClientState.DarkSourcesChanged:Connect(applyBackdrop)
 	ClientState.Changed:Connect(applyBackdrop)
 	applyBackdrop()
 
@@ -136,23 +178,60 @@ function Interface.Build(): ScreenGui
 		if available.X < 1 or available.Y < 1 then
 			return
 		end
-		local design = Theme.DesignResolution
+		local device = detectDevice()
+		local design = Theme.DeviceResolutions[device] or Theme.DesignResolution
 		local scale = math.clamp(math.min(available.X / design.X, available.Y / design.Y), Theme.MinScale, Theme.MaxScale)
 		local canvas = Vector2.new(available.X / scale, available.Y / scale)
+		local deviceChanged = device ~= Interface.Device
+		Interface.Device = device
+		Interface.DesignResolution = design
 		Interface.Scale = scale
 		Interface.CanvasSize = canvas
 		uiScale.Scale = scale
 		-- Root fait (zone sûre / échelle) pour la couvrir exactement une fois agrandi
 		root.Size = UDim2.fromOffset(canvas.X, canvas.Y)
+		if deviceChanged then
+			Interface.DeviceChanged:Fire(device)
+		end
 		Interface.ScaleChanged:Fire(scale, canvas)
 	end
+	updateScaleFn = updateScale
 
 	screenGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateScale)
+	-- Tactile / souris qui apparaissent (tablette + clavier...) : on revérifie le profil
+	UserInputService.LastInputTypeChanged:Connect(function()
+		if detectDevice() ~= Interface.Device then
+			updateScale()
+		end
+	end)
+	Interface.Device = detectDevice()
 	updateScale()
 
 	Interface.ScreenGui = screenGui
 	Interface.Root = root
 	return screenGui
+end
+
+-- Vrai sur téléphone (interface compacte : une seule ligne de menus, etc.)
+function Interface.IsPhone(): boolean
+	return Interface.Device == "Phone"
+end
+
+-- Vrai sur téléphone ou tablette (écran tactile sans souris)
+function Interface.IsTouch(): boolean
+	return Interface.Device ~= "Desktop"
+end
+
+-- Force un profil ("Phone" | "Tablet" | "Desktop") pour tester dans Studio ; nil = auto
+function Interface.SetDeviceOverride(device: string?)
+	if device ~= nil and Theme.DeviceResolutions[device] == nil then
+		return
+	end
+	deviceOverride = device
+	local update = updateScaleFn
+	if update then
+		update()
+	end
 end
 
 -- Convertit une position écran (pixels réels, ex. AbsolutePosition) en

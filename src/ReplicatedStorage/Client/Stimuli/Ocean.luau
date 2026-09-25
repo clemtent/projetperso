@@ -15,6 +15,8 @@
 local Ocean = {}
 Ocean.Slot = "Cinematic" -- pour la documentation : plein écran, calque Cinematic
 
+local Locale = require(game:GetService("ReplicatedStorage").Shared.Locale)
+
 local HORIZON = 0.58
 
 local WAVE_LAYERS = {
@@ -330,7 +332,7 @@ function Ocean.Play(ctx)
 	end
 
 	-- "Respire..." + cercle qui gonfle (inspiration)
-	showText(mainText, mainStroke, "Respire...", 0.6)
+	showText(mainText, mainStroke, Locale.T("Breathe..."), 0.6)
 	UIUtil.Tween(ringStroke, 0.5, { Transparency = 0.4 })
 	UIUtil.Tween(ringScale, 1.6, { Scale = 1.25 }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
 	if not waitAlive(1.6) then
@@ -344,7 +346,7 @@ function Ocean.Play(ctx)
 	end
 
 	-- "Tout est calme."
-	showText(mainText, mainStroke, "Tout est calme.", 0.5)
+	showText(mainText, mainStroke, Locale.T("All is calm."), 0.5)
 	if not waitAlive(1.2) then
 		return
 	end
@@ -356,10 +358,10 @@ function Ocean.Play(ctx)
 	-- "Rebirth x<mult>"
 	mainScale.Scale = 0.6
 	mainText.TextColor3 = Color3.fromRGB(255, 244, 200)
-	showText(mainText, mainStroke, "Rebirth " .. ctx.Format.Multiplier(multiplier), 0.35)
+	showText(mainText, mainStroke, Locale.T("Rebirth %s", ctx.Format.Multiplier(multiplier)), 0.35)
 	UIUtil.Tween(mainScale, 0.5, { Scale = 1 }, Enum.EasingStyle.Back)
-	local visit = rebirths > 0 and ("Visite n°" .. rebirths .. " à l'océan • ") or ""
-	showText(subText, subStroke, visit .. "tes gains sont multipliés pour toujours 🌊", 0.5)
+	local visit = rebirths > 0 and Locale.T("Ocean visit #%s • ", tostring(rebirths)) or ""
+	showText(subText, subStroke, visit .. Locale.T("your gains are multiplied forever 🌊"), 0.5)
 	ctx.Sound.Play("Bonus", 0.8)
 	if not waitAlive(1.3) then
 		return

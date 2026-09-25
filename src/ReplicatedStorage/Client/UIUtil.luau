@@ -656,10 +656,12 @@ function UIUtil.Tabs(props: { [string]: any }): Tabs
 	end
 
 	for index, tab in ipairs(list) do
+		-- Zone cliquable un peu plus haute que l'onglet (4 px de chaque côté) :
+		-- plus facile à toucher au doigt, le texte reste centré
 		local button = UIUtil.Create("TextButton", {
 			Name = tostring(tab.Id),
-			Size = UDim2.new(1 / count, 0, 1, 0),
-			Position = UDim2.fromScale((index - 1) / count, 0),
+			Size = UDim2.new(1 / count, 0, 1, 8),
+			Position = UDim2.new((index - 1) / count, 0, 0, -4),
 			BackgroundTransparency = 1,
 			AutoButtonColor = false,
 			Font = Theme.Fonts.Title,

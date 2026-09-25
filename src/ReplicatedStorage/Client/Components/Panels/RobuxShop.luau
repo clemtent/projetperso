@@ -36,10 +36,12 @@ local Notifications = require(script.Parent.Parent.Notifications)
 local Config = require(ReplicatedStorage.Shared.Config)
 local Formulas = require(ReplicatedStorage.Shared.Formulas)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
+local Locale = require(ReplicatedStorage.Shared.Locale)
 
+-- Title / Subtitle en anglais : traduits par PanelManager
 local RobuxShop = {
-	Title = "💎 Boutique Robux",
-	Subtitle = "Merci de soutenir le jeu 💖",
+	Title = "💎 Robux Shop",
+	Subtitle = "Thanks for supporting the game 💖",
 	Color = Theme.Colors.Robux,
 	Size = Vector2.new(800, 600),
 }
@@ -59,12 +61,12 @@ local PRODUCT_COLORS = {
 	Boost = Theme.Colors.Boost,
 	ServerRush = Theme.Colors.Pink,
 }
--- Rubans de mise en avant (Id de l'offre -> texte)
+-- Rubans de mise en avant (Id de l'offre -> texte anglais, traduit à l'affichage)
 local HIGHLIGHTS = {
-	X10 = "🔥 MEILLEURE OFFRE",
-	VIP = "⭐ POPULAIRE",
-	PackL = "💰 MEILLEUR PRIX",
-	Boost5 = "⚡ PUISSANT",
+	X10 = "🔥 BEST DEAL",
+	VIP = "⭐ POPULAR",
+	PackL = "💰 BEST VALUE",
+	Boost5 = "⚡ POWERFUL",
 }
 
 local PENDING_TIMEOUT = 20 -- secondes d'attente max de l'activation d'un pass acheté
@@ -160,7 +162,7 @@ local function priceText(offer: Offer): (string, boolean)
 	local cached = priceCache[cacheKey(offer.IsPass, offer.Id)]
 	if cached then
 		if not cached.ForSale or not cached.Price then
-			return "Indisponible", false
+			return Locale.T("Unavailable"), false
 		end
 		return "R$ " .. NumberFormatter.WithSpaces(cached.Price), true
 	end
@@ -180,10 +182,10 @@ local function prompt(offer: Offer)
 		SoundManager.Play("Error", 0.8)
 		UIUtil.Shake(offer.Button)
 		Notifications.Toast(
-			"Colle l'ID de « " .. tostring(offer.Def.Name) .. " » dans Config.Monetization pour le vendre.",
+			Locale.T("Paste the ID of “%s” in Config.Monetization to sell it.", Locale.T(tostring(offer.Def.Name))),
 			Theme.Colors.Orange,
 			5,
-			"Aperçu Studio",
+			Locale.T("Studio preview"),
 			false,
 			"🛠️"
 		)
@@ -197,7 +199,7 @@ local function prompt(offer: Offer)
 	if not forSale then
 		SoundManager.Play("Error", 0.7)
 		UIUtil.Shake(offer.Button)
-		Notifications.Toast("Cette offre n'est pas en vente pour le moment.", Theme.Colors.Red)
+		Notifications.Toast(Locale.T("This offer isn't on sale right now."), Theme.Colors.Red)
 		return
 	end
 	SoundManager.Play("Click", 1.2)
@@ -211,7 +213,7 @@ local function prompt(offer: Offer)
 	end)
 	if not ok then
 		warn("[RobuxShop] Impossible d'ouvrir l'achat : " .. tostring(err))
-		Notifications.Toast("Achat impossible pour le moment, réessaie.", Theme.Colors.Red)
+		Notifications.Toast(Locale.T("Can't buy right now, try again."), Theme.Colors.Red)
 	end
 end
 
@@ -238,7 +240,7 @@ function refreshOffer(offer: Offer)
 	end
 	if owned then
 		pendingPasses[offer.Id] = nil
-		styleButton(offer.Button, "✔ Acheté", Color3.fromRGB(222, 247, 232), Theme.Colors.RobuxDark, false)
+		styleButton(offer.Button, Locale.T("✔ Purchased"), Color3.fromRGB(222, 247, 232), Theme.Colors.RobuxDark, false)
 		offer.Stroke.Color = Theme.Colors.Robux
 		offer.Stroke.Thickness = 2
 		offer.Stroke.Transparency = 0
@@ -249,11 +251,11 @@ function refreshOffer(offer: Offer)
 	offer.Stroke.Transparency = offer.Hovered and 0 or 0.35
 	local pendingSince = offer.IsPass and pendingPasses[offer.Id]
 	if pendingSince and os.clock() - pendingSince < PENDING_TIMEOUT then
-		styleButton(offer.Button, "⏳ Activation…", Theme.Colors.PanelLight, Theme.Colors.TextDim, false)
+		styleButton(offer.Button, Locale.T("⏳ Activating…"), Theme.Colors.PanelLight, Theme.Colors.TextDim, false)
 		return
 	end
 	if offer.Id == 0 then
-		styleButton(offer.Button, "🛠️ ID à configurer", Theme.Colors.PanelLight, Theme.Colors.TextDim, false)
+		styleButton(offer.Button, Locale.T("🛠️ ID to set up"), Theme.Colors.PanelLight, Theme.Colors.TextDim, false)
 		return
 	end
 	local text, forSale = priceText(offer)
@@ -275,14 +277,14 @@ local function refreshExtra(offer: Offer, data)
 	local color = Theme.Colors.TextDim
 	if offer.IsPass then
 		if def.Multiplier then
-			text = "📈 Gains " .. NumberFormatter.Multiplier(def.Multiplier) .. " pour toujours"
+			text = Locale.T("📈 Gains %s forever", NumberFormatter.Multiplier(def.Multiplier))
 			color = offer.Color:Lerp(Color3.new(0, 0, 0), 0.35)
 		elseif def.AutoClicksPerSecond then
-			text = "🤖 " .. tostring(def.AutoClicksPerSecond) .. " clics / seconde"
+			text = Locale.T("🤖 %s clicks / second", tostring(def.AutoClicksPerSecond))
 			color = offer.Color:Lerp(Color3.new(0, 0, 0), 0.35)
 		end
 		if def.UnlockPremiumThemes then
-			text = (text ~= "" and (text .. " • ") or "") .. "🎨 Thèmes Premium"
+			text = (text ~= "" and (text .. " • ") or "") .. Locale.T("🎨 Premium themes")
 		end
 	elseif def.Kind == "Dopamine" then
 		local stats = { PerSecond = tonumber(data and data.PerSecond) or 0, ClickValue = tonumber(data and data.ClickValue) or 0 }
@@ -292,13 +294,13 @@ local function refreshExtra(offer: Offer, data)
 	elseif def.Kind == "Boost" then
 		local multiplier, remaining = ClientState.GetBoost()
 		if remaining > 0 then
-			text = string.format("⏱️ Actif : %s • %s", NumberFormatter.Multiplier(multiplier), UIUtil.FormatClock(remaining))
+			text = Locale.T("⏱️ Active: %s • %s", NumberFormatter.Multiplier(multiplier), UIUtil.FormatClock(remaining))
 			color = Theme.Colors.Boost
 		else
-			text = "⏱️ Durée : " .. NumberFormatter.Time(tonumber(def.Duration) or 0)
+			text = Locale.T("⏱️ Duration: %s", NumberFormatter.Time(tonumber(def.Duration) or 0))
 		end
 	elseif def.Kind == "ServerRush" then
-		text = "🎉 Tout le serveur en profite"
+		text = Locale.T("🎉 The whole server benefits")
 		color = Theme.Colors.Pink
 	end
 	if extra.Text ~= text then
@@ -333,11 +335,11 @@ local function refreshStatus(data)
 	local multiplier, remaining = ClientState.GetBoost()
 	local vip = ClientState.IsVIP()
 	if remaining > 0 then
-		heroStatus.Text = "🔥 Ton boost est actif : profites-en !"
+		heroStatus.Text = Locale.T("🔥 Your boost is active: enjoy it!")
 	elseif vip then
-		heroStatus.Text = "👑 Tu es VIP — merci pour ton soutien !"
+		heroStatus.Text = Locale.T("👑 You're VIP — thanks for your support!")
 	else
-		heroStatus.Text = "Les achats sont liés à ton compte et gardés pour toujours."
+		heroStatus.Text = Locale.T("Purchases are tied to your account and kept forever.")
 	end
 	local bonus = tonumber(data and data.BonusMultiplier) or ClientState.GetPassMultiplier()
 	setChip(heroChips.VIP, vip, "👑 VIP")
@@ -401,7 +403,7 @@ local function buildHero(content: Frame)
 
 	local title = UIUtil.Label({
 		Name = "HeroTitle",
-		Text = "Boutique Robux",
+		Text = Locale.T("Robux Shop"),
 		Font = Theme.Fonts.Title,
 		TextColor3 = WHITE,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -462,7 +464,7 @@ local function buildHero(content: Frame)
 	-- Toujours visible : rappel "achat sécurisé"
 	local safe = chip(4, WHITE, Theme.Colors.RobuxDark)
 	safe.Visible = true
-	setChip(safe, true, "🔒 Paiement Roblox sécurisé")
+	setChip(safe, true, Locale.T("🔒 Secure Roblox payment"))
 end
 
 ----------------------------------------------------------------------
@@ -530,7 +532,7 @@ local function buildCard(grid: ScrollingFrame, def, isPass: boolean, order: numb
 	-- "Pour toujours" / "Rachetable"
 	local kindChip = UIUtil.Chip({
 		Name = "Kind",
-		Text = isPass and "♾️ POUR TOUJOURS" or "🔁 RACHETABLE",
+		Text = isPass and Locale.T("♾️ FOREVER") or Locale.T("🔁 REBUYABLE"),
 		Color = WHITE,
 		TextColor3 = color:Lerp(Color3.new(0, 0, 0), 0.45),
 		Height = 18,
@@ -546,7 +548,7 @@ local function buildCard(grid: ScrollingFrame, def, isPass: boolean, order: numb
 	if highlight then
 		local ribbon = UIUtil.Chip({
 			Name = "Highlight",
-			Text = highlight,
+			Text = Locale.T(highlight),
 			Color = Theme.Colors.Premium,
 			TextColor3 = Theme.Colors.TextDark,
 			Height = 18,
@@ -563,7 +565,7 @@ local function buildCard(grid: ScrollingFrame, def, isPass: boolean, order: numb
 	if isPass then
 		local ownedChip = UIUtil.Chip({
 			Name = "Owned",
-			Text = "✔ ACHETÉ",
+			Text = Locale.T("✔ PURCHASED"),
 			Color = Theme.Colors.Robux,
 			TextColor3 = WHITE,
 			Height = 22,
@@ -580,7 +582,7 @@ local function buildCard(grid: ScrollingFrame, def, isPass: boolean, order: numb
 
 	UIUtil.Label({
 		Name = "OfferName",
-		Text = tostring(def.Name),
+		Text = Locale.T(tostring(def.Name)),
 		Font = Theme.Fonts.Title,
 		Size = UDim2.new(1, -16, 0, 22),
 		Position = UDim2.fromOffset(8, 114),
@@ -590,7 +592,7 @@ local function buildCard(grid: ScrollingFrame, def, isPass: boolean, order: numb
 	})
 	local desc = UIUtil.Create("TextLabel", {
 		Name = "Description",
-		Text = tostring(def.Description or ""),
+		Text = Locale.T(tostring(def.Description or "")),
 		Font = Theme.Fonts.Body,
 		TextSize = 14,
 		TextColor3 = Theme.Colors.TextDim,
@@ -687,7 +689,7 @@ function RobuxShop.Build(content: Frame)
 	UIUtil.Tabs({
 		Parent = content,
 		Tabs = {
-			{ Id = "All", Text = "⭐ Tout" },
+			{ Id = "All", Text = Locale.T("⭐ All") },
 			{ Id = "Passes", Text = "🎟️ Passes" },
 			{ Id = "Dopamine", Text = "💧 Dopamine" },
 			{ Id = "Boosts", Text = "⚡ Boosts" },
@@ -736,8 +738,8 @@ function RobuxShop.Build(content: Frame)
 		UIUtil.Corner(notice, Theme.Radius.S)
 		UIUtil.Stroke(notice, Theme.Colors.Orange, 1, 0.5)
 		UIUtil.Label({
-			Text = string.format(
-				"🛠️ Aperçu Studio : %d offre(s) sans ID (0) — cachées dans le jeu publié. Colle tes IDs dans Config.Monetization.",
+			Text = Locale.T(
+				"🛠️ Studio preview: %d offer(s) without an ID (0) — hidden in the published game. Paste your IDs in Config.Monetization.",
 				hidden
 			),
 			TextColor3 = Color3.fromRGB(150, 80, 0),
@@ -788,7 +790,7 @@ function RobuxShop.Build(content: Frame)
 
 	filterEmpty = UIUtil.Label({
 		Name = "FilterEmpty",
-		Text = "Rien dans cette catégorie pour le moment.",
+		Text = Locale.T("Nothing in this category for now."),
 		TextColor3 = Theme.Colors.TextDim,
 		Size = UDim2.new(1, 0, 0, 30),
 		Position = UDim2.fromOffset(0, top + 40),
@@ -823,7 +825,7 @@ function RobuxShop.Build(content: Frame)
 			Parent = bubble,
 		})
 		UIUtil.Label({
-			Text = "Bientôt disponible",
+			Text = Locale.T("Coming soon"),
 			Font = Theme.Fonts.Title,
 			Size = UDim2.new(1, -40, 0, 30),
 			Position = UDim2.fromOffset(20, 156),
@@ -831,7 +833,7 @@ function RobuxShop.Build(content: Frame)
 			Parent = empty,
 		})
 		UIUtil.Label({
-			Text = "La boutique ouvre très bientôt. Reviens nous voir ! 💖",
+			Text = Locale.T("The shop opens very soon. Come back and see us! 💖"),
 			TextColor3 = Theme.Colors.TextDim,
 			Size = UDim2.new(1, -80, 0, 22),
 			Position = UDim2.fromOffset(40, 192),

@@ -75,13 +75,16 @@ function AchievementService:Check(player: Player)
 			if value >= achievement.Goal then
 				data.Achievements[achievement.Id] = true
 				services.GameService:AddDopamine(player, achievement.Reward, false)
+				-- Id envoyé : le client peut afficher Locale.T(Config.AchievementsById[Id].Name).
+				-- Title, Text et Name sont déjà dans la langue du joueur.
+				local name = services.GameService:T(player, achievement.Name)
 				services.GameService:Notify(player, {
 					Type = "Achievement",
 					Icon = achievement.Icon,
-					Title = "SUCCÈS DÉBLOQUÉ !",
-					Text = achievement.Icon .. " " .. achievement.Name .. "  (+" .. NumberFormatter.Format(achievement.Reward) .. ")",
+					Title = services.GameService:T(player, "ACHIEVEMENT UNLOCKED!"),
+					Text = achievement.Icon .. " " .. name .. "  (+" .. NumberFormatter.Format(achievement.Reward) .. ")",
 					Id = achievement.Id,
-					Name = achievement.Name,
+					Name = name,
 					Reward = achievement.Reward,
 					BadgeAwarded = achievement.BadgeId > 0,
 				})

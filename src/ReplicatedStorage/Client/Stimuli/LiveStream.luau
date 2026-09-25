@@ -31,6 +31,8 @@
 local Debris = game:GetService("Debris")
 local TweenService = game:GetService("TweenService")
 
+local Locale = require(game:GetService("ReplicatedStorage").Shared.Locale)
+
 local LiveStream = {}
 LiveStream.Slot = "L3"
 
@@ -68,8 +70,14 @@ local BUTTER_BITES = 8 -- bouchées avant qu'il ne reste plus rien
 local FOODS = { "🥪", "🍟", "🍔", "🌭", "🍕", "🥓", "🍗", "🌮", "🍩", "🥐", "🍪", "🌯", "🍙", "🧁" }
 local FOOD_OFFSETS = { -29, -10, 10, 29 }
 
-local CRUNCH_WORDS = { "CRUNCH !", "MIAM", "CROC !", "*crounch*", "SLURP", "CRAC !", "NOM NOM", "CRISP !", "MMMH", "SCROUNCH" }
-local BUTTER_WORDS = { "CROUNCH !", "*CROUNCH*", "CRAC !", "SCRONCH", "CRUNCH !!" }
+local CRUNCH_WORDS = {
+	en = { "CRUNCH!", "YUM", "CHOMP!", "*crunch*", "SLURP", "CRACK!", "NOM NOM", "CRISP!", "MMMH", "SCRUNCH" },
+	fr = { "CRUNCH !", "MIAM", "CROC !", "*crounch*", "SLURP", "CRAC !", "NOM NOM", "CRISP !", "MMMH", "SCROUNCH" },
+}
+local BUTTER_WORDS = {
+	en = { "CRONCH!", "*CRONCH*", "CRACK!", "SCRONCH", "CRUNCH!!" },
+	fr = { "CROUNCH !", "*CROUNCH*", "CRAC !", "SCRONCH", "CRUNCH !!" },
+}
 local POP_COLORS = {
 	Color3.fromRGB(255, 214, 40),
 	Color3.fromRGB(255, 90, 160),
@@ -100,30 +108,57 @@ local MODS = { Tonton_Jean = true, Lulu_ASMR = true, Moustache_Pro = true, Madel
 local NAME_COLORS = { "#FF6B9A", "#6BD5FF", "#FFD34D", "#9DFF6B", "#C38BFF", "#FF9F45", "#5CFFD1", "#FF7AF0", "#7AA2FF", "#FFB3C7" }
 
 local MESSAGES = {
-	"W", "+1", "incroyable", "c'est quoi ce live", "le crunch était parfait", "encore !!",
-	"j'ai faim maintenant", "elle mange à 3h du mat ?", "premier", "ASMR de qualité", "MIAM",
-	"c'est tellement satisfaisant", "je regarde au lieu de réviser", "mdr", "le son 🤤",
-	"maman si tu vois ça coucou", "elle a même pas mâché", "trop bien", "respect",
-	"et la sauce ??", "GG", "qui est là depuis le début ?", "j'ai lâché mon goûter",
-	"5 étoiles", "mon moment préféré", "L", "elle va finir l'assiette ??", "le casque est trop beau",
-	"je suis au régime 😭", "le micro 😳", "c'est l'heure du goûter", "on veut des frites !",
-	"j'entends le crunch d'ici", "reviens manger chez moi", "ratio", "je m'endors 😴",
-	"le ring light 😍", "trop chou le sweat", "quelqu'un a vu mes lunettes ?", "je devais dormir il y a 2h",
-	"c'est mieux qu'un film", "ma prof regarde aussi je crois", "on est combien là ?", "le chat est chaud ce soir",
-	"bonjour de Marseille ☀️", "coucou de Lyon 👋", "salut de Montréal ❄️", "bisous de Bordeaux 🍷",
-	"je mange des chips en même temps", "on peut avoir un mukbang raclette ?", "prochain live : fondue 🧀",
-	"c'est mon rituel du soir", "elle est trop forte", "comment elle a pas mal au ventre ??",
-	"moi aussi je veux un micro moumoute", "ça me détend trop", "mon chat regarde avec moi 🐈",
-	"je suis en cours chut 🤫", "lol", "ptdr", "j'avoue", "grave", "je like chaque crunch",
-	"qui mange devant l'écran aussi ?", "le bruit est hypnotisant", "je reste jusqu'à la fin",
-	"on est bien là", "vivement demain", "je partage à mes potes", "c'est ma dose de dopamine",
-	"clique clique clique", "j'ai oublié pourquoi j'étais là", "encore une assiette !!",
-	"c'est quoi la musique ?", "le son est parfait", "vous entendez ça ??", "jsuis pas prêt",
-	"trop mims", "elle a des goûts de luxe", "c'est la meilleure streameuse", "notif activée 🔔",
-	"je devrais faire mes devoirs...", "t'as essayé les cornichons ?", "team frites 🍟", "team nuggets",
-	"il est quelle heure chez vous ?", "10 minutes que je souris devant mon écran", "ça sent bon d'ici",
-	"le chat va trop vite 😵", "qui veut un bout ?", "c'est mon anniv aujourd'hui 🎂", "joyeux anniv !!",
-	"j'ai mis le son à fond", "mes voisins entendent le crunch", "live de l'année", "je suis addict",
+	en = {
+		"W", "+1", "insane", "what is this stream", "that crunch was perfect", "again!!", "i'm hungry now",
+		"she's eating at 3am??", "first", "quality ASMR", "YUM", "so satisfying",
+		"watching this instead of studying", "lmao", "the sound 🤤", "hi mom if you see this",
+		"she didn't even chew", "so good", "respect", "where's the sauce??", "GG",
+		"who's been here since the start?", "dropped my snack", "5 stars", "my favorite part", "L",
+		"is she gonna finish the plate??", "love the headset", "i'm on a diet 😭", "the mic 😳", "snack time",
+		"we want fries!", "i can hear the crunch from here", "come eat at my place", "ratio", "falling asleep 😴",
+		"the ring light 😍", "that hoodie is so cute", "has anyone seen my glasses?",
+		"i was supposed to sleep 2h ago", "better than a movie", "pretty sure my teacher watches too",
+		"how many of us are here?", "chat is wild tonight", "hello from Texas ☀️", "hi from London 👋",
+		"greetings from Toronto ❄️", "love from Napa Valley 🍷", "eating chips at the same time",
+		"can we get a cheese mukbang?", "next stream: fondue 🧀", "this is my nightly ritual",
+		"she's so good at this", "how does her stomach not hurt??", "i want a fluffy mic too",
+		"this is so relaxing", "my cat is watching with me 🐈", "i'm in class shh 🤫", "lol", "lmfao", "fr", "real",
+		"i like every crunch", "who else eats in front of the screen?", "the sound is hypnotic",
+		"staying till the end", "we vibing", "can't wait for tomorrow", "sharing this with my friends",
+		"my daily dose of dopamine", "click click click", "forgot why i came here", "another plate!!",
+		"what's the song?", "audio is perfect", "do you guys hear that??", "i'm not ready", "so yummy",
+		"she has fancy taste", "best streamer ever", "notifs on 🔔", "i should be doing homework...",
+		"have you tried pickles?", "team fries 🍟", "team nuggets", "what time is it where you are?",
+		"been smiling at my screen for 10 min", "i can smell it from here", "chat is moving too fast 😵",
+		"who wants a bite?", "it's my birthday today 🎂", "happy birthday!!", "volume on max",
+		"my neighbors can hear the crunch", "stream of the year", "i'm addicted",
+	},
+	fr = {
+		"W", "+1", "incroyable", "c'est quoi ce live", "le crunch était parfait", "encore !!",
+		"j'ai faim maintenant", "elle mange à 3h du mat ?", "premier", "ASMR de qualité", "MIAM",
+		"c'est tellement satisfaisant", "je regarde au lieu de réviser", "mdr", "le son 🤤",
+		"maman si tu vois ça coucou", "elle a même pas mâché", "trop bien", "respect", "et la sauce ??", "GG",
+		"qui est là depuis le début ?", "j'ai lâché mon goûter", "5 étoiles", "mon moment préféré", "L",
+		"elle va finir l'assiette ??", "le casque est trop beau", "je suis au régime 😭", "le micro 😳",
+		"c'est l'heure du goûter", "on veut des frites !", "j'entends le crunch d'ici", "reviens manger chez moi",
+		"ratio", "je m'endors 😴", "le ring light 😍", "trop chou le sweat", "quelqu'un a vu mes lunettes ?",
+		"je devais dormir il y a 2h", "c'est mieux qu'un film", "ma prof regarde aussi je crois",
+		"on est combien là ?", "le chat est chaud ce soir", "bonjour de Marseille ☀️", "coucou de Lyon 👋",
+		"salut de Montréal ❄️", "bisous de Bordeaux 🍷", "je mange des chips en même temps",
+		"on peut avoir un mukbang raclette ?", "prochain live : fondue 🧀", "c'est mon rituel du soir",
+		"elle est trop forte", "comment elle a pas mal au ventre ??", "moi aussi je veux un micro moumoute",
+		"ça me détend trop", "mon chat regarde avec moi 🐈", "je suis en cours chut 🤫", "lol", "ptdr", "j'avoue",
+		"grave", "je like chaque crunch", "qui mange devant l'écran aussi ?", "le bruit est hypnotisant",
+		"je reste jusqu'à la fin", "on est bien là", "vivement demain", "je partage à mes potes",
+		"c'est ma dose de dopamine", "clique clique clique", "j'ai oublié pourquoi j'étais là",
+		"encore une assiette !!", "c'est quoi la musique ?", "le son est parfait", "vous entendez ça ??",
+		"jsuis pas prêt", "trop mims", "elle a des goûts de luxe", "c'est la meilleure streameuse",
+		"notif activée 🔔", "je devrais faire mes devoirs...", "t'as essayé les cornichons ?", "team frites 🍟",
+		"team nuggets", "il est quelle heure chez vous ?", "10 minutes que je souris devant mon écran",
+		"ça sent bon d'ici", "le chat va trop vite 😵", "qui veut un bout ?", "c'est mon anniv aujourd'hui 🎂",
+		"joyeux anniv !!", "j'ai mis le son à fond", "mes voisins entendent le crunch", "live de l'année",
+		"je suis addict",
+	},
 }
 -- Messages uniquement composés d'emotes (affichés en plus gros)
 local EMOTE_MESSAGES = {
@@ -131,41 +166,121 @@ local EMOTE_MESSAGES = {
 	"😍😍", "🤯", "🙌🙌", "✨✨✨", "🎉🎉🎉", "🧈🧈", "🍔🍕🌭", "😋😋", "💖", "🥺👉👈",
 }
 local EAT_REACTIONS = {
-	"CRUNCH 🔥", "le son 🤤🤤", "OUIIII", "MIAM", "encore une !", "W crunch", "ASMR 🔊",
-	"cette bouchée 😳", "elle a tout mangé d'un coup", "le crunch m'a traversé", "croustillant validé ✅",
-	"10/10 le bruit", "j'ai frissonné", "encore encore encore", "ce son devrait être interdit",
+	en = {
+		"CRUNCH 🔥", "the sound 🤤🤤", "YESSS", "YUM", "another one!", "W crunch", "ASMR 🔊", "that bite 😳",
+		"she ate it all in one go", "that crunch went right through me", "crispiness approved ✅", "10/10 sound",
+		"i got chills", "more more more", "this sound should be illegal",
+	},
+	fr = {
+		"CRUNCH 🔥", "le son 🤤🤤", "OUIIII", "MIAM", "encore une !", "W crunch", "ASMR 🔊", "cette bouchée 😳",
+		"elle a tout mangé d'un coup", "le crunch m'a traversé", "croustillant validé ✅", "10/10 le bruit",
+		"j'ai frissonné", "encore encore encore", "ce son devrait être interdit",
+	},
 }
 local BUTTER_REACTIONS = {
-	"*CROUNCH*", "le beurre 😭😭", "CROUNCH 🧈", "ASMR BEURRE 🔊", "qui croque du beurre ??",
-	"le son du beurre 🤤", "c'est illégal ça", "BEURRE CROUSTILLANT", "*crounch crounch*",
-	"le beurre a crié", "BEURRE > tout", "qui a eu l'idée du beurre 😭", "demi-sel ou doux ??", "encore le beurre !!",
+	en = {
+		"*CRONCH*", "the butter 😭😭", "CRONCH 🧈", "BUTTER ASMR 🔊", "who bites into butter??", "the butter sound 🤤",
+		"this should be illegal", "CRUNCHY BUTTER", "*cronch cronch*", "the butter screamed", "BUTTER > everything",
+		"whose idea was the butter 😭", "salted or unsalted??", "more butter!!",
+	},
+	fr = {
+		"*CROUNCH*", "le beurre 😭😭", "CROUNCH 🧈", "ASMR BEURRE 🔊", "qui croque du beurre ??", "le son du beurre 🤤",
+		"c'est illégal ça", "BEURRE CROUSTILLANT", "*crounch crounch*", "le beurre a crié", "BEURRE > tout",
+		"qui a eu l'idée du beurre 😭", "demi-sel ou doux ??", "encore le beurre !!",
+	},
 }
 local DONATION_REACTIONS = {
-	"MERCI POUR LE DON 💸", "le boss 🤑", "GG le don !!", "quel généreux", "W donateur",
-	"moi aussi je veux donner", "c'est la fête 🎉", "le mécène du live", "pluie de billets 💵",
-	"t'es le meilleur", "respect au donateur 🙏", "💸💸💸",
+	en = {
+		"THANKS FOR THE DONO 💸", "the boss 🤑", "GG on the dono!!", "so generous", "W donator", "i wanna donate too",
+		"party time 🎉", "patron of the stream", "it's raining cash 💵", "you're the best",
+		"respect to the donator 🙏", "💸💸💸",
+	},
+	fr = {
+		"MERCI POUR LE DON 💸", "le boss 🤑", "GG le don !!", "quel généreux", "W donateur",
+		"moi aussi je veux donner", "c'est la fête 🎉", "le mécène du live", "pluie de billets 💵",
+		"t'es le meilleur", "respect au donateur 🙏", "💸💸💸",
+	},
 }
 local FOLLOW_REACTIONS = {
-	"bienvenue !! 💜", "un nouvel abonné 🎉", "W follow", "bienvenue dans la team",
-	"on est une famille ici", "enfin abonné 😤", "les dons sont ouverts !!", "💜💜💜",
+	en = {
+		"welcome!! 💜", "a new follower 🎉", "W follow", "welcome to the team", "we're a family here",
+		"finally followed 😤", "donations are open!!", "💜💜💜",
+	},
+	fr = {
+		"bienvenue !! 💜", "un nouvel abonné 🎉", "W follow", "bienvenue dans la team", "on est une famille ici",
+		"enfin abonné 😤", "les dons sont ouverts !!", "💜💜💜",
+	},
 }
 local BIG_GAIN_REACTIONS = {
-	"GROS GAIN 🤑", "t'es riche maintenant", "prête-moi de la dopamine stp", "les chiffres montent 📈",
-	"c'est énorme", "💰💰💰", "quelle chance 🍀", "on fête ça 🎉", "le compteur s'affole", "t'arrêtes plus",
+	en = {
+		"BIG GAINS 🤑", "you're rich now", "lend me some dopamine pls", "numbers going up 📈", "that's huge", "💰💰💰",
+		"so lucky 🍀", "let's celebrate 🎉", "the counter is going crazy", "you're unstoppable",
+	},
+	fr = {
+		"GROS GAIN 🤑", "t'es riche maintenant", "prête-moi de la dopamine stp", "les chiffres montent 📈",
+		"c'est énorme", "💰💰💰", "quelle chance 🍀", "on fête ça 🎉", "le compteur s'affole", "t'arrêtes plus",
+	},
 }
 local RAID_MESSAGES = {
-	"RAID 🎉🎉", "on vient en raid !!", "💜 RAID 💜", "bonjour le chat !!", "coucou tout le monde 👋",
-	"on a entendu parler du crunch", "c'est ici le beurre ?", "RAIDDDD 🚨", "on débarque 🏃", "salut la team !!",
+	en = {
+		"RAID 🎉🎉", "raid incoming!!", "💜 RAID 💜", "hello chat!!", "hi everyone 👋", "we heard about the crunch",
+		"is this where the butter is?", "RAIDDDD 🚨", "coming through 🏃", "hey team!!",
+	},
+	fr = {
+		"RAID 🎉🎉", "on vient en raid !!", "💜 RAID 💜", "bonjour le chat !!", "coucou tout le monde 👋",
+		"on a entendu parler du crunch", "c'est ici le beurre ?", "RAIDDDD 🚨", "on débarque 🏃", "salut la team !!",
+	},
 }
 local MOD_MESSAGES = {
-	"restez gentils svp 🛡️", "pas de spam dans le chat !", "on respecte la streameuse 💜",
-	"hydratez-vous 💧", "pensez à suivre la chaîne 💜", "on parle pas la bouche pleine... ah si en fait",
+	en = {
+		"be nice pls 🛡️", "no spamming in chat!", "respect the streamer 💜", "stay hydrated 💧",
+		"don't forget to follow 💜", "don't talk with your mouth full... oh wait",
+	},
+	fr = {
+		"restez gentils svp 🛡️", "pas de spam dans le chat !", "on respecte la streameuse 💜", "hydratez-vous 💧",
+		"pensez à suivre la chaîne 💜", "on parle pas la bouche pleine... ah si en fait",
+	},
 }
 local HOST_MESSAGES = {
-	"merci d'être là 💜", "vous voulez que je goûte quoi ?", "le son est bon ?", "chut... ASMR 🤫",
-	"abonnez-vous 💜", "j'ai encore faim", "qui mange avec moi ?", "coucou les nouveaux 👋",
+	en = {
+		"thanks for being here 💜", "what should i taste next?", "is the audio good?", "shh... ASMR 🤫",
+		"follow for more 💜", "still hungry", "who's eating with me?", "hi newcomers 👋",
+	},
+	fr = {
+		"merci d'être là 💜", "vous voulez que je goûte quoi ?", "le son est bon ?", "chut... ASMR 🤫",
+		"abonnez-vous 💜", "j'ai encore faim", "qui mange avec moi ?", "coucou les nouveaux 👋",
+	},
 }
-local DONATION_LINES = { "a fait un don !", "t'envoie un pourboire !", "offre une tournée !", "a lâché un billet !" }
+local DONATION_LINES = {
+	en = { "just donated!", "sent you a tip!", "bought a round!", "dropped some cash!" },
+	fr = { "a fait un don !", "t'envoie un pourboire !", "offre une tournée !", "a lâché un billet !" },
+}
+-- Réactions aux notifications du joueur
+local JACKPOT_REACTIONS = {
+	en = { "JACKPOT?!", "JACKPOT 🤑🤑🤑", "THE DVD CORNER!!!" },
+	fr = { "JACKPOT ?!", "JACKPOT 🤑🤑🤑", "le coin du DVD !!!" },
+}
+local RUSH_REACTIONS = {
+	en = { "RUSH!!! 🚀", "everybody click!!", "it's rush time 🔥" },
+	fr = { "RUSH !!! 🚀", "tout le monde clique !!", "c'est le rush 🔥" },
+}
+local ACHIEVEMENT_REACTIONS = {
+	en = { "GG on the achievement 🏆", "achievement unlocked 👏", "too good 🏆" },
+	fr = { "GG pour le succès 🏆", "succès débloqué 👏", "trop fort 🏆" },
+}
+local UNLOCK_REACTIONS = {
+	en = { "new upgrade 👀", "what even is that??", "this is getting out of hand 😂" },
+	fr = { "nouvelle amélioration 👀", "c'est quoi ce truc ??", "ça devient n'importe quoi 😂" },
+}
+-- Le chat réclame le beurre / l'abonnement
+local BUTTER_NAGS = {
+	en = { "bite the butter!!", "THE BUTTER 🧈", "click the butter 👀", "where's the butter?" },
+	fr = { "croque le beurre !!", "LE BEURRE 🧈", "clique sur le beurre 👀", "il est où le beurre ?" },
+}
+local FOLLOW_NAGS = {
+	en = { "follow!!", "hit Follow 💜", "why aren't you following?" },
+	fr = { "abonne-toi !!", "clique sur Suivre 💜", "pourquoi t'es pas abonné ?" },
+}
 
 ----------------------------------------------------------------------
 -- Petites fonctions utilitaires
@@ -186,6 +301,26 @@ function LiveStream.Start(ctx)
 	local Theme = ctx.Theme
 	local Format = ctx.Format
 	local random = Random.new()
+
+	-- Textes dans la langue du joueur (choisis une fois au démarrage)
+	local crunchWords: { string } = Locale.Pick(CRUNCH_WORDS)
+	local butterWords: { string } = Locale.Pick(BUTTER_WORDS)
+	local messages: { string } = Locale.Pick(MESSAGES)
+	local eatReactions: { string } = Locale.Pick(EAT_REACTIONS)
+	local butterReactions: { string } = Locale.Pick(BUTTER_REACTIONS)
+	local donationReactions: { string } = Locale.Pick(DONATION_REACTIONS)
+	local followReactions: { string } = Locale.Pick(FOLLOW_REACTIONS)
+	local bigGainReactions: { string } = Locale.Pick(BIG_GAIN_REACTIONS)
+	local raidMessages: { string } = Locale.Pick(RAID_MESSAGES)
+	local modMessages: { string } = Locale.Pick(MOD_MESSAGES)
+	local hostMessages: { string } = Locale.Pick(HOST_MESSAGES)
+	local donationLines: { string } = Locale.Pick(DONATION_LINES)
+	local jackpotReactions: { string } = Locale.Pick(JACKPOT_REACTIONS)
+	local rushReactions: { string } = Locale.Pick(RUSH_REACTIONS)
+	local achievementReactions: { string } = Locale.Pick(ACHIEVEMENT_REACTIONS)
+	local unlockReactions: { string } = Locale.Pick(UNLOCK_REACTIONS)
+	local butterNags: { string } = Locale.Pick(BUTTER_NAGS)
+	local followNags: { string } = Locale.Pick(FOLLOW_NAGS)
 
 	local function effectsOn(): boolean
 		local data = ctx.State.Data
@@ -372,7 +507,7 @@ function LiveStream.Start(ctx)
 	local FOLLOWED_COLOR = Color3.fromRGB(62, 56, 84)
 	local followButton = UI.Create("TextButton", {
 		Name = "Follow",
-		Text = "💜 Suivre",
+		Text = Locale.T("💜 Follow"),
 		Font = Theme.Fonts.Title,
 		TextSize = 14,
 		TextColor3 = Color3.new(1, 1, 1),
@@ -476,7 +611,7 @@ function LiveStream.Start(ctx)
 	-- Enseigne néon "MIAM" (à droite, grésille)
 	local neonSign = text({
 		Name = "Neon",
-		Text = "miam ♥",
+		Text = Locale.T("yum ♥"),
 		Font = Enum.Font.FredokaOne,
 		TextSize = 17,
 		TextColor3 = Color3.fromRGB(255, 120, 200),
@@ -808,7 +943,7 @@ function LiveStream.Start(ctx)
 	-- Indice "CROQUE !" tant qu'on ne l'a pas croqué (flotte au-dessus du bloc)
 	local HINT_Y = BUTTON_H - 6 - BUTTER_H - 3 -- bas de l'indice (juste au-dessus du beurre)
 	local butterHint = text({
-		Text = "CROQUE !",
+		Text = Locale.T("BITE!"),
 		Font = Theme.Fonts.Title,
 		TextSize = 11,
 		TextColor3 = Color3.fromRGB(90, 50, 0),
@@ -1289,11 +1424,11 @@ function LiveStream.Start(ctx)
 	-- Texte du message épinglé (dépend de l'abonnement et du beurre)
 	local function refreshPinned(followed: boolean)
 		if not followed then
-			pinnedLabel.Text = "📌 <b>Suis</b> pour débloquer les dons 💸"
+			pinnedLabel.Text = Locale.T("📌 <b>Follow</b> to unlock donations 💸")
 		elseif hasButter() then
-			pinnedLabel.Text = "📌 Merci les abonnés 💜 Croquez le <b>beurre</b> !"
+			pinnedLabel.Text = Locale.T("📌 Thanks followers 💜 Bite the <b>butter</b>!")
 		else
-			pinnedLabel.Text = "📌 Merci les abonnés 💜 Soyez gentils !"
+			pinnedLabel.Text = Locale.T("📌 Thanks followers 💜 Be nice!")
 		end
 	end
 
@@ -1310,7 +1445,7 @@ function LiveStream.Start(ctx)
 			chat.Visible = true
 			chat.Position = UDim2.new(1, CHAT_W, 0, VIDEO_Y)
 			UI.Tween(chat, 0.35, { Position = UDim2.new(1, -VIDEO_X, 0, VIDEO_Y) }, Enum.EasingStyle.Back)
-			hostSays("le chat est ouvert !! 🎉")
+			hostSays(Locale.T("chat is open!! 🎉"))
 		else
 			chat.Visible = false
 		end
@@ -1328,7 +1463,7 @@ function LiveStream.Start(ctx)
 		if shown then
 			butterScale.Scale = 0.2
 			UI.Tween(butterScale, 0.5, { Scale = 1 }, Enum.EasingStyle.Back)
-			hostSays("j'ai ramené du BEURRE 🧈")
+			hostSays(Locale.T("i brought BUTTER 🧈"))
 		end
 		refreshPinned(isFollowedOnServer())
 	end
@@ -1380,16 +1515,16 @@ function LiveStream.Start(ctx)
 		shownFollowed = followed
 		refreshPinned(followed)
 		if followed then
-			followButton.Text = "✔ Abonné"
+			followButton.Text = Locale.T("✔ Following")
 			followButton.BackgroundColor3 = FOLLOWED_COLOR
 			followGradient.Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(220, 220, 230))
 			followStroke.Color = Color3.fromRGB(120, 110, 150)
 			if announce and wasShown == false then
-				systemMessage("💜 Tu suis maintenant <b>" .. HOST .. "</b> !", Color3.fromRGB(120, 60, 200))
-				hostSays("merci pour le follow !! les dons sont ouverts 💸")
+				systemMessage(Locale.T("💜 You're now following <b>%s</b>!", HOST), Color3.fromRGB(120, 60, 200))
+				hostSays(Locale.T("thanks for the follow!! donations are open 💸"))
 			end
 		else
-			followButton.Text = "💜 Suivre"
+			followButton.Text = Locale.T("💜 Follow")
 			followButton.BackgroundColor3 = FOLLOW_COLOR
 			followGradient.Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(205, 190, 230))
 			followStroke.Color = Color3.fromRGB(210, 180, 255)
@@ -1419,7 +1554,7 @@ function LiveStream.Start(ctx)
 		refreshFollow(true)
 		task.delay(0.6, function()
 			if ctx.IsAlive() then
-				react("follow", 0.5, FOLLOW_REACTIONS, 2)
+				react("follow", 0.5, followReactions, 2)
 			end
 		end)
 	end)
@@ -1488,7 +1623,7 @@ function LiveStream.Start(ctx)
 		end
 		local variant = math.floor(tonumber(info.Variant) or random:NextInteger(1, 1000))
 		local name = NAMES[(variant - 1) % #NAMES + 1]
-		local line = DONATION_LINES[(variant - 1) % #DONATION_LINES + 1]
+		local line = donationLines[(variant - 1) % #donationLines + 1]
 		local lifetime = tonumber(info.Lifetime) or 10
 		local inChat = chat.Visible
 		local height = inChat and 42 or 36
@@ -1539,7 +1674,7 @@ function LiveStream.Start(ctx)
 			UI.Create("UITextSizeConstraint", { MaxTextSize = 11, MinTextSize = 8, Parent = title })
 		end
 		local sub = text({
-			Text = "Clique pour récupérer ✨",
+			Text = Locale.T("Click to claim ✨"),
 			Font = Theme.Fonts.Title,
 			TextSize = inChat and 10 or 11,
 			TextColor3 = Color3.fromRGB(140, 60, 0),
@@ -1616,8 +1751,8 @@ function LiveStream.Start(ctx)
 		local donation = type(payload.SpawnId) == "string" and donations[payload.SpawnId] or nil
 		local amountText = amount and ("+" .. Format.Format(amount)) or ""
 		if donation and donation.Card.Parent then
-			donation.Title.Text = "✔ Merci <b>" .. escape(donation.Name) .. "</b> !"
-			donation.Sub.Text = amountText ~= "" and (amountText .. " Dopamine 💜") or "Merci 💜"
+			donation.Title.Text = Locale.T("✔ Thanks <b>%s</b>!", escape(donation.Name))
+			donation.Sub.Text = amountText ~= "" and (amountText .. " Dopamine 💜") or Locale.T("Thanks 💜")
 			if amount then
 				ctx.FloatText(donation.Card, UDim2.fromScale(0.5, 0.5), amountText, Theme.Colors.Gold, 22)
 			end
@@ -1631,10 +1766,10 @@ function LiveStream.Start(ctx)
 		addLikes(random:NextInteger(20, 60), true)
 		wow(0.9)
 		soundWave(nil)
-		popWord("MERCI !!", UDim2.new(0.5, 0, 0, MOUTH_Y - 28), Color3.fromRGB(255, 214, 40))
+		popWord(Locale.T("THANKS!!"), UDim2.new(0.5, 0, 0, MOUTH_Y - 28), Color3.fromRGB(255, 214, 40))
 		task.delay(0.4, function()
 			if ctx.IsAlive() then
-				react("donation", 0.8, DONATION_REACTIONS, 2)
+				react("donation", 0.8, donationReactions, 2)
 			end
 		end)
 	end)
@@ -1680,7 +1815,7 @@ function LiveStream.Start(ctx)
 		local butterTop = UDim2.new(BUTTER_X, 0, 0, BUTTER_Y - 6 - BUTTER_H * 0.6) -- haut du bloc
 		butterChunks(butterTop)
 		soundWave(butterTop)
-		popWord(pick(BUTTER_WORDS, random), UDim2.new(BUTTER_X, -12, 0, BUTTER_Y - BUTTON_H - 4), Color3.fromRGB(255, 226, 96))
+		popWord(pick(butterWords, random), UDim2.new(BUTTER_X, -12, 0, BUTTER_Y - BUTTON_H - 4), Color3.fromRGB(255, 226, 96))
 
 		-- "+X" prédit (le serveur donne gain par clic x ClickFraction)
 		local data = ctx.State.Data
@@ -1691,13 +1826,13 @@ function LiveStream.Start(ctx)
 
 		wow(0.4)
 		addLikes(random:NextInteger(1, 4), butterCrunches % 3 == 0)
-		react("butter", 1.2, BUTTER_REACTIONS)
+		react("butter", 1.2, butterReactions)
 
 		if #bites >= BUTTER_BITES then
 			regenerateButter()
 			task.delay(0.3, function()
 				if ctx.IsAlive() then
-					hostSays("plus de beurre... j'en ressers ! 🧈")
+					hostSays(Locale.T("out of butter... time for a refill! 🧈"))
 				end
 			end)
 		end
@@ -1850,7 +1985,7 @@ function LiveStream.Start(ctx)
 		for id, donation in pairs(donations) do
 			if not donation.Done and now >= donation.ExpiresAt then
 				if not donation.Claimed then
-					donation.Sub.Text = "Trop tard 😢"
+					donation.Sub.Text = Locale.T("Too late 😢")
 				end
 				removeDonation(id, 0.4)
 			end
@@ -1894,13 +2029,13 @@ function LiveStream.Start(ctx)
 			if not index then
 				-- Assiette vide : on ressert !
 				wow(0.8)
-				popWord("RESSERVI !", UDim2.new(0.5, 0, 0, MOUTH_Y - 24), nil)
+				popWord(Locale.T("REFILL!"), UDim2.new(0.5, 0, 0, MOUTH_Y - 24), nil)
 				task.wait(0.5)
 				if not ctx.IsAlive() then
 					break
 				end
 				refillPlate()
-				pushChat(randomName(), "ELLE RESSERT 😭🔥")
+				pushChat(randomName(), Locale.T("SHE'S GOING FOR SECONDS 😭🔥"))
 				task.wait(0.7)
 			else
 				local food = foods[index]
@@ -1919,13 +2054,13 @@ function LiveStream.Start(ctx)
 				openUntil = 0
 				chewUntil = os.clock() + 1
 				UI.Tween(armRight, 0.4, { Rotation = ARM_REST_R }, Enum.EasingStyle.Back)
-				popWord(pick(CRUNCH_WORDS, random), UDim2.new(0.5, random:NextNumber() < 0.5 and -50 or 50, 0, MOUTH_Y - 8), nil)
+				popWord(pick(crunchWords, random), UDim2.new(0.5, random:NextNumber() < 0.5 and -50 or 50, 0, MOUTH_Y - 8), nil)
 				crumbs()
 				soundWave(nil)
 				ctx.Sound.Play("Pop", random:NextNumber(0.55, 0.75))
 				addLikes(random:NextInteger(2, 8), true)
 				if random:NextNumber() < 0.45 then
-					react("eat", 0.5, EAT_REACTIONS)
+					react("eat", 0.5, eatReactions)
 				end
 			end
 		end
@@ -1941,15 +2076,15 @@ function LiveStream.Start(ctx)
 		end
 		local kind = payload.Type
 		if kind == "Jackpot" then
-			react("big", 1, { "JACKPOT ?!", "JACKPOT 🤑🤑🤑", "le coin du DVD !!!" }, 3)
+			react("big", 1, jackpotReactions, 3)
 		elseif kind == "Rush" then
-			react("big", 1, { "RUSH !!! 🚀", "tout le monde clique !!", "c'est le rush 🔥" }, 2)
+			react("big", 1, rushReactions, 2)
 		elseif kind == "Achievement" then
-			react("achievement", 2, { "GG pour le succès 🏆", "succès débloqué 👏", "trop fort 🏆" }, 0)
+			react("achievement", 2, achievementReactions, 0)
 		elseif kind == "Unlock" then
-			react("unlock", 2, { "nouvelle amélioration 👀", "c'est quoi ce truc ??", "ça devient n'importe quoi 😂" }, 0)
+			react("unlock", 2, unlockReactions, 0)
 		elseif kind == "Bonus" and BIG_SOURCES[payload.Source] then
-			react("big", 1.5, BIG_GAIN_REACTIONS, 1)
+			react("big", 1.5, bigGainReactions, 1)
 		end
 	end)
 
@@ -1966,9 +2101,9 @@ function LiveStream.Start(ctx)
 		local count = math.floor(random:NextInteger(40, 160) * (1 + followers() * 0.5))
 		viewers += count
 		addLikes(count, true)
-		chatTitle.Text = '🚨 <b><font color="#FF9F45">RAID !</font></b>'
-		systemMessage("🚨 RAID de <b>" .. escape(raider) .. "</b> avec " .. count .. " spectateurs !", Color3.fromRGB(230, 110, 20))
-		popWord("RAID !", UDim2.new(0.5, 0, 0, 40), Color3.fromRGB(255, 159, 69))
+		chatTitle.Text = "🚨 <b><font color=\"#FF9F45\">" .. Locale.T("RAID!") .. "</font></b>"
+		systemMessage(Locale.T("🚨 RAID from <b>%s</b> with %s viewers!", escape(raider), tostring(count)), Color3.fromRGB(230, 110, 20))
+		popWord(Locale.T("RAID!"), UDim2.new(0.5, 0, 0, 40), Color3.fromRGB(255, 159, 69))
 		wow(1)
 		for _ = 1, 3 do
 			spawnHeart("🎉")
@@ -1982,14 +2117,14 @@ function LiveStream.Start(ctx)
 				if random:NextNumber() < 0.3 then
 					pushChat(randomName(), pick(EMOTE_MESSAGES, random), { Emote = true })
 				else
-					pushChat(randomName(), pick(RAID_MESSAGES, random))
+					pushChat(randomName(), pick(raidMessages, random))
 				end
 			end
 			task.wait(0.6)
 			if not ctx.IsAlive() then
 				return
 			end
-			hostSays("merci pour le raid " .. raider .. " !! 💜")
+			hostSays(Locale.T("thanks for the raid %s!! 💜", raider))
 			task.wait(2.5)
 			chatTitle.Text = "💬 <b>Chat</b>"
 			raiding = false
@@ -2013,18 +2148,18 @@ function LiveStream.Start(ctx)
 					nextRaid = os.clock() + random:NextNumber(70, 140)
 					startRaid()
 				elseif roll < 0.05 then
-					hostSays(pick(HOST_MESSAGES, random))
+					hostSays(pick(hostMessages, random))
 				elseif roll < 0.09 then
 					local mod = pick({ "Tonton_Jean", "Lulu_ASMR", "Moustache_Pro", "Madeleine_Proust" }, random)
-					pushChat(mod, pick(MOD_MESSAGES, random))
+					pushChat(mod, pick(modMessages, random))
 				elseif roll < 0.15 and hasButter() then
-					pushChat(randomName(), pick({ "croque le beurre !!", "LE BEURRE 🧈", "clique sur le beurre 👀", "il est où le beurre ?" }, random))
+					pushChat(randomName(), pick(butterNags, random))
 				elseif roll < 0.17 and not isFollowed() then
-					pushChat(randomName(), pick({ "abonne-toi !!", "clique sur Suivre 💜", "pourquoi t'es pas abonné ?" }, random))
+					pushChat(randomName(), pick(followNags, random))
 				elseif roll < 0.35 then
 					pushChat(randomName(), pick(EMOTE_MESSAGES, random), { Emote = true })
 				else
-					pushChat(randomName(), pick(MESSAGES, random))
+					pushChat(randomName(), pick(messages, random))
 				end
 			end
 		end

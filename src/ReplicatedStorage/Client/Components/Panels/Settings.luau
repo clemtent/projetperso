@@ -22,6 +22,14 @@
 	  glissent à la souris ET au doigt (écran tactile).
 	La musique ne joue que si le réglage est actif ET que "Lofi Beats" est
 	débloqué (voir SoundManager.SetMusicAllowed).
+
+	v5 :
+	- 🌙 Mode sombre (section Affichage) : SetSetting("DarkMode", bool),
+	  appliqué tout de suite (ClientState.SetUserDarkMode -> DarkSkin).
+	- 🌐 Langue : Auto / English / Français, SetSetting("Language", valeur)
+	  ; la langue change au prochain passage dans le jeu (pas de
+	  reconstruction en direct) : un bandeau le rappelle.
+	- Textes en anglais traduits (Locale) ; zones tactiles agrandies.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -36,15 +44,18 @@ local Effects = require(Client.Effects)
 local ClientState = require(Client.ClientState)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Config = require(ReplicatedStorage.Shared.Config)
+local Locale = require(ReplicatedStorage.Shared.Locale)
+local Notifications = require(script.Parent.Parent.Notifications)
 
+-- Title / Subtitle en anglais : traduits par PanelManager
 local Settings = {
-	Title = "⚙️ Paramètres",
-	Subtitle = "Son, musique, clic et effets",
+	Title = "⚙️ Settings",
+	Subtitle = "Sound, music, display and language",
 	Color = Theme.Colors.Dark,
 	Size = Vector2.new(680, 600),
 }
 
-local VERSION = "v4"
+local VERSION = "v5"
 local WHITE = Color3.new(1, 1, 1)
 local BLACK = Color3.new(0, 0, 0)
 local ROW_HOVER = Theme.Colors.Surface or Theme.Colors.PanelLight
@@ -62,7 +73,14 @@ type Slider = { Set: (value: number) -> (), SetEnabled: (enabled: boolean) -> ()
 
 local toggles: { [string]: Toggle } = {} -- [clé] = interrupteur
 local sliders: { [string]: Slider } = {} -- [clé du réglage lié] = curseur
-local current = { Sound = true, Music = true, Effects = true }
+local current = { Sound = true, Music = true, Effects = true, DarkMode = false }
+
+-- Langue : onglets Auto / English / Français
+local LANGUAGE_OPTIONS = { "Auto", "en", "fr" }
+local languageTabs: UIUtil.Tabs? = nil
+local languageSaveToken = 0
+local languageSaving = false
+local languageChosen: string? = nil -- choix local (en attente de sauvegarde)
 
 local musicInfo: TextLabel? = nil -- sous-titre de la ligne "Musique lofi"
 local nowPlayingLabel: TextLabel? = nil -- grand texte de la carte "En cours de lecture"
@@ -88,20 +106,20 @@ local function refreshMusicInfo()
 	local text
 	local status
 	if not ClientState.HasFeature("Lofi") then
-		text = "🔒 Se débloque avec 🎧 Lofi Beats"
-		status = "Verrouillé"
+		text = Locale.T("🔒 Unlocks with 🎧 %s", Locale.T("Lofi Beats"))
+		status = Locale.T("Locked")
 	elseif not SoundManager.HasPlaylist() then
-		text = RunService:IsStudio() and "⚠️ Ajoute des IDs de musique dans Config.Music" or "Aucune musique pour le moment"
-		status = "Playlist vide"
+		text = RunService:IsStudio() and Locale.T("⚠️ Add music IDs in Config.Music") or Locale.T("No music for now")
+		status = Locale.T("Empty playlist")
 	elseif not current.Music then
-		text = "Musique coupée"
-		status = "En pause"
+		text = Locale.T("Music off")
+		status = Locale.T("Paused")
 	elseif playing and name then
 		text = "♫ " .. name
-		status = "♫ En cours de lecture"
+		status = Locale.T("♫ Now playing")
 	else
-		text = "Chargement..."
-		status = "Chargement"
+		text = Locale.T("Loading...")
+		status = Locale.T("Loading")
 	end
 	local label = musicInfo
 	if label then
@@ -143,6 +161,8 @@ function Settings.Apply(key: string, value: boolean)
 		SoundManager.SetMusicEnabled(value)
 	elseif key == "Effects" then
 		Effects.SetEnabled(value)
+	elseif key == "DarkMode" then
+		ClientState.SetUserDarkMode(value)
 	end
 
 	local ui = toggles[key]
@@ -296,7 +316,7 @@ local function buildClickOption(grid: Frame, entry, order: number)
 	local isKeyboard = string.find(string.lower(tostring(entry.Id)), "keyboard") ~= nil
 	local name = UIUtil.Label({
 		Name = "SoundName",
-		Text = tostring(entry.Name or entry.Id),
+		Text = Locale.T(tostring(entry.Name or entry.Id)),
 		Font = Theme.Fonts.Title,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Size = UDim2.new(1, -86, 0, 20),
@@ -307,7 +327,7 @@ local function buildClickOption(grid: Frame, entry, order: number)
 	})
 	UIUtil.Label({
 		Name = "Kind",
-		Text = isKeyboard and "⌨️ Clavier" or "🖱️ Clic",
+		Text = isKeyboard and Locale.T("⌨️ Keyboard") or Locale.T("🖱️ Click"),
 		TextColor3 = Theme.Colors.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Size = UDim2.new(1, -86, 0, 15),
@@ -560,14 +580,28 @@ local function buildToggle(row: Frame, key: string)
 	UIUtil.AnimateButton(button, 1.06, 0.93)
 	local ui: Toggle = { Button = button, Knob = knob, Stroke = stroke, Glyph = glyph }
 	toggles[key] = ui
-	paintToggle(ui, current[key] ~= false, false)
+	paintToggle(ui, current[key] == true, false)
 
-	button.Activated:Connect(function()
+	local function onActivated()
 		local newValue = not current[key]
 		Settings.Apply(key, newValue)
 		SoundManager.Play("Open", newValue and 1.3 or 0.8)
 		saveSetting(key, newValue)
-	end)
+	end
+	button.Activated:Connect(onActivated)
+	-- Zone tactile plus grande que l'interrupteur (au moins 44 px de haut)
+	local hitbox = UIUtil.Create("TextButton", {
+		Name = "Hitbox",
+		Size = UDim2.new(1, 20, 1, 20),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		BackgroundTransparency = 1,
+		AutoButtonColor = false,
+		Text = "",
+		ZIndex = 4,
+		Parent = button,
+	})
+	hitbox.Activated:Connect(onActivated)
 end
 
 -- Icône de volume selon le niveau
@@ -785,11 +819,11 @@ end
 ----------------------------------------------------------------------
 
 local function buildAudio(content: Instance)
-	local section = buildSection(content, 1, "🔊", "Audio", "Effets sonores, musique et son du clic", SECTION_AUDIO)
+	local section = buildSection(content, 1, "🔊", Locale.T("Audio"), Locale.T("Sound effects, music and click sound"), SECTION_AUDIO)
 
 	-- Effets sonores : interrupteur + volume
-	local soundRow, soundSubtitle = buildRow(section, 1, 96, "🔔", "Effets sonores", SECTION_AUDIO)
-	soundSubtitle.Text = "Clics, achats, bonus..."
+	local soundRow, soundSubtitle = buildRow(section, 1, 96, "🔔", Locale.T("Sound effects"), SECTION_AUDIO)
+	soundSubtitle.Text = Locale.T("Clicks, purchases, bonuses...")
 	buildToggle(soundRow, "Sound")
 	local lastPreview = 0
 	sliders.Sound = buildSlider(soundRow, SoundManager.GetEffectsVolume(), Theme.Colors.Blue, function(value, released)
@@ -805,7 +839,7 @@ local function buildAudio(content: Instance)
 	divider(section, 2)
 
 	-- Musique : interrupteur + volume (morceau en cours dans le sous-titre)
-	local musicRow, musicSubtitle = buildRow(section, 3, 96, "🎵", "Musique lofi", Theme.Colors.Purple)
+	local musicRow, musicSubtitle = buildRow(section, 3, 96, "🎵", Locale.T("Lofi music"), Theme.Colors.Purple)
 	musicInfo = musicSubtitle
 	buildToggle(musicRow, "Music")
 	sliders.Music = buildSlider(musicRow, SoundManager.GetMusicVolume(), Theme.Colors.Purple, function(value)
@@ -823,7 +857,7 @@ local function buildAudio(content: Instance)
 		Parent = section,
 	})
 	UIUtil.Label({
-		Text = "🖱️ Son du clic",
+		Text = Locale.T("🖱️ Click sound"),
 		Font = Theme.Fonts.Title,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Size = UDim2.new(1, -16, 0, 20),
@@ -832,7 +866,7 @@ local function buildAudio(content: Instance)
 		Parent = clickHeader,
 	})
 	UIUtil.Label({
-		Text = "▶ pour écouter, clic sur la carte pour choisir",
+		Text = Locale.T("▶ to listen, tap the card to choose"),
 		TextColor3 = Theme.Colors.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Size = UDim2.new(1, -16, 0, 15),
@@ -871,14 +905,95 @@ local function buildAudio(content: Instance)
 end
 
 local function buildDisplay(content: Instance)
-	local section = buildSection(content, 2, "🖥️", "Affichage", "Ce qui bouge à l'écran", SECTION_DISPLAY)
-	local fxRow, fxSubtitle = buildRow(section, 1, 60, "✨", "Particules et confettis", SECTION_DISPLAY)
-	fxSubtitle.Text = "Désactive pour un écran plus calme"
+	local section = buildSection(content, 2, "🖥️", Locale.T("Display"), Locale.T("What moves on screen"), SECTION_DISPLAY)
+	local fxRow, fxSubtitle = buildRow(section, 1, 60, "✨", Locale.T("Particles and confetti"), SECTION_DISPLAY)
+	fxSubtitle.Text = Locale.T("Turn off for a calmer screen")
 	buildToggle(fxRow, "Effects")
+
+	divider(section, 2)
+
+	-- Mode sombre (appliqué tout de suite, sauvegardé avec la progression)
+	local darkRow, darkSubtitle = buildRow(section, 3, 60, "🌙", Locale.T("Dark mode"), Theme.Colors.Dark)
+	darkSubtitle.Text = Locale.T("Easier on the eyes at night")
+	current.DarkMode = ClientState.IsUserDarkMode()
+	buildToggle(darkRow, "DarkMode")
+end
+
+-- Sauvegarde de la langue (3 essais) ; la langue change au prochain passage
+local function chooseLanguage(value: string)
+	if table.find(LANGUAGE_OPTIONS, value) == nil then
+		return
+	end
+	languageChosen = value
+	languageSaveToken += 1
+	local token = languageSaveToken
+	languageSaving = true
+	SoundManager.Play("Open", 1.1)
+	-- Message dans la langue choisie (Auto : langue Roblox du joueur)
+	local player = game:GetService("Players").LocalPlayer
+	local target = Locale.Resolve(value, player and player.LocaleId or nil)
+	if target == Locale.GetLanguage() then
+		Notifications.Toast(Locale.TFor(target, "Language saved"), Theme.Colors.Blue, 3.5, nil, false, "🌐")
+	else
+		Notifications.Toast(Locale.TFor(target, "Language will change after rejoining"), Theme.Colors.Blue, 5, nil, false, "🌐")
+	end
+	task.spawn(function()
+		for attempt = 1, 3 do
+			if token ~= languageSaveToken then
+				return
+			end
+			local ok, success = pcall(function()
+				return Net.Function("SetSetting"):InvokeServer("Language", value)
+			end)
+			if ok and success == true then
+				if token == languageSaveToken then
+					languageSaving = false
+				end
+				return
+			end
+			if attempt < 3 then
+				task.wait(0.3)
+			end
+		end
+		if token == languageSaveToken then
+			languageSaving = false
+			languageChosen = nil
+			Notifications.Toast(Locale.T("Couldn't save the language, try again."), Theme.Colors.Red)
+			local tabs = languageTabs
+			if tabs then
+				tabs.Select(ClientState.GetLanguageSetting(), true)
+			end
+		end
+	end)
+end
+
+local function buildLanguage(content: Instance)
+	local section = buildSection(content, 3, "🌐", Locale.T("Language"), Locale.T("Applied the next time you join"), Theme.Colors.Cyan)
+	local holder = UIUtil.Create("Frame", {
+		Name = "LanguageRow",
+		Size = UDim2.new(1, 0, 0, 52),
+		BackgroundTransparency = 1,
+		LayoutOrder = 1,
+		Parent = section,
+	})
+	languageTabs = UIUtil.Tabs({
+		Parent = holder,
+		Tabs = {
+			{ Id = "Auto", Text = Locale.T("🌐 Auto") },
+			{ Id = "en", Text = "🇬🇧 English" },
+			{ Id = "fr", Text = "🇫🇷 Français" },
+		},
+		Color = Theme.Colors.Cyan,
+		Size = UDim2.new(1, -8, 0, Theme.TouchTarget),
+		Position = UDim2.fromOffset(4, 4),
+		TextSize = 16,
+		Selected = ClientState.GetLanguageSetting(),
+		OnSelect = chooseLanguage,
+	})
 end
 
 local function buildGame(content: Instance)
-	local section = buildSection(content, 3, "🎮", "Jeu", "Musique en cours et crédits", SECTION_GAME)
+	local section = buildSection(content, 4, "🎮", Locale.T("Game"), Locale.T("Now playing and credits"), SECTION_GAME)
 
 	-- Carte "En cours de lecture"
 	local nowPlaying = UIUtil.Create("Frame", {
@@ -1015,7 +1130,7 @@ local function buildGame(content: Instance)
 		Parent = credits,
 	})
 	UIUtil.Label({
-		Text = "Un jeu Roblox  •  merci de jouer 💙",
+		Text = Locale.T("A Roblox game  •  thanks for playing 💙"),
 		TextColor3 = Theme.Colors.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Size = UDim2.new(1, -170, 0, 16),
@@ -1025,7 +1140,7 @@ local function buildGame(content: Instance)
 	})
 	local versionChip = UIUtil.Chip({
 		Name = "Version",
-		Text = "Version " .. VERSION,
+		Text = Locale.T("Version %s", VERSION),
 		Color = SECTION_GAME,
 		TextColor3 = Theme.Colors.TextLight,
 		Height = 26,
@@ -1065,11 +1180,12 @@ function Settings.Build(panel: Frame)
 
 	buildAudio(content)
 	buildDisplay(content)
+	buildLanguage(content)
 	buildGame(content)
 
 	UIUtil.Create("TextLabel", {
 		Name = "Tip",
-		Text = "Astuce : chaque amélioration ajoute quelque chose à l'écran. Jusqu'où iras-tu ?",
+		Text = Locale.T("Tip: every upgrade adds something to the screen. How far will you go?"),
 		TextColor3 = Theme.Colors.TextDim,
 		BackgroundTransparency = 1,
 		Font = Theme.Fonts.Body,
@@ -1126,6 +1242,26 @@ function Settings.Update(data)
 		applied = true
 		for _, key in ipairs({ "Sound", "Music", "Effects" }) do
 			Settings.Apply(key, data.Settings[key] ~= false)
+		end
+	end
+	-- Mode sombre : appliqué par ClientState, on recale juste l'interrupteur
+	local dark = ClientState.IsUserDarkMode()
+	if current.DarkMode ~= dark then
+		current.DarkMode = dark
+		local ui = toggles.DarkMode
+		if ui then
+			paintToggle(ui, dark, true)
+		end
+	end
+	-- Langue sauvegardée (sauf pendant une sauvegarde)
+	local tabs = languageTabs
+	if tabs and not languageSaving then
+		local saved = ClientState.GetLanguageSetting()
+		if languageChosen == nil or languageChosen == saved then
+			languageChosen = nil
+			if tabs.GetSelected() ~= saved then
+				tabs.Select(saved, true)
+			end
 		end
 	end
 	local clickSound = data.Settings.ClickSound

@@ -24,13 +24,16 @@
 	Format, Net, Theme, UIUtil, Effects, Sound, DVDMath, Notify, FloatText,
 	GetLevel, HasFeature, ClaimSpawn, Interact, OnSpawn, OnBonus, Connect,
 	OnRender, IsAlive, SetDarkMode (+ bonus : Slot, Interface, Random,
-	EffectsEnabled, et pour l'océan : Payload, Rebirths, Multiplier).
+	EffectsEnabled, GetSlotScale, et pour l'océan : Payload, Rebirths, Multiplier).
+	v5 : sur téléphone / tablette, le cadre d'un slot porte un UIScale
+	"SlotScale" (voir Slots) ; l'animation "pop" l'utilise directement.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Locale = require(Shared.Locale)
 local Config = require(Shared.Config)
 local Formulas = require(Shared.Formulas)
 local Net = require(Shared.Net)
@@ -154,6 +157,12 @@ local function newContext(feature: string, container: Frame, slot: string): (any
 
 	function ctx.IsAlive(): boolean
 		return record.Alive
+	end
+
+	-- Échelle du slot (1 sur PC, plus petite sur téléphone / tablette).
+	-- Le cadre garde sa taille "design" : rien à faire pour s'y adapter.
+	function ctx.GetSlotScale(): number
+		return Slots.GetScale(slot)
 	end
 
 	-- Petit bandeau en bas de l'écran
@@ -301,9 +310,20 @@ local function startFeature(feature: string, module: any)
 	local upgrade = upgradeId and Config.UpgradesById[upgradeId]
 	container.ZIndex = upgrade and upgrade.Order or 1 -- ordre d'empilement stable
 	local fullCanvas = slot == "Overlay" or slot == "Background"
+	-- "Pop" : on anime l'UIScale du slot (SlotScale, échelle du slot sur
+	-- téléphone) ou, à défaut, un UIScale temporaire (un seul UIScale par cadre)
+	local slotScale = container:FindFirstChild("SlotScale") :: UIScale?
 	local popScale: UIScale? = nil
+	local targetScale = 1
 	if not fullCanvas then
-		popScale = UIUtil.Create("UIScale", { Name = "PopScale", Scale = 0.3, Parent = container })
+		if slotScale then
+			popScale = slotScale
+			targetScale = Slots.GetScale(slot)
+			container:SetAttribute("SlotAnimating", true)
+			slotScale.Scale = 0.3 * targetScale
+		else
+			popScale = UIUtil.Create("UIScale", { Name = "PopScale", Scale = 0.3, Parent = container })
+		end
 	end
 	container.Parent = layer
 
@@ -321,9 +341,15 @@ local function startFeature(feature: string, module: any)
 	-- Apparition "pop"
 	local scale = popScale
 	if scale then
-		UIUtil.Tween(scale, 0.45, { Scale = 1 }, Enum.EasingStyle.Back)
+		UIUtil.Tween(scale, 0.45, { Scale = targetScale }, Enum.EasingStyle.Back)
 		task.delay(0.5, function()
-			if scale.Parent then
+			if scale == slotScale then
+				-- Fin de l'animation : échelle actuelle du slot (l'écran a pu changer)
+				container:SetAttribute("SlotAnimating", nil)
+				if scale.Parent and record.Alive then
+					scale.Scale = Slots.GetScale(slot)
+				end
+			elseif scale.Parent then
 				scale:Destroy()
 			end
 		end)
@@ -353,10 +379,11 @@ local function stopFeature(feature: string)
 	if record.Slot == "Overlay" or record.Slot == "Background" then
 		container:Destroy()
 	else
-		local scale = container:FindFirstChild("PopScale") :: UIScale?
+		local scale = (container:FindFirstChild("SlotScale") or container:FindFirstChild("PopScale")) :: UIScale?
 		if not scale then
 			scale = UIUtil.Create("UIScale", { Name = "PopScale", Parent = container })
 		end
+		container:SetAttribute("SlotAnimating", true)
 		UIUtil.Tween(scale :: UIScale, 0.25, { Scale = 0 }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
 		task.delay(0.3, function()
 			container:Destroy()
@@ -407,7 +434,7 @@ local function fallbackOcean(container: Frame, payload)
 	})
 	UIUtil.Gradient(sea, ColorSequence.new(Color3.fromRGB(170, 225, 255), Color3.fromRGB(0, 90, 160)), 90)
 	local label = UIUtil.Label({
-		Text = "Respire...",
+		Text = Locale.T("Breathe..."),
 		Font = Theme.Fonts.Title,
 		TextColor3 = Color3.new(1, 1, 1),
 		TextTransparency = 1,
@@ -423,7 +450,7 @@ local function fallbackOcean(container: Frame, payload)
 	task.wait(1)
 	UIUtil.Tween(label, 0.8, { TextTransparency = 0 })
 	task.wait(2)
-	label.Text = "Rebirth " .. NumberFormatter.Multiplier(tonumber(payload.Multiplier) or 1)
+	label.Text = Locale.T("Rebirth %s", NumberFormatter.Multiplier(tonumber(payload.Multiplier) or 1))
 	task.wait(1.5)
 	UIUtil.Tween(label, 0.8, { TextTransparency = 1 })
 	UIUtil.Tween(sea, 1, { BackgroundTransparency = 1 })
@@ -550,6 +577,9 @@ function StimulusManager.Init()
 		return
 	end
 	initialized = true
+
+	-- Échelle / position des slots selon l'appareil (téléphone, tablette, PC)
+	Slots.Bind(Interface)
 
 	ClientState.FeaturesChanged:Connect(applyFeatures)
 

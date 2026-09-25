@@ -78,9 +78,20 @@ local function unclip(parent: GuiObject, position: UDim2): (GuiObject, UDim2)
 	if scale <= 0 then
 		return parent, position
 	end
+	-- Les décalages (Offset) sont agrandis par TOUS les UIScale au-dessus du
+	-- parent (toile + échelle du slot sur téléphone)
+	local factor = 1
+	local node2: Instance? = parent
+	while node2 and node2 ~= root.Parent do
+		local nodeScale = node2:FindFirstChildOfClass("UIScale")
+		if nodeScale then
+			factor *= nodeScale.Scale
+		end
+		node2 = node2.Parent
+	end
 	local absolute = parent.AbsolutePosition
 		+ parent.AbsoluteSize * Vector2.new(position.X.Scale, position.Y.Scale)
-		+ Vector2.new(position.X.Offset, position.Y.Offset) * scale
+		+ Vector2.new(position.X.Offset, position.Y.Offset) * factor
 	local canvas = (absolute - overlay.AbsolutePosition) / scale
 	return overlay, UDim2.fromOffset(canvas.X, canvas.Y)
 end

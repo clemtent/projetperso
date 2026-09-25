@@ -57,19 +57,24 @@ function DailyRewardService:GetInfo(player: Player, stats)
 	}
 end
 
+-- Texte dans la langue du joueur
+local function T(player: Player, text: string, ...): string
+	return services.GameService:T(player, text, ...)
+end
+
 local function onClaim(player: Player)
 	if not RateLimiter.Check(player, "Daily", 1) then
-		return false, "Doucement !"
+		return false, T(player, "Slow down!")
 	end
 	local data = services.DataService:GetData(player)
 	if not data or not services.GameService:IsReady(player) then
-		return false, "Chargement en cours..."
+		return false, T(player, "Loading...")
 	end
 	if not Formulas.HasFeature(data, "Daily") then
-		return false, "Le calendrier n'est pas encore débloqué"
+		return false, T(player, "The calendar isn't unlocked yet")
 	end
 	if data.Daily.LastDay >= today() then
-		return false, "Déjà récupéré aujourd'hui, reviens demain !"
+		return false, T(player, "Already claimed today, come back tomorrow!")
 	end
 
 	local streak = nextStreak(data)
@@ -81,7 +86,7 @@ local function onClaim(player: Player)
 	services.GameService:AddDopamine(player, reward, false)
 	services.GameService:SendState(player)
 
-	return true, string.format("Jour %d : +%s %s !", streak, NumberFormatter.Format(reward), Config.Game.CurrencyName)
+	return true, T(player, "Day %d: +%s %s!", streak, NumberFormatter.Format(reward), Config.Game.CurrencyName)
 end
 
 function DailyRewardService:Start()

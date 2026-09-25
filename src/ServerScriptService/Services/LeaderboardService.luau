@@ -125,7 +125,7 @@ local function getName(userId: number): string
 		nameCache[userId] = name
 		return name
 	end
-	return "Joueur " .. userId
+	return "Player " .. userId -- nom de secours (envoyé à tous : laissé en anglais)
 end
 
 -- Valeurs à envoyer pour un joueur (nil si ses données ne sont pas chargées)

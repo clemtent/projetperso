@@ -18,6 +18,7 @@ local RunService = game:GetService("RunService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Formulas = require(ReplicatedStorage.Shared.Formulas)
+local Locale = require(ReplicatedStorage.Shared.Locale)
 local Net = require(ReplicatedStorage.Shared.Net)
 
 local EventService = {}
@@ -101,10 +102,12 @@ function EventService:StartRush(extend: boolean?): boolean
 		scheduleRushEnd()
 		Net.Event("EventUpdate"):FireAllClients(rushPayload())
 		services.GameService:MarkAllDirty()
-		services.GameService:NotifyAll({
-			Type = "Rush",
-			Text = "⚡ " .. settings.Name .. " prolongé de " .. settings.Duration .. " s !",
-		})
+		services.GameService:NotifyAll(function(lang)
+			return {
+				Type = "Rush",
+				Text = Locale.TFor(lang, "⚡ %s extended by %s s!", Locale.TFor(lang, settings.Name), tostring(settings.Duration)),
+			}
+		end)
 		return true
 	end
 	rush.Active = true
@@ -112,10 +115,13 @@ function EventService:StartRush(extend: boolean?): boolean
 	scheduleRushEnd()
 	Net.Event("EventUpdate"):FireAllClients(rushPayload())
 	services.GameService:MarkAllDirty()
-	services.GameService:NotifyAll({
-		Type = "Rush",
-		Text = "⚡ " .. settings.Name .. " : x" .. settings.Multiplier .. " pendant " .. settings.Duration .. " s !",
-	})
+	services.GameService:NotifyAll(function(lang)
+		return {
+			Type = "Rush",
+			Text = Locale.TFor(lang, "⚡ %s: x%s for %s s!", Locale.TFor(lang, settings.Name),
+				tostring(settings.Multiplier), tostring(settings.Duration)),
+		}
+	end)
 	return true
 end
 
