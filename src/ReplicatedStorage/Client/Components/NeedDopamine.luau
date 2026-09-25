@@ -97,8 +97,17 @@ local function button(parent: Instance, text: string, color: Color3, position: U
 		Text = text,
 		TextColor3 = Theme.ContrastText(color),
 		TextSize = 20,
+		TextScaled = true, -- (texte traduit plus long : il rétrécit au lieu de déborder)
 		ZIndex = 5,
 		Parent = parent,
+	})
+	UIUtil.Create("UITextSizeConstraint", { MaxTextSize = 20, MinTextSize = 12, Parent = node })
+	UIUtil.Create("UIPadding", {
+		PaddingLeft = UDim.new(0, 14),
+		PaddingRight = UDim.new(0, 14),
+		PaddingTop = UDim.new(0, 12),
+		PaddingBottom = UDim.new(0, 12),
+		Parent = node,
 	})
 	UIUtil.Corner(node, UDim.new(1, 0))
 	UIUtil.Stroke(node, color:Lerp(Color3.new(0, 0, 0), 0.25), 2, 0)
@@ -212,9 +221,13 @@ local function build(missing: number)
 	UIUtil.Create("UITextSizeConstraint", { MaxTextSize = 17, MinTextSize = 11, Parent = text })
 	text.TextScaled = true
 
-	local later = button(card, Locale.T("Later"), Color3.fromRGB(236, 232, 244), UDim2.new(0.27, 0, 1, -22), 150)
+	-- Deux boutons côte à côte, 12 px d'écart, 24 px des bords de la carte
+	local margin, gap = 24, 12
+	local laterWidth = math.floor((CARD_SIZE.X - margin * 2 - gap) * 0.38)
+	local getWidth = CARD_SIZE.X - margin * 2 - gap - laterWidth
+	local later = button(card, Locale.T("Later"), Color3.fromRGB(236, 232, 244), UDim2.new(0, margin + laterWidth / 2, 1, -22), laterWidth)
 	later.TextColor3 = Theme.Colors.TextDim
-	local get = button(card, Locale.T("💎 Get Dopamine"), Theme.Colors.Green, UDim2.new(0.68, 0, 1, -22), 210)
+	local get = button(card, Locale.T("💎 Get Dopamine"), Theme.Colors.Green, UDim2.new(1, -(margin + getWidth / 2), 1, -22), getWidth)
 	later.Activated:Connect(function()
 		snoozedUntil = os.clock() + SNOOZE_TIME
 		SoundManager.Play("Click", 1.1)

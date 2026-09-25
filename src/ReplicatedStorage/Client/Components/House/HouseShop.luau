@@ -273,9 +273,10 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 			ZIndex = 32,
 			Parent = body,
 		})
+		-- (3 px à gauche / en haut : contour épais de la carte choisie jamais coupé)
 		UIUtil.Create("UIPadding", {
 			PaddingTop = UDim.new(0, 4),
-			PaddingLeft = UDim.new(0, 2),
+			PaddingLeft = UDim.new(0, 3),
 			PaddingRight = UDim.new(0, 10),
 			PaddingBottom = UDim.new(0, 12),
 			Parent = list,
@@ -305,9 +306,57 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 	})
 	UIUtil.Create("UIPadding", {
 		PaddingLeft = UDim.new(0, 2),
-		PaddingRight = UDim.new(0, 2),
+		PaddingRight = UDim.new(0, 40),
 		Parent = categoryRow,
 	})
+	-- La rangée défile : fondu blanc + flèche "›" à droite, pour qu'une
+	-- pastille coupée au bord se lise comme "il y en a d'autres" (la flèche
+	-- fait défiler ; elle disparaît au bout de la rangée)
+	local moreHint = UIUtil.Create("Frame", {
+		Name = "MoreCategories",
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.fromScale(1, 0),
+		Size = UDim2.fromOffset(56, 38),
+		BackgroundColor3 = WHITE,
+		BorderSizePixel = 0,
+		ZIndex = 34,
+		Parent = body,
+	})
+	UIUtil.Create("UIGradient", {
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 1),
+			NumberSequenceKeypoint.new(0.45, 0),
+			NumberSequenceKeypoint.new(1, 0),
+		}),
+		Parent = moreHint,
+	})
+	local moreButton = UIUtil.PillButton({
+		Name = "More",
+		Text = "›",
+		Color = C.Pink,
+		TextColor3 = WHITE,
+		Height = 28,
+		TextSize = 20,
+		Round = true,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -3, 0.5, 0),
+		ZIndex = 35,
+		Parent = moreHint,
+	})
+	local function refreshMoreHint()
+		local window = categoryRow.AbsoluteWindowSize.X
+		local canvas = categoryRow.AbsoluteCanvasSize.X
+		moreHint.Visible = categoryRow.Visible and canvas > window + categoryRow.CanvasPosition.X + 4
+	end
+	moreButton.Activated:Connect(function()
+		local maxX = math.max(0, categoryRow.AbsoluteCanvasSize.X - categoryRow.AbsoluteWindowSize.X)
+		local target = math.min(maxX, categoryRow.CanvasPosition.X + 140)
+		UIUtil.Tween(categoryRow, 0.25, { CanvasPosition = Vector2.new(target, 0) })
+	end)
+	categoryRow:GetPropertyChangedSignal("CanvasPosition"):Connect(refreshMoreHint)
+	categoryRow:GetPropertyChangedSignal("AbsoluteCanvasSize"):Connect(refreshMoreHint)
+	categoryRow:GetPropertyChangedSignal("AbsoluteWindowSize"):Connect(refreshMoreHint)
+	categoryRow:GetPropertyChangedSignal("Visible"):Connect(refreshMoreHint)
 	local itemsList = scroller("ItemsList", 44)
 	local itemsGrid = UIUtil.Create("UIGridLayout", {
 		CellSize = UDim2.new(0.5, -6, 0, CARD_HEIGHT),
@@ -664,12 +713,14 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 		preview:SetAttribute("DarkSkinIgnore", true)
 		UIUtil.Corner(preview, 12)
 		preview.Parent = card
-		-- Motif en miniature (dessiné plus large que la carte : le surplus est coupé)
-		local canvas = UIUtil.Create("Frame", {
+		-- Motif en miniature (dessiné plus large que la carte : le surplus est coupé).
+		-- CanvasGroup arrondi : ClipsDescendants seul découpe en rectangle et le
+		-- motif dépassait des coins arrondis de l'aperçu
+		local canvas = UIUtil.Create("CanvasGroup", {
 			Name = "Canvas",
 			Size = UDim2.fromScale(1, 1),
 			BorderSizePixel = 0,
-			ClipsDescendants = true,
+			BackgroundTransparency = 1,
 			ZIndex = 36,
 			Parent = preview,
 		})
@@ -952,6 +1003,7 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 		categoryPill(entry.Id, entry.Icon .. " " .. HouseCommon.Name(entry), index)
 	end
 	paintCategories()
+	task.defer(refreshMoreHint)
 
 	-- Construction paresseuse d'une section (par paquets)
 	local function buildSection(name: string)

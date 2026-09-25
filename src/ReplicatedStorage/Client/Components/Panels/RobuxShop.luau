@@ -85,6 +85,7 @@ type Offer = {
 	Button: TextButton,
 	Extra: TextLabel?,
 	Owned: Frame?,
+	Kind: Frame?, -- pastille "Pour toujours" / "Rachetable"
 	Rays: Frame,
 	Hovered: boolean,
 }
@@ -238,6 +239,10 @@ function refreshOffer(offer: Offer)
 	local owned = offer.IsPass and ClientState.HasPass(def.Id)
 	if offer.Owned then
 		offer.Owned.Visible = owned
+		-- (le tampon "✔ ACHETÉ" prend la place de la pastille "Pour toujours")
+		if offer.Kind then
+			offer.Kind.Visible = not owned
+		end
 	end
 	if owned then
 		pendingPasses[offer.Id] = nil
@@ -547,6 +552,12 @@ local function buildCard(grid: ScrollingFrame, def, isPass: boolean, order: numb
 	-- Ruban de mise en avant
 	local highlight = HIGHLIGHTS[def.Id]
 	if highlight then
+		-- Deux pastilles ne tiennent pas sur une ligne : "Pour toujours" se
+		-- réduit à son icône (la ligne "Extra" le redit en toutes lettres)
+		local kindLabel = kindChip:FindFirstChild("Label") :: TextLabel?
+		if kindLabel then
+			kindLabel.Text = isPass and "♾️" or "🔁"
+		end
 		local ribbon = UIUtil.Chip({
 			Name = "Highlight",
 			Text = Locale.T(highlight),
@@ -564,20 +575,20 @@ local function buildCard(grid: ScrollingFrame, def, isPass: boolean, order: numb
 	-- Ruban "✔ ACHETÉ" (passes possédés)
 	local owned: Frame? = nil
 	if isPass then
+		-- En haut à gauche, à la place de "Pour toujours" : ne cache pas l'icône
 		local ownedChip = UIUtil.Chip({
 			Name = "Owned",
 			Text = Locale.T("✔ PURCHASED"),
 			Color = Theme.Colors.Robux,
 			TextColor3 = WHITE,
-			Height = 22,
-			TextSize = 12,
+			Height = 18,
+			TextSize = 10,
 			ZIndex = 6,
 			Visible = false,
 			StrokeColor = WHITE,
 			Parent = showcase,
 		})
-		ownedChip.AnchorPoint = Vector2.new(0.5, 1)
-		ownedChip.Position = UDim2.new(0.5, 0, 1, -6)
+		ownedChip.Position = UDim2.fromOffset(6, 6)
 		owned = ownedChip
 	end
 
@@ -643,6 +654,7 @@ local function buildCard(grid: ScrollingFrame, def, isPass: boolean, order: numb
 		Button = button,
 		Extra = extra,
 		Owned = owned,
+		Kind = kindChip,
 		Rays = rays,
 		Hovered = false,
 	}
@@ -773,7 +785,7 @@ function RobuxShop.Build(content: Frame)
 		Parent = grid,
 	})
 	UIUtil.Create("UIGridLayout", {
-		CellSize = UDim2.new(1 / 3, -10, 0, 238),
+		CellSize = UDim2.new(1 / 3, -10, 0, 246), -- (8 px d'air entre la ligne "Extra" et le bouton)
 		CellPadding = UDim2.fromOffset(10, 6),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = grid,

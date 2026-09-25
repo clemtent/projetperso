@@ -18,13 +18,13 @@
 	  - la barre d'améliorations (UpgradeBar).
 	Occupe x ∈ [centre-330, centre+330], y ∈ [28, ~430] de la toile.
 	v5 : textes traduits (Locale) ; sur téléphone les pastilles des menus
-	tiennent sur UNE ligne qui défile horizontalement (zones tactiles de
-	44 px), la largeur est limitée par les slots de côté (Slots) et tout se
+	sont rondes (icône seule) et tiennent sur UNE ligne (zones tactiles de
+	44 px ; la ligne peut encore défiler s'il y en a trop), la largeur est limitée par les slots de côté (Slots) et tout se
 	réajuste si l'écran change (Interface.DeviceChanged).
 	Maison : bouton rond "🏠" juste à DROITE du bouton "Click me" (ouvre
 	"Ma maison"), avec un badge quand un nouvel objet de maison devient
-	abordable (remis à zéro à l'ouverture) ; la carte du boost ⏱️ est
-	décalée à droite de ce bouton.
+	abordable (remis à zéro à l'ouverture) ; la carte du boost ⏱️ est à
+	gauche du bouton, sous les pastilles VIP / bonus (jamais sur un slot).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -77,6 +77,10 @@ local BUTTON_SIZE = Vector2.new(184, 62)
 local PILL_HEIGHT = 36
 local PILL_BADGE_CLEAR = 27 -- place réservée à droite du texte d'une pastille qui a un badge (marge comprise)
 local HOUSE_BUTTON_SIZE = 54 -- bouton "🏠" (zone tactile >= 44 px)
+-- Colonne des indicateurs Robux (à gauche du bouton) : 2 pastilles + carte du
+-- boost ; remontée de STATUS_LIFT px pour finir au-dessus du compteur
+local STATUS_HEIGHT = 90
+local STATUS_LIFT = 12
 local HOUSE_GAP = 6 -- écart entre "Click me" et "🏠" (le badge "99+" reste loin du slot CR)
 
 local random = Random.new()
@@ -466,17 +470,25 @@ local function buildPills(parent: Frame, order: number)
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
 		VerticalAlignment = Enum.VerticalAlignment.Center,
 		Wraps = not phone,
-		Padding = UDim.new(0, phone and 8 or 6),
+		Padding = UDim.new(0, phone and 10 or 6),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = row,
 	})
 
 	for index, def in ipairs(PILLS) do
-		-- Support (6 px de marge verticale entre deux lignes de pastilles)
+		-- Téléphone : pastilles rondes avec l'icône seule, pour que TOUTES
+		-- tiennent sur une ligne (le texte long ne tenait pas : pastille coupée
+		-- au bord de la rangée). Le titre complet s'affiche dans la fenêtre.
+		local round = def.Round == true or phone
+		local text = Locale.T(def.Text)
+		if round and not def.Round then
+			text = string.match(def.Text, "^(%S+)") or text
+		end
+		-- Support (marge verticale entre deux lignes de pastilles)
 		local holder = UIUtil.Create("Frame", {
 			Name = def.Id,
-			Size = UDim2.fromOffset(def.Round and height or 0, height + holderPad),
-			AutomaticSize = def.Round and Enum.AutomaticSize.None or Enum.AutomaticSize.X,
+			Size = UDim2.fromOffset(round and height or 0, height + holderPad),
+			AutomaticSize = round and Enum.AutomaticSize.None or Enum.AutomaticSize.X,
 			BackgroundTransparency = 1,
 			LayoutOrder = index,
 			Visible = def.Feature == nil and (def.Visible == nil or def.Visible()),
@@ -484,16 +496,16 @@ local function buildPills(parent: Frame, order: number)
 		})
 		local button = UIUtil.PillButton({
 			Name = "Button",
-			Text = Locale.T(def.Text),
+			Text = text,
 			Color = def.Color,
 			TextColor3 = def.Round and Theme.Colors.Text or Theme.Colors.TextLight,
 			Height = height,
-			TextSize = def.Round and math.floor(height * 0.56) or math.floor(height * 0.45),
-			Round = def.Round,
+			TextSize = round and math.floor(height * 0.56) or math.floor(height * 0.45),
+			Round = round,
 			Position = UDim2.fromOffset(0, buttonY),
 			Parent = holder,
 		})
-		if not def.Round then
+		if not round then
 			-- Contour du texte pour rester lisible sur les couleurs claires
 			local stroke = UIUtil.Create("UIStroke", {
 				Color = Theme.Colors.TextDark,
@@ -505,9 +517,9 @@ local function buildPills(parent: Frame, order: number)
 			stroke.Name = "TextStroke"
 		end
 		UIUtil.Shadow(button, 2, 0.86, 2)
-		local badge = UIUtil.Badge(button, def.Round and 22 or 18)
-		if def.Round then
-			badge.Position = UDim2.new(1, -2, 0, phone and 6 or 2)
+		local badge = UIUtil.Badge(button, round and 22 or 18)
+		if round then
+			badge.Position = UDim2.new(1, phone and -5 or -2, 0, phone and 9 or 2)
 		else
 			-- Badge DANS la pastille, à droite du texte : il ne recouvre ni le
 			-- texte ni la pastille voisine (la pastille s'élargit quand il est là)
@@ -600,16 +612,19 @@ local function buildCombo(parent: Frame, order: number)
 	})
 end
 
--- Indicateurs Robux, de chaque côté du bouton (hors de la pile : ils ne
--- poussent jamais la barre d'améliorations sur les emplacements du bas).
---   gauche : 👑 VIP, 💎 bonus des Game Passes ; droite (après "🏠") : ⏱️ boost + minuteur.
+-- Indicateurs Robux, à GAUCHE du bouton (hors de la pile : ils ne poussent
+-- jamais la barre d'améliorations sur les emplacements du bas) :
+-- 👑 VIP, 💎 bonus des Game Passes, puis ⏱️ boost + minuteur (petite carte).
+-- Tout tient dans une colonne de 70 px entre le slot CL et le bouton, sous le
+-- bandeau d'actualités et au-dessus du compteur : rien ne recouvre les slots
+-- CL / CR (à droite, le bouton "🏠" touche déjà presque le slot CR).
 -- `buttonCenterX` / `buttonCenterY` : centre du bouton dans la colonne.
 local function buildStatus(column: Frame, buttonCenterX: number, buttonCenterY: number)
 	statusLeft = UIUtil.Create("Frame", {
 		Name = "StatusLeft",
-		Size = UDim2.fromOffset(70, 56),
+		Size = UDim2.fromOffset(70, STATUS_HEIGHT),
 		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.fromOffset(buttonCenterX - BUTTON_SIZE.X / 2 - 8, buttonCenterY),
+		Position = UDim2.fromOffset(buttonCenterX - BUTTON_SIZE.X / 2 - 8, buttonCenterY - STATUS_LIFT),
 		BackgroundTransparency = 1,
 		Parent = column,
 	})
@@ -618,7 +633,7 @@ local function buildStatus(column: Frame, buttonCenterX: number, buttonCenterY: 
 		HorizontalAlignment = Enum.HorizontalAlignment.Right,
 		VerticalAlignment = Enum.VerticalAlignment.Center,
 		SortOrder = Enum.SortOrder.LayoutOrder,
-		Padding = UDim.new(0, 4),
+		Padding = UDim.new(0, 3),
 		Parent = statusLeft,
 	})
 	local function chip(name: string, text: string, color: Color3, textColor: Color3, chipOrder: number): Frame
@@ -627,8 +642,8 @@ local function buildStatus(column: Frame, buttonCenterX: number, buttonCenterY: 
 			Text = text,
 			Color = color,
 			TextColor3 = textColor,
-			Height = 22,
-			TextSize = 13,
+			Height = 20,
+			TextSize = 12,
 			LayoutOrder = chipOrder,
 			Visible = false,
 			Parent = statusLeft,
@@ -640,28 +655,26 @@ local function buildStatus(column: Frame, buttonCenterX: number, buttonCenterY: 
 	vipChip = chip("VIP", "👑 VIP", Theme.Colors.Premium, Theme.Colors.TextDark, 1)
 	bonusChip = chip("Bonus", "💎 x1", Theme.Colors.Purple, Theme.Colors.TextLight, 2)
 
-	-- Carte du boost : "⏱️ x2" + minuteur (à droite du bouton "🏠")
+	-- Carte du boost : "⏱️ x2" + minuteur (sous les pastilles, dans la même colonne)
 	boostCard = UIUtil.Create("Frame", {
 		Name = "Boost",
-		Size = UDim2.fromOffset(62, 50),
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.fromOffset(buttonCenterX + BUTTON_SIZE.X / 2 + HOUSE_GAP + HOUSE_BUTTON_SIZE + 14, buttonCenterY),
+		Size = UDim2.fromOffset(62, 38),
 		BackgroundColor3 = Theme.Colors.Boost,
+		LayoutOrder = 3,
 		Visible = false,
-		Parent = column,
+		Parent = statusLeft,
 	})
-	UIUtil.Corner(boostCard, Theme.Radius.M)
+	UIUtil.Corner(boostCard, Theme.Radius.S)
 	UIUtil.Stroke(boostCard, Theme.Colors.Border, 1.5, 0.3)
 	UIUtil.Gradient(boostCard, ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(215, 215, 215)), 90)
 	UIUtil.Create("UIScale", { Name = "PopScale", Parent = boostCard })
-	UIUtil.Shadow(boostCard, 3, 0.85, 2)
 	boostTitle = UIUtil.Label({
 		Text = "⏱️ x2",
 		Font = Theme.Fonts.Title,
 		TextColor3 = Theme.Colors.TextLight,
-		Size = UDim2.new(1, -8, 0, 20),
-		Position = UDim2.fromOffset(4, 5),
-		MaxTextSize = 16,
+		Size = UDim2.new(1, -8, 0, 17),
+		Position = UDim2.fromOffset(4, 3),
+		MaxTextSize = 14,
 		ZIndex = 2,
 		Parent = boostCard,
 	})
@@ -669,9 +682,9 @@ local function buildStatus(column: Frame, buttonCenterX: number, buttonCenterY: 
 		Text = "0:00",
 		Font = Theme.Fonts.Number,
 		TextColor3 = Theme.Colors.TextLight,
-		Size = UDim2.new(1, -8, 0, 18),
-		Position = UDim2.fromOffset(4, 26),
-		MaxTextSize = 15,
+		Size = UDim2.new(1, -8, 0, 15),
+		Position = UDim2.fromOffset(4, 20),
+		MaxTextSize = 13,
 		ZIndex = 2,
 		Parent = boostCard,
 	})

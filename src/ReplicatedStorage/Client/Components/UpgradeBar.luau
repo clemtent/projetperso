@@ -412,7 +412,8 @@ local function createCard(upgrade): Card
 	local gradient = UIUtil.Gradient(button, ColorSequence.new(Color3.new(1, 1, 1)), 90)
 	gradient.Enabled = false
 	local popScale = UIUtil.Create("UIScale", { Name = "PopScale", Parent = button })
-	UIUtil.Shadow(button, 3, 0.84, 2)
+	-- (ombre de 2 + 2 px : tient dans les 6 px sous la carte, jamais coupée par la barre)
+	UIUtil.Shadow(button, 2, 0.84, 1)
 
 	-- Décor "Icônes HD" : rayons qui tournent, anneau blanc, reflet brillant
 	local hd = UIUtil.Create("Frame", {
@@ -490,8 +491,10 @@ local function createCard(upgrade): Card
 		Parent = button,
 	})
 
+	-- Badge un peu rentré : lui et son contour restent dans la zone visible de la
+	-- barre (qui découpe son contenu), même agrandi au survol
 	local badge = UIUtil.Badge(holder, 26)
-	badge.Position = UDim2.new(1, -6, 0, 4)
+	badge.Position = UDim2.new(1, -9, 0, 9)
 
 	local card: Card = {
 		Upgrade = upgrade,

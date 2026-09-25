@@ -50,6 +50,9 @@ local House = {
 local C = HouseCommon.Colors
 local WHITE = Color3.new(1, 1, 1)
 local TOP_BAR = 46
+-- Largeur réservée aux boutons du bandeau ("Modifier" + "Boutique" et son
+-- badge, en taille tactile) : ils ne débordent plus sur les pastilles d'info
+local BUTTONS_WIDTH = 350
 local PENDING_PLACE_TIME = 6 -- (s) un objet acheté attend l'état du serveur pour être posé
 
 local content: Frame
@@ -255,7 +258,8 @@ local function refreshTray()
 		UIUtil.AnimateButton(tile, 1.08, 0.9)
 		local badge = UIUtil.Badge(tile, 20)
 		badge.BackgroundColor3 = C.PinkDeep
-		badge.Position = UDim2.new(1, -3, 0, 3)
+		-- (un peu rentré : le badge et son contour restent dans la rangée qui découpe)
+		badge.Position = UDim2.new(1, -5, 0, 6)
 		badge.Text = "x" .. entry.Free
 		badge.ZIndex = 20
 		badge.Visible = true
@@ -481,7 +485,7 @@ function House.Build(frame: Frame)
 	})
 	local leftGroup = UIUtil.Create("Frame", {
 		Name = "Info",
-		Size = UDim2.new(1, -300, 1, 0),
+		Size = UDim2.new(1, -(BUTTONS_WIDTH + 10), 1, 0),
 		BackgroundTransparency = 1,
 		ClipsDescendants = true,
 		ZIndex = 5,
@@ -583,7 +587,7 @@ function House.Build(frame: Frame)
 	-- Boutons (à droite)
 	local rightGroup = UIUtil.Create("Frame", {
 		Name = "Buttons",
-		Size = UDim2.new(0, 300, 1, 0),
+		Size = UDim2.new(0, BUTTONS_WIDTH, 1, 0),
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, 0, 0, 0),
 		BackgroundTransparency = 1,
@@ -602,7 +606,23 @@ function House.Build(frame: Frame)
 	editButton.Parent = rightGroup
 	shopButton = barButton("Shop", Locale.T("🛍️ Shop"), C.PinkDeep, 2)
 	shopButton.Parent = rightGroup
-	shopBadge = UIUtil.Badge(shopButton, 22)
+	-- Badge DANS la pastille, à droite du texte (ne cache plus "Boutique" et ne
+	-- déborde pas du bord de la fenêtre) : la pastille s'élargit quand il est là
+	shopBadge = UIUtil.Badge(shopButton, 20)
+	shopBadge.AnchorPoint = Vector2.new(1, 0.5)
+	do
+		local padding = shopButton:FindFirstChildOfClass("UIPadding")
+		local basePad = padding and padding.PaddingRight.Offset or 16
+		local function placeBadge()
+			local right = shopBadge.Visible and basePad + 30 or basePad
+			if padding then
+				padding.PaddingRight = UDim.new(0, right)
+			end
+			shopBadge.Position = UDim2.new(1, right - 6, 0.5, 0)
+		end
+		shopBadge:GetPropertyChangedSignal("Visible"):Connect(placeBadge)
+		placeBadge()
+	end
 
 	-- Zone principale : pièce (+ inventaire) à gauche, tiroir de la boutique à droite
 	main = UIUtil.Create("Frame", {
@@ -644,6 +664,15 @@ function House.Build(frame: Frame)
 	})
 	previewChip.AnchorPoint = Vector2.new(0.5, 0)
 	previewChip.Position = UDim2.new(0.5, 0, 0, 6)
+	-- Pastille de sauvegarde : en haut à gauche de la pièce (dans le bandeau, elle
+	-- était coupée par le bord de la zone d'infos sur tablette / téléphone)
+	savedChip.Parent = stage
+	savedChip.ZIndex = 20
+	local savedLabel = savedChip:FindFirstChild("Label") :: TextLabel?
+	if savedLabel then
+		savedLabel.ZIndex = 21
+	end
+	savedChip.Position = UDim2.fromOffset(10, 8)
 
 	-- Astuce en mode édition
 	editHint = UIUtil.Chip({
@@ -740,6 +769,8 @@ function House.Build(frame: Frame)
 		ZIndex = 11,
 		Parent = tray,
 	})
+	-- Marge à gauche : le contour de la première tuile n'est pas coupé
+	UIUtil.Create("UIPadding", { PaddingLeft = UDim.new(0, 3), PaddingRight = UDim.new(0, 3), Parent = trayList })
 	UIUtil.Create("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
 		VerticalAlignment = Enum.VerticalAlignment.Center,
