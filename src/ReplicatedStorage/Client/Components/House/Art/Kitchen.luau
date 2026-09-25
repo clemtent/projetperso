@@ -80,7 +80,6 @@ end
 
 -- Onigiri : triangle arrondi (losange + base), nori, visage
 local function onigiri(parent, kit, cx, bottom, w, z, eyes)
-	local C = kit.C
 	local rice = Color3.fromRGB(255, 253, 248)
 	local ink = kit.OutlineOf(Color3.fromRGB(225, 215, 215))
 	local h = w * 0.95
@@ -92,7 +91,7 @@ local function onigiri(parent, kit, cx, bottom, w, z, eyes)
 	kit.Part(parent, cx - w * 0.2, bottom - h * 0.3, w * 0.4, h * 0.3, Color3.fromRGB(60, 80, 70), { Radius = 2, Z = z + 3 })
 	kit.Face(parent, cx, bottom - h * 0.47, w * 0.5, { Eyes = eyes, Mouth = "smile", Z = z + 3 })
 	kit.Shine(parent, cx - w * 0.3, bottom - h * 0.52, w * 0.12, w * 0.07, z + 3, 0.2)
-	return C
+	return nil
 end
 
 -- Donut vu de biais : pâte, glaçage, trou, vermicelles
@@ -102,9 +101,8 @@ local function donut(parent, kit, cx, cy, w, icing, sprinkles, z, rot)
 	local h = w * 0.84
 	kit.Blob(g, w / 2, h / 2, w, h, Color3.fromRGB(235, 175, 105), { Z = 1 })
 	local top = kit.Blob(g, w / 2, h * 0.45, w * 0.88, h * 0.72, icing, { Z = 2, Shine = true })
-	local hole = kit.Blob(g, w / 2, h * 0.4, w * 0.22, h * 0.14, Color3.fromRGB(205, 140, 90), { Z = 3, Outline = false, Shade = false })
-	kit.Box(hole, w * 0.03, 0, w * 0.16, h * 0.05, Color3.fromRGB(150, 95, 70), 0.3, 2)
-	for i, p in ipairs({ { 0.2, 0.55, 30 }, { 0.72, 0.3, -40 }, { 0.8, 0.62, 70 }, { 0.36, 0.22, -10 } }) do
+	kit.Blob(g, w / 2, h * 0.4, w * 0.22, h * 0.14, Color3.fromRGB(190, 125, 85), { Z = 3, Outline = false, Shade = false })
+	for i, p in ipairs({ { 0.2, 0.55, 30 }, { 0.72, 0.3, -40 }, { 0.8, 0.62, 70 } }) do
 		local sp = kit.Box(top, w * 0.88 * p[1], h * 0.72 * p[2], w * 0.1, 1.6, sprinkles[(i - 1) % #sprinkles + 1], 0, 4)
 		sp.Rotation = p[3]
 		kit.Round(sp)
@@ -294,8 +292,8 @@ Art.CroissantBasket = function(body, kit, _item)
 	for _, y in ipairs({ 12, 21, 30 }) do
 		kit.Box(basket, 4, y, 68, 1.6, C.WoodDark, 0.45, 2)
 	end
-	for i = 0, 6 do
-		kit.Box(basket, 8 + i * 10, 4 + (i % 2) * 9, 1.6, 7, C.WoodDark, 0.45, 2)
+	for i = 0, 3 do
+		kit.Box(basket, 12 + i * 16, 4 + (i % 2) * 9, 1.6, 7, C.WoodDark, 0.45, 2)
 	end
 	kit.Part(body, 8, 57, 84, 9, C.WoodLight, { Radius = -1, Z = 6 })
 	kit.Heart(body, 50, 84, 10, C.Pink, 0, 7)
