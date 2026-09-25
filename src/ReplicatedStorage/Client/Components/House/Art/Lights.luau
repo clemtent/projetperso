@@ -194,8 +194,7 @@ Art.FloorLamp = function(body, kit, _item)
 	kit.Part(body, 28, 90, 44, 10, C.Mint, { Radius = -1, Z = 2, Shine = true })
 	kit.Part(body, 47, 34, 6, 58, C.MintSoft, { Radius = 3, Z = 1 })
 	kit.Blob(body, 50, 62, 12, 7, C.Mint, { Z = 2 })
-	local beam = kit.TriangleDown(body, 50, 38, 40, 22, C.Butter, 1, 0.8, 6)
-	beam.Rotation = 180
+	local beam = kit.Triangle(body, 50, 36, 46, 30, C.Butter, 1, 0.8, 6)
 	pulseAll(kit, beam, 0.15, 0.7, 0)
 	kit.Blob(body, 50, 38, 16, 9, C.Butter, { Z = 2, Outline = false })
 	-- dôme (moitié haute d'un ovale) + bordure + franges

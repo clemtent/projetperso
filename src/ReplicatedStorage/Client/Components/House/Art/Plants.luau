@@ -59,7 +59,7 @@ local function tier(parent, kit, cx, apex, half, color, z)
 		Shade = false,
 		Thickness = 1.8,
 	})
-	kit.Part(parent, cx - half + 2, apex + half - 5, half * 2 - 4, 8, kit.Darken(color, 0.1), { Radius = -1, Z = z + 1, Shade = false })
+	kit.Part(parent, cx - half + 3, apex + half - 6, half * 2 - 6, 8, color, { Radius = -1, Z = z + 1, Shade = 0.18, Thickness = 1.8 })
 	kit.Shine(clip, half + 4 - half * 0.34, 4 + half * 0.42, half * 0.22, 3, 2, 0.55)
 	return clip
 end
@@ -183,17 +183,18 @@ end
 Art.PottedPlant = function(body, kit, _item)
 	local C = kit.C
 	local foliage = kit.Pivot(body, 50, 64, 3)
+	local light = Color3.fromRGB(145, 215, 125)
 	local leaves = {
-		{ -160, 30, C.LeafDark },
-		{ -20, 30, C.LeafDark },
-		{ -136, 42, C.Leaf },
-		{ -44, 42, C.Leaf },
-		{ -112, 48, Color3.fromRGB(145, 215, 125) },
-		{ -68, 48, Color3.fromRGB(145, 215, 125) },
-		{ -90, 52, C.Leaf },
+		{ -90, 50, C.LeafDark, 1 },
+		{ -114, 46, C.Leaf, 2 },
+		{ -66, 46, C.Leaf, 2 },
+		{ -140, 40, light, 3 },
+		{ -40, 40, light, 3 },
+		{ -166, 30, C.Leaf, 4 },
+		{ -14, 30, C.Leaf, 4 },
 	}
-	for index, l in ipairs(leaves) do
-		leaf(foliage, kit, 0, 0, l[1], l[2], 16, l[3], index)
+	for _, l in ipairs(leaves) do
+		leaf(foliage, kit, 0, 0, l[1], l[2], 15, l[3], l[4])
 	end
 	kit.Animate(foliage, "Sway", 2, 0.6, 0.8)
 	local potBody, faceY = pot(body, kit, 50, 100, 60, 40, C.Cream)
@@ -368,7 +369,7 @@ end
 -- Feuille de monstera (fentes sombres et nervure)
 local function monsteraLeaf(parent, kit, px, py, angle, size, color, z)
 	local a = math.rad(angle)
-	local len, wid = size, size * 0.8
+	local len, wid = size, size * 0.86
 	local frame = kit.Blob(parent, px + math.cos(a) * len / 2, py + math.sin(a) * len / 2, len, wid, color, {
 		Z = z,
 		Rotation = angle,
@@ -377,11 +378,12 @@ local function monsteraLeaf(parent, kit, px, py, angle, size, color, z)
 	})
 	local dark = kit.Darken(color, 0.28)
 	kit.Line(frame, len * 0.06, wid / 2, len * 0.88, wid / 2, 1.6, dark, 0, 2)
-	for _, k in ipairs({ 0.34, 0.6 }) do
-		kit.Line(frame, len * k, 1.5, len * k + len * 0.07, wid * 0.34, 2, dark, 0, 2)
-		kit.Line(frame, len * k, wid - 1.5, len * k + len * 0.07, wid * 0.66, 2, dark, 0, 2)
+	local ks = if size >= 28 then { 0.3, 0.5, 0.7 } else { 0.38, 0.64 }
+	for _, k in ipairs(ks) do
+		local e = 0.5 - 0.5 * math.sqrt(1 - (2 * k - 1) ^ 2) -- bord de l'ovale à cette abscisse
+		kit.Line(frame, len * (k - 0.03), wid * e + 1.2, len * k + len * 0.04, wid * 0.4, 2.2, dark, 0, 2)
+		kit.Line(frame, len * (k - 0.03), wid * (1 - e) - 1.2, len * k + len * 0.04, wid * 0.6, 2.2, dark, 0, 2)
 	end
-	kit.Shine(frame, len * 0.3, wid * 0.24, len * 0.18, 2.5, 3, 0.5)
 end
 
 -- Monstera : grandes feuilles fendues sur un pot blanc façon terrazzo
@@ -430,7 +432,8 @@ Art.Hibiscus = function(body, kit, _item)
 		kit.Line(bush, x, y, x + r * 0.45, y - r * 0.75, 1.6, kit.Darken(color, 0.1), 0, 6)
 		kit.Circle(bush, x + r * 0.5, y - r * 0.82, 3.5, 3.5, C.Yellow, 0, 6)
 	end
-	kit.Blob(bush, 22, -38, 6, 9, C.Pink, { Z = 3, Rotation = 20, Shade = false, Thickness = 1.2 })
+	kit.Line(bush, 12, -24, 22, -36, 1.8, C.LeafDark, 0, 2)
+	kit.Blob(bush, 23, -38, 6, 9, C.Pink, { Z = 3, Rotation = 30, Shade = false, Thickness = 1.2 })
 	kit.Animate(bush, "Sway", 2, 0.6, 3.1)
 	pot(body, kit, 50, 100, 44, 30, C.Mint)
 	return nil
@@ -461,25 +464,26 @@ end
 Art.Terrarium = function(body, kit, _item)
 	local C = kit.C
 	-- contenu (derrière le verre)
-	kit.Part(body, 21, 66, 58, 31, C.WoodDark, { Radius = 19, Z = 2, Outline = false, Shade = 0.25 })
+	kit.Part(body, 21, 66, 58, 31, C.Brown, { Radius = 19, Z = 2, Outline = false, Shade = 0.25 })
+	kit.Box(body, 22, 78, 56, 4, C.Butter, 0.2, 2)
 	for _, p in ipairs({ { 30, 88, 7 }, { 46, 91, 5 }, { 64, 89, 7 } }) do
 		kit.Circle(body, p[1], p[2], p[3], p[3] * 0.7, C.Grey, 0, 3)
 	end
 	kit.Blob(body, 50, 69, 56, 10, C.Green, { Z = 3, Shade = false, Thickness = 1.2 })
-	leaf(body, kit, 32, 68, -125, 15, 7, C.Mint, 4, false)
-	leaf(body, kit, 32, 68, -55, 15, 7, C.Mint, 4, false)
-	leaf(body, kit, 32, 68, -90, 17, 7, Color3.fromRGB(130, 220, 185), 4, false)
-	kit.Part(body, 65, 56, 4, 11, C.Cream, { Radius = 2, Z = 4, Thickness = 1.2 })
-	kit.Blob(body, 67, 56, 13, 9, C.Red, { Z = 5, Thickness = 1.2 })
-	kit.Circle(body, 64, 55, 2.5, 2.5, C.White, 0, 6)
+	leaf(body, kit, 30, 68, -130, 14, 7, C.Mint, 4, false)
+	leaf(body, kit, 30, 68, -50, 14, 7, C.Mint, 4, false)
+	leaf(body, kit, 30, 68, -90, 16, 7, Color3.fromRGB(130, 220, 185), 4, false)
+	kit.Part(body, 69, 58, 4, 10, C.Cream, { Radius = 2, Z = 4, Thickness = 1.2 })
+	kit.Blob(body, 71, 58, 12, 8, C.Red, { Z = 5, Thickness = 1.2 })
+	kit.Circle(body, 68.5, 57, 2.5, 2.5, C.White, 0, 6)
 	-- escargot
-	local snail = kit.Group(body, 36, 50, 28, 18, 5)
-	kit.Part(snail, 2, 12, 24, 6, C.Cream, { Radius = -1, Z = 1, Thickness = 1.2 })
-	kit.Blob(snail, 21, 9, 8, 11, C.Cream, { Z = 2, Thickness = 1.2 })
+	local snail = kit.Group(body, 38, 49, 28, 18, 5)
+	kit.Part(snail, 2, 12, 24, 6, C.Butter, { Radius = -1, Z = 1, Thickness = 1.2 })
+	kit.Blob(snail, 21, 9, 8, 11, C.Butter, { Z = 2, Thickness = 1.2 })
 	kit.Line(snail, 20, 4, 18, -1, 1, C.Ink, 0, 1)
 	kit.Line(snail, 23, 4, 25, -1, 1, C.Ink, 0, 1)
-	kit.Blob(snail, 10, 8, 14, 13, C.Peach, { Z = 3, Shine = true, Thickness = 1.3 })
-	kit.Circle(snail, 10, 8.5, 6, 6, kit.Darken(C.Peach, 0.15), 0, 4)
+	kit.Blob(snail, 10, 8, 14, 13, C.Pink, { Z = 3, Shine = true, Thickness = 1.3 })
+	kit.Circle(snail, 10, 8.5, 6, 6, C.PinkDeep, 0.3, 4)
 	kit.Face(snail, 21.5, 9, 8, { Mouth = "none", Z = 3 })
 	kit.Animate(snail, "Drift", 3, 0.3, 0.7)
 	-- bocal
@@ -539,8 +543,8 @@ Art.MiniPine = function(body, kit, _item)
 	tier(tree, kit, 50, 28, 34, kit.Darken(green, 0.06), 2)
 	tier(tree, kit, 50, 14, 26, green, 4)
 	tier(tree, kit, 50, 2, 18, kit.Lighten(green, 0.08), 6)
-	for _, p in ipairs({ { 36, 55 }, { 62, 52 }, { 45, 34 } }) do
-		kit.Blob(tree, p[1], p[2], 5, 7, C.Wood, { Z = 9, Thickness = 1.1 })
+	for _, p in ipairs({ { 38, 54, C.Pink }, { 64, 50, C.Butter }, { 44, 33, C.Sky }, { 58, 20, C.Pink } }) do
+		kit.Circle(tree, p[1], p[2], 5, 5, p[3], 0, 9)
 	end
 	kit.Heart(tree, 50, 2, 8, C.Pink, 0, 9)
 	kit.Animate(tree, "Breathe", 0.012, 0.8, 0.5)
@@ -726,15 +730,15 @@ Art.HolidayTree = function(body, kit, _item)
 			kit.Animate(bulb, "Pulse", 0.6, 1.2, n * 1.37)
 		end
 	end
-	for _, b in ipairs({ { 34, 36, C.PinkDeep }, { 68, 34, C.Blue }, { 40, 62, C.Gold }, { 64, 60, C.Pink } }) do
+	for _, b in ipairs({ { 32, 42, C.PinkDeep }, { 70, 40, C.Blue }, { 38, 62, C.Gold }, { 64, 61, C.Pink } }) do
 		local ball = kit.Blob(body, b[1], b[2], 8, 8, b[3], { Z = 8, Thickness = 1.2 })
 		kit.Circle(ball, 2.4, 2.4, 2.4, 2.4, C.White, 0.2, 2)
 	end
 	-- étoile
 	local star = kit.Pivot(body, 50, 6, 9)
-	kit.Part(star, -7, -7, 14, 14, C.Yellow, { Radius = 2, Z = 1, Outline = C.Gold })
-	kit.Part(star, -7, -7, 14, 14, C.Yellow, { Radius = 2, Z = 2, Rotation = 45, Outline = C.Gold })
-	kit.Circle(star, 0, 0, 6, 6, C.White, 0.3, 3)
+	kit.Part(star, -7, -7, 14, 14, C.Yellow, { Radius = 1, Z = 1, Outline = C.Gold })
+	kit.Part(star, -7, -7, 14, 14, C.Yellow, { Radius = 1, Z = 2, Rotation = 45, Outline = C.Gold })
+	kit.Shine(star, -4, -4, 4, 3, 3, 0.3)
 	kit.Animate(star, "Sway", 6, 0.6, 0)
 	-- seau + cadeaux
 	kit.Part(body, 38, 80, 24, 20, C.Red, { Radius = 5, Z = 3 })
