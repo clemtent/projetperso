@@ -31,15 +31,14 @@ local function curtains(body, kit, x, y, w, h, fw, color, tie, rod)
 	for _, px in ipairs({ left, right }) do
 		kit.Circle(body, px, rodY + 2, 7, 7, rod, 0, 9)
 	end
-	local tieY = y + h * 0.56
-	local bottom = y + h + 4
+	local tieY = y + h * 0.55
+	local bottom = y + h + 5
 	for _, side in ipairs({ -1, 1 }) do
-		local cx = if side < 0 then x - fw + 5 else x + w + fw - 5
-		kit.Part(body, cx - 9, rodY + 1, 18, tieY - rodY + 2, color, { Radius = 6, Z = 10, Shade = 0.08 })
-		kit.Line(body, cx - side * 2, rodY + 5, cx - side * 1, tieY - 3, 1.4, kit.Darken(color, 0.12), 0.3, 11)
-		kit.Blob(body, cx + side * 3, (tieY + bottom) / 2, 22, bottom - tieY + 4, color, { Z = 11, Shade = 0.1 })
-		kit.Part(body, cx - 11, tieY - 3, 22, 6, tie, { Radius = -1, Z = 12 })
-		kit.Circle(body, cx + side * 9, tieY, 6, 6, tie, 0, 12)
+		local cx = if side < 0 then x - fw + 1 else x + w + fw - 1
+		kit.Part(body, cx - 7, rodY + 1, 14, tieY - rodY + 2, color, { Radius = 5, Z = 10, Shade = 0.08 })
+		kit.Line(body, cx + side * 1.5, rodY + 5, cx + side * 1, tieY - 4, 1.3, kit.Darken(color, 0.14), 0.25, 11)
+		kit.Blob(body, cx + side * 2.5, (tieY + bottom) / 2, 17, bottom - tieY + 4, color, { Z = 11, Shade = 0.1 })
+		kit.Part(body, cx - 9, tieY - 3, 18, 6, tie, { Radius = -1, Z = 12 })
 	end
 end
 
@@ -106,9 +105,6 @@ local function mountain(parent, kit, px, py, side, color, snow, z)
 		local s = side * 0.36
 		local d = s / math.sqrt(2)
 		kit.Part(parent, px - s / 2, py + d - s / 2 + 0.4, s, s, WHITE, { Rotation = 45, Radius = 4, Z = z + 1, Outline = false, Shade = false })
-		for _, side2 in ipairs({ -1, 1 }) do
-			kit.Circle(parent, px + side2 * d * 0.55, py + d * 1.25, d * 0.8, d * 0.7, WHITE, 0, z + 1)
-		end
 	end
 end
 
@@ -168,12 +164,13 @@ Art.CloudyWindow = function(body, kit, _item)
 		Tie = C.Butter,
 		Rod = C.Purple,
 	})
-	local big = kit.Cloud(view, w / 2, h * 0.64, 40, WHITE, 0, 3)
-	kit.Animate(big, "Drift", 2, 0.25, 0)
-	kit.Face(big, 18, 16, 16, { Eyes = "happy", Mouth = "smile", Z = 3 })
-	local small = kit.Cloud(view, 14, h * 0.34, 18, WHITE, 0.05, 2)
-	kit.Animate(small, "Drift", 4, 0.3, 1.5)
-	local small2 = kit.Cloud(view, w - 12, h * 0.9, 22, WHITE, 0.05, 2)
+	local big = kit.Cloud(view, w * 0.74, h * 0.94, 26, WHITE, 0, 3)
+	kit.Animate(big, "Drift", 1.5, 0.25, 0)
+	kit.Face(big, 12, 11, 11, { Eyes = "happy", Mouth = "smile", Z = 3 })
+	local small = kit.Cloud(view, 15, h * 0.42, 18, WHITE, 0.05, 2)
+	kit.Animate(small, "Drift", 3, 0.3, 1.5)
+	kit.Circle(view, w * 0.78, h * 0.3, 13, 13, C.Butter, 0, 2)
+	local small2 = kit.Cloud(view, w * 0.7, h * 0.42, 18, WHITE, 0.05, 2)
 	kit.Animate(small2, "Drift", 3, 0.35, 3)
 	return { WallShadow = Vector2.new(0.78, 0.8) }
 end
@@ -189,14 +186,16 @@ Art.RainyWindow = function(body, kit, _item)
 		Rod = C.Navy,
 	})
 	local rain = kit.Group(view, 0, 0, w, h, 2)
-	for index = 0, 9 do
-		local rx = 4 + (index * 37) % w
-		local ry = 18 + (index * 23) % (h - 22)
-		kit.Line(rain, rx, ry, rx - 2.5, ry + 7, 1.6, WHITE, 0.3, 1)
+	for row = 0, 1 do
+		for col = 0, 4 do
+			local rx = 6 + col * 11 + (row % 2) * 5.5
+			local ry = 28 + row * 15 + (col % 2) * 5
+			kit.Line(rain, rx, ry, rx - 2, ry + 6, 1.5, WHITE, 0.3, 1)
+		end
 	end
 	kit.Animate(rain, "Bob", 2.5, 2.2, 0)
-	local cloud = kit.Cloud(view, w / 2, 26, 44, Color3.fromRGB(215, 212, 232), 0, 3)
-	kit.Face(cloud, 22, 18, 16, { Eyes = "closed", Mouth = "o", Z = 3 })
+	local cloud = kit.Cloud(view, w * 0.3, 24, 32, Color3.fromRGB(220, 216, 236), 0, 3)
+	kit.Face(cloud, 13, 13, 12, { Eyes = "closed", Mouth = "o", Z = 3 })
 	kit.Animate(cloud, "Drift", 2, 0.3, 0.4)
 	kit.Blob(view, w / 2, h + 3, w + 10, 14, Color3.fromRGB(150, 165, 200), { Z = 2, Outline = false, Shade = false })
 	-- gouttes sur la vitre
@@ -216,7 +215,7 @@ Art.SunsetWindow = function(body, kit, _item)
 		Curtain = C.Cream,
 		Tie = C.Orange,
 		Rod = C.WoodDark,
-		Cross = "|",
+		Cross = "none",
 	})
 	local horizon = h * 0.64
 	local sun = kit.Circle(view, w / 2, horizon, 30, 30, C.Butter, 0, 2)
@@ -249,7 +248,8 @@ Art.PortholeWindow = function(body, kit, _item)
 	kit.Circle(sand, d / 2, d / 2 - 46, d, d, Color3.fromRGB(255, 225, 170), 0, 1)
 	kit.Circle(sand, 40, 5, 7, 4, C.Pink, 0, 2) -- coquillage
 	for index, s in ipairs({ { 12, 36, 18 }, { 18, 40, 13 }, { 50, 38, 16 } }) do
-		local weed = kit.Part(view, s[1] - 2.5, s[2], 5, s[3], C.Leaf, { Radius = -1, Z = 2, Thickness = 1.2 })
+		local weed = kit.Part(view, s[1] - 2, s[2], 4, s[3], C.Leaf, { Radius = -1, Z = 2, Thickness = 1.2 })
+		kit.Circle(weed, if index % 2 == 0 then 0 else 4, s[3] * 0.4, 4, 5, C.Leaf, 0, 1)
 		kit.Animate(weed, "Sway", 8, 0.8, index * 1.3)
 	end
 	local function fish(fx, fy, size, color, flip, phase)
@@ -306,7 +306,7 @@ Art.CityNightWindow = function(body, kit, _item)
 	for index, t in ipairs(towers) do
 		kit.Part(view, t[1], t[2], t[3], h - t[2] + 4, t[4], { Radius = 2, Z = 3 + index % 2, Thickness = 1.2, Shade = false })
 	end
-	local lit = { { 3, 36 }, { 3, 44 }, { 14, 26 }, { 14, 34 }, { 25, 40 }, { 35, 30 }, { 35, 38 }, { 47, 38 }, { 47, 46 }, { 25, 48 } }
+	local lit = { { 3, 36 }, { 14, 26 }, { 14, 34 }, { 25, 40 }, { 35, 30 }, { 47, 38 }, { 47, 46 }, { 25, 48 } }
 	for index, p in ipairs(lit) do
 		local win = kit.Box(view, p[1], p[2], 3.4, 3.4, C.Butter, 0, 6)
 		kit.Round(win, 1)
@@ -368,10 +368,12 @@ Art.MountainWindow = function(body, kit, _item)
 	mountain(view, kit, 50, 20, 40, Color3.fromRGB(150, 160, 220), true, 3)
 	kit.Blob(view, w * 0.3, h + 6, w * 1.1, 26, C.Leaf, { Z = 6, Shade = false, Thickness = 1.2 })
 	kit.Blob(view, w * 0.85, h + 8, w * 0.7, 30, C.Green, { Z = 6, Shade = false, Thickness = 1.2 })
-	for _, t in ipairs({ { 10, 38, 1 }, { 60, 36, 1.2 }, { 68, 42, 0.9 } }) do
+	-- sapins (2 étages arrondis)
+	for _, t in ipairs({ { 10, 40, 0.8 }, { 58, 38, 1 }, { 66, 44, 0.75 } }) do
 		local s = t[3]
-		kit.Box(view, t[1] - 1, t[2] + 11 * s, 2.4, 4 * s, C.WoodDark, 0, 7)
-		kit.Triangle(view, t[1], t[2], 11 * s, 13 * s, C.LeafDark, 8, 0, 5)
+		kit.Box(view, t[1] - 1.2, t[2] + 12 * s, 2.4, 5 * s, C.WoodDark, 0, 7)
+		kit.Part(view, t[1] - 6 * s, t[2] + 6 * s, 12 * s, 8 * s, C.LeafDark, { Radius = 3, Z = 8, Thickness = 1.2, Shade = false })
+		kit.Part(view, t[1] - 4 * s, t[2], 8 * s, 8 * s, C.LeafDark, { Radius = -1, Z = 9, Thickness = 1.2, Shade = false })
 	end
 	bird(view, kit, 38, 10, 3, C.Navy)
 	return { WallShadow = Vector2.new(0.86, 0.72) }
@@ -418,10 +420,10 @@ Art.BeachWindow = function(body, kit, _item)
 		local a, b = trunk[index], trunk[index + 1]
 		kit.Line(view, a[1], a[2], b[1], b[2], 5, C.WoodLight, 0, 6 + index)
 	end
-	for index, a in ipairs({ -150, -110, -60, -20, 25 }) do
+	for index, a in ipairs({ 155, -165, -120, -60, -15, 30 }) do
 		local rad = math.rad(a)
-		local len = 16
-		kit.Part(view, 56 + math.cos(rad) * len * 0.5 - len / 2, 28 + math.sin(rad) * len * 0.5 - 3.5, len, 7, C.Leaf, {
+		local len = 17
+		kit.Part(view, 56 + math.cos(rad) * len * 0.5 - len / 2, 28 + math.sin(rad) * len * 0.5 - 3, len, 6, if index % 2 == 0 then C.Leaf else C.Green, {
 			Radius = -1,
 			Z = 10 + index % 2,
 			Rotation = a,
@@ -446,25 +448,25 @@ Art.ShootingStarWindow = function(body, kit, _item)
 		Rod = C.Navy,
 		Cross = "|",
 	})
-	kit.Circle(view, 40, 16, 12, 12, C.Butter, 0, 2)
-	kit.Circle(view, 44, 13, 11, 11, Color3.fromRGB(34, 32, 86), 0, 2)
-	for index, s in ipairs({ { 12, 14 }, { 26, 8 }, { 48, 28 }, { 8, 34 }, { 30, 30 } }) do
+	kit.Circle(view, 15, 24, 12, 12, C.Butter, 0, 2)
+	kit.Circle(view, 19, 21, 11, 11, Color3.fromRGB(38, 34, 90), 0, 2)
+	for index, s in ipairs({ { 22, 12 }, { 36, 34 }, { 50, 16 }, { 8, 36 }, { 24, 32 } }) do
 		twinkle(view, kit, s[1], s[2], 2.6, if index % 2 == 0 then C.Butter else WHITE, index * 0.8)
 	end
 	-- étoile filante
 	local shooter = kit.Group(view, 0, 0, w, h, 5)
-	local tail = kit.Line(shooter, 4, 16, 26, 30, 4, C.Lilac, 0, 1)
-	kit.Fade(tail, 1, 0.2, 0)
-	local core = kit.Line(shooter, 10, 20, 26, 30, 1.6, WHITE, 0, 2)
+	local tail = kit.Line(shooter, 28, 4, 46, 20, 5, C.PinkSoft, 0, 1)
+	kit.Fade(tail, 1, 0.05, 0)
+	local core = kit.Line(shooter, 34, 10, 46, 20, 1.6, WHITE, 0, 2)
 	kit.Fade(core, 1, 0, 0)
-	kit.Sparkle(shooter, 27, 31, 12, C.Butter, 0, 3)
-	kit.Circle(shooter, 27, 31, 4, 4, WHITE, 0, 4)
+	kit.Sparkle(shooter, 47, 21, 12, C.Butter, 0, 3)
+	kit.Circle(shooter, 47, 21, 4, 4, WHITE, 0, 4)
 	kit.Animate(shooter, "Drift", 3, 0.6, 0)
 	-- colline et maisonnette
 	kit.Blob(view, w * 0.3, h + 8, w * 1.1, 30, Color3.fromRGB(70, 60, 130), { Z = 6, Shade = false, Thickness = 1.2 })
 	kit.Blob(view, w * 0.9, h + 6, w * 0.7, 22, Color3.fromRGB(90, 75, 150), { Z = 6, Shade = false, Thickness = 1.2 })
 	kit.Part(view, 36, 42, 11, 9, C.PinkSoft, { Radius = 1.5, Z = 7, Thickness = 1.2, Shade = false })
-	kit.Part(view, 37.3, 34.5, 8.5, 8.5, C.Pink, { Radius = 1.5, Z = 8, Rotation = 45, Thickness = 1.2, Shade = false })
+	kit.Part(view, 36.5, 37.5, 9, 9, C.Pink, { Radius = 1.5, Z = 6, Rotation = 45, Thickness = 1.2, Shade = false })
 	local lamp = kit.Box(view, 39.5, 44.5, 3.4, 3.4, C.Butter, 0, 9)
 	kit.Animate(lamp, "Pulse", 0.4, 0.6, 0)
 	return { WallShadow = Vector2.new(0.78, 0.8) }
@@ -474,7 +476,7 @@ end
 Art.GalaxyWindow = function(body, kit, _item)
 	local C = kit.C
 	local gold = Color3.fromRGB(245, 205, 110)
-	local view, w, h = window(body, kit, {
+	local view = window(body, kit, {
 		Arch = true,
 		X = 20,
 		Y = 12,

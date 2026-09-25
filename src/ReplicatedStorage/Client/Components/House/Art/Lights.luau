@@ -226,15 +226,15 @@ Art.OilLamp = function(body, kit, _item)
 	kit.Blob(bowl, 38, 0, 72, 60, clay, { Shine = false })
 	kit.Blob(body, 49, 61, 76, 13, kit.Lighten(clay, 0.2), { Z = 4 }) -- rebord
 	kit.Blob(body, 49, 61, 60, 7, Color3.fromRGB(240, 190, 90), { Z = 5, Outline = false, Shade = false }) -- huile
-	kit.Part(body, 68, 51, 24, 12, kit.Lighten(clay, 0.2), { Radius = -1, Z = 5, Rotation = -22 }) -- bec
+	kit.Part(body, 72, 53, 20, 11, kit.Lighten(clay, 0.2), { Radius = -1, Z = 5, Rotation = -12 }) -- bec
 	for _, x in ipairs({ 24, 76 }) do
 		kit.Circle(body, x, 74, 5, 5, C.PinkSoft, 0, 5)
 	end
 	kit.Face(body, 50, 76, 24, { Eyes = "happy", Mouth = "smile", Z = 6 })
-	kit.Line(body, 85, 50, 87, 44, 2.4, C.Ink, 0, 6)
-	local glow = kit.Circle(body, 87, 30, 30, 30, C.Butter, 0.72, 1)
+	kit.Line(body, 86, 55, 88, 49, 2.4, C.Ink, 0, 6)
+	local glow = kit.Circle(body, 88, 36, 30, 30, C.Butter, 0.72, 1)
 	kit.Animate(glow, "Pulse", 0.2, 0.9, 1)
-	flame(body, kit, 87, 46, 24, 7, 0.7)
+	flame(body, kit, 88, 51, 24, 7, 0.7)
 	return { Glow = Color3.fromRGB(255, 196, 110) }
 end
 
@@ -423,8 +423,6 @@ Art.RainbowProjector = function(body, kit, _item)
 	kit.Blob(body, 50, 66, 18, 10, C.Lilac, { Z = 6 })
 	kit.Blob(body, 50, 65, 10, 5, WHITE, { Z = 7, Outline = false, Shade = false })
 	kit.Face(body, 50, 82, 24, { Eyes = "dot", Mouth = "smile", Z = 6 })
-	local sp = kit.Sparkle(body, 20, 16, 10, WHITE, 0, 5)
-	pulseAll(kit, sp, 0.8, 1.2, 0.5)
 	return { Glow = Color3.fromRGB(200, 160, 255), WallShadow = Vector2.new(0.4, 0.3) }
 end
 
@@ -491,25 +489,36 @@ Art.CrystalChandelier = function(body, kit, _item)
 	kit.Part(layer, 43, 12, 14, 7, gold, { Radius = 3, Z = 3 })
 	kit.Circle(layer, 50, 32, 7, 7, gold, 0, 3)
 	kit.Circle(layer, 50, 42, 5, 5, C.PinkSoft, 0, 3)
-	-- bras (moitié basse d'un ovale doré)
-	local arms = kit.Group(layer, 10, 44, 80, 24, 3, true)
-	local ring = kit.Circle(arms, 40, 0, 72, 34, gold, 1, 1)
-	kit.Stroke(ring, gold, 3.6, 0)
-	local inner = kit.Group(layer, 24, 44, 52, 18, 3, true)
-	local ring2 = kit.Circle(inner, 26, 0, 40, 22, gold, 1, 1)
-	kit.Stroke(ring2, gold, 3, 0)
+	-- bras en U (traits : pas de découpe dans un objet qui se balance)
+	local function arm(x0, x1, top, depth, thick, count)
+		local half = (x1 - x0) / 2
+		local function yAt(x)
+			local u = (x - x0 - half) / half
+			return top + depth * (1 - u * u)
+		end
+		local px = x0
+		for index = 1, count do
+			local x = x0 + (x1 - x0) * index / count
+			kit.Line(layer, px, yAt(px), x, yAt(x), thick, gold, 0, 3)
+			px = x
+		end
+		return yAt
+	end
+	local armY = arm(14, 86, 46, 20, 3.6, 6)
+	arm(30, 70, 54, 10, 3, 4)
 	kit.Blob(layer, 50, 54, 22, 14, gold, { Z = 4, Shine = true })
-	-- gouttes de cristal
+	-- gouttes de cristal (pendues au grand bras)
 	local crystals = { C.LilacSoft, C.Glass, C.PinkSoft, C.Glass, C.LilacSoft }
-	for index, d in ipairs({ { 22, 60, 68 }, { 36, 64, 76 }, { 50, 62, 82 }, { 64, 64, 76 }, { 78, 60, 68 } }) do
-		kit.Line(layer, d[1], d[2], d[1], d[3] - 4, 1, gold, 0.3, 2)
-		local gem = kit.Diamond(layer, d[1], d[3], 8, crystals[index], 0, 3)
+	for index, d in ipairs({ { 22, 8 }, { 36, 10 }, { 50, 14 }, { 64, 10 }, { 78, 8 } }) do
+		local top = armY(d[1])
+		kit.Line(layer, d[1], top, d[1], top + d[2] - 3, 1, gold, 0.3, 2)
+		local gem = kit.Diamond(layer, d[1], top + d[2] + 1, 8, crystals[index], 0, 3)
 		kit.Stroke(gem, C.Sky, 1, 0.1)
 		kit.Animate(gem, "Pulse", 0.5, 1.4, index * 1.2)
 	end
 	-- bougies
 	for index, x in ipairs({ 14, 30, 70, 86 }) do
-		local y = if index == 1 or index == 4 then 44 else 52
+		local y = if index == 1 or index == 4 then 46 else 54
 		kit.Part(layer, x - 3, y - 12, 6, 12, C.Cream, { Radius = 2, Z = 4 })
 		kit.Blob(layer, x, y, 13, 6, gold, { Z = 5 })
 		flame(layer, kit, x, y - 12, 12, 5, index * 0.9)

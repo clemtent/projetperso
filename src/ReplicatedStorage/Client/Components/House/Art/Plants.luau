@@ -254,28 +254,28 @@ Art.HangingPothos = function(body, kit, _item)
 	end
 	kit.Circle(hanger, 0, 12, 6, 6, C.Wood, 0, 2)
 	local light, dark = Color3.fromRGB(165, 222, 130), C.Leaf
-	-- lianes (derrière le pot)
+	-- lianes (derrière le pot) : feuilles en cœur
 	local vines = {
-		{ -19, { { -3, 10 }, { -7, 22 }, { -5, 34 }, { -9, 46 }, { -6, 58 } } },
-		{ 19, { { 3, 10 }, { 7, 22 }, { 4, 34 } } },
+		{ -19, -8, 58, { 12, 25, 38, 51 } },
+		{ 19, 6, 36, { 12, 24, 36 } },
 	}
 	for index, v in ipairs(vines) do
 		local vine = kit.Pivot(hanger, v[1], 36, 2)
-		local px, py = 0, 0
-		for n, p in ipairs(v[2]) do
-			kit.Line(vine, px, py, p[1], p[2], 1.8, C.LeafDark, 0, 1)
-			px, py = p[1], p[2]
-			local heart = kit.Heart(vine, p[1] + (n % 2 == 0 and 3 or -3), p[2] + 2, 11, n % 2 == 0 and light or dark, 0, 2)
-			heart.Rotation = (n % 2 == 0 and -25 or 25)
+		kit.Line(vine, 0, 0, v[2], v[3], 1.8, C.LeafDark, 0, 1)
+		for n, y in ipairs(v[4]) do
+			local side = if n % 2 == 0 then 1 else -1
+			local heart = kit.Heart(vine, v[2] * y / v[3] + side * 3.5, y, 12, n % 2 == 0 and light or dark, 0, 2)
+			heart.Rotation = side * -28
 		end
 		kit.Animate(vine, "Sway", 4, 0.8, index * 2.1)
 	end
 	-- feuilles au-dessus du rebord
 	for _, l in ipairs({ { -8, -125, dark }, { 2, -80, light }, { 10, -50, dark } }) do
-		leaf(hanger, kit, l[1], 36, l[2], 16, 11, l[3], 3)
+		leaf(hanger, kit, l[1], 36, l[2], 16, 11, l[3], 3, false)
 	end
-	local _, faceY = pot(hanger, kit, 0, 66, 42, 30, C.Cream, 5)
-	kit.Face(hanger, 0, faceY, 20, { Z = 8 })
+	local potBody = pot(hanger, kit, 0, 66, 42, 30, C.Cream, 5)
+	kit.Box(potBody, 0, 12, potBody.Size.X.Offset, 4, C.PinkSoft, 0, 2)
+	kit.Box(potBody, 0, 18, potBody.Size.X.Offset, 2, C.Pink, 0.3, 2)
 	kit.Animate(hanger, "Sway", 1.5, 0.6, 0.5)
 	return { WallShadow = Vector2.new(0.42, 0.5) }
 end
@@ -392,11 +392,10 @@ Art.Monstera = function(body, kit, _item)
 	local plant = kit.Pivot(body, 50, 66, 3)
 	local green, deep = Color3.fromRGB(95, 185, 110), Color3.fromRGB(80, 165, 100)
 	local leaves = {
-		{ -22, -8, -165, 28, deep },
-		{ 22, -10, -15, 28, deep },
-		{ -14, -28, -128, 34, green },
-		{ 14, -30, -52, 34, green },
-		{ 0, -36, -90, 30, Color3.fromRGB(110, 200, 120) },
+		{ -22, -8, -160, 28, deep },
+		{ 22, -10, -20, 28, deep },
+		{ -10, -30, -112, 36, green },
+		{ 12, -32, -64, 36, Color3.fromRGB(110, 200, 120) },
 	}
 	for index, l in ipairs(leaves) do
 		kit.Line(plant, 0, 0, l[1], l[2], 2.4, C.LeafDark, 0, 1)
@@ -513,7 +512,7 @@ Art.CherryBlossom = function(body, kit, _item)
 		kit.Line(branch, s[1], s[2], s[3], s[4], s[5], brown, 0, 1)
 	end
 	local petal, heart = Color3.fromRGB(255, 200, 220), C.PinkDeep
-	for _, f in ipairs({ { -22, -43, 13 }, { -4, -53, 12 }, { 26, -37, 13 }, { 32, -16, 11 }, { -36, -35, 10 }, { 4, -28, 10 } }) do
+	for _, f in ipairs({ { -22, -43, 13 }, { -4, -53, 12 }, { 26, -37, 13 }, { 32, -16, 11 }, { -36, -35, 10 } }) do
 		blossom(branch, kit, f[1], f[2], f[3], petal, heart, 2)
 	end
 	for _, b in ipairs({ { -14, -30 }, { 18, -30 }, { -30, -46 }, { 38, -22 } }) do
@@ -530,7 +529,7 @@ Art.CherryBlossom = function(body, kit, _item)
 	kit.Part(body, 41, 55, 18, 12, vase, { Radius = 4, Z = 4 })
 	kit.Part(body, 38, 53, 24, 5, kit.Lighten(vase, 0.3), { Radius = -1, Z = 6 })
 	kit.Box(body, 36.8, 78, 26.4, 4, C.PinkSoft, 0, 6)
-	blossom(body, kit, 50, 90, 7, C.Pink, C.White, 6)
+	kit.Heart(body, 50, 90, 9, C.Pink, 0, 6)
 	return nil
 end
 
