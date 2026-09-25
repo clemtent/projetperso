@@ -34,6 +34,7 @@ local HouseCommon = require(HouseFolder:WaitForChild("HouseCommon"))
 local HouseRoom = require(HouseFolder:WaitForChild("HouseRoom"))
 local HouseEditor = require(HouseFolder:WaitForChild("HouseEditor"))
 local HouseShop = require(HouseFolder:WaitForChild("HouseShop"))
+local HouseArt = require(HouseFolder:WaitForChild("HouseArt"))
 local Locale = require(ReplicatedStorage.Shared.Locale)
 
 type HouseData = HouseCommon.HouseData
@@ -241,18 +242,22 @@ local function refreshTray()
 			BackgroundColor3 = HouseCommon.CategoryTint(item.Category),
 			AutoButtonColor = false,
 			Font = Theme.Fonts.Body,
-			Text = item.Icon,
+			Text = HouseArt.Has(item.Id) and "" or item.Icon,
 			TextSize = math.floor(tileSize * 0.6),
 			ZIndex = 13,
 			Parent = holder,
 		})
 		UIUtil.Corner(tile, 14)
+		if HouseArt.Has(item.Id) then
+			HouseArt.Thumbnail(tile, item, tileSize - 2, 1)
+		end
 		UIUtil.Stroke(tile, C.Pink, 1.5, 0.3)
 		UIUtil.AnimateButton(tile, 1.08, 0.9)
 		local badge = UIUtil.Badge(tile, 20)
 		badge.BackgroundColor3 = C.PinkDeep
 		badge.Position = UDim2.new(1, -3, 0, 3)
 		badge.Text = "x" .. entry.Free
+		badge.ZIndex = 20
 		badge.Visible = true
 		tile.Activated:Connect(function()
 			local current = editor
@@ -406,6 +411,9 @@ local function ensureRoom()
 		end,
 		OnHouseChanged = function()
 			forceSync = not newEditor.IsBusy()
+		end,
+		BeforeHouseChange = function()
+			newEditor.Flush()
 		end,
 		GetAvailable = function(itemId: string): number
 			return newEditor.Available(itemId)
@@ -801,7 +809,13 @@ function House.Build(frame: Frame)
 end
 
 function House.Update(data)
+	local previousSize = latestHouse.Size
 	latestHouse = HouseCommon.GetHouse(data)
+	-- Nouvelle taille de maison : le serveur a recalé les objets, on reprend
+	-- sa disposition telle quelle
+	if previousSize ~= latestHouse.Size then
+		forceSync = true
+	end
 	local currentEditor = editor
 	if currentEditor then
 		local force = forceSync

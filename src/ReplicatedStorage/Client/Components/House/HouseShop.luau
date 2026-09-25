@@ -28,6 +28,8 @@ local SoundManager = require(Client.SoundManager)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local Locale = require(ReplicatedStorage.Shared.Locale)
 local HouseCommon = require(script.Parent.HouseCommon)
+local NeedDopamine = require(script.Parent.Parent.NeedDopamine)
+local HouseArt = require(script.Parent.HouseArt)
 local HousePatterns = require(script.Parent.HousePatterns)
 
 type Item = HouseCommon.Item
@@ -50,6 +52,7 @@ export type Handlers = {
 	OnPlaceRequest: (itemId: string) -> (),
 	OnPreview: (kind: string, id: string?) -> (),
 	OnHouseChanged: () -> (),
+	BeforeHouseChange: () -> (),
 	GetAvailable: (itemId: string) -> number,
 }
 
@@ -71,6 +74,9 @@ type ItemCard = {
 	New: Frame,
 	Stroke: UIStroke,
 	Rank: number,
+	Tile: GuiObject,
+	Emoji: TextLabel,
+	Painted: boolean,
 }
 
 type StyleCard = {
@@ -400,7 +406,10 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 		if HouseCommon.Dopamine() < price then
 			SoundManager.Play("Error", 0.7)
 			UIUtil.Shake(card.Button)
-			handlers.Notify(Locale.T("You need %s more Dopamine", NumberFormatter.Format(price - HouseCommon.Dopamine())), Theme.Colors.Red)
+			local missing = price - HouseCommon.Dopamine()
+			NeedDopamine.Offer(missing, function()
+				handlers.Notify(Locale.T("You need %s more Dopamine", NumberFormatter.Format(missing)), Theme.Colors.Red)
+			end)
 			return
 		end
 		task.spawn(function()
@@ -427,7 +436,10 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 		if not isOwned and HouseCommon.Dopamine() < card.Style.Cost then
 			SoundManager.Play("Error", 0.7)
 			UIUtil.Shake(card.Button)
-			handlers.Notify(Locale.T("You need %s more Dopamine", NumberFormatter.Format(card.Style.Cost - HouseCommon.Dopamine())), Theme.Colors.Red)
+			local missing = card.Style.Cost - HouseCommon.Dopamine()
+			NeedDopamine.Offer(missing, function()
+				handlers.Notify(Locale.T("You need %s more Dopamine", NumberFormatter.Format(missing)), Theme.Colors.Red)
+			end)
 			return
 		end
 		local action = (isOwned and "set" or "buy") .. card.Kind
@@ -459,9 +471,15 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 		if not isOwned and HouseCommon.Dopamine() < size.Cost then
 			SoundManager.Play("Error", 0.7)
 			UIUtil.Shake(row.Button)
-			handlers.Notify(Locale.T("You need %s more Dopamine", NumberFormatter.Format(size.Cost - HouseCommon.Dopamine())), Theme.Colors.Red)
+			local missing = size.Cost - HouseCommon.Dopamine()
+			NeedDopamine.Offer(missing, function()
+				handlers.Notify(Locale.T("You need %s more Dopamine", NumberFormatter.Format(missing)), Theme.Colors.Red)
+			end)
 			return
 		end
+		-- Disposition en attente envoyée AVANT le déménagement (le serveur
+		-- recale ensuite les objets pour la nouvelle largeur)
+		handlers.BeforeHouseChange()
 		task.spawn(function()
 			local ok, message = request(isOwned and "setSize" or "buySize", size.Id, row.Button)
 			if ok then
@@ -533,7 +551,8 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 			})
 			UIUtil.Corner(dot, UDim.new(1, 0))
 		end
-		UIUtil.Create("TextLabel", {
+		-- Emoji en attendant le dessin (peint petit à petit, voir paintArt)
+		local emoji = UIUtil.Create("TextLabel", {
 			Name = "Emoji",
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.54),
@@ -611,6 +630,9 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 			New = newTag,
 			Stroke = stroke,
 			Rank = rank,
+			Tile = tile,
+			Emoji = emoji,
+			Painted = false,
 		}
 		table.insert(itemCards, entry)
 		button.Activated:Connect(function()
@@ -838,9 +860,64 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 			button.TextColor3 = selected and WHITE or C.Ink
 		end
 	end
+	-- Dessins des vignettes : peints à la demande (cartes visibles), quelques-uns
+	-- par image pour ne pas figer l'écran à l'ouverture de la boutique
+	local paintQueue: { ItemCard } = {}
+	local painting = false
+	local function paintArt(card: ItemCard)
+		if card.Painted then
+			return
+		end
+		card.Painted = true
+		if HouseArt.Has(card.Item.Id) then
+			HouseArt.Thumbnail(card.Tile, card.Item, 78, 37)
+			card.Emoji.Visible = false
+		end
+	end
+	local function queueArt(card: ItemCard)
+		if card.Painted then
+			return
+		end
+		table.insert(paintQueue, card)
+		if painting then
+			return
+		end
+		painting = true
+		task.spawn(function()
+			while #paintQueue > 0 do
+				for _ = 1, 6 do
+					local next = table.remove(paintQueue, 1)
+					if not next then
+						break
+					end
+					if next.Cell.Visible then
+						paintArt(next)
+					end
+				end
+				task.wait()
+			end
+			painting = false
+		end)
+	end
+
 	local function applyFilter()
+		table.clear(paintQueue)
 		for _, card in ipairs(itemCards) do
-			card.Cell.Visible = category == "All" or card.Item.Category == category
+			local visible = category == "All" or card.Item.Category == category
+			card.Cell.Visible = visible
+		end
+		-- Dans l'ordre d'affichage (les premières cartes d'abord)
+		local ordered = {}
+		for _, card in ipairs(itemCards) do
+			if card.Cell.Visible and not card.Painted then
+				table.insert(ordered, card)
+			end
+		end
+		table.sort(ordered, function(a, b)
+			return a.Cell.LayoutOrder < b.Cell.LayoutOrder
+		end)
+		for _, card in ipairs(ordered) do
+			queueArt(card)
 		end
 		itemsList.CanvasPosition = Vector2.zero
 	end

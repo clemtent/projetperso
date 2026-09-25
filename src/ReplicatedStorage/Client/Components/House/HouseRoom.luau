@@ -32,6 +32,8 @@ local UIUtil = require(Client.UIUtil)
 local Signal = require(ReplicatedStorage.Shared.Signal)
 local HouseCommon = require(script.Parent.HouseCommon)
 local HousePatterns = require(script.Parent.HousePatterns)
+local HouseArt = require(script.Parent.HouseArt)
+local HouseScenery = require(script.Parent.HouseScenery)
 
 type Item = HouseCommon.Item
 type Placed = HouseCommon.Placed
@@ -67,6 +69,7 @@ export type Sticker = {
 	Hit: TextButton,
 	Glow: Frame?,
 	Bulbs: { Frame },
+	Anims: { HouseArt.Anim },
 	Flat: boolean,
 }
 
@@ -93,300 +96,6 @@ export type Room = {
 	Update: (dt: number) -> (),
 	Refit: () -> (),
 }
-
-----------------------------------------------------------------------
--- Détails dessinés à la main (par Id d'objet)
-----------------------------------------------------------------------
-
-type DetailResult = {
-	HideEmoji: boolean?,
-	EmojiScale: number?,
-	EmojiY: number?, -- centre vertical de l'emoji (0..1 de la boîte)
-	Flat: boolean?,
-	Glow: Color3?,
-	Bulbs: { Frame }?,
-	WallShadow: Vector2?, -- taille de l'ombre d'un objet mural (fraction de la boîte)
-}
-
--- Rideaux roses de part et d'autre d'une fenêtre (boîte 100 x 100)
-local function curtains(body: Frame, top: number, height: number, left: number, right: number)
-	local rod = Box(body, left - 10, top - 6, right - left + 20, 4, C.WoodDark, 0, 5)
-	Round(rod)
-	Circle(body, left - 10, top - 4, 7, 7, C.WoodDark, 0, 5)
-	Circle(body, right + 10, top - 4, 7, 7, C.WoodDark, 0, 5)
-	for _, x in ipairs({ left - 7, right - 11 }) do
-		local curtain = Box(body, x, top - 3, 18, height, C.Pink, 0, 5)
-		Round(curtain, UDim.new(0, 6))
-		UIUtil.Gradient(curtain, ColorSequence.new(WHITE, Color3.fromRGB(225, 205, 215)), 0)
-		local tie = Box(body, x - 1, top + height * 0.55, 20, 5, C.PinkDeep, 0, 6)
-		Round(tie)
-	end
-end
-
--- Fenêtre (cadre + ciel + croisillon + rebord), l'emoji sert de "vue"
-local function windowDetail(skyTop: Color3, skyBottom: Color3): (Frame, Item) -> DetailResult
-	return function(body: Frame, _item: Item): DetailResult
-		local frame = Box(body, 12, 8, 76, 78, C.Cream, 0, 2)
-		Round(frame, UDim.new(0, 8))
-		UIUtil.Stroke(frame, C.WoodDark, 2, 0.35)
-		local glass = Box(body, 18, 14, 64, 66, WHITE, 0, 2)
-		Round(glass, UDim.new(0, 5))
-		UIUtil.Gradient(glass, ColorSequence.new(skyTop, skyBottom), 90)
-		glass.ZIndex = 3
-		-- Croisillon (semi-transparent : on voit la vue derrière)
-		Box(body, 48, 14, 4, 66, C.Cream, 0.15, 5)
-		Box(body, 18, 45, 64, 4, C.Cream, 0.15, 5)
-		local shine = Box(body, 22, 18, 14, 4, WHITE, 0.4, 5)
-		Round(shine)
-		local sill = Box(body, 6, 84, 88, 8, C.Cream, 0, 5)
-		Round(sill, UDim.new(0, 3))
-		UIUtil.Stroke(sill, C.WoodDark, 1.5, 0.5)
-		curtains(body, 10, 70, 12, 88)
-		return { EmojiScale = 0.5, EmojiY = 0.49, WallShadow = Vector2.new(0.9, 0.9) }
-	end
-end
-
--- Porte (corps coloré arrondi, poignée dorée) ; l'emoji décore la porte
-local function doorDetail(color: Color3, emojiScale: number): (Frame, Item) -> DetailResult
-	return function(body: Frame, _item: Item): DetailResult
-		local door = Box(body, 22, 4, 56, 96, color, 0, 2)
-		Round(door, UDim.new(0, 14))
-		UIUtil.Stroke(door, color:Lerp(BLACK, 0.35), 2.5, 0.2)
-		UIUtil.Gradient(door, ColorSequence.new(WHITE, Color3.fromRGB(215, 215, 215)), 0)
-		local panelTop = Box(body, 30, 16, 40, 30, color:Lerp(WHITE, 0.25), 0, 3)
-		Round(panelTop, UDim.new(0, 8))
-		local panelBottom = Box(body, 30, 54, 40, 34, color:Lerp(WHITE, 0.25), 0, 3)
-		Round(panelBottom, UDim.new(0, 8))
-		Circle(body, 70, 56, 8, 8, C.Butter, 0, 5)
-		return { EmojiScale = emojiScale, EmojiY = 0.32 }
-	end
-end
-
--- Halo de lumière (catégorie "Lights" et quelques objets lumineux)
-local LIGHT_COLORS: { [string]: Color3 } = {
-	ScentedCandle = Color3.fromRGB(255, 200, 120),
-	HangingBulb = Color3.fromRGB(255, 236, 150),
-	PaperLantern = Color3.fromRGB(255, 140, 120),
-	OilLamp = Color3.fromRGB(255, 196, 110),
-	StarNightLight = Color3.fromRGB(255, 232, 140),
-	SparklerLights = Color3.fromRGB(255, 220, 160),
-	NeonHeart = Color3.fromRGB(255, 90, 170),
-	MoonLamp = Color3.fromRGB(255, 244, 200),
-	RainbowProjector = Color3.fromRGB(200, 160, 255),
-	LavaLamp = Color3.fromRGB(255, 120, 90),
-	UFOLamp = Color3.fromRGB(150, 255, 200),
-	CrystalChandelier = Color3.fromRGB(190, 230, 255),
-	PocketSun = Color3.fromRGB(255, 214, 90),
-	Fireplace = Color3.fromRGB(255, 150, 80),
-	GlowStars = Color3.fromRGB(255, 244, 170),
-	CrystalBall = Color3.fromRGB(210, 170, 255),
-	DreamPortal = Color3.fromRGB(190, 140, 255),
-	Aquarium = Color3.fromRGB(140, 210, 255),
-	FloatingPlanet = Color3.fromRGB(255, 210, 160),
-}
-
--- Fil vertical qui pend du plafond (ampoule, lanterne, lustre)
-local function cord(body: Frame, length: number, color: Color3?)
-	Box(body, 49, -length, 2, length + 12, color or Color3.fromRGB(90, 70, 80), 0.1, 1)
-end
-
-local BULB_COLORS = {
-	Color3.fromRGB(255, 120, 180),
-	Color3.fromRGB(255, 220, 110),
-	Color3.fromRGB(130, 230, 190),
-	Color3.fromRGB(180, 150, 255),
-	Color3.fromRGB(255, 170, 130),
-	Color3.fromRGB(140, 200, 255),
-}
-
-local DETAILS: { [string]: (Frame, Item) -> DetailResult } = {}
-
--- Tapis tricoté : ovale à anneaux posé à plat, pelote au milieu
-DETAILS.KnittedRug = function(body: Frame, _item: Item): DetailResult
-	local rings = { C.PinkDeep, C.Cream, C.Pink, C.PinkSoft, C.Lilac }
-	for index, color in ipairs(rings) do
-		local k = 1 - (index - 1) * 0.17
-		Circle(body, 50, 84, 150 * k, 40 * k, color, 0, 2)
-	end
-	return { EmojiScale = 0.42, EmojiY = 0.72, Flat = true }
-end
-
--- Guirlande lumineuse : ampoules colorées sur un fil qui pend en arc
-DETAILS.FairyLights = function(body: Frame, _item: Item): DetailResult
-	local bulbs = {}
-	local count = 9
-	local previous: Vector2? = nil
-	for index = 0, count - 1 do
-		local t = index / (count - 1)
-		local x = -30 + t * 160
-		local y = 30 + math.sin(t * math.pi) * 34
-		local point = Vector2.new(x, y)
-		if previous then
-			local delta = point - previous
-			local wire = Box(body, 0, 0, delta.Magnitude + 1, 2, Color3.fromRGB(80, 110, 90), 0, 1)
-			wire.AnchorPoint = Vector2.new(0.5, 0.5)
-			wire.Position = UDim2.fromOffset((point.X + previous.X) / 2, (point.Y + previous.Y) / 2)
-			wire.Rotation = math.deg(math.atan2(delta.Y, delta.X))
-		end
-		previous = point
-		local color = BULB_COLORS[index % #BULB_COLORS + 1]
-		local halo = Circle(body, x, y + 7, 26, 26, color, 0.8, 1)
-		halo.Name = "Halo"
-		local bulb = Circle(body, x, y + 7, 10, 13, color, 0, 3)
-		bulb:SetAttribute("Phase", index * 0.9)
-		table.insert(bulbs, bulb)
-		table.insert(bulbs, halo)
-	end
-	return { HideEmoji = true, Bulbs = bulbs, WallShadow = Vector2.new(0, 0) }
-end
-
-DETAILS.HangingBulb = function(body: Frame, _item: Item): DetailResult
-	cord(body, 60)
-	return { EmojiScale = 0.9 }
-end
-
-DETAILS.PaperLantern = function(body: Frame, _item: Item): DetailResult
-	cord(body, 50, C.PinkDeep)
-	return { EmojiScale = 0.9 }
-end
-
-DETAILS.CrystalChandelier = function(body: Frame, _item: Item): DetailResult
-	cord(body, 40, Color3.fromRGB(200, 170, 90))
-	return { EmojiScale = 0.95 }
-end
-
--- Poster : feuille blanche légèrement penchée, scotch rose
-DETAILS.MapPoster = function(body: Frame, _item: Item): DetailResult
-	local paper = Box(body, 6, 10, 88, 80, WHITE, 0, 2)
-	paper.Rotation = -3
-	Round(paper, UDim.new(0, 4))
-	UIUtil.Stroke(paper, Color3.fromRGB(220, 200, 210), 1.5, 0.2)
-	for _, x in ipairs({ 4, 80 }) do
-		local tape = Box(body, x, 4, 18, 8, C.Pink, 0.25, 4)
-		tape.Rotation = x < 50 and -25 or 25
-	end
-	return { EmojiScale = 0.72, WallShadow = Vector2.new(0.9, 0.82) }
-end
-
--- Miroir cœur : grand cœur rose derrière le miroir
-DETAILS.HeartMirror = function(body: Frame, _item: Item): DetailResult
-	HousePatterns.Heart(body, 50, 50, 104, C.PinkDeep, 0, 2)
-	HousePatterns.Heart(body, 50, 51, 90, C.PinkSoft, 0, 2)
-	return { EmojiScale = 0.6, EmojiY = 0.47, WallShadow = Vector2.new(0.6, 0.55) }
-end
-
--- Cheminée en briques, le feu dans le foyer
-DETAILS.Fireplace = function(body: Frame, _item: Item): DetailResult
-	local mantle = Box(body, 2, 18, 96, 12, C.Cream, 0, 2)
-	Round(mantle, UDim.new(0, 4))
-	local bricks = Box(body, 8, 28, 84, 72, Color3.fromRGB(214, 120, 120), 0, 2)
-	UIUtil.Stroke(bricks, Color3.fromRGB(150, 70, 80), 2, 0.3)
-	for row = 0, 4 do
-		Box(bricks, 0, 12 + row * 13, 84, 2, Color3.fromRGB(250, 214, 200), 0.2, 3)
-	end
-	local hearth = Box(body, 24, 50, 52, 50, Color3.fromRGB(60, 36, 50), 0, 4)
-	Round(hearth, UDim.new(0, 20))
-	return { EmojiScale = 0.48, EmojiY = 0.76, Glow = LIGHT_COLORS.Fireplace }
-end
-
--- Aquarium : bac d'eau, bulles et poisson
-DETAILS.Aquarium = function(body: Frame, _item: Item): DetailResult
-	local tank = Box(body, 4, 26, 92, 70, Color3.fromRGB(170, 225, 255), 0.15, 2)
-	Round(tank, UDim.new(0, 8))
-	UIUtil.Stroke(tank, WHITE, 3, 0.1)
-	UIUtil.Gradient(tank, ColorSequence.new(Color3.fromRGB(235, 250, 255), Color3.fromRGB(150, 205, 245)), 90)
-	Box(body, 8, 86, 84, 8, Color3.fromRGB(255, 225, 170), 0, 3)
-	for index, point in ipairs({ Vector2.new(24, 44), Vector2.new(30, 60), Vector2.new(78, 40) }) do
-		local bubble = Circle(body, point.X, point.Y, 7 - index, 7 - index, WHITE, 0.3, 4)
-		UIUtil.Stroke(bubble, Color3.fromRGB(120, 180, 230), 1, 0.4)
-	end
-	Box(body, 0, 96, 100, 4, C.WoodDark, 0, 3)
-	return { EmojiScale = 0.46, EmojiY = 0.62 }
-end
-
--- Climatiseur : boîtier blanc avec grille
-DETAILS.AirConditioner = function(body: Frame, _item: Item): DetailResult
-	local unit = Box(body, 2, 28, 96, 44, WHITE, 0, 2)
-	Round(unit, UDim.new(0, 10))
-	UIUtil.Stroke(unit, Color3.fromRGB(190, 200, 215), 2, 0.1)
-	UIUtil.Gradient(unit, ColorSequence.new(WHITE, Color3.fromRGB(225, 232, 242)), 90)
-	for index = 0, 3 do
-		Box(body, 12, 58 + index * 3.2, 76, 1.5, Color3.fromRGB(170, 185, 205), 0.2, 3)
-	end
-	Circle(body, 86, 38, 5, 5, C.Mint, 0, 3)
-	return { EmojiScale = 0.26, EmojiY = 0.42, WallShadow = Vector2.new(0.95, 0.5) }
-end
-
--- Frigo pastel
-DETAILS.Fridge = function(body: Frame, _item: Item): DetailResult
-	local fridge = Box(body, 20, 2, 60, 98, Color3.fromRGB(180, 232, 214), 0, 2)
-	Round(fridge, UDim.new(0, 10))
-	UIUtil.Stroke(fridge, Color3.fromRGB(100, 170, 150), 2, 0.2)
-	UIUtil.Gradient(fridge, ColorSequence.new(WHITE, Color3.fromRGB(215, 215, 215)), 0)
-	Box(body, 20, 36, 60, 2, Color3.fromRGB(100, 170, 150), 0.2, 3)
-	Box(body, 70, 14, 3, 16, C.Cream, 0, 3)
-	Box(body, 70, 46, 3, 24, C.Cream, 0, 3)
-	HousePatterns.Heart(body, 36, 60, 12, C.Pink, 0, 3)
-	return { EmojiScale = 0.26, EmojiY = 0.2 }
-end
-
--- Cuisinière : four + poêle posée dessus
-DETAILS.Stove = function(body: Frame, _item: Item): DetailResult
-	local stove = Box(body, 12, 40, 76, 60, WHITE, 0, 2)
-	Round(stove, UDim.new(0, 8))
-	UIUtil.Stroke(stove, Color3.fromRGB(180, 170, 180), 2, 0.2)
-	local oven = Box(body, 22, 60, 56, 32, Color3.fromRGB(70, 60, 80), 0, 3)
-	Round(oven, UDim.new(0, 6))
-	Box(body, 26, 64, 20, 4, WHITE, 0.6, 4)
-	for index = 0, 2 do
-		Circle(body, 30 + index * 20, 50, 7, 7, C.Pink, 0, 3)
-	end
-	return { EmojiScale = 0.5, EmojiY = 0.28 }
-end
-
--- Bain chaud : bassin d'eau ovale
-DETAILS.HotSpring = function(body: Frame, _item: Item): DetailResult
-	Circle(body, 50, 82, 118, 34, Color3.fromRGB(180, 170, 170), 0, 2)
-	Circle(body, 50, 81, 104, 26, Color3.fromRGB(150, 215, 245), 0, 2)
-	Circle(body, 40, 78, 30, 6, WHITE, 0.5, 3)
-	return { EmojiScale = 0.6, EmojiY = 0.4 }
-end
-
--- Trou de souris : arche sombre au pied du mur, la souris dépasse
-DETAILS.MouseHole = function(body: Frame, _item: Item): DetailResult
-	local hole = Box(body, 16, 30, 68, 90, Color3.fromRGB(50, 34, 44), 0, 2)
-	Round(hole, UDim.new(0.5, 0))
-	Box(body, 10, 96, 80, 4, C.Cream, 0, 3)
-	return { EmojiScale = 0.55, EmojiY = 0.7 }
-end
-
-DETAILS.HeartDoor = doorDetail(C.Pink, 0.34)
-DETAILS.CandyDoor = doorDetail(Color3.fromRGB(255, 170, 205), 0.34)
-DETAILS.GardenDoor = doorDetail(Color3.fromRGB(140, 210, 160), 0.3)
-
--- Portail de rêve : anneau violet lumineux
-DETAILS.DreamPortal = function(body: Frame, _item: Item): DetailResult
-	Circle(body, 50, 52, 96, 96, Color3.fromRGB(160, 110, 255), 0, 2)
-	Circle(body, 50, 52, 80, 80, Color3.fromRGB(60, 30, 110), 0, 2)
-	return { EmojiScale = 0.7, EmojiY = 0.52, Glow = LIGHT_COLORS.DreamPortal }
-end
-
-DETAILS.CloudyWindow = windowDetail(Color3.fromRGB(150, 210, 255), Color3.fromRGB(220, 240, 255))
-DETAILS.RainyWindow = windowDetail(Color3.fromRGB(130, 150, 185), Color3.fromRGB(190, 205, 225))
-DETAILS.SunsetWindow = windowDetail(Color3.fromRGB(255, 150, 120), Color3.fromRGB(255, 214, 160))
-DETAILS.CityNightWindow = windowDetail(Color3.fromRGB(30, 30, 80), Color3.fromRGB(90, 70, 150))
-DETAILS.MountainWindow = windowDetail(Color3.fromRGB(140, 200, 255), Color3.fromRGB(230, 245, 255))
-DETAILS.BeachWindow = windowDetail(Color3.fromRGB(120, 210, 255), Color3.fromRGB(255, 236, 190))
-DETAILS.ShootingStarWindow = windowDetail(Color3.fromRGB(26, 24, 70), Color3.fromRGB(110, 80, 170))
-DETAILS.GalaxyWindow = windowDetail(Color3.fromRGB(40, 20, 80), Color3.fromRGB(160, 90, 200))
-
--- Fenêtre à rideaux (l'emoji EST la fenêtre) : juste les rideaux autour
-DETAILS.CurtainWindow = function(body: Frame, _item: Item): DetailResult
-	curtains(body, 12, 72, 10, 90)
-	local sill = Box(body, 4, 88, 92, 7, C.Cream, 0, 5)
-	Round(sill, UDim.new(0, 3))
-	return { EmojiScale = 0.86, EmojiY = 0.5 }
-end
 
 ----------------------------------------------------------------------
 -- Construction de la pièce
@@ -493,6 +202,9 @@ function HouseRoom.new(stage: Frame): Room
 		ZIndex = 5,
 		Parent = frame,
 	})
+	-- Ciel, toit, pelouse et poussières de lumière (au-dessus du voile de nuit)
+	local scenery = HouseScenery.new(stage, frame, SHELL, CEIL, 5)
+
 	-- Clic dans le vide : désélectionne (branché par l'éditeur)
 	local backgroundHit = UIUtil.Create("TextButton", {
 		Name = "BackgroundHit",
@@ -554,6 +266,7 @@ function HouseRoom.new(stage: Frame): Room
 
 	local function applyNight()
 		night.BackgroundTransparency = dark and 0.46 or 1
+		scenery:SetDark(dark)
 		local gradient = windowGlassGradient
 		if gradient then
 			if dark then
@@ -677,6 +390,7 @@ function HouseRoom.new(stage: Frame): Room
 		floorZone.Position = UDim2.fromOffset(4, wallHeight + 4)
 		floorZone.Size = UDim2.fromOffset(width - 8, height - wallHeight - 8)
 
+		scenery:Rebuild(width, height, wallHeight)
 		HousePatterns.BuildWall(wall, width, wallHeight, wallpaper, 1)
 		HousePatterns.BuildFloor(floor, width, height - wallHeight, floorStyle, 1)
 
@@ -764,10 +478,11 @@ function HouseRoom.new(stage: Frame): Room
 			return
 		end
 		local available = stage.AbsoluteSize / factor
-		local fullW = width + SHELL * 2 + 16
-		local fullH = height + CEIL + SHELL + 16
+		local fullW = width + SHELL * 2 + 76 -- (pelouse et toit débordent un peu)
+		local roofH, groundH = HouseScenery.ROOF + 24, HouseScenery.GROUND
+		local fullH = height + CEIL + SHELL + roofH + groundH + 16
 		local newScale = math.max(0.2, math.min(available.X / fullW, available.Y / fullH))
-		frame.Position = UDim2.new(0.5, 0, 0.5, (CEIL - SHELL) / 2 * newScale)
+		frame.Position = UDim2.new(0.5, 0, 0.5, (CEIL + roofH - SHELL - groundH) / 2 * newScale)
 		if force == true or math.abs(newScale - room.Scale) > 1e-4 then
 			room.Scale = newScale
 			scale.Scale = newScale
@@ -814,20 +529,13 @@ function HouseRoom.new(stage: Frame): Room
 		})
 		local pop = UIUtil.Create("UIScale", { Name = "Pop", Parent = body })
 
-		local detail: DetailResult = {}
-		local painter = DETAILS[item.Id]
-		if painter then
-			local ok, result = pcall(painter, body, item)
-			if ok and type(result) == "table" then
-				detail = result
-			elseif not ok then
-				warn("[HouseRoom] Détail " .. item.Id .. " : " .. tostring(result))
-			end
-		end
+		-- Dessin kawaii de l'objet (House/Art) ; sinon, l'emoji seul
+		local painted, anims = HouseArt.Paint(body, item, false)
+		local detail: HouseArt.Result = painted or {}
+		local showEmoji = painted == nil or detail.ShowEmoji == true
 
 		-- Halo des lumières
-		-- (la guirlande a ses propres halos, ampoule par ampoule)
-		local glowColor = detail.Glow or LIGHT_COLORS[item.Id] or (item.Category == "Lights" and detail.Bulbs == nil and C.Butter or nil)
+		local glowColor = detail.Glow or (item.Category == "Lights" and detail.Bulbs == nil and C.Butter or nil)
 		local glow: Frame? = nil
 		if glowColor then
 			local halo = UIUtil.Create("Frame", {
@@ -869,7 +577,7 @@ function HouseRoom.new(stage: Frame): Room
 			TextColor3 = WHITE,
 			TextSize = math.floor(88 * emojiScale),
 			TextYAlignment = isWall and Enum.TextYAlignment.Center or Enum.TextYAlignment.Bottom,
-			Visible = detail.HideEmoji ~= true,
+			Visible = showEmoji,
 			ZIndex = 4,
 			Parent = body,
 		})
@@ -916,6 +624,7 @@ function HouseRoom.new(stage: Frame): Room
 			Hit = hit,
 			Glow = glow,
 			Bulbs = detail.Bulbs or {},
+			Anims = anims,
 			Flat = flat,
 		}
 		stickers[sticker] = true
@@ -1024,8 +733,13 @@ function HouseRoom.new(stage: Frame): Room
 		end,
 		Update = function(dt: number)
 			clock += dt
-			-- Guirlandes qui scintillent (les ampoules et leur halo)
+			scenery:Update(dt)
+			-- Petites animations des dessins (animaux, flammes, balanciers...)
+			-- et guirlandes qui scintillent (les ampoules et leur halo)
 			for sticker in pairs(stickers) do
+				if #sticker.Anims > 0 then
+					HouseArt.Step(sticker.Anims, clock)
+				end
 				local bulbs = sticker.Bulbs
 				for index = 1, #bulbs, 2 do
 					local bulb = bulbs[index]

@@ -329,5 +329,10 @@ return {
 		["🛠️ Test tools"] = "🛠️ Outils de test",
 		["🤖 %s clicks / second"] = "🤖 %s clics / seconde",
 		["🥇 Leaderboard"] = "🥇 Classement",
+		-- Fenêtre "Pas assez de Dopamine" (NeedDopamine)
+		["Not enough Dopamine!"] = "Pas assez de Dopamine !",
+		["You need %s more Dopamine. Grab a pack in the shop and buy it right now!"] = "Il te manque %s de Dopamine. Prends un pack dans la boutique et achète-le tout de suite !",
+		["Later"] = "Plus tard",
+		["💎 Get Dopamine"] = "💎 Avoir de la Dopamine",
 	},
 }

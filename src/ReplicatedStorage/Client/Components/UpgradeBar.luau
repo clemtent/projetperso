@@ -33,6 +33,7 @@ local ClientState = require(Client.ClientState)
 local Effects = require(Client.Effects)
 local SoundManager = require(Client.SoundManager)
 local Notifications = require(script.Parent.Notifications)
+local NeedDopamine = require(script.Parent.NeedDopamine)
 local PanelManager = require(script.Parent.PanelManager)
 local Slots = require(Client.Slots)
 local Formulas = require(ReplicatedStorage.Shared.Formulas)
@@ -318,6 +319,7 @@ local function buy(upgradeId: string)
 	local upgrade = card.Upgrade
 	if not canAfford(upgrade) then
 		failFeedback(card)
+		NeedDopamine.Offer(getCost(upgrade) - ClientState.GetConfirmedDopamine())
 		return
 	end
 	task.spawn(function()

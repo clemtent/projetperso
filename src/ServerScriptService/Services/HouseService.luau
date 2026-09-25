@@ -107,6 +107,35 @@ local function trimPlaced(house, maxItems: number): number
 	return removed
 end
 
+-- Changement de taille : les objets gardent leur place "en px" autour du
+-- centre de la pièce (la déco ne s'étire pas dans une maison plus grande).
+-- Si la déco ne tient pas dans la nouvelle largeur, on la resserre à la place.
+local LAYOUT_MARGIN = 0.05 -- marge gauche / droite (fraction de la largeur)
+local function refitLayout(house, oldSize, newSize)
+	local oldWidth = tonumber(oldSize and oldSize.Width) or 1
+	local newWidth = tonumber(newSize and newSize.Width) or 1
+	if oldWidth <= 0 or newWidth <= 0 or oldWidth == newWidth or #house.Placed == 0 then
+		return
+	end
+	-- Étendue actuelle de la déco (en largeurs de "studio")
+	local minX, maxX = math.huge, -math.huge
+	for _, entry in ipairs(house.Placed) do
+		local px = (entry.X - 0.5) * oldWidth
+		minX = math.min(minX, px)
+		maxX = math.max(maxX, px)
+	end
+	local half = (0.5 - LAYOUT_MARGIN) * newWidth
+	local factor = 1
+	local spread = math.max(-minX, maxX)
+	if spread > half and spread > 0 then
+		factor = half / spread -- trop large : on resserre autour du centre
+	end
+	for _, entry in ipairs(house.Placed) do
+		local px = (entry.X - 0.5) * oldWidth * factor
+		entry.X = round(math.clamp(0.5 + px / newWidth, 0, 1), 0.0001)
+	end
+end
+
 -- Met à jour le meilleur confort atteint (stat)
 local function updateComfortStat(data)
 	local comfort = Formulas.GetHouseComfort(data)
@@ -265,6 +294,7 @@ end
 -- Emménage dans une taille possédée ; range les objets en trop
 local function moveInto(player: Player, data, size): (boolean, string)
 	local house = data.House
+	refitLayout(house, Formulas.GetHouseSize(data), size)
 	house.Size = size.Id
 	local stored = trimPlaced(house, size.MaxItems)
 	updateComfortStat(data)
@@ -293,6 +323,7 @@ local function buySize(player: Player, data, sizeId: string): (boolean, string)
 	-- On emménage tout de suite si la nouvelle maison est plus grande
 	local current = Formulas.GetHouseSize(data)
 	if size.Order > current.Order then
+		refitLayout(house, current, size)
 		house.Size = sizeId
 	end
 	services.GameService:SendState(player)

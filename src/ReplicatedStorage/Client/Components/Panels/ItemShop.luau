@@ -26,6 +26,7 @@ local ClientState = require(Client.ClientState)
 local Effects = require(Client.Effects)
 local SoundManager = require(Client.SoundManager)
 local Notifications = require(script.Parent.Parent.Notifications)
+local NeedDopamine = require(script.Parent.Parent.NeedDopamine)
 local Config = require(ReplicatedStorage.Shared.Config)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local Net = require(ReplicatedStorage.Shared.Net)
@@ -588,6 +589,7 @@ local function buildCard(grid: ScrollingFrame, cosmetic)
 			if not button:GetAttribute("Enabled") then
 				SoundManager.Play("Error", 0.7)
 				UIUtil.Shake(button)
+				NeedDopamine.Offer((tonumber(cosmetic.Cost) or 0) - getDopamine())
 				return
 			end
 			task.spawn(request, "buy", cosmetic)

@@ -453,7 +453,7 @@ test("Config.House : catalogue (ids, catégories, zones, motifs, prix)", functio
 	eq(check, H.Floors[1].Pattern, "Checker", "1er sol : damier prune")
 
 	-- Catégories
-	local categoryIds = { "Furniture", "Decor", "Toys", "Plants", "Electronics", "Kitchen", "Doors", "Windows", "Lights" }
+	local categoryIds = { "Furniture", "Decor", "Toys", "Plants", "Electronics", "Kitchen", "Doors", "Windows", "Lights", "Pets" }
 	eq(check, #H.Categories, #categoryIds, "nombre de catégories")
 	for i, category in ipairs(H.Categories) do
 		eq(check, category.Id, categoryIds[i], "catégorie " .. i)

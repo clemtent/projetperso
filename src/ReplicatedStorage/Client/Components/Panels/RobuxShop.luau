@@ -98,6 +98,7 @@ local pendingPasses: { [number]: number } = {} -- [GamePassId] = os.clock() de l
 local lastPrompt = 0
 local visible = false
 local filter = "All"
+local filterTabs: UIUtil.Tabs? = nil
 local animation: RBXScriptConnection? = nil
 local refreshClock = 0
 
@@ -686,7 +687,7 @@ function RobuxShop.Build(content: Frame)
 	local studio = RunService:IsStudio()
 	buildHero(content)
 
-	UIUtil.Tabs({
+	filterTabs = UIUtil.Tabs({
 		Parent = content,
 		Tabs = {
 			{ Id = "All", Text = Locale.T("⭐ All") },
@@ -857,6 +858,16 @@ function RobuxShop.Build(content: Frame)
 	end)
 
 	refreshStatus(ClientState.Data)
+end
+
+-- Ouvre directement un onglet ("Dopamine" quand il en manque pour un achat)
+function RobuxShop.ShowTab(id: string)
+	filter = id
+	local tabs = filterTabs
+	if tabs then
+		tabs.Select(id, true)
+	end
+	applyFilter()
 end
 
 function RobuxShop.OnOpen()
