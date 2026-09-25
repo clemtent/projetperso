@@ -850,7 +850,8 @@ local function buildPodium(parent: Frame, rank: number, x: number, blockHeight: 
 	end
 	local me = meChip(avatar.Frame, 9)
 	me.AnchorPoint = Vector2.new(0.5, 0.5)
-	me.Position = UDim2.new(0.5, 0, 1, 0)
+	-- (sur le bas de l'anneau, sans descendre sur le nom du joueur)
+	me.Position = UDim2.new(0.5, 0, 1, -7)
 
 	podiums[rank] = {
 		Holder = holder,

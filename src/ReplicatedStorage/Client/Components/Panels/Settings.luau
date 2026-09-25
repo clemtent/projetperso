@@ -632,12 +632,13 @@ local function buildSlider(row: Frame, initial: number, color: Color3, onChanged
 		Parent = row,
 	})
 
-	-- Zone de saisie plus haute que la piste (plus facile au doigt)
+	-- Zone de saisie plus haute que la piste (plus facile au doigt).
+	-- Marges : le bouton rond (et son halo) ne touche jamais l'icône ni le "100 %"
 	local hit = UIUtil.Create("TextButton", {
 		Name = "Slider",
 		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(0, 92, 1, -6),
-		Size = UDim2.new(1, -170, 0, 30),
+		Position = UDim2.new(0, 100, 1, -6),
+		Size = UDim2.new(1, -198, 0, 30),
 		BackgroundTransparency = 1,
 		AutoButtonColor = false,
 		Text = "",

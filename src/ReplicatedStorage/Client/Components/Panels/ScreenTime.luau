@@ -337,11 +337,13 @@ function ScreenTime.Build(content: Frame)
 			Parent = averageLine,
 		})
 	end
+	-- Étiquette de la moyenne : en haut à droite du graphique (légende), jamais
+	-- sur les valeurs des barres (la ligne peut passer à leur hauteur)
 	averageLabel = UIUtil.Create("TextLabel", {
 		Name = "AverageLabel",
-		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.new(1, 0, 0, -2),
-		Size = UDim2.fromOffset(0, 16),
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -14, 0, 11),
+		Size = UDim2.fromOffset(0, 18),
 		AutomaticSize = Enum.AutomaticSize.X,
 		BackgroundColor3 = Theme.Colors.Purple,
 		Font = Theme.Fonts.Title,
@@ -349,7 +351,8 @@ function ScreenTime.Build(content: Frame)
 		TextColor3 = Theme.Colors.TextLight,
 		TextSize = 12,
 		ZIndex = 4,
-		Parent = averageLine,
+		Visible = false,
+		Parent = chart,
 	})
 	UIUtil.Corner(averageLabel, UDim.new(1, 0))
 	UIUtil.Create("UIPadding", {
@@ -499,6 +502,7 @@ function ScreenTime.Update(data)
 	-- Moyenne des jours joués
 	local average = nonZero > 0 and sum / nonZero or 0
 	averageLine.Visible = average > 0
+	averageLabel.Visible = average > 0
 	if average > 0 then
 		averageLine.Position = UDim2.fromScale(0, 1 - math.clamp(average / maxValue, 0, 1) * BAR_AREA)
 		averageLabel.Text = Locale.T("Average %s", NumberFormatter.Time(average))

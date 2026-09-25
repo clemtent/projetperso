@@ -33,6 +33,7 @@ Runner.Slot = "L1"
 ----------------------------------------------------------------------
 local DESIGN_W = 280
 local BEZEL = 4 -- bord du "téléphone"
+local CARD_INSET = 2 -- marge dans le slot : le contour (2 px) n'est pas coupé par le découpage du slot
 local Z_NEAR = 0.6 -- en dessous : l'objet est passé derrière la caméra
 local Z_FAR = 10 -- apparition au loin
 local CHAR_Z = 1.45 -- profondeur du coureur
@@ -145,10 +146,11 @@ function Runner.Start(ctx)
 	------------------------------------------------------------------
 	-- Géométrie de l'écran et projection
 	------------------------------------------------------------------
-	local slotW = container.Size.X.Offset > 0 and container.Size.X.Offset or 288
-	local slotH = container.Size.Y.Offset > 0 and container.Size.Y.Offset or 190
-	local SW = slotW - BEZEL * 2
-	local SH = slotH - BEZEL * 2
+	local slotSize = ctx.GetSlotSize and ctx.GetSlotSize() or Vector2.new(288, 190)
+	local slotW = slotSize.X > 0 and slotSize.X or 288
+	local slotH = slotSize.Y > 0 and slotSize.Y or 190
+	local SW = slotW - CARD_INSET * 2 - BEZEL * 2
+	local SH = slotH - CARD_INSET * 2 - BEZEL * 2
 	local U = SW / DESIGN_W -- facteur d'échelle
 	local CX = SW / 2
 	local HY = math.floor(SH * 0.4) -- ligne d'horizon
@@ -197,7 +199,9 @@ function Runner.Start(ctx)
 	------------------------------------------------------------------
 	local device = frame({
 		Name = "RunnerDevice",
-		Size = UDim2.fromScale(1, 1),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(1, -CARD_INSET * 2, 1, -CARD_INSET * 2),
 		BackgroundColor3 = Color3.fromRGB(24, 24, 32),
 		Parent = container,
 	}, UDim.new(0, 12))

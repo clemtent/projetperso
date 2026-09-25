@@ -81,7 +81,7 @@ return {
 		["The screen goes full neon. Earnings x%s"] = "L'écran passe en mode néon. Gains x%s",
 		["Your mouse leaves sparkles behind. Clicks x%s"] = "Ta souris laisse des étincelles. Clics x%s",
 		["It's party time! Earnings x%s"] = "C'est la fête ! Gains x%s",
-		["Let it all go and breathe. Start over with x%s earnings forever"] = "Tout lâcher et respirer. Recommence avec des gains x%s pour toujours",
+		["Let it all go and breathe. Start over with x%s earnings forever (your 🏠 house is kept)"] = "Tout lâcher et respirer. Recommence avec des gains x%s pour toujours (ta 🏠 maison est gardée)",
 		-- Succès
 		["Hot Finger"] = "Doigt chaud",
 		["Click Addict"] = "Clic addict",

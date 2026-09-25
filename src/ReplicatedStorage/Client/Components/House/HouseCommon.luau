@@ -147,6 +147,7 @@ local CATEGORY_TINTS: { [string]: Color3 } = {
 	Doors = Color3.fromRGB(236, 224, 210),
 	Windows = Color3.fromRGB(214, 240, 255),
 	Lights = Color3.fromRGB(255, 244, 196),
+	Pets = Color3.fromRGB(255, 232, 214),
 }
 
 function HouseCommon.CategoryTint(categoryId: string): Color3

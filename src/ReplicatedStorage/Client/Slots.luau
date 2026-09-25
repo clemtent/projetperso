@@ -26,6 +26,11 @@
 	construisent comme avant, tout est simplement réduit. Sur PC l'échelle
 	vaut 1 et les positions sont exactement celles du tableau.
 	Slots.Changed est déclenché quand la mise en page change (rotation...).
+	Marge de découpe : le cadre d'un slot (qui découpe son contenu) déborde de
+	Slots.ClipMargin px tout autour de la zone "design", compensés par un
+	UIPadding : le contenu garde exactement sa place, mais le contour (UIStroke,
+	dessiné À L'EXTÉRIEUR des cartes, et jamais réduit par les UIScale) n'est
+	plus coupé, même sur téléphone. Taille "design" : Slots.GetDesignSize(name).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -52,6 +57,9 @@ Slots.Definitions = {
 }
 
 local TICKER_HEIGHT = 30
+-- Marge de découpe autour d'un slot (pixels "design", voir en-tête) : 6 px
+-- = 2 px à l'écran avec l'échelle la plus petite (téléphone, ~0.35)
+Slots.ClipMargin = 6
 -- Bas de la colonne centrale (pixels "design") sur téléphone / tablette
 local PHONE_COLUMN_BOTTOM = 388
 local TABLET_COLUMN_BOTTOM = 456
@@ -133,8 +141,17 @@ local function computeLayout(device: string, canvas: Vector2)
 	layout.CenterOffset = centerOffset
 end
 
--- Position (centre, AnchorPoint 0.5/0.5) et taille "design" d'un slot
--- (la taille réelle = taille x Slots.GetScale(name))
+-- Taille "design" de la zone d'un slot (sans la marge de découpe)
+function Slots.GetDesignSize(name: string): Vector2
+	local def = Slots.Definitions[name]
+	if not def then
+		return Vector2.new(0, 0)
+	end
+	return Vector2.new(def.W, def.H)
+end
+
+-- Position (centre, AnchorPoint 0.5/0.5) et taille du cadre d'un slot : zone
+-- "design" + marge de découpe (la taille réelle = taille x Slots.GetScale(name))
 function Slots.GetPlacement(name: string): (UDim2, UDim2)
 	local def = Slots.Definitions[name]
 	if not def then
@@ -164,17 +181,17 @@ function Slots.GetPlacement(name: string): (UDim2, UDim2)
 		size = UDim2.new(1, 0, 0, def.H)
 	elseif def.Anchor == "L" then
 		xUDim = UDim.new(0, (def.X + def.W / 2) * k)
-		size = UDim2.fromOffset(def.W, def.H)
+		size = UDim2.fromOffset(def.W + Slots.ClipMargin * 2, def.H + Slots.ClipMargin * 2)
 	elseif def.Anchor == "R" then
 		xUDim = UDim.new(1, -(def.X + def.W / 2) * k)
-		size = UDim2.fromOffset(def.W, def.H)
+		size = UDim2.fromOffset(def.W + Slots.ClipMargin * 2, def.H + Slots.ClipMargin * 2)
 	else -- "C"
 		local offset = def.X
 		if k ~= 1 and def.X ~= 0 then
 			offset = (def.X < 0 and -1 or 1) * layout.CenterOffset
 		end
 		xUDim = UDim.new(0.5, offset)
-		size = UDim2.fromOffset(def.W, def.H)
+		size = UDim2.fromOffset(def.W + Slots.ClipMargin * 2, def.H + Slots.ClipMargin * 2)
 	end
 	return UDim2.new(xUDim, yUDim), size
 end
@@ -248,6 +265,15 @@ function Slots.Create(name: string, parent: Instance?): Frame
 			scale.Name = "SlotScale"
 			scale.Scale = Slots.GetScale(name)
 			scale.Parent = frame
+			-- Compense la marge de découpe : le contenu reste dans la zone "design"
+			local margin = UDim.new(0, Slots.ClipMargin)
+			local padding = Instance.new("UIPadding")
+			padding.Name = "SlotMargin"
+			padding.PaddingLeft = margin
+			padding.PaddingRight = margin
+			padding.PaddingTop = margin
+			padding.PaddingBottom = margin
+			padding.Parent = frame
 		end
 		place(frame, name)
 		frames[frame] = name

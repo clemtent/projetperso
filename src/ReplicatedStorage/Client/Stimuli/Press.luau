@@ -9,7 +9,7 @@
 	    propres à chaque palier de la presse) ;
 	  - le piston descend, l'objet se tasse, la machine tremble, le
 	    manomètre grimpe dans le rouge... puis CRUNCH ! (écrasement avec
-	    rebond, onde de choc, éclats, vapeur, secousse de toute la carte,
+	    rebond, onde de choc, éclats, vapeur, secousse de la machine,
 	    son "Crush", onomatopée) ;
 	  - la galette part sur le tas à gauche, qui finit à la poubelle.
 
@@ -35,7 +35,8 @@ local Press = {}
 Press.Slot = "C3"
 
 ----------------------------------------------------------------------
--- Géométrie (pixels "design" dans un slot de 384 x 268)
+-- Géométrie (pixels "design" dans la carte de 380 x 264 : slot de 384 x 268
+-- moins 2 px de marge de chaque côté pour que le contour ne soit pas coupé)
 ----------------------------------------------------------------------
 local MX = 170 -- centre de la machine
 local ANVIL_Y = 228 -- dessus de l'enclume (bas des objets)
@@ -43,13 +44,13 @@ local PLATE_TOP = 64 -- position haute du plateau
 local PLATE_H = 22
 local PLATE_W = 176
 local FLAT_H = 12 -- hauteur d'un objet écrasé
-local BIN_X = 32 -- centre de la poubelle
+local BIN_X = 28 -- centre de la poubelle (à gauche du socle, sans le toucher)
 local BIN_TOP = 196
 local PILE_MAX = 8
-local QUEUE_X = { 322, 360 } -- places dans la file d'attente
+local QUEUE_X = { 320, 354 } -- places dans la file d'attente (sur le tapis, loin du bord)
 local QUEUE_Y = 222 -- dessus du tapis roulant
 local QUEUE_SIZE = 34
-local BELT_STRIPES_W = 110 -- bande de rayures du tapis (10 rayures, période = 1/5)
+local BELT_STRIPES_W = 104 -- bande de rayures du tapis (10 rayures, période = 1/5)
 local COLUMN_X = { MX - 110, MX + 94 }
 
 -- Durées de base (niveau 1), divisées par le facteur de vitesse
@@ -333,13 +334,16 @@ function Press.Start(ctx)
 	end
 
 	------------------------------------------------------------------
-	-- Carte (secouée en entier au CRUNCH) + "rig" (la machine)
+	-- Carte (fixe, contour toujours net) + "rig" (la machine, secouée au CRUNCH)
 	------------------------------------------------------------------
 	local card = Create("Frame", {
 		Name = "Card",
-		Size = UDim2.fromScale(1, 1),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(1, -4, 1, -4),
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		BorderSizePixel = 0,
+		ClipsDescendants = true, -- la machine qui tremble ne déborde jamais du cadre
 		Parent = container,
 	})
 	UIUtil.Corner(card, 18)
@@ -466,7 +470,7 @@ function Press.Start(ctx)
 	box({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0, 2, 0.42, 0), BackgroundColor3 = Theme.Colors.Red, ZIndex = 11, Parent = needlePivot })
 
 	-- Socle + enclume
-	local base = box({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(MX, ANVIL_Y), Size = UDim2.fromOffset(250, 28), BackgroundColor3 = white, ZIndex = 3 }, 5)
+	local base = box({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(MX, ANVIL_Y), Size = UDim2.fromOffset(226, 28), BackgroundColor3 = white, ZIndex = 3 }, 5)
 	local baseGradient = UIUtil.Gradient(base, TIERS[2].Base, 90)
 	local baseStripe = box({ Position = UDim2.fromOffset(4, 0), Size = UDim2.new(1, -8, 0, 5), BackgroundColor3 = white, ZIndex = 4, Parent = base })
 	local baseStripeGradient = UIUtil.Gradient(baseStripe, TIERS[2].Stripe, 35)
@@ -491,13 +495,13 @@ function Press.Start(ctx)
 
 	-- Tapis roulant (à droite) : rayures qui défilent
 	local steel = Color3.fromRGB(96, 104, 120)
-	local belt = box({ Position = UDim2.fromOffset(296, QUEUE_Y), Size = UDim2.fromOffset(84, 10), BackgroundColor3 = hazardBlack, ClipsDescendants = true, ZIndex = 3 })
+	local belt = box({ Position = UDim2.fromOffset(296, QUEUE_Y), Size = UDim2.fromOffset(76, 10), BackgroundColor3 = hazardBlack, ClipsDescendants = true, ZIndex = 3 })
 	local beltStripes = box({ Size = UDim2.fromOffset(BELT_STRIPES_W, 10), BackgroundColor3 = white, ZIndex = 3, Parent = belt })
 	UIUtil.Gradient(beltStripes, stripes(10, Color3.fromRGB(78, 82, 96), Color3.fromRGB(40, 42, 50)), 0)
-	for _, x in ipairs({ 302, 374 }) do
+	for _, x in ipairs({ 302, 366 }) do
 		box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(x, QUEUE_Y + 5), Size = UDim2.fromOffset(12, 12), BackgroundColor3 = steel, ZIndex = 4 }, 6)
 	end
-	box({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(338, QUEUE_Y + 10), Size = UDim2.fromOffset(8, 256 - QUEUE_Y - 10), BackgroundColor3 = steel, ZIndex = 2 })
+	box({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(334, QUEUE_Y + 10), Size = UDim2.fromOffset(8, 256 - QUEUE_Y - 10), BackgroundColor3 = steel, ZIndex = 2 })
 
 	-- Décors propres au palier (reconstruits à chaque changement de palier)
 	local decorBack = Create("Frame", { Name = "DecorBack", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = 3, Parent = rig })
@@ -509,7 +513,7 @@ function Press.Start(ctx)
 	local warning = Create("Frame", {
 		Name = "Warning",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.fromOffset(338, 44),
+		Position = UDim2.fromOffset(334, 44),
 		Size = UDim2.fromOffset(78, 76),
 		BackgroundColor3 = Theme.Colors.Yellow,
 		BorderSizePixel = 0,
@@ -541,7 +545,7 @@ function Press.Start(ctx)
 	local startGroup = Create("Frame", {
 		Name = "StartGroup",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.fromOffset(338, 38),
+		Position = UDim2.fromOffset(334, 38),
 		Size = UDim2.fromOffset(80, 96),
 		BackgroundTransparency = 1,
 		ZIndex = 12,
@@ -682,7 +686,8 @@ function Press.Start(ctx)
 				NumberSequenceKeypoint.new(1, 1),
 			})
 			tierAnim.Shine = shine
-			for _, x in ipairs({ MX - 100, MX + 100 }) do
+			-- (à droite, la gemme reste à l'écart du manomètre)
+			for _, x in ipairs({ MX - 104, MX + 108 }) do
 				local gem = UIUtil.Label({
 					Text = "💎",
 					AnchorPoint = Vector2.new(0.5, 0.5),
@@ -694,7 +699,7 @@ function Press.Start(ctx)
 				})
 				table.insert(tierAnim.Twinkles, gem)
 			end
-			local glow = box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(MX, ANVIL_Y + 2), Size = UDim2.fromOffset(230, 10), BackgroundColor3 = Color3.fromRGB(0, 230, 255), BackgroundTransparency = 0.5, ZIndex = 1, Parent = decorBack }, UDim.new(1, 0))
+			local glow = box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(MX, ANVIL_Y + 2), Size = UDim2.fromOffset(214, 10), BackgroundColor3 = Color3.fromRGB(0, 230, 255), BackgroundTransparency = 0.5, ZIndex = 1, Parent = decorBack }, UDim.new(1, 0))
 			tierAnim.Glow = glow
 		end
 	end
@@ -1401,13 +1406,13 @@ function Press.Start(ctx)
 			end
 		end
 
-		-- Secousse de toute la carte
+		-- Secousse de la machine (la carte et son contour restent immobiles)
 		if shakeTime > 0 then
 			shakeTime -= dt
-			local strength = math.clamp(shakeTime * 18, 0.6, 4) * shakePower
-			card.Position = UDim2.fromOffset(random:NextNumber(-strength, strength), random:NextNumber(-strength, strength))
-		elseif card.Position ~= UDim2.new() then
-			card.Position = UDim2.new()
+			local strength = math.clamp(shakeTime * 18, 0.6, 3) * math.min(shakePower, 1.4)
+			rig.Position = UDim2.fromOffset(random:NextNumber(-strength, strength), random:NextNumber(-strength, strength))
+		elseif rig.Position ~= UDim2.new() then
+			rig.Position = UDim2.new()
 		end
 
 		-- Compte à rebours du bouton START

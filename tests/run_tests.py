@@ -453,7 +453,7 @@ test("Config.House : catalogue (ids, catégories, zones, motifs, prix)", functio
 	eq(check, H.Floors[1].Pattern, "Checker", "1er sol : damier prune")
 
 	-- Catégories
-	local categoryIds = { "Furniture", "Decor", "Toys", "Plants", "Electronics", "Kitchen", "Doors", "Windows", "Lights" }
+	local categoryIds = { "Furniture", "Decor", "Toys", "Plants", "Electronics", "Kitchen", "Doors", "Windows", "Lights", "Pets" }
 	eq(check, #H.Categories, #categoryIds, "nombre de catégories")
 	for i, category in ipairs(H.Categories) do
 		eq(check, category.Id, categoryIds[i], "catégorie " .. i)
@@ -666,11 +666,36 @@ end)''')
     return "\n".join(lines)
 
 
+def house_art_test():
+    """Génère un test Luau : chaque objet de Config.House.Items a un dessin
+    (Art.<Id> = function ... dans Client/Components/House/Art/*.luau), et
+    aucun dessin ne vise un objet inconnu."""
+    art_dir = os.path.join(SRC, "ReplicatedStorage", "Client", "Components", "House", "Art")
+    drawn = {}
+    if os.path.isdir(art_dir):
+        for fname in sorted(os.listdir(art_dir)):
+            if fname.endswith(".luau"):
+                for m in re.finditer(r"^Art\.(\w+)\s*=\s*function", read(os.path.join(art_dir, fname)), re.M):
+                    drawn[m.group(1)] = fname
+    ids = ", ".join('["%s"] = "%s"' % (k, v) for k, v in sorted(drawn.items()))
+    return "\n".join([
+        'test("Maison : chaque objet a son dessin kawaii (%d dessins)", function(check)' % len(drawn),
+        "\tlocal drawn = { %s }" % ids,
+        "\tfor _, item in ipairs(Config.House.Items) do",
+        '\t\tcheck(drawn[item.Id] ~= nil, "pas de dessin pour " .. item.Id)',
+        "\tend",
+        "\tfor id, file in pairs(drawn) do",
+        '\t\tcheck(Config.HouseItemsById[id] ~= nil, "dessin sans objet : " .. id .. " (" .. file .. ")")',
+        "\tend",
+        "end)",
+    ])
+
+
 def main():
     if not os.path.exists(LUAU):
         print("FAIL : Luau CLI introuvable (%s)" % LUAU)
         return 1
-    bundle = build_bundle(config_key_test() + "\n" + lang_test())
+    bundle = build_bundle(config_key_test() + "\n" + lang_test() + "\n" + house_art_test())
     with tempfile.NamedTemporaryFile("w", suffix=".luau", delete=False, encoding="utf-8") as f:
         f.write(bundle)
         path = f.name

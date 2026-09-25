@@ -21,11 +21,20 @@ Quand tu n'en peux plus : **🌊 Aller à l'océan**. Une cinématique calme, pu
 2. Ouvre-le dans **Roblox Studio** (double-clic ou **Fichier > Ouvrir depuis un fichier**) : tous les scripts sont déjà en place.
 3. **Fichier > Publier sur Roblox** (nécessaire pour la sauvegarde et le classement).
 4. **Accueil > Paramètres du jeu > Sécurité** : active **« Enable Studio Access to API Services »**.
-5. Clique sur **Play** ▶️. Dans Studio, tape `/help` dans le chat pour voir les commandes de test.
+5. Clique sur **Play** ▶️. Dans Studio, tape `/aide` dans le chat pour voir les commandes de test.
 
 Les autres méthodes (Rojo, copie manuelle) sont décrites dans [`docs/INSTALLATION.md`](docs/INSTALLATION.md).
 
 ---
+
+## 🆕 Nouveautés v6.1 — 🏠 la maison en mieux
+
+- **Tous les objets sont de vrais dessins kawaii** (plus de simples emojis) : contours doux, reflets, petits visages, motifs… faits uniquement avec des Frames (`House/HouseArt` + un fichier par catégorie dans `House/Art/`). Ils sont animés dans la pièce : les animaux respirent et clignent des yeux, les flammes vacillent, les roues tournent, les balanciers se balancent.
+- **40 nouveaux objets** (195 au total), dont la catégorie **🐾 Animaux** : poussin, poisson rouge, chat qui dort, tortue, chiot, lapin, hamster dans sa roue, perroquet, renard, bébé dragon.
+- **Maison de poupée** : toit en tuiles avec lucarne et cheminée qui fume, pelouse fleurie, ciel avec des nuages qui passent (étoiles la nuit), poussières de lumière.
+- **Tailles de maison plus chères** : Appart 5M, Loft 500M, Manoir 50B. Quand tu changes de taille, la déco garde sa place au lieu de s'étirer (le serveur la recale ; resserrée si elle ne tient pas).
+- **La maison est gardée à l'océan 🌊** (renaissance) : tout ce que tu as acheté, posé, les tailles, papiers peints et sols.
+- **Pas assez de Dopamine ?** Une fenêtre propose d'en avoir tout de suite : « 💎 Avoir de la Dopamine » ouvre la boutique Robux sur l'onglet 💧 Dopamine (améliorations, maison, thèmes, objets).
 
 ## 🆕 Nouveautés v4
 

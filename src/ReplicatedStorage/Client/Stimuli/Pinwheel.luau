@@ -81,8 +81,10 @@ function Pinwheel.Start(ctx)
 	local spinConfig = ctx.Config.Interactions.Spin
 	local cooldown = (spinConfig and spinConfig.Cooldown) or 2
 
-	local width = container.Size.X.Offset > 0 and container.Size.X.Offset or 170
-	local height = container.Size.Y.Offset > 0 and container.Size.Y.Offset or 170
+	-- Taille de la carte = slot - 2 x 2 px (marge pour que son contour ne soit pas coupé)
+	local slotSize = ctx.GetSlotSize and ctx.GetSlotSize() or Vector2.new(170, 170)
+	local width = (slotSize.X > 0 and slotSize.X or 170) - 4
+	local height = (slotSize.Y > 0 and slotSize.Y or 170) - 4
 	local hubX, hubY = width / 2, math.floor(height * 0.41)
 	local reach = math.ceil(BLADE * math.sqrt(2))
 
@@ -123,7 +125,10 @@ function Pinwheel.Start(ctx)
 	------------------------------------------------------------------
 	local card = frame({
 		Name = "Card",
-		Size = UDim2.fromScale(1, 1),
+		-- 2 px de marge : le contour de la carte n'est pas coupé par le slot
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(1, -4, 1, -4),
 		BackgroundColor3 = WHITE,
 		ClipsDescendants = true,
 		Parent = container,
@@ -136,11 +141,22 @@ function Pinwheel.Start(ctx)
 		ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 226, 234)),
 	}), 90)
 	local cardScale = Create("UIScale", { Parent = card })
+	-- Décor (soleil, nuages, collines) dans un CanvasGroup arrondi : ClipsDescendants
+	-- découpe en rectangle, les collines dépasseraient des coins arrondis de la carte
+	local scenery = Create("CanvasGroup", {
+		Name = "Scenery",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ZIndex = 2,
+		Parent = card,
+	})
+	UIUtil.Corner(scenery, 18)
 
 	-- Soleil (halo qui respire)
-	local sunGlow = centered({ Name = "SunGlow", BackgroundColor3 = Color3.fromRGB(255, 240, 170), BackgroundTransparency = 0.6, ZIndex = 1, Parent = card }, width - 24, 24, 46, 46)
+	local sunGlow = centered({ Name = "SunGlow", BackgroundColor3 = Color3.fromRGB(255, 240, 170), BackgroundTransparency = 0.6, ZIndex = 1, Parent = scenery }, width - 24, 24, 46, 46)
 	round(sunGlow)
-	local sun = centered({ Name = "Sun", BackgroundColor3 = Color3.fromRGB(255, 214, 90), ZIndex = 1, Parent = card }, width - 24, 24, 22, 22)
+	local sun = centered({ Name = "Sun", BackgroundColor3 = Color3.fromRGB(255, 214, 90), ZIndex = 1, Parent = scenery }, width - 24, 24, 22, 22)
 	round(sun)
 	UIUtil.Gradient(sun, ColorSequence.new(Color3.fromRGB(255, 246, 190), Color3.fromRGB(255, 200, 80)), 45)
 
@@ -152,7 +168,7 @@ function Pinwheel.Start(ctx)
 			BackgroundColor3 = WHITE,
 			BackgroundTransparency = 0.05,
 			ZIndex = 1,
-			Parent = card,
+			Parent = scenery,
 		}, 0, 0, i == 1 and 40 or 32, i == 1 and 13 or 11)
 		round(cloud)
 		for p = 1, 2 do
@@ -177,9 +193,9 @@ function Pinwheel.Start(ctx)
 	end
 
 	-- Collines (une claire au fond, une plus foncée devant)
-	local farHill = centered({ Name = "FarHill", BackgroundColor3 = Color3.fromRGB(150, 222, 150), ZIndex = 2, Parent = card }, width * 0.18, height + 14, 170, 70)
+	local farHill = centered({ Name = "FarHill", BackgroundColor3 = Color3.fromRGB(150, 222, 150), ZIndex = 2, Parent = scenery }, width * 0.18, height + 14, 170, 70)
 	round(farHill)
-	local hill = centered({ Name = "Hill", BackgroundColor3 = WHITE, ZIndex = 2, Parent = card }, width * 0.62, height + 22, 240, 80)
+	local hill = centered({ Name = "Hill", BackgroundColor3 = WHITE, ZIndex = 2, Parent = scenery }, width * 0.62, height + 22, 240, 80)
 	round(hill)
 	UIUtil.Gradient(hill, ColorSequence.new(Color3.fromRGB(120, 214, 120), Color3.fromRGB(62, 160, 90)), 90)
 
@@ -638,7 +654,7 @@ function Pinwheel.Start(ctx)
 	ctx.OnBonus("Spin", function(payload)
 		local amount = tonumber(payload.Amount)
 		if amount then
-			floatOnOverlay(container, width, Vector2.new(hubX, hubY - 30), "+" .. ctx.Format.Format(amount), Theme.Colors.Gold, 26)
+			floatOnOverlay(card, width, Vector2.new(hubX, hubY - 30), "+" .. ctx.Format.Format(amount), Theme.Colors.Gold, 26)
 		end
 	end)
 

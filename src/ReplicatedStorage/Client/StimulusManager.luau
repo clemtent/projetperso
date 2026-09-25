@@ -24,7 +24,7 @@
 	Format, Net, Theme, UIUtil, Effects, Sound, DVDMath, Notify, FloatText,
 	GetLevel, HasFeature, ClaimSpawn, Interact, OnSpawn, OnBonus, Connect,
 	OnRender, IsAlive, SetDarkMode (+ bonus : Slot, Interface, Random,
-	EffectsEnabled, GetSlotScale, et pour l'océan : Payload, Rebirths, Multiplier).
+	EffectsEnabled, GetSlotScale, GetSlotSize, et pour l'océan : Payload, Rebirths, Multiplier).
 	v5 : sur téléphone / tablette, le cadre d'un slot porte un UIScale
 	"SlotScale" (voir Slots) ; l'animation "pop" l'utilise directement.
 ]]
@@ -163,6 +163,16 @@ local function newContext(feature: string, container: Frame, slot: string): (any
 	-- Le cadre garde sa taille "design" : rien à faire pour s'y adapter.
 	function ctx.GetSlotScale(): number
 		return Slots.GetScale(slot)
+	end
+
+	-- Taille "design" de la zone du slot (le cadre, lui, a une marge de
+	-- découpe en plus, compensée par un UIPadding : voir Slots.ClipMargin)
+	function ctx.GetSlotSize(): Vector2
+		local size = Slots.GetDesignSize(slot)
+		if size.X <= 0 or size.Y <= 0 then
+			return container.AbsoluteSize
+		end
+		return size
 	end
 
 	-- Petit bandeau en bas de l'écran

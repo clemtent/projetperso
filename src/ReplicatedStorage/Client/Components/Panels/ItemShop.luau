@@ -26,6 +26,7 @@ local ClientState = require(Client.ClientState)
 local Effects = require(Client.Effects)
 local SoundManager = require(Client.SoundManager)
 local Notifications = require(script.Parent.Parent.Notifications)
+local NeedDopamine = require(script.Parent.Parent.NeedDopamine)
 local Config = require(ReplicatedStorage.Shared.Config)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local Net = require(ReplicatedStorage.Shared.Net)
@@ -516,10 +517,12 @@ local function buildCard(grid: ScrollingFrame, cosmetic)
 	})
 	rarityChip.Position = UDim2.fromOffset(6, 6)
 
-	-- Ruban "ÉQUIPÉ" / "POSSÉDÉ"
+	-- Pastille ronde "✔" (verte = équipé, blanche = possédé) : à côté d'une
+	-- rareté longue ("Légendaire"), un ruban "✔ POSSÉDÉ" ne tenait pas sur la
+	-- ligne et chevauchait la rareté ; la ligne d'état le dit en toutes lettres
 	local ribbon = UIUtil.Chip({
 		Name = "Ribbon",
-		Text = Locale.T("EQUIPPED"),
+		Text = "✔",
 		Color = Theme.Colors.Green,
 		TextColor3 = Theme.Colors.TextDark,
 		Height = 18,
@@ -588,6 +591,7 @@ local function buildCard(grid: ScrollingFrame, cosmetic)
 			if not button:GetAttribute("Enabled") then
 				SoundManager.Play("Error", 0.7)
 				UIUtil.Shake(button)
+				NeedDopamine.Offer((tonumber(cosmetic.Cost) or 0) - getDopamine())
 				return
 			end
 			task.spawn(request, "buy", cosmetic)
@@ -706,7 +710,7 @@ function ItemShop.Update(data)
 			ui.Ribbon.Visible = true
 			ui.Ribbon.BackgroundColor3 = Theme.Colors.Green
 			if ribbonLabel then
-				ribbonLabel.Text = Locale.T("EQUIPPED")
+				ribbonLabel.Text = "✔"
 			end
 		elseif isOwned then
 			ui.Button.Text = Locale.T("Equip")
@@ -718,7 +722,7 @@ function ItemShop.Update(data)
 			ui.Ribbon.Visible = true
 			ui.Ribbon.BackgroundColor3 = WHITE
 			if ribbonLabel then
-				ribbonLabel.Text = Locale.T("✔ OWNED")
+				ribbonLabel.Text = "✔"
 			end
 		else
 			local cost = tonumber(cosmetic.Cost) or 0
