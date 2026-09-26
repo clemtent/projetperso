@@ -34,6 +34,7 @@ Net.Events = {
 	"EventUpdate", -- S -> C (rush) : début / fin d'un Dopamine Rush
 	"LeaderboardUpdate", -- S -> C (top) : top du classement
 	"StockUpdate", -- S -> C ({ Symbol, Price, History }) : cours de la bourse
+	"ArcadeEvent", -- S <-> C (kind, payload) : arcade en temps réel (invitations, coups des duels...)
 }
 
 Net.Functions = {
@@ -46,6 +47,8 @@ Net.Functions = {
 	"ItemShop", -- C -> S ("buy" | "equip" | "unequip", cosmeticId) -> (succès, message)
 	"ThemeShop", -- C -> S ("buy" | "equip", themeId) -> (succès, message)
 	"House", -- C -> S (action, argument) -> (succès, message) : maison (achats, papier peint, sol, disposition)
+	"Garden", -- C -> S (action, argument) -> (succès, résultat | message) : jardin de Dopamine
+	"Arcade", -- C -> S (action, argument) -> (succès, résultat | message) : mini-jeux, tickets, duels
 	"DebugCommand", -- C -> S (commande, argument) -> (succès, message) : UNIQUEMENT dans Studio
 }
 

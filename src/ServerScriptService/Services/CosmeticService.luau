@@ -60,6 +60,9 @@ local function onItemShop(player: Player, action: any, cosmeticId: any)
 		if cosmetics.Owned[cosmeticId] then
 			return false, T(player, "You already own this item")
 		end
+		if (cosmetic.RequiresRebirths or 0) > (data.Rebirths or 0) then
+			return false, T(player, "🔒 Unlocked after %d visits to the ocean", cosmetic.RequiresRebirths)
+		end
 		if data.Dopamine < cosmetic.Cost then
 			return false, T(player, "Not enough %s", Config.Game.CurrencyName)
 		end

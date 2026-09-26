@@ -544,6 +544,12 @@ Config.Cosmetics = {
 	{ Id = "Crown", Name = "Crown", Icon = "👑", Slot = "Hat", Cost = 6e6},
 	{ Id = "Halo", Name = "Halo", Icon = "😇", Slot = "Hat", Cost = 3e7},
 	{ Id = "Unicorn", Name = "Unicorn Horn", Icon = "🦄", Slot = "Hat", Cost = 2e8},
+	{ Id = "Bow", Name = "Pink Bow", Icon = "🎀", Slot = "Hat", Cost = 1e6 },
+	{ Id = "Wizard", Name = "Wizard Hat", Icon = "🧙", Slot = "Hat", Cost = 1.5e7 },
+	{ Id = "Astronaut", Name = "Space Helmet", Icon = "🚀", Slot = "Hat", Cost = 6e7, RequiresRebirths = 1 },
+	{ Id = "Tiara", Name = "Diamond Tiara", Icon = "💎", Slot = "Hat", Cost = 4e8, RequiresRebirths = 2 },
+	{ Id = "Flame", Name = "Flame Crown", Icon = "🔥", Slot = "Hat", Cost = 3e9, RequiresRebirths = 3 },
+	{ Id = "Planet", Name = "Tiny Planet", Icon = "🪐", Slot = "Hat", Cost = 3e10, RequiresRebirths = 5 },
 	{ Id = "SkinMint", Name = "Mint Button", Icon = "🟩", Slot = "Skin", Cost = 40000,
 		Top = Color3.fromRGB(210, 255, 225), Bottom = Color3.fromRGB(120, 220, 160) },
 	{ Id = "SkinSky", Name = "Sky Button", Icon = "🟦", Slot = "Skin", Cost = 150000,
@@ -554,6 +560,14 @@ Config.Cosmetics = {
 		Top = Color3.fromRGB(255, 240, 160), Bottom = Color3.fromRGB(230, 160, 0) },
 	{ Id = "SkinVoid", Name = "Void Button", Icon = "⬛", Slot = "Skin", Cost = 8e7,
 		Top = Color3.fromRGB(70, 60, 90), Bottom = Color3.fromRGB(5, 5, 10) },
+	{ Id = "SkinOcean", Name = "Ocean Button", Icon = "🌊", Slot = "Skin", Cost = 2e8, RequiresRebirths = 1,
+		Top = Color3.fromRGB(190, 240, 255), Bottom = Color3.fromRGB(20, 130, 200) },
+	{ Id = "SkinSakura", Name = "Sakura Button", Icon = "🌸", Slot = "Skin", Cost = 1.5e9, RequiresRebirths = 2,
+		Top = Color3.fromRGB(255, 235, 245), Bottom = Color3.fromRGB(245, 150, 190) },
+	{ Id = "SkinAurora", Name = "Aurora Button", Icon = "🌌", Slot = "Skin", Cost = 1.2e10, RequiresRebirths = 3,
+		Top = Color3.fromRGB(150, 255, 210), Bottom = Color3.fromRGB(110, 60, 200) },
+	{ Id = "SkinDiamond", Name = "Diamond Button", Icon = "💠", Slot = "Skin", Cost = 1e11, RequiresRebirths = 5,
+		Top = Color3.fromRGB(240, 255, 255), Bottom = Color3.fromRGB(120, 200, 255) },
 }
 
 ----------------------------------------------------------------------

@@ -35,6 +35,8 @@ local ORDER = {
 	"StockService",
 	"CasinoService",
 	"LootService",
+	"GardenService",
+	"MinigameService",
 	"CosmeticService",
 	"HouseService",
 	"QuestService",

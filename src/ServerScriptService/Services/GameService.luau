@@ -336,7 +336,7 @@ function GameService:BuildState(player: Player)
 	local offlineRate, offlineMaxSeconds = Formulas.GetOfflineSettings(data)
 	local houseComfort = Formulas.GetHouseComfort(data)
 
-	return {
+	local state = {
 		Dopamine = data.Dopamine,
 		Rebirths = data.Rebirths,
 		Upgrades = data.Upgrades,
@@ -393,6 +393,23 @@ function GameService:BuildState(player: Player)
 		-- Nombre de clics reçus par le serveur (sert au client pour sa prédiction)
 		ClickSeq = session and session.ClickSeq or 0,
 	}
+	-- Champs ajoutés par les autres services (machine chanceuse, jardin,
+	-- arcade...) : service:GetClientState(player, data) -> { [champ] = valeur }
+	for name, service in pairs(services) do
+		if type(service) == "table" and type(service.GetClientState) == "function" then
+			local ok, extra = pcall(service.GetClientState, service, player, data)
+			if ok and type(extra) == "table" then
+				for key, value in pairs(extra) do
+					if state[key] == nil then
+						state[key] = value
+					end
+				end
+			elseif not ok then
+				warn("[GameService] GetClientState de " .. tostring(name) .. " :", extra)
+			end
+		end
+	end
+	return state
 end
 
 function GameService:SendState(player: Player)
