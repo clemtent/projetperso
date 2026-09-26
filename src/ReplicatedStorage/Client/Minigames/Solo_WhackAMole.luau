@@ -177,6 +177,7 @@ function Module.Build(container: Frame, api)
 		})
 		Kit.Corner(belly, UDim.new(0.5, 0))
 		local eyes = {}
+		local cheeks = {}
 		for side = 0, 1 do
 			local eye = create("Frame", {
 				AnchorPoint = Vector2.new(0.5, 0.5),
@@ -206,6 +207,7 @@ function Module.Build(container: Frame, api)
 			})
 			Kit.Corner(cheek, UDim.new(1, 0))
 			eyes[side + 1] = eye
+			cheeks[side + 1] = cheek
 		end
 		local nose = create("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
@@ -238,8 +240,12 @@ function Module.Build(container: Frame, api)
 			Parent = mole,
 		})
 		local scale = create("UIScale", { Parent = mole })
+		local outline = Kit.Stroke(mole, C.Red, 2.5, 0)
+		outline.Enabled = false
 		return {
 			Frame = mole,
+			Cheeks = cheeks,
+			Outline = outline,
 			Gradient = gradientObj,
 			Belly = belly,
 			Eyes = eyes,
@@ -261,8 +267,15 @@ function Module.Build(container: Frame, api)
 			eye.Visible = not bomb
 			eye.Size = UDim2.fromScale(0.13, 0.12)
 		end
+		mole.Frame.Visible = true
 		mole.Icon.Text = bomb and "💣" or ""
 		mole.Crown.Visible = kind == 2
+		for _, cheek in ipairs(mole.Cheeks) do
+			cheek.Visible = not bomb
+		end
+		-- contour : rouge = danger, doré = bonus
+		mole.Outline.Enabled = kind ~= 1
+		mole.Outline.Color = bomb and C.Red or C.White
 	end
 
 	for index = 1, gameRules.Holes do
@@ -422,6 +435,7 @@ function Module.Build(container: Frame, api)
 		for _, entry in ipairs(holes) do
 			entry.Current = nil
 			entry.Mole.Frame.Position = UDim2.fromScale(0.5, 1)
+			entry.Mole.Frame.Visible = false
 			entry.Mole.Crown.Visible = false
 		end
 		refreshHud()
@@ -501,6 +515,7 @@ function Module.Build(container: Frame, api)
 				if age >= mole.Up or (hit and entry.Squash <= 0) then
 					entry.Current = nil
 					frame.Position = UDim2.fromScale(0.5, 1)
+					frame.Visible = false
 					entry.Mole.Crown.Visible = false
 				else
 					local up
@@ -530,6 +545,7 @@ function Module.Build(container: Frame, api)
 			for _, entry in ipairs(holes) do
 				entry.Current = nil
 				entry.Mole.Frame.Position = UDim2.fromScale(0.5, 1)
+				entry.Mole.Frame.Visible = false
 				entry.Mole.Crown.Visible = false
 			end
 			finish(st.Generation)

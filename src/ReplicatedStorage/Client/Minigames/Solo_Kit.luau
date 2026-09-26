@@ -565,6 +565,32 @@ function Kit:_BuildHud()
 		self:ShowPicker()
 	end)
 	self:_RefreshTitle()
+	-- Petit écran : on cache le compagnon pour laisser la place aux commandes
+	table.insert(self.Connections, hud:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+		self:_Relayout()
+	end))
+	task.defer(function()
+		if self.Alive then
+			self:_Relayout()
+		end
+	end)
+end
+
+-- Hauteur du HUD en pixels "design" -> mode compact (sans compagnon) si < 352
+function Kit:_Relayout()
+	local title = self.Hud:FindFirstChild("Title")
+	local unit = title and title.AbsoluteSize.Y / 58 or 0
+	if unit <= 0 then
+		return
+	end
+	local compact = self.Hud.AbsoluteSize.Y / unit < 352
+	self.Buddy.Frame.Visible = not compact
+	self.Extra.Size = UDim2.new(1, 0, 1, compact and -238 or -296)
+	local rating = self.Rating
+	if rating then
+		local height = self:ExtraHeight()
+		rating.Frame.Visible = height <= 0 or height >= rating.Top + 41
+	end
 end
 
 function Kit:_RefreshTitle()
@@ -1327,9 +1353,8 @@ function Kit:UseRating(top: number, caption: string?)
 	self.Rating = { Frame = frame, Stars = stars, Fill = fill, Top = top }
 	-- Cachée si la zone est trop petite (téléphone)
 	task.defer(function()
-		if self.Alive and self.Rating then
-			local height = self:ExtraHeight()
-			frame.Visible = height <= 0 or height >= top + 44
+		if self.Alive then
+			self:_Relayout()
 		end
 	end)
 end

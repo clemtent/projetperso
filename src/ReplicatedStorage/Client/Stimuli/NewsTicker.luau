@@ -61,7 +61,7 @@ local CATEGORIES = {
 	INSOLITE = { Text = "WEIRD", Color = Color3.fromRGB(150, 70, 225) },
 	POLITIQUE = { Text = "POLITICS", Color = Color3.fromRGB(40, 90, 210) },
 	SCIENCE = { Text = "SCIENCE", Color = Color3.fromRGB(0, 150, 140) },
-	TECH = { Text = "TECH", Color = Color3.fromRGB(90, 110, 150) },
+	TECH = { Text = "TECH", Color = Color3.fromRGB(70, 90, 125) },
 	CULTURE = { Text = "CULTURE", Color = Color3.fromRGB(230, 70, 140) },
 	SANTE = { Text = "HEALTH", Color = Color3.fromRGB(110, 190, 40) },
 	PEOPLE = { Text = "CELEBS", Color = Color3.fromRGB(255, 120, 30) },
@@ -513,7 +513,6 @@ function NewsTicker.Start(ctx)
 	local navyLight = Color3.fromRGB(30, 42, 78)
 	local yellow = Theme.Colors.Yellow
 	local white = Color3.new(1, 1, 1)
-	local green = Color3.fromRGB(60, 220, 110)
 
 	-- Police gras + italique (BuilderSans)
 	local italicFont = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Bold, Enum.FontStyle.Italic)
@@ -900,6 +899,8 @@ function NewsTicker.Start(ctx)
 	local function refreshLayout()
 		local width = designWidthOf(container)
 		local show = width >= SEGMENT_MIN_WIDTH
+		-- Largeur du bloc droit, lue par Email (compteur "non lus" juste à gauche)
+		container:SetAttribute("RightInset", CLOCK_W + (show and SEGMENT_W or 0))
 		if show ~= segmentShown then
 			segmentShown = show
 			segment.Visible = show
@@ -907,6 +908,7 @@ function NewsTicker.Start(ctx)
 		end
 	end
 	ctx.Connect(container:GetPropertyChangedSignal("AbsoluteSize"), refreshLayout)
+	container:SetAttribute("RightInset", CLOCK_W + SEGMENT_W)
 	task.defer(refreshLayout)
 
 	------------------------------------------------------------------

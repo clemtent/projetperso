@@ -1042,6 +1042,13 @@ function LiveStream.Start(ctx)
 		end
 
 		-- Assiette
+		-- Sauce piquante (au fond à droite : visible surtout sans le chat)
+		local bottle = box({ Name = "HotSauce", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(1, -30, 0, TABLE_Y + 6), Size = UDim2.fromOffset(12, 22), BackgroundColor3 = WHITE, ZIndex = 0, Parent = propsLayer }, 4)
+		grad(bottle, Color3.fromRGB(255, 90, 70), Color3.fromRGB(190, 30, 40), 0)
+		box(at({ BackgroundColor3 = Color3.fromRGB(80, 200, 120), ZIndex = 0, Parent = bottle }, 6, -3, 6, 7), 2)
+		box(at({ BackgroundColor3 = WHITE, ZIndex = 0, Parent = bottle }, 6, 13, 12, 6), 1)
+		box(at({ BackgroundColor3 = WHITE, BackgroundTransparency = 0.5, ZIndex = 0, Parent = bottle }, 3, 10, 2, 14), 1)
+
 		local plate = box(atC({ Name = "Plate", BackgroundColor3 = WHITE, ZIndex = 2, Parent = propsLayer }, 0, PLATE_Y, 90, 20), UDim.new(1, 0))
 		grad(plate, Color3.fromRGB(255, 255, 255), Color3.fromRGB(214, 214, 230))
 		UI.Stroke(plate, Color3.fromRGB(190, 184, 210), 1.2)
@@ -1054,6 +1061,7 @@ function LiveStream.Start(ctx)
 		local micHolder = box({ Name = "FluffyMic", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0, MIC_LEFT, 0, TABLE_Y + 32), Size = UDim2.fromOffset(40, 52), BackgroundTransparency = 1, ZIndex = 3, Parent = propsLayer })
 		box({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, 0), Size = UDim2.fromOffset(26, 5), BackgroundColor3 = Color3.fromRGB(60, 58, 72), ZIndex = 1, Parent = micHolder }, 2)
 		box({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -3), Size = UDim2.fromOffset(4, 22), BackgroundColor3 = Color3.fromRGB(70, 68, 84), ZIndex = 1, Parent = micHolder })
+		UI.Create("UIScale", { Scale = 0.85, Parent = micHolder })
 		local mic = round(at({ Name = "Mic", BackgroundColor3 = WHITE, ZIndex = 3, Parent = micHolder }, 20, 18, 25, 30))
 		grad(mic, Color3.fromRGB(236, 232, 244), Color3.fromRGB(170, 166, 186), 60)
 		for i = 0, 7 do
@@ -2431,11 +2439,12 @@ function LiveStream.Start(ctx)
 		for i, food in ipairs(foods) do
 			food.Text = pick(FOODS, random)
 			food.Rotation = random:NextNumber(-12, 12)
-			foodScales[i].Scale = 1
-			food.Position = foodHome(i) - UDim2.fromOffset(0, 80)
+			-- Chaque aliment "pop" dans l'assiette, l'un après l'autre
+			foodScales[i].Scale = 0
+			food.Position = foodHome(i)
 			food.Visible = true
-			later((i - 1) * 0.08, function()
-				UI.Tween(food, 0.45, { Position = foodHome(i) }, Enum.EasingStyle.Bounce)
+			later((i - 1) * 0.1, function()
+				UI.Tween(foodScales[i], 0.35, { Scale = 1 }, Enum.EasingStyle.Back)
 			end)
 		end
 	end
@@ -3017,6 +3026,11 @@ function LiveStream.Start(ctx)
 			S.uptime += 1
 			if S.uptime % 5 == 0 then
 				applyCompact()
+			end
+			-- Pastille des spectateurs : largeur selon le nombre
+			local pill = viewersLabel.Parent
+			if pill and pill:IsA("GuiObject") then
+				pill.Size = UDim2.fromOffset(26 + #viewersLabel.Text * 7, 16)
 			end
 			subtitleLabel.Text = string.format("🍤 %s%s · <font color=\"#FF8FA8\">%d:%02d:%02d</font>", streamTitle, qualityTag, S.uptime // 3600, (S.uptime // 60) % 60, S.uptime % 60)
 		end

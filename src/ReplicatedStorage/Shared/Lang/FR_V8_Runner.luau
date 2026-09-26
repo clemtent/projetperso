@@ -15,7 +15,6 @@ return {
 		["NEW BEST!"] = "NOUVEAU RECORD !",
 		["BEST"] = "RECORD",
 		["Best: %s m"] = "Record : %s m",
-		["Run over"] = "Fin de la course",
 		["COMBO x%d"] = "COMBO x%d",
 		["GO!"] = "C'EST PARTI !",
 	},

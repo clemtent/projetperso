@@ -278,7 +278,7 @@ function Module.Build(container: Frame, api)
 	----------------------------------------------------------------------
 	-- Coups
 	----------------------------------------------------------------------
-	kit:UseRating(46)
+	kit:UseRating(44)
 	local function refreshHud()
 		local sim = st.Sim
 		if not sim or not st.Rules then

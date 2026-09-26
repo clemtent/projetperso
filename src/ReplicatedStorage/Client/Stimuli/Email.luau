@@ -2,21 +2,26 @@
 	Email (ModuleScript - stimulus)
 	Emplacement : ReplicatedStorage > Client > Stimuli > Email
 
-	Messagerie "Dopamail" façon client mail premium :
+	"Dopamail", un vrai petit client mail :
 	  - chaque mail (décidé par le SERVEUR via l'événement Spawn "Email")
-	    arrive en vol plané sous forme de carte-enveloppe : rabat en V,
-	    timbre, avatar rond de l'expéditeur, nom, objet, aperçu du texte,
-	    pastille bleue "non lu", étiquette de priorité colorée (URGENT,
-	    PROMO, FAMILLE, TRAVAIL, ARNAQUE ?...) et barre de temps restant ;
-	  - un clic l'ouvre : la lettre sort de l'enveloppe puis la carte
-	    s'agrandit en vraie fenêtre de mail (barre de titre, objet, avatar,
-	    adresse, corps, signature, pièce jointe éventuelle, boutons
-	    Répondre / Transférer / Supprimer) + ClaimSpawn (le serveur valide) ;
-	    le "+X" confirmé (OnBonus "Email") s'affiche à côté ;
-	  - si on l'ignore trop longtemps, elle s'envole... et s'ajoute au
-	    compteur "📬 non lus" (en haut à droite), qui ne fait que grossir.
-	Plus de 70 mails absurdes (une liste par langue, même ordre) (spam, newsletters, maman, le boss, le prince,
-	promos, faux support technique...) choisis par info.Variant.
+	    arrive en vol plané sous forme de notification : en-tête "DOPAMAIL ·
+	    maintenant", avatar rond de l'expéditeur (pastille bleue "non lu"),
+	    nom, objet, aperçu du texte, trombone s'il y a une pièce jointe,
+	    étiquette colorée (URGENT, PROMO, FAMILLE, TRAVAIL, ARNAQUE ?...) et
+	    barre de temps restant ;
+	  - un clic l'ouvre : la lettre sort, puis une vraie fenêtre de mail
+	    s'ouvre (barre de titre, dossiers Boîte de réception / Favoris /
+	    Envoyés / Spam / Corbeille avec compteurs, objet, étoile, expéditeur,
+	    adresse, corps, signature, pièce jointe "téléchargeable", bandeau
+	    d'avertissement pour les spams et arnaques, boutons Répondre /
+	    Transférer / Spam / Supprimer) + ClaimSpawn (le serveur valide) ; le
+	    "+X" confirmé (OnBonus "Email") s'affiche à côté ;
+	  - si on l'ignore trop longtemps, la notification file vers le compteur
+	    "📬 non lus" (en haut à droite, dans le bandeau d'actu) ; cliquer sur
+	    le compteur ouvre la boîte de réception : la liste des mails ratés,
+	    qu'on peut lire (sans récompense : ils ont expiré côté serveur).
+	Plus de 90 mails absurdes (une liste par langue, même ordre) choisis par
+	info.Variant.
 ]]
 
 local Debris = game:GetService("Debris")
@@ -27,12 +32,17 @@ local Email = {}
 Email.Slot = "Overlay"
 
 local MAX_ENVELOPES = 4
-local CARD_W = 236
-local CARD_H = 74
-local POPUP_W = 360
-local POPUP_H = 252
-local POPUP_AUTO_CLOSE = 14
+local CARD_W = 250
+local CARD_H = 86
+local POPUP_W = 440
+local POPUP_H = 292
+local SIDEBAR_W = 110
+local POPUP_AUTO_CLOSE = 16
 local HURRY_TIME = 3 -- dernières secondes : la carte s'agite
+local MISSED_KEEP = 12 -- mails ratés gardés dans la boîte de réception
+-- Place du bloc droit du bandeau d'actu (horloge + segment), si le bandeau
+-- ne donne pas l'attribut "RightInset"
+local TICKER_RIGHT_FALLBACK = 60
 
 -- Styles des étiquettes de priorité (texte anglais, traduit avec Locale.T)
 local TAGS = {
@@ -272,6 +282,67 @@ local EMAILS = {
 		{ "SPAM", "🧠", "Brain Premium", "Upgrade to Brain Pro",
 			"Unlock unlimited thoughts, ad-free, plus the “remember why you walked into this room” feature. Free 7-day trial.",
 			"Brain Premium — Think bigger" },
+		-- v8 : nouveaux mails
+		{ "SPAM", "🦄", "Unicorn Investments", "Your unicorn is ready for pickup",
+			"Congratulations on your purchase of one (1) unicorn. Please bring a very large bag and a lot of glitter. No refunds, no exchanges, no horses.",
+			"Unicorn Investments — Dreams, invoiced", "📎 unicorn_receipt.pdf" },
+		{ "ARNAQUE", "🧙", "Wizard Support", "Your magic license expires TODAY",
+			"Renew now or your spells will be limited to “make toast”. We accept payment in dragon scales, gift cards, or your password (please don't).",
+			"Merlin, Level 99 Tech Support" },
+		{ "FAMILLE", "🐹", "Your hamster", "About the wheel",
+			"I ran 25 miles last night. I am still in the cage. Is this a metaphor? Please advise. Also: more seeds. Thank you for your attention.",
+			"Nibbles (cardio enthusiast)" },
+		{ "TRAVAIL", "🧑‍💼", "Human Resources", "Mandatory fun this Friday",
+			"Attendance at the spontaneous party is compulsory. Spontaneity will be graded. Please bring your own chair and your own enthusiasm.",
+			"Human Resources — Resources, not so human" },
+		{ "NEWS", "🌷", "Garden Gazette", "Your tulips are gossiping",
+			"Sources close to the flowerbed report that the tulips have been talking about the roses. The roses are not happy. The cactus saw everything.",
+			"The Garden Gazette — All the dirt", "📎 tulip_drama.mp3" },
+		{ "PROMO", "🎟️", "The Arcade", "Double tickets weekend!",
+			"Play, win, collect tickets, then trade them for a plush that looks vaguely like a duck. The duck is not guaranteed. The fun is.",
+			"The Arcade — Where tickets grow on trees" },
+		{ "SUPPORT", "🎧", "Lofi Radio Support", "Your beats have been delivered",
+			"Your 24/7 beats to relax to are now 25/7. We found an extra hour behind the couch. Please don't ask where it came from.",
+			"Lofi Support — Chill, delivered" },
+		{ "URGENT", "🗜️", "Press Safety Committee", "Please stop crushing macarons",
+			"The pastry chefs have filed 47 complaints. We are not saying stop. We are saying: at least film it in slow motion.",
+			"The Committee (wearing earplugs)" },
+		{ "PERSO", "📀", "The DVD Logo", "I was SO close",
+			"I saw the corner. The corner saw me. And then... one pixel. ONE. Please keep watching. I'll do it for you, I promise.",
+			"The Logo, always bouncing back" },
+		{ "SPAM", "🍀", "Lucky Chain Letter", "Forward this to 7 friends",
+			"Forward this to 7 friends or a pigeon will look at you funny. Forward it to 8 and the pigeon will wink. Forward it to 0: nothing happens. Try it.",
+			"Anonymous (definitely a pigeon)" },
+		{ "ARNAQUE", "🏝️", "Private Island Sales", "You've inherited an island!",
+			"It is a very small island. About the size of a pancake. It's also underwater at high tide. Taxes to pay first: 900 Dopamine.",
+			"Island Realty — Sea views (from below)", "📎 island_photo_blurry.jpg" },
+		{ "FAMILLE", "👴", "Grandpa", "HOW DO I SEND AN EMAIL",
+			"IS THIS WORKING? YOUR GRANDMOTHER SAYS YES. I SAY IT'S A TYPEWRITER WITH LIGHTS. IF YOU GET THIS, SEND A LETTER. A REAL ONE.",
+			"GRANDPA (SENT FROM THE BIG COMPUTER)" },
+		{ "TRAVAIL", "🤖", "Office Robot", "I have automated your job",
+			"Good news: I now do your job. Bad news: I also took your chair. Neutral news: the coffee is still terrible. Have a nice day off!",
+			"Unit 7, Employee of the Month (forever)", "📎 your_replacement.zip" },
+		{ "NEWS", "🔭", "Stargazers Monthly", "A star was named after you",
+			"Technically it's a satellite. Technically, it might be a streetlight. But it shines, and that's what counts. Frame the certificate.",
+			"Stargazers Monthly — Looking up since 1802", "📎 star_certificate.pdf" },
+		{ "PROMO", "🧋", "Bubble Tea Palace", "Loyalty card: 99/100 stamps",
+			"One more bubble tea and you'll get... a brand new loyalty card! Congratulations in advance. We believe in you.",
+			"Bubble Tea Palace — Pearls of wisdom" },
+		{ "SUPPORT", "📦", "Parcel Tracker", "Your package is in the hallway",
+			"Our driver rang the bell 0.2 seconds before leaving. We left a note: “Sorry we missed you.” We didn't miss you. We just ran.",
+			"Parcel Tracker — Almost delivered™" },
+		{ "SPAM", "🐍", "Snake Oil Ltd", "Miracle cream for tired thumbs",
+			"Rub on thumbs, click 300% faster, results guaranteed or your money back (money not included). Open the attachment, it's perfectly safe.",
+			"Snake Oil Ltd — Trust us (don't)", "📎 totally_not_a_virus.exe" },
+		{ "PERSO", "🌊", "The Ocean", "Just checking in",
+			"Hey. It's the ocean. No pressure (well, a lot of pressure, I'm very deep). Come visit sometime. I'll wave. I'm always waving.",
+			"The Ocean (very big, very blue)" },
+		{ "URGENT", "🎁", "Daily Rewards", "Your gift is waiting!",
+			"Your daily gift is ready. It has been ready since this morning. It is starting to take it personally. Please come and open it.",
+			"Daily Rewards — Patience: running out" },
+		{ "FAMILLE", "🐕", "The Dog", "WHO'S A GOOD HUMAN",
+			"YOU ARE. YOU ARE THE GOOD HUMAN. ALSO THE BALL IS UNDER THE COUCH AGAIN. ALSO I LOVE YOU. ALSO BALL. BALL?",
+			"Biscuit, good dog (the best one)" },
 	},
 	fr = {
 		{ "ARNAQUE", "🤴", "Prince de Pixelie", "URGENT : héritage de 1 000 000 Dopamine",
@@ -496,6 +567,67 @@ local EMAILS = {
 		{ "SPAM", "🧠", "Cerveau Premium", "Passez à la version Pro de votre cerveau",
 			"Débloquez des pensées illimitées, sans publicité, et l'option « se souvenir pourquoi on est entré dans cette pièce ». Essai gratuit 7 jours.",
 			"Cerveau Premium — Pensez plus grand" },
+		-- v8 : nouveaux mails
+		{ "SPAM", "🦄", "Licornes & Placements", "Votre licorne est prête à être retirée",
+			"Félicitations pour l'achat d'une (1) licorne. Prévoyez un très grand sac et beaucoup de paillettes. Ni reprise, ni échange, ni cheval.",
+			"Licornes & Placements — Les rêves, facturés", "📎 recu_licorne.pdf" },
+		{ "ARNAQUE", "🧙", "Support Magique", "Votre licence de magie expire AUJOURD'HUI",
+			"Renouvelez vite ou vos sorts seront limités à « faire griller du pain ». Paiement en écailles de dragon, cartes cadeaux ou mot de passe (surtout pas).",
+			"Merlin, support technique niveau 99" },
+		{ "FAMILLE", "🐹", "Ton hamster", "Au sujet de la roue",
+			"J'ai couru 40 km cette nuit. Je suis toujours dans la cage. C'est une métaphore ? Merci de me répondre. Et aussi : plus de graines. Merci.",
+			"Grignotin (fan de cardio)" },
+		{ "TRAVAIL", "🧑‍💼", "Ressources Humaines", "Fun obligatoire ce vendredi",
+			"La présence à la fête spontanée est obligatoire. La spontanéité sera notée. Merci d'apporter votre chaise et votre enthousiasme.",
+			"Les RH — Des ressources, pas très humaines" },
+		{ "NEWS", "🌷", "La Gazette du Jardin", "Tes tulipes font des commérages",
+			"Selon des sources proches du massif, les tulipes parlent dans le dos des roses. Les roses ne sont pas contentes. Le cactus a tout vu.",
+			"La Gazette du Jardin — Toute la terre sur l'affaire", "📎 drame_tulipes.mp3" },
+		{ "PROMO", "🎟️", "La Salle d'Arcade", "Week-end tickets doublés !",
+			"Joue, gagne, collectionne des tickets, puis échange-les contre une peluche qui ressemble vaguement à un canard. Canard non garanti. Fun garanti.",
+			"L'Arcade — Là où les tickets poussent" },
+		{ "SUPPORT", "🎧", "Support Radio Lofi", "Vos beats ont été livrés",
+			"Vos beats pour se détendre 24 h/24 passent en 25 h/24. On a trouvé une heure de plus derrière le canapé. Ne demandez pas d'où elle vient.",
+			"Support Lofi — La détente, livrée" },
+		{ "URGENT", "🗜️", "Comité Sécurité Presse", "Merci d'arrêter d'écraser des macarons",
+			"Les pâtissiers ont déposé 47 plaintes. On ne dit pas d'arrêter. On dit : au moins, filmez-le au ralenti.",
+			"Le Comité (avec des bouchons d'oreilles)" },
+		{ "PERSO", "📀", "Le Logo DVD", "J'y étais PRESQUE",
+			"J'ai vu le coin. Le coin m'a vu. Et puis... un pixel. UN. Continue de regarder, s'il te plaît. Je vais le faire pour toi, promis.",
+			"Le Logo, qui rebondit toujours" },
+		{ "SPAM", "🍀", "Chaîne Porte-Bonheur", "Transfère ce mail à 7 amis",
+			"Transfère ce mail à 7 amis ou un pigeon te regardera bizarrement. À 8 amis, le pigeon te fera un clin d'œil. À 0 : rien ne se passe. Essaie.",
+			"Anonyme (sûrement un pigeon)" },
+		{ "ARNAQUE", "🏝️", "Vente d'Îles Privées", "Vous avez hérité d'une île !",
+			"C'est une toute petite île. À peu près la taille d'une crêpe. Elle est aussi sous l'eau à marée haute. Taxes à régler d'abord : 900 Dopamine.",
+			"Îles Immo — Vue sur mer (par-dessous)", "📎 photo_ile_floue.jpg" },
+		{ "FAMILLE", "👴", "Papi", "COMMENT ON ENVOIE UN MAIL",
+			"EST-CE QUE ÇA MARCHE ? TA GRAND-MÈRE DIT OUI. MOI JE DIS QUE C'EST UNE MACHINE À ÉCRIRE AVEC DES LUMIÈRES. SI TU REÇOIS ÇA, ENVOIE UNE LETTRE. UNE VRAIE.",
+			"PAPI (ENVOYÉ DEPUIS LE GRAND ORDINATEUR)" },
+		{ "TRAVAIL", "🤖", "Robot du Bureau", "J'ai automatisé ton travail",
+			"Bonne nouvelle : je fais ton travail. Mauvaise nouvelle : j'ai aussi pris ta chaise. Nouvelle neutre : le café est toujours horrible. Bon congé !",
+			"Unité 7, employé du mois (pour toujours)", "📎 ton_remplacant.zip" },
+		{ "NEWS", "🔭", "Astronomie Mensuelle", "Une étoile porte ton nom",
+			"Techniquement, c'est un satellite. Techniquement, c'est peut-être un lampadaire. Mais ça brille, et c'est ce qui compte. Encadre le certificat.",
+			"Astronomie Mensuelle — Le nez en l'air depuis 1802", "📎 certificat_etoile.pdf" },
+		{ "PROMO", "🧋", "Palais du Bubble Tea", "Carte de fidélité : 99/100 tampons",
+			"Encore un bubble tea et tu gagnes... une toute nouvelle carte de fidélité ! Félicitations d'avance. On croit en toi.",
+			"Palais du Bubble Tea — Des perles de sagesse" },
+		{ "SUPPORT", "📦", "Suivi de Colis", "Votre colis est dans le couloir",
+			"Notre livreur a sonné 0,2 seconde avant de repartir. Il a laissé un mot : « Désolé de vous avoir manqué. » Il ne vous a pas manqué. Il a couru.",
+			"Suivi de Colis — Presque livré™" },
+		{ "SPAM", "🐍", "Huile de Serpent SARL", "Crème miracle pour pouces fatigués",
+			"À appliquer sur les pouces : clics 300 % plus rapides, satisfait ou remboursé (argent non inclus). Ouvrez la pièce jointe, c'est sans danger.",
+			"Huile de Serpent SARL — Faites-nous confiance (non)", "📎 pas_du_tout_un_virus.exe" },
+		{ "PERSO", "🌊", "L'Océan", "Des nouvelles ?",
+			"Coucou. C'est l'océan. Aucune pression (enfin, beaucoup de pression, je suis très profond). Passe me voir un de ces jours. Je te ferai signe. Je fais toujours signe.",
+			"L'Océan (très grand, très bleu)" },
+		{ "URGENT", "🎁", "Récompenses Quotidiennes", "Ton cadeau t'attend !",
+			"Ton cadeau du jour est prêt. Il est prêt depuis ce matin. Il commence à le prendre personnellement. Viens l'ouvrir, s'il te plaît.",
+			"Récompenses Quotidiennes — Patience : épuisée" },
+		{ "FAMILLE", "🐕", "Le Chien", "QUI EST UN BON HUMAIN",
+			"C'EST TOI. TU ES LE BON HUMAIN. AUSSI LA BALLE EST ENCORE SOUS LE CANAPÉ. AUSSI JE T'AIME. AUSSI BALLE. BALLE ?",
+			"Biscuit, gentil chien (le meilleur)" },
 	},
 }
 
@@ -505,7 +637,7 @@ local UNREAD = {
 	fr = { One = "non lu", Many = "non lus" },
 }
 
--- Réponses quand on clique sur "Répondre" / "Transférer"
+-- Réponses quand on clique sur "Répondre" / "Transférer" / "Spam"
 local REPLIES = {
 	en = {
 		"Sent... to nobody 📭",
@@ -514,6 +646,7 @@ local REPLIES = {
 		"Reply: “lol” 👍",
 		"Message went straight to spam 🗑️",
 		"Replied with a single emoji 👌",
+		"Reply sent: “haha yes”",
 	},
 	fr = {
 		"Envoyé... à personne 📭",
@@ -522,6 +655,7 @@ local REPLIES = {
 		"Réponse : « mdr » 👍",
 		"Message parti dans les spams 🗑️",
 		"Répondu avec un seul emoji 👌",
+		"Réponse envoyée : « haha oui »",
 	},
 }
 local FORWARDS = {
@@ -540,6 +674,29 @@ local FORWARDS = {
 		"Transféré au Boss (oups) 👔",
 	},
 }
+local SPAMMED = {
+	en = { "Into the spam folder! 🚫", "Blocked. The prince is sad. 👑", "Spam filter: fed 🍽️", "Bye bye, nonsense 👋" },
+	fr = { "Direction les indésirables ! 🚫", "Bloqué. Le prince est triste. 👑", "Filtre anti-spam : nourri 🍽️", "Au revoir, n'importe quoi 👋" },
+}
+-- Clic sur une pièce jointe (téléchargement... imaginaire)
+local ATTACHMENT_JOKES = {
+	en = { "Download failed: the file is shy 🙈", "Downloading... 1% (ETA: 3 years)", "Scanned: it's a picture of a potato 🥔", "Opened! It was empty. Deep." },
+	fr = { "Échec : le fichier est timide 🙈", "Téléchargement... 1 % (reste : 3 ans)", "Analysé : c'est une photo de patate 🥔", "Ouvert ! Il était vide. Profond." },
+}
+local VIRUS_JOKES = {
+	en = { "Blocked! Never open a random .exe 🛡️", "Nice try, virus. Deleted. 🛡️" },
+	fr = { "Bloqué ! N'ouvre jamais un .exe inconnu 🛡️", "Bien essayé, le virus. Supprimé. 🛡️" },
+}
+
+-- Icône + couleur d'une pièce jointe selon son extension
+local FILE_TYPES = {
+	pdf = { Icon = "📕", Color = Color3.fromRGB(226, 60, 60) },
+	xls = { Icon = "📊", Color = Color3.fromRGB(40, 160, 80) },
+	jpg = { Icon = "🖼️", Color = Color3.fromRGB(40, 130, 230) },
+	mp3 = { Icon = "🎵", Color = Color3.fromRGB(150, 70, 225) },
+	zip = { Icon = "🗜️", Color = Color3.fromRGB(240, 150, 20) },
+	exe = { Icon = "⚠️", Color = Color3.fromRGB(150, 20, 40) },
+}
 
 -- "Prince de Pixelie" -> "prince.de.pixelie"
 local ACCENTS = {
@@ -551,8 +708,8 @@ local ACCENTS = {
 	{ "ç", "c" },
 	{ "É", "e" },
 }
-local function slug(text: string): string
-	local result = string.lower(text)
+local function slug(value: string): string
+	local result = string.lower(value)
 	for _, pair in ipairs(ACCENTS) do
 		-- Les accents UTF-8 font 2 octets : on remplace mot à mot
 		local chars = pair[1]
@@ -576,11 +733,28 @@ local function pick(list: { any }, variant: any): any
 	return list[(v - 1) % #list + 1]
 end
 
+local function pickLine(variants): string
+	local list = Locale.Pick(variants)
+	return list[math.random(1, #list)]
+end
+
 -- Transforme une entrée compacte en mail complet
 local function buildEmail(entry): { [string]: any }
 	local style = TAGS[entry[1]] or TAGS.PERSO
-	local tag = { Text = Locale.T(style.Text), Color = style.Color }
+	local tag = { Id = entry[1], Text = Locale.T(style.Text), Color = style.Color }
 	local sender = entry[3]
+	local attachment = nil
+	if type(entry[7]) == "string" then
+		local name = string.gsub(entry[7], "^📎%s*", "")
+		local extension = string.lower(string.match(name, "%.(%w+)$") or "")
+		local kb = (#name * 137) % 2900 + 40
+		attachment = {
+			Name = name,
+			Type = FILE_TYPES[extension] or { Icon = "📄", Color = Color3.fromRGB(110, 116, 132) },
+			Size = kb >= 1000 and string.format("%.1f MB", kb / 1000) or (kb .. " KB"),
+			Virus = extension == "exe",
+		}
+	end
 	return {
 		Tag = tag,
 		Avatar = entry[2],
@@ -589,7 +763,10 @@ local function buildEmail(entry): { [string]: any }
 		Subject = entry[4],
 		Body = entry[5],
 		Signature = entry[6] or sender,
-		Attachment = entry[7],
+		Attachment = attachment,
+		Suspicious = entry[1] == "ARNAQUE" or entry[1] == "SPAM",
+		Read = false,
+		Starred = false,
 	}
 end
 
@@ -605,17 +782,34 @@ function Email.Start(ctx)
 	local inkDim = Color3.fromRGB(110, 116, 132)
 	local blue = Color3.fromRGB(40, 120, 240)
 	local border = Color3.fromRGB(30, 34, 48)
+	local line = Color3.fromRGB(226, 230, 238)
+	local sidebarColor = Color3.fromRGB(243, 246, 252)
+	local red = Color3.fromRGB(226, 38, 52)
 
 	local envelopes: { [string]: any } = {}
 	local envelopeCount = 0
-	local missed = 0
+	local missed = 0 -- mails ratés non lus
+	local missedList: { any } = {} -- les plus récents en premier
+	local spamCount = random:NextInteger(1200, 4800)
+	local trashCount = random:NextInteger(40, 300)
+	local sentCount = random:NextInteger(3, 30)
+	local starredCount = 0
 	local positions: { [string]: UDim2 } = {}
 	local lastPosition = UDim2.fromScale(0.5, 0.45)
-	local popup: any = nil -- fenêtre de mail ouverte
+	local popup: any = nil -- fenêtre ouverte
 
 	local function effectsOn(): boolean
 		local data = ctx.State.Data
 		return not (data and data.Settings and data.Settings.Effects == false)
+	end
+
+	-- Connexion liée à un bouton de fenêtre (coupée avec lui à sa destruction)
+	local function on(signal: RBXScriptSignal, callback: (...any) -> ())
+		signal:Connect(function(...)
+			if ctx.IsAlive() then
+				callback(...)
+			end
+		end)
 	end
 
 	local function frame(props: { [string]: any }): Frame
@@ -637,13 +831,7 @@ function Email.Start(ctx)
 	-- Avatar rond : dégradé de la couleur de l'étiquette + emoji
 	local function avatar(parent: Instance, email, size: number, position: UDim2, zIndex: number): Frame
 		local color = email.Tag.Color
-		local circle = frame({
-			Size = UDim2.fromOffset(size, size),
-			Position = position,
-			BackgroundColor3 = white,
-			ZIndex = zIndex,
-			Parent = parent,
-		})
+		local circle = frame({ Size = UDim2.fromOffset(size, size), Position = position, BackgroundColor3 = white, ZIndex = zIndex, Parent = parent })
 		UIUtil.Corner(circle, UDim.new(1, 0))
 		UIUtil.Gradient(circle, ColorSequence.new(color:Lerp(white, 0.7), color:Lerp(white, 0.35)), 135)
 		UIUtil.Stroke(circle, color, 1.5, 0.2)
@@ -662,19 +850,9 @@ function Email.Start(ctx)
 	-- Étiquette de priorité (largeur automatique)
 	local function tagChip(parent: Instance, email, height: number, zIndex: number): Frame
 		local tag = email.Tag
-		local chip = frame({
-			Size = UDim2.fromOffset(0, height),
-			AutomaticSize = Enum.AutomaticSize.X,
-			BackgroundColor3 = tag.Color,
-			ZIndex = zIndex,
-			Parent = parent,
-		})
+		local chip = frame({ Size = UDim2.fromOffset(0, height), AutomaticSize = Enum.AutomaticSize.X, BackgroundColor3 = tag.Color, ZIndex = zIndex, Parent = parent })
 		UIUtil.Corner(chip, UDim.new(1, 0))
-		UIUtil.Create("UIPadding", {
-			PaddingLeft = UDim.new(0, 6),
-			PaddingRight = UDim.new(0, 6),
-			Parent = chip,
-		})
+		UIUtil.Create("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6), Parent = chip })
 		text({
 			Name = "Label",
 			Size = UDim2.fromScale(0, 1),
@@ -689,17 +867,42 @@ function Email.Start(ctx)
 		return chip
 	end
 
+	-- Petit bouton de fenêtre
+	local function makeButton(parent: Instance, label: string, filled: boolean, textColor: Color3, x: number, y: number, width: number, height: number, z: number): TextButton
+		local button = UIUtil.Create("TextButton", {
+			Size = UDim2.fromOffset(width, height),
+			Position = UDim2.fromOffset(x, y),
+			BackgroundColor3 = filled and blue or white,
+			AutoButtonColor = false,
+			Font = Theme.Fonts.Title,
+			Text = label,
+			TextColor3 = textColor,
+			TextScaled = true,
+			ZIndex = z,
+			Parent = parent,
+		})
+		UIUtil.Create("UITextSizeConstraint", { MaxTextSize = 13, MinTextSize = 8, Parent = button })
+		UIUtil.Create("UIPadding", { PaddingLeft = UDim.new(0, 4), PaddingRight = UDim.new(0, 4), PaddingTop = UDim.new(0, 5), PaddingBottom = UDim.new(0, 5), Parent = button })
+		UIUtil.Corner(button, 8)
+		UIUtil.Stroke(button, filled and Color3.fromRGB(20, 80, 180) or Color3.fromRGB(200, 206, 220), 1.2, 0)
+		UIUtil.Gradient(button, ColorSequence.new(white, Color3.fromRGB(222, 226, 236)), 90)
+		UIUtil.AnimateButton(button, 1.05, 0.93)
+		return button
+	end
+
 	------------------------------------------------------------------
-	-- Compteur "📬 non lus" (dans le bandeau d'actu, à gauche du bloc
-	-- horloge : hors de toute carte, il ne cache pas la bourse)
+	-- Compteur "📬 non lus" (dans le bandeau d'actu, à gauche de son bloc
+	-- droit) : cliquable, ouvre la boîte de réception
 	------------------------------------------------------------------
-	local counter = frame({
+	local counter = UIUtil.Create("TextButton", {
 		Name = "Unread",
 		Size = UDim2.fromOffset(0, 22),
 		AutomaticSize = Enum.AutomaticSize.X,
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -112, 0, 4),
+		Position = UDim2.new(1, -(TICKER_RIGHT_FALLBACK + 6), 0, 4),
 		BackgroundColor3 = white,
+		AutoButtonColor = false,
+		Text = "",
 		Visible = false,
 		ZIndex = 40,
 		Parent = container,
@@ -707,11 +910,7 @@ function Email.Start(ctx)
 	UIUtil.Corner(counter, UDim.new(1, 0))
 	UIUtil.Stroke(counter, border, 1.5, 0.15)
 	UIUtil.Gradient(counter, ColorSequence.new(white, Color3.fromRGB(226, 232, 244)), 90)
-	UIUtil.Create("UIPadding", {
-		PaddingLeft = UDim.new(0, 4),
-		PaddingRight = UDim.new(0, 9),
-		Parent = counter,
-	})
+	UIUtil.Create("UIPadding", { PaddingLeft = UDim.new(0, 4), PaddingRight = UDim.new(0, 9), Parent = counter })
 	UIUtil.Create("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
 		VerticalAlignment = Enum.VerticalAlignment.Center,
@@ -734,11 +933,7 @@ function Email.Start(ctx)
 		Parent = counter,
 	})
 	UIUtil.Corner(counterBadge, UDim.new(1, 0))
-	UIUtil.Create("UIPadding", {
-		PaddingLeft = UDim.new(0, 5),
-		PaddingRight = UDim.new(0, 5),
-		Parent = counterBadge,
-	})
+	UIUtil.Create("UIPadding", { PaddingLeft = UDim.new(0, 5), PaddingRight = UDim.new(0, 5), Parent = counterBadge })
 	local counterLabel = text({
 		Size = UDim2.fromOffset(0, 18),
 		AutomaticSize = Enum.AutomaticSize.X,
@@ -750,9 +945,31 @@ function Email.Start(ctx)
 		Parent = counter,
 	})
 	local counterScale = UIUtil.Create("UIScale", { Parent = counter })
+	UIUtil.AnimateButton(counter, 1.06, 0.94)
 
-	local function refreshCounter()
-		local unread = envelopeCount + missed
+	-- Place du compteur : juste à gauche du bloc horloge / segment du bandeau
+	local tickerRight = TICKER_RIGHT_FALLBACK
+	local function placeCounter()
+		local slots = ctx.Interface and ctx.Interface.Layers and ctx.Interface.Layers.Slots
+		local ticker = slots and slots:FindFirstChild("NewsTicker")
+		local inset = ticker and ticker:GetAttribute("RightInset")
+		tickerRight = type(inset) == "number" and inset or TICKER_RIGHT_FALLBACK
+		counter.Position = UDim2.new(1, -(tickerRight + 6), 0, 4)
+	end
+	placeCounter()
+	task.delay(1, placeCounter)
+	if ctx.Interface and ctx.Interface.ScaleChanged then
+		ctx.Connect(ctx.Interface.ScaleChanged, function()
+			task.delay(0.2, placeCounter)
+		end)
+	end
+
+	local function unreadCount(): number
+		return envelopeCount + missed
+	end
+
+	local function refreshCounter(bump: boolean?)
+		local unread = unreadCount()
 		counter.Visible = unread > 0
 		local suffix = ""
 		if unread >= 50 then
@@ -761,16 +978,21 @@ function Email.Start(ctx)
 			suffix = " 😬"
 		end
 		counterBadge.Text = unread > 999 and "999+" or tostring(unread)
-		counterBadge.BackgroundColor3 = unread >= 10 and Color3.fromRGB(226, 38, 52) or blue
+		counterBadge.BackgroundColor3 = unread >= 10 and red or blue
 		counterLabel.Text = "📬 " .. (unread > 1 and Locale.Pick(UNREAD).Many or Locale.Pick(UNREAD).One) .. suffix
-		counterScale.Scale = 1.25
-		UIUtil.Tween(counterScale, 0.3, { Scale = 1 }, Enum.EasingStyle.Back)
+		if bump ~= false then
+			counterScale.Scale = 1.25
+			UIUtil.Tween(counterScale, 0.3, { Scale = 1 }, Enum.EasingStyle.Back)
+		end
 	end
 
 	------------------------------------------------------------------
-	-- Fenêtre de mail
+	-- Fenêtre du client mail
 	------------------------------------------------------------------
-	local function closePopup(target, trashed: boolean?)
+	local PANE_W = POPUP_W - SIDEBAR_W
+	local PANE_H = POPUP_H - 30
+
+	local function closePopup(target, how: string?)
 		local current = target or popup
 		if not current or current.Closed then
 			return
@@ -779,50 +1001,64 @@ function Email.Start(ctx)
 		if popup == current then
 			popup = nil
 		end
-		if trashed then
-			-- Direction la corbeille : rétrécit en tournant vers le bas
-			UIUtil.Tween(current.Root, 0.3, {
-				Position = current.Root.Position + UDim2.fromOffset(60, 120),
-				Rotation = 25,
-			}, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-			UIUtil.Tween(current.Scale, 0.3, { Scale = 0.2 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		local root = current.Root
+		if how == "trash" or how == "spam" then
+			-- La fenêtre file dans le dossier (Corbeille / Spam) de la barre latérale
+			local row = current.Folders[how == "trash" and "Trash" or "Spam"]
+			local rowY = row and (30 + row.Position.Y.Offset + 12) or POPUP_H
+			local offset = UDim2.fromOffset(SIDEBAR_W / 2 - root.AnchorPoint.X * POPUP_W, rowY - root.AnchorPoint.Y * POPUP_H)
+			UIUtil.Tween(root, 0.35, { Position = root.Position + offset, Rotation = how == "trash" and 20 or -12 }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+			UIUtil.Tween(current.Scale, 0.35, { Scale = 0.06 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 		else
 			UIUtil.Tween(current.Scale, 0.2, { Scale = 0.6 }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
 		end
-		UIUtil.Tween(current.Group, 0.25, { GroupTransparency = 1 })
-		UIUtil.Tween(current.Outline, 0.25, { Transparency = 1 })
-		UIUtil.Tween(current.Shadow, 0.25, { BackgroundTransparency = 1 })
-		Debris:AddItem(current.Root, 0.35)
+		UIUtil.Tween(current.Group, 0.3, { GroupTransparency = 1 })
+		UIUtil.Tween(current.Outline, 0.3, { Transparency = 1 })
+		UIUtil.Tween(current.Shadow, 0.3, { BackgroundTransparency = 1 })
+		Debris:AddItem(root, 0.4)
 	end
 
-	local function makeButton(parent: Instance, label: string, filled: boolean, textColor: Color3, x: number, width: number): TextButton
-		local button = UIUtil.Create("TextButton", {
-			Size = UDim2.fromOffset(width, 28),
-			Position = UDim2.new(0, x, 1, -38),
-			BackgroundColor3 = filled and blue or white,
-			AutoButtonColor = false,
-			Font = Theme.Fonts.Title,
-			Text = label,
-			TextColor3 = textColor,
-			TextSize = 14,
-			ZIndex = 66,
-			Parent = parent,
+	-- Ligne de dossier de la barre latérale
+	local function folderRow(parent: Instance, y: number, icon: string, name: string, count: number?, active: boolean, accent: Color3?): Frame
+		local row = frame({ Position = UDim2.fromOffset(6, y), Size = UDim2.new(1, -12, 0, 24), BackgroundColor3 = active and Color3.fromRGB(214, 228, 252) or sidebarColor, BackgroundTransparency = active and 0 or 1, ZIndex = 63, Parent = parent })
+		UIUtil.Corner(row, 7)
+		UIUtil.Label({
+			Position = UDim2.fromOffset(5, 4),
+			Size = UDim2.new(1, -36, 1, -8),
+			Font = active and Theme.Fonts.Title or Theme.Fonts.Body,
+			Text = icon .. " " .. name,
+			TextColor3 = active and blue or ink,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			MaxTextSize = 12,
+			ZIndex = 64,
+			Parent = row,
 		})
-		UIUtil.Corner(button, 9)
-		UIUtil.Stroke(button, filled and Color3.fromRGB(20, 80, 180) or Color3.fromRGB(200, 206, 220), 1.2, 0)
-		UIUtil.Gradient(button, ColorSequence.new(white, Color3.fromRGB(222, 226, 236)), 90)
-		UIUtil.AnimateButton(button, 1.05, 0.93)
-		return button
+		do
+			local badge = text({
+				Name = "Count",
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -4, 0.5, 0),
+				Size = UDim2.fromOffset(0, 15),
+				AutomaticSize = Enum.AutomaticSize.X,
+				BackgroundColor3 = accent or blue,
+				BackgroundTransparency = 0,
+				Font = Theme.Fonts.Number,
+				Text = (count or 0) > 999 and "999+" or tostring(count or 0),
+				TextColor3 = white,
+				TextSize = 10,
+				TextXAlignment = Enum.TextXAlignment.Center,
+				Visible = (count or 0) > 0,
+				ZIndex = 65,
+				Parent = row,
+			})
+			UIUtil.Corner(badge, UDim.new(1, 0))
+			UIUtil.Create("UIPadding", { PaddingLeft = UDim.new(0, 5), PaddingRight = UDim.new(0, 5), Parent = badge })
+		end
+		return row
 	end
 
-	local function openPopup(email, sx: number, sy: number, from: UDim2)
-		closePopup(nil)
-		local ax = math.clamp(sx, 0.02, 0.98)
-		local ay = math.clamp(sy, 0.06, 0.94)
-
-		-- AnchorPoint = position : la fenêtre reste toujours dans l'écran.
-		-- Racine = TextButton vide : elle absorbe les clics sur la fenêtre
-		-- (sinon ils traversent jusqu'au bouton principal / aux cartes).
+	-- Construit la fenêtre (barre de titre, dossiers, zone de lecture vide)
+	local function buildWindow(ax: number, ay: number, from: UDim2)
 		local root = UIUtil.Create("TextButton", {
 			Name = "MailWindow",
 			Size = UDim2.fromOffset(POPUP_W, POPUP_H),
@@ -835,14 +1071,7 @@ function Email.Start(ctx)
 			Parent = container,
 		})
 		local scale = UIUtil.Create("UIScale", { Scale = 0.35, Parent = root })
-		local shadow = frame({
-			Size = UDim2.new(1, 8, 1, 8),
-			Position = UDim2.fromOffset(-4, 4),
-			BackgroundColor3 = Color3.new(0, 0, 0),
-			BackgroundTransparency = 0.8,
-			ZIndex = 60,
-			Parent = root,
-		})
+		local shadow = frame({ Size = UDim2.new(1, 10, 1, 10), Position = UDim2.fromOffset(-5, 5), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.78, ZIndex = 60, Parent = root })
 		UIUtil.Corner(shadow, 18)
 
 		local group = UIUtil.Create("CanvasGroup", {
@@ -856,28 +1085,16 @@ function Email.Start(ctx)
 		})
 		UIUtil.Corner(group, 14)
 
-		-- Barre de titre (pastilles de fenêtre + nom de l'appli)
-		local titleBar = frame({
-			Size = UDim2.new(1, 0, 0, 30),
-			BackgroundColor3 = white,
-			ZIndex = 62,
-			Parent = group,
-		})
+		-- Barre de titre
+		local titleBar = frame({ Size = UDim2.new(1, 0, 0, 30), BackgroundColor3 = white, ZIndex = 62, Parent = group })
 		UIUtil.Gradient(titleBar, ColorSequence.new(Color3.fromRGB(44, 60, 104), Color3.fromRGB(26, 36, 66)), 90)
 		for index, color in ipairs({ Color3.fromRGB(255, 95, 86), Color3.fromRGB(255, 189, 46), Color3.fromRGB(39, 201, 63) }) do
-			local light = frame({
-				Size = UDim2.fromOffset(10, 10),
-				AnchorPoint = Vector2.new(0, 0.5),
-				Position = UDim2.new(0, 10 + (index - 1) * 15, 0.5, 0),
-				BackgroundColor3 = color,
-				ZIndex = 63,
-				Parent = titleBar,
-			})
+			local light = frame({ Size = UDim2.fromOffset(10, 10), AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10 + (index - 1) * 15, 0.5, 0), BackgroundColor3 = color, ZIndex = 63, Parent = titleBar })
 			UIUtil.Corner(light, UDim.new(1, 0))
 		end
 		text({
-			Size = UDim2.new(1, -110, 1, 0),
-			Position = UDim2.fromOffset(60, 0),
+			Size = UDim2.new(1, -150, 1, 0),
+			Position = UDim2.fromOffset(62, 0),
 			Font = Theme.Fonts.Title,
 			Text = Locale.T("📥 Dopamail — Inbox"),
 			TextColor3 = white,
@@ -886,6 +1103,10 @@ function Email.Start(ctx)
 			ZIndex = 63,
 			Parent = titleBar,
 		})
+		-- Fausse barre de recherche
+		local search = frame({ AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -36, 0.5, 0), Size = UDim2.fromOffset(92, 18), BackgroundColor3 = white, BackgroundTransparency = 0.85, ZIndex = 63, Parent = titleBar })
+		UIUtil.Corner(search, UDim.new(1, 0))
+		text({ Position = UDim2.fromOffset(8, 0), Size = UDim2.new(1, -10, 1, 0), Text = "🔍 " .. Locale.T("Search"), TextColor3 = Color3.fromRGB(200, 210, 235), TextSize = 10, ZIndex = 64, Parent = search })
 		local closeButton = UIUtil.Create("TextButton", {
 			Size = UDim2.fromOffset(24, 24),
 			AnchorPoint = Vector2.new(1, 0.5),
@@ -902,109 +1123,32 @@ function Email.Start(ctx)
 		})
 		UIUtil.Corner(closeButton, UDim.new(1, 0))
 
-		-- Objet + étiquette
-		text({
-			Size = UDim2.new(1, -24, 0, 20),
-			Position = UDim2.fromOffset(12, 36),
-			Font = Theme.Fonts.Title,
-			Text = email.Subject,
-			TextSize = 16,
-			TextTruncate = Enum.TextTruncate.AtEnd,
-			ZIndex = 62,
-			Parent = group,
-		})
+		-- Barre latérale : bouton "Écrire" (décor), dossiers, stockage
+		local sidebar = frame({ Position = UDim2.fromOffset(0, 30), Size = UDim2.new(0, SIDEBAR_W, 1, -30), BackgroundColor3 = sidebarColor, ZIndex = 62, Parent = group })
+		frame({ AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0), Size = UDim2.new(0, 1, 1, 0), BackgroundColor3 = line, ZIndex = 63, Parent = sidebar })
+		local compose = frame({ Position = UDim2.fromOffset(8, 8), Size = UDim2.new(1, -16, 0, 24), BackgroundColor3 = blue, ZIndex = 63, Parent = sidebar })
+		UIUtil.Corner(compose, UDim.new(1, 0))
+		UIUtil.Gradient(compose, ColorSequence.new(white, Color3.fromRGB(205, 215, 235)), 90)
+		text({ Size = UDim2.fromScale(1, 1), Font = Theme.Fonts.Title, Text = "✏️ " .. Locale.T("Compose"), TextColor3 = white, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 64, Parent = compose })
+		local folders = {
+			Inbox = folderRow(sidebar, 40, "📥", Locale.T("Inbox"), unreadCount(), true, red),
+			Starred = folderRow(sidebar, 66, "⭐", Locale.T("Starred"), starredCount, false, Color3.fromRGB(240, 170, 20)),
+			Sent = folderRow(sidebar, 92, "📤", Locale.T("Sent"), nil, false),
+			Spam = folderRow(sidebar, 118, "🚫", Locale.T("Spam"), spamCount, false, Color3.fromRGB(120, 124, 136)),
+			Trash = folderRow(sidebar, 144, "🗑️", Locale.T("Trash"), nil, false),
+		}
+		-- Stockage (toujours presque plein)
+		text({ Position = UDim2.new(0, 10, 1, -40), Size = UDim2.new(1, -20, 0, 14), Text = Locale.T("💾 Storage: 99% full"), TextColor3 = inkDim, TextSize = 10, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 63, Parent = sidebar })
+		local bar = frame({ Position = UDim2.new(0, 10, 1, -22), Size = UDim2.new(1, -20, 0, 6), BackgroundColor3 = line, ZIndex = 63, Parent = sidebar })
+		UIUtil.Corner(bar, UDim.new(1, 0))
+		local fill = frame({ Size = UDim2.fromScale(0.99, 1), BackgroundColor3 = Color3.fromRGB(240, 120, 40), ZIndex = 64, Parent = bar })
+		UIUtil.Corner(fill, UDim.new(1, 0))
 
-		-- Expéditeur
-		avatar(group, email, 34, UDim2.fromOffset(12, 60), 62)
-		text({
-			Size = UDim2.new(1, -150, 0, 16),
-			Position = UDim2.fromOffset(54, 60),
-			Font = Theme.Fonts.Title,
-			Text = email.Sender,
-			TextSize = 14,
-			TextTruncate = Enum.TextTruncate.AtEnd,
-			ZIndex = 62,
-			Parent = group,
-		})
-		text({
-			Size = UDim2.new(1, -66, 0, 14),
-			Position = UDim2.fromOffset(54, 77),
-			Text = Locale.T("<%s> · to me · just now", email.Address),
-			TextColor3 = inkDim,
-			TextSize = 11,
-			TextTruncate = Enum.TextTruncate.AtEnd,
-			ZIndex = 62,
-			Parent = group,
-		})
-		local chip = tagChip(group, email, 18, 63)
-		chip.AnchorPoint = Vector2.new(1, 0)
-		chip.Position = UDim2.new(1, -12, 0, 60)
-
-		frame({
-			Size = UDim2.new(1, -24, 0, 1),
-			Position = UDim2.fromOffset(12, 99),
-			BackgroundColor3 = Color3.fromRGB(226, 230, 238),
-			ZIndex = 62,
-			Parent = group,
-		})
-
-		-- Corps + signature (+ pièce jointe)
-		local hasAttachment = type(email.Attachment) == "string"
-		text({
-			Size = UDim2.new(1, -24, 0, hasAttachment and 58 or 72),
-			Position = UDim2.fromOffset(12, 106),
-			Text = email.Body,
-			TextSize = 13,
-			TextWrapped = true,
-			TextYAlignment = Enum.TextYAlignment.Top,
-			ZIndex = 62,
-			Parent = group,
-		})
-		local signature = text({
-			Size = UDim2.new(1, -24, 0, 14),
-			Position = UDim2.fromOffset(12, hasAttachment and 166 or 180),
-			Text = "— " .. email.Signature,
-			TextColor3 = inkDim,
-			TextSize = 12,
-			TextTruncate = Enum.TextTruncate.AtEnd,
-			ZIndex = 62,
-			Parent = group,
-		})
-		signature.FontFace = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Medium, Enum.FontStyle.Italic)
-		if hasAttachment then
-			local attachment = text({
-				Size = UDim2.fromOffset(0, 20),
-				AutomaticSize = Enum.AutomaticSize.X,
-				Position = UDim2.fromOffset(12, 186),
-				BackgroundColor3 = Color3.fromRGB(240, 243, 250),
-				BackgroundTransparency = 0,
-				Font = Theme.Fonts.Title,
-				Text = email.Attachment,
-				TextColor3 = Color3.fromRGB(60, 70, 100),
-				TextSize = 11,
-				ZIndex = 62,
-				Parent = group,
-			})
-			UIUtil.Corner(attachment, 6)
-			UIUtil.Create("UIPadding", {
-				PaddingLeft = UDim.new(0, 7),
-				PaddingRight = UDim.new(0, 7),
-				Parent = attachment,
-			})
-		end
-
-		-- Boutons
-		local buttonW = math.floor((POPUP_W - 24 - 12) / 3)
-		local replyButton = makeButton(group, Locale.T("↩️ Reply"), true, white, 12, buttonW)
-		local forwardButton = makeButton(group, Locale.T("➡️ Forward"), false, ink, 12 + buttonW + 6, buttonW)
-		local deleteButton = makeButton(group, Locale.T("🗑️ Delete"), false, Color3.fromRGB(210, 40, 50), 12 + (buttonW + 6) * 2, buttonW)
+		-- Zone de lecture (reconstruite à chaque vue)
+		local pane = frame({ Name = "Pane", Position = UDim2.fromOffset(SIDEBAR_W, 30), Size = UDim2.new(1, -SIDEBAR_W, 1, -30), ZIndex = 62, Parent = group })
 
 		-- Contour (hors du CanvasGroup)
-		local outline = frame({
-			Size = UDim2.fromScale(1, 1),
-			ZIndex = 67,
-			Parent = root,
-		})
+		local outline = frame({ Size = UDim2.fromScale(1, 1), ZIndex = 70, Parent = root })
 		UIUtil.Corner(outline, 14)
 		local outlineStroke = UIUtil.Stroke(outline, border, 1.5, 1)
 
@@ -1014,71 +1158,290 @@ function Email.Start(ctx)
 			Group = group,
 			Shadow = shadow,
 			Outline = outlineStroke,
+			Pane = pane,
+			Folders = folders,
 			Closed = false,
+			Token = 0,
+			Mode = "",
 		}
-		popup = current
+		on(closeButton.Activated, function()
+			closePopup(current)
+		end)
 
-		-- Ouverture : la fenêtre "sort" de l'enveloppe et s'agrandit
+		-- Ouverture : la fenêtre s'agrandit depuis la notification
 		UIUtil.Tween(root, 0.4, { Position = UDim2.fromScale(ax, ay) }, Enum.EasingStyle.Quint)
 		UIUtil.Tween(scale, 0.4, { Scale = 1 }, Enum.EasingStyle.Back)
 		UIUtil.Tween(group, 0.25, { GroupTransparency = 0 })
 		UIUtil.Tween(outlineStroke, 0.25, { Transparency = 0.1 })
+		return current
+	end
 
-		local function close()
-			closePopup(current)
+	-- Met à jour un compteur de dossier (texte du badge)
+	local function setFolderCount(current, name: string, count: number)
+		local row = current and current.Folders[name]
+		local badge = row and row:FindFirstChild("Count")
+		if not badge or not badge:IsA("TextLabel") then
+			return
+		end
+		badge.Text = count > 999 and "999+" or tostring(count)
+		badge.Visible = count > 0
+		local scale = badge:FindFirstChildOfClass("UIScale") or UIUtil.Create("UIScale", { Parent = badge })
+		scale.Scale = 1.4
+		UIUtil.Tween(scale, 0.3, { Scale = 1 }, Enum.EasingStyle.Back)
+	end
+
+	-- Petite animation d'entrée du contenu de la zone de lecture
+	local function slideIn(content: Frame)
+		content.Position = UDim2.fromOffset(0, 10)
+		UIUtil.Tween(content, 0.3, { Position = UDim2.fromOffset(0, 0) }, Enum.EasingStyle.Quint)
+	end
+
+	local showInbox: (current: any) -> ()
+
+	-- Vue "message" dans la zone de lecture
+	local function showMessage(current, email, fromInbox: boolean)
+		current.Token += 1
+		current.Mode = "Message"
+		current.Pane:ClearAllChildren()
+		local content = frame({ Size = UDim2.fromScale(1, 1), ZIndex = 62, Parent = current.Pane })
+		slideIn(content)
+		local W = PANE_W
+
+		-- Objet + étoile (favoris)
+		if fromInbox then
+			local back = UIUtil.Create("TextButton", { Position = UDim2.fromOffset(8, 8), Size = UDim2.fromOffset(22, 22), BackgroundColor3 = sidebarColor, AutoButtonColor = true, Font = Theme.Fonts.Title, Text = "←", TextColor3 = ink, TextSize = 14, ZIndex = 64, Parent = content })
+			UIUtil.Corner(back, UDim.new(1, 0))
+			on(back.Activated, function()
+				ctx.Sound.Play("Click", 1)
+				showInbox(current)
+			end)
+		end
+		local subjectX = fromInbox and 36 or 12
+		text({ Position = UDim2.fromOffset(subjectX, 8), Size = UDim2.fromOffset(W - subjectX - 40, 22), Font = Theme.Fonts.Title, Text = email.Subject, TextSize = 16, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 63, Parent = content })
+		local star = UIUtil.Create("TextButton", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 7), Size = UDim2.fromOffset(24, 24), BackgroundTransparency = 1, Font = Theme.Fonts.Title, Text = email.Starred and "⭐" or "☆", TextColor3 = Color3.fromRGB(240, 170, 20), TextSize = 18, ZIndex = 64, Parent = content })
+		local starScale = UIUtil.Create("UIScale", { Parent = star })
+		on(star.Activated, function()
+			email.Starred = not email.Starred
+			star.Text = email.Starred and "⭐" or "☆"
+			starredCount = math.max(0, starredCount + (email.Starred and 1 or -1))
+			setFolderCount(current, "Starred", starredCount)
+			starScale.Scale = 1.5
+			UIUtil.Tween(starScale, 0.35, { Scale = 1 }, Enum.EasingStyle.Back)
+			ctx.Sound.Play("Click", 1.2)
+		end)
+
+		-- Expéditeur
+		avatar(content, email, 34, UDim2.fromOffset(12, 36), 63)
+		text({ Position = UDim2.fromOffset(54, 36), Size = UDim2.fromOffset(W - 190, 16), Font = Theme.Fonts.Title, Text = email.Sender, TextSize = 13, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 63, Parent = content })
+		text({ Position = UDim2.fromOffset(54, 53), Size = UDim2.fromOffset(W - 66, 14), Text = Locale.T("<%s> · to me · just now", email.Address), TextColor3 = inkDim, TextSize = 11, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 63, Parent = content })
+		local chip = tagChip(content, email, 17, 64)
+		chip.AnchorPoint = Vector2.new(1, 0)
+		chip.Position = UDim2.new(1, -12, 0, 36)
+		frame({ Position = UDim2.fromOffset(12, 76), Size = UDim2.new(1, -24, 0, 1), BackgroundColor3 = line, ZIndex = 63, Parent = content })
+
+		-- Bandeau d'avertissement (spams et arnaques)
+		local y = 82
+		if email.Suspicious then
+			local scam = email.Tag.Id == "ARNAQUE"
+			local warning = frame({ Position = UDim2.fromOffset(12, y), Size = UDim2.new(1, -24, 0, 22), BackgroundColor3 = scam and Color3.fromRGB(255, 236, 200) or Color3.fromRGB(236, 238, 244), ZIndex = 63, Parent = content })
+			UIUtil.Corner(warning, 6)
+			UIUtil.Stroke(warning, scam and Color3.fromRGB(240, 150, 40) or Color3.fromRGB(190, 196, 210), 1, 0)
+			UIUtil.Label({
+				Position = UDim2.fromOffset(8, 2),
+				Size = UDim2.new(1, -14, 1, -4),
+				Font = Theme.Fonts.Title,
+				Text = scam and Locale.T("⚠️ Careful: this looks like a scam. Never share your password!") or Locale.T("🚫 This looks like spam. We're not judging."),
+				TextColor3 = scam and Color3.fromRGB(150, 70, 0) or inkDim,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				MaxTextSize = 11,
+				ZIndex = 64,
+				Parent = warning,
+			})
+			y += 28
 		end
 
-		ctx.Connect(closeButton.Activated, close)
-		ctx.Connect(deleteButton.Activated, function()
+		-- Corps + signature + pièce jointe
+		local attachment = email.Attachment
+		local bottom = PANE_H - 42 -- haut des boutons
+		local attachmentY = bottom - 34
+		local signatureY = (attachment and attachmentY or bottom) - 20
+		UIUtil.Label({
+			Position = UDim2.fromOffset(12, y),
+			Size = UDim2.fromOffset(W - 24, signatureY - y - 2),
+			Text = email.Body,
+			TextColor3 = ink,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextYAlignment = Enum.TextYAlignment.Top,
+			TextWrapped = true,
+			MaxTextSize = 13,
+			ZIndex = 63,
+			Parent = content,
+		})
+		local signature = text({ Position = UDim2.fromOffset(12, signatureY), Size = UDim2.fromOffset(W - 24, 16), Text = "— " .. email.Signature, TextColor3 = inkDim, TextSize = 12, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 63, Parent = content })
+		signature.FontFace = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Medium, Enum.FontStyle.Italic)
+		if attachment then
+			local card = UIUtil.Create("TextButton", { Position = UDim2.fromOffset(12, attachmentY), Size = UDim2.fromOffset(196, 30), BackgroundColor3 = Color3.fromRGB(245, 247, 252), AutoButtonColor = false, Text = "", ZIndex = 63, Parent = content })
+			UIUtil.Corner(card, 8)
+			UIUtil.Stroke(card, line, 1.2, 0)
+			local icon = frame({ Position = UDim2.fromOffset(4, 4), Size = UDim2.fromOffset(22, 22), BackgroundColor3 = attachment.Type.Color, ZIndex = 64, Parent = card })
+			UIUtil.Corner(icon, 5)
+			UIUtil.Label({ Size = UDim2.fromScale(1, 1), Text = attachment.Type.Icon, MaxTextSize = 13, ZIndex = 65, Parent = icon })
+			text({ Position = UDim2.fromOffset(32, 3), Size = UDim2.fromOffset(136, 14), Font = Theme.Fonts.Title, Text = attachment.Name, TextSize = 11, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 64, Parent = card })
+			text({ Position = UDim2.fromOffset(32, 16), Size = UDim2.fromOffset(120, 12), Text = attachment.Size, TextColor3 = inkDim, TextSize = 10, ZIndex = 64, Parent = card })
+			local download = text({ AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -6, 0.5, 0), Size = UDim2.fromOffset(20, 20), Text = "⬇️", TextSize = 13, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 64, Parent = card })
+			UIUtil.AnimateButton(card, 1.04, 0.95)
+			on(card.Activated, function()
+				ctx.Sound.Play("Click", 1)
+				local message = attachment.Virus and pickLine(VIRUS_JOKES) or pickLine(ATTACHMENT_JOKES)
+				ctx.FloatText(container, current.Root.Position, message, attachment.Virus and red or blue, 24)
+				download.Text = attachment.Virus and "🛡️" or "✅"
+			end)
+		end
+
+		-- Boutons
+		local gap = 6
+		local buttonW = math.floor((W - 24 - gap * 3) / 4)
+		local replyButton = makeButton(content, Locale.T("↩️ Reply"), true, white, 12, bottom, buttonW, 30, 66)
+		local forwardButton = makeButton(content, Locale.T("➡️ Forward"), false, ink, 12 + (buttonW + gap), bottom, buttonW, 30, 66)
+		local spamButton = makeButton(content, Locale.T("🚫 Spam"), false, Color3.fromRGB(110, 116, 132), 12 + (buttonW + gap) * 2, bottom, buttonW, 30, 66)
+		local deleteButton = makeButton(content, Locale.T("🗑️ Delete"), false, Color3.fromRGB(210, 40, 50), 12 + (buttonW + gap) * 3, bottom, buttonW, 30, 66)
+
+		local function anchorPosition(): UDim2
+			return UDim2.fromScale(current.Root.AnchorPoint.X, current.Root.AnchorPoint.Y)
+		end
+		on(deleteButton.Activated, function()
 			if current.Closed then
 				return
 			end
 			ctx.Sound.Play("Click", 0.8)
-			closePopup(current, true)
+			trashCount += 1
+			setFolderCount(current, "Trash", trashCount)
+			closePopup(current, "trash")
 		end)
-		ctx.Connect(replyButton.Activated, function()
+		on(spamButton.Activated, function()
+			if current.Closed then
+				return
+			end
+			ctx.Sound.Play("Click", 0.8)
+			spamCount += 1
+			setFolderCount(current, "Spam", spamCount)
+			ctx.FloatText(container, anchorPosition(), pickLine(SPAMMED), Color3.fromRGB(110, 116, 132), 26)
+			closePopup(current, "spam")
+		end)
+		on(replyButton.Activated, function()
 			if current.Closed then
 				return
 			end
 			ctx.Sound.Play("Mail", 1.3)
-			local replies = Locale.Pick(REPLIES)
-			ctx.FloatText(container, UDim2.fromScale(ax, ay), replies[random:NextInteger(1, #replies)], blue, 30)
-			close()
+			sentCount += 1
+			ctx.FloatText(container, anchorPosition(), pickLine(REPLIES), blue, 30)
+			closePopup(current)
 		end)
-		ctx.Connect(forwardButton.Activated, function()
+		on(forwardButton.Activated, function()
 			if current.Closed then
 				return
 			end
 			ctx.Sound.Play("Mail", 1.15)
-			local forwards = Locale.Pick(FORWARDS)
-			ctx.FloatText(container, UDim2.fromScale(ax, ay), forwards[random:NextInteger(1, #forwards)], Color3.fromRGB(140, 60, 220), 28)
-			close()
+			sentCount += 1
+			ctx.FloatText(container, anchorPosition(), pickLine(FORWARDS), Color3.fromRGB(140, 60, 220), 28)
+			closePopup(current)
 		end)
+	end
+
+	-- Vue "boîte de réception" : les mails ratés
+	showInbox = function(current)
+		current.Token += 1
+		current.Mode = "Inbox"
+		current.Pane:ClearAllChildren()
+		local content = frame({ Size = UDim2.fromScale(1, 1), ZIndex = 62, Parent = current.Pane })
+		slideIn(content)
+		text({ Position = UDim2.fromOffset(12, 8), Size = UDim2.fromOffset(PANE_W - 120, 22), Font = Theme.Fonts.Title, Text = "📥 " .. Locale.T("Inbox"), TextSize = 16, ZIndex = 63, Parent = content })
+		text({ AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 10), Size = UDim2.fromOffset(110, 18), Font = Theme.Fonts.Title, Text = Locale.T("%d unread", missed), TextColor3 = missed > 0 and red or inkDim, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 63, Parent = content })
+		local list = UIUtil.Create("ScrollingFrame", {
+			Position = UDim2.fromOffset(8, 36),
+			Size = UDim2.new(1, -16, 1, -42),
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			CanvasSize = UDim2.new(),
+			AutomaticCanvasSize = Enum.AutomaticSize.Y,
+			ScrollBarThickness = 4,
+			ScrollingDirection = Enum.ScrollingDirection.Y,
+			ZIndex = 63,
+			Parent = content,
+		})
+		UIUtil.Create("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder, Parent = list })
+		if #missedList == 0 then
+			UIUtil.Label({ Position = UDim2.fromOffset(0, 60), Size = UDim2.new(1, 0, 0, 40), Font = Theme.Fonts.Title, Text = Locale.T("🎉 Inbox zero! Enjoy it, it won't last."), TextColor3 = inkDim, MaxTextSize = 14, TextWrapped = true, ZIndex = 64, Parent = list })
+			return
+		end
+		for index, entry in ipairs(missedList) do
+			local email = entry.Email
+			local row = UIUtil.Create("TextButton", { Size = UDim2.new(1, -8, 0, 46), BackgroundColor3 = email.Read and white or Color3.fromRGB(236, 243, 255), AutoButtonColor = false, Text = "", LayoutOrder = index, ZIndex = 64, Parent = list })
+			UIUtil.Corner(row, 8)
+			UIUtil.Stroke(row, line, 1, 0)
+			if not email.Read then
+				local dot = frame({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(7, 23), Size = UDim2.fromOffset(7, 7), BackgroundColor3 = blue, ZIndex = 65, Parent = row })
+				UIUtil.Corner(dot, UDim.new(1, 0))
+			end
+			avatar(row, email, 30, UDim2.fromOffset(14, 8), 65)
+			text({ Position = UDim2.fromOffset(52, 4), Size = UDim2.new(1, -110, 0, 14), Font = email.Read and Theme.Fonts.Body or Theme.Fonts.Title, Text = email.Sender, TextSize = 12, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 65, Parent = row })
+			local minutes = math.max(1, math.floor((os.clock() - entry.Time) / 60))
+			text({ AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -8, 0, 4), Size = UDim2.fromOffset(56, 14), Text = Locale.T("%d min", minutes), TextColor3 = inkDim, TextSize = 10, TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 65, Parent = row })
+			text({ Position = UDim2.fromOffset(52, 18), Size = UDim2.new(1, -62, 0, 13), Font = Theme.Fonts.Title, Text = (email.Attachment and "📎 " or "") .. email.Subject, TextColor3 = Color3.fromRGB(50, 56, 72), TextSize = 11, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 65, Parent = row })
+			text({ Position = UDim2.fromOffset(52, 31), Size = UDim2.new(1, -62, 0, 12), Text = email.Body, TextColor3 = inkDim, TextSize = 10, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 65, Parent = row })
+			on(row.Activated, function()
+				if current.Closed then
+					return
+				end
+				ctx.Sound.Play("Click", 1.1)
+				if not email.Read then
+					email.Read = true
+					missed = math.max(0, missed - 1)
+					refreshCounter()
+					setFolderCount(current, "Inbox", unreadCount())
+				end
+				showMessage(current, email, true)
+			end)
+		end
+	end
+
+	local function autoClose(current)
+		local token = current.Token
 		task.delay(POPUP_AUTO_CLOSE, function()
-			if ctx.IsAlive() then
-				close()
+			if ctx.IsAlive() and current.Token == token then
+				closePopup(current)
 			end
 		end)
 	end
 
-	------------------------------------------------------------------
-	-- Cartes-enveloppes volantes
-	------------------------------------------------------------------
-	local function line(parent: Instance, a: Vector2, b: Vector2, thickness: number, color: Color3, zIndex: number, transparency: number?): Frame
-		local delta = b - a
-		local middle = (a + b) / 2
-		return frame({
-			Size = UDim2.fromOffset(delta.Magnitude + thickness * 0.5, thickness),
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromOffset(middle.X, middle.Y),
-			Rotation = math.deg(math.atan2(delta.Y, delta.X)),
-			BackgroundColor3 = color,
-			BackgroundTransparency = transparency or 0,
-			ZIndex = zIndex,
-			Parent = parent,
-		})
+	-- Ouvre un mail reçu (depuis une notification)
+	local function openMail(email, sx: number, sy: number, from: UDim2)
+		closePopup(nil)
+		local current = buildWindow(math.clamp(sx, 0.02, 0.98), math.clamp(sy, 0.06, 0.94), from)
+		popup = current
+		showMessage(current, email, false)
+		autoClose(current)
 	end
 
+	-- Ouvre la boîte de réception (clic sur le compteur)
+	local function openInbox()
+		if popup and not popup.Closed then
+			local wasInbox = popup.Mode == "Inbox"
+			closePopup(popup)
+			if wasInbox then
+				return
+			end
+		end
+		ctx.Sound.Play("Click", 1)
+		local current = buildWindow(0.98, 0.08, UDim2.new(1, -(tickerRight + 60), 0, 16))
+		popup = current
+		showInbox(current)
+	end
+	ctx.Connect(counter.Activated, openInbox)
+
+	------------------------------------------------------------------
+	-- Notifications de mail (cartes volantes)
+	------------------------------------------------------------------
 	local function fadeOut(root: Instance, duration: number)
 		for _, item in ipairs(root:GetDescendants()) do
 			if item:IsA("TextLabel") then
@@ -1101,23 +1464,32 @@ function Email.Start(ctx)
 		local root = envelope.Root
 		if opened then
 			-- La lettre sort de l'enveloppe, puis la carte s'efface
-			UIUtil.Tween(envelope.Letter, 0.2, { Position = UDim2.new(0.5, 0, 0, -26) }, Enum.EasingStyle.Back)
+			UIUtil.Tween(envelope.Letter, 0.2, { Position = UDim2.new(0.5, 0, 0, -30) }, Enum.EasingStyle.Back)
 			task.delay(0.12, function()
 				if root.Parent then
-					UIUtil.Tween(envelope.Scale, 0.25, { Scale = 1.15 }, Enum.EasingStyle.Quad)
+					UIUtil.Tween(envelope.Scale, 0.25, { Scale = 1.12 }, Enum.EasingStyle.Quad)
 					fadeOut(root, 0.22)
 				end
 			end)
 		else
-			-- Ignorée : elle s'envole vers le haut à gauche
+			-- Ignorée : elle file vers le compteur "non lus" (en haut à droite)
 			missed += 1
+			table.insert(missedList, 1, { Email = envelope.Email, Time = os.clock() })
+			if #missedList > MISSED_KEEP then
+				-- Trop vieux : il reste compté (la boîte déborde), mais n'est plus listé
+				table.remove(missedList)
+			end
 			UIUtil.Tween(root, 0.8, {
-				Position = root.Position + UDim2.new(-0.25, 0, -0.35, 0),
-				Rotation = -40,
+				Position = UDim2.new(1, -(tickerRight + 50), 0, 14),
+				Rotation = -25,
 			}, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-			UIUtil.Tween(envelope.Scale, 0.8, { Scale = 0.3 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+			UIUtil.Tween(envelope.Scale, 0.8, { Scale = 0.15 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+			fadeOut(root, 0.8)
 		end
 		refreshCounter()
+		if popup and not popup.Closed then
+			setFolderCount(popup, "Inbox", unreadCount())
+		end
 		Debris:AddItem(root, opened and 0.45 or 0.85)
 	end
 
@@ -1150,143 +1522,54 @@ function Email.Start(ctx)
 		local scale = UIUtil.Create("UIScale", { Scale = 0.6, Parent = root })
 
 		-- Lettre (derrière la carte, elle en sort à l'ouverture)
-		local letter = frame({
-			Name = "Letter",
-			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(0.5, 0, 0, 6),
-			Size = UDim2.new(1, -30, 0, 50),
-			BackgroundColor3 = white,
-			ZIndex = 30,
-			Parent = root,
-		})
+		local letter = frame({ Name = "Letter", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 8), Size = UDim2.new(1, -34, 0, 56), BackgroundColor3 = paper, ZIndex = 30, Parent = root })
 		UIUtil.Corner(letter, 4)
 		UIUtil.Stroke(letter, Color3.fromRGB(210, 214, 226), 1, 0)
+		for i = 1, 3 do
+			frame({ Position = UDim2.fromOffset(12, 8 + i * 7), Size = UDim2.new(0.7 - i * 0.12, 0, 0, 2), BackgroundColor3 = Color3.fromRGB(200, 204, 216), ZIndex = 30, Parent = letter })
+		end
 
 		-- Ombre douce
-		local shadow = frame({
-			Size = UDim2.new(1, 4, 1, 4),
-			Position = UDim2.fromOffset(-2, 4),
-			BackgroundColor3 = Color3.new(0, 0, 0),
-			BackgroundTransparency = 0.82,
-			ZIndex = 29,
-			Parent = root,
-		})
-		UIUtil.Corner(shadow, 14)
+		local shadow = frame({ Size = UDim2.new(1, 4, 1, 4), Position = UDim2.fromOffset(-2, 5), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.8, ZIndex = 29, Parent = root })
+		UIUtil.Corner(shadow, 16)
 
-		-- Carte (papier d'enveloppe)
-		local body = frame({
-			Name = "Body",
-			Size = UDim2.fromScale(1, 1),
-			BackgroundColor3 = paper,
-			ZIndex = 31,
-			Parent = root,
-		})
-		UIUtil.Corner(body, 12)
-		UIUtil.Gradient(body, ColorSequence.new(white, Color3.fromRGB(236, 232, 222)), 90)
+		-- Carte (notification)
+		local body = frame({ Name = "Body", Size = UDim2.fromScale(1, 1), BackgroundColor3 = white, ZIndex = 31, Parent = root })
+		UIUtil.Corner(body, 14)
+		UIUtil.Gradient(body, ColorSequence.new(white, Color3.fromRGB(238, 241, 248)), 90)
 		local bodyStroke = UIUtil.Stroke(body, border, 1.5, 0.15)
 		-- Liseré coloré à gauche (couleur de l'étiquette)
-		local accent = frame({
-			Size = UDim2.new(0, 4, 1, -20),
-			Position = UDim2.fromOffset(0, 10),
-			BackgroundColor3 = tagColor,
-			ZIndex = 32,
-			Parent = body,
-		})
+		local accent = frame({ Size = UDim2.new(0, 4, 1, -24), Position = UDim2.fromOffset(0, 12), BackgroundColor3 = tagColor, ZIndex = 32, Parent = body })
 		UIUtil.Corner(accent, 2)
 
-		-- Rabat en V (discret)
-		local tip = Vector2.new(CARD_W / 2, 13)
-		line(body, Vector2.new(8, 2), tip, 1.5, Color3.fromRGB(200, 190, 170), 32, 0.2)
-		line(body, Vector2.new(CARD_W - 8, 2), tip, 1.5, Color3.fromRGB(200, 190, 170), 32, 0.2)
-
-		-- Timbre (dépasse en haut à droite)
-		local stamp = frame({
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(1, -14, 0, 6),
-			Size = UDim2.fromOffset(22, 26),
-			Rotation = 8,
-			BackgroundColor3 = white,
-			ZIndex = 36,
-			Parent = body,
-		})
-		UIUtil.Stroke(stamp, Color3.fromRGB(190, 190, 200), 1, 0)
-		local stampInner = frame({
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.new(1, -5, 1, -5),
-			BackgroundColor3 = tagColor:Lerp(white, 0.55),
-			ZIndex = 37,
-			Parent = stamp,
-		})
-		UIUtil.Label({
-			Text = email.Avatar,
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromScale(0.85, 0.85),
-			MaxTextSize = 13,
-			ZIndex = 38,
-			Parent = stampInner,
-		})
+		-- En-tête "DOPAMAIL · maintenant" (comme une notification de téléphone)
+		local appIcon = frame({ Position = UDim2.fromOffset(12, 7), Size = UDim2.fromOffset(14, 14), BackgroundColor3 = blue, ZIndex = 33, Parent = body })
+		UIUtil.Corner(appIcon, 4)
+		UIUtil.Gradient(appIcon, ColorSequence.new(white, Color3.fromRGB(190, 205, 235)), 90)
+		UIUtil.Label({ Size = UDim2.fromScale(1, 1), Text = "✉", Font = Theme.Fonts.Title, TextColor3 = white, MaxTextSize = 10, ZIndex = 34, Parent = appIcon })
+		text({ Position = UDim2.fromOffset(31, 6), Size = UDim2.fromOffset(120, 16), Font = Theme.Fonts.Title, Text = "DOPAMAIL · " .. Locale.T("now"), TextColor3 = inkDim, TextSize = 10, ZIndex = 33, Parent = body })
+		local chip = tagChip(body, email, 15, 34)
+		chip.AnchorPoint = Vector2.new(1, 0)
+		chip.Position = UDim2.new(1, -10, 0, 6)
 
 		-- Avatar + pastille "non lu"
-		avatar(body, email, 40, UDim2.fromOffset(12, 18), 33)
-		local dot = frame({
-			Name = "UnreadDot",
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromOffset(15, 21),
-			Size = UDim2.fromOffset(12, 12),
-			BackgroundColor3 = blue,
-			ZIndex = 36,
-			Parent = body,
-		})
+		avatar(body, email, 38, UDim2.fromOffset(12, 28), 33)
+		local dot = frame({ Name = "UnreadDot", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(15, 31), Size = UDim2.fromOffset(12, 12), BackgroundColor3 = blue, ZIndex = 36, Parent = body })
 		UIUtil.Corner(dot, UDim.new(1, 0))
 		UIUtil.Stroke(dot, white, 2, 0)
 
-		-- Textes
-		text({
-			Size = UDim2.new(1, -150, 0, 16),
-			Position = UDim2.fromOffset(60, 14),
-			Font = Theme.Fonts.Title,
-			Text = email.Sender,
-			TextSize = 14,
-			TextTruncate = Enum.TextTruncate.AtEnd,
-			ZIndex = 33,
-			Parent = body,
-		})
-		text({
-			Size = UDim2.new(1, -72, 0, 15),
-			Position = UDim2.fromOffset(60, 31),
-			Font = Theme.Fonts.Title,
-			Text = email.Subject,
-			TextColor3 = Color3.fromRGB(50, 56, 72),
-			TextSize = 12,
-			TextTruncate = Enum.TextTruncate.AtEnd,
-			ZIndex = 33,
-			Parent = body,
-		})
-		text({
-			Size = UDim2.new(1, -72, 0, 14),
-			Position = UDim2.fromOffset(60, 47),
-			Text = email.Body,
-			TextColor3 = inkDim,
-			TextSize = 11,
-			TextTruncate = Enum.TextTruncate.AtEnd,
-			ZIndex = 33,
-			Parent = body,
-		})
-		local chip = tagChip(body, email, 15, 34)
-		chip.AnchorPoint = Vector2.new(1, 0)
-		chip.Position = UDim2.new(1, -30, 0, 14)
+		-- Textes (+ trombone s'il y a une pièce jointe)
+		text({ Position = UDim2.fromOffset(58, 26), Size = UDim2.new(1, -90, 0, 16), Font = Theme.Fonts.Title, Text = email.Sender, TextSize = 14, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 33, Parent = body })
+		if email.Attachment then
+			text({ AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 26), Size = UDim2.fromOffset(18, 16), Text = "📎", TextSize = 13, TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 33, Parent = body })
+		end
+		text({ Position = UDim2.fromOffset(58, 42), Size = UDim2.new(1, -68, 0, 15), Font = Theme.Fonts.Title, Text = email.Subject, TextColor3 = Color3.fromRGB(50, 56, 72), TextSize = 12, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 33, Parent = body })
+		text({ Position = UDim2.fromOffset(58, 57), Size = UDim2.new(1, -68, 0, 14), Text = email.Body, TextColor3 = inkDim, TextSize = 11, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 33, Parent = body })
 
 		-- Barre de temps restant (en bas)
-		local lifeBar = frame({
-			AnchorPoint = Vector2.new(0, 1),
-			Position = UDim2.new(0, 60, 1, -6),
-			Size = UDim2.new(1, -72, 0, 3),
-			BackgroundColor3 = tagColor,
-			ZIndex = 33,
-			Parent = body,
-		})
+		local lifeBack = frame({ AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 58, 1, -7), Size = UDim2.new(1, -70, 0, 3), BackgroundColor3 = Color3.fromRGB(222, 226, 236), ZIndex = 33, Parent = body })
+		UIUtil.Corner(lifeBack, UDim.new(1, 0))
+		local lifeBar = frame({ Size = UDim2.fromScale(1, 1), BackgroundColor3 = tagColor, ZIndex = 34, Parent = lifeBack })
 		UIUtil.Corner(lifeBar, UDim.new(1, 0))
 
 		local envelope = {
@@ -1346,11 +1629,12 @@ function Email.Start(ctx)
 				ctx.Effects.Burst(container, position, blue, 10)
 				ctx.Effects.Burst(container, position, nil, 6)
 			end
+			envelope.Email.Read = true
 			removeEnvelope(envelope, true)
 			local mail = envelope.Email
 			task.delay(0.14, function()
 				if ctx.IsAlive() then
-					openPopup(mail, envelope.X, envelope.Y, position)
+					openMail(mail, envelope.X, envelope.Y, position)
 				end
 			end)
 			local id = envelope.Id
@@ -1373,7 +1657,7 @@ function Email.Start(ctx)
 				removeEnvelope(envelope, false)
 			else
 				local t = now + envelope.Phase
-				envelope.LifeBar.Size = UDim2.new(math.clamp(left / envelope.Lifetime, 0, 1), -72, 0, 3)
+				envelope.LifeBar.Size = UDim2.fromScale(math.clamp(left / envelope.Lifetime, 0, 1), 1)
 				if left < HURRY_TIME then
 					-- Pressée : elle s'agite, étiquette "Vite !" rouge
 					if not envelope.Hurry then
@@ -1382,14 +1666,14 @@ function Email.Start(ctx)
 						if label and label:IsA("TextLabel") then
 							label.Text = Locale.T("⏰ QUICK, READ ME!")
 						end
-						envelope.Chip.BackgroundColor3 = Color3.fromRGB(226, 38, 52)
-						envelope.LifeBar.BackgroundColor3 = Color3.fromRGB(226, 38, 52)
+						envelope.Chip.BackgroundColor3 = red
+						envelope.LifeBar.BackgroundColor3 = red
 					end
 					envelope.Body.Rotation = math.sin(t * 24) * 4
 					local pulse = 12 + math.abs(math.sin(t * 10)) * 4
 					envelope.Dot.Size = UDim2.fromOffset(pulse, pulse)
 				else
-					envelope.Body.Rotation = math.sin(t * 2.5) * 1.5
+					envelope.Body.Rotation = math.sin(t * 2.5) * 1.2
 				end
 				-- Flotte doucement une fois arrivée
 				if age > 0.8 then
