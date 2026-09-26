@@ -463,6 +463,9 @@ local function buildCard(list: ScrollingFrame, theme)
 	end)
 end
 
+-- Progression / prix qui bougent avec la Dopamine : rafraîchi aussi entre deux états complets
+Themes.RefreshOnTick = true
+
 function Themes.Build(content: Frame)
 	header = UIUtil.Create("TextLabel", {
 		Name = "Header",

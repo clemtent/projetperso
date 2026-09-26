@@ -83,7 +83,7 @@ local CUP_X, CUP_BASE = -57, TABLE_Y + 8 -- bubble tea (derrière, à gauche)
 local BOWL_X, BOWL_BASE = 60, TABLE_Y + 9 -- bol de nouilles (derrière, à droite)
 local GOAL_Y, GOAL_H = VIDEO_H - 22, 15 -- barre "objectif d'abonnés"
 local MAX_HEARTS = 7
-local CHAT_POOL = 14 -- lignes de chat recyclées
+local CHAT_POOL = 12 -- lignes de chat recyclées
 local PARTICLES = 10 -- miettes / éclats recyclés
 local BUTTER_BITES = 8 -- bouchées avant qu'il ne reste plus rien
 
@@ -697,17 +697,6 @@ function LiveStream.Start(ctx)
 	------------------------------------------------------------------
 	local ledGradient: UIGradient, trophy: Frame, trophyGradient: UIGradient, neonSign: TextLabel
 	do
-		-- Rayures verticales très douces (papier peint)
-		for i = 1, 7 do
-			box({
-				Position = UDim2.new((i - 0.5) / 7, 0, 0, 0),
-				Size = UDim2.new(0, 8, 1, 0),
-				BackgroundColor3 = WHITE,
-				BackgroundTransparency = 0.96,
-				ZIndex = 1,
-				Parent = wallLayer,
-			})
-		end
 
 		-- Ruban LED en haut du mur (arc-en-ciel qui défile avec le studio) + halo
 		local led = box({
@@ -748,7 +737,7 @@ function LiveStream.Start(ctx)
 					BackgroundColor3 = WHITE,
 					ZIndex = 2,
 					Parent = foam,
-				}, 2)
+				})
 				-- Pyramides alternées (le dégradé tourne d'un carreau à l'autre)
 				UI.Gradient(tile, ColorSequence.new(Color3.fromRGB(96, 70, 140), Color3.fromRGB(44, 30, 72)), (row + col) % 2 == 0 and 45 or 225)
 			end
@@ -825,7 +814,6 @@ function LiveStream.Start(ctx)
 			ZIndex = 1,
 			Parent = bokehGroup,
 		})
-		UI.Stroke(dot, BOKEH_COLORS[(i - 1) % #BOKEH_COLORS + 1], 1, 0.5)
 		table.insert(bokeh, { Frame = dot, Phase = random:NextNumber(0, math.pi * 2), Base = 0.72 })
 	end
 
@@ -842,11 +830,6 @@ function LiveStream.Start(ctx)
 		local ringLight = round(atC({ Name = "Ring", BackgroundColor3 = Color3.fromRGB(255, 245, 250), BackgroundTransparency = 0.9, ZIndex = 2, Parent = ringGroup }, 0, HEAD_Y, RING, RING))
 		ringStroke = UI.Stroke(ringLight, WHITE, 6, 0.05)
 		UI.Gradient(ringStroke, ColorSequence.new(WHITE, Color3.fromRGB(255, 226, 246)), 90)
-		-- Petites LED sur l'anneau
-		for i = 0, 11 do
-			local angle = i / 12 * math.pi * 2
-			round(at({ BackgroundColor3 = Color3.fromRGB(255, 250, 230), BackgroundTransparency = 0.2, ZIndex = 3, Parent = ringLight }, RING / 2 + math.cos(angle) * RING / 2, RING / 2 + math.sin(angle) * RING / 2, 2.5, 2.5))
-		end
 	end
 
 	------------------------------------------------------------------
@@ -1352,7 +1335,7 @@ function LiveStream.Start(ctx)
 	type Particle = { Frame: Frame, Active: boolean, Age: number, Life: number, X: number, Y: number, VX: number, VY: number, Spin: number, Scale: number }
 	local particles: { Particle } = {}
 	for i = 1, PARTICLES do
-		local f = box({ Name = "Crumb" .. i, AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(4, 4), BackgroundColor3 = WHITE, Visible = false, ZIndex = 6, Parent = fxLayer }, 1)
+		local f = box({ Name = "Crumb" .. i, AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(4, 4), BackgroundColor3 = WHITE, Visible = false, ZIndex = 6, Parent = fxLayer })
 		particles[i] = { Frame = f, Active = false, Age = 0, Life = 0.6, X = 0, Y = 0, VX = 0, VY = 0, Spin = 0, Scale = 0.5 }
 	end
 	-- (x en Scale de la vidéo + décalage : la vidéo change de largeur)

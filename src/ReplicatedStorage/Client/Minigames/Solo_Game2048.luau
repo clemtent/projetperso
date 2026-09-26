@@ -480,9 +480,12 @@ function Module.Build(container: Frame, api)
 		local k = math.min(anim.T / SLIDE_TIME, 1)
 		local eased = 1 - (1 - k) * (1 - k)
 		for _, move in ipairs(anim.Moving) do
-			local a = cellCenter(move.From)
-			local b = cellCenter(move.To)
-			move.Tile.Frame.Position = a:Lerp(b, eased)
+			local ax, ay = (move.From - 1) % SIZE, (move.From - 1) // SIZE
+			local bx, by = (move.To - 1) % SIZE, (move.To - 1) // SIZE
+			move.Tile.Frame.Position = UDim2.fromScale(
+				(ax + (bx - ax) * eased + 0.5) / SIZE,
+				(ay + (by - ay) * eased + 0.5) / SIZE
+			)
 		end
 		if k >= 1 then
 			completeAnim()
