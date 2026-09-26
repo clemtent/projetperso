@@ -2801,6 +2801,9 @@ function Runner.Start(ctx)
 			if ob.Active then
 				local previousZ = ob.Z
 				ob.Z -= move
+				if ob.Knock > 0 and ob.Knock < 0.5 then
+					ob.Z += dt * 2.6 -- percuté : l'obstacle est projeté devant le coureur
+				end
 				if ob.Fatal and st.Mode == "Run" and ob.Z <= CHAR_Z + 0.1 then
 					ob.Fatal = false
 					if ob.Lane == nearestLane(st.RunnerX) and st.RunnerH < ob.Top then
