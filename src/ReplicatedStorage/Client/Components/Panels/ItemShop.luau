@@ -13,6 +13,10 @@
 	Achat / équipement / retrait via la RemoteFunction "ItemShop".
 	Chaque objet possédé donne un petit bonus permanent (Config.CosmeticBonus).
 	Débloqué par l'amélioration "Boutique d'objets" (Feature "ItemShop").
+	v8 : nouveaux objets triés par prix ; ceux qui demandent des visites à
+	l'océan (RequiresRebirths) sont montrés VERROUILLÉS (voile, cadenas,
+	"🔒 après N visites à l'océan", prix visible) ; trop cher -> NeedDopamine ;
+	prix à jour avec les ticks de Dopamine pendant que la boutique est ouverte.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -72,6 +76,9 @@ type Card = {
 	Status: TextLabel,
 	Ribbon: Frame,
 	Rays: Frame,
+	Showcase: Frame,
+	LockBadge: Frame,
+	Visual: GuiObject?,
 	Hovered: boolean,
 }
 
@@ -81,6 +88,8 @@ local busy = false
 local filter = "All"
 local visible = false
 local animation: RBXScriptConnection? = nil
+local tickConnection: any = nil -- ClientState.DopamineChanged (ticks légers)
+local lastTickRefresh = 0
 local hoverId: string? = nil
 
 -- Bannière
@@ -112,6 +121,25 @@ local function rarityOf(cost: number): Rarity
 		end
 	end
 	return RARITIES[#RARITIES]
+end
+
+-- Visites à l'océan nécessaires (0 = libre) / visites du joueur
+local function requiredRebirths(cosmetic): number
+	return tonumber(cosmetic.RequiresRebirths) or 0
+end
+
+local function playerRebirths(): number
+	local data = ClientState.Data
+	return tonumber(data and data.Rebirths) or 0
+end
+
+local function isLocked(cosmetic): boolean
+	return requiredRebirths(cosmetic) > playerRebirths()
+end
+
+local function lockText(cosmetic): string
+	local needed = requiredRebirths(cosmetic)
+	return needed == 1 and Locale.T("🔒 after 1 ocean visit") or Locale.T("🔒 after %d ocean visits", needed)
 end
 
 local function setChipText(chip: Frame, text: string)
@@ -423,12 +451,12 @@ local function buildHero(content: Frame)
 	UIUtil.Corner(collectionBar, UDim.new(1, 0))
 end
 
-local function buildCard(grid: ScrollingFrame, cosmetic)
+local function buildCard(grid: ScrollingFrame, cosmetic, layoutOrder: number)
 	local rarity = rarityOf(tonumber(cosmetic.Cost) or 0)
 	local cell = UIUtil.Create("Frame", {
 		Name = cosmetic.Id,
 		BackgroundTransparency = 1,
-		LayoutOrder = cosmetic.Order or 0,
+		LayoutOrder = layoutOrder,
 		Parent = grid,
 	})
 	local card = UIUtil.Create("Frame", {
@@ -468,6 +496,7 @@ local function buildCard(grid: ScrollingFrame, cosmetic)
 	})
 	UIUtil.Corner(glow, UDim.new(1, 0))
 
+	local visual: GuiObject? = nil
 	if cosmetic.Slot == "Skin" and cosmetic.Top and cosmetic.Bottom then
 		local swatch = UIUtil.Create("Frame", {
 			Name = "Swatch",
@@ -481,6 +510,7 @@ local function buildCard(grid: ScrollingFrame, cosmetic)
 		UIUtil.Corner(swatch, 9)
 		UIUtil.Stroke(swatch, Theme.Colors.Border, 1.5)
 		UIUtil.Gradient(swatch, ColorSequence.new(cosmetic.Top, cosmetic.Bottom), 90)
+		visual = swatch
 		UIUtil.Label({
 			Text = Locale.T("Click me"),
 			TextColor3 = Theme.ContrastText(cosmetic.Top:Lerp(cosmetic.Bottom, 0.5)),
@@ -491,7 +521,7 @@ local function buildCard(grid: ScrollingFrame, cosmetic)
 			Parent = swatch,
 		})
 	else
-		UIUtil.Label({
+		visual = UIUtil.Label({
 			Name = "Icon",
 			Text = cosmetic.Icon,
 			Size = UDim2.fromOffset(64, 64),
@@ -533,6 +563,54 @@ local function buildCard(grid: ScrollingFrame, cosmetic)
 	})
 	ribbon.AnchorPoint = Vector2.new(1, 0)
 	ribbon.Position = UDim2.new(1, -6, 0, 6)
+
+	-- Verrou (objet débloqué par les visites à l'océan) : voile + cadenas
+	local lockBadge = UIUtil.Create("Frame", {
+		Name = "Lock",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Color3.fromRGB(40, 50, 70),
+		BackgroundTransparency = 0.55,
+		Visible = false,
+		ZIndex = 6,
+		Parent = showcase,
+	})
+	UIUtil.Corner(lockBadge, Theme.Radius.M)
+	local lockPlate = UIUtil.Create("Frame", {
+		Name = "Plate",
+		Size = UDim2.fromOffset(34, 34),
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.new(1, -6, 1, -6),
+		BackgroundColor3 = WHITE,
+		ZIndex = 7,
+		Parent = lockBadge,
+	})
+	UIUtil.Corner(lockPlate, UDim.new(1, 0))
+	UIUtil.Stroke(lockPlate, Color3.fromRGB(0, 120, 180), 2, 0.1)
+	UIUtil.Gradient(lockPlate, ColorSequence.new(WHITE, Color3.fromRGB(200, 230, 245)), 90)
+	UIUtil.Create("TextLabel", {
+		Name = "Icon",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Font = Theme.Fonts.Body,
+		Text = "🔒",
+		TextSize = 18,
+		ZIndex = 8,
+		Parent = lockPlate,
+	})
+	local oceanChip = UIUtil.Chip({
+		Name = "Ocean",
+		Text = "🌊",
+		Color = Color3.fromRGB(0, 140, 200),
+		TextColor3 = WHITE,
+		Height = 18,
+		TextSize = 11,
+		ZIndex = 8,
+		StrokeColor = WHITE,
+		Parent = lockBadge,
+	})
+	oceanChip.AnchorPoint = Vector2.new(1, 0)
+	oceanChip.Position = UDim2.new(1, -6, 0, 6)
+	setChipText(oceanChip, "🌊 " .. tostring(requiredRebirths(cosmetic)))
 
 	UIUtil.Label({
 		Name = "ItemName",
@@ -578,6 +656,9 @@ local function buildCard(grid: ScrollingFrame, cosmetic)
 		Status = status,
 		Ribbon = ribbon,
 		Rays = rays,
+		Showcase = showcase,
+		LockBadge = lockBadge,
+		Visual = visual,
 		Hovered = false,
 	}
 
@@ -587,6 +668,21 @@ local function buildCard(grid: ScrollingFrame, cosmetic)
 			return
 		end
 		local owned, equipped = getCosmetics(data)
+		if not owned[cosmetic.Id] and isLocked(cosmetic) then
+			-- Verrouillé : on explique comment le débloquer (le serveur refuserait)
+			SoundManager.Play("Error", 0.7)
+			UIUtil.Shake(button)
+			local remaining = requiredRebirths(cosmetic) - playerRebirths()
+			Notifications.Show({
+				Title = Locale.T("%s is locked", Locale.T(cosmetic.Name)),
+				Text = remaining == 1 and Locale.T("Visit the ocean 1 more time to unlock it.")
+					or Locale.T("Visit the ocean %d more times to unlock it.", remaining),
+				Icon = "🔒",
+				Color = Color3.fromRGB(0, 140, 200),
+				Duration = 4,
+			})
+			return
+		end
 		if not owned[cosmetic.Id] then
 			if not button:GetAttribute("Enabled") then
 				SoundManager.Play("Error", 0.7)
@@ -679,8 +775,17 @@ function ItemShop.Build(content: Frame)
 		Parent = grid,
 	})
 
-	for _, cosmetic in ipairs(Config.Cosmetics) do
-		buildCard(grid, cosmetic)
+	-- Du moins cher au plus cher (les objets verrouillés, très chers, en fin de liste)
+	local sorted = table.clone(Config.Cosmetics)
+	table.sort(sorted, function(a, b)
+		local ra, rb = requiredRebirths(a), requiredRebirths(b)
+		if (ra > 0) ~= (rb > 0) then
+			return rb > 0
+		end
+		return (tonumber(a.Cost) or 0) < (tonumber(b.Cost) or 0)
+	end)
+	for index, cosmetic in ipairs(sorted) do
+		buildCard(grid, cosmetic, index)
 	end
 	applyFilter()
 	refreshPreview()
@@ -699,6 +804,14 @@ function ItemShop.Update(data)
 			ownedCount += 1
 		end
 
+		local locked = not isOwned and isLocked(cosmetic)
+		ui.LockBadge.Visible = locked
+		if ui.Visual then
+			local visual = ui.Visual :: GuiObject
+			if visual:IsA("TextLabel") then
+				visual.TextTransparency = locked and 0.45 or 0
+			end
+		end
 		local ribbonLabel = ui.Ribbon:FindFirstChild("Label") :: TextLabel?
 		if isEquipped then
 			ui.Button.Text = Locale.T("Remove")
@@ -724,6 +837,14 @@ function ItemShop.Update(data)
 			if ribbonLabel then
 				ribbonLabel.Text = "✔"
 			end
+		elseif isLocked(cosmetic) then
+			ui.Button.Text = lockText(cosmetic)
+			ui.Button:SetAttribute("BaseColor", Color3.fromRGB(214, 232, 244))
+			UIUtil.SetButtonEnabled(ui.Button, true)
+			ui.Button.TextColor3 = Color3.fromRGB(0, 90, 140)
+			ui.Status.Text = Locale.T("Price: %s", "💧 " .. NumberFormatter.Format(tonumber(cosmetic.Cost) or 0))
+			ui.Status.TextColor3 = Theme.Colors.TextDim
+			ui.Ribbon.Visible = false
 		else
 			local cost = tonumber(cosmetic.Cost) or 0
 			local affordable = dopamine >= cost
@@ -755,6 +876,20 @@ end
 
 function ItemShop.OnOpen()
 	visible = true
+	-- Dopamine qui monte (ticks légers) : prix / boutons à jour, 4 fois par seconde au plus
+	if not tickConnection then
+		local dopamineChanged = (ClientState :: any).DopamineChanged
+		if type(dopamineChanged) == "table" and type(dopamineChanged.Connect) == "function" then
+			tickConnection = dopamineChanged:Connect(function()
+				local now = os.clock()
+				if not visible or now - lastTickRefresh < 0.25 or not ClientState.Data then
+					return
+				end
+				lastTickRefresh = now
+				ItemShop.Update(ClientState.Data)
+			end)
+		end
+	end
 	hoverId = nil
 	refreshPreview()
 	-- Rayons des vitrines qui tournent doucement (seulement fenêtre ouverte)

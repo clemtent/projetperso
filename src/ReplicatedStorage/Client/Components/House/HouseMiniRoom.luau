@@ -8,7 +8,9 @@
 	    murs de côté en perspective, plinthe, ombre du plafond ;
 	  - les objets de la pièce en petit (dessins statiques de HouseArt),
 	    placés d'après leurs X / Y / S : au plus MAX_ITEMS objets (les plus
-	    gros d'abord) pour garder peu de Frames ;
+	    gros d'abord, mais les animaux et ce qui est posé sur les meubles
+	    gardés en priorité) pour garder peu de Frames ; même ordre
+	    d'affichage que la pièce (HouseSurfaces.Order) ;
 	  - la nuit : voile bleu nuit + lumière chaude de plafonnier (la pièce
 	    a l'air allumée), halo des lampes.
 	Reconstruction partielle : le fond n'est redessiné que si le papier
@@ -28,6 +30,8 @@ local UIUtil = require(Client.UIUtil)
 local HouseCommon = require(script.Parent.HouseCommon)
 local HousePatterns = require(script.Parent.HousePatterns)
 local HouseArt = require(script.Parent.HouseArt)
+local HouseSurfaces = require(script.Parent.HouseSurfaces)
+local HousePets = require(script.Parent.HousePets)
 
 type Room = HouseCommon.Room
 type SizeDef = HouseCommon.SizeDef
@@ -194,7 +198,9 @@ function HouseMiniRoom.new(parent: Instance, width: number, height: number): Min
 		for _, entry in ipairs(placed) do
 			local item = HouseCommon.ItemsById[entry.I]
 			if item then
-				table.insert(chosen, { Entry = entry, Item = item, Area = item.Size * entry.S })
+				-- (les animaux se voient même petits : ils comptent plus)
+				local area = item.Size * entry.S * (HousePets.Has(item.Id) and 2.2 or 1)
+				table.insert(chosen, { Entry = entry, Item = item, Area = area })
 			end
 		end
 		table.sort(chosen, function(a, b)
@@ -202,6 +208,18 @@ function HouseMiniRoom.new(parent: Instance, width: number, height: number): Min
 		end)
 		while #chosen > HouseMiniRoom.MAX_ITEMS do
 			table.remove(chosen)
+		end
+		-- Un objet posé sur un meuble absent de la mini-pièce flotterait : on l'enlève
+		local kept: { Placed } = {}
+		for _, pick in ipairs(chosen) do
+			table.insert(kept, pick.Entry)
+		end
+		local roomHeight = ROOM_HEIGHT
+		for index = #chosen, 1, -1 do
+			local support = HouseSurfaces.SupportOf(chosen[index].Entry, placed, roomWidth, roomHeight)
+			if support and not table.find(kept, support.Entry) then
+				table.remove(chosen, index)
+			end
 		end
 		local drawn = {}
 		for _, pick in ipairs(chosen) do
@@ -246,18 +264,18 @@ function HouseMiniRoom.new(parent: Instance, width: number, height: number): Min
 				table.insert(lamps, glow)
 			end
 			local rank = isWall and 0 or (flat and 1 or 2)
-			table.insert(drawn, { Holder = holder, Rank = rank, Entry = entry })
+			drawn[entry] = { Holder = holder, Rank = rank }
 		end
-		table.sort(drawn, function(a, b)
-			if a.Rank ~= b.Rank then
-				return a.Rank < b.Rank
-			end
-			if a.Entry.Z ~= b.Entry.Z then
-				return a.Entry.Z < b.Entry.Z
-			end
-			return a.Entry.Y < b.Entry.Y
+		local list: { Placed } = {}
+		for entry in pairs(drawn) do
+			table.insert(list, entry)
+		end
+		local ordered = HouseSurfaces.Order(list, roomWidth, roomHeight, function(entry: Placed): number
+			local info = drawn[entry]
+			return info and info.Rank or 2
 		end)
-		for index, info in ipairs(drawn) do
+		for index, entry in ipairs(ordered) do
+			local info = drawn[entry]
 			info.Holder.ZIndex = index
 			info.Holder.Parent = items
 		end

@@ -334,32 +334,6 @@ function Formulas.GetCasinoRTP(): number
 	return expected
 end
 
--- Probabilité (0..1) qu'un tour donne au moins une paire
-function Formulas.GetCasinoWinChance(): number
-	local symbols = Config.Casino.Symbols
-	local totalWeight = 0
-	for _, symbol in ipairs(symbols) do
-		totalWeight += symbol.Weight
-	end
-	if totalWeight <= 0 then
-		return 0
-	end
-	-- 1 - P(3 symboles tous différents)
-	local allDifferent = 0
-	for i, a in ipairs(symbols) do
-		for j, b in ipairs(symbols) do
-			if j ~= i then
-				for k, c in ipairs(symbols) do
-					if k ~= i and k ~= j then
-						allDifferent += (a.Weight * b.Weight * c.Weight) / (totalWeight ^ 3)
-					end
-				end
-			end
-		end
-	end
-	return 1 - allDifferent
-end
-
 ----------------------------------------------------------------------
 -- 🌻 Jardin de Dopamine
 ----------------------------------------------------------------------

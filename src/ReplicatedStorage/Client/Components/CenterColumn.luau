@@ -132,6 +132,7 @@ local counterFlashing = false
 local perSecondTarget = 0 -- Dopamine / s du serveur
 local perSecondShown = 0 -- valeur affichée (glisse vers la cible)
 local perSecondText = ""
+local perSecondDrawn = -1
 local perSecondFlashUntil = 0
 local perSecondFlashing = false
 local perSecondScale: UIScale
@@ -232,8 +233,15 @@ local function onClick()
 	local base = tonumber(ClientState.Data and ClientState.Data.ClickValue) or gain
 	local color, style = Effects.AmountStyle(gain, base, ClientState.DarkMode)
 	local center = Interface.GetCanvasCenter(clickButton)
-	local position = UDim2.fromOffset(center.X + random:NextNumber(-70, 70), center.Y - 34 + random:NextNumber(-12, 6))
-	Effects.Pop(effectsLayer, position, "+" .. formatAmount(gain), { Color = color, Size = 30 + ratio * 10, Style = style })
+	-- De part et d'autre du bouton, montée courte : les chiffres ne passent ni
+	-- sur le compteur ni sur le bandeau d'actualités
+	local side = random:NextNumber() < 0.5 and -1 or 1
+	local halfWidth = clickButton.AbsoluteSize.X / math.max(Interface.Scale, 0.01) / 2
+	local position = UDim2.fromOffset(
+		center.X + side * (halfWidth + random:NextNumber(4, 54)),
+		center.Y + 2 + random:NextNumber(-10, 10)
+	)
+	Effects.Pop(effectsLayer, position, "+" .. formatAmount(gain), { Color = color, Size = 28 + ratio * 10, Style = style, Rise = 36 })
 	Effects.Burst(effectsLayer, UDim2.fromOffset(center.X + random:NextNumber(-40, 40), center.Y), nil, 3)
 
 	-- Son de clic choisi dans les paramètres ; il monte dans les aigus avec le combo
@@ -846,7 +854,8 @@ local function refreshBadges()
 		local dopamine = ClientState.GetConfirmedDopamine()
 		local affordable = 0
 		for _, cosmetic in ipairs(Config.Cosmetics) do
-			if not owned[cosmetic.Id] and dopamine >= cosmetic.Cost then
+			local unlocked = (tonumber(cosmetic.RequiresRebirths) or 0) <= (tonumber(data.Rebirths) or 0)
+			if unlocked and not owned[cosmetic.Id] and dopamine >= cosmetic.Cost then
 				affordable += 1
 			end
 		end
@@ -1067,10 +1076,13 @@ function CenterColumn.Build(parent: Frame, floatingLayer: Frame, fxLayer: Frame)
 				perSecondShown = perSecondTarget
 			end
 		end
-		local rateText = Locale.T("%s Dopamine per second", formatAmount(perSecondShown))
-		if rateText ~= perSecondText then
-			perSecondText = rateText
-			perSecondLabel.Text = rateText
+		if perSecondShown ~= perSecondDrawn then
+			perSecondDrawn = perSecondShown
+			local rateText = Locale.T("%s Dopamine per second", formatAmount(perSecondShown))
+			if rateText ~= perSecondText then
+				perSecondText = rateText
+				perSecondLabel.Text = rateText
+			end
 		end
 		local rateFlash = os.clock() < perSecondFlashUntil
 		if rateFlash or perSecondFlashing then

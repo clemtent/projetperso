@@ -2,6 +2,10 @@
 	Pets (ModuleScript) — dessins des animaux 🐾 (ils respirent, clignent des yeux, remuent la queue)
 	Emplacement : ReplicatedStorage > Client > Components > House > Art > Pets
 	Contrat : voir HouseArt (boîte 100 x 100, pieds en bas pour les objets au sol).
+	Les parties "animal" de chaque dessin sont rangées dans des groupes dont le
+	nom commence par "Pet" (le reste = sa maison : coquille, panier, perchoir,
+	trésor) : House/HousePets fait se promener l'animal seul dans la pièce.
+	"PetWalk" (caché) = pose debout du chat pour marcher.
 ]]
 
 local Art = {}
@@ -61,6 +65,7 @@ Art.Chick = function(body, kit, _item)
 	local yellow = Color3.fromRGB(255, 222, 110)
 	local wingColor = Color3.fromRGB(255, 205, 90)
 	local chick = breather(body, kit, 0, 0, 100, 92, 3)
+	chick.Name = "Pet"
 	local tuft = kit.Pivot(chick, 50, 36, 1)
 	kit.Blob(tuft, -3.5, -3, 4, 9, yellow, { Rotation = -35, Thickness = 1.3 })
 	kit.Blob(tuft, 0, -5, 4.5, 11, yellow, { Rotation = 0, Thickness = 1.3 })
@@ -133,6 +138,7 @@ Art.SleepyCat = function(body, kit, _item)
 	local stripe = Color3.fromRGB(170, 160, 200)
 	kit.Blob(body, 50, 68, 84, 16, C.PinkSoft, { Z = 2 })
 	local cat = breather(body, kit, 0, 0, 100, 76, 3)
+	cat.Name = "Pet"
 	kit.Blob(cat, 58, 58, 58, 32, fur, { Z = 2, Shine = true })
 	for _, s in ipairs({ { 56, 44 }, { 65, 44 }, { 74, 46 } }) do
 		kit.Line(cat, s[1], s[2], s[1] + 1.5, s[2] + 6, 2.6, stripe, 0, 3)
@@ -149,27 +155,55 @@ Art.SleepyCat = function(body, kit, _item)
 		kit.Box(body, 10, y, 80, 2, C.Wood, 0, 6)
 	end
 	kit.Part(body, 4, 66, 92, 10, C.Wood, { Radius = -1, Z = 6, Shine = true })
-	-- pattes posées sur le rebord
+	-- pattes posées sur le rebord, queue, z z z (devant le panier)
+	local front = kit.Group(body, 0, 0, 100, 100, 7)
+	front.Name = "PetFront"
 	for _, x in ipairs({ 28, 40 }) do
-		kit.Blob(body, x, 67, 10, 7, C.White, { Z = 7, Thickness = 1.3 })
+		kit.Blob(front, x, 67, 10, 7, C.White, { Z = 2, Thickness = 1.3 })
 	end
 	-- queue qui pend du panier
-	local tail = kit.Pivot(body, 84, 66, 7)
+	local tail = kit.Pivot(front, 84, 66, 2)
+	tail.Name = "Tail" -- (cachée quand le chat dort ailleurs que dans son panier)
 	kit.Blob(tail, 3, 11, 9, 26, fur, { Rotation = -10, Thickness = 1.5 })
 	kit.Line(tail, 0.5, 8, 6.5, 8, 2.2, stripe, 0, 2)
 	kit.Line(tail, 1.5, 15, 7.5, 15, 2.2, stripe, 0, 2)
 	kit.Animate(tail, "Sway", 6, 0.5, 0.8)
 	-- z z z
 	for index, z in ipairs({ { "z", 56, 36, 11 }, { "z", 66, 25, 14 }, { "Z", 78, 13, 17 } }) do
-		local label = kit.Text(body, z[1], z[2], z[3], z[4], index == 2 and C.Purple or C.Lilac, 8)
+		local label = kit.Text(front, z[1], z[2], z[3], z[4], index == 2 and C.Purple or C.Lilac, 3)
 		kit.Animate(label, "Bob", 2, 0.6, index * 1.4)
 	end
+	-- pose debout (cachée) : le chat réveillé qui se promène, tourné vers la droite
+	local walk = kit.Group(body, 0, 0, 100, 100, 9)
+	walk.Name = "PetWalk"
+	walk.Visible = false
+	local wtail = kit.Pivot(walk, 27, 66, 1)
+	kit.Blob(wtail, -5, -15, 9, 32, fur, { Rotation = -18, Thickness = 1.5 })
+	kit.Line(wtail, -9, -20, -2, -21, 2.2, stripe, 0, 2)
+	kit.Line(wtail, -7, -10, 0, -11, 2.2, stripe, 0, 2)
+	kit.Animate(wtail, "Sway", 9, 0.9, 0.4)
+	for index, x in ipairs({ 33, 43, 60, 70 }) do
+		local leg = kit.Part(walk, x - 5, 80, 10, 18, index % 2 == 0 and kit.Darken(fur, 0.06) or fur, { Radius = 5, Z = 1, Thickness = 1.4 })
+		kit.Blob(leg, 5, 16, 11, 6, C.White, { Z = 2, Thickness = 1.1, Shade = false })
+	end
+	kit.Blob(walk, 50, 74, 56, 30, fur, { Z = 2, Shine = true })
+	for _, x in ipairs({ 40, 49, 58 }) do
+		kit.Line(walk, x, 60, x + 1.5, 66, 2.6, stripe, 0, 3)
+	end
+	ear(walk, kit, 64, 40, 13, fur, C.Pink, -16, 3)
+	ear(walk, kit, 86, 41, 13, fur, C.Pink, 18, 3)
+	kit.Blob(walk, 75, 55, 36, 31, fur, { Z = 4, Shine = true })
+	kit.Line(walk, 75, 40.5, 75, 45, 2.4, stripe, 0, 5)
+	kit.Face(walk, 77, 57, 24, { Mouth = "cat", Z = 6 })
+	kit.Animate(walk, "Breathe", 0.02, 1.2, 0.2)
 	return nil
 end
 
 -- Petite tortue : carapace à motifs, tête qui sort et hoche doucement
-Art.Turtle = function(body, kit, _item)
+Art.Turtle = function(root, kit, _item)
 	local C = kit.C
+	local body = kit.Group(root, 0, 0, 100, 100, 1)
+	body.Name = "Pet"
 	local shellColor = Color3.fromRGB(115, 195, 135)
 	local skin = Color3.fromRGB(175, 228, 170)
 	for _, x in ipairs({ 24, 58 }) do
@@ -196,8 +230,10 @@ Art.Turtle = function(body, kit, _item)
 end
 
 -- Chiot heureux : oreilles tombantes, tache sur l'œil, langue, collier à cœur, queue qui remue
-Art.Puppy = function(body, kit, _item)
+Art.Puppy = function(root, kit, _item)
 	local C = kit.C
+	local body = kit.Group(root, 0, 0, 100, 100, 1)
+	body.Name = "Pet"
 	local fur = Color3.fromRGB(255, 238, 215)
 	local spot = Color3.fromRGB(215, 160, 115)
 	local tail = kit.Pivot(body, 70, 86, 1)
@@ -225,8 +261,10 @@ Art.Puppy = function(body, kit, _item)
 end
 
 -- Lapin tout doux : longues oreilles (une tombante), petite carotte, pompon
-Art.Bunny = function(body, kit, _item)
+Art.Bunny = function(root, kit, _item)
 	local C = kit.C
+	local body = kit.Group(root, 0, 0, 100, 100, 1)
+	body.Name = "Pet"
 	local fur = Color3.fromRGB(255, 250, 252)
 	kit.Circle(body, 75, 88, 14, 14, fur, 0, 1)
 	local bun = breather(body, kit, 0, 0, 100, 98, 2)
@@ -306,6 +344,7 @@ Art.Parrot = function(body, kit, _item)
 	end
 	-- oiseau (pivot sur les pattes)
 	local bird = kit.Pivot(body, 42, 42, 5)
+	bird.Name = "Pet"
 	kit.Blob(bird, -4, 16, 9, 36, C.Blue, { Z = 1, Rotation = 10 })
 	kit.Blob(bird, 3, 15, 8, 32, C.Butter, { Z = 1, Rotation = -6 })
 	local g = breather(bird, kit, -22, -52, 44, 52, 2)
@@ -332,8 +371,10 @@ Art.Parrot = function(body, kit, _item)
 end
 
 -- Renard tout doux : grandes oreilles, joues blanches, énorme queue touffue qui balance
-Art.Fox = function(body, kit, _item)
+Art.Fox = function(root, kit, _item)
 	local C = kit.C
+	local body = kit.Group(root, 0, 0, 100, 100, 1)
+	body.Name = "Pet"
 	local orange = Color3.fromRGB(255, 160, 95)
 	local paw = Color3.fromRGB(175, 105, 85)
 	local tail = kit.Pivot(body, 64, 92, 1)
@@ -369,6 +410,9 @@ Art.Dragon = function(body, kit, _item)
 	end
 	local gem = kit.Diamond(body, 26, 88, 8, C.Sky, 0, 6)
 	kit.Stroke(gem, C.Blue, 1.2)
+	local treasure = body
+	body = kit.Group(treasure, 0, 0, 100, 100, 3)
+	body.Name = "Pet"
 	-- queue
 	local tail = kit.Pivot(body, 66, 90, 1)
 	kit.Blob(tail, 12, -2, 30, 12, scale, { Rotation = -25, Thickness = 1.6 })

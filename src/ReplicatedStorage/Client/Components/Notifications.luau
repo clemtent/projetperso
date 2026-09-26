@@ -2,12 +2,15 @@
 	Notifications (ModuleScript)
 	Emplacement : ReplicatedStorage > Client > Components > Notifications
 
-	Bandeaux ("toasts") en bas de l'écran, style clair et soigné :
-	  - bulle d'icône colorée (emoji) à gauche ;
+	Bandeaux ("toasts") en bas au centre (jamais sur le bandeau d'actualités
+	ni sur le bouton / compteur du haut), style clair et soigné :
+	  - liseré + badge d'icône colorés (emoji) à gauche ;
 	  - titre en gras + texte, ou texte seul ;
-	  - barre de temps restant (couleur du type) ;
-	  - empilés avec un espacement régulier (4 au maximum) ;
-	  - apparition en glissant + fondu, disparition en glissant sur le côté.
+	  - barre de temps restant (couleur du type) en bas de la carte ;
+	  - empilés (3 au maximum, 2 sur téléphone : le plus ancien part en fondu) ;
+	  - doublons regroupés : pastille "x2", "x3"... et le minuteur repart ;
+	  - apparition en glissant + fondu, disparition en glissant sur le côté
+	    (la place se referme en douceur).
 	Un clic ferme le bandeau.
 
 	Réagit aux notifications du serveur : Info, Error, Achievement, Quest,
@@ -43,10 +46,26 @@ local Interface = require(Client.Interface)
 local Notifications = {}
 
 local container: Frame? = nil
-local MAX_TOASTS = 4
-local TOAST_WIDTH = 430
+local MAX_TOASTS = 3 -- bandeaux visibles en même temps (2 sur téléphone)
+local TOAST_WIDTH = 410
 local MARGIN = 8 -- marge autour de la carte (place pour l'ombre dans le CanvasGroup)
 local order = 0
+
+type Toast = {
+	Key: string,
+	Group: CanvasGroup,
+	Card: TextButton,
+	Count: number,
+	CountChip: Frame,
+	CountLabel: TextLabel,
+	Timer: Frame,
+	Lifetime: number,
+	Token: number,
+	Closing: boolean,
+	Close: () -> (),
+}
+
+local live: { Toast } = {} -- bandeaux affichés (du plus ancien au plus récent)
 
 -- Icône par défaut selon la couleur d'accent (quand le texte n'en a pas)
 local function defaultIcon(color: Color3): string
@@ -69,20 +88,24 @@ local function splitIcon(text: string): (string?, string)
 	return nil, text
 end
 
+local function maxToasts(): number
+	return Interface.IsPhone() and 2 or MAX_TOASTS
+end
+
 function Notifications.Build(parent: Frame)
 	local frame = UIUtil.Create("Frame", {
 		Name = "Toasts",
-		Size = UDim2.fromOffset(TOAST_WIDTH + MARGIN * 2, 360),
+		Size = UDim2.fromOffset(TOAST_WIDTH + MARGIN * 2, 300),
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -8),
+		Position = UDim2.new(0.5, 0, 1, -10),
 		BackgroundTransparency = 1,
 		Parent = parent,
 	})
 	-- Téléphone : bandeaux un peu plus petits (la toile est agrandie) pour ne
 	-- pas cacher tout le bas de l'écran
-	local toastScale = UIUtil.Create("UIScale", { Parent = frame })
+	local scale = UIUtil.Create("UIScale", { Parent = frame })
 	local function applyDevice()
-		toastScale.Scale = Interface.IsPhone() and 0.9 or 1
+		scale.Scale = Interface.IsPhone() and 0.88 or 1
 	end
 	Interface.DeviceChanged:Connect(applyDevice)
 	applyDevice()
@@ -90,10 +113,35 @@ function Notifications.Build(parent: Frame)
 		VerticalAlignment = Enum.VerticalAlignment.Bottom,
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
 		SortOrder = Enum.SortOrder.LayoutOrder,
-		Padding = UDim.new(0, -6), -- les marges des CanvasGroup se chevauchent : ~10 px entre deux cartes
+		Padding = UDim.new(0, -8), -- les marges des CanvasGroup se chevauchent : ~8 px entre deux cartes
 		Parent = frame,
 	})
 	container = frame
+end
+
+-- Relance la barre de temps et la fermeture automatique d'un bandeau
+local function arm(toast: Toast)
+	toast.Token += 1
+	local token = toast.Token
+	toast.Timer.Size = UDim2.fromScale(1, 1)
+	UIUtil.Tween(toast.Timer, toast.Lifetime, { Size = UDim2.fromScale(0, 1) }, Enum.EasingStyle.Linear)
+	task.delay(toast.Lifetime, function()
+		if toast.Token == token then
+			toast.Close()
+		end
+	end)
+end
+
+-- Même bandeau déjà affiché : "x2", "x3"... au lieu d'en empiler un nouveau
+local function bump(toast: Toast)
+	toast.Count += 1
+	toast.CountLabel.Text = "x" .. tostring(toast.Count)
+	if not toast.CountChip.Visible then
+		toast.CountChip.Visible = true
+	end
+	UIUtil.Pop(toast.CountChip, 1.6, 0.35)
+	UIUtil.Pop(toast.Card, 1.04, 0.25)
+	arm(toast)
 end
 
 -- Affiche un bandeau. options : Text, Title?, Color?, Duration?, Icon?, Celebrate?
@@ -105,21 +153,25 @@ function Notifications.Show(options: { [string]: any })
 		return
 	end
 
-	-- Supprime les plus anciens s'il y en a trop
-	local existing = {}
-	for _, child in ipairs(target:GetChildren()) do
-		if child:IsA("GuiObject") then
-			table.insert(existing, child)
+	-- Doublon d'un bandeau encore affiché : on le regroupe ("x3")
+	local key = (rawTitle or "") .. "\0" .. rawText
+	for _, toast in ipairs(live) do
+		if toast.Key == key and not toast.Closing then
+			bump(toast)
+			return
 		end
 	end
-	table.sort(existing, function(a, b)
-		return a.LayoutOrder < b.LayoutOrder
-	end)
-	while #existing >= MAX_TOASTS do
-		local oldest = table.remove(existing, 1)
-		if oldest then
-			oldest:Destroy()
+
+	-- Trop de bandeaux : le plus ancien s'en va (en fondu)
+	local limit = maxToasts()
+	local open = {}
+	for _, toast in ipairs(live) do
+		if not toast.Closing then
+			table.insert(open, toast)
 		end
+	end
+	for index = 1, #open - limit + 1 do
+		open[index].Close()
 	end
 
 	local accent: Color3 = options.Color or Theme.Colors.Blue
@@ -145,7 +197,8 @@ function Notifications.Show(options: { [string]: any })
 	end
 	local finalIcon = icon or defaultIcon(accent)
 	local hasTitle = title ~= nil and title ~= ""
-	local height = hasTitle and (text ~= "" and 68 or 52) or 54
+	local twoLines = hasTitle and text ~= ""
+	local height = twoLines and 62 or 50
 
 	order += 1
 
@@ -168,11 +221,12 @@ function Notifications.Show(options: { [string]: any })
 		Size = UDim2.fromOffset(TOAST_WIDTH, height),
 		Position = UDim2.fromOffset(MARGIN, MARGIN + 14),
 		BackgroundColor3 = Theme.Colors.Card,
+		ClipsDescendants = true,
 		ZIndex = 2,
 		Parent = group,
 	})
-	UIUtil.Corner(card, 16)
-	UIUtil.Stroke(card, celebrate and Theme.Colors.Premium or Theme.Colors.CardBorder, celebrate and 2 or 1, celebrate and 0 or 0.82)
+	UIUtil.Corner(card, 14)
+	UIUtil.Stroke(card, celebrate and Theme.Colors.Premium or Theme.Colors.CardBorder, celebrate and 2 or 1, celebrate and 0 or 0.8)
 	UIUtil.Shadow(card, 3, 0.84, 2)
 	if celebrate then
 		UIUtil.Gradient(card, ColorSequence.new({
@@ -183,47 +237,85 @@ function Notifications.Show(options: { [string]: any })
 		-- Très léger voile de la couleur du type sur la gauche
 		local tint = UIUtil.Create("Frame", {
 			Name = "Tint",
-			Size = UDim2.new(0.55, 0, 1, 0),
+			Size = UDim2.new(0.6, 0, 1, 0),
 			BackgroundColor3 = accent,
-			BackgroundTransparency = 0.9,
+			BackgroundTransparency = 0.88,
 			BorderSizePixel = 0,
 			ZIndex = 2,
 			Parent = card,
 		})
-		UIUtil.Corner(tint, 16)
 		UIUtil.Create("UIGradient", {
 			Transparency = NumberSequence.new(0, 1),
 			Parent = tint,
 		})
 	end
+	-- Liseré de couleur à gauche
+	UIUtil.Create("Frame", {
+		Name = "Accent",
+		Size = UDim2.new(0, 5, 1, 0),
+		BackgroundColor3 = celebrate and Theme.Colors.Premium or accent,
+		BorderSizePixel = 0,
+		ZIndex = 3,
+		Parent = card,
+	})
 
-	-- Bulle d'icône
-	local bubbleSize = hasTitle and text ~= "" and 44 or 38
+	-- Badge d'icône (carré arrondi coloré)
+	local bubbleSize = twoLines and 42 or 34
 	local bubble = UIUtil.Create("Frame", {
 		Name = "Icon",
 		Size = UDim2.fromOffset(bubbleSize, bubbleSize),
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 12, 0.5, 0),
+		Position = UDim2.new(0, 14, 0.5, -1),
 		BackgroundColor3 = accent,
 		ZIndex = 3,
 		Parent = card,
 	})
-	UIUtil.Corner(bubble, UDim.new(1, 0))
-	UIUtil.Stroke(bubble, accent:Lerp(Color3.new(0, 0, 0), 0.25), 1.5, 0.2)
-	UIUtil.Gradient(bubble, ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(200, 200, 200)), 90)
-	UIUtil.Label({
+	UIUtil.Corner(bubble, UDim.new(0, math.floor(bubbleSize * 0.32)))
+	UIUtil.Stroke(bubble, accent:Lerp(Color3.new(0, 0, 0), 0.3), 1.5, 0.15)
+	UIUtil.Gradient(bubble, ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(196, 196, 196)), 90)
+	UIUtil.Create("TextLabel", {
+		Name = "Emoji",
 		Text = finalIcon,
-		Size = UDim2.new(1, -10, 1, -10),
-		Position = UDim2.fromOffset(5, 5),
-		MaxTextSize = math.floor(bubbleSize * 0.58),
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Font = Theme.Fonts.Body,
+		TextSize = math.floor(bubbleSize * 0.56),
 		ZIndex = 4,
 		Parent = bubble,
 	})
 	local bubbleScale = UIUtil.Create("UIScale", { Scale = 0.4, Parent = bubble })
 
-	-- Textes
-	local left = 12 + bubbleSize + 12
-	local right = celebrate and 46 or 16
+	-- Pastille "x3" (doublons regroupés), à droite
+	local countChip = UIUtil.Create("Frame", {
+		Name = "Count",
+		Size = UDim2.fromOffset(0, 24),
+		AutomaticSize = Enum.AutomaticSize.X,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, celebrate and -44 or -12, 0.5, -1),
+		BackgroundColor3 = accent,
+		Visible = false,
+		ZIndex = 5,
+		Parent = card,
+	})
+	UIUtil.Corner(countChip, UDim.new(1, 0))
+	UIUtil.Stroke(countChip, Color3.new(1, 1, 1), 1.5, 0)
+	UIUtil.Create("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8), Parent = countChip })
+	local countLabel = UIUtil.Create("TextLabel", {
+		Name = "Label",
+		Size = UDim2.fromScale(0, 1),
+		AutomaticSize = Enum.AutomaticSize.X,
+		BackgroundTransparency = 1,
+		Font = Theme.Fonts.Number,
+		Text = "x1",
+		TextSize = 15,
+		TextColor3 = Theme.ContrastText(accent),
+		ZIndex = 6,
+		Parent = countChip,
+	})
+
+	-- Textes (place réservée à droite pour la pastille "x3")
+	local left = 14 + bubbleSize + 12
+	local right = (celebrate and 46 or 16) + 44
 	if hasTitle then
 		UIUtil.Label({
 			Name = "Title",
@@ -231,8 +323,8 @@ function Notifications.Show(options: { [string]: any })
 			Font = Theme.Fonts.Title,
 			TextColor3 = Theme.Colors.Text,
 			TextXAlignment = Enum.TextXAlignment.Left,
-			Size = UDim2.new(1, -(left + right), 0, 22),
-			Position = UDim2.fromOffset(left, text ~= "" and 10 or 15),
+			Size = UDim2.new(1, -(left + right), 0, 21),
+			Position = UDim2.fromOffset(left, text ~= "" and 9 or 13),
 			MaxTextSize = 17,
 			ZIndex = 3,
 			Parent = card,
@@ -243,13 +335,13 @@ function Notifications.Show(options: { [string]: any })
 				Text = text,
 				Font = Theme.Fonts.Body,
 				TextColor3 = Theme.Colors.TextDim,
-				TextSize = 15,
+				TextSize = 14,
 				TextWrapped = true,
 				TextXAlignment = Enum.TextXAlignment.Left,
 				TextYAlignment = Enum.TextYAlignment.Top,
 				BackgroundTransparency = 1,
-				Size = UDim2.new(1, -(left + right), 0, 32),
-				Position = UDim2.fromOffset(left, 32),
+				Size = UDim2.new(1, -(left + right), 0, 30),
+				Position = UDim2.fromOffset(left, 30),
 				ZIndex = 3,
 				Parent = card,
 			})
@@ -266,7 +358,7 @@ function Notifications.Show(options: { [string]: any })
 			TextXAlignment = Enum.TextXAlignment.Left,
 			BackgroundTransparency = 1,
 			Size = UDim2.new(1, -(left + right), 1, -10),
-			Position = UDim2.fromOffset(left, 5),
+			Position = UDim2.fromOffset(left, 4),
 			ZIndex = 3,
 			Parent = card,
 		})
@@ -287,29 +379,26 @@ function Notifications.Show(options: { [string]: any })
 		UIUtil.Tween(sparkle, lifetime, { Rotation = 360 }, Enum.EasingStyle.Linear)
 	end
 
-	-- Barre de temps restant (en bas, dans les coins arrondis)
+	-- Barre de temps restant (tout en bas de la carte)
 	local track = UIUtil.Create("Frame", {
 		Name = "TimerTrack",
-		Size = UDim2.new(1, -32, 0, 3),
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -5),
+		Size = UDim2.new(1, 0, 0, 3),
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.fromScale(0, 1),
 		BackgroundColor3 = accent,
 		BackgroundTransparency = 0.85,
 		BorderSizePixel = 0,
 		ZIndex = 3,
 		Parent = card,
 	})
-	UIUtil.Corner(track, UDim.new(1, 0))
 	local timer = UIUtil.Create("Frame", {
 		Name = "Timer",
 		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = accent,
+		BackgroundColor3 = celebrate and Theme.Colors.Premium or accent,
 		BorderSizePixel = 0,
 		ZIndex = 4,
 		Parent = track,
 	})
-	UIUtil.Corner(timer, UDim.new(1, 0))
-	UIUtil.Tween(timer, lifetime, { Size = UDim2.fromScale(0, 1) }, Enum.EasingStyle.Linear)
 
 	-- Apparition : glissement vers le haut + fondu, l'icône "pop"
 	UIUtil.Tween(group, 0.25, { GroupTransparency = 0 })
@@ -324,20 +413,40 @@ function Notifications.Show(options: { [string]: any })
 		UIUtil.Tween(card, 0.15, { Position = UDim2.fromOffset(MARGIN, MARGIN) })
 	end)
 
-	local closing = false
+	local toast: Toast
 	local function close()
-		if closing or not group.Parent then
+		if toast.Closing or not group.Parent then
 			return
 		end
-		closing = true
+		toast.Closing = true
+		local index = table.find(live, toast)
+		if index then
+			table.remove(live, index)
+		end
 		UIUtil.Tween(group, 0.22, { GroupTransparency = 1 })
 		UIUtil.Tween(card, 0.25, { Position = UDim2.fromOffset(MARGIN + 60, MARGIN) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-		task.delay(0.26, function()
+		-- La place se referme en douceur (les autres bandeaux glissent)
+		UIUtil.Tween(group, 0.25, { Size = UDim2.fromOffset(TOAST_WIDTH + MARGIN * 2, 0) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		task.delay(0.27, function()
 			group:Destroy()
 		end)
 	end
+	toast = {
+		Key = key,
+		Group = group,
+		Card = card,
+		Count = 1,
+		CountChip = countChip,
+		CountLabel = countLabel,
+		Timer = timer,
+		Lifetime = lifetime,
+		Token = 0,
+		Closing = false,
+		Close = close,
+	}
+	table.insert(live, toast)
 	card.Activated:Connect(close)
-	task.delay(lifetime, close)
+	arm(toast)
 end
 
 -- Affiche un bandeau temporaire (API historique).

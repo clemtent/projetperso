@@ -718,6 +718,11 @@ local function setView(newView: string)
 	overviewHolder.Visible = not inRoom
 	stage.Visible = inRoom
 	roomBar.Visible = inRoom
+	-- Les animaux ne vivent que quand la pièce est affichée
+	local currentEditor = editor
+	if currentEditor then
+		currentEditor.SetLive(inRoom)
+	end
 	if not inRoom then
 		savedChip.Visible = false
 		previewChip.Visible = false

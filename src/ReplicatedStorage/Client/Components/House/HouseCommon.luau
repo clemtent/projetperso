@@ -107,6 +107,8 @@ export type HouseConfig = {
 	ComfortBonusPerPoint: number,
 	MaxComfortBonus: number,
 	WallRatio: number,
+	TabletopMaxSize: number?,
+	TabletopMinY: number?,
 	RoomCost: number,
 	RoomCostGrowth: number,
 	HarmonyBonus: number,
@@ -458,6 +460,24 @@ function HouseCommon.FormatPercent(value: number): string
 	return string.format("%.1f", value)
 end
 
+-- Visites à l'océan nécessaires pour une entrée (objet, style, maison)
+function HouseCommon.RequiredRebirths(entry: any): number
+	local ok, value = pcall(Formulas.GetHouseRequiredRebirths, entry)
+	if ok and type(value) == "number" then
+		return value
+	end
+	return 0
+end
+
+-- Vrai si l'entrée est débloquée pour ces données (visites à l'océan)
+function HouseCommon.IsUnlocked(data: any, entry: any): boolean
+	local ok, value = pcall(Formulas.IsHouseEntryUnlocked, data, entry)
+	if ok and type(value) == "boolean" then
+		return value
+	end
+	return true
+end
+
 -- Objets jamais achetés qu'on peut se payer maintenant (badges)
 function HouseCommon.AffordableNew(data: any, dopamine: number): { string }
 	local result = {}
@@ -466,7 +486,7 @@ function HouseCommon.AffordableNew(data: any, dopamine: number): { string }
 	end
 	local house = HouseCommon.GetHouse(data)
 	for _, item in ipairs(HouseCommon.Config.Items) do
-		if HouseCommon.Owned(house, item.Id) == 0 and dopamine >= HouseCommon.Price(item, 0) then
+		if HouseCommon.Owned(house, item.Id) == 0 and dopamine >= HouseCommon.Price(item, 0) and HouseCommon.IsUnlocked(data, item) then
 			table.insert(result, item.Id)
 		end
 	end
@@ -494,7 +514,9 @@ end
 
 -- Position corrigée d'un objet : dans sa zone, sans sortir de la pièce.
 -- `roomWidth` / `roomHeight` : taille de la pièce en px de maquette.
-function HouseCommon.ClampPosition(item: Item, x: number, y: number, scale: number, roomWidth: number, roomHeight: number): (number, number)
+-- `onSurface` : petit objet posé SUR un meuble (peut monter jusqu'à
+-- Config.House.TabletopMinY, comme le permet le serveur).
+function HouseCommon.ClampPosition(item: Item, x: number, y: number, scale: number, roomWidth: number, roomHeight: number, onSurface: boolean?): (number, number)
 	local half = (item.Size * scale * 0.38) / math.max(1, roomWidth)
 	half = math.clamp(half, 0.015, 0.2)
 	local minY, maxY = HouseCommon.ZoneBounds(item.Placement)
@@ -512,6 +534,9 @@ function HouseCommon.ClampPosition(item: Item, x: number, y: number, scale: numb
 			maxY = minY
 		end
 	else
+		if onSurface == true and item.Size <= (HouseCommon.Config.TabletopMaxSize or 0) then
+			minY = HouseCommon.Config.TabletopMinY or minY
+		end
 		-- Objet posé par ses pieds : sa tête ne traverse pas le plafond
 		minY = math.min(maxY, math.max(minY, sizeY * 0.92 - 0.02))
 	end

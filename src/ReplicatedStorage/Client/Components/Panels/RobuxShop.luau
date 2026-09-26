@@ -223,15 +223,37 @@ end
 -- Affichage d'une offre
 ----------------------------------------------------------------------
 
-local function styleButton(button: TextButton, text: string, background: Color3, textColor: Color3, enabled: boolean)
-	if button.Text ~= text then
+-- Bouton d'achat : pièce "R$" + prix (coin = false : texte seul, ex. "✔ Acheté")
+local function styleButton(button: TextButton, text: string, background: Color3, textColor: Color3, enabled: boolean, coin: boolean?)
+	local label = button:FindFirstChild("PriceLabel") :: TextLabel?
+	local coinFrame = button:FindFirstChild("Coin") :: Frame?
+	if label then
+		if label.Text ~= text then
+			label.Text = text
+		end
+		label.TextColor3 = textColor
+		label.Position = UDim2.fromOffset(coin and 30 or 0, 0)
+		label.Size = UDim2.new(1, coin and -30 or 0, 1, 0)
+	elseif button.Text ~= text then
 		button.Text = text
+	end
+	if coinFrame then
+		coinFrame.Visible = coin == true
 	end
 	button:SetAttribute("BaseColor", background)
 	button.BackgroundColor3 = background
 	button.TextColor3 = textColor
 	button.TextTransparency = 0
 	button:SetAttribute("Enabled", enabled)
+end
+
+-- Prix Robux affichable (nombre) ou nil
+local function priceValue(offer: Offer): number?
+	local cached = offer.Id ~= 0 and priceCache[cacheKey(offer.IsPass, offer.Id)]
+	if cached then
+		return cached.Price
+	end
+	return tonumber(offer.Def.PriceHint)
 end
 
 function refreshOffer(offer: Offer)
@@ -265,7 +287,10 @@ function refreshOffer(offer: Offer)
 		return
 	end
 	local text, forSale = priceText(offer)
-	if forSale then
+	local price = priceValue(offer)
+	if forSale and price then
+		styleButton(offer.Button, NumberFormatter.WithSpaces(price), Theme.Colors.Robux, Theme.Colors.TextLight, true, true)
+	elseif forSale then
 		styleButton(offer.Button, text, Theme.Colors.Robux, Theme.Colors.TextLight, true)
 	else
 		styleButton(offer.Button, text, Theme.Colors.Disabled, Theme.Colors.TextDim, false)
@@ -633,14 +658,61 @@ local function buildCard(grid: ScrollingFrame, def, isPass: boolean, order: numb
 		Text = "",
 		Color = Theme.Colors.Robux,
 		TextColor3 = Theme.Colors.TextLight,
-		Size = UDim2.new(1, -20, 0, 36),
+		Size = UDim2.new(1, -20, 0, 38),
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -9),
-		CornerRadius = 18,
+		CornerRadius = 19,
 		MaxTextSize = 17,
 		ZIndex = 4,
 		Parent = card,
 	})
+	-- Dégradé plus lumineux (reflet en haut) que le bouton standard
+	local buttonGradient = button:FindFirstChildOfClass("UIGradient")
+	if buttonGradient then
+		buttonGradient.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(236, 236, 236)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(196, 196, 196)),
+		})
+	end
+	-- Pièce "R$" + prix (le texte du bouton lui-même reste vide)
+	local coin = UIUtil.Create("Frame", {
+		Name = "Coin",
+		Size = UDim2.fromOffset(24, 24),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 2, 0.5, 0),
+		BackgroundColor3 = WHITE,
+		Visible = false,
+		ZIndex = 5,
+		Parent = button,
+	})
+	UIUtil.Corner(coin, UDim.new(1, 0))
+	UIUtil.Stroke(coin, Theme.Colors.RobuxDark, 1.5, 0.1)
+	UIUtil.Create("TextLabel", {
+		Name = "Symbol",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Font = Theme.Fonts.Title,
+		Text = "R$",
+		TextSize = 11,
+		TextColor3 = Theme.Colors.RobuxDark,
+		ZIndex = 6,
+		Parent = coin,
+	})
+	local priceLabel = UIUtil.Create("TextLabel", {
+		Name = "PriceLabel",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Font = Theme.Fonts.Title,
+		Text = "",
+		TextScaled = true,
+		TextColor3 = Theme.Colors.TextLight,
+		ZIndex = 5,
+		Parent = button,
+	})
+	UIUtil.Create("UITextSizeConstraint", { MaxTextSize = 19, MinTextSize = 10, Parent = priceLabel })
+	local priceStroke = UIUtil.Stroke(priceLabel, Theme.Colors.RobuxDark, 1, 0.35)
+	priceStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 
 	local offer: Offer = {
 		Def = def,

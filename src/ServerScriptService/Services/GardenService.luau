@@ -90,33 +90,34 @@ local function sanitize(data)
 	end
 	local now = os.time()
 	local count = plotCount(data)
-	local clean = {}
+	local plots = garden.Plots
+	-- Appelé à chaque état envoyé : on ne recrée un parterre que s'il est abîmé
 	for index = 1, count do
-		local plot = garden.Plots[index]
+		local plot = plots[index]
 		local flower = type(plot) == "table" and flowersById[plot.Flower]
 		if not flower or not isValidNumber(plot.PlantedAt) then
-			plot = plant(now)
-		else
-			-- Date dans le futur (horloge d'un autre serveur) : on replante maintenant
+			plots[index] = plant(now)
+		elseif plot.PlantedAt > now or plot.PlantedAt ~= math.floor(plot.PlantedAt) or plot.ReadyAt ~= plot.PlantedAt + flower.GrowSeconds then
+			-- Date dans le futur (horloge d'un autre serveur) ou incohérente : recalculée
 			local plantedAt = math.min(math.floor(plot.PlantedAt), now)
-			plot = { Flower = flower.Id, PlantedAt = plantedAt, ReadyAt = plantedAt + flower.GrowSeconds }
+			plots[index] = { Flower = flower.Id, PlantedAt = plantedAt, ReadyAt = plantedAt + flower.GrowSeconds }
 		end
-		clean[index] = plot
 	end
-	garden.Plots = clean
+	-- Parterres en trop (après l'océan, "Flower Beds" repart de zéro) ou clés parasites
+	for key in pairs(plots) do
+		if type(key) ~= "number" or key < 1 or key > count or key ~= math.floor(key) then
+			plots[key] = nil
+		end
+	end
 end
 
 -- Champs ajoutés à l'état envoyé au client (voir GameService:BuildState)
 function GardenService:GetClientState(_player: Player, data)
 	sanitize(data)
-	local plots = {}
-	if Formulas.HasFeature(data, settings.Feature) then
-		for index, plot in ipairs(data.Garden.Plots) do
-			plots[index] = { Flower = plot.Flower, PlantedAt = plot.PlantedAt, ReadyAt = plot.ReadyAt }
-		end
-	end
+	-- (la table est copiée par le RemoteEvent : on peut l'envoyer telle quelle)
+	local owned = Formulas.HasFeature(data, settings.Feature)
 	return {
-		Garden = { Plots = plots, Now = os.time() },
+		Garden = { Plots = owned and data.Garden.Plots or {}, Now = os.time() },
 	}
 end
 
@@ -189,13 +190,12 @@ local function onGarden(player: Player, action: any, arg: any)
 		services.QuestService:Progress(player, "Harvest", 1)
 		services.GameService:SendState(player)
 		announceRare(player, flower, amount)
-		local state = GardenService:GetClientState(player, data)
 		return true, {
 			Plot = index,
 			Flower = flower.Id,
 			Reward = amount,
 			Harvested = { { Plot = index, Flower = flower.Id, Reward = amount } },
-			Plots = state.Garden.Plots,
+			Plots = data.Garden.Plots,
 			Now = now,
 		}
 	end
@@ -216,11 +216,10 @@ local function onGarden(player: Player, action: any, arg: any)
 	end
 	services.QuestService:Progress(player, "Harvest", #harvested)
 	services.GameService:SendState(player)
-	local state = GardenService:GetClientState(player, data)
 	return true, {
 		Reward = total,
 		Harvested = harvested,
-		Plots = state.Garden.Plots,
+		Plots = data.Garden.Plots,
 		Now = now,
 	}
 end

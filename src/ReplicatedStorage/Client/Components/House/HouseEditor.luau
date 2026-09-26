@@ -24,7 +24,14 @@
 	    ~1,5 s après la dernière modification (les 2 pièces d'un envoi
 	    partent dans le même appel) ; nouvel essai si le serveur refuse,
 	    puis resynchro ;
-	  - hors édition : toucher un objet le fait rebondir (petits cœurs).
+	  - hors édition : toucher un objet le fait rebondir (petits cœurs) ;
+	  - SUR LES MEUBLES : un petit objet (Size <= TabletopMaxSize) glissé
+	    au-dessus d'une table, d'un bureau, d'une étagère, d'un lit...
+	    s'y pose (House/HouseSurfaces : trait lumineux sur le dessus visé)
+	    et passe devant son meuble ; déplacer / agrandir / ranger le meuble
+	    emporte (ou fait tomber) ce qui est posé dessus ;
+	  - ANIMAUX : hors édition, les animaux de la pièce se promènent et
+	    utilisent leurs affaires (House/HousePets, visuel seulement).
 	Les exemplaires sont comptés dans TOUTES les pièces (HouseCommon.Available
 	avec la disposition locale). Le serveur revérifie tout.
 ]]
@@ -42,6 +49,8 @@ local Signal = require(ReplicatedStorage.Shared.Signal)
 local Locale = require(ReplicatedStorage.Shared.Locale)
 local HouseCommon = require(script.Parent.HouseCommon)
 local HouseRoom = require(script.Parent.HouseRoom)
+local HouseSurfaces = require(script.Parent.HouseSurfaces)
+local HousePets = require(script.Parent.HousePets)
 
 type Placed = HouseCommon.Placed
 type HouseData = HouseCommon.HouseData
@@ -76,6 +85,8 @@ export type Editor = {
 	SetEditing: (editing: boolean) -> (),
 	IsEditing: () -> boolean,
 	SetActive: (active: boolean) -> (),
+	SetLive: (visible: boolean) -> (), -- pièce affichée : les animaux vivent
+	GetPets: () -> HousePets.Pets,
 	SetRoom: (roomId: string) -> (),
 	GetRoomId: () -> string?,
 	Sync: (house: HouseData, force: boolean?) -> (),
@@ -101,6 +112,9 @@ export type Editor = {
 	Update: (dt: number) -> (),
 }
 
+-- Objet posé sur le meuble qu'on déplace (décalage en fractions de la pièce)
+type Rider = { Entry: Placed, DX: number, DY: number }
+
 type Drag = {
 	Entry: Placed,
 	Input: InputObject,
@@ -109,6 +123,9 @@ type Drag = {
 	Start: Vector2,
 	Moved: boolean,
 	Before: { Placed },
+	Riders: { Rider },
+	Surface: HouseSurfaces.Surface?,
+	WasOn: boolean, -- posé sur un meuble au début du glissement
 }
 
 -- Envoi vers une autre pièce (pour l'annuler / le rétablir)
@@ -186,6 +203,8 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 	local lastNudge = 0
 	local lastNudgeEntry: Placed? = nil
 	local sendHandler: ((entry: Placed) -> ())? = nil
+	local liveVisible = false
+	local pets = HousePets.new(room)
 
 	local changed = Signal.new()
 	local saveStatusChanged = Signal.new()
@@ -388,35 +407,34 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 	-- Profondeur et barre d'outils
 	----------------------------------------------------------------------
 
-	-- Clé de tri : (zone, couche Z, Y, X)
+	-- Clé de tri : (zone, couche Z, Y, X) ; un objet posé sur un meuble
+	-- passe juste devant ce meuble (HouseSurfaces.Order)
+	local function rankOf(entry: Placed): number
+		local sticker = stickers[entry]
+		return sticker and zoneRank(sticker) or 2
+	end
 	local function sortedEntries(): { Placed }
-		local list = table.clone(layout)
-		table.sort(list, function(a, b)
-			local sa, sb = stickers[a], stickers[b]
-			local ra = sa and zoneRank(sa) or 2
-			local rb = sb and zoneRank(sb) or 2
-			if ra ~= rb then
-				return ra < rb
-			end
-			if a.Z ~= b.Z then
-				return a.Z < b.Z
-			end
-			if a.Y ~= b.Y then
-				return a.Y < b.Y
-			end
-			return a.X < b.X
-		end)
-		return list
+		return HouseSurfaces.Order(layout, room.Width, room.Height, rankOf)
 	end
 
+	-- (ZIndex espacés de 2 : les animaux qui se promènent se glissent entre deux objets)
 	local function resort()
+		local current = drag
+		local riding: { [Placed]: number } = {}
+		if current and current.Moved then
+			for index, rider in ipairs(current.Riders) do
+				riding[rider.Entry] = index
+			end
+		end
 		for index, entry in ipairs(sortedEntries()) do
 			local sticker = stickers[entry]
 			if sticker then
-				local dragged = drag ~= nil and (drag :: Drag).Entry == entry and (drag :: Drag).Moved
-				sticker.Frame.ZIndex = dragged and 5000 or index + 10
+				local dragged = current ~= nil and current.Entry == entry and current.Moved
+				local rider = riding[entry]
+				sticker.Frame.ZIndex = dragged and 5000 or (rider and 5000 + rider * 2 or index * 2 + 10)
 			end
 		end
+		pets.Refresh(layout, stickers)
 	end
 
 	-- Rectangle d'un objet dans la pièce (px de maquette) : (gauche, haut, droite, bas)
@@ -647,6 +665,65 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		UIUtil.Tween(sticker.Pop, 0.35, { Scale = 1 }, Enum.EasingStyle.Back)
 	end
 
+	-- Objets posés sur `entry` (ils le suivent)
+	local function ridersOf(entry: Placed): { Rider }
+		local riders: { Rider } = {}
+		for _, other in ipairs(HouseSurfaces.Dependents(entry, layout, room.Width, room.Height)) do
+			table.insert(riders, { Entry = other, DX = other.X - entry.X, DY = other.Y - entry.Y })
+		end
+		return riders
+	end
+
+	-- Place les objets posés sur un meuble qui bouge (et leurs autocollants)
+	local function moveRiders(entry: Placed, riders: { Rider })
+		for _, rider in ipairs(riders) do
+			local other = rider.Entry
+			other.X = entry.X + rider.DX
+			other.Y = entry.Y + rider.DY
+			local sticker = stickers[other]
+			if sticker then
+				sticker.Frame.Position = UDim2.fromScale(other.X, other.Y)
+			end
+		end
+	end
+
+	-- Meuble agrandi / rétréci : ce qui est posé dessus reste sur le dessus
+	local function rescaleRiders(entry: Placed, item: Item, oldX: number, oldY: number, oldS: number, riders: { Rider })
+		local old: Placed = { I = entry.I, X = oldX, Y = oldY, S = oldS, Z = entry.Z }
+		for _, rider in ipairs(riders) do
+			local other = rider.Entry
+			local bx, by = HouseSurfaces.RoomToBox(old, item, other.X, other.Y, room.Width, room.Height)
+			other.X, other.Y = HouseSurfaces.BoxToRoom(entry, item, bx, by, room.Width, room.Height)
+			local otherItem = HouseCommon.ItemsById[other.I]
+			if otherItem then
+				other.X, other.Y = HouseCommon.ClampPosition(otherItem, other.X, other.Y, other.S, room.Width, room.Height, true)
+			end
+			local sticker = stickers[other]
+			if sticker then
+				sticker.Frame.Position = UDim2.fromScale(other.X, other.Y)
+			end
+		end
+	end
+
+	-- Meuble rangé : ce qui était dessus tombe par terre (petit rebond)
+	local function dropRiders(entry: Placed)
+		for _, rider in ipairs(ridersOf(entry)) do
+			local other = rider.Entry
+			local item = HouseCommon.ItemsById[other.I]
+			local sticker = stickers[other]
+			if item then
+				local fromY = other.Y
+				other.X, other.Y = HouseCommon.ClampPosition(item, other.X, entry.Y + 0.01, other.S, room.Width, room.Height)
+				if sticker then
+					sticker.Frame.Position = UDim2.fromScale(other.X, other.Y)
+					local fall = (other.Y - fromY) * room.Height / math.max(0.2, item.Size * other.S / 100)
+					sticker.Body.Position = UDim2.fromOffset(0, -fall)
+					UIUtil.Tween(sticker.Body, 0.45, { Position = UDim2.fromOffset(0, 0) }, Enum.EasingStyle.Bounce)
+				end
+			end
+		end
+	end
+
 	local function beginDrag(entry: Placed, input: InputObject)
 		local pointer = room.ScreenToRoom(Vector2.new(input.Position.X, input.Position.Y))
 		drag = {
@@ -657,6 +734,9 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 			Start = Vector2.new(input.Position.X, input.Position.Y),
 			Moved = false,
 			Before = copyList(layout),
+			Riders = ridersOf(entry),
+			Surface = nil,
+			WasOn = HouseSurfaces.SupportOf(entry, layout, room.Width, room.Height) ~= nil,
 		}
 	end
 
@@ -800,10 +880,17 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 			return
 		end
 		pushUndo()
+		local riders = ridersOf(entry)
+		local support = HouseSurfaces.SupportOf(entry, layout, room.Width, room.Height)
+		local oldX, oldY, oldS = entry.X, entry.Y, entry.S
 		entry.S = newScale
 		-- Plus grand : l'objet doit rester dans sa zone
-		entry.X, entry.Y = HouseCommon.ClampPosition(sticker.Item, entry.X, entry.Y, entry.S, room.Width, room.Height)
+		entry.X, entry.Y = HouseCommon.ClampPosition(sticker.Item, entry.X, entry.Y, entry.S, room.Width, room.Height, support ~= nil)
 		sticker.Frame.Position = UDim2.fromScale(entry.X, entry.Y)
+		if #riders > 0 then
+			rescaleRiders(entry, sticker.Item, oldX, oldY, oldS, riders)
+			resort()
+		end
 		UIUtil.Tween(sticker.Scale, 0.2, { Scale = sticker.Item.Size * newScale / 100 }, Enum.EasingStyle.Back)
 		local ringStroke = sticker.RingStroke
 		if ringStroke then
@@ -871,6 +958,7 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 			return
 		end
 		pushUndo()
+		dropRiders(entry)
 		removeEntry(entry, C.Lilac)
 		SoundManager.Play("Pop", 0.7)
 		markDirty()
@@ -889,10 +977,22 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 			lastNudgeEntry = entry
 		end
 		lastNudge = now
+		local riders = ridersOf(entry)
 		local x = entry.X + dx / math.max(1, room.Width)
 		local y = entry.Y + dy / math.max(1, room.Height)
-		entry.X, entry.Y = snapPoint(sticker.Item, x, y, entry.S)
+		local support = HouseSurfaces.SupportOf(entry, layout, room.Width, room.Height)
+		if support and dy <= 0 then
+			-- Posé sur un meuble : glisse le long du dessus (flèche bas = descend)
+			local surface = support :: HouseSurfaces.Surface
+			entry.X = math.clamp(x, surface.L, surface.R)
+			entry.X, entry.Y = HouseCommon.ClampPosition(sticker.Item, entry.X, surface.Y, entry.S, room.Width, room.Height, true)
+		elseif support then
+			entry.X, entry.Y = snapPoint(sticker.Item, x, support.Base + 0.01, entry.S)
+		else
+			entry.X, entry.Y = snapPoint(sticker.Item, x, y, entry.S)
+		end
 		applyEntry(entry)
+		moveRiders(entry, riders)
 		resort()
 		positionToolbar()
 		markDirty()
@@ -1044,6 +1144,7 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		pushUndo(nil, { Room = targetId, Before = before, After = copyList(targetList) })
 		extras[targetId] = targetList
 		floatAt(sticker, "🚪 → " .. HouseCommon.GetRoomType(target).Icon, C.Lilac)
+		dropRiders(entry)
 		removeEntry(entry, C.Sky)
 		SoundManager.Play("Open", 1.3)
 		local roomType = HouseCommon.GetRoomType(target)
@@ -1159,6 +1260,7 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		local sticker = stickers[entry]
 		room.SetZoneHint(nil)
 		room.SetGrid(false)
+		room.SetSurfaceHint(nil)
 		if not sticker then
 			return
 		end
@@ -1166,6 +1268,26 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 			pushUndo(current.Before)
 			entry.X, entry.Y = current.Target.X, current.Target.Y
 			sticker.Frame.Position = UDim2.fromScale(entry.X, entry.Y)
+			-- Ce qui est posé dessus suit (et reste dans la pièce)
+			moveRiders(entry, current.Riders)
+			for _, rider in ipairs(current.Riders) do
+				local other = rider.Entry
+				local otherItem = HouseCommon.ItemsById[other.I]
+				if otherItem then
+					other.X, other.Y = HouseCommon.ClampPosition(otherItem, other.X, other.Y, other.S, room.Width, room.Height, true)
+					applyEntry(other)
+				end
+				local riderSticker = stickers[other]
+				if riderSticker then
+					UIUtil.Tween(riderSticker.Body, 0.16, { Position = UDim2.fromOffset(0, 0) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+				end
+			end
+			if current.Surface then
+				-- Posé sur un meuble : petites étincelles
+				task.delay(0.12, function()
+					burstAt(sticker, C.Butter, 6)
+				end)
+			end
 			-- "Plop" : l'objet se pose avec un petit rebond
 			UIUtil.Tween(sticker.Body, 0.16, { Position = UDim2.fromOffset(0, 0), Rotation = 0 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 			sticker.Pop.Scale = 0.92
@@ -1203,6 +1325,12 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 				UIUtil.Tween(sticker.Pop, 0.15, { Scale = LIFT_SCALE }, Enum.EasingStyle.Back)
 				UIUtil.Tween(sticker.Body, 0.15, { Position = UDim2.fromOffset(0, -8) })
 				room.SetZoneHint(sticker.Item.Placement)
+				for _, rider in ipairs(current.Riders) do
+					local riderSticker = stickers[rider.Entry]
+					if riderSticker then
+						UIUtil.Tween(riderSticker.Body, 0.15, { Position = UDim2.fromOffset(0, -8) })
+					end
+				end
 				room.SetGrid(snapEnabled, GRID)
 				SoundManager.Play("Click", 1.3)
 			end
@@ -1214,7 +1342,31 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 			return
 		end
 		local pointer = room.ScreenToRoom(position) + current.Offset
-		local x, y = snapPoint(sticker.Item, pointer.X, pointer.Y, current.Entry.S)
+		-- Petit objet au-dessus d'un meuble : il se pose SUR le meuble
+		local surface: HouseSurfaces.Surface? = nil
+		if HouseSurfaces.CanStandOn(sticker.Item) then
+			local skip: { [Placed]: boolean } = { [current.Entry] = true }
+			for _, rider in ipairs(current.Riders) do
+				skip[rider.Entry] = true
+			end
+			local height = sticker.Item.Size * current.Entry.S / math.max(1, room.Height)
+			surface = HouseSurfaces.Find(layout, pointer.X, pointer.Y, height, room.Width, room.Height, skip)
+		end
+		local x, y
+		if surface then
+			x = math.clamp(pointer.X, surface.L, surface.R)
+			if snapEnabled then
+				x = math.clamp(roundTo(x, GRID / math.max(1, room.Width)), surface.L, surface.R)
+			end
+			x, y = HouseCommon.ClampPosition(sticker.Item, x, surface.Y, current.Entry.S, room.Width, room.Height, true)
+		else
+			x, y = snapPoint(sticker.Item, pointer.X, pointer.Y, current.Entry.S)
+		end
+		if (surface ~= nil) ~= (current.Surface ~= nil) and surface then
+			SoundManager.Play("Click", 1.45)
+		end
+		current.Surface = surface
+		room.SetSurfaceHint(surface)
 		current.Target = Vector2.new(x, y)
 	end)
 
@@ -1318,6 +1470,8 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 				end
 				setSelected(nil)
 			end
+			-- En décoration, les animaux rentrent chez eux (on déplace leur "maison")
+			pets.SetLive(liveVisible and active and not editing)
 			local current = selected
 			if current and stickers[current] then
 				room.ShowRing(stickers[current], value)
@@ -1327,11 +1481,19 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		IsEditing = function(): boolean
 			return editing
 		end,
+		SetLive = function(visible: boolean)
+			liveVisible = visible
+			pets.SetLive(visible and active and not editing)
+		end,
+		GetPets = function(): HousePets.Pets
+			return pets
+		end,
 		SetActive = function(value: boolean)
 			active = value
 			if not value and drag then
 				endDrag()
 			end
+			pets.SetLive(liveVisible and active and not editing)
 		end,
 		SetRoom = function(newRoomId: string)
 			if newRoomId == roomId then
@@ -1440,6 +1602,9 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		end,
 		Update = function(dt: number)
 			clock += dt
+			if liveVisible then
+				pets.Update(dt)
+			end
 			local current = drag
 			if current and current.Moved then
 				local entry = current.Entry
@@ -1451,7 +1616,19 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 					sticker.Frame.Position = UDim2.fromScale(entry.X, entry.Y)
 					-- Petit rebond pendant le transport (pas de rotation : certains
 					-- dessins découpent leurs formes, ce qui ne marche pas si on les tourne)
-					sticker.Body.Position = UDim2.fromOffset(0, -8 + math.sin(clock * 9) * 2.5)
+					local bounce = -8 + math.sin(clock * 9) * 2.5
+					sticker.Body.Position = UDim2.fromOffset(0, bounce)
+					if #current.Riders > 0 then
+						moveRiders(entry, current.Riders)
+						for _, rider in ipairs(current.Riders) do
+							local riderSticker = stickers[rider.Entry]
+							if riderSticker then
+								-- (même rebond, en px de maquette : dessins de tailles différentes)
+								local k = sticker.Item.Size * entry.S / math.max(1, riderSticker.Item.Size * rider.Entry.S)
+								riderSticker.Body.Position = UDim2.fromOffset(0, bounce * k)
+							end
+						end
+					end
 				end
 			end
 			-- Contour de sélection qui "respire"

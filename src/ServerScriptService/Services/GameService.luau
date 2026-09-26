@@ -304,7 +304,8 @@ end
 function GameService:RunLight(player: Player, fn: (...any) -> ...any, ...)
 	local session = sessions[player]
 	if not session then
-		return fn(...)
+		fn(...)
+		return
 	end
 	session.Light += 1
 	local ok, err = pcall(fn, ...)

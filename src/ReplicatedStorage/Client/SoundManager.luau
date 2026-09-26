@@ -449,6 +449,13 @@ function SoundManager.Init()
 	-- Choix de la musique sauvegardé (Settings.MusicTrack), appliqué à chaque
 	-- état complet sauf juste après un choix local (sauvegarde en cours)
 	local function followSetting(data)
+		-- Musique autorisée avec "Lofi Beats" : suivi ici aussi, car le premier
+		-- état arrive souvent AVANT que ClientMain branche FeaturesChanged
+		-- (la musique ne démarrait alors qu'au prochain achat)
+		local allowed = ClientState.HasFeature("Lofi")
+		if allowed ~= musicAllowed then
+			SoundManager.SetMusicAllowed(allowed)
+		end
 		if os.clock() < modeLocalUntil or type(data) ~= "table" or type(data.Settings) ~= "table" then
 			return
 		end

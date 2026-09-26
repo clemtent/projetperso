@@ -94,6 +94,7 @@ export type Room = {
 	DestroySticker: (sticker: Sticker) -> (),
 	SetZoneHint: (placement: string?) -> (),
 	SetGrid: (visible: boolean, step: number?) -> (),
+	SetSurfaceHint: (surface: { L: number, R: number, Y: number }?) -> (),
 	SetExterior: (exterior: string?) -> (),
 	Update: (dt: number) -> (),
 	Refit: () -> (),
@@ -274,6 +275,38 @@ function HouseRoom.new(stage: Frame): Room
 	})
 	Round(floorZone, UDim.new(0, 10))
 	local floorZoneStroke = UIUtil.Stroke(floorZone, WHITE, 3, 1)
+
+	-- Dessus de meuble visé pendant un glissement (petit objet posé SUR un meuble)
+	local surfaceHint = UIUtil.Create("Frame", {
+		Name = "SurfaceHint",
+		AnchorPoint = Vector2.new(0, 0.5),
+		BackgroundTransparency = 1,
+		Visible = false,
+		ZIndex = 1,
+		Parent = overlay,
+	})
+	local surfaceGlow = Box(surfaceHint, 0, 0, 0, 0, C.Butter, 0.45, 1)
+	surfaceGlow.Size = UDim2.new(1, 16, 0, 16)
+	surfaceGlow.Position = UDim2.new(0, -8, 0.5, -8)
+	Round(surfaceGlow)
+	local surfaceLine = Box(surfaceHint, 0, 0, 0, 0, WHITE, 0, 2)
+	surfaceLine.Size = UDim2.new(1, 0, 0, 5)
+	surfaceLine.Position = UDim2.new(0, 0, 0.5, -2.5)
+	Round(surfaceLine)
+	UIUtil.Stroke(surfaceLine, C.PinkDeep, 2, 0)
+	local surfaceSparkle = UIUtil.Create("TextLabel", {
+		Name = "Sparkle",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(1, 2, 0.5, -2),
+		Size = UDim2.fromOffset(24, 24),
+		BackgroundTransparency = 1,
+		Font = Theme.Fonts.Body,
+		Text = "✨",
+		TextSize = 18,
+		ZIndex = 3,
+		Parent = surfaceHint,
+	})
+	local surfaceKey = ""
 
 	-- Éléments de décor qui changent la nuit
 	local windowGlassGradient: UIGradient? = nil
@@ -754,6 +787,28 @@ function HouseRoom.new(stage: Frame): Room
 				end
 			end
 			grid.Visible = visible
+		end,
+		SetSurfaceHint = function(surface: { L: number, R: number, Y: number }?)
+			if not surface then
+				surfaceKey = ""
+				surfaceHint.Visible = false
+				return
+			end
+			local key = string.format("%.3f|%.3f|%.3f", surface.L, surface.R, surface.Y)
+			if key == surfaceKey then
+				return
+			end
+			local appearing = not surfaceHint.Visible
+			surfaceKey = key
+			surfaceHint.Position = UDim2.fromOffset(surface.L * width, surface.Y * height)
+			surfaceHint.Size = UDim2.fromOffset(math.max(8, (surface.R - surface.L) * width), 10)
+			surfaceHint.Visible = true
+			if appearing then
+				surfaceGlow.BackgroundTransparency = 1
+				UIUtil.Tween(surfaceGlow, 0.18, { BackgroundTransparency = 0.45 })
+				surfaceSparkle.TextTransparency = 1
+				UIUtil.Tween(surfaceSparkle, 0.25, { TextTransparency = 0 })
+			end
 		end,
 		SetExterior = function(exterior: string?)
 			scenery:SetPalette(exterior)

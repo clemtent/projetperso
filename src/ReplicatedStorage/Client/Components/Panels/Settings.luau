@@ -30,6 +30,18 @@
 	  ; la langue change au prochain passage dans le jeu (pas de
 	  reconstruction en direct) : un bandeau le rappelle.
 	- Textes en anglais traduits (Locale) ; zones tactiles agrandies.
+
+	v8 — 🎧 lecteur de musique (section "Musique lofi") :
+	- carte "platine" : vinyle qui tourne, titre du morceau, état (en cours,
+	  en pause, verrouillé), petit visualiseur animé (volume réel du morceau
+	  via PlaybackLoudness quand il est disponible), boutons ⏮ ⏯ ⏭
+	  (⏯ = réglage "Musique" sauvegardé) ;
+	- interrupteur + volume de la musique (inchangés) ;
+	- liste des morceaux (Config.Music.Playlist) : « 🔀 Aléatoire » ou un
+	  morceau précis (joué en boucle), ✓ sur le choix actuel. Le choix est
+	  appliqué et sauvegardé par SoundManager.SetMusicTrack
+	  (SetSetting "MusicTrack") ;
+	- animations seulement quand la fenêtre est ouverte (30 images/s max).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -55,7 +67,7 @@ local Settings = {
 	Size = Vector2.new(680, 600),
 }
 
-local VERSION = "v5"
+local VERSION = "v8"
 local WHITE = Color3.new(1, 1, 1)
 local BLACK = Color3.new(0, 0, 0)
 local ROW_HOVER = Theme.Colors.Surface or Theme.Colors.PanelLight
@@ -83,11 +95,70 @@ local languageSaving = false
 local languageChosen: string? = nil -- choix local (en attente de sauvegarde)
 
 local musicInfo: TextLabel? = nil -- sous-titre de la ligne "Musique lofi"
-local nowPlayingLabel: TextLabel? = nil -- grand texte de la carte "En cours de lecture"
-local nowPlayingStatus: TextLabel? = nil -- petite ligne au-dessus ("♫ En cours de lecture"...)
-local nextButton: TextButton? = nil
-local equalizerBars: { Frame } = {}
 local equalizerConnection: RBXScriptConnection? = nil
+
+-- Lecteur de musique (v8)
+type Player = {
+	Card: Frame,
+	Vinyl: Frame,
+	VinylLabel: Frame,
+	VinylGradient: UIGradient,
+	VinylIcon: TextLabel,
+	Arm: Frame,
+	Status: TextLabel,
+	StatusDot: Frame,
+	Title: TextLabel,
+	Meta: TextLabel,
+	Bars: { Frame },
+	Play: TextButton,
+	Prev: TextButton,
+	Next: TextButton,
+}
+type TrackRow = {
+	Key: string,
+	Card: TextButton,
+	Stroke: UIStroke,
+	Check: Frame,
+	Name: TextLabel,
+	Sub: TextLabel,
+	Eq: { Frame },
+	Hovered: boolean,
+}
+local player: Player? = nil
+local trackRows: { TrackRow } = {}
+local lockBanner: Frame? = nil
+local vinylAngle = 0
+local barLevels: { number } = {}
+local animClock = 0
+
+-- Pochettes des morceaux (par Key ; les autres ont une pochette générique)
+local TRACK_ART = {
+	Lofi1 = { Icon = "🌧️", A = Color3.fromRGB(96, 140, 220), B = Color3.fromRGB(58, 70, 140) },
+	Lofi2 = { Icon = "📚", A = Color3.fromRGB(255, 176, 92), B = Color3.fromRGB(170, 84, 60) },
+	Lofi3 = { Icon = "☕", A = Color3.fromRGB(214, 170, 130), B = Color3.fromRGB(120, 84, 70) },
+	Lofi4 = { Icon = "🐱", A = Color3.fromRGB(255, 170, 200), B = Color3.fromRGB(170, 90, 170) },
+	Lofi5 = { Icon = "🌅", A = Color3.fromRGB(255, 150, 120), B = Color3.fromRGB(200, 70, 130) },
+	Lofi6 = { Icon = "🚆", A = Color3.fromRGB(110, 110, 200), B = Color3.fromRGB(34, 36, 90) },
+	Lofi7 = { Icon = "🧣", A = Color3.fromRGB(240, 120, 110), B = Color3.fromRGB(140, 60, 90) },
+	Lofi8 = { Icon = "✨", A = Color3.fromRGB(150, 110, 255), B = Color3.fromRGB(40, 30, 110) },
+}
+local SHUFFLE_ART = { Icon = "🔀", A = Color3.fromRGB(255, 120, 200), B = Color3.fromRGB(120, 70, 230) }
+local PLAYER_TOP = Color3.fromRGB(46, 28, 86)
+local PLAYER_BOTTOM = Color3.fromRGB(22, 18, 48)
+local PLAYER_ACCENT = Color3.fromRGB(255, 120, 200)
+local PLAYER_ACCENT2 = Color3.fromRGB(110, 220, 255)
+local LAVENDER = Color3.fromRGB(200, 188, 240)
+local MUSIC_SOFT = Color3.fromRGB(245, 238, 255)
+local BAR_COUNT = 18
+
+local function artFor(key: string?, index: number?)
+	if key and TRACK_ART[key] then
+		return TRACK_ART[key]
+	end
+	local keys = { "Lofi1", "Lofi2", "Lofi3", "Lofi4", "Lofi5", "Lofi6", "Lofi7", "Lofi8" }
+	local fallback = TRACK_ART[keys[((index or 1) - 1) % #keys + 1]]
+	return { Icon = "🎵", A = fallback.A, B = fallback.B }
+end
 
 -- Son du clic
 type ClickOption = { Id: string, Card: TextButton, Stroke: UIStroke, Check: Frame, Name: TextLabel, Hovered: boolean }
@@ -99,13 +170,72 @@ local clickSaving = false -- une sauvegarde est en cours (on ne recale pas sur l
 -- Réglages
 ----------------------------------------------------------------------
 
+-- Majuscules qui gardent les accents (string.upper ne touche pas à "é")
+local ACCENTS = { ["é"] = "É", ["è"] = "È", ["ê"] = "Ê", ["ë"] = "Ë", ["à"] = "À", ["â"] = "Â", ["ç"] = "Ç",
+	["î"] = "Î", ["ï"] = "Ï", ["ô"] = "Ô", ["ù"] = "Ù", ["û"] = "Û" }
+local function upper(text: string): string
+	local result = string.upper(text)
+	for small, big in pairs(ACCENTS) do
+		result = string.gsub(result, small, big)
+	end
+	return result
+end
+
+-- Infos du lecteur (fonction de repli si SoundManager n'a pas GetMusicInfo)
+local function getMusicInfo(): { [string]: any }?
+	if type(SoundManager.GetMusicInfo) == "function" then
+		return SoundManager.GetMusicInfo()
+	end
+	return nil
+end
+
+local function getMusicMode(): string
+	if type(SoundManager.GetMusicMode) == "function" then
+		return SoundManager.GetMusicMode()
+	end
+	return "Shuffle"
+end
+
+-- Coche / survol de la liste des morceaux
+local function paintTracks()
+	local mode = getMusicMode()
+	local info = getMusicInfo()
+	local playingKey = info and info.Playing and info.Key or nil
+	for _, row in ipairs(trackRows) do
+		local selected = row.Key == mode
+		local isPlaying = row.Key ~= "Shuffle" and row.Key == playingKey
+		row.Card.BackgroundColor3 = selected and MUSIC_SOFT or (row.Hovered and ROW_HOVER or Theme.Colors.Card)
+		row.Stroke.Color = (selected or row.Hovered) and Theme.Colors.Purple or ROW_BORDER
+		row.Stroke.Thickness = selected and 2 or 1.5
+		row.Stroke.Transparency = (row.Hovered and not selected) and 0.45 or 0
+		row.Name.TextColor3 = selected and Theme.Colors.Purple:Lerp(BLACK, 0.25) or Theme.Colors.Text
+		if row.Check.Visible ~= selected then
+			row.Check.Visible = selected
+			if selected then
+				UIUtil.Pop(row.Check, 0.3, 0.35)
+			end
+		end
+		local showEq = isPlaying and not selected
+		for _, bar in ipairs(row.Eq) do
+			bar.Visible = isPlaying
+		end
+		-- (morceau choisi ET en cours : la coche reste, l'égaliseur passe à côté)
+		if row.Eq[1] then
+			local holder = row.Eq[1].Parent :: GuiObject
+			holder.Position = showEq and UDim2.new(1, -14, 0.5, 0) or UDim2.new(1, -46, 0.5, 0)
+		end
+	end
+end
+
 -- Textes de la musique : morceau en cours, verrou Lofi, playlist vide...
 local function refreshMusicInfo()
-	local name = SoundManager.GetCurrentTrack()
+	local info = getMusicInfo()
+	local name = info and info.Name or SoundManager.GetCurrentTrack()
 	local playing = SoundManager.IsMusicPlaying()
+	local locked = not ClientState.HasFeature("Lofi")
 	local text
 	local status
-	if not ClientState.HasFeature("Lofi") then
+	if locked then
 		text = Locale.T("🔒 Unlocks with 🎧 %s", Locale.T("Lofi Beats"))
 		status = Locale.T("Locked")
 	elseif not SoundManager.HasPlaylist() then
@@ -125,18 +255,51 @@ local function refreshMusicInfo()
 	if label then
 		label.Text = text
 	end
-	local big = nowPlayingLabel
-	if big then
-		big.Text = (playing and name and current.Music) and tostring(name) or text
+	local ui = player
+	if ui then
+		ui.Status.Text = upper(status)
+		local live = playing and current.Music and not locked
+		ui.StatusDot.BackgroundColor3 = live and Color3.fromRGB(90, 240, 150) or (locked and Theme.Colors.Orange or LAVENDER)
+		-- Titre : morceau en cours, sinon le choix (ou le message)
+		local mode = getMusicMode()
+		local title = name
+		if not title and mode ~= "Shuffle" and type(SoundManager.GetPlaylist) == "function" then
+			for _, track in ipairs(SoundManager.GetPlaylist()) do
+				if track.Key == mode then
+					title = track.Name
+				end
+			end
+		end
+		if locked then
+			ui.Title.Text = Locale.T("Unlocks with 🎧 %s", Locale.T("Lofi Beats"))
+		else
+			ui.Title.Text = title or text
+		end
+		local count = info and info.Count or 0
+		local index = info and info.Index or 0
+		local modeText = mode == "Shuffle" and Locale.T("🔀 Shuffle") or Locale.T("🔁 Loop")
+		if count > 0 and index > 0 then
+			ui.Meta.Text = Locale.T("Track %d of %d", index, count) .. "  •  " .. modeText
+		else
+			ui.Meta.Text = modeText
+		end
+		local art = mode == "Shuffle" and not (info and info.Key) and SHUFFLE_ART or artFor(info and info.Key or mode, index)
+		ui.VinylGradient.Color = ColorSequence.new(art.A, art.B)
+		ui.VinylIcon.Text = locked and "🔒" or art.Icon
+		ui.Play.Text = (current.Music and not locked) and "❚❚" or "►"
+		local canSkip = not locked and SoundManager.HasPlaylist()
+		for _, button in ipairs({ ui.Prev, ui.Next }) do
+			button.TextTransparency = canSkip and 0 or 0.6
+			button.BackgroundTransparency = canSkip and 0.82 or 0.92
+		end
+		ui.Play.TextTransparency = locked and 0.5 or 0
+		UIUtil.Tween(ui.Arm, 0.5, { Rotation = live and 28 or 8 }, Enum.EasingStyle.Sine)
 	end
-	local small = nowPlayingStatus
-	if small then
-		small.Text = string.upper(status)
+	local banner = lockBanner
+	if banner then
+		banner.Visible = locked
 	end
-	local button = nextButton
-	if button then
-		button.Visible = playing and current.Music and SoundManager.HasPlaylist()
-	end
+	paintTracks()
 end
 
 -- Dessine un interrupteur (animé) selon sa valeur
@@ -800,18 +963,58 @@ local function buildSlider(row: Frame, initial: number, color: Color3, onChanged
 	return slider
 end
 
--- Égaliseur de la carte "En cours de lecture" (barres qui dansent)
-local function stepEqualizer()
-	local playing = SoundManager.IsMusicPlaying() and current.Music
-	local now = os.clock()
-	for index, bar in ipairs(equalizerBars) do
-		local height = 4
-		if playing then
-			local wave = math.sin(now * (5 + index * 1.7) + index * 1.3) * 0.5 + 0.5
-			local wave2 = math.sin(now * (2.3 + index * 0.9)) * 0.5 + 0.5
-			height = 5 + math.floor((wave * 0.7 + wave2 * 0.3) * 17)
+-- Animation du lecteur (vinyle, visualiseur, mini-égaliseurs de la liste) :
+-- seulement fenêtre ouverte, 30 images/s max
+local function stepPlayer(dt: number)
+	animClock += dt
+	if animClock < 1 / 30 then
+		return
+	end
+	local step = math.min(animClock, 0.1)
+	animClock = 0
+	local ui = player
+	if not ui then
+		return
+	end
+	local live = SoundManager.IsMusicPlaying() and current.Music and ClientState.HasFeature("Lofi")
+	-- Volume réel du morceau (0..1) quand Roblox le donne, sinon une vague douce
+	local loudness = 0.55
+	local _, sound = SoundManager.GetCurrentTrack()
+	if sound then
+		local ok, value = pcall(function()
+			return (sound :: Sound).PlaybackLoudness
+		end)
+		if ok and type(value) == "number" and value > 0 then
+			loudness = math.clamp(value / 420, 0.15, 1)
 		end
-		bar.Size = UDim2.fromOffset(4, height)
+	end
+	if live then
+		vinylAngle = (vinylAngle + step * 100) % 360 -- ~33 tours/min
+		ui.Vinyl.Rotation = vinylAngle
+	end
+	local now = os.clock()
+	for index, bar in ipairs(ui.Bars) do
+		local target = 0.08
+		if live then
+			local w1 = math.sin(now * (4.2 + index * 0.37) + index * 1.9) * 0.5 + 0.5
+			local w2 = math.sin(now * (1.7 + index * 0.21) + index * 0.6) * 0.5 + 0.5
+			local shape = 1 - math.abs(index - BAR_COUNT * 0.4) / BAR_COUNT * 0.9 -- plus haut vers le milieu
+			target = math.clamp((w1 * 0.65 + w2 * 0.35) * shape * (0.35 + loudness * 0.9), 0.08, 1)
+		end
+		local level = barLevels[index] or 0.08
+		level += (target - level) * math.min(1, step * (target > level and 18 or 7))
+		barLevels[index] = level
+		bar.Size = UDim2.new(1 / BAR_COUNT, -3, level, 0)
+	end
+	-- Mini-égaliseur du morceau en cours dans la liste
+	for _, row in ipairs(trackRows) do
+		local first = row.Eq[1]
+		if first and first.Visible then
+			for index, bar in ipairs(row.Eq) do
+				local wave = math.sin(now * (6 + index * 1.9) + index) * 0.5 + 0.5
+				bar.Size = UDim2.fromOffset(3, live and (4 + math.floor(wave * 12)) or 4)
+			end
+		end
 	end
 end
 
@@ -820,7 +1023,7 @@ end
 ----------------------------------------------------------------------
 
 local function buildAudio(content: Instance)
-	local section = buildSection(content, 1, "🔊", Locale.T("Audio"), Locale.T("Sound effects, music and click sound"), SECTION_AUDIO)
+	local section = buildSection(content, 2, "🔊", Locale.T("Sounds"), Locale.T("Effects volume and click sound"), SECTION_AUDIO)
 
 	-- Effets sonores : interrupteur + volume
 	local soundRow, soundSubtitle = buildRow(section, 1, 96, "🔔", Locale.T("Sound effects"), SECTION_AUDIO)
@@ -835,16 +1038,6 @@ local function buildAudio(content: Instance)
 			lastPreview = now
 			SoundManager.Play("Click", 0.9 + value * 0.4)
 		end
-	end)
-
-	divider(section, 2)
-
-	-- Musique : interrupteur + volume (morceau en cours dans le sous-titre)
-	local musicRow, musicSubtitle = buildRow(section, 3, 96, "🎵", Locale.T("Lofi music"), Theme.Colors.Purple)
-	musicInfo = musicSubtitle
-	buildToggle(musicRow, "Music")
-	sliders.Music = buildSlider(musicRow, SoundManager.GetMusicVolume(), Theme.Colors.Purple, function(value)
-		SoundManager.SetMusicVolume(value)
 	end)
 
 	divider(section, 4)
@@ -906,7 +1099,7 @@ local function buildAudio(content: Instance)
 end
 
 local function buildDisplay(content: Instance)
-	local section = buildSection(content, 2, "🖥️", Locale.T("Display"), Locale.T("What moves on screen"), SECTION_DISPLAY)
+	local section = buildSection(content, 3, "🖥️", Locale.T("Display"), Locale.T("What moves on screen"), SECTION_DISPLAY)
 	local fxRow, fxSubtitle = buildRow(section, 1, 60, "✨", Locale.T("Particles and confetti"), SECTION_DISPLAY)
 	fxSubtitle.Text = Locale.T("Turn off for a calmer screen")
 	buildToggle(fxRow, "Effects")
@@ -969,7 +1162,7 @@ local function chooseLanguage(value: string)
 end
 
 local function buildLanguage(content: Instance)
-	local section = buildSection(content, 3, "🌐", Locale.T("Language"), Locale.T("Applied the next time you join"), Theme.Colors.Cyan)
+	local section = buildSection(content, 4, "🌐", Locale.T("Language"), Locale.T("Applied the next time you join"), Theme.Colors.Cyan)
 	local holder = UIUtil.Create("Frame", {
 		Name = "LanguageRow",
 		Size = UDim2.new(1, 0, 0, 52),
@@ -993,108 +1186,600 @@ local function buildLanguage(content: Instance)
 	})
 end
 
-local function buildGame(content: Instance)
-	local section = buildSection(content, 4, "🎮", Locale.T("Game"), Locale.T("Now playing and credits"), SECTION_GAME)
+----------------------------------------------------------------------
+-- 🎧 Lecteur de musique (v8)
+----------------------------------------------------------------------
 
-	-- Carte "En cours de lecture"
-	local nowPlaying = UIUtil.Create("Frame", {
-		Name = "NowPlaying",
-		Size = UDim2.new(1, 0, 0, 72),
+-- Bouton rond du lecteur (⏮ ⏯ ⏭)
+local function playerButton(parent: Instance, name: string, glyph: string, size: number, x: number, filled: boolean, onActivated: () -> ()): TextButton
+	local button = UIUtil.Create("TextButton", {
+		Name = name,
+		Size = UDim2.fromOffset(size, size),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(1, x, 0.5, 0),
+		BackgroundColor3 = WHITE,
+		BackgroundTransparency = filled and 0 or 0.82,
+		AutoButtonColor = false,
+		Font = Theme.Fonts.Title,
+		Text = glyph,
+		TextColor3 = filled and PLAYER_BOTTOM or WHITE,
+		TextSize = filled and 22 or 15,
+		ZIndex = 4,
+		Parent = parent,
+	})
+	UIUtil.Corner(button, UDim.new(1, 0))
+	UIUtil.Stroke(button, WHITE, filled and 0 or 1.5, filled and 1 or 0.55)
+	if filled then
+		UIUtil.Gradient(button, ColorSequence.new(WHITE, Color3.fromRGB(230, 222, 255)), 90)
+	end
+	UIUtil.AnimateButton(button, 1.08, 0.9)
+	button.Activated:Connect(onActivated)
+	-- Zone tactile d'au moins 44 px
+	if size < Theme.TouchTarget then
+		local hitbox = UIUtil.Create("TextButton", {
+			Name = "Hitbox",
+			Size = UDim2.fromOffset(Theme.TouchTarget, Theme.TouchTarget),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			BackgroundTransparency = 1,
+			Text = "",
+			ZIndex = 5,
+			Parent = button,
+		})
+		hitbox.Activated:Connect(onActivated)
+	end
+	return button
+end
+
+local function buildPlayerCard(section: Frame)
+	local card = UIUtil.Create("Frame", {
+		Name = "Player",
+		Size = UDim2.new(1, 0, 0, 132),
 		BackgroundColor3 = WHITE,
 		LayoutOrder = 1,
+		ClipsDescendants = true,
 		Parent = section,
 	})
-	UIUtil.Corner(nowPlaying, Theme.Radius.M)
-	UIUtil.Stroke(nowPlaying, Theme.Colors.Purple, 1.5, 0.6)
-	UIUtil.Gradient(nowPlaying, ColorSequence.new(Color3.fromRGB(246, 238, 255), Color3.fromRGB(255, 240, 248)), 0)
-	local cover = UIUtil.Create("Frame", {
-		Name = "Cover",
-		Size = UDim2.fromOffset(52, 52),
+	card:SetAttribute("DarkSkinIgnore", true) -- déjà sombre
+	UIUtil.Corner(card, Theme.Radius.L)
+	UIUtil.Stroke(card, Color3.fromRGB(120, 80, 200), 1.5, 0.3)
+	UIUtil.Gradient(card, ColorSequence.new({
+		ColorSequenceKeypoint.new(0, PLAYER_TOP),
+		ColorSequenceKeypoint.new(1, PLAYER_BOTTOM),
+	}), 110)
+	-- Lueurs douces (décor)
+	for _, glow in ipairs({ { -40, -60, 200, PLAYER_ACCENT, 0.86 }, { 380, 50, 260, PLAYER_ACCENT2, 0.9 } }) do
+		local blob = UIUtil.Create("Frame", {
+			Size = UDim2.fromOffset(glow[3], glow[3]),
+			Position = UDim2.fromOffset(glow[1], glow[2]),
+			BackgroundColor3 = glow[4],
+			BackgroundTransparency = glow[5],
+			BorderSizePixel = 0,
+			ZIndex = 1,
+			Parent = card,
+		})
+		UIUtil.Corner(blob, UDim.new(1, 0))
+		UIUtil.Create("UIGradient", {
+			Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0),
+				NumberSequenceKeypoint.new(0.7, 0.5),
+				NumberSequenceKeypoint.new(1, 1),
+			}),
+			Parent = blob,
+		})
+	end
+
+	-- Vinyle (tourne quand la musique joue)
+	local deck = UIUtil.Create("Frame", {
+		Name = "Deck",
+		Size = UDim2.fromOffset(108, 108),
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 10, 0.5, 0),
+		Position = UDim2.new(0, 12, 0.5, 0),
+		BackgroundTransparency = 1,
+		ZIndex = 2,
+		Parent = card,
+	})
+	local vinyl = UIUtil.Create("Frame", {
+		Name = "Vinyl",
+		Size = UDim2.fromOffset(100, 100),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		BackgroundColor3 = Color3.fromRGB(18, 16, 24),
+		ZIndex = 2,
+		Parent = deck,
+	})
+	UIUtil.Corner(vinyl, UDim.new(1, 0))
+	UIUtil.Stroke(vinyl, Color3.fromRGB(0, 0, 0), 2, 0.2)
+	-- Sillons
+	for _, ratio in ipairs({ 0.9, 0.78, 0.66 }) do
+		local groove = UIUtil.Create("Frame", {
+			Size = UDim2.fromScale(ratio, ratio),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			BackgroundTransparency = 1,
+			ZIndex = 3,
+			Parent = vinyl,
+		})
+		UIUtil.Corner(groove, UDim.new(1, 0))
+		UIUtil.Stroke(groove, Color3.fromRGB(70, 64, 90), 1, 0.35)
+	end
+	-- Reflet (bande claire qui "tourne" avec le disque)
+	local sheen = UIUtil.Create("Frame", {
+		Size = UDim2.fromScale(0.96, 0.96),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
 		BackgroundColor3 = WHITE,
-		Parent = nowPlaying,
+		BackgroundTransparency = 0,
+		ZIndex = 3,
+		Parent = vinyl,
 	})
-	UIUtil.Corner(cover, Theme.Radius.M)
-	UIUtil.Gradient(cover, ColorSequence.new(Theme.Colors.Purple, Theme.Colors.Pink), 45)
-	UIUtil.Label({
-		Text = "🎧",
-		Size = UDim2.new(1, -16, 1, -16),
-		Position = UDim2.fromOffset(8, 8),
-		MaxTextSize = 26,
-		Parent = cover,
+	UIUtil.Corner(sheen, UDim.new(1, 0))
+	UIUtil.Create("UIGradient", {
+		Rotation = 35,
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 1),
+			NumberSequenceKeypoint.new(0.38, 1),
+			NumberSequenceKeypoint.new(0.47, 0.82),
+			NumberSequenceKeypoint.new(0.53, 0.82),
+			NumberSequenceKeypoint.new(0.62, 1),
+			NumberSequenceKeypoint.new(1, 1),
+		}),
+		Parent = sheen,
 	})
-	nowPlayingStatus = UIUtil.Label({
+	-- Étiquette centrale (couleurs de la pochette)
+	local label = UIUtil.Create("Frame", {
+		Name = "Label",
+		Size = UDim2.fromScale(0.42, 0.42),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		BackgroundColor3 = WHITE,
+		ZIndex = 4,
+		Parent = vinyl,
+	})
+	UIUtil.Corner(label, UDim.new(1, 0))
+	local labelGradient = UIUtil.Gradient(label, ColorSequence.new(PLAYER_ACCENT, Theme.Colors.Purple), 45)
+	local icon = UIUtil.Label({
+		Name = "Icon",
+		Text = "🎵",
+		Size = UDim2.fromScale(0.66, 0.66),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, -3),
+		MaxTextSize = 22,
+		ZIndex = 5,
+		Parent = label,
+	})
+	local spindle = UIUtil.Create("Frame", {
+		Size = UDim2.fromOffset(5, 5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, 11),
+		BackgroundColor3 = Color3.fromRGB(20, 18, 26),
+		ZIndex = 6,
+		Parent = label,
+	})
+	UIUtil.Corner(spindle, UDim.new(1, 0))
+	-- Bras de lecture (pivot en haut à droite du disque)
+	local armPivot = UIUtil.Create("Frame", {
+		Name = "ArmPivot",
+		Size = UDim2.fromOffset(12, 12),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(1, -4, 0, 8),
+		BackgroundColor3 = Color3.fromRGB(210, 210, 225),
+		ZIndex = 7,
+		Parent = deck,
+	})
+	UIUtil.Corner(armPivot, UDim.new(1, 0))
+	UIUtil.Stroke(armPivot, Color3.fromRGB(60, 56, 80), 1.5, 0)
+	local arm = UIUtil.Create("Frame", {
+		Name = "Arm",
+		Size = UDim2.fromOffset(4, 104),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.fromScale(0.5, 0.5),
+		BackgroundTransparency = 1,
+		Rotation = 8,
+		ZIndex = 6,
+		Parent = armPivot,
+	})
+	local armRod = UIUtil.Create("Frame", {
+		Size = UDim2.new(0, 3, 0, 58),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.fromScale(0.5, 0),
+		BackgroundColor3 = Color3.fromRGB(215, 215, 230),
+		BorderSizePixel = 0,
+		ZIndex = 6,
+		Parent = arm,
+	})
+	UIUtil.Corner(armRod, UDim.new(1, 0))
+	local head = UIUtil.Create("Frame", {
+		Size = UDim2.fromOffset(9, 14),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.fromOffset(2, 56),
+		BackgroundColor3 = Color3.fromRGB(240, 240, 250),
+		ZIndex = 7,
+		Parent = arm,
+	})
+	UIUtil.Corner(head, 3)
+	UIUtil.Stroke(head, Color3.fromRGB(60, 56, 80), 1, 0.2)
+
+	-- Textes
+	local textLeft = 142
+	local status = UIUtil.Label({
 		Name = "Status",
 		Font = Theme.Fonts.Title,
-		TextColor3 = Theme.Colors.Purple,
+		Text = "",
+		TextColor3 = LAVENDER,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Size = UDim2.new(1, -190, 0, 14),
-		Position = UDim2.fromOffset(74, 14),
+		Size = UDim2.new(1, -(textLeft + 190), 0, 14),
+		Position = UDim2.fromOffset(textLeft + 14, 18),
 		MaxTextSize = 12,
-		Parent = nowPlaying,
+		ZIndex = 3,
+		Parent = card,
 	})
-	nowPlayingLabel = UIUtil.Label({
-		Name = "Track",
+	local dot = UIUtil.Create("Frame", {
+		Name = "Live",
+		Size = UDim2.fromOffset(8, 8),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.fromOffset(textLeft, 25),
+		BackgroundColor3 = Color3.fromRGB(90, 240, 150),
+		ZIndex = 3,
+		Parent = card,
+	})
+	UIUtil.Corner(dot, UDim.new(1, 0))
+	local title = UIUtil.Label({
+		Name = "Title",
 		Font = Theme.Fonts.Title,
+		Text = "",
+		TextColor3 = WHITE,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Size = UDim2.new(1, -190, 0, 22),
-		Position = UDim2.fromOffset(74, 32),
-		MaxTextSize = 18,
-		Parent = nowPlaying,
+		Size = UDim2.new(1, -(textLeft + 176), 0, 26),
+		Position = UDim2.fromOffset(textLeft, 34),
+		MaxTextSize = 23,
+		ZIndex = 3,
+		Parent = card,
 	})
-	-- Égaliseur (4 barres) à droite du titre
-	local equalizer = UIUtil.Create("Frame", {
-		Name = "Equalizer",
-		Size = UDim2.fromOffset(34, 24),
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -62, 0.5, 0),
+	local meta = UIUtil.Label({
+		Name = "Meta",
+		Text = "",
+		TextColor3 = LAVENDER,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -(textLeft + 176), 0, 16),
+		Position = UDim2.fromOffset(textLeft, 62),
+		MaxTextSize = 14,
+		ZIndex = 3,
+		Parent = card,
+	})
+	-- Visualiseur (barres en bas, du milieu vers les bords)
+	local viz = UIUtil.Create("Frame", {
+		Name = "Visualizer",
+		Size = UDim2.new(1, -(textLeft + 176), 0, 30),
+		Position = UDim2.fromOffset(textLeft, 86),
 		BackgroundTransparency = 1,
-		Parent = nowPlaying,
+		ZIndex = 3,
+		Parent = card,
 	})
 	UIUtil.Create("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
-		HorizontalAlignment = Enum.HorizontalAlignment.Center,
 		VerticalAlignment = Enum.VerticalAlignment.Bottom,
-		Padding = UDim.new(0, 4),
-		Parent = equalizer,
+		HorizontalAlignment = Enum.HorizontalAlignment.Left,
+		Padding = UDim.new(0, 3),
+		Parent = viz,
 	})
-	table.clear(equalizerBars)
-	for index = 1, 4 do
+	local bars = {}
+	for index = 1, BAR_COUNT do
 		local bar = UIUtil.Create("Frame", {
 			Name = "Bar" .. index,
-			Size = UDim2.fromOffset(4, 4),
+			Size = UDim2.new(1 / BAR_COUNT, -3, 0.08, 0),
+			BackgroundColor3 = PLAYER_ACCENT:Lerp(PLAYER_ACCENT2, (index - 1) / (BAR_COUNT - 1)),
+			BorderSizePixel = 0,
+			LayoutOrder = index,
+			ZIndex = 3,
+			Parent = viz,
+		})
+		UIUtil.Corner(bar, 2)
+		UIUtil.Create("UIGradient", {
+			Rotation = 90,
+			Transparency = NumberSequence.new(0, 0.35),
+			Parent = bar,
+		})
+		table.insert(bars, bar)
+		barLevels[index] = 0.08
+	end
+
+	-- Commandes ⏮ ⏯ ⏭
+	local prev = playerButton(card, "Previous", "◄◄", 40, -146, false, function()
+		if type(SoundManager.PreviousTrack) == "function" and SoundManager.PreviousTrack() then
+			SoundManager.Play("Open", 1.1)
+		end
+	end)
+	local play = playerButton(card, "PlayPause", "❚❚", 56, -92, true, function()
+		if not ClientState.HasFeature("Lofi") then
+			Notifications.Toast(Locale.T("🔒 Unlocks with 🎧 %s", Locale.T("Lofi Beats")), Theme.Colors.Purple)
+			return
+		end
+		local newValue = not current.Music
+		Settings.Apply("Music", newValue)
+		SoundManager.Play("Open", newValue and 1.3 or 0.8)
+		saveSetting("Music", newValue)
+	end)
+	local nextButton = playerButton(card, "Next", "►►", 40, -38, false, function()
+		if SoundManager.NextTrack() then
+			SoundManager.Play("Open", 1.25)
+		end
+	end)
+
+	player = {
+		Card = card,
+		Vinyl = vinyl,
+		VinylLabel = label,
+		VinylGradient = labelGradient,
+		VinylIcon = icon,
+		Arm = arm,
+		Status = status,
+		StatusDot = dot,
+		Title = title,
+		Meta = meta,
+		Bars = bars,
+		Play = play,
+		Prev = prev,
+		Next = nextButton,
+	}
+end
+
+-- Carte d'un morceau de la liste (ou "Aléatoire" si key == "Shuffle")
+local function buildTrackCard(parent: Instance, key: string, name: string, subtitle: string, art, order: number, wide: boolean)
+	local card = UIUtil.Create("TextButton", {
+		Name = "Track_" .. key,
+		Size = wide and UDim2.new(1, 0, 0, 56) or UDim2.new(),
+		BackgroundColor3 = Theme.Colors.Card,
+		AutoButtonColor = false,
+		Text = "",
+		LayoutOrder = order,
+		Parent = parent,
+	})
+	UIUtil.Corner(card, Theme.Radius.M)
+	local stroke = UIUtil.Stroke(card, ROW_BORDER, 1.5)
+	UIUtil.AnimateButton(card, 1.02, 0.97)
+
+	local cover = UIUtil.Create("Frame", {
+		Name = "Cover",
+		Size = UDim2.fromOffset(40, 40),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 8, 0.5, 0),
+		BackgroundColor3 = WHITE,
+		ZIndex = 2,
+		Parent = card,
+	})
+	cover:SetAttribute("DarkSkinIgnore", true)
+	UIUtil.Corner(cover, Theme.Radius.M)
+	UIUtil.Gradient(cover, ColorSequence.new(art.A, art.B), 45)
+	UIUtil.Label({
+		Text = art.Icon,
+		Size = UDim2.new(1, -12, 1, -12),
+		Position = UDim2.fromOffset(6, 6),
+		MaxTextSize = 22,
+		ZIndex = 3,
+		Parent = cover,
+	})
+	local nameLabel = UIUtil.Label({
+		Name = "TrackName",
+		Text = name,
+		Font = Theme.Fonts.Title,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -110, 0, 20),
+		Position = UDim2.fromOffset(58, 8),
+		MaxTextSize = 16,
+		ZIndex = 2,
+		Parent = card,
+	})
+	local sub = UIUtil.Label({
+		Name = "Sub",
+		Text = subtitle,
+		TextColor3 = Theme.Colors.TextDim,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -110, 0, 15),
+		Position = UDim2.fromOffset(58, 30),
+		MaxTextSize = 13,
+		ZIndex = 2,
+		Parent = card,
+	})
+	-- Coche du choix actuel
+	local check = UIUtil.Create("Frame", {
+		Name = "Check",
+		Size = UDim2.fromOffset(24, 24),
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -10, 0.5, 0),
+		BackgroundColor3 = Theme.Colors.Purple,
+		Visible = false,
+		ZIndex = 2,
+		Parent = card,
+	})
+	UIUtil.Corner(check, UDim.new(1, 0))
+	UIUtil.Label({
+		Text = "✓",
+		Font = Theme.Fonts.Title,
+		TextColor3 = Theme.Colors.TextLight,
+		Size = UDim2.new(1, -6, 1, -6),
+		Position = UDim2.fromOffset(3, 3),
+		MaxTextSize = 15,
+		ZIndex = 3,
+		Parent = check,
+	})
+	-- Mini-égaliseur "en cours"
+	local eqHolder = UIUtil.Create("Frame", {
+		Name = "Eq",
+		Size = UDim2.fromOffset(18, 16),
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -14, 0.5, 0),
+		BackgroundTransparency = 1,
+		ZIndex = 2,
+		Parent = card,
+	})
+	UIUtil.Create("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		VerticalAlignment = Enum.VerticalAlignment.Bottom,
+		Padding = UDim.new(0, 2),
+		Parent = eqHolder,
+	})
+	local eq = {}
+	for index = 1, 4 do
+		local bar = UIUtil.Create("Frame", {
+			Size = UDim2.fromOffset(3, 4),
 			BackgroundColor3 = Theme.Colors.Purple:Lerp(Theme.Colors.Pink, (index - 1) / 3),
 			BorderSizePixel = 0,
 			LayoutOrder = index,
-			Parent = equalizer,
+			Visible = false,
+			ZIndex = 2,
+			Parent = eqHolder,
 		})
-		UIUtil.Corner(bar, 2)
-		table.insert(equalizerBars, bar)
+		UIUtil.Corner(bar, 1)
+		table.insert(eq, bar)
 	end
-	local skip = UIUtil.Create("TextButton", {
-		Name = "Next",
-		Size = UDim2.fromOffset(40, 40),
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -12, 0.5, 0),
-		BackgroundColor3 = WHITE,
-		AutoButtonColor = false,
-		Font = Theme.Fonts.Title,
-		Text = "⏭",
-		TextColor3 = Theme.Colors.Text,
-		TextSize = 18,
-		Visible = false,
-		Parent = nowPlaying,
-	})
-	UIUtil.Corner(skip, UDim.new(1, 0))
-	UIUtil.Stroke(skip, Theme.Colors.Purple, 1.5, 0.3)
-	UIUtil.AnimateButton(skip)
-	skip.Activated:Connect(function()
-		if SoundManager.NextTrack() then
-			SoundManager.Play("Open", 1.2)
+
+	local row: TrackRow = { Key = key, Card = card, Stroke = stroke, Check = check, Name = nameLabel, Sub = sub, Eq = eq, Hovered = false }
+	card.MouseEnter:Connect(function()
+		row.Hovered = true
+		paintTracks()
+	end)
+	card.MouseLeave:Connect(function()
+		row.Hovered = false
+		paintTracks()
+	end)
+	card.Activated:Connect(function()
+		if type(SoundManager.SetMusicTrack) ~= "function" then
+			return
+		end
+		local wasSelected = getMusicMode() == key
+		if SoundManager.SetMusicTrack(key) then
+			SoundManager.Play("Open", wasSelected and 1 or 1.2)
+			-- Choisir un morceau relance la musique si elle était coupée
+			if not current.Music and ClientState.HasFeature("Lofi") then
+				Settings.Apply("Music", true)
+				saveSetting("Music", true)
+			end
 		end
 	end)
-	nextButton = skip
+	table.insert(trackRows, row)
+end
+
+local function buildMusic(content: Instance)
+	local section = buildSection(content, 1, "🎧", Locale.T("Lofi music"), Locale.T("Pick your soundtrack, saved automatically"), Theme.Colors.Purple)
+
+	buildPlayerCard(section)
+
+	-- Interrupteur + volume (morceau en cours dans le sous-titre)
+	local musicRow, musicSubtitle = buildRow(section, 2, 96, "🎵", Locale.T("Music"), Theme.Colors.Purple)
+	musicInfo = musicSubtitle
+	buildToggle(musicRow, "Music")
+	sliders.Music = buildSlider(musicRow, SoundManager.GetMusicVolume(), Theme.Colors.Purple, function(value)
+		SoundManager.SetMusicVolume(value)
+	end)
+
+	divider(section, 3)
+
+	-- Bandeau "verrouillé" (musique pas encore débloquée : le choix est gardé)
+	local banner = UIUtil.Create("Frame", {
+		Name = "LockBanner",
+		Size = UDim2.new(1, 0, 0, 34),
+		BackgroundColor3 = Color3.fromRGB(255, 244, 226),
+		LayoutOrder = 4,
+		Visible = false,
+		Parent = section,
+	})
+	UIUtil.Corner(banner, Theme.Radius.M)
+	UIUtil.Stroke(banner, Theme.Colors.Orange, 1.2, 0.4)
+	UIUtil.Label({
+		Text = Locale.T("🔒 Buy 🎧 %s to hear it. Your pick is kept!", Locale.T("Lofi Beats")),
+		TextColor3 = Theme.Colors.Orange:Lerp(BLACK, 0.45),
+		Font = Theme.Fonts.Title,
+		Size = UDim2.new(1, -20, 1, -12),
+		Position = UDim2.fromOffset(10, 6),
+		MaxTextSize = 14,
+		Parent = banner,
+	})
+	lockBanner = banner
+
+	-- Liste des morceaux
+	local listHeader = UIUtil.Create("Frame", {
+		Name = "PlaylistHeader",
+		Size = UDim2.new(1, 0, 0, 40),
+		BackgroundTransparency = 1,
+		LayoutOrder = 5,
+		Parent = section,
+	})
+	UIUtil.Label({
+		Text = Locale.T("🎶 Playlist"),
+		Font = Theme.Fonts.Title,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -16, 0, 20),
+		Position = UDim2.fromOffset(8, 2),
+		MaxTextSize = 17,
+		Parent = listHeader,
+	})
+	UIUtil.Label({
+		Text = Locale.T("Tap a track to play it on repeat, or shuffle them all"),
+		TextColor3 = Theme.Colors.TextDim,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -16, 0, 15),
+		Position = UDim2.fromOffset(8, 23),
+		MaxTextSize = 13,
+		Parent = listHeader,
+	})
+
+	local playlist = type(SoundManager.GetPlaylist) == "function" and SoundManager.GetPlaylist() or {}
+	local shuffleHolder = UIUtil.Create("Frame", {
+		Name = "ShuffleHolder",
+		Size = UDim2.new(1, 0, 0, 60),
+		BackgroundTransparency = 1,
+		LayoutOrder = 6,
+		Parent = section,
+	})
+	UIUtil.Create("UIPadding", {
+		PaddingLeft = UDim.new(0, 4),
+		PaddingRight = UDim.new(0, 4),
+		PaddingTop = UDim.new(0, 2),
+		Parent = shuffleHolder,
+	})
+	buildTrackCard(
+		shuffleHolder,
+		"Shuffle",
+		Locale.T("Shuffle"),
+		Locale.T("All %d tracks, random order", #playlist),
+		SHUFFLE_ART,
+		0,
+		true
+	)
+
+	local grid = UIUtil.Create("Frame", {
+		Name = "Tracks",
+		Size = UDim2.fromScale(1, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		LayoutOrder = 7,
+		Parent = section,
+	})
+	UIUtil.Create("UIPadding", {
+		PaddingLeft = UDim.new(0, 4),
+		PaddingRight = UDim.new(0, 4),
+		PaddingTop = UDim.new(0, 2),
+		PaddingBottom = UDim.new(0, 2),
+		Parent = grid,
+	})
+	UIUtil.Create("UIGridLayout", {
+		CellSize = UDim2.new(0.5, -5, 0, 56),
+		CellPadding = UDim2.fromOffset(10, 8),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = grid,
+	})
+	for _, track in ipairs(playlist) do
+		buildTrackCard(grid, track.Key, track.Name, Locale.T("Track %d", track.Index), artFor(track.Key, track.Index), track.Index, false)
+	end
+	if #playlist == 0 then
+		grid.Visible = false
+		shuffleHolder.Visible = false
+	end
+end
+
+local function buildGame(content: Instance)
+	local section = buildSection(content, 5, "🎮", Locale.T("Game"), Locale.T("Credits and version"), SECTION_GAME)
 
 	-- Crédits et version
 	local credits = UIUtil.Create("Frame", {
@@ -1180,6 +1865,7 @@ function Settings.Build(panel: Frame)
 	})
 
 	buildAudio(content)
+	buildMusic(content)
 	buildDisplay(content)
 	buildLanguage(content)
 	buildGame(content)
@@ -1212,15 +1898,18 @@ function Settings.Build(panel: Frame)
 		end
 	end)
 	ClientState.FeaturesChanged:Connect(refreshMusicInfo)
+	if SoundManager.MusicChanged then
+		SoundManager.MusicChanged:Connect(refreshMusicInfo)
+	end
 	refreshMusicInfo()
-	stepEqualizer()
+	stepPlayer(1)
 end
 
 function Settings.OnOpen()
 	refreshMusicInfo()
-	-- Égaliseur animé seulement quand la fenêtre est ouverte
+	-- Lecteur animé seulement quand la fenêtre est ouverte
 	if not equalizerConnection then
-		equalizerConnection = RunService.Heartbeat:Connect(stepEqualizer)
+		equalizerConnection = RunService.Heartbeat:Connect(stepPlayer)
 	end
 end
 
