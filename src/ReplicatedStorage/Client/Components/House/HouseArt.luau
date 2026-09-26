@@ -630,7 +630,9 @@ end
 -- négative pour les GuiObjects) : chaque forme change de côté dans son
 -- parent, les rotations et dégradés horizontaux s'inversent, les
 -- animations suivent. Appliqué deux fois = dessin d'origine.
-function HouseArt.Mirror(root: GuiObject, anims: { Anim })
+-- `axis` (facultatif) : x de l'axe de symétrie pour les enfants directs de
+-- `root` (ex. les pieds d'un animal) ; par défaut le milieu de `root`.
+function HouseArt.Mirror(root: GuiObject, anims: { Anim }, axis: number?)
 	local byObject: { [Instance]: { Anim } } = {}
 	for _, anim in ipairs(anims) do
 		local list = byObject[anim.Object]
@@ -661,6 +663,9 @@ function HouseArt.Mirror(root: GuiObject, anims: { Anim })
 		if object:IsA("GuiObject") then
 			local parent = object.Parent :: Instance
 			local parentWidth = widthOf(parent)
+			if parent == root and axis then
+				parentWidth = axis * 2
+			end
 			local width = widthOf(object)
 			local list = byObject[object]
 			local first = list and list[1]

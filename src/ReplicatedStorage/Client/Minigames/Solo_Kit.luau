@@ -1046,7 +1046,7 @@ function Kit:_BuildResult()
 		local frame = create("Frame", {
 			Name = name,
 			Size = UDim2.new(0.42, 0, 1, 0),
-			BackgroundColor3 = color:Lerp(C.CardDark, 0.55),
+			BackgroundColor3 = color:Lerp(C.CardDark, 0.78),
 			LayoutOrder = order,
 			ZIndex = 53,
 			Parent = rewards,
@@ -1125,7 +1125,7 @@ function Kit:_BuildResult()
 	}
 end
 
-local RESULT_TITLES = { [0] = "Game over", [1] = "You win!", [2] = "Great job!", [3] = "Perfect!" }
+local RESULT_TITLES = { [0] = "Game over", [1] = "Well played!", [2] = "Great job!", [3] = "Perfect!" }
 
 function Kit:ShowResult(result)
 	if not self.Alive or type(result) ~= "table" then
@@ -1255,6 +1255,121 @@ function Kit:Mood(emoji: string, tip: string?, bounce: boolean?)
 		buddy.Scale.Scale = 1.25
 		tween(buddy.Scale, 0.3, { Scale = 1 }, Enum.EasingStyle.Back)
 	end
+end
+
+-- Hauteur (en pixels "design") de la zone Extra : sert à n'afficher un
+-- widget que s'il tient (téléphone : zone plus petite)
+function Kit:ExtraHeight(): number
+	local title = self.Hud:FindFirstChild("Title")
+	local unit = title and title.AbsoluteSize.Y / 58 or 0
+	if unit <= 0 then
+		return 0
+	end
+	return self.Extra.AbsoluteSize.Y / unit
+end
+
+-- Jauge d'étoiles (étoiles gagnées + progression vers la suivante), dans la zone Extra
+function Kit:UseRating(top: number, caption: string?)
+	local frame = create("Frame", {
+		Name = "Rating",
+		Position = UDim2.fromOffset(0, top),
+		Size = UDim2.new(1, 0, 0, 44),
+		BackgroundColor3 = C.Card,
+		BackgroundTransparency = 0.15,
+		ZIndex = 2,
+		Parent = self.Extra,
+	})
+	corner(frame, 12)
+	stroke(frame, C.Yellow, 1.5, 0.55)
+	gradient(frame, C.CardLight, C.CardDark, 90)
+	label({
+		Position = UDim2.fromOffset(10, 4),
+		Size = UDim2.new(0.42, -10, 0, 12),
+		Font = Kit.FontBody,
+		TextColor3 = C.TextDim,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Text = self:T(caption or "Stars"),
+		MaxTextSize = 11,
+		ZIndex = 3,
+		Parent = frame,
+	})
+	local stars = {}
+	for index = 1, 3 do
+		local star = label({
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.44 + (index - 1) * 0.18, 8, 0.44, 0),
+			Size = UDim2.fromOffset(26, 26),
+			Text = "⭐",
+			TextTransparency = 0.75,
+			MaxTextSize = 22,
+			ZIndex = 3,
+			Parent = frame,
+		})
+		stars[index] = { Label = star, Scale = create("UIScale", { Parent = star }), Lit = false }
+	end
+	local bar = create("Frame", {
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -5),
+		Size = UDim2.new(1, -20, 0, 5),
+		BackgroundColor3 = C.CardDark,
+		ZIndex = 3,
+		Parent = frame,
+	})
+	corner(bar, UDim.new(1, 0))
+	local fill = create("Frame", {
+		Size = UDim2.fromScale(0, 1),
+		BackgroundColor3 = C.Yellow,
+		ZIndex = 4,
+		Parent = bar,
+	})
+	corner(fill, UDim.new(1, 0))
+	gradient(fill, self.Accent:Lerp(C.White, 0.2), C.Yellow, 0)
+	self.Rating = { Frame = frame, Stars = stars, Fill = fill, Top = top }
+	-- Cachée si la zone est trop petite (téléphone)
+	task.defer(function()
+		if self.Alive and self.Rating then
+			local height = self:ExtraHeight()
+			frame.Visible = height <= 0 or height >= top + 44
+		end
+	end)
+end
+
+-- stars : 0..3 ; progress : 0..1 vers l'étoile suivante (nil = barre pleine)
+function Kit:SetRating(stars: number, progress: number?)
+	local rating = self.Rating
+	if not rating then
+		return
+	end
+	for index, star in ipairs(rating.Stars) do
+		local lit = index <= stars
+		if lit ~= star.Lit then
+			star.Lit = lit
+			star.Label.TextTransparency = lit and 0 or 0.75
+			if lit then
+				star.Scale.Scale = 1.6
+				tween(star.Scale, 0.35, { Scale = 1 }, Enum.EasingStyle.Back)
+			end
+		end
+	end
+	local value = stars >= 3 and 1 or math.clamp(progress or 1, 0, 1)
+	rating.Fill.Size = UDim2.fromScale(value, 1)
+end
+
+-- Étoiles + progression pour un score "plus grand = mieux"
+function Kit:SetRatingFromScore(value: number, thresholds: { number })
+	local stars = 0
+	for index, threshold in ipairs(thresholds) do
+		if value >= threshold then
+			stars = index
+		end
+	end
+	local progress = 1
+	if stars < 3 then
+		local low = stars > 0 and thresholds[stars] or 0
+		local high = thresholds[stars + 1]
+		progress = (value - low) / math.max(1, high - low)
+	end
+	self:SetRating(stars, progress)
 end
 
 -- Texte "Prochaine ⭐" pour les jeux à seuils

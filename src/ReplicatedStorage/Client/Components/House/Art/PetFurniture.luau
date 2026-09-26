@@ -132,7 +132,7 @@ Art.PetBed = function(body, kit, _item)
 		kit.Circle(cushion, s[1], s[2], 3, 3, C.PinkSoft, 0, 2)
 	end
 	-- os en peluche
-	bone(body, kit, 68, 74, 20, C.PinkSoft, -12, 3)
+	bone(body, kit, 70, 74, 24, C.White, -14, 3)
 	-- boudin avant (plus bas : on voit dedans)
 	kit.Part(body, 4, 80, 92, 19, kit.Lighten(rim, 0.1), { Radius = -1, Z = 4, Shine = true, Shade = 0.2 })
 	for _, x in ipairs({ 22, 50, 78 }) do
@@ -216,8 +216,9 @@ Art.DogHouse = function(body, kit, _item)
 	kit.Blob(door, 17, 44, 30, 12, Color3.fromRGB(70, 46, 70), { Z = 2, Outline = false, Shade = false })
 	kit.Part(body, 31, 56, 38, 5, C.Cream, { Radius = -1, Z = 4 })
 	-- toit
-	kit.Triangle(body, 50, 6, 104, 44, roof, 5, 0, 26)
-	kit.Triangle(body, 50, 13, 84, 33, kit.Lighten(roof, 0.12), 6, 0, 20)
+	kit.Triangle(body, 50, 6, 104, 44, roof, 5, 0, 30)
+	-- reflet sur le pan gauche du toit
+	kit.Line(body, 30, 36, 46, 16, 2.4, kit.Lighten(roof, 0.4), 0.2, 6)
 	-- tuiles en festons
 	for index = 0, 4 do
 		kit.Circle(body, 12 + index * 19, 49, 20, 10, kit.Darken(roof, 0.08), 0, 6)

@@ -753,6 +753,8 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 				return
 			end
 			if not editing then
+				-- (un animal qui dormait chez lui se réveille et vient jouer)
+				pets.Poke(entry)
 				wiggle(sticker)
 				burstAt(sticker, C.Pink, 6)
 				SoundManager.Play("Pop", 0.9 + math.random() * 0.3)
@@ -1030,6 +1032,44 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		return spot.X, spot.Y
 	end
 
+	-- Petite déco (tasse, plante, lampe...) : une place libre SUR un meuble
+	-- si possible (on la voit tout de suite posée sur la table)
+	local SURFACE_CATEGORIES = { Kitchen = true, Plants = true, Decor = true, Electronics = true, Lights = true }
+	local function surfaceSpot(item: Item): (number?, number?)
+		if not HouseSurfaces.CanStandOn(item) or not SURFACE_CATEGORIES[item.Category] then
+			return nil, nil
+		end
+		local height = item.Size / math.max(1, room.Height)
+		local halfW = item.Size * 0.3 / math.max(1, room.Width)
+		local candidates: { Vector2 } = {}
+		for _, entry in ipairs(layout) do
+			if HouseSurfaces.Has(entry.I) then
+				for _, surface in ipairs(HouseSurfaces.Of(entry, room.Width, room.Height)) do
+					if surface.Y >= HouseSurfaces.MinY() and surface.Y - height * 0.92 > -0.02 and surface.R - surface.L > halfW * 2 then
+						for _, t in ipairs({ 0.2, 0.5, 0.8 }) do
+							local x = surface.L + (surface.R - surface.L) * t
+							local free = true
+							for _, other in ipairs(layout) do
+								if math.abs(other.Y - surface.Y) < 0.01 and math.abs(other.X - x) < halfW * 1.6 then
+									free = false
+									break
+								end
+							end
+							if free then
+								table.insert(candidates, Vector2.new(x, surface.Y))
+							end
+						end
+					end
+				end
+			end
+		end
+		if #candidates == 0 then
+			return nil, nil
+		end
+		local pick = candidates[math.random(1, #candidates)]
+		return HouseCommon.ClampPosition(item, pick.X, pick.Y, 1, room.Width, room.Height, true)
+	end
+
 	local function canPlace(itemId: string): (boolean, string?)
 		local item = HouseCommon.ItemsById[itemId]
 		if not item or not roomId then
@@ -1078,8 +1118,14 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		end
 		local item = HouseCommon.ItemsById[itemId]
 		pushUndo()
-		local x, y = freeSpot(item, layout)
-		x, y = snapPoint(item, x, y, 1)
+		local x, y
+		local onX, onY = surfaceSpot(item)
+		if onX and onY then
+			x, y = onX, onY
+		else
+			x, y = freeSpot(item, layout)
+			x, y = snapPoint(item, x, y, 1)
+		end
 		-- Nouvelle couche au-dessus des objets qu'il chevauche
 		local entry: Placed = { I = itemId, X = x, Y = y, S = 1, Z = HouseCommon.DEFAULT_Z }
 		for _, other in ipairs(layout) do

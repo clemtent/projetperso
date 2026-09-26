@@ -162,6 +162,7 @@ export type Pets = {
 	Update: (dt: number) -> (),
 	Clear: () -> (),
 	Count: () -> number,
+	Poke: (entry: Placed) -> boolean,
 }
 
 local function isPetPart(object: Instance): boolean
@@ -278,7 +279,7 @@ function HousePets.new(room: any): Pets
 		local want = dir ~= actor.Def.Native
 		if body and want ~= actor.Mirrored then
 			actor.Mirrored = want
-			HouseArt.Mirror(body, actor.Anims)
+			HouseArt.Mirror(body, actor.Anims, actor.Def.Anchor.X)
 		end
 	end
 
@@ -834,7 +835,6 @@ function HousePets.new(room: any): Pets
 				tilt = -actor.Facing * 8 * math.sin(t * math.pi)
 				if t >= 1 then
 					finishStep(actor)
-					SoundManager.Play("Pop", 1.35)
 				end
 			elseif kind == "Act" then
 				local act = step.Act or "Idle"
@@ -1115,6 +1115,17 @@ function HousePets.new(room: any): Pets
 				actors[entry] = nil
 			end
 			table.clear(occupied)
+		end,
+		-- Toucher un animal resté chez lui : il se réveille et sort (❤️)
+		Poke = function(entry: Placed): boolean
+			local actor = actors[entry]
+			if not live or not actor or actor.Out then
+				return false
+			end
+			leaveHome(actor)
+			emoteFor(actor, "Happy")
+			actor.Joy = 0.45
+			return true
 		end,
 		Count = function(): number
 			local count = 0

@@ -50,8 +50,8 @@ function Module.Build(container: Frame, api)
 		SmallB = "Time",
 		Details = function(_, rules)
 			return string.format("%d × %d  ·  ", rules.Cols, rules.Rows) .. T("%d pairs", rules.Pairs)
-				.. "\n" .. T("⭐⭐⭐ in %d moves or less", math.ceil(rules.Pairs * 1.5))
-				.. "\n" .. T("⭐⭐ in %d moves or less", math.ceil(rules.Pairs * 2.25))
+				.. "\n" .. T("⭐⭐⭐ in %d moves max", math.ceil(rules.Pairs * 1.5))
+				.. "\n" .. T("⭐⭐ in %d moves max", math.ceil(rules.Pairs * 2.25))
 		end,
 		BestText = Kit.FormatTime,
 		ScoreText = function(result)
@@ -220,7 +220,13 @@ function Module.Build(container: Frame, api)
 		card.Flip = { T = -(delay or 0), ToFace = toFace, Symbol = symbol, Matched = matched == true, Swapped = false }
 	end
 
+	kit:UseRating(0, "Rating")
 	local function refreshHud()
+		local three, two = math.ceil(st.Pairs * 1.5), math.ceil(st.Pairs * 2.25)
+		local rating = st.Moves <= three and 3 or (st.Moves <= two and 2 or 1)
+		local budget = rating == 3 and three or (rating == 2 and two or st.Moves)
+		local floor = rating == 3 and 0 or (rating == 2 and three or st.Moves)
+		kit:SetRating(rating, 1 - (st.Moves - floor) / math.max(1, budget - floor))
 		kit:SetStat("Primary", tostring(st.Moves))
 		kit:SetStat("A", string.format("%d / %d", st.Found, st.Pairs))
 		kit:SetStat("B", Kit.FormatClock(st.Clock))
@@ -343,6 +349,7 @@ function Module.Build(container: Frame, api)
 			st.CloseAt = os.clock() + FLIP_TIME + 0.75
 			kit:Mood("🤔", T("Not a pair... remember them!"), false)
 		end
+		refreshHud()
 		kit:SetStat("Primary", tostring(st.Moves), true)
 		if reply.Done then
 			finish(reply.Result)

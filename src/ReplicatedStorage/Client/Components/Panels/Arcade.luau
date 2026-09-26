@@ -579,7 +579,7 @@ local function cardArt(parent: Instance, entry, height: number)
 	UIUtil.Corner(diamond, 12)
 	UIUtil.Stroke(diamond, WHITE, 2, 0.4)
 	-- Étincelles
-	local sparkles = { { 0.14, 0.26, 14 }, { 0.86, 0.22, 11 }, { 0.8, 0.8, 13 }, { 0.2, 0.78, 9 } }
+	local sparkles = { { 0.12, 0.56, 13 }, { 0.88, 0.5, 11 }, { 0.78, 0.84, 12 }, { 0.24, 0.82, 9 } }
 	for _, spec in ipairs(sparkles) do
 		text({
 			Text = "✦",
@@ -1106,7 +1106,7 @@ local function playerRow(parent: Instance, info, order: number, mode: string, in
 		end)
 	else
 		local invited = S.Outgoing and S.Outgoing.To and S.Outgoing.To.UserId == info.UserId
-		local canInvite = not info.Busy and (info.PairLeft or 1) > 0 and not S.Duel
+		local canInvite = not info.Busy and (info.PairLeft or 1) > 0 and not (S.Duel and not S.Duel.Over)
 		local button = neonButton({
 			Name = "Challenge",
 			Text = invited and T("Waiting...") or T("⚔️ Challenge"),
@@ -1288,7 +1288,7 @@ refreshLobby = function(force: boolean?)
 				S.Outgoing.ReceivedAt = os.clock()
 			end
 			refreshTabBadge()
-			if result.Duel and not (S.Active and S.Active.IsDuel) then
+			if result.Duel and not (S.Active and S.Active.IsDuel) and S.Visible and S.Tab == "Duels" then
 				showDuel(result.Duel)
 			elseif not result.Duel and S.Duel and not S.Duel.Over then
 				S.Duel = nil
@@ -1605,11 +1605,13 @@ local function buildGameView(root: Frame)
 	local back = neonButton({ Name = "Back", Text = T("← Back"), Color = C.Purple, Size = UDim2.fromOffset(96, 40), TextSize = 15, ZIndex = 22, Parent = view })
 	back.Activated:Connect(function()
 		sound("Click", 0.95)
-		if S.Active and S.Active.IsDuel and S.Duel and not S.Duel.Over then
-			-- Le duel continue : on revient au lobby, il reste affiché dans l'onglet Duels
-			toast(T("Your duel is still running!"), Theme.Colors.Orange, nil, "⚔️")
-		end
+		local running = S.Active and S.Active.IsDuel and S.Duel and not S.Duel.Over
 		closeGame()
+		if running then
+			-- Le duel continue : il revient dès qu'on rouvre l'onglet Duels
+			toast(T("Your duel is still running!"), Theme.Colors.Orange, nil, "⚔️")
+			selectTab("Games")
+		end
 	end)
 	G.Back = back
 	local forfeit = neonButton({ Name = "Forfeit", Text = T("🏳️ Give up"), Color = Color3.fromRGB(150, 60, 90), Size = UDim2.fromOffset(122, 40),
@@ -2081,25 +2083,25 @@ local function buildInvitePopup()
 	if not layer then
 		return
 	end
-	local holder = make("Frame", { Name = "ArcadeInvite", Size = UDim2.fromOffset(400, 128), AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 40), BackgroundTransparency = 1, Visible = false, ZIndex = 50, Parent = layer })
+	local holder = make("Frame", { Name = "ArcadeInvite", Size = UDim2.fromOffset(400, 116), AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 34), BackgroundTransparency = 1, Visible = false, ZIndex = 50, Parent = layer })
 	holder:SetAttribute("DarkSkinIgnore", true)
 	P.Scale = make("UIScale", { Parent = holder })
 	local card = panel({ Name = "Card", Color = C.Bg, StrokeColor = C.Pink, StrokeThickness = 2.5, StrokeTransparency = 0, Radius = 20, ZIndex = 51, Parent = holder })
 	card.BackgroundColor3 = WHITE
 	UIUtil.Gradient(card, ColorSequence.new(Color3.fromRGB(78, 26, 108), Color3.fromRGB(30, 16, 64)), 90)
 	UIUtil.Shadow(card, 4, 0.7, 3)
-	P.Avatar = avatar(card, 0, 52, C.Pink, { Position = UDim2.fromOffset(14, 14), ZIndex = 52 })
+	P.Avatar = avatar(card, 0, 52, C.Pink, { Position = UDim2.fromOffset(14, 12), ZIndex = 52 })
 	local swords = text({ Text = "⚔️", TextSize = 20, Size = UDim2.fromOffset(26, 26), AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromOffset(62, 60), XAlign = Enum.TextXAlignment.Center, ZIndex = 54, Parent = card })
+		Position = UDim2.fromOffset(62, 58), XAlign = Enum.TextXAlignment.Center, ZIndex = 54, Parent = card })
 	swords.BackgroundTransparency = 0
 	swords.BackgroundColor3 = C.Pink
 	UIUtil.Corner(swords, UDim.new(1, 0))
-	P.Title = text({ Text = "", TextSize = 17, Size = UDim2.new(1, -94, 0, 22), Position = UDim2.fromOffset(80, 12), ZIndex = 52, Parent = card })
-	P.Info = text({ Text = "", Font = Theme.Fonts.Body, TextSize = 14, Color = C.Yellow, Size = UDim2.new(1, -94, 0, 18), Position = UDim2.fromOffset(80, 35), ZIndex = 52, Parent = card })
-	P.Accept = neonButton({ Name = "Accept", Text = T("✓ Accept"), Color = C.Green, Size = UDim2.fromOffset(128, 36), Position = UDim2.fromOffset(80, 72), TextSize = 15, ZIndex = 53, Parent = card })
-	P.Decline = neonButton({ Name = "Decline", Text = T("✕ No thanks"), Color = Color3.fromRGB(110, 90, 150), Size = UDim2.fromOffset(128, 36),
-		Position = UDim2.fromOffset(216, 72), TextSize = 15, ZIndex = 53, Parent = card })
+	P.Title = text({ Text = "", TextSize = 17, Size = UDim2.new(1, -124, 0, 22), Position = UDim2.fromOffset(80, 10), ZIndex = 52, Parent = card })
+	P.Info = text({ Text = "", Font = Theme.Fonts.Body, TextSize = 14, Color = C.Yellow, Size = UDim2.new(1, -94, 0, 18), Position = UDim2.fromOffset(80, 33), ZIndex = 52, Parent = card })
+	P.Accept = neonButton({ Name = "Accept", Text = T("✓ Accept"), Color = C.Green, Size = UDim2.fromOffset(136, 36), Position = UDim2.fromOffset(80, 62), TextSize = 15, ZIndex = 53, Parent = card })
+	P.Decline = neonButton({ Name = "Decline", Text = T("✕ No thanks"), Color = Color3.fromRGB(110, 90, 150), Size = UDim2.fromOffset(136, 36),
+		Position = UDim2.fromOffset(224, 62), TextSize = 15, ZIndex = 53, Parent = card })
 	P.Later = text({ Text = "", Font = Theme.Fonts.Body, TextSize = 12, Color = C.TextDim, XAlign = Enum.TextXAlignment.Right,
 		Size = UDim2.fromOffset(40, 16), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 14), ZIndex = 52, Parent = card })
 	local track = make("Frame", { Size = UDim2.new(1, -36, 0, 4), AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -7),
@@ -2213,7 +2215,10 @@ function Arcade.AcceptInvite(id: string)
 		if not PanelManager.IsOpen("Arcade") then
 			PanelManager.Open("Arcade")
 		end
-		showDuel(result)
+		-- (l'événement duelStart est souvent arrivé avant : on ne remplace pas un état plus récent)
+		if not (S.Duel and S.Duel.Id == result.Id) then
+			showDuel(result)
+		end
 	else
 		sound("Error", 0.8)
 		toast(tostring(result or T("This invitation has expired")), Theme.Colors.Red)

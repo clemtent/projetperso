@@ -278,11 +278,13 @@ function Module.Build(container: Frame, api)
 	----------------------------------------------------------------------
 	-- Coups
 	----------------------------------------------------------------------
+	kit:UseRating(46)
 	local function refreshHud()
 		local sim = st.Sim
 		if not sim or not st.Rules then
 			return
 		end
+		kit:SetRatingFromScore(sim.MaxTile, st.Rules.Thresholds)
 		kit:SetStat("Primary", Kit.FormatNumber(sim.Score))
 		kit:SetStat("A", kit:NextStarText(sim.MaxTile, st.Rules.Thresholds))
 		kit:SetStat("B", "🏅 " .. tostring(sim.MaxTile))

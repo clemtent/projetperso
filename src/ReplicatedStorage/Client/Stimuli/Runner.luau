@@ -60,12 +60,11 @@ local COPING_H = 63 -- bas de la margelle
 local KERB_H = 10 -- haut de la bordure sombre
 -- Bandes au sol (x monde, de gauche à droite) : trottoir, ballast, lit de voie...
 local GROUND_EDGES = { -WALL_X, -128, -106, -54, -26, 26, 54, 106, 128, WALL_X }
-local TIE_PER_LANE = 9 -- traverses par voie
-local TIE_GAP = 0.46
+local TIE_PER_LANE = 7 -- traverses par voie
+local TIE_GAP = 0.56
 local TIE_START = 0.62
 local TIE_DEPTH = 0.1
 local TIE_HALF = 31
-local RAIL_SPLIT = 2.4 -- les rails sont en deux morceaux (plus épais devant)
 local POLE_X = 148 -- lampadaires
 local POLE_H = 100
 local POLE_ARM = 26
@@ -103,14 +102,14 @@ local BIG = 900 -- taille des demi-plans
 local DAY_LENGTH = 240 -- durée d'un cycle jour / nuit (s)
 local COMBO_WINDOW = 0.75 -- délai max entre deux pièces pour garder le combo
 
-local TRAIN_POOL = 3
-local OBSTACLE_POOL = 4
-local COIN_POOL = 14
-local SPARKLE_POOL = 6
-local POP_POOL = 4
-local SPEEDLINE_POOL = 8
-local DUST_POOL = 10
-local STAR_COUNT = 14
+local TRAIN_POOL = 2
+local OBSTACLE_POOL = 3
+local COIN_POOL = 10
+local SPARKLE_POOL = 5
+local POP_POOL = 3
+local SPEEDLINE_POOL = 6
+local DUST_POOL = 6
+local STAR_COUNT = 8
 
 local function rgb(r: number, g: number, b: number): Color3
 	return Color3.fromRGB(r, g, b)
@@ -161,7 +160,6 @@ local GLASS_DAY = rgb(146, 184, 236)
 local WINDOW_NIGHT = rgb(255, 212, 124)
 local LAMP_LIGHT = rgb(255, 232, 160)
 local TREE_GREEN = rgb(88, 176, 106)
-local TREE_LIGHT = rgb(146, 212, 124)
 local TRUNK = rgb(126, 88, 62)
 
 local GRAFFITI_WORDS = {
@@ -499,7 +497,7 @@ function Runner.Start(ctx)
 	sky.MoonGlow = disc(48 * U, rgb(200, 214, 255), 0.85, 2, skyLayer)
 	sky.Moon = disc(20 * U, rgb(246, 244, 232), 0, 2, skyLayer)
 	UIUtil.Gradient(sky.Moon, ColorSequence.new(WHITE, rgb(214, 210, 196)), 60)
-	for _, crater in ipairs({ { 0.34, 0.38, 0.26 }, { 0.64, 0.62, 0.2 }, { 0.58, 0.28, 0.13 } }) do
+	for _, crater in ipairs({ { 0.34, 0.38, 0.26 }, { 0.64, 0.64, 0.2 } }) do
 		frame({
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(crater[1], crater[2]),
@@ -514,8 +512,8 @@ function Runner.Start(ctx)
 	-- Nuages (4, qui dérivent ; parallaxe légère ; couleur selon l'heure)
 	------------------------------------------------------------------
 	local clouds = {}
-	for i = 1, 4 do
-		local width = random:NextNumber(40, 64) * U
+	for i = 1, 3 do
+		local width = random:NextNumber(44, 66) * U
 		local base = frame({
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Size = UDim2.fromOffset(width, width * 0.32),
@@ -525,21 +523,17 @@ function Runner.Start(ctx)
 		}, ROUND)
 		UIUtil.Gradient(base, ColorSequence.new(WHITE, rgb(208, 216, 236)), 90)
 		local puffs = { base }
-		for _, puff in ipairs({ { 0.1, -0.62, 0.42, 1.2 }, { 0.42, -0.4, 0.34, 0.95 } }) do
-			local p = frame({
-				Position = UDim2.fromScale(puff[1], puff[2]),
-				Size = UDim2.fromScale(puff[3], puff[4]),
-				BackgroundColor3 = WHITE,
-				ZIndex = 3,
-				Parent = base,
-			}, ROUND)
-			UIUtil.Gradient(p, ColorSequence.new(WHITE, rgb(226, 232, 246)), 90)
-			table.insert(puffs, p)
-		end
+		table.insert(puffs, frame({
+			Position = UDim2.fromScale(0.16, -0.62),
+			Size = UDim2.fromScale(0.46, 1.25),
+			BackgroundColor3 = WHITE,
+			ZIndex = 3,
+			Parent = base,
+		}, ROUND))
 		table.insert(clouds, {
 			Frame = base,
 			Puffs = puffs,
-			X = SW * (i - 0.5) / 4 + random:NextNumber(-16, 16) * U,
+			X = SW * (i - 0.5) / 3 + random:NextNumber(-16, 16) * U,
 			Y = random:NextNumber(0.18, 0.6) * HY,
 			Width = width,
 			Speed = random:NextNumber(3, 8) * U,
@@ -563,7 +557,7 @@ function Runner.Start(ctx)
 	})
 	do
 		local totalW = SW + SKY_MARGIN * 2
-		local count = 11
+		local count = 9
 		local step = totalW / count
 		for i = 1, count do
 			local w = step * random:NextNumber(0.8, 1.25)
@@ -578,7 +572,7 @@ function Runner.Start(ctx)
 				BackgroundColor3 = WHITE,
 				ZIndex = 1,
 				Parent = city.FarHolder,
-			}, UDim.new(0, (i % 3 == 0) and 5 * U or 1))
+			})
 			local entry = { Frame = b, Shade = random:NextNumber(0.9, 1.06), Antenna = nil :: Frame? }
 			if i % 4 == 2 then
 				entry.Antenna = frame({
@@ -618,7 +612,7 @@ function Runner.Start(ctx)
 	})
 	do
 		local totalW = SW + SKY_MARGIN * 2
-		local count = 8
+		local count = 6
 		local step = totalW / count
 		local baseY = HY + 50 * U -- le bas est caché par les murs
 		local faceShade = ColorSequence.new({
@@ -628,8 +622,8 @@ function Runner.Start(ctx)
 			kp(1, rgb(170, 170, 190)),
 		})
 		for i = 1, count do
-			local w = step * random:NextNumber(0.86, 1.08)
-			local h = random:NextNumber(14, 40) * U + (i % 3 == 1 and 10 * U or 0)
+			local w = step * random:NextNumber(0.84, 1.02)
+			local h = random:NextNumber(16, 40) * U + (i % 3 == 1 and 10 * U or 0)
 			local x = (i - 1) * step + random:NextNumber(-3, 3) * U
 			local total = h + (baseY - HY)
 			local body = frame({
@@ -639,7 +633,7 @@ function Runner.Start(ctx)
 				BackgroundColor3 = WHITE,
 				ZIndex = (i % 2 == 0) and 2 or 1,
 				Parent = city.MidHolder,
-			}, UDim.new(0, 2 * U))
+			})
 			UIUtil.Gradient(body, faceShade, 0)
 			local building = {
 				Body = body,
@@ -649,9 +643,9 @@ function Runner.Start(ctx)
 			}
 			-- 1 ou 2 blocs de fenêtres (4 colonnes x 4 étages au plus par bloc)
 			local columns = random:NextInteger(3, 4)
-			local blockCount = (total > 62 * U) and 2 or 1
+			local blockCount = 1
 			local topPad = 5 * U / total
-			local usable = (h + 20 * U) / total - topPad
+			local usable = math.min(h + 14 * U, 46 * U) / total
 			for blockIndex = 1, blockCount do
 				local blockH = usable / blockCount
 				local windows = frame({
@@ -699,15 +693,14 @@ function Runner.Start(ctx)
 					Parent = body,
 				}))
 			elseif roofKind == 1 then
-				local tank = frame({
+				table.insert(building.Extras, frame({
 					AnchorPoint = Vector2.new(0.5, 1),
 					Position = UDim2.new(0.62, 0, 0, 0),
 					Size = UDim2.fromOffset(9 * U, 8 * U),
 					BackgroundColor3 = WHITE,
 					ZIndex = 1,
 					Parent = body,
-				}, UDim.new(0.3, 0))
-				table.insert(building.Extras, tank)
+				}))
 			else
 				table.insert(building.Extras, frame({
 					AnchorPoint = Vector2.new(0, 1),
@@ -716,7 +709,7 @@ function Runner.Start(ctx)
 					BackgroundColor3 = WHITE,
 					ZIndex = 1,
 					Parent = body,
-				}, UDim.new(0, 1)))
+				}))
 			end
 			table.insert(city.Mid, building)
 		end
@@ -820,19 +813,18 @@ function Runner.Start(ctx)
 				BackgroundColor3 = TIE_COLOR,
 				ZIndex = 1,
 				Parent = track,
-			}, UDim.new(0.18, 0))
+			})
 			tint(tie, TIE_COLOR)
-			UIUtil.Gradient(tie, ColorSequence.new(rgb(255, 236, 210), rgb(170, 150, 140)), 90)
 			table.insert(ties, { Frame = tie, X = laneX, Offset = (i - 1) * TIE_GAP })
 		end
 	end
 	local TIE_CYCLE = TIE_PER_LANE * TIE_GAP
 
-	-- Chaque rail : 2 morceaux (loin / près), chacun en 2 tons (acier + reflet)
+	-- Chaque rail : acier + reflet ; le bout lointain s'estompe dans la brume
 	local rails = {}
 	for _, laneX in ipairs(LANES) do
 		for _, offset in ipairs({ -RAIL_OFFSET, RAIL_OFFSET }) do
-			for part = 1, 2 do
+			do
 				local base = tint(
 					frame({
 						AnchorPoint = Vector2.new(0.5, 0.5),
@@ -851,17 +843,17 @@ function Runner.Start(ctx)
 					}),
 					RAIL_SHINE
 				)
-				if part == 1 then
-					-- Le bout lointain s'estompe dans la brume
-					for _, f in ipairs({ base, shine }) do
-						UIUtil.Gradient(f, ColorSequence.new(WHITE), 0).Transparency = NumberSequence.new({
-							nkp(0, 0.85),
-							nkp(0.3, 0.15),
-							nkp(1, 0),
-						})
-					end
-				end
-				table.insert(rails, { Base = base, Shine = shine, X = laneX + offset, Near = part == 2 })
+				UIUtil.Gradient(base, ColorSequence.new(WHITE), 0).Transparency = NumberSequence.new({
+					nkp(0, 0.85),
+					nkp(0.25, 0.1),
+					nkp(1, 0),
+				})
+				UIUtil.Gradient(shine, ColorSequence.new(WHITE), 0).Transparency = NumberSequence.new({
+					nkp(0, 1),
+					nkp(0.4, 0.3),
+					nkp(1, 0),
+				})
+				table.insert(rails, { Base = base, Shine = shine, X = laneX + offset })
 			end
 		end
 	end
@@ -891,12 +883,10 @@ function Runner.Start(ctx)
 			end
 		end
 		for _, rail in ipairs(rails) do
-			local zFar = rail.Near and RAIL_SPLIT or Z_FAR
-			local zNear = rail.Near and 0.72 or RAIL_SPLIT
-			local far = Vector2.new(sx(rail.X, zFar), sy(0, zFar))
-			local near = Vector2.new(sx(rail.X, zNear), sy(0, zNear))
-			setLine(rail.Base, far, near, math.max(1.2, (rail.Near and 3.2 or 1.8) * U))
-			setLine(rail.Shine, far, near, math.max(0.8, (rail.Near and 1.3 or 0.8) * U))
+			local far = Vector2.new(sx(rail.X, Z_FAR), sy(0, Z_FAR))
+			local near = Vector2.new(sx(rail.X, 0.72), sy(0, 0.72))
+			setLine(rail.Base, far, near, math.max(1.4, 2.6 * U))
+			setLine(rail.Shine, far, near, math.max(0.8, 1 * U))
 		end
 	end
 
@@ -924,30 +914,11 @@ function Runner.Start(ctx)
 				}, ROUND),
 				TREE_GREEN
 			)
-			UIUtil.Gradient(crown, ColorSequence.new(WHITE, rgb(176, 196, 186)), 70)
-			tint(
-				frame({
-					AnchorPoint = Vector2.new(0.5, 0.5),
-					Position = UDim2.fromScale(0.3 + 0.4 * (sideIndex - 1), 0.72),
-					Size = UDim2.fromScale(0.62, 0.56),
-					BackgroundColor3 = TREE_GREEN,
-					ZIndex = 1,
-					Parent = crown,
-				}, ROUND),
-				TREE_GREEN
-			)
-			tint(
-				frame({
-					AnchorPoint = Vector2.new(0.5, 0.5),
-					Position = UDim2.fromScale(0.36, 0.3),
-					Size = UDim2.fromScale(0.34, 0.3),
-					BackgroundColor3 = TREE_LIGHT,
-					BackgroundTransparency = 0.25,
-					ZIndex = 2,
-					Parent = crown,
-				}, ROUND),
-				TREE_LIGHT
-			)
+			UIUtil.Gradient(crown, ColorSequence.new({
+				kp(0, rgb(255, 255, 230)),
+				kp(0.35, WHITE),
+				kp(1, rgb(150, 176, 166)),
+			}), sideIndex == 1 and 60 or 120)
 			table.insert(trees, {
 				Trunk = trunk,
 				Crown = crown,
@@ -971,23 +942,7 @@ function Runner.Start(ctx)
 				}),
 				side.Def.Pillar
 			)
-			UIUtil.Gradient(pillar, ColorSequence.new({
-				kp(0, rgb(255, 255, 255)),
-				kp(0.5, rgb(236, 236, 240)),
-				kp(1, rgb(196, 196, 206)),
-			}), side.Sign < 0 and 0 or 180)
-			-- chapiteau clair
-			tint(
-				frame({
-					AnchorPoint = Vector2.new(0.5, 0),
-					Position = UDim2.fromScale(0.5, 0),
-					Size = UDim2.fromScale(1.25, 0.07),
-					BackgroundColor3 = side.Def.Coping,
-					ZIndex = 6,
-					Parent = pillar,
-				}),
-				side.Def.Coping
-			)
+
 			table.insert(pillars, {
 				Frame = pillar,
 				Sign = side.Sign,
@@ -1010,7 +965,7 @@ function Runner.Start(ctx)
 		panel.Label.Text = graffitiWords[random:NextInteger(1, #graffitiWords)]
 		panel.Label.Rotation = random:NextNumber(-10, 10)
 	end
-	for i = 1, 2 do
+	for i = 1, 1 do
 		local f = tint(
 			frame({
 				BackgroundColor3 = WHITE,
@@ -1089,45 +1044,26 @@ function Runner.Start(ctx)
 				}),
 				metal
 			)
-			UIUtil.Gradient(pole, ColorSequence.new(rgb(160, 160, 180), WHITE), 0)
 			local arm = tint(
 				frame({
 					AnchorPoint = Vector2.new(s < 0 and 0 or 1, 0.5),
 					BackgroundColor3 = metal,
 					Parent = world,
-				}, UDim.new(0.5, 0)),
+				}),
 				metal
 			)
-			local head = tint(
-				frame({
-					AnchorPoint = Vector2.new(0.5, 0),
-					Position = UDim2.fromScale(s < 0 and 0.9 or 0.1, 0.2),
-					Size = UDim2.fromScale(0.36, 2.2),
-					BackgroundColor3 = rgb(88, 92, 116),
-					Parent = arm,
-				}, UDim.new(0.4, 0)),
-				rgb(88, 92, 116)
-			)
+			-- tête de lampe (verre gris le jour, lumineux la nuit)
 			local glow = frame({
-				AnchorPoint = Vector2.new(0.5, 0.35),
-				Position = UDim2.fromScale(0.5, 1),
-				Size = UDim2.fromScale(1.3, 0.9),
+				AnchorPoint = Vector2.new(0.5, 0.2),
+				Position = UDim2.fromScale(s < 0 and 0.9 or 0.1, 0.5),
+				Size = UDim2.fromScale(0.42, 2.6),
 				BackgroundColor3 = LAMP_LIGHT,
-				Parent = head,
-			}, ROUND)
-			local flare = frame({
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.fromScale(0.5, 1.1),
-				Size = UDim2.fromScale(2.6, 1.8),
-				BackgroundColor3 = LAMP_LIGHT,
-				BackgroundTransparency = 1,
-				Parent = head,
-			}, ROUND)
+				Parent = arm,
+			}, UDim.new(0.5, 0))
 			table.insert(poles, {
 				Pole = pole,
 				Arm = arm,
 				Glow = glow,
-				Flare = flare,
 				Pool = pool,
 				Sign = s,
 				Offset = (i - 1) * POLE_GAP + (s > 0 and POLE_GAP / 2 or 0),
@@ -1276,7 +1212,7 @@ function Runner.Start(ctx)
 			Position = UDim2.fromScale(0.5, 0.115),
 			Size = UDim2.fromScale(0.56, 0.075),
 			BackgroundColor3 = rgb(24, 22, 30),
-		}, UDim.new(0.25, 0))
+		})
 		local signLed = part({
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
@@ -1297,14 +1233,6 @@ function Runner.Start(ctx)
 			Rotation = 28,
 			BackgroundColor3 = WHITE,
 			BackgroundTransparency = 0.6,
-			Parent = windshield,
-		})
-		part({
-			Position = UDim2.fromScale(0.32, -0.15),
-			Size = UDim2.fromScale(0.035, 1.3),
-			Rotation = 28,
-			BackgroundColor3 = WHITE,
-			BackgroundTransparency = 0.7,
 			Parent = windshield,
 		})
 		local pillar = part({
@@ -1331,38 +1259,31 @@ function Runner.Start(ctx)
 			Position = UDim2.fromScale(0.5, 0.73),
 			Size = UDim2.fromScale(0.3, 0.075),
 			BackgroundColor3 = rgb(40, 42, 54),
-		}, UDim.new(0.4, 0))
-		local function headlight(x: number)
-			local light = part({
+		})
+		-- halo des phares (la nuit, ou quand le train fonce vers nous)
+		local beam = part({
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.73),
+			Size = UDim2.fromScale(1.3, 0.34),
+			BackgroundColor3 = rgb(255, 250, 214),
+			BackgroundTransparency = 1,
+		}, ROUND)
+		local function headlight(x: number): Frame
+			return part({
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				Position = UDim2.fromScale(x, 0.73),
 				Size = UDim2.fromScale(0.16, 0.1),
 				BackgroundColor3 = rgb(255, 248, 200),
 			}, ROUND)
-			local flare = part({
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.fromScale(0.5, 0.5),
-				Size = UDim2.fromScale(2.6, 2.6),
-				BackgroundColor3 = rgb(255, 250, 214),
-				BackgroundTransparency = 1,
-				Parent = light,
-			}, ROUND)
-			return light, flare
 		end
-		local headL, flareL = headlight(0.19)
-		local headR, flareR = headlight(0.81)
-		-- pare-chocs + attelage + bas de caisse
+		local headL = headlight(0.19)
+		local headR = headlight(0.81)
+		-- pare-chocs
 		part({
-			Position = UDim2.fromScale(0.03, 0.83),
-			Size = UDim2.fromScale(0.94, 0.09),
+			Position = UDim2.fromScale(0.03, 0.84),
+			Size = UDim2.fromScale(0.94, 0.1),
 			BackgroundColor3 = rgb(62, 64, 78),
 		}, UDim.new(0.35, 0))
-		part({
-			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.fromScale(0.5, 0.9),
-			Size = UDim2.fromScale(0.14, 0.1),
-			BackgroundColor3 = rgb(36, 36, 46),
-		}, UDim.new(0.2, 0))
 		local train = {
 			Active = false,
 			Body = body,
@@ -1372,10 +1293,8 @@ function Runner.Start(ctx)
 			Accent = accent,
 			HeadL = headL,
 			HeadR = headR,
-			FlareL = flareL,
-			FlareR = flareR,
+			Beam = beam,
 			Side = newQuad(WHITE),
-			Windows = newQuad(rgb(44, 60, 100)),
 			Roof = newQuad(WHITE),
 			Lane = 1,
 			Z = Z_FAR,
@@ -1417,17 +1336,6 @@ function Runner.Start(ctx)
 				}),
 				LEG_COLOR
 			)
-			-- pied
-			tint(
-				frame({
-					AnchorPoint = Vector2.new(0.5, 1),
-					Position = UDim2.fromScale(0.5, 1),
-					Size = UDim2.new(3.2, 0, 0, 2),
-					BackgroundColor3 = LEG_COLOR,
-					Parent = leg,
-				}, UDim.new(0.5, 0)),
-				LEG_COLOR
-			)
 			table.insert(legs, leg)
 		end
 		local light = frame({
@@ -1437,15 +1345,6 @@ function Runner.Start(ctx)
 			BackgroundColor3 = rgb(255, 70, 60),
 			Parent = board,
 		}, ROUND)
-		local lightGlow = frame({
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromScale(2.4, 2.4),
-			BackgroundColor3 = rgb(255, 90, 70),
-			BackgroundTransparency = 0.7,
-			Parent = light,
-		}, ROUND)
-
 		-- Deux cônes côte à côte
 		local cones = frame({
 			Name = "Cones",
@@ -1455,32 +1354,23 @@ function Runner.Start(ctx)
 			Parent = world,
 		})
 		for _, coneX in ipairs({ 0.24, 0.76 }) do
-			local cone = frame({
-				AnchorPoint = Vector2.new(0.5, 1),
-				Position = UDim2.fromScale(coneX, 1),
-				Size = UDim2.fromScale(0.42, 1),
-				BackgroundTransparency = 1,
-				Parent = cones,
-			})
+			-- (largeurs relatives au cadre des deux cônes : un cône = 42 %)
 			local function conePart(y: number, w: number, h: number, color: Color3, radius: UDim?): Frame
 				return tint(
 					frame({
 						AnchorPoint = Vector2.new(0.5, 0),
-						Position = UDim2.fromScale(0.5, y),
-						Size = UDim2.fromScale(w, h),
+						Position = UDim2.fromScale(coneX, y),
+						Size = UDim2.fromScale(w * 0.42, h),
 						BackgroundColor3 = color,
-						Parent = cone,
+						Parent = cones,
 					}, radius),
 					color
 				)
 			end
-			conePart(0.86, 1, 0.14, rgb(206, 80, 30), UDim.new(0.3, 0)) -- socle
-			local lower = conePart(0.5, 0.66, 0.38, CONE, UDim.new(0.2, 0))
-			UIUtil.Gradient(lower, ColorSequence.new(rgb(255, 255, 255), rgb(214, 214, 214)), 0)
-			conePart(0.36, 0.52, 0.16, rgb(248, 248, 252)) -- bande réfléchissante
-			local upper = conePart(0.08, 0.36, 0.3, CONE, UDim.new(0.3, 0))
-			UIUtil.Gradient(upper, ColorSequence.new(rgb(255, 255, 255), rgb(214, 214, 214)), 0)
-			conePart(0, 0.2, 0.12, CONE, ROUND) -- pointe
+			conePart(0.86, 1, 0.14, rgb(206, 80, 30)) -- socle
+			conePart(0.48, 0.66, 0.4, CONE, UDim.new(0.2, 0))
+			conePart(0.34, 0.5, 0.16, rgb(248, 248, 252)) -- bande réfléchissante
+			conePart(0, 0.34, 0.36, CONE, UDim.new(0.45, 0))
 		end
 
 		table.insert(obstacles, {
@@ -1489,7 +1379,6 @@ function Runner.Start(ctx)
 			Gradient = gradient,
 			Legs = legs,
 			Light = light,
-			LightGlow = lightGlow,
 			Cones = cones,
 			Kind = "Low",
 			Bottom = 20,
@@ -1524,31 +1413,18 @@ function Runner.Start(ctx)
 			Parent = world,
 		}, ROUND)
 		local gradient = UIUtil.Gradient(coin, coinSequence, 45)
-		local stroke = UIUtil.Stroke(coin, rgb(190, 110, 8), 1)
-		local ring = frame({
+		-- anneau en creux (plus sombre), qui tourne avec la pièce
+		frame({
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromScale(0.6, 0.6),
-			BackgroundColor3 = WHITE,
+			Size = UDim2.fromScale(0.62, 0.62),
+			BackgroundColor3 = rgb(232, 158, 22),
 			Parent = coin,
 		}, ROUND)
-		UIUtil.Gradient(ring, ColorSequence.new(rgb(226, 146, 14), rgb(255, 230, 120)), 45)
-		local glint = frame({
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.74, 0.24),
-			Size = UDim2.fromScale(0.34, 0.34),
-			Rotation = 45,
-			BackgroundColor3 = WHITE,
-			BackgroundTransparency = 1,
-			ZIndex = 2,
-			Parent = coin,
-		})
 		table.insert(coinsPool, {
 			Active = false,
 			Frame = coin,
 			Gradient = gradient,
-			Stroke = stroke,
-			Glint = glint,
 			Lane = 1,
 			X = 0,
 			H = COIN_H,
@@ -1593,16 +1469,6 @@ function Runner.Start(ctx)
 	}, ROUND)
 	UIUtil.Gradient(pickup.Bubble, ColorSequence.new(WHITE, rgb(210, 214, 230)), 90)
 	pickup.Stroke = UIUtil.Stroke(pickup.Bubble, WHITE, 2, 0)
-	-- reflet de la bulle
-	frame({
-		Position = UDim2.fromScale(0.2, 0.1),
-		Size = UDim2.fromScale(0.3, 0.18),
-		Rotation = -30,
-		BackgroundColor3 = WHITE,
-		BackgroundTransparency = 0.2,
-		ZIndex = 4,
-		Parent = pickup.Bubble,
-	}, ROUND)
 	pickup.Icon = UIUtil.Label({
 		Text = "🧲",
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -1714,13 +1580,7 @@ function Runner.Start(ctx)
 			Size = UDim2.fromScale(0.16, 0.3),
 			ZIndex = 2,
 		}, HOODIE_DARK)
-		-- poignet + main
-		limb(arm, {
-			AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.fromScale(0.5, 1),
-			Size = UDim2.fromScale(1.02, 0.18),
-			ZIndex = 2,
-		}, HOODIE, UDim.new(0.3, 0))
+		-- main
 		limb(arm, {
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 1.02),
@@ -1754,16 +1614,6 @@ function Runner.Start(ctx)
 		Size = UDim2.fromScale(0.74, 0.3),
 		ZIndex = 3,
 	}, HOODIE_DARK, ROUND)
-	-- bretelles du sac
-	for _, x in ipairs({ 0.24, 0.76 }) do
-		limb(hero.Torso, {
-			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.fromScale(x, 0.04),
-			Size = UDim2.fromScale(0.1, 0.4),
-			ZIndex = 4,
-		}, rgb(60, 60, 76), UDim.new(0.5, 0))
-	end
-
 	hero.Head = limb(hero.Root, {
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.fromScale(0.5, 0.01),
@@ -1785,13 +1635,7 @@ function Runner.Start(ctx)
 		ZIndex = 2,
 	}, CAP, UDim.new(0.5, 0))
 	UIUtil.Gradient(cap, ColorSequence.new(WHITE, rgb(196, 204, 222)), 90)
-	-- ouverture de la casquette (réglage) et visière tournée vers nous
-	limb(cap, {
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.fromScale(0.5, 1),
-		Size = UDim2.fromScale(0.3, 0.3),
-		ZIndex = 2,
-	}, HAIR, UDim.new(0.5, 0))
+	-- visière tournée vers nous
 	limb(hero.Head, {
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.56),
@@ -1812,26 +1656,6 @@ function Runner.Start(ctx)
 		Size = UDim2.fromScale(0.74, 0.4),
 		ZIndex = 2,
 	}, PACK_DARK, UDim.new(0.3, 0))
-	-- fermeture éclair + bande réfléchissante
-	limb(hero.Pack, {
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.fromScale(0.5, 0.22),
-		Size = UDim2.fromScale(0.6, 0.08),
-		ZIndex = 2,
-	}, rgb(250, 250, 255), UDim.new(0.5, 0))
-	-- porte-clés qui se balance
-	hero.Charm = limb(hero.Pack, {
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.fromScale(0.82, 0.62),
-		Size = UDim2.fromScale(0.07, 0.5),
-		ZIndex = 3,
-	}, rgb(90, 90, 110), UDim.new(0.5, 0))
-	limb(hero.Charm, {
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 1),
-		Size = UDim2.fromScale(2.6, 0.5),
-		ZIndex = 3,
-	}, rgb(90, 220, 255), ROUND)
 	-- Flammes du jetpack (cachées hors bonus)
 	hero.Flames = {}
 	for _, x in ipairs({ 0.27, 0.73 }) do
@@ -2032,16 +1856,14 @@ function Runner.Start(ctx)
 			Parent = parent,
 		}, ROUND)
 		UIUtil.Gradient(icon, coinSequence, 45)
-		UIUtil.Stroke(icon, rgb(190, 110, 8), 1)
-		local ring = frame({
+		frame({
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromScale(0.58, 0.58),
-			BackgroundColor3 = WHITE,
+			Size = UDim2.fromScale(0.6, 0.6),
+			BackgroundColor3 = rgb(232, 158, 22),
 			ZIndex = 2,
 			Parent = icon,
 		}, ROUND)
-		UIUtil.Gradient(ring, ColorSequence.new(rgb(226, 146, 14), rgb(255, 230, 120)), 45)
 		return icon
 	end
 
@@ -2152,8 +1974,7 @@ function Runner.Start(ctx)
 		}, ROUND)
 		return { Pill = p, Icon = icon, Fill = fill }
 	end
-	hud.PowerA = powerPill()
-	hud.PowerB = powerPill()
+	hud.Power = powerPill()
 
 	-- Écran de fin de course
 	hud.Results = frame({
@@ -2168,7 +1989,6 @@ function Runner.Start(ctx)
 		Parent = hudLayer,
 	}, UDim.new(0, 12 * U))
 	UIUtil.Stroke(hud.Results, WHITE, 1.5, 0.55)
-	UIUtil.Gradient(hud.Results, ColorSequence.new(rgb(255, 255, 255), rgb(170, 170, 200)), 90)
 	hud.ResultsScale = Create("UIScale", { Parent = hud.Results })
 	local function resultsLabel(y: number, h: number, font: Enum.Font, color: Color3, maxSize: number): TextLabel
 		local label = UIUtil.Label({
@@ -2419,15 +2239,12 @@ function Runner.Start(ctx)
 		end
 		-- Lampadaires et phares : plus forts la nuit
 		for _, pole in ipairs(poles) do
-			pole.Glow.BackgroundColor3 = rgb(200, 204, 214):Lerp(LAMP_LIGHT, night)
-			pole.Glow.BackgroundTransparency = 0.3 - night * 0.3
-			pole.Flare.BackgroundTransparency = 1 - night * 0.3
-			pole.Pool.BackgroundTransparency = 1 - night * 0.2
+			pole.Glow.BackgroundColor3 = rgb(206, 210, 222):Lerp(LAMP_LIGHT, night)
+			pole.Pool.BackgroundTransparency = 1 - night * 0.22
 		end
 		for _, train in ipairs(trains) do
 			if train.Extra <= 0 then
-				train.FlareL.BackgroundTransparency = 1 - night * 0.5
-				train.FlareR.BackgroundTransparency = 1 - night * 0.5
+				train.Beam.BackgroundTransparency = 1 - night * 0.45
 			end
 		end
 	end
@@ -2448,7 +2265,6 @@ function Runner.Start(ctx)
 		train.Active = false
 		train.Body.Visible = false
 		hideQuad(train.Side)
-		hideQuad(train.Windows)
 		hideQuad(train.Roof)
 	end
 
@@ -2474,9 +2290,7 @@ function Runner.Start(ctx)
 		train.HeadR.BackgroundColor3 = lightColor
 		train.HeadL.BackgroundTransparency = oncoming and 0 or 0.3
 		train.HeadR.BackgroundTransparency = oncoming and 0 or 0.3
-		local flare = oncoming and 0.55 or (1 - st.Night * 0.5)
-		train.FlareL.BackgroundTransparency = flare
-		train.FlareR.BackgroundTransparency = flare
+		train.Beam.BackgroundTransparency = oncoming and 0.6 or (1 - st.Night * 0.45)
 		train.Body.Visible = true
 		return true
 	end
@@ -2891,6 +2705,7 @@ function Runner.Start(ctx)
 			pole.Arm.Size = UDim2.fromOffset(POLE_ARM * U / z, math.max(1, 3 * U / z))
 			pole.Arm.BackgroundTransparency = t
 			pole.Arm.ZIndex = depth
+			pole.Glow.BackgroundTransparency = t
 			-- flaque de lumière sous la lampe (la nuit)
 			local lampX = pole.Sign * (POLE_X - POLE_ARM)
 			pole.Pool.Position = UDim2.fromOffset(sx(lampX, z), sy(0, z))
@@ -3001,12 +2816,8 @@ function Runner.Start(ctx)
 							sy(2, back),
 							depth - 2
 						)
-						-- bande de fenêtres le long du flanc
-						local w1, w2 = z + 0.3, back - 0.15
-						setVQuad(train.Windows, sx(sideX, w1), sy(66, w1), sy(45, w1), sx(sideX, w2), sy(66, w2), sy(45, w2), depth - 1)
 					else
 						hideQuad(train.Side)
-						hideQuad(train.Windows)
 					end
 					if train.Extra > 0 then
 						-- Phares qui clignotent : il fonce vers nous !
@@ -3070,7 +2881,6 @@ function Runner.Start(ctx)
 						if ob.Kind == "High" then
 							local on = math.sin(st.Clock * 7 + ob.Phase) > 0
 							ob.Light.BackgroundColor3 = on and rgb(255, 70, 60) or rgb(130, 30, 34)
-							ob.LightGlow.BackgroundTransparency = on and 0.55 or 1
 						end
 					end
 				end
@@ -3121,10 +2931,6 @@ function Runner.Start(ctx)
 					f.Size = UDim2.fromOffset(size * math.max(0.14, spin), size)
 					f.ZIndex = depthZ(z)
 					coin.Gradient.Offset = Vector2.new(math.sin(st.Clock * 2.4 + coin.Phase * 0.3) * 0.7, 0)
-					coin.Stroke.Thickness = math.max(1, size * 0.07)
-					-- éclat de temps en temps, quand la pièce est de face
-					local flash = (st.Clock * 1.1 + coin.Phase * 0.05) % 2.2
-					coin.Glint.BackgroundTransparency = (flash < 0.22 and spin > 0.6) and (flash / 0.22) * 0.8 or 1
 				end
 			end
 		end
@@ -3231,7 +3037,6 @@ function Runner.Start(ctx)
 		end
 		hero.Head.Position = UDim2.fromScale(0.5, 0.01 + math.abs(sinP) * 0.008)
 		hero.Pack.Position = UDim2.fromScale(0.5, 0.35 + (running and not flying and math.abs(math.cos(st.RunPhase)) * 0.015 or 0))
-		hero.Charm.Rotation = math.sin(st.RunPhase * 0.5 + 0.6) * 30
 
 		local heroScreenX = sx(st.RunnerX, CHAR_Z)
 		local heroY = sy(st.RunnerH, CHAR_Z) - bob
@@ -3447,28 +3252,15 @@ function Runner.Start(ctx)
 			hud.ComboPill.Visible = false
 		end
 
-		-- Jauges des bonus
-		local slots = { hud.PowerA, hud.PowerB }
-		local used = 0
+		-- Jauge du bonus en cours (jetpack, sinon aimant, sinon x2 ; le x2 a aussi son badge)
 		if st.JetTime > 0 then
-			used += 1
-			setPower(slots[used], "🚀", rgb(80, 200, 255), st.JetTime / JET_TIME)
+			setPower(hud.Power, "🚀", rgb(80, 200, 255), st.JetTime / JET_TIME)
 		elseif st.MagnetTime > 0 then
-			used += 1
-			setPower(slots[used], "🧲", rgb(255, 90, 170), st.MagnetTime / MAGNET_TIME)
-		end
-		if st.DoubleTime > 0 then
-			used += 1
-			setPower(slots[used], "x2", rgb(255, 196, 40), st.DoubleTime / DOUBLE_TIME)
-		end
-		for index, slot in ipairs(slots) do
-			if index > used then
-				if slot.Pill.Visible then
-					slot.Pill.Visible = false
-				end
-			else
-				slot.Pill.Position = UDim2.fromOffset(6 * U, (31 + (index - 1) * 19) * U)
-			end
+			setPower(hud.Power, "🧲", rgb(255, 90, 170), st.MagnetTime / MAGNET_TIME)
+		elseif st.DoubleTime > 0 then
+			setPower(hud.Power, "x2", rgb(255, 196, 40), st.DoubleTime / DOUBLE_TIME)
+		elseif hud.Power.Pill.Visible then
+			hud.Power.Pill.Visible = false
 		end
 	end
 

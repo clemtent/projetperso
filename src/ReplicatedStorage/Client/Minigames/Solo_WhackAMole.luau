@@ -95,20 +95,28 @@ function Module.Build(container: Frame, api)
 	Kit.Gradient(field, Color3.fromRGB(130, 226, 150), Color3.fromRGB(60, 160, 110), 90)
 	Kit.Stroke(field, Color3.fromRGB(200, 255, 210), 3, 0.3)
 	create("UIAspectRatioConstraint", { AspectRatio = 1.3, Parent = field })
-	-- fleurs et brins d'herbe (décor fixe)
-	local rng = Logic.Rng(77)
-	for index = 1, 16 do
-		local flower = Kit.Label({
+	-- pelouse tondue (bandes) + quelques fleurs sur les bords (décor fixe)
+	for index = 0, 5 do
+		create("Frame", {
+			Position = UDim2.fromScale(0, index / 6),
+			Size = UDim2.fromScale(1, 1 / 12),
+			BackgroundColor3 = C.White,
+			BackgroundTransparency = 0.9,
+			BorderSizePixel = 0,
+			ZIndex = 3,
+			Parent = field,
+		})
+	end
+	for index, spot in ipairs({ { 0.035, 0.3 }, { 0.965, 0.42 }, { 0.03, 0.72 }, { 0.97, 0.86 }, { 0.06, 0.06 }, { 0.94, 0.06 } }) do
+		Kit.Label({
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.04 + rng.Next() * 0.92, 0.04 + rng.Next() * 0.92),
-			Size = UDim2.fromScale(0.05, 0.065),
+			Position = UDim2.fromScale(spot[1], spot[2]),
+			Size = UDim2.fromScale(0.045, 0.06),
 			Text = ({ "🌼", "🌸", "🍀", "🌷" })[index % 4 + 1],
-			TextTransparency = 0.25,
 			MaxTextSize = 18,
 			ZIndex = 3,
 			Parent = field,
 		})
-		local _ = flower
 	end
 	local timeBar = create("Frame", {
 		Name = "TimeBar",
@@ -148,7 +156,7 @@ function Module.Build(container: Frame, api)
 			Name = "Mole",
 			AnchorPoint = Vector2.new(0.5, 0),
 			Position = UDim2.fromScale(0.5, 1),
-			Size = UDim2.fromScale(0.62, 0.95),
+			Size = UDim2.fromScale(0.8, 0.95),
 			BackgroundColor3 = MOLE_COLOR,
 			ZIndex = 6,
 			Parent = parent,
@@ -220,9 +228,9 @@ function Module.Build(container: Frame, api)
 		})
 		local crown = Kit.Label({
 			Name = "Crown",
-			AnchorPoint = Vector2.new(0.5, 1),
+			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.08),
-			Size = UDim2.fromScale(0.6, 0.3),
+			Size = UDim2.fromScale(0.5, 0.24),
 			Text = "👑",
 			Visible = false,
 			MaxTextSize = 30,
@@ -274,7 +282,7 @@ function Module.Build(container: Frame, api)
 		local mound = create("Frame", {
 			AnchorPoint = Vector2.new(0.5, 1),
 			Position = UDim2.fromScale(0.5, 0.97),
-			Size = UDim2.fromScale(0.86, 0.34),
+			Size = UDim2.fromScale(0.74, 0.34),
 			BackgroundColor3 = Color3.fromRGB(150, 100, 70),
 			ZIndex = 5,
 			Parent = cell,
@@ -283,35 +291,26 @@ function Module.Build(container: Frame, api)
 		Kit.Gradient(mound, Color3.fromRGB(176, 124, 88), Color3.fromRGB(120, 78, 54), 90)
 		local hole = create("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5, 0.42),
-			Size = UDim2.fromScale(0.8, 0.5),
+			Position = UDim2.fromScale(0.5, 0.4),
+			Size = UDim2.fromScale(0.8, 0.56),
 			BackgroundColor3 = Color3.fromRGB(46, 26, 22),
 			ZIndex = 6,
 			Parent = mound,
 		})
 		Kit.Corner(hole, UDim.new(0.5, 0))
+		Kit.Gradient(hole, Color3.fromRGB(20, 10, 10), Color3.fromRGB(70, 40, 32), 90)
 		-- Zone de sortie de la taupe (coupée au niveau du trou)
 		local clip = create("Frame", {
 			Name = "Clip",
 			AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.fromScale(0.5, 0.82),
-			Size = UDim2.fromScale(0.8, 0.78),
+			Position = UDim2.fromScale(0.5, 0.768),
+			Size = UDim2.fromScale(0.62, 0.74),
 			BackgroundTransparency = 1,
 			ClipsDescendants = true,
 			ZIndex = 6,
 			Parent = cell,
 		})
 		local mole = makeMole(clip)
-		-- Lèvre avant du trou (par-dessus la taupe)
-		local lip = create("Frame", {
-			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.fromScale(0.5, 0.8),
-			Size = UDim2.fromScale(0.74, 0.08),
-			BackgroundColor3 = Color3.fromRGB(150, 100, 70),
-			ZIndex = 8,
-			Parent = cell,
-		})
-		Kit.Corner(lip, UDim.new(1, 0))
 		local hammer = Kit.Label({
 			Name = "Hammer",
 			AnchorPoint = Vector2.new(0.2, 0.8),
@@ -341,7 +340,9 @@ function Module.Build(container: Frame, api)
 	----------------------------------------------------------------------
 	-- Partie
 	----------------------------------------------------------------------
+	kit:UseRating(0)
 	local function refreshHud()
+		kit:SetRatingFromScore(st.Score, st.Thresholds)
 		kit:SetStat("Primary", tostring(st.Score))
 		kit:SetStat("A", kit:NextStarText(st.Score, st.Thresholds))
 		kit:SetStat("B", tostring(math.max(0, math.ceil(st.Duration - st.Clock))) .. "s")
@@ -421,6 +422,7 @@ function Module.Build(container: Frame, api)
 		for _, entry in ipairs(holes) do
 			entry.Current = nil
 			entry.Mole.Frame.Position = UDim2.fromScale(0.5, 1)
+			entry.Mole.Crown.Visible = false
 		end
 		refreshHud()
 		kit:Mood("😊", T("Bonk the moles! Golden = +3, avoid bombs."))
@@ -499,6 +501,7 @@ function Module.Build(container: Frame, api)
 				if age >= mole.Up or (hit and entry.Squash <= 0) then
 					entry.Current = nil
 					frame.Position = UDim2.fromScale(0.5, 1)
+					entry.Mole.Crown.Visible = false
 				else
 					local up
 					if hit then
@@ -527,6 +530,7 @@ function Module.Build(container: Frame, api)
 			for _, entry in ipairs(holes) do
 				entry.Current = nil
 				entry.Mole.Frame.Position = UDim2.fromScale(0.5, 1)
+				entry.Mole.Crown.Visible = false
 			end
 			finish(st.Generation)
 		end

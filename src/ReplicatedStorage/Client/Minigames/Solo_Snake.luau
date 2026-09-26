@@ -231,7 +231,7 @@ function Module.Build(container: Frame, api)
 				segment = getSegment(index)
 				local k = length > 1 and (index - 1) / (length - 1) or 0
 				segment.Frame.BackgroundColor3 = HEAD_COLOR:Lerp(TAIL_COLOR, k)
-				local size = index == 1 and 1.02 or (0.86 - 0.18 * k)
+				local size = index == 1 and 1.08 or (0.96 - 0.22 * k)
 				segment.Frame.Size = UDim2.fromScale(size / st.Cols, size / st.Rows)
 				segment.Frame.Visible = true
 			elseif segment then
@@ -328,19 +328,30 @@ function Module.Build(container: Frame, api)
 		})
 		Kit.Corner(pad, UDim.new(1, 0))
 		Kit.Stroke(pad, kit.Accent, 1.5, 0.5)
-		local arrows = { { "▲", 0.5, 0.17 }, { "▶", 0.83, 0.5 }, { "▼", 0.5, 0.83 }, { "◀", 0.17, 0.5 } }
+		-- (un seul symbole "▲" tourné : ▶ / ◀ s'affichent en emoji sur certains appareils)
+		local arrows = { { 0.5, 0.17 }, { 0.83, 0.5 }, { 0.5, 0.83 }, { 0.17, 0.5 } }
 		for dir, info in ipairs(arrows) do
 			local button = Kit.Button({
 				Name = "Dir" .. dir,
-				Text = info[1],
+				Text = "",
 				Color = kit.Accent,
 				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.fromScale(info[2], info[3]),
+				Position = UDim2.fromScale(info[1], info[2]),
 				Size = UDim2.fromScale(0.34, 0.34),
 				Radius = 12,
 				MaxTextSize = 22,
 				ZIndex = 4,
 				Parent = pad,
+			})
+			Kit.Label({
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.fromScale(0.6, 0.6),
+				Text = "▲",
+				Rotation = (dir - 1) * 90,
+				MaxTextSize = 22,
+				ZIndex = 5,
+				Parent = button,
 			})
 			button.InputBegan:Connect(function(input)
 				if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -353,12 +364,14 @@ function Module.Build(container: Frame, api)
 	----------------------------------------------------------------------
 	-- Partie
 	----------------------------------------------------------------------
+	kit:UseRating(0)
 	local function refreshHud()
 		local sim = st.Sim
 		local score = sim and sim.Score or 0
 		kit:SetStat("Primary", "🍓 " .. tostring(score))
 		if st.Rules then
 			kit:SetStat("A", kit:NextStarText(score, st.Rules.Thresholds))
+			kit:SetRatingFromScore(score, st.Rules.Thresholds)
 		end
 		kit:SetStat("B", Kit.FormatClock(st.Clock))
 	end

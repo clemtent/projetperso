@@ -312,8 +312,10 @@ function Module.Build(container: Frame, api)
 		return icon .. " " .. string.format("%.2fs", step)
 	end
 
+	kit:UseRating(0)
 	local function refreshHud()
 		local rules = kit.GameRules.Difficulties[kit.Difficulty]
+		kit:SetRatingFromScore(st.Round, rules.Thresholds)
 		kit:SetStat("Primary", tostring(math.max(1, #st.Sequence)))
 		kit:SetStat("A", kit:NextStarText(st.Round, rules.Thresholds))
 		kit:SetStat("B", speedText(st.Step))
