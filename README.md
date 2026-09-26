@@ -27,6 +27,19 @@ Les autres méthodes (Rojo, copie manuelle) sont décrites dans [`docs/INSTALLAT
 
 ---
 
+## 🆕 Nouveautés v8 — tout en 10x mieux
+
+- **Refaits en bien plus beau et complet** : Runner (cycle jour/nuit, ville en parallaxe, trains détaillés, bonus aimant / x2 / jetpack, chutes et résultats), Live ASMR (streameuse animée, bras, overlays, chat), Lofi (chambre, vinyle, visualiseur, titre de la musique), Presse (10 paliers, hydraulique, écrasement), logo DVD (**5 max**), Flash info façon chaîne TV, vraie messagerie pour les mails, boutons d'achat, notifications, chiffres qui pop.
+- **🎰 Machine chanceuse** : elle remarche ! Tours GRATUITS (1 jeton / 75 s de jeu) — plus aucune mise de Dopamine (règles Roblox : la Dopamine s'achète en Robux, donc pas de pari avec).
+- **🌻 Jardin de Dopamine** à la place de la bourse (actions remboursées) : des fleurs poussent, on les cueille.
+- **🕹️ Arcade** : 6 mini-jeux solo (démineur, memory, Jacques a dit, tape-taupe, snake, 2048) et 4 **duels** contre les joueurs du serveur (morpion, puissance 4, réflexes, course à l'intrus) avec mise en **🎟️ tickets** (gagnés en jouant, jamais achetables : le gagnant remporte la mise x2). Boutique à tickets et records.
+- **Progression** : ~20 nouvelles améliorations (dont celles des carrés : chaussures du runner, vinyles, force du vent, studio de stream, chasseur d'orages, parterres…) et des nouveautés débloquées après 1, 2, 3, 5 et 8 visites à l'océan ; chapeaux / boutons et objets chers de la maison verrouillés jusqu'aux renaissances.
+- **🏠 Maison** : les petits objets se posent SUR les meubles ; les animaux se promènent et utilisent niche, arbre à chat, panier, gamelle, fontaine, griffoir, jouets, cage.
+- **🎧 Musique** : 8 musiques lofi, lecteur complet dans ⚙️ (précédent / suivant / aléatoire / choix de la musique).
+- **💎 Offres** : petites fenêtres Robux (boost, packs, pass) — max 4 par partie, jamais par-dessus une fenêtre, toujours fermables. Pas assez de Dopamine → proposition d'en avoir.
+- **Badges** : Millionnaire du bonheur, Milliardaire neuronal, Cerveau cosmique, Shopping, Accro aux achats.
+- **Moins de lag** : le serveur n'envoie plus tout l'état 5 fois par seconde (≈ 35x moins de trafic), animations en pause quand une fenêtre les recouvre.
+
 ## 🆕 Nouveautés v7 — 🏰 de vraies maisons à pièces
 
 - **Vraies maisons de poupée** vues en coupe (`House/HouseExterior`) : chalet (Studio, 2 pièces), maison de ville (Appart, 2×2), loft industriel (Loft, 2×3) et **grand manoir** (3×4 : tours, fronton à horloge cœur, balcons, grand escalier, jardin à la française, fontaine, portail). Jour / nuit animés.
@@ -120,7 +133,7 @@ Les autres méthodes (Rojo, copie manuelle) sont décrites dans [`docs/INSTALLAT
 │   │       📜 Pinwheel                ModuleScript  ← moulin à vent (slot CL)
 │   │       📜 Press                   ModuleScript  ← presse hydraulique (slot C3)
 │   │       📜 Runner                  ModuleScript  ← jeu de course infini (slot L3)
-│   │       📜 Stocks                  ModuleScript  ← bourse DOPA (slot R1)
+│   │       📜 Garden                  ModuleScript  ← jardin de Dopamine (slot R1)
 │   │       📜 Weather                 ModuleScript  ← orage + éclairs à cliquer (Overlay)
 │   📁 Remotes                         ⚙️ créé AUTOMATIQUEMENT par le serveur (Net.Setup)
 │
@@ -181,7 +194,7 @@ Dans le dépôt (`src/`), chaque fichier correspond à un objet :
   | Slot | Ancrage | Position | Taille | Stimulus |
   |---|---|---|---|---|
   | `Ticker` | toute la largeur | y = 0 | × 30 | NewsTicker |
-  | `L1` / `R1` | gauche / droite | 16, 40 | 288×190 | LiveStream / Stocks |
+  | `L1` / `R1` | gauche / droite | 16, 40 | 288×190 | Runner / Garden |
   | `L2` / `R2` | gauche / droite | 16, 240 | 288×180 | BubbleWrap / Casino |
   | `CL` / `CR` | centre −250 / +250 | y = 40 | 170×170 | Pinwheel / LootBox |
   | `L3` / `C3` / `R3` | gauche / centre / droite | y = 436 | 384×268 | Runner / Press / Lofi |

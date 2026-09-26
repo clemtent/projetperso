@@ -23,6 +23,7 @@ Net.Events = {
 	"ClientReady", -- C -> S () : l'interface est prête, envoie-moi tout
 	"Click", -- C -> S () : un clic sur le bouton
 	"StateUpdate", -- S -> C (state) : état complet du joueur
+	"StateTick", -- S -> C (tick) : petite mise à jour fréquente (Dopamine, clics...) entre deux états complets
 	"Notify", -- S -> C (payload) : succès, quêtes, bonus, jackpot, détox...
 	"DVDSetup", -- S -> C ({ Logos = { params... } }) : trajectoires des logos DVD
 	"DVDResize", -- C -> S (w, h) : taille d'un logo à l'écran (fraction de l'écran)
@@ -33,19 +34,20 @@ Net.Events = {
 	"Interact", -- C -> S (kind, arg) : papier bulle, moulin, titre du fil d'actu, presse
 	"EventUpdate", -- S -> C (rush) : début / fin d'un Dopamine Rush
 	"LeaderboardUpdate", -- S -> C (top) : top du classement
-	"StockUpdate", -- S -> C ({ Symbol, Price, History }) : cours de la bourse
+	"ArcadeEvent", -- S <-> C (kind, payload) : arcade en temps réel (invitations, coups des duels...)
 }
 
 Net.Functions = {
 	"BuyUpgrade", -- C -> S (upgradeId) -> (succès, message)
 	"ClaimDaily", -- C -> S () -> (succès, message)
 	"SetSetting", -- C -> S (nom, valeur) -> succès
-	"StockTrade", -- C -> S ("buy" | "sell", fraction) -> (succès, message)
-	"CasinoSpin", -- C -> S (fraction) -> (succès, résultat | message)
+	"CasinoSpin", -- C -> S () -> (succès, résultat | message) : tour GRATUIT (1 jeton) de la machine chanceuse
 	"OpenChest", -- C -> S () -> (succès, résultat | message)
 	"ItemShop", -- C -> S ("buy" | "equip" | "unequip", cosmeticId) -> (succès, message)
 	"ThemeShop", -- C -> S ("buy" | "equip", themeId) -> (succès, message)
 	"House", -- C -> S (action, argument) -> (succès, message) : maison (achats, papier peint, sol, disposition)
+	"Garden", -- C -> S (action, argument) -> (succès, résultat | message) : jardin de Dopamine
+	"Arcade", -- C -> S (action, argument) -> (succès, résultat | message) : mini-jeux, tickets, duels
 	"DebugCommand", -- C -> S (commande, argument) -> (succès, message) : UNIQUEMENT dans Studio
 }
 

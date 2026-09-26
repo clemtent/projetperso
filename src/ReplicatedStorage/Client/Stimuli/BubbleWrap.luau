@@ -15,7 +15,6 @@
 	Les 40 bulles sont créées une seule fois puis réutilisées.
 ]]
 
-local Debris = game:GetService("Debris")
 local UserInputService = game:GetService("UserInputService")
 
 local Locale = require(game:GetService("ReplicatedStorage").Shared.Locale)
@@ -209,43 +208,114 @@ function BubbleWrap.Start(ctx)
 		return false
 	end
 
-	local function popEffects(x: number, y: number)
-		-- Onde
+	------------------------------------------------------------------
+	-- Effets de "pop" (v8) : réserves recyclées, animées par UNE boucle
+	-- (avant : 12 instances + 5 tweens créés à chaque bulle éclatée, jusqu'à
+	-- 12 fois par seconde en glissant la souris)
+	------------------------------------------------------------------
+	local RING_POOL = 6
+	local DROP_POOL = 18
+	local rings = {}
+	for index = 1, RING_POOL do
 		local ring = Create("Frame", {
+			Name = "PopRing",
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromOffset(x, y),
 			Size = UDim2.fromOffset(DIAMETER, DIAMETER),
 			BackgroundTransparency = 1,
+			Visible = false,
 			ZIndex = 6,
 			Parent = sheet,
 		})
 		UIUtil.Corner(ring, UDim.new(1, 0))
-		local ringStroke = UIUtil.Stroke(ring, Color3.fromRGB(110, 180, 240), 2, 0.1)
-		UIUtil.Tween(ring, 0.25, { Size = UDim2.fromOffset(DIAMETER * 1.8, DIAMETER * 1.8) })
-		UIUtil.Tween(ringStroke, 0.25, { Transparency = 1 })
-		Debris:AddItem(ring, 0.3)
+		rings[index] = { Frame = ring, Stroke = UIUtil.Stroke(ring, Color3.fromRGB(110, 180, 240), 2, 0.1), Age = 1 }
+	end
+	local drops = {}
+	for index = 1, DROP_POOL do
+		local drop = Create("Frame", {
+			Name = "PopDrop",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Size = UDim2.fromOffset(4, 4),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BorderSizePixel = 0,
+			Visible = false,
+			ZIndex = 7,
+			Parent = sheet,
+		})
+		UIUtil.Corner(drop, UDim.new(1, 0))
+		drops[index] = {
+			Frame = drop,
+			Stroke = UIUtil.Stroke(drop, Color3.fromRGB(120, 180, 230), 1),
+			Age = 1,
+			X = 0,
+			Y = 0,
+			DX = 0,
+			DY = 0,
+		}
+	end
+	local nextRing, nextDrop = 1, 1
+	local activeEffects = 0 -- effets en cours (la boucle ne fait rien s'il n'y en a pas)
 
-		-- Gouttelettes d'air (si effets actifs)
+	local function popEffects(x: number, y: number)
+		local ring = rings[nextRing]
+		nextRing = nextRing % RING_POOL + 1
+		if ring.Age >= 1 then
+			activeEffects += 1
+		end
+		ring.Age = 0
+		ring.Frame.Position = UDim2.fromOffset(x, y)
+		ring.Frame.Size = UDim2.fromOffset(DIAMETER, DIAMETER)
+		ring.Stroke.Transparency = 0.1
+		ring.Frame.Visible = true
+
 		if effectsOn() then
 			for _ = 1, 3 do
+				local drop = drops[nextDrop]
+				nextDrop = nextDrop % DROP_POOL + 1
+				if drop.Age >= 1 then
+					activeEffects += 1
+				end
 				local angle = random:NextNumber(0, math.pi * 2)
 				local distance = random:NextNumber(12, 22)
-				local drop = Create("Frame", {
-					AnchorPoint = Vector2.new(0.5, 0.5),
-					Position = UDim2.fromOffset(x, y),
-					Size = UDim2.fromOffset(4, 4),
-					BackgroundColor3 = Color3.new(1, 1, 1),
-					BorderSizePixel = 0,
-					ZIndex = 7,
-					Parent = sheet,
-				})
-				UIUtil.Corner(drop, UDim.new(1, 0))
-				UIUtil.Stroke(drop, Color3.fromRGB(120, 180, 230), 1)
-				UIUtil.Tween(drop, 0.3, {
-					Position = UDim2.fromOffset(x + math.cos(angle) * distance, y + math.sin(angle) * distance),
-					BackgroundTransparency = 1,
-				})
-				Debris:AddItem(drop, 0.35)
+				drop.Age = 0
+				drop.X, drop.Y = x, y
+				drop.DX, drop.DY = math.cos(angle) * distance, math.sin(angle) * distance
+				drop.Frame.Position = UDim2.fromOffset(x, y)
+				drop.Frame.BackgroundTransparency = 0
+				drop.Stroke.Transparency = 0
+				drop.Frame.Visible = true
+			end
+		end
+	end
+
+	-- Avance les effets de pop (anneau 0.25 s, gouttes 0.3 s)
+	local function stepEffects(dt: number)
+		if activeEffects <= 0 then
+			return
+		end
+		for _, ring in ipairs(rings) do
+			if ring.Age < 1 then
+				ring.Age = math.min(1, ring.Age + dt / 0.25)
+				local eased = 1 - (1 - ring.Age) ^ 2
+				local size = DIAMETER * (1 + 0.8 * eased)
+				ring.Frame.Size = UDim2.fromOffset(size, size)
+				ring.Stroke.Transparency = 0.1 + 0.9 * ring.Age
+				if ring.Age >= 1 then
+					ring.Frame.Visible = false
+					activeEffects -= 1
+				end
+			end
+		end
+		for _, drop in ipairs(drops) do
+			if drop.Age < 1 then
+				drop.Age = math.min(1, drop.Age + dt / 0.3)
+				local eased = 1 - (1 - drop.Age) ^ 2
+				drop.Frame.Position = UDim2.fromOffset(drop.X + drop.DX * eased, drop.Y + drop.DY * eased)
+				drop.Frame.BackgroundTransparency = drop.Age
+				drop.Stroke.Transparency = drop.Age
+				if drop.Age >= 1 then
+					drop.Frame.Visible = false
+					activeEffects -= 1
+				end
 			end
 		end
 	end
@@ -379,25 +449,43 @@ function BubbleWrap.Start(ctx)
 		end)
 	end
 
-	-- Petite vague de "respiration" des bulles intactes (pour donner envie)
-	task.spawn(function()
-		while ctx.IsAlive() do
-			task.wait(random:NextNumber(4, 7))
-			if not ctx.IsAlive() then
-				break
-			end
-			if not regenerating then
-				for index, bubble in ipairs(bubbles) do
-					if not bubble.Popped then
-						task.delay((index % COLUMNS) * 0.04, function()
-							if ctx.IsAlive() and not bubble.Popped then
-								bubble.Scale.Scale = 1.08
-								UIUtil.Tween(bubble.Scale, 0.3, { Scale = 1 }, Enum.EasingStyle.Sine)
-							end
-						end)
-					end
+	-- Petite vague de "respiration" des bulles intactes (pour donner envie).
+	-- v8 : animée dans la boucle (avant : ~40 tweens + 40 threads d'un coup
+	-- toutes les 4 à 7 s), et seulement si le papier bulle est visible.
+	local WAVE_STEP = 0.04 -- décalage par colonne
+	local WAVE_TIME = 0.3
+	local waveAge = -1 -- < 0 : pas de vague en cours
+	local nextWave = os.clock() + random:NextNumber(4, 7)
+
+	ctx.OnRender(function(dt: number)
+		stepEffects(dt)
+		local now = os.clock()
+		if waveAge < 0 then
+			if now >= nextWave then
+				nextWave = now + random:NextNumber(4, 7)
+				if not regenerating and ctx.GetVisibility() == "Visible" then
+					waveAge = 0
 				end
 			end
+			return
+		end
+		waveAge += dt
+		local finished = true
+		for index, bubble in ipairs(bubbles) do
+			if not bubble.Popped then
+				local t = waveAge - (index % COLUMNS) * WAVE_STEP
+				if t < WAVE_TIME then
+					finished = false
+					if t >= 0 then
+						bubble.Scale.Scale = 1 + 0.08 * math.cos(t / WAVE_TIME * math.pi / 2)
+					end
+				elseif bubble.Scale.Scale ~= 1 then
+					bubble.Scale.Scale = 1
+				end
+			end
+		end
+		if finished then
+			waveAge = -1
 		end
 	end)
 end

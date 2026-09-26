@@ -130,5 +130,6 @@ return {
 		["Error: %s"] = "Erreur : %s",
 		["Test commands are only available in Studio"] = "Commandes de test disponibles uniquement dans Studio",
 		["Invalid argument"] = "Argument invalide",
+		["Locked for now"] = "Verrouillé pour l'instant",
 	},
 }

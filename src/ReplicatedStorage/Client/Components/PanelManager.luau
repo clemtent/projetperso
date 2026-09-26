@@ -10,6 +10,8 @@
 
 	Chaque panneau est un module dans Components > Panels avec :
 	  Title, Color, Build(content), Update(data) (optionnel),
+	  RefreshOnTick (optionnel : true = Update aussi sur les petites mises à jour,
+	  2 fois par seconde au plus, quand la fenêtre est ouverte),
 	  OnOpen() / OnClose() (optionnels), Size (Vector2, optionnel),
 	  Icon (optionnel : sinon le 1er emoji du titre), Subtitle (optionnel).
 	v5 : Title / Subtitle sont écrits en ANGLAIS dans les modules et traduits
@@ -333,6 +335,30 @@ function PanelManager.Build(layer: Frame)
 			end
 		end
 	end)
+
+	-- Entre deux états complets, le serveur n'envoie que de petites mises à
+	-- jour (Dopamine, progression des quêtes...). La fenêtre OUVERTE qui le
+	-- demande (Module.RefreshOnTick = true) est rafraîchie 2 fois par seconde au plus.
+	local tickSignal = (ClientState :: any).TickReceived
+	if tickSignal then
+		local lastRefresh = 0
+		tickSignal:Connect(function()
+			local name = openName
+			local panel = name and panels[name]
+			if not panel or panel.Module.RefreshOnTick ~= true or not panel.Module.Update or not ClientState.Data then
+				return
+			end
+			local now = os.clock()
+			if now - lastRefresh < 0.5 then
+				return
+			end
+			lastRefresh = now
+			local ok, err = pcall(panel.Module.Update, ClientState.Data)
+			if not ok then
+				warn("[PanelManager] Erreur dans " .. tostring(name) .. ".Update : " .. tostring(err))
+			end
+		end)
+	end
 end
 
 function PanelManager.Register(name: string, module)

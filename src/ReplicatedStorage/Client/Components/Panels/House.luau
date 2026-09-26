@@ -718,6 +718,11 @@ local function setView(newView: string)
 	overviewHolder.Visible = not inRoom
 	stage.Visible = inRoom
 	roomBar.Visible = inRoom
+	-- Les animaux ne vivent que quand la pièce est affichée
+	local currentEditor = editor
+	if currentEditor then
+		currentEditor.SetLive(inRoom)
+	end
 	if not inRoom then
 		savedChip.Visible = false
 		previewChip.Visible = false
@@ -1441,7 +1446,7 @@ function House.Build(frame: Frame)
 	-- Astuce en mode édition
 	editHint = UIUtil.Chip({
 		Name = "EditHint",
-		Text = Locale.T("✋ Drag to move  •  tap for options"),
+		Text = Locale.T("✋ Drag to move  •  🧁 small items go ON tables & shelves"),
 		Color = WHITE,
 		TextColor3 = C.Ink,
 		Height = 24,
@@ -1630,6 +1635,31 @@ function House.Build(frame: Frame)
 	end)
 
 	-- Mode sombre : la maison et la pièce passent en mode nuit
+	-- Dopamine qui change (petits ticks du serveur) : prix abordables et
+	-- badge de la boutique à jour, 4 fois par seconde au plus
+	if ClientState.DopamineChanged then
+		local pending = false
+		local lastRefresh = 0
+		ClientState.DopamineChanged:Connect(function()
+			if not isOpen or pending then
+				return
+			end
+			pending = true
+			task.delay(math.max(0, 0.25 - (os.clock() - lastRefresh)), function()
+				pending = false
+				lastRefresh = os.clock()
+				if not isOpen then
+					return
+				end
+				refreshShopBadge()
+				local currentShop = shop
+				if currentShop and currentShop.IsOpen() then
+					currentShop.Refresh()
+				end
+			end)
+		end)
+	end
+
 	ClientState.DarkModeChanged:Connect(function(dark: boolean)
 		local currentRoomView = room
 		if currentRoomView then
@@ -1732,7 +1762,8 @@ function House.OnOpen()
 			currentOverview.Update(step)
 		end
 		refreshClock += step
-		if refreshClock >= 0.5 then
+		-- (sans DopamineChanged : on vérifie les prix toutes les 0,5 s)
+		if refreshClock >= 0.5 and not ClientState.DopamineChanged then
 			refreshClock = 0
 			refreshShopBadge()
 			local currentShop = shop

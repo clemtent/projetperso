@@ -95,6 +95,17 @@ local function pick(list: { any }, variant: any): any
 	return list[(v - 1) % #list + 1]
 end
 
+-- Majuscules qui gardent les accents ("Podomètre" -> "PODOMÈTRE")
+local ACCENTS = { ["é"] = "É", ["è"] = "È", ["ê"] = "Ê", ["ë"] = "Ë", ["à"] = "À", ["â"] = "Â", ["ç"] = "Ç",
+	["î"] = "Î", ["ï"] = "Ï", ["ô"] = "Ô", ["ù"] = "Ù", ["û"] = "Û" }
+local function upper(text: string): string
+	local result = string.upper(text)
+	for small, big in pairs(ACCENTS) do
+		result = string.gsub(result, small, big)
+	end
+	return result
+end
+
 function PhoneNotifs.Start(ctx)
 	local UIUtil = ctx.UIUtil
 	local Theme = ctx.Theme
@@ -266,7 +277,7 @@ function PhoneNotifs.Start(ctx)
 			Position = UDim2.fromOffset(66, 9),
 			BackgroundTransparency = 1,
 			Font = Theme.Fonts.Title,
-			Text = string.upper(data.App),
+			Text = upper(data.App),
 			TextColor3 = Theme.Colors.TextDim,
 			TextSize = 13,
 			TextXAlignment = Enum.TextXAlignment.Left,

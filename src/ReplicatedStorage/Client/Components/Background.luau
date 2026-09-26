@@ -2321,15 +2321,42 @@ function Background.Build(parent: Instance)
 
 	showTheme(equippedId(), isReduced(), true)
 
-	-- Une seule boucle anime tout (couche actuelle + celles qui s'effacent)
-	RunService.Heartbeat:Connect(function(dt: number)
+	-- Une seule boucle anime tout (couche actuelle + celles qui s'effacent).
+	-- v8 : 30 images/s quand une fenêtre est ouverte par-dessus (le fond est
+	-- alors assombri), plans de parallaxe déplacés seulement s'ils bougent,
+	-- plus de copie de la liste des couches à chaque image.
+	local snapshot: { Layer } = {}
+	local pending = 0
+	local panelCheck = 0
+	local panelOpen = false
+	local lastParallax = Vector2.new(math.huge, math.huge)
+	RunService.Heartbeat:Connect(function(frameDt: number)
+		panelCheck += frameDt
+		if panelCheck >= 0.25 then
+			panelCheck = 0
+			local panels = bg.Parent and bg.Parent.Parent and bg.Parent.Parent:FindFirstChild("Panels")
+			local overlay = panels and panels:FindFirstChild("PanelOverlay")
+			panelOpen = overlay ~= nil and overlay:IsA("GuiObject") and overlay.Visible
+		end
+		pending += frameDt
+		if panelOpen and pending < 1 / 30 then
+			return
+		end
+		local dt = math.min(pending, 0.1)
+		pending = 0
 		local speed = rushActive and 1.8 or 1
 		local clock = os.clock()
 		-- Parallaxe lissée (désactivée si les effets sont coupés)
 		local target = currentReduced and Vector2.zero or parallaxTarget(clock)
 		parallax += (target - parallax) * (1 - math.exp(-2.5 * dt))
+		local moved = (parallax - lastParallax).Magnitude > 0.0005
+		if moved then
+			lastParallax = parallax
+		end
 
-		for _, layer in ipairs(table.clone(layers)) do
+		table.clear(snapshot)
+		table.move(layers, 1, #layers, 1, snapshot)
+		for _, layer in ipairs(snapshot) do
 			local update = layer.Update
 			if update then
 				layer.Time += dt * speed
@@ -2339,8 +2366,10 @@ function Background.Build(parent: Instance)
 					warn("[Background] Animation arrêtée : " .. tostring(err))
 				end
 			end
-			for _, p in ipairs(layer.Planes) do
-				p.Frame.Position = UDim2.new(0.5, -parallax.X * p.Depth * PARALLAX_X, 0.5, -parallax.Y * p.Depth * PARALLAX_Y)
+			if moved or layer.Time <= dt * speed + 1e-6 then
+				for _, p in ipairs(layer.Planes) do
+					p.Frame.Position = UDim2.new(0.5, -parallax.X * p.Depth * PARALLAX_X, 0.5, -parallax.Y * p.Depth * PARALLAX_Y)
+				end
 			end
 		end
 

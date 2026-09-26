@@ -58,6 +58,11 @@ local function debugVisible(): boolean
 	return RunService:IsStudio()
 end
 
+-- La pastille "🕹️ Arcade" n'apparaît que si le panneau a bien été enregistré
+local function arcadeVisible(): boolean
+	return PanelManager.IsRegistered("Arcade")
+end
+
 -- Pastilles des menus (Feature = nil : toujours visible ; Visible = fonction optionnelle).
 -- Text : anglais, traduit à la construction (Locale.T)
 local PILLS = {
@@ -65,6 +70,8 @@ local PILLS = {
 	{ Id = "ItemShop", Text = "🛒 Shop", Color = Theme.Colors.Green, Feature = "ItemShop", Panel = "ItemShop" },
 	{ Id = "Achievements", Text = "🏆 Achievements", Color = Theme.Colors.Purple, Feature = "Achievements", Panel = "Achievements" },
 	{ Id = "Quests", Text = "📜 Quests", Color = Theme.Colors.Orange, Feature = "Quests", Panel = "Quests" },
+	-- 🕹️ Arcade : panneau écrit à part (enregistré par ClientMain s'il existe)
+	{ Id = "Arcade", Text = "🕹️ Arcade", Color = Color3.fromRGB(255, 70, 160), Feature = "Minigames", Panel = "Arcade", Visible = arcadeVisible },
 	{ Id = "Leaderboard", Text = "🥇 Leaderboard", Color = Theme.Colors.Blue, Feature = nil, Panel = "Leaderboard" },
 	{ Id = "Daily", Text = "🎁 Gift", Color = Theme.Colors.Pink, Feature = "Daily", Panel = "Daily" },
 	{ Id = "Themes", Text = "🎨 Themes", Color = Theme.Colors.Cyan, Feature = nil, Panel = "Themes" },
@@ -122,6 +129,14 @@ local houseWiggleAt = 0
 local seenAchievements: number? = nil -- succès déjà vus (badge "Succès")
 local counterFlashUntil = 0 -- le compteur brille en doré (gros gain) jusqu'à cette heure
 local counterFlashing = false
+local perSecondTarget = 0 -- Dopamine / s du serveur
+local perSecondShown = 0 -- valeur affichée (glisse vers la cible)
+local perSecondText = ""
+local perSecondDrawn = -1
+local perSecondFlashUntil = 0
+local perSecondFlashing = false
+local perSecondScale: UIScale
+local counterText = ""
 local robotClock = 0
 local robotFloatClock = 0
 local currentSkin = ""
@@ -212,18 +227,22 @@ local function onClick()
 		UIUtil.Tween(hatLabel, 0.35, { Position = UDim2.new(0.5, 0, 0, 18) }, Enum.EasingStyle.Bounce)
 	end
 
-	-- "+X" qui s'envole près du bouton (couleur selon le combo)
+	-- "+X" qui s'envole près du bouton : couleur / style selon la taille du gain
+	-- (combo) ; au-delà de x2,5 la valeur d'un clic : style "critique" doré
 	local ratio = ClientState.GetComboMeter() / 100
-	local color = ClientState.DarkMode and Theme.Colors.TextLight or Theme.Colors.Text
-	if ratio > 0.75 then
-		color = Theme.Colors.Red
-	elseif ratio > 0.35 then
-		color = Theme.Colors.Orange
-	end
+	local base = tonumber(ClientState.Data and ClientState.Data.ClickValue) or gain
+	local color, style = Effects.AmountStyle(gain, base, ClientState.DarkMode)
 	local center = Interface.GetCanvasCenter(clickButton)
-	local position = UDim2.fromOffset(center.X + random:NextNumber(-80, 80), center.Y - 30 + random:NextNumber(-14, 8))
-	Effects.FloatingText(effectsLayer, position, "+" .. formatAmount(gain), color, 28 + ratio * 12)
-	Effects.Burst(effectsLayer, UDim2.fromOffset(center.X + random:NextNumber(-40, 40), center.Y), nil, 4)
+	-- De part et d'autre du bouton, montée courte : les chiffres ne passent ni
+	-- sur le compteur ni sur le bandeau d'actualités
+	local side = random:NextNumber() < 0.5 and -1 or 1
+	local halfWidth = clickButton.AbsoluteSize.X / math.max(Interface.Scale, 0.01) / 2
+	local position = UDim2.fromOffset(
+		center.X + side * (halfWidth + random:NextNumber(4, 54)),
+		center.Y + 2 + random:NextNumber(-10, 10)
+	)
+	Effects.Pop(effectsLayer, position, "+" .. formatAmount(gain), { Color = color, Size = 28 + ratio * 10, Style = style, Rise = 36 })
+	Effects.Burst(effectsLayer, UDim2.fromOffset(center.X + random:NextNumber(-40, 40), center.Y), nil, 3)
 
 	-- Son de clic choisi dans les paramètres ; il monte dans les aigus avec le combo
 	SoundManager.PlayClick(0.95 + ratio * 0.6 + random:NextNumber(0, 0.08))
@@ -494,17 +513,29 @@ local function buildPills(parent: Frame, order: number)
 			Visible = def.Feature == nil and (def.Visible == nil or def.Visible()),
 			Parent = row,
 		})
+		-- Tablette : texte et marges un peu plus serrés (pastilles tactiles de 44 px)
+		-- pour que les 10 pastilles tiennent sur DEUX lignes (sinon la barre
+		-- d'améliorations descendrait sur les emplacements du bas)
+		local tablet = Interface.Device == "Tablet"
 		local button = UIUtil.PillButton({
 			Name = "Button",
 			Text = text,
 			Color = def.Color,
 			TextColor3 = def.Round and Theme.Colors.Text or Theme.Colors.TextLight,
 			Height = height,
-			TextSize = round and math.floor(height * 0.56) or math.floor(height * 0.45),
+			TextSize = round and math.floor(height * 0.56) or math.floor(height * (tablet and 0.39 or 0.45)),
 			Round = round,
 			Position = UDim2.fromOffset(0, buttonY),
 			Parent = holder,
 		})
+		local pillPad = tablet and 13 or math.floor(height * 0.45)
+		if not round then
+			local padding = button:FindFirstChildOfClass("UIPadding")
+			if padding then
+				padding.PaddingLeft = UDim.new(0, pillPad)
+				padding.PaddingRight = UDim.new(0, pillPad)
+			end
+		end
 		if not round then
 			-- Contour du texte pour rester lisible sur les couleurs claires
 			local stroke = UIUtil.Create("UIStroke", {
@@ -524,7 +555,7 @@ local function buildPills(parent: Frame, order: number)
 			-- Badge DANS la pastille, à droite du texte : il ne recouvre ni le
 			-- texte ni la pastille voisine (la pastille s'élargit quand il est là)
 			local padding = button:FindFirstChildOfClass("UIPadding")
-			local basePad = math.floor(height * 0.45)
+			local basePad = pillPad
 			badge.AnchorPoint = Vector2.new(1, 0.5)
 			local function placeBadge()
 				local right = badge.Visible and math.max(basePad, PILL_BADGE_CLEAR) or basePad
@@ -835,7 +866,8 @@ local function refreshBadges()
 		local dopamine = ClientState.GetConfirmedDopamine()
 		local affordable = 0
 		for _, cosmetic in ipairs(Config.Cosmetics) do
-			if not owned[cosmetic.Id] and dopamine >= cosmetic.Cost then
+			local unlocked = (tonumber(cosmetic.RequiresRebirths) or 0) <= (tonumber(data.Rebirths) or 0)
+			if unlocked and not owned[cosmetic.Id] and dopamine >= cosmetic.Cost then
 				affordable += 1
 			end
 		end
@@ -885,7 +917,17 @@ local function refreshBadges()
 end
 
 local function onState(data)
-	perSecondLabel.Text = Locale.T("%s Dopamine per second", formatAmount(data.PerSecond or 0))
+	-- Dopamine / s : la ligne glisse vers la nouvelle valeur (voir RenderStepped)
+	local perSecond = tonumber(data.PerSecond) or 0
+	if perSecond > perSecondTarget * 1.0005 and perSecondTarget > 0 then
+		perSecondFlashUntil = os.clock() + 0.9 -- hausse : la ligne passe au vert un instant
+		perSecondScale.Scale = 1.08
+		UIUtil.Tween(perSecondScale, 0.35, { Scale = 1 }, Enum.EasingStyle.Back)
+	end
+	if perSecondTarget <= 0 or perSecond < perSecondTarget then
+		perSecondShown = perSecond -- baisse (océan) ou 1er état : tout de suite
+	end
+	perSecondTarget = perSecond
 	comboBar.Visible = data.ComboEnabled == true
 	local equipped = data.Cosmetics and data.Cosmetics.Equipped
 	applySkin((equipped and equipped.Skin) or "")
@@ -990,6 +1032,7 @@ function CenterColumn.Build(parent: Frame, floatingLayer: Frame, fxLayer: Frame)
 		MaxTextSize = 21,
 		Parent = stack,
 	})
+	perSecondScale = UIUtil.Create("UIScale", { Parent = perSecondLabel })
 	local perSecondStroke = UIUtil.Stroke(perSecondLabel, Theme.Colors.TextDark, 1.5, 0.4)
 	perSecondStroke.Name = "DarkStroke"
 	perSecondStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
@@ -1033,7 +1076,33 @@ function CenterColumn.Build(parent: Frame, floatingLayer: Frame, fxLayer: Frame)
 	-- Compteur lissé, jauge de combo, Rush : à chaque image
 	local badgeClock = 0
 	RunService.RenderStepped:Connect(function(dt: number)
-		counterLabel.Text = formatAmount(ClientState.UpdateDisplay(dt))
+		local shownText = formatAmount(ClientState.UpdateDisplay(dt))
+		if shownText ~= counterText then
+			counterText = shownText
+			counterLabel.Text = shownText
+		end
+		-- Ligne "par seconde" : glisse vers la nouvelle valeur (texte changé seulement si besoin)
+		if perSecondShown ~= perSecondTarget then
+			perSecondShown += (perSecondTarget - perSecondShown) * (1 - math.exp(-8 * dt))
+			if math.abs(perSecondTarget - perSecondShown) <= math.max(0.01, perSecondTarget * 0.001) then
+				perSecondShown = perSecondTarget
+			end
+		end
+		if perSecondShown ~= perSecondDrawn then
+			perSecondDrawn = perSecondShown
+			local rateText = Locale.T("%s Dopamine per second", formatAmount(perSecondShown))
+			if rateText ~= perSecondText then
+				perSecondText = rateText
+				perSecondLabel.Text = rateText
+			end
+		end
+		local rateFlash = os.clock() < perSecondFlashUntil
+		if rateFlash or perSecondFlashing then
+			local dim = ClientState.DarkMode and Theme.DarkColors.TextDim or Theme.Colors.TextDim
+			local k = rateFlash and math.clamp((perSecondFlashUntil - os.clock()) / 0.9, 0, 1) or 0
+			perSecondLabel.TextColor3 = dim:Lerp(Theme.Colors.RobuxDark, k)
+			perSecondFlashing = rateFlash
+		end
 		-- Gros gain : le nombre brille en doré un instant
 		local flashing = os.clock() < counterFlashUntil
 		if flashing or counterFlashing then

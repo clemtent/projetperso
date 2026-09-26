@@ -412,6 +412,11 @@ showNext = function()
 	showing = false
 end
 
+-- Vrai pendant qu'une fenêtre de succès est à l'écran (OfferPopup attend)
+function AchievementPopup.IsShowing(): boolean
+	return showing
+end
+
 -- Nouveau succès débloqué (payload de Notify "Achievement")
 function AchievementPopup.Show(payload)
 	if type(payload) ~= "table" then

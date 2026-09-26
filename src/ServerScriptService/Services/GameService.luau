@@ -9,7 +9,10 @@
 	    "Aller à l'océan" (détox = rebirth) ;
 	  - gains passifs (voir le pipeline ci-dessous) ;
 	  - temps d'écran (par session, par jour UTC, total) ;
-	  - envoi régulier de l'état au client (StateUpdate) ;
+	  - envoi de l'état au client : état COMPLET (StateUpdate) seulement quand
+	    quelque chose de "structurel" change (achat, quête terminée, coffre
+	    gagné, réglage...), sinon un petit "StateTick" (Dopamine, ClickSeq,
+	    avancement des quêtes / du coffre) : voir "Synchronisation" plus bas ;
 	  - leaderstats (liste des joueurs en haut à droite) ;
 	  - Dopamine hors-ligne : l'absence est calculée au chargement
 	    (DataService:TakeOfflineSeconds), le gain est donné et notifié
@@ -63,6 +66,13 @@ for _, clickSound in ipairs(Config.ClickSounds) do
 	CLICK_SOUNDS[clickSound.Id] = true
 end
 local DEFAULT_CLICK_SOUND = "Default"
+-- Musiques au choix : "Shuffle" (aléatoire) ou la Key d'une piste de Config.Music.Playlist
+local MUSIC_TRACKS = { Shuffle = true }
+for _, track in ipairs(Config.Music.Playlist) do
+	if type(track.Key) == "string" then
+		MUSIC_TRACKS[track.Key] = true
+	end
+end
 
 -- Clients qui ont envoyé ClientReady (l'interface peut afficher les notifications).
 -- Peut arriver AVANT la fin du chargement des données : on le retient à part.
@@ -162,6 +172,9 @@ local function sanitizeData(data)
 	if not isValidNumber(data.Dopamine) or data.Dopamine < 0 then
 		data.Dopamine = 0
 	end
+	if type(data.Stock) ~= "table" then
+		data.Stock = { Shares = 0, CostBasis = 0 }
+	end
 	if not isValidNumber(data.Stock.Shares) or data.Stock.Shares < 0 then
 		data.Stock.Shares = 0
 		data.Stock.CostBasis = 0
@@ -173,6 +186,24 @@ local function sanitizeData(data)
 	if type(data.Settings.ClickSound) ~= "string" or not CLICK_SOUNDS[data.Settings.ClickSound] then
 		data.Settings.ClickSound = DEFAULT_CLICK_SOUND
 	end
+	-- Musique retirée de la config -> aléatoire
+	if type(data.Settings.MusicTrack) ~= "string" or not MUSIC_TRACKS[data.Settings.MusicTrack] then
+		data.Settings.MusicTrack = "Shuffle"
+	end
+	-- Niveaux au-delà du maximum (ex. 10 logos DVD -> 5 maintenant)
+	for upgradeId, level in pairs(data.Upgrades) do
+		local upgrade = Config.UpgradesById[upgradeId]
+		if upgrade and upgrade.MaxLevel and type(level) == "number" and level > upgrade.MaxLevel then
+			data.Upgrades[upgradeId] = upgrade.MaxLevel
+		end
+	end
+	-- Ancienne bourse retirée : les actions encore détenues sont remboursées une fois
+	if isValidNumber(data.Stock.Shares) and data.Stock.Shares > 0 then
+		local price = (Config.Stocks and tonumber(Config.Stocks.StartPrice)) or 0
+		data.Dopamine = math.min(Config.Game.MaxDopamine, data.Dopamine + data.Stock.Shares * price)
+	end
+	data.Stock.Shares = 0
+	data.Stock.CostBasis = 0
 	-- Langue inconnue (sauvegarde abîmée) -> automatique
 	if type(data.Settings.Language) ~= "string" or not VALID_LANGUAGES[data.Settings.Language] then
 		data.Settings.Language = DEFAULT_LANGUAGE
@@ -227,21 +258,60 @@ function GameService:AddDopamine(player: Player, amount: number, countForQuests:
 	data.Dopamine = math.min(maxValue, data.Dopamine + amount)
 	data.Stats.LifetimeDopamine = math.min(maxValue, data.Stats.LifetimeDopamine + amount)
 	if countForQuests ~= false then
-		services.QuestService:Progress(player, "Earn", amount)
+		-- Quêtes "Gagne X" : leur avancement part dans le petit tick ; un état
+		-- complet seulement si une quête a été terminée (nouvelle quête)
+		local before = data.Stats.QuestsCompleted
+		self:RunLight(player, services.QuestService.Progress, services.QuestService, player, "Earn", amount)
+		if data.Stats.QuestsCompleted ~= before then
+			self:MarkDirty(player)
+		end
 	end
-	self:MarkDirty(player)
+	self:MarkTick(player)
 end
 
+-- Quelque chose de "structurel" a changé : l'état COMPLET partira au
+-- prochain envoi (Config.Game.SyncRate). Pendant RunLight, le changement
+-- est rétrogradé en petit tick (l'appelant décide lui-même).
 function GameService:MarkDirty(player: Player)
 	local session = sessions[player]
 	if session then
-		session.Dirty = true
+		if session.Light > 0 then
+			session.TickDirty = true
+		else
+			session.Dirty = true
+		end
+	end
+end
+
+-- Seules des valeurs "légères" ont changé (Dopamine, clics, avancement des
+-- quêtes ou du coffre) : un petit StateTick suffit
+function GameService:MarkTick(player: Player)
+	local session = sessions[player]
+	if session then
+		session.TickDirty = true
 	end
 end
 
 function GameService:MarkAllDirty()
 	for _, session in pairs(sessions) do
 		session.Dirty = true
+	end
+end
+
+-- Appelle fn(...) en rétrogradant ses MarkDirty en petits ticks (appels
+-- fréquents : quêtes "Gagne X", jauge du coffre, succès). Les erreurs sont
+-- relancées après avoir rétabli le compteur.
+function GameService:RunLight(player: Player, fn: (...any) -> ...any, ...)
+	local session = sessions[player]
+	if not session then
+		fn(...)
+		return
+	end
+	session.Light += 1
+	local ok, err = pcall(fn, ...)
+	session.Light = math.max(0, session.Light - 1)
+	if not ok then
+		error(err, 0)
 	end
 end
 
@@ -312,7 +382,7 @@ function GameService:BuildState(player: Player)
 	local offlineRate, offlineMaxSeconds = Formulas.GetOfflineSettings(data)
 	local houseComfort = Formulas.GetHouseComfort(data)
 
-	return {
+	local state = {
 		Dopamine = data.Dopamine,
 		Rebirths = data.Rebirths,
 		Upgrades = data.Upgrades,
@@ -341,7 +411,6 @@ function GameService:BuildState(player: Player)
 		NextRebirthMultiplier = Formulas.GetRebirthMultiplier(data.Rebirths + 1),
 
 		Daily = services.DailyRewardService:GetInfo(player, stats),
-		Stock = { Shares = data.Stock.Shares, CostBasis = data.Stock.CostBasis },
 		Chests = {
 			Stored = data.Chests.Stored,
 			Progress = data.Chests.Progress,
@@ -369,6 +438,45 @@ function GameService:BuildState(player: Player)
 		-- Nombre de clics reçus par le serveur (sert au client pour sa prédiction)
 		ClickSeq = session and session.ClickSeq or 0,
 	}
+	-- Champs ajoutés par les autres services (machine chanceuse, jardin,
+	-- arcade...) : service:GetClientState(player, data) -> { [champ] = valeur }
+	for name, service in pairs(services) do
+		if type(service) == "table" and type(service.GetClientState) == "function" then
+			local ok, extra = pcall(service.GetClientState, service, player, data)
+			if ok and type(extra) == "table" then
+				for key, value in pairs(extra) do
+					if state[key] == nil then
+						state[key] = value
+					end
+				end
+			elseif not ok then
+				warn("[GameService] GetClientState de " .. tostring(name) .. " :", extra)
+			end
+		end
+	end
+	return state
+end
+
+-- Avancement des quêtes (pour savoir s'il a changé depuis le dernier envoi)
+local function questProgressKey(data): string
+	local parts = {}
+	for index, quest in ipairs(data.Quests) do
+		parts[index] = tostring(quest.Progress)
+	end
+	return table.concat(parts, ",")
+end
+
+-- Jauge du coffre arrondie au pourcent (ce que le client affiche)
+local function chestKey(data): number
+	local chests = data.Chests
+	return chests.Stored * 1000 + math.floor((chests.Progress or 0) * 100)
+end
+
+-- Mémorise ce qui vient d'être envoyé (le prochain tick n'envoie que ce qui change)
+local function rememberSent(session, data)
+	session.SentQuests = questProgressKey(data)
+	session.SentChest = chestKey(data)
+	session.SentClicks = data.Stats.TotalClicks
 end
 
 function GameService:SendState(player: Player)
@@ -378,7 +486,50 @@ function GameService:SendState(player: Player)
 		return
 	end
 	session.Dirty = false
+	session.TickDirty = false
+	session.Stale = false
+	session.LastFull = os.clock()
 	Net.Event("StateUpdate"):FireClient(player, self:BuildState(player))
+	rememberSent(session, data)
+	updateLeaderstats(player, data)
+end
+
+-- Petit état fréquent entre deux états complets. Toujours : Dopamine et
+-- ClickSeq ; seulement si changé : clics totaux, avancement des quêtes
+-- ({ progrès dans l'ordre de data.Quests }) et coffre ({ Stored, Progress }).
+function GameService:BuildTick(player: Player, session, data)
+	local tick: { [string]: any } = {
+		Dopamine = data.Dopamine,
+		ClickSeq = session.ClickSeq,
+	}
+	local clicks = data.Stats.TotalClicks
+	if clicks ~= session.SentClicks then
+		tick.TotalClicks = clicks
+	end
+	local quests = questProgressKey(data)
+	if quests ~= session.SentQuests then
+		local progress = {}
+		for index, quest in ipairs(data.Quests) do
+			progress[index] = quest.Progress
+		end
+		tick.QuestProgress = progress
+	end
+	if chestKey(data) ~= session.SentChest then
+		tick.Chests = { Stored = data.Chests.Stored, Progress = data.Chests.Progress }
+	end
+	return tick
+end
+
+function GameService:SendTick(player: Player)
+	local session = sessions[player]
+	local data = services.DataService:GetData(player)
+	if not session or not data then
+		return
+	end
+	session.TickDirty = false
+	Net.Event("StateTick"):FireClient(player, self:BuildTick(player, session, data))
+	rememberSent(session, data)
+	-- Liste des joueurs : texte "1.5M" (ne change pas à chaque tick)
 	updateLeaderstats(player, data)
 end
 
@@ -455,7 +606,6 @@ function GameService:SendFullSync(player: Player)
 	services.DVDService:SendSetup(player)
 	services.EventService:SendState(player)
 	services.LeaderboardService:SendTo(player)
-	services.StockService:SendTo(player)
 	deliverPendingOffline(player)
 end
 
@@ -488,8 +638,10 @@ function GameService:Detox(player: Player)
 
 	data.Dopamine = 0
 	data.Upgrades = kept
-	data.Stock.Shares = 0
-	data.Stock.CostBasis = 0
+	if type(data.Stock) == "table" then
+		data.Stock.Shares = 0
+		data.Stock.CostBasis = 0
+	end
 	data.Rebirths += 1
 	data.LiveFollowed = false -- le live repart de zéro : il faudra se réabonner
 	self:ResetCombo(player)
@@ -542,7 +694,15 @@ function GameService:PlayerReady(player: Player, data)
 		SessionSeconds = 0, -- temps de jeu de cette session
 		PendingOffline = services.DataService:TakeOfflineSeconds(player), -- absence à récompenser
 		OfflineDelivering = false, -- don du gain hors-ligne programmé
-		Dirty = true,
+		Dirty = true, -- état COMPLET à envoyer (changement structurel)
+		TickDirty = false, -- petit StateTick à envoyer (Dopamine, clics...)
+		Stale = false, -- des valeurs secondaires (stats...) ont bougé depuis le dernier état complet
+		LastFull = 0, -- os.clock() du dernier état complet
+		Light = 0, -- > 0 pendant RunLight (MarkDirty -> petit tick)
+		AchievementCount = -1, -- succès débloqués (pour détecter un nouveau succès)
+		SentQuests = "", -- avancement des quêtes déjà envoyé
+		SentChest = -1, -- jauge du coffre déjà envoyée
+		SentClicks = -1, -- clics totaux déjà envoyés
 	}
 	sanitizeData(data)
 	createLeaderstats(player)
@@ -577,7 +737,7 @@ local function onClick(player: Player)
 
 	-- Compté même si refusé : le client s'en sert pour corriger sa prédiction
 	session.ClickSeq += 1
-	session.Dirty = true
+	session.TickDirty = true
 
 	-- Seau de jetons : on regagne MaxClicksPerSecond jetons par seconde
 	local now = os.clock()
@@ -635,6 +795,9 @@ local function onBuyUpgrade(player: Player, upgradeId: any)
 	if Formulas.IsMaxed(upgrade, level) then
 		return false, GameService:T(player, "Max level reached")
 	end
+	if not Formulas.IsUpgradeUnlocked(data, upgrade) then
+		return false, GameService:T(player, "Locked for now")
+	end
 	local cost = Formulas.GetUpgradeCost(upgrade, level, data.Rebirths)
 	if not isValidNumber(cost) or data.Dopamine < cost then
 		return false, GameService:T(player, "Not enough %s", Config.Game.CurrencyName)
@@ -680,6 +843,11 @@ local function onSetSetting(player: Player, name: any, value: any)
 	if name == "ClickSound" then
 		-- Son de clic : l'Id doit exister dans Config.ClickSounds
 		if type(value) ~= "string" or #value > 64 or not CLICK_SOUNDS[value] then
+			return false
+		end
+	elseif name == "MusicTrack" then
+		-- Musique : "Shuffle" ou la Key d'une piste de Config.Music.Playlist
+		if type(value) ~= "string" or #value > 32 or not MUSIC_TRACKS[value] then
 			return false
 		end
 	elseif name == "Language" then
@@ -739,11 +907,17 @@ local function passiveTick(player: Player, session, elapsed: number)
 	end
 	screenTime[key] += elapsed
 	if math.floor(session.SessionSeconds) ~= before then
-		session.Dirty = true -- au moins 1 envoi par seconde pour le temps d'écran
+		-- Le client extrapole le temps d'écran : l'état complet périodique suffit
+		session.Stale = true
 	end
 
-	-- 4. Coffre mystère
-	services.LootService:Charge(player, data, elapsed)
+	-- 4. Coffre mystère : la jauge part dans le petit tick, un nouveau coffre
+	-- plein déclenche un état complet
+	local storedBefore = data.Chests.Stored
+	GameService:RunLight(player, services.LootService.Charge, services.LootService, player, data, elapsed)
+	if data.Chests.Stored ~= storedBefore then
+		GameService:MarkDirty(player)
+	end
 
 	-- 5. Auto-clic (Game Pass) : comme un clic normal, sans combo
 	local autoClicks = services.MonetizationService:TakeAutoClicks(player, elapsed)
@@ -790,18 +964,55 @@ function GameService:Start()
 		end
 	end)
 
-	-- Synchronisation vers les clients (seulement si quelque chose a changé)
+	-- Synchronisation vers les clients (toutes les Config.Game.SyncRate s) :
+	--   - état COMPLET (StateUpdate) si quelque chose de structurel a changé
+	--     (Dirty), ou toutes les FULL_REFRESH s si des valeurs secondaires
+	--     (stats, temps d'écran...) ont bougé ;
+	--   - sinon petit StateTick (Dopamine, ClickSeq, quêtes, coffre) si besoin.
+	-- Avant : l'état complet (maison, quêtes, stats...) partait 5 fois par
+	-- seconde dès qu'un gain passif existait (source de lag réseau / client).
+	local FULL_REFRESH = 10
+	local function countAchievements(data): number
+		local count = 0
+		for _, unlocked in pairs(data.Achievements) do
+			if unlocked then
+				count += 1
+			end
+		end
+		return count
+	end
 	task.spawn(function()
 		while true do
 			task.wait(Config.Game.SyncRate)
+			local now = os.clock()
 			for player, session in pairs(sessions) do
-				if session.Dirty then
+				if session.Dirty or session.TickDirty or session.Stale then
 					local ok, err = pcall(function()
+						local data = services.DataService:GetData(player)
+						if not data then
+							return
+						end
+						-- Succès : un nouveau succès = état complet (médaille, bonus)
 						services.AchievementService:Check(player)
-						self:SendState(player)
+						local achievements = countAchievements(data)
+						if achievements ~= session.AchievementCount then
+							if session.AchievementCount >= 0 then
+								session.Dirty = true
+							end
+							session.AchievementCount = achievements
+						end
+						if session.TickDirty then
+							session.Stale = true
+						end
+						if session.Dirty or (session.Stale and now - session.LastFull >= FULL_REFRESH) then
+							self:SendState(player)
+						elseif session.TickDirty then
+							self:SendTick(player)
+						end
 					end)
 					if not ok then
 						session.Dirty = false
+						session.TickDirty = false
 						warn("[GameService] Erreur d'envoi de l'état pour " .. player.Name .. " :", err)
 					end
 				end

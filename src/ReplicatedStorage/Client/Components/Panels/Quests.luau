@@ -45,6 +45,9 @@ end
 local cards = {}
 local emptyLabel: TextLabel
 
+-- Progression / prix qui bougent avec la Dopamine : rafraîchi aussi entre deux états complets
+Quests.RefreshOnTick = true
+
 function Quests.Build(content: Frame)
 	UIUtil.Create("UIListLayout", {
 		Padding = UDim.new(0, 12),

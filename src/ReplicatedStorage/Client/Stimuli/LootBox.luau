@@ -597,33 +597,52 @@ function LootBox.Start(ctx)
 			round(arm)
 			Create("UIGradient", { Transparency = fadeEnds(), Parent = arm })
 		end
-		glints[index] = { Frame = holder, Scale = Create("UIScale", { Scale = 0, Parent = holder }), Busy = false }
+		glints[index] = { Frame = holder, Scale = Create("UIScale", { Scale = 0, Parent = holder }), Busy = false, Age = 0 }
 	end
 
+	-- v8 : reflets animés dans la boucle (avant : 3 tweens + 2 task.delay par
+	-- reflet, ~3 reflets par seconde quand un coffre attend)
 	local function spawnGlint(position: Vector2, size: number)
 		for _, glint in ipairs(glints) do
 			if not glint.Busy then
 				glint.Busy = true
+				glint.Age = 0
 				local frame = glint.Frame
 				frame.Position = UDim2.fromOffset(position.X, position.Y)
 				frame.Size = UDim2.fromOffset(size, size)
 				frame.Rotation = 0
 				frame.Visible = true
 				glint.Scale.Scale = 0
-				UIUtil.Tween(glint.Scale, 0.22, { Scale = 1 }, Enum.EasingStyle.Back)
-				UIUtil.Tween(frame, 0.6, { Rotation = 90 })
-				task.delay(0.28, function()
-					if frame.Parent then
-						UIUtil.Tween(glint.Scale, 0.3, { Scale = 0 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-					end
-				end)
-				task.delay(0.62, function()
-					glint.Busy = false
-					if frame.Parent then
-						frame.Visible = false
-					end
-				end)
 				return
+			end
+		end
+	end
+
+	-- 0.22 s d'apparition (Back), maintien, puis disparition (0.28 -> 0.58 s) ; rotation 0 -> 90° en 0.6 s
+	local function stepGlints(dt: number)
+		for _, glint in ipairs(glints) do
+			if glint.Busy then
+				glint.Age += dt
+				local age = glint.Age
+				local frame = glint.Frame
+				if age >= 0.62 then
+					glint.Busy = false
+					frame.Visible = false
+				else
+					local scale
+					if age < 0.22 then
+						local g = age / 0.22 - 1
+						scale = 1 + 2.7 * g * g * g + 1.7 * g * g
+					elseif age < 0.28 then
+						scale = 1
+					else
+						local g = math.min(1, (age - 0.28) / 0.3)
+						scale = 1 - g * g
+					end
+					glint.Scale.Scale = math.max(0, scale)
+					local r = math.min(1, age / 0.6)
+					frame.Rotation = 90 * (1 - (1 - r) * (1 - r))
+				end
 			end
 		end
 	end
@@ -1024,7 +1043,7 @@ function LootBox.Start(ctx)
 		pillOverrideUntil = os.clock() + seconds
 	end
 
-	ctx.Connect(ctx.State.Changed, function()
+	local function onChests()
 		local newStored, newProgress, newMax = readChests()
 		if newProgress ~= serverProgress then
 			serverProgress = newProgress
@@ -1044,7 +1063,16 @@ function LootBox.Start(ctx)
 				floatText(Vector2.new(cx, EFFECT_TEXT_Y), "+1 📦", GOLD, 22)
 			end
 		end
-	end)
+	end
+	ctx.Connect(ctx.State.Changed, onChests)
+	-- v8 : la jauge arrive aussi par les petits ticks (StateTick) du serveur
+	if ctx.State.TickReceived then
+		ctx.Connect(ctx.State.TickReceived, function(tick)
+			if type(tick) == "table" and tick.Chests ~= nil then
+				onChests()
+			end
+		end)
+	end
 
 	------------------------------------------------------------------
 	-- Animation continue
@@ -1080,6 +1108,7 @@ function LootBox.Start(ctx)
 
 	ctx.OnRender(function(dt: number)
 		elapsed += dt
+		stepGlints(dt)
 		local ready = stored >= 1 and not opening
 		local full = stored >= maxStored
 

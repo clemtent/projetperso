@@ -38,13 +38,19 @@ local TEMPLATE = {
 	Quests = {}, -- liste des quêtes actives
 	Daily = { LastDay = 0, Streak = 0 },
 	-- ClickSound = Id de Config.ClickSounds ; Language = "Auto" | "en" | "fr"
-	-- ("Auto" = langue de Roblox du joueur) ; DarkMode = mode sombre de l'interface
-	Settings = { Sound = true, Music = true, Effects = true, ClickSound = "Default", Language = "Auto", DarkMode = false },
+	-- ("Auto" = langue de Roblox du joueur) ; DarkMode = mode sombre de l'interface ;
+	-- MusicTrack = "Shuffle" (aléatoire) ou Key d'une musique de Config.Music.Playlist
+	Settings = { Sound = true, Music = true, Effects = true, ClickSound = "Default", Language = "Auto", DarkMode = false,
+		MusicTrack = "Shuffle" },
 	Cosmetics = {
 		Owned = {}, -- [cosmeticId] = true
 		Equipped = { Hat = "", Skin = "" }, -- "" = rien d'équipé
 	},
-	Stock = { Shares = 0, CostBasis = 0 }, -- actions de la bourse
+	Stock = { Shares = 0, CostBasis = 0 }, -- ancienne bourse (remboursée puis vidée)
+	Casino = { Tokens = -1, Progress = 0 }, -- 🎰 jetons de tours gratuits (-1 = jamais initialisé)
+	Garden = {}, -- 🌻 parterres du jardin (voir GardenService)
+	Tickets = 0, -- 🎟️ tickets d'arcade (gagnés en jouant, JAMAIS achetables : mises des duels)
+	Arcade = {}, -- 🕹️ mini-jeux (records, limites du jour : voir MinigameService)
 	Chests = { Stored = 0, Progress = 0 }, -- coffres mystère
 	ScreenTime = {}, -- ["numéro du jour UTC"] = secondes jouées ce jour-là
 	Themes = {
@@ -87,6 +93,10 @@ local TEMPLATE = {
 		SlotSpins = 0,
 		SlotWins = 0,
 		StockTrades = 0,
+		GardenHarvests = 0,
+		MinigamesPlayed = 0,
+		MinigamesWon = 0,
+		DuelsWon = 0,
 		ChestsOpened = 0,
 		CosmeticsBought = 0,
 		QuestsCompleted = 0,

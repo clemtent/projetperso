@@ -98,6 +98,9 @@ local function normalizeEntry(entry, item)
 	local minY, maxY = FLOOR_MIN_Y, 1
 	if item.Placement == "Wall" then
 		minY, maxY = 0, WALL_MAX_Y
+	elseif item.Size <= HOUSE.TabletopMaxSize then
+		-- Petit objet : peut être posé sur un meuble (plus haut que le sol)
+		minY = HOUSE.TabletopMinY
 	end
 	local x = math.clamp(numberOr(entry.X, 0.5), 0, 1)
 	local y = math.clamp(numberOr(entry.Y, (minY + maxY) / 2), minY, maxY)
@@ -513,6 +516,9 @@ local function buyItem(player: Player, data, itemId: string): (boolean, string)
 	if item.MaxOwned and owned >= item.MaxOwned then
 		return false, T(player, "You can't have more %s %s", item.Icon, name)
 	end
+	if not Formulas.IsHouseEntryUnlocked(data, item) then
+		return false, T(player, "🔒 Unlocked after %d visits to the ocean", Formulas.GetHouseRequiredRebirths(item))
+	end
 	local price = Formulas.GetHouseItemPrice(item, owned)
 	if not isValidNumber(price) or price < 0 or data.Dopamine < price then
 		return false, T(player, "Not enough %s", Config.Game.CurrencyName)
@@ -549,6 +555,9 @@ local function buySize(player: Player, data, sizeId: string): (boolean, string)
 	local house = data.House
 	if house.OwnedSizes[sizeId] then
 		return false, T(player, "You already own this house")
+	end
+	if not Formulas.IsHouseEntryUnlocked(data, size) then
+		return false, T(player, "🔒 Unlocked after %d visits to the ocean", Formulas.GetHouseRequiredRebirths(size))
 	end
 	if not isValidNumber(size.Cost) or size.Cost < 0 or data.Dopamine < size.Cost then
 		return false, T(player, "Not enough %s", Config.Game.CurrencyName)
@@ -706,6 +715,9 @@ local function buySkin(player: Player, data, kind: string, argument: any): (bool
 	local owned = house[skin.OwnedKey]
 	if owned[id] then
 		return false, T(player, skin.AlreadyOwned)
+	end
+	if not Formulas.IsHouseEntryUnlocked(data, entry) then
+		return false, T(player, "🔒 Unlocked after %d visits to the ocean", Formulas.GetHouseRequiredRebirths(entry))
 	end
 	if not isValidNumber(entry.Cost) or entry.Cost < 0 or data.Dopamine < entry.Cost then
 		return false, T(player, "Not enough %s", Config.Game.CurrencyName)

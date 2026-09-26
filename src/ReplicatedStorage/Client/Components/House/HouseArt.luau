@@ -30,6 +30,9 @@
 	  HouseArt.Thumbnail(parent, item, size, zIndex?) -> Frame
 	      vignette carrée de `size` px (dessin, ou emoji si pas de dessin)
 	  HouseArt.Step(anims, clock) : fait vivre les animations
+	  HouseArt.Mirror(root, anims) : retourne le dessin gauche <-> droite
+	      (les animaux qui se promènent regardent où ils vont) ; le refaire
+	      remet le dessin à l'endroit
 ]]
 
 local HouseArt = {}
@@ -619,6 +622,73 @@ function HouseArt.Step(anims: { Anim }, clock: number)
 			-- Un clignement rapide toutes les ~4 s (décalé par objet)
 			local cycle = (clock + anim.Phase) % 4.2
 			object.Visible = cycle < 4.05
+		end
+	end
+end
+
+-- Miroir gauche <-> droite d'un dessin déjà peint (Roblox n'a pas d'échelle
+-- négative pour les GuiObjects) : chaque forme change de côté dans son
+-- parent, les rotations et dégradés horizontaux s'inversent, les
+-- animations suivent. Appliqué deux fois = dessin d'origine.
+-- `axis` (facultatif) : x de l'axe de symétrie pour les enfants directs de
+-- `root` (ex. les pieds d'un animal) ; par défaut le milieu de `root`.
+function HouseArt.Mirror(root: GuiObject, anims: { Anim }, axis: number?)
+	local byObject: { [Instance]: { Anim } } = {}
+	for _, anim in ipairs(anims) do
+		local list = byObject[anim.Object]
+		if not list then
+			list = {}
+			byObject[anim.Object] = list
+		end
+		table.insert(list, anim)
+	end
+	local widths: { [Instance]: number } = {}
+	local function widthOf(object: Instance): number
+		local cached = widths[object]
+		if cached then
+			return cached
+		end
+		local width = 0
+		if object == root then
+			width = root.AbsoluteSize.X > 0 and root.Size.X.Offset <= 0 and root.AbsoluteSize.X or root.Size.X.Offset
+		elseif object:IsA("GuiObject") then
+			local parent = object.Parent
+			local parentWidth = parent and widthOf(parent) or 0
+			width = object.Size.X.Scale * parentWidth + object.Size.X.Offset
+		end
+		widths[object] = width
+		return width
+	end
+	for _, object in ipairs(root:GetDescendants()) do
+		if object:IsA("GuiObject") then
+			local parent = object.Parent :: Instance
+			local parentWidth = widthOf(parent)
+			if parent == root and axis then
+				parentWidth = axis * 2
+			end
+			local width = widthOf(object)
+			local list = byObject[object]
+			local first = list and list[1]
+			local position = first and first.BasePosition or object.Position
+			local left = position.X.Scale * parentWidth + position.X.Offset - object.AnchorPoint.X * width
+			local newLeft = parentWidth - left - width
+			local newPosition = UDim2.new(0, newLeft + object.AnchorPoint.X * width, position.Y.Scale, position.Y.Offset)
+			local rotation = -(first and first.BaseRotation or object.Rotation)
+			object.Position = newPosition
+			object.Rotation = rotation
+			if list then
+				for _, anim in ipairs(list) do
+					anim.BasePosition = newPosition
+					anim.BaseRotation = rotation
+					if anim.Kind == "Sway" or anim.Kind == "Drift" then
+						anim.Amp = -anim.Amp
+					elseif anim.Kind == "Spin" then
+						anim.Speed = -anim.Speed
+					end
+				end
+			end
+		elseif object:IsA("UIGradient") then
+			object.Rotation = (180 - object.Rotation) % 360
 		end
 	end
 end

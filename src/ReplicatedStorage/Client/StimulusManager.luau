@@ -27,6 +27,19 @@
 	EffectsEnabled, GetSlotScale, GetSlotSize, et pour l'océan : Payload, Rebirths, Multiplier).
 	v5 : sur téléphone / tablette, le cadre d'un slot porte un UIScale
 	"SlotScale" (voir Slots) ; l'animation "pop" l'utilise directement.
+
+	v8 (performances) :
+	  - horloge partagée : UNE seule connexion RenderStepped pour tous les
+	    ctx.OnRender (au lieu d'une par stimulus) ;
+	  - visibilité (recalculée 4 fois par seconde) : "Visible" (image par
+	    image), "Dimmed" (une fenêtre est ouverte par-dessus : 30 images/s
+	    max, dt cumulé) ou "Hidden" (slot entièrement caché par la fenêtre :
+	    OnRender en pause, dt remis à zéro à la reprise). Nouveaux champs du
+	    ctx : IsVisible(), GetVisibility(), OnVisibilityChanged(callback).
+	    Un module peut demander Module.AlwaysRender = true (ex. DVD : les coins
+	    sont détectés image par image) ;
+	  - mesure facultative : StimulusManager.SetProfiling(true) puis
+	    GetProfile() -> { [Feature] = secondes passées dans OnRender }.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -61,7 +74,25 @@ type Record = {
 	Alive: boolean,
 	Dark: boolean,
 	Connections: { any },
+	Visibility: string, -- "Visible" | "Dimmed" | "Hidden"
+	AlwaysRender: boolean,
+	VisibilityCallbacks: { (visibility: string) -> () },
 }
+
+-- Horloge partagée (une seule connexion RenderStepped pour tous les stimuli)
+type RenderEntry = { Record: Record, Callback: (dt: number) -> (), Connected: boolean, Pending: number }
+local renderEntries: { RenderEntry } = {}
+local renderConnection: RBXScriptConnection? = nil
+local renderDirty = false -- des entrées ont été déconnectées (nettoyage en fin d'image)
+local DIMMED_STEP = 1 / 30 -- fenêtre ouverte par-dessus : 30 images/s max
+local MAX_DT = 0.1 -- dt maximum transmis (reprise après une pause)
+local VISIBILITY_INTERVAL = 0.25
+local visibilityClock = 0
+-- Stimuli jamais ralentis (détection image par image, cinématique)
+local ALWAYS_RENDER = { DVD = true, Ocean = true }
+local profiling = false
+local profile: { [string]: number } = {}
+local profileClock: () -> number = os.clock
 
 local modules: { [string]: any } = {} -- [nom] = module chargé, ou false si erreur
 local running: { [string]: Record } = {}
@@ -133,6 +164,9 @@ local function newContext(feature: string, container: Frame, slot: string): (any
 		Alive = true,
 		Dark = false,
 		Connections = {},
+		Visibility = "Visible",
+		AlwaysRender = ALWAYS_RENDER[feature] == true,
+		VisibilityCallbacks = {},
 	}
 
 	local ctx = {}
@@ -224,18 +258,60 @@ local function newContext(feature: string, container: Frame, slot: string): (any
 		return connection
 	end
 
-	-- Appelé à chaque image (RenderStepped) ; une erreur coupe la connexion (un seul avertissement)
+	-- Appelé à chaque image (horloge partagée, voir en-tête : ralenti quand
+	-- une fenêtre est ouverte par-dessus, en pause quand le slot est caché).
+	-- Une erreur coupe la boucle (un seul avertissement).
 	function ctx.OnRender(callback: (dt: number) -> ()): any
-		local connection
-		connection = ctx.Connect(RunService.RenderStepped, function(dt: number)
-			local ok, err = pcall(callback, dt)
-			if not ok then
-				warn("[Stimuli." .. feature .. "] Erreur dans OnRender (boucle arrêtée) : " .. tostring(err))
-				if connection then
-					connection:Disconnect()
+		if not record.Alive then
+			return DEAD_CONNECTION
+		end
+		local entry: RenderEntry = { Record = record, Callback = callback, Connected = true, Pending = 0 }
+		table.insert(renderEntries, entry)
+		local connection = {
+			Connected = true,
+			Disconnect = function(self)
+				if entry.Connected then
+					entry.Connected = false
+					renderDirty = true
 				end
-			end
-		end)
+				if type(self) == "table" then
+					self.Connected = false
+				end
+			end,
+		}
+		table.insert(record.Connections, connection)
+		return connection
+	end
+
+	-- Visibilité du stimulus : "Visible" | "Dimmed" (fenêtre ouverte par-dessus) | "Hidden"
+	function ctx.GetVisibility(): string
+		return record.Visibility
+	end
+
+	-- Faux quand le stimulus est entièrement caché (inutile de l'animer)
+	function ctx.IsVisible(): boolean
+		return record.Alive and record.Visibility ~= "Hidden"
+	end
+
+	-- callback(visibilité) à chaque changement de visibilité
+	function ctx.OnVisibilityChanged(callback: (visibility: string) -> ()): any
+		if not record.Alive then
+			return DEAD_CONNECTION
+		end
+		table.insert(record.VisibilityCallbacks, callback)
+		local connection = {
+			Connected = true,
+			Disconnect = function(self)
+				local index = table.find(record.VisibilityCallbacks, callback)
+				if index then
+					table.remove(record.VisibilityCallbacks, index)
+				end
+				if type(self) == "table" then
+					self.Connected = false
+				end
+			end,
+		}
+		table.insert(record.Connections, connection)
 		return connection
 	end
 
@@ -297,6 +373,152 @@ local function killRecord(record: Record)
 		end)
 	end
 	table.clear(record.Connections)
+	table.clear(record.VisibilityCallbacks)
+end
+
+----------------------------------------------------------------------
+-- Horloge partagée + visibilité (v8)
+----------------------------------------------------------------------
+
+-- Fenêtre (PanelManager) ouverte : (overlay, cadre de la fenêtre) ou nil
+local function openPanelFrame(): (GuiObject?, GuiObject?)
+	local layer = Interface.Layers.Panels
+	local overlay = layer and layer:FindFirstChild("PanelOverlay")
+	if not overlay or not overlay:IsA("GuiObject") or not overlay.Visible then
+		return nil, nil
+	end
+	local holder = overlay:FindFirstChild("WindowHolder")
+	return overlay, (holder and holder:IsA("GuiObject")) and holder or nil
+end
+
+-- Vrai si `inner` est entièrement dans `outer` (coordonnées écran)
+local function covers(outer: GuiObject, inner: GuiObject): boolean
+	local op, os_ = outer.AbsolutePosition, outer.AbsoluteSize
+	local ip, is = inner.AbsolutePosition, inner.AbsoluteSize
+	if is.X <= 0 or is.Y <= 0 then
+		return false
+	end
+	return ip.X >= op.X and ip.Y >= op.Y and ip.X + is.X <= op.X + os_.X and ip.Y + is.Y <= op.Y + os_.Y
+end
+
+local function computeVisibility(record: Record, overlay: GuiObject?, holder: GuiObject?): string
+	local container = record.Container
+	if not container.Parent or not container.Visible then
+		return "Hidden"
+	end
+	if record.AlwaysRender then
+		return "Visible"
+	end
+	if oceanPlaying then
+		return "Dimmed"
+	end
+	if overlay then
+		local fullCanvas = record.Slot == "Overlay" or record.Slot == "Background"
+		if not fullCanvas and holder and covers(holder, container) then
+			return "Hidden"
+		end
+		return "Dimmed"
+	end
+	return "Visible"
+end
+
+local function refreshVisibility(records: { [string]: Record })
+	local overlay, holder = openPanelFrame()
+	for _, record in pairs(records) do
+		local visibility = computeVisibility(record, overlay, holder)
+		if visibility ~= record.Visibility then
+			record.Visibility = visibility
+			for _, callback in ipairs(table.clone(record.VisibilityCallbacks)) do
+				local ok, err = pcall(callback, visibility)
+				if not ok then
+					warn("[Stimuli." .. record.Feature .. "] Erreur dans OnVisibilityChanged : " .. tostring(err))
+				end
+			end
+		end
+	end
+end
+
+local function runEntry(entry: RenderEntry, dt: number)
+	local record = entry.Record
+	local callback = entry.Callback
+	local ok, err
+	if profiling then
+		local started = profileClock()
+		ok, err = pcall(callback, dt)
+		profile[record.Feature] = (profile[record.Feature] or 0) + (profileClock() - started)
+	else
+		ok, err = pcall(callback, dt)
+	end
+	if not ok then
+		warn("[Stimuli." .. record.Feature .. "] Erreur dans OnRender (boucle arrêtée) : " .. tostring(err))
+		entry.Connected = false
+		renderDirty = true
+	end
+end
+
+local function stepRender(dt: number)
+	visibilityClock += dt
+	if visibilityClock >= VISIBILITY_INTERVAL then
+		visibilityClock = 0
+		refreshVisibility(running)
+	end
+	-- (indices : un callback peut ajouter une entrée pendant la boucle)
+	local count = #renderEntries
+	for index = 1, count do
+		local entry = renderEntries[index]
+		if entry and entry.Connected and entry.Record.Alive then
+			local visibility = entry.Record.Visibility
+			if visibility == "Hidden" then
+				entry.Pending = 0
+			elseif visibility == "Dimmed" then
+				entry.Pending += dt
+				if entry.Pending >= DIMMED_STEP then
+					local step = math.min(entry.Pending, MAX_DT)
+					entry.Pending = 0
+					runEntry(entry, step)
+				end
+			else
+				local step = dt + entry.Pending
+				entry.Pending = 0
+				runEntry(entry, math.min(step, MAX_DT))
+			end
+		elseif entry and entry.Connected then
+			entry.Connected = false
+			renderDirty = true
+		end
+	end
+	if renderDirty then
+		renderDirty = false
+		local kept = {}
+		for _, entry in ipairs(renderEntries) do
+			if entry.Connected then
+				table.insert(kept, entry)
+			end
+		end
+		renderEntries = kept
+	end
+end
+
+-- Mesure (debug) : temps passé dans les OnRender de chaque stimulus
+function StimulusManager.SetProfiling(enabled: boolean, clock: (() -> number)?)
+	profiling = enabled == true
+	profileClock = clock or os.clock
+	table.clear(profile)
+end
+
+function StimulusManager.GetProfile(): { [string]: number }
+	return table.clone(profile)
+end
+
+-- Nombre de boucles OnRender actives (debug)
+function StimulusManager.GetRenderCount(): number
+	local count = 0
+	for _, entry in ipairs(renderEntries) do
+		if entry.Connected then
+			count += 1
+		end
+	end
+	return count
 end
 
 ----------------------------------------------------------------------
@@ -339,6 +561,7 @@ local function startFeature(feature: string, module: any)
 
 	local ctx, record = newContext(feature, container, slot)
 	record.Module = module
+	record.AlwaysRender = record.AlwaysRender or module.AlwaysRender == true
 	running[feature] = record
 
 	task.spawn(function()
@@ -590,6 +813,11 @@ function StimulusManager.Init()
 
 	-- Échelle / position des slots selon l'appareil (téléphone, tablette, PC)
 	Slots.Bind(Interface)
+
+	-- Horloge partagée de tous les stimuli (une seule connexion)
+	if not renderConnection then
+		renderConnection = RunService.RenderStepped:Connect(stepRender)
+	end
 
 	ClientState.FeaturesChanged:Connect(applyFeatures)
 

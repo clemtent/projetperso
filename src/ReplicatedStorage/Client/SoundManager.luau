@@ -27,6 +27,16 @@
 	  SoundManager.MusicStateChanged (joue)      : la musique démarre / s'arrête
 	  SoundManager.VolumeChanged (musique, effets)
 	  SoundManager.ClickSoundChanged (id)        : le son du clic a changé
+	  SoundManager.MusicChanged ()               : v8, morceau / lecture / choix changé
+
+	v8 — choix de la musique (⚙️ Paramètres) : réglage Settings.MusicTrack =
+	"Shuffle" (toute la playlist, ordre mélangé) ou la Key d'un morceau (ce
+	morceau en boucle). Appliqué au chargement (premier état), sauvegardé par
+	SetMusicTrack / NextTrack / PreviousTrack (SetSetting "MusicTrack").
+	  GetMusicInfo() -> { Key, Name, Index, Count, Playing, Mode, Loading }?
+	  SetMusicTrack(key) ("Shuffle" | Key), NextTrack(), PreviousTrack(),
+	  GetMusicMode(), GetPlaylist() -> { { Key, Name, Index } }.
+	Les effets sonores (SFX) ne changent pas.
 ]]
 
 local ContentProvider = game:GetService("ContentProvider")
@@ -39,6 +49,8 @@ local TweenService = game:GetService("TweenService")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Signal = require(ReplicatedStorage.Shared.Signal)
 local Locale = require(ReplicatedStorage.Shared.Locale)
+local Net = require(ReplicatedStorage.Shared.Net)
+local ClientState = require(script.Parent.ClientState)
 
 local SoundManager = {}
 
@@ -54,6 +66,7 @@ SoundManager.TrackChanged = Signal.new() -- (name: string?, sound: Sound?)
 SoundManager.MusicStateChanged = Signal.new() -- (playing: boolean)
 SoundManager.VolumeChanged = Signal.new() -- (musicVolume, effectsVolume)
 SoundManager.ClickSoundChanged = Signal.new() -- (clickSoundId)
+SoundManager.MusicChanged = Signal.new() -- () : morceau, lecture ou choix de musique changé
 
 local MIN_INTERVAL = 0.035 -- évite d'empiler 20 fois le même son dans la même image
 local CROSSFADE = 2.5 -- durée (s) du fondu enchaîné entre deux morceaux
@@ -81,8 +94,12 @@ local clickSoundId = DEFAULT_CLICK_SOUND
 local lastClick = 0
 
 -- Playlist
-type Track = { Name: string?, Index: number?, Id: string }
+type Track = { Name: string?, Index: number?, Id: string, Key: string? }
 local tracks: { Track } = {} -- pistes valides (Id non vide)
+local SHUFFLE = "Shuffle"
+local musicMode = SHUFFLE -- "Shuffle" ou la Key du morceau choisi (joué en boucle)
+local modeLocalUntil = 0 -- choix local récent : on ignore l'état serveur (sauvegarde en cours)
+local modeSaveToken = 0
 local order: { number } = {} -- ordre de lecture (indices dans `tracks`)
 local orderPosition = 0
 local current: Sound? = nil
@@ -142,6 +159,7 @@ local function setPlaying(value: boolean)
 	if playing ~= value then
 		playing = value
 		SoundManager.MusicStateChanged:Fire(value)
+		SoundManager.MusicChanged:Fire()
 	end
 end
 
@@ -165,9 +183,26 @@ local function buildOrder()
 	orderPosition = 0
 end
 
+-- Indice (dans `tracks`) du morceau choisi, ou nil en mode aléatoire
+local function fixedIndex(): number?
+	if musicMode == SHUFFLE then
+		return nil
+	end
+	for index, track in ipairs(tracks) do
+		if track.Key == musicMode then
+			return index
+		end
+	end
+	return nil
+end
+
 local function nextTrackIndex(): number?
 	if #tracks == 0 then
 		return nil
+	end
+	local fixed = fixedIndex()
+	if fixed then
+		return fixed
 	end
 	orderPosition += 1
 	if orderPosition > #order then
@@ -181,7 +216,7 @@ end
 -- Lecture
 ----------------------------------------------------------------------
 
-local startNext: (crossfade: number) -> ()
+local startNext: (crossfade: number, forcedIndex: number?) -> ()
 
 -- Surveille le chargement d'un morceau : s'il ne charge pas à temps, on passe au suivant
 local function watchLoading(sound: Sound, myGeneration: number)
@@ -221,15 +256,15 @@ local function watchLoading(sound: Sound, myGeneration: number)
 	end)
 end
 
--- Lance le morceau suivant avec un fondu enchaîné
-startNext = function(crossfade: number)
+-- Lance le morceau suivant (ou `forcedIndex`) avec un fondu enchaîné
+startNext = function(crossfade: number, forcedIndex: number?)
 	local group = musicGroup
 	local parent = folder
 	if not group or not parent then
 		return
 	end
-	local index = nextTrackIndex()
-	if not index then
+	local index = forcedIndex or nextTrackIndex()
+	if not index or not tracks[index] then
 		return
 	end
 	local track = tracks[index]
@@ -247,7 +282,8 @@ startNext = function(crossfade: number)
 	sound.Name = "Music_" .. tostring(track.Name or track.Index)
 	sound.SoundId = track.Id
 	sound.Volume = 0
-	sound.Looped = #tracks == 1 -- un seul morceau : il boucle tout seul
+	-- Un seul morceau, ou un morceau choisi : il boucle tout seul
+	sound.Looped = #tracks == 1 or fixedIndex() == index
 	sound.SoundGroup = group
 	sound.Parent = parent
 	current = sound
@@ -265,6 +301,7 @@ startNext = function(crossfade: number)
 	watchLoading(sound, myGeneration)
 	setPlaying(true)
 	SoundManager.TrackChanged:Fire(displayName, sound)
+	SoundManager.MusicChanged:Fire()
 end
 
 -- Démarre / reprend / coupe la musique selon les réglages
@@ -372,7 +409,12 @@ function SoundManager.Init()
 	for index, entry in ipairs(playlist) do
 		local id = normalizeId(entry.Id)
 		if id ~= "" then
-			table.insert(tracks, { Name = entry.Name and tostring(entry.Name) or nil, Index = index, Id = id })
+			table.insert(tracks, {
+				Name = entry.Name and tostring(entry.Name) or nil,
+				Index = index,
+				Id = id,
+				Key = type(entry.Key) == "string" and entry.Key or ("Track" .. index),
+			})
 		end
 	end
 	buildOrder()
@@ -394,7 +436,7 @@ function SoundManager.Init()
 				if not sound and os.clock() >= retryAt and retryAt > 0 then
 					retryAt = 0
 					refreshMusic()
-				elseif sound and #tracks > 1 and sound.IsPlaying and sound.IsLoaded then
+				elseif sound and #tracks > 1 and not sound.Looped and sound.IsPlaying and sound.IsLoaded then
 					local length = sound.TimeLength
 					if length > CROSSFADE * 3 and sound.TimePosition >= length - CROSSFADE then
 						startNext(CROSSFADE)
@@ -403,6 +445,29 @@ function SoundManager.Init()
 			end
 		end
 	end)
+
+	-- Choix de la musique sauvegardé (Settings.MusicTrack), appliqué à chaque
+	-- état complet sauf juste après un choix local (sauvegarde en cours)
+	local function followSetting(data)
+		-- Musique autorisée avec "Lofi Beats" : suivi ici aussi, car le premier
+		-- état arrive souvent AVANT que ClientMain branche FeaturesChanged
+		-- (la musique ne démarrait alors qu'au prochain achat)
+		local allowed = ClientState.HasFeature("Lofi")
+		if allowed ~= musicAllowed then
+			SoundManager.SetMusicAllowed(allowed)
+		end
+		if os.clock() < modeLocalUntil or type(data) ~= "table" or type(data.Settings) ~= "table" then
+			return
+		end
+		local saved = data.Settings.MusicTrack
+		if type(saved) == "string" and saved ~= musicMode then
+			SoundManager.SetMusicTrack(saved, true)
+		end
+	end
+	ClientState.Changed:Connect(followSetting)
+	if ClientState.Data then
+		followSetting(ClientState.Data)
+	end
 
 	refreshMusic()
 end
@@ -553,13 +618,170 @@ function SoundManager.GetEffectsVolume(): number
 	return effectsVolume
 end
 
--- Passe au morceau suivant (fondu court). Renvoie vrai si c'est fait.
+----------------------------------------------------------------------
+-- Choix de la musique (v8)
+----------------------------------------------------------------------
+
+-- Sauvegarde le choix côté serveur (dernier choix seulement, 3 essais)
+local function saveMusicMode()
+	modeSaveToken += 1
+	local token = modeSaveToken
+	local value = musicMode
+	modeLocalUntil = os.clock() + 6
+	task.delay(0.4, function()
+		for attempt = 1, 3 do
+			if token ~= modeSaveToken then
+				return -- un choix plus récent a pris le relais
+			end
+			local ok, success = pcall(function()
+				return Net.Function("SetSetting"):InvokeServer("MusicTrack", value)
+			end)
+			if ok and success == true then
+				local data = ClientState.Data
+				if data and type(data.Settings) == "table" then
+					data.Settings.MusicTrack = value
+				end
+				return
+			end
+			if attempt < 3 then
+				task.wait(0.4)
+			end
+		end
+	end)
+end
+
+-- Vrai si `key` est "Shuffle" ou la Key d'un morceau de la playlist
+local function isValidMode(key: any): boolean
+	if key == SHUFFLE then
+		return true
+	end
+	for _, track in ipairs(tracks) do
+		if track.Key == key then
+			return true
+		end
+	end
+	return false
+end
+
+-- Choisit la musique : "Shuffle" (toute la playlist) ou la Key d'un morceau
+-- (joué en boucle). `fromServer` = vrai : pas de sauvegarde (valeur déjà
+-- sauvegardée). Renvoie vrai si le choix est valide.
+function SoundManager.SetMusicTrack(key: string, fromServer: boolean?): boolean
+	if not isValidMode(key) then
+		return false
+	end
+	local changed = key ~= musicMode
+	musicMode = key
+	if not fromServer then
+		saveMusicMode()
+	end
+	local fixed = fixedIndex()
+	local sound = current
+	if fixed then
+		if sound and currentTrack == tracks[fixed] then
+			sound.Looped = true -- déjà en cours : il boucle désormais
+		elseif shouldPlay() then
+			failures = 0
+			retryAt = 0
+			startNext(0.8, fixed)
+		elseif sound then
+			-- Musique coupée : on oublie le morceau en pause, le choix
+			-- démarrera à la reprise
+			generation += 1
+			current = nil
+			currentTrack = nil
+			sound:Destroy()
+		end
+	elseif changed then
+		-- Retour à l'aléatoire : le morceau en cours continue, puis la playlist
+		if sound then
+			sound.Looped = #tracks == 1
+		end
+		buildOrder()
+	end
+	SoundManager.MusicChanged:Fire()
+	return true
+end
+
+-- Choix actuel : "Shuffle" ou la Key du morceau choisi
+function SoundManager.GetMusicMode(): string
+	return musicMode
+end
+
+-- Playlist (pistes avec un ID) : { { Key, Name (traduit), Index } }
+function SoundManager.GetPlaylist(): { { Key: string, Name: string, Index: number } }
+	local list = {}
+	for index, track in ipairs(tracks) do
+		table.insert(list, { Key = track.Key or ("Track" .. index), Name = trackName(track), Index = index })
+	end
+	return list
+end
+
+-- Morceau en cours (ou choisi) : { Key, Name, Index, Count, Playing, Mode, Loading } ;
+-- nil si la playlist est vide
+function SoundManager.GetMusicInfo(): { [string]: any }?
+	if #tracks == 0 then
+		return nil
+	end
+	local track = currentTrack
+	local index = 0
+	if track then
+		index = table.find(tracks, track) or 0
+	else
+		index = fixedIndex() or 0
+		track = tracks[index]
+	end
+	local sound = current
+	return {
+		Key = track and track.Key or nil,
+		Name = track and trackName(track) or nil,
+		Index = index,
+		Count = #tracks,
+		Playing = playing,
+		Mode = musicMode,
+		Loading = sound ~= nil and playing and not sound.IsLoaded,
+	}
+end
+
+-- Passe au morceau suivant (fondu court). Morceau choisi : on choisit le
+-- suivant de la playlist (sauvegardé). Renvoie vrai si c'est fait.
 function SoundManager.NextTrack(): boolean
+	if #tracks == 0 then
+		return false
+	end
+	local fixed = fixedIndex()
+	if fixed then
+		local nextIndex = fixed % #tracks + 1
+		return SoundManager.SetMusicTrack(tracks[nextIndex].Key or SHUFFLE)
+	end
 	if not shouldPlay() then
 		return false
 	end
 	failures = 0
 	retryAt = 0
+	startNext(0.8)
+	return true
+end
+
+-- Revient au morceau précédent (même logique que NextTrack)
+function SoundManager.PreviousTrack(): boolean
+	if #tracks == 0 then
+		return false
+	end
+	local fixed = fixedIndex()
+	if fixed then
+		local previousIndex = (fixed - 2) % #tracks + 1
+		return SoundManager.SetMusicTrack(tracks[previousIndex].Key or SHUFFLE)
+	end
+	if not shouldPlay() then
+		return false
+	end
+	failures = 0
+	retryAt = 0
+	-- Mode aléatoire : on recule de deux crans dans l'ordre (nextTrackIndex avance d'un)
+	if #order > 0 then
+		orderPosition = ((orderPosition - 2) % #order)
+	end
 	startNext(0.8)
 	return true
 end

@@ -113,6 +113,7 @@ Notifications.Build(layers.Toasts)
 OfflinePopup.Build(layers.Toasts)
 AchievementPopup.Build(layers.Toasts)
 NeedDopamine.Build(layers.Toasts)
+require(Components:WaitForChild("OfferPopup")).Build(layers.Toasts) -- 💎 offres Robux discrètes (Config.Monetization.Offers)
 PanelManager.Build(layers.Panels)
 PanelManager.Register("ScreenTime", require(Panels:WaitForChild("ScreenTime")))
 PanelManager.Register("ItemShop", require(Panels:WaitForChild("ItemShop")))
@@ -130,6 +131,19 @@ do
 		PanelManager.Register("House", module)
 	else
 		warn("[ClientMain] Erreur au chargement du panneau House : " .. tostring(module))
+	end
+end
+
+-- 🕹️ Arcade (mini-jeux, duels) : chargée sans bloquer le reste en cas d'erreur
+do
+	local arcadeModule = Panels:FindFirstChild("Arcade")
+	if arcadeModule and arcadeModule:IsA("ModuleScript") then
+		local ok, module = pcall(require, arcadeModule)
+		if ok and type(module) == "table" then
+			PanelManager.Register("Arcade", module)
+		else
+			warn("[ClientMain] Erreur au chargement du panneau Arcade : " .. tostring(module))
+		end
 	end
 end
 

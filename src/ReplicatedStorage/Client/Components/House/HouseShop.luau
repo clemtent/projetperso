@@ -20,6 +20,10 @@
 	  - Maisons : chaque bâtiment avec sa silhouette dessinée (grille des
 	    pièces, pièces du joueur dans la maison actuelle), étages x pièces,
 	    objets max par pièce, prix / possédé / habité.
+	Visites à l'océan : les objets / styles / maisons chers se débloquent
+	avec les renaissances (Formulas.GetHouseRequiredRebirths) : ils restent
+	visibles, voilés, avec un cadenas "🔒 Après N visites 🌊" et ne
+	s'achètent pas (le serveur refuse aussi).
 	Achats : HouseCommon.Invoke (pcall), sons, confettis et bandeaux ;
 	message du serveur affiché en cas de refus. Les cartes sont construites
 	au premier affichage d'un onglet, les dessins peints par petits paquets.
@@ -53,6 +57,7 @@ local HouseShop = {}
 local C = HouseCommon.Colors
 local WHITE = Color3.new(1, 1, 1)
 local BUY_COLOR = Theme.Colors.Green
+local LOCKED_COLOR = Color3.fromRGB(150, 128, 196) -- bouton "verrouillé" (visites à l'océan)
 local SOFT_STROKE = C.PinkSoft:Lerp(C.Pink, 0.3)
 local CARD_HEIGHT = 178
 local STYLE_CARD_HEIGHT = 158
@@ -103,6 +108,7 @@ type ItemCard = {
 	Tile: GuiObject,
 	Emoji: TextLabel,
 	Painted: boolean,
+	Lock: Frame?,
 }
 
 type StyleCard = {
@@ -112,6 +118,8 @@ type StyleCard = {
 	Button: TextButton,
 	Stroke: UIStroke,
 	Check: Frame,
+	Preview: GuiObject,
+	Lock: Frame?,
 }
 
 type FavTile = {
@@ -143,6 +151,7 @@ type SizeRow = {
 	Status: TextLabel,
 	Cells: { [number]: MiniCell },
 	CellKey: string,
+	Lock: Frame?,
 }
 
 -- Onglets : Id, icône (onglet replié), texte (onglet choisi)
@@ -240,6 +249,77 @@ local function paintButton(button: TextButton, text: string, color: Color3, enab
 	button:SetAttribute("BaseColor", color)
 	UIUtil.SetButtonEnabled(button, enabled)
 	button.TextColor3 = textColor or Theme.ContrastText(color)
+end
+
+-- Texte "🔒 Après N visites à l'océan" (court, pour les cartes)
+local function lockText(required: number): string
+	if required == 1 then
+		return Locale.T("After 1 ocean visit")
+	end
+	return Locale.T("After %d ocean visits", required)
+end
+
+-- Voile "verrouillé" posé sur une vignette : cadenas + nombre de visites
+-- (créé à la demande : seules les entrées verrouillées paient ces Frames)
+local function lockOverlay(parent: GuiObject, compact: boolean): Frame
+	local veil = UIUtil.Create("Frame", {
+		Name = "Lock",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Color3.fromRGB(84, 64, 130),
+		BackgroundTransparency = 0.5,
+		ZIndex = 45,
+		Parent = parent,
+	})
+	UIUtil.Corner(veil, 12)
+	UIUtil.Gradient(veil, ColorSequence.new(Color3.fromRGB(150, 190, 255), Color3.fromRGB(255, 255, 255)), 90)
+	local badge = UIUtil.Create("Frame", {
+		Name = "Badge",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, compact and -8 or -10),
+		Size = UDim2.fromOffset(compact and 30 or 36, compact and 30 or 36),
+		BackgroundColor3 = WHITE,
+		ZIndex = 46,
+		Parent = veil,
+	})
+	UIUtil.Corner(badge, UDim.new(1, 0))
+	UIUtil.Stroke(badge, C.Lilac, 2, 0)
+	UIUtil.Create("TextLabel", {
+		Name = "Icon",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Font = Theme.Fonts.Body,
+		Text = "🔒",
+		TextSize = compact and 16 or 19,
+		ZIndex = 47,
+		Parent = badge,
+	})
+	local wave = UIUtil.Create("TextLabel", {
+		Name = "Wave",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -4),
+		Size = UDim2.new(1, -8, 0, compact and 16 or 18),
+		BackgroundTransparency = 1,
+		Font = Theme.Fonts.Title,
+		Text = "",
+		TextColor3 = WHITE,
+		TextScaled = true,
+		TextStrokeTransparency = 0.55,
+		TextStrokeColor3 = Color3.fromRGB(60, 44, 92),
+		ZIndex = 47,
+		Parent = veil,
+	})
+	UIUtil.Create("UITextSizeConstraint", { MaxTextSize = compact and 12 or 13, Parent = wave })
+	return veil
+end
+
+local function setLock(overlay: Frame, required: number)
+	local wave = overlay:FindFirstChild("Wave") :: TextLabel?
+	if wave then
+		local text = "🌊 " .. lockText(required)
+		if wave.Text ~= text then
+			wave.Text = text
+		end
+	end
 end
 
 -- Petit rectangle arrondi (dessins des maisons)
@@ -844,8 +924,22 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 		return check(HouseCommon.GetHouse(ClientState.Data))
 	end
 
+	-- Entrée verrouillée (visites à l'océan) : message et petite secousse
+	local function refuseLocked(button: GuiObject, entry: any): boolean
+		if HouseCommon.IsUnlocked(ClientState.Data, entry) then
+			return false
+		end
+		SoundManager.Play("Error", 0.7)
+		UIUtil.Shake(button)
+		handlers.Notify(Locale.T("🔒 Unlocked after %d visits to the ocean", HouseCommon.RequiredRebirths(entry)), C.Lilac)
+		return true
+	end
+
 	local function buyItem(card: ItemCard)
 		local item = card.Item
+		if refuseLocked(card.Button, item) then
+			return
+		end
 		local house = HouseCommon.GetHouse(ClientState.Data)
 		local owned = HouseCommon.Owned(house, item.Id)
 		if HouseCommon.IsMaxed(item, owned) then
@@ -887,6 +981,9 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 			return
 		end
 		local isOwned = owned[id] == true or card.Style.Cost <= 0
+		if not isOwned and refuseLocked(card.Button, card.Style) then
+			return
+		end
 		if not isOwned and HouseCommon.Dopamine() < card.Style.Cost then
 			needDopamine(card.Button, card.Style.Cost)
 			return
@@ -967,6 +1064,9 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 			return
 		end
 		local isOwned = house.OwnedSizes[size.Id] == true or size.Cost <= 0
+		if not isOwned and refuseLocked(row.Button, size) then
+			return
+		end
 		if not isOwned and HouseCommon.Dopamine() < size.Cost then
 			needDopamine(row.Button, size.Cost)
 			return
@@ -1041,6 +1141,8 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 			BackgroundColor3 = HouseCommon.CategoryTint(item.Category),
 			AutoButtonColor = false,
 			Text = "",
+			-- (les fils des lampes suspendues ne débordent plus sur la carte du dessus)
+			ClipsDescendants = true,
 			ZIndex = 35,
 			Parent = card,
 		})
@@ -1152,6 +1254,7 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 			Tile = tile,
 			Emoji = emoji,
 			Painted = false,
+			Lock = nil,
 		}
 		table.insert(itemCards, entry)
 		button.Activated:Connect(function()
@@ -1246,7 +1349,7 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 			Position = UDim2.new(0, 6, 1, -8),
 			ZIndex = 35,
 		})
-		local entry: StyleCard = { Kind = kind, Style = style, Card = card, Button = button, Stroke = stroke, Check = check }
+		local entry: StyleCard = { Kind = kind, Style = style, Card = card, Button = button, Stroke = stroke, Check = check, Preview = preview, Lock = nil }
 		table.insert(styleCards, entry)
 		button.Activated:Connect(function()
 			styleAction(entry)
@@ -1860,6 +1963,7 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 			Status = status,
 			Cells = cells,
 			CellKey = "",
+			Lock = nil,
 		}
 		layoutSizeRow(entry)
 		table.insert(sizeRows, entry)
@@ -2194,12 +2298,23 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 					local price = HouseCommon.Price(item, owned)
 					local affordable = dopamine >= price
 					local favorite = room ~= nil and HouseCommon.IsFavorite(room, item)
+					local locked = owned == 0 and not HouseCommon.IsUnlocked(data, item)
+					if locked and not card.Lock then
+						card.Lock = lockOverlay(card.Tile, true)
+					end
+					local lock = card.Lock
+					if lock then
+						lock.Visible = locked
+						if locked then
+							setLock(lock, HouseCommon.RequiredRebirths(item))
+						end
+					end
 					card.Owned.Visible = owned > 0
 					if owned > 0 then
 						local free = handlers.GetAvailable(item.Id)
 						setChipText(card.Owned, free > 0 and string.format("x%d • 📦%d", owned, free) or ("x" .. owned))
 					end
-					card.New.Visible = owned == 0 and affordable
+					card.New.Visible = owned == 0 and affordable and not locked
 					card.Fav.Visible = favorite
 					if favorite then
 						setText(card.Comfort, Locale.T("✨ +%s comfort", formatComfort(HouseCommon.PlacedComfort(room, item))), C.Lilac:Lerp(C.Ink, 0.3))
@@ -2208,10 +2323,15 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 					end
 					if maxed then
 						paintButton(card.Button, Locale.T("MAX ✓"), Theme.Colors.ButtonBottom, true, Theme.Colors.Text)
+					elseif locked then
+						paintButton(card.Button, "🔒 💧 " .. NumberFormatter.Format(price), LOCKED_COLOR, true, WHITE)
 					else
 						paintButton(card.Button, "💧 " .. NumberFormatter.Format(price), BUY_COLOR, affordable, Theme.Colors.TextDark)
 					end
-					if owned == 0 and affordable then
+					if locked then
+						card.Stroke.Color = C.Lilac
+						card.Stroke.Thickness = 1.5
+					elseif owned == 0 and affordable then
 						card.Stroke.Color = C.Butter:Lerp(C.PinkDeep, 0.2)
 						card.Stroke.Thickness = 2.5
 					elseif favorite then
@@ -2233,6 +2353,17 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 					local equippedId = room and (isWallpaper and room.Wallpaper or room.Floor) or nil
 					local equipped = equippedId == card.Style.Id
 					local isOwned = owned[card.Style.Id] == true or card.Style.Cost <= 0
+					local locked = not isOwned and not HouseCommon.IsUnlocked(data, card.Style)
+					if locked and not card.Lock then
+						card.Lock = lockOverlay(card.Preview, true)
+					end
+					local lock = card.Lock
+					if lock then
+						lock.Visible = locked
+						if locked then
+							setLock(lock, HouseCommon.RequiredRebirths(card.Style))
+						end
+					end
 					card.Check.Visible = equipped
 					if equipped then
 						paintButton(card.Button, Locale.T("✔ Applied"), Theme.Colors.ButtonBottom, true, Theme.Colors.Text)
@@ -2241,6 +2372,10 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 					elseif isOwned then
 						paintButton(card.Button, Locale.T("Apply"), Theme.Colors.Blue, true, WHITE)
 						card.Stroke.Color = SOFT_STROKE
+						card.Stroke.Thickness = 1.5
+					elseif locked then
+						paintButton(card.Button, "🔒 💧 " .. NumberFormatter.Format(card.Style.Cost), LOCKED_COLOR, true, WHITE)
+						card.Stroke.Color = C.Lilac
 						card.Stroke.Thickness = 1.5
 					else
 						local affordable = dopamine >= card.Style.Cost
@@ -2302,12 +2437,29 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 					end
 					row.Stroke.Color = SOFT_STROKE
 					row.Stroke.Thickness = 1.5
+				elseif not HouseCommon.IsUnlocked(data, size) then
+					local required = HouseCommon.RequiredRebirths(size)
+					paintButton(row.Button, "🔒 💧 " .. NumberFormatter.Format(size.Cost), LOCKED_COLOR, true, WHITE)
+					setText(row.Status, "🔒 🌊 " .. lockText(required), Color3.fromRGB(128, 92, 196))
+					row.Stroke.Color = C.Lilac
+					row.Stroke.Thickness = 1.5
 				else
 					local affordable = dopamine >= size.Cost
 					paintButton(row.Button, "💧 " .. NumberFormatter.Format(size.Cost), BUY_COLOR, affordable, Theme.Colors.TextDark)
 					setText(row.Status, affordable and Locale.T("You can afford it!") or Locale.T("Not enough Dopamine yet"), C.PinkDeep)
 					row.Stroke.Color = SOFT_STROKE
 					row.Stroke.Thickness = 1.5
+				end
+				local lockedRow = not current and not isOwned and not HouseCommon.IsUnlocked(data, size)
+				if lockedRow and not row.Lock then
+					row.Lock = lockOverlay(row.Tile, true)
+				end
+				local rowLock = row.Lock
+				if rowLock then
+					rowLock.Visible = lockedRow
+					if lockedRow then
+						setLock(rowLock, HouseCommon.RequiredRebirths(size))
+					end
 				end
 			end
 		end
