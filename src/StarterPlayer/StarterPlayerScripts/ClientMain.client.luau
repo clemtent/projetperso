@@ -133,6 +133,19 @@ do
 	end
 end
 
+-- 🕹️ Arcade (mini-jeux, duels) : chargée sans bloquer le reste en cas d'erreur
+do
+	local arcadeModule = Panels:FindFirstChild("Arcade")
+	if arcadeModule and arcadeModule:IsA("ModuleScript") then
+		local ok, module = pcall(require, arcadeModule)
+		if ok and type(module) == "table" then
+			PanelManager.Register("Arcade", module)
+		else
+			warn("[ClientMain] Erreur au chargement du panneau Arcade : " .. tostring(module))
+		end
+	end
+end
+
 -- Outils de test : UNIQUEMENT dans Studio (panneau "🛠️ Test" + commandes de chat)
 if DebugTools.Enabled then
 	local debugModule = Panels:FindFirstChild("Debug")

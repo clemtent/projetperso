@@ -23,6 +23,7 @@ Net.Events = {
 	"ClientReady", -- C -> S () : l'interface est prête, envoie-moi tout
 	"Click", -- C -> S () : un clic sur le bouton
 	"StateUpdate", -- S -> C (state) : état complet du joueur
+	"StateTick", -- S -> C (tick) : petite mise à jour fréquente (Dopamine, clics...) entre deux états complets
 	"Notify", -- S -> C (payload) : succès, quêtes, bonus, jackpot, détox...
 	"DVDSetup", -- S -> C ({ Logos = { params... } }) : trajectoires des logos DVD
 	"DVDResize", -- C -> S (w, h) : taille d'un logo à l'écran (fraction de l'écran)
