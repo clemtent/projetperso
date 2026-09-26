@@ -32,7 +32,6 @@ local ORDER = {
 	"EventService",
 	"DVDService",
 	"InteractService",
-	"StockService",
 	"CasinoService",
 	"LootService",
 	"GardenService",

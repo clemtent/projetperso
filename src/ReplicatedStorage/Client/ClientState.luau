@@ -51,8 +51,6 @@ ClientState.RebirthLeaderboard = {}
 -- Ajouts v2
 ClientState.FeaturesChanged = Signal.new() -- (features) : l'ensemble des Features a changé
 ClientState.SpawnReceived = Signal.new() -- (info) : chaque événement "Spawn"
-ClientState.Stock = { Symbol = Config.Stocks.Symbol, Price = Config.Stocks.StartPrice, History = {} }
-ClientState.StockChanged = Signal.new() -- (stock)
 ClientState.DVDSetup = { Logos = {} }
 ClientState.DVDSetupChanged = Signal.new() -- (setup)
 ClientState.DarkMode = false
@@ -198,15 +196,6 @@ function ClientState.Init()
 			ClientState.ServerLeaderboard,
 			ClientState.RebirthLeaderboard
 		)
-	end)
-
-	Net.Event("StockUpdate").OnClientEvent:Connect(function(stock)
-		if type(stock) ~= "table" then
-			return
-		end
-		stock.History = stock.History or {}
-		ClientState.Stock = stock
-		ClientState.StockChanged:Fire(stock)
 	end)
 
 	Net.Event("DVDSetup").OnClientEvent:Connect(function(setup)

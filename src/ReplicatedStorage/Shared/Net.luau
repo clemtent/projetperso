@@ -34,7 +34,6 @@ Net.Events = {
 	"Interact", -- C -> S (kind, arg) : papier bulle, moulin, titre du fil d'actu, presse
 	"EventUpdate", -- S -> C (rush) : début / fin d'un Dopamine Rush
 	"LeaderboardUpdate", -- S -> C (top) : top du classement
-	"StockUpdate", -- S -> C ({ Symbol, Price, History }) : cours de la bourse
 	"ArcadeEvent", -- S <-> C (kind, payload) : arcade en temps réel (invitations, coups des duels...)
 }
 
@@ -42,8 +41,7 @@ Net.Functions = {
 	"BuyUpgrade", -- C -> S (upgradeId) -> (succès, message)
 	"ClaimDaily", -- C -> S () -> (succès, message)
 	"SetSetting", -- C -> S (nom, valeur) -> succès
-	"StockTrade", -- C -> S ("buy" | "sell", fraction) -> (succès, message)
-	"CasinoSpin", -- C -> S (fraction) -> (succès, résultat | message)
+	"CasinoSpin", -- C -> S () -> (succès, résultat | message) : tour GRATUIT (1 jeton) de la machine chanceuse
 	"OpenChest", -- C -> S () -> (succès, résultat | message)
 	"ItemShop", -- C -> S ("buy" | "equip" | "unequip", cosmeticId) -> (succès, message)
 	"ThemeShop", -- C -> S ("buy" | "equip", themeId) -> (succès, message)
