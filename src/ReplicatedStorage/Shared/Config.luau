@@ -779,6 +779,10 @@ Config.House = {
 	ComfortBonusPerPoint = 0.005, -- +0,5 % de TOUS les gains par point de confort des objets posés
 	MaxComfortBonus = 1.0, -- plafonné à +100 %
 	WallRatio = 0.46, -- haut de la pièce = murs, bas = sol (rendu client + limites du serveur)
+	-- Petits objets "de sol" (Size <= TabletopMaxSize) : on peut aussi les poser
+	-- SUR un meuble (table, bureau, étagère...) : ils peuvent monter jusqu'à TabletopMinY
+	TabletopMaxSize = 70,
+	TabletopMinY = 0.22,
 
 	Sizes = {
 		{ Id = "Studio", Name = "Cozy studio", Icon = "🏠", Cost = 0, Floors = 1, Columns = 2,
@@ -1324,6 +1328,23 @@ Config.House = {
 			Cost = 1.5e6, CostGrowth = 1.45, Comfort = 10 },
 		{ Id = "Dragon", Name = "Baby dragon", Icon = "🐉", Category = "Pets", Placement = "Floor", Size = 120,
 			Cost = 5e7, CostGrowth = 1.6, Comfort = 18 },
+		-- 🐾 Pour les animaux (niche, arbre à chat...) : les animaux vont s'en servir
+		{ Id = "PetBowl", Name = "Food bowl", Icon = "🥣", Category = "Pets", Placement = "Floor", Size = 40,
+			Cost = 3000, CostGrowth = 1.2, Comfort = 1 },
+		{ Id = "PetToys", Name = "Pet toy basket", Icon = "🎾", Category = "Pets", Placement = "Floor", Size = 50,
+			Cost = 6000, CostGrowth = 1.25, Comfort = 2 },
+		{ Id = "PetBed", Name = "Cozy pet bed", Icon = "🧺", Category = "Pets", Placement = "Floor", Size = 70,
+			Cost = 9000, CostGrowth = 1.3, Comfort = 3 },
+		{ Id = "ScratchingPost", Name = "Scratching post", Icon = "🪵", Category = "Pets", Placement = "Floor", Size = 90,
+			Cost = 18000, CostGrowth = 1.3, Comfort = 3 },
+		{ Id = "PetFountain", Name = "Pet water fountain", Icon = "💧", Category = "Pets", Placement = "Floor", Size = 50,
+			Cost = 25000, CostGrowth = 1.3, Comfort = 3 },
+		{ Id = "DogHouse", Name = "Dog house", Icon = "🦴", Category = "Pets", Placement = "Floor", Size = 110,
+			Cost = 45000, CostGrowth = 1.35, Comfort = 5 },
+		{ Id = "BirdCage", Name = "Bird cage", Icon = "🕊️", Category = "Pets", Placement = "Floor", Size = 100,
+			Cost = 90000, CostGrowth = 1.35, Comfort = 5 },
+		{ Id = "CatTree", Name = "Cat tree", Icon = "😺", Category = "Pets", Placement = "Floor", Size = 140,
+			Cost = 160000, CostGrowth = 1.4, Comfort = 7 },
 	},
 }
 

@@ -98,6 +98,9 @@ local function normalizeEntry(entry, item)
 	local minY, maxY = FLOOR_MIN_Y, 1
 	if item.Placement == "Wall" then
 		minY, maxY = 0, WALL_MAX_Y
+	elseif item.Size <= HOUSE.TabletopMaxSize then
+		-- Petit objet : peut être posé sur un meuble (plus haut que le sol)
+		minY = HOUSE.TabletopMinY
 	end
 	local x = math.clamp(numberOr(entry.X, 0.5), 0, 1)
 	local y = math.clamp(numberOr(entry.Y, (minY + maxY) / 2), minY, maxY)

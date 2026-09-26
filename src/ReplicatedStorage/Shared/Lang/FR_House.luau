@@ -300,6 +300,14 @@ return {
 		["Unknown room"] = "Pièce inconnue",
 
 		["🔒 Unlocked after %d visits to the ocean"] = "🔒 Débloqué après %d visites à l'océan",
+		["Food bowl"] = "Gamelle",
+		["Pet toy basket"] = "Panier de jouets",
+		["Cozy pet bed"] = "Panier douillet",
+		["Scratching post"] = "Griffoir",
+		["Pet water fountain"] = "Fontaine à eau",
+		["Dog house"] = "Niche",
+		["Bird cage"] = "Cage à oiseaux",
+		["Cat tree"] = "Arbre à chat",
 		-- Messages du serveur (HouseService)
 		["Unknown house item"] = "Objet de maison inconnu",
 		["You can't have more %s %s"] = "Tu ne peux pas avoir plus de %s %s",
