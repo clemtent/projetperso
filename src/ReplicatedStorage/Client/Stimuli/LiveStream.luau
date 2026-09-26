@@ -1642,6 +1642,8 @@ function LiveStream.Start(ctx)
 		nextRaid = random:NextNumber(45, 90),
 		uptime = random:NextInteger(40 * 60, 3 * 3600),
 		shownExpression = "",
+		compact = false, -- téléphone : chat en plus gros, sans épinglé ni saisie
+		avatarSize = 14,
 	}
 
 	local function wow(duration: number?)
@@ -1744,7 +1746,7 @@ function LiveStream.Start(ctx)
 		Parent = chat,
 	})
 	-- Le "rouleau" est accroché en bas et grandit vers le haut (les plus
-	-- vieux TXT.messages sortent par le haut, comme sur un vrai chat)
+	-- vieux messages sortent par le haut, comme sur un vrai chat)
 	local scroller = box({
 		Name = "Scroller",
 		AnchorPoint = Vector2.new(0, 1),
@@ -1783,6 +1785,7 @@ function LiveStream.Start(ctx)
 			Parent = chat,
 		}, 6)
 		UI.Stroke(input, Color3.fromRGB(96, 82, 140), 1, 0.3)
+		chatExtras.Input = input
 		text({
 			Text = Locale.T("Send a message"),
 			TextSize = 10,
@@ -1875,8 +1878,8 @@ function LiveStream.Start(ctx)
 			line.Avatar.Visible = true
 			line.Avatar.BackgroundColor3 = hexColor(nameColor(name))
 			line.Initial.Text = string.upper(string.sub(name, 1, 1))
-			line.Label.Position = UDim2.fromOffset(18, 0)
-			line.Label.Size = UDim2.new(1, -18, 0, 0)
+			line.Label.Position = UDim2.fromOffset(S.avatarSize + 4, 0)
+			line.Label.Size = UDim2.new(1, -(S.avatarSize + 4), 0, 0)
 		else
 			line.Avatar.Visible = false
 			line.Label.Position = UDim2.fromOffset(0, 0)
@@ -1901,7 +1904,7 @@ function LiveStream.Start(ctx)
 		local prefix = badge ~= "" and (badge .. " ") or ""
 		local body = escape(message)
 		if options and options.Emote then
-			body = '<font size="16">' .. body .. "</font>"
+			body = '<font size="' .. (S.compact and 19 or 16) .. '">' .. body .. "</font>"
 		end
 		writeLine(prefix .. '<font color="' .. nameColor(name) .. '"><b>' .. escape(name) .. "</b></font>: " .. body, name, options and options.Highlight)
 	end
@@ -1933,7 +1936,7 @@ function LiveStream.Start(ctx)
 		end
 		lastReaction[key] = now
 		pushChat(randomName(), pick(list, random))
-		-- Quelques TXT.messages de plus, un peu après (le chat s'emballe)
+		-- Quelques messages de plus, un peu après (le chat s'emballe)
 		for i = 1, extra or 0 do
 			later(0.25 * i + random:NextNumber(0, 0.2), function()
 				pushChat(randomName(), pick(list, random))
@@ -2653,7 +2656,40 @@ function LiveStream.Start(ctx)
 		end
 	end
 
-	-- Quelques TXT.messages dès le départ (le chat n'est jamais vide)
+	-- Mode compact (petit écran : le slot est réduit) : texte du chat plus
+	-- gros, message épinglé et champ de saisie cachés
+	local function applyCompact()
+		local scale = 1
+		if type(ctx.GetSlotScale) == "function" then
+			local ok, value = pcall(ctx.GetSlotScale)
+			scale = ok and tonumber(value) or 1
+		end
+		local compact = scale < 0.62
+		if compact == S.compact then
+			return
+		end
+		S.compact = compact
+		S.avatarSize = compact and 17 or 14
+		for _, line in ipairs(chatLines) do
+			line.Label.TextSize = compact and 14 or 11
+			line.Avatar.Size = UDim2.fromOffset(S.avatarSize, S.avatarSize)
+			line.Initial.TextSize = compact and 11 or 9
+			if line.Avatar.Visible then
+				line.Label.Position = UDim2.fromOffset(S.avatarSize + 4, 0)
+				line.Label.Size = UDim2.new(1, -(S.avatarSize + 4), 0, 0)
+			end
+		end
+		for _, extra in pairs(chatExtras) do
+			extra.Visible = not compact
+		end
+		chatTitle.TextSize = compact and 15 or 12
+		local top = compact and TITLE_H + 3 or LIST_Y
+		chatList.Position = UDim2.fromOffset(0, top)
+		chatList.Size = UDim2.new(1, 0, 0, compact and (VIDEO_H - top - 4) or LIST_H)
+	end
+	applyCompact()
+
+	-- Quelques messages dès le départ (le chat n'est jamais vide)
 	for _ = 1, 6 do
 		chatTick()
 	end
@@ -2765,7 +2801,7 @@ function LiveStream.Start(ctx)
 		S.clock += dt
 		local now = os.clock()
 
-		-- Tâches planifiées (TXT.messages en rafale, fin de raid, dons...)
+		-- Tâches planifiées (messages en rafale, fin de raid, dons...)
 		if #pending > 0 then
 			local index = 1
 			while index <= #pending do
@@ -2996,6 +3032,9 @@ function LiveStream.Start(ctx)
 		if S.secondTimer <= 0 then
 			S.secondTimer = 1
 			S.uptime += 1
+			if S.uptime % 5 == 0 then
+				applyCompact()
+			end
 			subtitleLabel.Text = string.format("🍤 %s%s · <font color=\"#FF8FA8\">%d:%02d:%02d</font>", streamTitle, qualityTag, S.uptime // 3600, (S.uptime // 60) % 60, S.uptime % 60)
 		end
 
