@@ -850,8 +850,8 @@ function NewsTicker.Start(ctx)
 			Parent = panel,
 		})
 		local value = text({
-			Size = UDim2.new(1, -32, 0, 14),
-			Position = UDim2.fromOffset(30, 14),
+			Size = UDim2.new(1, -32, 0, 13),
+			Position = UDim2.fromOffset(30, 15),
 			Text = "",
 			Font = Theme.Fonts.Number,
 			TextColor3 = white,

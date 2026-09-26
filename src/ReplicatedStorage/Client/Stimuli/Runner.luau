@@ -28,7 +28,8 @@
 	    et, de temps en temps, une chute, un écran de fin de course puis une
 	    nouvelle partie (le record est gardé pendant la session).
 	Tout est dessiné avec des Frames créées une seule fois puis recyclées
-	(aucune création pendant la partie). Une seule boucle OnRender, en pause
+	(~500 instances en tout, modificateurs compris ; aucune création pendant
+	la partie). Une seule boucle OnRender, en pause
 	quand la carte n'est pas visible ; les couleurs jour / nuit ne sont
 	recalculées que 5 fois par seconde, et seulement pendant les transitions.
 	Purement visuel : aucun appel serveur. Tout dérive de la taille du slot.

@@ -2138,7 +2138,7 @@ function Press.Start(ctx)
 		if entry.Special == "Sponge" then
 			-- L'éponge reprend sa forme... puis repart quand même
 			UIUtil.Tween(entry.Holder, 0.4, { Size = UDim2.fromOffset(entry.W, entry.H) }, Enum.EasingStyle.Back)
-			shout(Locale.T("...and it's back"), nil, nil)
+			shout(Locale.T("...and it's back"), rgb(120, 220, 255), 98)
 		end
 		outgoing = entry
 	end

@@ -59,7 +59,7 @@ local EQ_BARS = 12
 local BEAT = 60 / 78 -- une pulsation (78 BPM, tranquille)
 local NOTE_POOL = 6
 local NOTE_LIFE = 2.4
-local RAIN_DROPS = 18
+local RAIN_DROPS = 14
 local MAX_RECORDS = 12
 
 local WHITE = Color3.new(1, 1, 1)
@@ -330,7 +330,7 @@ function Lofi.Start(ctx)
 	local stars: { { Frame: Frame, Phase: number, Speed: number } } = {}
 	for _ = 1, 7 do
 		local size = random:NextInteger(2, 3)
-		local star = circle({
+		local star = frame({
 			Name = "Star",
 			Position = UDim2.fromOffset(random:NextInteger(4, GLASS_W - 56), random:NextInteger(3, 36)),
 			Size = UDim2.fromOffset(size, size),
@@ -371,7 +371,7 @@ function Lofi.Start(ctx)
 	local towerLight: Frame
 	do
 		local x = -2
-		for _, h in ipairs({ 30, 44, 26, 52, 34, 40, 28, 48, 36 }) do
+		for _, h in ipairs({ 30, 46, 26, 52, 36, 42, 30, 48 }) do
 			local w = random:NextInteger(14, 20)
 			frame({ Name = "FarBuilding", AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromOffset(x, GLASS_H), Size = UDim2.fromOffset(w, h), BackgroundColor3 = Color3.fromRGB(84, 64, 132), BackgroundTransparency = 0.25, ZIndex = 3, Parent = glass })
 			x += w + 1
@@ -388,7 +388,7 @@ function Lofi.Start(ctx)
 			-- Grille de fenêtres (quelques-unes allumées, qui changent)
 			for row = 0, math.floor((h - 10) / 8) - 1 do
 				for col = 0, math.floor((w - 4) / 6) - 1 do
-					if #litWindows < 22 and random:NextNumber() < 0.45 then
+					if #litWindows < 14 and random:NextNumber() < 0.4 then
 						local lit = frame({
 							Name = "Lit",
 							Position = UDim2.fromOffset(3 + col * 6, 6 + row * 8),
@@ -439,7 +439,7 @@ function Lofi.Start(ctx)
 
 	-- Gouttes qui glissent sur la vitre
 	local beads: { { Frame: Frame, X: number, Y: number, Speed: number } } = {}
-	for _ = 1, 3 do
+	for _ = 1, 2 do
 		local bead = circle({
 			Name = "Bead",
 			AnchorPoint = Vector2.new(0.5, 0.5),
@@ -770,8 +770,7 @@ function Lofi.Start(ctx)
 			local blush = headPart({ Name = "Blush", BackgroundColor3 = Color3.fromRGB(255, 136, 160), BackgroundTransparency = 0.45, ZIndex = 5 }, side * 13, 13, 9, 5)
 			UI.Corner(blush, UDim.new(1, 0))
 			for k = 0, 1 do
-				local freckle = headPart({ BackgroundColor3 = Color3.fromRGB(214, 140, 120), BackgroundTransparency = 0.3, ZIndex = 5 }, side * (12 + k * 3), 10 + k, 1.3, 1.3)
-				UI.Corner(freckle, UDim.new(1, 0))
+				headPart({ BackgroundColor3 = Color3.fromRGB(214, 140, 120), BackgroundTransparency = 0.3, ZIndex = 5 }, side * (12 + k * 3), 10 + k, 1.3, 1.3)
 			end
 		end
 		local nose = headPart({ Name = "Nose", BackgroundColor3 = SKIN_SHADE:Lerp(Color3.fromRGB(200, 120, 110), 0.4), ZIndex = 5 }, 0, 11, 2.5, 2)
@@ -1137,7 +1136,6 @@ function Lofi.Start(ctx)
 		local t = (i - 1) / (EQ_BARS - 1)
 		local color = EQ_LOW:Lerp(EQ_HIGH, t)
 		local eqBar = frame({ Name = "Bar" .. i, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, (i - 1) * (barWidth + barGap), 1, 0), Size = UDim2.fromOffset(barWidth, 4), BackgroundColor3 = WHITE, Parent = eq })
-		UI.Corner(eqBar, 2)
 		UI.Gradient(eqBar, ColorSequence.new(color:Lerp(WHITE, 0.35), color), 90)
 		eqPeaks[i] = frame({ Name = "Peak" .. i, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, (i - 1) * (barWidth + barGap), 1, -6), Size = UDim2.fromOffset(barWidth, 1.5), BackgroundColor3 = color:Lerp(WHITE, 0.5), Parent = eq })
 		eqBars[i] = eqBar
