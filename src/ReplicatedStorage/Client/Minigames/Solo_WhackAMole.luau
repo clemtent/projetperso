@@ -282,7 +282,7 @@ function Module.Build(container: Frame, api)
 		local mound = create("Frame", {
 			AnchorPoint = Vector2.new(0.5, 1),
 			Position = UDim2.fromScale(0.5, 0.97),
-			Size = UDim2.fromScale(0.74, 0.34),
+			Size = UDim2.fromScale(0.7, 0.4),
 			BackgroundColor3 = Color3.fromRGB(150, 100, 70),
 			ZIndex = 5,
 			Parent = cell,
@@ -303,8 +303,8 @@ function Module.Build(container: Frame, api)
 		local clip = create("Frame", {
 			Name = "Clip",
 			AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.fromScale(0.5, 0.768),
-			Size = UDim2.fromScale(0.62, 0.74),
+			Position = UDim2.fromScale(0.5, 0.73),
+			Size = UDim2.fromScale(0.6, 0.72),
 			BackgroundTransparency = 1,
 			ClipsDescendants = true,
 			ZIndex = 6,
