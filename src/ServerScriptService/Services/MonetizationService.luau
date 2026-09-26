@@ -78,12 +78,20 @@ local function T(player: Player, text: string, ...): string
 end
 
 ----------------------------------------------------------------------
--- Casino (règle Roblox : pas de jeu de hasard si on vend de la Dopamine)
+-- 🎰 Machine chanceuse : tours GRATUITS (jetons gagnés en jouant, aucune
+-- mise), donc toujours ouverte quand Config.Casino.Enabled = true, même si
+-- de la Dopamine se vend en Robux. DisableCasinoWhenSelling = true permet
+-- quand même de la fermer dans ce cas.
 ----------------------------------------------------------------------
 
 function MonetizationService:IsCasinoEnabled(): boolean
-	return Config.Casino.Enabled == true
-		and not (Config.IsSellingForRobux and Config.Monetization.DisableCasinoWhenSelling)
+	if Config.Casino.Enabled ~= true then
+		return false
+	end
+	if Config.Monetization.DisableCasinoWhenSelling == true and Config.IsSellingForRobux then
+		return false
+	end
+	return true
 end
 
 ----------------------------------------------------------------------
@@ -540,8 +548,8 @@ function MonetizationService:Start()
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
 
-	if Config.IsSellingForRobux and Config.Monetization.DisableCasinoWhenSelling and Config.Casino.Enabled then
-		print("[Dopamine Clicker] Offres Robux actives : la machine à sous est désactivée (règles Roblox).")
+	if Config.Casino.Enabled and not self:IsCasinoEnabled() then
+		print("[Dopamine Clicker] DisableCasinoWhenSelling = true : la machine chanceuse est fermée.")
 	end
 end
 

@@ -24,6 +24,15 @@
 	v5 : source "User" = réglage ⚙️ "Mode sombre" (Data.Settings.DarkMode),
 	appliqué tout de suite (SetUserDarkMode) ; langue : Data.Settings.Language
 	("Auto" | "en" | "fr") -> ClientState.ResolveLanguage().
+	v8 (performances) : le serveur n'envoie l'état COMPLET (StateUpdate ->
+	ClientState.Changed) que lorsqu'un changement "structurel" a lieu (achat,
+	quête terminée, réglage...) ou toutes les ~10 s ; entre deux, de petits
+	"StateTick" { Dopamine, ClickSeq, TotalClicks?, QuestProgress?, Chests? }
+	mettent à jour ClientState.Data sur place et déclenchent :
+	  - ClientState.DopamineChanged (dopamine confirmée) : ticks ET états complets ;
+	  - ClientState.TickReceived (tick) : chaque petit tick (quêtes, coffre...).
+	Changed ne se déclenche donc plus 5 fois par seconde : les affichages qui
+	dépendent de la Dopamine (prix abordables) écoutent aussi DopamineChanged.
 ]]
 
 local Players = game:GetService("Players")
@@ -61,6 +70,10 @@ ClientState.DarkSourcesChanged = Signal.new() -- () : une source du mode sombre 
 -- Ajouts v3
 ClientState.Loaded = Signal.new() -- () : premier état reçu (écran de chargement)
 ClientState.IsLoaded = false
+
+-- Ajouts v8 (petits ticks entre deux états complets)
+ClientState.DopamineChanged = Signal.new() -- (dopamine confirmée : état serveur + clics prédits)
+ClientState.TickReceived = Signal.new() -- (tick) : chaque StateTick, après mise à jour de Data
 
 -- Prédiction des clics
 local clickSeq = 0
@@ -157,14 +170,60 @@ local function onState(data)
 	if changed then
 		ClientState.FeaturesChanged:Fire(features)
 	end
+	ClientState.DopamineChanged:Fire(ClientState.GetConfirmedDopamine())
 	if not ClientState.IsLoaded then
 		ClientState.IsLoaded = true
 		ClientState.Loaded:Fire()
 	end
 end
 
+-- Petit tick (StateTick) : valeurs fréquentes mises à jour SUR PLACE dans
+-- ClientState.Data (même table : les modules qui la lisent voient la
+-- nouvelle valeur), sans déclencher Changed.
+local function onTick(tick)
+	local data = ClientState.Data
+	if type(tick) ~= "table" or type(data) ~= "table" then
+		return -- avant le premier état complet : ignoré (il contient tout)
+	end
+	local dopamine = tonumber(tick.Dopamine)
+	if dopamine and dopamine == dopamine then
+		data.Dopamine = dopamine
+	end
+	local seq = tonumber(tick.ClickSeq)
+	if seq then
+		data.ClickSeq = seq
+		while pending[1] and pending[1].Seq <= seq do
+			table.remove(pending, 1)
+		end
+	end
+	local clicks = tonumber(tick.TotalClicks)
+	if clicks and type(data.Stats) == "table" then
+		data.Stats.TotalClicks = clicks
+	end
+	if type(tick.QuestProgress) == "table" and type(data.Quests) == "table" then
+		for index, progress in ipairs(tick.QuestProgress) do
+			local quest = data.Quests[index]
+			if type(quest) == "table" and type(progress) == "number" then
+				quest.Progress = progress
+			end
+		end
+	end
+	local chests = tick.Chests
+	if type(chests) == "table" then
+		if type(data.Chests) ~= "table" then
+			data.Chests = {}
+		end
+		data.Chests.Stored = tonumber(chests.Stored) or data.Chests.Stored
+		data.Chests.Progress = tonumber(chests.Progress) or data.Chests.Progress
+	end
+	lastUpdateClock = os.clock()
+	ClientState.DopamineChanged:Fire(ClientState.GetConfirmedDopamine())
+	ClientState.TickReceived:Fire(tick)
+end
+
 function ClientState.Init()
 	Net.Event("StateUpdate").OnClientEvent:Connect(onState)
+	Net.Event("StateTick").OnClientEvent:Connect(onTick)
 
 	Net.Event("EventUpdate").OnClientEvent:Connect(function(rush)
 		ClientState.Rush = rush

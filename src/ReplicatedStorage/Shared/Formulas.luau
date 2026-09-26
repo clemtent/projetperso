@@ -278,10 +278,12 @@ function Formulas.GetOfflineReward(data, perSecond: number, seconds: number): nu
 end
 
 ----------------------------------------------------------------------
--- Casino
+-- 🎰 Machine chanceuse (tours GRATUITS : aucune mise)
+-- Les gains sont en SECONDES de production (voir Formulas.ScaledReward)
 ----------------------------------------------------------------------
 
--- Multiplicateur de gain pour 3 symboles (ids). 0 = perdu.
+-- Secondes de production gagnées pour 3 symboles (ids). 0 = rien d'aligné.
+-- Paire = 2 symboles identiques, Triple = 3 (on garde la meilleure combinaison)
 function Formulas.GetCasinoMultiplier(reels: { string }): number
 	local counts = {}
 	for _, id in ipairs(reels) do
@@ -291,41 +293,87 @@ function Formulas.GetCasinoMultiplier(reels: { string }): number
 	for id, count in pairs(counts) do
 		local symbol = Config.CasinoSymbolsById[id]
 		if symbol then
-			if count == 3 then
-				best = math.max(best, symbol.Triple)
+			if count >= 3 then
+				best = math.max(best, symbol.Triple or 0)
 			elseif count == 2 then
-				best = math.max(best, symbol.Pair)
+				best = math.max(best, symbol.Pair or 0)
 			end
 		end
 	end
 	return best
 end
 
--- Taux de retour théorique (ex. 0.93 = on récupère 93 % des mises en moyenne)
+-- Secondes réellement données pour ce tirage (lot de consolation si rien ne sort)
+function Formulas.GetCasinoRewardSeconds(reels: { string }): number
+	local seconds = Formulas.GetCasinoMultiplier(reels)
+	if seconds <= 0 then
+		return Config.Casino.MissRewardSeconds or 0
+	end
+	return seconds
+end
+
+-- Gain moyen d'un tour, en secondes de production (consolation comprise)
 function Formulas.GetCasinoRTP(): number
 	local symbols = Config.Casino.Symbols
 	local totalWeight = 0
 	for _, symbol in ipairs(symbols) do
 		totalWeight += symbol.Weight
 	end
+	if totalWeight <= 0 then
+		return 0
+	end
 	local expected = 0
 	for _, a in ipairs(symbols) do
 		for _, b in ipairs(symbols) do
 			for _, c in ipairs(symbols) do
 				local probability = (a.Weight / totalWeight) * (b.Weight / totalWeight) * (c.Weight / totalWeight)
-				expected += probability * Formulas.GetCasinoMultiplier({ a.Id, b.Id, c.Id })
+				expected += probability * Formulas.GetCasinoRewardSeconds({ a.Id, b.Id, c.Id })
 			end
 		end
 	end
 	return expected
 end
 
+-- Probabilité (0..1) qu'un tour donne au moins une paire
+function Formulas.GetCasinoWinChance(): number
+	local symbols = Config.Casino.Symbols
+	local totalWeight = 0
+	for _, symbol in ipairs(symbols) do
+		totalWeight += symbol.Weight
+	end
+	if totalWeight <= 0 then
+		return 0
+	end
+	-- 1 - P(3 symboles tous différents)
+	local allDifferent = 0
+	for i, a in ipairs(symbols) do
+		for j, b in ipairs(symbols) do
+			if j ~= i then
+				for k, c in ipairs(symbols) do
+					if k ~= i and k ~= j then
+						allDifferent += (a.Weight * b.Weight * c.Weight) / (totalWeight ^ 3)
+					end
+				end
+			end
+		end
+	end
+	return 1 - allDifferent
+end
+
 ----------------------------------------------------------------------
--- Bourse
+-- 🌻 Jardin de Dopamine
 ----------------------------------------------------------------------
 
-function Formulas.GetStockValue(stock, price: number): number
-	return (stock and stock.Shares or 0) * price
+-- Nombre de parterres (BasePlots + niveau de "Flower Beds")
+function Formulas.GetGardenPlotCount(data): number
+	local settings = Config.Garden
+	local count = settings.BasePlots or 3
+	for _, upgrade in ipairs(Config.Upgrades) do
+		if upgrade.Feature == "GardenPlots" then
+			count += Formulas.GetLevel(data, upgrade.Id)
+		end
+	end
+	return count
 end
 
 ----------------------------------------------------------------------
