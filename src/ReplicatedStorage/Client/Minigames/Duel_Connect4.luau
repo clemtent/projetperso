@@ -62,7 +62,7 @@ function Game.Build(container: Frame, api)
 		Size = UDim2.fromScale(1, 1 - launcherShare),
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.fromScale(0, 1),
-		BackgroundColor3 = Color3.fromRGB(70, 60, 230),
+		BackgroundColor3 = WHITE,
 		ZIndex = 24,
 		Parent = frame,
 	})

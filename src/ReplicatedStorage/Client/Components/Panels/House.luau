@@ -1446,7 +1446,7 @@ function House.Build(frame: Frame)
 	-- Astuce en mode édition
 	editHint = UIUtil.Chip({
 		Name = "EditHint",
-		Text = Locale.T("✋ Drag to move  •  tap for options"),
+		Text = Locale.T("✋ Drag to move  •  🧁 small items go ON tables & shelves"),
 		Color = WHITE,
 		TextColor3 = C.Ink,
 		Height = 24,

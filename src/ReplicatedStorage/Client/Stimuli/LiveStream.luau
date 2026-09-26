@@ -79,8 +79,8 @@ local UPPER_LEN, FORE_LEN = 27, 26 -- bras et avant-bras
 local BUTTER_X = 0.85 -- position (Scale) du beurre sur la table
 local BUTTER_Y = TABLE_Y + 28 -- bas de la coupelle de beurre (178)
 local MIC_LEFT = 24 -- micro "moumoute" : pixels depuis le bord gauche
-local CUP_X, CUP_BASE = 58, TABLE_Y + 8 -- bubble tea (derrière, à droite)
-local BOWL_X, BOWL_BASE = -62, TABLE_Y + 9 -- bol de nouilles (derrière, à gauche)
+local CUP_X, CUP_BASE = -57, TABLE_Y + 8 -- bubble tea (derrière, à gauche)
+local BOWL_X, BOWL_BASE = 60, TABLE_Y + 9 -- bol de nouilles (derrière, à droite)
 local GOAL_Y, GOAL_H = VIDEO_H - 22, 15 -- barre "objectif d'abonnés"
 local MAX_HEARTS = 7
 local CHAT_POOL = 14 -- lignes de chat recyclées
@@ -340,7 +340,7 @@ local RIGHT_BLOCK = PAD + 2 + FOLLOW_W + 8
 local FOLLOW_COLOR = Color3.fromRGB(145, 70, 255)
 local FOLLOWED_COLOR = Color3.fromRGB(62, 56, 84)
 local RING = 112
-local PRO_X, PRO_Y = -58, 104 -- capsule du micro (centre)
+local PRO_X, PRO_Y = -54, 100 -- capsule du micro (centre)
 local BUTTER_W, BUTTER_H = 42, 27
 local BUTTON_W, BUTTON_H = 62, 50 -- zone cliquable (coupelle + bloc)
 local HINT_Y = BUTTON_H - 6 - BUTTER_H - 3 -- bas de l'indice (juste au-dessus du beurre)
@@ -899,8 +899,8 @@ function LiveStream.Start(ctx)
 		Parent = streamer,
 	})
 	-- Mèches qui tombent DEVANT les épaules
-	for _, x in ipairs({ 29, 91 }) do
-		local lock = box(at({ Name = "FrontLock", BackgroundColor3 = WHITE, ZIndex = 6, Parent = streamer }, x, 90, 15, 34), 8)
+	for _, x in ipairs({ 31, 89 }) do
+		local lock = box(at({ Name = "FrontLock", BackgroundColor3 = WHITE, ZIndex = 6, Parent = streamer }, x, 86, 14, 24), 7)
 		grad(lock, HAIR:Lerp(HAIR_LIGHT, 0.3), HAIR)
 	end
 
@@ -922,8 +922,8 @@ function LiveStream.Start(ctx)
 	do
 		for _, x in ipairs({ 14, 50 }) do
 			-- Oreilles de chat (losanges, la moitié basse est cachée par les cheveux)
-			local ear = part({ Name = "CatEar", BackgroundColor3 = PHONES, Rotation = 45, ZIndex = 1 }, x, 4, 15, 15, 3)
-			earGlows[#earGlows + 1] = part({ Name = "EarGlow", BackgroundColor3 = PHONES_GLOW, ZIndex = 2, Parent = ear }, 7.5, 7.5, 8, 8, 2)
+			local ear = part({ Name = "CatEar", BackgroundColor3 = PHONES, Rotation = 45, ZIndex = 1 }, x, -1, 16, 16, 3)
+			earGlows[#earGlows + 1] = part({ Name = "EarGlow", BackgroundColor3 = PHONES_GLOW, ZIndex = 2, Parent = ear }, 7, 7, 8, 8, 2)
 		end
 		local face = part({ Name = "Face", BackgroundColor3 = WHITE, ZIndex = 3 }, 32, 34, 50, 49, UDim.new(0.46, 0))
 		grad(face, SKIN, SKIN_SHADE)
@@ -965,11 +965,11 @@ function LiveStream.Start(ctx)
 			part({ Name = "Shine", BackgroundColor3 = WHITE, ZIndex = 7, Parent = iris }, 2.8, 3, 3.2, 3.2, UDim.new(1, 0))
 			part({ Name = "Shine2", BackgroundColor3 = WHITE, BackgroundTransparency = 0.2, ZIndex = 7, Parent = iris }, 6, 7, 1.6, 1.6, UDim.new(1, 0))
 			-- Cils du haut + petit trait au coin extérieur
-			local lash = part({ Name = "Lash", BackgroundColor3 = INK, Rotation = side * 8, ZIndex = 8, Parent = open }, 7, 2.5, 14, 2.6, 1)
+			local lash = part({ Name = "Lash", BackgroundColor3 = INK, Rotation = side * 8, ZIndex = 8, Parent = open }, 7, 2.5, 13, 2, 1)
 			part({ BackgroundColor3 = INK, Rotation = side * 35, ZIndex = 8, Parent = lash }, side > 0 and 14 or 0, 0, 5, 2, 1)
 			local happy = arc(at({ Name = "Happy", Visible = false, ZIndex = 5, Parent = head }, x, 39, 11, 10), INK, 2, UPPER_ARC)
 			local relaxed = arc(at({ Name = "Closed", Visible = false, ZIndex = 5, Parent = head }, x, 34, 12, 10), INK, 2, LOWER_ARC)
-			local brow = part({ Name = "Brow", BackgroundColor3 = HAIR, ZIndex = 7 }, x, 27, 10, 2.4, 1)
+			local brow = part({ Name = "Brow", BackgroundColor3 = HAIR:Lerp(HAIR_LIGHT, 0.2), ZIndex = 7 }, x, 27, 9, 1.8, 1)
 			eyes[i] = { Open = open, Sclera = sclera, Iris = iris, Lash = lash, Happy = happy, Relaxed = relaxed, Brow = brow, X = x, Side = side }
 		end
 		-- Joues, nez
@@ -1025,7 +1025,7 @@ function LiveStream.Start(ctx)
 		-- Bubble tea (derrière, à droite) : cadre déplaçable (elle le boit)
 		local cupHome = UDim2.new(0.5, CUP_X, 0, CUP_BASE)
 		cup = box({ Name = "BubbleTea", AnchorPoint = Vector2.new(0.5, 1), Position = cupHome, Size = UDim2.fromOffset(18, 30), BackgroundTransparency = 1, ZIndex = 1, Parent = propsLayer })
-		box({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(12, 6), Size = UDim2.fromOffset(3.5, 16), Rotation = 12, BackgroundColor3 = Color3.fromRGB(255, 110, 150), ZIndex = 1, Parent = cup }, 1)
+		box({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(6, 6), Size = UDim2.fromOffset(3.5, 16), Rotation = -12, BackgroundColor3 = Color3.fromRGB(255, 110, 150), ZIndex = 1, Parent = cup }, 1)
 		local cupBody = box({ Position = UDim2.fromOffset(0, 3), Size = UDim2.fromOffset(18, 27), BackgroundColor3 = WHITE, ZIndex = 2, Parent = cup }, 4)
 		UI.Gradient(cupBody, ColorSequence.new({
 			ColorSequenceKeypoint.new(0, Color3.fromRGB(250, 246, 255)),
@@ -1084,25 +1084,27 @@ function LiveStream.Start(ctx)
 		local boom1 = box({ BackgroundColor3 = Color3.fromRGB(44, 42, 56), ZIndex = 1, Parent = proMic }, 2)
 		local boom2 = box({ BackgroundColor3 = Color3.fromRGB(44, 42, 56), ZIndex = 1, Parent = proMic }, 2)
 		-- (positionnés par setLimb, depuis le centre de la vidéo)
-		local proMicBody = box(atC({ Name = "Capsule", BackgroundColor3 = WHITE, Rotation = 18, ZIndex = 3, Parent = proMic }, PRO_X, PRO_Y, 15, 32), 7)
+		local proMicBody = box(atC({ Name = "Capsule", BackgroundColor3 = WHITE, Rotation = -28, ZIndex = 3, Parent = proMic }, PRO_X, PRO_Y, 13, 30), 6)
 		UI.Gradient(proMicBody, ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Color3.fromRGB(120, 118, 136)),
-			ColorSequenceKeypoint.new(0.45, Color3.fromRGB(70, 68, 84)),
-			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(30, 28, 40)),
-			ColorSequenceKeypoint.new(1, Color3.fromRGB(46, 44, 58)),
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(150, 146, 166)),
+			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(96, 92, 112)),
+			ColorSequenceKeypoint.new(0.52, Color3.fromRGB(40, 38, 52)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(58, 56, 72)),
 		}), 90)
+		-- Grille du micro + bague dorée
 		for i = 0, 3 do
-			box(at({ BackgroundColor3 = WHITE, BackgroundTransparency = 0.75, ZIndex = 4, Parent = proMicBody }, 7.5, 3 + i * 2.6, 11, 1), 1)
+			box(at({ BackgroundColor3 = WHITE, BackgroundTransparency = 0.7, ZIndex = 4, Parent = proMicBody }, 6.5, 3 + i * 3, 10, 1), 1)
 		end
-		local shock = round(atC({ BackgroundTransparency = 1, Rotation = 18, ZIndex = 2, Parent = proMic }, PRO_X, PRO_Y + 2, 24, 12))
-		UI.Stroke(shock, Color3.fromRGB(30, 30, 40), 2)
-		-- Filtre anti-pop (rond de tissu translucide) devant la bouche
-		local popFilter = round(atC({ BackgroundColor3 = Color3.fromRGB(20, 18, 30), BackgroundTransparency = 0.6, ZIndex = 5, Parent = proMic }, PRO_X + 17, PRO_Y - 4, 20, 24))
-		UI.Stroke(popFilter, Color3.fromRGB(30, 28, 40), 1.5)
-		box(atC({ BackgroundColor3 = Color3.fromRGB(30, 28, 40), Rotation = -40, ZIndex = 4, Parent = proMic }, PRO_X + 10, PRO_Y + 8, 2, 12), 1)
-		setLimb(boom1, -140, -10, PRO_X - 30, PRO_Y - 46, 4)
-		setLimb(boom2, PRO_X - 30, PRO_Y - 46, PRO_X - 4, PRO_Y - 12, 4)
-		round(atC({ BackgroundColor3 = Color3.fromRGB(80, 78, 96), ZIndex = 2, Parent = proMic }, PRO_X - 30, PRO_Y - 46, 7, 7))
+		box(at({ BackgroundColor3 = Color3.fromRGB(255, 206, 110), ZIndex = 4, Parent = proMicBody }, 6.5, 15.5, 13, 2), 1)
+		-- Suspension antichoc (deux anneaux)
+		for i = 0, 1 do
+			local ring = round(atC({ BackgroundTransparency = 1, Rotation = -28, ZIndex = 2 + i * 3, Parent = proMic }, PRO_X + 2 - i * 4, PRO_Y + 4 + i * 6, 22, 7))
+			UI.Stroke(ring, Color3.fromRGB(34, 32, 44), 1.5)
+		end
+		-- Bras articulé (depuis le haut de l'image) + articulation
+		setLimb(boom1, -96, -12, PRO_X - 20, PRO_Y - 44, 3.5)
+		setLimb(boom2, PRO_X - 20, PRO_Y - 44, PRO_X + 5, PRO_Y + 11, 3.5)
+		round(atC({ BackgroundColor3 = Color3.fromRGB(90, 88, 108), ZIndex = 2, Parent = proMic }, PRO_X - 20, PRO_Y - 44, 6, 6))
 	end
 
 	-- Ondes sonores (réserve de 2 anneaux)
@@ -1249,9 +1251,11 @@ function LiveStream.Start(ctx)
 	}
 	local function makeArm(side: number, restX: number, restY: number, chopsticks: boolean): Arm
 		local upper = box({ Name = "UpperArm", AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = WHITE, ZIndex = 1, Parent = armsLayer }, UDim.new(1, 0))
-		UI.Gradient(upper, ColorSequence.new(HOODIE:Lerp(WHITE, 0.12), HOODIE), side > 0 and 180 or 0)
+		UI.Gradient(upper, ColorSequence.new(HOODIE:Lerp(WHITE, 0.1), HOODIE:Lerp(HOODIE_DARK, 0.35)), side > 0 and 180 or 0)
+		UI.Stroke(upper, HOODIE_DARK, 1, 0.35)
 		local fore = box({ Name = "Forearm", AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = WHITE, ZIndex = 2, Parent = armsLayer }, UDim.new(1, 0))
 		UI.Gradient(fore, SLEEVE, 90)
+		UI.Stroke(fore, HOODIE_DARK, 1, 0.35)
 		-- Main : paume + pouce + plis des doigts (l'axe +Y local suit l'avant-bras)
 		local hand = box({ Name = "Hand", AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(13, 13), BackgroundTransparency = 1, ZIndex = 3, Parent = armsLayer })
 		if chopsticks then
@@ -1283,7 +1287,7 @@ function LiveStream.Start(ctx)
 			Tip = chopsticks and 27 or 4,
 		}
 	end
-	local leftArm = makeArm(-1, -42, TABLE_Y + 16, false)
+	local leftArm = makeArm(-1, -40, TABLE_Y + 14, false)
 	local rightArm = makeArm(1, 34, TABLE_Y + 8, true)
 
 	-- Cinématique inverse à 2 os : le coude plie vers l'extérieur
@@ -1302,8 +1306,8 @@ function LiveStream.Start(ctx)
 		local nx, ny = arm.Side * uy, -arm.Side * ux
 		local ex, ey = sx + a * (ux * cosA + nx * sinA), sy + a * (uy * cosA + ny * sinA)
 		local hx, hy = sx + ux * d, sy + uy * d
-		setLimb(arm.Upper, sx, sy, ex, ey, 15)
-		setLimb(arm.Fore, ex, ey, hx, hy, 13)
+		setLimb(arm.Upper, sx, sy, ex, ey, 13)
+		setLimb(arm.Fore, ex, ey, hx, hy, 11.5)
 		local fx, fy = hx - ex, hy - ey
 		local fl = math.max(0.001, math.sqrt(fx * fx + fy * fy))
 		arm.DirX, arm.DirY = fx / fl, fy / fl
@@ -1607,17 +1611,41 @@ function LiveStream.Start(ctx)
 	------------------------------------------------------------------
 	-- Expressions + gestes (pilotés par la boucle de rendu)
 	------------------------------------------------------------------
-	local chewUntil, biteUntil, wowUntil, thanksUntil, sipUntil, talkUntil = 0, 0, 0, 0, 0, 0
-	local nextBlink = os.clock() + random:NextNumber(1.5, 4)
-	local blinkUntil = 0
-	local lookX, lookY = 0, 0 -- regard (lissé)
-	local lookTargetX, lookTargetY = 0, 0
-	local nextLook = 0
-	local gesture: string? = nil -- "Heart" | "Wave"
-	local gestureUntil = 0
+	-- (une seule table : la fonction Start approche la limite de variables locales)
+	local S = {
+		chewUntil = 0,
+		biteUntil = 0,
+		wowUntil = 0,
+		thanksUntil = 0,
+		sipUntil = 0,
+		talkUntil = 0,
+		nextBlink = os.clock() + random:NextNumber(1.5, 4),
+		blinkUntil = 0,
+		lookX = 0, -- regard (lissé)
+		lookY = 0,
+		lookTargetX = 0,
+		lookTargetY = 0,
+		nextLook = 0,
+		gesture = nil :: string?, -- "Heart" | "Wave"
+		gestureUntil = 0,
+		clock = 0,
+		shown = true,
+		visibilityTimer = 0,
+		nextHeart = 0.5,
+		viewersTimer = 0,
+		likesTimer = 0,
+		followTimer = 0,
+		secondTimer = 0,
+		sparkleTimer = 2,
+		chatTimer = 0.8,
+		fanTimer = 4,
+		nextRaid = random:NextNumber(45, 90),
+		uptime = random:NextInteger(40 * 60, 3 * 3600),
+		shownExpression = "",
+	}
 
 	local function wow(duration: number?)
-		wowUntil = os.clock() + (duration or 0.6)
+		S.wowUntil = os.clock() + (duration or 0.6)
 	end
 
 	-- Les gestes attendent que les mains soient libres (voir la boucle du repas)
@@ -1626,12 +1654,12 @@ function LiveStream.Start(ctx)
 		if mealBusy then
 			return
 		end
-		gesture = name
-		gestureUntil = os.clock() + duration
+		S.gesture = name
+		S.gestureUntil = os.clock() + duration
 	end
 
 	local function thanks()
-		thanksUntil = os.clock() + 1.6
+		S.thanksUntil = os.clock() + 1.6
 		startGesture("Heart", 1.5)
 	end
 
@@ -1674,6 +1702,7 @@ function LiveStream.Start(ctx)
 	})
 	-- Point vert "en ligne"
 	local pinnedLabel: TextLabel
+	local chatExtras: { [string]: GuiObject } = {} -- (épinglé, saisie : cachés en mode compact)
 	do
 		local onlineDot = round(at({ BackgroundColor3 = Color3.fromRGB(90, 230, 130), ZIndex = 3, Parent = chat }, CHAT_W - 11, TITLE_H / 2 + 1, 6, 6))
 		UI.Stroke(onlineDot, Color3.fromRGB(90, 230, 130), 2, 0.7)
@@ -1690,18 +1719,19 @@ function LiveStream.Start(ctx)
 		}, 7)
 		grad(pinned, Color3.fromRGB(86, 60, 140), Color3.fromRGB(58, 42, 98), 0)
 		UI.Stroke(pinned, Color3.fromRGB(170, 120, 255), 1, 0.35)
-		pinnedLabel = UI.Label({
+		pinnedLabel = text({
 			Text = "",
 			RichText = true,
-			Font = Theme.Fonts.Body,
+			TextSize = 10,
+			TextWrapped = true,
 			TextColor3 = Color3.fromRGB(240, 232, 255),
 			TextXAlignment = Enum.TextXAlignment.Left,
-			Position = UDim2.fromOffset(5, 2),
-			Size = UDim2.new(1, -8, 1, -4),
-			MaxTextSize = 11,
+			Position = UDim2.fromOffset(5, 1),
+			Size = UDim2.new(1, -8, 1, -2),
 			ZIndex = 4,
 			Parent = pinned,
 		})
+		chatExtras.Pinned = pinned
 	end
 
 	local chatList = box({
@@ -1887,7 +1917,7 @@ function LiveStream.Start(ctx)
 	local HOST_OPTIONS: ChatOptions = { Badge = "🎙️", Highlight = Color3.fromRGB(145, 70, 255) }
 	local function hostSays(message: string)
 		pushChat(HOST, message, HOST_OPTIONS)
-		talkUntil = os.clock() + 1.4
+		S.talkUntil = os.clock() + 1.4
 	end
 
 	local function randomName(): string
@@ -2039,7 +2069,7 @@ function LiveStream.Start(ctx)
 			shownGoalRatio = ratio
 			goalFill.Size = UDim2.fromScale(ratio, 1)
 		end
-		goalCount.Text = Format.WithSpaces(followerCount) .. " / " .. Format.WithSpaces(goal)
+		goalCount.Text = formatCount(followerCount) .. " / " .. formatCount(goal)
 	end
 	refreshGoal()
 
@@ -2048,7 +2078,7 @@ function LiveStream.Start(ctx)
 		if followerCount >= goal then
 			-- Objectif atteint : on fête ça, puis on vise le palier suivant
 			popWord(Locale.T("GOAL!"), UDim2.new(0.5, 0, 0, GOAL_Y - 16), Color3.fromRGB(255, 214, 40))
-			systemMessage(Locale.T("🎯 Follower goal reached: <b>%s</b>!", Format.WithSpaces(goal)), Color3.fromRGB(200, 80, 160))
+			systemMessage(Locale.T("🎯 Follower goal reached: <b>%s</b>!", formatCount(goal)), Color3.fromRGB(200, 80, 160))
 			for _ = 1, 3 do
 				spawnHeart("🎉")
 			end
@@ -2433,15 +2463,15 @@ function LiveStream.Start(ctx)
 		local phase = meal.Phase
 		if phase == "Wait" then
 			mealBusy = false
-			if meal.T > 0 or now < gestureUntil then
+			if meal.T > 0 or now < S.gestureUntil then
 				return
 			end
 			if bitesSinceSip >= 3 and random:NextNumber() < 0.5 then
 				-- Une gorgée de bubble tea
 				bitesSinceSip = 0
 				mealBusy = true
-				meal.Phase, meal.T, meal.Arm = "SipReach", 0.35, rightArm
-				rightArm.TX, rightArm.TY = CUP_X - 4, CUP_BASE - 12
+				meal.Phase, meal.T, meal.Arm = "SipReach", 0.35, leftArm
+				leftArm.TX, leftArm.TY = CUP_X + 3, CUP_BASE - 12
 				return
 			end
 			local index = nil
@@ -2461,17 +2491,17 @@ function LiveStream.Start(ctx)
 				return
 			end
 			mealBusy = true
-			gesture = nil
+			S.gesture = nil
 			local arm = FOOD_OFFSETS[index] < 0 and leftArm or rightArm
 			meal.Phase, meal.T, meal.Index, meal.Arm = "Reach", 0.32, index, arm
 			aimTip(arm, FOOD_OFFSETS[index], FOOD_Y)
-			lookTargetX, lookTargetY = FOOD_OFFSETS[index] > 0 and 1 or -1, 2
+			S.lookTargetX, S.lookTargetY = FOOD_OFFSETS[index] > 0 and 1 or -1, 2
 		elseif phase == "Reach" then
 			local arm = meal.Arm :: Arm
 			aimTip(arm, FOOD_OFFSETS[meal.Index :: number], FOOD_Y)
 			if meal.T <= 0 then
 				meal.Phase, meal.T = "Lift", 0.36
-				biteUntil = now + 0.5
+				S.biteUntil = now + 0.5
 			end
 		elseif phase == "Lift" then
 			local arm = meal.Arm :: Arm
@@ -2481,12 +2511,12 @@ function LiveStream.Start(ctx)
 			food.Position = UDim2.new(0.5, tx, 0, ty)
 			food.Rotation *= 0.9
 			foodScales[meal.Index :: number].Scale = math.max(0.65, foodScales[meal.Index :: number].Scale - dt * 1.2)
-			lookTargetX, lookTargetY = 0, 1
+			S.lookTargetX, S.lookTargetY = 0, 1
 			if meal.T <= 0 then
 				-- CROC !
 				food.Visible = false
-				biteUntil = 0
-				chewUntil = now + 1.1
+				S.biteUntil = 0
+				S.chewUntil = now + 1.1
 				bitesSinceSip += 1
 				popWord(pick(TXT.crunchWords, random), UDim2.new(0.5, random:NextNumber() < 0.5 and -52 or 52, 0, MOUTH_Y - 10), nil)
 				burstParticles(0.5, 0, MOUTH_Y + 6, 4, CRUMB_COLORS, 45)
@@ -2511,25 +2541,25 @@ function LiveStream.Start(ctx)
 			end
 		elseif phase == "SipLift" or phase == "SipHold" then
 			-- Le gobelet suit la main jusqu'à la bouche (paille sur les lèvres)
-			rightArm.TX, rightArm.TY = 5, MOUTH_Y + 30
-			cupX = cupX + (rightArm.X - 4 - cupX) * math.min(1, dt * 14)
-			cupY = cupY + (rightArm.Y + 14 - cupY) * math.min(1, dt * 14)
-			cup.Rotation = approach(cup.Rotation, -14, 10, dt)
+			leftArm.TX, leftArm.TY = -8, MOUTH_Y + 30
+			cupX = cupX + (leftArm.X + 5 - cupX) * math.min(1, dt * 14)
+			cupY = cupY + (leftArm.Y + 14 - cupY) * math.min(1, dt * 14)
+			cup.Rotation = approach(cup.Rotation, 14, 10, dt)
 			if phase == "SipLift" and meal.T <= 0 then
 				meal.Phase, meal.T = "SipHold", 0.9
-				sipUntil = now + 1
+				S.sipUntil = now + 1
 			elseif phase == "SipHold" and meal.T <= 0 then
 				meal.Phase, meal.T = "SipBack", 0.4
 			end
 		elseif phase == "SipBack" then
-			rightArm.TX, rightArm.TY = CUP_X - 4, CUP_BASE - 12
+			leftArm.TX, leftArm.TY = CUP_X + 3, CUP_BASE - 12
 			cupX = approach(cupX, CUP_X, 12, dt)
 			cupY = approach(cupY, CUP_BASE, 12, dt)
 			cup.Rotation = approach(cup.Rotation, 0, 12, dt)
 			if meal.T <= 0 then
 				cupX, cupY, cup.Rotation = CUP_X, CUP_BASE, 0
 				meal.Phase, meal.T = "Back", 0.3
-				meal.Arm = rightArm
+				meal.Arm = leftArm
 			end
 		end
 		if phase == "SipLift" or phase == "SipHold" or phase == "SipBack" then
@@ -2654,24 +2684,10 @@ function LiveStream.Start(ctx)
 	------------------------------------------------------------------
 	-- LA boucle de rendu
 	------------------------------------------------------------------
-	local clock = 0
-	local shown = true
-	local visibilityTimer = 0
-	local nextHeart = 0.5
-	local viewersTimer = 0
-	local likesTimer = 0
-	local followTimer = 0
-	local secondTimer = 0
-	local sparkleTimer = 2
-	local chatTimer = 0.8
-	local fanTimer = 4
-	local nextRaid = random:NextNumber(45, 90)
-	local uptime = random:NextInteger(40 * 60, 3 * 3600)
-	local shownExpression = ""
 
 	-- Une expression = yeux + sourcils + bouche + joues
 	local function applyExpression(expression: string, now: number)
-		local blinking = now < blinkUntil
+		local blinking = now < S.blinkUntil
 		local eyeMode = "Open"
 		if expression == "Chew" or expression == "Thanks" then
 			eyeMode = "Happy"
@@ -2687,7 +2703,7 @@ function LiveStream.Start(ctx)
 				eye.Sclera.Size = big and UDim2.fromOffset(12.5, 14) or UDim2.fromOffset(11, 12)
 				eye.Iris.Size = big and UDim2.fromOffset(7.5, 8.5) or UDim2.fromOffset(8.5, 9.5)
 				local w, h = eye.Sclera.Size.X.Offset, eye.Sclera.Size.Y.Offset
-				eye.Iris.Position = UDim2.fromOffset(w / 2 + lookX, h / 2 + 0.5 + lookY)
+				eye.Iris.Position = UDim2.fromOffset(w / 2 + S.lookX, h / 2 + 0.5 + S.lookY)
 				eye.Lash.Position = UDim2.fromOffset(7, big and 1.2 or 2.5)
 			end
 			-- Sourcils
@@ -2711,9 +2727,9 @@ function LiveStream.Start(ctx)
 		elseif big then
 			open, w, h = true, 8, 10
 		elseif expression == "Chew" then
-			open, w, h = true, 9, 2.5 + math.abs(math.sin(clock * 15)) * 4
+			open, w, h = true, 9, 2.5 + math.abs(math.sin(S.clock * 15)) * 4
 		elseif expression == "Talk" then
-			open, w, h = true, 8, 2 + math.abs(math.sin(clock * 13)) * 5
+			open, w, h = true, 8, 2 + math.abs(math.sin(S.clock * 13)) * 5
 		elseif expression == "Sip" then
 			open, w, h = true, 4, 4
 		end
@@ -2726,8 +2742,8 @@ function LiveStream.Start(ctx)
 		smile.Visible = not open and expression ~= "Thanks"
 		catMouth.Visible = expression == "Thanks"
 		-- Joues
-		if expression ~= shownExpression then
-			shownExpression = expression
+		if expression ~= S.shownExpression then
+			S.shownExpression = expression
 			local blush = (expression == "Thanks" or expression == "Wow") and 0.15 or (expression == "Chew" and 0.3 or 0.5)
 			for _, b in ipairs(blushes) do
 				b.BackgroundTransparency = blush
@@ -2738,15 +2754,15 @@ function LiveStream.Start(ctx)
 
 	ctx.OnRender(function(rawDt: number)
 		local dt = math.min(rawDt, 0.1)
-		visibilityTimer -= dt
-		if visibilityTimer <= 0 then
-			visibilityTimer = 0.5
-			shown = computeShown()
+		S.visibilityTimer -= dt
+		if S.visibilityTimer <= 0 then
+			S.visibilityTimer = 0.5
+			S.shown = computeShown()
 		end
-		if not shown then
+		if not S.shown then
 			return
 		end
-		clock += dt
+		S.clock += dt
 		local now = os.clock()
 
 		-- Tâches planifiées (TXT.messages en rafale, fin de raid, dons...)
@@ -2768,69 +2784,69 @@ function LiveStream.Start(ctx)
 
 		-- Repas (machine à états) + gestes
 		updateMeal(dt, now)
-		if now >= gestureUntil then
-			gesture = nil
+		if now >= S.gestureUntil then
+			S.gesture = nil
 		end
 
 		-- Expression du moment (la plus importante gagne)
 		local expression = "Idle"
-		if now < thanksUntil then
+		if now < S.thanksUntil then
 			expression = "Thanks"
-		elseif now < wowUntil then
+		elseif now < S.wowUntil then
 			expression = "Wow"
-		elseif now < biteUntil then
+		elseif now < S.biteUntil then
 			expression = "Bite"
-		elseif now < sipUntil then
+		elseif now < S.sipUntil then
 			expression = "Sip"
-		elseif now < chewUntil then
+		elseif now < S.chewUntil then
 			expression = "Chew"
-		elseif now < talkUntil then
+		elseif now < S.talkUntil then
 			expression = "Talk"
 		end
 
 		-- Regard : caméra, chat, nourriture...
-		if now >= nextBlink then
-			blinkUntil = now + 0.12
-			nextBlink = now + random:NextNumber(2, 5)
+		if now >= S.nextBlink then
+			S.blinkUntil = now + 0.12
+			S.nextBlink = now + random:NextNumber(2, 5)
 		end
-		if not mealBusy and now >= nextLook then
-			nextLook = now + random:NextNumber(1.2, 3)
+		if not mealBusy and now >= S.nextLook then
+			S.nextLook = now + random:NextNumber(1.2, 3)
 			local roll = random:NextNumber()
 			if roll < 0.55 then
-				lookTargetX, lookTargetY = 0, 0 -- la caméra
+				S.lookTargetX, S.lookTargetY = 0, 0 -- la caméra
 			elseif roll < 0.8 then
-				lookTargetX, lookTargetY = 1.6, -0.4 -- le chat
+				S.lookTargetX, S.lookTargetY = 1.6, -0.4 -- le chat
 			else
-				lookTargetX, lookTargetY = random:NextNumber(-1.5, 1.5), 1.6 -- l'assiette
+				S.lookTargetX, S.lookTargetY = random:NextNumber(-1.5, 1.5), 1.6 -- l'assiette
 			end
 		end
-		lookX = approach(lookX, lookTargetX, 10, dt)
-		lookY = approach(lookY, lookTargetY, 10, dt)
+		S.lookX = approach(S.lookX, S.lookTargetX, 10, dt)
+		S.lookY = approach(S.lookY, S.lookTargetY, 10, dt)
 		applyExpression(expression, now)
 
 		-- Balancement doux (plus rapide quand elle mâche)
 		local chewing = expression == "Chew"
-		local bob = chewing and math.abs(math.sin(clock * 9)) * 1.6 or math.sin(clock * 2) * 1.2
+		local bob = chewing and math.abs(math.sin(S.clock * 9)) * 1.6 or math.sin(S.clock * 2) * 1.2
 		streamer.Position = UDim2.new(0.5, 0, 0, STREAMER_Y + bob)
-		local tilt = chewing and math.sin(clock * 7) * 3.5 or math.sin(clock * 1.3) * 2.5
+		local tilt = chewing and math.sin(S.clock * 7) * 3.5 or math.sin(S.clock * 1.3) * 2.5
 		if expression == "Thanks" then
 			tilt = 8
 		elseif expression == "Talk" then
-			tilt = math.sin(clock * 4) * 3
+			tilt = math.sin(S.clock * 4) * 3
 		end
 		head.Rotation = approach(head.Rotation, tilt, 12, dt)
 
 		-- Mains : repas, geste ou repos (avec un léger mouvement)
 		if not mealBusy then
-			if gesture == "Heart" then
+			if S.gesture == "Heart" then
 				leftArm.TX, leftArm.TY = -8, MOUTH_Y + 24
 				rightArm.TX, rightArm.TY = 8, MOUTH_Y + 24
-			elseif gesture == "Wave" then
-				leftArm.TX, leftArm.TY = -50 + math.sin(clock * 14) * 5, HEAD_Y + 8
+			elseif S.gesture == "Wave" then
+				leftArm.TX, leftArm.TY = -50 + math.sin(S.clock * 14) * 5, HEAD_Y + 8
 				rightArm.TX, rightArm.TY = rightArm.RestX, rightArm.RestY
 			else
-				leftArm.TX, leftArm.TY = leftArm.RestX + math.sin(clock * 1.1) * 1.5, leftArm.RestY
-				rightArm.TX, rightArm.TY = rightArm.RestX, rightArm.RestY + math.sin(clock * 1.3) * 1.2
+				leftArm.TX, leftArm.TY = leftArm.RestX + math.sin(S.clock * 1.1) * 1.5, leftArm.RestY
+				rightArm.TX, rightArm.TY = rightArm.RestX, rightArm.RestY + math.sin(S.clock * 1.3) * 1.2
 			end
 		elseif meal.Arm == rightArm then
 			leftArm.TX, leftArm.TY = leftArm.RestX, leftArm.RestY
@@ -2842,48 +2858,48 @@ function LiveStream.Start(ctx)
 			arm.Y = approach(arm.Y, arm.TY, 14, dt)
 			solveArm(arm, bob)
 		end
-		if gesture == "Heart" and effectsOn() and math.floor(clock * 3) ~= math.floor((clock - dt) * 3) then
+		if S.gesture == "Heart" and effectsOn() and math.floor(S.clock * 3) ~= math.floor((S.clock - dt) * 3) then
 			spawnHeart("💖")
 		end
 
 		-- Casque qui brille au rythme, pastilles, ruban LED, néon, lumières
-		local glow = 0.5 + 0.5 * math.sin(clock * 3)
+		local glow = 0.5 + 0.5 * math.sin(S.clock * 3)
 		for _, stroke in ipairs(cupStrokes) do
 			stroke.Transparency = 0.05 + glow * 0.5
 		end
 		for _, ear in ipairs(earGlows) do
 			ear.BackgroundTransparency = glow * 0.55
 		end
-		liveDot.BackgroundTransparency = math.sin(clock * 5) > 0 and 0 or 0.6
-		avatarLive.BackgroundTransparency = math.sin(clock * 5) > 0 and 0 or 0.15
-		micLed.BackgroundTransparency = math.sin(clock * 2.5) > -0.3 and 0 or 0.5
+		liveDot.BackgroundTransparency = math.sin(S.clock * 5) > 0 and 0 or 0.6
+		avatarLive.BackgroundTransparency = math.sin(S.clock * 5) > 0 and 0 or 0.15
+		micLed.BackgroundTransparency = math.sin(S.clock * 2.5) > -0.3 and 0 or 0.5
 		if ledRainbow then
-			ledGradient.Offset = Vector2.new((clock * 0.15) % 1 - 0.5, 0)
+			ledGradient.Offset = Vector2.new((S.clock * 0.15) % 1 - 0.5, 0)
 		end
-		ringGradient.Rotation = (clock * 60) % 360
-		strokeGradient.Rotation = (clock * 30) % 360
-		edgeGradient.Offset = Vector2.new(math.sin(clock * 0.6) * 0.3, 0)
-		goalGradient.Offset = Vector2.new((clock * 0.25) % 1 - 0.5, 0)
+		ringGradient.Rotation = (S.clock * 60) % 360
+		strokeGradient.Rotation = (S.clock * 30) % 360
+		edgeGradient.Offset = Vector2.new(math.sin(S.clock * 0.6) * 0.3, 0)
+		goalGradient.Offset = Vector2.new((S.clock * 0.25) % 1 - 0.5, 0)
 		if ringGroup.Visible then
 			ringStroke.Transparency = 0.05 + glow * 0.12
 			ringHaloStroke.Transparency = 0.7 + glow * 0.15
 		end
-		neonSign.TextTransparency = (math.sin(clock * 23) > 0.94) and 0.6 or 0
+		neonSign.TextTransparency = (math.sin(S.clock * 23) > 0.94) and 0.6 or 0
 		shine.BackgroundTransparency = 0.2 + glow * 0.3
 		if bokehGroup.Visible then
 			for _, dot in ipairs(bokeh) do
-				dot.Frame.BackgroundTransparency = dot.Base + 0.12 * math.sin(clock * 1.3 + dot.Phase)
+				dot.Frame.BackgroundTransparency = dot.Base + 0.12 * math.sin(S.clock * 1.3 + dot.Phase)
 			end
 		end
-		caret.Visible = math.floor(clock * 1.6) % 2 == 0
+		caret.Visible = math.floor(S.clock * 1.6) % 2 == 0
 		if followShine.Visible then
-			followShineGradient.Offset = Vector2.new(((clock * 0.5) % 2) - 1, 0)
+			followShineGradient.Offset = Vector2.new(((S.clock * 0.5) % 2) - 1, 0)
 		end
 
 		-- Vapeur du bol
 		for i, puff in ipairs(steam) do
 			if effectsOn() then
-				local p = ((clock / 2.4) + (i - 1) / 3) % 1
+				local p = ((S.clock / 2.4) + (i - 1) / 3) % 1
 				puff.Position = UDim2.new(0.5, BOWL_X + math.sin(p * 6 + i) * 4, 0, BOWL_BASE - 20 - p * 30)
 				puff.Size = UDim2.fromOffset(5 + p * 9, 5 + p * 9)
 				puff.BackgroundTransparency = 0.5 + p * 0.5
@@ -2912,15 +2928,15 @@ function LiveStream.Start(ctx)
 
 		-- Scintillement du beurre
 		if butterButton.Visible then
-			sparkleTimer -= dt
-			if sparkleTimer <= 0 then
-				sparkleTimer = random:NextNumber(1.5, 3.5)
+			S.sparkleTimer -= dt
+			if S.sparkleTimer <= 0 then
+				S.sparkleTimer = random:NextNumber(1.5, 3.5)
 				sparkle.TextTransparency = 0
 				sparkle.Position = UDim2.new(0.5, random:NextInteger(-15, 17), 0, random:NextInteger(BUTTON_H - 6 - BUTTER_H + 3, BUTTON_H - 12))
 				UI.Tween(sparkle, 0.6, { TextTransparency = 1 })
 			end
 			if butterHint.Visible then
-				butterHint.Position = UDim2.new(0.5, 0, 0, HINT_Y - math.abs(math.sin(clock * 4)) * 3)
+				butterHint.Position = UDim2.new(0.5, 0, 0, HINT_Y - math.abs(math.sin(S.clock * 4)) * 3)
 			end
 		end
 
@@ -2938,18 +2954,18 @@ function LiveStream.Start(ctx)
 				end
 			end
 		end
-		nextHeart -= dt
-		if nextHeart <= 0 then
-			nextHeart = random:NextNumber(0.6, 1.8) / (1 + followers() * 0.12)
+		S.nextHeart -= dt
+		if S.nextHeart <= 0 then
+			S.nextHeart = random:NextNumber(0.6, 1.8) / (1 + followers() * 0.12)
 			if effectsOn() or random:NextNumber() < 0.3 then
 				spawnHeart()
 			end
 		end
 
 		-- Spectateurs : marche aléatoire autour de la cible
-		viewersTimer -= dt
-		if viewersTimer <= 0 then
-			viewersTimer = 0.6
+		S.viewersTimer -= dt
+		if S.viewersTimer <= 0 then
+			S.viewersTimer = 0.6
 			local target = targetViewers()
 			viewers += (target - viewers) * 0.25 + target * random:NextNumber(-0.03, 0.03)
 			viewers = math.max(1, viewers)
@@ -2960,33 +2976,33 @@ function LiveStream.Start(ctx)
 		viewersLabel.TextColor3 = rising and Color3.fromRGB(140, 255, 170) or WHITE
 
 		-- Likes : montent tout seuls avec les spectateurs
-		likesTimer -= dt
-		if likesTimer <= 0 then
-			likesTimer = 0.5
+		S.likesTimer -= dt
+		if S.likesTimer <= 0 then
+			S.likesTimer = 0.5
 			addLikes(math.max(0, math.floor(viewers * random:NextNumber(0, 0.004) + random:NextNumber(0, 1.2))), false)
 		end
 		shownLikes += (likes - shownLikes) * math.min(1, dt * 5)
 		likesLabel.Text = "❤ " .. formatCount(math.floor(shownLikes + 0.5))
 
 		-- Nouveaux abonnés de temps en temps (barre d'objectif)
-		fanTimer -= dt
-		if fanTimer <= 0 then
-			fanTimer = random:NextNumber(2.5, 6) / (1 + followers() * 0.08)
+		S.fanTimer -= dt
+		if S.fanTimer <= 0 then
+			S.fanTimer = random:NextNumber(2.5, 6) / (1 + followers() * 0.08)
 			addFollowers(random:NextInteger(1, 2))
 		end
 
 		-- Chaque seconde : durée du live dans le titre
-		secondTimer -= dt
-		if secondTimer <= 0 then
-			secondTimer = 1
-			uptime += 1
-			subtitleLabel.Text = string.format("🍤 %s%s · <font color=\"#FF8FA8\">%d:%02d:%02d</font>", streamTitle, qualityTag, uptime // 3600, (uptime // 60) % 60, uptime % 60)
+		S.secondTimer -= dt
+		if S.secondTimer <= 0 then
+			S.secondTimer = 1
+			S.uptime += 1
+			subtitleLabel.Text = string.format("🍤 %s%s · <font color=\"#FF8FA8\">%d:%02d:%02d</font>", streamTitle, qualityTag, S.uptime // 3600, (S.uptime // 60) % 60, S.uptime % 60)
 		end
 
 		-- Abonnement : suit l'état serveur (et annule une attente expirée)
-		followTimer -= dt
-		if followTimer <= 0 then
-			followTimer = 0.5
+		S.followTimer -= dt
+		if S.followTimer <= 0 then
+			S.followTimer = 0.5
 			refreshFollow(true)
 		end
 
@@ -3001,16 +3017,16 @@ function LiveStream.Start(ctx)
 		end
 
 		-- Chat : de plus en plus rapide avec les abonnés, raids de temps en temps
-		chatTimer -= dt
-		if chatTimer <= 0 then
+		S.chatTimer -= dt
+		if S.chatTimer <= 0 then
 			local interval = math.clamp(1.4 / (1 + followers() * 0.15), 0.25, 1.4)
-			chatTimer = random:NextNumber(0.6, 1.3) * interval
+			S.chatTimer = random:NextNumber(0.6, 1.3) * interval
 			chatTick()
 		end
 		if chat.Visible then
-			nextRaid -= dt
-			if nextRaid <= 0 then
-				nextRaid = random:NextNumber(70, 140)
+			S.nextRaid -= dt
+			if S.nextRaid <= 0 then
+				S.nextRaid = random:NextNumber(70, 140)
 				startRaid()
 			end
 		end

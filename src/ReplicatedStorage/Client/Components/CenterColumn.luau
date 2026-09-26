@@ -513,17 +513,29 @@ local function buildPills(parent: Frame, order: number)
 			Visible = def.Feature == nil and (def.Visible == nil or def.Visible()),
 			Parent = row,
 		})
+		-- Tablette : texte et marges un peu plus serrés (pastilles tactiles de 44 px)
+		-- pour que les 10 pastilles tiennent sur DEUX lignes (sinon la barre
+		-- d'améliorations descendrait sur les emplacements du bas)
+		local tablet = Interface.Device == "Tablet"
 		local button = UIUtil.PillButton({
 			Name = "Button",
 			Text = text,
 			Color = def.Color,
 			TextColor3 = def.Round and Theme.Colors.Text or Theme.Colors.TextLight,
 			Height = height,
-			TextSize = round and math.floor(height * 0.56) or math.floor(height * 0.45),
+			TextSize = round and math.floor(height * 0.56) or math.floor(height * (tablet and 0.39 or 0.45)),
 			Round = round,
 			Position = UDim2.fromOffset(0, buttonY),
 			Parent = holder,
 		})
+		local pillPad = tablet and 13 or math.floor(height * 0.45)
+		if not round then
+			local padding = button:FindFirstChildOfClass("UIPadding")
+			if padding then
+				padding.PaddingLeft = UDim.new(0, pillPad)
+				padding.PaddingRight = UDim.new(0, pillPad)
+			end
+		end
 		if not round then
 			-- Contour du texte pour rester lisible sur les couleurs claires
 			local stroke = UIUtil.Create("UIStroke", {
@@ -543,7 +555,7 @@ local function buildPills(parent: Frame, order: number)
 			-- Badge DANS la pastille, à droite du texte : il ne recouvre ni le
 			-- texte ni la pastille voisine (la pastille s'élargit quand il est là)
 			local padding = button:FindFirstChildOfClass("UIPadding")
-			local basePad = math.floor(height * 0.45)
+			local basePad = pillPad
 			badge.AnchorPoint = Vector2.new(1, 0.5)
 			local function placeBadge()
 				local right = badge.Visible and math.max(basePad, PILL_BADGE_CLEAR) or basePad

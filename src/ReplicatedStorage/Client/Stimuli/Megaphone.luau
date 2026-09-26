@@ -217,6 +217,9 @@ function Megaphone.Start(ctx)
 		end
 		rig.Busy = true
 		active += 1
+		-- Plus petit sur téléphone / tablette (la toile y est plus petite)
+		local device = ctx.Interface and ctx.Interface.Device or "Desktop"
+		local k = device == "Phone" and 0.72 or (device == "Tablet" and 0.88 or 1)
 		local colors = palette or PALETTES[random:NextInteger(1, #PALETTES)]
 		local effects = effectsOn()
 
@@ -226,7 +229,7 @@ function Megaphone.Start(ctx)
 		holder.Position = position
 		holder.Rotation = random:NextNumber(-9, 9)
 		holder.Visible = true
-		rig.Scale.Scale = 2.6
+		rig.Scale.Scale = 2.6 * k
 		rig.Label.Text = word
 		rig.Shadow.Text = word
 		rig.Echo.Text = word
@@ -260,7 +263,7 @@ function Megaphone.Start(ctx)
 				task.delay(0.1 + (index - 1) * 0.12, function()
 					if frame.Parent then
 						ringStroke.Transparency = index == 1 and 0.1 or 0.3
-						UIUtil.Tween(frame, 0.55, { Size = UDim2.fromOffset(620, 620) }, Enum.EasingStyle.Quart)
+						UIUtil.Tween(frame, 0.55, { Size = UDim2.fromOffset(620 * k, 620 * k) }, Enum.EasingStyle.Quart)
 						UIUtil.Tween(ringStroke, 0.55, { Transparency = 1, Thickness = 1 }, Enum.EasingStyle.Quart)
 					end
 				end)
@@ -284,7 +287,7 @@ function Megaphone.Start(ctx)
 
 		-- 1) Écrasement à l'arrivée
 		local holderScale, label, stroke, icon = rig.Scale, rig.Label, rig.Stroke, rig.Icon
-		UIUtil.Tween(holderScale, 0.18, { Scale = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		UIUtil.Tween(holderScale, 0.18, { Scale = k }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 		UIUtil.Tween(label, 0.12, { TextTransparency = 0 })
 		UIUtil.Tween(rig.Shadow, 0.12, { TextTransparency = 0.55 })
 		UIUtil.Tween(stroke, 0.12, { Transparency = 0 })
@@ -326,7 +329,7 @@ function Megaphone.Start(ctx)
 			if holder.Parent then
 				holder.Position = base
 				-- 3) Respiration
-				UIUtil.Tween(holderScale, 0.6, { Scale = 1.07 }, Enum.EasingStyle.Sine)
+				UIUtil.Tween(holderScale, 0.6, { Scale = 1.07 * k }, Enum.EasingStyle.Sine)
 				UIUtil.Tween(icon, 0.6, { Rotation = -6 }, Enum.EasingStyle.Sine)
 				task.wait(0.65)
 			end
@@ -334,7 +337,7 @@ function Megaphone.Start(ctx)
 			-- 4) S'envole en disparaissant
 			if holder.Parent then
 				UIUtil.Tween(holder, 0.4, { Position = base - UDim2.fromOffset(0, 40) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-				UIUtil.Tween(holderScale, 0.4, { Scale = 0.85 })
+				UIUtil.Tween(holderScale, 0.4, { Scale = 0.85 * k })
 				UIUtil.Tween(label, 0.35, { TextTransparency = 1 })
 				UIUtil.Tween(rig.Shadow, 0.35, { TextTransparency = 1 })
 				UIUtil.Tween(stroke, 0.35, { Transparency = 1 })

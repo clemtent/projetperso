@@ -1274,14 +1274,14 @@ local function buildPlayerCard(section: Frame)
 		Name = "Deck",
 		Size = UDim2.fromOffset(108, 108),
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 12, 0.5, 0),
+		Position = UDim2.new(0, 16, 0.5, 0),
 		BackgroundTransparency = 1,
 		ZIndex = 2,
 		Parent = card,
 	})
 	local vinyl = UIUtil.Create("Frame", {
 		Name = "Vinyl",
-		Size = UDim2.fromOffset(100, 100),
+		Size = UDim2.fromOffset(94, 94),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
 		BackgroundColor3 = Color3.fromRGB(18, 16, 24),

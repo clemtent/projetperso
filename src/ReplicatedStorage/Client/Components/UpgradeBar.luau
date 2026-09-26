@@ -107,6 +107,7 @@ type Card = {
 	Shine: UIGradient,
 	PopScale: UIScale,
 	HD: Frame,
+	Rays: Frame,
 	Level: number,
 	Affordable: boolean?,
 	Removing: boolean,
@@ -864,6 +865,7 @@ local function createCard(upgrade): Card
 		Shine = shine,
 		PopScale = popScale,
 		HD = hd,
+		Rays = rays,
 		Level = ClientState.GetLevel(upgrade.Id),
 		Affordable = nil,
 		Removing = false,
@@ -1065,7 +1067,6 @@ local function buildTeaser()
 	end)
 	teaserButton.Activated:Connect(function()
 		lastUiTapClock = os.clock()
-		SoundManager.Play("Click", 1.2)
 		UIUtil.Shake(teaserButton)
 		showTooltip(TEASER_ID, lastInputTouch)
 	end)
@@ -1355,10 +1356,7 @@ function UpgradeBar.Build(parent: GuiObject, tooltipLayer: Frame): Frame
 		if hdEnabled then
 			local rotation = (os.clock() * 25) % 360
 			for _, card in pairs(cards) do
-				local rays = card.HD:FindFirstChild("Rays") :: Frame?
-				if rays then
-					rays.Rotation = rotation
-				end
+				card.Rays.Rotation = rotation
 			end
 		end
 		if os.clock() - lastAffordRefresh >= safety then

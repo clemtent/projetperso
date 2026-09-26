@@ -8,5 +8,6 @@ return {
 	fr = {
 		["After 1 ocean visit"] = "Après 1 visite à l'océan",
 		["After %d ocean visits"] = "Après %d visites à l'océan",
+		["✋ Drag to move  •  🧁 small items go ON tables & shelves"] = "✋ Glisse pour déplacer  •  🧁 les petits objets se posent SUR les meubles",
 	},
 }

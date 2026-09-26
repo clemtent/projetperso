@@ -164,7 +164,7 @@ local function text(props)
 		TextXAlignment = props.XAlign or Enum.TextXAlignment.Left,
 		TextYAlignment = props.YAlign or Enum.TextYAlignment.Center,
 		TextWrapped = props.Wrapped == true,
-		TextTruncate = props.Wrapped and Enum.TextTruncate.None or Enum.TextTruncate.AtEnd,
+		TextTruncate = Enum.TextTruncate.AtEnd,
 		Size = props.Size or UDim2.new(1, 0, 0, 20),
 		Position = props.Position or UDim2.new(),
 		AnchorPoint = props.AnchorPoint or Vector2.zero,
@@ -221,7 +221,7 @@ local function neonButton(props)
 	})
 	UIUtil.Corner(button, props.Radius or UDim.new(1, 0))
 	UIUtil.Stroke(button, color:Lerp(WHITE, 0.45), 1.5, 0.15)
-	UIUtil.Gradient(button, ColorSequence.new(color:Lerp(WHITE, 0.22), color:Lerp(BLACK, 0.12)), 90)
+	UIUtil.Gradient(button, ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(205, 205, 215)), 90)
 	button:SetAttribute("BaseColor", color)
 	button:SetAttribute("Enabled", true)
 	UIUtil.AnimateButton(button, 1.05, 0.93)
@@ -381,7 +381,7 @@ local function paintTabs()
 	for id, button in pairs(S.TabButtons) do
 		local selected = id == S.Tab
 		button.BackgroundTransparency = selected and 0 or 0.55
-		button.BackgroundColor3 = selected and C.Pink or C.Card
+		button.BackgroundColor3 = selected and WHITE or C.Card
 		button.TextColor3 = selected and WHITE or C.TextDim
 		local gradient = button:FindFirstChild("Glow") :: UIGradient?
 		if gradient then
@@ -431,7 +431,7 @@ local function buildHeader(root: Frame)
 	})
 	for index, tab in ipairs(TABS) do
 		local button = make("TextButton", {
-			Name = tab.Id,
+			Name = "Tab_" .. tab.Id,
 			Size = UDim2.fromOffset(0, 38),
 			AutomaticSize = Enum.AutomaticSize.X,
 			BackgroundColor3 = C.Card,
@@ -483,7 +483,8 @@ local function buildHeader(root: Frame)
 		ZIndex = 6,
 		Parent = bar,
 	})
-	UIUtil.Gradient(ticketChip, ColorSequence.new(Color3.fromRGB(96, 56, 20), Color3.fromRGB(52, 24, 60)), 90)
+	ticketChip.BackgroundColor3 = WHITE
+	UIUtil.Gradient(ticketChip, ColorSequence.new(Color3.fromRGB(110, 60, 24), Color3.fromRGB(60, 26, 72)), 90)
 	text({
 		Text = TICKET,
 		TextSize = 26,
@@ -545,6 +546,7 @@ local function cardArt(parent: Instance, entry, height: number)
 		Parent = parent,
 	})
 	UIUtil.Corner(art, 11)
+	art.BackgroundColor3 = WHITE
 	UIUtil.Gradient(art, ColorSequence.new(entry.Color, entry.Accent or entry.Color:Lerp(BLACK, 0.3)), 35)
 	-- Rayures "rétro" (3 bandes claires)
 	for index = 1, 3 do
@@ -648,7 +650,7 @@ local function buildGameCard(parent: Instance, entry, order: number)
 		Color = C.TextDim,
 		Wrapped = true,
 		YAlign = Enum.TextYAlignment.Top,
-		Size = UDim2.new(1, -20, 0, 32),
+		Size = UDim2.new(1, -20, 0, 34),
 		Position = UDim2.fromOffset(10, artHeight + 31),
 		ZIndex = 6,
 		Parent = card,
@@ -818,15 +820,16 @@ local function buildGamesPage(body: Frame)
 	local scroll, list = scrollPage(body, "Games")
 	S.Pages.Games = scroll
 	local solo, duel = ArcadeConfig.SoloGames, ArcadeConfig.DuelGames
-	sectionTitle(scroll, T("Solo games"), C.Purple, 1, T("Win games to earn %s tickets", TICKET))
-	local soloGrid = cardGrid(scroll, #solo, 4, 188, 2, "SoloGrid")
-	for index, entry in ipairs(solo) do
-		buildGameCard(soloGrid, entry, index)
-	end
-	sectionTitle(scroll, T("Duels"), C.Pink, 3, T("Challenge a player of this server"))
-	local duelGrid = cardGrid(scroll, #duel, 4, 188, 4, "DuelGrid")
+	-- Duels d'abord (une rangée), puis les jeux solo : les deux sont visibles dès l'ouverture
+	sectionTitle(scroll, T("Duels"), C.Pink, 1, T("Challenge a player of this server"))
+	local duelGrid = cardGrid(scroll, #duel, 4, 194, 2, "DuelGrid")
 	for index, entry in ipairs(duel) do
 		buildGameCard(duelGrid, entry, index)
+	end
+	sectionTitle(scroll, T("Solo games"), C.Purple, 3, T("Win games to earn %s tickets", TICKET))
+	local soloGrid = cardGrid(scroll, #solo, 4, 194, 4, "SoloGrid")
+	for index, entry in ipairs(solo) do
+		buildGameCard(soloGrid, entry, index)
 	end
 	fitCanvas(scroll, list)
 end
@@ -863,6 +866,13 @@ local function paintDuelSetup()
 			stroke.Color = selected and C.Yellow:Lerp(WHITE, 0.4) or C.Line
 			stroke.Transparency = selected and 0 or 0.45
 		end
+	end
+	local chosen = ArcadeConfig.GamesById[S.SelectedGame]
+	if L.Preview and chosen then
+		L.PreviewIcon.Text = chosen.Icon
+		L.PreviewName.Text = T(chosen.Name)
+		L.PreviewText.Text = T(chosen.Description)
+		L.PreviewGradient.Color = ColorSequence.new(chosen.Color, chosen.Accent or chosen.Color)
 	end
 	if L.PotLabel then
 		local stake = S.SelectedStake
@@ -915,11 +925,13 @@ local function buildDuelSetup(parent: Frame)
 			Parent = tile,
 		})
 		UIUtil.Corner(badge, 11)
-		UIUtil.Gradient(badge, ColorSequence.new(entry.Color:Lerp(WHITE, 0.25), entry.Accent or entry.Color), 45)
+		badge.BackgroundColor3 = WHITE
+		UIUtil.Gradient(badge, ColorSequence.new(entry.Color:Lerp(WHITE, 0.1), entry.Accent or entry.Color), 45)
 		text({ Text = entry.Icon, TextSize = 24, Size = UDim2.fromScale(1, 1), XAlign = Enum.TextXAlignment.Center, ZIndex = 8, Parent = badge })
-		text({ Text = T(entry.Name), TextSize = 14, Size = UDim2.new(1, -62, 0, 18), Position = UDim2.fromOffset(56, 12), ZIndex = 7, Parent = tile })
+		text({ Text = T(entry.Name), TextSize = 14, Wrapped = true, YAlign = Enum.TextYAlignment.Bottom,
+			Size = UDim2.new(1, -62, 0, 32), Position = UDim2.fromOffset(56, 5), ZIndex = 7, Parent = tile }).LineHeight = 0.95
 		text({ Text = T(entry.Tagline or ""), Font = Theme.Fonts.Body, TextSize = 12, Color = C.TextDim,
-			Size = UDim2.new(1, -62, 0, 16), Position = UDim2.fromOffset(56, 32), ZIndex = 7, Parent = tile })
+			Size = UDim2.new(1, -62, 0, 16), Position = UDim2.fromOffset(56, 38), ZIndex = 7, Parent = tile })
 		local check = text({ Name = "Check", Text = "✓", TextSize = 14, Color = WHITE, XAlign = Enum.TextXAlignment.Center,
 			Size = UDim2.fromOffset(18, 18), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -5, 0, 5), ZIndex = 9, Parent = tile })
 		check.BackgroundTransparency = 0
@@ -990,6 +1002,30 @@ local function buildDuelSetup(parent: Frame)
 		ZIndex = 6,
 		Parent = setup,
 	})
+	-- Aperçu du duel choisi (seulement s'il reste de la place : pas sur téléphone)
+	local bodyHeight = Arcade.GetSize().Y - 88 - 72
+	local previewHeight = bodyHeight - 284 - 84
+	local preview = panel({
+		Name = "Preview",
+		Size = UDim2.new(1, -24, 0, math.max(0, previewHeight)),
+		Position = UDim2.fromOffset(12, 282),
+		Color = C.Card,
+		StrokeTransparency = 0.5,
+		Radius = 12,
+		ZIndex = 6,
+		Parent = setup,
+	})
+	preview.Visible = previewHeight >= 60
+	local previewIcon = make("Frame", { Size = UDim2.fromOffset(44, 44), AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0),
+		BackgroundColor3 = WHITE, ZIndex = 7, Parent = preview })
+	UIUtil.Corner(previewIcon, 12)
+	L.PreviewGradient = UIUtil.Gradient(previewIcon, ColorSequence.new(C.Pink, C.Cyan), 45)
+	L.PreviewIcon = text({ Text = "", TextSize = 26, Size = UDim2.fromScale(1, 1), XAlign = Enum.TextXAlignment.Center, ZIndex = 8, Parent = previewIcon })
+	L.PreviewName = text({ Text = "", TextSize = 15, Size = UDim2.new(1, -74, 0, 18), Position = UDim2.new(0, 64, 0.5, -20), ZIndex = 7, Parent = preview })
+	L.PreviewText = text({ Text = "", Font = Theme.Fonts.Body, TextSize = 12, Color = C.TextDim, Wrapped = true, YAlign = Enum.TextYAlignment.Top,
+		Size = UDim2.new(1, -74, 0, 30), Position = UDim2.new(0, 64, 0.5, -1), ZIndex = 7, Parent = preview })
+	L.Preview = preview
+
 	-- Règles en bref (en bas)
 	local rules = panel({
 		Name = "Rules",
@@ -1315,6 +1351,7 @@ local function buildShopCard(parent: Instance, item, order: number)
 		ZIndex = 6,
 		Parent = parent,
 	})
+	card.BackgroundColor3 = WHITE
 	UIUtil.Gradient(card, ColorSequence.new(tint:Lerp(C.Card, 0.72), C.Card), 90)
 	local halo = make("Frame", {
 		Size = UDim2.fromOffset(62, 62),
@@ -1327,6 +1364,7 @@ local function buildShopCard(parent: Instance, item, order: number)
 	})
 	UIUtil.Corner(halo, UDim.new(1, 0))
 	UIUtil.Stroke(halo, tint:Lerp(WHITE, 0.5), 2, 0.1)
+	halo.BackgroundColor3 = WHITE
 	UIUtil.Gradient(halo, ColorSequence.new(tint:Lerp(WHITE, 0.35), tint:Lerp(BLACK, 0.1)), 90)
 	text({ Text = item.Icon, TextSize = 34, Size = UDim2.fromScale(1, 1), XAlign = Enum.TextXAlignment.Center, ZIndex = 8, Parent = halo })
 	text({ Text = T(item.Name), TextSize = 15, Size = UDim2.new(1, -16, 0, 20), Position = UDim2.fromOffset(8, 80),
@@ -1404,7 +1442,8 @@ local function buildShopPage(body: Frame)
 		ZIndex = 6,
 		Parent = scroll,
 	})
-	UIUtil.Gradient(banner, ColorSequence.new(Color3.fromRGB(110, 60, 30), Color3.fromRGB(70, 30, 90)), 0)
+	banner.BackgroundColor3 = WHITE
+	UIUtil.Gradient(banner, ColorSequence.new(Color3.fromRGB(120, 66, 30), Color3.fromRGB(80, 34, 104)), 0)
 	text({ Text = "🎟️", TextSize = 30, Size = UDim2.fromOffset(44, 44), Position = UDim2.fromOffset(10, 4),
 		XAlign = Enum.TextXAlignment.Center, ZIndex = 7, Parent = banner })
 	text({ Text = T("Arcade-exclusive rewards"), TextSize = 16, Color = C.Yellow, Size = UDim2.new(1, -70, 0, 20),
@@ -1441,6 +1480,7 @@ local R: any = {}
 
 local function statTile(parent: Instance, icon: string, label: string, color: Color3, order: number)
 	local tile = panel({ Name = "Stat", Color = C.Card, StrokeColor = color, StrokeTransparency = 0.45, Radius = 14, LayoutOrder = order, ZIndex = 6, Parent = parent })
+	tile.BackgroundColor3 = WHITE
 	UIUtil.Gradient(tile, ColorSequence.new(color:Lerp(C.Card, 0.7), C.Card), 0)
 	text({ Text = icon, TextSize = 26, Size = UDim2.fromOffset(40, 40), AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0),
 		XAlign = Enum.TextXAlignment.Center, ZIndex = 7, Parent = tile })
@@ -1572,7 +1612,7 @@ local function buildGameView(root: Frame)
 		closeGame()
 	end)
 	G.Back = back
-	local forfeit = neonButton({ Name = "Forfeit", Text = T("🏳️ Give up"), Color = Color3.fromRGB(150, 60, 90), Size = UDim2.fromOffset(112, 40),
+	local forfeit = neonButton({ Name = "Forfeit", Text = T("🏳️ Give up"), Color = Color3.fromRGB(150, 60, 90), Size = UDim2.fromOffset(122, 40),
 		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), TextSize = 14, ZIndex = 22, Parent = view })
 	local confirmUntil = 0
 	forfeit.Activated:Connect(function()
@@ -1605,7 +1645,7 @@ local function buildGameView(root: Frame)
 	G.SoloTitle = title
 
 	-- Bandeau VS (duel) : carte joueur | pot + temps | carte adversaire
-	local strip = make("Frame", { Name = "VersusStrip", Size = UDim2.new(1, -236, 0, 52), Position = UDim2.fromOffset(106, -6), BackgroundTransparency = 1, ZIndex = 21, Parent = view })
+	local strip = make("Frame", { Name = "VersusStrip", Size = UDim2.new(1, -246, 0, 52), Position = UDim2.fromOffset(106, -6), BackgroundTransparency = 1, ZIndex = 21, Parent = view })
 	G.Strip = strip
 	G.Cards = {}
 	for side = 1, 2 do
@@ -1654,7 +1694,8 @@ local function buildGameView(root: Frame)
 	end
 	local center = panel({ Name = "Pot", Size = UDim2.fromOffset(112, 52), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 0),
 		Color = Color3.fromRGB(60, 30, 40), StrokeColor = C.Yellow, StrokeTransparency = 0.2, Radius = 14, ZIndex = 22, Parent = strip })
-	UIUtil.Gradient(center, ColorSequence.new(Color3.fromRGB(100, 50, 40), Color3.fromRGB(60, 24, 80)), 90)
+	center.BackgroundColor3 = WHITE
+	UIUtil.Gradient(center, ColorSequence.new(Color3.fromRGB(110, 56, 40), Color3.fromRGB(64, 26, 86)), 90)
 	G.Vs = text({ Text = "VS", Font = Theme.Fonts.Number, TextSize = 18, Color = C.Yellow, XAlign = Enum.TextXAlignment.Center,
 		Size = UDim2.new(1, 0, 0, 22), Position = UDim2.fromOffset(0, 5), ZIndex = 23, Parent = center })
 	G.Pot = text({ Text = "", TextSize = 13, Color = Color3.fromRGB(255, 232, 190), XAlign = Enum.TextXAlignment.Center,
@@ -1663,7 +1704,8 @@ local function buildGameView(root: Frame)
 	-- Hôte du module de jeu
 	local host = panel({ Name = "Host", Size = UDim2.new(1, 0, 1, -54), Position = UDim2.fromOffset(0, 54), Color = Color3.fromRGB(16, 10, 34),
 		StrokeColor = C.Purple, StrokeTransparency = 0.25, StrokeThickness = 2, Radius = 18, Clip = true, ZIndex = 20, Parent = view })
-	UIUtil.Gradient(host, ColorSequence.new(Color3.fromRGB(30, 16, 62), Color3.fromRGB(14, 8, 30)), 90)
+	host.BackgroundColor3 = WHITE
+	UIUtil.Gradient(host, ColorSequence.new(Color3.fromRGB(34, 18, 70), Color3.fromRGB(16, 9, 34)), 90)
 	G.Host = host
 
 	-- Écran de résultat du duel (au-dessus de la zone de jeu)
@@ -1690,6 +1732,7 @@ local function buildGameView(root: Frame)
 		closeGame()
 		selectTab("Duels")
 	end)
+	G.Lobby = lobby
 	local rematch = neonButton({ Name = "Rematch", Text = T("🔁 Rematch"), Color = C.Pink, Size = UDim2.new(0.5, -21, 0, 40),
 		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 1, -54), TextSize = 15, ZIndex = 64, Parent = card })
 	rematch.Activated:Connect(function()
@@ -2009,6 +2052,8 @@ showResult = function(duel)
 	G.ResultRays.Visible = outcome == "Win"
 	local stillHere = other and Players:GetPlayerByUserId(other.UserId or 0) ~= nil
 	G.Rematch.Visible = stillHere == true and result.Reason ~= "left"
+	G.Lobby.AnchorPoint = G.Rematch.Visible and Vector2.zero or Vector2.new(0.5, 0)
+	G.Lobby.Position = G.Rematch.Visible and UDim2.new(0, 14, 1, -54) or UDim2.new(0.5, 0, 1, -54)
 	G.Result.Visible = true
 	G.Result.BackgroundTransparency = 1
 	UIUtil.Tween(G.Result, 0.3, { BackgroundTransparency = 0.3 })
@@ -2041,7 +2086,8 @@ local function buildInvitePopup()
 	holder:SetAttribute("DarkSkinIgnore", true)
 	P.Scale = make("UIScale", { Parent = holder })
 	local card = panel({ Name = "Card", Color = C.Bg, StrokeColor = C.Pink, StrokeThickness = 2.5, StrokeTransparency = 0, Radius = 20, ZIndex = 51, Parent = holder })
-	UIUtil.Gradient(card, ColorSequence.new(Color3.fromRGB(70, 22, 96), Color3.fromRGB(26, 14, 56)), 90)
+	card.BackgroundColor3 = WHITE
+	UIUtil.Gradient(card, ColorSequence.new(Color3.fromRGB(78, 26, 108), Color3.fromRGB(30, 16, 64)), 90)
 	UIUtil.Shadow(card, 4, 0.7, 3)
 	P.Avatar = avatar(card, 0, 52, C.Pink, { Position = UDim2.fromOffset(14, 14), ZIndex = 52 })
 	local swords = text({ Text = "⚔️", TextSize = 20, Size = UDim2.fromOffset(26, 26), AnchorPoint = Vector2.new(0.5, 0.5),
@@ -2320,6 +2366,7 @@ function Arcade.Build(content: Frame)
 		Parent = content,
 	})
 	root:SetAttribute("DarkSkinIgnore", true)
+	root.BackgroundColor3 = WHITE
 	UIUtil.Gradient(root, ColorSequence.new({
 		ColorSequenceKeypoint.new(0, C.Bg2),
 		ColorSequenceKeypoint.new(0.55, C.Bg),

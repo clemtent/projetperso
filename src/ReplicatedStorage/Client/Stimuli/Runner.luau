@@ -101,7 +101,7 @@ local SPEED_RAMP = 0.018
 local WAVE_GAP = 3.4 -- distance entre deux vagues d'obstacles
 local BIG = 900 -- taille des demi-plans
 local DAY_LENGTH = 240 -- durée d'un cycle jour / nuit (s)
-local COMBO_WINDOW = 0.9 -- délai max entre deux pièces pour garder le combo
+local COMBO_WINDOW = 0.75 -- délai max entre deux pièces pour garder le combo
 
 local TRAIN_POOL = 3
 local OBSTACLE_POOL = 4
@@ -1031,6 +1031,10 @@ function Runner.Start(ctx)
 			MaxTextSize = 60,
 			Parent = f,
 		})
+		local sizeConstraint = label:FindFirstChildOfClass("UITextSizeConstraint")
+		if sizeConstraint then
+			sizeConstraint.MinTextSize = 1 -- au loin, le graffiti devient minuscule
+		end
 		local stroke = UIUtil.Stroke(label, rgb(30, 24, 40), 1.5)
 		stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 		local panel = {
@@ -1053,15 +1057,16 @@ function Runner.Start(ctx)
 	-- Brume à l'horizon : les objets lointains en sortent doucement
 	local fog = frame({
 		Name = "Fog",
-		Position = UDim2.fromOffset(0, HY - 12 * U),
-		Size = UDim2.fromOffset(SW, 32 * U),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.fromOffset(CX, HY - 4 * U),
+		Size = UDim2.fromOffset(SW * 0.6, 24 * U),
 		BackgroundColor3 = WHITE,
 		ZIndex = depthZ(6),
 		Parent = world,
-	})
+	}, ROUND)
 	UIUtil.Gradient(fog, ColorSequence.new(WHITE), 90).Transparency = NumberSequence.new({
 		nkp(0, 1),
-		nkp(0.38, 0.08),
+		nkp(0.4, 0.1),
 		nkp(1, 1),
 	})
 
@@ -1113,7 +1118,7 @@ function Runner.Start(ctx)
 			local flare = frame({
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				Position = UDim2.fromScale(0.5, 1.1),
-				Size = UDim2.fromScale(4.4, 3),
+				Size = UDim2.fromScale(2.6, 1.8),
 				BackgroundColor3 = LAMP_LIGHT,
 				BackgroundTransparency = 1,
 				Parent = head,
@@ -1370,6 +1375,7 @@ function Runner.Start(ctx)
 			FlareL = flareL,
 			FlareR = flareR,
 			Side = newQuad(WHITE),
+			Windows = newQuad(rgb(44, 60, 100)),
 			Roof = newQuad(WHITE),
 			Lane = 1,
 			Z = Z_FAR,
@@ -2270,6 +2276,7 @@ function Runner.Start(ctx)
 		FadeT = 0,
 		DustTimer = 0,
 		JetShown = false,
+		LastCoinPop = -10,
 		ShownCombo = -1,
 		ShownBest = -1,
 		NewBest = false,
@@ -2412,9 +2419,10 @@ function Runner.Start(ctx)
 		end
 		-- Lampadaires et phares : plus forts la nuit
 		for _, pole in ipairs(poles) do
-			pole.Glow.BackgroundTransparency = 0.55 - night * 0.55
-			pole.Flare.BackgroundTransparency = 1 - night * 0.55
-			pole.Pool.BackgroundTransparency = 1 - night * 0.3
+			pole.Glow.BackgroundColor3 = rgb(200, 204, 214):Lerp(LAMP_LIGHT, night)
+			pole.Glow.BackgroundTransparency = 0.3 - night * 0.3
+			pole.Flare.BackgroundTransparency = 1 - night * 0.3
+			pole.Pool.BackgroundTransparency = 1 - night * 0.2
 		end
 		for _, train in ipairs(trains) do
 			if train.Extra <= 0 then
@@ -2440,6 +2448,7 @@ function Runner.Start(ctx)
 		train.Active = false
 		train.Body.Visible = false
 		hideQuad(train.Side)
+		hideQuad(train.Windows)
 		hideQuad(train.Roof)
 	end
 
@@ -2658,7 +2667,12 @@ function Runner.Start(ctx)
 		end
 		st.LastCoin = st.Clock
 		spawnSparkles(px, py, 2)
-		popText(gain == 2 and "+2" or "+1", px, py - 8 * U, gain == 2 and rgb(255, 150, 60) or GOLD, 34 * U, 15 * U)
+		local headY = sy(st.RunnerH + CHAR_H + 4, CHAR_Z)
+		if st.Clock - st.LastCoinPop < 0.3 then
+			return
+		end
+		st.LastCoinPop = st.Clock
+		popText(gain == 2 and "+2" or "+1", px + random:NextNumber(4, 14) * U, math.min(py, headY), gain == 2 and rgb(255, 150, 60) or GOLD, 28 * U, 13 * U)
 	end
 
 	local function activatePower(kind: string, px: number, py: number)
@@ -2880,7 +2894,7 @@ function Runner.Start(ctx)
 			-- flaque de lumière sous la lampe (la nuit)
 			local lampX = pole.Sign * (POLE_X - POLE_ARM)
 			pole.Pool.Position = UDim2.fromOffset(sx(lampX, z), sy(0, z))
-			pole.Pool.Size = UDim2.fromOffset(70 * U / z, 16 * U / z)
+			pole.Pool.Size = UDim2.fromOffset(56 * U / z, 12 * U / z)
 			pole.Pool.ZIndex = depth - 1
 			pole.Pool.Visible = st.Night > 0.05 and t < 1
 		end
@@ -2985,10 +2999,14 @@ function Runner.Start(ctx)
 							sx(sideX, back),
 							sy(TRAIN_H - 4, back),
 							sy(2, back),
-							depth - 1
+							depth - 2
 						)
+						-- bande de fenêtres le long du flanc
+						local w1, w2 = z + 0.3, back - 0.15
+						setVQuad(train.Windows, sx(sideX, w1), sy(66, w1), sy(45, w1), sx(sideX, w2), sy(66, w2), sy(45, w2), depth - 1)
 					else
 						hideQuad(train.Side)
+						hideQuad(train.Windows)
 					end
 					if train.Extra > 0 then
 						-- Phares qui clignotent : il fonce vers nous !

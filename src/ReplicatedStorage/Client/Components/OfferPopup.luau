@@ -625,7 +625,6 @@ local function show(offer: Offer)
 		icon.Position = UDim2.new(0.5, 0, 0.56, math.sin(t * 2) * 3)
 		icon.Rotation = math.sin(t * 1.3) * 5
 	end)
-	SoundManager.Play("Open", 1.1)
 end
 
 -- Montre une offre si les règles le permettent

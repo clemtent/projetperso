@@ -265,8 +265,8 @@ local function lockOverlay(parent: GuiObject, compact: boolean): Frame
 	local veil = UIUtil.Create("Frame", {
 		Name = "Lock",
 		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = Color3.fromRGB(60, 44, 92),
-		BackgroundTransparency = 0.42,
+		BackgroundColor3 = Color3.fromRGB(84, 64, 130),
+		BackgroundTransparency = 0.5,
 		ZIndex = 45,
 		Parent = parent,
 	})
@@ -1141,6 +1141,8 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 			BackgroundColor3 = HouseCommon.CategoryTint(item.Category),
 			AutoButtonColor = false,
 			Text = "",
+			-- (les fils des lampes suspendues ne débordent plus sur la carte du dessus)
+			ClipsDescendants = true,
 			ZIndex = 35,
 			Parent = card,
 		})

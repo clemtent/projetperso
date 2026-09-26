@@ -39,7 +39,7 @@ local COOLDOWN_FADE = 0.6 -- transparence des logos pendant la recharge
 local MIN_SOUND_GAP = 0.07 -- évite la cacophonie avec plusieurs logos
 local TRAIL_LAG = 0.055 -- retard (s) de chaque silhouette de la traînée
 local TRAIL_ALPHA = { 0.72, 0.83, 0.91 } -- transparence des silhouettes
-local GLOW_ALPHA = 0.9 -- transparence normale du halo
+local GLOW_ALPHA = 0.84 -- transparence normale du halo
 local RAINBOW_TIME = 2.6 -- durée de l'arc-en-ciel après un coin
 local RING_COUNT = 3 -- ondes de choc réutilisées
 
@@ -167,8 +167,8 @@ function DVD.Start(ctx)
 	------------------------------------------------------------------
 	-- Ellipse (le disque aplati) : union de pilules de plus en plus hautes et
 	-- étroites (UICorner ne sait faire que des pilules) ; renvoie les pièces
-	local DISC_Y = 61
-	local DISC_LAYERS = { { W - 22, 9 }, { W - 34, 15 }, { W - 56, 20 }, { W - 88, 24 } }
+	local DISC_Y = 62
+	local DISC_LAYERS = { { W - 18, 9 }, { W - 28, 15 }, { W - 42, 19.5 }, { W - 62, 23 }, { W - 92, 26 } }
 	local function drawDisc(parent: Instance, color: Color3, z: number, layers: number): { Frame }
 		local pieces = {}
 		for i = 1, layers do
@@ -201,7 +201,7 @@ function DVD.Start(ctx)
 			return parts
 		end
 		UIUtil.Gradient(word, GLOSS, 90)
-		local wordStroke = UIUtil.Stroke(word, color:Lerp(Color3.new(0, 0, 0), 0.55), 1.5, 0.35)
+		local wordStroke = UIUtil.Stroke(word, color:Lerp(Color3.new(0, 0, 0), 0.55), 1.2, 0.5)
 		wordStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 		parts.WordStroke = wordStroke
 		-- Reflet brillant en haut du disque
@@ -315,7 +315,7 @@ function DVD.Start(ctx)
 			Name = "Glow",
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromScale(1.06, 1.1),
+			Size = UDim2.fromScale(1.04, 0.9),
 			BackgroundColor3 = color,
 			BackgroundTransparency = GLOW_ALPHA,
 			BorderSizePixel = 0,
@@ -323,23 +323,9 @@ function DVD.Start(ctx)
 			Parent = body,
 		})
 		UIUtil.Corner(glow, UDim.new(1, 0))
-		local glowCore = UIUtil.Create("Frame", {
-			Name = "GlowCore",
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromScale(0.78, 0.6),
-			BackgroundColor3 = color,
-			BackgroundTransparency = 0.55,
-			BorderSizePixel = 0,
-			ZIndex = 5,
-			Parent = glow,
-		})
-		UIUtil.Corner(glowCore, UDim.new(1, 0))
 		logo.Glow = glow
 		table.insert(logo.Tinted, { glow, "BackgroundColor3" })
-		table.insert(logo.Tinted, { glowCore, "BackgroundColor3" })
 		table.insert(logo.Fades, { glow, "BackgroundTransparency", GLOW_ALPHA })
-		table.insert(logo.Fades, { glowCore, "BackgroundTransparency", 0.55 })
 
 		if useImage then
 			-- Image personnalisée (blanche, recolorée)
@@ -360,7 +346,7 @@ function DVD.Start(ctx)
 			logo.Word = parts.Word
 			table.insert(logo.Tinted, { parts.Word, "TextColor3" })
 			table.insert(logo.Fades, { parts.Word, "TextTransparency", 0 })
-			table.insert(logo.Fades, { parts.WordStroke, "Transparency", 0.35 })
+			table.insert(logo.Fades, { parts.WordStroke, "Transparency", 0.5 })
 			for _, piece in ipairs(parts.Disc) do
 				table.insert(logo.Tinted, { piece, "BackgroundColor3" })
 				table.insert(logo.Fades, { piece, "BackgroundTransparency", 0 })
