@@ -144,7 +144,11 @@ test("Config : cohérence des améliorations", function(check)
 		if q.Feature then check(Config.FeatureToUpgrade[q.Feature] ~= nil, "Quête " .. q.Type .. " Feature " .. q.Feature) end
 		check(q.Text:find("%s", 1, true) ~= nil, "Quête " .. q.Type .. " sans %s")
 	end
-	check(Config.FeatureToUpgrade[Config.Stocks.Feature] ~= nil, "Stocks.Feature")
+	check(Config.FeatureToUpgrade[Config.Garden.Feature] ~= nil, "Garden.Feature")
+	for _, u in ipairs(Config.Upgrades) do
+		if u.Requires then check(Config.UpgradesById[u.Requires] ~= nil, "Requires inconnu : " .. u.Id) end
+		check(u.RequiresRebirths == nil or u.RequiresRebirths >= 1, "RequiresRebirths " .. u.Id)
+	end
 	check(Config.FeatureToUpgrade[Config.Casino.Feature] ~= nil, "Casino.Feature")
 	check(Config.FeatureToUpgrade[Config.LootBox.Feature] ~= nil, "LootBox.Feature")
 	for _, c in ipairs(Config.Cosmetics) do
@@ -225,6 +229,13 @@ test("Formulas.GetVisibleUpgrades : progression", function(check)
 	local first = Formulas.GetVisibleUpgrades(d)
 	eq(check, #first, Config.UpgradeBar.RevealAhead, "au début")
 	for i, u in ipairs(first) do eq(check, u, Config.Upgrades[i], "ordre au début " .. i) end
+	-- Nouveautés des renaissances : cachées au début, visibles avec assez de visites
+	for _, u in ipairs(Config.Upgrades) do
+		if u.RequiresRebirths then check(not Formulas.IsUpgradeUnlocked(d, u), "verrouillée au début : " .. u.Id) end
+	end
+	local gate, gateCount = Formulas.GetNextRebirthUnlocks(d)
+	check(gate == 1 and gateCount >= 1, "prochaine nouveauté à la 1re visite")
+	d.Rebirths = 10
 	-- Achète toujours la moins chère visible (hors océan) jusqu'à tout avoir
 	local seen = {}
 	local steps = 0
@@ -289,17 +300,18 @@ test("Formulas.DescribeUpgrade (aucun %s restant)", function(check)
 	eq(check, Formulas.DescribeUpgrade(fake, N.Format, 0, function() error("x") end), "+3 per click", "traduction en erreur")
 end)
 
-test("Formulas casino (RTP 0.90-0.95, multiplicateurs)", function(check)
+test("Formulas machine chanceuse (tours gratuits, gains en secondes)", function(check)
 	local rtp = Formulas.GetCasinoRTP()
-	print(string.format("    RTP = %.4f", rtp))
-	check(rtp >= 0.90 and rtp <= 0.95, "RTP hors 0.90-0.95 : " .. rtp)
+	print(string.format("    gain moyen par tour = %.1f s de production", rtp))
+	check(rtp >= 5 and rtp <= 60, "gain moyen hors 5-60 s : " .. rtp)
+	check(Config.Casino.TokenInterval > 0 and Config.Casino.MaxTokens >= Config.Casino.StartTokens, "jetons")
 	local S = Config.Casino.Symbols
 	eq(check, Formulas.GetCasinoMultiplier({ S[1].Id, S[1].Id, S[1].Id }), S[1].Triple, "triple")
 	eq(check, Formulas.GetCasinoMultiplier({ S[2].Id, S[2].Id, S[1].Id }), S[2].Pair, "paire")
 	eq(check, Formulas.GetCasinoMultiplier({ S[1].Id, S[2].Id, S[3].Id }), 0, "perdu")
 	eq(check, Formulas.GetCasinoMultiplier({ "x", "x", "x" }), 0, "inconnu")
 	for _, s in ipairs(S) do check(Config.CasinoSymbolsById[s.Id] == s, "index " .. s.Id) end
-	for _, f in ipairs(Config.Casino.BetFractions) do check(f > 0 and f <= 1, "BetFraction " .. f) end
+
 end)
 
 test("Formulas combo", function(check)

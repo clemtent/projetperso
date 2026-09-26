@@ -63,6 +63,13 @@ for _, clickSound in ipairs(Config.ClickSounds) do
 	CLICK_SOUNDS[clickSound.Id] = true
 end
 local DEFAULT_CLICK_SOUND = "Default"
+-- Musiques au choix : "Shuffle" (aléatoire) ou la Key d'une piste de Config.Music.Playlist
+local MUSIC_TRACKS = { Shuffle = true }
+for _, track in ipairs(Config.Music.Playlist) do
+	if type(track.Key) == "string" then
+		MUSIC_TRACKS[track.Key] = true
+	end
+end
 
 -- Clients qui ont envoyé ClientReady (l'interface peut afficher les notifications).
 -- Peut arriver AVANT la fin du chargement des données : on le retient à part.
@@ -173,6 +180,23 @@ local function sanitizeData(data)
 	if type(data.Settings.ClickSound) ~= "string" or not CLICK_SOUNDS[data.Settings.ClickSound] then
 		data.Settings.ClickSound = DEFAULT_CLICK_SOUND
 	end
+	-- Musique retirée de la config -> aléatoire
+	if type(data.Settings.MusicTrack) ~= "string" or not MUSIC_TRACKS[data.Settings.MusicTrack] then
+		data.Settings.MusicTrack = "Shuffle"
+	end
+	-- Niveaux au-delà du maximum (ex. 10 logos DVD -> 5 maintenant)
+	for upgradeId, level in pairs(data.Upgrades) do
+		local upgrade = Config.UpgradesById[upgradeId]
+		if upgrade and upgrade.MaxLevel and type(level) == "number" and level > upgrade.MaxLevel then
+			data.Upgrades[upgradeId] = upgrade.MaxLevel
+		end
+	end
+	-- Ancienne bourse retirée : les actions encore détenues sont remboursées une fois
+	if isValidNumber(data.Stock.Shares) and data.Stock.Shares > 0 then
+		data.Dopamine = math.min(Config.Game.MaxDopamine, data.Dopamine + data.Stock.Shares * Config.Stocks.StartPrice)
+	end
+	data.Stock.Shares = 0
+	data.Stock.CostBasis = 0
 	-- Langue inconnue (sauvegarde abîmée) -> automatique
 	if type(data.Settings.Language) ~= "string" or not VALID_LANGUAGES[data.Settings.Language] then
 		data.Settings.Language = DEFAULT_LANGUAGE
@@ -635,6 +659,9 @@ local function onBuyUpgrade(player: Player, upgradeId: any)
 	if Formulas.IsMaxed(upgrade, level) then
 		return false, GameService:T(player, "Max level reached")
 	end
+	if not Formulas.IsUpgradeUnlocked(data, upgrade) then
+		return false, GameService:T(player, "Locked for now")
+	end
 	local cost = Formulas.GetUpgradeCost(upgrade, level, data.Rebirths)
 	if not isValidNumber(cost) or data.Dopamine < cost then
 		return false, GameService:T(player, "Not enough %s", Config.Game.CurrencyName)
@@ -680,6 +707,11 @@ local function onSetSetting(player: Player, name: any, value: any)
 	if name == "ClickSound" then
 		-- Son de clic : l'Id doit exister dans Config.ClickSounds
 		if type(value) ~= "string" or #value > 64 or not CLICK_SOUNDS[value] then
+			return false
+		end
+	elseif name == "MusicTrack" then
+		-- Musique : "Shuffle" ou la Key d'une piste de Config.Music.Playlist
+		if type(value) ~= "string" or #value > 32 or not MUSIC_TRACKS[value] then
 			return false
 		end
 	elseif name == "Language" then

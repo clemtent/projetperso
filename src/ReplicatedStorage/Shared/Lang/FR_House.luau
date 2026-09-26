@@ -299,6 +299,7 @@ return {
 		["Too many items in this room (max %d)"] = "Trop d'objets dans cette pièce (max %d)",
 		["Unknown room"] = "Pièce inconnue",
 
+		["🔒 Unlocked after %d visits to the ocean"] = "🔒 Débloqué après %d visites à l'océan",
 		-- Messages du serveur (HouseService)
 		["Unknown house item"] = "Objet de maison inconnu",
 		["You can't have more %s %s"] = "Tu ne peux pas avoir plus de %s %s",

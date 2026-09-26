@@ -70,6 +70,10 @@ Config.UpgradeBar = {
 --   Feature     : ce que l'amélioration fait apparaître à l'écran / débloque
 --                 (nom d'un module client dans Client > Stimuli, ou d'un menu)
 --   Permanent   : true = conservée après "Aller à l'océan" (menus utiles)
+--   Requires    : Id d'une amélioration qu'il faut déjà posséder (améliorations
+--                 "d'un carré" : chaussures du runner, vinyles du lofi...)
+--   RequiresRebirths : nombre de visites à l'océan nécessaires (nouveautés
+--                 débloquées en progressant ; cachées avant)
 --   Color       : couleur de la carte en mode "Icônes HD"
 --
 -- Équilibrage (simulé : 5 clics/s, ~50 % des bonus attrapés, on achète
@@ -82,7 +86,7 @@ Config.Upgrades = {
 		Cost = 10, CostGrowth = 2.2, MaxLevel = 15, Effect = "Click", Value = 1,
 		Color = Color3.fromRGB(255, 196, 0) },
 	{ Id = "DVD", Name = "DVD Logo", Icon = "📀", Description = "A bouncing logo. +%s Dopamine per bounce",
-		Cost = 110, CostGrowth = 2.2, MaxLevel = 10, Effect = "DVD", Value = 1, Feature = "DVD",
+		Cost = 110, CostGrowth = 2.6, MaxLevel = 5, Effect = "DVD", Value = 1, Feature = "DVD",
 		Color = Color3.fromRGB(40, 40, 40) },
 	{ Id = "NewsTicker", Name = "News Ticker", Icon = "📰", Description = "Absurd news, nonstop. +%s Dopamine/s",
 		Cost = 450, MaxLevel = 1, Effect = "PerSecond", Value = 8, Feature = "NewsTicker",
@@ -99,9 +103,15 @@ Config.Upgrades = {
 	{ Id = "Megaphone", Name = "Megaphone", Icon = "📢", Description = "EVERYTHING IN CAPS!!! Clicks x%s",
 		Cost = 6000, MaxLevel = 1, Effect = "ClickMultiplier", Value = 2, Feature = "Megaphone",
 		Color = Color3.fromRGB(220, 20, 20) },
+	{ Id = "Keyboard", Name = "Mechanical Keyboard", Icon = "⌨️", Description = "Clicky keys. +%s Dopamine per click",
+		Cost = 9000, CostGrowth = 2, MaxLevel = 12, Effect = "Click", Value = 12,
+		Color = Color3.fromRGB(90, 90, 110) },
 	{ Id = "Lofi", Name = "Lofi Beats", Icon = "🎧", Description = "Beats to relax/study to. +%s Dopamine/s",
 		Cost = 12000, MaxLevel = 1, Effect = "PerSecond", Value = 40, Feature = "Lofi",
 		Color = Color3.fromRGB(120, 90, 200) },
+	{ Id = "RunnerShoes", Name = "Running Shoes", Icon = "👟", Description = "The runner goes faster. +%s Dopamine/s",
+		Cost = 15000, CostGrowth = 1.8, MaxLevel = 10, Effect = "PerSecond", Value = 20, Requires = "Runner",
+		Color = Color3.fromRGB(255, 90, 60) },
 	{ Id = "Press", Name = "Hydraulic Press", Icon = "🗜️", Description = "Crushes stuff. Every level upgrades the press (wood, steel, gold, diamond...). +%s Dopamine/s",
 		Cost = 18000, CostGrowth = 1.75, MaxLevel = 10, Effect = "PerSecond", Value = 20, Feature = "Press",
 		Color = Color3.fromRGB(255, 200, 0) },
@@ -120,15 +130,24 @@ Config.Upgrades = {
 	{ Id = "Weather", Name = "Thunderstorm", Icon = "⛈️", Description = "Catch the lightning! +%s Dopamine/s",
 		Cost = 33000, MaxLevel = 1, Effect = "PerSecond", Value = 100, Feature = "Weather",
 		Color = Color3.fromRGB(30, 110, 200) },
+	{ Id = "Vinyl", Name = "Vinyl Collection", Icon = "💿", Description = "More records for the lofi. +%s Dopamine/s",
+		Cost = 40000, CostGrowth = 1.8, MaxLevel = 10, Effect = "PerSecond", Value = 45, Requires = "Lofi",
+		Color = Color3.fromRGB(150, 110, 230) },
 	{ Id = "ItemShop", Name = "Item Shop", Icon = "🧢", Description = "Hats for your button (kept forever)",
 		Cost = 55000, MaxLevel = 1, Effect = "Feature", Feature = "ItemShop", Permanent = true,
 		Color = Color3.fromRGB(60, 200, 60) },
-	{ Id = "Stocks", Name = "Stock Market", Icon = "📈", Description = "Invest your Dopamine. Stonks go up... or not.",
-		Cost = 60000, MaxLevel = 1, Effect = "Feature", Feature = "Stocks",
-		Color = Color3.fromRGB(20, 160, 90) },
+	{ Id = "Garden", Name = "Dopamine Garden", Icon = "🌻", Description = "Grow flowers and harvest them for Dopamine",
+		Cost = 60000, MaxLevel = 1, Effect = "Feature", Feature = "Garden",
+		Color = Color3.fromRGB(90, 190, 90) },
 	{ Id = "Boost", Name = "Green Arrow", Icon = "⬆️", Description = "Everything goes up. EVERYTHING. Earnings x%s",
 		Cost = 68000, MaxLevel = 1, Effect = "Multiplier", Value = 2, Feature = "Boost",
 		Color = Color3.fromRGB(40, 220, 60) },
+	{ Id = "WindPower", Name = "Wind Power", Icon = "🌬️", Description = "The pinwheel spins faster. +%s Dopamine/s",
+		Cost = 70000, CostGrowth = 1.8, MaxLevel = 10, Effect = "PerSecond", Value = 60, Requires = "Pinwheel",
+		Color = Color3.fromRGB(120, 210, 255) },
+	{ Id = "GardenPlots", Name = "Flower Beds", Icon = "🪴", Description = "One more flower bed in the garden",
+		Cost = 150000, CostGrowth = 3, MaxLevel = 5, Effect = "Feature", Feature = "GardenPlots", Requires = "Garden",
+		Color = Color3.fromRGB(120, 200, 100) },
 	{ Id = "LiveStream", Name = "ASMR Stream", Icon = "🥪", Description = "Someone is eating live. +%s Dopamine/s",
 		Cost = 100000, MaxLevel = 1, Effect = "PerSecond", Value = 120, Feature = "LiveStream",
 		Color = Color3.fromRGB(240, 170, 90) },
@@ -147,10 +166,13 @@ Config.Upgrades = {
 	{ Id = "Email", Name = "Inbox", Icon = "📧", Description = "You have (a lot of) new messages",
 		Cost = 320000, MaxLevel = 1, Effect = "Feature", Feature = "Email",
 		Color = Color3.fromRGB(0, 120, 255) },
+	{ Id = "Mouse", Name = "Gaming Mouse", Icon = "🖱️", Description = "RGB = more clicks. +%s Dopamine per click",
+		Cost = 450000, CostGrowth = 2.1, MaxLevel = 10, Effect = "Click", Value = 150,
+		Color = Color3.fromRGB(60, 200, 255) },
 	{ Id = "Quests", Name = "Quests", Icon = "📜", Description = "Unlocks quests (kept forever)",
 		Cost = 520000, MaxLevel = 1, Effect = "Feature", Feature = "Quests", Permanent = true,
 		Color = Color3.fromRGB(255, 140, 30) },
-	{ Id = "Casino", Name = "Slot Machine", Icon = "🎰", Description = "Try your luck (with Dopamine only)",
+	{ Id = "Casino", Name = "Lucky Machine", Icon = "🎰", Description = "Free spins earned by playing. Win Dopamine!",
 		Cost = 600000, MaxLevel = 1, Effect = "Feature", Feature = "Casino",
 		Color = Color3.fromRGB(200, 0, 60) },
 	{ Id = "PressStart", Name = "Turbo Press", Icon = "⚙️", Description = "A START button to crush things yourself",
@@ -159,6 +181,12 @@ Config.Upgrades = {
 	{ Id = "LiveChat", Name = "Live Chat", Icon = "💬", Description = "The stream chat goes wild. Clicks x%s",
 		Cost = 800000, MaxLevel = 1, Effect = "ClickMultiplier", Value = 3, Feature = "LiveChat",
 		Color = Color3.fromRGB(145, 70, 255) },
+	{ Id = "StormChaser", Name = "Storm Chaser", Icon = "🌪️", Description = "Bigger storms, more lightning. +%s Dopamine/s",
+		Cost = 900000, CostGrowth = 1.9, MaxLevel = 8, Effect = "PerSecond", Value = 400, Requires = "Weather",
+		Color = Color3.fromRGB(70, 90, 160) },
+	{ Id = "Minigames", Name = "Arcade", Icon = "🕹️", Description = "Mini-games and duels with the server (kept forever)",
+		Cost = 950000, MaxLevel = 1, Effect = "Feature", Feature = "Minigames", Permanent = true,
+		Color = Color3.fromRGB(255, 70, 160) },
 	{ Id = "ScreenTime", Name = "Screen Time", Icon = "📱", Description = "Find out how much time you've wasted here",
 		Cost = 1e6, MaxLevel = 1, Effect = "Feature", Feature = "ScreenTime", Permanent = true,
 		Color = Color3.fromRGB(45, 45, 50) },
@@ -168,12 +196,18 @@ Config.Upgrades = {
 	{ Id = "EmojiRain", Name = "Emoji Rain", Icon = "😂", Description = "It's raining emojis. +%s Dopamine/s",
 		Cost = 1.5e6, MaxLevel = 1, Effect = "PerSecond", Value = 1000, Feature = "EmojiRain",
 		Color = Color3.fromRGB(255, 210, 60) },
+	{ Id = "StreamStudio", Name = "Stream Studio", Icon = "🎙️", Description = "Pro mic, ring light, more viewers. +%s Dopamine/s",
+		Cost = 1.7e6, CostGrowth = 1.8, MaxLevel = 10, Effect = "PerSecond", Value = 900, Requires = "LiveStream",
+		Color = Color3.fromRGB(255, 80, 120) },
 	{ Id = "HDIcons", Name = "HD Icons", Icon = "✨", Description = "Super shiny icons. Earnings x%s",
 		Cost = 1.9e6, MaxLevel = 1, Effect = "Multiplier", Value = 1.5, Feature = "HDIcons",
 		Color = Color3.fromRGB(255, 120, 220) },
 	{ Id = "GoldenStar", Name = "Golden Star", Icon = "🌟", Description = "Golden stars show up. Catch them!",
 		Cost = 2.8e6, MaxLevel = 1, Effect = "Feature", Feature = "GoldenStar",
 		Color = Color3.fromRGB(255, 190, 0) },
+	{ Id = "MegaFinger", Name = "Mega Finger", Icon = "💪", Description = "+%s Dopamine per click",
+		Cost = 3.5e6, CostGrowth = 2.1, MaxLevel = 10, Effect = "Click", Value = 1500,
+		Color = Color3.fromRGB(255, 150, 60) },
 	{ Id = "NeonMode", Name = "Neon Mode", Icon = "🌈", Description = "The screen goes full neon. Earnings x%s",
 		Cost = 4.5e6, MaxLevel = 1, Effect = "Multiplier", Value = 2, Feature = "NeonMode",
 		Color = Color3.fromRGB(157, 78, 221) },
@@ -183,6 +217,43 @@ Config.Upgrades = {
 	{ Id = "Disco", Name = "Disco Ball", Icon = "💃", Description = "It's party time! Earnings x%s",
 		Cost = 1.2e7, MaxLevel = 1, Effect = "Multiplier", Value = 2, Feature = "Disco",
 		Color = Color3.fromRGB(200, 60, 255) },
+	-- 🌊 Débloquées par les visites à l'océan (RequiresRebirths)
+	{ Id = "DeepFocus", Name = "Deep Focus", Icon = "🧘", Description = "Calm mind, big gains. +%s Dopamine/s",
+		Cost = 1.5e7, CostGrowth = 1.7, MaxLevel = 10, Effect = "PerSecond", Value = 6000, RequiresRebirths = 1,
+		Color = Color3.fromRGB(110, 200, 190) },
+	{ Id = "Seashell", Name = "Seashell", Icon = "🐚", Description = "The sound of the sea. Earnings x%s",
+		Cost = 2e7, MaxLevel = 1, Effect = "Multiplier", Value = 1.5, RequiresRebirths = 1,
+		Color = Color3.fromRGB(255, 190, 170) },
+	{ Id = "CoralKeys", Name = "Coral Keyboard", Icon = "🪸", Description = "+%s Dopamine per click",
+		Cost = 2.5e7, CostGrowth = 1.9, MaxLevel = 10, Effect = "Click", Value = 8000, RequiresRebirths = 1,
+		Color = Color3.fromRGB(255, 120, 130) },
+	{ Id = "DreamMachine", Name = "Dream Machine", Icon = "💤", Description = "Earn while you dream. +%s Dopamine/s",
+		Cost = 5e7, CostGrowth = 1.7, MaxLevel = 10, Effect = "PerSecond", Value = 40000, RequiresRebirths = 2,
+		Color = Color3.fromRGB(150, 130, 230) },
+	{ Id = "Aurora", Name = "Aurora", Icon = "🌌", Description = "The sky lights up. Earnings x%s",
+		Cost = 9e7, MaxLevel = 1, Effect = "Multiplier", Value = 2, RequiresRebirths = 2,
+		Color = Color3.fromRGB(80, 220, 180) },
+	{ Id = "QuantumFinger", Name = "Quantum Finger", Icon = "⚛️", Description = "Clicks in several universes. +%s Dopamine per click",
+		Cost = 1.2e8, CostGrowth = 1.9, MaxLevel = 10, Effect = "Click", Value = 2e5, RequiresRebirths = 3,
+		Color = Color3.fromRGB(90, 160, 255) },
+	{ Id = "NeuralLink", Name = "Neural Link", Icon = "🧠", Description = "Click with your mind. Clicks x%s",
+		Cost = 2.5e8, MaxLevel = 1, Effect = "ClickMultiplier", Value = 3, RequiresRebirths = 3,
+		Color = Color3.fromRGB(255, 120, 200) },
+	{ Id = "TimeWarp", Name = "Time Warp", Icon = "⏳", Description = "Time flies. Earnings x%s",
+		Cost = 4e8, MaxLevel = 1, Effect = "Multiplier", Value = 2, RequiresRebirths = 3,
+		Color = Color3.fromRGB(230, 180, 90) },
+	{ Id = "GalaxyStream", Name = "Galaxy Stream", Icon = "🌠", Description = "A river of stars. +%s Dopamine/s",
+		Cost = 6e8, CostGrowth = 1.7, MaxLevel = 10, Effect = "PerSecond", Value = 1.5e6, RequiresRebirths = 5,
+		Color = Color3.fromRGB(120, 100, 230) },
+	{ Id = "Singularity", Name = "Singularity", Icon = "🕳️", Description = "Everything falls in. Earnings x%s",
+		Cost = 2e9, MaxLevel = 1, Effect = "Multiplier", Value = 3, RequiresRebirths = 5,
+		Color = Color3.fromRGB(40, 30, 60) },
+	{ Id = "InfiniteScroll", Name = "Infinite Scroll", Icon = "♾️", Description = "It never ends. +%s Dopamine/s",
+		Cost = 1e10, CostGrowth = 1.7, MaxLevel = 10, Effect = "PerSecond", Value = 5e7, RequiresRebirths = 8,
+		Color = Color3.fromRGB(255, 90, 90) },
+	{ Id = "Multiverse", Name = "Multiverse", Icon = "🪐", Description = "Infinite you's, infinite clicks. Earnings x%s",
+		Cost = 3e10, MaxLevel = 1, Effect = "Multiplier", Value = 3, RequiresRebirths = 8,
+		Color = Color3.fromRGB(200, 120, 255) },
 	{ Id = "Ocean", Name = "Go to the Ocean", Icon = "🌊", Description = "Let it all go and breathe. Start over with x%s earnings forever (your 🏠 house is kept)",
 		Cost = 0, MaxLevel = nil, Effect = "Detox", Feature = nil,
 		Color = Color3.fromRGB(0, 140, 200) },
@@ -238,7 +309,8 @@ Config.Achievements = {
 	{ Id = "Press25", Name = "Crusher", Icon = "🗜️", Stat = "PressCrushes", Goal = 25, Reward = 300000},
 	{ Id = "Slot25", Name = "Weekend Gambler", Icon = "🎰", Stat = "SlotSpins", Goal = 25, Reward = 600000},
 	{ Id = "SlotWin10", Name = "Lady Luck", Icon = "🍀", Stat = "SlotWins", Goal = 10, Reward = 1.5e6},
-	{ Id = "Stock10", Name = "Wolf of Wall Street", Icon = "🐺", Stat = "StockTrades", Goal = 10, Reward = 150000},
+	{ Id = "Garden25", Name = "Green Thumb", Icon = "🌻", Stat = "GardenHarvests", Goal = 25, Reward = 150000},
+	{ Id = "Arcade10", Name = "Arcade Champion", Icon = "🕹️", Stat = "MinigamesWon", Goal = 10, Reward = 1e6},
 	{ Id = "Chest1", Name = "What's Inside?", Icon = "📦", Stat = "ChestsOpened", Goal = 1, Reward = 600000},
 	{ Id = "Chest10", Name = "Collector", Icon = "🗝️", Stat = "ChestsOpened", Goal = 10, Reward = 5e6},
 	{ Id = "Cosmetic1", Name = "Stylish", Icon = "🧢", Stat = "CosmeticsBought", Goal = 1, Reward = 25000},
@@ -263,11 +335,16 @@ Config.AchievementBadges = {
 	Clicks10K = 3805147960891653,
 	Clicks100K = 657223704584845,
 	Earn1K = 3266069398626666,
+	Earn1M = 1525915832986676, -- 💰 Millionnaire du bonheur
+	Earn1B = 2880052495031162, -- 💎 Milliardaire neuronal
+	Earn1T = 3794921256154986, -- 🪐 Cerveau cosmique
+	Buy10 = 3720175929508517, -- 🛒 Shopping
+	Buy50 = 1330939500123022, -- 🛍️ Accro aux achats
 	-- À venir (mets l'ID quand le badge est créé ; 0 = pas de badge Roblox)
-	Earn1M = 0, Earn1B = 0, Earn1T = 0, Buy10 = 0, Buy50 = 0, Bounce100 = 0, Bounce5K = 0,
+	Bounce100 = 0, Bounce5K = 0,
 	Corner1 = 0, Combo1 = 0, Bubble100 = 0, Bubble1K = 0, Golden1 = 0, Golden10 = 0,
 	Lightning5 = 0, Notif10 = 0, Email10 = 0, Press25 = 0, Slot25 = 0, SlotWin10 = 0,
-	Stock10 = 0, Chest1 = 0, Chest10 = 0, Cosmetic1 = 0, Cosmetic5 = 0, Quests5 = 0,
+	Garden25 = 0, Arcade10 = 0, Chest1 = 0, Chest10 = 0, Cosmetic1 = 0, Cosmetic5 = 0, Quests5 = 0,
 	Daily3 = 0, Play1h = 0, Play10h = 0, Rebirth1 = 0, Rebirth5 = 0,
 }
 
@@ -287,7 +364,8 @@ Config.Quests = {
 		{ Type = "Bubbles", Feature = "BubbleWrap", Text = "Pop %s bubbles", Goals = { 30, 60, 100 }, RewardSeconds = 20, MinReward = 200 },
 		{ Type = "Spawns", Feature = "PhoneNotifs", Text = "Click %s notifications, emails or lightning bolts", Goals = { 3, 5, 8 }, RewardSeconds = 30, MinReward = 300 },
 		{ Type = "Combo", Feature = "Combo", Text = "Fill the combo meter %s times", Goals = { 1, 2, 3 }, RewardSeconds = 30, MinReward = 300 },
-		{ Type = "Casino", Feature = "Casino", Text = "Play the slot machine %s times", Goals = { 3, 5, 10 }, RewardSeconds = 20, MinReward = 300 },
+		{ Type = "Casino", Feature = "Casino", Text = "Spin the lucky machine %s times", Goals = { 2, 3, 5 }, RewardSeconds = 20, MinReward = 300 },
+		{ Type = "Harvest", Feature = "Garden", Text = "Harvest %s flowers", Goals = { 3, 5, 10 }, RewardSeconds = 25, MinReward = 300 },
 		{ Type = "Chests", Feature = "LootBox", Text = "Open %s chest(s)", Goals = { 1, 2 }, RewardSeconds = 30, MinReward = 500 },
 	},
 }
@@ -373,7 +451,8 @@ Config.DVD = {
 }
 
 ----------------------------------------------------------------------
--- Bourse (un cours commun à tout le serveur)
+-- Ancienne bourse (retirée) : les actions encore détenues sont remboursées
+-- une fois à StartPrice l'unité (voir GameService). Gardé pour ce calcul.
 ----------------------------------------------------------------------
 Config.Stocks = {
 	Feature = "Stocks",
@@ -391,25 +470,48 @@ Config.Stocks = {
 }
 
 ----------------------------------------------------------------------
--- Machine à sous (UNIQUEMENT avec la Dopamine du jeu, jamais de Robux)
---   Triple : gain si 3 symboles identiques (x mise)
---   Pair   : gain si exactement 2 symboles identiques (x mise)
---   Taux de retour visé : ~90-95 % (le jeu gagne un peu, comme un vrai casino)
+-- 🎰 Machine chanceuse : des TOURS GRATUITS (jetons gagnés en jouant,
+-- jamais achetables). On ne mise rien : aucun pari avec une monnaie qui
+-- s'achète en Robux (règles Roblox sur les jeux d'argent).
+--   Un jeton toutes les TokenInterval secondes de jeu (max MaxTokens).
+--   Gains en "secondes de production" (Pair = 2 symboles, Triple = 3).
 ----------------------------------------------------------------------
 Config.Casino = {
 	Enabled = true,
 	Feature = "Casino",
-	BetFractions = { 0.01, 0.05, 0.1, 0.25 },
-	MinBet = 10,
+	TokenInterval = 75, -- secondes de jeu par jeton
+	MaxTokens = 10,
+	StartTokens = 3, -- jetons offerts quand on débloque la machine
 	Cooldown = 1.5,
+	MissRewardSeconds = 2, -- petit lot de consolation si rien ne sort
+	MinReward = 50,
 	Symbols = {
-		{ Id = "Cherry", Icon = "🍒", Weight = 30, Pair = 0.5, Triple = 6 },
-		{ Id = "Lemon", Icon = "🍋", Weight = 25, Pair = 0.8, Triple = 10 },
-		{ Id = "Bell", Icon = "🔔", Weight = 20, Pair = 1, Triple = 12 },
-		{ Id = "Diamond", Icon = "💎", Weight = 12, Pair = 1.5, Triple = 25 },
-		{ Id = "Seven", Icon = "7️⃣", Weight = 8, Pair = 2, Triple = 60 },
-		{ Id = "Brain", Icon = "🧠", Weight = 5, Pair = 3, Triple = 200 },
+		{ Id = "Cherry", Icon = "🍒", Weight = 30, Pair = 8, Triple = 60 },
+		{ Id = "Lemon", Icon = "🍋", Weight = 25, Pair = 10, Triple = 90 },
+		{ Id = "Bell", Icon = "🔔", Weight = 20, Pair = 12, Triple = 120 },
+		{ Id = "Diamond", Icon = "💎", Weight = 12, Pair = 18, Triple = 240 },
+		{ Id = "Seven", Icon = "7️⃣", Weight = 8, Pair = 25, Triple = 480 },
+		{ Id = "Brain", Icon = "🧠", Weight = 5, Pair = 40, Triple = 1200 },
 	},
+}
+
+----------------------------------------------------------------------
+-- 🌻 Jardin de Dopamine (remplace la bourse) : des fleurs poussent dans
+-- des parterres ; on les cueille une fois écloses (gain = secondes de production)
+--   Plots = parterres de base (+1 par niveau de "Flower Beds")
+----------------------------------------------------------------------
+Config.Garden = {
+	Feature = "Garden",
+	BasePlots = 3,
+	HarvestCooldown = 0.3,
+	Flowers = {
+		{ Id = "Daisy", Name = "Daisy", Icon = "🌼", GrowSeconds = 30, RewardSeconds = 12, Weight = 40 },
+		{ Id = "Tulip", Name = "Tulip", Icon = "🌷", GrowSeconds = 60, RewardSeconds = 28, Weight = 30 },
+		{ Id = "Rose", Name = "Rose", Icon = "🌹", GrowSeconds = 120, RewardSeconds = 65, Weight = 18 },
+		{ Id = "Sunflower", Name = "Sunflower", Icon = "🌻", GrowSeconds = 240, RewardSeconds = 150, Weight = 9 },
+		{ Id = "Lotus", Name = "Golden Lotus", Icon = "🪷", GrowSeconds = 420, RewardSeconds = 320, Weight = 3 },
+	},
+	MinReward = 30,
 }
 
 ----------------------------------------------------------------------
@@ -522,11 +624,16 @@ Config.Sounds = {
 Config.Music = {
 	DefaultVolume = 0.35,
 	Shuffle = true,
+	-- Key = identifiant sauvegardé (réglage "MusicTrack" : "Shuffle" = aléatoire, sinon une Key)
 	Playlist = {
-		{ Name = "Lofi chill #1", Id = "rbxassetid://105526677737534" },
-		{ Name = "Lofi chill #2", Id = "rbxassetid://84166235077508" },
-		{ Name = "Lofi chill #3", Id = "rbxassetid://78354523278392" },
-		{ Name = "Lofi chill #4", Id = "rbxassetid://73874153787004" },
+		{ Key = "Lofi1", Name = "Rainy Window", Id = "rbxassetid://105526677737534" },
+		{ Key = "Lofi2", Name = "Late Night Study", Id = "rbxassetid://84166235077508" },
+		{ Key = "Lofi3", Name = "Coffee & Clouds", Id = "rbxassetid://78354523278392" },
+		{ Key = "Lofi4", Name = "Sleepy Cat", Id = "rbxassetid://73874153787004" },
+		{ Key = "Lofi5", Name = "Pastel Sunset", Id = "rbxassetid://72831582143889" },
+		{ Key = "Lofi6", Name = "Midnight Train", Id = "rbxassetid://114453445428505" },
+		{ Key = "Lofi7", Name = "Cozy Blanket", Id = "rbxassetid://97124296300129" },
+		{ Key = "Lofi8", Name = "Starry Lo-fi", Id = "rbxassetid://121078850554967" },
 	},
 
 }
@@ -624,9 +731,19 @@ Config.Monetization = {
 		{ Id = "ServerRush", Name = "Rush for Everyone", Icon = "🎉", Description = "Dopamine Rush x2 for the whole server",
 			ProductId = 3714592189, PriceHint = 79, Kind = "ServerRush" },
 	},
-	-- Règles Roblox : dès que de la Dopamine s'achète avec des Robux, la
-	-- machine à sous (jeu de hasard) est désactivée automatiquement.
-	DisableCasinoWhenSelling = true,
+	-- Petites fenêtres "offre" (OfferPopup) : proposées de temps en temps,
+	-- jamais pendant une fenêtre ouverte, fermables, max MaxPerSession
+	Offers = {
+		FirstDelay = 300, -- (s) première offre après 5 min de jeu
+		Interval = 720, -- (s) au moins 12 min entre deux offres
+		MaxPerSession = 4,
+		Products = { "Boost2", "PackM", "Boost5", "PackS", "PackL" },
+		GamePasses = { "X2", "AutoClick", "X10" },
+	},
+	-- La machine chanceuse ne fait plus miser de Dopamine (tours gratuits) :
+	-- elle reste ouverte même quand de la Dopamine s'achète en Robux.
+	-- (true = la fermer quand même dans ce cas)
+	DisableCasinoWhenSelling = false,
 }
 
 ----------------------------------------------------------------------
@@ -666,12 +783,21 @@ Config.House = {
 	Sizes = {
 		{ Id = "Studio", Name = "Cozy studio", Icon = "🏠", Cost = 0, Floors = 1, Columns = 2,
 			Width = 1.0, RoomItems = 25, Exterior = "Cottage" },
-		{ Id = "Apartment", Name = "Sweet apartment", Icon = "🏡", Cost = 5e6, Floors = 2, Columns = 2,
+		{ Id = "Apartment", Name = "Sweet apartment", Icon = "🏡", Cost = 5e6, RequiresRebirths = 0, Floors = 2, Columns = 2,
 			Width = 1.05, RoomItems = 28, Exterior = "Townhouse" },
-		{ Id = "Loft", Name = "Dreamy loft", Icon = "🏘️", Cost = 5e8, Floors = 2, Columns = 3,
+		{ Id = "Loft", Name = "Dreamy loft", Icon = "🏘️", Cost = 5e8, RequiresRebirths = 1, Floors = 2, Columns = 3,
 			Width = 1.2, RoomItems = 32, Exterior = "Loft" },
-		{ Id = "Mansion", Name = "Kawaii mansion", Icon = "🏰", Cost = 5e10, Floors = 3, Columns = 4,
+		{ Id = "Mansion", Name = "Kawaii mansion", Icon = "🏰", Cost = 5e10, RequiresRebirths = 3, Floors = 3, Columns = 4,
 			Width = 1.25, RoomItems = 36, Exterior = "Mansion" },
+	},
+
+	-- Objets / styles chers débloqués par les visites à l'océan (selon leur
+	-- prix, sauf RequiresRebirths explicite) : on n'a pas tout d'un coup
+	RebirthGates = {
+		{ Cost = 3e6, Rebirths = 1 },
+		{ Cost = 3e7, Rebirths = 2 },
+		{ Cost = 3e8, Rebirths = 3 },
+		{ Cost = 3e9, Rebirths = 5 },
 	},
 
 	RoomCost = 25000, -- 2e pièce

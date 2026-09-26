@@ -71,15 +71,52 @@ end
 
 -- Liste des améliorations visibles dans la barre : celles déjà possédées
 -- (et pas au maximum) + les Config.UpgradeBar.RevealAhead suivantes.
+-- Vrai si l'amélioration peut être achetée : assez de visites à l'océan
+-- (RequiresRebirths) et amélioration requise déjà possédée (Requires)
+function Formulas.IsUpgradeUnlocked(data, upgrade): boolean
+	local rebirths = type(data) == "table" and tonumber(data.Rebirths) or 0
+	if (upgrade.RequiresRebirths or 0) > (rebirths or 0) then
+		return false
+	end
+	if upgrade.Requires and Formulas.GetLevel(data, upgrade.Requires) <= 0 then
+		return false
+	end
+	return true
+end
+
+-- Prochaine nouveauté verrouillée par les renaissances (pour l'annoncer :
+-- "🌊 x nouveautés après ta prochaine visite à l'océan"), nil s'il n'y en a plus
+function Formulas.GetNextRebirthUnlocks(data): (number?, number)
+	local rebirths = type(data) == "table" and tonumber(data.Rebirths) or 0
+	local nextGate: number? = nil
+	for _, upgrade in ipairs(Config.Upgrades) do
+		local gate = upgrade.RequiresRebirths or 0
+		if gate > (rebirths or 0) and (nextGate == nil or gate < nextGate) then
+			nextGate = gate
+		end
+	end
+	local count = 0
+	if nextGate then
+		for _, upgrade in ipairs(Config.Upgrades) do
+			if (upgrade.RequiresRebirths or 0) == nextGate then
+				count += 1
+			end
+		end
+	end
+	return nextGate, count
+end
+
 function Formulas.GetVisibleUpgrades(data): { any }
 	local list = {}
 	local revealed = 0
 	for _, upgrade in ipairs(Config.Upgrades) do
 		local level = Formulas.GetLevel(data, upgrade.Id)
-		if not Formulas.IsMaxed(upgrade, level) then
+		if not Formulas.IsMaxed(upgrade, level) and Formulas.IsUpgradeUnlocked(data, upgrade) then
 			if level > 0 then
 				table.insert(list, upgrade)
 			elseif revealed < Config.UpgradeBar.RevealAhead then
+				-- (les améliorations verrouillées ne comptent pas : elles ne
+				-- bloquent jamais l'océan)
 				table.insert(list, upgrade)
 				revealed += 1
 			end
@@ -346,6 +383,32 @@ function Formulas.GetHouseRooms(house): { any }
 		return { { Id = "R1", Type = "Living", Slot = 1, Placed = house.Placed } }
 	end
 	return {}
+end
+
+-- Visites à l'océan nécessaires pour acheter un objet / un style / une
+-- maison / un type de pièce de la maison (0 = disponible tout de suite).
+-- RequiresRebirths explicite dans la config, sinon selon le prix
+-- (Config.House.RebirthGates : les objets chers arrivent plus tard).
+function Formulas.GetHouseRequiredRebirths(entry): number
+	if type(entry) ~= "table" then
+		return 0
+	end
+	if type(entry.RequiresRebirths) == "number" then
+		return entry.RequiresRebirths
+	end
+	local cost = tonumber(entry.Cost) or 0
+	local required = 0
+	for _, gate in ipairs(Config.House.RebirthGates) do
+		if cost >= gate.Cost then
+			required = math.max(required, gate.Rebirths)
+		end
+	end
+	return required
+end
+
+function Formulas.IsHouseEntryUnlocked(data, entry): boolean
+	local rebirths = type(data) == "table" and tonumber(data.Rebirths) or 0
+	return Formulas.GetHouseRequiredRebirths(entry) <= (rebirths or 0)
 end
 
 -- Prix de la PROCHAINE pièce quand on en a déjà `roomCount`
