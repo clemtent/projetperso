@@ -7,9 +7,9 @@
 	  - KeyboardArt.Build(parent, layout, x, y, w, h, options) : dessine un
 	    clavier dans le rectangle (x, y, w, h), centré, touches aussi grandes
 	    que possible. Deux dispositions :
-	      "Full" : Q W E R T Y U I O P ⌫ / A S D F G H J K L ↵ /
+	      "Full" : Q W E R T Y U I O P back / A S D F G H J K L enter /
 	               ⇧ Z X C V B N M , . ? / ctrl alt [espace] alt fn
-	      "Mini" : Q W E R T Y / A S D F G H / Z X C V B N / [espace] ↵
+	      "Mini" : Q W E R T Y / A S D F G H / Z X C V B N / [espace] enter
 	               (petit clavier "résumé" quand la place manque)
 	    Renvoie (touches, unité) : unité = taille d'une touche carrée (px).
 	  - chaque touche = un TextButton (le "socle", plus sombre) + la face
@@ -66,10 +66,10 @@ local ROWS: { [string]: { Indent: { number }, Rows: { { Spec } } } } = {
 		Indent = { 0, 0.25, 0, 0 },
 		Rows = {
 			{ { "Q", "Q", 1 }, { "W", "W", 1 }, { "E", "E", 1 }, { "R", "R", 1 }, { "T", "T", 1 }, { "Y", "Y", 1 },
-				{ "U", "U", 1 }, { "I", "I", 1 }, { "O", "O", 1 }, { "P", "P", 1 }, { "⌫", "Backspace", 1.5, "Back" } },
+				{ "U", "U", 1 }, { "I", "I", 1 }, { "O", "O", 1 }, { "P", "P", 1 }, { "back", "Backspace", 1.5, "Back" } },
 			{ { "A", "A", 1 }, { "S", "S", 1 }, { "D", "D", 1 }, { "F", "F", 1 }, { "G", "G", 1 }, { "H", "H", 1 },
-				{ "J", "J", 1 }, { "K", "K", 1 }, { "L", "L", 1 }, { "↵", "Return", 2.25, "Enter" } },
-			{ { "⇧", "Shift", 1.5, "Mod" }, { "Z", "Z", 1 }, { "X", "X", 1 }, { "C", "C", 1 }, { "V", "V", 1 }, { "B", "B", 1 },
+				{ "J", "J", 1 }, { "K", "K", 1 }, { "L", "L", 1 }, { "enter", "Return", 2.25, "Enter" } },
+			{ { "shift", "Shift", 1.5, "Mod" }, { "Z", "Z", 1 }, { "X", "X", 1 }, { "C", "C", 1 }, { "V", "V", 1 }, { "B", "B", 1 },
 				{ "N", "N", 1 }, { "M", "M", 1 }, { ",", "Comma", 1 }, { ".", "Period", 1 }, { "?", "Slash", 1 } },
 			{ { "ctrl", "Ctrl", 1.5, "Mod" }, { "alt", "Alt", 1.25, "Mod" }, { "", "Space", 6, "Space" },
 				{ "alt", "AltRight", 1.25, "Mod" }, { "fn", "Fn", 1.5, "Mod" } },
@@ -81,7 +81,7 @@ local ROWS: { [string]: { Indent: { number }, Rows: { { Spec } } } } = {
 			{ { "Q", "Q", 1 }, { "W", "W", 1 }, { "E", "E", 1 }, { "R", "R", 1 }, { "T", "T", 1 }, { "Y", "Y", 1 } },
 			{ { "A", "A", 1 }, { "S", "S", 1 }, { "D", "D", 1 }, { "F", "F", 1 }, { "G", "G", 1 }, { "H", "H", 1 } },
 			{ { "Z", "Z", 1 }, { "X", "X", 1 }, { "C", "C", 1 }, { "V", "V", 1 }, { "B", "B", 1 }, { "N", "N", 1 } },
-			{ { "", "Space", 4, "Space" }, { "↵", "Return", 2, "Enter" } },
+			{ { "", "Space", 4, "Space" }, { "enter", "Return", 2, "Enter" } },
 		},
 	},
 }
@@ -239,7 +239,7 @@ function KeyboardArt.Build(parent: Instance, layout: string, x: number, y: numbe
 			label.Size = UDim2.fromScale(1, 1)
 			label.Font = font
 			label.Text = legend
-			local small = #legend > 1 and key.Kind == "Mod"
+			local small = #legend > 1
 			label.TextSize = math.max(6, math.floor(unit * (small and 0.36 or 0.56)))
 			label.TextColor3 = opts.LegendColor and opts.LegendColor(key) or inkFor(color)
 			label.ZIndex = z + 2
