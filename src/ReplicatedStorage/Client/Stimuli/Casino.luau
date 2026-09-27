@@ -243,7 +243,7 @@ function Casino.Start(ctx)
 
 	local titleLabel = UIUtil.Label({
 		Name = "Title",
-		Text = Locale.T("★ LUCKY MACHINE ★"),
+		Text = Locale.T("⭐ LUCKY MACHINE ⭐"),
 		Font = Theme.Fonts.Title,
 		TextColor3 = WHITE,
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -501,14 +501,12 @@ function Casino.Start(ctx)
 	})
 	local arrows = {}
 	for side = 0, 1 do
-		local arrow = UIUtil.Label({
-			Text = side == 0 and "▶" or "◀",
-			Font = Theme.Fonts.Title,
-			TextColor3 = GOLD,
+		-- (triangles DESSINÉS : ▶ ◀ n'existent pas dans les polices Roblox)
+		local arrow = UIUtil.Icon(side == 0 and "Right" or "Left", {
+			Size = 11,
+			Color = GOLD,
 			AnchorPoint = Vector2.new(side, 0.5),
 			Position = UDim2.new(side, side == 0 and -8 or 8, 0.5, 0),
-			Size = UDim2.fromOffset(8, 12),
-			MaxTextSize = 10,
 			ZIndex = 10,
 			Parent = window,
 		})
@@ -634,14 +632,11 @@ function Casino.Start(ctx)
 	})
 	round(knobShine)
 	-- Petite flèche "tire-moi" qui rebondit à côté du levier (quand on peut jouer)
-	local pullHint = UIUtil.Label({
-		Text = "▼",
-		Font = Theme.Fonts.Title,
-		TextColor3 = GOLD_LIGHT,
+	local pullHint = UIUtil.Icon("Down", {
+		Size = 11,
+		Color = GOLD_LIGHT,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromOffset(leverX, knobTop + 22),
-		Size = UDim2.fromOffset(12, 10),
-		MaxTextSize = 10,
 		ZIndex = 4,
 		Parent = card,
 	})
@@ -940,7 +935,7 @@ function Casino.Start(ctx)
 	round(coinInner)
 	UIUtil.Stroke(coinInner, Color3.fromRGB(190, 120, 10), 1, 0.2)
 	UIUtil.Label({
-		Text = "★",
+		Text = "⭐",
 		Font = Theme.Fonts.Title,
 		TextColor3 = Color3.fromRGB(150, 80, 0),
 		AnchorPoint = Vector2.new(0.5, 0.5),

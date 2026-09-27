@@ -145,7 +145,7 @@ function InfiniteScroll.Start(ctx)
 		-- Cœurs (niveau 2+ ; 2 au niveau 8+)
 		if level >= 2 then
 			for heartIndex = 1, if level >= 8 then 2 else 1 do
-				local heart = Kit.Text(root, "♥", PHONE_W - 8, PHONE_H - 22, 12, Kit.Rgb(255, 80, 130), 6)
+				local heart = Kit.Text(root, "💗", PHONE_W - 8, PHONE_H - 22, 12, Kit.Rgb(255, 80, 130), 6)
 				heart.TextTransparency = 1
 				table.insert(phone.Hearts, { Frame = heart :: any, Offset = (heartIndex - 1) * 0.5 + random:NextNumber(0, 0.2) })
 			end

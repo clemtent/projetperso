@@ -40,6 +40,7 @@ local ORDER = {
 	"FriendMailService", -- mails entre amis Roblox (après ChatService ; lit data.FriendMail)
 	"CosmeticService",
 	"HouseService",
+	"WorldService", -- 🚶 Dopamine Town (après HouseService : la maison est déjà corrigée)
 	"QuestService",
 	"AchievementService",
 	"DailyRewardService",

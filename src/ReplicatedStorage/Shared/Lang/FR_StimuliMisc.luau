@@ -38,7 +38,6 @@ return {
 		["your avg price"] = "ton prix moyen",
 		["⏳ Opening..."] = "⏳ Ouverture...",
 		["Loading price... ⏳"] = "Chargement du cours... ⏳",
-		["▼ Sell"] = "▼ Vendre",
 		["💼 <font color=\"#8C98B4\">No shares · %s fee</font>"] = "💼 <font color=\"#8C98B4\">Aucune action · frais %s</font>",
 		["Buy low, sell high 😏"] = "Achète bas, vends haut 😏",
 		["💼 <b>%s</b> <font color=\"#8C98B4\">· %s shares</font>"] = "💼 <b>%s</b> <font color=\"#8C98B4\">· %s act.</font>",

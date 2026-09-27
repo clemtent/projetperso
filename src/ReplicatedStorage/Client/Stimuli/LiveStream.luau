@@ -451,7 +451,7 @@ local MARKS: { [string]: string } = {
 	Happy = "✨",
 	Wink = "⭐",
 	Yum = "😋",
-	Chew = "♪",
+	Chew = "🎵",
 	Shh = "🤫",
 }
 -- Mouvement de la tête (inclinaison, en degrés) selon l'expression
@@ -777,12 +777,12 @@ function LiveStream.Start(ctx)
 		trophy = box({ Name = "Award", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(42, 0), Size = UDim2.fromOffset(17, 21), BackgroundColor3 = WHITE, Visible = false, ZIndex = 4, Parent = shelf }, 2)
 		trophyGradient = grad(trophy, Color3.fromRGB(240, 240, 250), Color3.fromRGB(150, 150, 170), 45)
 		local trophyInner = box(at({ BackgroundColor3 = Color3.fromRGB(40, 30, 60), ZIndex = 4, Parent = trophy }, 8.5, 9, 11, 12), 2)
-		text({ Text = "♥", Font = Theme.Fonts.Title, TextSize = 9, TextColor3 = Color3.fromRGB(255, 90, 140), Size = UDim2.fromScale(1, 1), ZIndex = 5, Parent = trophyInner })
+		text({ Text = "💗", Font = Theme.Fonts.Title, TextSize = 8, TextColor3 = Color3.fromRGB(255, 90, 140), Size = UDim2.fromScale(1, 1), ZIndex = 5, Parent = trophyInner })
 
 		-- Enseigne néon "miam" (à droite, grésille)
 		neonSign = text({
 			Name = "Neon",
-			Text = Locale.T("yum ♥"),
+			Text = Locale.T("yum 💗"),
 			Font = Enum.Font.FredokaOne,
 			TextSize = 17,
 			TextColor3 = Color3.fromRGB(255, 130, 210),
@@ -912,7 +912,7 @@ function LiveStream.Start(ctx)
 	end
 	-- Motif sur le sweat (devient une étoile dorée au studio 6)
 	K.hoodieLogo = text({
-		Text = "♥",
+		Text = "💗",
 		Font = Theme.Fonts.Title,
 		TextSize = 13,
 		TextColor3 = WHITE,
@@ -966,7 +966,7 @@ function LiveStream.Start(ctx)
 		end
 		part({ Name = "HairShine", BackgroundColor3 = HAIR_LIGHT:Lerp(WHITE, 0.4), BackgroundTransparency = 0.25, Rotation = -12, ZIndex = 7 }, 20, 7, 15, 3.5, 2)
 		-- Barrette étoile
-		text({ Text = "★", Font = Theme.Fonts.Title, TextSize = 10, TextColor3 = Color3.fromRGB(255, 226, 110), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(49, 14), Size = UDim2.fromOffset(10, 10), Rotation = 15, ZIndex = 8, Parent = head })
+		text({ Text = "⭐", Font = Theme.Fonts.Title, TextSize = 10, TextColor3 = Color3.fromRGB(255, 226, 110), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(49, 14), Size = UDim2.fromOffset(10, 10), Rotation = 15, ZIndex = 8, Parent = head })
 		-- Arceau (haut d'un cercle)
 		local band = round(at({ Name = "Band", BackgroundTransparency = 1, ZIndex = 8, Parent = head }, 32, 30, 68, 64))
 		local bandStroke = UI.Stroke(band, WHITE, 5, 0)
@@ -1015,9 +1015,9 @@ function LiveStream.Start(ctx)
 		-- v9 : yeux en cœur (amoureuse), bouche qui boude (∩), goutte de larme
 		K.heartEyes = {}
 		for _, x in ipairs({ 21, 43 }) do
-			local heartEye = text({ Name = "HeartEye", Text = "♥", Font = Theme.Fonts.Title, TextSize = 15, TextColor3 = Color3.fromRGB(255, 64, 128), AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(14, 14), Visible = false, ZIndex = 6, Parent = head })
+			local heartEye = text({ Name = "HeartEye", Text = "💗", Font = Theme.Fonts.Title, TextSize = 15, TextColor3 = Color3.fromRGB(255, 64, 128), AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(14, 14), Visible = false, ZIndex = 6, Parent = head })
 			heartEye.Position = UDim2.fromOffset(x, 37)
-			local heartStroke = UI.Stroke(heartEye, Color3.fromRGB(120, 20, 60), 1, 0.4)
+			local heartStroke = UI.Stroke(heartEye, Color3.fromRGB(120, 20, 60), 1, 1) -- (emoji 💗 : contour caché)
 			heartStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 			table.insert(K.heartEyes, heartEye)
 		end
@@ -1994,7 +1994,7 @@ function LiveStream.Start(ctx)
 		-- v9 : chaque niveau ajoute quelque chose de visible
 		K.tubes.Visible = level >= 4
 		S.rgbHeadset = level >= 6
-		K.hoodieLogo.Text = level >= 6 and "★" or "♥"
+		K.hoodieLogo.Text = level >= 6 and "⭐" or "💗"
 		K.hoodieLogo.TextColor3 = level >= 6 and Color3.fromRGB(255, 226, 110) or WHITE
 		if level < 6 then
 			for _, ear in ipairs(earGlows) do
@@ -2328,7 +2328,7 @@ function LiveStream.Start(ctx)
 		local donation = type(payload.SpawnId) == "string" and donations[payload.SpawnId] or nil
 		local amountText = amount and ("+" .. Format.Format(amount)) or ""
 		if donation and donation.Card.Parent then
-			donation.Title.Text = Locale.T("✔ Thanks <b>%s</b>!", escape(donation.Name))
+			donation.Title.Text = Locale.T("✅ Thanks <b>%s</b>!", escape(donation.Name))
 			donation.Sub.Text = amountText ~= "" and (amountText .. " Dopamine 💜") or Locale.T("Thanks 💜")
 			if amount then
 				ctx.FloatText(donation.Card, UDim2.fromScale(0.5, 0.5), amountText, Theme.Colors.Gold, 22)
@@ -3209,7 +3209,7 @@ function LiveStream.Start(ctx)
 			addLikes(math.max(0, math.floor(viewers * random:NextNumber(0, 0.004) + random:NextNumber(0, 1.2))), false)
 		end
 		shownLikes += (likes - shownLikes) * math.min(1, dt * 5)
-		K.hud.SetLikes("❤ " .. formatCount(math.floor(shownLikes + 0.5)))
+		K.hud.SetLikes("❤️ " .. formatCount(math.floor(shownLikes + 0.5)))
 
 		-- Nouveaux abonnés de temps en temps (barre d'objectif)
 		S.fanTimer -= dt

@@ -1160,24 +1160,73 @@ function Lofi.Start(ctx)
 	------------------------------------------------------------------
 	-- Particules : notes de musique (et petits cœurs)
 	------------------------------------------------------------------
-	local notes: { { Label: TextLabel, Active: boolean, Age: number, X: number, Y: number, Dir: number, Rise: number } } = {}
+	-- v9.3 : notes DESSINÉES (♪ ♫ n'existent pas dans les polices Roblox et
+	-- les emoji 🎵 sont noirs : invisibles sur la nuit) ; cœur = emoji 💗.
+	-- Chaque note : un cadre (position, rotation, UIScale) + ses 2 icônes ;
+	-- les morceaux des icônes sont gardés en liste (transparence sans
+	-- GetDescendants à chaque image).
+	type NoteParticle = {
+		Label: Frame,
+		Scale: UIScale,
+		Single: Frame,
+		Double: Frame,
+		Heart: TextLabel,
+		Parts: { GuiObject },
+		Active: boolean,
+		Age: number,
+		X: number,
+		Y: number,
+		Dir: number,
+		Rise: number,
+	}
+	local notes: { NoteParticle } = {}
 	for i = 1, NOTE_POOL do
-		local noteLabel = label({
+		local holder = frame({
 			Name = "Note",
-			Text = i % 2 == 1 and "♪" or "♫",
-			Font = Theme.Fonts.Title,
-			TextSize = 18,
-			TextColor3 = NOTE_COLORS[(i - 1) % #NOTE_COLORS + 1],
-			TextStrokeColor3 = Color3.fromRGB(40, 20, 60),
-			TextStrokeTransparency = 0.35,
-			TextTransparency = 1,
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Size = UDim2.fromOffset(24, 24),
+			BackgroundTransparency = 1,
 			Visible = false,
 			ZIndex = 19,
 			Parent = scene,
 		})
-		table.insert(notes, { Label = noteLabel, Active = false, Age = 0, X = 0, Y = 0, Dir = 1, Rise = 58 })
+		local color = NOTE_COLORS[(i - 1) % #NOTE_COLORS + 1]
+		local single = UI.Icon("Note", { Name = "Single", Size = 18, Color = color, Transparency = 1, ZIndex = 19, Parent = holder })
+		local double = UI.Icon("Notes", { Name = "Double", Size = 18, Color = color, Transparency = 1, ZIndex = 19, Parent = holder })
+		local heart = label({
+			Name = "Heart",
+			Text = "💗",
+			Font = Theme.Fonts.Title,
+			TextColor3 = HEART_COLOR,
+			TextSize = 16,
+			TextTransparency = 1,
+			Size = UDim2.fromScale(1, 1),
+			Visible = false,
+			ZIndex = 19,
+			Parent = holder,
+		})
+		local parts: { GuiObject } = {}
+		for _, icon in ipairs({ single, double }) do
+			for _, part in ipairs(icon:GetDescendants()) do
+				if part:IsA("GuiObject") and part:GetAttribute("IconPart") == true then
+					table.insert(parts, part)
+				end
+			end
+		end
+		table.insert(notes, {
+			Label = holder,
+			Scale = UI.Create("UIScale", { Parent = holder }),
+			Single = single,
+			Double = double,
+			Heart = heart,
+			Parts = parts,
+			Active = false,
+			Age = 0,
+			X = 0,
+			Y = 0,
+			Dir = 1,
+			Rise = 58,
+		})
 	end
 
 	local function spawnNote(x: number, y: number, dir: number, rise: number, heart: boolean?)
@@ -1188,13 +1237,13 @@ function Lofi.Start(ctx)
 				n.Dir = dir
 				n.X, n.Y = x, y
 				n.Rise = rise
-				if heart then
-					n.Label.TextColor3 = HEART_COLOR
-					n.Label.Text = "♥"
-				else
+				local single = not heart and random:NextNumber() < 0.5
+				n.Heart.Visible = heart == true
+				n.Single.Visible = single
+				n.Double.Visible = not heart and not single
+				if not heart then
 					S.noteColorIndex = S.noteColorIndex % #NOTE_COLORS + 1
-					n.Label.TextColor3 = NOTE_COLORS[S.noteColorIndex]
-					n.Label.Text = random:NextNumber() < 0.5 and "♪" or "♫"
+					UI.SetIconColor(single and n.Single or n.Double, NOTE_COLORS[S.noteColorIndex])
 				end
 				n.Label.Visible = true
 				return
@@ -1303,12 +1352,13 @@ function Lofi.Start(ctx)
 		BackgroundColor3 = Color3.fromRGB(56, 44, 90),
 		AutoButtonColor = false,
 		Font = Theme.Fonts.Title,
-		Text = "⏭",
+		Text = "",
 		TextColor3 = WHITE,
 		TextSize = 15,
 		Visible = false,
 		Parent = bar,
 	})
+	UI.Icon("Next", { Name = "Glyph", Size = 16, Color = WHITE, Parent = B.Skip })
 	UI.Corner(B.Skip, UDim.new(1, 0))
 	UI.Stroke(B.Skip, EQ_HIGH, 1.5, 0.4)
 	UI.AnimateButton(B.Skip, 1.1, 0.88)
@@ -1443,7 +1493,7 @@ function Lofi.Start(ctx)
 		B.Subtitle.TextColor3 = Color3.fromRGB(200, 186, 240)
 		if name then
 			-- Vraie musique
-			B.Title.Text = "♫ " .. Locale.T(name)
+			B.Title.Text = "💿 " .. Locale.T(name)
 			B.Subtitle.Text = S.showAlt and Locale.T("lofi beats 🎧 to study to") or viewersText()
 		elseif playlist then
 			-- Musique disponible mais coupée (réglage) ou en chargement
@@ -1454,7 +1504,7 @@ function Lofi.Start(ctx)
 				musicOn = not ok or value ~= false
 			end
 			if S.showAlt then
-				B.Subtitle.Text = musicOn and Locale.T("♫ Loading music...") or Locale.T("🔇 Music off (⚙️ Settings)")
+				B.Subtitle.Text = musicOn and Locale.T("💿 Loading music...") or Locale.T("🔇 Music off (⚙️ Settings)")
 			else
 				B.Subtitle.Text = viewersText()
 			end
@@ -1466,7 +1516,7 @@ function Lofi.Start(ctx)
 		else
 			-- Pas de musique : juste l'ambiance
 			B.Title.Text = Locale.T("lofi beats 🎧 to study to")
-			B.Subtitle.Text = S.showAlt and ("♫ " .. tracks[S.trackIndex]) or viewersText()
+			B.Subtitle.Text = S.showAlt and ("💿 " .. tracks[S.trackIndex]) or viewersText()
 		end
 	end
 	refreshSubtitle()
@@ -2364,10 +2414,15 @@ function Lofi.Start(ctx)
 					local noteLabel = n.Label
 					noteLabel.Position = UDim2.fromOffset(n.X + n.Dir * p * 32 + math.sin(p * 9) * 5, n.Y - p * n.Rise)
 					noteLabel.Rotation = math.sin(p * 8) * 18
-					noteLabel.TextSize = math.floor(14 + math.min(1, p * 5) * 8)
+					n.Scale.Scale = (14 + math.min(1, p * 5) * 8) / 18
 					local alpha = p < 0.12 and (1 - p / 0.12) or math.max(0, (p - 0.55) / 0.45)
-					noteLabel.TextTransparency = alpha
-					noteLabel.TextStrokeTransparency = 0.35 + alpha * 0.65
+					if n.Heart.Visible then
+						n.Heart.TextTransparency = alpha
+					else
+						for _, part in ipairs(n.Parts) do
+							part.BackgroundTransparency = alpha
+						end
+					end
 				end
 			end
 		end

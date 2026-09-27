@@ -36,6 +36,7 @@ Net.Events = {
 	"LeaderboardUpdate", -- S -> C (top) : top du classement
 	"ArcadeEvent", -- S <-> C (kind, payload) : arcade en temps réel (invitations, coups des duels...)
 	"FriendMailEvent", -- S -> C ("New", mail filtré) : un mail d'ami Roblox arrive (FriendMailService)
+	"WorldEvent", -- S -> C (kind, payload) : 🚶 Dopamine Town (maisons, "j'aime", messages) (WorldService)
 }
 
 Net.Functions = {
@@ -51,6 +52,7 @@ Net.Functions = {
 	"Arcade", -- C -> S (action, argument) -> (succès, résultat | message) : mini-jeux, tickets, duels
 	"FilterText", -- C -> S (purpose "Live" | "Mail", texte) -> (succès, { Text, Topics } | message) : texte tapé, filtré par Roblox
 	"FriendMail", -- C -> S (action, argument) -> (succès, résultat | message, état?) : mails entre amis Roblox (FriendMailService)
+	"World", -- C -> S (action, argument) -> (succès, résultat | message) : 🚶 Dopamine Town (entrer, visiter, s'asseoir, j'aime) (WorldService)
 	"DebugCommand", -- C -> S (commande, argument) -> (succès, message) : UNIQUEMENT dans Studio
 }
 

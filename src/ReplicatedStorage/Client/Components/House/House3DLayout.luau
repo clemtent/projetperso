@@ -19,7 +19,7 @@
 
 	API :
 	  House3DLayout.Dims(sizeDef, px, depth, wallHeight?) -> Dims
-	  House3DLayout.Entries(room) -> { Placed }       (objets valides, nettoyés)
+	  House3DLayout.Entries(room) -> ({ Placed }, { index dans room.Placed })
 	  House3DLayout.Prepare(entry, order, dims, options) -> Build?
 	  House3DLayout.Layout(builds, dims, frame)       (Build.Pivot = pivot du modèle)
 ]]
@@ -113,13 +113,14 @@ function House3DLayout.Rotation(value: any): number?
 end
 
 -- Objets posés valides d'une pièce (valeurs bornées ; objets inconnus ignorés)
-function House3DLayout.Entries(room: any): { Placed }
+function House3DLayout.Entries(room: any): ({ Placed }, { number })
 	local entries: { Placed } = {}
+	local indices: { number } = {}
 	local list = type(room) == "table" and room.Placed or nil
 	if type(list) ~= "table" then
-		return entries
+		return entries, indices
 	end
-	for _, raw in ipairs(list) do
+	for position, raw in ipairs(list) do
 		if type(raw) == "table" and type(raw.I) == "string" and HouseCommon.ItemsById[raw.I] then
 			local entry: any = {
 				I = raw.I,
@@ -132,9 +133,10 @@ function House3DLayout.Entries(room: any): { Placed }
 				R = House3DLayout.Rotation(raw.R),
 			}
 			table.insert(entries, entry)
+			table.insert(indices, position)
 		end
 	end
-	return entries
+	return entries, indices
 end
 
 -- 1. modèle 3D d'un objet (pas encore placé)

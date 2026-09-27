@@ -757,7 +757,7 @@ function LootBox.Start(ctx)
 	local stars = {}
 	for index = 1, math.clamp(#tiers, 1, 5) do
 		local star = Create("TextLabel", {
-			Text = "★",
+			Text = "⭐",
 			Font = Theme.Fonts.Title,
 			TextSize = 15,
 			TextColor3 = GOLD,
@@ -771,6 +771,7 @@ function LootBox.Start(ctx)
 			Color = GOLD_EDGE,
 			Thickness = 1,
 			ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
+			Enabled = false, -- (emoji ⭐ : pas de contour)
 			Parent = star,
 		})
 		stars[index] = { Label = star, Stroke = starStroke, Scale = Create("UIScale", { Parent = star }) }
@@ -1348,6 +1349,7 @@ function LootBox.Start(ctx)
 		for index, star in ipairs(stars) do
 			local filled = index <= tierIndex
 			star.Label.TextColor3 = filled and GOLD or Color3.fromRGB(205, 205, 215)
+			star.Label.TextTransparency = filled and 0 or 0.72 -- (⭐ emoji : estompée = pas gagnée)
 			star.Stroke.Color = filled and GOLD_EDGE or Color3.fromRGB(160, 160, 175)
 			star.Scale.Scale = 0
 		end

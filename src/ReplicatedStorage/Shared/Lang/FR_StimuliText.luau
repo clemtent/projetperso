@@ -16,7 +16,7 @@ return {
 		["NEWS FLASH"] = "FLASH INFO",
 		["URGENT!"] = "URGENT !",
 		["BREAKING"] = "ALERTE",
-		["NEWS ● LIVE"] = "INFO ● DIRECT",
+		["NEWS • LIVE"] = "INFO • DIRECT",
 		["SOMEONE"] = "QUELQU'UN",
 
 		-- NewsTicker : rubriques

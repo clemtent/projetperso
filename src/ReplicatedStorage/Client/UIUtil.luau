@@ -860,7 +860,8 @@ end
 	UIUtil.Icon(kind, props) -> Frame transparent (carré Size x Size) :
 	  kind : "Cross" (✕), "Check" (✓), "Play" (▶), "Pause" (❚❚),
 	         "Next" (►►), "Prev" (◄◄), "Up" / "Down" / "Left" / "Right"
-	         (▲ ▼ ◀ ▶), "Chevron" (▾), "Dot" (●), "Ring" (◯), "Diamond" (✦).
+	         (▲ ▼ ◀ ▶), "Chevron" (▾), "Dot" (●), "Ring" (◯), "Diamond" (✦),
+	         "Note" (♪), "Notes" (♫), "ArrowLeft" / "ArrowRight" (← →).
 	  props : Size (px, 20), Color (blanc), Thickness (px, épaisseur des
 	          traits), Position, AnchorPoint (0.5, 0.5 par défaut), ZIndex,
 	          Name, Parent, Rotation, Transparency.
@@ -987,6 +988,16 @@ function UIUtil.Icon(kind: string, props: { [string]: any }?): Frame
 		iconTriangle(icon, direction, s * 0.5 + base / 4, s / 2, base, color, zIndex, alpha)
 	elseif kind == "Up" or kind == "Down" or kind == "Left" or kind == "Right" then
 		iconTriangle(icon, kind, s / 2, s / 2, s, color, zIndex, alpha)
+	elseif kind == "ArrowLeft" or kind == "ArrowRight" then
+		local tip, back = s * 0.16, s * 0.84
+		local wing = s * 0.3
+		if kind == "ArrowRight" then
+			tip, back = back, tip
+			wing = -wing
+		end
+		iconBar(icon, tip, s / 2, back, s / 2, thickness, color, zIndex, alpha)
+		iconBar(icon, tip, s / 2, tip + wing, s / 2 - math.abs(wing), thickness, color, zIndex, alpha)
+		iconBar(icon, tip, s / 2, tip + wing, s / 2 + math.abs(wing), thickness, color, zIndex, alpha)
 	elseif kind == "Chevron" then
 		iconBar(icon, s * 0.18, s * 0.36, s * 0.5, s * 0.68, thickness, color, zIndex, alpha)
 		iconBar(icon, s * 0.5, s * 0.68, s * 0.82, s * 0.36, thickness, color, zIndex, alpha)
@@ -1003,6 +1014,34 @@ function UIUtil.Icon(kind: string, props: { [string]: any }?): Frame
 			ZIndex = zIndex,
 		})
 		UIUtil.Create("UICorner", { CornerRadius = kind == "Dot" and UDim.new(1, 0) or UDim.new(0.18, 0), Parent = dot })
+	elseif kind == "Note" or kind == "Notes" then
+		-- Tête(s) ovale(s) penchée(s) + hampe(s) (+ crochet ou barre)
+		local function head(cx: number, cy: number)
+			local oval = iconPart(icon, "Frame", {
+				Name = "Head",
+				Size = UDim2.fromOffset(s * 0.36, s * 0.27),
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromOffset(cx, cy),
+				Rotation = -22,
+				BackgroundColor3 = color,
+				BackgroundTransparency = alpha,
+				BorderSizePixel = 0,
+				ZIndex = zIndex,
+			})
+			UIUtil.Create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = oval })
+		end
+		local stem = math.max(1.5, s * 0.1)
+		if kind == "Note" then
+			head(s * 0.36, s * 0.76)
+			iconBar(icon, s * 0.52, s * 0.72, s * 0.52, s * 0.12, stem, color, zIndex, alpha)
+			iconBar(icon, s * 0.52, s * 0.12, s * 0.8, s * 0.34, stem, color, zIndex, alpha)
+		else
+			head(s * 0.22, s * 0.8)
+			head(s * 0.7, s * 0.7)
+			iconBar(icon, s * 0.37, s * 0.76, s * 0.37, s * 0.22, stem, color, zIndex, alpha)
+			iconBar(icon, s * 0.85, s * 0.66, s * 0.85, s * 0.12, stem, color, zIndex, alpha)
+			iconBar(icon, s * 0.37, s * 0.22, s * 0.85, s * 0.12, stem * 1.5, color, zIndex, alpha)
+		end
 	elseif kind == "Ring" then
 		local ring = UIUtil.Create("Frame", {
 			Name = "Ring",

@@ -158,7 +158,7 @@ function Hud.new(ctx: any, options: Options)
 	local textW = HOST_W - nameX - FOLLOW_W - 8
 	local nameLabel = text({
 		Name = "Streamer",
-		Text = "<b>" .. options.Host .. '</b> <font color="#5CC8FF">✔</font>',
+		Text = "<b>" .. options.Host .. "</b> ✅",
 		RichText = true,
 		Font = Theme.Fonts.Title,
 		TextSize = 12,
@@ -251,7 +251,7 @@ function Hud.new(ctx: any, options: Options)
 		Parent = live,
 	})
 	local likesPill = box({ Name = "Likes", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, RIGHT_H + 4), Size = UDim2.fromOffset(64, RIGHT_H), BackgroundColor3 = PILL, BackgroundTransparency = 0.28, ZIndex = 3, Parent = right }, 6)
-	local likes = text({ Name = "Count", Text = "❤ 0", Font = Theme.Fonts.Number, TextSize = 12, TextColor3 = Color3.fromRGB(255, 176, 206), Size = UDim2.fromScale(1, 1), ZIndex = 4, Parent = likesPill })
+	local likes = text({ Name = "Count", Text = "❤️ 0", Font = Theme.Fonts.Number, TextSize = 12, TextColor3 = Color3.fromRGB(255, 176, 206), Size = UDim2.fromScale(1, 1), ZIndex = 4, Parent = likesPill })
 	local likesScale = UI.Create("UIScale", { Parent = likesPill })
 
 	------------------------------------------------------------------
@@ -313,7 +313,7 @@ function Hud.new(ctx: any, options: Options)
 	function hud.SetFollowed(followed: boolean)
 		shine.Visible = not followed
 		if followed then
-			follow.Text = Locale.T("✔ Following")
+			follow.Text = Locale.T("✅ Following")
 			follow.BackgroundColor3 = FOLLOWED_COLOR
 			followGradient.Color = ColorSequence.new(WHITE, Color3.fromRGB(220, 220, 230))
 			followStroke.Color = Color3.fromRGB(140, 130, 170)

@@ -152,9 +152,9 @@ function Game.Build(container: Frame, api)
 	UIUtil.Create("UIAspectRatioConstraint", { AspectRatio = 1, Parent = ghost })
 	ghost.Position = UDim2.fromScale(0.5 * cellW, 0.5)
 	ghost.Visible = false
-	local arrow = Kit.Label({ Text = "▼", TextSize = 16, Color = seatColors[you], Size = UDim2.fromOffset(20, 16),
-		AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 1), ZIndex = 29, Parent = ghost })
-	arrow.TextTransparency = 0.1
+	-- Flèche vers le bas DESSINÉE (le caractère ▼ n'existe pas dans les polices Roblox)
+	UIUtil.Icon("Down", { Name = "Arrow", Size = 14, Color = seatColors[you], Transparency = 0.1, AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 1, 2), ZIndex = 29, Parent = ghost })
 
 	local discs = {} -- [index] = Frame
 	local function myTurn(): boolean

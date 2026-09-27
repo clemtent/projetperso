@@ -446,7 +446,7 @@ function Sim.Run(profileOrName, options)
 	local t = 0
 	local function logPurchase(kind, name, cost)
 		if SIM_DEBUG then
-			print("BUY", t, data.Rebirths, name, cost, data.Dopamine)
+			print("BUY", t, data.Rebirths, name, cost, data.Dopamine, (rates or computeRates()).Total, SIM_LASTGAIN or 0)
 		end
 		if t <= 600 then
 			table.insert(result.Purchases, { T = t, Kind = kind, Name = name, Cost = cost })
@@ -597,6 +597,7 @@ function Sim.Run(profileOrName, options)
 		end
 
 		if best and best.Cost <= bank then
+			SIM_LASTGAIN = best.Gain
 			data.Dopamine -= best.Cost
 			if best.Kind == "Upgrade" then
 				local u = best.Upgrade

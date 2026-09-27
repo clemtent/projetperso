@@ -944,4 +944,243 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 	return scene
 end
 
+----------------------------------------------------------------------
+-- Monde (v9.3, Dopamine Town) : coque de pièce à taille de personnage et
+-- objets placés comme dans la vue 3D (voir l'en-tête)
+----------------------------------------------------------------------
+
+export type ShellOptions = {
+	Scale: number?, -- studs par px de la pièce 2D (32 / 760 par défaut : ~32 studs de large)
+	Depth: number?, -- (studs) profondeur intérieure (24)
+	WallHeight: number?, -- hauteur des murs (14)
+	Doors: { string }?, -- côtés avec une porte ouverte : "Front" | "Left" | "Right" | "Back" ({ "Front" })
+	DoorWidth: number?, -- (6)
+	DoorHeight: number?, -- (9)
+	Front: boolean?, -- mur avant (avec sa porte) ; true par défaut
+	Ceiling: boolean?, -- plafond ; false par défaut
+	Patterns: boolean?, -- motifs du papier peint / du sol (SurfaceGui décoratives) ; true par défaut
+}
+
+local SHELL_WALL_T = 1
+
+-- Pièce solide d'une coque (collision + rayons)
+local function shellPart(parent: Instance, name: string, size: Vector3, cframe: CFrame, color: Color3, material: Enum.Material?, solid: boolean): BasePart
+	local p = newPart("Part", name, size, cframe, color, material)
+	p.CanCollide = solid
+	p.CanQuery = solid
+	p.CastShadow = solid
+	p.Parent = parent
+	return p
+end
+
+function House3DScene.BuildRoomShell(roomData: any, sizeDef: any?, options: ShellOptions?): Model
+	local opts: ShellOptions = type(options) == "table" and options or {}
+	local room = type(roomData) == "table" and roomData or {}
+	local widthFactor = type(sizeDef) == "table" and tonumber(sizeDef.Width) or 1
+	local roomWpx = math.floor(ROOM_BASE_WIDTH * (widthFactor or 1) + 0.5)
+	local scale = tonumber(opts.Scale) or 32 / ROOM_BASE_WIDTH
+	local W = roomWpx * scale
+	local D = tonumber(opts.Depth) or 24
+	local WH = tonumber(opts.WallHeight) or 14
+	local T = SHELL_WALL_T
+	local doorW = math.clamp(tonumber(opts.DoorWidth) or 6, 3, W - 2)
+	local doorH = math.clamp(tonumber(opts.DoorHeight) or 9, 6, WH - 1)
+	local doors: { [string]: boolean } = {}
+	for _, side in ipairs(type(opts.Doors) == "table" and opts.Doors or { "Front" }) do
+		doors[tostring(side)] = true
+	end
+	local wallpaper = HouseCommon.GetRoomWallpaper(room)
+	local floorStyle = HouseCommon.GetRoomFloor(room)
+	local wallA = wallpaper and wallpaper.A or C.PinkSoft
+	local floorA = floorStyle and floorStyle.A or C.Lilac
+	local trimEntry = configTable("HouseTrimsById")[tostring(room.Trim or "Cream")]
+	local trim = asColor(type(trimEntry) == "table" and trimEntry.Color, CREAM)
+	local wallMaterial = WALL_MATERIAL[wallpaper and wallpaper.Pattern or ""] or M.SmoothPlastic
+	local floorMaterial = FLOOR_MATERIAL[floorStyle and floorStyle.Pattern or ""] or M.SmoothPlastic
+	local patterns = opts.Patterns ~= false
+
+	local model = Instance.new("Model")
+	model.Name = "RoomShell"
+	-- Repère : pivot au centre du dessus du sol, mur du fond vers -Z, avant (+Z)
+	local floorPart = shellPart(model, "Floor", Vector3.new(W + 2 * T, 1, D + 2 * T), CFrame.new(0, -0.5, 0), floorA, floorMaterial, true)
+	floorPart.CastShadow = false
+	floorPart.PivotOffset = CFrame.new(0, 0.5, 0)
+	model.PrimaryPart = floorPart
+	if patterns then
+		-- motif du sol (décoration : la couleur de la pièce suffit déjà)
+		local skin = shellPart(model, "FloorPattern", Vector3.new(W, D, 0.05), CFrame.fromMatrix(Vector3.new(0, 0.025 - 0.05, 0), Vector3.new(1, 0, 0), Vector3.new(0, 0, -1)), floorA, floorMaterial, false)
+		skin.CastShadow = false
+		local canvasW, canvasH = math.floor(W / PX), math.floor(D / PX)
+		local gui = House3DKit.Surface(skin, Enum.NormalId.Back, Vector2.new(canvasW, canvasH), 1)
+		local sheet = Instance.new("Frame")
+		sheet.Name = "Floor"
+		sheet.BackgroundTransparency = 1
+		sheet.BorderSizePixel = 0
+		sheet.Size = UDim2.fromScale(1, 1)
+		sheet.ClipsDescendants = true
+		sheet.Parent = gui
+		pcall(House3DFloor.Paint, sheet, canvasW, canvasH, floorStyle, 1)
+		sheet.BackgroundTransparency = 1
+	end
+
+	-- Un mur (avec une porte ouverte au milieu si demandé) ; `along` = axe du mur
+	local function wall(name: string, center: Vector3, along: Vector3, length: number, inward: Vector3, withDoor: boolean)
+		local across = Vector3.new(math.abs(inward.X), 0, math.abs(inward.Z)) * T
+		local lengthVec = Vector3.new(math.abs(along.X), 0, math.abs(along.Z))
+		local function segment(offset: number, segLength: number, y0: number, y1: number)
+			if segLength <= 0.05 or y1 - y0 <= 0.05 then
+				return
+			end
+			local size = lengthVec * segLength + across + Vector3.new(0, y1 - y0, 0)
+			shellPart(model, name, size, CFrame.new(center + along * offset + Vector3.new(0, (y0 + y1) / 2, 0)), wallA, wallMaterial, true)
+		end
+		if withDoor then
+			local side = (length - doorW) / 2
+			segment(-(doorW / 2 + side / 2), side, 0, WH)
+			segment(doorW / 2 + side / 2, side, 0, WH)
+			segment(0, doorW, doorH, WH)
+			-- chambranle (moulures)
+			local face = center + inward * (T / 2 + 0.1)
+			local trimSize = lengthVec * 0.5 + Vector3.new(math.abs(inward.X), 0, math.abs(inward.Z)) * 0.3
+			for _, sx in ipairs({ -1, 1 }) do
+				shellPart(model, "DoorFrame", trimSize + Vector3.new(0, doorH + 0.5, 0), CFrame.new(face + along * sx * (doorW / 2 + 0.25) + Vector3.new(0, (doorH + 0.5) / 2, 0)), trim, M.Wood, false)
+			end
+			shellPart(model, "DoorFrame", lengthVec * (doorW + 1) + Vector3.new(math.abs(inward.X), 0, math.abs(inward.Z)) * 0.3 + Vector3.new(0, 0.5, 0),
+				CFrame.new(face + Vector3.new(0, doorH + 0.25, 0)), trim, M.Wood, false)
+		else
+			segment(0, length, 0, WH)
+		end
+		-- plinthe et moulure du haut (côté intérieur)
+		local inner = center + inward * (T / 2 + 0.1)
+		local stripDepth = Vector3.new(math.abs(inward.X), 0, math.abs(inward.Z)) * 0.2
+		local function strip(stripName: string, y: number, h: number)
+			if withDoor and y < doorH then
+				local side = (length - doorW) / 2
+				for _, sx in ipairs({ -1, 1 }) do
+					shellPart(model, stripName, lengthVec * side + stripDepth + Vector3.new(0, h, 0), CFrame.new(inner + along * sx * (doorW / 2 + side / 2) + Vector3.new(0, y + h / 2, 0)), trim, M.SmoothPlastic, false)
+				end
+			else
+				shellPart(model, stripName, lengthVec * length + stripDepth + Vector3.new(0, h, 0), CFrame.new(inner + Vector3.new(0, y + h / 2, 0)), trim, M.SmoothPlastic, false)
+			end
+		end
+		strip("Skirting", 0, 0.7)
+		strip("Crown", WH - 0.5, 0.5)
+	end
+	local X = Vector3.new(1, 0, 0)
+	local Z = Vector3.new(0, 0, 1)
+	wall("WallBack", Vector3.new(0, 0, -D / 2 - T / 2), X, W + 2 * T, Z, doors.Back == true)
+	wall("WallLeft", Vector3.new(-W / 2 - T / 2, 0, 0), Z, D, X, doors.Left == true)
+	wall("WallRight", Vector3.new(W / 2 + T / 2, 0, 0), Z, D, -X, doors.Right == true)
+	if opts.Front ~= false then
+		wall("WallFront", Vector3.new(0, 0, D / 2 + T / 2), X, W + 2 * T, -Z, doors.Front == true)
+	end
+	if opts.Ceiling == true then
+		shellPart(model, "Ceiling", Vector3.new(W + 2 * T, 0.6, D + 2 * T), CFrame.new(0, WH + 0.3, 0), trim:Lerp(WHITE, 0.5), M.SmoothPlastic, true)
+	end
+	-- Papier peint (décoration) sur le mur du fond
+	if patterns then
+		local wallPx = math.floor(ROOM_HEIGHT * (tonumber(HouseCommon.Config.WallRatio) or 0.46) + 0.5)
+		local skin = shellPart(model, "WallPattern", Vector3.new(W, WH, 0.05), CFrame.new(0, WH / 2, -D / 2 + 0.03), wallA, wallMaterial, false)
+		skin.CastShadow = false
+		local canvasW = math.floor(W / (WH / wallPx))
+		local gui = House3DKit.Surface(skin, Enum.NormalId.Back, Vector2.new(canvasW, wallPx), 1)
+		local sheet = Instance.new("Frame")
+		sheet.Name = "Paper"
+		sheet.BackgroundTransparency = 1
+		sheet.BorderSizePixel = 0
+		sheet.Size = UDim2.fromScale(1, 1)
+		sheet.ClipsDescendants = true
+		sheet.Parent = gui
+		pcall(HousePatterns.BuildWall, sheet, canvasW, wallPx, wallpaper, 1)
+		sheet.BackgroundTransparency = 1
+	end
+	-- Fenêtre du mur du fond (cadre, vitre, rebord ; décor)
+	do
+		local ww, wh = math.min(8, W * 0.22), math.min(6.5, WH * 0.45)
+		local cx, cy = -W * 0.3, WH * 0.58
+		local z = -D / 2
+		local views = configTable("HouseViewsById")
+		local viewEntry = views[tostring(room.View or "Garden")] or views.Garden
+		local sky = type(viewEntry) == "table" and asColor(viewEntry.Sky, Color3.fromRGB(170, 214, 255)) or Color3.fromRGB(170, 214, 255)
+		shellPart(model, "WindowView", Vector3.new(ww, wh, 0.1), CFrame.new(cx, cy, z + 0.1), sky, M.SmoothPlastic, false).CastShadow = false
+		shellPart(model, "WindowHill", Vector3.new(ww, wh * 0.28, 0.1), CFrame.new(cx, cy - wh * 0.36, z + 0.15), GRASS, M.SmoothPlastic, false).CastShadow = false
+		local glass = shellPart(model, "WindowGlass", Vector3.new(ww, wh, 0.08), CFrame.new(cx, cy, z + 0.35), Color3.fromRGB(220, 240, 255), M.Glass, false)
+		glass.Transparency = 0.75
+		glass.CastShadow = false
+		local f = 0.35
+		for _, spec in ipairs({
+			{ 0, wh / 2 + f / 2, ww + 2 * f, f }, { 0, -wh / 2 - f / 2, ww + 2 * f, f },
+			{ -ww / 2 - f / 2, 0, f, wh }, { ww / 2 + f / 2, 0, f, wh }, { 0, 0, 0.18, wh }, { 0, 0, ww, 0.18 },
+		}) do
+			shellPart(model, "WindowFrame", Vector3.new(spec[3], spec[4], 0.4), CFrame.new(cx + spec[1], cy + spec[2], z + 0.25), trim, M.Wood, false)
+		end
+		shellPart(model, "WindowSill", Vector3.new(ww + 1.2, 0.3, 0.9), CFrame.new(cx, cy - wh / 2 - 0.35, z + 0.45), trim, M.Wood, false)
+	end
+	model:SetAttribute("Width", W)
+	model:SetAttribute("Depth", D)
+	model:SetAttribute("WallHeight", WH)
+	model:SetAttribute("Scale", scale)
+	model:SetAttribute("RoomWpx", roomWpx)
+	model.WorldPivot = CFrame.new()
+	return model
+end
+
+export type PlaceOptions = {
+	Night: boolean?,
+	Collide: boolean?, -- (true) gros meubles solides
+	Query: boolean?, -- (true) objets visibles aux rayons (déplacer à la souris)
+	Yield: boolean?, -- (false) task.wait() entre deux lots d'objets
+}
+
+-- Place les objets d'une pièce dans une coque (BuildRoomShell) : dossier
+-- "Items" de la coque (vidé d'abord). Renvoie les modèles ; chaque modèle a
+-- l'attribut "EntryIndex" (= index dans roomData.Placed).
+function House3DScene.PlaceItems(roomModel: Model, roomData: any, options: PlaceOptions?): { Model }
+	local opts: PlaceOptions = type(options) == "table" and options or {}
+	local scale = tonumber(roomModel:GetAttribute("Scale")) or 32 / ROOM_BASE_WIDTH
+	local roomWpx = tonumber(roomModel:GetAttribute("RoomWpx")) or ROOM_BASE_WIDTH
+	local D = tonumber(roomModel:GetAttribute("Depth")) or 24
+	local WH = tonumber(roomModel:GetAttribute("WallHeight")) or 14
+	local dims = House3DLayout.Dims({ Width = roomWpx / ROOM_BASE_WIDTH }, scale, D, WH)
+	local frame = roomModel:GetPivot() * CFrame.new(0, 0, -D / 2)
+	local folder = roomModel:FindFirstChild("Items")
+	if folder then
+		folder:ClearAllChildren()
+	else
+		folder = Instance.new("Folder")
+		folder.Name = "Items"
+		folder.Parent = roomModel
+	end
+	local room = type(roomData) == "table" and roomData or {}
+	local trimEntry = configTable("HouseTrimsById")[tostring(room.Trim or "Cream")]
+	local trim = asColor(type(trimEntry) == "table" and trimEntry.Color, CREAM)
+	local entries, indices = House3DLayout.Entries(room)
+	local builds: { House3DLayout.Build } = {}
+	for index, entry in ipairs(entries) do
+		local ok, build = pcall(House3DLayout.Prepare, entry, index, dims, { Night = opts.Night == true, Collide = opts.Collide, Query = opts.Query, Trim = trim })
+		if ok and build then
+			build.Model:SetAttribute("EntryIndex", indices[index])
+			table.insert(builds, build)
+		elseif not ok then
+			warn("[House3D] Objet " .. tostring(entry.I) .. " : " .. tostring(build))
+		end
+		if opts.Yield == true and index % 6 == 0 then
+			task.wait()
+		end
+	end
+	local okLayout, err = pcall(House3DLayout.Layout, builds, dims, frame)
+	if not okLayout then
+		warn("[House3D] Disposition : " .. tostring(err))
+	end
+	local models: { Model } = {}
+	for _, build in ipairs(builds) do
+		pcall(function()
+			build.Model:PivotTo(build.Pivot)
+		end)
+		build.Model.Parent = folder
+		table.insert(models, build.Model)
+	end
+	return models
+end
+
 return House3DScene

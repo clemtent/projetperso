@@ -970,7 +970,7 @@ function Garden.Start(ctx)
 			plot.ChipFill.Size = UDim2.fromScale(progress, 1)
 			plot.ChipFill.BackgroundColor3 = Color3.fromRGB(110, 210, 100)
 			plot.ChipFill.BackgroundTransparency = 0.25
-			plot.ChipLabel.Text = "⏱ " .. clockText(remaining)
+			plot.ChipLabel.Text = "⏱️ " .. clockText(remaining)
 			plot.ChipLabel.TextColor3 = WHITE
 		end
 	end
@@ -1121,7 +1121,7 @@ function Garden.Start(ctx)
 			pillLabel.Text = Locale.T("🌸 Tap the flower!")
 		elseif nextIn < math.huge then
 			mode = "wait"
-			pillLabel.Text = Locale.T("⏱ Next bloom %s", clockText(nextIn))
+			pillLabel.Text = Locale.T("⏱️ Next bloom %s", clockText(nextIn))
 		else
 			mode = "wait"
 			pillLabel.Text = "🌱"

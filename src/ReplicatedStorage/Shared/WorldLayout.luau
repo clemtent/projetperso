@@ -146,6 +146,12 @@ function WorldLayout.HallSpan(size: SizeDef?): (number, number)
 	return dims.Left, dims.Left + WorldLayout.HALL_W
 end
 
+-- x du milieu de la porte d'entrée (couloir de la cage, à droite de l'escalier)
+function WorldLayout.DoorX(size: SizeDef?): number
+	local x0 = WorldLayout.HallSpan(size)
+	return x0 + WorldLayout.STAIR_W + (WorldLayout.HALL_W - WorldLayout.STAIR_W) / 2
+end
+
 -- Boîte intérieure d'une pièce (repère local) : xMin, xMax, yFloor, dMin, dMax
 function WorldLayout.RoomInterior(size: SizeDef?, slot: number): (number, number, number, number, number)
 	local floor, column = WorldLayout.SlotCell(size, slot)
@@ -277,6 +283,59 @@ end
 -- parcelle et la façade de la maison
 function WorldLayout.HouseFrontOffset(): number
 	return WorldLayout.PLOT_D / 2 - WorldLayout.GARDEN_D
+end
+
+----------------------------------------------------------------------
+-- Repères Roblox (CFrame) : utilisés en jeu uniquement (pas dans les tests)
+----------------------------------------------------------------------
+
+-- Centre de la ville (loin de la Baseplate du lieu)
+WorldLayout.ORIGIN_X, WorldLayout.ORIGIN_Y, WorldLayout.ORIGIN_Z = 0, 60, 2600
+
+function WorldLayout.Origin(): Vector3
+	return Vector3.new(WorldLayout.ORIGIN_X, WorldLayout.ORIGIN_Y, WorldLayout.ORIGIN_Z)
+end
+
+-- Parcelle : centre au niveau du sol, LookVector = vers la place
+function WorldLayout.PlotCFrame(index: number, count: number): CFrame
+	local x, z = WorldLayout.PlotPlace(index, count)
+	local center = WorldLayout.Origin() + Vector3.new(x, 0, z)
+	local toPlaza = WorldLayout.Origin() - center
+	return CFrame.lookAt(center, center + Vector3.new(toPlaza.X, 0, toPlaza.Z))
+end
+
+-- Maison : milieu de la façade au sol, regarde DANS la maison (RightVector =
+-- droite du visiteur qui arrive de la place)
+function WorldLayout.HouseCFrame(plotCF: CFrame): CFrame
+	local front = plotCF.Position + plotCF.LookVector * WorldLayout.HouseFrontOffset()
+	return CFrame.lookAt(front, front - plotCF.LookVector)
+end
+
+-- Point du repère local (x, y, d) -> monde
+function WorldLayout.ToWorld(houseCF: CFrame, x: number, y: number, d: number): Vector3
+	return houseCF * Vector3.new(x, y, -d)
+end
+
+-- Monde -> repère local (x, y, d)
+function WorldLayout.ToLocal(houseCF: CFrame, point: Vector3): (number, number, number)
+	local p = houseCF:PointToObjectSpace(point)
+	return p.X, p.Y, -p.Z
+end
+
+-- Apparition devant la porte d'entrée (regarde la maison)
+function WorldLayout.DoorSpawn(houseCF: CFrame, size: SizeDef?): CFrame
+	local x = WorldLayout.DoorX(size)
+	local position = WorldLayout.ToWorld(houseCF, x, 3.2, -WorldLayout.SPAWN_FRONT)
+	local target = WorldLayout.ToWorld(houseCF, x, 3.2, 5)
+	return CFrame.lookAt(position, target)
+end
+
+-- Centre d'une pièce (pour y apparaître)
+function WorldLayout.RoomSpawn(houseCF: CFrame, size: SizeDef?, slot: number): CFrame
+	local xMin, xMax, yFloor, dMin, dMax = WorldLayout.RoomInterior(size, slot)
+	local x = (xMin + xMax) / 2
+	local position = WorldLayout.ToWorld(houseCF, x, yFloor + 3.2, dMin + (dMax - dMin) * 0.35)
+	return CFrame.lookAt(position, WorldLayout.ToWorld(houseCF, x, yFloor + 3.2, dMax))
 end
 
 ----------------------------------------------------------------------

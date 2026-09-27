@@ -127,6 +127,16 @@ local function tintOf(entry, rebirths: number): string?
 	return id
 end
 
+-- (v9.3) Rotation 3D d'un objet posé (Dopamine Town) : degrés entiers,
+-- multiple de 15 dans 15..345 ; nil = 0 (même règle que WorldLayout.NormalizeRotation)
+local function rotationOf(value): number?
+	if not isValidNumber(value) then
+		return nil
+	end
+	local r = (math.floor(value / 15 + 0.5) * 15) % 360
+	return if r == 0 then nil else r
+end
+
 local function normalizeEntry(entry, item, rebirths: number?)
 	local minY, maxY = FLOOR_MIN_Y, 1
 	if item.Placement == "Wall" then
@@ -148,6 +158,8 @@ local function normalizeEntry(entry, item, rebirths: number?)
 		Z = z,
 		F = entry.F == true or nil,
 		C = tintOf(entry, rebirths or 0),
+		-- (v9.3 🚶 Dopamine Town) rotation 3D facultative : degrés, multiple de 15, nil = 0
+		R = rotationOf(entry.R),
 	}
 end
 

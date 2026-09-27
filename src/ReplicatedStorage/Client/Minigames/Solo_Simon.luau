@@ -443,7 +443,7 @@ function Module.Build(container: Frame, api)
 			submit(st.Generation) -- le serveur confirme l'erreur
 			return
 		end
-		kit:Float(pads[index].Body, "♪", pads[index].Color)
+		kit:Float(pads[index].Body, "🎵", pads[index].Color)
 		if position >= #st.Sequence then
 			submit(st.Generation)
 		end
