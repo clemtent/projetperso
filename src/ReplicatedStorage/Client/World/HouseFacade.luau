@@ -1230,7 +1230,7 @@ local function garageWing(ctx: Ctx)
 	local wall = ctx.Wall
 	local stone = P.Stone
 	-- dalle, allée pavée jusqu'à la rue (+ bordures), rampe invisible vers le trottoir
-	kit:Box("GarageSlab", X0, X1, 0.2, FLOOR, D0, D1, Color3.fromRGB(214, 210, 216), M.Concrete, { Solid = true })
+	kit:Box("GarageSlab", X0 + 0.05, X1 - 0.05, 0.2, FLOOR, D0 + 0.05, D1 - 0.05, Color3.fromRGB(214, 210, 216), M.Concrete, { Solid = true })
 	local street = G.STREET_D
 	kit:Box("Driveway", X0 + 1.2, X1 - 1.2, 0.3, 0.62, street, D0, P.Pave, M.Pavement, { Solid = true })
 	for _, x in ipairs({ X0 + 0.7, X1 - 0.7 }) do
@@ -1243,7 +1243,7 @@ local function garageWing(ctx: Ctx)
 	local winD0, winD1, winY0, winY1 = -17.5, -12.5, 3.2, 7
 	kit:WallD("GarageSide", X0, X0 + W, 0, H, D0, D1, { { winD0, winD1, winY0, winY1 } }, wall, M.Plaster, { Solid = true })
 	kit:Box("GarageSideGlass", X0 + 0.25, X0 + 0.55, winY0, winY1, winD0, winD1, P.Glass, M.Glass, { T = 0.35, Shadow = false })
-	kit:Box("GarageSideSill", X0 - 0.35, X0 + 0.1, winY0 - 0.35, winY0, winD0 - 0.4, winD1 + 0.4, TRIM, M.Limestone, { Shadow = false })
+	kit:Box("GarageSideSill", X0 - 0.35, X0 + 0.1, winY0 - 0.35, winY0 + 0.06, winD0 - 0.4, winD1 + 0.4, TRIM, M.Limestone, { Shadow = false })
 	kit:Box("GarageSideR", X1 - W, X1, 0, H, D0, D1, wall, M.Plaster, { Solid = true })
 	local holes = {}
 	for bay = 1, G.BAYS do
@@ -1252,15 +1252,15 @@ local function garageWing(ctx: Ctx)
 	end
 	kit:WallX("GarageFront", X0, X1, FLOOR, H, D0, D0 + W, holes, wall, M.Plaster, { Solid = true })
 	-- soubassement, chaînes d'angle, corniche, bandeau doré
-	kit:Box("GaragePlinth", X0 - 0.15, X0 + 0.9, 0, 1.2, D0 - 0.15, D1, stone, M.Limestone, { Shadow = false })
-	kit:Box("GaragePlinth", X1 - 0.9, X1 + 0.15, 0, 1.2, D0 - 0.15, D1, stone, M.Limestone, { Shadow = false })
+	kit:Box("GaragePlinth", X0 - 0.15, X0 + 0.9, -0.05, 1.2, D0 - 0.15, D1 + 0.08, stone, M.Limestone, { Shadow = false })
+	kit:Box("GaragePlinth", X1 - 0.9, X1 + 0.15, -0.05, 1.2, D0 - 0.15, D1 + 0.08, stone, M.Limestone, { Shadow = false })
 	for _, x in ipairs({ X0, X1 }) do
 		for k = 0, 3 do
 			local y = 1.2 + k * 2.2
 			kit:Box("Quoin", x - 0.55, x + 0.55, y, y + 1.2, D0 - 0.2, D0 + 1.1, TRIM, M.Limestone, { Shadow = false })
 		end
 	end
-	kit:Box("GarageCornice", X0 - 0.6, X1 + 0.6, H - 0.2, H + 0.7, D0 - 0.7, D1, TRIM, M.Limestone, { Solid = true })
+	kit:Box("GarageCornice", X0 - 0.6, X1 + 0.6, H - 0.2, H + 0.7, D0 - 0.7, D1 + 0.12, TRIM, M.Limestone, { Solid = true })
 	kit:Box("GarageBand", X0 - 0.2, X1 + 0.2, H - 1.4, H - 1.2, D0 - 0.24, D0 - 0.02, P.Gold, M.Metal, { Shadow = false })
 	-- toit-terrasse : parapet plein + lisse + pots à boule
 	kit:Box("GarageParapet", X0 - 0.4, X1 + 0.4, H + 0.7, H + 2.1, D0 - 0.5, D0 + 0.3, TRIM, M.Limestone, { Shadow = false })
@@ -1282,9 +1282,10 @@ local function garageWing(ctx: Ctx)
 		local cx = G.BayX(bay)
 		local x0, x1 = cx - G.DOOR_W / 2, cx + G.DOOR_W / 2
 		local top = FLOOR + G.DOOR_H
-		kit:Box("DoorJamb", x0 - 0.45, x0, FLOOR, top, D0 - 0.25, D0 + W, TRIM, M.Limestone, { Shadow = false })
-		kit:Box("DoorJamb", x1, x1 + 0.45, FLOOR, top, D0 - 0.25, D0 + W, TRIM, M.Limestone, { Shadow = false })
-		kit:Box("DoorHeader", x0 - 0.45, x1 + 0.45, top, top + 0.45, D0 - 0.25, D0 + W, TRIM, M.Limestone, { Shadow = false })
+		-- (encadrement : 0,05 dans l'ouverture et en retrait du nu intérieur -> aucune face coplanaire)
+		kit:Box("DoorJamb", x0 - 0.45, x0 + 0.05, FLOOR, top, D0 - 0.25, D0 + W - 0.05, TRIM, M.Limestone, { Shadow = false })
+		kit:Box("DoorJamb", x1 - 0.05, x1 + 0.45, FLOOR, top, D0 - 0.25, D0 + W - 0.05, TRIM, M.Limestone, { Shadow = false })
+		kit:Box("DoorHeader", x0 - 0.45, x1 + 0.45, top - 0.05, top + 0.45, D0 - 0.25, D0 + W - 0.05, TRIM, M.Limestone, { Shadow = false })
 		if bay ~= 2 then
 			kit:Box("Keystone", cx - 0.5, cx + 0.5, top + 0.45, top + 1.4, D0 - 0.35, D0 + 0.2, TRIM, M.Limestone, { Shadow = false })
 		end
