@@ -19,6 +19,17 @@
 	    ✅ poser, ❌ annuler ;
 	  - fenêtre "👥 Visiter" : joueurs du serveur, leur maison, ❤️, accès ;
 	  - petits messages (toasts) et écran de chargement de la ville.
+	v9.4 (ENTRY94) :
+	  - "🏠 Rentrer" (téléportation devant sa porte) + 🧭 boussole sous
+	    "Retour" (flèche vers sa maison + distance, un appui = Rentrer) ;
+	  - pastille d'action en bas au milieu (entre le joystick et "sauter"
+	    sur mobile) : "■ Arrêter" pendant une émote, "Se lever" assis ;
+	  - voile plein écran à part (ScreenGui "TownOverlay", sous les
+	    encoches aussi, reste actif quand le HUD est masqué) : écran de
+	    chargement (ciel, silhouette de la ville, barre, astuces), bandes
+	    cinéma + titre + "Passer" du survol d'arrivée, fondus d'entrée /
+	    de sortie ;
+	  - liste des visites plus claire (anneau vert = en ville, pastilles).
 	Aucune logique de jeu ici : tout passe par les rappels (callbacks).
 ]]
 
@@ -1178,23 +1189,25 @@ function TownHud.OpenVisit(self: any, rows: { VisitRow })
 		UIUtil.Stroke(dot, WHITE, 2, 0)
 		local size = Config.HouseSizesById[snapshot.Size] or Config.House.Sizes[1]
 		local name = tostring(snapshot.DisplayName or snapshot.Name or "?")
-		label({ Name = "Name", Text = row.IsSelf and Locale.T("%s (you)", name) or name, Color = INK, TextSize = 19, Size = UDim2.new(1, -210, 0, 24),
+		-- nom, puis l'état (en ville / clique, 🔒) juste après
+		local nameText = row.IsSelf and Locale.T("%s (you)", name) or name
+		local nameW = math.min(textWidth(nameText, 19) + 10, 190)
+		label({ Name = "Name", Text = nameText, Color = INK, TextSize = 19, Size = UDim2.fromOffset(nameW + 4, 24),
 			Position = UDim2.fromOffset(80, 10), XAlign = Enum.TextXAlignment.Left, ZIndex = 24, Parent = item })
-		local status = inTown and Locale.T("🚶 in town") or Locale.T("💤 clicking")
+		local status = (inTown and Locale.T("🚶 in town") or Locale.T("💤 clicking")) .. (row.Locked and "  🔒" or "")
 		label({ Name = "Status", Text = status, Color = inTown and Color3.fromRGB(40, 160, 100) or Color3.fromRGB(150, 130, 170), TextSize = 13, Font = Theme.Fonts.Body,
-			Size = UDim2.fromOffset(110, 16), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -112, 0, 6), XAlign = Enum.TextXAlignment.Right, ZIndex = 24, Parent = item })
-		local chips = UIUtil.Create("Frame", { Name = "Chips", BackgroundTransparency = 1, Position = UDim2.fromOffset(80, 42), Size = UDim2.new(1, -200, 0, 22), ZIndex = 24, Parent = item })
+			Size = UDim2.fromOffset(textWidth(status, 13, Theme.Fonts.Body) + 6, 24), Position = UDim2.fromOffset(80 + nameW + 10, 10), XAlign = Enum.TextXAlignment.Left,
+			ZIndex = 24, Parent = item })
+		local chips = UIUtil.Create("Frame", { Name = "Chips", BackgroundTransparency = 1, Position = UDim2.fromOffset(80, 42), Size = UDim2.new(1, -240, 0, 22),
+			ClipsDescendants = true, ZIndex = 24, Parent = item })
 		UIUtil.Create("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 5), SortOrder = Enum.SortOrder.LayoutOrder, Parent = chips })
 		chip(chips, string.format("%s %s", tostring(size.Icon or "🏠"), Locale.T(size.Name)), Color3.fromRGB(240, 232, 255), INK, 1)
-		chip(chips, "❤️ " .. NumberFormatter.Format(tonumber(snapshot.Likes) or 0), Color3.fromRGB(255, 228, 238), PINK_DEEP, 2)
-		chip(chips, "👀 " .. NumberFormatter.Format(tonumber(snapshot.Visits) or 0), Color3.fromRGB(226, 240, 255), Color3.fromRGB(60, 110, 170), 3)
-		if row.Locked then
-			chip(chips, "🔒", Color3.fromRGB(236, 236, 244), INK, 4)
-		end
+		chip(chips, string.format("❤️ %s  👀 %s", NumberFormatter.Format(tonumber(snapshot.Likes) or 0), NumberFormatter.Format(tonumber(snapshot.Visits) or 0)),
+			Color3.fromRGB(255, 228, 238), PINK_DEEP, 2)
 		local go = UIUtil.PillButton({ Name = "Go", Text = row.IsSelf and Locale.T("🏠 Home") or Locale.T("🚶 Visit"), Color = row.IsSelf and PINK or LILAC,
-			Height = 44, TextSize = 17, ZIndex = 24, Parent = item })
-		go.AnchorPoint = Vector2.new(1, 0.5)
-		go.Position = UDim2.new(1, -12, 0.5, 0)
+			Height = 44, TextSize = 17, ZIndex = 24, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0), Parent = item })
+		go.AutomaticSize = Enum.AutomaticSize.None
+		go.Size = UDim2.fromOffset(textWidth(go.Text, 17) + 44, 44)
 		go.Activated:Connect(function()
 			self:CloseVisit()
 			if row.IsSelf then

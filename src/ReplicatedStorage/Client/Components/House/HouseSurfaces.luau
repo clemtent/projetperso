@@ -103,6 +103,15 @@ local SURFACES: { [string]: { { number } } } = {
 	GamingDesk = { { 3, 97, 35 } },
 	BunkBed = { { 10, 76, 27 }, { 10, 78, 71 } },
 	RaceCarBed = { { 18, 72, 41 } },
+	-- v9.5 : "Dopamine Setup" (Art/Setup95) : clavier, souris, petite télé,
+	-- plantes... se posent sur les bureaux gamer, le meuble télé et la table à
+	-- papier bulle (mêmes hauteurs que les modèles 3D : House3DSetup)
+	SetupDeskSolo = { { 4, 96, 50 } },
+	SetupDeskDuo = { { 4, 96, 50 } },
+	SetupDeskTrio = { { 4, 96, 50 } },
+	SetupDeskUltra = { { 4, 96, 50 } },
+	SetupTVStand = { { 3, 97, 55 } },
+	SetupBubbleWrap = { { 6, 94, 52 } },
 }
 
 -- Meubles "lits" : les animaux grimpeurs y font la sieste

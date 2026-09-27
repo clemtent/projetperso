@@ -19,7 +19,19 @@
 	    s'asseoir (invite -> le serveur crée un Seat), étiquettes de nom
 	    (pseudo + 🌊 visites à l'océan + ❤️) ;
 	  - édition des meubles de SA maison (FurnitureEdit) ;
-	  - Sortir ("⬅ Clicker") : le personnage est retiré, tout est remis.
+	  - Sortir ("⬅ Clicker") : fondu, le personnage est retiré, tout est remis.
+	v9.4 (ENTRY94) :
+	  - arrivée : écran de chargement (barre = maisons construites), puis
+	    1re fois de la session un survol de la ville (TownArrival, ~4 s,
+	    passable) qui finit derrière l'avatar posé à la PORTE de la ville
+	    (attribut "EntranceCF" de TOWN94) ; arc lumineux + repère jusqu'à
+	    SA maison, boussole dans le HUD, "🏠 Rentrer" ;
+	  - émotes (TownEmotes) : la piste est gardée et s'arrête en bougeant,
+	    en sautant, avec une autre émote, le bouton ■, en s'asseyant, en
+	    mode édition, en sortant, à la mort / au retrait du personnage ;
+	    "Se lever" quand on est assis (par terre ou sur un siège) ;
+	  - ambiance réaliste (TownAtmosphere) : jour / nuit selon le réglage
+	    "Mode sombre", remise EXACTE à la sortie.
 	Les gains passifs continuent (serveur) ; le bouton 👆 du HUD clique comme
 	le gros bouton (ClientState.Click).
 	Travail par image : presque rien (compteur 10 fois / s, portes et bandeau
