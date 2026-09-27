@@ -3768,8 +3768,10 @@ function Email.Start(ctx)
 		end
 		local online = {}
 		for _, info in ipairs(list) do
-			if type(info) == "table" and type(info.VisitorId) == "number" and info.IsOnline ~= false then
-				online[info.VisitorId] = true
+			-- (noms de champs lus prudemment : VisitorId / Id / UserId)
+			local id = FriendMailRules.ReadFriend(info)
+			if id and info.IsOnline ~= false then
+				online[id] = true
 			end
 		end
 		FS.Online = online
@@ -3987,10 +3989,13 @@ function Email.Start(ctx)
 			if ok and type(result) == "table" and type(result.Friends) == "table" then
 				local list = {}
 				for _, friend in ipairs(result.Friends) do
-					if type(friend) == "table" and type(friend.Id) == "number" then
-						local name = type(friend.Name) == "string" and friend.Name or ""
-						local display = type(friend.Display) == "string" and friend.Display ~= "" and friend.Display or name
-						table.insert(list, { Id = friend.Id, Name = name, Display = display ~= "" and display or ("#" .. tostring(friend.Id)) })
+					local id, name, display = FriendMailRules.ReadFriend(type(friend) == "table" and {
+						Id = friend.Id,
+						Username = friend.Name,
+						DisplayName = friend.Display,
+					} or nil)
+					if id then
+						table.insert(list, { Id = id, Name = name, Display = display ~= "" and display or ("#" .. tostring(id)) })
 					end
 				end
 				FS.Friends = list

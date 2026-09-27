@@ -10,6 +10,9 @@
 	Enregistrement stocké (côté serveur UNIQUEMENT, jamais envoyé tel quel) :
 	  { Id = "guid", F = expéditeur (UserId), N = pseudo, D = nom affiché,
 	    S = objet BRUT, B = texte BRUT, T = os.time() d'envoi,
+	    BS / BB = objet / texte filtrés "pour tout le monde" à l'envoi
+	    (GetNonChatStringForBroadcastAsync, le plus strict : secours si le
+	    filtre par destinataire échoue à la livraison),
 	    R = Id du mail auquel il répond (ou nil), Rd = lu, Rp = déjà répondu }
 ]]
 
@@ -108,6 +111,47 @@ function FriendMailRules.ValidRecord(record: any): boolean
 		and FriendMailRules.ValidUserId(record.F)
 		and type(record.S) == "string" and type(record.B) == "string"
 		and isNumber(record.T)
+end
+
+-- Texte à montrer au destinataire : filtré POUR lui si possible, sinon la
+-- version filtrée "pour tout le monde" faite à l'envoi ; sinon rien (nil =
+-- pas montré). JAMAIS le texte brut.
+function FriendMailRules.ShownText(forRecipient: any, broadcast: any): string?
+	if type(forRecipient) == "string" then
+		return forRecipient
+	end
+	if type(broadcast) == "string" then
+		return broadcast
+	end
+	return nil
+end
+
+-- Lecture prudente d'un ami (FriendPages, GetFriendsOnlineAsync) : les noms
+-- de champs varient selon l'API -> (UserId, pseudo, nom affiché) ou nil
+function FriendMailRules.ReadFriend(item: any): (number?, string, string)
+	if type(item) ~= "table" then
+		return nil, "", ""
+	end
+	local id = nil
+	for _, key in ipairs({ "VisitorId", "Id", "UserId" }) do
+		local value = tonumber(item[key])
+		if value and FriendMailRules.ValidUserId(value) then
+			id = value
+			break
+		end
+	end
+	local name = ""
+	for _, key in ipairs({ "Username", "UserName", "Name" }) do
+		if type(item[key]) == "string" and item[key] ~= "" then
+			name = item[key]
+			break
+		end
+	end
+	local display = (type(item.DisplayName) == "string" and item.DisplayName ~= "") and item.DisplayName or name
+	if name == "" then
+		name = display
+	end
+	return id, name, display
 end
 
 -- Boîte stockée -> liste propre : enregistrements invalides, doublons et

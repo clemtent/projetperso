@@ -1757,6 +1757,21 @@ do
 		local fresh = R.SanitizeData(nil, NOW)
 		check(fresh.LastNew == 0 and fresh.LastReply == 0 and next(fresh.Blocked) == nil, "données absentes")
 	end)
+
+	test("FriendMailRules : secours du filtre (jamais le brut) et lecture prudente des amis", function(check)
+		eq(check, R.ShownText("pour toi", "pour tous"), "pour toi", "filtre du destinataire d'abord")
+		eq(check, R.ShownText(nil, "pour ######"), "pour ######", "échec : version pour tout le monde")
+		eq(check, R.ShownText("", "x"), "", "texte vide filtré = vide")
+		check(R.ShownText(nil, nil) == nil, "aucune version filtrée : pas montré")
+		check(R.ShownText(nil, 42) == nil, "secours abîmé : pas montré")
+		local id, name, display = R.ReadFriend({ Id = 222, Username = "lea_rblx", DisplayName = "Léa" })
+		check(id == 222 and name == "lea_rblx" and display == "Léa", "FriendPages (Id, Username, DisplayName)")
+		id, name, display = R.ReadFriend({ VisitorId = 333, UserName = "maxou99", IsOnline = true })
+		check(id == 333 and name == "maxou99" and display == "maxou99", "GetFriendsOnlineAsync (VisitorId, UserName)")
+		id, name, display = R.ReadFriend({ UserId = "444", DisplayName = "Sam" })
+		check(id == 444 and name == "Sam" and display == "Sam", "UserId en texte, seulement DisplayName")
+		check(R.ReadFriend({ Id = -3 }) == nil and R.ReadFriend({ Id = 1.5 }) == nil and R.ReadFriend("x") == nil, "invalides")
+	end)
 end
 """
 

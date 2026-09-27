@@ -13,7 +13,10 @@
 	    la paire expéditeur -> destinataire aussi
 	    (TextChatService:CanUsersDirectChatAsync, sinon CanUsersChatAsync) :
 	    réglages de confidentialité, d'âge et contrôle parental respectés.
-	    Réponse inconnue (panne) = refusé ; contrôle REFAIT à la livraison ;
+	    Un "non" net = refusé tout de suite. Réponse inconnue (API qui ne sait
+	    pas répondre pour un destinataire absent du serveur) = accepté si
+	    l'expéditeur a le droit de discuter ; le contrôle de la paire est
+	    REFAIT à la livraison (destinataire présent) : refusé -> mail supprimé ;
 	  - anti-spam persistant (data.FriendMail, sauvegardé : se reconnecter ne
 	    remet rien à zéro) : 1 nouveau mail / 10 min, 1 réponse à un mail
 	    d'ami reçu / 2 min (une seule réponse par mail reçu) ;
@@ -30,7 +33,13 @@
 	    pour ces messages (le filtre s'adapte aux deux comptes : âge,
 	    réglages). GetNonChatString* est prévu pour du texte "hors
 	    conversation" (noms d'objets, panneaux...), ce qui n'est pas le cas ;
-	  - filtre en échec = mail NON montré ; nouvel essai plus tard ;
+	  - secours (API refusée, expéditeur hors ligne...) : à l'ENVOI, pendant
+	    que l'expéditeur est sur son serveur, on calcule aussi
+	    GetNonChatStringForBroadcastAsync (la version la plus stricte, valable
+	    pour tout le monde), gardée à côté du brut (BS / BB). Si le filtre par
+	    destinataire échoue à la livraison, c'est ELLE qui est montrée, jamais
+	    le brut. Filtre "pour tout le monde" en échec à l'envoi = envoi refusé.
+	    Sans aucune version filtrée = mail NON montré, nouvel essai plus tard ;
 	  - la copie "Envoyés" de l'expéditeur passe par le chemin habituel
 	    (RemoteFunction "FilterText", purpose "Mail", côté client).
 
@@ -300,10 +309,9 @@ local function fetchFriends(player: Player, session): { any }?
 			local pages = Players:GetFriendsAsync(player.UserId)
 			while true do
 				for _, item in ipairs(pages:GetCurrentPage()) do
-					if type(item) == "table" and Rules.ValidUserId(item.Id) and #list < FRIENDS_MAX then
-						local name = type(item.Username) == "string" and item.Username or ""
-						local display = type(item.DisplayName) == "string" and item.DisplayName ~= "" and item.DisplayName or name
-						table.insert(list, { Id = item.Id, Name = name, Display = display })
+					local id, name, display = Rules.ReadFriend(item)
+					if id and #list < FRIENDS_MAX then
+						table.insert(list, { Id = id, Name = name, Display = display })
 					end
 				end
 				if pages.IsFinished or #list >= FRIENDS_MAX then
@@ -389,7 +397,23 @@ local function pairAllowed(session, fromId: number, toId: number): boolean?
 	return value
 end
 
--- Texte brut -> texte filtré POUR le destinataire (nil = échec : pas montré)
+-- Texte brut -> version filtrée "pour tout le monde" (la plus stricte),
+-- calculée à l'ENVOI (l'expéditeur est là). nil = échec : envoi refusé.
+local function filterBroadcast(raw: string, fromId: number): string?
+	if raw == "" then
+		return ""
+	end
+	local ok, text = pcall(function()
+		local result = TextService:FilterStringAsync(raw, fromId, Enum.TextFilterContext.PrivateChat)
+		return result:GetNonChatStringForBroadcastAsync()
+	end)
+	if ok and type(text) == "string" then
+		return text
+	end
+	return nil
+end
+
+-- Texte brut -> texte filtré POUR le destinataire (nil = échec)
 local function filterFor(raw: string, fromId: number, toId: number): string?
 	if raw == "" then
 		return ""
@@ -493,10 +517,12 @@ local function deliver(player: Player, session, record): boolean
 	elseif allowed == nil then
 		return false
 	end
-	local subject = filterFor(record.S, record.F, player.UserId)
-	local body = subject ~= nil and filterFor(record.B, record.F, player.UserId) or nil
+	-- Filtre pour CE destinataire ; en échec, la version "pour tout le
+	-- monde" faite à l'envoi (jamais le brut)
+	local subject = Rules.ShownText(filterFor(record.S, record.F, player.UserId), record.BS)
+	local body = subject ~= nil and Rules.ShownText(filterFor(record.B, record.F, player.UserId), record.BB) or nil
 	if subject == nil or body == nil or not player.Parent or sessions[player] ~= session then
-		return false -- filtre en échec : pas montré, nouvel essai plus tard
+		return false -- aucune version filtrée : pas montré, nouvel essai plus tard
 	end
 	local out = {
 		Id = record.Id,
@@ -648,11 +674,18 @@ local function doSend(player: Player, session, args): (boolean, any)
 	elseif canChat == nil then
 		return false, T(player, "Friend mail is unavailable right now")
 	end
+	-- "Non" net : refusé. Inconnu (destinataire sur un autre serveur ou hors
+	-- ligne) : accepté, la paire est contrôlée à la livraison
 	local pair = pairAllowed(session, player.UserId, toId)
 	if pair == false then
 		return false, T(player, "This friend can't receive messages (privacy settings)")
-	elseif pair == nil then
-		return false, T(player, "Friend mail is unavailable right now")
+	end
+
+	-- Version filtrée "pour tout le monde" (secours de la livraison)
+	local broadcastSubject = filterBroadcast(subject, player.UserId)
+	local broadcastBody = broadcastSubject ~= nil and filterBroadcast(body, player.UserId) or nil
+	if broadcastSubject == nil or broadcastBody == nil then
+		return false, T(player, "Message could not be sent, try again")
 	end
 
 	if not store or not hasBudget(Enum.DataStoreRequestType.UpdateAsync) then
@@ -667,6 +700,8 @@ local function doSend(player: Player, session, args): (boolean, any)
 		D = player.DisplayName,
 		S = subject,
 		B = body,
+		BS = broadcastSubject,
+		BB = broadcastBody,
 		T = now,
 		R = original and original.Id or nil,
 	}
