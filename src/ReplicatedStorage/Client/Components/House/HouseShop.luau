@@ -868,6 +868,64 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = floorsList,
 	})
+	-- (v9.1) Listes des autres personnalisations (une grille par section)
+	local lookLists: { [string]: ScrollingFrame } = {}
+	local lookGrids: { UIGridLayout } = { wallpapersGrid, floorsGrid }
+	for _, name in ipairs({ "Trim", "Mood", "View", "Facade", "Roof", "RoofStyle", "Garden" }) do
+		local list = scroller(name .. "List", 50)
+		table.insert(lookGrids, UIUtil.Create("UIGridLayout", {
+			CellSize = UDim2.new(0.5, -6, 0, STYLE_CARD_HEIGHT),
+			CellPadding = UDim2.fromOffset(8, 10),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+			Parent = list,
+		}))
+		lookLists[name] = list
+	end
+
+	-- (v9.1) Sous-onglets des groupes "🎨 Style de pièce" / "🌷 Dehors"
+	local subRow = UIUtil.Create("ScrollingFrame", {
+		Name = "SubSections",
+		Size = UDim2.new(1, 0, 0, 38),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollingDirection = Enum.ScrollingDirection.X,
+		AutomaticCanvasSize = Enum.AutomaticSize.X,
+		CanvasSize = UDim2.new(),
+		ScrollBarThickness = 0,
+		Visible = false,
+		ZIndex = 32,
+		Parent = body,
+	})
+	UIUtil.Create("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0, 6),
+		Parent = subRow,
+	})
+	UIUtil.Create("UIPadding", { PaddingLeft = UDim.new(0, 2), PaddingRight = UDim.new(0, 8), Parent = subRow })
+	local subButtons: { [string]: TextButton } = {}
+	local subGroup = ""
+	-- Bandeau des sections "toute la maison" : explication / places du jardin
+	local outsideBar = UIUtil.Create("Frame", {
+		Name = "OutsideBar",
+		Position = UDim2.fromOffset(0, 44),
+		Size = UDim2.new(1, 0, 0, 30),
+		BackgroundColor3 = C.MintSoft,
+		Visible = false,
+		ZIndex = 32,
+		Parent = body,
+	})
+	UIUtil.Corner(outsideBar, 12)
+	UIUtil.Stroke(outsideBar, C.Mint, 1.5, 0.3)
+	local outsideHint = textLine(outsideBar, "Hint", {
+		Position = UDim2.fromOffset(10, 0),
+		Size = UDim2.new(1, -20, 1, 0),
+		TextColor3 = C.Ink,
+		TextSize = 13,
+		ZIndex = 33,
+	})
+
 	local roomsList = scroller("RoomsList", 0)
 	UIUtil.Create("UIListLayout", {
 		SortOrder = Enum.SortOrder.LayoutOrder,
@@ -917,8 +975,9 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 		local columns = math.clamp(math.floor(designWidth / 118), 2, 5)
 		local styleColumns = math.clamp(math.floor(designWidth / 150), 2, 4)
 		itemsGrid.CellSize = UDim2.new(1 / columns, -8, 0, CARD_HEIGHT)
-		wallpapersGrid.CellSize = UDim2.new(1 / styleColumns, -8, 0, STYLE_CARD_HEIGHT)
-		floorsGrid.CellSize = UDim2.new(1 / styleColumns, -8, 0, STYLE_CARD_HEIGHT)
+		for _, grid in ipairs(lookGrids) do
+			grid.CellSize = UDim2.new(1 / styleColumns, -8, 0, STYLE_CARD_HEIGHT)
+		end
 		for _, card in ipairs(roomCards) do
 			fitFavorites(card)
 		end
@@ -2315,6 +2374,14 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 			for _, style in ipairs(HouseCommon.Config.Floors) do
 				buildStyleCard("Floor", style, floorsList)
 			end
+		elseif lookLists[name] then
+			-- (v9.1) boiseries, ambiances, vues, façades, toits, motifs, jardin
+			local def = HouseCommon.LookKinds[KIND_OF[name]]
+			if def then
+				for _, entry in ipairs(def.List) do
+					buildStyleCard(def.Kind, entry :: any, lookLists[name])
+				end
+			end
 		elseif name == "Rooms" then
 			task.spawn(function()
 				for index, roomType in ipairs(HouseCommon.Config.RoomTypes) do
@@ -2339,7 +2406,7 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 
 	local function refreshRoomBar(house: HouseData)
 		local room, locked = targetRoom(house)
-		local kind = section == "Wallpapers" and "Wallpaper" or "Floor"
+		local kind = KIND_OF[section] or "Wallpaper"
 		-- L'essai en cours visait une autre pièce : on l'arrête
 		local roomId = room and room.Id or nil
 		if roomId ~= previewRoomId then
@@ -2355,9 +2422,15 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 		roomHint.Visible = not locked
 		roomHint.Text = Locale.T("🏠 Open a room, or pick one here:")
 		roomBar.Size = UDim2.new(1, 0, 0, barHeight)
+		roomBar.Position = UDim2.fromOffset(0, 44)
 		roomChips.Position = UDim2.fromOffset(0, locked and 3 or 26)
-		setListTop(wallpapersList, barHeight + 6)
-		setListTop(floorsList, barHeight + 6)
+		setListTop(wallpapersList, 44 + barHeight + 6)
+		setListTop(floorsList, 44 + barHeight + 6)
+		for name, list in pairs(lookLists) do
+			if ROOM_SECTIONS[name] then
+				setListTop(list, 44 + barHeight + 6)
+			end
+		end
 		-- Pastilles des pièces (reconstruites si la liste change)
 		local parts = { locked and ("L" .. kind) or "U", roomId or "" }
 		for _, entry in ipairs(sortedRooms(house)) do
@@ -2380,7 +2453,11 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 				AutomaticSize = Enum.AutomaticSize.X,
 				BackgroundTransparency = 1,
 				Font = Theme.Fonts.Body,
-				Text = kind == "Wallpaper" and Locale.T("🎨 Walls of this room:") or Locale.T("🟫 Floor of this room:"),
+				Text = if kind == "Wallpaper" then Locale.T("🎨 Walls of this room:")
+					elseif kind == "Floor" then Locale.T("🟫 Floor of this room:")
+					elseif kind == "Trim" then Locale.T("🎀 Trim of this room:")
+					elseif kind == "Mood" then Locale.T("💡 Lighting of this room:")
+					else Locale.T("🪟 Window of this room:"),
 				TextColor3 = C.Ink,
 				TextSize = 13,
 				LayoutOrder = 0,
@@ -2514,16 +2591,28 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 					end
 				end
 			end
-		elseif section == "Wallpapers" or section == "Floors" then
-			refreshRoomBar(house)
-			local room = targetRoom(house)
+		elseif KIND_OF[section] then
+			-- Murs, sols (v9.1 : + boiseries, ambiances, vues, façade, toit, motif, jardin)
+			local sectionKind = KIND_OF[section]
+			local room: Room? = nil
+			if ROOM_SECTIONS[section] then
+				refreshRoomBar(house)
+				room = targetRoom(house)
+			else
+				local text
+				if sectionKind == "Garden" then
+					text = Locale.T("🌷 Garden: %d/%d spots used • tap to put out / away", #house.Garden, HouseCommon.GardenSlots)
+				else
+					text = Locale.T("🏡 For the whole house • hover or tap a picture to try it")
+				end
+				if outsideHint.Text ~= text then
+					outsideHint.Text = text
+				end
+			end
 			for _, card in ipairs(styleCards) do
-				local isWallpaper = card.Kind == "Wallpaper"
-				if (section == "Wallpapers") == isWallpaper then
-					local owned = isWallpaper and house.OwnedWallpapers or house.OwnedFloors
-					local equippedId = room and (isWallpaper and room.Wallpaper or room.Floor) or nil
-					local equipped = equippedId == card.Style.Id
-					local isOwned = owned[card.Style.Id] == true or card.Style.Cost <= 0
+				if card.Kind == sectionKind then
+					local cost = tonumber(card.Style.Cost) or 0
+					local isOwned, equipped = lookState(house, room, card.Kind, card.Style.Id, cost)
 					local locked = not isOwned and not HouseCommon.IsUnlocked(data, card.Style)
 					if locked and not card.Lock then
 						card.Lock = lockOverlay(card.Preview, true)
@@ -2537,20 +2626,24 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 					end
 					card.Check.Visible = equipped
 					if equipped then
-						paintButton(card.Button, Locale.T("✔ Applied"), Theme.Colors.ButtonBottom, true, Theme.Colors.Text)
+						if sectionKind == "Garden" then
+							paintButton(card.Button, Locale.T("✔ In the garden"), Theme.Colors.ButtonBottom, true, Theme.Colors.Text)
+						else
+							paintButton(card.Button, Locale.T("✔ Applied"), Theme.Colors.ButtonBottom, true, Theme.Colors.Text)
+						end
 						card.Stroke.Color = Theme.Colors.Green
 						card.Stroke.Thickness = 3
 					elseif isOwned then
-						paintButton(card.Button, Locale.T("Apply"), Theme.Colors.Blue, true, WHITE)
+						paintButton(card.Button, sectionKind == "Garden" and Locale.T("🌷 Put out") or Locale.T("Apply"), Theme.Colors.Blue, true, WHITE)
 						card.Stroke.Color = SOFT_STROKE
 						card.Stroke.Thickness = 1.5
 					elseif locked then
-						paintButton(card.Button, "🔒 💧 " .. NumberFormatter.Format(card.Style.Cost), LOCKED_COLOR, true, WHITE)
+						paintButton(card.Button, "🔒 💧 " .. NumberFormatter.Format(cost), LOCKED_COLOR, true, WHITE)
 						card.Stroke.Color = C.Lilac
 						card.Stroke.Thickness = 1.5
 					else
-						local affordable = dopamine >= card.Style.Cost
-						paintButton(card.Button, "💧 " .. NumberFormatter.Format(card.Style.Cost), BUY_COLOR, affordable, Theme.Colors.TextDark)
+						local affordable = dopamine >= cost
+						paintButton(card.Button, "💧 " .. NumberFormatter.Format(cost), BUY_COLOR, affordable, Theme.Colors.TextDark)
 						card.Stroke.Color = SOFT_STROKE
 						card.Stroke.Thickness = 1.5
 					end
@@ -2647,9 +2740,66 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 		Rooms = roomsList,
 		Sizes = sizesList,
 	}
+	for name, list in pairs(lookLists) do
+		sections[name] = list
+	end
+
+	-- (v9.1) Pastilles des sous-onglets du groupe affiché
+	local function paintSubRow(group: string, target: string)
+		if group ~= subGroup then
+			subGroup = group
+			for _, button in pairs(subButtons) do
+				button:Destroy()
+			end
+			table.clear(subButtons)
+			for order, id in ipairs(GROUPS[group] or {}) do
+				local button = UIUtil.PillButton({
+					Name = id,
+					Text = Locale.T(SUB_LABELS[id] or id),
+					Color = WHITE,
+					TextColor3 = C.Ink,
+					Height = Interface.IsTouch() and 34 or 30,
+					TextSize = 13,
+					LayoutOrder = order,
+					ZIndex = 33,
+					StrokeColor = C.Pink,
+					Parent = subRow,
+				})
+				subButtons[id] = button
+				button.Activated:Connect(function()
+					if section ~= id then
+						SoundManager.Play("Click", 1.1)
+						shop.Open(id)
+					end
+				end)
+			end
+		end
+		for id, button in pairs(subButtons) do
+			local selected = id == target
+			button:SetAttribute("BaseColor", selected and C.PinkDeep or WHITE)
+			button.BackgroundColor3 = selected and C.PinkDeep or WHITE
+			button.TextColor3 = selected and WHITE or C.Ink
+		end
+		-- la pastille choisie reste visible (rangée qui défile)
+		task.delay(0.05, function()
+			local chosen = subButtons[target]
+			if not chosen or not chosen.Parent then
+				return
+			end
+			local left = chosen.AbsolutePosition.X - subRow.AbsolutePosition.X + subRow.CanvasPosition.X
+			local window = subRow.AbsoluteWindowSize.X
+			if left + chosen.AbsoluteSize.X > subRow.CanvasPosition.X + window or left < subRow.CanvasPosition.X then
+				subRow.CanvasPosition = Vector2.new(math.max(0, left - 20), 0)
+			end
+		end)
+	end
 
 	local function showSection(name: string)
 		local target = SECTION_ALIASES[name] or name
+		if GROUPS[target] then
+			-- onglet de groupe : le dernier sous-onglet ouvert
+			target = lastSub[target] or GROUPS[target][1]
+		end
 		if not sections[target] then
 			target = "Items"
 		end
@@ -2658,9 +2808,21 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 		for id, frame in pairs(sections) do
 			frame.Visible = id == target
 		end
+		local group = GROUP_OF[target]
+		if group then
+			lastSub[group] = target
+			paintSubRow(group, target)
+		end
 		categoryRow.Visible = target == "Items"
-		roomBar.Visible = target == "Wallpapers" or target == "Floors"
-		selectedTab = target
+		subRow.Visible = group ~= nil
+		roomBar.Visible = ROOM_SECTIONS[target] == true
+		outsideBar.Visible = group == "Outside"
+		if group == "Outside" then
+			setListTop(sections[target] :: ScrollingFrame, 44 + 30 + 6)
+		end
+		local newTab = group or target
+		changed = changed or newTab ~= selectedTab
+		selectedTab = newTab
 		layoutTabs(changed)
 		-- Changer d'onglet arrête l'essai en cours
 		if stickyPreview or hoverPreview then
