@@ -38,6 +38,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
 local Config = require(ReplicatedStorage.Shared.Config)
 local HouseGarden = require(script.Parent.HouseGarden)
+local HouseKit = require(script.Parent.HouseKit)
 
 local HouseFacade = {}
 
@@ -105,6 +106,7 @@ export type Built = {
 
 type Ctx = {
 	Kit: any,
+	G: any, -- kit du jardin (posé sur la pelouse de la parcelle)
 	Size: any,
 	Dims: any,
 	Style: string,
@@ -249,8 +251,8 @@ local function wallLantern(ctx: Ctx, x: number, y: number, withLight: boolean)
 end
 
 -- Lanterne sur poteau (pied en y0)
-local function postLantern(ctx: Ctx, x: number, d: number, y0: number, height: number, withLight: boolean)
-	local kit = ctx.Kit
+local function postLantern(ctx: Ctx, x: number, d: number, y0: number, height: number, withLight: boolean, onKit: any?)
+	local kit = onKit or ctx.Kit
 	kit:CylY("LampPost", x, y0, d, 0.35, height, C.Ink, M.Metal, { Solid = true, Shadow = false })
 	kit:Box("LampCap", x - 0.55, x + 0.55, y0 + height + 1.3, y0 + height + 1.6, d - 0.55, d + 0.55, C.Ink, M.Metal, { Shadow = false })
 	local glass = kit:Box("LampGlass", x - 0.42, x + 0.42, y0 + height, y0 + height + 1.3, d - 0.42, d + 0.42, P.Lamp, M.Neon, { Shadow = false })
@@ -261,7 +263,7 @@ local function postLantern(ctx: Ctx, x: number, d: number, y0: number, height: n
 end
 
 local function bush(ctx: Ctx, x: number, d: number, w: number, h: number, color: Color3)
-	local kit = ctx.Kit
+	local kit = ctx.G
 	kit:Ball("Bush", x, h * 0.42, d, h, color, M.Grass)
 	if w > h * 1.2 then
 		kit:Ball("Bush", x - w * 0.3, h * 0.34, d + 0.1, h * 0.8, color:Lerp(P.LeafDark, 0.15), M.Grass)
@@ -273,13 +275,13 @@ local function flowerDots(ctx: Ctx, x0: number, x1: number, d: number, count: nu
 	local colors = { C.Pink, C.Butter, WHITE, C.Lilac, C.Peach }
 	for k = 0, count - 1 do
 		local x = x0 + (k + 0.5) * (x1 - x0) / count
-		ctx.Kit:Ball("Flower", x, 0.55 + (k % 2) * 0.15, d + (k % 3 - 1) * 0.35, 0.6, colors[k % #colors + 1], M.SmoothPlastic, { Shadow = false })
+		ctx.G:Ball("Flower", x, 0.55 + (k % 2) * 0.15, d + (k % 3 - 1) * 0.35, 0.6, colors[k % #colors + 1], M.SmoothPlastic, { Shadow = false })
 	end
 end
 
 -- Arbre (tronc + feuillage en grappe + fruits)
 local function tree(ctx: Ctx, x: number, d: number, s: number, fruit: Color3?)
-	local kit = ctx.Kit
+	local kit = ctx.G
 	kit:CylY("Trunk", x, 0, d, 1.1 * s, 6 * s, P.Trunk, M.Wood, { Solid = true })
 	kit:Ball("Leaves", x, 8 * s, d, 6.5 * s, P.Leaf, M.Grass, { Shadow = true })
 	kit:Ball("Leaves", x - 2.4 * s, 7 * s, d + 0.6, 4.6 * s, P.Leaf:Lerp(P.LeafDark, 0.2), M.Grass, { Shadow = true })
@@ -498,25 +500,27 @@ local function porch(ctx: Ctx, x0: number, x1: number, landingD: number, steps: 
 	end
 	-- rampe lisse (invisible) sur les marches
 	local run = steps * tread
-	kit:Slab("PorchRamp", (x0 + x1) / 2, { -0.6 * yTop / run, -landingD - run - 0.6 }, { yTop, -landingD }, x1 - x0 - 0.8, 1, WHITE, M.SmoothPlastic,
+	local lawn = HouseKit.LAWN
+	local slope = (yTop - lawn) / run
+	kit:Slab("PorchRamp", (x0 + x1) / 2, { lawn - 0.6 * slope, -landingD - run - 0.6 }, { yTop, -landingD }, x1 - x0 - 0.8, 1, WHITE, M.SmoothPlastic,
 		{ Solid = true, Query = true, T = 1, Shadow = false })
 	return -landingD - run
 end
 
 -- Allée : suite de dalles d'un point (x, d) à l'autre
 local function path(ctx: Ctx, points: { { number } }, width: number, color: Color3, material: Enum.Material)
-	local kit = ctx.Kit
+	local kit = ctx.G
 	for k = 1, #points - 1 do
 		local a, b = points[k], points[k + 1]
 		local x0, x1 = math.min(a[1], b[1]) - width / 2, math.max(a[1], b[1]) + width / 2
 		local d0, d1 = math.min(a[2], b[2]) - width / 2, math.max(a[2], b[2]) + width / 2
-		kit:Box("Path", x0, x1, 0, 0.12, d0, d1, color, material, { Shadow = false })
+		kit:Box("Path", x0, x1, -0.1, 0.1, d0, d1, color, material, { Shadow = false })
 	end
 end
 
 -- Barrière blanche à piquets (le long de x, à `d`) avec un portillon ouvert
 local function picketFence(ctx: Ctx, x0: number, x1: number, d: number, gate0: number, gate1: number)
-	local kit = ctx.Kit
+	local kit = ctx.G
 	for _, span in ipairs({ { x0, gate0 }, { gate1, x1 } }) do
 		local a, b = span[1], span[2]
 		if b - a > 1 then
@@ -536,7 +540,7 @@ end
 
 -- Grille en fer forgé + piliers à lanternes
 local function ironFence(ctx: Ctx, x0: number, x1: number, d: number, gate0: number, gate1: number)
-	local kit = ctx.Kit
+	local kit = ctx.G
 	local iron = C.Ink:Lerp(C.Lilac, 0.25)
 	for _, span in ipairs({ { x0, gate0 }, { gate1, x1 } }) do
 		local a, b = span[1], span[2]
@@ -556,7 +560,7 @@ local function ironFence(ctx: Ctx, x0: number, x1: number, d: number, gate0: num
 	for _, x in ipairs({ gate0 - 0.8, gate1 + 0.8 }) do
 		kit:Box("GatePillar", x - 0.8, x + 0.8, 0, 4.6, d - 0.8, d + 0.8, P.Stone, M.Limestone, { Solid = true })
 		kit:Box("GatePillarCap", x - 1, x + 1, 4.6, 5, d - 1, d + 1, C.Cream, M.Limestone, { Shadow = false })
-		postLantern(ctx, x, d, 5, 0.6, false)
+		postLantern(ctx, x, d, 5, 0.6, false, kit)
 	end
 end
 
@@ -1369,6 +1373,7 @@ function HouseFacade.Build(kit: any, size: any, looks: Looks): Built
 	local built: Built = { Door = nil, Hinge = nil, Lock = nil, Fills = {}, Chimneys = 0, Style = style }
 	local ctx: Ctx = {
 		Kit = kit,
+		G = kit:Sub(CFrame.new(0, HouseKit.LAWN, 0)),
 		Size = size,
 		Dims = dims,
 		Style = style,

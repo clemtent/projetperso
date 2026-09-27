@@ -106,7 +106,7 @@ local roomBuilding = false
 local creating = false
 local contextKey = ""
 local currentContext: any = nil
-local clocks = { Counter = 0, Door = 0, Stream = 0, Tag = 0, Guide = 0 }
+local clocks = { Counter = 0, Door = 0, Stream = 0, Tag = 0, Guide = 0, Loc = 0 }
 local emotes: any = nil
 local guide: any = nil
 local guidePending = false
@@ -718,6 +718,61 @@ local function stepStream()
 end
 
 ----------------------------------------------------------------------
+-- 🌐 Panneaux de la ville (construits en anglais par le serveur) : chaque
+-- TextLabel qui porte l'attribut "LocText" (clé anglaise) est traduit ici ;
+-- panneaux reconstruits : DescendantAdded + petite minuterie (2 s)
+----------------------------------------------------------------------
+
+local function localizeLabel(label: Instance)
+	local key = label:GetAttribute("LocText")
+	if type(key) == "string" and key ~= "" then
+		local text = Locale.T(key)
+		if (label :: any).Text ~= text then
+			(label :: any).Text = text
+		end
+	end
+end
+
+local function trackLabel(object: Instance)
+	if object:IsA("TextLabel") then
+		table.insert(locLabels, object)
+		localizeLabel(object)
+	end
+end
+
+local function localizeTown()
+	for index = #locLabels, 1, -1 do
+		local label = locLabels[index]
+		if label.Parent == nil then
+			table.remove(locLabels, index)
+		else
+			localizeLabel(label)
+		end
+	end
+end
+
+local function watchTownLabels()
+	table.clear(locLabels)
+	local folder = workspace:FindFirstChild("DopamineTown")
+	if not folder then
+		return
+	end
+	for _, object in ipairs(folder:GetDescendants()) do
+		trackLabel(object)
+	end
+	table.insert(connections, folder.DescendantAdded:Connect(function(object)
+		if object:IsA("TextLabel") then
+			-- (l'attribut / le texte arrivent parfois juste après)
+			task.defer(function()
+				if inTown and object.Parent then
+					trackLabel(object)
+				end
+			end)
+		end
+	end))
+end
+
+----------------------------------------------------------------------
 -- Arrivée : guide vers sa maison, boussole
 ----------------------------------------------------------------------
 
@@ -789,7 +844,12 @@ local function step(dt: number)
 	clocks.Stream += dt
 	clocks.Tag += dt
 	clocks.Guide += dt
+	clocks.Loc += dt
 	TownAtmosphere.Step(dt)
+	if clocks.Loc >= LOC_EVERY then
+		clocks.Loc = 0
+		pcall(localizeTown)
+	end
 	if clocks.Counter >= COUNTER_EVERY then
 		clocks.Counter = 0
 		if hud then
@@ -824,6 +884,12 @@ local function step(dt: number)
 		local ok, err = pcall(stepStream)
 		if not ok then
 			warn("[Town] Flux : " .. tostring(err))
+		end
+		-- 📺 accessoires "live" (LiveProps, SETUP3D95) autour de l'avatar
+		local live = optionalModule("LiveProps")
+		local root = rootPart(LocalPlayer)
+		if live and root and type(live.SetFocus) == "function" then
+			pcall(live.SetFocus, root.Position)
 		end
 	end
 	if clocks.Tag >= TAG_EVERY then
@@ -884,11 +950,51 @@ end
 
 -- Caméra de Roblox qui suit l'avatar
 local function followCamera(character: Model?)
+	-- (au bureau, DeskMode tient la caméra : on n'y touche pas)
+	if deskActive() then
+		return
+	end
 	local camera = workspace.CurrentCamera
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 	if camera and humanoid then
 		camera.CameraType = Enum.CameraType.Custom
 		camera.CameraSubject = humanoid
+	end
+end
+
+-- 🖥️ DeskMode.Changed (une fois par session) : au bureau, plus d'émote ni
+-- de mode édition, boutons 😀 / ✏️ cachés (DeskMode a son "Se lever")
+local function wireDesk()
+	if deskWired then
+		return
+	end
+	local desk = optionalModule("DeskMode")
+	local changed = desk and desk.Changed
+	if not changed then
+		return
+	end
+	deskWired = true
+	local ok, err = pcall(function()
+		changed:Connect(function(active: boolean)
+			if not inTown then
+				return
+			end
+			if active then
+				if emotes then
+					emotes:Stop("desk")
+				end
+				if edit and edit:IsEnabled() then
+					edit:SetEnabled(false)
+				end
+			end
+			hud:SetDeskMode(active == true)
+			if emotes then
+				emotes:Notify()
+			end
+		end)
+	end)
+	if not ok then
+		warn("[Town] DeskMode.Changed : " .. tostring(err))
 	end
 end
 
@@ -1002,6 +1108,7 @@ local function enter(options: any)
 		end
 		syncHouses()
 		table.insert(connections, RunService.Heartbeat:Connect(step))
+		pcall(watchTownLabels)
 		table.insert(connections, LocalPlayer.CharacterAdded:Connect(onCharacter))
 		table.insert(connections, LocalPlayer.CharacterRemoving:Connect(function()
 			if emotes then
@@ -1055,6 +1162,9 @@ local function enter(options: any)
 				emotes:Attach(character)
 			end
 		end
+		-- 🖥️ bureau (SETUP3D95) : s'il existe
+		wireDesk()
+		deskCall("Start")
 		local arrival = type(result) == "table" and result.Arrival == "Entrance"
 		hud:ShowLoading(false)
 		busy = false
@@ -1099,10 +1209,15 @@ local function teardown()
 		connection:Disconnect()
 	end
 	table.clear(connections)
+	for userId in pairs(gardens) do
+		destroyGarden(userId)
+	end
+	table.clear(gardens)
 	for _, house in pairs(houses) do
 		pcall(house.Destroy, house)
 	end
 	table.clear(houses)
+	table.clear(locLabels)
 	if housesFolder then
 		housesFolder:Destroy()
 		housesFolder = nil
@@ -1110,6 +1225,9 @@ local function teardown()
 	roomBuilding = false
 	contextKey = ""
 	currentContext = nil
+	-- (DeskMode rend sa caméra AVANT qu'on remette la nôtre)
+	deskCall("Stop")
+	hud:SetDeskMode(false)
 	local s = saved
 	if s then
 		TownAtmosphere.Restore(s)
@@ -1209,6 +1327,9 @@ local function callbacks(): any
 				toast(Locale.T("Go inside your house to move your furniture"))
 				return
 			end
+			if not edit:IsEnabled() and deskActive() then
+				return
+			end
 			if not edit:IsEnabled() and emotes then
 				-- (mode édition : l'émote s'arrête)
 				emotes:Stop("edit")
@@ -1303,6 +1424,12 @@ function TownClient.Debug(): any
 		return guide
 	end, Intro = function()
 		return intro
+	end, Gardens = gardens, LocLabels = locLabels, UseModule = function(name: string, module: any)
+		-- (tests) remplace un module facultatif (DeskMode, LiveProps, GardenBuilder…)
+		optionalCache[name] = module or false
+		if name == "DeskMode" then
+			deskWired = false
+		end
 	end, Step = step, Event = onEvent }
 end
 
@@ -1312,6 +1439,7 @@ function TownClient.Init()
 		OnChanged = function(state: string?)
 			hud:SetAction(state)
 		end,
+		Blocked = deskActive,
 		Toast = function(text: string)
 			toast(Locale.T(text))
 		end,
@@ -1334,6 +1462,12 @@ function TownClient.Init()
 		end,
 	})
 	Net.Event("WorldEvent").OnClientEvent:Connect(onEvent)
+	-- langue changée (⚙️) pendant la promenade : panneaux retraduits
+	Locale.OnChanged(function()
+		if inTown then
+			pcall(localizeTown)
+		end
+	end)
 	WorldLink.SetHandler(TownClient.Enter, TownClient.IsInTown)
 end
 
