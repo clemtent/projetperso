@@ -15,7 +15,7 @@ return {
 		["💌 Sent to your Roblox friend. Roblox filters it for them too."] = "💌 Envoyé à ton ami Roblox. Roblox le filtre aussi pour lui.",
 		["🚩 Report"] = "🚩 Signaler",
 		["⛔ Block"] = "⛔ Bloquer",
-		["⚠️ Sure? Tap again"] = "⚠️ Sûr ? Touche encore",
+		["⚠️ Sure?"] = "⚠️ Sûr ?",
 		["🗑️ Friend mail deleted"] = "🗑️ Mail d'ami supprimé",
 		["🚩 Reported: mail hidden and %s blocked"] = "🚩 Signalé : mail caché et %s bloqué",
 		["⛔ %s is blocked: no more mails from them"] = "⛔ %s est bloqué : plus aucun mail de sa part",

@@ -2319,6 +2319,9 @@ function Email.Start(ctx)
 		S.Confirm = nil
 		for id, label in pairs(msg.ActionLabels) do
 			label.Text = msg.ActionTexts[id]
+			if id == "Report" or id == "Block" then
+				msg.Actions[id].BackgroundColor3 = C.White
+			end
 		end
 		if mail.Kind == "Friend" then
 			if mail.Replied then
@@ -3831,7 +3834,8 @@ function Email.Start(ctx)
 		local cmp = ui.Cmp
 		local layout = cmp.FriendLayout
 		local list = FS.Sorted
-		local first = math.max(0, math.floor(cmp.FriendScroll.CanvasPosition.Y / layout.Pitch))
+		local lastFirst = math.max(0, math.ceil(#list / layout.Columns) - 2)
+		local first = math.clamp(math.floor(cmp.FriendScroll.CanvasPosition.Y / layout.Pitch), 0, lastFirst)
 		local selected = S.Draft and S.Draft.Contact
 		for index, chip in ipairs(cmp.FriendChips) do
 			local slot = first * layout.Columns + index - 1
@@ -4428,7 +4432,8 @@ function Email.Start(ctx)
 				local ui = UI
 				local label = ui and ui.Msg.ActionLabels[id]
 				if label then
-					label.Text = Locale.T("⚠️ Sure? Tap again")
+					label.Text = Locale.T("⚠️ Sure?")
+					ui.Msg.Actions[id].BackgroundColor3 = Color3.fromRGB(255, 214, 218)
 				end
 				task.delay(3, function()
 					if ctx.IsAlive() and S.Confirm == stamp then
@@ -4436,6 +4441,7 @@ function Email.Start(ctx)
 						local current = UI
 						if current and current.Msg.ActionLabels[id] then
 							current.Msg.ActionLabels[id].Text = current.Msg.ActionTexts[id]
+							current.Msg.Actions[id].BackgroundColor3 = C.White
 						end
 					end
 				end)
@@ -4794,8 +4800,12 @@ function Email.Start(ctx)
 			return nil
 		end
 		local contact = friendContact(info.From, info.Name, info.Display)
-		local sentAt = tonumber(info.Time) or serverNow()
-		local age = math.max(0, serverNow() - sentAt)
+		-- Âge donné par le serveur (sinon : heure du serveur synchronisée)
+		local age = tonumber(info.Age)
+		if not age or age ~= age then
+			age = serverNow() - (tonumber(info.Time) or serverNow())
+		end
+		age = math.clamp(age, 0, 60 * 86400)
 		local mail = {
 			Kind = "Friend",
 			Friend = true,

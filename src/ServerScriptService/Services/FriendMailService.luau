@@ -55,7 +55,7 @@
 	    "Read" id | "Delete" id | "Report" id (cache + bloque l'expéditeur)
 	    "Block" userId | "Unblock" userId -> { Blocked = { [userId] = true } }
 	  RemoteEvent "FriendMailEvent" S -> C ("New", mail filtré)
-	    mail filtré = { Id, From, Name, Display, Subject, Body, Time, Read, Replied, IsReply }
+	    mail filtré = { Id, From, Name, Display, Subject, Body, Time, Age, Read, Replied, IsReply }
 ]]
 
 local DataStoreService = game:GetService("DataStoreService")
@@ -104,7 +104,7 @@ local store: DataStore? = nil
 local storeState = "Unknown"
 local messagingReady = false
 local sessions: { [Player]: any } = {}
-local inflight = 0 -- écritures lancées à la sortie d'un joueur
+local inflight = 0 -- écritures en cours (sortie d'un joueur, fermeture du serveur)
 
 ----------------------------------------------------------------------
 -- Utilitaires
@@ -233,7 +233,7 @@ local function newSession(): any
 		Inbox = {}, -- enregistrements BRUTS (jamais envoyés)
 		Shown = {}, -- [id] = mail filtré déjà livré au client
 		Ops = { Delete = {}, Read = {}, Replied = {} }, -- changements à écrire
-		Pairs = {}, -- [UserId] = { Value, At } (peuvent discuter ?)
+		Pairs = {}, -- ["de>à"] = { Value, At } (peuvent discuter ?)
 		Loaded = false,
 		Dirty = false,
 		Flushing = false,
@@ -374,15 +374,17 @@ local function canUsersChat(fromId: number, toId: number): boolean?
 	return nil
 end
 
--- Même contrôle, gardé 5 min dans la session (seulement les réponses sûres)
-local function pairAllowed(session, fromId: number, toId: number, otherId: number): boolean?
-	local cached = session.Pairs[otherId]
+-- Même contrôle, gardé 5 min dans la session (par sens : "de>à" ; seulement
+-- les réponses sûres)
+local function pairAllowed(session, fromId: number, toId: number): boolean?
+	local key = tostring(fromId) .. ">" .. tostring(toId)
+	local cached = session.Pairs[key]
 	if cached and os.clock() - cached.At < PAIR_TTL then
 		return cached.Value
 	end
 	local value = canUsersChat(fromId, toId)
 	if value ~= nil then
-		session.Pairs[otherId] = { Value = value, At = os.clock() }
+		session.Pairs[key] = { Value = value, At = os.clock() }
 	end
 	return value
 end
@@ -428,6 +430,13 @@ local function flushSession(userId: number, session, player: Player?)
 	end
 end
 
+-- Écriture comptée : la fermeture du serveur attend qu'elle finisse
+local function trackedFlush(userId: number, session, player: Player?)
+	inflight += 1
+	pcall(flushSession, userId, session, player)
+	inflight -= 1
+end
+
 local function markDirty(player: Player, session)
 	session.Dirty = true
 	if session.FlushQueued then
@@ -455,6 +464,14 @@ local function removeFromSession(session, predicate: (any) -> boolean): number
 	return removed
 end
 
+-- Copie envoyée au client : + Age (secondes depuis l'envoi, calculées ici :
+-- l'heure du client n'entre pas en jeu)
+local function withAge(mail): any
+	local copy = table.clone(mail)
+	copy.Age = math.max(0, os.time() - mail.Time)
+	return copy
+end
+
 -- Filtre puis envoie UN mail au client (s'il ne l'a pas déjà)
 local function deliver(player: Player, session, record): boolean
 	if session.Shown[record.Id] then
@@ -464,7 +481,7 @@ local function deliver(player: Player, session, record): boolean
 	if state and state.Blocked[tostring(record.F)] then
 		return true -- expéditeur bloqué : jamais montré
 	end
-	local allowed = pairAllowed(session, record.F, player.UserId, record.F)
+	local allowed = pairAllowed(session, record.F, player.UserId)
 	if allowed == false then
 		-- Réglages de confidentialité / d'âge : jamais montré, retiré de la boîte
 		session.Ops.Delete[record.Id] = true
@@ -494,7 +511,7 @@ local function deliver(player: Player, session, record): boolean
 		IsReply = record.R ~= nil,
 	}
 	session.Shown[record.Id] = out
-	Net.Event("FriendMailEvent"):FireClient(player, "New", out)
+	Net.Event("FriendMailEvent"):FireClient(player, "New", withAge(out))
 	return true
 end
 
@@ -631,7 +648,7 @@ local function doSend(player: Player, session, args): (boolean, any)
 	elseif canChat == nil then
 		return false, T(player, "Friend mail is unavailable right now")
 	end
-	local pair = pairAllowed(session, player.UserId, toId, toId)
+	local pair = pairAllowed(session, player.UserId, toId)
 	if pair == false then
 		return false, T(player, "This friend can't receive messages (privacy settings)")
 	elseif pair == nil then
@@ -699,7 +716,7 @@ end
 local function sortedShown(session): { any }
 	local list = {}
 	for _, mail in pairs(session.Shown) do
-		table.insert(list, mail)
+		table.insert(list, withAge(mail))
 	end
 	table.sort(list, function(a, b)
 		return a.Time > b.Time
@@ -875,7 +892,7 @@ function FriendMailService:Start()
 	game:BindToClose(function()
 		for player, session in pairs(sessions) do
 			if session.Dirty then
-				task.spawn(flushSession, player.UserId, session, player)
+				task.spawn(trackedFlush, player.UserId, session, player)
 			end
 		end
 		local start = os.clock()
@@ -897,12 +914,7 @@ function FriendMailService:PlayerRemoving(player: Player)
 	if session and session.Dirty then
 		-- (ses données sont encore là : DataService les libère après nous)
 		session.BlockedCopy = table.clone(opsFor(player, session).Blocked)
-		local userId = player.UserId
-		inflight += 1
-		task.spawn(function()
-			pcall(flushSession, userId, session, nil)
-			inflight -= 1
-		end)
+		task.spawn(trackedFlush, player.UserId, session, nil)
 	end
 end
 
