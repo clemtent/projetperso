@@ -454,28 +454,35 @@ end
 R.SetupMouse = function(b, _ctx)
 	local body = b.Map(rgb(36, 36, 50))
 	-- tapis (bord lumineux)
-	b.Round(0, 0, 0, 100, 1.4, 76, 5, rgb(30, 30, 42), M.Fabric)
+	-- (v9.6 z-fighting : tapis de 4 d'épaisseur (le tapis du bureau fait
+	-- 0,03 stud : le dessus du tapis de souris est maintenant bien au-dessus),
+	-- autocollant de 2 ; la souris posée dessus (+2.6))
+	local pad = 4
+	b.Round(0, 0, 0, 100, pad, 76, 5, rgb(30, 30, 42), M.Fabric)
 	for _, side in ipairs({ -1, 1 }) do
-		neon(b, b.Box(0, 0.2, side * 38.2, 94, 1, 0.8, RAINBOW[5], M.Neon), "RGB")
-		neon(b, b.Box(side * 50.2, 0.2, 0, 0.8, 1, 70, RAINBOW[1], M.Neon), "RGB")
+		-- (bords lumineux épais de 3 : l'épaisseur mini des pièces (0,03 stud)
+		-- ne les ramène plus sur les faces du tapis)
+		neon(b, b.Box(0, 0.2, side * 40, 94, pad - 1.4, 3, RAINBOW[5], M.Neon), "RGB")
+		neon(b, b.Box(side * 52, 0.2, 0, 3, pad - 1.4, 70, RAINBOW[1], M.Neon), "RGB")
 	end
-	b.Box(-30, 1.4, -26, 22, 0.8, 10, rgb(255, 92, 170), M.SmoothPlastic)
+	b.Box(-30, pad, -26, 22, 2, 10, rgb(255, 92, 170), M.SmoothPlastic)
 	-- souris
 	local mx, mz = 12, 4
-	named(b.Egg(mx, 7, mz + 3, 30, 14, 46, body, M.SmoothPlastic), "MouseBody")
-	b.Box(mx, 1.4, mz + 3, 22, 3, 36, body, M.SmoothPlastic)
+	local up = pad - 1.4
+	named(b.Egg(mx, 7 + up, mz + 3, 30, 14, 46, body, M.SmoothPlastic), "MouseBody")
+	b.Box(mx, pad, mz + 3, 22, 3, 36, body, M.SmoothPlastic)
 	for _, side in ipairs({ -1, 1 }) do
-		local button = b.BoxR(CFrame.new(mx + side * 6.6, 12.4, mz - 9) * CFrame.Angles(0.22, 0, 0), 12, 2, 18, lighten(body, 0.12), M.SmoothPlastic)
+		local button = b.BoxR(CFrame.new(mx + side * 6.6, 12.4 + up, mz - 9) * CFrame.Angles(0.22, 0, 0), 12, 2, 18, lighten(body, 0.12), M.SmoothPlastic)
 		button.Name = side == -1 and "MouseLeft" or "MouseRight"
-		b.BoxR(CFrame.new(mx + side * 14.4, 8, mz + 2) * CFrame.Angles(0, 0, side * 0.35), 1.2, 6, 24, CARBON_LIGHT, M.Rubber)
+		b.BoxR(CFrame.new(mx + side * 14.4, 8 + up, mz + 2) * CFrame.Angles(0, 0, side * 0.35), 1.2, 6, 24, CARBON_LIGHT, M.Rubber)
 	end
-	local wheel = b.CylX(mx, 13.6, mz - 10, 5, 3, RAINBOW[6], M.Neon)
+	local wheel = b.CylX(mx, 13.6 + up, mz - 10, 5, 3, RAINBOW[6], M.Neon)
 	neon(b, wheel, "MouseWheel")
-	local logo = b.Ball(mx, 12.2, mz + 14, 4.5, RAINBOW[5], M.Neon)
+	local logo = b.Ball(mx, 12.2 + up, mz + 14, 4.5, RAINBOW[5], M.Neon)
 	neon(b, logo, "RGB")
 	-- câble (tressé) vers l'arrière
-	House3DKit.Path(b, { { mx, 4, mz - 20 }, { mx - 4, 2.2, mz - 30 }, { mx - 20, 2, -36 }, { mx - 30, 2, -40 } }, 1.6, INK, M.Fabric)
-	b.Footprint(100, 76, 16)
+	House3DKit.Path(b, { { mx, 4 + up, mz - 20 }, { mx - 4, 2.2 + up, mz - 30 }, { mx - 20, 2 + up, -36 }, { mx - 30, 2 + up, -40 } }, 1.6, INK, M.Fabric)
+	b.Footprint(100, 76, 16 + up)
 end
 
 ----------------------------------------------------------------------
@@ -645,14 +652,14 @@ local function transport(b: Builder, x: number, y: number, z: number, scale: num
 end
 
 -- Barres de niveau (VU) : `count` barres lumineuses, bas à `y` ; `z` = face
--- sur laquelle on les monte (v9.6 z-fighting : fond z..z+0.8, barres
--- z+0.8..z+1.6, plus aucune face à 0,3 d'une autre)
+-- sur laquelle on les monte (v9.6 z-fighting : fond z..z+1.4, barres
+-- z+1.4..z+2.8 : même dans un petit objet, faces à plus de 0,02 stud)
 local function vuBars(b: Builder, x: number, y: number, z: number, w: number, h: number, count: number)
-	b.Box(x, y - 1, z + 0.4, w + 2, h + 2, 0.8, INK, M.SmoothPlastic)
+	b.Box(x, y - 1, z + 0.7, w + 2, h + 2, 1.4, INK, M.SmoothPlastic)
 	local step = w / count
 	for index = 1, count do
 		local color = index <= count * 0.6 and MINT or (index <= count * 0.85 and YELLOW or RED)
-		local bar = b.Box(x - w / 2 + step * (index - 0.5), y, z + 1.2, step * 0.6, h, 0.8, color, M.Neon)
+		local bar = b.Box(x - w / 2 + step * (index - 0.5), y, z + 2.1, step * 0.6, h, 1.4, color, M.Neon)
 		neon(b, bar, "VU_" .. index)
 	end
 end
@@ -695,10 +702,10 @@ local function turntable(b: Builder, x: number, y: number, z: number, w: number,
 end
 
 -- Petit écran LCD (morceau en cours) ; `z` = face de montage (v9.6 : cadre
--- z..z+0.8, écran z+0.8..z+1.3)
+-- z..z+1.4, écran z+1.4..z+1.9)
 local function lcd(b: Builder, x: number, y: number, z: number, w: number, h: number)
-	b.Box(x, y - 0.8, z + 0.4, w + 1.6, h + 1.6, 0.8, INK, M.SmoothPlastic)
-	screenPart(b, CFrame.new(x, y, z + 1.05), w, h, "Music", 1)
+	b.Box(x, y - 0.8, z + 0.7, w + 1.6, h + 1.6, 1.4, INK, M.SmoothPlastic)
+	screenPart(b, CFrame.new(x, y, z + 1.65), w, h, "Music", 1)
 end
 
 local function hifi(b: Builder, _ctx: any)
@@ -708,24 +715,25 @@ local function hifi(b: Builder, _ctx: any)
 		-- radio-cassette rétro
 		local body = b.Map(rgb(255, 140, 180))
 		b.Round(0, 0, 0, 100, 48, 30, 5, body, M.SmoothPlastic)
-		-- (v9.6 z-fighting : façade 15..16 posée sur le boîtier, puis chaque
-		-- couche des haut-parleurs / de la cassette 0.6 à 0.8 plus en avant)
-		b.Box(0, 4, 15.5, 94, 40, 1, darken(body, 0.2), M.SmoothPlastic)
+		-- (v9.6 z-fighting : petit objet (~0,02 stud / unité, épaisseur mini
+		-- 0,03) -> façade 15..16.4 puis couches de 1,4 : anneau, tissu, membrane,
+		-- cache ; fenêtre, bobines, repères)
+		b.Box(0, 4, 15.7, 94, 40, 1.4, darken(body, 0.2), M.SmoothPlastic)
 		for _, side in ipairs({ -1, 1 }) do
-			b.CylZ(side * 29, 24, 16.4, 36, 0.8, CHROME, M.Metal)
-			b.CylZ(side * 29, 24, 17.1, 32, 0.6, rgb(40, 40, 52), M.Fabric)
-			named(b.CylZ(side * 29, 24, 17.8, 22, 0.8, rgb(30, 30, 40), M.SmoothPlastic), "SpeakerCone")
-			b.CylZ(side * 29, 24, 18.6, 8, 0.8, CHROME, M.Metal)
+			b.CylZ(side * 29, 24, 17.1, 36, 1.4, CHROME, M.Metal)
+			b.CylZ(side * 29, 24, 18.5, 32, 1.4, rgb(40, 40, 52), M.Fabric)
+			named(b.CylZ(side * 29, 24, 19.9, 22, 1.4, rgb(30, 30, 40), M.SmoothPlastic), "SpeakerCone")
+			b.CylZ(side * 29, 24, 21.3, 8, 1.4, CHROME, M.Metal)
 		end
 		-- fenêtre de la cassette + bobines
-		b.Box(0, 20, 16.3, 22, 16, 0.6, rgb(60, 50, 80), M.Glass).Transparency = 0.2
+		b.Box(0, 20, 17.1, 22, 16, 1.4, rgb(60, 50, 80), M.Glass).Transparency = 0.2
 		for _, side in ipairs({ -1, 1 }) do
-			pivot(b, side == -1 and "Pivot_Spool1" or "Pivot_Spool2", side * 5.5, 28, 16.9)
-			named(b.CylZ(side * 5.5, 28, 16.9, 6, 0.6, WHITE, M.SmoothPlastic), side == -1 and "Spool1" or "Spool2")
-			named(b.Box(side * 5.5, 28, 17.4, 5.4, 1, 0.4, INK, M.SmoothPlastic), side == -1 and "Spool1" or "Spool2")
+			pivot(b, side == -1 and "Pivot_Spool1" or "Pivot_Spool2", side * 5.5, 28, 18.5)
+			named(b.CylZ(side * 5.5, 28, 18.5, 6, 1.4, WHITE, M.SmoothPlastic), side == -1 and "Spool1" or "Spool2")
+			named(b.Box(side * 5.5, 28, 19.9, 5.4, 1, 1.4, INK, M.SmoothPlastic), side == -1 and "Spool1" or "Spool2")
 		end
-		vuBars(b, 0, 8, 16, 20, 7, 5)
-		lcd(b, 0, 38, 16, 24, 6)
+		vuBars(b, 0, 8, 16.4, 20, 7, 5)
+		lcd(b, 0, 38, 16.4, 24, 6)
 		-- poignée
 		House3DKit.Path(b, { { -34, 48, 0 }, { -30, 60, 0 }, { 30, 60, 0 }, { 34, 48, 0 } }, 3, CHROME, M.Metal)
 		transport(b, -14, 48, 4, 1)

@@ -161,7 +161,7 @@ local function tabInfo(tabId: string): (string, string)
 	elseif tabId == "GardenDecor" then
 		return Locale.T("Garden decor"), "🌷"
 	elseif tabId == "Cars" then
-		return Locale.T("Cars"), "🚗"
+		return Locale.T("All cars"), "🚗"
 	end
 	return tabId, "🛍️"
 end
@@ -411,7 +411,7 @@ function ShopUI.Purchase(entry: Entry): boolean
 	if entry.Kind == "Item" then
 		toast(Locale.T("Place it at home: ✏️ Furniture"), LILAC)
 	elseif entry.Kind == "Car" then
-		toast(Locale.T("🚗 Drive it from the 🚗 My car button"), LILAC)
+		toast(Locale.T("🚗 Drive it with the 🚗 My car button"), LILAC)
 	end
 	if ui and ui.Open then
 		ui.SetStatus(message or "", GREEN)
@@ -853,6 +853,8 @@ buildGui = function(): any
 		footer.Text = shop.Id == "Cars" and Locale.T("🚗 Your cars wait in your garage: take one out with 🚗 My car")
 			or Locale.T("✏️ Your purchases go to your inventory: place them at home with ✏️ Furniture")
 		statusPill.Visible = false
+		-- (si la ville a masqué l'interface à une entrée précédente)
+		gui.Enabled = true
 		updateWallet()
 		layout()
 		dimmer.Visible = true

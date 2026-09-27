@@ -471,14 +471,19 @@ function HouseSurfaces.FreeX(surface: Surface, list: { Placed }, item: Item, sca
 		end
 		return true
 	end
-	local target = math.clamp(x, surface.L, surface.R)
+	-- rayon fermé (étagère) : l'objet reste ENTIER entre ses montants
+	local low, high = surface.L, surface.R
+	if surface.Gap and surface.R - surface.L > half * 2 then
+		low, high = surface.L + half, surface.R - half
+	end
+	local target = math.clamp(x, low, high)
 	if free(target) then
 		return target
 	end
 	local best, bestDistance = nil, math.huge
 	for _, block in ipairs(blocks) do
 		for _, candidate in ipairs({ block[1], block[2] }) do
-			if candidate >= surface.L - 1e-6 and candidate <= surface.R + 1e-6 and free(candidate) then
+			if candidate >= low - 1e-6 and candidate <= high + 1e-6 and free(candidate) then
 				local distance = math.abs(candidate - target)
 				if distance < bestDistance then
 					best, bestDistance = candidate, distance

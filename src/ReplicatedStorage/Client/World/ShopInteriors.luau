@@ -225,6 +225,7 @@ type Display = {
 	Labels: { [string]: TextLabel },
 	Key: string,
 	Live: any?,
+	SlotKind: string?,
 }
 
 type Door = { Part: BasePart, Closed: CFrame, Open: CFrame, IsOpen: boolean }
@@ -451,8 +452,14 @@ local function assign(shop: Shop, plan: Plan): { { Slot: Slot, Entry: ShopUI.Ent
 	table.sort(picked, function(a, b)
 		return price[a] < price[b]
 	end)
+	-- (répartis sur TOUTES les étagères, pas entassés au début)
+	local indices = {}
+	for i = 1, #plan.Shelf do
+		indices[i] = i
+	end
+	local slotIndex = spread(indices, #picked)
 	for i, entry in ipairs(picked) do
-		table.insert(result, { Slot = plan.Shelf[i], Entry = entry })
+		table.insert(result, { Slot = plan.Shelf[slotIndex[i]], Entry = entry })
 	end
 	return result
 end
@@ -560,8 +567,8 @@ local function addTag(shop: Shop, parent: Instance, d: Display, tagCF: CFrame, c
 	-- étiquette flottante (taille en studs : elle rapetisse avec la distance)
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "PriceLabel"
-	bb.Size = d.Entry.Kind == "Car" and UDim2.fromScale(5.2, 2) or UDim2.fromScale(2.3, 1.05)
-	bb.StudsOffsetWorldSpace = tagCF.LookVector * 0.25 + Vector3.new(0, d.Entry.Kind == "Car" and 2.4 or -0.1, 0)
+	bb.Size = d.Entry.Kind == "Car" and UDim2.fromScale(3.6, 1.45) or UDim2.fromScale(2.3, 1.05)
+	bb.StudsOffsetWorldSpace = tagCF.LookVector * 0.25 + Vector3.new(0, d.Entry.Kind == "Car" and 1.6 or -0.1, 0)
 	bb.MaxDistance = d.Entry.Kind == "Car" and 40 or TAG_DISTANCE
 	bb.LightInfluence = 0
 	bb.Brightness = 1
@@ -655,10 +662,25 @@ end
 
 local function placeDisplay(shop: Shop, parent: Instance, slot: Slot, entry: ShopUI.Entry, withTag: boolean): Display?
 	local model = buildItem(entry, slot)
-	local d: Display = { Entry = entry, Model = model, Labels = {}, Key = entry.Kind .. ":" .. entry.Id }
+	local d: Display = { Entry = entry, Model = model, Labels = {}, Key = entry.Kind .. ":" .. entry.Id, SlotKind = slot.Kind }
 	local height = 1.5
+	local lift = 0.02
+	if model and slot.Kind == "Shelf" and model:GetAttribute("Wall") ~= true then
+		-- 🐾 coussin sous chaque animal, 🪴 soucoupe en terre cuite sous les plantes
+		local fp = model:GetAttribute("Footprint")
+		local width = typeof(fp) == "Vector3" and math.clamp(math.max(fp.X, fp.Z) + 0.3, 1.2, slot.MaxW) or 1.8
+		if shop.Id == "Pets" then
+			local cushion = newPart(parent, "Cushion", Vector3.new(0.3, width, width), slot.CF * CFrame.new(0, 0.15, 0) * CFrame.Angles(0, 0, math.rad(90)), shop.Theme.Podium, M.Fabric)
+			;(cushion :: Part).Shape = Enum.PartType.Cylinder
+			lift = 0.32
+		elseif shop.Id == "Garden" then
+			local saucer = newPart(parent, "Saucer", Vector3.new(0.14, width * 0.8, width * 0.8), slot.CF * CFrame.new(0, 0.07, 0) * CFrame.Angles(0, 0, math.rad(90)), rgb(206, 124, 90), M.Slate)
+			;(saucer :: Part).Shape = Enum.PartType.Cylinder
+			lift = 0.16
+		end
+	end
 	if model then
-		local pivot = slot.CF * CFrame.new(0, 0.02, 0)
+		local pivot = slot.CF * CFrame.new(0, lift, 0)
 		if model:GetAttribute("Wall") == true and slot.WallZ then
 			pivot = slot.CF * CFrame.new(0, 0.05, slot.WallZ)
 		end
@@ -877,7 +899,7 @@ local function themeDecor(shop: Shop, parent: Instance)
 	elseif id == "Garden" then
 		-- paniers suspendus + arrosoir
 		local H = shop.Size.Y
-		for _, spot in ipairs({ { -3, 6 }, { 3, 6 }, { -3, 12 }, { 3, 12 } }) do
+		for _, spot in ipairs({ { -9.6, 5.2 }, { 9.6, 5.2 }, { -9.6, 11.6 }, { 9.6, 11.6 } }) do
 			local x, z = spot[1], spot[2]
 			box(parent, "BasketCord", F, x - 0.04, x + 0.04, H - 2.2, H - 0.1, z - 0.04, z + 0.04, rgb(150, 120, 90), M.SmoothPlastic)
 			cylinder(parent, "Basket", F, x, H - 3, z, 0.8, 1.6, rgb(190, 140, 90), M.WoodPlanks)
@@ -1430,6 +1452,7 @@ function ShopInteriors.Stop()
 	end
 	table.clear(conns)
 	ShopUI.Close()
+	ShopUI.SetToast(nil)
 	for _, shop in ipairs(shops) do
 		downgrade(shop, 0)
 		for _, d in ipairs(shop.Doors) do

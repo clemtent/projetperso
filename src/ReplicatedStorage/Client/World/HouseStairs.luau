@@ -129,7 +129,7 @@ local function hallFloor(kit: any, size: any, floor: number, floors: number)
 		-- soubassement plein + dallage (jusque sous la porte)
 		-- (v9.6 z-fighting : commence DERRIÈRE la façade (d = T) ; avant, le dallage
 		-- et le soubassement doublaient le seuil et la fondation de la façade)
-		kit:Box("HallBase", h0, h1, 0, y - 0.2, dFront, dBack, Color3.fromRGB(226, 214, 222), M.Concrete, { Solid = true, Shadow = false })
+		kit:Box("HallBase", h0, h1, 0, y - 0.2, dFront + 0.05, dBack - 0.05, Color3.fromRGB(226, 214, 222), M.Concrete, { Solid = true, Shadow = false })
 		kit:Box("HallTiles", h0, h1, y - 0.2, y, dFront, dBack, TILE, M.Marble, { Solid = true, Shadow = false })
 		-- paillasson devant la porte
 		local door = WorldLayout.DoorX(size)
@@ -163,7 +163,7 @@ local function hallFloor(kit: any, size: any, floor: number, floors: number)
 	end
 	if floor == floors then
 		kit:Box("GuardRail", s0, s1, y + railH, y + railH + 0.24, H0 - 0.16, H0 + 0.16, RAIL, M.Wood, { Solid = true, Shadow = false })
-		kit:Box("GuardBase", s0, s1, y, y + 0.25, H0 - 0.12, H0 + 0.12, WHITE, M.SmoothPlastic, { Solid = true, Shadow = false })
+		kit:Box("GuardBase", s0, s1, y - 0.03, y + 0.25, H0 - 0.12, H0 + 0.12, WHITE, M.SmoothPlastic, { Solid = true, Shadow = false })
 		for i = 1, 3 do
 			local x = s0 + i * (s1 - s0) / 4
 			kit:Box("GuardBaluster", x - 0.09, x + 0.09, y + 0.25, y + railH, H0 - 0.09, H0 + 0.09, WHITE, M.SmoothPlastic, { Shadow = false })

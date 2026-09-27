@@ -390,7 +390,8 @@ end
 -- `cf` = au sol, milieu du banc ; l'AVANT (LookVector, -Z local) est le côté
 -- où l'on s'assoit, le DOSSIER est du côté +Z local. Signature inchangée.
 --   - 2 flasques en fonte (pied avant qui monte jusqu'à l'accoudoir, pied
---     arrière qui continue en montant du dossier, accoudoir, patins) ;
+--     arrière qui continue en montant du dossier, accoudoir) : 14 pièces en
+--     tout (budget de la ville) ;
 --   - 3 lattes d'assise + 2 lattes de dossier en bois, dossier incliné de
 --     12° vers l'ARRIÈRE (+Z) ; (v9.4 : incliné vers l'avant, flottant) ;
 --   - assise à 1.9 stud (R15) ; le Seat (invisible) est une seule pièce
@@ -444,17 +445,12 @@ function TownKit.Bench(parent: Instance, cf: CFrame)
 	for _, sx in ipairs({ -1, 1 }) do
 		local x = sx * fx
 		-- pied avant (du sol jusqu'à l'accoudoir)
-		part(model, "FrontLeg", Vector3.new(0.22, armY - 0.14, 0.22), cf * CFrame.new(x, (armY + 0.14) / 2, zFront + 0.2), iron, M.Metal, "prop")
+		part(model, "FrontLeg", Vector3.new(0.22, armY, 0.22), cf * CFrame.new(x, armY / 2, zFront + 0.2), iron, M.Metal, "prop")
 		-- pied arrière (du sol à l'assise), puis montant du dossier (incliné)
-		part(model, "RearLeg", Vector3.new(0.22, H - 0.14, 0.22), cf * CFrame.new(x, (H + 0.14) / 2, zBack - 0.12), iron, M.Metal, "prop")
+		part(model, "RearLeg", Vector3.new(0.22, H, 0.22), cf * CFrame.new(x, H / 2, zBack - 0.12), iron, M.Metal, "prop")
 		part(model, "BackPost", Vector3.new(0.22, 1.75, 0.2), pivot * CFrame.new(x, 0.755, -0.02), iron, M.Metal, "deco")
-		-- traverse sous l'assise (déborde sous les lattes) + accoudoir
-		part(model, "SeatRail", Vector3.new(0.5, 0.16, seatDepth), cf * CFrame.new(sx * (L / 2 - 0.12), H - SLAT_T - 0.08, (zFront + zBack) / 2), iron, M.Metal, "deco")
+		-- accoudoir
 		part(model, "ArmRest", Vector3.new(0.3, 0.14, seatDepth + 0.1), cf * CFrame.new(x, armY + 0.07, (zFront + zBack) / 2 - 0.08), iron, M.Metal, "deco")
-		-- patins (petits pieds en volute)
-		for _, z in ipairs({ zFront + 0.2, zBack - 0.12 }) do
-			part(model, "Foot", Vector3.new(0.34, 0.14, 0.5), cf * CFrame.new(x, 0.07, z), iron, M.Metal, "deco")
-		end
 	end
 	return model
 end

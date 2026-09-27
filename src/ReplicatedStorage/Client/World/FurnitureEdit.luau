@@ -1228,7 +1228,7 @@ function FurnitureEdit.BuildTray(self: any)
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		Text = "",
 		Position = UDim2.fromOffset(14, 8),
-		Size = UDim2.new(1, -150, 0, 34),
+		Size = UDim2.new(1, -60, 0, 34),
 		ZIndex = 2,
 		Parent = panel,
 	})
@@ -1236,13 +1236,18 @@ function FurnitureEdit.BuildTray(self: any)
 	toggle.AnchorPoint = Vector2.new(1, 0)
 	toggle.Position = UDim2.new(1, -10, 0, 10)
 	toggle.ZIndex = 3
-	local buy = UIUtil.PillButton({ Name = "TrayBuy", Text = Locale.T("🛍️ Buy"), Color = PINK_DEEP, Height = 30, TextSize = 15, Parent = panel })
-	buy.AnchorPoint = Vector2.new(1, 0)
-	buy.Position = UDim2.new(1, -48, 0, 10)
+	-- (en bas, toute la largeur : "🛍️ Acheter" / retour à l'inventaire)
+	local buy = UIUtil.PillButton({ Name = "TrayBuy", Text = Locale.T("🛍️ Buy"), Color = PINK_DEEP, Height = 40, TextSize = 18, Parent = panel })
+	buy.AutomaticSize = Enum.AutomaticSize.None
+	buy.AnchorPoint = Vector2.new(0.5, 1)
+	buy.Position = UDim2.new(0.5, 0, 1, -10)
+	buy.Size = UDim2.new(1, -24, 0, 40)
 	buy.ZIndex = 3
-	local back = UIUtil.PillButton({ Name = "TrayBack", Text = Locale.T("📦 Inventory"), Color = SKY, Height = 30, TextSize = 15, Parent = panel })
-	back.AnchorPoint = Vector2.new(1, 0)
-	back.Position = UDim2.new(1, -48, 0, 10)
+	local back = UIUtil.PillButton({ Name = "TrayBack", Text = Locale.T("📦 Inventory"), Color = SKY, Height = 40, TextSize = 18, Parent = panel })
+	back.AutomaticSize = Enum.AutomaticSize.None
+	back.AnchorPoint = Vector2.new(0.5, 1)
+	back.Position = UDim2.new(0.5, 0, 1, -10)
+	back.Size = UDim2.new(1, -24, 0, 40)
 	back.ZIndex = 3
 	back.Visible = false
 
@@ -1272,7 +1277,7 @@ function FurnitureEdit.BuildTray(self: any)
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Position = UDim2.fromOffset(8, 86),
-		Size = UDim2.new(1, -16, 1, -94),
+		Size = UDim2.new(1, -16, 1, -144),
 		CanvasSize = UDim2.new(),
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		ScrollingDirection = Enum.ScrollingDirection.Y,
@@ -1356,13 +1361,16 @@ function FurnitureEdit.LayoutTray(self: any)
 	local top = phone and 62 or 66
 	local bottom = phone and 150 or 96
 	local width = phone and 250 or 300
-	local height = self.TrayOpen and math.max(120, math.min(460, h - top - bottom)) or 50
+	local height = self.TrayOpen and math.max(170, math.min(480, h - top - bottom)) or 50
 	tray.Panel.Position = UDim2.fromOffset(phone and 8 or 10, top)
 	tray.Panel.Size = UDim2.fromOffset(width, height)
 	tray.Toggle.Text = self.TrayOpen and "▾" or "▸"
 	tray.Chips.Visible = self.TrayOpen
 	tray.Grid.Visible = self.TrayOpen
 	tray.Empty.Visible = self.TrayOpen and tray.Empty.Text ~= ""
+	local buying = self.TrayView == "Buy"
+	tray.BuyButton.Visible = self.TrayOpen and not buying
+	tray.BackButton.Visible = self.TrayOpen and buying
 	local grid = tray.Grid:FindFirstChildOfClass("UIGridLayout")
 	if grid then
 		local cell = phone and 70 or 84
@@ -1472,8 +1480,6 @@ function FurnitureEdit.RefreshTray(self: any, force: boolean?)
 	end
 	self.TraySignature = key
 	tray.Title.Text = buying and Locale.T("🛍️ Buy") or Locale.T("📦 Inventory (%d)", total)
-	tray.BuyButton.Visible = not buying
-	tray.BackButton.Visible = buying
 	-- catégories présentes
 	clearList(tray.ChipButtons)
 	local present: { [string]: boolean } = {}
