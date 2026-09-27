@@ -246,8 +246,17 @@ local function refreshSign(index: number)
 	local likes = ownerTown and ownerTown.Likes or 0
 	local visits = ownerTown and ownerTown.Visits or 0
 	local open = ownerTown and ownerTown.Open or WorldLayout.DEFAULT_OPEN
+	-- 👑 maison la plus aimée du serveur
+	local best, bestLikes = nil, 0
+	for _, other in pairs(plotOwners) do
+		local otherTown = townOf(other)
+		if otherTown and otherTown.Likes > bestLikes then
+			best, bestLikes = other, otherTown.Likes
+		end
+	end
+	local crown = best == owner and "👑 " or "🏠 "
 	-- (noms Roblox : pas de filtre nécessaire ; titre en anglais neutre + emoji)
-	pcall(TownMap.SetPlotSign, plot, "🏠 " .. owner.DisplayName,
+	pcall(TownMap.SetPlotSign, plot, crown .. owner.DisplayName,
 		string.format("%s %s · 🌊 %s", tostring(size.Icon or "🏠"), tostring(size.Name or ""), tostring(tonumber(data.Rebirths) or 0)),
 		string.format("❤️ %s   👀 %s   %s", NumberFormatter.Format(likes), NumberFormatter.Format(visits), OPEN_ICONS[open] or "🔓"))
 	plot.Model:SetAttribute("OwnerId", owner.UserId)
@@ -648,7 +657,10 @@ local function like(player: Player, argument: any): (boolean, any)
 			end)
 		end
 	end
-	refreshSign(states[owner].Plot :: number)
+	-- (la couronne 👑 peut changer de maison : tous les panneaux)
+	for index in pairs(plotOwners) do
+		refreshSign(index)
+	end
 	pushIfChanged(owner)
 	fireTown("Liked", { Owner = owner.UserId, By = player.DisplayName, Likes = ownerTown.Likes })
 	local left = WorldLayout.LIKES_PER_DAY - likerTown.LikesGiven
@@ -800,7 +812,10 @@ local function patrol()
 							if plot and data then
 								local size = sizeDefOf(data)
 								local x, y, d = WorldLayout.ToLocal(plot.HouseCFrame, position)
-								if WorldLayout.InsideHouse(size, x, y, d, -0.8) and not canEnter(player, owner, false) then
+								-- (maison "Amis" : on attend la réponse de Roblox avant de juger)
+								local ownerTown = townOf(owner)
+								local pending = ownerTown ~= nil and ownerTown.Open == "Friends" and stateOf(player).Friends[owner.UserId] == nil
+								if WorldLayout.InsideHouse(size, x, y, d, -0.8) and not pending and not canEnter(player, owner, false) then
 									destroySeat(state)
 									teleport(player, WorldLayout.DoorSpawn(plot.HouseCFrame, size))
 									toast(player, T(player, "🔒 This house is closed to visitors"))

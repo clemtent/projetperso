@@ -104,6 +104,7 @@ local connections: { RBXScriptConnection } = {}
 local friendCache: { [number]: boolean } = {}
 local friendPending: { [number]: boolean } = {}
 local roomBuilding = false
+local creating = false
 local contextKey = ""
 local currentContext: any = nil
 local clocks = { Counter = 0, Door = 0, Stream = 0, Tag = 0 }
@@ -202,6 +203,7 @@ local function syncHouses()
 			houses[userId] = nil
 		end
 	end
+	local missing = false
 	for userId, snapshot in pairs(snapshots) do
 		local plot = tonumber(snapshot.Plot)
 		if plot then
@@ -212,16 +214,40 @@ local function syncHouses()
 					warn("[Town] Maison " .. tostring(userId) .. " : " .. tostring(err))
 				end
 			else
-				local ok, result = pcall(HouseBuilder.new, snapshot, WorldLayout.PlotCFrame(plot, count), folder)
-				if ok then
-					result.Model:SetAttribute("Plot", plot)
-					result.OnSeat = onSeat
-					houses[userId] = result
-				else
-					warn("[Town] Maison " .. tostring(userId) .. " : " .. tostring(result))
-				end
+				missing = true
 			end
 		end
+	end
+	-- nouvelles maisons : une par image (jamais des milliers de pièces d'un coup)
+	if missing and not creating then
+		creating = true
+		task.spawn(function()
+			while inTown and housesFolder == folder do
+				local nextId: number? = nil
+				local nextPlot = 0
+				-- (la sienne d'abord, puis les autres)
+				for userId, snapshot in pairs(snapshots) do
+					if not houses[userId] and tonumber(snapshot.Plot) and (nextId == nil or userId == LocalPlayer.UserId) then
+						nextId, nextPlot = userId, tonumber(snapshot.Plot) :: number
+					end
+				end
+				if not nextId then
+					break
+				end
+				local snapshot = snapshots[nextId :: number]
+				local ok, result = pcall(HouseBuilder.new, snapshot, WorldLayout.PlotCFrame(nextPlot, count), folder)
+				if ok then
+					result.Model:SetAttribute("Plot", nextPlot)
+					result.OnSeat = onSeat
+					houses[nextId :: number] = result
+				else
+					warn("[Town] Maison " .. tostring(nextId) .. " : " .. tostring(result))
+					snapshots[nextId :: number] = nil
+				end
+				task.wait()
+			end
+			creating = false
+		end)
 	end
 end
 
@@ -366,8 +392,22 @@ local function restoreAmbience(s: Saved)
 	end
 end
 
+-- Interfaces de Roblox (manette tactile, invites, chat...) : jamais masquées
+local KEEP_GUIS: { [string]: boolean } = {
+	TownHud = true,
+	TouchGui = true,
+	ProximityPrompts = true,
+	BubbleChat = true,
+	Chat = true,
+	Freecam = true,
+}
+local function keepGui(name: string): boolean
+	return KEEP_GUIS[name] == true or string.find(name, "Touch", 1, true) ~= nil or string.find(name, "Prompt", 1, true) ~= nil
+		or string.find(name, "Chat", 1, true) ~= nil
+end
+
 local function hideGui(s: Saved, gui: Instance)
-	if gui:IsA("ScreenGui") and gui.Name ~= "TownHud" and gui.Enabled then
+	if gui:IsA("ScreenGui") and not keepGui(gui.Name) and gui.Enabled then
 		table.insert(s.Guis, gui)
 		gui.Enabled = false
 	end
@@ -475,8 +515,9 @@ local function refreshTags()
 			if not tag then
 				local billboard = Instance.new("BillboardGui")
 				billboard.Name = "TownTag"
-				billboard.Size = UDim2.fromOffset(220, 52)
-				billboard.StudsOffset = Vector3.new(0, 2.6, 0)
+				-- (taille en studs : l'étiquette rapetisse avec la distance, comme le monde)
+				billboard.Size = UDim2.new(7, 0, 1.9, 0)
+				billboard.StudsOffset = Vector3.new(0, 2.4, 0)
 				billboard.MaxDistance = 90
 				billboard.LightInfluence = 0
 				billboard.AlwaysOnTop = false
@@ -484,9 +525,9 @@ local function refreshTags()
 				local name = Instance.new("TextLabel")
 				name.Name = "Name"
 				name.BackgroundTransparency = 1
-				name.Size = UDim2.new(1, 0, 0, 28)
+				name.Size = UDim2.fromScale(1, 0.56)
 				name.Font = Enum.Font.FredokaOne
-				name.TextSize = 24
+				name.TextScaled = true
 				name.TextColor3 = Color3.new(1, 1, 1)
 				name.TextStrokeColor3 = Color3.fromRGB(150, 60, 120)
 				name.TextStrokeTransparency = 0.2
@@ -496,19 +537,20 @@ local function refreshTags()
 				info.BackgroundColor3 = Color3.fromRGB(255, 120, 180)
 				info.BackgroundTransparency = 0.15
 				info.AnchorPoint = Vector2.new(0.5, 0)
-				info.Position = UDim2.new(0.5, 0, 0, 28)
-				info.Size = UDim2.fromOffset(0, 22)
-				info.AutomaticSize = Enum.AutomaticSize.X
+				info.Position = UDim2.fromScale(0.5, 0.58)
+				info.Size = UDim2.fromScale(0.62, 0.4)
 				info.Font = Enum.Font.GothamBold
-				info.TextSize = 15
+				info.TextScaled = true
 				info.TextColor3 = Color3.new(1, 1, 1)
 				info.Parent = billboard
 				local corner = Instance.new("UICorner")
 				corner.CornerRadius = UDim.new(1, 0)
 				corner.Parent = info
 				local padding = Instance.new("UIPadding")
-				padding.PaddingLeft = UDim.new(0, 8)
-				padding.PaddingRight = UDim.new(0, 8)
+				padding.PaddingLeft = UDim.new(0, 6)
+				padding.PaddingRight = UDim.new(0, 6)
+				padding.PaddingTop = UDim.new(0, 2)
+				padding.PaddingBottom = UDim.new(0, 2)
 				padding.Parent = info
 				billboard.Parent = head
 				tag = billboard

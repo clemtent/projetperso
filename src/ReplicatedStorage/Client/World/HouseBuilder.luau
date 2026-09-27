@@ -307,7 +307,10 @@ function HouseBuilder.BuildExterior(self: House)
 	-- Fondation (juste sous le dessus des sols)
 	localBox(self, folder, "Foundation", left - 0.4, right + 0.4, 0, WorldLayout.SLAB - 0.05, -0.4, depth + 0.4, Color3.fromRGB(226, 214, 230), M.Slate)
 	-- Façade : une fenêtre par pièce, porte d'entrée au rez-de-chaussée
-	local WIN_W, WIN_H, WIN_Y = 7, 5.5, 3.4
+	local WIN_W = math.clamp(dims.RoomW * 0.36, 7, 12)
+	local WIN_H, WIN_Y = 6.2, 3
+	local shutter = roofColor:Lerp(WHITE, 0.3)
+	local flowers = { Color3.fromRGB(255, 120, 170), Color3.fromRGB(255, 214, 110), Color3.fromRGB(190, 150, 255), WHITE }
 	for floor = 1, dims.Floors do
 		local yFloor = WorldLayout.FloorY(floor)
 		local y0 = floor == 1 and WorldLayout.SLAB - 0.05 or yFloor - WorldLayout.SLAB
@@ -335,6 +338,21 @@ function HouseBuilder.BuildExterior(self: House)
 				localBox(self, folder, "Sill", hole[1] - 0.5, hole[2] + 0.5, hole[3] - 0.35, hole[3], -0.8, 0.6, trim, M.SmoothPlastic, false)
 				localBox(self, folder, "Lintel", hole[1] - 0.3, hole[2] + 0.3, hole[4], hole[4] + 0.35, -0.55, 0, trim, M.SmoothPlastic, false)
 				localBox(self, folder, "Mullion", (hole[1] + hole[2]) / 2 - 0.12, (hole[1] + hole[2]) / 2 + 0.12, hole[3], hole[4], 0.2, 0.4, trim, M.SmoothPlastic, false)
+				if index > 1 then
+					-- volets et jardinière fleurie (fenêtres des pièces)
+					local shutterW = math.min(2.4, (hole[2] - hole[1]) * 0.32)
+					localBox(self, folder, "Shutter", hole[1] - 0.4 - shutterW, hole[1] - 0.4, hole[3], hole[4], -0.65, -0.3, shutter, M.SmoothPlastic, false)
+					localBox(self, folder, "Shutter", hole[2] + 0.4, hole[2] + 0.4 + shutterW, hole[3], hole[4], -0.65, -0.3, shutter, M.SmoothPlastic, false)
+					localBox(self, folder, "FlowerBox", hole[1] + 0.3, hole[2] - 0.3, hole[3] - 1.3, hole[3] - 0.35, -1.5, -0.3, WOOD, M.Wood, false)
+					local count = math.clamp(math.floor((hole[2] - hole[1]) / 2.2), 3, 5)
+					for k = 1, count do
+						local fx = hole[1] + 0.8 + (k - 0.5) * (hole[2] - hole[1] - 1.6) / count
+						local ball = newPart(folder, "Bloom", Vector3.new(1, 1, 1), CFrame.new(WorldLayout.ToWorld(self.HouseCF, fx, hole[3] - 0.15, -0.9)),
+							flowers[(k + index + floor) % #flowers + 1], M.SmoothPlastic, false)
+						ball.CastShadow = false
+						;(ball :: Part).Shape = Enum.PartType.Ball
+					end
+				end
 				-- (pièce pas encore meublée : on voit une lumière douce de la couleur de la pièce)
 				if index > 1 then
 					local slot = (floor - 1) * dims.Columns + (index - 1)
@@ -363,6 +381,11 @@ function HouseBuilder.BuildExterior(self: House)
 	-- Coins et corniche (moulures blanches)
 	for _, x in ipairs({ left - 0.3, right + 0.3 }) do
 		localBox(self, folder, "Corner", x - 0.35, x + 0.35, WorldLayout.SLAB - 0.05, height, -0.65, 0.3, trim, M.SmoothPlastic, false)
+	end
+	-- pilastres entre les colonnes (on voit les pièces de la maison 2D)
+	for column = 1, dims.Columns do
+		local x0 = WorldLayout.ColumnSpan(size, column)
+		localBox(self, folder, "Pilaster", x0 - 0.45, x0 + 0.45, WorldLayout.SLAB - 0.05, height, -0.75, -0.2, trim, M.SmoothPlastic, false)
 	end
 	for floor = 2, dims.Floors do
 		local y = WorldLayout.FloorY(floor) - WorldLayout.SLAB
@@ -468,24 +491,79 @@ function HouseBuilder.BuildExterior(self: House)
 	plateText.Text = "🏠 " .. tostring(snapshot.DisplayName or snapshot.Name or "")
 	plateText.Parent = plateGui
 
-	-- Toit à deux pans (faîte le long de la façade) + motif + cheminée
-	local roofH = WorldLayout.ROOF_H + (dims.Floors - 1) * 0.8
+	-- Toit : deux pans (faîte le long de la façade) + lucarnes, ou toit plat (loft)
+	local roofH = 12 + (dims.Floors - 1) * 1.5
 	local roofW = dims.Width + 2
 	local half = depth / 2 + 1
 	local roofY = height + 0.6
 	local frontCF = self.HouseCF * CFrame.new(0, roofY + roofH / 2, -(-1 + half / 2)) * CFrame.Angles(0, math.pi, 0)
 	local backCF = self.HouseCF * CFrame.new(0, roofY + roofH / 2, -(depth / 2 + half / 2))
-	local frontRoof = newPart(folder, "Roof", Vector3.new(roofW, roofH, half), frontCF, roofColor, M.SmoothPlastic, true, "WedgePart")
-	newPart(folder, "Roof", Vector3.new(roofW, roofH, half), backCF, roofColor, M.SmoothPlastic, true, "WedgePart")
 	local accent = roofColor:Lerp(WHITE, 0.45)
-	newPart(folder, "Ridge", Vector3.new(roofW + 0.4, 0.6, 0.9), self.HouseCF * CFrame.new(0, roofY + roofH + 0.1, -depth / 2), accent, M.SmoothPlastic, false)
-	local chimney = self.HouseCF * CFrame.new(right - 6, roofY + roofH * 0.55, -(depth * 0.72))
-	newPart(folder, "Chimney", Vector3.new(2.6, roofH * 0.9, 2.6), chimney, Color3.fromRGB(214, 150, 150), M.Brick, false)
-	newPart(folder, "ChimneyCap", Vector3.new(3.2, 0.5, 3.2), chimney * CFrame.new(0, roofH * 0.45 + 0.25, 0), CREAM, M.SmoothPlastic, false)
+	local flat = exteriorType == "Loft"
+	local frontRoof: BasePart
+	if flat then
+		roofH = 1
+		frontRoof = localBox(self, folder, "Roof", left - 1, right + 1, roofY, roofY + 1, -1, depth + 1, roofColor)
+		for _, spec in ipairs({ { left - 1, right + 1, -1, -0.5 }, { left - 1, right + 1, depth + 0.5, depth + 1 }, { left - 1, left - 0.5, -1, depth + 1 },
+			{ right + 0.5, right + 1, -1, depth + 1 } }) do
+			localBox(self, folder, "Parapet", spec[1], spec[2], roofY + 1, roofY + 2.6, spec[3], spec[4], accent, M.SmoothPlastic, false)
+		end
+		-- verrières + château d'eau (loft industriel)
+		for column = 1, dims.Columns do
+			local x0, x1 = WorldLayout.ColumnSpan(size, column)
+			local sky = localBox(self, folder, "Skylight", (x0 + x1) / 2 - 4, (x0 + x1) / 2 + 4, roofY + 1, roofY + 2.4, depth * 0.3, depth * 0.6, GLASS, M.Glass, false)
+			sky.Transparency = 0.35
+		end
+		local tank = WorldLayout.ToWorld(self.HouseCF, right - 7, roofY + 7, depth * 0.55)
+		local barrel = newPart(folder, "WaterTank", Vector3.new(6, 5, 5), CFrame.new(tank) * CFrame.Angles(0, 0, math.rad(90)), WOOD, M.WoodPlanks, false)
+		;(barrel :: Part).Shape = Enum.PartType.Cylinder
+		newPart(folder, "TankLegs", Vector3.new(4, 4, 4), CFrame.new(tank - Vector3.new(0, 4.5, 0)), Color3.fromRGB(110, 110, 130), M.Metal, false)
+	else
+		frontRoof = newPart(folder, "Roof", Vector3.new(roofW, roofH, half), frontCF, roofColor, M.SmoothPlastic, true, "WedgePart")
+		newPart(folder, "Roof", Vector3.new(roofW, roofH, half), backCF, roofColor, M.SmoothPlastic, true, "WedgePart")
+		newPart(folder, "Ridge", Vector3.new(roofW + 0.4, 0.6, 0.9), self.HouseCF * CFrame.new(0, roofY + roofH + 0.1, -depth / 2), accent, M.SmoothPlastic, false)
+		local chimney = self.HouseCF * CFrame.new(right - 6, roofY + roofH * 0.55, -(depth * 0.72))
+		newPart(folder, "Chimney", Vector3.new(2.6, roofH * 0.9, 2.6), chimney, Color3.fromRGB(214, 150, 150), M.Brick, false)
+		newPart(folder, "ChimneyCap", Vector3.new(3.2, 0.5, 3.2), chimney * CFrame.new(0, roofH * 0.45 + 0.25, 0), CREAM, M.SmoothPlastic, false)
+		-- lucarnes (une par colonne de pièces)
+		for column = 1, dims.Columns do
+			local x0, x1 = WorldLayout.ColumnSpan(size, column)
+			local cx = (x0 + x1) / 2
+			local dFront = -1 + 0.34 * half
+			local yBase = roofY + 0.34 * roofH - 0.6
+			localBox(self, folder, "Dormer", cx - 3, cx + 3, yBase, yBase + 4.4, dFront, dFront + 4, facade)
+			local glass = localBox(self, folder, "DormerGlass", cx - 1.8, cx + 1.8, yBase + 0.8, yBase + 3.6, dFront - 0.1, dFront + 0.2, GLASS, M.Glass, false)
+			glass.Transparency = 0.3
+			localBox(self, folder, "DormerFrame", cx - 2.2, cx + 2.2, yBase + 0.5, yBase + 0.8, dFront - 0.3, dFront + 0.2, trim, M.SmoothPlastic, false)
+			local capCF = self.HouseCF * CFrame.new(cx, yBase + 5.2, -(dFront + 1.9))
+			newPart(folder, "DormerRoof", Vector3.new(4.4, 1.6, 3.2), capCF * CFrame.new(-1.6, 0, 0) * CFrame.Angles(0, math.rad(90), 0), roofColor, M.SmoothPlastic, false, "WedgePart")
+			newPart(folder, "DormerRoof", Vector3.new(4.4, 1.6, 3.2), capCF * CFrame.new(1.6, 0, 0) * CFrame.Angles(0, math.rad(-90), 0), roofColor, M.SmoothPlastic, false, "WedgePart")
+		end
+	end
+	-- Manoir : deux tourelles aux bouts, toits en gradins + drapeau
+	if exteriorType == "Mansion" then
+		for _, sx in ipairs({ -1, 1 }) do
+			local x = sx < 0 and left - 3 or right + 3
+			local topY = height + roofH * 0.75
+			localBox(self, folder, "Tower", x - 4, x + 4, 0, topY, -2, 9, facade)
+			for k, spec in ipairs({ { 9.4, 1.6 }, { 7, 1.6 }, { 4.6, 1.6 }, { 2.4, 1.8 } }) do
+				local y = topY + (k - 1) * 1.6
+				localBox(self, folder, "TowerRoof", x - spec[1] / 2, x + spec[1] / 2, y, y + spec[2], 3.5 - spec[1] / 2, 3.5 + spec[1] / 2, k % 2 == 1 and roofColor or accent, M.SmoothPlastic, false)
+			end
+			local poleBase = WorldLayout.ToWorld(self.HouseCF, x, topY + 6.4, 3.5)
+			newPart(folder, "FlagPole", Vector3.new(0.25, 4, 0.25), CFrame.new(poleBase + Vector3.new(0, 2, 0)), WHITE, M.Metal, false)
+			newPart(folder, "Flag", Vector3.new(2.4, 1.4, 0.1), self.HouseCF * CFrame.new(x + 1.3, topY + 9.6, -3.5), Color3.fromRGB(255, 110, 170), M.SmoothPlastic, false)
+			for floor = 1, dims.Floors do
+				local y = WorldLayout.FloorY(floor) + 4
+				local g = localBox(self, folder, "TowerWindow", x - 1.3, x + 1.3, y, y + 3.6, -2.15, -1.9, Color3.fromRGB(255, 236, 170), M.Neon, false)
+				g.CastShadow = false
+			end
+		end
+	end
 	-- motif du toit (RoofStyle.Pattern) : petits reliefs sur le pan avant
 	local style = lookEntry("RoofStyle", snapshot.RoofStyle)
 	local pattern = style and tostring(style.Pattern) or "None"
-	if pattern ~= "None" then
+	if pattern ~= "None" and not flat then
 		local slope = math.atan2(roofH, half)
 		local motifColor = ({
 			Hearts = Color3.fromRGB(255, 110, 170),
@@ -523,6 +601,12 @@ function HouseBuilder.BuildExterior(self: House)
 		end
 	end
 	frontRoof:SetAttribute("Roof", true)
+	-- auvent au-dessus de la porte
+	local awningCF = self.HouseCF * CFrame.new(doorX, doorY0 + doorH + 1.2, 1.3) * CFrame.Angles(0, math.pi, 0)
+	newPart(folder, "Awning", Vector3.new(doorW + 2.4, 1.3, 2.6), awningCF, roofColor, M.SmoothPlastic, false, "WedgePart")
+	for _, sx in ipairs({ -1, 1 }) do
+		localBox(self, folder, "AwningPost", doorX + sx * (doorW / 2 + 1) - 0.15, doorX + sx * (doorW / 2 + 1) + 0.15, doorY0, doorY0 + doorH + 0.6, -2.4, -2.1, trim, M.SmoothPlastic, false)
+	end
 
 	-- Jardin : déco choisie (6 max), buissons fleuris le long de la façade
 	local garden = type(snapshot.Garden) == "table" and snapshot.Garden or {}

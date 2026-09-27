@@ -298,13 +298,28 @@ function TownMap.Build(plotCount: number): Town
 	for i = 1, segments do
 		local a = (i - 0.5) / segments * math.pi * 2
 		local p = origin + Vector3.new(math.sin(a) * roadR, 0.15, math.cos(a) * roadR)
-		part(decor, "Road", Vector3.new(segLen, 0.3, 12), CFrame.lookAt(p, origin + Vector3.new(0, 0.15, 0)) * CFrame.Angles(0, math.rad(90), 0), ROAD, M.SmoothPlastic)
+		-- (lookAt vers le centre : l'axe X de la pièce suit la route)
+		part(decor, "Road", Vector3.new(segLen, 0.3, 12), CFrame.lookAt(p, origin + Vector3.new(0, 0.15, 0)), ROAD, M.SmoothPlastic)
 	end
 	-- Place : pavés, anneaux, fontaine
 	disc(decor, "Plaza", origin + Vector3.new(0, 0.4, 0), WorldLayout.PLAZA_R, 0.5, PAVE, M.Slate)
 	disc(decor, "PlazaRing", origin + Vector3.new(0, 0.45, 0), WorldLayout.PLAZA_R * 0.72, 0.5, PAVE_PINK, M.Slate)
 	disc(decor, "PlazaInner", origin + Vector3.new(0, 0.5, 0), WorldLayout.PLAZA_R * 0.55, 0.5, PAVE_LILAC, M.Slate)
 	fountain(decor, origin + Vector3.new(0, 0.5, 0))
+	-- Massifs de fleurs autour de l'anneau rose (petites boules pastel)
+	local FLOWERS = { Color3.fromRGB(255, 120, 170), Color3.fromRGB(255, 214, 110), Color3.fromRGB(190, 150, 255), Color3.fromRGB(255, 255, 255) }
+	for i = 1, 8 do
+		local a = (i - 0.5) / 8 * math.pi * 2 + math.pi / 8
+		local r = WorldLayout.PLAZA_R * 0.64
+		local center = origin + Vector3.new(math.sin(a) * r, 0.5, math.cos(a) * r)
+		local bed = disc(decor, "FlowerBed", center + Vector3.new(0, 0.6, 0), 3.2, 0.6, Color3.fromRGB(150, 110, 90), M.Ground)
+		bed.CanCollide = false
+		ball(decor, "Leaves", center + Vector3.new(0, 1.1, 0), 4.2, GRASS, M.Grass)
+		for k = 1, 3 do
+			local b = k / 3 * math.pi * 2 + i
+			ball(decor, "Flower", center + Vector3.new(math.cos(b) * 1.3, 2.6, math.sin(b) * 1.3), 1.3, FLOWERS[(i + k) % #FLOWERS + 1], M.SmoothPlastic)
+		end
+	end
 	-- Bancs autour de la fontaine (face à elle)
 	for i = 1, 6 do
 		local a = (i - 0.5) / 6 * math.pi * 2
@@ -355,6 +370,12 @@ function TownMap.Build(plotCount: number): Town
 		tree(decor, origin + Vector3.new(math.sin(between) * treeR, 0, math.cos(between) * treeR), 8, CANOPIES[index % #CANOPIES + 1])
 		local midR = (from + to) / 2
 		tree(decor, origin + Vector3.new(math.sin(between) * midR, 0, math.cos(between) * midR), 6 + index % 3, CANOPIES[(index + 1) % #CANOPIES + 1])
+		-- petit bosquet dans le pré (loin des allées)
+		for k = 1, 3 do
+			local a = angle + math.pi / plotCount * (0.45 + 0.35 * ((index + k) % 3) / 2) * (k % 2 == 0 and -1 or 1)
+			local r = from + (to - from) * (0.2 + 0.25 * k)
+			tree(decor, origin + Vector3.new(math.sin(a) * r, 0, math.cos(a) * r), 5 + (index + k) % 4, CANOPIES[(index + k) % #CANOPIES + 1])
+		end
 	end
 
 	-- Murs invisibles au bord du pré

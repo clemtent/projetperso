@@ -47,7 +47,7 @@ WorldLayout.SIDE_PX = 42
 WorldLayout.DEPTH_CURVE = 1.35
 
 -- Parcelles
-WorldLayout.PLOT_W = 162 -- largeur (le manoir 3 x 4 tient dedans)
+WorldLayout.PLOT_W = 176 -- largeur (le manoir 3 x 4 et ses tourelles tiennent dedans)
 WorldLayout.PLOT_D = 84 -- profondeur
 WorldLayout.GARDEN_D = 30 -- jardin entre la rue et la façade
 WorldLayout.MIN_PLOTS = 4

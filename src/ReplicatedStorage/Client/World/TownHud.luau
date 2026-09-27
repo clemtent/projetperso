@@ -90,6 +90,20 @@ local OPEN_TEXT = {
 -- Petits constructeurs
 ----------------------------------------------------------------------
 
+local TextService = game:GetService("TextService")
+
+-- Largeur d'un texte (px) : les tailles sont calculées, pas "automatiques"
+local function textWidth(text: string, size: number, font: Enum.Font?): number
+	local ok, bounds = pcall(function()
+		return TextService:GetTextSize(text, size, font or Theme.Fonts.Title, Vector2.new(4000, 200))
+	end)
+	if ok and typeof(bounds) == "Vector2" then
+		return bounds.X
+	end
+	local length = utf8.len(text) or #text
+	return length * size * 0.55
+end
+
 local function label(props: { [string]: any }): TextLabel
 	local l = UIUtil.Create("TextLabel", {
 		BackgroundTransparency = 1,
@@ -159,6 +173,7 @@ function TownHud.new(callbacks: Callbacks)
 		Callbacks = callbacks,
 		Phone = false,
 		Toasts = {} :: { Frame },
+		ToastCount = 0,
 		Context = nil :: Context?,
 		Editing = false,
 		Holding = false,
@@ -179,35 +194,25 @@ function TownHud.Build(self: any)
 	local cb: Callbacks = self.Callbacks
 	local parts = self.Parts
 
-	-- ⬅ retour au clicker
+	-- ⬅ retour au clicker (flèche dessinée à gauche, texte à droite)
 	local back = UIUtil.PillButton({
 		Name = "BackToClicker",
-		Text = "",
+		Text = Locale.T("Back to clicker"),
 		Color = WHITE,
+		TextColor3 = INK,
 		Height = 46,
-		TextSize = 20,
+		TextSize = 19,
 		Parent = root,
 	})
+	back.AutomaticSize = Enum.AutomaticSize.None
+	back.TextXAlignment = Enum.TextXAlignment.Right
 	back.Position = UDim2.fromOffset(10, 8)
-	local backRow = UIUtil.Create("Frame", {
-		Name = "Content",
-		BackgroundTransparency = 1,
-		Size = UDim2.fromScale(0, 1),
-		AutomaticSize = Enum.AutomaticSize.X,
-		ZIndex = 3,
-		Parent = back,
-	})
-	UIUtil.Create("UIListLayout", {
-		FillDirection = Enum.FillDirection.Horizontal,
-		VerticalAlignment = Enum.VerticalAlignment.Center,
-		Padding = UDim.new(0, 8),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		Parent = backRow,
-	})
-	local arrowHolder = UIUtil.Create("Frame", { Name = "Arrow", BackgroundTransparency = 1, Size = UDim2.fromOffset(20, 20), LayoutOrder = 1, ZIndex = 3, Parent = backRow })
-	UIUtil.Icon("ArrowLeft", { Size = 20, Thickness = 3, Color = PINK_DEEP, ZIndex = 4, Parent = arrowHolder })
-	parts.BackText = label({ Name = "Text", Text = Locale.T("Back to clicker"), Color = INK, TextSize = 19, Size = UDim2.fromScale(0, 1),
-		AutomaticSize = Enum.AutomaticSize.X, LayoutOrder = 2, ZIndex = 3, Parent = backRow })
+	local backPad = back:FindFirstChildOfClass("UIPadding")
+	if backPad then
+		backPad.PaddingLeft = UDim.new(0, 44)
+		backPad.PaddingRight = UDim.new(0, 16)
+	end
+	UIUtil.Icon("ArrowLeft", { Size = 20, Thickness = 3, Color = PINK_DEEP, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, -22, 0.5, 0), ZIndex = 4, Parent = back })
 	back.Activated:Connect(function()
 		cb.Back()
 	end)
@@ -237,8 +242,7 @@ function TownHud.Build(self: any)
 		Name = "HouseBanner",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 72),
-		Size = UDim2.fromOffset(0, 34),
-		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.fromOffset(300, 34),
 		BackgroundColor3 = Color3.fromRGB(92, 58, 120),
 		BackgroundTransparency = 0.12,
 		Visible = false,
@@ -253,9 +257,9 @@ function TownHud.Build(self: any)
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = banner,
 	})
-	parts.BannerText = label({ Name = "Text", Text = "", Color = WHITE, TextSize = 17, Size = UDim2.fromScale(0, 1), AutomaticSize = Enum.AutomaticSize.X,
-		LayoutOrder = 1, Parent = banner })
+	parts.BannerText = label({ Name = "Text", Text = "", Color = WHITE, TextSize = 17, Size = UDim2.fromOffset(200, 34), LayoutOrder = 1, Parent = banner })
 	local openButton = UIUtil.PillButton({ Name = "OpenMode", Text = "", Color = MINT, Height = 26, TextSize = 14, LayoutOrder = 2, Parent = banner })
+	openButton.AutomaticSize = Enum.AutomaticSize.None
 	openButton.Activated:Connect(function()
 		cb.CycleOpen()
 	end)
@@ -305,7 +309,7 @@ function TownHud.Build(self: any)
 	UIUtil.Create("UIListLayout", {
 		FillDirection = Enum.FillDirection.Vertical,
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
-		Padding = UDim.new(0, 10),
+		Padding = UDim.new(0, 24),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = column,
 	})
@@ -347,8 +351,7 @@ function TownHud.Build(self: any)
 		Name = "EmoteWheel",
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(0, -10, 0.5, 0),
-		Size = UDim2.fromOffset(0, 60),
-		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.fromOffset(#EMOTES * 54 + 10, 60),
 		BackgroundColor3 = CARD,
 		Visible = false,
 		ZIndex = 6,
@@ -356,18 +359,20 @@ function TownHud.Build(self: any)
 	})
 	UIUtil.Corner(wheel, UDim.new(1, 0))
 	UIUtil.Stroke(wheel, Color3.fromRGB(255, 196, 70), 2, 0.1)
+	-- (le "puits à clics" reste HORS de la rangée : une UIListLayout le placerait comme un bouton)
 	UIUtil.SinkClicks(wheel)
-	UIUtil.Create("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8), Parent = wheel })
+	local wheelRow = UIUtil.Create("Frame", { Name = "Row", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 6, Parent = wheel })
+	UIUtil.Create("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8), Parent = wheelRow })
 	UIUtil.Create("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
 		VerticalAlignment = Enum.VerticalAlignment.Center,
 		Padding = UDim.new(0, 6),
 		SortOrder = Enum.SortOrder.LayoutOrder,
-		Parent = wheel,
+		Parent = wheelRow,
 	})
 	for index, spec in ipairs(EMOTES) do
 		local b = UIUtil.PillButton({ Name = "Emote_" .. spec.Id, Text = spec.Icon, Color = Color3.fromRGB(255, 240, 200), Height = 48, Round = true,
-			TextSize = 24, LayoutOrder = index, ZIndex = 7, Parent = wheel })
+			TextSize = 24, LayoutOrder = index, ZIndex = 7, Parent = wheelRow })
 		local tag = label({ Name = "Tag", Text = Locale.T(spec.Text), Color = INK, TextSize = 11, Size = UDim2.fromOffset(60, 12),
 			AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, 2), ZIndex = 9, Parent = b })
 		tag.Font = Theme.Fonts.Title
@@ -383,8 +388,7 @@ function TownHud.Build(self: any)
 		Name = "EditBar",
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -12),
-		Size = UDim2.fromOffset(0, 64),
-		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.fromOffset(600, 64),
 		BackgroundColor3 = CARD,
 		Visible = false,
 		Parent = root,
@@ -393,18 +397,23 @@ function TownHud.Build(self: any)
 	UIUtil.Stroke(editBar, SKY, 2, 0.1)
 	UIUtil.Shadow(editBar, 3, 0.8)
 	UIUtil.SinkClicks(editBar)
-	UIUtil.Create("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12), Parent = editBar })
+	local editRow = UIUtil.Create("Frame", { Name = "Row", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = editBar })
+	UIUtil.Create("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12), Parent = editRow })
 	UIUtil.Create("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
 		VerticalAlignment = Enum.VerticalAlignment.Center,
 		Padding = UDim.new(0, 8),
 		SortOrder = Enum.SortOrder.LayoutOrder,
-		Parent = editBar,
+		Parent = editRow,
 	})
-	parts.EditHint = label({ Name = "Hint", Text = "", Color = INK, TextSize = 17, Size = UDim2.fromScale(0, 1), AutomaticSize = Enum.AutomaticSize.X,
-		LayoutOrder = 0, Parent = editBar })
+	parts.EditHint = label({ Name = "Hint", Text = "", Color = INK, TextSize = 17, Size = UDim2.fromOffset(240, 60), LayoutOrder = 0, Parent = editRow })
+	parts.EditHint.TextWrapped = true
+	parts.EditHint.TextTruncate = Enum.TextTruncate.None
 	local function editButton(name: string, text: string, color: Color3, order: number, fn: () -> ()): TextButton
-		local b = UIUtil.PillButton({ Name = name, Text = text, Color = color, Height = 44, TextSize = 17, LayoutOrder = order, Parent = editBar })
+		local b = UIUtil.PillButton({ Name = name, Text = text, Color = color, Height = 44, TextSize = 17, LayoutOrder = order, Parent = editRow })
+		b.AutomaticSize = Enum.AutomaticSize.None
+		b.Size = UDim2.fromOffset(textWidth(text, 17) + 36, 44)
 		b.Activated:Connect(fn)
 		return b
 	end
@@ -421,8 +430,7 @@ function TownHud.Build(self: any)
 		Name = "Toasts",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 114),
-		Size = UDim2.fromOffset(520, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
+		Size = UDim2.fromOffset(660, 140),
 		BackgroundTransparency = 1,
 		Parent = root,
 	})
@@ -438,7 +446,8 @@ function TownHud.Build(self: any)
 	-- Fenêtre "Visiter"
 	local dimmer = UIUtil.Create("TextButton", {
 		Name = "VisitDimmer",
-		Size = UDim2.fromScale(1, 1),
+		Size = UDim2.new(1, 400, 1, 400),
+		Position = UDim2.fromOffset(-200, -200),
 		BackgroundColor3 = Color3.new(0, 0, 0),
 		BackgroundTransparency = 0.45,
 		AutoButtonColor = false,
@@ -537,19 +546,44 @@ function TownHud.Layout(self: any)
 	self.Scale.Scale = scale
 	self.Root.Size = UDim2.fromOffset(size.X / scale, size.Y / scale)
 	local parts = self.Parts
-	parts.BackText.Text = phone and Locale.T("Clicker") or Locale.T("Back to clicker")
-	parts.Home.Text = phone and "🏠" or Locale.T("🏠 My house")
-	parts.VisitButton.Text = phone and "👥" or Locale.T("👥 Visit…")
-	for _, button in ipairs({ parts.Home, parts.VisitButton }) do
+	local backText = phone and Locale.T("Clicker") or Locale.T("Back to clicker")
+	parts.Back.Text = backText
+	parts.Back.Size = UDim2.fromOffset(textWidth(backText, 19) + 64, 46)
+	for _, spec in ipairs({ { parts.Home, phone and "🏠" or Locale.T("🏠 My house") }, { parts.VisitButton, phone and "👥" or Locale.T("👥 Visit…") } }) do
+		local button, text = spec[1], spec[2]
+		button.Text = text
+		button.AutomaticSize = Enum.AutomaticSize.None
 		local padding = button:FindFirstChildOfClass("UIPadding")
+		local pad = phone and 12 or 18
 		if padding then
-			padding.PaddingLeft = UDim.new(0, phone and 12 or 20)
-			padding.PaddingRight = UDim.new(0, phone and 12 or 20)
+			padding.PaddingLeft = UDim.new(0, pad)
+			padding.PaddingRight = UDim.new(0, pad)
 		end
+		button.Size = UDim2.fromOffset(phone and 52 or textWidth(text, 19) + pad * 2 + 6, phone and 52 or 46)
 	end
 	parts.Counter.Size = UDim2.fromOffset(phone and 220 or 260, 58)
-	-- téléphone : colonne un peu plus haute (le bouton "sauter" est en bas à droite)
-	parts.Column.Position = UDim2.new(1, -12, phone and 0.4 or 0.46, 0)
+	-- téléphone : colonne compacte sous les boutons du haut (le bouton
+	-- "sauter" de Roblox est en bas à droite, plus à gauche que la colonne)
+	if phone then
+		parts.Column.AnchorPoint = Vector2.new(1, 0)
+		parts.Column.Position = UDim2.new(1, -8, 0, 66)
+	else
+		parts.Column.AnchorPoint = Vector2.new(1, 0.5)
+		parts.Column.Position = UDim2.new(1, -12, 0.46, 0)
+	end
+	local layout = parts.Column:FindFirstChildOfClass("UIListLayout")
+	if layout then
+		layout.Padding = UDim.new(0, phone and 16 or 24)
+	end
+	for _, spec in ipairs({ { parts.Click, 70, 58 }, { parts.Emote, 56, 46 }, { parts.Edit, 56, 46 }, { parts.Like, 56, 46 } }) do
+		local d = phone and spec[3] or spec[2]
+		spec[1].Size = UDim2.fromOffset(d, d)
+		spec[1].TextSize = math.floor(d * 0.46)
+		local tag = spec[1]:FindFirstChild("Tag")
+		if tag then
+			tag.Visible = not phone
+		end
+	end
 	local card = parts.VisitCard
 	local rootSize = Vector2.new(size.X / scale, size.Y / scale)
 	card.Size = UDim2.fromOffset(math.min(520, rootSize.X - 30), math.min(440, rootSize.Y - 30))
@@ -592,16 +626,26 @@ function TownHud.SetContext(self: any, context: Context?)
 	local size = Config.HouseSizesById[snapshot.Size] or Config.House.Sizes[1]
 	local name = tostring(snapshot.DisplayName or snapshot.Name or "?")
 	local title = context.IsOwner and Locale.T("🏠 Your %s", Locale.T(size.Name)) or Locale.T("🏠 %s's %s", name, Locale.T(size.Name))
-	parts.BannerText.Text = string.format("%s   ❤️ %s   👀 %s%s", title, NumberFormatter.Format(tonumber(snapshot.Likes) or 0),
+	local text = string.format("%s   ❤️ %s   👀 %s%s", title, NumberFormatter.Format(tonumber(snapshot.Likes) or 0),
 		NumberFormatter.Format(tonumber(snapshot.Visits) or 0), context.Locked and ("   " .. Locale.T("🔒 Closed to you")) or "")
+	parts.BannerText.Text = text
+	local textW = math.min(textWidth(text, 17), self.Phone and 360 or 560)
+	parts.BannerText.Size = UDim2.fromOffset(textW + 4, 34)
 	local open = WorldLayout.NormalizeOpen(snapshot.Open)
+	local openText = Locale.T(OPEN_TEXT[open])
 	parts.OpenButton.Visible = context.IsOwner
-	parts.OpenButton.Text = Locale.T(OPEN_TEXT[open])
+	parts.OpenButton.Text = openText
+	local openW = textWidth(openText, 14) + 28
+	parts.OpenButton.Size = UDim2.fromOffset(openW, 26)
+	parts.Banner.Size = UDim2.fromOffset(textW + 4 + 20 + (context.IsOwner and openW + 10 or 0), 34)
 end
 
 function TownHud.SetSnap(self: any, on: boolean)
 	self.Snap = on
-	self.Parts.SnapButton.Text = on and Locale.T("🧲 Grid: on") or Locale.T("🧲 Grid: off")
+	local text = on and Locale.T("🧲 Grid: on") or Locale.T("🧲 Grid: off")
+	local button = self.Parts.SnapButton
+	button.Text = text
+	button.Size = UDim2.fromOffset(textWidth(text, 17) + 36, 44)
 end
 
 -- Mode édition (barre du bas) : `holding` = un meuble est en main
@@ -617,10 +661,24 @@ function TownHud.SetEditing(self: any, editing: boolean, holding: boolean, itemN
 	else
 		parts.EditHint.Text = touch and Locale.T("✏️ Tap a piece of furniture to pick it up") or Locale.T("✏️ Click a piece of furniture to pick it up")
 	end
+	local width = 24 + (self.Phone and 0 or 248)
+	parts.EditHint.Visible = not self.Phone
 	for _, name in ipairs({ "Rotate", "SnapButton", "PutAway", "Drop", "CancelMove" }) do
 		parts[name].Visible = holding
+		if holding then
+			width += parts[name].Size.X.Offset + 8
+		end
 	end
 	parts.Done.Visible = not holding
+	if not holding then
+		width += parts.Done.Size.X.Offset + 8
+		if self.Phone then
+			-- (téléphone : l'indice passe dans la barre à la place des boutons)
+			parts.EditHint.Visible = true
+			width += 248
+		end
+	end
+	parts.EditBar.Size = UDim2.fromOffset(width, 64)
 end
 
 -- "+123" qui s'envole au-dessus d'un bouton
@@ -642,18 +700,18 @@ end
 function TownHud.Toast(self: any, text: string, color: Color3?)
 	local parts = self.Parts
 	local holder: Frame = parts.ToastHolder
+	self.ToastCount += 1
+	local width = math.min(textWidth(text, 18) + 40, 640)
 	local toast = UIUtil.Create("Frame", {
 		Name = "Toast",
-		Size = UDim2.fromOffset(0, 40),
-		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.fromOffset(width, 40),
 		BackgroundColor3 = color or Color3.fromRGB(92, 58, 120),
 		BackgroundTransparency = 0.08,
-		LayoutOrder = os.clock() * 1000 // 1,
+		LayoutOrder = self.ToastCount,
 		Parent = holder,
 	})
 	UIUtil.Corner(toast, UDim.new(1, 0))
-	UIUtil.Create("UIPadding", { PaddingLeft = UDim.new(0, 18), PaddingRight = UDim.new(0, 18), Parent = toast })
-	label({ Name = "Text", Text = text, Color = WHITE, TextSize = 18, Size = UDim2.fromScale(0, 1), AutomaticSize = Enum.AutomaticSize.X, Parent = toast })
+	label({ Name = "Text", Text = text, Color = WHITE, TextSize = 18, Size = UDim2.new(1, -24, 1, 0), Position = UDim2.fromOffset(12, 0), Parent = toast })
 	table.insert(self.Toasts, toast)
 	while #self.Toasts > 3 do
 		local oldest = table.remove(self.Toasts, 1)
