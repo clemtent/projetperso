@@ -27,6 +27,17 @@ Les autres méthodes (Rojo, copie manuelle) sont décrites dans [`docs/INSTALLAT
 
 ---
 
+## 🆕 Nouveautés v9.1 / v9.2
+
+- 🎬 **Vidéo de présentation** : [`docs/video/presentation.mp4`](docs/video/presentation.mp4) · 📝 **Description Roblox** prête à coller : [`docs/DESCRIPTION.md`](docs/DESCRIPTION.md).
+- ⌨️ **Clavier QWERTY cliquable** : chaque touche fait un clic avec un vrai son de touche (qui change avec le niveau) ; ton vrai clavier appuie aussi sur les touches ; 🖱️ la souris gaming clique quand tu cliques dessus.
+- 🗜️ **Presse** : plus rien ne passe à travers les autres pièces, écrasement bien plus spectaculaire. 📺 **Live** plein cadre (streameuse plus grande, chat lisible). 🎧 **Lofi** refaite, lisible à la taille de la carte.
+- 📬 **Mails aux amis** : écris à tes vrais amis Roblox (même serveur, autre serveur ou hors ligne) et réponds-leur — 1 mail / 10 min, texte filtré par Roblox, bloquer / signaler.
+- 🏠 **Maison** : ~100 objets de plus (dont 🎮 gaming, 🏀 sport, 🚀 aventure), couleurs des objets, lumière d'ambiance, vue par la fenêtre, boiseries, façade, toit et jardin ; **vraie 3D** (murs, sol et meubles en volume, lumières).
+- 🧢 **Boutique** : chapeaux et motifs dessinés pour le bouton (casquette, casque de course, carbone, camouflage, galaxie…) et 3 thèmes (Street, Gamer, Station spatiale).
+- 📱 **Téléphone** : le jeu utilise tout l'écran (plus de grosses bandes vides), boutons plus gros.
+- Corrigés : les boutons du menu qui bougeaient au survol, le nom de l'onglet choisi de l'arcade.
+
 ## 🆕 Nouveautés v9 — tout ce que tu débloques se voit
 
 - **Presse réparée dans Roblox** : un dégradé à 80 points (Roblox en accepte 20 au maximum) arrêtait la carte juste après le sol. Tout le jeu est maintenant vérifié avec un émulateur « strict » qui refuse ce que Roblox refuse.
