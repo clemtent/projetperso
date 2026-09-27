@@ -52,7 +52,7 @@ type Card = {
 	Status: TextLabel,
 	Check: Frame,
 	Lock: TextLabel,
-	Action: string, -- action du bouton principal : "equip" | "buy" | "vip" | "robux" | "none"
+	Action: string, -- action du bouton principal : "equip" | "buy" | "vip" | "robux" | "locked" | "none"
 }
 
 local header: TextLabel
@@ -289,6 +289,11 @@ local function onPrimary(card: Card)
 		promptPass(vipPassId(), "Monetization.GamePasses VIP")
 	elseif action == "robux" then
 		promptPass(tonumber(theme.GamePassId) or 0, "Themes." .. theme.Id .. ".GamePassId")
+	elseif action == "locked" then
+		-- v9.3 : thème réservé aux visites à l'océan (le serveur refuse aussi)
+		SoundManager.Play("Error", 0.7)
+		UIUtil.Shake(card.Primary)
+		Notifications.Toast(Locale.T("🔒 Unlocked after %d visits to the ocean", tonumber(theme.RequiresRebirths) or 0), Theme.Colors.Purple)
 	else
 		popCard(card) -- déjà équipé
 	end
@@ -531,6 +536,7 @@ function Themes.Update(data)
 	local owned, equipped = getThemesData(data)
 	local dopamine = getDopamine()
 	local isVIP = data and data.IsVIP == true
+	local rebirths = (data and tonumber(data.Rebirths)) or 0
 	local ownedCount = 0
 
 	for id, card in pairs(cards) do
@@ -574,7 +580,17 @@ function Themes.Update(data)
 			card.Stroke.Color = Theme.Colors.CardBorder
 			card.Stroke.Thickness = 1.5
 			card.Stroke.Transparency = 0.15
-			if cost then
+			local required = tonumber(theme.RequiresRebirths) or 0
+			if required > rebirths then
+				-- v9.3 : débloqué par les visites à l'océan (grisé, non achetable)
+				card.Action = "locked"
+				primary.Text = required == 1 and Locale.T("🔒 after 1 ocean visit") or Locale.T("🔒 after %d ocean visits", required)
+				primary:SetAttribute("BaseColor", Color3.fromRGB(214, 232, 244))
+				UIUtil.SetButtonEnabled(primary, false)
+				primary.TextColor3 = Color3.fromRGB(0, 90, 140)
+				card.Status.Text = Locale.T("🌊 Visit the ocean to unlock it")
+				card.Status.TextColor3 = Theme.Colors.TextDim
+			elseif cost then
 				-- Achetable en Dopamine (et peut-être aussi en Robux)
 				local affordable = dopamine >= cost
 				card.Action = "buy"

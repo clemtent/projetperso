@@ -150,6 +150,8 @@ type RoomCard = {
 	Count: Frame,
 	Favs: { FavTile },
 	More: Frame,
+	Preview: Frame,
+	Lock: Frame?, -- voile "verrouillé" (visites à l'océan), créé à la demande
 }
 
 type MiniCell = { Frame: Frame, Floor: Frame, Label: TextLabel }
@@ -1213,6 +1215,10 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 	end
 
 	local function buyRoomType(card: RoomCard)
+		-- v9.3 : type de pièce réservé aux visites à l'océan (le serveur refuse aussi)
+		if refuseLocked(card.Button, card.Type) then
+			return
+		end
 		local house = HouseCommon.GetHouse(ClientState.Data)
 		local size = HouseCommon.GetSize(house)
 		if #house.Rooms >= size.MaxRooms then
@@ -1904,6 +1910,8 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 			Count = count,
 			Favs = favs,
 			More = more,
+			Preview = preview,
+			Lock = nil,
 		}
 		table.insert(roomCards, entry)
 		fitFavorites(entry)
@@ -2677,12 +2685,26 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 				if have > 0 then
 					setChipText(card.Count, "x" .. have)
 				end
-				if full then
+				-- v9.3 : verrou des visites à l'océan (comme les objets)
+				local locked = have == 0 and not HouseCommon.IsUnlocked(data, card.Type)
+				if locked and not card.Lock then
+					card.Lock = lockOverlay(card.Preview, true)
+				end
+				local lock = card.Lock
+				if lock then
+					lock.Visible = locked
+					if locked then
+						setLock(lock, HouseCommon.RequiredRebirths(card.Type))
+					end
+				end
+				if locked then
+					paintButton(card.Button, "🔒 " .. lockText(HouseCommon.RequiredRebirths(card.Type)), LOCKED_COLOR, true, WHITE)
+				elseif full then
 					paintButton(card.Button, Locale.T("🏡 Bigger house"), Theme.Colors.Blue, true, WHITE)
 				else
 					paintButton(card.Button, "💧 " .. NumberFormatter.Format(price), BUY_COLOR, affordable, Theme.Colors.TextDark)
 				end
-				card.Stroke.Color = have > 0 and C.Lilac or SOFT_STROKE
+				card.Stroke.Color = (have > 0 or locked) and C.Lilac or SOFT_STROKE
 				card.Stroke.Thickness = have > 0 and 2 or 1.5
 			end
 		elseif section == "Sizes" then
