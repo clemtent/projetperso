@@ -574,13 +574,15 @@ local function buildCard(grid: ScrollingFrame, cosmetic, layoutOrder: number)
 		TextSize = 11,
 		ZIndex = 5,
 		Visible = false,
-		Parent = showcase,
 	})
 	ribbon.AnchorPoint = Vector2.new(1, 0)
 	ribbon.Position = UDim2.new(1, -6, 0, 6)
 	ribbon.AutomaticSize = Enum.AutomaticSize.None
 	ribbon.Size = UDim2.fromOffset(18, 18) -- pastille ronde
 	UIUtil.Icon("Check", { Name = "Tick", Size = 11, Thickness = 2, Color = Theme.Colors.TextDark, ZIndex = 6, Parent = ribbon })
+	-- (couleurs fixes, même en mode sombre : sinon pastille sombre + coche sombre)
+	ribbon:SetAttribute("DarkSkinIgnore", true)
+	ribbon.Parent = showcase
 
 	-- Verrou (objet débloqué par les visites à l'océan) : voile + cadenas
 	local lockBadge = UIUtil.Create("Frame", {

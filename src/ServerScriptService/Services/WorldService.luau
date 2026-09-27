@@ -188,7 +188,9 @@ local function isFriend(player: Player, ownerId: number, wait: boolean): boolean
 		return cached
 	end
 	local function fetch()
-		local ok, result = pcall(player.IsFriendsWith, player, ownerId)
+		local ok, result = pcall(function()
+			return player:IsFriendsWithAsync(ownerId)
+		end)
 		state.Friends[ownerId] = ok and result == true
 		state.FriendPending[ownerId] = nil
 	end
@@ -443,7 +445,15 @@ local function spawnCharacter(player: Player, target: CFrame)
 				player.RespawnLocation = current.Spawn
 			end)
 		end
-		local ok, err = pcall(player.LoadCharacter, player)
+		local ok, err = pcall(function()
+			player:LoadCharacterAsync()
+		end)
+		if not ok then
+			-- (ancienne API, au cas où)
+			ok, err = pcall(function()
+				(player :: any):LoadCharacter()
+			end)
+		end
 		state.Loading = false
 		if not ok then
 			warn("[WorldService] LoadCharacter : " .. tostring(err))

@@ -1849,6 +1849,75 @@ def sim_loader():
     return 'loaders["EconomySim"] = function()\nlocal require = req\n%s\nend\n' % body
 
 
+ECONOMY_TESTS = r"""
+do
+	local Sim = req("EconomySim")
+
+	test("Économie (simulateur) : rythme des renaissances, joueur actif sans Robux", function(check)
+		local result = Sim.Run("Active", { MaxHours = 40, MaxRebirths = 10 })
+		local runs = Sim.RunMinutes(result)
+		local parts = {}
+		for n = 1, 10 do
+			table.insert(parts, "R" .. n .. "=" .. (runs[n] and tostring(math.floor(runs[n] + 0.5)) or "-"))
+		end
+		print("    parties (min) : " .. table.concat(parts, " "))
+		check(result.Rebirths >= 10, "10 visites en moins de 40 h de jeu : " .. result.Rebirths)
+		-- Chaque partie dure au moins autant que la précédente (tolérance 2 %)
+		for n = 2, 10 do
+			if runs[n] and runs[n - 1] then
+				check(runs[n] >= runs[n - 1] * 0.98, string.format("partie R%d (%.0f min) plus courte que R%d (%.0f min)", n, runs[n], n - 1, runs[n - 1]))
+			end
+		end
+		-- Objectifs (Sim.Targets.RunMinutes)
+		for n, range in pairs(Sim.Targets.RunMinutes) do
+			local minutes = runs[n]
+			check(minutes ~= nil and minutes >= range[1] and minutes <= range[2],
+				string.format("partie R%d : %s min hors [%d, %d]", n, tostring(minutes and math.floor(minutes + 0.5)), range[1], range[2]))
+		end
+		-- Début de partie : des achats tout de suite
+		local first = result.Purchases[1]
+		check(first ~= nil and first.T <= Sim.Targets.FirstPurchaseSeconds, "1er achat en moins de " .. Sim.Targets.FirstPurchaseSeconds .. " s")
+		local early = 0
+		for _, p in ipairs(result.Purchases) do
+			if p.T <= 300 then
+				early += 1
+			end
+		end
+		check(early >= Sim.Targets.PurchasesIn5Min, "achats pendant les 5 premières minutes : " .. early)
+		-- Tout le contenu prend des jours : R10 jamais avant Sim.Targets.MinTotalHours h de jeu actif
+		local total = result.RebirthAt[10]
+		check(total ~= nil and total >= Sim.Targets.MinTotalHours * 3600, "R10 trop tôt : " .. tostring(total and math.floor(total / 60)) .. " min")
+	end)
+
+	test("Économie (simulateur) : les Robux accélèrent sans casser la courbe", function(check)
+		local active = Sim.RunMinutes(Sim.Run("Active", { MaxHours = 40, MaxRebirths = 5 }))
+		local robux = Sim.RunMinutes(Sim.Run("Robux", { MaxHours = 40, MaxRebirths = 5 }))
+		local parts = {}
+		for n = 1, 5 do
+			table.insert(parts, "R" .. n .. "=" .. (robux[n] and tostring(math.floor(robux[n] + 0.5)) or "-"))
+		end
+		print("    Game Passes x2 + VIP + auto-clic, parties (min) : " .. table.concat(parts, " "))
+		for n = 1, 5 do
+			check(robux[n] ~= nil and active[n] ~= nil and robux[n] < active[n], "R" .. n .. " : les Game Passes doivent faire gagner du temps")
+			check(robux[n] ~= nil and active[n] ~= nil and robux[n] >= active[n] * Sim.Targets.RobuxMinRatio,
+				"R" .. n .. " : partie Robux trop courte (" .. tostring(robux[n] and math.floor(robux[n])) .. " min)")
+		end
+		for n = 2, 5 do
+			if robux[n] and robux[n - 1] then
+				check(robux[n] >= robux[n - 1] * 0.95, "Robux : partie R" .. n .. " plus courte que R" .. (n - 1))
+			end
+		end
+	end)
+end
+"""
+
+
+def economy_test():
+    """Tests ECONOMY93 : le simulateur tests/economy_sim.luau (vrais modules
+    Shared) doit respecter les objectifs de rythme (Sim.Targets)."""
+    return sim_loader() + ECONOMY_TESTS
+
+
 def run_sim():
     """python3 tests/run_tests.py --sim [--robux | --whale | --sessions | --all] :
     lance le simulateur d'économie avec les vrais modules Shared et affiche le rapport."""
@@ -1881,7 +1950,8 @@ def main():
         return 1
     if "--sim" in sys.argv:
         return run_sim()
-    bundle = build_bundle(config_key_test() + "\n" + lang_test() + "\n" + house_art_test() + "\n" + arcade_shop_test() + "\n" + friend_mail_test())
+    bundle = build_bundle(config_key_test() + "\n" + lang_test() + "\n" + house_art_test() + "\n" + arcade_shop_test() + "\n" + friend_mail_test()
+                          + "\n" + economy_test())
     with tempfile.NamedTemporaryFile("w", suffix=".luau", delete=False, encoding="utf-8") as f:
         f.write(bundle)
         path = f.name

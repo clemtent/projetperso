@@ -503,11 +503,17 @@ R.FloorCushion = function(b, ctx)
 end
 R.Beanbag = function(b, _ctx)
 	local color = accent(b, 1, LILAC)
-	b.Ball(0, 22, 0, 90, color, M.Fabric)
-	b.Ball(0, 42, -20, 64, darken(color, 0.06), M.Fabric)
-	b.Box(0, 0, 0, 84, 4, 80, darken(color, 0.1), M.Fabric)
-	b.Top(1, 0, 58, 8, 50, 40)
-	b.Footprint(90, 90, 70)
+	-- pouf poire : grosse goutte affaissée, creux d'assise, dossier relevé
+	b.Egg(0, 24, 2, 92, 48, 86, color, M.Fabric)
+	b.EggR(CFrame.new(0, 50, -18) * CFrame.Angles(-0.35, 0, 0), 70, 50, 40, darken(color, 0.05), M.Fabric)
+	b.Egg(0, 44, 12, 56, 12, 46, lighten(color, 0.12), M.Fabric)
+	for _, side in ipairs({ -1, 1 }) do
+		b.Egg(side * 32, 30, 8, 26, 30, 50, darken(color, 0.03), M.Fabric)
+	end
+	b.Ball(26, 20, 40, 5, lighten(color, 0.4), M.Fabric)
+	b.Top(1, 0, 50, 10, 50, 40)
+	b.Seat(0, 48, 10, 50, 40)
+	b.Footprint(92, 86, 76)
 end
 local function sofa(b: Builder, ctx: Ctx, seatDefault: number, width: number, cushions: number)
 	local seat = ctx.TopY(1, seatDefault)
@@ -2536,6 +2542,7 @@ local function loadFamilies(name: string)
 end
 loadFamilies("House3DCritters")
 loadFamilies("House3DObjects")
+loadFamilies("House3DToys")
 
 local DOORS_AS_CARD: { [string]: boolean } = {}
 
@@ -2698,6 +2705,14 @@ export type ItemData = {
 	Locals: { CFrame },
 }
 
+-- Objets où l'on peut s'asseoir / s'allonger (monde) en plus des sièges et lits de HouseSurfaces
+local SITTABLE: { [string]: boolean } = {
+	Sofa = true, Armchair = true, Beanbag = true, EggChair = true, GardenBench = true, Pouf = true, HeartArmchair = true,
+	CatSofa = true, CrystalThrone = true, Hammock = true, GamerBeanbag = true, FloorCushion = true, GamerChair = true,
+	GamingChair = true, RockingChair = true, BarStool = true, MushroomStool = true, RacingRig = true, BunkBed = true,
+	RaceCarBed = true, PetBed = true, KotatsuTable = false,
+}
+
 -- Construit les pièces d'un objet dans `parent`, au repère `origin` (x à
 -- droite, y en haut depuis le sol, +z = le devant de l'objet)
 function House3DRecipes.Make(item: any, entry: any?, k: number, parent: Instance, origin: CFrame, trim: Color3?): ItemData
@@ -2728,6 +2743,13 @@ function House3DRecipes.Make(item: any, entry: any?, k: number, parent: Instance
 		b = House3DKit.Builder(parent, origin, k, mirror, mapper, House3DRecipes.PaletteOf(item))
 		b.Item = item
 		pcall(fallback, b, ctx)
+	end
+	-- place assise par défaut (sièges, lits, canapés) : le premier dessus
+	if not b.SeatAt and (SITTABLE[item.Id] or HouseSurfaces.IsSeat(item.Id) or HouseSurfaces.IsBed(item.Id)) then
+		local top = b.Tops[1]
+		if top then
+			b.SeatAt = { X = top.X, Y = top.Y, Z = top.Z, W = top.W, D = top.D }
+		end
 	end
 	-- dessus déclarés par HouseSurfaces mais pas par la recette
 	local raw = ctx.Raw

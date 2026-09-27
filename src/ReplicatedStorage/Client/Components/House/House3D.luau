@@ -12,8 +12,8 @@
 	    limitée), molette / pincer = zoomer, amorti doux ;
 	  - au repos, la caméra se balance doucement toute seule ;
 	  - le mur de côté entre la caméra et la pièce se baisse ;
-	  - barre d'outils : ↺ ↻ tourner, 🔄 recentrer, 🌙 / ☀️ nuit / jour,
-	    ✕ fermer (Échap ferme aussi) ;
+	  - barre d'outils : flèches = tourner, 🔄 recentrer, 🌙 / ☀️ nuit / jour,
+	    croix = fermer (Échap ferme aussi) ; icônes dessinées (UIUtil.Icon) ;
 	  - pendant la vue, TOUTES les ScreenGui du joueur sont masquées ; à la
 	    fermeture on remet EXACTEMENT : les ScreenGui qui étaient visibles,
 	    la caméra (CameraType, CameraSubject, CFrame, FieldOfView, Focus)
@@ -54,6 +54,7 @@ local Lighting = game:GetService("Lighting")
 
 local Client = script.Parent.Parent.Parent
 local Theme = require(Client.Theme)
+local UIUtil = require(Client.UIUtil)
 local Locale = require(ReplicatedStorage.Shared.Locale)
 local HouseCommon = require(script.Parent.HouseCommon)
 local House3DScene = require(script.Parent.House3DScene)
@@ -91,8 +92,10 @@ local REHIDE_EVERY = 1 -- (s) vérifie que les autres interfaces restent masqué
 -- Propriétés de Lighting réglées pendant la vue (et remises à la fermeture)
 local LIGHTING_KEYS = { "ClockTime", "Brightness", "Ambient", "OutdoorAmbient", "ColorShift_Top", "ColorShift_Bottom", "EnvironmentDiffuseScale",
 	"EnvironmentSpecularScale", "ExposureCompensation", "GlobalShadows", "ShadowSoftness", "FogStart", "FogEnd", "GeographicLatitude" }
--- Effets du lieu coupés pendant la vue (flou de profondeur, flou, correction de couleur)
-local EFFECT_CLASSES = { "DepthOfFieldEffect", "BlurEffect", "ColorCorrectionEffect" }
+-- Effets coupés pendant la vue (dans Lighting ET sous la caméra) : flou de
+-- profondeur, flou, correction de couleur, halo, rayons de soleil (le modèle
+-- "Baseplate" de Roblox met Bloom / DepthOfField / SunRays dans Lighting)
+local EFFECT_CLASSES = { "DepthOfFieldEffect", "BlurEffect", "ColorCorrectionEffect", "BloomEffect", "SunRaysEffect" }
 
 local WHITE = Color3.new(1, 1, 1)
 local C = HouseCommon.Colors
@@ -113,6 +116,8 @@ type Session = {
 	Saved: Saved?,
 	Hidden: { ScreenGui },
 	Connections: { RBXScriptConnection },
+	Controls: any?, -- contrôles du personnage coupés pendant la vue (PlayerModule)
+	MouseSaved: { Behavior: Enum.MouseBehavior, Icon: boolean }?,
 	Bound: boolean,
 	Gui: ScreenGui?,
 	Scene: House3DScene.Scene?,
@@ -348,6 +353,11 @@ local function stepCamera(s: Session, dt: number)
 	if camera.CameraType ~= Enum.CameraType.Scriptable then
 		camera.CameraType = Enum.CameraType.Scriptable
 	end
+	-- souris libre et visible (un verrouillage de souris d'un autre script
+	-- empêcherait de tourner autour de la pièce)
+	if s.MouseSaved and UserInputService.MouseBehavior ~= Enum.MouseBehavior.Default and not s.Dragging then
+		UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+	end
 	local viewport = camera.ViewportSize
 	if viewport ~= s.Viewport then
 		s.Viewport = viewport
@@ -443,7 +453,14 @@ local function saveLighting(s: Session)
 			s.LightingSaved[key] = value
 		end
 	end
-	for _, child in ipairs(Lighting:GetChildren()) do
+	local holders: { Instance } = Lighting:GetChildren()
+	local camera = workspace.CurrentCamera
+	if camera then
+		for _, child in ipairs(camera:GetChildren()) do
+			table.insert(holders, child)
+		end
+	end
+	for _, child in ipairs(holders) do
 		if child:IsA("Atmosphere") then
 			local ok, density = pcall(function()
 				return child.Density
@@ -547,17 +564,30 @@ local function toolButton(parent: Instance, m: Metrics, name: string, icon: stri
 		Color = ColorSequence.new(WHITE, Color3.fromRGB(236, 230, 240)),
 		Parent = button,
 	})
-	create("TextLabel", {
-		Name = "Icon",
-		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(0, math.floor(m.ButtonH * 0.08)),
-		Size = UDim2.new(1, 0, 0, m.IconSize + 4),
-		Font = Theme.Fonts.Title,
-		Text = icon,
-		TextSize = m.IconSize,
-		TextColor3 = primary and WHITE or C.Ink,
-		Parent = button,
-	})
+	if icon == "Cross" or icon == "ArrowLeft" or icon == "ArrowRight" then
+		-- (icône dessinée : ces glyphes s'affichent en carré vide dans Roblox)
+		UIUtil.Icon(icon, {
+			Name = "Icon",
+			Size = math.floor(m.IconSize * 0.9),
+			Thickness = math.max(2, math.floor(m.IconSize * 0.16 + 0.5)),
+			Color = primary and WHITE or C.Ink,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0, math.floor(m.ButtonH * 0.08) + math.floor((m.IconSize + 4) / 2)),
+			Parent = button,
+		})
+	else
+		create("TextLabel", {
+			Name = "Icon",
+			BackgroundTransparency = 1,
+			Position = UDim2.fromOffset(0, math.floor(m.ButtonH * 0.08)),
+			Size = UDim2.new(1, 0, 0, m.IconSize + 4),
+			Font = Theme.Fonts.Title,
+			Text = icon,
+			TextSize = m.IconSize,
+			TextColor3 = primary and WHITE or C.Ink,
+			Parent = button,
+		})
+	end
 	local label = create("TextLabel", {
 		Name = "Caption",
 		BackgroundTransparency = 1,
@@ -613,14 +643,15 @@ end
 -- Interface de la vue : carte de titre (dans la barre du haut de Roblox, au
 -- milieu, qui est libre) + barre d'outils en bas + pastille "construction"
 local function buildGui(s: Session, title: string, roomIcon: string): ScreenGui
-	local gui = create("ScreenGui", {
-		Name = "House3DView",
-		ResetOnSpawn = false,
-		IgnoreGuiInset = true,
-		ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets,
-		DisplayOrder = 60,
-		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-	}) :: ScreenGui
+	-- (propriétés posées dans l'ordre : dans Roblox, IgnoreGuiInset réécrit
+	-- ScreenInsets ; avec create() l'ordre de `pairs` n'est pas garanti)
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "House3DView"
+	gui.ResetOnSpawn = false
+	gui.IgnoreGuiInset = true
+	gui.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
+	gui.DisplayOrder = 60
+	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	local touch = isTouchDevice()
 	local device = "Desktop"
 	local okInterface, Interface = pcall(require, Client.Interface)
@@ -767,13 +798,13 @@ local function buildGui(s: Session, title: string, roomIcon: string): ScreenGui
 		Padding = UDim.new(0, m.Gap),
 		Parent = bar,
 	})
-	local rotateLeft = toolButton(bar, m, "RotateLeft", "↺", Locale.T("Rotate"), 1, false)
-	local rotateRight = toolButton(bar, m, "RotateRight", "↻", Locale.T("Rotate"), 2, false)
+	local rotateLeft = toolButton(bar, m, "RotateLeft", "ArrowLeft", Locale.T("Rotate"), 1, false)
+	local rotateRight = toolButton(bar, m, "RotateRight", "ArrowRight", Locale.T("Rotate"), 2, false)
 	separator(bar, m, 3)
 	local reset = toolButton(bar, m, "Reset", "🔄", Locale.T("Reset"), 4, false)
 	local nightButton = toolButton(bar, m, "Night", "🌙", Locale.T("Night"), 5, false)
 	separator(bar, m, 6)
-	local close = toolButton(bar, m, "Close", "✕", Locale.T("Close"), 7, true)
+	local close = toolButton(bar, m, "Close", "Cross", Locale.T("Close"), 7, true)
 	s.NightButton = nightButton
 	s.Toolbar = bar
 	s.BottomReserve = 10 + barH + 10
@@ -979,10 +1010,37 @@ end
 ----------------------------------------------------------------------
 
 local function hideGui(s: Session, child: Instance)
-	if child:IsA("ScreenGui") and child ~= s.Gui and child.Enabled then
+	-- (une ScreenGui vide ne cache rien : on n'y touche pas, par ex. les
+	-- sondes de zones sûres de l'interface, dont la taille sert au jeu)
+	if child:IsA("ScreenGui") and child ~= s.Gui and child.Enabled and #child:GetChildren() > 0 then
 		child.Enabled = false
 		table.insert(s.Hidden, child)
 	end
+end
+
+-- Coupe les contrôles du personnage (PlayerModule de Roblox) s'ils sont
+-- actifs ; renvoie l'objet à réactiver à la fermeture (nil sinon)
+local function disableControls(): any
+	local player = Players.LocalPlayer
+	if not player or not player.Character then
+		return nil
+	end
+	local ok, controls = pcall(function()
+		local scripts = player:FindFirstChildOfClass("PlayerScripts")
+		local module = scripts and scripts:FindFirstChild("PlayerModule")
+		if not module or not module:IsA("ModuleScript") then
+			return nil
+		end
+		local playerModule = (require :: any)(module)
+		local result = playerModule:GetControls()
+		local active = result and result.activeController
+		if not active or active.enabled == false then
+			return nil
+		end
+		result:Disable()
+		return result
+	end)
+	return ok and controls or nil
 end
 
 local function restoreCamera(s: Session)
@@ -1079,6 +1137,14 @@ local function start(s: Session, options: Options)
 		gui.Parent = playerGui
 	end
 
+	-- Personnage (monde) : ne marche pas pendant la vue (flèches, ZQSD, saut)
+	s.Controls = disableControls()
+	pcall(function()
+		s.MouseSaved = { Behavior = UserInputService.MouseBehavior, Icon = UserInputService.MouseIconEnabled }
+		UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+		UserInputService.MouseIconEnabled = true
+	end)
+
 	-- Caméra : arrivée en douceur depuis un peu plus loin, de côté
 	s.Viewport = camera.ViewportSize
 	computeFit(s)
@@ -1173,6 +1239,21 @@ local function closeSession()
 	table.clear(s.Connections)
 	pcall(restoreCamera, s)
 	pcall(restoreLighting, s)
+	local controls = s.Controls
+	if controls then
+		s.Controls = nil
+		pcall(function()
+			controls:Enable()
+		end)
+	end
+	local mouse = s.MouseSaved
+	if mouse then
+		s.MouseSaved = nil
+		pcall(function()
+			UserInputService.MouseBehavior = mouse.Behavior
+			UserInputService.MouseIconEnabled = mouse.Icon
+		end)
+	end
 	for _, gui in ipairs(s.Hidden) do
 		if gui.Parent then
 			pcall(function()
@@ -1222,6 +1303,8 @@ local function openSession(options: Options?): boolean
 		Saved = nil,
 		Hidden = {},
 		Connections = {},
+		Controls = nil,
+		MouseSaved = nil,
 		Bound = false,
 		Gui = nil,
 		Scene = nil,

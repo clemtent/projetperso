@@ -54,10 +54,13 @@ function Formulas.GetRebirthMultiplier(rebirths: number): number
 	return 1 + bonus
 end
 
--- Les améliorations (non permanentes) coûtent PriceGrowth^r fois plus après
--- r visites à l'océan : chaque partie coûte plus cher que la précédente
+-- Les améliorations (non permanentes) coûtent PriceGrowth^r x (1 + r)^PricePower
+-- fois plus après r visites à l'océan : chaque partie coûte plus cher que la
+-- précédente (surtout au début, puis de moins en moins vite)
 function Formulas.GetUpgradePriceScale(rebirths: number?): number
-	return (Config.Rebirth.PriceGrowth or 1) ^ cleanRebirths(rebirths)
+	local settings = Config.Rebirth
+	local r = cleanRebirths(rebirths)
+	return (settings.PriceGrowth or 1) ^ r * (1 + r) ^ (settings.PricePower or 0)
 end
 
 -- Prix du PROCHAIN niveau (level = niveau actuel)

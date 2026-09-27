@@ -57,8 +57,9 @@ Sim.Targets = {
 		[8] = { 150, 400 },
 	},
 	FirstPurchaseSeconds = 30, -- 1re amélioration achetée en moins de 30 s
-	PurchasesIn5Min = 6, -- au moins 6 achats pendant les 5 premières minutes
-	MaxRebirthsIn = 12, -- (heures) R10 jamais avant... (voir run_tests.py)
+	PurchasesIn5Min = 8, -- au moins 8 achats pendant les 5 premières minutes
+	MinTotalHours = 16, -- R10 jamais avant 16 h de jeu actif (des jours de jeu)
+	RobuxMinRatio = 0.25, -- avec x2 + VIP + auto-clic, une partie dure au moins 25 % de la partie sans Robux
 }
 
 ----------------------------------------------------------------------
@@ -325,7 +326,9 @@ function Sim.Run(profileOrName, options)
 
 	-- Taux de gains --------------------------------------------------
 	local rates -- cache
+	local ratesVersion = 0 -- change à chaque recalcul (état modifié)
 	local function computeRates()
+		ratesVersion += 1
 		local houseBonus = Formulas.GetHouseBonus(comfort)
 		local stats = Formulas.ComputeStats(data, 1, passMult * houseBonus)
 		local f = Formulas.GetFeatures(data)
@@ -467,6 +470,9 @@ function Sim.Run(profileOrName, options)
 		end
 	end
 
+	local nextThreshold = 0 -- (optimisation) rien ne change tant que la Dopamine n'atteint pas ce seuil
+	local lastDecisionAt = 0
+	local decidedVersion = -1 -- ... ni que l'état (taux de gains) ne change
 	local function tryPurchase()
 		local r = rates or computeRates()
 		local R = r.Total * rushAverage
@@ -489,6 +495,7 @@ function Sim.Run(profileOrName, options)
 		end
 
 		local best, bestScore = nil, math.huge
+		nextThreshold = math.huge
 		local function consider(candidate)
 			local cost = candidate.Cost
 			if not (cost == cost) or cost == math.huge then
@@ -511,6 +518,9 @@ function Sim.Run(profileOrName, options)
 			local limit = candidate.Permanent and horizon * 2 or horizon
 			if oceanVisible and payback > limit then
 				return
+			end
+			if cost > bank and cost < nextThreshold then
+				nextThreshold = cost
 			end
 			local wait = math.max(0, (cost - bank) / R)
 			local score = wait + payback
@@ -580,6 +590,9 @@ function Sim.Run(profileOrName, options)
 			local size = Config.House.Sizes[sizeIndex]
 			if #roomTypes < size.Floors * size.Columns then
 				local cost = Formulas.GetRoomCost(#roomTypes)
+				if cost <= R * B.HouseExpandSeconds and cost > bank and cost < nextThreshold then
+					nextThreshold = cost
+				end
 				if cost <= R * B.HouseExpandSeconds and cost <= bank then
 					consider({ Kind = "Room", Cost = cost, Gain = 0, Utility = true, Permanent = true })
 				end
@@ -594,6 +607,9 @@ function Sim.Run(profileOrName, options)
 		-- Océan
 		if oceanVisible and bank >= oceanCost then
 			return "Ocean"
+		end
+		if oceanVisible and oceanCost < nextThreshold then
+			nextThreshold = oceanCost
 		end
 
 		if best and best.Cost <= bank then
@@ -647,6 +663,9 @@ function Sim.Run(profileOrName, options)
 				return true
 			elseif style.Cost > R * B.StyleSinkSeconds then
 				break
+			elseif not ownedStyles[index] and style.Cost > bank * 0.5 and styleUnlocked(data, style) then
+				nextThreshold = math.min(nextThreshold, style.Cost * 2)
+				break
 			end
 		end
 		return false
@@ -692,7 +711,6 @@ function Sim.Run(profileOrName, options)
 		local r = rates or computeRates()
 		local rush = (t % B.RushEvery) < Config.Events.Rush.Duration and Config.Events.Rush.Multiplier or 1
 		earn(r.Total * rush * dt)
-		if SIM_DEBUG and t > 2228 and t < 2246 then print("TICK", t, r.Total, rush, r.P, r.Clicks, r.Passive, r.Bonus, data.Dopamine) end
 		-- Statistiques (pour les succès)
 		local S = data.Stats
 		local f = r.Features
@@ -747,6 +765,8 @@ function Sim.Run(profileOrName, options)
 		if t >= nextDecision then
 			nextDecision += B.DecisionEvery
 			checkAchievements()
+			if ratesVersion ~= decidedVersion or data.Dopamine >= nextThreshold or t >= lastDecisionAt + 30 then
+			lastDecisionAt = t
 			for _ = 1, 20 do -- plusieurs achats d'un coup si possible
 				local bought = tryPurchase()
 				if bought == "Ocean" then
@@ -761,6 +781,9 @@ function Sim.Run(profileOrName, options)
 				elseif not bought then
 					break
 				end
+			end
+			rates = rates or computeRates()
+			decidedVersion = ratesVersion
 			end
 		end
 

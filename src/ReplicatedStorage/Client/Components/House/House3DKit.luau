@@ -364,6 +364,99 @@ function House3DKit.Builder(parent: Instance, origin: CFrame, k: number, mirror:
 end
 
 ----------------------------------------------------------------------
+-- Formes plates en relief (plan x-y, épaisseur vers +z) : cœurs, étoiles,
+-- triangles, et tubes le long d'un chemin (néons, guirlandes, anses...)
+----------------------------------------------------------------------
+
+-- Triangle isocèle centré en (cx, cy), pointe vers `angle` (0 = vers le haut)
+function House3DKit.Triangle(b: Builder, cx: number, cy: number, z: number, base: number, height: number, angle: number, thick: number, color: Color3, material: Enum.Material?)
+	local cf = CFrame.new(cx, cy, z + thick / 2) * CFrame.Angles(0, 0, angle) * CFrame.Angles(0, math.pi / 2, 0)
+	local half = base / 2
+	b.Part("WedgePart", cf * CFrame.new(0, 0, -half / 2), Vector3.new(thick, height, half), color, material, "Pointe")
+	b.Part("WedgePart", cf * CFrame.Angles(0, math.pi, 0) * CFrame.new(0, 0, -half / 2), Vector3.new(thick, height, half), color, material, "Pointe")
+end
+
+-- Cœur plat : un carré tourné + deux disques (largeur totale `size`)
+function House3DKit.Heart(b: Builder, cx: number, cy: number, z: number, size: number, thick: number, color: Color3, material: Enum.Material?)
+	local side = size / 1.707
+	local oy = cy - side * 0.0735
+	b.BoxR(CFrame.new(cx, oy, z + thick / 2) * CFrame.Angles(0, 0, math.pi / 4), side, side, thick, color, material)
+	local offset = side / (2 * math.sqrt(2))
+	for _, sx in ipairs({ -1, 1 }) do
+		b.CylZ(cx + sx * offset, oy + offset, z + thick / 2, side, thick, color, material)
+	end
+end
+
+-- Étoile plate à 5 branches (rayon extérieur `radius`)
+function House3DKit.Star(b: Builder, cx: number, cy: number, z: number, radius: number, thick: number, color: Color3, material: Enum.Material?)
+	b.CylZ(cx, cy, z + thick / 2, radius * 0.9, thick, color, material)
+	for index = 0, 4 do
+		local angle = index * math.pi * 2 / 5
+		local d = radius * 0.62
+		House3DKit.Triangle(b, cx - math.sin(angle) * d, cy + math.cos(angle) * d, z, radius * 0.62, radius * 0.72, angle, thick, color, material)
+	end
+end
+
+-- Étoile "douce" (5 branches ovales + cœur rond) : 6 pièces seulement
+function House3DKit.StarSoft(b: Builder, cx: number, cy: number, z: number, radius: number, thick: number, color: Color3, material: Enum.Material?): BasePart
+	local core = b.CylZ(cx, cy, z + thick / 2, radius * 0.8, thick, color, material)
+	for index = 0, 4 do
+		local angle = index * math.pi * 2 / 5
+		local d = radius * 0.5
+		b.EggR(CFrame.new(cx - math.sin(angle) * d, cy + math.cos(angle) * d, z + thick / 2) * CFrame.Angles(0, 0, angle), radius * 0.5, radius, thick, color, material)
+	end
+	return core
+end
+
+-- Points d'un cœur (contour) / d'une étoile (contour), plan x-y
+function House3DKit.HeartPoints(cx: number, cy: number, z: number, size: number, count: number): { { number } }
+	local points = {}
+	for index = 0, count do
+		local t = index / count * math.pi * 2
+		local x = 16 * math.sin(t) ^ 3
+		local y = 13 * math.cos(t) - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t)
+		table.insert(points, { cx + x * size / 34, cy + (y + 2) * size / 34, z })
+	end
+	return points
+end
+function House3DKit.StarPoints(cx: number, cy: number, z: number, radius: number, inner: number): { { number } }
+	local points = {}
+	for index = 0, 10 do
+		local angle = index * math.pi / 5
+		local r = index % 2 == 0 and radius or radius * inner
+		table.insert(points, { cx - math.sin(angle) * r, cy + math.cos(angle) * r, z })
+	end
+	return points
+end
+
+-- Tubes le long d'un chemin (+ petites boules aux coudes)
+function House3DKit.Path(b: Builder, points: { { number } }, diameter: number, color: Color3, material: Enum.Material?, neon: boolean?, noJoints: boolean?): { BasePart }
+	local parts = {}
+	for index = 1, #points - 1 do
+		local a, c = points[index], points[index + 1]
+		local tube = b.Tube(a[1], a[2], a[3], c[1], c[2], c[3], diameter, color, material)
+		table.insert(parts, tube)
+		if index > 1 and not noJoints then
+			table.insert(parts, b.Ball(a[1], a[2], a[3], diameter, color, material))
+		end
+	end
+	if neon then
+		for _, part in ipairs(parts) do
+			b.Neon(part)
+		end
+	end
+	return parts
+end
+
+-- Cadre rectangulaire (4 baguettes), y = bas
+function House3DKit.Frame(b: Builder, x: number, y: number, z: number, w: number, h: number, bar: number, depth: number, color: Color3, material: Enum.Material?)
+	b.Box(x, y, z, w, bar, depth, color, material)
+	b.Box(x, y + h - bar, z, w, bar, depth, color, material)
+	b.Box(x - w / 2 + bar / 2, y + bar, z, bar, h - 2 * bar, depth, color, material)
+	b.Box(x + w / 2 - bar / 2, y + bar, z, bar, h - 2 * bar, depth, color, material)
+end
+
+----------------------------------------------------------------------
 -- Dessin 2D hors écran (palette, cartons)
 ----------------------------------------------------------------------
 

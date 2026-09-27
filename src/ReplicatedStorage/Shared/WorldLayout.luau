@@ -3,25 +3,24 @@
 	Emplacement : ReplicatedStorage > Shared > WorldLayout
 
 	🚶 Dopamine Town : géométrie PARTAGÉE serveur + client (+ tests), sans
-	aucun service Roblox. Le serveur s'en sert pour placer les parcelles, faire
-	apparaître les personnages devant les portes et vérifier les sièges / les
-	intrus ; le client pour construire les maisons au même endroit et pour
-	convertir les déplacements de meubles 3D <-> positions 2D (X / Y de
-	HouseCommon.Placed). Une seule source de vérité : la 2D.
+	aucun service Roblox (sauf les petites fonctions CFrame, en jeu seulement).
+	Le serveur s'en sert pour placer les parcelles, faire apparaître les
+	personnages devant les portes et vérifier les sièges / les intrus ; le
+	client pour construire les maisons au même endroit et pour convertir les
+	déplacements de meubles 3D <-> positions 2D (X / Y de HouseCommon.Placed).
+	Une seule source de vérité : la 2D.
 
 	Repère d'une maison ("local") : x vers la DROITE d'un visiteur qui regarde
 	la façade depuis la place, y vers le haut (0 = sol de la parcelle),
-	d = profondeur depuis la façade (0 = mur de devant, D = mur du fond).
-	Colonnes de la maison : [cage d'escalier (HallWidth)] [pièce 1] [pièce 2]...
+	d = profondeur depuis la façade (0 = face avant du mur de devant).
+	Colonnes de la maison : [cage d'escalier (HALL_W)] [pièce 1] [pièce 2]...
 	étage 1 = rez-de-chaussée (comme HouseCommon.SlotCell).
-
+	Chaque pièce = une coque House3DScene.BuildRoomShell (murs de WALL_T HORS
+	de l'intérieur) dont les objets sont placés par House3DScene.PlaceItems.
 	Correspondance 2D -> 3D d'une pièce (HouseRoom : X 0..1 de gauche à droite,
-	Y 0..1 de haut en bas, WallRatio = limite mur / sol) :
-	  - objet au sol : X -> x (linéaire, marges), Y (WallRatio..1) -> d
-	    (Y = WallRatio : contre le mur du fond, Y = 1 : devant), courbe douce
-	    (DepthCurve) comme l'aperçu 3D ; inverse exact (LocalToFloor) ;
-	  - objet au mur : X -> x, Y (0..WallRatio) -> hauteur du CENTRE sur le mur
-	    du fond (Y = 0 : plafond) ; inverse exact (LocalToWall).
+	Y 0..1 de haut en bas, WallRatio = limite mur / sol) : MÊME calcul que
+	House3DLayout (perspective des murs de côté 2D, courbe de profondeur) ;
+	FloorInverse / WallInverse le défont (déplacer un meuble avec l'avatar).
 	Rotation (champ R facultatif d'un objet posé) : degrés entiers multiples de
 	15 dans 15..345 ; nil / absent = 0 (anciennes sauvegardes).
 ]]
@@ -35,16 +34,17 @@ local WorldLayout = {}
 WorldLayout.PX = 0.036 -- studs par px de maquette 2D (objets à taille d'avatar)
 WorldLayout.ROOM_BASE_PX = 760 -- largeur 2D d'une pièce de largeur 1 (= HouseRoom.BASE_WIDTH)
 WorldLayout.ROOM_HEIGHT_PX = 440 -- hauteur 2D d'une pièce (= HouseRoom.HEIGHT)
-WorldLayout.DEPTH = 20 -- profondeur d'une pièce
+WorldLayout.DEPTH = 20 -- profondeur INTÉRIEURE d'une pièce
 WorldLayout.WALL_H = 12 -- hauteur sous plafond
 WorldLayout.SLAB = 1 -- épaisseur d'un plancher (le rez-de-chaussée est surélevé d'autant)
 WorldLayout.STORY = 13 -- WALL_H + SLAB
 WorldLayout.HALL_W = 12 -- cage d'escalier (à gauche de la maison)
-WorldLayout.WALL_T = 0.8 -- épaisseur des murs
-WorldLayout.MARGIN = 0.6 -- marge entre un objet posé et un mur
-WorldLayout.DEPTH_CURVE = 1.35
+WorldLayout.WALL_T = 1 -- épaisseur des murs (= coque BuildRoomShell : murs HORS de l'intérieur)
 WorldLayout.WALL_RATIO = 0.46 -- (valeur par défaut : Config.House.WallRatio)
 WorldLayout.ROOF_H = 9
+-- (= House3DLayout : murs de côté en perspective de la pièce 2D, courbe de profondeur)
+WorldLayout.SIDE_PX = 42
+WorldLayout.DEPTH_CURVE = 1.35
 
 -- Parcelles
 WorldLayout.PLOT_W = 162 -- largeur (le manoir 3 x 4 tient dedans)
@@ -58,15 +58,16 @@ WorldLayout.SPAWN_FRONT = 7 -- (studs) apparition devant la porte
 -- Porte d'entrée (dans la cage d'escalier) et passages entre pièces
 WorldLayout.DOOR_W = 5
 WorldLayout.DOOR_H = 8
-WorldLayout.PASS_W = 5 -- passage entre deux pièces / cage -> pièce
+WorldLayout.PASS_W = 5 -- passage entre deux pièces / cage -> pièce (centré en profondeur)
 WorldLayout.PASS_H = 8.5
-WorldLayout.PASS_D = 10 -- profondeur du centre des passages
 
--- Escalier (dans la cage) : volée k (étage k -> k+1), bande de gauche
+-- Escalier (dans la cage) : volée k (étage k -> k+1), bande de gauche de la
+-- cage, de la profondeur STAIR_D0 (bas) à STAIR_D1 (haut) ; trémie dans le
+-- plancher du dessus entre STAIR_HOLE_D0 et STAIR_D1
 WorldLayout.STAIR_W = 5
-WorldLayout.STAIR_D0 = 2 -- première marche (profondeur)
-WorldLayout.STAIR_D1 = 16 -- arrivée (profondeur)
-WorldLayout.STAIR_HOLE_D0 = 6.5 -- trémie dans le plancher du dessus (hauteur de tête)
+WorldLayout.STAIR_D0 = 3
+WorldLayout.STAIR_D1 = 17
+WorldLayout.STAIR_HOLE_D0 = 7.5
 
 export type SizeDef = { Floors: number, Columns: number, Width: number? }
 
@@ -84,38 +85,40 @@ local function sizeOf(size: SizeDef?): (number, number, number)
 	return floors, columns, width
 end
 
--- Largeur (studs) d'une pièce pour une taille de maison
-function WorldLayout.RoomWidth(size: SizeDef?): number
-	local _, _, width = sizeOf(size)
-	return WorldLayout.ROOM_BASE_PX * width * WorldLayout.PX
-end
-
--- Largeur 2D (px de maquette) d'une pièce (pour HouseSurfaces)
+-- Largeur 2D (px de maquette) d'une pièce (pour HouseSurfaces / House3DLayout)
 function WorldLayout.RoomWidthPx(size: SizeDef?): number
 	local _, _, width = sizeOf(size)
 	return math.floor(WorldLayout.ROOM_BASE_PX * width + 0.5)
 end
 
+-- Largeur INTÉRIEURE (studs) d'une pièce pour une taille de maison
+function WorldLayout.RoomWidth(size: SizeDef?): number
+	return WorldLayout.RoomWidthPx(size) * WorldLayout.PX
+end
+
 export type Dims = {
 	Floors: number,
 	Columns: number,
-	RoomW: number,
-	Width: number, -- largeur totale (cage + pièces)
-	Depth: number,
+	RoomW: number, -- largeur intérieure d'une pièce
+	Pitch: number, -- largeur d'une colonne (pièce + ses deux murs)
+	Width: number, -- largeur totale (cage + colonnes)
+	Depth: number, -- profondeur totale (pièce + murs avant / arrière)
 	Height: number, -- jusqu'au plafond du dernier étage
-	Left: number, -- x du bord gauche (murs centrés sur les lignes)
+	Left: number, -- x du bord gauche
 }
 
 function WorldLayout.Dims(size: SizeDef?): Dims
 	local floors, columns = sizeOf(size)
 	local roomW = WorldLayout.RoomWidth(size)
-	local width = WorldLayout.HALL_W + columns * roomW
+	local pitch = roomW + 2 * WorldLayout.WALL_T
+	local width = WorldLayout.HALL_W + columns * pitch
 	return {
 		Floors = floors,
 		Columns = columns,
 		RoomW = roomW,
+		Pitch = pitch,
 		Width = width,
-		Depth = WorldLayout.DEPTH,
+		Depth = WorldLayout.DEPTH + 2 * WorldLayout.WALL_T,
 		Height = floors * WorldLayout.STORY,
 		Left = -width / 2,
 	}
@@ -133,11 +136,11 @@ function WorldLayout.FloorY(floor: number): number
 	return (math.max(1, floor) - 1) * WorldLayout.STORY + WorldLayout.SLAB
 end
 
--- Bords (x gauche, x droite) d'une colonne de pièces (lignes des murs)
+-- Bords extérieurs (x gauche, x droite) d'une colonne de pièces (murs compris)
 function WorldLayout.ColumnSpan(size: SizeDef?, column: number): (number, number)
 	local dims = WorldLayout.Dims(size)
-	local x0 = dims.Left + WorldLayout.HALL_W + (column - 1) * dims.RoomW
-	return x0, x0 + dims.RoomW
+	local x0 = dims.Left + WorldLayout.HALL_W + (column - 1) * dims.Pitch
+	return x0, x0 + dims.Pitch
 end
 
 -- Bords de la cage d'escalier
@@ -152,63 +155,97 @@ function WorldLayout.DoorX(size: SizeDef?): number
 	return x0 + WorldLayout.STAIR_W + (WorldLayout.HALL_W - WorldLayout.STAIR_W) / 2
 end
 
--- Boîte intérieure d'une pièce (repère local) : xMin, xMax, yFloor, dMin, dMax
+-- Intérieur d'une pièce (repère local) : xMin, xMax, yFloor, dMin, dMax
 function WorldLayout.RoomInterior(size: SizeDef?, slot: number): (number, number, number, number, number)
 	local floor, column = WorldLayout.SlotCell(size, slot)
 	local x0, x1 = WorldLayout.ColumnSpan(size, column)
-	local t = WorldLayout.WALL_T / 2
-	return x0 + t, x1 - t, WorldLayout.FloorY(floor), t, WorldLayout.DEPTH - t
+	local t = WorldLayout.WALL_T
+	return x0 + t, x1 - t, WorldLayout.FloorY(floor), t, t + WorldLayout.DEPTH
+end
+
+-- Centre du dessus du sol d'une pièce (repère local) : x, y, d
+function WorldLayout.RoomCenter(size: SizeDef?, slot: number): (number, number, number)
+	local xMin, xMax, yFloor, dMin, dMax = WorldLayout.RoomInterior(size, slot)
+	return (xMin + xMax) / 2, yFloor, (dMin + dMax) / 2
 end
 
 ----------------------------------------------------------------------
--- 2D <-> 3D (repère local de la maison)
+-- 2D <-> 3D dans une pièce (même calcul que House3DLayout / PlaceItems)
 ----------------------------------------------------------------------
+-- Repère de la pièce : x vers la droite (0 = milieu), z depuis la face
+-- intérieure du mur du fond vers l'avant (0..D). Objet au sol : (x, z) =
+-- CENTRE de son empreinte (profondeur fd). Objet mural : y = BAS de sa
+-- boîte 2D (pivot du modèle), k = studs par unité (boîte 100 x 100).
+-- (House3DLayout écarte aussi les objets qui se chevauchent et colle
+-- certains meubles au mur : l'inverse retombe sur la même 2D à ces petits
+-- écarts près.)
 
-local function wallRatioOf(ratio: number?): number
-	return math.clamp(finite(ratio, WorldLayout.WALL_RATIO), 0.1, 0.9)
+export type RoomDims = { PX: number, RoomWpx: number, RoomHpx: number, WallPx: number, WallRatio: number, W: number, D: number, WH: number }
+
+function WorldLayout.RoomDims(size: SizeDef?, wallRatio: number?): RoomDims
+	local ratio = math.clamp(finite(wallRatio, WorldLayout.WALL_RATIO), 0.1, 0.9)
+	local roomWpx = WorldLayout.RoomWidthPx(size)
+	return {
+		PX = WorldLayout.PX,
+		RoomWpx = roomWpx,
+		RoomHpx = WorldLayout.ROOM_HEIGHT_PX,
+		WallPx = math.floor(WorldLayout.ROOM_HEIGHT_PX * ratio + 0.5),
+		WallRatio = ratio,
+		W = roomWpx * WorldLayout.PX,
+		D = WorldLayout.DEPTH,
+		WH = WorldLayout.WALL_H,
+	}
 end
 
--- Objet au sol : (X, Y) 2D -> (x, d) local, dans la pièce `slot`
-function WorldLayout.FloorToLocal(size: SizeDef?, slot: number, X: number, Y: number, wallRatio: number?): (number, number)
-	local ratio = wallRatioOf(wallRatio)
-	local xMin, xMax, _, dMin, dMax = WorldLayout.RoomInterior(size, slot)
-	local m = WorldLayout.MARGIN
-	local x = xMin + m + math.clamp(finite(X, 0.5), 0, 1) * (xMax - xMin - 2 * m)
-	local t = math.clamp((finite(Y, 0.8) - ratio) / (1 - ratio), 0, 1)
-	local fromBack = t ^ WorldLayout.DEPTH_CURVE
-	local d = (dMax - m) - fromBack * ((dMax - m) - (dMin + m))
-	return x, d
+local function depthT(dims: RoomDims, Y: number): number
+	return math.clamp((Y - dims.WallRatio) / math.max(0.05, 1 - dims.WallRatio), 0, 1)
 end
 
--- Inverse : (x, d) local -> (X, Y) 2D (bornés à la pièce)
-function WorldLayout.LocalToFloor(size: SizeDef?, slot: number, x: number, d: number, wallRatio: number?): (number, number)
-	local ratio = wallRatioOf(wallRatio)
-	local xMin, xMax, _, dMin, dMax = WorldLayout.RoomInterior(size, slot)
-	local m = WorldLayout.MARGIN
-	local X = math.clamp((finite(x, 0) - (xMin + m)) / math.max(0.01, xMax - xMin - 2 * m), 0, 1)
-	local span = math.max(0.01, (dMax - m) - (dMin + m))
-	local fromBack = math.clamp(((dMax - m) - finite(d, 0)) / span, 0, 1)
-	local t = fromBack ^ (1 / WorldLayout.DEPTH_CURVE)
-	return X, ratio + t * (1 - ratio)
+-- X 2D -> x (studs, 0 = milieu) à la profondeur t (perspective de la 2D)
+local function mapX(dims: RoomDims, X: number, t: number): number
+	local sidePx = WorldLayout.SIDE_PX * (1 - math.clamp(t, 0, 1))
+	local px = (X * dims.RoomWpx - sidePx) / math.max(1, dims.RoomWpx - 2 * sidePx) * dims.RoomWpx
+	return (px - dims.RoomWpx / 2) * dims.PX
 end
 
--- Objet au mur (mur du fond) : (X, Y) 2D -> (x, y du centre) local
-function WorldLayout.WallToLocal(size: SizeDef?, slot: number, X: number, Y: number, wallRatio: number?): (number, number)
-	local ratio = wallRatioOf(wallRatio)
-	local xMin, xMax, yFloor = WorldLayout.RoomInterior(size, slot)
-	local m = WorldLayout.MARGIN
-	local x = xMin + m + math.clamp(finite(X, 0.5), 0, 1) * (xMax - xMin - 2 * m)
-	local h = (1 - math.clamp(finite(Y, ratio / 2), 0, ratio) / ratio) * WorldLayout.WALL_H
-	return x, yFloor + h
+local function unmapX(dims: RoomDims, x: number, t: number): number
+	local sidePx = WorldLayout.SIDE_PX * (1 - math.clamp(t, 0, 1))
+	local px = x / dims.PX + dims.RoomWpx / 2
+	return (px * math.max(1, dims.RoomWpx - 2 * sidePx) / dims.RoomWpx + sidePx) / dims.RoomWpx
 end
 
-function WorldLayout.LocalToWall(size: SizeDef?, slot: number, x: number, y: number, wallRatio: number?): (number, number)
-	local ratio = wallRatioOf(wallRatio)
-	local xMin, xMax, yFloor = WorldLayout.RoomInterior(size, slot)
-	local m = WorldLayout.MARGIN
-	local X = math.clamp((finite(x, 0) - (xMin + m)) / math.max(0.01, xMax - xMin - 2 * m), 0, 1)
-	local h = math.clamp(finite(y, 0) - yFloor, 0, WorldLayout.WALL_H)
-	return X, ratio * (1 - h / WorldLayout.WALL_H)
+-- Objet au sol : (X, Y) -> (x, z du centre) ; `fw` / `fd` = empreinte
+function WorldLayout.FloorForward(dims: RoomDims, X: number, Y: number, fw: number, fd: number): (number, number)
+	local t = depthT(dims, finite(Y, 0.8))
+	local limit = math.max(0, dims.W / 2 - fw / 2 - 0.1)
+	local x = math.clamp(mapX(dims, finite(X, 0.5), t), -limit, limit)
+	local zFront = (t ^ WorldLayout.DEPTH_CURVE) * dims.D
+	local z = math.clamp(zFront - fd / 2, fd / 2 + 0.08, math.max(fd / 2 + 0.08, dims.D - fd / 2 - 0.1))
+	return x, z
+end
+
+-- Inverse : (x, z du centre) -> (X, Y) bornés à la zone du sol
+function WorldLayout.FloorInverse(dims: RoomDims, x: number, z: number, fd: number): (number, number)
+	local zFront = math.clamp(finite(z, 0) + fd / 2, 0, dims.D)
+	local t = (zFront / dims.D) ^ (1 / WorldLayout.DEPTH_CURVE)
+	local X = math.clamp(unmapX(dims, finite(x, 0), t), 0, 1)
+	return X, math.clamp(dims.WallRatio + t * (1 - dims.WallRatio), dims.WallRatio, 1)
+end
+
+-- Objet mural : (X, Y) -> (x, y du pivot = bas de la boîte 2D) ; k = studs par unité
+function WorldLayout.WallForward(dims: RoomDims, X: number, Y: number, fw: number, k: number): (number, number)
+	local half = math.min(fw / 2, dims.W / 2)
+	local limit = math.max(0, dims.W / 2 - half - 0.1)
+	local x = math.clamp(mapX(dims, finite(X, 0.5), 0), -limit, limit)
+	local centerY = math.clamp((dims.WallPx - finite(Y, 0.2) * dims.RoomHpx) * dims.PX, 0.4, dims.WH - 0.2)
+	return x, centerY - 50 * k
+end
+
+function WorldLayout.WallInverse(dims: RoomDims, x: number, y: number, k: number): (number, number)
+	local X = math.clamp(unmapX(dims, finite(x, 0), 0), 0, 1)
+	local centerY = finite(y, 0) + 50 * k
+	local Y = (dims.WallPx - centerY / dims.PX) / dims.RoomHpx
+	return X, math.clamp(Y, 0, dims.WallRatio)
 end
 
 -- Arrondi comme le serveur (HouseService : X / Y à 0,0001)
@@ -266,7 +303,7 @@ function WorldLayout.PlotRadius(count: number): number
 end
 
 -- Parcelle `index` (1..count) : centre (x, z) par rapport au centre de la ville,
--- et angle (radians) de la direction "vers la place" (LookVector)
+-- et angle (radians) de sa direction depuis le centre
 function WorldLayout.PlotPlace(index: number, count: number): (number, number, number)
 	local radius = WorldLayout.PlotRadius(count)
 	local angle = (index - 1) / count * math.pi * 2
@@ -300,8 +337,7 @@ end
 function WorldLayout.PlotCFrame(index: number, count: number): CFrame
 	local x, z = WorldLayout.PlotPlace(index, count)
 	local center = WorldLayout.Origin() + Vector3.new(x, 0, z)
-	local toPlaza = WorldLayout.Origin() - center
-	return CFrame.lookAt(center, center + Vector3.new(toPlaza.X, 0, toPlaza.Z))
+	return CFrame.lookAt(center, center - Vector3.new(x, 0, z))
 end
 
 -- Maison : milieu de la façade au sol, regarde DANS la maison (RightVector =
@@ -320,6 +356,18 @@ end
 function WorldLayout.ToLocal(houseCF: CFrame, point: Vector3): (number, number, number)
 	local p = houseCF:PointToObjectSpace(point)
 	return p.X, p.Y, -p.Z
+end
+
+-- Pivot de la coque d'une pièce (House3DScene.BuildRoomShell : centre du
+-- dessus du sol, mur du fond vers -Z)
+function WorldLayout.ShellPivot(houseCF: CFrame, size: SizeDef?, slot: number): CFrame
+	local x, y, d = WorldLayout.RoomCenter(size, slot)
+	return houseCF * CFrame.new(x, y, -d)
+end
+
+-- Repère de la pièce pour la 2D <-> 3D (face intérieure du mur du fond, +Z vers l'avant)
+function WorldLayout.RoomFrame(houseCF: CFrame, size: SizeDef?, slot: number): CFrame
+	return WorldLayout.ShellPivot(houseCF, size, slot) * CFrame.new(0, 0, -WorldLayout.DEPTH / 2)
 end
 
 -- Apparition devant la porte d'entrée (regarde la maison)
@@ -385,28 +433,28 @@ export type TownData = {
 	RewardDay: number,
 }
 
--- Données "Town" d'un joueur, réparées (sauvegardes abîmées, anciennes)
+-- Données "Town" d'un joueur, réparées (sauvegardes abîmées, anciennes, nouveau jour)
 function WorldLayout.SanitizeTown(raw: any, now: number): TownData
 	local town = type(raw) == "table" and raw or {}
 	local day = WorldLayout.DayNumber(now)
-	local likeDay = math.floor(finite(town.LikeDay, 0))
+	local sameDay = math.floor(finite(town.LikeDay, -1)) == day
 	local liked: { [string]: boolean } = {}
-	local given = math.max(0, math.floor(finite(town.LikesGiven, 0)))
-	if likeDay == day and type(town.Liked) == "table" then
-		local count = 0
-		for key, value in pairs(town.Liked) do
-			if type(key) == "string" and #key <= 20 and value == true and count < 200 then
-				liked[key] = true
-				count += 1
+	local given = 0
+	if sameDay then
+		given = math.max(0, math.floor(finite(town.LikesGiven, 0)))
+		if type(town.Liked) == "table" then
+			local count = 0
+			for key, value in pairs(town.Liked) do
+				if type(key) == "string" and #key <= 20 and value == true and count < 200 then
+					liked[key] = true
+					count += 1
+				end
 			end
 		end
-	else
-		given = 0
 	end
-	local rewardDay = math.floor(finite(town.RewardDay, 0))
-	local rewards = math.max(0, math.floor(finite(town.LikedRewards, 0)))
-	if rewardDay ~= day then
-		rewards = 0
+	local rewards = 0
+	if math.floor(finite(town.RewardDay, -1)) == day then
+		rewards = math.max(0, math.floor(finite(town.LikedRewards, 0)))
 	end
 	return {
 		Open = WorldLayout.NormalizeOpen(town.Open),
@@ -414,13 +462,13 @@ function WorldLayout.SanitizeTown(raw: any, now: number): TownData
 		Visits = math.clamp(math.floor(finite(town.Visits, 0)), 0, 1e9),
 		LikeDay = day,
 		Liked = liked,
-		LikesGiven = if likeDay == day then given else 0,
+		LikesGiven = given,
 		LikedRewards = rewards,
 		RewardDay = day,
 	}
 end
 
--- Un "j'aime" de `liker` pour la maison de `ownerId` est-il permis ?
+-- Un "j'aime" de `likerId` pour la maison de `ownerId` est-il permis ?
 -- -> (ok, raison) avec raison = "Self" | "Already" | "Limit"
 function WorldLayout.CanLike(likerTown: TownData, likerId: number, ownerId: number): (boolean, string?)
 	if likerId == ownerId then
@@ -457,7 +505,7 @@ function WorldLayout.RewardAmount(perSecond: any, seconds: number): number
 	return math.min(rate * seconds, 1e300)
 end
 
--- Point (repère local de la maison) dans la maison ? (marge en studs)
+-- Point (repère local de la maison) dans la maison ? (marge en studs, < 0 = plus strict)
 function WorldLayout.InsideHouse(size: SizeDef?, x: number, y: number, d: number, margin: number?): boolean
 	local dims = WorldLayout.Dims(size)
 	local m = margin or 0
@@ -476,10 +524,10 @@ function WorldLayout.SlotAt(size: SizeDef?, x: number, y: number, d: number): nu
 		return nil
 	end
 	local rel = x - dims.Left - WorldLayout.HALL_W
-	if rel < 0 or rel > dims.Columns * dims.RoomW then
+	if rel < 0 or rel > dims.Columns * dims.Pitch then
 		return nil
 	end
-	local column = math.clamp(math.floor(rel / dims.RoomW) + 1, 1, dims.Columns)
+	local column = math.clamp(math.floor(rel / dims.Pitch) + 1, 1, dims.Columns)
 	return (floor - 1) * dims.Columns + column
 end
 

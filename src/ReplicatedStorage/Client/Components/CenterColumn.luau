@@ -67,6 +67,23 @@ local function arcadeVisible(): boolean
 	return PanelManager.IsRegistered("Arcade")
 end
 
+-- 🚶 Dopamine Town (promenade 3D) : lien sans dépendance (World/WorldLink)
+local worldLink: any = nil
+do
+	local ok, module = pcall(function()
+		return require(script.Parent.Parent:WaitForChild("World", 5):WaitForChild("WorldLink", 5) :: ModuleScript)
+	end)
+	worldLink = ok and module or nil
+end
+local function townVisible(): boolean
+	return worldLink ~= nil and worldLink.Available()
+end
+local function enterTown()
+	if worldLink then
+		worldLink.Enter({})
+	end
+end
+
 -- Pastilles des menus (Feature = nil : toujours visible ; Visible = fonction optionnelle).
 -- Text : anglais, traduit à la construction (Locale.T)
 local PILLS = {
@@ -77,6 +94,8 @@ local PILLS = {
 	-- 🕹️ Arcade : panneau écrit à part (enregistré par ClientMain s'il existe)
 	{ Id = "Arcade", Text = "🕹️ Arcade", Color = Color3.fromRGB(255, 70, 160), Feature = "Minigames", Panel = "Arcade", Visible = arcadeVisible },
 	{ Id = "Leaderboard", Text = "🥇 Leaderboard", Color = Theme.Colors.Blue, Feature = nil, Panel = "Leaderboard" },
+	-- 🚶 Dopamine Town : pas une fenêtre, Action = entrer dans la ville
+	{ Id = "Town", Text = "🚶 Town", Color = Color3.fromRGB(96, 200, 150), Feature = nil, Panel = "Town", Visible = townVisible, Action = enterTown },
 	{ Id = "Daily", Text = "🎁 Gift", Color = Theme.Colors.Pink, Feature = "Daily", Panel = "Daily" },
 	{ Id = "Themes", Text = "🎨 Themes", Color = Theme.Colors.Cyan, Feature = nil, Panel = "Themes" },
 	{ Id = "RobuxShop", Text = "💎 Robux", Color = Theme.Colors.Robux, Feature = nil, Panel = "RobuxShop", Visible = robuxShopVisible },
@@ -661,6 +680,10 @@ local function buildPills(parent: Frame, order: number)
 		UIUtil.Create("UIScale", { Name = "PopScale", Parent = holder })
 
 		button.Activated:Connect(function()
+			if def.Action then
+				def.Action()
+				return
+			end
 			if not PanelManager.IsRegistered(def.Panel) then
 				SoundManager.Play("Error", 0.8)
 				UIUtil.Shake(button)

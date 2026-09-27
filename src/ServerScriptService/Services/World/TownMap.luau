@@ -27,7 +27,6 @@ TownMap.FOLDER_NAME = "DopamineTown"
 
 local M = Enum.Material
 local GRASS = Color3.fromRGB(150, 222, 150)
-local GRASS_DARK = Color3.fromRGB(128, 204, 134)
 local PLOT_GRASS = Color3.fromRGB(170, 232, 168)
 local PAVE = Color3.fromRGB(255, 232, 238)
 local PAVE_PINK = Color3.fromRGB(255, 196, 218)
@@ -368,6 +367,8 @@ function TownMap.Build(plotCount: number): Town
 		wall.CastShadow = false
 	end
 
+	-- (les clients recalculent les parcelles avec WorldLayout : même nombre)
+	folder:SetAttribute("PlotCount", plotCount)
 	folder.Parent = workspace
 	return {
 		Folder = folder,

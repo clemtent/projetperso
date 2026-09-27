@@ -686,6 +686,11 @@ local function buyRoom(player: Player, data, argument: any): (boolean, string)
 	if type(typeId) ~= "string" or not Config.HouseRoomTypesById[typeId] then
 		return false, T(player, "Unknown room type")
 	end
+	-- (v9.3) Types de pièces verrouillés par les visites à l'océan
+	local roomTypeEntry = Config.HouseRoomTypesById[typeId]
+	if not Formulas.IsHouseEntryUnlocked(data, roomTypeEntry) then
+		return false, T(player, "🔒 Unlocked after %d visits to the ocean", Formulas.GetHouseRequiredRebirths(roomTypeEntry))
+	end
 	local house = data.House
 	local size = Formulas.GetHouseSize(data)
 	if #house.Rooms >= size.MaxRooms then
@@ -751,6 +756,11 @@ local function setRoomType(player: Player, data, argument: any): (boolean, strin
 	local typeId = argument.Type
 	if not room or type(typeId) ~= "string" or not Config.HouseRoomTypesById[typeId] then
 		return false, T(player, "Invalid request")
+	end
+	-- (v9.3) Types de pièces verrouillés par les visites à l'océan
+	local wanted = Config.HouseRoomTypesById[typeId]
+	if room.Type ~= typeId and not Formulas.IsHouseEntryUnlocked(data, wanted) then
+		return false, T(player, "🔒 Unlocked after %d visits to the ocean", Formulas.GetHouseRequiredRebirths(wanted))
 	end
 	room.Type = typeId
 	updateComfortStat(data)

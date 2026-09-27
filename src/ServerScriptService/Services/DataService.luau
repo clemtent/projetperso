@@ -388,7 +388,9 @@ function DataService:ReleaseAsync(player: Player)
 	while profile.Saving and waited < 10 do
 		waited += task.wait(0.1)
 	end
-	self:SaveAsync(player)
+	-- v9.3 : sauvegarde de sortie même si une sauvegarde lente est encore en
+	-- cours (sinon les derniers changements étaient perdus)
+	self:SaveAsync(player, true)
 	profiles[player] = nil
 end
 
