@@ -1030,7 +1030,7 @@ open3D = function()
 		Placed = placed,
 	}
 	SoundManager.Play("Open", 1.2)
-	local ok, err = pcall(module.Open, {
+	local ok, opened = pcall(module.Open, {
 		Room = record,
 		SizeId = latestHouse.Size,
 		Title = roomLabel(roomData),
@@ -1038,8 +1038,11 @@ open3D = function()
 			SoundManager.Play("Click", 0.9)
 		end,
 	})
-	if not ok then
-		warn("[House] House3D.Open : " .. tostring(err))
+	-- (Open renvoie false si la vue n'a pas pu se construire)
+	if not ok or opened == false then
+		if not ok then
+			warn("[House] House3D.Open : " .. tostring(opened))
+		end
 		notify(Locale.T("🧊 3D view: coming soon!"), C.Lilac)
 	end
 end

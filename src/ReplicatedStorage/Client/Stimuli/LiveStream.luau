@@ -434,6 +434,8 @@ local EXPRESSIONS: { [string]: { [string]: any } } = {
 }
 -- Mouvement de la tête (inclinaison, en degrés) selon l'expression
 local HEAD_TILTS: { [string]: number } = { Thanks = 8, Shy = 9, Love = 6, Wink = 7, Sleepy = 11, Think = -8, Sad = -5 }
+-- Expressions de réaction où ses lèvres bougent pendant qu'elle parle (réponse)
+local TALKY: { [string]: boolean } = { Happy = true, Love = true, Shy = true, Wink = true, Think = true, Pout = true, Sad = true, Yum = true, Vibe = true }
 
 ----------------------------------------------------------------------
 -- Petites fonctions utilitaires
@@ -3222,6 +3224,9 @@ function LiveStream.Start(ctx)
 		-- Bouche
 		local open, w, h = false, 10, 8
 		local shape = spec.Mouth
+		if TALKY[expression] and now < S.talkUntil then
+			shape = "Talk" -- elle parle (sa réponse) en gardant ses yeux et sourcils
+		end
 		if type(shape) == "table" then
 			open, w, h = true, shape[1], shape[2]
 		elseif shape == "Chew" then

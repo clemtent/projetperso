@@ -126,6 +126,8 @@ type Session = {
 	TitleCard: Frame?,
 	Toolbar: Frame?,
 	UiScale: number,
+	TopReserve: number, -- (px de maquette) haut de l'écran pris par le titre
+	BottomReserve: number, -- bas de l'écran pris par la barre d'outils
 }
 
 local session: Session? = nil
@@ -195,27 +197,25 @@ end
 
 -- Place prise par l'interface (px d'écran) : titre en haut, barre en bas
 local function reservedArea(s: Session, viewportH: number): (number, number, number)
-	local topInset, bottomInset = 0, 0
-	local ok, topLeft, bottomRight = pcall(function()
+	local bottomInset = 0
+	local ok, _, bottomRight = pcall(function()
 		return GuiService:GetGuiInset()
 	end)
-	if ok and typeof(topLeft) == "Vector2" then
-		topInset = topLeft.Y
-		if typeof(bottomRight) == "Vector2" then
-			bottomInset = bottomRight.Y
-		end
+	if ok and typeof(bottomRight) == "Vector2" then
+		bottomInset = bottomRight.Y
 	end
 	local scale = s.UiScale
-	local top = topInset + (10 + 64 + 10) * scale
-	local bottom = bottomInset + (12 + 74 + 10) * scale
-	-- (écran très bas : on garde au moins 45 % de la hauteur pour la pièce)
+	local top = s.TopReserve * scale
+	-- (tactile : marge pour la barre d'accueil des téléphones)
+	local bottom = bottomInset + s.BottomReserve * scale + (isTouchDevice() and 12 or 0)
+	-- (écran très bas : on garde au moins la moitié de la hauteur pour la pièce)
 	local free = viewportH - top - bottom
-	if free < viewportH * 0.45 then
-		local k = (viewportH * 0.55) / math.max(1, top + bottom)
+	if free < viewportH * 0.5 then
+		local k = (viewportH * 0.5) / math.max(1, top + bottom)
 		top *= k
 		bottom *= k
 	end
-	return top, bottom, 24 * scale
+	return top, bottom, 20 * scale
 end
 
 -- Distance (et cible) pour voir toute la pièce de face, à l'inclinaison par défaut
@@ -411,18 +411,27 @@ end
 -- Interface (titre, barre d'outils, construction)
 ----------------------------------------------------------------------
 
-local function toolButton(parent: Instance, name: string, icon: string, caption: string, order: number, primary: boolean): TextButton
+type Metrics = {
+	ButtonW: number,
+	ButtonH: number,
+	IconSize: number,
+	CaptionSize: number,
+	Pad: number,
+	Gap: number,
+}
+
+local function toolButton(parent: Instance, m: Metrics, name: string, icon: string, caption: string, order: number, primary: boolean): TextButton
 	local button = create("TextButton", {
 		Name = name,
 		AutoButtonColor = false,
 		Text = "",
-		Size = UDim2.fromOffset(66, 58),
+		Size = UDim2.fromOffset(m.ButtonW, m.ButtonH),
 		BackgroundColor3 = primary and C.PinkDeep or C.PinkMist,
 		BorderSizePixel = 0,
 		LayoutOrder = order,
 		Parent = parent,
 	}) :: TextButton
-	corner(button, UDim.new(0, 16))
+	corner(button, UDim.new(0, math.floor(m.ButtonH * 0.28)))
 	stroke(button, primary and C.PinkDeep:Lerp(Color3.new(0, 0, 0), 0.15) or C.PinkSoft, 1.5, 0)
 	create("UIGradient", {
 		Rotation = 90,
@@ -432,11 +441,11 @@ local function toolButton(parent: Instance, name: string, icon: string, caption:
 	create("TextLabel", {
 		Name = "Icon",
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(0, 5),
-		Size = UDim2.new(1, 0, 0, 28),
+		Position = UDim2.fromOffset(0, math.floor(m.ButtonH * 0.08)),
+		Size = UDim2.new(1, 0, 0, m.IconSize + 4),
 		Font = Theme.Fonts.Title,
 		Text = icon,
-		TextSize = 24,
+		TextSize = m.IconSize,
 		TextColor3 = primary and WHITE or C.Ink,
 		Parent = button,
 	})
@@ -444,15 +453,15 @@ local function toolButton(parent: Instance, name: string, icon: string, caption:
 		Name = "Caption",
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -5),
-		Size = UDim2.new(1, -8, 0, 15),
+		Position = UDim2.new(0.5, 0, 1, -math.floor(m.ButtonH * 0.08)),
+		Size = UDim2.new(1, -8, 0, m.CaptionSize + 3),
 		Font = Theme.Fonts.Title,
 		Text = caption,
 		TextScaled = true,
 		TextColor3 = primary and WHITE or C.Ink,
 		Parent = button,
 	})
-	create("UITextSizeConstraint", { MaxTextSize = 12, MinTextSize = 7, Parent = label })
+	create("UITextSizeConstraint", { MaxTextSize = m.CaptionSize, MinTextSize = 7, Parent = label })
 	-- Petit rebond au survol / à l'appui
 	local press = create("UIScale", { Name = "Press", Parent = button }) :: UIScale
 	local hovering = false
@@ -473,11 +482,11 @@ local function toolButton(parent: Instance, name: string, icon: string, caption:
 	return button
 end
 
-local function separator(parent: Instance, order: number)
+local function separator(parent: Instance, m: Metrics, order: number)
 	local holder = create("Frame", {
 		Name = "Separator",
 		BackgroundTransparency = 1,
-		Size = UDim2.fromOffset(9, 58),
+		Size = UDim2.fromOffset(9, m.ButtonH),
 		LayoutOrder = order,
 		Parent = parent,
 	})
@@ -485,37 +494,42 @@ local function separator(parent: Instance, order: number)
 		Name = "Line",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(2, 34),
+		Size = UDim2.fromOffset(2, math.floor(m.ButtonH * 0.58)),
 		BackgroundColor3 = C.LilacSoft,
 		BorderSizePixel = 0,
 		Parent = holder,
 	})
 end
 
+-- Interface de la vue : carte de titre (dans la barre du haut de Roblox, au
+-- milieu, qui est libre) + barre d'outils en bas + pastille "construction"
 local function buildGui(s: Session, title: string, roomIcon: string): ScreenGui
 	local gui = create("ScreenGui", {
 		Name = "House3DView",
 		ResetOnSpawn = false,
-		IgnoreGuiInset = false,
-		ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets,
+		IgnoreGuiInset = true,
+		ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets,
 		DisplayOrder = 60,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 	}) :: ScreenGui
 	local touch = isTouchDevice()
+	local device = "Desktop"
+	local okInterface, Interface = pcall(require, Client.Interface)
+	if okInterface and type(Interface) == "table" and type(Interface.Device) == "string" then
+		device = Interface.Device
+	end
+	-- Téléphone (paysage, peu de hauteur) : tout est plus compact
+	local compact = device == "Phone"
+	local scale = compact and 0.82 or 1
+	s.UiScale = scale
+	local m: Metrics = compact and { ButtonW = 58, ButtonH = 48, IconSize = 20, CaptionSize = 10, Pad = 7, Gap = 5 }
+		or { ButtonW = 66, ButtonH = 58, IconSize = 24, CaptionSize = 12, Pad = 8, Gap = 6 }
 	local root = create("Frame", {
 		Name = "Root",
 		BackgroundTransparency = 1,
 		Size = UDim2.fromScale(1, 1),
 		Parent = gui,
 	})
-	-- Échelle : un peu plus petit sur téléphone
-	local device = "Desktop"
-	local okInterface, Interface = pcall(require, Client.Interface)
-	if okInterface and type(Interface) == "table" and type(Interface.Device) == "string" then
-		device = Interface.Device
-	end
-	local scale = device == "Phone" and 0.82 or 1
-	s.UiScale = scale
 	local content = create("Frame", {
 		Name = "Content",
 		BackgroundTransparency = 1,
@@ -526,21 +540,26 @@ local function buildGui(s: Session, title: string, roomIcon: string): ScreenGui
 	})
 	create("UIScale", { Scale = scale, Parent = content })
 
-	-- Carte de titre : "🧊 Vue 3D · Chambre" + aide
+	-- Carte de titre : "🛏️ Vue 3D · Chambre" + aide
 	local heading = Locale.T("3D view") .. " · " .. title
 	local hint = touch and Locale.T("Drag to rotate · Pinch to zoom") or Locale.T("Drag to rotate · Scroll to zoom")
-	local width = math.clamp(math.max(textWidth(heading, 20, Theme.Fonts.Title), textWidth(hint, 14, Theme.Fonts.Body)) + 92, 260, 620)
+	local cardH = compact and 44 or 54
+	local badgeSize = compact and 30 or 38
+	local titleSize = compact and 16 or 19
+	local hintSize = compact and 11 or 13
+	local textLeft = 10 + badgeSize + 10
+	local width = math.clamp(math.max(textWidth(heading, titleSize, Theme.Fonts.Title), textWidth(hint, hintSize, Theme.Fonts.Body)) + textLeft + 20, 220, 560)
 	local card = create("Frame", {
 		Name = "TitleCard",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 10),
-		Size = UDim2.fromOffset(width, 64),
+		Position = UDim2.new(0.5, 0, 0, 6),
+		Size = UDim2.fromOffset(width, cardH),
 		BackgroundColor3 = WHITE,
 		BackgroundTransparency = 0.03,
 		BorderSizePixel = 0,
 		Parent = content,
 	})
-	corner(card, UDim.new(0, 20))
+	corner(card, UDim.new(0, math.floor(cardH * 0.36)))
 	stroke(card, C.PinkSoft, 2, 0)
 	create("UIGradient", {
 		Rotation = 90,
@@ -549,8 +568,9 @@ local function buildGui(s: Session, title: string, roomIcon: string): ScreenGui
 	})
 	local badge = create("Frame", {
 		Name = "Badge",
-		Position = UDim2.fromOffset(12, 12),
-		Size = UDim2.fromOffset(40, 40),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 10, 0.5, 0),
+		Size = UDim2.fromOffset(badgeSize, badgeSize),
 		BackgroundColor3 = WHITE,
 		BorderSizePixel = 0,
 		Parent = card,
@@ -567,18 +587,19 @@ local function buildGui(s: Session, title: string, roomIcon: string): ScreenGui
 		Size = UDim2.fromScale(1, 1),
 		Font = Theme.Fonts.Title,
 		Text = roomIcon,
-		TextSize = 22,
+		TextSize = math.floor(badgeSize * 0.56),
 		TextColor3 = WHITE,
 		Parent = badge,
 	})
+	local lineTop = math.floor((cardH - titleSize - hintSize - 6) / 2)
 	create("TextLabel", {
 		Name = "Title",
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(62, 9),
-		Size = UDim2.new(1, -74, 0, 26),
+		Position = UDim2.fromOffset(textLeft, lineTop),
+		Size = UDim2.new(1, -textLeft - 12, 0, titleSize + 4),
 		Font = Theme.Fonts.Title,
 		Text = heading,
-		TextSize = 20,
+		TextSize = titleSize,
 		TextColor3 = C.Ink,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
@@ -587,11 +608,11 @@ local function buildGui(s: Session, title: string, roomIcon: string): ScreenGui
 	create("TextLabel", {
 		Name = "Hint",
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(62, 35),
-		Size = UDim2.new(1, -74, 0, 18),
+		Position = UDim2.fromOffset(textLeft, lineTop + titleSize + 4),
+		Size = UDim2.new(1, -textLeft - 12, 0, hintSize + 4),
 		Font = Theme.Fonts.Body,
 		Text = hint,
-		TextSize = 14,
+		TextSize = hintSize,
 		TextColor3 = C.Ink,
 		TextTransparency = 0.3,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -599,21 +620,23 @@ local function buildGui(s: Session, title: string, roomIcon: string): ScreenGui
 		Parent = card,
 	})
 	s.TitleCard = card
+	s.TopReserve = 6 + cardH + 8
 
 	-- Barre d'outils
-	local buttons = 5
-	local barWidth = 16 + buttons * 66 + (buttons - 1 + 2) * 6 + 2 * 9
+	local buttons, separators = 5, 2
+	local barH = m.ButtonH + m.Pad * 2
+	local barWidth = m.Pad * 2 + buttons * m.ButtonW + separators * 9 + (buttons + separators - 1) * m.Gap
 	local bar = create("Frame", {
 		Name = "Toolbar",
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -12),
-		Size = UDim2.fromOffset(barWidth, 74),
+		Position = UDim2.new(0.5, 0, 1, -10),
+		Size = UDim2.fromOffset(barWidth, barH),
 		BackgroundColor3 = WHITE,
 		BackgroundTransparency = 0.03,
 		BorderSizePixel = 0,
 		Parent = content,
 	})
-	corner(bar, UDim.new(0, 26))
+	corner(bar, UDim.new(0, math.floor(barH * 0.36)))
 	stroke(bar, C.PinkSoft, 2, 0)
 	create("UIGradient", {
 		Rotation = 90,
@@ -621,10 +644,10 @@ local function buildGui(s: Session, title: string, roomIcon: string): ScreenGui
 		Parent = bar,
 	})
 	create("UIPadding", {
-		PaddingLeft = UDim.new(0, 8),
-		PaddingRight = UDim.new(0, 8),
-		PaddingTop = UDim.new(0, 8),
-		PaddingBottom = UDim.new(0, 8),
+		PaddingLeft = UDim.new(0, m.Pad),
+		PaddingRight = UDim.new(0, m.Pad),
+		PaddingTop = UDim.new(0, m.Pad),
+		PaddingBottom = UDim.new(0, m.Pad),
 		Parent = bar,
 	})
 	create("UIListLayout", {
@@ -632,18 +655,19 @@ local function buildGui(s: Session, title: string, roomIcon: string): ScreenGui
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
 		VerticalAlignment = Enum.VerticalAlignment.Center,
 		SortOrder = Enum.SortOrder.LayoutOrder,
-		Padding = UDim.new(0, 6),
+		Padding = UDim.new(0, m.Gap),
 		Parent = bar,
 	})
-	local rotateLeft = toolButton(bar, "RotateLeft", "↺", Locale.T("Rotate"), 1, false)
-	local rotateRight = toolButton(bar, "RotateRight", "↻", Locale.T("Rotate"), 2, false)
-	separator(bar, 3)
-	local reset = toolButton(bar, "Reset", "🔄", Locale.T("Reset"), 4, false)
-	local nightButton = toolButton(bar, "Night", "🌙", Locale.T("Night"), 5, false)
-	separator(bar, 6)
-	local close = toolButton(bar, "Close", "✕", Locale.T("Close"), 7, true)
+	local rotateLeft = toolButton(bar, m, "RotateLeft", "↺", Locale.T("Rotate"), 1, false)
+	local rotateRight = toolButton(bar, m, "RotateRight", "↻", Locale.T("Rotate"), 2, false)
+	separator(bar, m, 3)
+	local reset = toolButton(bar, m, "Reset", "🔄", Locale.T("Reset"), 4, false)
+	local nightButton = toolButton(bar, m, "Night", "🌙", Locale.T("Night"), 5, false)
+	separator(bar, m, 6)
+	local close = toolButton(bar, m, "Close", "✕", Locale.T("Close"), 7, true)
 	s.NightButton = nightButton
 	s.Toolbar = bar
+	s.BottomReserve = 10 + barH + 10
 	refreshNightButton(s)
 	rotateLeft.Activated:Connect(function()
 		rotateBy(s, -ROTATE_STEP)
@@ -663,11 +687,11 @@ local function buildGui(s: Session, title: string, roomIcon: string): ScreenGui
 		end
 	end)
 
-	-- Pastille "construction" (le temps que les objets arrivent)
+	-- Pastille "construction" (le temps que les objets arrivent), au-dessus de la barre
 	local chip = create("Frame", {
 		Name = "Building",
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -96),
+		Position = UDim2.new(0.5, 0, 1, -(10 + barH + 10)),
 		Size = UDim2.fromOffset(250, 32),
 		BackgroundColor3 = C.Ink,
 		BackgroundTransparency = 0.12,
@@ -1080,6 +1104,8 @@ function House3D.Open(options: Options?): boolean
 		TitleCard = nil,
 		Toolbar = nil,
 		UiScale = 1,
+		TopReserve = 80,
+		BottomReserve = 100,
 	}
 	session = s
 	local ok, err = pcall(start, s, options)

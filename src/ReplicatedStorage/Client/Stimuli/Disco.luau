@@ -264,7 +264,7 @@ function Disco.Start(ctx)
 		if pill and pill:IsA("GuiObject") and pill.Visible then
 			rightZone += 6 + pill.AbsoluteSize.X / scale
 		end
-		return math.clamp(canvas.X / 2 - rightZone - BALL_D / 2 - 16, BALL_X_MIN, BALL_X)
+		return math.clamp(canvas.X / 2 - rightZone - BALL_D / 2 - 28, BALL_X_MIN, BALL_X)
 	end
 	local ballOffset = computeBallOffset()
 
