@@ -95,6 +95,14 @@ local SURFACES: { [string]: { { number } } } = {
 	CatSofa = { { 20, 80, 64 } },
 	CrystalThrone = { { 24, 76, 56 } },
 	KitchenSink = { { 4, 28, 38 }, { 72, 96, 38 } },
+	-- v9.2 : meubles "cool" (Art/Cool92Gaming)
+	GamerBeanbag = { { 24, 76, 54 } },
+	LockerCabinet = { { 8, 92, 9 } },
+	BrickTable = { { 3, 97, 37 } },
+	GamerChair = { { 22, 78, 61 } },
+	GamingDesk = { { 3, 97, 35 } },
+	BunkBed = { { 10, 76, 27 }, { 10, 78, 71 } },
+	RaceCarBed = { { 18, 72, 41 } },
 }
 
 -- Meubles "lits" : les animaux grimpeurs y font la sieste
@@ -112,6 +120,9 @@ local BEDS: { [string]: boolean } = {
 	CatSofa = true,
 	Hammock = true,
 	Pouf = true,
+	GamerBeanbag = true,
+	BunkBed = true,
+	RaceCarBed = true,
 }
 
 -- Sièges : View = "Side" (dessin de profil qui regarde à droite : retourné
@@ -134,6 +145,8 @@ local SEATS: { [string]: SeatInfo } = {
 	Pouf = { View = "Round", Half = 0.4 },
 	HeartArmchair = { View = "Front", Half = 0.46 },
 	CatSofa = { View = "Front", Half = 0.48 },
+	GamerChair = { View = "Front", Half = 0.32 },
+	GamerBeanbag = { View = "Round", Half = 0.46 },
 }
 
 -- Tables "où l'on s'assoit" (chaises rangées autour)
@@ -149,6 +162,8 @@ local TABLES: { [string]: boolean } = {
 	StudyDesk = true,
 	VanityTable = true,
 	KotatsuTable = true,
+	GamingDesk = true,
+	BrickTable = true,
 }
 
 export type Spot = {

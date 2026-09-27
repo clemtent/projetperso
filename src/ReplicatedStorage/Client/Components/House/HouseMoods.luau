@@ -13,6 +13,9 @@
 	  Disco    : taches de couleur qui tournent
 	  Aurora   : voiles d'aurore boréale qui ondulent
 	  Rainbow  : reflet arc-en-ciel qui balaie la pièce
+	  (v9.2) Neon : tubes néon qui grésillent ; Floodlights : projecteurs de
+	  stade + flashs ; RGB : LED gamer qui changent de couleur ; Storm :
+	  pluie + éclairs ; Embers : braises qui montent
 	Peu de Frames (≤ 14 particules), animation à 30 Hz au plus, rien
 	n'est créé pendant l'animation.
 
@@ -166,6 +169,77 @@ local function buildEffect(parent: Frame, width: number, height: number, entry: 
 		gradient.Color = RAINBOW
 		gradient.Parent = band
 		add(band, 0.5, 0.5, 0.06, 0, 0)
+	elseif effect == "Neon" then
+		-- (v9.2) deux tubes néon sous le plafond (cyan / magenta) + leur lueur
+		for index = 0, 1 do
+			local color = index == 0 and Color3.fromRGB(80, 230, 255) or Color3.fromRGB(255, 90, 200)
+			local glow = Box(parent, width * (0.08 + index * 0.5), height * 0.03, width * 0.38, height * 0.14, color, 0.7, 2)
+			Round(glow)
+			local tube = Box(glow, width * 0.02, height * 0.055, width * 0.34, math.max(3, height * 0.018), WHITE, 0, 2)
+			Round(tube)
+			table.insert(extras, glow)
+		end
+	elseif effect == "Floodlights" then
+		-- (v9.2) projecteurs de stade : faisceaux depuis les coins + flashs
+		for index, spec in ipairs({ { 0.02, -34 }, { 0.98, 34 }, { 0.3, -12 }, { 0.7, 12 } }) do
+			local beam = Box(parent, 0, 0, width * 0.2, height * 1.4, WHITE, 0.72, 2)
+			beam.AnchorPoint = Vector2.new(0.5, 0)
+			beam.Position = UDim2.fromOffset(width * spec[1], -height * 0.05)
+			beam.Rotation = spec[2]
+			local fade = Instance.new("UIGradient")
+			fade.Rotation = 90
+			fade.Transparency = NumberSequence.new(0, 1)
+			fade.Parent = beam
+			beam:SetAttribute("BaseRotation", spec[2])
+			table.insert(extras, beam)
+			Circle(parent, width * spec[1], height * 0.02, 26, 26, WHITE, 0.1, 3)
+			local _ = index
+		end
+		for index = 1, 8 do
+			local size = 8 + noise(index, 1) * 10
+			local holder = Box(parent, 0, 0, size, size, WHITE, 1, 3)
+			Sparkle(holder, size / 2, size / 2, size, WHITE, 0.05, 1)
+			local scale = Instance.new("UIScale")
+			scale.Parent = holder
+			add(holder, noise(index, 2), 0.15 + noise(3, index) * 0.3, 0, noise(index, 4) * 6, size)
+		end
+	elseif effect == "RGB" then
+		-- (v9.2) bandes LED arc-en-ciel en haut et en bas + petites LED
+		for index = 0, 1 do
+			local band = Box(parent, 0, index == 0 and 0 or height - height * 0.06, width, height * 0.06, WHITE, 0.2, 2)
+			local fade = Instance.new("UIGradient")
+			fade.Rotation = 90
+			fade.Transparency = index == 0 and NumberSequence.new(0.1, 1) or NumberSequence.new(1, 0.1)
+			fade.Parent = band
+			table.insert(extras, band)
+		end
+		for index = 1, 10 do
+			local led = Circle(parent, 0, 0, 7, 7, WHITE, 0.1, 3)
+			add(led, (index - 0.5) / 10, 0.035, 0, index * 0.1, 7)
+		end
+	elseif effect == "Storm" then
+		-- (v9.2) pluie oblique + éclair (flash blanc)
+		for index = 1, 14 do
+			local drop = Box(parent, 0, 0, 2, 14 + noise(index, 1) * 10, Color3.fromRGB(200, 220, 255), 0.35, 3)
+			drop.Rotation = 14
+			Round(drop)
+			add(drop, noise(index, 2), noise(3, index), 0.7 + noise(index, 5) * 0.5, 0, 0)
+		end
+		local flash = Box(parent, 0, 0, width, height, WHITE, 1, 4)
+		table.insert(extras, flash)
+	elseif effect == "Embers" then
+		-- (v9.2) braises qui montent + lueur orange au sol
+		local glow = Box(parent, 0, height * 0.6, width, height * 0.4, Color3.fromRGB(255, 120, 40), 0.5, 2)
+		local fade = Instance.new("UIGradient")
+		fade.Rotation = 90
+		fade.Transparency = NumberSequence.new(1, 0.3)
+		fade.Parent = glow
+		table.insert(extras, glow)
+		for index = 1, 12 do
+			local size = 4 + noise(index, 1) * 6
+			local ember = Circle(parent, 0, 0, size, size, index % 3 == 0 and Color3.fromRGB(255, 220, 90) or Color3.fromRGB(255, 130, 50), 0.1, 3)
+			add(ember, noise(index, 2), noise(3, index), 0.08 + noise(index, 5) * 0.08, noise(index, 4) * 6, size)
+		end
 	end
 	-- Position de départ (aperçu fixe : la seule position)
 	for _, particle in ipairs(particles) do
@@ -275,6 +349,57 @@ function HouseMoods.new(parent: Instance, z: number): Mood
 			for _, p in ipairs(particles) do
 				local x = ((t * p.Speed) % 1.6) - 0.3
 				p.Frame.Position = UDim2.fromOffset(x * width, 0.5 * height)
+			end
+		elseif effect == "Neon" then
+			-- (v9.2) les néons respirent et grésillent de temps en temps
+			for index, glow in ipairs(extras) do
+				local buzz = ((t * 0.7 + index * 0.37) % 5) < 0.12 and 0.25 or 0;
+				(glow :: Frame).BackgroundTransparency = 0.66 + 0.1 * math.sin(t * 2 + index) + buzz
+			end
+		elseif effect == "Floodlights" then
+			for _, beam in ipairs(extras) do
+				local base = tonumber(beam:GetAttribute("BaseRotation")) or 0
+				beam.Rotation = base + math.sin(t * 0.5 + base) * 4
+			end
+			for _, p in ipairs(particles) do
+				-- flashs d'appareils photo : brefs et décalés
+				local cycle = (t * 0.6 + p.Phase) % 3
+				local scale = p.Frame:FindFirstChildOfClass("UIScale")
+				if scale then
+					scale.Scale = cycle < 0.25 and (1 - cycle * 4) * 1.2 or 0
+				end
+			end
+		elseif effect == "RGB" then
+			for index, band in ipairs(extras) do
+				(band :: Frame).BackgroundColor3 = Color3.fromHSV((t * 0.12 + index * 0.5) % 1, 0.75, 1)
+			end
+			for _, p in ipairs(particles) do
+				(p.Frame :: Frame).BackgroundColor3 = Color3.fromHSV((t * 0.2 + p.X) % 1, 0.7, 1)
+				p.Frame.Position = UDim2.fromOffset(p.X * width, p.Y * height)
+			end
+		elseif effect == "Storm" then
+			for _, p in ipairs(particles) do
+				local y = (p.Y + t * p.Speed) % 1.1
+				local x = (p.X - y * 0.25) % 1.05
+				p.Frame.Position = UDim2.fromOffset(x * width, (y - 0.05) * height)
+			end
+			local flash = extras[1]
+			if flash then
+				-- un double éclair toutes les ~6 s
+				local cycle = t % 6.3
+				local amount = (cycle < 0.08 or (cycle > 0.2 and cycle < 0.3)) and 0.45 or 1;
+				(flash :: Frame).BackgroundTransparency = amount
+			end
+		elseif effect == "Embers" then
+			for _, p in ipairs(particles) do
+				local y = (p.Y - t * p.Speed) % 1.1
+				local x = p.X + math.sin(t * 1.7 + p.Phase) * 0.025
+				p.Frame.Position = UDim2.fromOffset(x * width, (y - 0.05) * height);
+				(p.Frame :: Frame).BackgroundTransparency = 0.1 + (1 - y / 1.1) * 0.6
+			end
+			local glow = extras[1]
+			if glow then
+				(glow :: Frame).BackgroundTransparency = 0.5 + 0.12 * math.sin(t * 1.3)
 			end
 		end
 	end

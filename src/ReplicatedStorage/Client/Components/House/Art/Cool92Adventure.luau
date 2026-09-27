@@ -15,7 +15,6 @@ local NAVY = rgb(52, 60, 100)
 local DARK = rgb(44, 46, 64)
 local DARKER = rgb(30, 32, 46)
 local CYAN = rgb(60, 222, 255)
-local MAGENTA = rgb(255, 84, 196)
 local RED = rgb(236, 66, 76)
 local ORANGE = rgb(255, 152, 56)
 local STEEL = rgb(176, 186, 206)
@@ -364,22 +363,35 @@ Art.PirateShip = function(body, kit, _item)
 	kit.Part(body, 46, 76, 8, 14, rgb(120, 80, 50), { Radius = 2, Z = 1 })
 	local ship = kit.Group(body, 0, 0, 100, 100, 2)
 	kit.Animate(ship, "Sway", 3, 0.9, 0)
-	-- mâts + voiles
-	kit.Part(ship, 48, 12, 4, 62, rgb(120, 80, 50), { Radius = 2, Z = 1 })
-	kit.Part(ship, 26, 30, 3, 44, rgb(120, 80, 50), { Radius = 2, Z = 1 })
-	kit.Part(ship, 32, 22, 36, 26, rgb(250, 244, 228), { Radius = 8, Z = 2, Shine = true })
-	kit.Part(ship, 36, 50, 28, 16, rgb(250, 244, 228), { Radius = 6, Z = 2 })
-	kit.Part(ship, 14, 38, 22, 20, rgb(250, 244, 228), { Radius = 6, Z = 2 })
-	-- drapeau
-	local flag = kit.Part(ship, 52, 8, 18, 12, DARKER, { Radius = 2, Z = 3 })
-	kit.Blob(flag, 9, 5, 7, 6, WHITE, { Z = 2, Outline = false })
-	kit.Box(flag, 5, 9, 8, 1.5, WHITE, 0, 2)
-	-- coque
-	local hull = kit.Part(ship, 8, 64, 84, 18, rgb(150, 96, 60), { Radius = 8, Z = 4, Shine = true })
-	kit.Box(hull, 4, 4, 76, 3, C.Gold, 0, 2)
+	local sail = rgb(250, 244, 228)
+	-- mâts
+	kit.Part(ship, 49, 10, 4, 62, rgb(120, 80, 50), { Radius = 2, Z = 1 })
+	kit.Part(ship, 24, 30, 3, 42, rgb(120, 80, 50), { Radius = 2, Z = 1 })
+	-- voiles gonflées (rayées de rouge) + foc triangulaire
+	local top = kit.Part(ship, 36, 16, 30, 20, sail, { Radius = 9, Z = 2, Shine = true })
+	kit.Box(top, 0, 8, 30, 4, RED, 0.1, 2)
+	local main = kit.Part(ship, 30, 38, 42, 26, sail, { Radius = 12, Z = 2, Shine = true })
+	kit.Box(main, 0, 8, 42, 4, RED, 0.1, 2)
+	kit.Box(main, 0, 16, 42, 4, RED, 0.1, 2)
+	local back = kit.Part(ship, 12, 38, 24, 22, sail, { Radius = 9, Z = 2 })
+	kit.Box(back, 0, 9, 24, 4, RED, 0.1, 2)
+	kit.Triangle(ship, 84, 30, 22, 34, sail, 2)
+	kit.Line(ship, 51, 14, 92, 62, 1, rgb(120, 80, 50), 0.2, 1)
+	-- drapeau pirate (tête de mort mignonne) en haut du grand mât
+	local flag = kit.Part(ship, 53, 6, 20, 13, DARKER, { Radius = 2, Z = 3 })
+	local skull = kit.Blob(flag, 10, 5.5, 8, 7, WHITE, { Z = 2, Outline = false })
+	kit.Circle(skull, 2.5, 3, 2, 2, DARKER, 0, 2)
+	kit.Circle(skull, 5.5, 3, 2, 2, DARKER, 0, 2)
+	kit.Line(flag, 5, 10, 15, 12, 1.2, WHITE, 0, 2)
+	kit.Line(flag, 15, 10, 5, 12, 1.2, WHITE, 0, 2)
+	-- coque (proue relevée)
+	kit.Triangle(ship, 90, 58, 14, 14, rgb(150, 96, 60), 3)
+	local hull = kit.Part(ship, 6, 62, 86, 18, rgb(150, 96, 60), { Radius = 9, Z = 4, Shine = true })
+	kit.Box(hull, 4, 4, 78, 3, C.Gold, 0, 2)
 	for index = 0, 3 do
-		kit.Circle(hull, 16 + index * 16, 11, 5, 5, DARKER, 0, 2) -- hublots
+		kit.Circle(hull, 18 + index * 16, 11, 5, 5, DARKER, 0, 2) -- hublots
 	end
+	kit.Part(ship, 2, 56, 18, 10, rgb(150, 96, 60), { Radius = 3, Z = 3 }) -- château arrière
 	return nil
 end
 
@@ -526,6 +538,7 @@ Art.DinoSkeleton = function(body, kit, _item)
 	kit.Line(body, 58, 56, 60, 76, 4, BONE, 0, 3)
 	kit.Line(body, 60, 76, 56, 88, 3.5, BONE, 0, 3)
 	kit.Line(body, 68, 44, 74, 52, 2, BONE, 0, 3) -- petit bras
+	kit.Line(body, 74, 30, 72, 26, 3, BONE, 0, 3) -- cou
 	-- crâne
 	local skull = kit.Part(body, 64, 12, 34, 20, BONE, { Radius = 8, Z = 5, Shine = true })
 	kit.Circle(skull, 12, 8, 7, 7, DARK, 0, 2)

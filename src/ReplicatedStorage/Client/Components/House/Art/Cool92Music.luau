@@ -18,7 +18,6 @@ local RED = rgb(236, 66, 76)
 local ORANGE = rgb(255, 152, 56)
 local STEEL = rgb(176, 186, 206)
 local CHROME = rgb(214, 222, 236)
-local BLUE = rgb(80, 150, 255)
 
 -- Petit éclair (logo) dans la zone (x, y) de hauteur h
 local function bolt(kit, parent, x, y, h, color, z)
@@ -141,7 +140,7 @@ end
 Art.DJBooth = function(body, kit, _item)
 	local C = kit.C
 	-- façade lumineuse
-	local front = kit.Part(body, 6, 44, 88, 54, DARKER, { Radius = 8, Z = 2, Shine = true })
+	local front = kit.Part(body, 6, 44, 88, 54, DARKER, { Radius = 8, Z = 2 })
 	for col = 0, 9 do
 		local height = 6 + ((col * 7) % 5) * 6
 		local bar = kit.Box(front, 6 + col * 7.8, 44 - height, 5.5, height, col % 3 == 0 and MAGENTA or (col % 3 == 1 and CYAN or LIME), 0, 2)

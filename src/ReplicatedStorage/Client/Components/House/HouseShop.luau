@@ -79,8 +79,10 @@ local MAX_FAVS = 10
 local TAB_ICON_WIDTH = 44 -- onglet non choisi (icône seule) : cible tactile
 local LIST_INSET = 31 -- largeur du tiroir - largeur utile d'une liste (marges)
 local LOOK_ART_W = 200 -- (v9.1) largeur de maquette des aperçus de personnalisation
--- (v9.1) les objets ajoutés à partir de celui-ci forment la pastille "🆕 Nouveautés"
-local NEW_FROM = (HouseCommon.ItemsById.ToyChest and HouseCommon.ItemsById.ToyChest.Order) or math.huge
+-- Les objets ajoutés à partir de celui-ci forment la pastille "🆕 Nouveautés"
+-- (v9.2 : les objets "cool" ; sinon ceux de la v9.1)
+local NEW_ITEM = HouseCommon.ItemsById.RGBHeadset or HouseCommon.ItemsById.ToyChest
+local NEW_FROM = (NEW_ITEM and NEW_ITEM.Order) or math.huge
 
 export type Handlers = {
 	Notify: (text: string, color: Color3?, title: string?) -> (),

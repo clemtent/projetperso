@@ -549,6 +549,12 @@ if gardenFolder then
 	end
 end
 
+-- (v9.2) Boîte à outils de dessin pour d'autres modules (chapeaux et boutons
+-- de la boutique d'objets : CosmeticArt) ; `static` = sans animation
+function HouseArt.NewKit(static: boolean?): (any, { Anim })
+	return newKit(static == true)
+end
+
 function HouseArt.HasGarden(decorId: string): boolean
 	return gardenPainters[decorId] ~= nil
 end

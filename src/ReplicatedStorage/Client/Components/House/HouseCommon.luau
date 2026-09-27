@@ -231,7 +231,10 @@ local CATEGORY_TINTS: { [string]: Color3 } = {
 }
 
 function HouseCommon.CategoryTint(categoryId: string): Color3
-	return CATEGORY_TINTS[categoryId] or HouseCommon.Colors.PinkSoft
+	-- (v9.2) les nouvelles catégories donnent leur teinte dans Config (Tint)
+	local entry = Config.HouseCategoriesById[categoryId]
+	local configured = entry and entry.Tint
+	return CATEGORY_TINTS[categoryId] or (typeof(configured) == "Color3" and configured) or HouseCommon.Colors.PinkSoft
 end
 
 ----------------------------------------------------------------------

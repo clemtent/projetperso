@@ -514,14 +514,19 @@ test("Config.House : catalogue (ids, catégories, zones, motifs, prix)", functio
 	end
 	checkSkins(H.Wallpapers, Config.HouseWallpapersById, { Plain = true, Stripes = true, Checker = true, Dots = true, Hearts = true,
 		Stars = true, Clouds = true, Bricks = true, Wood = true, Waves = true,
-		Plaid = true, Flowers = true, Diamonds = true, Chevron = true, Moons = true }, 26, "Papier peint")
+		Plaid = true, Flowers = true, Diamonds = true, Chevron = true, Moons = true,
+		-- v9.2
+		Flag = true, Bolts = true, Camo = true, Racing = true, Carbon = true, Graffiti = true, Planets = true, NeonGrid = true }, 39, "Papier peint")
 	checkSkins(H.Floors, Config.HouseFloorsById, { Plain = true, Checker = true, Wood = true, Tiles = true, Carpet = true,
-		Marble = true, Herringbone = true, Terrazzo = true, Mosaic = true, Grass = true, Clouds = true, Starry = true }, 22, "Sol")
+		Marble = true, Herringbone = true, Terrazzo = true, Mosaic = true, Grass = true, Clouds = true, Starry = true,
+		-- v9.2
+		Concrete = true, Court = true, Turf = true, TreadPlate = true, Road = true, Lava = true }, 30, "Sol")
 	eq(check, H.Wallpapers[1].Pattern, "Stripes", "1er papier peint : rayures roses")
 	eq(check, H.Floors[1].Pattern, "Checker", "1er sol : damier prune")
 
 	-- Catégories
-	local categoryIds = { "Furniture", "Decor", "Toys", "Plants", "Electronics", "Kitchen", "Doors", "Windows", "Lights", "Pets" }
+	local categoryIds = { "Furniture", "Decor", "Toys", "Plants", "Electronics", "Kitchen", "Doors", "Windows", "Lights", "Pets",
+		"Gaming", "Sports", "Adventure" } -- (v9.2)
 	eq(check, #H.Categories, #categoryIds, "nombre de catégories")
 	for i, category in ipairs(H.Categories) do
 		eq(check, category.Id, categoryIds[i], "catégorie " .. i)
@@ -751,11 +756,19 @@ test("Maison v9.1 : 48 nouveaux objets et personnalisation (couleurs, boiseries,
 			"ambiance " .. mood.Id)
 	end
 	local viewKinds = { Garden = true, Sunset = true, City = true, Beach = true, Snow = true, Sakura = true, Mountains = true,
-		Underwater = true, Candy = true, Space = true, Rainbow = true }
+		Underwater = true, Candy = true, Space = true, Rainbow = true,
+		SkatePark = true, Stadium = true, Racetrack = true, Launch = true, Dino = true, Volcano = true } -- (v9.2)
 	for _, view in ipairs(H.Views) do
 		check(viewKinds[view.Kind] == true and typeOf(view.Sky) == "Color3", "vue " .. view.Id)
 	end
-	local roofPatterns = { None = true, Hearts = true, Dots = true, Stripes = true, Stars = true, Flowers = true, Snow = true, Scales = true }
+	local roofPatterns = { None = true, Hearts = true, Dots = true, Stripes = true, Stars = true, Flowers = true, Snow = true, Scales = true,
+		Checkered = true, Bolts = true, Camo = true, Flames = true } -- (v9.2)
+	-- (v9.2) effets d'ambiance connus de HouseMoods
+	local moodEffects = { None = true, Rays = true, Sparkles = true, Hearts = true, Leaves = true, Bubbles = true, Disco = true,
+		Aurora = true, Rainbow = true, Neon = true, Floodlights = true, RGB = true, Storm = true, Embers = true }
+	for _, mood in ipairs(H.Moods) do
+		check(moodEffects[mood.Effect] == true, "effet d'ambiance inconnu " .. mood.Id .. " " .. tostring(mood.Effect))
+	end
 	for _, style in ipairs(H.RoofStyles) do
 		check(roofPatterns[style.Pattern] == true, "motif de toit " .. style.Id)
 	end

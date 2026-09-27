@@ -1842,6 +1842,80 @@ local function roofPattern(ctx: Ctx, roof: RoofRect, pattern: string, roofColor:
 			y += 18
 			row += 1
 		end
+	elseif pattern == "Checkered" then
+		-- (v9.2) damier de course noir et blanc (cases dans le toit seulement)
+		local cell = 18
+		local row = 0
+		local y = roof.Top + 10
+		while y < roof.Top + roof.H - cell do
+			local half = roofHalfWidth(roof, y)
+			local x = roof.CX - half + 10 + (row % 2) * cell
+			while x < roof.CX + half - 10 do
+				for k = 0, 1 do
+					local sx = x + k * cell
+					if insideRoof(roof, sx, y, 3) and insideRoof(roof, sx + cell, y, 3) and insideRoof(roof, sx, y + cell, 3) and insideRoof(roof, sx + cell, y + cell, 3) then
+						box(parent, sx, y, cell, cell, if k == 0 then Color3.fromRGB(40, 42, 56) else WHITE, if k == 0 then 0.05 else 0.1, z)
+					end
+				end
+				x += cell * 2
+			end
+			y += cell
+			row += 1
+		end
+	elseif pattern == "Bolts" then
+		-- (v9.2) éclairs jaunes en quinconce
+		grid(function(x, y, index)
+			local s = if index % 2 == 0 then 26 else 20
+			local color = if index % 3 == 0 then WHITE else C.Butter
+			line(parent, x + s * 0.2, y - s / 2, x - s * 0.2, y + s * 0.02, 5, color, 0, z)
+			line(parent, x - s * 0.2, y + s * 0.02, x + s * 0.18, y - s * 0.02, 5, color, 0, z)
+			line(parent, x + s * 0.18, y - s * 0.02, x - s * 0.22, y + s / 2, 5, color, 0, z)
+		end)
+	elseif pattern == "Camo" then
+		-- (v9.2) camouflage : taches arrondies en 3 teintes
+		local tones = { Color3.fromRGB(96, 120, 76), Color3.fromRGB(60, 76, 50), Color3.fromRGB(150, 160, 110) }
+		local row = 0
+		local y = roof.Top + 12
+		while y < roof.Top + roof.H - 8 do
+			local half = roofHalfWidth(roof, y)
+			local x = roof.CX - half + 14 + (row % 2) * 16
+			local index = 0
+			while x < roof.CX + half - 10 do
+				if insideRoof(roof, x, y, 12) then
+					local n = noise(x, y)
+					local spot = circle(parent, x, y, 30 + n * 20, 16 + n * 10, tones[(index + row) % #tones + 1], 0, z)
+					spot.Rotation = (n - 0.5) * 90
+				end
+				x += 30
+				index += 1
+			end
+			y += 16
+			row += 1
+		end
+	elseif pattern == "Flames" then
+		-- (v9.2) flammes qui montent depuis le bas du toit (orange + cœur jaune)
+		local eave = roof.Top + roof.H
+		local half = roof.BaseW / 2
+		local count = math.max(3, math.floor(half * 2 / 34))
+		for index = 0, count - 1 do
+			local cx = roof.CX - half + (index + 0.5) * (half * 2 / count)
+			if not (roof.Skip and math.abs(cx - roof.CX) < roof.Skip) then
+				local tall = roof.H * (0.38 + 0.3 * noise(index, 3))
+				local baseY = eave - 6
+				-- la pointe reste dans le toit (plus étroit en haut)
+				while tall > 14 and not insideRoof(roof, cx, baseY - tall, 6) do
+					tall -= 6
+				end
+				local tipY = baseY - tall
+				if tall > 14 and insideRoof(roof, cx, baseY - 10, 10) then
+					circle(parent, cx, baseY - 8, 30, 20, Color3.fromRGB(255, 120, 50), 0, z)
+					line(parent, cx - 10, baseY - 10, cx, tipY, 12, Color3.fromRGB(255, 120, 50), 0, z)
+					line(parent, cx + 10, baseY - 10, cx + 4, tipY + tall * 0.3, 10, Color3.fromRGB(255, 120, 50), 0, z)
+					circle(parent, cx, baseY - 8, 16, 12, C.Butter, 0, z + 1)
+					line(parent, cx - 3, baseY - 10, cx, tipY + tall * 0.35, 6, C.Butter, 0, z + 1)
+				end
+			end
+		end
 	end
 	local _ = deep
 end
