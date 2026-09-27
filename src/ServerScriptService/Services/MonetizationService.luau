@@ -11,6 +11,10 @@
 	  - Developer Products : ProcessReceipt (défini UNE seule fois ici).
 	    Chaque achat n'est accordé qu'une fois : son PurchaseId est gardé dans
 	    data.Purchases et sauvegardé AVANT de répondre "PurchaseGranted" à Roblox ;
+	    types : Dopamine, Boost, ServerRush, Tickets (🎟️ tickets d'arcade,
+	    même solde data.Tickets que MinigameService), Combo (🎟️ + Dopamine).
+	    Un type absent de Config.Monetization.ReadyKinds (ex. "Stylish",
+	    pas encore codé) n'est jamais accordé (Roblox réessaiera plus tard) ;
 	  - Boost temporaire (data.Boost, conservé si le joueur revient avant la fin).
 	Le client ne fait qu'OUVRIR la fenêtre d'achat Roblox : il ne peut rien
 	s'accorder lui-même.
@@ -371,11 +375,60 @@ local function recordPurchase(data, purchaseId: string)
 	data.Stats.RobuxPurchases += 1
 end
 
--- Accorde le contenu d'un produit. Renvoie le texte de remerciement.
+-- 🎟️ Tickets achetés : même solde que les tickets gagnés (MinigameService).
+-- -> (tickets ajoutés, nouveau solde)
+local function addPurchasedTickets(player: Player, data, amount: number): (number, number)
+	local minigames = services.MinigameService
+	if minigames and type(minigames.GrantPurchasedTickets) == "function" then
+		return minigames:GrantPurchasedTickets(player, amount)
+	end
+	-- (secours si l'arcade n'est pas chargée : même champ data.Tickets)
+	local before = (isValidNumber(data.Tickets) and data.Tickets >= 0) and math.floor(data.Tickets) or 0
+	data.Tickets = before + amount
+	return amount, data.Tickets
+end
+
+-- Nombre entier de tickets d'une offre (Tickets / Combo), sinon erreur
+local function ticketAmount(product): number
+	local amount = product.Tickets
+	if not isValidNumber(amount) or amount <= 0 or amount ~= math.floor(amount) then
+		error("nombre de tickets invalide pour " .. tostring(product.Id))
+	end
+	return amount
+end
+
+-- Accorde le contenu d'un produit. Renvoie (texte de remerciement, titre
+-- optionnel du bandeau, tickets ajoutés optionnels).
 -- Tout est calculé AVANT de modifier les données (pas d'accord à moitié).
-local function grantProduct(player: Player, data, product): string
+local function grantProduct(player: Player, data, product): (string, string?, number?)
 	local kind = product.Kind
-	if kind == "Dopamine" then
+	local ready = Config.Monetization.ReadyKinds
+	if type(ready) == "table" and not ready[kind] then
+		error("type de produit pas encore codé : " .. tostring(kind))
+	end
+	if kind == "Tickets" then
+		local amount = ticketAmount(product)
+		local added, balance = addPurchasedTickets(player, data, amount)
+		return T(player, "💎 Thank you! %s %s: +%s 🎟️ tickets (you have %s)", product.Icon, T(player, product.Name),
+			NumberFormatter.Format(added), NumberFormatter.Format(balance)),
+			T(player, "🎟️ +%s TICKETS!", NumberFormatter.Format(added)),
+			added
+	elseif kind == "Combo" then
+		-- Tout est vérifié d'abord ; la Dopamine (seule étape qui peut échouer)
+		-- est donnée AVANT les tickets (simple addition) : jamais à moitié
+		local tickets = ticketAmount(product)
+		local stats = services.GameService:GetStats(player)
+		local amount = Formulas.ScaledReward(stats, product.Seconds or 0, product.Minimum or 0)
+		if not isValidNumber(amount) or amount <= 0 then
+			error("montant invalide pour " .. tostring(product.Id))
+		end
+		services.GameService:AddDopamine(player, amount, false)
+		local added = addPurchasedTickets(player, data, tickets)
+		return T(player, "💎 Thank you! %s %s: +%s 🎟️ tickets and +%s %s", product.Icon, T(player, product.Name),
+			NumberFormatter.Format(added), NumberFormatter.Format(amount), Config.Game.CurrencyName),
+			T(player, "🎁 COMBO UNLOCKED!"),
+			added
+	elseif kind == "Dopamine" then
 		local stats = services.GameService:GetStats(player)
 		local amount = Formulas.ScaledReward(stats, product.Seconds or 0, product.Minimum or 0)
 		if not isValidNumber(amount) or amount <= 0 then
@@ -443,7 +496,7 @@ local function processReceipt(receiptInfo)
 	end
 
 	-- Accord + enregistrement du PurchaseId, sans aucune attente entre les deux
-	local ok, result = pcall(grantProduct, player, data, product)
+	local ok, result, title, tickets = pcall(grantProduct, player, data, product)
 	if not ok then
 		warn("[MonetizationService] Erreur en accordant " .. tostring(product.Id) .. " :", result)
 		return Enum.ProductPurchaseDecision.NotProcessedYet
@@ -455,6 +508,8 @@ local function processReceipt(receiptInfo)
 		Kind = "Product",
 		Id = product.Id,
 		Text = result,
+		Title = title, -- (nil = titre par défaut du bandeau)
+		Tickets = tickets, -- 🎟️ ajoutés (packs de tickets, combos)
 	})
 	services.GameService:SendState(player)
 

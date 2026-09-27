@@ -71,6 +71,7 @@ export type Sticker = {
 	Bulbs: { Frame },
 	Anims: { HouseArt.Anim },
 	Flat: boolean,
+	Flipped: boolean, -- dessin retourné (miroir) : entry.F
 }
 
 export type Room = {
@@ -94,7 +95,10 @@ export type Room = {
 	DestroySticker: (sticker: Sticker) -> (),
 	SetZoneHint: (placement: string?) -> (),
 	SetGrid: (visible: boolean, step: number?) -> (),
-	SetSurfaceHint: (surface: { L: number, R: number, Y: number }?) -> (),
+	SetSurfaceHint: (surface: { L: number, R: number, Y: number }?, label: string?, color: Color3?) -> (),
+	ShowSurfaces: (list: { any }?) -> (),
+	SetTargetGlow: (sticker: Sticker?) -> (),
+	SetFlip: (sticker: Sticker, flipped: boolean) -> (),
 	SetExterior: (exterior: string?) -> (),
 	Update: (dt: number) -> (),
 	Refit: () -> (),
@@ -276,24 +280,25 @@ function HouseRoom.new(stage: Frame): Room
 	Round(floorZone, UDim.new(0, 10))
 	local floorZoneStroke = UIUtil.Stroke(floorZone, WHITE, 3, 1)
 
-	-- Dessus de meuble visé pendant un glissement (petit objet posé SUR un meuble)
+	-- Dessus de meuble visé pendant un glissement (petit objet posé SUR un
+	-- meuble, chaise rangée à une table) : trait lumineux + étiquette
 	local surfaceHint = UIUtil.Create("Frame", {
 		Name = "SurfaceHint",
 		AnchorPoint = Vector2.new(0, 0.5),
 		BackgroundTransparency = 1,
 		Visible = false,
-		ZIndex = 1,
+		ZIndex = 3,
 		Parent = overlay,
 	})
 	local surfaceGlow = Box(surfaceHint, 0, 0, 0, 0, C.Butter, 0.45, 1)
-	surfaceGlow.Size = UDim2.new(1, 16, 0, 16)
-	surfaceGlow.Position = UDim2.new(0, -8, 0.5, -8)
+	surfaceGlow.Size = UDim2.new(1, 20, 0, 18)
+	surfaceGlow.Position = UDim2.new(0, -10, 0.5, -9)
 	Round(surfaceGlow)
 	local surfaceLine = Box(surfaceHint, 0, 0, 0, 0, WHITE, 0, 2)
-	surfaceLine.Size = UDim2.new(1, 0, 0, 5)
-	surfaceLine.Position = UDim2.new(0, 0, 0.5, -2.5)
+	surfaceLine.Size = UDim2.new(1, 0, 0, 6)
+	surfaceLine.Position = UDim2.new(0, 0, 0.5, -3)
 	Round(surfaceLine)
-	UIUtil.Stroke(surfaceLine, C.PinkDeep, 2, 0)
+	local surfaceLineStroke = UIUtil.Stroke(surfaceLine, C.PinkDeep, 2, 0)
 	local surfaceSparkle = UIUtil.Create("TextLabel", {
 		Name = "Sparkle",
 		AnchorPoint = Vector2.new(0.5, 1),
@@ -306,7 +311,61 @@ function HouseRoom.new(stage: Frame): Room
 		ZIndex = 3,
 		Parent = surfaceHint,
 	})
+	-- Étiquette "⬇ Table à manger" (taille constante à l'écran : contre-échelle)
+	local surfaceChip = UIUtil.Create("Frame", {
+		Name = "HintChip",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 0.5, -12),
+		Size = UDim2.fromOffset(0, 26),
+		AutomaticSize = Enum.AutomaticSize.X,
+		BackgroundColor3 = C.PinkDeep,
+		ZIndex = 4,
+		Parent = surfaceHint,
+	})
+	UIUtil.Corner(surfaceChip, UDim.new(1, 0))
+	UIUtil.Stroke(surfaceChip, WHITE, 2, 0)
+	UIUtil.Gradient(surfaceChip, ColorSequence.new(WHITE, Color3.fromRGB(222, 222, 222)), 90)
+	UIUtil.Create("UIPadding", { PaddingLeft = UDim.new(0, 11), PaddingRight = UDim.new(0, 11), Parent = surfaceChip })
+	local surfaceChipScale = UIUtil.Create("UIScale", { Parent = surfaceChip })
+	local surfaceChipLabel = UIUtil.Create("TextLabel", {
+		Name = "Label",
+		Size = UDim2.fromScale(0, 1),
+		AutomaticSize = Enum.AutomaticSize.X,
+		BackgroundTransparency = 1,
+		Font = Theme.Fonts.Title,
+		Text = "",
+		TextColor3 = WHITE,
+		TextSize = 14,
+		ZIndex = 5,
+		Parent = surfaceChip,
+	})
 	local surfaceKey = ""
+
+	-- Toutes les places libres (dessus de meubles) pendant un glissement
+	local surfacesLayer = UIUtil.Create("Frame", {
+		Name = "Surfaces",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Visible = false,
+		ZIndex = 1,
+		Parent = overlay,
+	})
+	local surfacePool: { Frame } = {}
+
+	-- Halo autour du meuble visé
+	local targetGlow = UIUtil.Create("Frame", {
+		Name = "TargetGlow",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(1.08, 1.06),
+		BackgroundColor3 = C.Butter,
+		BackgroundTransparency = 0.82,
+		Visible = false,
+		ZIndex = 3,
+	})
+	Round(targetGlow, UDim.new(0, 18))
+	local targetGlowStroke = UIUtil.Stroke(targetGlow, C.Butter:Lerp(C.Peach, 0.4), 3, 0.05)
+	local targetSticker: Sticker? = nil
 
 	-- Éléments de décor qui changent la nuit
 	local windowGlassGradient: UIGradient? = nil
@@ -573,7 +632,7 @@ function HouseRoom.new(stage: Frame): Room
 		})
 		local body = UIUtil.Create("Frame", {
 			Name = "Body",
-			Size = UDim2.fromScale(1, 1),
+			Size = UDim2.fromOffset(STICKER_BASE, STICKER_BASE),
 			BackgroundTransparency = 1,
 			ZIndex = 2,
 			Parent = holder,
@@ -677,7 +736,13 @@ function HouseRoom.new(stage: Frame): Room
 			Bulbs = detail.Bulbs or {},
 			Anims = anims,
 			Flat = flat,
+			Flipped = false,
 		}
+		-- Objet retourné (chaise tournée vers la table...) : dessin en miroir
+		if entry.F == true then
+			HouseArt.Mirror(body, anims, STICKER_BASE / 2)
+			sticker.Flipped = true
+		end
 		stickers[sticker] = true
 		if glow then
 			paintGlow(glow, dark)
@@ -762,6 +827,12 @@ function HouseRoom.new(stage: Frame): Room
 		end,
 		DestroySticker = function(sticker: Sticker)
 			stickers[sticker] = nil
+			-- (le halo du meuble visé est réutilisé : on le sort avant de détruire)
+			if targetSticker == sticker then
+				targetSticker = nil
+				targetGlow.Visible = false
+				targetGlow.Parent = nil
+			end
 			sticker.Frame:Destroy()
 		end,
 		SetGrid = function(visible: boolean, step: number?)
@@ -788,27 +859,93 @@ function HouseRoom.new(stage: Frame): Room
 			end
 			grid.Visible = visible
 		end,
-		SetSurfaceHint = function(surface: { L: number, R: number, Y: number }?)
+		SetSurfaceHint = function(surface: { L: number, R: number, Y: number }?, label: string?, color: Color3?)
 			if not surface then
 				surfaceKey = ""
 				surfaceHint.Visible = false
 				return
 			end
-			local key = string.format("%.3f|%.3f|%.3f", surface.L, surface.R, surface.Y)
+			local key = string.format("%.3f|%.3f|%.3f|%s", surface.L, surface.R, surface.Y, label or "")
+			surfaceChipScale.Scale = 1 / math.max(0.2, room.Scale)
 			if key == surfaceKey then
 				return
 			end
 			local appearing = not surfaceHint.Visible
 			surfaceKey = key
+			local tint = color or C.PinkDeep
+			surfaceLineStroke.Color = tint
+			surfaceChip.BackgroundColor3 = tint
 			surfaceHint.Position = UDim2.fromOffset(surface.L * width, surface.Y * height)
 			surfaceHint.Size = UDim2.fromOffset(math.max(8, (surface.R - surface.L) * width), 10)
+			surfaceChip.Visible = label ~= nil and label ~= ""
+			if label and surfaceChipLabel.Text ~= label then
+				surfaceChipLabel.Text = label
+			end
 			surfaceHint.Visible = true
 			if appearing then
 				surfaceGlow.BackgroundTransparency = 1
 				UIUtil.Tween(surfaceGlow, 0.18, { BackgroundTransparency = 0.45 })
 				surfaceSparkle.TextTransparency = 1
 				UIUtil.Tween(surfaceSparkle, 0.25, { TextTransparency = 0 })
+				UIUtil.Pop(surfaceChip, 0.6, 0.3)
 			end
+		end,
+		ShowSurfaces = function(list: { any }?)
+			if not list or #list == 0 then
+				surfacesLayer.Visible = false
+				return
+			end
+			-- (une Frame par dessus, réutilisées d'un glissement à l'autre)
+			for index, surface in ipairs(list) do
+				local line = surfacePool[index]
+				if not line then
+					line = Box(surfacesLayer, 0, 0, 0, 0, WHITE, 0.25, 1)
+					line.AnchorPoint = Vector2.new(0, 0.5)
+					Round(line)
+					UIUtil.Stroke(line, C.Pink, 1.5, 0.25)
+					local dot = Box(line, 0, 0, 7, 7, C.Butter, 0, 2)
+					dot.Name = "Dot"
+					dot.AnchorPoint = Vector2.new(0.5, 0.5)
+					dot.Position = UDim2.fromScale(0.5, 0.5)
+					Round(dot)
+					surfacePool[index] = line
+				end
+				line.Position = UDim2.fromOffset(surface.L * width, surface.Y * height)
+				line.Size = UDim2.fromOffset(math.max(8, (surface.R - surface.L) * width), 4)
+				line.Visible = true
+			end
+			for index = #list + 1, #surfacePool do
+				surfacePool[index].Visible = false
+			end
+			if not surfacesLayer.Visible then
+				surfacesLayer.Visible = true
+			end
+		end,
+		SetTargetGlow = function(sticker: Sticker?)
+			if sticker == targetSticker then
+				return
+			end
+			targetSticker = sticker
+			if not sticker or not sticker.Frame.Parent then
+				targetGlow.Visible = false
+				targetGlow.Parent = nil
+				return
+			end
+			local flat = sticker.Flat
+			targetGlow.Position = flat and UDim2.fromScale(0.5, 0.8) or UDim2.fromScale(0.5, 0.5)
+			targetGlow.Size = flat and UDim2.fromScale(1.5, 0.5) or UDim2.fromScale(1.1, 1.08)
+			targetGlowStroke.Thickness = 3 / math.max(0.2, sticker.Scale.Scale)
+			targetGlow.Parent = sticker.Frame
+			targetGlow.Visible = true
+			targetGlow.BackgroundTransparency = 1
+			UIUtil.Tween(targetGlow, 0.18, { BackgroundTransparency = 0.8 })
+		end,
+		SetFlip = function(sticker: Sticker, flipped: boolean)
+			if sticker.Flipped == flipped then
+				return
+			end
+			HouseArt.Mirror(sticker.Body, sticker.Anims, STICKER_BASE / 2)
+			sticker.Flipped = flipped
 		end,
 		SetExterior = function(exterior: string?)
 			scenery:SetPalette(exterior)

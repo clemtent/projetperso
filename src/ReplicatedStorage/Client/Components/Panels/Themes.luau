@@ -233,7 +233,11 @@ local function request(action: string, theme)
 		Notifications.Toast(Locale.T("🎨 Theme equipped: %s", theme.Icon .. " " .. Locale.T(theme.Name)), Theme.Colors.Cyan, 2.5)
 	else
 		SoundManager.Play("Error", 0.7)
-		Notifications.Toast(message or Locale.T("Not possible right now."), Theme.Colors.Red)
+		-- Refus "pas assez de Dopamine" du serveur : on propose d'en avoir (vrai manque)
+		local context = { Icon = theme.Icon, Name = Locale.T(theme.Name) }
+		if not (action == "buy" and NeedDopamine.OfferRefusal(message, tonumber(theme.Cost), nil, context)) then
+			Notifications.Toast(message or Locale.T("Not possible right now."), Theme.Colors.Red)
+		end
 		if card then
 			UIUtil.Shake(card.Primary)
 		end
@@ -270,13 +274,14 @@ local function onPrimary(card: Card)
 	if action == "equip" then
 		task.spawn(request, "equip", theme)
 	elseif action == "buy" then
-		if not card.Primary:GetAttribute("Enabled") then
+		-- Trop cher (calculé à l'instant) : "Pas assez de Dopamine" à CHAQUE clic
+		local missing = (tonumber(theme.Cost) or 0) - getDopamine()
+		if missing > 0 then
 			SoundManager.Play("Error", 0.7)
 			UIUtil.Shake(card.Primary)
-			local missing = math.max(0, (tonumber(theme.Cost) or 0) - getDopamine())
 			NeedDopamine.Offer(missing, function()
 				Notifications.Toast(Locale.T("You need %s more Dopamine", NumberFormatter.Format(missing)), Theme.Colors.Red)
-			end)
+			end, { Icon = theme.Icon, Name = Locale.T(theme.Name) })
 			return
 		end
 		task.spawn(request, "buy", theme)

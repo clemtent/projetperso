@@ -13,6 +13,9 @@ La **💎 Boutique Robux** est prête : il suffit de coller tes IDs dans `Replic
 | 💧💦🌊 Packs de Dopamine | Developer Product | `Products > PackS / PackM / PackL > ProductId` | 10 min / 1 h / 8 h de production |
 | ⏱️🔥 Boosts | Developer Product | `Products > Boost2 / Boost5 > ProductId` | x2 pendant 15 min / x5 pendant 10 min |
 | 🎉 Rush pour tous | Developer Product | `Products > ServerRush > ProductId` | Dopamine Rush pour tout le serveur |
+| 🎟️ Packs de tickets | Developer Product | `Products > Tickets5 … Tickets100 > ProductId` | 5 / 10 / 25 / 50 / 100 tickets d'arcade (déjà configurés, voir plus bas) |
+| 🎁 Combos (bientôt) | Developer Product | `Products > ComboStarter / ComboMega / ComboUltimate` | Tickets + Dopamine (déjà codé côté serveur) |
+| ✨ Objets stylés (bientôt) | à créer | `Products > Style…` | Cosmétiques : à coder avant la vente (voir plus bas) |
 | 🎨 Thèmes | Game Pass (optionnel) | `Config.Themes > <thème> > GamePassId` | Débloque ce thème avec des Robux |
 
 ### Où trouver les IDs
@@ -24,6 +27,61 @@ La **💎 Boutique Robux** est prête : il suffit de coller tes IDs dans `Replic
 Le serveur (`MonetizationService`) vérifie la possession des passes, traite les achats de produits avec `ProcessReceipt` (jamais deux fois le même achat) et sauvegarde avant de confirmer. Les prix affichés viennent de Roblox (`GetProductInfo`).
 
 > ⚠️ Dans Studio, les achats sont des **achats de test** (aucun Robux dépensé) : parfait pour vérifier.
+
+## 🎟️ Tickets d'arcade achetables (v9)
+
+Les tickets de l'🕹️ Arcade servent à la **boutique à tickets** (friandises de Dopamine, mini boost, badges). Ils se gagnent en jouant (plafond de 150 par jour) **et** s'achètent maintenant en Robux :
+
+| Pack | Id (Config) | Tickets | ProductId |
+|---|---|---|---|
+| 🎟️ Tickets de poche | `Tickets5` | 5 | `3714962647` |
+| 🎫 Bande de tickets | `Tickets10` | 10 | `3714962696` |
+| 🎁 Paquet de tickets | `Tickets25` | 25 | `3714962739` |
+| 🧺 Panier de tickets (⭐ POPULAIRE) | `Tickets50` | 50 | `3714962804` |
+| 📦 Caisse de tickets (💰 MEILLEUR PRIX) | `Tickets100` | 100 | `3714962854` |
+
+- **Où** : boutique Robux, onglet **🎟️ Tickets** (`RobuxShop.ShowTab("Tickets")`), bouton **+** à côté du solde 🎟️ de l'arcade, bouton « 🎟️ Avoir des tickets » de la boutique à tickets.
+- **Pas assez de tickets ?** À **chaque** achat refusé (contrôle du client ou refus du serveur), la fenêtre `NeedTickets` montre ce qui manque, le plus petit pack qui suffit, rappelle qu'on peut aussi en gagner gratuitement en jouant, et « 🎟️ Acheter des tickets » ouvre l'onglet 🎟️ Tickets (pack conseillé mis en avant). « Plus tard » ou un clic à côté ferme.
+- **Serveur** : `MonetizationService` (ProcessReceipt) ajoute les tickets au même solde `data.Tickets` que l'arcade (`MinigameService:GrantPurchasedTickets`), sans plafond du jour, enregistre le `PurchaseId` (jamais deux fois) et sauvegarde avant de confirmer ; bandeau « 🎟️ +25 TICKETS ! » côté joueur.
+- **Prix** : les vrais prix viennent de Roblox. L'économie par ticket (« 💸 −20 % par ticket ») n'est affichée que si les **vrais** prix des deux packs sont connus (jamais inventée). `PriceHint` ne sert que si Roblox ne répond pas.
+
+### 🏆 Duels : on mise des trophées, plus des tickets (règle Roblox)
+
+Une monnaie qui s'achète en Robux ne doit **jamais** être pariée. Depuis que les tickets sont achetables, les mises des duels sont en **🏆 trophées** (`data.Trophies`) :
+
+- gagnés **uniquement en jouant** : +1 par partie solo gagnée et récompensée, +1 par duel gagné et récompensé, plafond de 20 par jour (`ArcadeConfig.Trophies`), + 10 offerts une fois (aussi aux anciens joueurs) ;
+- **jamais achetables, jamais convertibles** (ni en tickets, ni en Dopamine, ni en rien d'achetable) ;
+- mises possibles : 0 (amical), 1, 2, 5, 10 🏆 ; le gagnant remporte la mise x2, le perdant perd la sienne, égalité / serveur qui ferme = mises rendues. Tout est vérifié par le serveur (les deux soldes à l'invitation ET à l'acceptation, séquestre) ;
+- le prix d'une victoire (Dopamine + 3 🎟️ bonus + 1 🏆) est **le même quelle que soit la mise**, même en duel amical : miser ne rapporte que des trophées.
+
+Les soldes de tickets existants sont conservés.
+
+## 🔜 Bientôt : combos et objets stylés
+
+Ces offres sont déjà dans la boutique Robux (onglet **🔜 Bientôt**) avec un ruban « BIENTÔT », un bouton désactivé et **aucune** fenêtre d'achat. Elles ont `ProductId = 0` et `ComingSoon = true` dans `Config.Monetization.Products`.
+
+### 🎁 Combos (tickets + Dopamine) — prêts côté serveur
+
+| Id | Contenu |
+|---|---|
+| `ComboStarter` | 20 🎟️ + 30 min de production |
+| `ComboMega` | 60 🎟️ + 2 h de production |
+| `ComboUltimate` | 150 🎟️ + 8 h de production |
+
+**Pour les activer** : crée le Developer Product sur le Creator Dashboard, colle son ID dans `ProductId` et mets `ComingSoon = false`. C'est tout : le serveur donne déjà les tickets + la Dopamine (`Formulas.ScaledReward`, au moins `Minimum`), sans jamais accorder à moitié. Tu peux changer `Tickets`, `Seconds`, `Minimum` et `PriceHint` librement.
+
+### ✨ Objets stylés — encore à coder
+
+`StyleGoldenTrail` (traînée dorée du curseur), `StyleRainbowAura` (aura arc-en-ciel au clic), `StyleNeonTag` (tag néon près du nom), `StyleDiamondSkin` (bouton en diamant), `StyleProfileFrame` (cadre de profil animé). Le champ `Style` dit l'effet visé.
+
+Le type `"Stylish"` n'est **pas** dans `Config.Monetization.ReadyKinds` : tant qu'il n'y est pas, la carte reste « BIENTÔT » même avec un ID, et le serveur refuse d'accorder l'achat (on ne vend jamais ce qu'on ne sait pas donner). Avant de les vendre :
+
+1. **Type d'achat** : un objet gardé pour toujours se vend plutôt en **Game Pass** (Roblox garde la possession, rien à sauvegarder) : ajoute-le dans `Config.Monetization.GamePasses` avec son champ `Style`. Si tu préfères un Developer Product, il faut sauvegarder la possession (ex. `data.Styles[Id] = true`, à ajouter dans `DataService`).
+2. **Serveur** : accorder l'objet (branche `"Stylish"` de `grantProduct` dans `MonetizationService`, ou possession du Game Pass) et l'envoyer au client dans l'état.
+3. **Client** : dessiner l'effet (traînée : `Stimuli/CursorTrail` ; aura : `Effects` au clic du bouton ; tag / cadre : panneaux Arcade et Classement ; bouton : `CenterColumn`), avec un réglage pour l'équiper / le retirer.
+4. Ajoute `Stylish = true` dans `ReadyKinds`, colle l'ID et mets `ComingSoon = false`.
+
+Ce sont des cosmétiques **sans bonus de gains** : la voie la plus sûre pour les règles Roblox.
 
 ## ⚠️ À lire avant de vendre quoi que ce soit : casino, coffres et règles Roblox
 

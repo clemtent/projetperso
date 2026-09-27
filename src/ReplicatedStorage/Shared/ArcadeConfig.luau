@@ -6,17 +6,24 @@
 	  - Games      : liste des mini-jeux (Kind = "Solo" | "Duel"). Le client
 	                 charge le module Client > Minigames > "<Kind>_<Id>"
 	                 (ex. Solo_Minesweeper, Duel_TicTacToe) ;
-	  - Tickets    : 🎟️ tickets d'arcade. Gagnés UNIQUEMENT en jouant,
-	                 JAMAIS achetables avec des Robux, sans valeur Robux
-	                 (règles Roblox : pas de mise de Dopamine, achetable) ;
-	  - Duels      : mises en tickets, délais, limites anti-abus ;
+	  - Tickets    : 🎟️ tickets d'arcade, la monnaie de la BOUTIQUE à tickets.
+	                 Gagnés en jouant (plafond par jour) OU achetés en Robux
+	                 (packs de la boutique Robux, Config.Monetization) ;
+	                 ils ne se misent JAMAIS en duel ;
+	  - Trophies   : 🏆 trophées, la monnaie des MISES de duel. Gagnés
+	                 UNIQUEMENT en jouant (+ petit cadeau de bienvenue),
+	                 jamais achetables, jamais convertibles (ni en tickets, ni
+	                 en Dopamine, ni en quoi que ce soit d'achetable) : règles
+	                 Roblox, on ne parie jamais une monnaie achetable ;
+	  - Duels      : mises en 🏆 trophées, délais, limites anti-abus ;
 	  - Shop       : boutique à tickets (petits boosts, Dopamine, badges).
 	  - Logic      : règles PURES des duels (victoire au morpion, puissance 4,
-	                 grilles de "Trouve l'intrus"), partagées par le serveur
-	                 (qui décide) et le client (qui affiche la ligne gagnante).
+	                 grilles de "Trouve l'intrus", mises, plafonds du jour),
+	                 partagées par le serveur (qui décide) et le client (qui
+	                 affiche) ; testées par tests/run_tests.py.
 
 	Tous les textes (Name, Description...) sont en ANGLAIS : traduits avec
-	Locale (dictionnaire Shared > Lang > FR_V8_Arcade).
+	Locale (dictionnaires Shared > Lang > FR_V8_Arcade, FR_V9_Arcade).
 ]]
 
 local ArcadeConfig = {}
@@ -30,6 +37,7 @@ ArcadeConfig.Feature = "Minigames" -- Feature débloquée par l'amélioration "A
 --   Color (couleur de la carte), Accent (2e couleur du dégradé), Tagline.
 -- Solo (utilisés par Services > Arcade > SoloGames) :
 --   Tickets         : 🎟️ gagnés par partie gagnée (plafonnés par Tickets.DailyCap)
+--                     (+ Trophies.PerSoloWin 🏆, plafonnés par Trophies.DailyCap)
 --   RewardSeconds   : Dopamine gagnée (secondes de production) par victoire
 --   DailyRewarded   : nombre de parties RÉCOMPENSÉES par jour pour ce jeu
 --   Record          : "High" (plus grand = mieux) | "Low" (plus petit = mieux, ex. un temps)
@@ -89,10 +97,26 @@ ArcadeConfig.Games = {
 ----------------------------------------------------------------------
 ArcadeConfig.Tickets = {
 	Icon = "🎟️",
-	Max = 99999, -- solde maximum
-	DailyCap = 150, -- tickets GAGNÉS par jour (récompenses : solo + victoires de duel ; les mises gagnées ne comptent pas)
-	DuelWinBonus = 3, -- tickets bonus du gagnant d'un duel récompensé (en plus du pot)
+	Max = 9999999, -- solde maximum (sécurité ; assez grand pour ne jamais "manger" des tickets achetés)
+	DailyCap = 150, -- tickets GAGNÉS par jour en jouant (solo + bonus de victoire en duel ; les achats ne comptent pas)
+	DuelWinBonus = 3, -- tickets bonus du gagnant d'un duel récompensé (même montant quelle que soit la mise)
 	StartTickets = 10, -- petit cadeau de bienvenue à l'ouverture de l'arcade
+}
+
+----------------------------------------------------------------------
+-- 🏆 Trophées (mises des duels)
+----------------------------------------------------------------------
+-- Gagnés UNIQUEMENT en jouant : jamais vendus contre des Robux, jamais
+-- échangés contre des tickets, de la Dopamine ou autre chose d'achetable.
+-- Le prix d'une victoire en duel (Dopamine + tickets bonus) ne dépend PAS
+-- de la mise : miser des trophées ne rapporte que des trophées.
+ArcadeConfig.Trophies = {
+	Icon = "🏆",
+	Max = 999999, -- solde maximum (sécurité)
+	WelcomeGift = 10, -- cadeau de bienvenue (une seule fois, aussi pour les joueurs qui avaient déjà l'arcade)
+	PerSoloWin = 1, -- par partie solo gagnée ET récompensée (quota du jour du jeu)
+	PerDuelWin = 1, -- par duel gagné ET récompensé (limites anti-farm par joueur)
+	DailyCap = 20, -- trophées GAGNÉS par jour (les mises gagnées ne comptent pas)
 }
 
 -- Récompense minimale en Dopamine (quand la production est encore petite)
@@ -102,7 +126,8 @@ ArcadeConfig.MinDopamineReward = 200
 -- ⚔️ Duels
 ----------------------------------------------------------------------
 ArcadeConfig.Duels = {
-	Stakes = { 0, 5, 10, 25, 50 }, -- mises possibles (tickets, chaque joueur)
+	Stakes = { 0, 1, 2, 5, 10 }, -- mises possibles (🏆 trophées, chaque joueur ; 0 = duel amical)
+	AnnounceStake = 5, -- mise (🏆) à partir de laquelle tout le serveur apprend le résultat
 	InviteSeconds = 30, -- une invitation expire après ce délai
 	InviteCooldown = 2, -- (s) entre deux invitations envoyées
 	DeclineCooldown = 20, -- (s) avant de réinviter quelqu'un qui a refusé
@@ -304,6 +329,71 @@ function Logic.RoundsWinner(scores: { number }, winScore: number): number
 		return 2
 	end
 	return 0
+end
+
+----------------------------------------------------------------------
+-- Monnaies de l'arcade (règles pures, utilisées par MinigameService)
+----------------------------------------------------------------------
+
+local function isCount(value): boolean
+	return type(value) == "number" and value == value and value ~= math.huge and value ~= -math.huge
+end
+
+-- Monnaie GAGNÉE avec un plafond par jour : combien on donne vraiment
+-- (entier >= 0, jamais plus que la place restante aujourd'hui)
+function Logic.CappedGrant(amount: number, earnedToday: number, dailyCap: number): number
+	if not isCount(amount) or amount <= 0 or not isCount(dailyCap) then
+		return 0
+	end
+	local room = math.max(0, math.floor(dailyCap - (isCount(earnedToday) and earnedToday or 0)))
+	return math.max(0, math.min(math.floor(amount), room))
+end
+
+-- Mise d'un duel acceptable ? stake doit être dans Duels.Stakes, et les deux
+-- joueurs doivent pouvoir la payer avec leurs 🏆 trophées.
+-- -> (true) ou (false, "invalid" | "self" | "other")
+function Logic.CheckStake(stake: any, myBalance: number, otherBalance: number): (boolean, string?)
+	if type(stake) ~= "number" or not ArcadeConfig.StakesSet[stake] then
+		return false, "invalid"
+	end
+	if not isCount(myBalance) or myBalance < stake then
+		return false, "self"
+	end
+	if not isCount(otherBalance) or otherBalance < stake then
+		return false, "other"
+	end
+	return true, nil
+end
+
+-- Fin d'un duel : ce que RÉCUPÈRE chaque place (les mises sont déjà en
+-- séquestre). Gagnant = les deux mises (x2), perdant = rien, égalité
+-- (winnerSeat = 0) = chacun récupère sa mise.
+function Logic.StakePayouts(stake: number, winnerSeat: number): { number }
+	local safe = isCount(stake) and math.max(0, math.floor(stake)) or 0
+	if winnerSeat == 1 then
+		return { safe * 2, 0 }
+	elseif winnerSeat == 2 then
+		return { 0, safe * 2 }
+	end
+	return { safe, safe }
+end
+
+-- Packs de tickets (entrées de Config.Monetization.Products, champ Tickets) :
+-- le plus PETIT pack qui couvre `missing`, sinon le plus gros. nil si aucun.
+function Logic.PickTicketPack(missing: number, packs: { any }): any
+	local best, biggest = nil, nil
+	for _, pack in ipairs(packs) do
+		local amount = type(pack) == "table" and tonumber(pack.Tickets) or nil
+		if amount and amount > 0 then
+			if amount >= missing and (best == nil or amount < best.Tickets) then
+				best = pack
+			end
+			if biggest == nil or amount > biggest.Tickets then
+				biggest = pack
+			end
+		end
+	end
+	return best or biggest
 end
 
 return ArcadeConfig

@@ -44,6 +44,7 @@ local HouseCommon = require(script.Parent.HouseCommon)
 local NeedDopamine = require(script.Parent.Parent.NeedDopamine)
 local HouseArt = require(script.Parent.HouseArt)
 local HousePatterns = require(script.Parent.HousePatterns)
+local HouseButtons = require(script.Parent.HouseButtons)
 
 type Item = HouseCommon.Item
 type Style = HouseCommon.Style
@@ -467,6 +468,8 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 		PaddingBottom = UDim.new(0, 10),
 		Parent = drawer,
 	})
+	-- Clic dans le tiroir (zone vide) : ne traverse pas jusqu'à la pièce / la maison
+	HouseButtons.Sink(drawer)
 
 	-- En-tête : titre, porte-monnaie, ✕
 	UIUtil.Create("TextLabel", {
@@ -519,17 +522,38 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 	})
 	UIUtil.Corner(tabBar, UDim.new(1, 0))
 	UIUtil.Stroke(tabBar, Theme.Colors.Divider, 1)
+	-- Onglet choisi : pastille "bonbon" rose brillante (reflet + lèvre)
 	local tabIndicator = UIUtil.Create("Frame", {
 		Name = "Indicator",
 		Position = UDim2.fromOffset(3, 3),
 		Size = UDim2.fromOffset(80, 30),
-		BackgroundColor3 = WHITE,
+		BackgroundColor3 = C.PinkDeep:Lerp(C.Ink, 0.3),
 		ZIndex = 32,
 		Parent = tabBar,
 	})
 	UIUtil.Corner(tabIndicator, UDim.new(1, 0))
-	UIUtil.Stroke(tabIndicator, C.PinkDeep, 1.5, 0.35)
-	local tabSelectedColor = C.PinkDeep:Lerp(Color3.new(0, 0, 0), 0.25)
+	UIUtil.Stroke(tabIndicator, C.PinkDeep:Lerp(C.Ink, 0.45), 1.5, 0.2)
+	local indicatorFace = UIUtil.Create("Frame", {
+		Name = "Face",
+		Size = UDim2.new(1, 0, 1, -3),
+		BackgroundColor3 = C.Pink,
+		ZIndex = 32,
+		Parent = tabIndicator,
+	})
+	UIUtil.Corner(indicatorFace, UDim.new(1, 0))
+	UIUtil.Gradient(indicatorFace, ColorSequence.new(Color3.fromRGB(255, 236, 246), Color3.fromRGB(236, 200, 220)), 90)
+	local indicatorGloss = UIUtil.Create("Frame", {
+		Name = "Gloss",
+		Position = UDim2.new(0, 8, 0, 2),
+		Size = UDim2.new(1, -16, 0.42, 0),
+		BackgroundColor3 = WHITE,
+		BackgroundTransparency = 0.45,
+		ZIndex = 32,
+		Parent = indicatorFace,
+	})
+	UIUtil.Corner(indicatorGloss, UDim.new(1, 0))
+	UIUtil.Create("UIGradient", { Rotation = 90, Transparency = NumberSequence.new(0.2, 1), Parent = indicatorGloss })
+	local tabSelectedColor = WHITE
 	local tabButtons: { [string]: TextButton } = {}
 	local selectedTab = "Items"
 

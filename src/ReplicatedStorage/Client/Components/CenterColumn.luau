@@ -77,12 +77,12 @@ local PILLS = {
 	{ Id = "Themes", Text = "🎨 Themes", Color = Theme.Colors.Cyan, Feature = nil, Panel = "Themes" },
 	{ Id = "RobuxShop", Text = "💎 Robux", Color = Theme.Colors.Robux, Feature = nil, Panel = "RobuxShop", Visible = robuxShopVisible },
 	{ Id = "Settings", Text = "⚙️", Color = Theme.Colors.ButtonBottom, Feature = nil, Panel = "Settings", Round = true },
-	{ Id = "Debug", Text = "🛠️ Test", Color = Theme.Colors.Red, Feature = nil, Panel = "Debug", Visible = debugVisible },
+	-- (outil de test : pastille ronde, icône seule, pour ne pas prendre de place)
+	{ Id = "Debug", Text = "🛠️ Test", Color = Theme.Colors.Red, Feature = nil, Panel = "Debug", Visible = debugVisible, Round = true },
 }
 
 local BUTTON_SIZE = Vector2.new(184, 62)
 local PILL_HEIGHT = 36
-local PILL_BADGE_CLEAR = 27 -- place réservée à droite du texte d'une pastille qui a un badge (marge comprise)
 local HOUSE_BUTTON_SIZE = 54 -- bouton "🏠" (zone tactile >= 44 px)
 -- Colonne des indicateurs Robux (à gauche du bouton) : 2 pastilles + carte du
 -- boost ; remontée de STATUS_LIFT px pour finir au-dessus du compteur
@@ -358,16 +358,10 @@ local function buildHouseButton(column: Frame, buttonCenterX: number, buttonCent
 		Height = HOUSE_BUTTON_SIZE,
 		TextSize = 30,
 		Round = true,
-		StrokeColor = Theme.Colors.Border,
 		ZIndex = 3,
 		Parent = holder,
 	})
-	-- Dégradé rose pastel (au lieu du dégradé gris des pastilles)
-	local gradient = houseButton:FindFirstChildOfClass("UIGradient")
-	if gradient then
-		gradient.Color = ColorSequence.new(Color3.fromRGB(255, 236, 246), Color3.fromRGB(255, 188, 220))
-	end
-	UIUtil.Shadow(houseButton, 3, 0.8, 2)
+	-- (v9 : bouton rose en relief avec reflet, contour rose foncé, ombre : voir UIUtil)
 	houseBadge = UIUtil.Badge(houseButton, 22)
 	houseBadge.Position = UDim2.new(1, -8, 0, 2)
 
@@ -430,6 +424,142 @@ local function pillsRowWidth(): number
 		return math.clamp(Slots.GetCenterClearWidth(), 360, 664)
 	end
 	return 664
+end
+
+-- "🛒 Boutique" -> ("🛒", "Boutique") ; sans emoji : (nil, texte)
+local function splitIcon(text: string): (string?, string)
+	local first, rest = string.match(text, "^(%S+)%s+(.+)$")
+	if first and rest and not string.find(first, "%w") then
+		return first, rest
+	end
+	if not string.find(text, "%w") then
+		return text, ""
+	end
+	return nil, text
+end
+
+--[[
+	Pastille de menu v9 ("premium") : corps coloré en relief (dégradé, lèvre
+	sombre en bas, reflet, contour teinté, ombre), icône dans une puce
+	blanche givrée à gauche, texte bordé, badge rouge DANS la pastille à
+	droite du texte (la pastille s'élargit quand il apparaît : il ne
+	recouvre jamais la voisine). Ronde (icône seule) sur téléphone et pour ⚙️.
+	Renvoie (bouton, badge).
+]]
+local function buildMenuPill(holder: Frame, def, icon: string?, label: string, height: number, round: boolean, tablet: boolean, y: number): (TextButton, TextLabel)
+	local lightBody = Theme.Luminance(def.Color) > 0.75
+	local textColor = lightBody and Theme.Colors.Text or Theme.Colors.TextLight
+	local button = UIUtil.Create("TextButton", {
+		Name = "Button",
+		Size = UDim2.fromOffset(height, height),
+		AutomaticSize = round and Enum.AutomaticSize.None or Enum.AutomaticSize.X,
+		BackgroundColor3 = def.Color,
+		AutoButtonColor = false,
+		Font = Theme.Fonts.Title,
+		Text = round and (icon or label) or "",
+		TextColor3 = textColor,
+		TextSize = math.floor(height * 0.52),
+		Position = UDim2.fromOffset(0, y),
+		ZIndex = 1,
+		Parent = holder,
+	})
+	UIUtil.Corner(button, UDim.new(1, 0))
+	UIUtil.DressButton(button, def.Color, { StrokeThickness = 1.5 })
+
+	local badge: TextLabel
+	if round then
+		badge = UIUtil.Badge(button, 22)
+	else
+		button.Size = UDim2.fromOffset(0, height)
+		-- (tablette : un peu plus serré pour que tout tienne sur deux lignes)
+		UIUtil.Create("UIPadding", {
+			PaddingLeft = UDim.new(0, tablet and 3 or 4),
+			PaddingRight = UDim.new(0, tablet and 10 or 12),
+			Parent = button,
+		})
+		-- Contenu dans son propre cadre (la liste ne doit pas placer le reflet)
+		local content = UIUtil.Create("Frame", {
+			Name = "Content",
+			Size = UDim2.fromOffset(0, height),
+			AutomaticSize = Enum.AutomaticSize.X,
+			BackgroundTransparency = 1,
+			ZIndex = 2,
+			Parent = button,
+		})
+		UIUtil.Create("UIListLayout", {
+			FillDirection = Enum.FillDirection.Horizontal,
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+			Padding = UDim.new(0, tablet and 3 or 4),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+			Parent = content,
+		})
+		-- Puce d'icône (disque blanc givré)
+		local chipSize = height - (tablet and 16 or 12)
+		local chip = UIUtil.Create("Frame", {
+			Name = "IconChip",
+			Size = UDim2.fromOffset(chipSize, chipSize),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BackgroundTransparency = lightBody and 0.35 or 0.1,
+			LayoutOrder = 1,
+			ZIndex = 2,
+			Parent = content,
+		})
+		chip:SetAttribute("DarkSkinIgnore", true)
+		UIUtil.Corner(chip, UDim.new(1, 0))
+		UIUtil.Stroke(chip, Color3.new(1, 1, 1), 1.5, 0.35)
+		UIUtil.Gradient(chip, ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(226, 228, 236)), 90)
+		UIUtil.Create("TextLabel", {
+			Name = "Icon",
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			Font = Theme.Fonts.Body,
+			Text = icon or "•",
+			TextColor3 = Theme.Colors.Text,
+			TextSize = math.floor(chipSize * 0.62),
+			ZIndex = 3,
+			Parent = chip,
+		})
+		local text = UIUtil.Create("TextLabel", {
+			Name = "Label",
+			Size = UDim2.fromOffset(0, height),
+			AutomaticSize = Enum.AutomaticSize.X,
+			BackgroundTransparency = 1,
+			Font = Theme.Fonts.Title,
+			Text = label,
+			TextColor3 = textColor,
+			TextSize = tablet and 16 or math.floor(height * 0.45),
+			LayoutOrder = 2,
+			ZIndex = 2,
+			Parent = content,
+		})
+		-- Contour du texte : lisible sur toutes les couleurs
+		local stroke = UIUtil.Create("UIStroke", {
+			Name = "TextStroke",
+			Color = def.Color:Lerp(Color3.new(0, 0, 0), 0.55),
+			Thickness = 1.2,
+			Transparency = lightBody and 1 or 0.35,
+			ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
+			Parent = text,
+		})
+		stroke:SetAttribute("DarkSkinIgnore", true)
+		-- Badge rouge DANS la pastille, après le texte (la pastille s'élargit)
+		badge = UIUtil.Badge(content, tablet and 16 or 18)
+		badge.LayoutOrder = 3
+	end
+	-- Ombre portée : dans le support, même largeur que la pastille (largeur en
+	-- échelle : ne change jamais la taille automatique du support)
+	local shadow = UIUtil.Create("Frame", {
+		Name = "PillShadow",
+		Size = UDim2.new(1, 0, 0, height),
+		Position = UDim2.fromOffset(0, y + 3),
+		BackgroundColor3 = Color3.new(0, 0, 0),
+		BackgroundTransparency = 0.8,
+		BorderSizePixel = 0,
+		ZIndex = 0,
+		Parent = holder,
+	})
+	UIUtil.Corner(shadow, UDim.new(1, 0))
+	return button, badge
 end
 
 -- (Re)construit la rangée des pastilles selon l'appareil :
@@ -499,10 +629,7 @@ local function buildPills(parent: Frame, order: number)
 		-- tiennent sur une ligne (le texte long ne tenait pas : pastille coupée
 		-- au bord de la rangée). Le titre complet s'affiche dans la fenêtre.
 		local round = def.Round == true or phone
-		local text = Locale.T(def.Text)
-		if round and not def.Round then
-			text = string.match(def.Text, "^(%S+)") or text
-		end
+		local icon, label = splitIcon(Locale.T(def.Text))
 		-- Support (marge verticale entre deux lignes de pastilles)
 		local holder = UIUtil.Create("Frame", {
 			Name = def.Id,
@@ -517,55 +644,9 @@ local function buildPills(parent: Frame, order: number)
 		-- pour que les 10 pastilles tiennent sur DEUX lignes (sinon la barre
 		-- d'améliorations descendrait sur les emplacements du bas)
 		local tablet = Interface.Device == "Tablet"
-		local button = UIUtil.PillButton({
-			Name = "Button",
-			Text = text,
-			Color = def.Color,
-			TextColor3 = def.Round and Theme.Colors.Text or Theme.Colors.TextLight,
-			Height = height,
-			TextSize = round and math.floor(height * 0.56) or math.floor(height * (tablet and 0.39 or 0.45)),
-			Round = round,
-			Position = UDim2.fromOffset(0, buttonY),
-			Parent = holder,
-		})
-		local pillPad = tablet and 13 or math.floor(height * 0.45)
-		if not round then
-			local padding = button:FindFirstChildOfClass("UIPadding")
-			if padding then
-				padding.PaddingLeft = UDim.new(0, pillPad)
-				padding.PaddingRight = UDim.new(0, pillPad)
-			end
-		end
-		if not round then
-			-- Contour du texte pour rester lisible sur les couleurs claires
-			local stroke = UIUtil.Create("UIStroke", {
-				Color = Theme.Colors.TextDark,
-				Thickness = 1,
-				Transparency = 0.55,
-				ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
-				Parent = button,
-			})
-			stroke.Name = "TextStroke"
-		end
-		UIUtil.Shadow(button, 2, 0.86, 2)
-		local badge = UIUtil.Badge(button, round and 22 or 18)
+		local button, badge = buildMenuPill(holder, def, icon, label, height, round, tablet, buttonY)
 		if round then
 			badge.Position = UDim2.new(1, phone and -5 or -2, 0, phone and 9 or 2)
-		else
-			-- Badge DANS la pastille, à droite du texte : il ne recouvre ni le
-			-- texte ni la pastille voisine (la pastille s'élargit quand il est là)
-			local padding = button:FindFirstChildOfClass("UIPadding")
-			local basePad = pillPad
-			badge.AnchorPoint = Vector2.new(1, 0.5)
-			local function placeBadge()
-				local right = badge.Visible and math.max(basePad, PILL_BADGE_CLEAR) or basePad
-				if padding then
-					padding.PaddingRight = UDim.new(0, right)
-				end
-				badge.Position = UDim2.new(1, right - 2, 0.5, 0)
-			end
-			badge:GetPropertyChangedSignal("Visible"):Connect(placeBadge)
-			placeBadge()
 		end
 		UIUtil.Create("UIScale", { Name = "PopScale", Parent = holder })
 
@@ -679,7 +760,7 @@ local function buildStatus(column: Frame, buttonCenterX: number, buttonCenterY: 
 			Visible = false,
 			Parent = statusLeft,
 		})
-		UIUtil.Gradient(frame, ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(225, 225, 225)), 90)
+		-- (relief : dégradé déjà posé par UIUtil.Chip)
 		UIUtil.Create("UIScale", { Name = "PopScale", Parent = frame })
 		return frame
 	end

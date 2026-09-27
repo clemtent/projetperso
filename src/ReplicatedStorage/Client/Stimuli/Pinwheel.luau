@@ -20,6 +20,16 @@
 	    OnBonus("Spin").
 	  - Pastille "compteur" en haut à gauche : petit cadran dont l'aiguille
 	    et la couleur suivent la vitesse, et les tours / minute.
+	v9 - "Énergie éolienne" (amélioration WindPower, 10 niveaux, lue avec
+	ctx.GetLevel("WindPower"), mise à jour en direct) :
+	  - une éolienne de plus sur les collines à chaque niveau (1 à 6 :
+	    grandes devant, plus petites et voilées au loin), qui sort de terre
+	    avec des étincelles et un coup de vent ; niveaux 7 à 10 : elles
+	    grandissent et un feu rouge clignote en haut ; au niveau 10, de
+	    petits éclairs d'énergie jaillissent des moyeux ;
+	  - le moulin tourne plus vite au repos (+28 °/s par niveau), les coups
+	    de vent sont plus fréquents, des lignes de vent traversent la carte
+	    en continu (plus nombreuses à chaque niveau), les nuages filent.
 ]]
 
 local Locale = require(game:GetService("ReplicatedStorage").Shared.Locale)
@@ -32,7 +42,8 @@ local BASE_SPEED = 70 -- degrés / seconde au repos
 local BOOST = 540 -- ajout de vitesse par souffle
 local MAX_SPEED = 2600
 local DECAY = 0.9 -- vitesse de retour au calme
-local WIND_POOL = 6 -- lignes de vent recyclées
+local WIND_POOL = 10 -- lignes de vent recyclées
+local WIND_SPEED_PER_LEVEL = 28 -- vitesse de repos en plus par niveau de WindPower
 local SPARKLE_POOL = 6 -- étincelles recyclées
 
 local WHITE = Color3.new(1, 1, 1)
@@ -43,6 +54,17 @@ local BLADE_COLORS = {
 	Color3.fromRGB(255, 196, 46), -- miel
 	Color3.fromRGB(64, 156, 255), -- ciel
 	Color3.fromRGB(70, 206, 140), -- menthe
+}
+
+-- Éoliennes (une par niveau de WindPower, 1 à 6) : x, sol (y du haut de la
+-- colline à cet endroit), hauteur du mât, colline ("Far" = gauche, "Near" = droite)
+local TURBINES = {
+	{ X = 22, Ground = 145, H = 46, Hill = "Far", Haze = 0 },
+	{ X = 146, Ground = 150, H = 42, Hill = "Near", Haze = 0 },
+	{ X = 46, Ground = 146, H = 31, Hill = "Far", Haze = 0.25 },
+	{ X = 124, Ground = 148, H = 29, Hill = "Near", Haze = 0.25 },
+	{ X = 9, Ground = 146, H = 25, Hill = "Far", Haze = 0.4 },
+	{ X = 159, Ground = 152, H = 25, Hill = "Near", Haze = 0.4 },
 }
 
 local LIFT_TEXTS = {
@@ -193,11 +215,109 @@ function Pinwheel.Start(ctx)
 	end
 
 	-- Collines (une claire au fond, une plus foncée devant)
-	local farHill = centered({ Name = "FarHill", BackgroundColor3 = Color3.fromRGB(150, 222, 150), ZIndex = 2, Parent = scenery }, width * 0.18, height + 14, 170, 70)
+	-- (ZIndex : éoliennes de gauche 2 < colline du fond 3 < éoliennes de droite 4 < colline de devant 5)
+	local farHill = centered({ Name = "FarHill", BackgroundColor3 = Color3.fromRGB(150, 222, 150), ZIndex = 3, Parent = scenery }, width * 0.18, height + 14, 170, 70)
 	round(farHill)
-	local hill = centered({ Name = "Hill", BackgroundColor3 = WHITE, ZIndex = 2, Parent = scenery }, width * 0.62, height + 22, 240, 80)
+	local hill = centered({ Name = "Hill", BackgroundColor3 = WHITE, ZIndex = 5, Parent = scenery }, width * 0.62, height + 22, 240, 80)
 	round(hill)
 	UIUtil.Gradient(hill, ColorSequence.new(Color3.fromRGB(120, 214, 120), Color3.fromRGB(62, 160, 90)), 90)
+
+	------------------------------------------------------------------
+	-- v9 : éoliennes sur les collines (WindPower), cachées au départ
+	------------------------------------------------------------------
+	local HAZE = Color3.fromRGB(200, 224, 250) -- voile bleuté des éoliennes lointaines
+	local turbines = {}
+	for index, def in ipairs(TURBINES) do
+		local blade = math.floor(def.H * 0.46 + 0.5)
+		local hubSize = math.max(3, math.floor(def.H * 0.11))
+		local tone = WHITE:Lerp(HAZE, def.Haze)
+		local shade = Color3.fromRGB(186, 198, 218):Lerp(HAZE, def.Haze)
+		local z = def.Hill == "Far" and 2 or 4
+		-- Cadre ancré en bas au centre (pied du mât, caché par la colline) :
+		-- le UIScale le fait grandir vers le haut
+		local root = frame({
+			Name = "Turbine" .. index,
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.fromOffset(def.X, def.Ground + 6),
+			Size = UDim2.fromOffset(blade * 2, def.H + 6 + blade),
+			BackgroundTransparency = 1,
+			Visible = false,
+			ZIndex = z,
+			Parent = scenery,
+		})
+		local scale = Create("UIScale", { Parent = root })
+		local tower = frame({
+			Name = "Tower",
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.fromOffset(blade, blade),
+			Size = UDim2.fromOffset(math.max(2, def.H * 0.075), def.H + 6),
+			BackgroundColor3 = WHITE,
+			ZIndex = z,
+			Parent = root,
+		})
+		UIUtil.Gradient(tower, ColorSequence.new(tone, shade), 0)
+		local nacelle = frame({
+			Name = "Nacelle",
+			AnchorPoint = Vector2.new(0.3, 0.5),
+			Position = UDim2.fromOffset(blade, blade),
+			Size = UDim2.fromOffset(hubSize * 2.4, hubSize * 1.3),
+			BackgroundColor3 = tone:Lerp(shade, 0.35),
+			ZIndex = z,
+			Parent = root,
+		})
+		UIUtil.Corner(nacelle, 2)
+		-- Rotor : 3 pales (chaque pale dans un carré tourné, centré sur le moyeu)
+		local rotorFrame = frame({
+			Name = "Blades",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromOffset(blade, blade),
+			Size = UDim2.fromOffset(blade * 2, blade * 2),
+			BackgroundTransparency = 1,
+			ZIndex = z,
+			Parent = root,
+		})
+		for bladeIndex = 0, 2 do
+			local holder = frame({
+				Size = UDim2.fromScale(1, 1),
+				BackgroundTransparency = 1,
+				Rotation = bladeIndex * 120,
+				ZIndex = z,
+				Parent = rotorFrame,
+			})
+			local bladeFrame = frame({
+				Name = "Blade",
+				AnchorPoint = Vector2.new(0.5, 1),
+				Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.fromOffset(math.max(1.5, def.H * 0.06), blade),
+				BackgroundColor3 = WHITE,
+				ZIndex = z,
+				Parent = holder,
+			})
+			UIUtil.Gradient(bladeFrame, ColorSequence.new(shade, tone), 0)
+		end
+		local turbineHub = centered({ Name = "Hub", BackgroundColor3 = tone, ZIndex = z, Parent = root }, blade, blade, hubSize, hubSize)
+		round(turbineHub)
+		UIUtil.Stroke(turbineHub, shade:Lerp(BLACK, 0.25), 1, 0.3)
+		-- Feu d'obstacle rouge (niveaux 7+), en haut de la nacelle
+		local lamp = centered({
+			Name = "Lamp",
+			BackgroundColor3 = Color3.fromRGB(255, 56, 70),
+			Visible = false,
+			ZIndex = z,
+			Parent = root,
+		}, blade + hubSize * 0.8, blade - hubSize * 0.75, 3, 3)
+		round(lamp)
+		turbines[index] = {
+			Root = root,
+			Scale = scale,
+			Rotor = rotorFrame,
+			Lamp = lamp,
+			Def = def,
+			Angle = random:NextNumber(0, 120),
+			Speed = random:NextNumber(0.85, 1.15),
+			Shown = false,
+		}
+	end
 
 	------------------------------------------------------------------
 	-- Pot, terre, plante et bâton en bois
@@ -300,6 +420,7 @@ function Pinwheel.Start(ctx)
 	local smileStroke = UIUtil.Stroke(smile, Color3.fromRGB(80, 40, 36), 1.5, 0)
 	UIUtil.Create("UIGradient", {
 		Rotation = 90,
+		Color = ColorSequence.new(WHITE),
 		Transparency = NumberSequence.new({
 			NumberSequenceKeypoint.new(0, 1),
 			NumberSequenceKeypoint.new(0.55, 1),
@@ -418,7 +539,7 @@ function Pinwheel.Start(ctx)
 			ZIndex = 5,
 			Parent = bladeHolder,
 		})
-		UIUtil.Create("UIGradient", { Transparency = FADE_ENDS, Parent = crease })
+		UIUtil.Create("UIGradient", { Color = ColorSequence.new(WHITE), Transparency = FADE_ENDS, Parent = crease })
 	end
 
 	-- Disque "flou" coloré (apparaît quand ça tourne vite)
@@ -463,7 +584,7 @@ function Pinwheel.Start(ctx)
 			Parent = card,
 		})
 		round(line)
-		UIUtil.Create("UIGradient", { Transparency = FADE_ENDS, Parent = line })
+		UIUtil.Create("UIGradient", { Color = ColorSequence.new(WHITE), Transparency = FADE_ENDS, Parent = line })
 		winds[i] = { Frame = line, Active = false, X = 0, Y = 0, Speed = 0, Life = 0, MaxLife = 1, Phase = 0 }
 	end
 
@@ -507,19 +628,22 @@ function Pinwheel.Start(ctx)
 	end
 	local nextSparkle = 1
 
-	local function sparkleBurst(count: number)
+	-- Gerbe d'étincelles autour du moyeu (ou d'un autre point : x, y, portée)
+	local function sparkleBurst(count: number, x: number?, y: number?, reach: number?)
+		local originX, originY = x or hubX, y or hubY
+		local far = reach or 56
 		for _ = 1, count do
 			local sparkle = sparkles[nextSparkle]
 			nextSparkle = nextSparkle % #sparkles + 1
 			local a = random:NextNumber(0, math.pi * 2)
-			local distance = random:NextNumber(34, 56)
-			sparkle.Position = UDim2.fromOffset(hubX, hubY)
+			local distance = random:NextNumber(far * 0.6, far)
+			sparkle.Position = UDim2.fromOffset(originX, originY)
 			sparkle.TextTransparency = 0
 			sparkle.TextStrokeTransparency = 0.6
 			sparkle.TextSize = random:NextInteger(12, 18)
 			sparkle.Rotation = 0
 			UIUtil.Tween(sparkle, random:NextNumber(0.45, 0.65), {
-				Position = UDim2.fromOffset(hubX + math.cos(a) * distance, hubY + math.sin(a) * distance),
+				Position = UDim2.fromOffset(originX + math.cos(a) * distance, originY + math.sin(a) * distance),
 				TextTransparency = 1,
 				TextStrokeTransparency = 1,
 				Rotation = random:NextNumber(-120, 120),
@@ -616,6 +740,7 @@ function Pinwheel.Start(ctx)
 	})
 
 	local speed = BASE_SPEED
+	local baseSpeed = BASE_SPEED -- vitesse de repos (monte avec WindPower)
 	local angle = random:NextNumber(0, 90)
 	local lastInteract = -math.huge
 	local gustTimer = random:NextNumber(5, 10)
@@ -659,6 +784,69 @@ function Pinwheel.Start(ctx)
 	end)
 
 	------------------------------------------------------------------
+	-- v9 : niveau d'énergie éolienne (WindPower), appliqué en direct
+	------------------------------------------------------------------
+	local windLevel = -1
+	local ambientWind = 0
+	local energyClock = 0
+	local lampOn = false
+
+	-- Position du moyeu d'une éolienne (coordonnées de la carte)
+	local function turbineHub(turbine): (number, number)
+		local def = turbine.Def
+		return def.X, def.Ground + 6 - (def.H + 6) * turbine.Scale.Scale
+	end
+
+	local function applyWind(level: number, animate: boolean)
+		level = math.clamp(math.floor(level), 0, 10)
+		if level == windLevel then
+			return
+		end
+		local previousLevel = windLevel
+		windLevel = level
+		baseSpeed = BASE_SPEED + level * WIND_SPEED_PER_LEVEL
+		-- Niveaux 7 à 10 : les éoliennes grandissent
+		local grow = 1 + 0.08 * math.max(0, level - #TURBINES)
+		for index, turbine in ipairs(turbines) do
+			local show = level >= index
+			turbine.Lamp.Visible = show and level >= 7
+			if show and not turbine.Shown then
+				turbine.Shown = true
+				turbine.Root.Visible = true
+				if animate then
+					-- Sort de terre avec des étincelles
+					turbine.Scale.Scale = 0.05
+					UIUtil.Tween(turbine.Scale, 0.7, { Scale = grow }, Enum.EasingStyle.Back)
+					local def = turbine.Def
+					sparkleBurst(effectsOn() and 5 or 2, def.X, def.Ground - def.H * 0.7, 26)
+				else
+					turbine.Scale.Scale = grow
+				end
+			elseif show then
+				if animate and math.abs(turbine.Scale.Scale - grow) > 0.001 then
+					UIUtil.Tween(turbine.Scale, 0.5, { Scale = grow }, Enum.EasingStyle.Back)
+				else
+					turbine.Scale.Scale = grow
+				end
+			elseif turbine.Shown then
+				turbine.Shown = false
+				turbine.Root.Visible = false
+			end
+		end
+		-- Niveau acheté : coup de vent pour qu'on le voie
+		if animate and previousLevel >= 0 and level > previousLevel then
+			speed = math.min(MAX_SPEED, speed + 450)
+			for _ = 1, effectsOn() and 4 or 1 do
+				spawnWind()
+			end
+		end
+	end
+	applyWind(tonumber(ctx.GetLevel("WindPower")) or 0, false)
+	ctx.Connect(ctx.State.Changed, function()
+		applyWind(tonumber(ctx.GetLevel("WindPower")) or 0, true)
+	end)
+
+	------------------------------------------------------------------
 	-- Animation
 	------------------------------------------------------------------
 	local restPosition = UDim2.fromOffset(hubX, hubY)
@@ -674,7 +862,7 @@ function Pinwheel.Start(ctx)
 		-- Coups de vent naturels
 		gustTimer -= dt
 		if gustTimer <= 0 then
-			gustTimer = random:NextNumber(6, 12)
+			gustTimer = random:NextNumber(6, 12) / (1 + math.max(0, windLevel) * 0.12)
 			speed = math.min(MAX_SPEED, speed + random:NextNumber(150, 300))
 			if fx then
 				spawnWind()
@@ -683,7 +871,7 @@ function Pinwheel.Start(ctx)
 		end
 
 		-- Retour progressif au calme
-		speed = BASE_SPEED + (speed - BASE_SPEED) * math.exp(-dt * DECAY)
+		speed = baseSpeed + (speed - baseSpeed) * math.exp(-dt * DECAY)
 		angle = (angle + speed * dt) % 360
 		rotor.Rotation = angle
 
@@ -699,6 +887,44 @@ function Pinwheel.Start(ctx)
 			if windTimer <= 0 then
 				windTimer = random:NextNumber(0.16, 0.3)
 				spawnWind()
+			end
+		end
+		-- v9 : vent ambiant (WindPower) : lignes de vent de plus en plus fréquentes
+		if fx and windLevel > 0 then
+			ambientWind -= dt * (0.25 + windLevel * 0.3)
+			if ambientWind <= 0 then
+				ambientWind = random:NextNumber(0.7, 1.3)
+				spawnWind()
+			end
+		end
+		-- Éoliennes : les pales tournent avec le vent, feux rouges (7+), éclairs d'énergie (10)
+		if windLevel > 0 then
+			local turbineSpin = 70 + windLevel * 16 + math.max(0, speed - baseSpeed) * 0.12
+			for _, turbine in ipairs(turbines) do
+				if turbine.Shown then
+					turbine.Angle = (turbine.Angle + turbineSpin * turbine.Speed * dt) % 360
+					turbine.Rotor.Rotation = turbine.Angle
+				end
+			end
+			if windLevel >= 7 then
+				local on = (clock % 1.4) < 0.3
+				if on ~= lampOn then
+					lampOn = on
+					for _, turbine in ipairs(turbines) do
+						turbine.Lamp.BackgroundTransparency = on and 0 or 0.75
+					end
+				end
+			end
+			if windLevel >= 10 and fx then
+				energyClock -= dt
+				if energyClock <= 0 then
+					energyClock = random:NextNumber(0.5, 1.1)
+					local turbine = turbines[random:NextInteger(1, #turbines)]
+					if turbine.Shown then
+						local x, y = turbineHub(turbine)
+						sparkleBurst(1, x, y, 16)
+					end
+				end
 			end
 		end
 		for _, wind in ipairs(winds) do
@@ -744,7 +970,7 @@ function Pinwheel.Start(ctx)
 
 		-- Nuages, soleil, fleur qui se balance dans le vent
 		for _, cloud in ipairs(clouds) do
-			cloud.X += cloud.Speed * dt
+			cloud.X += cloud.Speed * dt * (1 + math.max(0, windLevel) * 0.15)
 			if cloud.X > width + 30 then
 				cloud.X = -30
 			end

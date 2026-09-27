@@ -747,11 +747,541 @@ def house_art_test():
     ])
 
 
+# 🕹️ Arcade + 💎 boutique Robux (agent ARCADESHOP) : packs de tickets, combos
+# et objets stylés "bientôt" (Config.Monetization), 🏆 trophées (mises des
+# duels, règles pures d'ArcadeConfig.Logic), puis simulations SERVEUR de
+# MinigameService et MonetizationService (faux services, faux temps) : leurs
+# sources sont injectées telles quelles par arcade_shop_test().
+ARCADE_SHOP_TESTS = r"""
+do
+	local function loadModule(src, name, env)
+		local fn, err = loadstring(src, "=" .. name)
+		assert(fn, err)
+		if env then
+			setfenv(fn, setmetatable(env, { __index = getfenv(0) }))
+		end
+		return fn()
+	end
+	local ArcadeConfig = loadModule(ARCADE_SRC, "ArcadeConfig")
+	local products = Config.Monetization.Products
+
+	test("Config.Monetization : packs de tickets, combos et objets stylés (bientôt)", function(check)
+		local expected = { { 5, 3714962647 }, { 10, 3714962696 }, { 25, 3714962739 }, { 50, 3714962804 }, { 100, 3714962854 } }
+		local packs = {}
+		for _, p in ipairs(products) do
+			if p.Kind == "Tickets" then table.insert(packs, p) end
+		end
+		eq(check, #packs, #expected, "5 packs de tickets")
+		for i, want in ipairs(expected) do
+			local p = packs[i]
+			if p then
+				eq(check, p.Tickets, want[1], "tickets du pack " .. i)
+				eq(check, p.ProductId, want[2], "ProductId du pack " .. i)
+				check(p.ComingSoon ~= true, "pack en vente " .. p.Id)
+				eq(check, Config.ProductsByProductId[p.ProductId], p, "index ProductId " .. p.Id)
+				check(type(p.Name) == "string" and #p.Name > 0 and type(p.Icon) == "string" and #p.Icon > 0, "nom / icône " .. p.Id)
+				check(type(p.PriceHint) == "number" and p.PriceHint > 0, "PriceHint " .. p.Id)
+			end
+		end
+		check(packs[5] and type(packs[5].Tag) == "string" and packs[5].Tag:find("BEST VALUE", 1, true) ~= nil, "ruban BEST VALUE sur le gros pack")
+		-- Ids uniques, IDs Roblox uniques
+		local ids, productIds = {}, {}
+		for _, p in ipairs(products) do
+			check(not ids[p.Id], "Id en double " .. tostring(p.Id))
+			ids[p.Id] = true
+			if p.ProductId ~= 0 then
+				check(not productIds[p.ProductId], "ProductId en double " .. tostring(p.ProductId))
+				productIds[p.ProductId] = true
+			end
+		end
+		-- Bientôt : combos (déjà accordables) et objets stylés (pas encore codés)
+		local combos, styles = 0, 0
+		local ready = Config.Monetization.ReadyKinds
+		check(type(ready) == "table", "ReadyKinds")
+		for _, p in ipairs(products) do
+			if p.ComingSoon then
+				eq(check, p.ProductId, 0, "bientôt sans ID : " .. p.Id)
+				check(Config.ProductsByProductId[0] == nil, "ID 0 jamais indexé")
+			end
+			if p.Kind == "Combo" then
+				combos += 1
+				check(p.ComingSoon == true, "combo marqué bientôt " .. p.Id)
+				check(type(p.Tickets) == "number" and p.Tickets > 0 and p.Tickets == math.floor(p.Tickets), "tickets du combo " .. p.Id)
+				check(type(p.Seconds) == "number" and p.Seconds > 0 and type(p.Minimum) == "number" and p.Minimum > 0, "Dopamine du combo " .. p.Id)
+			elseif p.Kind == "Stylish" then
+				styles += 1
+				check(p.ComingSoon == true, "objet stylé marqué bientôt " .. p.Id)
+				check(type(p.Style) == "string", "Style " .. p.Id)
+			end
+			check(({ Dopamine = 1, Boost = 1, ServerRush = 1, Tickets = 1, Combo = 1, Stylish = 1 })[p.Kind] ~= nil, "Kind inconnu " .. p.Id)
+			-- Ce qui est vendu (ID + pas "bientôt") doit être accordable par le serveur
+			if p.ProductId ~= 0 and not p.ComingSoon then
+				check(ready[p.Kind] == true, "vendu mais pas accordable : " .. p.Id)
+			end
+		end
+		check(combos >= 3 and styles >= 5, "combos " .. combos .. " / stylés " .. styles)
+		check(ready.Tickets and ready.Combo and not ready.Stylish, "ReadyKinds : Tickets + Combo oui, Stylish non")
+	end)
+
+	test("ArcadeConfig : 🏆 trophées (mises des duels) et règles pures", function(check)
+		local stakes = ArcadeConfig.Duels.Stakes
+		eq(check, stakes[1], 0, "1re mise = duel amical")
+		for i = 2, #stakes do
+			check(stakes[i] > stakes[i - 1] and stakes[i] == math.floor(stakes[i]), "mises croissantes entières")
+			check(ArcadeConfig.StakesSet[stakes[i]] == true, "StakesSet " .. stakes[i])
+		end
+		local TR = ArcadeConfig.Trophies
+		check(TR.Icon == "🏆" and TR.WelcomeGift > 0 and TR.PerSoloWin >= 1 and TR.DailyCap >= TR.PerSoloWin, "réglages des trophées")
+		check(stakes[#stakes] <= TR.WelcomeGift + TR.DailyCap, "la plus grosse mise reste atteignable en un jour")
+		check(ArcadeConfig.Tickets.Max >= 1e6, "Tickets.Max assez grand pour les achats")
+		local L = ArcadeConfig.Logic
+		-- Plafonds du jour
+		eq(check, L.CappedGrant(3, 0, 20), 3, "sous le plafond")
+		eq(check, L.CappedGrant(3, 19, 20), 1, "reste 1")
+		eq(check, L.CappedGrant(3, 20, 20), 0, "plafond atteint")
+		eq(check, L.CappedGrant(3, 25, 20), 0, "au-delà du plafond")
+		eq(check, L.CappedGrant(2.7, 0, 20), 2, "entier")
+		eq(check, L.CappedGrant(-4, 0, 20), 0, "négatif")
+		eq(check, L.CappedGrant(0 / 0, 0, 20), 0, "NaN")
+		eq(check, L.CappedGrant(math.huge, 0, 20), 0, "infini")
+		-- Mises
+		local ok, why = L.CheckStake(5, 10, 10)
+		check(ok and why == nil, "mise payable")
+		ok, why = L.CheckStake(5, 4, 10)
+		check(not ok and why == "self", "pas assez de trophées (soi)")
+		ok, why = L.CheckStake(5, 10, 4)
+		check(not ok and why == "other", "pas assez de trophées (adversaire)")
+		ok, why = L.CheckStake(7, 99, 99)
+		check(not ok and why == "invalid", "mise hors liste")
+		ok, why = L.CheckStake("5", 99, 99)
+		check(not ok and why == "invalid", "mise texte")
+		ok = L.CheckStake(0, 0, 0)
+		check(ok, "duel amical sans trophée")
+		-- Pot : gagnant x2, perdant 0, égalité rendue ; jamais créé ni détruit
+		for _, stake in ipairs(stakes) do
+			local w1, w2, d = L.StakePayouts(stake, 1), L.StakePayouts(stake, 2), L.StakePayouts(stake, 0)
+			eq(check, w1[1], stake * 2, "gagnant 1") eq(check, w1[2], 0, "perdant 2")
+			eq(check, w2[1], 0, "perdant 1") eq(check, w2[2], stake * 2, "gagnant 2")
+			eq(check, d[1], stake, "égalité 1") eq(check, d[2], stake, "égalité 2")
+			eq(check, w1[1] + w1[2], stake * 2, "pot conservé")
+		end
+		-- Pack de tickets conseillé : le plus petit qui suffit, sinon le plus gros
+		local packs = {}
+		for _, p in ipairs(products) do
+			if p.Kind == "Tickets" and not p.ComingSoon then table.insert(packs, p) end
+		end
+		local function pick(missing)
+			local p = L.PickTicketPack(missing, packs)
+			return p and p.Tickets
+		end
+		eq(check, pick(1), 5, "manque 1") eq(check, pick(5), 5, "manque 5") eq(check, pick(6), 10, "manque 6")
+		eq(check, pick(26), 50, "manque 26") eq(check, pick(99), 100, "manque 99") eq(check, pick(500), 100, "trop : le plus gros")
+		check(L.PickTicketPack(3, {}) == nil, "aucun pack")
+	end)
+
+	------------------------------------------------------------------ Simulation serveur
+	-- Faux temps / faux task : les délais sont joués par advance()
+	local now = 1000
+	local queue = {}
+	local function schedule(t, fn, ...)
+		table.insert(queue, { At = now + (t or 0), Fn = fn, Args = table.pack(...) })
+	end
+	local function advance(seconds)
+		local target = now + seconds
+		while true do
+			table.sort(queue, function(a, b) return a.At < b.At end)
+			local item = queue[1]
+			if not item or item.At > target then break end
+			table.remove(queue, 1)
+			now = math.max(now, item.At)
+			item.Fn(table.unpack(item.Args, 1, item.Args.n))
+		end
+		now = target
+	end
+	local fakeTask = {
+		delay = function(t, fn, ...) schedule(t, fn, ...) end,
+		defer = function(fn, ...) schedule(0, fn, ...) end,
+		spawn = function(fn, ...) fn(...) end,
+		wait = function() return 0 end,
+	}
+	-- (os.time part d'un début de jour UTC : la simulation ne change jamais de jour)
+	local fakeOs = { clock = function() return now end, time = function() return 1699833600 + math.floor(now) end }
+	local PlayersService = { list = {} }
+	PlayersService.GetPlayers = function() return table.clone(PlayersService.list) end
+	PlayersService.GetPlayerByUserId = function(_, id)
+		for _, p in ipairs(PlayersService.list) do if p.UserId == id then return p end end
+		return nil
+	end
+	local function newPlayer(id, name)
+		local p = { UserId = id, DisplayName = name, Name = name }
+		p.GetNetworkPing = function() return 0.04 end
+		p.Parent = PlayersService
+		table.insert(PlayersService.list, p)
+		return p
+	end
+	local fakeLocale = {
+		TFor = function(_, text, ...) if select("#", ...) > 0 then return string.format(text, ...) end return text end,
+	}
+	local function fakeT(_, _p, text, ...)
+		if select("#", ...) > 0 then return string.format(text, ...) end
+		return text
+	end
+	local fakeRandom = { new = function()
+		return { NextInteger = function(_, a, b) return math.random(a, b) end, NextNumber = function(_, a, b) return a + math.random() * (b - a) end }
+	end }
+
+	test("MinigameService (simulation) : mises en 🏆, tickets jamais misés", function(check)
+		math.randomseed(7)
+		local events, arcadeFn = {}, nil
+		local Net = {
+			Event = function(name)
+				return { FireClient = function(_, player, kind, payload)
+					if name == "ArcadeEvent" then
+						events[player] = events[player] or {}
+						table.insert(events[player], { kind, payload })
+					end
+				end }
+			end,
+			Function = function(name)
+				return setmetatable({}, { __newindex = function(t, k, v) if name == "Arcade" then arcadeFn = v end rawset(t, k, v) end })
+			end,
+		}
+		local datas = {}
+		local announces = 0
+		local services = {
+			DataService = { GetData = function(_, p) return datas[p] end },
+			GameService = {
+				IsReady = function(_, p) return datas[p] ~= nil end,
+				T = fakeT,
+				GetStats = function() return { PerSecond = 100, ClickValue = 10 } end,
+				AddDopamine = function(_, p, amount) datas[p].Dopamine += amount end,
+				SendState = function() end,
+				Notify = function() end,
+				NotifyAll = function(_, fn)
+					local ok, msg = pcall(fn, "en")
+					check(ok and type(msg.Text) == "string" and msg.Text:find("🏆", 1, true) ~= nil, "annonce en 🏆")
+					announces += 1
+				end,
+			},
+			MonetizationService = {
+				GetBoost = function() return 1, 0 end,
+				AddBoost = function() end,
+			},
+		}
+		local shared = {
+			Config = Config,
+			Formulas = { HasFeature = function(data, f) return data.Features[f] == true end, ScaledReward = Formulas.ScaledReward },
+			Locale = fakeLocale,
+			NumberFormatter = N,
+			Net = Net,
+			ArcadeConfig = ArcadeConfig,
+		}
+		local ReplicatedStorage = { Shared = {} }
+		for k in pairs(shared) do ReplicatedStorage.Shared[k] = k end
+		local closers = {}
+		local Service = loadModule(MINIGAME_SRC, "MinigameService", {
+			require = function(x) if x == "RateLimiter" then return { Check = function() return true end } end return shared[x] end,
+			game = {
+				GetService = function(_, n) if n == "Players" then return PlayersService end return ReplicatedStorage end,
+				BindToClose = function(_, fn) table.insert(closers, fn) end,
+			},
+			script = { Parent = { RateLimiter = "RateLimiter", FindFirstChild = function() return nil end } },
+			task = fakeTask, os = fakeOs, Random = fakeRandom,
+			warn = function(...) check(false, "warn : " .. table.concat({ ... }, " ")) end,
+		})
+		Service:Init(services)
+		Service:Start()
+		advance(0)
+		local function lastEvent(p, kind)
+			local list = events[p] or {}
+			for i = #list, 1, -1 do if list[i][1] == kind then return list[i][2] end end
+			return nil
+		end
+		local function call(p, action, arg) return arcadeFn(p, action, arg) end
+		local function newData(tickets)
+			return { Tickets = tickets, Arcade = {}, Dopamine = 0, Features = { Minigames = true },
+				Stats = { MinigamesPlayed = 0, MinigamesWon = 0, DuelsWon = 0 } }
+		end
+		local TR, TK = ArcadeConfig.Trophies, ArcadeConfig.Tickets
+		local A, B, C = newPlayer(1, "Ana"), newPlayer(2, "Bob"), newPlayer(3, "Cid")
+		for _, p in ipairs({ A, B, C }) do
+			datas[p] = newData(500)
+			Service:PlayerReady(p, datas[p])
+		end
+		-- Cadeaux de bienvenue : tickets ET trophées (une seule fois)
+		call(A, "lobby") call(B, "lobby") call(C, "lobby") call(A, "lobby")
+		eq(check, datas[A].Trophies, TR.WelcomeGift, "trophées de bienvenue")
+		eq(check, datas[A].Tickets, 500 + TK.StartTickets, "tickets de bienvenue")
+		-- Ancien joueur (déjà "Welcomed" avant les trophées) : reçoit quand même les trophées
+		local D = newPlayer(4, "Dan")
+		datas[D] = newData(40)
+		datas[D].Arcade = { Welcomed = true }
+		Service:PlayerReady(D, datas[D])
+		call(D, "lobby")
+		eq(check, datas[D].Tickets, 40, "pas de 2e cadeau de tickets")
+		eq(check, datas[D].Trophies, TR.WelcomeGift, "trophées offerts aux anciens joueurs")
+		local ok, lobby = call(A, "lobby")
+		check(ok and type(lobby.Players) == "table" and #lobby.Players == 3, "lobby")
+		check(type(lobby.Players[1].Trophies) == "number", "le lobby montre les trophées")
+
+		-- 500 tickets mais trop peu de trophées : mise refusée (on ne mise JAMAIS de tickets)
+		local big = ArcadeConfig.Duels.Stakes[#ArcadeConfig.Duels.Stakes]
+		datas[A].Trophies = big - 1
+		advance(3)
+		local okBig, msg = call(A, "invite", { Target = 2, Game = "TicTacToe", Stake = big })
+		check(not okBig and type(msg) == "string" and msg:find("trophies", 1, true) ~= nil, "mise > trophées refusée malgré les tickets")
+		datas[A].Trophies = 30
+		datas[B].Trophies = big - 1
+		advance(3)
+		okBig, msg = call(A, "invite", { Target = 2, Game = "TicTacToe", Stake = big })
+		check(not okBig and type(msg) == "string" and msg:find("Bob", 1, true) ~= nil, "adversaire sans assez de trophées")
+		check(not call(A, "invite", { Target = 2, Game = "TicTacToe", Stake = 25 }), "ancienne mise en tickets (25) refusée")
+
+		-- Duel à 5 🏆 : séquestre, victoire, pot x2 ; tickets : seulement le bonus fixe
+		datas[B].Trophies = 20
+		advance(3)
+		local ticketsA, ticketsB = datas[A].Tickets, datas[B].Tickets
+		local okI, inv = call(A, "invite", { Target = 2, Game = "TicTacToe", Stake = 5 })
+		check(okI and inv.Invite and inv.Invite.Stake == 5, "invitation à 5 🏆")
+		local okA = call(B, "accept", inv.Invite.Id)
+		check(okA, "acceptation")
+		eq(check, datas[A].Trophies, 25, "séquestre A") eq(check, datas[B].Trophies, 15, "séquestre B")
+		eq(check, datas[A].Tickets, ticketsA, "tickets de A intacts") eq(check, datas[B].Tickets, ticketsB, "tickets de B intacts")
+		local duel = lastEvent(A, "duelStart")
+		local p1 = duel.You == 1 and A or B
+		local p2 = p1 == A and B or A
+		for _, move in ipairs({ { p1, 1 }, { p2, 2 }, { p1, 5 }, { p2, 3 }, { p1, 9 } }) do
+			check(call(move[1], "move", { Id = duel.Id, Move = move[2] }), "coup " .. move[2])
+		end
+		local fin = lastEvent(p1, "duelEnd")
+		check(fin and fin.Result.Outcome == "Win" and fin.Result.Trophies == 5, "victoire : +5 🏆 net")
+		local winnerBefore = p1 == A and 25 or 15
+		local loserBefore = p2 == A and 25 or 15
+		eq(check, datas[p1].Trophies, winnerBefore + 10 + fin.Result.TrophyBonus, "gagnant : pot x2 + bonus")
+		eq(check, fin.Result.TrophyBonus, TR.PerDuelWin, "1 🏆 bonus")
+		eq(check, datas[p2].Trophies, loserBefore, "perdant : mise perdue")
+		eq(check, lastEvent(p2, "duelEnd").Result.Trophies, -5, "perdant : -5 🏆")
+		eq(check, datas[p1].Tickets, (p1 == A and ticketsA or ticketsB) + TK.DuelWinBonus, "gagnant : seulement le bonus de tickets")
+		eq(check, datas[p2].Tickets, p2 == A and ticketsA or ticketsB, "perdant : tickets intacts")
+		eq(check, datas[p1].Arcade.History[1].K, "T", "historique : mise en trophées")
+		eq(check, announces, 1, "annonce du gros duel")
+
+		-- Le prix de la victoire NE dépend PAS de la mise (duel amical = même bonus)
+		advance(5)
+		local _, inv2 = call(A, "invite", { Target = 3, Game = "TicTacToe", Stake = 0 })
+		call(C, "accept", inv2.Invite.Id)
+		local d2 = lastEvent(A, "duelStart")
+		local q1 = d2.You == 1 and A or C
+		local q2 = q1 == A and C or A
+		local before = { [A] = { datas[A].Tickets, datas[A].Trophies, datas[A].Dopamine }, [C] = { datas[C].Tickets, datas[C].Trophies, datas[C].Dopamine } }
+		for _, move in ipairs({ { q1, 1 }, { q2, 2 }, { q1, 5 }, { q2, 3 }, { q1, 9 } }) do
+			call(move[1], "move", { Id = d2.Id, Move = move[2] })
+		end
+		local fin2 = lastEvent(q1, "duelEnd")
+		check(fin2 and fin2.Result.Outcome == "Win" and fin2.Result.Trophies == 0, "duel amical gagné")
+		eq(check, datas[q1].Tickets - before[q1][1], TK.DuelWinBonus, "même bonus de tickets sans mise")
+		eq(check, datas[q1].Trophies - before[q1][2], TR.PerDuelWin, "même bonus de trophée sans mise")
+		check(datas[q1].Dopamine > before[q1][3], "même prix en Dopamine sans mise")
+
+		-- Duel trop long : égalité, mises rendues ; fermeture du serveur : rendues aussi
+		advance(5)
+		local tA, tB = datas[A].Trophies, datas[B].Trophies
+		local _, inv3 = call(A, "invite", { Target = 2, Game = "SpotRace", Stake = 2 })
+		call(B, "accept", inv3.Invite.Id)
+		eq(check, datas[A].Trophies, tA - 2, "séquestre (égalité)")
+		advance(ArcadeConfig.Duels.MaxDuelSeconds + 1)
+		eq(check, datas[A].Trophies, tA, "égalité : mise rendue A") eq(check, datas[B].Trophies, tB, "égalité : mise rendue B")
+		advance(5)
+		local _, inv4 = call(A, "invite", { Target = 2, Game = "Connect4", Stake = 10 })
+		call(B, "accept", inv4.Invite.Id)
+		eq(check, datas[B].Trophies, tB - 10, "séquestre (fermeture)")
+		for _, fn in ipairs(closers) do fn() end
+		eq(check, datas[A].Trophies, tA, "fermeture : rendue A") eq(check, datas[B].Trophies, tB, "fermeture : rendue B")
+
+		-- Acceptation revérifiée : l'inviteur a dépensé ses trophées entre-temps
+		advance(5)
+		local _, inv5 = call(A, "invite", { Target = 3, Game = "TicTacToe", Stake = 5 })
+		datas[A].Trophies = 1
+		local okAcc, accMsg = call(C, "accept", inv5.Invite.Id)
+		check(not okAcc and tostring(accMsg):find("trophies", 1, true) ~= nil, "acceptation refusée : l'inviteur n'a plus assez")
+		check(lastEvent(A, "inviteClosed") and lastEvent(A, "inviteClosed").Reason == "trophies", "invitation fermée (trophées)")
+
+		-- Boutique à tickets : refus avec le manque (le client propose d'en acheter)
+		datas[C].Tickets = 3
+		local okBuy, refusal = call(C, "buy", "Snack")
+		check(not okBuy and type(refusal) == "table" and refusal.Missing == 17 and refusal.Currency == "Tickets", "refus : Missing = 17")
+		datas[C].Tickets = 20
+		check(call(C, "buy", "Snack") and datas[C].Tickets == 0, "achat en tickets")
+
+		-- Tickets achetés en Robux : même solde, sans plafond du jour
+		local added, balance = Service:GrantPurchasedTickets(C, 100)
+		eq(check, added, 100, "tickets achetés ajoutés") eq(check, balance, 100, "nouveau solde")
+		eq(check, datas[C].Arcade.TicketsBought, 100, "stat TicketsBought")
+		check(not pcall(Service.GrantPurchasedTickets, Service, C, 2.5), "montant non entier refusé")
+
+		-- Victoires solo : +1 🏆 par victoire récompensée, plafond du jour
+		local rewardWin = Service._Internal.RewardWin
+		local E = newPlayer(5, "Eve")
+		datas[E] = newData(0)
+		Service:PlayerReady(E, datas[E])
+		call(E, "lobby")
+		local start = datas[E].Trophies
+		local first = rewardWin(E, "Minesweeper", 42)
+		eq(check, first.Trophies, TR.PerSoloWin, "victoire solo : +1 🏆")
+		eq(check, datas[E].Trophies, start + TR.PerSoloWin, "solde après victoire")
+		local total = first.Trophies
+		for _, gameId in ipairs({ "Minesweeper", "Memory", "Simon" }) do
+			for _ = 1, 20 do
+				local r = rewardWin(E, gameId, nil)
+				total += r.Trophies
+				if r.Capped then
+					eq(check, r.Trophies, 0, "partie non récompensée : pas de trophée")
+				end
+			end
+		end
+		eq(check, total, TR.DailyCap, "plafond du jour des trophées")
+		eq(check, datas[E].Trophies, start + TR.DailyCap, "solde plafonné")
+		eq(check, datas[E].Arcade.DayTrophies, TR.DailyCap, "DayTrophies")
+		local st = Service:GetClientState(A, datas[A])
+		check(type(st.Trophies) == "number" and st.Arcade.TrophyCap == TR.DailyCap and type(st.Arcade.TrophiesEarned) == "number", "GetClientState : trophées")
+		-- Sauvegarde abîmée : trophées nettoyés
+		datas[B].Trophies = -5
+		call(B, "lobby")
+		eq(check, datas[B].Trophies, 0, "trophées négatifs corrigés")
+		datas[B].Trophies = 0 / 0
+		call(B, "lobby")
+		eq(check, datas[B].Trophies, 0, "trophées NaN corrigés")
+	end)
+
+	test("MonetizationService (simulation) : ProcessReceipt tickets, combos, bientôt", function(check)
+		local Decision = { PurchaseGranted = "Granted", NotProcessedYet = "NotYet" }
+		local MPS = { PromptGamePassPurchaseFinished = { Connect = function() end } }
+		local datas, notifies, saves = {}, {}, { ok = true, count = 0 }
+		local players = { list = {} }
+		players.GetPlayerByUserId = function(_, id)
+			for _, p in ipairs(players.list) do if p.UserId == id then return p end end
+			return nil
+		end
+		local P = { UserId = 77, Name = "Buyer", DisplayName = "Buyer" }
+		table.insert(players.list, P)
+		datas[P] = { Tickets = 3, Dopamine = 0, Purchases = {}, Boost = { Multiplier = 1, EndsAt = 0 }, Stats = { RobuxPurchases = 0 } }
+		local services = {
+			DataService = {
+				GetData = function(_, p) return datas[p] end,
+				CanSave = function() return true end,
+				SaveAsync = function() saves.count += 1 return saves.ok end,
+			},
+			GameService = {
+				IsReady = function(_, p) return datas[p] ~= nil end,
+				T = fakeT,
+				GetStats = function() return { PerSecond = 1000, ClickValue = 10 } end,
+				AddDopamine = function(_, p, amount) datas[p].Dopamine += amount end,
+				Notify = function(_, _p, payload) table.insert(notifies, payload) end,
+				SendState = function() end,
+				MarkDirty = function() end,
+				NotifyAll = function() end,
+			},
+			MinigameService = {
+				GrantPurchasedTickets = function(_, p, amount)
+					datas[p].Tickets += amount
+					return amount, datas[p].Tickets
+				end,
+			},
+			EventService = { StartRush = function() end },
+		}
+		local shared = { Config = Config, Formulas = Formulas, Locale = fakeLocale, NumberFormatter = N }
+		local ReplicatedStorage = { Shared = {} }
+		for k in pairs(shared) do ReplicatedStorage.Shared[k] = k end
+		local Service = loadModule(MONETIZATION_SRC, "MonetizationService", {
+			require = function(x) return shared[x] end,
+			game = { GetService = function(_, n)
+				if n == "MarketplaceService" then return MPS end
+				if n == "Players" then return players end
+				if n == "RunService" then return { IsStudio = function() return false end } end
+				return ReplicatedStorage
+			end },
+			Enum = { ProductPurchaseDecision = Decision },
+			task = fakeTask,
+			warn = function() end,
+			print = function() end,
+		})
+		Service:Init(services)
+		Service:Start()
+		check(type(MPS.ProcessReceipt) == "function", "ProcessReceipt défini")
+		local receipt = 0
+		local function buy(productId, purchaseId)
+			receipt += 1
+			return MPS.ProcessReceipt({ PlayerId = P.UserId, ProductId = productId, PurchaseId = purchaseId or ("P" .. receipt) })
+		end
+		-- Chaque pack de tickets : accordé, même solde que l'arcade, bandeau "Purchase"
+		local expected = 3
+		for _, p in ipairs(Config.Monetization.Products) do
+			if p.Kind == "Tickets" and p.ProductId ~= 0 then
+				local decision = buy(p.ProductId)
+				eq(check, decision, Decision.PurchaseGranted, "pack accordé " .. p.Id)
+				expected += p.Tickets
+				eq(check, datas[P].Tickets, expected, "tickets après " .. p.Id)
+				local last = notifies[#notifies]
+				check(last and last.Type == "Purchase" and last.Tickets == p.Tickets and type(last.Title) == "string", "bandeau d'achat " .. p.Id)
+			end
+		end
+		eq(check, expected, 3 + 5 + 10 + 25 + 50 + 100, "total des 5 packs")
+		-- Même achat renvoyé par Roblox : rien de plus
+		local pack5 = Config.ProductsById.Tickets5
+		eq(check, buy(pack5.ProductId, "SAME"), Decision.PurchaseGranted, "1er reçu")
+		eq(check, buy(pack5.ProductId, "SAME"), Decision.PurchaseGranted, "reçu en double")
+		eq(check, datas[P].Tickets, expected + 5, "jamais accordé deux fois")
+		-- Sauvegarde ratée : Roblox réessaiera, mais sans redonner
+		saves.ok = false
+		eq(check, buy(pack5.ProductId, "RETRY"), Decision.NotProcessedYet, "sauvegarde ratée")
+		saves.ok = true
+		eq(check, buy(pack5.ProductId, "RETRY"), Decision.PurchaseGranted, "nouvel essai")
+		eq(check, datas[P].Tickets, expected + 10, "accordé une seule fois malgré l'échec")
+		-- Produit inconnu
+		eq(check, buy(123456789), Decision.NotProcessedYet, "produit inconnu")
+		-- Combo (le jour où l'ID est collé) : tickets + Dopamine
+		local combo = Config.ProductsById.ComboStarter
+		Config.ProductsByProductId[900001] = combo
+		local ticketsBefore, dopamineBefore = datas[P].Tickets, datas[P].Dopamine
+		eq(check, buy(900001), Decision.PurchaseGranted, "combo accordé")
+		eq(check, datas[P].Tickets, ticketsBefore + combo.Tickets, "tickets du combo")
+		eq(check, datas[P].Dopamine - dopamineBefore, Formulas.ScaledReward({ PerSecond = 1000, ClickValue = 10 }, combo.Seconds, combo.Minimum), "Dopamine du combo")
+		-- Objet stylé (pas encore codé) : jamais accordé, jamais enregistré
+		local style = Config.ProductsById.StyleGoldenTrail
+		Config.ProductsByProductId[900002] = style
+		local purchases = #datas[P].Purchases
+		eq(check, buy(900002, "STYLE"), Decision.NotProcessedYet, "objet stylé refusé")
+		eq(check, #datas[P].Purchases, purchases, "achat stylé non enregistré")
+		Config.ProductsByProductId[900001] = nil
+		Config.ProductsByProductId[900002] = nil
+	end)
+end
+"""
+
+
+def arcade_shop_test():
+    """Tests ARCADESHOP : injecte ArcadeConfig, MinigameService et
+    MonetizationService (sources telles quelles) puis ARCADE_SHOP_TESTS."""
+    services = os.path.join(SRC, "ServerScriptService", "Services")
+    sources = [
+        ("ARCADE_SRC", os.path.join(SHARED, "ArcadeConfig.luau")),
+        ("MINIGAME_SRC", os.path.join(services, "MinigameService.luau")),
+        ("MONETIZATION_SRC", os.path.join(services, "MonetizationService.luau")),
+    ]
+    lines = []
+    for name, path in sources:
+        body = read(path)
+        if "]=====]" in body:
+            raise ValueError("délimiteur ]=====] interdit dans " + path)
+        lines.append("local %s = [=====[%s]=====]" % (name, body))
+    return "\n".join(lines) + "\n" + ARCADE_SHOP_TESTS
+
+
 def main():
     if not os.path.exists(LUAU):
         print("FAIL : Luau CLI introuvable (%s)" % LUAU)
         return 1
-    bundle = build_bundle(config_key_test() + "\n" + lang_test() + "\n" + house_art_test())
+    bundle = build_bundle(config_key_test() + "\n" + lang_test() + "\n" + house_art_test() + "\n" + arcade_shop_test())
     with tempfile.NamedTemporaryFile("w", suffix=".luau", delete=False, encoding="utf-8") as f:
         f.write(bundle)
         path = f.name

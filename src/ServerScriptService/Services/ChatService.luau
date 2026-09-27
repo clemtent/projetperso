@@ -9,9 +9,11 @@
 	RemoteFunction "FilterText" (purpose, text) -> (ok, résultat | message)
 	  purpose : "Live" (message du chat du live) ou "Mail" (mail écrit)
 	  résultat : { Text = texte filtré pour CE joueur, Topics = { sujets } }
-	  Les sujets (ChatTopics.Detect, sur le texte brut) servent aux faux
-	  spectateurs / correspondants pour répondre "en fonction de ce qu'il a
-	  dit". Le texte brut n'est jamais renvoyé ni montré à personne.
+	  Les sujets (ChatTopics.Detect) servent aux faux spectateurs /
+	  correspondants pour répondre "en fonction de ce qu'il a dit" ; v9 : si
+	  le filtre a masqué des mots, les sujets viennent du texte FILTRÉ (on ne
+	  réagit jamais à un mot censuré). Le texte brut n'est jamais renvoyé ni
+	  montré à personne.
 	Anti-spam : 1 message / 1,2 s (live), 1 / 2 s (mail) ; longueur limitée.
 	Si le filtre échoue (panne Roblox), le message n'est PAS affiché.
 ]]
@@ -79,7 +81,6 @@ local function onFilter(player: Player, purpose: any, text: any)
 	if cleaned == "" then
 		return false, T(player, "Invalid message")
 	end
-	local topics = ChatTopics.Detect(cleaned)
 	local ok, filtered = pcall(function()
 		local result = TextService:FilterStringAsync(cleaned, player.UserId, Enum.TextFilterContext.PublicChat)
 		return result:GetNonChatStringForUserAsync(player.UserId)
@@ -87,6 +88,10 @@ local function onFilter(player: Player, purpose: any, text: any)
 	if not ok or type(filtered) ~= "string" then
 		return false, T(player, "Message could not be sent, try again")
 	end
+	-- Sujets : sur le texte tel que le joueur a le droit de le dire. Si le
+	-- filtre a masqué des mots (#####), on ne réagit qu'à ce qui reste lisible
+	-- (jamais à un mot censuré).
+	local topics = ChatTopics.Detect(filtered == cleaned and cleaned or filtered)
 	return true, { Text = filtered, Topics = topics }
 end
 

@@ -25,6 +25,7 @@ local Locale = require(ReplicatedStorage.Shared.Locale)
 local HouseCommon = require(script.Parent.HouseCommon)
 local HouseArt = require(script.Parent.HouseArt)
 local HouseMiniRoom = require(script.Parent.HouseMiniRoom)
+local HouseButtons = require(script.Parent.HouseButtons)
 
 type HouseData = HouseCommon.HouseData
 type Item = HouseCommon.Item
@@ -82,7 +83,7 @@ function HousePicker.new(parent: Frame): Picker
 	})
 	UIUtil.Corner(dim, 20)
 	local card = UIUtil.Create("Frame", {
-		Name = "Card",
+		Name = "PickerCard",
 		Size = UDim2.new(1, -24, 1, -16),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
@@ -93,6 +94,8 @@ function HousePicker.new(parent: Frame): Picker
 	UIUtil.Corner(card, 22)
 	UIUtil.Stroke(card, C.Pink, 2.5, 0.1)
 	UIUtil.Gradient(card, ColorSequence.new(WHITE, C.PinkMist), 90)
+	-- Clic DANS la carte (zone vide, titre...) : ne ferme pas ; à côté : ferme
+	UIUtil.SinkClicks(card)
 	local sizeLimit = UIUtil.Create("UISizeConstraint", { MaxSize = Vector2.new(820, 480), Parent = card })
 	local cardScale = UIUtil.Create("UIScale", { Parent = card })
 	local title = UIUtil.Create("TextLabel", {
@@ -123,23 +126,25 @@ function HousePicker.new(parent: Frame): Picker
 		ZIndex = 62,
 		Parent = card,
 	})
-	local closeButton = UIUtil.Create("TextButton", {
+	local closeCandy = HouseButtons.Candy({
 		Name = "PickerClose",
-		Size = UDim2.fromOffset(44, 44),
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -10, 0, 10),
-		BackgroundColor3 = C.PinkSoft,
-		AutoButtonColor = false,
-		Font = Theme.Fonts.Title,
-		Text = "✕",
-		TextColor3 = C.Ink,
-		TextSize = 20,
+		Icon = "✕",
+		Color = HouseButtons.Palette.Red,
+		TextColor = WHITE,
+		Width = 44,
+		Height = 46,
+		Radius = 22,
+		IconSize = 20,
 		ZIndex = 63,
 		Parent = card,
 	})
-	UIUtil.Corner(closeButton, UDim.new(1, 0))
-	UIUtil.Stroke(closeButton, C.Pink, 1.5, 0.3)
+	local closeButton = closeCandy.Button
+	closeButton.AnchorPoint = Vector2.new(1, 0)
+	closeButton.Position = UDim2.new(1, -10, 0, 9)
 	UIUtil.AnimateButton(closeButton, 1.08, 0.9)
+	HouseButtons.Tip(closeButton, function()
+		return Locale.T("Close")
+	end)
 	local list = UIUtil.Create("ScrollingFrame", {
 		Name = "List",
 		Size = UDim2.new(1, -24, 1, -78),
@@ -232,6 +237,29 @@ function HousePicker.new(parent: Frame): Picker
 		UIUtil.Corner(button, 16)
 		UIUtil.Stroke(button, enabled and C.Pink or Color3.fromRGB(200, 190, 200), 2, enabled and 0.25 or 0.4)
 		UIUtil.Gradient(button, ColorSequence.new(WHITE, Color3.fromRGB(232, 232, 236)), 90)
+		-- Reflet brillant en haut + petite lèvre plus foncée en bas (carte "bonbon")
+		local gloss = UIUtil.Create("Frame", {
+			Name = "Gloss",
+			Position = UDim2.new(0, 6, 0, 3),
+			Size = UDim2.new(1, -12, 0, 20),
+			BackgroundColor3 = WHITE,
+			BackgroundTransparency = 0.45,
+			ZIndex = 63,
+			Parent = button,
+		})
+		UIUtil.Corner(gloss, 10)
+		UIUtil.Create("UIGradient", { Rotation = 90, Transparency = NumberSequence.new(0.2, 1), Parent = gloss })
+		local lip = UIUtil.Create("Frame", {
+			Name = "Lip",
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.new(0.5, 0, 1, 0),
+			Size = UDim2.new(1, -14, 0, 4),
+			BackgroundColor3 = color:Lerp(C.Ink, 0.35),
+			BackgroundTransparency = enabled and 0.55 or 0.8,
+			ZIndex = 63,
+			Parent = button,
+		})
+		UIUtil.Corner(lip, UDim.new(1, 0))
 		if enabled then
 			UIUtil.AnimateButton(button, 1.04, 0.95)
 		else

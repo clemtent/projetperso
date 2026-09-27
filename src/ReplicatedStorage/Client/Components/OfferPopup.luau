@@ -397,9 +397,9 @@ local function pillButton(parent: Instance, name: string, text: string, color: C
 		Parent = node,
 	})
 	UIUtil.Corner(node, UDim.new(1, 0))
-	UIUtil.Stroke(node, color:Lerp(BLACK, 0.3), 2, 0)
-	UIUtil.Gradient(node, ColorSequence.new(WHITE, Color3.fromRGB(212, 212, 212)), 90)
-	UIUtil.AnimateButton(node, 1.05, 0.93)
+	-- v9 : bouton en relief (dégradé, reflet, contour teinté) + ombre
+	UIUtil.DressButton(node, color, { StrokeThickness = 2 })
+	UIUtil.Shadow(node, 3, 0.8, 1, 1)
 	return node
 end
 
@@ -506,36 +506,18 @@ local function show(offer: Offer)
 	})
 	kindChip.Position = UDim2.fromOffset(10, 10)
 
-	-- ✕ (toujours visible, zone tactile de 44 px)
-	local closeButton = UIUtil.Create("TextButton", {
+	-- ✕ commun (toujours visible) + zone tactile agrandie autour
+	UIUtil.CloseButton({
 		Name = "Close",
-		Size = UDim2.fromOffset(36, 36),
+		Size = 36,
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -8, 0, 8),
-		BackgroundColor3 = WHITE,
-		BackgroundTransparency = 0.1,
-		AutoButtonColor = false,
-		Font = Theme.Fonts.Title,
-		Text = "✕",
-		TextSize = 18,
-		TextColor3 = Theme.Colors.Text,
+		Position = UDim2.new(1, -12, 0, 12),
 		ZIndex = 7,
+		Hitbox = 52,
+		Shadow = false,
 		Parent = card,
+		OnClose = close,
 	})
-	UIUtil.Corner(closeButton, UDim.new(1, 0))
-	UIUtil.Stroke(closeButton, Theme.Colors.Border, 1.5, 0.5)
-	local closeHitbox = UIUtil.Create("TextButton", {
-		Name = "CloseHitbox",
-		Size = UDim2.fromOffset(52, 52),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		BackgroundTransparency = 1,
-		Text = "",
-		ZIndex = 6,
-		Parent = closeButton,
-	})
-	closeButton.Activated:Connect(close)
-	closeHitbox.Activated:Connect(close)
 
 	-- Textes
 	local top = SHOWCASE_HEIGHT + 14

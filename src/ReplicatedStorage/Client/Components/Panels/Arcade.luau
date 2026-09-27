@@ -4,18 +4,25 @@
 
 	Fenêtre "néon kawaii" (débloquée par l'amélioration "Arcade", Feature
 	"Minigames") :
-	  - en-tête : onglets Jeux / Duels / Boutique à tickets / Records + solde 🎟️ ;
+	  - en-tête : onglets Jeux / Duels / Boutique à tickets / Records +
+	    portefeuille : 🎟️ tickets (= boutique, bouton "+" pour en acheter) et
+	    🏆 trophées (= mises des duels, gagnés seulement en jouant) ; le
+	    sous-titre de la fenêtre l'explique en une ligne ;
 	  - Jeux : cartes illustrées (solo et duels) ; un jeu solo se charge à la
 	    demande (Client > Minigames > Solo_<Id>) dans une grande zone de jeu
 	    avec bouton retour ;
-	  - Duels : choix du jeu et de la mise (en tickets), joueurs du serveur qui
-	    ont l'arcade, invitations envoyées / reçues ;
+	  - Duels : choix du jeu et de la mise (en 🏆 trophées, jamais en tickets :
+	    ils s'achètent en Robux), joueurs du serveur qui ont l'arcade,
+	    invitations envoyées / reçues ;
 	  - duel en cours : bandeau "toi VS adversaire" (scores, pot, temps),
 	    plateau (Client > Minigames > Duel_<Id>), écran de résultat ;
-	  - Boutique à tickets : petits boosts, Dopamine, badges d'arcade ;
+	  - Boutique à tickets : petits boosts, Dopamine, badges d'arcade. Pas
+	    assez de tickets -> fenêtre NeedTickets À CHAQUE fois (propose un pack
+	    de la boutique Robux, onglet 🎟️ Tickets) ;
 	  - Records : meilleurs scores, victoires, derniers duels.
 	Les invitations arrivent même fenêtre fermée : petite carte "défi" (calque
 	Toasts) avec Accepter / Refuser, et bandeaux Notifications.Show.
+	API : ShowTab(id) ("Games" | "Duels" | "Shop" | "Records").
 
 	Contrat d'un module de jeu (Client > Minigames) :
 	  { Id, Kind = "Solo" | "Duel", Build = function(container, api) -> { Destroy } }
@@ -46,16 +53,32 @@ local Locale = require(ReplicatedStorage.Shared.Locale)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local ArcadeConfig = require(ReplicatedStorage.Shared.ArcadeConfig)
 
--- Title / Subtitle en anglais : traduits par PanelManager
+-- Fenêtre "Pas assez de tickets" (chargée prudemment : son absence ne casse pas l'arcade)
+local NeedTickets: any = nil
+do
+	local module = script.Parent.Parent:FindFirstChild("NeedTickets")
+	if module and module:IsA("ModuleScript") then
+		local ok, result = pcall(require, module)
+		if ok and type(result) == "table" then
+			NeedTickets = result
+		else
+			warn("[Arcade] NeedTickets : " .. tostring(result))
+		end
+	end
+end
+
+-- Title / Subtitle en anglais : traduits par PanelManager.
+-- Le sous-titre est LA ligne qui explique honnêtement les deux monnaies.
 local Arcade = {
 	Title = "🕹️ Arcade",
-	Subtitle = "Mini-games and duels • win 🎟️ tickets",
+	Subtitle = "🎟️ Tickets: for the ticket shop • 🏆 Trophies: duel stakes, earned only by playing",
 	Color = Color3.fromRGB(166, 90, 255),
 	Size = Vector2.new(900, 600),
 }
 
 local T = Locale.T
 local TICKET = ArcadeConfig.Tickets.Icon
+local TROPHY = ArcadeConfig.Trophies.Icon
 
 ----------------------------------------------------------------------
 -- Palette néon (fond sombre violet, couleurs vives)
@@ -94,11 +117,16 @@ end
 API_COLORS.Seat1 = SEAT_COLORS[1]
 API_COLORS.Seat2 = SEAT_COLORS[2]
 
+-- Portefeuille de l'en-tête (🎟️ | 🏆)
+local TICKET_CHIP_WIDTH = 158
+local TROPHY_CHIP_WIDTH = 118
+local WALLET_WIDTH = TICKET_CHIP_WIDTH + 6 + TROPHY_CHIP_WIDTH
+
 local TABS = {
 	{ Id = "Games", Text = "🎮 Games" },
 	{ Id = "Duels", Text = "⚔️ Duels" },
 	{ Id = "Shop", Text = "🎟️ Ticket Shop" },
-	{ Id = "Records", Text = "🏆 Records" },
+	{ Id = "Records", Text = "🏅 Records" },
 }
 
 local REASONS = {
@@ -137,6 +165,7 @@ local S: any = {
 	Active = nil, -- jeu affiché { Entry, Handle, Host, Listeners, IsDuel }
 	Busy = false,
 	Tickets = 0,
+	Trophies = 0,
 	ShownTickets = 0,
 	Connections = {},
 	LoopAccumulator = 0,
@@ -330,31 +359,74 @@ local function avatar(parent: Instance, userId: number, size: number, ring: Colo
 end
 
 ----------------------------------------------------------------------
--- Solde de tickets
+-- Portefeuille : 🎟️ tickets (boutique) et 🏆 trophées (duels)
 ----------------------------------------------------------------------
 
 local ticketChip: Frame
 local ticketLabel: TextLabel
-local ticketSub: TextLabel
+local trophyChip: Frame
+local trophyLabel: TextLabel
 
 local function arcadeData()
 	local data = ClientState.Data
 	return (data and type(data.Arcade) == "table") and data.Arcade or {}
 end
 
+-- (nom historique : met à jour les DEUX soldes)
 local function refreshTickets(animate: boolean?)
 	local data = ClientState.Data
 	local tickets = (data and tonumber(data.Tickets)) or 0
-	local previous = S.Tickets
+	local trophies = (data and tonumber(data.Trophies)) or 0
+	local previousTickets, previousTrophies = S.Tickets, S.Trophies
 	S.Tickets = tickets
+	S.Trophies = trophies
 	if ticketLabel then
 		ticketLabel.Text = NumberFormatter.Format(tickets)
-		local arcade = arcadeData()
-		ticketSub.Text = T("Today %s / %s", tostring(arcade.DayTickets or 0), tostring(arcade.DailyCap or ArcadeConfig.Tickets.DailyCap))
-		if animate and tickets ~= previous and S.Visible then
-			UIUtil.Pop(ticketChip, tickets > previous and 1.15 or 0.92, 0.35)
+		trophyLabel.Text = NumberFormatter.Format(trophies)
+		if animate and S.Visible then
+			if tickets ~= previousTickets then
+				UIUtil.Pop(ticketChip, tickets > previousTickets and 1.15 or 0.92, 0.35)
+			end
+			if trophies ~= previousTrophies then
+				UIUtil.Pop(trophyChip, trophies > previousTrophies and 1.15 or 0.92, 0.35)
+			end
 		end
 	end
+end
+
+-- Ouvre la boutique Robux sur l'onglet 🎟️ Tickets
+local function openTicketShop()
+	if not PanelManager.IsRegistered("RobuxShop") then
+		return
+	end
+	PanelManager.Open("RobuxShop")
+	local module = script.Parent:FindFirstChild("RobuxShop")
+	if module and module:IsA("ModuleScript") then
+		local ok, shop = pcall(require, module)
+		if ok and type(shop) == "table" and type((shop :: any).ShowTab) == "function" then
+			(shop :: any).ShowTab("Tickets")
+		end
+	end
+end
+
+-- Pas assez de 🎟️ tickets : fenêtre NeedTickets À CHAQUE fois (propose d'en acheter)
+local function needTickets(missing: number, itemName: string?)
+	local function fallback()
+		toast(T("Not enough tickets"), Theme.Colors.Red)
+	end
+	if NeedTickets then
+		local ok = pcall(NeedTickets.Offer, missing, { Have = S.Tickets, Item = itemName, Fallback = fallback })
+		if ok then
+			return
+		end
+	end
+	fallback()
+end
+
+-- Pas assez de 🏆 trophées : ils ne s'achètent PAS, on explique comment en gagner
+local function needTrophies()
+	sound("Error", 0.8)
+	toast(T("Not enough trophies: win arcade games to earn some!"), Theme.Colors.Orange, nil, TROPHY)
 end
 
 ----------------------------------------------------------------------
@@ -417,7 +489,7 @@ local function buildHeader(root: Frame)
 	})
 	local tabs = make("Frame", {
 		Name = "Tabs",
-		Size = UDim2.new(1, -180, 1, 0),
+		Size = UDim2.new(1, -(WALLET_WIDTH + 8), 1, 0),
 		BackgroundTransparency = 1,
 		ZIndex = 5,
 		Parent = bar,
@@ -440,14 +512,14 @@ local function buildHeader(root: Frame)
 			Font = Theme.Fonts.Title,
 			Text = T(tab.Text),
 			TextColor3 = C.TextDim,
-			TextSize = 17,
+			TextSize = 16,
 			LayoutOrder = index,
 			ZIndex = 6,
 			Parent = tabs,
 		})
 		UIUtil.Corner(button, UDim.new(1, 0))
 		UIUtil.Stroke(button, C.Pink:Lerp(WHITE, 0.3), 1.5, 0.6)
-		make("UIPadding", { PaddingLeft = UDim.new(0, 16), PaddingRight = UDim.new(0, 16), Parent = button })
+		make("UIPadding", { PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 14), Parent = button })
 		make("UIGradient", {
 			Name = "Glow",
 			Color = ColorSequence.new(C.Pink:Lerp(WHITE, 0.1), C.Purple),
@@ -469,53 +541,105 @@ local function buildHeader(root: Frame)
 		end
 	end
 
-	-- Solde de tickets (néon jaune)
-	ticketChip = panel({
-		Name = "Tickets",
-		Size = UDim2.fromOffset(166, 44),
+	-- Portefeuille : 🎟️ tickets (néon jaune, "+" = en acheter) | 🏆 trophées (néon cyan)
+	local wallet = make("Frame", {
+		Name = "Wallet",
+		Size = UDim2.fromOffset(WALLET_WIDTH, 44),
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, 0, 0, 0),
-		Color = Color3.fromRGB(58, 34, 20),
-		StrokeColor = C.Yellow,
-		StrokeTransparency = 0.05,
-		StrokeThickness = 2,
-		Radius = 14,
+		BackgroundTransparency = 1,
 		ZIndex = 6,
 		Parent = bar,
 	})
-	ticketChip.BackgroundColor3 = WHITE
-	UIUtil.Gradient(ticketChip, ColorSequence.new(Color3.fromRGB(110, 60, 24), Color3.fromRGB(60, 26, 72)), 90)
-	text({
-		Text = TICKET,
-		TextSize = 26,
-		Size = UDim2.fromOffset(34, 34),
-		Position = UDim2.fromOffset(8, 5),
-		XAlign = Enum.TextXAlignment.Center,
-		ZIndex = 7,
-		Parent = ticketChip,
+	make("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		HorizontalAlignment = Enum.HorizontalAlignment.Right,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+		Padding = UDim.new(0, 6),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = wallet,
 	})
-	ticketLabel = text({
-		Name = "Balance",
-		Text = "0",
-		Font = Theme.Fonts.Number,
+	local function walletChip(name: string, icon: string, color: Color3, top: Color3, bottom: Color3, caption: string, width: number, order: number)
+		local chipFrame = panel({
+			Name = name,
+			Size = UDim2.fromOffset(width, 44),
+			Color = WHITE,
+			StrokeColor = color,
+			StrokeTransparency = 0.05,
+			StrokeThickness = 2,
+			Radius = 14,
+			LayoutOrder = order,
+			ZIndex = 6,
+			Parent = wallet,
+		})
+		UIUtil.Gradient(chipFrame, ColorSequence.new(top, bottom), 90)
+		text({
+			Name = "Icon",
+			Text = icon,
+			TextSize = 24,
+			Size = UDim2.fromOffset(32, 32),
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 6, 0.5, 0),
+			XAlign = Enum.TextXAlignment.Center,
+			ZIndex = 7,
+			Parent = chipFrame,
+		})
+		local balance = text({
+			Name = "Balance",
+			Text = "0",
+			Font = Theme.Fonts.Number,
+			TextSize = 21,
+			Color = color,
+			Size = UDim2.new(1, -44, 0, 22),
+			Position = UDim2.fromOffset(40, 3),
+			ZIndex = 7,
+			Parent = chipFrame,
+		})
+		text({
+			Name = "Caption",
+			Text = caption,
+			Font = Theme.Fonts.Body,
+			TextSize = 11,
+			Color = color:Lerp(WHITE, 0.55),
+			Size = UDim2.new(1, -44, 0, 13),
+			Position = UDim2.fromOffset(40, 25),
+			ZIndex = 7,
+			Parent = chipFrame,
+		})
+		return chipFrame, balance
+	end
+	ticketChip, ticketLabel = walletChip("Tickets", TICKET, C.Yellow, Color3.fromRGB(110, 60, 24), Color3.fromRGB(60, 26, 72),
+		T("for the shop"), TICKET_CHIP_WIDTH, 1)
+	trophyChip, trophyLabel = walletChip("Trophies", TROPHY, C.Cyan, Color3.fromRGB(20, 80, 110), Color3.fromRGB(44, 26, 90),
+		T("for duels"), TROPHY_CHIP_WIDTH, 2)
+	-- Bouton "+" : acheter des tickets (boutique Robux, onglet 🎟️ Tickets)
+	ticketLabel.Size = UDim2.new(1, -72, 0, 22)
+	local caption = ticketChip:FindFirstChild("Caption") :: TextLabel?
+	if caption then
+		caption.Size = UDim2.new(1, -72, 0, 13)
+	end
+	local plus = make("TextButton", {
+		Name = "BuyTickets",
+		Size = UDim2.fromOffset(26, 26),
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -7, 0.5, 0),
+		BackgroundColor3 = C.Green,
+		AutoButtonColor = false,
+		Font = Theme.Fonts.Title,
+		Text = "+",
+		TextColor3 = Color3.fromRGB(20, 60, 30),
 		TextSize = 22,
-		Color = C.Yellow,
-		Size = UDim2.new(1, -52, 0, 24),
-		Position = UDim2.fromOffset(46, 2),
-		ZIndex = 7,
+		ZIndex = 8,
 		Parent = ticketChip,
 	})
-	ticketSub = text({
-		Name = "Today",
-		Text = "",
-		Font = Theme.Fonts.Body,
-		TextSize = 12,
-		Color = Color3.fromRGB(255, 226, 160),
-		Size = UDim2.new(1, -52, 0, 14),
-		Position = UDim2.fromOffset(46, 25),
-		ZIndex = 7,
-		Parent = ticketChip,
-	})
+	UIUtil.Corner(plus, UDim.new(1, 0))
+	UIUtil.Stroke(plus, WHITE, 1.5, 0.2)
+	UIUtil.Gradient(plus, ColorSequence.new(WHITE, Color3.fromRGB(200, 215, 205)), 90)
+	UIUtil.AnimateButton(plus, 1.12, 0.9)
+	plus.Activated:Connect(function()
+		sound("Click", 1.2)
+		openTicketShop()
+	end)
 end
 
 ----------------------------------------------------------------------
@@ -628,7 +752,9 @@ local function buildGameCard(parent: Instance, entry, order: number)
 	chip(card, isDuel and T("DUEL") or T("SOLO"), isDuel and C.Pink or C.Purple, {
 		Position = UDim2.fromOffset(11, 11), ZIndex = 9, Height = 20, TextSize = 12, Transparency = 0.05,
 	})
-	local reward = isDuel and ("x2 " .. TICKET) or ("+" .. tostring(entry.Tickets or 0) .. " " .. TICKET)
+	-- Récompense : duel = mise x2 (en 🏆) ; solo = 🎟️ + 🏆 par victoire
+	local reward = isDuel and ("x2 " .. TROPHY)
+		or string.format("+%s %s  +%s %s", tostring(entry.Tickets or 0), TICKET, tostring(ArcadeConfig.Trophies.PerSoloWin), TROPHY)
 	chip(card, reward, Color3.fromRGB(40, 24, 70), {
 		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -11, 0, 11), ZIndex = 9, Height = 20, TextSize = 12,
 		Transparency = 0.2, TextColor = C.Yellow,
@@ -697,6 +823,13 @@ end
 
 local function refreshGameCards()
 	local arcade = arcadeData()
+	-- Gains du jour (plafonnés) : 🎟️ tickets et 🏆 trophées
+	local soloNote = S.SoloNote
+	if soloNote then
+		soloNote.Text = T("Today: %s / %s %s • %s / %s %s",
+			tostring(arcade.DayTickets or 0), tostring(arcade.DailyCap or ArcadeConfig.Tickets.DailyCap), TICKET,
+			tostring(arcade.DayTrophies or 0), tostring(arcade.TrophyCap or ArcadeConfig.Trophies.DailyCap), TROPHY)
+	end
 	for id, info in pairs(gameCards) do
 		local entry = info.Entry
 		if entry.Kind == "Duel" then
@@ -739,6 +872,7 @@ local function sectionTitle(parent: Instance, label: string, color: Color3, orde
 	})
 	if note then
 		text({
+			Name = "Note",
 			Text = note,
 			Font = Theme.Fonts.Body,
 			TextSize = 13,
@@ -821,12 +955,13 @@ local function buildGamesPage(body: Frame)
 	S.Pages.Games = scroll
 	local solo, duel = ArcadeConfig.SoloGames, ArcadeConfig.DuelGames
 	-- Duels d'abord (une rangée), puis les jeux solo : les deux sont visibles dès l'ouverture
-	sectionTitle(scroll, T("Duels"), C.Pink, 1, T("Challenge a player of this server"))
+	sectionTitle(scroll, T("Duels"), C.Pink, 1, T("Challenge a player of this server • stakes in %s trophies", TROPHY))
 	local duelGrid = cardGrid(scroll, #duel, 4, 194, 2, "DuelGrid")
 	for index, entry in ipairs(duel) do
 		buildGameCard(duelGrid, entry, index)
 	end
-	sectionTitle(scroll, T("Solo games"), C.Purple, 3, T("Win games to earn %s tickets", TICKET))
+	local soloNote = sectionTitle(scroll, T("Solo games"), C.Purple, 3, "")
+	S.SoloNote = soloNote:FindFirstChild("Note")
 	local soloGrid = cardGrid(scroll, #solo, 4, 194, 4, "SoloGrid")
 	for index, entry in ipairs(solo) do
 		buildGameCard(soloGrid, entry, index)
@@ -858,7 +993,7 @@ local function paintDuelSetup()
 	end
 	for stake, button in pairs(L.StakeButtons or {}) do
 		local selected = stake == S.SelectedStake
-		local affordable = S.Tickets >= stake
+		local affordable = S.Trophies >= stake
 		button.BackgroundColor3 = selected and C.Yellow or C.Card
 		button.TextColor3 = selected and Color3.fromRGB(50, 24, 60) or (affordable and C.Text or Color3.fromRGB(120, 108, 160))
 		local stroke = button:FindFirstChildOfClass("UIStroke")
@@ -876,8 +1011,11 @@ local function paintDuelSetup()
 	end
 	if L.PotLabel then
 		local stake = S.SelectedStake
-		L.PotLabel.Text = stake > 0 and T("Winner takes %s %s • draw = refund", tostring(stake * 2), TICKET)
+		L.PotLabel.Text = stake > 0 and T("Winner takes %s %s • draw = refund", tostring(stake * 2), TROPHY)
 			or T("Friendly duel: no stake, just glory")
+	end
+	if L.StakeTitle then
+		L.StakeTitle.Text = T("2. Stake in %s trophies (you have %s)", TROPHY, NumberFormatter.Format(S.Trophies))
 	end
 end
 
@@ -945,7 +1083,7 @@ local function buildDuelSetup(parent: Frame)
 		L.GameTiles[entry.Id] = tile
 	end
 
-	text({ Text = T("2. Stake (each player)"), TextSize = 16, Size = UDim2.new(1, -24, 0, 22), Position = UDim2.fromOffset(12, 180), Parent = setup })
+	L.StakeTitle = text({ Text = T("2. Stake (each player)"), TextSize = 16, Size = UDim2.new(1, -24, 0, 22), Position = UDim2.fromOffset(12, 180), Parent = setup })
 	local stakes = make("Frame", {
 		Name = "Stakes",
 		Size = UDim2.new(1, -24, 0, 36),
@@ -967,7 +1105,7 @@ local function buildDuelSetup(parent: Frame)
 			BackgroundColor3 = C.Card,
 			AutoButtonColor = false,
 			Font = Theme.Fonts.Title,
-			Text = stake == 0 and T("Free") or (tostring(stake) .. " " .. TICKET),
+			Text = stake == 0 and T("Free") or (tostring(stake) .. " " .. TROPHY),
 			TextColor3 = C.Text,
 			TextSize = 14,
 			LayoutOrder = index,
@@ -978,10 +1116,10 @@ local function buildDuelSetup(parent: Frame)
 		UIUtil.Stroke(button, C.Line, 1.5, 0.45)
 		UIUtil.AnimateButton(button, 1.05, 0.94)
 		button.Activated:Connect(function()
-			if S.Tickets < stake then
-				sound("Error", 0.8)
+			if S.Trophies < stake then
+				-- 🏆 jamais achetables : on explique comment en gagner
 				UIUtil.Shake(button)
-				toast(T("Not enough tickets"), Theme.Colors.Red)
+				needTrophies()
 				return
 			end
 			sound("Click", 1.25)
@@ -990,18 +1128,20 @@ local function buildDuelSetup(parent: Frame)
 		end)
 		L.StakeButtons[stake] = button
 	end
+	-- (une seule ligne compacte : la boîte des règles, collée en bas, ne la touche jamais, même sur téléphone)
 	L.PotLabel = text({
 		Name = "Pot",
 		Text = "",
 		Font = Theme.Fonts.Body,
 		TextSize = 13,
 		Color = C.Yellow,
-		Wrapped = true,
-		Size = UDim2.new(1, -24, 0, 34),
-		Position = UDim2.fromOffset(12, 246),
+		Size = UDim2.new(1, -24, 0, 20),
+		Position = UDim2.fromOffset(12, 247),
 		ZIndex = 6,
 		Parent = setup,
 	})
+	L.PotLabel.TextScaled = true
+	make("UITextSizeConstraint", { MaxTextSize = 13, MinTextSize = 9, Parent = L.PotLabel })
 	-- Aperçu du duel choisi (seulement s'il reste de la place : pas sur téléphone)
 	local bodyHeight = Arcade.GetSize().Y - 88 - 72
 	local previewHeight = bodyHeight - 284 - 84
@@ -1041,7 +1181,7 @@ local function buildDuelSetup(parent: Frame)
 	rules.AutomaticSize = Enum.AutomaticSize.Y
 	make("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), PaddingTop = UDim.new(0, 7), PaddingBottom = UDim.new(0, 7), Parent = rules })
 	local rulesText = text({
-		Text = T("🏆 Winner: both stakes + a Dopamine prize\n🏳️ Leaving or giving up = defeat\n🎟️ Tickets are earned by playing, never bought"),
+		Text = T("🏆 Stakes in trophies, never sold\n🥇 Winner: both stakes + Dopamine + bonus 🎟️\n🏳️ Leaving or giving up = defeat"),
 		Font = Theme.Fonts.Body,
 		TextSize = 12,
 		Color = C.TextDim,
@@ -1081,7 +1221,7 @@ local function playerRow(parent: Instance, info, order: number, mode: string, in
 	if mode == "invite" then
 		local entry = ArcadeConfig.GamesById[invite.Game]
 		status = string.format("%s %s • %s", entry and entry.Icon or "", gameName(invite.Game),
-			invite.Stake > 0 and (tostring(invite.Stake) .. " " .. TICKET) or T("Free"))
+			invite.Stake > 0 and (tostring(invite.Stake) .. " " .. TROPHY) or T("Free"))
 		statusColor = C.Yellow
 	elseif info.Busy then
 		status, statusColor = T("🟠 In a duel"), C.Orange
@@ -1089,6 +1229,10 @@ local function playerRow(parent: Instance, info, order: number, mode: string, in
 		status, statusColor = T("💤 No more duels together today"), C.TextDim
 	else
 		status, statusColor = T("🟢 Ready to play"), C.Green
+	end
+	-- Trophées du joueur (pour choisir une mise qu'il peut payer)
+	if mode ~= "invite" and type(info.Trophies) == "number" then
+		status ..= "  •  " .. TROPHY .. " " .. NumberFormatter.Format(info.Trophies)
 	end
 	text({ Text = status, Font = Theme.Fonts.Body, TextSize = 13, Color = statusColor, Size = UDim2.new(1, -200, 0, 16),
 		Position = UDim2.fromOffset(60, 31), ZIndex = 7, Parent = row })
@@ -1123,6 +1267,18 @@ local function playerRow(parent: Instance, info, order: number, mode: string, in
 			if not button:GetAttribute("Enabled") or S.Busy then
 				sound("Error", 0.8)
 				UIUtil.Shake(button)
+				return
+			end
+			-- Mise en 🏆 : vérifiée ici pour l'affichage, et par le serveur pour de vrai
+			if S.Trophies < S.SelectedStake then
+				UIUtil.Shake(button)
+				needTrophies()
+				return
+			end
+			if type(info.Trophies) == "number" and info.Trophies < S.SelectedStake then
+				sound("Error", 0.8)
+				UIUtil.Shake(button)
+				toast(T("%s doesn't have enough trophies for this stake", tostring(info.Name or "?")), Theme.Colors.Orange, nil, TROPHY)
 				return
 			end
 			S.Busy = true
@@ -1395,12 +1551,16 @@ local function buildShopCard(parent: Instance, item, order: number)
 		end
 		local arcade = arcadeData()
 		local owned = isBadge and arcade.Badges and arcade.Badges[item.Id]
+		local soldOut = item.MaxPerDay ~= nil and ((arcade.DayShop and arcade.DayShop[item.Id]) or 0) >= item.MaxPerDay
+		if not owned and not soldOut and S.Tickets < item.Price then
+			-- Pas assez de tickets : on propose d'en avoir (À CHAQUE fois)
+			UIUtil.Shake(card)
+			needTickets(item.Price - S.Tickets, T(item.Name))
+			return
+		end
 		if not button:GetAttribute("Enabled") then
 			sound("Error", 0.8)
 			UIUtil.Shake(card)
-			if not owned and S.Tickets < item.Price then
-				toast(T("Not enough tickets: win games to earn more!"), Theme.Colors.Red)
-			end
 			return
 		end
 		S.Busy = true
@@ -1418,10 +1578,15 @@ local function buildShopCard(parent: Instance, item, order: number)
 			end
 			local message = type(result) == "table" and result.Text or result
 			toast(tostring(message or T("Done!")), Theme.Colors.Green, nil, item.Icon)
+		elseif type(result) == "table" and tonumber(result.Missing) then
+			-- Refus du serveur faute de tickets (solde pas encore à jour ici)
+			UIUtil.Shake(card)
+			needTickets(tonumber(result.Missing) or 1, T(item.Name))
 		else
 			sound("Error", 0.8)
 			UIUtil.Shake(card)
-			toast(tostring(result or T("Error")), Theme.Colors.Red)
+			local message = type(result) == "table" and result.Text or result
+			toast(tostring(message or T("Error")), Theme.Colors.Red)
 		end
 	end)
 	shopCards[item.Id] = { Button = button, Item = item, Count = count }
@@ -1430,10 +1595,10 @@ end
 local function buildShopPage(body: Frame)
 	local scroll, list = scrollPage(body, "Shop")
 	S.Pages.Shop = scroll
-	-- Bandeau d'explication (tickets jamais achetables)
+	-- Bandeau d'explication : d'où viennent les tickets (+ bouton pour en acheter)
 	local banner = panel({
 		Name = "Banner",
-		Size = UDim2.new(1, 0, 0, 52),
+		Size = UDim2.new(1, 0, 0, 56),
 		Color = Color3.fromRGB(70, 40, 30),
 		StrokeColor = C.Yellow,
 		StrokeTransparency = 0.3,
@@ -1444,12 +1609,22 @@ local function buildShopPage(body: Frame)
 	})
 	banner.BackgroundColor3 = WHITE
 	UIUtil.Gradient(banner, ColorSequence.new(Color3.fromRGB(120, 66, 30), Color3.fromRGB(80, 34, 104)), 0)
-	text({ Text = "🎟️", TextSize = 30, Size = UDim2.fromOffset(44, 44), Position = UDim2.fromOffset(10, 4),
+	text({ Text = TICKET, TextSize = 30, Size = UDim2.fromOffset(44, 44), Position = UDim2.fromOffset(10, 6),
 		XAlign = Enum.TextXAlignment.Center, ZIndex = 7, Parent = banner })
-	text({ Text = T("Arcade-exclusive rewards"), TextSize = 16, Color = C.Yellow, Size = UDim2.new(1, -70, 0, 20),
-		Position = UDim2.fromOffset(60, 7), ZIndex = 7, Parent = banner })
-	text({ Text = T("Tickets are earned only by playing: they can't be bought."), Font = Theme.Fonts.Body, TextSize = 13,
-		Color = Color3.fromRGB(255, 232, 190), Size = UDim2.new(1, -70, 0, 18), Position = UDim2.fromOffset(60, 27), ZIndex = 7, Parent = banner })
+	text({ Text = T("Arcade-exclusive rewards"), TextSize = 16, Color = C.Yellow, Size = UDim2.new(1, -230, 0, 20),
+		Position = UDim2.fromOffset(60, 8), ZIndex = 7, Parent = banner })
+	local bannerText = text({ Text = T("Win tickets by playing, or get more in the 💎 shop. Duels use 🏆 trophies instead."),
+		Font = Theme.Fonts.Body, TextSize = 13, Color = Color3.fromRGB(255, 232, 190), Size = UDim2.new(1, -230, 0, 18),
+		Position = UDim2.fromOffset(60, 29), ZIndex = 7, Parent = banner })
+	-- (traduction plus longue : le texte rétrécit un peu au lieu d'être coupé)
+	bannerText.TextScaled = true
+	make("UITextSizeConstraint", { MaxTextSize = 13, MinTextSize = 9, Parent = bannerText })
+	local getTickets = neonButton({ Name = "GetTickets", Text = T("🎟️ Get tickets"), Color = C.Yellow, Size = UDim2.fromOffset(156, 36),
+		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0), TextSize = 15, ZIndex = 8, Parent = banner })
+	getTickets.Activated:Connect(function()
+		sound("Click", 1.2)
+		openTicketShop()
+	end)
 
 	local treats, badges = {}, {}
 	for _, item in ipairs(ArcadeConfig.Shop) do
@@ -1495,11 +1670,13 @@ local function buildRecordsPage(body: Frame)
 	local page = make("Frame", { Name = "Records", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false, ZIndex = 5, Parent = body })
 	S.Pages.Records = page
 	local stats = make("Frame", { Name = "Stats", Size = UDim2.new(1, 0, 0, 60), BackgroundTransparency = 1, ZIndex = 5, Parent = page })
-	make("UIGridLayout", { CellSize = UDim2.new(0.25, -8, 1, 0), CellPadding = UDim2.fromOffset(10, 0), SortOrder = Enum.SortOrder.LayoutOrder, Parent = stats })
-	R.Earned = statTile(stats, "🎟️", T("Tickets earned"), C.Yellow, 1)
-	R.Duels = statTile(stats, "⚔️", T("Duels won"), C.Pink, 2)
-	R.Won = statTile(stats, "🏆", T("Games won"), C.Green, 3)
-	R.Played = statTile(stats, "🎮", T("Games played"), C.Cyan, 4)
+	-- (5 tuiles : -9 px chacune pour que la 5e ne passe jamais à la ligne)
+	make("UIGridLayout", { CellSize = UDim2.new(0.2, -9, 1, 0), CellPadding = UDim2.fromOffset(10, 0), SortOrder = Enum.SortOrder.LayoutOrder, Parent = stats })
+	R.Earned = statTile(stats, TICKET, T("Tickets earned"), C.Yellow, 1)
+	R.Trophies = statTile(stats, TROPHY, T("Trophies earned"), C.Cyan, 2)
+	R.Duels = statTile(stats, "⚔️", T("Duels won"), C.Pink, 3)
+	R.Won = statTile(stats, "🥇", T("Games won"), C.Green, 4)
+	R.Played = statTile(stats, "🎮", T("Games played"), C.Purple, 5)
 
 	local left = panel({ Name = "Best", Size = UDim2.new(0.5, -5, 1, -70), Position = UDim2.fromOffset(0, 70), Color = C.Panel, Radius = 16, ZIndex = 5, Parent = page })
 	text({ Text = T("🏅 Best scores"), TextSize = 16, Size = UDim2.new(1, -24, 0, 22), Position = UDim2.fromOffset(12, 8), Parent = left })
@@ -1535,6 +1712,7 @@ renderRecords = function()
 	local stats = data.Stats or {}
 	local arcade = arcadeData()
 	R.Earned.Text = NumberFormatter.Format(arcade.TicketsEarned or 0)
+	R.Trophies.Text = NumberFormatter.Format(arcade.TrophiesEarned or 0)
 	R.Duels.Text = NumberFormatter.Format(stats.DuelsWon or 0)
 	R.Won.Text = NumberFormatter.Format(stats.MinigamesWon or 0)
 	R.Played.Text = NumberFormatter.Format(stats.MinigamesPlayed or 0)
@@ -1580,7 +1758,9 @@ renderRecords = function()
 			Size = UDim2.new(1, -150, 1, 0), Position = UDim2.fromOffset(74, 0), ZIndex = 8, Parent = row })
 		local stake = tonumber(item.S) or 0
 		local delta = item.R == "W" and ("+" .. stake) or (item.R == "L" and ("-" .. stake) or "±0")
-		text({ Text = stake > 0 and (delta .. " " .. TICKET) or T("Free"), Font = Theme.Fonts.Number, TextSize = 14, Color = outcome,
+		-- K = "T" : mise en 🏆 trophées ; sans K : ancien duel, misé en tickets
+		local unit = item.K == "T" and TROPHY or TICKET
+		text({ Text = stake > 0 and (delta .. " " .. unit) or T("Free"), Font = Theme.Fonts.Number, TextSize = 14, Color = outcome,
 			XAlign = Enum.TextXAlignment.Right, Size = UDim2.fromOffset(80, 40), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 0), ZIndex = 8, Parent = row })
 		height += 46
 	end
@@ -1843,7 +2023,7 @@ updateDuelStrip = function()
 			end
 		end
 	end
-	G.Pot.Text = (duel.Pot or 0) > 0 and (T("Pot") .. " " .. tostring(duel.Pot) .. " " .. TICKET) or T("Friendly")
+	G.Pot.Text = (duel.Pot or 0) > 0 and (T("Pot") .. " " .. tostring(duel.Pot) .. " " .. TROPHY) or T("Friendly")
 	G.Forfeit.Visible = not duel.Over
 end
 
@@ -2028,10 +2208,15 @@ showResult = function(duel)
 	end
 	G.ResultReason.Text = reasonText
 	local gains = {}
-	if (result.Tickets or 0) > 0 then
-		table.insert(gains, "+" .. tostring(result.Tickets) .. " " .. TICKET)
-	elseif (result.Tickets or 0) < 0 then
-		table.insert(gains, tostring(result.Tickets) .. " " .. TICKET)
+	-- Mise gagnée / perdue (🏆 trophées)
+	local staked = tonumber(result.Trophies) or 0
+	if staked > 0 then
+		table.insert(gains, "+" .. tostring(staked) .. " " .. TROPHY)
+	elseif staked < 0 then
+		table.insert(gains, tostring(staked) .. " " .. TROPHY)
+	end
+	if (result.TrophyBonus or 0) > 0 then
+		table.insert(gains, T("+%s %s bonus", tostring(result.TrophyBonus), TROPHY))
 	end
 	if (result.Bonus or 0) > 0 then
 		table.insert(gains, T("+%s %s bonus", tostring(result.Bonus), TICKET))
@@ -2167,13 +2352,13 @@ showInvitePopup = function(invite)
 	local from = invite.From or {}
 	P.Title.Text = T("%s challenges you!", playerText(from))
 	P.Info.Text = string.format("%s %s  •  %s", entry and entry.Icon or "", gameName(invite.Game),
-		(invite.Stake or 0) > 0 and T("%s %s each", tostring(invite.Stake), TICKET) or T("Free duel"))
+		(invite.Stake or 0) > 0 and T("%s %s each", tostring(invite.Stake), TROPHY) or T("Free duel"))
 	local head = P.Avatar:FindFirstChild("Head") :: ImageLabel?
 	if head then
 		head.Image = UIUtil.HeadshotUrl(from.UserId or 0, 100)
 	end
-	local canPay = S.Tickets >= (invite.Stake or 0)
-	setButton(P.Accept, canPay, canPay and T("✓ Accept") or T("Not enough 🎟️"))
+	local canPay = S.Trophies >= (invite.Stake or 0)
+	setButton(P.Accept, canPay, canPay and T("✓ Accept") or T("Not enough 🏆"))
 	local left = math.max(1, (invite.Seconds or 20) - (os.clock() - (invite.ReceivedAt or os.clock())))
 	P.Bar.Size = UDim2.fromScale(math.clamp(left / (invite.Total or 30), 0, 1), 1)
 	UIUtil.Tween(P.Bar, left, { Size = UDim2.fromScale(0, 1) }, Enum.EasingStyle.Linear)
@@ -2199,9 +2384,8 @@ function Arcade.AcceptInvite(id: string)
 		return
 	end
 	local invite = S.Incoming[id]
-	if invite and S.Tickets < (invite.Stake or 0) then
-		sound("Error", 0.8)
-		toast(T("Not enough tickets"), Theme.Colors.Red)
+	if invite and S.Trophies < (invite.Stake or 0) then
+		needTrophies()
 		return
 	end
 	S.Busy = true
@@ -2248,7 +2432,7 @@ local CLOSED_MESSAGES = {
 	expired = "Invitation to %s expired",
 	left = "%s left the server",
 	busy = "%s is busy in another duel",
-	tickets = "%s doesn't have enough tickets anymore",
+	trophies = "%s doesn't have enough trophies anymore",
 	limit = "You've dueled %s a lot today. Come back tomorrow!",
 }
 
@@ -2320,7 +2504,7 @@ local function onArcadeEvent(kind: string, payload: any)
 			end)
 		else
 			local outcome = result.Outcome
-			toast(outcome == "Win" and T("You won the duel! +%s %s", tostring(math.max(0, result.Tickets or 0)), TICKET)
+			toast(outcome == "Win" and T("You won the duel! +%s %s", tostring(math.max(0, tonumber(result.Trophies) or 0)), TROPHY)
 				or (outcome == "Lose" and T("You lost the duel") or T("Duel ended in a draw")),
 				outcome == "Win" and Theme.Colors.Gold or Theme.Colors.Purple, nil, "⚔️")
 		end
@@ -2348,6 +2532,15 @@ selectTab = function(id: string)
 	elseif id == "Games" then
 		refreshGameCards()
 	end
+end
+
+-- Ouvre un onglet de l'arcade ("Games" | "Duels" | "Shop" | "Records"),
+-- ex. "Shop" depuis l'onglet 🎟️ Tickets de la boutique Robux
+function Arcade.ShowTab(id: string)
+	if S.Pages[id] == nil or S.Active then
+		return
+	end
+	selectTab(id)
 end
 
 function Arcade.GetSize(): Vector2
