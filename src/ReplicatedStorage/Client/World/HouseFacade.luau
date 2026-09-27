@@ -549,7 +549,7 @@ local function ironFence(ctx: Ctx, x0: number, x1: number, d: number, gate0: num
 		if b - a > 1 then
 			kit:Box("FenceRail", a, b, 0.6, 0.8, d - 0.1, d + 0.1, iron, M.Metal, { Solid = true, Shadow = false })
 			kit:Box("FenceRail", a, b, 3.0, 3.2, d - 0.1, d + 0.1, iron, M.Metal, { Shadow = false })
-			local count = math.max(2, math.floor((b - a) / 2.2))
+			local count = math.max(2, math.floor((b - a) / 2.6))
 			for k = 0, count do
 				local x = a + k * (b - a) / count
 				kit:Box("FenceBar", x - 0.1, x + 0.1, 0, 3.8, d - 0.1, d + 0.1, iron, M.Metal, { Shadow = false })
@@ -1201,10 +1201,10 @@ STYLES.Mansion = function(ctx)
 			local b0, b1 = x0 + 1.4, x1 - 1.4
 			kit:Box("Balustrade", b0, b1, y + 2.2, y + 2.6, -1.6, -0.3, TRIM, M.Limestone, { Shadow = false })
 			kit:Box("BalustradeBase", b0, b1, y - 0.1, y + 0.3, -1.6, -0.3, TRIM, M.Limestone, { Solid = true, Shadow = false })
-			local count = math.floor((b1 - b0) / 2.4)
+			local count = math.floor((b1 - b0) / 3.2)
 			for k = 0, count do
 				local x = b0 + 0.4 + k * (b1 - b0 - 0.8) / count
-				kit:CylY("Baluster", x, y + 0.3, -0.95, 0.55, 1.9, TRIM, M.Limestone, { Shadow = false })
+				kit:CylY("Baluster", x, y + 0.3, -0.95, 0.6, 1.9, TRIM, M.Limestone, { Shadow = false })
 			end
 		end
 		if floor == 2 then
@@ -1215,7 +1215,7 @@ STYLES.Mansion = function(ctx)
 	-- corniche + modillons + liseré doré
 	kit:Box("Cornice", ctx.Left - T - 1, ctx.Right + T + 1, ctx.Top - 0.2, ctx.Top + 1.3, -1.5, 0, TRIM, M.Limestone)
 	kit:Box("CorniceGold", ctx.Left - T - 0.7, ctx.Right + T + 0.7, ctx.Top + 0.6, ctx.Top + 0.8, -1.55, -1.5, P.Gold, M.Metal, { Shadow = false })
-	local modCount = math.floor((ctx.Right - ctx.Left) / 6)
+	local modCount = math.floor((ctx.Right - ctx.Left) / 8)
 	for k = 0, modCount do
 		local x = ctx.Left + k * (ctx.Right - ctx.Left) / modCount
 		kit:Box("Modillion", x - 0.35, x + 0.35, ctx.Top - 0.9, ctx.Top - 0.2, -1.1, -0.3, TRIM, M.Limestone, { Shadow = false })
@@ -1226,7 +1226,7 @@ STYLES.Mansion = function(ctx)
 	local yBase = ctx.Top + 1.3
 	local front = mansardRoof(ctx, ctx.Left - T, ctx.Right + T, yBase, rise, inset, M.Slate)
 	roofPattern(ctx, front, ctx.Looks.Pattern or "None")
-	local crest = math.max(2, math.floor((ctx.Right - ctx.Left - 2 * inset) / 10))
+	local crest = math.max(2, math.floor((ctx.Right - ctx.Left - 2 * inset) / 12))
 	for k = 0, crest do
 		local x = ctx.Left + inset + k * (ctx.Right - ctx.Left - 2 * inset) / crest
 		kit:Box("CrestPost", x - 0.12, x + 0.12, yBase + rise, yBase + rise + 1.6, inset - 0.12, inset + 0.12, P.Gold:Lerp(C.Ink, 0.2), M.Metal, { Shadow = false })
@@ -1260,12 +1260,13 @@ STYLES.Mansion = function(ctx)
 			* CFrame.Angles(0, -s * math.pi / 2, 0), ctx.Wall:Lerp(C.Pink, 0.3), M.Plaster, { Shadow = false }, "WedgePart")
 	end
 	heart(ctx, ctx.DoorX, pedY + pedH + 1.1, -0.9, 2.2, C.Heart)
-	local clockY = pedY + pedH * 0.42
-	heart(ctx, ctx.DoorX, clockY, 0.1, 6.4, C.Pink)
-	kit:CylD("ClockFace", ctx.DoorX, clockY - 0.1, -0.2, 3.4, 0.3, C.Cream, M.SmoothPlastic, { Shadow = false })
-	kit:CylD("ClockRim", ctx.DoorX, clockY - 0.1, -0.1, 3.8, 0.2, P.Gold, M.Metal, { Shadow = false })
-	kit:Part("ClockHand", Vector3.new(0.18, 1.3, 0.1), CFrame.new(ctx.DoorX, clockY + 0.45, 0.4) * CFrame.Angles(0, 0, math.rad(-20)), C.Ink, M.Metal, { Shadow = false })
-	kit:Part("ClockHand", Vector3.new(0.14, 0.9, 0.1), CFrame.new(ctx.DoorX + 0.3, clockY - 0.3, 0.42) * CFrame.Angles(0, 0, math.rad(115)), C.Ink, M.Metal, { Shadow = false })
+	-- (devant le fronton : face avant en d = -1,5)
+	local clockY = pedY + pedH * 0.38
+	heart(ctx, ctx.DoorX, clockY, -1.65, 6.4, C.PinkDeep:Lerp(C.Pink, 0.4))
+	kit:CylD("ClockRim", ctx.DoorX, clockY - 0.1, -1.95, 3.8, 0.3, P.Gold, M.Metal, { Shadow = false })
+	kit:CylD("ClockFace", ctx.DoorX, clockY - 0.1, -2.05, 3.3, 0.2, C.Cream, M.SmoothPlastic, { Shadow = false })
+	kit:Part("ClockHand", Vector3.new(0.2, 1.3, 0.1), CFrame.new(ctx.DoorX + 0.2, clockY + 0.45, 2.2) * CFrame.Angles(0, 0, math.rad(-20)), C.Ink, M.Metal, { Shadow = false })
+	kit:Part("ClockHand", Vector3.new(0.16, 0.9, 0.1), CFrame.new(ctx.DoorX + 0.35, clockY - 0.3, 2.22) * CFrame.Angles(0, 0, math.rad(115)), C.Ink, M.Metal, { Shadow = false })
 
 	-- tours rondes aux deux bouts (devant les côtés du corps), toits coniques
 	local radius = 7
@@ -1291,12 +1292,12 @@ STYLES.Mansion = function(ctx)
 		end
 		kit:CylD("TowerOculus", tx, top - 2.2, td - radius - 0.1, 2.4, 0.3, P.Glass, M.Glass, { Shadow = false })
 		kit:CylY("TowerCrown", tx, top - 0.3, td, radius * 2 + 1.6, 1.2, TRIM, M.Limestone, { Solid = true })
-		local scallops = 14
+		local scallops = 10
 		for k = 0, scallops - 1 do
 			local a = k / scallops * math.pi * 2
 			kit:Ball("TowerScallop", tx + math.cos(a) * (radius + 0.5), top - 0.6, td + math.sin(a) * (radius + 0.5), 1.1, C.Pink, M.SmoothPlastic, { Shadow = false })
 		end
-		kit:Cone("TowerRoof", tx, top + 0.9, td, radius + 1.6, 12, 12, ctx.Roof, M.Slate)
+		kit:Cone("TowerRoof", tx, top + 0.9, td, radius + 1.6, 12, 10, ctx.Roof, M.Slate)
 		kit:Ball("TowerTop", tx, top + 13.1, td, 0.9, P.Gold, M.Metal, { Shadow = false })
 		kit:Box("FlagPole", tx - 0.1, tx + 0.1, top + 13.3, top + 17.5, td - 0.1, td + 0.1, WHITE, M.Metal, { Shadow = false })
 		kit:Box("Flag", tx + 0.1, tx + 2.6, top + 15.8, top + 17.4, td - 0.06, td + 0.06, if index == 1 then C.Pink else C.Lilac, M.Fabric, { Shadow = false })

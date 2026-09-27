@@ -635,6 +635,11 @@ function GardenBuilder.Update(self: Garden, gardenState: any)
 			local flower = plot and plot.Flower or ""
 			local plotKey = flower .. "|" .. tostring(plot and plot.PlantedAt or 0)
 			if plotKey ~= bed.Key then
+				-- une fleur prête remplacée par une graine = cueillie (par le
+				-- propriétaire, vu ici par un visiteur) : même éclat, sans "+X"
+				if bed.Hero and bed.Stage == "Ready" and bed.Flower ~= "" and flower ~= "" then
+					self:_pop(bed, bed.Flower, nil)
+				end
 				bed.Key = plotKey
 				bed.Flower = flower
 				bed.Stage = ""
@@ -1351,7 +1356,7 @@ function GardenBuilder._float(self: Garden, position: Vector3, text: string, col
 end
 
 -- Éclat de la cueillette : pétales + étincelles + anneau + "+X 🧠"
-function GardenBuilder._pop(self: Garden, bed: any, flowerId: string, reward: number)
+function GardenBuilder._pop(self: Garden, bed: any, flowerId: string, reward: number?)
 	if self.Destroyed or not self.Layout then
 		return
 	end
@@ -1403,7 +1408,9 @@ function GardenBuilder._pop(self: Garden, bed: any, flowerId: string, reward: nu
 		bed.Plants = nil
 		bed.Hero = nil
 	end
-	self:_float(head + Vector3.new(0, 0.6, 0), "+" .. NumberFormatter.Format(reward) .. " 🧠", GOLD, style == FLOWER_STYLE.Sunflower or flowerId == "Lotus")
+	if reward then
+		self:_float(head + Vector3.new(0, 0.6, 0), "+" .. NumberFormatter.Format(reward) .. " 🧠", GOLD, style == FLOWER_STYLE.Sunflower or flowerId == "Lotus")
+	end
 end
 
 -- Heure du serveur (réponse de GardenService) : corrige un décalage net
