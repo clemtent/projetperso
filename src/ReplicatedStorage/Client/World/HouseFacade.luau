@@ -189,7 +189,8 @@ end
 local function archTop(ctx: Ctx, x0: number, x1: number, y1: number, frame: Color3)
 	local kit = ctx.Kit
 	local w = x1 - x0 + 0.7
-	local h = w / 2
+	-- arc surbaissé (demi-ellipse) : ne monte jamais sur l'étage du dessus
+	local h = math.min(w / 2, 2.3)
 	local panel = kit:Box("ArchTop", x0 - 0.35, x1 + 0.35, y1, y1 + h, -0.42, -0.38, WHITE, M.SmoothPlastic, { T = 1, Shadow = false })
 	local gui = Instance.new("SurfaceGui")
 	gui.Name = "Arch"
@@ -422,31 +423,38 @@ local function roofPattern(ctx: Ctx, slab: BasePart, pattern: string)
 	end
 end
 
--- Toit à deux pans (faîtage le long de x) : pans, pignons, rives, faîtage
-local function gableRoof(ctx: Ctx, x0: number, x1: number, yBase: number, rise: number, overhang: number, material: Enum.Material): (BasePart, number)
+-- Toit à croupes (comme la 2D de la chaumière : un trapèze vu de face, faîtage
+-- court) : pans avant / arrière en trapèze, croupes triangulaires aux bouts
+local function hipRoof(ctx: Ctx, x0: number, x1: number, yBase: number, rise: number, overhang: number, hip: number, material: Enum.Material): BasePart
 	local kit = ctx.Kit
 	local depth = ctx.Depth
-	local ridgeD = depth / 2
-	local width = x1 - x0 + 2 * overhang
-	local cx = (x0 + x1) / 2
-	local drop = overhang * rise / ridgeD
-	local front = kit:Slab("Roof", cx, { yBase - drop, -overhang }, { yBase + rise, ridgeD }, width, 0.7, ctx.Roof, material, { Solid = true, Shadow = true })
-	kit:Slab("Roof", cx, { yBase + rise, ridgeD }, { yBase - drop, depth + overhang }, width, 0.7, ctx.Roof, material, { Solid = true, Shadow = true })
-	-- pignons (triangles pleins, couleur du mur)
-	for _, x in ipairs({ x0 + 0.5, x1 - 0.5 }) do
-		kit:Part("Gable", Vector3.new(1, rise, ridgeD), CFrame.new(x, yBase + rise / 2, -(ridgeD / 2)) * CFrame.Angles(0, math.pi, 0), ctx.Wall, M.Plaster, { Solid = true },
-			"WedgePart")
-		kit:Part("Gable", Vector3.new(1, rise, depth - ridgeD), CFrame.new(x, yBase + rise / 2, -(ridgeD + (depth - ridgeD) / 2)), ctx.Wall, M.Plaster, { Solid = true },
-			"WedgePart")
-		-- rives (bandeaux le long des pentes)
-		local rx = if x < cx then x0 - overhang + 0.3 else x1 + overhang - 0.3
-		kit:Slab("Barge", rx, { yBase - drop + 0.3, -overhang - 0.1 }, { yBase + rise + 0.35, ridgeD }, 0.6, 1, ctx.RoofDark, M.Wood, { Shadow = false })
-		kit:Slab("Barge", rx, { yBase + rise + 0.35, ridgeD }, { yBase - drop + 0.3, depth + overhang + 0.1 }, 0.6, 1, ctx.RoofDark, M.Wood, { Shadow = false })
+	local d0, d1 = -overhang, depth + overhang
+	local dm = depth / 2
+	local drop = overhang * rise / (dm + overhang)
+	local yb, yr = yBase - drop * 0.35, yBase + rise
+	local a0, a1 = x0 - overhang, x1 + overhang
+	local r0, r1 = a0 + hip, a1 - hip
+	local th = 0.7
+	local o = { Solid = true }
+	-- avant, arrière (2 triangles chacun), croupes gauche / droite
+	kit:Triangle("Roof", { a0, yb, d0 }, { a1, yb, d0 }, { r1, yr, dm }, th, ctx.Roof, material, o)
+	kit:Triangle("Roof", { a0, yb, d0 }, { r1, yr, dm }, { r0, yr, dm }, th, ctx.Roof, material, o)
+	kit:Triangle("Roof", { a0, yb, d1 }, { a1, yb, d1 }, { r1, yr, dm }, th, ctx.Roof, material, o)
+	kit:Triangle("Roof", { a0, yb, d1 }, { r1, yr, dm }, { r0, yr, dm }, th, ctx.Roof, material, o)
+	kit:Triangle("RoofHip", { a0, yb, d0 }, { a0, yb, d1 }, { r0, yr, dm }, th, ctx.Roof, material, o)
+	kit:Triangle("RoofHip", { a1, yb, d0 }, { a1, yb, d1 }, { r1, yr, dm }, th, ctx.Roof, material, o)
+	-- arêtiers (rives de la 2D) + faîtage + gouttière
+	for _, e in ipairs({ { a0, d0, r0 }, { a1, d0, r1 } }) do
+		local pa = Vector3.new(e[1], yb + 0.25, -e[2])
+		local pb = Vector3.new(e[3], yr + 0.3, -dm)
+		local len = (pb - pa).Magnitude
+		kit:Part("Hip", Vector3.new(0.7, 0.6, len), CFrame.lookAt((pa + pb) / 2, pb), ctx.RoofDark, M.Wood, { Shadow = false })
 	end
-	kit:CylX("Ridge", cx, yBase + rise + 0.1, ridgeD, 1.1, width + 0.4, ctx.RoofDark, M.ClayRoofTiles, { Shadow = false })
-	-- gouttière
-	kit:CylX("Gutter", cx, yBase - drop - 0.35, -overhang + 0.1, 0.5, width, Color3.fromRGB(236, 236, 244), M.Metal, { Shadow = false })
-	return front, ridgeD
+	kit:CylX("Ridge", (r0 + r1) / 2, yr + 0.1, dm, 1.1, r1 - r0 + 0.8, ctx.RoofDark, M.ClayRoofTiles, { Shadow = false })
+	kit:CylX("Gutter", (a0 + a1) / 2, yb - 0.3, d0 + 0.1, 0.5, a1 - a0, Color3.fromRGB(236, 236, 244), M.Metal, { Shadow = false })
+	-- (motif du toit : plaque invisible sur la partie centrale du pan avant)
+	local band = kit:Slab("RoofPatternBand", (r0 + r1) / 2, { yb + 0.02, d0 }, { yr + 0.02, dm }, r1 - r0, 0.1, ctx.Roof, material, { T = 1, Shadow = false })
+	return band
 end
 
 -- Toit mansardé : pentes raides devant / derrière / côtés + toit plat
@@ -662,7 +670,7 @@ end
 -- Fenêtre des pièces par style : { part de la largeur, bas (au-dessus du sol), hauteur }
 local WINDOWS: { [string]: { number } } = {
 	Cottage = { 0.56, 3.2, 6.6 },
-	Townhouse = { 0.42, 2.2, 8.2 },
+	Townhouse = { 0.42, 2.2, 7.4 },
 	Loft = { 0.7, 1.8, 7.2 },
 	Mansion = { 0.4, 2.4, 7 },
 }
@@ -750,12 +758,15 @@ STYLES.Cottage = function(ctx)
 	kit:Box("Beam", ctx.Left - T - 0.3, ctx.Right + T + 0.3, WorldLayout.PLINTH - 0.1, WorldLayout.PLINTH + 0.5, -0.7, -0.3, TIMBER, M.Wood, { Shadow = false })
 
 	-- toit de tuiles roses : grand pignon + festons + faîtage + cœur
+	-- (comme la 2D : le grand toit couvre les pièces ; le porche a son pignon)
 	local rise = 10 + (dims.Floors - 1) * 1.5
 	local overhang = 1.8
-	local front = gableRoof(ctx, ctx.Left - T, ctx.Right + T, ctx.Top + 0.6, rise, overhang, M.ClayRoofTiles)
+	local roofX0, roofX1 = ctx.Left - T, ctx.Hall0 + 0.4
+	local hip = math.clamp((roofX1 - roofX0) * 0.36, 6, 26)
+	local front = hipRoof(ctx, roofX0, roofX1, ctx.Top + 0.6, rise, overhang, hip, M.ClayRoofTiles)
 	roofPattern(ctx, front, ctx.Looks.Pattern or "None")
-	local width = ctx.Right - ctx.Left + 2 * T + 2 * overhang
-	local cx = (ctx.Left + ctx.Right) / 2
+	local width = roofX1 - roofX0 + 2 * overhang
+	local cx = (roofX0 + roofX1) / 2
 	local count = math.floor(width / 1.9)
 	for k = 0, count - 1 do
 		local x = cx - width / 2 + (k + 0.5) * width / count
@@ -774,20 +785,33 @@ STYLES.Cottage = function(ctx)
 		kit:Ball("Bloom", roomsX - 2.4 + index * 0.96, yFace - 0.9, dFace - 0.6, 0.8, color, M.SmoothPlastic, { Shadow = false })
 	end
 	-- cheminée (à droite, derrière le faîtage) + fumée
-	local chimneyX = roomsX + (ctx.Right - ctx.Left) * 0.24
-	chimney(ctx, chimneyX, ridgeD + 3, ctx.Top + 2, ctx.Top + 0.6 + rise + 2.2, Color3.fromRGB(226, 142, 142), true)
+	local chimneyX = roomsX + (roofX1 - roofX0) * 0.28
+	chimney(ctx, chimneyX, ridgeD + 1.4, ctx.Top + 2, ctx.Top + 0.6 + rise + 3.8, Color3.fromRGB(226, 142, 142), true)
 	-- chat assis sur le pan gauche
 	HouseGarden.Cat(kit, roomsX - (ctx.Right - ctx.Left) * 0.26, ctx.Top + 0.6 + 0.55 * rise + 0.3, -overhang + 0.55 * (ridgeD + overhang) - 0.3)
 
-	-- porche : petit pignon rose au-dessus de la porte + œil-de-bœuf + cœur
+	-- porche (cage) : son propre pignon rose face à la rue, œil-de-bœuf, cœur
 	local gx = ctx.DoorX
-	local gw = WorldLayout.HALL_W + 1
-	local gTop = WorldLayout.FloorY(1) + WorldLayout.DOOR_H + 1.3
+	local hx0, hx1 = ctx.Hall0, ctx.Hall1 + T
+	local hcx = (hx0 + hx1) / 2
+	local hRise = 5.5
+	local yEave = ctx.Top + 0.6
 	for _, s in ipairs({ -1, 1 }) do
-		kit:Part("PorchRoof", Vector3.new(3.4, 2.4, gw / 2), CFrame.new(gx + s * gw / 4, gTop + 1.2, 1.7) * CFrame.Angles(0, -s * math.pi / 2, 0), C.Pink, M.ClayRoofTiles,
-			{ Solid = true }, "WedgePart")
+		local edge = if s < 0 then hx0 - 0.9 else hx1 + 0.9
+		kit:SlabX("PorchRoof", ctx.Depth / 2 - 0.5, { edge, yEave - 0.9 * hRise / ((hx1 - hx0) / 2) }, { hcx, yEave + hRise }, ctx.Depth + 2.4, 0.6, ctx.Roof, M.ClayRoofTiles,
+			{ Solid = true, Shadow = true })
+		kit:Part("PorchGable", Vector3.new(1, hRise, (hx1 - hx0) / 2), CFrame.new(hcx + s * (hx1 - hx0) / 4, yEave + hRise / 2, 0.2) * CFrame.Angles(0, -s * math.pi / 2, 0),
+			annex, M.Plaster, { Solid = true }, "WedgePart")
+		kit:SlabX("PorchBarge", -1.6, { edge - 0.1, yEave - 0.9 * hRise / ((hx1 - hx0) / 2) + 0.3 }, { hcx, yEave + hRise + 0.35 }, 0.5, 0.9, ctx.RoofDark, M.Wood,
+			{ Shadow = false })
 	end
-	heart(ctx, gx, gTop + 3, -1.7, 1, C.Heart)
+	kit:CylD("GableWindowRing", hcx, yEave + hRise * 0.42, -0.35, 2.6, 0.3, C.Cream, M.Wood, { Shadow = false })
+	kit:CylD("GableWindow", hcx, yEave + hRise * 0.42, -0.52, 1.9, 0.1, P.Glass, M.Glass, { Shadow = false })
+	heart(ctx, hcx, yEave + hRise + 1.1, -0.6, 1.2, C.Heart)
+	local sc = math.floor((hx1 - hx0) / 1.9)
+	for j = 0, sc - 1 do
+		kit:CylD("Scallop", hx0 + (j + 0.5) * (hx1 - hx0) / sc, yEave - 0.25, -0.55, 1.6, 0.3, ctx.RoofDark, M.ClayRoofTiles, { Shadow = false })
+	end
 	-- porte ronde : cadre de bois + haut arrondi (disque)
 	frontDoor(ctx, C.Pink, TIMBER, false)
 	kit:CylD("DoorArch", gx, WorldLayout.FloorY(1) + WorldLayout.DOOR_H, -0.5, WorldLayout.DOOR_W + 1.2, 0.35, TIMBER, M.Wood, { Shadow = false })
@@ -903,28 +927,40 @@ STYLES.Townhouse = function(ctx)
 			end
 		end
 	end
-	-- toit mansardé d'ardoises + lucarnes roses + crête dorée + cheminées
+	-- toit mansardé d'ardoises (sur les pièces, comme la 2D) + lucarnes roses +
+	-- crête dorée + cheminées ; l'entrée (cage) a un toit plat à garde-corps
 	local rise = 8.5 + (dims.Floors - 1) * 0.5
 	local inset = 4.6
 	local yBase = ctx.Top + 1.1
-	local front = mansardRoof(ctx, ctx.Left - T, ctx.Right + T, yBase, rise, inset, M.Slate)
+	local r0, r1 = ctx.Left - T, ctx.Hall0 + 0.4
+	local front = mansardRoof(ctx, r0, r1, yBase, rise, inset, M.Slate)
 	roofPattern(ctx, front, ctx.Looks.Pattern or "None")
 	for column = 1, dims.Columns do
 		local x0, x1 = WorldLayout.ColumnSpan(ctx.Size, column)
 		dormer(ctx, (x0 + x1) / 2, yBase + 1.4, -0.6 + inset * 1.4 / rise - 0.3, 4.6, 5.2, false)
 	end
-	local crest = math.max(2, math.floor((ctx.Right - ctx.Left - 2 * inset) / 5))
+	local crest = math.max(2, math.floor((r1 - r0 - 2 * inset) / 5))
 	for k = 0, crest do
-		local x = ctx.Left + inset + k * (ctx.Right - ctx.Left - 2 * inset) / crest
+		local x = r0 + inset + k * (r1 - r0 - 2 * inset) / crest
 		kit:Box("CrestPost", x - 0.1, x + 0.1, yBase + rise, yBase + rise + 1.4, inset - 0.1, inset + 0.1, C.Ink:Lerp(C.Lilac, 0.3), M.Metal, { Shadow = false })
 		kit:Ball("CrestBall", x, yBase + rise + 1.5, inset, 0.5, P.Gold, M.Metal, { Shadow = false })
 	end
-	heart(ctx, (ctx.Left + ctx.Right) / 2, yBase + rise + 2.2, inset, 1.6, C.Heart)
-	local span = ctx.Right - ctx.Left
+	heart(ctx, (r0 + r1) / 2, yBase + rise + 2.2, inset, 1.6, C.Heart)
+	local span = r1 - r0
 	for _, s in ipairs({ -1, 1 }) do
-		local cx = (ctx.Left + ctx.Right) / 2 + s * span * 0.34
+		local cx = (r0 + r1) / 2 + s * span * 0.36
 		chimney(ctx, cx, ctx.Depth * 0.55, yBase + rise - 1, yBase + rise + 3.4, Color3.fromRGB(236, 160, 170), s > 0)
 	end
+	-- toit plat de l'entrée : garde-corps blanc + plante
+	local hx0, hx1 = ctx.Hall0 + 0.6, ctx.Hall1 + T
+	local yr = ctx.Top + 1.1
+	kit:Box("AnnexRail", hx0, hx1, yr + 2.2, yr + 2.45, -1.1, -0.9, WHITE, M.Metal, { Shadow = false })
+	kit:Box("AnnexRail", hx1 - 0.2, hx1, yr + 2.2, yr + 2.45, -1.1, ctx.Depth, WHITE, M.Metal, { Shadow = false })
+	for k = 0, 6 do
+		local x = hx0 + k * (hx1 - hx0) / 6
+		kit:Box("AnnexBar", x - 0.07, x + 0.07, yr, yr + 2.2, -1.05, -0.95, WHITE, M.Metal, { Shadow = false })
+	end
+	HouseGarden.PottedBall(kit:Sub(CFrame.new(0, yr, 0)), hx1 - 2, 1.5, 0.8, C.Peach)
 	-- entrée : porte cintrée, marquise rayée, 3 marches, lanterne, topiaires
 	local gx = ctx.DoorX
 	local yDoor = WorldLayout.FloorY(1)

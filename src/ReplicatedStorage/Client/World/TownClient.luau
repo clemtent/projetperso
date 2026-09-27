@@ -425,6 +425,7 @@ local KEEP_GUIS: { [string]: boolean } = {
 	BubbleChat = true,
 	Chat = true,
 	Freecam = true,
+	DeskModeGui = true, -- v9.5 🖥️ barre "Se lever" du bureau (DeskMode)
 }
 local function keepGui(name: string): boolean
 	return KEEP_GUIS[name] == true or string.find(name, "Touch", 1, true) ~= nil or string.find(name, "Prompt", 1, true) ~= nil
@@ -1068,6 +1069,12 @@ local function enter(options: any)
 	end
 	busy = true
 	closeClickerWindows()
+	-- v9.5 🖥️ objets "Dopamine Setup" vivants : LiveProps s'accroche aux
+	-- objets construits par HouseBuilder (idempotent, chaîne les crochets existants)
+	local live = optionalModule("LiveProps")
+	if live and type(live.BindHouseBuilder) == "function" then
+		pcall(live.BindHouseBuilder, HouseBuilder)
+	end
 	local s: Saved = { Guis = {}, Lighting = {}, Effects = {}, Moved = {} }
 	saved = s
 	hud:SetVisible(true)

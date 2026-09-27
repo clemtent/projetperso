@@ -331,7 +331,7 @@ local function desk(b: Builder, ctx: any)
 				local inner = CFrame.new(slot.X + side * (slot.W / 2 + 1.4), y, monitorZ)
 				local wingCF = inner * CFrame.Angles(0, a, 0) * CFrame.new(side * wing / 2, 0, 0)
 				b.BoxR(wingCF * CFrame.new(0, slot.H / 2, 0), wing + 1.4, slot.H + 2.8, 1.6, frame, M.SmoothPlastic)
-				local w = b.Part("Part", wingCF * CFrame.new(0, slot.H / 2, 1.05) * CFrame.Angles(0, math.pi, 0), Vector3.new(wing, slot.H, 0.5), rgb(90, 170, 255), M.Neon, "ScreenWing")
+				local w = b.Part("Part", wingCF * CFrame.new(0, slot.H / 2, 1.05) * CFrame.Angles(0, math.pi, 0), Vector3.new(wing, slot.H, 0.5), rgb(60, 110, 170), M.Neon, "ScreenWing")
 				w.CastShadow = false
 				w:SetAttribute("ScreenIndex", index)
 				table.insert(b.Glows, w)
@@ -349,9 +349,13 @@ local function desk(b: Builder, ctx: any)
 	end
 	-- rétroéclairage derrière les écrans
 	if tier >= 3 then
-		local back = b.Box(0, baseY - 2, -47.2, deskW - 20, (count >= 4 and (topY + 16) or (baseY + 26)) - baseY, 0.6, edge, M.Neon)
-		neon(b, back, rgbAll and "RGB" or "Glow")
-		back.Transparency = 0.35
+		local barTop = count >= 4 and (topY + 16) or (baseY + 24)
+		for _, side in ipairs({ -1, 1 }) do
+			local bar = b.Box(side * (deskW / 2 - 12), T + 1, -47.4, 1.6, barTop - T - 1, 0.6, edge, M.Neon)
+			neon(b, bar, rgbAll and "RGB" or "Glow")
+		end
+		local beam = b.Box(0, barTop - 1.6, -47.4, deskW - 22, 1.6, 0.6, edge, M.Neon)
+		neon(b, beam, rgbAll and "RGB" or "Glow")
 	end
 	-- déco selon le palier : casque sur son crochet, enceintes, figurine
 	if tier >= 2 then
@@ -415,9 +419,8 @@ R.SetupKeyboard = function(b, _ctx)
 		for keyIndex, letter in ipairs(row) do
 			local x = startX + (keyIndex - 1) * unit
 			local color = RAINBOW[(keyIndex + rowIndex) % #RAINBOW + 1]:Lerp(WHITE, 0.45)
-			local key = b.Box(x, 5.3, z, cap, 3.2, cap - 0.6, color, M.SmoothPlastic)
+			local key = b.Box(x, 5.3, z, cap, 3.4, cap - 0.6, color, M.SmoothPlastic)
 			key.Name = "Key_" .. letter
-			b.Box(x, 8.5, z + 0.2, cap - 2.4, 0.3, cap - 3, lighten(color, 0.4), M.SmoothPlastic)
 		end
 		-- touches larges au bout des rangées (Tab / Maj / Entrée)
 		local rowEnd = startX + (#row - 1) * unit + unit / 2 + 0.6
@@ -588,20 +591,28 @@ R.SetupTVStand = function(b, ctx)
 	for _, side in ipairs({ -1, 1 }) do
 		b.Box(side * 44, 0, 0, 4, 6, 30, CARBON_LIGHT, M.Metal)
 	end
-	b.Box(0, 6, 0, 100, T - 9, d, body, M.Wood)
-	b.Box(0, T - 3, 0, 100, 3, d + 1, darken(body, 0.25), M.SmoothPlastic)
-	-- portes vitrées fumées (côtés) + niche ouverte au centre
-	for _, side in ipairs({ -1, 1 }) do
-		local door = b.Box(side * 31, 9, d / 2 + 0.1, 34, T - 15, 0.6, rgb(70, 60, 96), M.Glass)
-		door.Transparency = 0.25
-		b.Box(side * 16, 9 + (T - 15) / 2 - 3, d / 2 + 0.8, 1, 6, 1, CHROME, M.Metal)
+	local inner = T - 9
+	b.Box(0, 6, 0, 100, 3, d, body, M.Wood)
+	b.Box(0, 6, -d / 2 + 1, 100, inner, 2, darken(body, 0.2), M.Wood)
+	for _, x in ipairs({ -48.5, -14.5, 14.5, 48.5 }) do
+		b.Box(x, 6, 0, 3, inner, d, body, M.Wood)
 	end
-	b.Box(0, 9, d / 2 - 12, 26, T - 15, 22, rgb(24, 22, 34), M.SmoothPlastic)
+	b.Box(0, T - 3, 0, 100, 3, d + 1, darken(body, 0.25), M.SmoothPlastic)
+	-- portes pleines (côtés) + niche ouverte au centre
+	for _, side in ipairs({ -1, 1 }) do
+		b.Box(side * 31.5, 9, d / 2 - 0.6, 31, inner - 6, 1.2, lighten(body, 0.12), M.Wood)
+		b.Box(side * 31.5, 10.5, d / 2 + 0.05, 27, inner - 9, 0.2, lighten(body, 0.2), M.Wood)
+		b.Box(side * 17.5, 9 + (inner - 6) / 2 - 3, d / 2 + 0.4, 1, 6, 1, CHROME, M.Metal)
+	end
+	b.Box(0, 9, 0, 26, 0.6, d - 4, rgb(24, 22, 34), M.SmoothPlastic)
+	neon(b, b.Box(0, T - 3.6, d / 2 - 3, 26, 0.5, 0.5, CYAN, M.Neon), "Glow")
 	-- console + manettes + boîtiers de DVD dans la niche
-	b.Round(0, 9, d / 2 - 8, 18, 4, 12, 2, WHITE, M.SmoothPlastic)
-	neon(b, b.Box(0, 11, d / 2 - 1.9, 8, 0.6, 0.4, CYAN, M.Neon), "Glow")
-	for index = 1, 5 do
-		b.Box(-8 + index * 3.2, 9 + (T - 15) * 0.55, d / 2 - 10, 2.4, 12, 9, RAINBOW[index], M.SmoothPlastic)
+	b.Round(0, 9.6, d / 2 - 10, 20, 5, 14, 2, WHITE, M.SmoothPlastic)
+	neon(b, b.Box(0, 12, d / 2 - 2.9, 8, 0.6, 0.4, CYAN, M.Neon), "Glow")
+	b.EggR(CFrame.new(-6, 10.5, d / 2 - 1) * CFrame.Angles(0, 0.3, 0), 8, 3, 5, rgb(255, 120, 190), M.SmoothPlastic)
+	b.Box(0, 9 + inner * 0.5, 0, 26, 0.8, d - 4, rgb(40, 36, 54), M.SmoothPlastic)
+	for index = 1, 6 do
+		b.Box(-10 + index * 3, 9.8 + inner * 0.5, 2, 2.4, 11, 13, RAINBOW[index], M.SmoothPlastic)
 	end
 	-- bande lumineuse au pied (arc-en-ciel)
 	neon(b, b.Box(0, 6.2, d / 2 + 0.3, 96, 1, 0.6, RAINBOW[1], M.Neon), "RGB")
@@ -943,9 +954,9 @@ R.SetupBubbleWrap = function(b, ctx)
 			index += 1
 			local x = -40 + (col - 0.5) * (80 / cols) + (row % 2 == 0 and 2 or -2)
 			local z = -8 + (row - 0.5) * (30 / rows) + 2
-			local bubble = b.Egg(x, T + 2.2, z, 7, 3.6, 6.4, rgb(236, 248, 255), M.Glass)
+			local bubble = b.Egg(x, T + 2.2, z, 7, 3.6, 6.4, rgb(232, 246, 255), M.SmoothPlastic)
 			bubble.Name = "Bubble_" .. index
-			bubble.Transparency = 0.2
+			bubble.Transparency = 0.05
 			bubble.CastShadow = false
 		end
 	end
@@ -989,8 +1000,9 @@ R.SetupLiveStudio = function(b, _ctx)
 	b.CylZ(rx, ry + 3, rz + 1.6, 3, 1, rgb(80, 120, 200), M.Glass)
 	neon(b, b.Ball(rx + 3, ry + 6, rz + 1.6, 1.6, RED, M.Neon), "RecLight")
 	-- enseigne ON AIR (au fond)
-	b.Box(0, 76, -18, 26, 9, 2, rgb(40, 14, 24), M.SmoothPlastic)
-	neon(b, b.Round(0, 77, -16.6, 22, 7, 1, 1.5, RED, M.Neon), "OnAir")
+	b.Box(-6, 41, -16, 2, 30, 2, CARBON_LIGHT, M.Metal)
+	b.Box(-6, 70, -16, 20, 8, 3, rgb(40, 14, 24), M.SmoothPlastic)
+	neon(b, b.Round(-6, 71, -14.4, 17, 6, 0.6, 1.5, RED, M.Neon), "OnAir")
 	-- tabouret
 	b.Cyl(0, 0, 16, 16, 1.5, CARBON, M.Metal)
 	b.Cyl(0, 1.5, 16, 3, 20, CHROME, M.Metal)
@@ -1087,7 +1099,7 @@ local function simpleFlower(b: Builder, flower: string, x: number, y: number, z:
 end
 
 -- Fleur du jardin 3D (GARDEN3D95) mise à l'échelle et versée dans le modèle
-local function gardenFlower(b: Builder, flower: string, y: number, height: number): boolean
+local function gardenFlower(b: Builder, flower: string, y: number, height: number, x: number?, z: number?, lean: number?): boolean
 	local module = gardenBuilder()
 	if not module then
 		return false
@@ -1102,7 +1114,7 @@ local function gardenFlower(b: Builder, flower: string, y: number, height: numbe
 		local scale = (height * b.K) / math.max(0.2, natural)
 		local parent = b.Parts[1] and b.Parts[1].Parent
 		local originCF = (b.Parts[1] and (b.Parts[1].CFrame * b.Locals[1]:Inverse())) or CFrame.new()
-		local base = originCF * CFrame.new(0, y * b.K, 0)
+		local base = originCF * CFrame.new((x or 0) * b.K, y * b.K, (z or 0) * b.K) * CFrame.Angles(0, (x or 0) * 0.07, -(lean or 0))
 		for _, part in ipairs(model:GetDescendants()) do
 			if part:IsA("BasePart") and part.Name ~= "Root" then
 				local rel = source:ToObjectSpace(part.CFrame)
@@ -1144,12 +1156,12 @@ R.SetupPlant = function(b, _ctx)
 		-- vasque dorée + eau + nénuphar
 		b.Cyl(0, 0, 0, 44, 4, darken(potColor, 0.2), M.Metal)
 		b.Cyl(0, 4, 0, 70, 16, potColor, M.Metal)
-		b.Cyl(0, 19, 0, 74, 2, rim, M.Metal)
-		local water = b.Cyl(0, 18, 0, 64, 1.4, rgb(90, 190, 230), M.Glass)
-		water.Transparency = 0.2
-		b.Cyl(14, 19.3, 8, 20, 0.6, LEAF, M.SmoothPlastic)
-		b.Cyl(-16, 19.3, -6, 16, 0.6, LEAF_DARK, M.SmoothPlastic)
-		soil = 19.6
+		b.Cyl(0, 19, 0, 74, 1.2, rim, M.Metal)
+		local water = b.Cyl(0, 20, 0, 66, 0.6, rgb(90, 190, 230), M.SmoothPlastic)
+		water.Transparency = 0.1
+		b.Cyl(14, 20.4, 8, 20, 0.5, LEAF, M.SmoothPlastic)
+		b.Cyl(-16, 20.4, -6, 16, 0.5, LEAF_DARK, M.SmoothPlastic)
+		soil = 20.6
 	elseif flower == "Sunflower" then
 		-- jardinière en bois
 		b.Box(0, 0, 0, 50, 30, 40, potColor, M.Wood)
@@ -1171,15 +1183,26 @@ R.SetupPlant = function(b, _ctx)
 	end
 	pivot(b, "Pivot_Flower", 0, soil, 0)
 	local height = 100 - soil - 16
-	if not gardenFlower(b, flower, soil, flower == "Lotus" and 30 or height) then
+	-- fleurs du jardin 3D : un bouquet (3 marguerites / tulipes, 2 roses)
+	local count = (flower == "Daisy" or flower == "Tulip") and 3 or (flower == "Rose" and 2 or 1)
+	local okGarden = true
+	for index = 1, count do
+		local offset = count > 1 and (index - (count + 1) / 2) * 11 or 0
+		local tall = flower == "Lotus" and 26 or (height - math.abs(offset) * 0.9)
+		if not gardenFlower(b, flower, soil, tall, offset, (index % 2) * 5 - 2, offset * 0.02) then
+			okGarden = false
+			break
+		end
+	end
+	if not okGarden then
 		if flower == "Sunflower" then
 			simpleFlower(b, flower, 0, soil, 0, height - 6, 0)
 		elseif flower == "Lotus" then
 			simpleFlower(b, flower, 0, soil, 0, 1, 0)
 		else
-			local count = flower == "Rose" and 2 or 3
-			for index = 1, count do
-				local offset = (index - (count + 1) / 2) * 9
+			local tufts = flower == "Rose" and 2 or 3
+			for index = 1, tufts do
+				local offset = (index - (tufts + 1) / 2) * 9
 				simpleFlower(b, flower, offset, soil, (index % 2) * 4 - 2, height - 10 - math.abs(offset) * 0.6, offset * 0.4)
 			end
 		end

@@ -36,9 +36,13 @@
 
 	API :
 	  LiveProps.Attach(model, itemId, context) -> handle?
-	    context = { Interactive: boolean, IsOwner: boolean?, Player: Player?, OwnerId: number? }
+	    context = { Interactive: boolean, IsOwner: boolean?, Player: Player?, OwnerId: number?,
+	                PauseDistance: number?, ScreenDistance: number? }
+	    (Interactive = false : aperçu 3D, pause à 250 studs, écrans visibles à 300)
 	  LiveProps.Detach(handle)
 	  LiveProps.AttachAll(models, context) -> { handle }   (ignore les objets non Setup)
+	  LiveProps.BindHouseBuilder(HouseBuilder)             (crochets OnItemAttach / OnItemDetach : la ville)
+	  LiveProps.HandleOf(model) -> handle?
 	  LiveProps.DetachAll(handles)
 	  LiveProps.SetFocus(position?)        (nil = la caméra)
 	  LiveProps.IsLive(itemId) -> boolean
@@ -182,7 +186,7 @@ end
 
 type Mover = { Part: BasePart, Offset: CFrame, Size: Vector3 }
 type Spinner = { Pivot: BasePart, Parts: { BasePart }, Offsets: { CFrame }, CFrames: { CFrame }, Axis: string, Angle: number, Speed: number, Target: number }
-type Press = { Part: BasePart, Offset: CFrame, Base: Color3, T: number, Depth: number }
+type Press = { Part: BasePart, Offset: CFrame, Base: Color3, Material: Enum.Material, T: number, Depth: number }
 type ScreenRec = {
 	Part: BasePart,
 	Kind: string,
@@ -206,6 +210,8 @@ export type Handle = {
 	Ref: BasePart,
 	Paused: boolean,
 	Distance: number,
+	PauseDistance: number,
+	ScreenDistance: number,
 	Clock: number,
 	Screens: { ScreenRec },
 	Clickables: { BasePart },
@@ -312,9 +318,10 @@ local function press(h: Handle, part: BasePart, depth: number?, flash: Color3?)
 			return
 		end
 	end
-	table.insert(h.Presses, { Part = part, Offset = m.Offset, Base = part.Color, T = 0, Depth = depth or m.Size.Y * 0.55 })
+	table.insert(h.Presses, { Part = part, Offset = m.Offset, Base = part.Color, Material = part.Material, T = 0, Depth = depth or m.Size.Y * 0.55 })
 	if flash then
 		part.Color = flash
+		part.Material = Enum.Material.Neon
 	end
 end
 
@@ -340,6 +347,7 @@ local function stepPresses(h: Handle, dt: number)
 		if t >= 0.25 then
 			p.Part.CFrame = ref * p.Offset
 			p.Part.Color = p.Base
+			p.Part.Material = p.Material
 			table.remove(list, index)
 		end
 	end
@@ -491,7 +499,7 @@ local function claimGui(rec: ScreenRec)
 	gui.CanvasSize = canvas
 	gui.LightInfluence = 0
 	gui.Brightness = 1.2
-	gui.MaxDistance = LiveProps.SCREEN_DISTANCE
+	gui.MaxDistance = rec.Handle.ScreenDistance
 	gui.AlwaysOnTop = false
 	gui.ClipsDescendants = true
 	gui.ResetOnSpawn = false
@@ -522,7 +530,7 @@ local function manageScreens(focus: Vector3)
 			local distance = (rec.Part.Position - focus).Magnitude
 			if h == deskFocus then
 				distance = -1
-			elseif h.Paused or distance > LiveProps.SCREEN_DISTANCE then
+			elseif h.Paused or distance > h.ScreenDistance then
 				distance = math.huge
 			end
 			rankDistance[rec] = distance
@@ -849,7 +857,7 @@ BEHAVIOURS.Press = function(h: Handle)
 		if not anvil then
 			return
 		end
-		local g = 1 / math.sqrt(math.max(0.15, s))
+		local g = math.min(1.9, 1 / math.sqrt(math.max(0.15, s)))
 		local base = anvil.CFrame
 		for _, c in ipairs(crushables) do
 			if c.Variant == current then
@@ -1353,7 +1361,7 @@ local function manage()
 			LiveProps.Detach(h)
 		else
 			h.Distance = (h.Ref.Position - focus).Magnitude
-			h.Paused = h ~= deskFocus and h.Distance > LiveProps.PAUSE_DISTANCE
+			h.Paused = h ~= deskFocus and h.Distance > h.PauseDistance
 		end
 	end
 	manageScreens(focus)
@@ -1556,6 +1564,9 @@ function LiveProps.Attach(model: Model, itemId: string?, context: { [string]: an
 		Ref = ref :: BasePart,
 		Paused = false,
 		Distance = 0,
+		-- (aperçu 3D du panneau : caméra en orbite plus loin, jamais en pause)
+		PauseDistance = tonumber(ctx.PauseDistance) or (ctx.Interactive == true and LiveProps.PAUSE_DISTANCE or 250),
+		ScreenDistance = tonumber(ctx.ScreenDistance) or (ctx.Interactive == true and LiveProps.SCREEN_DISTANCE or 300),
 		Clock = random:NextNumber(0, 10),
 		Screens = {},
 		Clickables = {},
@@ -1670,6 +1681,7 @@ function LiveProps.Detach(handle: Handle?)
 		for _, p in ipairs(h.Presses) do
 			if p.Part.Parent then
 				p.Part.Color = p.Base
+				p.Part.Material = p.Material
 			end
 		end
 	end
@@ -1783,6 +1795,47 @@ function LiveProps.Peripherals(desk: Handle?): { Handle }
 		end
 	end
 	return list
+end
+
+-- Handle d'un modèle (nil si le modèle n'est pas vivant)
+function LiveProps.HandleOf(model: Instance?): Handle?
+	if typeof(model) ~= "Instance" or not model:IsA("Model") then
+		return nil
+	end
+	return byModel[model]
+end
+
+-- Branche LiveProps sur les crochets de HouseBuilder (OnItemAttach /
+-- OnItemDetach, v9.5) : chaque objet Setup construit dans une maison de la
+-- ville devient vivant et cliquable ; retiré = détaché. Idempotent ; les
+-- crochets déjà posés par quelqu'un d'autre sont appelés aussi.
+local boundBuilders: { [any]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+function LiveProps.BindHouseBuilder(builder: any)
+	if type(builder) ~= "table" or boundBuilders[builder] then
+		return
+	end
+	boundBuilders[builder] = true
+	local previousAttach = builder.OnItemAttach
+	local previousDetach = builder.OnItemDetach
+	builder.OnItemAttach = function(house: any, slot: number, model: Model, entry: any, itemId: string)
+		if type(previousAttach) == "function" then
+			pcall(previousAttach, house, slot, model, entry, itemId)
+		end
+		if LiveProps.IsLive(itemId) then
+			local player = Players.LocalPlayer
+			local owner = type(house) == "table" and tonumber(house.UserId) or 0
+			LiveProps.Attach(model, itemId, { Interactive = true, IsOwner = player ~= nil and owner == player.UserId, OwnerId = owner })
+		end
+	end
+	builder.OnItemDetach = function(house: any, slot: number, model: Model, entry: any, itemId: string)
+		if type(previousDetach) == "function" then
+			pcall(previousDetach, house, slot, model, entry, itemId)
+		end
+		local h = LiveProps.HandleOf(model)
+		if h then
+			LiveProps.Detach(h)
+		end
+	end
 end
 
 -- Appui programmé (DeskMode : vraies touches du clavier du joueur)

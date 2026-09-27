@@ -726,7 +726,7 @@ function TownHud.SetContext(self: any, context: Context?)
 	self.Context = context
 	local parts = self.Parts
 	local snapshot = context and context.Snapshot
-	parts.Banner.Visible = snapshot ~= nil
+	parts.Banner.Visible = snapshot ~= nil and not self.DeskActive
 	parts.Edit.Visible = context ~= nil and context.IsOwner and context.InHouse and not self.DeskActive
 	parts.Like.Visible = snapshot ~= nil and not (context and context.IsOwner)
 	if not snapshot or not context then
@@ -1092,6 +1092,8 @@ function TownHud.SetDeskMode(self: any, active: boolean)
 	self.DeskActive = active
 	local parts = self.Parts
 	parts.Emote.Visible = not active
+	-- (au bureau, la bannière de la maison cacherait les écrans du haut)
+	parts.Banner.Visible = not active and self.Context ~= nil and self.Context.Snapshot ~= nil
 	if active then
 		self:SetEmoteWheel(false)
 		parts.Edit.Visible = false

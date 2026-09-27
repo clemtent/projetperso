@@ -12,6 +12,8 @@
 	    condition de distance ;
 	  - les vraies touches du joueur (A-Z, 0-9) enfoncent la touche 3D
 	    correspondante et cliquent (comme le clavier 2D) ;
+	  - l'avatar est masqué LOCALEMENT pendant le mode (LocalTransparencyModifier,
+	    comme en vue à la première personne) : il serait devant les écrans ;
 	  - on sort avec : saut, Échap, le bouton "⬅ Se lever", ou si le
 	    personnage s'éloigne / meurt / disparaît ; la caméra est remise
 	    EXACTEMENT (CameraType, CameraSubject, CFrame, FieldOfView) ainsi
@@ -74,6 +76,7 @@ local counterClock = 0
 local connections: { any } = {} -- pendant le mode
 local watchers: { any } = {} -- entre Start et Stop
 local humanoidConnections: { any } = {}
+local hidden: { BasePart } = {} -- pièces de l'avatar masquées (vue "à la première personne")
 
 local function clientState(): any
 	local ok, result = pcall(function()
@@ -151,7 +154,10 @@ local function framing(handle: any): CFrame?
 	end
 	local width = math.max(2, maxX - minX)
 	local height = math.max(1.5, maxY - low)
-	local lookAt = base + right * ((minX + maxX) / 2) + up * (low + height * 0.52 - base.Y)
+	-- (marges : le bandeau de la ville en haut, "Se lever" en bas ; le contenu
+	-- est un peu plus bas que le centre de l'image)
+	local lookAt = base + right * ((minX + maxX) / 2) + up * (low + height * 0.6 - base.Y)
+	height *= 1.3
 	local vfov = math.rad(FOV)
 	local camera = workspace.CurrentCamera
 	local viewport = camera and camera.ViewportSize or Vector2.new(1280, 720)
@@ -184,7 +190,7 @@ local function buildGui()
 	bar.Name = "Bar"
 	bar.AnchorPoint = Vector2.new(0.5, 1)
 	bar.Position = UDim2.new(0.5, 0, 1, -14)
-	bar.Size = UDim2.fromOffset(460, 56)
+	bar.Size = UDim2.fromOffset(540, 56)
 	bar.BackgroundColor3 = rgb(34, 26, 52)
 	bar.BackgroundTransparency = 0.15
 	bar.BorderSizePixel = 0
@@ -198,13 +204,13 @@ local function buildGui()
 	strokeLine.Transparency = 0.2
 	strokeLine.Parent = bar
 	local sizeLimit = Instance.new("UISizeConstraint")
-	sizeLimit.MaxSize = Vector2.new(460, 56)
+	sizeLimit.MaxSize = Vector2.new(540, 56)
 	sizeLimit.Parent = bar
 	local scale = Instance.new("UIScale")
 	scale.Name = "Fit"
 	local camera = workspace.CurrentCamera
 	local viewport = camera and camera.ViewportSize or Vector2.new(1280, 720)
-	scale.Scale = math.clamp((viewport.X - 24) / 460, 0.6, 1)
+	scale.Scale = math.clamp((viewport.X - 24) / 540, 0.55, 1)
 	scale.Parent = bar
 	local button = Instance.new("TextButton")
 	button.Name = "GetUp"
@@ -225,7 +231,7 @@ local function buildGui()
 	hint.Name = "Hint"
 	hint.BackgroundTransparency = 1
 	hint.Position = UDim2.fromOffset(158, 6)
-	hint.Size = UDim2.fromOffset(292, 22)
+	hint.Size = UDim2.fromOffset(372, 22)
 	hint.Font = Enum.Font.GothamBold
 	hint.TextSize = 14
 	hint.TextXAlignment = Enum.TextXAlignment.Left
@@ -238,7 +244,7 @@ local function buildGui()
 	count.Name = "Counter"
 	count.BackgroundTransparency = 1
 	count.Position = UDim2.fromOffset(158, 28)
-	count.Size = UDim2.fromOffset(292, 22)
+	count.Size = UDim2.fromOffset(372, 22)
 	count.Font = Enum.Font.GothamBlack
 	count.TextSize = 16
 	count.TextXAlignment = Enum.TextXAlignment.Left
@@ -318,6 +324,15 @@ local function onRender(dt: number)
 	if UserInputService.MouseBehavior ~= Enum.MouseBehavior.Default then
 		UserInputService.MouseBehavior = Enum.MouseBehavior.Default
 	end
+	-- l'avatar (assis devant les écrans) serait dans le champ : masqué localement
+	-- (réappliqué chaque image, après le contrôleur de transparence de Roblox)
+	for _, part in ipairs(hidden) do
+		part.LocalTransparencyModifier = 1
+	end
+	local screen = gui
+	if screen and not screen.Enabled then
+		screen.Enabled = true -- (une autre interface a pu la masquer en passant)
+	end
 	counterClock += dt
 	if counterClock >= 0.1 then
 		counterClock = 0
@@ -362,6 +377,15 @@ function DeskMode.Enter(handle: any): boolean
 	target = framing(handle)
 	LiveProps.SetDeskFocus(handle)
 	UserInputService.MouseIconEnabled = true
+	table.clear(hidden)
+	local model = character()
+	if model then
+		for _, d in ipairs(model:GetDescendants()) do
+			if d:IsA("BasePart") then
+				table.insert(hidden, d)
+			end
+		end
+	end
 	buildGui()
 	refreshCounter()
 	local ok = pcall(function()
@@ -421,6 +445,12 @@ function DeskMode.Exit(standUp: boolean?)
 	end)
 	disconnectAll(connections)
 	LiveProps.SetDeskFocus(nil)
+	for _, part in ipairs(hidden) do
+		if part.Parent then
+			part.LocalTransparencyModifier = 0
+		end
+	end
+	table.clear(hidden)
 	if gui then
 		gui:Destroy()
 		gui = nil
@@ -456,20 +486,27 @@ end
 -- Écoute (ville) : sièges du bureau, invite "🖥️ Utiliser"
 ----------------------------------------------------------------------
 
+local function onSeated(isSeated: boolean, seatPart: BasePart?)
+	if isSeated and seatPart then
+		local desk = LiveProps.DeskNear(seatPart.Position, SEAT_RADIUS)
+		if desk and desk.Interactive then
+			if DeskMode.Enter(desk) then
+				viaSeat = true
+			end
+		end
+	elseif not isSeated and viaSeat and active then
+		DeskMode.Exit(false)
+	end
+end
+
 local function watchHumanoid(humanoid: Humanoid)
 	disconnectAll(humanoidConnections)
-	table.insert(humanoidConnections, humanoid.Seated:Connect(function(isSeated: boolean, seatPart: BasePart?)
-		if isSeated and seatPart then
-			local desk = LiveProps.DeskNear(seatPart.Position, SEAT_RADIUS)
-			if desk and desk.Interactive then
-				if DeskMode.Enter(desk) then
-					viaSeat = true
-				end
-			end
-		elseif not isSeated and viaSeat and active then
-			DeskMode.Exit(false)
-		end
-	end))
+	local ok, err = pcall(function()
+		table.insert(humanoidConnections, humanoid.Seated:Connect(onSeated))
+	end)
+	if not ok then
+		warn("[DeskMode] Seated : " .. tostring(err))
+	end
 end
 
 function DeskMode.Start()

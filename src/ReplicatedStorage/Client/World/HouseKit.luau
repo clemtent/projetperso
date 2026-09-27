@@ -209,6 +209,48 @@ function HouseKit.Cone(self: Kit, name: string, x: number, y0: number, d: number
 	end
 end
 
+-- Triangle quelconque (points du repère local { x, y, d }) en deux coins
+-- (WedgePart) d'épaisseur `thick`, la face "dessus" passant par les 3 points
+-- (le côté `up` = direction qui doit être au-dessus, ex. le ciel pour un toit)
+function HouseKit.Triangle(self: Kit, name: string, p1: { number }, p2: { number }, p3: { number }, thick: number, color: Color3, material: Enum.Material?, opts: Opts?)
+	local v = { Vector3.new(p1[1], p1[2], -p1[3]), Vector3.new(p2[1], p2[2], -p2[3]), Vector3.new(p3[1], p3[2], -p3[3]) }
+	-- base = plus long côté ; C = sommet opposé ; H = pied de la hauteur
+	local best, bi = -1, 1
+	for i = 1, 3 do
+		local a, b = v[i], v[i % 3 + 1]
+		local len = (b - a).Magnitude
+		if len > best then
+			best, bi = len, i
+		end
+	end
+	local A, B, Cc = v[bi], v[bi % 3 + 1], v[(bi + 1) % 3 + 1]
+	local ab = (B - A).Unit
+	local H = A + ab * (Cc - A):Dot(ab)
+	local normal = (B - A):Cross(Cc - A).Unit
+	if normal.Y < 0 then
+		normal = -normal
+	end
+	local offset = -normal * (thick / 2)
+	local o: Opts = opts and table.clone(opts) or {}
+	if o.Shadow == nil then
+		o.Shadow = true
+	end
+	local height = (Cc - H).Magnitude
+	if height < 0.02 then
+		return
+	end
+	local yAxis = (Cc - H).Unit
+	for _, P in ipairs({ A, B }) do
+		local base = (P - H).Magnitude
+		if base > 0.02 then
+			local zAxis = (H - P).Unit
+			local xAxis = yAxis:Cross(zAxis)
+			local pos = H + (Cc - H) / 2 + (P - H) / 2 + offset
+			self:Part(name, Vector3.new(thick, height, base), CFrame.fromMatrix(pos, xAxis, yAxis, zAxis), color, material, o, "WedgePart")
+		end
+	end
+end
+
 -- Mur plein le long de x avec des ouvertures `holes` = { { x0, x1, y0, y1 } }
 function HouseKit.WallX(self: Kit, name: string, x0: number, x1: number, y0: number, y1: number, d0: number, d1: number, holes: { { number } }, color: Color3,
 	material: Enum.Material?, opts: Opts?)

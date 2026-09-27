@@ -245,7 +245,8 @@ local function newRunner(gui: SurfaceGui, canvas: Vector2): Screen
 	local distLabel = label(root, "Distance", "0 m", W - 106, 4, 100, 16, 13, WHITE, FONT_BLACK, 30)
 	distLabel.TextXAlignment = Enum.TextXAlignment.Right
 	stroke(distLabel, rgb(40, 40, 90), 0.2)
-	local combo = label(root, "Combo", "", 0, H * 0.46, W, 18, 14, rgb(255, 240, 120), FONT_BLACK, 30)
+	local combo = label(root, "Combo", "+1 🪙", 0, H * 0.46, W, 18, 14, rgb(255, 240, 120), FONT_BLACK, 30)
+	combo.Visible = false
 	combo.TextXAlignment = Enum.TextXAlignment.Center
 	stroke(combo, rgb(200, 60, 120), 0.1)
 
@@ -253,6 +254,7 @@ local function newRunner(gui: SurfaceGui, canvas: Vector2): Screen
 	local distance = random:NextInteger(100, 900)
 	local collected = random:NextInteger(0, 40)
 	local lane, laneX = 0, 0
+	local textClock = 1
 	local jump = 0
 	local run = 0
 	local comboTime = 0
@@ -321,14 +323,18 @@ local function newRunner(gui: SurfaceGui, canvas: Vector2): Screen
 		shadow.Size = UDim2.fromOffset(22 - lift * 0.2, 6)
 		legs[1].Rotation = math.sin(run) * 35
 		legs[2].Rotation = -math.sin(run) * 35
-		coinsLabel.Text = "🪙 " .. formatInt(collected)
-		distLabel.Text = formatInt(distance) .. " m"
+		textClock += dt
+		if textClock >= 0.25 then
+			textClock = 0
+			coinsLabel.Text = "🪙 " .. formatInt(collected)
+			distLabel.Text = formatInt(distance) .. " m"
+		end
 		if comboTime > 0 then
 			comboTime -= dt
-			combo.Text = "+1 🪙"
+			combo.Visible = true
 			combo.TextTransparency = 1 - math.clamp(comboTime / 0.6, 0, 1)
-		else
-			combo.Text = ""
+		elseif combo.Visible then
+			combo.Visible = false
 		end
 	end
 	function screen.Destroy(_self: Screen)
@@ -410,8 +416,7 @@ local function newLive(gui: SurfaceGui, canvas: Vector2): Screen
 	-- chat (à droite)
 	local chatW = W - videoW
 	local chat = box(root, "Chat", videoW, 0, chatW, H, rgb(24, 20, 36), 3)
-	local title = label(chat, "Title", Locale.T("💬 Live chat"), 6, 2, chatW - 8, 16, 10, rgb(200, 190, 230), FONT_BLACK, 5)
-	local _ = title
+	label(chat, "Title", Locale.T("💬 Live chat"), 6, 2, chatW - 8, 16, 10, rgb(200, 190, 230), FONT_BLACK, 5)
 	local LINES = 6
 	local lineH = math.floor((H - 22) / LINES)
 	local rows = {}
@@ -446,6 +451,7 @@ local function newLive(gui: SurfaceGui, canvas: Vector2): Screen
 	local blink = 2
 	local viewerCount = random:NextInteger(800, 4000)
 	local follows = random:NextInteger(200, 900)
+	local shownFollows = -1
 	local screen = {} :: Screen
 	screen.Kind = "Live"
 	screen.Root = root
@@ -485,10 +491,13 @@ local function newLive(gui: SurfaceGui, canvas: Vector2): Screen
 			heart.Label.TextTransparency = t
 		end
 		-- objectif
-		local goalMax = (math.floor(follows / 1000) + 1) * 1000
-		local ratio = follows / goalMax
-		goalFill.Size = UDim2.fromOffset(math.max(10, (videoW - 12) * ratio), 10)
-		goalText.Text = Locale.T("Follower goal %s/%s", formatInt(follows), formatInt(goalMax))
+		if follows ~= shownFollows then
+			shownFollows = follows
+			local goalMax = (math.floor(follows / 1000) + 1) * 1000
+			local ratio = follows / goalMax
+			goalFill.Size = UDim2.fromOffset(math.max(10, (videoW - 12) * ratio), 10)
+			goalText.Text = Locale.T("Follower goal %s/%s", formatInt(follows), formatInt(goalMax))
+		end
 	end
 	function screen.Destroy(_self: Screen)
 		root:Destroy()
@@ -504,7 +513,8 @@ local DVD_COLORS = { rgb(255, 46, 136), rgb(0, 200, 255), rgb(157, 78, 221), rgb
 
 local function newDVD(gui: SurfaceGui, canvas: Vector2): Screen
 	local W, H = canvas.X, canvas.Y
-	local root = newRoot(gui, canvas, rgb(6, 6, 12))
+	local root = newRoot(gui, canvas, rgb(10, 10, 22))
+	gradient(root, rgb(16, 14, 34), rgb(6, 6, 14), 90)
 	local LW, LH = math.floor(W * 0.24), math.floor(W * 0.14)
 	local logo = Instance.new("Frame")
 	logo.Name = "Logo"
@@ -581,8 +591,11 @@ local function newDVD(gui: SurfaceGui, canvas: Vector2): Screen
 		else
 			corner.Visible = false
 		end
+		local second = math.floor(played + dt)
+		if second ~= math.floor(played) then
+			osd.Text = string.format("▶ PLAY  %02d:%02d", math.floor(second / 60) % 60, second % 60)
+		end
 		played += dt
-		osd.Text = string.format("▶ PLAY  %02d:%02d", math.floor(played / 60) % 60, math.floor(played) % 60)
 	end
 	function screen.Destroy(_self: Screen)
 		root:Destroy()
@@ -626,8 +639,7 @@ local function newNews(gui: SurfaceGui, canvas: Vector2): Screen
 	-- logo de la chaîne + direct
 	local logoBox = box(root, "Logo", 8, 8, W * 0.34, H * 0.13, WHITE, 6)
 	round(logoBox, 4)
-	local logoText = label(logoBox, "Text", "🧠 DOPA NEWS", 6, 0, W * 0.34 - 8, H * 0.13, math.floor(H * 0.075), rgb(200, 30, 60), FONT_BLACK, 7)
-	local _ = logoText
+	label(logoBox, "Text", "🧠 DOPA NEWS", 6, 0, W * 0.34 - 8, H * 0.13, math.floor(H * 0.075), rgb(200, 30, 60), FONT_BLACK, 7)
 	local live = box(root, "Live", W - 52, 8, 44, 16, rgb(220, 30, 50), 6)
 	round(live, 4)
 	local liveText = label(live, "Text", Locale.T("LIVE"), 0, 0, 44, 16, 10, WHITE, FONT_BLACK, 7)
@@ -635,8 +647,7 @@ local function newNews(gui: SurfaceGui, canvas: Vector2): Screen
 	-- bandeau "Breaking news" + titre
 	local bandY = H * 0.62
 	local breaking = box(root, "Breaking", 0, bandY, W * 0.4, H * 0.1, rgb(220, 30, 50), 8)
-	local breakingText = label(breaking, "Text", Locale.T("BREAKING NEWS"), 6, 0, W * 0.4 - 8, H * 0.1, math.floor(H * 0.06), WHITE, FONT_BLACK, 9)
-	local _b = breakingText
+	label(breaking, "Text", Locale.T("BREAKING NEWS"), 6, 0, W * 0.4 - 8, H * 0.1, math.floor(H * 0.06), WHITE, FONT_BLACK, 9)
 	local headlineBox = box(root, "Headline", 0, bandY + H * 0.1, W, H * 0.16, WHITE, 8)
 	local headline = label(headlineBox, "Text", "", 8, 0, W - 16, H * 0.16, math.floor(H * 0.058), rgb(20, 24, 50), FONT_BLACK, 9)
 	headline.TextWrapped = true

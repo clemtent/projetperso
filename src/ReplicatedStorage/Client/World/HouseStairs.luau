@@ -226,11 +226,11 @@ function HouseStairs.Build(kit: any, size: any, colors: Colors): Result
 		if floor < floors then
 			flight(kit, size, floor, colors, ramps)
 			table.insert(holes, { floor + 1, WorldLayout.STAIR_HOLE_D0, WorldLayout.STAIR_D1 })
-			-- flèche ⬆ au pied de la volée (sur le poteau de départ, côté couloir)
+			-- flèche ⬆ au pied de la volée (sur la face de la première contremarche)
 			local s0, s1 = WorldLayout.StairSpan(size)
 			local y = WorldLayout.FloorY(floor)
-			local up = kit:Box("UpSign", s0 + 0.8, s1 - 0.8, y + 0.5, y + 0.95, WorldLayout.STAIR_D0 + 0.2, WorldLayout.STAIR_D0 + 0.58, colors.Accent, M.SmoothPlastic,
-				{ Shadow = false })
+			local riser = WorldLayout.STAIR_D0 + 0.5 * WorldLayout.STAIR_TREAD - 0.12
+			local up = kit:Box("UpSign", s0 + 0.9, s1 - 0.9, y + 0.12, y + 0.72, riser - 0.05, riser - 0.01, colors.Accent, M.SmoothPlastic, { Shadow = false })
 			kit:Text(up, Enum.NormalId.Back, "⬆️ " .. floorName(floor + 1), WHITE, Enum.Font.GothamBold, 40, 60)
 		end
 	end
