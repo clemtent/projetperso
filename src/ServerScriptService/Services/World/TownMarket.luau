@@ -159,11 +159,11 @@ local function facade(model: Model, cf: CFrame)
 	for _, sx in ipairs({ -1, 1 }) do
 		glassBox(model, "VestibuleSide", cf, sx < 0 and -vx or vx - 0.3, sx < 0 and -vx + 0.3 or vx, FLOOR, 10.2, vz, 0, 0.4, "prop")
 		-- vitres fixes de part et d'autre des portes
-		glassBox(model, "VestibuleLite", cf, sx < 0 and -vx + 0.3 or 3.7, sx < 0 and -3.7 or vx - 0.3, FLOOR, 8.2, vz, vz + 0.3, 0.4, "prop")
+		glassBox(model, "VestibuleLite", cf, sx < 0 and -vx + 0.3 or 3.9, sx < 0 and -3.9 or vx - 0.3, FLOOR, 8.2, vz, vz + 0.3, 0.4, "prop")
 		box(model, "VestibulePost", cf, sx < 0 and -3.9 or 3.7, sx < 0 and -3.7 or 3.9, FLOOR, 8.4, vz - 0.1, vz + 0.4, Color3.fromRGB(176, 180, 190), M.Metal, "deco")
 	end
 	box(model, "VestibuleFloor", cf, -vx, vx, -1.3, FLOOR, vz, 0, Color3.fromRGB(206, 200, 196), M.Concrete, "solid")
-	box(model, "VestibuleHeader", cf, -vx, vx, 8.2, 10.2, vz - 0.05, vz + 0.35, Color3.fromRGB(176, 180, 190), M.Metal, "deco")
+	box(model, "VestibuleHeader", cf, -vx + 0.3, vx - 0.3, 8.2, 10.2, vz - 0.05, vz + 0.35, Color3.fromRGB(176, 180, 190), M.Metal, "deco")
 	sign(model, "Welcome", cf, -4.5, 4.5, 8.5, 9.9, vz - 0.13, vz - 0.05, C.White, "Welcome! Open every day", BRAND, 40, 120)
 	box(model, "Canopy", cf, -9.5, 9.5, 10.2, 10.9, vz - 2.6, -1.6, C.White, M.Concrete, "decoS")
 	box(model, "CanopyEdge", cf, -9.6, 9.6, 10.2, 10.9, vz - 2.75, vz - 2.6, BRAND, M.SmoothPlastic, "deco")
@@ -290,7 +290,7 @@ local function parking(model: Model, cf: CFrame, geo: TownKit.Geo): (number, num
 			box(model, "IslandGrass", cf, x0 + 0.2, x1 - 0.2, LOT_Y + 0.5, LOT_Y + 0.55, row[1] + 0.7, row[2] - 0.7, C.Lawn, M.Grass, "deco")
 		end
 		-- (au bout d'une ligne de places, côté allée, sur un petit socle)
-		local lx, lz = sx * 21, -40.6
+		local lx, lz = sx * 21, -39.4
 		box(model, "LightBase", cf, lx - 0.6, lx + 0.6, LOT_Y, LOT_Y + 1, lz - 0.6, lz + 0.6, C.Curb, M.Concrete, "prop")
 		TownKit.Column(model, "LightPole", (cf * CFrame.new(lx, LOT_Y + 1, lz)).Position, 15, 0.5, C.Metal, M.Metal, "prop")
 		box(model, "LightArm", cf, lx - 2.6, lx + 2.6, LOT_Y + 15.6, LOT_Y + 16, lz - 0.2, lz + 0.2, C.Metal, M.Metal, "deco")

@@ -96,11 +96,8 @@ local function gableRoof(parent: Instance, cf: CFrame, w: number, d: number, h: 
 	TownKit.Wedge(parent, "Roof", Vector3.new(w + 1.6, h, half), cf * CFrame.new(0, h / 2, d / 2 - half / 2), color, M.ClayRoofTiles, "decoS")
 	TownKit.Wedge(parent, "Roof", Vector3.new(w + 1.6, h, half), cf * CFrame.new(0, h / 2, d / 2 + half / 2) * CFrame.Angles(0, math.pi, 0), color, M.ClayRoofTiles, "decoS")
 	part(parent, "Ridge", Vector3.new(w + 1.8, 0.5, 0.8), cf * CFrame.new(0, h + 0.1, d / 2), color:Lerp(Color3.new(0, 0, 0), 0.25), M.Slate, "deco")
-	-- pignons (triangles) : deux coins sous le toit de chaque côté
-	for _, sx in ipairs({ -1, 1 }) do
-		TownKit.Wedge(parent, "Gable", Vector3.new(0.4, h - 0.2, d / 2), cf * CFrame.new(sx * (w / 2 - 0.2), (h - 0.2) / 2, d / 4), C.Cream, M.Plaster, "deco")
-		TownKit.Wedge(parent, "Gable", Vector3.new(0.4, h - 0.2, d / 2), cf * CFrame.new(sx * (w / 2 - 0.2), (h - 0.2) / 2, d * 3 / 4) * CFrame.Angles(0, math.pi, 0), C.Cream, M.Plaster, "deco")
-	end
+	-- (v9.7) plus de coins "pignon" : ils étaient ENFERMÉS dans le toit
+	-- (invisibles) et leurs faces se confondaient avec celles du toit
 end
 
 -- (v9.6) partagés avec TownShops (boutiques où l'on entre)
@@ -309,7 +306,8 @@ function TownBuildings.TownHall(parent: Instance, cf: CFrame): (Model, Screen)
 	TownKit.Wedge(model, "Roof", Vector3.new(w, 6, d / 2), top * CFrame.new(0, 3, d * 3 / 4) * CFrame.Angles(0, math.pi, 0), roof, M.Slate, "decoS")
 	-- tour de l'horloge (au-dessus du portique)
 	local tower = cf * CFrame.new(0, h + 1.4, 8)
-	part(model, "Tower", Vector3.new(12, 16, 12), tower * CFrame.new(0, 8, 0), wall, M.Limestone, "solid")
+	-- (v9.7 : pied de la tour 0,1 au-dessus du bas du toit : faces non confondues)
+	part(model, "Tower", Vector3.new(12, 15.9, 12), tower * CFrame.new(0, 8.05, 0), wall, M.Limestone, "solid")
 	part(model, "TowerCornice", Vector3.new(13.4, 1, 13.4), tower * CFrame.new(0, 16.5, 0), trim, M.Marble, "deco")
 	local clock = part(model, "Clock", Vector3.new(0.6, 8, 8), tower * CFrame.new(0, 9, -6.2) * CFrame.Angles(0, math.rad(90), 0), C.White, M.SmoothPlastic, "deco")
 	;(clock :: Part).Shape = Enum.PartType.Cylinder

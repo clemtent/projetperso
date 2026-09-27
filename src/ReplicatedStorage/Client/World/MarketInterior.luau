@@ -82,6 +82,7 @@ local MAX_TAGS = 5
 local PX = WorldLayout.PX
 local GAP = 0.05
 local FLOOR_TOP = 0.07 -- dessus du revêtement de sol (repère F)
+local MAX_ITEM_PARTS = 36 -- (budget) un objet exposé plus lourd laisse sa place au suivant
 
 ----------------------------------------------------------------------
 -- Pièces
@@ -203,7 +204,7 @@ end
 -- État
 ----------------------------------------------------------------------
 
-type Slot = { CF: CFrame, MaxW: number, MaxH: number, MaxD: number, Tag: CFrame, WallZ: number? }
+type Slot = { CF: CFrame, MaxW: number, MaxH: number, MaxD: number, Tag: CFrame, WallZ: number?, Flank: number?, Tint: Color3? }
 
 type Display = {
 	Entry: ShopUI.Entry,
@@ -343,7 +344,8 @@ local function productRow(parent: Instance, S: CFrame, y: number, kind: string, 
 		if group <= 0 then
 			group = 2 + math.floor(hash(seed + i, 3) * 3)
 			if tint then
-				color = tint:Lerp(pick(PASTEL, seed + i, 5), 0.25 + hash(seed + i, 7) * 0.3)
+				-- (cartons "maison" : couleurs vives teintées par le rayon)
+				color = pick(PALETTE, seed + i, 5):Lerp(tint, 0.35 + hash(seed + i, 7) * 0.2)
 			elseif kind == "Bottle" then
 				color = pick(DRINKS, seed + i, 5)
 			elseif kind == "Care" then
@@ -433,8 +435,10 @@ local function cart(parent: Instance, P: CFrame, handle: Color3?)
 		local side = box(parent, "CartSide", P, sx * 0.85 - 0.03, sx * 0.85 + 0.03, 1.4, 2.9, -1.35, 1.2, wire, M.Metal)
 		side.Transparency = 0.35
 		box(parent, "CartPost", P, sx * 0.55 - 0.06, sx * 0.55 + 0.06, 0.35, 1.3, 1.02, 1.14, wire, M.Metal)
-		cylX(parent, "Wheel", P, sx * 0.62 - 0.1, sx * 0.62 + 0.1, 0.26, -1.05, 0.44, rgb(50, 50, 58), M.Rubber)
-		cylX(parent, "Wheel", P, sx * 0.62 - 0.1, sx * 0.62 + 0.1, 0.26, 0.95, 0.44, rgb(50, 50, 58), M.Rubber)
+	end
+	-- roues (une pièce par essieu : les deux roues d'un même côté vues de face)
+	for _, z in ipairs({ -1.05, 0.95 }) do
+		cylX(parent, "Wheels", P, -0.72, 0.72, 0.26, z, 0.44, rgb(50, 50, 58), M.Rubber)
 	end
 	local front = box(parent, "CartFront", P, -0.82, 0.82, 1.4, 2.9, -1.38, -1.32, wire, M.Metal)
 	front.Transparency = 0.35
@@ -623,8 +627,22 @@ local function buildItem(entry: ShopUI.Entry, slot: Slot): Model?
 	return model
 end
 
-local function placeDisplay(m: Market, parent: Instance, slot: Slot, entry: ShopUI.Entry)
+local function modelParts(model: Model): number
+	local n = 0
+	for _, x in ipairs(model:GetDescendants()) do
+		if x:IsA("BasePart") then
+			n += 1
+		end
+	end
+	return n
+end
+
+local function placeDisplay(m: Market, parent: Instance, slot: Slot, entry: ShopUI.Entry, force: boolean?): boolean
 	local model = buildItem(entry, slot)
+	if model and not force and modelParts(model) > MAX_ITEM_PARTS then
+		model:Destroy()
+		return false
+	end
 	local d: Display = { Entry = entry, Model = model, Labels = {} }
 	local height = 1
 	if model then
@@ -636,17 +654,30 @@ local function placeDisplay(m: Market, parent: Instance, slot: Slot, entry: Shop
 		model.Parent = parent
 		local fp = model:GetAttribute("Footprint")
 		height = typeof(fp) == "Vector3" and fp.Y or height
-		stats.Items += 1
-		for _, x in ipairs(model:GetDescendants()) do
-			if x:IsA("BasePart") then
-				partCount += 1
+		-- (rayon plein : l'objet "en carton" de part et d'autre de l'objet exposé)
+		local flank = slot.Flank
+		if flank and typeof(fp) == "Vector3" then
+			local half = math.min(fp.X, slot.MaxW) / 2
+			local tint = slot.Tint or rgb(236, 226, 214)
+			local seed = #m.Displays * 7
+			for _, sx in ipairs({ -1, 1 }) do
+				local x = half + 0.35
+				if x + 0.85 <= flank then
+					-- (la boîte de l'objet : couleur vive, bande claire = "étiquette")
+					local c = pick(PALETTE, seed + sx, 71):Lerp(tint, 0.3)
+					box(parent, "ItemBox", slot.CF, math.min(sx * x, sx * (x + 0.8)), math.max(sx * x, sx * (x + 0.8)), 0.02, 0.95, -0.34, 0.34, c, M.SmoothPlastic)
+				end
 			end
 		end
+		stats.Items += 1
+		partCount += modelParts(model)
 	end
 	local center = (slot.CF * CFrame.new(0, math.max(0.5, height / 2), 0)).Position
 	addTag(parent, d, slot.Tag, center)
 	table.insert(m.Displays, d)
+	return true
 end
+
 
 -- Échantillon régulier de `k` éléments (du moins cher au plus cher)
 local function spread<T>(list: { T }, k: number): { T }
@@ -687,6 +718,30 @@ local function categoryEntries(categories: { string }): { ShopUI.Entry }
 	return list
 end
 
+-- Remplit des emplacements avec les objets d'une liste (du moins cher au
+-- plus cher, échantillon régulier) ; un objet trop lourd cède sa place au
+-- suivant de la liste
+local function fillJobs(m: Market, parent: Instance, jobs: { () -> () }, slots: { Slot }, entries: { ShopUI.Entry })
+	local pool = spread(entries, math.min(#entries, #slots * 3))
+	local cursor = 1
+	for i, slot in ipairs(slots) do
+		table.insert(jobs, function()
+			-- (on vise l'échantillon régulier, puis on avance si trop lourd)
+			cursor = math.max(cursor, math.floor(1 + (i - 1) * #pool / #slots))
+			for _ = 1, 4 do
+				local entry = pool[cursor]
+				if not entry then
+					return
+				end
+				cursor += 1
+				if placeDisplay(m, parent, slot, entry, false) then
+					return
+				end
+			end
+		end)
+	end
+end
+
 ----------------------------------------------------------------------
 -- Niveau 1 : dehors (parking, chariots, camion, vitrines)
 ----------------------------------------------------------------------
@@ -699,7 +754,7 @@ local function outsideJobs(m: Market, parent: Instance): { () -> () }
 	local cf = m.MCF
 	local lotY = -0.5
 	-- voitures garées (rangée A : nez vers le bord ; rangée B : nez vers le magasin)
-	local spots = { { "A", 2 }, { "A", 5 }, { "A", 9 }, { "B", 1 }, { "B", 4 }, { "B", 8 }, { "B", 10 } }
+	local spots = { { "A", 2 }, { "A", 7 }, { "B", 1 }, { "B", 4 }, { "B", 9 } }
 	for index, spot in ipairs(spots) do
 		table.insert(jobs, function()
 			local cm = carModels()
@@ -733,15 +788,14 @@ local function outsideJobs(m: Market, parent: Instance): { () -> () }
 			box(parent, "CorralBack", P, -1.4, 1.4, 0, 2.6, 4.32, 4.48, rgb(176, 180, 190), M.Metal)
 			local roof = box(parent, "CorralSign", P, -1.6, 1.6, 2.6, 3.4, 4.2, 4.6, BRAND, M.SmoothPlastic)
 			label(roof, Enum.NormalId.Front, "🛒", WHITE, nil, 30, 120)
-			for k = 0, 2 do
-				cart(parent, P * CFrame.new(0, 0, -2.4 + k * 1.4) * CFrame.Angles(0, math.pi, 0))
+			for k = 0, 1 do
+				cart(parent, P * CFrame.new(0, 0, -1.6 + k * 1.4) * CFrame.Angles(0, math.pi, 0))
 			end
 		end)
 	end
 	-- chariots laissés devant l'entrée + bacs fleuris de part et d'autre du sas
 	table.insert(jobs, function()
-		cart(parent, cf * CFrame.new(-11, 0, -4) * CFrame.Angles(0, math.rad(200), 0))
-		cart(parent, cf * CFrame.new(13, lotY, -14) * CFrame.Angles(0, math.rad(70), 0))
+		cart(parent, cf * CFrame.new(-15.5, 0, -6.2) * CFrame.Angles(0, math.rad(200), 0))
 		for _, sx in ipairs({ -1, 1 }) do
 			local P = cf * CFrame.new(sx * 11.2, 0, -3)
 			box(parent, "Planter", P, -1.4, 1.4, 0, 1.4, -1, 1, rgb(250, 250, 252), M.SmoothPlastic, true)
@@ -945,17 +999,21 @@ local function realSlots(m: Market, index: number): { Slot }
 	local S = faceFrame(m.F, spec[1], spec[2])
 	local slots = {}
 	local len = GZ1 - GZ0 - 0.8
+	local kind = spec[3] :: string
+	local tint = HouseCommon.CategoryTint(string.sub(kind, 6))
 	for _, level in ipairs({ 2, 3 }) do
 		local y = LEVELS[level]
-		for i = 1, 4 do
-			local x = -len / 2 + (i - 0.5) * len / 4
+		for i = 1, 3 do
+			local x = -len / 2 + (i - 0.5) * len / 3
 			table.insert(slots, {
 				CF = S * CFrame.new(x, y, 0.62),
-				MaxW = len / 4 - 0.8,
+				MaxW = 3.2,
 				MaxH = CLEAR - 0.1,
 				MaxD = 1.05,
 				Tag = S * CFrame.new(x, y - 0.25, -0.14),
 				WallZ = 1.24 - 0.62 - 0.06 - GAP,
+				Flank = len / 3 / 2 - 0.12,
+				Tint = tint,
 			})
 		end
 	end
@@ -970,7 +1028,7 @@ local function produce(m: Market, parent: Instance)
 		local z0, z1 = seg[1], seg[2]
 		box(parent, "ProduceBase", F, -33.9, -28, FLOOR_TOP, 2.6, z0, z1, rgb(120, 170, 96), M.WoodPlanks, true)
 		-- plateau incliné vers l'allée
-		local top = newPart(parent, "ProduceTable", Vector3.new(5.6, 0.25, z1 - z0), F * CFrame.new(-31, 3.05, (z0 + z1) / 2) * CFrame.Angles(0, 0, math.rad(-14)), wood, M.WoodPlanks)
+		local top = newPart(parent, "ProduceTable", Vector3.new(5.6, 0.25, z1 - z0 - 0.1), F * CFrame.new(-31, 3.05, (z0 + z1) / 2) * CFrame.Angles(0, 0, math.rad(-14)), wood, M.WoodPlanks)
 		top.CanCollide = true
 		-- cagettes + fruits
 		local nz = math.floor((z1 - z0) / 2)
@@ -1048,8 +1106,8 @@ local function fridges(m: Market, parent: Instance)
 		for level = 0, 2 do
 			local y = 1.1 + level * 2.2
 			box(parent, "FridgeShelf", F, ux0 + 0.25, ux0 + uw - 0.25, y - 0.1, y, 42.2, 43.35, rgb(220, 226, 236), M.Metal)
-			for k = 0, 3 do
-				local x = ux0 + 0.62 + k * (uw - 1.24) / 3
+			for k = 0, 2 do
+				local x = ux0 + 0.7 + k * (uw - 1.4) / 2
 				local color = pick(PASTEL, u * 11 + level * 3 + k, 21)
 				if (u + level) % 2 == 0 then
 					cyl(parent, "Milk", F, x, y, 42.75, 1.2, 0.5, color, M.SmoothPlastic)
@@ -1065,7 +1123,7 @@ local function fridges(m: Market, parent: Instance)
 		box(parent, "FridgeHandle", F, cx + uw / 2 - 0.5, cx + uw / 2 - 0.35, 3, 5.4, 41.8, 41.95, rgb(176, 180, 190), M.Metal)
 	end
 	box(parent, "FridgeFrame", F, x1 - 0.08, x1, 0.4, 7.9, 41.95, 43.4, rgb(200, 204, 214), M.Metal)
-	box(parent, "FridgeKick", F, x0, x1, FLOOR_TOP, 0.5, 41.95, 43.4, rgb(96, 100, 116), M.Metal)
+	box(parent, "FridgeKick", F, x0 + 0.1, x1 - 0.1, FLOOR_TOP, 0.5, 41.97, 43.38, rgb(96, 100, 116), M.Metal)
 	-- bacs de surgelés (couvercles vitrés)
 	for i = 0, 2 do
 		local bx0 = -19 + i * 8.6
@@ -1098,8 +1156,8 @@ end
 
 local function electronicsSlots(m: Market): { Slot }
 	local slots = {}
-	for i = 1, 6 do
-		local x = 15.8 + (i - 0.5) * 17.6 / 6
+	for i = 1, 4 do
+		local x = 15.8 + (i - 0.5) * 17.6 / 4
 		-- (repère tourné : LookVector vers l'allée, -Z monde intérieur)
 		local S = m.F * CFrame.new(x, 2.75, 43.7)
 		table.insert(slots, { CF = S, MaxW = 2.4, MaxH = 2.8, MaxD = 1.8, Tag = m.F * CFrame.new(x, 2.3, 42.45), WallZ = 1.0 })
@@ -1115,7 +1173,8 @@ local function gardenDecor(m: Market, parent: Instance)
 		local z0, z1 = seg[1], seg[2]
 		for step = 0, 2 do
 			local x0 = 29.6 + step * 1.45
-			box(parent, "GardenStep", F, x0, 33.95, FLOOR_TOP, 0.9 + step * 1.3, z0, z1, green:Lerp(WHITE, step * 0.08), M.WoodPlanks, true)
+			-- (chaque marche un peu plus courte : jamais de faces confondues)
+			box(parent, "GardenStep", F, x0, 33.95 - step * 0.04, FLOOR_TOP, 0.9 + step * 1.3, z0 + step * 0.05, z1 - step * 0.05, green:Lerp(WHITE, step * 0.08), M.WoodPlanks, true)
 		end
 		-- pots en terre cuite sur la marche haute
 		for k = 0, 1 do
@@ -1136,7 +1195,7 @@ local function gardenSlots(m: Market): { Slot }
 	local slots = {}
 	for _, seg in ipairs({ { 16, 22.5 }, { 23.5, 30 }, { 31, 37.5 } }) do
 		local z0, z1 = seg[1], seg[2]
-		for step = 0, 1 do
+		for step = 1, 1 do
 			for k = 0, 1 do
 				local x = 29.6 + step * 1.45 + 0.72
 				local z = z0 + 1.6 + k * (z1 - z0 - 3.2)
@@ -1384,31 +1443,16 @@ local function fullJobs(m: Market, parent: Instance): { () -> () }
 		shoppers(m, parent)
 	end)
 	-- vrais objets de la maison : rayons, électronique, jardin
-	local placements: { { Slot: Slot, Entry: ShopUI.Entry } } = {}
 	for index, spec in ipairs(FACES) do
 		local kind = spec[3] :: string
 		if string.sub(kind, 1, 5) == "Real:" then
 			local category = string.sub(kind, 6)
 			local categories = category == "Gaming" and { "Gaming", "Setup" } or { category }
-			local slots = realSlots(m, index)
-			for i, entry in ipairs(spread(categoryEntries(categories), #slots)) do
-				table.insert(placements, { Slot = slots[i], Entry = entry })
-			end
+			fillJobs(m, parent, jobs, realSlots(m, index), categoryEntries(categories))
 		end
 	end
-	local tech = electronicsSlots(m)
-	for i, entry in ipairs(spread(categoryEntries({ "Electronics" }), #tech)) do
-		table.insert(placements, { Slot = tech[i], Entry = entry })
-	end
-	local garden = gardenSlots(m)
-	for i, entry in ipairs(spread(categoryEntries({ "Plants" }), #garden)) do
-		table.insert(placements, { Slot = garden[i], Entry = entry })
-	end
-	for _, p in ipairs(placements) do
-		table.insert(jobs, function()
-			placeDisplay(m, parent, p.Slot, p.Entry)
-		end)
-	end
+	fillJobs(m, parent, jobs, electronicsSlots(m), categoryEntries({ "Electronics" }))
+	fillJobs(m, parent, jobs, gardenSlots(m), categoryEntries({ "Plants" }))
 	return jobs
 end
 

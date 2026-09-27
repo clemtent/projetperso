@@ -192,8 +192,8 @@ local stats = { Built = 0, Destroyed = 0, Parts = 0 }
 -- Fenêtres (repère F : face de la coque à z = 0, dehors vers -Z)
 ----------------------------------------------------------------------
 
--- Couches (z) : verre [-0.12, -0.04] ; rideaux / meneaux [-0.22, -0.14] ;
--- traverse [-0.26, -0.18] ; parement [-SKIN, 0] ; appuis, linteaux,
+-- Couches (z) : verre [-0.12, -0.04] ; stores [-0.2, -0.13] ; meneaux
+-- [-0.24, -0.16] ; traverse [-0.28, -0.2] ; parement [-SKIN, 0] ; appuis, linteaux,
 -- volets, balcons : devant le parement
 local SKIN = 0.45
 
@@ -203,17 +203,17 @@ local function windowTrim(parent: Instance, F: CFrame, x: number, y0: number, y1
 	local hw = ww / 2
 	local front = -SKIN
 	if opts.Mullion then
-		box(parent, "Mullion", F, x - 0.09, x + 0.09, y0, y1, -0.22, -0.14, trim, M.SmoothPlastic)
+		box(parent, "Mullion", F, x - 0.09, x + 0.09, y0, y1, -0.24, -0.16, trim, M.SmoothPlastic)
 	end
 	if opts.Transom then
 		local ty = y0 + (y1 - y0) * 0.66
-		box(parent, "Transom", F, x - hw, x + hw, ty - 0.09, ty + 0.09, -0.26, -0.18, trim, M.SmoothPlastic)
+		box(parent, "Transom", F, x - hw, x + hw, ty - 0.09, ty + 0.09, -0.28, -0.2, trim, M.SmoothPlastic)
 	end
 	local r = hash(opts.Seed, 7)
 	if opts.Curtain and r < 0.45 then
 		-- store intérieur à demi baissé (pas de lumière derrière)
 		local c = r < 0.2 and rgb(246, 236, 220) or rgb(236, 206, 214)
-		box(parent, "Blind", F, x - hw + 0.05, x + hw - 0.05, y1 - (y1 - y0) * (0.3 + r), y1, -0.2, -0.15, c, M.Fabric)
+		box(parent, "Blind", F, x - hw + 0.05, x + hw - 0.05, y1 - (y1 - y0) * (0.3 + r), y1, -0.2, -0.13, c, M.Fabric)
 	end
 	if opts.Sill ~= false then
 		box(parent, "Sill", F, x - hw - 0.35, x + hw + 0.35, y0 - 0.32, y0 + 0.03, front - 0.42, front, trim, M.Concrete)
@@ -487,8 +487,8 @@ local function upperFloors(b: Building, parent: Instance, F: CFrame, n: number)
 			for i, x in ipairs(xs) do
 				local g = box(parent, "Glass", F, x - 1.4, x + 1.4, y0, y1, -0.12, -0.04, GLASS, M.Glass)
 				g.Reflectance = 0.18
-				box(parent, "Mullion", F, x - 0.08, x + 0.08, y0, y1, -0.22, -0.14, WHITE, M.Wood)
-				box(parent, "Transom", F, x - 1.4, x + 1.4, y0 + 3.1, y0 + 3.26, -0.26, -0.18, WHITE, M.Wood)
+				box(parent, "Mullion", F, x - 0.08, x + 0.08, y0, y1, -0.24, -0.16, WHITE, M.Wood)
+				box(parent, "Transom", F, x - 1.4, x + 1.4, y0 + 3.1, y0 + 3.26, -0.28, -0.2, WHITE, M.Wood)
 				-- croix de Saint-André dans l'allège, entre deux fenêtres
 				if i < #xs then
 					local mid = (x + xs[i + 1]) / 2
@@ -610,7 +610,7 @@ local function roofExtras(b: Building, parent: Instance, F: CFrame)
 		local glass = newPart(parent, "OculusGlass", Vector3.new(0.3, 1.7, 1.7), F * CFrame.new(0, cy, -0.24) * CFrame.Angles(0, math.rad(90), 0), GLASS, M.Glass)
 		;(glass :: Part).Shape = Enum.PartType.Cylinder
 		for _, sx in ipairs({ -1, 1 }) do
-			local gutter = newPart(parent, "Gutter", Vector3.new(d + 1, 0.4, 0.4), F * CFrame.new(sx * (hw + 0.85), h + 0.35, d / 2) * CFrame.Angles(0, math.rad(90), 0), rgb(236, 236, 240), M.Metal)
+			local gutter = newPart(parent, "Gutter", Vector3.new(d + 0.6, 0.4, 0.4), F * CFrame.new(sx * (hw + 0.85), h + 0.35, d / 2) * CFrame.Angles(0, math.rad(90), 0), rgb(236, 236, 240), M.Metal)
 			;(gutter :: Part).Shape = Enum.PartType.Cylinder
 		end
 		rodY(parent, "Finial", F, 0, h + 0.6 + roofH + 0.4, h + 0.6 + roofH + 1.6, -0.2, 0.25, rgb(214, 180, 90), M.Metal)

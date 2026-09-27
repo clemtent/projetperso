@@ -131,8 +131,14 @@ local function ball(list: { Spec }, tier: number, name: string, center: Vector3,
 	add(list, tier, "Ball", name, V(d, d, d), CFrame.new(center), color, M.Grass, profile or "deco")
 end
 
+-- (grappes / étages : chaque ovale tourne un peu sur lui-même, d'un angle
+-- différent de ses voisins : même un détecteur qui prendrait l'ovale pour
+-- sa boîte n'y trouverait aucune face parallèle confondue ; palmes, rideaux
+-- et racines gardent leur orientation)
+local SPIN = { Crown = true, CrownTop = true, Cluster = true, Tier = true, Tip = true, Bough = true, Petals = true }
 local function egg(list: { Spec }, tier: number, name: string, cf: CFrame, size: Vector3, color: Color3, profile: string?, material: Enum.Material?)
-	add(list, tier, "Egg", name, size, cf, color, material or M.Grass, profile or "deco")
+	local c = SPIN[name] and cf * CFrame.Angles(0, 0.3 + (#list % 7) * 0.33, 0) or cf
+	add(list, tier, "Egg", name, size, c, color, material or M.Grass, profile or "deco")
 end
 
 -- cylindre debout (pied `bottom`)
@@ -229,10 +235,10 @@ local function cherry(list: { Spec }, c: Ctx)
 	local yaw = CFrame.Angles(0, -A, 0)
 	egg(list, 0, "Crown", CFrame.new(0, H * 0.71, 0) * yaw, V(H * 0.64, H * 0.36, H * 0.56) * s, P[2], "decoS")
 	egg(list, 0, "Crown", CFrame.new(tips[1] + V(0, H * 0.06, 0)) * yaw, V(H * 0.42, H * 0.27, H * 0.38) * s, P[3], "decoS")
-	egg(list, 0, "Crown", CFrame.new(tips[2] + V(0, H * 0.06, 0)) * yaw, V(H * 0.4, H * 0.26, H * 0.36) * s, P[1], "decoS")
+	egg(list, 0, "Crown", CFrame.new(tips[2] + V(0, H * 0.085, 0)) * yaw, V(H * 0.4, H * 0.26, H * 0.36) * s, P[1], "decoS")
 	egg(list, 1, "CrownTop", CFrame.new(dir(A + 3.6) * H * 0.06 + V(0, H * 0.89, 0)) * yaw, V(H * 0.36, H * 0.22, H * 0.34) * s, P[3])
 	egg(list, 2, "Cluster", CFrame.new(tips[3] + V(0, H * 0.05, 0)) * yaw, V(H * 0.3, H * 0.2, H * 0.3) * s, P[2]:Lerp(P[1], 0.5))
-	egg(list, 2, "Cluster", CFrame.new(dir(A + 0.9) * H * 0.3 + V(0, H * 0.81, 0)) * yaw, V(H * 0.24, H * 0.16, H * 0.24) * s, P[3])
+	egg(list, 2, "Cluster", CFrame.new(dir(A + 0.9) * H * 0.3 + V(0, H * 0.835, 0)) * yaw, V(H * 0.24, H * 0.16, H * 0.24) * s, P[3])
 	if c.Lawn then
 		-- pétales tombés : taches roses à plat sur la pelouse
 		for k = 0, 2 do

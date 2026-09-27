@@ -21,6 +21,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
 local TownKit = require(script.Parent.TownKit)
+local TownVehicles = require(script.Parent.TownVehicles) -- (v9.7, VEHICLES97) bus, 2-roues
 
 local TownEntrance = {}
 
@@ -269,30 +270,6 @@ end
 -- Dehors : route, rond-point, bus, parking
 ----------------------------------------------------------------------
 
-local function bus(folder: Instance, cf: CFrame)
-	local model = TownKit.Model(folder, "Bus")
-	local body = Color3.fromRGB(255, 186, 214)
-	part(model, "Body", Vector3.new(7.4, 7, 26), cf * CFrame.new(0, 4.6, 0), body, M.SmoothPlastic, "solid")
-	part(model, "Roof", Vector3.new(7, 0.6, 24), cf * CFrame.new(0, 8.4, 0), C.White, M.SmoothPlastic, "deco")
-	part(model, "Stripe", Vector3.new(7.5, 0.8, 25.8), cf * CFrame.new(0, 3.4, 0), C.HotPink, M.SmoothPlastic, "deco")
-	part(model, "Windows", Vector3.new(7.5, 2.6, 21), cf * CFrame.new(0, 6.3, 1.6), C.GlassDark, M.Glass, "deco")
-	part(model, "Windshield", Vector3.new(6.6, 3.6, 0.2), cf * CFrame.new(0, 6, -13.05), C.GlassDark, M.Glass, "deco")
-	local dest = part(model, "Destination", Vector3.new(5.6, 1, 0.2), cf * CFrame.new(0, 8, -13.1), Color3.fromRGB(30, 26, 40), M.SmoothPlastic, "deco")
-	local _, board = TownKit.Surface(dest, Enum.NormalId.Front, 30, Color3.fromRGB(30, 26, 40), 150, 0)
-	TownKit.Label(board, "Text", "🧠 DOPAMINE TOWN", 0.03, 0.05, 0.94, 0.9, Color3.fromRGB(255, 190, 90), Enum.Font.GothamBlack, false)
-	part(model, "Bumper", Vector3.new(7.6, 1, 0.6), cf * CFrame.new(0, 1.4, -13.1), C.MetalLight, M.Metal, "deco")
-	for _, x in ipairs({ -2.6, 2.6 }) do
-		TownKit.Glow(part(model, "Headlight", Vector3.new(1.2, 0.7, 0.2), cf * CFrame.new(x, 2.4, -13.1), C.Glow, M.SmoothPlastic, "deco"))
-	end
-	for _, z in ipairs({ -8.5, 8 }) do
-		for _, x in ipairs({ -3.5, 3.5 }) do
-			local w = part(model, "Wheel", Vector3.new(1, 2.8, 2.8), cf * CFrame.new(x, 1.4, z), Color3.fromRGB(40, 40, 46), M.Rubber, "deco")
-			;(w :: Part).Shape = Enum.PartType.Cylinder
-		end
-	end
-	part(model, "Door", Vector3.new(0.2, 5.4, 3.4), cf * CFrame.new(3.72, 3.85, -9.5), C.GlassDark, M.Glass, "deco")
-end
-
 local function busStop(folder: Instance, cf: CFrame)
 	local model = TownKit.Model(folder, "BusStop")
 	part(model, "Slab", Vector3.new(12, 0.3, 5), cf * CFrame.new(0, 0.15, 0), C.Walk, M.Pavement, "solid")
@@ -326,7 +303,9 @@ local function outside(folder: Instance, geo: TownKit.Geo, gcf: CFrame)
 	TownKit.Disc(model, "IslandGrass", (loop * CFrame.new(0, WALK_Y + 0.05, 0)).Position, 7.2, 0.3, C.Lawn, M.Grass, "deco")
 	TownKit.Tree(model, (loop * CFrame.new(0, WALK_Y, 0)).Position, 16, 77, "Cherry", { Tier = 1, Lawn = true }) -- (v9.7 NATURE97)
 	-- bus arrêté devant l'abribus (il vient de déposer les joueurs)
-	bus(model, gcf * CFrame.new(4.2, ROAD_Y, 28))
+	-- (v9.7, VEHICLES97) vrai bus de ville, portes côté abribus : construit
+	-- côté client (TownTraffic : vitres, sièges, barres) ; boîte solide ici
+	TownVehicles.Bus(model, gcf * CFrame.new(4.2, ROAD_Y, 28))
 	busStop(model, gcf * CFrame.new(13, WALK_Y - 0.3, 30) * CFrame.Angles(0, math.rad(90), 0))
 	part(model, "Sidewalk", Vector3.new(6, 1.3, len - 4), gcf * CFrame.new(11, WALK_Y - 0.65, len / 2 + 5), C.Walk, M.Pavement, "solid")
 	-- parking (côté gauche en arrivant de la ville)
@@ -339,6 +318,9 @@ local function outside(folder: Instance, geo: TownKit.Geo, gcf: CFrame)
 	for i, bay in ipairs({ 0, 1, 4 }) do
 		TownKit.Car(model, lot * CFrame.new(-12 + bay * 6, ROAD_Y, -9) * CFrame.Angles(0, math.pi, 0), colors[i], ({ "CityCar", "BubbleCar", "Hatchback" })[i], {}) -- (v9.6) CarModels
 	end
+	-- (v9.7, VEHICLES97) 2 places de plus occupées (voitures construites côté client)
+	TownKit.VehicleSpot(model, "Car", lot * CFrame.new(-12 + 2 * 6, ROAD_Y, -9) * CFrame.Angles(0, math.pi, 0), { CarId = "CityCar", Color = Color3.fromRGB(220, 44, 64), Stripe = true })
+	TownKit.VehicleSpot(model, "Car", lot * CFrame.new(-12 + 3 * 6, ROAD_Y, -9) * CFrame.Angles(0, math.pi, 0), { CarId = "BubbleCar", Color = Color3.fromRGB(128, 222, 190) })
 	TownKit.Lamp(model, (lot * CFrame.new(0, ROAD_Y, 6)).Position, 0, false, true)
 	geo.Reserve((loop * CFrame.new(0, 0, 0)).Position, 24)
 end
@@ -411,7 +393,9 @@ function TownEntrance.Build(folder: Instance, geo: TownKit.Geo): EntranceResult
 	welcomeSign(entrance, CFrame.lookAt(center + Vector3.new(19, 0, -24), center + Vector3.new(4, 0, 4)))
 	local map = mapBoard(entrance, CFrame.lookAt(center + Vector3.new(-19, 0, -22), center + Vector3.new(-4, 0, 6)), geo)
 	-- vélos
-	TownKit.BikeRack(entrance, CFrame.new(center + Vector3.new(26, 0, 12)) * CFrame.Angles(0, math.rad(90), 0), 2)
+	TownKit.BikeRack(entrance, CFrame.new(center + Vector3.new(26, 0, 12)) * CFrame.Angles(0, math.rad(90), 0), 3)
+	-- (v9.7, VEHICLES97) trottinettes / scooter garés à côté des vélos (client)
+	TownVehicles.TwoWheelers(entrance, CFrame.new(center + Vector3.new(24.5, 0, 18.5)) * CFrame.Angles(0, math.rad(90), 0), 3, 4)
 	-- dehors
 	outside(entrance, geo, gcf)
 	return { Map = map, Spawn = spawn }

@@ -21,6 +21,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
 local TownKit = require(script.Parent.TownKit)
 local TownBuildings = require(script.Parent.TownBuildings)
+local TownVehicles = require(script.Parent.TownVehicles) -- (v9.7, VEHICLES97) food truck
 local Greenery = require(ReplicatedStorage.Shared.Greenery) -- (v9.7, NATURE97) plan du lac
 
 local TownNature = {}
@@ -207,7 +208,7 @@ local function lake(folder: Instance, geo: TownKit.Geo, center: Vector3, radius:
 	-- jet d'eau (colonne + gerbe, transparentes, + particules douces)
 	local jx, jz = LAKE.Jet[1] * R, LAKE.Jet[2] * R
 	TownKit.Disc(model, "JetRipple", P(jx, jz, LAKE.WaterTop + 0.04), 2.2, 0.06, Color3.fromRGB(214, 238, 252), M.SmoothPlastic, "deco").Transparency = 0.35
-	local column = TownKit.Egg(model, "JetColumn", L * CFrame.new(jx, LAKE.WaterTop + 3.2, jz), Vector3.new(0.8, 6.4, 0.8), Color3.fromRGB(226, 244, 255), M.Glass, "deco")
+	local column = TownKit.Egg(model, "JetColumn", L * CFrame.new(jx, LAKE.WaterTop + 3.3, jz), Vector3.new(0.8, 6.4, 0.8), Color3.fromRGB(226, 244, 255), M.Glass, "deco")
 	column.Transparency = 0.35
 	local spray = TownKit.Egg(model, "JetSpray", L * CFrame.new(jx, LAKE.WaterTop + 6.2, jz), Vector3.new(3.2, 1.6, 3.2), Color3.fromRGB(236, 248, 255), M.Glass, "deco")
 	spray.Transparency = 0.45
@@ -489,14 +490,11 @@ local function market(folder: Instance, geo: TownKit.Geo, cf: CFrame)
 			part(model, "Canopy", Vector3.new(7.6 / 6, 0.2, 4.4), s * CFrame.new(-3.8 + (k + 0.5) * 7.6 / 6, 7, -0.2) * CFrame.Angles(math.rad(-14), 0, 0), k % 2 == 0 and colors[1] or C.White, M.Fabric, k == 0 and "decoS" or "deco")
 		end
 	end
-	-- food truck (camionnette + passe-plat + enseigne)
-	local truck = cf * CFrame.new(0, GROUND_Y, 8) * CFrame.Angles(0, math.rad(90), 0)
-	TownKit.Car(model, truck, Color3.fromRGB(255, 214, 120), "Van")
-	part(model, "Hatch", Vector3.new(0.2, 1.8, 5), truck * CFrame.new(-2.4, 4.4, 0.8), Color3.fromRGB(60, 50, 70), M.SmoothPlastic, "deco")
-	part(model, "HatchRoof", Vector3.new(2.2, 0.2, 5.4), truck * CFrame.new(-3.4, 5.6, 0.8) * CFrame.Angles(0, 0, math.rad(-15)), C.Pink, M.Fabric, "deco")
-	local sign = part(model, "TruckSign", Vector3.new(0.3, 1.6, 6), truck * CFrame.new(0, 6.6, 0.8), C.White, M.SmoothPlastic, "deco")
-	local _, body = TownKit.Surface(sign, Enum.NormalId.Left, 30, nil, 200, 0)
-	TownKit.Label(body, "Text", "🌮 Taco Party", 0.03, 0.05, 0.94, 0.9, C.HotPink, Enum.Font.FredokaOne, false)
+	-- food truck (v9.7, VEHICLES97) : vrai food truck posé SUR la place
+	-- (cabine, passe-plat + comptoir tournés vers le marché, auvent rayé,
+	-- menu, enseigne "🌮 Taco Party") ; version légère (~50 pièces)
+	local truck = cf * CFrame.new(0, GROUND_Y + 0.15, 9) * CFrame.Angles(0, math.rad(90), 0)
+	TownVehicles.FoodTruck(model, truck, Color3.fromRGB(255, 214, 120))
 	geo.Reserve(cf.Position, 19)
 end
 
@@ -511,7 +509,7 @@ local function flowerGarden(folder: Instance, geo: TownKit.Geo, cf: CFrame)
 		local row = cf * CFrame.new(0, GROUND_Y, -9 + i * 4.4)
 		part(model, "Soil", Vector3.new(20, 0.6, 2.4), row * CFrame.new(0, 0.3, 0), Color3.fromRGB(120, 86, 64), M.Ground, "prop")
 		-- feuillage de la planche, puis des bouquets ronds qui dépassent
-		TownKit.Egg(model, "Leaves", row * CFrame.new(0, 0.75, 0), Vector3.new(19.4, 1.1, 2), Color3.fromRGB(92, 156, 80), M.Grass, "deco")
+		TownKit.Egg(model, "Leaves", row * CFrame.new(0, 0.75, 0), Vector3.new(19.4, 1.1, 2.12), Color3.fromRGB(92, 156, 80), M.Grass, "deco")
 		for k = 0, 3 do
 			local color = TownKit.FLOWERS[(i + (k % 2) * 2) % #TownKit.FLOWERS + 1]
 			TownKit.Egg(model, "Flowers", row * CFrame.new(-7.2 + k * 4.8 + (hash(i, k + 120) - 0.5) * 0.8, 1.25 + hash(i, k + 126) * 0.15, (hash(i, k + 123) - 0.5) * 0.4), Vector3.new(3.4, 0.95, 1.7), color, M.SmoothPlastic, "deco")
@@ -528,7 +526,7 @@ local function flowerGarden(folder: Instance, geo: TownKit.Geo, cf: CFrame)
 		part(model, "PergolaBeam", Vector3.new(10, 0.4, 0.5), p * CFrame.new(0, 8.2, -3 + i * 1.5), C.White, M.Wood, "deco")
 	end
 	local lilac = Color3.fromRGB(200, 150, 230)
-	TownKit.Egg(model, "Vine", p * CFrame.new(-2, 8.9, 0), Vector3.new(6, 1.4, 7.4), Color3.fromRGB(120, 176, 96), M.Grass, "deco")
+	TownKit.Egg(model, "Vine", p * CFrame.new(-2, 8.9, 0), Vector3.new(6.3, 1.4, 7.4), Color3.fromRGB(120, 176, 96), M.Grass, "deco")
 	TownKit.Egg(model, "Vine", p * CFrame.new(2.4, 8.8, 0.5), Vector3.new(5.6, 1.3, 6.6), lilac, M.Grass, "deco")
 	for k = 0, 3 do
 		local x = -3.3 + k * 2.2
@@ -727,6 +725,16 @@ local function belt(folder: Instance, geo: TownKit.Geo)
 	local m = geo.Slots
 	local back = geo.PlotR + WorldLayout.PLOT_D / 2
 	local perSlot = m >= 11 and 2 or (m >= 8 and 3 or 5) -- (v9.7 : arbres plus riches, un peu moins nombreux)
+	-- (v9.7) jamais dans l'emprise d'une parcelle (maison + jardin), marge de 6 studs
+	local function inPlot(p: Vector3): boolean
+		for i = 1, geo.Count do
+			local rel = WorldLayout.PlotCFrame(i, geo.Count):PointToObjectSpace(p)
+			if math.abs(rel.X) < WorldLayout.PLOT_W / 2 + 6 and math.abs(rel.Z) < WorldLayout.PLOT_D / 2 + 6 then
+				return true
+			end
+		end
+		return false
+	end
 	for k = 0, m - 1 do
 		for j = 1, perSlot do
 			local a = geo.SlotAngle(k) + (j - 0.5 - perSlot / 2) / perSlot * (math.pi * 2 / m) + (hash(k, j) - 0.5) * 0.05
@@ -734,7 +742,7 @@ local function belt(folder: Instance, geo: TownKit.Geo)
 			local p = O + Vector3.new(math.sin(a) * r, GROUND_Y, math.cos(a) * r)
 			-- (pas d'arbre sur la route d'arrivée derrière la porte)
 			local rel = p - O
-			if not (math.abs(rel.X) < 58 and rel.Z > 0 and rel.Z < geo.Gate + 110) then
+			if not (math.abs(rel.X) < 58 and rel.Z > 0 and rel.Z < geo.Gate + 110) and not inPlot(p) then
 				-- (v9.7 NATURE97) bois : sapins, chênes, peupliers, bouleaux
 				local h = hash(k, j + 20)
 				TownKit.Tree(model, p, 14 + hash(k, j + 9) * 10, k * 50 + j, h < 0.4 and "Fir" or (h < 0.65 and "Oak" or (h < 0.85 and "Poplar" or "Birch")), { Lawn = true })
@@ -743,7 +751,10 @@ local function belt(folder: Instance, geo: TownKit.Geo)
 		-- coin entre deux parcelles (sommet du boulevard), côté extérieur
 		local va = geo.SlotAngle(k) + geo.HalfAngle
 		local vr = (geo.Front + 16) / math.cos(geo.HalfAngle)
-		TownKit.Tree(model, O + Vector3.new(math.sin(va) * vr, GROUND_Y, math.cos(va) * vr), 13, k * 91, k % 2 == 0 and "Oak" or "Maple", { Lawn = true })
+		local corner = O + Vector3.new(math.sin(va) * vr, GROUND_Y, math.cos(va) * vr)
+		if not inPlot(corner) then
+			TownKit.Tree(model, corner, 13, k * 91, k % 2 == 0 and "Oak" or "Maple", { Lawn = true })
+		end
 	end
 end
 

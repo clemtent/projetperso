@@ -720,8 +720,8 @@ function VehicleModels.BikeRack(opts: any?): Model
 			cylY(k, "HoopLeg", x, 0, 2.3, z, 0.16, STEEL, M.Metal)
 		end
 		cylZ(k, "HoopTop", x, 2.4, 0, 1.7, 0.16, STEEL, M.Metal)
-		-- coudes (petits coins arrondis)
-		for _, z in ipairs({ -0.85, 0.85 }) do
+		-- coudes (petits coins arrondis ; opts.Bends = false : version serveur)
+		for _, z in ipairs(if o.Bends == false then {} else { -0.85, 0.85 }) do
 			local p = newPart(k, "Part", "HoopBend", Vector3.new(0.2, 0.2, 0.2), CFrame.new(x, 2.33, z), STEEL, M.Metal)
 			;(p :: Part).Shape = Enum.PartType.Ball
 		end

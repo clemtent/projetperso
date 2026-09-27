@@ -22,6 +22,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
 local CarModels = require(ReplicatedStorage.Shared.CarModels) -- (v9.6, GARAGE96) voitures garées
+local VehicleModels = require(ReplicatedStorage.Shared.VehicleModels) -- (v9.7, VEHICLES97) bus, vélos, camions
 local Greenery = require(ReplicatedStorage.Shared.Greenery) -- (v9.7, NATURE97) arbres
 
 local TownKit = {}
@@ -558,7 +559,7 @@ function TownKit.Planter(parent: Instance, cf: CFrame, length: number, width: nu
 	local leaves = math.max(1, math.floor(length / 4 + 0.5))
 	for i = 1, leaves do
 		local x = -length / 2 + (i - 0.5) * length / leaves
-		TownKit.Egg(model, "Leaves", cf * CFrame.new(x, 2 + (i % 2) * 0.06, 0), Vector3.new(length / leaves + 0.6, 1.3, width - 0.5), C.GrassDark:Lerp(C.White, (i % 2) * 0.08), M.Grass, "deco")
+		TownKit.Egg(model, "Leaves", cf * CFrame.new(x, 2 + (i % 2) * 0.06, 0), Vector3.new(length / leaves + 0.6, 1.3, width - 0.46 - (i % 2) * 0.24), C.GrassDark:Lerp(C.White, (i % 2) * 0.08), M.Grass, "deco")
 	end
 	local n = math.max(2, math.floor(length / 2.2))
 	for i = 1, n do
@@ -570,24 +571,49 @@ function TownKit.Planter(parent: Instance, cf: CFrame, length: number, width: nu
 end
 
 -- Arceau à vélos + un vélo garé
-function TownKit.BikeRack(parent: Instance, cf: CFrame, bikes: number)
-	local model = TownKit.Model(parent, "BikeRack")
-	for i = 0, 2 do
-		local x = (i - 1) * 1.6
-		part(model, "Hoop", Vector3.new(0.2, 2.2, 0.2), cf * CFrame.new(x, 1.1, -0.9), C.MetalLight, M.Metal, "deco")
-		part(model, "Hoop", Vector3.new(0.2, 2.2, 0.2), cf * CFrame.new(x, 1.1, 0.9), C.MetalLight, M.Metal, "deco")
-		part(model, "HoopTop", Vector3.new(0.2, 0.2, 2), cf * CFrame.new(x, 2.2, 0), C.MetalLight, M.Metal, "deco")
+-- (v9.7, VEHICLES97) Place réservée à un véhicule construit côté CLIENT
+-- (TownTraffic, en flux : bus complet, vélos, trottinettes, voitures garées
+-- en plus...) : une Configuration (0 pièce) dans DopamineTown/VehicleSpots,
+-- attributs Kind + CF (au sol, avant vers -Z) + options (Color, Variant...).
+-- `collider` (facultatif) : boîte invisible solide côté serveur (1 pièce),
+-- pour qu'on ne traverse pas un bus / un camion.
+TownKit.SPOTS_FOLDER = "VehicleSpots"
+function TownKit.VehicleSpot(parent: Instance, kind: string, cf: CFrame, attrs: { [string]: any }?, collider: { Size: Vector3, CF: CFrame }?): Instance
+	local root = parent:FindFirstAncestor("DopamineTown") or parent
+	local folder = root:FindFirstChild(TownKit.SPOTS_FOLDER)
+	if not folder then
+		folder = Instance.new("Folder")
+		folder.Name = TownKit.SPOTS_FOLDER
+		folder.Parent = root
 	end
-	for i = 1, bikes do
-		local bcf = cf * CFrame.new((i - 2) * 1.6 + 0.4, 0, 0)
-		local frame = ({ C.Sky, C.Pink, C.Mint })[i % 3 + 1]
-		for _, z in ipairs({ -1.4, 1.4 }) do
-			local wheel = part(model, "Wheel", Vector3.new(0.15, 2, 2), bcf * CFrame.new(0, 1, z), C.Metal, M.Rubber, "deco")
-			;(wheel :: Part).Shape = Enum.PartType.Cylinder
+	local spot = Instance.new("Configuration")
+	spot.Name = kind
+	spot:SetAttribute("Kind", kind)
+	spot:SetAttribute("CF", cf)
+	for key, value in pairs(attrs or {}) do
+		spot:SetAttribute(key, value)
+	end
+	spot.Parent = folder
+	if collider then
+		part(parent, "VehicleCollider", collider.Size, collider.CF, C.White, M.SmoothPlastic, "ghost")
+	end
+	return spot
+end
+
+-- Arceaux à vélos (v9.7, VEHICLES97) : 3 arceaux inox en U (serveur, sans
+-- coudes : 10 pièces) + `bikes` vélos réalistes (cadre, roues à rayons,
+-- panier...) construits côté client entre les arceaux (TownTraffic).
+function TownKit.BikeRack(parent: Instance, cf: CFrame, bikes: number)
+	local model = VehicleModels.BikeRack({ Count = 3, Gap = 2.2, Plate = false, Bends = false })
+	model:PivotTo(cf)
+	model.Parent = parent
+	stats.Parts += tonumber(model:GetAttribute("PartCount")) or 0
+	local colors = { C.Sky, C.Pink, C.Mint, C.Lemon }
+	for i, x in ipairs({ -1.1, 1.1, 3.3, -3.3 }) do
+		if i > bikes then
+			break
 		end
-		-- (v9.6 : cadre plus large que la roue (0.24 > 0.15) : faces distinctes)
-		part(model, "Frame", Vector3.new(0.24, 0.22, 2.8), bcf * CFrame.new(0, 1.6, 0) * CFrame.Angles(math.rad(8), 0, 0), frame, M.Metal, "deco")
-		part(model, "Saddle", Vector3.new(0.4, 0.2, 0.8), bcf * CFrame.new(0, 2.3, 0.7), C.Metal, M.Leather, "deco")
+		TownKit.VehicleSpot(parent, "Bike", cf * CFrame.new(x, 0, 0.15), { Variant = if i == 3 then "Kid" else "City", Color = colors[i] })
 	end
 	return model
 end
