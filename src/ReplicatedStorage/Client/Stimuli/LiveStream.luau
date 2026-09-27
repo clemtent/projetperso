@@ -1390,6 +1390,7 @@ function LiveStream.Start(ctx)
 		DirX: number, -- direction de l'avant-bras (normalisée)
 		DirY: number,
 		Tip: number, -- longueur de l'outil tenu (baguettes) au-delà de la main
+		Sticks: { Frame }, -- les baguettes (cachées pendant le cœur avec les mains)
 	}
 	local function makeArm(side: number, restX: number, restY: number, chopsticks: boolean): Arm
 		local upper = box({ Name = "UpperArm", AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = WHITE, ZIndex = 1, Parent = armsLayer }, UDim.new(1, 0))
@@ -1400,10 +1401,12 @@ function LiveStream.Start(ctx)
 		UI.Stroke(fore, HOODIE_DARK, 1, 0.35)
 		-- Main : paume + pouce + plis des doigts (l'axe +Y local suit l'avant-bras)
 		local hand = box({ Name = "Hand", AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(13, 13), BackgroundTransparency = 1, ZIndex = 3, Parent = armsLayer })
+		local sticks: { Frame } = {}
 		if chopsticks then
 			for i, rotation in ipairs({ -10, -2 }) do
 				local stick = box({ Name = "Chopstick", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(6.5 + (i - 1.5) * 3, 5), Size = UDim2.fromOffset(1.8, 26), Rotation = rotation, BackgroundColor3 = WHITE, ZIndex = 1, Parent = hand }, 1)
 				grad(stick, Color3.fromRGB(190, 130, 80), Color3.fromRGB(120, 70, 40))
+				table.insert(sticks, stick)
 			end
 		end
 		local palm = box(at({ Name = "Palm", BackgroundColor3 = WHITE, ZIndex = 2, Parent = hand }, 6.5, 6.5, 13, 13), UDim.new(0.45, 0))
@@ -1427,6 +1430,7 @@ function LiveStream.Start(ctx)
 			DirX = 0,
 			DirY = 1,
 			Tip = chopsticks and 27 or 4,
+			Sticks = sticks,
 		}
 	end
 	local leftArm = makeArm(-1, -40, TABLE_Y + 14, false)
@@ -1808,6 +1812,7 @@ function LiveStream.Start(ctx)
 		rising = false,
 		lean = 0, -- elle se penche vers le chat pendant qu'elle lit ton message
 		leanUntil = 0,
+		sticksHidden = false,
 	}
 
 	local function wow(duration: number?)
@@ -3390,6 +3395,14 @@ function LiveStream.Start(ctx)
 			arm.X = approach(arm.X, arm.TX, 14, dt)
 			arm.Y = approach(arm.Y, arm.TY, 14, dt)
 			solveArm(arm, bob, S.lean)
+		end
+		-- Cœur avec les mains : les baguettes disparaissent (sinon elles barrent son visage)
+		local hideSticks = S.gesture == "Heart" and not mealBusy
+		if hideSticks ~= S.sticksHidden then
+			S.sticksHidden = hideSticks
+			for _, stick in ipairs(rightArm.Sticks) do
+				stick.Visible = not hideSticks
+			end
 		end
 		if S.gesture == "Heart" and effectsOn() and math.floor(S.clock * 3) ~= math.floor((S.clock - dt) * 3) then
 			spawnHeart("💖")

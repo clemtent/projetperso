@@ -406,9 +406,9 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 	local candies: { Candy } = {}
 	local function toolSize(): (number, number)
 		if Interface.IsTouch() then
-			return 56, 60
+			return 58, 60
 		end
-		return 52, 56
+		return 56, 56
 	end
 	local function tool(order: number, name: string, icon: string, caption: string, color: Color3, textColor: Color3?): Candy
 		local w, h = toolSize()

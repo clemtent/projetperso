@@ -34,6 +34,7 @@ local RAIL_TOP, RAIL_BOTTOM = 30, 110 -- course du palet (y du centre)
 
 local active: { [any]: any } = {}
 local smashers: { [any]: () -> () } = {}
+local cleanups: { [any]: () -> () } = {}
 
 local function clicksFor(level: number): number
 	return CLICKS[math.clamp(level, 1, #CLICKS)]
@@ -390,6 +391,24 @@ function MegaFinger.Start(ctx)
 		end
 	end
 
+	-- Arrêt (océan...) pendant un écrasement : le bouton retrouve sa taille de repos
+	cleanups[ctx] = function()
+		local tween = squashTween
+		squashTween = nil
+		if tween then
+			tween:Cancel()
+			tween:Destroy()
+		end
+		local button = squashButton
+		squashButton = nil
+		if button and button.Parent then
+			local size = button.Size
+			if size.X.Offset == 0 and size.Y.Offset == 0 and (size.X.Scale ~= 1 or size.Y.Scale ~= 1) then
+				button.Size = UDim2.fromScale(1, 1)
+			end
+		end
+	end
+
 	local function smash(level: number)
 		local button = GearKit.GetButtonRect()
 		if not button then
@@ -581,6 +600,11 @@ function MegaFinger.Stop(ctx)
 	local piece = active[ctx]
 	active[ctx] = nil
 	smashers[ctx] = nil
+	local cleanup = cleanups[ctx]
+	cleanups[ctx] = nil
+	if cleanup then
+		cleanup()
+	end
 	if piece then
 		piece:Destroy()
 	end
