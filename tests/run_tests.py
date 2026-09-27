@@ -551,7 +551,7 @@ test("Config.House : catalogue (ids, catégories, zones, motifs, prix)", functio
 
 	-- Catégories
 	local categoryIds = { "Furniture", "Decor", "Toys", "Plants", "Electronics", "Kitchen", "Doors", "Windows", "Lights", "Pets",
-		"Gaming", "Sports", "Adventure" } -- (v9.2)
+		"Gaming", "Sports", "Adventure", "Setup" } -- (v9.2, v9.5 : Dopamine Setup)
 	eq(check, #H.Categories, #categoryIds, "nombre de catégories")
 	for i, category in ipairs(H.Categories) do
 		eq(check, category.Id, categoryIds[i], "catégorie " .. i)
