@@ -69,6 +69,10 @@ Interface.DesignResolution = Theme.DesignResolution -- toile de référence de l
 Interface.Bleed = { Left = 0, Top = 0, Right = 0, Bottom = 0 }
 -- Rangée du bandeau (y ∈ [0, 30] de la toile) : largeur cachée par les boutons Roblox
 Interface.TickerInsets = { Left = 0, Right = 0 }
+-- Hauteur (pixels "design") en haut de la toile qui passe sous la barre Roblox
+-- (téléphone : la rangée du bandeau ; 0 ailleurs). Les calques Panels et
+-- Toasts commencent dessous : fenêtres et popups restent hors des boutons Roblox.
+Interface.SafeTop = 0
 
 -- Forçage du profil (tests dans Studio) : nil = détection automatique
 local deviceOverride: string? = nil
@@ -165,12 +169,22 @@ end
 -- Cadres étendus jusqu'aux bords de l'écran (voir Interface.ApplyBleed)
 local bleedTargets: { [GuiObject]: boolean } = setmetatable({}, { __mode = "k" }) :: any
 local BLEED_NAMES = { Dimmer = true, MailDimmer = true }
+-- Calques qui commencent sous Interface.SafeTop
+local SHIFTED_LAYERS = { "Panels", "Toasts" }
 
 local function applyBleedTo(object: GuiObject)
 	local b = Interface.Bleed
+	-- Dans un calque décalé (Panels / Toasts), le parent commence SafeTop plus bas
+	local shift = 0
+	for _, name in ipairs(SHIFTED_LAYERS) do
+		local layer = Interface.Layers[name]
+		if layer and object ~= layer and object:IsDescendantOf(layer) then
+			shift = Interface.SafeTop
+		end
+	end
 	object.AnchorPoint = Vector2.zero
-	object.Position = UDim2.fromOffset(-b.Left, -b.Top)
-	object.Size = UDim2.new(1, b.Left + b.Right, 1, b.Top + b.Bottom)
+	object.Position = UDim2.fromOffset(-b.Left, -(b.Top + shift))
+	object.Size = UDim2.new(1, b.Left + b.Right, 1, b.Top + b.Bottom + shift)
 end
 
 function Interface.Build(): ScreenGui
@@ -340,6 +354,13 @@ function Interface.Build(): ScreenGui
 			Bottom = bottom / scale,
 		}
 		Interface.TickerInsets = { Left = tickerLeft, Right = tickerRight }
+		local safeTop = reclaim and TICKER_ROW or 0
+		Interface.SafeTop = safeTop
+		for _, name in ipairs(SHIFTED_LAYERS) do
+			local layer = Interface.Layers[name]
+			layer.Position = UDim2.fromOffset(0, safeTop)
+			layer.Size = UDim2.new(1, 0, 1, -safeTop)
+		end
 		uiScale.Scale = scale
 		-- Root fait (zone utile / échelle) pour la couvrir exactement une fois agrandi
 		root.Position = UDim2.fromOffset(left, top)

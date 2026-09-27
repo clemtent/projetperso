@@ -1676,11 +1676,104 @@ def arcade_shop_test():
     return "\n".join(lines) + "\n" + ARCADE_SHOP_TESTS
 
 
+FRIEND_MAIL_TESTS = r"""
+do
+	local fn, err = loadstring(FRIEND_MAIL_SRC, "=FriendMailRules")
+	assert(fn, err)
+	local R = fn()
+	local NOW = 1760000000
+
+	test("FriendMailRules : anti-spam (10 min / 2 min, horloge abîmée ou en avance)", function(check)
+		eq(check, R.NewInterval, 600, "1 mail / 10 min")
+		eq(check, R.ReplyInterval, 120, "1 réponse / 2 min")
+		local ok, left = R.Check({ LastNew = 0, LastReply = 0 }, NOW, false)
+		check(ok and left == 0, "jamais envoyé : autorisé")
+		ok, left = R.Check({ LastNew = NOW - 148, LastReply = 0 }, NOW, false)
+		check(not ok and left == 452, "envoyé il y a 148 s : encore 452 s (" .. tostring(left) .. ")")
+		ok, left = R.Check({ LastNew = NOW - 148, LastReply = 0 }, NOW, true)
+		check(ok and left == 0, "la réponse a son propre délai")
+		ok, left = R.Check({ LastNew = 0, LastReply = NOW - 30 }, NOW, true)
+		check(not ok and left == 90, "réponse il y a 30 s : encore 90 s")
+		ok = R.Check({ LastNew = NOW - 600 }, NOW, false)
+		check(ok, "pile 10 min : autorisé")
+		ok, left = R.Check({ LastNew = NOW + 5000 }, NOW, false)
+		check(not ok and left == 600, "date dans le futur = maintenant (pas de blocage éternel)")
+		ok = R.Check({ LastNew = 0 / 0 }, NOW, false)
+		check(ok, "NaN = jamais envoyé")
+		ok = R.Check(nil, NOW, false)
+		check(ok, "pas de données : autorisé")
+		eq(check, R.Countdown(452), "7:32", "compte à rebours")
+		eq(check, R.Countdown(59.2), "1:00", "arrondi au-dessus")
+		eq(check, R.Countdown(0), "0:00", "zéro")
+		eq(check, R.Countdown(3723), "1:02:03", "heures")
+	end)
+
+	test("FriendMailRules : boîte stockée (30 max, 30 jours, doublons, invalides)", function(check)
+		local list = {}
+		for i = 1, 40 do
+			table.insert(list, { Id = "m" .. i, F = 100 + i, S = "s", B = "b", T = NOW - i * 3600 })
+		end
+		table.insert(list, { Id = "old", F = 5, S = "s", B = "b", T = NOW - 31 * 86400 })
+		table.insert(list, { Id = "m3", F = 999, S = "dup", B = "b", T = NOW })
+		table.insert(list, { Id = "bad", F = -1, S = "s", B = "b", T = NOW })
+		table.insert(list, { Id = "bad2", F = 7, S = 12, B = "b", T = NOW })
+		table.insert(list, "garbage")
+		local kept = R.TrimInbox(list, NOW)
+		eq(check, #kept, 30, "30 mails gardés")
+		eq(check, kept[1].Id, "m1", "le plus récent d'abord")
+		eq(check, kept[30].Id, "m30", "les plus vieux partent")
+		local ids = {}
+		for _, r in ipairs(kept) do
+			check(not ids[r.Id], "doublon " .. r.Id)
+			ids[r.Id] = true
+		end
+		check(not ids.old and not ids.bad and not ids.bad2, "vieux / invalides retirés")
+		eq(check, #R.TrimInbox(nil, NOW), 0, "boîte absente")
+		local appended = R.Append(kept, { Id = "new", F = 42, S = "hi", B = "yo", T = NOW }, NOW)
+		eq(check, #appended, 30, "ajout : toujours 30")
+		eq(check, appended[1].Id, "new", "ajout en tête")
+		local ops = { Delete = { m1 = true }, Read = { m2 = true }, Replied = { m4 = true }, Blocked = { ["103"] = true } }
+		local applied = R.ApplyOps(kept, ops, NOW)
+		local byId = {}
+		for _, r in ipairs(applied) do byId[r.Id] = r end
+		check(byId.m1 == nil, "supprimé")
+		check(byId.m2 and byId.m2.Rd == true, "lu")
+		check(byId.m4 and byId.m4.Rp == true, "répondu")
+		check(byId.m3 == nil, "expéditeur bloqué (103) retiré")
+	end)
+
+	test("FriendMailRules : nettoyage du texte et des données", function(check)
+		eq(check, R.Clean("  hello \n\t world  ", 60), "hello world", "espaces")
+		eq(check, R.Clean(string.rep("é", 80), 60), string.rep("é", 60), "coupe UTF-8 à 60 caractères")
+		eq(check, R.Clean("\255\254", 60), "", "UTF-8 invalide refusé")
+		eq(check, R.Clean(42, 60), "", "pas un texte")
+		check(#R.Clean(string.rep("a", 100000), 300) == 300, "très long : coupé")
+		check(R.ValidUserId(12345) and not R.ValidUserId(0) and not R.ValidUserId(1.5) and not R.ValidUserId("1"), "UserId")
+		local clean = R.SanitizeData({ LastNew = NOW + 999, LastReply = -4, Blocked = { ["12"] = true, x = true, ["13"] = "yes", [14] = true } }, NOW)
+		eq(check, clean.LastNew, NOW, "futur ramené à maintenant")
+		eq(check, clean.LastReply, 0, "négatif = 0")
+		check(clean.Blocked["12"] == true and clean.Blocked["14"] == true, "blocages gardés (clés texte)")
+		check(clean.Blocked.x == nil and clean.Blocked["13"] == nil, "blocages invalides retirés")
+		local fresh = R.SanitizeData(nil, NOW)
+		check(fresh.LastNew == 0 and fresh.LastReply == 0 and next(fresh.Blocked) == nil, "données absentes")
+	end)
+end
+"""
+
+
+def friend_mail_test():
+    """Tests MAILFRIENDS : règles pures des mails entre amis (Shared/FriendMailRules)."""
+    body = read(os.path.join(SHARED, "FriendMailRules.luau"))
+    if "]=====]" in body:
+        raise ValueError("délimiteur ]=====] interdit dans FriendMailRules.luau")
+    return "local FRIEND_MAIL_SRC = [=====[%s]=====]\n%s" % (body, FRIEND_MAIL_TESTS)
+
+
 def main():
     if not os.path.exists(LUAU):
         print("FAIL : Luau CLI introuvable (%s)" % LUAU)
         return 1
-    bundle = build_bundle(config_key_test() + "\n" + lang_test() + "\n" + house_art_test() + "\n" + arcade_shop_test())
+    bundle = build_bundle(config_key_test() + "\n" + lang_test() + "\n" + house_art_test() + "\n" + arcade_shop_test() + "\n" + friend_mail_test())
     with tempfile.NamedTemporaryFile("w", suffix=".luau", delete=False, encoding="utf-8") as f:
         f.write(bundle)
         path = f.name

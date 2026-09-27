@@ -8,7 +8,7 @@
 
 	Règles (toutes vérifiées ICI, jamais confiées au client) :
 	  - le destinataire est un ami Roblox du joueur (liste GetFriendsAsync en
-	    cache, sinon player:IsFriendsWith) ;
+	    cache, sinon player:IsFriendsWithAsync) ;
 	  - le joueur a le droit de discuter (TextChatService:CanUserChatAsync) et
 	    la paire expéditeur -> destinataire aussi
 	    (TextChatService:CanUsersDirectChatAsync, sinon CanUsersChatAsync) :
@@ -336,7 +336,7 @@ local function isFriend(player: Player, session, userId: number): boolean?
 		return true
 	end
 	local ok, result = pcall(function()
-		return player:IsFriendsWith(userId)
+		return player:IsFriendsWithAsync(userId)
 	end)
 	if ok and type(result) == "boolean" then
 		return result
