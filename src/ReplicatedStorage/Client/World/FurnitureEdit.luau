@@ -1153,6 +1153,7 @@ end
 
 type Tray = {
 	Gui: ScreenGui,
+	Root: Frame,
 	Scale: UIScale,
 	Panel: Frame,
 	Title: TextLabel,
@@ -1203,14 +1204,21 @@ function FurnitureEdit.BuildTray(self: any)
 	gui.DisplayOrder = 21
 	gui.Enabled = false
 	gui.Parent = playerGui
-	local scale = UIUtil.Create("UIScale", { Parent = gui })
+	-- (comme TownHud : une toile "Root" à l'échelle de l'écran)
+	local root = UIUtil.Create("Frame", {
+		Name = "Root",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromOffset(1100, 620),
+		Parent = gui,
+	})
+	local scale = UIUtil.Create("UIScale", { Parent = root })
 
 	local panel = UIUtil.Create("Frame", {
 		Name = "InventoryTray",
 		Position = UDim2.fromOffset(10, 66),
 		Size = UDim2.fromOffset(300, 420),
 		BackgroundColor3 = CARD,
-		Parent = gui,
+		Parent = root,
 	})
 	UIUtil.Corner(panel, 20)
 	UIUtil.Stroke(panel, LILAC, 2, 0.1)
@@ -1271,6 +1279,7 @@ function FurnitureEdit.BuildTray(self: any)
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = chips,
 	})
+	UIUtil.Create("UIPadding", { PaddingLeft = UDim.new(0, 3), PaddingRight = UDim.new(0, 3), Parent = chips })
 
 	local grid = UIUtil.Create("ScrollingFrame", {
 		Name = "Grid",
@@ -1311,6 +1320,7 @@ function FurnitureEdit.BuildTray(self: any)
 
 	local tray: Tray = {
 		Gui = gui,
+		Root = root,
 		Scale = scale,
 		Panel = panel,
 		Title = title,
@@ -1349,13 +1359,16 @@ function FurnitureEdit.LayoutTray(self: any)
 	end
 	local size = tray.Gui.AbsoluteSize
 	if size.X < 10 or size.Y < 10 then
-		size = Vector2.new(1280, 720)
+		-- (pas encore mesuré : la taille de l'écran)
+		local camera = workspace.CurrentCamera
+		size = camera and camera.ViewportSize or Vector2.new(1280, 720)
 	end
 	local touch = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
 	local phone = touch and math.min(size.X, size.Y) < 500
 	local designW, designH = phone and 820 or 1100, phone and 430 or 620
 	local scale = math.clamp(math.min(size.X / designW, size.Y / designH), 0.45, 1.35)
 	tray.Scale.Scale = scale
+	tray.Root.Size = UDim2.fromOffset(size.X / scale, size.Y / scale)
 	local h = size.Y / scale
 	-- (bas : la barre d'édition du HUD au PC, le joystick au téléphone)
 	local top = phone and 62 or 66
@@ -1398,8 +1411,8 @@ local function clearList(list: { Instance })
 	table.clear(list)
 end
 
--- Une case (icône, nom, nombre ou prix)
-local function makeTile(parent: Instance, item: any, badge: string, badgeColor: Color3, order: number, dim: boolean): TextButton
+-- Une case (icône, nom, nombre en pastille ou prix sous l'icône)
+local function makeTile(parent: Instance, item: any, badge: string, badgeColor: Color3, order: number, dim: boolean, price: boolean?): TextButton
 	local tile = UIUtil.Create("TextButton", {
 		Name = "Tile_" .. item.Id,
 		Text = "",
@@ -1416,10 +1429,10 @@ local function makeTile(parent: Instance, item: any, badge: string, badgeColor: 
 		BackgroundTransparency = 1,
 		Font = Theme.Fonts.Title,
 		Text = item.Icon,
-		TextSize = 34,
+		TextSize = price and 28 or 34,
 		TextTransparency = dim and 0.45 or 0,
-		Position = UDim2.fromOffset(0, 6),
-		Size = UDim2.new(1, 0, 0, 42),
+		Position = UDim2.fromOffset(0, price and 2 or 6),
+		Size = UDim2.new(1, 0, 0, price and 36 or 42),
 		ZIndex = 4,
 		Parent = tile,
 	})
@@ -1445,8 +1458,8 @@ local function makeTile(parent: Instance, item: any, badge: string, badgeColor: 
 		TextColor3 = WHITE,
 		TextSize = 12,
 		AutomaticSize = Enum.AutomaticSize.X,
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -4, 0, 4),
+		AnchorPoint = price and Vector2.new(0.5, 0) or Vector2.new(1, 0),
+		Position = price and UDim2.new(0.5, 0, 0, 40) or UDim2.new(1, -4, 0, 4),
 		Size = UDim2.fromOffset(0, 18),
 		ZIndex = 5,
 		Parent = tile,
@@ -1546,7 +1559,7 @@ function FurnitureEdit.RefreshTray(self: any, force: boolean?)
 		local tile
 		if buying then
 			local affordable = dopamine >= entry.Price
-			tile = makeTile(tray.Grid, item, "🧠 " .. NumberFormatter.Format(entry.Price), affordable and MINT or Color3.fromRGB(190, 180, 200), order, not affordable)
+			tile = makeTile(tray.Grid, item, "🧠 " .. NumberFormatter.Format(entry.Price), affordable and MINT or Color3.fromRGB(190, 180, 200), order, not affordable, true)
 			tile.Activated:Connect(function()
 				self:Buy(item.Id, entry.Price)
 			end)

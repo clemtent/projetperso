@@ -852,7 +852,7 @@ end
 ----------------------------------------------------------------------
 
 local LOADING_TIPS = {
-	"Tip: follow the glowing arc to find your house",
+	"Tip: tap 🏠 Go home to jump to your front door",
 	"Tip: tap 😀 to dance, wave or sit — walk or jump to stop",
 	"Tip: leave a ❤️ at a friend's house: you both earn Dopamine",
 	"Tip: sit on any sofa, chair or bench",

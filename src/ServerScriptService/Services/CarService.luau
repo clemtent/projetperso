@@ -370,7 +370,7 @@ local function rig(model: Model, carId: string): (BasePart, VehicleSeat)
 		ball.Name = "Contact" .. index
 		ball.Shape = Enum.PartType.Ball
 		ball.Size = Vector3.new(wheelRadius * 2, wheelRadius * 2, wheelRadius * 2)
-		ball.CFrame = pivot * CFrame.new(position.X * 0.9, wheelRadius, position.Z)
+		ball.CFrame = pivot * CFrame.new(position.X * 0.8, wheelRadius, position.Z)
 		ball.Transparency = 1
 		ball.CanCollide = true
 		ball.CanTouch = false

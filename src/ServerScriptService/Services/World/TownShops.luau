@@ -291,6 +291,16 @@ function TownShops.Dealership(parent: Instance, cf: CFrame): Model
 	box(model, "SideWall", cf, hw - 1, hw, 0, DEALER_H + 0.8, 0, D, white, M.SmoothPlastic, "solid")
 	box(model, "BackWall", cf, -hw + 1, hw - 1, 0, DEALER_H + 0.8, D - 1, D, white, M.SmoothPlastic, "solid")
 	box(model, "Roof", cf, -hw - 0.6, hw + 0.6, DEALER_H + 0.5, DEALER_H + 1.6, -0.8, D + 0.6, white, M.SmoothPlastic, "decoS")
+	-- toit vu d'en haut : acrotère rose, verrières, groupes de clim
+	for _, sx in ipairs({ -1, 1 }) do
+		box(model, "Parapet", cf, sx < 0 and -hw - 0.6 or hw - 0.2, sx < 0 and -hw - 0.2 or hw + 0.6, DEALER_H + 1.5, DEALER_H + 2.4, -0.1, D + 0.6, accent, M.SmoothPlastic, "deco")
+	end
+	box(model, "ParapetBack", cf, -hw - 0.2, hw + 0.2, DEALER_H + 1.5, DEALER_H + 2.4, D + 0.2, D + 0.6, accent, M.SmoothPlastic, "deco")
+	for k = 0, 2 do
+		local z = 10 + k * 12
+		glass(model, "Skylight", Vector3.new(W * 0.5, 0.5, 5), cf * CFrame.new(-4, DEALER_H + 1.9, z), 0.35).CanCollide = false
+	end
+	box(model, "RoofUnit", cf, 12, 17, DEALER_H + 1.5, DEALER_H + 3.4, D - 12, D - 6, C.MetalLight, M.DiamondPlate, "deco")
 	box(model, "Ceiling", cf, -hw + 0.9, hw - 0.9, DEALER_H - 0.6, DEALER_H + 0.55, 0.9, D - 0.9, white, M.SmoothPlastic, "solid")
 	-- façade vitrée (côté boulevard) : poteaux, soubassement, vitres, porte
 	local doorTop = FLOOR_TOP + CAR_DOOR_H

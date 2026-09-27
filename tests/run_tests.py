@@ -2529,6 +2529,129 @@ def world_layout_test():
     return "local WORLD_LAYOUT_SRC = [=====[%s]=====]\n%s" % (body, WORLD_LAYOUT_TESTS)
 
 
+GARAGE_TESTS = r"""
+do
+	local fnW, errW = loadstring(GARAGE_WORLD_SRC, "=WorldLayout")
+	assert(fnW, errW)
+	local WL = fnW()
+	local fnG, errG = loadstring(GARAGE_LAYOUT_SRC, "=GarageLayout")
+	assert(fnG, errG)
+	local GL = fnG()
+
+	test("Voitures v9.6 : catalogue Config.Cars (ids, modèles, prix, verrous, peintures)", function(check)
+		local cars = Config.Cars
+		check(type(cars) == "table" and #cars.List >= 6 and #cars.List <= 8, "6 à 8 voitures")
+		local ids, colors = {}, {}
+		for _, paint in ipairs(cars.Colors) do
+			check(not colors[paint.Id], "peinture en double " .. tostring(paint.Id))
+			colors[paint.Id] = true
+			check(type(paint.Name) == "string" and type(paint.Color) == "table", "peinture " .. tostring(paint.Id))
+			check(Config.CarColorsById[paint.Id] == paint, "CarColorsById " .. tostring(paint.Id))
+		end
+		check(#cars.Colors >= 8, "au moins 8 peintures")
+		local lastCost, lastGate = 0, 0
+		for index, car in ipairs(cars.List) do
+			check(not ids[car.Id], "voiture en double " .. tostring(car.Id))
+			ids[car.Id] = true
+			check(Config.CarsById[car.Id] == car and car.Order == index, "CarsById / Order " .. car.Id)
+			check(CAR_KINDS[car.Kind] == true, "modèle 3D (CarModels) " .. tostring(car.Kind))
+			check(colors[car.DefaultColor] == true, "couleur par défaut " .. car.Id)
+			check(type(car.Cost) == "number" and car.Cost > lastCost, "prix croissants " .. car.Id)
+			check(type(car.RequiresRebirths) == "number" and car.RequiresRebirths >= lastGate, "verrous croissants " .. car.Id)
+			check(type(car.Icon) == "string" and #car.Icon > 0 and type(car.Name) == "string" and type(car.Desc) == "string", "textes " .. car.Id)
+			lastCost, lastGate = car.Cost, car.RequiresRebirths
+		end
+		check(cars.List[1].RequiresRebirths == 0, "une voiture dès le début")
+		check(cars.MaxSpeed > 20 and cars.MaxSpeed <= 60, "vitesse max raisonnable")
+		check(cars.IdleDespawn >= 30 and cars.SpawnCooldown >= 1 and cars.HonkCooldown >= 0.5, "délais")
+		-- garage (entrée de Config.House), dans la gamme du manoir
+		local garage = Config.House.Garage
+		local mansion = Config.HouseSizesById[garage.RequiresSize]
+		check(mansion ~= nil and mansion.Exterior == "Mansion", "garage : pour le manoir")
+		check(garage.RequiresRebirths >= (mansion.RequiresRebirths or 0), "garage : verrou >= manoir")
+		check(garage.Cost >= mansion.Cost * 0.5 and garage.Cost <= mansion.Cost * 20, "garage : prix dans la gamme du manoir")
+		eq(check, garage.Bays, GL.BAYS, "places du garage")
+	end)
+
+	test("Voitures v9.6 : garage du manoir dans la parcelle (GarageLayout)", function(check)
+		local mansion = Config.HouseSizesById.Mansion
+		local dims = WL.Dims(mansion)
+		local right = dims.Left + dims.Width
+		check(GL.Supports(mansion) and not GL.Supports(Config.HouseSizesById.Studio), "manoir seulement")
+		-- dans la cour de devant, sans toucher la maison, la tour de droite, les arbres, la boîte aux lettres, le panneau
+		check(GL.D1 < 0 and GL.D0 > -WL.GARDEN_D + 4, "entre la rue et la façade")
+		check(GL.X1 <= WL.PLOT_W / 2 - 4, "dans la parcelle (largeur)")
+		local tx, td, tr = right + WL.WALL_T + 1, 0.5, 7 + 0.4
+		local cx = math.clamp(tx, GL.X0, GL.X1)
+		local cd = math.clamp(td, GL.D0, GL.D1)
+		check(math.sqrt((tx - cx) ^ 2 + (td - cd) ^ 2) > tr, "loin de la tour de droite")
+		check(GL.X0 > 7 + 2, "boîte aux lettres / panneau libres")
+		check(GL.X1 < 83 - 3, "arbre du coin libre")
+		check(GL.X0 > WL.DoorX(mansion) + 12, "allée de la porte libre")
+		-- places : chaque voiture tient (largeur par la porte, longueur dedans)
+		local bayW = (GL.X1 - GL.X0 - 2 * GL.WALL) / GL.BAYS
+		check(GL.DOOR_W <= bayW - 1, "portes plus étroites que les places")
+		check(CAR_MAX_W <= GL.DOOR_W - 1.2, "la plus large voiture passe la porte (" .. CAR_MAX_W .. ")")
+		check(CAR_MAX_L <= GL.InnerDepth() - 0.4, "la plus longue voiture tient dedans (" .. CAR_MAX_L .. ")")
+		check(GL.DOOR_H >= CAR_MAX_H + 0.4, "la plus haute voiture passe sous la porte")
+		for bay = 1, GL.BAYS - 1 do
+			check(GL.BayX(bay + 1) - GL.BayX(bay) >= CAR_MAX_W + 1, "places séparées")
+		end
+		check(GL.BayX(1) - GL.DOOR_W / 2 > GL.X0 + GL.WALL and GL.BayX(GL.BAYS) + GL.DOOR_W / 2 < GL.X1 - GL.WALL, "portes dans la façade")
+		check(GL.Inside((GL.X0 + GL.X1) / 2, 2, (GL.D0 + GL.D1) / 2) and not GL.Inside(0, 2, 5), "Inside")
+		-- attribution des places : la voiture choisie au milieu, 3 au plus
+		local a = GL.Assign({ "BubbleCar", "SUV", "SportsCar", "Limo" }, "SportsCar")
+		eq(check, a.SportsCar, 2, "choisie au milieu")
+		check(a.BubbleCar == 1 and a.SUV == 3 and a.Limo == nil, "autres places, 3 au plus")
+		local b = GL.Assign({ "CityCar" }, "")
+		eq(check, b.CityCar, 2, "une seule voiture : au milieu")
+	end)
+
+	test("Voitures v9.6 : textes traduits (Config.Cars, garage)", function(check)
+		for _, text in ipairs(CAR_TEXTS_MISSING) do
+			check(false, "traduction française manquante : " .. text)
+		end
+	end)
+end
+"""
+
+
+def garage_test():
+    """Tests GARAGE96 : catalogue des voitures, garage du manoir (Shared/GarageLayout), traductions."""
+    world = read(os.path.join(SHARED, "WorldLayout.luau"))
+    garage = read(os.path.join(SHARED, "GarageLayout.luau"))
+    models = read(os.path.join(SHARED, "CarModels.luau"))
+    for body in (world, garage):
+        if "]=====]" in body:
+            raise ValueError("délimiteur ]=====] interdit")
+    # modèles 3D (SPECS de CarModels) : largeur / longueur / hauteur max
+    kinds, max_w, max_l, max_h = [], 0.0, 0.0, 0.0
+    for m in re.finditer(r"^\t(\w+) = \{ L = ([\d.]+), W = ([\d.]+),.*?Belt = ([\d.]+), Roof = ([\d.]+),", models, re.M):
+        kinds.append(m.group(1))
+        max_l = max(max_l, float(m.group(2)))
+        max_w = max(max_w, float(m.group(3)))
+        max_h = max(max_h, float(m.group(5)))
+    # textes à traduire (Config.Cars + garage) : clés présentes dans Shared/Lang
+    config = read(os.path.join(SHARED, "Config.luau"))
+    start = config.find("Config.Cars = {")
+    block = config[start:config.find("\n}\n", start)] if start >= 0 else ""
+    texts = re.findall(r'(?:Name|Desc) = "([^"]+)"', block)
+    garage_line = re.search(r'Garage = \{ Id = "Garage", Name = "([^"]+)"', config)
+    if garage_line:
+        texts.append(garage_line.group(1))
+    keys = set()
+    lang_dir = os.path.join(SHARED, "Lang")
+    for name in os.listdir(lang_dir):
+        if name.endswith(".luau"):
+            keys.update(re.findall(r'\["((?:[^"\\]|\\.)*)"\]\s*=', read(os.path.join(lang_dir, name))))
+    missing = [t for t in texts if t not in keys]
+    lua_list = "{ " + ", ".join('"%s"' % t.replace('"', '\\"') for t in missing) + " }"
+    kinds_set = "{ " + ", ".join("%s = true" % k for k in kinds) + " }"
+    return ("local GARAGE_WORLD_SRC = [=====[%s]=====]\nlocal GARAGE_LAYOUT_SRC = [=====[%s]=====]\n"
+            "local CAR_KINDS = %s\nlocal CAR_MAX_W, CAR_MAX_L, CAR_MAX_H = %s, %s, %s\nlocal CAR_TEXTS_MISSING = %s\n%s") % (
+        world, garage, kinds_set, max_w, max_l, max_h, lua_list, GARAGE_TESTS)
+
+
 SIM_PATH = os.path.join(ROOT, "tests", "economy_sim.luau")
 
 
@@ -2638,7 +2761,7 @@ def main():
     if "--sim" in sys.argv:
         return run_sim()
     bundle = build_bundle(config_key_test() + "\n" + lang_test() + "\n" + house_art_test() + "\n" + arcade_shop_test() + "\n" + friend_mail_test()
-                          + "\n" + economy_test() + "\n" + world_layout_test() + "\n" + garden_snapshot_test())
+                          + "\n" + economy_test() + "\n" + world_layout_test() + "\n" + garden_snapshot_test() + "\n" + garage_test())
     with tempfile.NamedTemporaryFile("w", suffix=".luau", delete=False, encoding="utf-8") as f:
         f.write(bundle)
         path = f.name
