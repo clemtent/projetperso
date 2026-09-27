@@ -72,7 +72,6 @@ local WOOD_DARK = rgb(128, 86, 60)
 local CREAM = rgb(255, 247, 236)
 local LEAF = rgb(110, 196, 110)
 local LEAF_DARK = rgb(64, 146, 84)
-local GLASS = rgb(210, 236, 255)
 local darken = House3DKit.Darken
 local lighten = House3DKit.Lighten
 

@@ -2044,6 +2044,106 @@ end
 """
 
 
+GARDEN_SNAPSHOT_TESTS = r"""
+do
+	local fn, err = loadstring(GARDEN_SNAPSHOT_SRC, "=GardenSnapshot")
+	assert(fn, err)
+	setfenv(fn, setmetatable({ require = function(name) return req(name) end, script = { Parent = { Config = "Config" } } }, { __index = getfenv() }))
+	local GS = fn()
+
+	-- valeurs sûres pour le JSON / un RemoteEvent (pas de NaN, tableaux denses)
+	local function jsonSafe(value, depth)
+		depth = depth or 0
+		local t = type(value)
+		if t == "number" then return value == value and value ~= math.huge and value ~= -math.huge end
+		if t == "string" or t == "boolean" then return true end
+		if t ~= "table" or depth > 6 then return false end
+		local n, count = #value, 0
+		for k, v in pairs(value) do
+			count += 1
+			if type(k) ~= "string" and not (type(k) == "number" and k >= 1 and k <= n and k == math.floor(k)) then return false end
+			if not jsonSafe(v, depth + 1) then return false end
+		end
+		return n == 0 or count == n
+	end
+	local function ser(v)
+		if type(v) ~= "table" then return tostring(v) end
+		local keys = {}
+		for k in pairs(v) do table.insert(keys, tostring(k)) end
+		table.sort(keys)
+		local out = {}
+		for _, k in ipairs(keys) do table.insert(out, k .. "=" .. ser(v[k] ~= nil and v[k] or v[tonumber(k)])) end
+		return "{" .. table.concat(out, ",") .. "}"
+	end
+
+	test("GardenSnapshot : données absentes ou abîmées -> verrouillé, jamais d'erreur", function(check)
+		for _, data in ipairs({ nil, {}, { Upgrades = "x" }, { Upgrades = {}, Garden = 5 }, { Upgrades = { Garden = 0 / 0 } } }) do
+			local ok, snap = pcall(GS.From, data)
+			check(ok and snap.Unlocked == false and #snap.Plots == 0, "From(" .. ser(data) .. ")")
+			check(ok and jsonSafe(snap), "JSON : " .. ser(data))
+		end
+		local s = GS.Sanitize("n'importe quoi")
+		check(s.Unlocked == false and #s.Plots == 0 and s.Count >= 1, "Sanitize(texte)")
+	end)
+
+	test("GardenSnapshot : parterres, maximum, moulin, fleurs invalides vidées", function(check)
+		local data = { Upgrades = { Garden = 1, GardenPlots = 2, Pinwheel = 1 }, Garden = { Plots = {
+			{ Flower = "Rose", PlantedAt = 1000, ReadyAt = 1240 },
+			{ Flower = "Cactus", PlantedAt = 1000, ReadyAt = 1060 },
+			{ Flower = "Daisy", PlantedAt = 0 / 0, ReadyAt = 5 },
+			"vide",
+			{ Flower = "Lotus", PlantedAt = 2000.7, ReadyAt = 100 },
+		} } }
+		local snap = GS.From(data)
+		check(snap.Unlocked and snap.Windmill, "débloqué + moulin")
+		check(snap.Count == Formulas.GetGardenPlotCount(data), "Count = Formulas.GetGardenPlotCount")
+		check(#snap.Plots == snap.Count, "un parterre par parterre possédé")
+		local maxPlots = Config.Garden.BasePlots
+		for _, u in ipairs(Config.Upgrades) do
+			if u.Feature == "GardenPlots" then maxPlots += u.MaxLevel end
+		end
+		check(snap.Max == maxPlots, "Max = BasePlots + niveaux max (" .. tostring(snap.Max) .. ")")
+		check(snap.Plots[1].Flower == "Rose" and snap.Plots[1].ReadyAt == 1240, "rose gardée")
+		check(snap.Plots[2].Flower == "" and snap.Plots[3].Flower == "" and snap.Plots[4].Flower == "", "fleur inconnue / NaN / texte -> vide")
+		check(snap.Plots[5].PlantedAt == 2000 and snap.Plots[5].ReadyAt >= snap.Plots[5].PlantedAt, "dates entières, jamais prête avant d'être plantée")
+		check(jsonSafe(snap), "JSON")
+		check(ser(GS.From(data)) == ser(snap), "stable (aucune heure dedans)")
+		check(ser(GS.Sanitize(snap)) == ser(snap), "Sanitize(From(x)) == From(x)")
+		check(ser(GS.From(data)):len() < 900, "petit")
+	end)
+
+	test("GardenSnapshot : stades graine -> pousse -> bouton -> fleur -> prête", function(check)
+		local order = { Seed = 0, Sprout = 1, Bud = 2, Bloom = 3, Ready = 4 }
+		for _, flower in ipairs(Config.Garden.Flowers) do
+			local plot = { Flower = flower.Id, PlantedAt = 0, ReadyAt = flower.GrowSeconds }
+			local last = -1
+			for step = 0, 20 do
+				local stage = GS.Stage(plot, flower.GrowSeconds * step / 20)
+				check(order[stage] ~= nil and order[stage] >= last, flower.Id .. " : stade " .. tostring(stage))
+				last = order[stage] or last
+			end
+			check(GS.Stage(plot, 0) == "Seed" and GS.Stage(plot, flower.GrowSeconds) == "Ready", flower.Id .. " : début / fin")
+			check(GARDEN_BUILDER_FLOWERS[flower.Id] == true, flower.Id .. " : pas de fleur 3D dans GardenBuilder")
+		end
+		check(GS.Stage({ Flower = "", PlantedAt = 0, ReadyAt = 0 }, 10) == "Empty", "vide")
+	end)
+end
+"""
+
+
+def garden_snapshot_test():
+    """Tests GARDEN3D95 : Shared/GardenSnapshot (instantané du jardin pour la
+    ville) + chaque fleur de Config.Garden a sa fleur 3D dans GardenBuilder."""
+    body = read(os.path.join(SHARED, "GardenSnapshot.luau"))
+    if "]=====]" in body:
+        raise ValueError("délimiteur ]=====] interdit dans GardenSnapshot.luau")
+    builder = read(os.path.join(SRC, "ReplicatedStorage", "Client", "World", "GardenBuilder.luau"))
+    styles = re.search(r"local FLOWER_STYLE[^\n]*\n(.*?)\n}", builder, re.S)
+    ids = re.findall(r"^\t(\w+) = \{", styles.group(1), re.M) if styles else []
+    flowers = "local GARDEN_BUILDER_FLOWERS = { %s }\n" % ", ".join("%s = true" % i for i in ids)
+    return "local GARDEN_SNAPSHOT_SRC = [=====[%s]=====]\n%s%s" % (body, flowers, GARDEN_SNAPSHOT_TESTS)
+
+
 def friend_mail_test():
     """Tests MAILFRIENDS : règles pures des mails entre amis (Shared/FriendMailRules)."""
     body = read(os.path.join(SHARED, "FriendMailRules.luau"))
@@ -2336,7 +2436,7 @@ def main():
     if "--sim" in sys.argv:
         return run_sim()
     bundle = build_bundle(config_key_test() + "\n" + lang_test() + "\n" + house_art_test() + "\n" + arcade_shop_test() + "\n" + friend_mail_test()
-                          + "\n" + economy_test() + "\n" + world_layout_test())
+                          + "\n" + economy_test() + "\n" + world_layout_test() + "\n" + garden_snapshot_test())
     with tempfile.NamedTemporaryFile("w", suffix=".luau", delete=False, encoding="utf-8") as f:
         f.write(bundle)
         path = f.name
