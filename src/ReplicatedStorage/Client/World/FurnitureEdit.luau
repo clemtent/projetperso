@@ -402,6 +402,19 @@ end
 -- Entrées
 ----------------------------------------------------------------------
 
+-- Objet réellement affiché : visible, ainsi que tous ses parents, dans une
+-- ScreenGui activée
+local function shownOnScreen(object: GuiObject): boolean
+	local node: Instance? = object
+	while node and not node:IsA("LayerCollector") do
+		if node:IsA("GuiObject") and not node.Visible then
+			return false
+		end
+		node = node.Parent
+	end
+	return node ~= nil and (node :: LayerCollector).Enabled
+end
+
 local function overHud(position: Vector2): boolean
 	local playerGui = Players.LocalPlayer:FindFirstChildOfClass("PlayerGui")
 	if not playerGui then
@@ -414,11 +427,19 @@ local function overHud(position: Vector2): boolean
 		return false
 	end
 	for _, object in ipairs(objects) do
-		if object:IsA("GuiObject") and object.Visible and (object:FindFirstAncestor(GUI_NAME) or object:FindFirstAncestor("TownShopGui")) then
-			return true
-		end
-		if object:IsA("GuiButton") and object.Visible and object:FindFirstAncestor("TownHud") then
-			return true
+		-- (v9.6.1) seules les VRAIES surfaces d'interface bloquent le clic :
+		-- un bouton, ou un cadre non transparent, dans une ScreenGui active et
+		-- visible jusqu'en haut. Avant, le cadre "Root" transparent du plateau
+		-- d'inventaire (toute la largeur de l'écran) avalait TOUS les clics :
+		-- impossible de prendre un meuble déjà posé.
+		if object:IsA("GuiObject") and shownOnScreen(object) then
+			local solid = object:IsA("GuiButton") or object.BackgroundTransparency < 0.95
+			if solid and (object:FindFirstAncestor(GUI_NAME) or object:FindFirstAncestor("TownShopGui")) then
+				return true
+			end
+			if object:IsA("GuiButton") and object:FindFirstAncestor("TownHud") then
+				return true
+			end
 		end
 	end
 	return false
