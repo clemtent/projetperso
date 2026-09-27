@@ -383,7 +383,7 @@ R.Bookshelf = function(b, ctx)
 	for _, side in ipairs({ -1, 1 }) do
 		b.Box(side * (w / 2 - 2), 0, 0, 4, top, depth, wood, M.Wood)
 	end
-	local shelves = 4
+	local shelves = 3 -- (v9.6) 3 cases, comme le dessin 2D
 	local colors = {}
 	for index = 1, 6 do
 		colors[index] = accent(b, index, ({ PINK, SKY, MINT, BUTTER, LILAC, rgb(255, 170, 120) })[index])
@@ -400,13 +400,17 @@ R.Bookshelf = function(b, ctx)
 				local bw = 4 + ((n * 7 + index * 3) % 4)
 				local bh = (top - 4) / shelves - 8 - ((n * 5 + index) % 5)
 				if (n + index) % 5 ~= 0 then
-					b.Box(x + bw / 2, y + 4, 2, bw, bh, depth - 8, colors[(n + index) % 6 + 1], M.SmoothPlastic)
+					b.Box(x + bw / 2, y + 4, -5, bw, bh, depth - 18, colors[(n + index) % 6 + 1], M.SmoothPlastic)
 				end
 				x += bw + 0.6
 			end
 		end
 	end
 	b.Top(1, 0, top, 0, w, depth)
+	-- (v9.6) rayons devant les livres : dessus 2 (haut) .. 4 (bas), = HouseSurfaces
+	for index = 0, shelves - 1 do
+		b.Top(shelves + 1 - index, 0, index * (top - 4) / shelves + 4, depth / 2 - 6, w - 10, 10)
+	end
 	b.Footprint(w, depth, top)
 end
 R.StorageBox = function(b, ctx)

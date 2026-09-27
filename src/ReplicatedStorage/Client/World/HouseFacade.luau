@@ -1168,6 +1168,170 @@ STYLES.Loft = function(ctx)
 	picketFence(ctx, ctx.Left - 8, ctx.Right + 4, -21, -2.2, 2.2)
 end
 
+----------------------------------------------------------------------
+-- (v9.6, GARAGE96) 🏎️ Aile du garage du manoir (GarageLayout) : 3 places
+-- côte à côte dans la cour de devant (côté droit vu de la rue), enduit de
+-- la façade, chaînes d'angle, corniche, toit-terrasse à balustrade, 3
+-- portes basculantes (Model "Door_<n>" : Panel + nervures + hublots +
+-- poignée ; attribut OpenCF = CFrame monde du panneau OUVERT, animées par
+-- CarClient), plafonnier (lumière douce, allumée par CarClient porte
+-- ouverte), lanternes, enseigne, allée pavée jusqu'à la rue avec rampe
+-- invisible vers le trottoir. Model "Garage" étiqueté "DopamineGarage",
+-- attribut HouseCF ; dossier "Cars" (voitures garées : CarClient).
+----------------------------------------------------------------------
+
+-- Garage possédé ? (instantané -> looks.Garage ; sinon attribut répliqué du propriétaire)
+local function hasGarage(kit: any, looks: Looks): boolean
+	if looks.Garage == true then
+		return true
+	end
+	if looks.Garage == false then
+		return false
+	end
+	local ok, result = pcall(function()
+		local folder = kit.Folder
+		local model = folder and folder.Parent
+		local ownerId = model and model:GetAttribute("OwnerId")
+		local owner = type(ownerId) == "number" and Players:GetPlayerByUserId(ownerId) or nil
+		return owner ~= nil and owner:GetAttribute("DopamineGarage") == true
+	end)
+	return ok and result == true
+end
+
+-- Grille sans portail (reprise de la grille à droite du garage)
+local function fenceRun(ctx: Ctx, a: number, b: number, d: number)
+	if b - a < 1 then
+		return
+	end
+	local kit = ctx.G
+	local iron = C.Ink:Lerp(C.Lilac, 0.25)
+	kit:Box("FenceRail", a, b, 0.6, 0.8, d - 0.1, d + 0.1, iron, M.Metal, { Solid = true, Shadow = false })
+	kit:Box("FenceRail", a, b, 3.0, 3.2, d - 0.1, d + 0.1, iron, M.Metal, { Shadow = false })
+	local count = math.max(2, math.floor((b - a) / 2.6))
+	for k = 0, count do
+		local x = a + k * (b - a) / count
+		kit:Box("FenceBar", x - 0.1, x + 0.1, 0, 3.8, d - 0.1, d + 0.1, iron, M.Metal, { Shadow = false })
+	end
+end
+
+local function garageWing(ctx: Ctx)
+	local model = Instance.new("Model")
+	model.Name = "Garage"
+	model:SetAttribute("HouseCF", ctx.Kit.CF)
+	model.Parent = ctx.Kit.Folder
+	local kit = ctx.Kit:Sub(CFrame.new(), model)
+	local G = GarageLayout
+	local X0, X1, D0, D1, W = G.X0, G.X1, G.D0, G.D1, G.WALL
+	local H, FLOOR = G.HEIGHT, G.FLOOR
+	local TRIM = Color3.fromRGB(255, 250, 244)
+	local wall = ctx.Wall
+	local stone = P.Stone
+	-- dalle, allée pavée jusqu'à la rue (+ bordures), rampe invisible vers le trottoir
+	kit:Box("GarageSlab", X0, X1, 0.2, FLOOR, D0, D1, Color3.fromRGB(214, 210, 216), M.Concrete, { Solid = true })
+	local street = G.STREET_D
+	kit:Box("Driveway", X0 + 1.2, X1 - 1.2, 0.3, 0.62, street, D0, P.Pave, M.Pavement, { Solid = true })
+	for _, x in ipairs({ X0 + 0.7, X1 - 0.7 }) do
+		kit:Box("DrivewayEdge", x - 0.5, x + 0.5, 0.3, 0.75, street, D0, TRIM, M.Limestone, { Solid = true, Shadow = false })
+	end
+	kit:Part("DrivewayRamp", Vector3.new(X1 - X0 - 2.4, 0.42, 1.6), CFrame.new((X0 + X1) / 2, 0.62 + 0.21, -(street + 0.8)), WHITE, M.SmoothPlastic,
+		{ Solid = true, Query = false, T = 1, Shadow = false }, "WedgePart")
+	-- murs (enduit de la façade) : fond, côtés (fenêtre cintrée côté fontaine), façade percée de 3 portes
+	kit:Box("GarageBack", X0, X1, 0, H, D1 - W, D1, wall, M.Plaster, { Solid = true })
+	local winD0, winD1, winY0, winY1 = -17.5, -12.5, 3.2, 7
+	kit:WallD("GarageSide", X0, X0 + W, 0, H, D0, D1, { { winD0, winD1, winY0, winY1 } }, wall, M.Plaster, { Solid = true })
+	kit:Box("GarageSideGlass", X0 + 0.25, X0 + 0.55, winY0, winY1, winD0, winD1, P.Glass, M.Glass, { T = 0.35, Shadow = false })
+	kit:Box("GarageSideSill", X0 - 0.35, X0 + 0.1, winY0 - 0.35, winY0, winD0 - 0.4, winD1 + 0.4, TRIM, M.Limestone, { Shadow = false })
+	kit:Box("GarageSideR", X1 - W, X1, 0, H, D0, D1, wall, M.Plaster, { Solid = true })
+	local holes = {}
+	for bay = 1, G.BAYS do
+		local cx = G.BayX(bay)
+		table.insert(holes, { cx - G.DOOR_W / 2, cx + G.DOOR_W / 2, FLOOR, FLOOR + G.DOOR_H })
+	end
+	kit:WallX("GarageFront", X0, X1, FLOOR, H, D0, D0 + W, holes, wall, M.Plaster, { Solid = true })
+	-- soubassement, chaînes d'angle, corniche, bandeau doré
+	kit:Box("GaragePlinth", X0 - 0.15, X0 + 0.9, 0, 1.2, D0 - 0.15, D1, stone, M.Limestone, { Shadow = false })
+	kit:Box("GaragePlinth", X1 - 0.9, X1 + 0.15, 0, 1.2, D0 - 0.15, D1, stone, M.Limestone, { Shadow = false })
+	for _, x in ipairs({ X0, X1 }) do
+		for k = 0, 3 do
+			local y = 1.2 + k * 2.2
+			kit:Box("Quoin", x - 0.55, x + 0.55, y, y + 1.2, D0 - 0.2, D0 + 1.1, TRIM, M.Limestone, { Shadow = false })
+		end
+	end
+	kit:Box("GarageCornice", X0 - 0.6, X1 + 0.6, H - 0.2, H + 0.7, D0 - 0.7, D1, TRIM, M.Limestone, { Solid = true })
+	kit:Box("GarageBand", X0 - 0.2, X1 + 0.2, H - 1.4, H - 1.2, D0 - 0.24, D0 - 0.02, P.Gold, M.Metal, { Shadow = false })
+	-- toit-terrasse : parapet plein + lisse + pots à boule
+	kit:Box("GarageParapet", X0 - 0.4, X1 + 0.4, H + 0.7, H + 2.1, D0 - 0.5, D0 + 0.3, TRIM, M.Limestone, { Shadow = false })
+	kit:Box("GarageParapet", X0 - 0.4, X0 + 0.4, H + 0.7, H + 2.1, D0 + 0.3, D1, TRIM, M.Limestone, { Shadow = false })
+	kit:Box("GarageParapet", X1 - 0.4, X1 + 0.4, H + 0.7, H + 2.1, D0 + 0.3, D1, TRIM, M.Limestone, { Shadow = false })
+	kit:Box("GarageRail", X0 - 0.5, X1 + 0.5, H + 2.1, H + 2.35, D0 - 0.6, D0 + 0.4, P.Gold, M.Metal, { Shadow = false })
+	for _, x in ipairs({ X0, X1 }) do
+		kit:Box("GarageUrn", x - 0.5, x + 0.5, H + 2.35, H + 3.1, D0 - 0.3, D0 + 0.5, TRIM, M.Limestone, { Shadow = false })
+		kit:Ball("GarageUrnBall", x, H + 3.5, D0 + 0.1, 0.9, P.Gold, M.Metal, { Shadow = false })
+	end
+	-- enseigne "GARAGE" (au-dessus de la porte du milieu) + cœur
+	local sign = kit:Box("GarageSign", G.BayX(2) - 4.2, G.BayX(2) + 4.2, FLOOR + G.DOOR_H + 0.55, FLOOR + G.DOOR_H + 1.6, D0 - 0.3, D0 - 0.05, TRIM, M.SmoothPlastic,
+		{ Shadow = false })
+	kit:Text(sign, Enum.NormalId.Back, "🏎️ GARAGE", C.PinkDeep, Enum.Font.FredokaOne, 30, 160)
+	-- encadrements, clés de voûte, portes basculantes
+	local doorColor = TRIM:Lerp(C.Pink, 0.12)
+	local rib = C.PinkSoft:Lerp(C.Pink, 0.25)
+	for bay = 1, G.BAYS do
+		local cx = G.BayX(bay)
+		local x0, x1 = cx - G.DOOR_W / 2, cx + G.DOOR_W / 2
+		local top = FLOOR + G.DOOR_H
+		kit:Box("DoorJamb", x0 - 0.45, x0, FLOOR, top, D0 - 0.25, D0 + W, TRIM, M.Limestone, { Shadow = false })
+		kit:Box("DoorJamb", x1, x1 + 0.45, FLOOR, top, D0 - 0.25, D0 + W, TRIM, M.Limestone, { Shadow = false })
+		kit:Box("DoorHeader", x0 - 0.45, x1 + 0.45, top, top + 0.45, D0 - 0.25, D0 + W, TRIM, M.Limestone, { Shadow = false })
+		if bay ~= 2 then
+			kit:Box("Keystone", cx - 0.5, cx + 0.5, top + 0.45, top + 1.4, D0 - 0.35, D0 + 0.2, TRIM, M.Limestone, { Shadow = false })
+		end
+		local door = Instance.new("Model")
+		door.Name = "Door_" .. bay
+		door.Parent = model
+		local dk = ctx.Kit:Sub(CFrame.new(), door)
+		local dz = D0 + W * 0.5
+		local panel = dk:Box("Panel", x0 + 0.05, x1 - 0.05, FLOOR + 0.02, top - 0.02, dz - 0.12, dz + 0.12, doorColor, M.SmoothPlastic, { Solid = true })
+		for k = 1, 3 do
+			local y = FLOOR + k * G.DOOR_H / 4
+			dk:Box("Rib", x0 + 0.2, x1 - 0.2, y - 0.08, y + 0.08, dz - 0.2, dz - 0.12, rib, M.SmoothPlastic, { Shadow = false })
+		end
+		dk:Box("DoorWindows", x0 + 0.9, x1 - 0.9, top - 1.5, top - 0.7, dz - 0.18, dz - 0.1, P.Glass, M.Glass, { Shadow = false })
+		dk:Box("DoorHandle", cx - 0.6, cx + 0.6, FLOOR + 0.9, FLOOR + 1.1, dz - 0.3, dz - 0.12, P.Gold, M.Metal, { Shadow = false })
+		-- ouverte : couchée sous le plafond, vers l'intérieur (porte basculante)
+		local openLocal = CFrame.new(cx, top + 0.45, -(D0 + W + G.DOOR_H / 2)) * CFrame.Angles(math.rad(90), 0, 0)
+		door:SetAttribute("OpenCF", ctx.Kit.CF * openLocal)
+		door.PrimaryPart = panel
+	end
+	-- lanternes entre les portes (sans vraie lumière)
+	for k = 1, G.BAYS - 1 do
+		local x = (G.BayX(k) + G.BayX(k + 1)) / 2
+		kit:Box("LanternArm", x - 0.1, x + 0.1, FLOOR + 5.4, FLOOR + 5.6, D0 - 0.8, D0, C.Ink, M.Metal, { Shadow = false })
+		kit:Box("Lantern", x - 0.35, x + 0.35, FLOOR + 4.1, FLOOR + 5.4, D0 - 1.15, D0 - 0.45, P.Lamp, M.SmoothPlastic, { Shadow = false })
+		kit:Box("LanternCap", x - 0.45, x + 0.45, FLOOR + 5.4, FLOOR + 5.7, D0 - 1.25, D0 - 0.35, C.Ink, M.Metal, { Shadow = false })
+	end
+	-- intérieur : plafond, marquages, étagère, plafonnier (lumière douce, éteinte)
+	kit:Box("GarageCeiling", X0 + W, X1 - W, H - 0.45, H - 0.25, D0 + W, D1 - W, Color3.fromRGB(246, 240, 244), M.SmoothPlastic, { Shadow = false })
+	for k = 1, G.BAYS - 1 do
+		local x = (G.BayX(k) + G.BayX(k + 1)) / 2
+		kit:Box("BayLine", x - 0.12, x + 0.12, FLOOR, FLOOR + 0.03, D0 + W + 1, D1 - W - 1, WHITE, M.SmoothPlastic, { Shadow = false })
+	end
+	kit:Box("Shelf", X0 + 3, X1 - 3, 5.2, 5.4, D1 - W - 1.1, D1 - W, Color3.fromRGB(214, 164, 120), M.Wood, { Shadow = false })
+	kit:Box("ShelfBox", X0 + 4, X0 + 6, 5.4, 6.6, D1 - W - 1, D1 - W - 0.1, C.Pink, M.SmoothPlastic, { Shadow = false })
+	kit:Box("ShelfBox", X1 - 7, X1 - 4.5, 5.4, 6.2, D1 - W - 1, D1 - W - 0.1, C.Sky, M.SmoothPlastic, { Shadow = false })
+	local lamp = kit:Box("CeilingLamp", (X0 + X1) / 2 - 3, (X0 + X1) / 2 + 3, H - 0.75, H - 0.47, (D0 + D1) / 2 - 0.6, (D0 + D1) / 2 + 0.6, Color3.fromRGB(255, 246, 226),
+		M.SmoothPlastic, { Shadow = false })
+	local light = ctx.Kit:Light(lamp, Color3.fromRGB(255, 226, 190), 18, 0.9)
+	if light then
+		light.Enabled = false
+	end
+	-- voitures garées (CarClient) + grille qui reprend à droite
+	local cars = Instance.new("Folder")
+	cars.Name = "Cars"
+	cars.Parent = model
+	fenceRun(ctx, X1, ctx.Right + WorldLayout.WALL_T + 7, -21)
+	CollectionService:AddTag(model, "DopamineGarage")
+end
+
 -- ░░ Mansion : le grand manoir kawaii ░░
 STYLES.Mansion = function(ctx)
 	local kit = ctx.Kit

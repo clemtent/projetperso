@@ -253,14 +253,6 @@ local function cylZ(b: B, name: string, x: number, y: number, z: number, length:
 	return p
 end
 
--- Cylindre debout (le long de Y)
-local function cylY(b: B, name: string, x: number, y: number, z: number, length: number, diameter: number, color: Color3, material: Enum.Material?): BasePart
-	local m = math.min(b.S.X, b.S.Z)
-	local p = newPart(b, "Part", name, Vector3.new(length * b.S.Y, diameter * m, diameter * m), CFrame.new(P(b, x, y, z)) * CFrame.Angles(0, 0, PI / 2), color, material or M.SmoothPlastic)
-	;(p :: Part).Shape = Enum.PartType.Cylinder
-	return p
-end
-
 ----------------------------------------------------------------------
 -- Éléments
 ----------------------------------------------------------------------
@@ -436,7 +428,6 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 		slab(b, "WindshieldTop", 0, wc - 0.1, s.Belt + 1.35, s.Ws + 1.02, s.Belt + 1.42, s.Ws + 1.1, 0.14, TRIM, M.SmoothPlastic)
 	else
 		local gTop = s.Roof - roofT
-		local gh = gTop - s.Belt
 		local front = wedge(b, "GlassFront", -wc / 2, wc / 2, s.Belt, gTop, s.Ws, s.R0, true, GLASS, M.Glass)
 		front.Transparency = 0.4
 		local midEnd = s.R1

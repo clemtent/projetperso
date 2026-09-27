@@ -1217,13 +1217,14 @@ local function decide(position: Vector3)
 	for _, shop in ipairs(shops) do
 		local d = flatDistance(position, shop.InteriorCF.Position)
 		local target = 0
+		local s: any = shop
 		if d <= FULL_RANGE or (shop.Level >= 2 and d <= FULL_DROP) then
 			target = 2
 		elseif d <= FRONT_RANGE or (shop.Level >= 1 and d <= FRONT_DROP) then
 			target = 1
 		end
-		;(shop :: any).Target = target
-		;(shop :: any).Distance = d
+		s.Target = target
+		s.Distance = d
 		if target == 2 then
 			table.insert(wantFull, shop)
 		end
@@ -1232,7 +1233,8 @@ local function decide(position: Vector3)
 		return (a :: any).Distance < (b :: any).Distance
 	end)
 	for index = MAX_FULL + 1, #wantFull do
-		;(wantFull[index] :: any).Target = 1
+		local extra: any = wantFull[index]
+		extra.Target = 1
 	end
 	for _, shop in ipairs(shops) do
 		local target = (shop :: any).Target

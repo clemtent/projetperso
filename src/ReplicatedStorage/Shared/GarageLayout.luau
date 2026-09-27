@@ -26,7 +26,7 @@ GarageLayout.D1 = -6 -- mur du fond (devant la maison)
 GarageLayout.WALL = 0.8
 GarageLayout.FLOOR = 0.7 -- dessus de la dalle (pelouse de la parcelle ≈ 0,45)
 GarageLayout.HEIGHT = 10 -- haut des murs (au-dessus de y = 0)
-GarageLayout.DOOR_W = 8
+GarageLayout.DOOR_W = 7.6
 GarageLayout.DOOR_H = 7.4
 GarageLayout.BAYS = 3
 GarageLayout.STREET_D = -30 -- bord de la parcelle côté rue (WorldLayout.GARDEN_D)

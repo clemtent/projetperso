@@ -307,6 +307,7 @@ ShopUI.Format = fmt
 
 local toastFn: ((string, Color3?) -> ())? = nil
 local ui: any = nil -- interface (construite à la 1re ouverture)
+local buildGui: () -> any -- (défini plus bas)
 
 function ShopUI.SetToast(fn: ((string, Color3?) -> ())?)
 	toastFn = fn
@@ -316,7 +317,7 @@ local function ensureGui(): any
 	if ui then
 		return ui
 	end
-	ui = (ShopUI :: any)._Build()
+	ui = buildGui()
 	return ui
 end
 
@@ -487,7 +488,7 @@ type Card = {
 	Painted: boolean,
 }
 
-function (ShopUI :: any)._Build(): any
+buildGui = function(): any
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
 	local old = playerGui:FindFirstChild("TownShopGui")
 	if old then
@@ -872,7 +873,7 @@ function (ShopUI :: any)._Build(): any
 	end
 
 	local function requestClose()
-		ShopUI.Close()
+		(ShopUI :: any).Close()
 	end
 	dimmer.Activated:Connect(requestClose)
 	close.Activated:Connect(requestClose)
@@ -916,7 +917,7 @@ function (ShopUI :: any)._Build(): any
 		local character = Players.LocalPlayer.Character
 		local rootPart = character and character:FindFirstChild("HumanoidRootPart")
 		if anchor and rootPart and rootPart:IsA("BasePart") and (rootPart.Position - anchor).Magnitude > ANCHOR_RANGE then
-			ShopUI.Close()
+			(ShopUI :: any).Close()
 		end
 	end)
 	return self
