@@ -12,6 +12,12 @@
 	    guirlandes lumineuses ;
 	  - couronne de BOUTIQUES tout autour (TownBuildings) en laissant libres
 	    les débouchés des rues et la mairie (au fond, face à l'avenue).
+	v9.6 (SHOPS96) : la couronne commence par les 6 BOUTIQUES OÙ L'ON ENTRE
+	(TownShops : animalerie, jouets, cuisine, meubles, setup, jardinerie ;
+	intérieurs construits par le client, ShopInteriors), complétées par des
+	boutiques de décor fermées ; lumières adoucies (plus de "flash") :
+	lumière de la fontaine 1, ampoules des guirlandes plus petites, plus de
+	néon sur les grandes surfaces.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -19,6 +25,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
 local TownKit = require(script.Parent.TownKit)
 local TownBuildings = require(script.Parent.TownBuildings)
+local TownShops = require(script.Parent.TownShops)
 
 local TownPlaza = {}
 
@@ -36,7 +43,7 @@ local function emitter(host: BasePart, props: { [string]: any })
 	e.Color = ColorSequence.new(Color3.fromRGB(214, 244, 255), Color3.fromRGB(255, 255, 255))
 	e.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.15), NumberSequenceKeypoint.new(0.7, 0.35), NumberSequenceKeypoint.new(1, 1) })
 	e.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.35), NumberSequenceKeypoint.new(1, 0.8) })
-	e.LightEmission = 0.3
+	e.LightEmission = 0.15
 	e.Acceleration = Vector3.new(0, -24, 0)
 	for key, value in pairs(props) do
 		(e :: any)[key] = value
@@ -152,7 +159,8 @@ local function fountain(folder: Instance, O: Vector3): BasePart
 		})
 	end
 	-- lumière sous l'eau (1 vraie lumière)
-	TownKit.Light(water, Color3.fromRGB(150, 220, 255), 20, 1.2)
+	-- (v9.6 : douce, pas d'éblouissement)
+	TownKit.Light(water, Color3.fromRGB(150, 220, 255), 18, 1)
 	-- plaque
 	local plaque = part(model, "Plaque", Vector3.new(6, 1.6, 0.3), CFrame.lookAt(base + Vector3.new(0, 1.4, basinR + 0.9), base + Vector3.new(0, 1.4, basinR + 10)), Color3.fromRGB(214, 176, 96), M.Metal, "deco")
 	local _, body = TownKit.Surface(plaque, Enum.NormalId.Front, 40, nil, 120, 0.3)
@@ -188,7 +196,7 @@ local function bandstand(folder: Instance, center: Vector3)
 	TownKit.Ball(model, "Finial", center + Vector3.new(0, 16.8, 0), 1.6, C.Yellow, M.Metal, "deco")
 	-- pupitres et instruments (notes de musique néon)
 	part(model, "Stand", Vector3.new(0.2, 3, 0.2), CFrame.new(center + Vector3.new(-2, 3.9, 1)), C.Metal, M.Metal, "deco")
-	part(model, "Note", Vector3.new(1.4, 1.8, 0.2), CFrame.new(center + Vector3.new(-2, 5.6, 1)), C.Pink, M.Neon, "deco")
+	part(model, "Note", Vector3.new(1.4, 1.8, 0.2), CFrame.new(center + Vector3.new(-2, 5.6, 1)), C.Pink, M.SmoothPlastic, "deco")
 end
 
 local function carousel(folder: Instance, center: Vector3)
@@ -239,7 +247,7 @@ local function garland(folder: Instance, a: Vector3, b: Vector3, seed: number)
 	for i = 1, 5 do
 		local t = i / 6
 		local p = a:Lerp(b, t) - Vector3.new(0, 2.2 * (1 - (2 * t - 1) ^ 2) + 0.35, 0)
-		TownKit.Ball(folder, "Bulb", p, 0.55, colors[(i + seed) % #colors + 1], M.Neon, "deco")
+		TownKit.Ball(folder, "Bulb", p, 0.42, colors[(i + seed) % #colors + 1], M.Neon, "deco")
 	end
 end
 
@@ -282,7 +290,16 @@ local function freeArcs(blocked: { { number } }): { { number } }
 	return free
 end
 
-local function shopRing(folder: Instance, geo: TownKit.Geo): number
+-- (v9.6) Couronne : d'abord les 6 BOUTIQUES OÙ L'ON ENTRE (TownShops,
+-- 30 studs de large : elles tiennent toujours, de 4 à 12 parcelles), puis
+-- des boutiques de décor (fermées) dans la place qui reste, de part et
+-- d'autre. Renvoie (boutiques de décor, boutiques où l'on entre).
+local SHOP_MARGIN = 1.2 -- (studs) de chaque côté d'une façade
+local function angularWidth(w: number): number
+	return 2 * math.atan((w / 2 + SHOP_MARGIN) / FACADE_R)
+end
+
+local function shopRing(folder: Instance, geo: TownKit.Geo, shopsFolder: Instance): (number, number)
 	local O = geo.Origin
 	local blocked = {}
 	for _, slot in ipairs(geo.Streets) do
@@ -293,20 +310,43 @@ local function shopRing(folder: Instance, geo: TownKit.Geo): number
 	-- mairie (au fond, face à l'avenue)
 	local hallHalf = math.atan(36 / FACADE_R)
 	table.insert(blocked, { math.pi - hallHalf, math.pi + hallHalf })
-	local used = 0
-	local shops = TownBuildings.SHOPS
+	local enterQueue = table.clone(TownShops.SPECS)
+	-- décor : pas de 2e magasin de jouets / de fleurs (la jardinerie en vend)
+	local decor = {}
+	for _, spec in ipairs(TownBuildings.SHOPS) do
+		if spec.Kind ~= "Toys" and spec.Kind ~= "Flowers" then
+			table.insert(decor, spec)
+		end
+	end
+	local used, entered = 0, 0
+	local enterWidth = angularWidth(TownShops.W)
 	for _, arc in ipairs(freeArcs(blocked)) do
-		-- remplit l'arc de boutiques (largeur angulaire = 2 atan((W/2 + 1) / R)), centré
-		local chosen = {}
+		local span = arc[2] - arc[1]
+		local inner, sides = {}, {}
 		local total = 0
+		while enterQueue[1] and total + enterWidth <= span do
+			table.insert(inner, { Enter = table.remove(enterQueue, 1), Width = enterWidth })
+			total += enterWidth
+		end
 		while true do
-			local spec = shops[(used + #chosen) % #shops + 1]
-			local width = 2 * math.atan((spec.W / 2 + 1.2) / FACADE_R)
-			if total + width > arc[2] - arc[1] then
+			local spec = decor[(used + #sides) % #decor + 1]
+			local width = angularWidth(spec.W)
+			if total + width > span then
 				break
 			end
-			table.insert(chosen, { Spec = spec, Width = width })
+			table.insert(sides, { Spec = spec, Width = width })
 			total += width
+		end
+		-- décor réparti des deux côtés des boutiques où l'on entre
+		local chosen = {}
+		for i = 1, #sides, 2 do
+			table.insert(chosen, sides[i])
+		end
+		for _, item in ipairs(inner) do
+			table.insert(chosen, item)
+		end
+		for i = 2, #sides, 2 do
+			table.insert(chosen, sides[i])
 		end
 		local a = (arc[1] + arc[2]) / 2 - total / 2
 		for _, item in ipairs(chosen) do
@@ -315,23 +355,34 @@ local function shopRing(folder: Instance, geo: TownKit.Geo): number
 			local p = O + d * FACADE_R + Vector3.new(0, WALK_Y, 0)
 			-- (façade vers la place : LookVector = vers le centre)
 			local cf = CFrame.lookAt(p, Vector3.new(O.X, p.Y, O.Z))
-			-- trottoir devant la boutique (entre la place et la façade)
-			part(folder, "ShopApron", Vector3.new(item.Spec.W + 2, 1.3, 6), cf * CFrame.new(0, -0.65, -2.5), C.Walk, M.Pavement, "solid")
-			TownBuildings.Shop(folder, cf * CFrame.new(0, 0, 0), item.Spec, used + 1)
-			used += 1
+			local w = item.Enter and TownShops.W or item.Spec.W
+			-- trottoir devant la boutique (un poil au-dessus du pavage : pas de
+			-- faces confondues avec la place)
+			part(folder, "ShopApron", Vector3.new(w + 2, 1.3, 6), cf * CFrame.new(0, -0.65 + 0.04, -2.5), C.Walk, M.Pavement, "solid")
+			if item.Enter then
+				entered += 1
+				TownShops.Shop(shopsFolder, cf, item.Enter, entered)
+			else
+				TownBuildings.Shop(folder, cf, item.Spec, used + 1)
+				used += 1
+			end
 			a += item.Width
 		end
 	end
-	return used
+	if enterQueue[1] then
+		warn("[TownPlaza] boutiques sans place : " .. #enterQueue)
+	end
+	return used, entered
 end
 
 ----------------------------------------------------------------------
 -- Construction
 ----------------------------------------------------------------------
 
-export type PlazaResult = { Screen: TownBuildings.Screen, ShopsUsed: number }
+export type PlazaResult = { Screen: TownBuildings.Screen, ShopsUsed: number, Enterable: number }
 
-function TownPlaza.Build(folder: Instance, geo: TownKit.Geo): PlazaResult
+-- `shopsFolder` : dossier des boutiques où l'on entre (DopamineTown.Shops)
+function TownPlaza.Build(folder: Instance, geo: TownKit.Geo, shopsFolder: Instance?): PlazaResult
 	local plaza = Instance.new("Folder")
 	plaza.Name = "Plaza"
 	plaza.Parent = folder
@@ -387,8 +438,8 @@ function TownPlaza.Build(folder: Instance, geo: TownKit.Geo): PlazaResult
 	local hallCF = CFrame.lookAt(hallP, ground)
 	part(plaza, "HallApron", Vector3.new(70, 1.3, 8), hallCF * CFrame.new(0, -0.65, -1.5), C.Walk, M.Pavement, "solid")
 	local _, screen = TownBuildings.TownHall(plaza, hallCF)
-	local used = shopRing(plaza, geo)
-	return { Screen = screen, ShopsUsed = used }
+	local used, entered = shopRing(plaza, geo, shopsFolder or plaza)
+	return { Screen = screen, ShopsUsed = used, Enterable = entered }
 end
 
 return TownPlaza

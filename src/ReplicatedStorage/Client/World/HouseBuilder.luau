@@ -425,7 +425,8 @@ local function roomFront(self: House, shell: Model, room: any, slot: number)
 	kit:Box("LampCord", cx - 0.06, cx + 0.06, top - 2, top, cd - 0.06, cd + 0.06, Color3.fromRGB(92, 58, 96), M.SmoothPlastic, { Shadow = false })
 	kit:CylY("LampShade", cx, top - 2.8, cd, 2.2, 1, trim:Lerp(WHITE, 0.4), M.Fabric, { Shadow = false })
 	local bulb = kit:Ball("LampBulb", cx, top - 2.9, cd, 0.8, Color3.fromRGB(255, 236, 190), M.Neon, { Shadow = false })
-	kit:Light(bulb, Color3.fromRGB(255, 226, 184), 30, 0.9)
+	-- (v9.6 "flash bang" : portée 30 -> 16, la lumière ne traverse plus 3 pièces ; 0.9 -> 0.75)
+	kit:Light(bulb, Color3.fromRGB(255, 226, 184), 16, 0.75)
 end
 
 -- (v9.5) crochets : chaque modèle d'objet construit / retiré

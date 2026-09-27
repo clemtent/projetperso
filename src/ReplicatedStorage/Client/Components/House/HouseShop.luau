@@ -1187,10 +1187,11 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 		if kind == "Wallpaper" or kind == "Floor" then
 			local owned = kind == "Wallpaper" and house.OwnedWallpapers or house.OwnedFloors
 			local equippedId = room and (kind == "Wallpaper" and room.Wallpaper or room.Floor) or nil
-			return owned[id] == true or cost <= 0, equippedId == id
+			return owned[id] == true or cost <= 0 or HouseCommon.IsRoomTypeStyle(room, kind, id), equippedId == id
 		end
 		local def = HouseCommon.LookKinds[kind]
 		local owned = HouseCommon.OwnsLook(house, kind, id) or (cost <= 0 and def ~= nil and def.Scope ~= "Garden")
+			or (def ~= nil and def.Scope == "Room" and HouseCommon.IsRoomTypeStyle(room, kind, id)) -- (v9.6) style du type de pièce : offert
 		if not def then
 			return owned, false
 		end

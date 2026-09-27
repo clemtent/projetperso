@@ -38,7 +38,13 @@ type Placed = HouseCommon.Placed
 
 local HouseSurfaces = {}
 
--- Dessus des meubles : { x0, x1, y } (boîte 100 x 100)
+-- Dessus des meubles : { x0, x1, y, z?, gap? } (boîte 100 x 100)
+--   x0 / x1 = bords, y = hauteur du dessus (0 = haut de la boîte) ;
+--   (v9.6) z = profondeur du milieu du dessus en 3D (fraction de la
+--   profondeur du modèle : -0,5 = fond, +0,5 = devant ; 0 par défaut) ;
+--   gap = hauteur libre au-dessus (étagère fermée : le rayon du dessus),
+--   nil = pas de limite. Un meuble peut avoir PLUSIEURS dessus (niveaux) :
+--   l'index d'un dessus = l'index du "Top" de la recette 3D (House3DRecipes).
 local SURFACES: { [string]: { { number } } } = {
 	-- meubles d'origine
 	WoodenChair = { { 16, 84, 52 } },
@@ -46,7 +52,8 @@ local SURFACES: { [string]: { { number } } } = {
 	Nightstand = { { 8, 92, 44 } },
 	DrawerCabinet = { { 8, 94, 24 } },
 	StudyDesk = { { 4, 96, 48 } },
-	Bookshelf = { { 8, 92, 9 } },
+	-- (v9.6) bibliothèque : le dessus + ses 3 rayons (devant les livres)
+	Bookshelf = { { 8, 92, 9 }, { 12, 88, 38, 0.3, 22 }, { 12, 88, 64, 0.3, 20 }, { 12, 88, 90, 0.3, 20 } },
 	VanityTable = { { 4, 96, 55 } },
 	Wardrobe = { { 6, 94, 11 } },
 	Fireplace = { { 2, 98, 14 } },
@@ -84,7 +91,10 @@ local SURFACES: { [string]: { { number } } } = {
 	DoubleBed = { { 10, 90, 58 } },
 	EggChair = { { 50, 78, 61 } },
 	-- v9 : étagère MURALE (objet mural : boîte centrée sur son Y)
-	FloatingShelf = { { 6, 94, 34 }, { 6, 94, 72 } },
+	FloatingShelf = { { 6, 94, 34 }, { 6, 94, 72, 0, 34 } },
+	-- (v9.6) étagère murale "mignonne" et étagère à trophées : leur planche
+	WallShelf = { { 4, 96, 60 } },
+	TrophyShelf = { { 4, 96, 66 } },
 	-- v9.1 : nouveaux meubles (Art/Cozy91, Art/Fun91)
 	ToyChest = { { 8, 92, 32 } },
 	Pouf = { { 20, 80, 52 } },
@@ -224,6 +234,8 @@ export type Surface = {
 	Y: number, -- hauteur du dessus (fraction de la hauteur)
 	Base: number, -- bas du meuble (pieds d'un meuble au sol, bas d'une étagère murale)
 	Index: number, -- n° du dessus (meuble à plusieurs dessus)
+	Depth: number, -- (v9.6) profondeur 3D du milieu (fraction de la profondeur du modèle)
+	Gap: number?, -- (v9.6) hauteur libre au-dessus (fraction de la hauteur), nil = pas de limite
 }
 
 -- Place d'une chaise à une table
@@ -320,13 +332,25 @@ function HouseSurfaces.Of(entry: Placed, roomW: number, roomH: number): { Surfac
 		return result
 	end
 	local base = baseOf(entry, item, roomH)
+	local k = item.Size * entry.S / 100
 	for index, s in ipairs(list) do
 		local a, y = HouseSurfaces.BoxToRoom(entry, item, s[1], s[3], roomW, roomH)
 		local b = HouseSurfaces.BoxToRoom(entry, item, s[2], s[3], roomW, roomH)
+		local gap = tonumber(s[5])
 		-- (objet retourné : les bords s'inversent)
-		table.insert(result, { Entry = entry, L = math.min(a, b), R = math.max(a, b), Y = y, Base = base, Index = index })
+		table.insert(result, { Entry = entry, L = math.min(a, b), R = math.max(a, b), Y = y, Base = base, Index = index,
+			Depth = tonumber(s[4]) or 0, Gap = if gap then gap * k / math.max(1, roomH) else nil })
 	end
 	return result
+end
+
+-- (v9.6) Un objet de hauteur `height` (fraction de la hauteur de la pièce)
+-- tient-il sur ce dessus ? (rayon fermé : pas beaucoup plus haut que la
+-- place libre ; le dessin d'un objet ne remplit pas toute sa boîte)
+local GAP_SLACK = 1.75
+function HouseSurfaces.Fits(surface: Surface, height: number): boolean
+	local gap = surface.Gap
+	return gap == nil or height <= gap * GAP_SLACK
 end
 
 -- Objets qui ne doivent pas servir de support (l'objet lui-même et ce qu'il porte)
@@ -345,9 +369,13 @@ function HouseSurfaces.Find(list: { Placed }, x: number, y: number, height: numb
 		if not excluded(other, skip) and SURFACES[other.I] then
 			for _, surface in ipairs(HouseSurfaces.Of(other, roomW, roomH)) do
 				local down = math.min(SNAP_DOWN, math.max(0.015, (surface.Base - surface.Y) * 0.55))
+				-- (v9.6) rayon d'une étagère fermée : on ne vise que la place
+				-- entre ce rayon et celui du dessus
+				local gap = surface.Gap
+				local up = if gap then math.min(SNAP_UP, gap * 0.9 + 0.01) else SNAP_UP
 				if x >= surface.L - SNAP_SIDE and x <= surface.R + SNAP_SIDE
-					and y >= surface.Y - SNAP_UP and y <= surface.Y + down
-					and surface.Y >= minY and surface.Y - height * 0.92 > -0.02 then
+					and y >= surface.Y - up and y <= surface.Y + down
+					and surface.Y >= minY and surface.Y - height * 0.92 > -0.02 and HouseSurfaces.Fits(surface, height) then
 					-- (le plus proche en hauteur ; à égalité, le meuble le plus en avant)
 					local score = math.abs(y - surface.Y) - surface.Base * 0.001
 					if score < bestScore then
@@ -368,7 +396,7 @@ function HouseSurfaces.All(list: { Placed }, height: number, roomW: number, room
 	for _, other in ipairs(list) do
 		if not excluded(other, skip) and SURFACES[other.I] then
 			for _, surface in ipairs(HouseSurfaces.Of(other, roomW, roomH)) do
-				if surface.Y >= minY and surface.Y - height * 0.92 > -0.02 and surface.R - surface.L > 0.01 then
+				if surface.Y >= minY and surface.Y - height * 0.92 > -0.02 and surface.R - surface.L > 0.01 and HouseSurfaces.Fits(surface, height) then
 					table.insert(result, surface)
 				end
 			end
@@ -398,6 +426,65 @@ function HouseSurfaces.SupportOf(entry: Placed, list: { Placed }, roomW: number,
 		end
 	end
 	return best
+end
+
+-- (v9.6) Demi-largeur visible d'un petit objet posé (fraction de la largeur)
+local SIDE_HALF = 0.3
+function HouseSurfaces.HalfWidth(item: Item, scale: number, roomW: number): number
+	return item.Size * scale * SIDE_HALF / math.max(1, roomW)
+end
+
+-- (v9.6) Objets posés sur CE dessus (même meuble, même niveau)
+function HouseSurfaces.OnSurface(surface: Surface, list: { Placed }, roomW: number, roomH: number, skip: { [Placed]: boolean }?): { Placed }
+	local result: { Placed } = {}
+	for _, other in ipairs(list) do
+		if other ~= surface.Entry and not excluded(other, skip) and math.abs(other.Y - surface.Y) <= SUPPORT_EPS then
+			local support = HouseSurfaces.SupportOf(other, list, roomW, roomH)
+			if support and support.Entry == surface.Entry and support.Index == surface.Index then
+				table.insert(result, other)
+			end
+		end
+	end
+	return result
+end
+
+-- (v9.6) Plusieurs objets côte à côte sur un même rayon, sans se chevaucher :
+-- x voulu -> x libre le plus proche le long du dessus [L, R] (x inchangé
+-- s'il n'y a plus de place). `skip` = l'objet déplacé et ce qu'il porte.
+function HouseSurfaces.FreeX(surface: Surface, list: { Placed }, item: Item, scale: number, x: number, roomW: number, roomH: number, skip: { [Placed]: boolean }?): number
+	local half = HouseSurfaces.HalfWidth(item, scale, roomW)
+	local blocks: { { number } } = {}
+	for _, other in ipairs(HouseSurfaces.OnSurface(surface, list, roomW, roomH, skip)) do
+		local otherItem = HouseCommon.ItemsById[other.I]
+		if otherItem then
+			local reach = half + HouseSurfaces.HalfWidth(otherItem, other.S, roomW)
+			table.insert(blocks, { other.X - reach, other.X + reach })
+		end
+	end
+	local function free(value: number): boolean
+		for _, block in ipairs(blocks) do
+			if value > block[1] + 1e-6 and value < block[2] - 1e-6 then
+				return false
+			end
+		end
+		return true
+	end
+	local target = math.clamp(x, surface.L, surface.R)
+	if free(target) then
+		return target
+	end
+	local best, bestDistance = nil, math.huge
+	for _, block in ipairs(blocks) do
+		for _, candidate in ipairs({ block[1], block[2] }) do
+			if candidate >= surface.L - 1e-6 and candidate <= surface.R + 1e-6 and free(candidate) then
+				local distance = math.abs(candidate - target)
+				if distance < bestDistance then
+					best, bestDistance = candidate, distance
+				end
+			end
+		end
+	end
+	return best or target
 end
 
 ----------------------------------------------------------------------

@@ -14,6 +14,11 @@
 	    tour de l'horloge, et le GRAND ÉCRAN des meilleurs joueurs du serveur
 	    (SurfaceGui mis à jour par TownMap) ;
 	  - silhouette lointaine d'une ville (au-delà des collines).
+	v9.6 : ces boutiques restent du DÉCOR (portes fermées) ; celles où l'on
+	entre sont dans TownShops (qui réutilise Window / GableRoof d'ici).
+	Plus de néon sur les grandes surfaces (marquise, bandeaux, portail de la
+	mairie, cœur de la flèche) : SmoothPlastic / verre ; lumière de l'écran
+	adoucie (portée 18, luminosité 0,8).
 	Repère d'un bâtiment : `cf` = milieu du pied de la façade, LookVector
 	vers la rue ; le volume est derrière (+Z local).
 ]]
@@ -130,14 +135,14 @@ local function shopExtras(parent: Instance, cf: CFrame, spec: ShopSpec, height: 
 		-- cadre de néons autour de l'enseigne + marquise à ampoules
 		local signY = GROUND_H + 1.6
 		local neon = spec.SignColor or C.Pink
-		part(parent, "NeonTop", Vector3.new(w * 0.78, 0.3, 0.3), cf * CFrame.new(0, signY + 1.6, -0.9), neon, M.Neon, "deco")
-		part(parent, "NeonBottom", Vector3.new(w * 0.78, 0.3, 0.3), cf * CFrame.new(0, signY - 1.6, -0.9), neon, M.Neon, "deco")
+		part(parent, "NeonTop", Vector3.new(w * 0.78, 0.3, 0.3), cf * CFrame.new(0, signY + 1.6, -0.9), neon, M.SmoothPlastic, "deco")
+		part(parent, "NeonBottom", Vector3.new(w * 0.78, 0.3, 0.3), cf * CFrame.new(0, signY - 1.6, -0.9), neon, M.SmoothPlastic, "deco")
 		if kind == "Cinema" then
 			part(parent, "Marquee", Vector3.new(w * 0.6, 1.2, 5), cf * CFrame.new(0, GROUND_H - 1.2, -3), Color3.fromRGB(60, 50, 70), M.Metal, "deco")
-			part(parent, "MarqueeLights", Vector3.new(w * 0.6 + 0.2, 0.3, 5.2), cf * CFrame.new(0, GROUND_H - 1.9, -3), Color3.fromRGB(255, 226, 150), M.Neon, "deco")
+			part(parent, "MarqueeLights", Vector3.new(w * 0.6 + 0.2, 0.3, 5.2), cf * CFrame.new(0, GROUND_H - 1.9, -3), Color3.fromRGB(255, 226, 150), M.SmoothPlastic, "deco")
 		else
-			part(parent, "NeonStripe", Vector3.new(0.3, height - 2, 0.3), cf * CFrame.new(-w / 2 + 0.6, height / 2, -0.3), Color3.fromRGB(90, 240, 255), M.Neon, "deco")
-			part(parent, "NeonStripe", Vector3.new(0.3, height - 2, 0.3), cf * CFrame.new(w / 2 - 0.6, height / 2, -0.3), Color3.fromRGB(255, 90, 200), M.Neon, "deco")
+			part(parent, "NeonStripe", Vector3.new(0.3, height - 2, 0.3), cf * CFrame.new(-w / 2 + 0.6, height / 2, -0.3), Color3.fromRGB(90, 240, 255), M.SmoothPlastic, "deco")
+			part(parent, "NeonStripe", Vector3.new(0.3, height - 2, 0.3), cf * CFrame.new(w / 2 - 0.6, height / 2, -0.3), Color3.fromRGB(255, 90, 200), M.SmoothPlastic, "deco")
 		end
 	elseif kind == "Bakery" then
 		-- enseigne suspendue (potence + médaillon)
@@ -279,7 +284,7 @@ function TownBuildings.TownHall(parent: Instance, cf: CFrame): (Model, Screen)
 	end
 	part(model, "Entablature", Vector3.new(cw + 1, 1.6, 4.6), cf * CFrame.new(0, 13.1, 1.2), trim, M.Marble, "decoS")
 	part(model, "PortalDoor", Vector3.new(6, 9, 0.4), cf * CFrame.new(0, 6.8, 2.85), Color3.fromRGB(120, 80, 70), M.Wood, "deco")
-	part(model, "PortalGlass", Vector3.new(4.6, 3, 0.3), cf * CFrame.new(0, 12.4, 2.75), Color3.fromRGB(255, 226, 160), M.Neon, "deco")
+	part(model, "PortalGlass", Vector3.new(4.6, 3, 0.3), cf * CFrame.new(0, 12.4, 2.75), Color3.fromRGB(255, 226, 160), M.Glass, "deco")
 	-- ailes : fenêtres hautes sur 2 étages
 	for _, sx in ipairs({ -1, 1 }) do
 		for f = 0, 1 do
@@ -314,16 +319,17 @@ function TownBuildings.TownHall(parent: Instance, cf: CFrame): (Model, Screen)
 		TownKit.Wedge(model, "Spire", Vector3.new(12, 10, 6), tower * CFrame.new(0, 22, 0) * rot * CFrame.new(0, 0, -3), roof, M.Slate, "decoS")
 		TownKit.Wedge(model, "Spire", Vector3.new(12, 10, 6), tower * CFrame.new(0, 22, 0) * rot * CFrame.Angles(0, math.pi, 0) * CFrame.new(0, 0, -3), roof, M.Slate, "decoS")
 	end
-	TownKit.Ball(model, "SpireHeart", (tower * CFrame.new(0, 28, 0)).Position, 2.4, C.Pink, M.Neon, "deco")
+	TownKit.Ball(model, "SpireHeart", (tower * CFrame.new(0, 28, 0)).Position, 2.4, C.Pink, M.SmoothPlastic, "deco")
 	-- GRAND ÉCRAN (au-dessus du portique, sous l'horloge)
 	local screenCF = cf * CFrame.new(0, 24.5, 2.2)
 	part(model, "ScreenFrame", Vector3.new(30, 14.2, 1.2), screenCF * CFrame.new(0, 0, 0.3), Color3.fromRGB(40, 36, 52), M.Metal, "deco")
 	local screen = part(model, "Screen", Vector3.new(28.6, 12.8, 0.4), screenCF * CFrame.new(0, 0, -0.4), Color3.fromRGB(24, 20, 40), M.SmoothPlastic, "deco")
-	part(model, "ScreenGlow", Vector3.new(30.4, 0.3, 0.3), screenCF * CFrame.new(0, 7.2, -0.5), C.Pink, M.Neon, "deco")
-	part(model, "ScreenGlow", Vector3.new(30.4, 0.3, 0.3), screenCF * CFrame.new(0, -7.2, -0.5), C.Lilac, M.Neon, "deco")
+	part(model, "ScreenGlow", Vector3.new(30.4, 0.3, 0.3), screenCF * CFrame.new(0, 7.2, -0.5), C.Pink, M.SmoothPlastic, "deco")
+	part(model, "ScreenGlow", Vector3.new(30.4, 0.3, 0.3), screenCF * CFrame.new(0, -7.2, -0.5), C.Lilac, M.SmoothPlastic, "deco")
 	local light = part(model, "ScreenLight", Vector3.new(1, 1, 1), screenCF * CFrame.new(0, 0, -6), C.White, M.SmoothPlastic, "deco")
 	light.Transparency = 1
-	TownKit.Light(light, Color3.fromRGB(255, 180, 230), 22, 1.1)
+	-- (v9.6 : lumière douce, pas d'éblouissement)
+	TownKit.Light(light, Color3.fromRGB(255, 196, 232), 18, 0.8)
 	local _, body = TownKit.Surface(screen, Enum.NormalId.Front, 24, Color3.fromRGB(24, 20, 44), 800, 0)
 	TownKit.Gradient(body, Color3.fromRGB(40, 24, 70), Color3.fromRGB(16, 20, 44), 90)
 	local title = TownKit.Label(body, "Title", "🏆 Top players of the server", 0.04, 0.04, 0.92, 0.17, Color3.fromRGB(255, 214, 96), Enum.Font.FredokaOne, true)

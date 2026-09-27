@@ -215,7 +215,8 @@ local function market(folder: Instance, geo: TownKit.Geo, cf: CFrame)
 		{ C.Lemon, Color3.fromRGB(150, 210, 110) }, -- pommes
 	}
 	for i, colors in ipairs(stalls) do
-		local s = cf * CFrame.Angles(0, math.rad((i - 2) * 50), 0) * CFrame.new(0, GROUND_Y + 0.4, -10)
+		-- (v9.6 : posés SUR la place (dessus à +0.15), plus 0.25 au-dessus du sol)
+		local s = cf * CFrame.Angles(0, math.rad((i - 2) * 50), 0) * CFrame.new(0, GROUND_Y + 0.15, -10)
 		part(model, "Counter", Vector3.new(7, 2.6, 2.6), s * CFrame.new(0, 1.3, 0), C.WoodLight, M.WoodPlanks, "solid")
 		part(model, "Goods", Vector3.new(6.4, 0.6, 2), s * CFrame.new(0, 2.9, 0), colors[2], M.SmoothPlastic, "deco")
 		for _, x in ipairs({ -3.3, 3.3 }) do
@@ -267,7 +268,8 @@ local function court(folder: Instance, geo: TownKit.Geo, cf: CFrame)
 	part(model, "Floor", Vector3.new(30, 0.5, 17), cf * CFrame.new(0, GROUND_Y + 0.1, 0), Color3.fromRGB(120, 150, 214), M.Rubber, "solid")
 	part(model, "Paint", Vector3.new(26, 0.1, 13), cf * CFrame.new(0, GROUND_Y + 0.38, 0), Color3.fromRGB(236, 150, 120), M.Rubber, "deco")
 	part(model, "MidLine", Vector3.new(0.3, 0.12, 13), cf * CFrame.new(0, GROUND_Y + 0.4, 0), C.White, M.SmoothPlastic, "deco")
-	TownKit.Disc(model, "Circle", (cf * CFrame.new(0, GROUND_Y + 0.42, 0)).Position, 2.4, 0.1, C.White, M.SmoothPlastic, "deco")
+	-- (v9.6 z-fighting : dessus à +0.49, au-dessus de la peinture (+0.43) et de la ligne (+0.46))
+	TownKit.Disc(model, "Circle", (cf * CFrame.new(0, GROUND_Y + 0.49, 0)).Position, 2.4, 0.1, C.White, M.SmoothPlastic, "deco")
 	for _, sx in ipairs({ -1, 1 }) do
 		local hoop = cf * CFrame.new(sx * 13.8, GROUND_Y, 0)
 		part(model, "HoopPole", Vector3.new(0.5, 10, 0.5), hoop * CFrame.new(sx * 1, 5, 0), C.Metal, M.Metal, "prop")
@@ -374,7 +376,7 @@ local function hills(folder: Instance, geo: TownKit.Geo)
 		local dist = geo.Town + 360 + hash(i, 66) * 80
 		local h = 90 + hash(i, 67) * 80
 		local w = h * 1.5
-		local base = O + Vector3.new(math.sin(a) * dist, GROUND_Y - 4, math.cos(a) * dist)
+		local base = O + Vector3.new(math.sin(a) * dist, GROUND_Y - 5, math.cos(a) * dist)
 		local cf = CFrame.lookAt(base, Vector3.new(O.X, base.Y, O.Z))
 		local rock = Color3.fromRGB(150, 150, 196):Lerp(Color3.fromRGB(176, 170, 214), hash(i, 68))
 		for r = 0, 1 do

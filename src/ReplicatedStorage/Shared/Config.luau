@@ -882,8 +882,11 @@ Config.Monetization = {
 --                ("Cottage" | "Townhouse" | "Loft" | "Mansion").
 --   RoomTypes  : types de pièces (salon, chambre, cuisine...). Les objets
 --                "préférés" d'une pièce (Categories / Items) y donnent
---                +HarmonyBonus de confort. Wallpaper / Floor = style de départ
---                (s'il est possédé, sinon le 1er gratuit).
+--                +HarmonyBonus de confort. Wallpaper / Floor (+ Trim / Mood
+--                facultatifs) = le "look" du type (v9.6) : appliqué tout seul
+--                à l'achat de la pièce et quand on change son type (sauf un
+--                style choisi à la main), GRATUIT et débloqué pour cette pièce
+--                même s'il n'est pas acheté.
 --   RoomCost   : prix de la pièce n°2, x RoomCostGrowth pour chaque suivante.
 --   Wallpapers : papiers peints (Pattern = "Plain" | "Stripes" | "Checker" |
 --                "Dots" | "Hearts" | "Stars" | "Clouds" | "Bricks" | "Wood" |
@@ -954,25 +957,28 @@ Config.House = {
 		{ Id = "Living", Name = "Living room", Icon = "🛋️", Wallpaper = "PinkStripes", Floor = "PlumChecker",
 			Categories = { "Decor" }, Items = { "Sofa", "Beanbag", "Fireplace", "RetroTV", "HomeCinema", "Bookshelf", "DrawerCabinet",
 				"Armchair", "CoffeeTable", "TVStand", "SideTable", "HeartArmchair", "CatSofa", "CloudRug", "KotatsuTable" } },
-		{ Id = "Bedroom", Name = "Bedroom", Icon = "🛏️", Wallpaper = "LilacDots", Floor = "PinkCarpet",
+		{ Id = "Bedroom", Name = "Bedroom", Icon = "🛏️", Wallpaper = "LilacDots", Floor = "PinkCarpet", Trim = "LavenderTrim",
 			Categories = { "Lights" }, Items = { "LoftBed", "CloudBed", "CanopyBed", "Nightstand", "Wardrobe", "VanityTable", "TeddyBear", "BigBear",
 				"DoubleBed", "Dresser", "HeartPillow", "MoonPillow", "BlanketStack", "HeartRug", "Pouf", "Mannequin", "CrystalThrone",
 				"BunkBed", "RaceCarBed", "LockerCabinet" } },
-		{ Id = "Kitchen", Name = "Kitchen", Icon = "🍳", Wallpaper = "MintGingham", Floor = "MintTiles",
+		{ Id = "Kitchen", Name = "Kitchen", Icon = "🍳", Wallpaper = "MintGingham", Floor = "PeachChecker", Trim = "SnowTrim",
 			Categories = { "Kitchen" }, Items = { "DiningTable", "DiningChair", "KitchenIsland", "BarStool", "CafeTable", "BarTable" } },
-		{ Id = "Bathroom", Name = "Bathroom", Icon = "🛁", Wallpaper = "BabyBlueWaves", Floor = "SkyTiles",
+		{ Id = "Bathroom", Name = "Bathroom", Icon = "🛁", Wallpaper = "BabyBlueWaves", Floor = "SkyTiles", Trim = "SnowTrim",
 			Categories = {}, Items = { "Toilet", "Shower", "Bathtub", "HeartMirror", "RubberDucky", "Vase", "ScentedCandle" } },
-		{ Id = "KidsRoom", Name = "Kids room", Icon = "🧸", RequiresRebirths = 1, Wallpaper = "PeachHearts", Floor = "SoftCream",
+		{ Id = "KidsRoom", Name = "Kids room", Icon = "🧸", RequiresRebirths = 1, Wallpaper = "PeachHearts", Floor = "SoftCream", Trim = "ButterTrim",
 			Categories = { "Toys" }, Items = { "MushroomStool", "FloorCushion", "ToyChest", "HeartRug", "StarGarland",
 				"BunkBed", "RaceCarBed", "BrickTable", "RaceTrackRug", "HeroPoster", "ComicPoster", "DinoEggLamp" } },
-		{ Id = "GameRoom", Name = "Game room", Icon = "🎮", RequiresRebirths = 1, Wallpaper = "StarryNight", Floor = "LilacShag",
+		{ Id = "GameRoom", Name = "Game room", Icon = "🎮", RequiresRebirths = 1, Wallpaper = "NeonGrid", Floor = "StarryCarpet", Trim = "ElectricBlueTrim",
+			Mood = "NeonNight",
 			Categories = { "Electronics", "Gaming" }, Items = { "GamingChair", "Beanbag", "BoardGame", "BarTable", "BarStool",
 				"GamerChair", "GamingDesk", "GamerBeanbag", "LightningNeon" } },
-		{ Id = "Greenhouse", Name = "Greenhouse", Icon = "🌿", RequiresRebirths = 1, Wallpaper = "MatchaLatte", Floor = "LightOak",
+		{ Id = "Greenhouse", Name = "Greenhouse", Icon = "🌿", RequiresRebirths = 1, Wallpaper = "MatchaLatte", Floor = "MeadowGrass", Trim = "MintTrim",
+			Mood = "FreshForest",
 			Categories = { "Plants" }, Items = { "Fountain", "WindChime", "GardenBench", "PicnicTable", "Lemonade" } },
-		{ Id = "PetRoom", Name = "Pet corner", Icon = "🐾", RequiresRebirths = 2, Wallpaper = "VanillaCream", Floor = "HoneyHerringbone",
+		{ Id = "PetRoom", Name = "Pet corner", Icon = "🐾", RequiresRebirths = 2, Wallpaper = "VanillaCream", Floor = "HoneyHerringbone", Trim = "HoneyTrim",
 			Categories = { "Pets" }, Items = { "Aquarium", "KnittedRug" } },
-		{ Id = "Library", Name = "Library", Icon = "📚", RequiresRebirths = 2, Wallpaper = "HoneyPanels", Floor = "CherryWood",
+		{ Id = "Library", Name = "Library", Icon = "📚", RequiresRebirths = 2, Wallpaper = "HoneyPanels", Floor = "CherryWood", Trim = "WalnutTrim",
+			Mood = "CozyLamp",
 			Categories = {}, Items = { "Bookshelf", "StudyDesk", "DeskGlobe", "WallShelf", "MapPoster", "Telescope",
 				"MantelClock", "CuckooClock", "Laptop", "WoodenChair", "FloorLamp", "SecretDoor",
 				"BigDesk", "BookStack", "Typewriter", "DeskLamp", "RockingChair", "FloatingShelf", "LadderShelf", "RetroComputer", "KittyClock" } },
@@ -980,19 +986,20 @@ Config.House = {
 			Categories = {}, Items = { "GrandPiano", "PinkGuitar", "RecordPlayer", "KaraokeMic", "Speaker", "ToyDrum",
 				"RetroRadio", "CatHeadphones", "DiscoBall", "MusicBox", "Harp", "Jukebox", "Xylophone", "NeonStar",
 				"GuitarAmp", "ElectricGuitar", "DrumKit", "DJBooth", "RGBHeadset" } },
-		{ Id = "Spa", Name = "Spa", Icon = "♨️", RequiresRebirths = 3, Wallpaper = "CloudySky", Floor = "CloudMarble",
+		{ Id = "Spa", Name = "Spa", Icon = "♨️", RequiresRebirths = 3, Wallpaper = "CloudySky", Floor = "CloudMarble", Trim = "SnowTrim",
 			Categories = {}, Items = { "HotSpring", "Bathtub", "Shower", "Fountain", "ScentedCandle", "OilLamp",
 				"Bamboo", "Hibiscus", "Vase", "Beanbag", "EggChair", "Bonsai", "LotusBowl", "SwanStatue", "Hammock", "CloudRug" } },
-		{ Id = "Attic", Name = "Starry attic", Icon = "🌙", RequiresRebirths = 5, Wallpaper = "GalaxyDream", Floor = "RoseQuartz",
+		{ Id = "Attic", Name = "Starry attic", Icon = "🌙", RequiresRebirths = 5, Wallpaper = "GalaxyDream", Floor = "RoseQuartz", Mood = "Moonlight",
 			Categories = {}, Items = { "Telescope", "FloatingPlanet", "GlowStars", "MoonGarland", "MoonLamp",
 				"StarNightLight", "ShootingStarWindow", "GalaxyWindow", "CrystalBall", "Suitcase", "StorageBox", "Ladder",
 				"SnowGlobe", "MushroomLamp", "StarGarland", "JellyfishLamp", "Hologram", "Owl",
 				"PlanetMobile", "RocketModel", "Observatory", "RocketLavaLamp" } },
 		-- v9.2 : pièces "cool"
-		{ Id = "SportsRoom", Name = "Sports room", Icon = "🏀", RequiresRebirths = 5, Wallpaper = "RacingStripes", Floor = "SportsCourt",
+		{ Id = "SportsRoom", Name = "Sports room", Icon = "🏀", RequiresRebirths = 5, Wallpaper = "RacingStripes", Floor = "SportsCourt", Trim = "RacingRedTrim",
+			Mood = "Stadium",
 			Categories = { "Sports" }, Items = { "LockerCabinet", "GamerBeanbag", "Surfboard", "BMXBike", "JerseyFrame",
 				"TrophyShelf", "GoldenTrophy", "Motorbike", "RaceTrackRug" } },
-		{ Id = "SpaceBase", Name = "Space base", Icon = "🛰️", RequiresRebirths = 8, Wallpaper = "DeepSpace", Floor = "MetalPlate",
+		{ Id = "SpaceBase", Name = "Space base", Icon = "🛰️", RequiresRebirths = 8, Wallpaper = "DeepSpace", Floor = "MetalPlate", Trim = "ChromeTrim",
 			Categories = { "Adventure" }, Items = { "Telescope", "ToyRocket", "ToyRobot", "Hologram", "FloatingPlanet",
 				"GalaxyWindow", "UFOLamp", "VRHeadset", "GamerPC", "RocketLavaLamp" } },
 	},

@@ -224,7 +224,7 @@ local function sparkles(parent: Part, color: Color3, rate: number)
 	emitter.Name = "Sparkles"
 	emitter.Texture = "rbxasset://textures/particles/sparkles_main.dds"
 	emitter.Color = ColorSequence.new(WHITE, color)
-	emitter.LightEmission = 1
+	emitter.LightEmission = 0.4 -- (v9.6 : 1 -> 0.4)
 	emitter.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.05), NumberSequenceKeypoint.new(0.4, 0.32), NumberSequenceKeypoint.new(1, 0) })
 	emitter.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1) })
 	emitter.Lifetime = NumberRange.new(0.8, 1.4)
@@ -249,14 +249,16 @@ local function buildPlant(model: Model, flowerId: string, stage: number, opts: F
 		if hero then
 			local water = disc(model, "Water", 2.5, 0.06, CFrame.new(0, 0.03, 0), Color3.fromRGB(104, 178, 224), M.Glass)
 			water.Transparency = 0.25
-			disc(model, "WaterRim", 2.75, 0.04, CFrame.new(0, 0.01, 0), Color3.fromRGB(120, 104, 90), M.Slate)
+			-- (v9.6 z-fighting : dessus du bord à 0.02, de l'eau à 0.06)
+			disc(model, "WaterRim", 2.75, 0.04, CFrame.new(0, 0, 0), Color3.fromRGB(120, 104, 90), M.Slate)
 		end
 		local padCount = stage == 0 and 1 or (stage == 1 and 2 or 3)
 		for i = 1, padCount do
 			local a = i * 2.1 + 0.4
 			local r = stage == 0 and 0.3 or 0.62
 			local d = (stage == 0 and 0.55 or (stage == 1 and 0.8 or 1.0)) * (hero and 1 or 0.8)
-			disc(model, "Pad", d, 0.05, CFrame.new(math.cos(a) * r, 0.09 + i * 0.004, math.sin(a) * r), i % 2 == 0 and LEAF_DARK or LEAF, M.SmoothPlastic)
+			-- (v9.6 z-fighting : nénuphars étagés de 0.03, plus 0.004)
+			disc(model, "Pad", d, 0.05, CFrame.new(math.cos(a) * r, 0.09 + i * 0.03, math.sin(a) * r), i % 2 == 0 and LEAF_DARK or LEAF, M.SmoothPlastic)
 		end
 		if stage == 0 then
 			return 0.2
@@ -283,8 +285,8 @@ local function buildPlant(model: Model, flowerId: string, stage: number, opts: F
 			sparkles(core, GOLD, 5)
 			local light = Instance.new("PointLight")
 			light.Color = Color3.fromRGB(255, 214, 120)
-			light.Range = 7
-			light.Brightness = 1.2
+			light.Range = 6 -- (v9.6 : 7 / 1.2 -> 6 / 0.6)
+			light.Brightness = 0.6
 			light.Shadows = false
 			light.Parent = core
 		end
@@ -789,7 +791,9 @@ function GardenBuilder._buildBed(self: Garden, folder: Instance, index: number, 
 	end
 	for _, sx in ipairs({ -1, 1 }) do
 		for _, sz in ipairs({ -1, 1 }) do
-			newPart(model, "Post", Vector3.new(0.62, h + 0.36, 0.62), cf * CFrame.new(sx * (w / 2 - 0.2), (h + 0.36) / 2, sz * (d / 2 - 0.2)), WOOD_DARK, M.Wood)
+			-- (v9.6 : 0.72 et plus 0.62 : les faces du poteau dépassent nettement du
+			-- rebord au lieu d'être à 0,01 stud des siennes -> plus de scintillement)
+			newPart(model, "Post", Vector3.new(0.72, h + 0.36, 0.72), cf * CFrame.new(sx * (w / 2 - 0.2), (h + 0.36) / 2, sz * (d / 2 - 0.2)), WOOD_DARK, M.Wood)
 		end
 	end
 	-- terre
@@ -957,8 +961,8 @@ function GardenBuilder._buildDecor(self: Garden, folder: Instance, pathZ: number
 		local lamp = newPart(folder, "Lamp", Vector3.new(0.62, 0.7, 0.62), p * CFrame.new(0, 3.8, 0), Color3.fromRGB(255, 226, 160), M.Neon)
 		local light = Instance.new("PointLight")
 		light.Color = Color3.fromRGB(255, 214, 150)
-		light.Range = 14
-		light.Brightness = 1.4
+		light.Range = 12 -- (v9.6 : 14 / 1.4 -> 12 / 0.8)
+		light.Brightness = 0.8
 		light.Shadows = false
 		light.Enabled = false
 		light.Parent = lamp
@@ -1015,7 +1019,7 @@ function GardenBuilder._buildDecor(self: Garden, folder: Instance, pathZ: number
 		for k = 0, 3 do
 			local arm = hubCF * CFrame.Angles(0, 0, k * math.pi / 2)
 			newPart(blades, "Arm", Vector3.new(0.2, 3.2, 0.12), arm * CFrame.new(0, 1.7, 0), WOOD_DARK, M.Wood)
-			newPart(blades, "Sail", Vector3.new(0.9, 2.5, 0.06), arm * CFrame.new(0.52, 1.95, 0.02), k % 2 == 0 and Color3.fromRGB(255, 250, 244) or Color3.fromRGB(255, 196, 214), M.Fabric)
+			newPart(blades, "Sail", Vector3.new(0.9, 2.5, 0.06), arm * CFrame.new(0.52, 1.95, 0.1), k % 2 == 0 and Color3.fromRGB(255, 250, 244) or Color3.fromRGB(255, 196, 214), M.Fabric)
 		end
 		blades.PrimaryPart = hub
 		blades.Parent = folder
@@ -1382,7 +1386,7 @@ function GardenBuilder._pop(self: Garden, bed: any, flowerId: string, reward: nu
 	stars.Name = "Stars"
 	stars.Texture = "rbxasset://textures/particles/sparkles_main.dds"
 	stars.Color = ColorSequence.new(WHITE, GOLD)
-	stars.LightEmission = 1
+	stars.LightEmission = 0.4 -- (v9.6 : 1 -> 0.4)
 	stars.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.6), NumberSequenceKeypoint.new(1, 0) })
 	stars.Transparency = NumberSequence.new(0, 1)
 	stars.Lifetime = NumberRange.new(0.5, 0.9)

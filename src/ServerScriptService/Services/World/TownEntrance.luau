@@ -116,7 +116,9 @@ local function gate(folder: Instance, gcf: CFrame)
 		local p1 = gcf * Vector3.new(math.cos(a1) * radius, spring + math.sin(a1) * radius, 0)
 		local mid = (p0 + p1) / 2
 		local out = (mid - (gcf * Vector3.new(0, spring, 0))).Unit
-		local block = part(model, "Voussoir", Vector3.new((p1 - p0).Magnitude + 0.3, 2.6, 4), CFrame.fromMatrix(mid + out * 1.1, (p1 - p0).Unit, out), i % 2 == 0 and Color3.fromRGB(255, 214, 226) or Color3.fromRGB(246, 232, 218), M.Limestone, "solid")
+		-- (v9.6 z-fighting : les voussoirs se chevauchent de 0.3 ; profondeur
+		-- alternée 4 / 4.12 pour que leurs faces avant / arrière ne soient pas confondues)
+		local block = part(model, "Voussoir", Vector3.new((p1 - p0).Magnitude + 0.3, 2.6, i % 2 == 0 and 4.12 or 4), CFrame.fromMatrix(mid + out * 1.1, (p1 - p0).Unit, out), i % 2 == 0 and Color3.fromRGB(255, 214, 226) or Color3.fromRGB(246, 232, 218), M.Limestone, "solid")
 		block.CastShadow = true
 	end
 	-- remplissage au-dessus de l'arche (écoinçons) + fronton
@@ -164,7 +166,7 @@ local function mapBoard(folder: Instance, cf: CFrame, geo: TownKit.Geo): MapBoar
 	end
 	part(model, "Roof", Vector3.new(18.5, 0.6, 2.6), cf * CFrame.new(0, 12.2, 0.2) * CFrame.Angles(math.rad(-12), 0, 0), Color3.fromRGB(150, 116, 206), M.Slate, "deco")
 	local board = part(model, "Board", Vector3.new(16, 9.6, 0.5), cf * CFrame.new(0, 6.6, 0.2), C.Wood, M.Wood, "solid")
-	local _, body = TownKit.Surface(board, Enum.NormalId.Front, 36, Color3.fromRGB(252, 244, 226), 200, 0.15)
+	local _, body = TownKit.Surface(board, Enum.NormalId.Front, 36, Color3.fromRGB(252, 244, 226), 200, 0.5)
 	TownKit.Stroke(body, Color3.fromRGB(176, 124, 84), 6)
 	TownKit.Label(body, "Title", "🗺️ Town map", 0.03, 0.02, 0.5, 0.1, C.Ink, Enum.Font.FredokaOne, true)
 	-- zone de la carte (carrée, à gauche) + légende (à droite)
@@ -253,7 +255,7 @@ local function welcomeSign(folder: Instance, cf: CFrame)
 		TownKit.Ball(model, "Flower", (cf * CFrame.new(i * 1.9, 2.6, -0.6)).Position, 1.2, TownKit.FLOWERS[(i + 4) % #TownKit.FLOWERS + 1], M.SmoothPlastic, "deco")
 	end
 	local board = part(model, "Board", Vector3.new(14, 6, 0.6), cf * CFrame.new(0, 6, 0.6), Color3.fromRGB(255, 244, 250), M.SmoothPlastic, "solid")
-	local _, body = TownKit.Surface(board, Enum.NormalId.Front, 36, nil, 260, 0.1)
+	local _, body = TownKit.Surface(board, Enum.NormalId.Front, 36, nil, 260, 0.5)
 	TownKit.Gradient(body, Color3.fromRGB(255, 240, 248), Color3.fromRGB(255, 212, 234), 90)
 	body.BackgroundTransparency = 0
 	TownKit.Stroke(body, C.Pink, 6)
@@ -280,7 +282,7 @@ local function bus(folder: Instance, cf: CFrame)
 	TownKit.Label(board, "Text", "🧠 DOPAMINE TOWN", 0.03, 0.05, 0.94, 0.9, Color3.fromRGB(255, 190, 90), Enum.Font.GothamBlack, false)
 	part(model, "Bumper", Vector3.new(7.6, 1, 0.6), cf * CFrame.new(0, 1.4, -13.1), C.MetalLight, M.Metal, "deco")
 	for _, x in ipairs({ -2.6, 2.6 }) do
-		part(model, "Headlight", Vector3.new(1.2, 0.7, 0.2), cf * CFrame.new(x, 2.4, -13.1), C.Glow, M.Neon, "deco")
+		TownKit.Glow(part(model, "Headlight", Vector3.new(1.2, 0.7, 0.2), cf * CFrame.new(x, 2.4, -13.1), C.Glow, M.SmoothPlastic, "deco"))
 	end
 	for _, z in ipairs({ -8.5, 8 }) do
 		for _, x in ipairs({ -3.5, 3.5 }) do
@@ -297,13 +299,12 @@ local function busStop(folder: Instance, cf: CFrame)
 	part(model, "Roof", Vector3.new(12.4, 0.5, 5.2), cf * CFrame.new(0, 8.4, 0), C.White, M.SmoothPlastic, "decoS")
 	part(model, "BackGlass", Vector3.new(11, 6.6, 0.25), cf * CFrame.new(0, 4.6, 2.2), C.Glass, M.Glass, "deco").Transparency = 0.5
 	for _, x in ipairs({ -5.8, 5.8 }) do
-		part(model, "Post", Vector3.new(0.4, 8.2, 0.4), cf * CFrame.new(x, 4.2, 2.2), C.MetalLight, M.Metal, "prop")
+		part(model, "Post", Vector3.new(0.4, 8.2, 0.4), cf * CFrame.new(x * 0.99, 4.2, 2.2), C.MetalLight, M.Metal, "prop")
 	end
-	local seat = part(model, "Bench", Vector3.new(8, 0.4, 1.6), cf * CFrame.new(0, 1.8, 1.3), C.WoodLight, M.WoodPlanks, "solid", "Seat")
-	seat.CanCollide = true
-	seat.CanTouch = true
+	-- (v9.6 : vrai banc TownKit, dos à la vitre, plus une planche flottante)
+	TownKit.Bench(model, cf * CFrame.new(0, 0.3, 0.9))
 	local ad = part(model, "Ad", Vector3.new(0.3, 5.4, 3.4), cf * CFrame.new(6.1, 4.2, 0.4), C.White, M.SmoothPlastic, "deco")
-	local _, body = TownKit.Surface(ad, Enum.NormalId.Right, 40, nil, 150, 0)
+	local _, body = TownKit.Surface(ad, Enum.NormalId.Right, 40, nil, 150, 0.5)
 	TownKit.Gradient(body, Color3.fromRGB(255, 190, 222), Color3.fromRGB(190, 170, 255), 90)
 	body.BackgroundTransparency = 0
 	TownKit.Label(body, "Ad", "🧠 Click more!", 0.05, 0.3, 0.9, 0.4, C.White, Enum.Font.FredokaOne, true)
@@ -336,7 +337,7 @@ local function outside(folder: Instance, geo: TownKit.Geo, gcf: CFrame)
 	end
 	local colors = { Color3.fromRGB(130, 200, 255), Color3.fromRGB(255, 236, 150), Color3.fromRGB(250, 250, 250), Color3.fromRGB(200, 170, 250) }
 	for i, bay in ipairs({ 0, 1, 4 }) do
-		TownKit.Car(model, lot * CFrame.new(-12 + bay * 6, ROAD_Y, -9) * CFrame.Angles(0, math.pi, 0), colors[i])
+		TownKit.Car(model, lot * CFrame.new(-12 + bay * 6, ROAD_Y, -9) * CFrame.Angles(0, math.pi, 0), colors[i], ({ "CityCar", "BubbleCar", "Hatchback" })[i], {}) -- (v9.6) CarModels
 	end
 	TownKit.Lamp(model, (lot * CFrame.new(0, ROAD_Y, 6)).Position, 0, false, true)
 	geo.Reserve((loop * CFrame.new(0, 0, 0)).Position, 24)
@@ -358,9 +359,10 @@ function TownEntrance.Build(folder: Instance, geo: TownKit.Geo): EntranceResult
 	-- place d'accueil : pavage, bande rose dans l'axe, bordures
 	local center = O + Vector3.new(0, WALK_Y, geo.Front + depth / 2 + 2)
 	part(entrance, "WelcomePlaza", Vector3.new(PLAZA_HALF * 2, 1.3, depth + 4), CFrame.new(center - Vector3.new(0, 0.65, 0)), C.Paving, M.Cobblestone, "solid")
-	part(entrance, "Band", Vector3.new(14, 0.2, depth + 4), CFrame.new(center + Vector3.new(0, 0.03, 0)), C.PavingRose, M.Cobblestone, "deco")
+	-- (v9.6 z-fighting : bande et bordures un peu en retrait des bords du pavage)
+	part(entrance, "Band", Vector3.new(14, 0.2, depth + 3.9), CFrame.new(center + Vector3.new(0, 0.03, 0)), C.PavingRose, M.Cobblestone, "deco")
 	for _, sx in ipairs({ -1, 1 }) do
-		part(entrance, "Border", Vector3.new(1.2, 0.2, depth + 4), CFrame.new(center + Vector3.new(sx * (PLAZA_HALF - 0.6), 0.04, 0)), C.StoneDark, M.Granite, "deco")
+		part(entrance, "Border", Vector3.new(1.1, 0.2, depth + 3.9), CFrame.new(center + Vector3.new(sx * (PLAZA_HALF - 0.6), 0.04, 0)), C.StoneDark, M.Granite, "deco")
 		-- haies le long des bords + arbres en bacs aux coins
 		part(entrance, "Hedge", Vector3.new(2.4, 3.2, depth - 14), CFrame.new(center + Vector3.new(sx * (PLAZA_HALF - 2.4), 1.6, -3)), C.GrassDark, M.Grass, "prop")
 		for _, dz in ipairs({ -depth / 2 + 6, depth / 2 - 10 }) do
@@ -391,7 +393,7 @@ function TownEntrance.Build(folder: Instance, geo: TownKit.Geo): EntranceResult
 	spawn.Name = "TownSpawn"
 	spawn.Anchored = true
 	spawn.Size = Vector3.new(5, 0.3, 5)
-	spawn.CFrame = CFrame.new(spawnGround + Vector3.new(0, 0.05, 0))
+	spawn.CFrame = CFrame.new(spawnGround + Vector3.new(0, 0.08, 0)) -- (v9.6 : dessus à +0.23, au-dessus des rayons)
 	spawn.Color = C.Pink
 	spawn.Material = M.Marble
 	spawn.TopSurface = Enum.SurfaceType.Smooth

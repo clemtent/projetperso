@@ -28,6 +28,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Formulas = require(ReplicatedStorage.Shared.Formulas)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Locale = require(ReplicatedStorage.Shared.Locale)
+local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
 
 export type Item = {
 	Id: string,
@@ -66,6 +67,8 @@ export type RoomTypeDef = {
 	Icon: string,
 	Wallpaper: string,
 	Floor: string,
+	Trim: string?, -- (v9.6) look du type (gratuit pour la pièce)
+	Mood: string?,
 	Categories: { string },
 	Items: { string },
 	FavoriteCategories: { [string]: boolean },
@@ -682,31 +685,30 @@ end
 -- `roomWidth` / `roomHeight` : taille de la pièce en px de maquette.
 -- `onSurface` : petit objet posé SUR un meuble (peut monter jusqu'à
 -- Config.House.TabletopMinY, comme le permet le serveur).
-function HouseCommon.ClampPosition(item: Item, x: number, y: number, scale: number, roomWidth: number, roomHeight: number, onSurface: boolean?): (number, number)
-	local half = (item.Size * scale * 0.38) / math.max(1, roomWidth)
-	half = math.clamp(half, 0.015, 0.2)
-	local minY, maxY = HouseCommon.ZoneBounds(item.Placement)
-	local ratio = HouseCommon.Config.WallRatio
-	local sizeY = (item.Size * scale) / math.max(1, roomHeight)
-	if item.Placement == "Wall" then
-		-- Objet centré sur Y : il reste (presque) entier sur le mur, sans
-		-- passer sous le plafond ni trop descendre sur le sol
-		local halfY = sizeY * 0.4
-		minY = math.max(minY, halfY + 0.02)
-		maxY = math.max(0.1, math.min(maxY, ratio - halfY * 0.7))
-		if minY > maxY then
-			-- Objet plus haut que le mur : centré sur le mur
-			minY = math.min(maxY, ratio / 2 + 0.02)
-			maxY = minY
-		end
-	else
-		if onSurface == true and HouseCommon.CanGoOnFurniture(item) then
-			minY = HouseCommon.Config.TabletopMinY or minY
-		end
-		-- Objet posé par ses pieds : sa tête ne traverse pas le plafond
-		minY = math.min(maxY, math.max(minY, sizeY * 0.92 - 0.02))
+-- (v9.6) Zone valide = WorldLayout.PlacementArea : LA MÊME que l'édition 3D
+-- de la ville (FurnitureEdit) et que le serveur (HouseService).
+function HouseCommon.PlacementArea(item: Item, scale: number, roomWidth: number, roomHeight: number, onSurface: boolean?): (number, number, number, number)
+	local raised: number? = nil
+	if item.Placement ~= "Wall" and onSurface == true and HouseCommon.CanGoOnFurniture(item) then
+		raised = HouseCommon.Config.TabletopMinY
 	end
-	return math.clamp(x, half, 1 - half), math.clamp(y, minY, maxY)
+	return WorldLayout.PlacementArea(item.Placement, item.Size * scale, roomWidth, roomHeight, HouseCommon.Config.WallRatio, raised)
+end
+
+function HouseCommon.ClampPosition(item: Item, x: number, y: number, scale: number, roomWidth: number, roomHeight: number, onSurface: boolean?): (number, number)
+	local x0, x1, y0, y1 = HouseCommon.PlacementArea(item, scale, roomWidth, roomHeight, onSurface)
+	return math.clamp(x, x0, x1), math.clamp(y, y0, y1)
+end
+
+-- (v9.6) Style "du type" d'une pièce (Config.House.RoomTypes Wallpaper /
+-- Floor) : gratuit et débloqué POUR CETTE PIÈCE même s'il n'est pas acheté
+-- (même règle que le serveur). kind = "Wallpaper" | "Floor"
+function HouseCommon.IsRoomTypeStyle(room: Room?, kind: string, id: string): boolean
+	if not room then
+		return false
+	end
+	local roomType = HouseCommon.RoomTypesById[room.Type] :: any
+	return roomType ~= nil and roomType[kind] == id
 end
 
 ----------------------------------------------------------------------

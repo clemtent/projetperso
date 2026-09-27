@@ -35,9 +35,12 @@
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local CollectionService = game:GetService("CollectionService")
 
 local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
 local Config = require(ReplicatedStorage.Shared.Config)
+local GarageLayout = require(ReplicatedStorage.Shared.GarageLayout) -- (v9.6, GARAGE96) 🏎️ aile du garage
 local HouseGarden = require(script.Parent.HouseGarden)
 local HouseKit = require(script.Parent.HouseKit)
 
@@ -95,7 +98,7 @@ local DEFAULT_ROOF: { [string]: Color3 } = {
 local CHIMNEYS: { [string]: number } = { Cottage = 1, Townhouse = 2, Loft = 0, Mansion = 2 }
 HouseFacade.Chimneys = CHIMNEYS
 
-export type Looks = { Wall: Color3?, Roof: Color3?, Pattern: string?, Garden: { string }, Rooms: { [number]: any }, Name: string }
+export type Looks = { Wall: Color3?, Roof: Color3?, Pattern: string?, Garden: { string }, Rooms: { [number]: any }, Name: string, Garage: boolean? }
 export type Built = {
 	Door: BasePart?,
 	Hinge: CFrame?,
@@ -125,6 +128,7 @@ type Ctx = {
 	Hall1: number,
 	DoorX: number,
 	Built: Built,
+	Garage: boolean, -- (v9.6) 🏎️ aile du garage (manoir)
 }
 
 ----------------------------------------------------------------------
@@ -1116,7 +1120,7 @@ STYLES.Loft = function(ctx)
 	sign.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	sign.PixelsPerStud = 20
 	sign.LightInfluence = 0
-	sign.Brightness = 2
+	sign.Brightness = 1 -- (v9.6 FIXES96 : 2 -> 1, enseigne pas éblouissante)
 	sign.MaxDistance = 400
 	sign.Parent = board
 	for index, letter in ipairs({ "L", "O", "F", "T" }) do
@@ -1391,12 +1395,20 @@ STYLES.Mansion = function(ctx)
 		flowerDots(ctx, x1 + 1, x2 - 1, -3.8, 6)
 		-- topiaire à étages près de la tour
 		local tcx = if s < 0 then ctx.Left - T - 1 else ctx.Right + T + 1
-		HouseGarden.Topiary(ctx.G, tcx, -10)
+		if not (ctx.Garage and s > 0) then -- (v9.6 : place du garage)
+			HouseGarden.Topiary(ctx.G, tcx, -10)
+		end
 		-- parterre rond fleuri
 		local bx = gx + s * (ctx.Right - ctx.Left) * 0.24
 		HouseGarden.FlowerBed(ctx.G, bx, -12, 5)
 	end
-	ironFence(ctx, ctx.Left - T - 7, ctx.Right + T + 7, -21, gx - 3.5, gx + 3.5)
+	if ctx.Garage then
+		-- (v9.6) la grille s'arrête contre l'aile du garage, reprend après
+		ironFence(ctx, ctx.Left - T - 7, GarageLayout.X0, -21, gx - 3.5, gx + 3.5)
+		garageWing(ctx)
+	else
+		ironFence(ctx, ctx.Left - T - 7, ctx.Right + T + 7, -21, gx - 3.5, gx + 3.5)
+	end
 end
 
 ----------------------------------------------------------------------
@@ -1433,10 +1445,13 @@ function HouseFacade.Build(kit: any, size: any, looks: Looks): Built
 		Hall1 = hall1,
 		DoorX = WorldLayout.DoorX(size),
 		Built = built,
+		Garage = style == "Mansion" and GarageLayout.Supports(size) and hasGarage(kit, looks),
 	}
 	STYLES[style](ctx)
 	-- déco du jardin choisie dans la maison 2D : mêmes places (de gauche à droite)
-	HouseGarden.Decorations(ctx.G, looks.Garden, dims.Left - 4, dims.Left + dims.Width + 4, -15, style == "Mansion")
+	-- (v9.6 : avec le garage, elle s'arrête avant l'aile)
+	local decoRight = if ctx.Garage then GarageLayout.X0 - 3 else dims.Left + dims.Width + 4
+	HouseGarden.Decorations(ctx.G, looks.Garden, dims.Left - 4, decoRight, -15, style == "Mansion")
 	return built
 end
 

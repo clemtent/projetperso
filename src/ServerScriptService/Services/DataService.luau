@@ -83,6 +83,9 @@ local TEMPLATE = {
 	-- 🚶 Dopamine Town (WorldService) : ouverture de la maison aux visiteurs
 	-- ("Everyone" | "Friends" | "Nobody"), ❤️ reçus, visites, ❤️ donnés aujourd'hui
 	Town = { Open = "Everyone", Likes = 0, Visits = 0, LikeDay = 0, Liked = {}, LikesGiven = 0, LikedRewards = 0, RewardDay = 0 },
+	-- 🚗 Voitures (v9.6, CarService) : possédées, couleur de chacune (Id de
+	-- Config.Cars.Colors), voiture choisie ("" = aucune), 🏎️ garage du manoir
+	Cars = { Owned = {}, Colors = {}, Selected = "", Garage = false },
 	Stats = {
 		TotalClicks = 0,
 		LifetimeDopamine = 0, -- Dopamine gagnée depuis toujours (classement)

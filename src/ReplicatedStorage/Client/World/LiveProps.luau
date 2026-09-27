@@ -463,8 +463,9 @@ end
 
 local function screenOff(rec: ScreenRec)
 	local tint = LiveScreens.Tints[rec.Kind] or rgb(40, 40, 70)
-	rec.Part.Material = Enum.Material.Neon
-	rec.Part.Color = tint:Lerp(Color3.new(0, 0, 0), 0.55)
+	-- (v9.6 : écran en veille = verre sombre mat, plus une dalle Neon)
+	rec.Part.Material = Enum.Material.SmoothPlastic
+	rec.Part.Color = tint:Lerp(Color3.new(0, 0, 0), 0.7)
 end
 
 local function releaseGui(rec: ScreenRec)
@@ -498,7 +499,7 @@ local function claimGui(rec: ScreenRec)
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.FixedSize
 	gui.CanvasSize = canvas
 	gui.LightInfluence = 0
-	gui.Brightness = 1.2
+	gui.Brightness = 1 -- (v9.6 : 1.2 -> 1, écrans pas éblouissants)
 	gui.MaxDistance = rec.Handle.ScreenDistance
 	gui.AlwaysOnTop = false
 	gui.ClipsDescendants = true

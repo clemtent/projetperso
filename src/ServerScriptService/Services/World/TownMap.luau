@@ -17,6 +17,9 @@
 	  - TownNature    : lac + pont, aire de jeux, marché, jardin, basket,
 	                    arbres, bois, collines, montagnes, ville lointaine,
 	                    murs invisibles ;
+	  - TownShops (v9.6) : les boutiques où l'on ENTRE (6 autour de la place,
+	                    placées par TownPlaza) et la 🚗 concession auto (à
+	                    droite de la place d'accueil), dans le dossier Shops ;
 	  - ici : les N parcelles (WorldLayout) : pelouse, clôtures, haie, arbres,
 	    boîte aux lettres et panneau du propriétaire (SetPlotSign, appelé par
 	    WorldService) ; le grand écran et le plan suivent les panneaux.
@@ -28,7 +31,9 @@
 	  attributs de Workspace.DopamineTown : PlotCount, EntranceCF (= SpawnCFrame),
 	    PlazaCF (centre de la place au sol), GateCF (arche, LookVector vers la
 	    place), TownRadius (murs) ;
-	  dossier Seats (sièges créés par WorldService) ; Town.PlazaCFrame =
+	  dossier Seats (sièges créés par WorldService) ; dossier Shops (v9.6 :
+	    boutiques où l'on entre, attributs ShopId / InteriorCF… : TownShops) ;
+	    attribut Shops (nombre de boutiques) ; Town.PlazaCFrame =
 	    SpawnCFrame (retour de chute / apparition sans parcelle).
 	  Les TextLabel des panneaux fixes ont un attribut "LocText" (clé anglaise) :
 	  le client peut les traduire (Locale.T).
@@ -43,6 +48,7 @@ local TownStreets = require(script.Parent.TownStreets)
 local TownPlaza = require(script.Parent.TownPlaza)
 local TownEntrance = require(script.Parent.TownEntrance)
 local TownNature = require(script.Parent.TownNature)
+local TownShops = require(script.Parent.TownShops)
 
 local TownMap = {}
 
@@ -254,10 +260,17 @@ function TownMap.Build(plotCount: number): Town
 	local seats = Instance.new("Folder")
 	seats.Name = "Seats"
 	seats.Parent = folder
+	-- (v9.6) boutiques où l'on entre (coques ; intérieurs : client ShopInteriors)
+	local shops = Instance.new("Folder")
+	shops.Name = "Shops"
+	shops.Parent = folder
 
 	-- (ordre = priorité des 16 vraies lumières : place, entrée, avenue)
-	local plaza = TownPlaza.Build(decor, geo)
+	local plaza = TownPlaza.Build(decor, geo, shops)
 	local entrance = TownEntrance.Build(decor, geo)
+	-- 🚗 concession auto : à droite de la place d'accueil (avant la nature :
+	-- sa place est réservée)
+	TownShops.BuildDealership(shops, geo)
 	TownStreets.Build(decor, geo)
 	TownNature.Build(decor, geo)
 
@@ -275,6 +288,7 @@ function TownMap.Build(plotCount: number): Town
 	folder:SetAttribute("TownRadius", WorldLayout.TownRadius(plotCount))
 	folder:SetAttribute("Parts", TownKit.Stats.Parts)
 	folder:SetAttribute("Lights", TownKit.Stats.Lights)
+	folder:SetAttribute("Shops", #shops:GetChildren())
 	folder.Parent = workspace
 
 	boards = { Plots = plots, Screen = plaza.Screen, Map = entrance.Map }

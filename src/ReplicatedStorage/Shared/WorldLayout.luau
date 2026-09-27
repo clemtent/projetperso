@@ -303,11 +303,20 @@ local function unmapX(dims: RoomDims, x: number, t: number): number
 	return (px * math.max(1, dims.RoomWpx - 2 * sidePx) / dims.RoomWpx + sidePx) / dims.RoomWpx
 end
 
--- Objet au sol : (X, Y) -> (x, z du centre) ; `fw` / `fd` = empreinte
-function WorldLayout.FloorForward(dims: RoomDims, X: number, Y: number, fw: number, fd: number): (number, number)
+-- (v9.6) Meuble "contre le mur" (House3DRecipes Info.Wall : armoire,
+-- bibliothèque, frigo...) : collé au mur du fond tant que t < WALL_SNAP_T
+-- (même règle que House3DLayout)
+WorldLayout.WALL_SNAP_T = 0.55
+
+-- Objet au sol : (X, Y) -> (x, z du centre) ; `fw` / `fd` = empreinte ;
+-- `againstWall` = meuble collé au mur du fond (voir WALL_SNAP_T)
+function WorldLayout.FloorForward(dims: RoomDims, X: number, Y: number, fw: number, fd: number, againstWall: boolean?): (number, number)
 	local t = depthT(dims, finite(Y, 0.8))
 	local limit = math.max(0, dims.W / 2 - fw / 2 - 0.1)
 	local x = math.clamp(mapX(dims, finite(X, 0.5), t), -limit, limit)
+	if againstWall == true and t < WorldLayout.WALL_SNAP_T then
+		return x, fd / 2 + 0.08
+	end
 	local zFront = (t ^ WorldLayout.DEPTH_CURVE) * dims.D
 	local z = math.clamp(zFront - fd / 2, fd / 2 + 0.08, math.max(fd / 2 + 0.08, dims.D - fd / 2 - 0.1))
 	return x, z
@@ -340,6 +349,100 @@ end
 -- Arrondi comme le serveur (HouseService : X / Y à 0,0001)
 function WorldLayout.Round4(value: number): number
 	return math.floor(value / 0.0001 + 0.5) * 0.0001
+end
+
+----------------------------------------------------------------------
+-- (v9.6) ZONE VALIDE d'un objet posé : UNE seule définition (fractions de
+-- la pièce 2D), utilisée par l'éditeur 2D (HouseCommon.ClampPosition),
+-- l'édition 3D de la ville (FurnitureEdit : le fantôme 3D est borné à ce qui
+-- retombe DANS la pièce 2D) et le serveur (HouseService : vérification à la
+-- sauvegarde et réparation des anciennes dispositions au chargement).
+--   - X : l'objet reste (presque) entier dans la largeur de la pièce ;
+--   - objet au sol : pieds dans la bande du sol, tête sous le plafond ;
+--     `raisedMinY` = Y min d'un petit objet qui peut monter SUR un meuble ;
+--   - objet mural : centre sur le mur, sans passer sous le plafond ni sur le sol.
+----------------------------------------------------------------------
+WorldLayout.AREA_HALF_W = 0.38 -- demi-largeur visible (fraction de la taille de l'objet)
+WorldLayout.FLOOR_GAP = 0.035 -- haut de la bande du sol = WallRatio + ça
+WorldLayout.FLOOR_MAX_Y = 0.985 -- pieds au plus bas
+WorldLayout.WALL_MIN_Y = 0.1 -- centre d'un objet mural au plus haut
+WorldLayout.WALL_GAP = 0.03 -- ... et au plus bas : WallRatio - ça
+
+-- (x0, x1, y0, y1) ; `sizePx` = item.Size x S (px de maquette)
+function WorldLayout.PlacementArea(placement: string?, sizePx: number, roomWpx: number, roomHpx: number, wallRatio: number?, raisedMinY: number?): (number, number, number, number)
+	local ratio = math.clamp(finite(wallRatio, WorldLayout.WALL_RATIO), 0.1, 0.9)
+	local size = math.max(0, finite(sizePx, 80))
+	local half = math.clamp(size * WorldLayout.AREA_HALF_W / math.max(1, finite(roomWpx, WorldLayout.ROOM_BASE_PX)), 0.015, 0.2)
+	local sizeY = size / math.max(1, finite(roomHpx, WorldLayout.ROOM_HEIGHT_PX))
+	local minY, maxY
+	if placement == "Wall" then
+		-- sur le MUR DU FOND (entre les murs de côté en perspective de la 2D,
+		-- SIDE_PX de chaque côté) : là où la 3D peut le montrer
+		local wpx = math.max(1, finite(roomWpx, WorldLayout.ROOM_BASE_PX))
+		local side = math.min(WorldLayout.SIDE_PX, wpx * 0.25)
+		local inner = wpx - 2 * side
+		local halfPx = math.min(size * WorldLayout.AREA_HALF_W, wpx * 0.5)
+		local wx0 = (halfPx * inner / wpx + side) / wpx
+		local wx1 = ((wpx - halfPx) * inner / wpx + side) / wpx
+		if wx0 > wx1 then
+			wx0, wx1 = 0.5, 0.5
+		end
+		half = wx0
+		-- centré sur Y : (presque) entier sur le mur
+		local halfY = sizeY * 0.4
+		minY = math.max(WorldLayout.WALL_MIN_Y, halfY + 0.02)
+		maxY = math.max(WorldLayout.WALL_MIN_Y, math.min(ratio - WorldLayout.WALL_GAP, ratio - halfY * 0.7))
+		if minY > maxY then
+			-- objet plus haut que le mur : centré sur le mur
+			minY = math.min(maxY, ratio / 2 + 0.02)
+			maxY = minY
+		end
+	else
+		maxY = WorldLayout.FLOOR_MAX_Y
+		minY = ratio + WorldLayout.FLOOR_GAP
+		local raised = raisedMinY ~= nil and finite(raisedMinY, minY) or nil
+		if raised then
+			minY = raised
+		end
+		-- posé par ses pieds : la tête ne traverse pas le plafond
+		minY = math.min(maxY, math.max(minY, sizeY * 0.92 - 0.02))
+	end
+	-- (zone symétrique : mur du fond comme sol)
+	return half, 1 - half, minY, maxY
+end
+
+-- Valeur bornée puis arrondie à 0,0001 SANS ressortir des bornes
+local function roundInside(value: number, low: number, high: number): number
+	local r = WorldLayout.Round4(math.clamp(value, low, high))
+	if r < low - 1e-9 then
+		r += 0.0001
+	elseif r > high + 1e-9 then
+		r -= 0.0001
+	end
+	return r
+end
+
+-- Position bornée à la zone ET arrondie comme la sauvegarde
+function WorldLayout.ClampToArea(X: number, Y: number, x0: number, x1: number, y0: number, y1: number): (number, number)
+	return roundInside(finite(X, 0.5), x0, x1), roundInside(finite(Y, (y0 + y1) / 2), y0, y1)
+end
+
+-- Objet au sol visé en 3D (x, z du centre) -> position PERMISE : (x, z) à
+-- montrer + (X, Y) à sauvegarder. Le fantôme est TOUJOURS l'image 2D -> 3D
+-- de ce qui sera sauvé (même rendu qu'après un rechargement).
+function WorldLayout.FloorClamp(dims: RoomDims, x: number, z: number, fw: number, fd: number, x0: number, x1: number, y0: number, y1: number, againstWall: boolean?): (number, number, number, number)
+	local X, Y = WorldLayout.FloorInverse(dims, x, z, fd)
+	X, Y = WorldLayout.ClampToArea(X, Y, x0, x1, y0, y1)
+	local x2, z2 = WorldLayout.FloorForward(dims, X, Y, fw, fd, againstWall)
+	return x2, z2, X, Y
+end
+
+-- Objet mural visé en 3D (x, y du pivot) -> (x, y) à montrer + (X, Y) à sauvegarder
+function WorldLayout.WallClamp(dims: RoomDims, x: number, y: number, fw: number, k: number, x0: number, x1: number, y0: number, y1: number): (number, number, number, number)
+	local X, Y = WorldLayout.WallInverse(dims, x, y, k)
+	X, Y = WorldLayout.ClampToArea(X, Y, x0, x1, y0, y1)
+	local x2, y2 = WorldLayout.WallForward(dims, X, Y, fw, k)
+	return x2, y2, X, Y
 end
 
 -- Grille d'aimant (studs) : valeur arrondie au pas

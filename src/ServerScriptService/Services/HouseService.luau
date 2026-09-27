@@ -57,6 +57,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Formulas = require(ReplicatedStorage.Shared.Formulas)
+local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local Net = require(ReplicatedStorage.Shared.Net)
 local RateLimiter = require(script.Parent.RateLimiter)
@@ -154,24 +155,32 @@ local function rotationOf(value): number?
 	return if r == 0 then nil else r
 end
 
-local function normalizeEntry(entry, item, rebirths: number?)
-	local minY, maxY = FLOOR_MIN_Y, 1
-	if item.Placement == "Wall" then
-		minY, maxY = 0, WALL_MAX_Y
-	else
-		-- Petit objet qui peut être posé SUR un meuble (table, étagère, lit...) :
-		-- il peut monter plus haut que le sol (même règle que le client)
-		minY = math.min(FLOOR_MIN_Y, Formulas.GetHouseFloorMinY(item))
+-- (v9.6) Zone valide d'un objet posé : WorldLayout.PlacementArea, LA MÊME
+-- que l'éditeur 2D (HouseCommon.ClampPosition) et l'édition 3D de la ville
+-- (FurnitureEdit). Un petit objet qui peut aller SUR un meuble (ou un petit
+-- objet d'une ancienne sauvegarde) peut monter jusqu'à TabletopMinY.
+-- `roomWpx` = largeur 2D de la pièce (px de maquette) de la maison actuelle.
+local function areaOf(item, scale: number, roomWpx: number): (number, number, number, number)
+	local raised: number? = nil
+	if item.Placement ~= "Wall" then
+		local floorMin = Formulas.GetHouseFloorMinY(item)
+		if floorMin < FLOOR_MIN_Y then
+			raised = floorMin
+		end
 	end
-	local x = math.clamp(numberOr(entry.X, 0.5), 0, 1)
-	local y = math.clamp(numberOr(entry.Y, (minY + maxY) / 2), minY, maxY)
-	local s = math.clamp(numberOr(entry.S, 1), MIN_SCALE, MAX_SCALE)
+	return WorldLayout.PlacementArea(item.Placement, (tonumber(item.Size) or 80) * scale, roomWpx, WorldLayout.ROOM_HEIGHT_PX, WALL_MAX_Y, raised)
+end
+
+local function normalizeEntry(entry, item, rebirths: number?, roomWpx: number?)
+	local s = math.clamp(round(math.clamp(numberOr(entry.S, 1), MIN_SCALE, MAX_SCALE), 0.001), MIN_SCALE, MAX_SCALE)
+	local x0, x1, y0, y1 = areaOf(item, s, roomWpx or WorldLayout.ROOM_BASE_PX)
+	local x, y = WorldLayout.ClampToArea(numberOr(entry.X, 0.5), numberOr(entry.Y, (y0 + y1) / 2), x0, x1, y0, y1)
 	local z = math.clamp(math.floor(numberOr(entry.Z, 0)), 0, MAX_Z)
 	return {
 		I = item.Id,
-		X = round(x, 0.0001),
-		Y = math.clamp(round(y, 0.0001), minY, maxY),
-		S = math.clamp(round(s, 0.001), MIN_SCALE, MAX_SCALE),
+		X = x,
+		Y = y,
+		S = s,
 		Z = z,
 		F = entry.F == true or nil,
 		C = tintOf(entry, rebirths or 0),
@@ -213,9 +222,17 @@ local function refitLayout(room, oldSize, newSize)
 	if spread > half and spread > 0 then
 		factor = half / spread -- trop large : on resserre autour du centre
 	end
+	local roomWpx = WorldLayout.RoomWidthPx(newSize)
 	for _, entry in ipairs(room.Placed) do
 		local px = (entry.X - 0.5) * oldWidth * factor
-		entry.X = round(math.clamp(0.5 + px / newWidth, 0, 1), 0.0001)
+		local x = math.clamp(0.5 + px / newWidth, 0, 1)
+		-- (v9.6) reste dans la zone valide de la nouvelle largeur
+		local item = Config.HouseItemsById[entry.I]
+		if item then
+			local x0, x1 = areaOf(item, numberOr(entry.S, 1), roomWpx)
+			x = math.clamp(x, x0, x1)
+		end
+		entry.X = round(x, 0.0001)
 	end
 end
 
@@ -263,17 +280,66 @@ local function firstFreeSlot(house, maxRooms: number): number?
 	return nil
 end
 
--- Style de départ d'une pièce : celui du type s'il est possédé, sinon le 1er
-local function defaultStyles(house, roomType): (string, string)
-	local wallpaper = roomType.Wallpaper
-	if type(wallpaper) ~= "string" or not house.OwnedWallpapers[wallpaper] then
-		wallpaper = DEFAULT_WALLPAPER
+-- (v9.6) "Look" d'un type de pièce (Config.House.RoomTypes : Wallpaper,
+-- Floor, Trim, Mood) : GRATUIT et débloqué pour une pièce de ce type, même
+-- s'il n'est pas acheté. Appliqué tout seul à l'achat de la pièce et quand
+-- son type change, sauf un style choisi à la main (room.Custom[kind]).
+local TYPE_STYLE_KINDS = { "Wallpaper", "Floor", "Trim", "Mood" }
+local function styleLookup(kind: string): { [string]: any }
+	if kind == "Wallpaper" then
+		return Config.HouseWallpapersById
+	elseif kind == "Floor" then
+		return Config.HouseFloorsById
 	end
-	local floor = roomType.Floor
-	if type(floor) ~= "string" or not house.OwnedFloors[floor] then
-		floor = DEFAULT_FLOOR
+	return LOOK_KINDS[kind].ById
+end
+local function styleDefault(kind: string): string
+	if kind == "Wallpaper" then
+		return DEFAULT_WALLPAPER
+	elseif kind == "Floor" then
+		return DEFAULT_FLOOR
 	end
-	return wallpaper, floor
+	return LOOK_KINDS[kind].List[1].Id
+end
+-- Style du type (id connu) ou nil
+local function typeStyle(typeId: any, kind: string): string?
+	local roomType = type(typeId) == "string" and Config.HouseRoomTypesById[typeId] or nil
+	local id = roomType and roomType[kind]
+	if type(id) == "string" and styleLookup(kind)[id] then
+		return id
+	end
+	return nil
+end
+local function isTypeStyle(room, kind: string, id: any): boolean
+	return type(id) == "string" and room ~= nil and typeStyle(room.Type, kind) == id
+end
+-- Le joueur a-t-il choisi ce style à la main ? (drapeau, sinon : ni le style
+-- du type d'avant, ni le style gratuit de départ = choisi)
+local function isCustomStyle(room, kind: string, oldTypeId: any): boolean
+	if type(room.Custom) == "table" and room.Custom[kind] == true then
+		return true
+	end
+	local current = room[kind]
+	return current ~= nil and current ~= typeStyle(oldTypeId, kind) and current ~= styleDefault(kind)
+end
+-- Retient (ou oublie) un choix à la main
+local function markCustom(room, kind: string, id: string)
+	local custom = type(room.Custom) == "table" and room.Custom or {}
+	custom[kind] = if isTypeStyle(room, kind, id) then nil else true
+	room.Custom = next(custom) ~= nil and custom or nil
+end
+-- Applique le look du type `room.Type` (sauf les styles choisis à la main)
+local function applyTypeStyles(room, oldTypeId: any)
+	for _, kind in ipairs(TYPE_STYLE_KINDS) do
+		if not isCustomStyle(room, kind, oldTypeId) then
+			room[kind] = typeStyle(room.Type, kind) or styleDefault(kind)
+		end
+	end
+end
+
+-- Style de départ d'une pièce : celui du type (gratuit), sinon le 1er
+local function defaultStyles(_house, roomType): (string, string)
+	return typeStyle(roomType.Id, "Wallpaper") or DEFAULT_WALLPAPER, typeStyle(roomType.Id, "Floor") or DEFAULT_FLOOR
 end
 
 local function newRoom(house, typeId: string, slot: number)
@@ -282,7 +348,8 @@ local function newRoom(house, typeId: string, slot: number)
 	house.NextRoom += 1
 	local wallpaper, floor = defaultStyles(house, roomType)
 	return { Id = id, Type = roomType.Id, Slot = slot, Wallpaper = wallpaper, Floor = floor,
-		Trim = HOUSE.Trims[1].Id, Mood = HOUSE.Moods[1].Id, View = HOUSE.Views[1].Id, Placed = {} }
+		Trim = typeStyle(roomType.Id, "Trim") or HOUSE.Trims[1].Id, Mood = typeStyle(roomType.Id, "Mood") or HOUSE.Moods[1].Id,
+		View = HOUSE.Views[1].Id, Placed = {} }
 end
 
 -- Déménagement : chaque pièce garde son étage / sa colonne si possible,
@@ -347,7 +414,7 @@ end
 -- Objets posés d'une pièce, corrigés : connus, pas plus que possédés
 -- (`used` compte les exemplaires déjà posés dans les autres pièces), au
 -- plus `maxItems`
-local function cleanPlaced(list, owned, used, maxItems: number, rebirths: number)
+local function cleanPlaced(list, owned, used, maxItems: number, rebirths: number, roomWpx: number?)
 	local placed = {}
 	if type(list) ~= "table" then
 		return placed
@@ -360,7 +427,7 @@ local function cleanPlaced(list, owned, used, maxItems: number, rebirths: number
 		local item = type(id) == "string" and Config.HouseItemsById[id] or nil
 		if item and (used[id] or 0) < (owned[id] or 0) then
 			used[id] = (used[id] or 0) + 1
-			table.insert(placed, normalizeEntry(entry, item, rebirths))
+			table.insert(placed, normalizeEntry(entry, item, rebirths, roomWpx))
 		end
 	end
 	return placed
@@ -481,16 +548,30 @@ local function sanitizeHouse(data)
 				Id = id or "",
 				Type = roomType.Id,
 				Slot = slot or 0,
-				Wallpaper = (type(raw.Wallpaper) == "string" and house.OwnedWallpapers[raw.Wallpaper]) and raw.Wallpaper
-					or fallbackWallpaper,
-				Floor = (type(raw.Floor) == "string" and house.OwnedFloors[raw.Floor]) and raw.Floor or fallbackFloor,
-				Placed = cleanPlaced(raw.Placed, items, used, size.RoomItems, rebirths),
+				-- (v9.6) possédé, ou le look (gratuit) du type de la pièce
+				Wallpaper = (type(raw.Wallpaper) == "string" and (house.OwnedWallpapers[raw.Wallpaper] or typeStyle(roomType.Id, "Wallpaper") == raw.Wallpaper))
+					and raw.Wallpaper or fallbackWallpaper,
+				Floor = (type(raw.Floor) == "string" and (house.OwnedFloors[raw.Floor] or typeStyle(roomType.Id, "Floor") == raw.Floor))
+					and raw.Floor or fallbackFloor,
+				-- (v9.6) réparation des anciennes dispositions : tout revient dans la zone valide
+				Placed = cleanPlaced(raw.Placed, items, used, size.RoomItems, rebirths, WorldLayout.RoomWidthPx(size)),
 			}
 			-- (v9.1) boiseries / ambiance / vue : possédées, sinon la 1re (gratuite)
 			for _, kind in ipairs(ROOM_LOOKS) do
 				local def = LOOK_KINDS[kind]
 				local value = raw[def.Field]
-				room[def.Field] = (type(value) == "string" and house[def.Owned][value]) and value or def.List[1].Id
+				room[def.Field] = (type(value) == "string" and (house[def.Owned][value] or typeStyle(roomType.Id, kind) == value)) and value
+					or typeStyle(roomType.Id, kind) or def.List[1].Id
+			end
+			-- (v9.6) styles choisis à la main (pas remplacés quand le type change)
+			if type(raw.Custom) == "table" then
+				local custom = {}
+				for _, kind in ipairs(TYPE_STYLE_KINDS) do
+					if raw.Custom[kind] == true then
+						custom[kind] = true
+					end
+				end
+				room.Custom = next(custom) ~= nil and custom or nil
 			end
 			if id then
 				ids[id] = true
@@ -785,7 +866,13 @@ local function setRoomType(player: Player, data, argument: any): (boolean, strin
 	if room.Type ~= typeId and not Formulas.IsHouseEntryUnlocked(data, wanted) then
 		return false, T(player, "🔒 Unlocked after %d visits to the ocean", Formulas.GetHouseRequiredRebirths(wanted))
 	end
+	local oldType = room.Type
 	room.Type = typeId
+	-- (v9.6) le look du nouveau type (murs, sol, boiseries, ambiance), sauf
+	-- ce que le joueur a choisi à la main
+	if oldType ~= typeId then
+		applyTypeStyles(room, oldType)
+	end
 	updateComfortStat(data)
 	services.GameService:SendState(player)
 	local roomType = Formulas.GetRoomType(typeId)
@@ -840,6 +927,13 @@ local function buySkin(player: Player, data, kind: string, argument: any): (bool
 	if owned[id] then
 		return false, T(player, skin.AlreadyOwned)
 	end
+	-- (v9.6) le look du type de la pièce : gratuit pour elle (rien à acheter)
+	if isTypeStyle(room, kind, id) then
+		room[kind] = id
+		markCustom(room, kind, id)
+		services.GameService:SendState(player)
+		return true, T(player, skin.Applied, entry.Icon or "", T(player, entry.Name))
+	end
 	if not Formulas.IsHouseEntryUnlocked(data, entry) then
 		return false, T(player, "🔒 Unlocked after %d visits to the ocean", Formulas.GetHouseRequiredRebirths(entry))
 	end
@@ -849,6 +943,7 @@ local function buySkin(player: Player, data, kind: string, argument: any): (bool
 	data.Dopamine -= entry.Cost
 	owned[id] = true
 	room[kind] = id -- appliqué tout de suite à la pièce
+	markCustom(room, kind, id)
 	services.GameService:SendState(player)
 	return true, T(player, skin.Bought, entry.Icon or "", T(player, entry.Name), NumberFormatter.Format(entry.Cost))
 end
@@ -864,16 +959,17 @@ local function setSkin(player: Player, data, kind: string, argument: any): (bool
 	if not entry then
 		return false, T(player, skin.Unknown)
 	end
-	if not house[skin.OwnedKey][id] then
+	if not house[skin.OwnedKey][id] and not isTypeStyle(room, kind, id) then
 		return false, T(player, skin.NotOwned)
 	end
 	room[kind] = id
+	markCustom(room, kind, id)
 	services.GameService:SendState(player)
 	return true, T(player, skin.Applied, entry.Icon or "", T(player, entry.Name))
 end
 
 -- Vérifie une liste d'objets posés venue du client (vraie liste 1..n)
-local function readPlacedList(player: Player, list: any, maxItems: number, rebirths: number): ({ any }?, string?)
+local function readPlacedList(player: Player, list: any, maxItems: number, rebirths: number, roomWpx: number?): ({ any }?, string?)
 	if type(list) ~= "table" then
 		return nil, T(player, "Invalid request")
 	end
@@ -901,7 +997,7 @@ local function readPlacedList(player: Player, list: any, maxItems: number, rebir
 		if not item then
 			return nil, T(player, "Unknown house item")
 		end
-		table.insert(result, normalizeEntry(entry, item, rebirths))
+		table.insert(result, normalizeEntry(entry, item, rebirths, roomWpx))
 	end
 	return result, nil
 end
@@ -934,7 +1030,7 @@ local function saveLayout(player: Player, data, argument: any): (boolean, string
 		if not room then
 			return false, T(player, "Unknown room")
 		end
-		local placed, message = readPlacedList(player, list, size.RoomItems, numberOr(data.Rebirths, 0))
+		local placed, message = readPlacedList(player, list, size.RoomItems, numberOr(data.Rebirths, 0), WorldLayout.RoomWidthPx(size))
 		if not placed then
 			return false, message or T(player, "Invalid request")
 		end
@@ -990,6 +1086,9 @@ end
 local function applyLook(player: Player, house, def, entry, room, on: boolean): (boolean, string?)
 	if def.Scope == "Room" then
 		room[def.Field] = entry.Id
+		if table.find(TYPE_STYLE_KINDS, def.Field) then
+			markCustom(room, def.Field, entry.Id)
+		end
 	elseif def.Scope == "House" then
 		house[def.Field] = entry.Id
 	else
@@ -1022,6 +1121,12 @@ local function buyLook(player: Player, data, argument: any): (boolean, string)
 	if owned[entry.Id] then
 		return false, T(player, "You already own this style")
 	end
+	-- (v9.6) le look du type de la pièce : gratuit pour elle
+	if def.Scope == "Room" and isTypeStyle(room, def.Field, entry.Id) then
+		applyLook(player, house, def, entry, room, true)
+		services.GameService:SendState(player)
+		return true, T(player, "🎨 %s %s applied", entry.Icon or "", T(player, entry.Name))
+	end
 	if not Formulas.IsHouseEntryUnlocked(data, entry) then
 		return false, T(player, "🔒 Unlocked after %d visits to the ocean", Formulas.GetHouseRequiredRebirths(entry))
 	end
@@ -1049,7 +1154,7 @@ local function setLook(player: Player, data, argument: any): (boolean, string)
 	if def.Scope == "Room" and not room then
 		return false, T(player, "Unknown room")
 	end
-	if not house[def.Owned][entry.Id] then
+	if not house[def.Owned][entry.Id] and not (def.Scope == "Room" and isTypeStyle(room, def.Field, entry.Id)) then
 		return false, T(player, "You don't own this style yet")
 	end
 	local ok, message = applyLook(player, house, def, entry, room, argument.On ~= false)

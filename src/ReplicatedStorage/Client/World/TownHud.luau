@@ -528,40 +528,41 @@ function TownHud.Build(self: any)
 	parts.VisitList = list
 
 	-- 🧭 Boussole vers sa maison (sous "Retour") : flèche qui tourne + distance ;
-	-- un appui = "Rentrer" (téléportation devant sa porte)
+	-- un appui = "Rentrer" (téléportation devant sa porte). v9.6 : PETITE et
+	-- discrète (plus aucune ligne / arc dans le monde vers la maison)
 	local compass = UIUtil.Create("TextButton", {
 		Name = "HomeCompass",
 		Position = UDim2.fromOffset(10, 62),
-		Size = UDim2.fromOffset(170, 46),
+		Size = UDim2.fromOffset(96, 32),
 		BackgroundColor3 = Color3.fromRGB(92, 58, 120),
-		BackgroundTransparency = 0.1,
+		BackgroundTransparency = 0.4,
 		AutoButtonColor = false,
 		Text = "",
 		Visible = false,
 		Parent = root,
 	})
 	UIUtil.Corner(compass, UDim.new(1, 0))
-	UIUtil.Stroke(compass, WHITE, 2, 0.35)
+	UIUtil.Stroke(compass, WHITE, 1, 0.6)
 	local dial = UIUtil.Create("Frame", {
 		Name = "Dial",
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(0, 4, 0.5, 0),
-		Size = UDim2.fromOffset(38, 38),
+		Size = UDim2.fromOffset(24, 24),
 		BackgroundColor3 = WHITE,
 		Parent = compass,
 	})
 	UIUtil.Corner(dial, UDim.new(1, 0))
-	UIUtil.Stroke(dial, PINK, 2, 0)
+	UIUtil.Stroke(dial, PINK, 1, 0)
 	-- (flèche en traits : pas de ClipsDescendants, elle peut tourner)
 	local needle = UIUtil.Create("Frame", { Name = "Needle", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(30, 30), BackgroundTransparency = 1, ZIndex = 3, Parent = dial })
+		Size = UDim2.fromOffset(20, 20), BackgroundTransparency = 1, ZIndex = 3, Parent = dial })
 	local function bar(x1: number, y1: number, x2: number, y2: number)
 		local dx, dy = x2 - x1, y2 - y1
 		local b = UIUtil.Create("Frame", {
 			Name = "Bar",
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromOffset((x1 + x2) / 2, (y1 + y2) / 2),
-			Size = UDim2.fromOffset(math.sqrt(dx * dx + dy * dy) + 4, 4),
+			Size = UDim2.fromOffset(math.sqrt(dx * dx + dy * dy) + 3, 3),
 			Rotation = math.deg(math.atan2(dy, dx)),
 			BackgroundColor3 = PINK_DEEP,
 			BorderSizePixel = 0,
@@ -570,10 +571,10 @@ function TownHud.Build(self: any)
 		})
 		UIUtil.Corner(b, UDim.new(1, 0))
 	end
-	bar(15, 4, 15, 26)
-	bar(15, 4, 8, 12)
-	bar(15, 4, 22, 12)
-	parts.CompassText = label({ Name = "Text", Text = "", Color = WHITE, TextSize = 17, Size = UDim2.new(1, -54, 1, 0), Position = UDim2.fromOffset(48, 0),
+	bar(10, 3, 10, 17)
+	bar(10, 3, 5, 8)
+	bar(10, 3, 15, 8)
+	parts.CompassText = label({ Name = "Text", Text = "", Color = WHITE, TextSize = 14, Size = UDim2.new(1, -38, 1, 0), Position = UDim2.fromOffset(32, 0),
 		XAlign = Enum.TextXAlignment.Left, Parent = compass })
 	compass.Activated:Connect(function()
 		cb.Home()
@@ -1146,7 +1147,7 @@ function TownHud.SetCompass(self: any, visible: boolean, bearing: number?, dista
 	local text = Locale.T("🏠 %s m", tostring(meters))
 	if parts.CompassText.Text ~= text then
 		parts.CompassText.Text = text
-		parts.Compass.Size = UDim2.fromOffset(math.max(120, textWidth(text, 17) + 66), 46)
+		parts.Compass.Size = UDim2.fromOffset(math.max(84, textWidth(text, 14) + 44), 32)
 	end
 end
 
