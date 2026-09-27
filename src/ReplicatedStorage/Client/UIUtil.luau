@@ -772,6 +772,33 @@ function UIUtil.SoftGradient(parent: Instance, color: Color3, rotation: number?)
 end
 
 -- Avatar (tête) d'un joueur sans requête bloquante (URL rbxthumb://)
+--[[
+	Empêche les clics DANS une fenêtre de la fermer. Sur Roblox, une Frame
+	(même Active) ne retient pas un clic destiné à un bouton placé derrière :
+	cliquer sur une zone vide d'une fenêtre activait le fond sombre (qui
+	ferme). On pose donc un bouton invisible sous tout le contenu de `frame` :
+	il "avale" les clics qui ne touchent aucun autre bouton. Les boutons,
+	champs de texte et listes défilantes de la fenêtre marchent comme avant.
+	À appeler une fois sur la carte / fenêtre de chaque popup ou panneau.
+]]
+function UIUtil.SinkClicks(frame: GuiObject): TextButton
+	local existing = frame:FindFirstChild("ClickSink")
+	if existing and existing:IsA("TextButton") then
+		return existing
+	end
+	local sink = Instance.new("TextButton")
+	sink.Name = "ClickSink"
+	sink.Size = UDim2.fromScale(1, 1)
+	sink.BackgroundTransparency = 1
+	sink.BorderSizePixel = 0
+	sink.Text = ""
+	sink.AutoButtonColor = false
+	sink.Selectable = false
+	sink.ZIndex = 0
+	sink.Parent = frame
+	return sink
+end
+
 function UIUtil.HeadshotUrl(userId: number, size: number?): string
 	return string.format("rbxthumb://type=AvatarHeadShot&id=%d&w=%d&h=%d", math.floor(userId), size or 48, size or 48)
 end

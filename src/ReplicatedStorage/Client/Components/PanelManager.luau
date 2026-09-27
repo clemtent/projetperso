@@ -207,6 +207,8 @@ function PanelManager.Build(layer: Frame)
 	UIUtil.Corner(window, Theme.Radius.XL)
 	UIUtil.Stroke(window, Theme.Colors.CardBorder, 1.5, 0.1)
 	UIUtil.Shadow(window, 10, 0.72, 6)
+	-- Un clic sur une zone vide de la fenêtre ne ferme plus rien (seul un clic dehors ferme)
+	UIUtil.SinkClicks(window)
 
 	-- En-tête : pastille d'icône, titre, sous-titre
 	iconBadge = UIUtil.Create("Frame", {

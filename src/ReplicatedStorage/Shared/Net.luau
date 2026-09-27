@@ -48,6 +48,7 @@ Net.Functions = {
 	"House", -- C -> S (action, argument) -> (succès, message) : maison (achats, papier peint, sol, disposition)
 	"Garden", -- C -> S (action, argument) -> (succès, résultat | message) : jardin de Dopamine
 	"Arcade", -- C -> S (action, argument) -> (succès, résultat | message) : mini-jeux, tickets, duels
+	"FilterText", -- C -> S (purpose "Live" | "Mail", texte) -> (succès, { Text, Topics } | message) : texte tapé, filtré par Roblox
 	"DebugCommand", -- C -> S (commande, argument) -> (succès, message) : UNIQUEMENT dans Studio
 }
 

@@ -11,9 +11,9 @@
 	  - bouton "💎 Get Dopamine" : ouvre la boutique Robux directement sur
 	    l'onglet "💧 Dopamine" (packs de Dopamine) ;
 	  - bouton "Later" (ou clic à côté) : ferme.
-	Pour ne pas agacer : après "Later", simple bulle rouge pendant 45 s.
-	S'il n'y a aucun pack de Dopamine à vendre (IDs à 0 hors Studio), on
-	affiche juste la bulle.
+	Elle s'affiche À CHAQUE achat refusé faute de Dopamine (plus de pause
+	après "Later"). S'il n'y a aucun pack de Dopamine à vendre (IDs à 0 hors
+	Studio), on affiche juste la bulle.
 	La fenêtre vit dans le calque Toasts (au-dessus des panneaux).
 	Signaux (v8, utilisés par OfferPopup) : Shown (fenêtre ouverte),
 	Refused(manque) ("Later" / clic à côté).
@@ -39,12 +39,10 @@ NeedDopamine.Shown = Signal.new() -- () : la fenêtre vient de s'ouvrir
 NeedDopamine.Refused = Signal.new() -- (manque) : "Later" ou clic à côté
 
 local CARD_SIZE = Vector2.new(420, 284)
-local SNOOZE_TIME = 45 -- (s) après "Later" : plus de fenêtre, juste la bulle
 local WAIT_HINT = 45 -- (s) si la production comble le manque avant : on le dit
 
 local layer: Frame? = nil
 local current: Frame? = nil
-local snoozedUntil = 0
 
 function NeedDopamine.Build(parent: Frame)
 	layer = parent
@@ -118,7 +116,6 @@ local function close()
 end
 
 local function refuse(missing: number)
-	snoozedUntil = os.clock() + SNOOZE_TIME
 	close()
 	NeedDopamine.Refused:Fire(missing)
 end
@@ -216,6 +213,7 @@ local function build(missing: number)
 		Parent = window,
 	})
 	UIUtil.Corner(card, Theme.Radius.XL)
+	UIUtil.SinkClicks(card) -- clic dans la carte : ne ferme pas
 	UIUtil.Stroke(card, Theme.Colors.Purple, 2.5, 0.2)
 	UIUtil.Gradient(card, ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(240, 232, 255)), 90)
 	UIUtil.Shadow(card, 6, 0.75, 4)
@@ -368,12 +366,12 @@ end
 --[[
 	À appeler quand un achat est refusé faute de Dopamine.
 	missing = combien il manque ; fallback = fonction qui affiche la bulle
-	habituelle (utilisée pendant la pause "Later" ou sans packs).
+	habituelle (utilisée si la fenêtre est déjà ouverte ou sans packs).
 	Renvoie true si la fenêtre s'est ouverte.
 ]]
 function NeedDopamine.Offer(missing: number, fallback: (() -> ())?): boolean
 	missing = math.max(0, tonumber(missing) or 0)
-	if current or os.clock() < snoozedUntil or not hasDopaminePacks() or not layer then
+	if current or not hasDopaminePacks() or not layer then
 		if fallback and not current then
 			fallback()
 		end

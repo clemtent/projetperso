@@ -450,6 +450,7 @@ local function show(offer: Offer)
 		Parent = window,
 	})
 	UIUtil.Corner(card, Theme.Radius.XL)
+	UIUtil.SinkClicks(card) -- clic dans la carte : ne ferme pas
 	UIUtil.Stroke(card, color:Lerp(BLACK, 0.25), 2, 0.25)
 	UIUtil.Shadow(card, 6, 0.75, 4)
 	local fitScale = math.min(1, (Interface.CanvasSize.X - 24) / CARD_SIZE.X, (Interface.CanvasSize.Y - 24) / CARD_SIZE.Y)

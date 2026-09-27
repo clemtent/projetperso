@@ -353,6 +353,7 @@ local function build(payload)
 		Parent = fade,
 	})
 	UIUtil.Corner(body, 26)
+	UIUtil.SinkClicks(body) -- clic dans la carte : ne ferme pas
 	UIUtil.Stroke(body, Theme.Colors.CardBorder, 1.5, 0.3)
 	UIUtil.Shadow(body, 6, 0.8, 3)
 
