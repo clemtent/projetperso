@@ -154,9 +154,9 @@ end
 -- (v9.7) La mascotte refaite : un cerveau dodu et kawaii, debout sur la
 -- vasque haute, bras levés ("youpi !"). `cf` = centre du cerveau, visage
 -- vers -Z local. Deux lobes (2 boules chacun : un peu plus long que haut),
--- 18 circonvolutions en relief, 10 sillons, sillon central, grands yeux
+-- 18 circonvolutions en relief, 12 sillons, sillon central, grands yeux
 -- brillants, joues, bouche ouverte + langue, bras, mains, jambes, pieds.
--- 51 pièces.
+-- 53 pièces.
 local BRAIN_FEET = 2.625 -- (studs) du centre du cerveau au dessous des pieds
 local function brain(model: Instance, cf: CFrame)
 	local pink = Color3.fromRGB(255, 152, 198)
@@ -211,6 +211,7 @@ local function brain(model: Instance, cf: CFrame)
 	-- un CERVEAU et pas deux boules) + sillon entre les deux hémisphères
 	local grooves = {
 		{ -1, { 0.15, 1, -0.35 }, { 0.7, 0.7, -0.2 } },
+		{ -1, { 0.2, 0.62, -0.75 }, { 0.75, 0.45, -0.55 } },
 		{ -1, { 0.9, 0.35, -0.25 }, { 0.95, -0.1, -0.3 } },
 		{ 1, { 0.15, 1, 0.3 }, { 0.75, 0.65, 0.25 } },
 		{ 1, { 0.4, 0.6, 0.7 }, { 0.85, 0.2, 0.5 } },
@@ -221,7 +222,7 @@ local function brain(model: Instance, cf: CFrame)
 			local c = Vector3.new(sx * 1.05, 0, gr[1] * 0.55)
 			local a = c + Vector3.new(sx * gr[2][1], gr[2][2], gr[2][3]).Unit * (R0 + 0.05)
 			local b = c + Vector3.new(sx * gr[3][1], gr[3][2], gr[3][3]).Unit * (R0 + 0.05)
-			TownKit.Rod(model, "Groove", at(a.X, a.Y, a.Z), at(b.X, b.Y, b.Z), 0.22, fold, M.SmoothPlastic, "deco")
+			TownKit.Rod(model, "Groove", at(a.X, a.Y, a.Z), at(b.X, b.Y, b.Z), 0.2, fold, M.SmoothPlastic, "deco")
 		end
 	end
 	part(model, "Fissure", Vector3.new(0.22, 0.3, 3.2), cf * CFrame.new(0, 1.3, 0.3), fold, M.SmoothPlastic, "deco")

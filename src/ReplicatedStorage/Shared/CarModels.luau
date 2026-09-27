@@ -564,7 +564,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 				box(b, "SideStep", math.min(x0, x1), math.max(x0, x1), s.Clear - 0.12, s.Clear + 0.04, s.AxleF + ra + 0.15, s.AxleR - ra - 0.15, GRAPHITE, M.DiamondPlate)
 			else
 				local x0, x1 = sx * (s.W / 2 - 0.02), sx * (s.W / 2 + 0.06)
-				box(b, "SideSkirt", math.min(x0, x1), math.max(x0, x1), s.Clear - 0.02, s.Clear + 0.3, s.AxleF + ra + 0.05, s.AxleR - ra - 0.05, TRIM, M.SmoothPlastic)
+				box(b, "SideSkirt", math.min(x0, x1), math.max(x0, x1), s.Clear - 0.05, s.Clear + 0.3, s.AxleF + ra + 0.05, s.AxleR - ra - 0.05, TRIM, M.SmoothPlastic)
 			end
 		end
 	end
@@ -741,7 +741,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			cylZ(b, "HeadlightRim", x, ly, hoodZ0 + 0.02, 0.2, d, if van then CHROME else WHITE, M.SmoothPlastic)
 			cylZ(b, "Headlight", x, ly, hoodZ0 - 0.06, 0.1, d - 0.3, LAMP, M.Glass)
 			if full then
-				cylZ(b, "HeadlightDot", x, ly, hoodZ0 - 0.1, 0.06, d * 0.26, DRL, M.SmoothPlastic)
+				cylZ(b, "HeadlightDot", x, ly, hoodZ0 - 0.11, 0.08, d * 0.26, DRL, M.SmoothPlastic)
 			end
 		end
 	elseif hf < 0.1 then
@@ -755,8 +755,8 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 		for _, sx in ipairs({ -1, 1 }) do
 			slab(b, "Headlight", sx * s.W * 0.2, s.W * 0.2, ya, za, yb, zb, 0.1, LAMP, M.Glass)
 			if full then
-				local yc, zc = onHood(0.045, 0.085)
-				local yd, zd = onHood(0.075, 0.085)
+				local yc, zc = onHood(0.06, 0.1)
+				local yd, zd = onHood(0.09, 0.1)
 				slab(b, "HeadlightDRL", sx * s.W * 0.2, s.W * 0.16, yc, zc, yd, zd, 0.04, DRL, M.SmoothPlastic)
 			end
 		end
@@ -769,8 +769,8 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 				local l0, l1 = sx * (s.W * 0.18 + 0.05), sx * (s.W * 0.45 - 0.05)
 				box(b, "Headlight", math.min(l0, l1), math.max(l0, l1), lampY - 0.18, lampTop - 0.04, hoodZ0 - 0.1, hoodZ0 + 0.05, LAMP, M.Glass)
 				local d0, d1 = sx * (s.W * 0.18 + 0.08), sx * (s.W * 0.45 - 0.08)
-				box(b, "HeadlightDRL", math.min(d0, d1), math.max(d0, d1), lampY - 0.16, lampY - 0.1, hoodZ0 - 0.115, hoodZ0 - 0.02, DRL, M.SmoothPlastic)
-				cylZ(b, "Projector", sx * s.W * 0.37, (lampY - 0.1 + lampTop - 0.04) / 2, hoodZ0 - 0.09, 0.08, math.min(0.34, lampTop - lampY + 0.02), CHROME, M.Metal)
+				box(b, "HeadlightDRL", math.min(d0, d1), math.max(d0, d1), lampY - 0.14, lampY - 0.08, hoodZ0 - 0.13, hoodZ0 - 0.02, DRL, M.SmoothPlastic)
+				cylZ(b, "Projector", sx * s.W * 0.37, (lampY - 0.08 + lampTop - 0.04) / 2, hoodZ0 - 0.11, 0.08, math.min(0.3, lampTop - lampY - 0.02), CHROME, M.Metal)
 				box(b, "Indicator", math.min(sx * s.W * 0.45, sx * s.W * 0.49), math.max(sx * s.W * 0.45, sx * s.W * 0.49), lampY - 0.2, lampY + 0.12, hoodZ0 - 0.08, hoodZ0 + 0.1, AMBER, M.SmoothPlastic)
 			else
 				box(b, "Headlight", math.min(x0, x1), math.max(x0, x1), lampY - 0.2, lampTop, hoodZ0 - 0.08, hoodZ0 + 0.1, LAMP, M.Glass)
@@ -850,7 +850,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			end
 			local z1 = trunkEnd - 0.25
 			for _, sx in ipairs({ -1, 1 }) do
-				local x0, x1 = sx * (s.W / 2 - 0.02), sx * (s.W / 2 + 0.05)
+				local x0, x1 = sx * (s.W / 2 - 0.02), sx * (s.W / 2 + 0.07)
 				box(b, "Stripe", math.min(x0, x1), math.max(x0, x1), yS - 0.07, yS + 0.07, z0, z1, stripe, M.SmoothPlastic)
 			end
 		end
@@ -953,17 +953,19 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 		box(b, "Wing", -s.W / 2 + 0.3, s.W / 2 - 0.3, s.Belt + 0.75, s.Belt + 0.9, trunkEnd - 1.1, trunkEnd - 0.2, GRAPHITE, M.SmoothPlastic)
 		for _, sx in ipairs({ -1, 1 }) do
 			box(b, "WingPost", sx * s.W * 0.3 - 0.08, sx * s.W * 0.3 + 0.08, s.Belt - s.TrunkDrop, s.Belt + 0.76, trunkEnd - 0.75, trunkEnd - 0.5, GRAPHITE, M.SmoothPlastic)
-			box(b, "SideIntake", sx * (s.W / 2 - 0.02), sx * (s.W / 2 + 0.19), s.Clear + 0.45, s.Low - 0.1, s.Rw - 0.2, s.Rw + 0.9, TRIM, M.Metal)
+			-- (prise d'air devant l'arche arrière, jamais devant la roue)
+			box(b, "SideIntake", sx * (s.W / 2 - 0.02), sx * (s.W / 2 + 0.19), s.Clear + 0.45, s.Low - 0.1, s.AxleR - ra - 1.2, s.AxleR - ra - 0.15, TRIM, M.Metal)
 		end
 		cylZ(b, "Exhaust2", -s.W * 0.28, s.Clear + 0.12, zB + 0.05, 0.7, 0.34, CHROME, M.Metal)
 		if full then
 			for k = -1, 1 do
-				box(b, "DiffuserFin", k * 0.6 - 0.05, k * 0.6 + 0.05, s.Clear - 0.05, s.Clear + 0.24, zB - 0.5, zB + 0.12, GRAPHITE, M.SmoothPlastic)
+				box(b, "DiffuserFin", k * 0.6 - 0.05, k * 0.6 + 0.05, s.Clear - 0.02, s.Clear + 0.24, zB - 0.5, zB + 0.12, GRAPHITE, M.SmoothPlastic)
 			end
 		end
 	elseif style == "Limo" then
 		for _, sx in ipairs({ -1, 1 }) do
-			box(b, "ChromeSill", sx * (s.W / 2 - 0.02), sx * (s.W / 2 + 0.19), s.Clear + 0.1, s.Clear + 0.22, zF + 1.8, zB - 1.8, CHROME, M.Metal)
+			-- (entre les deux arches : jamais devant les roues)
+			box(b, "ChromeSill", sx * (s.W / 2 - 0.02), sx * (s.W / 2 + 0.19), s.Clear + 0.1, s.Clear + 0.22, s.AxleF + ra + 0.1, s.AxleR - ra - 0.1, CHROME, M.Metal)
 		end
 		cylZ(b, "Ornament", 0, s.Belt - 0.02, hoodZ0 + 0.6, 0.3, 0.3, CHROME, M.Metal)
 	end

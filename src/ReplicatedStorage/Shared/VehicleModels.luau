@@ -255,14 +255,12 @@ function VehicleModels.Bus(opts: any?): Model
 			local x0, x1 = sx * (hw - 1.3), sx * (hw - 0.34)
 			box(k, "WheelHousing", math.min(x0, x1), math.max(x0, x1), yLow + 0.02, archTop, za - ra, za + ra, TRIM, M.SmoothPlastic)
 			busWheel(k, sx * (hw - 0.55), r, za, sx, full)
-			if full then
-				-- lèvre caoutchouc arrondie autour du passage (3 segments)
-				local half = ra * math.sin(math.rad(28)) + 0.06
-				for j = -1, 1 do
-					local a = j * math.rad(56)
-					boxRotX(k, "ArchTrim", sx * (hw + 0.02), r + math.cos(a) * (ra + 0.08), za + math.sin(a) * (ra + 0.08), 0.14, 0.22, half * 2, a, TRIM, M.Rubber)
-				end
-			end
+			-- coins hauts du passage de roue abattus (coins en biais, dans le
+			-- plan du flanc) : ouverture octogonale au lieu d'un rectangle
+			local c = 0.95
+			local xc = sx * (hw - wall / 2)
+			newPart(k, "WedgePart", "ArchCorner", Vector3.new(wall, c, c), CFrame.new(xc, archTop - c / 2, za - ra + c / 2) * CFrame.Angles(PI, 0, 0), body, M.SmoothPlastic)
+			newPart(k, "WedgePart", "ArchCorner", Vector3.new(wall, c, c), CFrame.new(xc, archTop - c / 2, za + ra - c / 2) * CFrame.Angles(0, 0, PI), body, M.SmoothPlastic)
 		end
 	end
 
@@ -341,7 +339,7 @@ function VehicleModels.Bus(opts: any?): Model
 		local z0, z1 = d[1], d[2]
 		local zc = (z0 + z1) / 2
 		local x0, x1 = hw - 0.2, hw - 0.06
-		box(k, "DoorStep", hw - 1.1, hw - 0.1, yLow, floorY - 0.02, z0 + 0.1, z1 - 0.1, FLOOR, M.DiamondPlate)
+		box(k, "DoorStep", hw - 1.1, hw - 0.1, yLow + 0.04, floorY - 0.06, z0 + 0.1, z1 - 0.1, FLOOR, M.DiamondPlate)
 		if full then
 			for _, side in ipairs({ { z0 + 0.1, zc - 0.05 }, { zc + 0.05, z1 - 0.1 } }) do
 				box(k, "DoorGlass", x0, x1, floorY + 0.9, winTop - 0.15, side[1], side[2], GLASS, M.Glass).Transparency = 0.3
@@ -350,7 +348,7 @@ function VehicleModels.Bus(opts: any?): Model
 			box(k, "DoorSeal", x0 - 0.04, hw + 0.05, floorY + 0.03, winTop - 0.16, zc - 0.07, zc + 0.07, TRIM, M.Rubber)
 			box(k, "DoorHeader", hw - 0.3, hw + 0.04, winTop - 0.15, winTop, z0, z1, TRIM, M.SmoothPlastic)
 			for _, zz in ipairs({ z0, z1 }) do
-				box(k, "DoorJamb", hw - 0.3, hw + 0.04, floorY, winTop, zz - 0.1, zz + 0.1, TRIM, M.SmoothPlastic)
+				box(k, "DoorJamb", hw - 0.26, hw + 0.04, floorY, winTop - 0.02, zz - 0.1, zz + 0.1, TRIM, M.SmoothPlastic)
 			end
 		else
 			box(k, "DoorGlass", x0, x1, floorY, winTop, z0 + 0.05, z1 - 0.05, GLASS_DARK, M.Glass).Transparency = 0.1
@@ -359,20 +357,37 @@ function VehicleModels.Bus(opts: any?): Model
 
 	-- ░ face avant arrondie : coins, tablier, pare-brise, girouette ░
 	for _, sx in ipairs({ -1, 1 }) do
-		cylY(k, "CornerLow", sx * (hw - rc), yLow, sill, zF + rc, rc * 2, body, M.SmoothPlastic, true)
+		cylY(k, "CornerLow", sx * (hw - rc), yLow + 0.04, sill, zF + rc, rc * 2, body, M.SmoothPlastic, true)
 		cylY(k, "CornerHigh", sx * (hw - rc), sill, wallTop, zF + rc, rc * 2, TRIM, M.SmoothPlastic)
 		cylY(k, "CornerRearLow", sx * (hw - rcb), yLow, split, zB - rcb, rcb * 2, livery, M.SmoothPlastic)
 		cylY(k, "CornerRear", sx * (hw - rcb), split, wallTop, zB - rcb, rcb * 2, body, M.SmoothPlastic)
 	end
 	box(k, "FrontPanel", -hw + rc, hw - rc, yLow, 3.3, zF, zF + rc, body, M.SmoothPlastic, true)
-	box(k, "FrontSkirt", -hw + rc, hw - rc, yLow, 1.5, zF - 0.05, zF + 0.5, livery, M.SmoothPlastic)
+	box(k, "FrontSkirt", -hw + rc, hw - rc, yLow + 0.08, 1.5, zF - 0.05, zF + 0.5, livery, M.SmoothPlastic)
 	box(k, "Bumper", -hw + 0.3, hw - 0.3, yLow - 0.1, yLow + 0.55, zF - 0.25, zF + 0.4, TRIM, M.SmoothPlastic)
 	-- pare-brise panoramique (léger fruit vers l'arrière)
 	slab(k, "Windshield", 0, W - 2 * rc + 0.2, 3.3, zF + 0.3, 6.9, zF + 0.7, 0.16, glassC, M.Glass).Transparency = if full then 0.3 else 0.12
 	box(k, "WindshieldBase", -hw + rc, hw - rc, 3.2, 3.42, zF + 0.1, zF + 0.6, TRIM, M.Rubber)
 	-- girouette (panneau à LED) + bandeau au-dessus (sous le nez arrondi du toit)
 	local dest = box(k, "DestinationSign", -hw + rc + 0.1, hw - rc - 0.1, 6.9, 7.85, zF + 0.5, zF + 0.95, Color3.fromRGB(24, 22, 30), M.SmoothPlastic)
-	sign(k, dest, Enum.NormalId.Front, 30, "9  🧠 DOPAMINE TOWN", LED, Color3.fromRGB(24, 22, 30), Enum.Font.Arcade, false, 0.3)
+	local destGui = sign(k, dest, Enum.NormalId.Front, 30, "🧠 DOPAMINE TOWN", LED, Color3.fromRGB(24, 22, 30), Enum.Font.Arcade, false, 0.3)
+	local destText = destGui:FindFirstChild("Text") :: TextLabel?
+	if destText then
+		destText.Position = UDim2.fromScale(0.2, 0.12)
+		destText.Size = UDim2.fromScale(0.77, 0.76)
+	end
+	local lineNo = Instance.new("TextLabel")
+	lineNo.Name = "Line"
+	lineNo.BackgroundColor3 = LED
+	lineNo.BorderSizePixel = 0
+	lineNo.Position = UDim2.fromScale(0.03, 0.1)
+	lineNo.Size = UDim2.fromScale(0.13, 0.8)
+	lineNo.Font = Enum.Font.GothamBlack
+	lineNo.TextScaled = true
+	lineNo.TextColor3 = Color3.fromRGB(24, 22, 30)
+	lineNo.Text = "9"
+	lineNo.ZIndex = 2
+	lineNo.Parent = destGui
 	box(k, "FrontHeader", -hw + rc, hw - rc, 7.85, wallTop, zF + 0.55, zF + 1.0, body, M.SmoothPlastic)
 	-- toit arrondi, climatisation, trappe
 	box(k, "Roof", -hw + 0.45, hw - 0.45, wallTop, roofTop, zF + 0.6, zB - 0.4, body, M.SmoothPlastic, true)
@@ -493,7 +508,7 @@ function VehicleModels.Bus(opts: any?): Model
 		local wheelPart = newPart(k, "Part", "SteeringWheel", Vector3.new(0.1, 1.3, 1.3), CFrame.new(dx, 3.6, zF + 2.0) * CFrame.Angles(math.rad(35), 0, 0) * CFrame.Angles(0, 0, PI / 2), TRIM, M.SmoothPlastic)
 		;(wheelPart :: Part).Shape = Enum.PartType.Cylinder
 		rod(k, "SteeringColumn", Vector3.new(dx, 2.6, zF + 1.5), Vector3.new(dx, 3.55, zF + 1.95), 0.16, TRIM, M.SmoothPlastic)
-		box(k, "TicketMachine", hw - 1.3, hw - 0.8, floorY, floorY + 3.4, doorF1 + 0.5, doorF1 + 0.95, Color3.fromRGB(90, 200, 170), M.SmoothPlastic)
+		box(k, "TicketMachine", -0.55, -0.1, floorY, floorY + 3.3, zF + 3.2, zF + 3.6, Color3.fromRGB(90, 200, 170), M.SmoothPlastic)
 	end
 
 	local model = finish(k, "Bus", -hw, hw, yLow, roofTop + 0.7, zF - 0.3, zB + 0.3, o.Solid == true)
@@ -626,8 +641,8 @@ function VehicleModels.KickScooter(opts: any?): Model
 	local d = 0.62
 	cylX(k, "WheelF", 0, d / 2, -1.25, 0.16, d, TYRE, M.Rubber)
 	cylX(k, "WheelR", 0, d / 2, 1.2, 0.16, d, TYRE, M.Rubber)
-	cylX(k, "HubF", 0, d / 2, -1.25, 0.2, 0.26, STEEL, M.Metal)
-	cylX(k, "HubR", 0, d / 2, 1.2, 0.2, 0.26, STEEL, M.Metal)
+	cylX(k, "HubF", 0, d / 2, -1.25, 0.24, 0.26, STEEL, M.Metal)
+	cylX(k, "HubR", 0, d / 2, 1.2, 0.24, 0.26, STEEL, M.Metal)
 	box(k, "Deck", -0.3, 0.3, 0.32, 0.48, -0.9, 1.0, TRIM, M.SmoothPlastic)
 	box(k, "DeckGrip", -0.26, 0.26, 0.48, 0.51, -0.8, 0.85, Color3.fromRGB(70, 70, 82), M.Sand)
 	box(k, "Battery", -0.22, 0.22, 0.2, 0.32, -0.7, 0.7, color, M.SmoothPlastic)
@@ -656,8 +671,8 @@ function VehicleModels.Scooter(opts: any?): Model
 	local r = d / 2
 	cylX(k, "WheelF", 0, r, -1.9, 0.36, d, TYRE, M.Rubber)
 	cylX(k, "WheelR", 0, r, 1.65, 0.4, d, TYRE, M.Rubber)
-	cylX(k, "RimF", 0, r, -1.9, 0.4, d * 0.56, STEEL, M.Metal)
-	cylX(k, "RimR", 0, r, 1.65, 0.44, d * 0.56, STEEL, M.Metal)
+	cylX(k, "RimF", 0, r, -1.9, 0.44, d * 0.56, STEEL, M.Metal)
+	cylX(k, "RimR", 0, r, 1.65, 0.48, d * 0.56, STEEL, M.Metal)
 	-- garde-boue avant + fourche
 	slab(k, "FrontFender", 0, 0.5, r + 0.62, -2.35, r + 0.7, -1.5, 0.12, color, M.SmoothPlastic)
 	rod(k, "ForkLeg", Vector3.new(0.14, r, -1.9), Vector3.new(0.14, 2.2, -1.62), 0.12, TRIM, M.Metal)
@@ -756,7 +771,7 @@ local function truckBase(k: K, t: Truck, cabColor: Color3, full: boolean): numbe
 	for _, z in ipairs({ zF + 2.1, zB - 2.3 }) do
 		for _, sx in ipairs({ -1, 1 }) do
 			cylX(k, "WheelArch", sx * (hw - 0.01), r + 0.1, z, 0.1, t.WheelD + 0.5, TRIM, M.SmoothPlastic)
-			local x = sx * (hw - 0.35)
+			local x = sx * (hw - 0.3)
 			cylX(k, "Tyre", x, r, z, 0.8, t.WheelD, TYRE, M.Rubber, true)
 			cylX(k, "Rim", x + sx * 0.36, r, z, 0.16, t.WheelD * 0.6, STEEL, M.Metal)
 			if full then
@@ -777,10 +792,10 @@ function VehicleModels.DeliveryVan(opts: any?): Model
 	local zB = t.L / 2
 	local cabEnd = truckBase(k, t, color, full)
 	-- caisse (fourgon) + bande + logo
-	local cargo = box(k, "CargoBox", -hw - 0.1, hw + 0.1, 1.3, t.BoxH, cabEnd, zB, WHITE, M.SmoothPlastic, true)
+	local cargo = box(k, "CargoBox", -hw, hw, 1.3, t.BoxH, cabEnd, zB, WHITE, M.SmoothPlastic, true)
 	for _, sx in ipairs({ -1, 1 }) do
-		local x0, x1 = sx * (hw + 0.1), sx * (hw + 0.14)
-		box(k, "CargoStripe", math.min(x0, x1), math.max(x0, x1), 2.0, 2.7, cabEnd + 0.3, zB - 0.3, color, M.SmoothPlastic)
+		local x0, x1 = sx * (hw + 0.02), sx * (hw + 0.07)
+		box(k, "CargoStripe", math.min(x0, x1), math.max(x0, x1), 3.0, 3.7, cabEnd + 0.3, zB - 0.3, color, M.SmoothPlastic)
 	end
 	sign(k, cargo, Enum.NormalId.Right, 22, "📦 Dopa Express", Color3.fromRGB(236, 72, 140), nil, Enum.Font.FredokaOne, false)
 	sign(k, cargo, Enum.NormalId.Left, 22, "📦 Dopa Express", Color3.fromRGB(236, 72, 140), nil, Enum.Font.FredokaOne, false)
