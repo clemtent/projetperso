@@ -42,6 +42,8 @@ export type Item = {
 	MaxOwned: number?,
 	Order: number?,
 	Tabletop: boolean?, -- true / false : force "peut être posé sur un meuble"
+	RequiresUpgrade: string?, -- (v9.5) amélioration du clicker à posséder pour l'acheter
+	Setup: any?, -- (v9.5) "Dopamine Setup" : comportement live (voir Config.House.Items)
 }
 
 export type SizeDef = {
@@ -574,13 +576,55 @@ function HouseCommon.RequiredRebirths(entry: any): number
 	return 0
 end
 
--- Vrai si l'entrée est débloquée pour ces données (visites à l'océan)
+-- (v9.5) Amélioration du clicker exigée par un objet "Dopamine Setup"
+-- (item.RequiresUpgrade = Id de Config.Upgrades, au moins 1 niveau :
+-- data.Upgrades[id] >= 1, même règle que HouseService) : renvoie
+-- l'amélioration qui manque, nil si rien ne manque
+function HouseCommon.MissingUpgrade(data: any, entry: any): any?
+	local upgradeId = type(entry) == "table" and entry.RequiresUpgrade or nil
+	if type(upgradeId) ~= "string" then
+		return nil
+	end
+	local upgrades = type(data) == "table" and data.Upgrades or nil
+	local level = type(upgrades) == "table" and tonumber(upgrades[upgradeId]) or 0
+	if level and level == level and level >= 1 then
+		return nil
+	end
+	return Config.UpgradesById[upgradeId] or { Id = upgradeId, Name = upgradeId, Icon = "🔒" }
+end
+
+-- Vrai si l'entrée est débloquée pour ces données (visites à l'océan et,
+-- v9.5, amélioration exigée)
 function HouseCommon.IsUnlocked(data: any, entry: any): boolean
+	if HouseCommon.MissingUpgrade(data, entry) ~= nil then
+		return false
+	end
 	local ok, value = pcall(Formulas.IsHouseEntryUnlocked, data, entry)
 	if ok and type(value) == "boolean" then
 		return value
 	end
 	return true
+end
+
+-- (v9.5) Pourquoi l'entrée est verrouillée : (genre, texte court traduit)
+--   "Rebirths" : "Après N visites à l'océan" (le plus gros verrou d'abord)
+--   "Upgrade"  : "Débloque 🏃 Coureur infini d'abord" (3e valeur = l'amélioration)
+--   nil        : rien ne bloque
+function HouseCommon.LockReason(data: any, entry: any): (string?, string?, any?)
+	local ok, value = pcall(Formulas.IsHouseEntryUnlocked, data, entry)
+	if ok and value == false then
+		local required = HouseCommon.RequiredRebirths(entry)
+		if required == 1 then
+			return "Rebirths", Locale.T("After 1 ocean visit")
+		end
+		return "Rebirths", Locale.T("After %d ocean visits", required)
+	end
+	local upgrade = HouseCommon.MissingUpgrade(data, entry)
+	if upgrade then
+		local label = tostring(upgrade.Icon or "") .. " " .. Locale.T(tostring(upgrade.Name or upgrade.Id))
+		return "Upgrade", Locale.T("Unlock %s first", label), upgrade
+	end
+	return nil, nil
 end
 
 -- Objets jamais achetés qu'on peut se payer maintenant (badges)

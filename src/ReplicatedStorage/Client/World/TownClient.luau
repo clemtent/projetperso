@@ -19,7 +19,19 @@
 	    s'asseoir (invite -> le serveur crée un Seat), étiquettes de nom
 	    (pseudo + 🌊 visites à l'océan + ❤️) ;
 	  - édition des meubles de SA maison (FurnitureEdit) ;
-	  - Sortir ("⬅ Clicker") : le personnage est retiré, tout est remis.
+	  - Sortir ("⬅ Clicker") : fondu, le personnage est retiré, tout est remis.
+	v9.4 (ENTRY94) :
+	  - arrivée : écran de chargement (barre = maisons construites), puis
+	    1re fois de la session un survol de la ville (TownArrival, ~4 s,
+	    passable) qui finit derrière l'avatar posé à la PORTE de la ville
+	    (attribut "EntranceCF" de TOWN94) ; arc lumineux + repère jusqu'à
+	    SA maison, boussole dans le HUD, "🏠 Rentrer" ;
+	  - émotes (TownEmotes) : la piste est gardée et s'arrête en bougeant,
+	    en sautant, avec une autre émote, le bouton ■, en s'asseyant, en
+	    mode édition, en sortant, à la mort / au retrait du personnage ;
+	    "Se lever" quand on est assis (par terre ou sur un siège) ;
+	  - ambiance réaliste (TownAtmosphere) : jour / nuit selon le réglage
+	    "Mode sombre", remise EXACTE à la sortie.
 	Les gains passifs continuent (serveur) ; le bouton 👆 du HUD clique comme
 	le gros bouton (ClientState.Click).
 	Travail par image : presque rien (compteur 10 fois / s, portes et bandeau
@@ -29,7 +41,6 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-local Lighting = game:GetService("Lighting")
 local GuiService = game:GetService("GuiService")
 local StarterGui = game:GetService("StarterGui")
 local TextChatService = game:GetService("TextChatService")
@@ -45,6 +56,9 @@ local WorldLink = require(script.Parent.WorldLink)
 local HouseBuilder = require(script.Parent.HouseBuilder)
 local TownHud = require(script.Parent.TownHud)
 local FurnitureEdit = require(script.Parent.FurnitureEdit)
+local TownEmotes = require(script.Parent.TownEmotes)
+local TownAtmosphere = require(script.Parent.TownAtmosphere)
+local TownArrival = require(script.Parent.TownArrival)
 
 local TownClient = {}
 
@@ -59,30 +73,16 @@ local DOOR_RANGE = 9
 local MAX_ZOOM = 40
 local MIN_ZOOM = 0.5
 
--- Éclairage de la ville (remis à la sortie)
-local TOWN_LIGHTING: { [string]: any } = {
-	ClockTime = 14.3,
-	Brightness = 2.4,
-	Ambient = Color3.fromRGB(150, 132, 160),
-	OutdoorAmbient = Color3.fromRGB(198, 178, 208),
-	ColorShift_Top = Color3.fromRGB(255, 232, 240),
-	ColorShift_Bottom = Color3.fromRGB(0, 0, 0),
-	EnvironmentDiffuseScale = 1,
-	EnvironmentSpecularScale = 0.6,
-	ExposureCompensation = 0.12,
-	GlobalShadows = true,
-	ShadowSoftness = 0.35,
-	FogStart = 700,
-	FogEnd = 2600,
-	FogColor = Color3.fromRGB(255, 224, 238),
-	GeographicLatitude = 35,
-}
+local GUIDE_EVERY = 0.25
+local GUIDE_DONE = 18 -- (studs) arrivé devant sa porte : l'arc s'éteint
+local FADE_COLOR = Color3.fromRGB(255, 190, 220)
 
 type Saved = {
 	Guis: { ScreenGui },
 	Lighting: { [string]: any },
 	Effects: { { Instance: Instance, Enabled: boolean } },
-	Moved: { Instance }, -- ciels / atmosphères du lieu mis de côté
+	Moved: { { Instance: Instance, Parent: Instance } }, -- ciels / atmosphères / nuages du lieu mis de côté
+	CameraType: Enum.CameraType?,
 	Touch: boolean?,
 	ChatWindow: boolean?,
 	ChatInput: boolean?,
@@ -98,7 +98,6 @@ local edit: any = nil
 local snapshots: { [number]: any } = {}
 local houses: { [number]: any } = {}
 local housesFolder: Folder? = nil
-local created: { Instance } = {}
 local saved: Saved? = nil
 local connections: { RBXScriptConnection } = {}
 local friendCache: { [number]: boolean } = {}
@@ -107,7 +106,16 @@ local roomBuilding = false
 local creating = false
 local contextKey = ""
 local currentContext: any = nil
-local clocks = { Counter = 0, Door = 0, Stream = 0, Tag = 0 }
+local clocks = { Counter = 0, Door = 0, Stream = 0, Tag = 0, Guide = 0, Loc = 0 }
+local emotes: any = nil
+local guide: any = nil
+local guidePending = false
+local intro: any = nil
+local introSeen = false -- (survol : 1re arrivée de la session seulement)
+local gardens: { [number]: any } = {} -- 🌻 jardins de Dopamine 3D (GardenBuilder), par UserId
+local locLabels: { Instance } = {} -- panneaux de la ville à traduire (attribut "LocText")
+local LOC_EVERY = 2
+local deskWired = false
 
 ----------------------------------------------------------------------
 -- Utilitaires
@@ -174,6 +182,83 @@ local function canEnter(snapshot: any): boolean
 end
 
 ----------------------------------------------------------------------
+-- Modules v9.5 (autres agents) : chargés PARESSEUSEMENT, en pcall ; absents
+-- ou en erreur -> ignorés sans bruit (la ville marche sans eux)
+----------------------------------------------------------------------
+
+local optionalCache: { [string]: any } = {}
+local function optionalModule(name: string): any
+	local cached = optionalCache[name]
+	if cached ~= nil then
+		return cached or nil
+	end
+	local module = script.Parent:FindFirstChild(name)
+	local ok, result = false, nil
+	if module and module:IsA("ModuleScript") then
+		ok, result = pcall(require, module)
+	end
+	optionalCache[name] = (ok and type(result) == "table") and result or false
+	return optionalCache[name] or nil
+end
+
+-- 🖥️ Bureau (DeskMode, SETUP3D95) : l'avatar est assis à son setup ?
+local function deskActive(): boolean
+	local desk = optionalModule("DeskMode")
+	if not desk or type(desk.IsActive) ~= "function" then
+		return false
+	end
+	local ok, result = pcall(desk.IsActive)
+	return ok and result == true
+end
+
+local function deskCall(method: string)
+	local desk = optionalModule("DeskMode")
+	local fn = desk and desk[method]
+	if type(fn) == "function" then
+		local ok, err = pcall(fn)
+		if not ok then
+			warn("[Town] DeskMode." .. method .. " : " .. tostring(err))
+		end
+	end
+end
+
+----------------------------------------------------------------------
+-- 🌻 Jardins de Dopamine 3D (GardenBuilder, GARDEN3D95)
+----------------------------------------------------------------------
+
+local function destroyGarden(userId: number)
+	local garden = gardens[userId]
+	gardens[userId] = nil
+	if garden then
+		pcall(garden.Destroy, garden)
+	end
+end
+
+local function createGarden(userId: number, house: any, snapshot: any, plot: number, count: number)
+	local GardenBuilder = optionalModule("GardenBuilder")
+	if not GardenBuilder or gardens[userId] then
+		return
+	end
+	local ok, result = pcall(function()
+		local plotCF = WorldLayout.PlotCFrame(plot, count)
+		local origin, size
+		if type(GardenBuilder.BackyardArea) == "function" then
+			origin, size = GardenBuilder.BackyardArea(plotCF)
+		else
+			origin, size = GardenBuilder.BackyardCFrame(plotCF), GardenBuilder.BACKYARD_SIZE
+		end
+		local garden = GardenBuilder.new(house.Model, origin, size, userId == LocalPlayer.UserId, { OwnerName = snapshot.DisplayName })
+		garden:Update(snapshot.DopamineGarden)
+		return garden
+	end)
+	if ok and result then
+		gardens[userId] = result
+	else
+		warn("[Town] Jardin " .. tostring(userId) .. " : " .. tostring(result))
+	end
+end
+
+----------------------------------------------------------------------
 -- Maisons
 ----------------------------------------------------------------------
 
@@ -182,6 +267,9 @@ local function onSeat(house: any, slot: number, _model: Model, seatPart: BasePar
 		return
 	end
 	local cf = seatPart.CFrame * CFrame.new(0, seatPart.Size.Y / 2, 0)
+	if emotes then
+		emotes:Stop("sit")
+	end
 	task.spawn(function()
 		local ok, message = invoke("sit", { Owner = house.UserId, Slot = slot, CFrame = cf })
 		if not ok and type(message) == "string" then
@@ -199,6 +287,7 @@ local function syncHouses()
 	for userId, house in pairs(houses) do
 		local snapshot = snapshots[userId]
 		if not snapshot or not snapshot.Plot or tonumber(house.Model:GetAttribute("Plot")) ~= snapshot.Plot then
+			destroyGarden(userId)
 			house:Destroy()
 			houses[userId] = nil
 		end
@@ -212,6 +301,10 @@ local function syncHouses()
 				local ok, err = pcall(house.Update, house, snapshot)
 				if not ok then
 					warn("[Town] Maison " .. tostring(userId) .. " : " .. tostring(err))
+				end
+				local garden = gardens[userId]
+				if garden then
+					pcall(garden.Update, garden, snapshot.DopamineGarden)
 				end
 			else
 				missing = true
@@ -240,6 +333,7 @@ local function syncHouses()
 					result.Model:SetAttribute("Plot", nextPlot)
 					result.OnSeat = onSeat
 					houses[nextId :: number] = result
+					createGarden(nextId :: number, result, snapshot, nextPlot, count)
 				else
 					warn("[Town] Maison " .. tostring(nextId) .. " : " .. tostring(result))
 					snapshots[nextId :: number] = nil
@@ -322,84 +416,16 @@ end
 -- Ambiance (éclairage, interfaces, contrôles) : sauvegarde / remise
 ----------------------------------------------------------------------
 
-local function newLightingChild(className: string, props: { [string]: any }): Instance
-	local instance = Instance.new(className :: any)
-	for key, value in pairs(props) do
-		pcall(function()
-			(instance :: any)[key] = value
-		end)
-	end
-	instance.Name = "DopamineTown" .. className
-	instance.Parent = Lighting
-	table.insert(created, instance)
-	return instance
-end
-
-local function applyAmbience(s: Saved)
-	for key, value in pairs(TOWN_LIGHTING) do
-		local ok, current = pcall(function()
-			return (Lighting :: any)[key]
-		end)
-		if ok then
-			s.Lighting[key] = current
-			pcall(function()
-				(Lighting :: any)[key] = value
-			end)
-		end
-	end
-	for _, child in ipairs(Lighting:GetChildren()) do
-		if child:IsA("PostEffect") then
-			table.insert(s.Effects, { Instance = child, Enabled = child.Enabled })
-			child.Enabled = false
-		elseif child:IsA("Sky") or child:IsA("Atmosphere") or child:IsA("Clouds") then
-			table.insert(s.Moved, child)
-			child.Parent = nil
-		end
-	end
-	newLightingChild("Atmosphere", {
-		Density = 0.26,
-		Offset = 0.12,
-		Color = Color3.fromRGB(255, 214, 236),
-		Decay = Color3.fromRGB(190, 164, 232),
-		Glare = 0.25,
-		Haze = 1.2,
-	})
-	newLightingChild("Sky", { SunAngularSize = 16, MoonAngularSize = 11, StarCount = 3000, CelestialBodiesShown = true })
-	newLightingChild("ColorCorrectionEffect", { Saturation = 0.12, Contrast = 0.04, Brightness = 0.02, TintColor = Color3.fromRGB(255, 247, 251) })
-	newLightingChild("BloomEffect", { Intensity = 0.35, Size = 24, Threshold = 1.6 })
-	newLightingChild("SunRaysEffect", { Intensity = 0.04, Spread = 0.6 })
-end
-
-local function restoreAmbience(s: Saved)
-	for _, instance in ipairs(created) do
-		pcall(instance.Destroy, instance)
-	end
-	table.clear(created)
-	for key, value in pairs(s.Lighting) do
-		pcall(function()
-			(Lighting :: any)[key] = value
-		end)
-	end
-	for _, effect in ipairs(s.Effects) do
-		pcall(function()
-			(effect.Instance :: any).Enabled = effect.Enabled
-		end)
-	end
-	for _, instance in ipairs(s.Moved) do
-		pcall(function()
-			instance.Parent = Lighting
-		end)
-	end
-end
-
 -- Interfaces de Roblox (manette tactile, invites, chat...) : jamais masquées
 local KEEP_GUIS: { [string]: boolean } = {
 	TownHud = true,
+	TownOverlay = true,
 	TouchGui = true,
 	ProximityPrompts = true,
 	BubbleChat = true,
 	Chat = true,
 	Freecam = true,
+	DeskModeGui = true, -- v9.5 🖥️ barre "Se lever" du bureau (DeskMode)
 }
 local function keepGui(name: string): boolean
 	return KEEP_GUIS[name] == true or string.find(name, "Touch", 1, true) ~= nil or string.find(name, "Prompt", 1, true) ~= nil
@@ -569,33 +595,15 @@ local function refreshTags()
 	end
 end
 
+-- Émotes : TownEmotes garde la piste et l'arrête (bouger, sauter, bouton…)
 local function playEmote(name: string)
-	local character = LocalPlayer.Character
-	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-	if not character or not humanoid then
+	if not emotes then
 		return
 	end
-	if name == "sit" then
-		humanoid.Sit = true
-		return
+	if edit and edit:IsEnabled() and name ~= "sit" then
+		edit:SetEnabled(false)
 	end
-	local ok, played = pcall(humanoid.PlayEmote, humanoid, name)
-	if ok and played then
-		return
-	end
-	-- (avatar R6 ou émote absente) : animation du script Animate par défaut
-	local animate = character:FindFirstChild("Animate")
-	local holder = animate and animate:FindFirstChild(name)
-	local animation = holder and holder:FindFirstChildOfClass("Animation")
-	local animator = humanoid:FindFirstChildOfClass("Animator")
-	if animation and animator then
-		pcall(function()
-			local track = animator:LoadAnimation(animation)
-			track:Play()
-		end)
-	else
-		toast(Locale.T("This emote isn't available for your avatar"))
-	end
+	emotes:Play(name)
 end
 
 ----------------------------------------------------------------------
@@ -710,6 +718,124 @@ local function stepStream()
 	end
 end
 
+----------------------------------------------------------------------
+-- 🌐 Panneaux de la ville (construits en anglais par le serveur) : chaque
+-- TextLabel qui porte l'attribut "LocText" (clé anglaise) est traduit ici ;
+-- panneaux reconstruits : DescendantAdded + petite minuterie (2 s)
+----------------------------------------------------------------------
+
+local function localizeLabel(label: Instance)
+	local key = label:GetAttribute("LocText")
+	if type(key) == "string" and key ~= "" then
+		local text = Locale.T(key)
+		if (label :: any).Text ~= text then
+			(label :: any).Text = text
+		end
+	end
+end
+
+local function trackLabel(object: Instance)
+	if object:IsA("TextLabel") then
+		table.insert(locLabels, object)
+		localizeLabel(object)
+	end
+end
+
+local function localizeTown()
+	for index = #locLabels, 1, -1 do
+		local label = locLabels[index]
+		if label.Parent == nil then
+			table.remove(locLabels, index)
+		else
+			localizeLabel(label)
+		end
+	end
+end
+
+local function watchTownLabels()
+	table.clear(locLabels)
+	local folder = workspace:FindFirstChild("DopamineTown")
+	if not folder then
+		return
+	end
+	for _, object in ipairs(folder:GetDescendants()) do
+		trackLabel(object)
+	end
+	table.insert(connections, folder.DescendantAdded:Connect(function(object)
+		if object:IsA("TextLabel") then
+			-- (l'attribut / le texte arrivent parfois juste après)
+			task.defer(function()
+				if inTown and object.Parent then
+					trackLabel(object)
+				end
+			end)
+		end
+	end))
+end
+
+----------------------------------------------------------------------
+-- Arrivée : guide vers sa maison, boussole
+----------------------------------------------------------------------
+
+-- Porte de ENTRÉE de la ville (TownMap via l'attribut "EntranceCF")
+local function townCFrame(attribute: string): CFrame?
+	local folder = workspace:FindFirstChild("DopamineTown")
+	local value = folder and folder:GetAttribute(attribute)
+	if typeof(value) == "CFrame" then
+		return value
+	end
+	return nil
+end
+
+local function plazaCenter(): Vector3
+	local plaza = townCFrame("PlazaCF")
+	return plaza and plaza.Position or WorldLayout.Origin()
+end
+
+local function startGuide()
+	local house = myHouse()
+	if not house or not housesFolder then
+		guidePending = true
+		return
+	end
+	guidePending = false
+	if not guide then
+		guide = TownArrival.Guide(housesFolder)
+	end
+	local ok, err = pcall(function()
+		guide:Start(LocalPlayer.Character, house:DoorPosition())
+	end)
+	if not ok then
+		warn("[Town] Guide : " .. tostring(err))
+	end
+end
+
+local function stepGuide()
+	local house = myHouse()
+	local root = rootPart(LocalPlayer)
+	if guidePending and house then
+		startGuide()
+	end
+	local context = currentContext
+	local home = context ~= nil and context.IsOwner
+	if guide and guide:IsActive() then
+		local distance = guide:Update(root and root.Position)
+		if home or distance < GUIDE_DONE then
+			guide:Stop()
+			toast(Locale.T("🏠 Here's your house! Walk in, it's all yours"), Color3.fromRGB(236, 72, 140))
+		end
+	end
+	-- boussole : visible dès qu'on n'est pas chez soi (et pas pendant le survol)
+	local camera = workspace.CurrentCamera
+	local showing = house ~= nil and root ~= nil and camera ~= nil and not home and not (intro and intro:IsRunning())
+	if showing and house and root and camera then
+		local door = house:DoorPosition()
+		hud:SetCompass(true, TownArrival.Bearing(camera, root.Position, door), (Vector3.new(door.X, 0, door.Z) - Vector3.new(root.Position.X, 0, root.Position.Z)).Magnitude)
+	else
+		hud:SetCompass(false)
+	end
+end
+
 local function step(dt: number)
 	if not inTown then
 		return
@@ -718,10 +844,30 @@ local function step(dt: number)
 	clocks.Door += dt
 	clocks.Stream += dt
 	clocks.Tag += dt
+	clocks.Guide += dt
+	clocks.Loc += dt
+	TownAtmosphere.Step(dt)
+	if clocks.Loc >= LOC_EVERY then
+		clocks.Loc = 0
+		pcall(localizeTown)
+	end
 	if clocks.Counter >= COUNTER_EVERY then
 		clocks.Counter = 0
 		if hud then
 			hud:UpdateCounter()
+		end
+		if emotes then
+			local ok, err = pcall(emotes.Step, emotes)
+			if not ok then
+				warn("[Town] Émotes : " .. tostring(err))
+			end
+		end
+	end
+	if clocks.Guide >= GUIDE_EVERY then
+		clocks.Guide = 0
+		local ok, err = pcall(stepGuide)
+		if not ok then
+			warn("[Town] Guide : " .. tostring(err))
 		end
 	end
 	if clocks.Door >= DOOR_EVERY then
@@ -739,6 +885,12 @@ local function step(dt: number)
 		local ok, err = pcall(stepStream)
 		if not ok then
 			warn("[Town] Flux : " .. tostring(err))
+		end
+		-- 📺 accessoires "live" (LiveProps, SETUP3D95) autour de l'avatar
+		local live = optionalModule("LiveProps")
+		local root = rootPart(LocalPlayer)
+		if live and root and type(live.SetFocus) == "function" then
+			pcall(live.SetFocus, root.Position)
 		end
 	end
 	if clocks.Tag >= TAG_EVERY then
@@ -797,6 +949,114 @@ local function goRoom(ownerId: number, slot: number)
 	end
 end
 
+-- Caméra de Roblox qui suit l'avatar
+local function followCamera(character: Model?)
+	-- (au bureau, DeskMode tient la caméra : on n'y touche pas)
+	if deskActive() then
+		return
+	end
+	local camera = workspace.CurrentCamera
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if camera and humanoid then
+		camera.CameraType = Enum.CameraType.Custom
+		camera.CameraSubject = humanoid
+	end
+end
+
+-- 🖥️ DeskMode.Changed (une fois par session) : au bureau, plus d'émote ni
+-- de mode édition, boutons 😀 / ✏️ cachés (DeskMode a son "Se lever")
+local function wireDesk()
+	if deskWired then
+		return
+	end
+	local desk = optionalModule("DeskMode")
+	local changed = desk and desk.Changed
+	if not changed then
+		return
+	end
+	deskWired = true
+	local ok, err = pcall(function()
+		changed:Connect(function(active: boolean)
+			if not inTown then
+				return
+			end
+			if active then
+				if emotes then
+					emotes:Stop("desk")
+				end
+				if edit and edit:IsEnabled() then
+					edit:SetEnabled(false)
+				end
+			end
+			hud:SetDeskMode(active == true)
+			if emotes then
+				emotes:Notify()
+			end
+		end)
+	end)
+	if not ok then
+		warn("[Town] DeskMode.Changed : " .. tostring(err))
+	end
+end
+
+-- Survol de la ville (1re arrivée de la session), puis le guide
+local function playIntro(character: Model)
+	local camera = workspace.CurrentCamera
+	local entrance = townCFrame("EntranceCF")
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if not entrance and root and root:IsA("BasePart") then
+		entrance = root.CFrame
+	end
+	if not camera or not entrance then
+		followCamera(character)
+		startGuide()
+		return
+	end
+	-- (l'avatar arrive exactement là où le survol se termine)
+	if root and root:IsA("BasePart") then
+		entrance = CFrame.new(root.Position) * entrance.Rotation
+	end
+	introSeen = true
+	local path = TownArrival.MakePath(entrance :: CFrame, plazaCenter())
+	hud:SetCinematic(true, Locale.T("Welcome, %s!", LocalPlayer.DisplayName))
+	intro = TownArrival.Intro({
+		Camera = camera,
+		Path = path,
+		OnProgress = function(t: number)
+			hud:SetIntroProgress(t)
+		end,
+		OnDone = function(_skipped: boolean)
+			intro = nil
+			hud:SetCinematic(false)
+			if inTown then
+				followCamera(LocalPlayer.Character)
+				startGuide()
+				toast(Locale.T("🚶 Welcome to Dopamine Town!"), Color3.fromRGB(236, 72, 140))
+				toast(Locale.T("Follow the glowing arc to your house 🏠"))
+			end
+		end,
+	})
+end
+
+local function onCharacter(character: Model)
+	if not inTown then
+		return
+	end
+	character:WaitForChild("Humanoid", 5)
+	if not inTown or LocalPlayer.Character ~= character then
+		return
+	end
+	if not (intro and intro:IsRunning()) then
+		followCamera(character)
+	end
+	if emotes then
+		emotes:Attach(character)
+	end
+	if guide and guide:IsActive() then
+		guide:Attach(character)
+	end
+end
+
 local function enter(options: any)
 	if busy then
 		return
@@ -809,13 +1069,23 @@ local function enter(options: any)
 	end
 	busy = true
 	closeClickerWindows()
+	-- v9.5 🖥️ objets "Dopamine Setup" vivants : LiveProps s'accroche aux
+	-- objets construits par HouseBuilder (idempotent, chaîne les crochets existants)
+	local live = optionalModule("LiveProps")
+	if live and type(live.BindHouseBuilder) == "function" then
+		pcall(live.BindHouseBuilder, HouseBuilder)
+	end
 	local s: Saved = { Guis = {}, Lighting = {}, Effects = {}, Moved = {} }
 	saved = s
 	hud:SetVisible(true)
-	hud:ShowLoading(true, Locale.T("Building the town…"))
+	hud:ShowLoading(true, Locale.T("Building the town…"), 0.08)
 	applyControls(s)
+	local camera = workspace.CurrentCamera
+	s.CameraType = camera and camera.CameraType or nil
+	local visit = type(options) == "table" and options.Visit or nil
+	local slot = type(options) == "table" and tonumber(options.Slot) or nil
 	task.spawn(function()
-		local ok, result = invoke("enter", { Visit = type(options) == "table" and options.Visit or nil })
+		local ok, result = invoke("enter", { Visit = visit, Slot = slot })
 		if not ok then
 			restoreControls(s)
 			saved = nil
@@ -830,7 +1100,8 @@ local function enter(options: any)
 			return
 		end
 		inTown = true
-		applyAmbience(s)
+		TownAtmosphere.SetNight(ClientState.IsUserDarkMode())
+		TownAtmosphere.Apply(s)
 		local folder = Instance.new("Folder")
 		folder.Name = HOUSES_FOLDER
 		folder.Parent = workspace
@@ -844,37 +1115,100 @@ local function enter(options: any)
 		end
 		syncHouses()
 		table.insert(connections, RunService.Heartbeat:Connect(step))
-		table.insert(connections, LocalPlayer.CharacterAdded:Connect(function(character)
-			local camera = workspace.CurrentCamera
-			local humanoid = character:WaitForChild("Humanoid", 5)
-			if camera and humanoid and inTown then
-				camera.CameraType = Enum.CameraType.Custom
-				camera.CameraSubject = humanoid
+		pcall(watchTownLabels)
+		table.insert(connections, LocalPlayer.CharacterAdded:Connect(onCharacter))
+		table.insert(connections, LocalPlayer.CharacterRemoving:Connect(function()
+			if emotes then
+				emotes:Detach()
 			end
 		end))
-		local character = waitCharacter(12)
-		if character and inTown then
-			local camera = workspace.CurrentCamera
-			local humanoid = character:FindFirstChildOfClass("Humanoid")
-			if camera and humanoid then
-				camera.CameraType = Enum.CameraType.Custom
-				camera.CameraSubject = humanoid
+		-- nuit en ville = réglage ⚙️ "Mode sombre" du joueur (source "User")
+		local function syncNight()
+			TownAtmosphere.SetNight(ClientState.IsUserDarkMode())
+		end
+		table.insert(connections, ClientState.DarkModeChanged:Connect(syncNight))
+		table.insert(connections, ClientState.DarkSourcesChanged:Connect(syncNight))
+		-- chargement : personnage + maisons (barre de progression)
+		local started = os.clock()
+		local character: Model? = nil
+		while inTown and os.clock() - started < 10 do
+			local current = LocalPlayer.Character
+			if current and current:FindFirstChild("HumanoidRootPart") then
+				character = current
+			end
+			local total, built = 0, 0
+			for userId, snapshot in pairs(snapshots) do
+				if snapshot.Plot then
+					total += 1
+					if houses[userId] then
+						built += 1
+					end
+				end
+			end
+			local ratio = total > 0 and built / total or 1
+			hud:SetLoadingProgress(0.15 + 0.6 * ratio + (character and 0.25 or 0))
+			if total > 0 and built < total then
+				hud:ShowLoading(true, Locale.T("Building the houses… %s/%s", tostring(built), tostring(total)))
+			end
+			if character and ratio >= 1 and os.clock() - started > 0.5 then
+				break
+			end
+			task.wait(0.1)
+		end
+		if not inTown then
+			return
+		end
+		hud:ShowLoading(true, Locale.T("Here we go!"), 1)
+		task.wait(0.25)
+		character = character or waitCharacter(4)
+		if not inTown then
+			return
+		end
+		if character then
+			if emotes then
+				emotes:Attach(character)
 			end
 		end
+		-- 🖥️ bureau (SETUP3D95) : s'il existe
+		wireDesk()
+		deskCall("Start")
+		local arrival = type(result) == "table" and result.Arrival == "Entrance"
 		hud:ShowLoading(false)
 		busy = false
-		toast(Locale.T("🚶 Welcome to Dopamine Town!"), Color3.fromRGB(236, 72, 140))
-		if type(options) == "table" and tonumber(options.Slot) and inTown then
-			goRoom(LocalPlayer.UserId, tonumber(options.Slot) :: number)
+		if arrival and character and not introSeen then
+			playIntro(character)
+		else
+			followCamera(character)
+			if arrival then
+				startGuide()
+				toast(Locale.T("🚶 Welcome to Dopamine Town!"), Color3.fromRGB(236, 72, 140))
+				toast(Locale.T("Follow the glowing arc to your house 🏠"))
+			else
+				toast(Locale.T("🚶 Welcome to Dopamine Town!"), Color3.fromRGB(236, 72, 140))
+			end
+		end
+		if slot and inTown then
+			goRoom(LocalPlayer.UserId, slot)
 		end
 	end)
 end
 
-leave = function()
-	if not inTown or busy then
-		return
-	end
+-- Remise à l'état du clicker (après le fondu)
+local function teardown()
 	inTown = false
+	if intro then
+		intro:Cancel()
+		intro = nil
+	end
+	if emotes then
+		emotes:Stop("leave")
+		emotes:Detach()
+	end
+	if guide then
+		guide:Destroy()
+		guide = nil
+	end
+	guidePending = false
 	if edit then
 		edit:SetEnabled(false)
 	end
@@ -882,10 +1216,15 @@ leave = function()
 		connection:Disconnect()
 	end
 	table.clear(connections)
+	for userId in pairs(gardens) do
+		destroyGarden(userId)
+	end
+	table.clear(gardens)
 	for _, house in pairs(houses) do
 		pcall(house.Destroy, house)
 	end
 	table.clear(houses)
+	table.clear(locLabels)
 	if housesFolder then
 		housesFolder:Destroy()
 		housesFolder = nil
@@ -893,14 +1232,44 @@ leave = function()
 	roomBuilding = false
 	contextKey = ""
 	currentContext = nil
+	-- (DeskMode rend sa caméra AVANT qu'on remette la nôtre)
+	deskCall("Stop")
+	hud:SetDeskMode(false)
 	local s = saved
 	if s then
-		restoreAmbience(s)
+		TownAtmosphere.Restore(s)
 		restoreControls(s)
+		local camera = workspace.CurrentCamera
+		if camera and s.CameraType then
+			pcall(function()
+				camera.CameraType = s.CameraType :: Enum.CameraType
+			end)
+		end
 	end
 	saved = nil
 	hud:SetVisible(false)
 	task.spawn(invoke, "leave", nil)
+end
+
+leave = function()
+	if not inTown or busy then
+		return
+	end
+	busy = true
+	-- l'émote s'arrête tout de suite ; fondu, remise, puis le clicker réapparaît
+	if emotes then
+		emotes:Stop("leave")
+	end
+	hud:Fade(0, 0.3, FADE_COLOR)
+	task.delay(0.32, function()
+		local ok, err = pcall(teardown)
+		if not ok then
+			warn("[Town] Sortie : " .. tostring(err))
+			inTown = false
+		end
+		hud:Fade(1, 0.45)
+		busy = false
+	end)
 end
 
 ----------------------------------------------------------------------
@@ -965,6 +1334,13 @@ local function callbacks(): any
 				toast(Locale.T("Go inside your house to move your furniture"))
 				return
 			end
+			if not edit:IsEnabled() and deskActive() then
+				return
+			end
+			if not edit:IsEnabled() and emotes then
+				-- (mode édition : l'émote s'arrête)
+				emotes:Stop("edit")
+			end
 			edit:SetEnabled(not edit:IsEnabled())
 		end,
 		Rotate = function()
@@ -995,6 +1371,28 @@ local function callbacks(): any
 		Click = function(): number?
 			local ok, gain = pcall(ClientState.Click)
 			return ok and gain or nil
+		end,
+		StopEmote = function()
+			if emotes then
+				emotes:Stop("button")
+			end
+		end,
+		GetUp = function()
+			if not emotes then
+				return
+			end
+			local humanoid = emotes.Humanoid
+			local seat = humanoid and humanoid.SeatPart
+			emotes:StandUp()
+			-- (siège créé par le serveur : il le détruit, on est sûr d'être debout)
+			if seat and string.sub(seat.Name, 1, 9) == "TownSeat_" then
+				task.spawn(invoke, "stand", nil)
+			end
+		end,
+		SkipIntro = function()
+			if intro then
+				intro:Skip()
+			end
 		end,
 		CycleOpen = function()
 			local mine = snapshots[LocalPlayer.UserId]
@@ -1027,13 +1425,35 @@ end
 
 -- (tests) état interne
 function TownClient.Debug(): any
-	return { Houses = houses, Snapshots = snapshots, Hud = hud, Edit = edit, Context = function()
+	return { Houses = houses, Snapshots = snapshots, Hud = hud, Edit = edit, Emotes = emotes, Atmosphere = TownAtmosphere, Context = function()
 		return currentContext
+	end, Guide = function()
+		return guide
+	end, Intro = function()
+		return intro
+	end, Gardens = gardens, LocLabels = locLabels, UseModule = function(name: string, module: any)
+		-- (tests) remplace un module facultatif (DeskMode, LiveProps, GardenBuilder…)
+		optionalCache[name] = module or false
+		if name == "DeskMode" then
+			deskWired = false
+			if inTown then
+				wireDesk()
+			end
+		end
 	end, Step = step, Event = onEvent }
 end
 
 function TownClient.Init()
 	hud = TownHud.new(callbacks())
+	emotes = TownEmotes.new({
+		OnChanged = function(state: string?)
+			hud:SetAction(state)
+		end,
+		Blocked = deskActive,
+		Toast = function(text: string)
+			toast(Locale.T(text))
+		end,
+	})
 	edit = FurnitureEdit.new({
 		GetHouse = myHouse,
 		Hud = hud,
@@ -1052,6 +1472,12 @@ function TownClient.Init()
 		end,
 	})
 	Net.Event("WorldEvent").OnClientEvent:Connect(onEvent)
+	-- langue changée (⚙️) pendant la promenade : panneaux retraduits
+	Locale.OnChanged(function()
+		if inTown then
+			pcall(localizeTown)
+		end
+	end)
 	WorldLink.SetHandler(TownClient.Enter, TownClient.IsInTown)
 end
 

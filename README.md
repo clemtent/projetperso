@@ -27,6 +27,29 @@ Les autres méthodes (Rojo, copie manuelle) sont décrites dans [`docs/INSTALLAT
 
 ---
 
+## 🆕 Nouveautés v9.4 / v9.5 — une vraie ville, et ton setup en vrai dans ta maison
+
+- 🖥️ **Dopamine Setup** (nouvelle catégorie de la boutique maison) : les stimulus du clicker deviennent de vrais objets de ta maison, vivants en 3D.
+  - **Bureaux gamer** de 1 à 5 écrans (runner façon Subway, live, infos, DVD).
+  - **Clavier et souris cliquables** en 3D : chaque touche donne un vrai clic avec son son.
+  - **Télés DVD** de la petite à la géante, sur meuble ou au mur, plus un écran flash info.
+  - **Chaînes hi-fi** : radio-cassette → CD → platine vinyle → studio.
+  - **Moulin à vent, presse hydraulique, papier bulle, studio de live** et **plantes en pot**.
+  - Chaque objet se débloque avec son amélioration, et les plus gros avec des renaissances.
+  - **Mode bureau** : assieds-toi à ton bureau, la caméra cadre tes écrans et tu cliques au clavier.
+- 🌻 **Jardin de Dopamine en 3D** derrière ta maison dans la ville : les fleurs poussent en vrai (graine → fleur → ✨ prête) et tu les cueilles avec ton perso. Les visiteurs le voient.
+- 🏙️ **Dopamine Town refaite** :
+  - arche d'entrée « DOPAMINE TOWN », avenue bordée d'arbres, vraies rues avec trottoirs et passages piétons, voitures, bus ;
+  - place avec fontaine et mascotte, kiosque, manège, boutiques, mairie avec écran du top du serveur ;
+  - lac, parc, collines et montagnes.
+- 🚶 **Arrivée** : écran de chargement, survol de la ville (qu'on peut passer), arrivée à l'arche, flèche et boussole vers ta maison, bouton « 🏠 Rentrer ». Ciel, lumière et jour/nuit réalistes.
+- 🏠 **Maisons 3D fidèles à la 2D** : chalet, maison de ville, loft et manoir avec leur vrai toit, cheminées, tours rondes, fenêtres en verre, porche, clôture et déco de jardin. **Vrais escaliers** : marches, rampe et garde-corps, plus une pente invisible pour ne jamais se coincer.
+- Corrigés :
+  - les danses ne s'arrêtaient plus : maintenant elles s'arrêtent en bougeant, en sautant, avec ■ Arrêter, etc. ;
+  - ajout d'un bouton « Se lever » ;
+  - les tours du manoir ressemblaient à des cheminées empilées ;
+  - vérifications automatiques contre les objets en double.
+
 ## 🆕 Nouveautés v9.3 — plus dur, vraie 3D, Dopamine Town
 
 - 🚶 **Dopamine Town** : bouton « 🚶 Ville » (ou « Entrer à pied » dans la Maison). Tu entres avec **ton avatar** dans une ville où chaque joueur du serveur a sa maison, construite en vraie 3D à partir de sa maison du jeu. Tu te promènes de pièce en pièce, tu montes les étages et tu t'assois sur les canapés. Tu peux **visiter** les autres (ouverte à tous / amis / fermée), faire des **emotes** et mettre des **❤️** (bonus pour toi et le propriétaire, 👑 pour la maison la plus aimée).

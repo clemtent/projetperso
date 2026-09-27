@@ -19,6 +19,17 @@
 	    ✅ poser, ❌ annuler ;
 	  - fenêtre "👥 Visiter" : joueurs du serveur, leur maison, ❤️, accès ;
 	  - petits messages (toasts) et écran de chargement de la ville.
+	v9.4 (ENTRY94) :
+	  - "🏠 Rentrer" (téléportation devant sa porte) + 🧭 boussole sous
+	    "Retour" (flèche vers sa maison + distance, un appui = Rentrer) ;
+	  - pastille d'action en bas au milieu (entre le joystick et "sauter"
+	    sur mobile) : "■ Arrêter" pendant une émote, "Se lever" assis ;
+	  - voile plein écran à part (ScreenGui "TownOverlay", sous les
+	    encoches aussi, reste actif quand le HUD est masqué) : écran de
+	    chargement (ciel, silhouette de la ville, barre, astuces), bandes
+	    cinéma + titre + "Passer" du survol d'arrivée, fondus d'entrée /
+	    de sortie ;
+	  - liste des visites plus claire (anneau vert = en ville, pastilles).
 	Aucune logique de jeu ici : tout passe par les rappels (callbacks).
 ]]
 
@@ -63,6 +74,9 @@ export type Callbacks = {
 	Like: () -> (),
 	Click: () -> number?,
 	CycleOpen: () -> (),
+	StopEmote: () -> (),
+	GetUp: () -> (),
+	SkipIntro: () -> (),
 }
 
 export type Context = {
@@ -284,7 +298,7 @@ function TownHud.Build(self: any)
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = topRight,
 	})
-	local home = UIUtil.PillButton({ Name = "MyHouse", Text = Locale.T("🏠 My house"), Color = PINK, Height = 46, TextSize = 19, LayoutOrder = 1, Parent = topRight })
+	local home = UIUtil.PillButton({ Name = "MyHouse", Text = Locale.T("🏠 Go home"), Color = PINK, Height = 46, TextSize = 19, LayoutOrder = 1, Parent = topRight })
 	home.Activated:Connect(function()
 		cb.Home()
 	end)
@@ -475,6 +489,12 @@ function TownHud.Build(self: any)
 	UIUtil.Gradient(card, ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(246, 236, 255)), 90)
 	label({ Name = "Title", Text = Locale.T("👥 Visit a house"), Color = PINK_DEEP, TextSize = 26, Size = UDim2.new(1, -80, 0, 40),
 		Position = UDim2.fromOffset(20, 12), XAlign = Enum.TextXAlignment.Left, ZIndex = 22, Parent = card })
+	local count = label({ Name = "Count", Text = "", Color = WHITE, TextSize = 14, Size = UDim2.fromOffset(80, 24), AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -62, 0, 20), ZIndex = 22, Parent = card })
+	count.BackgroundColor3 = LILAC
+	count.BackgroundTransparency = 0
+	UIUtil.Corner(count, UDim.new(1, 0))
+	parts.VisitCount = count
 	parts.VisitSub = label({ Name = "Subtitle", Text = Locale.T("Walk to their door, sit on their sofa and leave a ❤️"), Color = INK, TextSize = 15,
 		Font = Theme.Fonts.Body, Size = UDim2.new(1, -80, 0, 20), Position = UDim2.fromOffset(20, 50), XAlign = Enum.TextXAlignment.Left, ZIndex = 22, Parent = card })
 	local close = UIUtil.CloseButton({ Name = "CloseVisit", Size = 40, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 12), ZIndex = 23 })
@@ -507,22 +527,93 @@ function TownHud.Build(self: any)
 	parts.VisitCard = card
 	parts.VisitList = list
 
-	-- Écran de chargement
-	local loading = UIUtil.Create("Frame", {
-		Name = "Loading",
-		Size = UDim2.new(1, 400, 1, 400),
-		Position = UDim2.fromOffset(-200, -200),
-		BackgroundColor3 = Color3.fromRGB(255, 214, 236),
+	-- 🧭 Boussole vers sa maison (sous "Retour") : flèche qui tourne + distance ;
+	-- un appui = "Rentrer" (téléportation devant sa porte)
+	local compass = UIUtil.Create("TextButton", {
+		Name = "HomeCompass",
+		Position = UDim2.fromOffset(10, 62),
+		Size = UDim2.fromOffset(170, 46),
+		BackgroundColor3 = Color3.fromRGB(92, 58, 120),
+		BackgroundTransparency = 0.1,
+		AutoButtonColor = false,
+		Text = "",
 		Visible = false,
-		ZIndex = 40,
 		Parent = root,
 	})
-	UIUtil.Gradient(loading, ColorSequence.new(Color3.fromRGB(255, 226, 240), Color3.fromRGB(214, 226, 255)), 90)
-	label({ Name = "Title", Text = "🚶 Dopamine Town", Color = PINK_DEEP, TextSize = 46, Size = UDim2.fromOffset(700, 60),
-		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.44), ZIndex = 41, Parent = loading })
-	parts.LoadingText = label({ Name = "Text", Text = "", Color = INK, TextSize = 20, Font = Theme.Fonts.Body, Size = UDim2.fromOffset(700, 30),
-		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.53), ZIndex = 41, Parent = loading })
-	parts.Loading = loading
+	UIUtil.Corner(compass, UDim.new(1, 0))
+	UIUtil.Stroke(compass, WHITE, 2, 0.35)
+	local dial = UIUtil.Create("Frame", {
+		Name = "Dial",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 4, 0.5, 0),
+		Size = UDim2.fromOffset(38, 38),
+		BackgroundColor3 = WHITE,
+		Parent = compass,
+	})
+	UIUtil.Corner(dial, UDim.new(1, 0))
+	UIUtil.Stroke(dial, PINK, 2, 0)
+	-- (flèche en traits : pas de ClipsDescendants, elle peut tourner)
+	local needle = UIUtil.Create("Frame", { Name = "Needle", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(30, 30), BackgroundTransparency = 1, ZIndex = 3, Parent = dial })
+	local function bar(x1: number, y1: number, x2: number, y2: number)
+		local dx, dy = x2 - x1, y2 - y1
+		local b = UIUtil.Create("Frame", {
+			Name = "Bar",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromOffset((x1 + x2) / 2, (y1 + y2) / 2),
+			Size = UDim2.fromOffset(math.sqrt(dx * dx + dy * dy) + 4, 4),
+			Rotation = math.deg(math.atan2(dy, dx)),
+			BackgroundColor3 = PINK_DEEP,
+			BorderSizePixel = 0,
+			ZIndex = 3,
+			Parent = needle,
+		})
+		UIUtil.Corner(b, UDim.new(1, 0))
+	end
+	bar(15, 4, 15, 26)
+	bar(15, 4, 8, 12)
+	bar(15, 4, 22, 12)
+	parts.CompassText = label({ Name = "Text", Text = "", Color = WHITE, TextSize = 17, Size = UDim2.new(1, -54, 1, 0), Position = UDim2.fromOffset(48, 0),
+		XAlign = Enum.TextXAlignment.Left, Parent = compass })
+	compass.Activated:Connect(function()
+		cb.Home()
+	end)
+	parts.Compass = compass
+	parts.Needle = needle
+
+	-- Pastille d'action en bas au milieu (entre joystick et "sauter" sur
+	-- mobile) : "■ Arrêter" pendant une émote, "Se lever" quand on est assis
+	local action = UIUtil.PillButton({ Name = "StopEmote", Text = "", Color = Color3.fromRGB(255, 92, 120), Height = 50, TextSize = 20, Parent = root })
+	action.AutomaticSize = Enum.AutomaticSize.None
+	action.AnchorPoint = Vector2.new(0.5, 1)
+	action.Position = UDim2.new(0.5, 0, 1, -18)
+	action.Visible = false
+	action.TextXAlignment = Enum.TextXAlignment.Right
+	local actionPad = action:FindFirstChildOfClass("UIPadding")
+	if actionPad then
+		actionPad.PaddingLeft = UDim.new(0, 50)
+		actionPad.PaddingRight = UDim.new(0, 20)
+	end
+	-- icône : carré "stop" ou flèche "se lever"
+	local stopIcon = UIUtil.Create("Frame", { Name = "StopIcon", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, -26, 0.5, 0),
+		Size = UDim2.fromOffset(16, 16), BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 4, Parent = action })
+	UIUtil.Corner(stopIcon, 3)
+	local upIcon = UIUtil.Icon("Up", { Size = 20, Color = WHITE, Position = UDim2.new(0, -26, 0.5, 0), ZIndex = 4, Parent = action })
+	upIcon.Name = "UpIcon"
+	action.Activated:Connect(function()
+		if self.ActionState == "Sit" then
+			cb.GetUp()
+		else
+			cb.StopEmote()
+		end
+	end)
+	parts.Action = action
+	parts.StopIcon = stopIcon
+	parts.UpIcon = upIcon
+	self.ActionState = nil
+
+	-- Écran de chargement (plein écran, sous les encoches aussi)
+	self:BuildOverlay()
 
 	self:SetSnap(true)
 	self:SetEditing(false, false)
@@ -549,7 +640,7 @@ function TownHud.Layout(self: any)
 	local backText = phone and Locale.T("Clicker") or Locale.T("Back to clicker")
 	parts.Back.Text = backText
 	parts.Back.Size = UDim2.fromOffset(textWidth(backText, 19) + 64, 46)
-	for _, spec in ipairs({ { parts.Home, phone and "🏠" or Locale.T("🏠 My house") }, { parts.VisitButton, phone and "👥" or Locale.T("👥 Visit…") } }) do
+	for _, spec in ipairs({ { parts.Home, phone and "🏠" or Locale.T("🏠 Go home") }, { parts.VisitButton, phone and "👥" or Locale.T("👥 Visit…") } }) do
 		local button, text = spec[1], spec[2]
 		button.Text = text
 		button.AutomaticSize = Enum.AutomaticSize.None
@@ -584,6 +675,21 @@ function TownHud.Layout(self: any)
 			tag.Visible = not phone
 		end
 	end
+	-- voile plein écran (chargement, survol) : même échelle que le reste
+	local overlay = self.Overlay
+	local full = overlay and overlay.AbsoluteSize or size
+	if full.X < 10 or full.Y < 10 then
+		full = size
+	end
+	local overlayScale = math.clamp(math.min(full.X / 860, full.Y / 520), 0.45, 1.3)
+	parts.LoadingScale.Scale = overlayScale
+	parts.CinemaScale.Scale = overlayScale
+	-- bandes cinéma : 11 % de l'écran, jamais moins de 56 px (bouton "Passer" dedans)
+	local barH = math.max(math.floor(full.Y * 0.11), 56)
+	parts.TopBar.Size = UDim2.new(1, 0, 0, barH)
+	parts.BottomBar.Size = UDim2.new(1, 0, 0, barH)
+	parts.Skip.Position = UDim2.new(1, phone and -64 or -40, 0, barH / 2)
+	parts.SkipScale.Scale = math.clamp(overlayScale, 0.8, 1.2)
 	local card = parts.VisitCard
 	local rootSize = Vector2.new(size.X / scale, size.Y / scale)
 	card.Size = UDim2.fromOffset(math.min(520, rootSize.X - 30), math.min(440, rootSize.Y - 30))
@@ -598,6 +704,9 @@ function TownHud.SetVisible(self: any, visible: boolean)
 	if not visible then
 		self:CloseVisit()
 		self:SetEmoteWheel(false)
+		self:SetCinematic(false)
+		self:SetAction(nil)
+		self:SetCompass(false)
 	end
 end
 
@@ -617,8 +726,8 @@ function TownHud.SetContext(self: any, context: Context?)
 	self.Context = context
 	local parts = self.Parts
 	local snapshot = context and context.Snapshot
-	parts.Banner.Visible = snapshot ~= nil
-	parts.Edit.Visible = context ~= nil and context.IsOwner and context.InHouse
+	parts.Banner.Visible = snapshot ~= nil and not self.DeskActive
+	parts.Edit.Visible = context ~= nil and context.IsOwner and context.InHouse and not self.DeskActive
 	parts.Like.Visible = snapshot ~= nil and not (context and context.IsOwner)
 	if not snapshot or not context then
 		return
@@ -679,6 +788,9 @@ function TownHud.SetEditing(self: any, editing: boolean, holding: boolean, itemN
 		end
 	end
 	parts.EditBar.Size = UDim2.fromOffset(width, 64)
+	if parts.Action then
+		self:PlaceAction()
+	end
 end
 
 -- "+123" qui s'envole au-dessus d'un bouton
@@ -733,10 +845,308 @@ function TownHud.SetEmoteWheel(self: any, open: boolean)
 	self.Parts.Wheel.Visible = open
 end
 
-function TownHud.ShowLoading(self: any, visible: boolean, text: string?)
-	self.Parts.Loading.Visible = visible
+----------------------------------------------------------------------
+-- Voile plein écran : chargement, fondus, survol (ScreenGui à part,
+-- sous les encoches aussi ; reste actif quand le HUD est masqué)
+----------------------------------------------------------------------
+
+local LOADING_TIPS = {
+	"Tip: follow the glowing arc to find your house",
+	"Tip: tap 😀 to dance, wave or sit — walk or jump to stop",
+	"Tip: leave a ❤️ at a friend's house: you both earn Dopamine",
+	"Tip: sit on any sofa, chair or bench",
+	"Tip: ✏️ moves your furniture inside your house",
+	"Tip: your Dopamine keeps growing while you walk around",
+}
+
+local SKYLINE = { -- (x en échelle, largeur px, hauteur px, couleur)
+	{ 0.03, 70, 90, 1 }, { 0.1, 56, 130, 2 }, { 0.17, 84, 70, 1 }, { 0.26, 60, 110, 2 }, { 0.33, 90, 84, 1 },
+	{ 0.62, 80, 96, 1 }, { 0.7, 58, 140, 2 }, { 0.78, 92, 76, 1 }, { 0.87, 64, 118, 2 }, { 0.95, 78, 88, 1 },
+}
+
+function TownHud.BuildOverlay(self: any)
+	local playerGui = self.Gui.Parent
+	local old = playerGui and playerGui:FindFirstChild("TownOverlay")
+	if old then
+		old:Destroy()
+	end
+	local overlay = Instance.new("ScreenGui")
+	overlay.Name = "TownOverlay"
+	overlay.ResetOnSpawn = false
+	overlay.IgnoreGuiInset = true
+	overlay.ScreenInsets = Enum.ScreenInsets.None
+	overlay.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	overlay.DisplayOrder = 45
+	overlay.Enabled = true
+	overlay.Parent = playerGui
+	self.Overlay = overlay
+	local parts = self.Parts
+
+	-- Chargement : ciel rose -> lilas, soleil, silhouette de la ville
+	local loading = UIUtil.Create("Frame", {
+		Name = "Loading",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = WHITE,
+		BorderSizePixel = 0,
+		Visible = false,
+		ZIndex = 40,
+		Parent = overlay,
+	})
+	UIUtil.Gradient(loading, ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(176, 160, 255)),
+		ColorSequenceKeypoint.new(0.55, Color3.fromRGB(255, 176, 214)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 222, 196)),
+	}), 90)
+	local sun = UIUtil.Create("Frame", { Name = "Sun", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.62),
+		Size = UDim2.fromOffset(300, 300), BackgroundColor3 = Color3.fromRGB(255, 244, 214), BackgroundTransparency = 0.35, ZIndex = 41, Parent = loading })
+	UIUtil.Corner(sun, UDim.new(1, 0))
+	local halo = UIUtil.Create("Frame", { Name = "Halo", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(1.5, 1.5), BackgroundColor3 = WHITE, BackgroundTransparency = 0.82, ZIndex = 41, Parent = sun })
+	UIUtil.Corner(halo, UDim.new(1, 0))
+	-- silhouette : maisons (corps + toit en carré tourné) sur une colline
+	UIUtil.Create("Frame", { Name = "Ground", AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1),
+		Size = UDim2.new(1, 0, 0.16, 0), BackgroundColor3 = Color3.fromRGB(150, 118, 196), BorderSizePixel = 0, ZIndex = 43, Parent = loading })
+	local tones = { Color3.fromRGB(170, 136, 214), Color3.fromRGB(196, 160, 236) }
+	for _, spec in ipairs(SKYLINE) do
+		local color = tones[spec[4]]
+		local body = UIUtil.Create("Frame", { Name = "House", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(spec[1], 0, 0.84, 1),
+			Size = UDim2.fromOffset(spec[2], spec[3]), BackgroundColor3 = color, BorderSizePixel = 0, ZIndex = 42, Parent = loading })
+		local roofSide = spec[2] / math.sqrt(2)
+		UIUtil.Create("Frame", { Name = "Roof", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0), Rotation = 45,
+			Size = UDim2.fromOffset(roofSide, roofSide), BackgroundColor3 = color, BorderSizePixel = 0, ZIndex = 42, Parent = body })
+		for w = 0, 1 do
+			local window = UIUtil.Create("Frame", { Name = "Window", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.3 + w * 0.4, 0, 0, spec[3] * 0.3),
+				Size = UDim2.fromOffset(12, 14), BackgroundColor3 = Color3.fromRGB(255, 236, 170), BorderSizePixel = 0, ZIndex = 42, Parent = body })
+			UIUtil.Corner(window, 3)
+		end
+	end
+	-- centre : titre, état, barre, astuce (mis à l'échelle dans Layout)
+	local center = UIUtil.Create("Frame", { Name = "Center", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.4),
+		Size = UDim2.fromOffset(760, 260), BackgroundTransparency = 1, ZIndex = 44, Parent = loading })
+	parts.LoadingScale = UIUtil.Create("UIScale", { Parent = center })
+	label({ Name = "Welcome", Text = Locale.T("Welcome to"), Color = WHITE, TextSize = 26, Size = UDim2.new(1, 0, 0, 34), ZIndex = 45, Parent = center })
+	local title = label({ Name = "Title", Text = "DOPAMINE TOWN", Color = WHITE, TextSize = 78, Size = UDim2.new(1, 0, 0, 90),
+		Position = UDim2.fromOffset(0, 30), ZIndex = 45, Parent = center })
+	UIUtil.Create("UIStroke", { Color = PINK_DEEP, Thickness = 5, Parent = title })
+	parts.LoadingText = label({ Name = "Text", Text = "", Color = INK, TextSize = 22, Font = Theme.Fonts.Title, Size = UDim2.new(1, 0, 0, 30),
+		Position = UDim2.fromOffset(0, 136), ZIndex = 45, Parent = center })
+	local track = UIUtil.Create("Frame", { Name = "Progress", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 176),
+		Size = UDim2.fromOffset(420, 18), BackgroundColor3 = WHITE, BackgroundTransparency = 0.25, ZIndex = 45, Parent = center })
+	UIUtil.Corner(track, UDim.new(1, 0))
+	UIUtil.Stroke(track, WHITE, 2, 0)
+	local fill = UIUtil.Create("Frame", { Name = "Fill", Size = UDim2.fromScale(0.05, 1), BackgroundColor3 = PINK, ZIndex = 46, Parent = track })
+	UIUtil.Corner(fill, UDim.new(1, 0))
+	UIUtil.Gradient(fill, ColorSequence.new(Color3.fromRGB(255, 120, 190), Color3.fromRGB(255, 190, 110)), 0)
+	parts.LoadingFill = fill
+	parts.LoadingTip = label({ Name = "Tip", Text = "", Color = INK, TextSize = 18, Font = Theme.Fonts.Body, Size = UDim2.new(1, 0, 0, 26),
+		Position = UDim2.fromOffset(0, 208), ZIndex = 45, Parent = center })
+	parts.Loading = loading
+
+	-- Survol : bandes cinéma, titre, "Passer"
+	local cinema = UIUtil.Create("Frame", { Name = "Cinematic", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false, ZIndex = 30, Parent = overlay })
+	for _, spec in ipairs({ { "TopBar", 0 }, { "BottomBar", 1 } }) do
+		parts[spec[1]] = UIUtil.Create("Frame", { Name = spec[1], AnchorPoint = Vector2.new(0, spec[2]), Position = UDim2.fromScale(0, spec[2]), Size = UDim2.fromScale(1, 0.11),
+			BackgroundColor3 = Color3.fromRGB(12, 8, 20), BorderSizePixel = 0, ZIndex = 31, Parent = cinema })
+	end
+	local cinemaCenter = UIUtil.Create("Frame", { Name = "Titles", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale(0.5, 0.86),
+		Size = UDim2.fromOffset(760, 130), BackgroundTransparency = 1, ZIndex = 32, Parent = cinema })
+	parts.CinemaScale = UIUtil.Create("UIScale", { Parent = cinemaCenter })
+	local cTitle = label({ Name = "Title", Text = "DOPAMINE TOWN", Color = WHITE, TextSize = 64, Size = UDim2.new(1, 0, 0, 74), ZIndex = 33, Parent = cinemaCenter })
+	local cStroke = UIUtil.Create("UIStroke", { Color = PINK_DEEP, Thickness = 4, Parent = cTitle })
+	local cSub = label({ Name = "Subtitle", Text = "", Color = WHITE, TextSize = 24, Size = UDim2.new(1, 0, 0, 32), Position = UDim2.fromOffset(0, 78), ZIndex = 33, Parent = cinemaCenter })
+	local cSubStroke = UIUtil.Create("UIStroke", { Color = INK, Thickness = 2, Transparency = 0.2, Parent = cSub })
+	parts.CinemaTitle, parts.CinemaSub, parts.CinemaStroke, parts.CinemaSubStroke = cTitle, cSub, cStroke, cSubStroke
+	local skip = UIUtil.PillButton({ Name = "SkipIntro", Text = Locale.T("Skip"), Color = WHITE, TextColor3 = INK, Height = 40, TextSize = 18, ZIndex = 34, Parent = cinema })
+	skip.AutomaticSize = Enum.AutomaticSize.None
+	skip.TextXAlignment = Enum.TextXAlignment.Left
+	skip.AnchorPoint = Vector2.new(1, 0.5)
+	skip.Position = UDim2.new(1, -40, 0.055, 0)
+	skip.Size = UDim2.fromOffset(textWidth(Locale.T("Skip"), 18) + 62, 40)
+	local skipPad = skip:FindFirstChildOfClass("UIPadding")
+	if skipPad then
+		skipPad.PaddingLeft = UDim.new(0, 18)
+		skipPad.PaddingRight = UDim.new(0, 40)
+	end
+	UIUtil.Icon("Next", { Size = 18, Color = PINK_DEEP, Position = UDim2.new(1, 20, 0.5, 0), ZIndex = 35, Parent = skip })
+	parts.SkipScale = UIUtil.Create("UIScale", { Parent = skip })
+	skip.Activated:Connect(function()
+		self.Callbacks.SkipIntro()
+	end)
+	parts.Cinema = cinema
+	parts.Skip = skip
+
+	-- Fondu (sortie, fin du chargement)
+	parts.Fade = UIUtil.Create("Frame", { Name = "Fade", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(255, 190, 220),
+		BackgroundTransparency = 1, BorderSizePixel = 0, Visible = false, ZIndex = 60, Parent = overlay })
+end
+
+-- Écran de chargement ; `progress` 0..1 (barre)
+function TownHud.ShowLoading(self: any, visible: boolean, text: string?, progress: number?)
+	local parts = self.Parts
+	local wasVisible = parts.Loading.Visible
+	parts.Loading.Visible = visible
 	if text then
-		self.Parts.LoadingText.Text = text
+		parts.LoadingText.Text = text
+	end
+	if progress then
+		self:SetLoadingProgress(progress)
+	end
+	if visible and not wasVisible then
+		-- astuces qui défilent tant que l'écran est là
+		self.TipToken = (self.TipToken or 0) + 1
+		local token = self.TipToken
+		local index = math.random(1, #LOADING_TIPS)
+		parts.LoadingTip.Text = Locale.T(LOADING_TIPS[index])
+		task.spawn(function()
+			while self.TipToken == token and parts.Loading.Visible do
+				task.wait(2.6)
+				if self.TipToken ~= token or not parts.Loading.Visible then
+					break
+				end
+				index = index % #LOADING_TIPS + 1
+				parts.LoadingTip.Text = Locale.T(LOADING_TIPS[index])
+			end
+		end)
+	elseif not visible and wasVisible then
+		self.TipToken = (self.TipToken or 0) + 1
+		-- (le chargement s'efface en douceur : voile de la même couleur)
+		self:Fade(0, 0, Color3.fromRGB(255, 186, 214))
+		self:Fade(1, 0.6)
+	end
+end
+
+function TownHud.SetLoadingProgress(self: any, progress: number)
+	local p = math.clamp(progress, 0.03, 1)
+	self.Parts.LoadingFill.Size = UDim2.fromScale(p, 1)
+end
+
+-- Voile plein écran : `alpha` 0 = couvert, 1 = transparent
+function TownHud.Fade(self: any, alpha: number, duration: number, color: Color3?)
+	local fade: Frame = self.Parts.Fade
+	if color then
+		fade.BackgroundColor3 = color
+	end
+	if self.FadeTween then
+		pcall(function()
+			self.FadeTween:Cancel()
+		end)
+		self.FadeTween = nil
+	end
+	fade.Visible = true
+	if duration <= 0 then
+		fade.BackgroundTransparency = alpha
+		fade.Visible = alpha < 1
+		return
+	end
+	local ok, tween = pcall(function()
+		return TweenService:Create(fade, TweenInfo.new(duration, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), { BackgroundTransparency = alpha })
+	end)
+	if ok and tween then
+		self.FadeTween = tween
+		tween.Completed:Connect(function()
+			if self.FadeTween == tween then
+				self.FadeTween = nil
+				fade.Visible = fade.BackgroundTransparency < 0.999
+			end
+		end)
+		tween:Play()
+	else
+		fade.BackgroundTransparency = alpha
+		fade.Visible = alpha < 1
+	end
+end
+
+-- Survol : bandes + titre ; le HUD normal est caché pendant ce temps
+function TownHud.SetCinematic(self: any, on: boolean, subtitle: string?)
+	local parts = self.Parts
+	parts.Cinema.Visible = on
+	self.Root.Visible = not on
+	if subtitle then
+		parts.CinemaSub.Text = subtitle
+	end
+	if on then
+		self:SetIntroProgress(0)
+	end
+end
+
+-- Titre du survol : apparaît puis s'efface (t = 0..1)
+function TownHud.SetIntroProgress(self: any, t: number)
+	local parts = self.Parts
+	local alpha
+	if t < 0.12 then
+		alpha = 1 - t / 0.12
+	elseif t < 0.7 then
+		alpha = 0
+	else
+		alpha = math.clamp((t - 0.7) / 0.2, 0, 1)
+	end
+	parts.CinemaTitle.TextTransparency = alpha
+	parts.CinemaSub.TextTransparency = alpha
+	parts.CinemaStroke.Transparency = alpha
+	parts.CinemaSubStroke.Transparency = 0.2 + 0.8 * alpha
+end
+
+-- 🖥️ Au bureau (DeskMode) : pas d'émotes ni de meubles, pas de pastille
+-- (DeskMode montre son propre "Se lever")
+function TownHud.SetDeskMode(self: any, active: boolean)
+	self.DeskActive = active
+	local parts = self.Parts
+	parts.Emote.Visible = not active
+	-- (au bureau, la bannière de la maison cacherait les écrans du haut)
+	parts.Banner.Visible = not active and self.Context ~= nil and self.Context.Snapshot ~= nil
+	if active then
+		self:SetEmoteWheel(false)
+		parts.Edit.Visible = false
+		self:SetAction(nil)
+	else
+		local context = self.Context
+		parts.Edit.Visible = context ~= nil and context.IsOwner and context.InHouse
+	end
+end
+
+-- Pastille d'action : "Emote" -> ■ Arrêter, "Sit" -> Se lever, nil -> cachée
+function TownHud.SetAction(self: any, state: string?)
+	if self.DeskActive then
+		state = nil
+	end
+	self.ActionState = state
+	local parts = self.Parts
+	local action: TextButton = parts.Action
+	action.Visible = state ~= nil
+	if not state then
+		return
+	end
+	local text = state == "Sit" and Locale.T("Get up") or Locale.T("Stop")
+	action.Text = text
+	action.BackgroundColor3 = state == "Sit" and MINT or Color3.fromRGB(255, 92, 120)
+	action:SetAttribute("BaseColor", action.BackgroundColor3)
+	action.Size = UDim2.fromOffset(textWidth(text, 20) + 76, 50)
+	parts.StopIcon.Visible = state ~= "Sit"
+	parts.UpIcon.Visible = state == "Sit"
+	self:PlaceAction()
+end
+
+-- (au-dessus de la barre d'édition si elle est ouverte)
+function TownHud.PlaceAction(self: any)
+	local parts = self.Parts
+	local lift = parts.EditBar.Visible and 86 or 18
+	parts.Action.Position = UDim2.new(0.5, 0, 1, -lift)
+end
+
+-- Boussole : `bearing` en degrés (0 = devant), `distance` en studs
+function TownHud.SetCompass(self: any, visible: boolean, bearing: number?, distance: number?)
+	local parts = self.Parts
+	parts.Compass.Visible = visible
+	if not visible then
+		return
+	end
+	parts.Needle.Rotation = math.floor((bearing or 0) + 0.5)
+	-- (1 stud = 0,28 m)
+	local meters = math.floor((distance or 0) * 0.28 + 0.5)
+	local text = Locale.T("🏠 %s m", tostring(meters))
+	if parts.CompassText.Text ~= text then
+		parts.CompassText.Text = text
+		parts.Compass.Size = UDim2.fromOffset(math.max(120, textWidth(text, 17) + 66), 46)
 	end
 end
 
@@ -758,40 +1168,67 @@ function TownHud.OpenVisit(self: any, rows: { VisitRow })
 		label({ Name = "Empty", Text = Locale.T("Nobody else is here yet… invite a friend!"), Color = INK, TextSize = 17, Size = UDim2.new(1, 0, 0, 60),
 			ZIndex = 23, Parent = list })
 	end
+	-- petite pastille (taille, ❤️, 👀, 🔒…)
+	local function chip(parent: Instance, text: string, color: Color3, textColor: Color3, order: number)
+		local width = textWidth(text, 13, Theme.Fonts.Title) + 16
+		local c = UIUtil.Create("Frame", { Name = "Chip", Size = UDim2.fromOffset(width, 22), BackgroundColor3 = color, LayoutOrder = order, ZIndex = 24, Parent = parent })
+		UIUtil.Corner(c, UDim.new(1, 0))
+		label({ Name = "Text", Text = text, Color = textColor, TextSize = 13, Size = UDim2.fromScale(1, 1), ZIndex = 25, Parent = c })
+	end
 	for index, row in ipairs(rows) do
 		local snapshot = row.Snapshot
+		local inTown = snapshot.InTown == true
 		local item = UIUtil.Create("Frame", {
 			Name = "Row_" .. tostring(snapshot.UserId),
-			Size = UDim2.new(1, 0, 0, 64),
-			BackgroundColor3 = row.IsSelf and Color3.fromRGB(255, 236, 246) or WHITE,
+			Size = UDim2.new(1, 0, 0, 78),
+			BackgroundColor3 = WHITE,
 			LayoutOrder = index,
 			ZIndex = 23,
 			Parent = list,
 		})
-		UIUtil.Corner(item, 16)
-		UIUtil.Stroke(item, Color3.fromRGB(230, 214, 250), 1.5, 0)
+		UIUtil.Corner(item, 18)
+		UIUtil.Stroke(item, row.IsSelf and PINK or Color3.fromRGB(226, 212, 250), row.IsSelf and 2 or 1.5, 0)
+		UIUtil.Gradient(item, ColorSequence.new(row.IsSelf and Color3.fromRGB(255, 236, 246) or Color3.fromRGB(250, 246, 255), WHITE), 0)
+		-- avatar dans un anneau (vert : en ville)
+		local ring = UIUtil.Create("Frame", { Name = "Ring", Size = UDim2.fromOffset(60, 60), Position = UDim2.fromOffset(9, 9),
+			BackgroundColor3 = inTown and MINT or Color3.fromRGB(214, 200, 240), ZIndex = 24, Parent = item })
+		UIUtil.Corner(ring, UDim.new(1, 0))
 		local head = UIUtil.Create("ImageLabel", {
 			Name = "Head",
-			Size = UDim2.fromOffset(48, 48),
-			Position = UDim2.fromOffset(8, 8),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(52, 52),
 			BackgroundColor3 = Color3.fromRGB(255, 226, 240),
 			Image = UIUtil.HeadshotUrl(tonumber(snapshot.UserId) or 1, 60),
-			ZIndex = 24,
-			Parent = item,
+			ZIndex = 25,
+			Parent = ring,
 		})
 		UIUtil.Corner(head, UDim.new(1, 0))
+		local dot = UIUtil.Create("Frame", { Name = "Status", AnchorPoint = Vector2.new(1, 1), Position = UDim2.fromScale(1, 1), Size = UDim2.fromOffset(16, 16),
+			BackgroundColor3 = inTown and Color3.fromRGB(60, 210, 130) or Color3.fromRGB(190, 180, 200), ZIndex = 26, Parent = ring })
+		UIUtil.Corner(dot, UDim.new(1, 0))
+		UIUtil.Stroke(dot, WHITE, 2, 0)
 		local size = Config.HouseSizesById[snapshot.Size] or Config.House.Sizes[1]
 		local name = tostring(snapshot.DisplayName or snapshot.Name or "?")
-		label({ Name = "Name", Text = row.IsSelf and Locale.T("%s (you)", name) or name, Color = INK, TextSize = 18, Size = UDim2.new(1, -200, 0, 24),
-			Position = UDim2.fromOffset(66, 8), XAlign = Enum.TextXAlignment.Left, ZIndex = 24, Parent = item })
-		local status = snapshot.InTown and Locale.T("🚶 in town") or Locale.T("💤 clicking")
-		label({ Name = "House", Text = string.format("%s %s · ❤️ %s · %s%s", tostring(size.Icon or "🏠"), Locale.T(size.Name), NumberFormatter.Format(tonumber(snapshot.Likes) or 0),
-			status, row.Locked and " · 🔒" or ""), Color = Color3.fromRGB(130, 100, 150), TextSize = 14, Font = Theme.Fonts.Body, Size = UDim2.new(1, -200, 0, 20),
-			Position = UDim2.fromOffset(66, 34), XAlign = Enum.TextXAlignment.Left, ZIndex = 24, Parent = item })
+		-- nom, puis l'état (en ville / clique, 🔒) juste après
+		local nameText = row.IsSelf and Locale.T("%s (you)", name) or name
+		local nameW = math.min(textWidth(nameText, 19) + 10, 190)
+		label({ Name = "Name", Text = nameText, Color = INK, TextSize = 19, Size = UDim2.fromOffset(nameW + 4, 24),
+			Position = UDim2.fromOffset(80, 10), XAlign = Enum.TextXAlignment.Left, ZIndex = 24, Parent = item })
+		local status = (inTown and Locale.T("🚶 in town") or Locale.T("💤 clicking")) .. (row.Locked and "  🔒" or "")
+		label({ Name = "Status", Text = status, Color = inTown and Color3.fromRGB(40, 160, 100) or Color3.fromRGB(150, 130, 170), TextSize = 13, Font = Theme.Fonts.Body,
+			Size = UDim2.fromOffset(textWidth(status, 13, Theme.Fonts.Body) + 6, 24), Position = UDim2.fromOffset(80 + nameW + 10, 10), XAlign = Enum.TextXAlignment.Left,
+			ZIndex = 24, Parent = item })
+		local chips = UIUtil.Create("Frame", { Name = "Chips", BackgroundTransparency = 1, Position = UDim2.fromOffset(80, 42), Size = UDim2.new(1, -240, 0, 22),
+			ClipsDescendants = true, ZIndex = 24, Parent = item })
+		UIUtil.Create("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 5), SortOrder = Enum.SortOrder.LayoutOrder, Parent = chips })
+		chip(chips, string.format("%s %s", tostring(size.Icon or "🏠"), Locale.T(size.Name)), Color3.fromRGB(240, 232, 255), INK, 1)
+		chip(chips, string.format("❤️ %s  👀 %s", NumberFormatter.Format(tonumber(snapshot.Likes) or 0), NumberFormatter.Format(tonumber(snapshot.Visits) or 0)),
+			Color3.fromRGB(255, 228, 238), PINK_DEEP, 2)
 		local go = UIUtil.PillButton({ Name = "Go", Text = row.IsSelf and Locale.T("🏠 Home") or Locale.T("🚶 Visit"), Color = row.IsSelf and PINK or LILAC,
-			Height = 42, TextSize = 17, ZIndex = 24, Parent = item })
-		go.AnchorPoint = Vector2.new(1, 0.5)
-		go.Position = UDim2.new(1, -10, 0.5, 0)
+			Height = 44, TextSize = 17, ZIndex = 24, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0), Parent = item })
+		go.AutomaticSize = Enum.AutomaticSize.None
+		go.Size = UDim2.fromOffset(textWidth(go.Text, 17) + 44, 44)
 		go.Activated:Connect(function()
 			self:CloseVisit()
 			if row.IsSelf then
@@ -801,6 +1238,8 @@ function TownHud.OpenVisit(self: any, rows: { VisitRow })
 			end
 		end)
 	end
+	parts.VisitCount.Text = Locale.T("%s houses", tostring(#rows))
+	parts.VisitCount.Size = UDim2.fromOffset(textWidth(parts.VisitCount.Text, 14) + 20, 24)
 	parts.VisitDimmer.Visible = true
 	parts.VisitCard.Visible = true
 	UIUtil.Pop(parts.VisitCard, 0.9, 0.2)
@@ -817,6 +1256,9 @@ end
 
 function TownHud.Destroy(self: any)
 	self.Gui:Destroy()
+	if self.Overlay then
+		self.Overlay:Destroy()
+	end
 end
 
 return TownHud

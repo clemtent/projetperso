@@ -1355,6 +1355,9 @@ Config.House = {
 		{ Id = "Gaming", Name = "Gaming", Icon = "🎮", Tint = Color3.fromRGB(212, 236, 255) },
 		{ Id = "Sports", Name = "Sports", Icon = "🏀", Tint = Color3.fromRGB(255, 226, 204) },
 		{ Id = "Adventure", Name = "Adventure", Icon = "🚀", Tint = Color3.fromRGB(226, 226, 255) },
+		-- v9.5 🖥️ "Dopamine Setup" : les stimuli du clicker deviennent de vrais
+		-- objets de la maison (voir la fin de Items)
+		{ Id = "Setup", Name = "Dopamine Setup", Icon = "🖥️", Tint = Color3.fromRGB(222, 214, 255) },
 	},
 
 	Items = {
@@ -2103,6 +2106,124 @@ Config.House = {
 			Cost = 1.5e8, CostGrowth = 1.55, Comfort = 21 },
 		{ Id = "MechRobot", Name = "Giant mech robot", Icon = "🤖", Category = "Adventure", Placement = "Floor", Size = 135,
 			Cost = 4e8, CostGrowth = 1.6, Comfort = 24 },
+
+		-- v9.5 🖥️ "Dopamine Setup" : chaque stimulus débloqué dans le clicker
+		-- devient un objet de la maison, vivant et cliquable en 3D (dessins :
+		-- Art/Setup95 ; modèles 3D : House3DSetup ; vie : World/LiveProps).
+		--   RequiresUpgrade = Id d'une amélioration (Config.Upgrades) : il faut en
+		--     posséder au moins 1 niveau (data.Upgrades[id] >= 1) pour ACHETER
+		--     l'objet (vérifié par HouseService et HouseCommon) ; un objet déjà
+		--     acheté reste à soi, même après l'océan.
+		--   RequiresRebirths : écrit en clair (0 = tout de suite) : le prix de base
+		--     est ensuite multiplié par le palier (RebirthGates : x3 / x6 / x9...).
+		--   Setup = comportement "live" (lu par la 3D) :
+		--     Kind  = "Desk" | "Keyboard" | "Mouse" | "TV" | "TVStand" | "HiFi" |
+		--             "Windmill" | "Press" | "BubbleWrap" | "LiveStudio" | "NewsTV" | "Plant"
+		--     Tier  = rang dans sa famille (1 = le plus petit)
+		--     Screens = nombre d'écrans ; Feeds = ce qu'affiche chaque écran
+		--             ("Runner" | "Live" | "DVD" | "News") ; Curved / RGB (bureau ultime)
+		--     Size  = "S" | "M" | "L" | "XL" ; Mount = "Floor" (au sol) |
+		--             "Surface" (posé sur un meuble) | "Stand" (écran sur pied /
+		--             sur un meuble) | "Wall" (au mur, support compris)
+		--     Seat  = true : chaise gamer intégrée (le personnage s'y assoit)
+		--     Flower = Id de Config.Garden.Flowers (plantes du jardin)
+		--   Dessus des bureaux / du meuble télé / de la table à papier bulle :
+		--     House/HouseSurfaces (clavier, souris, petite télé, plantes y montent)
+		-- 🖥️ Bureaux gamer (écrans : coureur, live ; + d'écrans avec les visites)
+		{ Id = "SetupDeskSolo", Name = "Gamer desk setup", Icon = "🖥️", Category = "Setup", Placement = "Floor", Size = 140,
+			Cost = 50000, CostGrowth = 1.35, Comfort = 5, MaxOwned = 3, Tabletop = false,
+			RequiresUpgrade = "Runner", RequiresRebirths = 0,
+			Setup = { Kind = "Desk", Tier = 1, Screens = 1, Feeds = { "Runner" }, Size = "M", Mount = "Floor", Seat = true } },
+		{ Id = "SetupDeskDuo", Name = "Dual-screen setup", Icon = "💻", Category = "Setup", Placement = "Floor", Size = 150,
+			Cost = 200000, CostGrowth = 1.35, Comfort = 8, MaxOwned = 3, Tabletop = false,
+			RequiresUpgrade = "Runner", RequiresRebirths = 1,
+			Setup = { Kind = "Desk", Tier = 2, Screens = 2, Feeds = { "Runner", "Live" }, Size = "L", Mount = "Floor", Seat = true } },
+		{ Id = "SetupDeskTrio", Name = "Triple-screen battlestation", Icon = "📊", Category = "Setup", Placement = "Floor", Size = 155,
+			Cost = 800000, CostGrowth = 1.4, Comfort = 12, MaxOwned = 3, Tabletop = false,
+			RequiresUpgrade = "Runner", RequiresRebirths = 2,
+			Setup = { Kind = "Desk", Tier = 3, Screens = 3, Feeds = { "Live", "Runner", "Live" }, Size = "L", Mount = "Floor", Seat = true } },
+		{ Id = "SetupDeskUltra", Name = "Ultimate RGB battlestation", Icon = "🌈", Category = "Setup", Placement = "Floor", Size = 160,
+			Cost = 8e6, CostGrowth = 1.45, Comfort = 18, MaxOwned = 3, Tabletop = false,
+			RequiresUpgrade = "Runner", RequiresRebirths = 4,
+			Setup = { Kind = "Desk", Tier = 4, Screens = 5, Feeds = { "Live", "News", "Runner", "DVD", "Live" }, Curved = true, RGB = true,
+				Size = "XL", Mount = "Floor", Seat = true } },
+		-- ⌨️🖱️ Sur le bureau : chaque touche / clic = un vrai clic
+		{ Id = "SetupKeyboard", Name = "RGB mechanical keyboard", Icon = "⌨️", Category = "Setup", Placement = "Floor", Size = 60,
+			Cost = 15000, CostGrowth = 1.3, Comfort = 3, Tabletop = true, RequiresUpgrade = "Keyboard", RequiresRebirths = 0,
+			Setup = { Kind = "Keyboard", Tier = 1, Size = "S", Mount = "Surface" } },
+		{ Id = "SetupMouse", Name = "Gaming mouse & pad", Icon = "🖱️", Category = "Setup", Placement = "Floor", Size = 45,
+			Cost = 5e6, CostGrowth = 1.35, Comfort = 8, Tabletop = true, RequiresUpgrade = "Mouse", RequiresRebirths = 0,
+			Setup = { Kind = "Mouse", Tier = 1, Size = "S", Mount = "Surface" } },
+		-- 📺 Télés : le logo DVD rebondit dessus
+		{ Id = "SetupTVStand", Name = "Neon TV cabinet", Icon = "📼", Category = "Setup", Placement = "Floor", Size = 130,
+			Cost = 15000, CostGrowth = 1.3, Comfort = 3, Tabletop = false, RequiresRebirths = 0,
+			Setup = { Kind = "TVStand", Tier = 1, Size = "L", Mount = "Floor" } },
+		{ Id = "SetupTVSmall", Name = "Little DVD TV", Icon = "📺", Category = "Setup", Placement = "Floor", Size = 70,
+			Cost = 8000, CostGrowth = 1.25, Comfort = 2, Tabletop = true, RequiresUpgrade = "DVD", RequiresRebirths = 0,
+			Setup = { Kind = "TV", Tier = 1, Screens = 1, Feeds = { "DVD" }, Size = "S", Mount = "Stand" } },
+		{ Id = "SetupTVMedium", Name = "DVD flat TV", Icon = "📺", Category = "Setup", Placement = "Floor", Size = 100,
+			Cost = 60000, CostGrowth = 1.3, Comfort = 5, Tabletop = true, RequiresUpgrade = "DVD", RequiresRebirths = 1,
+			Setup = { Kind = "TV", Tier = 2, Screens = 1, Feeds = { "DVD" }, Size = "M", Mount = "Stand" } },
+		{ Id = "SetupTVLarge", Name = "Big DVD TV", Icon = "📺", Category = "Setup", Placement = "Floor", Size = 130,
+			Cost = 400000, CostGrowth = 1.35, Comfort = 9, Tabletop = true, RequiresUpgrade = "DVD", RequiresRebirths = 2,
+			Setup = { Kind = "TV", Tier = 3, Screens = 1, Feeds = { "DVD" }, Size = "L", Mount = "Stand" } },
+		{ Id = "SetupTVGiant", Name = "Giant DVD cinema TV", Icon = "📺", Category = "Setup", Placement = "Floor", Size = 155,
+			Cost = 5e6, CostGrowth = 1.45, Comfort = 15, Tabletop = false, RequiresUpgrade = "DVD", RequiresRebirths = 4,
+			Setup = { Kind = "TV", Tier = 4, Screens = 1, Feeds = { "DVD" }, Size = "XL", Mount = "Stand" } },
+		{ Id = "SetupTVWallMedium", Name = "Wall DVD TV", Icon = "📺", Category = "Setup", Placement = "Wall", Size = 100,
+			Cost = 70000, CostGrowth = 1.3, Comfort = 5, RequiresUpgrade = "DVD", RequiresRebirths = 1,
+			Setup = { Kind = "TV", Tier = 2, Screens = 1, Feeds = { "DVD" }, Size = "M", Mount = "Wall" } },
+		{ Id = "SetupTVWallLarge", Name = "Big wall DVD TV", Icon = "📺", Category = "Setup", Placement = "Wall", Size = 130,
+			Cost = 450000, CostGrowth = 1.35, Comfort = 9, RequiresUpgrade = "DVD", RequiresRebirths = 2,
+			Setup = { Kind = "TV", Tier = 3, Screens = 1, Feeds = { "DVD" }, Size = "L", Mount = "Wall" } },
+		{ Id = "SetupTVWallGiant", Name = "Giant wall DVD TV", Icon = "📺", Category = "Setup", Placement = "Wall", Size = 155,
+			Cost = 5.5e6, CostGrowth = 1.45, Comfort = 15, RequiresUpgrade = "DVD", RequiresRebirths = 4,
+			Setup = { Kind = "TV", Tier = 4, Screens = 1, Feeds = { "DVD" }, Size = "XL", Mount = "Wall" } },
+		{ Id = "SetupNewsTV", Name = "Breaking news screen", Icon = "📰", Category = "Setup", Placement = "Wall", Size = 100,
+			Cost = 9000, CostGrowth = 1.25, Comfort = 2, RequiresUpgrade = "NewsTicker", RequiresRebirths = 0,
+			Setup = { Kind = "NewsTV", Tier = 1, Screens = 1, Feeds = { "News" }, Size = "M", Mount = "Wall" } },
+		-- 🎧 Chaînes hi-fi (musique lofi du jeu : lecture / morceau suivant)
+		{ Id = "SetupHiFiBoombox", Name = "Lofi boombox", Icon = "📻", Category = "Setup", Placement = "Floor", Size = 65,
+			Cost = 20000, CostGrowth = 1.3, Comfort = 3, Tabletop = true, RequiresUpgrade = "Lofi", RequiresRebirths = 0,
+			Setup = { Kind = "HiFi", Tier = 1, Size = "S", Mount = "Surface" } },
+		{ Id = "SetupHiFiCD", Name = "CD hi-fi system", Icon = "💿", Category = "Setup", Placement = "Floor", Size = 80,
+			Cost = 90000, CostGrowth = 1.3, Comfort = 6, Tabletop = true, RequiresUpgrade = "Lofi", RequiresRebirths = 1,
+			Setup = { Kind = "HiFi", Tier = 2, Size = "M", Mount = "Surface" } },
+		{ Id = "SetupHiFiVinyl", Name = "Vinyl turntable & speakers", Icon = "🎶", Category = "Setup", Placement = "Floor", Size = 125,
+			Cost = 500000, CostGrowth = 1.35, Comfort = 10, Tabletop = false, RequiresUpgrade = "Lofi", RequiresRebirths = 2,
+			Setup = { Kind = "HiFi", Tier = 3, Size = "L", Mount = "Floor" } },
+		{ Id = "SetupHiFiStudio", Name = "Lofi studio wall", Icon = "🎚️", Category = "Setup", Placement = "Floor", Size = 155,
+			Cost = 6e6, CostGrowth = 1.45, Comfort = 16, MaxOwned = 3, Tabletop = false, RequiresUpgrade = "Lofi", RequiresRebirths = 4,
+			Setup = { Kind = "HiFi", Tier = 4, Size = "XL", Mount = "Floor" } },
+		-- 🌀🗜️🔘🎥 Les autres stimuli, en vrai
+		{ Id = "SetupWindmill", Name = "Garden windmill", Icon = "🌀", Category = "Setup", Placement = "Floor", Size = 135,
+			Cost = 60000, CostGrowth = 1.35, Comfort = 5, MaxOwned = 3, Tabletop = false, RequiresUpgrade = "Pinwheel", RequiresRebirths = 0,
+			Setup = { Kind = "Windmill", Tier = 1, Size = "L", Mount = "Floor" } },
+		{ Id = "SetupPress", Name = "Real hydraulic press", Icon = "🗜️", Category = "Setup", Placement = "Floor", Size = 130,
+			Cost = 50000, CostGrowth = 1.35, Comfort = 5, MaxOwned = 3, Tabletop = false, RequiresUpgrade = "Press", RequiresRebirths = 0,
+			Setup = { Kind = "Press", Tier = 1, Size = "L", Mount = "Floor" } },
+		{ Id = "SetupBubbleWrap", Name = "Bubble wrap table", Icon = "🔘", Category = "Setup", Placement = "Floor", Size = 110,
+			Cost = 80000, CostGrowth = 1.35, Comfort = 5, MaxOwned = 3, Tabletop = false, RequiresUpgrade = "BubbleWrap", RequiresRebirths = 0,
+			Setup = { Kind = "BubbleWrap", Tier = 1, Size = "M", Mount = "Floor" } },
+		{ Id = "SetupLiveStudio", Name = "Live streaming corner", Icon = "🎥", Category = "Setup", Placement = "Floor", Size = 145,
+			Cost = 1.5e6, CostGrowth = 1.4, Comfort = 10, MaxOwned = 3, Tabletop = false, RequiresUpgrade = "LiveStream", RequiresRebirths = 0,
+			Setup = { Kind = "LiveStudio", Tier = 1, Screens = 1, Feeds = { "Live" }, Size = "L", Mount = "Floor" } },
+		-- 🌼 Plantes du Jardin de Dopamine (en pot, lumineuses) : de plus en plus rares
+		{ Id = "SetupPlantDaisy", Name = "Dopamine daisy", Icon = "🌼", Category = "Setup", Placement = "Floor", Size = 55,
+			Cost = 200000, CostGrowth = 1.3, Comfort = 4, Tabletop = true, RequiresUpgrade = "Garden", RequiresRebirths = 0,
+			Setup = { Kind = "Plant", Tier = 1, Flower = "Daisy", Size = "S", Mount = "Surface" } },
+		{ Id = "SetupPlantTulip", Name = "Dopamine tulip", Icon = "🌷", Category = "Setup", Placement = "Floor", Size = 60,
+			Cost = 450000, CostGrowth = 1.3, Comfort = 5, Tabletop = true, RequiresUpgrade = "Garden", RequiresRebirths = 0,
+			Setup = { Kind = "Plant", Tier = 2, Flower = "Tulip", Size = "S", Mount = "Surface" } },
+		{ Id = "SetupPlantRose", Name = "Dopamine rose", Icon = "🌹", Category = "Setup", Placement = "Floor", Size = 65,
+			Cost = 400000, CostGrowth = 1.35, Comfort = 7, Tabletop = true, RequiresUpgrade = "Garden", RequiresRebirths = 1,
+			Setup = { Kind = "Plant", Tier = 3, Flower = "Rose", Size = "S", Mount = "Surface" } },
+		{ Id = "SetupPlantSunflower", Name = "Dopamine sunflower", Icon = "🌻", Category = "Setup", Placement = "Floor", Size = 90,
+			Cost = 1e6, CostGrowth = 1.4, Comfort = 10, Tabletop = true, RequiresUpgrade = "Garden", RequiresRebirths = 2,
+			Setup = { Kind = "Plant", Tier = 4, Flower = "Sunflower", Size = "M", Mount = "Floor" } },
+		{ Id = "SetupPlantLotus", Name = "Golden dopamine lotus", Icon = "🪷", Category = "Setup", Placement = "Floor", Size = 75,
+			Cost = 4e6, CostGrowth = 1.45, Comfort = 14, Tabletop = true, RequiresUpgrade = "Garden", RequiresRebirths = 3,
+			Setup = { Kind = "Plant", Tier = 5, Flower = "Lotus", Size = "M", Mount = "Surface" } },
 	},
 }
 

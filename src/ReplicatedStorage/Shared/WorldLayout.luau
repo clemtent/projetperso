@@ -13,8 +13,10 @@
 	Repère d'une maison ("local") : x vers la DROITE d'un visiteur qui regarde
 	la façade depuis la place, y vers le haut (0 = sol de la parcelle),
 	d = profondeur depuis la façade (0 = face avant du mur de devant).
-	Colonnes de la maison : [cage d'escalier (HALL_W)] [pièce 1] [pièce 2]...
-	étage 1 = rez-de-chaussée (comme HouseCommon.SlotCell).
+	Colonnes de la maison : [pièce 1] [pièce 2]... avec la cage d'escalier
+	(HALL_W) là où la maison 2D dessine l'entrée (HallAfter : à droite, ou
+	au milieu pour le manoir) ; étage 1 = rez-de-chaussée (comme
+	HouseCommon.SlotCell), posé sur un soubassement de PLINTH studs.
 	Chaque pièce = une coque House3DScene.BuildRoomShell (murs de WALL_T HORS
 	de l'intérieur) dont les objets sont placés par House3DScene.PlaceItems.
 	Correspondance 2D -> 3D d'une pièce (HouseRoom : X 0..1 de gauche à droite,
@@ -34,11 +36,12 @@ local WorldLayout = {}
 WorldLayout.PX = 0.036 -- studs par px de maquette 2D (objets à taille d'avatar)
 WorldLayout.ROOM_BASE_PX = 760 -- largeur 2D d'une pièce de largeur 1 (= HouseRoom.BASE_WIDTH)
 WorldLayout.ROOM_HEIGHT_PX = 440 -- hauteur 2D d'une pièce (= HouseRoom.HEIGHT)
-WorldLayout.DEPTH = 20 -- profondeur INTÉRIEURE d'une pièce
+WorldLayout.DEPTH = 24 -- profondeur INTÉRIEURE d'une pièce (v9.4 : 24, place pour un vrai escalier)
 WorldLayout.WALL_H = 12 -- hauteur sous plafond
-WorldLayout.SLAB = 1 -- épaisseur d'un plancher (le rez-de-chaussée est surélevé d'autant)
+WorldLayout.SLAB = 1 -- épaisseur d'un plancher
+WorldLayout.PLINTH = 2 -- (v9.4) soubassement : le rez-de-chaussée est à PLINTH + SLAB (perron à marches)
 WorldLayout.STORY = 13 -- WALL_H + SLAB
-WorldLayout.HALL_W = 12 -- cage d'escalier (à gauche de la maison)
+WorldLayout.HALL_W = 12 -- cage d'escalier (là où la maison 2D dessine l'entrée : voir HallAfter)
 WorldLayout.WALL_T = 1 -- épaisseur des murs (= coque BuildRoomShell : murs HORS de l'intérieur)
 WorldLayout.WALL_RATIO = 0.46 -- (valeur par défaut : Config.House.WallRatio)
 WorldLayout.ROOF_H = 9
@@ -54,6 +57,17 @@ WorldLayout.MIN_PLOTS = 4
 WorldLayout.MAX_PLOTS = 12
 WorldLayout.PLAZA_R = 64 -- rayon de la place centrale
 WorldLayout.SPAWN_FRONT = 7 -- (studs) apparition devant la porte
+-- (v9.4) Rues de la ville : boulevard polygonal (un côté droit devant chaque
+-- parcelle), avenue principale de l'entrée (+Z) à la place
+WorldLayout.ROAD_W = 20 -- chaussée du boulevard (2 voies)
+WorldLayout.WALK_W = 6 -- trottoirs
+WorldLayout.AVENUE_W = 16 -- chaussée de l'avenue / des rues
+WorldLayout.GROUND_Y = 0.4 -- dessus du pré et des pelouses (repère : Origin().Y)
+WorldLayout.ROAD_Y = 0.5 -- dessus de la chaussée
+WorldLayout.WALK_Y = 1 -- dessus des trottoirs et de la place (bordure de 0,5)
+WorldLayout.GATE_BACK = 60 -- porte de la ville : distance depuis le bord des parcelles côté rue
+WorldLayout.SPAWN_INSIDE = 12 -- apparition : juste à l'intérieur de la porte
+WorldLayout.TOWN_MARGIN = 80 -- pré au-delà du fond des parcelles (murs invisibles)
 
 -- Porte d'entrée (dans la cage d'escalier) et passages entre pièces
 WorldLayout.DOOR_W = 5
@@ -61,15 +75,34 @@ WorldLayout.DOOR_H = 8
 WorldLayout.PASS_W = 5 -- passage entre deux pièces / cage -> pièce (centré en profondeur)
 WorldLayout.PASS_H = 8.5
 
--- Escalier (dans la cage) : volée k (étage k -> k+1), bande de gauche de la
--- cage, de la profondeur STAIR_D0 (bas) à STAIR_D1 (haut) ; trémie dans le
--- plancher du dessus entre STAIR_HOLE_D0 et STAIR_D1
+-- Escalier (v9.4, dans la cage) : une volée droite par étage (étage k -> k+1),
+-- au MILIEU de la cage (face à la porte d'entrée), couloirs de chaque côté.
+-- 13 marches de STAIR_RISE (1 stud) x STAIR_TREAD (1,4 stud) : pente ~35,5°.
+-- Bas de la volée à STAIR_D0 (vestibule devant), haut à STAIR_D1 (palier du
+-- fond, toute la largeur de la cage). Trémie dans le plancher du dessus entre
+-- STAIR_HOLE_D0 et STAIR_D1 : là où la marche dépasse WALL_H - HEADROOM, pour
+-- garder >= HEADROOM studs sous le plancher partout sur le chemin.
+-- Collision : une rampe lisse invisible (pas de marche où l'avatar accroche).
 WorldLayout.STAIR_W = 5
-WorldLayout.STAIR_D0 = 3
-WorldLayout.STAIR_D1 = 17
-WorldLayout.STAIR_HOLE_D0 = 7.5
+WorldLayout.STAIR_RISE = 1
+WorldLayout.STAIR_STEPS = 13 -- = STORY / STAIR_RISE
+WorldLayout.STAIR_TREAD = 1.4
+WorldLayout.STAIR_D0 = 4
+WorldLayout.STAIR_D1 = 4 + 13 * 1.4 -- 22,2
+WorldLayout.HEADROOM = 7.5
+WorldLayout.STAIR_HOLE_D0 = 4 + (12 - 7.5) * 1.4 -- 10,3 (marche à 4,5 : 12 - 4,5 = 7,5 de hauteur libre)
 
-export type SizeDef = { Floors: number, Columns: number, Width: number? }
+export type SizeDef = { Floors: number, Columns: number, Width: number?, Exterior: string?, Id: string? }
+
+-- Style extérieur (= HouseExterior 2D) d'une taille de maison
+local STYLE_BY_SIZE = { Studio = "Cottage", Apartment = "Townhouse", Loft = "Loft", Mansion = "Mansion" }
+function WorldLayout.StyleOf(size: SizeDef?): string
+	if type(size) ~= "table" then
+		return "Cottage"
+	end
+	local style = size.Exterior or (size.Id and STYLE_BY_SIZE[size.Id :: string])
+	return type(style) == "string" and style or "Cottage"
+end
 
 local function finite(value: any, default: number): number
 	if type(value) == "number" and value == value and value ~= math.huge and value ~= -math.huge then
@@ -119,9 +152,20 @@ function WorldLayout.Dims(size: SizeDef?): Dims
 		Pitch = pitch,
 		Width = width,
 		Depth = WorldLayout.DEPTH + 2 * WorldLayout.WALL_T,
-		Height = floors * WorldLayout.STORY,
+		Height = WorldLayout.PLINTH + floors * WorldLayout.STORY,
 		Left = -width / 2,
 	}
+end
+
+-- (v9.4) Nombre de colonnes de pièces À GAUCHE de la cage d'escalier : comme
+-- la maison 2D (HouseExterior) — entrée à droite (chaumière, maison de ville,
+-- loft), travée centrale pour le manoir
+function WorldLayout.HallAfter(size: SizeDef?): number
+	local _, columns = sizeOf(size)
+	if WorldLayout.StyleOf(size) == "Mansion" then
+		return math.floor(columns / 2)
+	end
+	return columns
 end
 
 -- Emplacement -> (étage, colonne) ; même règle que HouseCommon.SlotCell
@@ -133,26 +177,71 @@ end
 
 -- Hauteur (y) du DESSUS du plancher de l'étage `floor`
 function WorldLayout.FloorY(floor: number): number
-	return (math.max(1, floor) - 1) * WorldLayout.STORY + WorldLayout.SLAB
+	return WorldLayout.PLINTH + (math.max(1, floor) - 1) * WorldLayout.STORY + WorldLayout.SLAB
 end
 
 -- Bords extérieurs (x gauche, x droite) d'une colonne de pièces (murs compris)
 function WorldLayout.ColumnSpan(size: SizeDef?, column: number): (number, number)
 	local dims = WorldLayout.Dims(size)
-	local x0 = dims.Left + WorldLayout.HALL_W + (column - 1) * dims.Pitch
+	local hall = column > WorldLayout.HallAfter(size) and WorldLayout.HALL_W or 0
+	local x0 = dims.Left + hall + (column - 1) * dims.Pitch
 	return x0, x0 + dims.Pitch
 end
 
 -- Bords de la cage d'escalier
 function WorldLayout.HallSpan(size: SizeDef?): (number, number)
 	local dims = WorldLayout.Dims(size)
-	return dims.Left, dims.Left + WorldLayout.HALL_W
+	local x0 = dims.Left + WorldLayout.HallAfter(size) * dims.Pitch
+	return x0, x0 + WorldLayout.HALL_W
 end
 
--- x du milieu de la porte d'entrée (couloir de la cage, à droite de l'escalier)
+-- Colonne de pièces qui contient x (repère local), nil = cage ou dehors
+function WorldLayout.ColumnAt(size: SizeDef?, x: number): number?
+	local dims = WorldLayout.Dims(size)
+	local hall0, hall1 = WorldLayout.HallSpan(size)
+	if x < dims.Left or x > dims.Left + dims.Width or (x > hall0 and x < hall1) then
+		return nil
+	end
+	local rel = x - dims.Left - (x >= hall1 and WorldLayout.HALL_W or 0)
+	return math.clamp(math.floor(rel / dims.Pitch) + 1, 1, dims.Columns)
+end
+
+-- x du milieu de la porte d'entrée = milieu de la cage (l'escalier lui fait face)
 function WorldLayout.DoorX(size: SizeDef?): number
-	local x0 = WorldLayout.HallSpan(size)
-	return x0 + WorldLayout.STAIR_W + (WorldLayout.HALL_W - WorldLayout.STAIR_W) / 2
+	local x0, x1 = WorldLayout.HallSpan(size)
+	return (x0 + x1) / 2
+end
+
+-- Bande de l'escalier (x gauche, x droite) : centrée dans la cage
+function WorldLayout.StairSpan(size: SizeDef?): (number, number)
+	local x = WorldLayout.DoorX(size)
+	return x - WorldLayout.STAIR_W / 2, x + WorldLayout.STAIR_W / 2
+end
+
+-- Hauteur (au-dessus du sol de l'étage) du dessus de la rampe / des marches à
+-- la profondeur d (0 avant STAIR_D0, STORY après STAIR_D1)
+function WorldLayout.StairHeight(d: number): number
+	local t = (d - WorldLayout.STAIR_D0) / (WorldLayout.STAIR_D1 - WorldLayout.STAIR_D0)
+	return math.clamp(t, 0, 1) * WorldLayout.STORY
+end
+
+-- Pente de la volée (degrés)
+function WorldLayout.StairSlope(): number
+	return math.deg(math.atan2(WorldLayout.STORY, WorldLayout.STAIR_D1 - WorldLayout.STAIR_D0))
+end
+
+-- Côtés d'une colonne qui ont un passage (voisin ou cage) : { "Left"?, "Right"? }
+function WorldLayout.RoomDoors(size: SizeDef?, column: number): { string }
+	local _, columns = sizeOf(size)
+	local hall = WorldLayout.HallAfter(size)
+	local doors = {}
+	if column > 1 or hall == 0 then
+		table.insert(doors, "Left")
+	end
+	if column < columns or hall == columns then
+		table.insert(doors, "Right")
+	end
+	return doors
 end
 
 -- Intérieur d'une pièce (repère local) : xMin, xMax, yFloor, dMin, dMax
@@ -294,11 +383,23 @@ function WorldLayout.PlotCount(maxPlayers: any): number
 	return math.clamp(math.floor(finite(maxPlayers, 8)), WorldLayout.MIN_PLOTS, WorldLayout.MAX_PLOTS)
 end
 
+-- (v9.4) Emplacements autour de la place : count + 1 ; l'emplacement 0
+-- (direction +Z depuis le centre) est l'ENTRÉE de la ville (porte, place
+-- d'accueil), les parcelles 1..count suivent dans le sens des angles
+function WorldLayout.PlotSlots(count: number): number
+	return math.max(3, count) + 1
+end
+
+-- Angle (radians) de l'emplacement `slot` (0 = entrée)
+function WorldLayout.SlotAngle(slot: number, count: number): number
+	return slot / WorldLayout.PlotSlots(count) * math.pi * 2
+end
+
 -- Rayon du centre des parcelles : les coins avant de deux parcelles voisines
 -- ne se touchent jamais
 function WorldLayout.PlotRadius(count: number): number
-	local n = math.max(3, count)
-	local front = (WorldLayout.PLOT_W / 2 + 6) / math.tan(math.pi / n)
+	local m = WorldLayout.PlotSlots(count)
+	local front = (WorldLayout.PLOT_W / 2 + 6) / math.tan(math.pi / m)
 	return math.max(front, WorldLayout.PLAZA_R + 150) + WorldLayout.PLOT_D / 2
 end
 
@@ -306,14 +407,35 @@ end
 -- et angle (radians) de sa direction depuis le centre
 function WorldLayout.PlotPlace(index: number, count: number): (number, number, number)
 	local radius = WorldLayout.PlotRadius(count)
-	local angle = (index - 1) / count * math.pi * 2
+	local angle = WorldLayout.SlotAngle(index, count)
 	local x, z = math.sin(angle) * radius, math.cos(angle) * radius
 	return x, z, angle
 end
 
--- Rayon de la route circulaire (devant les parcelles)
+-- Distance du centre au bord avant (côté rue) des parcelles
+function WorldLayout.PlotFrontRadius(count: number): number
+	return WorldLayout.PlotRadius(count) - WorldLayout.PLOT_D / 2
+end
+
+-- Axe du boulevard (distance du centre à l'axe de chaque côté droit du
+-- polygone, devant les parcelles : trottoir extérieur collé aux parcelles)
 function WorldLayout.RingRoadRadius(count: number): number
-	return WorldLayout.PlotRadius(count) - WorldLayout.PLOT_D / 2 - 9
+	return WorldLayout.PlotFrontRadius(count) - WorldLayout.WALK_W - WorldLayout.ROAD_W / 2
+end
+
+-- Bord intérieur du boulevard (trottoir intérieur compris)
+function WorldLayout.RingInnerRadius(count: number): number
+	return WorldLayout.RingRoadRadius(count) - WorldLayout.ROAD_W / 2 - WorldLayout.WALK_W
+end
+
+-- Distance du centre à la porte de la ville (sur l'axe +Z)
+function WorldLayout.GateDistance(count: number): number
+	return WorldLayout.PlotFrontRadius(count) + WorldLayout.GATE_BACK
+end
+
+-- Rayon des murs invisibles (bord du pré)
+function WorldLayout.TownRadius(count: number): number
+	return WorldLayout.PlotRadius(count) + WorldLayout.PLOT_D / 2 + WorldLayout.TOWN_MARGIN
 end
 
 -- Distance (le long de la direction "vers la place") entre le centre de la
@@ -338,6 +460,24 @@ function WorldLayout.PlotCFrame(index: number, count: number): CFrame
 	local x, z = WorldLayout.PlotPlace(index, count)
 	local center = WorldLayout.Origin() + Vector3.new(x, 0, z)
 	return CFrame.lookAt(center, center - Vector3.new(x, 0, z))
+end
+
+-- (v9.4) Porte de la ville : centre de l'arche au sol, LookVector = vers la place
+function WorldLayout.GateCFrame(count: number): CFrame
+	local p = WorldLayout.Origin() + Vector3.new(0, WorldLayout.WALK_Y, WorldLayout.GateDistance(count))
+	return CFrame.lookAt(p, p - Vector3.new(0, 0, 1))
+end
+
+-- Apparition à l'entrée : pieds ~3 studs au-dessus du pavé, juste à
+-- l'intérieur de la porte, regard vers l'avenue et la place
+function WorldLayout.EntranceCFrame(count: number): CFrame
+	local p = WorldLayout.Origin() + Vector3.new(0, WorldLayout.WALK_Y + 3, WorldLayout.GateDistance(count) - WorldLayout.SPAWN_INSIDE)
+	return CFrame.lookAt(p, p - Vector3.new(0, 0, 1))
+end
+
+-- Centre de la place, au sol (dessus du pavé)
+function WorldLayout.PlazaCFrame(): CFrame
+	return CFrame.new(WorldLayout.Origin() + Vector3.new(0, WorldLayout.WALK_Y, 0))
 end
 
 -- Maison : milieu de la façade au sol, regarde DANS la maison (RightVector =
@@ -519,15 +659,15 @@ function WorldLayout.SlotAt(size: SizeDef?, x: number, y: number, d: number): nu
 	if d < 0 or d > dims.Depth then
 		return nil
 	end
-	local floor = math.floor((y - WorldLayout.SLAB + 0.5) / WorldLayout.STORY) + 1
+	local floor = math.floor((y - WorldLayout.PLINTH - WorldLayout.SLAB + 0.5) / WorldLayout.STORY) + 1
 	if floor < 1 or floor > dims.Floors then
 		return nil
 	end
-	local rel = x - dims.Left - WorldLayout.HALL_W
-	if rel < 0 or rel > dims.Columns * dims.Pitch then
+	-- (v9.4) la cage peut être à droite ou au milieu : WorldLayout.ColumnAt
+	local column = WorldLayout.ColumnAt(size, x)
+	if not column then
 		return nil
 	end
-	local column = math.clamp(math.floor(rel / dims.Pitch) + 1, 1, dims.Columns)
 	return (floor - 1) * dims.Columns + column
 end
 

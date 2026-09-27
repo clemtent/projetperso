@@ -28,14 +28,19 @@
 	    visée, accès autorisé, à portée du personnage) et crée un vrai Seat
 	    invisible (CanTouch = false) puis Seat:Sit(humanoid) : la pose assise
 	    est répliquée à tout le monde comme un siège normal ; le Seat est
-	    détruit dès que le joueur se lève.
+	    détruit dès que le joueur se lève ("stand" : le client demande de le
+	    détruire tout de suite, bouton "Se lever") ;
+	  - v9.4 : on ARRIVE en ville par la porte d'entrée (TownMap.SpawnCFrame /
+	    attribut "EntranceCF" de Workspace.DopamineTown, posé ici s'il manque) ;
+	    une visite ou une pièce demandée pose toujours devant la bonne porte.
 	Tout est dans des pcall, chaque action a sa limite de fréquence.
 
 	Données : data.Town = { Open, Likes, Visits, LikeDay, Liked = { [UserId] = true },
 	LikesGiven, LikedRewards, RewardDay } (WorldLayout.SanitizeTown).
 
 	RemoteFunction World (action, argument) -> (succès, résultat | message) :
-	  "enter" { Visit = UserId?, Slot = number? } | "leave" | "home"
+	  "enter" { Visit = UserId?, Slot = number? } -> { Plot, Owner, Arrival = "Entrance" | "Door" }
+	  "leave" | "home" | "stand" (détruit son siège)
 	  "visit" UserId | "room" { Owner = UserId, Slot } | "setOpen" "Everyone" | "Friends" | "Nobody"
 	  "like" UserId | "sit" { Owner = UserId, Slot, CFrame } | "houses" (-> liste des instantanés)
 	RemoteEvent WorldEvent (S -> C) :
@@ -55,6 +60,16 @@ local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local RateLimiter = require(script.Parent.RateLimiter)
 local TownMap = require(script.Parent:WaitForChild("World"):WaitForChild("TownMap"))
+-- 🌻 jardin de Dopamine 3D (GARDEN3D95) : module facultatif, jamais bloquant
+local GardenSnapshot: any = nil
+do
+	local ok, result = pcall(function()
+		return require(ReplicatedStorage.Shared:FindFirstChild("GardenSnapshot") :: ModuleScript)
+	end)
+	if ok and type(result) == "table" and type(result.From) == "function" then
+		GardenSnapshot = result
+	end
+end
 
 local WorldService = {}
 
@@ -236,6 +251,10 @@ local function refreshSign(index: number)
 	local data = owner and dataOf(owner)
 	if not owner or not data then
 		pcall(TownMap.SetPlotSign, plot, "✨ Free plot", "", "")
+		-- (le client traduit le panneau d'après la clé "LocText")
+		pcall(function()
+			plot.Title:SetAttribute("LocText", "✨ Free plot")
+		end)
 		plot.Model:SetAttribute("OwnerId", 0)
 		plot.Model:SetAttribute("OwnerName", "")
 		plot.Model:SetAttribute("Likes", 0)
@@ -255,6 +274,9 @@ local function refreshSign(index: number)
 		end
 	end
 	local crown = best == owner and "👑 " or "🏠 "
+	pcall(function()
+		plot.Title:SetAttribute("LocText", nil)
+	end)
 	-- (noms Roblox : pas de filtre nécessaire ; titre en anglais neutre + emoji)
 	pcall(TownMap.SetPlotSign, plot, crown .. owner.DisplayName,
 		string.format("%s %s · 🌊 %s", tostring(size.Icon or "🏠"), tostring(size.Name or ""), tostring(tonumber(data.Rebirths) or 0)),
@@ -291,6 +313,16 @@ local function copyPlaced(list: any): { any }
 		end
 	end
 	return placed
+end
+
+-- 🌻 jardin de Dopamine (GardenSnapshot.From : petit, stable, sans heure)
+local function gardenSnapshotOf(data: any): any?
+	local module = GardenSnapshot
+	if not module then
+		return nil
+	end
+	local ok, result = pcall(module.From, data)
+	return ok and result or nil
 end
 
 local function snapshotOf(player: Player): any?
@@ -342,6 +374,7 @@ local function snapshotOf(player: Player): any?
 		Roof = house.Roof,
 		RoofStyle = house.RoofStyle,
 		Garden = garden,
+		DopamineGarden = gardenSnapshotOf(data),
 		Rooms = rooms,
 	}
 end
@@ -416,6 +449,24 @@ local function removeCharacter(player: Player)
 		end)
 		pcall(character.Destroy, character)
 	end
+end
+
+-- Porte d'entrée de la ville (TOWN94 : TownMap.SpawnCFrame / "EntranceCF")
+local function entranceCFrame(): CFrame
+	local current = town
+	local spawnFn = (TownMap :: any).SpawnCFrame
+	if type(spawnFn) == "function" then
+		local ok, cf = pcall(spawnFn)
+		if ok and typeof(cf) == "CFrame" then
+			return cf
+		end
+	end
+	local folder = current and current.Folder or workspace:FindFirstChild(TownMap.FOLDER_NAME)
+	local attribute = folder and folder:GetAttribute("EntranceCF")
+	if typeof(attribute) == "CFrame" then
+		return attribute
+	end
+	return current and current.PlazaCFrame or CFrame.new(WorldLayout.Origin() + Vector3.new(0, 4, 0))
 end
 
 local function spawnPoint(player: Player, target: Player?): CFrame
@@ -509,14 +560,17 @@ local function enter(player: Player, argument: any): (boolean, any)
 	if type(argument) == "table" and argument.Visit ~= nil then
 		target = playerById(argument.Visit)
 	end
-	local spawnAt = spawnPoint(player, target)
+	-- arrivée : par la porte de la ville ; visite / pièce : devant la bonne porte
+	local slot = type(argument) == "table" and tonumber(argument.Slot) or nil
+	local arrival = (target == nil and slot == nil) and "Entrance" or "Door"
+	local spawnAt = arrival == "Entrance" and entranceCFrame() or spawnPoint(player, target)
 	spawnCharacter(player, spawnAt)
 	-- le nouvel arrivant reçoit toutes les maisons ; les autres apprennent qu'il est là
 	pcall(function()
 		Net.Event("WorldEvent"):FireClient(player, "Houses", allSnapshots())
 	end)
 	pushIfChanged(player, true)
-	return true, { Plot = state.Plot, Owner = target and target.UserId or player.UserId }
+	return true, { Plot = state.Plot, Owner = target and target.UserId or player.UserId, Arrival = arrival }
 end
 
 local function leave(player: Player): (boolean, any)
@@ -742,7 +796,7 @@ local function sit(player: Player, argument: any): (boolean, any)
 	return true, nil
 end
 
-local ACTION_INTERVALS = { like = 1, sit = 0.4, visit = 1, room = 0.5, setOpen = 0.5, houses = 2, home = 1, leave = 1 }
+local ACTION_INTERVALS = { like = 1, sit = 0.4, stand = 0.3, visit = 1, room = 0.5, setOpen = 0.5, houses = 2, home = 1, leave = 1 }
 
 local function onWorld(player: Player, action: any, argument: any): (boolean, any)
 	if type(action) ~= "string" or #action > 16 then
@@ -781,6 +835,9 @@ local function onWorld(player: Player, action: any, argument: any): (boolean, an
 		return like(player, argument)
 	elseif action == "sit" then
 		return sit(player, argument)
+	elseif action == "stand" then
+		destroySeat(stateOf(player))
+		return true, nil
 	elseif action == "houses" then
 		return true, allSnapshots()
 	end
@@ -803,7 +860,7 @@ local function patrol()
 			if root and humanoid and humanoid.Health > 0 then
 				local position = root.Position
 				if position.Y < originY - 40 then
-					teleport(player, current.PlazaCFrame)
+					teleport(player, entranceCFrame())
 				else
 					for index, owner in pairs(plotOwners) do
 						if owner ~= player then
@@ -844,6 +901,22 @@ function WorldService:Start()
 	else
 		warn("[WorldService] Construction de la ville : " .. tostring(result))
 	end
+	-- panneaux "✨ Free plot" : tous marqués pour la traduction côté client
+	local built = town
+	if built then
+		for index = 1, #built.Plots do
+			if not plotOwners[index] then
+				pcall(refreshSign, index)
+			end
+		end
+	end
+	-- (le client lit l'entrée pour le survol d'arrivée : posée si TownMap ne l'a pas fait)
+	pcall(function()
+		local current = town
+		if current and typeof(current.Folder:GetAttribute("EntranceCF")) ~= "CFrame" then
+			current.Folder:SetAttribute("EntranceCF", entranceCFrame())
+		end
+	end)
 	-- Bulles de chat au-dessus des avatars (réplique aux clients)
 	pcall(function()
 		local bubbles = TextChatService:FindFirstChildOfClass("BubbleChatConfiguration")

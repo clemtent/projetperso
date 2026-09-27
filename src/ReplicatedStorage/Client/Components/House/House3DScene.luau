@@ -63,6 +63,20 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local HouseCommon = require(script.Parent.HouseCommon)
+
+-- v9.5 🖥️ objets "Dopamine Setup" vivants dans l'aperçu (World/LiveProps, chargé à la demande)
+local liveProps: any = nil
+local function getLiveProps(): any
+	if liveProps == nil then
+		local ok, result = pcall(function()
+			local world = script.Parent.Parent.Parent:FindFirstChild("World")
+			local module = world and world:FindFirstChild("LiveProps")
+			return module and require(module :: ModuleScript) or false
+		end)
+		liveProps = ok and result or false
+	end
+	return liveProps or nil
+end
 local HousePatterns = require(script.Parent.HousePatterns)
 local House3DFloor = require(script.Parent.House3DFloor)
 local House3DKit = require(script.Parent.House3DKit)
@@ -697,6 +711,7 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 	itemFolder.Parent = folder
 	local pets: { Pet } = {}
 	local petClock = 0
+	local liveHandles: { any } = {}
 
 	-- montage dans la pièce (+ arrivée en douceur)
 	local lampCount = 0
@@ -824,6 +839,13 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 				if not breathe() then
 					discard()
 					return
+				end
+			end
+			local live = getLiveProps()
+			if live then
+				local okLive, handles = pcall(live.AttachAll, itemFolder:GetChildren(), { Interactive = false })
+				if okLive and type(handles) == "table" then
+					liveHandles = handles
 				end
 			end
 			applyNight()
@@ -958,6 +980,10 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 				pcall(function()
 					emitter.Enabled = false
 				end)
+			end
+			local live = getLiveProps()
+			if live then
+				pcall(live.DetachAll, liveHandles)
 			end
 			folder:Destroy()
 		end,
