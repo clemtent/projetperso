@@ -1107,6 +1107,14 @@ local function enter(options: any)
 			return
 		end
 		inTown = true
+		-- v9.6 🚗 voitures (CarClient, GARAGE96) : bouton, conduite, garages des manoirs
+		local car = optionalModule("CarClient")
+		if car and type(car.Start) == "function" then
+			local okCar, errCar = pcall(car.Start, { Toast = toast })
+			if not okCar then
+				warn("[Town] CarClient.Start : " .. tostring(errCar))
+			end
+		end
 		TownAtmosphere.SetNight(ClientState.IsUserDarkMode())
 		TownAtmosphere.Apply(s)
 		-- v9.6 🛍️ boutiques où l'on entre : intérieurs en flux (SHOPS96)
@@ -1249,6 +1257,11 @@ local function teardown()
 	currentContext = nil
 	-- (DeskMode rend sa caméra AVANT qu'on remette la nôtre)
 	deskCall("Stop")
+	-- v9.6 🚗 on descend de voiture, HUD retiré (avant de rendre la caméra)
+	local car = optionalModule("CarClient")
+	if car and type(car.Stop) == "function" then
+		pcall(car.Stop)
+	end
 	-- (v9.6) boutiques : intérieurs détruits, catalogue fermé, portes remises
 	local shops = optionalModule("ShopInteriors")
 	if shops and type(shops.Stop) == "function" then

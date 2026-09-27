@@ -195,7 +195,7 @@ end
 
 local function exteriorKey(snapshot: any): string
 	local parts = { tostring(snapshot.Size), tostring(snapshot.Facade), tostring(snapshot.Roof), tostring(snapshot.RoofStyle), tostring(snapshot.Plot),
-		tostring(snapshot.DisplayName) }
+		tostring(snapshot.DisplayName), tostring(snapshot.Garage) }
 	if type(snapshot.Garden) == "table" then
 		table.insert(parts, table.concat(snapshot.Garden, ","))
 	end
@@ -321,6 +321,7 @@ function HouseBuilder.BuildExterior(self: House)
 		Garden = type(snapshot.Garden) == "table" and snapshot.Garden or {},
 		Rooms = bySlot,
 		Name = tostring(snapshot.DisplayName or snapshot.Name or ""),
+		Garage = if type(snapshot.Garage) == "boolean" then snapshot.Garage else nil, -- v9.6 🏎️ garage du manoir (CarService)
 	}
 	local okFacade, built = pcall(HouseFacade.Build, kit, size, looks)
 	if not okFacade then
