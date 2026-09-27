@@ -1938,12 +1938,39 @@ do
 				local xMin, xMax = L.RoomInterior(size, slot)
 				check(math.abs((xMax - xMin) - L.RoomWidth(size)) < 1e-9, size.Id .. " largeur intérieure = coque")
 			end
-			check(L.SlotAt(size, dims.Left + 2, 3, 10) == nil, size.Id .. " : la cage n'est pas une pièce")
+			-- (v9.4) cage à droite ou au milieu (comme la 2D)
+			local h0, h1 = L.HallSpan(size)
+			check(L.SlotAt(size, (h0 + h1) / 2, L.FloorY(1) + 2, 10) == nil, size.Id .. " : la cage n'est pas une pièce")
 			check(not L.InsideHouse(size, 0, 3, -8, 0), size.Id .. " : le jardin n'est pas dans la maison")
-			-- porte d'entrée dans la cage, à droite de l'escalier
+			-- porte d'entrée dans la cage, face à l'escalier
 			local door = L.DoorX(size)
-			check(door - L.DOOR_W / 2 >= dims.Left + L.STAIR_W and door + L.DOOR_W / 2 <= dims.Left + L.HALL_W, size.Id .. " porte")
+			check(door - L.DOOR_W / 2 >= h0 and door + L.DOOR_W / 2 <= h1, size.Id .. " porte")
+			local s0, s1 = L.StairSpan(size)
+			check(s0 > h0 + 2.5 and s1 < h1 - 2.5, size.Id .. " escalier au milieu de la cage (couloirs de chaque côté)")
+			-- colonnes contiguës hors de la cage, sans chevauchement
+			for column = 1, size.Columns do
+				local c0, c1 = L.ColumnSpan(size, column)
+				check(c1 <= h0 + 1e-9 or c0 >= h1 - 1e-9, size.Id .. " colonne " .. column .. " hors de la cage")
+				eq(check, L.ColumnAt(size, (c0 + c1) / 2), column, size.Id .. " ColumnAt")
+			end
+			-- passages : chaque pièce touche la cage ou une voisine
+			for column = 1, size.Columns do
+				check(#L.RoomDoors(size, column) >= 1, size.Id .. " passages")
+			end
 		end
+		-- (v9.4) escalier : pente <= 40°, hauteur libre >= 7 partout, haut au ras de l'étage
+		check(L.StairSlope() <= 40, "pente de l'escalier " .. L.StairSlope())
+		eq(check, L.STAIR_STEPS * L.STAIR_RISE, L.STORY, "13 marches = un étage")
+		check(math.abs(L.StairHeight(L.STAIR_D1) - L.STORY) < 1e-9, "haut de la rampe au ras de l'étage")
+		check(L.StairHeight(L.STAIR_D0) == 0, "bas de la rampe au sol")
+		local minHead = math.huge
+		for i = 0, 200 do
+			local d = L.STAIR_D0 + (L.STAIR_D1 - L.STAIR_D0) * i / 200
+			local ceiling = d < L.STAIR_HOLE_D0 and L.WALL_H or (L.STORY + L.WALL_H - 1.2)
+			minHead = math.min(minHead, ceiling - L.StairHeight(d))
+		end
+		check(minHead >= 7, "hauteur libre sur l'escalier " .. minHead)
+		check(L.STAIR_D1 <= L.WALL_T + L.DEPTH - 2, "palier du haut")
 		for _, n in ipairs({ 4, 8, 12 }) do
 			local r = L.PlotRadius(n)
 			local x1, z1 = L.PlotPlace(1, n)

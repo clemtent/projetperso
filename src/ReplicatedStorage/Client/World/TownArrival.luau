@@ -309,7 +309,7 @@ function Guide.Attach(self: any, character: Model?)
 	end
 	local source = Instance.new("Attachment")
 	source.Name = "TownGuideStart"
-	source.CFrame = CFrame.new(0, -1.5, 0) * AXIS_UP
+	source.CFrame = CFrame.new(0, -2.6, -2) * AXIS_UP
 	source.Parent = root
 	self.Source = source
 	local beam = Instance.new("Beam")
@@ -322,8 +322,8 @@ function Guide.Attach(self: any, character: Model?)
 	beam.LightInfluence = 0
 	beam.FaceCamera = true
 	beam.Segments = 48
-	beam.Width0 = 0.5
-	beam.Width1 = 1.6
+	beam.Width0 = 0.9
+	beam.Width1 = 2.4
 	beam.CurveSize0 = 10
 	beam.CurveSize1 = -10
 	beam.Parent = self.Anchor

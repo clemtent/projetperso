@@ -673,7 +673,12 @@ function TownHud.Layout(self: any)
 	local overlayScale = math.clamp(math.min(full.X / 860, full.Y / 520), 0.45, 1.3)
 	parts.LoadingScale.Scale = overlayScale
 	parts.CinemaScale.Scale = overlayScale
-	parts.Skip.Position = UDim2.new(1, phone and -64 or -40, 0.055, 0)
+	-- bandes cinéma : 11 % de l'écran, jamais moins de 56 px (bouton "Passer" dedans)
+	local barH = math.max(math.floor(full.Y * 0.11), 56)
+	parts.TopBar.Size = UDim2.new(1, 0, 0, barH)
+	parts.BottomBar.Size = UDim2.new(1, 0, 0, barH)
+	parts.Skip.Position = UDim2.new(1, phone and -64 or -40, 0, barH / 2)
+	parts.SkipScale.Scale = math.clamp(overlayScale, 0.8, 1.2)
 	local card = parts.VisitCard
 	local rootSize = Vector2.new(size.X / scale, size.Y / scale)
 	card.Size = UDim2.fromOffset(math.min(520, rootSize.X - 30), math.min(440, rootSize.Y - 30))
@@ -929,7 +934,7 @@ function TownHud.BuildOverlay(self: any)
 	-- Survol : bandes cinéma, titre, "Passer"
 	local cinema = UIUtil.Create("Frame", { Name = "Cinematic", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false, ZIndex = 30, Parent = overlay })
 	for _, spec in ipairs({ { "TopBar", 0 }, { "BottomBar", 1 } }) do
-		UIUtil.Create("Frame", { Name = spec[1], AnchorPoint = Vector2.new(0, spec[2]), Position = UDim2.fromScale(0, spec[2]), Size = UDim2.fromScale(1, 0.11),
+		parts[spec[1]] = UIUtil.Create("Frame", { Name = spec[1], AnchorPoint = Vector2.new(0, spec[2]), Position = UDim2.fromScale(0, spec[2]), Size = UDim2.fromScale(1, 0.11),
 			BackgroundColor3 = Color3.fromRGB(12, 8, 20), BorderSizePixel = 0, ZIndex = 31, Parent = cinema })
 	end
 	local cinemaCenter = UIUtil.Create("Frame", { Name = "Titles", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale(0.5, 0.86),
@@ -944,8 +949,15 @@ function TownHud.BuildOverlay(self: any)
 	skip.AutomaticSize = Enum.AutomaticSize.None
 	skip.TextXAlignment = Enum.TextXAlignment.Left
 	skip.AnchorPoint = Vector2.new(1, 0.5)
-	skip.Position = UDim2.new(1, -70, 0.055, 0)
-	UIUtil.Icon("Next", { Size = 18, Color = PINK_DEEP, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 8, 0.5, 0), ZIndex = 35, Parent = skip })
+	skip.Position = UDim2.new(1, -40, 0.055, 0)
+	skip.Size = UDim2.fromOffset(textWidth(Locale.T("Skip"), 18) + 62, 40)
+	local skipPad = skip:FindFirstChildOfClass("UIPadding")
+	if skipPad then
+		skipPad.PaddingLeft = UDim.new(0, 18)
+		skipPad.PaddingRight = UDim.new(0, 40)
+	end
+	UIUtil.Icon("Next", { Size = 18, Color = PINK_DEEP, Position = UDim2.new(1, 20, 0.5, 0), ZIndex = 35, Parent = skip })
+	parts.SkipScale = UIUtil.Create("UIScale", { Parent = skip })
 	skip.Activated:Connect(function()
 		self.Callbacks.SkipIntro()
 	end)
