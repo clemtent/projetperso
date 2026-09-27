@@ -139,6 +139,10 @@ local function applyHeader(module, name: string)
 	iconBadge.Visible = icon ~= nil
 	iconLabel.Text = icon or ""
 	iconBadge.BackgroundColor3 = color
+	local badgeStroke = iconBadge:FindFirstChild("BadgeStroke")
+	if badgeStroke and badgeStroke:IsA("UIStroke") then
+		badgeStroke.Color = UIUtil.EdgeColor(color)
+	end
 	titleLabel.Text = text
 
 	local left = icon and 76 or 26
@@ -207,6 +211,8 @@ function PanelManager.Build(layer: Frame)
 	UIUtil.Corner(window, Theme.Radius.XL)
 	UIUtil.Stroke(window, Theme.Colors.CardBorder, 1.5, 0.1)
 	UIUtil.Shadow(window, 10, 0.72, 6)
+	-- Un clic sur une zone vide de la fenêtre ne ferme plus rien (seul un clic dehors ferme)
+	UIUtil.SinkClicks(window)
 
 	-- En-tête : pastille d'icône, titre, sous-titre
 	iconBadge = UIUtil.Create("Frame", {
@@ -218,8 +224,11 @@ function PanelManager.Build(layer: Frame)
 		Parent = window,
 	})
 	UIUtil.Corner(iconBadge, Theme.Radius.M)
-	UIUtil.Stroke(iconBadge, Theme.Colors.Border, 1.5, 0.2)
-	UIUtil.Gradient(iconBadge, ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(205, 205, 205)), 90)
+	-- v9 : pastille en relief (dégradé, reflet, contour teinté)
+	local badgeStroke = UIUtil.Stroke(iconBadge, UIUtil.EdgeColor(Theme.Colors.Blue), 1.5, 0)
+	badgeStroke.Name = "BadgeStroke"
+	UIUtil.Gradient(iconBadge, UIUtil.ButtonShading, 90)
+	UIUtil.Gloss(iconBadge, 0.5)
 	iconLabel = UIUtil.Label({
 		Size = UDim2.new(1, -8, 1, -8),
 		Position = UDim2.fromOffset(4, 4),
@@ -251,41 +260,29 @@ function PanelManager.Build(layer: Frame)
 		Parent = window,
 	})
 
-	local closeButton = UIUtil.BasicButton({
+	-- ✕ commun (UIUtil.CloseButton) + zone tactile agrandie (téléphone / tablette)
+	UIUtil.CloseButton({
 		Name = "Close",
-		Text = "✕",
-		Font = Theme.Fonts.Title,
-		TextSize = 20,
-		Size = UDim2.fromOffset(40, 40),
+		Size = 40,
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -16, 0, 13),
-		CornerRadius = 20,
 		ZIndex = 4,
+		Hitbox = 64,
 		Parent = window,
+		OnClose = function()
+			PanelManager.Close()
+		end,
 	})
-	closeButton.Activated:Connect(function()
-		PanelManager.Close()
-	end)
-	-- Zone tactile agrandie (bouton invisible autour du ✕) sur téléphone / tablette
-	local closeHitbox = UIUtil.Create("TextButton", {
-		Name = "CloseHitbox",
-		Text = "",
-		BackgroundTransparency = 1,
-		AutoButtonColor = false,
-		Size = UDim2.fromOffset(64, 64),
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -4, 0, 1),
-		ZIndex = 3,
-		Visible = Interface.IsTouch(),
-		Parent = window,
-	})
-	closeHitbox.Activated:Connect(function()
-		PanelManager.Close()
-	end)
+	local closeHitbox = window:FindFirstChild("CloseHitbox") :: GuiObject?
+	if closeHitbox then
+		closeHitbox.Visible = Interface.IsTouch()
+	end
 
 	-- L'écran change (rotation, fenêtre redimensionnée) : la fenêtre ouverte se réajuste
 	Interface.ScaleChanged:Connect(function()
-		closeHitbox.Visible = Interface.IsTouch()
+		if closeHitbox then
+			closeHitbox.Visible = Interface.IsTouch()
+		end
 		if openName then
 			local panel = panels[openName]
 			if panel then

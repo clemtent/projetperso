@@ -44,6 +44,8 @@ local HouseCommon = require(script.Parent.HouseCommon)
 local NeedDopamine = require(script.Parent.Parent.NeedDopamine)
 local HouseArt = require(script.Parent.HouseArt)
 local HousePatterns = require(script.Parent.HousePatterns)
+local HouseButtons = require(script.Parent.HouseButtons)
+local HouseSurfaces = require(script.Parent.HouseSurfaces)
 
 type Item = HouseCommon.Item
 type Style = HouseCommon.Style
@@ -467,6 +469,8 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 		PaddingBottom = UDim.new(0, 10),
 		Parent = drawer,
 	})
+	-- Clic dans le tiroir (zone vide) : ne traverse pas jusqu'à la pièce / la maison
+	HouseButtons.Sink(drawer)
 
 	-- En-tête : titre, porte-monnaie, ✕
 	UIUtil.Create("TextLabel", {
@@ -494,17 +498,18 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 	})
 	wallet.AnchorPoint = Vector2.new(1, 0)
 	wallet.Position = UDim2.new(1, -44, 0, 1)
-	local closeButton = UIUtil.BasicButton({
+	-- ✕ commun du jeu (zone tactile agrandie)
+	UIUtil.CloseButton({
 		Name = "Close",
-		Text = "✕",
-		Font = Theme.Fonts.Title,
-		TextSize = 17,
-		Size = UDim2.fromOffset(34, 34),
+		Size = 34,
+		Hitbox = 44,
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, 0, 0, -2),
-		CornerRadius = 17,
 		ZIndex = 31,
 		Parent = drawer,
+		OnClose = function()
+			shop.Close()
+		end,
 	})
 
 	-- Onglets : même look que UIUtil.Tabs (fond gris clair, pastille blanche
@@ -519,17 +524,38 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 	})
 	UIUtil.Corner(tabBar, UDim.new(1, 0))
 	UIUtil.Stroke(tabBar, Theme.Colors.Divider, 1)
+	-- Onglet choisi : pastille "bonbon" rose brillante (reflet + lèvre)
 	local tabIndicator = UIUtil.Create("Frame", {
 		Name = "Indicator",
 		Position = UDim2.fromOffset(3, 3),
 		Size = UDim2.fromOffset(80, 30),
-		BackgroundColor3 = WHITE,
+		BackgroundColor3 = C.PinkDeep:Lerp(C.Ink, 0.3),
 		ZIndex = 32,
 		Parent = tabBar,
 	})
 	UIUtil.Corner(tabIndicator, UDim.new(1, 0))
-	UIUtil.Stroke(tabIndicator, C.PinkDeep, 1.5, 0.35)
-	local tabSelectedColor = C.PinkDeep:Lerp(Color3.new(0, 0, 0), 0.25)
+	UIUtil.Stroke(tabIndicator, C.PinkDeep:Lerp(C.Ink, 0.45), 1.5, 0.2)
+	local indicatorFace = UIUtil.Create("Frame", {
+		Name = "Face",
+		Size = UDim2.new(1, 0, 1, -3),
+		BackgroundColor3 = C.Pink,
+		ZIndex = 32,
+		Parent = tabIndicator,
+	})
+	UIUtil.Corner(indicatorFace, UDim.new(1, 0))
+	UIUtil.Gradient(indicatorFace, ColorSequence.new(Color3.fromRGB(255, 236, 246), Color3.fromRGB(236, 200, 220)), 90)
+	local indicatorGloss = UIUtil.Create("Frame", {
+		Name = "Gloss",
+		Position = UDim2.new(0, 8, 0, 2),
+		Size = UDim2.new(1, -16, 0.42, 0),
+		BackgroundColor3 = WHITE,
+		BackgroundTransparency = 0.45,
+		ZIndex = 32,
+		Parent = indicatorFace,
+	})
+	UIUtil.Corner(indicatorGloss, UDim.new(1, 0))
+	UIUtil.Create("UIGradient", { Rotation = 90, Transparency = NumberSequence.new(0.2, 1), Parent = indicatorGloss })
+	local tabSelectedColor = WHITE
 	local tabButtons: { [string]: TextButton } = {}
 	local selectedTab = "Items"
 
@@ -888,7 +914,9 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 	end
 
 	-- Appelle le serveur ; (succès) + bandeau et son d'erreur si refus
-	local function request(action: string, argument: any, button: GuiObject): (boolean, string?)
+	-- Achat refusé par le serveur : "pas assez de Dopamine" -> la fenêtre
+	-- pour en avoir (à chaque fois), sinon le message du serveur
+	local function request(action: string, argument: any, button: GuiObject, cost: number?, context: any?): (boolean, string?)
 		if busy then
 			return false, nil
 		end
@@ -898,19 +926,27 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 		if not ok then
 			SoundManager.Play("Error", 0.7)
 			UIUtil.Shake(button)
-			handlers.Notify(message or Locale.T("Not possible right now."), Theme.Colors.Red)
+			local offered = false
+			if cost then
+				local okOffer, shown = pcall(NeedDopamine.OfferRefusal, message, cost, nil, context)
+				offered = okOffer and shown == true
+			end
+			if not offered then
+				handlers.Notify(message or Locale.T("Not possible right now."), Theme.Colors.Red)
+			end
 		end
 		return ok, message
 	end
 
-	-- Pas assez de Dopamine : fenêtre "Get Dopamine" (ou bulle)
-	local function needDopamine(button: GuiObject, price: number)
+	-- Pas assez de Dopamine : fenêtre "Get Dopamine" (ou bulle) ; context =
+	-- ce qu'on voulait acheter (icône + nom), affiché dans la fenêtre
+	local function needDopamine(button: GuiObject, price: number, context: any?)
 		SoundManager.Play("Error", 0.7)
 		UIUtil.Shake(button)
 		local missing = price - HouseCommon.Dopamine()
 		NeedDopamine.Offer(missing, function()
 			handlers.Notify(Locale.T("You need %s more Dopamine", NumberFormatter.Format(missing)), Theme.Colors.Red)
-		end)
+		end, context)
 	end
 
 	-- Attend (3 s max) que le nouvel état du serveur soit arrivé
@@ -949,12 +985,13 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 			return
 		end
 		local price = HouseCommon.Price(item, owned)
+		local context = { Icon = item.Icon, Name = HouseCommon.Name(item), Color = C.PinkDeep }
 		if HouseCommon.Dopamine() < price then
-			needDopamine(card.Button, price)
+			needDopamine(card.Button, price, context)
 			return
 		end
 		task.spawn(function()
-			local ok, message = request("buyItem", item.Id, card.Button)
+			local ok, message = request("buyItem", item.Id, card.Button, price, context)
 			if ok then
 				celebrate(card.Card, false)
 				handlers.Notify(message or Locale.T("%s is yours!", item.Icon .. " " .. HouseCommon.Name(item)), Theme.Colors.Green, Locale.T("🏠 New item"))
@@ -984,14 +1021,15 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 		if not isOwned and refuseLocked(card.Button, card.Style) then
 			return
 		end
+		local styleContext = { Icon = card.Style.Icon or "🎨", Name = HouseCommon.Name(card.Style), Color = C.Lilac }
 		if not isOwned and HouseCommon.Dopamine() < card.Style.Cost then
-			needDopamine(card.Button, card.Style.Cost)
+			needDopamine(card.Button, card.Style.Cost, styleContext)
 			return
 		end
 		local action = (isOwned and "set" or "buy") .. card.Kind
 		local roomId = room.Id
 		task.spawn(function()
-			local ok, message = request(action, { Room = roomId, Id = id }, card.Button)
+			local ok, message = request(action, { Room = roomId, Id = id }, card.Button, not isOwned and card.Style.Cost or nil, styleContext)
 			if ok then
 				stickyPreview = nil
 				hoverPreview = nil
@@ -1019,8 +1057,9 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 			return
 		end
 		local price = HouseCommon.RoomCost(house)
+		local roomContext = { Icon = card.Type.Icon, Name = HouseCommon.Name(card.Type), Color = C.Mint }
 		if HouseCommon.Dopamine() < price then
-			needDopamine(card.Button, price)
+			needDopamine(card.Button, price, roomContext)
 			return
 		end
 		local before: { [string]: boolean } = {}
@@ -1029,7 +1068,7 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 		end
 		local typeId = card.Type.Id
 		task.spawn(function()
-			local ok, message = request("buyRoom", { Type = typeId }, card.Button)
+			local ok, message = request("buyRoom", { Type = typeId }, card.Button, price, roomContext)
 			if not ok then
 				return
 			end
@@ -1067,8 +1106,9 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 		if not isOwned and refuseLocked(row.Button, size) then
 			return
 		end
+		local sizeContext = { Icon = size.Icon, Name = HouseCommon.Name(size), Color = C.Sky }
 		if not isOwned and HouseCommon.Dopamine() < size.Cost then
-			needDopamine(row.Button, size.Cost)
+			needDopamine(row.Button, size.Cost, sizeContext)
 			return
 		end
 		-- Dispositions en attente envoyées AVANT le déménagement (le serveur
@@ -1076,7 +1116,7 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 		handlers.BeforeHouseChange()
 		local sizeId = size.Id
 		task.spawn(function()
-			local ok, message = request(isOwned and "setSize" or "buySize", sizeId, row.Button)
+			local ok, message = request(isOwned and "setSize" or "buySize", sizeId, row.Button, not isOwned and size.Cost or nil, sizeContext)
 			if not ok then
 				return
 			end
@@ -2030,6 +2070,12 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 			local visible
 			if category == "Favorites" then
 				visible = room ~= nil and HouseCommon.IsFavorite(room, card.Item)
+			elseif category == "TablesSeats" then
+				-- (v9) tables vides et sièges qu'on range autour
+				visible = HouseSurfaces.IsTable(card.Item.Id) or HouseSurfaces.IsSeat(card.Item.Id)
+			elseif category == "Tabletop" then
+				-- (v9) tout ce qu'on peut poser SUR un meuble
+				visible = HouseCommon.CanGoOnFurniture(card.Item)
 			else
 				visible = category == "All" or card.Item.Category == category
 			end
@@ -2081,8 +2127,10 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 	categoryPill("Favorites", "", 1)
 	local favoritesPill = categoryButtons.Favorites
 	favoritesPill.Visible = false
+	categoryPill("TablesSeats", Locale.T("🍽️ Tables & chairs"), 2)
+	categoryPill("Tabletop", Locale.T("🧁 On furniture"), 3)
 	for index, entry in ipairs(HouseCommon.Config.Categories) do
-		categoryPill(entry.Id, entry.Icon .. " " .. HouseCommon.Name(entry), index + 1)
+		categoryPill(entry.Id, entry.Icon .. " " .. HouseCommon.Name(entry), index + 3)
 	end
 	paintCategories()
 	task.defer(refreshMoreHint)
@@ -2499,10 +2547,6 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 		relayoutGrids()
 		refresh()
 	end
-
-	closeButton.Activated:Connect(function()
-		shop.Close()
-	end)
 
 	layoutTabs(false)
 

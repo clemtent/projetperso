@@ -37,13 +37,38 @@
 	  - Feature "Butter" : un bloc de beurre brillant. Clic = son "Crunch",
 	    traces de dents, éclats, "+X" = gain par clic x ClickFraction,
 	    Interact("Butter") limité côté client à MaxPerSecond.
+	v9 :
+	  - le joueur ÉCRIT dans le chat (Live > ChatInput : champ, bouton ➤,
+	    Entrée, tactile, 120 caractères, mode lent). Le texte passe par le
+	    filtre du serveur (RemoteFunction "FilterText") : seul le texte FILTRÉ
+	    s'affiche, dans un style "toi" doré (photo d'avatar, pseudo affiché).
+	    La streameuse le lit dans une bulle, réagit (expression, geste, emoji,
+	    cœurs) puis répond ; 1 à 4 spectateurs répondent en 1 à 6 s selon les
+	    sujets détectés (Shared > ChatTopics, réponses dans Live > ChatReplies),
+	    parfois avec une mention @pseudo ; le chat se calme quelques secondes
+	    pour qu'on puisse lire ;
+	  - nouvelles expressions (rire, cœurs dans les yeux, boude, réfléchit,
+	    bâille, clin d'œil, chut...) et gestes (main au menton, bras en l'air,
+	    mains sur les joues, montre le chat, chut) ; elle parle aussi dans la
+	    bulle pour les grands moments (abonnement, dons, raids, objectif) ;
+	  - chaque niveau de "StreamStudio" se voit : 1 ring light, 2 LED RGB,
+	    3 micro pro + HD, 4 tubes néon, 5 bokeh, 6 casque RGB + sweat étoile,
+	    7 4K, 8 faisceaux de scène, 9 couronne sur l'avatar, 10 cadre doré ;
+	  - widget d'objectif : alterne avec "Nouvel abonné : X" ;
+	  - boucle de rendu plafonnée à 30 images/s, textes mis à jour seulement
+	    quand ils changent.
 	Performance : UNE seule boucle de rendu (repas, chat, raids, particules
 	recyclées...) qui se met en pause quand le live n'est pas visible.
 ]]
 
 local TweenService = game:GetService("TweenService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Locale = require(game:GetService("ReplicatedStorage").Shared.Locale)
+local Locale = require(ReplicatedStorage.Shared.Locale)
+local ChatTopics = require(ReplicatedStorage.Shared.ChatTopics)
+local Replies = require(script.Parent.Live.ChatReplies)
+local ChatInput = require(script.Parent.Live.ChatInput)
 
 local LiveStream = {}
 LiveStream.Slot = "L3"
@@ -108,6 +133,7 @@ local POP_COLORS = {
 local HEARTS = { "❤️", "💜", "💖", "😍", "🔥", "👏", "✨" }
 
 local HOST = "MangeTout_ASMR"
+local HOST_CHAT = "MangeTout" -- (nom court dans le chat : une ligne de gagnée)
 
 ----------------------------------------------------------------------
 -- Chat : pseudos, rôles et messages (tout est inventé)
@@ -125,6 +151,7 @@ local NAMES = {
 }
 -- Modérateurs (badge 🛡️) : toujours les mêmes, comme sur un vrai live
 local MODS = { Tonton_Jean = true, Lulu_ASMR = true, Moustache_Pro = true, Madeleine_Proust = true }
+local MOD_LIST = { "Tonton_Jean", "Lulu_ASMR", "Moustache_Pro", "Madeleine_Proust" }
 local NAME_COLORS = { "#FF6B9A", "#6BD5FF", "#FFD34D", "#9DFF6B", "#C38BFF", "#FF9F45", "#5CFFD1", "#FF7AF0", "#7AA2FF", "#FFB3C7" }
 
 local MESSAGES = {
@@ -348,9 +375,20 @@ local CRUMB_COLORS = { Color3.fromRGB(230, 170, 90), Color3.fromRGB(250, 210, 14
 local BUTTER_COLORS = { Color3.fromRGB(255, 226, 96), Color3.fromRGB(255, 246, 190), Color3.fromRGB(245, 200, 70) }
 local TITLE_H = 22
 local PINNED_Y, PINNED_H = TITLE_H + 4, 30
-local INPUT_H = 20
+local INPUT_H = 22 -- champ de saisie (Live > ChatInput ; 30 en mode compact)
 local LIST_Y = PINNED_Y + PINNED_H + 3
 local LIST_H = VIDEO_H - LIST_Y - INPUT_H - 8
+local BUBBLE_W = 150 -- bulle de la streameuse (158 en mode compact)
+local QUIET_TIME = 7 -- après un message du joueur, le chat ralentit (on peut lire)
+local YOU_GOLD = Color3.fromRGB(255, 211, 77) -- style "toi" dans le chat
+local MENTION_PINK = Color3.fromRGB(255, 84, 150) -- lignes qui te mentionnent
+local GOLD_FRAME = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 214, 90)),
+	ColorSequenceKeypoint.new(0.35, Color3.fromRGB(255, 250, 220)),
+	ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 170, 60)),
+	ColorSequenceKeypoint.new(0.75, Color3.fromRGB(255, 244, 190)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 214, 90)),
+})
 local LED_RAINBOW = ColorSequence.new({
 	ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 80, 160)),
 	ColorSequenceKeypoint.new(0.25, Color3.fromRGB(255, 200, 60)),
@@ -366,6 +404,38 @@ local SLEEVE = ColorSequence.new({
 	ColorSequenceKeypoint.new(1, HOODIE_DARK),
 })
 local BOKEH_COLORS = { Color3.fromRGB(255, 200, 120), Color3.fromRGB(255, 140, 220), Color3.fromRGB(140, 220, 255), Color3.fromRGB(200, 170, 255) }
+
+-- Expressions du visage (v9 : réglages en table). Eyes : "Open" | "Happy" (∩)
+-- | "Closed" (◡) | "Heart" | "Wink" ; Blink = cligne des yeux ; Big = grands
+-- yeux ; BrowY / Brow = hauteur et inclinaison des sourcils (x côté : positif =
+-- milieu relevé, négatif = froncé) ; Raise = un sourcil levé ; Mouth = { w, h }
+-- ou "Chew" | "Talk" | "Laugh" | "Yawn" ; Cat = bouche de chat (ω) ; Frown =
+-- bouche qui boude (∩) ; Blush = transparence des joues ; Puff = joues gonflées.
+local EXPRESSIONS: { [string]: { [string]: any } } = {
+	Idle = { Eyes = "Open", Blink = true },
+	Talk = { Eyes = "Open", Blink = true, Mouth = "Talk" },
+	Bite = { Eyes = "Open", BrowY = 25, Brow = -4, Mouth = { 14, 12 } },
+	Wow = { Eyes = "Open", Big = true, BrowY = 23, Brow = -10, Mouth = { 8, 10 }, Blush = 0.15 },
+	Chew = { Eyes = "Happy", BrowY = 26, Brow = -6, Mouth = "Chew", Blush = 0.3, Puff = true },
+	Sip = { Eyes = "Closed", BrowY = 27, Brow = 2, Mouth = { 4, 4 } },
+	Thanks = { Eyes = "Happy", BrowY = 26, Brow = -6, Cat = true, Blush = 0.15 },
+	Shy = { Eyes = "Happy", BrowY = 26, Brow = -6, Cat = true, Blush = 0.08 },
+	Happy = { Eyes = "Happy", BrowY = 25.5, Brow = -6, Mouth = { 11, 5.5 }, Blush = 0.3 },
+	Laugh = { Eyes = "Happy", BrowY = 24, Brow = -8, Mouth = "Laugh", Blush = 0.15 },
+	Love = { Eyes = "Heart", BrowY = 25, Brow = -4, Cat = true, Blush = 0.08 },
+	Yum = { Eyes = "Happy", BrowY = 26, Brow = -6, Mouth = { 9, 6.5 }, Blush = 0.3 },
+	Vibe = { Eyes = "Happy", BrowY = 26, Brow = -4, Blush = 0.35 },
+	Pout = { Eyes = "Open", Blink = true, BrowY = 27.5, Brow = -16, Frown = true, Blush = 0.25, Puff = true },
+	Sad = { Eyes = "Open", Big = true, Blink = true, BrowY = 25, Brow = 16, Frown = true, Tear = true, Blush = 0.4 },
+	Think = { Eyes = "Open", Blink = true, Raise = true, Mouth = { 4, 3.5 } },
+	Sleepy = { Eyes = "Closed", BrowY = 27, Brow = 2, Mouth = "Yawn" },
+	Wink = { Eyes = "Wink", BrowY = 25, Brow = -6, Blush = 0.3 },
+	Shh = { Eyes = "Closed", BrowY = 27, Brow = 2, Mouth = { 4, 4 } },
+}
+-- Mouvement de la tête (inclinaison, en degrés) selon l'expression
+local HEAD_TILTS: { [string]: number } = { Thanks = 8, Shy = 9, Love = 6, Wink = 7, Sleepy = 11, Think = -8, Sad = -5 }
+-- Expressions de réaction où ses lèvres bougent pendant qu'elle parle (réponse)
+local TALKY: { [string]: boolean } = { Happy = true, Love = true, Shy = true, Wink = true, Think = true, Pout = true, Sad = true, Yum = true, Vibe = true }
 
 ----------------------------------------------------------------------
 -- Petites fonctions utilitaires
@@ -418,6 +488,20 @@ function LiveStream.Start(ctx)
 		butterNags = Locale.Pick(BUTTER_NAGS) :: { string },
 		followNags = Locale.Pick(FOLLOW_NAGS) :: { string },
 	}
+
+	-- v9 : objets et fonctions ajoutés rangés dans UNE table (Start est
+	-- proche de la limite de 200 variables locales de Luau)
+	local K: { [string]: any } = {}
+	do
+		local player = Players.LocalPlayer
+		local display = player and player.DisplayName or ""
+		K.name = display ~= "" and display or (player and player.Name or "?")
+		K.headshot = (player and player.UserId > 0) and UI.HeadshotUrl(player.UserId, 48) or ""
+		K.known = {} -- sujets acceptés (ChatTopics.Order)
+		for _, topic in ipairs(ChatTopics.Order) do
+			K.known[topic] = true
+		end
+	end
 
 	local function effectsOn(): boolean
 		local data = ctx.State.Data
@@ -592,6 +676,19 @@ function LiveStream.Start(ctx)
 	})
 	UI.Corner(avatarLive, 4)
 	UI.Stroke(avatarLive, Color3.fromRGB(30, 24, 44), 1.5)
+	-- v9 : couronne de streameuse partenaire (studio 9)
+	K.crown = text({
+		Name = "Crown",
+		Text = "👑",
+		TextSize = 15,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromOffset(AVATAR_X + 12, HEADER_MID - 16),
+		Size = UDim2.fromOffset(20, 20),
+		Rotation = 22,
+		Visible = false,
+		ZIndex = 8,
+		Parent = header,
+	})
 
 	-- Pseudo + titre du live : de l'avatar jusqu'au bouton Suivre
 	text({
@@ -832,6 +929,51 @@ function LiveStream.Start(ctx)
 		UI.Gradient(ringStroke, ColorSequence.new(WHITE, Color3.fromRGB(255, 226, 246)), 90)
 	end
 
+	-- v9 : tubes néon sur les bords de l'image (studio 4) et faisceaux de
+	-- scène qui balayent derrière elle (studio 8)
+	do
+		local tubes = layer("NeonTubes", 3, wallLayer)
+		K.tubeGradients = {}
+		for _, side in ipairs({ 0, 1 }) do
+			local inward = side == 0 and 1 or -1
+			box({ AnchorPoint = Vector2.new(side, 0), Position = UDim2.new(side, inward * 1, 0, 30), Size = UDim2.fromOffset(11, 112), BackgroundColor3 = Color3.fromRGB(255, 150, 225), BackgroundTransparency = 0.8, ZIndex = 1, Parent = tubes }, UDim.new(1, 0))
+			local tube = box({ AnchorPoint = Vector2.new(side, 0), Position = UDim2.new(side, inward * 5, 0, 32), Size = UDim2.fromOffset(3, 108), BackgroundColor3 = WHITE, ZIndex = 2, Parent = tubes }, UDim.new(1, 0))
+			table.insert(K.tubeGradients, UI.Gradient(tube, LED_RAINBOW, 90))
+			for _, y in ipairs({ 36, 134 }) do
+				box({ AnchorPoint = Vector2.new(side, 0.5), Position = UDim2.new(side, inward * 3, 0, y), Size = UDim2.fromOffset(7, 3), BackgroundColor3 = Color3.fromRGB(58, 50, 82), ZIndex = 3, Parent = tubes }, 1)
+			end
+		end
+		K.tubes = tubes
+		local beams = layer("Beams", 0, lightLayer)
+		K.beamFrames = {}
+		-- Un faisceau tourne autour de son CENTRE (règle Roblox) : le cadre fait
+		-- deux fois la longueur utile, centré sur le projecteur, moitié haute invisible
+		for i, x in ipairs({ 0.14, 0.86 }) do
+			local beam = box({
+				Name = "Beam",
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.new(x, 0, 0, -6),
+				Size = UDim2.fromOffset(34, 420),
+				BackgroundColor3 = i == 1 and Color3.fromRGB(255, 160, 235) or Color3.fromRGB(150, 210, 255),
+				ZIndex = 0,
+				Parent = beams,
+			}, UDim.new(0.5, 0))
+			UI.Create("UIGradient", {
+				Rotation = 90,
+				Transparency = NumberSequence.new({
+					NumberSequenceKeypoint.new(0, 1),
+					NumberSequenceKeypoint.new(0.49, 1),
+					NumberSequenceKeypoint.new(0.5, 0.25),
+					NumberSequenceKeypoint.new(0.75, 0.72),
+					NumberSequenceKeypoint.new(1, 1),
+				}),
+				Parent = beam,
+			})
+			table.insert(K.beamFrames, beam)
+		end
+		K.beams = beams
+	end
+
 	------------------------------------------------------------------
 	-- La streameuse (dessinée en formes, cadre de 120 x 120)
 	------------------------------------------------------------------
@@ -868,8 +1010,8 @@ function LiveStream.Start(ctx)
 			box(at({ BackgroundColor3 = Color3.fromRGB(200, 200, 220), ZIndex = 5, Parent = streamer }, x, 102, 3, 4), 1)
 		end
 	end
-	-- Motif sur le sweat
-	text({
+	-- Motif sur le sweat (devient une étoile dorée au studio 6)
+	K.hoodieLogo = text({
 		Text = "♥",
 		Font = Theme.Fonts.Title,
 		TextSize = 13,
@@ -970,6 +1112,17 @@ function LiveStream.Start(ctx)
 		mouth = part({ Name = "Mouth", BackgroundColor3 = Color3.fromRGB(116, 30, 56), Visible = false, ZIndex = 5 }, 32, 51, 10, 8, UDim.new(1, 0))
 		teeth = box({ Name = "Teeth", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 1), Size = UDim2.new(0.7, 0, 0, 2.5), BackgroundColor3 = WHITE, ZIndex = 6, Parent = mouth }, 1)
 		tongue = box({ Name = "Tongue", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, 0), Size = UDim2.fromScale(0.65, 0.45), BackgroundColor3 = Color3.fromRGB(255, 120, 140), ZIndex = 6, Parent = mouth }, UDim.new(1, 0))
+		-- v9 : yeux en cœur (amoureuse), bouche qui boude (∩), goutte de larme
+		K.heartEyes = {}
+		for _, x in ipairs({ 21, 43 }) do
+			local heartEye = text({ Name = "HeartEye", Text = "♥", Font = Theme.Fonts.Title, TextSize = 15, TextColor3 = Color3.fromRGB(255, 64, 128), AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(14, 14), Visible = false, ZIndex = 6, Parent = head })
+			heartEye.Position = UDim2.fromOffset(x, 37)
+			local heartStroke = UI.Stroke(heartEye, Color3.fromRGB(120, 20, 60), 1, 0.4)
+			heartStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+			table.insert(K.heartEyes, heartEye)
+		end
+		K.frown = arc(at({ Name = "Frown", Visible = false, ZIndex = 5, Parent = head }, 32, 51, 9, 7), Color3.fromRGB(150, 50, 70), 1.8, UPPER_ARC)
+		K.tear = part({ Name = "Tear", BackgroundColor3 = Color3.fromRGB(130, 210, 255), BackgroundTransparency = 0.1, Visible = false, ZIndex = 7 }, 45, 45, 3, 5, UDim.new(1, 0))
 	end
 
 	------------------------------------------------------------------
@@ -1239,6 +1392,7 @@ function LiveStream.Start(ctx)
 		DirX: number, -- direction de l'avant-bras (normalisée)
 		DirY: number,
 		Tip: number, -- longueur de l'outil tenu (baguettes) au-delà de la main
+		Sticks: { Frame }, -- les baguettes (cachées pendant le cœur avec les mains)
 	}
 	local function makeArm(side: number, restX: number, restY: number, chopsticks: boolean): Arm
 		local upper = box({ Name = "UpperArm", AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = WHITE, ZIndex = 1, Parent = armsLayer }, UDim.new(1, 0))
@@ -1249,10 +1403,12 @@ function LiveStream.Start(ctx)
 		UI.Stroke(fore, HOODIE_DARK, 1, 0.35)
 		-- Main : paume + pouce + plis des doigts (l'axe +Y local suit l'avant-bras)
 		local hand = box({ Name = "Hand", AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(13, 13), BackgroundTransparency = 1, ZIndex = 3, Parent = armsLayer })
+		local sticks: { Frame } = {}
 		if chopsticks then
 			for i, rotation in ipairs({ -10, -2 }) do
 				local stick = box({ Name = "Chopstick", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(6.5 + (i - 1.5) * 3, 5), Size = UDim2.fromOffset(1.8, 26), Rotation = rotation, BackgroundColor3 = WHITE, ZIndex = 1, Parent = hand }, 1)
 				grad(stick, Color3.fromRGB(190, 130, 80), Color3.fromRGB(120, 70, 40))
+				table.insert(sticks, stick)
 			end
 		end
 		local palm = box(at({ Name = "Palm", BackgroundColor3 = WHITE, ZIndex = 2, Parent = hand }, 6.5, 6.5, 13, 13), UDim.new(0.45, 0))
@@ -1276,14 +1432,15 @@ function LiveStream.Start(ctx)
 			DirX = 0,
 			DirY = 1,
 			Tip = chopsticks and 27 or 4,
+			Sticks = sticks,
 		}
 	end
 	local leftArm = makeArm(-1, -40, TABLE_Y + 14, false)
 	local rightArm = makeArm(1, 34, TABLE_Y + 8, true)
 
 	-- Cinématique inverse à 2 os : le coude plie vers l'extérieur
-	local function solveArm(arm: Arm, bodyBob: number)
-		local sx, sy = arm.Side * SHOULDER_X, SHOULDER_Y + bodyBob
+	local function solveArm(arm: Arm, bodyBob: number, lean: number)
+		local sx, sy = arm.Side * SHOULDER_X + lean, SHOULDER_Y + bodyBob
 		local dx, dy = arm.X - sx, arm.Y - sy
 		local distance = math.sqrt(dx * dx + dy * dy)
 		local ux, uy = 0, 1
@@ -1544,6 +1701,7 @@ function LiveStream.Start(ctx)
 		local goalLabel = text({
 			Name = "Label",
 			Text = Locale.T("💜 Follower goal"),
+			RichText = true,
 			Font = Theme.Fonts.Title,
 			TextSize = 10,
 			TextXAlignment = Enum.TextXAlignment.Left,
@@ -1569,6 +1727,7 @@ function LiveStream.Start(ctx)
 			local stroke = UI.Stroke(label, Color3.fromRGB(20, 10, 30), 1.2, 0.35)
 			stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 		end
+		K.goalLabel = goalLabel
 	end
 
 	-- Dons : alertes empilées en haut de la vidéo (sous les pastilles)
@@ -1633,8 +1792,29 @@ function LiveStream.Start(ctx)
 		nextRaid = random:NextNumber(45, 90),
 		uptime = random:NextInteger(40 * 60, 3 * 3600),
 		shownExpression = "",
-		compact = false, -- téléphone : chat en plus gros, sans épinglé ni saisie
+		compact = false, -- téléphone : chat en plus gros, sans message épinglé
 		avatarSize = 14,
+		-- v9
+		frameAcc = 0, -- boucle plafonnée à 30 images/s
+		mood = "", -- expression de réaction (message du joueur)
+		moodUntil = 0,
+		holdMealUntil = 0, -- elle ne reprend pas une bouchée pendant qu'elle te répond
+		quietUntil = 0, -- le chat ralentit pour qu'on lise ton message
+		bubbleUntil = 0,
+		bubbleLockUntil = 0, -- bulle réservée à la conversation avec le joueur
+		bubbleClosing = false,
+		playerMessages = 0,
+		lastPlayerText = "",
+		goalTimer = 7, -- widget d'objectif : alterne avec "Nouvel abonné"
+		goalMode = 0,
+		latestFollower = "",
+		rgbHeadset = false, -- studio 6
+		viewersText = "",
+		likesText = "",
+		rising = false,
+		lean = 0, -- elle se penche vers le chat pendant qu'elle lit ton message
+		leanUntil = 0,
+		sticksHidden = false,
 	}
 
 	local function wow(duration: number?)
@@ -1662,6 +1842,120 @@ function LiveStream.Start(ctx)
 	local pending: { { At: number, Run: () -> () } } = {}
 	local function later(delay: number, run: () -> ())
 		table.insert(pending, { At = os.clock() + delay, Run = run })
+	end
+
+	------------------------------------------------------------------
+	-- v9 : bulle de la streameuse (elle lit ton message puis te répond),
+	-- emojis qui s'envolent près de sa tête, gestes différés
+	------------------------------------------------------------------
+	do
+		local bubble = box({
+			Name = "Speech",
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, 26, 0, 25),
+			Size = UDim2.fromOffset(BUBBLE_W, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			BackgroundColor3 = WHITE,
+			Visible = false,
+			ZIndex = 5,
+			Parent = alertLayer,
+		}, 10)
+		UI.Gradient(bubble, ColorSequence.new(WHITE, Color3.fromRGB(246, 238, 255)), 90)
+		UI.Stroke(bubble, Color3.fromRGB(190, 150, 255), 1.5, 0)
+		UI.Create("UIPadding", {
+			PaddingTop = UDim.new(0, 5),
+			PaddingBottom = UDim.new(0, 6),
+			PaddingLeft = UDim.new(0, 8),
+			PaddingRight = UDim.new(0, 8),
+			Parent = bubble,
+		})
+		-- Pointe (losange) vers sa tête ; la position suit la largeur (layoutBubble)
+		K.bubbleTail = box({
+			Name = "Tail",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0, 38, 1, 5),
+			Size = UDim2.fromOffset(10, 10),
+			Rotation = 45,
+			BackgroundColor3 = Color3.fromRGB(246, 238, 255),
+			ZIndex = 5,
+			Parent = bubble,
+		}, 2)
+		K.bubbleLabel = text({
+			Name = "Say",
+			Text = "",
+			RichText = true,
+			TextSize = 11,
+			TextWrapped = true,
+			TextColor3 = INK,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			AutomaticSize = Enum.AutomaticSize.Y,
+			Size = UDim2.fromScale(1, 0),
+			ZIndex = 6,
+			Parent = bubble,
+		})
+		K.bubbleScale = UI.Create("UIScale", { Parent = bubble })
+		K.bubble = bubble
+		-- Emojis de réaction (réserve de 3, montent à gauche de sa tête)
+		K.floats = {}
+		for i = 1, 3 do
+			local label = text({ Name = "Float" .. i, Text = "", TextSize = 18, AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(26, 26), Visible = false, ZIndex = 11, Parent = fxLayer })
+			K.floats[i] = { Label = label, Start = 0, X = 0 }
+		end
+	end
+
+	-- Bulle : texte riche (déjà échappé) affiché `duration` secondes
+	function K.sayRich(rich: string, duration: number)
+		K.bubbleLabel.Text = rich
+		K.bubble.Visible = true
+		S.bubbleClosing = false
+		S.bubbleUntil = os.clock() + duration
+		K.bubbleScale.Scale = 0.35
+		UI.Tween(K.bubbleScale, 0.3, { Scale = 1 }, Enum.EasingStyle.Back)
+	end
+
+	-- Bulle : texte brut (Replies.NAME = ton pseudo, en gras violet)
+	function K.say(message: string, duration: number)
+		local body = string.gsub(escape(message), Replies.NAME, function()
+			return '<font color="#8C5BE0"><b>' .. escape(K.name) .. "</b></font>"
+		end)
+		K.sayRich(body, duration)
+	end
+
+	-- Taille de la bulle : plus large (et texte plus gros) en mode compact ;
+	-- la pointe vise toujours sa tête (centre de la vidéo - 3)
+	function K.layoutBubble(compact: boolean)
+		local width = compact and 196 or BUBBLE_W
+		local shift = compact and 0 or 26
+		K.bubble.Size = UDim2.fromOffset(width, 0)
+		K.bubble.Position = UDim2.new(0.5, shift, 0, compact and 24 or 25)
+		K.bubbleLabel.TextSize = compact and 13 or 11
+		K.bubbleTail.Position = UDim2.new(0, -3 - (shift - width / 2) - 8, 1, 5)
+	end
+
+	function K.float(emoji: string)
+		for _, item in ipairs(K.floats) do
+			if not item.Label.Visible then
+				item.Label.Text = emoji
+				item.Start = os.clock()
+				item.X = random:NextNumber(-70, -54)
+				item.Label.Visible = true
+				return
+			end
+		end
+	end
+
+	-- Geste dès que ses mains sont libres (elle finit sa bouchée d'abord)
+	function K.gesture(name: string, duration: number, tries: number?)
+		if mealBusy then
+			local attempt = (tries or 0) + 1
+			if attempt <= 6 then
+				later(0.35, function()
+					K.gesture(name, duration, attempt)
+				end)
+			end
+			return
+		end
+		startGesture(name, duration)
 	end
 
 	------------------------------------------------------------------
@@ -1760,40 +2054,33 @@ function LiveStream.Start(ctx)
 		Parent = scroller,
 	})
 	-- Fondu en haut de la liste
-	local caret: Frame
 	do
 		local fade = box({ Name = "Fade", Size = UDim2.new(1, 0, 0, 26), BackgroundColor3 = Color3.fromRGB(30, 25, 46), ZIndex = 8, Parent = chatList })
 		UI.Gradient(fade, ColorSequence.new(WHITE), 90).Transparency = NumberSequence.new(0, 1)
-
-		-- Champ de saisie (décor) + bouton emote
-		local input = box({
-			Name = "Input",
-			AnchorPoint = Vector2.new(0, 1),
-			Position = UDim2.new(0, 5, 1, -5),
-			Size = UDim2.new(1, -10, 0, INPUT_H),
-			BackgroundColor3 = Color3.fromRGB(44, 38, 64),
-			ZIndex = 3,
-			Parent = chat,
-		}, 6)
-		UI.Stroke(input, Color3.fromRGB(96, 82, 140), 1, 0.3)
-		chatExtras.Input = input
-		text({
-			Text = Locale.T("Send a message"),
-			TextSize = 10,
-			TextColor3 = Color3.fromRGB(150, 140, 180),
-			TextXAlignment = Enum.TextXAlignment.Left,
-			TextTruncate = Enum.TextTruncate.AtEnd,
-			Position = UDim2.fromOffset(7, 0),
-			Size = UDim2.new(1, -28, 1, 0),
-			ZIndex = 4,
-			Parent = input,
-		})
-		text({ Text = "🙂", TextSize = 11, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -3, 0.5, 0), Size = UDim2.fromOffset(16, 16), ZIndex = 4, Parent = input })
-		caret = box({ Position = UDim2.fromOffset(5, 5), Size = UDim2.fromOffset(1, INPUT_H - 10), BackgroundColor3 = Color3.fromRGB(200, 190, 240), ZIndex = 4, Parent = input })
 	end
 
-	-- Lignes recyclées : avatar à initiale + texte (badge, pseudo coloré, message)
-	type ChatLine = { Frame: Frame, Avatar: Frame, Initial: TextLabel, Label: TextLabel, Padding: UIPadding }
+	-- v9 : le VRAI champ de saisie (Live > ChatInput : filtre serveur, mode
+	-- lent, tactile). Toucher la liste des messages ouvre aussi le clavier.
+	K.input = ChatInput.new(ctx, {
+		Parent = chat,
+		TapArea = chatList,
+		ZIndex = 5,
+		KnownTopics = K.known,
+		OnMessage = function(message: string, topics: { string })
+			K.onPlayerMessage(message, topics)
+		end,
+		OnFocus = function(focused: boolean)
+			if focused then
+				-- Elle jette un œil au chat pendant que tu écris
+				S.lookTargetX, S.lookTargetY = 1.6, -0.3
+				S.nextLook = os.clock() + 3
+			end
+		end,
+	})
+
+	-- Lignes recyclées : avatar à initiale + texte (badge, pseudo coloré, message).
+	-- v9 : contour + dégradé (style "toi" / mention) et photo d'avatar du joueur
+	type ChatLine = { Frame: Frame, Avatar: Frame, Initial: TextLabel, Label: TextLabel, Padding: UIPadding, Stroke: UIStroke, Gradient: UIGradient, Photo: ImageLabel }
 	local chatLines: { ChatLine } = {}
 	local chatOrder = 0
 	local nextLine = 0
@@ -1826,7 +2113,13 @@ function LiveStream.Start(ctx)
 			ZIndex = 5,
 			Parent = frame,
 		})
-		chatLines[i] = { Frame = frame, Avatar = avatar, Initial = initial, Label = label, Padding = padding }
+		local lineStroke = UI.Stroke(frame, YOU_GOLD, 1, 0.25)
+		lineStroke.Enabled = false
+		local lineGradient = UI.Gradient(frame, ColorSequence.new(Color3.fromRGB(255, 196, 70), Color3.fromRGB(255, 104, 170)), 0)
+		lineGradient.Enabled = false
+		local photo = UI.Create("ImageLabel", { Name = "Photo", Image = "", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Visible = false, ZIndex = 6, Parent = avatar })
+		UI.Corner(photo, UDim.new(1, 0))
+		chatLines[i] = { Frame = frame, Avatar = avatar, Initial = initial, Label = label, Padding = padding, Stroke = lineStroke, Gradient = lineGradient, Photo = photo }
 	end
 
 	local function nameHash(name: string): number
@@ -1856,18 +2149,25 @@ function LiveStream.Start(ctx)
 	end
 
 	type ChatOptions = { Badge: string?, Highlight: Color3?, Emote: boolean?, System: boolean? }
+	-- Style d'une ligne : Kind "you" (ton message : doré, ta photo) ou "mention" (on te parle : rose)
+	type LineStyle = { Highlight: Color3?, Kind: string? }
+	-- Ton pseudo dans les messages des autres (mention dorée)
+	K.nameTag = '<font color="#FFD34D"><b>' .. escape(K.name) .. "</b></font>"
 
 	-- Recycle la plus vieille ligne et l'amène tout en bas
-	local function writeLine(richText: string, name: string?, highlight: Color3?)
+	local function writeLine(richText: string, name: string?, style: LineStyle?)
 		nextLine = nextLine % CHAT_POOL + 1
 		local line = chatLines[nextLine]
 		chatOrder += 1
 		line.Frame.LayoutOrder = chatOrder
 		line.Frame.Visible = true
 		line.Label.Text = richText
+		local kind = style and style.Kind
+		local highlight = style and style.Highlight
+		local you, mention = kind == "you", kind == "mention"
 		if name then
 			line.Avatar.Visible = true
-			line.Avatar.BackgroundColor3 = hexColor(nameColor(name))
+			line.Avatar.BackgroundColor3 = you and YOU_GOLD or hexColor(nameColor(name))
 			line.Initial.Text = string.upper(string.sub(name, 1, 1))
 			line.Label.Position = UDim2.fromOffset(S.avatarSize + 4, 0)
 			line.Label.Size = UDim2.new(1, -(S.avatarSize + 4), 0, 0)
@@ -1876,17 +2176,40 @@ function LiveStream.Start(ctx)
 			line.Label.Position = UDim2.fromOffset(0, 0)
 			line.Label.Size = UDim2.fromScale(1, 0)
 		end
-		local pad = highlight and 3 or 0
-		line.Frame.BackgroundColor3 = highlight or Color3.new(0, 0, 0)
-		line.Frame.BackgroundTransparency = highlight and 0.5 or 1
+		local showPhoto = you and K.headshot ~= ""
+		line.Photo.Visible = showPhoto
+		if showPhoto and line.Photo.Image ~= K.headshot then
+			line.Photo.Image = K.headshot
+		end
+		local boxed = highlight ~= nil or you or mention
+		line.Gradient.Enabled = you
+		line.Stroke.Enabled = you or mention
+		if you then
+			line.Frame.BackgroundColor3 = WHITE
+			line.Stroke.Color = YOU_GOLD
+			line.Stroke.Transparency = 0.15
+			-- Petit flash à l'arrivée
+			line.Frame.BackgroundTransparency = 0.3
+			UI.Tween(line.Frame, 0.8, { BackgroundTransparency = 0.74 })
+		elseif mention then
+			line.Frame.BackgroundColor3 = MENTION_PINK
+			line.Frame.BackgroundTransparency = 0.7
+			line.Stroke.Color = MENTION_PINK
+			line.Stroke.Transparency = 0.45
+		else
+			line.Frame.BackgroundColor3 = highlight or Color3.new(0, 0, 0)
+			line.Frame.BackgroundTransparency = highlight and 0.5 or 1
+		end
+		local pad = boxed and 3 or 0
 		line.Padding.PaddingLeft = UDim.new(0, pad)
 		line.Padding.PaddingRight = UDim.new(0, pad)
-		line.Padding.PaddingTop = UDim.new(0, highlight and 2 or 0)
-		line.Padding.PaddingBottom = UDim.new(0, highlight and 2 or 0)
+		line.Padding.PaddingTop = UDim.new(0, boxed and 2 or 0)
+		line.Padding.PaddingBottom = UDim.new(0, boxed and 2 or 0)
 		line.Label.TextTransparency = 1
 		UI.Tween(line.Label, 0.22, { TextTransparency = 0 })
 	end
 
+	-- `message` est du texte brut (échappé ici) ; Replies.NAME = ton pseudo (mention)
 	local function pushChat(name: string, message: string, options: ChatOptions?)
 		if not chat.Visible then
 			return
@@ -1894,10 +2217,29 @@ function LiveStream.Start(ctx)
 		local badge = (options and options.Badge) or roleBadge(name)
 		local prefix = badge ~= "" and (badge .. " ") or ""
 		local body = escape(message)
+		local mention = string.find(body, Replies.NAME, 1, true) ~= nil
+		if mention then
+			body = string.gsub(body, Replies.NAME, function()
+				return K.nameTag
+			end)
+		end
 		if options and options.Emote then
 			body = '<font size="' .. (S.compact and 19 or 16) .. '">' .. body .. "</font>"
 		end
-		writeLine(prefix .. '<font color="' .. nameColor(name) .. '"><b>' .. escape(name) .. "</b></font>: " .. body, name, options and options.Highlight)
+		local highlight = options and options.Highlight
+		writeLine(prefix .. '<font color="' .. nameColor(name) .. '"><b>' .. escape(name) .. "</b></font>: " .. body, name, {
+			Highlight = highlight,
+			Kind = (mention and highlight == nil) and "mention" or nil,
+		})
+	end
+
+	-- Ton message (texte FILTRÉ par le serveur) : style doré "toi"
+	function K.pushPlayer(message: string)
+		if not chat.Visible then
+			return
+		end
+		local tag = '<font color="#FFF0B0" size="' .. (S.compact and 12 or 9) .. '">(' .. escape(Locale.T("you")) .. ")</font>"
+		writeLine('⭐ <font color="#FFD34D"><b>' .. escape(K.name) .. "</b></font> " .. tag .. ": " .. escape(message), K.name, { Kind = "you" })
 	end
 
 	-- Message système (raid, abonnement, don...) : sans pseudo, surligné
@@ -1905,13 +2247,34 @@ function LiveStream.Start(ctx)
 		if not chat.Visible then
 			return
 		end
-		writeLine("<i>" .. richText .. "</i>", nil, color)
+		writeLine("<i>" .. richText .. "</i>", nil, { Highlight = color })
 	end
 
 	local HOST_OPTIONS: ChatOptions = { Badge = "🎙️", Highlight = Color3.fromRGB(145, 70, 255) }
-	local function hostSays(message: string)
-		pushChat(HOST, message, HOST_OPTIONS)
+	-- bubble : true = elle le dit aussi dans sa bulle (grands moments), nil =
+	-- parfois (si la bulle est libre), false = seulement dans le chat
+	local function hostSays(message: string, bubble: boolean?)
+		pushChat(HOST_CHAT, message, HOST_OPTIONS)
 		S.talkUntil = os.clock() + 1.4
+		local now = os.clock()
+		if bubble == false or now < S.bubbleLockUntil then
+			return
+		end
+		if bubble or (now > S.bubbleUntil + 2 and random:NextNumber() < 0.5) then
+			K.say(message, 2.8)
+			if bubble == nil then
+				-- Elle parle d'elle-même : petit geste ou clin d'œil
+				local roll = random:NextNumber()
+				if roll < 0.35 then
+					K.gesture("Wave", 1.4)
+				elseif roll < 0.55 then
+					K.gesture("Heart", 1.4)
+				elseif roll < 0.75 then
+					S.mood, S.moodUntil = "Wink", now + 1.3
+					K.float("✨")
+				end
+			end
+		end
 	end
 
 	local function randomName(): string
@@ -1939,6 +2302,9 @@ function LiveStream.Start(ctx)
 	local function refreshPinned(followed: boolean)
 		if not followed then
 			pinnedLabel.Text = Locale.T("📌 <b>Follow</b> to unlock donations 💸")
+		elseif S.playerMessages == 0 then
+			-- v9 : invitation à écrire (tant que le joueur n'a rien écrit)
+			pinnedLabel.Text = Locale.T("📌 Write in the chat: <b>she reads everything</b>! 💬")
 		elseif hasButter() then
 			pinnedLabel.Text = Locale.T("📌 Thanks followers 💜 Bite the <b>butter</b>!")
 		else
@@ -1959,7 +2325,7 @@ function LiveStream.Start(ctx)
 			chat.Visible = true
 			chat.Position = UDim2.new(1, CHAT_W, 0, VIDEO_Y)
 			UI.Tween(chat, 0.35, { Position = UDim2.new(1, -VIDEO_X, 0, VIDEO_Y) }, Enum.EasingStyle.Back)
-			hostSays(Locale.T("chat is open!! 🎉"))
+			hostSays(Locale.T("chat is open!! 🎉"), true)
 		else
 			chat.Visible = false
 		end
@@ -1977,7 +2343,7 @@ function LiveStream.Start(ctx)
 		if shown then
 			butterScale.Scale = 0.2
 			UI.Tween(butterScale, 0.5, { Scale = 1 }, Enum.EasingStyle.Back)
-			hostSays(Locale.T("i brought BUTTER 🧈"))
+			hostSays(Locale.T("i brought BUTTER 🧈"), true)
 		end
 		refreshPinned(isFollowedOnServer())
 	end
@@ -1988,6 +2354,7 @@ function LiveStream.Start(ctx)
 	local shownStudio, shownFollowers = -1, -1
 	local ledRainbow = false
 	local qualityTag = ""
+	K.frameColors = strokeGradient.Color -- (cadre doré au studio 10)
 	local function refreshStudio()
 		local level, fans = studio(), followers()
 		if level == shownStudio and fans == shownFollowers then
@@ -2001,6 +2368,23 @@ function LiveStream.Start(ctx)
 		proMic.Visible = level >= 3
 		bokehGroup.Visible = level >= 5
 		qualityTag = level >= 7 and " · 4K" or (level >= 3 and " · HD" or "")
+		-- v9 : chaque niveau ajoute quelque chose de visible
+		K.tubes.Visible = level >= 4
+		S.rgbHeadset = level >= 6
+		K.hoodieLogo.Text = level >= 6 and "★" or "♥"
+		K.hoodieLogo.TextColor3 = level >= 6 and Color3.fromRGB(255, 226, 110) or WHITE
+		if level < 6 then
+			for _, ear in ipairs(earGlows) do
+				ear.BackgroundColor3 = PHONES_GLOW
+			end
+			for _, stroke in ipairs(cupStrokes) do
+				stroke.Color = PHONES_GLOW
+			end
+		end
+		K.beams.Visible = level >= 8
+		K.crown.Visible = level >= 9
+		strokeGradient.Color = level >= 10 and GOLD_FRAME or K.frameColors
+		cardStroke.Thickness = level >= 10 and 3 or 2
 		trophy.Visible = fans >= 5
 		if fans >= 15 then
 			trophyGradient.Color = ColorSequence.new(Color3.fromRGB(200, 250, 255), Color3.fromRGB(90, 180, 255))
@@ -2067,8 +2451,9 @@ function LiveStream.Start(ctx)
 	end
 	refreshGoal()
 
-	local function addFollowers(amount: number)
+	local function addFollowers(amount: number, who: string?)
 		followerCount += amount
+		S.latestFollower = who or randomName() -- (widget "Nouvel abonné")
 		if followerCount >= goal then
 			-- Objectif atteint : on fête ça, puis on vise le palier suivant
 			popWord(Locale.T("GOAL!"), UDim2.new(0.5, 0, 0, GOAL_Y - 16), Color3.fromRGB(255, 214, 40))
@@ -2078,7 +2463,7 @@ function LiveStream.Start(ctx)
 			end
 			thanks()
 			later(0.6, function()
-				hostSays(Locale.T("we hit the goal!! thank you 😭💜"))
+				hostSays(Locale.T("we hit the goal!! thank you 😭💜"), true)
 			end)
 			goalStart = goal
 			goal = nextGoal(followerCount)
@@ -2107,7 +2492,7 @@ function LiveStream.Start(ctx)
 			followStroke.Color = Color3.fromRGB(120, 110, 150)
 			if announce and wasShown == false then
 				systemMessage(Locale.T("💜 You're now following <b>%s</b>!", HOST), Color3.fromRGB(120, 60, 200))
-				hostSays(Locale.T("thanks for the follow!! donations are open 💸"))
+				hostSays(Locale.T("thanks for the follow!! donations are open 💸"), true)
 			end
 		else
 			followButton.Text = Locale.T("💜 Follow")
@@ -2137,7 +2522,8 @@ function LiveStream.Start(ctx)
 		end
 		viewers += 1
 		addLikes(10, true)
-		addFollowers(1)
+		addFollowers(1, K.name) -- c'est toi le nouvel abonné !
+		S.goalTimer, S.goalMode = 0.4, 0
 		wow(0.8)
 		startGesture("Wave", 1.4)
 		refreshFollow(true)
@@ -2422,7 +2808,7 @@ function LiveStream.Start(ctx)
 		if #bites >= BUTTER_BITES then
 			regenerateButter()
 			later(0.3, function()
-				hostSays(Locale.T("out of butter... time for a refill! 🧈"))
+				hostSays(Locale.T("out of butter... time for a refill! 🧈"), true)
 			end)
 		end
 	end)
@@ -2458,7 +2844,7 @@ function LiveStream.Start(ctx)
 		local phase = meal.Phase
 		if phase == "Wait" then
 			mealBusy = false
-			if meal.T > 0 or now < S.gestureUntil then
+			if meal.T > 0 or now < S.gestureUntil or now < S.holdMealUntil then
 				return
 			end
 			if bitesSinceSip >= 3 and random:NextNumber() < 0.5 then
@@ -2619,7 +3005,7 @@ function LiveStream.Start(ctx)
 			end)
 		end
 		later(delay + 0.6, function()
-			hostSays(Locale.T("thanks for the raid %s!! 💜", raider))
+			hostSays(Locale.T("thanks for the raid %s!! 💜", raider), true)
 		end)
 		later(delay + 3.1, function()
 			chatTitle.Text = "💬 <b>" .. Locale.T("Stream chat") .. "</b>"
@@ -2635,7 +3021,7 @@ function LiveStream.Start(ctx)
 		if roll < 0.05 then
 			hostSays(pick(TXT.hostMessages, random))
 		elseif roll < 0.09 then
-			local mod = pick({ "Tonton_Jean", "Lulu_ASMR", "Moustache_Pro", "Madeleine_Proust" }, random)
+			local mod = pick(MOD_LIST, random)
 			pushChat(mod, pick(TXT.modMessages, random))
 		elseif roll < 0.15 and hasButter() then
 			pushChat(randomName(), pick(TXT.butterNags, random))
@@ -2648,8 +3034,95 @@ function LiveStream.Start(ctx)
 		end
 	end
 
+	------------------------------------------------------------------
+	-- v9 : le joueur a écrit (texte FILTRÉ par le serveur + ses sujets)
+	------------------------------------------------------------------
+	-- Réaction de la streameuse : expression, geste, emoji, cœurs
+	function K.react(mood: any)
+		local now = os.clock()
+		S.mood = mood.Expression or "Happy"
+		S.moodUntil = now + 2.8
+		S.lookTargetX, S.lookTargetY = 0, 0 -- elle te répond face caméra
+		S.nextLook = now + 2.6
+		if mood.Gesture then
+			K.gesture(mood.Gesture, 2.1)
+		end
+		if mood.Float then
+			K.float(mood.Float)
+		end
+		for _ = 1, tonumber(mood.Hearts) or 0 do
+			spawnHeart()
+		end
+		if S.mood == "Shh" or S.mood == "Vibe" then
+			soundWave(nil)
+		end
+	end
+
+	function K.onPlayerMessage(message: string, topics: { string })
+		if not chat.Visible then
+			return
+		end
+		local now = os.clock()
+		S.playerMessages += 1
+		local first = S.playerMessages == 1
+		local normalized = ChatTopics.Normalize(message)
+		local repeated = normalized == S.lastPlayerText
+		S.lastPlayerText = normalized
+		S.quietUntil = now + QUIET_TIME
+		if first then
+			refreshPinned(isFollowed()) -- (plus besoin de l'invitation à écrire)
+		end
+		K.pushPlayer(message)
+		addLikes(random:NextInteger(3, 12), true)
+		spawnHeart()
+
+		local plan = Replies.Build({
+			Topics = topics,
+			Lang = Locale.GetLanguage(),
+			Text = message,
+			Normalized = normalized,
+			First = first,
+			Repeat = repeated,
+			Random = random,
+		})
+		local delay = plan.Host.Delay
+
+		-- 1) Elle lit ton message à voix haute (bulle), les yeux sur le chat
+		local quote = escape(Replies.Quote(message, S.compact and 40 or 52))
+		K.sayRich('<font color="#8C5BE0"><b>' .. escape(K.name) .. '</b></font> <font color="#6F5E8C"><i>“' .. quote .. "”</i></font>", delay + 0.4)
+		S.bubbleLockUntil = now + delay + 3.4
+		S.lookTargetX, S.lookTargetY = 1.6, -0.3
+		S.nextLook = now + delay
+		S.leanUntil = now + delay
+		S.talkUntil = now + math.min(delay, 1.4)
+		S.holdMealUntil = now + delay + 2.6
+
+		-- 2) Sa réponse (bulle + chat) et sa réaction
+		later(delay, function()
+			hostSays(plan.Host.Text, false)
+			K.say(plan.Host.Text, 3.2)
+			K.react(plan.Mood)
+		end)
+
+		-- 3) Les spectateurs (et un modo gentil si besoin), étalés sur 1 à 6 s
+		local usedNames: { [string]: boolean } = {}
+		for _, line in ipairs(plan.Viewers) do
+			local name = line.Mod and MOD_LIST[random:NextInteger(1, #MOD_LIST)] or randomName()
+			for _ = 1, 3 do
+				if not usedNames[name] then
+					break
+				end
+				name = randomName()
+			end
+			usedNames[name] = true
+			later(line.Delay, function()
+				pushChat(name, line.Text)
+			end)
+		end
+	end
+
 	-- Mode compact (petit écran : le slot est réduit) : texte du chat plus
-	-- gros, message épinglé et champ de saisie cachés
+	-- gros, message épinglé caché, champ de saisie plus grand
 	local function applyCompact()
 		local scale = 1
 		if type(ctx.GetSlotScale) == "function" then
@@ -2675,9 +3148,12 @@ function LiveStream.Start(ctx)
 			extra.Visible = not compact
 		end
 		chatTitle.TextSize = compact and 15 or 12
+		-- v9 : le champ de saisie reste là (plus haut et plus gros), la bulle s'élargit
+		K.input.SetCompact(compact)
+		K.layoutBubble(compact)
 		local top = compact and TITLE_H + 3 or LIST_Y
 		chatList.Position = UDim2.fromOffset(0, top)
-		chatList.Size = UDim2.new(1, 0, 0, compact and (VIDEO_H - top - 4) or LIST_H)
+		chatList.Size = UDim2.new(1, 0, 0, VIDEO_H - top - K.input.Height - 8)
 	end
 	applyCompact()
 
@@ -2715,19 +3191,22 @@ function LiveStream.Start(ctx)
 
 	-- Une expression = yeux + sourcils + bouche + joues
 	local function applyExpression(expression: string, now: number)
-		local blinking = now < S.blinkUntil
-		local eyeMode = "Open"
-		if expression == "Chew" or expression == "Thanks" then
-			eyeMode = "Happy"
-		elseif expression == "Sip" or (blinking and (expression == "Idle" or expression == "Talk")) then
+		local spec = EXPRESSIONS[expression] or EXPRESSIONS.Idle
+		local eyeMode = spec.Eyes or "Open"
+		if spec.Blink and now < S.blinkUntil then
 			eyeMode = "Closed"
 		end
-		local big = expression == "Wow"
-		for _, eye in ipairs(eyes) do
-			eye.Open.Visible = eyeMode == "Open"
-			eye.Happy.Visible = eyeMode == "Happy"
-			eye.Relaxed.Visible = eyeMode == "Closed"
-			if eyeMode == "Open" then
+		local big = spec.Big == true
+		for index, eye in ipairs(eyes) do
+			local mode = eyeMode
+			if mode == "Wink" then
+				mode = index == 1 and "Happy" or "Open" -- clin d'œil (œil gauche)
+			end
+			eye.Open.Visible = mode == "Open"
+			eye.Happy.Visible = mode == "Happy"
+			eye.Relaxed.Visible = mode == "Closed"
+			K.heartEyes[index].Visible = mode == "Heart"
+			if mode == "Open" then
 				eye.Sclera.Size = big and UDim2.fromOffset(12.5, 14) or UDim2.fromOffset(11, 12)
 				eye.Iris.Size = big and UDim2.fromOffset(7.5, 8.5) or UDim2.fromOffset(8.5, 9.5)
 				local w, h = eye.Sclera.Size.X.Offset, eye.Sclera.Size.Y.Offset
@@ -2735,31 +3214,29 @@ function LiveStream.Start(ctx)
 				eye.Lash.Position = UDim2.fromOffset(7, big and 1.2 or 2.5)
 			end
 			-- Sourcils
-			local browY, browRot = 27, eye.Side * 6
-			if big then
-				browY, browRot = 23, eye.Side * -10
-			elseif expression == "Bite" then
-				browY, browRot = 25, eye.Side * -4
-			elseif expression == "Thanks" or expression == "Chew" then
-				browY, browRot = 26, eye.Side * -6
-			elseif expression == "Sip" then
-				browY, browRot = 27, eye.Side * 2
+			local browY, browRot = spec.BrowY or 27, eye.Side * (spec.Brow or 6)
+			if spec.Raise and index == 1 then
+				browY, browRot = 23.5, eye.Side * -8 -- un sourcil levé (elle réfléchit)
 			end
 			eye.Brow.Position = UDim2.fromOffset(eye.X, browY)
 			eye.Brow.Rotation = browRot
 		end
 		-- Bouche
 		local open, w, h = false, 10, 8
-		if expression == "Bite" then
-			open, w, h = true, 14, 12
-		elseif big then
-			open, w, h = true, 8, 10
-		elseif expression == "Chew" then
+		local shape = spec.Mouth
+		if TALKY[expression] and now < S.talkUntil then
+			shape = "Talk" -- elle parle (sa réponse) en gardant ses yeux et sourcils
+		end
+		if type(shape) == "table" then
+			open, w, h = true, shape[1], shape[2]
+		elseif shape == "Chew" then
 			open, w, h = true, 9, 2.5 + math.abs(math.sin(S.clock * 15)) * 4
-		elseif expression == "Talk" then
+		elseif shape == "Talk" then
 			open, w, h = true, 8, 2 + math.abs(math.sin(S.clock * 13)) * 5
-		elseif expression == "Sip" then
-			open, w, h = true, 4, 4
+		elseif shape == "Laugh" then
+			open, w, h = true, 12, 5 + math.abs(math.sin(S.clock * 14)) * 4.5
+		elseif shape == "Yawn" then
+			open, w, h = true, 7, 6 + math.abs(math.sin(S.clock * 1.7)) * 6
 		end
 		mouth.Visible = open
 		if open then
@@ -2767,21 +3244,29 @@ function LiveStream.Start(ctx)
 			teeth.Visible = h >= 7
 			tongue.Visible = h >= 6
 		end
-		smile.Visible = not open and expression ~= "Thanks"
-		catMouth.Visible = expression == "Thanks"
-		-- Joues
+		K.frown.Visible = spec.Frown == true and not open
+		catMouth.Visible = spec.Cat == true and not open
+		smile.Visible = not open and not spec.Frown and not spec.Cat
+		-- Joues, larme (seulement quand l'expression change)
 		if expression ~= S.shownExpression then
 			S.shownExpression = expression
-			local blush = (expression == "Thanks" or expression == "Wow") and 0.15 or (expression == "Chew" and 0.3 or 0.5)
+			local puff = spec.Puff == true
 			for _, b in ipairs(blushes) do
-				b.BackgroundTransparency = blush
-				b.Size = UDim2.fromOffset(expression == "Chew" and 12 or 10, expression == "Chew" and 6 or 5)
+				b.BackgroundTransparency = spec.Blush or 0.5
+				b.Size = UDim2.fromOffset(puff and 12 or 10, puff and 6 or 5)
 			end
+			K.tear.Visible = spec.Tear == true
 		end
 	end
 
 	ctx.OnRender(function(rawDt: number)
-		local dt = math.min(rawDt, 0.1)
+		-- v9 : 30 images/s au plus (le dt s'accumule entre deux passages)
+		S.frameAcc += rawDt
+		if S.frameAcc < 1 / 31 then
+			return
+		end
+		local dt = math.min(S.frameAcc, 0.1)
+		S.frameAcc = 0
 		S.visibilityTimer -= dt
 		if S.visibilityTimer <= 0 then
 			S.visibilityTimer = 0.5
@@ -2820,6 +3305,8 @@ function LiveStream.Start(ctx)
 		local expression = "Idle"
 		if now < S.thanksUntil then
 			expression = "Thanks"
+		elseif now < S.moodUntil and S.mood ~= "" then
+			expression = S.mood -- v9 : réaction à ton message
 		elseif now < S.wowUntil then
 			expression = "Wow"
 		elseif now < S.biteUntil then
@@ -2855,12 +3342,24 @@ function LiveStream.Start(ctx)
 		-- Balancement doux (plus rapide quand elle mâche)
 		local chewing = expression == "Chew"
 		local bob = chewing and math.abs(math.sin(S.clock * 9)) * 1.6 or math.sin(S.clock * 2) * 1.2
-		streamer.Position = UDim2.new(0.5, 0, 0, STREAMER_Y + bob)
+		if expression == "Laugh" then
+			bob = math.abs(math.sin(S.clock * 16)) * 2.2 -- elle rit : ça la secoue
+		elseif expression == "Vibe" then
+			bob = math.abs(math.sin(S.clock * 6)) * 2.5 -- elle danse
+		end
+		S.lean = approach(S.lean, now < S.leanUntil and 5 or 0, 6, dt)
+		streamer.Position = UDim2.new(0.5, S.lean, 0, STREAMER_Y + bob)
 		local tilt = chewing and math.sin(S.clock * 7) * 3.5 or math.sin(S.clock * 1.3) * 2.5
-		if expression == "Thanks" then
-			tilt = 8
+		if HEAD_TILTS[expression] then
+			tilt = HEAD_TILTS[expression]
 		elseif expression == "Talk" then
 			tilt = math.sin(S.clock * 4) * 3
+		elseif expression == "Laugh" then
+			tilt = math.sin(S.clock * 19) * 4
+		elseif expression == "Vibe" then
+			tilt = math.sin(S.clock * 6) * 8
+		elseif expression == "Pout" then
+			tilt = -5 + math.sin(S.clock * 11) * 1.5
 		end
 		head.Rotation = approach(head.Rotation, tilt, 12, dt)
 
@@ -2872,6 +3371,22 @@ function LiveStream.Start(ctx)
 			elseif S.gesture == "Wave" then
 				leftArm.TX, leftArm.TY = -50 + math.sin(S.clock * 14) * 5, HEAD_Y + 8
 				rightArm.TX, rightArm.TY = rightArm.RestX, rightArm.RestY
+			elseif S.gesture == "Think" then -- main au menton
+				leftArm.TX, leftArm.TY = -9, MOUTH_Y + 11
+				rightArm.TX, rightArm.TY = rightArm.RestX, rightArm.RestY
+			elseif S.gesture == "Cheer" then -- bras en l'air
+				local lift = math.sin(S.clock * 10) * 4
+				leftArm.TX, leftArm.TY = -44, HEAD_Y - 4 + lift
+				rightArm.TX, rightArm.TY = 44, HEAD_Y - 4 - lift
+			elseif S.gesture == "Cheeks" then -- main sur la joue, baguettes levées
+				leftArm.TX, leftArm.TY = -21, MOUTH_Y - 5
+				rightArm.TX, rightArm.TY = 40, HEAD_Y + 4 + math.sin(S.clock * 7) * 2
+			elseif S.gesture == "Shh" then -- doigt sur la bouche
+				leftArm.TX, leftArm.TY = -3, MOUTH_Y + 3
+				rightArm.TX, rightArm.TY = rightArm.RestX, rightArm.RestY
+			elseif S.gesture == "Point" then -- montre le chat avec ses baguettes
+				leftArm.TX, leftArm.TY = leftArm.RestX, leftArm.RestY
+				rightArm.TX, rightArm.TY = 54 + math.sin(S.clock * 8) * 2, SHOULDER_Y - 28
 			else
 				leftArm.TX, leftArm.TY = leftArm.RestX + math.sin(S.clock * 1.1) * 1.5, leftArm.RestY
 				rightArm.TX, rightArm.TY = rightArm.RestX, rightArm.RestY + math.sin(S.clock * 1.3) * 1.2
@@ -2884,7 +3399,15 @@ function LiveStream.Start(ctx)
 		for _, arm in ipairs({ leftArm, rightArm }) do
 			arm.X = approach(arm.X, arm.TX, 14, dt)
 			arm.Y = approach(arm.Y, arm.TY, 14, dt)
-			solveArm(arm, bob)
+			solveArm(arm, bob, S.lean)
+		end
+		-- Cœur avec les mains : les baguettes disparaissent (sinon elles barrent son visage)
+		local hideSticks = S.gesture == "Heart" and not mealBusy
+		if hideSticks ~= S.sticksHidden then
+			S.sticksHidden = hideSticks
+			for _, stick in ipairs(rightArm.Sticks) do
+				stick.Visible = not hideSticks
+			end
 		end
 		if S.gesture == "Heart" and effectsOn() and math.floor(S.clock * 3) ~= math.floor((S.clock - dt) * 3) then
 			spawnHeart("💖")
@@ -2892,11 +3415,60 @@ function LiveStream.Start(ctx)
 
 		-- Casque qui brille au rythme, pastilles, ruban LED, néon, lumières
 		local glow = 0.5 + 0.5 * math.sin(S.clock * 3)
+		local rgb = S.rgbHeadset and Color3.fromHSV((S.clock * 0.18) % 1, 0.5, 1) or nil -- casque RGB (studio 6)
 		for _, stroke in ipairs(cupStrokes) do
 			stroke.Transparency = 0.05 + glow * 0.5
+			if rgb then
+				stroke.Color = rgb
+			end
 		end
 		for _, ear in ipairs(earGlows) do
 			ear.BackgroundTransparency = glow * 0.55
+			if rgb then
+				ear.BackgroundColor3 = rgb
+			end
+		end
+		-- v9 : tubes néon (studio 4), faisceaux (studio 8)
+		if K.tubes.Visible then
+			local offset = (S.clock * 0.2) % 1 - 0.5
+			for _, gradient in ipairs(K.tubeGradients) do
+				gradient.Offset = Vector2.new(offset, offset)
+			end
+		end
+		if K.beams.Visible then
+			for i, beam in ipairs(K.beamFrames) do
+				beam.Rotation = math.sin(S.clock * 0.8 + i * 2.1) * 24
+			end
+		end
+		-- v9 : yeux en cœur qui battent, emojis qui s'envolent, bulle qui se referme
+		if S.shownExpression == "Love" then
+			local size = math.floor(15 + math.abs(math.sin(S.clock * 8)) * 3)
+			for _, heartEye in ipairs(K.heartEyes) do
+				heartEye.TextSize = size
+			end
+		end
+		for _, item in ipairs(K.floats) do
+			local label = item.Label
+			if label.Visible then
+				local t = (now - item.Start) / 1.7
+				if t >= 1 then
+					label.Visible = false
+				else
+					label.Position = UDim2.new(0.5, item.X + math.sin(t * 6) * 4, 0, HEAD_Y - 4 - t * 46)
+					label.TextTransparency = t * t
+					label.Rotation = math.sin(t * 5) * 12
+				end
+			end
+		end
+		if K.bubble.Visible and now >= S.bubbleUntil and not S.bubbleClosing then
+			S.bubbleClosing = true
+			UI.Tween(K.bubbleScale, 0.16, { Scale = 0 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+			later(0.17, function()
+				if S.bubbleClosing then
+					S.bubbleClosing = false
+					K.bubble.Visible = false
+				end
+			end)
 		end
 		liveDot.BackgroundTransparency = math.sin(S.clock * 5) > 0 and 0 or 0.6
 		avatarLive.BackgroundTransparency = math.sin(S.clock * 5) > 0 and 0 or 0.15
@@ -2919,7 +3491,9 @@ function LiveStream.Start(ctx)
 				dot.Frame.BackgroundTransparency = dot.Base + 0.12 * math.sin(S.clock * 1.3 + dot.Phase)
 			end
 		end
-		caret.Visible = math.floor(S.clock * 1.6) % 2 == 0
+		if chat.Visible then
+			K.input.Step(now) -- v9 : champ de saisie (attente, invitation, erreurs)
+		end
 		if followShine.Visible then
 			followShineGradient.Offset = Vector2.new(((S.clock * 0.5) % 2) - 1, 0)
 		end
@@ -3000,8 +3574,15 @@ function LiveStream.Start(ctx)
 		end
 		shownViewers += (viewers - shownViewers) * math.min(1, dt * 4)
 		local rising = viewers > shownViewers + 0.5
-		viewersLabel.Text = formatCount(math.floor(shownViewers + 0.5))
-		viewersLabel.TextColor3 = rising and Color3.fromRGB(140, 255, 170) or WHITE
+		local viewersText = formatCount(math.floor(shownViewers + 0.5))
+		if viewersText ~= S.viewersText then
+			S.viewersText = viewersText
+			viewersLabel.Text = viewersText
+		end
+		if rising ~= S.rising then
+			S.rising = rising
+			viewersLabel.TextColor3 = rising and Color3.fromRGB(140, 255, 170) or WHITE
+		end
 
 		-- Likes : montent tout seuls avec les spectateurs
 		S.likesTimer -= dt
@@ -3010,13 +3591,34 @@ function LiveStream.Start(ctx)
 			addLikes(math.max(0, math.floor(viewers * random:NextNumber(0, 0.004) + random:NextNumber(0, 1.2))), false)
 		end
 		shownLikes += (likes - shownLikes) * math.min(1, dt * 5)
-		likesLabel.Text = "❤ " .. formatCount(math.floor(shownLikes + 0.5))
+		local likesText = "❤ " .. formatCount(math.floor(shownLikes + 0.5))
+		if likesText ~= S.likesText then
+			S.likesText = likesText
+			likesLabel.Text = likesText
+		end
 
 		-- Nouveaux abonnés de temps en temps (barre d'objectif)
 		S.fanTimer -= dt
 		if S.fanTimer <= 0 then
 			S.fanTimer = random:NextNumber(2.5, 6) / (1 + followers() * 0.08)
 			addFollowers(random:NextInteger(1, 2))
+		end
+
+		-- v9 : le widget d'objectif alterne avec le dernier abonné
+		S.goalTimer -= dt
+		if S.goalTimer <= 0 then
+			S.goalTimer = 6
+			local showFollower = S.goalMode == 0 and S.latestFollower ~= ""
+			S.goalMode = showFollower and 1 or 0
+			if showFollower then
+				K.goalLabel.Text = Locale.T("🆕 New follower: <b>%s</b>", escape(S.latestFollower))
+				K.goalLabel.Size = UDim2.new(1, -14, 1, 0)
+				goalCount.Visible = false
+			else
+				K.goalLabel.Text = Locale.T("💜 Follower goal")
+				K.goalLabel.Size = UDim2.new(0.55, -7, 1, 0)
+				goalCount.Visible = true
+			end
 		end
 
 		-- Chaque seconde : durée du live dans le titre
@@ -3057,9 +3659,16 @@ function LiveStream.Start(ctx)
 		if S.chatTimer <= 0 then
 			local interval = math.clamp(1.4 / (1 + followers() * 0.15), 0.25, 1.4)
 			S.chatTimer = random:NextNumber(0.6, 1.3) * interval
-			chatTick()
+			if now < S.quietUntil and random:NextNumber() < 0.75 then
+				S.chatTimer = math.max(S.chatTimer, 1.1) -- v9 : on lit ton message et les réponses
+			else
+				chatTick()
+			end
 		end
 		if chat.Visible then
+			if now < S.quietUntil then
+				S.nextRaid = math.max(S.nextRaid, 8)
+			end
 			S.nextRaid -= dt
 			if S.nextRaid <= 0 then
 				S.nextRaid = random:NextNumber(70, 140)

@@ -82,6 +82,12 @@ local SPECIES: { [string]: Species } = {
 		Likes = { Perch = 3, Eat = 0.8, Drink = 0.6, Play = 0.6 } },
 	Dragon = { Move = "Fly", Speed = 52, Anchor = Vector2.new(50, 98), Native = -1, Home = 1, Altitude = 22,
 		Likes = { Perch = 1.4, Sleep = 1.5, Play = 2, Eat = 1 } },
+	-- v9 : chaton (grimpe sur les lits, canapés, chaises...) et hérisson
+	Kitten = { Move = "Walk", Speed = 46, Anchor = Vector2.new(52, 98), Native = 1, Home = 1.4, Climb = true,
+		Rest = NumberRange.new(8, 18), Curl = 18,
+		Likes = { Sleep = 2.6, Play = 2.4, Scratch = 1.6, Perch = 1.6, Sit = 1.6, Eat = 1.2, Drink = 1, Enter = 1 } },
+	Hedgehog = { Move = "Walk", Speed = 24, Anchor = Vector2.new(46, 96), Native = -1, Home = 1.2,
+		Likes = { Eat = 2.6, Drink = 1.6, Sleep = 1.6, Play = 1, Enter = 0.8 } },
 }
 
 local EMOTES: { [string]: { string } } = {

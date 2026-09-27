@@ -21,9 +21,12 @@
 		OwnedSizes = { [id] = true }, OwnedWallpapers = { [id] = true }, OwnedFloors = { [id] = true },
 		Items = { [itemId] = nombre possédé },
 		Rooms = { { Id = "R1", Type = "Living", Slot = 1..MaxRooms, Wallpaper = id, Floor = id,
-			Placed = { { I = itemId, X = 0..1, Y = 0..1, S = 0.6..1.6, Z = 0..999 }, ... } }, ... },
+			Placed = { { I = itemId, X = 0..1, Y = 0..1, S = 0.6..1.6, Z = 0..999, F = true? }, ... } }, ... },
 		NextRoom = 2, -- prochain numéro d'Id de pièce
 	}
+	F (facultatif) = objet retourné gauche <-> droite (chaise tournée vers la
+	table...). Petits objets posés SUR un meuble : Formulas.CanGoOnFurniture
+	(Y jusqu'à Config.House.TabletopMinY), même règle que l'éditeur.
 	Emplacement (Slot) : (étage - 1) x Columns + colonne ; étage 1 = rez-de-chaussée.
 	Les anciennes sauvegardes (une seule pièce : Wallpaper / Floor / Placed)
 	deviennent un salon.
@@ -93,14 +96,16 @@ local function T(player: Player, text: string, ...): string
 	return services.GameService:T(player, text, ...)
 end
 
--- Un objet posé, corrigé : coordonnées bornées, dans la bonne zone
+-- Un objet posé, corrigé : coordonnées bornées, dans la bonne zone.
+-- F = true : dessin retourné (miroir gauche <-> droite), absent sinon.
 local function normalizeEntry(entry, item)
 	local minY, maxY = FLOOR_MIN_Y, 1
 	if item.Placement == "Wall" then
 		minY, maxY = 0, WALL_MAX_Y
-	elseif item.Size <= HOUSE.TabletopMaxSize then
-		-- Petit objet : peut être posé sur un meuble (plus haut que le sol)
-		minY = HOUSE.TabletopMinY
+	else
+		-- Petit objet qui peut être posé SUR un meuble (table, étagère, lit...) :
+		-- il peut monter plus haut que le sol (même règle que le client)
+		minY = math.min(FLOOR_MIN_Y, Formulas.GetHouseFloorMinY(item))
 	end
 	local x = math.clamp(numberOr(entry.X, 0.5), 0, 1)
 	local y = math.clamp(numberOr(entry.Y, (minY + maxY) / 2), minY, maxY)
@@ -112,6 +117,7 @@ local function normalizeEntry(entry, item)
 		Y = math.clamp(round(y, 0.0001), minY, maxY),
 		S = math.clamp(round(s, 0.001), MIN_SCALE, MAX_SCALE),
 		Z = z,
+		F = entry.F == true or nil,
 	}
 end
 

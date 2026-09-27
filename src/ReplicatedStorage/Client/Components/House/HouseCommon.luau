@@ -9,7 +9,10 @@
 	    emplacement (Slot), son papier peint, son sol et ses objets ;
 	  - prix (Formulas.GetHouseItemPrice), exemplaires possédés / posés,
 	    confort et bonus (mêmes formules que le serveur) ;
-	  - bornes des zones "Wall" (haut) / "Floor" (bas) de la pièce ;
+	  - bornes des zones "Wall" (haut) / "Floor" (bas) de la pièce, et
+	    règle "peut être posé SUR un meuble" (CanGoOnFurniture, même règle
+	    que le serveur : Formulas.CanGoOnFurniture) ;
+	  - objets posés { I, X, Y, S, Z, F? } : F = dessin retourné (miroir) ;
 	  - appel du serveur : Net.Function("House"):InvokeServer(action, arg)
 	    protégé par pcall ;
 	  - palette kawaii (roses, lilas, menthe) utilisée par tous les modules
@@ -38,6 +41,7 @@ export type Item = {
 	Comfort: number,
 	MaxOwned: number?,
 	Order: number?,
+	Tabletop: boolean?, -- true / false : force "peut être posé sur un meuble"
 }
 
 export type SizeDef = {
@@ -80,8 +84,8 @@ export type Style = {
 
 export type Category = { Id: string, Name: string, Icon: string, Order: number? }
 
--- Un objet posé (format du serveur)
-export type Placed = { I: string, X: number, Y: number, S: number, Z: number }
+-- Un objet posé (format du serveur) ; F = dessin retourné (miroir)
+export type Placed = { I: string, X: number, Y: number, S: number, Z: number, F: boolean? }
 
 -- Une pièce (format du serveur) ; Slot = (étage - 1) x Columns + colonne,
 -- étage 1 = rez-de-chaussée
@@ -109,6 +113,7 @@ export type HouseConfig = {
 	WallRatio: number,
 	TabletopMaxSize: number?,
 	TabletopMinY: number?,
+	LegacyTabletopSize: number?,
 	RoomCost: number,
 	RoomCostGrowth: number,
 	HarmonyBonus: number,
@@ -218,6 +223,7 @@ local function readPlaced(list: any): { Placed }
 					Y = tonumber(entry.Y) or 0.8,
 					S = tonumber(entry.S) or 1,
 					Z = tonumber(entry.Z) or 0,
+					F = entry.F == true or nil,
 				})
 			end
 		end
@@ -502,6 +508,23 @@ end
 -- Zones de la pièce
 ----------------------------------------------------------------------
 
+-- Vrai si l'objet peut être posé SUR un meuble (table, étagère, lit...) :
+-- même règle que le serveur (Formulas.CanGoOnFurniture)
+local tabletopCache: { [string]: boolean } = {}
+function HouseCommon.CanGoOnFurniture(item: Item?): boolean
+	if not item then
+		return false
+	end
+	local cached = tabletopCache[item.Id]
+	if cached ~= nil then
+		return cached
+	end
+	local ok, value = pcall(Formulas.CanGoOnFurniture, item)
+	local result = ok and value == true
+	tabletopCache[item.Id] = result
+	return result
+end
+
 -- Bornes (Y) de la zone d'un objet : "Wall" = haut, "Floor" = bas
 -- (un peu plus serrées que celles du serveur : l'objet reste bien dans sa zone)
 function HouseCommon.ZoneBounds(placement: string): (number, number)
@@ -534,7 +557,7 @@ function HouseCommon.ClampPosition(item: Item, x: number, y: number, scale: numb
 			maxY = minY
 		end
 	else
-		if onSurface == true and item.Size <= (HouseCommon.Config.TabletopMaxSize or 0) then
+		if onSurface == true and HouseCommon.CanGoOnFurniture(item) then
 			minY = HouseCommon.Config.TabletopMinY or minY
 		end
 		-- Objet posé par ses pieds : sa tête ne traverse pas le plafond

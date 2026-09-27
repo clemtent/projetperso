@@ -15,8 +15,10 @@
 	   (Notify { Type = "Achievement", Id, Name, Icon, Reward, BadgeAwarded }) :
 	   médaillon qui tourne devant des rayons, titre, nom, récompense, et
 	   "🏅 Badge Roblox obtenu !" si le serveur a donné un vrai badge.
-	   Non bloquante (les clics passent au travers), en haut de l'écran, avec
-	   une file d'attente (les suivants s'enchaînent, au-delà de 3 : résumé).
+	   Non bloquante (les clics passent au travers : on peut continuer à
+	   cliquer le gros bouton), en haut de l'écran, avec une file d'attente
+	   (les suivants s'enchaînent, au-delà de 3 : résumé). v9 : petit ✕ dans
+	   le coin (hors du gros bouton) pour la fermer tout de suite.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -297,7 +299,7 @@ local function present(payload, summary: string?)
 		Font = Theme.Fonts.Title,
 		TextColor3 = tier.Ring,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Size = UDim2.new(1, -150, 0, 20),
+		Size = UDim2.new(1, -180, 0, 20), -- (place pour le ✕)
 		Position = UDim2.fromOffset(134, 14),
 		MaxTextSize = 16,
 		ZIndex = 4,
@@ -387,14 +389,35 @@ local function present(payload, summary: string?)
 		medallion.Frame.Rotation = math.sin(t * 3) * 6
 	end)
 
-	task.delay(SHOW_TIME, function()
+	-- Sortie (fin du minuteur ou ✕) : une seule fois
+	local leaving = false
+	local function dismiss()
+		if leaving then
+			return
+		end
+		leaving = true
 		UIUtil.Tween(holder, 0.35, { Position = UDim2.new(0.5, 0, 0, -170) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 		UIUtil.Tween(group, 0.35, { GroupTransparency = 1 })
-		task.wait(0.38)
-		connection:Disconnect()
-		holder:Destroy()
-		showNext()
-	end)
+		task.delay(0.38, function()
+			connection:Disconnect()
+			holder:Destroy()
+			showNext()
+		end)
+	end
+	UIUtil.CloseButton({
+		Name = "Close",
+		Size = 26,
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -8, 0, 8),
+		ZIndex = 6,
+		Shadow = false,
+		Parent = card,
+		OnClose = function()
+			SoundManager.Play("Click", 1.1)
+			dismiss()
+		end,
+	})
+	task.delay(SHOW_TIME, dismiss)
 end
 
 showNext = function()

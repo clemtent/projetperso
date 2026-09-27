@@ -12,10 +12,16 @@
 	  - VUE PIÈCE : la pièce kawaii (House/HouseRoom) de la pièce choisie,
 	    bouton "⬅ Maison" + onglets des pièces dans le bandeau, type de la
 	    pièce (cliquable = changer de type), confort de la pièce ✨ ;
-	    mode édition (House/HouseEditor) : glisser, barre d'outils,
-	    annuler / rétablir, aimant 🧲, envoyer dans une autre pièce,
-	    dupliquer ; inventaire en bas (toucher un objet rangé = le poser ;
-	    ✨ = préféré de cette pièce).
+	    mode édition (House/HouseEditor) : glisser, barre d'outils
+	    "bonbons" (près de l'objet ; sur téléphone elle prend la place de
+	    l'inventaire), annuler / rétablir, aimant 🧲, envoyer dans une autre
+	    pièce, dupliquer, retourner, objets posés SUR les meubles, chaises
+	    rangées aux tables ; inventaire en bas (toucher un objet rangé = le
+	    poser ; ✨ = préféré de cette pièce) ;
+	  - "🧊 3D" : aperçu 3D de la pièce (House/House3D, chargé à la demande
+	    avec pcall : absent -> petit message "bientôt").
+	Les clics dans les cadres (barre, inventaire, tiroir, fenêtres de choix)
+	ne traversent jamais jusqu'à la pièce / la maison derrière.
 	Bandeau : immeuble et nombre de pièces, confort ❤️ + bonus "+X % de
 	Dopamine" (en direct pendant l'édition), boutons "↔ Ranger" /
 	"✏️ Modifier" et "🛍️ Boutique" (badge) : rien ne se chevauche sur
@@ -45,6 +51,7 @@ local HouseShop = require(HouseFolder:WaitForChild("HouseShop"))
 local HouseArt = require(HouseFolder:WaitForChild("HouseArt"))
 local HouseOverview = require(HouseFolder:WaitForChild("HouseOverview"))
 local HousePicker = require(HouseFolder:WaitForChild("HousePicker"))
+local HouseButtons = require(HouseFolder:WaitForChild("HouseButtons"))
 local Locale = require(ReplicatedStorage.Shared.Locale)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 
@@ -72,6 +79,7 @@ local overviewHolder: Frame
 local stage: Frame
 local stageFade: Frame
 local tray: Frame
+local toolDock: Frame -- téléphone : la barre d'outils de l'objet choisi prend la place de l'inventaire
 local trayList: ScrollingFrame
 local trayEmpty: TextLabel
 local emptyHint: Frame
@@ -88,13 +96,14 @@ local savedChip: Frame
 local roomBar: Frame
 local typeButton: TextButton
 local statsChip: Frame
-local dock: Frame
+local dock: TextButton
 local undoButton: TextButton
 local redoButton: TextButton
 local snapButton: TextButton
 local arrangeButton: TextButton
 local editButton: TextButton
 local shopButton: TextButton
+local view3DButton: TextButton
 local shopBadge: TextLabel
 local previewChip: Frame
 
@@ -315,12 +324,13 @@ local function layoutHeader()
 	local inRoom = view == "room"
 	arrangeButton.Visible = not inRoom
 	editButton.Visible = inRoom
+	view3DButton.Visible = inRoom
 	backButton.Visible = inRoom
 	tabsScroller.Visible = inRoom
 	houseChip.Visible = not inRoom
 	local buttonsWidth = 0
 	local gap = 8
-	for _, button in ipairs({ arrangeButton, editButton, shopButton }) do
+	for _, button in ipairs({ arrangeButton, view3DButton, editButton, shopButton }) do
 		if button.Visible then
 			buttonsWidth += pillWidth(button) + gap
 		end
@@ -375,6 +385,7 @@ end
 ----------------------------------------------------------------------
 
 local openRoom: (roomId: string, instant: boolean?, after: (() -> ())?) -> ()
+local open3D: () -> ()
 
 local function refreshTabs()
 	local rooms = sortedRooms()
@@ -399,35 +410,25 @@ local function refreshTabs()
 		local roomType = HouseCommon.GetRoomType(roomData)
 		local isCurrent = roomData.Id == currentRoomId
 		local named = isCurrent and Interface.Device == "Desktop"
-		local tab = UIUtil.Create("TextButton", {
+		-- (bonbon rond pour les autres pièces, pastille nommée pour la pièce ouverte)
+		local tab = UIUtil.PillButton({
 			Name = "Tab_" .. roomData.Id,
-			Size = UDim2.fromOffset(named and 0 or height + 4, height),
-			AutomaticSize = named and Enum.AutomaticSize.X or Enum.AutomaticSize.None,
-			BackgroundColor3 = isCurrent and C.PinkDeep or WHITE,
-			AutoButtonColor = false,
-			Font = Theme.Fonts.Title,
-			Text = (isCurrent and Interface.Device == "Desktop") and roomLabel(roomData) or roomType.Icon,
+			Text = named and roomLabel(roomData) or roomType.Icon,
+			Color = isCurrent and C.PinkDeep or WHITE,
 			TextColor3 = isCurrent and WHITE or C.Ink,
+			Height = height,
 			TextSize = named and 15 or 20,
+			Round = not named,
 			LayoutOrder = index,
 			ZIndex = 7,
-			Parent = tabsScroller,
+			StrokeColor = isCurrent and WHITE or nil,
+			StrokeThickness = isCurrent and 2 or 1.5,
 		})
-		UIUtil.Corner(tab, UDim.new(1, 0))
-		UIUtil.Stroke(tab, isCurrent and WHITE or C.Pink, isCurrent and 2 or 1.5, isCurrent and 0.1 or 0.35)
-		if named then
-			UIUtil.Create("UIPadding", {
-				PaddingLeft = UDim.new(0, 12),
-				PaddingRight = UDim.new(0, 12),
-				Parent = tab,
-			})
-		end
+		tab.Parent = tabsScroller
 		if isCurrent then
-			UIUtil.Gradient(tab, ColorSequence.new(WHITE, Color3.fromRGB(226, 226, 226)), 90)
 			currentButton = tab
 		end
-		UIUtil.AnimateButton(tab, 1.08, 0.92)
-		total += (named and textWidth(tab.Text, tab.TextSize, tab.Font) + 28 or height + 4) + 5
+		total += (named and textWidth(tab.Text, tab.TextSize, tab.Font) + math.floor(height * 0.45) * 2 + 4 or height) + 5
 		tab.Activated:Connect(function()
 			if roomData.Id ~= currentRoomId then
 				SoundManager.Play("Click", 1.2)
@@ -600,6 +601,10 @@ local function layoutLeft(animate: boolean)
 	local trayHeight = isPhone() and 70 or 82
 	tray.Size = UDim2.new(1, 0, 0, trayHeight)
 	tray.Visible = editing
+	toolDock.Size = UDim2.new(1, 0, 0, trayHeight + 8)
+	if not editing then
+		toolDock.Visible = false
+	end
 	local stageTarget = UDim2.new(1, 0, 1, editing and -(trayHeight + 8) or 0)
 	if animate then
 		UIUtil.Tween(stage, 0.3, { Size = stageTarget }, Enum.EasingStyle.Quint)
@@ -843,11 +848,14 @@ local function buyRoomAt(slot: number)
 		OnPick = function(typeId: string)
 			local price = HouseCommon.RoomCost(latestHouse)
 			local dopamine = HouseCommon.Dopamine()
+			local roomType = HouseCommon.RoomTypesById[typeId]
+			-- (ce qu'on achète, montré dans la fenêtre "pas assez de Dopamine")
+			local context = roomType and { Icon = roomType.Icon, Name = HouseCommon.Name(roomType), Color = C.Mint } or nil
 			if dopamine < price then
 				local missing = price - dopamine
 				NeedDopamine.Offer(missing, function()
 					notify(Locale.T("You need %s more Dopamine", NumberFormatter.Format(missing)), Theme.Colors.Red)
-				end)
+				end, context)
 				return
 			end
 			invoke("buyRoom", { Type = typeId, Slot = slot }, function(ok: boolean, message: string?)
@@ -858,7 +866,11 @@ local function buyRoomAt(slot: number)
 					refreshOverview()
 				else
 					SoundManager.Play("Error", 0.8)
-					notify(message or Locale.T("Network error, try again."), Theme.Colors.Red)
+					-- Refus du serveur "pas assez de Dopamine" : la fenêtre, à chaque fois
+					local okOffer, shown = pcall(NeedDopamine.OfferRefusal, message, price, nil, context)
+					if not (okOffer and shown == true) then
+						notify(message or Locale.T("Network error, try again."), Theme.Colors.Red)
+					end
 				end
 			end)
 		end,
@@ -909,6 +921,16 @@ local function roomMenu(roomId: string)
 					changeRoomType(roomId)
 				end)
 			end },
+			{ Text = Locale.T("🧊 3D"), Color = Color3.fromRGB(214, 236, 255), OnClick = function()
+				local currentOverview = overview
+				if currentOverview then
+					currentOverview.SetArranging(false)
+				end
+				refreshEditUi()
+				openRoom(roomId, false, function()
+					open3D()
+				end)
+			end },
 		},
 	})
 end
@@ -955,6 +977,87 @@ local function askSendTarget(entry: Placed)
 end
 
 ----------------------------------------------------------------------
+-- 🧊 Aperçu 3D (House/House3D, écrit à part : chargé à la demande et
+-- protégé par pcall ; absent -> petit message "bientôt")
+----------------------------------------------------------------------
+
+local house3D: any = nil
+
+local function loadHouse3D(): any
+	if house3D then
+		return house3D
+	end
+	local moduleScript = HouseFolder:FindFirstChild("House3D")
+	if not moduleScript or not moduleScript:IsA("ModuleScript") then
+		return nil
+	end
+	local ok, result = pcall(require, moduleScript)
+	if ok and type(result) == "table" and type(result.Open) == "function" then
+		house3D = result
+		return result
+	end
+	warn("[House] House3D : " .. tostring(result))
+	return nil
+end
+
+local function is3DOpen(): boolean
+	local module = house3D
+	if not module or type(module.IsOpen) ~= "function" then
+		return false
+	end
+	local ok, value = pcall(module.IsOpen)
+	return ok and value == true
+end
+
+open3D = function()
+	local roomData = currentRoom()
+	if view ~= "room" or not roomData then
+		return
+	end
+	local module = loadHouse3D()
+	if not module then
+		SoundManager.Play("Click", 1.1)
+		UIUtil.Shake(view3DButton)
+		notify(Locale.T("🧊 3D view: coming soon!"), C.Lilac)
+		return
+	end
+	local currentEditor = editor
+	if currentEditor then
+		-- (la disposition en cours part tout de suite au serveur)
+		currentEditor.Flush()
+	end
+	-- Pièce telle qu'on la voit (disposition locale comprise)
+	local placed = {}
+	for _, entry in ipairs(currentLayout()) do
+		table.insert(placed, { I = entry.I, X = entry.X, Y = entry.Y, S = entry.S, Z = entry.Z, F = entry.F == true or nil })
+	end
+	local record = {
+		Id = roomData.Id,
+		Type = roomData.Type,
+		Slot = roomData.Slot,
+		Wallpaper = roomData.Wallpaper,
+		Floor = roomData.Floor,
+		Placed = placed,
+	}
+	SoundManager.Play("Open", 1.2)
+	local ok, opened = pcall(module.Open, {
+		Room = record,
+		SizeId = latestHouse.Size,
+		Title = roomLabel(roomData),
+		OnClose = function()
+			SoundManager.Play("Click", 0.9)
+		end,
+	})
+	-- (Open renvoie false si la vue n'a pas pu se construire)
+	if not ok or opened == false then
+		if not ok then
+			warn("[House] House3D.Open : " .. tostring(opened))
+		end
+		notify(Locale.T("🧊 3D view: coming soon!"), C.Lilac)
+	end
+end
+
+----------------------------------------------------------------------
 -- Construction (à la première ouverture)
 ----------------------------------------------------------------------
 
@@ -986,6 +1089,7 @@ local function ensureBuilt()
 	end)
 	newEditor.HistoryChanged:Connect(refreshDock)
 	newEditor.SetSendHandler(askSendTarget)
+	newEditor.SetDockHost(toolDock)
 
 	picker = HousePicker.new(content)
 
@@ -1279,10 +1383,17 @@ function House.Build(frame: Frame)
 	})
 	arrangeButton = barButton("Arrange", Locale.T("↔️ Arrange"), C.Lilac, 1)
 	arrangeButton.Parent = rightGroup
-	editButton = barButton("Edit", Locale.T("✏️ Edit"), C.Lilac, 2)
+	-- Aperçu 3D de la pièce (House/House3D, chargé à la demande)
+	view3DButton = barButton("View3D", Locale.T("🧊 3D"), Color3.fromRGB(92, 172, 238), 2)
+	view3DButton.Parent = rightGroup
+	view3DButton.Visible = false
+	HouseButtons.Tip(view3DButton, function()
+		return Locale.T("See this room in 3D")
+	end)
+	editButton = barButton("Edit", Locale.T("✏️ Edit"), C.Lilac, 3)
 	editButton.Parent = rightGroup
 	editButton.Visible = false
-	shopButton = barButton("Shop", Locale.T("🛍️ Shop"), C.PinkDeep, 3)
+	shopButton = barButton("Shop", Locale.T("🛍️ Shop"), C.PinkDeep, 4)
 	shopButton.Parent = rightGroup
 	-- Badge DANS la pastille, à droite du texte (ne cache plus "Boutique" et ne
 	-- déborde pas du bord de la fenêtre) : la pastille s'élargit quand il est là
@@ -1382,6 +1493,7 @@ function House.Build(frame: Frame)
 		Parent = roomBar,
 	})
 	statsChip.BackgroundTransparency = 0.1
+	HouseButtons.Sink(statsChip)
 	savedChip = UIUtil.Chip({
 		Name = "Saved",
 		Text = "",
@@ -1394,9 +1506,11 @@ function House.Build(frame: Frame)
 		Visible = false,
 		Parent = roomBar,
 	})
+	HouseButtons.Sink(savedChip)
 
 	-- Dock d'édition (en haut à droite) : annuler / rétablir / aimant
-	dock = UIUtil.Create("Frame", {
+	-- (bouton sans action : un clic entre deux boutons ne traverse pas)
+	dock = HouseButtons.Container({
 		Name = "Dock",
 		Size = UDim2.fromOffset(0, 0),
 		AutomaticSize = Enum.AutomaticSize.XY,
@@ -1427,6 +1541,15 @@ function House.Build(frame: Frame)
 	undoButton = smallButton("Undo", "↩️", 1, dock)
 	redoButton = smallButton("Redo", "↪️", 2, dock)
 	snapButton = smallButton("Snap", "🧲", 3, dock)
+	HouseButtons.Tip(undoButton, function()
+		return HouseButtons.TipText("Undo", "( Ctrl+Z )")
+	end)
+	HouseButtons.Tip(redoButton, function()
+		return HouseButtons.TipText("Redo", "( Ctrl+Y )")
+	end)
+	HouseButtons.Tip(snapButton, function()
+		return HouseButtons.TipText("Snap to grid", "( G )")
+	end)
 
 	-- "Aperçu" (essai d'un papier peint / sol)
 	previewChip = UIUtil.Chip({
@@ -1442,11 +1565,12 @@ function House.Build(frame: Frame)
 	})
 	previewChip.AnchorPoint = Vector2.new(0.5, 1)
 	previewChip.Position = UDim2.new(0.5, 0, 1, -38)
+	HouseButtons.Sink(previewChip)
 
 	-- Astuce en mode édition
 	editHint = UIUtil.Chip({
 		Name = "EditHint",
-		Text = Locale.T("✋ Drag to move  •  🧁 small items go ON tables & shelves"),
+		Text = Locale.T("✋ Drag to move  •  🧁 small items go ON furniture  •  🪑 chairs snap to tables"),
 		Color = WHITE,
 		TextColor3 = C.Ink,
 		Height = 24,
@@ -1457,6 +1581,7 @@ function House.Build(frame: Frame)
 	})
 	editHint.AnchorPoint = Vector2.new(0.5, 1)
 	editHint.Position = UDim2.new(0.5, 0, 1, -6)
+	HouseButtons.Sink(editHint)
 
 	-- Pièce vide : invitation à ouvrir la boutique
 	emptyHint = UIUtil.Create("Frame", {
@@ -1471,6 +1596,7 @@ function House.Build(frame: Frame)
 	})
 	UIUtil.Corner(emptyHint, 20)
 	UIUtil.Stroke(emptyHint, C.Pink, 2, 0.2)
+	UIUtil.SinkClicks(emptyHint)
 	UIUtil.Label({
 		Name = "Text",
 		Size = UDim2.new(1, -24, 0, 62),
@@ -1523,6 +1649,22 @@ function House.Build(frame: Frame)
 	})
 	UIUtil.Corner(tray, 18)
 	UIUtil.Stroke(tray, C.Pink, 1.5, 0.3)
+	UIUtil.SinkClicks(tray)
+	-- (téléphone) barre d'outils de l'objet choisi, par-dessus l'inventaire
+	toolDock = UIUtil.Create("Frame", {
+		Name = "ToolDock",
+		Size = UDim2.new(1, 0, 0, 90),
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 0, 1, 0),
+		BackgroundColor3 = C.PinkMist,
+		Visible = false,
+		ZIndex = 26,
+		Parent = left,
+	})
+	UIUtil.Corner(toolDock, 18)
+	UIUtil.Stroke(toolDock, C.Pink, 1.5, 0.2)
+	UIUtil.Gradient(toolDock, ColorSequence.new(WHITE, Color3.fromRGB(255, 232, 244)), 90)
+	UIUtil.SinkClicks(toolDock)
 	UIUtil.Create("TextLabel", {
 		Name = "Title",
 		Size = UDim2.new(0, 104, 1, -12),
@@ -1602,6 +1744,7 @@ function House.Build(frame: Frame)
 		end
 	end)
 	backButton.Activated:Connect(backToOverview)
+	view3DButton.Activated:Connect(open3D)
 	typeButton.Activated:Connect(function()
 		if currentRoomId then
 			changeRoomType(currentRoomId :: string)
@@ -1755,6 +1898,10 @@ function House.OnOpen()
 	end
 	renderConnection = RunService.RenderStepped:Connect(function(dt: number)
 		local step = math.min(dt, 0.1)
+		-- (aperçu 3D ouvert par-dessus : la maison est cachée, on ne l'anime pas)
+		if house3D and is3DOpen() then
+			return
+		end
 		currentEditor.Update(step)
 		if view == "room" then
 			currentRoomView.Update(step)

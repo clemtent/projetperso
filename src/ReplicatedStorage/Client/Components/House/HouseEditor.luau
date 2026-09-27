@@ -12,24 +12,34 @@
 	    l'objet reste dans sa zone (mur / sol), zone valide mise en valeur,
 	    AIMANTATION à la grille (option 🧲, lignes visibles pendant le
 	    glissement), petit "plop" à la pose ;
-	  - sélection + barre d'outils flottante : ➖ plus petit, ➕ plus grand,
-	    ⏬ derrière, ⏫ devant, 📑 dupliquer, 🚪 envoyer dans une autre pièce,
-	    📦 ranger ; le survol d'un bouton affiche son nom et son raccourci ;
+	  - sélection + BARRE D'OUTILS "bonbons" (House/HouseButtons) près de
+	    l'objet (ou en bas de la scène sur téléphone) : vignette + nom +
+	    confort + "📍 sur la table", taille ➖ 100 % ➕, ⏬ derrière /
+	    ⏫ devant, ↔️ retourner (miroir), 📑 copier, 🚪 envoyer dans une
+	    autre pièce, 📦 ranger (rouge) ; bulle au survol (nom + raccourci) ;
+	    les clics dans la barre ne désélectionnent jamais l'objet ;
 	  - ANNULER / RÉTABLIR (30 étapes par pièce ; Ctrl+Z / Ctrl+Y) ;
 	  - clavier : flèches = petit déplacement (Maj = plus grand), + / - =
-	    taille, Page préc. / suiv. = couche, Suppr = ranger, Ctrl+D =
-	    dupliquer, Échap = désélectionner, G = aimant ;
-	  - pose depuis l'inventaire (Place) à un endroit libre ;
+	    taille, Page préc. / suiv. = couche, F = retourner, Suppr = ranger,
+	    Ctrl+D = dupliquer, Échap = désélectionner, G = aimant ;
+	  - pose depuis l'inventaire (Place) à un endroit libre : petite déco
+	    directement SUR un meuble (nourriture sur une table, coussin sur le
+	    lit...), chaise directement À UNE TABLE ;
 	  - sauvegarde automatique "saveLayout" { Rooms = { [pièce] = ... } }
 	    ~1,5 s après la dernière modification (les 2 pièces d'un envoi
 	    partent dans le même appel) ; nouvel essai si le serveur refuse,
 	    puis resynchro ;
 	  - hors édition : toucher un objet le fait rebondir (petits cœurs) ;
-	  - SUR LES MEUBLES : un petit objet (Size <= TabletopMaxSize) glissé
-	    au-dessus d'une table, d'un bureau, d'une étagère, d'un lit...
-	    s'y pose (House/HouseSurfaces : trait lumineux sur le dessus visé)
-	    et passe devant son meuble ; déplacer / agrandir / ranger le meuble
-	    emporte (ou fait tomber) ce qui est posé dessus ;
+	  - SUR LES MEUBLES (House/HouseSurfaces) : un petit objet glissé
+	    au-dessus d'une table, d'un bureau, d'une étagère, d'un lit, d'un
+	    canapé, d'une chaise... s'y pose : pendant le glissement, toutes les
+	    places possibles s'allument, le dessus visé brille avec une étiquette
+	    "✨ Poser sur : Table à manger" et le meuble est entouré ;
+	  - CHAISES À TABLE : une chaise / un tabouret glissé près d'une table
+	    se range à gauche ou à droite (tournée vers elle), derrière (le
+	    dossier dépasse) ou devant ; déplacer / agrandir la table emporte ses
+	    chaises et ce qui est posé dessus ; ranger la table fait tomber ce
+	    qui était posé dessus (les chaises restent) ;
 	  - ANIMAUX : hors édition, les animaux de la pièce se promènent et
 	    utilisent leurs affaires (House/HousePets, visuel seulement).
 	Les exemplaires sont comptés dans TOUTES les pièces (HouseCommon.Available
@@ -38,6 +48,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
+local TextService = game:GetService("TextService")
 
 local Client = script.Parent.Parent.Parent
 local Theme = require(Client.Theme)
@@ -51,12 +62,15 @@ local HouseCommon = require(script.Parent.HouseCommon)
 local HouseRoom = require(script.Parent.HouseRoom)
 local HouseSurfaces = require(script.Parent.HouseSurfaces)
 local HousePets = require(script.Parent.HousePets)
+local HouseArt = require(script.Parent.HouseArt)
+local HouseButtons = require(script.Parent.HouseButtons)
 
 type Placed = HouseCommon.Placed
 type HouseData = HouseCommon.HouseData
 type Item = HouseCommon.Item
 type Room = HouseRoom.Room
 type Sticker = HouseRoom.Sticker
+type Candy = HouseButtons.Candy
 
 local HouseEditor = {}
 
@@ -71,9 +85,12 @@ local GRID = 20 -- (px de maquette) pas de l'aimant
 local NUDGE_SMALL = 4 -- (px de maquette) flèche
 local NUDGE_BIG = 24 -- (px de maquette) Maj + flèche
 local NUDGE_MERGE = 0.8 -- (s) flèches enchaînées = une seule étape d'annulation
+local DOCK_BELOW = 760 -- (px de maquette) scène plus étroite : barre d'outils en bas de la scène
 
 local C = HouseCommon.Colors
+local P = HouseButtons.Palette
 local WHITE = Color3.new(1, 1, 1)
+local SEAT_TINT = Color3.fromRGB(56, 176, 140) -- étiquette "chaise à table"
 
 export type SaveStatus = "idle" | "dirty" | "saving" | "saved" | "error"
 
@@ -99,8 +116,10 @@ export type Editor = {
 	Deselect: () -> (),
 	GetSelected: () -> Placed?,
 	Duplicate: () -> boolean,
+	Flip: () -> boolean,
 	SendTo: (roomId: string) -> boolean,
 	SetSendHandler: (handler: (entry: Placed) -> ()) -> (),
+	SetDockHost: (host: GuiObject?) -> (), -- téléphone : la barre d'outils prend la place de l'inventaire
 	Undo: () -> boolean,
 	Redo: () -> boolean,
 	CanUndo: () -> boolean,
@@ -124,7 +143,12 @@ type Drag = {
 	Moved: boolean,
 	Before: { Placed },
 	Riders: { Rider },
+	Skip: { [Placed]: boolean },
+	Tabletop: boolean, -- peut être posé sur un meuble
+	IsSeat: boolean, -- chaise / tabouret : peut se ranger à une table
 	Surface: HouseSurfaces.Surface?,
+	Seat: HouseSurfaces.SeatSpot?,
+	HintKey: string,
 	WasOn: boolean, -- posé sur un meuble au début du glissement
 }
 
@@ -150,15 +174,19 @@ end
 local function signature(list: { Placed }): string
 	local parts = table.create(#list)
 	for index, entry in ipairs(list) do
-		parts[index] = string.format("%s:%.4f:%.4f:%.3f:%d", entry.I, entry.X, entry.Y, entry.S, math.floor(entry.Z))
+		parts[index] = string.format("%s:%.4f:%.4f:%.3f:%d%s", entry.I, entry.X, entry.Y, entry.S, math.floor(entry.Z), entry.F and ":F" or "")
 	end
 	return table.concat(parts, ";")
+end
+
+local function copyEntry(entry: Placed): Placed
+	return { I = entry.I, X = entry.X, Y = entry.Y, S = entry.S, Z = entry.Z, F = entry.F == true or nil }
 end
 
 local function copyList(list: { Placed }): { Placed }
 	local result = table.create(#list)
 	for index, entry in ipairs(list) do
-		result[index] = { I = entry.I, X = entry.X, Y = entry.Y, S = entry.S, Z = entry.Z }
+		result[index] = copyEntry(entry)
 	end
 	return result
 end
@@ -173,6 +201,7 @@ local function payloadOf(list: { Placed }): { Placed }
 			Y = roundTo(entry.Y, 0.0001),
 			S = roundTo(entry.S, 0.001),
 			Z = math.clamp(math.floor(entry.Z), 0, HouseCommon.MAX_Z),
+			F = entry.F == true or nil,
 		}
 	end
 	return payload
@@ -212,7 +241,7 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 	local historyChanged = Signal.new()
 
 	----------------------------------------------------------------------
-	-- Barre d'outils de sélection
+	-- Barre d'outils de sélection ("bonbons")
 	----------------------------------------------------------------------
 
 	local toolbar = UIUtil.Create("Frame", {
@@ -225,27 +254,115 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		ZIndex = 20,
 		Parent = room.Overlay,
 	})
+	toolbar:SetAttribute("DarkSkinIgnore", true)
 	local toolbarScale = UIUtil.Create("UIScale", { Parent = toolbar })
-	UIUtil.Create("UIListLayout", {
+	local toolbarLayout = UIUtil.Create("UIListLayout", {
 		FillDirection = Enum.FillDirection.Vertical,
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
 		SortOrder = Enum.SortOrder.LayoutOrder,
-		Padding = UDim.new(0, 4),
+		Padding = UDim.new(0, 5),
 		Parent = toolbar,
 	})
-	local nameChip = UIUtil.Chip({
-		Name = "NameChip",
-		Text = "",
-		Color = C.PinkDeep,
-		TextColor3 = WHITE,
-		Height = 26,
-		TextSize = 14,
+
+	-- En-tête : vignette + nom + confort, et où l'objet est posé
+	local header = UIUtil.Create("Frame", {
+		Name = "Header",
+		Size = UDim2.fromOffset(0, 32),
+		AutomaticSize = Enum.AutomaticSize.X,
+		BackgroundTransparency = 1,
 		LayoutOrder = 1,
 		ZIndex = 21,
 		Parent = toolbar,
 	})
-	local nameLabel = nameChip:FindFirstChild("Label") :: TextLabel
-	local bar = UIUtil.Create("Frame", {
+	UIUtil.Create("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0, 6),
+		Parent = header,
+	})
+	-- (conteneurs = boutons sans action : un clic dans la barre ne traverse
+	-- jamais jusqu'à la pièce, qui désélectionnerait l'objet)
+	local nameChip = HouseButtons.Container({
+		Name = "NameChip",
+		Size = UDim2.fromOffset(0, 32),
+		AutomaticSize = Enum.AutomaticSize.X,
+		BackgroundColor3 = C.PinkDeep,
+		LayoutOrder = 1,
+		ZIndex = 21,
+		Parent = header,
+	})
+	UIUtil.Corner(nameChip, UDim.new(1, 0))
+	UIUtil.Stroke(nameChip, WHITE, 2, 0)
+	UIUtil.Gradient(nameChip, ColorSequence.new(Color3.fromRGB(255, 196, 222), WHITE), 90)
+	UIUtil.Create("UIPadding", { PaddingLeft = UDim.new(0, 3), PaddingRight = UDim.new(0, 13), Parent = nameChip })
+	UIUtil.Create("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0, 7),
+		Parent = nameChip,
+	})
+	local thumb = UIUtil.Create("Frame", {
+		Name = "Thumb",
+		Size = UDim2.fromOffset(26, 26),
+		BackgroundColor3 = WHITE,
+		LayoutOrder = 1,
+		ZIndex = 22,
+		Parent = nameChip,
+	})
+	UIUtil.Corner(thumb, UDim.new(1, 0))
+	UIUtil.Stroke(thumb, C.PinkSoft, 1.5, 0)
+	local nameLabel = UIUtil.Create("TextLabel", {
+		Name = "Label",
+		Size = UDim2.fromScale(0, 1),
+		AutomaticSize = Enum.AutomaticSize.X,
+		BackgroundTransparency = 1,
+		Font = Theme.Fonts.Title,
+		Text = "",
+		TextColor3 = WHITE,
+		TextSize = 15,
+		LayoutOrder = 2,
+		ZIndex = 22,
+		Parent = nameChip,
+	})
+	UIUtil.Create("UIStroke", {
+		Color = C.PinkDeep:Lerp(Color3.new(0, 0, 0), 0.45),
+		Thickness = 1,
+		Transparency = 0.55,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
+		Parent = nameLabel,
+	})
+	local placeChip = HouseButtons.Container({
+		Name = "PlaceChip",
+		Size = UDim2.fromOffset(0, 26),
+		AutomaticSize = Enum.AutomaticSize.X,
+		BackgroundColor3 = C.MintSoft,
+		LayoutOrder = 2,
+		ZIndex = 21,
+		Visible = false,
+		Parent = header,
+	})
+	UIUtil.Corner(placeChip, UDim.new(1, 0))
+	UIUtil.Stroke(placeChip, C.Mint, 1.5, 0.2)
+	UIUtil.Create("UIPadding", { PaddingLeft = UDim.new(0, 11), PaddingRight = UDim.new(0, 11), Parent = placeChip })
+	local placeLabel = UIUtil.Create("TextLabel", {
+		Name = "Label",
+		Size = UDim2.fromScale(0, 1),
+		AutomaticSize = Enum.AutomaticSize.X,
+		BackgroundTransparency = 1,
+		Font = Theme.Fonts.Title,
+		Text = "",
+		TextColor3 = C.Ink,
+		TextSize = 13,
+		ZIndex = 22,
+		Parent = placeChip,
+	})
+
+	-- Capsule d'outils (les clics entre les boutons ne traversent pas)
+	local bar = HouseButtons.Container({
 		Name = "Bar",
 		Size = UDim2.fromOffset(0, 0),
 		AutomaticSize = Enum.AutomaticSize.XY,
@@ -255,93 +372,179 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		Parent = toolbar,
 	})
 	UIUtil.Corner(bar, 22)
-	UIUtil.Stroke(bar, C.Pink, 2, 0.1)
+	UIUtil.Stroke(bar, C.Pink, 2, 0.05)
+	UIUtil.Gradient(bar, ColorSequence.new(WHITE, Color3.fromRGB(255, 232, 244)), 90)
 	UIUtil.Create("UIPadding", {
-		PaddingLeft = UDim.new(0, 6),
-		PaddingRight = UDim.new(0, 6),
-		PaddingTop = UDim.new(0, 5),
-		PaddingBottom = UDim.new(0, 5),
+		PaddingLeft = UDim.new(0, 8),
+		PaddingRight = UDim.new(0, 8),
+		PaddingTop = UDim.new(0, 6),
+		PaddingBottom = UDim.new(0, 7),
 		Parent = bar,
 	})
 	UIUtil.Create("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
 		VerticalAlignment = Enum.VerticalAlignment.Center,
 		SortOrder = Enum.SortOrder.LayoutOrder,
-		Padding = UDim.new(0, 4),
+		Padding = UDim.new(0, 6),
 		Parent = bar,
 	})
 
-	local nameText = ""
-	local hoverTip: string? = nil
-	local function refreshNameChip()
-		local value = hoverTip or nameText
-		if nameLabel.Text ~= value then
-			nameLabel.Text = value
-		end
-		nameChip.BackgroundColor3 = hoverTip and C.Ink or C.PinkDeep
-	end
-
-	local toolButtons: { TextButton } = {}
-	local function toolButton(order: number, icon: string, caption: string, tip: string, color: Color3): TextButton
-		local size = Interface.IsTouch() and Theme.TouchTarget or 40
-		local button = UIUtil.Create("TextButton", {
-			Name = caption,
-			Size = UDim2.fromOffset(size + 6, size + 12),
-			BackgroundColor3 = color,
-			AutoButtonColor = false,
-			Text = "",
+	local function separator(order: number): Frame
+		local line = UIUtil.Create("Frame", {
+			Name = "Sep" .. order,
+			Size = UDim2.fromOffset(2, 40),
+			BackgroundColor3 = C.Pink,
+			BackgroundTransparency = 0.55,
+			BorderSizePixel = 0,
 			LayoutOrder = order,
 			ZIndex = 22,
 			Parent = bar,
 		})
-		UIUtil.Corner(button, 14)
-		UIUtil.Gradient(button, ColorSequence.new(WHITE, Color3.fromRGB(228, 228, 228)), 90)
-		UIUtil.Create("TextLabel", {
-			Name = "Icon",
-			Size = UDim2.new(1, 0, 1, -14),
-			BackgroundTransparency = 1,
-			Font = Theme.Fonts.Title,
-			Text = icon,
-			TextColor3 = C.Ink,
-			TextSize = math.floor(size * 0.5),
-			ZIndex = 23,
-			Parent = button,
-		})
-		UIUtil.Create("TextLabel", {
-			Name = "Caption",
-			AnchorPoint = Vector2.new(0, 1),
-			Position = UDim2.new(0, 1, 1, -2),
-			Size = UDim2.new(1, -2, 0, 12),
-			BackgroundTransparency = 1,
-			Font = Theme.Fonts.Title,
-			Text = Locale.T(caption),
-			TextColor3 = C.Ink,
-			TextScaled = true,
-			ZIndex = 23,
-			Parent = button,
-		})
-		UIUtil.AnimateButton(button, 1.08, 0.9)
-		-- Infobulle (souris) : nom + raccourci à la place du nom de l'objet
-		button.MouseEnter:Connect(function()
-			if not Interface.IsTouch() then
-				hoverTip = icon .. " " .. Locale.T(tip)
-				refreshNameChip()
-			end
-		end)
-		button.MouseLeave:Connect(function()
-			hoverTip = nil
-			refreshNameChip()
-		end)
-		table.insert(toolButtons, button)
-		return button
+		UIUtil.Corner(line, UDim.new(1, 0))
+		return line
 	end
-	local smallerButton = toolButton(1, "➖", "Smaller", "Smaller  ( - )", C.LilacSoft)
-	local biggerButton = toolButton(2, "➕", "Bigger", "Bigger  ( + )", C.LilacSoft)
-	local backButton = toolButton(3, "⏬", "Back", "Send backward  ( Page Down )", C.MintSoft)
-	local frontButton = toolButton(4, "⏫", "Front", "Bring forward  ( Page Up )", C.MintSoft)
-	local copyButton = toolButton(5, "📑", "Copy", "Duplicate  ( Ctrl+D )", Color3.fromRGB(255, 240, 200))
-	local sendButton = toolButton(6, "🚪", "Send", "Send to another room", Color3.fromRGB(214, 236, 255))
-	local storeButton = toolButton(7, "📦", "Store", "Store in inventory  ( Delete )", C.PinkSoft)
+
+	local candies: { Candy } = {}
+	local function toolSize(): (number, number)
+		if Interface.IsTouch() then
+			return 58, 60
+		end
+		return 56, 56
+	end
+	local function tool(order: number, name: string, icon: string, caption: string, color: Color3, textColor: Color3?): Candy
+		local w, h = toolSize()
+		local candy = HouseButtons.Candy({
+			Name = name,
+			Icon = icon,
+			Caption = Locale.T(caption),
+			Color = color,
+			TextColor = textColor,
+			Width = w,
+			Height = h,
+			IconSize = 22,
+			LayoutOrder = order,
+			ZIndex = 22,
+			Parent = bar,
+		})
+		table.insert(candies, candy)
+		return candy
+	end
+
+	-- Taille : ➖ 100 % ➕ (segment)
+	local sizeGroup = UIUtil.Create("Frame", {
+		Name = "SizeGroup",
+		Size = UDim2.fromOffset(0, 0),
+		AutomaticSize = Enum.AutomaticSize.XY,
+		BackgroundColor3 = Color3.fromRGB(243, 236, 255),
+		LayoutOrder = 1,
+		ZIndex = 22,
+		Parent = bar,
+	})
+	UIUtil.Corner(sizeGroup, 18)
+	UIUtil.Stroke(sizeGroup, C.Lilac, 1.5, 0.45)
+	UIUtil.Create("UIPadding", {
+		PaddingLeft = UDim.new(0, 4),
+		PaddingRight = UDim.new(0, 4),
+		PaddingTop = UDim.new(0, 4),
+		PaddingBottom = UDim.new(0, 4),
+		Parent = sizeGroup,
+	})
+	UIUtil.Create("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0, 4),
+		Parent = sizeGroup,
+	})
+	local function sizeButton(order: number, name: string, icon: string): Candy
+		local candy = HouseButtons.Candy({
+			Name = name,
+			Icon = icon,
+			Color = P.Lilac,
+			Width = Interface.IsTouch() and 46 or 40,
+			Height = Interface.IsTouch() and 50 or 46,
+			Radius = 16,
+			IconSize = 18,
+			LayoutOrder = order,
+			ZIndex = 23,
+			Parent = sizeGroup,
+		})
+		table.insert(candies, candy)
+		return candy
+	end
+	local smaller = sizeButton(1, "Smaller", "➖")
+	local percentHolder = UIUtil.Create("Frame", {
+		Name = "Percent",
+		Size = UDim2.fromOffset(52, 44),
+		BackgroundTransparency = 1,
+		LayoutOrder = 2,
+		ZIndex = 23,
+		Parent = sizeGroup,
+	})
+	local percentLabel = UIUtil.Create("TextLabel", {
+		Name = "Value",
+		Size = UDim2.new(1, 0, 0, 24),
+		Position = UDim2.fromOffset(0, 3),
+		BackgroundTransparency = 1,
+		Font = Theme.Fonts.Title,
+		Text = "100%",
+		TextColor3 = C.Ink,
+		TextSize = 17,
+		ZIndex = 24,
+		Parent = percentHolder,
+	})
+	UIUtil.Create("TextLabel", {
+		Name = "Caption",
+		Size = UDim2.new(1, 0, 0, 14),
+		Position = UDim2.fromOffset(0, 27),
+		BackgroundTransparency = 1,
+		Font = Theme.Fonts.Title,
+		Text = Locale.T("Size"),
+		TextColor3 = C.Lilac:Lerp(C.Ink, 0.45),
+		TextSize = 12,
+		ZIndex = 24,
+		Parent = percentHolder,
+	})
+	local bigger = sizeButton(3, "Bigger", "➕")
+	separator(2)
+	local backTool = tool(3, "Back", "⏬", "Back", P.Mint)
+	local frontTool = tool(4, "Front", "⏫", "Front", P.Mint)
+	separator(5)
+	local flipTool = tool(6, "Flip", "↔️", "Flip", P.Sky)
+	local copyTool = tool(7, "Copy", "📑", "Copy", P.Butter)
+	local sendTool = tool(8, "Send", "🚪", "Send", P.Peach)
+	separator(9)
+	local storeTool = tool(10, "Store", "📦", "Put away", P.Red, WHITE)
+	-- (téléphone : la barre cache l'inventaire -> "OK" pour le retrouver)
+	local doneTool = tool(-1, "Deselect", "✔️", "OK", P.Green, WHITE)
+	doneTool.Button.Visible = false
+	local doneSep = separator(0)
+	doneSep.Visible = false
+
+	HouseButtons.Tip(smaller.Button, function()
+		return HouseButtons.TipText("Make smaller", "( - )")
+	end)
+	HouseButtons.Tip(bigger.Button, function()
+		return HouseButtons.TipText("Make bigger", "( + )")
+	end)
+	HouseButtons.Tip(backTool.Button, function()
+		return HouseButtons.TipText("Send backward", "( Page Down )")
+	end)
+	HouseButtons.Tip(frontTool.Button, function()
+		return HouseButtons.TipText("Bring forward", "( Page Up )")
+	end)
+	HouseButtons.Tip(flipTool.Button, function()
+		return HouseButtons.TipText("Flip left / right", "( F )")
+	end)
+	HouseButtons.Tip(copyTool.Button, function()
+		return HouseButtons.TipText("Duplicate", "( Ctrl+D )")
+	end)
+	HouseButtons.Tip(sendTool.Button, function()
+		return HouseButtons.TipText("Send to another room")
+	end)
+	HouseButtons.Tip(storeTool.Button, function()
+		return HouseButtons.TipText("Put away in the inventory", "( Delete )")
+	end)
 
 	-- Pastille "+2 ❤️" etc. au-dessus d'un objet (calque des effets)
 	local function floatAt(sticker: Sticker, text: string, color: Color3)
@@ -408,7 +611,8 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 	----------------------------------------------------------------------
 
 	-- Clé de tri : (zone, couche Z, Y, X) ; un objet posé sur un meuble
-	-- passe juste devant ce meuble (HouseSurfaces.Order)
+	-- passe juste devant ce meuble, une chaise à table juste derrière /
+	-- devant elle (HouseSurfaces.Order)
 	local function rankOf(entry: Placed): number
 		local sticker = stickers[entry]
 		return sticker and zoneRank(sticker) or 2
@@ -460,63 +664,293 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		return al < br and bl < ar and at < bb and bt < ab
 	end
 
+	-- Barre en bas (téléphone / petite scène : à la place de l'inventaire si
+	-- la fenêtre a donné un "hôte", sinon en bas de la scène) ou près de l'objet
+	local docked = false
+	local dockHost: GuiObject? = nil
+	local function wantDocked(): boolean
+		if Interface.IsPhone() then
+			return true
+		end
+		local factor = Interface.Scale > 0 and Interface.Scale or 1
+		local stageWidth = room.Stage.AbsoluteSize.X / factor
+		return stageWidth > 0 and stageWidth < DOCK_BELOW
+	end
+	local function applyToolbarMode()
+		local dock = wantDocked()
+		local host = dockHost
+		local parent: Instance = dock and (host or room.Stage) or room.Overlay
+		if dock == docked and toolbar.Parent == parent then
+			return
+		end
+		docked = dock
+		HouseButtons.HideTipOf(toolbar)
+		if host and not dock then
+			host.Visible = false
+		end
+		doneTool.Button.Visible = dock and host ~= nil
+		doneSep.Visible = doneTool.Button.Visible
+		if dock then
+			toolbar.Parent = parent
+			toolbar.ZIndex = 25
+			toolbarScale.Scale = 1
+			if host then
+				-- (une seule rangée : nom à gauche, outils à droite)
+				toolbarLayout.FillDirection = Enum.FillDirection.Horizontal
+				toolbar.AnchorPoint = Vector2.new(0.5, 0.5)
+				toolbar.Position = UDim2.fromScale(0.5, 0.5)
+			else
+				toolbarLayout.FillDirection = Enum.FillDirection.Vertical
+				toolbar.AnchorPoint = Vector2.new(0.5, 1)
+				toolbar.Position = UDim2.new(0.5, 0, 1, -6)
+			end
+		else
+			toolbarLayout.FillDirection = Enum.FillDirection.Vertical
+			toolbar.Parent = room.Overlay
+			toolbar.ZIndex = 20
+		end
+	end
+
+	-- Taille "naturelle" (px, avant UIScale) d'un cadre à AutomaticSize,
+	-- calculée depuis son contenu (listes, marges, textes) : juste dès la
+	-- première image, sans attendre qu'AbsoluteSize soit mis à jour
+	local function measure(gui: GuiObject): (number, number)
+		local width, height = gui.Size.X.Offset, gui.Size.Y.Offset
+		local auto = gui.AutomaticSize
+		if auto == Enum.AutomaticSize.None then
+			return width, height
+		end
+		local contentW, contentH = 0, 0
+		if gui:IsA("TextLabel") or gui:IsA("TextButton") then
+			local label = gui :: TextLabel
+			if label.Text ~= "" then
+				local ok, size = pcall(function()
+					return TextService:GetTextSize(label.Text, label.TextSize, label.Font, Vector2.new(4000, 1000))
+				end)
+				if ok and typeof(size) == "Vector2" then
+					contentW, contentH = size.X, size.Y
+				else
+					contentW, contentH = (utf8.len(label.Text) or #label.Text) * label.TextSize * 0.55, label.TextSize
+				end
+			end
+		end
+		local list = gui:FindFirstChildOfClass("UIListLayout")
+		local horizontal = list ~= nil and list.FillDirection == Enum.FillDirection.Horizontal
+		local count = 0
+		local sumW, sumH, maxW, maxH = 0, 0, 0, 0
+		for _, child in ipairs(gui:GetChildren()) do
+			if child:IsA("GuiObject") and child.Visible then
+				local w, h = measure(child)
+				count += 1
+				sumW += w
+				sumH += h
+				maxW = math.max(maxW, w)
+				maxH = math.max(maxH, h)
+			end
+		end
+		if list then
+			local gap = list.Padding.Offset * math.max(0, count - 1)
+			if horizontal then
+				contentW, contentH = math.max(contentW, sumW + gap), math.max(contentH, maxH)
+			else
+				contentW, contentH = math.max(contentW, maxW), math.max(contentH, sumH + gap)
+			end
+		else
+			contentW, contentH = math.max(contentW, maxW), math.max(contentH, maxH)
+		end
+		local padding = gui:FindFirstChildOfClass("UIPadding")
+		if padding then
+			contentW += padding.PaddingLeft.Offset + padding.PaddingRight.Offset
+			contentH += padding.PaddingTop.Offset + padding.PaddingBottom.Offset
+		end
+		if auto == Enum.AutomaticSize.X or auto == Enum.AutomaticSize.XY then
+			width = math.max(width, contentW)
+		end
+		if auto == Enum.AutomaticSize.Y or auto == Enum.AutomaticSize.XY then
+			height = math.max(height, contentH)
+		end
+		return width, height
+	end
+
+	-- Hôte (téléphone) : visible avec la barre ; la barre rétrécit si besoin
+	local function fitDockHost(visible: boolean)
+		local host = dockHost
+		if not host or not docked then
+			return
+		end
+		host.Visible = visible
+		if visible then
+			local factor = Interface.Scale > 0 and Interface.Scale or 1
+			local hostWidth = host.AbsoluteSize.X / factor
+			local measuredWidth = measure(toolbar)
+			local barWidth = math.max(measuredWidth, toolbar.AbsoluteSize.X / factor / math.max(0.2, toolbarScale.Scale))
+			if hostWidth > 0 and barWidth > 0 then
+				local wanted = math.clamp((hostWidth - 12) / barWidth, 0.5, 1)
+				if math.abs(wanted - toolbarScale.Scale) > 1e-3 then
+					toolbarScale.Scale = wanted
+				end
+			end
+		end
+	end
+
 	local function positionToolbar()
 		local entry = selected
 		if not entry or not editing or (drag ~= nil and (drag :: Drag).Moved) then
 			toolbar.Visible = false
+			fitDockHost(false)
 			return
 		end
 		local sticker = stickers[entry]
 		if not sticker then
 			toolbar.Visible = false
+			fitDockHost(false)
 			return
 		end
-		local scale = math.max(0.2, room.Scale)
-		toolbarScale.Scale = 1 / scale
-		local _, top, _, bottom = rectOf(entry)
-		local toolbarSize = toolbar.AbsoluteSize
-		local pixelRatio = room.Frame.AbsoluteSize.X / math.max(1, room.Width)
-		local heightInRoom = pixelRatio > 0 and toolbarSize.Y / pixelRatio or 110 / scale
-		local widthInRoom = pixelRatio > 0 and toolbarSize.X / pixelRatio or 400 / scale
-		local x = math.clamp(entry.X * room.Width, widthInRoom / 2 - 10, room.Width - widthInRoom / 2 + 10)
-		if top - heightInRoom - 8 >= -14 then
-			toolbar.AnchorPoint = Vector2.new(0.5, 1)
-			toolbar.Position = UDim2.fromOffset(x, top - 6)
-		else
-			toolbar.AnchorPoint = Vector2.new(0.5, 0)
-			toolbar.Position = UDim2.fromOffset(x, math.min(bottom + 6, room.Height - heightInRoom + 10))
+		applyToolbarMode()
+		if docked then
+			toolbar.Visible = true
+			fitDockHost(true)
+			return
 		end
+		-- Tout est calculé en px de maquette de la pièce (repère de l'Overlay).
+		-- La barre reste ENTIÈREMENT dans la partie visible de la pièce
+		-- (pièce ∩ scène) ; si elle n'y tient pas : dans la scène ; si elle
+		-- n'y tient toujours pas : elle rétrécit.
+		local scale = math.max(0.2, room.Scale)
+		local base = 1 / scale
+		local current = math.max(0.01, toolbarScale.Scale)
+		local pixelRatio = room.Frame.AbsoluteSize.X / math.max(1, room.Width)
+		local toolbarSize = toolbar.AbsoluteSize
+		-- taille "naturelle" de la barre (échelle de base), en px de la pièce
+		-- (contenu mesuré ; AbsoluteSize peut avoir une image de retard)
+		local measuredW, measuredH = measure(toolbar)
+		local naturalW, naturalH = measuredW * base, measuredH * base
+		if pixelRatio > 0 and toolbarSize.X > 0 and toolbarSize.Y > 0 then
+			naturalW = math.max(naturalW, toolbarSize.X / pixelRatio * base / current)
+			naturalH = math.max(naturalH, toolbarSize.Y / pixelRatio * base / current)
+		end
+		if naturalW <= 0 or naturalH <= 0 then
+			naturalW, naturalH = 560 * base, 120 * base
+		end
+		local margin = 6 * base
+		-- partie visible de la scène, dans le repère de la pièce
+		local stageL, stageT, stageR, stageB = -math.huge, -math.huge, math.huge, math.huge
+		if pixelRatio > 0 then
+			local offset = room.Stage.AbsolutePosition - room.Frame.AbsolutePosition
+			local stageSize = room.Stage.AbsoluteSize
+			if stageSize.X > 0 and stageSize.Y > 0 then
+				stageL, stageT = offset.X / pixelRatio, offset.Y / pixelRatio
+				stageR, stageB = stageL + stageSize.X / pixelRatio, stageT + stageSize.Y / pixelRatio
+			end
+		end
+		local function bounds(low: number, high: number, stageLow: number, stageHigh: number, size: number): (number, number)
+			local a, b = math.max(low, stageLow) + margin, math.min(high, stageHigh) - margin
+			if b - a >= size then
+				return a, b
+			end
+			if stageHigh - stageLow < math.huge then
+				return stageLow + margin, stageHigh - margin
+			end
+			return low + margin, high - margin
+		end
+		local left, right = bounds(0, room.Width, stageL, stageR, naturalW)
+		local ceiling, floorLine = bounds(0, room.Height, stageT, stageB, naturalH)
+		-- trop large / trop haute même pour la scène : on rétrécit
+		local fit = 1
+		if naturalW > right - left and right - left > 0 then
+			fit = math.min(fit, (right - left) / naturalW)
+		end
+		if naturalH > floorLine - ceiling and floorLine - ceiling > 0 then
+			fit = math.min(fit, (floorLine - ceiling) / naturalH)
+		end
+		fit = math.max(0.4, fit)
+		local wanted = base * fit
+		if math.abs(wanted - toolbarScale.Scale) > 1e-3 then
+			toolbarScale.Scale = wanted
+		end
+		local w, h = naturalW * fit, naturalH * fit
+		-- horizontal : centrée sur l'objet, bornée (math.clamp exige min <= max)
+		local x = entry.X * room.Width - w / 2
+		x = right - w >= left and math.clamp(x, left, right - w) or (left + right - w) / 2
+		-- vertical : au-dessus de l'objet, sinon en dessous, sinon du côté le plus libre
+		local _, top, _, bottom = rectOf(entry)
+		local y
+		if top - 6 - h >= ceiling then
+			y = top - 6 - h
+		elseif bottom + 6 + h <= floorLine then
+			y = bottom + 6
+		elseif top - ceiling >= floorLine - bottom then
+			y = ceiling
+		else
+			y = floorLine - h
+		end
+		y = floorLine - h >= ceiling and math.clamp(y, ceiling, floorLine - h) or (ceiling + floorLine - h) / 2
+		toolbar.AnchorPoint = Vector2.new(0, 0)
+		toolbar.Position = UDim2.fromOffset(x, y)
 		toolbar.Visible = true
 	end
 
-	local function setDisabled(button: TextButton, disabled: boolean)
-		button.BackgroundTransparency = disabled and 0.55 or 0
-		local icon = button:FindFirstChild("Icon") :: TextLabel?
-		if icon then
-			icon.TextTransparency = disabled and 0.5 or 0
+	-- Où est posé l'objet (étiquette "📍") : meuble porteur ou table de la chaise
+	local function placeText(entry: Placed): string?
+		local support = HouseSurfaces.SupportOf(entry, layout, room.Width, room.Height)
+		if support then
+			local furniture = HouseCommon.ItemsById[support.Entry.I]
+			if furniture then
+				return Locale.T("📍 On: %s", HouseCommon.Name(furniture))
+			end
 		end
+		local seat = HouseSurfaces.SeatedAt(entry, layout, room.Width, room.Height)
+		if seat then
+			local furniture = HouseCommon.ItemsById[seat.Table.I]
+			if furniture then
+				return Locale.T("🪑 At: %s", HouseCommon.Name(furniture))
+			end
+		end
+		return nil
 	end
 
+	local thumbItemId = ""
 	local function refreshToolbarText()
 		local entry = selected
 		local item = entry and HouseCommon.ItemsById[entry.I]
-		if not item then
+		if not entry or not item then
 			return
 		end
+		applyToolbarMode()
 		local roomData = currentRoomData()
 		local comfort = HouseCommon.PlacedComfort(roomData, item)
 		local favorite = HouseCommon.IsFavorite(roomData, item)
-		nameText = string.format("%s %s  ❤️+%s%s", item.Icon, HouseCommon.Name(item), HouseCommon.FormatPercent(comfort), favorite and "  ✨" or "")
-		refreshNameChip()
-		local s = (entry :: Placed).S
-		setDisabled(smallerButton, s <= HouseCommon.MIN_SCALE + 1e-3)
-		setDisabled(biggerButton, s >= HouseCommon.MAX_SCALE - 1e-3)
-		setDisabled(copyButton, available(item.Id) <= 0 or #layout >= roomItems())
-		setDisabled(sendButton, #house.Rooms < 2)
+		local text = string.format("%s  ❤️+%s%s", HouseCommon.Name(item), HouseCommon.FormatPercent(comfort), favorite and "  ✨" or "")
+		if nameLabel.Text ~= text then
+			nameLabel.Text = text
+		end
+		if thumbItemId ~= item.Id then
+			thumbItemId = item.Id
+			for _, child in ipairs(thumb:GetChildren()) do
+				if child:IsA("GuiObject") then
+					child:Destroy()
+				end
+			end
+			HouseArt.Thumbnail(thumb, item, 26, 23)
+		end
+		local place = placeText(entry)
+		placeChip.Visible = place ~= nil and not docked
+		if place and placeLabel.Text ~= place then
+			placeLabel.Text = place
+		end
+		percentLabel.Text = string.format("%d%%", math.floor(entry.S * 100 + 0.5))
+		smaller.SetEnabled(entry.S > HouseCommon.MIN_SCALE + 1e-3)
+		bigger.SetEnabled(entry.S < HouseCommon.MAX_SCALE - 1e-3)
+		copyTool.SetEnabled(available(item.Id) > 0 and #layout < roomItems())
+		sendTool.SetEnabled(#house.Rooms >= 2)
+		flipTool.SetIcon(entry.F and "↩️" or "↔️")
 	end
 
 	local function setSelected(entry: Placed?)
 		if selected == entry then
+			if entry then
+				refreshToolbarText()
+			end
 			positionToolbar()
 			return
 		end
@@ -525,13 +959,14 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 			room.ShowRing(stickers[previous], false)
 		end
 		selected = entry
-		hoverTip = nil
+		HouseButtons.HideTipOf(toolbar)
 		if entry and stickers[entry] then
 			local sticker = stickers[entry]
 			room.ShowRing(sticker, editing)
 			refreshToolbarText()
 			if editing then
-				UIUtil.Pop(bar, 0.6, 0.3)
+				UIUtil.Pop(bar, 0.7, 0.28)
+				UIUtil.Pop(nameChip, 0.6, 0.3)
 			end
 		end
 		positionToolbar()
@@ -665,13 +1100,21 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		UIUtil.Tween(sticker.Pop, 0.35, { Scale = 1 }, Enum.EasingStyle.Back)
 	end
 
-	-- Objets posés sur `entry` (ils le suivent)
-	local function ridersOf(entry: Placed): { Rider }
+	local function applyEntry(entry: Placed)
+		local sticker = stickers[entry]
+		if sticker then
+			sticker.Frame.Position = UDim2.fromScale(entry.X, entry.Y)
+		end
+	end
+
+	-- Objets posés sur `entry` et chaises rangées à cette table (ils le suivent)
+	local function ridersOf(entry: Placed): ({ Rider }, { [Placed]: Placed })
 		local riders: { Rider } = {}
-		for _, other in ipairs(HouseSurfaces.Dependents(entry, layout, room.Width, room.Height)) do
+		local dependents, parents = HouseSurfaces.Dependents(entry, layout, room.Width, room.Height)
+		for _, other in ipairs(dependents) do
 			table.insert(riders, { Entry = other, DX = other.X - entry.X, DY = other.Y - entry.Y })
 		end
-		return riders
+		return riders, parents
 	end
 
 	-- Place les objets posés sur un meuble qui bouge (et leurs autocollants)
@@ -687,31 +1130,108 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		end
 	end
 
-	-- Meuble agrandi / rétréci : ce qui est posé dessus reste sur le dessus
-	local function rescaleRiders(entry: Placed, item: Item, oldX: number, oldY: number, oldS: number, riders: { Rider })
-		local old: Placed = { I = entry.I, X = oldX, Y = oldY, S = oldS, Z = entry.Z }
-		for _, rider in ipairs(riders) do
-			local other = rider.Entry
-			local bx, by = HouseSurfaces.RoomToBox(old, item, other.X, other.Y, room.Width, room.Height)
-			other.X, other.Y = HouseSurfaces.BoxToRoom(entry, item, bx, by, room.Width, room.Height)
-			local otherItem = HouseCommon.ItemsById[other.I]
-			if otherItem then
-				other.X, other.Y = HouseCommon.ClampPosition(otherItem, other.X, other.Y, other.S, room.Width, room.Height, true)
-			end
-			local sticker = stickers[other]
-			if sticker then
-				sticker.Frame.Position = UDim2.fromScale(other.X, other.Y)
+	-- Déplace un objet et ce qui le suit d'un décalage (dx, dy)
+	local function shiftGroup(entry: Placed, dx: number, dy: number, followers: { Placed })
+		entry.X += dx
+		entry.Y += dy
+		applyEntry(entry)
+		for _, other in ipairs(followers) do
+			other.X += dx
+			other.Y += dy
+			applyEntry(other)
+		end
+	end
+
+	-- Chaise rangée à `tableEntry` : se replace à la même place (après un
+	-- changement de taille de la chaise ou de la table)
+	local function reseat(seat: Placed, tableEntry: Placed, kind: string, followers: { Placed })
+		local seatItem = HouseCommon.ItemsById[seat.I]
+		if not seatItem then
+			return
+		end
+		for _, spot in ipairs(HouseSurfaces.SeatSpots(tableEntry, seatItem, seat.S, seat.X, room.Width, room.Height)) do
+			if spot.Kind == kind then
+				local x, y = HouseCommon.ClampPosition(seatItem, spot.X, spot.Y, seat.S, room.Width, room.Height)
+				shiftGroup(seat, x - seat.X, y - seat.Y, followers)
+				return
 			end
 		end
 	end
 
-	-- Meuble rangé : ce qui était dessus tombe par terre (petit rebond)
-	local function dropRiders(entry: Placed)
-		for _, rider in ipairs(ridersOf(entry)) do
+	-- Meuble agrandi / rétréci : ce qui est posé dessus reste sur le dessus,
+	-- les chaises restent rangées à leur place autour de la table
+	local function rescaleRiders(entry: Placed, item: Item, oldX: number, oldY: number, oldS: number, riders: { Rider }, parents: { [Placed]: Placed }, seats: { [Placed]: string })
+		local old: Placed = { I = entry.I, X = oldX, Y = oldY, S = oldS, Z = entry.Z, F = entry.F }
+		-- Ce qui est posé sur une chaise suit sa chaise
+		local seatOf: { [Placed]: Placed } = {}
+		for _, rider in ipairs(riders) do
+			local node = rider.Entry
+			local depth = 0
+			while parents[node] and parents[node] ~= entry and depth < 6 do
+				node = parents[node]
+				depth += 1
+			end
+			if seats[node] and node ~= rider.Entry then
+				seatOf[rider.Entry] = node
+			end
+		end
+		for seat, kind in pairs(seats) do
+			local followers = {}
+			for other, owner in pairs(seatOf) do
+				if owner == seat then
+					table.insert(followers, other)
+				end
+			end
+			reseat(seat, entry, kind, followers)
+		end
+		for _, rider in ipairs(riders) do
 			local other = rider.Entry
+			if not seats[other] and not seatOf[other] then
+				local bx, by = HouseSurfaces.RoomToBox(old, item, other.X, other.Y, room.Width, room.Height)
+				other.X, other.Y = HouseSurfaces.BoxToRoom(entry, item, bx, by, room.Width, room.Height)
+				local otherItem = HouseCommon.ItemsById[other.I]
+				if otherItem then
+					other.X, other.Y = HouseCommon.ClampPosition(otherItem, other.X, other.Y, other.S, room.Width, room.Height, true)
+				end
+				applyEntry(other)
+			end
+		end
+	end
+
+	-- Chaises rangées à cette table (et leur place)
+	local function seatsOf(entry: Placed, riders: { Rider }): { [Placed]: string }
+		local seats: { [Placed]: string } = {}
+		if not HouseSurfaces.IsTable(entry.I) then
+			return seats
+		end
+		for _, rider in ipairs(riders) do
+			local spot = HouseSurfaces.SeatedAt(rider.Entry, layout, room.Width, room.Height)
+			if spot and spot.Table == entry then
+				seats[rider.Entry] = spot.Kind
+			end
+		end
+		return seats
+	end
+
+	-- Meuble rangé / envoyé ailleurs : ce qui était posé dessus tombe par
+	-- terre (petit rebond) ; les chaises autour d'une table restent où elles sont
+	local function dropRiders(entry: Placed)
+		local riders, parents = ridersOf(entry)
+		local seats = seatsOf(entry, riders)
+		for _, rider in ipairs(riders) do
+			local other = rider.Entry
+			-- (ce qui est sur une chaise reste sur la chaise)
+			local node = other
+			local onSeat = seats[other] ~= nil
+			local depth = 0
+			while not onSeat and parents[node] and parents[node] ~= entry and depth < 6 do
+				node = parents[node]
+				onSeat = seats[node] ~= nil
+				depth += 1
+			end
 			local item = HouseCommon.ItemsById[other.I]
 			local sticker = stickers[other]
-			if item then
+			if item and not onSeat then
 				local fromY = other.Y
 				other.X, other.Y = HouseCommon.ClampPosition(item, other.X, entry.Y + 0.01, other.S, room.Width, room.Height)
 				if sticker then
@@ -726,6 +1246,12 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 
 	local function beginDrag(entry: Placed, input: InputObject)
 		local pointer = room.ScreenToRoom(Vector2.new(input.Position.X, input.Position.Y))
+		local riders = ridersOf(entry)
+		local skip: { [Placed]: boolean } = { [entry] = true }
+		for _, rider in ipairs(riders) do
+			skip[rider.Entry] = true
+		end
+		local item = HouseCommon.ItemsById[entry.I]
 		drag = {
 			Entry = entry,
 			Input = input,
@@ -734,8 +1260,13 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 			Start = Vector2.new(input.Position.X, input.Position.Y),
 			Moved = false,
 			Before = copyList(layout),
-			Riders = ridersOf(entry),
+			Riders = riders,
+			Skip = skip,
+			Tabletop = HouseSurfaces.CanStandOn(item),
+			IsSeat = HouseSurfaces.IsSeat(entry.I),
 			Surface = nil,
+			Seat = nil,
+			HintKey = "",
 			WasOn = HouseSurfaces.SupportOf(entry, layout, room.Width, room.Height) ~= nil,
 		}
 	end
@@ -792,18 +1323,25 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		table.clear(stickers)
 	end
 
+	local function clearHints()
+		room.SetZoneHint(nil)
+		room.SetGrid(false)
+		room.SetSurfaceHint(nil)
+		room.ShowSurfaces(nil)
+		room.SetTargetGlow(nil)
+	end
+
 	local function rebuildFrom(list: { Placed }, keepSelection: boolean?)
 		local keepIndex: number? = nil
 		if selected and keepSelection ~= false then
 			keepIndex = table.find(layout, selected :: Placed)
 		end
 		drag = nil
-		room.SetZoneHint(nil)
-		room.SetGrid(false)
+		clearHints()
 		clearStickers()
 		layout = {}
 		for _, entry in ipairs(list) do
-			local copy = { I = entry.I, X = entry.X, Y = entry.Y, S = entry.S, Z = entry.Z }
+			local copy = copyEntry(entry)
 			if attachSticker(copy) then
 				table.insert(layout, copy)
 			end
@@ -853,13 +1391,6 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		end
 	end
 
-	local function applyEntry(entry: Placed)
-		local sticker = stickers[entry]
-		if sticker then
-			sticker.Frame.Position = UDim2.fromScale(entry.X, entry.Y)
-		end
-	end
-
 	local function snapPoint(item: Item, x: number, y: number, s: number): (number, number)
 		if snapEnabled then
 			local stepX = GRID / math.max(1, room.Width)
@@ -882,17 +1413,27 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 			return
 		end
 		pushUndo()
-		local riders = ridersOf(entry)
+		local riders, parents = ridersOf(entry)
+		local seats = seatsOf(entry, riders)
 		local support = HouseSurfaces.SupportOf(entry, layout, room.Width, room.Height)
+		local seated = HouseSurfaces.SeatedAt(entry, layout, room.Width, room.Height)
 		local oldX, oldY, oldS = entry.X, entry.Y, entry.S
 		entry.S = newScale
 		-- Plus grand : l'objet doit rester dans sa zone
 		entry.X, entry.Y = HouseCommon.ClampPosition(sticker.Item, entry.X, entry.Y, entry.S, room.Width, room.Height, support ~= nil)
 		sticker.Frame.Position = UDim2.fromScale(entry.X, entry.Y)
 		if #riders > 0 then
-			rescaleRiders(entry, sticker.Item, oldX, oldY, oldS, riders)
-			resort()
+			rescaleRiders(entry, sticker.Item, oldX, oldY, oldS, riders, parents, seats)
 		end
+		-- Chaise rangée à une table : elle reste bien rangée (avec ce qui est dessus)
+		if seated then
+			local followers = {}
+			for _, rider in ipairs(riders) do
+				table.insert(followers, rider.Entry)
+			end
+			reseat(entry, seated.Table, seated.Kind, followers)
+		end
+		resort()
 		UIUtil.Tween(sticker.Scale, 0.2, { Scale = sticker.Item.Size * newScale / 100 }, Enum.EasingStyle.Back)
 		local ringStroke = sticker.RingStroke
 		if ringStroke then
@@ -903,11 +1444,55 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		markDirty()
 	end
 
+	-- Chaise rangée à une table : "devant" / "derrière" la font changer de place
+	local function restackSeat(entry: Placed, forward: boolean, button: GuiObject): boolean
+		local seated = HouseSurfaces.SeatedAt(entry, layout, room.Width, room.Height)
+		if not seated then
+			return false
+		end
+		local want = forward and "Front" or "Behind"
+		if seated.Kind == want then
+			refuse(button, forward and Locale.T("Already in front!") or Locale.T("Already at the back!"))
+			return true
+		end
+		local item = HouseCommon.ItemsById[entry.I]
+		if not item then
+			return true
+		end
+		for _, spot in ipairs(HouseSurfaces.SeatSpots(seated.Table, item, entry.S, entry.X, room.Width, room.Height)) do
+			if spot.Kind == want then
+				pushUndo()
+				local riders = ridersOf(entry)
+				local followers = {}
+				for _, rider in ipairs(riders) do
+					table.insert(followers, rider.Entry)
+				end
+				local x, y = HouseCommon.ClampPosition(item, spot.X, spot.Y, entry.S, room.Width, room.Height)
+				shiftGroup(entry, x - entry.X, y - entry.Y, followers)
+				entry.Z = seated.Table.Z
+				local sticker = stickers[entry]
+				if sticker then
+					wiggle(sticker)
+				end
+				resort()
+				positionToolbar()
+				SoundManager.Play("Click", forward and 1.15 or 0.9)
+				markDirty()
+				return true
+			end
+		end
+		refuse(button, Locale.T("No room for this chair there"))
+		return true
+	end
+
 	-- Devant / derrière : passe devant (ou derrière) TOUS les objets qui le chevauchent
 	local function restack(forward: boolean, button: GuiObject)
 		local entry = selected
 		local sticker = entry and stickers[entry]
 		if not entry or not sticker then
+			return
+		end
+		if HouseSurfaces.IsSeat(entry.I) and restackSeat(entry, forward, button) then
 			return
 		end
 		local order = sortedEntries()
@@ -934,6 +1519,43 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		wiggle(sticker)
 		SoundManager.Play("Click", forward and 1.15 or 0.9)
 		markDirty()
+	end
+
+	-- Retourne l'objet (miroir) ; un meuble retourné emporte ce qui est
+	-- posé dessus et ses chaises (elles restent tournées vers la table)
+	local function flip(): boolean
+		local entry = selected
+		local sticker = entry and stickers[entry]
+		if not entry or not sticker then
+			return false
+		end
+		pushUndo()
+		local riders = ridersOf(entry)
+		local flipped = entry.F ~= true
+		entry.F = flipped or nil
+		room.SetFlip(sticker, flipped)
+		for _, rider in ipairs(riders) do
+			local other = rider.Entry
+			other.X = entry.X - (other.X - entry.X)
+			local info = HouseSurfaces.Seat(other.I)
+			local otherSticker = stickers[other]
+			if info and info.View == "Side" then
+				other.F = (other.F ~= true) or nil
+				if otherSticker then
+					room.SetFlip(otherSticker, other.F == true)
+				end
+			end
+			local otherItem = HouseCommon.ItemsById[other.I]
+			if otherItem then
+				other.X = math.clamp(other.X, 0, 1)
+			end
+			applyEntry(other)
+		end
+		wiggle(sticker)
+		SoundManager.Play("Click", flipped and 1.25 or 1.05)
+		resort()
+		markDirty()
+		return true
 	end
 
 	local function removeEntry(entry: Placed, color: Color3)
@@ -1032,42 +1654,84 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		return spot.X, spot.Y
 	end
 
-	-- Petite déco (tasse, plante, lampe...) : une place libre SUR un meuble
-	-- si possible (on la voit tout de suite posée sur la table)
-	local SURFACE_CATEGORIES = { Kitchen = true, Plants = true, Decor = true, Electronics = true, Lights = true }
+	-- Petit objet : une place libre SUR un meuble si possible (la nourriture
+	-- sur une table, un coussin ou une peluche sur le lit...)
 	local function surfaceSpot(item: Item): (number?, number?)
-		if not HouseSurfaces.CanStandOn(item) or not SURFACE_CATEGORIES[item.Category] then
+		if not HouseSurfaces.CanStandOn(item) or item.Category == "Pets" then
 			return nil, nil
 		end
 		local height = item.Size / math.max(1, room.Height)
 		local halfW = item.Size * 0.3 / math.max(1, room.Width)
-		local candidates: { Vector2 } = {}
+		local candidates: { { Point: Vector2, Pref: number } } = {}
+		local bestPref = 0
 		for _, entry in ipairs(layout) do
 			if HouseSurfaces.Has(entry.I) then
-				for _, surface in ipairs(HouseSurfaces.Of(entry, room.Width, room.Height)) do
-					if surface.Y >= HouseSurfaces.MinY() and surface.Y - height * 0.92 > -0.02 and surface.R - surface.L > halfW * 2 then
-						for _, t in ipairs({ 0.2, 0.5, 0.8 }) do
-							local x = surface.L + (surface.R - surface.L) * t
-							local free = true
-							for _, other in ipairs(layout) do
-								if math.abs(other.Y - surface.Y) < 0.01 and math.abs(other.X - x) < halfW * 1.6 then
-									free = false
-									break
+				local pref = HouseSurfaces.Preference(item, entry.I)
+				if pref > 0 then
+					for _, surface in ipairs(HouseSurfaces.Of(entry, room.Width, room.Height)) do
+						if surface.Y >= HouseSurfaces.MinY() and surface.Y - height * 0.92 > -0.02 and surface.R - surface.L > halfW * 2 then
+							for _, t in ipairs({ 0.2, 0.5, 0.8 }) do
+								local x = surface.L + (surface.R - surface.L) * t
+								local free = true
+								for _, other in ipairs(layout) do
+									if math.abs(other.Y - surface.Y) < 0.01 and math.abs(other.X - x) < halfW * 1.6 then
+										free = false
+										break
+									end
 								end
-							end
-							if free then
-								table.insert(candidates, Vector2.new(x, surface.Y))
+								if free then
+									table.insert(candidates, { Point = Vector2.new(x, surface.Y), Pref = pref })
+									bestPref = math.max(bestPref, pref)
+								end
 							end
 						end
 					end
 				end
 			end
 		end
-		if #candidates == 0 then
+		local best: { Vector2 } = {}
+		for _, candidate in ipairs(candidates) do
+			if candidate.Pref == bestPref then
+				table.insert(best, candidate.Point)
+			end
+		end
+		-- (hors cuisine et coussins : pas toujours sur un meuble, sinon tout s'y entasse)
+		if #best == 0 or (bestPref < 2 and item.Category ~= "Kitchen" and math.random() < 0.35) then
 			return nil, nil
 		end
-		local pick = candidates[math.random(1, #candidates)]
+		local pick = best[math.random(1, #best)]
 		return HouseCommon.ClampPosition(item, pick.X, pick.Y, 1, room.Width, room.Height, true)
+	end
+
+	-- Chaise : une place libre à une table (côtés d'abord, puis derrière)
+	local function seatSpotFor(item: Item, scale: number, except: Placed?): HouseSurfaces.SeatSpot?
+		if not HouseSurfaces.IsSeat(item.Id) then
+			return nil
+		end
+		for _, kindWanted in ipairs({ "Left", "Right", "Behind", "Front" }) do
+			for _, tableEntry in ipairs(layout) do
+				if HouseSurfaces.IsTable(tableEntry.I) then
+					for _, spot in ipairs(HouseSurfaces.SeatSpots(tableEntry, item, scale, tableEntry.X, room.Width, room.Height)) do
+						if spot.Kind == kindWanted then
+							local taken = false
+							for _, other in ipairs(layout) do
+								if other ~= except and HouseSurfaces.IsSeat(other.I) then
+									local at = HouseSurfaces.SeatedAt(other, layout, room.Width, room.Height)
+									if at and at.Table == tableEntry and at.Kind == kindWanted then
+										taken = true
+										break
+									end
+								end
+							end
+							if not taken and spot.X > 0.03 and spot.X < 0.97 then
+								return spot
+							end
+						end
+					end
+				end
+			end
+		end
+		return nil
 	end
 
 	local function canPlace(itemId: string): (boolean, string?)
@@ -1119,18 +1783,27 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		local item = HouseCommon.ItemsById[itemId]
 		pushUndo()
 		local x, y
+		local flipped: boolean? = nil
+		local z = HouseCommon.DEFAULT_Z
+		local seat = seatSpotFor(item, 1, nil)
 		local onX, onY = surfaceSpot(item)
-		if onX and onY then
+		if seat then
+			x, y = HouseCommon.ClampPosition(item, seat.X, seat.Y, 1, room.Width, room.Height)
+			flipped = seat.F
+			z = seat.Table.Z
+		elseif onX and onY then
 			x, y = onX, onY
 		else
 			x, y = freeSpot(item, layout)
 			x, y = snapPoint(item, x, y, 1)
 		end
-		-- Nouvelle couche au-dessus des objets qu'il chevauche
-		local entry: Placed = { I = itemId, X = x, Y = y, S = 1, Z = HouseCommon.DEFAULT_Z }
-		for _, other in ipairs(layout) do
-			if overlaps(entry, other) then
-				entry.Z = math.max(entry.Z, other.Z)
+		local entry: Placed = { I = itemId, X = x, Y = y, S = 1, Z = z, F = flipped }
+		if not seat then
+			-- Nouvelle couche au-dessus des objets qu'il chevauche
+			for _, other in ipairs(layout) do
+				if overlaps(entry, other) then
+					entry.Z = math.max(entry.Z, other.Z)
+				end
 			end
 		end
 		addEntry(entry, true)
@@ -1149,17 +1822,37 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		end
 		local ok, reason = canPlace(entry.I)
 		if not ok then
-			refuse(copyButton, available(entry.I) <= 0 and Locale.T("No other copy in your inventory: buy one in the shop!") or reason)
+			refuse(copyTool.Button, available(entry.I) <= 0 and Locale.T("No other copy in your inventory: buy one in the shop!") or reason)
 			return false
 		end
 		pushUndo()
-		local offset = math.max(GRID, sticker.Item.Size * entry.S * 0.35)
-		local x = entry.X + offset / math.max(1, room.Width)
-		if x > 0.9 then
-			x = entry.X - offset / math.max(1, room.Width)
+		local item = sticker.Item
+		local copy: Placed = { I = entry.I, X = entry.X, Y = entry.Y, S = entry.S, Z = math.min(HouseCommon.MAX_Z, entry.Z + 1), F = entry.F }
+		local offset = math.max(GRID, item.Size * entry.S * 0.35) / math.max(1, room.Width)
+		local support = HouseSurfaces.SupportOf(entry, layout, room.Width, room.Height)
+		local seat: HouseSurfaces.SeatSpot? = nil
+		if HouseSurfaces.IsSeat(entry.I) and HouseSurfaces.SeatedAt(entry, layout, room.Width, room.Height) then
+			seat = seatSpotFor(item, entry.S, nil)
 		end
-		local copy: Placed = { I = entry.I, X = x, Y = entry.Y, S = entry.S, Z = math.min(HouseCommon.MAX_Z, entry.Z + 1) }
-		copy.X, copy.Y = snapPoint(sticker.Item, copy.X, copy.Y, copy.S)
+		if seat then
+			-- Chaise à table : la copie prend une autre place autour d'une table
+			copy.X, copy.Y = HouseCommon.ClampPosition(item, seat.X, seat.Y, entry.S, room.Width, room.Height)
+			copy.F = seat.F
+			copy.Z = seat.Table.Z
+		elseif support then
+			-- Posé sur un meuble : la copie reste sur le même dessus
+			local x = entry.X + offset
+			if x > support.R then
+				x = entry.X - offset
+			end
+			copy.X, copy.Y = HouseCommon.ClampPosition(item, math.clamp(x, support.L, support.R), support.Y, entry.S, room.Width, room.Height, true)
+		else
+			local x = entry.X + offset
+			if x > 0.9 then
+				x = entry.X - offset
+			end
+			copy.X, copy.Y = snapPoint(item, x, entry.Y, entry.S)
+		end
 		addEntry(copy, false)
 		setSelected(copy)
 		markDirty()
@@ -1176,7 +1869,7 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		end
 		local targetList = copyList(layoutOfRoom(targetId))
 		if #targetList >= roomItems() then
-			refuse(sendButton, Locale.T("This room is full (%d items)! Decorate another room 🏡", roomItems()))
+			refuse(sendTool.Button, Locale.T("This room is full (%d items)! Decorate another room 🏡", roomItems()))
 			return false
 		end
 		local item = sticker.Item
@@ -1186,7 +1879,7 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		for _, other in ipairs(targetList) do
 			z = math.max(z, other.Z)
 		end
-		table.insert(targetList, { I = entry.I, X = x, Y = y, S = entry.S, Z = z })
+		table.insert(targetList, { I = entry.I, X = x, Y = y, S = entry.S, Z = z, F = entry.F })
 		pushUndo(nil, { Room = targetId, Before = before, After = copyList(targetList) })
 		extras[targetId] = targetList
 		floatAt(sticker, "🚪 → " .. HouseCommon.GetRoomType(target).Icon, C.Lilac)
@@ -1249,28 +1942,31 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		return true
 	end
 
-	smallerButton.Activated:Connect(function()
-		resize(-HouseCommon.SCALE_STEP, smallerButton)
+	smaller.Button.Activated:Connect(function()
+		resize(-HouseCommon.SCALE_STEP, smaller.Button)
 	end)
-	biggerButton.Activated:Connect(function()
-		resize(HouseCommon.SCALE_STEP, biggerButton)
+	bigger.Button.Activated:Connect(function()
+		resize(HouseCommon.SCALE_STEP, bigger.Button)
 	end)
-	frontButton.Activated:Connect(function()
-		restack(true, frontButton)
+	frontTool.Button.Activated:Connect(function()
+		restack(true, frontTool.Button)
 	end)
-	backButton.Activated:Connect(function()
-		restack(false, backButton)
+	backTool.Button.Activated:Connect(function()
+		restack(false, backTool.Button)
 	end)
-	copyButton.Activated:Connect(function()
+	flipTool.Button.Activated:Connect(function()
+		flip()
+	end)
+	copyTool.Button.Activated:Connect(function()
 		duplicate()
 	end)
-	sendButton.Activated:Connect(function()
+	sendTool.Button.Activated:Connect(function()
 		local entry = selected
 		if not entry then
 			return
 		end
 		if #house.Rooms < 2 then
-			refuse(sendButton, Locale.T("Buy another room first! 🏡"))
+			refuse(sendTool.Button, Locale.T("Buy another room first! 🏡"))
 			return
 		end
 		local handler = sendHandler
@@ -1278,11 +1974,15 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 			handler(entry)
 		end
 	end)
-	storeButton.Activated:Connect(function()
+	storeTool.Button.Activated:Connect(function()
 		local entry = selected
 		if entry then
 			store(entry)
 		end
+	end)
+	doneTool.Button.Activated:Connect(function()
+		SoundManager.Play("Click", 1)
+		setSelected(nil)
 	end)
 
 	room.BackgroundHit.Activated:Connect(function()
@@ -1291,6 +1991,24 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		end
 	end)
 	room.Changed:Connect(positionToolbar)
+	room.Stage:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+		if selected and editing then
+			positionToolbar()
+		end
+	end)
+	-- (la taille de la barre change avec le nom / l'étiquette : on la reborne
+	-- au rendu suivant ; même échelle -> même taille, pas de boucle)
+	local toolbarQueued = false
+	toolbar:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+		if toolbarQueued or not (selected and editing) then
+			return
+		end
+		toolbarQueued = true
+		task.defer(function()
+			toolbarQueued = false
+			positionToolbar()
+		end)
+	end)
 
 	----------------------------------------------------------------------
 	-- Glisser-déposer (souris + tactile)
@@ -1304,15 +2022,23 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		drag = nil
 		local entry = current.Entry
 		local sticker = stickers[entry]
-		room.SetZoneHint(nil)
-		room.SetGrid(false)
-		room.SetSurfaceHint(nil)
+		clearHints()
 		if not sticker then
 			return
 		end
 		if current.Moved then
 			pushUndo(current.Before)
 			entry.X, entry.Y = current.Target.X, current.Target.Y
+			local seat = current.Seat
+			if seat then
+				-- Chaise rangée à la table : même couche que la table, tournée vers elle
+				entry.Z = seat.Table.Z
+				local info = HouseSurfaces.Seat(entry.I)
+				if info and info.View == "Side" then
+					entry.F = seat.F == true or nil
+				end
+			end
+			room.SetFlip(sticker, entry.F == true)
 			sticker.Frame.Position = UDim2.fromScale(entry.X, entry.Y)
 			-- Ce qui est posé dessus suit (et reste dans la pièce)
 			moveRiders(entry, current.Riders)
@@ -1320,7 +2046,8 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 				local other = rider.Entry
 				local otherItem = HouseCommon.ItemsById[other.I]
 				if otherItem then
-					other.X, other.Y = HouseCommon.ClampPosition(otherItem, other.X, other.Y, other.S, room.Width, room.Height, true)
+					local onFurniture = HouseSurfaces.CanStandOn(otherItem)
+					other.X, other.Y = HouseCommon.ClampPosition(otherItem, other.X, other.Y, other.S, room.Width, room.Height, onFurniture)
 					applyEntry(other)
 				end
 				local riderSticker = stickers[other]
@@ -1328,10 +2055,10 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 					UIUtil.Tween(riderSticker.Body, 0.16, { Position = UDim2.fromOffset(0, 0) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 				end
 			end
-			if current.Surface then
-				-- Posé sur un meuble : petites étincelles
+			if current.Surface or seat then
+				-- Posé sur un meuble / rangée à table : petites étincelles
 				task.delay(0.12, function()
-					burstAt(sticker, C.Butter, 6)
+					burstAt(sticker, seat and C.Mint or C.Butter, 7)
 				end)
 			end
 			-- "Plop" : l'objet se pose avec un petit rebond
@@ -1348,6 +2075,27 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		positionToolbar()
 	end
 
+	-- Texte de l'étiquette pendant un glissement
+	local function hintFor(surface: HouseSurfaces.Surface?, seat: HouseSurfaces.SeatSpot?): string?
+		if surface then
+			local furniture = HouseCommon.ItemsById[surface.Entry.I]
+			return furniture and Locale.T("✨ Put on: %s", HouseCommon.Name(furniture)) or nil
+		elseif seat then
+			local furniture = HouseCommon.ItemsById[seat.Table.I]
+			if not furniture then
+				return nil
+			end
+			local name = HouseCommon.Name(furniture)
+			if seat.Kind == "Behind" then
+				return Locale.T("🪑 Behind: %s", name)
+			elseif seat.Kind == "Front" then
+				return Locale.T("🪑 In front of: %s", name)
+			end
+			return Locale.T("🪑 At the side of: %s", name)
+		end
+		return nil
+	end
+
 	UserInputService.InputChanged:Connect(function(input: InputObject)
 		local current = drag
 		if not current or not active then
@@ -1361,42 +2109,47 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 			return
 		end
 		local position = Vector2.new(input.Position.X, input.Position.Y)
+		local sticker = stickers[current.Entry]
+		if not sticker then
+			return
+		end
+		local item = sticker.Item
 		if not current.Moved then
 			if (position - current.Start).Magnitude < DRAG_THRESHOLD then
 				return
 			end
 			current.Moved = true
-			local sticker = stickers[current.Entry]
-			if sticker then
-				UIUtil.Tween(sticker.Pop, 0.15, { Scale = LIFT_SCALE }, Enum.EasingStyle.Back)
-				UIUtil.Tween(sticker.Body, 0.15, { Position = UDim2.fromOffset(0, -8) })
-				room.SetZoneHint(sticker.Item.Placement)
-				for _, rider in ipairs(current.Riders) do
-					local riderSticker = stickers[rider.Entry]
-					if riderSticker then
-						UIUtil.Tween(riderSticker.Body, 0.15, { Position = UDim2.fromOffset(0, -8) })
-					end
+			UIUtil.Tween(sticker.Pop, 0.15, { Scale = LIFT_SCALE }, Enum.EasingStyle.Back)
+			UIUtil.Tween(sticker.Body, 0.15, { Position = UDim2.fromOffset(0, -8) })
+			room.SetZoneHint(item.Placement)
+			for _, rider in ipairs(current.Riders) do
+				local riderSticker = stickers[rider.Entry]
+				if riderSticker then
+					UIUtil.Tween(riderSticker.Body, 0.15, { Position = UDim2.fromOffset(0, -8) })
 				end
-				room.SetGrid(snapEnabled, GRID)
-				SoundManager.Play("Click", 1.3)
 			end
+			room.SetGrid(snapEnabled, GRID)
+			-- Toutes les places possibles s'allument (petit objet)
+			if current.Tabletop then
+				local height = item.Size * current.Entry.S / math.max(1, room.Height)
+				room.ShowSurfaces(HouseSurfaces.All(layout, height, room.Width, room.Height, current.Skip))
+			end
+			SoundManager.Play("Click", 1.3)
 			resort()
 			toolbar.Visible = false
-		end
-		local sticker = stickers[current.Entry]
-		if not sticker then
-			return
+			HouseButtons.HideTipOf(toolbar)
 		end
 		local pointer = room.ScreenToRoom(position) + current.Offset
-		-- Petit objet au-dessus d'un meuble : il se pose SUR le meuble
+		-- Petit objet au-dessus d'un meuble : il se pose SUR le meuble ;
+		-- chaise près d'une table : elle se range à la table
 		local surface: HouseSurfaces.Surface? = nil
-		if HouseSurfaces.CanStandOn(sticker.Item) then
-			local skip: { [Placed]: boolean } = { [current.Entry] = true }
-			for _, rider in ipairs(current.Riders) do
-				skip[rider.Entry] = true
-			end
-			local height = sticker.Item.Size * current.Entry.S / math.max(1, room.Height)
-			surface = HouseSurfaces.Find(layout, pointer.X, pointer.Y, height, room.Width, room.Height, skip)
+		local seat: HouseSurfaces.SeatSpot? = nil
+		if current.Tabletop then
+			local height = item.Size * current.Entry.S / math.max(1, room.Height)
+			surface = HouseSurfaces.Find(layout, pointer.X, pointer.Y, height, room.Width, room.Height, current.Skip)
+		end
+		if not surface and current.IsSeat then
+			seat = HouseSurfaces.FindSeat(layout, current.Entry, pointer.X, pointer.Y, room.Width, room.Height, current.Skip)
 		end
 		local x, y
 		if surface then
@@ -1404,15 +2157,47 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 			if snapEnabled then
 				x = math.clamp(roundTo(x, GRID / math.max(1, room.Width)), surface.L, surface.R)
 			end
-			x, y = HouseCommon.ClampPosition(sticker.Item, x, surface.Y, current.Entry.S, room.Width, room.Height, true)
+			x, y = HouseCommon.ClampPosition(item, x, surface.Y, current.Entry.S, room.Width, room.Height, true)
+		elseif seat then
+			x, y = HouseCommon.ClampPosition(item, seat.X, seat.Y, current.Entry.S, room.Width, room.Height)
 		else
-			x, y = snapPoint(sticker.Item, pointer.X, pointer.Y, current.Entry.S)
+			x, y = snapPoint(item, pointer.X, pointer.Y, current.Entry.S)
 		end
-		if (surface ~= nil) ~= (current.Surface ~= nil) and surface then
-			SoundManager.Play("Click", 1.45)
+		-- Indices : dessus visé / place à table, meuble entouré, petit "clic"
+		local key = ""
+		if surface then
+			key = string.format("S%s:%d", tostring(surface.Entry), surface.Index)
+		elseif seat then
+			key = string.format("C%s:%s", tostring(seat.Table), seat.Kind)
+		end
+		if key ~= current.HintKey then
+			current.HintKey = key
+			if key ~= "" then
+				SoundManager.Play("Click", 1.45)
+			end
+		end
+		local label = hintFor(surface, seat)
+		if surface then
+			room.SetSurfaceHint(surface, label, C.PinkDeep)
+			room.SetTargetGlow(stickers[surface.Entry])
+		elseif seat then
+			room.SetSurfaceHint({ L = seat.L, R = seat.R, Y = seat.Top }, label, SEAT_TINT)
+			room.SetTargetGlow(stickers[seat.Table])
+		else
+			room.SetSurfaceHint(nil)
+			room.SetTargetGlow(nil)
+		end
+		-- Chaise de profil : elle se tourne vers la table (aperçu en direct)
+		if current.IsSeat then
+			local info = HouseSurfaces.Seat(item.Id)
+			local wantFlip = current.Entry.F == true
+			if seat and info and info.View == "Side" then
+				wantFlip = seat.F == true
+			end
+			room.SetFlip(sticker, wantFlip)
 		end
 		current.Surface = surface
-		room.SetSurfaceHint(surface)
+		current.Seat = seat
 		current.Target = Vector2.new(x, y)
 	end)
 
@@ -1461,16 +2246,18 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		local step = snapEnabled and GRID or (shift and NUDGE_BIG or NUDGE_SMALL)
 		if ctrl and key == Enum.KeyCode.D then
 			duplicate()
+		elseif key == Enum.KeyCode.F and not ctrl then
+			flip()
 		elseif key == Enum.KeyCode.Delete or key == Enum.KeyCode.Backspace then
 			store(entry)
 		elseif key == Enum.KeyCode.Equals or key == Enum.KeyCode.KeypadPlus then
-			resize(HouseCommon.SCALE_STEP, biggerButton)
+			resize(HouseCommon.SCALE_STEP, bigger.Button)
 		elseif key == Enum.KeyCode.Minus or key == Enum.KeyCode.KeypadMinus then
-			resize(-HouseCommon.SCALE_STEP, smallerButton)
+			resize(-HouseCommon.SCALE_STEP, smaller.Button)
 		elseif key == Enum.KeyCode.PageUp then
-			restack(true, frontButton)
+			restack(true, frontTool.Button)
 		elseif key == Enum.KeyCode.PageDown then
-			restack(false, backButton)
+			restack(false, backTool.Button)
 		elseif key == Enum.KeyCode.Left then
 			nudge(-step, 0)
 		elseif key == Enum.KeyCode.Right then
@@ -1484,16 +2271,17 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		end
 	end)
 
-	-- Taille des boutons (tactile : zones de 44 px)
+	-- Taille des boutons (tactile : zones de 44 px et plus)
 	Interface.DeviceChanged:Connect(function()
-		local size = Interface.IsTouch() and Theme.TouchTarget or 40
-		for _, button in ipairs(toolButtons) do
-			button.Size = UDim2.fromOffset(size + 6, size + 12)
-			local icon = button:FindFirstChild("Icon") :: TextLabel?
-			if icon then
-				icon.TextSize = math.floor(size * 0.5)
+		local w, h = toolSize()
+		for _, candy in ipairs(candies) do
+			if candy.Button.Parent == bar then
+				candy.SetSize(w, h)
+			else
+				candy.SetSize(Interface.IsTouch() and 46 or 40, Interface.IsTouch() and 50 or 46)
 			end
 		end
+		positionToolbar()
 	end)
 
 	----------------------------------------------------------------------
@@ -1613,9 +2401,19 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 			return selected
 		end,
 		Duplicate = duplicate,
+		Flip = flip,
 		SendTo = sendTo,
 		SetSendHandler = function(handler: (entry: Placed) -> ())
 			sendHandler = handler
+		end,
+		SetDockHost = function(host: GuiObject?)
+			local old = dockHost
+			if old and old ~= host then
+				old.Visible = false
+			end
+			dockHost = host
+			docked = false
+			positionToolbar()
 		end,
 		Undo = undo,
 		Redo = redo,

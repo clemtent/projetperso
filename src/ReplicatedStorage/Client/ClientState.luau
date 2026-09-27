@@ -74,6 +74,7 @@ ClientState.IsLoaded = false
 -- Ajouts v8 (petits ticks entre deux états complets)
 ClientState.DopamineChanged = Signal.new() -- (dopamine confirmée : état serveur + clics prédits)
 ClientState.TickReceived = Signal.new() -- (tick) : chaque StateTick, après mise à jour de Data
+ClientState.Clicked = Signal.new() -- (gain prédit) : chaque clic accepté sur le gros bouton (v9 : visuels des améliorations de clic)
 
 -- Prédiction des clics
 local clickSeq = 0
@@ -496,6 +497,7 @@ function ClientState.Click(): number?
 	clickSeq += 1
 	table.insert(pending, { Seq = clickSeq, Amount = gain })
 	Net.Event("Click"):FireServer()
+	ClientState.Clicked:Fire(gain)
 	return gain
 end
 

@@ -3,40 +3,49 @@
 	Emplacement : ServerScriptService > Services > MinigameService
 
 	🕹️ Arcade (amélioration "Arcade", Feature "Minigames") : mini-jeux solo,
-	🎟️ tickets et duels entre joueurs du serveur. 100 % côté serveur.
+	🎟️ tickets, 🏆 trophées et duels entre joueurs du serveur. 100 % côté serveur.
 
 	RemoteFunction "Arcade" (action, argument) -> (succès, résultat | message) :
 	  - "solo:*"    : routé vers Services > Arcade > SoloGames.Handle(player, data,
 	                  action, arg, api) (jeux solo, écrits à part ; chargé avec
 	                  pcall : son absence ne casse jamais l'arcade) ;
 	  - "lobby"     : joueurs du serveur qui ont l'arcade, invitations, duel en cours ;
-	  - "invite"    : { Target = UserId, Game = Id, Stake = tickets } ;
+	  - "invite"    : { Target = UserId, Game = Id, Stake = 🏆 trophées } ;
 	  - "cancel" / "accept" / "decline" (Id d'invitation) ;
 	  - "move"      : { Id = duel, Move = coup } ; "forfeit" (abandon) ;
 	  - "buy"       : Id d'un objet de la boutique à tickets ; "badge" : équipe un badge.
+	    Refus faute de tickets : (false, { Text, Missing = tickets manquants,
+	    Currency = "Tickets" }) -> le client propose d'en acheter (NeedTickets).
 	RemoteEvent "ArcadeEvent" (S -> C) : "invite", "inviteClosed", "duelStart",
 	  "duelUpdate", "duelEnd" (payload = invitation ou état du duel VU par ce joueur).
 
-	Tickets (data.Tickets) : gagnés UNIQUEMENT en jouant (plafond par jour),
-	jamais achetables avec des Robux, sans valeur Robux. Les mises des duels
-	sont en tickets (JAMAIS de Dopamine : la Dopamine s'achète avec des Robux).
+	Deux monnaies (règles Roblox : on ne mise JAMAIS une monnaie achetable) :
+	  - 🎟️ tickets (data.Tickets) : boutique à tickets. Gagnés en jouant
+	    (plafond par jour) ou achetés en Robux (packs : MonetizationService
+	    appelle GrantPurchasedTickets). Jamais misés ;
+	  - 🏆 trophées (data.Trophies) : MISES des duels. Gagnés UNIQUEMENT en
+	    jouant (victoires solo / duel récompensées, plafond par jour) + un
+	    cadeau de bienvenue ; jamais achetables, jamais convertibles.
 
 	Duels :
 	  - invitation d'un joueur du serveur (pas soi-même), mise identique pour
-	    les deux, délai d'expiration, refus, annulation ;
-	  - à l'acceptation : les deux mises sont prises (séquestre) ;
+	    les deux (en 🏆, vérifiée ici pour les DEUX joueurs), délai
+	    d'expiration, refus, annulation ;
+	  - à l'acceptation : les deux mises sont prises (séquestre), revérifiées ;
 	  - état du jeu gardé ICI : coups validés (tour, case libre...), victoire
 	    détectée ici (ArcadeConfig.Logic), temps par coup, durée max ;
-	  - gagnant : les deux mises (mise x2) + Dopamine (secondes de production)
-	    + tickets bonus ; perdant : perd sa mise ; égalité : mises rendues ;
+	  - gagnant : les deux mises (x2, en 🏆) + Dopamine (secondes de
+	    production) + tickets bonus + 1 🏆 bonus (le prix NE dépend PAS de la
+	    mise) ; perdant : perd sa mise ; égalité : mises rendues ;
 	  - déconnexion ou abandon : le joueur qui part perd ;
 	  - anti-abus : limites de duels par jour contre le MÊME joueur (et
 	    récompenses limitées), cadence des invitations, pas de duel contre soi.
 
-	data.Arcade = { Day, DayTickets, DayRewards = { [jeu] = n }, DayPairs = { [UserId] = n },
+	data.Arcade = { Day, DayTickets, DayTrophies, DayRewards = { [jeu] = n }, DayPairs = { [UserId] = n },
 	  DayPairRewards = { [UserId] = n }, DayShop = { [objet] = n }, Best = { [jeu] = record },
 	  Plays / Wins / Losses / Draws = { [jeu] = n }, Badges = { [id] = true }, Badge = id,
-	  History = { dernier duel en premier }, TicketsEarned, Welcomed }
+	  History = { dernier duel en premier ; K = "T" : mise en 🏆 }, TicketsEarned, TrophiesEarned,
+	  TicketsBought, Welcomed, TrophyGift }
 ]]
 
 local Players = game:GetService("Players")
@@ -58,6 +67,7 @@ local random = Random.new()
 local Logic = ArcadeConfig.Logic
 local DUELS = ArcadeConfig.Duels
 local TICKETS = ArcadeConfig.Tickets
+local TROPHIES = ArcadeConfig.Trophies
 local SECONDS_PER_DAY = 86400
 local HISTORY_SIZE = 8
 
@@ -111,25 +121,33 @@ local function ensureArcade(data)
 		data.Tickets = 0
 	end
 	data.Tickets = math.floor(math.min(data.Tickets, TICKETS.Max))
+	if not isValidNumber(data.Trophies) or data.Trophies < 0 then
+		data.Trophies = 0
+	end
+	data.Trophies = math.floor(math.min(data.Trophies, TROPHIES.Max))
 	for _, key in ipairs({ "Best", "Plays", "Wins", "Losses", "Draws", "Badges", "History" }) do
 		arcade[key] = asTable(arcade[key])
 	end
 	if type(arcade.Badge) ~= "string" or not arcade.Badges[arcade.Badge] or not ArcadeConfig.ShopById[arcade.Badge] then
 		arcade.Badge = ""
 	end
-	if not isValidNumber(arcade.TicketsEarned) then
-		arcade.TicketsEarned = 0
+	for _, key in ipairs({ "TicketsEarned", "TrophiesEarned", "TicketsBought" }) do
+		if not isValidNumber(arcade[key]) then
+			arcade[key] = 0
+		end
 	end
 	local day = math.floor(os.time() / SECONDS_PER_DAY)
 	if arcade.Day ~= day then
 		arcade.Day = day
 		arcade.DayTickets = 0
+		arcade.DayTrophies = 0
 		arcade.DayRewards = {}
 		arcade.DayPairs = {}
 		arcade.DayPairRewards = {}
 		arcade.DayShop = {}
 	else
 		arcade.DayTickets = isValidNumber(arcade.DayTickets) and arcade.DayTickets or 0
+		arcade.DayTrophies = isValidNumber(arcade.DayTrophies) and arcade.DayTrophies or 0
 		for _, key in ipairs({ "DayRewards", "DayPairs", "DayPairRewards", "DayShop" }) do
 			arcade[key] = asTable(arcade[key])
 		end
@@ -149,11 +167,13 @@ local function badgeIcon(data): string
 end
 
 local function playerInfo(player: Player)
+	local data = getData(player)
 	return {
 		UserId = player.UserId,
 		Name = player.DisplayName,
 		User = player.Name,
-		Badge = badgeIcon(getData(player)),
+		Badge = badgeIcon(data),
+		Trophies = data and isValidNumber(data.Trophies) and math.floor(data.Trophies) or 0,
 	}
 end
 
@@ -168,10 +188,10 @@ local function incr(map, key, amount: number?)
 end
 
 ----------------------------------------------------------------------
--- Tickets, Dopamine, stats (aussi exposés aux jeux solo via `api`)
+-- Tickets, trophées, Dopamine, stats (aussi exposés aux jeux solo via `api`)
 ----------------------------------------------------------------------
 
--- Ajoute / retire des tickets SANS plafond du jour (mises, pots, remboursements, achats)
+-- Ajoute / retire des 🎟️ tickets SANS plafond du jour (achats en tickets, cadeau, packs Robux)
 local function moveTickets(player: Player, amount: number): number
 	local data = getData(player)
 	if not data or not isValidNumber(amount) then
@@ -187,18 +207,47 @@ end
 -- Tickets GAGNÉS (récompenses) : plafonnés par jour. Renvoie le nombre vraiment donné.
 local function grantTickets(player: Player, amount: number): number
 	local data = getData(player)
-	if not data or not isValidNumber(amount) or amount <= 0 then
+	if not data then
 		return 0
 	end
 	local arcade = ensureArcade(data)
-	local room = math.max(0, TICKETS.DailyCap - arcade.DayTickets)
-	local granted = math.min(math.floor(amount), room)
+	local granted = Logic.CappedGrant(amount, arcade.DayTickets, TICKETS.DailyCap)
 	if granted <= 0 then
 		return 0
 	end
 	granted = moveTickets(player, granted)
 	arcade.DayTickets += granted
 	arcade.TicketsEarned += granted
+	return granted
+end
+
+-- Ajoute / retire des 🏆 trophées SANS plafond du jour (mises en séquestre, pots, remboursements, cadeau)
+local function moveTrophies(player: Player, amount: number): number
+	local data = getData(player)
+	if not data or not isValidNumber(amount) then
+		return 0
+	end
+	ensureArcade(data)
+	local before = data.Trophies
+	data.Trophies = math.clamp(math.floor(before + amount), 0, TROPHIES.Max)
+	changed[player] = true
+	return data.Trophies - before
+end
+
+-- Trophées GAGNÉS en jouant : plafonnés par jour. Renvoie le nombre vraiment donné.
+local function grantTrophies(player: Player, amount: number): number
+	local data = getData(player)
+	if not data then
+		return 0
+	end
+	local arcade = ensureArcade(data)
+	local granted = Logic.CappedGrant(amount, arcade.DayTrophies, TROPHIES.DailyCap)
+	if granted <= 0 then
+		return 0
+	end
+	granted = moveTrophies(player, granted)
+	arcade.DayTrophies += granted
+	arcade.TrophiesEarned += granted
 	return granted
 end
 
@@ -277,7 +326,7 @@ end
 local function rewardWin(player: Player, gameId: string, score: number?)
 	local data = getData(player)
 	local entry = ArcadeConfig.GamesById[gameId]
-	local result = { Tickets = 0, Dopamine = 0, Record = false, Capped = false }
+	local result = { Tickets = 0, Trophies = 0, Dopamine = 0, Record = false, Capped = false }
 	if not data or not entry then
 		return result
 	end
@@ -288,6 +337,7 @@ local function rewardWin(player: Player, gameId: string, score: number?)
 	end
 	if takeDailyReward(player, gameId) then
 		result.Tickets = grantTickets(player, entry.Tickets or 0)
+		result.Trophies = grantTrophies(player, TROPHIES.PerSoloWin)
 		result.Dopamine = grantDopamineSeconds(player, entry.RewardSeconds or 0, true)
 		addStat(player, "MinigamesWon", 1)
 	else
@@ -303,6 +353,7 @@ local soloApi = {
 		return grantDopamineSeconds(player, seconds, true)
 	end,
 	GrantTickets = grantTickets,
+	GrantTrophies = grantTrophies,
 	AddStat = addStat,
 	Notify = function(player: Player, payload)
 		services.GameService:Notify(player, payload)
@@ -499,36 +550,42 @@ local function endDuel(duel, winnerSeat: number, reason: string)
 
 	local entry = gameOf(duel)
 	local results = {}
+	-- Mises en 🏆 (déjà en séquestre) : gagnant x2, perdant rien, égalité rendue
+	local payouts = Logic.StakePayouts(duel.Stake, winnerSeat)
 	for seat, player in ipairs(duel.Players) do
 		local data = getData(player)
 		local other = duel.Players[3 - seat]
-		local result = { Outcome = "Draw", Reason = reason, Tickets = 0, Bonus = 0, Dopamine = 0, Rewarded = false }
+		-- Trophies = gain / perte de la mise ; Bonus = 🎟️ bonus ; TrophyBonus = 🏆 bonus
+		local result = { Outcome = "Draw", Reason = reason, Trophies = 0, Bonus = 0, TrophyBonus = 0, Dopamine = 0, Rewarded = false }
 		results[seat] = result
 		if data then
 			local arcade = ensureArcade(data)
 			addStat(player, "MinigamesPlayed", 1)
 			incr(arcade.Plays, duel.Game)
+			if payouts[seat] > 0 then
+				moveTrophies(player, payouts[seat])
+			end
 			if winnerSeat == 0 then
-				moveTickets(player, duel.Stake) -- mise rendue
 				incr(arcade.Draws, duel.Game)
 			elseif winnerSeat == seat then
 				result.Outcome = "Win"
-				moveTickets(player, duel.Pot) -- les deux mises
-				result.Tickets = duel.Pot - duel.Stake
+				result.Trophies = payouts[seat] - duel.Stake
 				incr(arcade.Wins, duel.Game)
 				local key = tostring(other.UserId)
 				local rewardedToday = tonumber(arcade.DayPairRewards[key]) or 0
 				if rewardedToday < DUELS.PairRewardedPerDay and duel.Moves >= DUELS.MinMovesForReward then
+					-- Prix de la victoire : identique quelle que soit la mise (même en duel amical)
 					arcade.DayPairRewards[key] = rewardedToday + 1
 					result.Rewarded = true
 					result.Bonus = grantTickets(player, TICKETS.DuelWinBonus)
+					result.TrophyBonus = grantTrophies(player, TROPHIES.PerDuelWin)
 					result.Dopamine = grantDopamineSeconds(player, entry.RewardSeconds or 30, true)
 					addStat(player, "MinigamesWon", 1)
 					addStat(player, "DuelsWon", 1)
 				end
 			else
 				result.Outcome = "Lose"
-				result.Tickets = -duel.Stake
+				result.Trophies = -duel.Stake
 				incr(arcade.Losses, duel.Game)
 			end
 			pushHistory(data, {
@@ -536,6 +593,7 @@ local function endDuel(duel, winnerSeat: number, reason: string)
 				O = duel.Infos[3 - seat].Name,
 				R = result.Outcome == "Win" and "W" or (result.Outcome == "Lose" and "L" or "D"),
 				S = duel.Stake,
+				K = "T", -- mise en 🏆 trophées (les anciens duels, sans K, étaient en tickets)
 				T = os.time(),
 			})
 			changed[player] = true
@@ -553,7 +611,7 @@ local function endDuel(duel, winnerSeat: number, reason: string)
 	end
 
 	-- Gros duel : tout le serveur est prévenu
-	if winnerSeat ~= 0 and duel.Stake >= 25 then
+	if winnerSeat ~= 0 and duel.Stake >= (DUELS.AnnounceStake or 5) then
 		local winnerName = duel.Infos[winnerSeat].Name
 		local loserName = duel.Infos[3 - winnerSeat].Name
 		local pot = tostring(duel.Pot)
@@ -561,7 +619,7 @@ local function endDuel(duel, winnerSeat: number, reason: string)
 		services.GameService:NotifyAll(function(lang)
 			return {
 				Type = "Info",
-				Text = Locale.TFor(lang, "⚔️ %s beat %s at %s and won %s 🎟️!", winnerName, loserName, Locale.TFor(lang, gameName), pot),
+				Text = Locale.TFor(lang, "⚔️ %s beat %s at %s and won %s 🏆!", winnerName, loserName, Locale.TFor(lang, gameName), pot),
 			}
 		end)
 	end
@@ -951,14 +1009,22 @@ function ACTIONS.invite(player: Player, data, arg)
 		return false, T(player, "%s just said no. Try again in a moment", target.DisplayName)
 	end
 	local targetData = getData(target)
+	if not targetData then
+		return false, T(player, "This player has left")
+	end
 	if pairCount(data, target, "DayPairs") >= DUELS.PairDailyLimit or pairCount(targetData, player, "DayPairs") >= DUELS.PairDailyLimit then
 		return false, T(player, "You've dueled %s a lot today. Come back tomorrow!", target.DisplayName)
 	end
-	if data.Tickets < stake then
-		return false, T(player, "Not enough tickets")
-	end
-	if targetData.Tickets < stake then
-		return false, T(player, "%s doesn't have enough tickets for this stake", target.DisplayName)
+	-- Mise en 🏆 trophées (jamais en tickets : ils s'achètent en Robux)
+	ensureArcade(targetData)
+	local stakeOk, why = Logic.CheckStake(stake, data.Trophies, targetData.Trophies)
+	if not stakeOk then
+		if why == "self" then
+			return false, T(player, "Not enough trophies: win arcade games to earn some!")
+		elseif why == "other" then
+			return false, T(player, "%s doesn't have enough trophies for this stake", target.DisplayName)
+		end
+		return false, T(player, "Invalid stake")
 	end
 	local previous = outgoingOf(player)
 	if previous then
@@ -1028,22 +1094,25 @@ function ACTIONS.accept(player: Player, data, id)
 		closeInvite(invite, "limit")
 		return false, T(player, "You've dueled %s a lot today. Come back tomorrow!", from.DisplayName)
 	end
+	-- Mise revérifiée au moment d'accepter (les soldes ont pu changer)
 	local stake = invite.Stake
-	if data.Tickets < stake then
-		return false, T(player, "Not enough tickets")
-	end
-	if fromData.Tickets < stake then
-		closeInvite(invite, "tickets")
-		return false, T(player, "%s doesn't have enough tickets anymore", from.DisplayName)
+	ensureArcade(fromData)
+	local stakeOk, why = Logic.CheckStake(stake, data.Trophies, fromData.Trophies)
+	if not stakeOk then
+		if why == "self" then
+			return false, T(player, "Not enough trophies: win arcade games to earn some!")
+		end
+		closeInvite(invite, "trophies")
+		return false, T(player, "%s doesn't have enough trophies anymore", from.DisplayName)
 	end
 	closeInvite(invite, "accepted")
 	-- Les deux joueurs ne sont plus disponibles : leurs autres invitations tombent
 	closeInvitesOf(player, "busy")
 	closeInvitesOf(from, "busy")
-	-- Séquestre : les deux mises sont prises maintenant
+	-- Séquestre : les deux mises (🏆) sont prises maintenant
 	if stake > 0 then
-		moveTickets(player, -stake)
-		moveTickets(from, -stake)
+		moveTrophies(player, -stake)
+		moveTrophies(from, -stake)
 	end
 	local duel = startDuel(invite.Game, from, player, stake)
 	if changed[from] then
@@ -1097,7 +1166,8 @@ function ACTIONS.buy(player: Player, data, itemId)
 		return false, T(player, "Sold out for today. Come back tomorrow!")
 	end
 	if data.Tickets < item.Price then
-		return false, T(player, "Not enough tickets")
+		-- Le client propose alors d'en acheter (fenêtre NeedTickets)
+		return false, { Text = T(player, "Not enough tickets"), Missing = item.Price - data.Tickets, Currency = "Tickets" }
 	end
 	local name = T(player, item.Name)
 	local text
@@ -1164,10 +1234,15 @@ local function onArcade(player: Player, action: any, arg: any)
 		return false, T(player, "The arcade isn't unlocked yet")
 	end
 	local arcade = ensureArcade(data)
-	-- Cadeau de bienvenue (une seule fois)
+	-- Cadeaux de bienvenue (une seule fois chacun ; les trophées sont aussi
+	-- offerts aux joueurs qui avaient déjà l'arcade avant leur arrivée)
 	if not arcade.Welcomed then
 		arcade.Welcomed = true
 		moveTickets(player, TICKETS.StartTickets)
+	end
+	if not arcade.TrophyGift then
+		arcade.TrophyGift = true
+		moveTrophies(player, TROPHIES.WelcomeGift)
 	end
 
 	local okCall, ok, result
@@ -1208,6 +1283,7 @@ function MinigameService:GetClientState(player: Player, data)
 	local arcade = ensureArcade(data)
 	return {
 		Tickets = data.Tickets,
+		Trophies = data.Trophies,
 		Arcade = {
 			Badge = arcade.Badge,
 			Badges = arcade.Badges,
@@ -1218,13 +1294,31 @@ function MinigameService:GetClientState(player: Player, data)
 			Draws = arcade.Draws,
 			History = arcade.History,
 			TicketsEarned = arcade.TicketsEarned,
+			TrophiesEarned = arcade.TrophiesEarned,
 			DayTickets = arcade.DayTickets,
 			DailyCap = TICKETS.DailyCap,
+			DayTrophies = arcade.DayTrophies,
+			TrophyCap = TROPHIES.DailyCap,
 			DayRewards = arcade.DayRewards,
 			DayShop = arcade.DayShop,
 			InDuel = duelOf[player] ~= nil,
 		},
 	}
+end
+
+-- 🎟️ Tickets achetés en Robux (appelé par MonetizationService dans
+-- ProcessReceipt, APRÈS la vérification de l'achat) : ajoutés au même solde
+-- que les tickets gagnés, sans plafond du jour. -> (ajoutés, nouveau solde)
+function MinigameService:GrantPurchasedTickets(player: Player, amount: number): (number, number)
+	local data = getData(player)
+	if not data or not isValidNumber(amount) or amount <= 0 or amount ~= math.floor(amount) then
+		error("montant de tickets invalide : " .. tostring(amount))
+	end
+	local arcade = ensureArcade(data)
+	local added = moveTickets(player, amount)
+	arcade.TicketsBought += added
+	changed[player] = nil -- (MonetizationService renvoie l'état complet lui-même)
+	return added, data.Tickets
 end
 
 function MinigameService:PlayerReady(_player: Player, data)
@@ -1272,6 +1366,7 @@ end
 MinigameService._Internal = {
 	Snapshot = snapshot,
 	EndDuel = endDuel,
+	RewardWin = rewardWin,
 }
 
 return MinigameService

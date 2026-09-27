@@ -60,7 +60,7 @@ export type Mini = {
 local function placedSignature(list: { Placed }): string
 	local parts = table.create(#list)
 	for index, entry in ipairs(list) do
-		parts[index] = string.format("%s:%.3f:%.3f:%.2f:%d", entry.I, entry.X, entry.Y, entry.S, math.floor(entry.Z))
+		parts[index] = string.format("%s:%.3f:%.3f:%.2f:%d%s", entry.I, entry.X, entry.Y, entry.S, math.floor(entry.Z), entry.F and "F" or "")
 	end
 	return table.concat(parts, ";")
 end
@@ -235,12 +235,16 @@ function HouseMiniRoom.new(parent: Instance, width: number, height: number): Min
 			UIUtil.Create("UIScale", { Scale = item.Size * entry.S / 100 * k, Parent = holder })
 			local body = UIUtil.Create("Frame", {
 				Name = "Body",
-				Size = UDim2.fromScale(1, 1),
+				Size = UDim2.fromOffset(100, 100),
 				BackgroundTransparency = 1,
 				ZIndex = 2,
 				Parent = holder,
 			})
 			local result = HouseArt.Paint(body, item, true)
+			if entry.F == true and result ~= nil then
+				-- (objet retourné : chaise tournée vers la table...)
+				HouseArt.Mirror(body, {}, 50)
+			end
 			local flat = result ~= nil and result.Flat == true
 			if result == nil or result.ShowEmoji == true then
 				UIUtil.Create("TextLabel", {

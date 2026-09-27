@@ -363,6 +363,38 @@ function Formulas.GetHouseItemPrice(item, ownedCount: number?): number
 	return math.floor(item.Cost * ((item.CostGrowth or 1) ^ math.floor(owned)))
 end
 
+-- Catégories dont les objets ne se posent jamais SUR un meuble (sauf
+-- Tabletop = true dans la config : valise, carton...)
+local NOT_ON_FURNITURE = { Furniture = true, Doors = true, Windows = true }
+
+-- Vrai si l'objet peut être posé SUR un meuble (table, étagère, lit,
+-- canapé...) : petit objet au sol, pas un meuble ni une porte. Même règle
+-- côté client (éditeur) et serveur (limites de la disposition).
+function Formulas.CanGoOnFurniture(item): boolean
+	if type(item) ~= "table" or item.Placement ~= "Floor" then
+		return false
+	end
+	if item.Tabletop == true then
+		return true
+	elseif item.Tabletop == false or NOT_ON_FURNITURE[item.Category] then
+		return false
+	end
+	local house = Config.House
+	return (tonumber(item.Size) or math.huge) <= (tonumber(house.TabletopMaxSize) or 0)
+end
+
+-- Plus petit Y (pieds) permis pour un objet au sol : celui des objets posés
+-- sur les meubles s'il peut y aller (ou petit objet d'une ancienne
+-- sauvegarde), sinon le haut de la zone du sol
+function Formulas.GetHouseFloorMinY(item): number
+	local house = Config.House
+	local legacy = tonumber(house.LegacyTabletopSize) or 0
+	if Formulas.CanGoOnFurniture(item) or (type(item) == "table" and (tonumber(item.Size) or math.huge) <= legacy) then
+		return tonumber(house.TabletopMinY) or 0.22
+	end
+	return house.WallRatio * 0.85
+end
+
 -- Taille de maison actuelle (config) : la 1re si la sauvegarde est invalide
 function Formulas.GetHouseSize(data)
 	local house = type(data) == "table" and data.House or nil

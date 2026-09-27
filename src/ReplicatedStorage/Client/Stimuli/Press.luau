@@ -125,6 +125,49 @@ local function stripes(n: number, c1: Color3, c2: Color3): ColorSequence
 	return bands(colors)
 end
 
+-- Bandes alternées nettes réparties en plusieurs morceaux côte à côte :
+-- Roblox refuse un dégradé de plus de 20 points (erreur qui arrêtait toute
+-- la carte), donc 10 bandes au maximum par morceau.
+type StripeFill = { SetColors: (a: Color3, b: Color3) -> () }
+local function stripeFill(frame: GuiObject, n: number, c1: Color3, c2: Color3, rotation: number): StripeFill
+	local pieces = math.ceil(n / 10)
+	local gradients: { UIGradient } = {}
+	local starts: { number } = {}
+	local counts: { number } = {}
+	local used = 0
+	frame.BackgroundTransparency = 1
+	for p = 1, pieces do
+		local count = math.floor(n * p / pieces + 0.5) - used
+		local piece = Instance.new("Frame")
+		piece.Name = "Stripes" .. p
+		piece.BorderSizePixel = 0
+		piece.BackgroundColor3 = WHITE
+		piece.Position = UDim2.fromScale(used / n, 0)
+		piece.Size = UDim2.fromScale(count / n, 1)
+		piece.ZIndex = frame.ZIndex
+		piece.Parent = frame
+		local gradient = Instance.new("UIGradient")
+		gradient.Rotation = rotation
+		gradient.Parent = piece
+		gradients[p] = gradient
+		starts[p] = used
+		counts[p] = count
+		used += count
+	end
+	local fill = {}
+	function fill.SetColors(a: Color3, b: Color3)
+		for p, gradient in ipairs(gradients) do
+			local colors = {}
+			for i = 1, counts[p] do
+				colors[i] = ((starts[p] + i) % 2 == 1) and a or b
+			end
+			gradient.Color = bands(colors)
+		end
+	end
+	fill.SetColors(c1, c2)
+	return fill :: StripeFill
+end
+
 local function darker(color: Color3, k: number): Color3
 	return color:Lerp(BLACK, k)
 end
@@ -815,7 +858,7 @@ function Press.Start(ctx)
 	-- Sol (= fond de la carte) + bande de sécurité
 	local floor = box({ Name = "Floor", Position = UDim2.fromOffset(0, FLOOR_Y), Size = UDim2.new(1, 0, 1, -FLOOR_Y), BackgroundTransparency = 1, ZIndex = 2, Parent = card })
 	local floorTape = box({ Position = UDim2.fromOffset(0, 0), Size = UDim2.new(1, 0, 0, 3), BackgroundColor3 = WHITE, ZIndex = 1, Parent = floor })
-	local floorTapeGradient = UIUtil.Gradient(floorTape, stripes(40, rgb(255, 200, 30), INK), 0)
+	local floorTapeStripes = stripeFill(floorTape, 40, rgb(255, 200, 30), INK, 0)
 	-- Grille néon au sol (palier 10)
 	local floorGrid = box({ Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false, ZIndex = 1, Parent = floor })
 	for i = 1, 10 do
@@ -1052,7 +1095,7 @@ function Press.Start(ctx)
 	local crownGradient = UIUtil.Gradient(crown, beamSeq(TIERS[1].Frame), 90)
 	local crownStroke = UIUtil.Stroke(crown, TIERS[1].Outline, 2, 0.1)
 	local crownStripe = box({ Position = UDim2.fromOffset(8, 9), Size = UDim2.new(1, -16, 0, 8), BackgroundColor3 = WHITE, ZIndex = 7, Parent = crown }, 2)
-	local crownStripeGradient = UIUtil.Gradient(crownStripe, stripes(22, TIERS[1].AccentA, TIERS[1].AccentB), 35)
+	local crownStripes = stripeFill(crownStripe, 22, TIERS[1].AccentA, TIERS[1].AccentB, 35)
 
 	-- Tige chromée (derrière la traverse et le plateau)
 	local rod = rbox({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(MX, CROWN_Y + CROWN_H - 2), Size = UDim2.fromOffset(20, 10), BackgroundColor3 = WHITE, ZIndex = 3 })
@@ -1066,7 +1109,7 @@ function Press.Start(ctx)
 	local plateGradient = UIUtil.Gradient(plate, beamSeq(TIERS[1].Frame), 90)
 	local plateStroke = UIUtil.Stroke(plate, TIERS[1].Outline, 1.5, 0.2)
 	local plateStripe = box({ Position = UDim2.fromOffset(8, 4), Size = UDim2.new(1, -16, 0, 6), BackgroundColor3 = WHITE, ZIndex = 6, Parent = plate }, 2)
-	local plateStripeGradient = UIUtil.Gradient(plateStripe, stripes(16, TIERS[1].AccentA, TIERS[1].AccentB), 35)
+	local plateStripes = stripeFill(plateStripe, 16, TIERS[1].AccentA, TIERS[1].AccentB, 35)
 	-- Semelle (plus sombre, en dessous)
 	local die = box({ Position = UDim2.new(0, 10, 1, -5), Size = UDim2.new(1, -20, 0, 5), BackgroundColor3 = rgb(60, 64, 76), ZIndex = 6, Parent = plate }, 1)
 	local guides: { Frame } = {}
@@ -1098,7 +1141,7 @@ function Press.Start(ctx)
 	local bolsterGradient = UIUtil.Gradient(bolster, beamSeq(TIERS[1].Frame), 90)
 	local bolsterStroke = UIUtil.Stroke(bolster, TIERS[1].Outline, 1.5, 0.2)
 	local bolsterStripe = box({ Position = UDim2.fromOffset(6, 12), Size = UDim2.new(1, -12, 0, 8), BackgroundColor3 = WHITE, ZIndex = 5, Parent = bolster }, 2)
-	local bolsterStripeGradient = UIUtil.Gradient(bolsterStripe, stripes(18, TIERS[1].AccentA, TIERS[1].AccentB), 35)
+	local bolsterStripes = stripeFill(bolsterStripe, 18, TIERS[1].AccentA, TIERS[1].AccentB, 35)
 	local led = box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1, -12, 0, 6), Size = UDim2.fromOffset(6, 6), BackgroundColor3 = Theme.Colors.Green, ZIndex = 6, Parent = bolster }, UDim.new(1, 0))
 
 	------------------------------------------------------------------
@@ -1107,7 +1150,7 @@ function Press.Start(ctx)
 	local belt = rbox({ Position = UDim2.fromOffset(BELT_X0, BELT_Y), Size = UDim2.fromOffset(BELT_X1 - BELT_X0, BELT_H), BackgroundColor3 = rgb(40, 42, 50), ClipsDescendants = true, ZIndex = 6 }, 3)
 	local BELT_PERIOD = 12
 	local beltStripes = box({ Size = UDim2.new(1, BELT_PERIOD * 2, 1, 0), BackgroundColor3 = WHITE, ZIndex = 6, Parent = belt })
-	UIUtil.Gradient(beltStripes, stripes(math.floor((BELT_X1 - BELT_X0 + BELT_PERIOD * 2) / (BELT_PERIOD / 2)), rgb(74, 78, 92), rgb(44, 46, 56)), 0)
+	stripeFill(beltStripes, math.floor((BELT_X1 - BELT_X0 + BELT_PERIOD * 2) / (BELT_PERIOD / 2)), rgb(74, 78, 92), rgb(44, 46, 56), 0)
 	box({ Size = UDim2.new(1, 0, 0, 2), BackgroundColor3 = WHITE, BackgroundTransparency = 0.8, ZIndex = 7, Parent = belt })
 	-- Châssis (devant les rouleaux) : à droite de l'enclume et petit bout à gauche
 	local steel = rgb(96, 104, 120)
@@ -1631,7 +1674,11 @@ function Press.Start(ctx)
 			seam.BackgroundColor3 = style.Seam
 		end
 		floorGrid.Visible = style.Neon == true
-		floorTapeGradient.Color = style.Neon and stripes(40, rgb(0, 230, 255), rgb(255, 60, 200)) or stripes(40, rgb(255, 200, 30), INK)
+		if style.Neon then
+			floorTapeStripes.SetColors(rgb(0, 230, 255), rgb(255, 60, 200))
+		else
+			floorTapeStripes.SetColors(rgb(255, 200, 30), INK)
+		end
 		titleLabel.TextColor3 = style.Title
 		counterLabel.TextColor3 = style.Title
 		speedLabel.TextColor3 = style.Dark and rgb(255, 190, 90) or Theme.Colors.Orange
@@ -1655,20 +1702,20 @@ function Press.Start(ctx)
 		crownGradient.Rotation = 90
 		crownStroke.Color = style.Outline
 		crownStroke.Thickness = style.Neon and 2.5 or 2
-		crownStripeGradient.Color = stripes(22, style.AccentA, style.AccentB)
+		crownStripes.SetColors(style.AccentA, style.AccentB)
 		rodGradient.Color = cylinderSeq(style.Chrome)
 		glandGradient.Color = beamSeq(darker(style.Frame, 0.15))
 		plateGradient.Color = beamSeq(style.Frame)
 		plateStroke.Color = style.Outline
 		plateStroke.Thickness = style.Neon and 2 or 1.5
-		plateStripeGradient.Color = stripes(16, style.AccentA, style.AccentB)
+		plateStripes.SetColors(style.AccentA, style.AccentB)
 		for _, gradient in ipairs(guideGradients) do
 			gradient.Color = beamSeq(darker(style.Frame, 0.12))
 		end
 		die.BackgroundColor3 = darker(style.Frame, 0.55)
 		bolsterGradient.Color = beamSeq(darker(style.Frame, 0.05))
 		bolsterStroke.Color = style.Outline
-		bolsterStripeGradient.Color = stripes(18, style.AccentA, style.AccentB)
+		bolsterStripes.SetColors(style.AccentA, style.AccentB)
 		motorGradient.Color = stripes(8, lighter(style.Frame, 0.1), darker(style.Frame, 0.25))
 		motorStroke.Color = style.Outline
 		tankGradient.Color = cylinderSeq(darker(style.Frame, 0.05))

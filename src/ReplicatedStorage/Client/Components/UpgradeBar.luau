@@ -12,15 +12,24 @@
 	    combien il reste avant de pouvoir acheter) ;
 	  - achat : la carte s'écrase puis rebondit, reflet qui balaie la carte,
 	    plaque qui saute, "Nv 4" qui s'envole, étincelles de sa couleur ;
-	  - carte "🔒 teaser" en bout de rangée quand de nouvelles améliorations
-	    arrivent après la prochaine visite à l'océan
-	    (Formulas.GetNextRebirthUnlocks) ;
+	  - carte "🔒 teaser" (v9 : vraie carte "océan" — mer en dégradé, vagues,
+	    hublot + cadenas + "+N", aperçu des icônes) ÉPINGLÉE au bout de la
+	    rangée, hors du défilement (toujours visible, jamais coupée), quand de
+	    nouvelles améliorations arrivent après la prochaine visite à l'océan
+	    (Formulas.GetNextRebirthUnlocks) ; clic = la rangée montre la carte
+	    "Aller à l'océan" ;
+	  - v9 : carte abordable = anneau vert + halo ; trop chère = contour doux
+	    et plaque estompée ; niveau presque au max = barre dorée ; niveau max
+	    atteint = la carte brille en or avec "MAX ✓" avant de partir ;
 	  - infobulle : nom, niveau, description, amélioration requise
 	    (Requires), prix + ce qu'il manque ;
 	  - PC : survol = infobulle, clic = achat ; tactile : 1er appui =
 	    infobulle avec "Acheter", 2e appui = achat ; "Aller à l'océan"
 	    demande toujours une confirmation ;
-	  - carte trop chère : NeedDopamine.Offer (fenêtre "Pas assez de Dopamine").
+	  - carte trop chère (PC ET tactile, "Aller à l'océan" compris) :
+	    NeedDopamine.Offer à CHAQUE clic ; refus du serveur ("pas assez de
+	    Dopamine" alors que le client croyait pouvoir payer) :
+	    NeedDopamine.OfferRefusal avec le vrai manque.
 	L'état "abordable" suit ClientState.Changed ET ClientState.DopamineChanged
 	(s'il existe), limité à 4 mises à jour par seconde (+ filet de sécurité
 	lent pour les clics prédits).
@@ -52,7 +61,11 @@ local Locale = require(ReplicatedStorage.Shared.Locale)
 local UpgradeBar = {}
 
 local DESIGN = 100 -- taille "design" d'une carte (mise à l'échelle ensuite)
-local TEASER_WIDTH = 212 -- largeur "design" de la carte teaser
+local TEASER_WIDTH = 184 -- largeur "design" de la carte teaser (texte + icônes)
+local TEASER_COMPACT_WIDTH = 116 -- teaser compact (rangée étroite : téléphone serré)
+local TEASER_COMPACT_BELOW = 520 -- (px) rangée plus étroite : teaser compact
+local TEASER_MAX_PEEK = 5 -- icônes des nouveautés montrées (large)
+local TEASER_COMPACT_PEEK = 3
 local MAX_WIDTH = 660 -- largeur max de la rangée (au-delà : défilement horizontal)
 local GAP = 12
 local CARD_SIZE = 100
@@ -71,6 +84,10 @@ local PRICE_OK = Color3.fromRGB(70, 222, 110)
 local PRICE_TRACK = Color3.fromRGB(236, 236, 240)
 local PRICE_FILL = Color3.fromRGB(150, 225, 170)
 local OCEAN = Color3.fromRGB(0, 140, 200)
+local AFFORD_EDGE = Color3.fromRGB(34, 197, 94) -- anneau "tu peux l'acheter"
+local AFFORD_GLOW = Color3.fromRGB(74, 222, 128)
+local CARD_EDGE = Color3.fromRGB(198, 202, 214) -- contour doux (trop cher)
+local MAX_GOLD = Color3.fromRGB(255, 190, 20)
 
 -- Mesures selon l'appareil : (taille de carte, taille min, largeur max de la rangée)
 local function metrics(): (number, number, number)
@@ -108,6 +125,7 @@ type Card = {
 	PopScale: UIScale,
 	HD: Frame,
 	Rays: Frame,
+	Glow: Frame,
 	Level: number,
 	Affordable: boolean?,
 	Removing: boolean,
@@ -118,15 +136,26 @@ local scroll: ScrollingFrame
 local cards: { [string]: Card } = {}
 local random = Random.new()
 
+-- Rangée (cartes qui défilent + teaser épinglé au bout)
+local row: Frame
+
 -- Carte "teaser" (améliorations verrouillées jusqu'à la prochaine visite à l'océan)
 local teaser: Frame
+local teaserFitFrame: Frame
 local teaserFit: UIScale
 local teaserButton: TextButton
 local teaserTitle: TextLabel
 local teaserText: TextLabel
-local teaserIcons: TextLabel
+local teaserPlate: Frame
+local teaserBadge: TextLabel
+local teaserPeek: Frame
+local teaserPeekSlots: { Frame } = {}
+local teaserWaves: { Frame } = {}
+local teaserBubbles: { Frame } = {}
 local teaserGate: number? = nil
 local teaserCount = 0
+local teaserCompact = false
+local teaserDesignWidth = TEASER_WIDTH
 
 -- Infobulle
 local tooltip: TextButton
@@ -137,6 +166,9 @@ local tipNeeds: TextLabel
 local tipCost: TextLabel
 local tipMissing: TextLabel
 local tipButton: TextButton
+local tipAccent: Frame -- liseré de couleur en haut (couleur de l'amélioration)
+local tipBar: Frame -- jauge "presque abordable"
+local tipBarFill: Frame
 local tipUpgradeId: string? = nil -- Id de la carte, ou "__teaser"
 local tipPinned = false -- vrai si ouverte par appui (tactile) ou confirmation
 local TEASER_ID = "__teaser"
@@ -229,6 +261,8 @@ local function refreshTeaserTooltip()
 		end
 	end
 	tipName.Text = Locale.T("🔒 Coming after the ocean")
+	tipAccent.BackgroundColor3 = OCEAN
+	tipBar.Visible = false
 	tipLevel.Visible = true
 	tipLevel.Text = Locale.T("Unlocks at %d ocean visits (you: %d)", teaserGate, getRebirths())
 	tipDesc.Text = table.concat(names, "\n")
@@ -261,6 +295,7 @@ local function refreshTooltip()
 	local affordable = dopamine >= cost - 1e-6
 
 	tipName.Text = upgrade.Icon .. "  " .. Locale.T(upgrade.Name)
+	tipAccent.BackgroundColor3 = upgradeColor(upgrade)
 	tipDesc.Text = Formulas.DescribeUpgrade(upgrade, NumberFormatter.Format, getRebirths(), translate)
 	if upgrade.Effect == "Detox" then
 		local rebirths = getRebirths()
@@ -290,9 +325,12 @@ local function refreshTooltip()
 	tipCost.Text = Locale.T("Cost: %s Dopamine", formatAmount(cost))
 	tipCost.TextColor3 = affordable and Theme.Colors.RobuxDark or Theme.Colors.Red
 	tipMissing.Visible = not affordable
+	tipBar.Visible = not affordable
 	if not affordable then
-		local percent = cost > 0 and math.floor(math.clamp(dopamine / cost, 0, 0.99) * 100) or 0
+		local ratio = cost > 0 and math.clamp(dopamine / cost, 0, 0.99) or 0
+		local percent = math.floor(ratio * 100)
 		tipMissing.Text = Locale.T("%d%% there • %s missing", percent, NumberFormatter.Format(cost - dopamine))
+		tipBarFill.Size = UDim2.fromScale(math.max(ratio, 0.03), 1)
 	end
 
 	local needsButton = tipPinned
@@ -343,8 +381,10 @@ local function buildTooltip(layer: Frame)
 		ZIndex = 5,
 		Parent = layer,
 	})
-	UIUtil.Corner(tooltip, 14)
-	UIUtil.Stroke(tooltip, Theme.Colors.CardBorder, 1.5, 0.05)
+	UIUtil.Corner(tooltip, 16)
+	-- v9 : contour doux + léger dégradé (plus de contour noir)
+	UIUtil.Stroke(tooltip, CARD_EDGE, 1.5, 0)
+	UIUtil.Gradient(tooltip, ColorSequence.new(WHITE, Color3.fromRGB(244, 245, 249)), 90)
 	UIUtil.Create("UIScale", { Parent = tooltip })
 	UIUtil.Shadow(tooltip, 5, 0.8, 3)
 	UIUtil.Create("UIPadding", {
@@ -381,6 +421,17 @@ local function buildTooltip(layer: Frame)
 		return line
 	end
 
+	-- Liseré de la couleur de l'amélioration
+	tipAccent = UIUtil.Create("Frame", {
+		Name = "Accent",
+		Size = UDim2.new(1, 0, 0, 4),
+		BackgroundColor3 = Theme.Colors.Blue,
+		BorderSizePixel = 0,
+		LayoutOrder = 0,
+		ZIndex = 6,
+		Parent = tooltip,
+	})
+	UIUtil.Corner(tipAccent, UDim.new(1, 0))
 	tipName = textLine("Name", 1, Theme.Fonts.Title, 21, Theme.Colors.Text)
 	tipLevel = textLine("Level", 2, Theme.Fonts.Title, 14, Theme.Colors.Purple)
 	tipDesc = textLine("Description", 3, Theme.Fonts.Body, 16, Theme.Colors.TextDim)
@@ -397,6 +448,29 @@ local function buildTooltip(layer: Frame)
 	})
 	tipCost = textLine("Cost", 6, Theme.Fonts.Title, 17, Theme.Colors.Text)
 	tipMissing = textLine("Missing", 7, Theme.Fonts.Body, 14, Theme.Colors.TextDim)
+	-- Jauge "tu y es presque" (seulement quand c'est trop cher)
+	tipBar = UIUtil.Create("Frame", {
+		Name = "Progress",
+		Size = UDim2.new(1, 0, 0, 8),
+		BackgroundColor3 = PRICE_TRACK,
+		LayoutOrder = 8,
+		ClipsDescendants = true,
+		Visible = false,
+		ZIndex = 6,
+		Parent = tooltip,
+	})
+	UIUtil.Corner(tipBar, UDim.new(1, 0))
+	tipBarFill = UIUtil.Create("Frame", {
+		Name = "Fill",
+		Size = UDim2.fromScale(0, 1),
+		BackgroundColor3 = WHITE,
+		BorderSizePixel = 0,
+		ZIndex = 7,
+		Parent = tipBar,
+	})
+	tipBarFill:SetAttribute("DarkSkinIgnore", true)
+	UIUtil.Corner(tipBarFill, UDim.new(1, 0))
+	UIUtil.Gradient(tipBarFill, ColorSequence.new(Color3.fromRGB(134, 239, 172), AFFORD_EDGE), 0)
 
 	tipButton = UIUtil.PillButton({
 		Name = "Buy",
@@ -405,7 +479,7 @@ local function buildTooltip(layer: Frame)
 		TextColor3 = Theme.Colors.TextDark,
 		Height = 38,
 		TextSize = 18,
-		LayoutOrder = 8,
+		LayoutOrder = 9,
 		ZIndex = 6,
 		Parent = tooltip,
 	})
@@ -463,10 +537,20 @@ local function styleAffordability(card: Card, animate: boolean)
 		card.PriceStroke.Transparency = 0.75
 	end
 
-	card.Stroke.Thickness = affordable and 2 or 1.5
-	card.Stroke.Transparency = affordable and 0 or 0.5
-	card.Icon.TextTransparency = affordable and 0 or 0.2
-	card.Plate.BackgroundTransparency = affordable and 0 or 0.25
+	-- v9 : abordable = anneau vert + halo ; sinon contour gris doux, plaque estompée
+	if affordable then
+		card.Stroke.Color = AFFORD_EDGE
+		card.Stroke.Thickness = 2.5
+		card.Stroke.Transparency = 0
+	else
+		card.Stroke.Color = darkMode and Theme.DarkColors.CardBorder
+			or (hdEnabled and upgradeColor(upgrade):Lerp(BLACK, 0.35) or CARD_EDGE)
+		card.Stroke.Thickness = 1.5
+		card.Stroke.Transparency = darkMode and 0.62 or 0
+	end
+	card.Glow.Visible = affordable
+	card.Icon.TextTransparency = affordable and 0 or 0.25
+	card.Plate.BackgroundTransparency = affordable and 0 or 0.3
 
 	-- Devient abordable : petit "pop" pour attirer l'œil
 	if card.Affordable == false and affordable and animate and tipUpgradeId ~= upgrade.Id then
@@ -502,7 +586,7 @@ local function styleCard(card: Card)
 			button.BackgroundTransparency = 0
 		end
 	end
-	card.Stroke.Color = darkMode and Theme.DarkColors.CardBorder or Theme.Colors.CardBorder
+	-- (contour : voir styleAffordability, selon abordable ou non)
 	styleAffordability(card, false)
 end
 
@@ -528,7 +612,12 @@ local function styleLevel(card: Card, data)
 		card.LevelText.Text = tostring(level)
 		card.LevelTrack.Visible = upgrade.MaxLevel ~= nil
 		if upgrade.MaxLevel then
-			card.LevelFill.Size = UDim2.fromScale(math.clamp(level / upgrade.MaxLevel, 0, 1), 1)
+			local ratio = math.clamp(level / upgrade.MaxLevel, 0, 1)
+			card.LevelFill.Size = UDim2.fromScale(ratio, 1)
+			-- Presque au max : la barre (et la pastille) passent à l'or
+			local nearMax = level >= upgrade.MaxLevel - 1 and level > 0
+			card.LevelFill.BackgroundColor3 = nearMax and MAX_GOLD or upgradeColor(upgrade):Lerp(BLACK, 0.1)
+			card.LevelChip.BackgroundColor3 = nearMax and MAX_GOLD:Lerp(BLACK, 0.25) or Theme.Colors.Dark
 		end
 	else
 		card.LevelChip.Visible = false
@@ -572,6 +661,18 @@ local function buyAnimation(card: Card, newLevel: number?)
 	end
 end
 
+-- Ce qu'on essaie d'acheter (affiché dans la fenêtre "Pas assez de Dopamine")
+local function purchaseContext(upgrade)
+	return { Icon = upgrade.Icon, Name = Locale.T(upgrade.Name), Color = upgradeColor(upgrade) }
+end
+
+-- Achat refusé faute de Dopamine : fenêtre "Pas assez de Dopamine" À CHAQUE fois
+local function offerDopamine(card: Card)
+	local upgrade = card.Upgrade
+	hideTooltip()
+	NeedDopamine.Offer(getCost(upgrade) - getDopamine(), nil, purchaseContext(upgrade))
+end
+
 local function buy(upgradeId: string)
 	lastUiTapClock = os.clock()
 	local card = cards[upgradeId]
@@ -581,10 +682,11 @@ local function buy(upgradeId: string)
 	local upgrade = card.Upgrade
 	if not canAfford(upgrade) then
 		failFeedback(card)
-		NeedDopamine.Offer(getCost(upgrade) - getDopamine())
+		offerDopamine(card)
 		return
 	end
 	local previousLevel = ClientState.GetLevel(upgrade.Id)
+	local cost = getCost(upgrade)
 	task.spawn(function()
 		local ok, success, message = pcall(function()
 			return Net.Function("BuyUpgrade"):InvokeServer(upgradeId)
@@ -600,6 +702,9 @@ local function buy(upgradeId: string)
 			failFeedback(card)
 			if not ok then
 				Notifications.Toast(Locale.T("Network error, try again."), Theme.Colors.Red)
+			elseif NeedDopamine.OfferRefusal(message, cost, nil, purchaseContext(upgrade)) then
+				-- Le serveur n'avait pas encore compté tous les clics : vrai manque proposé
+				hideTooltip()
 			elseif type(message) == "string" and message ~= "" then
 				local layer = Effects.GetLayer()
 				if layer and card.Button.Parent then
@@ -632,6 +737,22 @@ local function createCard(upgrade): Card
 		Parent = holder,
 	})
 	local fit = UIUtil.Create("UIScale", { Name = "FitScale", Parent = fitFrame })
+
+	-- Halo vert derrière la carte quand on peut l'acheter
+	local glow = UIUtil.Create("Frame", {
+		Name = "Glow",
+		Size = UDim2.new(1, 10, 1, 10),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		BackgroundColor3 = AFFORD_GLOW,
+		BackgroundTransparency = 0.72,
+		BorderSizePixel = 0,
+		Visible = false,
+		ZIndex = 0,
+		Parent = fitFrame,
+	})
+	glow:SetAttribute("DarkSkinIgnore", true)
+	UIUtil.Corner(glow, 22)
 
 	local button = UIUtil.Create("TextButton", {
 		Name = "Card",
@@ -741,6 +862,7 @@ local function createCard(upgrade): Card
 	})
 	UIUtil.Corner(levelChip, UDim.new(1, 0))
 	UIUtil.Stroke(levelChip, WHITE, 1.5, 0)
+	UIUtil.Gradient(levelChip, ColorSequence.new(WHITE, Color3.fromRGB(190, 190, 190)), 90)
 	UIUtil.Create("UIPadding", {
 		PaddingLeft = UDim.new(0, 5),
 		PaddingRight = UDim.new(0, 5),
@@ -795,6 +917,9 @@ local function createCard(upgrade): Card
 	})
 	UIUtil.Corner(price, UDim.new(1, 0))
 	local priceStroke = UIUtil.Stroke(price, Theme.Colors.CardBorder, 1, 0.75)
+	-- Relief + reflet (au-dessus de la jauge, sous le texte)
+	UIUtil.Gradient(price, UIUtil.ButtonShading, 90)
+	UIUtil.Gloss(price, 0.45).ZIndex = 4
 	local priceFill = UIUtil.Create("Frame", {
 		Name = "Fill",
 		Size = UDim2.fromScale(0, 1),
@@ -866,6 +991,7 @@ local function createCard(upgrade): Card
 		PopScale = popScale,
 		HD = hd,
 		Rays = rays,
+		Glow = glow,
 		Level = ClientState.GetLevel(upgrade.Id),
 		Affordable = nil,
 		Removing = false,
@@ -889,6 +1015,12 @@ local function createCard(upgrade): Card
 	-- Clic / appui
 	button.Activated:Connect(function()
 		lastUiTapClock = os.clock()
+		-- Trop cher : fenêtre "Pas assez de Dopamine" tout de suite, à CHAQUE
+		-- clic (tactile et "Aller à l'océan" compris : rien à confirmer)
+		if not canAfford(upgrade) then
+			buy(upgrade.Id)
+			return
+		end
 		local needsConfirm = upgrade.Effect == "Detox"
 		if lastInputTouch or needsConfirm then
 			if tipUpgradeId == upgrade.Id and tipPinned and not needsConfirm then
@@ -912,7 +1044,9 @@ local function createCard(upgrade): Card
 	return card
 end
 
-local function removeCard(id: string)
+-- `maxed` : la carte part parce qu'elle a atteint son niveau max (plusieurs
+-- niveaux) : elle brille en or avec "MAX ✓" avant de s'effacer
+local function removeCard(id: string, maxed: boolean?)
 	local card = cards[id]
 	if not card or card.Removing then
 		return
@@ -922,9 +1056,31 @@ local function removeCard(id: string)
 	if tipUpgradeId == id then
 		hideTooltip()
 	end
-	UIUtil.Tween(card.PopScale, 0.25, { Scale = 0 }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-	task.delay(0.3, function()
-		card.Holder:Destroy()
+	local delay = 0
+	if maxed and card.Button.Parent then
+		delay = 0.55
+		card.Stroke.Color = MAX_GOLD
+		card.Stroke.Thickness = 3
+		card.Glow.BackgroundColor3 = MAX_GOLD
+		card.Glow.Visible = true
+		card.PopScale.Scale = 1.12
+		UIUtil.Tween(card.PopScale, 0.4, { Scale = 1 }, Enum.EasingStyle.Back)
+		sweep(card)
+		local layer = Effects.GetLayer()
+		if layer then
+			Effects.Pop(layer, Interface.CanvasPosition(card.Button, Vector2.new(0, -48)), Locale.T("MAX ✓"), {
+				Color = MAX_GOLD,
+				Size = 24,
+				Style = "Bonus",
+				Rise = 46,
+			})
+		end
+	end
+	task.delay(delay, function()
+		UIUtil.Tween(card.PopScale, 0.25, { Scale = 0 }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+		task.delay(0.3, function()
+			card.Holder:Destroy()
+		end)
 	end)
 end
 
@@ -932,15 +1088,69 @@ end
 -- Carte teaser (🔒 nouveautés après la prochaine visite à l'océan)
 ----------------------------------------------------------------------
 
+--[[
+	v9 : une vraie carte "océan", de la même famille que les autres cartes
+	(même hauteur, même mise à l'échelle), ÉPINGLÉE au bout de la rangée
+	(hors du défilement : toujours visible, jamais coupée) :
+	  - mer en dégradé (bleu profond -> turquoise), rayons de lumière,
+	    vagues festonnées qui ondulent, petites bulles qui montent ;
+	  - hublot givré avec un cadenas + pastille dorée "+N" ;
+	  - "N nouveautés" + "après ta prochaine visite à l'océan" ;
+	  - aperçu des icônes des nouveautés (Config.Upgrades dont
+	    RequiresRebirths = le prochain palier) dans des bulles givrées ;
+	  - version compacte si la rangée est étroite (téléphone serré).
+	Survol / appui : infobulle détaillée ; clic : la rangée défile jusqu'à la
+	carte "Aller à l'océan", qui saute pour se montrer.
+]]
+local SEA_TOP = Color3.fromRGB(10, 62, 138)
+local SEA_MID = Color3.fromRGB(14, 120, 196)
+local SEA_BOTTOM = Color3.fromRGB(28, 186, 210)
+local WAVE_BACK = Color3.fromRGB(34, 156, 214)
+local WAVE_FRONT = Color3.fromRGB(96, 214, 236)
+local SEA_EDGE = Color3.fromRGB(8, 46, 104)
+local SEA_TEXT = Color3.fromRGB(214, 244, 255)
+local GOLD = Color3.fromRGB(255, 200, 46)
+
+-- Bande de vague festonnée (rangée de cercles sur le haut d'une bande)
+local function buildWave(parent: Instance, name: string, color: Color3, height: number, bottom: number, zIndex: number): Frame
+	local band = UIUtil.Create("Frame", {
+		Name = name,
+		Size = UDim2.new(1.5, 0, 0, height),
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, bottom),
+		BackgroundColor3 = color,
+		BorderSizePixel = 0,
+		ZIndex = zIndex,
+		Parent = parent,
+	})
+	local crests = 16
+	for index = 0, crests - 1 do
+		local crest = UIUtil.Create("Frame", {
+			Name = "Crest" .. index,
+			Size = UDim2.fromOffset(24, 24),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(index / (crests - 1), 0, 0, 4),
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			ZIndex = zIndex,
+			Parent = band,
+		})
+		UIUtil.Corner(crest, UDim.new(1, 0))
+	end
+	return band
+end
+
 local function buildTeaser()
 	teaser = UIUtil.Create("Frame", {
 		Name = "Teaser",
 		Size = UDim2.fromOffset(TEASER_WIDTH, CARD_SIZE),
 		BackgroundTransparency = 1,
 		Visible = false,
-		Parent = scroll,
+		Parent = row,
 	})
-	local fitFrame = UIUtil.Create("Frame", {
+	-- Couleurs de l'océan gardées en mode sombre
+	teaser:SetAttribute("DarkSkinIgnore", true)
+	teaserFitFrame = UIUtil.Create("Frame", {
 		Name = "Fit",
 		Size = UDim2.fromOffset(TEASER_WIDTH, DESIGN),
 		AnchorPoint = Vector2.new(0, 0.5),
@@ -948,109 +1158,209 @@ local function buildTeaser()
 		BackgroundTransparency = 1,
 		Parent = teaser,
 	})
-	teaserFit = UIUtil.Create("UIScale", { Name = "FitScale", Parent = fitFrame })
+	teaserFit = UIUtil.Create("UIScale", { Name = "FitScale", Parent = teaserFitFrame })
 	teaserButton = UIUtil.Create("TextButton", {
 		Name = "Card",
 		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = Color3.fromRGB(232, 244, 252),
+		BackgroundColor3 = SEA_MID,
+		BackgroundTransparency = 1,
 		AutoButtonColor = false,
 		Text = "",
-		Parent = fitFrame,
+		Parent = teaserFitFrame,
 	})
 	UIUtil.Corner(teaserButton, 18)
-	local stroke = UIUtil.Stroke(teaserButton, OCEAN:Lerp(BLACK, 0.2), 1.5, 0.35)
+	local stroke = UIUtil.Stroke(teaserButton, SEA_EDGE, 2, 0)
 	stroke.Name = "TeaserStroke"
-	UIUtil.Gradient(teaserButton, ColorSequence.new(Color3.fromRGB(245, 251, 255), Color3.fromRGB(205, 232, 248)), 90)
-	UIUtil.Shadow(teaserButton, 2, 0.86, 1)
+	UIUtil.Shadow(teaserButton, 3, 0.8, 1, 2)
 	local teaserPop = UIUtil.Create("UIScale", { Name = "PopScale", Parent = teaserButton })
 
-	-- Vagues décoratives en bas
-	for index = 1, 2 do
-		local wave = UIUtil.Create("Frame", {
-			Name = "Wave" .. index,
-			Size = UDim2.new(1.3, 0, 0, 40),
-			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(0.5, index == 1 and -20 or 24, 1, index == 1 and -18 or -10),
-			BackgroundColor3 = OCEAN:Lerp(WHITE, index == 1 and 0.55 or 0.3),
-			BackgroundTransparency = 0.45,
-			BorderSizePixel = 0,
-			ZIndex = 1,
-			Parent = teaserButton,
-		})
-		UIUtil.Corner(wave, UDim.new(1, 0))
-	end
-	-- (la carte coupe les vagues)
-	teaserButton.ClipsDescendants = true
-
-	local lock = UIUtil.Create("Frame", {
-		Name = "OceanPlate",
-		Size = UDim2.fromOffset(44, 44),
-		Position = UDim2.fromOffset(9, 10),
-		BackgroundColor3 = WHITE,
-		ZIndex = 3,
+	-- La mer (CanvasGroup : tout le décor est coupé aux coins arrondis)
+	local sea = UIUtil.Create("CanvasGroup", {
+		Name = "Sea",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		ZIndex = 1,
 		Parent = teaserButton,
 	})
-	UIUtil.Corner(lock, 14)
-	UIUtil.Stroke(lock, OCEAN:Lerp(BLACK, 0.3), 1.5, 0.2)
-	UIUtil.Gradient(lock, ColorSequence.new(Color3.fromRGB(230, 240, 250), Color3.fromRGB(170, 200, 225)), 90)
+	UIUtil.Corner(sea, 18)
+	-- (un UIGradient directement sur le CanvasGroup teinterait tout son contenu)
+	local water = UIUtil.Create("Frame", {
+		Name = "Water",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = WHITE,
+		BorderSizePixel = 0,
+		ZIndex = 1,
+		Parent = sea,
+	})
+	UIUtil.Gradient(water, ColorSequence.new({
+		ColorSequenceKeypoint.new(0, SEA_TOP),
+		ColorSequenceKeypoint.new(0.55, SEA_MID),
+		ColorSequenceKeypoint.new(1, SEA_BOTTOM),
+	}), 70)
+	-- Rayons de lumière (depuis la surface, en haut à droite)
+	for index, spec in ipairs({ { 0.66, 26, 0.88 }, { 0.8, 14, 0.9 }, { 0.93, 20, 0.92 } }) do
+		UIUtil.Create("Frame", {
+			Name = "Ray" .. index,
+			Size = UDim2.new(0, spec[2], 2, 0),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(spec[1], 0.1),
+			Rotation = 24,
+			BackgroundColor3 = WHITE,
+			BackgroundTransparency = spec[3],
+			BorderSizePixel = 0,
+			ZIndex = 2,
+			Parent = sea,
+		})
+	end
+	-- Petites bulles qui montent
+	table.clear(teaserBubbles)
+	for index, spec in ipairs({ { 0.56, 6 }, { 0.74, 4 }, { 0.9, 7 } }) do
+		local bubble = UIUtil.Create("Frame", {
+			Name = "Bubble" .. index,
+			Size = UDim2.fromOffset(spec[2], spec[2]),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(spec[1], 0.7),
+			BackgroundColor3 = WHITE,
+			BackgroundTransparency = 0.45,
+			BorderSizePixel = 0,
+			ZIndex = 3,
+			Parent = sea,
+		})
+		bubble:SetAttribute("X", spec[1])
+		bubble:SetAttribute("Phase", index * 0.37)
+		UIUtil.Corner(bubble, UDim.new(1, 0))
+		table.insert(teaserBubbles, bubble)
+	end
+	-- Vagues (arrière, avant) + écume
+	table.clear(teaserWaves)
+	table.insert(teaserWaves, buildWave(sea, "WaveBack", WAVE_BACK, 30, 2, 4))
+	table.insert(teaserWaves, buildWave(sea, "WaveFront", WAVE_FRONT, 18, 4, 5))
+
+	-- Hublot givré + cadenas + pastille "+N"
+	teaserPlate = UIUtil.Create("Frame", {
+		Name = "Porthole",
+		Size = UDim2.fromOffset(44, 44),
+		Position = UDim2.fromOffset(10, 10),
+		BackgroundColor3 = WHITE,
+		BackgroundTransparency = 0.72,
+		ZIndex = 6,
+		Parent = teaserButton,
+	})
+	UIUtil.Corner(teaserPlate, UDim.new(1, 0))
+	UIUtil.Stroke(teaserPlate, WHITE, 2.5, 0.1)
+	UIUtil.Create("UIGradient", {
+		Rotation = 90,
+		Transparency = NumberSequence.new(0, 0.5),
+		Parent = teaserPlate,
+	})
 	UIUtil.Create("TextLabel", {
-		Name = "Wave",
+		Name = "Lock",
 		Size = UDim2.fromScale(1, 1),
 		BackgroundTransparency = 1,
 		Font = Theme.Fonts.Body,
-		Text = "🌊",
-		TextSize = 26,
-		ZIndex = 4,
-		Parent = lock,
+		Text = "🔒",
+		TextSize = 23,
+		ZIndex = 7,
+		Parent = teaserPlate,
 	})
+	teaserBadge = UIUtil.Create("TextLabel", {
+		Name = "Count",
+		Size = UDim2.fromOffset(0, 20),
+		AutomaticSize = Enum.AutomaticSize.X,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(1, -2, 0, 3),
+		BackgroundColor3 = GOLD,
+		Font = Theme.Fonts.Number,
+		Text = "+1",
+		TextColor3 = Color3.fromRGB(80, 44, 0),
+		TextSize = 13,
+		ZIndex = 8,
+		Parent = teaserPlate,
+	})
+	UIUtil.Corner(teaserBadge, UDim.new(1, 0))
+	UIUtil.Stroke(teaserBadge, WHITE, 1.5, 0)
+	UIUtil.Create("UIPadding", { PaddingLeft = UDim.new(0, 5), PaddingRight = UDim.new(0, 5), Parent = teaserBadge })
 
+	-- Textes (blancs, bordés de bleu nuit : lisibles sur la mer)
 	teaserTitle = UIUtil.Create("TextLabel", {
 		Name = "Title",
-		Size = UDim2.new(1, -66, 0, 22),
-		Position = UDim2.fromOffset(60, 9),
+		Size = UDim2.fromOffset(TEASER_WIDTH - 80, 20),
+		Position = UDim2.fromOffset(70, 11),
 		BackgroundTransparency = 1,
 		Font = Theme.Fonts.Title,
 		Text = "",
-		TextColor3 = Color3.fromRGB(10, 60, 100),
+		TextColor3 = WHITE,
 		TextSize = 17,
 		TextScaled = true,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		ZIndex = 4,
+		ZIndex = 6,
 		Parent = teaserButton,
 	})
-	UIUtil.Create("UITextSizeConstraint", { MaxTextSize = 17, MinTextSize = 10, Parent = teaserTitle })
+	UIUtil.Create("UITextSizeConstraint", { MaxTextSize = 17, MinTextSize = 9, Parent = teaserTitle })
+	local titleStroke = UIUtil.Stroke(teaserTitle, SEA_EDGE, 1.5, 0.35)
+	titleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 	teaserText = UIUtil.Create("TextLabel", {
 		Name = "Text",
-		Size = UDim2.new(1, -66, 0, 34),
-		Position = UDim2.fromOffset(60, 31),
+		Size = UDim2.fromOffset(TEASER_WIDTH - 80, 28),
+		Position = UDim2.fromOffset(70, 32),
 		BackgroundTransparency = 1,
-		Font = Theme.Fonts.Body,
+		Font = Theme.Fonts.Title,
 		Text = "",
-		TextColor3 = Color3.fromRGB(40, 80, 110),
-		TextSize = 14,
+		TextColor3 = SEA_TEXT,
+		TextSize = 13,
 		TextWrapped = true,
 		TextScaled = true,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
-		ZIndex = 4,
+		ZIndex = 6,
 		Parent = teaserButton,
 	})
-	UIUtil.Create("UITextSizeConstraint", { MaxTextSize = 14, MinTextSize = 9, Parent = teaserText })
-	-- Silhouettes des nouveautés (fantômes)
-	teaserIcons = UIUtil.Create("TextLabel", {
-		Name = "Icons",
-		Size = UDim2.new(1, -20, 0, 26),
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -6),
+	UIUtil.Create("UITextSizeConstraint", { MaxTextSize = 13, MinTextSize = 8, Parent = teaserText })
+
+	-- Aperçu des nouveautés : icônes dans des bulles givrées
+	teaserPeek = UIUtil.Create("Frame", {
+		Name = "Peek",
+		Size = UDim2.fromOffset(TEASER_WIDTH - 20, 26),
+		Position = UDim2.fromOffset(10, 66),
 		BackgroundTransparency = 1,
-		Font = Theme.Fonts.Body,
-		Text = "",
-		TextSize = 20,
-		TextTransparency = 0.45,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		ZIndex = 4,
+		ZIndex = 6,
 		Parent = teaserButton,
 	})
+	UIUtil.Create("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+		Padding = UDim.new(0, 5),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = teaserPeek,
+	})
+	table.clear(teaserPeekSlots)
+	for index = 1, TEASER_MAX_PEEK do
+		local slot = UIUtil.Create("Frame", {
+			Name = "Peek" .. index,
+			Size = UDim2.fromOffset(25, 25),
+			BackgroundColor3 = WHITE,
+			BackgroundTransparency = 0.2,
+			LayoutOrder = index,
+			Visible = false,
+			ZIndex = 6,
+			Parent = teaserPeek,
+		})
+		UIUtil.Corner(slot, UDim.new(1, 0))
+		UIUtil.Stroke(slot, WHITE, 1.5, 0.2)
+		UIUtil.Gradient(slot, ColorSequence.new(WHITE, Color3.fromRGB(200, 236, 250)), 90)
+		UIUtil.Create("TextLabel", {
+			Name = "Icon",
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			Font = Theme.Fonts.Title,
+			Text = "",
+			TextColor3 = SEA_EDGE,
+			TextSize = 15,
+			ZIndex = 7,
+			Parent = slot,
+		})
+		table.insert(teaserPeekSlots, slot)
+	end
 
 	teaserButton.MouseEnter:Connect(function()
 		if lastInputTouch or tipPinned then
@@ -1067,12 +1377,76 @@ local function buildTeaser()
 	end)
 	teaserButton.Activated:Connect(function()
 		lastUiTapClock = os.clock()
-		UIUtil.Shake(teaserButton)
+		SoundManager.Play("Click", 1.2)
+		teaserPop.Scale = 0.94
+		UIUtil.Tween(teaserPop, 0.3, { Scale = 1 }, Enum.EasingStyle.Back)
 		showTooltip(TEASER_ID, lastInputTouch)
+		-- Montre la carte "Aller à l'océan" (c'est elle qui débloque tout ça)
+		for _, card in pairs(cards) do
+			if card.Upgrade.Effect == "Detox" and not card.Removing then
+				local view = scroll.Size.X.Offset
+				local target = math.clamp(card.Holder.Position.X.Offset - (view - card.Holder.Size.X.Offset) / 2, 0, math.max(0, scroll.CanvasSize.X.Offset - view))
+				UIUtil.Tween(scroll, 0.45, { CanvasPosition = Vector2.new(target, 0) }, Enum.EasingStyle.Quint)
+				task.delay(0.35, function()
+					if card.Removing then
+						return
+					end
+					card.PopScale.Scale = 1.14
+					UIUtil.Tween(card.PopScale, 0.5, { Scale = 1 }, Enum.EasingStyle.Elastic)
+					sweep(card)
+				end)
+				break
+			end
+		end
 	end)
 end
 
-local function refreshTeaser(data)
+local refreshTeaser: (data: any) -> ()
+local teaserData: any = nil
+
+-- Place le contenu du teaser : large (texte + 5 icônes) ou compact
+local function setTeaserCompact(compact: boolean)
+	if compact == teaserCompact and teaserDesignWidth == (compact and TEASER_COMPACT_WIDTH or TEASER_WIDTH) then
+		return
+	end
+	teaserCompact = compact
+	local width = compact and TEASER_COMPACT_WIDTH or TEASER_WIDTH
+	teaserDesignWidth = width
+	teaserFitFrame.Size = UDim2.fromOffset(width, DESIGN)
+	if compact then
+		teaserPlate.Size = UDim2.fromOffset(40, 40)
+		teaserPlate.AnchorPoint = Vector2.new(0.5, 0)
+		teaserPlate.Position = UDim2.new(0.5, 0, 0, 7)
+		teaserTitle.Size = UDim2.fromOffset(width - 12, 16)
+		teaserTitle.Position = UDim2.fromOffset(6, 50)
+		teaserTitle.TextXAlignment = Enum.TextXAlignment.Center
+		teaserText.Visible = false
+		teaserPeek.Size = UDim2.fromOffset(width - 12, 24)
+		teaserPeek.Position = UDim2.fromOffset(6, 69)
+	else
+		teaserPlate.Size = UDim2.fromOffset(44, 44)
+		teaserPlate.AnchorPoint = Vector2.zero
+		teaserPlate.Position = UDim2.fromOffset(10, 10)
+		teaserTitle.Size = UDim2.fromOffset(width - 80, 20)
+		teaserTitle.Position = UDim2.fromOffset(70, 11)
+		teaserTitle.TextXAlignment = Enum.TextXAlignment.Left
+		teaserText.Visible = true
+		teaserText.Size = UDim2.fromOffset(width - 80, 28)
+		teaserPeek.Size = UDim2.fromOffset(width - 20, 26)
+		teaserPeek.Position = UDim2.fromOffset(10, 66)
+	end
+	local layoutObject = teaserPeek:FindFirstChildOfClass("UIListLayout")
+	if layoutObject then
+		layoutObject.HorizontalAlignment = compact and Enum.HorizontalAlignment.Center or Enum.HorizontalAlignment.Left
+	end
+	-- Textes et nombre d'icônes selon la version
+	if teaserData then
+		refreshTeaser(teaserData)
+	end
+end
+
+refreshTeaser = function(data)
+	teaserData = data
 	local gate, count = Formulas.GetNextRebirthUnlocks(data)
 	teaserGate = gate
 	teaserCount = count
@@ -1086,32 +1460,82 @@ local function refreshTeaser(data)
 	end
 	local rebirths = tonumber(data.Rebirths) or 0
 	local visits = math.max(1, (gate :: number) - rebirths)
-	teaserTitle.Text = count == 1 and Locale.T("🔒 1 new upgrade") or Locale.T("🔒 %d new upgrades", count)
+	teaserBadge.Text = "+" .. tostring(count)
+	if teaserCompact then
+		teaserTitle.Text = Locale.T("After the ocean 🌊")
+	else
+		teaserTitle.Text = count == 1 and Locale.T("1 new upgrade") or Locale.T("%d new upgrades", count)
+	end
 	if visits <= 1 then
 		teaserText.Text = Locale.T("after your next visit to the ocean")
 	else
 		teaserText.Text = Locale.T("after %d more visits to the ocean", visits)
 	end
+	-- Aperçu : les icônes des nouveautés (+N s'il y en a trop)
 	local icons = {}
 	for _, upgrade in ipairs(Config.Upgrades) do
-		if (upgrade.RequiresRebirths or 0) == gate and #icons < 6 then
+		if (upgrade.RequiresRebirths or 0) == gate then
 			table.insert(icons, upgrade.Icon)
 		end
 	end
-	teaserIcons.Text = table.concat(icons, " ")
+	local room = teaserCompact and TEASER_COMPACT_PEEK or TEASER_MAX_PEEK
+	local shown = #icons > room and room - 1 or #icons
+	for index, slot in ipairs(teaserPeekSlots) do
+		local label = slot:FindFirstChild("Icon") :: TextLabel?
+		if index <= shown then
+			slot.Visible = true
+			if label then
+				label.Text = icons[index]
+				label.TextSize = 15
+			end
+		elseif index == shown + 1 and #icons > shown then
+			slot.Visible = true
+			if label then
+				label.Text = "+" .. tostring(#icons - shown)
+				label.TextSize = 12
+			end
+		else
+			slot.Visible = false
+		end
+	end
+end
+
+-- Vagues et bulles du teaser (≈ 20 fois par seconde, seulement s'il est visible)
+local teaserClock = 0
+local function animateTeaser(dt: number)
+	teaserClock += dt
+	if teaserClock < 0.05 then
+		return
+	end
+	local t = os.clock()
+	teaserClock = 0
+	local back, front = teaserWaves[1], teaserWaves[2]
+	if back and front then
+		back.Position = UDim2.new(0.5, math.sin(t * 0.9) * 12, 1, 2)
+		front.Position = UDim2.new(0.5, math.sin(t * 1.3 + 1.7) * -16, 1, 4)
+	end
+	for _, bubble in ipairs(teaserBubbles) do
+		local phase = ((tonumber(bubble:GetAttribute("Phase")) or 0) + t * 0.22) % 1
+		local x = tonumber(bubble:GetAttribute("X")) or 0.5
+		bubble.Position = UDim2.new(x, math.sin(t * 3 + x * 9) * 3, 0.78 - phase * 0.8, 0)
+		bubble.BackgroundTransparency = 0.35 + phase * 0.6
+	end
 end
 
 ----------------------------------------------------------------------
 -- Mise en page
 ----------------------------------------------------------------------
 
--- Place les cartes (centrées ; défilement si trop large).
--- Les cartes de `created` arrivent en glissant depuis le bas.
+-- Place les cartes (centrées ; défilement si trop large) et le teaser, épinglé
+-- au bout de la rangée. Les cartes de `created` arrivent en glissant du bas.
 local function layout(list: { any }, created: { [string]: boolean })
 	local count = #list
 	local cardSize, minCardSize, maxWidth = metrics()
 	local teaserOn = teaser.Visible
-	local slots = count + (teaserOn and TEASER_WIDTH / DESIGN or 0)
+	if teaserOn then
+		setTeaserCompact(maxWidth < TEASER_COMPACT_BELOW)
+	end
+	local slots = count + (teaserOn and teaserDesignWidth / DESIGN or 0)
 	local gaps = math.max(0, count + (teaserOn and 1 or 0) - 1)
 	local size = cardSize
 	if slots > 0 then
@@ -1124,12 +1548,15 @@ local function layout(list: { any }, created: { [string]: boolean })
 	if bar.Size.Y.Offset ~= barHeight then
 		bar.Size = UDim2.new(1, 0, 0, barHeight)
 	end
-	local teaserWidth = teaserOn and math.floor(TEASER_WIDTH * scale) or 0
-	local contentWidth = count * size + teaserWidth + gaps * GAP + PAD_SIDE * 2
-	local viewWidth = math.min(contentWidth, maxWidth + PAD_SIDE * 2)
+	local teaserWidth = teaserOn and math.floor(teaserDesignWidth * scale) or 0
+	-- Zone qui défile : les cartes, dans la place laissée par le teaser
+	local contentWidth = count * size + math.max(0, count - 1) * GAP + PAD_SIDE * 2
+	local budget = maxWidth + PAD_SIDE * 2 - (teaserOn and (teaserWidth + GAP) or 0)
+	local viewWidth = math.min(contentWidth, math.max(budget, size + PAD_SIDE * 2))
 	scroll.Size = UDim2.new(0, viewWidth, 1, 0)
 	scroll.CanvasSize = UDim2.fromOffset(contentWidth, 0)
 	scroll.ScrollBarThickness = contentWidth > viewWidth + 1 and 4 or 0
+	row.Size = UDim2.new(0, viewWidth + (teaserOn and (teaserWidth + GAP) or 0), 1, 0)
 
 	local y = PAD_TOP + (cardSize - size)
 	for index, upgrade in ipairs(list) do
@@ -1153,7 +1580,8 @@ local function layout(list: { any }, created: { [string]: boolean })
 	if teaserOn then
 		teaserFit.Scale = scale
 		teaser.Size = UDim2.fromOffset(teaserWidth, size)
-		teaser.Position = UDim2.fromOffset(PAD_SIDE + count * (size + GAP), y)
+		-- (la zone qui défile finit par PAD_SIDE d'air : même écart que entre deux cartes)
+		teaser.Position = UDim2.fromOffset(viewWidth - PAD_SIDE + GAP, y)
 	end
 end
 
@@ -1206,7 +1634,13 @@ local function refresh(data)
 		end
 	end
 	for _, id in ipairs(toRemove) do
-		removeCard(id)
+		local card = cards[id]
+		local upgrade = card and card.Upgrade
+		local maxed = upgrade ~= nil
+			and isRepeatable(upgrade)
+			and upgrade.Effect ~= "Detox"
+			and Formulas.IsMaxed(upgrade, Formulas.GetLevel(data, id))
+		removeCard(id, maxed)
 	end
 
 	-- Nouvelles cartes
@@ -1254,11 +1688,19 @@ function UpgradeBar.Build(parent: GuiObject, tooltipLayer: Frame): Frame
 		BackgroundTransparency = 1,
 		Parent = parent,
 	})
-	scroll = UIUtil.Create("ScrollingFrame", {
-		Name = "Cards",
+	-- Rangée centrée : cartes (défilent si besoin) + carte teaser toujours
+	-- visible au bout (jamais coupée ni cachée par le défilement)
+	row = UIUtil.Create("Frame", {
+		Name = "Row",
 		Size = UDim2.new(0, MAX_WIDTH, 1, 0),
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.fromScale(0.5, 0),
+		BackgroundTransparency = 1,
+		Parent = bar,
+	})
+	scroll = UIUtil.Create("ScrollingFrame", {
+		Name = "Cards",
+		Size = UDim2.new(0, MAX_WIDTH, 1, 0),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollingDirection = Enum.ScrollingDirection.X,
@@ -1266,7 +1708,7 @@ function UpgradeBar.Build(parent: GuiObject, tooltipLayer: Frame): Frame
 		ScrollBarImageColor3 = Theme.Colors.Dark,
 		CanvasSize = UDim2.fromOffset(0, 0),
 		ElasticBehavior = Enum.ElasticBehavior.WhenScrollable,
-		Parent = bar,
+		Parent = row,
 	})
 	buildTeaser()
 
@@ -1312,6 +1754,8 @@ function UpgradeBar.Build(parent: GuiObject, tooltipLayer: Frame): Frame
 	end)
 
 	PanelManager.Opened:Connect(hideTooltip)
+	-- La fenêtre "Pas assez de Dopamine" s'ouvre : l'infobulle s'efface
+	NeedDopamine.Shown:Connect(hideTooltip)
 
 	-- Écran qui change : cartes, largeur et infobulle réajustées
 	local function applyDevice()
@@ -1352,7 +1796,11 @@ function UpgradeBar.Build(parent: GuiObject, tooltipLayer: Frame): Frame
 	-- Rotation des rayons HD (seulement avec les Icônes HD) + filet de sécurité
 	-- "abordable" (clics prédits, ou pas encore de ticks légers : 4 fois / s)
 	local safety = hasTicks and SAFETY_INTERVAL or REFRESH_INTERVAL
-	RunService.RenderStepped:Connect(function()
+	RunService.RenderStepped:Connect(function(dt: number)
+		-- Vagues du teaser (en pause quand une fenêtre recouvre la barre)
+		if teaser.Visible and not PanelManager.IsOpen() then
+			animateTeaser(dt)
+		end
 		if hdEnabled then
 			local rotation = (os.clock() * 25) % 360
 			for _, card in pairs(cards) do

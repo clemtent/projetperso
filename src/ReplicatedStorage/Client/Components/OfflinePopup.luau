@@ -353,6 +353,7 @@ local function build(payload)
 		Parent = fade,
 	})
 	UIUtil.Corner(body, 26)
+	UIUtil.SinkClicks(body) -- clic dans la carte : ne ferme pas
 	UIUtil.Stroke(body, Theme.Colors.CardBorder, 1.5, 0.3)
 	UIUtil.Shadow(body, 6, 0.8, 3)
 
@@ -441,7 +442,8 @@ local function build(payload)
 	infoChip(chips, upgrade and upgrade.Icon or "😴", sleepName, Locale.T("Lv. %s", tostring(level)), Theme.Colors.Purple, 3)
 
 	-- Jauge : temps comptabilisé / durée max
-	local gaugeY = SKY_HEIGHT + 204
+	-- (v9 : un peu remonté : l'astuce ne passe plus sous le bouton "Récupérer")
+	local gaugeY = SKY_HEIGHT + 198
 	UIUtil.Label({
 		Name = "GaugeText",
 		Text = Locale.T(
@@ -489,7 +491,7 @@ local function build(payload)
 			TextColor3 = Theme.Colors.Purple,
 			Font = Theme.Fonts.Title,
 			Size = UDim2.new(1, -40, 0, 16),
-			Position = UDim2.fromOffset(20, gaugeY + 38),
+			Position = UDim2.fromOffset(20, gaugeY + 35),
 			MaxTextSize = 14,
 			ZIndex = 3,
 			Parent = body,
@@ -502,10 +504,10 @@ local function build(payload)
 		Text = Locale.T("Collect"),
 		Color = Theme.Colors.Green,
 		TextColor3 = Theme.Colors.TextDark,
-		Size = UDim2.new(1, -80, 0, 52),
+		Size = UDim2.new(1, -80, 0, 48),
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -18),
-		CornerRadius = 26,
+		CornerRadius = 24,
 		MaxTextSize = 24,
 		ZIndex = 4,
 		Parent = body,

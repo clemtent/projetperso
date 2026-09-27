@@ -5,14 +5,27 @@
 	Présentation "premium" construite depuis Config.Monetization :
 	  - bannière violette animée (diamant, rayons, étincelles) avec ton état :
 	    VIP, bonus des Game Passes, boost en cours (compte à rebours) ;
-	  - onglets Tout / Passes / Dopamine / Boosts ;
-	  - grandes cartes illustrées : vitrine au dégradé de l'offre, rayons,
-	    rubans ("MEILLEURE OFFRE", "POPULAIRE"...), avantages en pastilles,
-	    bouton prix R$ (vrai prix Roblox), "✔ Acheté" pour les passes possédés.
-	Les offres dont l'ID vaut 0 sont cachées dans le jeu publié. Dans Studio,
-	elles restent visibles en APERÇU (bouton "ID à configurer") pour que le
-	propriétaire voie la boutique ; s'il n'y a rien à vendre dans le jeu
-	publié : "Bientôt disponible".
+	  - onglets Tout / Passes / Dopamine / Boosts / 🎟️ Tickets / 🔜 Bientôt ;
+	  - offres rangées en SECTIONS (titre + grille) : grandes cartes illustrées
+	    (passes, Dopamine, boosts, combos) et cartes compactes (packs de tickets
+	    avec éventail de tickets et "×25", objets stylés) ; rubans ("MEILLEURE
+	    OFFRE", "POPULAIRE"...), bouton prix R$ (vrai prix Roblox), "✔ Acheté"
+	    pour les passes possédés ;
+	  - 🎟️ Tickets : packs de tickets d'arcade (économie par ticket calculée
+	    avec les VRAIS prix Roblox seulement), ton solde, rappel honnête "les
+	    🏆 trophées des duels ne s'achètent pas", bouton "🕹️ Arcade" ;
+	  - 🔜 Bientôt : combos (tickets + Dopamine) et objets stylés marqués
+	    ComingSoon = true (ou d'un type que le serveur ne sait pas encore
+	    donner, voir Config.Monetization.ReadyKinds) : ruban "BIENTÔT"
+	    brillant, bouton désactivé, JAMAIS de fenêtre d'achat.
+	Les offres dont l'ID vaut 0 sont cachées dans le jeu publié (sauf les
+	"Bientôt", toujours montrées). Dans Studio, elles restent visibles en
+	APERÇU (bouton "ID à configurer") pour que le propriétaire voie la
+	boutique ; s'il n'y a rien à vendre dans le jeu publié : "Bientôt disponible".
+
+	API : ShowTab(id) ("All" | "Passes" | "Dopamine" | "Boosts" | "Tickets" |
+	"Soon"), Spotlight(offerId) (défile jusqu'à l'offre et la met en avant,
+	ex. pack conseillé par NeedTickets), HasOffers(), IsOpen().
 
 	Le vrai prix vient de MarketplaceService:GetProductInfo (dans un thread
 	séparé, protégé par pcall, mis en cache) ; en attendant ou en cas
@@ -26,6 +39,7 @@ local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 
 local Client = script.Parent.Parent.Parent
 local Theme = require(Client.Theme)
@@ -33,10 +47,12 @@ local UIUtil = require(Client.UIUtil)
 local ClientState = require(Client.ClientState)
 local SoundManager = require(Client.SoundManager)
 local Notifications = require(script.Parent.Parent.Notifications)
+local PanelManager = require(script.Parent.Parent.PanelManager)
 local Config = require(ReplicatedStorage.Shared.Config)
 local Formulas = require(ReplicatedStorage.Shared.Formulas)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local Locale = require(ReplicatedStorage.Shared.Locale)
+local ArcadeConfig = require(ReplicatedStorage.Shared.ArcadeConfig)
 
 -- Title / Subtitle en anglais : traduits par PanelManager
 local RobuxShop = {
@@ -47,8 +63,16 @@ local RobuxShop = {
 }
 
 local WHITE = Color3.new(1, 1, 1)
+local BLACK = Color3.new(0, 0, 0)
 local HERO_TOP = Color3.fromRGB(64, 28, 140)
 local HERO_BOTTOM = Color3.fromRGB(200, 50, 160)
+local TICKET_GOLD = Color3.fromRGB(255, 176, 32)
+local TICKET_INK = Color3.fromRGB(110, 60, 10)
+local SOON_PINK = Color3.fromRGB(255, 60, 140)
+local SOON_BUTTON = Color3.fromRGB(232, 226, 246)
+local SOON_TEXT = Color3.fromRGB(120, 96, 170)
+local TICKET = ArcadeConfig.Tickets.Icon
+local TROPHY = ArcadeConfig.Trophies.Icon
 
 local PASS_COLORS = {
 	X10 = Theme.Colors.Purple,
@@ -60,8 +84,12 @@ local PRODUCT_COLORS = {
 	Dopamine = Theme.Colors.Cyan,
 	Boost = Theme.Colors.Boost,
 	ServerRush = Theme.Colors.Pink,
+	Tickets = TICKET_GOLD,
+	Combo = Color3.fromRGB(255, 96, 128),
+	Stylish = Color3.fromRGB(150, 90, 255),
 }
--- Rubans de mise en avant (Id de l'offre -> texte anglais, traduit à l'affichage)
+-- Rubans de mise en avant (Id de l'offre -> texte anglais, traduit à
+-- l'affichage) ; les nouvelles offres utilisent le champ Tag de la config
 local HIGHLIGHTS = {
 	X10 = "🔥 BEST DEAL",
 	VIP = "⭐ POPULAR",
@@ -69,15 +97,38 @@ local HIGHLIGHTS = {
 	Boost5 = "⚡ POWERFUL",
 }
 
+-- Sections (dans l'ordre d'affichage). Style "Big" = 3 grandes cartes par
+-- ligne ; "Compact" = 5 petites cartes par ligne.
+local SECTIONS = {
+	{ Id = "Passes", Title = "♾️ Game Passes", Note = "Bought once, yours forever", Color = Theme.Colors.Purple, Style = "Big" },
+	{ Id = "Dopamine", Title = "💧 Dopamine packs", Note = "Instant Dopamine, scaled to your production", Color = Theme.Colors.Cyan, Style = "Big" },
+	{ Id = "Boosts", Title = "⚡ Boosts", Note = "Earn more for a little while", Color = Theme.Colors.Boost, Style = "Big" },
+	{ Id = "Tickets", Title = "🎟️ Arcade tickets", Note = "", Color = TICKET_GOLD, Style = "Compact" },
+	{ Id = "Combos", Title = "🎁 Combos", Note = "Tickets + Dopamine in one pack", Color = PRODUCT_COLORS.Combo, Style = "Big" },
+	{ Id = "Stylish", Title = "✨ Stylish items", Note = "Cosmetics: just for the look", Color = PRODUCT_COLORS.Stylish, Style = "Compact" },
+}
+local STYLES = {
+	Big = { Columns = 3, CellHeight = 246, Gap = 10, RowGap = 6 },
+	Compact = { Columns = 5, CellHeight = 218, Gap = 8, RowGap = 6 },
+}
+local SECTION_HEADER = 32 -- titre de section
+local SECTION_GAP = 12 -- entre deux sections
+local FOOTER_HEIGHT = 50 -- bandeau d'infos sous les tickets
+local LIST_PADDING_TOP = 2
+local LIST_PADDING_BOTTOM = 10
+
 local PENDING_TIMEOUT = 20 -- secondes d'attente max de l'activation d'un pass acheté
 local PROMPT_COOLDOWN = 1
 local RETRY_DELAY = 30 -- nouvel essai de GetProductInfo après une erreur
+local ANIM_STEP = 1 / 30 -- animations d'ambiance à 30 images/s au plus
 
 type Offer = {
 	Def: any,
 	IsPass: boolean,
 	Id: number,
-	Category: string, -- "Passes" | "Dopamine" | "Boosts"
+	Section: string, -- Id de SECTIONS
+	Soon: boolean, -- "Bientôt" : jamais d'achat
+	Compact: boolean,
 	Color: Color3,
 	Cell: Frame,
 	Card: Frame,
@@ -86,12 +137,29 @@ type Offer = {
 	Extra: TextLabel?,
 	Owned: Frame?,
 	Kind: Frame?, -- pastille "Pour toujours" / "Rachetable"
+	Spot: Frame?, -- pastille "👉 Conseillé" (Spotlight)
 	Rays: Frame,
 	Hovered: boolean,
+	Spotlit: number, -- os.clock() de fin de mise en avant
+}
+
+type Section = {
+	Def: any,
+	Frame: Frame,
+	Grid: Frame,
+	Note: TextLabel,
+	Footer: Frame?,
+	Offers: { Offer },
+	Columns: number,
+	CellHeight: number,
+	RowGap: number,
 }
 
 local player = Players.LocalPlayer
 local offers: { Offer } = {}
+local offersById: { [string]: Offer } = {}
+local sections: { Section } = {}
+local sectionsById: { [string]: Section } = {}
 local priceCache: { [string]: { Price: number?, ForSale: boolean } } = {}
 local fetching: { [string]: boolean } = {}
 local lastFailure: { [string]: number } = {}
@@ -100,8 +168,12 @@ local lastPrompt = 0
 local visible = false
 local filter = "All"
 local filterTabs: UIUtil.Tabs? = nil
+local tabIds: { [string]: boolean } = {}
 local animation: RBXScriptConnection? = nil
 local refreshClock = 0
+local animClock = 0
+local list: ScrollingFrame? = nil
+local shineTweens: { Tween } = {} -- reflets des rubans "BIENTÔT" (joués seulement boutique ouverte)
 
 local heroStatus: TextLabel
 local heroChips: { VIP: Frame, Bonus: Frame, Boost: Frame } = {} :: any
@@ -109,6 +181,61 @@ local heroDiamond: TextLabel
 local heroRays: Frame
 local sparkles: { TextLabel } = {}
 local filterEmpty: TextLabel
+local arcadeButton: TextButton? = nil
+
+----------------------------------------------------------------------
+-- Classement des offres
+----------------------------------------------------------------------
+
+-- Section d'une offre de la config
+local function sectionOf(def, isPass: boolean): string
+	if isPass then
+		return "Passes"
+	end
+	local kind = def.Kind
+	if kind == "Dopamine" then
+		return "Dopamine"
+	elseif kind == "Tickets" then
+		return "Tickets"
+	elseif kind == "Combo" then
+		return "Combos"
+	elseif kind == "Stylish" then
+		return "Stylish"
+	end
+	return "Boosts"
+end
+
+-- Packs de tickets : utiles seulement avec l'🕹️ Arcade débloquée (sinon on
+-- ne les vend pas encore : cadenas "🔒 Arcade")
+local function ticketsLocked(def): boolean
+	return def.Kind == "Tickets" and not ClientState.HasFeature(ArcadeConfig.Feature)
+end
+
+-- "Bientôt" : marquée ComingSoon, ou d'un type que le serveur ne sait pas donner
+local function isComingSoon(def, isPass: boolean): boolean
+	if def.ComingSoon == true then
+		return true
+	end
+	if isPass then
+		return false
+	end
+	local ready = Config.Monetization.ReadyKinds
+	return type(ready) == "table" and ready[def.Kind] ~= true
+end
+
+-- L'offre est-elle montrée avec l'onglet `tab` ?
+local function cellVisible(offer: Offer, tab: string): boolean
+	if tab == "All" then
+		return true
+	elseif tab == "Soon" then
+		return offer.Soon
+	end
+	if offer.Section == "Combos" and not offer.Soon then
+		-- Combo en vente : il contient des tickets ET de la Dopamine
+		return tab == "Tickets" or tab == "Dopamine"
+	end
+	return offer.Section == tab
+end
 
 ----------------------------------------------------------------------
 -- Prix (MarketplaceService, jamais sur le thread de rendu)
@@ -119,9 +246,10 @@ local function cacheKey(isPass: boolean, id: number): string
 end
 
 local refreshOffer: (offer: Offer) -> () -- défini plus bas
+local refreshExtra: (offer: Offer, data: any) -> () -- défini plus bas
 
 local function fetchPrice(offer: Offer)
-	if offer.Id == 0 then
+	if offer.Id == 0 or offer.Soon then
 		return
 	end
 	local key = cacheKey(offer.IsPass, offer.Id)
@@ -152,6 +280,12 @@ local function fetchPrice(offer: Offer)
 		end
 		if offer.Card.Parent then
 			refreshOffer(offer)
+			-- (l'économie des packs de tickets dépend des prix des autres packs)
+			for _, other in ipairs(offers) do
+				if other.Section == "Tickets" then
+					refreshExtra(other, ClientState.Data)
+				end
+			end
 		end
 	end)
 end
@@ -171,6 +305,18 @@ local function priceText(offer: Offer): (string, boolean)
 	return "R$ " .. NumberFormatter.WithSpaces(tonumber(offer.Def.PriceHint) or 0), true
 end
 
+-- VRAI prix Roblox (cache), sinon nil (jamais le PriceHint)
+local function realPrice(offer: Offer): number?
+	if offer.Id == 0 then
+		return nil
+	end
+	local cached = priceCache[cacheKey(offer.IsPass, offer.Id)]
+	if cached and cached.ForSale and cached.Price and cached.Price > 0 then
+		return cached.Price
+	end
+	return nil
+end
+
 ----------------------------------------------------------------------
 -- Achat
 ----------------------------------------------------------------------
@@ -180,6 +326,13 @@ local function prompt(offer: Offer)
 		return
 	end
 	lastPrompt = os.clock()
+	if offer.Soon then
+		-- "Bientôt" : jamais de fenêtre d'achat
+		SoundManager.Play("Error", 0.9)
+		UIUtil.Shake(offer.Button)
+		Notifications.Toast(Locale.T("Coming soon!"), Theme.Colors.Purple, 3, nil, false, "🔜")
+		return
+	end
 	if offer.Id == 0 then
 		SoundManager.Play("Error", 0.8)
 		UIUtil.Shake(offer.Button)
@@ -195,6 +348,12 @@ local function prompt(offer: Offer)
 	end
 	if offer.IsPass and ClientState.HasPass(offer.Def.Id) then
 		SoundManager.Play("Error", 0.8)
+		return
+	end
+	if ticketsLocked(offer.Def) then
+		SoundManager.Play("Error", 0.8)
+		UIUtil.Shake(offer.Button)
+		Notifications.Toast(Locale.T("Unlock the 🕹️ Arcade first: tickets are spent there."), Theme.Colors.Purple, 4, nil, false, "🔒")
 		return
 	end
 	local _, forSale = priceText(offer)
@@ -227,18 +386,35 @@ end
 local function styleButton(button: TextButton, text: string, background: Color3, textColor: Color3, enabled: boolean, coin: boolean?)
 	local label = button:FindFirstChild("PriceLabel") :: TextLabel?
 	local coinFrame = button:FindFirstChild("Coin") :: Frame?
+	local coinWidth = coinFrame and coinFrame.Size.X.Offset + 6 or 30
 	if label then
 		if label.Text ~= text then
 			label.Text = text
 		end
 		label.TextColor3 = textColor
-		label.Position = UDim2.fromOffset(coin and 30 or 0, 0)
-		label.Size = UDim2.new(1, coin and -30 or 0, 1, 0)
+		label.Position = UDim2.fromOffset(coin and coinWidth or 0, 0)
+		label.Size = UDim2.new(1, coin and -coinWidth or 0, 1, 0)
+		-- Contour du texte seulement sur le vert "achat" (sur fond clair, texte net)
+		local textStroke = label:FindFirstChildOfClass("UIStroke")
+		if textStroke then
+			textStroke.Transparency = enabled and 0.35 or 1
+		end
 	elseif button.Text ~= text then
 		button.Text = text
 	end
 	if coinFrame then
 		coinFrame.Visible = coin == true
+	end
+	-- Contour (style v9 : teinte plus sombre du fond) et reflet : actif = net,
+	-- désactivé = contour doux et sans reflet
+	local buttonStroke = button:FindFirstChildOfClass("UIStroke")
+	if buttonStroke then
+		buttonStroke.Color = enabled and UIUtil.EdgeColor(background) or background:Lerp(BLACK, 0.3)
+		buttonStroke.Transparency = enabled and 0 or 0.35
+	end
+	local gloss = button:FindFirstChild("Gloss")
+	if gloss and gloss:IsA("GuiObject") then
+		gloss.Visible = enabled
 	end
 	button:SetAttribute("BaseColor", background)
 	button.BackgroundColor3 = background
@@ -266,6 +442,10 @@ function refreshOffer(offer: Offer)
 			offer.Kind.Visible = not owned
 		end
 	end
+	local spotlit = offer.Spotlit > os.clock()
+	if offer.Spot then
+		offer.Spot.Visible = spotlit
+	end
 	if owned then
 		pendingPasses[offer.Id] = nil
 		styleButton(offer.Button, Locale.T("✔ Purchased"), Color3.fromRGB(222, 247, 232), Theme.Colors.RobuxDark, false)
@@ -274,9 +454,24 @@ function refreshOffer(offer: Offer)
 		offer.Stroke.Transparency = 0
 		return
 	end
-	offer.Stroke.Color = offer.Color:Lerp(Color3.new(0, 0, 0), 0.2)
-	offer.Stroke.Thickness = offer.Hovered and 2 or 1.5
-	offer.Stroke.Transparency = offer.Hovered and 0 or 0.35
+	if spotlit then
+		offer.Stroke.Color = TICKET_GOLD
+		offer.Stroke.Thickness = 3
+		offer.Stroke.Transparency = 0
+	else
+		offer.Stroke.Color = offer.Color:Lerp(BLACK, 0.2)
+		offer.Stroke.Thickness = offer.Hovered and 2 or 1.5
+		offer.Stroke.Transparency = offer.Hovered and 0 or 0.35
+	end
+	if offer.Soon then
+		styleButton(offer.Button, Locale.T("🔜 Coming soon"), SOON_BUTTON, SOON_TEXT, false)
+		local buttonStroke = offer.Button:FindFirstChildOfClass("UIStroke")
+		if buttonStroke then
+			buttonStroke.Color = SOON_TEXT
+			buttonStroke.Transparency = 0.45
+		end
+		return
+	end
 	local pendingSince = offer.IsPass and pendingPasses[offer.Id]
 	if pendingSince and os.clock() - pendingSince < PENDING_TIMEOUT then
 		styleButton(offer.Button, Locale.T("⏳ Activating…"), Theme.Colors.PanelLight, Theme.Colors.TextDim, false)
@@ -284,6 +479,10 @@ function refreshOffer(offer: Offer)
 	end
 	if offer.Id == 0 then
 		styleButton(offer.Button, Locale.T("🛠️ ID to set up"), Theme.Colors.PanelLight, Theme.Colors.TextDim, false)
+		return
+	end
+	if ticketsLocked(def) then
+		styleButton(offer.Button, Locale.T("🔒 Arcade"), Theme.Colors.PanelLight, Theme.Colors.TextDim, false)
 		return
 	end
 	local text, forSale = priceText(offer)
@@ -297,8 +496,39 @@ function refreshOffer(offer: Offer)
 	end
 end
 
+-- Économie par ticket d'un pack par rapport au plus petit pack (VRAIS prix
+-- Roblox des deux packs, sinon nil : jamais d'économie inventée)
+local function ticketSavings(offer: Offer): number?
+	local price = realPrice(offer)
+	local amount = tonumber(offer.Def.Tickets) or 0
+	if not price or amount <= 0 then
+		return nil
+	end
+	local base: Offer? = nil
+	for _, other in ipairs(offers) do
+		local otherAmount = tonumber(other.Def.Tickets) or 0
+		if other.Section == "Tickets" and not other.Soon and otherAmount > 0
+			and (base == nil or otherAmount < (tonumber(base.Def.Tickets) or 0)) then
+			base = other
+		end
+	end
+	if not base or base == offer then
+		return nil
+	end
+	local basePrice = realPrice(base)
+	local baseAmount = tonumber(base.Def.Tickets) or 0
+	if not basePrice or baseAmount <= 0 then
+		return nil
+	end
+	local saving = 1 - (price / amount) / (basePrice / baseAmount)
+	if saving < 0.05 then
+		return nil
+	end
+	return math.floor(saving * 100 + 0.5)
+end
+
 -- Ligne "extra" : estimation du gain / boost actif / effet
-local function refreshExtra(offer: Offer, data)
+function refreshExtra(offer: Offer, data)
 	local extra = offer.Extra
 	if not extra then
 		return
@@ -306,19 +536,19 @@ local function refreshExtra(offer: Offer, data)
 	local def = offer.Def
 	local text = ""
 	local color = Theme.Colors.TextDim
+	local stats = { PerSecond = tonumber(data and data.PerSecond) or 0, ClickValue = tonumber(data and data.ClickValue) or 0 }
 	if offer.IsPass then
 		if def.Multiplier then
 			text = Locale.T("📈 Gains %s forever", NumberFormatter.Multiplier(def.Multiplier))
-			color = offer.Color:Lerp(Color3.new(0, 0, 0), 0.35)
+			color = offer.Color:Lerp(BLACK, 0.35)
 		elseif def.AutoClicksPerSecond then
 			text = Locale.T("🤖 %s clicks / second", tostring(def.AutoClicksPerSecond))
-			color = offer.Color:Lerp(Color3.new(0, 0, 0), 0.35)
+			color = offer.Color:Lerp(BLACK, 0.35)
 		end
 		if def.UnlockPremiumThemes then
 			text = (text ~= "" and (text .. " • ") or "") .. Locale.T("🎨 Premium themes")
 		end
 	elseif def.Kind == "Dopamine" then
-		local stats = { PerSecond = tonumber(data and data.PerSecond) or 0, ClickValue = tonumber(data and data.ClickValue) or 0 }
 		local amount = Formulas.ScaledReward(stats, tonumber(def.Seconds) or 0, tonumber(def.Minimum) or 0)
 		text = "≈ +" .. NumberFormatter.Format(amount) .. " Dopamine"
 		color = Theme.Colors.Blue
@@ -333,6 +563,22 @@ local function refreshExtra(offer: Offer, data)
 	elseif def.Kind == "ServerRush" then
 		text = Locale.T("🎉 The whole server benefits")
 		color = Theme.Colors.Pink
+	elseif def.Kind == "Tickets" then
+		local saving = ticketSavings(offer)
+		if saving then
+			text = Locale.T("💸 −%s%% per ticket", tostring(saving))
+			color = Theme.Colors.RobuxDark
+		else
+			text = Locale.T("🕹️ For the arcade")
+			color = TICKET_INK
+		end
+	elseif def.Kind == "Combo" then
+		local amount = Formulas.ScaledReward(stats, tonumber(def.Seconds) or 0, tonumber(def.Minimum) or 0)
+		text = string.format("%s %s + ≈ %s 🧠", TICKET, NumberFormatter.Format(tonumber(def.Tickets) or 0), NumberFormatter.Format(amount))
+		color = offer.Color:Lerp(BLACK, 0.35)
+	elseif def.Kind == "Stylish" then
+		text = Locale.T("✨ Just for style")
+		color = offer.Color:Lerp(BLACK, 0.3)
 	end
 	if extra.Text ~= text then
 		extra.Text = text
@@ -499,19 +745,171 @@ local function buildHero(content: Frame)
 end
 
 ----------------------------------------------------------------------
+-- Morceaux de cartes
+----------------------------------------------------------------------
+
+-- Ruban diagonal "BIENTÔT" (coin haut droit de la vitrine). Il croise les
+-- bords droits de la vitrine (pas le coin arrondi) ; son reflet est un
+-- dégradé qui glisse (Tween en boucle : aucun code par image, joué
+-- seulement quand la boutique est ouverte).
+local function comingSoonRibbon(showcase: Frame, inset: number, zIndex: number)
+	local ribbon = UIUtil.Create("Frame", {
+		Name = "SoonRibbon",
+		Size = UDim2.fromOffset(inset * 4 + 40, 22),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(1, -inset, 0, inset),
+		Rotation = 45,
+		BackgroundColor3 = WHITE,
+		BorderSizePixel = 0,
+		ZIndex = zIndex,
+		Parent = showcase,
+	})
+	UIUtil.Stroke(ribbon, WHITE, 1.5, 0.15)
+	local shine = UIUtil.Create("UIGradient", {
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, SOON_PINK),
+			ColorSequenceKeypoint.new(0.4, SOON_PINK),
+			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 214, 236)),
+			ColorSequenceKeypoint.new(0.6, Color3.fromRGB(255, 120, 60)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 120, 60)),
+		}),
+		Offset = Vector2.new(-0.6, 0),
+		Parent = ribbon,
+	})
+	table.insert(shineTweens, TweenService:Create(shine, TweenInfo.new(1.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, false, 2.2), {
+		Offset = Vector2.new(0.6, 0),
+	}))
+	local label = UIUtil.Create("TextLabel", {
+		Name = "Label",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Font = Theme.Fonts.Title,
+		Text = Locale.T("COMING SOON"),
+		TextColor3 = WHITE,
+		TextSize = 11,
+		ZIndex = zIndex + 1,
+		Parent = ribbon,
+	})
+	local labelStroke = UIUtil.Stroke(label, Color3.fromRGB(150, 20, 70), 1, 0.35)
+	labelStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	return ribbon
+end
+
+-- Petits tickets en arc de cercle derrière l'icône (plus le pack est gros, plus il y en a)
+local function ticketFan(showcase: Frame, amount: number, zIndex: number)
+	local count = amount >= 100 and 5 or (amount >= 50 and 4 or (amount >= 25 and 3 or (amount >= 10 and 2 or 1)))
+	for index = 1, count do
+		local t = count == 1 and 0.5 or (index - 1) / (count - 1)
+		local angle = math.rad(200 + t * 140) -- de 200° à 340° : arc au-dessus de l'icône
+		local radius = 34
+		UIUtil.Create("TextLabel", {
+			Name = "FanTicket" .. index,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, math.cos(angle) * radius * 1.3, 0.56, math.sin(angle) * radius * 0.75),
+			Size = UDim2.fromOffset(24, 24),
+			Rotation = (t - 0.5) * 50,
+			BackgroundTransparency = 1,
+			Font = Theme.Fonts.Body,
+			Text = TICKET,
+			TextSize = 18,
+			ZIndex = zIndex,
+			Parent = showcase,
+		})
+	end
+end
+
+-- Chip de mise en avant (ruban de la config ou HIGHLIGHTS)
+local function tagChip(parent: Instance, text: string, zIndex: number, anchorRight: boolean): Frame
+	local ribbon = UIUtil.Chip({
+		Name = "Highlight",
+		Text = Locale.T(text),
+		Color = Theme.Colors.Premium,
+		TextColor3 = Theme.Colors.TextDark,
+		Height = 18,
+		TextSize = 10,
+		ZIndex = zIndex,
+		Parent = parent,
+	})
+	if anchorRight then
+		ribbon.AnchorPoint = Vector2.new(1, 0)
+		ribbon.Position = UDim2.new(1, -6, 0, 6)
+	else
+		ribbon.Position = UDim2.fromOffset(6, 6)
+	end
+	return ribbon
+end
+
+-- Bouton prix : pièce "R$" + prix (le texte du bouton lui-même reste vide)
+local function priceButton(card: Frame, height: number, bottom: number, coinSize: number): TextButton
+	local button = UIUtil.NeonButton({
+		Name = "Price",
+		Text = "",
+		Color = Theme.Colors.Robux,
+		TextColor3 = Theme.Colors.TextLight,
+		Size = UDim2.new(1, -16, 0, height),
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -bottom),
+		CornerRadius = math.floor(height / 2),
+		MaxTextSize = 17,
+		ZIndex = 4,
+		Parent = card,
+	})
+	local coin = UIUtil.Create("Frame", {
+		Name = "Coin",
+		Size = UDim2.fromOffset(coinSize, coinSize),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 2, 0.5, 0),
+		BackgroundColor3 = WHITE,
+		Visible = false,
+		ZIndex = 5,
+		Parent = button,
+	})
+	UIUtil.Corner(coin, UDim.new(1, 0))
+	UIUtil.Stroke(coin, Theme.Colors.RobuxDark, 1.5, 0.1)
+	UIUtil.Create("TextLabel", {
+		Name = "Symbol",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Font = Theme.Fonts.Title,
+		Text = "R$",
+		TextSize = coinSize >= 24 and 11 or 10,
+		TextColor3 = Theme.Colors.RobuxDark,
+		ZIndex = 6,
+		Parent = coin,
+	})
+	local priceLabel = UIUtil.Create("TextLabel", {
+		Name = "PriceLabel",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Font = Theme.Fonts.Title,
+		Text = "",
+		TextScaled = true,
+		TextColor3 = Theme.Colors.TextLight,
+		ZIndex = 5,
+		Parent = button,
+	})
+	UIUtil.Create("UITextSizeConstraint", { MaxTextSize = height >= 38 and 19 or 16, MinTextSize = 9, Parent = priceLabel })
+	local priceStroke = UIUtil.Stroke(priceLabel, Theme.Colors.RobuxDark, 1, 0.35)
+	priceStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	return button
+end
+
+----------------------------------------------------------------------
 -- Construction des cartes
 ----------------------------------------------------------------------
 
-local function buildCard(grid: ScrollingFrame, def, isPass: boolean, order: number)
+local function buildCard(section: Section, def, isPass: boolean, order: number)
+	local sectionId = section.Def.Id
+	local compact = section.Def.Style == "Compact"
+	local soon = isComingSoon(def, isPass)
 	local color: Color3 = isPass and (PASS_COLORS[def.Id] or Theme.Colors.Purple)
 		or (PRODUCT_COLORS[def.Kind] or Theme.Colors.Cyan)
-	local category = isPass and "Passes" or (def.Kind == "Dopamine" and "Dopamine" or "Boosts")
 
 	local cell = UIUtil.Create("Frame", {
 		Name = tostring(def.Id),
 		BackgroundTransparency = 1,
 		LayoutOrder = order,
-		Parent = grid,
+		Parent = section.Grid,
 	})
 	local card = UIUtil.Create("Frame", {
 		Name = "Card",
@@ -522,13 +920,14 @@ local function buildCard(grid: ScrollingFrame, def, isPass: boolean, order: numb
 		Parent = cell,
 	})
 	UIUtil.Corner(card, Theme.Radius.L)
-	local stroke = UIUtil.Stroke(card, color:Lerp(Color3.new(0, 0, 0), 0.2), 1.5, 0.35)
+	local stroke = UIUtil.Stroke(card, color:Lerp(BLACK, 0.2), 1.5, 0.35)
 	UIUtil.Shadow(card, 3, 0.86, 2)
 
 	-- Vitrine
+	local showcaseHeight = compact and 88 or 104
 	local showcase = UIUtil.Create("Frame", {
 		Name = "Showcase",
-		Size = UDim2.new(1, -10, 0, 104),
+		Size = UDim2.new(1, -10, 0, showcaseHeight),
 		Position = UDim2.fromOffset(5, 5),
 		BackgroundColor3 = WHITE,
 		ClipsDescendants = true,
@@ -536,65 +935,101 @@ local function buildCard(grid: ScrollingFrame, def, isPass: boolean, order: numb
 		Parent = card,
 	})
 	UIUtil.Corner(showcase, Theme.Radius.M)
-	UIUtil.SoftGradient(showcase, color, 90)
-	local rays = UIUtil.Rays(showcase, WHITE, 6, 190, UDim2.fromScale(0.5, 0.55), 3)
+	if def.Kind == "Tickets" then
+		-- Vitrine "fête foraine" : dégradé doré chaud
+		UIUtil.Gradient(showcase, ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 236, 170)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 170, 70)),
+		}), 90)
+	else
+		UIUtil.SoftGradient(showcase, color, 90)
+	end
+	local iconY = compact and 0.56 or 0.55
+	local rays = UIUtil.Rays(showcase, WHITE, 6, compact and 170 or 190, UDim2.fromScale(0.5, iconY), 3)
 	local glow = UIUtil.Create("Frame", {
 		Name = "Glow",
-		Size = UDim2.fromOffset(74, 74),
+		Size = UDim2.fromOffset(compact and 60 or 74, compact and 60 or 74),
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.55),
+		Position = UDim2.fromScale(0.5, iconY),
 		BackgroundColor3 = WHITE,
 		BackgroundTransparency = 0.55,
 		ZIndex = 3,
 		Parent = showcase,
 	})
 	UIUtil.Corner(glow, UDim.new(1, 0))
+	if def.Kind == "Tickets" then
+		ticketFan(showcase, tonumber(def.Tickets) or 0, 4)
+	end
 	UIUtil.Label({
 		Name = "Icon",
-		Text = tostring(def.Icon or (isPass and "🎟️" or "💧")),
-		Size = UDim2.fromOffset(64, 64),
+		Text = tostring(def.Icon or (isPass and "♾️" or "💧")),
+		Size = UDim2.fromOffset(compact and 50 or 64, compact and 50 or 64),
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.56),
-		MaxTextSize = 54,
-		ZIndex = 4,
-		Parent = showcase,
-	})
-
-	-- "Pour toujours" / "Rachetable"
-	local kindChip = UIUtil.Chip({
-		Name = "Kind",
-		Text = isPass and Locale.T("♾️ FOREVER") or Locale.T("🔁 REBUYABLE"),
-		Color = WHITE,
-		TextColor3 = color:Lerp(Color3.new(0, 0, 0), 0.45),
-		Height = 18,
-		TextSize = 10,
+		Position = UDim2.fromScale(0.5, iconY + 0.01),
+		MaxTextSize = compact and 42 or 54,
 		ZIndex = 5,
-		StrokeColor = WHITE,
 		Parent = showcase,
 	})
-	kindChip.Position = UDim2.fromOffset(6, 6)
+	-- "×25" : nombre de tickets du pack, en gros
+	if def.Kind == "Tickets" then
+		local count = UIUtil.Create("TextLabel", {
+			Name = "Amount",
+			AnchorPoint = Vector2.new(1, 1),
+			Position = UDim2.new(1, -6, 1, -2),
+			Size = UDim2.fromOffset(70, 28),
+			BackgroundTransparency = 1,
+			Font = Theme.Fonts.Number,
+			Text = "×" .. tostring(def.Tickets or 0),
+			TextColor3 = WHITE,
+			TextSize = 24,
+			TextXAlignment = Enum.TextXAlignment.Right,
+			ZIndex = 6,
+			Parent = showcase,
+		})
+		local countStroke = UIUtil.Stroke(count, Color3.fromRGB(170, 70, 0), 2, 0)
+		countStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	end
 
-	-- Ruban de mise en avant
-	local highlight = HIGHLIGHTS[def.Id]
-	if highlight then
-		-- Deux pastilles ne tiennent pas sur une ligne : "Pour toujours" se
-		-- réduit à son icône (la ligne "Extra" le redit en toutes lettres)
-		local kindLabel = kindChip:FindFirstChild("Label") :: TextLabel?
-		if kindLabel then
-			kindLabel.Text = isPass and "♾️" or "🔁"
-		end
-		local ribbon = UIUtil.Chip({
-			Name = "Highlight",
-			Text = Locale.T(highlight),
-			Color = Theme.Colors.Premium,
-			TextColor3 = Theme.Colors.TextDark,
+	-- "Pour toujours" / "Rachetable" (grandes cartes seulement)
+	local kindChip: Frame? = nil
+	local highlight = def.Tag or HIGHLIGHTS[def.Id]
+	if not compact then
+		local chip = UIUtil.Chip({
+			Name = "Kind",
+			Text = isPass and Locale.T("♾️ FOREVER") or Locale.T("🔁 REBUYABLE"),
+			Color = WHITE,
+			TextColor3 = color:Lerp(BLACK, 0.45),
 			Height = 18,
 			TextSize = 10,
 			ZIndex = 5,
+			StrokeColor = WHITE,
 			Parent = showcase,
 		})
-		ribbon.AnchorPoint = Vector2.new(1, 0)
-		ribbon.Position = UDim2.new(1, -6, 0, 6)
+		chip.Position = UDim2.fromOffset(6, 6)
+		kindChip = chip
+		if highlight or soon then
+			-- Deux pastilles ne tiennent pas sur une ligne : "Pour toujours" se
+			-- réduit à son icône (la ligne "Extra" le redit en toutes lettres)
+			local kindLabel = chip:FindFirstChild("Label") :: TextLabel?
+			if kindLabel then
+				kindLabel.Text = isPass and "♾️" or "🔁"
+			end
+		end
+	end
+	-- Ruban de mise en avant (à droite ; à gauche sur les cartes "Bientôt"
+	-- et compactes, pour laisser la place au ruban diagonal)
+	if highlight then
+		if compact then
+			tagChip(showcase, highlight, 6, false)
+		elseif soon then
+			local ribbon = tagChip(showcase, highlight, 6, false)
+			ribbon.Position = UDim2.fromOffset(32, 6)
+		else
+			tagChip(showcase, highlight, 5, true)
+		end
+	end
+	if soon then
+		comingSoonRibbon(showcase, compact and 36 or 42, 7)
 	end
 
 	-- Ruban "✔ ACHETÉ" (passes possédés)
@@ -617,13 +1052,32 @@ local function buildCard(grid: ScrollingFrame, def, isPass: boolean, order: numb
 		owned = ownedChip
 	end
 
+	-- Pastille "👉 Conseillé" (Spotlight, ex. pack proposé par NeedTickets)
+	local spot = UIUtil.Chip({
+		Name = "Spot",
+		Text = Locale.T("👉 Best fit"),
+		Color = TICKET_GOLD,
+		TextColor3 = TICKET_INK,
+		Height = 20,
+		TextSize = 11,
+		ZIndex = 8,
+		Visible = false,
+		StrokeColor = WHITE,
+		Parent = card,
+	})
+	-- (à cheval sur le haut de la carte : ne cache ni l'icône ni le nom)
+	spot.AnchorPoint = Vector2.new(0.5, 0.5)
+	spot.Position = UDim2.new(0.5, 0, 0, 1)
+
+	-- Textes
+	local nameTop = showcaseHeight + (compact and 10 or 9)
 	UIUtil.Label({
 		Name = "OfferName",
 		Text = Locale.T(tostring(def.Name)),
 		Font = Theme.Fonts.Title,
-		Size = UDim2.new(1, -16, 0, 22),
-		Position = UDim2.fromOffset(8, 114),
-		MaxTextSize = 18,
+		Size = UDim2.new(1, -14, 0, compact and 19 or 22),
+		Position = UDim2.fromOffset(7, nameTop),
+		MaxTextSize = compact and 15 or 18,
 		ZIndex = 3,
 		Parent = card,
 	})
@@ -631,94 +1085,43 @@ local function buildCard(grid: ScrollingFrame, def, isPass: boolean, order: numb
 		Name = "Description",
 		Text = Locale.T(tostring(def.Description or "")),
 		Font = Theme.Fonts.Body,
-		TextSize = 14,
+		TextSize = compact and 12 or 14,
 		TextColor3 = Theme.Colors.TextDim,
 		TextWrapped = true,
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, -20, 0, 32),
-		Position = UDim2.fromOffset(10, 137),
+		Size = UDim2.new(1, compact and -14 or -20, 0, compact and 28 or 32),
+		Position = UDim2.fromOffset(compact and 7 or 10, nameTop + (compact and 20 or 23)),
 		ZIndex = 3,
 		Parent = card,
 	})
 	desc.TextTruncate = Enum.TextTruncate.AtEnd
+	if compact then
+		-- Petite carte : le texte rétrécit pour tenir sur 2 lignes (jamais de débordement)
+		desc.TextYAlignment = Enum.TextYAlignment.Top
+		desc.TextScaled = true
+		UIUtil.Create("UITextSizeConstraint", { MaxTextSize = 12, MinTextSize = 8, Parent = desc })
+	end
 	local extra = UIUtil.Label({
 		Name = "Extra",
 		Text = "",
 		Font = Theme.Fonts.Title,
 		TextColor3 = Theme.Colors.TextDim,
-		Size = UDim2.new(1, -16, 0, 16),
-		Position = UDim2.fromOffset(8, 171),
-		MaxTextSize = 13,
+		Size = UDim2.new(1, -14, 0, compact and 14 or 16),
+		Position = UDim2.fromOffset(7, nameTop + (compact and 50 or 57)),
+		MaxTextSize = compact and 12 or 13,
 		ZIndex = 3,
 		Parent = card,
 	})
 
-	local button = UIUtil.NeonButton({
-		Name = "Price",
-		Text = "",
-		Color = Theme.Colors.Robux,
-		TextColor3 = Theme.Colors.TextLight,
-		Size = UDim2.new(1, -20, 0, 38),
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -9),
-		CornerRadius = 19,
-		MaxTextSize = 17,
-		ZIndex = 4,
-		Parent = card,
-	})
-	-- Dégradé plus lumineux (reflet en haut) que le bouton standard
-	local buttonGradient = button:FindFirstChildOfClass("UIGradient")
-	if buttonGradient then
-		buttonGradient.Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
-			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(236, 236, 236)),
-			ColorSequenceKeypoint.new(1, Color3.fromRGB(196, 196, 196)),
-		})
-	end
-	-- Pièce "R$" + prix (le texte du bouton lui-même reste vide)
-	local coin = UIUtil.Create("Frame", {
-		Name = "Coin",
-		Size = UDim2.fromOffset(24, 24),
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 2, 0.5, 0),
-		BackgroundColor3 = WHITE,
-		Visible = false,
-		ZIndex = 5,
-		Parent = button,
-	})
-	UIUtil.Corner(coin, UDim.new(1, 0))
-	UIUtil.Stroke(coin, Theme.Colors.RobuxDark, 1.5, 0.1)
-	UIUtil.Create("TextLabel", {
-		Name = "Symbol",
-		Size = UDim2.fromScale(1, 1),
-		BackgroundTransparency = 1,
-		Font = Theme.Fonts.Title,
-		Text = "R$",
-		TextSize = 11,
-		TextColor3 = Theme.Colors.RobuxDark,
-		ZIndex = 6,
-		Parent = coin,
-	})
-	local priceLabel = UIUtil.Create("TextLabel", {
-		Name = "PriceLabel",
-		Size = UDim2.fromScale(1, 1),
-		BackgroundTransparency = 1,
-		Font = Theme.Fonts.Title,
-		Text = "",
-		TextScaled = true,
-		TextColor3 = Theme.Colors.TextLight,
-		ZIndex = 5,
-		Parent = button,
-	})
-	UIUtil.Create("UITextSizeConstraint", { MaxTextSize = 19, MinTextSize = 10, Parent = priceLabel })
-	local priceStroke = UIUtil.Stroke(priceLabel, Theme.Colors.RobuxDark, 1, 0.35)
-	priceStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	local button = priceButton(card, compact and 34 or 38, compact and 8 or 9, compact and 20 or 24)
 
 	local offer: Offer = {
 		Def = def,
 		IsPass = isPass,
 		Id = tonumber(isPass and def.GamePassId or def.ProductId) or 0,
-		Category = category,
+		Section = sectionId,
+		Soon = soon,
+		Compact = compact,
 		Color = color,
 		Cell = cell,
 		Card = card,
@@ -727,8 +1130,10 @@ local function buildCard(grid: ScrollingFrame, def, isPass: boolean, order: numb
 		Extra = extra,
 		Owned = owned,
 		Kind = kindChip,
+		Spot = spot,
 		Rays = rays,
 		Hovered = false,
+		Spotlit = 0,
 	}
 	button.Activated:Connect(function()
 		prompt(offer)
@@ -745,21 +1150,215 @@ local function buildCard(grid: ScrollingFrame, def, isPass: boolean, order: numb
 		hover(false)
 	end)
 	table.insert(offers, offer)
+	table.insert(section.Offers, offer)
+	offersById[tostring(def.Id)] = offer
 	refreshOffer(offer)
 	refreshExtra(offer, ClientState.Data)
 end
 
-local function applyFilter()
-	local shown = 0
-	for _, offer in ipairs(offers) do
-		local show = filter == "All" or offer.Category == filter
-		offer.Cell.Visible = show
-		if show then
-			shown += 1
+----------------------------------------------------------------------
+-- Sections
+----------------------------------------------------------------------
+
+-- Ouvre l'arcade (onglet boutique à tickets) depuis l'onglet 🎟️ Tickets
+local function openArcade()
+	if not PanelManager.IsRegistered("Arcade") then
+		return
+	end
+	SoundManager.Play("Click", 1.2)
+	PanelManager.Open("Arcade")
+	local panels = script.Parent
+	local module = panels:FindFirstChild("Arcade")
+	if module and module:IsA("ModuleScript") then
+		local ok, arcade = pcall(require, module)
+		if ok and type(arcade) == "table" and type((arcade :: any).ShowTab) == "function" then
+			(arcade :: any).ShowTab("Shop")
 		end
 	end
+end
+
+-- Bandeau sous les packs de tickets : rappel honnête + retour à l'arcade
+local function buildTicketFooter(section: Section)
+	local footer = UIUtil.Create("Frame", {
+		Name = "Footer",
+		Size = UDim2.new(1, 0, 0, FOOTER_HEIGHT - 8),
+		BackgroundColor3 = Color3.fromRGB(255, 247, 228),
+		ZIndex = 2,
+		Parent = section.Frame,
+	})
+	UIUtil.Corner(footer, Theme.Radius.M)
+	UIUtil.Stroke(footer, TICKET_GOLD, 1, 0.45)
+	local info = UIUtil.Create("TextLabel", {
+		Name = "Info",
+		Position = UDim2.fromOffset(12, 0),
+		Size = UDim2.new(1, -176, 1, 0),
+		BackgroundTransparency = 1,
+		Font = Theme.Fonts.Body,
+		Text = Locale.T("🎟️ Tickets buy treats, boosts and badges in the arcade. %s Duel trophies can't be bought: they're earned only by playing.", TROPHY),
+		TextColor3 = TICKET_INK,
+		TextSize = 13,
+		TextWrapped = true,
+		TextScaled = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 3,
+		Parent = footer,
+	})
+	UIUtil.Create("UITextSizeConstraint", { MaxTextSize = 13, MinTextSize = 9, Parent = info })
+	local button = UIUtil.PillButton({
+		Name = "OpenArcade",
+		Text = Locale.T("🕹️ Arcade"),
+		Color = Color3.fromRGB(166, 90, 255),
+		TextColor3 = WHITE,
+		Height = 32,
+		TextSize = 15,
+		ZIndex = 4,
+		Parent = footer,
+	})
+	button.AnchorPoint = Vector2.new(1, 0.5)
+	button.Position = UDim2.new(1, -10, 0.5, 0)
+	button.Activated:Connect(openArcade)
+	arcadeButton = button
+	section.Footer = footer
+end
+
+local function buildSection(parent: ScrollingFrame, def, order: number): Section
+	local style = STYLES[def.Style] or STYLES.Big
+	local frame = UIUtil.Create("Frame", {
+		Name = "Section_" .. def.Id,
+		Size = UDim2.new(1, 0, 0, SECTION_HEADER),
+		BackgroundTransparency = 1,
+		LayoutOrder = order,
+		Parent = parent,
+	})
+	-- Titre : barre de couleur, titre, note à droite
+	local header = UIUtil.Create("Frame", {
+		Name = "Header",
+		Size = UDim2.new(1, 0, 0, SECTION_HEADER - 4),
+		BackgroundTransparency = 1,
+		Parent = frame,
+	})
+	local bar = UIUtil.Create("Frame", {
+		Name = "Accent",
+		Size = UDim2.fromOffset(5, 18),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 2, 0.5, 0),
+		BackgroundColor3 = def.Color,
+		BorderSizePixel = 0,
+		Parent = header,
+	})
+	UIUtil.Corner(bar, 3)
+	UIUtil.Label({
+		Name = "Title",
+		Text = Locale.T(def.Title),
+		Font = Theme.Fonts.Title,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(0.5, -14, 0, 22),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 14, 0.5, 0),
+		MaxTextSize = 18,
+		Parent = header,
+	})
+	local note = UIUtil.Label({
+		Name = "Note",
+		Text = def.Note ~= "" and Locale.T(def.Note) or "",
+		TextColor3 = Theme.Colors.TextDim,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		Size = UDim2.new(0.5, -6, 0, 18),
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -4, 0.5, 0),
+		MaxTextSize = 13,
+		Parent = header,
+	})
+	local grid = UIUtil.Create("Frame", {
+		Name = "Grid",
+		Size = UDim2.new(1, 0, 0, 0),
+		Position = UDim2.fromOffset(0, SECTION_HEADER),
+		BackgroundTransparency = 1,
+		Parent = frame,
+	})
+	UIUtil.Create("UIGridLayout", {
+		CellSize = UDim2.new(1 / style.Columns, -math.ceil(style.Gap * (style.Columns - 1) / style.Columns), 0, style.CellHeight),
+		CellPadding = UDim2.fromOffset(style.Gap, style.RowGap),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = grid,
+	})
+	local section: Section = {
+		Def = def,
+		Frame = frame,
+		Grid = grid,
+		Note = note,
+		Footer = nil,
+		Offers = {},
+		Columns = style.Columns,
+		CellHeight = style.CellHeight,
+		RowGap = style.RowGap,
+	}
+	table.insert(sections, section)
+	sectionsById[def.Id] = section
+	return section
+end
+
+-- Place les sections selon l'onglet : cartes visibles, hauteurs, défilement
+local function applyFilter()
+	local total = LIST_PADDING_TOP + LIST_PADDING_BOTTOM
+	local shownSections = 0
+	local shownOffers = 0
+	for _, section in ipairs(sections) do
+		local count = 0
+		for _, offer in ipairs(section.Offers) do
+			local show = cellVisible(offer, filter)
+			offer.Cell.Visible = show
+			if show then
+				count += 1
+			end
+		end
+		local rows = math.ceil(count / section.Columns)
+		local gridHeight = rows > 0 and (rows * section.CellHeight + (rows - 1) * section.RowGap) or 0
+		section.Grid.Size = UDim2.new(1, 0, 0, gridHeight)
+		local height = SECTION_HEADER + gridHeight
+		local footer = section.Footer
+		if footer then
+			footer.Position = UDim2.fromOffset(0, height + 6)
+			height += FOOTER_HEIGHT
+		end
+		section.Frame.Size = UDim2.new(1, 0, 0, height)
+		section.Frame.Visible = count > 0
+		if count > 0 then
+			total += height + (shownSections > 0 and SECTION_GAP or 0)
+			shownSections += 1
+			shownOffers += count
+		end
+	end
+	local scroll = list
+	if scroll then
+		scroll.CanvasSize = UDim2.fromOffset(0, total)
+	end
 	if filterEmpty then
-		filterEmpty.Visible = shown == 0 and #offers > 0
+		filterEmpty.Visible = shownOffers == 0 and #offers > 0
+	end
+end
+
+-- Solde de tickets (titre de la section 🎟️) + bouton Arcade
+local function refreshTicketNote(data)
+	local section = sectionsById.Tickets
+	if not section then
+		return
+	end
+	local tickets = tonumber(data and data.Tickets)
+	local text
+	if not ClientState.HasFeature(ArcadeConfig.Feature) then
+		text = Locale.T("🔒 Unlock the 🕹️ Arcade to use tickets")
+	elseif tickets then
+		text = Locale.T("You have %s %s", NumberFormatter.Format(tickets), TICKET)
+	else
+		text = Locale.T("For the 🕹️ arcade ticket shop")
+	end
+	if section.Note.Text ~= text then
+		section.Note.Text = text
+	end
+	local button = arcadeButton
+	if button then
+		button.Visible = PanelManager.IsRegistered("Arcade") and ClientState.HasFeature(ArcadeConfig.Feature)
 	end
 end
 
@@ -771,44 +1370,66 @@ function RobuxShop.Build(content: Frame)
 	local studio = RunService:IsStudio()
 	buildHero(content)
 
+	-- Offres affichées : configurées (ID ~= 0), "Bientôt" (toujours), et
+	-- dans Studio aussi les autres (aperçu)
+	local chosen: { { Def: any, IsPass: boolean } } = {}
+	local hidden = 0
+	local hasSoon = false
+	for _, pass in ipairs(Config.Monetization.GamePasses) do
+		local id = tonumber(pass.GamePassId) or 0
+		local soon = isComingSoon(pass, true)
+		if id ~= 0 or soon or studio then
+			table.insert(chosen, { Def = pass, IsPass = true })
+		end
+		if id == 0 and not soon then
+			hidden += 1
+		end
+		hasSoon = hasSoon or soon
+	end
+	for _, product in ipairs(Config.Monetization.Products) do
+		local id = tonumber(product.ProductId) or 0
+		local soon = isComingSoon(product, false)
+		if id ~= 0 or soon or studio then
+			table.insert(chosen, { Def = product, IsPass = false })
+		end
+		if id == 0 and not soon then
+			hidden += 1
+		end
+		hasSoon = hasSoon or soon
+	end
+
+	-- Onglets (🔜 seulement s'il y a des offres "Bientôt")
+	local tabList = {
+		{ Id = "All", Text = Locale.T("⭐ All") },
+		{ Id = "Passes", Text = Locale.T("♾️ Passes") },
+		{ Id = "Dopamine", Text = Locale.T("💧 Dopamine") },
+		{ Id = "Boosts", Text = Locale.T("⚡ Boosts") },
+		{ Id = "Tickets", Text = Locale.T("🎟️ Tickets") },
+	}
+	if hasSoon then
+		table.insert(tabList, { Id = "Soon", Text = Locale.T("🔜 Soon") })
+	end
+	for _, tab in ipairs(tabList) do
+		tabIds[tab.Id] = true
+	end
 	filterTabs = UIUtil.Tabs({
 		Parent = content,
-		Tabs = {
-			{ Id = "All", Text = Locale.T("⭐ All") },
-			{ Id = "Passes", Text = "🎟️ Passes" },
-			{ Id = "Dopamine", Text = "💧 Dopamine" },
-			{ Id = "Boosts", Text = "⚡ Boosts" },
-		},
+		Tabs = tabList,
 		Color = Theme.Colors.Purple,
 		Size = UDim2.new(1, 0, 0, 36),
 		Position = UDim2.fromOffset(0, 118),
 		Selected = filter,
+		TextSize = 15,
 		OnSelect = function(id: string)
 			filter = id
 			applyFilter()
+			local scroll = list
+			if scroll then
+				scroll.CanvasPosition = Vector2.zero
+			end
 			SoundManager.Play("Click", 1.3)
 		end,
 	})
-
-	-- Offres affichées : configurées (ID ~= 0) ; dans Studio, aussi les autres (aperçu)
-	local passes, products = {}, {}
-	local hidden = 0
-	for _, pass in ipairs(Config.Monetization.GamePasses) do
-		if (tonumber(pass.GamePassId) or 0) ~= 0 or studio then
-			table.insert(passes, pass)
-		end
-		if (tonumber(pass.GamePassId) or 0) == 0 then
-			hidden += 1
-		end
-	end
-	for _, product in ipairs(Config.Monetization.Products) do
-		if (tonumber(product.ProductId) or 0) ~= 0 or studio then
-			table.insert(products, product)
-		end
-		if (tonumber(product.ProductId) or 0) == 0 then
-			hidden += 1
-		end
-	end
 
 	local top = 162
 	if studio and hidden > 0 then
@@ -836,7 +1457,7 @@ function RobuxShop.Build(content: Frame)
 		top += 32
 	end
 
-	local grid = UIUtil.Create("ScrollingFrame", {
+	local scroll = UIUtil.Create("ScrollingFrame", {
 		Name = "Offers",
 		Size = UDim2.new(1, 0, 1, -top),
 		Position = UDim2.fromOffset(0, top),
@@ -845,32 +1466,39 @@ function RobuxShop.Build(content: Frame)
 		ScrollBarThickness = 5,
 		ScrollBarImageColor3 = Theme.Colors.Purple,
 		CanvasSize = UDim2.new(),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 		Parent = content,
 	})
 	UIUtil.Create("UIPadding", {
-		PaddingTop = UDim.new(0, 2),
+		PaddingTop = UDim.new(0, LIST_PADDING_TOP),
 		PaddingLeft = UDim.new(0, 4),
 		PaddingRight = UDim.new(0, 12),
-		PaddingBottom = UDim.new(0, 10),
-		Parent = grid,
+		PaddingBottom = UDim.new(0, LIST_PADDING_BOTTOM),
+		Parent = scroll,
 	})
-	UIUtil.Create("UIGridLayout", {
-		CellSize = UDim2.new(1 / 3, -10, 0, 246), -- (8 px d'air entre la ligne "Extra" et le bouton)
-		CellPadding = UDim2.fromOffset(10, 6),
+	UIUtil.Create("UIListLayout", {
+		Padding = UDim.new(0, SECTION_GAP),
 		SortOrder = Enum.SortOrder.LayoutOrder,
-		Parent = grid,
+		Parent = scroll,
 	})
+	list = scroll
 
-	local order = 0
-	for _, pass in ipairs(passes) do
-		order += 1
-		buildCard(grid, pass, true, order)
+	-- Sections, puis cartes dans l'ordre de la config
+	for index, def in ipairs(SECTIONS) do
+		buildSection(scroll, def, index)
 	end
-	for _, product in ipairs(products) do
-		order += 1
-		buildCard(grid, product, false, order)
+	local orderInSection: { [string]: number } = {}
+	for _, entry in ipairs(chosen) do
+		local sectionId = sectionOf(entry.Def, entry.IsPass)
+		local section = sectionsById[sectionId]
+		if section then
+			orderInSection[sectionId] = (orderInSection[sectionId] or 0) + 1
+			buildCard(section, entry.Def, entry.IsPass, orderInSection[sectionId])
+		end
+	end
+	local ticketSection = sectionsById.Tickets
+	if ticketSection and #ticketSection.Offers > 0 then
+		buildTicketFooter(ticketSection)
 	end
 
 	filterEmpty = UIUtil.Label({
@@ -927,6 +1555,7 @@ function RobuxShop.Build(content: Frame)
 		})
 	end
 	applyFilter()
+	refreshTicketNote(ClientState.Data)
 
 	-- Pass acheté : "⏳ Activation…" jusqu'à la confirmation du serveur
 	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(who: Player, passId: number, purchased: boolean)
@@ -944,14 +1573,69 @@ function RobuxShop.Build(content: Frame)
 	refreshStatus(ClientState.Data)
 end
 
--- Ouvre directement un onglet ("Dopamine" quand il en manque pour un achat)
+-- Ouvre directement un onglet ("Dopamine" quand il en manque pour un achat,
+-- "Tickets" quand il manque des tickets à l'arcade, "Soon"...)
 function RobuxShop.ShowTab(id: string)
+	if not tabIds[id] then
+		return
+	end
 	filter = id
 	local tabs = filterTabs
 	if tabs then
 		tabs.Select(id, true)
 	end
 	applyFilter()
+	local scroll = list
+	if scroll then
+		scroll.CanvasPosition = Vector2.zero
+	end
+end
+
+-- Met une offre en avant (ex. le pack de tickets conseillé) : son onglet est
+-- affiché, la liste défile jusqu'à elle, contour doré + "👉 Conseillé"
+function RobuxShop.Spotlight(offerId: string)
+	local offer = offersById[tostring(offerId)]
+	if not offer then
+		return
+	end
+	if not cellVisible(offer, filter) then
+		RobuxShop.ShowTab(offer.Soon and "Soon" or (offer.Section == "Combos" and "Tickets" or offer.Section))
+	end
+	-- Position de la carte dans la liste (sections visibles au-dessus + rang)
+	local y = LIST_PADDING_TOP
+	local found = false
+	for _, section in ipairs(sections) do
+		if section.Frame.Visible then
+			local index = 0
+			for _, other in ipairs(section.Offers) do
+				if other == offer then
+					found = true
+					break
+				end
+				if other.Cell.Visible then
+					index += 1
+				end
+			end
+			if found then
+				y += SECTION_HEADER + math.floor(index / section.Columns) * (section.CellHeight + section.RowGap)
+				break
+			end
+			y += section.Frame.Size.Y.Offset + SECTION_GAP
+		end
+	end
+	local scroll = list
+	if scroll and found then
+		local target = Vector2.new(0, math.max(0, y - SECTION_HEADER - 4))
+		TweenService:Create(scroll, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { CanvasPosition = target }):Play()
+	end
+	offer.Spotlit = os.clock() + 4
+	refreshOffer(offer)
+	UIUtil.Pop(offer.Card, 1.08, 0.5)
+	task.delay(4.1, function()
+		if offer.Card.Parent then
+			refreshOffer(offer)
+		end
+	end)
 end
 
 function RobuxShop.OnOpen()
@@ -961,28 +1645,38 @@ function RobuxShop.OnOpen()
 		fetchPrice(offer)
 	end
 	refreshStatus(ClientState.Data)
+	refreshTicketNote(ClientState.Data)
+	for _, tween in ipairs(shineTweens) do
+		tween:Play()
+	end
 
-	-- Animations (seulement fenêtre ouverte) : rayons, diamant, étincelles,
-	-- et comptes à rebours (boost, activation) 2 fois par seconde
+	-- Animations (seulement fenêtre ouverte, 30 images/s au plus) : rayons,
+	-- diamant, étincelles, et comptes à rebours (boost, activation) 2 fois par seconde
 	if animation then
 		animation:Disconnect()
 	end
 	local started = os.clock()
+	animClock = 0
 	animation = RunService.RenderStepped:Connect(function(dt: number)
-		local t = os.clock() - started
-		heroRays.Rotation = (heroRays.Rotation + dt * 14) % 360
-		heroDiamond.Position = UDim2.new(1, -80, 0.5, math.sin(t * 2) * 4)
-		heroDiamond.Rotation = math.sin(t * 1.3) * 6
-		for _, star in ipairs(sparkles) do
-			local phase = star:GetAttribute("Phase") or 0
-			star.TextTransparency = 0.2 + 0.6 * (0.5 + 0.5 * math.sin(t * 2.5 + phase))
-		end
-		for _, offer in ipairs(offers) do
-			if offer.Cell.Visible then
-				offer.Rays.Rotation = (offer.Rays.Rotation + dt * (offer.Hovered and 60 or 12)) % 360
+		animClock += dt
+		refreshClock += dt
+		if animClock >= ANIM_STEP then
+			local step = animClock
+			animClock = 0
+			local t = os.clock() - started
+			heroRays.Rotation = (heroRays.Rotation + step * 14) % 360
+			heroDiamond.Position = UDim2.new(1, -80, 0.5, math.sin(t * 2) * 4)
+			heroDiamond.Rotation = math.sin(t * 1.3) * 6
+			for _, star in ipairs(sparkles) do
+				local phase = star:GetAttribute("Phase") or 0
+				star.TextTransparency = 0.2 + 0.6 * (0.5 + 0.5 * math.sin(t * 2.5 + phase))
+			end
+			for _, offer in ipairs(offers) do
+				if offer.Cell.Visible then
+					offer.Rays.Rotation = (offer.Rays.Rotation + step * (offer.Hovered and 60 or 12)) % 360
+				end
 			end
 		end
-		refreshClock += dt
 		if refreshClock >= 0.5 then
 			refreshClock = 0
 			local data = ClientState.Data
@@ -1006,6 +1700,9 @@ function RobuxShop.OnClose()
 		connection:Disconnect()
 		animation = nil
 	end
+	for _, tween in ipairs(shineTweens) do
+		tween:Pause()
+	end
 end
 
 function RobuxShop.Update(data)
@@ -1014,6 +1711,7 @@ function RobuxShop.Update(data)
 		refreshExtra(offer, data)
 	end
 	refreshStatus(data)
+	refreshTicketNote(data)
 end
 
 -- Vrai si au moins une offre Robux est configurée (utilisé par la colonne centrale)

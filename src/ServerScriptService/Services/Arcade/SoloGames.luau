@@ -22,12 +22,12 @@
 	  solo:info   nil                                  -> { Best = { ["Id:Diff"] = n } }
 	  solo:start  { Game, Difficulty }                 -> { Token, Game, Difficulty, Best, ... (selon le jeu) }
 	  solo:move   { Token, ... }                       -> selon le jeu (Démineur, Memory, Simon)
-	  solo:finish { Token, ... }                       -> { Done = true, Won, Stars, Score, Tickets, Dopamine, ... }
+	  solo:finish { Token, ... }                       -> { Done = true, Won, Stars, Score, Tickets, Trophies, Dopamine, ... }
 	  (voir le détail en bas de chaque section)
 
 	Récompenses : une victoire (>= 1 étoile) appelle api.RewardWin (base
-	ArcadeConfig : tickets, Dopamine, stat MinigamesWon, parties récompensées
-	par jour, record), puis ajoute un bonus selon la difficulté et les étoiles
+	ArcadeConfig : tickets, 🏆 trophée, Dopamine, stat MinigamesWon, parties
+	récompensées par jour, record), puis ajoute un bonus selon la difficulté et les étoiles
 	(Solo_Logic.Multiplier) tant que le quota du jour n'est pas atteint.
 	Records par difficulté : data.Arcade.Solo.Best["Id:Diff"] (nettoyé ici).
 	L'onglet Records de l'arcade (data.Arcade.Best) reçoit le score du mode
@@ -245,6 +245,7 @@ local function conclude(player, data, api, session, metrics)
 		Score = metrics.Score or 0,
 		Time = math.floor(elapsed * 10) / 10,
 		Tickets = 0,
+		Trophies = 0,
 		Dopamine = 0,
 		Capped = false,
 		Record = false,
@@ -269,6 +270,7 @@ local function conclude(player, data, api, session, metrics)
 		local okReward, reward = callApi(api, "RewardWin", player, session.Game, recordValue)
 		if okReward and type(reward) == "table" then
 			result.Tickets = tonumber(reward.Tickets) or 0
+			result.Trophies = tonumber(reward.Trophies) or 0 -- 🏆 (mises des duels, jamais achetables)
 			result.Dopamine = tonumber(reward.Dopamine) or 0
 			result.Capped = reward.Capped == true
 			result.Record = reward.Record == true

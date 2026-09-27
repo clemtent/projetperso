@@ -49,7 +49,8 @@ local TEMPLATE = {
 	Stock = { Shares = 0, CostBasis = 0 }, -- ancienne bourse (remboursée puis vidée)
 	Casino = { Tokens = -1, Progress = 0 }, -- 🎰 jetons de tours gratuits (-1 = jamais initialisé)
 	Garden = {}, -- 🌻 parterres du jardin (voir GardenService)
-	Tickets = 0, -- 🎟️ tickets d'arcade (gagnés en jouant, JAMAIS achetables : mises des duels)
+	Tickets = 0, -- 🎟️ tickets d'arcade (gagnés en jouant ou achetés en Robux ; boutique à tickets, jamais misés)
+	Trophies = 0, -- 🏆 trophées d'arcade (gagnés UNIQUEMENT en jouant, jamais achetables ni convertibles : mises des duels)
 	Arcade = {}, -- 🕹️ mini-jeux (records, limites du jour : voir MinigameService)
 	Chests = { Stored = 0, Progress = 0 }, -- coffres mystère
 	ScreenTime = {}, -- ["numéro du jour UTC"] = secondes jouées ce jour-là
@@ -233,6 +234,11 @@ function DataService:LoadAsync(player: Player)
 
 	data = reconcile(data or deepCopy(TEMPLATE), TEMPLATE)
 	data.Version = TEMPLATE.Version
+	-- 🏆 Trophées : entier >= 0 (sauvegarde abîmée corrigée)
+	if not isValidNumber(data.Trophies) or data.Trophies < 0 then
+		data.Trophies = 0
+	end
+	data.Trophies = math.floor(data.Trophies)
 
 	-- Absence depuis la dernière sauvegarde (gain hors-ligne donné par
 	-- GameService quand le client est prêt), puis on repart de maintenant

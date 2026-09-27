@@ -17,8 +17,9 @@
 	  - Snake                    : simulation pas à pas (graine)
 	  - 2048                     : simulation des coups (graine)
 
-	Les récompenses sont des 🎟️ tickets (jamais achetables) et des SECONDES de
-	production de Dopamine (aucune mise, aucun hasard payant : jeux d'adresse).
+	Les récompenses sont des 🎟️ tickets, un 🏆 trophée (jamais achetable) et
+	des SECONDES de production de Dopamine (aucune mise, aucun hasard payant :
+	jeux d'adresse).
 ]]
 
 local Logic = {}

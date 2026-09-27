@@ -56,71 +56,198 @@ Clic droit sur le parent → **Insert Object** → **Folder**, puis renomme-le.
 
 | Dossier | Emplacement exact |
 |---|---|
-| `Shared` | `ReplicatedStorage > Shared` |
 | `Client` | `ReplicatedStorage > Client` |
 | `Components` | `ReplicatedStorage > Client > Components` |
+| `House` | `ReplicatedStorage > Client > Components > House` |
+| `Art` | `ReplicatedStorage > Client > Components > House > Art` |
 | `Panels` | `ReplicatedStorage > Client > Components > Panels` |
+| `Minigames` | `ReplicatedStorage > Client > Minigames` |
 | `Stimuli` | `ReplicatedStorage > Client > Stimuli` |
+| `Cosmos` | `ReplicatedStorage > Client > Stimuli > Cosmos` |
+| `Gear` | `ReplicatedStorage > Client > Stimuli > Gear` |
+| `Live` | `ReplicatedStorage > Client > Stimuli > Live` |
+| `Shared` | `ReplicatedStorage > Shared` |
+| `Lang` | `ReplicatedStorage > Shared > Lang` |
 | `Services` | `ServerScriptService > Services` |
+| `Arcade` | `ServerScriptService > Services > Arcade` |
 
 `StarterPlayer > StarterPlayerScripts` existe déjà. **Ne crée pas** `ReplicatedStorage > Remotes` : le serveur le crée tout seul.
 
-### 2. Puis chaque script (liste complète, 64 fichiers)
+### 2. Puis chaque script (liste complète, 187 fichiers)
 
 Crée l'objet du bon type à l'emplacement indiqué, renomme-le **exactement**, ouvre-le et colle **tout** le contenu du fichier.
 
 | Objet dans Studio (emplacement exact) | Type | Fichier à copier |
 |---|---|---|
 | `ReplicatedStorage > Client > ClientState` | ModuleScript | `src/ReplicatedStorage/Client/ClientState.luau` |
+| `ReplicatedStorage > Client > Components > AchievementPopup` | ModuleScript | `src/ReplicatedStorage/Client/Components/AchievementPopup.luau` |
 | `ReplicatedStorage > Client > Components > Background` | ModuleScript | `src/ReplicatedStorage/Client/Components/Background.luau` |
 | `ReplicatedStorage > Client > Components > CenterColumn` | ModuleScript | `src/ReplicatedStorage/Client/Components/CenterColumn.luau` |
+| `ReplicatedStorage > Client > Components > DebugTools` | ModuleScript | `src/ReplicatedStorage/Client/Components/DebugTools.luau` |
+| `ReplicatedStorage > Client > Components > House > Art > Critters` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/Art/Critters.luau` |
+| `ReplicatedStorage > Client > Components > House > Art > Decor` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/Art/Decor.luau` |
+| `ReplicatedStorage > Client > Components > House > Art > Doors` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/Art/Doors.luau` |
+| `ReplicatedStorage > Client > Components > House > Art > Electronics` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/Art/Electronics.luau` |
+| `ReplicatedStorage > Client > Components > House > Art > Furniture` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/Art/Furniture.luau` |
+| `ReplicatedStorage > Client > Components > House > Art > Kitchen` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/Art/Kitchen.luau` |
+| `ReplicatedStorage > Client > Components > House > Art > Lights` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/Art/Lights.luau` |
+| `ReplicatedStorage > Client > Components > House > Art > PetFurniture` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/Art/PetFurniture.luau` |
+| `ReplicatedStorage > Client > Components > House > Art > Pets` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/Art/Pets.luau` |
+| `ReplicatedStorage > Client > Components > House > Art > Plants` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/Art/Plants.luau` |
+| `ReplicatedStorage > Client > Components > House > Art > Tables` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/Art/Tables.luau` |
+| `ReplicatedStorage > Client > Components > House > Art > Tabletop` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/Art/Tabletop.luau` |
+| `ReplicatedStorage > Client > Components > House > Art > Toys` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/Art/Toys.luau` |
+| `ReplicatedStorage > Client > Components > House > Art > Windows` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/Art/Windows.luau` |
+| `ReplicatedStorage > Client > Components > House > House3D` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/House3D.luau` |
+| `ReplicatedStorage > Client > Components > House > House3DFloor` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/House3DFloor.luau` |
+| `ReplicatedStorage > Client > Components > House > House3DScene` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/House3DScene.luau` |
+| `ReplicatedStorage > Client > Components > House > HouseArt` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/HouseArt.luau` |
+| `ReplicatedStorage > Client > Components > House > HouseButtons` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/HouseButtons.luau` |
+| `ReplicatedStorage > Client > Components > House > HouseCommon` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/HouseCommon.luau` |
+| `ReplicatedStorage > Client > Components > House > HouseEditor` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/HouseEditor.luau` |
+| `ReplicatedStorage > Client > Components > House > HouseExterior` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/HouseExterior.luau` |
+| `ReplicatedStorage > Client > Components > House > HouseMiniRoom` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/HouseMiniRoom.luau` |
+| `ReplicatedStorage > Client > Components > House > HouseOverview` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/HouseOverview.luau` |
+| `ReplicatedStorage > Client > Components > House > HousePatterns` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/HousePatterns.luau` |
+| `ReplicatedStorage > Client > Components > House > HousePets` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/HousePets.luau` |
+| `ReplicatedStorage > Client > Components > House > HousePicker` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/HousePicker.luau` |
+| `ReplicatedStorage > Client > Components > House > HouseRoom` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/HouseRoom.luau` |
+| `ReplicatedStorage > Client > Components > House > HouseScenery` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/HouseScenery.luau` |
+| `ReplicatedStorage > Client > Components > House > HouseShop` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/HouseShop.luau` |
+| `ReplicatedStorage > Client > Components > House > HouseSurfaces` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/HouseSurfaces.luau` |
+| `ReplicatedStorage > Client > Components > LoadingScreen` | ModuleScript | `src/ReplicatedStorage/Client/Components/LoadingScreen.luau` |
+| `ReplicatedStorage > Client > Components > NeedDopamine` | ModuleScript | `src/ReplicatedStorage/Client/Components/NeedDopamine.luau` |
+| `ReplicatedStorage > Client > Components > NeedTickets` | ModuleScript | `src/ReplicatedStorage/Client/Components/NeedTickets.luau` |
 | `ReplicatedStorage > Client > Components > Notifications` | ModuleScript | `src/ReplicatedStorage/Client/Components/Notifications.luau` |
+| `ReplicatedStorage > Client > Components > OfferPopup` | ModuleScript | `src/ReplicatedStorage/Client/Components/OfferPopup.luau` |
+| `ReplicatedStorage > Client > Components > OfflinePopup` | ModuleScript | `src/ReplicatedStorage/Client/Components/OfflinePopup.luau` |
 | `ReplicatedStorage > Client > Components > PanelManager` | ModuleScript | `src/ReplicatedStorage/Client/Components/PanelManager.luau` |
 | `ReplicatedStorage > Client > Components > Panels > Achievements` | ModuleScript | `src/ReplicatedStorage/Client/Components/Panels/Achievements.luau` |
+| `ReplicatedStorage > Client > Components > Panels > Arcade` | ModuleScript | `src/ReplicatedStorage/Client/Components/Panels/Arcade.luau` |
 | `ReplicatedStorage > Client > Components > Panels > Daily` | ModuleScript | `src/ReplicatedStorage/Client/Components/Panels/Daily.luau` |
+| `ReplicatedStorage > Client > Components > Panels > Debug` | ModuleScript | `src/ReplicatedStorage/Client/Components/Panels/Debug.luau` |
+| `ReplicatedStorage > Client > Components > Panels > House` | ModuleScript | `src/ReplicatedStorage/Client/Components/Panels/House.luau` |
 | `ReplicatedStorage > Client > Components > Panels > ItemShop` | ModuleScript | `src/ReplicatedStorage/Client/Components/Panels/ItemShop.luau` |
 | `ReplicatedStorage > Client > Components > Panels > Leaderboard` | ModuleScript | `src/ReplicatedStorage/Client/Components/Panels/Leaderboard.luau` |
 | `ReplicatedStorage > Client > Components > Panels > Quests` | ModuleScript | `src/ReplicatedStorage/Client/Components/Panels/Quests.luau` |
+| `ReplicatedStorage > Client > Components > Panels > RobuxShop` | ModuleScript | `src/ReplicatedStorage/Client/Components/Panels/RobuxShop.luau` |
 | `ReplicatedStorage > Client > Components > Panels > ScreenTime` | ModuleScript | `src/ReplicatedStorage/Client/Components/Panels/ScreenTime.luau` |
 | `ReplicatedStorage > Client > Components > Panels > Settings` | ModuleScript | `src/ReplicatedStorage/Client/Components/Panels/Settings.luau` |
+| `ReplicatedStorage > Client > Components > Panels > Themes` | ModuleScript | `src/ReplicatedStorage/Client/Components/Panels/Themes.luau` |
 | `ReplicatedStorage > Client > Components > UpgradeBar` | ModuleScript | `src/ReplicatedStorage/Client/Components/UpgradeBar.luau` |
+| `ReplicatedStorage > Client > DarkSkin` | ModuleScript | `src/ReplicatedStorage/Client/DarkSkin.luau` |
 | `ReplicatedStorage > Client > Effects` | ModuleScript | `src/ReplicatedStorage/Client/Effects.luau` |
 | `ReplicatedStorage > Client > Interface` | ModuleScript | `src/ReplicatedStorage/Client/Interface.luau` |
+| `ReplicatedStorage > Client > Minigames > DuelKit` | ModuleScript | `src/ReplicatedStorage/Client/Minigames/DuelKit.luau` |
+| `ReplicatedStorage > Client > Minigames > Duel_Connect4` | ModuleScript | `src/ReplicatedStorage/Client/Minigames/Duel_Connect4.luau` |
+| `ReplicatedStorage > Client > Minigames > Duel_ReactionDuel` | ModuleScript | `src/ReplicatedStorage/Client/Minigames/Duel_ReactionDuel.luau` |
+| `ReplicatedStorage > Client > Minigames > Duel_SpotRace` | ModuleScript | `src/ReplicatedStorage/Client/Minigames/Duel_SpotRace.luau` |
+| `ReplicatedStorage > Client > Minigames > Duel_TicTacToe` | ModuleScript | `src/ReplicatedStorage/Client/Minigames/Duel_TicTacToe.luau` |
+| `ReplicatedStorage > Client > Minigames > Solo_Game2048` | ModuleScript | `src/ReplicatedStorage/Client/Minigames/Solo_Game2048.luau` |
+| `ReplicatedStorage > Client > Minigames > Solo_Kit` | ModuleScript | `src/ReplicatedStorage/Client/Minigames/Solo_Kit.luau` |
+| `ReplicatedStorage > Client > Minigames > Solo_Logic` | ModuleScript | `src/ReplicatedStorage/Client/Minigames/Solo_Logic.luau` |
+| `ReplicatedStorage > Client > Minigames > Solo_Memory` | ModuleScript | `src/ReplicatedStorage/Client/Minigames/Solo_Memory.luau` |
+| `ReplicatedStorage > Client > Minigames > Solo_Minesweeper` | ModuleScript | `src/ReplicatedStorage/Client/Minigames/Solo_Minesweeper.luau` |
+| `ReplicatedStorage > Client > Minigames > Solo_Simon` | ModuleScript | `src/ReplicatedStorage/Client/Minigames/Solo_Simon.luau` |
+| `ReplicatedStorage > Client > Minigames > Solo_Snake` | ModuleScript | `src/ReplicatedStorage/Client/Minigames/Solo_Snake.luau` |
+| `ReplicatedStorage > Client > Minigames > Solo_WhackAMole` | ModuleScript | `src/ReplicatedStorage/Client/Minigames/Solo_WhackAMole.luau` |
 | `ReplicatedStorage > Client > Slots` | ModuleScript | `src/ReplicatedStorage/Client/Slots.luau` |
 | `ReplicatedStorage > Client > SoundManager` | ModuleScript | `src/ReplicatedStorage/Client/SoundManager.luau` |
+| `ReplicatedStorage > Client > Stimuli > Aurora` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/Aurora.luau` |
 | `ReplicatedStorage > Client > Stimuli > BubbleWrap` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/BubbleWrap.luau` |
 | `ReplicatedStorage > Client > Stimuli > Casino` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/Casino.luau` |
+| `ReplicatedStorage > Client > Stimuli > CoralKeys` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/CoralKeys.luau` |
+| `ReplicatedStorage > Client > Stimuli > Cosmos > Kit` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/Cosmos/Kit.luau` |
+| `ReplicatedStorage > Client > Stimuli > Cosmos > Zones` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/Cosmos/Zones.luau` |
 | `ReplicatedStorage > Client > Stimuli > CursorTrail` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/CursorTrail.luau` |
 | `ReplicatedStorage > Client > Stimuli > DVD` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/DVD.luau` |
+| `ReplicatedStorage > Client > Stimuli > DeepFocus` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/DeepFocus.luau` |
 | `ReplicatedStorage > Client > Stimuli > Disco` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/Disco.luau` |
+| `ReplicatedStorage > Client > Stimuli > DreamMachine` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/DreamMachine.luau` |
 | `ReplicatedStorage > Client > Stimuli > Email` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/Email.luau` |
 | `ReplicatedStorage > Client > Stimuli > EmojiRain` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/EmojiRain.luau` |
+| `ReplicatedStorage > Client > Stimuli > Finger` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/Finger.luau` |
+| `ReplicatedStorage > Client > Stimuli > GalaxyStream` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/GalaxyStream.luau` |
+| `ReplicatedStorage > Client > Stimuli > Garden` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/Garden.luau` |
+| `ReplicatedStorage > Client > Stimuli > Gear > GearKit` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/Gear/GearKit.luau` |
+| `ReplicatedStorage > Client > Stimuli > Gear > GearLayout` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/Gear/GearLayout.luau` |
+| `ReplicatedStorage > Client > Stimuli > Gear > GearPiece` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/Gear/GearPiece.luau` |
+| `ReplicatedStorage > Client > Stimuli > Gear > HandArt` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/Gear/HandArt.luau` |
+| `ReplicatedStorage > Client > Stimuli > Gear > KeyboardArt` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/Gear/KeyboardArt.luau` |
 | `ReplicatedStorage > Client > Stimuli > GoldenStar` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/GoldenStar.luau` |
+| `ReplicatedStorage > Client > Stimuli > InfiniteScroll` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/InfiniteScroll.luau` |
+| `ReplicatedStorage > Client > Stimuli > Keyboard` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/Keyboard.luau` |
+| `ReplicatedStorage > Client > Stimuli > Live > ChatInput` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/Live/ChatInput.luau` |
+| `ReplicatedStorage > Client > Stimuli > Live > ChatReplies` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/Live/ChatReplies.luau` |
 | `ReplicatedStorage > Client > Stimuli > LiveStream` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/LiveStream.luau` |
 | `ReplicatedStorage > Client > Stimuli > Lofi` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/Lofi.luau` |
 | `ReplicatedStorage > Client > Stimuli > LootBox` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/LootBox.luau` |
+| `ReplicatedStorage > Client > Stimuli > MegaFinger` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/MegaFinger.luau` |
 | `ReplicatedStorage > Client > Stimuli > Megaphone` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/Megaphone.luau` |
+| `ReplicatedStorage > Client > Stimuli > Mouse` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/Mouse.luau` |
+| `ReplicatedStorage > Client > Stimuli > Multiverse` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/Multiverse.luau` |
 | `ReplicatedStorage > Client > Stimuli > NeonMode` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/NeonMode.luau` |
+| `ReplicatedStorage > Client > Stimuli > NeuralLink` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/NeuralLink.luau` |
 | `ReplicatedStorage > Client > Stimuli > NewsTicker` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/NewsTicker.luau` |
 | `ReplicatedStorage > Client > Stimuli > Ocean` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/Ocean.luau` |
 | `ReplicatedStorage > Client > Stimuli > PhoneNotifs` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/PhoneNotifs.luau` |
 | `ReplicatedStorage > Client > Stimuli > Pinwheel` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/Pinwheel.luau` |
 | `ReplicatedStorage > Client > Stimuli > Press` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/Press.luau` |
+| `ReplicatedStorage > Client > Stimuli > QuantumFinger` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/QuantumFinger.luau` |
 | `ReplicatedStorage > Client > Stimuli > Runner` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/Runner.luau` |
-| `ReplicatedStorage > Client > Stimuli > Stocks` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/Stocks.luau` |
+| `ReplicatedStorage > Client > Stimuli > Seashell` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/Seashell.luau` |
+| `ReplicatedStorage > Client > Stimuli > Singularity` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/Singularity.luau` |
+| `ReplicatedStorage > Client > Stimuli > SleepMode` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/SleepMode.luau` |
+| `ReplicatedStorage > Client > Stimuli > TimeWarp` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/TimeWarp.luau` |
 | `ReplicatedStorage > Client > Stimuli > Weather` | ModuleScript | `src/ReplicatedStorage/Client/Stimuli/Weather.luau` |
 | `ReplicatedStorage > Client > StimulusManager` | ModuleScript | `src/ReplicatedStorage/Client/StimulusManager.luau` |
 | `ReplicatedStorage > Client > Theme` | ModuleScript | `src/ReplicatedStorage/Client/Theme.luau` |
 | `ReplicatedStorage > Client > UIUtil` | ModuleScript | `src/ReplicatedStorage/Client/UIUtil.luau` |
+| `ReplicatedStorage > Shared > ArcadeConfig` | ModuleScript | `src/ReplicatedStorage/Shared/ArcadeConfig.luau` |
+| `ReplicatedStorage > Shared > ChatTopics` | ModuleScript | `src/ReplicatedStorage/Shared/ChatTopics.luau` |
 | `ReplicatedStorage > Shared > Config` | ModuleScript | `src/ReplicatedStorage/Shared/Config.luau` |
 | `ReplicatedStorage > Shared > DVDMath` | ModuleScript | `src/ReplicatedStorage/Shared/DVDMath.luau` |
 | `ReplicatedStorage > Shared > Formulas` | ModuleScript | `src/ReplicatedStorage/Shared/Formulas.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_Config` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_Config.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_House` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_House.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_HouseRooms` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_HouseRooms.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_HouseShop` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_HouseShop.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_HouseUI` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_HouseUI.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_Server` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_Server.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_StimuliLive` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_StimuliLive.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_StimuliMisc` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_StimuliMisc.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_StimuliText` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_StimuliText.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_UI` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_UI.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V8_Arcade` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V8_Arcade.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V8_House` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V8_House.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V8_LiveLofi` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V8_LiveLofi.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V8_Perf` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V8_Perf.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V8_PressDVD` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V8_PressDVD.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V8_Runner` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V8_Runner.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V8_SlotGarden` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V8_SlotGarden.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V8_Solo` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V8_Solo.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V8_UIShop` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V8_UIShop.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V9_Arcade` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V9_Arcade.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V9_Cosmos` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V9_Cosmos.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V9_Fun` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V9_Fun.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V9_Gear` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V9_Gear.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V9_House` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V9_House.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V9_House3D` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V9_House3D.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V9_Lead` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V9_Lead.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V9_Live` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V9_Live.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V9_Mail` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V9_Mail.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V9_Runner` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V9_Runner.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V9_UX` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V9_UX.luau` |
+| `ReplicatedStorage > Shared > Lang > README` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/README.luau` |
+| `ReplicatedStorage > Shared > Locale` | ModuleScript | `src/ReplicatedStorage/Shared/Locale.luau` |
 | `ReplicatedStorage > Shared > Net` | ModuleScript | `src/ReplicatedStorage/Shared/Net.luau` |
 | `ReplicatedStorage > Shared > NumberFormatter` | ModuleScript | `src/ReplicatedStorage/Shared/NumberFormatter.luau` |
 | `ReplicatedStorage > Shared > Signal` | ModuleScript | `src/ReplicatedStorage/Shared/Signal.luau` |
-| `ServerScriptService > Main` | **Script** | `src/ServerScriptService/Main.server.luau` |
+| `ServerScriptService > Main` | Script | `src/ServerScriptService/Main.server.luau` |
 | `ServerScriptService > Services > AchievementService` | ModuleScript | `src/ServerScriptService/Services/AchievementService.luau` |
+| `ServerScriptService > Services > Arcade > SoloGames` | ModuleScript | `src/ServerScriptService/Services/Arcade/SoloGames.luau` |
 | `ServerScriptService > Services > CasinoService` | ModuleScript | `src/ServerScriptService/Services/CasinoService.luau` |
+| `ServerScriptService > Services > ChatService` | ModuleScript | `src/ServerScriptService/Services/ChatService.luau` |
 | `ServerScriptService > Services > CosmeticService` | ModuleScript | `src/ServerScriptService/Services/CosmeticService.luau` |
 | `ServerScriptService > Services > DVDService` | ModuleScript | `src/ServerScriptService/Services/DVDService.luau` |
 | `ServerScriptService > Services > DailyRewardService` | ModuleScript | `src/ServerScriptService/Services/DailyRewardService.luau` |
@@ -128,15 +255,18 @@ Crée l'objet du bon type à l'emplacement indiqué, renomme-le **exactement**, 
 | `ServerScriptService > Services > DebugService` | ModuleScript | `src/ServerScriptService/Services/DebugService.luau` |
 | `ServerScriptService > Services > EventService` | ModuleScript | `src/ServerScriptService/Services/EventService.luau` |
 | `ServerScriptService > Services > GameService` | ModuleScript | `src/ServerScriptService/Services/GameService.luau` |
+| `ServerScriptService > Services > GardenService` | ModuleScript | `src/ServerScriptService/Services/GardenService.luau` |
+| `ServerScriptService > Services > HouseService` | ModuleScript | `src/ServerScriptService/Services/HouseService.luau` |
 | `ServerScriptService > Services > InteractService` | ModuleScript | `src/ServerScriptService/Services/InteractService.luau` |
 | `ServerScriptService > Services > LeaderboardService` | ModuleScript | `src/ServerScriptService/Services/LeaderboardService.luau` |
 | `ServerScriptService > Services > LootService` | ModuleScript | `src/ServerScriptService/Services/LootService.luau` |
+| `ServerScriptService > Services > MinigameService` | ModuleScript | `src/ServerScriptService/Services/MinigameService.luau` |
+| `ServerScriptService > Services > MonetizationService` | ModuleScript | `src/ServerScriptService/Services/MonetizationService.luau` |
 | `ServerScriptService > Services > QuestService` | ModuleScript | `src/ServerScriptService/Services/QuestService.luau` |
 | `ServerScriptService > Services > RateLimiter` | ModuleScript | `src/ServerScriptService/Services/RateLimiter.luau` |
-| `ServerScriptService > Services > StockService` | ModuleScript | `src/ServerScriptService/Services/StockService.luau` |
-| `StarterPlayer > StarterPlayerScripts > ClientMain` | **LocalScript** | `src/StarterPlayer/StarterPlayerScripts/ClientMain.client.luau` |
+| `ServerScriptService > Services > ThemeService` | ModuleScript | `src/ServerScriptService/Services/ThemeService.luau` |
+| `StarterPlayer > StarterPlayerScripts > ClientMain` | LocalScript | `src/StarterPlayer/StarterPlayerScripts/ClientMain.client.luau` |
 
-⚠️ Les noms sont sensibles à la casse (`GameService` ≠ `Gameservice`, `NewsTicker` ≠ `Newsticker`).
 ⚠️ `Main` doit être un **Script**, `ClientMain` un **LocalScript**, tout le reste des **ModuleScript**.
 ⚠️ Un nouveau Script/ModuleScript contient déjà `print("Hello world!")` ou `local module = {} return module` : **remplace tout**.
 💡 Le nom d'un module du dossier `Stimuli` doit être **exactement** le nom de sa Feature (voir `Config.Upgrades`), sinon il ne sera jamais lancé (aucune erreur : il est simplement ignoré).
@@ -152,27 +282,42 @@ C → S = le client **demande**, le serveur valide tout. S → C = le serveur **
 
 ### RemoteEvents
 
-| Nom | Sens | Arguments | Rôle |
-|---|---|---|---|
-| `ClientReady` | C → S | *(aucun)* | L'interface est prête : le serveur renvoie tout (état, logos DVD, rush, classement, bourse) |
-| `Click` | C → S | *(aucun)* | Un clic sur le bouton « Clique-moi » |
-| `StateUpdate` | S → C | `state` | État complet du joueur (Dopamine, améliorations, Features, stats, combo, bourse, coffres, cosmétiques, temps d'écran, `ClickSeq`…) |
-| `Notify` | S → C | `payload` | `Type` = `Info`, `Error`, `Achievement`, `Quest`, `Bonus` (`Source`, `Amount`), `Jackpot`, `Rush`, `Unlock` (`Feature`, `UpgradeId`, `Text`), `Detox` (`Rebirths`, `Multiplier`) |
-| `DVDSetup` | S → C | `{ Logos = { {X0, Y0, VX, VY, T0, W, H}, … } }` | Trajectoires des logos DVD |
-| `DVDResize` | C → S | `w, h` | Taille d'un logo à l'écran (fraction de l'écran) |
-| `DVDClick` | C → S | `index` | Clic sur le logo numéro `index` |
-| `DVDCorner` | C → S | `index, k` | « Le logo `index` a touché un coin au rebond `k` » (recalculé par le serveur) |
-| `Spawn` | S → C | `{ Kind, Id, X, Y, Lifetime, Variant }` | Un objet à cliquer apparaît (`Kind` = `Golden`, `Lightning`, `Notif`, `Email`) |
-| `SpawnClick` | C → S | `id` | Le joueur a cliqué cet objet |
-| `Interact` | C → S | `kind, arg` | `kind` = `Bubble`, `Spin`, `Headline`, `Press` (papier bulle, moulin, titre du fil d'actu, presse) |
-| `EventUpdate` | S → C | `rush` | Début / fin d'un Dopamine Rush |
-| `LeaderboardUpdate` | S → C | `top` | Top du classement |
-| `StockUpdate` | S → C | `{ Symbol, Price, History }` | Cours de la bourse (commun à tout le serveur) |
+| Nom | Rôle (sens, arguments) |
+|---|---|
+| `ClientReady` | C -> S () : l'interface est prête, envoie-moi tout |
+| `Click` | C -> S () : un clic sur le bouton |
+| `StateUpdate` | S -> C (state) : état complet du joueur |
+| `StateTick` | S -> C (tick) : petite mise à jour fréquente (Dopamine, clics...) entre deux états complets |
+| `Notify` | S -> C (payload) : succès, quêtes, bonus, jackpot, détox... |
+| `DVDSetup` | S -> C ({ Logos = { params... } }) : trajectoires des logos DVD |
+| `DVDResize` | C -> S (w, h) : taille d'un logo à l'écran (fraction de l'écran) |
+| `DVDClick` | C -> S (index) : clic sur le logo numéro `index` |
+| `DVDCorner` | C -> S (index, k) : le logo `index` a touché un coin au rebond k |
+| `Spawn` | S -> C (info) : un objet à cliquer apparaît (étoile, éclair, notif, mail) |
+| `SpawnClick` | C -> S (id) : le joueur a cliqué cet objet |
+| `Interact` | C -> S (kind, arg) : papier bulle, moulin, titre du fil d'actu, presse |
+| `EventUpdate` | S -> C (rush) : début / fin d'un Dopamine Rush |
+| `LeaderboardUpdate` | S -> C (top) : top du classement |
+| `ArcadeEvent` | S <-> C (kind, payload) : arcade en temps réel (invitations, coups des duels...) |
 
 ### RemoteFunctions (C → S, avec réponse)
 
-| Nom | Arguments | Réponse | Rôle |
-|---|---|---|---|
+| Nom | Rôle (arguments -> réponse) |
+|---|---|
+| `BuyUpgrade` | C -> S (upgradeId) -> (succès, message) |
+| `ClaimDaily` | C -> S () -> (succès, message) |
+| `SetSetting` | C -> S (nom, valeur) -> succès |
+| `CasinoSpin` | C -> S () -> (succès, résultat \| message) : tour GRATUIT (1 jeton) de la machine chanceuse |
+| `OpenChest` | C -> S () -> (succès, résultat \| message) |
+| `ItemShop` | C -> S ("buy" \| "equip" \| "unequip", cosmeticId) -> (succès, message) |
+| `ThemeShop` | C -> S ("buy" \| "equip", themeId) -> (succès, message) |
+| `House` | C -> S (action, argument) -> (succès, message) : maison (achats, papier peint, sol, disposition) |
+| `Garden` | C -> S (action, argument) -> (succès, résultat \| message) : jardin de Dopamine |
+| `Arcade` | C -> S (action, argument) -> (succès, résultat \| message) : mini-jeux, tickets, duels |
+| `FilterText` | C -> S (purpose "Live" \| "Mail", texte) -> (succès, { Text, Topics } \| message) : texte tapé, filtré par Roblox |
+| `DebugCommand` | C -> S (commande, argument) -> (succès, message) : UNIQUEMENT dans Studio |
+
+---|---|---|---|
 | `BuyUpgrade` | `upgradeId` | `(succès, message)` | Acheter un niveau d'amélioration (ou « Aller à l'océan ») |
 | `ClaimDaily` | *(aucun)* | `(succès, message)` | Récupérer le cadeau du jour |
 | `SetSetting` | `nom, valeur` | `succès` | `Sound`, `Music` ou `Effects` (booléen) |

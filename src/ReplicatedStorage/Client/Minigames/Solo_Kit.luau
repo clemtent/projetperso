@@ -9,7 +9,7 @@
 	    commandes propres au jeu, boutons ↻ Rejouer / 🎚️ Difficulté ;
 	  - zone de jeu (Area) : le module du jeu y construit son plateau ;
 	  - écran de choix de la difficulté (3 cartes : détails, récompense, record) ;
-	  - écran de fin (étoiles, score, record, 🎟️ tickets et 🧠 Dopamine gagnés) ;
+	  - écran de fin (étoiles, score, record 🏅, 🎟️ tickets, 🏆 trophée et 🧠 Dopamine gagnés) ;
 	  - compte à rebours 3-2-1, confettis et "+1" (cadres RÉUTILISÉS),
 	    secousse, UNE seule boucle d'animation (RenderStepped) par jeu.
 
@@ -37,6 +37,19 @@ do
 		local ok, result = pcall(require, module)
 		if ok then
 			NumberFormatter = result
+		end
+	end
+end
+
+-- 🏆 trophées par victoire solo récompensée (ArcadeConfig.Trophies.PerSoloWin)
+local TROPHIES_PER_WIN = 1
+do
+	local shared = ReplicatedStorage:FindFirstChild("Shared")
+	local module = shared and shared:FindFirstChild("ArcadeConfig")
+	if module then
+		local ok, result = pcall(require, module)
+		if ok and type(result) == "table" and type(result.Trophies) == "table" then
+			TROPHIES_PER_WIN = tonumber(result.Trophies.PerSoloWin) or TROPHIES_PER_WIN
 		end
 	end
 end
@@ -598,7 +611,7 @@ function Kit:_RefreshTitle()
 	local text = (info and info.Icon or "") .. " " .. self:T(info and info.Name or self.Difficulty)
 	local best = self.Bests[self.Id .. ":" .. self.Difficulty]
 	if best then
-		text ..= "  ·  🏆 " .. self:BestText(best)
+		text ..= "  ·  🏅 " .. self:BestText(best)
 	end
 	self.TitleSub.Text = text
 end
@@ -877,12 +890,12 @@ function Kit:_RefreshPicker()
 	for difficulty, entry in pairs(self.PickerCards) do
 		local tickets, seconds = Logic.Reward(tonumber(self.Entry.Tickets) or 0, tonumber(self.Entry.RewardSeconds) or 0, difficulty, 3)
 		if tickets > 0 or seconds > 0 then
-			entry.Reward.Text = self:T("Up to 🎟️ %s · 🧠 %s", tostring(tickets), tostring(seconds) .. "s")
+			entry.Reward.Text = self:T("Up to 🎟️ %s · 🏆 %s · 🧠 %s", tostring(tickets), tostring(TROPHIES_PER_WIN), tostring(seconds) .. "s")
 		else
-			entry.Reward.Text = "🎟️ 🧠"
+			entry.Reward.Text = "🎟️ 🏆 🧠"
 		end
 		local best = self.Bests[self.Id .. ":" .. difficulty]
-		entry.Best.Text = best and ("🏆 " .. self:T("Best: %s", self:BestText(best))) or self:T("No record yet")
+		entry.Best.Text = best and ("🏅 " .. self:T("Best: %s", self:BestText(best))) or self:T("No record yet")
 		entry.Card.BackgroundTransparency = 0
 		local selected = difficulty == self.Difficulty
 		entry.Best.TextColor3 = selected and C.White or C.TextDim
@@ -1091,7 +1104,8 @@ function Kit:_BuildResult()
 		return frame, text
 	end
 	local ticketChip, ticketText = chip("Tickets", C.Yellow, 1)
-	local dopaChip, dopaText = chip("Dopamine", C.Pink, 2)
+	local trophyChip, trophyText = chip("Trophies", C.Cyan, 2)
+	local dopaChip, dopaText = chip("Dopamine", C.Pink, 3)
 	local note = label({
 		Name = "Note",
 		Position = UDim2.new(0, 20, 0.735, 0),
@@ -1145,6 +1159,8 @@ function Kit:_BuildResult()
 		Best = best,
 		TicketChip = ticketChip,
 		TicketText = ticketText,
+		TrophyChip = trophyChip,
+		TrophyText = trophyText,
 		DopaChip = dopaChip,
 		DopaText = dopaText,
 		Note = note,
@@ -1174,18 +1190,27 @@ function Kit:ShowResult(result)
 	local bestText = ""
 	if type(result.Best) == "number" then
 		self.Bests[self.Id .. ":" .. self.Difficulty] = result.Best
-		bestText = "🏆 " .. self:T("Best: %s", self:BestText(result.Best))
+		bestText = "🏅 " .. self:T("Best: %s", self:BestText(result.Best))
 		if result.NewBest then
 			bestText ..= '  <font color="#FFDA54"><b>' .. self:T("NEW RECORD!") .. "</b></font>"
 		end
 	end
 	ui.Best.Text = bestText
 	local tickets = tonumber(result.Tickets) or 0
+	local trophies = tonumber(result.Trophies) or 0
 	local dopamine = tonumber(result.Dopamine) or 0
 	ui.TicketText.Text = "🎟️ +" .. Kit.FormatNumber(tickets)
+	ui.TrophyText.Text = "🏆 +" .. Kit.FormatNumber(trophies)
 	ui.DopaText.Text = "🧠 +" .. Kit.FormatNumber(dopamine)
 	ui.TicketChip.Visible = won
 	ui.DopaChip.Visible = won
+	-- 🏆 trophée gagné (mises des duels) : 3 pastilles plus étroites
+	local showTrophy = won and trophies > 0
+	ui.TrophyChip.Visible = showTrophy
+	local chipWidth = showTrophy and 0.3 or 0.42
+	for _, chipFrame in ipairs({ ui.TicketChip, ui.TrophyChip, ui.DopaChip }) do
+		chipFrame.Size = UDim2.new(chipWidth, 0, 1, 0)
+	end
 	local note = ""
 	if type(result.Rejected) == "string" then
 		note = self:T(result.Rejected)

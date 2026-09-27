@@ -42,6 +42,8 @@ local ItemShop = {
 	Subtitle = "Hats and colors for your button",
 	Color = Theme.Colors.Green,
 	Size = Vector2.new(780, 600),
+	-- v9 : prix "abordable / il manque X" rafraîchis en direct quand la boutique est ouverte
+	RefreshOnTick = true,
 }
 
 -- Noms des emplacements (anglais, traduits à l'affichage)
@@ -257,8 +259,12 @@ local function request(action: string, cosmetic)
 		if ui then
 			UIUtil.Shake(ui.Button)
 		end
-		local text = ok and tostring(message or Locale.T("Not possible right now.")) or Locale.T("Network error, try again.")
-		Notifications.Toast(text, Theme.Colors.Red)
+		-- Refus "pas assez de Dopamine" du serveur : on propose d'en avoir (vrai manque)
+		local context = { Icon = cosmetic.Icon, Name = Locale.T(cosmetic.Name) }
+		if not (ok and action == "buy" and NeedDopamine.OfferRefusal(message, tonumber(cosmetic.Cost), nil, context)) then
+			local text = ok and tostring(message or Locale.T("Not possible right now.")) or Locale.T("Network error, try again.")
+			Notifications.Toast(text, Theme.Colors.Red)
+		end
 	end
 	if ClientState.Data then
 		ItemShop.Update(ClientState.Data)
@@ -684,10 +690,13 @@ local function buildCard(grid: ScrollingFrame, cosmetic, layoutOrder: number)
 			return
 		end
 		if not owned[cosmetic.Id] then
-			if not button:GetAttribute("Enabled") then
+			-- Trop cher (calculé à l'instant, pas d'après l'état du bouton) :
+			-- fenêtre "Pas assez de Dopamine" à CHAQUE clic
+			local missing = (tonumber(cosmetic.Cost) or 0) - getDopamine()
+			if missing > 0 then
 				SoundManager.Play("Error", 0.7)
 				UIUtil.Shake(button)
-				NeedDopamine.Offer((tonumber(cosmetic.Cost) or 0) - getDopamine())
+				NeedDopamine.Offer(missing, nil, { Icon = cosmetic.Icon, Name = Locale.T(cosmetic.Name), Color = ui.Rarity and ui.Rarity.Color or nil })
 				return
 			end
 			task.spawn(request, "buy", cosmetic)

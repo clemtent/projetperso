@@ -27,12 +27,25 @@ Les autres méthodes (Rojo, copie manuelle) sont décrites dans [`docs/INSTALLAT
 
 ---
 
+## 🆕 Nouveautés v9 — tout ce que tu débloques se voit
+
+- **Presse réparée dans Roblox** : un dégradé à 80 points (Roblox en accepte 20 au maximum) arrêtait la carte juste après le sol. Tout le jeu est maintenant vérifié avec un émulateur « strict » qui refuse ce que Roblox refuse.
+- **Fenêtres** : un clic à côté ferme (comme le ✕), un clic DANS la fenêtre ne ferme plus rien. Nouveaux boutons en relief partout (menu, onglets, ✕).
+- **Pas assez de Dopamine ?** La fenêtre « Avoir de la Dopamine » s'affiche à CHAQUE achat refusé (même quand le serveur refuse), avec ce que tu voulais acheter.
+- **Tout ce que tu débloques se voit** : main qui tape le bouton, clavier mécanique, souris gaming, méga-doigt (jeu de force de fête foraine), clavier corail, doigts quantiques, lien neuronal, lune du mode veille, anneaux de concentration, coquillage, **Machine à rêves** (moutons qui sautent), aurore, horloge du temps, rivière d'étoiles, trou noir, téléphones qui défilent, portails du multivers ; baskets du runner, éoliennes du vent, camion du chasseur d'orages. Chaque niveau ajoute un détail.
+- **📬 Dopamail réparé** : le compteur et la liste sont enfin d'accord, ✏️ Écrire (8 contacts qui répondent selon ce que tu dis), dossiers, Répondre, Transférer, Spam, Corbeille, recherche.
+- **💬 Chat du live** : tu écris, la streameuse lit ton message et les spectateurs te répondent selon ce que tu as dit (texte filtré par Roblox).
+- **🎟️ Tickets achetables** (packs 5 / 10 / 25 / 50 / 100) et fenêtre « Pas assez de tickets » qui mène à la boutique. Les **duels se misent maintenant en 🏆 trophées** (gagnés uniquement en jouant, jamais achetables : règles Roblox sur les paris). Combos et objets stylés « Bientôt » dans la boutique Robux.
+- **🏠 Maison** : 52 objets de plus, tables vides, on pose les objets SUR les tables, lits, étagères…, chaises qui se rangent autour de la table, barre d'outils refaite (avec « Retourner »), et **🧊 aperçu 3D** de la pièce (on tourne autour à la souris / au doigt, jour / nuit).
+- **Visuels refaits** : runner, live (expressions, gestes), chambre lofi (heure réelle, pluie, chat), logos DVD, boule disco, papier bulle, renaissance (marée + plage au coucher du soleil), carte « nouveautés après ta prochaine visite de l'océan ».
+- **Économie** : ce qui se débloque après l'océan coûte bien plus cher (Machine à rêves 250M…), les fleurs poussent 2x plus lentement, 1 jeton de machine chanceuse toutes les 5 min.
+
 ## 🆕 Nouveautés v8 — tout en 10x mieux
 
 - **Refaits en bien plus beau et complet** : Runner (cycle jour/nuit, ville en parallaxe, trains détaillés, bonus aimant / x2 / jetpack, chutes et résultats), Live ASMR (streameuse animée, bras, overlays, chat), Lofi (chambre, vinyle, visualiseur, titre de la musique), Presse (10 paliers, hydraulique, écrasement), logo DVD (**5 max**), Flash info façon chaîne TV, vraie messagerie pour les mails, boutons d'achat, notifications, chiffres qui pop.
 - **🎰 Machine chanceuse** : elle remarche ! Tours GRATUITS (1 jeton / 75 s de jeu) — plus aucune mise de Dopamine (règles Roblox : la Dopamine s'achète en Robux, donc pas de pari avec).
 - **🌻 Jardin de Dopamine** à la place de la bourse (actions remboursées) : des fleurs poussent, on les cueille.
-- **🕹️ Arcade** : 6 mini-jeux solo (démineur, memory, Jacques a dit, tape-taupe, snake, 2048) et 4 **duels** contre les joueurs du serveur (morpion, puissance 4, réflexes, course à l'intrus) avec mise en **🎟️ tickets** (gagnés en jouant, jamais achetables : le gagnant remporte la mise x2). Boutique à tickets et records.
+- **🕹️ Arcade** : 6 mini-jeux solo (démineur, memory, Jacques a dit, tape-taupe, snake, 2048) et 4 **duels** contre les joueurs du serveur (morpion, puissance 4, réflexes, course à l'intrus) avec mise (le gagnant remporte la mise x2 ; depuis la v9 la mise se fait en **🏆 trophées**, gagnés uniquement en jouant, jamais achetables ni convertibles). **🎟️ Tickets** pour la boutique à tickets (gagnés en jouant ou, depuis la v9, achetés en packs dans la boutique Robux). Records.
 - **Progression** : ~20 nouvelles améliorations (dont celles des carrés : chaussures du runner, vinyles, force du vent, studio de stream, chasseur d'orages, parterres…) et des nouveautés débloquées après 1, 2, 3, 5 et 8 visites à l'océan ; chapeaux / boutons et objets chers de la maison verrouillés jusqu'aux renaissances.
 - **🏠 Maison** : les petits objets se posent SUR les meubles ; les animaux se promènent et utilisent niche, arbre à chat, panier, gamelle, fontaine, griffoir, jouets, cage.
 - **🎧 Musique** : 8 musiques lofi, lecteur complet dans ⚙️ (précédent / suivant / aléatoire / choix de la musique).

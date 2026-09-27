@@ -1,0 +1,98 @@
+--[[
+	FR_V9_House (ModuleScript) — traductions françaises de la maison v9
+	(tables vides, chaises à table, objets posés partout, nouvelle barre
+	d'outils "bonbons", aperçu 3D, 52 nouveaux objets).
+	Format : { fr = { ["Texte anglais"] = "Texte français" } }
+]]
+
+return {
+	fr = {
+		-- Nouveaux objets (Config.House.Items)
+		["Round side table"] = "Petite table ronde",
+		["Round café table"] = "Table ronde de café",
+		["Coffee table"] = "Table basse",
+		["Dining table"] = "Table à manger",
+		["Tall bar table"] = "Haute table de bar",
+		["Pastel dresser"] = "Commode pastel",
+		["TV stand"] = "Meuble télé",
+		["Kitchen island"] = "Îlot de cuisine",
+		["Picnic table"] = "Table de pique-nique",
+		["Big wooden desk"] = "Grand bureau en bois",
+		["Mushroom stool"] = "Tabouret champignon",
+		["Floor cushions"] = "Coussins de sol",
+		["Dining chair"] = "Chaise de salle à manger",
+		["Bar stool"] = "Tabouret de bar",
+		["Cozy armchair"] = "Fauteuil douillet",
+		["Garden bench"] = "Banc de jardin",
+		["Rocking chair"] = "Rocking-chair",
+		["Big comfy bed"] = "Grand lit douillet",
+		["Hanging egg chair"] = "Fauteuil œuf suspendu",
+		["Book stack"] = "Pile de livres",
+		["Heart pillow"] = "Coussin cœur",
+		["Moon pillow"] = "Coussin lune",
+		["Photo frame"] = "Cadre photo",
+		["Floating shelf"] = "Étagère flottante",
+		["Blanket stack"] = "Pile de plaids",
+		["Piggy bank"] = "Tirelire cochon",
+		["Snow globe"] = "Boule à neige",
+		["Ballerina music box"] = "Boîte à musique ballerine",
+		["Mini aquarium"] = "Mini aquarium",
+		["Royal jewelry box"] = "Coffret à bijoux royal",
+		["Fruit bowl"] = "Coupe de fruits",
+		["Pizza plate"] = "Assiette de pizza",
+		["Lemonade pitcher"] = "Carafe de citronnade",
+		["Tea set"] = "Service à thé",
+		["Salad bowl"] = "Saladier",
+		["Happy toaster"] = "Grille-pain joyeux",
+		["Macaron tower"] = "Tour de macarons",
+		["Cute microwave"] = "Micro-ondes mignon",
+		["Vase of flowers"] = "Vase de fleurs",
+		["Tiny bonsai"] = "Petit bonsaï",
+		["Desk lamp"] = "Lampe de bureau",
+		["Mushroom lamp"] = "Lampe champignon",
+		["Crystal candelabra"] = "Chandelier de cristal",
+		["Alarm clock"] = "Réveil",
+		["Typewriter"] = "Machine à écrire",
+		["Desk fan"] = "Ventilateur de bureau",
+		["Drawing tablet"] = "Tablette à dessin",
+		["Board game"] = "Jeu de société",
+		["Whale plush"] = "Peluche baleine",
+		["Octopus plush"] = "Peluche pieuvre",
+		["Calico kitten"] = "Chaton calico",
+		["Tiny hedgehog"] = "Petit hérisson",
+
+		-- Barre d'outils de l'éditeur (bonbons + bulles)
+		["Size"] = "Taille",
+		["OK"] = "OK",
+		["Flip"] = "Retourner",
+		["Put away"] = "Ranger",
+		["Make smaller"] = "Réduire",
+		["Make bigger"] = "Agrandir",
+		["Send backward"] = "Mettre derrière",
+		["Bring forward"] = "Mettre devant",
+		["Flip left / right"] = "Retourner gauche / droite",
+		["Duplicate"] = "Dupliquer",
+		["Put away in the inventory"] = "Ranger dans l'inventaire",
+		["Undo"] = "Annuler",
+		["Redo"] = "Rétablir",
+		["Snap to grid"] = "Aimanter à la grille",
+		["📍 On: %s"] = "📍 Sur : %s",
+		["🪑 At: %s"] = "🪑 À table : %s",
+		["✨ Put on: %s"] = "✨ Poser sur : %s",
+		["🪑 Behind: %s"] = "🪑 Derrière : %s",
+		["🪑 In front of: %s"] = "🪑 Devant : %s",
+		["🪑 At the side of: %s"] = "🪑 À côté de : %s",
+		["No room for this chair there"] = "Pas de place pour cette chaise ici",
+		["✋ Drag to move  •  🧁 small items go ON furniture  •  🪑 chairs snap to tables"] =
+			"✋ Glisse pour déplacer  •  🧁 petits objets SUR les meubles  •  🪑 chaises à table",
+
+		-- Boutique : filtres
+		["🍽️ Tables & chairs"] = "🍽️ Tables et chaises",
+		["🧁 On furniture"] = "🧁 À poser dessus",
+
+		-- Aperçu 3D
+		["🧊 3D"] = "🧊 3D",
+		["See this room in 3D"] = "Voir cette pièce en 3D",
+		["🧊 3D view: coming soon!"] = "🧊 Vue 3D : bientôt disponible !",
+	},
+}
