@@ -30,6 +30,8 @@ local UIUtil = require(Client.UIUtil)
 local HouseCommon = require(script.Parent.HouseCommon)
 local HousePatterns = require(script.Parent.HousePatterns)
 local HouseArt = require(script.Parent.HouseArt)
+local HouseTints = require(script.Parent.HouseTints)
+local HouseMoods = require(script.Parent.HouseMoods)
 local HouseSurfaces = require(script.Parent.HouseSurfaces)
 local HousePets = require(script.Parent.HousePets)
 
@@ -60,7 +62,7 @@ export type Mini = {
 local function placedSignature(list: { Placed }): string
 	local parts = table.create(#list)
 	for index, entry in ipairs(list) do
-		parts[index] = string.format("%s:%.3f:%.3f:%.2f:%d%s", entry.I, entry.X, entry.Y, entry.S, math.floor(entry.Z), entry.F and "F" or "")
+		parts[index] = string.format("%s:%.3f:%.3f:%.2f:%d%s%s", entry.I, entry.X, entry.Y, entry.S, math.floor(entry.Z), entry.F and "F" or "", entry.C or "")
 	end
 	return table.concat(parts, ";")
 end
@@ -112,6 +114,14 @@ function HouseMiniRoom.new(parent: Instance, width: number, height: number): Min
 		Size = UDim2.fromScale(1, 1),
 		BackgroundTransparency = 1,
 		ZIndex = 3,
+		Parent = frame,
+	})
+	-- (v9.1) ambiance lumineuse de la pièce (voile + effet figé)
+	local moodLayer = UIUtil.Create("Frame", {
+		Name = "Mood",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		ZIndex = 4,
 		Parent = frame,
 	})
 	local night = UIUtil.Create("Frame", {
@@ -176,7 +186,11 @@ function HouseMiniRoom.new(parent: Instance, width: number, height: number): Min
 			Box(decor, edgeX, 0, 1.5, wallHeight, wallB:Lerp(BLACK, 0.35), 0.5, 2)
 		end
 		-- Plinthe, ombre au pied du mur, ombre du plafond, avant plus sombre
-		Box(decor, side, wallHeight - 5, width - side * 2, 5, C.Cream, 0, 2)
+		local trim = HouseCommon.Look("Trim", room.Trim)
+		local trimColor = (trim and trim.Color) or C.Cream
+		Box(decor, side, wallHeight - 5, width - side * 2, 5, trimColor, 0, 2)
+		Box(decor, 0, 0, width, 4, trimColor, 0, 3) -- moulure du plafond
+		HouseMoods.Static(moodLayer, width, height, HouseCommon.Look("Mood", room.Mood) :: any, 1)
 		local ao = Box(decor, 0, wallHeight, width, 12, BLACK, 0.75, 1)
 		UIUtil.Create("UIGradient", { Rotation = 90, Transparency = NumberSequence.new(0, 1), Parent = ao })
 		local ceiling = Box(decor, 0, 0, width, 14, BLACK, 0.7, 2)
@@ -241,6 +255,9 @@ function HouseMiniRoom.new(parent: Instance, width: number, height: number): Min
 				Parent = holder,
 			})
 			local result = HouseArt.Paint(body, item, true)
+			if result ~= nil and entry.C then
+				HouseTints.Apply(body, entry.C) -- (v9.1) couleur choisie
+			end
 			if entry.F == true and result ~= nil then
 				-- (objet retourné : chaise tournée vers la table...)
 				HouseArt.Mirror(body, {}, 50)
@@ -290,7 +307,7 @@ function HouseMiniRoom.new(parent: Instance, width: number, height: number): Min
 		Frame = frame,
 		Set = function(room: Room, size: SizeDef, placed: { Placed }?)
 			local list = placed or room.Placed
-			local newStyleKey = string.format("%s|%s|%d", room.Wallpaper, room.Floor, width)
+			local newStyleKey = string.format("%s|%s|%d|%s|%s", room.Wallpaper, room.Floor, width, tostring(room.Trim), tostring(room.Mood))
 			if newStyleKey ~= styleKey then
 				styleKey = newStyleKey
 				buildBackground(room)

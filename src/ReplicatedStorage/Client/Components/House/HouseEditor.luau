@@ -64,6 +64,7 @@ local HouseSurfaces = require(script.Parent.HouseSurfaces)
 local HousePets = require(script.Parent.HousePets)
 local HouseArt = require(script.Parent.HouseArt)
 local HouseButtons = require(script.Parent.HouseButtons)
+local ClientState = require(Client.ClientState)
 
 type Placed = HouseCommon.Placed
 type HouseData = HouseCommon.HouseData
@@ -174,13 +175,13 @@ end
 local function signature(list: { Placed }): string
 	local parts = table.create(#list)
 	for index, entry in ipairs(list) do
-		parts[index] = string.format("%s:%.4f:%.4f:%.3f:%d%s", entry.I, entry.X, entry.Y, entry.S, math.floor(entry.Z), entry.F and ":F" or "")
+		parts[index] = string.format("%s:%.4f:%.4f:%.3f:%d%s%s", entry.I, entry.X, entry.Y, entry.S, math.floor(entry.Z), entry.F and ":F" or "", entry.C and (":" .. entry.C) or "")
 	end
 	return table.concat(parts, ";")
 end
 
 local function copyEntry(entry: Placed): Placed
-	return { I = entry.I, X = entry.X, Y = entry.Y, S = entry.S, Z = entry.Z, F = entry.F == true or nil }
+	return { I = entry.I, X = entry.X, Y = entry.Y, S = entry.S, Z = entry.Z, F = entry.F == true or nil, C = entry.C }
 end
 
 local function copyList(list: { Placed }): { Placed }
@@ -202,6 +203,7 @@ local function payloadOf(list: { Placed }): { Placed }
 			S = roundTo(entry.S, 0.001),
 			Z = math.clamp(math.floor(entry.Z), 0, HouseCommon.MAX_Z),
 			F = entry.F == true or nil,
+			C = entry.C,
 		}
 	end
 	return payload
@@ -511,10 +513,12 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 	local frontTool = tool(4, "Front", "⏫", "Front", P.Mint)
 	separator(5)
 	local flipTool = tool(6, "Flip", "↔️", "Flip", P.Sky)
-	local copyTool = tool(7, "Copy", "📑", "Copy", P.Butter)
-	local sendTool = tool(8, "Send", "🚪", "Send", P.Peach)
-	separator(9)
-	local storeTool = tool(10, "Store", "📦", "Put away", P.Red, WHITE)
+	-- (v9.1) 🎨 couleur de l'objet : la rangée des couleurs remplace les outils
+	local paintTool = tool(7, "Paint", "🎨", "Colour", P.Pink)
+	local copyTool = tool(8, "Copy", "📑", "Copy", P.Butter)
+	local sendTool = tool(9, "Send", "🚪", "Send", P.Peach)
+	separator(10)
+	local storeTool = tool(11, "Store", "📦", "Put away", P.Red, WHITE)
 	-- (téléphone : la barre cache l'inventaire -> "OK" pour le retrouver)
 	local doneTool = tool(-1, "Deselect", "✔️", "OK", P.Green, WHITE)
 	doneTool.Button.Visible = false
@@ -536,6 +540,9 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 	HouseButtons.Tip(flipTool.Button, function()
 		return HouseButtons.TipText("Flip left / right", "( F )")
 	end)
+	HouseButtons.Tip(paintTool.Button, function()
+		return HouseButtons.TipText("Change the colour", "( C )")
+	end)
 	HouseButtons.Tip(copyTool.Button, function()
 		return HouseButtons.TipText("Duplicate", "( Ctrl+D )")
 	end)
@@ -544,6 +551,84 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 	end)
 	HouseButtons.Tip(storeTool.Button, function()
 		return HouseButtons.TipText("Put away in the inventory", "( Delete )")
+	end)
+
+	-- (v9.1) Rangée des couleurs (à la place des outils quand on clique 🎨) :
+	-- ⬅ retour, couleurs d'origine, puis Config.House.Tints
+	local palette = HouseButtons.Container({
+		Name = "Palette",
+		Size = UDim2.fromOffset(0, 0),
+		AutomaticSize = Enum.AutomaticSize.XY,
+		BackgroundColor3 = WHITE,
+		LayoutOrder = 2,
+		Visible = false,
+		ZIndex = 21,
+		Parent = toolbar,
+	})
+	UIUtil.Corner(palette, 22)
+	UIUtil.Stroke(palette, C.Pink, 2, 0.05)
+	UIUtil.Gradient(palette, ColorSequence.new(WHITE, Color3.fromRGB(255, 232, 244)), 90)
+	UIUtil.Create("UIPadding", {
+		PaddingLeft = UDim.new(0, 8),
+		PaddingRight = UDim.new(0, 8),
+		PaddingTop = UDim.new(0, 6),
+		PaddingBottom = UDim.new(0, 7),
+		Parent = palette,
+	})
+	UIUtil.Create("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0, 5),
+		Parent = palette,
+	})
+	local swatchW = Interface.IsTouch() and 44 or 38
+	local swatchH = Interface.IsTouch() and 50 or 44
+	local paletteBack = HouseButtons.Candy({
+		Name = "PaletteBack",
+		Icon = "⬅️",
+		Color = P.White,
+		Width = swatchW,
+		Height = swatchH,
+		Radius = 16,
+		IconSize = 18,
+		LayoutOrder = 0,
+		ZIndex = 22,
+		Parent = palette,
+	})
+	table.insert(candies, paletteBack)
+	type Swatch = { Id: string?, Candy: Candy }
+	local swatches: { Swatch } = {}
+	local function swatch(order: number, id: string?, color: Color3, icon: string): Swatch
+		local candy = HouseButtons.Candy({
+			Name = "Tint_" .. (id or "Original"),
+			Icon = icon,
+			Color = color,
+			Width = swatchW,
+			Height = swatchH,
+			Radius = 16,
+			IconSize = 16,
+			LayoutOrder = order,
+			ZIndex = 22,
+			Parent = palette,
+		})
+		table.insert(candies, candy)
+		local entry: Swatch = { Id = id, Candy = candy }
+		table.insert(swatches, entry)
+		return entry
+	end
+	local originalSwatch = swatch(1, nil, P.White, "🌈")
+	HouseButtons.Tip(originalSwatch.Candy.Button, function()
+		return HouseButtons.TipText("Original colours")
+	end)
+	for index, tint in ipairs(HouseCommon.Tints) do
+		local entry = swatch(index + 1, tint.Id, tint.Color or P.White, "")
+		HouseButtons.Tip(entry.Candy.Button, function()
+			return HouseButtons.TipText((tint.Icon or "") .. " " .. HouseCommon.Name(tint))
+		end)
+	end
+	HouseButtons.Tip(paletteBack.Button, function()
+		return HouseButtons.TipText("Back to the tools")
 	end)
 
 	-- Pastille "+2 ❤️" etc. au-dessus d'un objet (calque des effets)
@@ -944,6 +1029,13 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		copyTool.SetEnabled(available(item.Id) > 0 and #layout < roomItems())
 		sendTool.SetEnabled(#house.Rooms >= 2)
 		flipTool.SetIcon(entry.F and "↩️" or "↔️")
+		-- (v9.1) couleur choisie : ✓ ; verrouillée (visites à l'océan) : 🔒
+		for _, sw in ipairs(swatches) do
+			local tint = sw.Id and HouseCommon.TintsById[sw.Id] or nil
+			local locked = tint ~= nil and not HouseCommon.IsUnlocked(ClientState.Data, tint)
+			local chosen = entry.C == sw.Id
+			sw.Candy.SetIcon(if chosen then "✔️" elseif locked then "🔒" elseif sw.Id == nil then "🌈" else "")
+		end
 	end
 
 	local function setSelected(entry: Placed?)
@@ -1161,7 +1253,7 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 	-- Meuble agrandi / rétréci : ce qui est posé dessus reste sur le dessus,
 	-- les chaises restent rangées à leur place autour de la table
 	local function rescaleRiders(entry: Placed, item: Item, oldX: number, oldY: number, oldS: number, riders: { Rider }, parents: { [Placed]: Placed }, seats: { [Placed]: string })
-		local old: Placed = { I = entry.I, X = oldX, Y = oldY, S = oldS, Z = entry.Z, F = entry.F }
+		local old: Placed = { I = entry.I, X = oldX, Y = oldY, S = oldS, Z = entry.Z, F = entry.F, C = entry.C }
 		-- Ce qui est posé sur une chaise suit sa chaise
 		local seatOf: { [Placed]: Placed } = {}
 		for _, rider in ipairs(riders) do
@@ -1827,7 +1919,7 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		end
 		pushUndo()
 		local item = sticker.Item
-		local copy: Placed = { I = entry.I, X = entry.X, Y = entry.Y, S = entry.S, Z = math.min(HouseCommon.MAX_Z, entry.Z + 1), F = entry.F }
+		local copy: Placed = { I = entry.I, X = entry.X, Y = entry.Y, S = entry.S, Z = math.min(HouseCommon.MAX_Z, entry.Z + 1), F = entry.F, C = entry.C }
 		local offset = math.max(GRID, item.Size * entry.S * 0.35) / math.max(1, room.Width)
 		local support = HouseSurfaces.SupportOf(entry, layout, room.Width, room.Height)
 		local seat: HouseSurfaces.SeatSpot? = nil
@@ -1879,7 +1971,7 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		for _, other in ipairs(targetList) do
 			z = math.max(z, other.Z)
 		end
-		table.insert(targetList, { I = entry.I, X = x, Y = y, S = entry.S, Z = z, F = entry.F })
+		table.insert(targetList, { I = entry.I, X = x, Y = y, S = entry.S, Z = z, F = entry.F, C = entry.C })
 		pushUndo(nil, { Room = targetId, Before = before, After = copyList(targetList) })
 		extras[targetId] = targetList
 		floatAt(sticker, "🚪 → " .. HouseCommon.GetRoomType(target).Icon, C.Lilac)
@@ -1956,6 +2048,65 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 	end)
 	flipTool.Button.Activated:Connect(function()
 		flip()
+	end)
+	-- (v9.1) 🎨 couleurs
+	local function showPalette(on: boolean)
+		if palette.Visible == on then
+			return
+		end
+		HouseButtons.HideTipOf(toolbar)
+		palette.Visible = on
+		bar.Visible = not on
+		if on then
+			UIUtil.Pop(palette, 0.8, 0.25)
+		end
+		positionToolbar()
+		task.defer(positionToolbar)
+	end
+	local function setTint(tintId: string?, button: GuiObject)
+		local entry = selected
+		local sticker = entry and stickers[entry]
+		if not entry or not sticker then
+			return
+		end
+		local tint = tintId and HouseCommon.TintsById[tintId] or nil
+		if tint and not HouseCommon.IsUnlocked(ClientState.Data, tint) then
+			SoundManager.Play("Error", 0.7)
+			UIUtil.Shake(button)
+			notify(Locale.T("🔒 Unlocked after %d visits to the ocean", HouseCommon.RequiredRebirths(tint)), C.Lilac)
+			return
+		end
+		if entry.C == tintId then
+			UIUtil.Pop(button, 1.1, 0.2)
+			return
+		end
+		pushUndo()
+		entry.C = tintId
+		room.SetTint(sticker, tintId)
+		room.ApplySticker(sticker)
+		wiggle(sticker)
+		burstAt(sticker, tint and tint.Color or C.Pink, 10)
+		SoundManager.Play("Pop", 1.15)
+		resort()
+		markDirty()
+	end
+	paintTool.Button.Activated:Connect(function()
+		SoundManager.Play("Click", 1.2)
+		showPalette(true)
+	end)
+	paletteBack.Button.Activated:Connect(function()
+		SoundManager.Play("Click", 0.95)
+		showPalette(false)
+	end)
+	for _, sw in ipairs(swatches) do
+		sw.Candy.Button.Activated:Connect(function()
+			setTint(sw.Id, sw.Candy.Button)
+		end)
+	end
+	selectionChanged:Connect(function(entry: Placed?)
+		if not entry then
+			showPalette(false)
+		end
 	end)
 	copyTool.Button.Activated:Connect(function()
 		duplicate()
@@ -2248,6 +2399,8 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 			duplicate()
 		elseif key == Enum.KeyCode.F and not ctrl then
 			flip()
+		elseif key == Enum.KeyCode.C and not ctrl then
+			showPalette(not palette.Visible)
 		elseif key == Enum.KeyCode.Delete or key == Enum.KeyCode.Backspace then
 			store(entry)
 		elseif key == Enum.KeyCode.Equals or key == Enum.KeyCode.KeypadPlus then

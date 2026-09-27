@@ -141,6 +141,7 @@ type SideWall = {
 	Skin: BasePart,
 	Crown: BasePart,
 	Skirt: BasePart,
+	Edge: BasePart,
 	Gui: SurfaceGui?,
 	Lowered: boolean,
 }
@@ -239,9 +240,9 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 	local destroyed = false
 
 	-- Personnalisation (v9.1) : moulures, ambiance, vue de la fenêtre
-	local trimEntry = configTable("HouseTrimsById")[tostring(roomData.Trim or "")]
+	local trimEntry = configTable("HouseTrimsById")[tostring(roomData.Trim or "Cream")]
 	local trim = asColor(type(trimEntry) == "table" and trimEntry.Color, CREAM)
-	local moodRaw = configTable("HouseMoodsById")[tostring(roomData.Mood or "")]
+	local moodRaw = configTable("HouseMoodsById")[tostring(roomData.Mood or "Sunny")]
 	local mood = {
 		Tint = asColor(type(moodRaw) == "table" and moodRaw.Tint, DEFAULT_MOOD.Tint),
 		Amount = math.clamp(finite(type(moodRaw) == "table" and moodRaw.Amount, 0), 0, 1),
@@ -249,7 +250,8 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 		Brightness = math.clamp(finite(type(moodRaw) == "table" and moodRaw.Brightness, 1), 0.2, 2),
 		Effect = type(moodRaw) == "table" and type(moodRaw.Effect) == "string" and moodRaw.Effect or "None",
 	}
-	local viewEntry = configTable("HouseViewsById")[tostring(roomData.View or "")]
+	local views = configTable("HouseViewsById")
+	local viewEntry = views[tostring(roomData.View or "Garden")] or views.Garden
 	local HouseViews = requireSibling("HouseViews")
 	local HouseTints = requireSibling("HouseTints")
 
@@ -311,12 +313,12 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 	table.insert(skyBands, { Part = part("StudioTop", Vector3.new(HX * 2 + 2, 1, HZ * 2 + 2), CFrame.new(at(0, yMax, centerZ)), SKY_DAY[bands], M.SmoothPlastic, false), Index = bands })
 	table.insert(skyBands, { Part = part("StudioBottom", Vector3.new(HX * 2 + 2, 1, HZ * 2 + 2), CFrame.new(at(0, yMin, centerZ)), SKY_DAY[1], M.SmoothPlastic, false), Index = 1 })
 	-- Nuages (boules blanches, derrière la maison)
-	for index = 1, 7 do
-		local cx = -80 + index * 22 + (noise(index, 1) - 0.5) * 10
-		local cy = 18 + noise(index, 2) * 30
+	for index = 1, 6 do
+		local cx = -90 + index * 26 + (noise(index, 1) - 0.5) * 12
+		local cy = -2 + noise(index, 2) * 8
 		local cz = centerZ - HZ + 6 + noise(index, 3) * 8
 		for puff = 0, 2 do
-			local ball = part("Cloud", Vector3.new(1, 1, 1) * (8 + puff % 2 * 3), CFrame.new(at(cx + (puff - 1) * 6, cy + (puff % 2) * 2, cz)), WHITE, M.SmoothPlastic, false)
+			local ball = part("Cloud", Vector3.new(1, 1, 1) * (5 + puff % 2 * 2), CFrame.new(at(cx + (puff - 1) * 4, cy + (puff % 2) * 1.5, cz)), WHITE, M.SmoothPlastic, false)
 			;(ball :: Part).Shape = Enum.PartType.Ball
 			table.insert(skyBands, { Part = ball, Index = 0 })
 		end
@@ -361,7 +363,8 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 	------------------------------------------------------------------
 	-- Dalle, sol
 	------------------------------------------------------------------
-	part("Slab", Vector3.new(W + WALL_T * 2, SLAB, D + WALL_T), CFrame.new(at(0, -SLAB / 2, (D - WALL_T) / 2)), SHELL, M.SmoothPlastic, false)
+	-- (le dessus de la dalle reste sous le sol : pas de faces confondues)
+	part("Slab", Vector3.new(W + WALL_T * 2, SLAB - 0.3, D + WALL_T), CFrame.new(at(0, -0.3 - (SLAB - 0.3) / 2, (D - WALL_T) / 2)), SHELL, M.SmoothPlastic, false)
 	part("SlabTrim", Vector3.new(W + WALL_T * 2 + 0.1, 0.25, 0.25), CFrame.new(at(0, -0.12, D + 0.02)), trim, M.SmoothPlastic, false)
 	do
 		local pattern = floorStyle and floorStyle.Pattern or "Plain"
@@ -425,15 +428,15 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 	for _, side in ipairs({ -1, 1 }) do
 		local shellPart = part(side < 0 and "WallLeft" or "WallRight", Vector3.new(WALL_T, WH + 0.4, D + WALL_T + SKIN),
 			CFrame.new(at(side * (W / 2 + SKIN + WALL_T / 2), (WH + 0.4) / 2 - 0.2, (D - WALL_T - SKIN) / 2)), SHELL, M.SmoothPlastic, false)
-		local right = side < 0 and -BACKWARD or BACKWARD
+		local right = side < 0 and BACKWARD or -BACKWARD
 		local skin = facing(side < 0 and "WallLeftPaper" or "WallRightPaper", at(side * W / 2, WH / 2, D / 2), right, Y_AXIS, D, WH, SKIN, wallA:Lerp(BLACK, 0.04), wallMaterial)
 		local gui = House3DKit.Surface(skin, Enum.NormalId.Back, Vector2.new(DEPTH_PX, wallPx), 1)
 		paper(gui, DEPTH_PX)
 		local crown = part("TrimCrownSide", Vector3.new(0.36, crownH, D), CFrame.new(at(side * (W / 2 - 0.18), WH - crownH / 2, D / 2)), trim, M.SmoothPlastic, false)
 		local skirt = part("TrimSkirtSide", Vector3.new(0.2, 0.6, D), CFrame.new(at(side * (W / 2 - 0.1), 0.3, D / 2)), trim, M.SmoothPlastic, false)
 		-- chant avant du mur (liseré)
-		part("TrimEdge", Vector3.new(WALL_T + SKIN + 0.1, WH + 0.4, 0.2), CFrame.new(at(side * (W / 2 + (WALL_T + SKIN) / 2), (WH + 0.4) / 2 - 0.2, D + 0.05)), trim, M.SmoothPlastic, false)
-		table.insert(sideWalls, { Side = side, Shell = shellPart, Skin = skin, Crown = crown, Skirt = skirt, Gui = gui, Lowered = false })
+		local edge = part("TrimEdge", Vector3.new(WALL_T + SKIN + 0.1, WH + 0.4, 0.2), CFrame.new(at(side * (W / 2 + (WALL_T + SKIN) / 2), (WH + 0.4) / 2 - 0.2, D + 0.05)), trim, M.SmoothPlastic, false)
+		table.insert(sideWalls, { Side = side, Shell = shellPart, Skin = skin, Crown = crown, Skirt = skirt, Edge = edge, Gui = gui, Lowered = false })
 	end
 	part("TrimSkirtBack", Vector3.new(W, 0.6, 0.2), CFrame.new(at(0, 0.3, 0.1)), trim, M.SmoothPlastic, false)
 	part("TrimCrownBack", Vector3.new(W, crownH, 0.36), CFrame.new(at(0, WH - crownH / 2, 0.18)), trim, M.SmoothPlastic, false)
@@ -760,6 +763,7 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 		}
 		if recipe then
 			local b = House3DKit.Builder(staging, CFrame.identity, k, entry.F == true, mapper, painted.Colors)
+			b.Painted = painted
 			local ctx = House3DRecipes.Context(item, trim)
 			local ok, err = pcall(recipe, b, ctx)
 			if ok and #b.Parts > 0 then
@@ -783,6 +787,8 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 				for _, p in ipairs(b.Parts) do
 					p:Destroy()
 				end
+				-- (le dessin a pu partir avec les pièces : on le refait pour le carton)
+				build.Painted = House3DKit.Paint(item, entry, apply)
 			end
 		end
 		return build
@@ -1189,11 +1195,13 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 					local x = wall.Side * (W / 2 + SKIN + WALL_T / 2)
 					wall.Shell.Size = Vector3.new(WALL_T, height + 0.4, D + WALL_T + SKIN)
 					wall.Shell.CFrame = CFrame.new(at(x, (height + 0.4) / 2 - 0.2, (D - WALL_T - SKIN) / 2))
-					local right = wall.Side < 0 and -BACKWARD or BACKWARD
+					local right = wall.Side < 0 and BACKWARD or -BACKWARD
 					local normal = right:Cross(Y_AXIS)
 					wall.Skin.Size = Vector3.new(D, height, SKIN)
 					wall.Skin.CFrame = CFrame.fromMatrix(at(wall.Side * W / 2, height / 2, D / 2) - normal * (SKIN / 2), right, Y_AXIS)
 					wall.Crown.CFrame = CFrame.new(at(wall.Side * (W / 2 - 0.18), height - crownH / 2, D / 2))
+					wall.Edge.Size = Vector3.new(WALL_T + SKIN + 0.1, height + 0.4, 0.2)
+					wall.Edge.CFrame = CFrame.new(at(wall.Side * (W / 2 + (WALL_T + SKIN) / 2), (height + 0.4) / 2 - 0.2, D + 0.05))
 					local gui = wall.Gui
 					if gui then
 						gui.Enabled = not lower

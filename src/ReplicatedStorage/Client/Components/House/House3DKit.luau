@@ -71,6 +71,7 @@ export type Builder = {
 	Depth: number,
 	Height: number,
 	Pal: { Color3 },
+	Painted: Painted?,
 	P: (index: number, fallback: Color3) -> Color3,
 	Map: (color: Color3) -> Color3,
 	Part: (className: string, cframe: CFrame, size: Vector3, color: Color3, material: Enum.Material?, name: string?) -> BasePart,
@@ -85,6 +86,7 @@ export type Builder = {
 	Neon: (part: BasePart) -> (),
 	Top: (index: number, x: number, y: number, z: number, w: number, d: number) -> (),
 	Footprint: (w: number, d: number, h: number) -> (),
+	Art: (x: number, y: number, z: number, w: number, h: number, zoom: number) -> BasePart,
 }
 
 ----------------------------------------------------------------------
@@ -268,6 +270,29 @@ function House3DKit.Builder(parent: Instance, origin: CFrame, k: number, mirror:
 	end
 	b.Footprint = function(w: number, d: number, h: number)
 		b.Width, b.Depth, b.Height = w, d, h
+	end
+	-- Panneau (y = bas) qui montre le dessin 2D de l'objet sur sa face avant
+	-- (vue d'une fenêtre, tableau...) ; `zoom` > 1 = on ne garde que le centre
+	local artUsed = false
+	b.Art = function(x: number, y: number, z: number, w: number, h: number, zoom: number): BasePart
+		local panel = b.Box(x, y, z, w, h, 1, b.P(1, WHITE), Enum.Material.SmoothPlastic)
+		panel.CastShadow = false
+		local painted = b.Painted
+		if not painted then
+			return panel
+		end
+		local canvas = Vector2.new(math.max(16, w * CARD_RES), math.max(16, h * CARD_RES))
+		local gui = House3DKit.Surface(panel, Enum.NormalId.Back, canvas, 0.5)
+		local content = artUsed and painted.Content:Clone() or painted.Content
+		artUsed = true
+		local scale = CARD_RES * zoom
+		local marginX = (painted.UnitsW - 100) / 2
+		content.Position = UDim2.fromOffset(canvas.X / 2 - (marginX + 50) * scale, canvas.Y / 2 - (painted.MarginTop + 50) * scale)
+		local uiScale = Instance.new("UIScale")
+		uiScale.Scale = scale
+		uiScale.Parent = content
+		content.Parent = gui
+		return panel
 	end
 	return b
 end

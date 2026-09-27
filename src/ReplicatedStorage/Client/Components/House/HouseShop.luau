@@ -176,11 +176,11 @@ local SUB_LABELS: { [string]: string } = {
 	Wallpapers = "🧱 Walls",
 	Floors = "🟫 Floors",
 	Trim = "🎀 Trim",
-	Mood = "💡 Lighting",
-	View = "🪟 Window view",
-	Facade = "🏠 House colour",
-	Roof = "🔺 Roof colour",
-	RoofStyle = "✨ Roof pattern",
+	Mood = "💡 Light",
+	View = "🪟 View",
+	Facade = "🏠 Paint",
+	Roof = "🔺 Roof",
+	RoofStyle = "✨ Tiles",
 	Garden = "🌷 Garden",
 }
 local GROUP_OF: { [string]: string } = {}

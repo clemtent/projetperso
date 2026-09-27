@@ -31,6 +31,7 @@ local Interface = require(Client.Interface)
 local SoundManager = require(Client.SoundManager)
 local HouseCommon = require(script.Parent.HouseCommon)
 local HouseArt = require(script.Parent.HouseArt)
+local HouseTints = require(script.Parent.HouseTints)
 local HouseSurfaces = require(script.Parent.HouseSurfaces)
 
 type Placed = HouseCommon.Placed
@@ -343,6 +344,10 @@ function HousePets.new(room: any): Pets
 			Parent = holder,
 		})
 		local _, anims = HouseArt.Paint(body, actor.Item, false)
+		-- (v9.1) même couleur que l'autocollant posé
+		if actor.Entry.C then
+			HouseTints.Apply(body, actor.Entry.C)
+		end
 		-- (rétrécit vers ses pieds quand il entre dans la niche)
 		local shrink = UIUtil.Create("UIScale", { Name = "Shrink", Parent = body })
 		-- On ne garde que l'animal (pas sa coquille, son panier, son perchoir...)

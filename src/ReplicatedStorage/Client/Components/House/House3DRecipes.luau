@@ -990,6 +990,37 @@ R.WallShelf = function(b, _ctx)
 	b.Footprint(100, 22, 100)
 end
 
+-- FENÊTRES ET TABLEAUX (repère : bas de la boîte ; z = 0 contre le mur) --------
+
+-- Fenêtre en relief : cadre (couleur des moulures), croisillon, rebord, vitre ;
+-- la vue = le centre du dessin 2D de la fenêtre
+local function windowRecipe(b: Builder, ctx: Ctx)
+	local frame = ctx.Trim
+	b.Art(0, 12, 0.5, 78, 76, 1.3)
+	local glass = b.Box(0, 12, 3, 78, 76, 0.6, GLASS, M.Glass)
+	glass.Transparency = 0.8
+	glass.CastShadow = false
+	b.Box(0, 88, 2.5, 90, 7, 6, frame)
+	b.Box(0, 6, 2.5, 90, 6, 6, frame)
+	for _, x in ipairs({ -42, 42 }) do
+		b.Box(x, 12, 2.5, 6, 76, 6, frame)
+	end
+	b.Box(0, 12, 2.5, 3, 76, 4, frame)
+	b.Box(0, 48.5, 2.5, 78, 3, 4, frame)
+	b.Box(0, 1, 7, 100, 5, 14, frame)
+	b.Footprint(100, 14, 100)
+end
+-- Tableau / affiche / calendrier : un cadre épais + le dessin sur la face avant
+local function plaque(b: Builder, _ctx: Ctx)
+	local back = darken(b.P(1, WOOD), 0.25)
+	b.Box(0, 6, 1, 88, 88, 2, back, M.Wood)
+	b.Art(0, 6, 2.1, 88, 88, 1)
+	b.Footprint(88, 3, 100)
+end
+R.FramedPicture = plaque
+R.MapPoster = plaque
+R.WallCalendar = plaque
+
 -- ÉLECTRONIQUE -----------------------------------------------------------
 
 local function screen(b: Builder, x: number, y: number, z: number, w: number, h: number, color: Color3)
@@ -1855,6 +1886,9 @@ function House3DRecipes.For(item: any): (Recipe?, Info)
 	end
 	local id = item.Id
 	local recipe = R[id]
+	if not recipe and item.Category == "Windows" and item.Placement == "Wall" then
+		recipe = windowRecipe
+	end
 	if item.Category == "Doors" and item.Placement ~= "Wall" and not DOORS_AS_CARD[id] then
 		info.Wall = true
 		recipe = recipe or door
