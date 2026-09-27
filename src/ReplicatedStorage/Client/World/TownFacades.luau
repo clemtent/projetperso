@@ -668,13 +668,13 @@ local function backSide(b: Building, parent: Instance)
 	local dx = -w * 0.25
 	box(parent, "BackDoorFrame", R, dx - 1.7, dx + 1.7, 1.2, 8.3, -0.16, 0, trim, M.SmoothPlastic)
 	box(parent, "BackDoor", R, dx - 1.3, dx + 1.3, 1.2, 7.9, -0.3, -0.16, b.Accent:Lerp(WHITE, 0.15), M.Wood)
-	box(parent, "BackStep", R, dx - 1.8, dx + 1.8, 0, 1.17, -1.9, -0.62, rgb(206, 200, 194), M.Concrete, true)
+	box(parent, "BackStep", R, dx - 1.8, dx + 1.8, -0.6, 1.17, -1.9, -0.62, rgb(206, 200, 194), M.Concrete, true)
 	box(parent, "BackLamp", R, dx + 2, dx + 2.5, 6.6, 7.4, -0.5, -0.03, rgb(250, 236, 200), M.Glass)
 	flatWindow(parent, R, w * 0.25, 3.6, 7.4, 3.2, trim, b.Seed + 77)
 	-- jardinet : bac de fleurs + buissons le long du mur (dans l'emprise du socle)
-	box(parent, "Planter", R, w * 0.25 - 2.4, w * 0.25 + 2.4, 1.2, 1.9, -0.6, -0.1, rgb(176, 124, 84), M.WoodPlanks)
+	box(parent, "Planter", R, w * 0.25 - 2.4, w * 0.25 + 2.4, -0.6, 1.9, -0.9, -0.1, rgb(176, 124, 84), M.WoodPlanks)
 	for k = -1, 1 do
-		ball(parent, "Shrub", R, w * 0.25 + k * 1.5, 2.2, -0.35, 1.3, k == 0 and FLOWERS[(b.Seed % #FLOWERS) + 1] or rgb(104, 172, 96), M.Grass)
+		ball(parent, "Shrub", R, w * 0.25 + k * 1.5, 2.2, -0.5, 1.3, k == 0 and FLOWERS[(b.Seed % #FLOWERS) + 1] or rgb(104, 172, 96), M.Grass)
 	end
 	-- climatiseur + descente d'eau
 	box(parent, "AirCon", R, hw - 2.6, hw - 0.8, b.GroundH + 1, b.GroundH + 2.4, -1.2, -0.03, rgb(226, 228, 232), M.Metal)
@@ -720,12 +720,84 @@ local function exposedSide(b: Building, parent: Instance, sx: number, above: num
 end
 
 ----------------------------------------------------------------------
+-- Mairie (arrière + côtés) et boutiques de décor de la place (arrière,
+-- côtés, pancarte "Fermé") : leur façade est construite par le serveur
+----------------------------------------------------------------------
+
+local function hallExtras(b: Building, parent: Instance)
+	local w, d = b.W, b.D
+	local trim = b.Trim
+	-- arrière : 2 rangées de hautes fenêtres + porte à deux battants
+	local R = b.CF * CFrame.new(0, 0, d) * CFrame.Angles(0, math.pi, 0)
+	local n = 8
+	for f = 0, 1 do
+		local y0 = 3.8 + f * 14
+		for i = 1, n do
+			local x = -w / 2 + (i - 0.5) * w / n
+			if not (f == 0 and (i == n / 2 or i == n / 2 + 1)) then
+				flatWindow(parent, R, x, y0, y0 + 6.4, 3.2, trim, b.Seed * 13 + f * 9 + i)
+			end
+		end
+		box(parent, "Course", R, -w / 2, w / 2, y0 + 7.4, y0 + 8, -0.4, 0, trim, M.Marble)
+	end
+	-- (le socle de la mairie monte à 1,55 et déborde de 0,4 : porte au-dessus)
+	box(parent, "BackPortal", R, -3.6, 3.6, 1.55, 10.6, -0.55, 0, trim, M.Marble)
+	for _, sx in ipairs({ -1, 1 }) do
+		box(parent, "BackDoor", R, sx < 0 and -3 or 0.05, sx < 0 and -0.05 or 3, 1.6, 9.6, -0.7, -0.55, rgb(120, 80, 70), M.Wood)
+		box(parent, "DoorKnob", R, sx * 0.45 - 0.12, sx * 0.45 + 0.12, 5.2, 5.5, -0.83, -0.7, rgb(214, 180, 90), M.Metal)
+	end
+	box(parent, "BackSteps", R, -4.4, 4.4, -0.6, 0.8, -2.6, -0.41, rgb(214, 208, 202), M.Marble, true)
+	box(parent, "BackSteps", R, -4.4, 4.4, 0.8, 1.52, -1.5, -0.41, rgb(222, 216, 210), M.Marble, true)
+	for _, sx in ipairs({ -1, 1 }) do
+		box(parent, "Planter", R, sx * 8 - 1.6, sx * 8 + 1.6, -0.6, 1.4, -1.8, -0.2, trim, M.Marble)
+		ball(parent, "Shrub", R, sx * 8, 2.1, -1, 2, rgb(96, 164, 96), M.Grass)
+	end
+	-- côtés : 2 rangées de 2 fenêtres
+	for _, sx in ipairs({ -1, 1 }) do
+		local S = b.CF * CFrame.new(sx * w / 2, 0, d / 2) * CFrame.Angles(0, sx * -math.pi / 2, 0)
+		for f = 0, 1 do
+			for _, x in ipairs({ -d * 0.25, d * 0.25 }) do
+				flatWindow(parent, S, x, 3.8 + f * 14, 10.2 + f * 14, 3.2, trim, b.Seed + f * 3 + math.floor(x))
+			end
+		end
+	end
+end
+
+local function decorShopExtras(b: Building, parent: Instance)
+	backSide(b, parent)
+	for _, sx in ipairs({ -1, 1 }) do
+		local exposed = (sx < 0 and b.Left) or (sx > 0 and b.Right)
+		if exposed then
+			local R = b.CF * CFrame.new(sx * b.W / 2, 0, b.D / 2) * CFrame.Angles(0, sx * -math.pi / 2, 0)
+			for f = 1, b.Floors - 1 do
+				local yb = b.GroundH + (f - 1) * b.FloorH
+				flatWindow(parent, R, 0, yb + 2, yb + 6, 2.2, b.Trim, b.Seed * 3 + f + sx)
+			end
+		end
+	end
+	-- pancarte "Fermé" sur la porte vitrée (porte au milieu de la devanture)
+	local plaque = box(parent, "ClosedSign", b.CF, -0.8, 0.8, 5, 5.8, -0.73, -0.67, WHITE, M.SmoothPlastic)
+	signText(plaque, Locale.T("Closed for now 😴"), rgb(200, 70, 100), 60, PLAQUE_DISTANCE, Enum.Font.GothamBold)
+end
+
+----------------------------------------------------------------------
 -- Un immeuble : travaux découpés (façade, étages, arrière, côtés, toit)
 ----------------------------------------------------------------------
 
 local function jobsFor(b: Building, parent: Model): { () -> () }
 	local jobs: { () -> () } = {}
 	local F = b.CF
+	if b.Style == "Hall" then
+		table.insert(jobs, function()
+			hallExtras(b, parent)
+		end)
+		return jobs
+	elseif b.Style == "DecorShop" then
+		table.insert(jobs, function()
+			decorShopExtras(b, parent)
+		end)
+		return jobs
+	end
 	local n = math.clamp(math.floor((b.W - 2) / 6.5), 2, 4)
 	table.insert(jobs, function()
 		local style = b.Style

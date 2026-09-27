@@ -255,6 +255,19 @@ function TownBuildings.Shop(parent: Instance, cf: CFrame, spec: ShopSpec, seed: 
 	-- gouttière
 	part(model, "Drainpipe", Vector3.new(0.4, height, 0.4), cf * CFrame.new(w / 2 - 0.3, height / 2, -0.25), C.MetalLight, M.Metal, "deco")
 	shopExtras(model, cf, spec, height)
+	-- (v9.7) arrière / côtés / pancarte "Fermé" : détail client (TownFacades)
+	model:SetAttribute("FacadeStyle", "DecorShop")
+	model:SetAttribute("FacadeCF", cf)
+	model:SetAttribute("W", w)
+	model:SetAttribute("D", d)
+	model:SetAttribute("Floors", spec.Floors)
+	model:SetAttribute("Height", height)
+	model:SetAttribute("Seed", seed)
+	model:SetAttribute("Wall", spec.Wall)
+	model:SetAttribute("Trim", trim)
+	model:SetAttribute("Accent", spec.Awning[1])
+	model:SetAttribute("GroundH", GROUND_H)
+	model:SetAttribute("FloorH", FLOOR_H)
 	return model
 end
 
@@ -342,6 +355,18 @@ function TownBuildings.TownHall(parent: Instance, cf: CFrame): (Model, Screen)
 		rows[i] = row
 	end
 	local footer = TownKit.Label(body, "Footer", "❤️ Like houses to climb the board!", 0.06, 0.88, 0.88, 0.09, Color3.fromRGB(255, 160, 210), Enum.Font.GothamBold, true)
+	-- (v9.7) arrière (côté parc) et côtés : fenêtres, porte de service... en
+	-- détail client (TownFacades, style "Hall") ; repère = pied du corps
+	model:SetAttribute("FacadeStyle", "Hall")
+	model:SetAttribute("FacadeCF", cf * CFrame.new(0, 0, 3))
+	model:SetAttribute("W", w)
+	model:SetAttribute("D", d)
+	model:SetAttribute("Floors", 2)
+	model:SetAttribute("Height", h)
+	model:SetAttribute("Seed", 7)
+	model:SetAttribute("Wall", wall)
+	model:SetAttribute("Trim", trim)
+	model:SetAttribute("Accent", roof)
 	return model, { Rows = rows, Title = title, Footer = footer }
 end
 

@@ -951,7 +951,12 @@ table.insert(MARKET_SHOP.Tabs, "GardenDecor")
 ShopUI.MARKET = MARKET_SHOP
 
 function ShopUI.OpenShop(shopId: string, options: { Tab: string?, Anchor: Vector3? }?)
-	local shop = ShopUI.SHOPS[shopId] or (shopId == "All" and ALL_SHOP or nil) or (shopId == "Market" and MARKET_SHOP or nil)
+	local shop: ShopDef? = ShopUI.SHOPS[shopId]
+	if shopId == "All" then
+		shop = ALL_SHOP
+	elseif shopId == "Market" then
+		shop = MARKET_SHOP
+	end
 	if not shop then
 		return
 	end

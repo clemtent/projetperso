@@ -726,7 +726,13 @@ local function belt(folder: Instance, geo: TownKit.Geo)
 	local back = geo.PlotR + WorldLayout.PLOT_D / 2
 	local perSlot = m >= 11 and 2 or (m >= 8 and 3 or 5) -- (v9.7 : arbres plus riches, un peu moins nombreux)
 	-- (v9.7) jamais dans l'emprise d'une parcelle (maison + jardin), marge de 6 studs
+	-- (v9.7) ni sur le supermarché et son parking (TownMarket, BUILDINGS97)
+	local okMarket, TownMarket = pcall(require, script.Parent:FindFirstChild("TownMarket"))
+	local marketCF = WorldLayout.MarketCFrame and WorldLayout.MarketCFrame(geo.Count) or nil
 	local function inPlot(p: Vector3): boolean
+		if okMarket and marketCF and type(TownMarket) == "table" and TownMarket.InZone and TownMarket.InZone(marketCF, p, 4) then
+			return true
+		end
 		for i = 1, geo.Count do
 			local rel = WorldLayout.PlotCFrame(i, geo.Count):PointToObjectSpace(p)
 			if math.abs(rel.X) < WorldLayout.PLOT_W / 2 + 6 and math.abs(rel.Z) < WorldLayout.PLOT_D / 2 + 6 then

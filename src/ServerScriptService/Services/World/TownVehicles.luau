@@ -64,10 +64,11 @@ TownVehicles.PARKED_COLORS = {
 -- Choix stable (même ville à chaque démarrage) d'une voiture garée
 function TownVehicles.PickCar(seed: number, index: number): (string, Color3, { [string]: any })
 	local kinds, colors = TownVehicles.PARKED_KINDS, TownVehicles.PARKED_COLORS
-	local kind = kinds[math.floor(hash(seed, 31 + index) * #kinds) % #kinds + 1]
-	local color = colors[math.floor(hash(seed, 57 + index) * #colors) % #colors + 1]
+	-- (graines bien mélangées : deux voitures voisines n'ont presque jamais la même teinte)
+	local kind = kinds[math.floor(hash(seed * 1.618 + index * 7.31, 31) * #kinds) % #kinds + 1]
+	local color = colors[(math.floor(hash(seed * 2.414 + 3.3, 57) * #colors) + index * 4) % #colors + 1]
 	local opts: { [string]: any } = { Detail = "Parked" }
-	local roll = hash(seed, 83 + index)
+	local roll = hash(seed * 0.707 + index * 5.9, 83)
 	if roll < 0.18 then
 		opts.Stripe = true
 	elseif roll < 0.3 and (kind == "CityCar" or kind == "Hatchback" or kind == "SUV") then

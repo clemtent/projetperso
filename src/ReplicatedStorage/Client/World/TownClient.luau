@@ -909,6 +909,14 @@ local function step(dt: number)
 		if shops and root and type(shops.Step) == "function" then
 			pcall(shops.Step, root.Position)
 		end
+		local facades = optionalModule("TownFacades")
+		if facades and root and type(facades.Step) == "function" then
+			pcall(facades.Step, root.Position)
+		end
+		local marketMod = optionalModule("MarketInterior")
+		if marketMod and root and type(marketMod.Step) == "function" then
+			pcall(marketMod.Step, root.Position)
+		end
 		-- v9.7 🌳 nature : détails de près autour de l'avatar (TownGreenery, NATURE97)
 		local greenery = optionalModule("TownGreenery")
 		if greenery and root and type(greenery.Step) == "function" then
@@ -1140,6 +1148,21 @@ local function enter(options: any)
 				warn("[Town] ShopInteriors.Start : " .. tostring(errShops))
 			end
 		end
+		-- v9.7 🏘️ détail des immeubles de rue + 🛒 supermarché MégaDopa (BUILDINGS97)
+		local facades = optionalModule("TownFacades")
+		if facades and type(facades.Start) == "function" then
+			local okF, errF = pcall(facades.Start)
+			if not okF then
+				warn("[Town] TownFacades.Start : " .. tostring(errF))
+			end
+		end
+		local marketMod = optionalModule("MarketInterior")
+		if marketMod and type(marketMod.Start) == "function" then
+			local okM, errM = pcall(marketMod.Start, { Toast = toast })
+			if not okM then
+				warn("[Town] MarketInterior.Start : " .. tostring(errM))
+			end
+		end
 		-- v9.7 🎠 place centrale animée (TownPlazaFx, PLAZA97) : manège, ballons, pigeons…
 		local plazaFx = optionalModule("TownPlazaFx")
 		if plazaFx and type(plazaFx.Start) == "function" then
@@ -1297,6 +1320,14 @@ local function teardown()
 	local shops = optionalModule("ShopInteriors")
 	if shops and type(shops.Stop) == "function" then
 		pcall(shops.Stop)
+	end
+	local facades = optionalModule("TownFacades")
+	if facades and type(facades.Stop) == "function" then
+		pcall(facades.Stop)
+	end
+	local marketMod = optionalModule("MarketInterior")
+	if marketMod and type(marketMod.Stop) == "function" then
+		pcall(marketMod.Stop)
 	end
 	-- (v9.7) place centrale : pièces locales (manège, ballons, pigeons…) détruites
 	local plazaFx = optionalModule("TownPlazaFx")

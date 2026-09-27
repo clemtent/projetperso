@@ -797,8 +797,25 @@ function VehicleModels.DeliveryVan(opts: any?): Model
 		local x0, x1 = sx * (hw + 0.02), sx * (hw + 0.07)
 		box(k, "CargoStripe", math.min(x0, x1), math.max(x0, x1), 3.0, 3.7, cabEnd + 0.3, zB - 0.3, color, M.SmoothPlastic)
 	end
-	sign(k, cargo, Enum.NormalId.Right, 22, "📦 Dopa Express", Color3.fromRGB(236, 72, 140), nil, Enum.Font.FredokaOne, false)
-	sign(k, cargo, Enum.NormalId.Left, 22, "📦 Dopa Express", Color3.fromRGB(236, 72, 140), nil, Enum.Font.FredokaOne, false)
+	for _, face in ipairs({ Enum.NormalId.Right, Enum.NormalId.Left }) do
+		local g = sign(k, cargo, face, 22, "📦 Dopa Express", Color3.fromRGB(236, 72, 140), nil, Enum.Font.FredokaOne, false)
+		local title = g:FindFirstChild("Text") :: TextLabel?
+		if title then
+			title.Size = UDim2.fromScale(0.94, 0.5)
+			title.Position = UDim2.fromScale(0.03, 0.12)
+		end
+		local sub = Instance.new("TextLabel")
+		sub.Name = "Slogan"
+		sub.BackgroundTransparency = 1
+		sub.Size = UDim2.fromScale(0.8, 0.2)
+		sub.Position = UDim2.fromScale(0.1, 0.66)
+		sub.Font = Enum.Font.GothamBold
+		sub.TextScaled = true
+		sub.TextColor3 = Color3.fromRGB(92, 58, 96)
+		sub.Text = k.T("Fast delivery all over town 🚚")
+		sub:SetAttribute("LocText", "Fast delivery all over town 🚚")
+		sub.Parent = g
+	end
 	-- portes arrière (2 battants + poignées)
 	for _, sx in ipairs({ -1, 1 }) do
 		local x0, x1 = sx * 0.04, sx * (hw - 0.05)
@@ -850,7 +867,7 @@ function VehicleModels.FoodTruck(opts: any?): Model
 	end
 	-- menu (tableau noir) + enseigne sur le toit + taco géant
 	local menu = box(k, "Menu", hw + 0.02, hw + 0.08, 4.0, 5.8, zB - 0.95, zB - 0.25, Color3.fromRGB(40, 44, 48), M.Slate)
-	sign(k, menu, Enum.NormalId.Right, 30, "🌮 3 · 🌯 5 · 🥤 2", WHITE, nil, Enum.Font.FredokaOne, false)
+	sign(k, menu, Enum.NormalId.Right, 30, "🌮 Tacos · 🌯 Burritos · 🥤 Drinks", WHITE, nil, Enum.Font.FredokaOne, true)
 	local board = box(k, "TruckSign", -0.15, 0.15, t.BoxH + 0.1, t.BoxH + 1.6, cabEnd + 0.8, zB - 0.8, WHITE, M.SmoothPlastic)
 	sign(k, board, Enum.NormalId.Right, 30, "🌮 Taco Party", Color3.fromRGB(236, 72, 140), nil, Enum.Font.FredokaOne, false)
 	sign(k, board, Enum.NormalId.Left, 30, "🌮 Taco Party", Color3.fromRGB(236, 72, 140), nil, Enum.Font.FredokaOne, false)

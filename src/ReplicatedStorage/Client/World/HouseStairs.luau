@@ -270,7 +270,9 @@ function HouseStairs.Build(kit: any, size: any, colors: Colors): Result
 	local top = WorldLayout.FloorY(floors) + WorldLayout.WALL_H
 	-- (v9.6 z-fighting : la façade pose déjà sa dalle de toit [top, top + 0.6] ;
 	-- le plafond du hall descend de 0.1 et s'arrête dans la dalle)
-	kit:Box("HallCeiling", h0, h1, top - 0.1, top + 0.5, WorldLayout.WALL_T, WorldLayout.WALL_T + WorldLayout.DEPTH, CEILING, M.SmoothPlastic, { Solid = true, Shadow = false })
+	-- (v9.7 z-fighting : le plafond s'arrête contre la face intérieure des murs
+	-- du hall [0.15 d'épaisseur], sinon ses côtés doublent ceux des murs)
+	kit:Box("HallCeiling", h0 + 0.15, h1 - 0.15, top - 0.1, top + 0.5, WorldLayout.WALL_T, WorldLayout.WALL_T + WorldLayout.DEPTH, CEILING, M.SmoothPlastic, { Solid = true, Shadow = false })
 	return { Ramps = ramps, Holes = holes, Parts = kit.Stats.Count - before }
 end
 
