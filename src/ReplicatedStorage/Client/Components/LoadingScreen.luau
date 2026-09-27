@@ -97,6 +97,10 @@ function LoadingScreen.Show()
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		Parent = playerGui,
 	}) :: ScreenGui
+	-- v9.1 : plein écran, y compris sous l'encoche (sinon le monde 3D se voit sur les côtés)
+	screen.ScreenInsets = Enum.ScreenInsets.None
+	screen.SafeAreaCompatibility = Enum.SafeAreaCompatibility.None
+	screen.ClipToDeviceSafeArea = false
 	gui = screen
 
 	-- Fond : dégradé doux qui tourne lentement (bloque les clics)
@@ -120,8 +124,9 @@ function LoadingScreen.Show()
 	local canvas = UIUtil.Create("Frame", {
 		Name = "Canvas",
 		Size = UDim2.fromOffset(canvasSize.X, canvasSize.Y),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
+		-- Même place que la toile du jeu (sur téléphone, elle n'est pas centrée)
+		AnchorPoint = Vector2.zero,
+		Position = Interface.Root and Interface.Root.Position or UDim2.new(),
 		BackgroundTransparency = 1,
 		ZIndex = 2,
 		Parent = screen,
@@ -130,6 +135,9 @@ function LoadingScreen.Show()
 	local scaleConnection = Interface.ScaleChanged:Connect(function(scale: number, size: Vector2)
 		canvasScale.Scale = scale
 		canvas.Size = UDim2.fromOffset(size.X, size.Y)
+		if Interface.Root then
+			canvas.Position = Interface.Root.Position
+		end
 	end)
 	screen.Destroying:Connect(function()
 		scaleConnection:Disconnect()

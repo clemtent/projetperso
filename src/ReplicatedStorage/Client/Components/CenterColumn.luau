@@ -86,6 +86,10 @@ local PILLS = {
 
 local BUTTON_SIZE = Vector2.new(184, 62)
 local PILL_HEIGHT = 36
+-- Téléphone : pastilles rondes plus grosses (≈ 34 px réels à l'écran, zone
+-- tactile correcte) avec moins de marge verticale autour (la rangée ne
+-- grandit que de 2 px "design")
+local PHONE_PILL_HEIGHT = 52
 local HOUSE_BUTTON_SIZE = 54 -- bouton "🏠" (zone tactile >= 44 px)
 -- Colonne des indicateurs Robux (à gauche du bouton) : 2 pastilles + carte du
 -- boost ; remontée de STATUS_LIFT px pour finir au-dessus du compteur
@@ -575,10 +579,10 @@ local function buildPills(parent: Frame, order: number)
 	end
 	table.clear(pills)
 	local phone = Interface.IsPhone()
-	local height = Interface.IsTouch() and Theme.TouchTarget or PILL_HEIGHT
+	local height = phone and PHONE_PILL_HEIGHT or (Interface.IsTouch() and Theme.TouchTarget or PILL_HEIGHT)
 	-- Marge verticale du support (4 px d'air entre deux lignes de pastilles sur PC)
-	local holderPad = phone and 12 or 4
-	local buttonY = phone and 7 or 2
+	local holderPad = phone and 6 or 4
+	local buttonY = phone and 3 or 2
 	pillsDevice = Interface.Device
 
 	local row: GuiObject
@@ -649,7 +653,7 @@ local function buildPills(parent: Frame, order: number)
 		local tablet = Interface.Device == "Tablet"
 		local button, badge = buildMenuPill(holder, def, icon, label, height, round, tablet, buttonY)
 		if round then
-			badge.Position = UDim2.new(1, phone and -5 or -2, 0, phone and 9 or 2)
+			badge.Position = UDim2.new(1, phone and -6 or -2, 0, phone and 12 or 2)
 		end
 		UIUtil.Create("UIScale", { Name = "PopScale", Parent = holder })
 

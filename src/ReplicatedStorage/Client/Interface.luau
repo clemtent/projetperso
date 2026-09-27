@@ -283,6 +283,12 @@ function Interface.Build(): ScreenGui
 	-- bord) ; Slots.Create y recale les cadres des stimuli sur la toile
 	local backgroundLayer = Interface.Layers.Background
 	bleedTargets[backgroundLayer] = true
+	-- Cinématiques (ex. "Ocean") : leurs cadres plein-calque couvrent tout l'écran
+	Interface.Layers.Cinematic.ChildAdded:Connect(function(child)
+		if child:IsA("GuiObject") and child.Size == UDim2.fromScale(1, 1) then
+			Interface.ApplyBleed(child)
+		end
+	end)
 	-- Voiles sombres des fenêtres / popups ("Dimmer") : tout l'écran aussi
 	for _, name in ipairs({ "Overlay", "Panels", "Toasts" }) do
 		Interface.Layers[name].DescendantAdded:Connect(function(object)
