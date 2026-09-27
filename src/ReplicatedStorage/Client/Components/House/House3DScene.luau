@@ -171,6 +171,8 @@ type SideWall = {
 	Edge: BasePart,
 	Gui: SurfaceGui?,
 	Lowered: boolean,
+	-- (v9.6) écarts anti-scintillement de la pose "levée" (gardés en baissant / relevant)
+	Deltas: { [BasePart]: { P: Vector3, S: Vector3 } }?,
 }
 
 type Arrival = { Parts: { BasePart }, Finals: { CFrame }, Delay: number, Clock: number }
@@ -729,6 +731,9 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 		end
 	end
 	applyNight()
+	-- (v9.6) anti-scintillement du décor : moulures, fenêtre, rideaux...
+	-- écartés des murs / du sol / du studio (qui ne bougent pas)
+	pcall(House3DScene.SeparateShell, folder, nil)
 	folder.Parent = workspace
 
 	------------------------------------------------------------------
@@ -851,6 +856,16 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 				discard()
 				return
 			end
+			-- (v9.6) anti-scintillement entre objets voisins et avec le décor
+			-- (avant l'arrivée en douceur, qui garde les places finales)
+			pcall(function()
+				local models: { Instance } = {}
+				for _, build in ipairs(builds) do
+					build.Model:PivotTo(build.Pivot)
+					table.insert(models, build.Model)
+				end
+				House3DScene.SeparateShell(folder, models)
+			end)
 			local order = table.clone(builds)
 			table.sort(order, function(a, b)
 				if a.Entry.Y ~= b.Entry.Y then
@@ -935,17 +950,33 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 				end
 				if lower ~= nil then
 					wall.Lowered = lower
-					local height = lower and 1.2 or WH
 					local x = wall.Side * (W / 2 + SKIN + WALL_T / 2)
-					wall.Shell.Size = Vector3.new(WALL_T, height + 0.4, D + WALL_T + SKIN)
-					wall.Shell.CFrame = CFrame.new(at(x, (height + 0.4) / 2 - 0.2, (D - WALL_T - SKIN) / 2))
 					local right = wall.Side < 0 and BACKWARD or -BACKWARD
 					local normal = right:Cross(Y_AXIS)
-					wall.Skin.Size = Vector3.new(D, height, SKIN)
-					wall.Skin.CFrame = CFrame.fromMatrix(at(wall.Side * W / 2, height / 2, D / 2) - normal * (SKIN / 2), right, Y_AXIS)
-					wall.Crown.CFrame = CFrame.new(at(wall.Side * (W / 2 - 0.18), height - crownH / 2, D / 2))
-					wall.Edge.Size = Vector3.new(WALL_T + SKIN + 0.1, height + 0.4, 0.2)
-					wall.Edge.CFrame = CFrame.new(at(wall.Side * (W / 2 + (WALL_T + SKIN) / 2), (height + 0.4) / 2 - 0.2, D + 0.05))
+					-- pose d'un mur de hauteur `height` (tailles, repères)
+					local function pose(height: number): { { Part: BasePart, S: Vector3, C: CFrame } }
+						return {
+							{ Part = wall.Shell, S = Vector3.new(WALL_T, height + 0.4, D + WALL_T + SKIN), C = CFrame.new(at(x, (height + 0.4) / 2 - 0.2, (D - WALL_T - SKIN) / 2)) },
+							{ Part = wall.Skin, S = Vector3.new(D, height, SKIN), C = CFrame.fromMatrix(at(wall.Side * W / 2, height / 2, D / 2) - normal * (SKIN / 2), right, Y_AXIS) },
+							{ Part = wall.Crown, S = wall.Crown.Size, C = CFrame.new(at(wall.Side * (W / 2 - 0.18), height - crownH / 2, D / 2)) },
+							{ Part = wall.Edge, S = Vector3.new(WALL_T + SKIN + 0.1, height + 0.4, 0.2), C = CFrame.new(at(wall.Side * (W / 2 + (WALL_T + SKIN) / 2), (height + 0.4) / 2 - 0.2, D + 0.05)) },
+						}
+					end
+					-- (v9.6) écarts anti-scintillement de la pose levée, gardés dans les deux poses
+					local deltas = wall.Deltas
+					if not deltas then
+						local fresh: { [BasePart]: { P: Vector3, S: Vector3 } } = {}
+						for _, spec in ipairs(pose(WH)) do
+							fresh[spec.Part] = { P = spec.Part.Position - spec.C.Position, S = spec.Part.Size - spec.S }
+						end
+						wall.Deltas = fresh
+						deltas = fresh
+					end
+					for _, spec in ipairs(pose(lower and 1.2 or WH)) do
+						local delta = (deltas :: any)[spec.Part]
+						spec.Part.Size = spec.S + (delta and delta.S or Vector3.zero)
+						spec.Part.CFrame = spec.C + (delta and delta.P or Vector3.zero)
+					end
 					local gui = wall.Gui
 					if gui then
 						gui.Enabled = not lower
@@ -1161,7 +1192,9 @@ function House3DScene.BuildRoomShell(roomData: any, sizeDef: any?, options: Shel
 		wall("WallFront", Vector3.new(0, 0, D / 2 + T / 2), X, W + 2 * T, -Z, doors.Front == true)
 	end
 	if opts.Ceiling == true then
-		shellPart(model, "Ceiling", Vector3.new(W + 2 * T, 0.6, D + 2 * T), CFrame.new(0, WH + 0.3, 0), trim:Lerp(WHITE, 0.5), M.SmoothPlastic, true)
+		-- (v9.6 : dessous 0,04 plus bas que le dessous du plancher de l'étage :
+		-- plus de faces confondues avec lui, ni avec la dalle de la façade)
+		shellPart(model, "Ceiling", Vector3.new(W + 2 * T, 0.56, D + 2 * T), CFrame.new(0, WH + 0.24, 0), trim:Lerp(WHITE, 0.5), M.SmoothPlastic, true)
 	end
 	-- Papier peint (décoration) sur le mur du fond
 	if patterns then
@@ -1208,6 +1241,9 @@ function House3DScene.BuildRoomShell(roomData: any, sizeDef: any?, options: Shel
 	model:SetAttribute("Scale", scale)
 	model:SetAttribute("RoomWpx", roomWpx)
 	model.WorldPivot = CFrame.new()
+	-- (v9.6) anti-scintillement : moulures, chambranles, fenêtre écartés des
+	-- murs / du sol (qui ne bougent pas : collisions et portes intactes)
+	pcall(House3DScene.SeparateShell, model, nil)
 	return model
 end
 
@@ -1266,7 +1302,39 @@ function House3DScene.PlaceItems(roomModel: Model, roomData: any, options: Place
 		build.Model.Parent = folder
 		table.insert(models, build.Model)
 	end
+	-- (v9.6) anti-scintillement entre objets voisins et avec la coque
+	pcall(House3DScene.SeparateShell, roomModel, models)
 	return models
+end
+
+-- v9.6 : faces confondues (z-fighting) d'une coque et de ses objets. Les
+-- grandes pièces de la coque (sol, murs, plafond, motifs) restent fixes ;
+-- les moulures et les pièces des objets s'écartent de 0,035 stud.
+local SHELL_FIXED: { [string]: boolean } = {
+	Floor = true, FloorPattern = true, WallPattern = true, Ceiling = true,
+	WallBack = true, WallLeft = true, WallRight = true, WallFront = true,
+	-- (maquette de la vue 3D : coque, peaux papier peint, socle, studio)
+	WallBackPaper = true, WallLeftPaper = true, WallRightPaper = true, Slab = true, Lawn = true, Base = true,
+}
+function House3DScene.SeparateShell(shell: Instance, items: { any }?)
+	local parts: { BasePart } = {}
+	local fixed: { [BasePart]: boolean } = {}
+	for _, child in ipairs(shell:GetChildren()) do
+		if child:IsA("BasePart") then
+			table.insert(parts, child)
+			if SHELL_FIXED[child.Name] or string.sub(child.Name, 1, 6) == "Studio" then
+				fixed[child] = true
+			end
+		end
+	end
+	for _, model in ipairs(items or {}) do
+		for _, d in ipairs(model:GetDescendants()) do
+			if d:IsA("BasePart") then
+				table.insert(parts, d)
+			end
+		end
+	end
+	House3DKit.Separate(parts, fixed)
 end
 
 return House3DScene

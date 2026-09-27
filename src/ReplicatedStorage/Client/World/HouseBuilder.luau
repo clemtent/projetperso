@@ -411,14 +411,16 @@ local function roomFront(self: House, shell: Model, room: any, slot: number)
 	kit:WallX("FrontWall", xMin, xMax, yFloor, top, T, T + 0.12, { rect }, paper, M.SmoothPlastic, { Solid = false, Shadow = false })
 	kit:Box("FrontSkirting", xMin, xMax, yFloor, yFloor + 0.7, T + 0.12, T + 0.32, trim, M.SmoothPlastic, { Shadow = false })
 	kit:Box("FrontCrown", xMin, xMax, top - 0.5, top, T + 0.12, T + 0.32, trim, M.SmoothPlastic, { Shadow = false })
-	kit:Box("InnerSill", rect[1] - 0.5, rect[2] + 0.5, rect[3] - 0.3, rect[3], T, T + 0.7, trim, M.Wood, { Shadow = false })
+	-- (v9.6 anti-scintillement : dessus 0,04 au-dessus du bas de la fenêtre du mur)
+	kit:Box("InnerSill", rect[1] - 0.5, rect[2] + 0.5, rect[3] - 0.3, rect[3] + 0.04, T, T + 0.7, trim, M.Wood, { Shadow = false })
 	-- rideaux (couleur secondaire du papier peint) + tringle
 	local style = wallpaperOf(room)
 	local curtain = style and typeof(style.B) == "Color3" and style.B or Color3.fromRGB(255, 190, 214)
 	kit:Box("CurtainRod", rect[1] - 1.6, rect[2] + 1.6, rect[4] + 0.6, rect[4] + 0.8, T + 0.5, T + 0.7, Color3.fromRGB(246, 196, 84), M.Metal, { Shadow = false })
 	for _, sx in ipairs({ -1, 1 }) do
 		local x = if sx < 0 then rect[1] - 0.2 else rect[2] + 0.2
-		kit:Box("Curtain", x - 1.2, x + 1.2, rect[3] - 0.6, rect[4] + 0.6, T + 0.35, T + 0.7, curtain, M.Fabric, { Shadow = false })
+		-- (v9.6 : rideau 0,05 devant le rebord, plus de faces confondues)
+		kit:Box("Curtain", x - 1.2, x + 1.2, rect[3] - 0.6, rect[4] + 0.6, T + 0.35, T + 0.75, curtain, M.Fabric, { Shadow = false })
 	end
 	-- plafonnier : vraie lumière chaude
 	local cx = (xMin + xMax) / 2

@@ -411,21 +411,19 @@ local function sepFaces(part: BasePart, out: { SepFace })
 	local half = { size.X / 2, size.Y / 2, size.Z / 2 }
 	for axis = 1, 3 do
 		for _, sign in ipairs({ 1, -1 }) do
-			local keep, shrink = true, 1
+			local keep = true
 			if shape == "Cylinder" then
 				keep = axis == 1
-				shrink = 0.85
 			elseif shape == "Wedge" then
 				keep = (axis == 2 and sign < 0) or (axis == 3 and sign > 0) or axis == 1
-				shrink = axis == 1 and 0.7 or 1
 			end
 			if keep then
 				local n = axes[axis] * sign
 				local center = cf.Position + n * half[axis]
 				local b, c = axis == 1 and 2 or 1, axis == 3 and 2 or 3
-				local hb, hc = axes[b] * half[b] * shrink, axes[c] * half[c] * shrink
+				local hb, hc = axes[b] * half[b], axes[c] * half[c]
 				if shape == "Cylinder" then
-					local r = math.min(size.Y, size.Z) / 2 * shrink
+					local r = math.min(size.Y, size.Z) / 2
 					hb, hc = axes[2] * r, axes[3] * r
 				end
 				local u, v = sepBasis(n)
@@ -451,18 +449,28 @@ end
 
 -- Écarte les faces confondues d'une liste de pièces (un objet, une coque de
 -- pièce...) ; renvoie le nombre de faces déplacées
-function House3DKit.Separate(parts: { BasePart }): number
+function House3DKit.Separate(parts: { BasePart }, fixed: { [BasePart]: boolean }?): number
+	local still = fixed or {}
+	local order: { [BasePart]: number } = {}
+	for index, part in ipairs(parts) do
+		order[part] = index
+	end
+	local function keyOf(n: Vector3, slot: number): string
+		return string.format("%d,%d,%d,%d", math.floor(n.X * 50 + 0.5), math.floor(n.Y * 50 + 0.5), math.floor(n.Z * 50 + 0.5), slot)
+	end
+	local function overlaps(a: SepFace, b: SepFace, minimum: number): boolean
+		local ou = math.min(a.U1, b.U1) - math.max(a.U0, b.U0)
+		local ov = math.min(a.V1, b.V1) - math.max(a.V0, b.V0)
+		return ou > 0 and ov > 0 and ou * ov > minimum
+	end
 	local moved = 0
-	for _ = 1, 6 do
+	for _ = 1, 8 do
 		local faces: { SepFace } = {}
 		for _, part in ipairs(parts) do
 			sepFaces(part, faces)
 		end
 		local buckets: { [string]: { SepFace } } = {}
-		local function keyOf(n: Vector3, slot: number): string
-			return string.format("%d,%d,%d,%d", math.floor(n.X * 50 + 0.5), math.floor(n.Y * 50 + 0.5), math.floor(n.Z * 50 + 0.5), slot)
-		end
-		for _, face in ipairs(faces) do
+		local function add(face: SepFace)
 			local key = keyOf(face.N, math.floor(face.D / 0.05))
 			local list = buckets[key]
 			if not list then
@@ -471,54 +479,57 @@ function House3DKit.Separate(parts: { BasePart }): number
 			end
 			table.insert(list, face)
 		end
+		for _, face in ipairs(faces) do
+			add(face)
+		end
+		-- une face voisine (autre pièce, autre couleur) trop près du plan `d` ?
+		local function clashes(face: SepFace, d: number): boolean
+			for ek = -1, 1 do
+				for _, other in ipairs(buckets[keyOf(face.N, math.floor(d / 0.05) + ek)] or {}) do
+					if other.Part ~= face.Part and other.N:Dot(face.N) > 0.999 and math.abs(other.D - d) < SEP_NEAR
+						and overlaps(other, face, 0) and sepDiffers(other.Part, face.Part) then
+						return true
+					end
+				end
+			end
+			return false
+		end
 		local touched: { [BasePart]: boolean } = {}
 		local fixes = 0
 		for _, a in ipairs(faces) do
-			if not touched[a.Part] then
-				local slot = math.floor(a.D / 0.05)
-				for dk = -1, 1 do
-					local list = buckets[keyOf(a.N, slot + dk)]
-					for _, b in ipairs(list or {}) do
-						if b.Part ~= a.Part and not touched[a.Part] and not touched[b.Part] and a.N:Dot(b.N) > 0.999
-							and math.abs(a.D - b.D) < SEP_NEAR and sepDiffers(a.Part, b.Part) then
-							local ou = math.min(a.U1, b.U1) - math.max(a.U0, b.U0)
-							local ov = math.min(a.V1, b.V1) - math.max(a.V0, b.V0)
-							if ou > 0 and ov > 0 and ou * ov > SEP_OVERLAP then
-								-- la plus petite face avance (à aire égale : la pièce ajoutée après)
-								local small, large = a, b
-								if b.Area < a.Area or (b.Area == a.Area and (table.find(parts, b.Part) or 0) > (table.find(parts, a.Part) or 0)) then
-									small, large = b, a
+			local slot = math.floor(a.D / 0.05)
+			for dk = -1, 1 do
+				for _, b in ipairs(buckets[keyOf(a.N, slot + dk)] or {}) do
+					if b.Part ~= a.Part and not touched[a.Part] and not touched[b.Part] and a.N:Dot(b.N) > 0.999
+						and math.abs(a.D - b.D) < SEP_NEAR and overlaps(a, b, SEP_OVERLAP) and sepDiffers(a.Part, b.Part) then
+						-- la plus petite face avance (à aire égale : la pièce ajoutée après) ;
+						-- une pièce "fixe" (mur, sol...) ne bouge jamais
+						local small, large = a, b
+						if b.Area < a.Area or (b.Area == a.Area and (order[b.Part] or 0) > (order[a.Part] or 0)) then
+							small, large = b, a
+						end
+						if still[small.Part] then
+							small, large = large, small
+						end
+						if not still[small.Part] then
+							-- plan visé : SEP_GAP devant la grande face, loin de toute autre
+							-- face voisine (deux corrections ne se recollent pas)
+							local target = math.max(small.D, large.D) + SEP_GAP
+							for _ = 1, 8 do
+								if not clashes(small, target) then
+									break
 								end
-								-- plan visé : SEP_GAP devant la grande face, et loin de toute autre
-								-- face voisine (sinon deux corrections se recollent l'une à l'autre)
-								local target = large.D + SEP_GAP
-								for _ = 1, 6 do
-									local clash = false
-									for ek = -1, 2 do
-										for _, other in ipairs(buckets[keyOf(small.N, math.floor(target / 0.05) + ek)] or {}) do
-											if other.Part ~= small.Part and other.N:Dot(small.N) > 0.999 and math.abs(other.D - target) < SEP_NEAR
-												and math.min(other.U1, small.U1) > math.max(other.U0, small.U0)
-												and math.min(other.V1, small.V1) > math.max(other.V0, small.V0)
-												and sepDiffers(other.Part, small.Part) then
-												clash = true
-											end
-										end
-									end
-									if not clash then
-										break
-									end
-									target += SEP_GAP
-								end
-								local grow = target - small.D
-								if grow > 0 then
-									local part = small.Part
-									local add = small.Axis == 1 and Vector3.new(grow, 0, 0) or (small.Axis == 2 and Vector3.new(0, grow, 0) or Vector3.new(0, 0, grow))
-									part.Size += add
-									part.CFrame = part.CFrame + small.N * (grow / 2)
-									touched[part] = true
-									fixes += 1
-								end
+								target += SEP_GAP
 							end
+							local grow = target - small.D
+							local part = small.Part
+							local extra = small.Axis == 1 and Vector3.new(grow, 0, 0) or (small.Axis == 2 and Vector3.new(0, grow, 0) or Vector3.new(0, 0, grow))
+							part.Size += extra
+							part.CFrame = part.CFrame + small.N * (grow / 2)
+							touched[part] = true
+							fixes += 1
+							-- (le nouveau plan compte tout de suite pour les corrections suivantes)
+							add({ Part = part, Axis = small.Axis, N = small.N, D = target, U0 = small.U0, U1 = small.U1, V0 = small.V0, V1 = small.V1, Area = small.Area })
 						end
 					end
 				end
