@@ -78,14 +78,18 @@ function Seashell.Start(ctx)
 			table.insert(glows, glow)
 		end
 
-		-- Éventail : côtes arrondies qui rayonnent depuis la charnière (bord festonné)
+		-- Éventail : côtes arrondies qui rayonnent depuis la charnière (bord
+		-- festonné). Une rotation Roblox tourne autour du CENTRE du cadre :
+		-- chaque côte est donc centrée à mi-longueur, dans sa direction.
 		for index, angle in ipairs(RIB_ANGLES) do
-			local centre = angle == 0
+			local middle = angle == 0
+			local length = RIB_LENGTH - math.abs(angle) * 0.06
+			local radians = math.rad(angle)
 			local rib = Kit.Box(root, {
 				Name = "Rib",
-				AnchorPoint = Vector2.new(0.5, 1),
-				Position = UDim2.fromOffset(HINGE_X, HINGE_Y),
-				Size = UDim2.fromOffset(if centre then 26 else 24, RIB_LENGTH - math.abs(angle) * 0.06),
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromOffset(HINGE_X + math.sin(radians) * length / 2, HINGE_Y - math.cos(radians) * length / 2),
+				Size = UDim2.fromOffset(if middle then 26 else 24, length),
 				Rotation = angle,
 				Color = if index % 2 == 0 then Kit.Rgb(255, 176, 186) else Kit.Rgb(255, 204, 186),
 				ZIndex = 5,

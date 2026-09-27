@@ -449,10 +449,11 @@ function HousePicker.new(parent: Frame): Picker
 			local columns = math.max(1, math.min(count, 3))
 			local cellHeight = Interface.IsTouch() and 64 or 56
 			local rows = math.ceil(count / columns)
-			open(options.Title, options.Subtitle, columns, cellHeight, rows, 560)
+			-- (3 boutons : fenêtre plus large, les textes traduits tiennent)
+			open(options.Title, options.Subtitle, columns, cellHeight, rows, 120 + columns * 190)
 			for index, info in ipairs(options.Buttons) do
 				local button = cell(index, info.Color, true, info.OnClick)
-				text(button, info.Text, UDim2.fromOffset(8, 0), UDim2.new(1, -16, 1, 0), 18, C.Ink, true)
+				text(button, info.Text, UDim2.fromOffset(8, 0), UDim2.new(1, -16, 1, 0), 17, C.Ink, true)
 			end
 		end,
 		Close = close,

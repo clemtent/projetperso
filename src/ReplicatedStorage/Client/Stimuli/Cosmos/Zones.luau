@@ -886,4 +886,21 @@ function Zones.Release(id: string)
 	end
 end
 
+-- Résumé des places actuelles (débogage) : "Id: x,y,échelle[,replié] ..."
+function Zones.Describe(): string
+	local parts = {}
+	for _, request in ipairs(sortedRequests()) do
+		local items = {}
+		for _, p in ipairs(request.Previous) do
+			if p then
+				table.insert(items, string.format("%d,%d,x%.2f%s", math.floor(p.X), math.floor(p.Y), p.Scale, if p.Folded then ",replié" else ""))
+			else
+				table.insert(items, "-")
+			end
+		end
+		table.insert(parts, request.Id .. "[" .. table.concat(items, " ") .. "]")
+	end
+	return table.concat(parts, " ")
+end
+
 return Zones

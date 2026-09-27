@@ -8,17 +8,19 @@
 	bandeau - horloge, marchés - et de la pastille "📬 Dopamail", revérifié
 	chaque seconde ; y = 14 : au-dessus des cartes du haut ; la chaîne
 	monte dans la barre du haut de Roblox) :
-	  - la boule : 7 rangées de facettes carrées projetées sur une sphère
-	    (plus étroites vers les bords = relief), ombrées par une lumière en
-	    haut à gauche, séparées par des joints sombres ; en tournant, un
-	    motif de luminosité défile sur chaque rangée (scintillement), des
-	    reflets colorés passent et des facettes flashent (étoile ✦) ;
-	    gros reflet doux fixe, calotte + anneau + chaîne, léger balancement ;
+	  - la boule : 11 rangées x 10 colonnes de facettes carrées projetées
+	    sur une sphère (plus étroites vers les bords = relief), ombrées par
+	    une lumière en haut à gauche, séparées par des joints sombres ; en
+	    tournant, un motif de luminosité défile sur chaque rangée
+	    (scintillement), des reflets colorés passent et des facettes
+	    flashent (étoile ✦) ; gros reflet doux fixe, calotte + anneau +
+	    chaîne, léger balancement ;
 	  - fins rayons de lumière qui partent de la boule et balayent l'écran
-	    en tournant (ils s'estompent au loin), 3 larges faisceaux colorés
-	    qui vont et viennent, et une pluie de petites taches de lumière
-	    projetées (les reflets des facettes) qui glissent sur tout l'écran,
-	    plus 3 halos colorés très doux ;
+	    en tournant (ils s'estompent au loin), 3 faisceaux colorés qui vont
+	    et viennent, et une pluie de taches de lumière (cœur lumineux +
+	    halo coloré : les reflets des facettes) qui glissent sur tout
+	    l'écran sans jamais en sortir, plus 3 halos colorés très doux ;
+	  - thème clair : rayons et taches plus colorés (le blanc disparaîtrait) ;
 	  - rien n'est cliquable : les clics passent à travers.
 	Spectaculaire mais pas éblouissant : tout est semi-transparent, les
 	rayons sont fins. Coût : UNE boucle OnRender, mise à jour 30 fois par

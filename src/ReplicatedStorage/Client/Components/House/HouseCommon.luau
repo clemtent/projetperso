@@ -9,7 +9,10 @@
 	    emplacement (Slot), son papier peint, son sol et ses objets ;
 	  - prix (Formulas.GetHouseItemPrice), exemplaires possédés / posés,
 	    confort et bonus (mêmes formules que le serveur) ;
-	  - bornes des zones "Wall" (haut) / "Floor" (bas) de la pièce ;
+	  - bornes des zones "Wall" (haut) / "Floor" (bas) de la pièce, et
+	    règle "peut être posé SUR un meuble" (CanGoOnFurniture, même règle
+	    que le serveur : Formulas.CanGoOnFurniture) ;
+	  - objets posés { I, X, Y, S, Z, F? } : F = dessin retourné (miroir) ;
 	  - appel du serveur : Net.Function("House"):InvokeServer(action, arg)
 	    protégé par pcall ;
 	  - palette kawaii (roses, lilas, menthe) utilisée par tous les modules

@@ -24,7 +24,8 @@ local KeyboardArt = require(Gear:WaitForChild("KeyboardArt"))
 local CoralKeys = {}
 CoralKeys.Slot = "Background" -- sous l'interface (effets de clic : calque Overlay)
 
-local W, H = 184, 86
+local FULL = Vector2.new(184, 86)
+local COMPACT = Vector2.new(80, 106) -- pavé "galets" (forme de rechange)
 local INK = Color3.fromRGB(28, 70, 96)
 local CORAL_PALETTE = {
 	Color3.fromRGB(255, 138, 138),
@@ -65,7 +66,8 @@ function CoralKeys.Start(ctx)
 	local animator = GearKit.Animator(ctx)
 	local piece = GearPiece.new(ctx, {
 		Id = "CoralKeys",
-		Size = Vector2.new(W, H),
+		Size = FULL,
+		Shapes = { COMPACT },
 		Priority = 5,
 		MinScale = 0.4,
 		MaxScale = 1,
@@ -118,15 +120,17 @@ function CoralKeys.Start(ctx)
 		return bubble
 	end)
 
-	local function keyColor(level: number): (row: number, col: number, units: number) -> Color3
-		return function(row: number, col: number, _units: number): Color3
+	local function keyColor(level: number): (key: KeyboardArt.Key) -> Color3
+		local count = 0
+		return function(key: KeyboardArt.Key): Color3
+			count += 1
 			if level >= 10 then
-				return GearKit.Rainbow(0.45 + (col - 1) / 11 * 0.5 + row * 0.04, 0.32, 1)
+				return GearKit.Rainbow(0.45 + key.Fx * 0.5 + key.Fy * 0.08, 0.32, 1) -- touches sirène
 			end
-			if level >= 2 and (row * 11 + col) % 5 == 0 then
+			if level >= 2 and count % 5 == 0 then
 				return Color3.fromRGB(252, 248, 255) -- nacre
 			end
-			return CORAL_PALETTE[(row + col) % #CORAL_PALETTE + 1]
+			return CORAL_PALETTE[(key.Row + key.Col) % #CORAL_PALETTE + 1]
 		end
 	end
 
@@ -140,6 +144,9 @@ function CoralKeys.Start(ctx)
 		end
 		table.clear(keys)
 		fish = nil
+		local compact = piece.Shape > 0
+		local size = compact and COMPACT or FULL
+		local W, H = size.X, size.Y
 		local root = Instance.new("Frame")
 		root.Name = "Art"
 		root.BackgroundTransparency = 1
@@ -157,23 +164,37 @@ function CoralKeys.Start(ctx)
 			Gradient = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(236, 214, 190)),
 		})
 		GearKit.Box(root, 0, 6, W, 9, Color3.fromRGB(120, 222, 230), { Name = "Foam", Radius = 12, Z = 3, Transparency = 0.15 })
-		for index = 0, 8 do
+		for index = 0, math.floor((W - 20) / 21) do
 			GearKit.Box(root, 8 + index * 21, 11 + (index % 2) * 2, 12, 5, Color3.new(1, 1, 1), { Name = "FoamDot", Radius = "round", Z = 3, Transparency = 0.1 })
 		end
-		for index, ripple in ipairs({ { 20, 74 }, { 120, 78 }, { 70, 80 }, { 160, 70 } }) do
-			GearKit.Box(root, ripple[1], ripple[2], 18 + index * 3, 1.8, Color3.fromRGB(214, 176, 120), { Name = "Ripple", Radius = "round", Z = 3, Transparency = 0.35 })
+		for index, ripple in ipairs({ { 0.1, 0.86 }, { 0.65, 0.9 }, { 0.38, 0.93 }, { 0.87, 0.82 } }) do
+			GearKit.Box(root, W * ripple[1], H * ripple[2], math.min(18 + index * 3, W * 0.25), 1.8, Color3.fromRGB(214, 176, 120), {
+				Name = "Ripple",
+				Radius = "round",
+				Z = 3,
+				Transparency = 0.35,
+			})
+		end
+
+		-- Boîtier : plein clavier ou pavé
+		local caseX, caseY, caseW, caseH
+		if compact then
+			caseX, caseY, caseW, caseH = 10, 17, W - 20, H - 36
+		else
+			caseX, caseY, caseW, caseH = 13, 17, W - 26, 50
 		end
 
 		-- Lueur lagon (bioluminescence)
 		if level >= 8 then
-			GearKit.Box(root, 8, 12, W - 16, 60, Color3.fromRGB(90, 255, 230), { Name = "Glow", Radius = 18, Z = 4, Transparency = 0.45 })
+			GearKit.Box(root, caseX - 5, caseY - 5, caseW + 10, caseH + 10, Color3.fromRGB(90, 255, 230), { Name = "Glow", Radius = 18, Z = 4, Transparency = 0.45 })
 		end
 
 		-- Algues (à gauche)
 		if level >= 3 then
-			for strand = 0, 1 do
+			local strands = compact and 1 or 2
+			for strand = 0, strands - 1 do
 				for leaf = 0, 3 do
-					GearKit.Outlined(root, 2 + strand * 5 + (leaf % 2) * 3, 58 - leaf * 12 - strand * 5, 6, 13, Color3.fromRGB(96, 206, 120), {
+					GearKit.Outlined(root, 2 + strand * 5 + (leaf % 2) * 3, caseY + caseH - 9 - leaf * 12 - strand * 5, 6, 13, Color3.fromRGB(96, 206, 120), {
 						Name = "Leaf",
 						Radius = "round",
 						Rotation = (leaf % 2 == 0) and -18 or 18,
@@ -187,7 +208,7 @@ function CoralKeys.Start(ctx)
 		end
 
 		-- Boîtier + plaque + touches galets
-		GearKit.Outlined(root, 13, 17, W - 26, 50, Color3.fromRGB(84, 206, 206), {
+		GearKit.Outlined(root, caseX, caseY, caseW, caseH, Color3.fromRGB(84, 206, 206), {
 			Name = "Case",
 			Radius = 13,
 			Outline = 2.2,
@@ -196,33 +217,39 @@ function CoralKeys.Start(ctx)
 			LineZ = 5,
 			Gradient = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(190, 225, 235)),
 		})
-		GearKit.Box(root, 18, 19, W - 36, 3, Color3.new(1, 1, 1), { Name = "CaseShine", Radius = "round", Transparency = 0.4, Z = 7 })
-		GearKit.Box(root, 17, 22, W - 34, 41, Color3.fromRGB(30, 112, 142), { Name = "Plate", Radius = 8, Z = 7 })
-		keys = KeyboardArt.Keys(root, 19, 24, W - 38, 37, {
+		GearKit.Box(root, caseX + 5, caseY + 2, caseW - 10, 3, Color3.new(1, 1, 1), { Name = "CaseShine", Radius = "round", Transparency = 0.4, Z = 7 })
+		GearKit.Box(root, caseX + 4, caseY + 5, caseW - 8, caseH - 9, Color3.fromRGB(30, 112, 142), { Name = "Plate", Radius = 8, Z = 7 })
+		local keyOptions = {
 			Color = keyColor(level),
 			Radius = 4,
 			Gap = 1.8,
 			Shine = true,
 			Z = 8,
-		})
+		}
+		if compact then
+			keys = KeyboardArt.Numpad(root, caseX + 6, caseY + 7, caseW - 12, caseH - 13, keyOptions)
+		else
+			keys = KeyboardArt.Keys(root, caseX + 6, caseY + 7, caseW - 12, caseH - 13, keyOptions)
+		end
 
 		-- Branches de corail (coin haut gauche du boîtier)
 		if level >= 7 then
 			local coral = Color3.fromRGB(255, 110, 150)
-			GearKit.Outlined(root, 22, 2, 5, 18, coral, { Name = "Coral", Radius = "round", Outline = 1.2, OutlineColor = Color3.fromRGB(170, 40, 80), Z = 14, LineZ = 13 })
-			GearKit.Outlined(root, 16, 6, 5, 12, coral, { Name = "Coral", Radius = "round", Rotation = -35, Outline = 1.2, OutlineColor = Color3.fromRGB(170, 40, 80), Z = 14, LineZ = 13 })
-			GearKit.Outlined(root, 28, 5, 5, 12, coral, { Name = "Coral", Radius = "round", Rotation = 35, Outline = 1.2, OutlineColor = Color3.fromRGB(170, 40, 80), Z = 14, LineZ = 13 })
-			for _, dot in ipairs({ { 24.5, 1 }, { 15, 5 }, { 33, 4 } }) do
+			local bx = caseX + 9
+			GearKit.Outlined(root, bx, 2, 5, 18, coral, { Name = "Coral", Radius = "round", Outline = 1.2, OutlineColor = Color3.fromRGB(170, 40, 80), Z = 14, LineZ = 13 })
+			GearKit.Outlined(root, bx - 6, 6, 5, 12, coral, { Name = "Coral", Radius = "round", Rotation = -35, Outline = 1.2, OutlineColor = Color3.fromRGB(170, 40, 80), Z = 14, LineZ = 13 })
+			GearKit.Outlined(root, bx + 6, 5, 5, 12, coral, { Name = "Coral", Radius = "round", Rotation = 35, Outline = 1.2, OutlineColor = Color3.fromRGB(170, 40, 80), Z = 14, LineZ = 13 })
+			for _, dot in ipairs({ { bx + 2.5, 1 }, { bx - 7, 5 }, { bx + 11, 4 } }) do
 				GearKit.Box(root, dot[1], dot[2], 4, 4, Color3.fromRGB(255, 200, 220), { Name = "Polyp", Anchor = Vector2.new(0.5, 0.5), Radius = "round", Z = 15 })
 			end
 		end
 
 		-- Étoile de mer, coquillage, palourde (sur le sable)
 		if level >= 4 then
-			starfish(root, W - 14, H - 12, 18, 14)
+			starfish(root, W - 13, H - 11, compact and 15 or 18, 14)
 		end
 		if level >= 5 then
-			local shell = GearKit.Outlined(root, 6, H - 16, 16, 11, Color3.fromRGB(255, 190, 200), {
+			local shell = GearKit.Outlined(root, 5, H - 15, 15, 10, Color3.fromRGB(255, 190, 200), {
 				Name = "Shell",
 				Radius = 6,
 				Outline = 1.2,
@@ -231,7 +258,7 @@ function CoralKeys.Start(ctx)
 				LineZ = 13,
 			})
 			for index = 1, 3 do
-				GearKit.Box(shell, index * 4, 2, 1.2, 8, Color3.fromRGB(210, 120, 150), { Name = "Ridge", Z = 15 })
+				GearKit.Box(shell, index * 3.8, 2, 1.2, 7, Color3.fromRGB(210, 120, 150), { Name = "Ridge", Z = 15 })
 			end
 		end
 		if level >= 9 then
@@ -248,6 +275,7 @@ function CoralKeys.Start(ctx)
 		end
 
 		-- Poisson-clown
+		fishHome = compact and Vector2.new(W - 18, 11) or Vector2.new(150, 12)
 		if level >= 6 then
 			local holder = Instance.new("Frame")
 			holder.Name = "Fish"
@@ -271,6 +299,9 @@ function CoralKeys.Start(ctx)
 
 	piece.OnLevel = function(level, _previous)
 		build(level)
+	end
+	piece.OnShape = function(_shape, _size)
+		build(math.max(1, piece.Level))
 	end
 
 	local function releaseBubble(fromLocal: Vector2, big: boolean)
@@ -347,7 +378,8 @@ function CoralKeys.Start(ctx)
 		if not piece:IsShown() then
 			return
 		end
-		releaseBubble(Vector2.new(random:NextNumber(30, W - 30), 20), false)
+		local width = piece.Size.X
+		releaseBubble(Vector2.new(random:NextNumber(width * 0.2, width * 0.8), 20), false)
 		local swimmer = fish
 		if swimmer and random:NextNumber() < 0.5 then
 			local lastStep = -1
@@ -359,7 +391,7 @@ function CoralKeys.Start(ctx)
 				lastStep = step
 				local k = step / 72
 				local angle = k * math.pi * 2
-				local x = fishHome.X - 60 * math.sin(angle * 0.5)
+				local x = fishHome.X - math.min(60, piece.Size.X * 0.55) * math.sin(angle * 0.5)
 				local y = fishHome.Y + math.sin(angle) * 3
 				swimmer.Position = UDim2.fromOffset(x, y)
 				swimmer.Rotation = math.cos(angle * 3) * 6

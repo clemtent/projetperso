@@ -921,6 +921,16 @@ local function roomMenu(roomId: string)
 					changeRoomType(roomId)
 				end)
 			end },
+			{ Text = Locale.T("🧊 3D"), Color = Color3.fromRGB(214, 236, 255), OnClick = function()
+				local currentOverview = overview
+				if currentOverview then
+					currentOverview.SetArranging(false)
+				end
+				refreshEditUi()
+				openRoom(roomId, false, function()
+					open3D()
+				end)
+			end },
 		},
 	})
 end

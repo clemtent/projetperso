@@ -124,7 +124,16 @@ function HouseButtons.ShowTip(owner: GuiObject?, text: string?)
 	tipOwner = owner
 	label.Text = text
 	frame.Position = UDim2.new(0.5, 0, 0, -8)
-	frame.Parent = owner
+	-- (bulle détruite avec un ancien bouton : on en refait une)
+	if not pcall(function()
+		frame.Parent = owner
+	end) then
+		tip, tipLabel = nil, nil
+		frame, label = ensureTip()
+		label.Text = text
+		frame.Position = UDim2.new(0.5, 0, 0, -8)
+		frame.Parent = owner
+	end
 	frame.Visible = true
 	UIUtil.Pop(frame, 0.7, 0.2)
 end

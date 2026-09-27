@@ -994,4 +994,11 @@ function GearLayout.GetTerritory(): Rect?
 	return lastTerritory
 end
 
+-- (debug / tests) : obstacles vus maintenant + territoire
+function GearLayout.DebugObstacles(): ({ Rect }, Rect)
+	local canvas = GearKit.CanvasSize()
+	local obstacles, barBottom = collectObstacles(canvas)
+	return obstacles, computeTerritory(canvas, barBottom)
+end
+
 return GearLayout

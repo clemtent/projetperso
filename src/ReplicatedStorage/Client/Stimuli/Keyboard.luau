@@ -3,8 +3,10 @@
 	Emplacement : ReplicatedStorage > Client > Stimuli > Keyboard
 
 	Un petit clavier mécanique sur son tapis de bureau, posé dans l'espace
-	libre près de la colonne centrale (Gear/GearLayout). À chaque clic, des
-	touches s'enfoncent et des "clac !" sautent au-dessus.
+	libre près de la colonne centrale (Gear/GearLayout, calque Background : il ne
+	recouvre jamais l'interface). Quand la place manque (couloir étroit à côté
+	des menus), il devient un pavé numérique en hauteur. À chaque clic, des
+	touches s'enfoncent et des "clac !" sautent au-dessus (calque Overlay).
 	Chaque niveau ajoute quelque chose :
 	  1 clavier blanc sur tapis lilas     2 touches colorées (Échap, Entrée, espace)
 	  3 repose-poignets rose               4 tapis étoilé + 2 touches par clic
@@ -26,13 +28,21 @@ local KeyboardArt = require(Gear:WaitForChild("KeyboardArt"))
 local Keyboard = {}
 Keyboard.Slot = "Background" -- sous l'interface (effets de clic : calque Overlay)
 
-local W, H = 180, 78
+local FULL = Vector2.new(180, 78)
+local COMPACT = Vector2.new(76, 100) -- pavé numérique (forme de rechange)
 local INK = Color3.fromRGB(52, 44, 72)
 local POP_COLORS = {
 	Color3.fromRGB(255, 110, 170),
 	Color3.fromRGB(80, 200, 255),
 	Color3.fromRGB(255, 196, 40),
 	Color3.fromRGB(130, 230, 120),
+}
+local PASTEL = {
+	Color3.fromRGB(255, 206, 228),
+	Color3.fromRGB(196, 246, 222),
+	Color3.fromRGB(220, 210, 255),
+	Color3.fromRGB(255, 240, 204),
+	Color3.fromRGB(206, 232, 255),
 }
 
 local active: { [any]: any } = {}
@@ -54,7 +64,8 @@ function Keyboard.Start(ctx)
 	local animator = GearKit.Animator(ctx)
 	local piece = GearPiece.new(ctx, {
 		Id = "Keyboard",
-		Size = Vector2.new(W, H),
+		Size = FULL,
+		Shapes = { COMPACT },
 		Priority = 3,
 		MinScale = 0.4,
 		MaxScale = 1,
@@ -73,7 +84,7 @@ function Keyboard.Start(ctx)
 	local glowGradient: UIGradient? = nil
 	local hueOffset = 0
 
-	-- "clac !" réutilisés (sur la toile, pas mis à l'échelle)
+	-- "clac !" réutilisés (calque Overlay, pas mis à l'échelle)
 	local pops = GearKit.Pool(3, function(index)
 		local label = Instance.new("TextLabel")
 		label.Name = "Clack"
@@ -97,28 +108,26 @@ function Keyboard.Start(ctx)
 		return label
 	end)
 
-	local function keyColor(level: number): (row: number, col: number, units: number) -> Color3
-		return function(row: number, col: number, units: number): Color3
+	local function rgbFor(key: KeyboardArt.Key): Color3
+		return GearKit.Rainbow(key.Fx * 0.92 + key.Fy * 0.12 + hueOffset, 0.42, 1)
+	end
+
+	local function keyColor(level: number): (key: KeyboardArt.Key) -> Color3
+		return function(key: KeyboardArt.Key): Color3
 			if level >= 8 then
-				return GearKit.Rainbow((col - 1) / 11 + row * 0.03 + hueOffset, 0.42, 1)
+				return rgbFor(key)
 			end
 			if level >= 2 then
-				if row == 1 and col == 1 then
+				if key.Kind == "Esc" then
 					return Color3.fromRGB(255, 96, 110)
-				elseif col == 11 and (row == 2 or row == 3) then
+				elseif key.Kind == "Enter" then
 					return Color3.fromRGB(255, 212, 70)
-				elseif row == 4 and units >= 4 then
+				elseif key.Kind == "Space" then
 					return Color3.fromRGB(120, 196, 255)
 				end
 			end
 			if level >= 5 then
-				local pastel = {
-					Color3.fromRGB(255, 206, 228),
-					Color3.fromRGB(196, 246, 222),
-					Color3.fromRGB(220, 210, 255),
-					Color3.fromRGB(255, 240, 204),
-				}
-				return pastel[row]
+				return PASTEL[(key.Row - 1) % #PASTEL + 1]
 			end
 			return Color3.fromRGB(250, 250, 253)
 		end
@@ -134,6 +143,9 @@ function Keyboard.Start(ctx)
 		end
 		table.clear(keys)
 		glowGradient = nil
+		local compact = piece.Shape > 0
+		local size = compact and COMPACT or FULL
+		local W, H = size.X, size.Y
 		local root = Instance.new("Frame")
 		root.Name = "Art"
 		root.BackgroundTransparency = 1
@@ -152,38 +164,51 @@ function Keyboard.Start(ctx)
 		stitchStroke.Parent = stitch
 		if level >= 4 then
 			-- Petites étoiles sur le tapis
-			local spots = { { 7, 8 }, { W - 9, 8 }, { 7, H - 9 }, { W - 9, H - 9 }, { W / 2 - 50, 6 }, { W / 2 + 40, H - 6 } }
+			local spots = { { 7, 8 }, { W - 9, 8 }, { 7, H - 9 }, { W - 9, H - 9 } }
+			if not compact then
+				table.insert(spots, { W / 2 - 50, 6 })
+				table.insert(spots, { W / 2 + 40, H - 6 })
+			end
 			for index, spot in ipairs(spots) do
 				GearKit.Star(root, spot[1], spot[2], index <= 4 and 8 or 6, POP_COLORS[(index - 1) % #POP_COLORS + 1], 4)
 			end
 		end
 
+		-- Boîtier (rectangle) : plein clavier ou pavé
+		local caseX, caseY, caseW, caseH
+		if compact then
+			caseX, caseY, caseW, caseH = 8, 12, W - 16, H - 26
+		else
+			caseX, caseY, caseW, caseH = 10, 11, W - 20, 51
+		end
+
 		-- Lueur sous le clavier
 		if level >= 6 then
 			local glowColor = level >= 7 and Color3.new(1, 1, 1) or Color3.fromRGB(80, 230, 255)
-			local glow = GearKit.Box(root, 2, 4, W - 4, 67, glowColor, {
+			local glow = GearKit.Box(root, caseX - 8, caseY - 7, caseW + 16, caseH + 14, glowColor, {
 				Name = "Underglow",
 				Radius = 16,
 				Transparency = 0.12,
 				Z = 4,
 				Gradient = level >= 7 and GearKit.RainbowSequence(0, 0.85) or nil,
-				GradientRotation = 0,
+				GradientRotation = compact and 90 or 0,
 			})
-			GearKit.Box(root, 1, 4, W - 2, 68, glowColor, {
+			GearKit.Box(root, caseX - 12, caseY - 10, caseW + 24, caseH + 20, glowColor, {
 				Name = "UnderglowSoft",
 				Radius = 18,
 				Transparency = 0.72,
 				Z = 4,
 				Gradient = level >= 7 and GearKit.RainbowSequence(0.3, 0.85) or nil,
-				GradientRotation = 0,
+				GradientRotation = compact and 90 or 0,
 			})
 			glowGradient = glow:FindFirstChildOfClass("UIGradient")
 		end
 
 		-- Câble (spiralé au niveau 11)
+		local cableX = compact and W - 22 or 137
 		if level >= 11 then
-			for index = 0, 5 do
-				GearKit.Outlined(root, 124 + index * 7, 2, 6, 8, index % 2 == 0 and Color3.fromRGB(255, 190, 220) or Color3.fromRGB(170, 215, 255), {
+			for index = 0, (compact and 2 or 5) do
+				GearKit.Outlined(root, (compact and W - 34 or 124) + index * 7, 2, 6, 8, index % 2 == 0 and Color3.fromRGB(255, 190, 220) or Color3.fromRGB(170, 215, 255), {
 					Name = "Coil",
 					Radius = "round",
 					Outline = 1.2,
@@ -193,12 +218,13 @@ function Keyboard.Start(ctx)
 				})
 			end
 		else
-			GearKit.Outlined(root, 137, 1, 4, 13, Color3.fromRGB(90, 92, 110), { Name = "Cable", Radius = 2, Outline = 1.2, OutlineColor = INK, Z = 6, LineZ = 5 })
+			GearKit.Outlined(root, cableX, 1, 4, caseY + 2, Color3.fromRGB(90, 92, 110), { Name = "Cable", Radius = 2, Outline = 1.2, OutlineColor = INK, Z = 6, LineZ = 5 })
 		end
 
 		-- Repose-poignets
 		if level >= 3 then
-			GearKit.Outlined(root, 24, 64, W - 48, 9, Color3.fromRGB(255, 196, 216), {
+			local restY = caseY + caseH + 3
+			GearKit.Outlined(root, compact and 12 or 24, restY, compact and W - 24 or W - 48, compact and 7 or 9, Color3.fromRGB(255, 196, 216), {
 				Name = "WristRest",
 				Radius = "round",
 				Outline = 1.8,
@@ -209,10 +235,10 @@ function Keyboard.Start(ctx)
 			})
 		end
 
-		-- Boîtier + plaque
+		-- Boîtier + plaque + touches
 		local gold = level >= 12
 		local caseColor = gold and Color3.fromRGB(255, 204, 70) or Color3.fromRGB(250, 250, 253)
-		GearKit.Outlined(root, 10, 11, W - 20, 51, caseColor, {
+		GearKit.Outlined(root, caseX, caseY, caseW, caseH, caseColor, {
 			Name = "Case",
 			Radius = 9,
 			Outline = 2.2,
@@ -222,20 +248,30 @@ function Keyboard.Start(ctx)
 			Gradient = gold and ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(230, 160, 50))
 				or ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(214, 216, 228)),
 		})
-		GearKit.Box(root, 14, 14, W - 28, 3, Color3.new(1, 1, 1), { Name = "CaseShine", Radius = "round", Transparency = 0.35, Z = 9 })
+		GearKit.Box(root, caseX + 4, caseY + 3, caseW - 8, 3, Color3.new(1, 1, 1), { Name = "CaseShine", Radius = "round", Transparency = 0.35, Z = 9 })
 		local plateColor = dark and Color3.fromRGB(58, 52, 86) or Color3.fromRGB(150, 156, 178)
-		GearKit.Box(root, 14, 17, W - 28, 41, plateColor, { Name = "Plate", Radius = 5, Z = 9 })
-		keys = KeyboardArt.Keys(root, 16, 19, W - 32, 37, {
+		GearKit.Box(root, caseX + 4, caseY + 6, caseW - 8, caseH - 10, plateColor, { Name = "Plate", Radius = 5, Z = 9 })
+		local keyOptions = {
 			Color = keyColor(level),
 			Radius = 2.5,
 			Gap = 1.8,
 			Shine = level >= 5,
 			Z = 10,
-		})
+		}
+		if compact then
+			keys = KeyboardArt.Numpad(root, caseX + 6, caseY + 8, caseW - 12, caseH - 14, keyOptions)
+		else
+			keys = KeyboardArt.Keys(root, caseX + 6, caseY + 8, caseW - 12, caseH - 14, keyOptions)
+		end
 
-		-- Touche artisanale (étoile dorée)
+		-- Touche artisanale (étoile dorée) : dernière touche de la 1re rangée
 		if level >= 10 then
-			local key = keys[11]
+			local key: KeyboardArt.Key? = nil
+			for _, candidate in ipairs(keys) do
+				if candidate.Row == 1 and (key == nil or candidate.Col > (key :: KeyboardArt.Key).Col) then
+					key = candidate
+				end
+			end
 			if key then
 				local artisan = GearKit.Box(root, key.X - 1, key.Y - 1, key.W + 2, key.H + 2, Color3.fromRGB(255, 196, 40), {
 					Name = "Artisan",
@@ -255,6 +291,9 @@ function Keyboard.Start(ctx)
 	piece.OnLevel = function(level, _previous)
 		build(level)
 	end
+	piece.OnShape = function(_shape, _size)
+		build(math.max(1, piece.Level))
+	end
 
 	-- Couleurs RGB qui avancent à chaque clic
 	local function shiftRGB(level: number)
@@ -268,7 +307,7 @@ function Keyboard.Start(ctx)
 		end
 		if level >= 8 and level < 12 then
 			for _, key in ipairs(keys) do
-				KeyboardArt.SetColor(key, GearKit.Rainbow((key.Col - 1) / 11 + key.Row * 0.03 + hueOffset, 0.42, 1))
+				KeyboardArt.SetColor(key, rgbFor(key))
 			end
 		end
 	end
@@ -278,9 +317,8 @@ function Keyboard.Start(ctx)
 		local list = keys
 		animator:Play("wave", 0.45, function(t)
 			for _, key in ipairs(list) do
-				local x = (key.Col - 1) / 10
-				local glow = GearKit.Bump(math.clamp((t * 1.6 - x * 0.6) / 0.6, 0, 1))
-				local base = GearKit.Rainbow((key.Col - 1) / 11 + key.Row * 0.03 + hueOffset, 0.42 + 0.4 * glow, 1)
+				local glow = GearKit.Bump(math.clamp((t * 1.6 - key.Fx * 0.6) / 0.6, 0, 1))
+				local base = GearKit.Rainbow(key.Fx * 0.92 + key.Fy * 0.12 + hueOffset, 0.42 + 0.4 * glow, 1)
 				key.Color = base
 				if not animator:IsPlaying(key) then
 					key.Frame.BackgroundColor3 = base
@@ -326,8 +364,8 @@ function Keyboard.Start(ctx)
 		for index, key in ipairs(KeyboardArt.Pick(keys, count, random)) do
 			local delay = (index - 1) * 0.035
 			animator:Play(key, 0.17 + delay, function(t)
-				local local_t = math.clamp((t * (0.17 + delay) - delay) / 0.17, 0, 1)
-				local amount = local_t < 0.35 and local_t / 0.35 or 1 - (local_t - 0.35) / 0.65
+				local k = math.clamp((t * (0.17 + delay) - delay) / 0.17, 0, 1)
+				local amount = k < 0.35 and k / 0.35 or 1 - (k - 0.35) / 0.65
 				KeyboardArt.Press(key, amount, lit)
 			end, function()
 				KeyboardArt.Press(key, 0)

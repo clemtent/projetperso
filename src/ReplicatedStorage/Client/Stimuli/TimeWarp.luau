@@ -44,6 +44,7 @@ function TimeWarp.Start(ctx)
 	local hourHand: Frame? = nil
 	local minuteHand: Frame? = nil
 	local ghosts: { Frame } = {}
+	local ghostBars: { Frame } = {}
 	local ripples: { { Frame: Frame, Stroke: UIStroke, Offset: number } } = {}
 	local face: Frame? = nil
 
@@ -52,6 +53,7 @@ function TimeWarp.Start(ctx)
 			content:Destroy()
 		end
 		table.clear(ghosts)
+		table.clear(ghostBars)
 		table.clear(ripples)
 		local root = Kit.Box(piece.Frame, { Name = "Content", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1 })
 		content = root
@@ -91,40 +93,41 @@ function TimeWarp.Start(ctx)
 			})
 		end
 
+		-- Aiguille : une rotation Roblox tourne autour du CENTRE du cadre, donc
+		-- chaque aiguille est dans un pivot carré centré sur le cadran (c'est
+		-- le pivot qui tourne). Renvoie (pivot, aiguille).
+		local function hand(name: string, width: number, length: number, color: Color3, alpha: number, z: number, radius: number?): (Frame, Frame)
+			local pivot = Kit.Box(root, {
+				Name = name,
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromOffset(C, C),
+				Size = UDim2.fromOffset(length * 2, length * 2),
+				BackgroundTransparency = 1,
+				ZIndex = z,
+			})
+			local bar = Kit.Box(pivot, {
+				Name = "Bar",
+				AnchorPoint = Vector2.new(0.5, 1),
+				Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.fromOffset(width, length),
+				Color = color,
+				Alpha = alpha,
+				ZIndex = z,
+			})
+			if radius then
+				Kit.Corner(bar, radius)
+			end
+			return pivot, bar
+		end
 		-- Aiguilles fantômes (traînée pendant l'emballement)
 		for index = 1, 2 do
-			local ghost = Kit.Box(root, {
-				Name = "Ghost",
-				AnchorPoint = Vector2.new(0.5, 1),
-				Position = UDim2.fromOffset(C, C),
-				Size = UDim2.fromOffset(3, 34),
-				Color = gold,
-				Alpha = 1,
-				ZIndex = 4,
-			})
-			ghosts[index] = ghost
+			local pivot, bar = hand("Ghost", 3, 34, gold, 1, 4)
+			ghosts[index] = pivot
+			ghostBars[index] = bar
 		end
 		-- Aiguilles
-		local hour = Kit.Box(root, {
-			Name = "HourHand",
-			AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.fromOffset(C, C),
-			Size = UDim2.fromOffset(5, 23),
-			Color = handColor,
-			ZIndex = 5,
-		})
-		Kit.Corner(hour, 3)
-		hourHand = hour
-		local minute = Kit.Box(root, {
-			Name = "MinuteHand",
-			AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.fromOffset(C, C),
-			Size = UDim2.fromOffset(3, 35),
-			Color = handColor,
-			ZIndex = 6,
-		})
-		Kit.Corner(minute, 2)
-		minuteHand = minute
+		hourHand = hand("HourHand", 5, 23, handColor, 0, 5, 3)
+		minuteHand = hand("MinuteHand", 3, 35, handColor, 0, 6, 2)
 		Kit.Circle(root, C, C, 9, gold, 0, 7)
 	end
 
@@ -134,15 +137,14 @@ function TimeWarp.Start(ctx)
 		build()
 	end)
 
-	local centre = Vector2.new(-1000, -1000) -- centre de l'horloge sur la toile
+	-- Origine des ondes : l'horloge si elle a une place, sinon le compteur
+	local centre: Vector2? = nil
 	Zones.Request(ID, {
 		{ W = BOX, H = BOX, Anchor = Vector2.new(0.2, 0.56), MinScale = 0.4, MaxScale = 1.15 },
 	}, function(placements)
 		local placement = placements[1]
 		Kit.Place(piece, placement)
-		if placement then
-			centre = Vector2.new(placement.X, placement.Y)
-		end
+		centre = if placement then Vector2.new(placement.X, placement.Y) else nil
 	end)
 
 	local minuteAngle, hourAngle = 40, 300
@@ -150,9 +152,6 @@ function TimeWarp.Start(ctx)
 	local warpClock = 3
 	local waveClock = -1
 	Kit.Loop(ctx, 20, function(dt, t)
-		if not piece.Placed then
-			return
-		end
 		-- Vitesse des aiguilles : calme, puis emballement (accélère / ralentit)
 		warpClock += dt
 		local warp = 0
@@ -180,7 +179,10 @@ function TimeWarp.Start(ctx)
 			local lag = index * 0.045 * speed
 			ghostAngles[index] = minuteAngle - lag
 			ghost.Rotation = ghostAngles[index]
-			ghost.BackgroundTransparency = 1 - warp * (if index == 1 then 0.55 else 0.3)
+			local bar = ghostBars[index]
+			if bar then
+				bar.BackgroundTransparency = 1 - warp * (if index == 1 then 0.55 else 0.3)
+			end
 		end
 		local dial = face
 		if dial then
@@ -203,8 +205,9 @@ function TimeWarp.Start(ctx)
 			else
 				local canvas = Zones.GetCanvas()
 				local size = 60 + p * canvas.Magnitude * 1.1
+				local origin = centre or Zones.GetFocus()
 				wave.Visible = true
-				wave.Position = UDim2.fromOffset(centre.X, centre.Y)
+				wave.Position = UDim2.fromOffset(origin.X, origin.Y)
 				wave.Size = UDim2.fromOffset(size, size)
 				waveStroke.Thickness = 2 + p * 6
 				waveStroke.Transparency = 0.45 + p * 0.55

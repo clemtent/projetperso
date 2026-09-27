@@ -30,6 +30,8 @@
 	  - le moulin tourne plus vite au repos (+28 °/s par niveau), les coups
 	    de vent sont plus fréquents, des lignes de vent traversent la carte
 	    en continu (plus nombreuses à chaque niveau), les nuages filent.
+	Performances : le décor (CanvasGroup redessiné à chaque changement :
+	nuages, soleil, éoliennes) n'est mis à jour que 30 fois par seconde.
 ]]
 
 local Locale = require(game:GetService("ReplicatedStorage").Shared.Locale)

@@ -118,6 +118,8 @@ type Session = {
 	Touches: { [any]: Vector2 },
 	PinchStart: number?,
 	PinchZoom: number,
+	Stick: Vector2, -- stick de la manette (tourner en continu)
+	Warned: boolean,
 	-- interface
 	NightButton: TextButton?,
 	Chip: Frame?,
@@ -327,6 +329,13 @@ local function stepCamera(s: Session, dt: number)
 	if viewport ~= s.Viewport then
 		s.Viewport = viewport
 		computeFit(s)
+	end
+	-- Manette : le stick fait tourner en continu
+	local stick = s.Stick
+	if stick.Magnitude > 0.2 then
+		touched(s)
+		s.YawT += stick.X * dt * math.rad(90)
+		s.PitchT -= stick.Y * dt * math.rad(60)
 	end
 	-- Balancement tout seul au repos
 	if s.Clock - s.LastInput > IDLE_TIME and not s.Dragging and next(s.Touches) == nil then
@@ -767,11 +776,19 @@ local function onInputBegan(s: Session, input: InputObject, processed: boolean)
 	if processed then
 		return
 	end
-	if kind == Enum.UserInputType.Keyboard then
-		if key == Enum.KeyCode.Left or key == Enum.KeyCode.Q then
+	if kind == Enum.UserInputType.Keyboard or kind == Enum.UserInputType.Gamepad1 then
+		if key == Enum.KeyCode.Left or key == Enum.KeyCode.Q or key == Enum.KeyCode.DPadLeft then
 			rotateBy(s, -ROTATE_STEP)
-		elseif key == Enum.KeyCode.Right or key == Enum.KeyCode.E then
+		elseif key == Enum.KeyCode.Right or key == Enum.KeyCode.E or key == Enum.KeyCode.DPadRight then
 			rotateBy(s, ROTATE_STEP)
+		elseif key == Enum.KeyCode.ButtonR1 or key == Enum.KeyCode.ButtonR2 then
+			touched(s)
+			s.ZoomT *= WHEEL_STEP
+		elseif key == Enum.KeyCode.ButtonL1 or key == Enum.KeyCode.ButtonL2 then
+			touched(s)
+			s.ZoomT /= WHEEL_STEP
+		elseif key == Enum.KeyCode.ButtonY then
+			resetView(s)
 		elseif key == Enum.KeyCode.Up then
 			touched(s)
 			s.PitchT += math.rad(8)
@@ -800,6 +817,10 @@ local function onInputChanged(s: Session, input: InputObject, processed: boolean
 			s.YawT -= delta.X * DRAG_SPEED
 			s.PitchT += delta.Y * DRAG_SPEED
 			touched(s)
+		end
+	elseif kind == Enum.UserInputType.Gamepad1 then
+		if input.KeyCode == Enum.KeyCode.Thumbstick1 or input.KeyCode == Enum.KeyCode.Thumbstick2 then
+			s.Stick = Vector2.new(input.Position.X, input.Position.Y)
 		end
 	elseif kind == Enum.UserInputType.MouseWheel then
 		if processed then
@@ -846,6 +867,10 @@ local function onInputEnded(s: Session, input: InputObject)
 	elseif kind == Enum.UserInputType.Touch then
 		s.Touches[input] = nil
 		s.PinchStart = nil
+	elseif kind == Enum.UserInputType.Gamepad1 then
+		if input.KeyCode == Enum.KeyCode.Thumbstick1 or input.KeyCode == Enum.KeyCode.Thumbstick2 then
+			s.Stick = Vector2.zero
+		end
 	end
 end
 
@@ -906,6 +931,14 @@ local function start(s: Session, options: Options)
 	local roomType = HouseCommon.GetRoomType(room)
 	local title = type(options.Title) == "string" and options.Title ~= "" and options.Title
 		or (roomType and Locale.T(roomType.Name) or Locale.T("3D view"))
+	-- (l'icône de la pièce est déjà dans la pastille du titre)
+	local icon = roomType and roomType.Icon or ""
+	if icon ~= "" and string.sub(title, 1, #icon) == icon then
+		local rest = string.gsub(string.sub(title, #icon + 1), "^%s+", "")
+		if rest ~= "" then
+			title = rest
+		end
+	end
 	local okDark, darkMode = pcall(function()
 		return require(Client.ClientState).DarkMode
 	end)
@@ -952,7 +985,8 @@ local function start(s: Session, options: Options)
 	RunService:BindToRenderStep(RENDER_NAME, Enum.RenderPriority.Camera.Value + 1, function(dt: number)
 		if s.Alive then
 			local ok, err = pcall(stepCamera, s, dt)
-			if not ok then
+			if not ok and not s.Warned then
+				s.Warned = true
 				warn("[House3D] Caméra : " .. tostring(err))
 			end
 		end
@@ -1097,6 +1131,8 @@ function House3D.Open(options: Options?): boolean
 		Touches = {},
 		PinchStart = nil,
 		PinchZoom = 1,
+		Stick = Vector2.zero,
+		Warned = false,
 		NightButton = nil,
 		Chip = nil,
 		ChipBar = nil,
