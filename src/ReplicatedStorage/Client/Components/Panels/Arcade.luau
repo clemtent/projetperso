@@ -2005,6 +2005,25 @@ local function buildGameView(root: Frame)
 	G.Result = result
 end
 
+-- Affiche la marque dessinée `kind` ("Cross" / "Ring" / "Dot", nil = aucune)
+-- dans la case score d'une carte de duel (recolore seulement si besoin)
+local function setScoreMark(card, kind: string?, color: Color3)
+	if card.MarkKind == kind and card.MarkColor == color then
+		return
+	end
+	card.MarkKind = kind
+	card.MarkColor = color
+	for _, name in ipairs({ "Cross", "Ring", "Dot" }) do
+		local mark = card.Score:FindFirstChild("Mark" .. name)
+		if mark and mark:IsA("GuiObject") then
+			mark.Visible = name == kind
+			if name == kind then
+				UIUtil.SetIconColor(mark, color)
+			end
+		end
+	end
+end
+
 local function playerText(info): string
 	if not info then
 		return "?"

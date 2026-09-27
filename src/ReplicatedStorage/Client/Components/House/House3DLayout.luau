@@ -98,6 +98,20 @@ function House3DLayout.Dims(sizeDef: any, px: number, depth: number, wallHeight:
 	}
 end
 
+-- Rotation libre d'un objet (entry.R, degrés, multiple de 15 entre 15 et
+-- 345 ; nil = 0). Ajoutée par le monde (Dopamine Town)
+function House3DLayout.Rotation(value: any): number?
+	local degrees = tonumber(value)
+	if degrees == nil or degrees ~= degrees then
+		return nil
+	end
+	degrees = math.floor(degrees / 15 + 0.5) * 15 % 360
+	if degrees == 0 then
+		return nil
+	end
+	return degrees
+end
+
 -- Objets posés valides d'une pièce (valeurs bornées ; objets inconnus ignorés)
 function House3DLayout.Entries(room: any): { Placed }
 	local entries: { Placed } = {}
@@ -115,6 +129,7 @@ function House3DLayout.Entries(room: any): { Placed }
 				Z = finite(raw.Z, 0),
 				F = raw.F == true or nil,
 				C = type(raw.C) == "string" and raw.C or nil,
+				R = House3DLayout.Rotation(raw.R),
 			}
 			table.insert(entries, entry)
 		end
@@ -354,7 +369,13 @@ function House3DLayout.Layout(builds: { Build }, dims: Dims, frame: CFrame)
 	for _, build in ipairs(builds) do
 		place(build, 0)
 	end
+	-- Rotation libre (entry.R) autour du centre de l'empreinte (objets au
+	-- sol ; une chaise rangée à une table y reste tournée si R est absent)
 	for _, build in ipairs(builds) do
+		local degrees = (build.Entry :: any).R
+		if build.Kind ~= "Wall" and type(degrees) == "number" and degrees ~= 0 then
+			build.Origin = build.Origin * CFrame.Angles(0, math.rad(degrees), 0)
+		end
 		build.Pivot = build.Origin * TURN
 	end
 end

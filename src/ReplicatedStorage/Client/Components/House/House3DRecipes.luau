@@ -2789,15 +2789,16 @@ function House3DRecipes.BuildModel(itemId: string, entry: any?, options: BuildOp
 	local data = House3DRecipes.Make(item, entry, k, model, turn, opts.Trim)
 	local wall = item.Placement == "Wall"
 	local query = opts.Query ~= false
-	local night = opts.Night == true
 	for _, p in ipairs(data.Parts) do
 		p.CanQuery = query
 		if opts.Shadows == false then
 			p.CastShadow = false
 		end
 	end
-	for _, light in ipairs(data.Lights) do
-		light.Brightness *= night and 1.7 or 0.9
+	if opts.Night ~= nil then
+		for _, light in ipairs(data.Lights) do
+			light.Brightness *= opts.Night == true and 1.7 or 0.9
+		end
 	end
 	-- Pièce de base (PrimaryPart) : pivot = bas du centre de l'empreinte
 	-- (objet mural : bas de la boîte, contre le mur), devant vers -Z
