@@ -543,9 +543,11 @@ end
 -- Étiquette de prix + invite "Acheter" d'un objet exposé
 local function addTag(shop: Shop, parent: Instance, d: Display, tagCF: CFrame, center: Vector3)
 	local theme = shop.Theme
-	local tag = newPart(parent, "PriceTag", Vector3.new(1.3, 0.55, 0.08), tagCF, WHITE, M.SmoothPlastic)
-	-- (bandeau qui ENVELOPPE le haut de l'étiquette : aucune face confondue)
-	newPart(parent, "TagStripe", Vector3.new(1.36, 0.16, 0.16), tagCF * CFrame.new(0, 0.22, 0), theme.Accent, M.SmoothPlastic)
+	-- (v9.6.1) ancre INVISIBLE : l'ancienne étiquette en pièce (et son bandeau)
+	-- passait DEVANT le panneau de prix et cachait le texte
+	local tag = newPart(parent, "PriceTag", Vector3.new(0.4, 0.4, 0.08), tagCF, WHITE, M.SmoothPlastic)
+	tag.Transparency = 1
+	tag.CastShadow = false
 	d.Tag = tag
 	-- l'invite est posée au centre de l'objet (l'interface Roblox s'y affiche)
 	local attachment = Instance.new("Attachment")
@@ -568,13 +570,17 @@ local function addTag(shop: Shop, parent: Instance, d: Display, tagCF: CFrame, c
 	-- étiquette flottante (taille en studs : elle rapetisse avec la distance)
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "PriceLabel"
-	bb.Size = d.Entry.Kind == "Car" and UDim2.fromScale(3.6, 1.45) or UDim2.fromScale(2.3, 1.05)
+	bb.Size = d.Entry.Kind == "Car" and UDim2.fromScale(3.6, 1.45) or UDim2.fromScale(1.9, 0.86)
 	bb.StudsOffsetWorldSpace = tagCF.LookVector * 0.25 + Vector3.new(0, d.Entry.Kind == "Car" and 1.6 or -0.1, 0)
 	bb.MaxDistance = d.Entry.Kind == "Car" and 40 or TAG_DISTANCE
 	bb.LightInfluence = 0
 	bb.Brightness = 1
-	bb.AlwaysOnTop = false
+	-- (v9.6.1) toujours lisible (jamais coupé par une étagère ou un objet) ;
+	-- seules les étiquettes les plus proches s'affichent (updateTags)
+	bb.AlwaysOnTop = true
+	bb.Enabled = false
 	bb.Parent = tag
+	d.Billboard = bb
 	local card = Instance.new("Frame")
 	card.Name = "Card"
 	card.Size = UDim2.fromScale(1, 1)
@@ -1235,6 +1241,40 @@ local function inside(shop: Shop, p: Vector3): boolean
 	return math.abs(rel.X) < s.X / 2 + 0.5 and math.abs(rel.Z) < s.Z / 2 + 0.5 and rel.Y > -2 and rel.Y < s.Y + 2
 end
 
+-- (v9.6.1) étiquettes de prix : seulement dans la boutique où l'on est, et
+-- les MAX_TAGS plus proches (plus de panneaux empilés les uns sur les autres)
+local MAX_TAGS = 5
+local function updateTags(position: Vector3)
+	local candidates: { { d: Display, dist: number } } = {}
+	for _, shop in ipairs(shops) do
+		local here = inside(shop, position)
+		for _, d in ipairs(shop.Displays) do
+			local bb = d.Billboard
+			if bb and bb.Parent and d.Tag then
+				local dist = (d.Tag.Position - position).Magnitude
+				local isCar = d.Entry.Kind == "Car"
+				if (here or isCar) and dist <= (isCar and 40 or TAG_DISTANCE) then
+					table.insert(candidates, { d = d, dist = dist })
+				else
+					bb.Enabled = false
+				end
+			end
+		end
+	end
+	table.sort(candidates, function(a, b)
+		return a.dist < b.dist
+	end)
+	local shown = 0
+	for _, c in ipairs(candidates) do
+		local isCar = c.d.Entry.Kind == "Car"
+		local show = isCar or shown < MAX_TAGS
+		if show and not isCar then
+			shown += 1
+		end
+		(c.d.Billboard :: BillboardGui).Enabled = show
+	end
+end
+
 local function decide(position: Vector3)
 	-- niveau voulu par boutique (hystérésis), 3 complètes au plus
 	local wantFull = {}
@@ -1355,6 +1395,7 @@ local function heartbeat(dt: number)
 	local position = localPosition()
 	if position then
 		decide(position)
+		pcall(updateTags, position)
 	end
 	local positions = characterPositions()
 	for _, shop in ipairs(shops) do
