@@ -505,7 +505,8 @@ local function porch(ctx: Ctx, x0: number, x1: number, landingD: number, steps: 
 	local kit = ctx.Kit
 	local yTop = WorldLayout.FloorY(1)
 	local tread = 1.25
-	kit:Box("Porch", x0, x1, 0, yTop, -landingD, 0, color, material, { Solid = true })
+	-- (v9.6 : 0,04 sous le seuil : pas coplanaire avec le mur sous la porte)
+	kit:Box("Porch", x0, x1, 0, yTop - 0.04, -landingD, 0, color, material, { Solid = true })
 	-- `steps` contremarches : la dernière arrive sur la pelouse
 	local rise = yTop / steps
 	for k = 1, steps - 1 do
@@ -671,7 +672,8 @@ local function bodyWalls(ctx: Ctx, holes: { [number]: { { number } } }, material
 	kit:Box("Back", L, R, 0, ctx.Top, ctx.Depth - T + 0.05, ctx.Depth + 0.3, ctx.Wall, material, { Solid = true })
 	-- dalle du toit (ferme la maison par le haut)
 	-- (v9.6 : décalée de 0,05 : jamais coplanaire avec les plafonds des pièces du dernier étage)
-	kit:Box("TopSlab", L, R, ctx.Top + 0.05, ctx.Top + 0.65, -0.3, ctx.Depth + 0.3, ctx.Trim, M.SmoothPlastic, { Solid = true, Shadow = false })
+	-- (et 0,05 en retrait sur les 4 côtés : jamais coplanaire avec les parapets du loft)
+	kit:Box("TopSlab", L + 0.05, R - 0.05, ctx.Top + 0.05, ctx.Top + 0.65, -0.25, ctx.Depth + 0.25, ctx.Trim, M.SmoothPlastic, { Solid = true, Shadow = false })
 end
 
 -- Fenêtre des pièces par style : { part de la largeur, bas (au-dessus du sol), hauteur }
@@ -757,10 +759,11 @@ STYLES.Cottage = function(ctx)
 			end
 		end
 	end
-	kit:Box("Beam", ctx.Left - T - 0.3, ctx.Right + T + 0.3, ctx.Top - 1, ctx.Top, -0.66, -0.3, TIMBER, M.Wood, { Shadow = false })
+	-- (v9.6 : dessus des poutres décalés de 0,05 des bords de l'enduit du porche)
+	kit:Box("Beam", ctx.Left - T - 0.3, ctx.Right + T + 0.3, ctx.Top - 1, ctx.Top + 0.05, -0.66, -0.3, TIMBER, M.Wood, { Shadow = false })
 	for floor = 2, dims.Floors do
 		local y = WorldLayout.FloorY(floor) - WorldLayout.SLAB
-		kit:Box("Beam", ctx.Left - T - 0.3, ctx.Right + T + 0.3, y - 0.3, y + 0.7, -0.66, -0.3, TIMBER, M.Wood, { Shadow = false })
+		kit:Box("Beam", ctx.Left - T - 0.3, ctx.Right + T + 0.3, y - 0.3, y + 0.75, -0.66, -0.3, TIMBER, M.Wood, { Shadow = false })
 	end
 	kit:Box("Beam", ctx.Left - T - 0.3, ctx.Right + T + 0.3, WorldLayout.PLINTH - 0.1, WorldLayout.PLINTH + 0.5, -0.7, -0.3, TIMBER, M.Wood, { Shadow = false })
 
@@ -807,7 +810,8 @@ STYLES.Cottage = function(ctx)
 		local edge = if s < 0 then hx0 - 0.9 else hx1 + 0.9
 		kit:SlabX("PorchRoof", ctx.Depth / 2 - 0.5, { edge, yEave - 0.9 * hRise / ((hx1 - hx0) / 2) }, { hcx, yEave + hRise }, ctx.Depth + 2.4, 0.6, ctx.Roof, M.ClayRoofTiles,
 			{ Solid = true, Shadow = true })
-		kit:Part("PorchGable", Vector3.new(1, hRise, (hx1 - hx0) / 2), CFrame.new(hcx + s * (hx1 - hx0) / 4, yEave + hRise / 2, 0.2) * CFrame.Angles(0, -s * math.pi / 2, 0),
+		-- (v9.6 : pignon 0,3 plus bas : sa pente passe sous le toit, jamais coplanaire)
+		kit:Part("PorchGable", Vector3.new(1, hRise, (hx1 - hx0) / 2), CFrame.new(hcx + s * (hx1 - hx0) / 4, yEave + hRise / 2 - 0.3, 0.2) * CFrame.Angles(0, -s * math.pi / 2, 0),
 			annex, M.Plaster, { Solid = true }, "WedgePart")
 		kit:SlabX("PorchBarge", -1.6, { edge - 0.1, yEave - 0.9 * hRise / ((hx1 - hx0) / 2) + 0.3 }, { hcx, yEave + hRise + 0.35 }, 0.5, 0.9, ctx.RoofDark, M.Wood,
 			{ Shadow = false })
@@ -817,12 +821,12 @@ STYLES.Cottage = function(ctx)
 	heart(ctx, hcx, yEave + hRise + 1.1, -0.6, 1.2, C.Heart)
 	local sc = math.floor((hx1 - hx0) / 1.9)
 	for j = 0, sc - 1 do
-		kit:CylD("Scallop", hx0 + (j + 0.5) * (hx1 - hx0) / sc, yEave - 0.25, -0.55, 1.6, 0.3, ctx.RoofDark, M.ClayRoofTiles, { Shadow = false })
+		kit:CylD("Scallop", hx0 + (j + 0.5) * (hx1 - hx0) / sc, yEave - 0.25, -0.68, 1.6, 0.3, ctx.RoofDark, M.ClayRoofTiles, { Shadow = false })
 	end
 	-- porte ronde : cadre de bois + haut arrondi (disque)
 	frontDoor(ctx, C.Pink, TIMBER, false)
 	kit:CylD("DoorArch", gx, WorldLayout.FloorY(1) + WorldLayout.DOOR_H, -0.5, WorldLayout.DOOR_W + 1.2, 0.35, TIMBER, M.Wood, { Shadow = false })
-	kit:CylD("DoorArchGlass", gx, WorldLayout.FloorY(1) + WorldLayout.DOOR_H + 0.1, -0.7, WorldLayout.DOOR_W - 0.6, 0.12, P.Glass, M.Glass, { Shadow = false })
+	kit:CylD("DoorArchGlass", gx, WorldLayout.FloorY(1) + WorldLayout.DOOR_H + 0.1, -0.85, WorldLayout.DOOR_W - 0.6, 0.12, P.Glass, M.Glass, { Shadow = false })
 	heart(ctx, gx, WorldLayout.FloorY(1) + WorldLayout.DOOR_H + 1, -0.85, 1.1, C.Heart, M.SmoothPlastic) -- (v9.6 : plus de Neon, "flash bang")
 	wallLantern(ctx, gx + WorldLayout.DOOR_W / 2 + 1.2, WorldLayout.FloorY(1) + 4.2, true)
 	local foot = porch(ctx, gx - 3.5, gx + 3.5, 2.2, 3, P.StoneDark, M.Slate)
@@ -839,7 +843,7 @@ STYLES.Cottage = function(ctx)
 	local gateX = 0
 	local stones = { { gateX, -20 }, { gateX * 0.8 + gx * 0.2, -16.5 }, { gateX * 0.5 + gx * 0.5, -13 }, { gateX * 0.2 + gx * 0.8, -10 }, { gx, foot - 1.2 } }
 	for index, s in ipairs(stones) do
-		ctx.G:CylY("SteppingStone", s[1], -0.1, s[2], 2.6 - index * 0.12, 0.2, P.Stone:Lerp(P.StoneDark, (index % 2) * 0.4), M.Slate, { Shadow = false })
+		ctx.G:CylY("SteppingStone", s[1], -0.1, s[2], 2.6 - index * 0.12, 0.25, P.Stone:Lerp(P.StoneDark, (index % 2) * 0.4), M.Slate, { Shadow = false })
 	end
 	path(ctx, { { gx, foot - 0.5 }, { gx, foot - 2.5 } }, 3, P.Pave, M.Pebble)
 	path(ctx, { { gateX, -29.5 }, { gateX, -21.5 } }, 3, P.Pave, M.Pebble)
@@ -1160,7 +1164,7 @@ STYLES.Loft = function(ctx)
 	end
 	-- trottoir : caisses fleuries, banc, plantes
 	ctx.G:Box("Sidewalk", ctx.Left - 8, ctx.Right + 6, -0.1, 0.12, -6, -0.6, P.Pave, M.Pavement, { Shadow = false })
-	for index, c in ipairs({ { ctx.Left + 2, -3 }, { ctx.Left + 5, -3.4 }, { ctx.Left + 3.2, -5 } }) do
+	for index, c in ipairs({ { ctx.Left + 2, -3 }, { ctx.Left + 5, -3.4 }, { ctx.Left + 3.2, -4.9 } }) do
 		ctx.G:Box("Crate", c[1] - 1.2, c[1] + 1.2, 0, 1.8 - (index % 2) * 0.3, c[2] - 1, c[2] + 1, C.Wood, M.WoodPlanks, { Shadow = false })
 		ctx.G:Ball("CrateBush", c[1], 2.2, c[2], 1.8, P.Leaf, M.Grass, { Shadow = false })
 	end

@@ -274,7 +274,8 @@ end
 local function plate(b: B, name: string, z: number, y: number, facing: number, full: boolean, text: string?)
 	local p = box(b, name, -0.9, 0.9, y - 0.24, y + 0.24, z - 0.03, z + 0.03, PLATE, M.SmoothPlastic)
 	if full then
-		box(b, name .. "Band", -0.9, -0.66, y - 0.24, y + 0.24, z - 0.04 * facing - 0.025, z - 0.04 * facing + 0.025, PLATE_BAND, M.SmoothPlastic)
+		-- (bande bleue 0,04 en avant de la plaque : jamais coplanaire avec le pare-chocs)
+		box(b, name .. "Band", -0.9, -0.66, y - 0.24, y + 0.24, z + 0.06 * facing - 0.025, z + 0.06 * facing + 0.025, PLATE_BAND, M.SmoothPlastic)
 	end
 	if text and text ~= "" then
 		local gui = Instance.new("SurfaceGui")
