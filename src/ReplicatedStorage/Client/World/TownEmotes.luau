@@ -217,7 +217,8 @@ end
 -- Mouvement demandé (manette, clavier, joystick tactile) ?
 function TownEmotes.MoveMagnitude(self: any): number
 	local humanoid = self.Humanoid
-	local magnitude = humanoid and humanoid.MoveDirection.Magnitude or 0
+	local direction = humanoid and humanoid.MoveDirection
+	local magnitude = typeof(direction) == "Vector3" and direction.Magnitude or 0
 	if not self.ControlsTried then
 		self.ControlsTried = true
 		self.Controls = controlsOf()

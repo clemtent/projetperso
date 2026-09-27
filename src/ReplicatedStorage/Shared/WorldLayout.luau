@@ -54,6 +54,17 @@ WorldLayout.MIN_PLOTS = 4
 WorldLayout.MAX_PLOTS = 12
 WorldLayout.PLAZA_R = 64 -- rayon de la place centrale
 WorldLayout.SPAWN_FRONT = 7 -- (studs) apparition devant la porte
+-- (v9.4) Rues de la ville : boulevard polygonal (un côté droit devant chaque
+-- parcelle), avenue principale de l'entrée (+Z) à la place
+WorldLayout.ROAD_W = 20 -- chaussée du boulevard (2 voies)
+WorldLayout.WALK_W = 6 -- trottoirs
+WorldLayout.AVENUE_W = 16 -- chaussée de l'avenue / des rues
+WorldLayout.GROUND_Y = 0.4 -- dessus du pré et des pelouses (repère : Origin().Y)
+WorldLayout.ROAD_Y = 0.5 -- dessus de la chaussée
+WorldLayout.WALK_Y = 1 -- dessus des trottoirs et de la place (bordure de 0,5)
+WorldLayout.GATE_BACK = 60 -- porte de la ville : distance depuis le bord des parcelles côté rue
+WorldLayout.SPAWN_INSIDE = 12 -- apparition : juste à l'intérieur de la porte
+WorldLayout.TOWN_MARGIN = 80 -- pré au-delà du fond des parcelles (murs invisibles)
 
 -- Porte d'entrée (dans la cage d'escalier) et passages entre pièces
 WorldLayout.DOOR_W = 5
@@ -294,11 +305,23 @@ function WorldLayout.PlotCount(maxPlayers: any): number
 	return math.clamp(math.floor(finite(maxPlayers, 8)), WorldLayout.MIN_PLOTS, WorldLayout.MAX_PLOTS)
 end
 
+-- (v9.4) Emplacements autour de la place : count + 1 ; l'emplacement 0
+-- (direction +Z depuis le centre) est l'ENTRÉE de la ville (porte, place
+-- d'accueil), les parcelles 1..count suivent dans le sens des angles
+function WorldLayout.PlotSlots(count: number): number
+	return math.max(3, count) + 1
+end
+
+-- Angle (radians) de l'emplacement `slot` (0 = entrée)
+function WorldLayout.SlotAngle(slot: number, count: number): number
+	return slot / WorldLayout.PlotSlots(count) * math.pi * 2
+end
+
 -- Rayon du centre des parcelles : les coins avant de deux parcelles voisines
 -- ne se touchent jamais
 function WorldLayout.PlotRadius(count: number): number
-	local n = math.max(3, count)
-	local front = (WorldLayout.PLOT_W / 2 + 6) / math.tan(math.pi / n)
+	local m = WorldLayout.PlotSlots(count)
+	local front = (WorldLayout.PLOT_W / 2 + 6) / math.tan(math.pi / m)
 	return math.max(front, WorldLayout.PLAZA_R + 150) + WorldLayout.PLOT_D / 2
 end
 
@@ -306,14 +329,35 @@ end
 -- et angle (radians) de sa direction depuis le centre
 function WorldLayout.PlotPlace(index: number, count: number): (number, number, number)
 	local radius = WorldLayout.PlotRadius(count)
-	local angle = (index - 1) / count * math.pi * 2
+	local angle = WorldLayout.SlotAngle(index, count)
 	local x, z = math.sin(angle) * radius, math.cos(angle) * radius
 	return x, z, angle
 end
 
--- Rayon de la route circulaire (devant les parcelles)
+-- Distance du centre au bord avant (côté rue) des parcelles
+function WorldLayout.PlotFrontRadius(count: number): number
+	return WorldLayout.PlotRadius(count) - WorldLayout.PLOT_D / 2
+end
+
+-- Axe du boulevard (distance du centre à l'axe de chaque côté droit du
+-- polygone, devant les parcelles : trottoir extérieur collé aux parcelles)
 function WorldLayout.RingRoadRadius(count: number): number
-	return WorldLayout.PlotRadius(count) - WorldLayout.PLOT_D / 2 - 9
+	return WorldLayout.PlotFrontRadius(count) - WorldLayout.WALK_W - WorldLayout.ROAD_W / 2
+end
+
+-- Bord intérieur du boulevard (trottoir intérieur compris)
+function WorldLayout.RingInnerRadius(count: number): number
+	return WorldLayout.RingRoadRadius(count) - WorldLayout.ROAD_W / 2 - WorldLayout.WALK_W
+end
+
+-- Distance du centre à la porte de la ville (sur l'axe +Z)
+function WorldLayout.GateDistance(count: number): number
+	return WorldLayout.PlotFrontRadius(count) + WorldLayout.GATE_BACK
+end
+
+-- Rayon des murs invisibles (bord du pré)
+function WorldLayout.TownRadius(count: number): number
+	return WorldLayout.PlotRadius(count) + WorldLayout.PLOT_D / 2 + WorldLayout.TOWN_MARGIN
 end
 
 -- Distance (le long de la direction "vers la place") entre le centre de la
@@ -338,6 +382,24 @@ function WorldLayout.PlotCFrame(index: number, count: number): CFrame
 	local x, z = WorldLayout.PlotPlace(index, count)
 	local center = WorldLayout.Origin() + Vector3.new(x, 0, z)
 	return CFrame.lookAt(center, center - Vector3.new(x, 0, z))
+end
+
+-- (v9.4) Porte de la ville : centre de l'arche au sol, LookVector = vers la place
+function WorldLayout.GateCFrame(count: number): CFrame
+	local p = WorldLayout.Origin() + Vector3.new(0, WorldLayout.WALK_Y, WorldLayout.GateDistance(count))
+	return CFrame.lookAt(p, p - Vector3.new(0, 0, 1))
+end
+
+-- Apparition à l'entrée : pieds ~3 studs au-dessus du pavé, juste à
+-- l'intérieur de la porte, regard vers l'avenue et la place
+function WorldLayout.EntranceCFrame(count: number): CFrame
+	local p = WorldLayout.Origin() + Vector3.new(0, WorldLayout.WALK_Y + 3, WorldLayout.GateDistance(count) - WorldLayout.SPAWN_INSIDE)
+	return CFrame.lookAt(p, p - Vector3.new(0, 0, 1))
+end
+
+-- Centre de la place, au sol (dessus du pavé)
+function WorldLayout.PlazaCFrame(): CFrame
+	return CFrame.new(WorldLayout.Origin() + Vector3.new(0, WorldLayout.WALK_Y, 0))
 end
 
 -- Maison : milieu de la façade au sol, regarde DANS la maison (RightVector =
