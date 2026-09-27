@@ -113,7 +113,11 @@ local P = {
 -- (v9.1) Couleurs choisies par le joueur pendant qu'un style se dessine
 -- (façade : Wall ; toit : P.RoofPink / P.Slate remplacés le temps du dessin)
 local LOOK: { Wall: Color3? } = {}
-local GARDEN_H = 104 -- jardin devant la maison (déco choisie)
+-- Jardin devant la maison (déco choisie) : sa hauteur suit la largeur du
+-- bâtiment (la déco reste bien visible une fois le manoir réduit à l'écran)
+local function gardenHeight(width: number): number
+	return math.clamp(math.floor(width * 0.1), 110, 170)
+end
 
 ----------------------------------------------------------------------
 -- Formes de base (même esprit que le kit de HouseArt)
@@ -1841,6 +1845,8 @@ end
 -- dessins du dossier GardenArt), GardenSlots places fixes
 local function gardenStrip(ctx: Ctx, width: number, top: number, garden: { string })
 	local front = ctx.Front
+	local GARDEN_H = gardenHeight(width)
+	local decoSize = GARDEN_H - 6
 	local lawn = part(front, 12, top, width - 24, GARDEN_H - 8, P.Grass, { R = 26, Z = 50, Line = P.GrassDark, Shade = 0.14 })
 	local _ = lawn
 	-- bordure fleurie en haut de la pelouse
@@ -1859,14 +1865,14 @@ local function gardenStrip(ctx: Ctx, width: number, top: number, garden: { strin
 		local id = garden[index]
 		local entry = id and byId[id]
 		if entry then
-			local holder = group(front, cx - 50, top + GARDEN_H - 104, 100, 100, 60)
+			local holder = group(front, cx - decoSize / 2, top + GARDEN_H - 4 - decoSize, decoSize, decoSize, 60)
 			local body = group(holder, 0, 0, 100, 100, 1)
 			body.AnchorPoint = Vector2.new(0.5, 1)
-			body.Position = UDim2.fromOffset(50, 100)
+			body.Position = UDim2.fromOffset(decoSize / 2, decoSize)
 			local scale = Instance.new("UIScale")
-			scale.Scale = 0.92
+			scale.Scale = decoSize / 100
 			scale.Parent = body
-			circle(holder, 50, 96, 76, 12, BLACK, 0.85, 0)
+			circle(holder, decoSize / 2, decoSize * 0.96, decoSize * 0.76, decoSize * 0.12, BLACK, 0.85, 0)
 			local ok, err = pcall(function()
 				HouseArt.PaintGarden(body, entry, true)
 			end)
@@ -1979,7 +1985,7 @@ function HouseExterior.Build(parent: Instance, size: SizeDef, looks: Looks?): Ex
 	end
 
 	local built = paint(looks)
-	local fullHeight = built.Height + GARDEN_H
+	local fullHeight = built.Height + gardenHeight(built.Width)
 	root.Size = UDim2.fromOffset(built.Width, fullHeight)
 	root.Parent = parent
 

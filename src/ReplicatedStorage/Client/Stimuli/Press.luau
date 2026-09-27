@@ -2002,6 +2002,7 @@ function Press.Start(ctx)
 		Splat: Frame?,
 		Icon: string?,
 		NoPile: boolean?,
+		Regrow: boolean?,
 		Puddle: Frame?,
 		Dropped: boolean?,
 	}
@@ -2419,8 +2420,9 @@ function Press.Start(ctx)
 			return
 		end
 		if entry.Special == "Sponge" then
-			-- L'éponge reprend sa forme... puis repart quand même
-			UIUtil.Tween(entry.Holder, 0.4, { Size = UDim2.fromOffset(entry.W, entry.H) }, Enum.EasingStyle.Back)
+			-- L'éponge reprend sa forme en SUIVANT le plateau (elle ne passe
+			-- jamais derrière lui), voir la phase "Rise"... puis repart quand même
+			entry.Regrow = true
 			shout(Locale.T("...and it's back"), rgb(120, 220, 255), 98)
 		end
 		outgoing = entry
@@ -2590,6 +2592,13 @@ function Press.Start(ctx)
 			end
 		elseif phase == "Rise" then
 			plateY = phaseStartPlate + (PLATE_TOP - phaseStartPlate) * easeOut(t)
+			local sponge = outgoing
+			if sponge and sponge.Regrow then
+				local room = BELT_Y - plateY - PLATE_H
+				local height = math.min(sponge.H, room)
+				local k = math.clamp((height - FLAT_H) / math.max(1, sponge.H - FLAT_H), 0, 1)
+				sponge.Holder.Size = UDim2.fromOffset(sponge.W * (1.5 - 0.5 * k), height)
+			end
 			targetPressure = 0.1
 			if t >= 1 then
 				plateY = PLATE_TOP

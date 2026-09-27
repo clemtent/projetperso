@@ -245,7 +245,6 @@ function HouseMoods.new(parent: Instance, z: number): Mood
 				if scale then
 					scale.Scale = 0.4 + wave * 0.8
 				end
-				p.Frame.Rotation = wave * 45
 			end
 		elseif effect == "Hearts" or effect == "Bubbles" then
 			for _, p in ipairs(particles) do
