@@ -126,10 +126,11 @@ local function gate(folder: Instance, gcf: CFrame)
 	end
 	part(model, "Keystone", Vector3.new(2.6, 3.6, 4.8), gcf * CFrame.new(0, spring + radius + 1.1, 0), C.HotPink, M.Marble, "deco")
 	-- fronton "DOPAMINE TOWN" (lisible des deux côtés)
-	local boardW = 2 * (OPENING + TOWER) + 2
-	local boardY = spring + radius + 5.2
-	part(model, "Lintel", Vector3.new(boardW + 1, 1.2, 4.2), gcf * CFrame.new(0, boardY - 3.8, 0), Color3.fromRGB(255, 196, 214), M.Marble, "decoS")
-	local board = part(model, "NameBoard", Vector3.new(boardW, 6.4, 1.6), gcf * CFrame.new(0, boardY, 0), Color3.fromRGB(255, 244, 250), M.SmoothPlastic, "solid")
+	-- (entre les deux tours, au-dessus de l'arche)
+	local boardW = 2 * OPENING - 0.6
+	local boardY = spring + radius + 5.4
+	part(model, "Lintel", Vector3.new(2 * OPENING, 1.2, 4.2), gcf * CFrame.new(0, boardY - 4, 0), Color3.fromRGB(255, 196, 214), M.Marble, "decoS")
+	local board = part(model, "NameBoard", Vector3.new(boardW, 6.8, 1.6), gcf * CFrame.new(0, boardY, 0), Color3.fromRGB(255, 244, 250), M.SmoothPlastic, "solid")
 	for _, face in ipairs({ Enum.NormalId.Front, Enum.NormalId.Back }) do
 		local _, body = TownKit.Surface(board, face, 24, nil, 900, 0)
 		local title = TownKit.Label(body, "Title", "DOPAMINE TOWN", 0.03, 0.06, 0.94, 0.62, C.HotPink, Enum.Font.FredokaOne, false)
@@ -139,14 +140,11 @@ local function gate(folder: Instance, gcf: CFrame)
 		stroke.Parent = title
 		TownKit.Label(body, "Subtitle", "🧠 Welcome! 💖", 0.1, 0.68, 0.8, 0.28, C.Plum, Enum.Font.GothamBold, true)
 	end
-	for _, y in ipairs({ 3.4, -3.4 }) do
+	for _, y in ipairs({ 3.6, -3.6 }) do
 		part(model, "NeonRim", Vector3.new(boardW + 0.4, 0.35, 1.8), gcf * CFrame.new(0, boardY + y, 0), C.Pink, M.Neon, "deco")
 	end
-	for _, sx in ipairs({ -1, 1 }) do
-		part(model, "NeonRim", Vector3.new(0.35, 7.1, 1.8), gcf * CFrame.new(sx * (boardW / 2 + 0.2), boardY, 0), C.Pink, M.Neon, "deco")
-	end
 	-- cœur lumineux au sommet (deux boules + un carré tourné)
-	local heart = gcf * CFrame.new(0, boardY + 6.2, 0)
+	local heart = gcf * CFrame.new(0, boardY + 5.8, 0)
 	TownKit.Ball(model, "Heart", (heart * CFrame.new(-1.15, 0.7, 0)).Position, 3, C.HotPink, M.Neon, "deco")
 	TownKit.Ball(model, "Heart", (heart * CFrame.new(1.15, 0.7, 0)).Position, 3, C.HotPink, M.Neon, "deco")
 	part(model, "HeartTip", Vector3.new(2.6, 2.6, 1.2), heart * CFrame.new(0, -0.6, 0) * CFrame.Angles(0, 0, math.rad(45)), C.HotPink, M.Neon, "deco")
@@ -316,7 +314,7 @@ local function outside(folder: Instance, geo: TownKit.Geo, gcf: CFrame)
 	-- route depuis la porte, puis rond-point
 	part(model, "Road", Vector3.new(16, 0.7, len), gcf * CFrame.new(0, ROAD_Y - 0.35, len / 2 + 3), C.Asphalt, M.Asphalt, "solid")
 	for i = 0, 3 do
-		part(model, "Dash", Vector3.new(0.4, 0.1, 5), gcf * CFrame.new(0, ROAD_Y + 0.02, 10 + i * 11), C.Line, M.SmoothPlastic, "deco")
+		part(model, "Dash", Vector3.new(0.4, 0.1, 5), gcf * CFrame.new(0, ROAD_Y + 0.05, 10 + i * 11), C.Line, M.SmoothPlastic, "deco")
 	end
 	local loop = gcf * CFrame.new(0, 0, len + 16)
 	TownKit.Disc(model, "Roundabout", (loop * CFrame.new(0, ROAD_Y, 0)).Position, 20, 0.7, C.Asphalt, M.Asphalt, "solid")
@@ -331,7 +329,7 @@ local function outside(folder: Instance, geo: TownKit.Geo, gcf: CFrame)
 	local lot = gcf * CFrame.new(-31, 0, 26)
 	part(model, "Parking", Vector3.new(30, 0.7, 34), lot * CFrame.new(0, ROAD_Y - 0.35, 0), C.AsphaltDark, M.Asphalt, "solid")
 	for i = 0, 5 do
-		part(model, "Bay", Vector3.new(0.3, 0.1, 11), lot * CFrame.new(-15 + i * 6, ROAD_Y + 0.02, -9), C.Line, M.SmoothPlastic, "deco")
+		part(model, "Bay", Vector3.new(0.3, 0.1, 11), lot * CFrame.new(-15 + i * 6, ROAD_Y + 0.05, -9), C.Line, M.SmoothPlastic, "deco")
 	end
 	local colors = { Color3.fromRGB(130, 200, 255), Color3.fromRGB(255, 236, 150), Color3.fromRGB(250, 250, 250), Color3.fromRGB(200, 170, 250) }
 	for i, bay in ipairs({ 0, 1, 3, 4 }) do
@@ -368,7 +366,7 @@ function TownEntrance.Build(folder: Instance, geo: TownKit.Geo): EntranceResult
 			TownKit.Tree(entrance, p + Vector3.new(0, 1.8, 0), 14, math.floor(p.X + dz), sx > 0 and 2 or 1)
 		end
 		-- lampadaires (vraies lumières)
-		TownKit.Lamp(entrance, center + Vector3.new(sx * 11, 0, -8), TownKit.Facing(Vector3.new(-sx, 0, 0)), true)
+		TownKit.Lamp(entrance, center + Vector3.new(sx * 13, 0, 3), TownKit.Facing(Vector3.new(-sx, 0, 0)), true)
 		-- jardinières le long de l'axe
 		TownKit.Planter(entrance, CFrame.new(center + Vector3.new(sx * 18, 0, 6)), 8, 3, 3 + sx)
 		TownKit.Planter(entrance, CFrame.new(center + Vector3.new(sx * 18, 0, -14)), 8, 3, 7 + sx)

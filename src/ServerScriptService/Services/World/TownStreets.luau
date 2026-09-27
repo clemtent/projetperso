@@ -22,6 +22,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
 local TownKit = require(script.Parent.TownKit)
+local TownBuildings = require(script.Parent.TownBuildings)
 
 local TownStreets = {}
 
@@ -116,29 +117,29 @@ local function buildBoulevard(folder: Instance, geo: TownKit.Geo)
 		strip(side, "Curb", F, -(A + hw + 0.8) * tanH, (A + hw + 0.8) * tanH, hw, hw + 0.8, WALK_Y + 0.03, 0.4, C.Curb, M.Concrete, "deco")
 		-- lignes de rive
 		local edgeZ = hw - 1.1
-		strip(side, "EdgeLine", F, -(A + edgeZ) * tanH, (A + edgeZ) * tanH, edgeZ - 0.18, edgeZ + 0.18, ROAD_Y + 0.02, 0.1, C.Line, M.SmoothPlastic, "deco")
-		strip(side, "EdgeLine", F, -(A - edgeZ) * tanH, (A - edgeZ) * tanH, -edgeZ - 0.18, -edgeZ + 0.18, ROAD_Y + 0.02, 0.1, C.Line, M.SmoothPlastic, "deco", innerGaps)
+		strip(side, "EdgeLine", F, -(A + edgeZ) * tanH, (A + edgeZ) * tanH, edgeZ - 0.18, edgeZ + 0.18, ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "deco")
+		strip(side, "EdgeLine", F, -(A - edgeZ) * tanH, (A - edgeZ) * tanH, -edgeZ - 0.18, -edgeZ + 0.18, ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "deco", innerGaps)
 		-- ligne médiane en pointillés (arrêtée avant les coins et les croisements)
 		local limit = A * tanH - 10
 		local x = -limit
 		while x + 5 <= limit do
 			local cx = x + 2.5
 			if not (junction and math.abs(cx) < jw + 5) then
-				part(side, "Dash", Vector3.new(5, 0.1, 0.4), F * CFrame.new(cx, ROAD_Y + 0.02, 0), C.Line, M.SmoothPlastic, "deco")
+				part(side, "Dash", Vector3.new(6, 0.1, 0.4), F * CFrame.new(cx, ROAD_Y + 0.05, 0), C.Line, M.SmoothPlastic, "deco")
 			end
-			x += 12
+			x += 18
 		end
 		if junction then
 			if k == 0 then
 				-- passage piéton : de la place d'accueil à la promenade de l'avenue
 				for i = 0, 7 do
 					local z = -hw + 1.6 + i * (ROAD_W - 3.2) / 7
-					part(side, "Zebra", Vector3.new(12, 0.1, 1.1), F * CFrame.new(0, ROAD_Y + 0.02, z), C.Line, M.SmoothPlastic, "deco")
+					part(side, "Zebra", Vector3.new(12, 0.1, 1.1), F * CFrame.new(0, ROAD_Y + 0.05, z), C.Line, M.SmoothPlastic, "deco")
 				end
 			else
 				-- flèches de tourne-à-gauche / droite : simple ligne "cédez" pointillée
 				for i = -3, 3 do
-					part(side, "Yield", Vector3.new(1.6, 0.1, 0.4), F * CFrame.new(i * 2.4, ROAD_Y + 0.02, -hw + 3), C.Line, M.SmoothPlastic, "deco")
+					part(side, "Yield", Vector3.new(1.6, 0.1, 0.4), F * CFrame.new(i * 2.4, ROAD_Y + 0.05, -hw + 3), C.Line, M.SmoothPlastic, "deco")
 				end
 			end
 		end
@@ -153,7 +154,7 @@ local function buildBoulevard(folder: Instance, geo: TownKit.Geo)
 			end
 		end
 		local treeHalf = (A - hw - WALK_W - 4) * tanH - 8
-		local n = math.max(1, math.floor(2 * treeHalf / 24))
+		local n = math.max(1, math.floor(2 * treeHalf / 30))
 		for i = 0, n do
 			local tx = -treeHalf + i * (2 * treeHalf) / math.max(1, n)
 			if not (junction and math.abs(tx) < jw + 7) then
@@ -210,14 +211,15 @@ local function buildAvenue(folder: Instance, geo: TownKit.Geo)
 		radialBox(ave, "Sidewalk", R, s0, geo.Inner + 0.5, sx * LANE_OUT, sx * AVE_OUT, WALK_Y, 1.3, C.Walk, M.Pavement, "solid")
 		radialBox(ave, "Curb", R, s0, geo.Inner + 0.5, sx * LANE_OUT, sx * (LANE_OUT + 0.8), WALK_Y + 0.03, 0.4, C.Curb, M.Concrete, "deco")
 		-- ligne d'arrêt au bout de la voie + flèche
-		radialBox(ave, "StopLine", R, roadEdge - 2.4, roadEdge - 1.8, sx * (PROM + 0.4), sx * (LANE_OUT - 0.4), ROAD_Y + 0.02, 0.1, C.Line, M.SmoothPlastic, "deco")
+		radialBox(ave, "StopLine", R, roadEdge - 2.4, roadEdge - 1.8, sx * (PROM + 0.4), sx * (LANE_OUT - 0.4), ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "deco")
 		-- bornes à l'entrée de la zone piétonne
 		for i = 0, 3 do
 			local x = sx * (PROM + 1.2 + i * 2.2)
 			TownKit.Bollard(ave, (R * CFrame.new(x, WALK_Y, -s0 + 0.8)).Position)
 		end
 	end
-	-- arbres (double rangée) et lampadaires doubles sur la promenade, bancs entre les arbres
+	-- arbres (double rangée) sur la promenade ; entre deux arbres : un
+	-- lampadaire ou un banc tourné vers l'axe (le milieu reste libre pour marcher)
 	local length = roadEdge - 6 - (s0 + 6)
 	local n = math.max(2, math.floor(length / 14))
 	local lamps = 0
@@ -230,13 +232,14 @@ local function buildAvenue(folder: Instance, geo: TownKit.Geo)
 		end
 		if i < n then
 			local sm = s + length / n / 2
-			if i % 2 == 0 then
-				lamps += 1
-				local base = (R * CFrame.new(0, WALK_Y, -sm)).Position
-				TownKit.Lamp(ave, base, TownKit.Facing(R.RightVector), lamps % 2 == 1 and lamps <= 7, true)
-			else
-				for _, sx in ipairs({ -1, 1 }) do
-					TownKit.Bench(ave, R * CFrame.new(sx * 2.6, WALK_Y, -sm) * CFrame.Angles(0, math.rad(sx * 90), 0))
+			for _, sx in ipairs({ -1, 1 }) do
+				if (i + (sx > 0 and 1 or 0)) % 2 == 0 then
+					lamps += 1
+					local base = (R * CFrame.new(sx * (PROM - 1.6), WALK_Y, -sm)).Position
+					-- (vraies lumières : une sur trois, 4 au plus)
+					TownKit.Lamp(ave, base, TownKit.Facing(R.RightVector * -sx), lamps % 3 == 1 and lamps <= 10)
+				else
+					TownKit.Bench(ave, R * CFrame.new(sx * (PROM - 1.8), WALK_Y, -sm) * CFrame.Angles(0, math.rad(sx * 90), 0))
 				end
 			end
 		end
@@ -267,15 +270,15 @@ local function buildSideStreet(folder: Instance, geo: TownKit.Geo, slot: number)
 	-- pointillés, passage piéton, ligne d'arrêt
 	local s = s0 + 4
 	while s + 5 < geo.Inner - 10 do
-		radialBox(st, "Dash", R, s, s + 5, -0.2, 0.2, ROAD_Y + 0.02, 0.1, C.Line, M.SmoothPlastic, "deco")
+		radialBox(st, "Dash", R, s, s + 5, -0.2, 0.2, ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "deco")
 		s += 12
 	end
 	local zs = geo.Inner - 6
 	for i = 0, 5 do
 		local x = -ST_HALF + 1.4 + i * (2 * ST_HALF - 2.8) / 5
-		radialBox(st, "Zebra", R, zs - 2.5, zs + 2.5, x - 0.55, x + 0.55, ROAD_Y + 0.02, 0.1, C.Line, M.SmoothPlastic, "deco")
+		radialBox(st, "Zebra", R, zs - 2.5, zs + 2.5, x - 0.55, x + 0.55, ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "deco")
 	end
-	radialBox(st, "StopLine", R, zs - 4.2, zs - 3.6, 0.2, ST_HALF - 0.4, ROAD_Y + 0.02, 0.1, C.Line, M.SmoothPlastic, "deco")
+	radialBox(st, "StopLine", R, zs - 4.2, zs - 3.6, 0.2, ST_HALF - 0.4, ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "deco")
 	TownKit.RoadSign(st, (R * CFrame.new(ST_HALF + 1.4, WALK_Y, -(zs - 5))).Position, geo.SlotAngle(slot), Color3.fromRGB(220, 60, 70), "Diamond")
 	-- arbres d'alignement + lampadaires
 	local length = geo.Inner - 8 - (s0 + 6)
@@ -296,6 +299,31 @@ local function buildSideStreet(folder: Instance, geo: TownKit.Geo, slot: number)
 	TownKit.Car(st, R * CFrame.new(ST_HALF - 3.2, ROAD_Y, -(s0 + length * 0.55)), CAR_COLORS[(slot + 2) % #CAR_COLORS + 1])
 end
 
+-- Immeubles des deux côtés d'une rue (façades alignées sur le trottoir)
+local function frontage(folder: Instance, geo: TownKit.Geo, slot: number, edge: number, maxPerSide: number)
+	local model = TownKit.Model(folder, "Frontage_" .. slot)
+	local R = radialFrame(geo, slot)
+	local s1 = geo.Inner - 12
+	local seed = slot * 37 + 3
+	for _, sx in ipairs({ -1, 1 }) do
+		local s = geo.StreetStart + 5
+		for _ = 1, maxPerSide do
+			seed += 1
+			local w = 22 + math.floor(hash(seed, 1) * 4) * 2
+			if s + w > s1 then
+				break
+			end
+			local d = 16 + math.floor(hash(seed, 2) * 3) * 2
+			local floors = hash(seed, 3) < 0.45 and 3 or 2
+			local p = (R * CFrame.new(sx * edge, WALK_Y, -(s + w / 2))).Position
+			local out = R.RightVector * sx
+			TownBuildings.RowHouse(model, CFrame.lookAt(p, p - out), w, d, floors, seed)
+			geo.Reserve(p + out * (d / 2), math.sqrt((w / 2) ^ 2 + (d / 2) ^ 2) + 1)
+			s += w + 2.5
+		end
+	end
+end
+
 function TownStreets.Build(folder: Instance, geo: TownKit.Geo)
 	local streets = Instance.new("Folder")
 	streets.Name = "Streets"
@@ -304,6 +332,9 @@ function TownStreets.Build(folder: Instance, geo: TownKit.Geo)
 	buildAvenue(streets, geo)
 	buildSideStreet(streets, geo, geo.SideR)
 	buildSideStreet(streets, geo, geo.SideL)
+	frontage(streets, geo, 0, AVE_OUT + 0.2, 4)
+	frontage(streets, geo, geo.SideR, ST_OUT + 0.2, 3)
+	frontage(streets, geo, geo.SideL, ST_OUT + 0.2, 3)
 end
 
 return TownStreets

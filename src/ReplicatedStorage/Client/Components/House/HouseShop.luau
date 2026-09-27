@@ -383,6 +383,53 @@ local function setLock(overlay: Frame, required: number)
 	end
 end
 
+-- (v9.5) Voile d'un objet verrouillé : la raison de HouseCommon.LockReason
+-- ("Rebirths" = vague + visites ; "Upgrade" = "Débloque 🏃 Coureur infini
+-- d'abord" sur deux lignes, badge à l'icône de l'amélioration)
+local function setItemLock(overlay: Frame, kind: string?, text: string?, upgrade: any?)
+	local wave = overlay:FindFirstChild("Wave") :: TextLabel?
+	local badge = overlay:FindFirstChild("Badge")
+	local icon = badge and badge:FindFirstChild("Icon") :: TextLabel?
+	local isUpgrade = kind == "Upgrade"
+	if wave then
+		local wanted = if isUpgrade then (text or "") else "🌊 " .. (text or "")
+		if wave.Text ~= wanted then
+			wave.Text = wanted
+		end
+		wave.TextWrapped = isUpgrade
+		wave.Size = UDim2.new(1, -8, 0, isUpgrade and 28 or 16)
+	end
+	if badge and badge:IsA("GuiObject") then
+		badge.Position = UDim2.new(0.5, 0, 0.5, isUpgrade and -13 or -8)
+	end
+	if icon then
+		local glyph = if isUpgrade and upgrade and type(upgrade.Icon) == "string" then upgrade.Icon else "🔒"
+		if icon.Text ~= glyph then
+			icon.Text = glyph
+		end
+	end
+	local chip = overlay:FindFirstChild("Padlock") :: TextLabel?
+	if isUpgrade and not chip and badge then
+		-- petit cadenas sur le badge (l'icône de l'amélioration prend sa place)
+		chip = UIUtil.Create("TextLabel", {
+			Name = "Padlock",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(1, -2, 1, -2),
+			Size = UDim2.fromOffset(14, 14),
+			BackgroundColor3 = C.Lilac,
+			Font = Theme.Fonts.Body,
+			Text = "🔒",
+			TextSize = 9,
+			ZIndex = 48,
+			Parent = badge,
+		})
+		UIUtil.Corner(chip :: TextLabel, UDim.new(1, 0))
+	end
+	if chip then
+		chip.Visible = isUpgrade
+	end
+end
+
 -- Petit rectangle arrondi (dessins des maisons)
 local function box(parent: Instance, x: number, y: number, w: number, h: number, color: Color3, props: { [string]: any }?): Frame
 	local options = props or {}
@@ -1093,6 +1140,12 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 		end
 		SoundManager.Play("Error", 0.7)
 		UIUtil.Shake(button)
+		-- (v9.5) objets "Dopamine Setup" : l'amélioration du clicker d'abord
+		local kind, reason = HouseCommon.LockReason(ClientState.Data, entry)
+		if kind == "Upgrade" and reason then
+			handlers.Notify("🔒 " .. reason, C.Lilac)
+			return true
+		end
 		handlers.Notify("🔒 " .. lockText(HouseCommon.RequiredRebirths(entry)), C.Lilac) -- (bon accord : 1 visite / N visites)
 		return true
 	end
@@ -2326,7 +2379,11 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 	categoryPill("TablesSeats", Locale.T("🍽️ Tables & chairs"), 3)
 	categoryPill("Tabletop", Locale.T("🧁 On furniture"), 4)
 	for index, entry in ipairs(HouseCommon.Config.Categories) do
-		categoryPill(entry.Id, entry.Icon .. " " .. HouseCommon.Name(entry), index + 4)
+		-- (v9.5) "🖥️ Dopamine Setup" juste après "✨ Tout" (les stimuli en vrai)
+		categoryPill(entry.Id, entry.Icon .. " " .. HouseCommon.Name(entry), if entry.Id == "Setup" then -1 else index + 4)
+	end
+	if categoryButtons.All then
+		categoryButtons.All.LayoutOrder = -2
 	end
 	paintCategories()
 	task.defer(refreshMoreHint)
@@ -2568,7 +2625,9 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 					if lock then
 						lock.Visible = locked
 						if locked then
-							setLock(lock, HouseCommon.RequiredRebirths(item))
+							-- (v9.5) visites à l'océan OU amélioration du clicker à débloquer
+							local kind, reason, upgrade = HouseCommon.LockReason(data, item)
+							setItemLock(lock, kind, reason, upgrade)
 						end
 					end
 					card.Owned.Visible = owned > 0

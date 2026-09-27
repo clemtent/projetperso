@@ -112,6 +112,23 @@ local function T(player: Player, text: string, ...): string
 	return services.GameService:T(player, text, ...)
 end
 
+-- (v9.5) "Dopamine Setup" : amélioration du clicker exigée par un objet
+-- (item.RequiresUpgrade, au moins 1 niveau dans data.Upgrades) ; renvoie
+-- l'amélioration qui manque (ou une entrée minimale si l'Id est inconnu),
+-- nil si rien ne manque. Même règle que HouseCommon.MissingUpgrade.
+local function missingUpgrade(data, item): any?
+	local upgradeId = item.RequiresUpgrade
+	if type(upgradeId) ~= "string" then
+		return nil
+	end
+	local upgrades = type(data.Upgrades) == "table" and data.Upgrades or {}
+	local level = upgrades[upgradeId]
+	if isValidNumber(level) and level >= 1 then
+		return nil
+	end
+	return Config.UpgradesById[upgradeId] or { Id = upgradeId, Name = upgradeId, Icon = "🔒" }
+end
+
 -- Un objet posé, corrigé : coordonnées bornées, dans la bonne zone.
 -- F = true : dessin retourné (miroir gauche <-> droite), absent sinon.
 -- Couleur d'un objet posé : id connu et débloqué (visites à l'océan), sinon nil
@@ -609,6 +626,12 @@ local function buyItem(player: Player, data, itemId: string): (boolean, string)
 	end
 	if not Formulas.IsHouseEntryUnlocked(data, item) then
 		return false, T(player, "🔒 Unlocked after %d visits to the ocean", Formulas.GetHouseRequiredRebirths(item))
+	end
+	-- (v9.5) "Dopamine Setup" : l'amélioration du clicker exigée (au moins 1 niveau)
+	local missing = missingUpgrade(data, item)
+	if missing then
+		local label = tostring(missing.Icon or "") .. " " .. T(player, tostring(missing.Name or missing.Id))
+		return false, "🔒 " .. T(player, "Unlock %s first", label)
 	end
 	local price = Formulas.GetHouseItemPrice(item, owned)
 	if not isValidNumber(price) or price < 0 or data.Dopamine < price then

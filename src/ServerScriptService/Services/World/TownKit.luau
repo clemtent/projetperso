@@ -313,13 +313,13 @@ function TownKit.Tree(parent: Instance, base: Vector3, height: number, seed: num
 	local model = TownKit.Model(parent, "Tree")
 	local k = kind or (hash(seed, 3) < 0.18 and 2 or 1)
 	local trunkH = height * 0.55
-	TownKit.Column(model, "Trunk", base, trunkH, 1.1 + height * 0.05, C.Bark, M.Wood, "prop")
+	TownKit.Column(model, "Trunk", base, trunkH, 0.8 + height * 0.04, C.Bark, M.Wood, "prop")
 	if k == 3 then
 		local green = Color3.fromRGB(70, 138, 96):Lerp(Color3.fromRGB(96, 160, 104), hash(seed, 5))
-		for i = 0, 2 do
-			local w = height * (0.62 - i * 0.16)
-			local h = height * 0.34
-			local y = trunkH * 0.45 + i * height * 0.24
+		for i = 0, 1 do
+			local w = height * (0.6 - i * 0.2)
+			local h = height * 0.42
+			local y = trunkH * 0.45 + i * height * 0.3
 			-- (étage de sapin : deux coins croisés = pyramide)
 			TownKit.Wedge(model, "Fir", Vector3.new(w, h, w / 2), CFrame.new(base + Vector3.new(0, y + h / 2, 0)) * CFrame.new(0, 0, -w / 4), green, M.Grass, "deco")
 			TownKit.Wedge(model, "Fir", Vector3.new(w, h, w / 2), CFrame.new(base + Vector3.new(0, y + h / 2, 0)) * CFrame.Angles(0, math.pi, 0) * CFrame.new(0, 0, -w / 4), green, M.Grass, "deco")

@@ -18,9 +18,6 @@
 	vers la rue ; le volume est derrière (+Z local).
 ]]
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
 local TownKit = require(script.Parent.TownKit)
 
 local TownBuildings = {}
@@ -29,8 +26,6 @@ local M = TownKit.M
 local C = TownKit.C
 local part = TownKit.Part
 local hash = TownKit.Hash
-
-local WALK_Y = WorldLayout.WALK_Y
 
 export type ShopSpec = {
 	Kind: string,
@@ -334,6 +329,65 @@ function TownBuildings.TownHall(parent: Instance, cf: CFrame): (Model, Screen)
 	end
 	local footer = TownKit.Label(body, "Footer", "❤️ Like houses to climb the board!", 0.06, 0.88, 0.88, 0.09, Color3.fromRGB(255, 160, 210), Enum.Font.GothamBold, true)
 	return model, { Rows = rows, Title = title, Footer = footer }
+end
+
+----------------------------------------------------------------------
+-- Immeubles de rue (économes : ≈ 17 pièces) le long de l'avenue et des rues
+----------------------------------------------------------------------
+
+local ROW_COLORS = {
+	Color3.fromRGB(255, 214, 196),
+	Color3.fromRGB(206, 236, 220),
+	Color3.fromRGB(226, 214, 250),
+	Color3.fromRGB(255, 240, 196),
+	Color3.fromRGB(204, 226, 250),
+	Color3.fromRGB(255, 206, 222),
+	Color3.fromRGB(240, 232, 222),
+}
+local ROW_ROOFS = {
+	Color3.fromRGB(150, 96, 96),
+	Color3.fromRGB(96, 104, 136),
+	Color3.fromRGB(126, 100, 160),
+	Color3.fromRGB(170, 110, 84),
+}
+
+function TownBuildings.RowHouse(parent: Instance, cf: CFrame, w: number, d: number, floors: number, seed: number): Model
+	local model = TownKit.Model(parent, "RowHouse")
+	local wall = ROW_COLORS[seed % #ROW_COLORS + 1]
+	local trim = C.White
+	local height = GROUND_H + (floors - 1) * FLOOR_H
+	local brick = hash(seed, 81) < 0.35
+	part(model, "Body", Vector3.new(w, height, d), cf * CFrame.new(0, height / 2, d / 2), wall, brick and M.Brick or M.Plaster, "solid")
+	part(model, "Plinth", Vector3.new(w + 0.4, 1.8, d + 0.4), cf * CFrame.new(0, 0.3, d / 2), C.StoneDark, M.Granite, "prop")
+	-- rez-de-chaussée : vitrine en bandeau, porte, petit auvent
+	local accent = ROW_ROOFS[seed % #ROW_ROOFS + 1]
+	part(model, "Front", Vector3.new(w - 2, GROUND_H - 3, 0.3), cf * CFrame.new(0, 1.2 + (GROUND_H - 3) / 2, -0.1), accent, M.Wood, "deco")
+	local glass = part(model, "Glass", Vector3.new(w - 8, GROUND_H - 5, 0.3), cf * CFrame.new(-2, 1.2 + (GROUND_H - 3) / 2 + 0.3, -0.2), Color3.fromRGB(255, 226, 190), M.Glass, "deco")
+	glass.Reflectance = 0.2
+	part(model, "Door", Vector3.new(3, 6.4, 0.3), cf * CFrame.new(w / 2 - 3.2, 1.2 + 3.2, -0.2), C.Cream, M.Wood, "deco")
+	part(model, "Awning", Vector3.new(w - 1.6, 0.25, 3), cf * CFrame.new(0, GROUND_H - 1.4, -1.4) * CFrame.Angles(math.rad(18), 0, 0), TownKit.FLOWERS[seed % #TownKit.FLOWERS + 1]:Lerp(C.White, 0.2), M.Fabric, "decoS")
+	-- étages : bandeau clair + fenêtres
+	local n = math.max(2, math.floor(w / 7))
+	for f = 1, floors - 1 do
+		local y = GROUND_H + (f - 1) * FLOOR_H + FLOOR_H / 2 + 0.4
+		part(model, "WinBand", Vector3.new(w - 1.6, 5.4, 0.25), cf * CFrame.new(0, y, -0.08), trim, M.SmoothPlastic, "deco")
+		for i = 1, n do
+			local x = -w / 2 + 0.8 + (i - 0.5) * (w - 1.6) / n
+			local pane = part(model, "Window", Vector3.new((w - 1.6) / n - 1.6, 4.4, 0.3), cf * CFrame.new(x, y, -0.14), Color3.fromRGB(150, 196, 226), M.Glass, "deco")
+			pane.Reflectance = 0.15
+		end
+	end
+	part(model, "Cornice", Vector3.new(w + 0.8, 0.9, d + 0.8), cf * CFrame.new(0, height + 0.45, d / 2), trim, M.Concrete, "decoS")
+	if hash(seed, 82) < 0.55 then
+		local roof = ROW_ROOFS[(seed + 1) % #ROW_ROOFS + 1]
+		local h = math.min(7, d * 0.4)
+		local top = cf * CFrame.new(0, height + 0.9, 0)
+		TownKit.Wedge(model, "Roof", Vector3.new(w + 0.8, h, d / 2 + 0.4), top * CFrame.new(0, h / 2, d / 4 - 0.2), roof, M.ClayRoofTiles, "decoS")
+		TownKit.Wedge(model, "Roof", Vector3.new(w + 0.8, h, d / 2 + 0.4), top * CFrame.new(0, h / 2, d * 3 / 4 + 0.2) * CFrame.Angles(0, math.pi, 0), roof, M.ClayRoofTiles, "decoS")
+	else
+		part(model, "RoofBox", Vector3.new(w * 0.3, 2.2, d * 0.3), cf * CFrame.new(w * 0.2, height + 2, d * 0.6), C.MetalLight, M.DiamondPlate, "deco")
+	end
+	return model
 end
 
 ----------------------------------------------------------------------

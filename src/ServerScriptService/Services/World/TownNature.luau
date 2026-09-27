@@ -272,15 +272,15 @@ local function hills(folder: Instance, geo: TownKit.Geo)
 		local a = (i + hash(i, 61) * 0.6) / n * math.pi * 2
 		local dist = geo.Town + 90 + hash(i, 62) * 120
 		local d = 160 + hash(i, 63) * 170
-		local p = O + Vector3.new(math.sin(a) * (dist + d * 0.25), GROUND_Y - d * 0.36, math.cos(a) * (dist + d * 0.25))
+		local p = O + Vector3.new(math.sin(a) * (dist + d * 0.25), GROUND_Y - d * 0.42, math.cos(a) * (dist + d * 0.25))
 		local tone = Color3.fromRGB(116, 186, 104):Lerp(Color3.fromRGB(150, 206, 130), hash(i, 64))
 		TownKit.Ball(model, "Hill", p, d, tone, M.Grass, "deco")
 	end
 	-- montagnes enneigées (pyramides approchées) dans le dos de l'entrée
 	for i = 1, 6 do
 		local a = math.pi + (i - 3.5) * 0.32 + (hash(i, 65) - 0.5) * 0.1
-		local dist = geo.Town + 420 + hash(i, 66) * 120
-		local h = 150 + hash(i, 67) * 110
+		local dist = geo.Town + 360 + hash(i, 66) * 80
+		local h = 90 + hash(i, 67) * 80
 		local w = h * 1.5
 		local base = O + Vector3.new(math.sin(a) * dist, GROUND_Y - 4, math.cos(a) * dist)
 		local cf = CFrame.lookAt(base, Vector3.new(O.X, base.Y, O.Z))
@@ -339,7 +339,7 @@ local function belt(folder: Instance, geo: TownKit.Geo)
 			-- (pas d'arbre sur la route d'arrivée derrière la porte)
 			local rel = p - O
 			if not (math.abs(rel.X) < 58 and rel.Z > 0 and rel.Z < geo.Gate + 110) then
-				TownKit.Tree(model, p, 14 + hash(k, j + 9) * 10, k * 50 + j, hash(k, j + 20) < 0.45 and 3 or 4)
+				TownKit.Tree(model, p, 14 + hash(k, j + 9) * 10, k * 50 + j, hash(k, j + 20) < 0.4 and 3 or 4)
 			end
 		end
 		-- coin entre deux parcelles (sommet du boulevard), côté extérieur
@@ -359,7 +359,7 @@ function TownNature.Build(folder: Instance, geo: TownKit.Geo): number
 	nature.Parent = folder
 	local O = geo.Origin
 	-- pré (sous tout le reste) et murs invisibles
-	TownKit.Disc(nature, "Meadow", O + Vector3.new(0, GROUND_Y, 0), geo.Town + 330, 4, C.Grass, M.Grass, "solid")
+	TownKit.Disc(nature, "Meadow", O + Vector3.new(0, GROUND_Y, 0), 1000, 4, C.Grass, M.Grass, "solid")
 	local walls = 40
 	for i = 1, walls do
 		local a = (i - 0.5) / walls * math.pi * 2
@@ -385,10 +385,10 @@ function TownNature.Build(folder: Instance, geo: TownKit.Geo): number
 	if depth > 70 then
 		court(nature, geo, frame((math.pi + aL) / 2 - 0.05, geo.Inner - 18))
 	end
-	local trees = scatterTrees(nature, geo, math.clamp(math.floor(depth * 0.45), 30, 70))
+	local trees = scatterTrees(nature, geo, math.clamp(math.floor(depth * 0.35), 25, 55))
 	belt(nature, geo)
 	hills(nature, geo)
-	TownBuildings.Skyline(nature, O, math.rad(130), math.rad(230), geo.Town + 330, 26)
+	TownBuildings.Skyline(nature, O, math.rad(125), math.rad(235), geo.Town + 200, 26)
 	return trees
 end
 

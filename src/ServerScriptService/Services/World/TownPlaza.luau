@@ -25,7 +25,6 @@ local TownPlaza = {}
 local M = TownKit.M
 local C = TownKit.C
 local part = TownKit.Part
-local hash = TownKit.Hash
 
 local WALK_Y = WorldLayout.WALK_Y
 local R = WorldLayout.PLAZA_R
