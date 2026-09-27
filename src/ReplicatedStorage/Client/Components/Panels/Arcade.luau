@@ -249,11 +249,8 @@ local function neonButton(props)
 		Parent = props.Parent,
 	})
 	UIUtil.Corner(button, props.Radius or UDim.new(1, 0))
-	UIUtil.Stroke(button, color:Lerp(WHITE, 0.45), 1.5, 0.15)
-	UIUtil.Gradient(button, ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(205, 205, 215)), 90)
-	button:SetAttribute("BaseColor", color)
-	button:SetAttribute("Enabled", true)
-	UIUtil.AnimateButton(button, 1.05, 0.93)
+	-- Style v9 partagé (relief, reflet, animations) ; contour néon clair sur le fond sombre
+	UIUtil.DressButton(button, color, { StrokeColor = color:Lerp(WHITE, 0.45), StrokeThickness = 1.5, StrokeTransparency = 0.15 })
 	return button
 end
 
@@ -633,9 +630,7 @@ local function buildHeader(root: Frame)
 		Parent = ticketChip,
 	})
 	UIUtil.Corner(plus, UDim.new(1, 0))
-	UIUtil.Stroke(plus, WHITE, 1.5, 0.2)
-	UIUtil.Gradient(plus, ColorSequence.new(WHITE, Color3.fromRGB(200, 215, 205)), 90)
-	UIUtil.AnimateButton(plus, 1.12, 0.9)
+	UIUtil.DressButton(plus, C.Green, { StrokeColor = WHITE, StrokeThickness = 1.5, StrokeTransparency = 0.2, Hover = 1.12, Press = 0.9 })
 	plus.Activated:Connect(function()
 		sound("Click", 1.2)
 		openTicketShop()

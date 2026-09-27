@@ -631,9 +631,6 @@ function Zones.Schedule()
 	planPending = true
 	task.delay(REPLAN_DELAY, function()
 		planPending = false
-		if next(requests) == nil then
-			return
-		end
 		planning = true
 		local ok, err = pcall(plan)
 		planning = false

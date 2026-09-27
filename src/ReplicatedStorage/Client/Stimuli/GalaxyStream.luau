@@ -3,17 +3,17 @@
 	Emplacement : ReplicatedStorage > Client > Stimuli > GalaxyStream
 
 	🌠 Rivière galactique (+/s, 10 niveaux, après 5 visites à l'océan) : une
-	rivière d'étoiles traverse tout le fond de l'écran en diagonale douce
-	(du bas à gauche vers le haut à droite, SOUS le compteur) : un voile
-	lumineux violet / rose et des étoiles qui coulent le long du courant,
-	scintillent et se recyclent au bout.
+	rivière d'étoiles traverse le fond de l'écran : un voile lumineux violet
+	/ rose avec un courant plus clair au milieu, et des étoiles qui coulent le
+	long du courant, scintillent et se recyclent au bout.
+	Le tracé est choisi parmi plusieurs courbes (diagonales, arches, S) : celle
+	qui passe le plus dans le fond VISIBLE (Cosmos/Zones.PickPath : ni cartes,
+	ni colonne, ni objets posés), recalculé quand la mise en page change.
 	Chaque niveau rend la rivière plus dense et plus lumineuse :
-	  - étoiles : 14 + 3 par niveau (44 au niveau 10) ;
-	  - voile de plus en plus lumineux et large ;
-	  - niveau 4+ : des éclats dorés ; niveau 7+ : étoiles filantes le long
-	    du courant ; niveau 10 : cœur brillant de la rivière.
-	Effet d'ambiance (pas de place réservée, passe derrière les cartes et se
-	voit dans tous les espaces libres). ≤ 15 images/s, particules recyclées.
+	  - étoiles : 12 + 3 par niveau (42 au niveau 10), voile plus large ;
+	  - niveau 4+ : éclats dorés ; niveau 7+ : étoiles filantes le long du
+	    courant ; niveau 10 : courant central doré.
+	Effet d'ambiance (sous les cartes). ≤ 15 images/s, particules recyclées.
 ]]
 
 local Cosmos = script.Parent:WaitForChild("Cosmos")
@@ -26,25 +26,32 @@ GalaxyStream.Slot = "Background"
 local ID = "GalaxyStream"
 local MAX_LEVEL = 10
 local SAMPLES = 48 -- points du chemin (précalculés)
-local BAND_SEGMENTS = 5
+local BAND_SEGMENTS = 6
 
-local STAR_COLORS = {
+-- Tracés possibles (4 points de contrôle, fractions de la toile)
+local ROUTES = {
+	{ Vector2.new(-0.06, 0.97), Vector2.new(0.3, 0.8), Vector2.new(0.62, 0.62), Vector2.new(1.06, 0.2) }, -- bas-gauche -> haut-droite
+	{ Vector2.new(-0.06, 0.2), Vector2.new(0.38, 0.42), Vector2.new(0.62, 0.74), Vector2.new(1.06, 0.98) }, -- haut-gauche -> bas-droite
+	{ Vector2.new(0.24, -0.06), Vector2.new(0.2, 0.62), Vector2.new(0.8, 0.42), Vector2.new(0.76, 1.06) }, -- S (couloir gauche, gouttière droite)
+	{ Vector2.new(0.76, -0.06), Vector2.new(0.8, 0.62), Vector2.new(0.2, 0.42), Vector2.new(0.24, 1.06) }, -- S miroir
+	{ Vector2.new(-0.06, 0.6), Vector2.new(0.3, 1.1), Vector2.new(0.7, 1.1), Vector2.new(1.06, 0.6) }, -- arche basse
+}
+
+local STAR_COLORS_DARK = {
 	Color3.fromRGB(255, 255, 255),
-	Color3.fromRGB(200, 220, 255),
+	Color3.fromRGB(200, 224, 255),
 	Color3.fromRGB(255, 200, 240),
-	Color3.fromRGB(190, 170, 255),
+	Color3.fromRGB(200, 180, 255),
+}
+local STAR_COLORS_LIGHT = {
+	Color3.fromRGB(120, 80, 230),
+	Color3.fromRGB(60, 120, 230),
+	Color3.fromRGB(230, 80, 170),
+	Color3.fromRGB(150, 90, 240),
 }
 
 local function starCount(level: number): number
-	return 14 + 3 * level
-end
-
--- Courbe de la rivière (fractions de la toile) : Bézier cubique
-local P0, P1, P2, P3 = Vector2.new(-0.06, 0.97), Vector2.new(0.3, 0.8), Vector2.new(0.62, 0.62), Vector2.new(1.06, 0.2)
-
-local function bezier(u: number): Vector2
-	local a = 1 - u
-	return P0 * (a * a * a) + P1 * (3 * a * a * u) + P2 * (3 * a * u * u) + P3 * (u * u * u)
+	return 12 + 3 * level
 end
 
 function GalaxyStream.Start(ctx)
@@ -56,21 +63,26 @@ function GalaxyStream.Start(ctx)
 	local container: Frame = ctx.Container
 
 	local root: Frame? = nil
+	local route = 1
 	local points: { Vector2 } = {}
 	local normals: { Vector2 } = {}
-	local band: { Frame } = {}
 	type Star = { Frame: Frame, U: number, Lane: number, Speed: number, Phase: number, Twinkle: boolean }
 	local stars: { Star } = {}
 	local streak: Frame? = nil
 	local streakU = -1
+
+	local function width(): number
+		return 64 + level * 5
+	end
 
 	-- Chemin en pixels (toile) + normales
 	local function computePath()
 		local canvas = Zones.GetCanvas()
 		table.clear(points)
 		table.clear(normals)
+		local controls = ROUTES[route]
 		for index = 0, SAMPLES do
-			local p = bezier(index / SAMPLES)
+			local p = Zones.Bezier(controls, index / SAMPLES)
 			points[index + 1] = Vector2.new(p.X * canvas.X, p.Y * canvas.Y)
 		end
 		for index = 1, #points do
@@ -87,68 +99,73 @@ function GalaxyStream.Start(ctx)
 		local i = math.floor(f)
 		local k = f - i
 		local a, b = points[i + 1], points[math.min(#points, i + 2)]
-		return a:Lerp(b, k), normals[i + 1]
-	end
-
-	local function width(): number
-		return 70 + level * 6
+		return a:Lerp(b, k), normals[math.min(#normals, i + 1)]
 	end
 
 	local function build()
 		if root then
 			root:Destroy()
 		end
-		table.clear(band)
 		table.clear(stars)
 		streak = nil
 		computePath()
 		local holder = Kit.Box(container, { Name = "GalaxyStream", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1 })
 		root = holder
 
-		-- Voile de la rivière : segments le long de la courbe
-		local veilColor = if dark then Kit.Rgb(170, 120, 255) else Kit.Rgb(150, 110, 240)
-		local core = if dark then 0.62 - level * 0.012 else 0.72 - level * 0.012
-		local fade = Kit.Fade({ 0, 1, 0.3, core + 0.14, 0.5, core, 0.7, core + 0.14, 1, 1 })
+		-- Voile de la rivière + courant central : segments le long de la courbe
+		local edge = if dark then Kit.Rgb(160, 110, 255) else Kit.Rgb(140, 100, 240)
+		local other = if dark then Kit.Rgb(255, 130, 210) else Kit.Rgb(236, 110, 196)
+		local core = (if dark then 0.6 else 0.66) - level * 0.012
+		local fade = Kit.Fade({ 0, 1, 0.3, core + 0.16, 0.5, core, 0.7, core + 0.16, 1, 1 })
+		local coreColor = if level >= 10 then Kit.Rgb(255, 222, 140) elseif dark then Kit.Rgb(240, 230, 255) else Kit.Rgb(255, 255, 255)
+		local w = width()
 		for s = 1, BAND_SEGMENTS do
-			local u0, u1 = (s - 1) / BAND_SEGMENTS, s / BAND_SEGMENTS
-			local a = pathAt(u0)
-			local b = pathAt(u1)
+			local a = pathAt((s - 1) / BAND_SEGMENTS)
+			local b = pathAt(s / BAND_SEGMENTS)
 			local delta = b - a
+			local centre = UDim2.fromOffset((a.X + b.X) / 2, (a.Y + b.Y) / 2)
+			local rotation = math.deg(math.atan2(delta.Y, delta.X))
 			local segment = Kit.Box(holder, {
 				Name = "Band",
 				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.fromOffset((a.X + b.X) / 2, (a.Y + b.Y) / 2),
-				Size = UDim2.fromOffset(delta.Magnitude + 60, width()),
-				Rotation = math.deg(math.atan2(delta.Y, delta.X)),
+				Position = centre,
+				Size = UDim2.fromOffset(delta.Magnitude + w * 0.5, w),
+				Rotation = rotation,
 				Color = Color3.new(1, 1, 1),
 				ZIndex = 1,
 			})
-			Kit.Corner(segment, width() / 2)
-			Kit.Gradient(segment, ColorSequence.new(veilColor, if dark then Kit.Rgb(255, 140, 210) else Kit.Rgb(240, 120, 200)), fade, 90)
-			table.insert(band, segment)
+			Kit.Gradient(segment, ColorSequence.new(edge, other), fade, 90)
+			local current = Kit.Box(holder, {
+				Name = "Current",
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = centre,
+				Size = UDim2.fromOffset(delta.Magnitude + 8, 6),
+				Rotation = rotation,
+				Color = coreColor,
+				Alpha = math.clamp((if dark then 0.72 else 0.6) - level * 0.02, 0.4, 0.8),
+				ZIndex = 2,
+			})
+			Kit.Corner(current, 3)
 		end
 
 		-- Étoiles qui coulent
+		local palette = if dark then STAR_COLORS_DARK else STAR_COLORS_LIGHT
 		for index = 1, starCount(level) do
-			local gold = level >= 4 and index % 7 == 0
-			local size = if gold then 5 elseif index % 5 == 0 then 4 else random:NextInteger(2, 3)
-			local color = if gold then Kit.Rgb(255, 214, 110) else STAR_COLORS[(index - 1) % #STAR_COLORS + 1]
-			if not dark and not gold then
-				color = color:Lerp(Kit.Rgb(120, 90, 220), 0.45)
-			end
+			local gold = level >= 4 and index % 6 == 0
+			local size = if gold then 7 elseif index % 4 == 0 then 5 else random:NextInteger(3, 4)
 			local frame = Kit.Box(holder, {
 				Name = "Star",
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				Size = UDim2.fromOffset(size, size),
 				Rotation = 45,
-				Color = color,
-				ZIndex = 2,
+				Color = if gold then Kit.Rgb(255, 204, 90) else palette[(index - 1) % #palette + 1],
+				ZIndex = 3,
 			})
 			table.insert(stars, {
 				Frame = frame,
 				U = random:NextNumber(),
-				Lane = random:NextNumber(-1, 1) * random:NextNumber(0.2, 1),
-				Speed = random:NextNumber(0.018, 0.04),
+				Lane = random:NextNumber(-1, 1) * random:NextNumber(0.15, 1),
+				Speed = random:NextNumber(0.02, 0.045),
 				Phase = random:NextNumber(0, 6),
 				Twinkle = index % 2 == 0,
 			})
@@ -159,31 +176,22 @@ function GalaxyStream.Start(ctx)
 			local line = Kit.Box(holder, {
 				Name = "ShootingStar",
 				AnchorPoint = Vector2.new(1, 0.5),
-				Size = UDim2.fromOffset(46, 2),
-				Color = Color3.new(1, 1, 1),
+				Size = UDim2.fromOffset(52, 3),
+				Color = if dark then Color3.new(1, 1, 1) else Kit.Rgb(255, 196, 80),
 				Alpha = 1,
-				ZIndex = 3,
+				ZIndex = 4,
 			})
 			Kit.Gradient(line, nil, Kit.Fade({ 0, 1, 1, 0 }), 0)
 			streak = line
 		end
+	end
 
-		-- Cœur brillant (niveau 10) : un 2e voile fin au centre du courant
-		if level >= 10 then
-			for s = 1, BAND_SEGMENTS do
-				local source = band[s]
-				local coreLine = Kit.Box(holder, {
-					Name = "Core",
-					AnchorPoint = Vector2.new(0.5, 0.5),
-					Position = source.Position,
-					Size = UDim2.fromOffset(source.Size.X.Offset - 40, 10),
-					Rotation = source.Rotation,
-					Color = Kit.Rgb(255, 236, 255),
-					Alpha = if dark then 0.6 else 0.7,
-					ZIndex = 1,
-				})
-				Kit.Corner(coreLine, 5)
-			end
+	-- Choisit le tracé le plus visible (après chaque planification des places)
+	local function pickRoute(force: boolean?)
+		local best = Zones.PickPath(ROUTES, width())
+		if best ~= route or force then
+			route = best
+			build()
 		end
 	end
 
@@ -199,11 +207,12 @@ function GalaxyStream.Start(ctx)
 	local lastCanvas = Zones.GetCanvas()
 	ctx.Connect(Zones.Changed, function()
 		local now = Zones.GetCanvas()
-		if (now - lastCanvas).Magnitude > 1 then
-			lastCanvas = now
-			build()
-		end
+		local resized = (now - lastCanvas).Magnitude > 1
+		lastCanvas = now
+		pickRoute(resized)
 	end)
+	-- Pas encore d'objet cosmique à placer : planification quand même (pour le tracé)
+	Zones.Schedule()
 
 	Kit.Loop(ctx, 15, function(dt, t)
 		local half = width() / 2 - 6
@@ -219,17 +228,17 @@ function GalaxyStream.Start(ctx)
 			local position = p + n * ((star.Lane + sway) * half)
 			star.Frame.Position = UDim2.fromOffset(position.X, position.Y)
 			if star.Twinkle then
-				star.Frame.BackgroundTransparency = 0.1 + 0.7 * (0.5 + 0.5 * math.sin(t * 2.6 + star.Phase))
+				star.Frame.BackgroundTransparency = 0.05 + 0.6 * (0.5 + 0.5 * math.sin(t * 2.6 + star.Phase))
 			end
 		end
 		local line = streak
 		if line and effects then
 			if streakU < 0 then
-				if random:NextNumber() < dt * 0.25 then
+				if random:NextNumber() < dt * 0.3 then
 					streakU = 0
 				end
 			else
-				streakU += dt * 0.45
+				streakU += dt * 0.5
 				if streakU > 1 then
 					streakU = -1
 					line.BackgroundTransparency = 1

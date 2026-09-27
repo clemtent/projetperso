@@ -63,7 +63,7 @@ function MegaFinger.Start(ctx)
 		MinScale = 0.42,
 		MaxScale = 1,
 		GlowColor = Color3.fromRGB(255, 226, 190),
-		ContainerZ = 93,
+		ContainerZ = 1103,
 		Anchor = function(button, _canvas)
 			-- À droite du bouton (après le bouton 🏠)
 			return Vector2.new(button.X1 + 110, (button.Y0 + button.Y1) / 2 + 40)

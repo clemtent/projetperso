@@ -57,9 +57,9 @@ end
 function QuantumFinger.Start(ctx)
 	local animator = GearKit.Animator(ctx)
 	local random = ctx.Random
-	-- Derrière la vraie main (conteneur du doigt musclé : ZIndex 97), au-dessus
-	-- des fonds animés du calque Background
-	ctx.Container.ZIndex = 96
+	-- Derrière la vraie main (conteneur du doigt musclé : ZIndex 1107), au-dessus
+	-- des fonds animés du calque Background (voir GearPiece)
+	ctx.Container.ZIndex = 1106
 	local fx = GearKit.FXLayer(ctx, "Gear_QuantumFingerFX")
 
 	local level = math.max(1, GearKit.Level(ctx, "QuantumFinger"))

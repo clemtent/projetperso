@@ -46,7 +46,7 @@ function NeuralLink.Start(ctx)
 		MinScale = 0.42,
 		MaxScale = 1,
 		GlowColor = Color3.fromRGB(255, 200, 240),
-		ContainerZ = 91,
+		ContainerZ = 1101,
 		Anchor = function(button, _canvas)
 			-- En haut à droite du bouton (au-dessus de la souris)
 			return Vector2.new(button.X1 + 200, button.Y0 + 30)

@@ -36,7 +36,7 @@ function Finger.Start(ctx)
 		MaxScale = 1,
 		Near = 60,
 		GlowColor = Color3.fromRGB(255, 236, 214),
-		ContainerZ = 97,
+		ContainerZ = 1107,
 		Anchor = function(button, _canvas)
 			-- À gauche du bouton, un peu plus bas : le doigt vise vers le haut / la droite
 			return Vector2.new(button.X0 - 50, (button.Y0 + button.Y1) / 2 + 6)

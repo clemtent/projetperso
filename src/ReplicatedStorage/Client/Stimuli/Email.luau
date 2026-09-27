@@ -1391,15 +1391,15 @@ local function composeReply(texts, topics: { any }, forwarded: boolean, caps: bo
 			table.insert(parts, piece)
 		end
 	end
-	local body = table.concat(parts, " ")
+	-- (numéro de ticket AVANT les majuscules : "{n}" deviendrait "{N}")
+	local body = string.gsub(table.concat(parts, " "), "{n}", tostring(math.random(10000, 99999)))
 	if caps then
 		body = shout(body)
 	end
 	if texts.Before then
 		body = texts.Before .. body .. (texts.After or "")
 	end
-	local numbered = string.gsub(body, "{n}", tostring(math.random(10000, 99999)))
-	return numbered
+	return body
 end
 
 function Email.Start(ctx)
@@ -1784,6 +1784,17 @@ function Email.Start(ctx)
 				end
 			end
 		end
+		-- Toujours trop (jamais lus : joueur absent) : les plus vieux non lus partent aussi
+		for index = #mails, 1, -1 do
+			if received <= MAX_RECEIVED then
+				break
+			end
+			local mail = mails[index]
+			if mail.Kind ~= "Sent" and not mail.Starred and mail.State ~= "Live" and mail ~= S.Selected then
+				removeMail(mail)
+				received -= 1
+			end
+		end
 	end
 
 	local function addMail(mail)
@@ -1896,7 +1907,7 @@ function Email.Start(ctx)
 		counterBadge.Text = unread > 999 and "999+" or tostring(unread)
 		counterBadge.BackgroundColor3 = unread >= 10 and C.Red or C.Blue
 		if unread > 0 then
-			local suffix = unread >= 50 and " 😱" or (unread >= 10 and " 😬" or "")
+			local suffix = unread >= 25 and " 😱" or (unread >= 10 and " 😬" or "")
 			local words = Locale.Pick(UNREAD)
 			counterLabel.Text = "📬 " .. (unread > 1 and words.Many or words.One) .. suffix
 		else
@@ -2140,6 +2151,10 @@ function Email.Start(ctx)
 				local count = folderCount(def.Id)
 				item.Badge.Visible = count > 0
 				item.Badge.Text = count > 99 and "99+" or tostring(count)
+				if def.Id == "Inbox" then
+					-- Comme le compteur du bandeau : rouge à partir de 10 non lus
+					item.Badge.BackgroundColor3 = (count >= 10 or ui.Mode == "Phone") and C.Red or C.Blue
+				end
 			end
 		end
 		ui.LogoDot.Visible = unreadCount() > 0

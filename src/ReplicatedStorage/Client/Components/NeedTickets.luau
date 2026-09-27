@@ -283,13 +283,31 @@ local function build(missing: number, have: number, item: string?)
 	UIUtil.Stroke(card, ORANGE, 2.5, 0.15)
 	UIUtil.Gradient(card, ColorSequence.new(WHITE, Color3.fromRGB(255, 244, 226)), 90)
 	UIUtil.Shadow(card, 6, 0.75, 4)
-	local base = Interface.IsPhone() and 0.92 or 1
-	local scale = UIUtil.Create("UIScale", { Scale = 0.8 * base, Parent = card })
-	UIUtil.Tween(scale, 0.3, { Scale = base }, Enum.EasingStyle.Back)
+	-- Tient toujours à l'écran (téléphone) + petit "pop" d'entrée
+	local canvas = Interface.CanvasSize
+	local fit = math.min(1, (canvas.X - 24) / CARD_SIZE.X, (canvas.Y - 24) / CARD_SIZE.Y)
+	local scale = UIUtil.Create("UIScale", { Name = "FitScale", Scale = 0.8 * fit, Parent = card })
+	UIUtil.Tween(scale, 0.3, { Scale = fit }, Enum.EasingStyle.Back)
 
 	buildHeader(card)
 
-	-- Pastille "-N 🎟️" sur le bandeau
+	-- ✕ (même effet que "Later" ou un clic à côté), comme les autres fenêtres
+	UIUtil.CloseButton({
+		Name = "Close",
+		Size = 34,
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -14, 0, 14),
+		ZIndex = 8,
+		Hitbox = Interface.IsTouch() and 48 or 0,
+		Shadow = false,
+		Parent = card,
+		OnClose = function()
+			SoundManager.Play("Click", 1.1)
+			refuse(missing)
+		end,
+	})
+
+	-- Pastille "-N 🎟️" sur le bandeau (en haut à gauche : le ✕ est à droite)
 	local chip = UIUtil.Chip({
 		Name = "Missing",
 		Text = "−" .. NumberFormatter.Format(missing) .. " " .. TICKET,
@@ -301,8 +319,7 @@ local function build(missing: number, have: number, item: string?)
 		StrokeColor = WHITE,
 		Parent = card,
 	})
-	chip.AnchorPoint = Vector2.new(1, 0)
-	chip.Position = UDim2.new(1, -16, 0, 16)
+	chip.Position = UDim2.fromOffset(18, 18)
 
 	local top = HEADER_HEIGHT + 12
 	UIUtil.Create("TextLabel", {
@@ -437,14 +454,52 @@ local function build(missing: number, have: number, item: string?)
 	})
 	UIUtil.Create("UITextSizeConstraint", { MaxTextSize = 14, MinTextSize = 10, Parent = free })
 
-	-- Deux boutons côte à côte, 12 px d'écart, 24 px des bords de la carte
+	-- Deux boutons côte à côte (style v9 partagé) : "Later" (neutre) + "🎟️ Buy tickets" (achat)
 	local margin, gap = 24, 12
 	local laterWidth = math.floor((CARD_SIZE.X - margin * 2 - gap) * 0.36)
 	local buyWidth = CARD_SIZE.X - margin * 2 - gap - laterWidth
-	local later = button(card, "Later", Locale.T("Later"), Color3.fromRGB(240, 234, 226), UDim2.new(0, margin + laterWidth / 2, 1, -20), laterWidth)
-	later.TextColor3 = Theme.Colors.TextDim
-	local buy = button(card, "BuyTickets", Locale.T("🎟️ Buy tickets"), GOLD, UDim2.new(1, -(margin + buyWidth / 2), 1, -20), buyWidth)
-	buy.TextColor3 = INK
+	local later = UIUtil.BasicButton({
+		Name = "Later",
+		Text = Locale.T("Later"),
+		Font = Theme.Fonts.Title,
+		TextColor3 = Theme.Colors.TextDim,
+		TextSize = 19,
+		Size = UDim2.fromOffset(laterWidth, 50),
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, margin, 1, -20),
+		CornerRadius = UDim.new(1, 0),
+		ZIndex = 5,
+		Parent = card,
+	})
+	local buy = UIUtil.NeonButton({
+		Name = "BuyTickets",
+		Text = Locale.T("🎟️ Buy tickets"),
+		Color = GOLD,
+		TextColor3 = INK,
+		Size = UDim2.fromOffset(buyWidth, 50),
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.new(1, -margin, 1, -20),
+		CornerRadius = UDim.new(1, 0),
+		MaxTextSize = 20,
+		ZIndex = 5,
+		Parent = card,
+	})
+	-- Reflet qui traverse le bouton d'achat (boucle douce, arrêtée à la fermeture)
+	buy.ClipsDescendants = true
+	local shine = UIUtil.Create("Frame", {
+		Name = "Shine",
+		Size = UDim2.new(0, 34, 1, 24),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(-0.3, 0, 0.5, 0),
+		Rotation = 18,
+		BackgroundColor3 = WHITE,
+		BackgroundTransparency = 0.6,
+		BorderSizePixel = 0,
+		ZIndex = 6,
+		Parent = buy,
+	})
+	shine:SetAttribute("DarkSkinIgnore", true)
+	loop(shine, TweenInfo.new(1.1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut, -1, false, 1.4), { Position = UDim2.new(1.3, 0, 0.5, 0) })
 	later.Activated:Connect(function()
 		SoundManager.Play("Click", 1.1)
 		refuse(missing)

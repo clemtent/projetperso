@@ -69,7 +69,7 @@ function SleepMode.Start(ctx)
 	local stars: { { Frame: Frame, Phase: number, Speed: number } } = {}
 	local zs: { { Label: TextLabel, Base: number, Offset: number } } = {}
 	local moonGroup: Frame? = nil
-	local halo: Frame? = nil
+	local halo: UIStroke? = nil
 	local haloBase = 0.8
 	local shooting: Frame? = nil
 	local shootClock = 0
@@ -132,10 +132,11 @@ function SleepMode.Start(ctx)
 			ZIndex = 4,
 		})
 		moonGroup = group
-		haloBase = if level >= 4 then 0.72 else 0.8
-		halo = Kit.Circle(group, MOON.X, MOON.Y, MOON.D + 16, Kit.Rgb(255, 236, 170), haloBase, 4)
 		local moon = Kit.Circle(group, MOON.X, MOON.Y, MOON.D, Color3.new(1, 1, 1), 0, 5)
 		Kit.Gradient(moon, ColorSequence.new(Kit.Rgb(255, 244, 196), Kit.Rgb(255, 208, 110)), nil, 45)
+		-- Lueur le long du croissant (la "morsure" cache la partie intérieure)
+		haloBase = if level >= 4 then 0.35 else 0.5
+		halo = Kit.Stroke(moon, Kit.Rgb(255, 238, 170), if level >= 4 then 4 else 3, haloBase)
 		-- "Morsure" couleur du ciel : même dégradé que le hublot à cette hauteur
 		local top = (BITE.Y - BITE.D / 2 - (BUBBLE.Y - BUBBLE.D / 2)) / BUBBLE.D
 		local bottom = (BITE.Y + BITE.D / 2 - (BUBBLE.Y - BUBBLE.D / 2)) / BUBBLE.D
@@ -205,7 +206,7 @@ function SleepMode.Start(ctx)
 		end
 		local glow = halo
 		if glow then
-			glow.BackgroundTransparency = haloBase + 0.08 * math.sin(t * 1.3)
+			glow.Transparency = haloBase + 0.15 * math.sin(t * 1.3)
 		end
 		-- « z » : montent en diagonale, grossissent, s'effacent
 		for _, z in ipairs(zs) do

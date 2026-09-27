@@ -985,7 +985,6 @@ function Runner.Start(ctx)
 					Parent = body,
 				}))
 			elseif roofKind == 3 then
-				-- Enseigne lumineuse "DOPA" sur la façade (brille aussi la nuit)
 				table.insert(building.Extras, frame({
 					AnchorPoint = Vector2.new(0, 1),
 					Position = UDim2.fromScale(0.12, 0),
@@ -994,10 +993,14 @@ function Runner.Start(ctx)
 					ZIndex = 1,
 					Parent = body,
 				}))
+			end
+			-- Enseigne lumineuse "DOPA" sur la façade de l'immeuble de droite,
+			-- juste au-dessus des murs (loin des textes d'événement, au centre)
+			if i == 4 then
 				local board = frame({
 					Name = "Billboard",
-					AnchorPoint = Vector2.new(0.5, 0),
-					Position = UDim2.new(0.62, 0, 0, 3 * U),
+					AnchorPoint = Vector2.new(0.5, 1),
+					Position = UDim2.new(0.5, 0, 1, -(baseY - HY) - 3 * U),
 					Size = UDim2.fromOffset(32 * U, 11 * U),
 					BackgroundColor3 = WHITE,
 					ZIndex = 3,

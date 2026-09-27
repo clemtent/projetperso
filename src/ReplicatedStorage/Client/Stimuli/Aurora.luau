@@ -2,16 +2,16 @@
 	Aurora (ModuleScript - stimulus)
 	Emplacement : ReplicatedStorage > Client > Stimuli > Aurora
 
-	🌌 Aurore boréale (gains x2, après 2 visites à l'océan) : deux rubans
-	d'aurore ondulent en haut du ciel, sur toute la largeur de l'écran
-	(voiles verticaux vert -> turquoise -> violet, bord bas plus lumineux,
-	haut qui se fond dans le ciel), avec quelques étoiles qui scintillent.
-	On les voit derrière le bouton et le compteur et entre les cartes du
-	haut. Chaque ruban = 7 voiles (cadres + dégradé vertical) dont la
-	hauteur et l'inclinaison suivent une onde qui avance.
-	Effet d'ambiance (pas de place réservée) : très transparent, jamais
-	sur le texte du compteur. Clair : couleurs plus profondes ; sombre :
-	couleurs néon. ≤ 15 images/s, ~40 instances.
+	🌌 Aurore boréale (gains x2, après 2 visites à l'océan) : deux rideaux
+	d'aurore pendent du haut du ciel sur toute la largeur de l'écran (voiles
+	violet -> turquoise -> vert, ourlet lumineux en bas), parcourus de rayons
+	verticaux qui ondulent, avec quelques étoiles.
+	L'ourlet dessine une arche : juste au-dessus du bouton au centre (jamais
+	sur le compteur), il descend le long des couloirs entre les cartes sur
+	les côtés : c'est là que le fond se voit en fin de partie.
+	Effet d'ambiance (pas de place réservée, sous les cartes). Clair :
+	couleurs aquarelle plus profondes ; sombre : couleurs néon.
+	≤ 12 images/s, ~55 instances, rien créé par image.
 ]]
 
 local Cosmos = script.Parent:WaitForChild("Cosmos")
@@ -21,30 +21,31 @@ local Zones = require(Cosmos:WaitForChild("Zones"))
 local Aurora = {}
 Aurora.Slot = "Background"
 
-local SEGMENTS = 7
-local STARS = 7
+local VEILS = 8 -- voiles par rideau
+local RAYS = 8
+local STARS = 5
+local TOP = 24 -- haut des voiles (sous le bandeau d'actualités)
+local HEM_CENTRE = 60 -- ourlet au centre : juste au-dessus du bouton
+local HEM_DIP = 150 -- de combien l'ourlet descend vers les bords
 
-type Ribbon = {
-	Y: number, -- hauteur du bas du ruban (px, toile)
-	Height: number,
+type Curtain = {
+	Lift: number, -- décalage de l'ourlet (px)
 	Amp: number,
 	Speed: number,
 	Phase: number,
-	Alpha: number,
-	Colors: { Color3 }, -- bas, milieu, haut
 	Frames: { Frame },
-	Gradients: { UIGradient },
 }
 
 local function palette(dark: boolean, index: number): { Color3 }
+	-- { haut, milieu, ourlet }
 	if dark then
 		return if index == 1
-			then { Color3.fromRGB(90, 255, 180), Color3.fromRGB(70, 210, 255), Color3.fromRGB(190, 120, 255) }
-			else { Color3.fromRGB(120, 255, 160), Color3.fromRGB(255, 120, 220), Color3.fromRGB(140, 110, 255) }
+			then { Color3.fromRGB(170, 110, 255), Color3.fromRGB(70, 210, 255), Color3.fromRGB(100, 255, 180) }
+			else { Color3.fromRGB(255, 110, 210), Color3.fromRGB(140, 120, 255), Color3.fromRGB(110, 240, 255) }
 	end
 	return if index == 1
-		then { Color3.fromRGB(30, 200, 150), Color3.fromRGB(40, 170, 225), Color3.fromRGB(150, 100, 235) }
-		else { Color3.fromRGB(60, 205, 130), Color3.fromRGB(235, 100, 190), Color3.fromRGB(120, 100, 240) }
+		then { Color3.fromRGB(150, 96, 236), Color3.fromRGB(40, 166, 228), Color3.fromRGB(30, 196, 140) }
+		else { Color3.fromRGB(230, 90, 186), Color3.fromRGB(120, 100, 236), Color3.fromRGB(40, 190, 220) }
 end
 
 function Aurora.Start(ctx)
@@ -55,41 +56,40 @@ function Aurora.Start(ctx)
 	local container: Frame = ctx.Container
 
 	local root: Frame? = nil
-	local ribbons: { Ribbon } = {}
+	local curtains: { Curtain } = {}
+	type Ray = { Frame: Frame, X: number, Phase: number, Length: number }
+	local rays: { Ray } = {}
 	local stars: { { Frame: Frame, Phase: number } } = {}
 	local canvas = Zones.GetCanvas()
+
+	-- Hauteur de l'ourlet à l'abscisse x (arche : haut au centre, bas sur les côtés)
+	local function hem(x: number, lift: number): number
+		local half = canvas.X / 2
+		local ratio = math.clamp(math.abs(x - half) / half, 0, 1)
+		return HEM_CENTRE + lift + HEM_DIP * ratio ^ 1.6
+	end
 
 	local function build()
 		if root then
 			root:Destroy()
 		end
-		table.clear(ribbons)
+		table.clear(curtains)
+		table.clear(rays)
 		table.clear(stars)
 		canvas = Zones.GetCanvas()
 		local holder = Kit.Box(container, { Name = "Aurora", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1 })
 		root = holder
 
 		local specs = {
-			{ Y = 122, Height = 104, Amp = 12, Speed = 0.35, Alpha = if dark then 0.5 else 0.6 },
-			{ Y = 92, Height = 76, Amp = 10, Speed = -0.25, Alpha = if dark then 0.58 else 0.68 },
+			{ Lift = 0, Amp = 9, Speed = 0.4, Alpha = if dark then 0.34 else 0.4 },
+			{ Lift = -16, Amp = 7, Speed = -0.3, Alpha = if dark then 0.42 else 0.48 },
 		}
 		for index, spec in ipairs(specs) do
 			local colors = palette(dark, index)
-			local ribbon: Ribbon = {
-				Y = spec.Y,
-				Height = spec.Height,
-				Amp = spec.Amp,
-				Speed = spec.Speed,
-				Phase = random:NextNumber(0, 6),
-				Alpha = spec.Alpha,
-				Colors = colors,
-				Frames = {},
-				Gradients = {},
-			}
-			-- Voiles : dégradé vertical (haut transparent -> bas lumineux)
-			local sequence = Kit.Colors({ 0, colors[3], 0.55, colors[2], 1, colors[1] })
-			local fade = Kit.Fade({ 0, 1, 0.45, 0.55, 0.86, 0.12, 1, 0.9 })
-			for s = 1, SEGMENTS do
+			local curtain: Curtain = { Lift = spec.Lift, Amp = spec.Amp, Speed = spec.Speed, Phase = random:NextNumber(0, 6), Frames = {} }
+			local sequence = Kit.Colors({ 0, colors[1], 0.55, colors[2], 1, colors[3] })
+			local fade = Kit.Fade({ 0, 1, 0.4, 0.62, 0.86, 0.1, 1, 0.55 })
+			for _ = 1, VEILS do
 				local veil = Kit.Box(holder, {
 					Name = "Veil",
 					AnchorPoint = Vector2.new(0.5, 1),
@@ -97,45 +97,64 @@ function Aurora.Start(ctx)
 					Alpha = spec.Alpha,
 					ZIndex = index,
 				})
-				Kit.Corner(veil, 40)
-				table.insert(ribbon.Gradients, Kit.Gradient(veil, sequence, fade, 90))
-				ribbon.Frames[s] = veil
+				Kit.Gradient(veil, sequence, fade, 90)
+				table.insert(curtain.Frames, veil)
 			end
-			table.insert(ribbons, ribbon)
+			table.insert(curtains, curtain)
 		end
 
-		-- Étoiles du ciel (entre les rubans et le haut de l'écran)
+		-- Rayons (fins traits lumineux près de l'ourlet)
+		local rayColor = if dark then Kit.Rgb(200, 255, 230) else Kit.Rgb(40, 190, 150)
+		for index = 1, RAYS do
+			local frame = Kit.Box(holder, {
+				Name = "Ray",
+				AnchorPoint = Vector2.new(0.5, 1),
+				Color = rayColor,
+				Alpha = if dark then 0.25 else 0.35,
+				ZIndex = 3,
+			})
+			Kit.Gradient(frame, nil, Kit.Fade({ 0, 1, 0.7, 0.3, 1, 0.1 }), 90)
+			table.insert(rays, {
+				Frame = frame,
+				X = (index - 0.5) / RAYS + random:NextNumber(-0.04, 0.04),
+				Phase = random:NextNumber(0, 6),
+				Length = random:NextNumber(36, 60),
+			})
+		end
+
+		-- Étoiles du ciel
 		for _ = 1, STARS do
 			local star = Kit.Diamond(
 				holder,
 				random:NextNumber(0.05, 0.95) * canvas.X,
-				random:NextNumber(40, 118),
+				random:NextNumber(34, 56),
 				random:NextInteger(3, 5),
-				if dark then Kit.Rgb(255, 255, 255) else Kit.Rgb(255, 196, 90),
+				if dark then Kit.Rgb(255, 255, 255) else Kit.Rgb(255, 190, 80),
 				0,
-				3
+				4
 			)
 			table.insert(stars, { Frame = star, Phase = random:NextNumber(0, 6) })
 		end
 	end
 
-	-- Place les voiles le long de l'onde (appelé à chaque image d'animation)
+	-- Place voiles et rayons le long de l'ourlet (onde qui avance)
 	local function layout(t: number)
 		local width = canvas.X
-		local step = width / (SEGMENTS - 1)
-		for _, ribbon in ipairs(ribbons) do
-			local phase = ribbon.Phase + t * ribbon.Speed
-			for s, veil in ipairs(ribbon.Frames) do
+		local step = width / (VEILS - 1)
+		for _, curtain in ipairs(curtains) do
+			local phase = curtain.Phase + t * curtain.Speed
+			for s, veil in ipairs(curtain.Frames) do
 				local x = (s - 1) * step
-				local wave = math.sin(phase + s * 0.95)
-				local slope = math.cos(phase + s * 0.95)
-				veil.Position = UDim2.fromOffset(x, ribbon.Y + wave * ribbon.Amp)
-				veil.Size = UDim2.fromOffset(step * 1.45, ribbon.Height * (0.8 + 0.3 * (0.5 + 0.5 * math.sin(phase * 1.3 + s * 1.7))))
-				veil.Rotation = slope * 7
+				local bottom = hem(x, curtain.Lift) + math.sin(phase + s * 0.95) * curtain.Amp
+				veil.Position = UDim2.fromOffset(x, bottom)
+				veil.Size = UDim2.fromOffset(step * 1.5, math.max(24, bottom - TOP))
 			end
-			for s, gradient in ipairs(ribbon.Gradients) do
-				gradient.Offset = Vector2.new(0, 0.06 * math.sin(t * 0.8 + s))
-			end
+		end
+		for _, ray in ipairs(rays) do
+			local x = ray.X * width + math.sin(t * 0.6 + ray.Phase) * 10
+			local bottom = hem(x, 0) + 2
+			ray.Frame.Position = UDim2.fromOffset(x, bottom)
+			ray.Frame.Size = UDim2.fromOffset(3, ray.Length * (0.75 + 0.25 * math.sin(t * 1.3 + ray.Phase)))
 		end
 	end
 
@@ -154,9 +173,12 @@ function Aurora.Start(ctx)
 		end
 	end)
 
-	Kit.Loop(ctx, 15, function(_dt, t)
+	Kit.Loop(ctx, 12, function(_dt, t)
 		if effects then
 			layout(t)
+			for _, ray in ipairs(rays) do
+				ray.Frame.BackgroundTransparency = (if dark then 0.25 else 0.35) + 0.35 * (0.5 + 0.5 * math.sin(t * 2.2 + ray.Phase))
+			end
 		end
 		for _, star in ipairs(stars) do
 			star.Frame.BackgroundTransparency = 0.2 + 0.7 * (0.5 + 0.5 * math.sin(t * 1.8 + star.Phase))

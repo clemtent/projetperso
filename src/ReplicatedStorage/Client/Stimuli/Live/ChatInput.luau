@@ -205,7 +205,7 @@ function ChatInput.new(ctx: any, options: Options)
 		TextXAlignment = Enum.TextXAlignment.Center,
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = Color3.fromRGB(16, 12, 28),
-		BackgroundTransparency = 0.12,
+		BackgroundTransparency = 0.04,
 		BorderSizePixel = 0,
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.new(0, 5, 1, -(height + 8)),

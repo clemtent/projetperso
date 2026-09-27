@@ -644,6 +644,48 @@ test("Formulas maison (prix, confort, bonus)", function(check)
 	local boosted = Formulas.ComputeStats(d, 1, Formulas.GetHouseBonus(40))
 	check(near(boosted.ClickValue, base.ClickValue * (1 + 40 * H.ComfortBonusPerPoint)), "bonus appliqué au clic")
 end)
+
+test("Maison v9 : tables vides, chaises, objets posés SUR les meubles", function(check)
+	local H = Config.House
+	local I = Config.HouseItemsById
+	check(#H.Items >= 250, "au moins 250 objets (v9 : +40) : " .. #H.Items)
+	-- Nouveaux meubles / objets attendus
+	for _, id in ipairs({ "DiningTable", "CafeTable", "CoffeeTable", "SideTable", "KitchenIsland", "PicnicTable", "BarTable",
+		"BigDesk", "DiningChair", "MushroomStool", "BarStool", "Armchair", "GardenBench", "FloorCushion", "RockingChair",
+		"DoubleBed", "FruitBowl", "TeaSet", "DeskLamp", "BoardGame", "PhotoFrame", "HeartPillow", "SnowGlobe", "MiniAquarium",
+		"Kitten", "Hedgehog", "FloatingShelf" }) do
+		check(I[id] ~= nil, "objet v9 manquant : " .. id)
+	end
+	eq(check, I.DiningTable and I.DiningTable.Category, "Furniture", "table = meuble")
+	eq(check, I.FloatingShelf and I.FloatingShelf.Placement, "Wall", "étagère flottante au mur")
+	-- Règle "posable sur un meuble" (même règle client / serveur)
+	local can = Formulas.CanGoOnFurniture
+	for _, id in ipairs({ "CocoaMug", "HeartPillow", "Kitten", "SleepyCat", "TeaSet", "Laptop", "TulipPot", "ScentedCandle",
+		"TeddyBear", "Suitcase", "StorageBox", "BigBear", "RetroTV", "DesktopPC", "FruitBowl", "DeskLamp" }) do
+		check(I[id] ~= nil and can(I[id]) == true, "devrait pouvoir aller sur un meuble : " .. id)
+	end
+	for _, id in ipairs({ "WoodenChair", "DiningTable", "Nightstand", "Sofa", "MouseHole", "WoodenDoor", "CurtainWindow",
+		"HangingBulb", "GrandPiano", "KnittedRug", "RobotVacuum", "PetBowl", "FloorLamp", "Dragon" }) do
+		check(I[id] ~= nil and can(I[id]) == false, "ne va PAS sur un meuble : " .. id)
+	end
+	check(can(nil) == false and can({}) == false, "entrée invalide")
+	-- Limites du serveur (Y des pieds) : objets posables, anciennes sauvegardes, meubles
+	eq(check, Formulas.GetHouseFloorMinY(I.CocoaMug), H.TabletopMinY, "tasse : peut monter sur un meuble")
+	eq(check, Formulas.GetHouseFloorMinY(I.Nightstand), H.TabletopMinY, "ancienne sauvegarde (Size <= 70) acceptée")
+	eq(check, Formulas.GetHouseFloorMinY(I.DiningTable), H.WallRatio * 0.85, "table : reste au sol")
+	check(H.TabletopMinY < H.WallRatio * 0.85 and H.TabletopMinY >= 0.05, "TabletopMinY")
+	check(H.TabletopMaxSize >= 70 and H.LegacyTabletopSize <= H.TabletopMaxSize, "tailles posables")
+	-- Plus on avance, plus c'est cher : les objets chers sont verrouillés par les visites à l'océan
+	check(Formulas.GetHouseRequiredRebirths(I.EggChair) >= 1, "fauteuil œuf : après l'océan")
+	check(Formulas.GetHouseRequiredRebirths(I.Candelabra) >= 2, "chandelier : 2 visites")
+	check(Formulas.GetHouseRequiredRebirths(I.JewelryBox) >= 3, "coffret royal : 3 visites")
+	eq(check, Formulas.GetHouseRequiredRebirths(I.SideTable), 0, "petite table : tout de suite")
+	-- Objet retourné (F) : même confort, sauvegardes d'avant (sans F) inchangées
+	local plain = { House = { Size = "Studio", Items = { DiningChair = 2 }, Rooms = {
+		{ Id = "R1", Type = "Kitchen", Slot = 1, Placed = { { I = "DiningChair", X = 0.3, Y = 0.8, S = 1, Z = 1 },
+			{ I = "DiningChair", X = 0.6, Y = 0.8, S = 1, Z = 1, F = true } } } } } }
+	check(near(Formulas.GetHouseComfort(plain), 2 * I.DiningChair.Comfort * (1 + H.HarmonyBonus)), "confort avec chaises retournées")
+end)
 """
 
 
@@ -775,6 +817,55 @@ def house_art_test():
         "\tend",
         "\tfor id, file in pairs(drawn) do",
         '\t\tcheck(Config.HouseItemsById[id] ~= nil, "dessin sans objet : " .. id .. " (" .. file .. ")")',
+        "\tend",
+        "end)",
+    ]) + "\n" + house_surfaces_test()
+
+
+def house_surfaces_test():
+    """Génère un test Luau : les dessus de meubles, sièges et tables de
+    Client/Components/House/HouseSurfaces.luau visent des objets connus
+    (coordonnées 0..100, x0 < x1), chaque table a un dessus, chaque siège est
+    un meuble au sol."""
+    path = os.path.join(SRC, "ReplicatedStorage", "Client", "Components", "House", "HouseSurfaces.luau")
+    src = read(path) if os.path.exists(path) else ""
+
+    def block(name):
+        m = re.search(r"^local %s[^\n]*=\s*\{\n(.*?)^\}" % name, src, re.M | re.S)
+        return m.group(1) if m else ""
+
+    surfaces = []
+    for m in re.finditer(r"^\t(\w+) = \{ (.*?) \},?\s*(?:--.*)?$", block("SURFACES"), re.M):
+        for s in re.finditer(r"\{ ([\d.]+), ([\d.]+), ([\d.]+) \}", m.group(2)):
+            surfaces.append('{ "%s", %s, %s, %s }' % (m.group(1), s.group(1), s.group(2), s.group(3)))
+    seats = re.findall(r"^\t(\w+) = \{ View = \"(\w+)\"", block("SEATS"), re.M)
+    tables = re.findall(r"^\t(\w+) = true", block("TABLES"), re.M)
+    beds = re.findall(r"^\t(\w+) = true", block("BEDS"), re.M)
+    return "\n".join([
+        'test("Maison : dessus des meubles, sièges et tables (%d dessus, %d sièges, %d tables)", function(check)'
+        % (len(surfaces), len(seats), len(tables)),
+        "\tlocal surfaces = { %s }" % ", ".join(surfaces),
+        "\tlocal seats = { %s }" % ", ".join('{ "%s", "%s" }' % s for s in seats),
+        "\tlocal tables = { %s }" % ", ".join('"%s"' % t for t in tables),
+        "\tlocal beds = { %s }" % ", ".join('"%s"' % b for b in beds),
+        '\tcheck(#surfaces >= 30 and #seats >= 6 and #tables >= 6, "données de HouseSurfaces lues")',
+        "\tlocal hasSurface = {}",
+        "\tfor _, s in ipairs(surfaces) do",
+        "\t\tlocal item = Config.HouseItemsById[s[1]]",
+        '\t\tcheck(item ~= nil, "dessus d\'un objet inconnu : " .. s[1])',
+        '\t\tcheck(s[2] >= 0 and s[3] <= 100 and s[2] < s[3] and s[4] >= 0 and s[4] <= 100, "coordonnées du dessus " .. s[1])',
+        "\t\thasSurface[s[1]] = true",
+        "\tend",
+        "\tfor _, t in ipairs(tables) do",
+        '\t\tcheck(Config.HouseItemsById[t] ~= nil and hasSurface[t] == true, "table sans dessus : " .. t)',
+        "\tend",
+        "\tfor _, b in ipairs(beds) do",
+        '\t\tcheck(Config.HouseItemsById[b] ~= nil and hasSurface[b] == true, "lit sans dessus : " .. b)',
+        "\tend",
+        "\tfor _, s in ipairs(seats) do",
+        "\t\tlocal item = Config.HouseItemsById[s[1]]",
+        '\t\tcheck(item ~= nil and item.Placement == "Floor" and item.Category == "Furniture", "siège = meuble au sol : " .. s[1])',
+        '\t\tcheck(s[2] == "Side" or s[2] == "Front" or s[2] == "Round", "vue du siège " .. s[1])',
         "\tend",
         "end)",
     ])

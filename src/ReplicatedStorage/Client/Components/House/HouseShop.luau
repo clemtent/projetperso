@@ -45,6 +45,7 @@ local NeedDopamine = require(script.Parent.Parent.NeedDopamine)
 local HouseArt = require(script.Parent.HouseArt)
 local HousePatterns = require(script.Parent.HousePatterns)
 local HouseButtons = require(script.Parent.HouseButtons)
+local HouseSurfaces = require(script.Parent.HouseSurfaces)
 
 type Item = HouseCommon.Item
 type Style = HouseCommon.Style
@@ -2069,6 +2070,12 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 			local visible
 			if category == "Favorites" then
 				visible = room ~= nil and HouseCommon.IsFavorite(room, card.Item)
+			elseif category == "TablesSeats" then
+				-- (v9) tables vides et sièges qu'on range autour
+				visible = HouseSurfaces.IsTable(card.Item.Id) or HouseSurfaces.IsSeat(card.Item.Id)
+			elseif category == "Tabletop" then
+				-- (v9) tout ce qu'on peut poser SUR un meuble
+				visible = HouseCommon.CanGoOnFurniture(card.Item)
 			else
 				visible = category == "All" or card.Item.Category == category
 			end
@@ -2120,8 +2127,10 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 	categoryPill("Favorites", "", 1)
 	local favoritesPill = categoryButtons.Favorites
 	favoritesPill.Visible = false
+	categoryPill("TablesSeats", Locale.T("🍽️ Tables & chairs"), 2)
+	categoryPill("Tabletop", Locale.T("🧁 On furniture"), 3)
 	for index, entry in ipairs(HouseCommon.Config.Categories) do
-		categoryPill(entry.Id, entry.Icon .. " " .. HouseCommon.Name(entry), index + 1)
+		categoryPill(entry.Id, entry.Icon .. " " .. HouseCommon.Name(entry), index + 3)
 	end
 	paintCategories()
 	task.defer(refreshMoreHint)

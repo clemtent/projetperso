@@ -403,7 +403,6 @@ function Lofi.Start(ctx)
 		silentTime = 0, -- depuis quand la musique "joue" sans aucun volume
 		musicName = nil :: string?,
 		musicSound = nil :: Sound?,
-		musicTimer = 0,
 		writeTime = 0,
 		pageFlip = -1, -- progression du tournage de page (-1 : aucun)
 		linesWritten = 0,
@@ -426,7 +425,6 @@ function Lofi.Start(ctx)
 		hour = 22,
 		night = 1,
 		lampPower = 1,
-		timeTimer = 0,
 		rain = 1, -- intensité de la pluie (0..1), lissée
 		rainTarget = 1,
 		weatherTimer = random:NextNumber(60, 100),
@@ -448,7 +446,6 @@ function Lofi.Start(ctx)
 		catAwake = 9,
 		catBlink = -1,
 		catLook = 0,
-		catLift = 0,
 	}
 
 	------------------------------------------------------------------
@@ -506,6 +503,7 @@ function Lofi.Start(ctx)
 		Beads = {} :: { { Frame: Frame, Trail: Frame, X: number, Y: number, Speed: number, Length: number } },
 		Droplets = {} :: { Frame },
 		Fairy = {} :: { { Frame: Frame, Glow: UIStroke, Phase: number } },
+		Roof = {} :: { Frame }, -- antenne, château d'eau (couleur de la ville)
 	}
 	do
 		local WOOD_LIGHT = Color3.fromRGB(236, 214, 182)
@@ -621,7 +619,7 @@ function Lofi.Start(ctx)
 			end
 			if index == 4 then
 				-- La tour : antenne + voyant rouge qui clignote
-				frame({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0, 0), Size = UDim2.fromOffset(1.5, 12), BackgroundColor3 = Color3.fromRGB(30, 24, 50), ZIndex = 5, Parent = building })
+				table.insert(WIN.Roof, frame({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0, 0), Size = UDim2.fromOffset(1.5, 12), BackgroundColor3 = PALETTES.Night.NearTop, ZIndex = 5, Parent = building }))
 				WIN.TowerLight = circle(at({ BackgroundColor3 = Color3.fromRGB(255, 60, 70), ZIndex = 6, Parent = building }, w / 2, -12, 3, 3))
 			elseif index == 6 then
 				-- Enseigne néon sur le toit
@@ -631,12 +629,13 @@ function Lofi.Start(ctx)
 				WIN.NeonSign = sign
 			elseif index == 5 then
 				-- Château d'eau sur le toit (sur pilotis)
-				local tank = frame({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 2, 0, -5), Size = UDim2.fromOffset(10, 8), BackgroundColor3 = Color3.fromRGB(34, 28, 62), ZIndex = 5, Parent = building })
+				local tank = frame({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 2, 0, -5), Size = UDim2.fromOffset(10, 8), BackgroundColor3 = PALETTES.Night.NearTop, ZIndex = 5, Parent = building })
 				UI.Corner(tank, 2)
+				table.insert(WIN.Roof, tank)
 				for leg = -1, 1, 2 do
-					frame({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 2 + leg * 3, 0, 0), Size = UDim2.fromOffset(1, 6), BackgroundColor3 = Color3.fromRGB(34, 28, 62), ZIndex = 5, Parent = building })
+					table.insert(WIN.Roof, frame({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 2 + leg * 3, 0, 0), Size = UDim2.fromOffset(1, 6), BackgroundColor3 = PALETTES.Night.NearTop, ZIndex = 5, Parent = building }))
 				end
-				frame({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 2, 0, -13), Size = UDim2.fromOffset(12, 3), Rotation = 0, BackgroundColor3 = Color3.fromRGB(34, 28, 62), ZIndex = 5, Parent = building })
+				table.insert(WIN.Roof, frame({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 2, 0, -13), Size = UDim2.fromOffset(12, 3), BackgroundColor3 = PALETTES.Night.NearTop, ZIndex = 5, Parent = building }))
 			end
 			x += w + 2
 			if x > GLASS_W then
@@ -1837,6 +1836,13 @@ function Lofi.Start(ctx)
 		body.Position = UDim2.fromOffset(x, y)
 	end
 
+	-- Fenêtres allumées de la ville (la nuit seulement)
+	local function refreshCityLights()
+		for _, lit in ipairs(WIN.Lit) do
+			lit.Frame.BackgroundTransparency = lit.On and (0.1 + (1 - S.night) * 0.9) or 1
+		end
+	end
+
 	-- Applique l'ambiance (heure + pluie) : appelé rarement (toutes les
 	-- 10 s, ou quand l'intensité de la pluie a changé)
 	local function applyPalette()
@@ -1867,6 +1873,10 @@ function Lofi.Start(ctx)
 		for _, g in ipairs(WIN.Near) do
 			g.Color = near
 		end
+		for _, part in ipairs(WIN.Roof) do
+			part.BackgroundColor3 = P.NearTop
+		end
+		refreshCityLights()
 		shaft.BackgroundColor3 = P.Shaft
 		shaft.BackgroundTransparency = 1 - 0.3 * P.ShaftPower * (1 - S.rain * 0.45)
 		placeSky(S.hour)
@@ -1951,8 +1961,6 @@ function Lofi.Start(ctx)
 		if #WIN.Lit > 0 and random:NextNumber() < 0.4 then
 			local lit = WIN.Lit[random:NextInteger(1, #WIN.Lit)]
 			lit.On = not lit.On
-		end
-		for _, lit in ipairs(WIN.Lit) do
 			lit.Frame.BackgroundTransparency = lit.On and (0.1 + (1 - S.night) * 0.9) or 1
 		end
 		-- Météo : les averses vont et viennent
@@ -2106,6 +2114,7 @@ function Lofi.Start(ctx)
 		if sipping then
 			pencilUp = true
 		end
+		local flipping = false
 		if S.pageFlip >= 0 then
 			-- La feuille passe de la page de droite à la page de gauche
 			S.pageFlip += dt / 0.6
@@ -2114,6 +2123,7 @@ function Lofi.Start(ctx)
 				S.pageFlip = -1
 				H.Page.Visible = false
 			else
+				flipping = true
 				H.Page.Visible = true
 				local width = math.abs(math.cos(p * math.pi)) * (NOTE_W / 2)
 				H.Page.AnchorPoint = Vector2.new(p < 0.5 and 0 or 1, 0.5)
@@ -2122,16 +2132,17 @@ function Lofi.Start(ctx)
 			end
 			pencilUp = true
 		end
-		if pencilUp then
-			-- Pause : lignes pleines (ou page blanche après le tournage)
-			local full = S.pageFlip < 0.5 and not (S.pageFlip < 0 and S.writeTime < 0.05)
-			if sipping then
-				full = S.writeTime >= LINE_TIME * 2
-			end
-			if not sipping then
-				H.Lines[1].Size = UDim2.fromOffset(full and WRITE_W or 0, 2.5)
-				H.Lines[2].Size = UDim2.fromOffset(full and WRITE_W or 0, 2.5)
-			end
+		if flipping then
+			-- Page pleine qui part, puis page blanche une fois tournée
+			local full = S.pageFlip < 0.5
+			H.Lines[1].Size = UDim2.fromOffset(full and WRITE_W or 0, 2.5)
+			H.Lines[2].Size = UDim2.fromOffset(full and WRITE_W or 0, 2.5)
+		elseif sipping then
+			-- (lignes figées pendant la gorgée)
+		elseif pencilUp and S.writeTime >= LINE_TIME * 2 then
+			-- Pause en fin de cycle : les deux lignes sont écrites
+			H.Lines[1].Size = UDim2.fromOffset(WRITE_W, 2.5)
+			H.Lines[2].Size = UDim2.fromOffset(WRITE_W, 2.5)
 		else
 			H.Lines[1].Size = UDim2.fromOffset(lineIndex == 1 and WRITE_W * progressLine or WRITE_W, 2.5)
 			H.Lines[2].Size = UDim2.fromOffset(lineIndex == 2 and WRITE_W * progressLine or 0, 2.5)
@@ -2213,7 +2224,6 @@ function Lofi.Start(ctx)
 			end
 		end
 		S.catLook += (look - S.catLook) * math.min(1, dt * 4)
-		S.catLift = lift
 		CAT.Head.Position = UDim2.fromOffset(CAT_HEAD_X + S.catLook * 1.5, CAT_HEAD_Y - lift * 5)
 		CAT.Head.Rotation = S.catLook * 9 + (yawn and -6 or 0)
 		for i, eye in ipairs(CAT.Open) do

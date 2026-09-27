@@ -35,7 +35,7 @@ export type Options = {
 	Near: number?,
 	GlowColor: Color3?, -- couleur du halo (mode sombre)
 	UpgradeId: string?, -- amélioration suivie pour OnLevel (par défaut Id)
-	ContainerZ: number?, -- ZIndex du conteneur dans le calque Background (défaut 92)
+	ContainerZ: number?, -- ZIndex du conteneur dans le calque Background (défaut 1100)
 }
 
 local GearPiece = {}
@@ -73,8 +73,10 @@ local SPARKLE_COLORS = {
 
 function GearPiece.new(ctx: any, options: Options, animator: GearKit.Animator?): Piece
 	local size = options.Size
-	-- Au-dessus des fonds animés (thème, néon, aurores... : ZIndex < 90), sous tout le reste
-	ctx.Container.ZIndex = options.ContainerZ or 92
+	-- Calque Background : fond du thème 0, mode néon ~50, fonds cosmiques 301-310,
+	-- nuages d'orage 1000 -> les accessoires (objets posés) sont au-dessus de ces
+	-- ambiances (1101-1107), et sous toute l'interface (calques Slots, Main...)
+	ctx.Container.ZIndex = options.ContainerZ or 1100
 	local fx = GearKit.FXLayer(ctx, "Gear_" .. options.Id .. "FX")
 	local root = Instance.new("Frame")
 	root.Name = "Gear_" .. options.Id

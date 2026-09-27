@@ -346,16 +346,16 @@ ChatReplies.Host = {
 	},
 	Name = {
 		en = {
-			"i'm MangeTout! nice to meet you {n} 💜", "{n}, cute name! 🥰",
+			"i'm MangeTout! nice to meet you {n} 💜", "MangeTout! it means \"eats everything\" in French 😋",
 			"everyone calls me the butter queen 👑🧈", "you can call me Mange ✨",
-			"MangeTout = eats everything 😋", "{n} is a great name, i'm stealing it 😂",
-			"welcome {n}, i'll remember your name 💜", "the streamer is me, hi 👋",
+			"MangeTout, professional snack tester 😎", "it's MangeTout! and you're {n}, i'll remember 💜",
+			"the streamer is me, MangeTout, hi 👋", "MangeTout! {n} is a cute name too 🥰",
 		},
 		fr = {
-			"moi c'est MangeTout ! enchantée {n} 💜", "{n}, trop joli pseudo ! 🥰",
+			"moi c'est MangeTout ! enchantée {n} 💜", "MangeTout ! parce que je mange tout 😋",
 			"tout le monde m'appelle la reine du beurre 👑🧈", "tu peux m'appeler Mange ✨",
-			"MangeTout = je mange tout 😋", "{n} c'est trop bien comme pseudo, je te le vole 😂",
-			"bienvenue {n}, je vais retenir ton pseudo 💜", "la streameuse c'est moi, coucou 👋",
+			"MangeTout, goûteuse professionnelle de goûters 😎", "c'est MangeTout ! et toi c'est {n}, je retiens 💜",
+			"la streameuse c'est moi, MangeTout, coucou 👋", "MangeTout ! {n} c'est trop joli comme pseudo aussi 🥰",
 		},
 	},
 	Pet = {
@@ -744,8 +744,12 @@ ChatReplies.Extra = {
 	},
 }
 
--- Sujets dont les réponses ne répondent pas à une question
-local NOT_ANSWERS = { Greeting = true, Bye = true, Mean = true, Sad = true, Laugh = true, Love = true, Compliment = true }
+-- Question + sujet précis : sujets dont les réponses "répondent", du plus
+-- concret au plus vague (les autres sujets ne servent pas de réponse)
+local ANSWER_PRIORITY = {
+	Name = 1, Age = 2, Pet = 3, Food = 4, Butter = 5, Music = 6, Game = 7, Weather = 8, School = 9, Help = 10,
+	ASMR = 11, Dopamine = 12, Follow = 13, Sleep = 14, Happy = 15,
+}
 
 -- Messages "test" (mots du message normalisé, séparés par une espace)
 local TEST_MESSAGES = {
@@ -839,9 +843,14 @@ function ChatReplies.Build(options: Options): Plan
 	end
 	-- Une question sur un sujet précis ("tu manges quoi ?") : elle répond avec ce sujet
 	local answer = primary
-	local second = topics[2]
-	if primary == "Question" and second and ChatReplies.Host[second] and not NOT_ANSWERS[second] then
-		answer = second
+	if primary == "Question" then
+		local best = math.huge
+		for index = 2, #topics do
+			local rank = ANSWER_PRIORITY[topics[index]]
+			if rank and rank < best and ChatReplies.Host[topics[index]] then
+				best, answer = rank, topics[index]
+			end
+		end
 	end
 	local topic: string = answer
 	local hostVariants: any = ChatReplies.Host[answer]

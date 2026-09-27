@@ -70,7 +70,7 @@ function CoralKeys.Start(ctx)
 		MinScale = 0.4,
 		MaxScale = 1,
 		GlowColor = Color3.fromRGB(170, 250, 240),
-		ContainerZ = 92,
+		ContainerZ = 1102,
 		Anchor = function(button, _canvas)
 			-- Sous le clavier mécanique, à gauche
 			return Vector2.new(button.X0 - 160, button.Y1 + 205)

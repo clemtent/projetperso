@@ -346,8 +346,9 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 		local solidColor = kind == "Top" and SKY_TOP_DAY or (kind == "Bottom" and SKY_BOTTOM_DAY or Color3.fromRGB(214, 226, 255))
 		local solid = newPart("Backdrop" .. name, Vector3.new(width + 4, height + 4, 1), CFrame.fromMatrix(at(center.X, center.Y, center.Z) - normal * 0.6, right, up), solidColor)
 		solid.Parent = folder
-		local part, gui = newCanvas("Sky" .. name, at(center.X, center.Y, center.Z), right, up, width, height, DEPTH_FAR, 0, nil, skyPPS)
-		local cw, ch = width * skyPPS, height * skyPPS
+		-- (toile un peu plus grande que la face : pas de joint visible dans les coins)
+		local part, gui = newCanvas("Sky" .. name, at(center.X, center.Y, center.Z), right, up, width + 3, height + 3, DEPTH_FAR, 0, nil, skyPPS)
+		local cw, ch = (width + 3) * skyPPS, (height + 3) * skyPPS
 		local fill = Instance.new("Frame")
 		fill.Name = "Sky"
 		fill.BorderSizePixel = 0
@@ -373,7 +374,8 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 				local n = noise(seed + index, 1)
 				local cloudW = (30 + 26 * n) * skyPPS
 				local cx = cw * ((index - 0.5) / 6) + (noise(seed + index, 2) - 0.5) * 20 * skyPPS
-				local cy = ch * (0.14 + 0.36 * noise(seed + index, 3))
+				-- (autour et un peu au-dessus de l'horizon de la maison : visibles derrière elle)
+				local cy = ch * (0.36 + 0.26 * noise(seed + index, 3))
 				local holder = Instance.new("Frame")
 				holder.Name = "Cloud" .. index
 				holder.BackgroundTransparency = 1

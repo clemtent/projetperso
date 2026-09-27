@@ -151,7 +151,8 @@ ChatTopics.Keywords = {
 	Weather = {
 		"weather", "rain", "raining", "rainy", "sun", "sunny", "snow", "snowing", "storm", "thunder", "cloud", "cloudy",
 		"wind", "cold", "hot", "summer", "winter", "meteo", "pluie", "pleut", "soleil", "neige", "orage", "tonnerre", "nuage",
-		"vent", "froid", "chaud", "hiver", "☀", "🌧", "❄", "⛈", "🌈", "☔",
+		"vent", "froid", "chaud", "hiver", "quel temps", "il fait beau", "beau temps", "mauvais temps", "☀", "🌧", "❄",
+		"⛈", "🌈", "☔",
 	},
 	School = {
 		"school", "homework", "exam", "exams", "teacher", "class", "classes", "study", "studying", "math", "maths", "grade",

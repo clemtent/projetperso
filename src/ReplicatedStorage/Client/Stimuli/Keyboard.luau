@@ -59,7 +59,7 @@ function Keyboard.Start(ctx)
 		MinScale = 0.4,
 		MaxScale = 1,
 		GlowColor = Color3.fromRGB(200, 190, 255),
-		ContainerZ = 94,
+		ContainerZ = 1104,
 		Anchor = function(button, _canvas)
 			-- En bas à gauche du bouton, à côté du compteur
 			return Vector2.new(button.X0 - 150, button.Y1 + 95)

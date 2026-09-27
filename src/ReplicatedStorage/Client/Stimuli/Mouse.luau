@@ -35,7 +35,7 @@ function Mouse.Start(ctx)
 		MinScale = 0.42,
 		MaxScale = 1,
 		GlowColor = Color3.fromRGB(190, 240, 255),
-		ContainerZ = 95,
+		ContainerZ = 1105,
 		Anchor = function(button, _canvas)
 			-- En bas à droite du bouton (le clavier est à gauche)
 			return Vector2.new(button.X1 + 150, button.Y1 + 100)

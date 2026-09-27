@@ -85,6 +85,10 @@ return {
 		["✋ Drag to move  •  🧁 small items go ON furniture  •  🪑 chairs snap to tables"] =
 			"✋ Glisse pour déplacer  •  🧁 petits objets SUR les meubles  •  🪑 chaises à table",
 
+		-- Boutique : filtres
+		["🍽️ Tables & chairs"] = "🍽️ Tables et chaises",
+		["🧁 On furniture"] = "🧁 À poser dessus",
+
 		-- Aperçu 3D
 		["🧊 3D"] = "🧊 3D",
 		["See this room in 3D"] = "Voir cette pièce en 3D",
