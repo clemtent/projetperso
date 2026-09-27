@@ -121,7 +121,7 @@ function QuantumFinger.Start(ctx)
 			local spread = n <= 1 and 12 or math.min(11, 36 / (n - 1))
 			local offset = perp * (k * spread) - dir * (5 + math.abs(k) * 3)
 			slot.Offset = offset
-			slot.Turn = k * 7
+			slot.Turn = k * (n <= 2 and 12 or 9)
 			slot.Aim.Position = UDim2.new(0.5, offset.X, 0.5, offset.Y)
 			slot.Aim.Rotation = aimAngle + slot.Turn
 		end

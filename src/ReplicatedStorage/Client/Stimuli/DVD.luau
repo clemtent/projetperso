@@ -103,7 +103,7 @@ local GLOSS = ColorSequence.new({
 -- { { largeur, hauteur }, ... } en pixels "design".
 local function ellipseLayers(a: number, b: number): { { number } }
 	local layers = {}
-	for _, f in ipairs({ 0.36, 0.56, 0.72, 0.84, 0.93, 0.98, 1 }) do
+	for _, f in ipairs({ 0.3, 0.43, 0.56, 0.68, 0.79, 0.88, 0.95, 1 }) do
 		local halfH = b * f
 		local halfW = math.min(a, halfH + a * math.sqrt(math.max(0, 1 - f * f)))
 		table.insert(layers, { halfW * 2, halfH * 2 })

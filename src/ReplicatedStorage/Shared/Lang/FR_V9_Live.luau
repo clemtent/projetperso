@@ -12,6 +12,7 @@
 return {
 	fr = {
 		["Sending…"] = "Envoi…",
+		["Type here…"] = "Écris ici…",
 		["⏳ Slow mode: %ss"] = "⏳ Mode lent : %ss",
 		["you"] = "toi",
 		["📌 Write in the chat: <b>she reads everything</b>! 💬"] = "📌 Écris dans le chat : <b>elle lit tout</b> ! 💬",

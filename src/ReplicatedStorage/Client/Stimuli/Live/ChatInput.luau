@@ -76,6 +76,8 @@ function ChatInput.new(ctx: any, options: Options)
 	local Theme = ctx.Theme
 	local zBase = options.ZIndex or 3
 	local placeholder = Locale.T("Send a message") .. "…"
+	local compactPlaceholder = Locale.T("Type here…")
+	local isCompact = false
 
 	local height, sendSize = 22, 18
 	local sending, token, sentAt = false, 0, 0
@@ -102,6 +104,17 @@ function ChatInput.new(ctx: any, options: Options)
 	UI.Gradient(frame, ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(196, 190, 220)), 90)
 	local stroke = UI.Stroke(frame, STROKE_IDLE, 1, 0.3)
 
+	-- Zone du texte : découpe ce qui dépasse (texte long, indication) avant le bouton
+	local field = UI.Create("Frame", {
+		Name = "Field",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ClipsDescendants = true,
+		Position = UDim2.fromOffset(8, 0),
+		Size = UDim2.new(1, -(8 + sendSize + 7), 1, 0),
+		ZIndex = zBase + 1,
+		Parent = frame,
+	})
 	local box = UI.Create("TextBox", {
 		Name = "ChatBox",
 		Text = "",
@@ -116,10 +129,9 @@ function ChatInput.new(ctx: any, options: Options)
 		ClipsDescendants = true,
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(8, 0),
-		Size = UDim2.new(1, -(8 + sendSize + 7), 1, 0),
+		Size = UDim2.fromScale(1, 1),
 		ZIndex = zBase + 1,
-		Parent = frame,
+		Parent = field,
 	})
 
 	local send = UI.Create("TextButton", {
@@ -257,7 +269,7 @@ function ChatInput.new(ctx: any, options: Options)
 	local function setBusy(busy: boolean)
 		box.TextEditable = not busy
 		box.TextTransparency = busy and 0.55 or 0
-		box.PlaceholderText = busy and Locale.T("Sending…") or placeholder
+		box.PlaceholderText = busy and Locale.T("Sending…") or (isCompact and compactPlaceholder or placeholder)
 		refreshSend(os.clock())
 	end
 
@@ -413,8 +425,12 @@ function ChatInput.new(ctx: any, options: Options)
 		sendSize = compact and 26 or 18
 		api.Height = height
 		frame.Size = UDim2.new(1, -10, 0, height)
+		isCompact = compact
 		box.TextSize = compact and 14 or 11
-		box.Size = UDim2.new(1, -(8 + sendSize + 7), 1, 0)
+		field.Size = UDim2.new(1, -(8 + sendSize + 7), 1, 0)
+		if not sending then
+			box.PlaceholderText = compact and compactPlaceholder or placeholder
+		end
 		send.Size = UDim2.fromOffset(sendSize, sendSize)
 		arrowScale.Scale = sendSize / ARROW_BOX
 		sendLabel.TextSize = compact and 14 or 10

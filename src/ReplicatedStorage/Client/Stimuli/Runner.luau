@@ -2667,7 +2667,8 @@ function Runner.Start(ctx)
 	-- HUD (pièces, distance, record, combo, bonus en cours)
 	------------------------------------------------------------------
 	local hudLayer = layer("HUD", 9, screen)
-	local hud = {}
+	local hud: any = {}
+	local hudBoost = 1 -- agrandissement des pastilles (téléphone)
 
 	local function pill(position: UDim2, size: UDim2, anchor: Vector2?): Frame
 		local p = frame({
@@ -2739,6 +2740,7 @@ function Runner.Start(ctx)
 	})
 
 	hud.DistPill = pill(UDim2.new(1, -6 * U, 0, 6 * U), UDim2.fromOffset(84 * U, 21 * U), Vector2.new(1, 0))
+	hud.DistScale = Create("UIScale", { Parent = hud.DistPill })
 	hud.DistStroke = hud.DistPill:FindFirstChildOfClass("UIStroke")
 	hud.DistLabel = UIUtil.Label({
 		Text = "0 m",
@@ -4887,14 +4889,14 @@ function Runner.Start(ctx)
 		end
 		if st.CoinPulse > 0 then
 			st.CoinPulse = math.max(0, st.CoinPulse - dt * 5)
-			hud.CoinScale.Scale = 1 + 0.16 * st.CoinPulse
+			hud.CoinScale.Scale = hudBoost * (1 + 0.16 * st.CoinPulse)
 		end
 		hud.DoubleBadge.Visible = st.DoubleTime > 0
 		-- Badge des baskets : rebondit quand le niveau change
 		if st.ShoePulse > 0 then
 			st.ShoePulse = math.max(0, st.ShoePulse - dt / 0.9)
 			local k = 1 - st.ShoePulse
-			hud.ShoeScale.Scale = 1 + 0.4 * math.sin(k * math.pi) * (1 - k * 0.5)
+			hud.ShoeScale.Scale = hudBoost * (1 + 0.4 * math.sin(k * math.pi) * (1 - k * 0.5))
 		end
 
 		-- Combo (à partir de 5 pièces d'affilée)
@@ -4925,6 +4927,35 @@ function Runner.Start(ctx)
 	end
 
 	------------------------------------------------------------------
+	-- Téléphone : la carte est très réduite (échelle du slot ~0,4) ; les
+	-- pastilles principales (pièces, distance, baskets) sont agrandies pour
+	-- rester lisibles, la ligne du dessous (bonus, combo, record) descend
+	------------------------------------------------------------------
+	local function applyHudBoost()
+		if container:GetAttribute("SlotAnimating") then
+			return -- apparition "pop" en cours : taille pas encore définitive
+		end
+		-- échelle réelle à l'écran (toile de l'interface x échelle du slot)
+		local scale = screen.AbsoluteSize.X / math.max(1, SW)
+		if scale <= 0 then
+			return
+		end
+		local boost = math.clamp(0.55 / scale, 1, 1.3)
+		if math.abs(boost - hudBoost) < 0.01 then
+			return
+		end
+		hudBoost = boost
+		hud.CoinScale.Scale = boost
+		hud.DistScale.Scale = boost
+		hud.ShoeScale.Scale = boost
+		local row = (6 + 21 * boost + 4) * U -- sous les pastilles agrandies
+		hud.Power.Pill.Position = UDim2.fromOffset(6 * U, row)
+		hud.BestLabel.Position = UDim2.new(1, -10 * U, 0, row - 3 * U)
+		hud.ComboPill.Position = boost > 1.05 and UDim2.new(0.5, 0, 0, row) or UDim2.new(0.5, 0, 0, 6 * U)
+	end
+	applyHudBoost()
+
+	------------------------------------------------------------------
 	-- Boucle principale
 	------------------------------------------------------------------
 	ctx.OnRender(function(rawDt: number)
@@ -4933,6 +4964,7 @@ function Runner.Start(ctx)
 		if st.VisibleCheck <= 0 then
 			st.VisibleCheck = 0.5
 			st.Visible = computeVisible()
+			applyHudBoost()
 		end
 		if not st.Visible then
 			return

@@ -118,6 +118,7 @@ export type Editor = {
 	Flip: () -> boolean,
 	SendTo: (roomId: string) -> boolean,
 	SetSendHandler: (handler: (entry: Placed) -> ()) -> (),
+	SetDockHost: (host: GuiObject?) -> (), -- téléphone : la barre d'outils prend la place de l'inventaire
 	Undo: () -> boolean,
 	Redo: () -> boolean,
 	CanUndo: () -> boolean,
@@ -254,9 +255,10 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 	})
 	toolbar:SetAttribute("DarkSkinIgnore", true)
 	local toolbarScale = UIUtil.Create("UIScale", { Parent = toolbar })
-	UIUtil.Create("UIListLayout", {
+	local toolbarLayout = UIUtil.Create("UIListLayout", {
 		FillDirection = Enum.FillDirection.Vertical,
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Padding = UDim.new(0, 5),
 		Parent = toolbar,
@@ -656,8 +658,10 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		return al < br and bl < ar and at < bb and bt < ab
 	end
 
-	-- Barre en bas de la scène (téléphone / petite scène) ou près de l'objet
+	-- Barre en bas (téléphone / petite scène : à la place de l'inventaire si
+	-- la fenêtre a donné un "hôte", sinon en bas de la scène) ou près de l'objet
 	local docked = false
+	local dockHost: GuiObject? = nil
 	local function wantDocked(): boolean
 		if Interface.IsPhone() then
 			return true
@@ -668,20 +672,51 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 	end
 	local function applyToolbarMode()
 		local dock = wantDocked()
-		if dock == docked and toolbar.Parent ~= nil then
+		local host = dockHost
+		local parent: Instance = dock and (host or room.Stage) or room.Overlay
+		if dock == docked and toolbar.Parent == parent then
 			return
 		end
 		docked = dock
 		HouseButtons.HideTipOf(toolbar)
+		if host and not dock then
+			host.Visible = false
+		end
 		if dock then
-			toolbar.Parent = room.Stage
+			toolbar.Parent = parent
 			toolbar.ZIndex = 25
-			toolbar.AnchorPoint = Vector2.new(0.5, 1)
-			toolbar.Position = UDim2.new(0.5, 0, 1, -6)
 			toolbarScale.Scale = 1
+			if host then
+				-- (une seule rangée : nom à gauche, outils à droite)
+				toolbarLayout.FillDirection = Enum.FillDirection.Horizontal
+				toolbar.AnchorPoint = Vector2.new(0.5, 0.5)
+				toolbar.Position = UDim2.fromScale(0.5, 0.5)
+			else
+				toolbarLayout.FillDirection = Enum.FillDirection.Vertical
+				toolbar.AnchorPoint = Vector2.new(0.5, 1)
+				toolbar.Position = UDim2.new(0.5, 0, 1, -6)
+			end
 		else
+			toolbarLayout.FillDirection = Enum.FillDirection.Vertical
 			toolbar.Parent = room.Overlay
 			toolbar.ZIndex = 20
+		end
+	end
+
+	-- Hôte (téléphone) : visible avec la barre ; la barre rétrécit si besoin
+	local function fitDockHost(visible: boolean)
+		local host = dockHost
+		if not host or not docked then
+			return
+		end
+		host.Visible = visible
+		if visible then
+			local factor = Interface.Scale > 0 and Interface.Scale or 1
+			local hostWidth = host.AbsoluteSize.X / factor
+			local barWidth = toolbar.AbsoluteSize.X / factor / math.max(0.2, toolbarScale.Scale)
+			if hostWidth > 0 and barWidth > 0 then
+				toolbarScale.Scale = math.clamp((hostWidth - 12) / barWidth, 0.5, 1)
+			end
 		end
 	end
 
@@ -689,16 +724,19 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		local entry = selected
 		if not entry or not editing or (drag ~= nil and (drag :: Drag).Moved) then
 			toolbar.Visible = false
+			fitDockHost(false)
 			return
 		end
 		local sticker = stickers[entry]
 		if not sticker then
 			toolbar.Visible = false
+			fitDockHost(false)
 			return
 		end
 		applyToolbarMode()
 		if docked then
 			toolbar.Visible = true
+			fitDockHost(true)
 			return
 		end
 		local scale = math.max(0.2, room.Scale)
@@ -2223,6 +2261,15 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		SendTo = sendTo,
 		SetSendHandler = function(handler: (entry: Placed) -> ())
 			sendHandler = handler
+		end,
+		SetDockHost = function(host: GuiObject?)
+			local old = dockHost
+			if old and old ~= host then
+				old.Visible = false
+			end
+			dockHost = host
+			docked = false
+			positionToolbar()
 		end,
 		Undo = undo,
 		Redo = redo,

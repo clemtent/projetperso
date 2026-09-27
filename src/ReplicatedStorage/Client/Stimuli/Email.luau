@@ -3012,7 +3012,8 @@ function Email.Start(ctx)
 		cmp.FixedName = text({ Position = UDim2.fromOffset(44, 0), Size = UDim2.new(1, -56, 1, 0), Font = FONT_TITLE, TextSize = 14 + F, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 6, Parent = cmp.Fixed })
 
 		local function field(name: string, multi: boolean, placeholder: string): (Frame, TextBox)
-			local holder = frame({ Name = name .. "Field", Position = UDim2.fromOffset(P, 0), Size = UDim2.new(1, -P * 2, 0, 36), BackgroundColor3 = C.Field, ZIndex = 5, Parent = composeView })
+			-- (ClipsDescendants : un long texte ne déborde jamais du champ)
+			local holder = frame({ Name = name .. "Field", Position = UDim2.fromOffset(P, 0), Size = UDim2.new(1, -P * 2, 0, 36), BackgroundColor3 = C.Field, ClipsDescendants = true, ZIndex = 5, Parent = composeView })
 			UIUtil.Corner(holder, 9)
 			local stroke = UIUtil.Stroke(holder, Color3.fromRGB(204, 210, 226), 1.3, 0)
 			local box = UIUtil.Create("TextBox", {

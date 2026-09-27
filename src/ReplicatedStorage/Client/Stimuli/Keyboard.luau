@@ -73,7 +73,7 @@ function Keyboard.Start(ctx)
 	local hueOffset = 0
 
 	-- "clac !" réutilisés (sur la toile, pas mis à l'échelle)
-	local pops = GearKit.Pool(5, function(index)
+	local pops = GearKit.Pool(3, function(index)
 		local label = Instance.new("TextLabel")
 		label.Name = "Clack"
 		label.BackgroundTransparency = 1
@@ -160,10 +160,10 @@ function Keyboard.Start(ctx)
 		-- Lueur sous le clavier
 		if level >= 6 then
 			local glowColor = level >= 7 and Color3.new(1, 1, 1) or Color3.fromRGB(80, 230, 255)
-			local glow = GearKit.Box(root, 5, 8, W - 10, 60, glowColor, {
+			local glow = GearKit.Box(root, 2, 4, W - 4, 67, glowColor, {
 				Name = "Underglow",
 				Radius = 16,
-				Transparency = 0.3,
+				Transparency = 0.12,
 				Z = 4,
 				Gradient = level >= 7 and GearKit.RainbowSequence(0, 0.85) or nil,
 				GradientRotation = 0,
@@ -300,10 +300,10 @@ function Keyboard.Start(ctx)
 		local scale = label:FindFirstChildOfClass("UIScale")
 		local big = level >= 9
 		label.Text = big and Locale.T("CLACK!") or Locale.T("clack!")
-		label.TextSize = big and 17 or 13
-		local drift = random:NextNumber(-10, 10)
-		local rise = big and 30 or 22
-		animator:Play(label, 0.55, function(t)
+		label.TextSize = big and 16 or 12
+		local drift = random:NextNumber(-14, 14)
+		local rise = (big and 30 or 22) + random:NextNumber(0, 10)
+		animator:Play(label, 0.45, function(t)
 			label.Visible = t < 1
 			local e = GearKit.Ease.OutCubic(t)
 			label.Position = UDim2.fromOffset(point.X + drift * e, point.Y - 2 - rise * e)

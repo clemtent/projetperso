@@ -225,10 +225,26 @@ local function collectColumn(list: { Rect }, column: Instance)
 	end
 end
 
+-- Objets persistants connus des autres stimuli plein écran (sans attribut)
+local KNOWN_OVERLAY = {
+	Disco = { "Ball" }, -- boule disco accrochée au bandeau d'actu
+}
+
 -- Objets marqués LayoutObstacle = true dans un calque plein écran (hors accessoires)
 local function collectMarked(list: { Rect }, layer: Instance?)
 	if not layer then
 		return
+	end
+	for containerName, names in pairs(KNOWN_OVERLAY) do
+		local container = layer:FindFirstChild(containerName)
+		if container and container:IsA("GuiObject") and container.Visible then
+			for _, name in ipairs(names) do
+				local item = container:FindFirstChild(name, true)
+				if item then
+					addObject(list, item, 10, 10)
+				end
+			end
+		end
 	end
 	for _, container in ipairs(layer:GetChildren()) do
 		if container:IsA("GuiObject") and container.Visible then

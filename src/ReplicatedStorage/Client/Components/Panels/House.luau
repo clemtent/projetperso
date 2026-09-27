@@ -73,6 +73,7 @@ local overviewHolder: Frame
 local stage: Frame
 local stageFade: Frame
 local tray: Frame
+local toolDock: Frame -- téléphone : la barre d'outils de l'objet choisi prend la place de l'inventaire
 local trayList: ScrollingFrame
 local trayEmpty: TextLabel
 local emptyHint: Frame
@@ -594,6 +595,10 @@ local function layoutLeft(animate: boolean)
 	local trayHeight = isPhone() and 70 or 82
 	tray.Size = UDim2.new(1, 0, 0, trayHeight)
 	tray.Visible = editing
+	toolDock.Size = UDim2.new(1, 0, 0, trayHeight + 8)
+	if not editing then
+		toolDock.Visible = false
+	end
 	local stageTarget = UDim2.new(1, 0, 1, editing and -(trayHeight + 8) or 0)
 	if animate then
 		UIUtil.Tween(stage, 0.3, { Size = stageTarget }, Enum.EasingStyle.Quint)
@@ -1058,6 +1063,7 @@ local function ensureBuilt()
 	end)
 	newEditor.HistoryChanged:Connect(refreshDock)
 	newEditor.SetSendHandler(askSendTarget)
+	newEditor.SetDockHost(toolDock)
 
 	picker = HousePicker.new(content)
 
@@ -1618,6 +1624,21 @@ function House.Build(frame: Frame)
 	UIUtil.Corner(tray, 18)
 	UIUtil.Stroke(tray, C.Pink, 1.5, 0.3)
 	UIUtil.SinkClicks(tray)
+	-- (téléphone) barre d'outils de l'objet choisi, par-dessus l'inventaire
+	toolDock = UIUtil.Create("Frame", {
+		Name = "ToolDock",
+		Size = UDim2.new(1, 0, 0, 90),
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 0, 1, 0),
+		BackgroundColor3 = C.PinkMist,
+		Visible = false,
+		ZIndex = 26,
+		Parent = left,
+	})
+	UIUtil.Corner(toolDock, 18)
+	UIUtil.Stroke(toolDock, C.Pink, 1.5, 0.2)
+	UIUtil.Gradient(toolDock, ColorSequence.new(WHITE, Color3.fromRGB(255, 232, 244)), 90)
+	UIUtil.SinkClicks(toolDock)
 	UIUtil.Create("TextLabel", {
 		Name = "Title",
 		Size = UDim2.new(0, 104, 1, -12),

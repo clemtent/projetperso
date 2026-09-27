@@ -405,6 +405,12 @@ local function styleButton(button: TextButton, text: string, background: Color3,
 	if coinFrame then
 		coinFrame.Visible = coin == true
 	end
+	-- Contour : foncé sur un bouton actif, doux (teinte du fond) sinon
+	local buttonStroke = button:FindFirstChildOfClass("UIStroke")
+	if buttonStroke then
+		buttonStroke.Color = enabled and Theme.Colors.Border or background:Lerp(BLACK, 0.35)
+		buttonStroke.Transparency = enabled and 0.1 or 0.35
+	end
 	button:SetAttribute("BaseColor", background)
 	button.BackgroundColor3 = background
 	button.TextColor3 = textColor
