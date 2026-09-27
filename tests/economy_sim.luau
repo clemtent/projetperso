@@ -36,6 +36,9 @@
 	    arrête d'acheter ce qui ne serait pas remboursé à temps.
 	Les récompenses "secondes de production" utilisent Formulas.ScaledReward
 	(même production de référence que le serveur).
+	Débogage : la variable globale SIM_DEBUG = true (avant Sim.Run) affiche
+	chaque achat (BUY t visites nom prix banque gains/s gain), chaque succès
+	(ACH) et chaque visite à l'océan (DEBUG R).
 ]]
 
 local Config = require("Config")
