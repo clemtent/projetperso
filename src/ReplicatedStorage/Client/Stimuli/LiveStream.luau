@@ -1542,15 +1542,26 @@ function LiveStream.Start(ctx)
 
 	-- Dons : alertes empilées en haut de la vidéo (sous les pastilles)
 	-- (v9.1 : en haut de la colonne du chat, comme les cadeaux d'une appli de live)
-	local donationStack = box({
-		Name = "Donations",
+	-- Colonne d'alertes : dons EN PREMIER puis sa bulle de parole (jamais l'un sous l'autre)
+	K.alerts = box({
+		Name = "AlertColumn",
 		Position = UDim2.fromOffset(CHAT_X, CHAT_TOP - 4),
-		Size = UDim2.fromOffset(CHAT_COL_W, 110),
+		Size = UDim2.fromOffset(CHAT_COL_W, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1,
 		ZIndex = 1,
 		Parent = alertLayer,
 	})
-	UI.Create("UISizeConstraint", { MaxSize = Vector2.new(240, 110), Parent = donationStack })
+	UI.Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 5), Parent = K.alerts })
+	local donationStack = box({
+		Name = "Donations",
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		LayoutOrder = 1,
+		ZIndex = 2,
+		Parent = K.alerts,
+	})
 	UI.Create("UIListLayout", {
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
@@ -1663,13 +1674,13 @@ function LiveStream.Start(ctx)
 	do
 		local bubble = box({
 			Name = "Speech",
-			Position = UDim2.fromOffset(CHAT_X, CHAT_TOP - 4),
+			LayoutOrder = 2,
 			Size = UDim2.fromOffset(BUBBLE_W, 0),
 			AutomaticSize = Enum.AutomaticSize.Y,
 			BackgroundColor3 = WHITE,
 			Visible = false,
-			ZIndex = 5,
-			Parent = alertLayer,
+			ZIndex = 1,
+			Parent = K.alerts,
 		}, 10)
 		UI.Gradient(bubble, ColorSequence.new(WHITE, Color3.fromRGB(246, 238, 255)), 90)
 		UI.Stroke(bubble, Color3.fromRGB(190, 150, 255), 2, 0)

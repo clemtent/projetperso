@@ -4,9 +4,10 @@
 
 	Vue 3D "maison de poupée" d'une pièce (bouton "🧊 3D" de la vue pièce) :
 	une vraie maquette en 3D, construite côté client dans le Workspace, loin
-	du monde (House3DScene : studio de ciel pastel, socle fleuri, murs et sol
-	avec le papier peint et le sol de la pièce, objets en cartons découpés
-	dessinés avec HouseArt), filmée par une caméra Scriptable :
+	du monde (House3DScene : studio pastel, socle fleuri, pièce en vraies
+	Parts opaques avec le papier peint / le sol / les moulures / l'ambiance
+	de la pièce, objets en 3D (House3DRecipes) ou en cartons épais),
+	filmée par une caméra Scriptable :
 	  - glisser (souris / doigt) = tourner autour (±70°, inclinaison
 	    limitée), molette / pincer = zoomer, amorti doux ;
 	  - au repos, la caméra se balance doucement toute seule ;
@@ -15,7 +16,19 @@
 	    ✕ fermer (Échap ferme aussi) ;
 	  - pendant la vue, TOUTES les ScreenGui du joueur sont masquées ; à la
 	    fermeture on remet EXACTEMENT : les ScreenGui qui étaient visibles,
-	    et la caméra (CameraType, CameraSubject, CFrame, FieldOfView, Focus).
+	    la caméra (CameraType, CameraSubject, CFrame, FieldOfView, Focus)
+	    et l'éclairage du lieu (Lighting + Atmosphere / flous, réglés
+	    pendant la vue pour que la pièce soit toujours bien éclairée) ;
+	  - la caméra est reprise CHAQUE image après toutes les autres
+	    (BindToRenderStep, priorité Last) : les scripts de caméra par
+	    défaut ne peuvent pas la déplacer.
+	v9.1 (vu dans le vrai Roblox : "c'est en 2D, on ne voit ni le sol ni
+	les murs") : le décor était dessiné sur des SurfaceGui portées par des
+	pièces invisibles de 2040 studs d'épaisseur (pour l'ordre d'affichage).
+	Le centre de ces pièces était à plus de 1000 studs de la caméra, or une
+	SurfaceGui neuve a MaxDistance = 1000 : sol, murs et ciel n'étaient
+	pas dessinés, il ne restait que les cartons plats. Tout est maintenant
+	en Parts opaques de taille normale (voir House3DScene).
 	Robuste : double ouverture (la vue précédente est fermée proprement),
 	réapparition du personnage, nouvelle caméra, erreurs (un objet cassé
 	n'empêche pas les autres de s'afficher). Travail par image = caméra
@@ -37,6 +50,7 @@ local TweenService = game:GetService("TweenService")
 local GuiService = game:GetService("GuiService")
 local TextService = game:GetService("TextService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Lighting = game:GetService("Lighting")
 
 local Client = script.Parent.Parent.Parent
 local Theme = require(Client.Theme)
@@ -48,6 +62,7 @@ local House3D = {}
 
 export type Options = {
 	Room: any,
+	House: any?,
 	SizeId: string?,
 	Title: string?,
 	OnClose: (() -> ())?,
@@ -73,6 +88,11 @@ local AUTO_AMPLITUDE = math.rad(24)
 local AUTO_PERIOD = 16
 local FRONT_MARGIN = 1.2 -- la caméra reste devant le bord avant de la pièce
 local REHIDE_EVERY = 1 -- (s) vérifie que les autres interfaces restent masquées
+-- Propriétés de Lighting réglées pendant la vue (et remises à la fermeture)
+local LIGHTING_KEYS = { "ClockTime", "Brightness", "Ambient", "OutdoorAmbient", "ColorShift_Top", "ColorShift_Bottom", "EnvironmentDiffuseScale",
+	"EnvironmentSpecularScale", "ExposureCompensation", "GlobalShadows", "ShadowSoftness", "FogStart", "FogEnd", "GeographicLatitude" }
+-- Effets du lieu coupés pendant la vue (flou de profondeur, flou, correction de couleur)
+local EFFECT_CLASSES = { "DepthOfFieldEffect", "BlurEffect", "ColorCorrectionEffect" }
 
 local WHITE = Color3.new(1, 1, 1)
 local C = HouseCommon.Colors
@@ -87,6 +107,8 @@ type Saved = {
 
 type Session = {
 	Alive: boolean,
+	LightingSaved: { [string]: any },
+	EffectsSaved: { { Instance: Instance, Property: string, Value: any } },
 	OnClose: (() -> ())?,
 	Saved: Saved?,
 	Hidden: { ScreenGui },
@@ -133,6 +155,7 @@ type Session = {
 }
 
 local session: Session? = nil
+local applyLighting: (s: Session) -> ()
 
 ----------------------------------------------------------------------
 -- Outils
@@ -362,6 +385,7 @@ local function stepCamera(s: Session, dt: number)
 		camera.FieldOfView = FOV
 	end
 	scene.UpdateWalls(cframe.Position)
+	scene.Step(dt)
 	-- Les autres interfaces restent masquées (une ScreenGui réactivée ailleurs)
 	s.RehideClock += dt
 	if s.RehideClock >= REHIDE_EVERY then
@@ -406,6 +430,81 @@ local function refreshNightButton(s: Session)
 	end
 end
 
+----------------------------------------------------------------------
+-- Éclairage du lieu (réglé pendant la vue, remis EXACTEMENT à la fermeture)
+----------------------------------------------------------------------
+
+local function saveLighting(s: Session)
+	for _, key in ipairs(LIGHTING_KEYS) do
+		local ok, value = pcall(function()
+			return (Lighting :: any)[key]
+		end)
+		if ok and value ~= nil then
+			s.LightingSaved[key] = value
+		end
+	end
+	for _, child in ipairs(Lighting:GetChildren()) do
+		if child:IsA("Atmosphere") then
+			local ok, density = pcall(function()
+				return child.Density
+			end)
+			if ok then
+				table.insert(s.EffectsSaved, { Instance = child, Property = "Density", Value = density })
+				pcall(function()
+					child.Density = 0
+				end)
+			end
+		else
+			for _, className in ipairs(EFFECT_CLASSES) do
+				if child:IsA(className) then
+					local ok, enabled = pcall(function()
+						return (child :: any).Enabled
+					end)
+					if ok then
+						table.insert(s.EffectsSaved, { Instance = child, Property = "Enabled", Value = enabled })
+						pcall(function()
+							(child :: any).Enabled = false
+						end)
+					end
+				end
+			end
+		end
+	end
+end
+
+applyLighting = function(s: Session)
+	local scene = s.Scene
+	if not scene then
+		return
+	end
+	local okProps, props = pcall(scene.Lighting, s.Night)
+	if not okProps or type(props) ~= "table" then
+		return
+	end
+	for key, value in pairs(props) do
+		if s.LightingSaved[key] ~= nil then
+			pcall(function()
+				(Lighting :: any)[key] = value
+			end)
+		end
+	end
+end
+
+local function restoreLighting(s: Session)
+	for key, value in pairs(s.LightingSaved) do
+		pcall(function()
+			(Lighting :: any)[key] = value
+		end)
+	end
+	table.clear(s.LightingSaved)
+	for _, saved in ipairs(s.EffectsSaved) do
+		pcall(function()
+			(saved.Instance :: any)[saved.Property] = saved.Value
+		end)
+	end
+	table.clear(s.EffectsSaved)
+end
+
 local function toggleNight(s: Session)
 	touched(s)
 	s.Night = not s.Night
@@ -413,6 +512,7 @@ local function toggleNight(s: Session)
 	if scene then
 		scene.SetNight(s.Night)
 	end
+	applyLighting(s)
 	refreshNightButton(s)
 end
 
@@ -972,6 +1072,9 @@ local function start(s: Session, options: Options)
 	s.Scene = scene
 	s.FrontZ = scene.FrontZ
 	s.Focus = scene.Focus
+	-- Éclairage : la pièce est bien éclairée quel que soit le réglage du lieu
+	saveLighting(s)
+	applyLighting(s)
 	if playerGui then
 		gui.Parent = playerGui
 	end
@@ -985,7 +1088,8 @@ local function start(s: Session, options: Options)
 	camera.FieldOfView = FOV
 	camera.CFrame = orbitCFrame(s.Focus, s.Yaw, s.Pitch, s.Fit * s.Zoom)
 	camera.Focus = CFrame.new(s.Focus)
-	RunService:BindToRenderStep(RENDER_NAME, Enum.RenderPriority.Camera.Value + 1, function(dt: number)
+	-- (priorité Last : après les scripts de caméra de Roblox et tous les autres)
+	RunService:BindToRenderStep(RENDER_NAME, Enum.RenderPriority.Last.Value, function(dt: number)
 		if s.Alive then
 			local ok, err = pcall(stepCamera, s, dt)
 			if not ok and not s.Warned then
@@ -995,6 +1099,12 @@ local function start(s: Session, options: Options)
 		end
 	end)
 	s.Bound = true
+	-- Un autre script remet la caméra en mode normal : on la reprend tout de suite
+	table.insert(s.Connections, camera:GetPropertyChangedSignal("CameraType"):Connect(function()
+		if s.Alive and camera.CameraType ~= Enum.CameraType.Scriptable then
+			camera.CameraType = Enum.CameraType.Scriptable
+		end
+	end))
 
 	table.insert(s.Connections, UserInputService.InputBegan:Connect(function(input: InputObject, processed: boolean)
 		if s.Alive then
@@ -1062,6 +1172,7 @@ local function closeSession()
 	end
 	table.clear(s.Connections)
 	pcall(restoreCamera, s)
+	pcall(restoreLighting, s)
 	for _, gui in ipairs(s.Hidden) do
 		if gui.Parent then
 			pcall(function()
@@ -1105,6 +1216,8 @@ local function openSession(options: Options?): boolean
 	end
 	local s: Session = {
 		Alive = true,
+		LightingSaved = {},
+		EffectsSaved = {},
 		OnClose = type(options.OnClose) == "function" and options.OnClose or nil,
 		Saved = nil,
 		Hidden = {},

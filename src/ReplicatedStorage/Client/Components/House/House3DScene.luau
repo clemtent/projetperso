@@ -234,7 +234,6 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 	local wallpaper = HouseCommon.GetRoomWallpaper(roomData)
 	local floorStyle = HouseCommon.GetRoomFloor(roomData)
 	local wallA = wallpaper and wallpaper.A or C.PinkSoft
-	local wallB = wallpaper and wallpaper.B or C.Pink
 	local floorA = floorStyle and floorStyle.A or C.Lilac
 	local night = startNight == true
 	local destroyed = false
@@ -996,11 +995,14 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 		local model = build.Model
 		local parts: { BasePart } = {}
 		local finals: { CFrame } = {}
+		local holder = Instance.new("Folder")
+		holder.Name = "Item_" .. tostring(build.Item.Id)
+		holder.Parent = itemFolder
 		if model then
 			for index, p in ipairs(model.Parts) do
 				local final = build.Origin * model.Locals[index]
 				p.CFrame = final
-				p.Parent = itemFolder
+				p.Parent = holder
 				table.insert(parts, p)
 				table.insert(finals, final)
 			end
@@ -1031,14 +1033,14 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 			if build.Kind == "Wall" then
 				cf = cf * CFrame.new(0, 50 * build.K, 0.08)
 			end
-			local card = House3DKit.Card(itemFolder, cf, painted, build.K, twoSided, 0.6)
+			local card = House3DKit.Card(holder, cf, painted, build.K, twoSided, 0.6)
 			build.Card = card
 			table.insert(parts, card)
 			table.insert(finals, card.CFrame)
 			-- petit socle en bois sous les cartons posés au sol
 			if build.Kind == "Floor" and build.Relation ~= "On" then
 				local base = newPart("Part", "CardStand", Vector3.new(math.max(0.6, 60 * build.K), 0.18, 0.7), build.Origin * CFrame.new(0, 0.09, 0), Color3.fromRGB(214, 170, 130), M.Wood)
-				base.Parent = itemFolder
+				base.Parent = holder
 				table.insert(parts, base)
 				table.insert(finals, base.CFrame)
 			end

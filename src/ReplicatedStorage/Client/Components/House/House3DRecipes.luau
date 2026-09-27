@@ -57,7 +57,6 @@ local INK = rgb(70, 48, 76)
 local LEAF = rgb(120, 200, 120)
 local LEAF_DARK = rgb(70, 150, 90)
 local GLASS = rgb(200, 235, 255)
-local SCREEN = rgb(40, 44, 80)
 local FIRE = rgb(255, 150, 60)
 
 local darken = House3DKit.Darken

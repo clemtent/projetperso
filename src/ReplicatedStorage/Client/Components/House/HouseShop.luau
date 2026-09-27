@@ -46,6 +46,7 @@ local HouseArt = require(script.Parent.HouseArt)
 local HousePatterns = require(script.Parent.HousePatterns)
 local HouseButtons = require(script.Parent.HouseButtons)
 local HouseSurfaces = require(script.Parent.HouseSurfaces)
+local HouseLookCards = require(script.Parent.HouseLookCards)
 
 type Item = HouseCommon.Item
 type Style = HouseCommon.Style
@@ -157,19 +158,63 @@ type SizeRow = {
 }
 
 -- Onglets : Id, icône (onglet replié), texte (onglet choisi)
+-- (v9.1) "🎨 Style de pièce" et "🌷 Dehors" regroupent des sous-onglets
 local TAB_DEFS = {
 	{ Id = "Items", Icon = "🛋️", Text = "🛋️ Items" },
-	{ Id = "Wallpapers", Icon = "🎨", Text = "🎨 Walls" },
-	{ Id = "Floors", Icon = "🟫", Text = "🟫 Floors" },
+	{ Id = "Style", Icon = "🎨", Text = "🎨 Room style" },
+	{ Id = "Outside", Icon = "🌷", Text = "🌷 Outside" },
 	{ Id = "Rooms", Icon = "🚪", Text = "🚪 Rooms" },
 	{ Id = "Sizes", Icon = "🏡", Text = "🏡 Houses" },
 }
+-- Sous-onglets de chaque groupe (dans l'ordre) et leur nom
+local GROUPS: { [string]: { string } } = {
+	Style = { "Wallpapers", "Floors", "Trim", "Mood", "View" },
+	Outside = { "Facade", "Roof", "RoofStyle", "Garden" },
+}
+local SUB_LABELS: { [string]: string } = {
+	Wallpapers = "🧱 Walls",
+	Floors = "🟫 Floors",
+	Trim = "🎀 Trim",
+	Mood = "💡 Lighting",
+	View = "🪟 Window view",
+	Facade = "🏠 House colour",
+	Roof = "🔺 Roof colour",
+	RoofStyle = "✨ Roof pattern",
+	Garden = "🌷 Garden",
+}
+local GROUP_OF: { [string]: string } = {}
+for group, list in pairs(GROUPS) do
+	for _, id in ipairs(list) do
+		GROUP_OF[id] = group
+	end
+end
+-- Genre de personnalisation de chaque section de styles
+local KIND_OF: { [string]: string } = {
+	Wallpapers = "Wallpaper",
+	Floors = "Floor",
+	Trim = "Trim",
+	Mood = "Mood",
+	View = "View",
+	Facade = "Facade",
+	Roof = "Roof",
+	RoofStyle = "RoofStyle",
+	Garden = "Garden",
+}
+-- Sections "par pièce" (bandeau de la pièce en haut)
+local ROOM_SECTIONS: { [string]: boolean } = { Wallpapers = true, Floors = true, Trim = true, Mood = true, View = true }
+local PREVIEW_KINDS = { "Wallpaper", "Floor", "Trim", "Mood", "View", "Facade", "Roof", "RoofStyle", "Garden" }
 local SECTION_ALIASES: { [string]: string } = {
 	Houses = "Sizes",
 	Walls = "Wallpapers",
 	Wallpaper = "Wallpapers",
 	Floor = "Floors",
 	Room = "Rooms",
+	Trims = "Trim",
+	Moods = "Mood",
+	Lighting = "Mood",
+	Views = "View",
+	Exterior = "Facade",
+	Roofs = "Roof",
 }
 
 -- Petite étiquette arrondie dans une carte
@@ -402,6 +447,8 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 	local sizeRows: { SizeRow } = {}
 	local stickyPreview: { Kind: string, Id: string }? = nil
 	local hoverPreview: { Kind: string, Id: string }? = nil
+	local appliedPreview: { [string]: string } = {} -- essais déjà envoyés (par genre)
+	local lastSub: { [string]: string } = { Style = "Wallpapers", Outside = "Facade" }
 	local width = 380
 	local openToken = 0
 	local chosenRoomId: string? = nil -- pièce choisie dans la boutique (vue de la maison)
@@ -889,8 +936,14 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 
 	local function applyPreview()
 		local current = hoverPreview or stickyPreview
-		handlers.OnPreview("Wallpaper", current and current.Kind == "Wallpaper" and current.Id or nil)
-		handlers.OnPreview("Floor", current and current.Kind == "Floor" and current.Id or nil)
+		for _, kind in ipairs(PREVIEW_KINDS) do
+			local id = current and current.Kind == kind and current.Id or nil
+			-- (seuls les genres qui changent sont renvoyés : pas de reconstruction inutile)
+			if appliedPreview[kind] ~= id then
+				appliedPreview[kind] = id :: any
+				handlers.OnPreview(kind, id)
+			end
+		end
 	end
 
 	local function endPreviews()
@@ -1001,35 +1054,73 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 		end)
 	end
 
+	-- (v9.1) État d'une carte de style : (possédée, appliquée) pour le genre
+	-- de la carte, dans la pièce visée (murs, sol, boiseries, ambiance, vue)
+	-- ou toute la maison (façade, toit, motif, jardin)
+	local function lookState(house: HouseData, room: Room?, kind: string, id: string, cost: number): (boolean, boolean)
+		if kind == "Wallpaper" or kind == "Floor" then
+			local owned = kind == "Wallpaper" and house.OwnedWallpapers or house.OwnedFloors
+			local equippedId = room and (kind == "Wallpaper" and room.Wallpaper or room.Floor) or nil
+			return owned[id] == true or cost <= 0, equippedId == id
+		end
+		local def = HouseCommon.LookKinds[kind]
+		local owned = HouseCommon.OwnsLook(house, kind, id) or (cost <= 0 and def ~= nil and def.Scope ~= "Garden")
+		if not def then
+			return owned, false
+		end
+		if def.Scope == "Room" then
+			return owned, room ~= nil and (room :: any)[def.Field] == id
+		elseif def.Scope == "House" then
+			return owned, (house :: any)[def.Field] == id
+		end
+		return owned, table.find(house.Garden, id) ~= nil
+	end
+
 	local function styleAction(card: StyleCard)
 		local house = HouseCommon.GetHouse(ClientState.Data)
+		local kind = card.Kind
+		local def = HouseCommon.LookKinds[kind]
+		local perRoom = kind == "Wallpaper" or kind == "Floor" or (def ~= nil and def.Scope == "Room")
 		local room = targetRoom(house)
-		if not room then
+		if perRoom and not room then
 			SoundManager.Play("Error", 0.7)
 			UIUtil.Shake(card.Button)
 			handlers.Notify(Locale.T("Open a room to change its walls and floor"), Theme.Colors.Orange)
 			return
 		end
-		local owned = card.Kind == "Wallpaper" and house.OwnedWallpapers or house.OwnedFloors
-		local equipped = card.Kind == "Wallpaper" and room.Wallpaper or room.Floor
 		local id = card.Style.Id
-		if equipped == id then
+		local cost = tonumber(card.Style.Cost) or 0
+		local isOwned, equipped = lookState(house, room, kind, id, cost)
+		local isGarden = def ~= nil and def.Scope == "Garden"
+		if equipped and not isGarden then
 			UIUtil.Pop(card.Card, 1.05, 0.3)
 			return
 		end
-		local isOwned = owned[id] == true or card.Style.Cost <= 0
 		if not isOwned and refuseLocked(card.Button, card.Style) then
 			return
 		end
 		local styleContext = { Icon = card.Style.Icon or "🎨", Name = HouseCommon.Name(card.Style), Color = C.Lilac }
-		if not isOwned and HouseCommon.Dopamine() < card.Style.Cost then
-			needDopamine(card.Button, card.Style.Cost, styleContext)
+		if not isOwned and HouseCommon.Dopamine() < cost then
+			needDopamine(card.Button, cost, styleContext)
 			return
 		end
-		local action = (isOwned and "set" or "buy") .. card.Kind
-		local roomId = room.Id
+		if isGarden and isOwned and not equipped and #house.Garden >= HouseCommon.GardenSlots then
+			SoundManager.Play("Error", 0.7)
+			UIUtil.Shake(card.Button)
+			handlers.Notify(Locale.T("Your garden is full (max %d): put something away first", HouseCommon.GardenSlots), Theme.Colors.Orange)
+			return
+		end
+		local action, argument
+		local roomId = room and room.Id or nil
+		if kind == "Wallpaper" or kind == "Floor" then
+			action = (isOwned and "set" or "buy") .. kind
+			argument = { Room = roomId, Id = id }
+		else
+			action = isOwned and "setLook" or "buyLook"
+			argument = { Kind = kind, Id = id, Room = perRoom and roomId or nil, On = not (isGarden and equipped) }
+		end
 		task.spawn(function()
-			local ok, message = request(action, { Room = roomId, Id = id }, card.Button, not isOwned and card.Style.Cost or nil, styleContext)
+			local ok, message = request(action, argument, card.Button, not isOwned and cost or nil, styleContext)
 			if ok then
 				stickyPreview = nil
 				hoverPreview = nil
@@ -1040,6 +1131,10 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 				else
 					celebrate(card.Card, false)
 					handlers.Notify(message or Locale.T("Applied!"), Theme.Colors.Green)
+				end
+				if not perRoom then
+					-- (façade, toit, jardin : la maison se redessine)
+					handlers.OnHouseChanged()
 				end
 				refresh()
 			end
