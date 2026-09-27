@@ -661,12 +661,13 @@ local function bodyWalls(ctx: Ctx, holes: { [number]: { { number } } }, material
 	-- soubassement (devant) + fondations pleines sous les pièces
 	local yGround = WorldLayout.FloorY(1)
 	kit:WallX("Plinth", L - 0.3, R + 0.3, 0, WorldLayout.PLINTH, -0.6, T, {}, plinthColor, plinthMaterial, { Solid = true })
-	kit:Box("Foundation", ctx.Left, ctx.Right, 0, WorldLayout.PLINTH, T, ctx.Depth - T, plinthColor:Lerp(BLACK, 0.1), M.Concrete, { Solid = true, Shadow = false })
+	kit:Box("Foundation", ctx.Left, ctx.Right, -0.05, WorldLayout.PLINTH, T, ctx.Depth - T, plinthColor:Lerp(BLACK, 0.1), M.Concrete, { Solid = true, Shadow = false })
 	kit:Box("PlinthCap", L - 0.4, R + 0.4, WorldLayout.PLINTH - 0.25, WorldLayout.PLINTH + 0.1, -0.75, 0, ctx.Trim, M.Limestone, { Shadow = false })
 	local _ = yGround
 	-- bouts (à l'extérieur des colonnes) et fond (derrière les coques)
-	kit:Box("EndLeft", L, ctx.Left, 0, ctx.Top, -0.3, ctx.Depth, ctx.Wall, material, { Solid = true })
-	kit:Box("EndRight", ctx.Right, R, 0, ctx.Top, -0.3, ctx.Depth, ctx.Wall, material, { Solid = true })
+	-- (v9.6 : pieds 0,1 sous le sol : pas coplanaires avec le soubassement)
+	kit:Box("EndLeft", L, ctx.Left, -0.1, ctx.Top, -0.3, ctx.Depth, ctx.Wall, material, { Solid = true })
+	kit:Box("EndRight", ctx.Right, R, -0.1, ctx.Top, -0.3, ctx.Depth, ctx.Wall, material, { Solid = true })
 	kit:Box("Back", L, R, 0, ctx.Top, ctx.Depth - T + 0.05, ctx.Depth + 0.3, ctx.Wall, material, { Solid = true })
 	-- dalle du toit (ferme la maison par le haut)
 	-- (v9.6 : décalée de 0,05 : jamais coplanaire avec les plafonds des pièces du dernier étage)
@@ -1432,7 +1433,7 @@ STYLES.Mansion = function(ctx)
 	local crest = math.max(2, math.floor((ctx.Right - ctx.Left - 2 * inset) / 12))
 	for k = 0, crest do
 		local x = ctx.Left + inset + k * (ctx.Right - ctx.Left - 2 * inset) / crest
-		kit:Box("CrestPost", x - 0.12, x + 0.12, yBase + rise, yBase + rise + 1.6, inset - 0.12, inset + 0.12, P.Gold:Lerp(C.Ink, 0.2), M.Metal, { Shadow = false })
+		kit:Box("CrestPost", x - 0.12, x + 0.12, yBase + rise, yBase + rise + 1.6, inset - 0.18, inset + 0.18, P.Gold:Lerp(C.Ink, 0.2), M.Metal, { Shadow = false })
 		kit:Ball("CrestBall", x, yBase + rise + 1.75, inset, 0.6, P.Gold, M.Metal, { Shadow = false })
 	end
 	for _, column in ipairs({ 1, dims.Columns }) do
@@ -1459,7 +1460,7 @@ STYLES.Mansion = function(ctx)
 	for _, s in ipairs({ -1, 1 }) do
 		kit:Part("Pediment", Vector3.new(1.2, pedH, pedW / 2), CFrame.new(ctx.DoorX + s * pedW / 4, pedY + pedH / 2, 0.9) * CFrame.Angles(0, -s * math.pi / 2, 0), TRIM,
 			M.Limestone, { Solid = true }, "WedgePart")
-		kit:Part("PedimentInner", Vector3.new(0.3, pedH - 3, pedW / 2 - 4.5), CFrame.new(ctx.DoorX + s * (pedW / 2 - 4.5) / 2, pedY + 0.9 + (pedH - 3) / 2, 0.45)
+		kit:Part("PedimentInner", Vector3.new(0.3, pedH - 3, pedW / 2 - 4.5), CFrame.new(ctx.DoorX + s * (pedW / 2 - 4.5) / 2, pedY + 0.9 + (pedH - 3) / 2, 0.4)
 			* CFrame.Angles(0, -s * math.pi / 2, 0), ctx.Wall:Lerp(C.Pink, 0.3), M.Plaster, { Shadow = false }, "WedgePart")
 	end
 	heart(ctx, ctx.DoorX, pedY + pedH + 1.1, -0.9, 2.2, C.Heart)
@@ -1477,8 +1478,9 @@ STYLES.Mansion = function(ctx)
 		local tx = if s < 0 then ctx.Left - T - 1 else ctx.Right + T + 1
 		local td = 0.5
 		local top = ctx.Top + 3
-		kit:CylY("Tower", tx, 0, td, radius * 2, top, TOWER, M.Plaster, { Solid = true })
-		kit:CylY("TowerPlinth", tx, 0, td, radius * 2 + 0.6, WorldLayout.PLINTH + 0.4, P.Stone, M.Limestone, { Solid = true })
+		-- (v9.6 : pieds décalés sous le sol : jamais coplanaires avec les fondations)
+		kit:CylY("Tower", tx, -0.15, td, radius * 2, top + 0.15, TOWER, M.Plaster, { Solid = true })
+		kit:CylY("TowerPlinth", tx, -0.2, td, radius * 2 + 0.6, WorldLayout.PLINTH + 0.6, P.Stone, M.Limestone, { Solid = true })
 		for floor = 1, dims.Floors do
 			local y = WorldLayout.FloorY(floor)
 			if floor > 1 then

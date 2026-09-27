@@ -2776,6 +2776,11 @@ function House3DRecipes.Make(item: any, entry: any?, k: number, parent: Instance
 			b.SeatAt = { X = top.X, Y = top.Y, Z = top.Z, W = top.W, D = top.D }
 		end
 	end
+	-- (v9.6) anti-scintillement : faces confondues de l'objet écartées
+	local okSep, errSep = pcall(House3DKit.Separate, b.Parts)
+	if not okSep then
+		warn("[House3D] Separate " .. tostring(item.Id) .. " : " .. tostring(errSep))
+	end
 	-- dessus déclarés par HouseSurfaces mais pas par la recette
 	local raw = ctx.Raw
 	if raw then
@@ -2846,7 +2851,8 @@ function House3DRecipes.BuildModel(itemId: string, entry: any?, options: BuildOp
 	end
 	if opts.Night ~= nil then
 		for _, light in ipairs(data.Lights) do
-			light.Brightness *= opts.Night == true and 1.7 or 0.9
+			-- (v9.6 "flash bang" : plus de x1,7 la nuit dans les pièces de la ville)
+			light.Brightness *= opts.Night == true and 1.15 or 0.85
 		end
 	end
 	-- Pièce de base (PrimaryPart) : pivot = bas du centre de l'empreinte
