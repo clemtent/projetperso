@@ -29,6 +29,16 @@
 	SurfaceGui neuve a MaxDistance = 1000 : sol, murs et ciel n'étaient
 	pas dessinés, il ne restait que les cartons plats. Tout est maintenant
 	en Parts opaques de taille normale (voir House3DScene).
+	v9.3 (revue contre le vrai moteur Roblox) : tous les objets sont de
+	vrais modèles 3D (plus aucun carton en SurfaceGui : trop de toiles 2D
+	ne s'affichent pas toutes dans Roblox) ; la ScreenGui de la vue pose
+	IgnoreGuiInset avant ScreenInsets (l'un réécrit l'autre) ; les
+	ScreenGui vides (sondes de zones sûres de l'interface) ne sont plus
+	coupées ; flous / halos / rayons de soleil coupés aussi sous la caméra
+	et dans Lighting (Bloom, SunRays) puis remis ; le personnage (monde)
+	ne marche plus pendant la vue (PlayerModule, remis à la fermeture) ;
+	souris libérée (MouseBehavior / icône remis à la fermeture) ; objets
+	déplacés en lot (BulkMoveTo).
 	Robuste : double ouverture (la vue précédente est fermée proprement),
 	réapparition du personnage, nouvelle caméra, erreurs (un objet cassé
 	n'empêche pas les autres de s'afficher). Travail par image = caméra

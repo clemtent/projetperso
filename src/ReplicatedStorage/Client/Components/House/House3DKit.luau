@@ -2,9 +2,13 @@
 	House3DKit (ModuleScript)
 	Emplacement : ReplicatedStorage > Client > Components > House > House3DKit
 
-	Boîte à outils de la vue 3D (House3D) : construit les VRAIS objets 3D
-	(Parts opaques de taille normale) et, pour les objets sans recette, un
-	carton découpé épais dessiné des deux côtés.
+	Boîte à outils de la vue 3D (House3D) et du monde : construit les VRAIS
+	objets 3D (Parts de taille normale : blocs, boules, cylindres, pentes,
+	ovales = Part + SpecialMesh "Sphere", tubes d'un point à un autre, blocs
+	arrondis, coussins, formes plates en relief : cœurs, étoiles, triangles,
+	chemins de tubes). v9.3 : plus aucun carton découpé (SurfaceGui) pour
+	les objets ; seul b.Art (affiches, vue d'une fenêtre) pose un dessin 2D
+	sur une face, par-dessus un panneau déjà coloré.
 
 	Repère d'un objet ("unités") : la boîte de dessin 2D de l'objet fait
 	100 x 100 unités ; en 3D, 1 unité = K studs (K = taille à l'écran x 0.05
@@ -21,7 +25,7 @@
 	  House3DKit.Paint(item, entry, night) -> Painted   (dessin 2D hors écran + palette)
 	  House3DKit.Palette(painted) -> { Color3 }
 	  House3DKit.Builder(parent, origin, k, mirror, map, palette) -> Builder
-	  House3DKit.Card(parent, cframe, painted, k, twoSided, lightInfluence) -> (Part, { SurfaceGui })
+	  House3DKit.Triangle / Heart / Star / StarSoft / HeartPoints / StarPoints / Path / Frame (formes)
 	  House3DKit.NewPart(className, name, size, cframe, color, material?, transparency?) -> BasePart
 	  House3DKit.Surface(part, face, canvasSize, lightInfluence) -> SurfaceGui
 	  House3DKit.Wood / Dist / Darken / Lighten / Pick (couleurs)
@@ -40,7 +44,6 @@ local CARD_MARGIN_TOP = 36
 local CARD_MARGIN_BOTTOM = 4
 local CARD_MARGIN_WALL = 26
 local CARD_RES = 4 -- px de toile par unité
-local CARD_THICK = 0.14 -- (studs) épaisseur du carton
 -- (Roblox : une SurfaceGui neuve a MaxDistance = 1000 -> on le fixe nous-mêmes)
 House3DKit.MAX_DISTANCE = 3000
 
@@ -552,47 +555,6 @@ function House3DKit.Palette(painted: Painted): { Color3 }
 		table.insert(colors, list[index].Color)
 	end
 	return colors
-end
-
-----------------------------------------------------------------------
--- Carton découpé épais (objets sans recette 3D)
-----------------------------------------------------------------------
-
--- `cframe` = centre du BAS du carton (objet au sol) ou centre (objet mural),
--- orienté : +Z local = côté qui regarde la caméra
-function House3DKit.Card(parent: Instance, cframe: CFrame, painted: Painted, k: number, twoSided: boolean, lightInfluence: number): (BasePart, { SurfaceGui })
-	local w, h = painted.UnitsW * k, painted.UnitsH * k
-	local center
-	if painted.Wall then
-		-- (boîte centrée, marges égales en haut et en bas)
-		center = cframe
-	else
-		center = cframe * CFrame.new(0, h / 2 - painted.MarginBottom * k, 0)
-	end
-	local part = House3DKit.NewPart("Part", "Card_" .. tostring(painted.Item.Id), Vector3.new(w, h, CARD_THICK), center, WHITE, nil, 1)
-	part.CastShadow = false
-	local guis = {}
-	local canvas = Vector2.new(painted.UnitsW * CARD_RES, painted.UnitsH * CARD_RES)
-	local front = House3DKit.Surface(part, Enum.NormalId.Back, canvas, lightInfluence)
-	local content = painted.Content
-	local scale = Instance.new("UIScale")
-	scale.Scale = CARD_RES
-	scale.Parent = content
-	content.Parent = front
-	table.insert(guis, front)
-	if twoSided then
-		-- Dos : le même dessin en miroir (la silhouette tombe pile derrière)
-		local back = House3DKit.Surface(part, Enum.NormalId.Front, canvas, lightInfluence)
-		local copy = content:Clone()
-		copy.Parent = back
-		local body = copy:FindFirstChild("Body")
-		if body and body:IsA("GuiObject") then
-			pcall(HouseArt.Mirror, body, {}, 50)
-		end
-		table.insert(guis, back)
-	end
-	part.Parent = parent
-	return part, guis
 end
 
 return House3DKit

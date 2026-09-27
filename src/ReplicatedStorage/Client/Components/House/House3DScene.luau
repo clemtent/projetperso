@@ -15,10 +15,12 @@
 	    les motifs (papier peint, sol) ne sont qu'une DÉCORATION facultative
 	    (SurfaceGui de taille fixe sur la face d'une pièce normale) : la
 	    couleur de la pièce suffit déjà ;
-	  - objets : vrais modèles 3D (House3DRecipes) aux couleurs du dessin 2D
-	    de l'objet (et de sa variante de couleur) ; sans recette = carton
-	    découpé épais dessiné des deux côtés ; objets posés SUR le vrai
-	    dessus 3D des meubles ; chaises tournées vers leur table ; F = miroir ;
+	  - objets (v9.3) : TOUS en vrais modèles 3D (House3DRecipes +
+	    House3DCritters / House3DObjects / House3DToys), aux couleurs du
+	    dessin 2D de l'objet (et de sa variante de couleur), jamais de carton
+	    découpé ; placés par House3DLayout (posés SUR le vrai dessus 3D des
+	    meubles, chaises tournées vers leur table, F = miroir, R = rotation) ;
+	    arrivée en douceur et respiration des animaux (BulkMoveTo, ≤ 30 Hz) ;
 	  - lumières : plafonnier, soleil de la fenêtre (SpotLight), lampes
 	    (PointLight), ambiance de la pièce (Room.Mood : couleur, intensité,
 	    petites particules) ; l'éclairage du lieu est réglé par House3D
@@ -27,7 +29,8 @@
 	Champs de pièce lus (tous facultatifs, valeurs par défaut sinon) :
 	  Wallpaper, Floor, Trim (Config.HouseTrimsById), Mood
 	  (Config.HouseMoodsById), View (Config.HouseViewsById) ; objets :
-	  { I, X, Y, S, Z, F, C } (C = variante de couleur, HouseTints).
+	  { I, X, Y, S, Z, F, C, R } (C = variante de couleur, HouseTints ;
+	  R = rotation en degrés, multiple de 15, monde "Dopamine Town").
 
 	API :
 	  House3DScene.new(room, sizeId, night) -> Scene   (décor construit tout de suite)
@@ -37,6 +40,24 @@
 	  scene.UpdateWalls(eye)   baisse le mur de côté entre la caméra et la pièce
 	  scene.Step(dt)           arrivée des objets, ambiance (appelé chaque image)
 	  scene.Destroy()
+
+	API du monde (v9.3, Dopamine Town : n'utilise ni la vue 3D, ni la
+	caméra, ni l'interface ; utilisable depuis n'importe quel script client) :
+	  House3DScene.BuildRoomShell(roomData, sizeDef?, options?) -> Model "RoomShell"
+	    options : Scale (studs par px de la pièce 2D ; 32/760 = ~32 studs de
+	    large), Depth (24), WallHeight (14), Doors ({ "Front" } ; "Left",
+	    "Right", "Back"), DoorWidth (6), DoorHeight (9), Front (true = mur
+	    avant), Ceiling (false), Patterns (true = motifs décoratifs).
+	    PrimaryPart "Floor" ; pivot = centre du dessus du sol ; mur du fond
+	    vers -Z, avant (porte) vers +Z ; sol et murs solides (CanCollide),
+	    vraies ouvertures de porte ; attributs Width, Depth, WallHeight,
+	    Scale, RoomWpx.
+	  House3DScene.PlaceItems(roomModel, roomData, options?) -> { Model }
+	    options : Night, Collide, Query, Yield. Construit les objets (voir
+	    House3DRecipes.BuildItem) dans roomModel.Items, avec le même passage
+	    2D -> 3D que la vue 3D (au pivot ACTUEL de la coque) ; attribut
+	    "EntryIndex" = index dans roomData.Placed ; entry.R = rotation.
+	  Devant d'un modèle d'objet = -Z (convention LookVector de Roblox).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")

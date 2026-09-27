@@ -11,12 +11,32 @@
 	HouseSurfaces (R.TopY) pour que les objets posés dessus tombent juste.
 
 	Recette = function(b: Builder, R: Ctx)
-	Un objet sans recette (House3DRecipes.For -> nil) devient un carton
-	découpé épais (House3DKit.Card).
+	v9.3 : les 354 objets ont un vrai modèle 3D (ici + House3DCritters,
+	House3DObjects, House3DToys) ; un objet inconnu (future mise à jour)
+	reçoit une forme 3D de repli à ses couleurs, jamais un carton.
 
 	API :
-	  House3DRecipes.For(item) -> (Recipe?, Info)   Info = { Wall = contre le mur ?, Flat = tapis ? }
+	  House3DRecipes.For(item) -> (Recipe, Info)   Info = { Wall = contre le mur ?, Flat = tapis ?, Pet = animal ? }
 	  House3DRecipes.Has(itemId) -> boolean
+	  House3DRecipes.Make(item, entry, k, parent, origin, trim?) -> ItemData  (pièces au repère `origin`, devant +Z)
+
+	API du monde (Dopamine Town ; aucun lien avec la vue 3D, la caméra ou l'interface) :
+	  House3DRecipes.BuildItem(itemId, entry?, options?) -> Model?
+	    entry : { S?, F?, C? } (taille, miroir, variante de couleur ; R n'est
+	    PAS appliqué ici : c'est l'appelant qui tourne le modèle)
+	    options : Scale (studs par px de la pièce 2D, 0.05 par défaut : la
+	    boîte 2D fait item.Size x S x Scale studs), Night, Collide (true),
+	    Query (true), Trim (Color3), Shadows (true)
+	    Modèle : toutes les pièces Anchored, CanTouch = false ; pièces visibles
+	    CanCollide = false, CanQuery = Query ; PrimaryPart "Root" (invisible,
+	    0.1 d'épaisseur) ; pivot = bas du centre de l'empreinte (objet mural :
+	    bas de sa boîte 2D, contre le mur, l'objet avance vers -Z) ; DEVANT =
+	    -Z ; gros meubles au sol : "Hitbox" invisible CanCollide = true jusqu'à
+	    l'assise / au dessus ; "SeatPart" (Part transparente, face -Z) pour
+	    s'asseoir ; attributs ItemId, Footprint (Vector3 L, H, P), TopHeight,
+	    TopCenter (Vector3, repère du modèle), TopSize (Vector2), Wall,
+	    AgainstWall, Flat, Pet.
+	  House3DRecipes.BuildModel(itemId, entry?, options?) -> (Model?, ItemData?)
 ]]
 
 local HouseSurfaces = require(script.Parent.HouseSurfaces)
