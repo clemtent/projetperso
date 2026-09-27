@@ -27,6 +27,36 @@ Les autres méthodes (Rojo, copie manuelle) sont décrites dans [`docs/INSTALLAT
 
 ---
 
+## 🆕 Nouveautés v9.7 — une ville bien plus vivante
+
+- 🛒 **Supermarché MégaDopa** à l'entrée de la ville :
+  - parking avec places marquées, abris à chariots, portes automatiques ;
+  - rayons numérotés pleins de produits avec étiquettes de prix, fruits & légumes, boulangerie, frigos, congélateurs, mur de télés, jardin ;
+  - rayons maison avec de vrais objets à acheter ;
+  - 4 caisses avec tapis et caissiers, et 4 caisses automatiques. « 🛒 Passer en caisse » ouvre le catalogue complet.
+- 🏘️ **Immeubles de la ville** :
+  - 5 styles (haussmannien, briques, pastel, moderne, colombages) ;
+  - fenêtres encadrées, balcons, boutiques fermées avec vitrines et enseignes ;
+  - façades tournées vers la rue, et dos et côtés finis.
+- 🚗 **Véhicules** :
+  - les 8 voitures à acheter sont entièrement refaites : carrosserie, jantes, freins, phares, intérieur, bandes de course, toit bicolore ;
+  - un vrai bus de ville, des vélos, des trottinettes, un scooter, un camion de livraison, un food truck ;
+  - voitures garées dans des places marquées ;
+  - **circulation** sur le boulevard (bus et voitures qui s'arrêtent pour les piétons).
+- 🌳 **Nature** :
+  - 10 espèces d'arbres (cerisier, érable d'automne, bouleau, sapin, palmier, saule…), haies, massifs fleuris ;
+  - **lac** avec île, roseaux, ponton, barque, pédalo cygne, canards ;
+  - **pont** en bois, **aire de jeux** complète, parc avec kiosque, pergola et pique-nique.
+- 🎠 **Centre-ville** :
+  - **manège qui tourne** avec chevaux qui montent et descendent ;
+  - fontaine à 3 étages avec la mascotte cerveau refaite, kiosque à musique ;
+  - stands de glaces et de barbe à papa, chariot à ballons ;
+  - guirlandes, pigeons qui s'envolent quand on approche.
+- Corrigés :
+  - le bouton « Conduire » restait affiché en roulant ;
+  - on ne pouvait plus déplacer ses meubles en ville (v9.6.1) ;
+  - prix illisibles dans les boutiques (v9.6.1).
+
 ## 🆕 Nouveautés v9.6 — magasins, garage, voitures, et beaucoup de corrections
 
 - 🛍️ **7 magasins où l'on entre** dans Dopamine Town :
