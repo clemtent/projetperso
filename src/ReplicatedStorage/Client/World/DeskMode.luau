@@ -156,8 +156,10 @@ local function framing(handle: any): CFrame?
 	local height = math.max(1.5, maxY - low)
 	-- (marges : le bandeau de la ville en haut, "Se lever" en bas ; le contenu
 	-- est un peu plus bas que le centre de l'image)
-	local lookAt = base + right * ((minX + maxX) / 2) + up * (low + height * 0.6 - base.Y)
-	height *= 1.3
+	local camera0 = workspace.CurrentCamera
+	local short = camera0 ~= nil and camera0.ViewportSize.Y < 500 -- (téléphone en paysage : la barre prend plus de place)
+	local lookAt = base + right * ((minX + maxX) / 2) + up * (low + height * (short and 0.42 or 0.6) - base.Y)
+	height *= short and 1.5 or 1.3
 	local vfov = math.rad(FOV)
 	local camera = workspace.CurrentCamera
 	local viewport = camera and camera.ViewportSize or Vector2.new(1280, 720)
@@ -210,7 +212,7 @@ local function buildGui()
 	scale.Name = "Fit"
 	local camera = workspace.CurrentCamera
 	local viewport = camera and camera.ViewportSize or Vector2.new(1280, 720)
-	scale.Scale = math.clamp((viewport.X - 24) / 540, 0.55, 1)
+	scale.Scale = math.clamp(math.min((viewport.X - 24) / 540, viewport.Y / 560), 0.55, 1)
 	scale.Parent = bar
 	local button = Instance.new("TextButton")
 	button.Name = "GetUp"
