@@ -426,6 +426,9 @@ local KEEP_GUIS: { [string]: boolean } = {
 	Chat = true,
 	Freecam = true,
 	DeskModeGui = true, -- v9.5 🖥️ barre "Se lever" du bureau (DeskMode)
+	TownInventoryGui = true, -- v9.6 plateau inventaire 3D (FurnitureEdit, PLACE96)
+	TownShopGui = true, -- v9.6 catalogue des magasins (ShopUI, SHOPS96)
+	CarGui = true, -- v9.6 conduite (CarClient, GARAGE96)
 }
 local function keepGui(name: string): boolean
 	return KEEP_GUIS[name] == true or string.find(name, "Touch", 1, true) ~= nil or string.find(name, "Prompt", 1, true) ~= nil

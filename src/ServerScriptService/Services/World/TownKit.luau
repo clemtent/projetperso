@@ -205,28 +205,44 @@ end
 -- Lumières (budget global)
 ----------------------------------------------------------------------
 
+-- v9.6 (FIXES96) "flash bang" : plafonds pour TOUTES les lumières de la
+-- ville (même si un appelant demande plus) ; lumières "NightOnly" : le
+-- client (TownAtmosphere) ne les allume que la nuit
+TownKit.MAX_LIGHT_BRIGHTNESS = 1
+TownKit.MAX_LIGHT_RANGE = 20
+
 function TownKit.Light(host: BasePart, color: Color3, range: number, brightness: number, kind: string?): Light?
 	if stats.Lights >= TownKit.MAX_LIGHTS then
 		return nil
 	end
 	stats.Lights += 1
 	local light: Light
+	local r = math.min(range, TownKit.MAX_LIGHT_RANGE)
 	if kind == "Spot" then
 		local spot = Instance.new("SpotLight")
 		spot.Angle = 70
 		spot.Face = Enum.NormalId.Bottom
-		spot.Range = range
+		spot.Range = r
 		light = spot
 	else
 		local point = Instance.new("PointLight")
-		point.Range = range
+		point.Range = r
 		light = point
 	end
 	light.Color = color
-	light.Brightness = brightness
+	light.Brightness = math.min(brightness, TownKit.MAX_LIGHT_BRIGHTNESS)
 	light.Shadows = false
+	light:SetAttribute("NightOnly", true)
 	light.Parent = host
 	return light
+end
+
+-- Verre de lanterne / ampoule : mat (SmoothPlastic) le jour, Neon la nuit
+-- (bascule côté client, TownAtmosphere) ; à garder PETIT (≤ ~1 stud)
+function TownKit.Glow(p: BasePart): BasePart
+	p.Material = M.SmoothPlastic
+	p:SetAttribute("NightGlow", true)
+	return p
 end
 
 ----------------------------------------------------------------------
@@ -239,7 +255,8 @@ function TownKit.Surface(board: BasePart, face: Enum.NormalId, pixelsPerStud: nu
 	gui.Face = face
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	gui.PixelsPerStud = pixelsPerStud
-	gui.LightInfluence = lightInfluence or 0.2
+	-- (v9.6 : 0.5 par défaut, un panneau n'est plus une boîte lumineuse la nuit)
+	gui.LightInfluence = lightInfluence or 0.5
 	gui.MaxDistance = maxDistance or 400
 	gui.Parent = board
 	local frame = Instance.new("Frame")
@@ -355,12 +372,15 @@ function TownKit.Lamp(parent: Instance, base: Vector3, facing: number, light: bo
 		local armEnd = rot * CFrame.new(side * 2.2, 11.6, 0)
 		TownKit.Beam(model, "Arm", (rot * CFrame.new(0, 11.8, 0)).Position, armEnd.Position, 0.22, 0.22, C.Metal, M.Metal, "deco")
 		part(model, "Hood", Vector3.new(1.6, 0.35, 1.6), armEnd * CFrame.new(0, -0.1, 0), C.Metal, M.Metal, "deco")
-		local glow = part(model, "Glow", Vector3.new(1.1, 1.1, 1.1), armEnd * CFrame.new(0, -0.8, 0), C.Glow, M.Neon, "deco")
+		-- (v9.6 : verre dépoli sous le chapeau, Neon la nuit seulement)
+		local glow = part(model, "Glow", Vector3.new(0.9, 0.9, 0.9), armEnd * CFrame.new(0, -0.74, 0), C.Glow, M.SmoothPlastic, "deco")
+		TownKit.Glow(glow)
 		glowPart = glowPart or glow
 	end
 	part(model, "Cap", Vector3.new(0.7, 0.5, 0.7), rot * CFrame.new(0, 12.2, 0), C.Metal, M.Metal, "deco")
 	if light and glowPart then
-		TownKit.Light(glowPart, C.Glow, 26, 1.4)
+		-- (v9.6 : 26 / 1.4 -> 18 / 0.85)
+		TownKit.Light(glowPart, C.Glow, 18, 0.85)
 	end
 	return model
 end

@@ -2778,7 +2778,9 @@ function House3DRecipes.Make(item: any, entry: any?, k: number, parent: Instance
 		for index, surface in ipairs(raw) do
 			if not b.Tops[index] and type(surface) == "table" then
 				local x0, x1, y = tonumber(surface[1]) or 10, tonumber(surface[2]) or 90, tonumber(surface[3]) or 50
-				b.Tops[index] = { X = ((x0 + x1) / 2 - 50) * (mirror and -1 or 1), Y = 100 - y, Z = 0, W = x1 - x0, D = b.Depth * 0.8 }
+				-- (v9.6 PLACE96) 4e valeur facultative : profondeur du centre du niveau,
+				-- en fraction de la profondeur du modèle (-0,5 = fond, +0,5 = devant)
+				b.Tops[index] = { X = ((x0 + x1) / 2 - 50) * (mirror and -1 or 1), Y = 100 - y, Z = (tonumber(surface[4]) or 0) * b.Depth, W = x1 - x0, D = b.Depth * 0.8 }
 			end
 		end
 	end
@@ -2886,6 +2888,11 @@ function House3DRecipes.BuildModel(itemId: string, entry: any?, options: BuildOp
 	if top then
 		model:SetAttribute("TopCenter", Vector3.new(-top.X * k, top.Y * k, -top.Z * k))
 		model:SetAttribute("TopSize", Vector2.new(top.W * k, top.D * k))
+	end
+	-- (v9.6 PLACE96) chaque niveau (étagères...) : FurnitureEdit choisit le
+	-- niveau d'après la hauteur touchée en 3D (repère du modèle, devant -Z)
+	for index, t in pairs(data.Tops) do
+		model:SetAttribute("Top" .. tostring(index), Vector3.new(-t.X * k, t.Y * k, -t.Z * k))
 	end
 	model:SetAttribute("Wall", wall)
 	model:SetAttribute("Flat", data.Info.Flat == true)

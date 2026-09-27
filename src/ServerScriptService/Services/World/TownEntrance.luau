@@ -78,10 +78,11 @@ end
 local function lantern(model: Instance, cf: CFrame, withLight: boolean)
 	part(model, "LanternArm", Vector3.new(0.3, 0.3, 2.2), cf * CFrame.new(0, 0, -1.1), C.Metal, M.Metal, "deco")
 	part(model, "LanternTop", Vector3.new(1.6, 0.5, 1.6), cf * CFrame.new(0, -0.4, -2.2), C.Metal, M.Metal, "deco")
-	local glow = part(model, "LanternGlow", Vector3.new(1.1, 1.8, 1.1), cf * CFrame.new(0, -1.6, -2.2), C.Glow, M.Neon, "deco")
+	-- (v9.6 : verre mat le jour, Neon la nuit seulement ; lumière 30 / 1.6 -> 18 / 0.9)
+	local glow = TownKit.Glow(part(model, "LanternGlow", Vector3.new(1.1, 1.8, 1.1), cf * CFrame.new(0, -1.6, -2.2), C.Glow, M.SmoothPlastic, "deco"))
 	part(model, "LanternBase", Vector3.new(1.4, 0.3, 1.4), cf * CFrame.new(0, -2.6, -2.2), C.Metal, M.Metal, "deco")
 	if withLight then
-		TownKit.Light(glow, C.Glow, 30, 1.6)
+		TownKit.Light(glow, C.Glow, 18, 0.9)
 	end
 end
 
@@ -132,7 +133,7 @@ local function gate(folder: Instance, gcf: CFrame)
 	part(model, "Lintel", Vector3.new(2 * OPENING, 1.2, 4.2), gcf * CFrame.new(0, boardY - 4, 0), Color3.fromRGB(255, 196, 214), M.Marble, "decoS")
 	local board = part(model, "NameBoard", Vector3.new(boardW, 6.8, 1.6), gcf * CFrame.new(0, boardY, 0), Color3.fromRGB(255, 244, 250), M.SmoothPlastic, "solid")
 	for _, face in ipairs({ Enum.NormalId.Front, Enum.NormalId.Back }) do
-		local _, body = TownKit.Surface(board, face, 24, nil, 900, 0)
+		local _, body = TownKit.Surface(board, face, 24, nil, 900, 0.5)
 		local title = TownKit.Label(body, "Title", "DOPAMINE TOWN", 0.03, 0.06, 0.94, 0.62, C.HotPink, Enum.Font.FredokaOne, false)
 		local stroke = Instance.new("UIStroke")
 		stroke.Color = C.White
@@ -141,13 +142,14 @@ local function gate(folder: Instance, gcf: CFrame)
 		TownKit.Label(body, "Subtitle", "🧠 Welcome! 💖", 0.1, 0.68, 0.8, 0.28, C.Plum, Enum.Font.GothamBold, true)
 	end
 	for _, y in ipairs({ 3.6, -3.6 }) do
-		part(model, "NeonRim", Vector3.new(boardW + 0.4, 0.35, 1.8), gcf * CFrame.new(0, boardY + y, 0), C.Pink, M.Neon, "deco")
+		-- (v9.6 : liseré en marbre rose, plus un tube Neon de 26 studs qui éblouit)
+		part(model, "Rim", Vector3.new(boardW + 0.4, 0.35, 1.8), gcf * CFrame.new(0, boardY + y, 0), C.Pink, M.Marble, "deco")
 	end
-	-- cœur lumineux au sommet (deux boules + un carré tourné)
+	-- cœur au sommet (deux boules + un carré tourné) ; v9.6 : marbre, plus Neon
 	local heart = gcf * CFrame.new(0, boardY + 5.8, 0)
-	TownKit.Ball(model, "Heart", (heart * CFrame.new(-1.15, 0.7, 0)).Position, 3, C.HotPink, M.Neon, "deco")
-	TownKit.Ball(model, "Heart", (heart * CFrame.new(1.15, 0.7, 0)).Position, 3, C.HotPink, M.Neon, "deco")
-	part(model, "HeartTip", Vector3.new(2.6, 2.6, 1.2), heart * CFrame.new(0, -0.6, 0) * CFrame.Angles(0, 0, math.rad(45)), C.HotPink, M.Neon, "deco")
+	TownKit.Ball(model, "Heart", (heart * CFrame.new(-1.15, 0.7, 0)).Position, 3, C.HotPink, M.Marble, "deco")
+	TownKit.Ball(model, "Heart", (heart * CFrame.new(1.15, 0.7, 0)).Position, 3, C.HotPink, M.Marble, "deco")
+	part(model, "HeartTip", Vector3.new(2.6, 2.6, 1.2), heart * CFrame.new(0, -0.6, 0) * CFrame.Angles(0, 0, math.rad(45)), C.HotPink, M.Marble, "deco")
 	return model
 end
 

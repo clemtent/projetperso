@@ -250,6 +250,7 @@ local function applyMix()
 		set(cloud, "Cover", lerp(0.52, 0.4, m))
 	end
 	set(Lighting, "ClockTime", clockNow())
+	setLamps(m >= 0.5)
 end
 
 local function remember(saved: any, key: string)
@@ -280,6 +281,7 @@ function TownAtmosphere.Apply(saved: any)
 	clockTimer = 0
 	mixTimer = 0
 	mix = night and 1 or 0
+	lampsOn = mix >= 0.5
 	-- 1) valeurs actuelles gardées (remise exacte)
 	for key in pairs(DAY) do
 		remember(saved, key)
@@ -350,6 +352,7 @@ function TownAtmosphere.Apply(saved: any)
 			table.insert(created, cloud)
 		end
 	end
+	watchLamps()
 	applyMix()
 end
 
@@ -364,6 +367,7 @@ function TownAtmosphere.Restore(saved: any)
 	table.clear(created)
 	table.clear(effects)
 	clouds = nil
+	restoreLamps()
 	for key, value in pairs(saved.Lighting) do
 		set(Lighting, key, value)
 	end
