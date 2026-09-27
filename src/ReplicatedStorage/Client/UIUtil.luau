@@ -237,6 +237,40 @@ function UIUtil.AnimateButton(button: GuiButton, hoverScale: number?, pressScale
 	local press = pressScale or 0.92
 	local hovering = false
 
+	-- v9.1 : un bouton rangé par un UIListLayout / UIGridLayout ou dans un
+	-- cadre à taille automatique ne doit PAS grossir : Roblox recalcule la
+	-- mise en page avec la taille agrandie, les boutons voisins bougent (et
+	-- passent à la ligne), la souris ressort du bouton... impossible à
+	-- cliquer. Dans ce cas : reflet + contour seulement, jamais d'échelle.
+	local function canScale(): boolean
+		local parent = button.Parent
+		if not parent or not parent:IsA("GuiObject") then
+			return true
+		end
+		if parent:FindFirstChildWhichIsA("UIGridStyleLayout") then
+			return false
+		end
+		if (parent :: GuiObject).AutomaticSize ~= Enum.AutomaticSize.None then
+			return false
+		end
+		return true
+	end
+	local stroke = button:FindFirstChild("ButtonStroke") or button:FindFirstChildOfClass("UIStroke")
+	local baseThickness = stroke and stroke:IsA("UIStroke") and stroke.Thickness or 0
+	local function outline(on: boolean)
+		if stroke and stroke:IsA("UIStroke") then
+			UIUtil.Tween(stroke, 0.12, { Thickness = on and baseThickness + 1.5 or baseThickness })
+		end
+	end
+	local function scaleTo(target: number, duration: number, style: Enum.EasingStyle?)
+		if canScale() then
+			UIUtil.Tween(scale, duration, { Scale = target }, style)
+		else
+			scale.Scale = 1
+			outline(target > 1)
+		end
+	end
+
 	local function glow(state: string)
 		local gloss = button:FindFirstChild("Gloss")
 		if not gloss or not gloss:IsA("GuiObject") then
@@ -254,20 +288,20 @@ function UIUtil.AnimateButton(button: GuiButton, hoverScale: number?, pressScale
 
 	button.MouseEnter:Connect(function()
 		hovering = true
-		UIUtil.Tween(scale, 0.15, { Scale = hover }, Enum.EasingStyle.Back)
+		scaleTo(hover, 0.15, Enum.EasingStyle.Back)
 		glow("hover")
 	end)
 	button.MouseLeave:Connect(function()
 		hovering = false
-		UIUtil.Tween(scale, 0.15, { Scale = 1 })
+		scaleTo(1, 0.15)
 		glow("rest")
 	end)
 	button.MouseButton1Down:Connect(function()
-		UIUtil.Tween(scale, 0.08, { Scale = press })
+		scaleTo(press, 0.08)
 		glow("press")
 	end)
 	button.MouseButton1Up:Connect(function()
-		UIUtil.Tween(scale, 0.25, { Scale = hovering and hover or 1 }, Enum.EasingStyle.Back)
+		scaleTo(hovering and hover or 1, 0.25, Enum.EasingStyle.Back)
 		glow(hovering and "hover" or "rest")
 	end)
 end
