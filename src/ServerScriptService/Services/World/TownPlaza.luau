@@ -143,7 +143,7 @@ local function fountain(folder: Instance, O: Vector3): BasePart
 	for i = 0, 5 do
 		local a = i / 6 * math.pi * 2
 		local p = base + Vector3.new(math.sin(a) * 9.5, 1.95, math.cos(a) * 9.5)
-		local jet = part(model, "Jet", Vector3.new(0.5, 0.3, 0.5), CFrame.lookAt(p, base + Vector3.new(0, 1.95, 0)) * CFrame.Angles(math.rad(55), 0, 0), C.MetalLight, M.Metal, "deco")
+		local jet = part(model, "Jet", Vector3.new(0.5, 0.3, 0.5), CFrame.lookAt(p, base + Vector3.new(0, 1.95, 0)) * CFrame.Angles(math.rad(-35), 0, 0), C.MetalLight, M.Metal, "deco")
 		emitter(jet, {
 			EmissionDirection = Enum.NormalId.Top,
 			Rate = 14,
@@ -317,7 +317,7 @@ local function shopRing(folder: Instance, geo: TownKit.Geo): number
 			-- (façade vers la place : LookVector = vers le centre)
 			local cf = CFrame.lookAt(p, Vector3.new(O.X, p.Y, O.Z))
 			-- trottoir devant la boutique (entre la place et la façade)
-			part(folder, "ShopApron", Vector3.new(item.Spec.W + 2, 1.3, 6), cf * CFrame.new(0, -0.65, 1.2), C.Walk, M.Pavement, "solid")
+			part(folder, "ShopApron", Vector3.new(item.Spec.W + 2, 1.3, 6), cf * CFrame.new(0, -0.65, -2.5), C.Walk, M.Pavement, "solid")
 			TownBuildings.Shop(folder, cf * CFrame.new(0, 0, 0), item.Spec, used + 1)
 			used += 1
 			a += item.Width
@@ -386,7 +386,7 @@ function TownPlaza.Build(folder: Instance, geo: TownKit.Geo): PlazaResult
 	-- mairie (au fond) + écran des meilleurs joueurs
 	local hallP = ground + Vector3.new(0, 0, -(R + 4))
 	local hallCF = CFrame.lookAt(hallP, ground)
-	part(plaza, "HallApron", Vector3.new(70, 1.3, 8), hallCF * CFrame.new(0, -0.65, 1), C.Walk, M.Pavement, "solid")
+	part(plaza, "HallApron", Vector3.new(70, 1.3, 8), hallCF * CFrame.new(0, -0.65, -1.5), C.Walk, M.Pavement, "solid")
 	local _, screen = TownBuildings.TownHall(plaza, hallCF)
 	local used = shopRing(plaza, geo)
 	return { Screen = screen, ShopsUsed = used }

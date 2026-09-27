@@ -204,7 +204,7 @@ end
 
 function TownEmotes.RefreshSit(self: any)
 	local humanoid = self.Humanoid
-	local sitting = humanoid ~= nil and (humanoid.Sit or humanoid.SeatPart ~= nil)
+	local sitting = humanoid ~= nil and (humanoid.Sit == true or humanoid.SeatPart ~= nil)
 	if sitting ~= self.Sitting then
 		self.Sitting = sitting
 		if sitting and self.Name then
@@ -245,7 +245,7 @@ function TownEmotes.OnMove(self: any)
 		self:Stop("move")
 	end
 	local humanoid = self.Humanoid
-	if humanoid and humanoid.Sit and humanoid.SeatPart == nil then
+	if humanoid and humanoid.Sit == true and humanoid.SeatPart == nil then
 		self:StandUp()
 	end
 end
@@ -256,7 +256,7 @@ function TownEmotes.OnJump(self: any)
 		self:Stop("jump")
 	end
 	local humanoid = self.Humanoid
-	if humanoid and (humanoid.Sit or humanoid.SeatPart ~= nil) then
+	if humanoid and (humanoid.Sit == true or humanoid.SeatPart ~= nil) then
 		self:StandUp()
 	end
 end
@@ -406,7 +406,7 @@ function TownEmotes.Play(self: any, name: string): boolean
 		self:Notify()
 		return true
 	end
-	if humanoid.Sit or humanoid.SeatPart ~= nil then
+	if humanoid.Sit == true or humanoid.SeatPart ~= nil then
 		self:StandUp()
 	end
 	local looped = LOOPED[name] == true
@@ -468,7 +468,7 @@ function TownEmotes.Step(self: any)
 	self:RefreshSit()
 	if self.Name then
 		self:OnMove()
-	elseif humanoid.Sit and humanoid.SeatPart == nil then
+	elseif humanoid.Sit == true and humanoid.SeatPart == nil then
 		self:OnMove()
 	end
 	if self.Name and not self.Looped then
