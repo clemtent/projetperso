@@ -489,7 +489,27 @@ function House3DKit.Separate(parts: { BasePart }): number
 								if b.Area < a.Area or (b.Area == a.Area and (table.find(parts, b.Part) or 0) > (table.find(parts, a.Part) or 0)) then
 									small, large = b, a
 								end
-								local grow = SEP_GAP - (small.D - large.D)
+								-- plan visé : SEP_GAP devant la grande face, et loin de toute autre
+								-- face voisine (sinon deux corrections se recollent l'une à l'autre)
+								local target = large.D + SEP_GAP
+								for _ = 1, 6 do
+									local clash = false
+									for ek = -1, 2 do
+										for _, other in ipairs(buckets[keyOf(small.N, math.floor(target / 0.05) + ek)] or {}) do
+											if other.Part ~= small.Part and other.N:Dot(small.N) > 0.999 and math.abs(other.D - target) < SEP_NEAR
+												and math.min(other.U1, small.U1) > math.max(other.U0, small.U0)
+												and math.min(other.V1, small.V1) > math.max(other.V0, small.V0)
+												and sepDiffers(other.Part, small.Part) then
+												clash = true
+											end
+										end
+									end
+									if not clash then
+										break
+									end
+									target += SEP_GAP
+								end
+								local grow = target - small.D
 								if grow > 0 then
 									local part = small.Part
 									local add = small.Axis == 1 and Vector3.new(grow, 0, 0) or (small.Axis == 2 and Vector3.new(0, grow, 0) or Vector3.new(0, 0, grow))

@@ -883,9 +883,10 @@ local function themeDecor(shop: Shop, parent: Instance)
 			end
 		end
 		local H = shop.Size.Y
-		box(parent, "PotRail", F, -3, 3, H - 1.9, H - 1.75, D - 8, D - 7.85, rgb(200, 196, 210), M.Metal)
+		-- (au-dessus du comptoir, à droite : ne cache pas l'enseigne du fond)
+		box(parent, "PotRail", F, 5.6, 10.4, H - 1.9, H - 1.75, D - 4.6, D - 4.45, rgb(200, 196, 210), M.Metal)
 		for i = 0, 3 do
-			cylinder(parent, "Pot", F, -2.2 + i * 1.45, H - 3.1, D - 7.9, 0.8, 1.1, rgb(214, 120, 90):Lerp(rgb(200, 196, 210), i % 2 * 0.6), M.Metal)
+			cylinder(parent, "Pot", F, 6.3 + i * 1.2, H - 3.1, D - 4.52, 0.8, 1.05, rgb(214, 120, 90):Lerp(rgb(200, 196, 210), i % 2 * 0.6), M.Metal)
 		end
 	elseif id == "Furniture" then
 		-- tapis sous les estrades du centre

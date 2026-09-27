@@ -510,6 +510,16 @@ local function onOccupant(car: Car)
 	else
 		car.Driving = false
 		car.LastUsed = os.clock()
+		pcall(function()
+			local drive = car.Root:FindFirstChild("DriveVelocity") :: LinearVelocity?
+			if drive then
+				drive.PlaneVelocity = Vector2.new(0, 0)
+			end
+			local align = car.Root:FindFirstChild("DriveAlign") :: AlignOrientation?
+			if align then
+				align.CFrame = flatten(car.Root.CFrame).Rotation
+			end
+		end)
 		local gen = car.Generation
 		task.delay(0.8, function()
 			if cars[car.Player] == car and car.Generation == gen and car.Seat.Occupant == nil and car.Root.Parent then

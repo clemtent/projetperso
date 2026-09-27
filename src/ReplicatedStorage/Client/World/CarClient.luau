@@ -629,7 +629,9 @@ local function setLights(on: boolean)
 		return
 	end
 	for _, light in ipairs(driving.Lights) do
-		light.Enabled = on
+		if light:IsA("Light") then
+			light.Enabled = on
+		end
 	end
 end
 
@@ -639,6 +641,15 @@ local function stopDriving()
 		return
 	end
 	driving = nil
+	-- (plus de commande : la voiture s'arrête, à plat, avant que le serveur l'ancre)
+	pcall(function()
+		if d.Drive then
+			d.Drive.PlaneVelocity = Vector2.new(0, 0)
+		end
+		if d.Align then
+			d.Align.CFrame = CFrame.Angles(0, d.Heading, 0)
+		end
+	end)
 	for _, light in ipairs(d.Lights) do
 		pcall(light.Destroy, light)
 	end
@@ -665,21 +676,27 @@ local function startDriving(seat: VehicleSeat)
 	end
 	stopDriving()
 	collectZones()
+	-- 2 petits phares (attaches à l'avant de la boîte, tournées vers l'avant)
 	local lights = {}
-	for _, part in ipairs(model:GetChildren()) do
-		if part:IsA("BasePart") and part.Name == "Headlight" then
-			local spot = Instance.new("SpotLight")
-			spot.Name = "CarHeadlight"
-			spot.Brightness = 0.8
-			spot.Range = 26
-			spot.Angle = 55
-			spot.Face = Enum.NormalId.Front
-			spot.Color = Color3.fromRGB(255, 244, 220)
-			spot.Shadows = false
-			spot.Enabled = isNight()
-			spot.Parent = part
-			table.insert(lights, spot)
-		end
+	local length = tonumber(model:GetAttribute("Length")) or root.Size.Z
+	local width = tonumber(model:GetAttribute("Width")) or root.Size.X
+	for _, sx in ipairs({ -1, 1 }) do
+		local attachment = Instance.new("Attachment")
+		attachment.Name = "CarHeadlight"
+		attachment.Position = Vector3.new(sx * width * 0.3, 0, -length / 2 + 0.2)
+		attachment.Parent = root
+		local spot = Instance.new("SpotLight")
+		spot.Name = "CarHeadlight"
+		spot.Brightness = 0.8
+		spot.Range = 26
+		spot.Angle = 55
+		spot.Face = Enum.NormalId.Front
+		spot.Color = Color3.fromRGB(255, 244, 220)
+		spot.Shadows = false
+		spot.Enabled = isNight()
+		spot.Parent = attachment
+		table.insert(lights, attachment)
+		table.insert(lights, spot)
 	end
 	driving = {
 		Seat = seat,
