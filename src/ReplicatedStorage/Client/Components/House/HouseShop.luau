@@ -71,6 +71,7 @@ local FAV_GAP = 4
 local MAX_FAVS = 10
 local TAB_ICON_WIDTH = 44 -- onglet non choisi (icône seule) : cible tactile
 local LIST_INSET = 31 -- largeur du tiroir - largeur utile d'une liste (marges)
+local LOOK_ART_W = 200 -- (v9.1) largeur de maquette des aperçus de personnalisation
 
 export type Handlers = {
 	Notify: (text: string, color: Color3?, title: string?) -> (),
@@ -1408,11 +1409,12 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 
 	local function buildStyleCard(kind: string, style: Style, listFrame: Instance)
 		local _, card, stroke = makeCard(listFrame, style.Id, style.Order or 0)
+		local isPattern = kind == "Wallpaper" or kind == "Floor"
 		local preview = UIUtil.Create("TextButton", {
 			Name = "Preview",
 			Position = UDim2.fromOffset(6, 6),
 			Size = UDim2.new(1, -12, 0, 78),
-			BackgroundColor3 = style.A,
+			BackgroundColor3 = isPattern and style.A or WHITE,
 			AutoButtonColor = false,
 			ClipsDescendants = true,
 			Text = "",
@@ -1433,20 +1435,46 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 			Parent = preview,
 		})
 		UIUtil.Corner(canvas, 12)
-		-- Dessin à l'échelle de la pièce, réduit de moitié (mêmes proportions, peu de Frames)
-		local art = UIUtil.Create("Frame", {
-			Name = "Art",
-			Size = UDim2.fromOffset(420, 160),
-			BorderSizePixel = 0,
-			ClipsDescendants = true,
-			ZIndex = 36,
-			Parent = canvas,
-		})
-		UIUtil.Create("UIScale", { Scale = 0.5, Parent = art })
-		if kind == "Wallpaper" then
-			HousePatterns.BuildWall(art, 420, 160, style, 1)
+		if isPattern then
+			-- Dessin à l'échelle de la pièce, réduit de moitié (mêmes proportions, peu de Frames)
+			local art = UIUtil.Create("Frame", {
+				Name = "Art",
+				Size = UDim2.fromOffset(420, 160),
+				BorderSizePixel = 0,
+				ClipsDescendants = true,
+				ZIndex = 36,
+				Parent = canvas,
+			})
+			UIUtil.Create("UIScale", { Scale = 0.5, Parent = art })
+			if kind == "Wallpaper" then
+				HousePatterns.BuildWall(art, 420, 160, style, 1)
+			else
+				HousePatterns.BuildFloor(art, 420, 160, style, 1)
+			end
 		else
-			HousePatterns.BuildFloor(art, 420, 160, style, 1)
+			-- (v9.1) aperçu dessiné (boiseries, ambiance, vue, façade, toit, jardin),
+			-- centré : la carte peut être plus étroite que le dessin
+			local art = UIUtil.Create("Frame", {
+				Name = "Art",
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.fromOffset(LOOK_ART_W, 78),
+				BackgroundTransparency = 1,
+				BorderSizePixel = 0,
+				ClipsDescendants = true,
+				ZIndex = 36,
+				Parent = canvas,
+			})
+			local house = HouseCommon.GetHouse(ClientState.Data)
+			local room = targetRoom(house)
+			local facade = HouseCommon.Look("Facade", house.Facade)
+			local roof = HouseCommon.Look("Roof", house.Roof)
+			HouseLookCards.Paint(art, kind, style, LOOK_ART_W, 78, {
+				Wallpaper = room and HouseCommon.GetRoomWallpaper(room) or nil,
+				Floor = room and HouseCommon.GetRoomFloor(room) or nil,
+				Facade = facade and facade.Color or nil,
+				Roof = roof and roof.Color or nil,
+			})
 		end
 		local check = UIUtil.Create("Frame", {
 			Name = "Check",
