@@ -24,11 +24,26 @@
 	Pas de lumière, pas de Neon, pas de son (le client ajoute de petits
 	phares la nuit à SA voiture seulement).
 
+	v9.7 (VEHICLES97) "10x mieux" : capot bombé en 2 pans + nez arrondi,
+	ailes évasées autour des roues (arches en 3 segments ; bossages d'ailes
+	sur le roadster), bas de caisse noirs, toit aux bords arrondis, montants
+	noirs ("toit flottant"), vraies JANTES (lèvre, disque de frein, étrier,
+	5 / 6 / 10 rayons, cache-moyeu), blocs optiques (boîtier, glace,
+	projecteur, feu de jour ; feux arrière rouge + bande + recul), calandres
+	différentes par modèle, antibrouillards, rétroviseurs sur pied, sièges
+	avec appuie-tête, banquette arrière, écran, colonne de direction.
+	Peinture légèrement brillante (Reflectance), option bicolore :
+	  opts.Stripe = true | Color3 (bandes de course / filet latéral),
+	  opts.RoofColor = Color3 (toit bicolore).
+	"Full" ≈ 110-160 pièces (voiture qu'on conduit, concession) ;
+	"Parked" ≈ 40-48 pièces (voitures garées de la ville, garages).
+
 	API :
 	  CarModels.Build(carId, color?, opts?) -> Model
 	    color : Color3 | Id de Config.Cars.Colors | nil (couleur par défaut)
 	    opts  : { Detail = "Full" | "Parked", Plate = "TEXTE"?,
-	              Scale = number | Vector3 (x = largeur, y = hauteur, z = longueur) }
+	              Scale = number | Vector3 (x = largeur, y = hauteur, z = longueur),
+	              Stripe = true | Color3 ?, RoofColor = Color3 ? }
 	    Repère : pivot = centre du DESSOUS (au sol), avant vers -Z. Tout est
 	    ANCRÉ ; PrimaryPart "Root" = boîte de collision invisible (seule pièce
 	    CanCollide), les autres pièces sont du décor (CanCollide / CanQuery /
@@ -104,6 +119,17 @@ local PLATE_BAND = Color3.fromRGB(40, 80, 190)
 local SEAT = Color3.fromRGB(70, 56, 66)
 local WHITE = Color3.new(1, 1, 1)
 local BLACK = Color3.new(0, 0, 0)
+-- (v9.7) détails
+local DISC = Color3.fromRGB(118, 120, 128) -- disque de frein
+local CAL_RED = Color3.fromRGB(212, 40, 52)
+local CAL_DARK = Color3.fromRGB(78, 78, 88)
+local HOUSING = Color3.fromRGB(28, 28, 34) -- boîtiers des optiques
+local DRL = Color3.fromRGB(255, 252, 240) -- feu de jour (pas de Neon)
+local TAIL_IN = Color3.fromRGB(255, 96, 104)
+local REVERSE = Color3.fromRGB(236, 236, 240)
+local SEAT2 = Color3.fromRGB(88, 72, 82)
+local SCREEN = Color3.fromRGB(44, 70, 104)
+local GRAPHITE = Color3.fromRGB(52, 54, 62)
 
 local function kindOf(carId: string?): string
 	if type(carId) == "string" then
@@ -183,6 +209,7 @@ type B = {
 	S: Vector3, -- échelle
 	Count: number,
 	Paint: Color3?, -- couleur de carrosserie (pièces marquées "Paint" : repeinture sans reconstruire)
+	Gloss: number?, -- (v9.7) Reflectance de la peinture (vernis léger)
 }
 
 local function newPart(b: B, className: string, name: string, size: Vector3, cf: CFrame, color: Color3, material: Enum.Material, shadow: boolean?): BasePart
@@ -201,6 +228,9 @@ local function newPart(b: B, className: string, name: string, size: Vector3, cf:
 	p.Material = material
 	if b.Paint and color == b.Paint then
 		p:SetAttribute("Paint", true)
+		if b.Gloss and material == M.SmoothPlastic then
+			p.Reflectance = b.Gloss
+		end
 	end
 	p.Parent = b.Model
 	b.Count += 1

@@ -503,6 +503,8 @@ local function onOccupant(car: Car)
 		end
 		car.Driving = true
 		car.LastUsed = os.clock()
+		-- (v9.7) le client cache l'invite "Conduire" tant que quelqu'un est au volant
+		car.Model:SetAttribute("Occupied", true)
 		car.Root.Anchored = false
 		pcall(function()
 			car.Root:SetNetworkOwner(car.Player)
@@ -510,6 +512,7 @@ local function onOccupant(car: Car)
 	else
 		car.Driving = false
 		car.LastUsed = os.clock()
+		car.Model:SetAttribute("Occupied", false)
 		pcall(function()
 			local drive = car.Root:FindFirstChild("DriveVelocity") :: LinearVelocity?
 			if drive then
