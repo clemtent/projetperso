@@ -58,7 +58,7 @@ local PINK = Color3.fromRGB(255, 84, 160)
 local INK = Color3.fromRGB(92, 52, 16) -- texte chaud sur fond doré
 
 local current: Frame? = nil
-local spin: Tween? = nil
+local loops: { Tween } = {} -- animations en boucle (rayons, reflet) : arrêtées à la fermeture
 
 ----------------------------------------------------------------------
 -- Packs de tickets (Config.Monetization.Products, Kind "Tickets")
@@ -90,12 +90,18 @@ local function layer(): Frame?
 	return layers and layers.Toasts or nil
 end
 
+-- Animation en boucle (aucun code par image), arrêtée à la fermeture
+local function loop(instance: Instance, info: TweenInfo, goal: { [string]: any })
+	local tween = TweenService:Create(instance, info, goal)
+	table.insert(loops, tween)
+	tween:Play()
+end
+
 local function stopSpin()
-	local tween = spin
-	spin = nil
-	if tween then
+	for _, tween in ipairs(loops) do
 		tween:Cancel()
 	end
+	table.clear(loops)
 end
 
 local function close()
@@ -111,9 +117,9 @@ local function close()
 		UIUtil.Tween(dimmer, 0.2, { BackgroundTransparency = 1 })
 	end
 	if card then
-		local scale = card:FindFirstChildOfClass("UIScale")
+		local scale = card:FindFirstChild("FitScale") :: UIScale?
 		if scale then
-			UIUtil.Tween(scale, 0.2, { Scale = 0.85 * (Interface.IsPhone() and 0.92 or 1) }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+			UIUtil.Tween(scale, 0.2, { Scale = 0.85 * scale.Scale }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
 		end
 	end
 	task.delay(0.22, function()
@@ -148,37 +154,6 @@ local function openShop(packId: string?)
 	end
 end
 
-local function button(parent: Instance, name: string, text: string, color: Color3, position: UDim2, width: number): TextButton
-	local node = UIUtil.Create("TextButton", {
-		Name = name,
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = position,
-		Size = UDim2.fromOffset(width, 50),
-		BackgroundColor3 = color,
-		AutoButtonColor = false,
-		Font = Theme.Fonts.Title,
-		Text = text,
-		TextColor3 = Theme.ContrastText(color),
-		TextSize = 20,
-		TextScaled = true, -- (texte traduit plus long : il rétrécit au lieu de déborder)
-		ZIndex = 6,
-		Parent = parent,
-	})
-	UIUtil.Create("UITextSizeConstraint", { MaxTextSize = 20, MinTextSize = 12, Parent = node })
-	UIUtil.Create("UIPadding", {
-		PaddingLeft = UDim.new(0, 14),
-		PaddingRight = UDim.new(0, 14),
-		PaddingTop = UDim.new(0, 12),
-		PaddingBottom = UDim.new(0, 12),
-		Parent = node,
-	})
-	UIUtil.Corner(node, UDim.new(1, 0))
-	UIUtil.Stroke(node, color:Lerp(Color3.new(0, 0, 0), 0.25), 2, 0)
-	UIUtil.Gradient(node, ColorSequence.new(WHITE, Color3.fromRGB(215, 215, 215)), 90)
-	UIUtil.AnimateButton(node, 1.05, 0.93)
-	return node
-end
-
 -- Bandeau doré : dégradé, rayons (rotation par Tween en boucle : aucun code
 -- par image), gros ticket qui tremble, petites étincelles
 local function buildHeader(card: Frame)
@@ -198,11 +173,7 @@ local function buildHeader(card: Frame)
 		ColorSequenceKeypoint.new(1, PINK),
 	}), 20)
 	local rays = UIUtil.Rays(header, WHITE, 8, 300, UDim2.fromScale(0.5, 0.62), 3)
-	spin = TweenService:Create(rays, TweenInfo.new(24, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1), { Rotation = 360 })
-	local tween = spin
-	if tween then
-		tween:Play()
-	end
+	loop(rays, TweenInfo.new(24, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1), { Rotation = 360 })
 	-- Halo + gros ticket
 	local halo = UIUtil.Create("Frame", {
 		Name = "Halo",

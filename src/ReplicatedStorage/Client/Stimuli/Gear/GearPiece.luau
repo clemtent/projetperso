@@ -3,9 +3,14 @@
 	Emplacement : ReplicatedStorage > Client > Stimuli > Gear > GearPiece
 
 	Un accessoire "posé" à l'écran (doigt, clavier, souris...) :
-	  - cadre racine "Gear_<Id>" dans le conteneur du stimulus (calque Overlay),
-	    placé par GearLayout dans l'espace libre (attribut LayoutObstacle = true :
-	    les autres stimuli peuvent l'éviter) ;
+	  - cadre racine "Gear_<Id>" dans le conteneur du stimulus (Slot "Background" :
+	    SOUS toute l'interface, au-dessus des fonds animés grâce au ZIndex du
+	    conteneur), placé par GearLayout dans l'espace libre (attribut
+	    LayoutObstacle = true : les autres stimuli peuvent l'éviter). Même si la
+	    mise en page se trompait un instant, il ne recouvre JAMAIS une carte,
+	    une pastille ou un bouton : il passerait dessous ;
+	  - FX : cadre "Gear_<Id>FX" dans le calque Overlay pour les effets de clic
+	    PASSAGERS (étoiles, "clac !", bulles, ondes...), au-dessus de l'interface ;
 	  - Content : cadre de la taille "design" de l'accessoire, où le module dessine ;
 	  - apparition "pop" (+ étincelles) au premier placement, glissement doux
 	    quand la mise en page change, disparition si aucune place n'existe ;
@@ -30,6 +35,7 @@ export type Options = {
 	Near: number?,
 	GlowColor: Color3?, -- couleur du halo (mode sombre)
 	UpgradeId: string?, -- amélioration suivie pour OnLevel (par défaut Id)
+	ContainerZ: number?, -- ZIndex du conteneur dans le calque Background (défaut 92)
 }
 
 local GearPiece = {}
@@ -42,6 +48,7 @@ export type Piece = typeof(setmetatable(
 		Options: Options,
 		Root: Frame,
 		Content: Frame,
+		FX: Frame,
 		PlaceScale: UIScale,
 		Glow: Frame,
 		Animator: GearKit.Animator,
@@ -66,6 +73,9 @@ local SPARKLE_COLORS = {
 
 function GearPiece.new(ctx: any, options: Options, animator: GearKit.Animator?): Piece
 	local size = options.Size
+	-- Au-dessus des fonds animés (thème, néon, aurores... : ZIndex < 90), sous tout le reste
+	ctx.Container.ZIndex = options.ContainerZ or 92
+	local fx = GearKit.FXLayer(ctx, "Gear_" .. options.Id .. "FX")
 	local root = Instance.new("Frame")
 	root.Name = "Gear_" .. options.Id
 	root.BackgroundTransparency = 1
@@ -111,7 +121,7 @@ function GearPiece.new(ctx: any, options: Options, animator: GearKit.Animator?):
 	-- Étincelles (réutilisées) : apparition, niveau supérieur
 	local sparkles = {}
 	for index = 1, 6 do
-		local star = GearKit.Star(ctx.Container, 0, 0, 14, SPARKLE_COLORS[(index - 1) % #SPARKLE_COLORS + 1], 30)
+		local star = GearKit.Star(fx, 0, 0, 14, SPARKLE_COLORS[(index - 1) % #SPARKLE_COLORS + 1], 30)
 		star.Visible = false
 		table.insert(sparkles, star)
 	end
@@ -124,6 +134,7 @@ function GearPiece.new(ctx: any, options: Options, animator: GearKit.Animator?):
 		Options = options,
 		Root = root,
 		Content = content,
+		FX = fx,
 		PlaceScale = placeScale,
 		Glow = glow,
 		Animator = animator or GearKit.Animator(ctx),
@@ -273,10 +284,8 @@ function GearPiece.Destroy(self: Piece)
 	if self.Root.Parent then
 		self.Root:Destroy()
 	end
-	for _, star in ipairs(self.Sparkles) do
-		if star.Parent then
-			star:Destroy()
-		end
+	if self.FX.Parent then
+		self.FX:Destroy()
 	end
 end
 

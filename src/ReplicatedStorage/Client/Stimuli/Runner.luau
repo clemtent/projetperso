@@ -2320,6 +2320,21 @@ function Runner.Start(ctx)
 		ZIndex = 4,
 	}, CAP_DARK, UDim.new(0.5, 0))
 	outline(hero.Visor, 0.4)
+	-- mèche de cheveux sur la nuque (se balance : pivot centré sur l'attache)
+	hero.Tuft = frame({
+		Name = "Tuft",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.8),
+		Size = UDim2.fromScale(0.26, 0.7),
+		BackgroundTransparency = 1,
+		ZIndex = 5,
+		Parent = hero.Head,
+	})
+	outline(limb(hero.Tuft, {
+		Position = UDim2.fromScale(0, 0.45),
+		Size = UDim2.fromScale(1, 0.5),
+		ZIndex = 1,
+	}, HAIR, ROUND), 0.35)
 
 	-- Sac à dos (rebondit avec un peu de retard) : rabat, poche, porte-clés
 	hero.Pack = limb(hero.Root, {
@@ -2669,6 +2684,7 @@ function Runner.Start(ctx)
 	local hudLayer = layer("HUD", 9, screen)
 	local hud: any = {}
 	local hudBoost = 1 -- agrandissement des pastilles (téléphone)
+	local textDrop = 0 -- textes d'événement un peu plus bas quand le HUD est agrandi
 
 	local function pill(position: UDim2, size: UDim2, anchor: Vector2?): Frame
 		local p = frame({
@@ -3053,6 +3069,8 @@ function Runner.Start(ctx)
 		PackV = 0,
 		CharmA = 0,
 		CharmV = 0,
+		TuftA = 0,
+		TuftV = 0,
 		LastVX = 0,
 		VX = 0, -- vitesse latérale du coureur
 		Trick = 0, -- figure pendant le saut (0 : groupé, 1 : vrille, 2 : étoile)
@@ -3475,7 +3493,7 @@ function Runner.Start(ctx)
 			return
 		end
 		st.EventCooldown = 2.6
-		popText(text, CX, HY - 8 * U, color, 150 * U, 22 * U, true)
+		popText(text, CX, HY - 8 * U + textDrop, color, 150 * U, 22 * U, true)
 	end
 
 	-- Pièce qui file vers le compteur (le compteur pulse à son arrivée)
@@ -3546,7 +3564,7 @@ function Runner.Start(ctx)
 	end
 
 	local function activatePower(kind: string, px: number, py: number)
-		local popY = HY - 14 * U -- au-dessus de la tête (bulle d'émoji)
+		local popY = HY - 14 * U + textDrop -- au-dessus de la tête (bulle d'émoji)
 		st.EventCooldown = math.max(st.EventCooldown, 1.2)
 		if kind == "Jetpack" then
 			st.JetTime = JET_TIME
@@ -3668,7 +3686,7 @@ function Runner.Start(ctx)
 		st.ShoePulse = 1
 		hero.ShoeRingStroke.Color = color
 		hero.ShoeRing.Visible = true
-		popText(Locale.T("NEW SHOES!"), CX, HY - 14 * U, color, 160 * U, 24 * U, true)
+		popText(Locale.T("NEW SHOES!"), CX, HY - 14 * U + textDrop, color, 160 * U, 24 * U, true)
 		st.EventCooldown = math.max(st.EventCooldown, 1.6)
 		showEmote("🤩", 1.6)
 		lookBack("Happy", 1.1)
@@ -4479,6 +4497,10 @@ function Runner.Start(ctx)
 		st.CharmV += (-80 * st.CharmA - 4 * st.CharmV + drive) * dt
 		st.CharmA = math.clamp(st.CharmA + st.CharmV * dt, -1.1, 1.1)
 		hero.Charm.Rotation = math.deg(st.CharmA)
+		-- mèche de cheveux : même principe, plus raide
+		st.TuftV += (-140 * st.TuftA - 7 * st.TuftV + drive * 0.7 + (runCycle and math.sin(st.RunPhase) * 4 or 0)) * dt
+		st.TuftA = math.clamp(st.TuftA + st.TuftV * dt, -0.7, 0.7)
+		hero.Tuft.Rotation = math.deg(st.TuftA)
 
 		local heroScreenX = sx(st.RunnerX, CHAR_Z)
 		local heroY = sy(st.RunnerH, CHAR_Z) - bob
@@ -4952,6 +4974,7 @@ function Runner.Start(ctx)
 		hud.Power.Pill.Position = UDim2.fromOffset(6 * U, row)
 		hud.BestLabel.Position = UDim2.new(1, -10 * U, 0, row - 3 * U)
 		hud.ComboPill.Position = boost > 1.05 and UDim2.new(0.5, 0, 0, row) or UDim2.new(0.5, 0, 0, 6 * U)
+		textDrop = boost > 1.05 and 13 * U or 0
 	end
 	applyHudBoost()
 

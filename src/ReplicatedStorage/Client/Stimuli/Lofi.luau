@@ -675,6 +675,9 @@ function Lofi.Start(ctx)
 			table.insert(WIN.Beads, { Frame = bead, Trail = trail, X = random:NextNumber(8, GLASS_W - 8), Y = random:NextNumber(0, GLASS_H), Speed = random:NextNumber(6, 16), Length = 0 })
 		end
 
+		-- Buée en bas de la vitre (quand il pleut)
+		WIN.Fog = frame({ Name = "Fog", Position = UDim2.fromOffset(0, GLASS_H - 26), Size = UDim2.fromOffset(GLASS_W, 26), BackgroundColor3 = Color3.fromRGB(220, 226, 255), BackgroundTransparency = 0.72, ZIndex = 7, Parent = glass })
+		fade(WIN.Fog, NumberSequence.new(1, 0))
 		-- Éclair (voile blanc) + reflets sur la vitre
 		WIN.Flash = frame({ Name = "Flash", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(230, 225, 255), BackgroundTransparency = 1, ZIndex = 8, Parent = glass })
 		for _, spec in ipairs({ { 30, 30, 12, 0.88 }, { 48, 30, 5, 0.9 }, { 104, 50, 8, 0.93 } }) do
@@ -1157,6 +1160,10 @@ function Lofi.Start(ctx)
 			ColorSequenceKeypoint.new(0.9, Color3.fromRGB(218, 168, 122)),
 			ColorSequenceKeypoint.new(1, Color3.fromRGB(218, 168, 122)),
 		}), 90)
+		-- La lumière de la lampe déborde sur la face avant du bureau
+		D.Spill = frame({ Name = "LightSpill", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(318, DESK_FRONT), Size = UDim2.fromOffset(130, 30), BackgroundColor3 = WARM_LIGHT, BackgroundTransparency = 0.8, ZIndex = 13, Parent = scene })
+		UI.Corner(D.Spill, 14)
+		fade(D.Spill, NumberSequence.new(0, 1))
 		-- Ombre portée du plateau sur la face avant
 		local lip = frame({ Name = "DeskLip", Position = UDim2.fromOffset(0, DESK_FRONT), Size = UDim2.new(1, 0, 0, 6), BackgroundColor3 = BLACK, BackgroundTransparency = 0.6, ZIndex = 13, Parent = scene })
 		fade(lip, NumberSequence.new(0, 1))
@@ -2296,6 +2303,7 @@ function Lofi.Start(ctx)
 			for _, droplet in ipairs(WIN.Droplets) do
 				droplet.BackgroundTransparency = 0.45 + wetAlpha * 0.55
 			end
+			WIN.Fog.BackgroundTransparency = 0.72 + wetAlpha * 0.28
 		end
 		for _, bead in ipairs(WIN.Beads) do
 			if rain > 0.2 then
@@ -2454,6 +2462,7 @@ function Lofi.Start(ctx)
 		for _, glow in ipairs(D.Pool) do
 			glow.BackgroundTransparency = math.min(1, 1 - 0.34 * power * (0.9 + 0.1 * breath) + flicker)
 		end
+		D.Spill.BackgroundTransparency = math.min(1, 1 - 0.22 * power * (0.9 + 0.1 * breath) + flicker)
 		for _, ray in ipairs(LAMP.Rays) do
 			ray.Frame.BackgroundTransparency = math.min(1, 1 - (1 - ray.Alpha) * power + flicker)
 		end

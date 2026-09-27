@@ -8,7 +8,7 @@
 	  - "DVD" en gras italique, couleur du logo, avec un léger vernis, un
 	    fin contour sombre (lisible sur n'importe quel fond) et une ombre
 	    décalée qui lui donne du relief ;
-	  - dessous, le disque aplati : une VRAIE ellipse (7 pilules inscrites
+	  - dessous, le disque aplati : une VRAIE ellipse (8 pilules inscrites
 	    dans l'ellipse, calculées), reflet blanc, reflet holographique qui
 	    glisse, et "VIDEO" en creux ;
 	  - un halo doux (3 couches) de la couleur du logo, qui s'illumine à
@@ -259,6 +259,7 @@ function DVD.Start(ctx)
 	------------------------------------------------------------------
 	local DISC_Y = 62
 	local DISC_LAYERS = ellipseLayers(W / 2 - 9, 13)
+	local GHOST_LAYER = 4 -- la traînée n'utilise qu'une pilule (moyenne)
 
 	-- Dessine le mot + le disque (logo complet, ou silhouette de traînée) ;
 	-- renvoie les pièces à colorer
@@ -274,7 +275,7 @@ function DVD.Start(ctx)
 		parts.Word.FontFace = WORD_FONT
 		-- Disque aplati (silhouette : une seule pilule, sinon les recouvrements
 		-- transparents se verraient)
-		for i = (full and 1 or 3), (full and #DISC_LAYERS or 3) do
+		for i = (full and 1 or GHOST_LAYER), (full and #DISC_LAYERS or GHOST_LAYER) do
 			local layer = DISC_LAYERS[i]
 			table.insert(parts.Disc, pill(place({ Name = "Disc" .. i, ZIndex = z + 1, Parent = parent }, W / 2, DISC_Y, layer[1], layer[2])))
 		end

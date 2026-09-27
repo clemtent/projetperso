@@ -194,14 +194,16 @@ function ChatInput.new(ctx: any, options: Options)
 	})
 
 	-- Ligne d'état au-dessus du champ : compteur, erreur, mode lent
+	-- (texte sur plusieurs lignes si besoin : la ligne grandit vers le haut)
 	local status = UI.Create("TextLabel", {
 		Name = "ChatStatus",
 		Text = "",
 		Font = Theme.Fonts.Title,
 		TextSize = 9,
 		TextColor3 = INFO_COLOR,
-		TextXAlignment = Enum.TextXAlignment.Right,
-		TextTruncate = Enum.TextTruncate.AtEnd,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = Color3.fromRGB(16, 12, 28),
 		BackgroundTransparency = 0.12,
 		BorderSizePixel = 0,
@@ -213,7 +215,13 @@ function ChatInput.new(ctx: any, options: Options)
 		Parent = options.Parent,
 	})
 	UI.Corner(status, 5)
-	UI.Create("UIPadding", { PaddingLeft = UDim.new(0, 5), PaddingRight = UDim.new(0, 5), Parent = status })
+	UI.Create("UIPadding", {
+		PaddingLeft = UDim.new(0, 5),
+		PaddingRight = UDim.new(0, 5),
+		PaddingTop = UDim.new(0, 1),
+		PaddingBottom = UDim.new(0, 1),
+		Parent = status,
+	})
 
 	------------------------------------------------------------------
 	-- États

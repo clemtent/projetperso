@@ -399,7 +399,7 @@ local function pillButton(parent: Instance, name: string, text: string, color: C
 	UIUtil.Corner(node, UDim.new(1, 0))
 	-- v9 : bouton en relief (dégradé, reflet, contour teinté) + ombre
 	UIUtil.DressButton(node, color, { StrokeThickness = 2 })
-	UIUtil.Shadow(node, 3, 0.8, 1, 1)
+	UIUtil.ButtonShadow(node, 3, 0.8)
 	return node
 end
 

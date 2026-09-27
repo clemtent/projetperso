@@ -405,11 +405,16 @@ local function styleButton(button: TextButton, text: string, background: Color3,
 	if coinFrame then
 		coinFrame.Visible = coin == true
 	end
-	-- Contour : foncé sur un bouton actif, doux (teinte du fond) sinon
+	-- Contour (style v9 : teinte plus sombre du fond) et reflet : actif = net,
+	-- désactivé = contour doux et sans reflet
 	local buttonStroke = button:FindFirstChildOfClass("UIStroke")
 	if buttonStroke then
-		buttonStroke.Color = enabled and Theme.Colors.Border or background:Lerp(BLACK, 0.35)
-		buttonStroke.Transparency = enabled and 0.1 or 0.35
+		buttonStroke.Color = enabled and UIUtil.EdgeColor(background) or background:Lerp(BLACK, 0.3)
+		buttonStroke.Transparency = enabled and 0 or 0.35
+	end
+	local gloss = button:FindFirstChild("Gloss")
+	if gloss and gloss:IsA("GuiObject") then
+		gloss.Visible = enabled
 	end
 	button:SetAttribute("BaseColor", background)
 	button.BackgroundColor3 = background
@@ -849,15 +854,6 @@ local function priceButton(card: Frame, height: number, bottom: number, coinSize
 		ZIndex = 4,
 		Parent = card,
 	})
-	-- Dégradé plus lumineux (reflet en haut) que le bouton standard
-	local buttonGradient = button:FindFirstChildOfClass("UIGradient")
-	if buttonGradient then
-		buttonGradient.Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
-			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(236, 236, 236)),
-			ColorSequenceKeypoint.new(1, Color3.fromRGB(196, 196, 196)),
-		})
-	end
 	local coin = UIUtil.Create("Frame", {
 		Name = "Coin",
 		Size = UDim2.fromOffset(coinSize, coinSize),

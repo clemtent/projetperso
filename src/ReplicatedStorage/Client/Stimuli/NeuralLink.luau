@@ -8,9 +8,10 @@
 	neuronal. À chaque clic, une impulsion lumineuse part du cerveau, suit le
 	câble et fait une étincelle au bouton ; le cerveau "pulse" et ses
 	électrodes s'allument.
-	Le câble passe SOUS l'interface (calque Background, cadre "Gear_NeuralCable") :
-	il ne recouvre jamais une carte, le compteur ou un bouton, et se glisse
-	dessous quand il doit les traverser.
+	Tout le dessin (cerveau + câble "Gear_NeuralCable") est SOUS l'interface
+	(Slot "Background") : le câble ne recouvre jamais une carte, le compteur ou
+	un bouton, il se glisse dessous quand il doit les traverser. Seule
+	l'étincelle d'arrivée (passagère) est dans le calque Overlay.
 	Au repos : de temps en temps une "pensée" (impulsion douce) et un clin d'œil.
 ]]
 
@@ -19,14 +20,13 @@ local GearKit = require(Gear:WaitForChild("GearKit"))
 local GearPiece = require(Gear:WaitForChild("GearPiece"))
 
 local NeuralLink = {}
-NeuralLink.Slot = "Overlay"
+NeuralLink.Slot = "Background" -- sous l'interface (étincelles : calque Overlay)
 
 local W, H = 104, 90
 local INK = Color3.fromRGB(128, 48, 104)
 local PINK = Color3.fromRGB(255, 176, 208)
 local FOLD = Color3.fromRGB(226, 112, 166)
 local SEGMENTS = 18
-local CABLE_Z = 90 -- au-dessus des fonds animés (calque Background), sous tout le reste
 
 local active: { [any]: () -> () } = {}
 
@@ -46,6 +46,7 @@ function NeuralLink.Start(ctx)
 		MinScale = 0.42,
 		MaxScale = 1,
 		GlowColor = Color3.fromRGB(255, 200, 240),
+		ContainerZ = 91,
 		Anchor = function(button, _canvas)
 			-- En haut à droite du bouton (au-dessus de la souris)
 			return Vector2.new(button.X1 + 200, button.Y0 + 30)
@@ -135,15 +136,14 @@ function NeuralLink.Start(ctx)
 	-- Le câble (calque Background) + impulsions
 	------------------------------------------------------------------
 
-	local layers = ctx.Interface.Layers
 	local cable = Instance.new("Frame")
 	cable.Name = "Gear_NeuralCable"
 	cable.BackgroundTransparency = 1
 	cable.Size = UDim2.fromScale(1, 1)
-	cable.ZIndex = CABLE_Z
+	cable.ZIndex = 1 -- sous le cerveau (le conteneur est déjà sous l'interface)
 	cable.Visible = false
 	cable.Active = false
-	cable.Parent = layers.Background or ctx.Container
+	cable.Parent = ctx.Container
 
 	local segments = {}
 	for index = 1, SEGMENTS do
@@ -176,7 +176,7 @@ function NeuralLink.Start(ctx)
 		stroke.Thickness = 2.5
 		stroke.Parent = ring
 		GearKit.Star(ring, 0, 0, 12, Color3.new(1, 1, 1), 25).Position = UDim2.fromScale(0.5, 0.5)
-		ring.Parent = ctx.Container
+		ring.Parent = piece.FX
 		return ring
 	end)
 

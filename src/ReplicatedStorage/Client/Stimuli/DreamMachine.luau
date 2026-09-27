@@ -12,9 +12,10 @@
 	  3 : 2e nuage (mouton qui dort)        8 : liseré doré + étincelles
 	  4 : 2e mouton                         9 : ampoule arc-en-ciel
 	  5 : rayon de rêve (lumière)          10 : 4e mouton + « zZ » de la machine
-	Deux mises en page : HAUTE (nuages empilés au-dessus de la machine : les
-	gouttières entre les cartes du bas sur PC) ou LARGE (nuages à droite :
-	grands espaces des téléphones / tablettes) ; Cosmos/Zones choisit.
+	Trois mises en page, Cosmos/Zones choisit celle qui se voit le mieux :
+	HAUTE (nuages empilés au-dessus de la machine : gouttières entre les
+	cartes du bas sur PC), LARGE (nuages à droite : bas des téléphones) ou
+	CARRÉE (2-3 nuages autour de la machine : côtés des tablettes).
 	Calque Background, ≤ 20 images/s, objets recyclés.
 ]]
 
@@ -33,6 +34,10 @@ local TALL_W = 106
 local TALL_H = { 222, 292, 366 }
 local WIDE_H = 160
 local WIDE_W = { 238, 340, 438 }
+local SQUARE_W, SQUARE_H = 238, 176 -- 2 ou 3 nuages
+
+-- Formes (index Cosmos/Zones) : 0 = haute, 1 = large, 2 = carrée
+local TALL, WIDE, SQUARE = 0, 1, 2
 
 -- Nuages : taille intérieure
 local CLOUD_SIZE = {
@@ -60,8 +65,8 @@ type Layout = {
 	Beam: { Vector2 }, -- début, fin
 }
 
-local function layoutFor(wide: boolean, clouds: number): Layout
-	if wide then
+local function layoutFor(shape: number, clouds: number): Layout
+	if shape == WIDE then
 		local w = WIDE_W[clouds]
 		return {
 			W = w,
@@ -71,6 +76,16 @@ local function layoutFor(wide: boolean, clouds: number): Layout
 			Bubbles = { Vector3.new(86, 70, 6), Vector3.new(98, 58, 9), Vector3.new(112, 46, 12) },
 			Clouds = { Vector2.new(178, 70), Vector2.new(288, 104), Vector2.new(390, 60) },
 			Beam = { Vector2.new(70, 82), Vector2.new(170, 70) },
+		}
+	elseif shape == SQUARE and clouds >= 2 then
+		return {
+			W = SQUARE_W,
+			H = SQUARE_H,
+			Device = Vector2.new(54, 138),
+			Bulb = Vector2.new(73, 102),
+			Bubbles = { Vector3.new(88, 90, 6), Vector3.new(100, 78, 9), Vector3.new(114, 66, 12) },
+			Clouds = { Vector2.new(180, 52), Vector2.new(54, 44), Vector2.new(184, 140) },
+			Beam = { Vector2.new(73, 102), Vector2.new(176, 58) },
 		}
 	end
 	local h = TALL_H[clouds]
@@ -91,7 +106,7 @@ function DreamMachine.Start(ctx)
 	local effects = Kit.Effects(ctx)
 	local level = math.clamp(ctx.GetLevel(UPGRADE_ID), 1, MAX_LEVEL)
 	local dark = Kit.IsDark(ctx)
-	local wide = false
+	local shape = TALL
 	local piece = Kit.Piece(ctx.Container, "DreamMachine", TALL_W, TALL_H[1])
 
 	-- Éléments animés (remplis par build)
@@ -182,7 +197,7 @@ function DreamMachine.Start(ctx)
 		bulb, bulbGlow, beam, screenZ, sleeper, cloud1 = nil, nil, nil, nil, nil, nil
 
 		local clouds = cloudCount(level)
-		local layout = layoutFor(wide, clouds)
+		local layout = layoutFor(shape, clouds)
 		piece.Frame.Size = UDim2.fromOffset(layout.W, layout.H)
 		local ink = Kit.Ink(dark)
 		local root = Kit.Box(piece.Frame, {
@@ -342,20 +357,23 @@ function DreamMachine.Start(ctx)
 
 	local function request()
 		local clouds = cloudCount(level)
+		local shapes = { Vector2.new(WIDE_W[clouds], WIDE_H) }
+		if clouds >= 2 then
+			table.insert(shapes, Vector2.new(SQUARE_W, SQUARE_H))
+		end
 		Zones.Request(UPGRADE_ID, {
 			{
 				W = TALL_W,
 				H = TALL_H[clouds],
-				AltW = WIDE_W[clouds],
-				AltH = WIDE_H,
+				Shapes = shapes,
 				Anchor = Vector2.new(0.3, 0.84),
-				MinScale = 0.5,
+				MinScale = 0.45,
 				MaxScale = 1.15,
 			},
 		}, function(placements)
 			local placement = placements[1]
-			if placement and placement.Alt ~= wide then
-				wide = placement.Alt
+			if placement and placement.Shape ~= shape then
+				shape = placement.Shape
 				build()
 			end
 			Kit.Place(piece, placement)

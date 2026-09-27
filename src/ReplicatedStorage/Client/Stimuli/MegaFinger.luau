@@ -25,7 +25,7 @@ local GearPiece = require(Gear:WaitForChild("GearPiece"))
 local HandArt = require(Gear:WaitForChild("HandArt"))
 
 local MegaFinger = {}
-MegaFinger.Slot = "Overlay"
+MegaFinger.Slot = "Background" -- sous l'interface (main géante et effets : calque Overlay)
 
 local W, H = 60, 136
 local INK = Color3.fromRGB(56, 36, 50)
@@ -63,6 +63,7 @@ function MegaFinger.Start(ctx)
 		MinScale = 0.42,
 		MaxScale = 1,
 		GlowColor = Color3.fromRGB(255, 226, 190),
+		ContainerZ = 93,
 		Anchor = function(button, _canvas)
 			-- À droite du bouton (après le bouton 🏠)
 			return Vector2.new(button.X1 + 110, (button.Y0 + button.Y1) / 2 + 40)
@@ -288,7 +289,7 @@ function MegaFinger.Start(ctx)
 		})
 		table.insert(giantLines, line)
 	end
-	giant.Parent = ctx.Container
+	giant.Parent = piece.FX
 
 	local function shockRing(index: number)
 		local ring = Instance.new("Frame")
@@ -305,12 +306,12 @@ function MegaFinger.Start(ctx)
 		stroke.Thickness = 4
 		stroke.Color = Color3.fromRGB(255, 220, 90)
 		stroke.Parent = ring
-		ring.Parent = ctx.Container
+		ring.Parent = piece.FX
 		return ring
 	end
 	local rings = { shockRing(1), shockRing(2), shockRing(3) }
 	local dust = GearKit.Pool(6, function()
-		local puff = GearKit.Box(ctx.Container, 0, 0, 16, 16, Color3.fromRGB(240, 236, 250), {
+		local puff = GearKit.Box(piece.FX, 0, 0, 16, 16, Color3.fromRGB(240, 236, 250), {
 			Name = "Dust",
 			Anchor = Vector2.new(0.5, 0.5),
 			Radius = "round",
@@ -358,7 +359,7 @@ function MegaFinger.Start(ctx)
 	burstLabel.Parent = burst
 	local burstScale = Instance.new("UIScale")
 	burstScale.Parent = burst
-	burst.Parent = ctx.Container
+	burst.Parent = piece.FX
 
 	-- Écrasement du bouton : UNE animation (Tween) réutilisée, comme le "squish"
 	-- de la colonne centrale (le bouton garde sa taille de repos 1 x 1)

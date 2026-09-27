@@ -157,53 +157,107 @@ local function slotRect(frame: GuiObject): Rect
 	return rect
 end
 
+-- Vrai si aucun des rectangles ne chevauche un autre (des éléments rangés par
+-- un UIListLayout ne se chevauchent jamais : sinon les positions lues ne sont
+-- pas fiables — layout pas encore calculé, ou émulateur sans UIListLayout)
+local function noOverlap(rects: { Rect }): boolean
+	for i = 1, #rects do
+		local a = rects[i]
+		for j = i + 1, #rects do
+			local b = rects[j]
+			local ox = math.min(a.X1, b.X1) - math.max(a.X0, b.X0)
+			local oy = math.min(a.Y1, b.Y1) - math.max(a.Y0, b.Y0)
+			if ox > 2 and oy > 2 then
+				return false
+			end
+		end
+	end
+	return true
+end
+
+local function visibleChildRects(parent: Instance): { Rect }
+	local rects = {}
+	for _, child in ipairs(parent:GetChildren()) do
+		if child:IsA("GuiObject") and child.Visible then
+			local rect = GearKit.CanvasRect(child)
+			if validRect(rect) then
+				table.insert(rects, rect)
+			end
+		end
+	end
+	return rects
+end
+
+-- Pile sous le bouton (compteur, "par seconde", menus, combo, améliorations)
+local function collectStack(list: { Rect }, stack: GuiObject)
+	local items = {}
+	local rects = {}
+	local widest = 0
+	for _, item in ipairs(stack:GetChildren()) do
+		if item:IsA("GuiObject") and item.Visible then
+			local rect = GearKit.CanvasRect(item)
+			if validRect(rect) then
+				table.insert(items, item)
+				table.insert(rects, rect)
+				widest = math.max(widest, rect.X1 - rect.X0)
+			end
+		end
+	end
+	if not noOverlap(rects) then
+		-- Positions pas fiables : on réserve prudemment toute la pile (largeur de
+		-- son élément le plus large, et un peu plus bas que son cadre)
+		local frame = GearKit.CanvasRect(stack)
+		local cx = (frame.X0 + frame.X1) / 2
+		local half = math.max(widest, 320) / 2 + 4
+		table.insert(list, { X0 = cx - half, Y0 = frame.Y0 - 2, X1 = cx + half, Y1 = frame.Y1 + 60 })
+		return
+	end
+	for index, item in ipairs(items) do
+		local rect = rects[index]
+		if item.Name == "Counter" then
+			-- Le nombre + "Dopamine" (avec de la place pour grandir)
+			local labels = visibleChildRects(item)
+			local box: Rect? = nil
+			for _, label in ipairs(labels) do
+				box = union(box, label)
+			end
+			local inside = box ~= nil and (box :: Rect).X0 >= rect.X0 - 2 and (box :: Rect).X1 <= rect.X1 + 2
+			if box and inside and noOverlap(labels) then
+				table.insert(list, inflate(box :: Rect, 24, 2))
+			else
+				table.insert(list, rect)
+			end
+		elseif item.Name == "Pills" and not item:IsA("ScrollingFrame") then
+			-- Rangée des menus : seulement les pastilles visibles (si leurs positions sont fiables)
+			local pills = visibleChildRects(item)
+			local box: Rect? = nil
+			for _, pill in ipairs(pills) do
+				box = union(box, pill)
+			end
+			if box and noOverlap(pills) then
+				table.insert(list, inflate(box :: Rect, 8, 3))
+			else
+				table.insert(list, inflate(rect, 4, 2))
+			end
+		else
+			table.insert(list, rect)
+			-- Enfants qui dépassent (bandeau Rush sur la ligne "par seconde"...)
+			for _, sub in ipairs(item:GetChildren()) do
+				if sub:IsA("GuiObject") and sub.Visible and sub.ZIndex > 1 then
+					addObject(list, sub)
+				end
+			end
+		end
+	end
+end
+
 -- Colonne centrale : chaque élément visible (pas le grand cadre transparent)
 local function collectColumn(list: { Rect }, column: Instance)
 	for _, child in ipairs(column:GetChildren()) do
 		if child:IsA("GuiObject") and child.Visible then
 			local name = child.Name
 			if name == "Stack" then
-				for _, item in ipairs(child:GetChildren()) do
-					if item:IsA("GuiObject") and item.Visible then
-						if item.Name == "Counter" then
-							-- Le nombre + "Dopamine" (avec de la place pour grandir)
-							local counted = false
-							for _, label in ipairs(item:GetChildren()) do
-								if label:IsA("GuiObject") and label.Visible then
-									counted = true
-									addObject(list, label, 22, 2)
-								end
-							end
-							if not counted then
-								addObject(list, item)
-							end
-						elseif item.Name == "Pills" and not item:IsA("ScrollingFrame") then
-							-- Rangée des menus : seulement les pastilles visibles
-							local box: Rect? = nil
-							for _, pill in ipairs(item:GetChildren()) do
-								if pill:IsA("GuiObject") and pill.Visible then
-									local rect = GearKit.CanvasRect(pill)
-									if validRect(rect) then
-										box = union(box, rect)
-									end
-								end
-							end
-							if box then
-								table.insert(list, inflate(box, 4, 2))
-							else
-								addObject(list, item)
-							end
-						else
-							addObject(list, item)
-							-- Enfants qui dépassent (bandeau Rush sur la ligne "par seconde"...)
-							for _, sub in ipairs(item:GetChildren()) do
-								if sub:IsA("GuiObject") and sub.Visible and sub.ZIndex > 1 then
-									addObject(list, sub)
-								end
-							end
-						end
-					end
-				end
+				collectStack(list, child)
 			elseif name == "ClickerHolder" then
 				addObject(list, child, 2, 2)
 				for _, sub in ipairs(child:GetChildren()) do
@@ -212,8 +266,12 @@ local function collectColumn(list: { Rect }, column: Instance)
 					end
 				end
 			elseif name == "StatusLeft" then
+				-- Pastilles VIP / bonus / boost : toute la colonne dès qu'une est visible
 				for _, chip in ipairs(child:GetChildren()) do
-					addObject(list, chip, 2, 2)
+					if chip:IsA("GuiObject") and chip.Visible then
+						addObject(list, child, 2, 2)
+						break
+					end
 				end
 			elseif name == "HouseHolder" then
 				-- Le badge "99+" déborde en haut à droite

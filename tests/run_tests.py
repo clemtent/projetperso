@@ -26,7 +26,7 @@ LUAU = "/tmp/luau/luau"
 if "--luau" in sys.argv:
     LUAU = sys.argv[sys.argv.index("--luau") + 1]
 
-MODULES = ["Config", "NumberFormatter", "Formulas", "DVDMath"]
+MODULES = ["Config", "NumberFormatter", "Formulas", "DVDMath", "ChatTopics"]
 
 HEADER = r"""
 -- Faux objets Roblox (juste ce qu'il faut pour les modules Shared)
@@ -400,6 +400,39 @@ test("DVDMath : coins et directions", function(check)
 	eq(check, dx, -1, "dir x après rebond")
 	eq(check, DVD.Triangle(1.3, 1), 0.7, "triangle")
 	check(near(DVD.Triangle(-0.25, 1), 0.25), "triangle négatif")
+end)
+
+------------------------------------------------------------------ ChatTopics (LIVE v9)
+test("ChatTopics.Detect : sujets FR/EN, argot, emojis, négations", function(check)
+	local CT = req("ChatTopics")
+	local function has(text, topic)
+		for _, t in ipairs(CT.Detect(text)) do
+			if t == topic then return true end
+		end
+		return false
+	end
+	local function first(text) return CT.Detect(text)[1] end
+	eq(check, first("salut tout le monde !"), "Greeting", "salut")
+	eq(check, first("helloooo"), "Greeting", "lettres répétées")
+	eq(check, first("coucouuu 👋"), "Greeting", "coucou + emoji")
+	eq(check, first("bonne nuit les amis"), "Bye", "bonne nuit")
+	eq(check, first("je t'aime trop"), "Love", "je t'aime")
+	eq(check, first("t'es nulle"), "Mean", "nulle")
+	check(not has("pas mal ce live", "Mean") and has("pas mal ce live", "Compliment"), "négation : pas mal = compliment")
+	check(has("tu manges quoi ?", "Question") and has("tu manges quoi ?", "Food"), "question + nourriture")
+	eq(check, first("mdrrrr"), "Laugh", "mdr répété")
+	eq(check, first("hahahaha"), "Laugh", "haha*")
+	eq(check, first("😂😂"), "Laugh", "emoji")
+	check(#CT.Detect("le chat va trop vite") == 0, "« chat » (le chat du live) n'est pas un animal")
+	eq(check, first("my cat is here"), "Pet", "cat")
+	check(has("how old are you", "Age") and has("tu as quel âge ?", "Age"), "âge EN / FR (accents)")
+	eq(check, first("j'ai un contrôle demain"), "School", "contrôle (accent)")
+	check(#CT.Detect("test") == 0, "« test » n'est pas l'école")
+	check(#CT.Detect("") == 0 and #CT.Detect(nil) == 0, "vide / nil")
+	check(#CT.Detect(string.rep("hello love pizza lol sleep cat rain ", 20)) <= 4, "4 sujets au plus")
+	for _, topic in ipairs(CT.Order) do
+		check(type(CT.Keywords[topic]) == "table" and #CT.Keywords[topic] > 0, "mots-clés " .. topic)
+	end
 end)
 
 ------------------------------------------------------------------ Maison 🏠

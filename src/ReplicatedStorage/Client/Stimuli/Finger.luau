@@ -19,7 +19,7 @@ local GearPiece = require(Gear:WaitForChild("GearPiece"))
 local HandArt = require(Gear:WaitForChild("HandArt"))
 
 local Finger = {}
-Finger.Slot = "Overlay"
+Finger.Slot = "Background" -- sous l'interface (effets de clic : calque Overlay)
 
 local FOOTPRINT = 90
 local TOUCH_RANGE = 46 -- au-delà (en px), le doigt fait juste un petit "coup" dans le vide
@@ -36,6 +36,7 @@ function Finger.Start(ctx)
 		MaxScale = 1,
 		Near = 60,
 		GlowColor = Color3.fromRGB(255, 236, 214),
+		ContainerZ = 97,
 		Anchor = function(button, _canvas)
 			-- À gauche du bouton, un peu plus bas : le doigt vise vers le haut / la droite
 			return Vector2.new(button.X0 - 50, (button.Y0 + button.Y1) / 2 + 6)
@@ -76,7 +77,7 @@ function Finger.Start(ctx)
 	local taps = 0
 
 	-- Impact (sur la toile) : étoile + anneau, réutilisés
-	local impact = GearKit.Star(ctx.Container, 0, 0, 22, Color3.fromRGB(255, 236, 120), 20)
+	local impact = GearKit.Star(piece.FX, 0, 0, 22, Color3.fromRGB(255, 236, 120), 20)
 	impact.Visible = false
 	local ring = Instance.new("Frame")
 	ring.Name = "ImpactRing"
@@ -91,7 +92,7 @@ function Finger.Start(ctx)
 	ringStroke.Color = Color3.fromRGB(255, 255, 255)
 	ringStroke.Thickness = 2
 	ringStroke.Parent = ring
-	ring.Parent = ctx.Container
+	ring.Parent = piece.FX
 
 	local dropBase: { [Frame]: UDim2 } = {}
 

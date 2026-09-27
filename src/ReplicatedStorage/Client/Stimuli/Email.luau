@@ -54,6 +54,11 @@ local Locale = require(game:GetService("ReplicatedStorage").Shared.Locale)
 local Email = {}
 Email.Slot = "Overlay"
 
+-- Changement de langue : UN seul écouteur pour le module (Locale.OnChanged
+-- ne se débranche pas), qui prévient le Dopamail en cours s'il y en a un
+local languageHandler: (() -> ())? = nil
+local languageHooked = false
+
 local MAX_ENVELOPES = 4
 local CARD_W = 250
 local CARD_H = 86
@@ -1487,6 +1492,7 @@ function Email.Start(ctx)
 		CloseToken = 0,
 		SnackToken = 0,
 		SnackAction = nil :: any,
+		SnackTarget = nil :: any, -- mail annoncé par le snack (caché quand on l'ouvre)
 	}
 	local UI: any = nil -- fenêtre (construite à la première ouverture, puis réutilisée)
 
@@ -1499,7 +1505,7 @@ function Email.Start(ctx)
 	local setView: (view: string) -> ()
 	local renderAll: () -> ()
 	local renderMessage: (mail: any) -> ()
-	local snack: (message: string, action: (() -> ())?) -> ()
+	local snack: (message: string, action: (() -> ())?, target: any?) -> ()
 	local spawnCard: (mail: any, info: any?) -> ()
 	local removeEnvelope: (envelope: any, opened: boolean) -> ()
 	local expireMail: (mail: any) -> ()
@@ -2387,12 +2393,13 @@ function Email.Start(ctx)
 		local ui = UI
 		S.SnackToken += 1
 		S.SnackAction = nil
+		S.SnackTarget = nil
 		if ui then
 			ui.Snack.Visible = false
 		end
 	end
 
-	snack = function(message: string, action: (() -> ())?)
+	snack = function(message: string, action: (() -> ())?, target: any?)
 		local ui = UI
 		if not ui or not S.Open then
 			ctx.Notify(message)
@@ -2401,6 +2408,7 @@ function Email.Start(ctx)
 		S.SnackToken += 1
 		local token = S.SnackToken
 		S.SnackAction = action
+		S.SnackTarget = target
 		ui.Snack.Text = message
 		ui.Snack.Visible = true
 		ui.SnackScale.Scale = 0.6
@@ -2572,27 +2580,23 @@ function Email.Start(ctx)
 			ui.SearchBox = box
 		end
 
-		local closeSize = phone and 40 or 36
-		local close = UIUtil.Create("TextButton", {
+		-- ✕ commun à toutes les fenêtres du jeu (disque blanc nacré, croix
+		-- rouge au survol) : bien visible sur le dégradé, rien à voir avec les
+		-- icônes rondes et sombres de Roblox ; zone tactile agrandie autour
+		UIUtil.CloseButton({
 			Name = "MailClose",
+			Size = phone and 40 or 36,
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, -10, 0.5, 0),
-			Size = UDim2.fromOffset(closeSize, closeSize),
-			BackgroundColor3 = C.Red,
-			BorderSizePixel = 0,
-			AutoButtonColor = false,
-			Text = "",
-			ZIndex = 6,
+			ZIndex = 7,
 			Parent = titleBar,
+			Hitbox = phone and 64 or 54,
+			OnClose = function()
+				if ctx.IsAlive() then
+					closeWindow()
+				end
+			end,
 		})
-		UIUtil.Corner(close, 10)
-		UIUtil.Gradient(close, ColorSequence.new(C.White, Color3.fromRGB(226, 196, 200)), 90)
-		UIUtil.Stroke(close, Color3.fromRGB(110, 10, 22), 2, 0)
-		text({ Size = UDim2.fromScale(1, 1), Font = FONT_TITLE, Text = "✕", TextColor3 = C.White, TextSize = phone and 24 or 21, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 7, Parent = close })
-		UIUtil.AnimateButton(close, 1.08, 0.92)
-		onClick(close, function()
-			closeWindow()
-		end)
 
 		-- Barre latérale (PC) / colonne d'icônes (téléphone)
 		local side = frame({ Name = "Sidebar", Position = UDim2.fromOffset(0, T), Size = UDim2.new(0, L.Side, 1, -T), BackgroundColor3 = C.Side, ZIndex = 3, Parent = win })
@@ -3353,6 +3357,9 @@ function Email.Start(ctx)
 		if mail.Envelope then
 			removeEnvelope(mail.Envelope, true)
 		end
+		if S.SnackTarget == mail then
+			hideSnack()
+		end
 		if not inFolder(mail, S.Folder) then
 			S.Folder = mail.Folder
 		end
@@ -3465,7 +3472,7 @@ function Email.Start(ctx)
 			if S.Open then
 				snack(Locale.T("📩 New mail from %s", contact.Short), function()
 					openMail(mail, "List")
-				end)
+				end, mail)
 			else
 				spawnCard(mail, nil)
 			end
@@ -3863,7 +3870,7 @@ function Email.Start(ctx)
 		if S.Open then
 			snack(Locale.T("📩 New mail from %s", mail.Email.Sender), function()
 				openMail(mail, "List")
-			end)
+			end, mail)
 		end
 		refresh(true)
 	end
@@ -3950,6 +3957,21 @@ function Email.Start(ctx)
 		openWindow()
 	end)
 
+	-- Reconstruit la fenêtre (autre mise en page, autre langue) en gardant
+	-- la vue, la sélection et le brouillon
+	local function rebuildWindow()
+		local wasOpen = S.Open
+		destroyWindow()
+		S.Open = false
+		if wasOpen then
+			openWindow()
+			if S.View == "Message" and S.Selected then
+				renderMessage(S.Selected)
+				setView("Message")
+			end
+		end
+	end
+
 	-- L'écran change (rotation, fenêtre redimensionnée, autre appareil)
 	local function onScreenChanged()
 		task.delay(0.2, function()
@@ -3962,16 +3984,7 @@ function Email.Start(ctx)
 				return
 			end
 			if ui.Mode ~= currentMode() then
-				local wasOpen = S.Open
-				destroyWindow()
-				S.Open = false
-				if wasOpen then
-					openWindow()
-					if S.View == "Message" and S.Selected then
-						renderMessage(S.Selected)
-						setView("Message")
-					end
-				end
+				rebuildWindow()
 			else
 				fitWindow()
 			end
@@ -3985,11 +3998,44 @@ function Email.Start(ctx)
 			ctx.Connect(ctx.Interface.DeviceChanged, onScreenChanged)
 		end
 	end
+
+	-- Langue changée (réglages) : correspondants renommés, fenêtre reconstruite
+	languageHandler = function()
+		if not ctx.IsAlive() then
+			return
+		end
+		local texts = Locale.Pick(CONTACT_TEXT)
+		for _, contact in ipairs(contacts) do
+			local t = texts[contact.Id]
+			if t then
+				contact.Name = t.Name
+				contact.Short = t.Short
+				contact.Signature = t.Signature
+				contact.Address = slug(t.Name) .. Locale.T("@dopamail.com")
+			end
+		end
+		me.Name = Locale.T("Me")
+		me.Address = string.lower(player and player.Name or "you") .. Locale.T("@dopamail.com")
+		refreshCounter(false)
+		if UI then
+			rebuildWindow()
+		end
+	end
+	if not languageHooked then
+		languageHooked = true
+		Locale.OnChanged(function()
+			local handler = languageHandler
+			if handler then
+				handler()
+			end
+		end)
+	end
 end
 
 function Email.Stop(_ctx)
 	-- Cartes, fenêtre et compteur vivent dans ctx.Container
 	-- (détruit par le StimulusManager) ; les tâches en attente vérifient ctx.IsAlive()
+	languageHandler = nil
 end
 
 return Email

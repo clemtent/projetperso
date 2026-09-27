@@ -22,7 +22,7 @@ local GearPiece = require(Gear:WaitForChild("GearPiece"))
 local KeyboardArt = require(Gear:WaitForChild("KeyboardArt"))
 
 local CoralKeys = {}
-CoralKeys.Slot = "Overlay"
+CoralKeys.Slot = "Background" -- sous l'interface (effets de clic : calque Overlay)
 
 local W, H = 184, 86
 local INK = Color3.fromRGB(28, 70, 96)
@@ -70,6 +70,7 @@ function CoralKeys.Start(ctx)
 		MinScale = 0.4,
 		MaxScale = 1,
 		GlowColor = Color3.fromRGB(170, 250, 240),
+		ContainerZ = 92,
 		Anchor = function(button, _canvas)
 			-- Sous le clavier mécanique, à gauche
 			return Vector2.new(button.X0 - 160, button.Y1 + 205)
@@ -113,7 +114,7 @@ function CoralKeys.Start(ctx)
 		shineCorner.CornerRadius = UDim.new(0.5, 0)
 		shineCorner.Parent = shine
 		shine.Parent = bubble
-		bubble.Parent = ctx.Container
+		bubble.Parent = piece.FX
 		return bubble
 	end)
 

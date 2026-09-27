@@ -24,7 +24,7 @@ local GearPiece = require(Gear:WaitForChild("GearPiece"))
 local KeyboardArt = require(Gear:WaitForChild("KeyboardArt"))
 
 local Keyboard = {}
-Keyboard.Slot = "Overlay"
+Keyboard.Slot = "Background" -- sous l'interface (effets de clic : calque Overlay)
 
 local W, H = 180, 78
 local INK = Color3.fromRGB(52, 44, 72)
@@ -59,6 +59,7 @@ function Keyboard.Start(ctx)
 		MinScale = 0.4,
 		MaxScale = 1,
 		GlowColor = Color3.fromRGB(200, 190, 255),
+		ContainerZ = 94,
 		Anchor = function(button, _canvas)
 			-- En bas à gauche du bouton, à côté du compteur
 			return Vector2.new(button.X0 - 150, button.Y1 + 95)
@@ -92,7 +93,7 @@ function Keyboard.Start(ctx)
 		stroke.Parent = label
 		local scale = Instance.new("UIScale")
 		scale.Parent = label
-		label.Parent = ctx.Container
+		label.Parent = piece.FX
 		return label
 	end)
 

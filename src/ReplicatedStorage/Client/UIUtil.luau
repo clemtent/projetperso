@@ -329,8 +329,8 @@ function UIUtil.NeonButton(props: { [string]: any }): TextButton
 	button:SetAttribute("BaseColor", color)
 	button:SetAttribute("Enabled", true)
 	UIUtil.AnimateButton(button, 1.05, 0.93)
-	if props.Shadow ~= false and button.Parent then
-		UIUtil.Shadow(button, 3, 0.8, 1, 1)
+	if props.Shadow ~= false then
+		UIUtil.ButtonShadow(button, 3, 0.8)
 	end
 	return button
 end
@@ -558,6 +558,150 @@ function UIUtil.Shadow(frame: GuiObject, offset: number?, transparency: number?,
 	return holder
 end
 
+--[[
+	Ombre portée d'un BOUTON (v9), sans risque avec les listes :
+	  - créée au cycle suivant (task.defer) : l'appelant a le temps de poser
+	    un UIListLayout / UIGridLayout ou de déplacer le bouton ;
+	  - jamais dans un parent qui a (ou reçoit ensuite) un UIListLayout /
+	    UIGridLayout : elle y deviendrait un élément de la liste ;
+	  - suit le bouton (position, taille réelle, visibilité, échelle) et le
+	    suit s'il change de parent ; disparaît avec lui.
+	Une seule couche (bon marché). Renvoie rien (l'ombre peut apparaître /
+	disparaître selon le parent).
+]]
+function UIUtil.ButtonShadow(button: GuiObject, offset: number?, transparency: number?)
+	if button:GetAttribute("HasButtonShadow") then
+		return
+	end
+	button:SetAttribute("HasButtonShadow", true)
+	local shift = offset or 3
+	local alpha = transparency or 0.8
+	local holder: Frame? = nil
+	local watched: Instance? = nil -- parent surveillé (arrivée d'une liste)
+	local layoutWatch: RBXScriptConnection? = nil
+	local alive = true
+
+	local function inLayout(parent: Instance?): boolean
+		return parent ~= nil and parent:FindFirstChildWhichIsA("UIGridStyleLayout") ~= nil
+	end
+	local function remove()
+		local current = holder
+		holder = nil
+		if current then
+			current:Destroy()
+		end
+	end
+	local function sync()
+		local current = holder
+		if not current then
+			return
+		end
+		current.AnchorPoint = button.AnchorPoint
+		current.Position = button.Position + UDim2.fromOffset(0, shift)
+		current.Rotation = button.Rotation
+		current.Visible = button.Visible
+		current.ZIndex = button.ZIndex - 1
+		local automatic = button.AutomaticSize
+		if automatic ~= nil and automatic ~= Enum.AutomaticSize.None then
+			-- Taille automatique : on lit la taille réelle (sans les UIScale du bouton)
+			local own = 1
+			for _, child in ipairs(button:GetChildren()) do
+				if child:IsA("UIScale") then
+					own *= child.Scale
+				end
+			end
+			local factor = ancestorScale(button.Parent) * own
+			if factor > 0 then
+				local size = button.AbsoluteSize / factor
+				current.Size = UDim2.fromOffset(size.X, size.Y)
+			end
+		else
+			current.Size = button.Size
+		end
+		local animScale = button:FindFirstChild("AnimScale")
+		local mirror = current:FindFirstChildOfClass("UIScale")
+		if animScale and animScale:IsA("UIScale") and mirror then
+			mirror.Scale = animScale.Scale
+		end
+	end
+	local function place()
+		if not alive then
+			return
+		end
+		local parent = button.Parent
+		-- Parent surveillé : s'il reçoit une liste, l'ombre s'en va
+		if watched ~= parent then
+			if layoutWatch then
+				layoutWatch:Disconnect()
+				layoutWatch = nil
+			end
+			watched = parent
+			if parent then
+				layoutWatch = parent.ChildAdded:Connect(function(child)
+					if child:IsA("UIGridStyleLayout") then
+						remove()
+					end
+				end)
+			end
+		end
+		if not parent or not parent:IsA("GuiBase2d") or inLayout(parent) then
+			remove()
+			return
+		end
+		local current = holder
+		if not current then
+			current = UIUtil.Create("Frame", {
+				Name = button.Name .. "Shadow",
+				BackgroundColor3 = Theme.Colors.Shadow,
+				BackgroundTransparency = alpha,
+				BorderSizePixel = 0,
+				Active = false,
+			})
+			local corner = button:FindFirstChildOfClass("UICorner")
+			if corner then
+				UIUtil.Create("UICorner", { CornerRadius = corner.CornerRadius, Parent = current })
+			end
+			UIUtil.Create("UIScale", { Parent = current })
+			local created = current :: Frame
+			created.Destroying:Connect(function()
+				if holder == created then
+					holder = nil
+				end
+			end)
+			holder = created
+		end
+		sync()
+		local target = current :: Frame
+		if target.Parent ~= parent then
+			target.Parent = parent
+		end
+	end
+
+	task.defer(place)
+	button.AncestryChanged:Connect(function(child: Instance)
+		if child == button then
+			place()
+		end
+	end)
+	button.Changed:Connect(function(property: string)
+		if SHADOW_PROPS[property] or property == "AutomaticSize" then
+			sync()
+		end
+	end)
+	local animScale = button:FindFirstChild("AnimScale")
+	if animScale and animScale:IsA("UIScale") then
+		animScale:GetPropertyChangedSignal("Scale"):Connect(sync)
+	end
+	button.Destroying:Connect(function()
+		alive = false
+		if layoutWatch then
+			layoutWatch:Disconnect()
+			layoutWatch = nil
+		end
+		remove()
+	end)
+end
+
 -- Badge rouge rond (compteur) accroché en haut à droite d'un élément
 function UIUtil.Badge(parent: GuiObject, size: number?): TextLabel
 	local diameter = size or 24
@@ -638,8 +782,8 @@ function UIUtil.PillButton(props: { [string]: any }): TextButton
 	button:SetAttribute("BaseColor", color)
 	button:SetAttribute("Enabled", true)
 	UIUtil.AnimateButton(button, 1.05, 0.93)
-	if props.Shadow ~= false and button.Parent then
-		UIUtil.Shadow(button, 2, 0.82, 1, 1)
+	if props.Shadow ~= false then
+		UIUtil.ButtonShadow(button, 2, 0.82)
 	end
 	return button
 end
@@ -667,8 +811,8 @@ function UIUtil.BasicButton(props: { [string]: any }): TextButton
 	button:SetAttribute("BaseColor", Color3.new(1, 1, 1))
 	button:SetAttribute("Enabled", true)
 	UIUtil.AnimateButton(button, 1.04, 0.94)
-	if props.Shadow ~= false and button.Parent then
-		UIUtil.Shadow(button, 2, 0.84, 1, 1)
+	if props.Shadow ~= false then
+		UIUtil.ButtonShadow(button, 2, 0.84)
 	end
 	return button
 end

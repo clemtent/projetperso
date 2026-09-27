@@ -760,10 +760,10 @@ function Weather.Start(ctx)
 	local STRIP_CLOUDS = { { X = 0.26, Level = 1 }, { X = 0.63, Level = 1 }, { X = 0.45, Level = 3 }, { X = 0.8, Level = 5 } }
 	local stripClouds = {}
 	for _, def in ipairs(STRIP_CLOUDS) do
-		local cloud = makeCloud(chaser, "Storm", stormColor, 7, {
+		local cloud = makeCloud(chaser, "Storm", Color3.fromRGB(150, 158, 186), 7, {
 			Glow = true,
-			Bottom = Color3.fromRGB(66, 70, 94),
-			HighlightTransparency = 0.82,
+			Bottom = Color3.fromRGB(96, 102, 130),
+			HighlightTransparency = 0.6,
 		})
 		cloud.Root.AnchorPoint = Vector2.new(0.5, 0)
 		cloud.Root.Visible = false
@@ -858,7 +858,7 @@ function Weather.Start(ctx)
 		bolt.Age = 0
 		bolt.Holder.Visible = true
 		cloud.Flash = 1
-		skyFlashLevel = math.max(skyFlashLevel, 0.35 + chaserLevel * 0.03)
+		skyFlashLevel = math.max(skyFlashLevel, 0.2 + chaserLevel * 0.02)
 	end
 
 	------------------------------------------------------------------
@@ -959,8 +959,8 @@ function Weather.Start(ctx)
 		local ring = box({
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Size = UDim2.fromOffset(48 - 40 * t, 9),
-			BackgroundColor3 = Color3.fromRGB(150, 156, 180):Lerp(Color3.fromRGB(92, 96, 120), t),
-			BackgroundTransparency = 0.15 + 0.15 * t,
+			BackgroundColor3 = Color3.fromRGB(196, 202, 224):Lerp(Color3.fromRGB(126, 130, 158), t),
+			BackgroundTransparency = 0.08 + 0.14 * t,
 			ZIndex = 9,
 			Parent = tornado,
 		})
@@ -1018,9 +1018,9 @@ function Weather.Start(ctx)
 		anemometer.Visible = level >= 6
 		stripe.BackgroundColor3 = level >= 8 and Color3.fromRGB(255, 200, 40) or Color3.fromRGB(255, 140, 30)
 		decal.Text = level >= 8 and "🌪️" or "⚡"
-		vanScale.Scale = math.clamp(stripHeight / 62, 0.7, 1.25) * (0.9 + 0.03 * level)
+		vanScale.Scale = math.clamp(stripHeight / 62, 0.7, 1.25) * (0.98 + 0.03 * level)
 		tornado.Visible = level >= 5
-		tornadoScale.Scale = math.clamp(stripHeight / 70, 0.6, 1.3) * (0.62 + 0.14 * math.max(0, level - 5))
+		tornadoScale.Scale = math.clamp(stripHeight / 64, 0.6, 1.4) * (0.78 + 0.13 * math.max(0, level - 5))
 		for _, bit in ipairs(debris) do
 			bit.Frame.Visible = level >= 7
 		end
@@ -1203,63 +1203,71 @@ function Weather.Start(ctx)
 	------------------------------------------------------------------
 	local camera = workspace.CurrentCamera
 	local parallax = Vector2.zero
+	local ambientPending = 0
 
 	ctx.OnRender(function(dt: number)
 		dt = math.min(dt, 0.1)
 		local now = os.clock()
 		updateChaser(dt)
 
-		-- Parallaxe : suit un peu la souris (lissée)
-		if camera and camera.ViewportSize.X > 0 then
-			local mouse = UserInputService:GetMouseLocation()
-			local target = Vector2.new(
-				math.clamp(mouse.X / camera.ViewportSize.X * 2 - 1, -1, 1),
-				math.clamp(mouse.Y / camera.ViewportSize.Y * 2 - 1, -1, 1)
-			)
-			parallax = parallax:Lerp(target, math.min(1, dt * 3))
-		end
+		-- Ambiance (nuages, pluie, parallaxe) : 30 fois par seconde suffisent
+		ambientPending += dt
+		if ambientPending >= 1 / 30 then
+			local ambientDt = math.min(ambientPending, 0.1)
+			ambientPending = 0
 
-		-- Nuages lointains : lents, peu de parallaxe
-		for _, cloud in ipairs(farClouds) do
-			local range = cloud.Range
-			local drift = 0.5 + 0.5 * math.sin(now * 0.05 + cloud.Phase)
-			local sx = range.Min + (range.Max - range.Min) * drift
-			cloud.Root.Position = UDim2.new(sx, -parallax.X * 3, 0, range.Y + math.sin(now * 0.6 + cloud.Phase) * 2 - parallax.Y * 2)
-		end
-
-		-- Gros nuages de pluie
-		for _, cloud in ipairs(ambient) do
-			local range = cloud.Range
-			local drift = 0.5 + 0.5 * math.sin(now * 0.08 + cloud.Phase)
-			local sx = range.Min + (range.Max - range.Min) * drift
-			local bob = math.sin(now * 0.9 + cloud.Phase) * 3
-			local stormy = now < cloud.StormUntil
-			local rumble = stormy and math.sin(now * 55) * 1.5 or 0
-			cloud.Root.Position = UDim2.new(sx, rumble - parallax.X * 8, 0, 34 + bob - parallax.Y * 4)
-			-- StormChaser : nuages plus sombres et lueurs internes au hasard
-			setCloudColor(cloud, stormy and cloudStorm or cloudColor:Lerp(cloudStorm, 0.07 * chaserLevel))
-			updateGlow(cloud, dt, stormy and 7 or chaserLevel * 0.12)
-
-			-- Pluie + éclaboussures
-			local shapeH = cloud.Shape.H
-			for _, drop in ipairs(cloud.Drops) do
-				drop.Y += drop.Speed * dt * (stormy and 1.4 or 1)
-				if drop.Y > RAIN_FALL then
-					splashAt(cloud, drop.X - RAIN_FALL * 0.25)
-					drop.Y = 0
-					drop.X = random:NextNumber(16, cloud.Shape.W - 16)
-				end
-				drop.Frame.Position = UDim2.fromOffset(drop.X - drop.Y * 0.25, shapeH - 8 + drop.Y)
+			-- Parallaxe : suit un peu la souris (lissée)
+			if camera and camera.ViewportSize.X > 0 then
+				local mouse = UserInputService:GetMouseLocation()
+				local target = Vector2.new(
+					math.clamp(mouse.X / camera.ViewportSize.X * 2 - 1, -1, 1),
+					math.clamp(mouse.Y / camera.ViewportSize.Y * 2 - 1, -1, 1)
+				)
+				parallax = parallax:Lerp(target, math.min(1, ambientDt * 3))
 			end
-			for _, splash in ipairs(cloud.Splashes) do
-				if splash.Active then
-					splash.Age += dt * 3
-					if splash.Age >= 1 then
-						splash.Active = false
-						splash.Frame.Visible = false
-					else
-						splash.Frame.Size = UDim2.fromOffset(6 + splash.Age * 12, 2 + splash.Age * 3)
-						splash.Stroke.Transparency = 0.2 + splash.Age * 0.8
+
+			-- Nuages lointains : lents, peu de parallaxe
+			for _, cloud in ipairs(farClouds) do
+				local range = cloud.Range
+				local drift = 0.5 + 0.5 * math.sin(now * 0.05 + cloud.Phase)
+				local sx = range.Min + (range.Max - range.Min) * drift
+				cloud.Root.Position = UDim2.new(sx, -parallax.X * 3, 0, range.Y + math.sin(now * 0.6 + cloud.Phase) * 2 - parallax.Y * 2)
+			end
+
+			-- Gros nuages de pluie
+			for _, cloud in ipairs(ambient) do
+				local range = cloud.Range
+				local drift = 0.5 + 0.5 * math.sin(now * 0.08 + cloud.Phase)
+				local sx = range.Min + (range.Max - range.Min) * drift
+				local bob = math.sin(now * 0.9 + cloud.Phase) * 3
+				local stormy = now < cloud.StormUntil
+				local rumble = stormy and math.sin(now * 55) * 1.5 or 0
+				cloud.Root.Position = UDim2.new(sx, rumble - parallax.X * 8, 0, 34 + bob - parallax.Y * 4)
+				-- StormChaser : nuages plus sombres et lueurs internes au hasard
+				setCloudColor(cloud, stormy and cloudStorm or cloudColor:Lerp(cloudStorm, 0.07 * chaserLevel))
+				updateGlow(cloud, ambientDt, stormy and 7 or chaserLevel * 0.12)
+
+				-- Pluie + éclaboussures
+				local shapeH = cloud.Shape.H
+				for _, drop in ipairs(cloud.Drops) do
+					drop.Y += drop.Speed * ambientDt * (stormy and 1.4 or 1)
+					if drop.Y > RAIN_FALL then
+						splashAt(cloud, drop.X - RAIN_FALL * 0.25)
+						drop.Y = 0
+						drop.X = random:NextNumber(16, cloud.Shape.W - 16)
+					end
+					drop.Frame.Position = UDim2.fromOffset(drop.X - drop.Y * 0.25, shapeH - 8 + drop.Y)
+				end
+				for _, splash in ipairs(cloud.Splashes) do
+					if splash.Active then
+						splash.Age += ambientDt * 3
+						if splash.Age >= 1 then
+							splash.Active = false
+							splash.Frame.Visible = false
+						else
+							splash.Frame.Size = UDim2.fromOffset(6 + splash.Age * 12, 2 + splash.Age * 3)
+							splash.Stroke.Transparency = 0.2 + splash.Age * 0.8
+						end
 					end
 				end
 			end

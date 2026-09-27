@@ -842,11 +842,14 @@ local function buyRoomAt(slot: number)
 		OnPick = function(typeId: string)
 			local price = HouseCommon.RoomCost(latestHouse)
 			local dopamine = HouseCommon.Dopamine()
+			local roomType = HouseCommon.RoomTypesById[typeId]
+			-- (ce qu'on achète, montré dans la fenêtre "pas assez de Dopamine")
+			local context = roomType and { Icon = roomType.Icon, Name = HouseCommon.Name(roomType), Color = C.Mint } or nil
 			if dopamine < price then
 				local missing = price - dopamine
 				NeedDopamine.Offer(missing, function()
 					notify(Locale.T("You need %s more Dopamine", NumberFormatter.Format(missing)), Theme.Colors.Red)
-				end)
+				end, context)
 				return
 			end
 			invoke("buyRoom", { Type = typeId, Slot = slot }, function(ok: boolean, message: string?)
@@ -857,7 +860,11 @@ local function buyRoomAt(slot: number)
 					refreshOverview()
 				else
 					SoundManager.Play("Error", 0.8)
-					notify(message or Locale.T("Network error, try again."), Theme.Colors.Red)
+					-- Refus du serveur "pas assez de Dopamine" : la fenêtre, à chaque fois
+					local okOffer, shown = pcall(NeedDopamine.OfferRefusal, message, price, nil, context)
+					if not (okOffer and shown == true) then
+						notify(message or Locale.T("Network error, try again."), Theme.Colors.Red)
+					end
 				end
 			end)
 		end,

@@ -231,7 +231,7 @@ function Pinwheel.Start(ctx)
 		local blade = math.floor(def.H * 0.46 + 0.5)
 		local hubSize = math.max(3, math.floor(def.H * 0.11))
 		local tone = WHITE:Lerp(HAZE, def.Haze)
-		local shade = Color3.fromRGB(186, 198, 218):Lerp(HAZE, def.Haze)
+		local shade = Color3.fromRGB(164, 178, 204):Lerp(HAZE, def.Haze)
 		local z = def.Hill == "Far" and 2 or 4
 		-- Cadre ancré en bas au centre (pied du mât, caché par la colline) :
 		-- le UIScale le fait grandir vers le haut
@@ -788,6 +788,7 @@ function Pinwheel.Start(ctx)
 	------------------------------------------------------------------
 	local windLevel = -1
 	local ambientWind = 0
+	local sceneryClock = 0
 	local energyClock = 0
 	local lampOn = false
 
@@ -903,7 +904,6 @@ function Pinwheel.Start(ctx)
 			for _, turbine in ipairs(turbines) do
 				if turbine.Shown then
 					turbine.Angle = (turbine.Angle + turbineSpin * turbine.Speed * dt) % 360
-					turbine.Rotor.Rotation = turbine.Angle
 				end
 			end
 			if windLevel >= 7 then
@@ -974,9 +974,21 @@ function Pinwheel.Start(ctx)
 			if cloud.X > width + 30 then
 				cloud.X = -30
 			end
-			cloud.Frame.Position = UDim2.fromOffset(cloud.X, cloud.Y)
 		end
-		sunGlow.BackgroundTransparency = 0.6 + 0.12 * math.sin(clock * 1.3)
+		-- Décor (CanvasGroup redessiné à chaque changement) : 30 fois par seconde
+		sceneryClock += dt
+		if sceneryClock >= 1 / 30 then
+			sceneryClock = 0
+			for _, cloud in ipairs(clouds) do
+				cloud.Frame.Position = UDim2.fromOffset(cloud.X, cloud.Y)
+			end
+			sunGlow.BackgroundTransparency = 0.6 + 0.12 * math.sin(clock * 1.3)
+			for _, turbine in ipairs(turbines) do
+				if turbine.Shown then
+					turbine.Rotor.Rotation = turbine.Angle
+				end
+			end
+		end
 		flower.Rotation = math.sin(clock * (1.5 + fast * 6)) * (6 + fast * 14)
 
 		-- Compteur : aiguille, couleur du cadran, tours / minute (degrés/s ÷ 6)

@@ -126,22 +126,20 @@ function HousePicker.new(parent: Frame): Picker
 		ZIndex = 62,
 		Parent = card,
 	})
-	local closeCandy = HouseButtons.Candy({
+	-- ✕ commun du jeu (même look que les autres fenêtres), zone tactile agrandie
+	local close: () -> ()
+	local closeButton = UIUtil.CloseButton({
 		Name = "PickerClose",
-		Icon = "✕",
-		Color = HouseButtons.Palette.Red,
-		TextColor = WHITE,
-		Width = 44,
-		Height = 46,
-		Radius = 22,
-		IconSize = 20,
+		Size = 42,
+		Hitbox = 54,
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -12, 0, 10),
 		ZIndex = 63,
 		Parent = card,
+		OnClose = function()
+			close()
+		end,
 	})
-	local closeButton = closeCandy.Button
-	closeButton.AnchorPoint = Vector2.new(1, 0)
-	closeButton.Position = UDim2.new(1, -10, 0, 9)
-	UIUtil.AnimateButton(closeButton, 1.08, 0.9)
 	HouseButtons.Tip(closeButton, function()
 		return Locale.T("Close")
 	end)
@@ -182,7 +180,7 @@ function HousePicker.new(parent: Frame): Picker
 		end
 	end
 
-	local function close()
+	close = function()
 		if not overlay.Visible then
 			return
 		end
@@ -294,7 +292,6 @@ function HousePicker.new(parent: Frame): Picker
 	end
 
 	dim.Activated:Connect(close)
-	closeButton.Activated:Connect(close)
 
 	picker = {
 		Frame = overlay,

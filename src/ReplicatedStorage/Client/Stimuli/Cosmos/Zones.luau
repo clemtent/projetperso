@@ -48,9 +48,12 @@
 	  Zones.GetFocus() -> Vector2              -- centre du compteur
 	  Zones.GetTextRects() -> { Rect }         -- bouton + compteur
 	  Zones.Changed                            -- Signal : mise en page recalculée
-	Item = { W, H, AltW?, AltH?, Anchor = Vector2 (fraction de la toile),
-	         MinScale?, MaxScale?, Gap? }
-	Placement = { X, Y (centre, px de la toile), Scale, Alt, W, H } ou false
+	Item = { W, H, Shapes? = { Vector2 } (formes de rechange), Anchor = Vector2
+	         (fraction de la toile), MinScale?, MaxScale?, Gap? }
+	Placement = { X, Y (centre, px de la toile), Scale, Shape (0 = forme
+	              principale, i = Shapes[i]), W, H } ou false
+	Zones.PickPath(candidates, width) -> index : la courbe la plus visible
+	              (le plus de cases libres) parmi des courbes de Bézier.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -67,8 +70,7 @@ export type Rect = { X: number, Y: number, W: number, H: number }
 export type Item = {
 	W: number,
 	H: number,
-	AltW: number?,
-	AltH: number?,
+	Shapes: { Vector2 }?,
 	Anchor: Vector2,
 	MinScale: number?,
 	MaxScale: number?,
@@ -79,7 +81,7 @@ export type Placement = {
 	X: number,
 	Y: number,
 	Scale: number,
-	Alt: boolean,
+	Shape: number,
 	W: number,
 	H: number,
 }
@@ -468,9 +470,9 @@ local function search(item: Item, canvas: Vector2): Placement?
 	if #scales == 0 then
 		table.insert(scales, math.clamp(1, minScale, maxScale))
 	end
-	local shapes = { { item.W, item.H, false } }
-	if item.AltW and item.AltH then
-		table.insert(shapes, { item.AltW, item.AltH, true })
+	local shapes = { { item.W, item.H, 0 } }
+	for index, extra in ipairs(item.Shapes or {}) do
+		table.insert(shapes, { extra.X, extra.Y, index })
 	end
 	local anchorX, anchorY = item.Anchor.X * canvas.X, item.Anchor.Y * canvas.Y
 	local diagonal = math.max(1, canvas.Magnitude)
@@ -509,7 +511,7 @@ local function search(item: Item, canvas: Vector2): Placement?
 					local score = math.sqrt(dx * dx + dy * dy) / diagonal - s * SCALE_WEIGHT
 					if score < bestScore then
 						bestScore = score
-						best = { X = centreX, Y = centreY, Scale = s, Alt = shape[3] :: boolean, W = w, H = h }
+						best = { X = centreX, Y = centreY, Scale = s, Shape = shape[3], W = w, H = h }
 					end
 				end
 			end
@@ -526,7 +528,7 @@ local function signatureOf(placements: { Placement | false }): string
 	local parts = {}
 	for _, p in ipairs(placements) do
 		if p then
-			table.insert(parts, string.format("%d,%d,%.2f,%s", math.floor(p.X + 0.5), math.floor(p.Y + 0.5), p.Scale, if p.Alt then "a" else "n"))
+			table.insert(parts, string.format("%d,%d,%.2f,%d", math.floor(p.X + 0.5), math.floor(p.Y + 0.5), p.Scale, p.Shape))
 		else
 			table.insert(parts, "-")
 		end
@@ -575,7 +577,12 @@ local function plan()
 		local previous = request.Previous[index]
 		if previous then
 			local old = previous :: Placement
-			local sameShape = (old.W == item.W and old.H == item.H) or (item.AltW ~= nil and old.W == item.AltW and old.H == item.AltH)
+			local sameShape = old.W == item.W and old.H == item.H
+			for _, extra in ipairs(item.Shapes or {}) do
+				if old.W == extra.X and old.H == extra.Y then
+					sameShape = true
+				end
+			end
 			local fresh = chosen
 			if sameShape and isFree(old, gap) and (fresh == nil or fresh.Scale < old.Scale + MOVE_GAIN) then
 				chosen = old
@@ -699,6 +706,51 @@ local function bind()
 		layer.ChildAdded:Connect(changed)
 		layer.ChildRemoved:Connect(changed)
 	end
+end
+
+----------------------------------------------------------------------
+-- Chemins (effets d'ambiance) : quelle courbe se voit le mieux ?
+----------------------------------------------------------------------
+
+-- Point d'une courbe de Bézier cubique (4 points en fractions de la toile)
+function Zones.Bezier(points: { Vector2 }, u: number): Vector2
+	local a = 1 - u
+	return points[1] * (a * a * a) + points[2] * (3 * a * a * u) + points[3] * (3 * a * u * u) + points[4] * (u * u * u)
+end
+
+-- Parmi plusieurs courbes (chacune 4 points de contrôle, fractions de la
+-- toile), celle dont la bande de largeur `width` passe le plus dans le fond
+-- VISIBLE (cases libres de la grille : ni carte, ni colonne, ni objet posé).
+-- Appelé après une planification (Zones.Changed).
+function Zones.PickPath(candidates: { { Vector2 } }, width: number): number
+	local canvas = Zones.GetCanvas()
+	if grid.Cols == 0 or #grid.Occ == 0 then
+		return 1
+	end
+	local bestIndex, bestScore = 1, -1
+	for index, points in ipairs(candidates) do
+		local free = 0
+		local previous = Zones.Bezier(points, 0)
+		for step = 1, 60 do
+			local p = Zones.Bezier(points, step / 60)
+			local d = p - previous
+			previous = p
+			local length = math.max(1e-6, d.Magnitude)
+			local normal = Vector2.new(-d.Y / length, d.X / length)
+			for _, lane in ipairs({ -0.35, 0, 0.35 }) do
+				local x = p.X * canvas.X + normal.X * lane * width
+				local y = p.Y * canvas.Y + normal.Y * lane * width
+				local i, j = math.floor(x / CELL), math.floor(y / CELL)
+				if i >= 0 and j >= 0 and i < grid.Cols and j < grid.Rows and grid.Occ[j * grid.Cols + i + 1] == 0 then
+					free += 1
+				end
+			end
+		end
+		if free > bestScore then
+			bestIndex, bestScore = index, free
+		end
+	end
+	return bestIndex
 end
 
 ----------------------------------------------------------------------

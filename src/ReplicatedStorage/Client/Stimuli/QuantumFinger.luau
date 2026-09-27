@@ -25,7 +25,7 @@ local GearLayout = require(Gear:WaitForChild("GearLayout"))
 local HandArt = require(Gear:WaitForChild("HandArt"))
 
 local QuantumFinger = {}
-QuantumFinger.Slot = "Overlay"
+QuantumFinger.Slot = "Background" -- sous l'interface (fantômes téléportés : calque Overlay)
 
 local FOOTPRINT = 90
 local GLITCH_COLORS = {
@@ -57,8 +57,10 @@ end
 function QuantumFinger.Start(ctx)
 	local animator = GearKit.Animator(ctx)
 	local random = ctx.Random
-	-- Derrière la vraie main (le conteneur du doigt musclé a le ZIndex 1)
-	ctx.Container.ZIndex = 0
+	-- Derrière la vraie main (conteneur du doigt musclé : ZIndex 97), au-dessus
+	-- des fonds animés du calque Background
+	ctx.Container.ZIndex = 96
+	local fx = GearKit.FXLayer(ctx, "Gear_QuantumFingerFX")
 
 	local level = math.max(1, GearKit.Level(ctx, "QuantumFinger"))
 	local host: any = nil -- placement suivi (doigt musclé, ou le nôtre)
@@ -97,7 +99,7 @@ function QuantumFinger.Start(ctx)
 		local scale = Instance.new("UIScale")
 		scale.Parent = holder
 		local ghost = HandArt.BuildGhost(holder, GLITCH_COLORS[index], 8, "Ghost")
-		holder.Parent = ctx.Container
+		holder.Parent = fx
 		table.insert(teleports, { Holder = holder, Scale = scale, Ghost = ghost })
 	end
 
@@ -411,6 +413,9 @@ function QuantumFinger.Start(ctx)
 		if ownRegistered then
 			ownRegistered = false
 			GearLayout.Unregister("QuantumFinger")
+		end
+		if fx.Parent then
+			fx:Destroy()
 		end
 	end
 end

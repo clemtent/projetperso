@@ -746,7 +746,10 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		local pixelRatio = room.Frame.AbsoluteSize.X / math.max(1, room.Width)
 		local heightInRoom = pixelRatio > 0 and toolbarSize.Y / pixelRatio or 120 / scale
 		local widthInRoom = pixelRatio > 0 and toolbarSize.X / pixelRatio or 560 / scale
-		local x = math.clamp(entry.X * room.Width, widthInRoom / 2 - 10, room.Width - widthInRoom / 2 + 10)
+		-- (barre plus large que la pièce : centrée ; math.clamp exige min <= max)
+		local minX = widthInRoom / 2 - 10
+		local maxX = room.Width - widthInRoom / 2 + 10
+		local x = minX <= maxX and math.clamp(entry.X * room.Width, minX, maxX) or room.Width / 2
 		if top - heightInRoom - 8 >= -16 then
 			-- au-dessus de l'objet
 			toolbar.AnchorPoint = Vector2.new(0.5, 1)

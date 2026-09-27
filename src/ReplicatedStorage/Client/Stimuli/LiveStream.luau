@@ -1433,8 +1433,8 @@ function LiveStream.Start(ctx)
 	local rightArm = makeArm(1, 34, TABLE_Y + 8, true)
 
 	-- Cinématique inverse à 2 os : le coude plie vers l'extérieur
-	local function solveArm(arm: Arm, bodyBob: number)
-		local sx, sy = arm.Side * SHOULDER_X, SHOULDER_Y + bodyBob
+	local function solveArm(arm: Arm, bodyBob: number, lean: number)
+		local sx, sy = arm.Side * SHOULDER_X + lean, SHOULDER_Y + bodyBob
 		local dx, dy = arm.X - sx, arm.Y - sy
 		local distance = math.sqrt(dx * dx + dy * dy)
 		local ux, uy = 0, 1
@@ -1806,6 +1806,8 @@ function LiveStream.Start(ctx)
 		viewersText = "",
 		likesText = "",
 		rising = false,
+		lean = 0, -- elle se penche vers le chat pendant qu'elle lit ton message
+		leanUntil = 0,
 	}
 
 	local function wow(duration: number?)
@@ -2253,6 +2255,18 @@ function LiveStream.Start(ctx)
 		end
 		if bubble or (now > S.bubbleUntil + 2 and random:NextNumber() < 0.5) then
 			K.say(message, 2.8)
+			if bubble == nil then
+				-- Elle parle d'elle-même : petit geste ou clin d'œil
+				local roll = random:NextNumber()
+				if roll < 0.35 then
+					K.gesture("Wave", 1.4)
+				elseif roll < 0.55 then
+					K.gesture("Heart", 1.4)
+				elseif roll < 0.75 then
+					S.mood, S.moodUntil = "Wink", now + 1.3
+					K.float("✨")
+				end
+			end
 		end
 	end
 
@@ -3072,6 +3086,7 @@ function LiveStream.Start(ctx)
 		S.bubbleLockUntil = now + delay + 3.4
 		S.lookTargetX, S.lookTargetY = 1.6, -0.3
 		S.nextLook = now + delay
+		S.leanUntil = now + delay
 		S.talkUntil = now + math.min(delay, 1.4)
 		S.holdMealUntil = now + delay + 2.6
 
@@ -3322,7 +3337,8 @@ function LiveStream.Start(ctx)
 		elseif expression == "Vibe" then
 			bob = math.abs(math.sin(S.clock * 6)) * 2.5 -- elle danse
 		end
-		streamer.Position = UDim2.new(0.5, 0, 0, STREAMER_Y + bob)
+		S.lean = approach(S.lean, now < S.leanUntil and 5 or 0, 6, dt)
+		streamer.Position = UDim2.new(0.5, S.lean, 0, STREAMER_Y + bob)
 		local tilt = chewing and math.sin(S.clock * 7) * 3.5 or math.sin(S.clock * 1.3) * 2.5
 		if HEAD_TILTS[expression] then
 			tilt = HEAD_TILTS[expression]
@@ -3373,7 +3389,7 @@ function LiveStream.Start(ctx)
 		for _, arm in ipairs({ leftArm, rightArm }) do
 			arm.X = approach(arm.X, arm.TX, 14, dt)
 			arm.Y = approach(arm.Y, arm.TY, 14, dt)
-			solveArm(arm, bob)
+			solveArm(arm, bob, S.lean)
 		end
 		if S.gesture == "Heart" and effectsOn() and math.floor(S.clock * 3) ~= math.floor((S.clock - dt) * 3) then
 			spawnHeart("💖")

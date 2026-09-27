@@ -250,6 +250,20 @@ function GearKit.ApplyFade(base: { [Instance]: number }, alpha: number)
 	end
 end
 
+-- Cadre plein écran dans le calque Overlay pour les effets PASSAGERS d'un
+-- stimulus dont le dessin permanent est dans le calque Background.
+-- (à détruire dans Stop : il n'appartient pas au conteneur du stimulus)
+function GearKit.FXLayer(ctx: any, name: string): Frame
+	local frame = Instance.new("Frame")
+	frame.Name = name
+	frame.BackgroundTransparency = 1
+	frame.Size = UDim2.fromScale(1, 1)
+	frame.Active = false
+	frame.ZIndex = 30
+	frame.Parent = ctx.Overlay or ctx.Container
+	return frame
+end
+
 ----------------------------------------------------------------------
 -- Toile et gros bouton
 ----------------------------------------------------------------------
