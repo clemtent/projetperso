@@ -164,7 +164,8 @@ local function buildBoulevard(folder: Instance, geo: TownKit.Geo)
 			local tx = -treeHalf + i * (2 * treeHalf) / math.max(1, n)
 			if not (junction and math.abs(tx) < jw + 7) then
 				local base = (F * CFrame.new(tx, WorldLayout.GROUND_Y, -hw - WALK_W - 4)).Position
-				TownKit.Tree(side, base, 12 + hash(k, i) * 5, k * 17 + i, (i + k) % 5 == 0 and 2 or 1)
+				-- (v9.7 NATURE97) boulevard : chênes, érables, peupliers, cerisiers (silhouette ; détails de près côté client)
+				TownKit.Tree(side, base, 12 + hash(k, i) * 5, k * 17 + i, ({ "Oak", "Poplar", "Maple", "Oak", "Cherry" })[(i + k) % 5 + 1], { Lawn = true })
 			end
 		end
 		if hash(k, 99) < 0.55 and not (k == 0) then
@@ -238,7 +239,8 @@ local function buildAvenue(folder: Instance, geo: TownKit.Geo)
 		for _, sx in ipairs({ -1, 1 }) do
 			local base = (R * CFrame.new(sx * (PROM - 2.2), WALK_Y, -s)).Position
 			part(ave, "TreeGrate", Vector3.new(3, 0.1, 3), CFrame.new(base + Vector3.new(0, 0.05, 0)), C.Metal, M.DiamondPlate, "deco")
-			TownKit.Tree(ave, base, 13 + hash(i, sx) * 3, i * 7 + sx, (i % 4 == 1) and 2 or 1)
+			-- (v9.7 NATURE97) avenue : allée de cerisiers, d'érables et de chênes (détails de près côté client)
+			TownKit.Tree(ave, base, 13 + hash(i, sx) * 3, i * 7 + sx, (i % 3 == 1) and "Cherry" or (i % 3 == 2 and "Maple" or "Oak"))
 		end
 		if i < n then
 			local sm = s + length / n / 2
@@ -299,7 +301,7 @@ local function buildSideStreet(folder: Instance, geo: TownKit.Geo, slot: number)
 			local base = (R * CFrame.new(sx * (ST_OUT - 1.8), WALK_Y, -si)).Position
 			if (i + (sx > 0 and 1 or 0)) % 2 == 0 then
 				part(st, "TreeGrate", Vector3.new(2.6, 0.1, 2.6), CFrame.new(base + Vector3.new(0, 0.05, 0)), C.Metal, M.DiamondPlate, "deco")
-				TownKit.Tree(st, base, 11 + hash(slot, i) * 4, slot * 31 + i + sx, 1)
+				TownKit.Tree(st, base, 11 + hash(slot, i) * 4, slot * 31 + i + sx, (i % 2 == 0) and "Birch" or "Oak") -- (v9.7 NATURE97)
 			else
 				TownKit.Lamp(st, base, TownKit.Facing(R.RightVector * -sx), false)
 			end

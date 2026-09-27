@@ -21,6 +21,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
 local TownKit = require(script.Parent.TownKit)
 local TownBuildings = require(script.Parent.TownBuildings)
+local Greenery = require(ReplicatedStorage.Shared.Greenery) -- (v9.7, NATURE97) plan du lac
 
 local TownNature = {}
 
@@ -32,158 +33,389 @@ local hash = TownKit.Hash
 local GROUND_Y = WorldLayout.GROUND_Y
 
 ----------------------------------------------------------------------
--- Lac
+-- Lac (v9.7, NATURE97) : un vrai lac de parc
 ----------------------------------------------------------------------
+-- Une seule nappe d'eau (disque transparent : pas de recouvrements qui
+-- assombrissent l'eau), bord peu profond (sable visible sous l'eau), fond
+-- plus sombre au milieu ; la rive IRRÉGULIÈRE vient des berges (monticules
+-- d'herbe / criques de sable qui mordent sur l'eau), des pierres, des
+-- roseaux, d'une île avec son saule. Pont en arc en bois (tablier = vraie
+-- rampe continue, sans marche), ponton sur pilotis, barque, pédalo cygne,
+-- jet d'eau. Les petits détails (nénuphars fleuris, canards, cygnes,
+-- roseaux en plus) sont ajoutés côté CLIENT près de l'avatar
+-- (TownGreenery, attributs NearDetail / DetailCF / DetailR).
+
+local LAKE = Greenery.LAKE
+local SAND = Color3.fromRGB(232, 210, 164)
+local ROCK = Color3.fromRGB(150, 146, 150)
+local PLANK = Color3.fromRGB(186, 134, 90)
+local PLANK_DARK = Color3.fromRGB(140, 98, 66)
+
+-- Tablier en arc (points du DESSUS, du bord a au bord b) : poutres jointives
+-- qui dépassent un peu à chaque joint (pas de trou ; arête < 0,03 stud)
+local function arch(a: Vector3, b: Vector3, rise: number, n: number): { Vector3 }
+	local pts = {}
+	for i = 0, n do
+		local t = i / n
+		table.insert(pts, a:Lerp(b, t) + Vector3.new(0, rise * math.sin(t * math.pi), 0))
+	end
+	return pts
+end
+
+local function bridge(model: Instance, from: Vector3, to: Vector3, side: Vector3)
+	local br = TownKit.Model(model, "Bridge")
+	local n = 8
+	local len = (Vector3.new(to.X, 0, to.Z) - Vector3.new(from.X, 0, from.Z)).Magnitude
+	local rise = math.min(4.6, len * 0.075)
+	local deck = arch(from + Vector3.new(0, 0.06, 0), to + Vector3.new(0, 0.06, 0), rise, n)
+	local T = 0.6 -- épaisseur du tablier
+	local halfW = LAKE.BridgeHalfW
+	for i = 1, n do
+		local a, b = deck[i], deck[i + 1]
+		local axis = (b - a).Unit
+		local up = axis:Cross(side).Unit
+		if up.Y < 0 then
+			up = -up
+		end
+		-- (le dessus de la poutre passe par a et b : centre abaissé de T/2)
+		local a2, b2 = a - axis * 0.3 - up * T / 2, b + axis * 0.3 - up * T / 2
+		-- (un tronçon sur deux 0,1 plus étroit : côtés des recouvrements jamais confondus)
+		local plank = TownKit.Beam(br, "Deck", a2, b2, halfW * 2 - (i % 2) * 0.1, T, i % 2 == 0 and PLANK or PLANK:Lerp(PLANK_DARK, 0.25), M.WoodPlanks, "solid")
+		plank.CastShadow = true
+	end
+	-- garde-corps : poteaux à chaque joint + main courante
+	for i = 1, n + 1 do
+		for _, s in ipairs({ -1, 1 }) do
+			local p = deck[i] + side * s * (halfW - 0.2)
+			local newel = i == 1 or i == n + 1
+			TownKit.Column(br, newel and "Newel" or "Post", p - Vector3.new(0, 0.3, 0), newel and 3.5 or 3.2, newel and 0.7 or 0.36, PLANK_DARK, M.Wood, "prop")
+			if newel then
+				TownKit.Ball(br, "NewelCap", p + Vector3.new(0, 3.3, 0), 0.9, PLANK, M.Wood, "deco")
+			end
+			if i <= n then
+				local q = deck[i + 1] + side * s * (halfW - 0.2)
+				TownKit.Beam(br, "Handrail", p + Vector3.new(0, 2.95, 0), q + Vector3.new(0, 2.95, 0), 0.34, 0.22, PLANK, M.Wood, "deco")
+			end
+		end
+	end
+	-- culées en pierre (les pieds du pont, dans la berge)
+	for _, e in ipairs({ { deck[1], deck[2] }, { deck[n + 1], deck[n] } }) do
+		local dirIn = Vector3.new(e[2].X - e[1].X, 0, e[2].Z - e[1].Z).Unit
+		local p = e[1] + dirIn * 2.2
+		TownKit.Part(br, "Abutment", Vector3.new(halfW * 2 + 1.6, 1.4, 2.2), CFrame.lookAt(p, p + dirIn) * CFrame.new(0, -0.62, 0), ROCK, M.Cobblestone, "deco")
+	end
+	return deck
+end
+
+-- Barque (coque en 3 pièces + banc + rames)
+local function rowBoat(model: Instance, cf: CFrame)
+	local hull = Color3.fromRGB(96, 150, 196)
+	TownKit.Part(model, "BoatBottom", Vector3.new(2.6, 0.5, 5.4), cf * CFrame.new(0, 0.25, 0), hull, M.WoodPlanks, "deco")
+	for _, s in ipairs({ -1, 1 }) do
+		TownKit.Part(model, "BoatSide", Vector3.new(0.25, 0.9, 5.6), cf * CFrame.new(s * 1.35, 0.7, 0) * CFrame.Angles(0, 0, math.rad(s * 12)), C.White, M.WoodPlanks, "deco")
+	end
+	TownKit.Egg(model, "BoatBow", cf * CFrame.new(0, 0.55, -2.7), Vector3.new(2.7, 1.1, 3.4), hull, M.WoodPlanks, "deco")
+	TownKit.Part(model, "BoatSeat", Vector3.new(2.5, 0.2, 0.9), cf * CFrame.new(0, 0.95, 0.4), C.WoodLight, M.WoodPlanks, "deco")
+	TownKit.Rod(model, "Oar", (cf * CFrame.new(-1.2, 1.1, 0.4)).Position, (cf * CFrame.new(-3.4, 0.3, 1.8)).Position, 0.18, C.WoodLight, M.Wood, "deco")
+end
+
+-- Pédalo cygne (coque blanche, cou courbé, tête, bec orange, banc rose)
+local function swanBoat(model: Instance, cf: CFrame)
+	local white = Color3.fromRGB(250, 250, 252)
+	TownKit.Egg(model, "SwanHull", cf * CFrame.new(0, 0.6, 0), Vector3.new(3.8, 1.8, 6.2), white, M.SmoothPlastic, "decoS")
+	TownKit.Egg(model, "SwanWing", cf * CFrame.new(0, 1.3, 0.9), Vector3.new(3.4, 1.2, 3.6), Color3.fromRGB(238, 240, 246), M.SmoothPlastic, "deco")
+	TownKit.Part(model, "SwanSeat", Vector3.new(2.4, 0.5, 1.2), cf * CFrame.new(0, 1.5, -0.2), Color3.fromRGB(255, 150, 190), M.Fabric, "deco")
+	local neck0 = (cf * CFrame.new(0, 1.2, -2.4)).Position
+	local neck1 = (cf * CFrame.new(0, 3.6, -3.2)).Position
+	local neck2 = (cf * CFrame.new(0, 4.6, -2.7)).Position
+	TownKit.Rod(model, "SwanNeck", neck0, neck1, 0.8, white, M.SmoothPlastic, "deco")
+	TownKit.Rod(model, "SwanNeck", neck1, neck2, 0.7, white, M.SmoothPlastic, "deco")
+	TownKit.Ball(model, "SwanHead", neck2 + Vector3.new(0, 0.1, 0), 1.3, white, M.SmoothPlastic, "deco")
+	TownKit.Egg(model, "SwanBeak", CFrame.lookAt(neck2, (cf * CFrame.new(0, 4.4, -4.2)).Position) * CFrame.new(0, -0.05, -0.8), Vector3.new(0.4, 0.35, 0.9), Color3.fromRGB(255, 150, 60), M.SmoothPlastic, "deco")
+end
 
 local function lake(folder: Instance, geo: TownKit.Geo, center: Vector3, radius: number)
 	local model = TownKit.Model(folder, "Lake")
 	local towardPlaza = (Vector3.new(geo.Origin.X, center.Y, geo.Origin.Z) - center).Unit
 	local side = Vector3.new(-towardPlaza.Z, 0, towardPlaza.X)
-	local lobes = {
-		{ center, radius },
-		{ center + side * radius * 0.75 + towardPlaza * radius * 0.2, radius * 0.62 },
-		{ center - side * radius * 0.7 - towardPlaza * radius * 0.15, radius * 0.55 },
+	local G = center + Vector3.new(0, GROUND_Y, 0)
+	-- repère du lac : X = side, Y = haut, Z = en s'éloignant de la place
+	local L = CFrame.fromMatrix(G, side, Vector3.new(0, 1, 0))
+	local R = radius
+	local function P(x: number, z: number, y: number?): Vector3
+		return (L * CFrame.new(x, y or 0, z)).Position
+	end
+	local function ang(a: number, r: number): (number, number)
+		return math.sin(a) * r, math.cos(a) * r
+	end
+	model:SetAttribute("NearDetail", "Lake")
+	model:SetAttribute("DetailCF", L)
+	model:SetAttribute("DetailR", R)
+	-- nappes : rive de sable (on y marche), bord peu profond, fond, eau
+	TownKit.Disc(model, "Shore", G + Vector3.new(0, 0.06, 0), R + 1.2, 0.3, SAND, M.Sand, "solid")
+	TownKit.Disc(model, "LakeBed", G + Vector3.new(0, 0.12, 0), R - 1.6, 0.2, Color3.fromRGB(70, 150, 176), M.Sand, "deco")
+	TownKit.Disc(model, "LakeDeep", G + Vector3.new(0, 0.16, 0), R * 0.62, 0.2, C.WaterDeep, M.Slate, "deco")
+	local water = TownKit.Disc(model, "Water", G + Vector3.new(0, LAKE.WaterTop, 0), R, 0.2, C.Water, M.Glass, "deco")
+	water.Transparency = 0.35
+	water.Reflectance = 0.12
+	-- berges : une couronne d'ovales couchés le long de la rive, herbe et
+	-- sable en alternance, qui mordent plus ou moins sur l'eau : le bord
+	-- devient une ligne ondulée (on laisse libres les bouts du pont et le ponton)
+	local bx = LAKE.BridgeX * R
+	local n = 16
+	for k = 0, n - 1 do
+		local a = k / n * math.pi * 2 + (hash(k, 101) - 0.5) * 0.2
+		local bite = (hash(k, 102) - 0.35) * 3.2
+		local x, z = ang(a, R + 1 - bite)
+		local nearBridge = math.abs(x - bx) < 7 and math.abs(z) > R * 0.6
+		local nearDock = x > R * 0.6 and math.abs(z - LAKE.DockZ * R) < 6
+		if not nearBridge and not nearDock then
+			local beach = k % 3 == 1
+			local len = 2 * math.pi * R / n * (1.25 + hash(k, 103) * 0.35)
+			local wid = 5 + hash(k, 104) * 4 + math.max(0, bite) * 1.4
+			local tall = beach and 0.95 or 1.3 + hash(k, 105) * 0.5
+			local color = beach and SAND or C.Grass:Lerp(C.GrassDark, hash(k, 106) * 0.45)
+			TownKit.Egg(model, beach and "Beach" or "Bank", L * CFrame.new(x, 0, z) * CFrame.Angles(0, a, 0), Vector3.new(len, tall, wid), color, beach and M.Sand or M.Grass, "deco")
+		end
+	end
+	-- pierres de la rive
+	for k = 0, 6 do
+		local a = k / 7 * math.pi * 2 + 0.2 + hash(k, 106) * 0.35
+		local x, z = ang(a, R - 0.4 + hash(k, 107) * 1.2)
+		if not (math.abs(x - bx) < 6 and math.abs(z) > R * 0.6) then
+			local s = 1.1 + hash(k, 108) * 1.3
+			TownKit.Egg(model, "Stone", L * CFrame.new(x, 0.3, z) * CFrame.Angles(0, hash(k, 109) * 6, 0), Vector3.new(s * 1.3, s * 0.8, s), ROCK:Lerp(C.White, hash(k, 110) * 0.25), M.Slate, "deco")
+		end
+	end
+	-- roseaux + massettes (le reste des roseaux vient du client)
+	for k = 0, 1 do
+		local a = 0.7 + k * 1.55
+		local x, z = ang(a, R - 1.2)
+		if not (math.abs(x - bx) < 6 and math.abs(z) > R * 0.6) then
+			local base = L * CFrame.new(x, 0, z)
+			TownKit.Egg(model, "Reeds", base * CFrame.new(0, 1.7, 0) * CFrame.Angles(0, a, math.rad(6)), Vector3.new(1.4, 4.2, 1.1), Color3.fromRGB(104, 158, 84), M.Grass, "deco")
+			TownKit.Rod(model, "Cattail", (base * CFrame.new(0.5, 0.3, 0.3)).Position, (base * CFrame.new(0.7, 4.4, 0.4)).Position, 0.14, Color3.fromRGB(96, 146, 78), M.Grass, "deco")
+			TownKit.Egg(model, "CattailHead", base * CFrame.new(0.72, 4.5, 0.4), Vector3.new(0.42, 1.2, 0.42), Color3.fromRGB(122, 84, 58), M.Fabric, "deco")
+		end
+	end
+	-- l'île et son saule
+	local ix, iz, ir = LAKE.Island[1] * R, LAKE.Island[2] * R, math.max(4.5, LAKE.Island[3] * R)
+	TownKit.Egg(model, "IslandSand", L * CFrame.new(ix, 0.3, iz), Vector3.new(ir * 2 + 2.4, 1.2, ir * 2 + 1.6), SAND, M.Sand, "deco")
+	TownKit.Egg(model, "Island", L * CFrame.new(ix, 0.4, iz), Vector3.new(ir * 2, 2.4, ir * 1.8), C.Grass, M.Grass, "deco")
+	TownKit.Tree(model, P(ix, iz, 1.4), 13, 911, "Willow", { Tier = 1, Lawn = true })
+	TownKit.Egg(model, "Stone", L * CFrame.new(ix - ir * 0.8, 0.5, iz + ir * 0.5), Vector3.new(1.8, 1.1, 1.4), ROCK, M.Slate, "deco")
+	-- jet d'eau (colonne + gerbe, transparentes, + particules douces)
+	local jx, jz = LAKE.Jet[1] * R, LAKE.Jet[2] * R
+	TownKit.Disc(model, "JetRipple", P(jx, jz, LAKE.WaterTop + 0.04), 2.2, 0.06, Color3.fromRGB(214, 238, 252), M.SmoothPlastic, "deco").Transparency = 0.35
+	local column = TownKit.Egg(model, "JetColumn", L * CFrame.new(jx, LAKE.WaterTop + 3.2, jz), Vector3.new(0.8, 6.4, 0.8), Color3.fromRGB(226, 244, 255), M.Glass, "deco")
+	column.Transparency = 0.35
+	local spray = TownKit.Egg(model, "JetSpray", L * CFrame.new(jx, LAKE.WaterTop + 6.2, jz), Vector3.new(3.2, 1.6, 3.2), Color3.fromRGB(236, 248, 255), M.Glass, "deco")
+	spray.Transparency = 0.45
+	local drops = Instance.new("ParticleEmitter")
+	drops.Name = "JetDrops"
+	drops.Color = ColorSequence.new(Color3.fromRGB(230, 246, 255))
+	drops.LightEmission = 0
+	drops.Transparency = NumberSequence.new(0.3, 1)
+	drops.Size = NumberSequence.new(0.35, 0.1)
+	drops.Lifetime = NumberRange.new(0.8, 1.2)
+	drops.Rate = 18
+	drops.Speed = NumberRange.new(4, 6)
+	drops.SpreadAngle = Vector2.new(35, 35)
+	drops.Acceleration = Vector3.new(0, -18, 0)
+	drops.Parent = spray
+	-- pont en arc (du côté de la place vers le fond)
+	bridge(model, P(bx, -(R + 5)), P(bx, R + 5), side)
+	-- ponton sur pilotis (depuis la rive +X, vers le milieu) + barque + pédalo
+	local dz = LAKE.DockZ * R
+	local dock = L * CFrame.new(R - 3, 0, dz) * CFrame.Angles(0, math.pi / 2, 0)
+	-- (dessus à 0,85 : une petite marche depuis la rive)
+	TownKit.Part(model, "Dock", Vector3.new(4, 0.4, 12), dock * CFrame.new(0, 0.65, 0), PLANK, M.WoodPlanks, "solid")
+	for _, zz in ipairs({ -5.4, 0, 5.4 }) do
+		for _, xx in ipairs({ -1.7, 1.7 }) do
+			TownKit.Column(model, "DockPost", (dock * CFrame.new(xx, -0.2, zz)).Position, 1.8, 0.45, PLANK_DARK, M.Wood, "deco")
+		end
+	end
+	rowBoat(model, dock * CFrame.new(-3.6, LAKE.WaterTop - 0.35, 2.4) * CFrame.Angles(0, math.rad(8), 0))
+	swanBoat(model, dock * CFrame.new(3.8, LAKE.WaterTop - 0.3, 1.4) * CFrame.Angles(0, math.rad(-10), 0))
+	-- arbres de la rive : saules pleureurs + deux palmiers sur la plage
+	local rim = {
+		{ -0.62, 0.9, "Willow" },
+		{ -1.02, -0.2, "Willow" },
+		{ 0.62, 0.94, "Palm" },
+		{ 0.86, 0.72, "Palm" },
 	}
-	-- rives (sable), fond, eau : trois couches de disques
-	for _, lobe in ipairs(lobes) do
-		TownKit.Disc(model, "Shore", lobe[1] + Vector3.new(0, GROUND_Y + 0.08, 0), lobe[2] + 3, 0.4, C.Sand, M.Sand, "solid")
+	for i, t in ipairs(rim) do
+		local p = P(t[1] * R + (t[1] > 0 and 3 or -3), t[2] * R + 3)
+		TownKit.Tree(model, p, t[3] == "Palm" and 15 + i or 14, 131 * i, t[3], { Tier = 1, Lawn = true })
 	end
-	for _, lobe in ipairs(lobes) do
-		TownKit.Disc(model, "LakeBed", lobe[1] + Vector3.new(0, GROUND_Y + 0.12, 0), lobe[2], 0.4, C.WaterDeep, M.Slate, "deco")
-	end
-	for _, lobe in ipairs(lobes) do
-		local water = TownKit.Disc(model, "Water", lobe[1] + Vector3.new(0, GROUND_Y + 0.35, 0), lobe[2] - 0.1, 0.2, C.Water, M.Glass, "deco")
-		water.Transparency = 0.3
-		water.Reflectance = 0.15
-	end
-	-- nénuphars, roseaux, canards
-	for i = 1, 7 do
-		local a = hash(i, 51) * math.pi * 2
-		local r = radius * (0.35 + hash(i, 52) * 0.5)
-		local p = center + Vector3.new(math.cos(a) * r, GROUND_Y + 0.5, math.sin(a) * r)
-		TownKit.Disc(model, "LilyPad", p, 1.1 + hash(i, 53) * 0.6, 0.1, Color3.fromRGB(110, 190, 110), M.Grass, "deco")
-		if i % 3 == 0 then
-			TownKit.Ball(model, "Lily", p + Vector3.new(0, 0.3, 0), 0.7, Color3.fromRGB(255, 190, 220), M.SmoothPlastic, "deco")
-		end
-	end
-	for i = 1, 10 do
-		local a = hash(i, 54) * math.pi * 2
-		local lobe = lobes[i % 3 + 1]
-		local p = lobe[1] + Vector3.new(math.cos(a) * (lobe[2] - 0.8), GROUND_Y, math.sin(a) * (lobe[2] - 0.8))
-		TownKit.Column(model, "Reed", p, 3 + hash(i, 55) * 2, 0.25, Color3.fromRGB(96, 150, 80), M.Grass, "deco")
-		TownKit.Column(model, "ReedTop", p + Vector3.new(0, 3 + hash(i, 55) * 2, 0), 1, 0.45, Color3.fromRGB(130, 90, 60), M.Fabric, "deco")
-	end
-	for i = 1, 3 do
-		local p = center + side * (i - 2) * radius * 0.35 - towardPlaza * radius * 0.35 + Vector3.new(0, GROUND_Y + 0.8, 0)
-		local look = CFrame.lookAt(p, p + side)
-		TownKit.Ball(model, "Duck", p, 1.3, i == 2 and C.White or Color3.fromRGB(255, 230, 120), M.SmoothPlastic, "deco")
-		TownKit.Ball(model, "DuckHead", (look * CFrame.new(0, 0.7, -0.55)).Position, 0.8, i == 2 and C.White or Color3.fromRGB(255, 230, 120), M.SmoothPlastic, "deco")
-		part(model, "Beak", Vector3.new(0.3, 0.15, 0.4), look * CFrame.new(0, 0.65, -1.05), Color3.fromRGB(255, 150, 60), M.SmoothPlastic, "deco")
-	end
-	-- pont en bois en arc sur le lac (du côté de la place vers le fond)
-	local a = center - towardPlaza * (radius + 4) + side * radius * 0.1
-	local b = center + towardPlaza * (radius + 4) + side * radius * 0.1
-	local n = 7
-	local bridge = TownKit.Model(model, "Bridge")
-	local prev = a + Vector3.new(0, GROUND_Y + 0.4, 0)
-	for i = 1, n do
-		local t = i / n
-		local p = a:Lerp(b, t) + Vector3.new(0, GROUND_Y + 0.4 + math.sin(t * math.pi) * 5, 0)
-		local deck = TownKit.Beam(bridge, "Deck", prev, p, 6, 0.5, C.Wood, M.WoodPlanks, "solid")
-		deck.CastShadow = true
-		for _, sx in ipairs({ -1, 1 }) do
-			local off = side * sx * 2.9
-			TownKit.Beam(bridge, "Rail", prev + off + Vector3.new(0, 2.6, 0), p + off + Vector3.new(0, 2.6, 0), 0.3, 0.3, C.WoodLight, M.Wood, "deco")
-			TownKit.Column(bridge, "Baluster", p + off, 2.6, 0.35, C.WoodLight, M.Wood, "deco")
-		end
-		prev = p
-	end
-	-- ponton + barque
-	local dockDir = side
-	local dock = center + dockDir * (radius * 0.9) + Vector3.new(0, GROUND_Y + 0.9, 0)
-	part(model, "Dock", Vector3.new(4, 0.4, 10), CFrame.lookAt(dock, dock - dockDir), C.Wood, M.WoodPlanks, "solid")
-	for _, dz in ipairs({ -4, 0, 4 }) do
-		TownKit.Column(model, "DockPost", (CFrame.lookAt(dock, dock - dockDir) * CFrame.new(1.8, -0.9, dz)).Position, 1.8, 0.5, C.Bark, M.Wood, "deco")
-	end
-	local boat = CFrame.lookAt(dock, dock - dockDir) * CFrame.new(-4.4, -0.3, 2.5)
-	part(model, "Boat", Vector3.new(3, 1.2, 7), boat, Color3.fromRGB(255, 170, 190), M.WoodPlanks, "deco")
-	part(model, "BoatSeat", Vector3.new(2.8, 0.2, 1), boat * CFrame.new(0, 0.4, 0), C.WoodLight, M.WoodPlanks, "deco")
-	-- saules sur la rive + bancs face à l'eau
-	local planted = 0
-	for i = 1, 16 do
-		if planted >= 4 then
-			break
-		end
-		local angle = i / 16 * math.pi * 2 * 3.3
-		local lobe = lobes[i % 3 + 1]
-		local p = lobe[1] + Vector3.new(math.cos(angle), 0, math.sin(angle)) * (lobe[2] + 6)
-		local dry = true
-		for _, other in ipairs(lobes) do
-			if (Vector3.new(p.X - other[1].X, 0, p.Z - other[1].Z)).Magnitude < other[2] + 5 then
-				dry = false
-			end
-		end
-		if dry then
-			planted += 1
-			TownKit.Tree(model, p + Vector3.new(0, GROUND_Y, 0), 14, i * 131, planted % 2 == 0 and 2 or 1)
-		end
+	-- bancs face à l'eau (côté place) + lampadaires aux bouts du pont
+	for _, bxx in ipairs({ 0.34, -0.72 }) do
+		local p = P(bxx * R, -(R + 6))
+		TownKit.Bench(model, CFrame.lookAt(p, P(bxx * R, 0)))
 	end
 	for _, s in ipairs({ -1, 1 }) do
-		local p = center + towardPlaza * (radius + 5) + side * s * 9 + Vector3.new(0, GROUND_Y, 0)
-		TownKit.Bench(model, CFrame.lookAt(p, p - towardPlaza))
+		TownKit.Lamp(model, P(bx + 5.2, s * (R + 7)), TownKit.Facing(-side), false)
 	end
-	geo.Reserve(center, radius + 4)
-	for i = 2, 3 do
-		geo.Reserve(lobes[i][1], lobes[i][2] + 4)
-	end
+	geo.Reserve(center, R + 9)
+	-- (pied du pont côté place : l'allée du parc y arrive)
+	return P(bx, -(R + 7))
 end
 
 ----------------------------------------------------------------------
--- Aire de jeux, pique-nique
+-- Aire de jeux (v9.7, NATURE97), pique-nique, coin du parc
 ----------------------------------------------------------------------
+-- Sol souple en couleurs, petite clôture avec portillon (côté place),
+-- toboggan (tour, toit, échelle, glissière à rebords), balançoires à
+-- chaînes (vrais Seat), cage à grimper, bac à sable (jouets : client),
+-- tape-cul, lapin à ressort, tourniquet. `cf` : centre au sol, -Z vers la
+-- place. Tout ce qui se touche est solide, le reste est du décor.
+
+local PW, PD = 38, 30 -- (largeur, profondeur de l'aire)
 
 local function playground(folder: Instance, geo: TownKit.Geo, cf: CFrame)
 	local model = TownKit.Model(folder, "Playground")
-	TownKit.Disc(model, "Sand", (cf * CFrame.new(0, GROUND_Y + 0.12, 0)).Position, 15, 0.4, C.Sand, M.Sand, "solid")
-	TownKit.Disc(model, "Border", (cf * CFrame.new(0, GROUND_Y + 0.05, 0)).Position, 15.8, 0.4, C.WoodLight, M.Wood, "deco")
-	-- toboggan : tour, échelle, glissière
-	local slide = cf * CFrame.new(-6, GROUND_Y, 0)
-	for _, x in ipairs({ -1.4, 1.4 }) do
-		for _, z in ipairs({ -1.4, 1.4 }) do
-			part(model, "TowerPost", Vector3.new(0.5, 7, 0.5), slide * CFrame.new(x, 3.5, z), C.Sky, M.Metal, "prop")
+	local g = cf * CFrame.new(0, GROUND_Y, 0)
+	model:SetAttribute("NearDetail", "Playground")
+	model:SetAttribute("DetailCF", g)
+	-- sol souple + taches de couleur (à des hauteurs distinctes)
+	TownKit.Part(model, "SoftFloor", Vector3.new(PW, 0.3, PD), g * CFrame.new(0, 0.05, 0), Color3.fromRGB(236, 150, 128), M.Rubber, "solid")
+	local patches = { { -9, -6, 5.2, C.Mint }, { 9, 6, 5.6, C.Lilac }, { 1, 0, 6.4, C.Lemon }, { -11, 8, 4.6, C.Sky } }
+	for i, pt in ipairs(patches) do
+		TownKit.Disc(model, "SoftPatch", (g * CFrame.new(pt[1], 0.22 + i * 0.03, pt[2])).Position, pt[3], 0.1, pt[4], M.Rubber, "deco")
+	end
+	-- clôture basse (poteaux + 2 lisses) avec portillon ouvert face à la place
+	local fence = Color3.fromRGB(255, 255, 255)
+	local rail = Color3.fromRGB(120, 196, 226)
+	local hw, hd = PW / 2 + 0.6, PD / 2 + 0.6
+	local sides = {
+		{ Vector3.new(-hw, 0, hd), Vector3.new(hw, 0, hd) },
+		{ Vector3.new(-hw, 0, -hd), Vector3.new(hw, 0, -hd) },
+		{ Vector3.new(-hw, 0, -hd), Vector3.new(-hw, 0, hd) },
+		{ Vector3.new(hw, 0, -hd), Vector3.new(hw, 0, hd) },
+	}
+	local gate = 2.4 -- (demi-largeur du portillon)
+	for si, s in ipairs(sides) do
+		local runs = { s }
+		if si == 2 then
+			runs = { { s[1], Vector3.new(-gate, 0, -hd) }, { Vector3.new(gate, 0, -hd), s[2] } }
+		end
+		for _, r in ipairs(runs) do
+			local a, b = (g * CFrame.new(r[1])).Position, (g * CFrame.new(r[2])).Position
+			for _, y in ipairs({ 1.1, 2.3 }) do
+				TownKit.Beam(model, "FenceRail", a + Vector3.new(0, y, 0), b + Vector3.new(0, y, 0), 0.18, 0.24, rail, M.Wood, "prop")
+			end
+			local len = (b - a).Magnitude
+			local n = math.max(1, math.floor(len / 12 + 0.5))
+			for k = 0, n do
+				local p = a:Lerp(b, k / n)
+				TownKit.Column(model, "FencePost", p, 2.7, 0.4, fence, M.Wood, "prop")
+			end
 		end
 	end
-	part(model, "TowerDeck", Vector3.new(3.6, 0.4, 3.6), slide * CFrame.new(0, 4.6, 0), C.WoodLight, M.WoodPlanks, "solid")
-	part(model, "TowerRoof", Vector3.new(4.2, 0.4, 4.2), slide * CFrame.new(0, 7.2, 0), C.Pink, M.SmoothPlastic, "deco")
-	TownKit.Wedge(model, "Chute", Vector3.new(2, 4.6, 7), slide * CFrame.new(0, 2.3, 5.3) * CFrame.Angles(0, math.pi, 0), C.Lemon, M.SmoothPlastic, "solid")
-	for i = 0, 4 do
-		part(model, "Rung", Vector3.new(2.4, 0.25, 0.25), slide * CFrame.new(0, 0.8 + i * 0.9, -2.2), C.Metal, M.Metal, "deco")
+	for _, sx in ipairs({ -1, 1 }) do
+		local p = (g * CFrame.new(sx * gate, 0, -hd)).Position
+		TownKit.Column(model, "GatePost", p, 3.2, 0.6, fence, M.Wood, "prop")
+		TownKit.Ball(model, "GateCap", p + Vector3.new(0, 3.4, 0), 0.8, C.Pink, M.SmoothPlastic, "deco")
 	end
-	for _, x in ipairs({ -1.2, 1.2 }) do
-		part(model, "Ladder", Vector3.new(0.25, 4.8, 0.25), slide * CFrame.new(x, 2.4, -2.2), C.Metal, M.Metal, "deco")
-	end
-	-- balançoires
-	local swing = cf * CFrame.new(6, GROUND_Y, -2)
-	for _, x in ipairs({ -4, 4 }) do
-		part(model, "SwingLeg", Vector3.new(0.4, 8, 0.4), swing * CFrame.new(x, 4, -1.2) * CFrame.Angles(math.rad(-10), 0, 0), C.Mint, M.Metal, "prop")
-		part(model, "SwingLeg", Vector3.new(0.4, 8, 0.4), swing * CFrame.new(x, 4, 1.2) * CFrame.Angles(math.rad(10), 0, 0), C.Mint, M.Metal, "prop")
-	end
-	part(model, "SwingBar", Vector3.new(8.6, 0.4, 0.4), swing * CFrame.new(0, 7.9, 0), C.Mint, M.Metal, "deco")
-	for _, x in ipairs({ -1.8, 1.8 }) do
-		for _, dx in ipairs({ -0.6, 0.6 }) do
-			part(model, "Rope", Vector3.new(0.1, 5.6, 0.1), swing * CFrame.new(x + dx, 5, 0), C.MetalLight, M.Metal, "deco")
+	-- (battant ouvert vers l'extérieur)
+	TownKit.Part(model, "Gate", Vector3.new(0.16, 1.6, 2.2), g * CFrame.new(-gate - 0.1, 1.6, -hd - 1.2), rail, M.Wood, "deco")
+	-- TOBOGGAN : tour 4 poteaux, plancher, toit à 2 pans, échelle, glissière
+	local tower = g * CFrame.new(-10, 0, 3)
+	local deckY = 4.6
+	for _, x in ipairs({ -1.5, 1.5 }) do
+		for _, z in ipairs({ -1.5, 1.5 }) do
+			TownKit.Column(model, "TowerPost", (tower * CFrame.new(x, 0, z)).Position, 8.2, 0.5, C.Sky, M.Metal, "prop")
 		end
-		part(model, "SwingSeat", Vector3.new(1.6, 0.25, 0.8), swing * CFrame.new(x, 2.2, 0), C.Pink, M.Rubber, "deco")
 	end
-	-- tape-cul + animal à ressort
-	local seesaw = cf * CFrame.new(1, GROUND_Y, 8) * CFrame.Angles(0, math.rad(20), 0)
-	part(model, "Pivot", Vector3.new(0.8, 1.2, 0.8), seesaw * CFrame.new(0, 0.6, 0), C.Metal, M.Metal, "prop")
-	part(model, "Plank", Vector3.new(0.9, 0.3, 9), seesaw * CFrame.new(0, 1.4, 0) * CFrame.Angles(math.rad(12), 0, 0), C.Peach, M.WoodPlanks, "deco")
-	local rider = cf * CFrame.new(8, GROUND_Y, 7)
-	TownKit.Column(model, "Spring", (rider).Position, 1.4, 0.5, C.MetalLight, M.Metal, "deco")
-	part(model, "RiderBody", Vector3.new(1.2, 1.4, 2.6), rider * CFrame.new(0, 2.1, 0), C.Lilac, M.SmoothPlastic, "prop")
-	TownKit.Ball(model, "RiderHead", (rider * CFrame.new(0, 3.2, -1.2)).Position, 1.6, C.Lilac, M.SmoothPlastic, "deco")
-	geo.Reserve(cf.Position, 17)
+	TownKit.Part(model, "TowerDeck", Vector3.new(3.6, 0.4, 3.6), tower * CFrame.new(0, deckY - 0.2, 0), C.WoodLight, M.WoodPlanks, "solid")
+	for _, s in ipairs({ -1, 1 }) do
+		TownKit.Wedge(model, "TowerRoof", Vector3.new(4.4, 1.6, 2.3), tower * CFrame.new(0, 9, s * 1.15) * CFrame.Angles(0, s > 0 and math.pi or 0, 0), C.HotPink, M.SmoothPlastic, "deco")
+	end
+	-- échelle (côté -X) : 2 montants + 5 barreaux
+	for _, z in ipairs({ -0.8, 0.8 }) do
+		TownKit.Part(model, "LadderSide", Vector3.new(0.25, deckY + 1, 0.25), tower * CFrame.new(-2.4, (deckY + 1) / 2, z), C.Metal, M.Metal, "prop")
+	end
+	for k = 1, 5 do
+		TownKit.Part(model, "Rung", Vector3.new(0.22, 0.22, 1.6), tower * CFrame.new(-2.4, k * deckY / 6 + 0.1, 0), C.Metal, M.Metal, "deco")
+	end
+	-- glissière (+Z) : pente continue, rebords, sortie à plat
+	local top = (tower * CFrame.new(0, deckY, 1.8)).Position
+	local foot = (tower * CFrame.new(0, 0.9, 8.6)).Position
+	TownKit.Beam(model, "Chute", top - Vector3.new(0, 0.15, 0), foot - Vector3.new(0, 0.15, 0), 1.8, 0.3, C.Lemon, M.SmoothPlastic, "solid")
+	local right = (tower.RightVector)
+	for _, s in ipairs({ -1, 1 }) do
+		TownKit.Beam(model, "ChuteRim", top + right * s * 1.0 + Vector3.new(0, 0.2, 0), foot + right * s * 1.0 + Vector3.new(0, 0.2, 0), 0.2, 0.6, C.Peach, M.SmoothPlastic, "deco")
+	end
+	TownKit.Part(model, "ChuteOut", Vector3.new(1.8, 0.3, 1.6), tower * CFrame.new(0, 0.6, 9.3), C.Lemon, M.SmoothPlastic, "prop")
+	-- BALANÇOIRES : portique en A, barre, 2 sièges (vrais Seat) sur chaînes
+	local swing = g * CFrame.new(9, 0, -5)
+	for _, x in ipairs({ -4.6, 4.6 }) do
+		for _, z in ipairs({ -1, 1 }) do
+			local foot2 = (swing * CFrame.new(x, 0, z * 1.6)).Position
+			local head = (swing * CFrame.new(x, 7.6, 0)).Position
+			TownKit.Rod(model, "SwingLeg", foot2, head, 0.42, C.Mint, M.Metal, "prop")
+		end
+	end
+	local bar = TownKit.Rod(model, "SwingBar", (swing * CFrame.new(-4.9, 7.6, 0)).Position, (swing * CFrame.new(4.9, 7.6, 0)).Position, 0.45, C.Mint, M.Metal, "deco")
+	bar.CastShadow = true
+	for _, x in ipairs({ -2, 2 }) do
+		for _, dx in ipairs({ -0.7, 0.7 }) do
+			TownKit.Rod(model, "Chain", (swing * CFrame.new(x + dx, 7.4, 0)).Position, (swing * CFrame.new(x + dx, 2.1, 0)).Position, 0.1, C.MetalLight, M.Metal, "deco")
+		end
+		local seat = TownKit.Part(model, "SwingSeat", Vector3.new(1.7, 0.3, 0.9), swing * CFrame.new(x, 1.95, 0), C.Pink, M.Rubber, "solid", "Seat")
+		seat.CanTouch = true
+		seat.CanQuery = true
+	end
+	-- CAGE À GRIMPER : cube de barres + plateforme
+	local gym = g * CFrame.new(9, 0, 7.5)
+	for _, x in ipairs({ -2.2, 2.2 }) do
+		for _, z in ipairs({ -2.2, 2.2 }) do
+			TownKit.Column(model, "GymPost", (gym * CFrame.new(x, 0, z)).Position, 4.5, 0.36, C.Lilac, M.Metal, "prop")
+		end
+	end
+	TownKit.Part(model, "GymTop", Vector3.new(4.8, 0.3, 4.8), gym * CFrame.new(0, 4.45, 0), C.Sky, M.Rubber, "solid")
+	for _, y in ipairs({ 1.5, 3 }) do
+		for _, s in ipairs({ -1, 1 }) do
+			TownKit.Part(model, "GymBar", Vector3.new(4.4, 0.22, 0.22), gym * CFrame.new(0, y, s * 2.2), C.Lemon, M.Metal, "deco")
+		end
+	end
+	TownKit.Part(model, "GymBar", Vector3.new(0.22, 0.22, 4.4), gym * CFrame.new(-2.2, 2.25, 0), C.Lemon, M.Metal, "deco")
+	-- BAC À SABLE : 4 planches + sable (jouets : client)
+	local box = g * CFrame.new(-8, 0, -7.5)
+	TownKit.Part(model, "SandPit", Vector3.new(7, 0.5, 7), box * CFrame.new(0, 0.3, 0), C.Sand, M.Sand, "deco")
+	for _, s in ipairs({ -1, 1 }) do
+		TownKit.Part(model, "SandBorder", Vector3.new(7.8, 0.8, 0.4), box * CFrame.new(0, 0.42, s * 3.7), C.WoodLight, M.WoodPlanks, "prop")
+		TownKit.Part(model, "SandBorder", Vector3.new(0.4, 0.78, 7), box * CFrame.new(s * 3.7, 0.41, 0), C.WoodLight, M.WoodPlanks, "prop")
+	end
+	-- TAPE-CUL
+	local seesaw = g * CFrame.new(0, 0, 10) * CFrame.Angles(0, math.rad(90), 0)
+	TownKit.Part(model, "Pivot", Vector3.new(0.9, 1.3, 0.9), seesaw * CFrame.new(0, 0.65, 0), C.Metal, M.Metal, "prop")
+	local plankCF = seesaw * CFrame.new(0, 1.45, 0) * CFrame.Angles(math.rad(11), 0, 0)
+	TownKit.Part(model, "Plank", Vector3.new(0.9, 0.3, 9), plankCF, C.Peach, M.WoodPlanks, "deco")
+	for _, z in ipairs({ -3.6, 3.6 }) do
+		TownKit.Part(model, "Handle", Vector3.new(1.2, 0.8, 0.16), plankCF * CFrame.new(0, 0.55, z), C.Metal, M.Metal, "deco")
+	end
+	-- LAPIN À RESSORT
+	local rider = g * CFrame.new(-1, 0, -8) * CFrame.Angles(0, math.rad(30), 0)
+	TownKit.Column(model, "Spring", rider.Position, 1.3, 0.45, C.MetalLight, M.Metal, "deco")
+	TownKit.Egg(model, "BunnyBody", rider * CFrame.new(0, 2, 0), Vector3.new(1.3, 1.5, 2.4), C.White, M.SmoothPlastic, "prop")
+	TownKit.Ball(model, "BunnyHead", (rider * CFrame.new(0, 2.9, -1.1)).Position, 1.4, C.White, M.SmoothPlastic, "deco")
+	for _, sx in ipairs({ -1, 1 }) do
+		TownKit.Egg(model, "BunnyEar", rider * CFrame.new(sx * 0.3, 4, -1.1) * CFrame.Angles(0, 0, math.rad(-sx * 10)), Vector3.new(0.35, 1.3, 0.25), C.Pink, M.SmoothPlastic, "deco")
+	end
+	-- TOURNIQUET
+	local mg = g * CFrame.new(0, 0, 1)
+	TownKit.Disc(model, "RoundPlate", (mg * CFrame.new(0, 0.85, 0)).Position, 3.2, 0.5, C.Pink, M.Metal, "solid")
+	TownKit.Disc(model, "RoundInner", (mg * CFrame.new(0, 0.9, 0)).Position, 2.2, 0.1, C.White, M.Metal, "deco")
+	TownKit.Column(model, "RoundPole", (mg * CFrame.new(0, 0.9, 0)).Position, 2.6, 0.4, C.Metal, M.Metal, "prop")
+	for k = 0, 3 do
+		local a = k * math.pi / 2
+		TownKit.Rod(model, "RoundBar", (mg * CFrame.new(0, 3.3, 0)).Position, (mg * CFrame.new(math.cos(a) * 2.7, 0.95, math.sin(a) * 2.7)).Position, 0.18, C.Sky, M.Metal, "deco")
+	end
+	-- un banc pour les parents + une poubelle, dehors, près du portillon
+	TownKit.Bench(model, CFrame.lookAt((g * CFrame.new(-9, 0, -hd - 4.5)).Position, (g * CFrame.new(-9, 0, 0)).Position))
+	TownKit.Bin(model, (g * CFrame.new(gate + 3.2, 0, -hd - 2.4)).Position, Color3.fromRGB(96, 150, 110))
+	geo.Reserve(cf.Position, 23)
 end
 
 local function picnic(folder: Instance, geo: TownKit.Geo, cf: CFrame, count: number)
@@ -200,6 +432,37 @@ local function picnic(folder: Instance, geo: TownKit.Geo, cf: CFrame, count: num
 		end
 		geo.Reserve(t.Position, 5)
 	end
+	-- (v9.7) chariot à glaces sous son parasol, à côté des tables
+	local cart = cf * CFrame.new((count + 1) / 2 * 9 + 4, GROUND_Y, -2) * CFrame.Angles(0, math.rad(-20), 0)
+	part(model, "CartBody", Vector3.new(4.4, 2.2, 2.2), cart * CFrame.new(0, 1.9, 0), Color3.fromRGB(255, 236, 244), M.SmoothPlastic, "prop")
+	part(model, "CartStripe", Vector3.new(4.5, 0.5, 2.3), cart * CFrame.new(0, 2.2, 0), C.Pink, M.SmoothPlastic, "deco")
+	for _, x in ipairs({ -1.4, 1.4 }) do
+		local wheel = part(model, "CartWheel", Vector3.new(0.3, 1.6, 1.6), cart * CFrame.new(x, 0.8, 1.2) * CFrame.Angles(0, math.rad(90), 0), C.Metal, M.Rubber, "deco")
+		;(wheel :: Part).Shape = Enum.PartType.Cylinder
+	end
+	TownKit.Column(model, "CartPole", (cart * CFrame.new(0, 3, 0)).Position, 4.2, 0.2, C.White, M.Metal, "deco")
+	TownKit.Egg(model, "Parasol", cart * CFrame.new(0, 7.2, 0), Vector3.new(6.4, 1.6, 6.4), C.Mint, M.Fabric, "decoS")
+	TownKit.Ball(model, "Scoop", (cart * CFrame.new(-1, 3.4, 0)).Position, 0.9, C.Pink, M.SmoothPlastic, "deco")
+	TownKit.Ball(model, "Scoop", (cart * CFrame.new(0.2, 3.4, 0.1)).Position, 0.9, C.Lemon, M.SmoothPlastic, "deco")
+	geo.Reserve(cart.Position, 5)
+end
+
+-- Kiosque (gloriette) : plancher, 6 colonnes, dôme, épi de faîtage
+local function gazebo(folder: Instance, geo: TownKit.Geo, cf: CFrame)
+	local model = TownKit.Model(folder, "Gazebo")
+	local g = cf * CFrame.new(0, GROUND_Y, 0)
+	TownKit.Disc(model, "GazeboFloor", (g * CFrame.new(0, 0.5, 0)).Position, 6.2, 0.6, C.Stone, M.Marble, "solid")
+	TownKit.Disc(model, "GazeboStep", (g * CFrame.new(0, 0.25, 0)).Position, 7, 0.3, C.StoneDark, M.Marble, "solid")
+	for k = 0, 5 do
+		local a = k * math.pi / 3 + math.pi / 6
+		TownKit.Column(model, "GazeboPost", (g * CFrame.new(math.cos(a) * 5.4, 0.5, math.sin(a) * 5.4)).Position, 6.6, 0.5, C.White, M.Wood, "prop")
+	end
+	-- (dôme en lentille : dessous à 6,1 au centre, au-dessus des têtes)
+	TownKit.Egg(model, "GazeboRoof", g * CFrame.new(0, 7.6, 0), Vector3.new(14.4, 3, 14.4), Color3.fromRGB(150, 196, 180), M.SmoothPlastic, "decoS")
+	TownKit.Egg(model, "GazeboCrown", g * CFrame.new(0, 8.9, 0), Vector3.new(5, 1.4, 5), Color3.fromRGB(236, 246, 240), M.SmoothPlastic, "deco")
+	TownKit.Ball(model, "GazeboFinial", (g * CFrame.new(0, 9.9, 0)).Position, 0.9, C.Yellow, M.Metal, "deco")
+	TownKit.Bench(model, g * CFrame.new(0, 0.5, 2.6) * CFrame.Angles(0, math.pi, 0))
+	geo.Reserve(cf.Position, 11)
 end
 
 ----------------------------------------------------------------------
@@ -243,12 +506,18 @@ end
 
 local function flowerGarden(folder: Instance, geo: TownKit.Geo, cf: CFrame)
 	local model = TownKit.Model(folder, "FlowerGarden")
-	for i = 0, 5 do
-		local row = cf * CFrame.new(0, GROUND_Y, -10 + i * 4)
+	-- (v9.7) planches de terre + vraies touffes de fleurs (ovales en bouquets)
+	for i = 0, 4 do
+		local row = cf * CFrame.new(0, GROUND_Y, -9 + i * 4.4)
 		part(model, "Soil", Vector3.new(20, 0.6, 2.4), row * CFrame.new(0, 0.3, 0), Color3.fromRGB(120, 86, 64), M.Ground, "prop")
-		part(model, "Flowers", Vector3.new(19, 1, 1.8), row * CFrame.new(0, 1.1, 0), TownKit.FLOWERS[i % #TownKit.FLOWERS + 1], M.Grass, "deco")
+		-- feuillage de la planche, puis des bouquets ronds qui dépassent
+		TownKit.Egg(model, "Leaves", row * CFrame.new(0, 0.75, 0), Vector3.new(19.4, 1.1, 2), Color3.fromRGB(92, 156, 80), M.Grass, "deco")
+		for k = 0, 3 do
+			local color = TownKit.FLOWERS[(i + (k % 2) * 2) % #TownKit.FLOWERS + 1]
+			TownKit.Egg(model, "Flowers", row * CFrame.new(-7.2 + k * 4.8 + (hash(i, k + 120) - 0.5) * 0.8, 1.25 + hash(i, k + 126) * 0.15, (hash(i, k + 123) - 0.5) * 0.4), Vector3.new(3.4, 0.95, 1.7), color, M.SmoothPlastic, "deco")
+		end
 	end
-	-- pergola au milieu
+	-- pergola couverte de glycine
 	local p = cf * CFrame.new(0, GROUND_Y, 16)
 	for _, x in ipairs({ -4, 4 }) do
 		for _, z in ipairs({ -3, 3 }) do
@@ -258,7 +527,13 @@ local function flowerGarden(folder: Instance, geo: TownKit.Geo, cf: CFrame)
 	for i = 0, 4 do
 		part(model, "PergolaBeam", Vector3.new(10, 0.4, 0.5), p * CFrame.new(0, 8.2, -3 + i * 1.5), C.White, M.Wood, "deco")
 	end
-	part(model, "Vine", Vector3.new(9, 0.6, 7), p * CFrame.new(0, 8.7, 0), Color3.fromRGB(200, 150, 230), M.Grass, "deco")
+	local lilac = Color3.fromRGB(200, 150, 230)
+	TownKit.Egg(model, "Vine", p * CFrame.new(-2, 8.9, 0), Vector3.new(6, 1.4, 7.4), Color3.fromRGB(120, 176, 96), M.Grass, "deco")
+	TownKit.Egg(model, "Vine", p * CFrame.new(2.4, 8.8, 0.5), Vector3.new(5.6, 1.3, 6.6), lilac, M.Grass, "deco")
+	for k = 0, 3 do
+		local x = -3.3 + k * 2.2
+		TownKit.Egg(model, "Wisteria", p * CFrame.new(x, 7.4, (k % 2 == 0) and -2.6 or 2.6), Vector3.new(0.9, 2.2, 0.9), lilac:Lerp(C.White, (k % 2) * 0.25), M.SmoothPlastic, "deco")
+	end
 	TownKit.Bench(model, p * CFrame.new(0, 0, 1.2))
 	geo.Reserve((cf * CFrame.new(0, 0, 3)).Position, 16)
 end
@@ -292,18 +567,37 @@ end
 
 local PATH = Color3.fromRGB(236, 222, 196)
 
--- Allée en gravier droite de a à b (réserve son tracé : pas d'arbre dessus)
-local function footpath(folder: Instance, geo: TownKit.Geo, a: Vector3, b: Vector3)
-	local flatA = Vector3.new(a.X, geo.Origin.Y + GROUND_Y + 0.06, a.Z)
-	local flatB = Vector3.new(b.X, geo.Origin.Y + GROUND_Y + 0.06, b.Z)
+-- Allée en gravier SINUEUSE de a à b (v9.7) : tronçons droits + disques
+-- aux coudes (virages arrondis, un peu plus hauts : pas de faces confondues) ;
+-- réserve son tracé (pas d'arbre dessus)
+local function footpath(folder: Instance, geo: TownKit.Geo, a: Vector3, b: Vector3, seed: number?)
+	local y = geo.Origin.Y + GROUND_Y + 0.06
+	local flatA = Vector3.new(a.X, y, a.Z)
+	local flatB = Vector3.new(b.X, y, b.Z)
 	local len = (flatB - flatA).Magnitude
 	if len < 6 then
 		return
 	end
-	local mid = (flatA + flatB) / 2
-	part(folder, "Footpath", Vector3.new(5, 0.2, len), CFrame.lookAt(mid, flatB) * CFrame.new(0, -0.1, 0), PATH, M.Pebble, "deco")
+	local along = (flatB - flatA).Unit
+	local perp = Vector3.new(-along.Z, 0, along.X)
+	local n = math.clamp(math.floor(len / 13), 1, 5)
+	local amp = math.min(4, len * 0.08) * (hash(seed or 1, 130) < 0.5 and -1 or 1)
+	local pts = {}
+	for i = 0, n do
+		local t = i / n
+		local wiggle = (i == 0 or i == n) and 0 or math.sin(t * math.pi * 2) * amp
+		table.insert(pts, flatA:Lerp(flatB, t) + perp * wiggle)
+	end
+	for i = 1, n do
+		local p0, p1 = pts[i], pts[i + 1]
+		local mid = (p0 + p1) / 2
+		part(folder, "Footpath", Vector3.new(5, 0.2, (p1 - p0).Magnitude), CFrame.lookAt(mid, p1) * CFrame.new(0, -0.1, 0), PATH, M.Pebble, "deco")
+		if i < n then
+			TownKit.Disc(folder, "PathBend", p1 + Vector3.new(0, 0.03, 0), 2.5, 0.2, PATH, M.Pebble, "deco")
+		end
+	end
 	for t = 0, len, 9 do
-		geo.Reserve(flatA:Lerp(flatB, t / len), 4)
+		geo.Reserve(flatA:Lerp(flatB, t / len), 4 + math.abs(amp))
 	end
 end
 
@@ -411,8 +705,14 @@ local function scatterTrees(folder: Instance, geo: TownKit.Geo, target: number)
 		local p = geo.Origin + Vector3.new(math.sin(a) * r, 0, math.cos(a) * r)
 		local size = 10 + hash(i, 73) * 8
 		if geo.IsFree(p, 4) then
-			local kind = hash(i, 74) < 0.15 and 3 or (hash(i, 75) < 0.2 and 2 or (hash(i, 76) < roundish and 4 or 1))
-			TownKit.Tree(model, p + Vector3.new(0, GROUND_Y, 0), size, i, kind)
+			-- (v9.7 NATURE97) parc mélangé : chênes, érables, cerisiers, bouleaux,
+			-- sapins, peupliers, pommiers (grandes villes : plus de peupliers, fins
+			-- et à 3 pièces) ; silhouette côté serveur, détails de près côté client
+			local h = hash(i, 74)
+			local mix = roundish > 0.5 and { "Poplar", "Oak", "Poplar", "Birch", "Fir", "Cherry", "Poplar", "Maple" }
+				or { "Oak", "Maple", "Cherry", "Birch", "Oak", "Fir", "Poplar", "Fruit", "Oak", "Cherry" }
+			local kind = mix[1 + math.floor(h * #mix) % #mix]
+			TownKit.Tree(model, p + Vector3.new(0, GROUND_Y, 0), size, i, kind, { Lawn = true })
 			geo.Reserve(p, 6)
 			placed += 1
 		end
@@ -426,7 +726,7 @@ local function belt(folder: Instance, geo: TownKit.Geo)
 	local O = geo.Origin
 	local m = geo.Slots
 	local back = geo.PlotR + WorldLayout.PLOT_D / 2
-	local perSlot = m >= 11 and 2 or (m >= 8 and 5 or 6)
+	local perSlot = m >= 11 and 2 or (m >= 8 and 3 or 5) -- (v9.7 : arbres plus riches, un peu moins nombreux)
 	for k = 0, m - 1 do
 		for j = 1, perSlot do
 			local a = geo.SlotAngle(k) + (j - 0.5 - perSlot / 2) / perSlot * (math.pi * 2 / m) + (hash(k, j) - 0.5) * 0.05
@@ -435,13 +735,15 @@ local function belt(folder: Instance, geo: TownKit.Geo)
 			-- (pas d'arbre sur la route d'arrivée derrière la porte)
 			local rel = p - O
 			if not (math.abs(rel.X) < 58 and rel.Z > 0 and rel.Z < geo.Gate + 110) then
-				TownKit.Tree(model, p, 14 + hash(k, j + 9) * 10, k * 50 + j, hash(k, j + 20) < 0.4 and 3 or 4)
+				-- (v9.7 NATURE97) bois : sapins, chênes, peupliers, bouleaux
+				local h = hash(k, j + 20)
+				TownKit.Tree(model, p, 14 + hash(k, j + 9) * 10, k * 50 + j, h < 0.4 and "Fir" or (h < 0.65 and "Oak" or (h < 0.85 and "Poplar" or "Birch")), { Lawn = true })
 			end
 		end
 		-- coin entre deux parcelles (sommet du boulevard), côté extérieur
 		local va = geo.SlotAngle(k) + geo.HalfAngle
 		local vr = (geo.Front + 16) / math.cos(geo.HalfAngle)
-		TownKit.Tree(model, O + Vector3.new(math.sin(va) * vr, GROUND_Y, math.cos(va) * vr), 13, k * 91, 1)
+		TownKit.Tree(model, O + Vector3.new(math.sin(va) * vr, GROUND_Y, math.cos(va) * vr), 13, k * 91, k % 2 == 0 and "Oak" or "Maple", { Lawn = true })
 	end
 end
 
@@ -472,11 +774,12 @@ function TownNature.Build(folder: Instance, geo: TownKit.Geo): number
 		local p = geo.At(angle, dist)
 		return CFrame.lookAt(p, Vector3.new(O.X, p.Y, O.Z))
 	end
-	local lakeR = math.clamp(depth / 2 - 12, 20, 42)
+	-- (v9.7) un seul grand plan d'eau, un peu plus large que l'ancien disque
+	local lakeR = math.min(math.clamp(depth / 2 - 12, 20, 42) * 1.15, depth / 2 - 18)
 	local lakeAngle, lakeDist = (aR + math.pi) / 2 + 0.05, mid + 4
-	lake(nature, geo, geo.At(lakeAngle, lakeDist), lakeR)
+	local bridgeFoot = lake(nature, geo, geo.At(lakeAngle, lakeDist), lakeR)
 	local anchors = {
-		{ lakeAngle, lakeDist - lakeR - 4 },
+		{ lakeAngle, lakeDist - lakeR - 4, bridgeFoot },
 		{ aR * 0.42, r0 + 22 - 16 },
 		{ (aL + math.pi * 2) / 2, r0 + 24 - 18 },
 		{ (math.pi + aL) / 2 + 0.06, r0 + 22 - 14 },
@@ -508,10 +811,31 @@ function TownNature.Build(folder: Instance, geo: TownKit.Geo): number
 	end
 	-- allées en gravier : de l'arrière des boutiques de la place vers chaque lieu
 	local paths = TownKit.Model(nature, "Footpaths")
-	for _, anchor in ipairs(anchors) do
-		footpath(paths, geo, geo.At(anchor[1], r0 - 1), geo.At(anchor[1], anchor[2]))
+	for i, anchor in ipairs(anchors) do
+		footpath(paths, geo, geo.At(anchor[1], r0 - 1), anchor[3] or geo.At(anchor[1], anchor[2]), i)
 	end
-	local trees = scatterTrees(nature, geo, math.clamp(math.floor(depth * 0.35), 25, geo.Slots >= 11 and 56 or 44))
+	-- (v9.7) kiosque du parc + massif fleuri et buissons au départ des allées
+	for _, spot in ipairs({ { aR * 0.86, r0 + 18 }, { lakeAngle - 0.3, r0 + 14 }, { aR * 0.2, r0 + 44 } }) do
+		local p = geo.At(spot[1], spot[2])
+		if geo.IsFree(p, 11) then
+			gazebo(nature, geo, frame(spot[1], spot[2]))
+			break
+		end
+	end
+	local greens = TownKit.Model(nature, "ParkGreens")
+	for i, anchor in ipairs(anchors) do
+		for _, s in ipairs({ -1, 1 }) do
+			local p = geo.At(anchor[1] + s * 0.05, r0 + 4)
+			if i == 1 and s > 0 and geo.IsFree(p, 5) then
+				TownKit.FlowerBed(greens, p + Vector3.new(0, GROUND_Y - 0.3, 0), 3.4, 40 + i)
+				geo.Reserve(p, 5)
+			elseif geo.IsFree(p, 3) then
+				TownKit.Bush(greens, p + Vector3.new(0, GROUND_Y, 0), 2.4 + hash(i, s + 3), 30 + i * 2 + s, (i + s) % 2 == 0 and TownKit.FLOWERS[i % #TownKit.FLOWERS + 1] or nil)
+				geo.Reserve(p, 3)
+			end
+		end
+	end
+	local trees = scatterTrees(nature, geo, math.clamp(math.floor(depth * 0.28), 22, geo.Slots >= 11 and 46 or 36))
 	belt(nature, geo)
 	hills(nature, geo)
 	TownBuildings.Skyline(nature, O, math.rad(125), math.rad(235), geo.Town + 320, 20)

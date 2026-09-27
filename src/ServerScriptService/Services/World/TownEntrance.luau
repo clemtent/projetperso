@@ -324,7 +324,7 @@ local function outside(folder: Instance, geo: TownKit.Geo, gcf: CFrame)
 	TownKit.Disc(model, "Roundabout", (loop * CFrame.new(0, ROAD_Y, 0)).Position, 20, 0.7, C.Asphalt, M.Asphalt, "solid")
 	TownKit.Disc(model, "Island", (loop * CFrame.new(0, WALK_Y, 0)).Position, 8, 1.3, C.Curb, M.Concrete, "solid")
 	TownKit.Disc(model, "IslandGrass", (loop * CFrame.new(0, WALK_Y + 0.05, 0)).Position, 7.2, 0.3, C.Lawn, M.Grass, "deco")
-	TownKit.Tree(model, (loop * CFrame.new(0, WALK_Y, 0)).Position, 16, 77, 2)
+	TownKit.Tree(model, (loop * CFrame.new(0, WALK_Y, 0)).Position, 16, 77, "Cherry", { Tier = 1, Lawn = true }) -- (v9.7 NATURE97)
 	-- bus arrêté devant l'abribus (il vient de déposer les joueurs)
 	bus(model, gcf * CFrame.new(4.2, ROAD_Y, 28))
 	busStop(model, gcf * CFrame.new(13, WALK_Y - 0.3, 30) * CFrame.Angles(0, math.rad(90), 0))
@@ -364,11 +364,12 @@ function TownEntrance.Build(folder: Instance, geo: TownKit.Geo): EntranceResult
 	for _, sx in ipairs({ -1, 1 }) do
 		part(entrance, "Border", Vector3.new(1.1, 0.2, depth + 3.9), CFrame.new(center + Vector3.new(sx * (PLAZA_HALF - 0.6), 0.04, 0)), C.StoneDark, M.Granite, "deco")
 		-- haies le long des bords + arbres en bacs aux coins
-		part(entrance, "Hedge", Vector3.new(2.4, 3.2, depth - 14), CFrame.new(center + Vector3.new(sx * (PLAZA_HALF - 2.4), 1.6, -3)), C.GrassDark, M.Grass, "prop")
+		-- (v9.7 NATURE97) haie taillée au dessus arrondi
+		TownKit.Hedge(entrance, CFrame.new(center + Vector3.new(sx * (PLAZA_HALF - 2.4), 0, -3)) * CFrame.Angles(0, math.pi / 2, 0), depth - 14, 2.4, 3.2, 20 + sx)
 		for _, dz in ipairs({ -depth / 2 + 6, depth / 2 - 10 }) do
 			local p = center + Vector3.new(sx * (PLAZA_HALF - 8), 0, dz)
 			part(entrance, "TreeBox", Vector3.new(4.4, 1.8, 4.4), CFrame.new(p + Vector3.new(0, 0.9, 0)), C.White, M.Concrete, "prop")
-			TownKit.Tree(entrance, p + Vector3.new(0, 1.8, 0), 14, math.floor(p.X + dz), sx > 0 and 2 or 1)
+			TownKit.Tree(entrance, p + Vector3.new(0, 1.8, 0), 14, math.floor(p.X + dz), sx > 0 and "Cherry" or "Oak") -- (v9.7 NATURE97)
 		end
 		-- lampadaires (vraies lumières)
 		TownKit.Lamp(entrance, center + Vector3.new(sx * 13, 0, 3), TownKit.Facing(Vector3.new(-sx, 0, 0)), true)

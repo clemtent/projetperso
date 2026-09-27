@@ -899,6 +899,11 @@ local function step(dt: number)
 		if shops and root and type(shops.Step) == "function" then
 			pcall(shops.Step, root.Position)
 		end
+		-- v9.7 🌳 nature : détails de près autour de l'avatar (TownGreenery, NATURE97)
+		local greenery = optionalModule("TownGreenery")
+		if greenery and root and type(greenery.Step) == "function" then
+			pcall(greenery.Step, root.Position)
+		end
 	end
 	if clocks.Tag >= TAG_EVERY then
 		clocks.Tag = 0
@@ -1125,6 +1130,14 @@ local function enter(options: any)
 				warn("[Town] ShopInteriors.Start : " .. tostring(errShops))
 			end
 		end
+		-- v9.7 🌳 nature : détails de près (arbres, lac, aire de jeux) côté client (NATURE97)
+		local greenery = optionalModule("TownGreenery")
+		if greenery and type(greenery.Start) == "function" then
+			local okGreen, errGreen = pcall(greenery.Start)
+			if not okGreen then
+				warn("[Town] TownGreenery.Start : " .. tostring(errGreen))
+			end
+		end
 		local folder = Instance.new("Folder")
 		folder.Name = HOUSES_FOLDER
 		folder.Parent = workspace
@@ -1266,6 +1279,11 @@ local function teardown()
 	local shops = optionalModule("ShopInteriors")
 	if shops and type(shops.Stop) == "function" then
 		pcall(shops.Stop)
+	end
+	-- v9.7 🌳 nature : détails de près détruits (NATURE97)
+	local greenery = optionalModule("TownGreenery")
+	if greenery and type(greenery.Stop) == "function" then
+		pcall(greenery.Stop)
 	end
 	hud:SetDeskMode(false)
 	local s = saved
