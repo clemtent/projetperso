@@ -18,9 +18,26 @@
 	Il faut cliquer sur l'éclair avant qu'il ne disparaisse (Lifetime) :
 	ClaimSpawn, et le "+X" confirmé (OnBonus "Lightning") s'affiche à
 	l'impact.
+
+	v9 - CHASSEUR D'ORAGES (amélioration StormChaser, 8 niveaux, lue avec
+	ctx.GetLevel("StormChaser"), mise à jour en direct) : une bande "orage"
+	au-dessus du bandeau d'actu (dans la barre du haut de Roblox ; sur le
+	bandeau lui-même s'il n'y a pas de barre) :
+	  - nuages d'orage avec éclairs silencieux (plus fréquents et plus
+	    nombreux à chaque niveau), pluie, petite route ;
+	  - la camionnette du chasseur d'orages patrouille, s'arrête pour
+	    scanner (radar qui balaie, ondes), fonce vers chaque éclair à
+	    attraper et poursuit la tornade ; elle s'équipe au fil des niveaux :
+	    radar et antenne (1), gyrophare (2), ondes radar + pluie (3), éclairs
+	    de décor plus fréquents (4), TORNADE (5, plus grosse ensuite),
+	    anémomètre (6), débris dans la tornade (7), livrée dorée (8) ;
+	  - les éclairs à attraper sont plus grands, plus lumineux et plus
+	    ramifiés, les nuages d'ambiance plus sombres et agités.
+	Aucun son ajouté (les éclairs de décor sont silencieux).
 ]]
 
 local Debris = game:GetService("Debris")
+local GuiService = game:GetService("GuiService")
 local UserInputService = game:GetService("UserInputService")
 
 local Weather = {}
@@ -40,6 +57,8 @@ local BOLT_TOP = 50 -- départ de l'éclair (sous le nuage d'orage)
 local BOLT_IMPACT = 206 -- point d'impact dans le cadre de l'éclair
 local BOLT_ANCHOR_Y = BOLT_IMPACT / BOLT_H
 local STROBE_TIME = 0.45
+local CHASER_STEP = 1 / 30 -- mise à jour de la bande "chasseur d'orages"
+local VAN_SPEED = 95 -- pixels / seconde (en marche arrière : x 0.6)
 
 -- Formes des nuages : bouffées { x, y, diamètre } de l'arrière vers l'avant,
 -- base arrondie { x, y, largeur, hauteur }, reflets { x, y, diamètre }
@@ -367,6 +386,10 @@ function Weather.Start(ctx)
 		splash.Frame.Visible = true
 	end
 
+	-- Niveau de StormChaser (0 = pas acheté) et réaction de la camionnette aux éclairs
+	local chaserLevel = 0
+	local onBoltSpawned: (x: number) -> () = function(_x: number) end
+
 	------------------------------------------------------------------
 	-- Éclairs
 	------------------------------------------------------------------
@@ -448,7 +471,8 @@ function Weather.Start(ctx)
 			Parent = container,
 		})
 		local scale = UIUtil.Create("UIScale", { Scale = 0.7, Parent = root })
-		UIUtil.Tween(scale, 0.25, { Scale = 1 }, Enum.EasingStyle.Back)
+		-- StormChaser : éclairs plus grands
+		UIUtil.Tween(scale, 0.25, { Scale = 1 + 0.04 * chaserLevel }, Enum.EasingStyle.Back)
 
 		-- Colonne de lumière derrière l'éclair
 		local shaft = UIUtil.Create("Frame", {
@@ -508,6 +532,13 @@ function Weather.Start(ctx)
 		end
 		-- Deux branches plus fines
 		local branchFrom = { 2 + shape:NextInteger(0, 1), 4 + shape:NextInteger(0, 1) }
+		-- StormChaser : éclairs plus ramifiés
+		if chaserLevel >= 3 then
+			table.insert(branchFrom, 6 + shape:NextInteger(0, 1))
+		end
+		if chaserLevel >= 6 then
+			table.insert(branchFrom, 3)
+		end
 		for _, index in ipairs(branchFrom) do
 			local from = points[index]
 			local group = groups[index] or groups[#groups]
@@ -611,6 +642,7 @@ function Weather.Start(ctx)
 		end
 		storm.Flash = 1
 		stormNearestCloud(x)
+		onBoltSpawned(x)
 
 		-- Clic : on attrape l'éclair
 		ctx.Connect(root.Activated, function()
@@ -683,8 +715,9 @@ function Weather.Start(ctx)
 			local stormy = now < cloud.StormUntil
 			local rumble = stormy and math.sin(now * 55) * 1.5 or 0
 			cloud.Root.Position = UDim2.new(sx, rumble - parallax.X * 8, 0, 34 + bob - parallax.Y * 4)
-			setCloudColor(cloud, stormy and cloudStorm or cloudColor)
-			updateGlow(cloud, dt, stormy and 7 or 0)
+			-- StormChaser : nuages plus sombres et lueurs internes au hasard
+			setCloudColor(cloud, stormy and cloudStorm or cloudColor:Lerp(cloudStorm, 0.07 * chaserLevel))
+			updateGlow(cloud, dt, stormy and 7 or chaserLevel * 0.12)
 
 			-- Pluie + éclaboussures
 			local shapeH = cloud.Shape.H
@@ -728,7 +761,7 @@ function Weather.Start(ctx)
 				for _, core in ipairs(bolt.Cores) do
 					core.BackgroundTransparency = coreAlpha
 				end
-				local glowAlpha = 0.74 + math.sin(now * 22) * 0.08 + coreAlpha * 0.2
+				local glowAlpha = 0.74 - 0.03 * chaserLevel + math.sin(now * 22) * 0.08 + coreAlpha * 0.2
 				for _, glow in ipairs(bolt.Glows) do
 					glow.BackgroundTransparency = glowAlpha
 				end

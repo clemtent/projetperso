@@ -2088,7 +2088,7 @@ function Email.Start(ctx)
 		ui.ListSub.Text = sub
 		-- Action d'en-tête : "Tout lu" (Réception) / "Vider" (Corbeille)
 		local action = nil
-		if folder == "Inbox" and unreadCount() > 0 then
+		if folder == "Inbox" and unreadCount() > 0 and not searching then
 			action = Locale.T("✓ All read")
 		elseif folder == "Trash" and #list > 0 and not searching then
 			action = Locale.T("🧹 Empty")
@@ -2712,7 +2712,7 @@ function Email.Start(ctx)
 		if not phone then
 			-- Contacts rapides : un clic = nouveau message à ce correspondant
 			local quickY = folderY + 12
-			text({ Position = UDim2.fromOffset(16, quickY), Size = UDim2.new(1, -32, 0, 16), Font = FONT_TITLE, Text = Locale.T("✏️ Write to…"), TextColor3 = C.InkDim, TextSize = 12, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 6, Parent = side })
+			local caption = text({ Position = UDim2.fromOffset(16, quickY), Size = UDim2.new(1, -32, 0, 16), Font = FONT_TITLE, Text = Locale.T("✏️ Write to…"), TextColor3 = C.InkDim, TextSize = 12, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 6, Parent = side })
 			quickY += 24
 			local cell = 36
 			local gap = math.floor((L.Side - 28 - cell * 4) / 3)
@@ -2733,6 +2733,15 @@ function Email.Start(ctx)
 				local avatar = makeAvatar(quick, cell, UDim2.fromOffset(0, 0), 7)
 				avatar.Set(contact.Avatar, tagColor(contact.Tag))
 				UIUtil.AnimateButton(quick, 1.12, 0.9)
+				-- Survol : la légende donne le nom du correspondant
+				on(quick.MouseEnter, function()
+					caption.Text = Locale.T("✏️ Write to %s", contact.Short)
+					caption.TextColor3 = C.BlueDark
+				end)
+				on(quick.MouseLeave, function()
+					caption.Text = Locale.T("✏️ Write to…")
+					caption.TextColor3 = C.InkDim
+				end)
 				onClick(quick, function()
 					ctx.Sound.Play("Click", 1.1)
 					openCompose({ Kind = "New", Contact = contact })
@@ -2914,7 +2923,8 @@ function Email.Start(ctx)
 			msg.FileAction.Text = file.Virus and "🛡️" or "✅"
 		end)
 		msg.Attachment = attachment
-		frame({ Name = "Spacer", Size = UDim2.new(1, 0, 0, 6), LayoutOrder = 9, Parent = scroll })
+		-- Marge du bas (le défilement automatique ne compte pas toujours le UIPadding)
+		frame({ Name = "Spacer", Size = UDim2.new(1, 0, 0, 16), LayoutOrder = 9, Parent = scroll })
 
 		local actionBar = frame({ Name = "ActionBar", AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.new(1, 0, 0, barH), ZIndex = 5, Parent = messageView })
 		frame({ Size = UDim2.new(1, 0, 0, 1), BackgroundColor3 = C.Line, ZIndex = 6, Parent = actionBar })

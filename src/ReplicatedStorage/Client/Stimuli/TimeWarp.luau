@@ -21,7 +21,7 @@ local TimeWarp = {}
 TimeWarp.Slot = "Background"
 
 local ID = "TimeWarp"
-local BOX = 124
+local BOX = 108
 local C = BOX / 2 -- centre du cadran
 local FACE = 84
 local RIPPLES = 3
@@ -136,7 +136,7 @@ function TimeWarp.Start(ctx)
 
 	local centre = Vector2.new(-1000, -1000) -- centre de l'horloge sur la toile
 	Zones.Request(ID, {
-		{ W = BOX, H = BOX, Anchor = Vector2.new(0.2, 0.56), MinScale = 0.45, MaxScale = 1.15 },
+		{ W = BOX, H = BOX, Anchor = Vector2.new(0.2, 0.56), MinScale = 0.4, MaxScale = 1.15 },
 	}, function(placements)
 		local placement = placements[1]
 		Kit.Place(piece, placement)

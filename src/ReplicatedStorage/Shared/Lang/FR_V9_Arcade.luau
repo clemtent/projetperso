@@ -63,6 +63,11 @@ return {
 		["👉 Best fit"] = "👉 Conseillé",
 		["You have %s %s"] = "Tu as %s %s",
 		["For the 🕹️ arcade ticket shop"] = "Pour la boutique à tickets de l'🕹️ arcade",
+		["🔒 Unlock the 🕹️ Arcade to use tickets"] = "🔒 Débloque l'🕹️ Arcade pour utiliser des tickets",
+		["🔒 Arcade"] = "🔒 Arcade",
+		["Unlock the 🕹️ Arcade first: tickets are spent there."] = "Débloque d'abord l'🕹️ Arcade : c'est là que les tickets se dépensent.",
+		["Trophies are your duel stakes: win arcade games to earn them. They can't be bought."] =
+			"Les trophées servent de mises en duel : gagne des parties d'arcade pour en avoir. Ils ne s'achètent pas.",
 		["🎟️ Tickets buy treats, boosts and badges in the arcade. %s Duel trophies can't be bought: they're earned only by playing."] =
 			"🎟️ Les tickets achètent friandises, boosts et badges à l'arcade. %s Les trophées des duels ne s'achètent pas : ils se gagnent seulement en jouant.",
 

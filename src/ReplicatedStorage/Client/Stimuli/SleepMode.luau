@@ -183,7 +183,7 @@ function SleepMode.Start(ctx)
 	end)
 
 	Zones.Request(UPGRADE_ID, {
-		{ W = BOX_W, H = BOX_H, Anchor = Vector2.new(0.86, 0.2), MinScale = 0.5, MaxScale = 1.3 },
+		{ W = BOX_W, H = BOX_H, Anchor = Vector2.new(0.86, 0.2), MinScale = 0.4, MaxScale = 1.3 },
 	}, function(placements)
 		Kit.Place(piece, placements[1])
 	end)

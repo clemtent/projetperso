@@ -173,6 +173,7 @@ local animation: RBXScriptConnection? = nil
 local refreshClock = 0
 local animClock = 0
 local list: ScrollingFrame? = nil
+local shineTweens: { Tween } = {} -- reflets des rubans "BIENTÔT" (joués seulement boutique ouverte)
 
 local heroStatus: TextLabel
 local heroChips: { VIP: Frame, Bonus: Frame, Boost: Frame } = {} :: any
@@ -202,6 +203,12 @@ local function sectionOf(def, isPass: boolean): string
 		return "Stylish"
 	end
 	return "Boosts"
+end
+
+-- Packs de tickets : utiles seulement avec l'🕹️ Arcade débloquée (sinon on
+-- ne les vend pas encore : cadenas "🔒 Arcade")
+local function ticketsLocked(def): boolean
+	return def.Kind == "Tickets" and not ClientState.HasFeature(ArcadeConfig.Feature)
 end
 
 -- "Bientôt" : marquée ComingSoon, ou d'un type que le serveur ne sait pas donner
@@ -343,6 +350,12 @@ local function prompt(offer: Offer)
 		SoundManager.Play("Error", 0.8)
 		return
 	end
+	if ticketsLocked(offer.Def) then
+		SoundManager.Play("Error", 0.8)
+		UIUtil.Shake(offer.Button)
+		Notifications.Toast(Locale.T("Unlock the 🕹️ Arcade first: tickets are spent there."), Theme.Colors.Purple, 4, nil, false, "🔒")
+		return
+	end
 	local _, forSale = priceText(offer)
 	if not forSale then
 		SoundManager.Play("Error", 0.7)
@@ -455,6 +468,10 @@ function refreshOffer(offer: Offer)
 	end
 	if offer.Id == 0 then
 		styleButton(offer.Button, Locale.T("🛠️ ID to set up"), Theme.Colors.PanelLight, Theme.Colors.TextDim, false)
+		return
+	end
+	if ticketsLocked(def) then
+		styleButton(offer.Button, Locale.T("🔒 Arcade"), Theme.Colors.PanelLight, Theme.Colors.TextDim, false)
 		return
 	end
 	local text, forSale = priceText(offer)
@@ -722,7 +739,8 @@ end
 
 -- Ruban diagonal "BIENTÔT" (coin haut droit de la vitrine). Il croise les
 -- bords droits de la vitrine (pas le coin arrondi) ; son reflet est un
--- dégradé qui glisse (Tween en boucle : aucun code par image).
+-- dégradé qui glisse (Tween en boucle : aucun code par image, joué
+-- seulement quand la boutique est ouverte).
 local function comingSoonRibbon(showcase: Frame, inset: number, zIndex: number)
 	local ribbon = UIUtil.Create("Frame", {
 		Name = "SoonRibbon",
@@ -747,9 +765,9 @@ local function comingSoonRibbon(showcase: Frame, inset: number, zIndex: number)
 		Offset = Vector2.new(-0.6, 0),
 		Parent = ribbon,
 	})
-	TweenService:Create(shine, TweenInfo.new(1.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, false, 2.2), {
+	table.insert(shineTweens, TweenService:Create(shine, TweenInfo.new(1.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, false, 2.2), {
 		Offset = Vector2.new(0.6, 0),
-	}):Play()
+	}))
 	local label = UIUtil.Create("TextLabel", {
 		Name = "Label",
 		Size = UDim2.fromScale(1, 1),
@@ -1325,8 +1343,14 @@ local function refreshTicketNote(data)
 		return
 	end
 	local tickets = tonumber(data and data.Tickets)
-	local text = tickets and Locale.T("You have %s %s", NumberFormatter.Format(tickets), TICKET)
-		or Locale.T("For the 🕹️ arcade ticket shop")
+	local text
+	if not ClientState.HasFeature(ArcadeConfig.Feature) then
+		text = Locale.T("🔒 Unlock the 🕹️ Arcade to use tickets")
+	elseif tickets then
+		text = Locale.T("You have %s %s", NumberFormatter.Format(tickets), TICKET)
+	else
+		text = Locale.T("For the 🕹️ arcade ticket shop")
+	end
 	if section.Note.Text ~= text then
 		section.Note.Text = text
 	end
@@ -1620,6 +1644,9 @@ function RobuxShop.OnOpen()
 	end
 	refreshStatus(ClientState.Data)
 	refreshTicketNote(ClientState.Data)
+	for _, tween in ipairs(shineTweens) do
+		tween:Play()
+	end
 
 	-- Animations (seulement fenêtre ouverte, 30 images/s au plus) : rayons,
 	-- diamant, étincelles, et comptes à rebours (boost, activation) 2 fois par seconde
@@ -1670,6 +1697,9 @@ function RobuxShop.OnClose()
 	if connection then
 		connection:Disconnect()
 		animation = nil
+	end
+	for _, tween in ipairs(shineTweens) do
+		tween:Pause()
 	end
 end
 

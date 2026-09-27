@@ -626,7 +626,7 @@ function DVD.Start(ctx)
 		splash.Frame.Visible = true
 	end
 
-	local function onBounce(logo, x: number, y: number, w: number, h: number, bouncedX: boolean, bouncedY: boolean)
+	local function onBounce(logo, x: number, y: number, w: number, h: number, bouncedX: boolean, bouncedY: boolean, corner: boolean)
 		nextColor(logo)
 		local color = colors[logo.ColorIndex]
 
@@ -661,7 +661,7 @@ function DVD.Start(ctx)
 
 		local data = getData()
 		local value = data and data.BounceValue or 0
-		if value > 0 then
+		if value > 0 and not corner then
 			ctx.FloatText(container, UDim2.fromScale(x + w / 2, y + h / 2), "+" .. ctx.Format.Format(value), color, 24)
 		end
 		if effectsOn() then
@@ -691,10 +691,10 @@ function DVD.Start(ctx)
 			ring.Age = -ring.Delay
 			ring.Stroke.Color = i == 2 and WHITE or Theme.Colors.Gold
 		end
-		-- Tampon près du coin (vers l'intérieur de l'écran), toujours lisible
+		-- Tampon près du coin, juste au-delà du logo (vers l'intérieur de l'écran)
 		stampLabel.Text = pickLine(CORNER_TEXTS, random)
 		stamp.AnchorPoint = Vector2.new(cornerX, cornerY)
-		stamp.Position = UDim2.new(cornerX, cornerX == 0 and 26 or -26, cornerY, cornerY == 0 and 70 or -70)
+		stamp.Position = UDim2.new(cornerX, cornerX == 0 and 30 or -30, cornerY, cornerY == 0 and H + 34 or -(H + 34))
 		stamp.Rotation = (cornerX == cornerY) and -7 or 7
 		stampAge = 0
 		stamp.Visible = true
@@ -872,29 +872,28 @@ function DVD.Start(ctx)
 				local lastX, lastY = logo.LastX, logo.LastY
 				local bouncedX = lastX ~= nil and indexX ~= lastX
 				local bouncedY = lastY ~= nil and indexY ~= lastY
+				-- Numéro du bord touché = le plus grand des deux segments
+				local k = (bouncedX and lastX) and math.max(indexX, lastX) or nil
+				local corner = k ~= nil and DVDMath.IsCornerAtBounceX(params, k, tolerance)
 
 				if bouncedX or bouncedY then
-					onBounce(logo, x, y, w, h, bouncedX, bouncedY)
+					onBounce(logo, x, y, w, h, bouncedX, bouncedY, corner)
 				end
 
-				if bouncedX and lastX then
-					-- Numéro du bord touché = le plus grand des deux segments
-					local k = math.max(indexX, lastX)
-					if DVDMath.IsCornerAtBounceX(params, k, tolerance) then
-						ctx.Net.Event("DVDCorner"):FireServer(index, k)
-						onCorner(logo, x, y, w, h)
-					else
-						-- Frôlé ? (à moins de 3 % d'un coin)
-						local _, rangeY = DVDMath.Ranges(params)
-						if math.min(y, rangeY - y) < 0.03 then
-							ctx.FloatText(
-								container,
-								UDim2.fromScale(x + w / 2, y + h / 2 + 0.06),
-								pickLine(NEAR_MISS, random),
-								Theme.Colors.TextDim,
-								22
-							)
-						end
+				if corner and k then
+					ctx.Net.Event("DVDCorner"):FireServer(index, k)
+					onCorner(logo, x, y, w, h)
+				elseif k then
+					-- Frôlé ? (à moins de 3 % d'un coin)
+					local _, rangeY = DVDMath.Ranges(params)
+					if math.min(y, rangeY - y) < 0.03 then
+						ctx.FloatText(
+							container,
+							UDim2.fromScale(x + w / 2, y + h / 2 + 0.06),
+							pickLine(NEAR_MISS, random),
+							Theme.Colors.TextDim,
+							22
+						)
 					end
 				end
 

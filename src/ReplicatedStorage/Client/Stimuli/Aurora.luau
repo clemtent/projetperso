@@ -70,8 +70,8 @@ function Aurora.Start(ctx)
 		root = holder
 
 		local specs = {
-			{ Y = 150, Height = 118, Amp = 16, Speed = 0.35, Alpha = if dark then 0.5 else 0.62 },
-			{ Y = 112, Height = 84, Amp = 12, Speed = -0.25, Alpha = if dark then 0.58 else 0.7 },
+			{ Y = 122, Height = 104, Amp = 12, Speed = 0.35, Alpha = if dark then 0.5 else 0.6 },
+			{ Y = 92, Height = 76, Amp = 10, Speed = -0.25, Alpha = if dark then 0.58 else 0.68 },
 		}
 		for index, spec in ipairs(specs) do
 			local colors = palette(dark, index)

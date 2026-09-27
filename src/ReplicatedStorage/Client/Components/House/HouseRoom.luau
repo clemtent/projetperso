@@ -312,10 +312,11 @@ function HouseRoom.new(stage: Frame): Room
 		Parent = surfaceHint,
 	})
 	-- Étiquette "⬇ Table à manger" (taille constante à l'écran : contre-échelle)
+	-- (sous le trait : l'objet qu'on porte reste bien visible au-dessus)
 	local surfaceChip = UIUtil.Create("Frame", {
 		Name = "HintChip",
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 0.5, -12),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0.5, 14),
 		Size = UDim2.fromOffset(0, 26),
 		AutomaticSize = Enum.AutomaticSize.X,
 		BackgroundColor3 = C.PinkDeep,

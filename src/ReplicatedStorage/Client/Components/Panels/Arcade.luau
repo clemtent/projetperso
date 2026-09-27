@@ -640,6 +640,28 @@ local function buildHeader(root: Frame)
 		sound("Click", 1.2)
 		openTicketShop()
 	end)
+	-- Grandes zones tactiles (téléphone) : toucher le solde 🎟️ = en acheter ;
+	-- toucher le solde 🏆 = rappel honnête de ce que sont les trophées
+	local function hitbox(parent: Frame, name: string): TextButton
+		return make("TextButton", {
+			Name = name,
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			Text = "",
+			AutoButtonColor = false,
+			ZIndex = 7,
+			Parent = parent,
+		})
+	end
+	hitbox(ticketChip, "TicketsHitbox").Activated:Connect(function()
+		sound("Click", 1.2)
+		openTicketShop()
+	end)
+	hitbox(trophyChip, "TrophiesHitbox").Activated:Connect(function()
+		sound("Click", 1.1)
+		UIUtil.Pop(trophyChip, 1.1, 0.3)
+		toast(T("Trophies are your duel stakes: win arcade games to earn them. They can't be bought."), Theme.Colors.Cyan, nil, TROPHY)
+	end)
 end
 
 ----------------------------------------------------------------------

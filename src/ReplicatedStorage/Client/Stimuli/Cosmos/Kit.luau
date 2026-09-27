@@ -359,9 +359,12 @@ function Kit.Place(piece: Piece, placement: any)
 	local frame, scale = piece.Frame, piece.Scale
 	if not placement then
 		frame.Visible = false
+		frame:SetAttribute("LayoutObstacle", nil)
 		piece.Placed = false
 		return
 	end
+	-- Convention partagée : les autres stimuli (accessoires de clic...) évitent cet objet
+	frame:SetAttribute("LayoutObstacle", true)
 	local position = UDim2.fromOffset(placement.X, placement.Y)
 	frame.Size = UDim2.fromOffset(placement.W, placement.H)
 	piece.Target = placement.Scale

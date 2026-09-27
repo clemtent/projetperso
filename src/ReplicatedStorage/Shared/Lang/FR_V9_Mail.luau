@@ -29,6 +29,7 @@ return {
 		["Pick a mail to read it"] = "Choisis un mail pour le lire",
 		["💡 Flying mails give Dopamine if you open them before they fly away!"] = "💡 Les mails volants rapportent de la Dopamine si tu les ouvres avant qu'ils s'envolent !",
 		["✏️ Write to…"] = "✏️ Écrire à…",
+		["✏️ Write to %s"] = "✏️ Écrire à %s",
 		["You wrote:"] = "Tu as écrit :",
 		["📩 New mail from %s"] = "📩 Nouveau mail de %s",
 

@@ -189,11 +189,14 @@ function NeuralLink.Start(ctx)
 			return
 		end
 		local button = placement.Button
-		local port = piece:ToCanvas(Vector2.new(52, 84))
+		local center = Vector2.new(placement.CX, placement.CY)
+		-- Le câble sort du casque si le bouton est au-dessus, sinon du tronc cérébral
+		local up = (button.Y0 + button.Y1) / 2 < center.Y - 10
+		local port = piece:ToCanvas(up and Vector2.new(52, 3) or Vector2.new(52, 84))
 		if not port then
 			return
 		end
-		local center = Vector2.new(placement.CX, placement.CY)
+		local portDir = up and Vector2.new(0, -1) or Vector2.new(0, 1)
 		-- Point d'arrivée : bord du bouton le plus proche, un peu à l'intérieur (le câble passe dessous)
 		local edge = GearKit.ClosestOnRect(button, center)
 		local normal = Vector2.zero
@@ -210,7 +213,7 @@ function NeuralLink.Start(ctx)
 		local finish = edge - normal * 10
 		local distance = (finish - port).Magnitude
 		path[1] = port
-		path[2] = port + Vector2.new(0, math.clamp(distance * 0.35, 24, 90))
+		path[2] = port + portDir * math.clamp(distance * 0.35, 24, 90)
 		path[3] = edge + normal * math.clamp(distance * 0.35, 20, 80)
 		path[4] = finish
 		local previous = path[1]

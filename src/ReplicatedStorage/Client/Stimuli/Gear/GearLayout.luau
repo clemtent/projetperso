@@ -77,7 +77,8 @@ local GearLayout = {}
 GearLayout.Changed = Signal.new() -- (id, placement | nil)
 
 local CELL = 8 -- taille d'une case de la grille (pixels "design")
-local MARGIN = 7 -- espace laissé autour des obstacles quand on place
+local MARGIN = 7 -- espace laissé autour des obstacles quand on place (grille)
+local EXACT_MARGIN = 6 -- même chose au pixel près (affinage)
 local KEEP_MARGIN = 1 -- tolérance pour garder une place déjà prise (évite les sauts)
 local PIECE_GAP = 6 -- espace entre deux accessoires
 local EDGE = 6 -- marge au bord de l'écran
@@ -431,6 +432,81 @@ local function search(grid: Grid, spec: Spec, button: Rect, canvas: Vector2, max
 	return best
 end
 
+-- Test exact (sans grille) : rectangle libre ?
+local function exactFree(rect: Rect, obstacles: { Rect }, placed: { Rect }, canvas: Vector2): boolean
+	if rect.X0 < EDGE or rect.Y0 < EDGE or rect.X1 > canvas.X - EDGE or rect.Y1 > canvas.Y - EDGE then
+		return false
+	end
+	for _, obstacle in ipairs(obstacles) do
+		if intersects(rect, obstacle, EXACT_MARGIN) then
+			return false
+		end
+	end
+	for _, other in ipairs(placed) do
+		if intersects(rect, other, PIECE_GAP) then
+			return false
+		end
+	end
+	return true
+end
+
+-- Affinage : la grille est prudente (jusqu'à une case perdue de chaque côté).
+-- Autour de la place trouvée, on cherche au pixel près la position qui permet
+-- la plus grande taille (et la plus proche du point préféré).
+local function refine(placement: Placement, spec: Spec, obstacles: { Rect }, placed: { Rect }, button: Rect, canvas: Vector2, near: number?): Placement
+	local anchor = spec.Anchor(button, canvas)
+	local maxScale = spec.MaxScale or 1
+	local size = spec.Size
+	local function fits(cx: number, cy: number, scale: number): boolean
+		local w, h = size.X * scale, size.Y * scale
+		local rect = { X0 = cx - w / 2, Y0 = cy - h / 2, X1 = cx + w / 2, Y1 = cy + h / 2 }
+		if near and GearKit.RectGap(rect, button) > near then
+			return false
+		end
+		return exactFree(rect, obstacles, placed, canvas)
+	end
+	local function cost(cx: number, cy: number, scale: number): number
+		local dx, dy = cx - anchor.X, cy - anchor.Y
+		return math.sqrt(dx * dx + dy * dy) + (1 - scale / maxScale) * SIZE_PENALTY
+	end
+	local bestX, bestY, bestScale = placement.CX, placement.CY, placement.Scale
+	if not fits(bestX, bestY, bestScale) then
+		return placement
+	end
+	local bestCost = cost(bestX, bestY, bestScale)
+	local startX, startY, startScale = bestX, bestY, bestScale
+	for dy = -12, 12, 3 do
+		for dx = -12, 12, 3 do
+			local cx, cy = startX + dx, startY + dy
+			if fits(cx, cy, startScale) then
+				-- Plus grande échelle possible ici (dichotomie)
+				local lo, hi = startScale, maxScale
+				if fits(cx, cy, hi) then
+					lo = hi
+				else
+					for _ = 1, 6 do
+						local mid = (lo + hi) / 2
+						if fits(cx, cy, mid) then
+							lo = mid
+						else
+							hi = mid
+						end
+					end
+				end
+				local c = cost(cx, cy, lo)
+				if c < bestCost - 0.5 then
+					bestCost = c
+					bestX, bestY, bestScale = cx, cy, lo
+				end
+			end
+		end
+	end
+	if bestX == startX and bestY == startY and bestScale == startScale then
+		return placement
+	end
+	return makePlacement(bestX, bestY, bestScale, spec, button)
+end
+
 -- La place actuelle est-elle toujours bonne ?
 local function stillValid(placement: Placement, spec: Spec, obstacles: { Rect }, placed: { Rect }, button: Rect, canvas: Vector2): boolean
 	local rect = placement.Rect
@@ -535,9 +611,14 @@ local function doLayout(force: boolean)
 			local maxScale = spec.MaxScale or 1
 			local minScale = math.min(maxScale, spec.MinScale or 0.45)
 			placement = search(grid, spec, button, canvas, maxScale, minScale, spec.Near)
+			local near = spec.Near
 			if not placement then
 				-- Dernier recours : plus petit, et n'importe où
+				near = nil
 				placement = search(grid, spec, button, canvas, minScale * 0.9, maxScale * LAST_RESORT_SCALE, nil)
+			end
+			if placement then
+				placement = refine(placement, spec, obstacles, placed, button, canvas, near)
 			end
 		end
 		results[piece] = placement

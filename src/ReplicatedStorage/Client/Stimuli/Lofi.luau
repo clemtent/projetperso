@@ -388,6 +388,7 @@ function Lofi.Start(ctx)
 		acc = 0, -- temps accumulé (boucle à 30 images/s)
 		frame = 0, -- numéro de l'image (le décor lent est animé une image sur deux)
 		dropletRain = -1, -- pluie utilisée pour les gouttelettes
+		timeStamp = -1, -- dernier temps affiché dans le lecteur
 		clock = 0,
 		shown = true,
 		visibilityTimer = 0,
@@ -2339,9 +2340,13 @@ function Lofi.Start(ctx)
 				glow.BackgroundTransparency = 0.84 + 0.06 * math.sin(clock * 0.8 + i)
 			end
 		end
-		WIN.TowerLight.BackgroundTransparency = (clock % 1.6) < 0.5 and (1 - night) * 0.8 or 0.85
-		WIN.Neon.Transparency = math.min(1, 0.3 + (1 - night) * 0.6 + ((math.sin(clock * 23) > 0.93) and 0.3 or 0))
-		WIN.NeonSign.BackgroundTransparency = (1 - night) * 0.5
+		if WIN.TowerLight then
+			WIN.TowerLight.BackgroundTransparency = (clock % 1.6) < 0.5 and (1 - night) * 0.8 or 0.85
+		end
+		if WIN.Neon and slow then
+			WIN.Neon.Transparency = math.min(1, 0.3 + (1 - night) * 0.6 + ((math.sin(clock * 23) > 0.93) and 0.3 or 0))
+			WIN.NeonSign.BackgroundTransparency = (1 - night) * 0.5
+		end
 		if slow then
 			for _, light in ipairs(WIN.Fairy) do
 				local twinkle = 0.5 + 0.5 * math.sin(clock * 2.2 + light.Phase)
@@ -2551,7 +2556,10 @@ function Lofi.Start(ctx)
 		local ratio = math.clamp(position / length, 0, 1)
 		B.Fill.Size = UDim2.fromScale(ratio, 1)
 		B.Knob.Position = UDim2.fromScale(ratio, 0.5)
-		if B.Time.Visible then
+		-- Temps : le texte n'est refait que quand la seconde change
+		local stamp = math.floor(position) * 10000 + math.floor(length)
+		if B.Time.Visible and stamp ~= S.timeStamp then
+			S.timeStamp = stamp
 			B.Time.Text = clockText(position) .. " / " .. clockText(length)
 		end
 	end

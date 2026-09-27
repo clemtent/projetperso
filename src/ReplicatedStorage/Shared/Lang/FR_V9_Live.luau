@@ -14,7 +14,6 @@ return {
 		["Sending…"] = "Envoi…",
 		["⏳ Slow mode: %ss"] = "⏳ Mode lent : %ss",
 		["you"] = "toi",
-		["✨ First message from <b>%s</b>!"] = "✨ Premier message de <b>%s</b> !",
 		["📌 Write in the chat: <b>she reads everything</b>! 💬"] = "📌 Écris dans le chat : <b>elle lit tout</b> ! 💬",
 		["🆕 New follower: <b>%s</b>"] = "🆕 Nouvel abonné : <b>%s</b>",
 	},

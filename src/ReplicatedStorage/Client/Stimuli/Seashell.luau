@@ -150,7 +150,7 @@ function Seashell.Start(ctx)
 	end)
 
 	Zones.Request(ID, {
-		{ W = BOX_W, H = BOX_H, Anchor = Vector2.new(0.62, 0.97), MinScale = 0.45, MaxScale = 1.15 },
+		{ W = BOX_W, H = BOX_H, Anchor = Vector2.new(0.62, 0.97), MinScale = 0.4, MaxScale = 1.15 },
 	}, function(placements)
 		Kit.Place(piece, placements[1])
 	end)

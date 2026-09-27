@@ -87,12 +87,12 @@ Ce sont des cosmétiques **sans bonus de gains** : la voie la plus sûre pour le
 
 Dans la version actuelle :
 
-- la **🎰 machine à sous** (`CasinoService`) et le **📦 coffre mystère** (`LootService`) fonctionnent **uniquement avec la Dopamine du jeu** : on ne peut pas y miser, ni les acheter, ni les recharger avec des Robux ;
-- la Dopamine elle-même ne s'achète pas.
+- la **🎰 machine chanceuse** (`CasinoService`) ne fait plus miser de Dopamine : ses tours sont **gratuits** (jetons gagnés avec le temps de jeu) ; le **📦 coffre mystère** (`LootService`) se recharge avec le temps de jeu : ni l'un ni l'autre ne s'achète ou ne se recharge avec des Robux ;
+- la Dopamine (packs, boosts) et les 🎟️ tickets d'arcade s'achètent en Robux : **aucune** de ces monnaies n'est pariée. Les duels de l'arcade se misent en 🏆 trophées, gagnés uniquement en jouant (voir plus haut).
 
 **Dès que tu vends de la Dopamine, des boosts de gains ou quoi que ce soit qui s'échange contre de la Dopamine** (packs, x2, auto-clic…), la Dopamine devient indirectement payante, et donc :
 
-1. **Le casino se désactive automatiquement** dès qu'un ID Robux est rempli (`Config.Monetization.DisableCasinoWhenSelling = true`) : le serveur refuse les mises et la machine affiche « 🚧 Fermé ». Les règles de Roblox interdisent les jeux d'argent qui utilisent des Robux ou des objets ayant une valeur réelle, même indirectement.
+1. **Jamais de pari avec une monnaie payante** : les règles de Roblox interdisent les jeux d'argent qui utilisent des Robux ou des objets ayant une valeur réelle, même indirectement. C'est pourquoi la machine chanceuse ne fait plus miser (tours gratuits ; `Config.Monetization.DisableCasinoWhenSelling = true` la ferme complètement si tu préfères) et pourquoi les duels de l'arcade se misent en 🏆 trophées (jamais achetables, jamais convertibles) et plus en 🎟️ tickets (achetables). Si tu ajoutes un jour une mise, elle doit porter sur une monnaie **uniquement gagnée en jouant** et sans aucun échange possible contre quelque chose d'achetable.
 2. **Affiche les probabilités des coffres** : un coffre mystère obtenu grâce à une ressource payante devient un « objet aléatoire payant » (paid random item / loot box). Roblox exige alors que **les chances de chaque récompense soient visibles avant l'ouverture**. Les chances (Commun 60 %, Rare 25 %, Épique 12 %, Légendaire 3 %) sont **affichées en jeu** via le bouton « ? » du coffre. Les coffres ne s'achètent pas avec des Robux (ils se rechargent avec le temps de jeu). Ne vends jamais de coffres directement contre des Robux sans cet affichage (et vérifie les restrictions par pays dans la politique Roblox).
 3. **Remplis honnêtement le questionnaire de maturité** (Creator Dashboard > ton expérience > **Maturity & Compliance / Questionnaire**) : déclare la machine à sous (même en monnaie fictive), les coffres aléatoires et tout achat. Une déclaration fausse peut entraîner la modération de l'expérience.
 

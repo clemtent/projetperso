@@ -164,7 +164,9 @@ local SUPPORT_EPS = 0.006 -- tolérance pour retrouver le meuble sous un objet
 
 -- Chaises autour d'une table (fractions de la hauteur de la pièce)
 local SIDE_DY = 0.006 -- côté : juste derrière la table (le plateau passe devant l'assise)
-local BEHIND_DY = 0.034 -- derrière : le dossier dépasse du plateau
+local BEHIND_DY = 0.03 -- derrière : au moins ça...
+local BEHIND_MAX = 0.085 -- ...au plus ça (grande table, petite chaise)
+local BEHIND_PEEK = 0.03 -- le dossier dépasse du plateau d'environ ça
 local FRONT_DY = 0.03 -- devant
 local TUCK = 0.12 -- (fraction de la taille) l'avant d'une chaise de profil glisse sous le plateau
 local SEAT_EPS_Y = 0.007
@@ -403,7 +405,11 @@ function HouseSurfaces.SeatSpots(tableEntry: Placed, seatItem: Item, seatScale: 
 	local mid = (l + r) / 2
 	local x = math.clamp(px, mid - inner, mid + inner)
 	if r - l >= size * 0.5 then
-		table.insert(spots, { Table = tableEntry, Kind = "Behind", X = x, Y = tableEntry.Y - BEHIND_DY, F = nil, L = l, R = r, Top = top })
+		-- derrière : assez loin pour que le dossier dépasse un peu du plateau
+		local tableTopHeight = tableEntry.Y - top
+		local seatHeight = seatItem.Size * seatScale * 0.9 / math.max(1, roomH)
+		local behind = math.clamp(tableTopHeight - seatHeight + BEHIND_PEEK, BEHIND_DY, BEHIND_MAX)
+		table.insert(spots, { Table = tableEntry, Kind = "Behind", X = x, Y = tableEntry.Y - behind, F = nil, L = l, R = r, Top = top })
 		table.insert(spots, { Table = tableEntry, Kind = "Front", X = x, Y = tableEntry.Y + FRONT_DY, F = nil, L = l, R = r, Top = top })
 	end
 	return spots
@@ -513,13 +519,14 @@ local SOFT_ITEMS: { [string]: boolean } = {
 	BlanketStack = true,
 }
 function HouseSurfaces.Preference(item: Item, furnitureId: string): number
-	local soft = BEDS[furnitureId] == true or SEATS[furnitureId] ~= nil
+	local bed = BEDS[furnitureId] == true
+	local seat = SEATS[furnitureId] ~= nil
 	if item.Category == "Kitchen" then
-		return soft and 0 or (TABLES[furnitureId] and 2 or 1)
+		return (bed or seat) and 0 or (TABLES[furnitureId] and 2 or 1)
 	elseif SOFT_ITEMS[item.Id] or item.Category == "Toys" or item.Category == "Pets" then
-		return soft and 2 or 1
+		return bed and 2 or 1
 	end
-	return soft and 0 or 1
+	return (bed or seat) and 0 or 1
 end
 
 ----------------------------------------------------------------------

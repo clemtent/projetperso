@@ -27,6 +27,7 @@ local MAX_LEVEL = 10
 local FIRST_RADIUS = 96
 local RING_GAP = 21
 local BREATH = 8 -- secondes par respiration complète
+local CUT_BELOW = 22 -- les anneaux s'arrêtent 22 px sous le centre du compteur
 
 local COLORS = {
 	Color3.fromRGB(110, 220, 200),
@@ -83,37 +84,47 @@ function DeepFocus.Start(ctx)
 
 		-- Halo doux derrière le compteur (niveau 6+)
 		if level >= 6 then
-			glow = Kit.Ellipse(holder, c, c, 420, 150, if dark then Kit.Rgb(90, 220, 200) else Kit.Rgb(150, 235, 220), 0.86, 1)
+			glow = Kit.Ellipse(holder, c, c, 420, 150, if dark then Kit.Rgb(90, 220, 200) else Kit.Rgb(150, 235, 220), 0.88, 1)
 		else
 			glow = nil
 		end
 
-		-- Anneaux (de plus en plus transparents vers l'extérieur)
-		local strength = 0.05 * math.min(level, 10) -- plus de lueur à chaque niveau
+		-- Les anneaux sont coupés juste sous le nombre : des arches au-dessus
+		-- du bouton et autour du compteur, rien derrière la ligne "par
+		-- seconde" ni les pastilles.
+		local arch = Kit.Box(holder, {
+			Name = "Arch",
+			Size = UDim2.fromOffset(size, c + CUT_BELOW),
+			BackgroundTransparency = 1,
+			ClipsDescendants = true,
+			ZIndex = 2,
+		})
+
+		-- Anneaux (plus transparents vers l'extérieur, plus lumineux à chaque niveau)
 		for index = 1, rings do
 			local radius = FIRST_RADIUS + (index - 1) * RING_GAP
 			local golden = level >= 10 and index == rings
 			local color = if golden then Kit.Rgb(255, 204, 100) else COLORS[(index - 1) % #COLORS + 1]
-			local alpha = math.clamp(0.4 + index * 0.035 - strength, 0.28, 0.85)
+			local alpha = math.clamp(0.64 + index * 0.022 - level * 0.02, 0.42, 0.88)
 			if not dark then
-				alpha = math.clamp(alpha + 0.06, 0.3, 0.9)
+				alpha = math.clamp(alpha + 0.04, 0.44, 0.9)
 			end
-			local ring = Kit.Ring(holder, c, c, radius * 2, color, if golden then 3 else (if index % 3 == 1 then 2 else 1.5), alpha, 2)
+			local ring = Kit.Ring(arch, c, c, radius * 2, color, if golden then 3 else (if index % 3 == 1 then 2 else 1.5), alpha, 2)
 			ring.Name = "Ring"
 		end
 
 		-- Onde de respiration
-		local wave, stroke = Kit.Ring(holder, c, c, FIRST_RADIUS * 2, COLORS[1], 2, 1, 2)
+		local wave, stroke = Kit.Ring(arch, c, c, FIRST_RADIUS * 2, COLORS[1], 2, 1, 2)
 		wave.Name = "Breath"
 		pulse, pulseStroke = wave, stroke
 
-		-- Perles de concentration
+		-- Perles de concentration (passent sous "l'horizon" du compteur)
 		for index = 1, beadCount(level) do
 			local ringIndex = 1 + (index * 2) % rings
 			local radius = FIRST_RADIUS + (ringIndex - 1) * RING_GAP
-			local bead = Kit.Circle(holder, c, c, 7, Kit.Rgb(255, 255, 255), 0, 3)
+			local bead = Kit.Circle(arch, c, c, 7, Kit.Rgb(255, 255, 255), 0, 3)
 			Kit.Stroke(bead, COLORS[(index - 1) % #COLORS + 1], 2, 0)
-			table.insert(beads, { Frame = bead, Radius = radius, Speed = (if index % 2 == 0 then -1 else 1) * (0.25 + index * 0.04), Angle = index * 1.3 })
+			table.insert(beads, { Frame = bead, Radius = radius, Speed = (if index % 2 == 0 then -1 else 1) * (0.25 + index * 0.04), Angle = index * 1.3 - math.pi / 2 })
 		end
 	end
 

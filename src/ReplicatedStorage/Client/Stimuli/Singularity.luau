@@ -21,8 +21,8 @@ local Singularity = {}
 Singularity.Slot = "Background"
 
 local ID = "Singularity"
-local BOX_W, BOX_H = 124, 104
-local CX, CY = 62, 54 -- centre du trou
+local BOX_W, BOX_H = 124, 92
+local CX, CY = 62, 46 -- centre du trou
 local DISK_W, DISK_H = 118, 30
 local PARTICLES = 12
 local STREAKS = 4
@@ -85,7 +85,7 @@ function Singularity.Start(ctx)
 				Name = "Jet",
 				AnchorPoint = Vector2.new(0.5, if dir < 0 then 1 else 0),
 				Position = UDim2.fromOffset(CX, CY),
-				Size = UDim2.fromOffset(4, 50),
+				Size = UDim2.fromOffset(4, 40),
 				Color = Kit.Rgb(170, 220, 255),
 				ZIndex = 2,
 			})
@@ -146,7 +146,7 @@ function Singularity.Start(ctx)
 	end)
 
 	Zones.Request(ID, {
-		{ W = BOX_W, H = BOX_H, Anchor = Vector2.new(0.78, 0.58), MinScale = 0.45, MaxScale = 1.2 },
+		{ W = BOX_W, H = BOX_H, Anchor = Vector2.new(0.78, 0.58), MinScale = 0.4, MaxScale = 1.2 },
 	}, function(placements)
 		Kit.Place(piece, placements[1])
 	end)

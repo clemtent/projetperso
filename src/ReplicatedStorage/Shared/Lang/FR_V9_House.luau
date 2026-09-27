@@ -83,7 +83,7 @@ return {
 		["🪑 At the side of: %s"] = "🪑 À côté de : %s",
 		["No room for this chair there"] = "Pas de place pour cette chaise ici",
 		["✋ Drag to move  •  🧁 small items go ON furniture  •  🪑 chairs snap to tables"] =
-			"✋ Glisse pour déplacer  •  🧁 les petits objets se posent SUR les meubles  •  🪑 les chaises se rangent aux tables",
+			"✋ Glisse pour déplacer  •  🧁 petits objets SUR les meubles  •  🪑 chaises à table",
 
 		-- Aperçu 3D
 		["🧊 3D"] = "🧊 3D",

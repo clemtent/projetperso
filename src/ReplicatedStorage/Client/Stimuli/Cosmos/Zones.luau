@@ -10,37 +10,43 @@
 
 	  - Profondeur : chaque stimulus a un ZIndex fixe (Zones.Depth) dans le
 	    calque Background, au-dessus du fond du thème (0) et du mode néon
-	    (~50) : ciel lointain (aurore, rivière d'étoiles) -> anneaux et
-	    horloge -> objets (lune, machine à rêves...).
+	    (~50) : ciel lointain (aurore, rivière d'étoiles) -> anneaux ->
+	    objets (lune, machine à rêves...). Les conteneurs découpent leur
+	    contenu (rien ne déborde sous la barre Roblox / l'encoche).
 	  - Place : une grille d'occupation (cases de 8 px "design") marque tout
 	    ce qui cache le fond : bandeau d'actualités, cartes des slots
 	    réellement présentes (L1, CL, R3...), colonne centrale (bouton,
 	    compteur, pastilles, jauge, barre d'améliorations dont la largeur
-	    réelle est lue). Chaque OBJET demande une ou plusieurs places (taille
-	    "design", forme de rechange, point préféré, échelle min / max) ; les
-	    demandes sont servies par priorité (Zones.Priority) et chaque place
-	    accordée est retirée de la grille : deux objets ne se chevauchent
-	    jamais et un objet n'est jamais posé sous une carte.
-	    Sur PC, en fin de partie, il reste surtout les « gouttières » entre
-	    les cartes du bas et les couloirs entre les slots de côté et la
-	    colonne ; sur téléphone / tablette, de grands espaces sur les côtés.
-	  - Replanification regroupée (jamais à chaque image) quand l'écran
-	    change (appareil, taille), qu'une carte apparaît / disparaît, que la
-	    barre d'améliorations change de largeur ou qu'un stimulus cosmique
-	    démarre / s'arrête. Un objet qui change de place glisse (tween).
+	    réelle est lue) et les objets des autres stimuli marqués
+	    LayoutObstacle = true (convention partagée : accessoires de clic...).
+	    Chaque OBJET demande une ou plusieurs places (taille "design", forme
+	    de rechange, point préféré, échelle min / max). Service en 2 tours :
+	    d'abord le 1er objet de chaque stimulus (par priorité, Zones.Priority :
+	    chaque amélioration reste visible), puis les objets en plus (2e / 3e
+	    portail, téléphones...). Chaque place accordée est retirée de la
+	    grille : deux objets ne se chevauchent jamais, aucun n'est sous une
+	    carte. Nos objets placés sont marqués LayoutObstacle = true.
+	    Sur PC en fin de partie il reste surtout les « gouttières » entre les
+	    cartes du bas et les couloirs le long des slots de côté ; sur
+	    téléphone / tablette, de grands espaces sur les côtés.
+	  - Stabilité : un objet garde sa place tant qu'elle reste libre (sauf si
+	    une place nettement plus grande se libère, ex. après l'océan).
+	  - Replanification regroupée (jamais à chaque image) : écran (appareil,
+	    taille), carte qui apparaît / disparaît, barre qui change de largeur,
+	    stimulus cosmique qui démarre / s'arrête, et une vérification toutes
+	    les 1,5 s (objet d'un autre stimulus posé sur un des nôtres).
 
 	Les effets d'ambiance (aurore, rivière d'étoiles, anneaux de
 	concentration, onde du temps) n'ont pas de place réservée : ils passent
-	derrière tout, très transparents, et évitent le compteur
-	(Zones.GetTextRects).
+	derrière tout, très transparents, et évitent le texte du compteur.
 
 	API :
-	  Zones.Attach(ctx)                        -- ZIndex du conteneur (profondeur)
+	  Zones.Attach(ctx)                        -- profondeur + découpe du conteneur
 	  Zones.Request(id, items, onPlace)        -- demande / met à jour des places
 	  Zones.Release(id)                        -- libère (Stop du stimulus)
 	  Zones.GetCanvas() -> Vector2             -- taille de la toile ("design")
 	  Zones.GetFocus() -> Vector2              -- centre du compteur
-	  Zones.GetTextRects() -> { Rect }         -- zones de texte à ne pas brouiller
+	  Zones.GetTextRects() -> { Rect }         -- bouton + compteur
 	  Zones.Changed                            -- Signal : mise en page recalculée
 	Item = { W, H, AltW?, AltH?, Anchor = Vector2 (fraction de la toile),
 	         MinScale?, MaxScale?, Gap? }
@@ -84,6 +90,7 @@ type Request = {
 	Items: { Item },
 	OnPlace: (placements: { Placement | false }) -> (),
 	Signature: string?,
+	Previous: { Placement | false },
 }
 
 -- ZIndex des conteneurs dans le calque Background : fond du thème = 0,
@@ -106,8 +113,8 @@ Zones.Priority = {
 	DreamMachine = 1,
 	SleepMode = 2,
 	Singularity = 3,
-	TimeWarp = 4,
-	Seashell = 5,
+	Seashell = 4,
+	TimeWarp = 5,
 	Multiverse = 6,
 	InfiniteScroll = 7,
 }
@@ -118,7 +125,9 @@ local CELL = 8 -- taille d'une case de la grille (pixels "design")
 local EDGE = 4 -- marge le long des bords de la toile
 local TICKER_HEIGHT = 32
 local SCALE_WEIGHT = 0.55 -- préférence "plus gros" face à "plus près du point préféré"
+local MOVE_GAIN = 0.12 -- on ne quitte une place valable que pour une échelle nettement plus grande
 local REPLAN_DELAY = 0.12
+local CHECK_INTERVAL = 1.5
 local BAR_MAX_HALF = 346 -- demi-largeur max de la barre d'améliorations (660 + marges)
 local BAR_CHANGE = 12 -- replanifie si la barre change de plus de 12 px
 
@@ -134,11 +143,18 @@ local COLUMN = {
 	Phone = { PillsBottom = 262, Row1Half = 300, Row2Half = 300, TwoRows = false, BarHeight = 102 },
 }
 
+-- Nos propres conteneurs (on ne s'évite pas soi-même)
+local OWN = {}
+for name in pairs(Zones.Depth) do
+	OWN[name] = true
+end
+
 local requests: { [string]: Request } = {}
 local bound = false
 local planPending = false
 local planning = false
 local planAgain = false
+local checking = false
 
 -- Grille : Occ[j * cols + i + 1] = 1 si la case (i, j) est prise ; Sat = sommes cumulées
 local grid = {
@@ -180,6 +196,14 @@ end
 local cardsFrame: GuiObject? = nil
 local lastBarHalf = BAR_MAX_HALF
 
+local function barHalfOf(frame: GuiObject): number
+	local size = frame.Size
+	if size.X.Scale ~= 0 or size.X.Offset <= 0 then
+		return BAR_MAX_HALF
+	end
+	return math.clamp(size.X.Offset / 2 + 4, 40, BAR_MAX_HALF)
+end
+
 local function measureBarHalf(): number
 	local cards = cardsFrame
 	if not cards or not cards.Parent then
@@ -192,12 +216,7 @@ local function measureBarHalf(): number
 			cards = found
 			cardsFrame = found
 			found:GetPropertyChangedSignal("Size"):Connect(function()
-				if found ~= cardsFrame then
-					return
-				end
-				local size = found.Size
-				local half = size.X.Scale == 0 and math.clamp(size.X.Offset / 2 + 4, 40, BAR_MAX_HALF) or BAR_MAX_HALF
-				if math.abs(half - lastBarHalf) >= BAR_CHANGE then
+				if found == cardsFrame and math.abs(barHalfOf(found) - lastBarHalf) >= BAR_CHANGE then
 					Zones.Schedule()
 				end
 			end)
@@ -206,18 +225,14 @@ local function measureBarHalf(): number
 	if not cards then
 		return BAR_MAX_HALF
 	end
-	local size = cards.Size
-	if size.X.Scale ~= 0 or size.X.Offset <= 0 then
-		return BAR_MAX_HALF
-	end
-	return math.clamp(size.X.Offset / 2 + 4, 40, BAR_MAX_HALF)
+	return barHalfOf(cards)
 end
 
 ----------------------------------------------------------------------
 -- Ce qui cache le fond
 ----------------------------------------------------------------------
 
--- Zones de texte (bouton, compteur) : les effets d'ambiance les évitent
+-- Bouton + compteur : les effets d'ambiance y restent très discrets
 function Zones.GetTextRects(): { Rect }
 	local cx = Zones.GetCanvas().X / 2
 	return {
@@ -288,6 +303,57 @@ local function slotRect(child: GuiObject, canvas: Vector2): Rect?
 	}
 end
 
+-- Rectangle (toile) d'un objet quelconque, d'après sa position à l'écran
+local function screenRect(object: GuiObject): Rect?
+	local scale = Interface.Scale
+	if type(scale) ~= "number" or scale <= 0 then
+		return nil
+	end
+	local size = object.AbsoluteSize / scale
+	if size.X < 1 or size.Y < 1 then
+		return nil
+	end
+	local topLeft = Interface.ScreenToCanvas(object.AbsolutePosition)
+	return { X = topLeft.X, Y = topLeft.Y, W = size.X, H = size.Y }
+end
+
+-- Objets des AUTRES stimuli marqués LayoutObstacle = true (calques plein écran)
+local function markedRects(): { Rect }
+	local rects: { Rect } = {}
+	local layers = Interface.Layers
+	if not layers then
+		return rects
+	end
+	for _, layerName in ipairs({ "Overlay", "Background" }) do
+		local layer = layers[layerName]
+		if layer then
+			for _, container in ipairs(layer:GetChildren()) do
+				if container:IsA("GuiObject") and container.Visible and not OWN[container.Name] then
+					for _, item in ipairs(container:GetChildren()) do
+						if item:IsA("GuiObject") and item.Visible then
+							if item:GetAttribute("LayoutObstacle") == true then
+								local rect = screenRect(item)
+								if rect then
+									table.insert(rects, rect)
+								end
+							end
+							for _, sub in ipairs(item:GetChildren()) do
+								if sub:IsA("GuiObject") and sub.Visible and sub:GetAttribute("LayoutObstacle") == true then
+									local rect = screenRect(sub)
+									if rect then
+										table.insert(rects, rect)
+									end
+								end
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+	return rects
+end
+
 local function blockedRects(canvas: Vector2): { Rect }
 	local rects: { Rect } = { { X = 0, Y = 0, W = canvas.X, H = TICKER_HEIGHT } }
 	local layer = Interface.Layers and Interface.Layers.Slots
@@ -302,6 +368,9 @@ local function blockedRects(canvas: Vector2): { Rect }
 		end
 	end
 	for _, rect in ipairs(columnRects(canvas)) do
+		table.insert(rects, rect)
+	end
+	for _, rect in ipairs(markedRects()) do
 		table.insert(rects, rect)
 	end
 	return rects
@@ -364,6 +433,25 @@ local function resetGrid(canvas: Vector2)
 	buildSat()
 end
 
+-- Rectangle occupé par une place (sans marge)
+local function placementRect(p: Placement): Rect
+	local w, h = p.W * p.Scale, p.H * p.Scale
+	return { X = p.X - w / 2, Y = p.Y - h / 2, W = w, H = h }
+end
+
+-- Vrai si la place (avec sa marge) est entièrement libre dans la grille
+local function isFree(p: Placement, gap: number): boolean
+	local rect = placementRect(p)
+	local i0 = math.floor((rect.X - gap) / CELL)
+	local j0 = math.floor((rect.Y - gap) / CELL)
+	local i1 = math.ceil((rect.X + rect.W + gap) / CELL)
+	local j1 = math.ceil((rect.Y + rect.H + gap) / CELL)
+	if i0 < 0 or j0 < 0 or i1 > grid.Cols or j1 > grid.Rows then
+		return false
+	end
+	return takenCount(i0, j0, i1 - i0, j1 - j0) == 0
+end
+
 -- Meilleure place pour un objet : pour chaque case libre (coin haut-gauche),
 -- plus grande échelle qui tient (recherche dichotomique), puis score =
 -- distance au point préféré - bonus de taille.
@@ -392,7 +480,7 @@ local function search(item: Item, canvas: Vector2): Placement?
 	local bestScore = math.huge
 	for _, shape in ipairs(shapes) do
 		local w, h = shape[1], shape[2]
-		-- Taille en cases pour chaque échelle
+		-- Taille en cases pour chaque échelle (la place est centrée dans les cases)
 		local cellsW, cellsH = {}, {}
 		for index, s in ipairs(scales) do
 			cellsW[index] = math.ceil((w * s + gap * 2) / CELL)
@@ -438,7 +526,7 @@ local function signatureOf(placements: { Placement | false }): string
 	local parts = {}
 	for _, p in ipairs(placements) do
 		if p then
-			table.insert(parts, string.format("%d,%d,%.2f,%s", math.floor(p.X + 0.5), math.floor(p.Y + 0.5), p.Scale, p.Alt and "a" or "n"))
+			table.insert(parts, string.format("%d,%d,%.2f,%s", math.floor(p.X + 0.5), math.floor(p.Y + 0.5), p.Scale, if p.Alt then "a" else "n"))
 		else
 			table.insert(parts, "-")
 		end
@@ -463,30 +551,58 @@ end
 local function plan()
 	local canvas = Zones.GetCanvas()
 	resetGrid(canvas)
-	local results: { { Request: Request, Placements: { Placement | false } } } = {}
-	for _, request in ipairs(sortedRequests()) do
-		local placements: { Placement | false } = {}
-		for index, item in ipairs(request.Items) do
-			local found = search(item, canvas)
-			if found then
-				local w, h = found.W * found.Scale, found.H * found.Scale
-				mark({ X = found.X - w / 2, Y = found.Y - h / 2, W = w, H = h }, item.Gap or 6)
-				buildSat()
-				placements[index] = found
-			else
-				placements[index] = false
+	local order = sortedRequests()
+	local results: { [Request]: { Placement | false } } = {}
+	-- 2 tours : le 1er objet de chaque stimulus, puis les objets en plus
+	local queue: { { Request: Request, Index: number } } = {}
+	for _, request in ipairs(order) do
+		results[request] = {}
+		if request.Items[1] then
+			table.insert(queue, { Request = request, Index = 1 })
+		end
+	end
+	for _, request in ipairs(order) do
+		for index = 2, #request.Items do
+			table.insert(queue, { Request = request, Index = index })
+		end
+	end
+	for _, entry in ipairs(queue) do
+		local request, index = entry.Request, entry.Index
+		local item = request.Items[index]
+		local gap = item.Gap or 6
+		local chosen: Placement? = search(item, canvas)
+		-- Stabilité : garder l'ancienne place si elle est encore libre
+		local previous = request.Previous[index]
+		if previous then
+			local old = previous :: Placement
+			local sameShape = (old.W == item.W and old.H == item.H) or (item.AltW ~= nil and old.W == item.AltW and old.H == item.AltH)
+			local fresh = chosen
+			if sameShape and isFree(old, gap) and (fresh == nil or fresh.Scale < old.Scale + MOVE_GAIN) then
+				chosen = old
 			end
 		end
-		table.insert(results, { Request = request, Placements = placements })
+		if chosen then
+			mark(placementRect(chosen), gap)
+			buildSat()
+			results[request][index] = chosen
+		else
+			results[request][index] = false
+		end
 	end
 	-- Rappels (hors de la boucle de calcul)
-	for _, result in ipairs(results) do
-		local request = result.Request
+	for _, request in ipairs(order) do
 		if requests[request.Id] == request then
-			local signature = signatureOf(result.Placements)
+			local placements = results[request]
+			for index = 1, #request.Items do
+				if placements[index] == nil then
+					placements[index] = false
+				end
+			end
+			request.Previous = placements
+			local signature = signatureOf(placements)
 			if signature ~= request.Signature then
 				request.Signature = signature
-				local ok, err = pcall(request.OnPlace, result.Placements)
+				local ok, err = pcall(request.OnPlace, placements)
 				if not ok then
 					warn("[Cosmos.Zones] Erreur dans le placement de " .. request.Id .. " : " .. tostring(err))
 				end
@@ -524,6 +640,49 @@ function Zones.Schedule()
 	end)
 end
 
+-- Vérification lente : un objet d'un autre stimulus s'est-il posé sur un des nôtres ?
+local function overlaps(a: Rect, b: Rect): boolean
+	return a.X < b.X + b.W and b.X < a.X + a.W and a.Y < b.Y + b.H and b.Y < a.Y + a.H
+end
+
+local function check()
+	local others = markedRects()
+	if #others == 0 then
+		return
+	end
+	for _, request in pairs(requests) do
+		for _, p in ipairs(request.Previous) do
+			if p then
+				local mine = placementRect(p)
+				for _, rect in ipairs(others) do
+					if overlaps(mine, rect) then
+						Zones.Schedule()
+						return
+					end
+				end
+			end
+		end
+	end
+end
+
+local function startChecks()
+	if checking then
+		return
+	end
+	checking = true
+	task.spawn(function()
+		while next(requests) ~= nil do
+			task.wait(CHECK_INTERVAL)
+			local ok, err = pcall(check)
+			if not ok then
+				warn("[Cosmos.Zones] Erreur de vérification : " .. tostring(err))
+				break
+			end
+		end
+		checking = false
+	end)
+end
+
 local function bind()
 	if bound then
 		return
@@ -546,11 +705,16 @@ end
 -- API
 ----------------------------------------------------------------------
 
--- Profondeur du stimulus : ZIndex de son conteneur dans le calque Background
+-- Profondeur du stimulus (ZIndex de son conteneur dans le calque
+-- Background) + découpe : rien ne déborde de la toile
 function Zones.Attach(ctx)
-	local depth = Zones.Depth[ctx.Feature]
-	if depth and ctx.Container then
-		ctx.Container.ZIndex = depth
+	local container = ctx.Container
+	if container then
+		local depth = Zones.Depth[ctx.Feature]
+		if depth then
+			container.ZIndex = depth
+		end
+		container.ClipsDescendants = true
 	end
 	bind()
 end
@@ -566,11 +730,10 @@ function Zones.Request(id: string, items: { Item }, onPlace: (placements: { Plac
 		Items = items,
 		OnPlace = onPlace,
 		Signature = nil,
+		Previous = if previous then previous.Previous else {},
 	}
-	if previous then
-		previous.Signature = nil
-	end
 	Zones.Schedule()
+	startChecks()
 end
 
 function Zones.Release(id: string)

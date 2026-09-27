@@ -3,7 +3,7 @@
 	Emplacement : ReplicatedStorage > Client > Stimuli > Runner
 
 	Un "jeu de course infini" façon jeu mobile qui tourne tout seul dans le
-	coin en haut à gauche (slot L1, 288x190). v8, bien plus riche :
+	coin en haut à gauche (slot L1, 288x190). v8 :
 	  - ciel qui suit un cycle jour / coucher de soleil / nuit / aube (4 min) :
 	    soleil qui traverse le ciel puis se couche derrière la ville, lune et
 	    étoiles qui scintillent la nuit, nuages teintés selon l'heure ;
@@ -19,19 +19,37 @@
 	    hautes (glissade), paires de cônes (saut) ;
 	  - pièces qui tournent (anneau, reflet, éclat) ; bonus aimant 🧲,
 	    pièces x2 et jetpack 🚀, chacun avec son effet visuel ;
-	  - coureur vu de dos (casquette à l'envers, sweat à capuche, sac à dos) :
-	    cycle de course (semelles visibles quand le pied part en arrière),
-	    saut avec écrasement à l'atterrissage, glissade, chute ; poussière
-	    sous les pieds, lignes de vitesse, étincelles ;
 	  - HUD : pièces (+ badge x2), distance, record de la session, combo,
 	    jauges des bonus ; petits événements ("Beau saut !", "De justesse !")
 	    et, de temps en temps, une chute, un écran de fin de course puis une
 	    nouvelle partie (le record est gardé pendant la session).
+	v9 ("encore mieux") :
+	  - coureur plus grand, contours façon dessin animé : bras et jambes
+	    articulés (pivots), bras opposés aux jambes, épaules qui tournent,
+	    sac à dos à ressort, porte-clés qui se balance, capuche qui rebondit ;
+	    figures pendant les sauts (groupé, vrille, étoile) ; il se retourne de
+	    temps en temps (visage, clignement des yeux) et réagit : yeux ronds
+	    quand un train le frôle, ravi avec un bonus, sonné (yeux en croix,
+	    étoiles autour de la tête) après une chute ; bulle d'émoji ;
+	  - baskets = amélioration "RunnerShoes" (0 à 10), visibles et mises à
+	    jour en direct (ctx.State.Changed) : usées, blanches, sport, lacets de
+	    couleur, montantes, semelles néon (halo au sol, traînée lumineuse
+	    qui suit les changements de voie), ailes aux talons, bottes à
+	    réaction, bottes-fusées en feu ; poussière / étincelles / plumes /
+	    braises selon le niveau ; badge "👟 Niv. X" dans le HUD ; un peu plus
+	    de vitesse à chaque niveau ; "Nouvelles baskets !" à l'achat ;
+	  - décor : grande roue et tour de télévision au loin (lumières la nuit),
+	    oiseaux, enseigne "DOPA", pont routier qui passe au-dessus de la voie
+	    (ombre sur les rails), vitres des trains allumées la nuit, ombres de
+	    contact, vignette ;
+	  - pièces ramassées qui filent vers le compteur ; écran de fin avec
+	    bandeau "Perdu" et bouton "Rejouer" qui s'enfonce tout seul.
 	Tout est dessiné avec des Frames créées une seule fois puis recyclées
-	(~500 instances en tout, modificateurs compris ; aucune création pendant
-	la partie). Une seule boucle OnRender, en pause
-	quand la carte n'est pas visible ; les couleurs jour / nuit ne sont
-	recalculées que 5 fois par seconde, et seulement pendant les transitions.
+	(~800 instances en tout, modificateurs compris ; aucune création pendant
+	la partie). Une seule boucle OnRender, en pause quand la carte n'est pas
+	visible ; décor d'ambiance à 30 images/s ; couleurs jour / nuit
+	recalculées 5 fois par seconde, et seulement pendant les transitions ;
+	les propriétés inchangées ne sont pas réécrites (visibilité mémorisée).
 	Purement visuel : aucun appel serveur. Tout dérive de la taille du slot.
 ]]
 
@@ -1539,6 +1557,15 @@ function Runner.Start(ctx)
 			Size = UDim2.fromScale(0.94, 0.1),
 			BackgroundColor3 = rgb(62, 64, 78),
 		}, UDim.new(0.35, 0))
+		-- ombre de contact au pied du train
+		part({
+			Name = "ContactShadow",
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.fromScale(0.5, 0.985),
+			Size = UDim2.fromScale(1.12, 0.07),
+			BackgroundColor3 = rgb(10, 8, 24),
+			BackgroundTransparency = 0.5,
+		}, ROUND)
 		local train = {
 			Active = false,
 			Body = body,
@@ -1683,10 +1710,21 @@ function Runner.Start(ctx)
 				)
 			)
 		end
+		local shadow = frame({
+			Name = "ContactShadow",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 2),
+			Size = UDim2.fromScale(1.02, 0.22),
+			BackgroundColor3 = rgb(10, 8, 24),
+			BackgroundTransparency = 0.6,
+			ZIndex = 0,
+			Parent = board,
+		}, ROUND)
 		return {
 			Type = "Board",
 			Visual = board,
 			Board = board,
+			Shadow = shadow,
 			Gradient = UIUtil.Gradient(board, ColorSequence.new(WHITE), 25),
 			Legs = legs,
 			-- gyrophare (barrières hautes)
@@ -1709,6 +1747,16 @@ function Runner.Start(ctx)
 			Visible = false,
 			Parent = world,
 		})
+		frame({
+			Name = "ContactShadow",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.98),
+			Size = UDim2.fromScale(1.02, 0.16),
+			BackgroundColor3 = rgb(10, 8, 24),
+			BackgroundTransparency = 0.55,
+			ZIndex = 0,
+			Parent = cones,
+		}, ROUND)
 		for _, coneX in ipairs({ 0.24, 0.76 }) do
 			-- (largeurs relatives au cadre des deux cônes : un cône = 42 %)
 			local function conePart(y: number, w: number, h: number, color: Color3, radius: UDim?): Frame
@@ -3286,6 +3334,8 @@ function Runner.Start(ctx)
 			for _, leg in ipairs(ob.Legs) do
 				leg.Size = UDim2.fromScale(0.065, legScale)
 			end
+			ob.Shadow.Position = UDim2.fromScale(0.5, 1 + legScale)
+			ob.Shadow.Size = UDim2.fromScale(1.02, 0.22 * (18 / (ob.Top - ob.Bottom)))
 			ob.Light.Visible = kind == "High"
 			ob.Board.Rotation = 0
 			ob.Board.Visible = true

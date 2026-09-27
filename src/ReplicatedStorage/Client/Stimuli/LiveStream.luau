@@ -133,6 +133,7 @@ local POP_COLORS = {
 local HEARTS = { "❤️", "💜", "💖", "😍", "🔥", "👏", "✨" }
 
 local HOST = "MangeTout_ASMR"
+local HOST_CHAT = "MangeTout" -- (nom court dans le chat : une ligne de gagnée)
 
 ----------------------------------------------------------------------
 -- Chat : pseudos, rôles et messages (tout est inventé)
@@ -943,12 +944,14 @@ function LiveStream.Start(ctx)
 		K.tubes = tubes
 		local beams = layer("Beams", 0, lightLayer)
 		K.beamFrames = {}
-		for i, x in ipairs({ 0.16, 0.84 }) do
+		-- Un faisceau tourne autour de son CENTRE (règle Roblox) : le cadre fait
+		-- deux fois la longueur utile, centré sur le projecteur, moitié haute invisible
+		for i, x in ipairs({ 0.14, 0.86 }) do
 			local beam = box({
 				Name = "Beam",
-				AnchorPoint = Vector2.new(0.5, 0),
-				Position = UDim2.new(x, 0, 0, -8),
-				Size = UDim2.fromOffset(30, 200),
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.new(x, 0, 0, -6),
+				Size = UDim2.fromOffset(34, 420),
 				BackgroundColor3 = i == 1 and Color3.fromRGB(255, 160, 235) or Color3.fromRGB(150, 210, 255),
 				ZIndex = 0,
 				Parent = beams,
@@ -956,8 +959,10 @@ function LiveStream.Start(ctx)
 			UI.Create("UIGradient", {
 				Rotation = 90,
 				Transparency = NumberSequence.new({
-					NumberSequenceKeypoint.new(0, 0.3),
-					NumberSequenceKeypoint.new(0.55, 0.78),
+					NumberSequenceKeypoint.new(0, 1),
+					NumberSequenceKeypoint.new(0.49, 1),
+					NumberSequenceKeypoint.new(0.5, 0.25),
+					NumberSequenceKeypoint.new(0.75, 0.72),
 					NumberSequenceKeypoint.new(1, 1),
 				}),
 				Parent = beam,
@@ -2175,8 +2180,8 @@ function LiveStream.Start(ctx)
 			line.Stroke.Color = YOU_GOLD
 			line.Stroke.Transparency = 0.15
 			-- Petit flash à l'arrivée
-			line.Frame.BackgroundTransparency = 0.2
-			UI.Tween(line.Frame, 0.7, { BackgroundTransparency = 0.58 })
+			line.Frame.BackgroundTransparency = 0.3
+			UI.Tween(line.Frame, 0.8, { BackgroundTransparency = 0.74 })
 		elseif mention then
 			line.Frame.BackgroundColor3 = MENTION_PINK
 			line.Frame.BackgroundTransparency = 0.7
@@ -2225,7 +2230,7 @@ function LiveStream.Start(ctx)
 			return
 		end
 		local tag = '<font color="#FFF0B0" size="' .. (S.compact and 12 or 9) .. '">(' .. escape(Locale.T("you")) .. ")</font>"
-		writeLine("⭐ <b>" .. escape(K.name) .. "</b> " .. tag .. ": " .. escape(message), K.name, { Kind = "you" })
+		writeLine('⭐ <font color="#FFD34D"><b>' .. escape(K.name) .. "</b></font> " .. tag .. ": " .. escape(message), K.name, { Kind = "you" })
 	end
 
 	-- Message système (raid, abonnement, don...) : sans pseudo, surligné
@@ -2240,7 +2245,7 @@ function LiveStream.Start(ctx)
 	-- bubble : true = elle le dit aussi dans sa bulle (grands moments), nil =
 	-- parfois (si la bulle est libre), false = seulement dans le chat
 	local function hostSays(message: string, bubble: boolean?)
-		pushChat(HOST, message, HOST_OPTIONS)
+		pushChat(HOST_CHAT, message, HOST_OPTIONS)
 		S.talkUntil = os.clock() + 1.4
 		local now = os.clock()
 		if bubble == false or now < S.bubbleLockUntil then
@@ -3044,8 +3049,7 @@ function LiveStream.Start(ctx)
 		S.lastPlayerText = normalized
 		S.quietUntil = now + QUIET_TIME
 		if first then
-			systemMessage(Locale.T("✨ First message from <b>%s</b>!", escape(K.name)), Color3.fromRGB(196, 140, 30))
-			refreshPinned(isFollowed())
+			refreshPinned(isFollowed()) -- (plus besoin de l'invitation à écrire)
 		end
 		K.pushPlayer(message)
 		addLikes(random:NextInteger(3, 12), true)

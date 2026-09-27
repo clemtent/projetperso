@@ -157,6 +157,9 @@ local tipNeeds: TextLabel
 local tipCost: TextLabel
 local tipMissing: TextLabel
 local tipButton: TextButton
+local tipAccent: Frame -- liseré de couleur en haut (couleur de l'amélioration)
+local tipBar: Frame -- jauge "presque abordable"
+local tipBarFill: Frame
 local tipUpgradeId: string? = nil -- Id de la carte, ou "__teaser"
 local tipPinned = false -- vrai si ouverte par appui (tactile) ou confirmation
 local TEASER_ID = "__teaser"
@@ -249,6 +252,8 @@ local function refreshTeaserTooltip()
 		end
 	end
 	tipName.Text = Locale.T("🔒 Coming after the ocean")
+	tipAccent.BackgroundColor3 = OCEAN
+	tipBar.Visible = false
 	tipLevel.Visible = true
 	tipLevel.Text = Locale.T("Unlocks at %d ocean visits (you: %d)", teaserGate, getRebirths())
 	tipDesc.Text = table.concat(names, "\n")
@@ -281,6 +286,7 @@ local function refreshTooltip()
 	local affordable = dopamine >= cost - 1e-6
 
 	tipName.Text = upgrade.Icon .. "  " .. Locale.T(upgrade.Name)
+	tipAccent.BackgroundColor3 = upgradeColor(upgrade)
 	tipDesc.Text = Formulas.DescribeUpgrade(upgrade, NumberFormatter.Format, getRebirths(), translate)
 	if upgrade.Effect == "Detox" then
 		local rebirths = getRebirths()
@@ -310,9 +316,12 @@ local function refreshTooltip()
 	tipCost.Text = Locale.T("Cost: %s Dopamine", formatAmount(cost))
 	tipCost.TextColor3 = affordable and Theme.Colors.RobuxDark or Theme.Colors.Red
 	tipMissing.Visible = not affordable
+	tipBar.Visible = not affordable
 	if not affordable then
-		local percent = cost > 0 and math.floor(math.clamp(dopamine / cost, 0, 0.99) * 100) or 0
+		local ratio = cost > 0 and math.clamp(dopamine / cost, 0, 0.99) or 0
+		local percent = math.floor(ratio * 100)
 		tipMissing.Text = Locale.T("%d%% there • %s missing", percent, NumberFormatter.Format(cost - dopamine))
+		tipBarFill.Size = UDim2.fromScale(math.max(ratio, 0.03), 1)
 	end
 
 	local needsButton = tipPinned
@@ -363,8 +372,10 @@ local function buildTooltip(layer: Frame)
 		ZIndex = 5,
 		Parent = layer,
 	})
-	UIUtil.Corner(tooltip, 14)
-	UIUtil.Stroke(tooltip, Theme.Colors.CardBorder, 1.5, 0.05)
+	UIUtil.Corner(tooltip, 16)
+	-- v9 : contour doux + léger dégradé (plus de contour noir)
+	UIUtil.Stroke(tooltip, CARD_EDGE, 1.5, 0)
+	UIUtil.Gradient(tooltip, ColorSequence.new(WHITE, Color3.fromRGB(244, 245, 249)), 90)
 	UIUtil.Create("UIScale", { Parent = tooltip })
 	UIUtil.Shadow(tooltip, 5, 0.8, 3)
 	UIUtil.Create("UIPadding", {
@@ -401,6 +412,17 @@ local function buildTooltip(layer: Frame)
 		return line
 	end
 
+	-- Liseré de la couleur de l'amélioration
+	tipAccent = UIUtil.Create("Frame", {
+		Name = "Accent",
+		Size = UDim2.new(1, 0, 0, 4),
+		BackgroundColor3 = Theme.Colors.Blue,
+		BorderSizePixel = 0,
+		LayoutOrder = 0,
+		ZIndex = 6,
+		Parent = tooltip,
+	})
+	UIUtil.Corner(tipAccent, UDim.new(1, 0))
 	tipName = textLine("Name", 1, Theme.Fonts.Title, 21, Theme.Colors.Text)
 	tipLevel = textLine("Level", 2, Theme.Fonts.Title, 14, Theme.Colors.Purple)
 	tipDesc = textLine("Description", 3, Theme.Fonts.Body, 16, Theme.Colors.TextDim)
@@ -417,6 +439,29 @@ local function buildTooltip(layer: Frame)
 	})
 	tipCost = textLine("Cost", 6, Theme.Fonts.Title, 17, Theme.Colors.Text)
 	tipMissing = textLine("Missing", 7, Theme.Fonts.Body, 14, Theme.Colors.TextDim)
+	-- Jauge "tu y es presque" (seulement quand c'est trop cher)
+	tipBar = UIUtil.Create("Frame", {
+		Name = "Progress",
+		Size = UDim2.new(1, 0, 0, 8),
+		BackgroundColor3 = PRICE_TRACK,
+		LayoutOrder = 8,
+		ClipsDescendants = true,
+		Visible = false,
+		ZIndex = 6,
+		Parent = tooltip,
+	})
+	UIUtil.Corner(tipBar, UDim.new(1, 0))
+	tipBarFill = UIUtil.Create("Frame", {
+		Name = "Fill",
+		Size = UDim2.fromScale(0, 1),
+		BackgroundColor3 = WHITE,
+		BorderSizePixel = 0,
+		ZIndex = 7,
+		Parent = tipBar,
+	})
+	tipBarFill:SetAttribute("DarkSkinIgnore", true)
+	UIUtil.Corner(tipBarFill, UDim.new(1, 0))
+	UIUtil.Gradient(tipBarFill, ColorSequence.new(Color3.fromRGB(134, 239, 172), AFFORD_EDGE), 0)
 
 	tipButton = UIUtil.PillButton({
 		Name = "Buy",
@@ -425,7 +470,7 @@ local function buildTooltip(layer: Frame)
 		TextColor3 = Theme.Colors.TextDark,
 		Height = 38,
 		TextSize = 18,
-		LayoutOrder = 8,
+		LayoutOrder = 9,
 		ZIndex = 6,
 		Parent = tooltip,
 	})
@@ -1185,7 +1230,7 @@ local function buildTeaser()
 	-- Hublot givré + cadenas + pastille "+N"
 	teaserPlate = UIUtil.Create("Frame", {
 		Name = "Porthole",
-		Size = UDim2.fromOffset(48, 48),
+		Size = UDim2.fromOffset(44, 44),
 		Position = UDim2.fromOffset(10, 10),
 		BackgroundColor3 = WHITE,
 		BackgroundTransparency = 0.72,
@@ -1205,7 +1250,7 @@ local function buildTeaser()
 		BackgroundTransparency = 1,
 		Font = Theme.Fonts.Body,
 		Text = "🔒",
-		TextSize = 25,
+		TextSize = 23,
 		ZIndex = 7,
 		Parent = teaserPlate,
 	})
@@ -1230,8 +1275,8 @@ local function buildTeaser()
 	-- Textes (blancs, bordés de bleu nuit : lisibles sur la mer)
 	teaserTitle = UIUtil.Create("TextLabel", {
 		Name = "Title",
-		Size = UDim2.fromOffset(TEASER_WIDTH - 76, 20),
-		Position = UDim2.fromOffset(66, 11),
+		Size = UDim2.fromOffset(TEASER_WIDTH - 80, 20),
+		Position = UDim2.fromOffset(70, 11),
 		BackgroundTransparency = 1,
 		Font = Theme.Fonts.Title,
 		Text = "",
@@ -1247,8 +1292,8 @@ local function buildTeaser()
 	titleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 	teaserText = UIUtil.Create("TextLabel", {
 		Name = "Text",
-		Size = UDim2.fromOffset(TEASER_WIDTH - 76, 28),
-		Position = UDim2.fromOffset(66, 32),
+		Size = UDim2.fromOffset(TEASER_WIDTH - 80, 28),
+		Position = UDim2.fromOffset(70, 32),
 		BackgroundTransparency = 1,
 		Font = Theme.Fonts.Title,
 		Text = "",
@@ -1370,14 +1415,14 @@ local function setTeaserCompact(compact: boolean)
 		teaserPeek.Size = UDim2.fromOffset(width - 12, 24)
 		teaserPeek.Position = UDim2.fromOffset(6, 69)
 	else
-		teaserPlate.Size = UDim2.fromOffset(48, 48)
+		teaserPlate.Size = UDim2.fromOffset(44, 44)
 		teaserPlate.AnchorPoint = Vector2.zero
 		teaserPlate.Position = UDim2.fromOffset(10, 10)
-		teaserTitle.Size = UDim2.fromOffset(width - 76, 20)
-		teaserTitle.Position = UDim2.fromOffset(66, 11)
+		teaserTitle.Size = UDim2.fromOffset(width - 80, 20)
+		teaserTitle.Position = UDim2.fromOffset(70, 11)
 		teaserTitle.TextXAlignment = Enum.TextXAlignment.Left
 		teaserText.Visible = true
-		teaserText.Size = UDim2.fromOffset(width - 76, 28)
+		teaserText.Size = UDim2.fromOffset(width - 80, 28)
 		teaserPeek.Size = UDim2.fromOffset(width - 20, 26)
 		teaserPeek.Position = UDim2.fromOffset(10, 66)
 	end
