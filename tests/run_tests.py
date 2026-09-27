@@ -1489,7 +1489,7 @@ def house_surfaces_test():
     surfaces = []
     for m in re.finditer(r"^\t(\w+) = \{ (.*?) \},?\s*(?:--.*)?$", block("SURFACES"), re.M):
         for s in re.finditer(r"\{ ([\d.]+), ([\d.]+), ([\d.]+)(?:, (-?[\d.]+))?(?:, ([\d.]+))? \}", m.group(2)):
-            surfaces.append('{ "%s", %s, %s, %s }' % (m.group(1), s.group(1), s.group(2), s.group(3)))
+            surfaces.append('{ "%s", %s, %s, %s, %s, %s }' % (m.group(1), s.group(1), s.group(2), s.group(3), s.group(4) or "nil", s.group(5) or "nil"))
     seats = re.findall(r"^\t(\w+) = \{ View = \"(\w+)\"", block("SEATS"), re.M)
     tables = re.findall(r"^\t(\w+) = true", block("TABLES"), re.M)
     beds = re.findall(r"^\t(\w+) = true", block("BEDS"), re.M)
@@ -1502,12 +1502,17 @@ def house_surfaces_test():
         "\tlocal beds = { %s }" % ", ".join('"%s"' % b for b in beds),
         '\tcheck(#surfaces >= 30 and #seats >= 6 and #tables >= 6, "données de HouseSurfaces lues")',
         "\tlocal hasSurface = {}",
+        "\tlocal levels = {}",
         "\tfor _, s in ipairs(surfaces) do",
         "\t\tlocal item = Config.HouseItemsById[s[1]]",
         '\t\tcheck(item ~= nil, "dessus d\'un objet inconnu : " .. s[1])',
         '\t\tcheck(s[2] >= 0 and s[3] <= 100 and s[2] < s[3] and s[4] >= 0 and s[4] <= 100, "coordonnées du dessus " .. s[1])',
+        '\t\tcheck(s[5] == nil or (s[5] >= -0.5 and s[5] <= 0.5), "profondeur 3D du dessus (v9.6) " .. s[1])',
+        '\t\tcheck(s[6] == nil or (s[6] > 0 and s[6] < 100), "place libre du rayon (v9.6) " .. s[1])',
+        "\t\tlevels[s[1]] = (levels[s[1]] or 0) + 1",
         "\t\thasSurface[s[1]] = true",
         "\tend",
+        '\tcheck((levels.Bookshelf or 0) >= 4 and levels.WallShelf == 1 and levels.TrophyShelf == 1 and (levels.FloatingShelf or 0) >= 2, "(v9.6) étagères à plusieurs niveaux")',
         "\tfor _, t in ipairs(tables) do",
         '\t\tcheck(Config.HouseItemsById[t] ~= nil and hasSurface[t] == true, "table sans dessus : " .. t)',
         "\tend",

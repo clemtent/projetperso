@@ -28,6 +28,7 @@
 	  House3DKit.Triangle / Heart / Star / StarSoft / HeartPoints / StarPoints / Path / Frame (formes)
 	  House3DKit.NewPart(className, name, size, cframe, color, material?, transparency?) -> BasePart
 	  House3DKit.Surface(part, face, canvasSize, lightInfluence) -> SurfaceGui
+	  House3DKit.Separate(parts) -> number   (v9.6 : écarte les faces confondues, anti-scintillement)
 	  House3DKit.Wood / Dist / Darken / Lighten / Pick (couleurs)
 ]]
 
@@ -364,6 +365,151 @@ function House3DKit.Builder(parent: Instance, origin: CFrame, k: number, mirror:
 		return panel
 	end
 	return b
+end
+
+----------------------------------------------------------------------
+-- v9.6 : anti-scintillement (z-fighting). Deux faces de pièces DIFFÉRENTES
+-- (couleur / matière / transparence) dans le même plan, du même côté, qui se
+-- recouvrent : Roblox les dessine en alternance ("bugs de texture" vus par
+-- le joueur). Separate écarte la plus petite des deux de SEP_GAP studs vers
+-- l'extérieur (la pièce grandit de ce côté-là, rien ne s'ouvre ni ne flotte).
+----------------------------------------------------------------------
+
+local SEP_GAP = 0.035 -- (studs) écart visé entre deux faces du même côté
+local SEP_NEAR = 0.025 -- en dessous : faces "confondues"
+local SEP_OVERLAP = 0.02 -- (studs²) recouvrement minimal pris en compte
+
+type SepFace = { Part: BasePart, Axis: number, N: Vector3, D: number, U0: number, U1: number, V0: number, V1: number, Area: number }
+
+local function sepBasis(n: Vector3): (Vector3, Vector3)
+	local u = n:Cross(math.abs(n.Y) < 0.9 and Vector3.new(0, 1, 0) or Vector3.new(1, 0, 0)).Unit
+	return u, n:Cross(u)
+end
+
+-- Faces planes d'une pièce (bloc : 6 ; cylindre : 2 disques ; pente : dessous, dos, côtés)
+local function sepFaces(part: BasePart, out: { SepFace })
+	if part.Transparency >= 0.99 then
+		return
+	end
+	local shape = "Block"
+	if part:IsA("WedgePart") then
+		shape = "Wedge"
+	elseif part:IsA("Part") then
+		local partShape = (part :: Part).Shape
+		if partShape == Enum.PartType.Ball then
+			return
+		elseif partShape == Enum.PartType.Cylinder then
+			shape = "Cylinder"
+		elseif partShape ~= Enum.PartType.Block then
+			return
+		end
+	else
+		return
+	end
+	local cf, size = part.CFrame, part.Size
+	local axes = { cf.RightVector, cf.UpVector, -cf.LookVector }
+	local half = { size.X / 2, size.Y / 2, size.Z / 2 }
+	for axis = 1, 3 do
+		for _, sign in ipairs({ 1, -1 }) do
+			local keep, shrink = true, 1
+			if shape == "Cylinder" then
+				keep = axis == 1
+				shrink = 0.85
+			elseif shape == "Wedge" then
+				keep = (axis == 2 and sign < 0) or (axis == 3 and sign > 0) or axis == 1
+				shrink = axis == 1 and 0.7 or 1
+			end
+			if keep then
+				local n = axes[axis] * sign
+				local center = cf.Position + n * half[axis]
+				local b, c = axis == 1 and 2 or 1, axis == 3 and 2 or 3
+				local hb, hc = axes[b] * half[b] * shrink, axes[c] * half[c] * shrink
+				if shape == "Cylinder" then
+					local r = math.min(size.Y, size.Z) / 2 * shrink
+					hb, hc = axes[2] * r, axes[3] * r
+				end
+				local u, v = sepBasis(n)
+				local u0, u1, v0, v1 = math.huge, -math.huge, math.huge, -math.huge
+				for _, corner in ipairs({ center + hb + hc, center + hb - hc, center - hb + hc, center - hb - hc }) do
+					local pu, pv = corner:Dot(u), corner:Dot(v)
+					u0, u1 = math.min(u0, pu), math.max(u1, pu)
+					v0, v1 = math.min(v0, pv), math.max(v1, pv)
+				end
+				table.insert(out, { Part = part, Axis = axis, N = n, D = n:Dot(center), U0 = u0, U1 = u1, V0 = v0, V1 = v1, Area = (u1 - u0) * (v1 - v0) })
+			end
+		end
+	end
+end
+
+local function sepDiffers(a: BasePart, b: BasePart): boolean
+	if a.Material ~= b.Material or math.abs(a.Transparency - b.Transparency) > 0.05 then
+		return true
+	end
+	local ca, cb = a.Color, b.Color
+	return math.max(math.abs(ca.R - cb.R), math.abs(ca.G - cb.G), math.abs(ca.B - cb.B)) > 3 / 255
+end
+
+-- Écarte les faces confondues d'une liste de pièces (un objet, une coque de
+-- pièce...) ; renvoie le nombre de faces déplacées
+function House3DKit.Separate(parts: { BasePart }): number
+	local moved = 0
+	for _ = 1, 6 do
+		local faces: { SepFace } = {}
+		for _, part in ipairs(parts) do
+			sepFaces(part, faces)
+		end
+		local buckets: { [string]: { SepFace } } = {}
+		local function keyOf(n: Vector3, slot: number): string
+			return string.format("%d,%d,%d,%d", math.floor(n.X * 50 + 0.5), math.floor(n.Y * 50 + 0.5), math.floor(n.Z * 50 + 0.5), slot)
+		end
+		for _, face in ipairs(faces) do
+			local key = keyOf(face.N, math.floor(face.D / 0.05))
+			local list = buckets[key]
+			if not list then
+				list = {}
+				buckets[key] = list
+			end
+			table.insert(list, face)
+		end
+		local touched: { [BasePart]: boolean } = {}
+		local fixes = 0
+		for _, a in ipairs(faces) do
+			if not touched[a.Part] then
+				local slot = math.floor(a.D / 0.05)
+				for dk = -1, 1 do
+					local list = buckets[keyOf(a.N, slot + dk)]
+					for _, b in ipairs(list or {}) do
+						if b.Part ~= a.Part and not touched[a.Part] and not touched[b.Part] and a.N:Dot(b.N) > 0.999
+							and math.abs(a.D - b.D) < SEP_NEAR and sepDiffers(a.Part, b.Part) then
+							local ou = math.min(a.U1, b.U1) - math.max(a.U0, b.U0)
+							local ov = math.min(a.V1, b.V1) - math.max(a.V0, b.V0)
+							if ou > 0 and ov > 0 and ou * ov > SEP_OVERLAP then
+								-- la plus petite face avance (à aire égale : la pièce ajoutée après)
+								local small, large = a, b
+								if b.Area < a.Area or (b.Area == a.Area and (table.find(parts, b.Part) or 0) > (table.find(parts, a.Part) or 0)) then
+									small, large = b, a
+								end
+								local grow = SEP_GAP - (small.D - large.D)
+								if grow > 0 then
+									local part = small.Part
+									local add = small.Axis == 1 and Vector3.new(grow, 0, 0) or (small.Axis == 2 and Vector3.new(0, grow, 0) or Vector3.new(0, 0, grow))
+									part.Size += add
+									part.CFrame = part.CFrame + small.N * (grow / 2)
+									touched[part] = true
+									fixes += 1
+								end
+							end
+						end
+					end
+				end
+			end
+		end
+		moved += fixes
+		if fixes == 0 then
+			break
+		end
+	end
+	return moved
 end
 
 ----------------------------------------------------------------------

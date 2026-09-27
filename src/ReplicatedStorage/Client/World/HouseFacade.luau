@@ -148,10 +148,11 @@ local function roomWindow(ctx: Ctx, slot: number?, x0: number, x1: number, y0: n
 	local glass = kit:Box("Glass", x0, x1, y0, y1, 0.35, 0.5, P.Glass, M.Glass, { T = 0.62, Shadow = false })
 	glass.CastShadow = false
 	local f = if kind == "Grid" then 0.3 else 0.35
-	kit:Box("WinFrame", x0 - f, x1 + f, y1, y1 + f, -0.45, 0.35, frame, M.Wood)
-	kit:Box("WinFrame", x0 - f, x1 + f, y0 - f, y0, -0.45, 0.35, frame, M.Wood)
-	kit:Box("WinFrame", x0 - f, x0, y0, y1, -0.45, 0.35, frame, M.Wood)
-	kit:Box("WinFrame", x1, x1 + f, y0, y1, -0.45, 0.35, frame, M.Wood)
+	-- (v9.6 : le cadre déborde de 0,05 dans le trou -> jamais coplanaire avec les bords du mur)
+	kit:Box("WinFrame", x0 - f, x1 + f, y1 - 0.05, y1 + f, -0.45, 0.35, frame, M.Wood)
+	kit:Box("WinFrame", x0 - f, x1 + f, y0 - f, y0 + 0.05, -0.45, 0.35, frame, M.Wood)
+	kit:Box("WinFrame", x0 - f, x0 + 0.05, y0, y1, -0.45, 0.35, frame, M.Wood)
+	kit:Box("WinFrame", x1 - 0.05, x1 + f, y0, y1, -0.45, 0.35, frame, M.Wood)
 	local cx = (x0 + x1) / 2
 	if kind == "Grid" then
 		-- cadre d'usine : 3 x 2 carreaux
@@ -598,7 +599,7 @@ local function frontDoor(ctx: Ctx, leafColor: Color3, frameColor: Color3, withGl
 	for _, sx in ipairs({ -1, 1 }) do
 		kit:Box("DoorFrame", x + sx * (w / 2) - 0.3, x + sx * (w / 2) + 0.3, y0, y0 + h + 0.4, -0.7, 0.25, frameColor, M.Wood, { Solid = true })
 	end
-	kit:Box("DoorFrame", x - w / 2 - 0.45, x + w / 2 + 0.45, y0 + h, y0 + h + 0.6, -0.75, 0.25, frameColor, M.Wood)
+	kit:Box("DoorFrame", x - w / 2 - 0.45, x + w / 2 + 0.45, y0 + h - 0.05, y0 + h + 0.6, -0.75, 0.25, frameColor, M.Wood)
 	local leaf = kit:Box("DoorLeaf", x - w / 2 + 0.05, x + w / 2 - 0.05, y0, y0 + h - 0.05, 0.15, 0.55, leafColor, M.Wood, { Solid = true, Shadow = true })
 	ctx.Built.Door = leaf
 	ctx.Built.Hinge = ctx.Kit.CF * CFrame.new(x - w / 2 + 0.05, y0, -0.35)
@@ -668,7 +669,8 @@ local function bodyWalls(ctx: Ctx, holes: { [number]: { { number } } }, material
 	kit:Box("EndRight", ctx.Right, R, 0, ctx.Top, -0.3, ctx.Depth, ctx.Wall, material, { Solid = true })
 	kit:Box("Back", L, R, 0, ctx.Top, ctx.Depth - T + 0.05, ctx.Depth + 0.3, ctx.Wall, material, { Solid = true })
 	-- dalle du toit (ferme la maison par le haut)
-	kit:Box("TopSlab", L, R, ctx.Top, ctx.Top + 0.6, -0.3, ctx.Depth + 0.3, ctx.Trim, M.SmoothPlastic, { Solid = true, Shadow = false })
+	-- (v9.6 : décalée de 0,05 : jamais coplanaire avec les plafonds des pièces du dernier étage)
+	kit:Box("TopSlab", L, R, ctx.Top + 0.05, ctx.Top + 0.65, -0.3, ctx.Depth + 0.3, ctx.Trim, M.SmoothPlastic, { Solid = true, Shadow = false })
 end
 
 -- Fenêtre des pièces par style : { part de la largeur, bas (au-dessus du sol), hauteur }
@@ -820,7 +822,7 @@ STYLES.Cottage = function(ctx)
 	frontDoor(ctx, C.Pink, TIMBER, false)
 	kit:CylD("DoorArch", gx, WorldLayout.FloorY(1) + WorldLayout.DOOR_H, -0.5, WorldLayout.DOOR_W + 1.2, 0.35, TIMBER, M.Wood, { Shadow = false })
 	kit:CylD("DoorArchGlass", gx, WorldLayout.FloorY(1) + WorldLayout.DOOR_H + 0.1, -0.7, WorldLayout.DOOR_W - 0.6, 0.12, P.Glass, M.Glass, { Shadow = false })
-	heart(ctx, gx, WorldLayout.FloorY(1) + WorldLayout.DOOR_H + 1, -0.85, 1.1, C.Heart, M.Neon)
+	heart(ctx, gx, WorldLayout.FloorY(1) + WorldLayout.DOOR_H + 1, -0.85, 1.1, C.Heart, M.SmoothPlastic) -- (v9.6 : plus de Neon, "flash bang")
 	wallLantern(ctx, gx + WorldLayout.DOOR_W / 2 + 1.2, WorldLayout.FloorY(1) + 4.2, true)
 	local foot = porch(ctx, gx - 3.5, gx + 3.5, 2.2, 3, P.StoneDark, M.Slate)
 	namePlate(ctx, gx, WorldLayout.FloorY(1) + WorldLayout.DOOR_H + 3.6, -0.5, 7)
@@ -946,7 +948,7 @@ STYLES.Townhouse = function(ctx)
 	local crest = math.max(2, math.floor((r1 - r0 - 2 * inset) / 5))
 	for k = 0, crest do
 		local x = r0 + inset + k * (r1 - r0 - 2 * inset) / crest
-		kit:Box("CrestPost", x - 0.1, x + 0.1, yBase + rise, yBase + rise + 1.4, inset - 0.1, inset + 0.1, C.Ink:Lerp(C.Lilac, 0.3), M.Metal, { Shadow = false })
+		kit:Box("CrestPost", x - 0.1, x + 0.1, yBase + rise, yBase + rise + 1.4, inset - 0.16, inset + 0.16, C.Ink:Lerp(C.Lilac, 0.3), M.Metal, { Shadow = false })
 		kit:Ball("CrestBall", x, yBase + rise + 1.5, inset, 0.5, P.Gold, M.Metal, { Shadow = false })
 	end
 	heart(ctx, (r0 + r1) / 2, yBase + rise + 2.2, inset, 1.6, C.Heart)
@@ -1113,7 +1115,7 @@ STYLES.Loft = function(ctx)
 		kit:Box("SignBracket", sx + 1.4, ctx.Left - T, by, by + 0.3, -0.9, -0.5, steel, M.Metal, { Shadow = false })
 	end
 	local board = kit:Box("NeonSign", sx - 1.6, sx + 1.6, ctx.Top - 14, ctx.Top - 2, -1.2, -0.4, Color3.fromRGB(86, 64, 120), M.SmoothPlastic, { Solid = true })
-	heart(ctx, sx, ctx.Top - 3.3, -1.35, 1.8, Color3.fromRGB(255, 150, 206), M.Neon)
+	heart(ctx, sx, ctx.Top - 3.3, -1.35, 1.8, Color3.fromRGB(255, 150, 206), M.SmoothPlastic) -- (v9.6 : plus de Neon, "flash bang")
 	local sign = Instance.new("SurfaceGui")
 	sign.Name = "Neon"
 	sign.Face = Enum.NormalId.Back
@@ -1410,7 +1412,7 @@ STYLES.Mansion = function(ctx)
 		end
 		if floor == 2 then
 			-- petit balcon arrondi de la travée centrale
-			kit:CylY("CenterBalcony", ctx.DoorX, y - 0.4, -0.6, 7, 0.4, TRIM, M.Limestone, { Solid = true })
+			kit:CylY("CenterBalcony", ctx.DoorX, y - 0.45, -0.6, 7, 0.4, TRIM, M.Limestone, { Solid = true }) -- (v9.6 : 0,05 sous le palier)
 		end
 	end
 	-- corniche + modillons + liseré doré

@@ -544,7 +544,8 @@ end
 local function addTag(shop: Shop, parent: Instance, d: Display, tagCF: CFrame, center: Vector3)
 	local theme = shop.Theme
 	local tag = newPart(parent, "PriceTag", Vector3.new(1.3, 0.55, 0.08), tagCF, WHITE, M.SmoothPlastic)
-	newPart(parent, "TagStripe", Vector3.new(1.3, 0.12, 0.1), tagCF * CFrame.new(0, 0.2, 0), theme.Accent, M.SmoothPlastic)
+	-- (bandeau qui ENVELOPPE le haut de l'étiquette : aucune face confondue)
+	newPart(parent, "TagStripe", Vector3.new(1.36, 0.16, 0.16), tagCF * CFrame.new(0, 0.22, 0), theme.Accent, M.SmoothPlastic)
 	d.Tag = tag
 	-- l'invite est posée au centre de l'objet (l'interface Roblox s'y affiche)
 	local attachment = Instance.new("Attachment")
@@ -728,7 +729,7 @@ local function lining(shop: Shop, parent: Instance)
 	for _, sx in ipairs({ -1, 1 }) do
 		box(parent, "WallLining", F, sx * wx, sx * (wx + 0.1), 0.15, top, 0.2, D - 0.2, t.Wall, M.SmoothPlastic)
 		box(parent, "Wainscot", F, sx * (wx - GAP - 0.1), sx * (wx - GAP), 0.15, 3.1, 0.4, D - 0.4, t.Wainscot, M.WoodPlanks)
-		box(parent, "ChairRail", F, sx * (wx - GAP - 0.2), sx * (wx - GAP), 3.05, 3.3, 0.4, D - 0.4, WHITE, M.SmoothPlastic)
+		box(parent, "ChairRail", F, sx * (wx - GAP - 0.22), sx * (wx - GAP - 0.05), 3.05, 3.3, 0.4, D - 0.4, WHITE, M.SmoothPlastic)
 	end
 	box(parent, "BackLining", F, -wx + 0.15, wx - 0.15, 0.15, top, D - inset - 0.1, D - inset, t.Wall, M.SmoothPlastic)
 	box(parent, "BackWainscot", F, -wx + 0.35, wx - 0.35, 0.15, 3.1, D - inset - 0.2 - GAP, D - inset - 0.1 - GAP, t.Wainscot, M.WoodPlanks)
@@ -915,7 +916,7 @@ local function stages(shop: Shop, parent: Instance, plan: Plan)
 	local F = shop.F
 	for _, spot in ipairs(plan.PodiumSpots) do
 		cylinder(parent, "Podium", F, spot.X, 0.1, spot.Z, 0.6, 5, t.Podium, M.SmoothPlastic, true)
-		cylinder(parent, "PodiumRim", F, spot.X, 0.08, spot.Z, 0.25, 5.3, t.Accent, M.SmoothPlastic)
+		cylinder(parent, "PodiumRim", F, spot.X, 0.04, spot.Z, 0.29, 5.3, t.Accent, M.SmoothPlastic)
 	end
 	for _, pf in ipairs(plan.Platforms) do
 		local hwid, hd = pf.W / 2, pf.Dp / 2

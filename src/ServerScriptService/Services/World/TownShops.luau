@@ -288,14 +288,14 @@ function TownShops.Dealership(parent: Instance, cf: CFrame): Model
 	-- plancher, murs pleins (côté parcelles + fond), toit
 	box(model, "Floor", cf, -hw + 0.1, hw - 0.1, FLOOR_TOP - 1.2, FLOOR_TOP, 0.1, D - 0.1, C.StoneDark, M.Concrete, "solid")
 	box(model, "Threshold", cf, -CAR_DOOR / 2, CAR_DOOR / 2, FLOOR_TOP - 0.5, FLOOR_TOP - 0.02, -0.5, 0.3, C.MetalLight, M.Metal, "solid")
-	box(model, "SideWall", cf, hw - 1, hw, 0, DEALER_H + 0.8, 0, D, white, M.SmoothPlastic, "solid")
+	box(model, "SideWall", cf, hw - 1, hw, 0, DEALER_H + 0.8, 1, D, white, M.SmoothPlastic, "solid")
 	box(model, "BackWall", cf, -hw + 1, hw - 1, 0, DEALER_H + 0.8, D - 1, D, white, M.SmoothPlastic, "solid")
 	box(model, "Roof", cf, -hw - 0.6, hw + 0.6, DEALER_H + 0.5, DEALER_H + 1.6, -0.8, D + 0.6, white, M.SmoothPlastic, "decoS")
 	-- toit vu d'en haut : acrotère rose, verrières, groupes de clim
 	for _, sx in ipairs({ -1, 1 }) do
-		box(model, "Parapet", cf, sx < 0 and -hw - 0.6 or hw - 0.2, sx < 0 and -hw - 0.2 or hw + 0.6, DEALER_H + 1.5, DEALER_H + 2.4, -0.1, D + 0.6, accent, M.SmoothPlastic, "deco")
+		box(model, "Parapet", cf, sx < 0 and -hw - 0.55 or hw - 0.2, sx < 0 and -hw - 0.2 or hw + 0.55, DEALER_H + 1.5, DEALER_H + 2.4, -0.1, D + 0.55, accent, M.SmoothPlastic, "deco")
 	end
-	box(model, "ParapetBack", cf, -hw - 0.2, hw + 0.2, DEALER_H + 1.5, DEALER_H + 2.4, D + 0.2, D + 0.6, accent, M.SmoothPlastic, "deco")
+	box(model, "ParapetBack", cf, -hw - 0.2, hw + 0.2, DEALER_H + 1.5, DEALER_H + 2.4, D + 0.2, D + 0.55, accent, M.SmoothPlastic, "deco")
 	for k = 0, 2 do
 		local z = 10 + k * 12
 		glass(model, "Skylight", Vector3.new(W * 0.5, 0.5, 5), cf * CFrame.new(-4, DEALER_H + 1.9, z), 0.35).CanCollide = false
@@ -317,15 +317,15 @@ function TownShops.Dealership(parent: Instance, cf: CFrame): Model
 			local mx = sx * (x0 + (x1 - x0) * k / 3)
 			part(model, "Mullion", Vector3.new(0.35, DEALER_H - 2.2, 0.55), cf * CFrame.new(mx, (1 + DEALER_H - 1.1) / 2, 0.4), frame, M.Metal, "deco")
 		end
-		doorPanel(model, cf * CFrame.new(sx * CAR_DOOR / 4, FLOOR_TOP + (CAR_DOOR_H - 0.1) / 2, 0.35), CAR_DOOR / 2 - 0.05, CAR_DOOR_H - 0.1, sx * (CAR_DOOR / 2 - 0.4))
+		doorPanel(model, cf * CFrame.new(sx * CAR_DOOR / 4, FLOOR_TOP + (CAR_DOOR_H - 0.1) / 2, 0.35), CAR_DOOR / 2 - 0.05, CAR_DOOR_H - 0.1, sx * (CAR_DOOR / 2 - 0.5))
 	end
 	box(model, "DoorHeader", cf, -CAR_DOOR / 2, CAR_DOOR / 2, doorTop, doorTop + 0.4, -0.2, 1, frame, M.Metal, "solid")
 	glass(model, "Transom", Vector3.new(CAR_DOOR - 0.1, DEALER_H - 1.1 - doorTop - 0.5, 0.3), cf * CFrame.new(0, (doorTop + 0.4 + DEALER_H - 1.1) / 2, 0.4), 0.7)
 	-- côté place d'accueil (x < 0) : mur-rideau vitré
 	local side = cf * CFrame.new(-hw + 0.5, 0, 0)
-	box(model, "SideKick", side, -0.5, 0.5, 0, 1, 1, D, frame, M.Metal, "solid")
-	box(model, "SideBeam", side, -0.5, 0.5, DEALER_H - 1.1, DEALER_H + 0.6, 1, D, frame, M.Metal, "solid")
-	box(model, "SideBack", side, -0.5, 0.5, 0.9, DEALER_H - 1, D - 5, D, white, M.SmoothPlastic, "solid")
+	box(model, "SideKick", side, -0.5, 0.5, 0, 1, 1, D - 5, frame, M.Metal, "solid")
+	box(model, "SideBeam", side, -0.5, 0.5, DEALER_H - 1.1, DEALER_H + 0.6, 1, D - 5, frame, M.Metal, "solid")
+	box(model, "SideBack", side, -0.5, 0.5, 0, DEALER_H + 0.6, D - 5, D, white, M.SmoothPlastic, "solid")
 	glass(model, "SideGlass", Vector3.new(0.3, DEALER_H - 2.2, D - 6.1), side * CFrame.new(0, (1 + DEALER_H - 1.1) / 2, (1 + D - 5) / 2), 0.7)
 	for k = 1, 5 do
 		local z = 1 + (D - 6) * k / 6
@@ -340,7 +340,7 @@ function TownShops.Dealership(parent: Instance, cf: CFrame): Model
 	stroke.Thickness = 2
 	stroke.Parent = title
 	part(model, "SignStripe", Vector3.new(W + 1.3, 0.5, 0.7), cf * CFrame.new(0, DEALER_H + 1.85, -0.5), accent, M.SmoothPlastic, "deco")
-	local sideSign = part(model, "SideSign", Vector3.new(0.6, 3.4, D * 0.7), cf * CFrame.new(-hw - 0.5, DEALER_H + 3.3, D * 0.4), white, M.SmoothPlastic, "deco")
+	local sideSign = part(model, "SideSign", Vector3.new(0.6, 3.4, D * 0.7), cf * CFrame.new(-hw - 0.75, DEALER_H + 3.3, D * 0.4), white, M.SmoothPlastic, "deco")
 	local _, ss = TownKit.Surface(sideSign, Enum.NormalId.Left, 20, nil, 500, 0.2)
 	TownKit.Label(ss, "Title", spec.Sign, 0.06, 0.08, 0.88, 0.84, accent, Enum.Font.FredokaOne, true)
 	-- plateaux des voitures (déco : les voitures roulent dessus)

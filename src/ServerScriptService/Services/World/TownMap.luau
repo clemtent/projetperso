@@ -124,7 +124,7 @@ local function buildPlot(parent: Instance, index: number, count: number): PlotIn
 			part(model, "FencePost", Vector3.new(0.6, 3.4, 0.6), plotCF * CFrame.new(x, g + 1.7, z), fence, M.Wood, "deco")
 		end
 	end
-	part(model, "Hedge", Vector3.new(W - 1.6, 4.2, 2.6), plotCF * CFrame.new(0, g + 2.1, D / 2 - 1.3), C.GrassDark, M.Grass, "prop")
+	part(model, "Hedge", Vector3.new(W - 1.6, 4.2, 2.6), plotCF * CFrame.new(0, g + 2.1, D / 2 - 1.35), C.GrassDark, M.Grass, "prop")
 	-- deux arbres aux coins avant (hors de la zone des décorations de jardin)
 	for _, sx in ipairs({ -1, 1 }) do
 		TownKit.Tree(model, (plotCF * CFrame.new(sx * (W / 2 - 5), g, -D / 2 + 5)).Position, 13 + (index % 3), index * 7 + sx, (index + sx) % 3 == 0 and 2 or 1)

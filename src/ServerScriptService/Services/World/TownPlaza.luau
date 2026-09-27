@@ -92,7 +92,7 @@ local function brain(model: Instance, cf: CFrame, scale: number)
 	-- visage kawaii (vers l'avant : -Z)
 	for _, sx in ipairs({ -1, 1 }) do
 		TownKit.Ball(model, "Eye", (cf * CFrame.new(sx * 0.9 * s, 0.1 * s, -2.05 * s)).Position, 0.75 * s, C.Ink, M.SmoothPlastic, "deco")
-		TownKit.Ball(model, "Shine", (cf * CFrame.new(sx * 0.9 * s + 0.15 * s, 0.3 * s, -2.35 * s)).Position, 0.25 * s, C.White, M.Neon, "deco")
+		TownKit.Glow(TownKit.Ball(model, "Shine", (cf * CFrame.new(sx * 0.9 * s + 0.15 * s, 0.3 * s, -2.35 * s)).Position, 0.25 * s, C.White, M.SmoothPlastic, "deco"))
 		part(model, "Blush", Vector3.new(0.7 * s, 0.35 * s, 0.1 * s), cf * CFrame.new(sx * 1.6 * s, -0.45 * s, -1.95 * s) * CFrame.Angles(0, sx * math.rad(20), 0), Color3.fromRGB(255, 110, 150), M.SmoothPlastic, "deco")
 	end
 	part(model, "Smile", Vector3.new(0.9 * s, 0.18 * s, 0.1 * s), cf * CFrame.new(0, -0.55 * s, -2.12 * s), C.Ink, M.SmoothPlastic, "deco")
@@ -196,7 +196,7 @@ local function bandstand(folder: Instance, center: Vector3)
 	TownKit.Ball(model, "Finial", center + Vector3.new(0, 16.8, 0), 1.6, C.Yellow, M.Metal, "deco")
 	-- pupitres et instruments (notes de musique néon)
 	part(model, "Stand", Vector3.new(0.2, 3, 0.2), CFrame.new(center + Vector3.new(-2, 3.9, 1)), C.Metal, M.Metal, "deco")
-	part(model, "Note", Vector3.new(1.4, 1.8, 0.2), CFrame.new(center + Vector3.new(-2, 5.6, 1)), C.Pink, M.SmoothPlastic, "deco")
+	part(model, "Note", Vector3.new(1.4, 1.8, 0.3), CFrame.new(center + Vector3.new(-2, 5.6, 1)), C.Pink, M.SmoothPlastic, "deco")
 end
 
 local function carousel(folder: Instance, center: Vector3)
@@ -247,7 +247,8 @@ local function garland(folder: Instance, a: Vector3, b: Vector3, seed: number)
 	for i = 1, 5 do
 		local t = i / 6
 		local p = a:Lerp(b, t) - Vector3.new(0, 2.2 * (1 - (2 * t - 1) ^ 2) + 0.35, 0)
-		TownKit.Ball(folder, "Bulb", p, 0.42, colors[(i + seed) % #colors + 1], M.Neon, "deco")
+		-- (v9.6 : mates le jour, Neon la nuit seulement : TownKit.Glow)
+		TownKit.Glow(TownKit.Ball(folder, "Bulb", p, 0.42, colors[(i + seed) % #colors + 1], M.SmoothPlastic, "deco"))
 	end
 end
 
@@ -436,7 +437,7 @@ function TownPlaza.Build(folder: Instance, geo: TownKit.Geo, shopsFolder: Instan
 	-- mairie (au fond) + écran des meilleurs joueurs
 	local hallP = ground + Vector3.new(0, 0, -(R + 4))
 	local hallCF = CFrame.lookAt(hallP, ground)
-	part(plaza, "HallApron", Vector3.new(70, 1.3, 8), hallCF * CFrame.new(0, -0.65, -1.5), C.Walk, M.Pavement, "solid")
+	part(plaza, "HallApron", Vector3.new(70, 1.3, 8), hallCF * CFrame.new(0, -0.65 + 0.05, -1.5), C.Walk, M.Pavement, "solid")
 	local _, screen = TownBuildings.TownHall(plaza, hallCF)
 	local used, entered = shopRing(plaza, geo, shopsFolder or plaza)
 	return { Screen = screen, ShopsUsed = used, Enterable = entered }

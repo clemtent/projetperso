@@ -73,7 +73,7 @@ local function window(parent: Instance, cf: CFrame, w: number, h: number, trim: 
 	part(parent, "WinFrame", Vector3.new(w + 0.8, h + 0.8, 0.3), cf * CFrame.new(0, 0, -0.1), trim, M.SmoothPlastic, "deco")
 	local glass = part(parent, "WinGlass", Vector3.new(w, h, 0.3), cf * CFrame.new(0, 0, -0.16), Color3.fromRGB(150, 196, 226), M.Glass, "deco")
 	glass.Reflectance = 0.15
-	part(parent, "WinBar", Vector3.new(0.25, h, 0.35), cf * CFrame.new(0, 0, -0.18), trim, M.SmoothPlastic, "deco")
+	part(parent, "WinBar", Vector3.new(0.25, h - 0.1, 0.35), cf * CFrame.new(0, 0, -0.18), trim, M.SmoothPlastic, "deco")
 	part(parent, "Sill", Vector3.new(w + 1.4, 0.35, 0.8), cf * CFrame.new(0, -h / 2 - 0.5, -0.4), trim, M.Concrete, "deco")
 	if shutters then
 		for _, sx in ipairs({ -1, 1 }) do
@@ -219,7 +219,7 @@ function TownBuildings.Shop(parent: Instance, cf: CFrame, spec: ShopSpec, seed: 
 	-- enseigne (texte traduisible côté client)
 	local signColor = spec.SignColor or C.HotPink
 	local board = part(model, "SignBoard", Vector3.new(w * 0.72, 2.6, 0.4), cf * CFrame.new(0, GROUND_H + 1.6, -0.3), C.Cream, M.Wood, "deco")
-	local _, body = TownKit.Surface(board, Enum.NormalId.Front, 30, nil, 360, 0)
+	local _, body = TownKit.Surface(board, Enum.NormalId.Front, 30, nil, 360, 0.5)
 	local label = TownKit.Label(body, "Title", spec.Sign, 0.03, 0.08, 0.94, 0.84, signColor, Enum.Font.FredokaOne, false)
 	local stroke = Instance.new("UIStroke")
 	stroke.Color = C.White
@@ -270,7 +270,7 @@ function TownBuildings.TownHall(parent: Instance, cf: CFrame): (Model, Screen)
 	local trim = C.White
 	local roof = Color3.fromRGB(110, 104, 140)
 	part(model, "Body", Vector3.new(w, h, d), cf * CFrame.new(0, h / 2, d / 2 + 3), wall, M.Limestone, "solid")
-	part(model, "Plinth", Vector3.new(w + 0.8, 1.6, d + 0.8), cf * CFrame.new(0, 0.8, d / 2 + 3), C.StoneDark, M.Granite, "prop")
+	part(model, "Plinth", Vector3.new(w + 0.8, 1.6, d + 0.8), cf * CFrame.new(0, 0.75, d / 2 + 3), C.StoneDark, M.Granite, "prop")
 	-- avant-corps central (portique) : marches, colonnes, fronton
 	local cw = 28
 	for i = 0, 2 do
@@ -284,7 +284,7 @@ function TownBuildings.TownHall(parent: Instance, cf: CFrame): (Model, Screen)
 	end
 	part(model, "Entablature", Vector3.new(cw + 1, 1.6, 4.6), cf * CFrame.new(0, 13.1, 1.2), trim, M.Marble, "decoS")
 	part(model, "PortalDoor", Vector3.new(6, 9, 0.4), cf * CFrame.new(0, 6.8, 2.85), Color3.fromRGB(120, 80, 70), M.Wood, "deco")
-	part(model, "PortalGlass", Vector3.new(4.6, 3, 0.3), cf * CFrame.new(0, 12.4, 2.75), Color3.fromRGB(255, 226, 160), M.Glass, "deco")
+	part(model, "PortalGlass", Vector3.new(4.6, 2.9, 0.3), cf * CFrame.new(0, 12.35, 2.75), Color3.fromRGB(255, 226, 160), M.Glass, "deco")
 	-- ailes : fenêtres hautes sur 2 étages
 	for _, sx in ipairs({ -1, 1 }) do
 		for f = 0, 1 do
@@ -376,7 +376,7 @@ function TownBuildings.RowHouse(parent: Instance, cf: CFrame, w: number, d: numb
 	part(model, "Front", Vector3.new(w - 2, GROUND_H - 3, 0.3), cf * CFrame.new(0, 1.2 + (GROUND_H - 3) / 2, -0.1), accent, M.Wood, "deco")
 	local glass = part(model, "Glass", Vector3.new(w - 8, GROUND_H - 5, 0.3), cf * CFrame.new(-2, 1.2 + (GROUND_H - 3) / 2 + 0.3, -0.2), Color3.fromRGB(255, 226, 190), M.Glass, "deco")
 	glass.Reflectance = 0.2
-	part(model, "Door", Vector3.new(3, 6.4, 0.3), cf * CFrame.new(w / 2 - 3.2, 1.2 + 3.2, -0.2), C.Cream, M.Wood, "deco")
+	part(model, "Door", Vector3.new(3, 6.4, 0.3), cf * CFrame.new(w / 2 - 3.2, 1.25 + 3.2, -0.2), C.Cream, M.Wood, "deco")
 	part(model, "Awning", Vector3.new(w - 1.6, 0.25, 3), cf * CFrame.new(0, GROUND_H - 1.4, -1.4) * CFrame.Angles(math.rad(18), 0, 0), TownKit.FLOWERS[seed % #TownKit.FLOWERS + 1]:Lerp(C.White, 0.2), M.Fabric, "decoS")
 	-- étages : bandeau clair + fenêtres
 	local n = math.max(2, math.floor(w / 7))
