@@ -8,7 +8,7 @@
 	    clavier dans le rectangle (x, y, w, h), centré, touches aussi grandes
 	    que possible. Deux dispositions :
 	      "Full" : Q W E R T Y U I O P back / A S D F G H J K L enter /
-	               ⇧ Z X C V B N M , . ? / ctrl alt [espace] alt fn
+	               shift Z X C V B N M , . ? / ctrl alt [espace] alt fn
 	      "Mini" : Q W E R T Y / A S D F G H / Z X C V B N / [espace] enter
 	               (petit clavier "résumé" quand la place manque)
 	    Renvoie (touches, unité) : unité = taille d'une touche carrée (px).
@@ -23,8 +23,6 @@
 	  - KeyboardArt.Find(keys, code) : la touche qui porte ce Code (ou nil).
 	Aucune instance n'est créée pendant les clics (tout est construit une fois).
 ]]
-
-local GearKit = require(script.Parent.GearKit)
 
 local KeyboardArt = {}
 
@@ -46,6 +44,7 @@ export type Key = {
 	Color: Color3,
 	Units: number,
 	Depth: number, -- hauteur du socle visible sous la face (px)
+	Artisan: boolean?, -- touche artisanale (couleur fixe)
 }
 
 export type KeysOptions = {
@@ -100,6 +99,54 @@ local function layoutUnits(layout: string): (number, number)
 	return widest, #def.Rows
 end
 KeyboardArt.LayoutUnits = layoutUnits
+
+export type Geometry = {
+	Step: number,
+	W: number,
+	H: number,
+	Pad: number,
+	CaseX: number,
+	CaseY: number,
+	CaseW: number,
+	CaseH: number,
+	KeysX: number,
+	KeysY: number,
+	KeysW: number,
+	KeysH: number,
+	RestY: number,
+	RestH: number,
+}
+
+-- Mise en page d'un clavier dessiné pour un pas de touche `step` (touche +
+-- écart) : tapis (marge), place du câble en haut, boîtier, touches,
+-- repose-poignets en bas. `top` / `bottom` / `side` : place en plus (décors).
+function KeyboardArt.Geometry(layout: string, step: number, top: number?, bottom: number?, side: number?): Geometry
+	local unitsW, rows = layoutUnits(layout)
+	local pad = step * 0.34 + (side or 0)
+	local casePad = step * 0.3
+	local keysW, keysH = unitsW * step, rows * step
+	local caseW, caseH = keysW + casePad * 2, keysH + casePad * 2
+	local caseX = pad
+	local caseY = step * 0.5 + (top or 0)
+	local restH = step * 0.42
+	local restY = caseY + caseH + step * 0.14
+	return {
+		Step = step,
+		W = caseW + pad * 2,
+		H = restY + restH + step * 0.3 + (bottom or 0),
+		Pad = pad,
+		CaseX = caseX,
+		CaseY = caseY,
+		CaseW = caseW,
+		CaseH = caseH,
+		KeysX = caseX + casePad,
+		KeysY = caseY + casePad,
+		KeysW = keysW,
+		KeysH = keysH,
+		RestY = restY,
+		RestH = restH,
+	}
+end
 
 -- Vraies touches (Enum.KeyCode.Name) -> Code des touches du jeu
 local ALIASES: { [string]: string } = {
@@ -291,11 +338,17 @@ function KeyboardArt.Pick(keys: { Key }, count: number, random: Random): { Key }
 	return picked
 end
 
--- Petite étoile dorée sur une touche (touche "artisanale")
-function KeyboardArt.Artisan(key: Key, z: number)
+-- Touche "artisanale" : dorée, avec une étoile blanche en légende
+function KeyboardArt.Artisan(key: Key, _z: number)
 	KeyboardArt.SetColor(key, Color3.fromRGB(255, 200, 60))
-	key.Label.Text = ""
-	GearKit.Star(key.Frame, key.W / 2, (key.H - key.Depth) / 2, math.min(key.W, key.H) * 0.62, Color3.new(1, 1, 1), z)
+	key.Artisan = true
+	key.Label.Text = "★"
+	key.Label.TextColor3 = Color3.new(1, 1, 1)
+	key.Label.TextSize = math.max(6, math.floor(key.H * 0.62))
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Color3.fromRGB(200, 120, 20)
+	stroke.Thickness = math.max(1, key.H * 0.05)
+	stroke.Parent = key.Label
 end
 
 return KeyboardArt

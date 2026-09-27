@@ -84,8 +84,9 @@ export type Style = {
 
 export type Category = { Id: string, Name: string, Icon: string, Order: number? }
 
--- Un objet posé (format du serveur) ; F = dessin retourné (miroir)
-export type Placed = { I: string, X: number, Y: number, S: number, Z: number, F: boolean? }
+-- Un objet posé (format du serveur) ; F = dessin retourné (miroir) ;
+-- C = couleur (Config.House.Tints, nil = couleurs d'origine)
+export type Placed = { I: string, X: number, Y: number, S: number, Z: number, F: boolean?, C: string? }
 
 -- Une pièce (format du serveur) ; Slot = (étage - 1) x Columns + colonne,
 -- étage 1 = rez-de-chaussée
@@ -95,7 +96,33 @@ export type Room = {
 	Slot: number,
 	Wallpaper: string,
 	Floor: string,
+	Trim: string, -- (v9.1) boiseries (Config.House.Trims)
+	Mood: string, -- (v9.1) ambiance / lumière (Config.House.Moods)
+	View: string, -- (v9.1) vue par la fenêtre (Config.House.Views)
 	Placed: { Placed },
+}
+
+-- (v9.1) Entrée de personnalisation (boiseries, ambiance, vue, façade, toit,
+-- motif du toit, déco du jardin, couleur d'objet) : champs selon le genre
+export type Look = {
+	Id: string,
+	Name: string,
+	Icon: string,
+	Cost: number?,
+	RequiresRebirths: number?,
+	Color: Color3?,
+	Tint: Color3?,
+	Tint2: Color3?,
+	Amount: number?,
+	Light: Color3?,
+	Brightness: number?,
+	Effect: string?,
+	Kind: string?,
+	Sky: Color3?,
+	Horizon: Color3?,
+	Ground: Color3?,
+	Pattern: string?,
+	Order: number?,
 }
 
 export type HouseData = {
@@ -105,6 +132,12 @@ export type HouseData = {
 	OwnedFloors: { [string]: boolean },
 	Items: { [string]: number },
 	Rooms: { Room },
+	-- (v9.1) personnalisation : possédés par genre ({ [id] = true }), extérieur
+	Owned: { [string]: { [string]: boolean } },
+	Facade: string,
+	Roof: string,
+	RoofStyle: string,
+	Garden: { string },
 }
 
 export type HouseConfig = {
@@ -224,11 +257,44 @@ local function readPlaced(list: any): { Placed }
 					S = tonumber(entry.S) or 1,
 					Z = tonumber(entry.Z) or 0,
 					F = entry.F == true or nil,
+					C = type(entry.C) == "string" and entry.C or nil,
 				})
 			end
 		end
 	end
 	return placed
+end
+
+-- (v9.1) Genres de personnalisation (Config.HouseLookKinds)
+export type LookKind = { Kind: string, List: { Look }, Owned: string, Scope: string, Field: string, ById: { [string]: Look } }
+local LOOK_KINDS = ((Config :: any).HouseLookKinds or {}) :: { [string]: LookKind }
+local LOOKS_BY_ID = ((Config :: any).HouseLooksById or {}) :: { [string]: { [string]: Look } }
+HouseCommon.LookKinds = LOOK_KINDS
+HouseCommon.TintsById = ((Config :: any).HouseTintsById or {}) :: { [string]: Look }
+HouseCommon.Tints = ((Config.House :: any).Tints or {}) :: { Look }
+HouseCommon.GardenSlots = tonumber((Config.House :: any).GardenSlots) or 6
+
+-- Id valide d'un genre (sinon la 1re entrée de la liste)
+local function lookId(kind: string, value: any): string
+	local byId = LOOKS_BY_ID[kind]
+	if type(value) == "string" and byId and byId[value] then
+		return value
+	end
+	local def = LOOK_KINDS[kind]
+	local first = def and def.List[1]
+	return first and first.Id or ""
+end
+
+-- Entrée d'un genre par id (la 1re si inconnue)
+function HouseCommon.Look(kind: string, id: string?): Look?
+	local byId = LOOKS_BY_ID[kind]
+	return byId and byId[lookId(kind, id)] or nil
+end
+
+-- Vrai si le joueur possède cette entrée (la 1re est gratuite, sauf jardin)
+function HouseCommon.OwnsLook(house: HouseData, kind: string, id: string): boolean
+	local map = house.Owned[kind]
+	return map ~= nil and map[id] == true
 end
 
 -- Maison du joueur (jamais nil : valeurs par défaut avant le premier état ;
@@ -258,6 +324,9 @@ function HouseCommon.GetHouse(data: any): HouseData
 					Floor = type(raw.Floor) == "string" and raw.Floor
 						or (type(house.Floor) == "string" and house.Floor)
 						or (firstFloor and firstFloor.Id or ""),
+					Trim = lookId("Trim", raw.Trim),
+					Mood = lookId("Mood", raw.Mood),
+					View = lookId("View", raw.View),
 					Placed = readPlaced(raw.Placed),
 				})
 			end
@@ -270,10 +339,36 @@ function HouseCommon.GetHouse(data: any): HouseData
 			Slot = 1,
 			Wallpaper = firstWallpaper and firstWallpaper.Id or "",
 			Floor = firstFloor and firstFloor.Id or "",
+			Trim = lookId("Trim", nil),
+			Mood = lookId("Mood", nil),
+			View = lookId("View", nil),
 			Placed = {},
 		})
 	end
+	-- (v9.1) personnalisation : possédés par genre (la 1re entrée est gratuite)
+	local owned: { [string]: { [string]: boolean } } = {}
+	for kind, def in pairs(LOOK_KINDS) do
+		local map = table.clone(mapOf(house[def.Owned]))
+		local first = def.List[1]
+		if first and def.Scope ~= "Garden" then
+			map[first.Id] = true
+		end
+		owned[kind] = map
+	end
+	local garden: { string } = {}
+	if type(house.Garden) == "table" then
+		for _, id in ipairs(house.Garden) do
+			if type(id) == "string" and LOOKS_BY_ID.Garden and LOOKS_BY_ID.Garden[id] then
+				table.insert(garden, id)
+			end
+		end
+	end
 	return {
+		Owned = owned,
+		Facade = lookId("Facade", house.Facade),
+		Roof = lookId("Roof", house.Roof),
+		RoofStyle = lookId("RoofStyle", house.RoofStyle),
+		Garden = garden,
 		Size = type(house.Size) == "string" and house.Size or (firstSize and firstSize.Id or "Studio"),
 		OwnedSizes = mapOf(house.OwnedSizes),
 		OwnedWallpapers = mapOf(house.OwnedWallpapers),

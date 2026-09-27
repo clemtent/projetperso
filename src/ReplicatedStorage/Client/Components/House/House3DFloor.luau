@@ -8,7 +8,8 @@
 	aurait une double perspective. On reprend donc les mêmes motifs et les
 	mêmes couleurs (A / B du style), mais en grille régulière : c'est la
 	caméra 3D qui fait la perspective.
-	  Motifs : Plain, Checker, Wood, Tiles, Carpet, Marble, Herringbone.
+	  Motifs : Plain, Checker, Wood, Tiles, Carpet, Marble, Herringbone
+	  (+ v9.1 : Terrazzo, Mosaic, Grass, Clouds, Starry ; motif inconnu = uni).
 	  + la pelouse du socle (herbe, touffes et petites fleurs, comme la
 	    pelouse sous la maison en 2D).
 	Uniquement des Frames (comme HousePatterns) ; `container` doit couper
@@ -39,6 +40,12 @@ local function noise(a: number, b: number): number
 end
 
 local FLOOR: { [string]: Painter } = {}
+local FLOWERS_3D = {
+	Color3.fromRGB(255, 126, 182),
+	Color3.fromRGB(255, 226, 130),
+	WHITE,
+	Color3.fromRGB(183, 148, 246),
+}
 
 -- Uni : grandes bandes douces + quelques reflets
 FLOOR.Plain = function(holder, w, h, a, b, u)
@@ -210,6 +217,100 @@ FLOOR.Herringbone = function(holder, w, h, a, b, u)
 		end
 		y += cell
 		row += 1
+	end
+end
+
+-- v9.1 : Terrazzo (éclats colorés), Mosaic (petits carreaux), Grass (herbe),
+-- Clouds (nuages), Starry (ciel étoilé)
+FLOOR.Terrazzo = function(holder, w, h, a, b, u)
+	local chips = { b, b:Lerp(WHITE, 0.4), a:Lerp(BLACK, 0.18), Color3.fromRGB(255, 170, 190), Color3.fromRGB(150, 205, 255) }
+	local step = 26 * u
+	local index = 0
+	local y = step / 2
+	while y < h do
+		local x = step / 2 + noise(index, 1) * step
+		while x < w do
+			index += 1
+			local size = (5 + 7 * noise(index, 2)) * u
+			local chip = Box(holder, x, y + (noise(index, 3) - 0.5) * step, size * 1.4, size, chips[index % #chips + 1], 0.1)
+			chip.Rotation = noise(index, 4) * 180
+			Round(chip, UDim.new(0.35, 0))
+			x += step * (0.7 + noise(index, 5) * 0.8)
+		end
+		y += step
+	end
+end
+
+FLOOR.Mosaic = function(holder, w, h, a, b, u)
+	local cell = 22 * u
+	local colors = { a, b, a:Lerp(b, 0.5), b:Lerp(WHITE, 0.35) }
+	local row = 0
+	local y = 0
+	while y < h do
+		local col = 0
+		local x = 0
+		while x < w do
+			local color = colors[(row * 3 + col + math.floor(noise(row, col) * 3)) % #colors + 1]
+			Box(holder, x + 1 * u, y + 1 * u, cell - 2 * u, cell - 2 * u, color, 0)
+			x += cell
+			col += 1
+		end
+		y += cell
+		row += 1
+	end
+end
+
+FLOOR.Grass = function(holder, w, h, a, b, u)
+	local step = 34 * u
+	local index = 0
+	local y = step / 2
+	while y < h do
+		local x = noise(index, 7) * step
+		while x < w do
+			index += 1
+			Circle(holder, x, y, step * 0.7, step * 0.34, index % 2 == 0 and b or a:Lerp(b, 0.5), 0.25)
+			if noise(index, 8) > 0.82 then
+				local petal = FLOWERS_3D[index % #FLOWERS_3D + 1]
+				Circle(holder, x + step * 0.2, y - step * 0.1, 7 * u, 7 * u, petal, 0, 2)
+			end
+			x += step * (0.6 + noise(index, 9) * 0.7)
+		end
+		y += step * 0.7
+	end
+end
+
+FLOOR.Clouds = function(holder, w, h, a, b, u)
+	local step = 150 * u
+	local index = 0
+	local y = step * 0.4
+	while y < h + step * 0.3 do
+		local x = (index % 2) * step * 0.5
+		while x < w + step * 0.3 do
+			index += 1
+			HousePatterns.Cloud(holder, x, y, step * (0.55 + noise(index, 1) * 0.25), b, 0.25, 1)
+			x += step
+		end
+		y += step * 0.6
+	end
+	Box(holder, 0, 0, w, h, a:Lerp(WHITE, 0.6), 0.85)
+end
+
+FLOOR.Starry = function(holder, w, h, a, b, u)
+	local step = 60 * u
+	local index = 0
+	local y = step / 2
+	while y < h do
+		local x = noise(index, 3) * step
+		while x < w do
+			index += 1
+			local size = (8 + 10 * noise(index, 4)) * u
+			HousePatterns.Sparkle(holder, x, y + (noise(index, 5) - 0.5) * step * 0.6, size, b, 0.1, 2)
+			if noise(index, 6) > 0.6 then
+				Circle(holder, x + step * 0.4, y + step * 0.25, 3 * u, 3 * u, a:Lerp(WHITE, 0.7), 0.2, 2)
+			end
+			x += step * (0.7 + noise(index, 7) * 0.8)
+		end
+		y += step * 0.8
 	end
 end
 

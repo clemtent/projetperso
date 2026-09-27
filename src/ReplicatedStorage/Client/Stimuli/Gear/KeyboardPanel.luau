@@ -129,9 +129,11 @@ function KeyboardPanel._build(self: any)
 	-- Pas d'une touche (touche + écart) : ≈ 40 px réels sur PC, 46 en tactile
 	local header = touch and 50 or 42
 	local pad = 10
-	local step = (touch and 50 or 44) / scale
-	-- ... sans dépasser l'écran (largeur, et ~64 % de la hauteur)
-	step = math.min(step, (canvas.X - 24 - pad * 2) / (unitsW + 0.9), (canvas.Y * 0.64 - header - pad * 2) / (rows + 1.3))
+	local step = (touch and 52 or 44) / scale
+	-- ... sans dépasser l'écran (largeur ; hauteur : 82 % sur téléphone, 66 % sinon)
+	local phone = interface.Device == "Phone"
+	local maxHeight = canvas.Y * (phone and 0.82 or 0.66)
+	step = math.min(step, (canvas.X - 24 - pad * 2) / (unitsW + 1.3), (maxHeight - header - pad * 2) / (rows + 2))
 	step = math.max(step, 18)
 
 	local frame = Instance.new("Frame")
@@ -188,13 +190,16 @@ function KeyboardPanel._build(self: any)
 	local title = Instance.new("TextLabel")
 	title.Name = "Title"
 	title.BackgroundTransparency = 1
-	title.Position = UDim2.fromOffset(pad + 6, pad)
-	title.Size = UDim2.fromOffset(width * 0.5, header - 6)
+	title.Position = UDim2.fromOffset(pad + 6, pad + 2)
+	title.Size = UDim2.fromOffset(phone and (width - header - pad * 3) or width * 0.56, header - 10)
 	title.Font = Theme.Fonts.Title
-	title.TextSize = touch and 24 or 21
+	title.TextScaled = true -- (rétrécit un peu plutôt que d'être coupé)
+	local titleSize = Instance.new("UITextSizeConstraint")
+	titleSize.MaxTextSize = touch and 24 or 21
+	titleSize.MinTextSize = 11
+	titleSize.Parent = title
 	title.TextColor3 = Color3.fromRGB(255, 255, 255)
 	title.TextXAlignment = Enum.TextXAlignment.Left
-	title.TextTruncate = Enum.TextTruncate.AtEnd
 	title.Text = self.Options.Title()
 	title.ZIndex = 3
 	title.Parent = frame
@@ -206,47 +211,39 @@ function KeyboardPanel._build(self: any)
 	hint.Name = "Hint"
 	hint.BackgroundTransparency = 1
 	hint.AnchorPoint = Vector2.new(1, 0)
-	hint.Position = UDim2.new(1, -(pad + closeSize + 12), 0, pad)
-	hint.Size = UDim2.fromOffset(width * 0.5 - closeSize - 30, header - 6)
+	hint.Position = UDim2.new(1, -(pad + closeSize + 12), 0, pad + 4)
+	hint.Size = UDim2.fromOffset(width * 0.44 - closeSize - 34, header - 14)
 	hint.Font = Theme.Fonts.Body
-	hint.TextSize = touch and 19 or 17
+	hint.TextScaled = true
+	local hintSize = Instance.new("UITextSizeConstraint")
+	hintSize.MaxTextSize = touch and 19 or 17
+	hintSize.MinTextSize = 9
+	hintSize.Parent = hint
 	hint.TextColor3 = Color3.fromRGB(214, 206, 255)
 	hint.TextXAlignment = Enum.TextXAlignment.Right
-	hint.TextTruncate = Enum.TextTruncate.AtEnd
 	hint.Text = touch and Locale.T("Tap the keys!") or Locale.T("Type on your keyboard too!")
+	hint.Visible = not phone -- (téléphone : place au titre)
 	hint.ZIndex = 3
 	hint.Parent = frame
 	self.Hint = hint
 
-	-- Gros bouton ✕
-	local close = Instance.new("TextButton")
-	close.Name = "KeyboardClose"
-	close.AnchorPoint = Vector2.new(1, 0)
-	close.Position = UDim2.new(1, -pad, 0, pad - 2)
-	close.Size = UDim2.fromOffset(closeSize, closeSize)
-	close.BackgroundColor3 = Color3.fromRGB(255, 86, 110)
-	close.AutoButtonColor = true
-	close.Selectable = false
-	close.Font = Theme.Fonts.Title
-	close.Text = "✕"
-	close.TextSize = math.floor(closeSize * 0.55)
-	close.TextColor3 = Color3.new(1, 1, 1)
-	close.ZIndex = 4
-	UIUtil.Corner(close, math.floor(closeSize / 2))
-	local closeStroke = Instance.new("UIStroke")
-	closeStroke.Color = Color3.new(1, 1, 1)
-	closeStroke.Thickness = 2
-	closeStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	closeStroke.Parent = close
+	-- Gros bouton ✕ (le même que toutes les fenêtres)
+	local close = UIUtil.CloseButton({
+		Name = "KeyboardClose",
+		Size = closeSize,
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -pad, 0, pad - 2),
+		ZIndex = 4,
+		Parent = frame,
+		OnClose = function()
+			self:Close()
+		end,
+	})
 	close.InputBegan:Connect(function(input: InputObject)
 		if isPress(input) then
 			self:MarkInside()
 		end
 	end)
-	close.Activated:Connect(function()
-		self:Close()
-	end)
-	close.Parent = frame
 
 	frame.Parent = ctx.Overlay or ctx.Container
 	self.Frame = frame
@@ -323,18 +320,21 @@ function KeyboardPanel.FindKey(self: any, code: string): KeyboardArt.Key?
 	return KeyboardArt.Find(self.Keys, code)
 end
 
--- Haut d'une touche, en pixels "design" de la toile
+-- Point de départ du "+X" d'une touche : au-dessus du panneau, à l'aplomb de
+-- la touche (les chiffres ne cachent pas les touches), en pixels "design"
 function KeyboardPanel.KeyPoint(self: any, key: KeyboardArt.Key): Vector2?
 	local ctx = self.Ctx
 	local root = ctx.Interface.Root
+	local frame = self.Frame
 	local scale = math.max(0.01, ctx.Interface.Scale or 1)
 	local button = key.Button
-	if not root or not button.Parent then
+	if not root or not frame or not button.Parent then
 		return nil
 	end
-	local position = (button.AbsolutePosition - root.AbsolutePosition) / scale
-	local size = button.AbsoluteSize / scale
-	return Vector2.new(position.X + size.X / 2, position.Y)
+	local origin = root.AbsolutePosition
+	local x = (button.AbsolutePosition.X + button.AbsoluteSize.X / 2 - origin.X) / scale
+	local y = (frame.AbsolutePosition.Y - origin.Y) / scale
+	return Vector2.new(x, y - 6)
 end
 
 function KeyboardPanel.Destroy(self: any)

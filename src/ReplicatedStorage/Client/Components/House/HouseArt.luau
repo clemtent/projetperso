@@ -29,6 +29,8 @@
 	      dessine l'objet dans `body` ; `static` = pas d'animation (vignettes)
 	  HouseArt.Thumbnail(parent, item, size, zIndex?) -> Frame
 	      vignette carrée de `size` px (dessin, ou emoji si pas de dessin)
+	  HouseArt.PaintGarden(body, entry, static?) : (v9.1) déco du jardin
+	      (dossier GardenArt, Config.House.GardenDecor)
 	  HouseArt.Step(anims, clock) : fait vivre les animations
 	  HouseArt.Mirror(root, anims) : retourne le dessin gauche <-> droite
 	      (les animaux qui se promènent regardent où ils vont) ; le refaire
@@ -524,6 +526,52 @@ if artFolder then
 			end
 		end
 	end
+end
+
+-- (v9.1) Déco du jardin (Config.House.GardenDecor) : dossier GardenArt,
+-- même contrat (boîte 100 x 100, pieds en bas)
+local gardenPainters: { [string]: Painter } = {}
+local gardenFolder = script.Parent:FindFirstChild("GardenArt")
+if gardenFolder then
+	for _, moduleScript in ipairs(gardenFolder:GetChildren()) do
+		if moduleScript:IsA("ModuleScript") then
+			local ok, result = pcall(require, moduleScript)
+			if ok and type(result) == "table" then
+				for id, painter in pairs(result) do
+					if type(id) == "string" and type(painter) == "function" then
+						gardenPainters[id] = painter
+					end
+				end
+			else
+				warn("[HouseArt] Jardin " .. moduleScript.Name .. " : " .. tostring(result))
+			end
+		end
+	end
+end
+
+function HouseArt.HasGarden(decorId: string): boolean
+	return gardenPainters[decorId] ~= nil
+end
+
+-- Dessine une déco du jardin dans `body` (100 x 100) ; sinon son emoji
+function HouseArt.PaintGarden(body: Frame, entry: any, static: boolean?): (Result?, { Anim })
+	local painter = gardenPainters[entry.Id]
+	if painter then
+		local kit, anims = newKit(static == true)
+		local ok, result = pcall(painter, body, kit, entry)
+		if ok then
+			return (type(result) == "table" and result or {}) :: Result, anims
+		end
+		warn("[HouseArt] Jardin " .. tostring(entry.Id) .. " : " .. tostring(result))
+		for _, child in ipairs(body:GetChildren()) do
+			if child:IsA("GuiObject") then
+				child:Destroy()
+			end
+		end
+	end
+	local label = text(body, tostring(entry.Icon or "🌷"), 50, 60, 60, WHITE, 2)
+	label.Font = Enum.Font.BuilderSansMedium
+	return nil, {}
 end
 
 function HouseArt.Has(itemId: string): boolean

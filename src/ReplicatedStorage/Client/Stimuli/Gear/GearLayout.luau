@@ -46,6 +46,8 @@
 	      Priority = number (plus petit = placé d'abord),
 	      Anchor = function(button: Rect, canvas: Vector2): Vector2 (centre préféré),
 	      MinScale, MaxScale, Near (écart max. avec le bouton, en px, facultatif),
+	      SizePenalty (v9.1, facultatif : plus grand = préfère une place plus
+	      grande, même plus loin — les claviers cliquables veulent de grosses touches),
 	      OnPlace = function(placement | nil) }
 	  GearLayout.Unregister(id)
 	  GearLayout.GetPlacement(id) -> placement | nil

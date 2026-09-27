@@ -1,0 +1,1911 @@
+--[[
+	House3DRecipes (ModuleScript)
+	Emplacement : ReplicatedStorage > Client > Components > House > House3DRecipes
+
+	Recettes 3D des objets de la maison pour la vue 3D (House3D) : chaque
+	recette construit l'objet avec de VRAIES pièces (blocs, cylindres,
+	boules, pentes) via un House3DKit.Builder, en unités de la boîte 2D
+	(100 = taille de l'objet ; y = hauteur depuis le sol ; z = vers l'avant).
+	Les couleurs viennent de la palette du dessin 2D de l'objet (b.Pal,
+	b.P(i, défaut)) ; les dessus des meubles sont à la hauteur donnée par
+	HouseSurfaces (R.TopY) pour que les objets posés dessus tombent juste.
+
+	Recette = function(b: Builder, R: Ctx)
+	Un objet sans recette (House3DRecipes.For -> nil) devient un carton
+	découpé épais (House3DKit.Card).
+
+	API :
+	  House3DRecipes.For(item) -> (Recipe?, Info)   Info = { Wall = contre le mur ?, Flat = tapis ? }
+	  House3DRecipes.Has(itemId) -> boolean
+]]
+
+local HouseSurfaces = require(script.Parent.HouseSurfaces)
+local House3DKit = require(script.Parent.House3DKit)
+
+type Builder = House3DKit.Builder
+
+export type Ctx = {
+	Item: any,
+	Raw: { { number } }?,
+	TopY: (index: number, default: number) -> number,
+	Span: (index: number, default0: number, default1: number) -> (number, number),
+	Trim: Color3,
+}
+export type Recipe = (b: Builder, R: Ctx) -> ()
+export type Info = { Wall: boolean, Flat: boolean, Glow: boolean }
+
+local House3DRecipes = {}
+
+local M = Enum.Material
+local rgb = Color3.fromRGB
+local WHITE = Color3.new(1, 1, 1)
+local BLACK = Color3.new(0, 0, 0)
+local CREAM = rgb(255, 247, 236)
+local WOOD = rgb(214, 164, 120)
+local WOOD_LIGHT = rgb(236, 196, 150)
+local WOOD_DARK = rgb(160, 110, 78)
+local PINK = rgb(255, 126, 182)
+local PINK_SOFT = rgb(255, 214, 232)
+local LILAC = rgb(183, 148, 246)
+local MINT = rgb(110, 214, 176)
+local SKY = rgb(150, 205, 255)
+local BUTTER = rgb(255, 226, 130)
+local GOLD = rgb(245, 190, 60)
+local GREY = rgb(200, 196, 210)
+local GREY_DARK = rgb(120, 116, 136)
+local INK = rgb(70, 48, 76)
+local LEAF = rgb(120, 200, 120)
+local LEAF_DARK = rgb(70, 150, 90)
+local GLASS = rgb(200, 235, 255)
+local SCREEN = rgb(40, 44, 80)
+local FIRE = rgb(255, 150, 60)
+
+local darken = House3DKit.Darken
+local lighten = House3DKit.Lighten
+
+----------------------------------------------------------------------
+-- Couleurs de la palette
+----------------------------------------------------------------------
+
+local function isWoody(h: number, s: number, v: number): boolean
+	return h >= 0.02 and h <= 0.13 and s >= 0.18 and s <= 0.75 and v >= 0.35 and v <= 0.95
+end
+
+local function woodOf(b: Builder, fallback: Color3?): Color3
+	return House3DKit.Wood(b.Pal, b.Map(fallback or WOOD_LIGHT))
+end
+
+-- n-ième couleur "vive" (ni bois, ni presque blanc / noir / gris)
+local function accent(b: Builder, n: number, fallback: Color3): Color3
+	local count = 0
+	for _, color in ipairs(b.Pal) do
+		local h, s, v = color:ToHSV()
+		if s > 0.16 and v > 0.3 and not isWoody(h, s, v) then
+			count += 1
+			if count == n then
+				return color
+			end
+		end
+	end
+	return b.Map(fallback)
+end
+
+local function greenOf(b: Builder, fallback: Color3): Color3
+	return House3DKit.Pick(b.Pal, function(h, s, v)
+		return h > 0.2 and h < 0.45 and s > 0.2 and v > 0.3
+	end, b.Map(fallback))
+end
+
+local function lightOf(b: Builder, fallback: Color3): Color3
+	return House3DKit.Pick(b.Pal, function(_h, s, v)
+		return s < 0.14 and v > 0.86
+	end, b.Map(fallback))
+end
+
+----------------------------------------------------------------------
+-- Petits morceaux réutilisés
+----------------------------------------------------------------------
+
+local function legs4(b: Builder, w: number, d: number, h: number, t: number, color: Color3, material: Enum.Material?)
+	for _, sx in ipairs({ -1, 1 }) do
+		for _, sz in ipairs({ -1, 1 }) do
+			b.Box(sx * (w / 2 - t / 2), 0, sz * (d / 2 - t / 2), t, h, t, color, material)
+		end
+	end
+end
+
+local function knob(b: Builder, x: number, y: number, z: number, size: number, color: Color3?)
+	b.Ball(x, y, z, size, color or GOLD, M.Metal)
+end
+
+-- Caisson (commode, table de nuit...) : corps, tiroirs / portes, poignées
+local function cabinet(b: Builder, w: number, d: number, h: number, body: Color3, front: Color3, drawers: number, doors: number, feet: number)
+	local y0 = feet
+	if feet > 0 then
+		legs4(b, w - 6, d - 6, feet, 5, darken(body, 0.2), M.Wood)
+	end
+	b.Box(0, y0, 0, w, h - y0, d, body, M.Wood)
+	local rows = math.max(drawers, 0)
+	local inner = h - y0 - 6
+	if rows > 0 then
+		local rowH = inner / rows
+		for index = 1, rows do
+			local y = y0 + 3 + (index - 1) * rowH
+			b.Box(0, y + 1, d / 2, w - 8, rowH - 2, 1.4, front, M.SmoothPlastic)
+			knob(b, 0, y + rowH / 2, d / 2 + 1.6, 4)
+		end
+	elseif doors > 0 then
+		local doorW = (w - 8) / doors
+		for index = 1, doors do
+			local x = -w / 2 + 4 + (index - 0.5) * doorW
+			b.Box(x, y0 + 3, d / 2, doorW - 2, inner, 1.4, front, M.SmoothPlastic)
+			local side = (index - 0.5) < doors / 2 and 1 or -1
+			knob(b, x + side * (doorW / 2 - 5), y0 + 3 + inner * 0.55, d / 2 + 1.6, 4)
+		end
+	end
+end
+
+-- Cheveux d'herbe / feuillage en boules
+local function bush(b: Builder, x: number, y: number, z: number, size: number, color: Color3, count: number)
+	b.Ball(x, y, z, size, color, M.SmoothPlastic)
+	for index = 1, count do
+		local angle = index / count * math.pi * 2
+		b.Ball(x + math.cos(angle) * size * 0.34, y + (index % 2 == 0 and 0.12 or -0.1) * size, z + math.sin(angle) * size * 0.3, size * 0.62,
+			index % 2 == 0 and color or darken(color, 0.12), M.SmoothPlastic)
+	end
+end
+
+local function pot(b: Builder, diameter: number, height: number, color: Color3)
+	b.Cyl(0, 0, 0, diameter * 0.82, height * 0.2, darken(color, 0.12), M.SmoothPlastic)
+	b.Cyl(0, height * 0.2, 0, diameter * 0.9, height * 0.62, color, M.SmoothPlastic)
+	b.Cyl(0, height * 0.82, 0, diameter, height * 0.18, lighten(color, 0.15), M.SmoothPlastic)
+	b.Cyl(0, height * 0.9, 0, diameter * 0.86, height * 0.12, rgb(120, 86, 70), M.Ground)
+end
+
+----------------------------------------------------------------------
+-- Recettes
+----------------------------------------------------------------------
+
+local R: { [string]: Recipe } = {}
+
+-- TABLES --------------------------------------------------------------
+
+local function rectTable(depth: number, cloth: boolean, legColor: Color3?)
+	return function(b: Builder, ctx: Ctx)
+		local top = ctx.TopY(1, 60)
+		local x0, x1 = ctx.Span(1, -48, 48)
+		local w = x1 - x0
+		local wood = woodOf(b)
+		local legs = legColor and b.Map(legColor) or darken(wood, 0.12)
+		legs4(b, w - 8, depth - 8, top - 5, 6, legs, M.Wood)
+		b.Box((x0 + x1) / 2, top - 11, 0, w - 12, 6, depth - 12, darken(wood, 0.08), M.Wood)
+		b.Box((x0 + x1) / 2, top - 5, 0, w, 5, depth, wood, M.Wood)
+		if cloth then
+			local clothColor = lightOf(b, WHITE)
+			b.Box((x0 + x1) / 2, top - 0.2, 0, w * 0.74, 0.6, depth + 1.2, clothColor, M.Fabric)
+			b.Box((x0 + x1) / 2, top - 9, depth / 2 + 0.5, w * 0.74, 9, 0.6, clothColor, M.Fabric)
+			b.Box((x0 + x1) / 2, top - 9, -depth / 2 - 0.5, w * 0.74, 9, 0.6, clothColor, M.Fabric)
+			b.Ball((x0 + x1) / 2, top - 7, depth / 2 + 1, 4, accent(b, 1, PINK))
+		end
+		b.Top(1, (x0 + x1) / 2, top, 0, w, depth)
+		b.Footprint(w, depth, top)
+	end
+end
+
+R.DiningTable = rectTable(58, true)
+R.CoffeeTable = function(b, ctx)
+	local top = ctx.TopY(1, 49)
+	local x0, x1 = ctx.Span(1, -47, 47)
+	local w, depth = x1 - x0, 52
+	local wood = woodOf(b)
+	legs4(b, w - 10, depth - 10, top - 5, 7, darken(wood, 0.15), M.Wood)
+	b.Box(0, top * 0.25, 0, w - 14, 3, depth - 14, darken(wood, 0.05), M.Wood)
+	b.Box(0, top - 6, 0, w, 6, depth, wood, M.Wood)
+	b.Top(1, (x0 + x1) / 2, top, 0, w, depth)
+	b.Footprint(w, depth, top)
+end
+R.SideTable = rectTable(60, false)
+R.BigDesk = function(b, ctx)
+	rectTable(56, false)(b, ctx)
+	local top = ctx.TopY(1, 63)
+	local x0, x1 = ctx.Span(1, -48, 48)
+	local wood = woodOf(b)
+	-- caisson à tiroirs à droite
+	local cw = (x1 - x0) * 0.3
+	b.Box(x1 - cw / 2 - 3, 0, 0, cw, top - 6, 48, darken(wood, 0.05), M.Wood)
+	for index = 1, 3 do
+		local y = 4 + (index - 1) * (top - 12) / 3
+		b.Box(x1 - cw / 2 - 3, y, 24, cw - 5, (top - 12) / 3 - 2, 1.2, accent(b, 1, PINK_SOFT))
+		knob(b, x1 - cw / 2 - 3, y + (top - 12) / 6, 25.5, 3.4)
+	end
+end
+R.StudyDesk = R.BigDesk
+R.PicnicTable = function(b, ctx)
+	local top = ctx.TopY(1, 61)
+	local bench = ctx.TopY(2, 29)
+	local x0, x1 = ctx.Span(1, -46, 46)
+	local w, depth = x1 - x0, 44
+	local wood = woodOf(b, WOOD)
+	legs4(b, w - 16, depth - 10, top - 4, 6, darken(wood, 0.15), M.Wood)
+	b.Box(0, top - 4, 0, w, 4, depth, wood, M.WoodPlanks)
+	for _, side in ipairs({ -1, 1 }) do
+		legs4(b, w - 20, 12, bench - 4, 5, darken(wood, 0.15), M.Wood)
+		b.Box(0, bench - 4, side * (depth / 2 + 12), w + 2, 4, 14, wood, M.WoodPlanks)
+		b.Box(0, 0, side * (depth / 2 + 12), 4, bench - 4, 4, darken(wood, 0.15), M.Wood)
+	end
+	-- nappe vichy
+	b.Box(0, top, 0, w * 0.5, 0.5, depth * 0.8, accent(b, 1, rgb(255, 150, 170)), M.Fabric)
+	b.Top(1, 0, top, 0, w, depth)
+	b.Top(2, 0, bench, depth / 2 + 12, w, 14)
+	b.Footprint(w, depth + 40, top)
+end
+R.KitchenIsland = function(b, ctx)
+	local top = ctx.TopY(1, 63)
+	local x0, x1 = ctx.Span(1, -48, 48)
+	local w, depth = x1 - x0, 50
+	local body = accent(b, 1, MINT)
+	b.Box(0, 0, 0, w - 4, 4, depth - 6, darken(body, 0.25))
+	b.Box(0, 4, 0, w - 4, top - 10, depth - 4, body, M.SmoothPlastic)
+	for index = 1, 3 do
+		local x = -w / 2 + 2 + (index - 0.5) * (w - 4) / 3
+		b.Box(x, 8, depth / 2 - 1.5, (w - 4) / 3 - 3, top - 18, 1.2, lighten(body, 0.2))
+		b.Box(x, top - 22, depth / 2, 12, 2, 2, GREY, M.Metal)
+	end
+	b.Box(0, top - 6, 0, w, 6, depth, lightOf(b, rgb(248, 246, 252)), M.Marble)
+	b.Top(1, 0, top, 0, w, depth)
+	b.Footprint(w, depth, top)
+end
+local function roundTable(b: Builder, ctx: Ctx, defaultTop: number)
+	local top = ctx.TopY(1, defaultTop)
+	local x0, x1 = ctx.Span(1, -44, 44)
+	local w = x1 - x0
+	local wood = woodOf(b, WOOD_LIGHT)
+	local metal = b.Map(GREY)
+	b.Cyl(0, 0, 0, w * 0.5, 3, darken(metal, 0.2), M.Metal)
+	b.Cyl(0, 3, 0, 8, top - 8, metal, M.Metal)
+	b.Cyl(0, top - 5, 0, w, 5, accent(b, 1, wood), M.SmoothPlastic)
+	b.Cyl(0, top - 5.4, 0, w + 2, 1.6, lighten(accent(b, 1, wood), 0.3), M.SmoothPlastic)
+	if top > 60 then
+		b.Cyl(0, top * 0.3, 0, w * 0.46, 2, GOLD, M.Metal)
+	end
+	b.Top(1, 0, top, 0, w * 0.8, w * 0.8)
+	b.Footprint(w, w, top)
+end
+R.CafeTable = function(b, ctx)
+	roundTable(b, ctx, 70)
+end
+R.BarTable = function(b, ctx)
+	roundTable(b, ctx, 84)
+end
+R.VanityTable = function(b, ctx)
+	local top = ctx.TopY(1, 45)
+	local x0, x1 = ctx.Span(1, -46, 46)
+	local w, depth = x1 - x0, 44
+	local wood = lightOf(b, CREAM)
+	local trim = accent(b, 1, PINK)
+	legs4(b, w - 6, depth - 6, top - 10, 5, wood, M.Wood)
+	b.Box(0, top - 10, 0, w, 10, depth, wood, M.Wood)
+	b.Box(0, top - 8, depth / 2, w * 0.5, 6, 1.2, trim)
+	knob(b, 0, top - 5, depth / 2 + 1.4, 3)
+	-- miroir ovale
+	local mirrorH = math.max(20, 96 - top)
+	b.Box(0, top, -depth / 2 + 3, 10, mirrorH * 0.3, 4, wood, M.Wood)
+	local frame = b.CylZ(0, top + mirrorH * 0.55, -depth / 2 + 3, mirrorH * 0.9, 3, trim, M.SmoothPlastic)
+	frame.Name = "Cadre"
+	local glass = b.CylZ(0, top + mirrorH * 0.55, -depth / 2 + 4, mirrorH * 0.76, 2, rgb(214, 238, 255), M.Glass)
+	glass.Reflectance = 0.2
+	b.Top(1, 0, top, 4, w, depth - 10)
+	b.Footprint(w, depth, 100)
+end
+
+-- RANGEMENTS -----------------------------------------------------------
+
+R.Nightstand = function(b, ctx)
+	local top = ctx.TopY(1, 56)
+	local x0, x1 = ctx.Span(1, -42, 42)
+	local w, depth = x1 - x0, 60
+	local body = woodOf(b, WOOD_LIGHT)
+	cabinet(b, w, depth, top - 4, body, accent(b, 1, PINK_SOFT), 2, 0, 6)
+	b.Box(0, top - 4, 0, w + 4, 4, depth + 4, lighten(body, 0.1), M.Wood)
+	b.Top(1, 0, top, 0, w, depth)
+	b.Footprint(w + 4, depth + 4, top)
+end
+R.Dresser = function(b, ctx)
+	local top = ctx.TopY(1, 63)
+	local x0, x1 = ctx.Span(1, -46, 46)
+	local w, depth = x1 - x0, 50
+	local body = woodOf(b, WOOD_LIGHT)
+	cabinet(b, w, depth, top - 4, body, accent(b, 1, PINK_SOFT), 3, 0, 6)
+	b.Box(0, top - 4, 0, w + 4, 4, depth + 3, lighten(body, 0.12), M.Wood)
+	b.Top(1, 0, top, 0, w, depth)
+	b.Footprint(w + 4, depth + 3, top)
+end
+R.DrawerCabinet = function(b, ctx)
+	local top = ctx.TopY(1, 76)
+	local x0, x1 = ctx.Span(1, -43, 44)
+	local w, depth = x1 - x0, 44
+	local body = woodOf(b, WOOD_LIGHT)
+	cabinet(b, w, depth, top - 4, body, accent(b, 1, rgb(255, 200, 220)), 4, 0, 5)
+	b.Box(0, top - 4, 0, w + 3, 4, depth + 3, lighten(body, 0.12), M.Wood)
+	b.Top(1, 0, top, 0, w, depth)
+	b.Footprint(w + 3, depth + 3, top)
+end
+R.TVStand = function(b, ctx)
+	local top = ctx.TopY(1, 47)
+	local x0, x1 = ctx.Span(1, -48, 48)
+	local w, depth = x1 - x0, 40
+	local body = woodOf(b, WOOD)
+	cabinet(b, w, depth, top - 4, body, accent(b, 1, lighten(body, 0.2)), 0, 3, 5)
+	b.Box(0, top - 4, 0, w + 2, 4, depth + 2, lighten(body, 0.1), M.Wood)
+	b.Top(1, 0, top, 0, w, depth)
+	b.Footprint(w + 2, depth + 2, top)
+end
+R.Wardrobe = function(b, ctx)
+	local top = ctx.TopY(1, 89)
+	local x0, x1 = ctx.Span(1, -44, 44)
+	local w, depth = x1 - x0, 42
+	local body = woodOf(b, WOOD_LIGHT)
+	local front = accent(b, 1, rgb(255, 200, 220))
+	cabinet(b, w, depth, top - 5, body, front, 0, 2, 6)
+	b.Box(0, top - 5, 0, w + 5, 5, depth + 4, lighten(body, 0.12), M.Wood)
+	-- petits cœurs / médaillons sur les portes
+	for _, side in ipairs({ -1, 1 }) do
+		b.CylZ(side * w * 0.24, top * 0.7, depth / 2 + 1.6, 8, 1, lighten(front, 0.35))
+	end
+	b.Top(1, 0, top, 0, w, depth)
+	b.Footprint(w + 5, depth + 4, top)
+end
+R.Bookshelf = function(b, ctx)
+	local top = ctx.TopY(1, 91)
+	local x0, x1 = ctx.Span(1, -42, 42)
+	local w, depth = x1 - x0 + 4, 30
+	local wood = woodOf(b, WOOD)
+	b.Box(0, 0, -depth / 2 + 1, w, top, 2, darken(wood, 0.2), M.Wood)
+	for _, side in ipairs({ -1, 1 }) do
+		b.Box(side * (w / 2 - 2), 0, 0, 4, top, depth, wood, M.Wood)
+	end
+	local shelves = 4
+	local colors = {}
+	for index = 1, 6 do
+		colors[index] = accent(b, index, ({ PINK, SKY, MINT, BUTTER, LILAC, rgb(255, 170, 120) })[index])
+	end
+	for index = 0, shelves do
+		local y = index * (top - 4) / shelves
+		b.Box(0, y, 0, w - 4, 4, depth, wood, M.Wood)
+		if index < shelves then
+			-- livres
+			local x = -w / 2 + 5
+			local n = 0
+			while x < w / 2 - 12 do
+				n += 1
+				local bw = 4 + ((n * 7 + index * 3) % 4)
+				local bh = (top - 4) / shelves - 8 - ((n * 5 + index) % 5)
+				if (n + index) % 5 ~= 0 then
+					b.Box(x + bw / 2, y + 4, 2, bw, bh, depth - 8, colors[(n + index) % 6 + 1], M.SmoothPlastic)
+				end
+				x += bw + 0.6
+			end
+		end
+	end
+	b.Top(1, 0, top, 0, w, depth)
+	b.Footprint(w, depth, top)
+end
+R.StorageBox = function(b, ctx)
+	local top = ctx.TopY(1, 53)
+	local x0, x1 = ctx.Span(1, -36, 36)
+	local w, depth = x1 - x0, 60
+	local body = House3DKit.Pick(b.Pal, function(_h, s, v)
+		return v > 0.4 and s > 0.1
+	end, b.Map(rgb(214, 180, 140)))
+	b.Box(0, 0, 0, w, top - 6, depth, body, M.Cardboard)
+	b.Box(0, top - 6, 0, w + 3, 6, depth + 3, lighten(body, 0.1), M.Cardboard)
+	b.Box(0, top - 18, depth / 2 + 0.6, 16, 6, 1, darken(body, 0.35))
+	b.Top(1, 0, top, 0, w, depth)
+	b.Footprint(w + 3, depth + 3, top)
+end
+R.Suitcase = function(b, _ctx)
+	local body = accent(b, 1, PINK)
+	b.Box(0, 4, 0, 70, 62, 30, body, M.Leather)
+	for _, x in ipairs({ -20, 20 }) do
+		b.Box(x, 4, 0, 5, 62, 31, darken(body, 0.25), M.Leather)
+	end
+	b.Box(0, 66, 0, 22, 4, 6, INK)
+	b.Box(0, 66, 0, 5, 8, 6, INK)
+	for _, x in ipairs({ -28, 28 }) do
+		b.Ball(x, 3, 12, 6, INK, M.Rubber)
+	end
+	b.Top(1, 0, 70, 0, 70, 30)
+	b.Footprint(70, 30, 72)
+end
+
+-- SIÈGES -----------------------------------------------------------------
+
+local function chair(b: Builder, ctx: Ctx, seatDefault: number, backH: number, width: number, depth: number, padColor: Color3?)
+	local seat = ctx.TopY(1, seatDefault)
+	local wood = woodOf(b, WOOD)
+	legs4(b, width - 4, depth - 4, seat - 5, 5, darken(wood, 0.1), M.Wood)
+	b.Box(0, seat - 5, 0, width, 5, depth, wood, M.Wood)
+	if padColor then
+		b.Box(0, seat, 1, width - 6, 2.2, depth - 8, padColor, M.Fabric)
+	end
+	-- dossier (derrière = -z)
+	b.Box(-width / 2 + 3, seat, -depth / 2 + 2.5, 5, backH, 5, darken(wood, 0.05), M.Wood)
+	b.Box(width / 2 - 3, seat, -depth / 2 + 2.5, 5, backH, 5, darken(wood, 0.05), M.Wood)
+	b.Box(0, seat + backH * 0.45, -depth / 2 + 2.5, width - 6, backH * 0.5, 3, padColor or wood, padColor and M.Fabric or M.Wood)
+	b.Top(1, 0, seat + (padColor and 2 or 0), 3, width - 10, depth - 10)
+	b.Footprint(width, depth, seat + backH)
+end
+R.WoodenChair = function(b, ctx)
+	chair(b, ctx, 48, 44, 64, 56, nil)
+end
+R.DiningChair = function(b, ctx)
+	chair(b, ctx, 48, 44, 52, 52, accent(b, 1, PINK_SOFT))
+end
+R.RockingChair = function(b, ctx)
+	chair(b, ctx, 43, 50, 58, 54, accent(b, 1, rgb(255, 190, 200)))
+	local wood = woodOf(b, WOOD)
+	for _, side in ipairs({ -1, 1 }) do
+		b.BoxR(CFrame.new(side * 27, 3, 0) * CFrame.Angles(0.12, 0, 0), 4, 3, 74, darken(wood, 0.2), M.Wood)
+	end
+end
+R.GamingChair = function(b, ctx)
+	local seat = ctx.TopY(1, 37)
+	local main = accent(b, 1, PINK)
+	local dark = darken(accent(b, 2, INK), 0.2)
+	for index = 0, 4 do
+		local angle = index / 5 * math.pi * 2
+		b.BoxR(CFrame.new(math.cos(angle) * 12, 2, math.sin(angle) * 12) * CFrame.Angles(0, -angle, 0), 26, 3, 4, dark, M.Metal)
+		b.Ball(math.cos(angle) * 24, 2, math.sin(angle) * 24, 4, INK, M.Rubber)
+	end
+	b.Cyl(0, 3, 0, 6, seat - 10, GREY, M.Metal)
+	b.Box(0, seat - 8, 0, 54, 8, 50, main, M.Leather)
+	b.Box(0, seat - 8, -22, 50, 60, 8, main, M.Leather)
+	b.Box(0, seat + 10, -18, 20, 40, 1, dark, M.Leather)
+	for _, side in ipairs({ -1, 1 }) do
+		b.Box(side * 26, seat, 2, 4, 14, 30, dark, M.Leather)
+		b.Wedge(side * 16, seat + 52, -22, 10, 12, 8, dark, "Front", M.Leather)
+	end
+	b.Top(1, 0, seat, 4, 44, 36)
+	b.Footprint(56, 56, seat + 60)
+end
+R.BarStool = function(b, ctx)
+	local seat = ctx.TopY(1, 74)
+	local color = accent(b, 1, PINK)
+	b.Cyl(0, 0, 0, 34, 3, GREY_DARK, M.Metal)
+	b.Cyl(0, 3, 0, 6, seat - 10, GREY, M.Metal)
+	b.Cyl(0, seat * 0.35, 0, 30, 2, GOLD, M.Metal)
+	b.Cyl(0, seat - 8, 0, 46, 8, color, M.Leather)
+	b.Top(1, 0, seat, 0, 36, 36)
+	b.Footprint(46, 46, seat)
+end
+R.MushroomStool = function(b, ctx)
+	local seat = ctx.TopY(1, 85)
+	local cap = accent(b, 1, rgb(255, 110, 120))
+	local stem = lightOf(b, CREAM)
+	b.Cyl(0, 0, 0, 34, seat * 0.62, stem, M.SmoothPlastic)
+	b.Cyl(0, seat * 0.55, 0, 86, seat * 0.3, cap, M.SmoothPlastic)
+	b.Cyl(0, seat * 0.85 - 1, 0, 70, seat * 0.15 + 1, lighten(cap, 0.08), M.SmoothPlastic)
+	for index = 1, 6 do
+		local angle = index / 6 * math.pi * 2
+		b.Ball(math.cos(angle) * 30, seat * 0.72, math.sin(angle) * 30, 12, WHITE)
+	end
+	b.Ball(0, seat - 1, 0, 14, WHITE)
+	b.Top(1, 0, seat, 0, 50, 50)
+	b.Footprint(86, 86, seat)
+end
+R.FloorCushion = function(b, ctx)
+	local seat = ctx.TopY(1, 51)
+	local color = accent(b, 1, PINK)
+	b.Cyl(0, 0, 0, 90, seat * 0.8, color, M.Fabric)
+	b.Cyl(0, seat * 0.7, 0, 76, seat * 0.3, lighten(color, 0.12), M.Fabric)
+	b.Ball(0, seat - 2, 0, 10, darken(color, 0.2), M.Fabric)
+	b.Top(1, 0, seat, 0, 60, 60)
+	b.Footprint(90, 90, seat)
+end
+R.Beanbag = function(b, _ctx)
+	local color = accent(b, 1, LILAC)
+	b.Ball(0, 22, 0, 90, color, M.Fabric)
+	b.Ball(0, 42, -20, 64, darken(color, 0.06), M.Fabric)
+	b.Box(0, 0, 0, 84, 4, 80, darken(color, 0.1), M.Fabric)
+	b.Top(1, 0, 58, 8, 50, 40)
+	b.Footprint(90, 90, 70)
+end
+local function sofa(b: Builder, ctx: Ctx, seatDefault: number, width: number, cushions: number)
+	local seat = ctx.TopY(1, seatDefault)
+	local main = accent(b, 1, PINK)
+	local depth = 56
+	local wood = woodOf(b, WOOD_DARK)
+	for _, sx in ipairs({ -1, 1 }) do
+		for _, sz in ipairs({ -1, 1 }) do
+			b.Cyl(sx * (width / 2 - 8), 0, sz * (depth / 2 - 8), 6, 7, wood, M.Wood)
+		end
+	end
+	b.Box(0, 7, 0, width, seat - 16, depth, darken(main, 0.08), M.Fabric)
+	local cw = (width - 20) / cushions
+	for index = 1, cushions do
+		local x = -width / 2 + 10 + (index - 0.5) * cw
+		b.Box(x, seat - 9, 4, cw - 1.5, 9, depth - 12, main, M.Fabric)
+		b.Box(x, seat, -depth / 2 + 7, cw - 2, 30, 12, main, M.Fabric)
+	end
+	b.Box(0, 7, -depth / 2 + 3, width, seat + 26, 6, darken(main, 0.12), M.Fabric)
+	for _, side in ipairs({ -1, 1 }) do
+		b.Box(side * (width / 2 - 5), 7, 0, 10, seat, depth, darken(main, 0.04), M.Fabric)
+		b.CylZ(side * (width / 2 - 5), seat + 7, 0, 12, depth, lighten(main, 0.06), M.Fabric)
+	end
+	-- petit coussin
+	local pillow = accent(b, 2, BUTTER)
+	b.BoxR(CFrame.new(-width / 2 + 22, seat + 8, -depth / 2 + 16) * CFrame.Angles(-0.3, 0.2, 0.1), 16, 16, 5, pillow, M.Fabric)
+	b.Top(1, 0, seat, 4, width - 26, depth - 16)
+	b.Footprint(width, depth, seat + 30)
+end
+R.Sofa = function(b, ctx)
+	sofa(b, ctx, 38, 100, 3)
+end
+R.Armchair = function(b, ctx)
+	sofa(b, ctx, 37, 96, 1)
+end
+R.EggChair = function(b, ctx)
+	local seat = ctx.TopY(1, 39)
+	local shell = lightOf(b, WHITE)
+	local pad = accent(b, 1, PINK)
+	b.Cyl(0, 0, 0, 44, 4, GREY_DARK, M.Metal)
+	b.Cyl(0, 4, 0, 6, seat - 14, GREY, M.Metal)
+	b.Ball(0, seat + 18, -6, 80, shell, M.SmoothPlastic)
+	b.Ball(0, seat + 16, 10, 62, pad, M.Fabric)
+	b.Box(0, seat - 6, 12, 50, 6, 30, pad, M.Fabric)
+	b.Top(1, 0, seat, 14, 40, 26)
+	b.Footprint(80, 80, seat + 58)
+end
+R.GardenBench = function(b, ctx)
+	local seat = ctx.TopY(1, 41)
+	local wood = woodOf(b, WOOD)
+	local metal = b.Map(rgb(90, 90, 110))
+	for _, side in ipairs({ -1, 1 }) do
+		b.Box(side * 44, 0, 0, 4, seat + 12, 36, metal, M.Metal)
+	end
+	for index = 0, 3 do
+		b.Box(0, seat - 3, -14 + index * 9.5, 88, 3, 8, wood, M.WoodPlanks)
+	end
+	for index = 0, 2 do
+		b.BoxR(CFrame.new(0, seat + 8 + index * 9, -19 - index * 1.2) * CFrame.Angles(-0.15, 0, 0), 88, 7, 3, wood, M.WoodPlanks)
+	end
+	b.Top(1, 0, seat, 0, 80, 30)
+	b.Footprint(92, 40, seat + 34)
+end
+
+-- LITS ---------------------------------------------------------------------
+
+local function bed(b: Builder, ctx: Ctx, topDefault: number, width: number, depth: number)
+	local top = ctx.TopY(1, topDefault)
+	local wood = woodOf(b, WOOD_LIGHT)
+	local blanket = accent(b, 1, PINK)
+	local sheet = lightOf(b, WHITE)
+	local frameTop = top - 12
+	legs4(b, width - 2, depth - 2, frameTop, 6, darken(wood, 0.1), M.Wood)
+	b.Box(0, frameTop * 0.45, 0, width, frameTop * 0.55, depth, wood, M.Wood)
+	b.Box(0, frameTop, 0, width - 4, 12, depth - 4, sheet, M.Fabric)
+	-- tête de lit (gauche) et pied (droite)
+	b.Box(-width / 2 + 3, 0, 0, 6, top + 28, depth, wood, M.Wood)
+	b.CylZ(-width / 2 + 3, top + 28, 0, 10, depth, lighten(wood, 0.1), M.Wood)
+	b.Box(width / 2 - 3, 0, 0, 6, top + 8, depth, wood, M.Wood)
+	-- couverture (retombe sur les côtés) + revers
+	b.Box(width * 0.12, frameTop + 2, 0, width * 0.72, 11, depth, blanket, M.Fabric)
+	b.Box(width * 0.12, frameTop - 8, depth / 2 + 0.5, width * 0.72, 12, 1, darken(blanket, 0.05), M.Fabric)
+	b.Box(-width * 0.2, frameTop + 2.4, 0, 8, 11, depth + 0.2, lighten(blanket, 0.4), M.Fabric)
+	-- oreillers
+	local n = depth > 60 and 2 or 1
+	for index = 1, n do
+		local z = n == 1 and 0 or (index == 1 and -depth * 0.22 or depth * 0.22)
+		b.BoxR(CFrame.new(-width / 2 + 16, top + 4, z) * CFrame.Angles(0, 0, -0.35), 18, 7, depth / n - 8, sheet, M.Fabric)
+	end
+	b.Top(1, 0, top + 1, 0, width - 20, depth - 10)
+	b.Footprint(width, depth, top + 28)
+end
+R.DoubleBed = function(b, ctx)
+	bed(b, ctx, 42, 100, 76)
+end
+R.CanopyBed = function(b, ctx)
+	bed(b, ctx, 36, 70, 60)
+	local wood = woodOf(b, WOOD_LIGHT)
+	local drape = accent(b, 2, PINK_SOFT)
+	for _, sx in ipairs({ -1, 1 }) do
+		for _, sz in ipairs({ -1, 1 }) do
+			b.Cyl(sx * 34, 0, sz * 29, 4, 98, wood, M.Wood)
+			b.Ball(sx * 34, 99, sz * 29, 6, GOLD, M.Metal)
+		end
+	end
+	b.Box(0, 94, 0, 72, 3, 62, drape, M.Fabric)
+	for _, sz in ipairs({ -1, 1 }) do
+		b.Box(0, 82, sz * 30, 72, 12, 1, drape, M.Fabric)
+	end
+	for _, sx in ipairs({ -1, 1 }) do
+		b.Box(sx * 34, 50, 29, 6, 44, 2, lighten(drape, 0.2), M.Fabric)
+	end
+end
+R.CloudBed = function(b, ctx)
+	local top = ctx.TopY(1, 45)
+	local cloud = lightOf(b, WHITE)
+	local blanket = accent(b, 1, SKY)
+	for index = 0, 6 do
+		local x = -42 + index * 14
+		b.Ball(x, 16, 0, 34 + (index % 2) * 6, index % 2 == 0 and cloud or rgb(236, 240, 255))
+	end
+	b.Box(0, 10, 0, 84, top - 22, 56, cloud, M.Fabric)
+	b.Box(0, top - 12, 0, 80, 11, 54, WHITE, M.Fabric)
+	b.Box(8, top - 10, 0, 60, 11, 55, blanket, M.Fabric)
+	b.Ball(-40, top + 6, 0, 28, cloud)
+	b.Ball(-30, top + 14, 0, 22, cloud)
+	b.Ball(-32, top + 3, 0, 16, WHITE, M.Fabric)
+	b.Top(1, 4, top, 0, 70, 50)
+	b.Footprint(96, 60, top + 20)
+end
+R.LoftBed = function(b, ctx)
+	local top = ctx.TopY(1, 77)
+	local desk = ctx.TopY(2, 27)
+	local wood = woodOf(b, WOOD)
+	local blanket = accent(b, 1, LILAC)
+	for _, sx in ipairs({ -1, 1 }) do
+		for _, sz in ipairs({ -1, 1 }) do
+			b.Box(sx * 36, 0, sz * 22, 5, top + 14, 5, wood, M.Wood)
+		end
+	end
+	b.Box(0, top - 12, 0, 76, 6, 48, wood, M.Wood)
+	b.Box(0, top - 6, 0, 72, 6, 44, WHITE, M.Fabric)
+	b.Box(6, top - 4, 0, 56, 5, 45, blanket, M.Fabric)
+	b.Box(-26, top - 1, 0, 14, 5, 30, WHITE, M.Fabric)
+	b.Box(0, top + 4, 22, 76, 4, 2, wood, M.Wood)
+	-- bureau dessous
+	b.Box(-14, desk - 4, 0, 44, 4, 40, lighten(wood, 0.15), M.Wood)
+	-- échelle
+	for _, x in ipairs({ 30, 42 }) do
+		b.Box(x, 0, 26, 3, top, 3, darken(wood, 0.15), M.Wood)
+	end
+	for index = 1, 5 do
+		b.Box(36, index * top / 6, 26, 12, 2.5, 2.5, darken(wood, 0.15), M.Wood)
+	end
+	b.Top(1, 0, top, 0, 60, 40)
+	b.Top(2, -14, desk, 0, 40, 36)
+	b.Footprint(80, 56, top + 14)
+end
+R.PetBed = function(b, _ctx)
+	local color = accent(b, 1, PINK)
+	b.Cyl(0, 0, 0, 90, 22, color, M.Fabric)
+	b.Cyl(0, 16, 0, 70, 7, lighten(color, 0.4), M.Fabric)
+	b.Top(1, 0, 22, 0, 60, 60)
+	b.Footprint(90, 90, 22)
+end
+
+-- CUISINE ---------------------------------------------------------------
+
+R.Fridge = function(b, ctx)
+	local top = ctx.TopY(1, 96)
+	local body = House3DKit.Pick(b.Pal, function(_h, s, v)
+		return v > 0.6
+	end, b.Map(rgb(240, 250, 255)))
+	local x0, x1 = ctx.Span(1, -30, 30)
+	local w, depth = math.max(52, (x1 - x0) * 1.1), 46
+	b.Box(0, 0, 0, w, 4, depth, darken(body, 0.3))
+	b.Box(0, 4, 0, w, top - 4, depth, body, M.SmoothPlastic)
+	b.Box(0, top * 0.62, depth / 2, w - 3, 1, 1, darken(body, 0.2))
+	for _, y in ipairs({ top * 0.3, top * 0.8 }) do
+		b.Box(w / 2 - 7, y - 8, depth / 2 + 1.2, 2.5, 18, 2.5, GREY, M.Metal)
+	end
+	b.CylZ(-w * 0.18, top * 0.8, depth / 2 + 0.8, 9, 1, accent(b, 1, PINK))
+	b.Top(1, 0, top, 0, w, depth)
+	b.Footprint(w, depth, top)
+end
+R.Stove = function(b, ctx)
+	local top = ctx.TopY(1, 62)
+	local x0, x1 = ctx.Span(1, -44, 44)
+	local w, depth = x1 - x0, 50
+	local body = accent(b, 1, rgb(255, 180, 190))
+	b.Box(0, 0, 0, w, top - 4, depth, body, M.SmoothPlastic)
+	b.Box(0, top - 4, 0, w + 2, 4, depth + 2, lightOf(b, WHITE), M.SmoothPlastic)
+	b.Box(0, 8, depth / 2, w * 0.7, top * 0.5, 1.2, rgb(60, 50, 70), M.Glass)
+	b.Box(0, top * 0.62, depth / 2 + 1, w * 0.6, 2.5, 2.5, GREY, M.Metal)
+	for index = 1, 4 do
+		knob(b, -w / 2 + index * w / 5, top - 10, depth / 2 + 1, 4, INK)
+	end
+	for _, x in ipairs({ -w / 4, w / 4 }) do
+		for _, z in ipairs({ -depth / 4, depth / 4 }) do
+			b.Cyl(x, top, z, 16, 1, rgb(70, 60, 80), M.Metal)
+		end
+	end
+	b.Top(1, 0, top, 0, w, depth)
+	b.Footprint(w + 2, depth + 2, top)
+end
+R.Microwave = function(b, _ctx)
+	local body = lightOf(b, WHITE)
+	b.Box(0, 0, 0, 90, 56, 50, body, M.SmoothPlastic)
+	b.Box(-10, 8, 25, 56, 40, 1, rgb(50, 44, 70), M.Glass)
+	b.Box(30, 8, 25, 18, 40, 1, accent(b, 1, PINK))
+	b.Top(1, 0, 56, 0, 80, 46)
+	b.Footprint(90, 50, 56)
+end
+R.Toaster = function(b, _ctx)
+	local body = accent(b, 1, rgb(255, 170, 190))
+	b.Box(0, 0, 0, 80, 56, 44, body, M.SmoothPlastic)
+	for _, z in ipairs({ -8, 8 }) do
+		b.Box(0, 56, z, 60, 1, 7, INK)
+		b.Box(0, 52, z, 40, 10, 5, rgb(222, 170, 110))
+	end
+	b.Box(42, 30, 0, 4, 6, 10, INK)
+	b.Footprint(80, 44, 60)
+end
+
+-- SALLE DE BAIN ------------------------------------------------------------
+
+R.Bathtub = function(b, ctx)
+	local top = ctx.TopY(1, 54)
+	local body = lightOf(b, WHITE)
+	local w, depth = 96, 52
+	for _, sx in ipairs({ -1, 1 }) do
+		for _, sz in ipairs({ -1, 1 }) do
+			b.Ball(sx * 40, 4, sz * 18, 9, GOLD, M.Metal)
+		end
+	end
+	b.Box(0, 6, 0, w, top - 10, depth, body, M.SmoothPlastic)
+	b.Box(0, top - 4, 0, w + 2, 4, depth + 2, lighten(body, 0.2), M.SmoothPlastic)
+	b.Box(0, top - 7, 0, w - 10, 4, depth - 10, rgb(170, 220, 255), M.Glass).Transparency = 0.15
+	for index = 1, 7 do
+		b.Ball(-30 + index * 9, top - 3, ((index * 13) % 20) - 10, 8 + index % 3 * 2, WHITE)
+	end
+	b.Cyl(-w / 2 + 6, top, 0, 4, 18, GREY, M.Metal)
+	b.CylX(-w / 2 + 11, top + 17, 0, 4, 12, GREY, M.Metal)
+	b.Box(0, 10, depth / 2 + 0.5, w * 0.6, 8, 1, accent(b, 1, PINK))
+	b.Top(1, 0, top, 0, w - 8, depth - 8)
+	b.Footprint(w + 2, depth + 2, top)
+end
+R.Toilet = function(b, ctx)
+	local top = ctx.TopY(1, 82)
+	local body = lightOf(b, WHITE)
+	b.Cyl(0, 0, 8, 28, 26, body, M.SmoothPlastic)
+	b.Cyl(0, 22, 10, 46, 12, body, M.SmoothPlastic)
+	b.Cyl(0, 34, 10, 48, 3, accent(b, 1, PINK), M.SmoothPlastic)
+	b.Box(0, 30, -20, 46, top - 30, 18, body, M.SmoothPlastic)
+	b.Box(0, top - 3, -20, 50, 4, 20, lighten(body, 0.2), M.SmoothPlastic)
+	b.Box(14, top - 12, -10, 8, 3, 2, GREY, M.Metal)
+	b.Top(1, 0, top, -20, 40, 16)
+	b.Footprint(50, 56, top)
+end
+R.Shower = function(b, _ctx)
+	local tray = lightOf(b, WHITE)
+	b.Box(0, 0, 0, 80, 6, 60, tray, M.SmoothPlastic)
+	local glass = b.Box(0, 6, 29, 78, 90, 1.2, rgb(200, 230, 255), M.Glass)
+	glass.Transparency = 0.6
+	glass.CastShadow = false
+	local side = b.Box(39, 6, 0, 1.2, 90, 58, rgb(200, 230, 255), M.Glass)
+	side.Transparency = 0.6
+	side.CastShadow = false
+	b.Cyl(-30, 6, -26, 4, 92, GREY, M.Metal)
+	b.CylZ(-30, 96, -18, 4, 16, GREY, M.Metal)
+	b.Cyl(-30, 88, -10, 16, 3, GREY, M.Metal)
+	b.Box(0, 96, 0, 82, 3, 60, accent(b, 1, SKY))
+	b.Footprint(82, 62, 100)
+end
+R.HotSpring = function(b, _ctx)
+	local stone = b.Map(rgb(170, 160, 180))
+	for index = 0, 13 do
+		local angle = index / 14 * math.pi * 2
+		b.Ball(math.cos(angle) * 44, 10, math.sin(angle) * 30, 20 + index % 3 * 3, index % 2 == 0 and stone or darken(stone, 0.12), M.Slate)
+	end
+	b.Cyl(0, 0, 0, 80, 12, rgb(150, 210, 240), M.Glass)
+	b.Cyl(0, 11, 0, 76, 2, rgb(190, 235, 255), M.SmoothPlastic)
+	for index = 1, 5 do
+		local steam = b.Ball(-20 + index * 8, 30 + index * 6, (index % 2) * 8, 14, WHITE)
+		steam.Transparency = 0.55
+		steam.CastShadow = false
+	end
+	b.Footprint(100, 70, 20)
+end
+
+-- LAMPES ---------------------------------------------------------------------
+
+local function lampShade(b: Builder, y: number, diameter: number, height: number, color: Color3, light: Color3, range: number)
+	local shade = b.Cyl(0, y, 0, diameter, height, color, M.Fabric)
+	shade.CastShadow = false
+	b.Cyl(0, y + height, 0, diameter * 0.8, 1, lighten(color, 0.3), M.Fabric)
+	local bulb = b.Ball(0, y + height * 0.2, 0, diameter * 0.45, light)
+	b.Neon(bulb)
+	b.Light(bulb, light, range, 1)
+end
+R.FloorLamp = function(b, _ctx)
+	local metal = b.Map(GOLD)
+	local shade = accent(b, 1, PINK_SOFT)
+	b.Cyl(0, 0, 0, 30, 4, metal, M.Metal)
+	b.Cyl(0, 4, 0, 4, 72, metal, M.Metal)
+	lampShade(b, 72, 36, 24, shade, BUTTER, 18)
+	b.Footprint(36, 36, 100)
+end
+R.DeskLamp = function(b, _ctx)
+	local color = accent(b, 1, MINT)
+	b.Cyl(0, 0, 0, 40, 6, color, M.SmoothPlastic)
+	b.BoxR(CFrame.new(-6, 30, 0) * CFrame.Angles(0, 0, 0.35), 5, 50, 5, color, M.SmoothPlastic)
+	b.BoxR(CFrame.new(4, 58, 0) * CFrame.Angles(0, 0, -0.9), 5, 30, 5, color, M.SmoothPlastic)
+	b.Ball(-14, 52, 0, 8, GREY, M.Metal)
+	local head = b.BoxR(CFrame.new(18, 62, 0) * CFrame.Angles(0, 0, -0.6), 26, 14, 24, color, M.SmoothPlastic)
+	head.CastShadow = false
+	local bulb = b.Ball(22, 55, 0, 12, BUTTER)
+	b.Neon(bulb)
+	b.Light(bulb, BUTTER, 12, 0.9)
+	b.Footprint(44, 40, 70)
+end
+R.LavaLamp = function(b, _ctx)
+	local color = accent(b, 1, PINK)
+	b.Cyl(0, 0, 0, 34, 20, GREY_DARK, M.Metal)
+	local glass = b.Cyl(0, 20, 0, 26, 56, lighten(color, 0.5), M.Glass)
+	glass.Transparency = 0.25
+	for index = 1, 3 do
+		local blob = b.Ball(((index * 7) % 10) - 5, 28 + index * 14, 0, 12 - index, color)
+		b.Neon(blob)
+	end
+	b.Cyl(0, 76, 0, 18, 10, GREY_DARK, M.Metal)
+	b.Light(glass, color, 12, 0.9)
+	b.Footprint(34, 34, 86)
+end
+R.MushroomLamp = function(b, _ctx)
+	local cap = accent(b, 1, PINK)
+	b.Cyl(0, 0, 0, 26, 50, CREAM, M.SmoothPlastic)
+	local top = b.Cyl(0, 44, 0, 80, 18, cap, M.SmoothPlastic)
+	top.CastShadow = false
+	local glow = b.Cyl(0, 40, 0, 60, 4, BUTTER)
+	b.Neon(glow)
+	b.Ball(0, 60, 0, 30, lighten(cap, 0.1))
+	for index = 1, 5 do
+		local angle = index / 5 * math.pi * 2
+		b.Ball(math.cos(angle) * 26, 58, math.sin(angle) * 26, 9, WHITE)
+	end
+	b.Light(glow, BUTTER, 12, 1)
+	b.Footprint(80, 80, 72)
+end
+R.MoonLamp = function(b, _ctx)
+	b.Cyl(0, 0, 0, 40, 6, woodOf(b, WOOD), M.Wood)
+	b.Cyl(0, 6, 0, 4, 12, GREY, M.Metal)
+	local moon = b.Ball(0, 50, 0, 64, lightOf(b, rgb(255, 244, 200)))
+	b.Neon(moon)
+	b.Light(moon, rgb(255, 236, 190), 14, 1)
+	b.Footprint(64, 64, 82)
+end
+R.ScentedCandle = function(b, _ctx)
+	local color = accent(b, 1, PINK_SOFT)
+	b.Cyl(0, 0, 0, 70, 60, color, M.SmoothPlastic)
+	b.Cyl(0, 58, 0, 60, 3, lighten(color, 0.3), M.SmoothPlastic)
+	b.Cyl(0, 60, 0, 2, 8, INK)
+	local flame = b.Ball(0, 74, 0, 12, FIRE)
+	b.Neon(flame)
+	b.Light(flame, rgb(255, 190, 120), 8, 0.8)
+	b.Footprint(70, 70, 80)
+end
+R.OilLamp = function(b, _ctx)
+	local metal = b.Map(GOLD)
+	b.Cyl(0, 0, 0, 40, 6, metal, M.Metal)
+	b.Ball(0, 20, 0, 40, metal, M.Metal)
+	local glass = b.Cyl(0, 34, 0, 30, 40, rgb(255, 240, 210), M.Glass)
+	glass.Transparency = 0.35
+	local flame = b.Ball(0, 48, 0, 10, FIRE)
+	b.Neon(flame)
+	b.Cyl(0, 74, 0, 34, 4, metal, M.Metal)
+	b.Light(flame, rgb(255, 190, 120), 10, 0.9)
+	b.Footprint(40, 40, 80)
+end
+R.Candelabra = function(b, _ctx)
+	local metal = b.Map(GOLD)
+	b.Cyl(0, 0, 0, 34, 5, metal, M.Metal)
+	b.Cyl(0, 5, 0, 5, 50, metal, M.Metal)
+	b.CylX(0, 50, 0, 4, 56, metal, M.Metal)
+	for _, x in ipairs({ -28, 0, 28 }) do
+		b.Cyl(x, 50, 0, 10, 4, metal, M.Metal)
+		b.Cyl(x, 54, 0, 8, 24, CREAM, M.SmoothPlastic)
+		local flame = b.Ball(x, 83, 0, 7, FIRE)
+		b.Neon(flame)
+		if x == 0 then
+			b.Light(flame, rgb(255, 190, 120), 10, 0.9)
+		end
+	end
+	b.Footprint(64, 30, 88)
+end
+
+-- LUMIÈRES MURALES / SUSPENDUES (repère : bas de la boîte, y = 0..100) ---------
+
+R.HangingBulb = function(b, _ctx)
+	b.Cyl(0, 40, 0, 2, 70, INK)
+	b.Cyl(0, 36, 0, 12, 10, GOLD, M.Metal)
+	local bulb = b.Ball(0, 26, 0, 24, BUTTER)
+	b.Neon(bulb)
+	b.Light(bulb, BUTTER, 16, 1)
+	b.Footprint(24, 24, 100)
+end
+R.PaperLantern = function(b, _ctx)
+	local color = accent(b, 1, rgb(255, 140, 150))
+	b.Cyl(0, 80, 0, 2, 30, INK)
+	b.Cyl(0, 74, 0, 24, 6, INK)
+	local lantern = b.Ball(0, 48, 0, 56, color, M.Fabric)
+	b.Cyl(0, 20, 0, 24, 5, INK)
+	b.Light(lantern, lighten(color, 0.4), 14, 1)
+	table.insert(b.Glows, lantern)
+	b.Footprint(56, 56, 100)
+end
+R.DiscoBall = function(b, _ctx)
+	b.Cyl(0, 80, 0, 2, 30, GREY)
+	local ball = b.Ball(0, 48, 0, 60, rgb(220, 220, 240), M.Foil)
+	ball.Reflectance = 0.5
+	b.Light(ball, accent(b, 1, LILAC), 16, 0.8)
+	b.Footprint(60, 60, 100)
+end
+R.CloudLamp = function(b, _ctx)
+	b.Cyl(0, 76, 0, 2, 40, GREY)
+	for index = 0, 4 do
+		local puff = b.Ball(-24 + index * 12, 50 + (index % 2) * 6, 0, 26 + (index % 2) * 8, WHITE)
+		table.insert(b.Glows, puff)
+		if index == 2 then
+			b.Light(puff, rgb(255, 250, 235), 16, 0.9)
+		end
+	end
+	b.Footprint(70, 36, 100)
+end
+R.FairyLights = function(b, _ctx)
+	local colors = { accent(b, 1, PINK), accent(b, 2, BUTTER), accent(b, 3, MINT), accent(b, 4, SKY) }
+	local count = 12
+	for index = 0, count do
+		local t = index / count
+		local x = -48 + t * 96
+		local y = 60 - math.sin(t * math.pi * 2) ^ 2 * 16
+		b.Cyl(x, y - 1, 0.5, 1.2, 3, INK)
+		local bulb = b.Ball(x, y - 4, 1, 6, colors[index % 4 + 1])
+		b.Neon(bulb)
+		if index % 6 == 3 then
+			b.Light(bulb, colors[index % 4 + 1], 10, 0.6)
+		end
+	end
+	b.Footprint(100, 4, 100)
+end
+
+-- ÉTAGÈRES MURALES (repère : bas de la boîte ; z = 0 contre le mur) --------
+
+R.FloatingShelf = function(b, ctx)
+	local wood = woodOf(b, WOOD)
+	for index = 1, 2 do
+		local y = ctx.TopY(index, index == 1 and 66 or 28)
+		local x0, x1 = ctx.Span(index, -44, 44)
+		b.Box((x0 + x1) / 2, y - 4, 11, x1 - x0 + 4, 4, 22, wood, M.Wood)
+		for _, side in ipairs({ -1, 1 }) do
+			b.Wedge((x0 + x1) / 2 + side * (x1 - x0) * 0.36, y - 14, 5, 3, 10, 10, darken(wood, 0.2), "Front", M.Wood)
+		end
+		b.Top(index, (x0 + x1) / 2, y, 11, x1 - x0, 18)
+	end
+	b.Footprint(100, 22, 100)
+end
+R.WallShelf = function(b, _ctx)
+	local wood = woodOf(b, WOOD)
+	b.Box(0, 44, 11, 96, 5, 22, wood, M.Wood)
+	for _, side in ipairs({ -1, 1 }) do
+		b.Wedge(side * 36, 32, 5, 3, 12, 10, darken(wood, 0.2), "Front", M.Wood)
+	end
+	local colors = { accent(b, 1, PINK), accent(b, 2, SKY), accent(b, 3, MINT) }
+	for index = 1, 6 do
+		b.Box(-40 + index * 5, 49, 10, 4.2, 18 + index % 3 * 3, 14, colors[index % 3 + 1])
+	end
+	b.Ball(28, 57, 10, 14, accent(b, 4, LEAF))
+	b.Cyl(28, 49, 10, 12, 6, accent(b, 5, rgb(255, 170, 120)))
+	b.Top(1, 0, 49, 11, 60, 18)
+	b.Footprint(100, 22, 100)
+end
+
+-- ÉLECTRONIQUE -----------------------------------------------------------
+
+local function screen(b: Builder, x: number, y: number, z: number, w: number, h: number, color: Color3)
+	local panel = b.Box(x, y, z, w, h, 1, color, M.SmoothPlastic)
+	b.Neon(panel)
+	panel.Color = color
+	return panel
+end
+R.RetroTV = function(b, ctx)
+	local top = ctx.TopY(1, 77)
+	local body = accent(b, 1, rgb(255, 170, 190))
+	legs4(b, 60, 36, 10, 4, INK, M.Wood)
+	b.Box(0, 10, 0, 90, top - 10, 50, body, M.SmoothPlastic)
+	b.Box(-10, 18, 25, 58, top - 30, 1, darken(body, 0.35))
+	screen(b, -10, 21, 25.6, 52, top - 36, rgb(120, 180, 255))
+	for index = 1, 2 do
+		knob(b, 30, 20 + index * 16, 25.5, 7, INK)
+	end
+	b.BoxR(CFrame.new(-10, top + 12, -6) * CFrame.Angles(0, 0, 0.5), 1.5, 30, 1.5, GREY, M.Metal)
+	b.BoxR(CFrame.new(4, top + 12, -6) * CFrame.Angles(0, 0, -0.5), 1.5, 30, 1.5, GREY, M.Metal)
+	b.Top(1, 0, top, 0, 80, 44)
+	b.Footprint(90, 50, top)
+end
+R.HomeCinema = function(b, _ctx)
+	local wood = woodOf(b, WOOD_DARK)
+	b.Box(0, 0, 0, 100, 18, 30, wood, M.Wood)
+	b.Box(0, 18, -4, 8, 12, 8, GREY_DARK, M.Metal)
+	b.Box(0, 28, -4, 96, 56, 4, INK, M.SmoothPlastic)
+	screen(b, 0, 31, -1.8, 90, 50, accent(b, 1, rgb(140, 190, 255)))
+	for _, side in ipairs({ -1, 1 }) do
+		b.Box(side * 44, 18, 6, 12, 30, 12, INK)
+		b.CylZ(side * 44, 38, 12.2, 8, 1, GREY_DARK, M.Metal)
+	end
+	b.Top(1, 0, 18, 8, 70, 14)
+	b.Footprint(100, 30, 84)
+end
+R.DesktopPC = function(b, _ctx)
+	local color = accent(b, 1, rgb(230, 230, 245))
+	b.Box(-8, 0, 0, 26, 6, 18, color)
+	b.Box(-8, 6, -4, 5, 16, 5, color)
+	b.Box(-8, 20, -4, 70, 46, 4, color)
+	screen(b, -8, 23, -1.8, 64, 40, rgb(150, 210, 255))
+	b.Box(-8, 0, 20, 56, 3, 16, lighten(color, 0.2))
+	b.Box(36, 0, 0, 18, 56, 40, darken(color, 0.08))
+	local led = b.Box(36, 48, 20.2, 8, 3, 0.5, accent(b, 2, MINT))
+	b.Neon(led)
+	b.Footprint(90, 40, 66)
+end
+R.Laptop = function(b, _ctx)
+	local color = accent(b, 1, rgb(230, 225, 245))
+	b.Box(0, 0, 8, 80, 4, 50, color, M.SmoothPlastic)
+	b.Box(0, 4, 12, 64, 0.6, 26, darken(color, 0.25))
+	local lid = b.BoxR(CFrame.new(0, 24, -17) * CFrame.Angles(-0.25, 0, 0), 80, 46, 3, color, M.SmoothPlastic)
+	lid.Name = "Couvercle"
+	local panel = b.BoxR(CFrame.new(0, 24, -15.2) * CFrame.Angles(-0.25, 0, 0), 72, 38, 0.6, rgb(150, 200, 255), M.Neon)
+	table.insert(b.Glows, panel)
+	b.Footprint(80, 56, 48)
+end
+R.ArcadeMachine = function(b, _ctx)
+	local body = accent(b, 1, rgb(160, 110, 230))
+	b.Box(0, 0, 0, 64, 100, 50, body, M.SmoothPlastic)
+	b.Box(0, 44, 26, 64, 8, 14, darken(body, 0.15))
+	for index = 1, 3 do
+		knob(b, -18 + index * 9, 52, 28, 5, ({ PINK, BUTTER, MINT })[index])
+	end
+	b.Box(-20, 52, 28, 3, 7, 3, INK)
+	screen(b, 0, 58, 25.4, 50, 30, accent(b, 2, rgb(120, 230, 255)))
+	local marquee = b.Box(0, 90, 25.4, 58, 8, 1, BUTTER)
+	b.Neon(marquee)
+	b.Footprint(64, 64, 100)
+end
+R.SlotMachine = function(b, _ctx)
+	local body = accent(b, 1, rgb(255, 120, 140))
+	b.Box(0, 0, 0, 64, 90, 44, body, M.SmoothPlastic)
+	b.Box(0, 44, 22, 52, 28, 1, WHITE)
+	for index = 0, 2 do
+		b.Box(-16 + index * 16, 48, 22.6, 12, 20, 0.5, ({ PINK, BUTTER, MINT })[index + 1])
+	end
+	b.CylX(36, 64, 0, 4, 10, GREY, M.Metal)
+	b.Box(40, 64, 0, 3, 24, 3, GREY, M.Metal)
+	b.Ball(40, 90, 0, 10, rgb(255, 80, 100))
+	local top = b.Box(0, 90, 0, 60, 8, 40, GOLD, M.Metal)
+	top.Name = "Haut"
+	b.Footprint(70, 44, 100)
+end
+R.Speaker = function(b, _ctx)
+	local body = accent(b, 1, INK)
+	b.Box(0, 0, 0, 56, 96, 46, body, M.SmoothPlastic)
+	b.CylZ(0, 30, 23.4, 36, 1.2, darken(body, 0.3))
+	b.CylZ(0, 30, 24, 14, 1.4, GREY, M.Metal)
+	b.CylZ(0, 72, 23.4, 20, 1.2, darken(body, 0.3))
+	b.Top(1, 0, 96, 0, 50, 40)
+	b.Footprint(56, 46, 96)
+end
+R.GrandPiano = function(b, _ctx)
+	local body = accent(b, 1, rgb(60, 50, 80))
+	for _, x in ipairs({ -36, 36 }) do
+		b.Box(x, 0, 10, 6, 40, 6, body)
+	end
+	b.Box(0, 0, -22, 6, 40, 6, body)
+	b.Box(0, 40, -4, 90, 18, 62, body, M.SmoothPlastic)
+	b.Box(0, 52, 30, 80, 3, 10, WHITE)
+	for index = 0, 13 do
+		b.Box(-36 + index * 5.6, 55, 27, 3, 2, 5, INK)
+	end
+	b.BoxR(CFrame.new(-4, 74, -8) * CFrame.Angles(-0.55, 0, 0), 86, 2, 60, body)
+	b.Box(0, 58, 24, 70, 14, 2, darken(body, 0.2))
+	b.Footprint(92, 72, 90)
+end
+R.Telescope = function(b, _ctx)
+	local metal = b.Map(GREY_DARK)
+	for index = 0, 2 do
+		local angle = index / 3 * math.pi * 2
+		b.BoxR(CFrame.new(math.cos(angle) * 12, 30, math.sin(angle) * 12) * CFrame.Angles(math.sin(angle) * 0.35, 0, -math.cos(angle) * 0.35), 3, 64, 3, woodOf(b, WOOD), M.Wood)
+	end
+	b.Ball(0, 62, 0, 8, metal, M.Metal)
+	local tube = b.BoxR(CFrame.new(6, 74, 0) * CFrame.Angles(0, 0, 0.55), 64, 12, 12, accent(b, 1, rgb(90, 110, 200)), M.SmoothPlastic)
+	tube.Name = "Tube"
+	b.BoxR(CFrame.new(-16, 60, 0) * CFrame.Angles(0, 0, 0.55), 10, 8, 8, GOLD, M.Metal)
+	b.Footprint(60, 40, 96)
+end
+R.RecordPlayer = function(b, ctx)
+	local wood = woodOf(b, WOOD)
+	b.Box(0, 0, 0, 90, 26, 60, wood, M.Wood)
+	b.Cyl(-8, 26, 0, 52, 2, INK)
+	b.Cyl(-8, 28, 0, 14, 1, accent(b, 1, PINK))
+	b.BoxR(CFrame.new(26, 28, 4) * CFrame.Angles(0, 0.5, 0), 3, 3, 40, GREY, M.Metal)
+	local horn = b.Cyl(30, 26, -20, 10, 30, GOLD, M.Metal)
+	horn.Name = "Pavillon"
+	b.Ball(30, 60, -20, 30, GOLD, M.Metal)
+	b.Top(1, 0, ctx.TopY(1, 26), 0, 40, 40)
+	b.Footprint(90, 60, 70)
+end
+
+-- CHEMINÉE ------------------------------------------------------------
+
+R.Fireplace = function(b, ctx)
+	local top = ctx.TopY(1, 86)
+	local stone = House3DKit.Pick(b.Pal, function(_h, s, v)
+		return v > 0.5 and s < 0.45
+	end, b.Map(rgb(236, 220, 230)))
+	local w, depth = 100, 34
+	b.Box(0, 0, 0, w, top - 6, depth, stone, M.Brick)
+	b.Box(0, 0, depth / 2 - 2, w * 0.56, top * 0.56, 6, rgb(60, 40, 50), M.SmoothPlastic)
+	b.Box(0, 0, depth / 2 + 2, w + 6, 4, 10, darken(stone, 0.1), M.Slate)
+	-- bûches et flammes
+	for index = -1, 1 do
+		b.CylX(index * 8, 5, depth / 2, 6, 26, WOOD_DARK, M.Wood)
+	end
+	local flames = { FIRE, rgb(255, 200, 80), rgb(255, 110, 70) }
+	for index = 1, 3 do
+		local flame = b.Ball(-12 + index * 6, 14 + (index % 2) * 4, depth / 2, 12 - (index % 2) * 3, flames[index])
+		b.Neon(flame)
+		if index == 2 then
+			b.Light(flame, rgb(255, 160, 90), 18, 1.4)
+		end
+	end
+	-- manteau
+	local wood = woodOf(b, WOOD)
+	b.Box(0, top - 6, 2, w + 8, 6, depth + 6, wood, M.Wood)
+	b.Top(1, 0, top, 2, w, depth)
+	b.Footprint(w + 8, depth + 6, top)
+end
+
+-- PLANTES ----------------------------------------------------------------
+
+local function plantColors(b: Builder): (Color3, Color3, Color3)
+	local green = greenOf(b, LEAF)
+	local potColor = House3DKit.Pick(b.Pal, function(h, s, v)
+		return not (h > 0.2 and h < 0.45) and s > 0.12 and v > 0.4
+	end, b.Map(rgb(255, 170, 150)))
+	local flower = House3DKit.Pick(b.Pal, function(h, s, v)
+		return (h < 0.18 or h > 0.5) and s > 0.3 and v > 0.5
+	end, b.Map(PINK))
+	return green, potColor, flower
+end
+local function smallPlant(flowers: boolean)
+	return function(b: Builder, _ctx: Ctx)
+		local green, potColor, flower = plantColors(b)
+		pot(b, 56, 40, potColor)
+		for index = 0, 4 do
+			local angle = index / 5 * math.pi * 2
+			b.BoxR(CFrame.new(math.cos(angle) * 6, 52, math.sin(angle) * 6) * CFrame.Angles(math.sin(angle) * 0.4, 0, -math.cos(angle) * 0.4), 3, 30, 3, darken(green, 0.2))
+		end
+		bush(b, 0, 64, 0, 40, green, 5)
+		if flowers then
+			for index = 0, 4 do
+				local angle = index / 5 * math.pi * 2 + 0.3
+				local x, z = math.cos(angle) * 16, math.sin(angle) * 14
+				b.Ball(x, 76 + (index % 2) * 8, z, 16, flower)
+				b.Ball(x, 77 + (index % 2) * 8, z + 6, 6, BUTTER)
+			end
+		end
+		b.Footprint(56, 56, 90)
+	end
+end
+local function tree(canopyColor: Color3?, round: boolean)
+	return function(b: Builder, _ctx: Ctx)
+		local green, potColor, flower = plantColors(b)
+		local canopy = canopyColor and flower or green
+		pot(b, 34, 26, potColor)
+		b.Cyl(0, 22, 0, 7, 44, woodOf(b, WOOD_DARK), M.Wood)
+		if round then
+			bush(b, 0, 72, 0, 44, canopy, 6)
+			bush(b, -14, 62, 6, 26, canopy, 3)
+		else
+			for index = 0, 3 do
+				b.Cyl(0, 36 + index * 15, 0, 58 - index * 13, 16, index % 2 == 0 and canopy or darken(canopy, 0.1), M.SmoothPlastic)
+			end
+			b.Ball(0, 98, 0, 12, BUTTER)
+		end
+		b.Footprint(60, 60, 100)
+	end
+end
+R.PottedPlant = smallPlant(false)
+R.Monstera = function(b, _ctx)
+	local green, potColor = plantColors(b)
+	pot(b, 40, 34, potColor)
+	for index = 0, 6 do
+		local angle = index / 7 * math.pi * 2
+		local leaf = b.BoxR(CFrame.new(math.cos(angle) * 18, 58 + (index % 3) * 10, math.sin(angle) * 14) * CFrame.Angles(math.sin(angle) * 0.7, angle, -math.cos(angle) * 0.7),
+			26, 2, 18, index % 2 == 0 and green or darken(green, 0.15))
+		leaf.Name = "Feuille"
+		b.BoxR(CFrame.new(math.cos(angle) * 9, 46 + (index % 3) * 5, math.sin(angle) * 7) * CFrame.Angles(math.sin(angle) * 0.5, 0, -math.cos(angle) * 0.5), 2, 26, 2, darken(green, 0.3))
+	end
+	b.Footprint(70, 60, 90)
+end
+for _, id in ipairs({ "DaisyPot", "RedRose", "TulipPot", "Hibiscus", "FlowerVase", "Bouquet", "LuckyClover" }) do
+	R[id] = smallPlant(true)
+end
+R.Sprout = smallPlant(false)
+R.TinyCactus = function(b, _ctx)
+	local green, potColor, flower = plantColors(b)
+	pot(b, 56, 40, potColor)
+	b.Cyl(0, 36, 0, 26, 40, green, M.SmoothPlastic)
+	b.Ball(0, 76, 0, 26, green)
+	b.Cyl(-18, 50, 0, 10, 16, green)
+	b.Ball(-18, 66, 0, 10, green)
+	b.Ball(0, 90, 0, 12, flower)
+	b.Footprint(56, 56, 96)
+end
+R.IndoorTree = tree(nil, true)
+R.Bonsai = tree(nil, true)
+R.CherryBlossom = tree(PINK, true)
+R.MiniPine = tree(nil, false)
+R.HolidayTree = tree(nil, false)
+R.PalmTree = function(b, _ctx)
+	local green, potColor = plantColors(b)
+	pot(b, 34, 22, potColor)
+	for index = 0, 5 do
+		b.Cyl(index * 1.5, 20 + index * 11, 0, 9 - index * 0.4, 12, index % 2 == 0 and WOOD or WOOD_DARK, M.Wood)
+	end
+	for index = 0, 5 do
+		local angle = index / 6 * math.pi * 2
+		b.BoxR(CFrame.new(8 + math.cos(angle) * 18, 88, math.sin(angle) * 18) * CFrame.Angles(math.sin(angle) * 0.5, -angle, -math.cos(angle) * 0.5), 38, 2, 12, green)
+	end
+	b.Ball(8, 86, 0, 10, rgb(140, 100, 70))
+	b.Footprint(70, 70, 100)
+end
+R.Bamboo = function(b, _ctx)
+	local green, potColor = plantColors(b)
+	b.Box(0, 0, 0, 60, 22, 36, potColor, M.SmoothPlastic)
+	for index = 0, 4 do
+		local x = -20 + index * 10
+		local h = 70 + (index % 3) * 10
+		b.Cyl(x, 22, (index % 2) * 8 - 4, 5, h, green, M.SmoothPlastic)
+		for joint = 1, 3 do
+			b.Cyl(x, 22 + joint * h / 4, (index % 2) * 8 - 4, 6, 1.2, darken(green, 0.25))
+		end
+		b.BoxR(CFrame.new(x + 6, 22 + h - 6, (index % 2) * 8 - 4) * CFrame.Angles(0, 0, -0.6), 14, 1, 5, lighten(green, 0.1))
+	end
+	b.Footprint(60, 36, 100)
+end
+R.Sunflower = function(b, _ctx)
+	local green, potColor = plantColors(b)
+	pot(b, 46, 30, potColor)
+	b.Cyl(0, 28, 0, 4, 50, green)
+	b.BoxR(CFrame.new(8, 48, 0) * CFrame.Angles(0, 0, -0.5), 18, 2, 10, green)
+	b.CylZ(0, 82, 2, 40, 4, rgb(255, 210, 60))
+	b.CylZ(0, 82, 4, 18, 3, rgb(140, 90, 60))
+	b.Footprint(46, 46, 100)
+end
+R.GiantMushroom = R.MushroomStool
+R.Terrarium = function(b, _ctx)
+	local green = greenOf(b, LEAF)
+	b.Cyl(0, 0, 0, 60, 8, woodOf(b, WOOD), M.Wood)
+	bush(b, 0, 20, 0, 30, green, 3)
+	local dome = b.Ball(0, 36, 0, 64, GLASS, M.Glass)
+	dome.Transparency = 0.55
+	dome.CastShadow = false
+	b.Footprint(64, 64, 70)
+end
+
+-- TAPIS ----------------------------------------------------------------------
+
+local function rug(b: Builder, _ctx: Ctx)
+	local main = accent(b, 1, PINK)
+	local second = accent(b, 2, lighten(main, 0.35))
+	b.Box(0, 0, 0, 100, 0.8, 68, main, M.Fabric)
+	b.Box(0, 0.8, 0, 84, 0.3, 54, second, M.Fabric)
+	b.Box(0, 1.1, 0, 60, 0.3, 36, lighten(main, 0.2), M.Fabric)
+	for _, side in ipairs({ -1, 1 }) do
+		for index = 0, 9 do
+			b.Box(side * 51, 0, -30 + index * 6.6, 3, 0.5, 1.4, lightOf(b, CREAM), M.Fabric)
+		end
+	end
+	for _, part in ipairs(b.Parts) do
+		part.CastShadow = false
+	end
+	b.Footprint(100, 68, 1)
+end
+
+-- PORTES (contre le mur du fond) ----------------------------------------------
+
+local function door(b: Builder, ctx: Ctx)
+	local panel = accent(b, 1, rgb(255, 180, 200))
+	local frame = ctx.Trim
+	b.Box(-36, 0, 0, 6, 96, 6, frame, M.Wood)
+	b.Box(36, 0, 0, 6, 96, 6, frame, M.Wood)
+	b.Box(0, 96, 0, 78, 6, 6, frame, M.Wood)
+	b.Box(0, 0, -1, 66, 96, 3, panel, M.Wood)
+	for _, y in ipairs({ 12, 52 }) do
+		b.Box(0, y, 0.8, 50, 32, 1, lighten(panel, 0.18), M.Wood)
+	end
+	knob(b, 24, 48, 2.5, 6)
+	b.Box(0, 0, 4, 60, 1, 8, darken(panel, 0.2))
+	b.Footprint(84, 8, 102)
+end
+R.ToriiGate = function(b, _ctx)
+	local red = accent(b, 1, rgb(230, 70, 70))
+	for _, x in ipairs({ -34, 34 }) do
+		b.Cyl(x, 0, 0, 9, 90, red, M.Wood)
+		b.Cyl(x, 0, 0, 12, 6, INK)
+	end
+	b.Box(0, 70, 0, 84, 6, 6, red, M.Wood)
+	b.Box(0, 88, 0, 104, 6, 10, red, M.Wood)
+	b.Box(0, 94, 0, 108, 4, 12, INK, M.Wood)
+	b.Box(0, 76, 0, 12, 12, 3, INK)
+	b.Footprint(108, 12, 98)
+end
+
+-- ANIMAUX ET PELUCHES ------------------------------------------------------
+
+-- Petite bête kawaii : corps, tête, oreilles, yeux, joues, queue ; `kind` règle les détails
+local function critter(kind: string)
+	return function(b: Builder, _ctx: Ctx)
+		local body = b.Pal[1] or b.Map(rgb(255, 200, 160))
+		local h, s, v = body:ToHSV()
+		if s < 0.08 and v < 0.2 then
+			-- (le contour prune a gagné : on prend la couleur suivante)
+			body = b.Pal[2] or body
+		end
+		local _ = h
+		local belly = lightOf(b, lighten(body, 0.5))
+		local head = 46
+		local bodyD = 50
+		local headY = 60
+		if kind == "Bird" then
+			b.Ball(0, 30, 0, 54, body)
+			b.Ball(0, 30, 10, 36, belly)
+			b.Ball(0, 66, 2, 40, body)
+			b.Wedge(0, 60, 22, 10, 8, 8, rgb(255, 170, 60), "Front")
+			for _, side in ipairs({ -1, 1 }) do
+				b.BoxR(CFrame.new(side * 26, 34, 0) * CFrame.Angles(0, 0, side * 0.5), 6, 24, 20, darken(body, 0.1))
+				b.Ball(side * 9, 70, 20, 6, INK)
+			end
+			for _, x in ipairs({ -8, 8 }) do
+				b.Cyl(x, 0, 0, 3, 6, rgb(255, 170, 60))
+			end
+			b.Footprint(56, 56, 88)
+			return
+		elseif kind == "Fish" then
+			local bowl = b.Ball(0, 40, 0, 80, GLASS, M.Glass)
+			bowl.Transparency = 0.6
+			bowl.CastShadow = false
+			local water = b.Cyl(0, 6, 0, 66, 48, rgb(150, 210, 255), M.Glass)
+			water.Transparency = 0.45
+			water.CastShadow = false
+			local fish = accent(b, 1, rgb(255, 150, 60))
+			b.Ball(0, 36, 0, 24, fish)
+			b.Wedge(-16, 30, 0, 12, 14, 4, fish, "Left")
+			b.Ball(7, 40, 10, 4, INK)
+			b.Cyl(0, 0, 0, 50, 6, rgb(200, 170, 250))
+			b.Footprint(80, 80, 82)
+			return
+		elseif kind == "Turtle" then
+			local shell = accent(b, 1, LEAF_DARK)
+			b.Ball(0, 16, 0, 60, shell)
+			b.Box(0, 0, 0, 60, 16, 56, body)
+			b.Ball(34, 18, 0, 26, lightOf(b, rgb(170, 220, 150)))
+			b.Ball(40, 22, 8, 5, INK)
+			for _, x in ipairs({ -20, 20 }) do
+				for _, z in ipairs({ -22, 22 }) do
+					b.Ball(x, 4, z, 14, belly)
+				end
+			end
+			b.Footprint(76, 60, 46)
+			return
+		end
+		-- mammifères / peluches
+		if kind == "Bear" or kind == "Big" then
+			bodyD, head, headY = 58, 54, 66
+		elseif kind == "Bunny" then
+			headY = 56
+		end
+		b.Ball(0, 24, 0, bodyD, body)
+		b.Ball(0, 22, 12, bodyD * 0.6, belly)
+		b.Ball(0, headY, 4, head, body)
+		-- pattes
+		for _, x in ipairs({ -14, 14 }) do
+			b.Ball(x, 6, 16, 16, body)
+		end
+		-- oreilles
+		for _, side in ipairs({ -1, 1 }) do
+			if kind == "Cat" or kind == "Fox" then
+				b.Wedge(side * 13, headY + head * 0.34, 4, 14, 16, 8, body, "Front")
+				b.Wedge(side * 13, headY + head * 0.34, 7.5, 7, 9, 1, PINK_SOFT, "Front")
+			elseif kind == "Bunny" then
+				b.BoxR(CFrame.new(side * 9, headY + head * 0.6, 2) * CFrame.Angles(0, 0, side * -0.15), 10, 34, 7, body)
+				b.BoxR(CFrame.new(side * 9, headY + head * 0.6, 5.8) * CFrame.Angles(0, 0, side * -0.15), 5, 26, 1, PINK_SOFT)
+			elseif kind == "Dog" then
+				b.BoxR(CFrame.new(side * 24, headY - 2, 4) * CFrame.Angles(0, 0, side * 0.25), 10, 26, 12, darken(body, 0.18))
+			elseif kind == "Panda" then
+				b.Ball(side * 18, headY + head * 0.38, 2, 16, INK)
+			else
+				b.Ball(side * 18, headY + head * 0.38, 2, 16, body)
+				b.Ball(side * 18, headY + head * 0.38, 6, 8, PINK_SOFT)
+			end
+			-- yeux et joues
+			if kind == "Panda" then
+				b.Ball(side * 10, headY + 2, 4 + head * 0.42, 12, INK)
+				b.Ball(side * 10, headY + 3, 6 + head * 0.44, 4, WHITE)
+			else
+				b.Ball(side * 10, headY + 2, 4 + head * 0.45, 7, INK)
+				b.Ball(side * 11, headY + 3.5, 5 + head * 0.47, 2.4, WHITE)
+			end
+			b.Ball(side * 16, headY - 6, 3 + head * 0.4, 8, rgb(255, 160, 180))
+		end
+		b.Ball(0, headY - 4, 5 + head * 0.47, 5, INK)
+		if kind == "Fox" then
+			b.Ball(-30, 20, -10, 22, body)
+			b.Ball(-40, 26, -12, 12, WHITE)
+		elseif kind == "Cat" then
+			b.BoxR(CFrame.new(-26, 30, -14) * CFrame.Angles(0, 0, 0.8), 6, 40, 6, body)
+		elseif kind == "Unicorn" then
+			b.Wedge(0, headY + head * 0.42, 6, 6, 18, 6, GOLD, "Front")
+		elseif kind == "Pig" then
+			b.CylZ(0, headY - 6, 4 + head * 0.48, 14, 4, lighten(body, 0.2))
+		end
+		b.Footprint(bodyD + 10, bodyD, headY + head * 0.5)
+	end
+end
+local CRITTERS: { [string]: string } = {
+	Kitten = "Cat", SleepyCat = "Cat", KittyPlush = "Cat",
+	Puppy = "Dog", PuppyPlush = "Dog",
+	Bunny = "Bunny", BunnyPlush = "Bunny",
+	TeddyBear = "Bear", BigBear = "Big", HamsterPlush = "Bear", Hamster = "Bear", Hedgehog = "Bear",
+	PandaPlush = "Panda", Fox = "Fox", UnicornPlush = "Unicorn", PiggyBank = "Pig",
+	Chick = "Bird", Parrot = "Bird", PenguinPlush = "Bird", RubberDucky = "Bird",
+	Goldfish = "Fish", Turtle = "Turtle",
+	FroggyPlush = "Bear", DinoPlush = "Bear",
+}
+for id, kind in pairs(CRITTERS) do
+	R[id] = critter(kind)
+end
+
+-- AFFAIRES DES ANIMAUX ----------------------------------------------------
+
+R.DogHouse = function(b, _ctx)
+	local wall = accent(b, 1, rgb(255, 190, 150))
+	local roof = accent(b, 2, rgb(230, 90, 110))
+	b.Box(0, 0, 0, 80, 56, 64, wall, M.WoodPlanks)
+	b.Box(0, 0, 32, 30, 36, 1.2, rgb(60, 40, 50))
+	b.Wedge(-21, 56, 0, 42, 26, 70, roof, "Left", M.RoofShingles)
+	b.Wedge(21, 56, 0, 42, 26, 70, roof, "Right", M.RoofShingles)
+	b.Box(0, 40, 32.6, 26, 8, 1, lightOf(b, CREAM))
+	b.Footprint(84, 70, 82)
+end
+R.ScratchingPost = function(b, _ctx)
+	local base = accent(b, 1, rgb(200, 170, 240))
+	b.Box(0, 0, 0, 70, 8, 60, base, M.Fabric)
+	b.Cyl(0, 8, 0, 20, 70, rgb(222, 190, 140), M.Fabric)
+	b.Box(0, 78, 0, 50, 8, 44, base, M.Fabric)
+	b.Cyl(20, 60, 10, 2, 16, INK)
+	b.Ball(20, 58, 10, 8, accent(b, 2, PINK))
+	b.Top(1, 0, 86, 0, 44, 40)
+	b.Footprint(70, 60, 86)
+end
+R.CatTree = function(b, _ctx)
+	local base = accent(b, 1, rgb(200, 170, 240))
+	b.Box(0, 0, 0, 90, 8, 60, base, M.Fabric)
+	b.Cyl(-20, 8, 0, 14, 80, rgb(222, 190, 140), M.Fabric)
+	b.Cyl(24, 8, 0, 14, 40, rgb(222, 190, 140), M.Fabric)
+	b.Box(24, 48, 0, 40, 6, 36, base, M.Fabric)
+	b.Box(-20, 86, 0, 48, 6, 40, base, M.Fabric)
+	b.Box(-30, 8, 0, 30, 26, 36, lighten(base, 0.1), M.Fabric)
+	b.Top(1, -20, 92, 0, 40, 34)
+	b.Footprint(90, 60, 92)
+end
+R.PetBowl = function(b, _ctx)
+	local color = accent(b, 1, PINK)
+	b.Cyl(0, 0, 0, 80, 26, color)
+	b.Cyl(0, 24, 0, 64, 3, rgb(190, 130, 90), M.Pebble)
+	b.Footprint(80, 80, 28)
+end
+R.PetToys = function(b, _ctx)
+	b.Ball(-16, 14, 0, 28, accent(b, 1, PINK))
+	b.Ball(18, 10, 6, 20, accent(b, 2, BUTTER))
+	b.CylX(4, 5, -14, 10, 30, accent(b, 3, SKY))
+	b.Footprint(70, 50, 28)
+end
+R.Aquarium = function(b, ctx)
+	local top = ctx.TopY(1, 84)
+	local wood = woodOf(b, WOOD)
+	b.Box(0, 0, 0, 94, top * 0.35, 44, wood, M.Wood)
+	local tankY = top * 0.35
+	local tankH = top - tankY - 2
+	local glass = b.Box(0, tankY, 0, 90, tankH, 40, GLASS, M.Glass)
+	glass.Transparency = 0.55
+	glass.CastShadow = false
+	local water = b.Box(0, tankY + 2, 0, 86, tankH - 8, 36, rgb(130, 200, 250), M.Glass)
+	water.Transparency = 0.4
+	water.CastShadow = false
+	b.Box(0, tankY, 0, 86, 4, 36, rgb(240, 220, 180), M.Sand)
+	for index = 1, 3 do
+		local fish = b.Ball(-24 + index * 14, tankY + 12 + index * 5, (index % 2) * 10 - 5, 10, ({ rgb(255, 150, 60), PINK, BUTTER })[index])
+		fish.CastShadow = false
+	end
+	b.Box(-30, tankY + 4, -10, 4, 22, 4, LEAF_DARK)
+	b.Box(0, top - 2, 0, 94, 2, 44, darken(wood, 0.1), M.Wood)
+	b.Light(water, rgb(160, 220, 255), 10, 0.6)
+	b.Top(1, 0, top, 0, 80, 36)
+	b.Footprint(94, 44, top)
+end
+R.MiniAquarium = function(b, _ctx)
+	critter("Fish")(b, _ctx)
+end
+
+-- DÉCO / TABLE / JOUETS (petits objets) -------------------------------------
+
+local function cup(straw: boolean)
+	return function(b: Builder, _ctx: Ctx)
+		local color = accent(b, 1, PINK)
+		b.Cyl(0, 0, 0, 50, 60, color)
+		b.Cyl(0, 58, 0, 44, 3, lightOf(b, rgb(255, 240, 230)))
+		if straw then
+			b.BoxR(CFrame.new(6, 72, 0) * CFrame.Angles(0, 0, -0.25), 5, 34, 5, accent(b, 2, SKY))
+			for index = 1, 3 do
+				b.Ball(-10 + index * 6, 8, (index % 2) * 6, 9, INK)
+			end
+		else
+			b.CylZ(30, 34, 0, 26, 5, color)
+			b.CylZ(30, 34, 0, 14, 6, lighten(color, 0.5))
+		end
+		b.Footprint(62, 50, 64)
+	end
+end
+R.CocoaMug = cup(false)
+R.StrawberryMilk = cup(true)
+R.BubbleTea = cup(true)
+R.Lemonade = cup(true)
+local function bowl(b: Builder, _ctx: Ctx)
+	local color = accent(b, 2, lightOf(b, WHITE))
+	b.Cyl(0, 0, 0, 44, 8, darken(color, 0.1))
+	b.Cyl(0, 6, 0, 86, 30, color)
+	local fill = accent(b, 1, rgb(255, 200, 140))
+	b.Cyl(0, 34, 0, 78, 4, fill)
+	b.Ball(-14, 40, 4, 18, accent(b, 3, rgb(255, 150, 120)))
+	b.Ball(12, 40, -6, 16, accent(b, 4, LEAF))
+	b.Footprint(86, 86, 48)
+end
+R.RamenBowl = bowl
+R.SaladBowl = bowl
+R.FruitBowl = bowl
+local function plate(b: Builder, _ctx: Ctx)
+	b.Cyl(0, 0, 0, 96, 6, lightOf(b, WHITE))
+	for index = 0, 3 do
+		local angle = index / 4 * math.pi * 2
+		b.Box(math.cos(angle) * 20, 6, math.sin(angle) * 18, 24, 14, 20, accent(b, index % 3 + 1, rgb(255, 210, 160)))
+	end
+	b.Footprint(96, 96, 20)
+end
+R.PizzaPlate = plate
+R.OnigiriPlate = plate
+R.SushiPlatter = plate
+local function cake(tiers: number)
+	return function(b: Builder, _ctx: Ctx)
+		local cream = lightOf(b, rgb(255, 248, 240))
+		local main = accent(b, 1, PINK)
+		b.Cyl(0, 0, 0, 90, 4, WHITE)
+		local y = 4
+		for index = 1, tiers do
+			local d = 80 - (index - 1) * 22
+			local h = 44 / tiers + 6
+			b.Cyl(0, y, 0, d, h, index % 2 == 1 and main or cream)
+			b.Cyl(0, y + h - 2, 0, d + 2, 4, cream)
+			y += h
+		end
+		b.Ball(0, y + 5, 0, 14, rgb(240, 60, 80))
+		b.Footprint(90, 90, y + 12)
+	end
+end
+R.StrawberryCake = cake(2)
+R.BirthdayCake = cake(3)
+R.PancakeTower = cake(3)
+R.CupcakeStand = cake(3)
+R.Pudding = cake(1)
+R.MacaronTower = function(b, _ctx)
+	local colors = { accent(b, 1, PINK), accent(b, 2, MINT), accent(b, 3, LILAC), accent(b, 4, BUTTER) }
+	b.Cyl(0, 0, 0, 60, 4, GOLD, M.Metal)
+	for index = 0, 5 do
+		local d = 56 - index * 8
+		b.Cyl(0, 4 + index * 12, 0, d, 10, colors[index % 4 + 1])
+	end
+	b.Footprint(60, 60, 80)
+end
+local function jar(b: Builder, _ctx: Ctx)
+	local color = accent(b, 1, rgb(255, 200, 120))
+	local glass = b.Cyl(0, 0, 0, 70, 66, GLASS, M.Glass)
+	glass.Transparency = 0.45
+	b.Cyl(0, 2, 0, 62, 44, color)
+	b.Cyl(0, 66, 0, 74, 10, accent(b, 2, PINK))
+	b.Ball(0, 78, 0, 14, accent(b, 2, PINK))
+	b.Footprint(74, 74, 84)
+end
+R.CookieJar = jar
+R.HoneyPot = jar
+R.Teapot = function(b, _ctx)
+	local color = accent(b, 1, rgb(160, 220, 255))
+	b.Ball(0, 34, 0, 64, color)
+	b.Cyl(0, 0, 0, 40, 8, darken(color, 0.1))
+	b.Cyl(0, 62, 0, 30, 6, lightOf(b, WHITE))
+	b.Ball(0, 70, 0, 10, accent(b, 2, PINK))
+	b.BoxR(CFrame.new(34, 40, 0) * CFrame.Angles(0, 0, -0.8), 8, 28, 8, color)
+	b.CylZ(-34, 36, 0, 24, 5, color)
+	b.Footprint(90, 64, 76)
+end
+R.TeaSet = R.Teapot
+R.Watermelon = function(b, _ctx)
+	b.Ball(0, 36, 0, 74, rgb(90, 180, 90))
+	for index = 0, 3 do
+		b.BoxR(CFrame.new(0, 36, 0) * CFrame.Angles(0, index * math.pi / 4, 0), 75, 70, 3, rgb(60, 140, 70))
+	end
+	b.Footprint(74, 74, 74)
+end
+local function boxThing(b: Builder, _ctx: Ctx)
+	local color = accent(b, 1, PINK)
+	b.Box(0, 0, 0, 84, 40, 60, color)
+	b.Box(0, 40, 0, 88, 8, 64, lighten(color, 0.2))
+	b.Box(0, 0, 0, 12, 49, 64.4, accent(b, 2, BUTTER))
+	b.Box(0, 0, 0, 88.4, 49, 12, accent(b, 2, BUTTER))
+	b.Ball(0, 52, 0, 14, accent(b, 2, BUTTER))
+	b.Top(1, 0, 48, 0, 70, 50)
+	b.Footprint(88, 64, 56)
+end
+R.BentoBox = boxThing
+R.DonutBox = boxThing
+R.JewelryBox = boxThing
+R.MusicBox = boxThing
+R.GiftPile = function(b, _ctx)
+	local colors = { accent(b, 1, PINK), accent(b, 2, SKY), accent(b, 3, MINT) }
+	local specs = { { -20, 0, 0, 50, 40 }, { 26, 0, 6, 36, 30 }, { -14, 40, 0, 32, 26 } }
+	for index, spec in ipairs(specs) do
+		local x, y, z, s, h = spec[1], spec[2], spec[3], spec[4], spec[5]
+		b.Box(x, y, z, s, h, s * 0.9, colors[index])
+		b.Box(x, y, z, 6, h + 0.4, s * 0.9 + 0.4, BUTTER)
+		b.Ball(x, y + h + 3, z, 10, BUTTER)
+	end
+	b.Footprint(90, 50, 76)
+end
+R.BookStack = function(b, _ctx)
+	local colors = { accent(b, 1, PINK), accent(b, 2, SKY), accent(b, 3, MINT), accent(b, 4, BUTTER) }
+	for index = 0, 4 do
+		b.BoxR(CFrame.new((index % 2) * 4 - 2, 5 + index * 11, 0) * CFrame.Angles(0, (index % 3 - 1) * 0.15, 0), 84, 10, 60, colors[index % 4 + 1])
+		b.Box((index % 2) * 4 - 2, index * 11 + 1, 30.1, 80, 8, 0.4, WHITE)
+	end
+	b.Top(1, 0, 55, 0, 60, 50)
+	b.Footprint(84, 60, 56)
+end
+R.BlanketStack = function(b, _ctx)
+	local colors = { accent(b, 1, PINK), accent(b, 2, SKY), accent(b, 3, MINT), accent(b, 4, LILAC) }
+	for index = 0, 3 do
+		b.Box(0, index * 14, 0, 90 - index * 4, 14, 60, colors[index + 1], M.Fabric)
+		b.CylZ(-(90 - index * 4) / 2, index * 14 + 7, 0, 14, 60, colors[index + 1], M.Fabric)
+	end
+	b.Top(1, 0, 56, 0, 70, 50)
+	b.Footprint(94, 60, 56)
+end
+local function pillow(b: Builder, _ctx: Ctx)
+	local color = accent(b, 1, PINK)
+	b.BoxR(CFrame.new(0, 34, 0) * CFrame.Angles(-0.2, 0, 0), 80, 64, 24, color, M.Fabric)
+	b.Ball(0, 36, 12, 18, lighten(color, 0.3), M.Fabric)
+	b.Footprint(80, 40, 70)
+end
+R.HeartPillow = pillow
+R.MoonPillow = pillow
+local function orb(b: Builder, _ctx: Ctx)
+	local base = accent(b, 2, woodOf(b, WOOD))
+	b.Cyl(0, 0, 0, 60, 16, base)
+	local ball = b.Ball(0, 46, 0, 64, accent(b, 1, rgb(190, 170, 255)), M.Glass)
+	ball.Transparency = 0.25
+	b.Ball(0, 40, 0, 26, WHITE)
+	b.Footprint(64, 64, 80)
+end
+R.SnowGlobe = orb
+R.CrystalBall = orb
+R.DeskGlobe = function(b, _ctx)
+	b.Cyl(0, 0, 0, 44, 6, woodOf(b, WOOD), M.Wood)
+	b.Cyl(0, 6, 0, 5, 20, GOLD, M.Metal)
+	b.Ball(0, 58, 0, 64, accent(b, 1, rgb(110, 180, 250)))
+	b.Ball(-10, 70, 16, 22, accent(b, 2, LEAF))
+	b.CylZ(0, 58, 0, 74, 3, GOLD, M.Metal)
+	b.Footprint(74, 64, 92)
+end
+R.GoldenTrophy = function(b, _ctx)
+	local gold = b.Map(GOLD)
+	b.Box(0, 0, 0, 44, 14, 36, woodOf(b, WOOD_DARK), M.Wood)
+	b.Cyl(0, 14, 0, 10, 24, gold, M.Metal)
+	b.Cyl(0, 36, 0, 50, 36, gold, M.Metal)
+	for _, side in ipairs({ -1, 1 }) do
+		b.CylZ(side * 28, 58, 0, 18, 4, gold, M.Metal)
+	end
+	b.Footprint(66, 50, 74)
+end
+R.MantelClock = function(b, _ctx)
+	local wood = woodOf(b, WOOD)
+	b.Box(0, 0, 0, 80, 50, 34, wood, M.Wood)
+	b.Ball(0, 50, 0, 40, wood, M.Wood)
+	b.CylZ(0, 42, 17, 40, 2, WHITE)
+	b.BoxR(CFrame.new(0, 48, 18.4) * CFrame.Angles(0, 0, 0.2), 2, 14, 0.6, INK)
+	b.BoxR(CFrame.new(3, 42, 18.4) * CFrame.Angles(0, 0, 1.3), 2, 10, 0.6, INK)
+	b.Footprint(80, 40, 70)
+end
+R.Vase = function(b, _ctx)
+	local color = accent(b, 1, rgb(160, 200, 255))
+	b.Cyl(0, 0, 0, 40, 10, color)
+	b.Ball(0, 30, 0, 54, color)
+	b.Cyl(0, 50, 0, 26, 24, color)
+	b.Cyl(0, 72, 0, 32, 4, lighten(color, 0.3))
+	for index = 0, 2 do
+		b.Ball(-10 + index * 10, 82 + (index % 2) * 8, 0, 14, accent(b, 2, PINK))
+	end
+	b.Footprint(56, 56, 96)
+end
+R.Fountain = function(b, _ctx)
+	local stone = lightOf(b, rgb(236, 236, 246))
+	b.Cyl(0, 0, 0, 96, 22, stone, M.Marble)
+	local water = b.Cyl(0, 18, 0, 86, 3, rgb(150, 210, 255), M.Glass)
+	water.Transparency = 0.2
+	b.Cyl(0, 22, 0, 14, 40, stone, M.Marble)
+	b.Cyl(0, 58, 0, 50, 8, stone, M.Marble)
+	b.Cyl(0, 66, 0, 10, 16, stone, M.Marble)
+	local spray = b.Ball(0, 86, 0, 16, rgb(190, 230, 255), M.Glass)
+	spray.Transparency = 0.3
+	b.Footprint(96, 96, 94)
+end
+R.MoaiStatue = function(b, _ctx)
+	local stone = b.Map(rgb(170, 160, 170))
+	b.Box(0, 0, 0, 50, 60, 40, stone, M.Slate)
+	b.Box(0, 50, 2, 40, 46, 36, stone, M.Slate)
+	b.Box(0, 80, 20.5, 30, 6, 2, darken(stone, 0.3))
+	b.Box(0, 56, 21, 10, 22, 4, darken(stone, 0.1), M.Slate)
+	b.Footprint(50, 42, 96)
+end
+R.BeachBall = function(b, _ctx)
+	b.Ball(0, 50, 0, 96, WHITE)
+	for index = 0, 2 do
+		local stripe = b.BoxR(CFrame.new(0, 50, 0) * CFrame.Angles(0, index * math.pi / 3, 0), 97, 90, 14, ({ accent(b, 1, PINK), accent(b, 2, SKY), accent(b, 3, BUTTER) })[index + 1])
+		stripe.Name = "Bande"
+	end
+	b.Footprint(96, 96, 96)
+end
+R.GiantDice = function(b, _ctx)
+	b.BoxR(CFrame.new(0, 42, 0) * CFrame.Angles(0, 0.35, 0), 84, 84, 84, lightOf(b, WHITE))
+	for _, p in ipairs({ { -20, 62 }, { 20, 22 }, { 0, 42 } }) do
+		b.BoxR(CFrame.new(0, 0, 0) * CFrame.Angles(0, 0.35, 0) * CFrame.new(p[1], p[2], 42.2), 14, 14, 1, accent(b, 1, PINK))
+	end
+	b.Footprint(100, 100, 84)
+end
+R.ToyDrum = function(b, _ctx)
+	local color = accent(b, 1, rgb(255, 110, 120))
+	b.Cyl(0, 0, 0, 90, 60, color)
+	b.Cyl(0, 58, 0, 92, 4, WHITE)
+	b.Cyl(0, 0, 0, 92, 4, WHITE)
+	for index = 0, 5 do
+		local angle = index / 6 * math.pi * 2
+		b.BoxR(CFrame.new(math.cos(angle) * 45, 30, math.sin(angle) * 45) * CFrame.Angles(0, -angle, 0.4), 2, 60, 2, GOLD)
+	end
+	b.Footprint(92, 92, 64)
+end
+R.BoardGame = function(b, _ctx)
+	b.Box(0, 0, 0, 96, 8, 70, accent(b, 1, PINK))
+	b.Box(0, 8, 0, 80, 0.5, 56, WHITE)
+	for index = 0, 3 do
+		b.Cyl(-24 + index * 16, 8.5, (index % 2) * 12, 8, 10, ({ PINK, SKY, MINT, BUTTER })[index + 1])
+	end
+	b.Footprint(96, 70, 18)
+end
+R.ToyRobot = function(b, _ctx)
+	local metal = accent(b, 1, rgb(170, 200, 230))
+	for _, x in ipairs({ -12, 12 }) do
+		b.Box(x, 0, 0, 14, 26, 18, darken(metal, 0.15), M.Metal)
+	end
+	b.Box(0, 26, 0, 48, 34, 30, metal, M.Metal)
+	b.Box(0, 62, 0, 38, 28, 28, lighten(metal, 0.1), M.Metal)
+	for _, side in ipairs({ -1, 1 }) do
+		local eye = b.Ball(side * 9, 76, 14, 8, rgb(120, 230, 255))
+		b.Neon(eye)
+		b.Box(side * 30, 34, 0, 8, 24, 10, darken(metal, 0.1), M.Metal)
+	end
+	b.Cyl(0, 90, 0, 2, 8, GREY)
+	b.Ball(0, 98, 0, 6, rgb(255, 80, 100))
+	b.Footprint(64, 30, 100)
+end
+R.NestingDolls = function(b, _ctx)
+	local colors = { accent(b, 1, rgb(255, 110, 120)), accent(b, 2, BUTTER), accent(b, 3, MINT) }
+	for index = 0, 2 do
+		local s = 1 - index * 0.25
+		local x = -28 + index * 30
+		b.Ball(x, 20 * s, 0, 40 * s, colors[index + 1])
+		b.Ball(x, 48 * s, 0, 30 * s, colors[index + 1])
+		b.Ball(x, 48 * s, 12 * s, 16 * s, rgb(255, 230, 210))
+	end
+	b.Footprint(90, 40, 64)
+end
+R.ToyRocket = function(b, _ctx)
+	local color = lightOf(b, WHITE)
+	b.Cyl(0, 10, 0, 34, 60, color)
+	b.Ball(0, 70, 0, 34, accent(b, 1, rgb(255, 90, 110)))
+	b.Cyl(0, 78, 0, 16, 12, accent(b, 1, rgb(255, 90, 110)))
+	b.CylZ(0, 50, 16, 14, 2, accent(b, 2, SKY))
+	for index = 0, 2 do
+		local angle = index / 3 * math.pi * 2
+		b.BoxR(CFrame.new(math.cos(angle) * 20, 16, math.sin(angle) * 20) * CFrame.Angles(0, -angle, 0), 16, 26, 3, accent(b, 1, rgb(255, 90, 110)))
+	end
+	local flame = b.Ball(0, 6, 0, 16, FIRE)
+	b.Neon(flame)
+	b.Footprint(50, 50, 96)
+end
+
+----------------------------------------------------------------------
+-- Familles par défaut (objets sans recette dédiée)
+----------------------------------------------------------------------
+
+local DOORS_AS_CARD: { [string]: boolean } = { DreamPortal = true, MouseHole = true, Elevator = false }
+
+-- Objets qu'on colle contre le mur du fond (portes, grands rangements)
+local AGAINST_WALL: { [string]: boolean } = {
+	Wardrobe = true, Bookshelf = true, Fridge = true, Fireplace = true, Dresser = true, DrawerCabinet = true,
+	HomeCinema = true, TVStand = true, KitchenIsland = false, Shower = true, ToriiGate = true, ArcadeMachine = true,
+	SlotMachine = true, Speaker = true, VanityTable = true, Aquarium = true, Stove = true, Toilet = true,
+}
+
+function House3DRecipes.Has(itemId: string): boolean
+	return R[itemId] ~= nil
+end
+
+-- Recette d'un objet (nil = carton découpé)
+function House3DRecipes.For(item: any): (Recipe?, Info)
+	local info: Info = { Wall = false, Flat = false, Glow = item.Category == "Lights" }
+	if type(item) ~= "table" or type(item.Id) ~= "string" then
+		return nil, info
+	end
+	local id = item.Id
+	local recipe = R[id]
+	if item.Category == "Doors" and item.Placement ~= "Wall" and not DOORS_AS_CARD[id] then
+		info.Wall = true
+		recipe = recipe or door
+	end
+	if id == "KnittedRug" or string.find(id, "Rug$") then
+		info.Flat = true
+		recipe = recipe or rug
+	end
+	if not recipe and item.Placement ~= "Wall" and item.Category == "Plants" then
+		recipe = (tonumber(item.Size) or 60) >= 100 and tree(nil, true) or smallPlant(true)
+	end
+	if AGAINST_WALL[id] then
+		info.Wall = true
+	end
+	return recipe, info
+end
+
+-- Contexte d'une recette (dessus de HouseSurfaces, couleur des moulures)
+function House3DRecipes.Context(item: any, trim: Color3): Ctx
+	local raw = nil
+	local okRaw, value = pcall(HouseSurfaces.Raw, item.Id)
+	if okRaw and type(value) == "table" then
+		raw = value
+	end
+	local ctx: Ctx = {
+		Item = item,
+		Raw = raw,
+		Trim = trim,
+		TopY = function(index: number, default: number): number
+			local surface = raw and raw[index]
+			local y = surface and tonumber(surface[3])
+			if y then
+				return math.clamp(100 - y, 2, 100)
+			end
+			return default
+		end,
+		Span = function(index: number, default0: number, default1: number): (number, number)
+			local surface = raw and raw[index]
+			local x0 = surface and tonumber(surface[1])
+			local x1 = surface and tonumber(surface[2])
+			if x0 and x1 and x1 > x0 then
+				return x0 - 50, x1 - 50
+			end
+			return default0, default1
+		end,
+	}
+	return ctx
+end
+
+-- (pour les couleurs de secours ailleurs)
+House3DRecipes.BLACK = BLACK
+
+return House3DRecipes

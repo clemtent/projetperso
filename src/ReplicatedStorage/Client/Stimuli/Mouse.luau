@@ -17,6 +17,7 @@
 local Gear = script.Parent:WaitForChild("Gear")
 local GearKit = require(Gear:WaitForChild("GearKit"))
 local GearPiece = require(Gear:WaitForChild("GearPiece"))
+local GearClick = require(Gear:WaitForChild("GearClick"))
 
 local Mouse = {}
 Mouse.Slot = "Background" -- sous l'interface (effets de clic : calque Overlay)
@@ -293,6 +294,31 @@ function Mouse.Start(ctx)
 	ctx.Connect(ctx.State.Clicked, function()
 		if ctx.IsVisible() then
 			click()
+		end
+	end)
+
+	-- La souris elle-même est un bouton (zone transparente au-dessus du dessin)
+	local hit = Instance.new("TextButton")
+	hit.Name = "MouseHit"
+	hit.BackgroundTransparency = 1
+	hit.AutoButtonColor = false
+	hit.Selectable = false
+	hit.Text = ""
+	hit.Size = UDim2.fromScale(1, 1)
+	hit.ZIndex = 40
+	hit.Parent = piece.Content
+	hit.InputBegan:Connect(function(input: InputObject)
+		local kind = input.UserInputType
+		if kind ~= Enum.UserInputType.MouseButton1 and kind ~= Enum.UserInputType.Touch then
+			return
+		end
+		if not piece:IsShown() then
+			return
+		end
+		GearClick.PlayClickSound()
+		local gain = GearClick.Click("Mouse", piece:ToCanvas(Vector2.new(27, 20)))
+		if not gain then
+			click() -- (clic refusé : trop rapide, la souris s'anime quand même)
 		end
 	end)
 

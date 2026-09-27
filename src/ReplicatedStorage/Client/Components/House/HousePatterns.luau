@@ -332,6 +332,132 @@ WALL.Waves = function(holder, w, h, a, b, u)
 	end
 end
 
+-- (v9.1) Écossais : larges bandes croisées (B) + fins filets blancs
+WALL.Plaid = function(holder, w, h, a, b, u)
+	local cell = 64 * u
+	local x = 0
+	while x < w do
+		local band = box(holder, x, 0, cell * 0.42, h, b, 0.45)
+		band.Size = UDim2.new(0, cell * 0.42, 1, 0)
+		local thread = box(holder, x + cell * 0.66, 0, 2 * u, h, WHITE, 0.35)
+		thread.Size = UDim2.new(0, 2 * u, 1, 0)
+		x += cell
+	end
+	local y = 0
+	while y < h do
+		local band = box(holder, 0, y, w, cell * 0.42, b, 0.45)
+		band.Size = UDim2.new(1, 0, 0, cell * 0.42)
+		local thread = box(holder, 0, y + cell * 0.66, w, 2 * u, WHITE, 0.35)
+		thread.Size = UDim2.new(1, 0, 0, 2 * u)
+		local dark = box(holder, 0, y + cell * 0.18, w, 3 * u, b:Lerp(BLACK, 0.2), 0.55)
+		dark.Size = UDim2.new(1, 0, 0, 3 * u)
+		y += cell
+	end
+	local _ = a
+end
+
+-- (v9.1) Petites fleurs à 5 pétales (B) au cœur jaune, en quinconce
+WALL.Flowers = function(holder, w, h, a, b, u)
+	local step = 70 * u
+	local petal = 11 * u
+	local heartColor = Color3.fromRGB(255, 214, 110)
+	local petalColor = b
+	if (b.R + b.G + b.B) / 3 > 0.95 then
+		-- pétales blancs sur fond clair : un contour pastel pour les voir
+		petalColor = a:Lerp(Color3.fromRGB(255, 190, 210), 0.5)
+	end
+	local row = 0
+	local y = step * 0.4
+	while y < h + petal do
+		local cx = (row % 2) * step / 2 + step * 0.3
+		while cx < w + petal do
+			local n = noise(cx, y)
+			local scale = 0.8 + n * 0.4
+			for k = 0, 4 do
+				local angle = k / 5 * math.pi * 2 + n
+				circle(holder, cx + math.cos(angle) * petal * 0.62 * scale, y + math.sin(angle) * petal * 0.62 * scale,
+					petal * scale, petal * scale, petalColor, 0.05)
+			end
+			circle(holder, cx, y, petal * 0.7 * scale, petal * 0.7 * scale, heartColor, 0)
+			if n > 0.55 then
+				-- petite feuille
+				local leaf = circle(holder, cx + step * 0.3, y + step * 0.18, 12 * u, 6 * u, Color3.fromRGB(150, 210, 140), 0.25)
+				leaf.Rotation = -30
+			end
+			cx += step
+		end
+		y += step * 0.7
+		row += 1
+	end
+end
+
+-- (v9.1) Arlequin : losanges B (en quinconce) + fins points blancs
+WALL.Diamonds = function(holder, w, h, a, b, u)
+	local step = 56 * u
+	local row = 0
+	local y = 0
+	while y < h + step do
+		local cx = (row % 2) * step / 2
+		while cx < w + step do
+			diamond(holder, cx, y, step * 0.5, b, 0.1)
+			circle(holder, cx + step / 2, y, 4 * u, 4 * u, WHITE, 0.3)
+			cx += step
+		end
+		y += step / 2
+		row += 1
+	end
+	local _ = a
+end
+
+-- (v9.1) Chevrons : zigzags horizontaux (segments tournés), 2 teintes
+WALL.Chevron = function(holder, w, h, a, b, u)
+	local seg = 40 * u
+	local thick = 13 * u
+	local rowGap = 46 * u
+	local tones = { b, b:Lerp(a, 0.45) }
+	local row = 0
+	local y = rowGap * 0.5
+	while y < h + rowGap do
+		local x = 0
+		local index = 0
+		local color = tones[row % 2 + 1]
+		while x < w + seg do
+			local up = index % 2 == 0
+			local frame = box(holder, 0, 0, seg * 1.02 + thick * 0.4, thick, color, 0)
+			frame.AnchorPoint = Vector2.new(0.5, 0.5)
+			frame.Position = UDim2.fromOffset(x + seg * 0.5, y)
+			frame.Rotation = up and -32 or 32
+			roundify(frame, UDim.new(0, thick * 0.3))
+			x += seg * 0.86
+			index += 1
+		end
+		y += rowGap
+		row += 1
+	end
+end
+
+-- (v9.1) Lunes endormies et étoiles
+WALL.Moons = function(holder, w, h, a, b, u)
+	local step = 92 * u
+	local row = 0
+	local y = step * 0.42
+	while y < h + 10 * u do
+		local cx = (row % 2) * step / 2 + step * 0.32
+		while cx < w + 10 * u do
+			local n = noise(cx, y)
+			local size = (22 + 10 * n) * u
+			local moon = circle(holder, cx, y, size, size, b)
+			-- croissant : un disque couleur du fond "croque" la lune
+			circle(moon, size * 0.72, size * 0.36, size * 0.82, size * 0.82, a, 0)
+			sparkle(holder, cx + step * 0.46, y + step * 0.2, (8 + 6 * n) * u, b, 0.15)
+			circle(holder, cx - step * 0.28, y + step * 0.3, 4 * u, 4 * u, b, 0.3)
+			cx += step
+		end
+		y += step * 0.66
+		row += 1
+	end
+end
+
 ----------------------------------------------------------------------
 -- Sols (perspective)
 ----------------------------------------------------------------------
@@ -522,6 +648,107 @@ FLOOR.Herringbone = function(holder, w, h, a, b, u)
 		end
 	end
 	local _ = u
+end
+
+-- (v9.1) Terrazzo : éclats de couleurs (plus gros vers l'avant)
+FLOOR.Terrazzo = function(holder, w, h, a, b, u)
+	local rows = perspectiveRows(h, 7, 1.16)
+	local chips = { b, b:Lerp(WHITE, 0.4), Color3.fromRGB(255, 214, 120), Color3.fromRGB(150, 206, 240), b:Lerp(BLACK, 0.15) }
+	for index, row in ipairs(rows) do
+		local step = (38 + 30 * row.K) * u
+		local x = noise(index, 3) * step
+		while x < w do
+			local n = noise(x, index)
+			local size = (4 + 7 * row.K * (0.5 + n)) * u
+			local chip = circle(holder, x, row.Y + row.H * (0.2 + 0.6 * noise(index, x)), size * 1.5, size, chips[math.floor(n * #chips) % #chips + 1], 0.05)
+			chip.Rotation = (n - 0.5) * 80
+			x += step * (0.6 + n * 0.8)
+		end
+	end
+	box(holder, 0, 0, w, h * 0.3, a:Lerp(WHITE, 0.7), 0.6)
+end
+
+-- (v9.1) Mosaïque : petits carreaux en nuances (joints clairs)
+FLOOR.Mosaic = function(holder, w, h, a, b, u)
+	local rows = perspectiveRows(h, 9, 1.12)
+	local frontW = rows[#rows].H * 1.1
+	for index, row in ipairs(rows) do
+		local cellW = cellWidth(frontW, row.K)
+		local gap = math.max(1, 2 * u * row.K)
+		local first, last = columns(w, cellW)
+		local center = w / 2
+		for j = first, last do
+			local n = noise(j + 5, index)
+			if n > 0.3 then
+				local tone = a:Lerp(b, 0.35 + n * 0.65)
+				if n > 0.93 then
+					tone = WHITE
+				end
+				box(holder, center + j * cellW + gap / 2, row.Y + gap / 2, cellW - gap, row.H - gap, tone, 0)
+			end
+		end
+	end
+end
+
+-- (v9.1) Gazon d'intérieur : bandes tondues + touffes et petites fleurs
+FLOOR.Grass = function(holder, w, h, a, b, u)
+	local rows = perspectiveRows(h, 8, 1.14)
+	for index, row in ipairs(rows) do
+		if index % 2 == 0 then
+			box(holder, 0, row.Y, w, row.H, b, 0.45)
+		end
+		local step = (26 + 26 * row.K) * u
+		local x = noise(index, 11) * step
+		while x < w do
+			local n = noise(x, index + 4)
+			local tuft = (3 + 5 * row.K) * u
+			local blade = box(holder, x, row.Y + row.H * 0.5 - tuft, math.max(1, 2 * u * row.K), tuft * 1.6, b:Lerp(BLACK, 0.18), 0.1)
+			blade.Rotation = (n - 0.5) * 40
+			if n > 0.86 then
+				local petal = (4 + 4 * row.K) * u
+				circle(holder, x + 6 * u, row.Y + row.H * 0.4, petal, petal, n > 0.93 and Color3.fromRGB(255, 190, 214) or WHITE, 0)
+				circle(holder, x + 6 * u, row.Y + row.H * 0.4, petal * 0.4, petal * 0.4, Color3.fromRGB(255, 214, 110), 0)
+			end
+			x += step * (0.6 + n * 0.8)
+		end
+	end
+	local _ = a
+end
+
+-- (v9.1) Nuages moelleux (sol) : gros nuages blancs en perspective
+FLOOR.Clouds = function(holder, w, h, a, b, u)
+	local rows = perspectiveRows(h, 4, 1.35)
+	for index, row in ipairs(rows) do
+		local width = (90 + 80 * row.K) * u
+		local x = (index % 2) * width / 2 - width * 0.3
+		while x < w + width do
+			local n = noise(x, index)
+			cloud(holder, x, row.Y + row.H * 0.95, width * (0.8 + n * 0.3), b, 0.1 + n * 0.2)
+			x += width * 1.1
+		end
+	end
+	local _ = a
+end
+
+-- (v9.1) Moquette étoilée : fond sombre (A) + étoiles et petits points (B)
+FLOOR.Starry = function(holder, w, h, a, b, u)
+	local rows = perspectiveRows(h, 7, 1.16)
+	for index, row in ipairs(rows) do
+		if index % 2 == 0 then
+			box(holder, 0, row.Y, w, row.H, a:Lerp(WHITE, 0.08), 0.3)
+		end
+		local step = (50 + 50 * row.K) * u
+		local x = noise(index, 2) * step
+		while x < w do
+			local n = noise(x, index + 9)
+			if n > 0.45 then
+				sparkle(holder, x, row.Y + row.H * 0.5, (6 + 10 * row.K * n) * u, b, 0.1)
+			else
+				circle(holder, x, row.Y + row.H * 0.5, (2 + 2 * row.K) * u, (2 + 2 * row.K) * u, b, 0.3)
+			end
+			x += step * (0.5 + n * 0.8)
+		end
+	end
 end
 
 ----------------------------------------------------------------------

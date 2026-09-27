@@ -39,11 +39,15 @@ local HouseCommon = require(script.Parent.HouseCommon)
 local HousePatterns = require(script.Parent.HousePatterns)
 local HouseArt = require(script.Parent.HouseArt)
 local HouseScenery = require(script.Parent.HouseScenery)
+local HouseViews = require(script.Parent.HouseViews)
+local HouseMoods = require(script.Parent.HouseMoods)
+local HouseTints = require(script.Parent.HouseTints)
 
 type Item = HouseCommon.Item
 type Placed = HouseCommon.Placed
 type Style = HouseCommon.Style
 type SizeDef = HouseCommon.SizeDef
+type Look = HouseCommon.Look
 
 local HouseRoom = {}
 
@@ -77,6 +81,7 @@ export type Sticker = {
 	Anims: { HouseArt.Anim },
 	Flat: boolean,
 	Flipped: boolean, -- dessin retourné (miroir) : entry.F
+	Tint: string?, -- (v9.1) couleur appliquée au dessin : entry.C
 }
 
 export type Room = {
@@ -91,6 +96,9 @@ export type Room = {
 	Scale: number,
 	Changed: any, -- Signal () : taille / échelle changée
 	SetStyle: (size: SizeDef, wallpaper: Style?, floor: Style?) -> (),
+	-- (v9.1) boiseries (couleur), vue par la fenêtre, ambiance lumineuse
+	SetLooks: (trim: Look?, view: Look?, mood: Look?) -> (),
+	SetTint: (sticker: Sticker, tintId: string?) -> (),
 	SetDark: (dark: boolean) -> (),
 	IsDark: () -> boolean,
 	ScreenToRoom: (position: Vector2) -> Vector2,
@@ -148,6 +156,11 @@ function HouseRoom.new(stage: Frame): Room
 	local wallHeight = math.floor(height * HouseCommon.Config.WallRatio + 0.5)
 	local dark = false
 	local styleKey = ""
+	local lastWallpaper: Style? = nil
+	local lastFloor: Style? = nil
+	local trimLook: Look? = nil
+	local viewLook: Look? = nil
+	local moodLook: Look? = nil
 	local stickers: { [Sticker]: boolean } = {}
 	local clock = 0
 
@@ -182,10 +195,11 @@ function HouseRoom.new(stage: Frame): Room
 	})
 	Round(shell, UDim.new(0, 18))
 	UIUtil.Stroke(shell, C.PinkDeep, 2, 0.45)
-	UIUtil.Gradient(shell, ColorSequence.new({
+	local SHELL_DEFAULT = ColorSequence.new({
 		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 225, 238)),
 		ColorSequenceKeypoint.new(1, Color3.fromRGB(236, 206, 238)),
-	}), 90)
+	})
+	local shellGradient = UIUtil.Gradient(shell, SHELL_DEFAULT, 90)
 	UIUtil.Shadow(shell, 8, 0.78, 5)
 
 	local wall = UIUtil.Create("Frame", {
@@ -257,11 +271,13 @@ function HouseRoom.new(stage: Frame): Room
 		ZIndex = 8,
 		Parent = frame,
 	})
+	-- (v9.1) Ambiance lumineuse : voile + effet par-dessus les objets
+	local moods = HouseMoods.new(frame, 9)
 	local overlay = UIUtil.Create("Frame", {
 		Name = "Overlay",
 		Size = UDim2.fromScale(1, 1),
 		BackgroundTransparency = 1,
-		ZIndex = 9,
+		ZIndex = 10,
 		Parent = frame,
 	})
 
@@ -374,22 +390,25 @@ function HouseRoom.new(stage: Frame): Room
 	local targetSticker: Sticker? = nil
 
 	-- Éléments de décor qui changent la nuit
-	local windowGlassGradient: UIGradient? = nil
+	local windowGlass: Frame? = nil
 	local dayDecor: { GuiObject } = {}
 	local nightDecor: { GuiObject } = {}
 	local beamSlices: { Frame } = {}
 	local sunLight: Frame? = nil
 
+	-- Lampes plus lumineuses la nuit ou dans une ambiance tamisée
+	local function glowNight(): boolean
+		local mood = moodLook
+		return dark or (mood ~= nil and (tonumber(mood.Brightness) or 1) < 0.8)
+	end
+
 	local function applyNight()
 		night.BackgroundTransparency = dark and 0.46 or 1
 		scenery:SetDark(dark)
-		local gradient = windowGlassGradient
-		if gradient then
-			if dark then
-				gradient.Color = ColorSequence.new(Color3.fromRGB(24, 22, 70), Color3.fromRGB(80, 60, 150))
-			else
-				gradient.Color = ColorSequence.new(Color3.fromRGB(150, 214, 255), Color3.fromRGB(255, 214, 236))
-			end
+		local glass = windowGlass
+		if glass then
+			-- (v9.1) la vue par la fenêtre, de jour ou de nuit
+			HouseViews.Paint(glass, glass.Size.X.Offset, glass.Size.Y.Offset, viewLook :: any, dark)
 		end
 		for _, object in ipairs(dayDecor) do
 			object.Visible = not dark
@@ -405,45 +424,34 @@ function HouseRoom.new(stage: Frame): Room
 		if sun then
 			sun.Visible = not dark
 		end
+		local bright = glowNight()
 		for sticker in pairs(stickers) do
 			local glow = sticker.Glow
 			if glow then
-				paintGlow(glow, dark)
+				paintGlow(glow, bright)
 			end
 		end
 	end
 
 	-- Fenêtre fixe à rideaux (au mur, à gauche) + tache de lumière au sol
-	local function buildWindow(windowX: number)
+	local function buildWindow(windowX: number, trim: Color3)
 		local top = 36
 		local w, h = 104, 92
-		local outer = Box(decor, windowX, top, w, h, C.Cream, 0, 3)
+		local outer = Box(decor, windowX, top, w, h, trim, 0, 3)
 		Round(outer, UDim.new(0, 14))
 		UIUtil.Stroke(outer, C.WoodDark, 2, 0.4)
+		-- Vitre : la vue choisie (HouseViews), repeinte le jour / la nuit
 		local glass = Box(decor, windowX + 8, top + 8, w - 16, h - 16, WHITE, 0, 4)
+		glass.ClipsDescendants = true
 		Round(glass, UDim.new(0, 9))
-		windowGlassGradient = UIUtil.Gradient(glass, ColorSequence.new(WHITE, WHITE), 90)
-		-- Jour : petit nuage et soleil ; nuit : lune et étoiles
-		local sun = Circle(glass, 62, 18, 16, 16, Color3.fromRGB(255, 230, 130), 0, 5)
-		local cloudHolder = Box(glass, 0, 0, w - 16, h - 16, WHITE, 1, 5)
-		HousePatterns.Cloud(cloudHolder, 30, 58, 34, WHITE, 0.05, 6)
-		table.insert(dayDecor, sun)
-		table.insert(dayDecor, cloudHolder)
-		local moon = Circle(glass, 60, 20, 18, 18, Color3.fromRGB(255, 244, 200), 0, 5)
-		local moonBite = Circle(moon, 13, 6, 14, 14, Color3.fromRGB(40, 34, 95), 0, 6)
-		moonBite.Name = "Bite"
-		table.insert(nightDecor, moon)
-		for index, point in ipairs({ Vector2.new(16, 16), Vector2.new(30, 44), Vector2.new(70, 52), Vector2.new(44, 12) }) do
-			local star = Circle(glass, point.X, point.Y, 3 + index % 2, 3 + index % 2, WHITE, 0.1, 5)
-			table.insert(nightDecor, star)
-		end
+		windowGlass = glass
 		-- Croisillon
-		Box(decor, windowX + w / 2 - 2, top + 8, 4, h - 16, C.Cream, 0, 5)
-		Box(decor, windowX + 8, top + h / 2 - 2, w - 16, 4, C.Cream, 0, 5)
+		Box(decor, windowX + w / 2 - 2, top + 8, 4, h - 16, trim, 0, 5)
+		Box(decor, windowX + 8, top + h / 2 - 2, w - 16, 4, trim, 0, 5)
 		local shine = Box(decor, windowX + 14, top + 14, 16, 5, WHITE, 0.45, 5)
 		Round(shine)
 		-- Rebord + ombre
-		local sill = Box(decor, windowX - 8, top + h - 4, w + 16, 10, C.Cream, 0, 6)
+		local sill = Box(decor, windowX - 8, top + h - 4, w + 16, 10, trim, 0, 6)
 		Round(sill, UDim.new(0, 4))
 		UIUtil.Stroke(sill, C.WoodDark, 1.5, 0.5)
 		local sillShadow = Box(decor, windowX - 4, top + h + 6, w + 8, 10, BLACK, 0.85, 3)
@@ -485,14 +493,18 @@ function HouseRoom.new(stage: Frame): Room
 
 	-- Reconstruit la coque, les murs, le sol et le décor fixe
 	local function rebuild(wallpaper: Style?, floorStyle: Style?)
+		lastWallpaper = wallpaper
+		lastFloor = floorStyle
 		for _, child in ipairs(decor:GetChildren()) do
 			child:Destroy()
 		end
 		table.clear(dayDecor)
 		table.clear(nightDecor)
 		table.clear(beamSlices)
-		windowGlassGradient = nil
+		windowGlass = nil
 		sunLight = nil
+		local trim = (trimLook and trimLook.Color) or C.Cream
+		local customTrim = trimLook ~= nil and trimLook.Color ~= nil and trimLook.Order ~= nil and trimLook.Order > 1
 
 		frame.Size = UDim2.fromOffset(width, height)
 		shell.Position = UDim2.fromOffset(-SHELL, -CEIL)
@@ -560,23 +572,27 @@ function HouseRoom.new(stage: Frame): Room
 			edge.Rotation = math.deg(math.atan2(delta.Y, delta.X))
 		end
 
-		-- Plinthe (mur du fond) + petite ombre
-		local baseboard = Box(decor, SIDE, wallHeight - 11, width - SIDE * 2, 11, C.Cream, 0, 4)
+		-- Plinthe (mur du fond) + petite ombre (couleur des boiseries)
+		local baseboard = Box(decor, SIDE, wallHeight - 11, width - SIDE * 2, 11, trim, 0, 4)
 		Box(baseboard, 0, 0, width - SIDE * 2, 2, WHITE, 0.2, 5)
 		Box(baseboard, 0, 9, width - SIDE * 2, 2, wallB:Lerp(BLACK, 0.3), 0.5, 5)
 		-- Moulure du plafond + festons
-		local crown = Box(decor, 0, 0, width, 7, C.Cream, 0, 5)
+		local crown = Box(decor, 0, 0, width, 7, trim, 0, 5)
 		Box(crown, 0, 5, width, 2, wallB:Lerp(BLACK, 0.25), 0.55, 6)
 		local scallop = 20
 		local x = scallop / 2
-		local scallopColor = C.Pink:Lerp(wallB, 0.4)
+		local scallopColor = customTrim and trim:Lerp(wallB, 0.3) or C.Pink:Lerp(wallB, 0.4)
+		-- Plafond et côtés de la coque : teintés par les boiseries choisies
+		shellGradient.Color = if customTrim
+			then ColorSequence.new(trim:Lerp(WHITE, 0.3), trim:Lerp(BLACK, 0.06))
+			else SHELL_DEFAULT
 		while x < width do
 			Circle(decor, x, 7, scallop - 2, 12, scallopColor, 0, 4)
 			x += scallop
 		end
 
 		-- Fenêtre (à gauche) et prise électrique rigolote (à droite)
-		buildWindow(math.floor(SIDE + width * 0.1))
+		buildWindow(math.floor(SIDE + width * 0.1), trim)
 		local outlet = Box(decor, width - SIDE - 70, wallHeight - 44, 22, 26, WHITE, 0, 4)
 		Round(outlet, UDim.new(0, 5))
 		UIUtil.Stroke(outlet, wallB:Lerp(BLACK, 0.35), 1.5, 0.4)
@@ -648,6 +664,10 @@ function HouseRoom.new(stage: Frame): Room
 		-- Dessin kawaii de l'objet (House/Art) ; sinon, l'emoji seul
 		local painted, anims = HouseArt.Paint(body, item, false)
 		local detail: HouseArt.Result = painted or {}
+		-- (v9.1) couleur choisie pour cet objet
+		if painted and entry.C then
+			HouseTints.Apply(body, entry.C)
+		end
 		local showEmoji = painted == nil or detail.ShowEmoji == true
 
 		-- Halo des lumières
@@ -743,6 +763,7 @@ function HouseRoom.new(stage: Frame): Room
 			Anims = anims,
 			Flat = flat,
 			Flipped = false,
+			Tint = painted and entry.C or nil,
 		}
 		-- Objet retourné (chaise tournée vers la table...) : dessin en miroir
 		if entry.F == true then
@@ -751,7 +772,7 @@ function HouseRoom.new(stage: Frame): Room
 		end
 		stickers[sticker] = true
 		if glow then
-			paintGlow(glow, dark)
+			paintGlow(glow, glowNight())
 		end
 		applySticker(sticker)
 		holder.Parent = items
@@ -786,6 +807,46 @@ function HouseRoom.new(stage: Frame): Room
 			rebuild(wallpaper, floorStyle)
 			-- Nouvelle largeur : échelle recalculée (et signal Changed même si elle ne bouge pas)
 			refit(widthChanged)
+		end,
+		SetLooks = function(trim: Look?, view: Look?, mood: Look?)
+			local oldTrim, oldView = trimLook, viewLook
+			trimLook, viewLook, moodLook = trim, view, mood
+			if (oldTrim and oldTrim.Id) ~= (trim and trim.Id) then
+				rebuild(lastWallpaper, lastFloor)
+			elseif (oldView and oldView.Id) ~= (view and view.Id) then
+				applyNight()
+			end
+			moods.Set(mood :: any, width, height)
+			-- (lampes plus lumineuses dans une ambiance tamisée)
+			local bright = glowNight()
+			for sticker in pairs(stickers) do
+				local glow = sticker.Glow
+				if glow then
+					paintGlow(glow, bright)
+				end
+			end
+		end,
+		-- (v9.1) change la couleur d'un objet déjà posé : on repeint son dessin
+		SetTint = function(sticker: Sticker, tintId: string?)
+			if sticker.Tint == tintId then
+				return
+			end
+			local body = sticker.Body
+			for _, child in ipairs(body:GetChildren()) do
+				if child:IsA("GuiObject") and child.Name ~= "Glow" and child.Name ~= "Emoji" then
+					child:Destroy()
+				end
+			end
+			local painted, anims = HouseArt.Paint(body, sticker.Item, false)
+			if painted and tintId then
+				HouseTints.Apply(body, tintId)
+			end
+			sticker.Anims = anims
+			sticker.Bulbs = (painted and painted.Bulbs) or {}
+			sticker.Tint = tintId
+			if sticker.Flipped then
+				HouseArt.Mirror(body, anims, STICKER_BASE / 2)
+			end
 		end,
 		SetDark = function(value: boolean)
 			if dark == value then
@@ -977,6 +1038,7 @@ function HouseRoom.new(stage: Frame): Room
 		Update = function(dt: number)
 			clock += dt
 			scenery:Update(dt)
+			moods.Update(dt)
 			-- Petites animations des dessins (animaux, flammes, balanciers...)
 			-- et guirlandes qui scintillent (les ampoules et leur halo)
 			for sticker in pairs(stickers) do

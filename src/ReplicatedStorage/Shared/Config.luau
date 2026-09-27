@@ -995,6 +995,163 @@ Config.House = {
 			A = Color3.fromRGB(152, 108, 82), B = Color3.fromRGB(122, 84, 64) },
 		{ Id = "GoldenMarble", Name = "Golden marble", Icon = "👑", Cost = 3e8, Pattern = "Marble",
 			A = Color3.fromRGB(255, 241, 196), B = Color3.fromRGB(232, 196, 112) },
+		-- v9.1 : terrazzo, mosaïque, gazon, nuages, moquette étoilée
+		{ Id = "PinkTerrazzo", Name = "Pink terrazzo", Icon = "🍧", Cost = 3000, Pattern = "Terrazzo",
+			A = Color3.fromRGB(255, 232, 238), B = Color3.fromRGB(240, 150, 186) },
+		{ Id = "MintMosaic", Name = "Mint mosaic", Icon = "🧩", Cost = 20000, Pattern = "Mosaic",
+			A = Color3.fromRGB(214, 246, 232), B = Color3.fromRGB(150, 218, 196) },
+		{ Id = "MeadowGrass", Name = "Meadow grass", Icon = "🌱", Cost = 60000, Pattern = "Grass",
+			A = Color3.fromRGB(176, 228, 150), B = Color3.fromRGB(128, 198, 118) },
+		{ Id = "CreamTerrazzo", Name = "Vanilla terrazzo", Icon = "🍨", Cost = 150000, Pattern = "Terrazzo",
+			A = Color3.fromRGB(252, 244, 230), B = Color3.fromRGB(196, 170, 226) },
+		{ Id = "CloudNine", Name = "Cloud nine", Icon = "☁️", Cost = 500000, Pattern = "Clouds",
+			A = Color3.fromRGB(206, 228, 255), B = Color3.fromRGB(255, 255, 255) },
+		{ Id = "StarryCarpet", Name = "Starry carpet", Icon = "⭐", Cost = 3e6, Pattern = "Starry",
+			A = Color3.fromRGB(86, 74, 150), B = Color3.fromRGB(255, 230, 150) },
+		{ Id = "OceanMosaic", Name = "Ocean mosaic", Icon = "🐚", Cost = 1.2e7, Pattern = "Mosaic",
+			A = Color3.fromRGB(196, 232, 250), B = Color3.fromRGB(110, 184, 226) },
+		{ Id = "AuroraStars", Name = "Aurora starlight", Icon = "🌌", Cost = 8e8, Pattern = "Starry",
+			A = Color3.fromRGB(58, 48, 118), B = Color3.fromRGB(170, 255, 214) },
+	},
+
+	-- v9.1 🎨 Personnalisation (tout est sauvegardé par le serveur) --------
+	-- Couleurs des objets posés (entry.C) : gratuites ; la couleur principale
+	-- du dessin prend la teinte Color (les ombres et reflets suivent)
+	Tints = {
+		{ Id = "Pink", Name = "Bubblegum", Icon = "💗", Color = Color3.fromRGB(255, 140, 190) },
+		{ Id = "Peach", Name = "Peach", Icon = "🍑", Color = Color3.fromRGB(255, 176, 138) },
+		{ Id = "Butter", Name = "Butter", Icon = "💛", Color = Color3.fromRGB(255, 218, 110) },
+		{ Id = "Mint", Name = "Mint", Icon = "💚", Color = Color3.fromRGB(116, 218, 176) },
+		{ Id = "Sky", Name = "Sky", Icon = "💙", Color = Color3.fromRGB(126, 192, 255) },
+		{ Id = "Lilac", Name = "Lilac", Icon = "💜", Color = Color3.fromRGB(180, 146, 246) },
+		{ Id = "Berry", Name = "Berry", Icon = "🍒", Color = Color3.fromRGB(222, 66, 128) },
+		{ Id = "Choco", Name = "Chocolate", Icon = "🍫", Color = Color3.fromRGB(150, 100, 78) },
+		{ Id = "Snow", Name = "Snow white", Icon = "🤍", Color = Color3.fromRGB(246, 244, 252) },
+		{ Id = "Night", Name = "Midnight", Icon = "🌑", Color = Color3.fromRGB(86, 80, 150) },
+		{ Id = "Gold", Name = "Gold", Icon = "👑", Color = Color3.fromRGB(240, 194, 70), RequiresRebirths = 1 },
+	},
+
+	-- Boiseries d'une pièce : plinthe, moulure du plafond, cadre de fenêtre
+	Trims = {
+		{ Id = "Cream", Name = "Vanilla cream", Icon = "🍦", Cost = 0, Color = Color3.fromRGB(255, 247, 236) },
+		{ Id = "SnowTrim", Name = "Snow white", Icon = "🤍", Cost = 800, Color = Color3.fromRGB(250, 250, 255) },
+		{ Id = "BubblegumTrim", Name = "Bubblegum pink", Icon = "💗", Cost = 3000, Color = Color3.fromRGB(255, 166, 204) },
+		{ Id = "MintTrim", Name = "Mint", Icon = "💚", Cost = 8000, Color = Color3.fromRGB(150, 222, 192) },
+		{ Id = "SkyTrim", Name = "Sky blue", Icon = "💙", Cost = 20000, Color = Color3.fromRGB(156, 204, 250) },
+		{ Id = "LavenderTrim", Name = "Lavender", Icon = "💜", Cost = 50000, Color = Color3.fromRGB(198, 170, 246) },
+		{ Id = "ButterTrim", Name = "Butter yellow", Icon = "💛", Cost = 120000, Color = Color3.fromRGB(255, 224, 128) },
+		{ Id = "HoneyTrim", Name = "Honey wood", Icon = "🍯", Cost = 300000, Color = Color3.fromRGB(214, 164, 120) },
+		{ Id = "WalnutTrim", Name = "Walnut", Icon = "🌰", Cost = 900000, Color = Color3.fromRGB(140, 96, 74) },
+		{ Id = "RoseGoldTrim", Name = "Rose gold", Icon = "🌹", Cost = 4e6, Color = Color3.fromRGB(236, 168, 158) },
+		{ Id = "GoldTrim", Name = "Royal gold", Icon = "👑", Cost = 4e7, Color = Color3.fromRGB(240, 196, 88) },
+		{ Id = "MidnightTrim", Name = "Midnight", Icon = "🌑", Cost = 3e8, Color = Color3.fromRGB(78, 68, 124) },
+	},
+
+	-- Ambiance (lumière) d'une pièce : voile coloré (Tint, force Amount),
+	-- 2e couleur du dégradé (Tint2), couleur des lampes (Light), luminosité
+	-- (Brightness, 1 = normal) et petit effet animé (Effect)
+	Moods = {
+		{ Id = "Sunny", Name = "Sunny day", Icon = "☀️", Cost = 0, Tint = Color3.fromRGB(255, 250, 230),
+			Tint2 = Color3.fromRGB(255, 250, 230), Amount = 0, Light = Color3.fromRGB(255, 244, 222), Brightness = 1, Effect = "None" },
+		{ Id = "CozyLamp", Name = "Cozy lamplight", Icon = "🕯️", Cost = 5000, Tint = Color3.fromRGB(255, 176, 96),
+			Tint2 = Color3.fromRGB(255, 214, 150), Amount = 0.16, Light = Color3.fromRGB(255, 196, 120), Brightness = 0.9, Effect = "Rays" },
+		{ Id = "GoldenHour", Name = "Golden hour", Icon = "🌅", Cost = 25000, Tint = Color3.fromRGB(255, 150, 90),
+			Tint2 = Color3.fromRGB(255, 120, 170), Amount = 0.2, Light = Color3.fromRGB(255, 180, 120), Brightness = 0.95, Effect = "Rays" },
+		{ Id = "Moonlight", Name = "Moonlight", Icon = "🌙", Cost = 80000, Tint = Color3.fromRGB(60, 70, 170),
+			Tint2 = Color3.fromRGB(120, 110, 210), Amount = 0.34, Light = Color3.fromRGB(170, 190, 255), Brightness = 0.55, Effect = "Sparkles" },
+		{ Id = "CottonCandy", Name = "Cotton candy", Icon = "🍭", Cost = 250000, Tint = Color3.fromRGB(255, 140, 200),
+			Tint2 = Color3.fromRGB(140, 200, 255), Amount = 0.2, Light = Color3.fromRGB(255, 190, 230), Brightness = 1, Effect = "Hearts" },
+		{ Id = "FreshForest", Name = "Fresh forest", Icon = "🍃", Cost = 600000, Tint = Color3.fromRGB(110, 210, 140),
+			Tint2 = Color3.fromRGB(220, 255, 170), Amount = 0.18, Light = Color3.fromRGB(210, 255, 200), Brightness = 0.95, Effect = "Leaves" },
+		{ Id = "UnderTheSea", Name = "Under the sea", Icon = "🫧", Cost = 2e6, Tint = Color3.fromRGB(60, 170, 230),
+			Tint2 = Color3.fromRGB(90, 230, 220), Amount = 0.3, Light = Color3.fromRGB(150, 230, 255), Brightness = 0.75, Effect = "Bubbles" },
+		{ Id = "DiscoParty", Name = "Disco party", Icon = "🪩", Cost = 6e6, Tint = Color3.fromRGB(120, 60, 180),
+			Tint2 = Color3.fromRGB(255, 80, 180), Amount = 0.36, Light = Color3.fromRGB(255, 140, 240), Brightness = 0.5, Effect = "Disco" },
+		{ Id = "Aurora", Name = "Northern lights", Icon = "🌌", Cost = 2e7, Tint = Color3.fromRGB(40, 60, 140),
+			Tint2 = Color3.fromRGB(80, 230, 180), Amount = 0.32, Light = Color3.fromRGB(160, 255, 220), Brightness = 0.6, Effect = "Aurora" },
+		{ Id = "FairyDust", Name = "Fairy dust", Icon = "✨", Cost = 8e7, Tint = Color3.fromRGB(190, 120, 255),
+			Tint2 = Color3.fromRGB(255, 200, 250), Amount = 0.24, Light = Color3.fromRGB(230, 190, 255), Brightness = 0.85, Effect = "Sparkles" },
+		{ Id = "RainbowGlow", Name = "Rainbow glow", Icon = "🌈", Cost = 3e8, Tint = Color3.fromRGB(255, 120, 160),
+			Tint2 = Color3.fromRGB(120, 200, 255), Amount = 0.22, Light = Color3.fromRGB(255, 230, 240), Brightness = 1, Effect = "Rainbow" },
+	},
+
+	-- Vue par la fenêtre de la pièce (Kind = dessin : HouseViews)
+	Views = {
+		{ Id = "Garden", Name = "Sunny garden", Icon = "🌤️", Cost = 0, Kind = "Garden",
+			Sky = Color3.fromRGB(150, 214, 255), Horizon = Color3.fromRGB(255, 226, 240), Ground = Color3.fromRGB(150, 222, 150) },
+		{ Id = "PinkSunset", Name = "Pink sunset", Icon = "🌇", Cost = 3000, Kind = "Sunset",
+			Sky = Color3.fromRGB(255, 150, 190), Horizon = Color3.fromRGB(255, 214, 150), Ground = Color3.fromRGB(190, 120, 170) },
+		{ Id = "CitySkyline", Name = "City skyline", Icon = "🏙️", Cost = 12000, Kind = "City",
+			Sky = Color3.fromRGB(170, 200, 255), Horizon = Color3.fromRGB(240, 220, 255), Ground = Color3.fromRGB(170, 160, 210) },
+		{ Id = "BeachView", Name = "Beach & sea", Icon = "🏝️", Cost = 40000, Kind = "Beach",
+			Sky = Color3.fromRGB(140, 214, 255), Horizon = Color3.fromRGB(110, 200, 230), Ground = Color3.fromRGB(255, 228, 170) },
+		{ Id = "SnowyPines", Name = "Snowy pines", Icon = "❄️", Cost = 120000, Kind = "Snow",
+			Sky = Color3.fromRGB(196, 214, 255), Horizon = Color3.fromRGB(236, 240, 255), Ground = Color3.fromRGB(250, 252, 255) },
+		{ Id = "SakuraHills", Name = "Sakura hills", Icon = "🌸", Cost = 400000, Kind = "Sakura",
+			Sky = Color3.fromRGB(190, 220, 255), Horizon = Color3.fromRGB(255, 226, 238), Ground = Color3.fromRGB(170, 226, 160) },
+		{ Id = "MountainLake", Name = "Mountain lake", Icon = "🏔️", Cost = 1.2e6, Kind = "Mountains",
+			Sky = Color3.fromRGB(150, 200, 255), Horizon = Color3.fromRGB(226, 240, 255), Ground = Color3.fromRGB(120, 196, 220) },
+		{ Id = "CoralReef", Name = "Coral reef", Icon = "🐠", Cost = 4e6, Kind = "Underwater",
+			Sky = Color3.fromRGB(70, 170, 220), Horizon = Color3.fromRGB(120, 220, 230), Ground = Color3.fromRGB(240, 214, 170) },
+		{ Id = "Candyland", Name = "Candyland", Icon = "🍬", Cost = 1.5e7, Kind = "Candy",
+			Sky = Color3.fromRGB(255, 200, 236), Horizon = Color3.fromRGB(255, 240, 200), Ground = Color3.fromRGB(255, 170, 210) },
+		{ Id = "OuterSpace", Name = "Outer space", Icon = "🪐", Cost = 6e7, Kind = "Space",
+			Sky = Color3.fromRGB(30, 24, 70), Horizon = Color3.fromRGB(90, 50, 140), Ground = Color3.fromRGB(200, 196, 220) },
+		{ Id = "RainbowSky", Name = "Rainbow sky", Icon = "🌈", Cost = 2.5e8, Kind = "Rainbow",
+			Sky = Color3.fromRGB(170, 220, 255), Horizon = Color3.fromRGB(255, 240, 250), Ground = Color3.fromRGB(255, 255, 255) },
+	},
+
+	-- 🏡 Extérieur (toute la maison) : couleur de la façade et du toit (Color
+	-- nil = couleurs d'origine du bâtiment), motif du toit, déco du jardin
+	Facades = {
+		{ Id = "ClassicFacade", Name = "Original colours", Icon = "🏠", Cost = 0 },
+		{ Id = "StrawberryFacade", Name = "Strawberry milk", Icon = "🍓", Cost = 20000, Color = Color3.fromRGB(255, 208, 222) },
+		{ Id = "MintFacade", Name = "Mint ice cream", Icon = "🍃", Cost = 60000, Color = Color3.fromRGB(200, 240, 222) },
+		{ Id = "SkyFacade", Name = "Baby blue", Icon = "💙", Cost = 150000, Color = Color3.fromRGB(204, 228, 255) },
+		{ Id = "LavenderFacade", Name = "Lavender", Icon = "💜", Cost = 400000, Color = Color3.fromRGB(226, 212, 255) },
+		{ Id = "ButterFacade", Name = "Butter cake", Icon = "🧈", Cost = 1e6, Color = Color3.fromRGB(255, 240, 190) },
+		{ Id = "PeachFacade", Name = "Peach sorbet", Icon = "🍑", Cost = 2.5e6, Color = Color3.fromRGB(255, 220, 196) },
+		{ Id = "CocoaFacade", Name = "Hot cocoa", Icon = "☕", Cost = 8e6, Color = Color3.fromRGB(190, 146, 120) },
+		{ Id = "SnowFacade", Name = "Snow castle", Icon = "🏔️", Cost = 3e7, Color = Color3.fromRGB(248, 248, 255) },
+		{ Id = "MidnightFacade", Name = "Midnight sky", Icon = "🌃", Cost = 2e8, Color = Color3.fromRGB(110, 100, 170) },
+	},
+	Roofs = {
+		{ Id = "ClassicRoof", Name = "Original colours", Icon = "🏠", Cost = 0 },
+		{ Id = "BubblegumRoof", Name = "Bubblegum", Icon = "💗", Cost = 15000, Color = Color3.fromRGB(255, 140, 188) },
+		{ Id = "LilacRoof", Name = "Lilac", Icon = "💜", Cost = 45000, Color = Color3.fromRGB(180, 150, 240) },
+		{ Id = "MintRoof", Name = "Mint", Icon = "💚", Cost = 120000, Color = Color3.fromRGB(110, 206, 170) },
+		{ Id = "SkyRoof", Name = "Sky blue", Icon = "💙", Cost = 300000, Color = Color3.fromRGB(116, 180, 246) },
+		{ Id = "SunnyRoof", Name = "Sunny yellow", Icon = "🌻", Cost = 800000, Color = Color3.fromRGB(255, 204, 90) },
+		{ Id = "CoralRoof", Name = "Coral", Icon = "🪸", Cost = 2e6, Color = Color3.fromRGB(255, 130, 116) },
+		{ Id = "ChocolateRoof", Name = "Chocolate", Icon = "🍫", Cost = 6e6, Color = Color3.fromRGB(140, 92, 76) },
+		{ Id = "SnowRoof", Name = "Snowy white", Icon = "⛄", Cost = 2e7, Color = Color3.fromRGB(242, 244, 255) },
+		{ Id = "GoldRoof", Name = "Royal gold", Icon = "👑", Cost = 1e8, Color = Color3.fromRGB(240, 190, 70) },
+	},
+	RoofStyles = {
+		{ Id = "PlainRoof", Name = "Classic tiles", Icon = "🧱", Cost = 0, Pattern = "None" },
+		{ Id = "HeartRoof", Name = "Love hearts", Icon = "💕", Cost = 30000, Pattern = "Hearts" },
+		{ Id = "PolkaRoof", Name = "Polka dots", Icon = "🔴", Cost = 90000, Pattern = "Dots" },
+		{ Id = "CandyRoof", Name = "Candy stripes", Icon = "🍬", Cost = 250000, Pattern = "Stripes" },
+		{ Id = "StarRoof", Name = "Twinkle stars", Icon = "⭐", Cost = 700000, Pattern = "Stars" },
+		{ Id = "FlowerRoof", Name = "Flower garden", Icon = "🌷", Cost = 2e6, Pattern = "Flowers" },
+		{ Id = "SnowyRoof", Name = "Snowy caps", Icon = "❄️", Cost = 7e6, Pattern = "Snow" },
+		{ Id = "MermaidRoof", Name = "Mermaid scales", Icon = "🧜", Cost = 4e7, Pattern = "Scales" },
+	},
+	-- Déco du jardin devant la maison (GardenSlots au plus, dans l'ordre choisi)
+	GardenSlots = 6,
+	GardenDecor = {
+		{ Id = "TulipBed", Name = "Tulip bed", Icon = "🌷", Cost = 8000 },
+		{ Id = "GardenGnome", Name = "Garden gnome", Icon = "🧙", Cost = 20000 },
+		{ Id = "PinkFlamingo", Name = "Pink flamingo", Icon = "🦩", Cost = 45000 },
+		{ Id = "Birdbath", Name = "Bird bath", Icon = "🐦", Cost = 100000 },
+		{ Id = "Beehive", Name = "Honey beehive", Icon = "🐝", Cost = 220000 },
+		{ Id = "DuckPond", Name = "Duck pond", Icon = "🦆", Cost = 500000 },
+		{ Id = "PumpkinPatch", Name = "Pumpkin patch", Icon = "🎃", Cost = 1.1e6 },
+		{ Id = "Snowman", Name = "Happy snowman", Icon = "⛄", Cost = 2.4e6 },
+		{ Id = "WishingWell", Name = "Wishing well", Icon = "🪣", Cost = 5e6 },
+		{ Id = "Trampoline", Name = "Trampoline", Icon = "🤸", Cost = 1.2e7 },
+		{ Id = "RainbowArch", Name = "Rainbow arch", Icon = "🌈", Cost = 5e7 },
+		{ Id = "UnicornStatue", Name = "Unicorn statue", Icon = "🦄", Cost = 3e8 },
 	},
 
 	Categories = {
@@ -1671,6 +1828,41 @@ for index, item in ipairs(Config.House.Items) do
 	if list then
 		table.insert(list, item)
 	end
+end
+
+-- (v9.1) Personnalisation : un "genre" par axe. Scope "Room" = choisi par
+-- pièce (champ Field de la pièce), "House" = toute la maison (champ Field de
+-- data.House), "Garden" = liste de déco du jardin ; Owned = table des
+-- entrées achetées dans data.House ; la 1re entrée de chaque liste est
+-- gratuite (Cost 0) sauf pour le jardin
+Config.HouseLookKinds = {
+	Trim = { List = Config.House.Trims, Owned = "OwnedTrims", Scope = "Room", Field = "Trim" },
+	Mood = { List = Config.House.Moods, Owned = "OwnedMoods", Scope = "Room", Field = "Mood" },
+	View = { List = Config.House.Views, Owned = "OwnedViews", Scope = "Room", Field = "View" },
+	Facade = { List = Config.House.Facades, Owned = "OwnedFacades", Scope = "House", Field = "Facade" },
+	Roof = { List = Config.House.Roofs, Owned = "OwnedRoofs", Scope = "House", Field = "Roof" },
+	RoofStyle = { List = Config.House.RoofStyles, Owned = "OwnedRoofStyles", Scope = "House", Field = "RoofStyle" },
+	Garden = { List = Config.House.GardenDecor, Owned = "OwnedGarden", Scope = "Garden", Field = "Garden" },
+}
+Config.HouseLooksById = {} -- [kind] = { [id] = entrée }
+for kind, def in pairs(Config.HouseLookKinds) do
+	local byId = {}
+	for index, entry in ipairs(def.List) do
+		entry.Order = index
+		entry.Cost = entry.Cost or 0
+		byId[entry.Id] = entry
+	end
+	def.ById = byId
+	def.Kind = kind
+	Config.HouseLooksById[kind] = byId
+end
+Config.HouseTrimsById = Config.HouseLooksById.Trim
+Config.HouseMoodsById = Config.HouseLooksById.Mood
+Config.HouseViewsById = Config.HouseLooksById.View
+Config.HouseTintsById = {}
+for index, tint in ipairs(Config.House.Tints) do
+	tint.Order = index
+	Config.HouseTintsById[tint.Id] = tint
 end
 
 return Config
