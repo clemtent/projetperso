@@ -692,6 +692,7 @@ function Weather.Start(ctx)
 	local stripHeight = 60
 	local roadY = 58
 	local canvasWidth = 1280
+	local refreshSizes: () -> () = function() end -- (définie plus bas : tailles selon la bande et le niveau)
 
 	-- Bande dans la barre du haut de Roblox (au-dessus de la zone sûre), ou
 	-- sur le bandeau d'actu s'il n'y a pas de barre
@@ -713,6 +714,7 @@ function Weather.Start(ctx)
 		end
 		chaser.Size = UDim2.new(1, 0, 0, stripHeight)
 		roadY = stripHeight - 2
+		refreshSizes()
 	end
 	layoutStrip()
 	ctx.Connect(ctx.Interface.ScaleChanged, layoutStrip)
@@ -995,6 +997,18 @@ function Weather.Start(ctx)
 	local tornadoX = canvasWidth * 0.6
 	local rainCount = 0
 
+	-- Tailles selon la hauteur de la bande (écran) et le niveau
+	refreshSizes = function()
+		local level = math.max(chaserLevel, 1)
+		for _, cloud in ipairs(stripClouds) do
+			cloud.Scaler.Scale = math.clamp(stripHeight / 120, 0.38, 0.6) * (1 + 0.04 * level)
+		end
+		vanScale.Scale = math.clamp(stripHeight / 62, 0.7, 1.25) * (0.98 + 0.03 * level)
+		tornadoScale.Scale = math.clamp(stripHeight / 64, 0.6, 1.4) * (0.78 + 0.13 * math.max(0, level - 5))
+		vanX = math.clamp(vanX, canvasWidth * 0.2, canvasWidth * 0.8)
+		vanTarget = math.clamp(vanTarget, canvasWidth * 0.2, canvasWidth * 0.8)
+	end
+
 	local function applyChaser(level: number, animate: boolean)
 		level = math.clamp(math.floor(level), 0, 8)
 		if level == chaserLevel and chaser.Visible == (level > 0) then
@@ -1008,7 +1022,6 @@ function Weather.Start(ctx)
 		end
 		for _, cloud in ipairs(stripClouds) do
 			cloud.Root.Visible = level >= cloud.Def.Level
-			cloud.Scaler.Scale = math.clamp(stripHeight / 120, 0.38, 0.6) * (1 + 0.04 * level)
 		end
 		rainCount = level >= 3 and math.min(#stripRain, 4 + level * 2) or 0
 		for index, drop in ipairs(stripRain) do
@@ -1018,9 +1031,8 @@ function Weather.Start(ctx)
 		anemometer.Visible = level >= 6
 		stripe.BackgroundColor3 = level >= 8 and Color3.fromRGB(255, 200, 40) or Color3.fromRGB(255, 140, 30)
 		decal.Text = level >= 8 and "🌪️" or "⚡"
-		vanScale.Scale = math.clamp(stripHeight / 62, 0.7, 1.25) * (0.98 + 0.03 * level)
 		tornado.Visible = level >= 5
-		tornadoScale.Scale = math.clamp(stripHeight / 64, 0.6, 1.4) * (0.78 + 0.13 * math.max(0, level - 5))
+		refreshSizes()
 		for _, bit in ipairs(debris) do
 			bit.Frame.Visible = level >= 7
 		end

@@ -787,6 +787,14 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 	------------------------------------------------------------------
 	-- Objets
 	------------------------------------------------------------------
+	-- (copie : la pièce peut changer pendant la vue ; valeurs invalides corrigées)
+	local function finite(value: any, default: number): number
+		local number = tonumber(value)
+		if number == nil or number ~= number or number == math.huge or number == -math.huge then
+			return default
+		end
+		return number
+	end
 	local entries: { Placed } = {}
 	local roomPlaced = type(room) == "table" and room.Placed or nil
 	if type(roomPlaced) == "table" then
@@ -794,10 +802,10 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 			if type(raw) == "table" and type(raw.I) == "string" and HouseCommon.ItemsById[raw.I] then
 				table.insert(entries, {
 					I = raw.I,
-					X = tonumber(raw.X) or 0.5,
-					Y = tonumber(raw.Y) or 0.8,
-					S = math.clamp(tonumber(raw.S) or 1, 0.2, 3),
-					Z = tonumber(raw.Z) or 0,
+					X = math.clamp(finite(raw.X, 0.5), 0, 1),
+					Y = math.clamp(finite(raw.Y, 0.8), 0, 1),
+					S = math.clamp(finite(raw.S, 1), 0.2, 3),
+					Z = finite(raw.Z, 0),
 					F = raw.F == true or nil,
 				})
 			end

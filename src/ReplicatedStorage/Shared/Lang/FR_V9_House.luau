@@ -63,6 +63,7 @@ return {
 
 		-- Barre d'outils de l'éditeur (bonbons + bulles)
 		["Size"] = "Taille",
+		["OK"] = "OK",
 		["Flip"] = "Retourner",
 		["Put away"] = "Ranger",
 		["Make smaller"] = "Réduire",

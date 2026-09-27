@@ -11,6 +11,7 @@
 
 return {
 	fr = {
+		["Send a message…"] = "Ton message…",
 		["Sending…"] = "Envoi…",
 		["Type here…"] = "Écris ici…",
 		["⏳ Slow mode: %ss"] = "⏳ Mode lent : %ss",

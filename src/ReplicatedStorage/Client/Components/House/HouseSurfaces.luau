@@ -116,6 +116,7 @@ local SEATS: { [string]: SeatInfo } = {
 	Armchair = { View = "Front", Half = 0.48 },
 	GardenBench = { View = "Front", Half = 0.46 },
 	Beanbag = { View = "Round", Half = 0.46 },
+	Sofa = { View = "Front", Half = 0.48 }, -- (canapé derrière la table basse)
 }
 
 -- Tables "où l'on s'assoit" (chaises rangées autour)

@@ -8,52 +8,50 @@
 	Background (SOUS les cartes et la colonne centrale) : ils ne cachent jamais
 	une information, mais il faut les poser là où le fond se voit vraiment.
 
-	  - Profondeur : chaque stimulus a un ZIndex fixe (Zones.Depth) dans le
-	    calque Background, au-dessus du fond du thème (0) et du mode néon
-	    (~50) : ciel lointain (aurore, rivière d'étoiles) -> anneaux ->
-	    objets (lune, machine à rêves...). Les conteneurs découpent leur
-	    contenu (rien ne déborde sous la barre Roblox / l'encoche).
-	  - Place : une grille d'occupation (cases de 8 px "design") marque tout
-	    ce qui cache le fond : bandeau d'actualités, cartes des slots
-	    réellement présentes (L1, CL, R3...), colonne centrale (bouton,
-	    compteur, pastilles, jauge, barre d'améliorations dont la largeur
-	    réelle est lue) et les objets des autres stimuli marqués
-	    LayoutObstacle = true (convention partagée : accessoires de clic...).
-	    Chaque OBJET demande une ou plusieurs places (taille "design", forme
-	    de rechange, point préféré, échelle min / max). Service en 2 tours :
-	    d'abord le 1er objet de chaque stimulus (par priorité, Zones.Priority :
-	    chaque amélioration reste visible), puis les objets en plus (2e / 3e
-	    portail, téléphones...). Chaque place accordée est retirée de la
-	    grille : deux objets ne se chevauchent jamais, aucun n'est sous une
-	    carte. Nos objets placés sont marqués LayoutObstacle = true.
-	    Sur PC en fin de partie il reste surtout les « gouttières » entre les
-	    cartes du bas et les couloirs le long des slots de côté ; sur
-	    téléphone / tablette, de grands espaces sur les côtés.
+	  - Profondeur (convention du calque Background) : fond du thème 0, mode
+	    néon ~50, COSMOS 301-310 (Zones.Depth : ciel lointain -> anneaux ->
+	    objets), nuages de l'orage 1000, accessoires de clic 1101-1107.
+	    Nos conteneurs découpent leur contenu (rien sous la barre Roblox).
+	  - Territoire (règle du chef de projet) : les accessoires de clic
+	    (CLICKGEAR) ont la « bande centrale » au-dessus du BAS RÉEL de la
+	    barre d'améliorations (autour du bouton et du compteur, à côté des
+	    pastilles, poches à côté de la barre). Les OBJETS cosmiques vont
+	    partout ailleurs : gouttières entre les cartes du bas, couloirs entre
+	    les slots de côté et CL / CR, espaces sous la barre, côtés libres.
+	    Les effets d'ambiance (aurore, rivière d'étoiles, anneaux, ondes du
+	    temps) peuvent passer partout, très transparents.
+	  - Place : grille d'occupation (cases de 8 px "design") : bandeau
+	    d'actualités, cartes des slots présentes, colonne centrale (rectangle
+	    réel de la barre d'améliorations), bande des accessoires, et objets
+	    des autres stimuli marqués LayoutObstacle = true (convention
+	    partagée ; nos objets posés le sont aussi). Chaque objet demande une
+	    ou plusieurs places (taille "design", formes de rechange, point
+	    préféré, échelle min / max). Service en 2 tours : le 1er objet de
+	    chaque stimulus (ordre Zones.Priority : la machine à rêves d'abord),
+	    puis les objets en plus (2e / 3e portail, téléphones...). Ce qui ne
+	    tient pas est « replié » en tout petit (échelle 0,25 minimum) plutôt
+	    que de disparaître. Deux objets ne se chevauchent jamais.
 	  - Stabilité : un objet garde sa place tant qu'elle reste libre (sauf si
 	    une place nettement plus grande se libère, ex. après l'océan).
 	  - Replanification regroupée (jamais à chaque image) : écran (appareil,
-	    taille), carte qui apparaît / disparaît, barre qui change de largeur,
-	    stimulus cosmique qui démarre / s'arrête, et une vérification toutes
-	    les 1,5 s (objet d'un autre stimulus posé sur un des nôtres).
-
-	Les effets d'ambiance (aurore, rivière d'étoiles, anneaux de
-	concentration, onde du temps) n'ont pas de place réservée : ils passent
-	derrière tout, très transparents, et évitent le texte du compteur.
+	    taille), carte qui apparaît / disparaît, barre qui change de taille,
+	    stimulus cosmique qui démarre / s'arrête, et vérification toutes les
+	    1,5 s (objet d'un autre stimulus posé sur un des nôtres).
 
 	API :
-	  Zones.Attach(ctx)                        -- profondeur + découpe du conteneur
-	  Zones.Request(id, items, onPlace)        -- demande / met à jour des places
-	  Zones.Release(id)                        -- libère (Stop du stimulus)
-	  Zones.GetCanvas() -> Vector2             -- taille de la toile ("design")
-	  Zones.GetFocus() -> Vector2              -- centre du compteur
-	  Zones.GetTextRects() -> { Rect }         -- bouton + compteur
-	  Zones.Changed                            -- Signal : mise en page recalculée
-	Item = { W, H, Shapes? = { Vector2 } (formes de rechange), Anchor = Vector2
-	         (fraction de la toile), MinScale?, MaxScale?, Gap? }
+	  Zones.Attach(ctx)                   -- profondeur + découpe du conteneur
+	  Zones.Request(id, items, onPlace)   -- demande / met à jour des places
+	  Zones.Release(id)                   -- libère (Stop du stimulus)
+	  Zones.Schedule()                    -- demande une replanification
+	  Zones.GetCanvas() -> Vector2        -- taille de la toile ("design")
+	  Zones.GetFocus() -> Vector2         -- centre du compteur
+	  Zones.PickPath(routes, width) -> i  -- courbe la plus visible (ambiance)
+	  Zones.Bezier(points, u) -> Vector2
+	  Zones.Changed                       -- Signal : mise en page recalculée
+	Item = { W, H, Shapes? = { Vector2 } (formes de rechange), Anchor =
+	         Vector2 (fraction de la toile), MinScale?, MaxScale?, Gap? }
 	Placement = { X, Y (centre, px de la toile), Scale, Shape (0 = forme
-	              principale, i = Shapes[i]), W, H } ou false
-	Zones.PickPath(candidates, width) -> index : la courbe la plus visible
-	              (le plus de cases libres) parmi des courbes de Bézier.
+	              principale, i = Shapes[i]), W, H, Folded? } ou false
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -75,7 +73,6 @@ export type Item = {
 	MinScale: number?,
 	MaxScale: number?,
 	Gap: number?,
-	Force: boolean?, -- objet principal à montrer coûte que coûte (voir plan)
 }
 
 export type Placement = {
@@ -85,14 +82,7 @@ export type Placement = {
 	Shape: number,
 	W: number,
 	H: number,
-	Forced: boolean?, -- posé par-dessus un objet d'un autre stimulus (qui va s'écarter)
-}
-
-type Grid = {
-	Cols: number,
-	Rows: number,
-	Occ: { number },
-	Sat: { number },
+	Folded: boolean?, -- replié en tout petit (pas de place à l'échelle minimale)
 }
 
 type Request = {
@@ -104,8 +94,14 @@ type Request = {
 	Previous: { Placement | false },
 }
 
--- ZIndex des conteneurs dans le calque Background : fond du thème = 0,
--- mode néon ~ 50 (ordre de l'amélioration), nuages de l'orage = 1000
+type Grid = {
+	Cols: number,
+	Rows: number,
+	Occ: { number },
+	Sat: { number },
+}
+
+-- ZIndex des conteneurs dans le calque Background (convention partagée)
 Zones.Depth = {
 	Aurora = 301,
 	GalaxyStream = 302,
@@ -121,13 +117,13 @@ Zones.Depth = {
 
 -- Ordre de service des demandes de place (plus petit = servi d'abord)
 Zones.Priority = {
-	DreamMachine = 1,
-	SleepMode = 2,
-	Singularity = 3,
-	Seashell = 4,
-	TimeWarp = 5,
-	Multiverse = 6,
-	InfiniteScroll = 7,
+	DreamMachine = 1, -- place garantie : le joueur a demandé à la voir
+	Seashell = 2,
+	SleepMode = 3,
+	Singularity = 4,
+	Multiverse = 5,
+	InfiniteScroll = 6,
+	TimeWarp = 7, -- l'horloge est un bonus : ses ondes sont une ambiance
 }
 
 Zones.Changed = Signal.new()
@@ -137,17 +133,17 @@ local EDGE = 4 -- marge le long des bords de la toile
 local TICKER_HEIGHT = 32
 local SCALE_WEIGHT = 0.55 -- préférence "plus gros" face à "plus près du point préféré"
 local MOVE_GAIN = 0.12 -- on ne quitte une place valable que pour une échelle nettement plus grande
+local FOLD_SCALE = 0.25 -- dernier recours : objet replié en tout petit
 local REPLAN_DELAY = 0.12
 local CHECK_INTERVAL = 1.5
 local BAR_MAX_HALF = 346 -- demi-largeur max de la barre d'améliorations (660 + marges)
 local BAR_CHANGE = 12 -- replanifie si la barre change de plus de 12 px
 
 -- Échelles essayées (de la plus grande à la plus petite)
-local SCALES = { 1.5, 1.4, 1.3, 1.2, 1.1, 1, 0.92, 0.85, 0.78, 0.72, 0.66, 0.6, 0.55, 0.5, 0.45, 0.4, 0.36, 0.32 }
+local SCALES = { 1.5, 1.4, 1.3, 1.2, 1.1, 1, 0.92, 0.85, 0.78, 0.72, 0.66, 0.6, 0.55, 0.5, 0.45, 0.4, 0.36, 0.32, 0.28, 0.25 }
 
 -- Colonne centrale (pixels "design" depuis le haut de la toile), d'après
--- CenterColumn / UpgradeBar : pastilles sur 2 rangées (PC, tablette) ou 1
--- rangée (téléphone), jauge de combo, barre d'améliorations.
+-- CenterColumn / UpgradeBar ; sert aussi de secours si la barre est introuvable
 local COLUMN = {
 	Desktop = { PillsBottom = 294, Row1Half = 336, Row2Half = 300, TwoRows = true, BarHeight = 118 },
 	Tablet = { PillsBottom = 302, Row1Half = 336, Row2Half = 300, TwoRows = true, BarHeight = 118 },
@@ -166,10 +162,8 @@ local planPending = false
 local planning = false
 local planAgain = false
 local checking = false
-
--- Grille : Occ[j * cols + i + 1] = 1 si la case (i, j) est prise ; Sat = sommes
--- cumulées. Dernière grille complète (pour Zones.PickPath).
-local lastGrid: Grid = { Cols = 0, Rows = 0, Occ = {}, Sat = {} }
+-- Grille "visible" (sans la bande des accessoires) : pour Zones.PickPath
+local viewGrid: Grid = { Cols = 0, Rows = 0, Occ = {}, Sat = {} }
 
 ----------------------------------------------------------------------
 -- Toile, appareil
@@ -196,52 +190,82 @@ function Zones.GetFocus(): Vector2
 	return Vector2.new(Zones.GetCanvas().X / 2, 156)
 end
 
+-- Rectangle (toile) d'un objet quelconque, d'après sa position à l'écran
+local function screenRect(object: GuiObject): Rect?
+	local scale = Interface.Scale
+	if type(scale) ~= "number" or scale <= 0 then
+		return nil
+	end
+	local size = object.AbsoluteSize / scale
+	if size.X < 1 or size.Y < 1 then
+		return nil
+	end
+	local topLeft = Interface.ScreenToCanvas(object.AbsolutePosition)
+	return { X = topLeft.X, Y = topLeft.Y, W = size.X, H = size.Y }
+end
+
 ----------------------------------------------------------------------
--- Barre d'améliorations : largeur réelle (ScrollingFrame "Cards")
+-- Barre d'améliorations : rectangle RÉEL (ScrollingFrame "Cards")
 ----------------------------------------------------------------------
 
 local cardsFrame: GuiObject? = nil
-local lastBarHalf = BAR_MAX_HALF
+local lastBar: Rect? = nil
 
-local function barHalfOf(frame: GuiObject): number
-	local size = frame.Size
-	if size.X.Scale ~= 0 or size.X.Offset <= 0 then
-		return BAR_MAX_HALF
+local function findCards(): GuiObject?
+	local cards = cardsFrame
+	if cards and cards.Parent then
+		return cards
 	end
-	return math.clamp(size.X.Offset / 2 + 4, 40, BAR_MAX_HALF)
+	cardsFrame = nil
+	local main = Interface.Layers and Interface.Layers.Main
+	local bar = main and main:FindFirstChild("UpgradeBar", true)
+	local found = bar and bar:FindFirstChild("Cards")
+	if found and found:IsA("GuiObject") then
+		cardsFrame = found
+		-- La barre change de taille (cartes ajoutées / retirées) : on replanifie
+		found:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+			local previous = lastBar
+			local now = if found == cardsFrame then screenRect(found) else nil
+			if previous and now and (math.abs(now.W - previous.W) >= BAR_CHANGE or math.abs(now.Y + now.H - previous.Y - previous.H) >= BAR_CHANGE) then
+				Zones.Schedule()
+			end
+		end)
+		return found
+	end
+	return nil
 end
 
-local function measureBarHalf(): number
-	local cards = cardsFrame
-	if not cards or not cards.Parent then
-		cards = nil
-		cardsFrame = nil
-		local main = Interface.Layers and Interface.Layers.Main
-		local bar = main and main:FindFirstChild("UpgradeBar", true)
-		local found = bar and bar:FindFirstChild("Cards")
-		if found and found:IsA("GuiObject") then
-			cards = found
-			cardsFrame = found
-			found:GetPropertyChangedSignal("Size"):Connect(function()
-				if found == cardsFrame and math.abs(barHalfOf(found) - lastBarHalf) >= BAR_CHANGE then
-					Zones.Schedule()
-				end
-			end)
+-- Rectangle de la barre (toile) ; secours : taille lue / constantes
+local function barRect(canvas: Vector2): Rect
+	local cx = canvas.X / 2
+	local m = COLUMN[device()]
+	local cards = findCards()
+	if cards and cards.Visible then
+		local rect = screenRect(cards)
+		if rect and rect.W > 20 and rect.H > 20 and rect.Y > 100 then
+			lastBar = rect
+			return rect
+		end
+		local size = cards.Size
+		if size.X.Scale == 0 and size.X.Offset > 0 then
+			local half = math.clamp(size.X.Offset / 2 + 4, 40, BAR_MAX_HALF)
+			local fallback = { X = cx - half, Y = m.PillsBottom + 22, W = half * 2, H = m.BarHeight }
+			lastBar = fallback
+			return fallback
 		end
 	end
-	if not cards then
-		return BAR_MAX_HALF
-	end
-	return barHalfOf(cards)
+	local fallback = { X = cx - BAR_MAX_HALF, Y = m.PillsBottom + 22, W = BAR_MAX_HALF * 2, H = m.BarHeight }
+	lastBar = fallback
+	return fallback
 end
 
 ----------------------------------------------------------------------
 -- Ce qui cache le fond
 ----------------------------------------------------------------------
 
--- Bouton + compteur : les effets d'ambiance y restent très discrets
-function Zones.GetTextRects(): { Rect }
-	local cx = Zones.GetCanvas().X / 2
+-- Bouton + compteur
+local function textRects(canvas: Vector2): { Rect }
+	local cx = canvas.X / 2
 	return {
 		{ X = cx - 182, Y = 24, W = 346, H = 110 }, -- bouton, pastilles VIP / boost, maison, chapeau
 		{ X = cx - 240, Y = 126, W = 480, H = 80 }, -- compteur + Dopamine par seconde
@@ -251,20 +275,33 @@ end
 local function columnRects(canvas: Vector2): { Rect }
 	local cx = canvas.X / 2
 	local m = COLUMN[device()]
-	local rects = Zones.GetTextRects()
+	local rects = textRects(canvas)
 	if m.TwoRows then
 		table.insert(rects, { X = cx - m.Row1Half, Y = 202, W = m.Row1Half * 2, H = 48 })
 		table.insert(rects, { X = cx - m.Row2Half, Y = 248, W = m.Row2Half * 2, H = m.PillsBottom - 248 })
 	else
 		table.insert(rects, { X = cx - m.Row1Half, Y = 202, W = m.Row1Half * 2, H = m.PillsBottom - 202 })
 	end
-	-- Jauge de combo
-	table.insert(rects, { X = cx - 156, Y = m.PillsBottom, W = 312, H = 24 })
-	-- Barre d'améliorations (largeur réelle)
-	local barHalf = measureBarHalf()
-	lastBarHalf = barHalf
-	table.insert(rects, { X = cx - barHalf, Y = m.PillsBottom + 22, W = barHalf * 2, H = m.BarHeight })
+	table.insert(rects, { X = cx - 156, Y = m.PillsBottom, W = 312, H = 24 }) -- jauge de combo
+	table.insert(rects, barRect(canvas))
 	return rects
+end
+
+-- Rectangle "design" d'un slot (même vide) sur la toile
+local function slotDesignRect(name: string, canvas: Vector2): Rect?
+	local def = Slots.Definitions[name]
+	if not def then
+		return nil
+	end
+	local position = Slots.GetPlacement(name)
+	local cx = position.X.Scale * canvas.X + position.X.Offset
+	local cy = position.Y.Scale * canvas.Y + position.Y.Offset
+	if def.Anchor == "T" then
+		return { X = 0, Y = cy - def.H / 2, W = canvas.X, H = def.H }
+	end
+	local k = Slots.GetScale(name)
+	local w, h = def.W * k, def.H * k
+	return { X = cx - w / 2, Y = cy - h / 2, W = w, H = h }
 end
 
 local function samePosition(a: UDim2, b: UDim2): boolean
@@ -277,17 +314,9 @@ end
 -- Rectangle (toile) d'un cadre du calque Slots : slot connu (définition +
 -- échelle, même pendant l'animation d'apparition) ou cadre quelconque
 local function slotRect(child: GuiObject, canvas: Vector2): Rect?
-	for name, def in pairs(Slots.Definitions) do
-		local position = Slots.GetPlacement(name)
-		if samePosition(position, child.Position) then
-			local cx = position.X.Scale * canvas.X + position.X.Offset
-			local cy = position.Y.Scale * canvas.Y + position.Y.Offset
-			if def.Anchor == "T" then
-				return { X = 0, Y = cy - def.H / 2, W = canvas.X, H = def.H }
-			end
-			local k = Slots.GetScale(name)
-			local w, h = def.W * k, def.H * k
-			return { X = cx - w / 2, Y = cy - h / 2, W = w, H = h }
+	for name in pairs(Slots.Definitions) do
+		if samePosition(Slots.GetPlacement(name), child.Position) then
+			return slotDesignRect(name, canvas)
 		end
 	end
 	local size = child.Size
@@ -310,18 +339,44 @@ local function slotRect(child: GuiObject, canvas: Vector2): Rect?
 	}
 end
 
--- Rectangle (toile) d'un objet quelconque, d'après sa position à l'écran
-local function screenRect(object: GuiObject): Rect?
-	local scale = Interface.Scale
-	if type(scale) ~= "number" or scale <= 0 then
-		return nil
+-- Bandeau + cartes des slots + colonne centrale
+local function blockedRects(canvas: Vector2): { Rect }
+	local rects: { Rect } = { { X = 0, Y = 0, W = canvas.X, H = TICKER_HEIGHT } }
+	local layer = Interface.Layers and Interface.Layers.Slots
+	if layer then
+		for _, child in ipairs(layer:GetChildren()) do
+			if child:IsA("GuiObject") and child.Visible then
+				local rect = slotRect(child, canvas)
+				if rect then
+					table.insert(rects, rect)
+				end
+			end
+		end
 	end
-	local size = object.AbsoluteSize / scale
-	if size.X < 1 or size.Y < 1 then
-		return nil
+	for _, rect in ipairs(columnRects(canvas)) do
+		table.insert(rects, rect)
 	end
-	local topLeft = Interface.ScreenToCanvas(object.AbsolutePosition)
-	return { X = topLeft.X, Y = topLeft.Y, W = size.X, H = size.Y }
+	return rects
+end
+
+-- Bande des accessoires de clic (interdite à nos OBJETS) : entre CL et CR
+-- au-dessus de leur bas, puis entre les slots de côté jusqu'au bas réel de
+-- la barre d'améliorations. Les couloirs entre les slots de côté et CL / CR
+-- (au-dessus du bas de CL) restent à nous.
+local function gearBand(canvas: Vector2): { Rect }
+	local cl, cr = slotDesignRect("CL", canvas), slotDesignRect("CR", canvas)
+	local l1, r1 = slotDesignRect("L1", canvas), slotDesignRect("R1", canvas)
+	if not (cl and cr) then
+		return {}
+	end
+	local bar = barRect(canvas)
+	local top = cl.Y + cl.H
+	local left = if l1 then l1.X + l1.W else cl.X
+	local right = if r1 then r1.X else cr.X + cr.W
+	return {
+		{ X = cl.X, Y = 0, W = cr.X + cr.W - cl.X, H = top },
+		{ X = left, Y = top, W = right - left, H = math.max(0, bar.Y + bar.H - top) },
+	}
 end
 
 -- Objets des AUTRES stimuli marqués LayoutObstacle = true (calques plein écran)
@@ -361,37 +416,14 @@ local function markedRects(): { Rect }
 	return rects
 end
 
-local function blockedRects(canvas: Vector2): { Rect }
-	local rects: { Rect } = { { X = 0, Y = 0, W = canvas.X, H = TICKER_HEIGHT } }
-	local layer = Interface.Layers and Interface.Layers.Slots
-	if layer then
-		for _, child in ipairs(layer:GetChildren()) do
-			if child:IsA("GuiObject") and child.Visible then
-				local rect = slotRect(child, canvas)
-				if rect then
-					table.insert(rects, rect)
-				end
-			end
-		end
-	end
-	for _, rect in ipairs(columnRects(canvas)) do
-		table.insert(rects, rect)
-	end
-	return rects
-end
-
 ----------------------------------------------------------------------
--- Grille d'occupation
+-- Grille d'occupation (Occ[j * cols + i + 1] = 1 si la case (i, j) est prise)
 ----------------------------------------------------------------------
 
 local function newGrid(canvas: Vector2): Grid
 	local cols = math.max(1, math.ceil(canvas.X / CELL))
 	local rows = math.max(1, math.ceil(canvas.Y / CELL))
 	return { Cols = cols, Rows = rows, Occ = table.create(cols * rows, 0), Sat = {} }
-end
-
-local function copyGrid(g: Grid): Grid
-	return { Cols = g.Cols, Rows = g.Rows, Occ = table.clone(g.Occ), Sat = {} }
 end
 
 local function mark(g: Grid, rect: Rect, pad: number)
@@ -408,6 +440,7 @@ local function mark(g: Grid, rect: Rect, pad: number)
 	end
 end
 
+-- Sommes cumulées : "ce rectangle est-il libre ?" en O(1)
 local function buildSat(g: Grid)
 	local cols, rows, occ = g.Cols, g.Rows, g.Occ
 	local stride = cols + 1
@@ -432,17 +465,11 @@ local function takenCount(g: Grid, i: number, j: number, w: number, h: number): 
 	return sat[(j + h) * stride + i + w + 1] - sat[j * stride + i + w + 1] - sat[(j + h) * stride + i + 1] + sat[j * stride + i + 1]
 end
 
--- Grille de base : bords de la toile, bandeau, cartes, colonne centrale
-local function baseGrid(canvas: Vector2): Grid
-	local g = newGrid(canvas)
+local function markEdges(g: Grid, canvas: Vector2)
 	mark(g, { X = 0, Y = 0, W = canvas.X, H = EDGE }, 0)
 	mark(g, { X = 0, Y = canvas.Y - EDGE, W = canvas.X, H = EDGE }, 0)
 	mark(g, { X = 0, Y = 0, W = EDGE, H = canvas.Y }, 0)
 	mark(g, { X = canvas.X - EDGE, Y = 0, W = EDGE, H = canvas.Y }, 0)
-	for _, rect in ipairs(blockedRects(canvas)) do
-		mark(g, rect, 2)
-	end
-	return g
 end
 
 -- Rectangle occupé par une place (sans marge)
@@ -464,13 +491,12 @@ local function isFree(g: Grid, p: Placement, gap: number): boolean
 	return takenCount(g, i0, j0, i1 - i0, j1 - j0) == 0
 end
 
--- Meilleure place pour un objet : pour chaque case libre (coin haut-gauche),
--- plus grande échelle qui tient (recherche dichotomique), puis score =
--- distance au point préféré - bonus de taille.
-local function search(g: Grid, item: Item, canvas: Vector2): Placement?
+-- Meilleure place pour un objet entre les échelles minScale et maxScale :
+-- pour chaque case libre (coin haut-gauche), plus grande échelle qui tient
+-- (recherche dichotomique), puis score = distance au point préféré - bonus
+-- de taille.
+local function search(g: Grid, item: Item, canvas: Vector2, minScale: number, maxScale: number): Placement?
 	local gap = item.Gap or 6
-	local minScale = item.MinScale or 0.5
-	local maxScale = item.MaxScale or 1
 	local scales = {}
 	for _, s in ipairs(SCALES) do
 		if s <= maxScale + 1e-6 and s >= minScale - 1e-6 then
@@ -478,7 +504,7 @@ local function search(g: Grid, item: Item, canvas: Vector2): Placement?
 		end
 	end
 	if #scales == 0 then
-		table.insert(scales, math.clamp(1, minScale, maxScale))
+		return nil
 	end
 	local shapes = { { item.W, item.H, 0 } }
 	for index, extra in ipairs(item.Shapes or {}) do
@@ -560,16 +586,36 @@ local function sortedRequests(): { Request }
 	return list
 end
 
+local function sameShapeAs(old: Placement, item: Item): boolean
+	if old.W == item.W and old.H == item.H then
+		return true
+	end
+	for _, extra in ipairs(item.Shapes or {}) do
+		if old.W == extra.X and old.H == extra.Y then
+			return true
+		end
+	end
+	return false
+end
+
 local function plan()
 	local canvas = Zones.GetCanvas()
-	-- 2 grilles : sans / avec les objets des autres stimuli (LayoutObstacle)
-	local base = baseGrid(canvas)
-	local all = copyGrid(base)
-	for _, rect in ipairs(markedRects()) do
-		mark(all, rect, 2)
+	local blocked = blockedRects(canvas)
+	local marked = markedRects()
+	-- Grille des OBJETS : tout ce qui cache le fond + bande des accessoires
+	local objects = newGrid(canvas)
+	markEdges(objects, canvas)
+	for _, rect in ipairs(blocked) do
+		mark(objects, rect, 2)
 	end
-	buildSat(base)
-	buildSat(all)
+	for _, rect in ipairs(gearBand(canvas)) do
+		mark(objects, rect, 0)
+	end
+	for _, rect in ipairs(marked) do
+		mark(objects, rect, 2)
+	end
+	buildSat(objects)
+
 	local order = sortedRequests()
 	local results: { [Request]: { Placement | false } } = {}
 	-- 2 tours : le 1er objet de chaque stimulus, puis les objets en plus
@@ -585,49 +631,64 @@ local function plan()
 			table.insert(queue, { Request = request, Index = index })
 		end
 	end
+	local function commit(request: Request, index: number, chosen: Placement, gap: number)
+		mark(objects, placementRect(chosen), gap)
+		buildSat(objects)
+		results[request][index] = chosen
+	end
+	local missing: { { Request: Request, Index: number } } = {}
 	for _, entry in ipairs(queue) do
 		local request, index = entry.Request, entry.Index
 		local item = request.Items[index]
 		local gap = item.Gap or 6
-		local chosen: Placement? = search(all, item, canvas)
+		local chosen: Placement? = search(objects, item, canvas, item.MinScale or 0.5, item.MaxScale or 1)
 		-- Stabilité : garder l'ancienne place si elle est encore libre
 		local previous = request.Previous[index]
 		if previous then
 			local old = previous :: Placement
-			local sameShape = old.W == item.W and old.H == item.H
-			for _, extra in ipairs(item.Shapes or {}) do
-				if old.W == extra.X and old.H == extra.Y then
-					sameShape = true
-				end
-			end
 			local fresh = chosen
-			if sameShape and not old.Forced and isFree(all, old, gap) and (fresh == nil or fresh.Scale < old.Scale + MOVE_GAIN) then
+			if not old.Folded and sameShapeAs(old, item) and isFree(objects, old, gap) and (fresh == nil or fresh.Scale < old.Scale + MOVE_GAIN) then
 				chosen = old
-			elseif sameShape and old.Forced and item.Force and fresh == nil and isFree(base, old, gap) then
-				chosen = old
-			end
-		end
-		-- Objet principal sans place : posé quand même, par-dessus les objets
-		-- des autres stimuli (marqué LayoutObstacle, ils s'en écartent)
-		if chosen == nil and item.Force then
-			local forced = search(base, item, canvas)
-			if forced then
-				forced.Forced = true
-				chosen = forced
 			end
 		end
 		if chosen then
-			local rect = placementRect(chosen)
-			mark(base, rect, gap)
-			mark(all, rect, gap)
-			buildSat(base)
-			buildSat(all)
-			results[request][index] = chosen
+			commit(request, index, chosen, gap)
+		else
+			table.insert(missing, entry)
+		end
+	end
+	-- Dernier recours : replié en tout petit plutôt que disparaître
+	for _, entry in ipairs(missing) do
+		local request, index = entry.Request, entry.Index
+		local item = request.Items[index]
+		local gap = math.min(item.Gap or 6, 3)
+		local folded = search(objects, item, canvas, FOLD_SCALE, item.MinScale or 0.5)
+		if folded then
+			folded.Folded = true
+			commit(request, index, folded, gap)
 		else
 			results[request][index] = false
 		end
 	end
-	lastGrid = all
+
+	-- Grille "visible" (ambiance) : sans la bande des accessoires
+	local view = newGrid(canvas)
+	markEdges(view, canvas)
+	for _, rect in ipairs(blocked) do
+		mark(view, rect, 2)
+	end
+	for _, rect in ipairs(marked) do
+		mark(view, rect, 2)
+	end
+	for _, request in ipairs(order) do
+		for _, p in pairs(results[request]) do
+			if p then
+				mark(view, placementRect(p), 2)
+			end
+		end
+	end
+	viewGrid = view
+
 	-- Rappels (hors de la boucle de calcul)
 	for _, request in ipairs(order) do
 		if requests[request.Id] == request then
@@ -688,7 +749,7 @@ local function check()
 	end
 	for _, request in pairs(requests) do
 		for _, p in ipairs(request.Previous) do
-			if p and not p.Forced then
+			if p then
 				local mine = placementRect(p)
 				for _, rect in ipairs(others) do
 					if overlaps(mine, rect) then
@@ -747,13 +808,13 @@ function Zones.Bezier(points: { Vector2 }, u: number): Vector2
 	return points[1] * (a * a * a) + points[2] * (3 * a * a * u) + points[3] * (3 * a * u * u) + points[4] * (u * u * u)
 end
 
--- Parmi plusieurs courbes (chacune 4 points de contrôle, fractions de la
+-- Parmi plusieurs courbes (4 points de contrôle chacune, fractions de la
 -- toile), celle dont la bande de largeur `width` passe le plus dans le fond
--- VISIBLE (cases libres de la grille : ni carte, ni colonne, ni objet posé).
--- Appelé après une planification (Zones.Changed).
+-- VISIBLE (ni carte, ni colonne, ni objet posé). À appeler après une
+-- planification (Zones.Changed).
 function Zones.PickPath(candidates: { { Vector2 } }, width: number): number
 	local canvas = Zones.GetCanvas()
-	local grid = lastGrid
+	local grid = viewGrid
 	if grid.Cols == 0 or #grid.Occ == 0 then
 		return 1
 	end

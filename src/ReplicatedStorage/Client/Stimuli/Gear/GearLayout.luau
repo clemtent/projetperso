@@ -13,23 +13,36 @@
 	    Overlay / Background (convention partagée avec les autres stimuli) ;
 	  - les autres accessoires (jamais deux accessoires l'un sur l'autre).
 
+	Territoire (règle partagée avec les stimuli cosmiques, v9) : les accessoires
+	restent dans la BANDE CENTRALE — entre les colonnes des slots de côté
+	(L1 / L2 et R1 / R2, présents ou non) et AU-DESSUS du bas réel de la barre
+	d'améliorations : autour du bouton et du compteur, à côté des menus, dans les
+	poches à côté de la barre. Les gouttières entre les cartes du bas, les
+	couloirs de côté et l'espace sous la barre sont aux stimuli cosmiques.
+
 	Principe : une grille de cases de 8 px "design" marque ce qui est occupé
 	(avec une marge), une table de sommes cumulées répond en O(1) "ce rectangle
 	est-il libre ?". Chaque accessoire (par ordre de priorité) cherche la place
-	libre la plus proche de son point préféré, à la plus grande taille possible
-	(il rétrécit jusqu'à MinScale s'il le faut, puis jusqu'à 25 % en dernier
-	recours ; sinon il est caché). Un accessoire garde sa place tant qu'elle
-	reste valable (pas de sauts inutiles) ; tout est recalculé quand l'écran
-	change (téléphone / tablette / rotation).
+	libre la plus proche de son point préféré, à la plus grande taille possible :
+	il rétrécit jusqu'à MinScale s'il le faut, peut prendre une forme de rechange
+	plus compacte (ex. clavier -> pavé numérique en hauteur, pour les couloirs
+	étroits), puis jusqu'à 20 % en dernier recours ; sinon il est caché. Un
+	affinage au pixel près grossit ensuite l'accessoire autant que la place le
+	permet. Un accessoire garde sa place tant qu'elle reste valable (pas de sauts
+	inutiles) ; tout est recalculé quand l'écran change (téléphone / tablette /
+	rotation).
+	Positions peu fiables (layout pas encore calculé...) : si des éléments rangés
+	par un UIListLayout se chevauchent, toute la pile est réservée prudemment.
 
 	Déclencheurs : inscription d'un accessoire, Features qui changent (nouvelle
 	carte), Slots.Changed / changement d'échelle ou d'appareil, et une petite
 	vérification toutes les 1,2 s (compteur qui s'allonge, pastille de boost
-	qui apparaît...). Aucun calcul image par image.
+	qui apparaît, barre qui descend...). Aucun calcul image par image.
 
 	API :
 	  GearLayout.Register(id, spec)   spec = {
 	      Size = Vector2 (taille à l'échelle 1, pixels "design"),
+	      Shapes = { Vector2 }? (formes de rechange, plus compactes),
 	      Priority = number (plus petit = placé d'abord),
 	      Anchor = function(button: Rect, canvas: Vector2): Vector2 (centre préféré),
 	      MinScale, MaxScale, Near (écart max. avec le bouton, en px, facultatif),
@@ -37,7 +50,8 @@
 	  GearLayout.Unregister(id)
 	  GearLayout.GetPlacement(id) -> placement | nil
 	  GearLayout.Changed : Signal (id, placement | nil)
-	  placement = { CX, CY, Scale, W, H, Rect, Button (rectangle du bouton) }
+	  placement = { CX, CY, Scale, W, H, Size (forme à l'échelle 1), Shape
+	                (0 = forme principale, i = Shapes[i]), Rect, Button }
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -57,12 +71,15 @@ export type Placement = {
 	Scale: number,
 	W: number,
 	H: number,
+	Size: Vector2,
+	Shape: number,
 	Rect: Rect,
 	Button: Rect,
 }
 
 export type Spec = {
 	Size: Vector2,
+	Shapes: { Vector2 }?,
 	Priority: number,
 	Anchor: (button: Rect, canvas: Vector2) -> Vector2,
 	MinScale: number?,
@@ -77,14 +94,15 @@ local GearLayout = {}
 GearLayout.Changed = Signal.new() -- (id, placement | nil)
 
 local CELL = 8 -- taille d'une case de la grille (pixels "design")
-local MARGIN = 7 -- espace laissé autour des obstacles quand on place (grille)
-local EXACT_MARGIN = 6 -- même chose au pixel près (affinage)
+local MARGIN = 6 -- espace laissé autour des obstacles quand on place (grille)
+local EXACT_MARGIN = 5 -- même chose au pixel près (affinage)
 local KEEP_MARGIN = 1 -- tolérance pour garder une place déjà prise (évite les sauts)
-local PIECE_GAP = 6 -- espace entre deux accessoires
+local PIECE_GAP = 3 -- espace entre deux accessoires (ils peuvent se serrer)
 local EDGE = 6 -- marge au bord de l'écran
 local SIZE_PENALTY = 300 -- "coût" (en px de distance) d'un accessoire 2x plus petit ... x2
+local SHAPE_PENALTY = 24 -- petite préférence pour la forme principale
 local CHECK_INTERVAL = 1.2
-local LAST_RESORT_SCALE = 0.25
+local LAST_RESORT_SCALE = 0.2
 
 local pieces: { [string]: Piece } = {}
 local running = false
@@ -94,6 +112,7 @@ local forceNext = false
 local connections: { any } = {}
 local lastButton: Rect? = nil
 local lastCanvas: Vector2? = nil
+local lastTerritory: Rect? = nil
 local checkCount = 0
 
 ----------------------------------------------------------------------
@@ -188,11 +207,13 @@ local function visibleChildRects(parent: Instance): { Rect }
 	return rects
 end
 
--- Pile sous le bouton (compteur, "par seconde", menus, combo, améliorations)
-local function collectStack(list: { Rect }, stack: GuiObject)
+-- Pile sous le bouton (compteur, "par seconde", menus, combo, améliorations).
+-- Renvoie le bas de la barre d'améliorations (ou de la pile) sur la toile.
+local function collectStack(list: { Rect }, stack: GuiObject): number
 	local items = {}
 	local rects = {}
 	local widest = 0
+	local frame = GearKit.CanvasRect(stack)
 	for _, item in ipairs(stack:GetChildren()) do
 		if item:IsA("GuiObject") and item.Visible then
 			local rect = GearKit.CanvasRect(item)
@@ -206,14 +227,20 @@ local function collectStack(list: { Rect }, stack: GuiObject)
 	if not noOverlap(rects) then
 		-- Positions pas fiables : on réserve prudemment toute la pile (largeur de
 		-- son élément le plus large, et un peu plus bas que son cadre)
-		local frame = GearKit.CanvasRect(stack)
 		local cx = (frame.X0 + frame.X1) / 2
 		local half = math.max(widest, 320) / 2 + 4
-		table.insert(list, { X0 = cx - half, Y0 = frame.Y0 - 2, X1 = cx + half, Y1 = frame.Y1 + 60 })
-		return
+		local bottom = frame.Y1 + 60
+		table.insert(list, { X0 = cx - half, Y0 = frame.Y0 - 2, X1 = cx + half, Y1 = bottom })
+		return bottom
 	end
+	local barBottom: number? = nil
+	local lowest = frame.Y0
 	for index, item in ipairs(items) do
 		local rect = rects[index]
+		lowest = math.max(lowest, rect.Y1)
+		if item.Name == "UpgradeBar" then
+			barBottom = rect.Y1
+		end
 		if item.Name == "Counter" then
 			-- Le nombre + "Dopamine" (avec de la place pour grandir)
 			local labels = visibleChildRects(item)
@@ -249,15 +276,18 @@ local function collectStack(list: { Rect }, stack: GuiObject)
 			end
 		end
 	end
+	return barBottom or lowest
 end
 
--- Colonne centrale : chaque élément visible (pas le grand cadre transparent)
-local function collectColumn(list: { Rect }, column: Instance)
+-- Colonne centrale : chaque élément visible (pas le grand cadre transparent).
+-- Renvoie le bas de la barre d'améliorations (nil si pas de pile).
+local function collectColumn(list: { Rect }, column: Instance): number?
+	local barBottom: number? = nil
 	for _, child in ipairs(column:GetChildren()) do
 		if child:IsA("GuiObject") and child.Visible then
 			local name = child.Name
 			if name == "Stack" then
-				collectStack(list, child)
+				barBottom = collectStack(list, child)
 			elseif name == "ClickerHolder" then
 				addObject(list, child, 2, 2)
 				for _, sub in ipairs(child:GetChildren()) do
@@ -281,6 +311,7 @@ local function collectColumn(list: { Rect }, column: Instance)
 			end
 		end
 	end
+	return barBottom
 end
 
 -- Objets persistants connus des autres stimuli plein écran (sans attribut)
@@ -322,11 +353,13 @@ local function collectMarked(list: { Rect }, layer: Instance?)
 	end
 end
 
-local function collectObstacles(canvas: Vector2): { Rect }
+-- Obstacles + bas de la barre d'améliorations (toile)
+local function collectObstacles(canvas: Vector2): ({ Rect }, number)
 	local list: { Rect } = {}
+	local barBottom = canvas.Y
 	local layers = Interface.Layers
 	if not layers then
-		return list
+		return list, barBottom
 	end
 	local slots = layers.Slots
 	if slots then
@@ -344,7 +377,10 @@ local function collectObstacles(canvas: Vector2): { Rect }
 		for _, child in ipairs(main:GetChildren()) do
 			if child:IsA("GuiObject") and child.Visible then
 				if child.Name == "CenterColumn" then
-					collectColumn(list, child)
+					local bottom = collectColumn(list, child)
+					if bottom then
+						barBottom = bottom
+					end
 				else
 					local rect = GearKit.CanvasRect(child)
 					-- (les cadres plein écran ne sont pas des obstacles)
@@ -357,11 +393,32 @@ local function collectObstacles(canvas: Vector2): { Rect }
 	end
 	collectMarked(list, layers.Overlay)
 	collectMarked(list, layers.Background)
-	return list
+	return list, barBottom
 end
 
 local function intersects(a: Rect, b: Rect, margin: number): boolean
 	return a.X0 < b.X1 + margin and b.X0 < a.X1 + margin and a.Y0 < b.Y1 + margin and b.Y0 < a.Y1 + margin
+end
+
+-- Bande centrale réservée aux accessoires (voir l'en-tête)
+local function computeTerritory(canvas: Vector2, barBottom: number): Rect
+	local left, right = 0, canvas.X
+	local l1 = Slots.Definitions.L1
+	if l1 then
+		left = (l1.X + l1.W + Slots.ClipMargin) * Slots.GetScale("L1")
+	end
+	local r1 = Slots.Definitions.R1
+	if r1 then
+		right = canvas.X - (r1.X + r1.W + Slots.ClipMargin) * Slots.GetScale("R1")
+	end
+	if right - left < 200 then
+		left, right = 0, canvas.X
+	end
+	return { X0 = left, Y0 = 0, X1 = right, Y1 = math.clamp(barBottom, 60, canvas.Y) }
+end
+
+local function inside(rect: Rect, area: Rect, tolerance: number): boolean
+	return rect.X0 >= area.X0 - tolerance and rect.Y0 >= area.Y0 - tolerance and rect.X1 <= area.X1 + tolerance and rect.Y1 <= area.Y1 + tolerance
 end
 
 ----------------------------------------------------------------------
@@ -432,17 +489,35 @@ end
 -- Recherche d'une place
 ----------------------------------------------------------------------
 
-local function makePlacement(cx: number, cy: number, scale: number, spec: Spec, button: Rect): Placement
-	local w, h = spec.Size.X * scale, spec.Size.Y * scale
+local function makePlacement(cx: number, cy: number, scale: number, size: Vector2, shape: number, button: Rect): Placement
+	local w, h = size.X * scale, size.Y * scale
 	return {
 		CX = cx,
 		CY = cy,
 		Scale = scale,
 		W = w,
 		H = h,
+		Size = size,
+		Shape = shape,
 		Rect = { X0 = cx - w / 2, Y0 = cy - h / 2, X1 = cx + w / 2, Y1 = cy + h / 2 },
 		Button = button,
 	}
+end
+
+-- Formes possibles : { taille, facteur de "taille visible" par rapport à la forme principale }
+local function shapesOf(spec: Spec): { { Size: Vector2, Index: number, Visual: number } }
+	local main = spec.Size
+	local list = { { Size = main, Index = 0, Visual = 1 } }
+	for index, size in ipairs(spec.Shapes or {}) do
+		-- (un pavé plus compact "compte" pour sa surface relative)
+		local visual = math.sqrt((size.X * size.Y) / math.max(1, main.X * main.Y))
+		table.insert(list, { Size = size, Index = index, Visual = visual })
+	end
+	return list
+end
+
+local function sizeCost(scale: number, maxScale: number, visual: number, shapeIndex: number): number
+	return (1 - (scale * visual) / maxScale) * SIZE_PENALTY + (shapeIndex > 0 and SHAPE_PENALTY or 0)
 end
 
 -- Meilleure place pour `spec` entre les échelles maxScale et minScale (nil si aucune)
@@ -450,65 +525,71 @@ local function search(grid: Grid, spec: Spec, button: Rect, canvas: Vector2, max
 	local anchor = spec.Anchor(button, canvas)
 	local bestCost = math.huge
 	local best: Placement? = nil
-	local scale = maxScale
-	while scale >= minScale - 1e-4 do
-		local penalty = (1 - scale / maxScale) * SIZE_PENALTY
-		if penalty >= bestCost then
-			break
-		end
-		local w, h = spec.Size.X * scale, spec.Size.Y * scale
-		local cw, ch = math.max(1, math.ceil(w / CELL)), math.max(1, math.ceil(h / CELL))
-		-- Zone de recherche (limitée autour du bouton si Near)
-		local cMin, cMax = 0, grid.Cols - cw
-		local rMin, rMax = 0, grid.Rows - ch
-		if near then
-			cMin = math.max(cMin, math.floor((button.X0 - near - w) / CELL) - 1)
-			cMax = math.min(cMax, math.ceil((button.X1 + near) / CELL) + 1)
-			rMin = math.max(rMin, math.floor((button.Y0 - near - h) / CELL) - 1)
-			rMax = math.min(rMax, math.ceil((button.Y1 + near) / CELL) + 1)
-		end
-		local foundHere: { number }? = nil
-		local function try(c0: number, r0: number)
-			local cx = (c0 + cw / 2) * CELL
-			local cy = (r0 + ch / 2) * CELL
-			local dx, dy = cx - anchor.X, cy - anchor.Y
-			local cost = math.sqrt(dx * dx + dy * dy) + penalty
-			if cost < bestCost and isFree(grid, c0, r0, cw, ch) then
-				if near then
-					local rect = { X0 = cx - w / 2, Y0 = cy - h / 2, X1 = cx + w / 2, Y1 = cy + h / 2 }
-					if GearKit.RectGap(rect, button) > near then
-						return
-					end
-				end
-				bestCost = cost
-				best = makePlacement(cx, cy, scale, spec, button)
-				foundHere = { c0, r0 }
+	for _, shape in ipairs(shapesOf(spec)) do
+		local size = shape.Size
+		local scale = maxScale
+		while scale >= minScale - 1e-4 do
+			local penalty = sizeCost(scale, maxScale, shape.Visual, shape.Index)
+			if penalty >= bestCost then
+				break
 			end
-		end
-		-- Passe grossière (1 case sur 2), puis affinage autour du meilleur
-		for r0 = rMin, rMax, 2 do
-			for c0 = cMin, cMax, 2 do
-				try(c0, r0)
+			local w, h = size.X * scale, size.Y * scale
+			local cw, ch = math.max(1, math.ceil(w / CELL)), math.max(1, math.ceil(h / CELL))
+			-- Zone de recherche (limitée autour du bouton si Near)
+			local cMin, cMax = 0, grid.Cols - cw
+			local rMin, rMax = 0, grid.Rows - ch
+			if near then
+				cMin = math.max(cMin, math.floor((button.X0 - near - w) / CELL) - 1)
+				cMax = math.min(cMax, math.ceil((button.X1 + near) / CELL) + 1)
+				rMin = math.max(rMin, math.floor((button.Y0 - near - h) / CELL) - 1)
+				rMax = math.min(rMax, math.ceil((button.Y1 + near) / CELL) + 1)
 			end
-		end
-		local found = foundHere
-		if found then
-			for r0 = found[2] - 2, found[2] + 2 do
-				for c0 = found[1] - 2, found[1] + 2 do
-					if r0 >= rMin and r0 <= rMax and c0 >= cMin and c0 <= cMax then
-						try(c0, r0)
+			local foundHere: { number }? = nil
+			local function try(c0: number, r0: number)
+				local cx = (c0 + cw / 2) * CELL
+				local cy = (r0 + ch / 2) * CELL
+				local dx, dy = cx - anchor.X, cy - anchor.Y
+				local cost = math.sqrt(dx * dx + dy * dy) + penalty
+				if cost < bestCost and isFree(grid, c0, r0, cw, ch) then
+					if near then
+						local rect = { X0 = cx - w / 2, Y0 = cy - h / 2, X1 = cx + w / 2, Y1 = cy + h / 2 }
+						if GearKit.RectGap(rect, button) > near then
+							return
+						end
 					end
+					bestCost = cost
+					best = makePlacement(cx, cy, scale, size, shape.Index, button)
+					foundHere = { c0, r0 }
 				end
 			end
+			-- Passe grossière (1 case sur 2), puis affinage autour du meilleur
+			for r0 = rMin, rMax, 2 do
+				for c0 = cMin, cMax, 2 do
+					try(c0, r0)
+				end
+			end
+			local found = foundHere
+			if found then
+				for r0 = found[2] - 2, found[2] + 2 do
+					for c0 = found[1] - 2, found[1] + 2 do
+						if r0 >= rMin and r0 <= rMax and c0 >= cMin and c0 <= cMax then
+							try(c0, r0)
+						end
+					end
+				end
+			end
+			scale *= 0.9
 		end
-		scale *= 0.9
 	end
 	return best
 end
 
--- Test exact (sans grille) : rectangle libre ?
-local function exactFree(rect: Rect, obstacles: { Rect }, placed: { Rect }, canvas: Vector2): boolean
+-- Test exact (sans grille) : rectangle libre et dans le territoire ?
+local function exactFree(rect: Rect, obstacles: { Rect }, placed: { Rect }, canvas: Vector2, territory: Rect): boolean
 	if rect.X0 < EDGE or rect.Y0 < EDGE or rect.X1 > canvas.X - EDGE or rect.Y1 > canvas.Y - EDGE then
+		return false
+	end
+	if not inside(rect, territory, 0) then
 		return false
 	end
 	for _, obstacle in ipairs(obstacles) do
@@ -527,21 +608,35 @@ end
 -- Affinage : la grille est prudente (jusqu'à une case perdue de chaque côté).
 -- Autour de la place trouvée, on cherche au pixel près la position qui permet
 -- la plus grande taille (et la plus proche du point préféré).
-local function refine(placement: Placement, spec: Spec, obstacles: { Rect }, placed: { Rect }, button: Rect, canvas: Vector2, near: number?): Placement
+local function refine(
+	placement: Placement,
+	spec: Spec,
+	obstacles: { Rect },
+	placed: { Rect },
+	button: Rect,
+	canvas: Vector2,
+	territory: Rect,
+	near: number?
+): Placement
 	local anchor = spec.Anchor(button, canvas)
 	local maxScale = spec.MaxScale or 1
-	local size = spec.Size
+	local size = placement.Size
+	local shapeIndex = placement.Shape
+	local visual = 1
+	if shapeIndex > 0 then
+		visual = math.sqrt((size.X * size.Y) / math.max(1, spec.Size.X * spec.Size.Y))
+	end
 	local function fits(cx: number, cy: number, scale: number): boolean
 		local w, h = size.X * scale, size.Y * scale
 		local rect = { X0 = cx - w / 2, Y0 = cy - h / 2, X1 = cx + w / 2, Y1 = cy + h / 2 }
 		if near and GearKit.RectGap(rect, button) > near then
 			return false
 		end
-		return exactFree(rect, obstacles, placed, canvas)
+		return exactFree(rect, obstacles, placed, canvas, territory)
 	end
 	local function cost(cx: number, cy: number, scale: number): number
 		local dx, dy = cx - anchor.X, cy - anchor.Y
-		return math.sqrt(dx * dx + dy * dy) + (1 - scale / maxScale) * SIZE_PENALTY
+		return math.sqrt(dx * dx + dy * dy) + sizeCost(scale, maxScale, visual, shapeIndex)
 	end
 	local bestX, bestY, bestScale = placement.CX, placement.CY, placement.Scale
 	if not fits(bestX, bestY, bestScale) then
@@ -578,13 +673,24 @@ local function refine(placement: Placement, spec: Spec, obstacles: { Rect }, pla
 	if bestX == startX and bestY == startY and bestScale == startScale then
 		return placement
 	end
-	return makePlacement(bestX, bestY, bestScale, spec, button)
+	return makePlacement(bestX, bestY, bestScale, size, shapeIndex, button)
 end
 
 -- La place actuelle est-elle toujours bonne ?
-local function stillValid(placement: Placement, spec: Spec, obstacles: { Rect }, placed: { Rect }, button: Rect, canvas: Vector2): boolean
+local function stillValid(
+	placement: Placement,
+	spec: Spec,
+	obstacles: { Rect },
+	placed: { Rect },
+	button: Rect,
+	canvas: Vector2,
+	territory: Rect
+): boolean
 	local rect = placement.Rect
 	if rect.X0 < 0 or rect.Y0 < 0 or rect.X1 > canvas.X or rect.Y1 > canvas.Y then
+		return false
+	end
+	if not inside(rect, territory, 2) then
 		return false
 	end
 	for _, obstacle in ipairs(obstacles) do
@@ -593,7 +699,7 @@ local function stillValid(placement: Placement, spec: Spec, obstacles: { Rect },
 		end
 	end
 	for _, other in ipairs(placed) do
-		if intersects(rect, other, 2) then
+		if intersects(rect, other, 1) then
 			return false
 		end
 	end
@@ -610,6 +716,9 @@ local function samePlacement(a: Placement?, b: Placement?): boolean
 		return a == b
 	end
 	local aa, bb = a :: Placement, b :: Placement
+	if aa.Shape ~= bb.Shape then
+		return false
+	end
 	if math.abs(aa.CX - bb.CX) > 0.5 or math.abs(aa.CY - bb.CY) > 0.5 or math.abs(aa.Scale - bb.Scale) > 1e-3 then
 		return false
 	end
@@ -662,15 +771,18 @@ local function doLayout(force: boolean)
 		return
 	end
 	local canvas = GearKit.CanvasSize()
-	local obstacles = collectObstacles(canvas)
+	local obstacles, barBottom = collectObstacles(canvas)
+	local territory = computeTerritory(canvas, barBottom)
 	local grid = newGrid(canvas)
 	for _, obstacle in ipairs(obstacles) do
 		markRect(grid, obstacle.X0 - MARGIN, obstacle.Y0 - MARGIN, obstacle.X1 + MARGIN, obstacle.Y1 + MARGIN)
 	end
+	-- Bords de l'écran + hors du territoire
 	markRect(grid, 0, 0, canvas.X, EDGE)
 	markRect(grid, 0, canvas.Y - EDGE, canvas.X, canvas.Y)
-	markRect(grid, 0, 0, EDGE, canvas.Y)
-	markRect(grid, canvas.X - EDGE, 0, canvas.X, canvas.Y)
+	markRect(grid, 0, 0, math.max(EDGE, territory.X0), canvas.Y)
+	markRect(grid, math.min(canvas.X - EDGE, territory.X1), 0, canvas.X, canvas.Y)
+	markRect(grid, 0, territory.Y1, canvas.X, canvas.Y)
 	buildSat(grid)
 
 	local placed: { Rect } = {}
@@ -679,20 +791,20 @@ local function doLayout(force: boolean)
 		local spec = piece.Spec
 		local current = piece.Placement
 		local placement: Placement? = nil
-		if current and not force and stillValid(current, spec, obstacles, placed, button, canvas) then
-			placement = makePlacement(current.CX, current.CY, current.Scale, spec, button)
+		if current and not force and stillValid(current, spec, obstacles, placed, button, canvas, territory) then
+			placement = makePlacement(current.CX, current.CY, current.Scale, current.Size, current.Shape, button)
 		else
 			local maxScale = spec.MaxScale or 1
 			local minScale = math.min(maxScale, spec.MinScale or 0.45)
 			placement = search(grid, spec, button, canvas, maxScale, minScale, spec.Near)
 			local near = spec.Near
 			if not placement then
-				-- Dernier recours : plus petit, et n'importe où
+				-- Dernier recours : plus petit, et n'importe où dans le territoire
 				near = nil
 				placement = search(grid, spec, button, canvas, minScale * 0.9, maxScale * LAST_RESORT_SCALE, nil)
 			end
 			if placement then
-				placement = refine(placement, spec, obstacles, placed, button, canvas, near)
+				placement = refine(placement, spec, obstacles, placed, button, canvas, territory, near)
 			end
 		end
 		results[piece] = placement
@@ -706,6 +818,7 @@ local function doLayout(force: boolean)
 
 	lastButton = button
 	lastCanvas = canvas
+	lastTerritory = territory
 	for piece, placement in pairs(results) do
 		if pieces[piece.Id] == piece and not samePlacement(piece.Placement, placement) then
 			notify(piece, placement)
@@ -739,11 +852,19 @@ local function check()
 		GearLayout.Request(false)
 		return
 	end
-	local obstacles = collectObstacles(canvas)
+	local obstacles, barBottom = collectObstacles(canvas)
+	local territory = computeTerritory(canvas, barBottom)
+	local old = lastTerritory
+	-- La barre remonte (plus de place) ou descend : on revérifie tout
+	local territoryMoved = old ~= nil and (math.abs(old.Y1 - territory.Y1) > 6 or math.abs(old.X0 - territory.X0) > 6)
 	local hidden = false
 	for _, piece in pairs(pieces) do
 		local placement = piece.Placement
 		if placement then
+			if not inside(placement.Rect, territory, 2) then
+				GearLayout.Request(false)
+				return
+			end
 			for _, obstacle in ipairs(obstacles) do
 				if intersects(placement.Rect, obstacle, KEEP_MARGIN) then
 					GearLayout.Request(false)
@@ -756,7 +877,7 @@ local function check()
 	end
 	-- Un accessoire sans place : de la place a peut-être été libérée
 	checkCount += 1
-	if hidden and checkCount % 5 == 0 then
+	if (hidden and checkCount % 5 == 0) or territoryMoved then
 		GearLayout.Request(false)
 	end
 end
@@ -802,6 +923,7 @@ local function stop()
 	table.clear(connections)
 	lastButton = nil
 	lastCanvas = nil
+	lastTerritory = nil
 end
 
 ----------------------------------------------------------------------
@@ -865,6 +987,11 @@ function GearLayout.Snapshot(): { [string]: Placement? }
 		out[id] = piece.Placement
 	end
 	return out
+end
+
+-- (debug / tests) : bande réservée aux accessoires lors du dernier calcul
+function GearLayout.GetTerritory(): Rect?
+	return lastTerritory
 end
 
 return GearLayout

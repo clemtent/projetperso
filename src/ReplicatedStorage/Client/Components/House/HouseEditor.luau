@@ -514,6 +514,11 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 	local sendTool = tool(8, "Send", "🚪", "Send", P.Peach)
 	separator(9)
 	local storeTool = tool(10, "Store", "📦", "Put away", P.Red, WHITE)
+	-- (téléphone : la barre cache l'inventaire -> "OK" pour le retrouver)
+	local doneTool = tool(-1, "Deselect", "✔️", "OK", P.Green, WHITE)
+	doneTool.Button.Visible = false
+	local doneSep = separator(0)
+	doneSep.Visible = false
 
 	HouseButtons.Tip(smaller.Button, function()
 		return HouseButtons.TipText("Make smaller", "( - )")
@@ -682,6 +687,8 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		if host and not dock then
 			host.Visible = false
 		end
+		doneTool.Button.Visible = dock and host ~= nil
+		doneSep.Visible = doneTool.Button.Visible
 		if dock then
 			toolbar.Parent = parent
 			toolbar.ZIndex = 25
@@ -1855,6 +1862,10 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		if entry then
 			store(entry)
 		end
+	end)
+	doneTool.Button.Activated:Connect(function()
+		SoundManager.Play("Click", 1)
+		setSelected(nil)
 	end)
 
 	room.BackgroundHit.Activated:Connect(function()

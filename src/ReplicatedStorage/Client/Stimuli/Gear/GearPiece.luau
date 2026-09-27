@@ -28,6 +28,7 @@ type Placement = GearLayout.Placement
 export type Options = {
 	Id: string,
 	Size: Vector2,
+	Shapes: { Vector2 }?, -- formes de rechange plus compactes (voir GearLayout)
 	Priority: number,
 	Anchor: (button: GearKit.Rect, canvas: Vector2) -> Vector2,
 	MinScale: number?,
@@ -54,6 +55,9 @@ export type Piece = typeof(setmetatable(
 		Animator: GearKit.Animator,
 		Placement: Placement?,
 		Level: number,
+		Shape: number,
+		Size: Vector2,
+		OnShape: ((shape: number, size: Vector2) -> ())?,
 		OnPlaced: ((placement: Placement, first: boolean) -> ())?,
 		OnHidden: (() -> ())?,
 		OnLevel: ((level: number, previous: number) -> ())?,
@@ -142,6 +146,9 @@ function GearPiece.new(ctx: any, options: Options, animator: GearKit.Animator?):
 		Animator = animator or GearKit.Animator(ctx),
 		Placement = nil,
 		Level = GearKit.Level(ctx, options.UpgradeId or options.Id),
+		Shape = 0,
+		Size = size,
+		OnShape = nil,
 		OnPlaced = nil,
 		OnHidden = nil,
 		OnLevel = nil,
@@ -175,6 +182,7 @@ function GearPiece.new(ctx: any, options: Options, animator: GearKit.Animator?):
 
 	GearLayout.Register(options.Id, {
 		Size = size,
+		Shapes = options.Shapes,
 		Priority = options.Priority,
 		Anchor = options.Anchor,
 		MinScale = options.MinScale,
@@ -203,6 +211,10 @@ function GearPiece._place(self: Piece, placement: Placement?)
 		return
 	end
 	local first = self.Placement == nil or not root.Visible
+	-- Nouvelle forme (ex. clavier -> pavé numérique) : on redessine
+	if placement.Shape ~= self.Shape then
+		self:_setShape(placement.Shape, placement.Size)
+	end
 	local from = root.Position
 	local fromScale = self.PlaceScale.Scale
 	self.Placement = placement
@@ -226,6 +238,25 @@ function GearPiece._place(self: Piece, placement: Placement?)
 	local callback = self.OnPlaced
 	if callback then
 		callback(placement, first)
+	end
+end
+
+-- Change la forme (taille "design") de l'accessoire
+function GearPiece._setShape(self: Piece, shape: number, size: Vector2)
+	self.Shape = shape
+	self.Size = size
+	self.Root.Size = UDim2.fromOffset(size.X, size.Y)
+	self.Content.Size = UDim2.fromOffset(size.X, size.Y)
+	local glow = self.Glow
+	glow.Position = UDim2.fromOffset(size.X / 2, size.Y / 2)
+	if size.X ~= size.Y then
+		glow.Size = UDim2.fromOffset(size.X * 1.1, size.Y * 1.25)
+	else
+		glow.Size = UDim2.fromOffset(size.X * 1.15, size.Y * 1.15)
+	end
+	local callback = self.OnShape
+	if callback then
+		callback(shape, size)
 	end
 end
 
@@ -268,7 +299,7 @@ function GearPiece.ToCanvas(self: Piece, localPoint: Vector2): Vector2?
 	if not placement then
 		return nil
 	end
-	local size = self.Options.Size
+	local size = self.Size
 	local scale = placement.Scale
 	return Vector2.new(placement.CX + (localPoint.X - size.X / 2) * scale, placement.CY + (localPoint.Y - size.Y / 2) * scale)
 end

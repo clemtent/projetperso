@@ -414,6 +414,43 @@ ChatReplies.Host = {
 	},
 }
 
+-- Vraies réponses quand on lui POSE une question sur ces sujets
+-- ("tu manges quoi ?", "tu écoutes quoi ?", "c'est quoi ton jeu préféré ?")
+ChatReplies.Answers = {
+	Food = {
+		en = {
+			"today's menu: noodles, dumplings and a bit of butter 🍜🧈", "whatever the chat tells me to eat 😋",
+			"a mystery snack... it's crunchy! 🥟", "everything on this plate, one bite at a time 🍗🍤",
+			"noodles now, butter for dessert 🧈", "fried shrimp and cookies, the perfect combo 🍤🍪",
+		},
+		fr = {
+			"au menu : nouilles, raviolis et un peu de beurre 🍜🧈", "ce que le chat me dit de manger 😋",
+			"un goûter mystère... il croustille ! 🥟", "tout ce qu'il y a dans l'assiette, une bouchée à la fois 🍗🍤",
+			"des nouilles, et du beurre en dessert 🧈", "crevettes frites et cookies, le combo parfait 🍤🍪",
+		},
+	},
+	Music = {
+		en = {
+			"lofi beats, always 🎧", "whatever helps me crunch in rhythm 🎶", "the sound of butter is my favorite song 🧈🎵",
+			"chill beats and snack sounds 😌", "i love the lofi room upgrade 🎧💜",
+		},
+		fr = {
+			"du lofi, toujours 🎧", "ce qui m'aide à croquer en rythme 🎶", "le bruit du beurre, c'est ma chanson préférée 🧈🎵",
+			"des sons chill et des bruits de goûter 😌", "j'adore la chambre lofi 🎧💜",
+		},
+	},
+	Game = {
+		en = {
+			"this clicker, obviously 😏", "the arcade! i'm terrible at it 😂🕹️", "eating is my favorite game 😋",
+			"anything cozy with snacks 🎮🍪",
+		},
+		fr = {
+			"ce clicker, évidemment 😏", "l'arcade ! je suis trop nulle 😂🕹️", "manger, c'est mon jeu préféré 😋",
+			"tout ce qui est cosy avec des goûters 🎮🍪",
+		},
+	},
+}
+
 ----------------------------------------------------------------------
 -- Réponses des faux spectateurs
 ----------------------------------------------------------------------
@@ -842,18 +879,22 @@ function ChatReplies.Build(options: Options): Plan
 		primary = "None"
 	end
 	-- Une question sur un sujet précis ("tu manges quoi ?") : elle répond avec ce sujet
+	-- (même après un "coucou" : "salut ! tu manges quoi ?" -> elle parle de sa nourriture)
 	local answer = primary
-	if primary == "Question" then
+	if table.find(topics, "Question") and primary ~= "Mean" and primary ~= "Sad" then
 		local best = math.huge
-		for index = 2, #topics do
-			local rank = ANSWER_PRIORITY[topics[index]]
-			if rank and rank < best and ChatReplies.Host[topics[index]] then
-				best, answer = rank, topics[index]
+		for _, candidate in ipairs(topics) do
+			local rank = ANSWER_PRIORITY[candidate]
+			if rank and rank < best and ChatReplies.Host[candidate] then
+				best, answer = rank, candidate
 			end
 		end
 	end
 	local topic: string = answer
 	local hostVariants: any = ChatReplies.Host[answer]
+	if answer ~= primary or primary == "Question" then
+		hostVariants = ChatReplies.Answers[answer] or hostVariants
+	end
 	local upset = primary == "Mean" or primary == "Sad"
 	local noTopic = primary == "None"
 	if filtered then

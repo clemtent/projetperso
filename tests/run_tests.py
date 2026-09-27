@@ -819,7 +819,92 @@ def house_art_test():
         '\t\tcheck(Config.HouseItemsById[id] ~= nil, "dessin sans objet : " .. id .. " (" .. file .. ")")',
         "\tend",
         "end)",
-    ]) + "\n" + house_surfaces_test()
+    ]) + "\n" + house_surfaces_test() + "\n" + house_service_test()
+
+
+# 🏠 Simulation SERVEUR de HouseService (source injectée telle quelle, faux
+# services) : la disposition envoyée par l'éditeur (objets posés SUR les
+# meubles, chaises retournées F, anciennes sauvegardes) est acceptée telle
+# quelle ; ce qui sort des zones est recalé.
+HOUSE_SERVICE_TESTS = r"""
+do
+	local fakeFunctions = {}
+	local fakeNet = { Function = function(name)
+		fakeFunctions[name] = fakeFunctions[name] or {}
+		return fakeFunctions[name]
+	end }
+	local fakeModules = { Config = Config, Formulas = Formulas, NumberFormatter = N, Net = fakeNet,
+		RateLimiter = { Check = function() return true end } }
+	local shared = { Config = "Config", Formulas = "Formulas", NumberFormatter = "NumberFormatter", Net = "Net" }
+	local env = {
+		game = { GetService = function() return { Shared = shared } end },
+		script = { Parent = { RateLimiter = "RateLimiter" } },
+		require = function(key) return fakeModules[key] end,
+		warn = function() end,
+	}
+	local fn, err = loadstring(HOUSE_SERVICE_SRC, "=HouseService")
+	assert(fn, err)
+	setfenv(fn, setmetatable(env, { __index = getfenv(0) }))
+	local HouseService = fn()
+	local data
+	local player = { Name = "Test" }
+	HouseService:Init({
+		DataService = { GetData = function() return data end },
+		GameService = {
+			T = function(_, _, text, ...) if select("#", ...) > 0 then return string.format(text, ...) end return text end,
+			SendState = function() end,
+			IsReady = function() return true end,
+		},
+	})
+	HouseService:Start()
+
+	test("HouseService (simulation) : objets sur les meubles, chaises retournées, anciennes sauvegardes", function(check)
+		local H = Config.House
+		data = { Dopamine = 0, Rebirths = 0, Stats = {}, House = { Size = "Studio",
+			Items = { DiningTable = 1, DiningChair = 3, CocoaMug = 1, Nightstand = 1, WoodenChair = 1, HeartPillow = 1 },
+			-- ancienne maison à une seule pièce : table de chevet posée en hauteur (ancienne règle Size <= 70)
+			Placed = { { I = "Nightstand", X = 0.5, Y = 0.3, S = 1, Z = 1 } } } }
+		HouseService:PlayerReady(player, data)
+		local room = data.House.Rooms[1]
+		check(room ~= nil and room.Id == "R1", "ancienne sauvegarde -> une pièce")
+		eq(check, room and room.Placed[1] and room.Placed[1].Y, 0.3, "ancienne table de chevet en hauteur gardée")
+		local invoke = fakeFunctions.House and fakeFunctions.House.OnServerInvoke
+		check(type(invoke) == "function", "RemoteFunction House branchée")
+		if type(invoke) ~= "function" then return end
+		local ok, message = invoke(player, "saveLayout", { Rooms = { R1 = {
+			{ I = "DiningTable", X = 0.4, Y = 0.74, S = 1, Z = 100 },
+			{ I = "CocoaMug", X = 0.4, Y = 0.5337, S = 1, Z = 100 }, -- sur la table
+			{ I = "DiningChair", X = 0.3, Y = 0.734, S = 1, Z = 100 }, -- à gauche de la table
+			{ I = "DiningChair", X = 0.5, Y = 0.734, S = 1, Z = 100, F = true }, -- à droite, retournée
+			{ I = "HeartPillow", X = 0.7, Y = 0.18, S = 1, Z = 100, F = "oui" }, -- (F invalide ignoré)
+			{ I = "DiningChair", X = 0.2, Y = 0.3, S = 1, Z = 100 }, -- une chaise ne monte pas sur un meuble
+		} } })
+		check(ok == true, "disposition acceptée : " .. tostring(message))
+		local placed = data.House.Rooms[1].Placed
+		eq(check, #placed, 6, "6 objets")
+		check(near(placed[2].Y, 0.5337, 1e-6), "tasse sur la table : Y gardé " .. tostring(placed[2].Y))
+		eq(check, placed[3].F, nil, "chaise de gauche : pas retournée")
+		eq(check, placed[4].F, true, "chaise de droite : retournée (F gardé)")
+		eq(check, placed[5].F, nil, "F invalide ignoré")
+		check(near(placed[5].Y, 0.18, 1e-6), "coussin posé en hauteur (étagère murale...) " .. tostring(placed[5].Y))
+		check(near(placed[6].Y, H.WallRatio * 0.85, 1e-6), "chaise recalée au sol : " .. tostring(placed[6].Y))
+		-- Trop haut même pour un petit objet : recalé à TabletopMinY
+		ok = invoke(player, "saveLayout", { Rooms = { R1 = { { I = "CocoaMug", X = 0.5, Y = 0.01, S = 1, Z = 1 } } } })
+		check(ok == true and near(data.House.Rooms[1].Placed[1].Y, H.TabletopMinY, 1e-6), "tasse trop haute recalée")
+		-- Comfort identique avec ou sans F
+		eq(check, Formulas.GetHouseComfort(data), Config.HouseItemsById.CocoaMug.Comfort * (1 + (Formulas.IsRoomFavorite(Formulas.GetRoomType("Living"), Config.HouseItemsById.CocoaMug) and H.HarmonyBonus or 0)), "confort")
+	end)
+end
+"""
+
+
+def house_service_test():
+    """Injecte Services/HouseService.luau (source telle quelle) puis HOUSE_SERVICE_TESTS."""
+    path = os.path.join(SRC, "ServerScriptService", "Services", "HouseService.luau")
+    body = read(path)
+    if "]=====]" in body:
+        raise ValueError("délimiteur ]=====] interdit dans " + path)
+    return "local HOUSE_SERVICE_SRC = [=====[%s]=====]\n%s" % (body, HOUSE_SERVICE_TESTS)
 
 
 def house_surfaces_test():

@@ -75,7 +75,7 @@ function ChatInput.new(ctx: any, options: Options)
 	local UI = ctx.UIUtil
 	local Theme = ctx.Theme
 	local zBase = options.ZIndex or 3
-	local placeholder = Locale.T("Send a message") .. "…"
+	local placeholder = Locale.T("Send a message…")
 	local compactPlaceholder = Locale.T("Type here…")
 	local isCompact = false
 
