@@ -124,7 +124,7 @@ local function gate(folder: Instance, gcf: CFrame)
 		part(model, "Spandrel", Vector3.new(3, 7, 3.4), gcf * CFrame.new(sx * 12, spring + 11, 0), Color3.fromRGB(246, 232, 218), M.Limestone, "solid")
 		part(model, "Spandrel", Vector3.new(3.5, 3.4, 3.4), gcf * CFrame.new(sx * 8.75, spring + 12.7, 0), Color3.fromRGB(246, 232, 218), M.Limestone, "solid")
 	end
-	part(model, "Keystone", Vector3.new(2.6, 3.6, 4.8), gcf * CFrame.new(0, spring + radius + 1.1, 0), C.HotPink, M.Marble, "deco")
+	part(model, "Keystone", Vector3.new(2.6, 3.2, 4.8), gcf * CFrame.new(0, spring + radius + 0.4, 0), C.HotPink, M.Marble, "deco")
 	-- fronton "DOPAMINE TOWN" (lisible des deux côtés)
 	-- (entre les deux tours, au-dessus de l'arche)
 	local boardW = 2 * OPENING - 0.6
@@ -332,7 +332,7 @@ local function outside(folder: Instance, geo: TownKit.Geo, gcf: CFrame)
 		part(model, "Bay", Vector3.new(0.3, 0.1, 11), lot * CFrame.new(-15 + i * 6, ROAD_Y + 0.05, -9), C.Line, M.SmoothPlastic, "deco")
 	end
 	local colors = { Color3.fromRGB(130, 200, 255), Color3.fromRGB(255, 236, 150), Color3.fromRGB(250, 250, 250), Color3.fromRGB(200, 170, 250) }
-	for i, bay in ipairs({ 0, 1, 3, 4 }) do
+	for i, bay in ipairs({ 0, 1, 4 }) do
 		TownKit.Car(model, lot * CFrame.new(-12 + bay * 6, ROAD_Y, -9) * CFrame.Angles(0, math.pi, 0), colors[i])
 	end
 	TownKit.Lamp(model, (lot * CFrame.new(0, ROAD_Y, 6)).Position, 0, false, true)

@@ -88,7 +88,7 @@ local function lake(folder: Instance, geo: TownKit.Geo, center: Vector3, radius:
 	local prev = a + Vector3.new(0, GROUND_Y + 0.4, 0)
 	for i = 1, n do
 		local t = i / n
-		local p = a:Lerp(b, t) + Vector3.new(0, GROUND_Y + 0.4 + math.sin(t * math.pi) * 2.8, 0)
+		local p = a:Lerp(b, t) + Vector3.new(0, GROUND_Y + 0.4 + math.sin(t * math.pi) * 5, 0)
 		local deck = TownKit.Beam(bridge, "Deck", prev, p, 6, 0.5, C.Wood, M.WoodPlanks, "solid")
 		deck.CastShadow = true
 		for _, sx in ipairs({ -1, 1 }) do
@@ -108,6 +108,30 @@ local function lake(folder: Instance, geo: TownKit.Geo, center: Vector3, radius:
 	local boat = CFrame.lookAt(dock, dock - dockDir) * CFrame.new(-4.4, -0.3, 2.5)
 	part(model, "Boat", Vector3.new(3, 1.2, 7), boat, Color3.fromRGB(255, 170, 190), M.WoodPlanks, "deco")
 	part(model, "BoatSeat", Vector3.new(2.8, 0.2, 1), boat * CFrame.new(0, 0.4, 0), C.WoodLight, M.WoodPlanks, "deco")
+	-- saules sur la rive + bancs face à l'eau
+	local planted = 0
+	for i = 1, 16 do
+		if planted >= 4 then
+			break
+		end
+		local angle = i / 16 * math.pi * 2 * 3.3
+		local lobe = lobes[i % 3 + 1]
+		local p = lobe[1] + Vector3.new(math.cos(angle), 0, math.sin(angle)) * (lobe[2] + 6)
+		local dry = true
+		for _, other in ipairs(lobes) do
+			if (Vector3.new(p.X - other[1].X, 0, p.Z - other[1].Z)).Magnitude < other[2] + 5 then
+				dry = false
+			end
+		end
+		if dry then
+			planted += 1
+			TownKit.Tree(model, p + Vector3.new(0, GROUND_Y, 0), 14, i * 131, planted % 2 == 0 and 2 or 1)
+		end
+	end
+	for _, s in ipairs({ -1, 1 }) do
+		local p = center + towardPlaza * (radius + 5) + side * s * 9 + Vector3.new(0, GROUND_Y, 0)
+		TownKit.Bench(model, CFrame.lookAt(p, p - towardPlaza))
+	end
 	geo.Reserve(center, radius + 4)
 	for i = 2, 3 do
 		geo.Reserve(lobes[i][1], lobes[i][2] + 4)
@@ -277,8 +301,8 @@ local function hills(folder: Instance, geo: TownKit.Geo)
 		TownKit.Ball(model, "Hill", p, d, tone, M.Grass, "deco")
 	end
 	-- montagnes enneigées (pyramides approchées) dans le dos de l'entrée
-	for i = 1, 6 do
-		local a = math.pi + (i - 3.5) * 0.32 + (hash(i, 65) - 0.5) * 0.1
+	for i = 1, 5 do
+		local a = math.pi + (i - 3) * 0.36 + (hash(i, 65) - 0.5) * 0.1
 		local dist = geo.Town + 360 + hash(i, 66) * 80
 		local h = 90 + hash(i, 67) * 80
 		local w = h * 1.5
@@ -330,7 +354,7 @@ local function belt(folder: Instance, geo: TownKit.Geo)
 	local O = geo.Origin
 	local m = geo.Slots
 	local back = geo.PlotR + WorldLayout.PLOT_D / 2
-	local perSlot = 6
+	local perSlot = m >= 11 and 3 or (m >= 8 and 5 or 6)
 	for k = 0, m - 1 do
 		for j = 1, perSlot do
 			local a = geo.SlotAngle(k) + (j - 0.5 - perSlot / 2) / perSlot * (math.pi * 2 / m) + (hash(k, j) - 0.5) * 0.05
@@ -385,10 +409,10 @@ function TownNature.Build(folder: Instance, geo: TownKit.Geo): number
 	if depth > 70 then
 		court(nature, geo, frame((math.pi + aL) / 2 - 0.05, geo.Inner - 18))
 	end
-	local trees = scatterTrees(nature, geo, math.clamp(math.floor(depth * 0.35), 25, 55))
+	local trees = scatterTrees(nature, geo, math.clamp(math.floor(depth * 0.35), 25, 38))
 	belt(nature, geo)
 	hills(nature, geo)
-	TownBuildings.Skyline(nature, O, math.rad(125), math.rad(235), geo.Town + 200, 26)
+	TownBuildings.Skyline(nature, O, math.rad(125), math.rad(235), geo.Town + 320, 20)
 	return trees
 end
 

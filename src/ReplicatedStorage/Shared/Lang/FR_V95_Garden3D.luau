@@ -15,6 +15,5 @@ return {
 		["🌱 Planted!"] = "🌱 Planté !",
 		["%s's garden"] = "Le jardin de %s",
 		["🔒 Unlock the Dopamine Garden"] = "🔒 Débloque le Jardin de Dopamine",
-		["🔒 More beds: %s"] = "🔒 Plus de parterres : %s",
 	},
 }

@@ -154,7 +154,7 @@ local function buildBoulevard(folder: Instance, geo: TownKit.Geo)
 			end
 		end
 		local treeHalf = (A - hw - WALK_W - 4) * tanH - 8
-		local n = math.max(1, math.floor(2 * treeHalf / 30))
+		local n = math.max(1, math.floor(2 * treeHalf / 34))
 		for i = 0, n do
 			local tx = -treeHalf + i * (2 * treeHalf) / math.max(1, n)
 			if not (junction and math.abs(tx) < jw + 7) then
@@ -162,7 +162,7 @@ local function buildBoulevard(folder: Instance, geo: TownKit.Geo)
 				TownKit.Tree(side, base, 12 + hash(k, i) * 5, k * 17 + i, (i + k) % 5 == 0 and 2 or 1)
 			end
 		end
-		if hash(k, 99) < 0.72 and not (k == 0) then
+		if hash(k, 99) < 0.55 and not (k == 0) then
 			local cx = (hash(k, 5) - 0.5) * half * 0.9
 			if not (junction and math.abs(cx) < jw + 12) then
 				TownKit.Car(side, F * CFrame.new(cx, ROAD_Y, -hw + 3.4) * CFrame.Angles(0, math.rad(90), 0), CAR_COLORS[k % #CAR_COLORS + 1], hash(k, 6) < 0.25 and "Van" or nil)
@@ -170,7 +170,7 @@ local function buildBoulevard(folder: Instance, geo: TownKit.Geo)
 		end
 		-- bouche d'incendie + poubelle sur le trottoir intérieur
 		local hx = half * 0.25
-		if not (junction and math.abs(hx) < jw + 6) then
+		if k % 2 == 1 and not (junction and math.abs(hx) < jw + 6) then
 			TownKit.Hydrant(side, (F * CFrame.new(hx, WALK_Y, -hw - 1.6)).Position)
 			TownKit.Bin(side, (F * CFrame.new(hx + 3, WALK_Y, -hw - 1.6)).Position, k % 2 == 0 and Color3.fromRGB(96, 150, 110) or Color3.fromRGB(110, 140, 200))
 		end
@@ -221,7 +221,8 @@ local function buildAvenue(folder: Instance, geo: TownKit.Geo)
 	-- arbres (double rangée) sur la promenade ; entre deux arbres : un
 	-- lampadaire ou un banc tourné vers l'axe (le milieu reste libre pour marcher)
 	local length = roadEdge - 6 - (s0 + 6)
-	local n = math.max(2, math.floor(length / 14))
+	-- (pas de 14 studs, 10 intervalles au plus : budget de pièces des grandes villes)
+	local n = math.clamp(math.floor(length / 14), 2, 8)
 	local lamps = 0
 	for i = 0, n do
 		local s = s0 + 6 + i * length / n
@@ -271,7 +272,7 @@ local function buildSideStreet(folder: Instance, geo: TownKit.Geo, slot: number)
 	local s = s0 + 4
 	while s + 5 < geo.Inner - 10 do
 		radialBox(st, "Dash", R, s, s + 5, -0.2, 0.2, ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "deco")
-		s += 12
+		s += 18
 	end
 	local zs = geo.Inner - 6
 	for i = 0, 5 do
@@ -282,7 +283,7 @@ local function buildSideStreet(folder: Instance, geo: TownKit.Geo, slot: number)
 	TownKit.RoadSign(st, (R * CFrame.new(ST_HALF + 1.4, WALK_Y, -(zs - 5))).Position, geo.SlotAngle(slot), Color3.fromRGB(220, 60, 70), "Diamond")
 	-- arbres d'alignement + lampadaires
 	local length = geo.Inner - 8 - (s0 + 6)
-	local n = math.max(1, math.floor(length / 20))
+	local n = math.clamp(math.floor(length / 20), 1, 7)
 	for i = 0, n do
 		local si = s0 + 6 + i * length / n
 		for _, sx in ipairs({ -1, 1 }) do

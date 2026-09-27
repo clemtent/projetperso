@@ -236,8 +236,8 @@ local function garland(folder: Instance, a: Vector3, b: Vector3, seed: number)
 	TownKit.Rod(folder, "Wire", a, mid, 0.1, C.Metal, M.SmoothPlastic, "deco")
 	TownKit.Rod(folder, "Wire", mid, b, 0.1, C.Metal, M.SmoothPlastic, "deco")
 	local colors = { C.Glow, C.Pink, C.Sky, C.Lemon, C.Mint }
-	for i = 1, 6 do
-		local t = i / 7
+	for i = 1, 5 do
+		local t = i / 6
 		local p = a:Lerp(b, t) - Vector3.new(0, 2.2 * (1 - (2 * t - 1) ^ 2) + 0.35, 0)
 		TownKit.Ball(folder, "Bulb", p, 0.55, colors[(i + seed) % #colors + 1], M.Neon, "deco")
 	end

@@ -112,7 +112,7 @@ local function buildPlot(parent: Instance, index: number, count: number): PlotIn
 		local zc = 3
 		part(model, "Fence", Vector3.new(0.25, 2.4, len), plotCF * CFrame.new(x, g + 1.4, zc), fence, M.WoodPlanks, "prop")
 		part(model, "FenceRail", Vector3.new(0.4, 0.3, len), plotCF * CFrame.new(x, g + 2.75, zc), fence, M.Wood, "deco")
-		local posts = 4
+		local posts = 3
 		for i = 0, posts do
 			local z = zc - len / 2 + i * len / posts
 			part(model, "FencePost", Vector3.new(0.6, 3.4, 0.6), plotCF * CFrame.new(x, g + 1.7, z), fence, M.Wood, "deco")

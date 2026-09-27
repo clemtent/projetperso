@@ -957,7 +957,129 @@ def house_art_test():
         '\t\tcheck(Config.HouseItemsById[id] ~= nil, "dessin sans objet : " .. id .. " (" .. file .. ")")',
         "\tend",
         "end)",
-    ]) + "\n" + house_garden_art_test() + "\n" + house_surfaces_test() + "\n" + house_service_test() + "\n" + cool92_test()
+    ]) + "\n" + house_garden_art_test() + "\n" + house_surfaces_test() + "\n" + house_service_test() + "\n" + cool92_test() + "\n" + setup95_test()
+
+
+# (v9.5) SETUPDATA95 : "🖥️ Dopamine Setup" (Config.House, Art/Setup95,
+# HouseSurfaces) : ids exacts du contrat, dessins, verrous (amélioration +
+# visites à l'océan), prix croissants par palier, dessus des bureaux
+SETUP95_IDS = [
+    "SetupDeskSolo", "SetupDeskDuo", "SetupDeskTrio", "SetupDeskUltra", "SetupKeyboard", "SetupMouse",
+    "SetupTVStand", "SetupTVSmall", "SetupTVMedium", "SetupTVLarge", "SetupTVGiant",
+    "SetupTVWallMedium", "SetupTVWallLarge", "SetupTVWallGiant", "SetupNewsTV",
+    "SetupHiFiBoombox", "SetupHiFiCD", "SetupHiFiVinyl", "SetupHiFiStudio",
+    "SetupWindmill", "SetupPress", "SetupBubbleWrap", "SetupLiveStudio",
+    "SetupPlantDaisy", "SetupPlantTulip", "SetupPlantRose", "SetupPlantSunflower", "SetupPlantLotus",
+]
+
+
+def setup95_test():
+    comp = os.path.join(SRC, "ReplicatedStorage", "Client", "Components", "House")
+    art_path = os.path.join(comp, "Art", "Setup95.luau")
+    drawn = re.findall(r"^Art\.(\w+)\s*=\s*function", read(art_path), re.M) if os.path.exists(art_path) else []
+    surf = read(os.path.join(comp, "HouseSurfaces.luau"))
+    surfaced = re.findall(r"^\t(Setup\w+) = \{ \{", surf, re.M)
+    lua = lambda names: "{ " + ", ".join('"%s"' % n for n in names) + " }"
+    return r'''
+test("Maison v9.5 : Dopamine Setup (%d objets, %d dessins Setup95)", function(check)
+	local ids, drawnList, surfaced = %s, %s, %s
+	local drawn, onSurface = {}, {}
+	for _, id in ipairs(drawnList) do drawn[id] = true end
+	for _, id in ipairs(surfaced) do onSurface[id] = true end
+	local category = Config.HouseCategoriesById.Setup
+	check(category ~= nil and category.Name == "Dopamine Setup" and category.Icon == "🖥️" and category.Tint ~= nil, "catégorie Setup")
+	local kinds = { Desk = true, Keyboard = true, Mouse = true, TV = true, TVStand = true, HiFi = true, Windmill = true, Press = true,
+		BubbleWrap = true, LiveStudio = true, NewsTV = true, Plant = true }
+	local feeds = { Runner = true, Live = true, DVD = true, News = true }
+	local seen = {}
+	for _, id in ipairs(ids) do
+		local item = Config.HouseItemsById[id]
+		check(item ~= nil, "objet manquant " .. id)
+		if item then
+			seen[id] = true
+			eq(check, item.Category, "Setup", "catégorie " .. id)
+			check(drawn[id] == true, "dessin Setup95 " .. id)
+			check(type(item.Setup) == "table" and kinds[item.Setup.Kind] == true, "Setup.Kind " .. id)
+			check(type(item.Setup.Tier) == "number" and item.Setup.Tier >= 1, "Setup.Tier " .. id)
+			check(({ S = true, M = true, L = true, XL = true })[item.Setup.Size] == true, "Setup.Size " .. id)
+			check(({ Floor = true, Surface = true, Stand = true, Wall = true })[item.Setup.Mount] == true, "Setup.Mount " .. id)
+			if item.Setup.Mount == "Wall" then eq(check, item.Placement, "Wall", "au mur " .. id) else eq(check, item.Placement, "Floor", "au sol " .. id) end
+			if item.Setup.Mount == "Surface" then check(Formulas.CanGoOnFurniture(item), "se pose sur un meuble " .. id) end
+			if item.Setup.Feeds then
+				eq(check, #item.Setup.Feeds, item.Setup.Screens, "un flux par écran " .. id)
+				for _, f in ipairs(item.Setup.Feeds) do check(feeds[f] == true, "flux inconnu " .. tostring(f) .. " " .. id) end
+			end
+			if item.Setup.Kind == "Desk" then
+				check(item.Setup.Seat == true and onSurface[id] == true and not Formulas.CanGoOnFurniture(item), "bureau : chaise + dessus " .. id)
+			end
+			if item.Setup.Kind == "Plant" then check(Config.Garden and type(item.Setup.Flower) == "string", "fleur " .. id) end
+			check(type(item.RequiresRebirths) == "number", "RequiresRebirths écrit " .. id)
+			if item.RequiresUpgrade ~= nil then
+				check(Config.UpgradesById[item.RequiresUpgrade] ~= nil, "amélioration inconnue " .. tostring(item.RequiresUpgrade) .. " " .. id)
+			end
+		end
+	end
+	-- aucun autre objet dans la catégorie, aucun autre dessin dans Setup95
+	for _, item in ipairs(Config.HouseItemsByCategory.Setup or {}) do check(seen[item.Id] == true, "objet Setup hors contrat " .. item.Id) end
+	for id in pairs(drawn) do check(seen[id] == true, "dessin Setup95 sans objet " .. id) end
+	for _, id in ipairs({ "SetupTVStand", "SetupBubbleWrap" }) do check(onSurface[id] == true, "dessus " .. id) end
+	for _, id in ipairs({ "SetupKeyboard", "SetupMouse", "SetupTVSmall", "SetupPlantDaisy", "SetupPlantTulip", "SetupPlantRose",
+		"SetupPlantSunflower", "SetupPlantLotus" }) do
+		check(Formulas.CanGoOnFurniture(Config.HouseItemsById[id]), "sur un bureau / meuble : " .. id)
+	end
+	-- verrous du contrat : amélioration + visites
+	local I = Config.HouseItemsById
+	local gates = {
+		SetupDeskSolo = { "Runner", 0 }, SetupDeskDuo = { "Runner", 1 }, SetupDeskTrio = { "Runner", 2 }, SetupDeskUltra = { "Runner", 4 },
+		SetupKeyboard = { "Keyboard", 0 }, SetupMouse = { "Mouse", 0 },
+		SetupTVSmall = { "DVD", 0 }, SetupTVMedium = { "DVD", 1 }, SetupTVLarge = { "DVD", 2 }, SetupTVGiant = { "DVD", 4 },
+		SetupTVWallMedium = { "DVD", 1 }, SetupTVWallLarge = { "DVD", 2 }, SetupTVWallGiant = { "DVD", 4 },
+		SetupHiFiBoombox = { "Lofi", 0 }, SetupHiFiCD = { "Lofi", 1 }, SetupHiFiVinyl = { "Lofi", 2 }, SetupHiFiStudio = { "Lofi", 4 },
+		SetupWindmill = { "Pinwheel", 0 }, SetupPress = { "Press", 0 }, SetupBubbleWrap = { "BubbleWrap", 0 }, SetupLiveStudio = { "LiveStream", 0 },
+		SetupNewsTV = { "NewsTicker", 0 },
+		SetupPlantDaisy = { "Garden", 0 }, SetupPlantTulip = { "Garden", 0 }, SetupPlantRose = { "Garden", 1 }, SetupPlantSunflower = { "Garden", 2 },
+		SetupPlantLotus = { "Garden", 3 },
+	}
+	for id, gate in pairs(gates) do
+		local item = I[id]
+		if item then
+			eq(check, item.RequiresUpgrade, gate[1], "amélioration de " .. id)
+			eq(check, Formulas.GetHouseRequiredRebirths(item), gate[2], "visites de " .. id)
+		end
+	end
+	eq(check, I.SetupTVStand and I.SetupTVStand.RequiresUpgrade, nil, "meuble télé libre")
+	eq(check, Config.UpgradesById.Runner.Feature, "Runner", "bureaux : amélioration du coureur")
+	-- prix strictement croissants avec le palier dans chaque famille
+	for _, family in ipairs({
+		{ "SetupDeskSolo", "SetupDeskDuo", "SetupDeskTrio", "SetupDeskUltra" },
+		{ "SetupTVSmall", "SetupTVMedium", "SetupTVLarge", "SetupTVGiant" },
+		{ "SetupTVWallMedium", "SetupTVWallLarge", "SetupTVWallGiant" },
+		{ "SetupHiFiBoombox", "SetupHiFiCD", "SetupHiFiVinyl", "SetupHiFiStudio" },
+		{ "SetupPlantDaisy", "SetupPlantTulip", "SetupPlantRose", "SetupPlantSunflower", "SetupPlantLotus" },
+	}) do
+		for k = 2, #family do
+			local a, b = I[family[k - 1]], I[family[k]]
+			if a and b then
+				check(b.Cost > a.Cost and b.Setup.Tier > a.Setup.Tier and b.Comfort >= a.Comfort, "prix / palier croissants " .. a.Id .. " < " .. b.Id)
+				check(Formulas.GetHouseRequiredRebirths(b) >= Formulas.GetHouseRequiredRebirths(a), "visites croissantes " .. b.Id)
+			end
+		end
+	end
+	-- le support mural coûte un peu plus que la télé sur pied
+	for _, pair in ipairs({ { "SetupTVMedium", "SetupTVWallMedium" }, { "SetupTVLarge", "SetupTVWallLarge" }, { "SetupTVGiant", "SetupTVWallGiant" } }) do
+		check(I[pair[2]].Cost >= I[pair[1]].Cost, "télé murale >= sur pied " .. pair[2])
+	end
+	-- prix raisonnables : au moins le prix de l'amélioration à 0 visite, confort
+	-- jamais plus rentable que les petits objets du début (<= 1 point / 2 K)
+	for _, id in ipairs(ids) do
+		local item = I[id]
+		if item and item.RequiresUpgrade and Formulas.GetHouseRequiredRebirths(item) == 0 then
+			local upgrade = Config.UpgradesById[item.RequiresUpgrade]
+			check(item.Cost >= math.min(upgrade.Cost, 5e6) * 0.5, "objet moins cher que son amélioration : " .. id)
+		end
+		if item then check(item.Cost / item.Comfort >= 2000, "confort trop rentable : " .. id) end
+	end
+end)''' % (len(SETUP95_IDS), len(drawn), lua(SETUP95_IDS), lua(drawn), lua(surfaced))
 
 
 def cool92_test():
@@ -1177,6 +1299,58 @@ do
 		ok = invoke(player, "buyRoom", "Kitchen")
 		local newRoom = house.Rooms[#house.Rooms]
 		check(ok == true and newRoom.Trim == H.Trims[1].Id and newRoom.Mood == H.Moods[1].Id and newRoom.View == H.Views[1].Id, "nouvelle pièce : styles par défaut")
+	end)
+
+	-- (v9.5) SETUPDATA95 : "Dopamine Setup", le serveur vérifie RequiresUpgrade
+	test("HouseService (simulation) v9.5 : objets Dopamine Setup verrouillés par leur amélioration", function(check)
+		local invoke = fakeFunctions.House and fakeFunctions.House.OnServerInvoke
+		if type(invoke) ~= "function" then check(false, "RemoteFunction House") return end
+		data = { Dopamine = 1e12, Rebirths = 5, Upgrades = {}, Stats = {}, House = { Size = "Studio", Items = {} } }
+		HouseService:PlayerReady(player, data)
+		local items = data.House.Items
+		local ok, message = invoke(player, "buyItem", "SetupDeskSolo")
+		check(ok == false and (items.SetupDeskSolo or 0) == 0, "bureau sans Coureur infini : refusé")
+		check(type(message) == "string" and message:find("Endless Runner", 1, true) ~= nil and message:find("first", 1, true) ~= nil,
+			"message : débloque l'amélioration d'abord : " .. tostring(message))
+		eq(check, data.Dopamine, 1e12, "rien de payé")
+		data.Upgrades.Runner = 0
+		ok = invoke(player, "buyItem", "SetupDeskSolo")
+		check(ok == false, "niveau 0 : refusé")
+		data.Upgrades.Runner = 0 / 0
+		ok = invoke(player, "buyItem", "SetupDeskSolo")
+		check(ok == false, "niveau NaN : refusé")
+		data.Upgrades.Runner = 1
+		ok = invoke(player, "buyItem", "SetupDeskSolo")
+		check(ok == true and items.SetupDeskSolo == 1, "bureau avec Coureur infini : acheté")
+		eq(check, data.Dopamine, 1e12 - Config.HouseItemsById.SetupDeskSolo.Cost, "prix payé")
+		-- l'objet acheté reste à soi même si l'amélioration disparaît (océan)
+		data.Upgrades.Runner = nil
+		check(items.SetupDeskSolo == 1, "objet gardé")
+		-- meuble télé : aucune amélioration exigée
+		ok = invoke(player, "buyItem", "SetupTVStand")
+		check(ok == true, "meuble télé : pas d'amélioration exigée")
+		-- visites à l'océan d'abord, puis amélioration
+		data.Rebirths = 3
+		data.Upgrades.DVD = 1
+		ok, message = invoke(player, "buyItem", "SetupTVGiant")
+		check(ok == false and tostring(message):find("ocean", 1, true) ~= nil, "télé géante : 4 visites : " .. tostring(message))
+		data.Rebirths = 4
+		ok = invoke(player, "buyItem", "SetupTVGiant")
+		check(ok == true, "télé géante : 4 visites + DVD")
+		-- chaque objet Setup est refusé sans son amélioration, accepté avec
+		data.Rebirths = 10
+		data.Dopamine = 1e15
+		for _, item in ipairs(Config.House.Items) do
+			if item.RequiresUpgrade then
+				data.Upgrades = {}
+				local before = items[item.Id] or 0
+				local refused = invoke(player, "buyItem", item.Id)
+				check(refused == false and (items[item.Id] or 0) == before, "refusé sans " .. item.RequiresUpgrade .. " : " .. item.Id)
+				data.Upgrades[item.RequiresUpgrade] = 1
+				local accepted, why = invoke(player, "buyItem", item.Id)
+				check(accepted == true and items[item.Id] == before + 1, "accepté avec " .. item.RequiresUpgrade .. " : " .. item.Id .. " " .. tostring(why))
+			end
+		end
 	end)
 end
 """

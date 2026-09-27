@@ -337,7 +337,9 @@ function TownKit.Tree(parent: Instance, base: Vector3, height: number, seed: num
 	TownKit.Ball(model, "Crown", top, crown, color, M.Grass, "decoS")
 	local a = hash(seed, 11) * math.pi * 2
 	TownKit.Ball(model, "Crown2", top + Vector3.new(math.cos(a) * crown * 0.32, -crown * 0.12, math.sin(a) * crown * 0.32), crown * 0.72, color:Lerp(C.White, 0.1), M.Grass, "deco")
-	TownKit.Ball(model, "Crown3", top + Vector3.new(-math.cos(a) * crown * 0.28, crown * 0.18, -math.sin(a) * crown * 0.28), crown * 0.66, color:Lerp(Color3.new(0, 0, 0), 0.08), M.Grass, "deco")
+	if hash(seed, 12) < 0.5 then
+		TownKit.Ball(model, "Crown3", top + Vector3.new(-math.cos(a) * crown * 0.28, crown * 0.18, -math.sin(a) * crown * 0.28), crown * 0.66, color:Lerp(Color3.new(0, 0, 0), 0.08), M.Grass, "deco")
+	end
 	return model
 end
 

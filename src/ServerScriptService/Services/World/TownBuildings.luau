@@ -254,7 +254,7 @@ export type Screen = { Rows: { TextLabel }, Title: TextLabel, Footer: TextLabel 
 
 function TownBuildings.TownHall(parent: Instance, cf: CFrame): (Model, Screen)
 	local model = TownKit.Model(parent, "TownHall")
-	local w, d, h = 64, 26, 30
+	local w, d, h = 64, 26, 34
 	local wall = Color3.fromRGB(250, 238, 230)
 	local trim = C.White
 	local roof = Color3.fromRGB(110, 104, 140)
@@ -279,7 +279,7 @@ function TownBuildings.TownHall(parent: Instance, cf: CFrame): (Model, Screen)
 		for f = 0, 1 do
 			for i = 0, 2 do
 				local x = sx * (cw / 2 + 3.5 + i * 6.4)
-				window(model, cf * CFrame.new(x, 6.5 + f * 12, 3), 3.4, 6.4, trim, nil, f == 1, i + f)
+				window(model, cf * CFrame.new(x, 7 + f * 14, 3), 3.4, 6.4, trim, nil, f == 1, i + f)
 			end
 		end
 		-- drapeaux sur la façade
@@ -310,7 +310,7 @@ function TownBuildings.TownHall(parent: Instance, cf: CFrame): (Model, Screen)
 	end
 	TownKit.Ball(model, "SpireHeart", (tower * CFrame.new(0, 28, 0)).Position, 2.4, C.Pink, M.Neon, "deco")
 	-- GRAND ÉCRAN (au-dessus du portique, sous l'horloge)
-	local screenCF = cf * CFrame.new(0, 21.5, 2.2)
+	local screenCF = cf * CFrame.new(0, 24.5, 2.2)
 	part(model, "ScreenFrame", Vector3.new(30, 14.2, 1.2), screenCF * CFrame.new(0, 0, 0.3), Color3.fromRGB(40, 36, 52), M.Metal, "deco")
 	local screen = part(model, "Screen", Vector3.new(28.6, 12.8, 0.4), screenCF * CFrame.new(0, 0, -0.4), Color3.fromRGB(24, 20, 40), M.SmoothPlastic, "deco")
 	part(model, "ScreenGlow", Vector3.new(30.4, 0.3, 0.3), screenCF * CFrame.new(0, 7.2, -0.5), C.Pink, M.Neon, "deco")
@@ -377,6 +377,11 @@ function TownBuildings.RowHouse(parent: Instance, cf: CFrame, w: number, d: numb
 			pane.Reflectance = 0.15
 		end
 	end
+	-- fenêtres de l'arrière (côté parc) : un bandeau vitré par étage
+	for f = 1, floors - 1 do
+		local y = GROUND_H + (f - 1) * FLOOR_H + FLOOR_H / 2 + 0.4
+		part(model, "BackWindows", Vector3.new(w - 4, 3.8, 0.3), cf * CFrame.new(0, y, d + 0.1), Color3.fromRGB(150, 196, 226), M.Glass, "deco")
+	end
 	part(model, "Cornice", Vector3.new(w + 0.8, 0.9, d + 0.8), cf * CFrame.new(0, height + 0.45, d / 2), trim, M.Concrete, "decoS")
 	if hash(seed, 82) < 0.55 then
 		local roof = ROW_ROOFS[(seed + 1) % #ROW_ROOFS + 1]
@@ -400,7 +405,7 @@ function TownBuildings.Skyline(parent: Instance, center: Vector3, fromAngle: num
 		local t = (i - 0.5) / count
 		local a = fromAngle + (toAngle - fromAngle) * t + (hash(i, 41) - 0.5) * 0.04
 		local dist = distance + hash(i, 42) * 90
-		local h = 50 + hash(i, 43) * 130
+		local h = 40 + hash(i, 43) * 90
 		local w = 26 + hash(i, 44) * 30
 		local p = center + Vector3.new(math.sin(a) * dist, h / 2 - 6, math.cos(a) * dist)
 		local cf = CFrame.lookAt(p, Vector3.new(center.X, p.Y, center.Z))

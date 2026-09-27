@@ -127,16 +127,23 @@ end
 -- pastille LIVE, spectateurs, bulles de chat, cœurs
 local function feedLive(kit, screen, w, h)
 	local C = kit.C
+	-- écran vertical (bureau ultime) : la streameuse au centre, sans le chat
+	local tall = h > w * 1.1
 	local room = kit.Box(screen, 0, 0, w, h, WHITE, 0, 1)
 	kit.Gradient(room, rgb(120, 90, 200), rgb(60, 40, 110), 90)
 	kit.Box(screen, 0, h * 0.78, w, h * 0.22, rgb(90, 60, 150), 0, 2) -- bureau
 	-- guirlande lumineuse
-	for index = 0, 4 do
-		local bulb = kit.Circle(screen, w * (0.1 + index * 0.1), h * (0.14 + (index % 2) * 0.05), h * 0.06, h * 0.06, C.Butter, 0, 2)
+	local bulbs = tall and 3 or 5
+	for index = 0, bulbs - 1 do
+		local size = math.min(w, h) * 0.07
+		local bulb = kit.Circle(screen, w * (0.2 + index * (tall and 0.3 or 0.1)), h * (0.24 + (index % 2) * 0.04), size, size, C.Butter, 0, 2)
 		kit.Animate(bulb, "Pulse", 0.5, 1.5, index)
 	end
 	-- streameuse
 	local cx, cy, r = w * 0.34, h * 0.56, h * 0.48
+	if tall then
+		cx, cy, r = w * 0.5, h * 0.62, math.min(h * 0.36, w * 0.8)
+	end
 	kit.Blob(screen, cx, cy + r * 0.62, r * 1.1, r * 0.5, rgb(255, 140, 190), { Z = 3, Thickness = 1 }) -- sweat
 	kit.Blob(screen, cx, cy - r * 0.06, r * 0.98, r * 0.9, rgb(120, 70, 60), { Z = 3, Thickness = 1, Shade = false }) -- cheveux
 	local head = kit.Blob(screen, cx, cy + r * 0.04, r * 0.76, r * 0.72, SKIN, { Z = 4, Thickness = 1 })
@@ -151,21 +158,27 @@ local function feedLive(kit, screen, w, h)
 	kit.Box(sandwich, 0, r * 0.1, r * 0.44, r * 0.06, LIME, 0, 2)
 	kit.Part(sandwich, 0, r * 0.15, r * 0.44, r * 0.1, rgb(236, 190, 120), { Radius = 2, Z = 1, Thickness = 0.8 })
 	kit.Animate(sandwich, "Bob", h * 0.02, 2.6, 0.5)
-	-- LIVE + spectateurs
-	local live = kit.Part(screen, w * 0.04, h * 0.05, w * 0.22, h * 0.15, RED, { Radius = 3, Z = 7, Outline = false })
+	-- LIVE (+ spectateurs sur les écrans larges)
+	local liveW = tall and w * 0.62 or w * 0.22
+	local liveH = tall and w * 0.24 or h * 0.15
+	local live = kit.Part(screen, w * 0.05, h * 0.04, liveW, liveH, RED, { Radius = 3, Z = 7, Outline = false })
 	kit.Animate(live, "Pulse", 0.25, 1.6, 0)
-	kit.Text(live, "LIVE", w * 0.11, h * 0.075, math.max(4, h * 0.12), WHITE, 3)
-	kit.Text(screen, "👁 1.2K", w * 0.4, h * 0.12, math.max(4, h * 0.1), WHITE, 7)
-	-- bulles de chat
-	local chat = { MAGENTA, CYAN, C.Butter, LIME }
-	for index, color in ipairs(chat) do
-		local bubble = kit.Part(screen, w * 0.64, h * (0.1 + (index - 1) * 0.2), w * 0.32, h * 0.15, WHITE, { Radius = 3, Z = 6, Outline = false, T = 0.1 })
-		kit.Box(bubble, w * 0.03, h * 0.04, w * 0.07, h * 0.07, color, 0, 2)
-		kit.Box(bubble, w * 0.12, h * 0.05, w * 0.17, h * 0.04, rgb(170, 160, 200), 0, 2)
+	kit.Text(live, "LIVE", liveW / 2, liveH / 2, math.max(4, liveH * 0.8), WHITE, 3)
+	if not tall then
+		kit.Text(screen, "👁 1.2K", w * 0.44, h * 0.12, math.max(4, h * 0.1), WHITE, 7)
+		-- bulles de chat
+		local chat = { MAGENTA, CYAN, C.Butter, LIME }
+		for index, color in ipairs(chat) do
+			local bubble = kit.Part(screen, w * 0.64, h * (0.1 + (index - 1) * 0.2), w * 0.32, h * 0.15, WHITE, { Radius = 3, Z = 6, Outline = false, T = 0.1 })
+			kit.Box(bubble, w * 0.03, h * 0.04, w * 0.07, h * 0.07, color, 0, 2)
+			kit.Box(bubble, w * 0.12, h * 0.05, w * 0.17, h * 0.04, rgb(170, 160, 200), 0, 2)
+		end
 	end
 	-- cœurs qui montent
 	for index = 1, 2 do
-		local heartFrame = kit.Heart(screen, w * (0.54 + index * 0.02), h * (0.66 - index * 0.14), h * 0.14, C.Heart, 0, 8)
+		local hx = if tall then w * (0.7 + index * 0.08) else w * (0.54 + index * 0.02)
+		local size = math.min(h * 0.14, w * 0.3)
+		local heartFrame = kit.Heart(screen, math.min(hx, w - size / 2), h * (0.66 - index * 0.14), size, C.Heart, 0, 8)
 		kit.Animate(heartFrame, "Bob", h * 0.05, 1.8, index * 1.4)
 	end
 end
@@ -426,7 +439,7 @@ Art.SetupDeskUltra = function(body, kit, _item)
 		kit.Animate(cone, "Pulse", 0.4, 2, index)
 	end
 	chairBack(kit, body, 54, 56, MAGENTA, 8)
-	for index, pos in ipairs({ { 3, 6 }, { 97, 52 }, { 60, -2 } }) do
+	for index, pos in ipairs({ { 3, 6 }, { 97, 52 } }) do
 		local s = kit.Sparkle(body, pos[1], pos[2], 8, index == 2 and CYAN or C.Butter, 0, 9)
 		kit.Animate(s, "Breathe", 0.2, 1.4, index)
 	end
@@ -719,8 +732,11 @@ Art.SetupHiFiCD = function(body, kit, _item)
 	local disc = kit.Circle(cd, 0, 0, 22, 22, WHITE, 0, 1)
 	kit.Gradient(disc, rgb(200, 240, 255), rgb(255, 190, 240), 45)
 	kit.Stroke(disc, STEEL_DARK, 1, 0)
+	kit.Circle(cd, 0, 0, 13, 13, WHITE, 0.5, 2)
 	kit.Circle(cd, 0, 0, 6, 6, rgb(210, 214, 236), 0, 2)
-	kit.Box(cd, -1, -10, 2, 6, WHITE, 0.3, 3)
+	kit.Circle(cd, 0, 0, 2.6, 2.6, DARK, 0, 3)
+	kit.Box(cd, -1, -10, 2, 5, WHITE, 0.2, 3)
+	kit.Box(cd, 4, 3, 2, 5, rgb(255, 200, 240), 0.3, 3)
 	kit.Animate(cd, "Spin", 1, 0.5, 0)
 	return { Glow = C.Sky }
 end
@@ -974,7 +990,11 @@ Art.SetupLiveStudio = function(body, kit, _item)
 	local glow = kit.Circle(body, 17, 28, 36, 36, rgb(255, 250, 220), 0.6, 2)
 	kit.Animate(glow, "Pulse", 0.2, 1, 0)
 	local ring = kit.Circle(body, 17, 28, 28, 28, WHITE, 1, 3)
-	kit.Stroke(ring, rgb(255, 250, 230), 4.5, 0)
+	kit.Stroke(ring, rgb(255, 222, 140), 4.5, 0)
+	local rim = kit.Circle(body, 17, 28, 33, 33, WHITE, 1, 3)
+	kit.Stroke(rim, STEEL_DARK, 1.2, 0)
+	local inner = kit.Circle(body, 17, 28, 23, 23, WHITE, 1, 3)
+	kit.Stroke(inner, STEEL_DARK, 1, 0.3)
 	kit.Circle(body, 17, 28, 6, 6, DARK, 0, 3) -- téléphone au centre
 	-- petit bureau + écran du live
 	for _, x in ipairs({ 33, 70 }) do

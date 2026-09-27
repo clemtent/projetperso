@@ -71,7 +71,7 @@ local TAU = math.pi * 2
 
 -- Dimensions (studs)
 local LAWN_TOP = 0.4 -- dessus de la pelouse de la parcelle (TownMap : Lawn 0,4)
-local BED_W, BED_D, BED_H = 7, 4.2, 1.5
+local BED_W, BED_D, BED_H = 6.2, 3.6, 1.4
 local PLANK = 0.4
 local BED_GAP = 3.6
 local PATH_W = 3.4
@@ -826,9 +826,9 @@ function GardenBuilder._buildBed(self: Garden, folder: Instance, index: number, 
 	}
 	billboardFor(bed, hitbox)
 	if kind == "Ghost" then
-		bed.Title.Text = Locale.T("🔒 More beds: %s", plotsUpgradeName())
+		bed.Title.Text = "🔒 +1 🪴"
 		bed.Bar.Visible = false
-		bed.Timer.Text = "+1 🪴"
+		bed.Timer.Text = plotsUpgradeName()
 		bed.Billboard.StudsOffsetWorldSpace = Vector3.new(0, 2.6, 0)
 	elseif kind == "Locked" then
 		bed.Title.Text = "🔒 " .. Locale.T("Dopamine Garden")
@@ -1092,7 +1092,7 @@ function GardenBuilder._buildPlants(self: Garden, bed: any)
 	local plants = Instance.new("Model")
 	plants.Name = "Plants"
 	local lotus = bed.Flower == "Lotus"
-	local hero = makeFlower(bed.Flower, stage, { Scale = lotus and 1.25 or 1.15, Detail = true, Fx = true, Hero = true })
+	local hero = makeFlower(bed.Flower, stage, { Scale = lotus and 1.3 or 1.4, Detail = true, Fx = true, Hero = true })
 	hero.Name = "Hero"
 	hero:PivotTo(bed.HeroCF)
 	hero.Parent = plants
@@ -1100,10 +1100,17 @@ function GardenBuilder._buildPlants(self: Garden, bed: any)
 	bed.TopHeight = tonumber(hero:GetAttribute("TopHeight")) or 1
 	-- deux compagnes plus petites (tournées un peu différemment)
 	for _, side in ipairs({ -1, 1 }) do
-		local mate = makeFlower(bed.Flower, stage, { Scale = lotus and 0.7 or 0.82, Detail = false, Fx = false, Hero = not lotus })
+		local mate = makeFlower(bed.Flower, stage, { Scale = lotus and 0.75 or 1.0, Detail = false, Fx = false, Hero = not lotus })
 		mate.Name = "Mate"
-		mate:PivotTo(bed.CF * CFrame.new(side * BED_W * 0.3, SOIL_TOP, lotus and 0.2 or -0.35) * CFrame.Angles(0, side * rad(22), 0))
+		mate:PivotTo(bed.CF * CFrame.new(side * BED_W * 0.31, SOIL_TOP, lotus and 0.3 or -0.3) * CFrame.Angles(0, side * rad(22), 0))
 		mate.Parent = plants
+	end
+	-- feuillage bas entre les plantes (la terre ne paraît pas vide)
+	if not lotus and stage ~= "Seed" then
+		for k, spot in ipairs({ Vector3.new(-0.17, 0, 0.55), Vector3.new(0.17, 0, 0.6), Vector3.new(0, 0, -0.75) }) do
+			local size = Vector3.new(1.3, 0.55, 0.85) * (stage == "Sprout" and 0.6 or 1)
+			egg(plants, "Foliage", size, bed.CF * CFrame.new(spot.X * BED_W, SOIL_TOP + 0.1, spot.Z * BED_D * 0.5) * CFrame.Angles(0, k * 0.9, 0), k == 2 and LEAF or LEAF_DARK, M.Grass)
+		end
 	end
 	plants.Parent = bed.Model
 	bed.Plants = plants
