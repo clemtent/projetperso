@@ -1040,7 +1040,7 @@ function House3D.IsOpen(): boolean
 	return session ~= nil
 end
 
-function House3D.Close()
+local function closeSession()
 	local s = session
 	if not s then
 		return
@@ -1088,13 +1088,13 @@ function House3D.Close()
 	end
 end
 
-function House3D.Open(options: Options?): boolean
+local function openSession(options: Options?): boolean
 	if type(options) ~= "table" or type(options.Room) ~= "table" then
 		warn("[House3D] Open : pièce manquante")
 		return false
 	end
 	if session then
-		House3D.Close()
+		closeSession()
 	end
 	if session then
 		-- (rouverte par OnClose de la vue précédente)
@@ -1153,6 +1153,27 @@ function House3D.Open(options: Options?): boolean
 		return false
 	end
 	return true
+end
+
+-- Fermeture : ne lève jamais d'erreur (chaque étape est protégée)
+function House3D.Close()
+	local ok, err = pcall(closeSession)
+	if not ok then
+		warn("[House3D] Fermeture : " .. tostring(err))
+		session = nil
+	end
+end
+
+-- Ouverture : ne lève jamais d'erreur ; en cas d'échec, tout est remis
+-- comme avant (interfaces, caméra) et la fonction renvoie false
+function House3D.Open(options: Options?): boolean
+	local ok, result = pcall(openSession, options)
+	if not ok then
+		warn("[House3D] Ouverture : " .. tostring(result))
+		House3D.Close()
+		return false
+	end
+	return result == true
 end
 
 return House3D
