@@ -116,6 +116,7 @@ local gardens: { [number]: any } = {} -- 🌻 jardins de Dopamine 3D (GardenBuil
 local locLabels: { Instance } = {} -- panneaux de la ville à traduire (attribut "LocText")
 local LOC_EVERY = 2
 local deskWired = false
+local plazaFxWarned = false -- (v9.7) une seule alerte si TownPlazaFx.Step échoue
 
 ----------------------------------------------------------------------
 -- Utilitaires
@@ -850,6 +851,15 @@ local function step(dt: number)
 	clocks.Guide += dt
 	clocks.Loc += dt
 	TownAtmosphere.Step(dt)
+	-- v9.7 🎠 place centrale (TownPlazaFx : 30 Hz au plus, en pause au loin)
+	local plazaFx = optionalModule("TownPlazaFx")
+	if plazaFx and type(plazaFx.Step) == "function" then
+		local okFx, errFx = pcall(plazaFx.Step, dt)
+		if not okFx and not plazaFxWarned then
+			plazaFxWarned = true
+			warn("[Town] TownPlazaFx.Step : " .. tostring(errFx))
+		end
+	end
 	if clocks.Loc >= LOC_EVERY then
 		clocks.Loc = 0
 		pcall(localizeTown)
@@ -1130,6 +1140,14 @@ local function enter(options: any)
 				warn("[Town] ShopInteriors.Start : " .. tostring(errShops))
 			end
 		end
+		-- v9.7 🎠 place centrale animée (TownPlazaFx, PLAZA97) : manège, ballons, pigeons…
+		local plazaFx = optionalModule("TownPlazaFx")
+		if plazaFx and type(plazaFx.Start) == "function" then
+			local okFx, errFx = pcall(plazaFx.Start)
+			if not okFx then
+				warn("[Town] TownPlazaFx.Start : " .. tostring(errFx))
+			end
+		end
 		-- v9.7 🌳 nature : détails de près (arbres, lac, aire de jeux) côté client (NATURE97)
 		local greenery = optionalModule("TownGreenery")
 		if greenery and type(greenery.Start) == "function" then
@@ -1279,6 +1297,11 @@ local function teardown()
 	local shops = optionalModule("ShopInteriors")
 	if shops and type(shops.Stop) == "function" then
 		pcall(shops.Stop)
+	end
+	-- (v9.7) place centrale : pièces locales (manège, ballons, pigeons…) détruites
+	local plazaFx = optionalModule("TownPlazaFx")
+	if plazaFx and type(plazaFx.Stop) == "function" then
+		pcall(plazaFx.Stop)
 	end
 	-- v9.7 🌳 nature : détails de près détruits (NATURE97)
 	local greenery = optionalModule("TownGreenery")

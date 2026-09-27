@@ -370,7 +370,7 @@ function VehicleModels.Bus(opts: any?): Model
 	box(k, "WindshieldBase", -hw + rc, hw - rc, 3.2, 3.42, zF + 0.1, zF + 0.6, TRIM, M.Rubber)
 	-- girouette (panneau à LED) + bandeau au-dessus (sous le nez arrondi du toit)
 	local dest = box(k, "DestinationSign", -hw + rc + 0.1, hw - rc - 0.1, 6.9, 7.85, zF + 0.5, zF + 0.95, Color3.fromRGB(24, 22, 30), M.SmoothPlastic)
-	local destGui = sign(k, dest, Enum.NormalId.Front, 30, "🧠 DOPAMINE TOWN", LED, Color3.fromRGB(24, 22, 30), Enum.Font.Arcade, false, 0.3)
+	local destGui = sign(k, dest, Enum.NormalId.Front, 30, "DOPAMINE TOWN", LED, Color3.fromRGB(24, 22, 30), Enum.Font.Arcade, false, 0.3)
 	local destText = destGui:FindFirstChild("Text") :: TextLabel?
 	if destText then
 		destText.Position = UDim2.fromScale(0.2, 0.12)
