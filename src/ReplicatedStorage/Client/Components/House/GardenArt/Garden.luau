@@ -94,12 +94,13 @@ end
 Garden.Beehive = function(body, kit, _entry)
 	local C = kit.C
 	kit.Part(body, 26, 84, 48, 14, C.WoodDark, { Radius = 4, Z = 1 })
-	local straw = Color3.fromRGB(246, 200, 110)
+	local straw = Color3.fromRGB(255, 212, 96)
+	kit.Blob(body, 50, 56, 60, 60, straw, { Z = 2, Shine = true })
 	for index = 0, 3 do
-		local w = 56 - index * 10
-		kit.Part(body, 50 - w / 2, 70 - index * 13, w, 16, index % 2 == 0 and straw or kit.Darken(straw, 0.08), { Radius = 8, Z = 2 + index })
+		kit.Box(body, 24 + index * 2, 38 + index * 12, 52 - index * 4, 2.5, kit.Darken(straw, 0.25), 0.2, 3)
 	end
-	kit.Circle(body, 50, 74, 12, 10, C.Brown, 0, 8)
+	kit.Part(body, 42, 70, 16, 14, Color3.fromRGB(150, 96, 60), { Radius = 7, Z = 8 })
+	kit.Blob(body, 60, 82, 8, 12, C.Orange, { Z = 9, T = 0.1 }) -- goutte de miel
 	kit.Face(body, 50, 56, 18, { Eyes = "happy", Z = 9 })
 	kit.Blob(body, 58, 26, 6, 10, C.Gold, { Z = 9, Rotation = 30 })
 	for index, spot in ipairs({ { 18, 36 }, { 82, 44 } }) do

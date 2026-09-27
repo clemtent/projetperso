@@ -345,7 +345,7 @@ Art.Harp = function(body, kit, _item)
 	for index = 0, 6 do
 		local x = 32 + index * 6
 		local top = 24 + index * 2.4
-		local string = kit.Line(body, x, top, x, 86, 1.2, WHITE, 0.1, 1)
+		local string = kit.Line(body, x, top, x, 86, 1.4, Color3.fromRGB(255, 236, 190), 0, 1)
 		kit.Animate(string, "Drift", 0.6, 3, index)
 	end
 	for index, note in ipairs({ { 86, 24 }, { 12, 44 } }) do

@@ -72,6 +72,8 @@ local MAX_FAVS = 10
 local TAB_ICON_WIDTH = 44 -- onglet non choisi (icône seule) : cible tactile
 local LIST_INSET = 31 -- largeur du tiroir - largeur utile d'une liste (marges)
 local LOOK_ART_W = 200 -- (v9.1) largeur de maquette des aperçus de personnalisation
+-- (v9.1) les objets ajoutés à partir de celui-ci forment la pastille "🆕 Nouveautés"
+local NEW_FROM = (HouseCommon.ItemsById.ToyChest and HouseCommon.ItemsById.ToyChest.Order) or math.huge
 
 export type Handlers = {
 	Notify: (text: string, color: Color3?, title: string?) -> (),
@@ -2250,7 +2252,10 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 		local room = currentRoom(house)
 		for _, card in ipairs(itemCards) do
 			local visible
-			if category == "Favorites" then
+			if category == "New91" then
+				-- (v9.1) les nouveautés de la boutique
+				visible = (card.Item.Order or 0) >= NEW_FROM
+			elseif category == "Favorites" then
 				visible = room ~= nil and HouseCommon.IsFavorite(room, card.Item)
 			elseif category == "TablesSeats" then
 				-- (v9) tables vides et sièges qu'on range autour
@@ -2305,14 +2310,15 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 		end)
 	end
 	categoryPill("All", Locale.T("✨ All"), 0)
+	categoryPill("New91", Locale.T("🆕 New!"), 1)
 	-- Préférés de la pièce ouverte (cachée dans la vue de la maison)
-	categoryPill("Favorites", "", 1)
+	categoryPill("Favorites", "", 2)
 	local favoritesPill = categoryButtons.Favorites
 	favoritesPill.Visible = false
-	categoryPill("TablesSeats", Locale.T("🍽️ Tables & chairs"), 2)
-	categoryPill("Tabletop", Locale.T("🧁 On furniture"), 3)
+	categoryPill("TablesSeats", Locale.T("🍽️ Tables & chairs"), 3)
+	categoryPill("Tabletop", Locale.T("🧁 On furniture"), 4)
 	for index, entry in ipairs(HouseCommon.Config.Categories) do
-		categoryPill(entry.Id, entry.Icon .. " " .. HouseCommon.Name(entry), index + 3)
+		categoryPill(entry.Id, entry.Icon .. " " .. HouseCommon.Name(entry), index + 4)
 	end
 	paintCategories()
 	task.defer(refreshMoreHint)
