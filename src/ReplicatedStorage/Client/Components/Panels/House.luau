@@ -12,10 +12,16 @@
 	  - VUE PIÈCE : la pièce kawaii (House/HouseRoom) de la pièce choisie,
 	    bouton "⬅ Maison" + onglets des pièces dans le bandeau, type de la
 	    pièce (cliquable = changer de type), confort de la pièce ✨ ;
-	    mode édition (House/HouseEditor) : glisser, barre d'outils,
-	    annuler / rétablir, aimant 🧲, envoyer dans une autre pièce,
-	    dupliquer ; inventaire en bas (toucher un objet rangé = le poser ;
-	    ✨ = préféré de cette pièce).
+	    mode édition (House/HouseEditor) : glisser, barre d'outils
+	    "bonbons" (près de l'objet ; sur téléphone elle prend la place de
+	    l'inventaire), annuler / rétablir, aimant 🧲, envoyer dans une autre
+	    pièce, dupliquer, retourner, objets posés SUR les meubles, chaises
+	    rangées aux tables ; inventaire en bas (toucher un objet rangé = le
+	    poser ; ✨ = préféré de cette pièce) ;
+	  - "🧊 3D" : aperçu 3D de la pièce (House/House3D, chargé à la demande
+	    avec pcall : absent -> petit message "bientôt").
+	Les clics dans les cadres (barre, inventaire, tiroir, fenêtres de choix)
+	ne traversent jamais jusqu'à la pièce / la maison derrière.
 	Bandeau : immeuble et nombre de pièces, confort ❤️ + bonus "+X % de
 	Dopamine" (en direct pendant l'édition), boutons "↔ Ranger" /
 	"✏️ Modifier" et "🛍️ Boutique" (badge) : rien ne se chevauche sur
