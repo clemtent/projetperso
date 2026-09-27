@@ -23,6 +23,12 @@
 	                  bonbons, sucettes, bonbons gélifiés, vermicelles
 	      "Grid"    : synthwave (soleil rayé, deux chaînes de montagnes néon,
 	                  palmiers, grille qui défile)
+	      (v9.2) "Street"  : skatepark en ville (immeubles, mur tagué, rampe,
+	                  panier de basket, skateur qui passe)
+	      "Gamer"   : setup RGB (pixels, envahisseurs qui flottent,
+	                  manettes, écrans, bande LED arc-en-ciel)
+	      "Station" : station spatiale (planète qui tourne, lune, satellite,
+	                  astronaute, étoiles filantes, hublot)
 	  - fondu enchaîné quand le thème change ;
 	  - moins d'éléments si le joueur a coupé les effets (Settings.Effects).
 
@@ -2090,6 +2096,576 @@ Decors.Grid = function(frame, theme, reduced, random)
 			horizonGlow.BackgroundTransparency = 0.1 + 0.1 * pulse
 			for index, tree in ipairs(palms) do
 				tree.Rotation = math.sin(t * 0.8 + index) * 1.2
+			end
+		end,
+	}
+end
+
+----------------------------------------------------------------------
+-- (v9.2) Décors "cool" : Street (skatepark en ville), Gamer (setup RGB),
+-- Station (station spatiale)
+----------------------------------------------------------------------
+
+-- Petit bloc de pixels (envahisseur) : `rows` = chaînes de 0 / 1
+local function pixelSprite(parent: Instance, rows: { string }, pixel: number, color: Color3, z: number): Frame
+	local width = #rows[1] * pixel
+	local holder = box({
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Size = UDim2.fromOffset(width, #rows * pixel),
+		BackgroundTransparency = 1,
+		ZIndex = z,
+		Parent = parent,
+	})
+	for rowIndex, line in ipairs(rows) do
+		-- une Frame par suite de pixels allumés (moins de Frames)
+		local col = 1
+		while col <= #line do
+			if string.sub(line, col, col) == "1" then
+				local start = col
+				while col <= #line and string.sub(line, col, col) == "1" do
+					col += 1
+				end
+				box({
+					Position = UDim2.fromOffset((start - 1) * pixel, (rowIndex - 1) * pixel),
+					Size = UDim2.fromOffset((col - start) * pixel, pixel),
+					BackgroundColor3 = color,
+					ZIndex = z,
+					Parent = holder,
+				})
+			else
+				col += 1
+			end
+		end
+	end
+	return holder
+end
+
+-- Street : ciel de jour, immeubles, mur de briques tagué, rampe de skate,
+-- panier de basket, nuages qui passent, skateur qui traverse l'écran
+Decors.Street = function(frame, theme, reduced, random)
+	local floaters: { Floater } = {}
+	local twinkles: { Twinkle } = {}
+	local accent: Color3 = theme.Accent
+
+	-- Soleil + nuages
+	local far = plane(frame, 0.1, 1)
+	local sun = softGlow(far, 260, Color3.fromRGB(255, 240, 180), 0.35, 1)
+	sun.Position = UDim2.fromScale(0.82, 0.16)
+	circle({
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.82, 0.16),
+		Size = UDim2.fromOffset(86, 86),
+		BackgroundColor3 = Color3.fromRGB(255, 230, 130),
+		ZIndex = 2,
+		Parent = far,
+	})
+	for i = 1, reduced and 2 or 4 do
+		local c = cloud(far, random:NextInteger(160, 260), WHITE, 0.1, 2)
+		table.insert(floaters, newFloater(c, random, { X = random:NextNumber(0, 1), Y = random:NextNumber(0.08, 0.3), VX = random:NextNumber(0.004, 0.01) }))
+		local _ = i
+	end
+
+	-- Immeubles au loin (fenêtres)
+	local city = plane(frame, 0.22, 2)
+	local x = -0.02
+	local index = 0
+	while x < 1.04 do
+		index += 1
+		local w = random:NextNumber(0.06, 0.1)
+		local h = random:NextNumber(0.22, 0.42)
+		local building = box({
+			AnchorPoint = Vector2.new(0, 1),
+			Position = UDim2.fromScale(x, 0.7),
+			Size = UDim2.fromScale(w, h),
+			BackgroundColor3 = skyAt(theme, 0.4):Lerp(Color3.fromRGB(90, 110, 160), 0.45 + (index % 2) * 0.1),
+			ZIndex = 2,
+			Parent = city,
+		})
+		for row = 0, 5 do
+			for col = 0, 2 do
+				if random:NextNumber() < 0.55 then
+					box({
+						Position = UDim2.fromScale(0.14 + col * 0.28, 0.06 + row * 0.15),
+						Size = UDim2.fromScale(0.16, 0.07),
+						BackgroundColor3 = WHITE,
+						BackgroundTransparency = 0.55,
+						ZIndex = 2,
+						Parent = building,
+					})
+				end
+			end
+		end
+		x += w + 0.008
+	end
+
+	-- Mur de briques avec graffitis
+	local wallPlane = plane(frame, 0.4, 3)
+	local wall = box({
+		Name = "Wall",
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.fromScale(0, 0.86),
+		Size = UDim2.fromScale(1, 0.2),
+		BackgroundColor3 = Color3.fromRGB(196, 110, 90),
+		ClipsDescendants = true,
+		ZIndex = 3,
+		Parent = wallPlane,
+	})
+	for row = 0, 5 do
+		box({
+			Position = UDim2.fromScale(0, row / 6),
+			Size = UDim2.new(1, 0, 0, 2),
+			BackgroundColor3 = Color3.fromRGB(150, 80, 70),
+			ZIndex = 3,
+			Parent = wall,
+		})
+		for col = 0, 16 do
+			box({
+				Position = UDim2.fromScale(col / 16 + (row % 2) / 32, row / 6),
+				Size = UDim2.new(0, 2, 1 / 6, 0),
+				BackgroundColor3 = Color3.fromRGB(150, 80, 70),
+				ZIndex = 3,
+				Parent = wall,
+			})
+		end
+	end
+	local tags = { { "SKATE", 0.18, Color3.fromRGB(80, 200, 255) }, { "GG", 0.5, accent }, { "COOL!", 0.82, Color3.fromRGB(140, 240, 110) } }
+	for tagIndex, tag in ipairs(tags) do
+		if not reduced or tagIndex ~= 3 then
+			local splash = circle({
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(tag[2], 0.5),
+				Size = UDim2.fromOffset(210, 90),
+				BackgroundColor3 = WHITE,
+				BackgroundTransparency = 0.55,
+				ZIndex = 4,
+				Parent = wall,
+			})
+			local _ = splash
+			local label = Create("TextLabel", {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(tag[2], 0.5),
+				Size = UDim2.fromOffset(260, 90),
+				BackgroundTransparency = 1,
+				Font = Enum.Font.FredokaOne,
+				Text = tag[1],
+				TextSize = 58,
+				TextColor3 = tag[3],
+				TextStrokeColor3 = Color3.fromRGB(40, 36, 60),
+				TextStrokeTransparency = 0,
+				Rotation = -6 + tagIndex * 4,
+				ZIndex = 5,
+				Parent = wall,
+			})
+			twinkle(twinkles, label, "TextTransparency", 0, 0.12, random, 0.6, 1.2)
+		end
+	end
+	-- Trottoir
+	local ground = box({
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.fromScale(0, 1.02),
+		Size = UDim2.fromScale(1, 0.17),
+		BackgroundColor3 = WHITE,
+		ZIndex = 4,
+		Parent = wallPlane,
+	})
+	vgradient(ground, Color3.fromRGB(206, 210, 220), Color3.fromRGB(160, 166, 180))
+	for col = 0, 8 do
+		box({
+			Position = UDim2.fromScale(col / 8, 0),
+			Size = UDim2.new(0, 3, 1, 0),
+			BackgroundColor3 = Color3.fromRGB(140, 146, 160),
+			BackgroundTransparency = 0.4,
+			ZIndex = 4,
+			Parent = ground,
+		})
+	end
+
+	-- Premier plan : rampe de skate (gauche) + panier de basket (droite)
+	local near = plane(frame, 0.8, 6)
+	local ramp = box({
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.fromScale(-0.02, 1.02),
+		Size = UDim2.fromOffset(220, 130),
+		BackgroundColor3 = Color3.fromRGB(190, 140, 100),
+		ClipsDescendants = true,
+		ZIndex = 6,
+		Parent = near,
+	})
+	UIUtil.Corner(ramp, UDim.new(0, 6))
+	circle({
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(1, 20, 0, -10),
+		Size = UDim2.fromOffset(300, 260),
+		BackgroundColor3 = skyAt(theme, 0.9):Lerp(Color3.fromRGB(180, 190, 206), 0.6),
+		ZIndex = 6,
+		Parent = ramp,
+	})
+	box({
+		Position = UDim2.fromOffset(0, 0),
+		Size = UDim2.fromOffset(40, 8),
+		BackgroundColor3 = Color3.fromRGB(200, 206, 220),
+		ZIndex = 7,
+		Parent = ramp,
+	})
+	local pole = box({
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.fromScale(0.9, 1.02),
+		Size = UDim2.fromOffset(12, 250),
+		BackgroundColor3 = Color3.fromRGB(120, 126, 146),
+		ZIndex = 6,
+		Parent = near,
+	})
+	local board = box({
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(0.5, 16, 0, -10),
+		Size = UDim2.fromOffset(110, 70),
+		BackgroundColor3 = WHITE,
+		ZIndex = 7,
+		Parent = pole,
+	})
+	UIUtil.Corner(board, UDim.new(0, 6))
+	UIUtil.Stroke(board, Color3.fromRGB(60, 80, 150), 3, 0)
+	local rim = box({
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 1, -8),
+		Size = UDim2.fromOffset(52, 6),
+		BackgroundColor3 = Color3.fromRGB(255, 130, 50),
+		ZIndex = 8,
+		Parent = board,
+	})
+	UIUtil.Corner(rim, UDim.new(1, 0))
+	local ball = emoji("🏀", 34, { Position = UDim2.fromScale(0.86, 0.9), ZIndex = 8, Parent = near })
+
+	-- Skateur qui traverse le trottoir de temps en temps
+	local skater = emoji("🛹", 40, { Position = UDim2.fromScale(-0.2, 0.93), ZIndex = 7, Parent = near })
+
+	return {
+		Update = function(dt, t)
+			stepFloaters(floaters, dt, t)
+			stepTwinkles(twinkles, t)
+			-- ballon qui rebondit sous le panier
+			local bounce = math.abs(math.sin(t * 2.4))
+			ball.Position = UDim2.fromScale(0.86, 0.95 - bounce * 0.12)
+			local cycle = (t % 14) / 14
+			skater.Position = UDim2.fromScale(-0.15 + cycle * 1.4, 0.93 - math.abs(math.sin(t * 6)) * 0.005)
+			skater.Rotation = math.sin(t * 3) * 4
+		end,
+	}
+end
+
+-- Gamer : setup RGB dans le noir (grille de pixels, envahisseurs qui
+-- flottent, manettes, écrans et bande LED arc-en-ciel)
+Decors.Gamer = function(frame, theme, reduced, random)
+	local floaters: { Floater } = {}
+	local twinkles: { Twinkle } = {}
+	local accent: Color3 = theme.Accent
+	local magenta = Color3.fromRGB(255, 84, 196)
+
+	-- Plan lointain : halos néon + grille de pixels qui scintillent
+	local far = plane(frame, 0.08, 1)
+	for i, color in ipairs({ accent, magenta, Color3.fromRGB(140, 110, 255) }) do
+		local halo = softGlow(far, random:NextInteger(420, 560), color, 0.08, 1)
+		halo.Position = UDim2.fromScale(({ 0.15, 0.85, 0.5 })[i], ({ 0.25, 0.3, 0.7 })[i])
+	end
+	for _ = 1, reduced and 16 or 34 do
+		local size = random:NextInteger(4, 9)
+		local pixel = box({
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(random:NextNumber(0, 1), random:NextNumber(0, 0.75)),
+			Size = UDim2.fromOffset(size, size),
+			BackgroundColor3 = random:NextNumber() < 0.5 and accent or magenta,
+			ZIndex = 1,
+			Parent = far,
+		})
+		twinkle(twinkles, pixel, "BackgroundTransparency", 0.1, 0.95, random, 0.8, 2.5)
+	end
+
+	-- Envahisseurs en pixels qui flottent
+	local mid = plane(frame, 0.3, 3)
+	local invader = { "00100000100", "00010001000", "00111111100", "01101110110", "11111111111", "10111111101", "10100000101", "00011011000" }
+	local ghost = { "0011100", "0111110", "1101011", "1111111", "1111111", "1010101" }
+	local colors = { Color3.fromRGB(140, 240, 110), accent, magenta, Color3.fromRGB(255, 214, 80) }
+	for i = 1, reduced and 3 or 6 do
+		local sprite = pixelSprite(mid, i % 2 == 0 and ghost or invader, random:NextInteger(4, 6), colors[(i - 1) % #colors + 1], 3)
+		table.insert(floaters, newFloater(sprite, random, {
+			X = random:NextNumber(0, 1), Y = random:NextNumber(0.1, 0.7),
+			VX = random:NextNumber(-0.012, 0.012), VY = random:NextNumber(-0.006, 0.006), Amp = 0.01, Wobble = 6,
+		}))
+	end
+	for _ = 1, reduced and 2 or 4 do
+		local pad = emoji("🎮", random:NextInteger(26, 36), { TextTransparency = 0.2, ZIndex = 3, Parent = mid })
+		table.insert(floaters, newFloater(pad, random, { VY = -random:NextNumber(0.008, 0.016), Amp = 0.02, Wobble = 12 }))
+	end
+
+	-- Premier plan : deux écrans + bureau + bande LED arc-en-ciel
+	local near = plane(frame, 0.7, 5)
+	local screens = {}
+	for i, x in ipairs({ 0.1, 0.9 }) do
+		local monitor = box({
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.fromScale(x, 0.93),
+			Size = UDim2.fromOffset(190, 118),
+			BackgroundColor3 = Color3.fromRGB(20, 20, 34),
+			ZIndex = 5,
+			Parent = near,
+		})
+		UIUtil.Corner(monitor, UDim.new(0, 8))
+		UIUtil.Stroke(monitor, i == 1 and accent or magenta, 2, 0.2)
+		local screen = box({
+			Position = UDim2.fromOffset(8, 8),
+			Size = UDim2.new(1, -16, 1, -16),
+			BackgroundColor3 = WHITE,
+			ZIndex = 5,
+			Parent = monitor,
+		})
+		UIUtil.Corner(screen, UDim.new(0, 4))
+		vgradient(screen, i == 1 and Color3.fromRGB(40, 60, 140) or Color3.fromRGB(110, 30, 110), Color3.fromRGB(16, 16, 40))
+		-- barres d'égaliseur / de vie qui bougent
+		for bar = 0, 5 do
+			local b = box({
+				AnchorPoint = Vector2.new(0, 1),
+				Position = UDim2.fromScale(0.08 + bar * 0.15, 0.9),
+				Size = UDim2.fromScale(0.1, 0.4),
+				BackgroundColor3 = bar % 2 == 0 and accent or magenta,
+				ZIndex = 6,
+				Parent = screen,
+			})
+			table.insert(screens, { Frame = b, Phase = random:NextNumber(0, 6) })
+		end
+		box({
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, 0, 1, 0),
+			Size = UDim2.fromOffset(16, 20),
+			BackgroundColor3 = Color3.fromRGB(40, 40, 60),
+			ZIndex = 5,
+			Parent = monitor,
+		})
+	end
+	local desk = box({
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.fromScale(0, 1.03),
+		Size = UDim2.fromScale(1, 0.08),
+		BackgroundColor3 = Color3.fromRGB(24, 24, 40),
+		ZIndex = 6,
+		Parent = near,
+	})
+	local led = box({
+		Position = UDim2.fromOffset(0, 0),
+		Size = UDim2.new(1, 0, 0, 5),
+		BackgroundColor3 = WHITE,
+		ZIndex = 7,
+		Parent = desk,
+	})
+	local ledGradient = Create("UIGradient", {
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 80, 120)),
+			ColorSequenceKeypoint.new(0.2, Color3.fromRGB(255, 200, 80)),
+			ColorSequenceKeypoint.new(0.4, Color3.fromRGB(120, 240, 110)),
+			ColorSequenceKeypoint.new(0.6, Color3.fromRGB(60, 222, 255)),
+			ColorSequenceKeypoint.new(0.8, Color3.fromRGB(150, 110, 255)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 80, 120)),
+		}),
+		Parent = led,
+	})
+	local ledGlow = box({
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.fromOffset(0, 0),
+		Size = UDim2.new(1, 0, 0, 50),
+		BackgroundColor3 = accent,
+		ZIndex = 5,
+		Parent = desk,
+	})
+	Create("UIGradient", { Rotation = 90, Transparency = fadeSequence(1, 0.6), Parent = ledGlow })
+
+	return {
+		Update = function(dt, t)
+			stepFloaters(floaters, dt, t)
+			stepTwinkles(twinkles, t)
+			for _, s in ipairs(screens) do
+				s.Frame.Size = UDim2.fromScale(0.1, 0.2 + 0.6 * (0.5 + 0.5 * math.sin(t * 3 + s.Phase)))
+			end
+			-- l'arc-en-ciel défile ; la lueur change de couleur
+			ledGradient.Offset = Vector2.new(((t * 0.08) % 1) - 0.5, 0)
+			ledGlow.BackgroundColor3 = Color3.fromHSV((t * 0.06) % 1, 0.7, 1)
+		end,
+	}
+end
+
+-- Station spatiale : étoiles, grande planète, lune, satellite, astronaute
+-- qui flotte, étoiles filantes, hublot de la station sur les bords
+Decors.Station = function(frame, theme, reduced, random)
+	local floaters: { Floater } = {}
+	local twinkles: { Twinkle } = {}
+	local accent: Color3 = theme.Accent
+
+	local far = plane(frame, 0.06, 1)
+	for i, color in ipairs({ Color3.fromRGB(90, 70, 200), Color3.fromRGB(40, 150, 200) }) do
+		local nebula = softGlow(far, random:NextInteger(420, 560), color, 0.08, 1)
+		nebula.Position = UDim2.fromScale(({ 0.7, 0.25 })[i], ({ 0.25, 0.4 })[i])
+	end
+	for _ = 1, reduced and 22 or 50 do
+		local d = random:NextInteger(2, 4)
+		local star = circle({
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(random:NextNumber(0, 1), random:NextNumber(0, 1)),
+			Size = UDim2.fromOffset(d, d),
+			BackgroundColor3 = random:NextNumber() < 0.25 and accent or WHITE,
+			ZIndex = 1,
+			Parent = far,
+		})
+		twinkle(twinkles, star, "BackgroundTransparency", 0.05, 0.85, random, 1, 3)
+	end
+	for _ = 1, reduced and 1 or 3 do
+		local _, scale = crossStar(far, random:NextNumber(0.1, 0.9), random:NextNumber(0.05, 0.5), 18, WHITE, 2)
+		twinkle(twinkles, scale, "Scale", 0.4, 1.1, random, 0.8, 1.6)
+	end
+
+	-- Grande planète (océans + continents + atmosphère) en bas à gauche
+	local planetPlane = plane(frame, 0.15, 2)
+	local atmosphere = softGlow(planetPlane, 700, Color3.fromRGB(110, 200, 255), 0.18, 2)
+	atmosphere.Position = UDim2.fromScale(0.14, 1.05)
+	local planet = Create("CanvasGroup", {
+		Name = "Planet",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.14, 1.05),
+		Size = UDim2.fromOffset(560, 560),
+		BackgroundTransparency = 1,
+		ZIndex = 2,
+		Parent = planetPlane,
+	})
+	UIUtil.Corner(planet, UDim.new(1, 0))
+	local ocean = box({ Size = UDim2.fromScale(1, 1), BackgroundColor3 = WHITE, ZIndex = 1, Parent = planet })
+	vgradient(ocean, Color3.fromRGB(80, 170, 255), Color3.fromRGB(30, 70, 170))
+	local land = {}
+	for i, spec in ipairs({ { 0.3, 0.2, 0.32, 0.18 }, { 0.62, 0.36, 0.26, 0.22 }, { 0.4, 0.6, 0.3, 0.16 }, { 0.75, 0.12, 0.18, 0.1 } }) do
+		local continent = circle({
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(spec[1], spec[2]),
+			Size = UDim2.fromScale(spec[3], spec[4]),
+			BackgroundColor3 = Color3.fromRGB(110, 200, 120),
+			Rotation = i * 20,
+			ZIndex = 2,
+			Parent = planet,
+		})
+		table.insert(land, { Frame = continent, X = spec[1] })
+	end
+	local shadow = circle({
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.75, 0.65),
+		Size = UDim2.fromScale(1.2, 1.2),
+		BackgroundColor3 = Color3.fromRGB(4, 6, 24),
+		BackgroundTransparency = 0.45,
+		ZIndex = 3,
+		Parent = planet,
+	})
+	local _ = shadow
+	-- Lune
+	local moon = circle({
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.86, 0.2),
+		Size = UDim2.fromOffset(70, 70),
+		BackgroundColor3 = Color3.fromRGB(220, 222, 236),
+		ZIndex = 2,
+		Parent = planetPlane,
+	})
+	for _, crater in ipairs({ { 0.3, 0.35, 16 }, { 0.62, 0.6, 12 }, { 0.4, 0.72, 8 } }) do
+		circle({
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(crater[1], crater[2]),
+			Size = UDim2.fromOffset(crater[3], crater[3]),
+			BackgroundColor3 = Color3.fromRGB(180, 182, 200),
+			ZIndex = 2,
+			Parent = moon,
+		})
+	end
+
+	-- Satellite, astronaute et étoile filante
+	local mid = plane(frame, 0.35, 4)
+	local satellite = emoji("🛰️", 42, { ZIndex = 4, Parent = mid })
+	table.insert(floaters, newFloater(satellite, random, { X = 0.3, Y = 0.18, VX = 0.012, Amp = 0.01, Spin = 6, Wobble = 4 }))
+	local astronaut = box({
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Size = UDim2.fromOffset(60, 70),
+		BackgroundTransparency = 1,
+		ZIndex = 4,
+		Parent = mid,
+	})
+	local suit = box({ Position = UDim2.fromOffset(14, 30), Size = UDim2.fromOffset(32, 30), BackgroundColor3 = WHITE, ZIndex = 4, Parent = astronaut })
+	UIUtil.Corner(suit, UDim.new(0, 10))
+	local helmet = circle({ Position = UDim2.fromOffset(10, 0), Size = UDim2.fromOffset(40, 38), BackgroundColor3 = WHITE, ZIndex = 5, Parent = astronaut })
+	local visor = circle({ Position = UDim2.fromOffset(7, 8), Size = UDim2.fromOffset(26, 20), BackgroundColor3 = Color3.fromRGB(40, 60, 130), ZIndex = 6, Parent = helmet })
+	box({ Position = UDim2.fromOffset(5, 4), Size = UDim2.fromOffset(8, 4), BackgroundColor3 = WHITE, BackgroundTransparency = 0.4, ZIndex = 7, Parent = visor })
+	for _, x in ipairs({ 2, 46 }) do
+		local arm = box({ Position = UDim2.fromOffset(x, 34), Size = UDim2.fromOffset(12, 22), BackgroundColor3 = WHITE, ZIndex = 4, Parent = astronaut })
+		UIUtil.Corner(arm, UDim.new(0, 6))
+	end
+	for _, x in ipairs({ 16, 32 }) do
+		local leg = box({ Position = UDim2.fromOffset(x, 56), Size = UDim2.fromOffset(12, 14), BackgroundColor3 = Color3.fromRGB(220, 226, 240), ZIndex = 4, Parent = astronaut })
+		UIUtil.Corner(leg, UDim.new(0, 5))
+	end
+	table.insert(floaters, newFloater(astronaut, random, { X = 0.72, Y = 0.62, VX = -0.006, VY = -0.004, Amp = 0.02, Spin = -8, Wobble = 10 }))
+	local shooting = box({
+		AnchorPoint = Vector2.new(1, 0.5),
+		Size = UDim2.fromOffset(160, 3),
+		Rotation = 20,
+		BackgroundColor3 = WHITE,
+		ZIndex = 3,
+		Parent = mid,
+	})
+	Create("UIGradient", { Transparency = fadeSequence(1, 0), Parent = shooting })
+
+	-- Hublot de la station : cadre métal arrondi sur les bords de l'écran
+	local frameColor = Color3.fromRGB(40, 48, 80)
+	local porthole = box({
+		Name = "Porthole",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(1, -24, 1, -24),
+		BackgroundTransparency = 1,
+		ZIndex = 8,
+		Parent = frame,
+	})
+	UIUtil.Corner(porthole, UDim.new(0, 60))
+	UIUtil.Stroke(porthole, frameColor, 18, 0)
+	local rimLight = box({
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(1, -44, 1, -44),
+		BackgroundTransparency = 1,
+		ZIndex = 8,
+		Parent = frame,
+	})
+	UIUtil.Corner(rimLight, UDim.new(0, 50))
+	UIUtil.Stroke(rimLight, accent, 2, 0.5)
+	for _, pos in ipairs({ { 0.02, 0.5 }, { 0.98, 0.5 }, { 0.5, 0.015 }, { 0.5, 0.985 } }) do
+		local bolt = circle({
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(pos[1], pos[2]),
+			Size = UDim2.fromOffset(9, 9),
+			BackgroundColor3 = Color3.fromRGB(150, 160, 196),
+			ZIndex = 9,
+			Parent = frame,
+		})
+		local _ = bolt
+	end
+
+	return {
+		Update = function(dt, t)
+			stepFloaters(floaters, dt, t)
+			stepTwinkles(twinkles, t)
+			-- la planète tourne (continents qui glissent)
+			for _, entry in ipairs(land) do
+				local x = ((entry.X + t * 0.004) % 1.3) - 0.15
+				entry.Frame.Position = UDim2.fromScale(x, entry.Frame.Position.Y.Scale)
+			end
+			-- étoile filante toutes les ~9 s
+			local cycle = t % 9
+			if cycle < 1 then
+				shooting.Visible = true
+				shooting.Position = UDim2.fromScale(0.2 + cycle * 0.5, 0.1 + cycle * 0.18)
+				shooting.BackgroundTransparency = cycle
+			else
+				shooting.Visible = false
 			end
 		end,
 	}

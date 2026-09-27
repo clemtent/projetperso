@@ -48,6 +48,7 @@ local Formulas = require(ReplicatedStorage.Shared.Formulas)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local Locale = require(ReplicatedStorage.Shared.Locale)
 local HouseCommon = require(script.Parent:WaitForChild("House"):WaitForChild("HouseCommon"))
+local CosmeticArt = require(script.Parent.CosmeticArt) -- (v9.2) chapeaux dessinés, motifs de boutons
 
 local CenterColumn = {}
 
@@ -192,6 +193,7 @@ local function applySkin(skinId: string)
 		buttonGradient.Color = ColorSequence.new(Theme.Colors.Button, Theme.Colors.ButtonBottom)
 		clickLabel.TextColor3 = Theme.Colors.Text
 	end
+	CosmeticArt.ApplySkin(clickButton, skin, 12, 2) -- (v9.2) motif (nil = retiré)
 end
 
 local function applyHat(hatId: string)
@@ -201,7 +203,7 @@ local function applyHat(hatId: string)
 	currentHat = hatId
 	local hat = Config.CosmeticsById[hatId]
 	if hat then
-		hatLabel.Text = hat.Icon
+		CosmeticArt.ApplyHat(hatLabel, hat) -- (v9.2) dessin, sinon l'emoji
 		hatLabel.Visible = true
 		local scale = hatLabel:FindFirstChildOfClass("UIScale")
 		if scale then
@@ -209,6 +211,7 @@ local function applyHat(hatId: string)
 			UIUtil.Tween(scale, 0.45, { Scale = 1 }, Enum.EasingStyle.Back)
 		end
 	else
+		CosmeticArt.ApplyHat(hatLabel, nil)
 		hatLabel.Visible = false
 	end
 end

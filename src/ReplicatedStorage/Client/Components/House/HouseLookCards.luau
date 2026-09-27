@@ -157,6 +157,51 @@ local function miniHouse(frame: Frame, w: number, h: number, wall: Color3, roof:
 		for index, p in ipairs(spots) do
 			Circle(frame, p.X, p.Y, 13, 11, tones[index % #tones + 1], 0.1, 6)
 		end
+	elseif pattern == "Checkered" then
+		-- (v9.2) damier de course
+		for row = 0, 4 do
+			local y = roofTop + roofH * (0.2 + row * 0.14)
+			for col = -6, 6 do
+				local x = cx + col * 7
+				if (row + col) % 2 == 0 and inside(x, y + 3) and inside(x + 7, y + 3) then
+					Box(frame, x, y, 7, roofH * 0.14, Color3.fromRGB(40, 42, 56), 0, 6)
+				end
+			end
+		end
+	elseif pattern == "Bolts" then
+		-- (v9.2) éclairs (zigzags jaunes)
+		for index, p in ipairs(spots) do
+			if index % 2 == 1 then
+				local color = index % 3 == 0 and WHITE or C.Butter
+				local a = Box(frame, p.X - 1, p.Y - 7, 3, 8, color, 0, 6)
+				a.Rotation = 25
+				local b = Box(frame, p.X - 1, p.Y - 1, 3, 8, color, 0, 6)
+				b.Rotation = 25
+				Box(frame, p.X - 3, p.Y - 1, 6, 2, color, 0, 6)
+			end
+		end
+	elseif pattern == "Camo" then
+		-- (v9.2) taches de camouflage
+		local tones = { Color3.fromRGB(96, 120, 76), Color3.fromRGB(60, 76, 50), Color3.fromRGB(150, 160, 110) }
+		for index, p in ipairs(spots) do
+			local spot = Circle(frame, p.X, p.Y, 14, 8, tones[index % #tones + 1], 0, 6)
+			spot.Rotation = (index * 37) % 60 - 30
+		end
+	elseif pattern == "Flames" then
+		-- (v9.2) flammes qui montent du bas du toit
+		for index = -3, 3 do
+			local x = cx + index * 12
+			local tall = roofH * (0.55 + (index % 2) * 0.2)
+			while tall > 10 and not inside(x, roofTop + roofH - tall) do
+				tall -= 3
+			end
+			if tall > 10 and inside(x, roofTop + roofH - 8) then
+				Circle(frame, x, roofTop + roofH - 8, 12, 9, Color3.fromRGB(255, 120, 50), 0, 6)
+				local tip = Box(frame, x - 4, roofTop + roofH - tall, 8, tall - 4, Color3.fromRGB(255, 120, 50), 0, 7)
+				Round(tip, UDim.new(1, 0))
+				Circle(frame, x, roofTop + roofH - 8, 6, 5, C.Butter, 0, 8)
+			end
+		end
 	end
 end
 

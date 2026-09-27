@@ -919,7 +919,50 @@ def house_art_test():
         '\t\tcheck(Config.HouseItemsById[id] ~= nil, "dessin sans objet : " .. id .. " (" .. file .. ")")',
         "\tend",
         "end)",
-    ]) + "\n" + house_garden_art_test() + "\n" + house_surfaces_test() + "\n" + house_service_test()
+    ]) + "\n" + house_garden_art_test() + "\n" + house_surfaces_test() + "\n" + house_service_test() + "\n" + cool92_test()
+
+
+def cool92_test():
+    """(v9.2) Contenu "cool" des boutiques : objets de la maison (≥ 35, verrous
+    d'océan des objets chers), chapeaux / motifs de boutons dessinés par
+    Client/Components/CosmeticArt.luau, décors des thèmes (Background.luau)."""
+    comp = os.path.join(SRC, "ReplicatedStorage", "Client", "Components")
+    cosm = read(os.path.join(comp, "CosmeticArt.luau")) if os.path.exists(os.path.join(comp, "CosmeticArt.luau")) else ""
+    hats = sorted(set(re.findall(r"^HATS\.(\w+)\s*=\s*function", cosm, re.M)))
+    skins = sorted(set(re.findall(r"^SKINS\.(\w+)\s*=\s*function", cosm, re.M)))
+    decors = sorted(set(re.findall(r"^Decors\.(\w+)\s*=\s*function", read(os.path.join(comp, "Background.luau")), re.M)))
+    art_dir = os.path.join(comp, "House", "Art")
+    cool = []
+    for fname in sorted(os.listdir(art_dir)):
+        if fname.startswith("Cool92") and fname.endswith(".luau"):
+            cool += re.findall(r"^Art\.(\w+)\s*=\s*function", read(os.path.join(art_dir, fname)), re.M)
+    lua = lambda names: "{ " + ", ".join('["%s"] = true' % n for n in names) + " }"
+    return "\n".join([
+        'test("Boutiques v9.2 : contenu cool (%d objets, %d chapeaux, %d motifs, %d décors)", function(check)' % (len(cool), len(hats), len(skins), len(decors)),
+        "\tlocal cool, hats, skins, decors = %s, %s, %s, %s" % (lua(cool), lua(hats), lua(skins), lua(decors)),
+        "\tlocal count = 0",
+        "\tfor id in pairs(cool) do",
+        "\t\tlocal item = Config.HouseItemsById[id]",
+        '\t\tcheck(item ~= nil, "objet cool inconnu " .. id)',
+        "\t\tif item then",
+        "\t\t\tcount += 1",
+        '\t\t\tif item.Cost >= 3e6 then check(Formulas.GetHouseRequiredRebirths(item) >= 1, "objet cher sans visite à l\'océan : " .. id) end',
+        "\t\tend",
+        "\tend",
+        '\tcheck(count >= 35, "au moins 35 objets cool : " .. count)',
+        "\tfor _, c in ipairs(Config.Cosmetics) do",
+        '\t\tif c.Pattern ~= nil then check(skins[c.Pattern] == true, "motif de bouton sans dessin : " .. c.Id) end',
+        "\tend",
+        "\tfor id in pairs(hats) do",
+        '\t\tlocal c = Config.CosmeticsById[id]',
+        '\t\tcheck(c ~= nil and c.Slot == "Hat", "chapeau dessiné inconnu : " .. id)',
+        "\tend",
+        "\tfor _, theme in ipairs(Config.Themes) do",
+        '\t\tcheck(decors[theme.Decor] == true, "décor de thème inconnu : " .. tostring(theme.Id) .. " " .. tostring(theme.Decor))',
+        "\tend",
+        '\tfor _, id in ipairs({ "Street", "Gamer", "SpaceStation" }) do check(Config.ThemesById[id] ~= nil, "thème " .. id) end',
+        "end)",
+    ])
 
 
 def house_garden_art_test():

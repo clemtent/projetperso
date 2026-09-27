@@ -104,21 +104,27 @@ end
 -- Rampe de skate (quart de lune en bois, bord métal, skate posé)
 Garden.SkateRamp = function(body, kit, _entry)
 	local C = kit.C
-	local ramp = kit.Part(body, 6, 30, 88, 70, WOOD, { Radius = 0, Z = 1, Shine = true })
-	-- le creux de la rampe : grand disque couleur pelouse qui "croque" le bois
-	local clip = kit.Group(body, 6, 30, 88, 70, 2, true)
-	kit.Circle(clip, 10, 0, 150, 140, rgb(150, 214, 140), 0, 1)
-	local _ = ramp
-	kit.Part(body, 78, 26, 18, 6, STEEL, { Radius = 3, Z = 3 }) -- bord (coping)
-	for index = 0, 3 do
-		kit.Box(body, 84, 34 + index * 16, 10, 2, kit.Darken(WOOD, 0.25), 0, 3)
+	-- profil en quart de cercle (creux) : tranches horizontales de bois
+	local right, top, bottom, radius = 80, 30, 98, 70
+	local slices = 22
+	for index = 1, slices do
+		local k = index / slices
+		local width = radius * (1 - math.sqrt(math.max(0, 1 - k * k)))
+		local y = top + (bottom - top) * (index - 1) / slices
+		local slice = kit.Box(body, right - width - 2, y, width + 2, (bottom - top) / slices + 0.8, WOOD, 0, 1)
+		local _ = slice
 	end
-	-- skate posé en bas
-	local deck = kit.Part(body, 14, 88, 34, 5, RED, { Radius = 3, Z = 4 })
-	local _d = deck
-	kit.Circle(body, 20, 95, 5, 5, C.Butter, 0, 5)
-	kit.Circle(body, 42, 95, 5, 5, C.Butter, 0, 5)
-	kit.Sparkle(body, 60, 24, 10, C.Butter, 0, 5)
+	kit.Part(body, 80, 28, 16, 70, kit.Darken(WOOD, 0.1), { Radius = 2, Z = 2, Shine = true }) -- plateforme
+	for index = 0, 3 do
+		kit.Box(body, 82, 36 + index * 16, 12, 2, kit.Darken(WOOD, 0.3), 0, 3)
+	end
+	kit.Part(body, 74, 25, 24, 5, STEEL, { Radius = 2, Z = 3 }) -- bord (coping)
+	kit.Part(body, 8, 94, 76, 5, kit.Darken(WOOD, 0.15), { Radius = 2, Z = 2 }) -- base
+	-- skate posé en bas de la rampe
+	kit.Part(body, 16, 86, 30, 5, RED, { Radius = 3, Z = 4 })
+	kit.Circle(body, 21, 93, 5, 5, C.Butter, 0, 5)
+	kit.Circle(body, 41, 93, 5, 5, C.Butter, 0, 5)
+	kit.Sparkle(body, 56, 30, 10, C.Butter, 0, 5)
 	return nil
 end
 

@@ -31,6 +31,8 @@
 	      vignette carrée de `size` px (dessin, ou emoji si pas de dessin)
 	  HouseArt.PaintGarden(body, entry, static?) : (v9.1) déco du jardin
 	      (dossier GardenArt, Config.House.GardenDecor)
+	  HouseArt.NewKit(static?) -> (kit, anims) : (v9.2) la boîte à outils seule
+	      (chapeaux et boutons dessinés : Components > CosmeticArt)
 	  HouseArt.Step(anims, clock) : fait vivre les animations
 	  HouseArt.Mirror(root, anims) : retourne le dessin gauche <-> droite
 	      (les animaux qui se promènent regardent où ils vont) ; le refaire

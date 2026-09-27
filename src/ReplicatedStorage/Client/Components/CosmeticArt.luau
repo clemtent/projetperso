@@ -25,7 +25,7 @@
 ]]
 
 local Components = script.Parent
-local HouseArt = require(Components.House.HouseArt)
+local HouseArt = require(Components:WaitForChild("House"):WaitForChild("HouseArt"))
 
 local CosmeticArt = {}
 
@@ -85,14 +85,15 @@ end
 -- Casque gamer (arceau, oreillettes RGB, micro)
 HATS.GamerHeadset = function(body, kit)
 	local clip = kit.Group(body, 8, 20, 84, 50, 1, true)
-	kit.Part(clip, 4, 4, 76, 90, DARK, { Radius = -1, T = 1, Outline = DARK, Thickness = 9, Shade = false })
-	local pad = kit.Part(body, 30, 20, 40, 12, rgb(60, 66, 110), { Radius = 6, Z = 2, Shine = true })
+	-- arceau clair (lisible sur les boutons sombres) + coussinet
+	kit.Part(clip, 4, 4, 76, 90, WHITE, { Radius = -1, T = 1, Outline = rgb(230, 236, 250), Thickness = 9, Shade = false })
+	local pad = kit.Part(body, 30, 20, 40, 12, MAGENTA, { Radius = 6, Z = 2, Shine = true })
 	kit.Box(pad, 8, 4, 24, 3, CYAN, 0.1, 2)
 	for index, side in ipairs({ -1, 1 }) do
 		local cx = 50 + side * 38
 		local color = index == 1 and CYAN or MAGENTA
 		kit.Blob(body, cx, 70, 30, 38, color, { Z = 2, Outline = false, Shade = false, T = 0.55 })
-		local cup = kit.Blob(body, cx, 70, 24, 32, DARK, { Z = 3, Shine = true })
+		local cup = kit.Blob(body, cx, 70, 24, 32, rgb(236, 240, 250), { Z = 3, Shine = true })
 		kit.Blob(cup, 12, 16, 14, 20, DARKER, { Z = 2, Outline = color, Thickness = 2.5, Shade = false })
 	end
 	kit.Line(body, 16, 80, 34, 92, 3, DARK, 0, 4)
@@ -135,19 +136,22 @@ end
 -- Casque de viking (dôme gris, bandeau doré à rivets, cornes)
 HATS.VikingHelmet = function(body, kit)
 	local horn = rgb(250, 240, 214)
+	local hornDark = rgb(226, 206, 170)
 	for _, side in ipairs({ -1, 1 }) do
-		local base = kit.Blob(body, 50 + side * 36, 58, 18, 20, horn, { Z = 1 })
-		local _ = base
-		kit.Blob(body, 50 + side * 42, 44, 14, 20, horn, { Z = 1, Rotation = side * 20 })
-		kit.Blob(body, 50 + side * 44, 30, 10, 16, horn, { Z = 1, Rotation = side * 30 })
-		kit.Circle(body, 50 + side * 44, 23, 6, 6, horn, 0, 1)
+		-- corne qui s'affine en remontant vers l'extérieur
+		kit.Blob(body, 50 + side * 34, 62, 22, 18, horn, { Z = 1, Rotation = side * 20 })
+		kit.Blob(body, 50 + side * 42, 48, 16, 20, horn, { Z = 1, Rotation = side * 25 })
+		kit.Blob(body, 50 + side * 45, 35, 11, 16, horn, { Z = 1, Rotation = side * 15 })
+		kit.Triangle(body, 50 + side * 45, 18, 10, 14, horn, 1)
+		kit.Box(body, 50 + side * 36 - 6, 56, 12, 3, hornDark, 0.2, 2)
 	end
-	local dome = kit.Part(body, 18, 34, 64, 56, STEEL, { Radius = 30, Z = 2, Shine = true })
-	kit.Box(dome, 29, 4, 6, 50, GOLD, 0, 2)
-	local band = kit.Part(body, 14, 76, 72, 14, GOLD, { Radius = 5, Z = 3, Shine = true })
+	local dome = kit.Part(body, 14, 30, 72, 60, STEEL, { Radius = 32, Z = 2, Shine = true })
+	kit.Box(dome, 33, 4, 6, 54, GOLD, 0, 2)
+	local band = kit.Part(body, 10, 76, 80, 14, GOLD, { Radius = 5, Z = 3, Shine = true })
 	for index = 0, 5 do
-		kit.Circle(band, 7 + index * 11.5, 7, 4, 4, rgb(200, 150, 50), 0, 2)
+		kit.Circle(band, 8 + index * 12.8, 7, 4, 4, rgb(200, 150, 50), 0, 2)
 	end
+	kit.Part(body, 45, 76, 10, 20, STEEL, { Radius = 3, Z = 4 }) -- nasal
 end
 
 -- Capuche de dino (verte, piques orange, dents, yeux)
@@ -221,7 +225,7 @@ function CosmeticArt.ApplyHat(label: GuiObject, cosmetic: any?): boolean
 	body.Size = UDim2.fromOffset(100, 100)
 	body.ZIndex = label.ZIndex
 	local scale = Instance.new("UIScale")
-	scale.Scale = size / 100
+	scale.Scale = size / 100 * 1.2 -- (un peu plus grand qu'un emoji : les dessins ont des marges)
 	scale.Parent = body
 	local kit = HouseArt.NewKit(true)
 	local ok, err = pcall(painter, body, kit)

@@ -2038,6 +2038,433 @@ R.ToyBlocks = function(b, _ctx)
 end
 
 ----------------------------------------------------------------------
+-- (v9.2) Objets "cool" : coin gamer, sport, véhicules, espace, musique
+-- (couleurs passées par b.Map : la couleur choisie pour l'objet s'applique)
+----------------------------------------------------------------------
+
+local NAVY = rgb(52, 60, 100)
+local CARBON = rgb(40, 42, 58)
+local NEON_CYAN = rgb(60, 222, 255)
+local NEON_PINK = rgb(255, 84, 196)
+local RACE_RED = rgb(236, 66, 76)
+local CHROME = rgb(214, 222, 236)
+
+-- Roue (axe avant-arrière : on voit le pneu de profil depuis la caméra)
+local function wheel3D(b: Builder, x: number, y: number, z: number, d: number, width: number, rim: Color3?)
+	b.CylZ(x, y, z, d, width, INK, M.Rubber)
+	b.CylZ(x, y, z, d * 0.6, width + 0.6, rim or GREY, M.Metal)
+end
+
+R.GamingDesk = function(b, ctx)
+	local top = ctx.TopY(1, 65)
+	local x0, x1 = ctx.Span(1, -47, 47)
+	local w, depth = x1 - x0, 56
+	local legs = b.Map(RACE_RED)
+	for _, side in ipairs({ -1, 1 }) do
+		b.Box(side * (w / 2 - 8), 0, 0, 10, top - 6, 10, legs, M.Metal)
+		b.Box(side * (w / 2 - 8), 0, 0, 14, 4, depth - 6, CARBON, M.Metal)
+	end
+	b.Box(0, top * 0.55, -depth / 2 + 8, w - 20, 8, 12, CARBON, M.Metal) -- range-câbles
+	b.Box(0, top - 6, 0, w, 6, depth, CARBON, M.SmoothPlastic)
+	local led = b.Box(0, top - 5, depth / 2 + 0.3, w - 6, 2, 0.6, NEON_CYAN)
+	b.Neon(led)
+	b.Light(led, NEON_CYAN, 10, 0.6)
+	b.Top(1, (x0 + x1) / 2, top, 0, w, depth)
+	b.Footprint(w, depth, top)
+end
+R.BrickTable = function(b, ctx)
+	local top = ctx.TopY(1, 63)
+	local x0, x1 = ctx.Span(1, -47, 47)
+	local w, depth = x1 - x0, 54
+	local colors = { RACE_RED, BUTTER, rgb(80, 150, 255), rgb(255, 152, 56) }
+	for sideIndex, side in ipairs({ -1, 1 }) do
+		for level = 0, 2 do
+			local color = colors[(level + sideIndex) % #colors + 1]
+			local y = level * ((top - 8) / 3)
+			b.Box(side * (w / 2 - 9), y, 0, 14, (top - 8) / 3, 40, color, M.SmoothPlastic)
+			b.Cyl(side * (w / 2 - 9), y + (top - 8) / 3, -8, 5, 1.5, color, M.SmoothPlastic)
+			b.Cyl(side * (w / 2 - 9), y + (top - 8) / 3, 8, 5, 1.5, color, M.SmoothPlastic)
+		end
+	end
+	local plate = b.Map(rgb(96, 196, 110))
+	b.Box(0, top - 8, 0, w, 8, depth, plate, M.SmoothPlastic)
+	for index = 0, 9 do
+		b.CylZ(-w / 2 + 6 + index * (w - 12) / 9, top - 4, depth / 2 + 0.5, 4, 1.2, lighten(plate, 0.2), M.SmoothPlastic)
+	end
+	b.Top(1, (x0 + x1) / 2, top, 0, w, depth)
+	b.Footprint(w, depth, top)
+end
+R.GamerChair = function(b, ctx)
+	local seat = ctx.TopY(1, 39)
+	local main = b.Map(RACE_RED)
+	for index = 0, 4 do
+		local angle = index / 5 * math.pi * 2
+		b.BoxR(CFrame.new(math.cos(angle) * 12, 2, math.sin(angle) * 12) * CFrame.Angles(0, -angle, 0), 26, 3, 4, CARBON, M.Metal)
+		b.Ball(math.cos(angle) * 24, 2, math.sin(angle) * 24, 4, INK, M.Rubber)
+	end
+	b.Cyl(0, 3, 0, 6, seat - 10, GREY, M.Metal)
+	b.Box(0, seat - 8, 0, 54, 8, 50, CARBON, M.Leather)
+	b.Box(0, seat - 7, 0, 22, 8.4, 46, main, M.Leather)
+	b.Box(0, seat - 8, -22, 52, 64, 8, CARBON, M.Leather)
+	b.Box(0, seat + 4, -17.6, 22, 50, 1, main, M.Leather)
+	b.Box(0, seat + 4, -17.2, 4, 50, 1, WHITE, M.Leather)
+	for _, side in ipairs({ -1, 1 }) do
+		b.Box(side * 22, seat + 6, -20, 8, 44, 12, main, M.Leather) -- ailes du baquet
+		b.Box(side * 27, seat, 2, 4, 14, 30, CARBON, M.Leather)
+	end
+	b.Box(0, seat + 46, -16, 22, 10, 6, CARBON, M.Fabric) -- coussin de tête
+	b.Top(1, 0, seat, 4, 44, 36)
+	b.Footprint(56, 56, seat + 64)
+end
+R.GamerBeanbag = function(b, _ctx)
+	local color = b.Map(rgb(76, 72, 112))
+	b.Ball(0, 22, 0, 90, color, M.Fabric)
+	b.Ball(0, 42, -20, 64, lighten(color, 0.08), M.Fabric)
+	b.Box(0, 0, 0, 84, 4, 80, darken(color, 0.1), M.Fabric)
+	local seam = b.Box(0, 30, 44.5, 60, 2, 0.8, NEON_CYAN)
+	b.Neon(seam)
+	b.Top(1, 0, 58, 8, 50, 40)
+	b.Footprint(90, 90, 70)
+end
+R.LockerCabinet = function(b, ctx)
+	local top = ctx.TopY(1, 91)
+	local blue = b.Map(rgb(80, 130, 220))
+	local w, depth = 86, 40
+	b.Box(0, 0, 0, w, 6, depth, darken(blue, 0.35), M.Metal)
+	b.Box(0, 6, 0, w, top - 6, depth, blue, M.Metal)
+	for index = 0, 1 do
+		local x = -w / 4 + index * w / 2
+		b.Box(x, 9, depth / 2, w / 2 - 4, top - 14, 1, lighten(blue, 0.08), M.Metal)
+		for vent = 0, 3 do
+			b.Box(x, top - 16 - vent * 5, depth / 2 + 0.6, w / 2 - 16, 2, 0.4, darken(blue, 0.3), M.Metal)
+		end
+		b.Box(x + (index == 0 and 14 or -14), top * 0.5, depth / 2 + 1, 3, 12, 2, GREY, M.Metal)
+	end
+	b.Top(1, 0, top, 0, w - 8, depth - 6)
+	b.Footprint(w, depth, top)
+end
+R.BunkBed = function(b, ctx)
+	local upper = ctx.TopY(1, 73)
+	local lower = ctx.TopY(2, 29)
+	local frame = b.Map(rgb(96, 120, 190))
+	local width, depth = 96, 60
+	for _, sx in ipairs({ -1, 1 }) do
+		for _, sz in ipairs({ -1, 1 }) do
+			b.Box(sx * (width / 2 - 3), 0, sz * (depth / 2 - 3), 6, 96, 6, frame, M.Wood)
+		end
+	end
+	for index, top in ipairs({ upper, lower }) do
+		b.Box(0, top - 16, 0, width - 4, 6, depth - 4, darken(frame, 0.2), M.Wood)
+		b.Box(0, top - 10, 0, width - 10, 10, depth - 10, WHITE, M.Fabric)
+		local blanket = index == 1 and NAVY or RACE_RED
+		b.Box(width * 0.12, top - 9, 0, width * 0.62, 10.5, depth - 8, blanket, M.Fabric)
+		b.BoxR(CFrame.new(-width / 2 + 16, top + 2, 0) * CFrame.Angles(0, 0, -0.3), 18, 7, depth - 22, lighten(frame, 0.5), M.Fabric)
+		b.Top(index, 0, top, 0, width - 24, depth - 12)
+	end
+	b.Box(-width / 4, upper + 2, depth / 2 - 3, width / 2, 6, 3, frame, M.Wood) -- garde-corps
+	-- échelle
+	for _, x in ipairs({ width / 2 - 20, width / 2 - 6 }) do
+		b.Box(x, 0, depth / 2 + 3, 3, upper, 3, WOOD_LIGHT, M.Wood)
+	end
+	for index = 1, 4 do
+		b.Box(width / 2 - 13, index * upper / 5, depth / 2 + 3, 16, 3, 3, WOOD_LIGHT, M.Wood)
+	end
+	b.Footprint(width, depth, 96)
+end
+R.RaceCarBed = function(b, ctx)
+	local top = ctx.TopY(1, 59)
+	local red = b.Map(RACE_RED)
+	local width, depth = 100, 60
+	b.Box(0, 8, 0, width - 10, top - 18, depth, red, M.SmoothPlastic)
+	b.Wedge(width / 2 - 4, 8, 0, 14, top - 26, depth, red, "Right", M.SmoothPlastic) -- nez
+	b.Box(-width / 2 + 6, 8, 0, 10, top + 6, depth, darken(red, 0.1), M.SmoothPlastic)
+	b.Box(-width / 2 + 2, top + 12, 0, 16, 4, depth + 6, CARBON, M.SmoothPlastic) -- aileron
+	b.Box(0, top - 10, 0, width * 0.6, 10, depth - 8, WHITE, M.Fabric) -- matelas
+	b.Box(width * 0.08, top - 9, 0, width * 0.34, 10.5, depth - 6, CARBON, M.Fabric)
+	b.Box(0, top * 0.45, depth / 2 + 0.3, width - 14, 3, 0.6, WHITE)
+	for _, x in ipairs({ -30, 30 }) do
+		for _, z in ipairs({ -depth / 2 - 2, depth / 2 + 2 }) do
+			wheel3D(b, x, 12, z, 24, 8, CHROME)
+		end
+	end
+	local lamp = b.Ball(width / 2 - 8, top - 26, depth / 2 - 8, 8, BUTTER)
+	b.Neon(lamp)
+	b.Top(1, -6, top, 0, 52, depth - 12)
+	b.Footprint(width, depth + 12, top + 16)
+end
+R.NeonArcade = function(b, _ctx)
+	local body = b.Map(rgb(30, 32, 46))
+	b.Box(0, 0, 0, 64, 100, 50, body, M.SmoothPlastic)
+	for index, x in ipairs({ -32.4, 32.4 }) do
+		local strip = b.Box(x, 6, 0, 0.8, 90, 46, index == 1 and NEON_CYAN or NEON_PINK)
+		b.Neon(strip)
+	end
+	b.Box(0, 44, 26, 64, 8, 14, NAVY)
+	for index = 1, 4 do
+		knob(b, -18 + index * 8, 52, 28, 5, ({ NEON_CYAN, NEON_PINK, rgb(140, 240, 110), BUTTER })[index])
+	end
+	b.Box(-22, 52, 28, 3, 8, 3, RACE_RED)
+	screen(b, 0, 58, 25.4, 50, 30, rgb(20, 30, 70))
+	b.Art(0, 60, 26, 30, 22, 2.6)
+	local marquee = b.Box(0, 90, 25.4, 58, 8, 1, NEON_PINK)
+	b.Neon(marquee)
+	b.Light(marquee, NEON_PINK, 12, 0.8)
+	b.Footprint(64, 64, 100)
+end
+R.GamerPC = function(b, _ctx)
+	-- écran + clavier + tour vitrée à LED
+	b.Box(-16, 0, 0, 20, 4, 14, CARBON)
+	b.Box(-16, 4, -4, 5, 14, 5, GREY_DARK, M.Metal)
+	b.Box(-16, 16, -4, 64, 40, 4, CARBON)
+	screen(b, -16, 19, -1.8, 58, 34, rgb(120, 170, 255))
+	b.Box(-16, 0, 18, 58, 3, 14, CARBON)
+	local keys = b.Box(-16, 3, 18, 52, 0.6, 10, NEON_PINK)
+	b.Neon(keys)
+	b.Box(32, 0, 0, 22, 62, 42, CARBON)
+	local glass = b.Box(32, 6, 21.2, 16, 50, 0.6, NEON_CYAN)
+	b.Neon(glass)
+	glass.Transparency = 0.3
+	b.Light(glass, NEON_CYAN, 10, 0.7)
+	b.Footprint(90, 44, 62)
+end
+R.RacingRig = function(b, _ctx)
+	b.Box(0, 0, 0, 96, 6, 44, CARBON, M.Metal)
+	-- siège baquet
+	local red = b.Map(RACE_RED)
+	b.Box(-24, 6, 0, 36, 14, 40, CARBON, M.Leather)
+	b.BoxR(CFrame.new(-38, 36, 0) * CFrame.Angles(0, 0, 0.25), 10, 56, 40, CARBON, M.Leather)
+	b.BoxR(CFrame.new(-37, 36, 0) * CFrame.Angles(0, 0, 0.25), 11, 40, 12, red, M.Leather)
+	-- colonne + volant + pédalier
+	b.Box(22, 6, 0, 6, 44, 6, GREY, M.Metal)
+	b.BoxR(CFrame.new(16, 50, 0) * CFrame.Angles(0, 0, 0.35), 4, 24, 24, INK, M.Rubber)
+	b.Box(40, 6, 0, 16, 6, 24, GREY_DARK, M.Metal)
+	-- écran
+	b.Box(32, 6, -14, 4, 60, 4, GREY, M.Metal)
+	b.Box(32, 60, -14, 40, 26, 3, CARBON)
+	screen(b, 32, 62, -12.3, 36, 22, rgb(110, 170, 255))
+	b.Footprint(96, 44, 86)
+end
+R.BasketHoop = function(b, _ctx)
+	b.Box(-10, 0, 0, 40, 12, 36, CARBON, M.SmoothPlastic)
+	b.Cyl(-10, 12, 0, 7, 76, GREY, M.Metal)
+	b.BoxR(CFrame.new(4, 88, 0) * CFrame.Angles(0, 0, -0.5), 30, 4, 4, GREY, M.Metal)
+	b.Box(22, 80, -2, 4, 30, 44, WHITE)
+	b.Box(24.4, 86, -2, 0.4, 12, 16, RACE_RED)
+	-- cercle orange (8 petits segments) + ballon
+	for index = 0, 7 do
+		local angle = index / 8 * math.pi * 2
+		b.Box(36 + math.cos(angle) * 10, 80, math.sin(angle) * 10, 5, 2, 5, rgb(255, 130, 50), M.Metal)
+	end
+	local net = b.Cyl(36, 68, 0, 16, 12, WHITE, M.Fabric)
+	net.Transparency = 0.5
+	b.Ball(34, 10, 26, 18, rgb(250, 140, 60), M.Rubber)
+	b.Footprint(70, 50, 110)
+end
+R.FootballGoal = function(b, _ctx)
+	for _, x in ipairs({ -44, 44 }) do
+		b.Box(x, 0, 12, 5, 80, 5, WHITE, M.Metal)
+		b.BoxR(CFrame.new(x, 40, -4) * CFrame.Angles(-0.4, 0, 0), 3, 82, 3, WHITE, M.Metal)
+	end
+	b.Box(0, 78, 12, 93, 5, 5, WHITE, M.Metal)
+	local net = b.BoxR(CFrame.new(0, 40, -6) * CFrame.Angles(-0.4, 0, 0), 88, 84, 0.6, WHITE, M.Fabric)
+	net.Transparency = 0.6
+	net.CastShadow = false
+	b.Ball(10, 9, 22, 18, WHITE, M.SmoothPlastic)
+	b.Footprint(98, 40, 82)
+end
+R.BoxingBag = function(b, _ctx)
+	b.Box(-38, 0, 0, 20, 5, 30, CARBON, M.Metal)
+	b.Box(-38, 5, 0, 7, 92, 7, CARBON, M.Metal)
+	b.Box(-10, 92, 0, 62, 6, 6, CARBON, M.Metal)
+	b.Box(18, 72, 0, 1.5, 20, 1.5, GREY, M.Metal)
+	b.Cyl(18, 20, 0, 30, 52, b.Map(RACE_RED), M.Leather)
+	b.Cyl(18, 34, 0, 30.6, 4, INK, M.Leather)
+	b.Cyl(18, 58, 0, 30.6, 4, INK, M.Leather)
+	b.Footprint(80, 34, 98)
+end
+R.GuitarAmp = function(b, _ctx)
+	b.Box(0, 0, 0, 84, 76, 40, CARBON, M.Leather)
+	b.Box(0, 62, 20.3, 78, 10, 0.8, GOLD, M.Metal)
+	for index = 0, 4 do
+		knob(b, -26 + index * 12, 67, 21.2, 5, INK)
+	end
+	b.Box(0, 6, 20.3, 76, 52, 0.8, rgb(70, 64, 80), M.Fabric)
+	b.CylZ(0, 32, 20.8, 36, 0.6, INK, M.Fabric)
+	b.Box(0, 76, 0, 34, 4, 8, INK, M.Leather)
+	b.Footprint(84, 40, 80)
+end
+R.DrumKit = function(b, _ctx)
+	local shell = b.Map(rgb(80, 110, 230))
+	b.CylZ(0, 26, 0, 50, 32, shell, M.SmoothPlastic)
+	b.CylZ(0, 26, 16.2, 44, 0.6, rgb(244, 246, 255), M.SmoothPlastic)
+	for index, x in ipairs({ -14, 14 }) do
+		b.Cyl(x, 52, -6, 20, 14, shell, M.SmoothPlastic)
+		local _ = index
+	end
+	b.Cyl(-40, 0, 6, 3, 44, GREY, M.Metal)
+	b.Cyl(-40, 44, 6, 26, 10, CHROME, M.Metal) -- caisse claire
+	b.Cyl(40, 0, 6, 28, 38, shell, M.SmoothPlastic) -- tom basse
+	for _, spec in ipairs({ { -46, 70, -10 }, { 46, 78, -10 } }) do
+		b.Cyl(spec[1], 0, spec[3], 2.5, spec[2], GREY, M.Metal)
+		b.Cyl(spec[1], spec[2], spec[3], 30, 1, GOLD, M.Metal)
+	end
+	b.Footprint(100, 60, 80)
+end
+R.DJBooth = function(b, _ctx)
+	b.Box(0, 0, 0, 96, 64, 44, CARBON, M.SmoothPlastic)
+	local front = b.Box(0, 6, 22.3, 88, 48, 0.8, rgb(20, 20, 34))
+	local _ = front
+	for index = 0, 9 do
+		local bar = b.Box(-38 + index * 8.4, 10, 22.8, 5, 10 + (index * 7) % 5 * 7, 0.5, index % 2 == 0 and NEON_CYAN or NEON_PINK)
+		b.Neon(bar)
+	end
+	for _, x in ipairs({ -28, 28 }) do
+		b.Cyl(x, 64, 2, 30, 3, INK, M.SmoothPlastic)
+		b.Cyl(x, 67, 2, 8, 0.6, NEON_PINK, M.SmoothPlastic)
+	end
+	b.Box(0, 64, 2, 18, 4, 22, rgb(60, 62, 84))
+	b.Light(front, NEON_PINK, 12, 0.7)
+	b.Footprint(96, 44, 70)
+end
+R.SharkTank = function(b, _ctx)
+	b.Box(0, 0, 0, 96, 26, 46, CARBON, M.SmoothPlastic)
+	local glass = b.Box(0, 26, 0, 94, 66, 44, GLASS, M.Glass)
+	glass.Transparency = 0.55
+	glass.CastShadow = false
+	local water = b.Box(0, 28, 0, 90, 56, 40, rgb(60, 140, 220), M.Glass)
+	water.Transparency = 0.45
+	water.CastShadow = false
+	b.Box(0, 26, 0, 90, 4, 40, rgb(240, 220, 180), M.Sand)
+	for index, spec in ipairs({ { -18, 56, -6 }, { 18, 42, 8 } }) do
+		local shark = b.BoxR(CFrame.new(spec[1], spec[2], spec[3]) * CFrame.Angles(0, index * 0.4, 0), 26, 10, 10, rgb(130, 150, 190), M.SmoothPlastic)
+		shark.CastShadow = false
+		b.Wedge(spec[1], spec[2] + 5, spec[3], 6, 8, 3, rgb(130, 150, 190), "Front")
+	end
+	b.Box(0, 92, 0, 98, 4, 48, CARBON, M.SmoothPlastic)
+	b.Light(water, rgb(120, 200, 255), 12, 0.7)
+	b.Footprint(98, 48, 96)
+end
+R.RocketModel = function(b, _ctx)
+	b.Box(0, 0, 0, 80, 6, 50, GREY, M.Metal)
+	b.Box(28, 6, -8, 8, 80, 8, b.Map(RACE_RED), M.Metal)
+	b.Cyl(-6, 16, 0, 24, 54, WHITE, M.SmoothPlastic)
+	b.Ball(-6, 70, 0, 24, RACE_RED, M.SmoothPlastic)
+	b.Cyl(-6, 40, 0, 24.6, 4, RACE_RED, M.SmoothPlastic)
+	local window = b.CylZ(-6, 52, 12.2, 9, 1, NEON_CYAN)
+	b.Neon(window)
+	for index = 0, 2 do
+		local angle = index / 3 * math.pi * 2
+		b.BoxR(CFrame.new(-6 + math.cos(angle) * 14, 20, math.sin(angle) * 14) * CFrame.Angles(0, -angle, 0), 10, 16, 2, RACE_RED)
+	end
+	local flame = b.Ball(-6, 10, 0, 14, rgb(255, 170, 60))
+	b.Neon(flame)
+	b.Footprint(80, 50, 82)
+end
+R.Observatory = function(b, _ctx)
+	b.Cyl(0, 0, 0, 40, 8, CARBON, M.Metal)
+	b.Cyl(0, 8, 0, 12, 40, GREY, M.Metal)
+	b.Ball(0, 48, 0, 18, CARBON, M.Metal)
+	b.BoxR(CFrame.new(0, 58, 0) * CFrame.Angles(0, 0, 0.5), 84, 20, 20, WHITE, M.SmoothPlastic)
+	b.BoxR(CFrame.new(33, 78, 0) * CFrame.Angles(0, 0, 0.5), 18, 24, 24, CARBON, M.SmoothPlastic)
+	b.BoxR(CFrame.new(-4, 72, 0) * CFrame.Angles(0, 0, 0.5), 30, 5, 5, GREY, M.Metal)
+	b.Footprint(80, 40, 92)
+end
+R.MechRobot = function(b, _ctx)
+	local white = b.Map(rgb(240, 244, 252))
+	local blue = rgb(80, 150, 255)
+	for _, x in ipairs({ -14, 14 }) do
+		b.Box(x, 0, 0, 20, 10, 28, blue, M.SmoothPlastic)
+		b.Box(x, 10, 0, 14, 26, 14, GREY, M.Metal)
+	end
+	b.Box(0, 36, 0, 50, 36, 30, white, M.SmoothPlastic)
+	local core = b.Ball(0, 56, 15, 12, NEON_CYAN)
+	b.Neon(core)
+	b.Light(core, NEON_CYAN, 10, 0.8)
+	for _, side in ipairs({ -1, 1 }) do
+		b.Ball(side * 30, 66, 0, 18, blue, M.SmoothPlastic)
+		b.Box(side * 32, 34, 0, 12, 30, 12, white, M.SmoothPlastic)
+		b.Ball(side * 32, 30, 0, 14, blue, M.SmoothPlastic)
+	end
+	b.Box(0, 72, 0, 30, 22, 24, white, M.SmoothPlastic)
+	local visor = b.Box(0, 80, 12.3, 24, 7, 0.6, NEON_CYAN)
+	b.Neon(visor)
+	b.Cyl(0, 94, 0, 2, 8, GREY, M.Metal)
+	local tip = b.Ball(0, 103, 0, 5, RACE_RED)
+	b.Neon(tip)
+	b.Footprint(76, 30, 104)
+end
+R.AstronautStatue = function(b, _ctx)
+	b.Cyl(0, 0, 0, 80, 10, rgb(200, 196, 220), M.Slate)
+	for _, x in ipairs({ -8, 8 }) do
+		b.Box(x, 10, 0, 12, 18, 14, WHITE, M.Fabric)
+	end
+	b.Box(0, 28, -8, 36, 32, 10, GREY, M.Metal) -- sac à dos
+	b.Box(0, 28, 0, 30, 32, 20, WHITE, M.Fabric)
+	b.Box(0, 40, 10.2, 12, 8, 0.6, NAVY)
+	b.BoxR(CFrame.new(-20, 44, 0) * CFrame.Angles(0, 0, 0.3), 10, 24, 10, WHITE, M.Fabric)
+	b.BoxR(CFrame.new(20, 64, 0) * CFrame.Angles(0, 0, -0.3), 10, 24, 10, WHITE, M.Fabric)
+	b.Ball(0, 72, 0, 30, WHITE, M.SmoothPlastic)
+	local visor = b.Ball(0, 72, 5, 22, rgb(40, 60, 130), M.Glass)
+	visor.Reflectance = 0.2
+	b.Cyl(36, 10, 10, 2, 60, GREY, M.Metal)
+	b.Box(44, 58, 10, 16, 10, 0.6, rgb(80, 150, 255))
+	b.Footprint(80, 40, 88)
+end
+R.PirateChest = function(b, _ctx)
+	local wood = b.Map(rgb(170, 110, 70))
+	b.Box(0, 0, 0, 84, 40, 50, wood, M.Wood)
+	for _, x in ipairs({ -30, 30 }) do
+		b.Box(x, 0, 0, 7, 40.4, 50.4, GOLD, M.Metal)
+	end
+	b.BoxR(CFrame.new(0, 58, -28) * CFrame.Angles(-1.1, 0, 0), 84, 30, 8, wood, M.Wood)
+	for index = 0, 8 do
+		b.Ball(-30 + (index % 5) * 15, 40 + (index > 4 and 5 or 0), -6 + (index % 3) * 8, 12, GOLD, M.Metal)
+	end
+	b.Ball(-10, 48, 4, 8, RACE_RED, M.Glass)
+	b.Ball(12, 48, 0, 8, NEON_CYAN, M.Glass)
+	b.Box(0, 22, 25.3, 14, 14, 1.2, GOLD, M.Metal)
+	b.Footprint(84, 50, 60)
+end
+R.Motorbike = function(b, _ctx)
+	for _, x in ipairs({ -34, 34 }) do
+		wheel3D(b, x, 18, 0, 36, 8, CHROME)
+	end
+	local red = b.Map(RACE_RED)
+	b.Box(-4, 28, 0, 34, 20, 14, CHROME, M.Metal) -- moteur
+	b.Box(6, 46, 0, 32, 14, 18, red, M.SmoothPlastic) -- réservoir
+	b.Box(-22, 50, 0, 28, 6, 16, INK, M.Leather) -- selle
+	b.BoxR(CFrame.new(30, 40, 0) * CFrame.Angles(0, 0, -0.45), 5, 50, 5, CHROME, M.Metal)
+	b.Box(22, 64, 0, 4, 4, 34, INK, M.Metal)
+	local lamp = b.CylX(36, 56, 0, 10, 4, BUTTER)
+	b.Neon(lamp)
+	b.BoxR(CFrame.new(-30, 22, 8) * CFrame.Angles(0, 0, 0.15), 40, 5, 5, CHROME, M.Metal) -- échappement
+	b.Footprint(100, 24, 70)
+end
+R.DinoSkeleton = function(b, _ctx)
+	b.Box(0, 0, 0, 96, 8, 36, CARBON, M.Marble)
+	local bone = rgb(246, 238, 220)
+	local spine = { { -46, 36 }, { -30, 44 }, { -14, 48 }, { 2, 50 }, { 16, 54 }, { 26, 64 }, { 30, 74 } }
+	for index, p in ipairs(spine) do
+		b.Ball(p[1], p[2], 0, 7, bone, M.Marble)
+		local next = spine[index + 1]
+		if next then
+			local dx, dy = next[1] - p[1], next[2] - p[2]
+			b.BoxR(CFrame.new((p[1] + next[1]) / 2, (p[2] + next[2]) / 2, 0) * CFrame.Angles(0, 0, math.atan2(dy, dx)), math.sqrt(dx * dx + dy * dy), 3, 3, bone, M.Marble)
+		end
+	end
+	for index = 0, 3 do
+		b.Box(-8 + index * 6, 30, 0, 2, 18 - index * 2, 16, bone, M.Marble)
+	end
+	for _, x in ipairs({ -10, 10 }) do
+		b.Box(x, 8, 0, 4, 42, 4, bone, M.Marble)
+	end
+	b.Box(36, 70, 0, 26, 14, 14, bone, M.Marble)
+	b.Box(38, 64, 0, 22, 5, 12, bone, M.Marble)
+	b.Box(0, 4, 18.3, 20, 5, 0.6, GOLD, M.Metal)
+	b.Footprint(96, 36, 86)
+end
+
+----------------------------------------------------------------------
 -- Familles par défaut (objets sans recette dédiée)
 ----------------------------------------------------------------------
 
@@ -2049,6 +2476,8 @@ local AGAINST_WALL: { [string]: boolean } = {
 	HomeCinema = true, TVStand = true, KitchenIsland = false, Shower = true, ToriiGate = true, ArcadeMachine = true,
 	SlotMachine = true, Speaker = true, VanityTable = true, Aquarium = true, Stove = true, Toilet = true,
 	KitchenSink = true, Jukebox = true, PinballMachine = false, LadderShelf = true,
+	-- v9.2
+	LockerCabinet = true, NeonArcade = true, SharkTank = true, GuitarAmp = true,
 }
 
 function House3DRecipes.Has(itemId: string): boolean
