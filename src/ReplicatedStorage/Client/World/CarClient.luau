@@ -867,16 +867,16 @@ end
 -- Garages des manoirs
 ----------------------------------------------------------------------
 
-local function ownerOf(model: Instance): number
+local function ownerOf(model: Instance): (number, Instance?)
 	local node: Instance? = model
 	while node do
 		local id = node:GetAttribute("OwnerId")
 		if type(id) == "number" then
-			return id
+			return id, node
 		end
 		node = node.Parent
 	end
-	return 0
+	return 0, nil
 end
 
 local function parseCars(text: any): { { Id: string, Color: string } }
@@ -947,16 +947,19 @@ local function registerGarage(model: Instance)
 			table.insert(doors, { Panel = panel, Parts = list, Closed = closed, Open = typeof(open) == "CFrame" and open or closed, T = 0, Target = 0 })
 		end
 	end
-	local cars = model:FindFirstChild("Cars")
+	-- voitures garées : HORS de l'extérieur de la maison (budget de pièces de
+	-- la façade), dans la maison ("GarageCars"), vidé quand le garage disparaît
+	local ownerId, house = ownerOf(model)
+	local cars = house and house:FindFirstChild("GarageCars") or nil
 	if not cars then
 		cars = Instance.new("Folder")
-		cars.Name = "Cars"
-		cars.Parent = model
+		cars.Name = "GarageCars"
+		cars.Parent = house or model
 	end
 	local lamp = model:FindFirstChild("CeilingLamp", true)
 	local g: Garage = {
 		Model = model,
-		OwnerId = ownerOf(model),
+		OwnerId = ownerId,
 		HouseCF = houseCF,
 		Doors = doors,
 		Cars = cars :: Instance,
@@ -968,7 +971,11 @@ local function registerGarage(model: Instance)
 end
 
 local function unregisterGarage(model: Instance)
+	local g = garages[model :: Model]
 	garages[model :: Model] = nil
+	if g then
+		g.Cars:ClearAllChildren()
+	end
 end
 
 -- Portes : cibles (10 Hz) puis animation (chaque image)
@@ -976,7 +983,7 @@ local function garageTargets()
 	local carsFolder = workspace:FindFirstChild("DopamineCars")
 	for model, g in pairs(garages) do
 		if not model.Parent then
-			garages[model] = nil
+			unregisterGarage(model)
 			continue
 		end
 		refreshGarage(g)

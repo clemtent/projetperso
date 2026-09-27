@@ -53,7 +53,7 @@ local SURFACES: { [string]: { { number } } } = {
 	DrawerCabinet = { { 8, 94, 24 } },
 	StudyDesk = { { 4, 96, 48 } },
 	-- (v9.6) bibliothèque : le dessus + ses 3 rayons (devant les livres)
-	Bookshelf = { { 8, 92, 9 }, { 12, 88, 38, 0.3, 22 }, { 12, 88, 64, 0.3, 20 }, { 12, 88, 90, 0.3, 20 } },
+	Bookshelf = { { 8, 92, 9 }, { 12, 88, 38, 0.3, 23 }, { 12, 88, 64, 0.3, 21 }, { 12, 88, 90, 0.3, 21 } },
 	VanityTable = { { 4, 96, 55 } },
 	Wardrobe = { { 6, 94, 11 } },
 	Fireplace = { { 2, 98, 14 } },
@@ -344,10 +344,12 @@ function HouseSurfaces.Of(entry: Placed, roomW: number, roomH: number): { Surfac
 	return result
 end
 
--- (v9.6) Un objet de hauteur `height` (fraction de la hauteur de la pièce)
--- tient-il sur ce dessus ? (rayon fermé : pas beaucoup plus haut que la
--- place libre ; le dessin d'un objet ne remplit pas toute sa boîte)
-local GAP_SLACK = 1.75
+-- (v9.6) Un objet de hauteur `height` (fraction de la hauteur de la pièce,
+-- = sa boîte) tient-il sur ce dessus ? Rayon fermé : le dessin (2D) / le
+-- modèle (3D) remplit ~75 % de sa boîte -> boîte <= place libre x 1,3.
+-- MÊME règle en 2D (éditeur) et en 3D (FurnitureEdit) : un objet trop haut
+-- ne "voit" pas ce rayon (il va sur un autre niveau qui lui convient).
+local GAP_SLACK = 1.3
 function HouseSurfaces.Fits(surface: Surface, height: number): boolean
 	local gap = surface.Gap
 	return gap == nil or height <= gap * GAP_SLACK

@@ -451,7 +451,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			roofColor = WHITE:Lerp(paint, 0.08)
 		end
 		box(b, "Roof", -wc / 2 + 0.15, wc / 2 - 0.15, gTop, s.Roof, s.R0 - 0.08, s.R1 + 0.08, roofColor, M.SmoothPlastic, true)
-		for _, sx in ipairs({ -1, 1 }) do
+		for _, sx in ipairs(if full then { -1, 1 } else {}) do
 			cylZ(b, "RoofEdge", sx * (wc / 2 - 0.15), gTop + roofT / 2, (s.R0 + s.R1) / 2, s.R1 - s.R0 + 0.16, roofT + 0.02, roofColor, M.SmoothPlastic)
 		end
 		-- montants : A (le long du pare-brise), B, C
@@ -463,7 +463,9 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			else
 				box(b, "PillarC", x - 0.06, x + 0.06, s.Belt, gTop, s.R1 - 0.45, s.R1 + 0.02, paint, M.SmoothPlastic)
 			end
-			if style ~= "Van" then
+			if not full then
+				-- (version garée : pas de montant B)
+			elseif style ~= "Van" then
 				local bz = if s.Doors == 4 then s.R0 + (s.R1 - s.R0) * 0.46 else s.R0 + (s.R1 - s.R0) * 0.62
 				box(b, "PillarB", x - 0.06, x + 0.06, s.Belt, gTop, bz - 0.18, bz + 0.18, TRIM, M.SmoothPlastic)
 				if style == "Limo" then
@@ -485,7 +487,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 	end
 
 	-- ░ ligne de ceinture chromée ░
-	for _, sx in ipairs({ -1, 1 }) do
+	for _, sx in ipairs(if full then { -1, 1 } else {}) do
 		box(b, "BeltTrim", sx * (s.W / 2 - 0.02), sx * (s.W / 2 + 0.04), s.Belt - 0.12, s.Belt - 0.02, s.Ws, if style == "Pickup" then s.Rw else s.Rw + 0.2, CHROME, M.Metal)
 	end
 
@@ -535,11 +537,14 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			box(b, "GrilleBar", -s.W * 0.21, s.W * 0.21, grilleY + k * lowH * 0.08 - 0.03, grilleY + k * lowH * 0.08 + 0.03, zF - 0.07, zF + 0.1, CHROME, M.Metal)
 		end
 	end
-	local badge = cylZ(b, "Badge", 0, grilleY, zF - 0.08, 0.08, 0.34, Color3.fromRGB(255, 120, 170), M.Metal)
-	badge.Color = if style == "Limo" or style == "Sports" then CHROME else Color3.fromRGB(255, 120, 170)
+	if full then
+		cylZ(b, "Badge", 0, grilleY, zF - 0.08, 0.08, 0.34, if style == "Limo" or style == "Sports" then CHROME else Color3.fromRGB(255, 120, 170), M.Metal)
+	end
 
 	-- ░ plaques ░
-	plate(b, "PlateFront", zF - 0.06, s.Clear + 0.17, -1, full, nil)
+	if full then
+		plate(b, "PlateFront", zF - 0.06, s.Clear + 0.17, -1, full, nil)
+	end
 	plate(b, "PlateRear", zB + 0.06, s.Clear + lowH * 0.55, 1, full, options.Plate)
 
 	-- ░ détails (joints de portes, poignées, échappement, intérieur) ░

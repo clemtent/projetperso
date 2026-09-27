@@ -290,7 +290,7 @@ local function bus(folder: Instance, cf: CFrame)
 			;(w :: Part).Shape = Enum.PartType.Cylinder
 		end
 	end
-	part(model, "Door", Vector3.new(0.2, 5.4, 3.4), cf * CFrame.new(3.72, 3.8, -9.5), C.GlassDark, M.Glass, "deco")
+	part(model, "Door", Vector3.new(0.2, 5.4, 3.4), cf * CFrame.new(3.72, 3.85, -9.5), C.GlassDark, M.Glass, "deco")
 end
 
 local function busStop(folder: Instance, cf: CFrame)

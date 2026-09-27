@@ -1324,10 +1324,7 @@ local function garageWing(ctx: Ctx)
 	if light then
 		light.Enabled = false
 	end
-	-- voitures garées (CarClient) + grille qui reprend à droite
-	local cars = Instance.new("Folder")
-	cars.Name = "Cars"
-	cars.Parent = model
+	-- grille qui reprend à droite (les voitures garées : CarClient, dossier "GarageCars" de la maison)
 	fenceRun(ctx, X1, ctx.Right + WorldLayout.WALL_T + 7, -21)
 	CollectionService:AddTag(model, "DopamineGarage")
 end

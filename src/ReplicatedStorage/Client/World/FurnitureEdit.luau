@@ -782,6 +782,51 @@ function FurnitureEdit.SurfaceTarget(self: any, held: Held, model: Model, hit: V
 	}
 end
 
+-- (v9.6) Le rayon passe juste au-dessus d'un dessus (plan horizontal de
+-- chaque dessus, avec une petite marge) : (meuble, point sur le dessus)
+local TOP_MARGIN = 0.35
+function FurnitureEdit.NearTop(_self: any, held: Held, ray: Ray, models: { Instance }): (Model?, Vector3?)
+	local room = held.House.Rooms[held.Slot]
+	local list = room and room.Data and room.Data.Placed
+	local S = surfaces()
+	if not list or not S then
+		return nil, nil
+	end
+	local bestModel, bestPoint, bestT = nil, nil, math.huge
+	for _, instance in ipairs(models) do
+		local model = instance :: Model
+		local index = tonumber(model:GetAttribute("EntryIndex"))
+		local entry = index and list[index]
+		local item = entry and HouseCommon.ItemsById[entry.I]
+		local raw = entry and S.Raw(entry.I)
+		if entry and item and raw and entry ~= held.Entry then
+			local pivot = model:GetPivot()
+			local _, _, fd = footprint(model)
+			local k = unitK(item, tonumber(entry.S) or 1)
+			for level = 1, #raw do
+				local top = topLocal(model, level, entry, item)
+				if top then
+					local world = pivot * top
+					local dy = ray.Direction.Y
+					if math.abs(dy) > 1e-4 then
+						local t = (world.Y - ray.Origin.Y) / dy
+						if t > 0 and t < bestT then
+							local p = ray.Origin + ray.Direction * t
+							local rel = pivot:PointToObjectSpace(p)
+							local s = raw[level]
+							local halfW = ((tonumber(s[2]) or 90) - (tonumber(s[1]) or 10)) * k / 2
+							if math.abs(rel.X - top.X) <= halfW + TOP_MARGIN and math.abs(rel.Z - top.Z) <= fd * 0.5 + TOP_MARGIN then
+								bestModel, bestPoint, bestT = model, p + Vector3.new(0, 0.01, 0), t
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+	return bestModel, bestPoint
+end
+
 -- Chaque image (seulement en main) : le meuble suit le pointeur
 function FurnitureEdit.Follow(self: any)
 	local held: Held? = self.Held
@@ -831,13 +876,16 @@ function FurnitureEdit.Follow(self: any)
 		-- au-dessus d'un meuble avec un dessus ? (petits objets seulement)
 		local target: any = nil
 		local supportModel: Model? = nil
-		if HouseCommon.CanGoOnFurniture(item) then
+		local S = surfaces()
+		if HouseCommon.CanGoOnFurniture(item) and S then
 			local params = RaycastParams.new()
 			params.FilterType = Enum.RaycastFilterType.Include
 			local room = house.Rooms[held.Slot]
 			local include: { Instance } = {}
+			-- (v9.6) seulement les meubles qui ont un dessus : le rayon traverse
+			-- les petits objets déjà posés et trouve le rayon / la table dessous
 			for _, other in ipairs(room and room.Items or {}) do
-				if other ~= held.Model and other.Parent then
+				if other ~= held.Model and other.Parent and S.Has(tostring(other:GetAttribute("ItemId"))) then
 					local isFollower = false
 					for _, f in ipairs(held.Followers) do
 						if f.Model == other then
@@ -852,10 +900,18 @@ function FurnitureEdit.Follow(self: any)
 			params.FilterDescendantsInstances = include
 			local hit = workspace:Raycast(ray.Origin, ray.Direction * 250, params)
 			local model = hit and itemModelOf(hit.Instance)
-			local S = surfaces()
-			if model and hit and S and S.Has(tostring(model:GetAttribute("ItemId"))) then
+			if model and hit and S.Has(tostring(model:GetAttribute("ItemId"))) then
 				target = self:SurfaceTarget(held, model, hit.Position)
 				supportModel = target and model or nil
+			end
+			-- (v9.6) pointeur juste AU-DESSUS d'un dessus (table basse vue de
+			-- face, le rayon passe au-dessus) : on le "voit" quand même
+			if not target then
+				local near, point = self:NearTop(held, ray, include)
+				if near and point then
+					target = self:SurfaceTarget(held, near, point)
+					supportModel = target and near or nil
+				end
 			end
 		end
 		if target then

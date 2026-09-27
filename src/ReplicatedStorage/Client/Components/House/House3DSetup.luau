@@ -304,7 +304,7 @@ local function desk(b: Builder, ctx: any)
 	-- goulotte à câbles + lumière sous le bureau
 	b.Box(0, T - 9, -44, deskW * 0.6, 4, 6, CARBON, M.Metal)
 	if tier >= 2 then
-		local under = b.Box(0, T - 3.8, -40, deskW - 12, 0.6, 2, edge, M.Neon)
+		local under = b.Box(0, T - 4.8, -40, deskW - 12, 0.8, 2, edge, M.Neon)
 		neon(b, under, rgbAll and "RGB" or "Glow")
 	end
 	-- tour PC (au sol, à droite) ; bureau ultime : une seconde à gauche
@@ -326,7 +326,8 @@ local function desk(b: Builder, ctx: any)
 		local cf = CFrame.new(slot.X, y, monitorZ) * CFrame.Angles(0, slot.Yaw, 0)
 		if slot.Curved and setup.Curved ~= false then
 			-- ultra-large incurvé : panneau central + deux ailes tournées vers soi
-			monitor(b, cf, slot.W, slot.H, kind, index, frame, true, 8)
+			-- (v9.6 : pied posé SUR le plateau, plus enfoncé de 0.2 dedans)
+			monitor(b, cf, slot.W, slot.H, kind, index, frame, true, y - T - 1.4)
 			local wing = 9
 			for _, side in ipairs({ -1, 1 }) do
 				local a = -side * 0.38
@@ -496,8 +497,9 @@ end
 
 local function soundbar(b: Builder, x: number, y: number, z: number, w: number)
 	b.Round(x, y, z, w, 4, 6, 2, CARBON, M.SmoothPlastic)
-	b.Box(x, y + 0.6, z + 3.05, w - 4, 2.8, 0.2, rgb(70, 70, 90), M.Fabric)
-	neon(b, b.Box(x, y + 0.3, z + 3.2, 3, 0.5, 0.2, CYAN, M.Neon), "Glow")
+	-- (v9.6 z-fighting : grille 3..3.8 puis diode 3.8..4.4 devant le boîtier)
+	b.Box(x, y + 0.6, z + 3.4, w - 4, 2.8, 0.8, rgb(70, 70, 90), M.Fabric)
+	neon(b, b.Box(x, y + 0.3, z + 4.1, 3, 0.5, 0.6, CYAN, M.Neon), "Glow")
 end
 
 local function tvRecipe(b: Builder, _ctx: any)
@@ -578,8 +580,8 @@ R.SetupNewsTV = function(b, _ctx)
 	local y0 = 50 - h / 2 - 2
 	b.Box(0, y0 - 2, 5, w + 6, h + 8, 2.4, rgb(40, 14, 24), M.SmoothPlastic)
 	-- (v9.6 z-fighting : bandeaux 1 plus larges et 0.5 plus épais que le cadre)
-	neon(b, b.Box(0, y0 - 2.6, 5, w + 8, 1.2, 3.4, RED, M.Neon), "Glow")
-	neon(b, b.Box(0, y0 + h + 5, 5, w + 8, 1.2, 3.4, RED, M.Neon), "Glow")
+	neon(b, b.Box(0, y0 - 3.2, 5, w + 8, 1.2, 4.4, RED, M.Neon), "Glow")
+	neon(b, b.Box(0, y0 + h + 6, 5, w + 8, 1.2, 4.4, RED, M.Neon), "Glow")
 	screenPart(b, CFrame.new(0, y0 + 2, 6.45), w, h, "News", 1)
 	-- voyant "ON AIR" au-dessus
 	local lamp = b.Round(0, y0 + h + 7, 4, 22, 5, 3, 1.5, RED, M.Neon)
@@ -599,7 +601,7 @@ R.SetupTVStand = function(b, ctx)
 	-- (v9.6 z-fighting : flancs plus larges que les plateaux (±50.5), cloisons
 	-- posées SUR le plateau bas, fond en retrait : aucune face confondue)
 	b.Box(0, 6, 0, 100, 3, d, body, M.Wood)
-	b.Box(0, 6.5, -d / 2 + 1.5, 99, inner - 0.5, 2, darken(body, 0.2), M.Wood)
+	b.Box(0, 6.5, -d / 2 + 2.5, 99, inner - 0.5, 2, darken(body, 0.2), M.Wood)
 	for _, x in ipairs({ -49, 49 }) do
 		b.Box(x, 5.5, 0, 3, inner + 0.5, d - 1, body, M.Wood)
 	end
@@ -642,13 +644,15 @@ local function transport(b: Builder, x: number, y: number, z: number, scale: num
 	nextButton.Name = "NextButton"
 end
 
--- Barres de niveau (VU) : `count` barres lumineuses, bas à `y`
+-- Barres de niveau (VU) : `count` barres lumineuses, bas à `y` ; `z` = face
+-- sur laquelle on les monte (v9.6 z-fighting : fond z..z+0.8, barres
+-- z+0.8..z+1.6, plus aucune face à 0,3 d'une autre)
 local function vuBars(b: Builder, x: number, y: number, z: number, w: number, h: number, count: number)
-	b.Box(x, y - 1, z - 0.3, w + 2, h + 2, 0.6, INK, M.SmoothPlastic)
+	b.Box(x, y - 1, z + 0.4, w + 2, h + 2, 0.8, INK, M.SmoothPlastic)
 	local step = w / count
 	for index = 1, count do
 		local color = index <= count * 0.6 and MINT or (index <= count * 0.85 and YELLOW or RED)
-		local bar = b.Box(x - w / 2 + step * (index - 0.5), y, z, step * 0.6, h, 0.6, color, M.Neon)
+		local bar = b.Box(x - w / 2 + step * (index - 0.5), y, z + 1.2, step * 0.6, h, 0.8, color, M.Neon)
 		neon(b, bar, "VU_" .. index)
 	end
 end
@@ -690,10 +694,11 @@ local function turntable(b: Builder, x: number, y: number, z: number, w: number,
 	b.Box(cx + diameter * 0.3, y + 6.8, z + d * 0.18, 2, 1, 3, INK, M.SmoothPlastic)
 end
 
--- Petit écran LCD (morceau en cours)
+-- Petit écran LCD (morceau en cours) ; `z` = face de montage (v9.6 : cadre
+-- z..z+0.8, écran z+0.8..z+1.3)
 local function lcd(b: Builder, x: number, y: number, z: number, w: number, h: number)
-	b.Box(x, y - 0.8, z - 0.3, w + 1.6, h + 1.6, 0.6, INK, M.SmoothPlastic)
-	screenPart(b, CFrame.new(x, y, z + 0.3), w, h, "Music", 1)
+	b.Box(x, y - 0.8, z + 0.4, w + 1.6, h + 1.6, 0.8, INK, M.SmoothPlastic)
+	screenPart(b, CFrame.new(x, y, z + 1.05), w, h, "Music", 1)
 end
 
 local function hifi(b: Builder, _ctx: any)
@@ -703,22 +708,24 @@ local function hifi(b: Builder, _ctx: any)
 		-- radio-cassette rétro
 		local body = b.Map(rgb(255, 140, 180))
 		b.Round(0, 0, 0, 100, 48, 30, 5, body, M.SmoothPlastic)
-		b.Box(0, 4, 15.1, 94, 40, 0.4, darken(body, 0.2), M.SmoothPlastic)
+		-- (v9.6 z-fighting : façade 15..16 posée sur le boîtier, puis chaque
+		-- couche des haut-parleurs / de la cassette 0.6 à 0.8 plus en avant)
+		b.Box(0, 4, 15.5, 94, 40, 1, darken(body, 0.2), M.SmoothPlastic)
 		for _, side in ipairs({ -1, 1 }) do
-			b.CylZ(side * 29, 24, 15.3, 36, 0.8, CHROME, M.Metal)
-			b.CylZ(side * 29, 24, 15.6, 32, 0.6, rgb(40, 40, 52), M.Fabric)
-			named(b.CylZ(side * 29, 24, 16, 22, 1, rgb(30, 30, 40), M.SmoothPlastic), "SpeakerCone")
-			b.CylZ(side * 29, 24, 16.6, 8, 1, CHROME, M.Metal)
+			b.CylZ(side * 29, 24, 16.4, 36, 0.8, CHROME, M.Metal)
+			b.CylZ(side * 29, 24, 17.1, 32, 0.6, rgb(40, 40, 52), M.Fabric)
+			named(b.CylZ(side * 29, 24, 17.8, 22, 0.8, rgb(30, 30, 40), M.SmoothPlastic), "SpeakerCone")
+			b.CylZ(side * 29, 24, 18.6, 8, 0.8, CHROME, M.Metal)
 		end
 		-- fenêtre de la cassette + bobines
-		b.Box(0, 20, 15.3, 22, 16, 0.6, rgb(60, 50, 80), M.Glass).Transparency = 0.2
+		b.Box(0, 20, 16.3, 22, 16, 0.6, rgb(60, 50, 80), M.Glass).Transparency = 0.2
 		for _, side in ipairs({ -1, 1 }) do
-			pivot(b, side == -1 and "Pivot_Spool1" or "Pivot_Spool2", side * 5.5, 28, 15.7)
-			named(b.CylZ(side * 5.5, 28, 15.7, 6, 0.6, WHITE, M.SmoothPlastic), side == -1 and "Spool1" or "Spool2")
-			named(b.Box(side * 5.5, 28, 16, 5.4, 1, 0.3, INK, M.SmoothPlastic), side == -1 and "Spool1" or "Spool2")
+			pivot(b, side == -1 and "Pivot_Spool1" or "Pivot_Spool2", side * 5.5, 28, 16.9)
+			named(b.CylZ(side * 5.5, 28, 16.9, 6, 0.6, WHITE, M.SmoothPlastic), side == -1 and "Spool1" or "Spool2")
+			named(b.Box(side * 5.5, 28, 17.4, 5.4, 1, 0.4, INK, M.SmoothPlastic), side == -1 and "Spool1" or "Spool2")
 		end
-		vuBars(b, 0, 8, 15.6, 20, 7, 5)
-		lcd(b, 0, 38, 15.3, 24, 6)
+		vuBars(b, 0, 8, 16, 20, 7, 5)
+		lcd(b, 0, 38, 16, 24, 6)
 		-- poignée
 		House3DKit.Path(b, { { -34, 48, 0 }, { -30, 60, 0 }, { 30, 60, 0 }, { 34, 48, 0 } }, 3, CHROME, M.Metal)
 		transport(b, -14, 48, 4, 1)
@@ -739,8 +746,8 @@ local function hifi(b: Builder, _ctx: any)
 		named(b.Box(-7, 45.2, 3, 6, 0.2, 2, rgb(120, 220, 255), M.Neon), "Vinyl")
 		local lid = b.Cyl(0, 44.9, 0, 30, 3, rgb(200, 230, 255), M.Glass)
 		lid.Transparency = 0.6
-		lcd(b, 0, 30, 17.1, 30, 8)
-		vuBars(b, 0, 20, 17.3, 28, 6, 7)
+		lcd(b, 0, 30, 17, 30, 8)
+		vuBars(b, 0, 20, 17, 28, 6, 7)
 		b.CylZ(-12, 10, 17.2, 8, 1.6, CHROME, M.Metal)
 		transport(b, 6, 8, 17, 1)
 		for _, side in ipairs({ -1, 1 }) do
@@ -755,9 +762,9 @@ local function hifi(b: Builder, _ctx: any)
 		b.Box(0, 0, 0, 56, 36, 34, wood, M.Wood)
 		b.Box(0, 36, 0, 58, 2, 36, darken(wood, 0.2), M.Wood)
 		-- ampli (façade + VU + boutons) dans le meuble
-		b.Box(0, 20, 16.4, 48, 13, 1.2, rgb(34, 32, 40), M.Metal)
-		vuBars(b, -10, 23, 17.4, 20, 7, 8)
-		b.CylZ(12, 26.5, 17.3, 7, 1.4, CHROME, M.Metal)
+		b.Box(0, 20, 17, 48, 13, 2, rgb(34, 32, 40), M.Metal)
+		vuBars(b, -10, 23, 18, 20, 7, 8)
+		b.CylZ(12, 26.5, 18.7, 7, 1.4, CHROME, M.Metal)
 		transport(b, 14, 21, 17.5, 0.9)
 		-- bac à vinyles (pochettes colorées)
 		for index = 1, 7 do
@@ -799,8 +806,8 @@ local function hifi(b: Builder, _ctx: any)
 		b.Box(8 + index * 3, 40, 2, 1, 1.2, 12, CHROME, M.Metal)
 	end
 	transport(b, 16, 40, -6, 0.8)
-	vuBars(b, 0, 20, 14.4, 40, 10, 10)
-	lcd(b, 0, 46, -13.3, 26, 8)
+	vuBars(b, 0, 20, 14, 40, 10, 10)
+	lcd(b, 0, 46, -14, 26, 8)
 	-- enceintes colonnes
 	for _, side in ipairs({ -1, 1 }) do
 		speaker(b, side * 42, 0, -2, 16, 86, 20, rgb(30, 30, 38), 3)
@@ -878,10 +885,11 @@ R.SetupPress = function(b, _ctx)
 	-- socle + bandes de danger
 	b.Box(0, 0, 0, 92, 8, 56, frame, M.Metal)
 	for index = 0, 8 do
-		b.BoxR(CFrame.new(-40 + index * 10, 4, 28.1) * CFrame.Angles(0, 0, 0.7), 4, 12, 0.4, index % 2 == 0 and yellowC or INK, M.SmoothPlastic)
+		-- (v9.6 z-fighting : bandes 28..28.8, baguettes 28..29.6)
+		b.BoxR(CFrame.new(-40 + index * 10, 4, 28.4) * CFrame.Angles(0, 0, 0.7), 4, 12, 0.8, index % 2 == 0 and yellowC or INK, M.SmoothPlastic)
 	end
-	b.Box(0, 0, 28.3, 92, 1.2, 0.6, frame, M.Metal)
-	b.Box(0, 6.8, 28.3, 92, 1.2, 0.6, frame, M.Metal)
+	b.Box(0, 0, 28.8, 92, 1.2, 1.6, frame, M.Metal)
+	b.Box(0, 6.8, 28.8, 92, 1.2, 1.6, frame, M.Metal)
 	-- enclume (matrice)
 	b.Box(0, 8, 0, 50, 10, 40, rgb(110, 116, 132), M.DiamondPlate)
 	pivot(b, "Pivot_Anvil", 0, 18, 0)
@@ -891,16 +899,16 @@ R.SetupPress = function(b, _ctx)
 		b.Box(side * 36, 8, -6, 14, 5, 14, frame, M.Metal)
 	end
 	b.Box(0, 84, -6, 92, 14, 26, yellowC, M.Metal)
-	b.Box(0, 88, 7.1, 60, 6, 0.4, INK, M.SmoothPlastic)
+	b.Box(0, 88, 7.5, 60, 6, 1, INK, M.SmoothPlastic)
 	-- vérin hydraulique
 	b.Cyl(0, 70, -2, 22, 14, frame, M.Metal)
 	b.Cyl(0, 66, -2, 18, 4, CHROME, M.Metal)
 	-- piston (descend) : tige + plateau
 	pivot(b, "Pivot_Ram", 0, 60, 0)
-	named(b.Cyl(0, 58, -2, 10, 40, CHROME, M.Metal), "PressRam")
+	named(b.Cyl(0, 58, -2, 10, 39, CHROME, M.Metal), "PressRam")
 	named(b.Box(0, 50, 0, 46, 8, 36, rgb(90, 96, 112), M.Metal), "PressRam")
 	for index = 0, 4 do
-		named(b.BoxR(CFrame.new(-18 + index * 9, 54, 18.1) * CFrame.Angles(0, 0, 0.7), 3, 9, 0.4, index % 2 == 0 and yellowC or INK, M.SmoothPlastic), "PressRam")
+		named(b.BoxR(CFrame.new(-18 + index * 9, 54, 18.4) * CFrame.Angles(0, 0, 0.7), 3, 9, 0.8, index % 2 == 0 and yellowC or INK, M.SmoothPlastic), "PressRam")
 	end
 	-- objets à écraser (un seul visible à la fois)
 	-- 1 : canard en caoutchouc
@@ -954,7 +962,7 @@ R.SetupBubbleWrap = function(b, ctx)
 	b.CylX(0, T + 9, -18, 4, 90, CHROME, M.Metal)
 	local roll = b.CylX(0, T + 9, -18, 16, 84, rgb(200, 230, 255), M.Glass)
 	roll.Transparency = 0.35
-	b.CylX(0, T + 9, -18, 12, 84.4, rgb(230, 244, 255), M.SmoothPlastic).Transparency = 0.55
+	b.CylX(0, T + 9, -18, 12, 86, rgb(230, 244, 255), M.SmoothPlastic).Transparency = 0.55
 	-- feuille dépliée + bulles (cliquables)
 	local sheet = b.Box(0, T, 6, 84, 0.6, 34, rgb(220, 240, 255), M.SmoothPlastic)
 	sheet.Transparency = 0.35
@@ -1173,7 +1181,7 @@ R.SetupPlant = function(b, _ctx)
 		b.Cyl(0, 4, 0, 70, 16, potColor, M.Metal)
 		-- (v9.6 z-fighting : liseré sous le bord (18..19.4), eau puis nénuphars
 		-- empilés à 1 d'écart ; la fleur du jardin n'apporte plus sa propre mare)
-		b.Cyl(0, 18, 0, 74, 1.4, rim, M.Metal)
+		b.Cyl(0, 17, 0, 74, 1.4, rim, M.Metal)
 		local water = b.Cyl(0, 20, 0, 66, 1, rgb(90, 190, 230), M.SmoothPlastic)
 		water.Transparency = 0.1
 		b.Cyl(14, 21, 8, 20, 1, LEAF, M.SmoothPlastic)
@@ -1191,7 +1199,7 @@ R.SetupPlant = function(b, _ctx)
 		b.Cyl(0, 0, 0, 34, 4, darken(potColor, 0.15), M.SmoothPlastic)
 		b.Cyl(0, 4, 0, 40, 22, potColor, M.SmoothPlastic)
 		b.Cyl(0, 24, 0, 46, 6, rim, M.SmoothPlastic)
-		b.Cyl(0, 29.4, 0, 40, 1, rgb(110, 76, 56), M.Grass)
+		b.Cyl(0, 29.4, 0, 40, 2, rgb(110, 76, 56), M.Grass) -- (v9.6 : dessus 1.4 au-dessus du pot)
 		if tier >= 3 then
 			-- motif en cœur sur le pot
 			House3DKit.Heart(b, 0, 14, 20.2, 10, 0.6, PINK, M.SmoothPlastic)

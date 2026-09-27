@@ -152,7 +152,8 @@ local function hallFloor(kit: any, size: any, floor: number, floors: number)
 	local railH = 3.2
 	for _, x in ipairs({ s0 + 0.2, s1 - 0.2 }) do
 		kit:Box("GuardRail", x - 0.16, x + 0.16, y + railH, y + railH + 0.24, H0, D1, RAIL, M.Wood, { Solid = true, Shadow = false })
-		kit:Box("GuardBase", x - 0.1, x + 0.1, y, y + 0.25, H0, D1, WHITE, M.SmoothPlastic, { Solid = true, Shadow = false })
+		-- (v9.6 : dessous 0.03 sous le plancher : ne se confond plus avec celui du poteau, visible depuis l'escalier)
+		kit:Box("GuardBase", x - 0.1, x + 0.1, y - 0.03, y + 0.25, H0, D1, WHITE, M.SmoothPlastic, { Solid = true, Shadow = false })
 		local count = math.floor((D1 - H0) / 1.1)
 		for i = 0, count do
 			local d = H0 + 0.2 + i * (D1 - H0 - 0.4) / math.max(1, count)
@@ -201,10 +202,11 @@ local function hallWalls(kit: any, size: any, floor: number, colors: Colors)
 		kit:WallD("Skirting", r0, r1, y, y + 0.6, dFront, dBack, holes, colors.Trim, M.Wood, { Shadow = false })
 		if room then
 			-- chambranle du passage
-			for _, d in ipairs({ pass[1] - 0.2, pass[2] + 0.2 }) do
-				kit:Box("PassFrame", r0, r1, y, y + WorldLayout.PASS_H + 0.3, d - 0.2, d + 0.2, colors.Trim, M.Wood, { Shadow = false })
-			end
-			kit:Box("PassFrame", r0, r1, y + WorldLayout.PASS_H, y + WorldLayout.PASS_H + 0.45, pass[1] - 0.4, pass[2] + 0.4, colors.Trim, M.Wood, { Shadow = false })
+			-- (v9.6 z-fighting : le chambranle déborde de 0.04 DANS l'ouverture, sinon
+			-- ses faces se confondaient avec les tranches du mur)
+			kit:Box("PassFrame", r0, r1, y, y + WorldLayout.PASS_H + 0.3, pass[1] - 0.4, pass[1] + 0.04, colors.Trim, M.Wood, { Shadow = false })
+			kit:Box("PassFrame", r0, r1, y, y + WorldLayout.PASS_H + 0.3, pass[2] - 0.04, pass[2] + 0.4, colors.Trim, M.Wood, { Shadow = false })
+			kit:Box("PassFrame", r0, r1, y + WorldLayout.PASS_H - 0.04, y + WorldLayout.PASS_H + 0.45, pass[1] - 0.4, pass[2] + 0.4, colors.Trim, M.Wood, { Shadow = false })
 		end
 	end
 	-- corniche + plafonnier (vraie lumière, budget du kit)
