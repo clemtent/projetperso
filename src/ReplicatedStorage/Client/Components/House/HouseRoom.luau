@@ -14,7 +14,12 @@
 	    fenêtre, les lumières (catégorie "Lights") brillent davantage.
 	  - objets = gros emojis "autocollants" (ombre portée, halo pour les
 	    lumières, détails dessinés à la main pour certains objets : tapis,
-	    guirlande, fenêtres, portes, cheminée, aquarium, frigo...).
+	    guirlande, fenêtres, portes, cheminée, aquarium, frigo...) ; un
+	    objet retourné (entry.F) est dessiné en miroir (SetFlip) ;
+	  - indices pendant un glissement (éditeur) : zones mur / sol, grille
+	    de l'aimant, toutes les places libres sur les meubles (ShowSurfaces),
+	    dessus visé qui brille + étiquette "✨ Poser sur : ..." ou "🪑 ..."
+	    (SetSurfaceHint), halo autour du meuble visé (SetTargetGlow).
 
 	Coordonnées : la pièce fait (BASE_WIDTH x Width de la taille) x HEIGHT px
 	de "maquette" ; un UIScale l'adapte à la place disponible (Stage).

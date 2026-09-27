@@ -369,6 +369,7 @@ function DreamMachine.Start(ctx)
 				Anchor = Vector2.new(0.3, 0.84),
 				MinScale = 0.45,
 				MaxScale = 1.15,
+				Force = true, -- la machine à rêves doit TOUJOURS se voir
 			},
 		}, function(placements)
 			local placement = placements[1]

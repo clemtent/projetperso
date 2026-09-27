@@ -21,6 +21,9 @@
 	sont rondes (icône seule) et tiennent sur UNE ligne (zones tactiles de
 	44 px ; la ligne peut encore défiler s'il y en a trop), la largeur est limitée par les slots de côté (Slots) et tout se
 	réajuste si l'écran change (Interface.DeviceChanged).
+	v9 : pastilles des menus "premium" (corps en relief avec reflet et
+	contour teinté, puce d'icône blanche givrée, texte bordé, ombre, badge
+	DANS la pastille) : toujours sur DEUX lignes max sur PC / tablette.
 	Maison : bouton rond "🏠" juste à DROITE du bouton "Click me" (ouvre
 	"Ma maison"), avec un badge quand un nouvel objet de maison devient
 	abordable (remis à zéro à l'ouverture) ; la carte du boost ⏱️ est à

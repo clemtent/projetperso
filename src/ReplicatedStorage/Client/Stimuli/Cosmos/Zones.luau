@@ -75,6 +75,7 @@ export type Item = {
 	MinScale: number?,
 	MaxScale: number?,
 	Gap: number?,
+	Force: boolean?, -- objet principal à montrer coûte que coûte (voir plan)
 }
 
 export type Placement = {
@@ -84,6 +85,14 @@ export type Placement = {
 	Shape: number,
 	W: number,
 	H: number,
+	Forced: boolean?, -- posé par-dessus un objet d'un autre stimulus (qui va s'écarter)
+}
+
+type Grid = {
+	Cols: number,
+	Rows: number,
+	Occ: { number },
+	Sat: { number },
 }
 
 type Request = {
@@ -158,13 +167,9 @@ local planning = false
 local planAgain = false
 local checking = false
 
--- Grille : Occ[j * cols + i + 1] = 1 si la case (i, j) est prise ; Sat = sommes cumulées
-local grid = {
-	Cols = 0,
-	Rows = 0,
-	Occ = {} :: { number },
-	Sat = {} :: { number },
-}
+-- Grille : Occ[j * cols + i + 1] = 1 si la case (i, j) est prise ; Sat = sommes
+-- cumulées. Dernière grille complète (pour Zones.PickPath).
+local lastGrid: Grid = { Cols = 0, Rows = 0, Occ = {}, Sat = {} }
 
 ----------------------------------------------------------------------
 -- Toile, appareil
@@ -372,9 +377,6 @@ local function blockedRects(canvas: Vector2): { Rect }
 	for _, rect in ipairs(columnRects(canvas)) do
 		table.insert(rects, rect)
 	end
-	for _, rect in ipairs(markedRects()) do
-		table.insert(rects, rect)
-	end
 	return rects
 end
 
@@ -382,8 +384,18 @@ end
 -- Grille d'occupation
 ----------------------------------------------------------------------
 
-local function mark(rect: Rect, pad: number)
-	local cols, rows, occ = grid.Cols, grid.Rows, grid.Occ
+local function newGrid(canvas: Vector2): Grid
+	local cols = math.max(1, math.ceil(canvas.X / CELL))
+	local rows = math.max(1, math.ceil(canvas.Y / CELL))
+	return { Cols = cols, Rows = rows, Occ = table.create(cols * rows, 0), Sat = {} }
+end
+
+local function copyGrid(g: Grid): Grid
+	return { Cols = g.Cols, Rows = g.Rows, Occ = table.clone(g.Occ), Sat = {} }
+end
+
+local function mark(g: Grid, rect: Rect, pad: number)
+	local cols, rows, occ = g.Cols, g.Rows, g.Occ
 	local i0 = math.max(0, math.floor((rect.X - pad) / CELL))
 	local i1 = math.min(cols - 1, math.ceil((rect.X + rect.W + pad) / CELL) - 1)
 	local j0 = math.max(0, math.floor((rect.Y - pad) / CELL))
@@ -396,8 +408,8 @@ local function mark(rect: Rect, pad: number)
 	end
 end
 
-local function buildSat()
-	local cols, rows, occ = grid.Cols, grid.Rows, grid.Occ
+local function buildSat(g: Grid)
+	local cols, rows, occ = g.Cols, g.Rows, g.Occ
 	local stride = cols + 1
 	local sat = table.create(stride * (rows + 1), 0)
 	for j = 1, rows do
@@ -410,29 +422,27 @@ local function buildSat()
 			sat[base + i + 1] = sat[previous + i + 1] + rowSum
 		end
 	end
-	grid.Sat = sat
+	g.Sat = sat
 end
 
 -- Nombre de cases prises dans [i, i + w) x [j, j + h)
-local function takenCount(i: number, j: number, w: number, h: number): number
-	local stride = grid.Cols + 1
-	local sat = grid.Sat
+local function takenCount(g: Grid, i: number, j: number, w: number, h: number): number
+	local stride = g.Cols + 1
+	local sat = g.Sat
 	return sat[(j + h) * stride + i + w + 1] - sat[j * stride + i + w + 1] - sat[(j + h) * stride + i + 1] + sat[j * stride + i + 1]
 end
 
-local function resetGrid(canvas: Vector2)
-	grid.Cols = math.max(1, math.ceil(canvas.X / CELL))
-	grid.Rows = math.max(1, math.ceil(canvas.Y / CELL))
-	grid.Occ = table.create(grid.Cols * grid.Rows, 0)
-	-- Bords de la toile
-	mark({ X = 0, Y = 0, W = canvas.X, H = EDGE }, 0)
-	mark({ X = 0, Y = canvas.Y - EDGE, W = canvas.X, H = EDGE }, 0)
-	mark({ X = 0, Y = 0, W = EDGE, H = canvas.Y }, 0)
-	mark({ X = canvas.X - EDGE, Y = 0, W = EDGE, H = canvas.Y }, 0)
+-- Grille de base : bords de la toile, bandeau, cartes, colonne centrale
+local function baseGrid(canvas: Vector2): Grid
+	local g = newGrid(canvas)
+	mark(g, { X = 0, Y = 0, W = canvas.X, H = EDGE }, 0)
+	mark(g, { X = 0, Y = canvas.Y - EDGE, W = canvas.X, H = EDGE }, 0)
+	mark(g, { X = 0, Y = 0, W = EDGE, H = canvas.Y }, 0)
+	mark(g, { X = canvas.X - EDGE, Y = 0, W = EDGE, H = canvas.Y }, 0)
 	for _, rect in ipairs(blockedRects(canvas)) do
-		mark(rect, 2)
+		mark(g, rect, 2)
 	end
-	buildSat()
+	return g
 end
 
 -- Rectangle occupé par une place (sans marge)
@@ -442,22 +452,22 @@ local function placementRect(p: Placement): Rect
 end
 
 -- Vrai si la place (avec sa marge) est entièrement libre dans la grille
-local function isFree(p: Placement, gap: number): boolean
+local function isFree(g: Grid, p: Placement, gap: number): boolean
 	local rect = placementRect(p)
 	local i0 = math.floor((rect.X - gap) / CELL)
 	local j0 = math.floor((rect.Y - gap) / CELL)
 	local i1 = math.ceil((rect.X + rect.W + gap) / CELL)
 	local j1 = math.ceil((rect.Y + rect.H + gap) / CELL)
-	if i0 < 0 or j0 < 0 or i1 > grid.Cols or j1 > grid.Rows then
+	if i0 < 0 or j0 < 0 or i1 > g.Cols or j1 > g.Rows then
 		return false
 	end
-	return takenCount(i0, j0, i1 - i0, j1 - j0) == 0
+	return takenCount(g, i0, j0, i1 - i0, j1 - j0) == 0
 end
 
 -- Meilleure place pour un objet : pour chaque case libre (coin haut-gauche),
 -- plus grande échelle qui tient (recherche dichotomique), puis score =
 -- distance au point préféré - bonus de taille.
-local function search(item: Item, canvas: Vector2): Placement?
+local function search(g: Grid, item: Item, canvas: Vector2): Placement?
 	local gap = item.Gap or 6
 	local minScale = item.MinScale or 0.5
 	local maxScale = item.MaxScale or 1
@@ -476,7 +486,7 @@ local function search(item: Item, canvas: Vector2): Placement?
 	end
 	local anchorX, anchorY = item.Anchor.X * canvas.X, item.Anchor.Y * canvas.Y
 	local diagonal = math.max(1, canvas.Magnitude)
-	local cols, rows, occ = grid.Cols, grid.Rows, grid.Occ
+	local cols, rows, occ = g.Cols, g.Rows, g.Occ
 
 	local best: Placement? = nil
 	local bestScore = math.huge
@@ -492,13 +502,13 @@ local function search(item: Item, canvas: Vector2): Placement?
 		for j = 0, rows - smallH do
 			local base = j * cols
 			for i = 0, cols - smallW do
-				if occ[base + i + 1] == 0 and takenCount(i, j, smallW, smallH) == 0 then
+				if occ[base + i + 1] == 0 and takenCount(g, i, j, smallW, smallH) == 0 then
 					-- Plus grande échelle qui tient ici (les échelles vont en décroissant)
 					local lo, hi = 1, #scales -- hi tient toujours
 					while lo < hi do
 						local mid = (lo + hi) // 2
 						local cw, ch = cellsW[mid], cellsH[mid]
-						if i + cw <= cols and j + ch <= rows and takenCount(i, j, cw, ch) == 0 then
+						if i + cw <= cols and j + ch <= rows and takenCount(g, i, j, cw, ch) == 0 then
 							hi = mid
 						else
 							lo = mid + 1
@@ -552,7 +562,14 @@ end
 
 local function plan()
 	local canvas = Zones.GetCanvas()
-	resetGrid(canvas)
+	-- 2 grilles : sans / avec les objets des autres stimuli (LayoutObstacle)
+	local base = baseGrid(canvas)
+	local all = copyGrid(base)
+	for _, rect in ipairs(markedRects()) do
+		mark(all, rect, 2)
+	end
+	buildSat(base)
+	buildSat(all)
 	local order = sortedRequests()
 	local results: { [Request]: { Placement | false } } = {}
 	-- 2 tours : le 1er objet de chaque stimulus, puis les objets en plus
@@ -572,7 +589,7 @@ local function plan()
 		local request, index = entry.Request, entry.Index
 		local item = request.Items[index]
 		local gap = item.Gap or 6
-		local chosen: Placement? = search(item, canvas)
+		local chosen: Placement? = search(all, item, canvas)
 		-- Stabilité : garder l'ancienne place si elle est encore libre
 		local previous = request.Previous[index]
 		if previous then
@@ -584,18 +601,33 @@ local function plan()
 				end
 			end
 			local fresh = chosen
-			if sameShape and isFree(old, gap) and (fresh == nil or fresh.Scale < old.Scale + MOVE_GAIN) then
+			if sameShape and not old.Forced and isFree(all, old, gap) and (fresh == nil or fresh.Scale < old.Scale + MOVE_GAIN) then
+				chosen = old
+			elseif sameShape and old.Forced and item.Force and fresh == nil and isFree(base, old, gap) then
 				chosen = old
 			end
 		end
+		-- Objet principal sans place : posé quand même, par-dessus les objets
+		-- des autres stimuli (marqué LayoutObstacle, ils s'en écartent)
+		if chosen == nil and item.Force then
+			local forced = search(base, item, canvas)
+			if forced then
+				forced.Forced = true
+				chosen = forced
+			end
+		end
 		if chosen then
-			mark(placementRect(chosen), gap)
-			buildSat()
+			local rect = placementRect(chosen)
+			mark(base, rect, gap)
+			mark(all, rect, gap)
+			buildSat(base)
+			buildSat(all)
 			results[request][index] = chosen
 		else
 			results[request][index] = false
 		end
 	end
+	lastGrid = all
 	-- Rappels (hors de la boucle de calcul)
 	for _, request in ipairs(order) do
 		if requests[request.Id] == request then
@@ -656,7 +688,7 @@ local function check()
 	end
 	for _, request in pairs(requests) do
 		for _, p in ipairs(request.Previous) do
-			if p then
+			if p and not p.Forced then
 				local mine = placementRect(p)
 				for _, rect in ipairs(others) do
 					if overlaps(mine, rect) then
@@ -721,6 +753,7 @@ end
 -- Appelé après une planification (Zones.Changed).
 function Zones.PickPath(candidates: { { Vector2 } }, width: number): number
 	local canvas = Zones.GetCanvas()
+	local grid = lastGrid
 	if grid.Cols == 0 or #grid.Occ == 0 then
 		return 1
 	end

@@ -3,9 +3,11 @@
 	Emplacement : ReplicatedStorage > Client > Stimuli > Disco
 
 	v9 : une VRAIE boule à facettes (calque Overlay), suspendue par une
-	chaîne au-dessus du bandeau d'actu, à droite de la colonne centrale
-	(x = centre + 360 : au-dessus des cartes du haut, sans cacher R1 / CR ;
-	la chaîne monte dans la barre du haut de Roblox) :
+	chaîne devant le bandeau d'actu, à droite de la colonne centrale
+	(x = centre + 360 au plus, mais toujours à gauche du bloc droit du
+	bandeau - horloge, marchés - et de la pastille "📬 Dopamail", revérifié
+	chaque seconde ; y = 14 : au-dessus des cartes du haut ; la chaîne
+	monte dans la barre du haut de Roblox) :
 	  - la boule : 7 rangées de facettes carrées projetées sur une sphère
 	    (plus étroites vers les bords = relief), ombrées par une lumière en
 	    haut à gauche, séparées par des joints sombres ; en tournant, un
@@ -27,8 +29,9 @@
 local Disco = {}
 Disco.Slot = "Overlay"
 
-local BALL_X = 360 -- décalage depuis le centre de l'écran
-local BALL_Y = 18 -- centre de la boule (le bandeau d'actu fait y 0-30 ; les cartes commencent à y = 40)
+local BALL_X = 360 -- décalage maximal depuis le centre de l'écran
+local BALL_X_MIN = 200 -- ... et minimal (le chapeau du gros bouton est au centre)
+local BALL_Y = 14 -- centre de la boule (le bandeau d'actu fait y 0-30 ; les cartes commencent à y = 40)
 local BALL_D = 50
 local PIVOT_Y = -74 -- point d'attache de la chaîne (au-dessus de l'écran)
 local UPDATE_STEP = 1 / 30
@@ -243,10 +246,32 @@ function Disco.Start(ctx)
 	local radius = BALL_D / 2
 	local hang = BALL_Y - PIVOT_Y -- distance point d'attache -> centre de la boule
 	local half = hang + radius + 10
+	-- Décalage horizontal : à gauche du bloc droit du bandeau d'actu (horloge,
+	-- marchés : attribut "RightInset" de NewsTicker) et de la pastille Dopamail
+	local function computeBallOffset(): number
+		local interface = ctx.Interface
+		local canvas = interface.CanvasSize or Vector2.new(1280, 720)
+		local scale = math.max(0.01, interface.Scale or 1)
+		local rightZone = 70
+		local slots = interface.Layers and interface.Layers.Slots
+		local ticker = slots and slots:FindFirstChild("NewsTicker")
+		local inset = ticker and ticker:GetAttribute("RightInset")
+		if type(inset) == "number" then
+			rightZone = inset
+		end
+		local email = ctx.Overlay and ctx.Overlay:FindFirstChild("Email")
+		local pill = email and email:FindFirstChild("Unread")
+		if pill and pill:IsA("GuiObject") and pill.Visible then
+			rightZone += 6 + pill.AbsoluteSize.X / scale
+		end
+		return math.clamp(canvas.X / 2 - rightZone - BALL_D / 2 - 16, BALL_X_MIN, BALL_X)
+	end
+	local ballOffset = computeBallOffset()
+
 	local holder = Create("Frame", {
 		Name = "Hanger",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, BALL_X, 0, PIVOT_Y),
+		Position = UDim2.new(0.5, ballOffset, 0, PIVOT_Y),
 		Size = UDim2.fromOffset(half * 2, half * 2),
 		BackgroundTransparency = 1,
 		ZIndex = 6,
@@ -484,6 +509,7 @@ function Disco.Start(ctx)
 	------------------------------------------------------------------
 	local time = 0
 	local pending = 0
+	local layoutClock = 0
 	local facetClock = 0
 	local flashClock = 0
 	local spin = 0
@@ -524,11 +550,22 @@ function Disco.Start(ctx)
 		spin = (spin + step * SPIN_SPEED) % RING
 		local hue = (time * 0.05) % 1
 
+		-- Place de la boule (le bandeau / la boîte mail peuvent changer)
+		layoutClock += step
+		if layoutClock >= 1 then
+			layoutClock = 0
+			local offset = computeBallOffset()
+			if math.abs(offset - ballOffset) > 0.5 then
+				ballOffset = offset
+				holder.Position = UDim2.new(0.5, ballOffset, 0, PIVOT_Y)
+			end
+		end
+
 		-- Balancement (autour du point d'attache) et centre de la boule
 		local sway = math.sin(time * 0.9) * 2.2
 		holder.Rotation = sway
 		local swayRad = math.rad(sway)
-		local cx = BALL_X - hang * math.sin(swayRad)
+		local cx = ballOffset - hang * math.sin(swayRad)
 		local cy = PIVOT_Y + hang * math.cos(swayRad)
 
 		-- Larges faisceaux (vont et viennent, couleur qui change doucement)

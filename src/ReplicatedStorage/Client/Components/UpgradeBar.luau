@@ -12,15 +12,24 @@
 	    combien il reste avant de pouvoir acheter) ;
 	  - achat : la carte s'écrase puis rebondit, reflet qui balaie la carte,
 	    plaque qui saute, "Nv 4" qui s'envole, étincelles de sa couleur ;
-	  - carte "🔒 teaser" en bout de rangée quand de nouvelles améliorations
-	    arrivent après la prochaine visite à l'océan
-	    (Formulas.GetNextRebirthUnlocks) ;
+	  - carte "🔒 teaser" (v9 : vraie carte "océan" — mer en dégradé, vagues,
+	    hublot + cadenas + "+N", aperçu des icônes) ÉPINGLÉE au bout de la
+	    rangée, hors du défilement (toujours visible, jamais coupée), quand de
+	    nouvelles améliorations arrivent après la prochaine visite à l'océan
+	    (Formulas.GetNextRebirthUnlocks) ; clic = la rangée montre la carte
+	    "Aller à l'océan" ;
+	  - v9 : carte abordable = anneau vert + halo ; trop chère = contour doux
+	    et plaque estompée ; niveau presque au max = barre dorée ; niveau max
+	    atteint = la carte brille en or avec "MAX ✓" avant de partir ;
 	  - infobulle : nom, niveau, description, amélioration requise
 	    (Requires), prix + ce qu'il manque ;
 	  - PC : survol = infobulle, clic = achat ; tactile : 1er appui =
 	    infobulle avec "Acheter", 2e appui = achat ; "Aller à l'océan"
 	    demande toujours une confirmation ;
-	  - carte trop chère : NeedDopamine.Offer (fenêtre "Pas assez de Dopamine").
+	  - carte trop chère (PC ET tactile, "Aller à l'océan" compris) :
+	    NeedDopamine.Offer à CHAQUE clic ; refus du serveur ("pas assez de
+	    Dopamine" alors que le client croyait pouvoir payer) :
+	    NeedDopamine.OfferRefusal avec le vrai manque.
 	L'état "abordable" suit ClientState.Changed ET ClientState.DopamineChanged
 	(s'il existe), limité à 4 mises à jour par seconde (+ filet de sécurité
 	lent pour les clics prédits).

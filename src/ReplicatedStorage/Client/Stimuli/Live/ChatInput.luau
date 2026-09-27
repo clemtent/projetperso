@@ -150,6 +150,7 @@ function ChatInput.new(ctx: any, options: Options)
 	UI.Gradient(send, ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(196, 176, 236)), 90)
 	local sendStroke = UI.Stroke(send, Color3.fromRGB(214, 186, 255), 1, 0.35)
 	UI.AnimateButton(send, 1.12, 0.86)
+	local sendScale = send:FindFirstChild("AnimScale") :: UIScale? -- (un seul UIScale par objet)
 
 	-- Flèche "envoyer" : tige + deux traits de pointe (dessin 18 x 18 mis à l'échelle)
 	local arrow = UI.Create("Frame", {
@@ -269,8 +270,9 @@ function ChatInput.new(ctx: any, options: Options)
 			sendLabel.Text = string.rep("•", math.floor(now * 3) % 3 + 1)
 		elseif not ready then
 			sendLabel.Text = tostring(math.ceil(cooldownUntil - now))
-		elseif wasWaiting then
-			UI.Pop(send, 1.25, 0.3) -- de nouveau prêt
+		elseif wasWaiting and sendScale then
+			sendScale.Scale = 1.25 -- de nouveau prêt : petit "pop"
+			UI.Tween(sendScale, 0.3, { Scale = 1 }, Enum.EasingStyle.Back)
 		end
 	end
 

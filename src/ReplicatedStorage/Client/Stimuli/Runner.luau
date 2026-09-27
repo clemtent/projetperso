@@ -2601,6 +2601,7 @@ function Runner.Start(ctx)
 			VY = 0,
 			Size = 3,
 			Spin = 0,
+			Rot = 45,
 		})
 	end
 	local function spawnShoeFx(x: number, y: number, color: Color3, size: number, vx: number, vy: number, life: number)
@@ -2609,8 +2610,8 @@ function Runner.Start(ctx)
 				fx.Life, fx.MaxLife = life, life
 				fx.X, fx.Y, fx.VX, fx.VY, fx.Size = x, y, vx, vy, size
 				fx.Spin = random:NextNumber(-360, 360)
+				fx.Rot = 45
 				fx.Frame.BackgroundColor3 = color
-				fx.Frame.Rotation = 45
 				fx.Frame.Visible = true
 				return
 			end
@@ -4752,7 +4753,8 @@ function Runner.Start(ctx)
 					local size = fx.Size * (0.5 + 0.5 * t)
 					f.Position = UDim2.fromOffset(fx.X, fx.Y)
 					f.Size = UDim2.fromOffset(size, size * (level >= 7 and level <= 8 and 0.55 or 1))
-					f.Rotation += fx.Spin * dt
+					fx.Rot += fx.Spin * dt
+					f.Rotation = fx.Rot
 					f.BackgroundTransparency = 1 - t
 				end
 			end
