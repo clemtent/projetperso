@@ -285,6 +285,72 @@ local function court(folder: Instance, geo: TownKit.Geo, cf: CFrame)
 end
 
 ----------------------------------------------------------------------
+-- Allées de parc, terrain de foot, champ de tulipes (grandes villes)
+----------------------------------------------------------------------
+
+local PATH = Color3.fromRGB(236, 222, 196)
+
+-- Allée en gravier droite de a à b (réserve son tracé : pas d'arbre dessus)
+local function footpath(folder: Instance, geo: TownKit.Geo, a: Vector3, b: Vector3)
+	local flatA = Vector3.new(a.X, geo.Origin.Y + GROUND_Y + 0.06, a.Z)
+	local flatB = Vector3.new(b.X, geo.Origin.Y + GROUND_Y + 0.06, b.Z)
+	local len = (flatB - flatA).Magnitude
+	if len < 6 then
+		return
+	end
+	local mid = (flatA + flatB) / 2
+	part(folder, "Footpath", Vector3.new(5, 0.2, len), CFrame.lookAt(mid, flatB) * CFrame.new(0, -0.1, 0), PATH, M.Pebble, "deco")
+	for t = 0, len, 9 do
+		geo.Reserve(flatA:Lerp(flatB, t / len), 4)
+	end
+end
+
+local function soccer(folder: Instance, geo: TownKit.Geo, cf: CFrame)
+	local model = TownKit.Model(folder, "SoccerField")
+	local L, W = 44, 28
+	part(model, "Pitch", Vector3.new(W, 0.2, L), cf * CFrame.new(0, GROUND_Y + 0.02, 0), Color3.fromRGB(110, 190, 100), M.Grass, "deco")
+	for i = -2, 2, 2 do
+		part(model, "Stripe", Vector3.new(W - 2, 0.2, L / 7), cf * CFrame.new(0, GROUND_Y + 0.05, i * L / 7), Color3.fromRGB(130, 206, 116), M.Grass, "deco")
+	end
+	local line = C.White
+	for _, sx in ipairs({ -1, 1 }) do
+		part(model, "Touchline", Vector3.new(0.4, 0.2, L - 2), cf * CFrame.new(sx * (W / 2 - 1), GROUND_Y + 0.08, 0), line, M.SmoothPlastic, "deco")
+		part(model, "GoalLine", Vector3.new(W - 2, 0.2, 0.4), cf * CFrame.new(0, GROUND_Y + 0.08, sx * (L / 2 - 1)), line, M.SmoothPlastic, "deco")
+		-- but : poteaux, barre, filet
+		local goal = cf * CFrame.new(0, GROUND_Y, sx * (L / 2 - 0.6))
+		for _, gx in ipairs({ -3.5, 3.5 }) do
+			part(model, "Post", Vector3.new(0.3, 4, 0.3), goal * CFrame.new(gx, 2, 0), line, M.Metal, "prop")
+		end
+		part(model, "Bar", Vector3.new(7.3, 0.3, 0.3), goal * CFrame.new(0, 4, 0), line, M.Metal, "deco")
+		local net = part(model, "Net", Vector3.new(7, 3.8, 2), goal * CFrame.new(0, 2, sx * 1.1), line, M.Fabric, "deco")
+		net.Transparency = 0.6
+	end
+	part(model, "MidLine", Vector3.new(W - 2, 0.2, 0.4), cf * CFrame.new(0, GROUND_Y + 0.08, 0), line, M.SmoothPlastic, "deco")
+	TownKit.Disc(model, "CenterRing", (cf * CFrame.new(0, GROUND_Y + 0.1, 0)).Position, 4.2, 0.1, line, M.SmoothPlastic, "deco")
+	TownKit.Disc(model, "CenterIn", (cf * CFrame.new(0, GROUND_Y + 0.12, 0)).Position, 3.8, 0.1, Color3.fromRGB(110, 190, 100), M.Grass, "deco")
+	TownKit.Ball(model, "Ball", (cf * CFrame.new(2, GROUND_Y + 0.9, 3)).Position, 1.4, C.White, M.SmoothPlastic, "deco")
+	geo.Reserve(cf.Position, 27)
+end
+
+local function tulips(folder: Instance, geo: TownKit.Geo, cf: CFrame)
+	local model = TownKit.Model(folder, "TulipField")
+	for i = 0, 6 do
+		part(model, "Tulips", Vector3.new(26, 1.1, 2.6), cf * CFrame.new(0, GROUND_Y + 0.5, -12 + i * 4), TownKit.FLOWERS[i % #TownKit.FLOWERS + 1], M.Grass, "deco")
+	end
+	-- petit moulin décoratif
+	local mill = cf * CFrame.new(16, GROUND_Y, 0)
+	TownKit.Column(model, "MillTower", mill.Position, 12, 5, C.Cream, M.Plaster, "solid")
+	TownKit.Wedge(model, "MillRoof", Vector3.new(5.6, 3, 2.8), mill * CFrame.new(0, 13.5, -1.4), Color3.fromRGB(170, 96, 90), M.ClayRoofTiles, "deco")
+	TownKit.Wedge(model, "MillRoof", Vector3.new(5.6, 3, 2.8), mill * CFrame.new(0, 13.5, 1.4) * CFrame.Angles(0, math.pi, 0), Color3.fromRGB(170, 96, 90), M.ClayRoofTiles, "deco")
+	local hub = mill * CFrame.new(0, 10, -2.8)
+	for k = 0, 1 do
+		part(model, "Sail", Vector3.new(1.4, 14, 0.2), hub * CFrame.Angles(0, 0, math.rad(45 + k * 90)), C.White, M.Fabric, "deco")
+	end
+	geo.Reserve(cf.Position, 20)
+	geo.Reserve(mill.Position, 5)
+end
+
+----------------------------------------------------------------------
 -- Paysage lointain
 ----------------------------------------------------------------------
 
@@ -354,7 +420,7 @@ local function belt(folder: Instance, geo: TownKit.Geo)
 	local O = geo.Origin
 	local m = geo.Slots
 	local back = geo.PlotR + WorldLayout.PLOT_D / 2
-	local perSlot = m >= 11 and 3 or (m >= 8 and 5 or 6)
+	local perSlot = m >= 11 and 2 or (m >= 8 and 5 or 6)
 	for k = 0, m - 1 do
 		for j = 1, perSlot do
 			local a = geo.SlotAngle(k) + (j - 0.5 - perSlot / 2) / perSlot * (math.pi * 2 / m) + (hash(k, j) - 0.5) * 0.05
@@ -401,7 +467,14 @@ function TownNature.Build(folder: Instance, geo: TownKit.Geo): number
 		return CFrame.lookAt(p, Vector3.new(O.X, p.Y, O.Z))
 	end
 	local lakeR = math.clamp(depth / 2 - 12, 20, 42)
-	lake(nature, geo, geo.At((aR + math.pi) / 2 + 0.05, mid + 4), lakeR)
+	local lakeAngle, lakeDist = (aR + math.pi) / 2 + 0.05, mid + 4
+	lake(nature, geo, geo.At(lakeAngle, lakeDist), lakeR)
+	local anchors = {
+		{ lakeAngle, lakeDist - lakeR - 4 },
+		{ aR * 0.42, r0 + 22 - 16 },
+		{ (aL + math.pi * 2) / 2, r0 + 24 - 18 },
+		{ (math.pi + aL) / 2 + 0.06, r0 + 22 - 14 },
+	}
 	playground(nature, geo, frame(aR * 0.42, r0 + 22))
 	picnic(nature, geo, frame(aR * 0.62, math.min(geo.Inner - 14, r0 + 50)), 3)
 	market(nature, geo, frame((aL + math.pi * 2) / 2, r0 + 24))
@@ -409,7 +482,30 @@ function TownNature.Build(folder: Instance, geo: TownKit.Geo): number
 	if depth > 70 then
 		court(nature, geo, frame((math.pi + aL) / 2 - 0.05, geo.Inner - 18))
 	end
-	local trees = scatterTrees(nature, geo, math.clamp(math.floor(depth * 0.35), 25, 38))
+	-- grandes villes : terrain de foot + champ de tulipes là où il y a de la place
+	if depth > 110 then
+		for _, spot in ipairs({ { (aL + math.pi * 2) / 2 + 0.04, geo.Inner - 34 }, { aR * 0.55, geo.Inner - 34 }, { (aR + math.pi) / 2, geo.Inner - 30 } }) do
+			local p = geo.At(spot[1], spot[2])
+			if geo.IsFree(p, 26) then
+				soccer(nature, geo, frame(spot[1], spot[2]))
+				table.insert(anchors, { spot[1], spot[2] - 24 })
+				break
+			end
+		end
+		for _, spot in ipairs({ { aR * 0.3, geo.Inner - 30 }, { (math.pi + aL) / 2 - 0.1, mid + 10 }, { (aL + math.pi * 2) / 2 - 0.12, mid + 16 } }) do
+			local p = geo.At(spot[1], spot[2])
+			if geo.IsFree(p, 22) then
+				tulips(nature, geo, frame(spot[1], spot[2]))
+				break
+			end
+		end
+	end
+	-- allées en gravier : de l'arrière des boutiques de la place vers chaque lieu
+	local paths = TownKit.Model(nature, "Footpaths")
+	for _, anchor in ipairs(anchors) do
+		footpath(paths, geo, geo.At(anchor[1], r0 - 1), geo.At(anchor[1], anchor[2]))
+	end
+	local trees = scatterTrees(nature, geo, math.clamp(math.floor(depth * 0.35), 25, 44))
 	belt(nature, geo)
 	hills(nature, geo)
 	TownBuildings.Skyline(nature, O, math.rad(125), math.rad(235), geo.Town + 320, 20)

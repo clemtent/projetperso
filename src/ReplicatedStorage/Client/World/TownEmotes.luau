@@ -44,6 +44,8 @@ local ONE_SHOT_MAX = 6
 
 export type Hooks = {
 	OnChanged: ((state: string?, name: string?) -> ())?,
+	-- vrai = un autre mode tient l'avatar (bureau DeskMode) : les émotes se taisent
+	Blocked: (() -> boolean)?,
 	Toast: ((text: string) -> ())?,
 }
 
@@ -87,7 +89,20 @@ end
 -- État
 ----------------------------------------------------------------------
 
+function TownEmotes.IsBlocked(self: any): boolean
+	local blocked = self.Hooks.Blocked
+	if not blocked then
+		return false
+	end
+	local ok, result = pcall(blocked)
+	return ok and result == true
+end
+
 function TownEmotes.State(self: any): string?
+	-- (au bureau : DeskMode montre son propre "Se lever")
+	if self:IsBlocked() then
+		return nil
+	end
 	if self.Name then
 		return "Emote"
 	end
@@ -238,7 +253,7 @@ end
 -- Bouger : arrête l'émote ; relève l'avatar assis PAR TERRE (pas un siège :
 -- on ne se lève pas d'un canapé en touchant le joystick par erreur)
 function TownEmotes.OnMove(self: any)
-	if self:MoveMagnitude() <= MOVE_THRESHOLD then
+	if self:IsBlocked() or self:MoveMagnitude() <= MOVE_THRESHOLD then
 		return
 	end
 	if self.Name then
@@ -252,6 +267,9 @@ end
 
 -- Sauter : arrête l'émote et relève l'avatar (par terre ou siège)
 function TownEmotes.OnJump(self: any)
+	if self:IsBlocked() then
+		return
+	end
 	if self.Name then
 		self:Stop("jump")
 	end
@@ -273,21 +291,41 @@ function TownEmotes.Attach(self: any, character: Model?)
 	self.Character = character
 	self.Humanoid = humanoid
 	local list = self.Connections
-	table.insert(list, humanoid:GetPropertyChangedSignal("MoveDirection"):Connect(function()
+	-- (chaque signal est facultatif : un Humanoid / émulateur incomplet ne casse rien)
+	local function watch(getSignal: () -> any, fn: (...any) -> ())
+		local ok, connection = pcall(function()
+			local signal = getSignal()
+			return signal and signal:Connect(fn) or nil
+		end)
+		if ok and connection then
+			table.insert(list, connection)
+		end
+	end
+	watch(function()
+		return humanoid:GetPropertyChangedSignal("MoveDirection")
+	end, function()
 		self:OnMove()
-	end))
-	table.insert(list, humanoid:GetPropertyChangedSignal("Sit"):Connect(function()
+	end)
+	watch(function()
+		return humanoid:GetPropertyChangedSignal("Sit")
+	end, function()
 		self:RefreshSit()
-	end))
-	table.insert(list, humanoid.Seated:Connect(function()
+	end)
+	watch(function()
+		return humanoid.Seated
+	end, function()
 		self:RefreshSit()
-	end))
-	table.insert(list, humanoid.Jumping:Connect(function(active: boolean)
+	end)
+	watch(function()
+		return humanoid.Jumping
+	end, function(active: boolean)
 		if active and self.Name then
 			self:Stop("jump")
 		end
-	end))
-	table.insert(list, humanoid.StateChanged:Connect(function(_old: Enum.HumanoidStateType, new: Enum.HumanoidStateType)
+	end)
+	watch(function()
+		return humanoid.StateChanged
+	end, function(_old: Enum.HumanoidStateType, new: Enum.HumanoidStateType)
 		if new == Enum.HumanoidStateType.Jumping or new == Enum.HumanoidStateType.Freefall then
 			if self.Name then
 				self:Stop("jump")
@@ -297,21 +335,27 @@ function TownEmotes.Attach(self: any, character: Model?)
 		elseif new == Enum.HumanoidStateType.Dead then
 			self:Stop("removed")
 		end
-	end))
-	table.insert(list, humanoid.Died:Connect(function()
+	end)
+	watch(function()
+		return humanoid.Died
+	end, function()
 		self:Stop("removed")
 		self.Sitting = false
 		self:Notify()
-	end))
-	table.insert(list, character.AncestryChanged:Connect(function(_, parent)
+	end)
+	watch(function()
+		return character.AncestryChanged
+	end, function(_, parent)
 		if parent == nil and self.Character == character then
 			self:Detach()
 		end
-	end))
+	end)
 	-- (touche "sauter" même assis : Humanoid.Jumping ne vient pas toujours)
-	table.insert(list, UserInputService.JumpRequest:Connect(function()
+	watch(function()
+		return UserInputService.JumpRequest
+	end, function()
 		self:OnJump()
-	end))
+	end)
 	self.Sitting = false
 	self:RefreshSit()
 	self:Notify()
@@ -393,7 +437,7 @@ end
 function TownEmotes.Play(self: any, name: string): boolean
 	local humanoid = self.Humanoid
 	local character = self.Character
-	if not humanoid or not character or humanoid.Health <= 0 then
+	if not humanoid or not character or humanoid.Health <= 0 or self:IsBlocked() then
 		return false
 	end
 	-- une nouvelle émote remplace toujours l'ancienne
@@ -462,6 +506,12 @@ function TownEmotes.Step(self: any)
 	if humanoid.Parent == nil or humanoid.Health <= 0 then
 		if self.Name then
 			self:Stop("removed")
+		end
+		return
+	end
+	if self:IsBlocked() then
+		if self.Name then
+			self:Stop("desk")
 		end
 		return
 	end

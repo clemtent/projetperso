@@ -112,6 +112,10 @@ local guide: any = nil
 local guidePending = false
 local intro: any = nil
 local introSeen = false -- (survol : 1re arrivée de la session seulement)
+local gardens: { [number]: any } = {} -- 🌻 jardins de Dopamine 3D (GardenBuilder), par UserId
+local locLabels: { Instance } = {} -- panneaux de la ville à traduire (attribut "LocText")
+local LOC_EVERY = 2
+local deskWired = false
 
 ----------------------------------------------------------------------
 -- Utilitaires
@@ -178,6 +182,83 @@ local function canEnter(snapshot: any): boolean
 end
 
 ----------------------------------------------------------------------
+-- Modules v9.5 (autres agents) : chargés PARESSEUSEMENT, en pcall ; absents
+-- ou en erreur -> ignorés sans bruit (la ville marche sans eux)
+----------------------------------------------------------------------
+
+local optionalCache: { [string]: any } = {}
+local function optionalModule(name: string): any
+	local cached = optionalCache[name]
+	if cached ~= nil then
+		return cached or nil
+	end
+	local module = script.Parent:FindFirstChild(name)
+	local ok, result = false, nil
+	if module and module:IsA("ModuleScript") then
+		ok, result = pcall(require, module)
+	end
+	optionalCache[name] = (ok and type(result) == "table") and result or false
+	return optionalCache[name] or nil
+end
+
+-- 🖥️ Bureau (DeskMode, SETUP3D95) : l'avatar est assis à son setup ?
+local function deskActive(): boolean
+	local desk = optionalModule("DeskMode")
+	if not desk or type(desk.IsActive) ~= "function" then
+		return false
+	end
+	local ok, result = pcall(desk.IsActive)
+	return ok and result == true
+end
+
+local function deskCall(method: string)
+	local desk = optionalModule("DeskMode")
+	local fn = desk and desk[method]
+	if type(fn) == "function" then
+		local ok, err = pcall(fn)
+		if not ok then
+			warn("[Town] DeskMode." .. method .. " : " .. tostring(err))
+		end
+	end
+end
+
+----------------------------------------------------------------------
+-- 🌻 Jardins de Dopamine 3D (GardenBuilder, GARDEN3D95)
+----------------------------------------------------------------------
+
+local function destroyGarden(userId: number)
+	local garden = gardens[userId]
+	gardens[userId] = nil
+	if garden then
+		pcall(garden.Destroy, garden)
+	end
+end
+
+local function createGarden(userId: number, house: any, snapshot: any, plot: number, count: number)
+	local GardenBuilder = optionalModule("GardenBuilder")
+	if not GardenBuilder or gardens[userId] then
+		return
+	end
+	local ok, result = pcall(function()
+		local plotCF = WorldLayout.PlotCFrame(plot, count)
+		local origin, size
+		if type(GardenBuilder.BackyardArea) == "function" then
+			origin, size = GardenBuilder.BackyardArea(plotCF)
+		else
+			origin, size = GardenBuilder.BackyardCFrame(plotCF), GardenBuilder.BACKYARD_SIZE
+		end
+		local garden = GardenBuilder.new(house.Model, origin, size, userId == LocalPlayer.UserId, { OwnerName = snapshot.DisplayName })
+		garden:Update(snapshot.DopamineGarden)
+		return garden
+	end)
+	if ok and result then
+		gardens[userId] = result
+	else
+		warn("[Town] Jardin " .. tostring(userId) .. " : " .. tostring(result))
+	end
+end
+
+----------------------------------------------------------------------
 -- Maisons
 ----------------------------------------------------------------------
 
@@ -206,6 +287,7 @@ local function syncHouses()
 	for userId, house in pairs(houses) do
 		local snapshot = snapshots[userId]
 		if not snapshot or not snapshot.Plot or tonumber(house.Model:GetAttribute("Plot")) ~= snapshot.Plot then
+			destroyGarden(userId)
 			house:Destroy()
 			houses[userId] = nil
 		end
@@ -219,6 +301,10 @@ local function syncHouses()
 				local ok, err = pcall(house.Update, house, snapshot)
 				if not ok then
 					warn("[Town] Maison " .. tostring(userId) .. " : " .. tostring(err))
+				end
+				local garden = gardens[userId]
+				if garden then
+					pcall(garden.Update, garden, snapshot.DopamineGarden)
 				end
 			else
 				missing = true
@@ -247,6 +333,7 @@ local function syncHouses()
 					result.Model:SetAttribute("Plot", nextPlot)
 					result.OnSeat = onSeat
 					houses[nextId :: number] = result
+					createGarden(nextId :: number, result, snapshot, nextPlot, count)
 				else
 					warn("[Town] Maison " .. tostring(nextId) .. " : " .. tostring(result))
 					snapshots[nextId :: number] = nil

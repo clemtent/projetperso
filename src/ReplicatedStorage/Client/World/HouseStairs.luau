@@ -219,7 +219,7 @@ function HouseStairs.Build(kit: any, size: any, colors: Colors): Result
 	local floors = dims.Floors
 	local ramps: { BasePart } = {}
 	local holes = {}
-	local before = kit.Count
+	local before = kit.Stats.Count
 	for floor = 1, floors do
 		hallFloor(kit, size, floor, floors)
 		hallWalls(kit, size, floor, colors)
@@ -255,7 +255,7 @@ function HouseStairs.Build(kit: any, size: any, colors: Colors): Result
 	local h0, h1 = WorldLayout.HallSpan(size)
 	local top = WorldLayout.FloorY(floors) + WorldLayout.WALL_H
 	kit:Box("HallCeiling", h0, h1, top, top + 0.6, WorldLayout.WALL_T, WorldLayout.WALL_T + WorldLayout.DEPTH, CEILING, M.SmoothPlastic, { Solid = true, Shadow = false })
-	return { Ramps = ramps, Holes = holes, Parts = kit.Count - before }
+	return { Ramps = ramps, Holes = holes, Parts = kit.Stats.Count - before }
 end
 
 return HouseStairs

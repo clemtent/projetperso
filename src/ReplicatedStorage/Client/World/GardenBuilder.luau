@@ -44,6 +44,7 @@
 	  garden:SetFocus(position?)   (facultatif : sinon la caméra sert de repère)
 	  garden:Destroy()             (aussi automatique si `parent` est détruit)
 	  GardenBuilder.BackyardArea(plotCF) -> (originCF, areaSize)
+	  GardenBuilder.BackyardCFrame(plotCF) -> originCF ; GardenBuilder.BACKYARD_SIZE (Vector2)
 	  GardenBuilder.BuildFlower(flowerId, stage, scale?) -> Model
 	      stage = "Seed" | "Sprout" | "Bud" | "Bloom" | "Ready" (ou 0..4) ;
 	      modèle tourné vers -Z, pivot = bas centre (posé sur la terre),
@@ -70,7 +71,7 @@ local rad = math.rad
 local TAU = math.pi * 2
 
 -- Dimensions (studs)
-local LAWN_TOP = 0.4 -- dessus de la pelouse de la parcelle (TownMap : Lawn 0,4)
+local LAWN_TOP = 0.45 -- dessus de la pelouse de la parcelle (TownMap v9.4)
 local BED_W, BED_D, BED_H = 6.2, 3.6, 1.4
 local PLANK = 0.4
 local BED_GAP = 3.6
@@ -466,6 +467,14 @@ function GardenBuilder.BackyardArea(plotCF: CFrame): (CFrame, Vector2)
 	local center = (back + edge) / 2
 	return plotCF * CFrame.new(0, LAWN_TOP, center), Vector2.new(WorldLayout.PLOT_W - 8, edge - back)
 end
+
+-- (noms utilisés par TownClient : même calcul)
+function GardenBuilder.BackyardCFrame(plotCF: CFrame): CFrame
+	local cf = GardenBuilder.BackyardArea(plotCF)
+	return cf
+end
+local _, backyardSize = GardenBuilder.BackyardArea(CFrame.identity)
+GardenBuilder.BACKYARD_SIZE = backyardSize
 
 ----------------------------------------------------------------------
 -- Heure du serveur, textes
@@ -1237,6 +1246,11 @@ function GardenBuilder._heartbeat(self: Garden, dt: number)
 						bed.Hero = nil
 					end
 					bed.Billboard.Enabled = false
+				end
+				for _, fly in ipairs(self.Butterflies) do
+					fly.Body.Transparency = 1
+					fly.Left.Transparency = 1
+					fly.Right.Transparency = 1
 				end
 			elseif not self.Near and distance < SHOW_RANGE then
 				self.Near = true

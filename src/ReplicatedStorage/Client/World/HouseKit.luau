@@ -8,7 +8,8 @@
 	(d > 0 = dans la maison, d < 0 = jardin de devant).
 	Toutes les pièces sont ancrées, CanTouch = false ; la déco (Solid = false)
 	ne bloque ni les avatars ni les rayons ; petites pièces sans ombre.
-	Le kit COMPTE ses pièces (budget : manoir < 1200) et ses vraies lumières.
+	Le kit COMPTE ses pièces (kit.Stats.Count ; budget : manoir < 1200) et
+	ses vraies lumières (kit.Stats.Lights <= MaxLights).
 
 	API :
 	  HouseKit.new(houseCF, folder) -> Kit
@@ -25,6 +26,7 @@
 	  kit:WallX(name, x0, x1, y0, y1, d0, d1, holes, color, material?, opts?)
 	  kit:Light(part, color, range, brightness, kind?) (budget de lumières)
 	  kit:Text(part, face, text, color, font?, pps?)  (SurfaceGui)
+	  kit:Sub(offsetCF) -> Kit  (même dossier / compteurs, repère décalé)
 ]]
 
 local HouseKit = {}
@@ -40,27 +42,41 @@ export type Opts = {
 	Shape: Enum.PartType?,
 }
 
+export type Stats = { Count: number, Lights: number, MaxLights: number }
+
 export type Kit = typeof(setmetatable({} :: {
 	CF: CFrame,
 	Folder: Instance,
-	Count: number,
-	Lights: number,
-	MaxLights: number,
+	Stats: Stats,
 	L: (x: number, y: number, d: number) -> CFrame,
 }, HouseKit))
+
+-- Hauteur du dessus de la pelouse des parcelles (TownMap) : le jardin de
+-- devant est posé dessus (HouseKit.Sub)
+HouseKit.LAWN = 0.45
+
+local function localCF(x: number, y: number, d: number): CFrame
+	return CFrame.new(x, y, -d)
+end
 
 function HouseKit.new(houseCF: CFrame, folder: Instance, maxLights: number?): Kit
 	local self = setmetatable({
 		CF = houseCF,
 		Folder = folder,
-		Count = 0,
-		Lights = 0,
-		MaxLights = maxLights or 4,
-		L = function(x: number, y: number, d: number): CFrame
-			return CFrame.new(x, y, -d)
-		end,
+		Stats = { Count = 0, Lights = 0, MaxLights = maxLights or 4 },
+		L = localCF,
 	}, HouseKit)
 	return self
+end
+
+-- Kit décalé (même dossier, mêmes compteurs) : ex. le jardin posé sur la pelouse
+function HouseKit.Sub(self: Kit, offset: CFrame, folder: Instance?): Kit
+	return setmetatable({
+		CF = self.CF * offset,
+		Folder = folder or self.Folder,
+		Stats = self.Stats,
+		L = localCF,
+	}, HouseKit)
 end
 
 function HouseKit.World(self: Kit, x: number, y: number, d: number): Vector3
@@ -96,7 +112,7 @@ function HouseKit.Part(self: Kit, name: string, size: Vector3, localCF: CFrame, 
 		(p :: Part).Shape = o.Shape
 	end
 	p.Parent = self.Folder
-	self.Count += 1
+	self.Stats.Count += 1
 	return p
 end
 
@@ -248,10 +264,11 @@ end
 
 -- Vraie lumière (PointLight / SpotLight), dans la limite du budget de la maison
 function HouseKit.Light(self: Kit, part: BasePart, color: Color3, range: number, brightness: number, kind: string?): Light?
-	if self.Lights >= self.MaxLights then
+	local stats = self.Stats
+	if stats.Lights >= stats.MaxLights then
 		return nil
 	end
-	self.Lights += 1
+	stats.Lights += 1
 	local light = Instance.new((kind or "PointLight") :: any) :: Light
 	light.Color = color
 	light.Brightness = brightness
