@@ -552,6 +552,25 @@ function SoundManager.PreviewClickSound(id: string)
 	end
 end
 
+-- v9.1 GEAR : son de touche (Config.ClickSounds Keyboard1..5) joué par les
+-- claviers cliquables, avec hauteur ; limité comme PlayClick
+local lastKey = 0
+function SoundManager.PlayKeySound(id: string, pitch: number?)
+	if not soundEnabled or effectsVolume <= 0 then
+		return
+	end
+	local template = clickTemplates[id]
+	if not template then
+		return
+	end
+	local now = os.clock()
+	if now - lastKey < MIN_INTERVAL then
+		return
+	end
+	lastKey = now
+	playTemplate(template, pitch or 1)
+end
+
 function SoundManager.SetSoundEnabled(enabled: boolean)
 	soundEnabled = enabled == true
 end
