@@ -48,6 +48,7 @@ local Formulas = require(ReplicatedStorage.Shared.Formulas)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local Locale = require(ReplicatedStorage.Shared.Locale)
 local HouseCommon = require(script.Parent:WaitForChild("House"):WaitForChild("HouseCommon"))
+local CosmeticArt = require(script.Parent.CosmeticArt) -- (v9.2) chapeaux dessinés, motifs de boutons
 
 local CenterColumn = {}
 
@@ -86,6 +87,10 @@ local PILLS = {
 
 local BUTTON_SIZE = Vector2.new(184, 62)
 local PILL_HEIGHT = 36
+-- Téléphone : pastilles rondes plus grosses (≈ 34 px réels à l'écran, zone
+-- tactile correcte) avec moins de marge verticale autour (la rangée ne
+-- grandit que de 2 px "design")
+local PHONE_PILL_HEIGHT = 52
 local HOUSE_BUTTON_SIZE = 54 -- bouton "🏠" (zone tactile >= 44 px)
 -- Colonne des indicateurs Robux (à gauche du bouton) : 2 pastilles + carte du
 -- boost ; remontée de STATUS_LIFT px pour finir au-dessus du compteur
@@ -188,6 +193,7 @@ local function applySkin(skinId: string)
 		buttonGradient.Color = ColorSequence.new(Theme.Colors.Button, Theme.Colors.ButtonBottom)
 		clickLabel.TextColor3 = Theme.Colors.Text
 	end
+	CosmeticArt.ApplySkin(clickButton, skin, 12, 2) -- (v9.2) motif (nil = retiré)
 end
 
 local function applyHat(hatId: string)
@@ -197,7 +203,7 @@ local function applyHat(hatId: string)
 	currentHat = hatId
 	local hat = Config.CosmeticsById[hatId]
 	if hat then
-		hatLabel.Text = hat.Icon
+		CosmeticArt.ApplyHat(hatLabel, hat) -- (v9.2) dessin, sinon l'emoji
 		hatLabel.Visible = true
 		local scale = hatLabel:FindFirstChildOfClass("UIScale")
 		if scale then
@@ -205,6 +211,7 @@ local function applyHat(hatId: string)
 			UIUtil.Tween(scale, 0.45, { Scale = 1 }, Enum.EasingStyle.Back)
 		end
 	else
+		CosmeticArt.ApplyHat(hatLabel, nil)
 		hatLabel.Visible = false
 	end
 end
@@ -575,10 +582,10 @@ local function buildPills(parent: Frame, order: number)
 	end
 	table.clear(pills)
 	local phone = Interface.IsPhone()
-	local height = Interface.IsTouch() and Theme.TouchTarget or PILL_HEIGHT
+	local height = phone and PHONE_PILL_HEIGHT or (Interface.IsTouch() and Theme.TouchTarget or PILL_HEIGHT)
 	-- Marge verticale du support (4 px d'air entre deux lignes de pastilles sur PC)
-	local holderPad = phone and 12 or 4
-	local buttonY = phone and 7 or 2
+	local holderPad = phone and 6 or 4
+	local buttonY = phone and 3 or 2
 	pillsDevice = Interface.Device
 
 	local row: GuiObject
@@ -649,7 +656,7 @@ local function buildPills(parent: Frame, order: number)
 		local tablet = Interface.Device == "Tablet"
 		local button, badge = buildMenuPill(holder, def, icon, label, height, round, tablet, buttonY)
 		if round then
-			badge.Position = UDim2.new(1, phone and -5 or -2, 0, phone and 9 or 2)
+			badge.Position = UDim2.new(1, phone and -6 or -2, 0, phone and 12 or 2)
 		end
 		UIUtil.Create("UIScale", { Name = "PopScale", Parent = holder })
 

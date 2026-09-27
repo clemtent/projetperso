@@ -23,7 +23,16 @@
 		Rooms = { { Id = "R1", Type = "Living", Slot = 1..MaxRooms, Wallpaper = id, Floor = id,
 			Placed = { { I = itemId, X = 0..1, Y = 0..1, S = 0.6..1.6, Z = 0..999, F = true? }, ... } }, ... },
 		NextRoom = 2, -- prochain numéro d'Id de pièce
+		-- v9.1 🎨 personnalisation (Config.HouseLookKinds) :
+		OwnedTrims / OwnedMoods / OwnedViews / OwnedFacades / OwnedRoofs /
+		OwnedRoofStyles / OwnedGarden = { [id] = true },
+		Facade = id, Roof = id, RoofStyle = id, -- extérieur
+		Garden = { id, ... }, -- déco du jardin affichée (GardenSlots max)
 	}
+	Chaque pièce a aussi Trim (boiseries), Mood (ambiance) et View (vue par la
+	fenêtre) ; un objet posé peut avoir C = couleur (Config.House.Tints ;
+	les couleurs verrouillées par les visites à l'océan sont retirées).
+	Anciennes sauvegardes : tout ce qui manque prend la 1re entrée (gratuite).
 	F (facultatif) = objet retourné gauche <-> droite (chaise tournée vers la
 	table...). Petits objets posés SUR un meuble : Formulas.CanGoOnFurniture
 	(Y jusqu'à Config.House.TabletopMinY), même règle que l'éditeur.
@@ -38,7 +47,10 @@
 	  "moveRoom" { Room, Slot }   (échange si l'emplacement est pris)
 	  "setRoomType" { Room, Type }
 	  "buyWallpaper" / "setWallpaper" / "buyFloor" / "setFloor" { Room, Id } (ou Id seul = 1re pièce)
-	  "saveLayout" { Rooms = { [roomId] = { { I, X, Y, S, Z }, ... } } }  (ou { Room, Placed })
+	  "saveLayout" { Rooms = { [roomId] = { { I, X, Y, S, Z, F?, C? }, ... } } }  (ou { Room, Placed })
+	  "buyLook" { Kind, Id, Room? }  achète (et applique) une personnalisation
+	  "setLook" { Kind, Id, Room?, On? }  applique une personnalisation possédée
+	    (Kind "Garden" : On = true / false pose / range la déco du jardin)
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -59,6 +71,7 @@ local DEFAULT_WALLPAPER = HOUSE.Wallpapers[1].Id
 local DEFAULT_FLOOR = HOUSE.Floors[1].Id
 
 local DEFAULT_ROOM_TYPE = HOUSE.RoomTypes[1].Id
+local ROOM_LOOKS = { "Trim", "Mood", "View" }
 
 local MAX_ID_LENGTH = 64
 local MAX_ROOM_ID_LENGTH = 16
@@ -84,6 +97,9 @@ local function round(value: number, step: number): number
 	return math.floor(value / step + 0.5) * step
 end
 
+local LOOK_KINDS = Config.HouseLookKinds
+local GARDEN_SLOTS = HOUSE.GardenSlots or 6
+
 local function numberOr(value, default: number): number
 	if isValidNumber(value) then
 		return value
@@ -98,7 +114,20 @@ end
 
 -- Un objet posé, corrigé : coordonnées bornées, dans la bonne zone.
 -- F = true : dessin retourné (miroir gauche <-> droite), absent sinon.
-local function normalizeEntry(entry, item)
+-- Couleur d'un objet posé : id connu et débloqué (visites à l'océan), sinon nil
+local function tintOf(entry, rebirths: number): string?
+	local id = entry.C
+	if type(id) ~= "string" or #id > MAX_ID_LENGTH then
+		return nil
+	end
+	local tint = Config.HouseTintsById[id]
+	if not tint or Formulas.GetHouseRequiredRebirths(tint) > rebirths then
+		return nil
+	end
+	return id
+end
+
+local function normalizeEntry(entry, item, rebirths: number?)
 	local minY, maxY = FLOOR_MIN_Y, 1
 	if item.Placement == "Wall" then
 		minY, maxY = 0, WALL_MAX_Y
@@ -118,6 +147,7 @@ local function normalizeEntry(entry, item)
 		S = math.clamp(round(s, 0.001), MIN_SCALE, MAX_SCALE),
 		Z = z,
 		F = entry.F == true or nil,
+		C = tintOf(entry, rebirths or 0),
 	}
 end
 
@@ -222,7 +252,8 @@ local function newRoom(house, typeId: string, slot: number)
 	local id = "R" .. tostring(house.NextRoom)
 	house.NextRoom += 1
 	local wallpaper, floor = defaultStyles(house, roomType)
-	return { Id = id, Type = roomType.Id, Slot = slot, Wallpaper = wallpaper, Floor = floor, Placed = {} }
+	return { Id = id, Type = roomType.Id, Slot = slot, Wallpaper = wallpaper, Floor = floor,
+		Trim = HOUSE.Trims[1].Id, Mood = HOUSE.Moods[1].Id, View = HOUSE.Views[1].Id, Placed = {} }
 end
 
 -- Déménagement : chaque pièce garde son étage / sa colonne si possible,
@@ -287,7 +318,7 @@ end
 -- Objets posés d'une pièce, corrigés : connus, pas plus que possédés
 -- (`used` compte les exemplaires déjà posés dans les autres pièces), au
 -- plus `maxItems`
-local function cleanPlaced(list, owned, used, maxItems: number)
+local function cleanPlaced(list, owned, used, maxItems: number, rebirths: number)
 	local placed = {}
 	if type(list) ~= "table" then
 		return placed
@@ -300,7 +331,7 @@ local function cleanPlaced(list, owned, used, maxItems: number)
 		local item = type(id) == "string" and Config.HouseItemsById[id] or nil
 		if item and (used[id] or 0) < (owned[id] or 0) then
 			used[id] = (used[id] or 0) + 1
-			table.insert(placed, normalizeEntry(entry, item))
+			table.insert(placed, normalizeEntry(entry, item, rebirths))
 		end
 	end
 	return placed
@@ -320,6 +351,36 @@ local function sanitizeHouse(data)
 
 	if type(house.Size) ~= "string" or not house.OwnedSizes[house.Size] then
 		house.Size = DEFAULT_SIZE
+	end
+	local rebirths = numberOr(data.Rebirths, 0)
+
+	-- (v9.1) Personnalisation : entrées connues, la 1re gratuite toujours possédée
+	for _, def in pairs(LOOK_KINDS) do
+		local owned = cleanOwnedMap(house[def.Owned], def.ById)
+		if def.Scope ~= "Garden" then
+			owned[def.List[1].Id] = true
+		end
+		house[def.Owned] = owned
+		if def.Scope == "House" then
+			local value = house[def.Field]
+			if type(value) ~= "string" or not owned[value] then
+				house[def.Field] = def.List[1].Id
+			end
+		elseif def.Scope == "Garden" then
+			local garden, seen = {}, {}
+			if type(house.Garden) == "table" then
+				for _, id in ipairs(house.Garden) do
+					if #garden >= GARDEN_SLOTS then
+						break
+					end
+					if type(id) == "string" and owned[id] and not seen[id] then
+						seen[id] = true
+						table.insert(garden, id)
+					end
+				end
+			end
+			house.Garden = garden
+		end
 	end
 
 	-- Objets possédés : nombres entiers > 0, jamais plus que MaxOwned
@@ -394,8 +455,14 @@ local function sanitizeHouse(data)
 				Wallpaper = (type(raw.Wallpaper) == "string" and house.OwnedWallpapers[raw.Wallpaper]) and raw.Wallpaper
 					or fallbackWallpaper,
 				Floor = (type(raw.Floor) == "string" and house.OwnedFloors[raw.Floor]) and raw.Floor or fallbackFloor,
-				Placed = cleanPlaced(raw.Placed, items, used, size.RoomItems),
+				Placed = cleanPlaced(raw.Placed, items, used, size.RoomItems, rebirths),
 			}
+			-- (v9.1) boiseries / ambiance / vue : possédées, sinon la 1re (gratuite)
+			for _, kind in ipairs(ROOM_LOOKS) do
+				local def = LOOK_KINDS[kind]
+				local value = raw[def.Field]
+				room[def.Field] = (type(value) == "string" and house[def.Owned][value]) and value or def.List[1].Id
+			end
 			if id then
 				ids[id] = true
 				local number = tonumber(string.match(id, "^R(%d+)$"))
@@ -410,7 +477,8 @@ local function sanitizeHouse(data)
 		end
 	end
 	if #rooms == 0 then
-		table.insert(rooms, { Id = "R1", Type = DEFAULT_ROOM_TYPE, Slot = 1, Wallpaper = DEFAULT_WALLPAPER, Floor = DEFAULT_FLOOR, Placed = {} })
+		table.insert(rooms, { Id = "R1", Type = DEFAULT_ROOM_TYPE, Slot = 1, Wallpaper = DEFAULT_WALLPAPER, Floor = DEFAULT_FLOOR,
+			Trim = HOUSE.Trims[1].Id, Mood = HOUSE.Moods[1].Id, View = HOUSE.Views[1].Id, Placed = {} })
 		highest = 1
 	end
 	if not isValidNumber(house.NextRoom) or house.NextRoom <= highest then
@@ -481,6 +549,11 @@ function HouseService:DebugGrantAll(player: Player): boolean
 	end
 	for _, item in ipairs(HOUSE.Items) do
 		house.Items[item.Id] = math.max(house.Items[item.Id] or 0, 1)
+	end
+	for _, def in pairs(LOOK_KINDS) do
+		for _, entry in ipairs(def.List) do
+			house[def.Owned][entry.Id] = true
+		end
 	end
 	-- La plus grande maison, avec une pièce de chaque type (gratuit)
 	local biggest = HOUSE.Sizes[#HOUSE.Sizes]
@@ -755,7 +828,7 @@ local function setSkin(player: Player, data, kind: string, argument: any): (bool
 end
 
 -- Vérifie une liste d'objets posés venue du client (vraie liste 1..n)
-local function readPlacedList(player: Player, list: any, maxItems: number): ({ any }?, string?)
+local function readPlacedList(player: Player, list: any, maxItems: number, rebirths: number): ({ any }?, string?)
 	if type(list) ~= "table" then
 		return nil, T(player, "Invalid request")
 	end
@@ -783,7 +856,7 @@ local function readPlacedList(player: Player, list: any, maxItems: number): ({ a
 		if not item then
 			return nil, T(player, "Unknown house item")
 		end
-		table.insert(result, normalizeEntry(entry, item))
+		table.insert(result, normalizeEntry(entry, item, rebirths))
 	end
 	return result, nil
 end
@@ -816,7 +889,7 @@ local function saveLayout(player: Player, data, argument: any): (boolean, string
 		if not room then
 			return false, T(player, "Unknown room")
 		end
-		local placed, message = readPlacedList(player, list, size.RoomItems)
+		local placed, message = readPlacedList(player, list, size.RoomItems, numberOr(data.Rebirths, 0))
 		if not placed then
 			return false, message or T(player, "Invalid request")
 		end
@@ -843,6 +916,103 @@ local function saveLayout(player: Player, data, argument: any): (boolean, string
 	updateComfortStat(data)
 	services.GameService:SendState(player)
 	return true, T(player, "🏠 Layout saved")
+end
+
+----------------------------------------------------------------------
+-- (v9.1) Personnalisation : boiseries, ambiance, vue (par pièce), façade,
+-- toit, motif du toit (maison), déco du jardin (liste)
+----------------------------------------------------------------------
+
+-- Argument { Kind, Id, Room?, On? } -> (définition du genre, entrée, pièce?)
+local function lookTarget(house, argument: any)
+	if type(argument) ~= "table" or type(argument.Kind) ~= "string" or type(argument.Id) ~= "string"
+		or #argument.Id > MAX_ID_LENGTH then
+		return nil, nil, nil
+	end
+	local def = LOOK_KINDS[argument.Kind]
+	if not def then
+		return nil, nil, nil
+	end
+	local entry = def.ById[argument.Id]
+	local room = nil
+	if def.Scope == "Room" then
+		room = if argument.Room == nil then house.Rooms[1] else findRoom(house, argument.Room)
+	end
+	return def, entry, room
+end
+
+-- Applique une entrée possédée ; Garden : On (défaut true) pose / range
+local function applyLook(player: Player, house, def, entry, room, on: boolean): (boolean, string?)
+	if def.Scope == "Room" then
+		room[def.Field] = entry.Id
+	elseif def.Scope == "House" then
+		house[def.Field] = entry.Id
+	else
+		local index = table.find(house.Garden, entry.Id)
+		if on and not index then
+			if #house.Garden >= GARDEN_SLOTS then
+				return false, T(player, "Your garden is full (max %d): put something away first", GARDEN_SLOTS)
+			end
+			table.insert(house.Garden, entry.Id)
+		elseif not on and index then
+			table.remove(house.Garden, index)
+		end
+	end
+	return true, nil
+end
+
+local function buyLook(player: Player, data, argument: any): (boolean, string)
+	local house = data.House
+	local def, entry, room = lookTarget(house, argument)
+	if not def then
+		return false, T(player, "Invalid request")
+	end
+	if not entry then
+		return false, T(player, "Unknown style")
+	end
+	if def.Scope == "Room" and not room then
+		return false, T(player, "Unknown room")
+	end
+	local owned = house[def.Owned]
+	if owned[entry.Id] then
+		return false, T(player, "You already own this style")
+	end
+	if not Formulas.IsHouseEntryUnlocked(data, entry) then
+		return false, T(player, "🔒 Unlocked after %d visits to the ocean", Formulas.GetHouseRequiredRebirths(entry))
+	end
+	local cost = entry.Cost
+	if not isValidNumber(cost) or cost < 0 or data.Dopamine < cost then
+		return false, T(player, "Not enough %s", Config.Game.CurrencyName)
+	end
+	data.Dopamine -= cost
+	owned[entry.Id] = true
+	-- appliqué tout de suite (jardin plein : acheté quand même, rangé)
+	applyLook(player, house, def, entry, room, true)
+	services.GameService:SendState(player)
+	return true, T(player, "🎨 %s %s is yours! (%s)", entry.Icon or "", T(player, entry.Name), NumberFormatter.Format(cost))
+end
+
+local function setLook(player: Player, data, argument: any): (boolean, string)
+	local house = data.House
+	local def, entry, room = lookTarget(house, argument)
+	if not def then
+		return false, T(player, "Invalid request")
+	end
+	if not entry then
+		return false, T(player, "Unknown style")
+	end
+	if def.Scope == "Room" and not room then
+		return false, T(player, "Unknown room")
+	end
+	if not house[def.Owned][entry.Id] then
+		return false, T(player, "You don't own this style yet")
+	end
+	local ok, message = applyLook(player, house, def, entry, room, argument.On ~= false)
+	if not ok then
+		return false, message or T(player, "Invalid request")
+	end
+	services.GameService:SendState(player)
+	return true, T(player, "🎨 %s %s applied", entry.Icon or "", T(player, entry.Name))
 end
 
 local STRING_ACTIONS = { buyItem = true, buySize = true, setSize = true }
@@ -895,6 +1065,10 @@ local function onHouse(player: Player, action: any, argument: any)
 		return buySkin(player, data, "Floor", argument)
 	elseif action == "setFloor" then
 		return setSkin(player, data, "Floor", argument)
+	elseif action == "buyLook" then
+		return buyLook(player, data, argument)
+	elseif action == "setLook" then
+		return setLook(player, data, argument)
 	end
 	return false, T(player, "Invalid request")
 end

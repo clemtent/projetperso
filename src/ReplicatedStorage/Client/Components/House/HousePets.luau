@@ -31,6 +31,7 @@ local Interface = require(Client.Interface)
 local SoundManager = require(Client.SoundManager)
 local HouseCommon = require(script.Parent.HouseCommon)
 local HouseArt = require(script.Parent.HouseArt)
+local HouseTints = require(script.Parent.HouseTints)
 local HouseSurfaces = require(script.Parent.HouseSurfaces)
 
 type Placed = HouseCommon.Placed
@@ -88,6 +89,13 @@ local SPECIES: { [string]: Species } = {
 		Likes = { Sleep = 2.6, Play = 2.4, Scratch = 1.6, Perch = 1.6, Sit = 1.6, Eat = 1.2, Drink = 1, Enter = 1 } },
 	Hedgehog = { Move = "Walk", Speed = 24, Anchor = Vector2.new(46, 96), Native = -1, Home = 1.2,
 		Likes = { Eat = 2.6, Drink = 1.6, Sleep = 1.6, Play = 1, Enter = 0.8 } },
+	-- v9.1 : caneton (trottine), manchot (se dandine), chouette (vole, se perche)
+	Duckling = { Move = "Hop", Speed = 36, Anchor = Vector2.new(46, 90), Native = -1, Home = 1.2,
+		Likes = { Eat = 2.4, Drink = 2.2, Play = 1.4, Sleep = 1.2 } },
+	Penguin = { Move = "Walk", Speed = 30, Anchor = Vector2.new(50, 92), Native = 1, Home = 1,
+		Likes = { Eat = 2.4, Drink = 2, Play = 1.8, Sleep = 1.2, Sit = 1 } },
+	Owl = { Move = "Fly", Speed = 60, Anchor = Vector2.new(50, 84), Native = 1, Home = 1.6, Bird = true, Altitude = 40,
+		Rest = NumberRange.new(10, 20), Likes = { Perch = 3, Sleep = 2, Eat = 0.8 } },
 }
 
 local EMOTES: { [string]: { string } } = {
@@ -343,6 +351,10 @@ function HousePets.new(room: any): Pets
 			Parent = holder,
 		})
 		local _, anims = HouseArt.Paint(body, actor.Item, false)
+		-- (v9.1) même couleur que l'autocollant posé
+		if actor.Entry.C then
+			HouseTints.Apply(body, actor.Entry.C)
+		end
 		-- (rétrécit vers ses pieds quand il entre dans la niche)
 		local shrink = UIUtil.Create("UIScale", { Name = "Shrink", Parent = body })
 		-- On ne garde que l'animal (pas sa coquille, son panier, son perchoir...)

@@ -22,6 +22,9 @@
 	    (invitation discrète).
 	Step(now) est appelé par la boucle de rendu de LiveStream (≤ 30 Hz) :
 	aucune boucle ni connexion par image ici.
+	v9.1 : posé sur la vidéo (Live > ChatPanel) : champ sombre translucide
+	plus grand (26 px, texte 13 ; 36 px et texte 19 en mode compact),
+	marge réglable (options.Inset).
 ]]
 
 local Locale = require(game:GetService("ReplicatedStorage").Shared.Locale)
@@ -35,11 +38,11 @@ local FAIL_COOLDOWN = 1.3
 local TIMEOUT = 10 -- sans réponse du serveur : on rend la main
 local STATUS_TIME = 3
 
-local FIELD = Color3.fromRGB(44, 38, 64)
-local STROKE_IDLE = Color3.fromRGB(96, 82, 140)
+local FIELD = Color3.fromRGB(16, 10, 30)
+local STROKE_IDLE = Color3.fromRGB(230, 220, 255)
 local STROKE_FOCUS = Color3.fromRGB(200, 156, 255)
 local STROKE_INVITE = Color3.fromRGB(255, 150, 214)
-local SEND_READY = Color3.fromRGB(145, 70, 255)
+local SEND_READY = Color3.fromRGB(255, 60, 120)
 local SEND_WAIT = Color3.fromRGB(74, 66, 100)
 local ERROR_COLOR = Color3.fromRGB(255, 130, 140)
 local SLOW_COLOR = Color3.fromRGB(255, 208, 110)
@@ -50,6 +53,7 @@ export type Options = {
 	Parent: GuiObject, -- panneau du chat
 	TapArea: GuiObject?, -- zone (liste des messages) qui ouvre le clavier au toucher
 	ZIndex: number?,
+	Inset: number?, -- marge avec les bords du panneau (5 par défaut)
 	KnownTopics: { [string]: boolean }?, -- sujets acceptés (ChatTopics.Order)
 	OnMessage: (text: string, topics: { string }) -> (),
 	OnFocus: ((focused: boolean) -> ())?,
@@ -78,8 +82,9 @@ function ChatInput.new(ctx: any, options: Options)
 	local placeholder = Locale.T("Send a message…")
 	local compactPlaceholder = Locale.T("Type here…")
 	local isCompact = false
+	local inset = options.Inset or 5
 
-	local height, sendSize = 22, 18
+	local height, sendSize = 26, 22
 	local sending, token, sentAt = false, 0, 0
 	local cooldownUntil = 0
 	local statusUntil, statusKind = 0, "" -- "" | "counter" | "timed"
@@ -93,15 +98,15 @@ function ChatInput.new(ctx: any, options: Options)
 	local frame = UI.Create("Frame", {
 		Name = "ChatInput",
 		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(0, 5, 1, -5),
-		Size = UDim2.new(1, -10, 0, height),
+		Position = UDim2.new(0, inset, 1, -inset),
+		Size = UDim2.new(1, -2 * inset, 0, height),
 		BackgroundColor3 = FIELD,
+		BackgroundTransparency = 0.3,
 		BorderSizePixel = 0,
 		ZIndex = zBase,
 		Parent = options.Parent,
 	})
-	UI.Corner(frame, 8)
-	UI.Gradient(frame, ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(196, 190, 220)), 90)
+	UI.Corner(frame, UDim.new(1, 0))
 	local stroke = UI.Stroke(frame, STROKE_IDLE, 1, 0.3)
 
 	-- Zone du texte : découpe ce qui dépasse (texte long, indication) avant le bouton
@@ -110,8 +115,8 @@ function ChatInput.new(ctx: any, options: Options)
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
-		Position = UDim2.fromOffset(8, 0),
-		Size = UDim2.new(1, -(8 + sendSize + 7), 1, 0),
+		Position = UDim2.fromOffset(11, 0),
+		Size = UDim2.new(1, -(11 + sendSize + 7), 1, 0),
 		ZIndex = zBase + 1,
 		Parent = frame,
 	})
@@ -119,10 +124,10 @@ function ChatInput.new(ctx: any, options: Options)
 		Name = "ChatBox",
 		Text = "",
 		PlaceholderText = placeholder,
-		PlaceholderColor3 = Color3.fromRGB(154, 144, 190),
-		TextColor3 = Color3.fromRGB(246, 242, 255),
+		PlaceholderColor3 = Color3.fromRGB(200, 190, 230),
+		TextColor3 = Color3.fromRGB(250, 246, 255),
 		Font = Theme.Fonts.Body,
-		TextSize = 11,
+		TextSize = 13,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		ClearTextOnFocus = false,
 		MultiLine = false,
@@ -147,8 +152,8 @@ function ChatInput.new(ctx: any, options: Options)
 		Parent = frame,
 	})
 	UI.Corner(send, UDim.new(1, 0))
-	UI.Gradient(send, ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(196, 176, 236)), 90)
-	local sendStroke = UI.Stroke(send, Color3.fromRGB(214, 186, 255), 1, 0.35)
+	UI.Gradient(send, ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(230, 180, 210)), 90)
+	local sendStroke = UI.Stroke(send, Color3.fromRGB(255, 190, 220), 1, 0.35)
 	UI.AnimateButton(send, 1.12, 0.86)
 	local sendScale = send:FindFirstChild("AnimScale") :: UIScale? -- (un seul UIScale par objet)
 
@@ -162,7 +167,7 @@ function ChatInput.new(ctx: any, options: Options)
 		ZIndex = zBase + 2,
 		Parent = send,
 	})
-	local arrowScale = UI.Create("UIScale", { Parent = arrow })
+	local arrowScale = UI.Create("UIScale", { Scale = sendSize / ARROW_BOX, Parent = arrow })
 	local function bar(x: number, y: number, w: number, rotation: number)
 		local piece = UI.Create("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
@@ -185,7 +190,7 @@ function ChatInput.new(ctx: any, options: Options)
 		Name = "Wait",
 		Text = "",
 		Font = Theme.Fonts.Title,
-		TextSize = 10,
+		TextSize = 12,
 		TextColor3 = Color3.fromRGB(230, 222, 255),
 		BackgroundTransparency = 1,
 		Size = UDim2.fromScale(1, 1),
@@ -200,7 +205,7 @@ function ChatInput.new(ctx: any, options: Options)
 		Name = "ChatStatus",
 		Text = "",
 		Font = Theme.Fonts.Title,
-		TextSize = 9,
+		TextSize = 11,
 		TextColor3 = INFO_COLOR,
 		TextWrapped = true,
 		TextXAlignment = Enum.TextXAlignment.Center,
@@ -209,8 +214,8 @@ function ChatInput.new(ctx: any, options: Options)
 		BackgroundTransparency = 0.04,
 		BorderSizePixel = 0,
 		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(0, 5, 1, -(height + 8)),
-		Size = UDim2.new(1, -10, 0, 14),
+		Position = UDim2.new(0, inset, 1, -(height + inset + 3)),
+		Size = UDim2.new(1, -2 * inset, 0, 16),
 		Visible = false,
 		ZIndex = zBase + 4,
 		Parent = options.Parent,
@@ -284,7 +289,7 @@ function ChatInput.new(ctx: any, options: Options)
 	end
 
 	local function nudge()
-		local home = UDim2.new(0, 5, 1, -5)
+		local home = UDim2.new(0, inset, 1, -inset)
 		frame.Position = home + UDim2.fromOffset(4, 0)
 		UI.Tween(frame, 0.25, { Position = home }, Enum.EasingStyle.Elastic)
 	end
@@ -431,22 +436,22 @@ function ChatInput.new(ctx: any, options: Options)
 	local api = { Frame = frame, Box = box, Send = send, Height = height }
 
 	function api.SetCompact(compact: boolean)
-		height = compact and 30 or 22
-		sendSize = compact and 26 or 18
+		height = compact and 36 or 26
+		sendSize = compact and 30 or 22
 		api.Height = height
-		frame.Size = UDim2.new(1, -10, 0, height)
+		frame.Size = UDim2.new(1, -2 * inset, 0, height)
 		isCompact = compact
-		box.TextSize = compact and 14 or 11
-		field.Size = UDim2.new(1, -(8 + sendSize + 7), 1, 0)
+		box.TextSize = compact and 19 or 13
+		field.Size = UDim2.new(1, -(11 + sendSize + 7), 1, 0)
 		if not sending then
 			box.PlaceholderText = compact and compactPlaceholder or placeholder
 		end
 		send.Size = UDim2.fromOffset(sendSize, sendSize)
 		arrowScale.Scale = sendSize / ARROW_BOX
-		sendLabel.TextSize = compact and 14 or 10
-		status.TextSize = compact and 12 or 9
-		status.Size = UDim2.new(1, -10, 0, compact and 18 or 14)
-		status.Position = UDim2.new(0, 5, 1, -(height + 8))
+		sendLabel.TextSize = compact and 18 or 12
+		status.TextSize = compact and 16 or 11
+		status.Size = UDim2.new(1, -2 * inset, 0, compact and 22 or 16)
+		status.Position = UDim2.new(0, inset, 1, -(height + inset + 3))
 	end
 
 	function api.Focus()
@@ -486,7 +491,7 @@ function ChatInput.new(ctx: any, options: Options)
 			stroke.Transparency = 0.15 + 0.5 * (0.5 + 0.5 * math.sin(now * 3.2))
 		elseif inviteOn or stroke.Color ~= STROKE_IDLE then
 			inviteOn = false
-			stroke.Color, stroke.Transparency, stroke.Thickness = STROKE_IDLE, 0.3, 1
+			stroke.Color, stroke.Transparency, stroke.Thickness = STROKE_IDLE, 0.45, 1
 		end
 	end
 

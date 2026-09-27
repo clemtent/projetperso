@@ -19,6 +19,7 @@ local DataStoreService = game:GetService("DataStoreService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local FriendMailRules = require(ReplicatedStorage.Shared.FriendMailRules)
 local Locale = require(ReplicatedStorage.Shared.Locale)
 
 local DataService = {}
@@ -75,6 +76,10 @@ local TEMPLATE = {
 	Purchases = {}, -- PurchaseId (texte) des 50 derniers achats Robux traités (anti-doublon)
 	LastOnline = 0, -- os.time() de la dernière sauvegarde / sortie (0 = jamais)
 	LiveFollowed = false, -- abonné au live ASMR pendant cette partie (remis à false à la détox)
+	-- 💌 Mails entre amis Roblox (FriendMailService) : dernier envoi d'un
+	-- nouveau mail / d'une réponse (os.time(), anti-spam gardé d'une partie à
+	-- l'autre) et expéditeurs bloqués { ["UserId"] = true }
+	FriendMail = { LastNew = 0, LastReply = 0, Blocked = {} },
 	Stats = {
 		TotalClicks = 0,
 		LifetimeDopamine = 0, -- Dopamine gagnée depuis toujours (classement)
@@ -239,6 +244,8 @@ function DataService:LoadAsync(player: Player)
 		data.Trophies = 0
 	end
 	data.Trophies = math.floor(data.Trophies)
+	-- 💌 Mails entre amis : horodatages valides (jamais dans le futur), blocages propres
+	data.FriendMail = FriendMailRules.SanitizeData(data.FriendMail, os.time())
 
 	-- Absence depuis la dernière sauvegarde (gain hors-ligne donné par
 	-- GameService quand le client est prêt), puis on repart de maintenant

@@ -34,6 +34,7 @@ export type Options = {
 	MinScale: number?,
 	MaxScale: number?,
 	Near: number?,
+	SizePenalty: number?, -- v9.1 (voir GearLayout)
 	GlowColor: Color3?, -- couleur du halo (mode sombre)
 	UpgradeId: string?, -- amélioration suivie pour OnLevel (par défaut Id)
 	ContainerZ: number?, -- ZIndex du conteneur dans le calque Background (défaut 1100)
@@ -188,6 +189,7 @@ function GearPiece.new(ctx: any, options: Options, animator: GearKit.Animator?):
 		MinScale = options.MinScale,
 		MaxScale = options.MaxScale,
 		Near = options.Near,
+		SizePenalty = options.SizePenalty,
 		OnPlace = function(placement: Placement?)
 			self:_place(placement)
 		end,

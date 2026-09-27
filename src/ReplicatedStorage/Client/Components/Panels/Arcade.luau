@@ -449,12 +449,22 @@ local showResult
 local function paintTabs()
 	for id, button in pairs(S.TabButtons) do
 		local selected = id == S.Tab
-		button.BackgroundTransparency = selected and 0 or 0.55
-		button.BackgroundColor3 = selected and WHITE or C.Card
-		button.TextColor3 = selected and WHITE or C.TextDim
-		local gradient = button:FindFirstChild("Glow") :: UIGradient?
-		if gradient then
-			gradient.Enabled = selected
+		-- v9.1 : le dégradé est sur un fond séparé ("GlowFill") : posé sur le
+		-- bouton lui-même, il teintait aussi le texte blanc, qui devenait
+		-- invisible sur l'onglet choisi (seul l'emoji restait)
+		button.BackgroundTransparency = selected and 1 or 0.55
+		button.BackgroundColor3 = C.Card
+		local label = button:FindFirstChild("Label") :: TextLabel?
+		if label then
+			label.TextColor3 = selected and WHITE or C.TextDim
+			local labelStroke = label:FindFirstChildOfClass("UIStroke")
+			if labelStroke then
+				labelStroke.Enabled = selected
+			end
+		end
+		local fill = button:FindFirstChild("GlowFill") :: Frame?
+		if fill then
+			fill.Visible = selected
 		end
 		local stroke = button:FindFirstChildOfClass("UIStroke")
 		if stroke then
@@ -506,10 +516,7 @@ local function buildHeader(root: Frame)
 			BackgroundColor3 = C.Card,
 			BackgroundTransparency = 0.55,
 			AutoButtonColor = false,
-			Font = Theme.Fonts.Title,
-			Text = T(tab.Text),
-			TextColor3 = C.TextDim,
-			TextSize = 16,
+			Text = "",
 			LayoutOrder = index,
 			ZIndex = 6,
 			Parent = tabs,
@@ -517,13 +524,39 @@ local function buildHeader(root: Frame)
 		UIUtil.Corner(button, UDim.new(1, 0))
 		UIUtil.Stroke(button, C.Pink:Lerp(WHITE, 0.3), 1.5, 0.6)
 		make("UIPadding", { PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 14), Parent = button })
+		-- Fond dégradé de l'onglet choisi (déborde sur le rembourrage)
+		local glowFill = make("Frame", {
+			Name = "GlowFill",
+			Size = UDim2.new(1, 28, 1, 0),
+			Position = UDim2.fromOffset(-14, 0),
+			BackgroundColor3 = WHITE,
+			BorderSizePixel = 0,
+			Visible = false,
+			ZIndex = 6,
+			Parent = button,
+		})
+		UIUtil.Corner(glowFill, UDim.new(1, 0))
 		make("UIGradient", {
 			Name = "Glow",
 			Color = ColorSequence.new(C.Pink:Lerp(WHITE, 0.1), C.Purple),
 			Rotation = 0,
-			Enabled = false,
+			Parent = glowFill,
+		})
+		local tabLabel = make("TextLabel", {
+			Name = "Label",
+			Size = UDim2.fromScale(0, 1),
+			AutomaticSize = Enum.AutomaticSize.X,
+			BackgroundTransparency = 1,
+			Font = Theme.Fonts.Title,
+			Text = T(tab.Text),
+			TextColor3 = C.TextDim,
+			TextSize = 16,
+			ZIndex = 7,
 			Parent = button,
 		})
+		local labelStroke = UIUtil.Stroke(tabLabel, C.Purple:Lerp(Color3.new(0, 0, 0), 0.4), 1.2, 0.3)
+		labelStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+		labelStroke.Enabled = false
 		UIUtil.AnimateButton(button, 1.04, 0.95)
 		button.Activated:Connect(function()
 			if S.Tab ~= tab.Id then

@@ -82,7 +82,7 @@ export type Handlers = {
 
 export type Overview = {
 	Frame: Frame,
-	SetHouse: (house: HouseData, overrides: HouseCommon.Overrides?) -> (),
+	SetHouse: (house: HouseData, overrides: HouseCommon.Overrides?, preview: { [string]: string }?) -> (),
 	SetDark: (dark: boolean) -> (),
 	SetArranging: (on: boolean) -> (),
 	IsArranging: () -> boolean,
@@ -258,13 +258,13 @@ local function buildFallback(parent: Instance, size: SizeDef): Exterior
 end
 
 -- Immeuble de HouseExterior (Contrat A), sinon celui de secours
-local function buildExterior(parent: Instance, size: SizeDef): Exterior
+local function buildExterior(parent: Instance, size: SizeDef, looks: any): Exterior
 	local folder = script.Parent
 	local moduleScript = folder:FindFirstChild("HouseExterior")
 	if moduleScript and moduleScript:IsA("ModuleScript") then
 		local ok, result = pcall(function()
 			local module = (require :: any)(moduleScript)
-			local built = module.Build(parent, size)
+			local built = module.Build(parent, size, looks)
 			assert(type(built) == "table" and typeof(built.Frame) == "Instance" and type(built.Cells) == "table", "bad exterior")
 			assert(typeof(built.CellLayer) == "Instance", "no cell layer")
 			for slot = 1, size.MaxRooms do
@@ -310,6 +310,9 @@ function HouseOverview.new(parent: Frame, handlers: Handlers): Overview
 	local overridesNow: HouseCommon.Overrides? = nil
 	local size: SizeDef? = nil
 	local exterior: Exterior? = nil
+	local exteriorLooks: any = nil -- (v9.1) façade, toit, jardin
+	local gardenFocus = false -- (v9.1) essai d'une déco du jardin en cours
+	local looksKey = ""
 	local cards: { [string]: Card } = {}
 	local empties: { [number]: EmptySlot } = {}
 	local localSlots: { [string]: number } = {} -- déplacements pas encore confirmés
@@ -1218,6 +1221,10 @@ function HouseOverview.new(parent: Frame, handlers: Handlers): Overview
 		if minX < maxX then
 			minX, maxX = math.max(0, minX - 90), math.min(ext.Width, maxX + 90)
 			minY, maxY = math.max(0, minY - 150), math.min(ext.Height, maxY + 70)
+			-- (v9.1) essai d'une déco du jardin depuis la boutique : le jardin reste à l'écran
+			if gardenFocus then
+				maxY = ext.Height
+			end
 			local focus = math.max(0.05, math.min(availW / (maxX - minX), availH / (maxY - minY)))
 			-- (PC / tablette : l'immeuble entier tant qu'il reste assez grand)
 			if full < focus * (Interface.IsPhone() and 0.85 or 0.5) then
@@ -1261,7 +1268,7 @@ function HouseOverview.new(parent: Frame, handlers: Handlers): Overview
 	local function rebuild()
 		local currentSize = size :: SizeDef
 		clearAll()
-		exterior = buildExterior(zoom, currentSize)
+		exterior = buildExterior(zoom, currentSize, exteriorLooks)
 		local ext = exterior :: Exterior
 		zoom.Size = UDim2.fromOffset(ext.Width, ext.Height)
 		ext.Frame.Position = UDim2.fromScale(0.5, 0.5)
@@ -1276,11 +1283,54 @@ function HouseOverview.new(parent: Frame, handlers: Handlers): Overview
 
 	overview = {
 		Frame = root,
-		SetHouse = function(newHouse: HouseData, overrides: HouseCommon.Overrides?)
+		SetHouse = function(newHouse: HouseData, overrides: HouseCommon.Overrides?, preview: { [string]: string }?)
 			house = newHouse
 			overridesNow = overrides
 			local newSize = HouseCommon.GetSize(newHouse)
-			if not size or newSize.Id ~= (size :: SizeDef).Id or not exterior then
+			-- (v9.1) façade, toit, motif du toit, jardin (+ essai de la boutique)
+			local essay = preview or {}
+			local garden = table.clone(newHouse.Garden)
+			local extra = essay.Garden
+			if extra and not table.find(garden, extra) then
+				if #garden >= HouseCommon.GardenSlots then
+					table.remove(garden)
+				end
+				table.insert(garden, extra)
+			end
+			local looks = {
+				Facade = HouseCommon.Look("Facade", essay.Facade or newHouse.Facade),
+				Roof = HouseCommon.Look("Roof", essay.Roof or newHouse.Roof),
+				RoofStyle = HouseCommon.Look("RoofStyle", essay.RoofStyle or newHouse.RoofStyle),
+				Garden = garden,
+			}
+			local key = table.concat({
+				looks.Facade and looks.Facade.Id or "",
+				looks.Roof and looks.Roof.Id or "",
+				looks.RoofStyle and looks.RoofStyle.Id or "",
+				table.concat(garden, ","),
+			}, "|")
+			local wantFocus = extra ~= nil
+			if wantFocus ~= gardenFocus then
+				gardenFocus = wantFocus
+				task.defer(function()
+					refit(true)
+				end)
+			end
+			local looksChanged = key ~= looksKey
+			looksKey = key
+			exteriorLooks = looks
+			local current = exterior :: any
+			if looksChanged and current and size and newSize.Id == (size :: SizeDef).Id and type(current.SetLooks) == "function" then
+				-- même bâtiment : on repeint seulement la façade (les pièces restent)
+				local ok, err = pcall(current.SetLooks, looks)
+				if ok then
+					looksChanged = false
+					current.SetDark(dark)
+				else
+					warn("[HouseOverview] SetLooks : " .. tostring(err))
+				end
+			end
+			if not size or newSize.Id ~= (size :: SizeDef).Id or not exterior or looksChanged then
 				size = newSize
 				localSlots = {}
 				rebuild()

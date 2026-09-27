@@ -54,7 +54,7 @@ local MX = 170 -- axe de la presse
 local FLOOR_Y = 246 -- sol de l'atelier
 local BELT_Y = 206 -- dessus du tapis (bas des objets)
 local BELT_H = 8
-local BELT_X0, BELT_X1 = 66, 372
+local BELT_X0, BELT_X1 = 64, 384 -- le tapis sort par le bord droit de la carte
 local CROWN_Y, CROWN_H = 50, 26 -- traverse du haut
 local CYL_Y = 36 -- haut du vérin
 local PLATE_TOP = CROWN_Y + CROWN_H + 6 -- plateau en position haute
@@ -62,23 +62,57 @@ local PLATE_H = 22
 local PLATE_W = 160
 local PILLAR_W = 18
 local PILLAR_X = { MX - 80 - PILLAR_W, MX + 80 } -- bord gauche de chaque colonne
-local SPACING = 84 -- pas du tapis entre deux objets
-local SLOT_X = { MX + SPACING, MX + SPACING * 2 } -- file d'attente
-local EXIT_X = MX - SPACING -- la galette s'arrête ici avant de tomber dans le bac
-local BIN_X, BIN_W, BIN_TOP = 36, 50, 184
-local FLAT_H = 11 -- hauteur d'une galette
+-- Pas du tapis : l'objet en attente est posé À DROITE de la colonne et des
+-- guides du plateau (jamais devant eux), le suivant arrive du bord de la carte
+local SPACING = 152
+local SLOT_X = { MX + SPACING } -- file d'attente visible (x = 322)
+local ENTRY_X = MX + SPACING * 2 -- le nouvel objet arrive d'ici (hors carte)
+local BIN_X, BIN_W, BIN_TOP = 34, 50, 212 -- bac : son bord est SOUS le tapis
+local FLAT_H = 12 -- hauteur d'une galette
+local ITEM_SCALE = 1.15 -- objets un peu plus gros (lisibles à la taille de la carte)
 local CONSOLE_X, CONSOLE_Y, CONSOLE_W, CONSOLE_H = 294, 38, 76, 90
-local PARTICLE_MAX = 44
+local PARTICLE_MAX = 48
 local PUFF_MAX = 10
 local SHOUT_COUNT = 2
+local RAY_COUNT = 12 -- rayons de l'éclat "BD" au CRUNCH
+
+-- Ordre d'empilement des calques de la machine (ZIndexBehavior = Sibling) :
+-- chaque pièce a sa place, rien ne "traverse" une pièce qui devrait la cacher.
+local Z = {
+	Burst = 1, -- éclat BD derrière la machine
+	DecorBack = 2, -- décor mural (étoiles, lueur)
+	Hose = 3,
+	BinBack = 3,
+	BinFill = 4,
+	Pillar = 4,
+	PillarDecor = 5, -- cordes, ferrures, veinage : SUR les colonnes, SOUS le plateau et les objets
+	Rod = 6,
+	Housing = 6,
+	Unit = 7, -- centrale hydraulique
+	Crown = 8,
+	CrownDecor = 9, -- rivets, manomètres, afficheur, gemmes, gyrophare
+	Gland = 9,
+	BeltLegs = 9,
+	Bolster = 10,
+	BolsterDecor = 11,
+	Belt = 12,
+	BeltFrame = 13,
+	Roller = 14,
+	Item = 15, -- objets : devant les colonnes...
+	Plate = 16, -- ... mais derrière le plateau (et ses guides)
+	BinFront = 17, -- la galette tombe DERRIÈRE la face du bac
+	BinRim = 18,
+	Console = 19,
+	FX = 20, -- particules (découpées sous l'en-tête)
+}
 
 -- Durées de base (niveau 1), divisées par le facteur de vitesse
 local DURATIONS = {
 	Load = 0.9,
-	Descend = 1.1,
-	Squeeze = 0.55,
+	Descend = 0.85,
+	Squeeze = 0.6,
 	Crunch = 0.07,
-	Hold = 0.45,
+	Hold = 0.5,
 	Rise = 0.8,
 }
 
@@ -289,6 +323,7 @@ type Drawn = {
 	Words: Words,
 	Special: string?,
 	Wobble: number?,
+	Juice: Color3?, -- couleur de la flaque après écrasement
 	Build: (k: Kit, holder: Frame) -> Built,
 }
 
@@ -322,7 +357,7 @@ local DRAWN: { [string]: Drawn } = {
 		end,
 	},
 	Can = {
-		Id = "Can", W = 40, H = 62, Weight = 2, Words = W.Can,
+		Id = "Can", W = 40, H = 62, Weight = 2, Words = W.Can, Juice = rgb(200, 150, 60),
 		Build = function(k, holder)
 			local c = pickFrom(CAN_COLORS, k.Random)
 			local body = k.Part(holder, 0, 0.07, 1, 0.93, c, 2, UDim.new(0.18, 0))
@@ -338,7 +373,7 @@ local DRAWN: { [string]: Drawn } = {
 		end,
 	},
 	Melon = {
-		Id = "Melon", W = 70, H = 54, Weight = 2, Words = W.Melon, Special = "Melon",
+		Id = "Melon", W = 70, H = 54, Weight = 2, Words = W.Melon, Special = "Melon", Juice = rgb(236, 60, 72),
 		Build = function(k, holder)
 			local body = k.Part(holder, 0, 0, 1, 1, WHITE, 2, PILL)
 			local gradient = k.Gradient(body, stripes(9, rgb(40, 132, 48), rgb(118, 198, 86)), 0)
@@ -349,7 +384,7 @@ local DRAWN: { [string]: Drawn } = {
 		end,
 	},
 	Cake = {
-		Id = "Cake", W = 64, H = 64, Weight = 2, Words = W.Cake,
+		Id = "Cake", W = 64, H = 64, Weight = 2, Words = W.Cake, Juice = rgb(255, 240, 246),
 		Build = function(k, holder)
 			local sponge = rgb(246, 206, 140)
 			local icing = pickFrom(ICING_COLORS, k.Random)
@@ -900,27 +935,20 @@ function Press.Start(ctx)
 		ZIndex = 30,
 		Parent = card,
 	})
+	-- Pilule de LARGEUR FIXE (texte réduit si besoin) : elle ne peut jamais
+	-- chevaucher le titre ni le compteur, quelle que soit la police / langue
 	local tierChip = box({
 		Name = "TierChip",
-		Position = UDim2.fromOffset(108, 7),
-		Size = UDim2.fromOffset(0, 20),
-		AutomaticSize = Enum.AutomaticSize.X,
+		Position = UDim2.fromOffset(110, 7),
+		Size = UDim2.fromOffset(172, 20),
 		BackgroundColor3 = TIERS[1].Chip,
 		ZIndex = 30,
 		Parent = card,
 	}, UDim.new(1, 0))
 	local tierChipStroke = UIUtil.Stroke(tierChip, WHITE, 1.5, 0.35)
 	UIUtil.Gradient(tierChip, seq(WHITE, rgb(215, 215, 215)), 90)
-	UIUtil.Create("UIPadding", { PaddingLeft = UDim.new(0, 3), PaddingRight = UDim.new(0, 9), Parent = tierChip })
-	UIUtil.Create("UIListLayout", {
-		FillDirection = Enum.FillDirection.Horizontal,
-		VerticalAlignment = Enum.VerticalAlignment.Center,
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		Padding = UDim.new(0, 5),
-		Parent = tierChip,
-	})
 	-- Pastille ronde "niveau" à gauche de la pilule
-	local levelBadge = box({ Size = UDim2.fromOffset(15, 15), BackgroundColor3 = WHITE, LayoutOrder = 1, ZIndex = 31, Parent = tierChip }, UDim.new(1, 0))
+	local levelBadge = box({ AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 3, 0.5, 0), Size = UDim2.fromOffset(15, 15), BackgroundColor3 = WHITE, ZIndex = 31, Parent = tierChip }, UDim.new(1, 0))
 	local levelBadgeLabel = Create("TextLabel", {
 		Size = UDim2.fromScale(1, 1),
 		BackgroundTransparency = 1,
@@ -931,16 +959,14 @@ function Press.Start(ctx)
 		ZIndex = 32,
 		Parent = levelBadge,
 	})
-	local tierChipLabel = Create("TextLabel", {
+	local tierChipLabel = UIUtil.Label({
 		Name = "Label",
-		Size = UDim2.fromOffset(0, 20),
-		AutomaticSize = Enum.AutomaticSize.X,
-		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(22, 3),
+		Size = UDim2.new(1, -30, 1, -6),
 		Font = Theme.Fonts.Title,
 		Text = "",
 		TextColor3 = WHITE,
-		TextSize = 12,
-		LayoutOrder = 2,
+		MaxTextSize = 12,
 		ZIndex = 32,
 		Parent = tierChip,
 	})
@@ -1009,11 +1035,27 @@ function Press.Start(ctx)
 	end
 
 	------------------------------------------------------------------
+	-- Calques de la machine (voir Z en haut du fichier)
+	------------------------------------------------------------------
+	local function layer(name: string, z: number): Frame
+		return Create("Frame", { Name = name, Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = z, Parent = rig })
+	end
+	-- L'éclat est découpé entre l'en-tête et le sol (cadre jamais tourné :
+	-- la découpe fonctionne aussi dans Roblox, même si l'éclat, lui, tourne)
+	local burstLayer = Create("Frame", { Name = "Burst", Position = UDim2.fromOffset(0, HEADER_H), Size = UDim2.new(1, 0, 0, FLOOR_Y - HEADER_H), BackgroundTransparency = 1, ClipsDescendants = true, ZIndex = Z.Burst, Parent = rig })
+	local decorBack = layer("DecorBack", Z.DecorBack)
+	local hoseLayer = layer("Hoses", Z.Hose)
+	local unit = layer("Unit", Z.Unit)
+	local decorPillar = layer("DecorPillar", Z.PillarDecor)
+	local decorCrown = layer("DecorCrown", Z.CrownDecor)
+	local decorBolster = layer("DecorBolster", Z.BolsterDecor)
+
+	------------------------------------------------------------------
 	-- Flexible hydraulique (courbe de Bézier en petits segments)
 	------------------------------------------------------------------
 	local hoseSegments: { Frame } = {}
 	local fittings: { Frame } = {}
-	local function hose(p0: Vector2, p1: Vector2, p2: Vector2, p3: Vector2, thickness: number, z: number)
+	local function hose(p0: Vector2, p1: Vector2, p2: Vector2, p3: Vector2, thickness: number)
 		local steps = 10
 		local previous = p0
 		for i = 1, steps do
@@ -1022,45 +1064,47 @@ function Press.Start(ctx)
 			local point = p0 * (u * u * u) + p1 * (3 * u * u * t) + p2 * (3 * u * t * t) + p3 * (t * t * t)
 			local delta = point - previous
 			local middle = (point + previous) / 2
-			local segment = rbox({
+			local segment = box({
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				Position = UDim2.fromOffset(middle.X, middle.Y),
 				Size = UDim2.fromOffset(delta.Magnitude + thickness * 0.7, thickness),
 				Rotation = math.deg(math.atan2(delta.Y, delta.X)),
 				BackgroundColor3 = TIERS[1].Hose,
-				ZIndex = z,
+				ZIndex = 1,
+				Parent = hoseLayer,
 			}, UDim.new(1, 0))
 			table.insert(hoseSegments, segment)
 			previous = point
 		end
 		for _, p in ipairs({ p0, p3 }) do
-			table.insert(fittings, rbox({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(p.X, p.Y), Size = UDim2.fromOffset(thickness + 4, thickness + 4), BackgroundColor3 = TIERS[1].Fitting, ZIndex = z + 1 }, 2))
+			table.insert(fittings, box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(p.X, p.Y), Size = UDim2.fromOffset(thickness + 4, thickness + 4), BackgroundColor3 = TIERS[1].Fitting, ZIndex = 2, Parent = hoseLayer }, 2))
 		end
 	end
 
 	------------------------------------------------------------------
 	-- Centrale hydraulique (à gauche) : moteur + réservoir + voyant d'huile
 	------------------------------------------------------------------
-	local motor = rbox({ Position = UDim2.fromOffset(16, 66), Size = UDim2.fromOffset(40, 26), BackgroundColor3 = WHITE, ZIndex = 3 }, 6)
+	local motor = box({ Position = UDim2.fromOffset(16, 66), Size = UDim2.fromOffset(40, 26), BackgroundColor3 = WHITE, ZIndex = 2, Parent = unit }, 6)
 	local motorGradient = UIUtil.Gradient(motor, stripes(8, rgb(120, 126, 140), rgb(90, 96, 110)), 90)
 	local motorStroke = UIUtil.Stroke(motor, INK, 1.5, 0.3)
-	rbox({ Position = UDim2.fromOffset(12, 72), Size = UDim2.fromOffset(6, 14), BackgroundColor3 = rgb(70, 74, 86), ZIndex = 3 }, 2)
-	local tank = rbox({ Position = UDim2.fromOffset(12, 92), Size = UDim2.fromOffset(48, 62), BackgroundColor3 = WHITE, ZIndex = 3 }, 7)
+	box({ Position = UDim2.fromOffset(11, 72), Size = UDim2.fromOffset(6, 14), BackgroundColor3 = rgb(70, 74, 86), ZIndex = 1, Parent = unit }, 2)
+	local tank = box({ Position = UDim2.fromOffset(12, 92), Size = UDim2.fromOffset(48, 62), BackgroundColor3 = WHITE, ZIndex = 3, Parent = unit }, 7)
 	local tankGradient = UIUtil.Gradient(tank, cylinderSeq(TIERS[1].Frame), 0)
 	local tankStroke = UIUtil.Stroke(tank, TIERS[1].Outline, 1.5, 0.2)
 	-- Voyant d'huile (niveau qui bouge avec la pression)
-	local sight = rbox({ Position = UDim2.fromOffset(40, 100), Size = UDim2.fromOffset(10, 46), BackgroundColor3 = rgb(30, 34, 44), ClipsDescendants = true, ZIndex = 4 }, 3)
+	local sight = box({ Position = UDim2.fromOffset(40, 100), Size = UDim2.fromOffset(10, 46), BackgroundColor3 = rgb(30, 34, 44), ClipsDescendants = true, ZIndex = 4, Parent = unit }, 3)
 	UIUtil.Stroke(sight, WHITE, 1, 0.5)
-	local oil = rbox({ AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.fromScale(1, 0.6), BackgroundColor3 = rgb(255, 180, 40), ZIndex = 5, Parent = sight }, 2)
+	local oil = box({ AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.fromScale(1, 0.6), BackgroundColor3 = rgb(255, 180, 40), ZIndex = 5, Parent = sight }, 2)
 	UIUtil.Gradient(oil, seq(rgb(255, 230, 140), rgb(230, 130, 20)), 90)
-	local _, tankNeedle = makeGauge(rig, 25, 114, 18, 5)
+	local _, tankNeedle = makeGauge(unit, 25, 114, 18, 5)
 	-- Pieds du réservoir
 	for _, x in ipairs({ 16, 50 }) do
-		rbox({ Position = UDim2.fromOffset(x, 154), Size = UDim2.fromOffset(6, 6), BackgroundColor3 = rgb(60, 64, 74), ZIndex = 3 }, 1)
+		box({ Position = UDim2.fromOffset(x, 153), Size = UDim2.fromOffset(6, 7), BackgroundColor3 = rgb(60, 64, 74), ZIndex = 2, Parent = unit }, 1)
 	end
-	-- Deux flexibles jusqu'au vérin
-	hose(Vector2.new(28, 66), Vector2.new(24, 34), Vector2.new(96, 30), Vector2.new(MX - 30, 42), 5, 2)
-	hose(Vector2.new(44, 66), Vector2.new(46, 46), Vector2.new(104, 44), Vector2.new(MX - 30, 50), 4, 2)
+	-- Deux flexibles PARALLÈLES jusqu'au vérin, au-dessus de la traverse
+	-- (ils ne se croisent pas et ne passent derrière rien)
+	hose(Vector2.new(26, 68), Vector2.new(26, 38), Vector2.new(40, 40), Vector2.new(MX - 28, 40), 5)
+	hose(Vector2.new(44, 68), Vector2.new(44, 47), Vector2.new(56, 47), Vector2.new(MX - 28, 47), 4)
 
 	------------------------------------------------------------------
 	-- La presse
@@ -1068,14 +1112,14 @@ function Press.Start(ctx)
 	-- Colonnes (ombrées comme des cylindres) + pieds
 	local pillars: { { Frame: Frame, Gradient: UIGradient, Stroke: UIStroke } } = {}
 	for _, x in ipairs(PILLAR_X) do
-		local pillar = rbox({ Position = UDim2.fromOffset(x, CROWN_Y + 4), Size = UDim2.fromOffset(PILLAR_W, FLOOR_Y - CROWN_Y - 8), BackgroundColor3 = WHITE, ZIndex = 2 }, 3)
+		local pillar = rbox({ Position = UDim2.fromOffset(x, CROWN_Y + 4), Size = UDim2.fromOffset(PILLAR_W, FLOOR_Y - CROWN_Y - 8), BackgroundColor3 = WHITE, ZIndex = Z.Pillar }, 3)
 		local gradient = UIUtil.Gradient(pillar, cylinderSeq(TIERS[1].Frame), 0)
 		local stroke = UIUtil.Stroke(pillar, TIERS[1].Outline, 1, 0.35)
 		table.insert(pillars, { Frame = pillar, Gradient = gradient, Stroke = stroke })
 	end
 	local feet: { Frame } = {}
 	for _, x in ipairs(PILLAR_X) do
-		local foot = rbox({ Position = UDim2.fromOffset(x - 6, FLOOR_Y - 7), Size = UDim2.fromOffset(PILLAR_W + 12, 8), BackgroundColor3 = WHITE, ZIndex = 3 }, 2)
+		local foot = rbox({ Position = UDim2.fromOffset(x - 6, FLOOR_Y - 7), Size = UDim2.fromOffset(PILLAR_W + 12, 8), BackgroundColor3 = WHITE, ZIndex = Z.Pillar }, 2)
 		table.insert(feet, foot)
 	end
 	local feetGradients: { UIGradient } = {}
@@ -1084,28 +1128,39 @@ function Press.Start(ctx)
 	end
 
 	-- Vérin (chemise + fond) au-dessus de la traverse
-	local housing = rbox({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(MX, CYL_Y), Size = UDim2.fromOffset(60, CROWN_Y - CYL_Y + 4), BackgroundColor3 = WHITE, ZIndex = 4 }, 5)
+	local housing = rbox({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(MX, CYL_Y), Size = UDim2.fromOffset(60, CROWN_Y - CYL_Y + 4), BackgroundColor3 = WHITE, ZIndex = Z.Housing }, 5)
 	local housingGradient = UIUtil.Gradient(housing, cylinderSeq(TIERS[1].Frame), 0)
 	local housingStroke = UIUtil.Stroke(housing, TIERS[1].Outline, 1.5, 0.25)
-	local cap = rbox({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(MX, CYL_Y + 3), Size = UDim2.fromOffset(68, 6), BackgroundColor3 = WHITE, ZIndex = 5 }, 2)
+	local cap = rbox({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(MX, CYL_Y + 3), Size = UDim2.fromOffset(68, 6), BackgroundColor3 = WHITE, ZIndex = Z.Housing }, 2)
 	local capGradient = UIUtil.Gradient(cap, beamSeq(TIERS[1].Frame), 90)
 
 	-- Traverse
-	local crown = rbox({ Position = UDim2.fromOffset(MX - 114, CROWN_Y), Size = UDim2.fromOffset(228, CROWN_H), BackgroundColor3 = WHITE, ClipsDescendants = true, ZIndex = 6 }, 6)
+	local CROWN_X, CROWN_W = MX - 114, 228
+	local crown = rbox({ Position = UDim2.fromOffset(CROWN_X, CROWN_Y), Size = UDim2.fromOffset(CROWN_W, CROWN_H), BackgroundColor3 = WHITE, ClipsDescendants = true, ZIndex = Z.Crown }, 6)
 	local crownGradient = UIUtil.Gradient(crown, beamSeq(TIERS[1].Frame), 90)
 	local crownStroke = UIUtil.Stroke(crown, TIERS[1].Outline, 2, 0.1)
-	local crownStripe = box({ Position = UDim2.fromOffset(8, 9), Size = UDim2.new(1, -16, 0, 8), BackgroundColor3 = WHITE, ZIndex = 7, Parent = crown }, 2)
-	local crownStripes = stripeFill(crownStripe, 22, TIERS[1].AccentA, TIERS[1].AccentB, 35)
+	-- Bande d'accent (s'arrête avant le panneau des manomètres)
+	local GAUGE_PANEL_X, GAUGE_PANEL_W = 162, 60 -- (repère de la traverse)
+	local crownStripe = box({ Position = UDim2.fromOffset(8, 9), Size = UDim2.fromOffset(GAUGE_PANEL_X - 14, 8), BackgroundColor3 = WHITE, ZIndex = 2, Parent = crown }, 2)
+	local crownStripes = stripeFill(crownStripe, 16, TIERS[1].AccentA, TIERS[1].AccentB, 35)
+	-- Panneau des manomètres ENCASTRÉ dans la traverse (plus rien ne dépasse)
+	local gaugePanel = box({ Position = UDim2.fromOffset(GAUGE_PANEL_X, 2), Size = UDim2.fromOffset(GAUGE_PANEL_W, CROWN_H - 4), BackgroundColor3 = rgb(36, 40, 50), ZIndex = 10, Parent = crown }, 5)
+	local gaugePanelStroke = UIUtil.Stroke(gaugePanel, INK, 1, 0.3)
+	local _, mainNeedle, mainBezel = makeGauge(gaugePanel, 15, (CROWN_H - 4) / 2, 18, 2)
+	-- Second manomètre (paliers >= 4) ; sinon un voyant "prêt"
+	local gauge2, gauge2Needle = makeGauge(gaugePanel, GAUGE_PANEL_W - 15, (CROWN_H - 4) / 2, 18, 2)
+	local panelLamp = box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(GAUGE_PANEL_W - 15, (CROWN_H - 4) / 2), Size = UDim2.fromOffset(10, 10), BackgroundColor3 = Theme.Colors.Green, ZIndex = 2, Parent = gaugePanel }, UDim.new(1, 0))
+	UIUtil.Stroke(panelLamp, INK, 1)
 
 	-- Tige chromée (derrière la traverse et le plateau)
-	local rod = rbox({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(MX, CROWN_Y + CROWN_H - 2), Size = UDim2.fromOffset(20, 10), BackgroundColor3 = WHITE, ZIndex = 3 })
+	local rod = rbox({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(MX, CROWN_Y + CROWN_H - 2), Size = UDim2.fromOffset(20, 10), BackgroundColor3 = WHITE, ZIndex = Z.Rod })
 	local rodGradient = UIUtil.Gradient(rod, cylinderSeq(TIERS[1].Chrome), 0)
 	-- Joint (bague) sous la traverse
-	local gland = rbox({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(MX, CROWN_Y + CROWN_H - 1), Size = UDim2.fromOffset(30, 6), BackgroundColor3 = WHITE, ZIndex = 7 }, 2)
+	local gland = rbox({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(MX, CROWN_Y + CROWN_H - 1), Size = UDim2.fromOffset(30, 6), BackgroundColor3 = WHITE, ZIndex = Z.Gland }, 2)
 	local glandGradient = UIUtil.Gradient(gland, beamSeq(TIERS[1].Frame), 90)
 
-	-- Plateau (guidé par les colonnes) + éclair blanc au choc
-	local plate = rbox({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(MX, PLATE_TOP), Size = UDim2.fromOffset(PLATE_W, PLATE_H), BackgroundColor3 = WHITE, ZIndex = 5 }, 4)
+	-- Plateau (guidé par les colonnes) + éclair blanc au choc : DEVANT les objets
+	local plate = rbox({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(MX, PLATE_TOP), Size = UDim2.fromOffset(PLATE_W, PLATE_H), BackgroundColor3 = WHITE, ZIndex = Z.Plate }, 4)
 	local plateGradient = UIUtil.Gradient(plate, beamSeq(TIERS[1].Frame), 90)
 	local plateStroke = UIUtil.Stroke(plate, TIERS[1].Outline, 1.5, 0.2)
 	local plateStripe = box({ Position = UDim2.fromOffset(8, 4), Size = UDim2.new(1, -16, 0, 6), BackgroundColor3 = WHITE, ZIndex = 6, Parent = plate }, 2)
@@ -1130,14 +1185,14 @@ function Press.Start(ctx)
 		table.insert(guideGradients, UIUtil.Gradient(guide, beamSeq(TIERS[1].Frame), 90))
 	end
 	local plateFlash = box({ Size = UDim2.fromScale(1, 1), BackgroundColor3 = WHITE, BackgroundTransparency = 1, ZIndex = 9, Parent = plate }, 4)
-
-	-- Manomètre principal (sur la traverse, à droite du vérin)
-	local _, mainNeedle, mainBezel = makeGauge(rig, MX + 62, CYL_Y + 9, 24, 8)
-	-- Second manomètre (paliers >= 4)
-	local gauge2, gauge2Needle = makeGauge(rig, MX + 92, CYL_Y + 11, 18, 8)
+	-- Traits de vitesse au-dessus du plateau (descente rapide)
+	local speedLines: { Frame } = {}
+	for i, x in ipairs({ -52, -18, 18, 52 }) do
+		table.insert(speedLines, box({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, x, 0, -3), Size = UDim2.fromOffset(3, 10 + (i % 2) * 6), BackgroundColor3 = WHITE, BackgroundTransparency = 1, ZIndex = 1, Parent = plate }, UDim.new(1, 0)))
+	end
 
 	-- Enclume (sous le tapis) avec bande d'accent
-	local bolster = rbox({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(MX, BELT_Y + BELT_H - 1), Size = UDim2.fromOffset(176, FLOOR_Y - BELT_Y - BELT_H + 1), BackgroundColor3 = WHITE, ZIndex = 4 }, 3)
+	local bolster = rbox({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(MX, BELT_Y + BELT_H - 1), Size = UDim2.fromOffset(176, FLOOR_Y - BELT_Y - BELT_H + 1), BackgroundColor3 = WHITE, ZIndex = Z.Bolster }, 3)
 	local bolsterGradient = UIUtil.Gradient(bolster, beamSeq(TIERS[1].Frame), 90)
 	local bolsterStroke = UIUtil.Stroke(bolster, TIERS[1].Outline, 1.5, 0.2)
 	local bolsterStripe = box({ Position = UDim2.fromOffset(6, 12), Size = UDim2.new(1, -12, 0, 8), BackgroundColor3 = WHITE, ZIndex = 5, Parent = bolster }, 2)
@@ -1147,70 +1202,79 @@ function Press.Start(ctx)
 	------------------------------------------------------------------
 	-- Tapis roulant : bande qui défile, châssis, rouleaux, pieds
 	------------------------------------------------------------------
-	local belt = rbox({ Position = UDim2.fromOffset(BELT_X0, BELT_Y), Size = UDim2.fromOffset(BELT_X1 - BELT_X0, BELT_H), BackgroundColor3 = rgb(40, 42, 50), ClipsDescendants = true, ZIndex = 6 }, 3)
+	local belt = rbox({ Position = UDim2.fromOffset(BELT_X0, BELT_Y), Size = UDim2.fromOffset(BELT_X1 - BELT_X0, BELT_H), BackgroundColor3 = rgb(40, 42, 50), ClipsDescendants = true, ZIndex = Z.Belt }, 3)
 	local BELT_PERIOD = 12
-	local beltStripes = box({ Size = UDim2.new(1, BELT_PERIOD * 2, 1, 0), BackgroundColor3 = WHITE, ZIndex = 6, Parent = belt })
+	local beltStripes = box({ Size = UDim2.new(1, BELT_PERIOD * 2, 1, 0), BackgroundColor3 = WHITE, ZIndex = 1, Parent = belt })
 	stripeFill(beltStripes, math.floor((BELT_X1 - BELT_X0 + BELT_PERIOD * 2) / (BELT_PERIOD / 2)), rgb(74, 78, 92), rgb(44, 46, 56), 0)
-	box({ Size = UDim2.new(1, 0, 0, 2), BackgroundColor3 = WHITE, BackgroundTransparency = 0.8, ZIndex = 7, Parent = belt })
+	box({ Size = UDim2.new(1, 0, 0, 2), BackgroundColor3 = WHITE, BackgroundTransparency = 0.8, ZIndex = 2, Parent = belt })
 	-- Châssis (devant les rouleaux) : à droite de l'enclume et petit bout à gauche
 	local steel = rgb(96, 104, 120)
 	local frames = {
-		rbox({ Position = UDim2.fromOffset(MX + 88, BELT_Y + BELT_H), Size = UDim2.fromOffset(BELT_X1 - MX - 88, 12), BackgroundColor3 = WHITE, ZIndex = 7 }, 3),
-		rbox({ Position = UDim2.fromOffset(BELT_X0, BELT_Y + BELT_H), Size = UDim2.fromOffset(MX - 88 - BELT_X0, 12), BackgroundColor3 = WHITE, ZIndex = 7 }, 3),
+		rbox({ Position = UDim2.fromOffset(MX + 88, BELT_Y + BELT_H), Size = UDim2.fromOffset(BELT_X1 - MX - 88, 12), BackgroundColor3 = WHITE, ZIndex = Z.BeltFrame }, 3),
+		rbox({ Position = UDim2.fromOffset(BELT_X0, BELT_Y + BELT_H), Size = UDim2.fromOffset(MX - 88 - BELT_X0, 12), BackgroundColor3 = WHITE, ZIndex = Z.BeltFrame }, 3),
 	}
 	for _, f in ipairs(frames) do
 		UIUtil.Gradient(f, beamSeq(steel), 90)
 	end
 	-- Rouleaux (moyeux qui tournent quand la bande avance)
 	local rollers: { Frame } = {}
-	for _, x in ipairs({ 74, MX + 102, MX + 130, MX + 158, MX + 186 }) do
-		local hub = rbox({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(x, BELT_Y + BELT_H + 6), Size = UDim2.fromOffset(9, 9), BackgroundColor3 = rgb(200, 206, 216), ZIndex = 8 }, UDim.new(1, 0))
+	for _, x in ipairs({ BELT_X0 + 9, MX + 102, MX + 130, MX + 158, MX + 186 }) do
+		local hub = rbox({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(x, BELT_Y + BELT_H + 6), Size = UDim2.fromOffset(9, 9), BackgroundColor3 = rgb(200, 206, 216), ZIndex = Z.Roller }, UDim.new(1, 0))
 		UIUtil.Stroke(hub, rgb(50, 54, 64), 1)
-		box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, -2, 0, 2), BackgroundColor3 = rgb(60, 64, 76), ZIndex = 9, Parent = hub })
-		box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0, 2, 1, -2), BackgroundColor3 = rgb(60, 64, 76), ZIndex = 9, Parent = hub })
+		box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, -2, 0, 2), BackgroundColor3 = rgb(60, 64, 76), ZIndex = 2, Parent = hub })
+		box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0, 2, 1, -2), BackgroundColor3 = rgb(60, 64, 76), ZIndex = 2, Parent = hub })
 		table.insert(rollers, hub)
 	end
 	-- Pieds du tapis + entretoise
-	for _, x in ipairs({ MX + 110, BELT_X1 - 16 }) do
-		rbox({ Position = UDim2.fromOffset(x, BELT_Y + BELT_H + 12), Size = UDim2.fromOffset(7, FLOOR_Y - BELT_Y - BELT_H - 12), BackgroundColor3 = rgb(80, 86, 100), ZIndex = 5 }, 1)
+	for _, x in ipairs({ MX + 112, MX + 190 }) do
+		rbox({ Position = UDim2.fromOffset(x, BELT_Y + BELT_H + 12), Size = UDim2.fromOffset(7, FLOOR_Y - BELT_Y - BELT_H - 12), BackgroundColor3 = rgb(80, 86, 100), ZIndex = Z.BeltLegs }, 1)
 	end
-	rbox({ Position = UDim2.fromOffset(MX + 110, FLOOR_Y - 12), Size = UDim2.fromOffset(BELT_X1 - 16 - MX - 110, 4), BackgroundColor3 = rgb(80, 86, 100), ZIndex = 5 }, 1)
+	rbox({ Position = UDim2.fromOffset(MX + 112, FLOOR_Y - 12), Size = UDim2.fromOffset(78, 4), BackgroundColor3 = rgb(80, 86, 100), ZIndex = Z.BeltLegs }, 1)
 
 	------------------------------------------------------------------
-	-- Bac de récupération (à gauche, sous le bout du tapis)
+	-- Bac de récupération (à gauche, son bord SOUS le bout du tapis)
 	------------------------------------------------------------------
-	rbox({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(BIN_X, BIN_TOP), Size = UDim2.fromOffset(BIN_W, FLOOR_Y - BIN_TOP), BackgroundColor3 = rgb(40, 90, 56), ZIndex = 3 }, 5)
-	local binFront = rbox({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(BIN_X, BIN_TOP + 8), Size = UDim2.fromOffset(BIN_W + 4, FLOOR_Y - BIN_TOP - 8), BackgroundColor3 = rgb(70, 150, 96), ZIndex = 9 }, 5)
+	rbox({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(BIN_X, BIN_TOP), Size = UDim2.fromOffset(BIN_W, FLOOR_Y - BIN_TOP), BackgroundColor3 = rgb(40, 90, 56), ZIndex = Z.BinBack }, 5)
+	local binFront = rbox({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(BIN_X, BIN_TOP + 8), Size = UDim2.fromOffset(BIN_W + 4, FLOOR_Y - BIN_TOP - 8), BackgroundColor3 = rgb(70, 150, 96), ZIndex = Z.BinFront }, 5)
 	UIUtil.Gradient(binFront, cylinderSeq(rgb(70, 150, 96)), 0)
 	UIUtil.Stroke(binFront, rgb(30, 80, 46), 1.5)
 	UIUtil.Label({
 		Text = "♻️",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.52),
-		Size = UDim2.fromOffset(26, 26),
-		MaxTextSize = 22,
-		ZIndex = 10,
+		Position = UDim2.fromScale(0.5, 0.55),
+		Size = UDim2.fromOffset(20, 20),
+		MaxTextSize = 18,
+		ZIndex = 2,
 		Parent = binFront,
 	})
-	rbox({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(BIN_X, BIN_TOP + 5), Size = UDim2.fromOffset(BIN_W + 8, 6), BackgroundColor3 = rgb(50, 120, 72), ZIndex = 10 }, 3)
-	local binFill = rbox({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(BIN_X, BIN_TOP + 10), Size = UDim2.fromOffset(BIN_W - 12, 0), BackgroundColor3 = rgb(180, 140, 90), ZIndex = 4 }, PILL)
+	rbox({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(BIN_X, BIN_TOP + 5), Size = UDim2.fromOffset(BIN_W + 8, 6), BackgroundColor3 = rgb(50, 120, 72), ZIndex = Z.BinRim }, 3)
+	local binFill = rbox({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(BIN_X, BIN_TOP + 10), Size = UDim2.fromOffset(BIN_W - 12, 0), BackgroundColor3 = rgb(180, 140, 90), ZIndex = Z.BinFill }, PILL)
 	local binScale = Create("UIScale", { Parent = binFront })
 
 	------------------------------------------------------------------
-	-- Onde de choc + éclair d'impact (réutilisés)
+	-- Éclat "BD" derrière la machine au CRUNCH (rayons + étoile, réutilisés)
 	------------------------------------------------------------------
-	local shockRing = rbox({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(MX, BELT_Y), Size = UDim2.fromOffset(20, 6), BackgroundTransparency = 1, ZIndex = 11 }, UDim.new(1, 0))
-	local shockStroke = UIUtil.Stroke(shockRing, WHITE, 3, 1)
-	local impactFlash = rbox({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(MX, BELT_Y - 6), Size = UDim2.fromOffset(150, 40), BackgroundColor3 = rgb(255, 250, 220), BackgroundTransparency = 1, ZIndex = 11 }, UDim.new(1, 0))
-
-	-- Décors propres au palier (reconstruits à chaque changement)
-	local decorBack = Create("Frame", { Name = "DecorBack", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = 1, Parent = rig })
-	local decorFront = Create("Frame", { Name = "DecorFront", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = 10, Parent = rig })
+	local BURST_Y = BELT_Y - 36
+	local burst = box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(MX, BURST_Y - HEADER_H), Size = UDim2.fromOffset(250, 250), BackgroundTransparency = 1, Visible = false, ZIndex = 1, Parent = burstLayer })
+	local burstScale = Create("UIScale", { Parent = burst })
+	local burstStars: { Frame } = {}
+	local burstStrokes: { UIStroke } = {}
+	for i = 1, 2 do
+		local star = box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(92, 92), Rotation = (i - 1) * 45, BackgroundColor3 = rgb(255, 214, 60), ZIndex = 2, Parent = burst }, 8)
+		table.insert(burstStars, star)
+		table.insert(burstStrokes, UIUtil.Stroke(star, rgb(255, 140, 30), 2.5, 0.2))
+	end
+	local burstRays: { Frame } = {}
+	for i = 1, RAY_COUNT do
+		local pivot = box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1, 1), Rotation = (i - 1) * (360 / RAY_COUNT) + 7, BackgroundTransparency = 1, ZIndex = 1, Parent = burst })
+		local long = i % 2 == 1
+		table.insert(burstRays, box({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, long and 0 or 0.12), Size = UDim2.new(0, long and 12 or 8, 0.5, long and -30 or -44), BackgroundColor3 = long and WHITE or rgb(255, 214, 60), ZIndex = 1, Parent = pivot }, UDim.new(1, 0)))
+	end
 
 	------------------------------------------------------------------
 	-- Pupitre (à droite) : bouton START (Presse turbo) ou panneau d'avertissement
 	------------------------------------------------------------------
-	local console = rbox({ Name = "Console", Position = UDim2.fromOffset(CONSOLE_X, CONSOLE_Y), Size = UDim2.fromOffset(CONSOLE_W, CONSOLE_H), BackgroundColor3 = WHITE, ZIndex = 12 }, 10)
+	local console = rbox({ Name = "Console", Position = UDim2.fromOffset(CONSOLE_X, CONSOLE_Y), Size = UDim2.fromOffset(CONSOLE_W, CONSOLE_H), BackgroundColor3 = WHITE, ZIndex = Z.Console }, 10)
 	UIUtil.Gradient(console, seq(rgb(84, 90, 104), rgb(44, 48, 58)), 90)
 	local consoleStroke = UIUtil.Stroke(console, INK, 2)
 	for _, pos in ipairs({ Vector2.new(6, 6), Vector2.new(CONSOLE_W - 6, 6), Vector2.new(6, CONSOLE_H - 6), Vector2.new(CONSOLE_W - 6, CONSOLE_H - 6) }) do
@@ -1298,7 +1362,15 @@ function Press.Start(ctx)
 	------------------------------------------------------------------
 	-- Réserves réutilisées : particules, bouffées de vapeur, cris
 	------------------------------------------------------------------
-	local fx = Create("Frame", { Name = "FX", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = 13, Parent = rig })
+	-- Découpe SOUS l'en-tête : aucune particule / vapeur ne passe sur le titre,
+	-- la pastille ou le compteur (le cadre n'est jamais tourné : la découpe
+	-- de Roblox fonctionne). Les coordonnées restent celles de la machine.
+	local fxClip = Create("Frame", { Name = "FXClip", Position = UDim2.fromOffset(0, HEADER_H), Size = UDim2.new(1, 0, 1, -HEADER_H), BackgroundTransparency = 1, ClipsDescendants = true, ZIndex = Z.FX, Parent = rig })
+	local fx = Create("Frame", { Name = "FX", Position = UDim2.fromOffset(0, -HEADER_H), Size = UDim2.new(1, 0, 1, HEADER_H), BackgroundTransparency = 1, ZIndex = 1, Parent = fxClip })
+	-- Onde de choc + éclair d'impact (réutilisés)
+	local impactFlash = box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(MX, BELT_Y - 6), Size = UDim2.fromOffset(170, 44), BackgroundColor3 = rgb(255, 250, 220), BackgroundTransparency = 1, ZIndex = 1, Parent = fx }, UDim.new(1, 0))
+	local shockRing = box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(MX, BELT_Y), Size = UDim2.fromOffset(20, 6), BackgroundTransparency = 1, ZIndex = 2, Parent = fx }, UDim.new(1, 0))
+	local shockStroke = UIUtil.Stroke(shockRing, WHITE, 3, 1)
 
 	type Particle = {
 		Frame: Frame,
@@ -1375,6 +1447,36 @@ function Press.Start(ctx)
 					particle.VY += particle.Gravity * dt
 					particle.X += particle.VX * dt
 					particle.Y += particle.VY * dt
+					-- Collisions : les éclats rebondissent sur le tapis / le sol au
+					-- lieu de traverser l'enclume ; ceux qui tombent dans le bac y
+					-- disparaissent ; les bords de la carte les renvoient.
+					if particle.Gravity > 0 then
+						local ground = FLOOR_Y - particle.Size / 2
+						if particle.X >= BELT_X0 and particle.X <= BELT_X1 then
+							ground = BELT_Y - particle.Size / 2
+						elseif particle.X < BIN_X + BIN_W / 2 + 4 then
+							ground = BIN_TOP + 6
+						end
+						if particle.Y > ground and particle.VY > 0 then
+							if particle.Streak or ground == BIN_TOP + 6 then
+								particle.Life = math.min(particle.Life, 0.05)
+							elseif particle.VY > 90 then
+								particle.VY = -particle.VY * 0.32
+								particle.VX *= 0.6
+								particle.Spin *= 0.5
+							else
+								particle.VY = 0
+								particle.VX *= 0.5
+								particle.Spin = 0
+								particle.Gravity = 0
+								particle.Life = math.min(particle.Life, 0.35)
+							end
+							particle.Y = ground
+						end
+					end
+					if (particle.X < 8 and particle.VX < 0) or (particle.X > 372 and particle.VX > 0) then
+						particle.VX = -particle.VX * 0.4
+					end
 					local frame = particle.Frame
 					frame.Position = UDim2.fromOffset(particle.X, particle.Y)
 					local k = particle.Life / particle.MaxLife
@@ -1437,7 +1539,7 @@ function Press.Start(ctx)
 	end
 
 	-- Cris "CRUNCH!" (2 étiquettes utilisées à tour de rôle)
-	type Shout = { Label: TextLabel, Stroke: UIStroke, Scale: UIScale, Life: number, Y: number }
+	type Shout = { Label: TextLabel, Stroke: UIStroke, Scale: UIScale, Life: number, Y: number, Peak: number }
 	local shouts: { Shout } = {}
 	for _ = 1, SHOUT_COUNT do
 		local label = UIUtil.Label({
@@ -1452,23 +1554,42 @@ function Press.Start(ctx)
 			ZIndex = 20,
 			Parent = card,
 		})
-		local stroke = UIUtil.Stroke(label, INK, 3)
+		local stroke = UIUtil.Stroke(label, INK, 3.5)
 		stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+		-- Lettres "BD" : haut clair, bas plus foncé
+		UIUtil.Gradient(label, seq(WHITE, rgb(255, 196, 150)), 90)
 		local scale = Create("UIScale", { Parent = label })
-		table.insert(shouts, { Label = label, Stroke = stroke, Scale = scale, Life = 0, Y = 130 })
+		table.insert(shouts, { Label = label, Stroke = stroke, Scale = scale, Life = 0, Y = 130, Peak = 1.1 })
 	end
 	local shoutIndex = 0
 
-	local function shout(text: string, color: Color3?, y: number?)
+	local bannerLife = 0 -- annonce de palier en cours : pas de cri par-dessus
+	local function shout(text: string, color: Color3?, y: number?, banner: boolean?)
+		if bannerLife > 0 and not banner then
+			return
+		end
+		-- Un seul cri lisible à la fois : le précédent s'efface aussitôt
+		for _, other in ipairs(shouts) do
+			if other.Life > 0.12 then
+				other.Life = 0.12
+			end
+		end
+		if banner then
+			bannerLife = 1
+		end
 		shoutIndex = shoutIndex % SHOUT_COUNT + 1
 		local s = shouts[shoutIndex]
 		local long = (utf8.len(text) or #text) > 12
 		s.Y = y or 128
 		s.Life = 1
+		-- Les phrases longues grossissent moins : elles restent entre le
+		-- réservoir et le pupitre
+		local length = utf8.len(text) or #text
+		s.Peak = long and 0.92 or (length > 8 and 1 or 1.1)
 		local label = s.Label
 		label.Text = text
 		label.TextColor3 = color or rgb(255, 220, 50)
-		label.Size = UDim2.fromOffset(long and 250 or 220, long and 26 or 40)
+		label.Size = UDim2.fromOffset(long and 236 or 210, long and 28 or 40)
 		local constraint = label:FindFirstChildOfClass("UITextSizeConstraint")
 		if constraint then
 			constraint.MaxTextSize = long and 22 or 36
@@ -1482,6 +1603,9 @@ function Press.Start(ctx)
 	end
 
 	local function updateShouts(dt: number)
+		if bannerLife > 0 then
+			bannerLife -= dt
+		end
 		for _, s in ipairs(shouts) do
 			if s.Life > 0 then
 				s.Life -= dt
@@ -1489,9 +1613,19 @@ function Press.Start(ctx)
 				if s.Life <= 0 then
 					s.Label.Visible = false
 				else
-					-- Apparition élastique puis montée en fondu
-					s.Scale.Scale = age < 0.2 and 0.3 + easeOutBack(age / 0.2) * 0.8 or 1.1
-					if age > 0.55 then
+					-- Apparition "coup de poing" (dépasse puis se pose, en tremblant)
+					-- puis montée en fondu
+					if age < 0.12 then
+						s.Scale.Scale = 0.3 + easeOutBack(age / 0.12) * (s.Peak * 1.23 - 0.3)
+					elseif age < 0.3 then
+						s.Scale.Scale = s.Peak * (1.23 - 0.23 * easeOut((age - 0.12) / 0.18))
+					else
+						s.Scale.Scale = s.Peak
+					end
+					if age < 0.3 then
+						local jitter = (0.3 - age) * 8
+						s.Label.Position = UDim2.fromOffset(MX + random:NextNumber(-jitter, jitter), s.Y + random:NextNumber(-jitter, jitter))
+					elseif age > 0.55 then
 						local k = (age - 0.55) / 0.45
 						s.Label.Position = UDim2.fromOffset(MX, s.Y - 26 * k)
 						s.Label.TextTransparency = k
@@ -1519,10 +1653,30 @@ function Press.Start(ctx)
 		NeonStrokes = {} :: { UIStroke },
 	}
 
+	-- Un rivet / une gemme de la traverse tomberait-il sur le panneau des manomètres ?
+	local function onGaugePanel(x: number): boolean
+		local left = CROWN_X + GAUGE_PANEL_X
+		return x > left - 5 and x < left + GAUGE_PANEL_W + 5
+	end
+
+	-- Gemme taillée (carré tourné à 45°)
+	local function gem(parent: Instance, x: number, y: number, size: number, color: Color3, rim: Color3): UIStroke
+		local g = box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(size, size), Rotation = 45, BackgroundColor3 = color, ZIndex = 2, Parent = parent }, 2)
+		UIUtil.Gradient(g, seq(lighter(color, 0.6), color, darker(color, 0.25)), 45)
+		local stroke = UIUtil.Stroke(g, rim, 1.5)
+		box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.35, 0.35), Size = UDim2.fromScale(0.3, 0.3), BackgroundColor3 = WHITE, BackgroundTransparency = 0.2, ZIndex = 3, Parent = g }, 1)
+		return stroke
+	end
+
+	-- Chaque décor va dans le calque de la pièce qu'il habille : sur les
+	-- colonnes (sous le plateau et les objets), sur la traverse, sur l'enclume,
+	-- ou au mur (derrière toute la machine). Plus rien ne "perce" un objet.
 	local function buildDecor(index: number)
 		local style = TIERS[index]
 		decorBack:ClearAllChildren()
-		decorFront:ClearAllChildren()
+		decorPillar:ClearAllChildren()
+		decorCrown:ClearAllChildren()
+		decorBolster:ClearAllChildren()
 		if tierAnim.Shine then
 			tierAnim.Shine:Destroy()
 		end
@@ -1539,27 +1693,29 @@ function Press.Start(ctx)
 			-- Veinage du bois sur les colonnes
 			for _, x in ipairs(PILLAR_X) do
 				for _, gx in ipairs({ 5, 11 }) do
-					box({ Position = UDim2.fromOffset(x + gx, CROWN_Y + 30), Size = UDim2.fromOffset(1, FLOOR_Y - CROWN_Y - 50), BackgroundColor3 = darker(style.Frame, 0.3), BackgroundTransparency = 0.5, ZIndex = 1, Parent = decorFront })
+					box({ Position = UDim2.fromOffset(x + gx, CROWN_Y + 30), Size = UDim2.fromOffset(1, FLOOR_Y - CROWN_Y - 50), BackgroundColor3 = darker(style.Frame, 0.3), BackgroundTransparency = 0.5, ZIndex = 1, Parent = decorPillar })
 				end
 			end
 		end
 		if style.Rope then
 			-- Cordes enroulées sur les colonnes
 			for _, x in ipairs(PILLAR_X) do
-				for _, y in ipairs({ 96, 150 }) do
-					local rope = box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(x + PILLAR_W / 2, y), Size = UDim2.fromOffset(PILLAR_W + 6, 10), BackgroundColor3 = WHITE, ZIndex = 2, Parent = decorFront }, 3)
+				for _, y in ipairs({ 118, 184 }) do
+					local rope = box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(x + PILLAR_W / 2, y), Size = UDim2.fromOffset(PILLAR_W + 6, 10), BackgroundColor3 = WHITE, ZIndex = 2, Parent = decorPillar }, 3)
 					UIUtil.Gradient(rope, stripes(7, rgb(232, 204, 146), rgb(184, 146, 90)), 60)
 				end
 			end
 			for _, x in ipairs({ MX - 104, MX - 60, MX + 60, MX + 104 }) do
-				dot(decorFront, x, CROWN_Y + 4, 4, style.Bolt, 3)
+				if not onGaugePanel(x) then
+					dot(decorCrown, x, CROWN_Y + 4, 4, style.Bolt, 3)
+				end
 			end
 		end
 		if style.Bands then
-			-- Ferrures sur les colonnes et aux bouts de la traverse
+			-- Ferrures sur les colonnes
 			for _, x in ipairs(PILLAR_X) do
-				for _, y in ipairs({ 100, 160, 214 }) do
-					local band = box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(x + PILLAR_W / 2, y), Size = UDim2.fromOffset(PILLAR_W + 4, 7), BackgroundColor3 = WHITE, ZIndex = 2, Parent = decorFront }, 1)
+				for _, y in ipairs({ 118, 160, 198 }) do
+					local band = box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(x + PILLAR_W / 2, y), Size = UDim2.fromOffset(PILLAR_W + 4, 7), BackgroundColor3 = WHITE, ZIndex = 2, Parent = decorPillar }, 1)
 					UIUtil.Gradient(band, beamSeq(rgb(84, 86, 96)), 90)
 					dot(band, (PILLAR_W + 4) / 2, 3.5, 3, rgb(170, 174, 184), 3)
 				end
@@ -1567,23 +1723,28 @@ function Press.Start(ctx)
 		end
 		if style.Rivets then
 			for i = 0, 8 do
-				dot(decorFront, MX - 104 + i * 26, CROWN_Y + 4, 3, style.Bolt, 3)
-				dot(decorFront, MX - 104 + i * 26, CROWN_Y + CROWN_H - 4, 3, style.Bolt, 3)
+				local x = MX - 104 + i * 26
+				if not onGaugePanel(x) then
+					dot(decorCrown, x, CROWN_Y + 4, 3, style.Bolt, 3)
+					dot(decorCrown, x, CROWN_Y + CROWN_H - 4, 3, style.Bolt, 3)
+				end
 			end
 		end
 		if style.Beacon then
-			-- Gyrophare sur la traverse (à gauche)
+			-- Gyrophare posé SUR la traverse (bout droit)
+			local bx = CROWN_X + CROWN_W - 16
 			local baseColor = style.Neon and rgb(255, 60, 200) or rgb(255, 150, 20)
-			box({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(36, 67), Size = UDim2.fromOffset(14, 4), BackgroundColor3 = rgb(50, 52, 60), ZIndex = 3, Parent = decorFront }, 1)
-			local beacon = box({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(36, 64), Size = UDim2.fromOffset(12, 10), BackgroundColor3 = baseColor, ZIndex = 3, Parent = decorFront }, 5)
+			local beam = box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(bx, CROWN_Y - 8), Size = UDim2.fromOffset(34, 6), BackgroundColor3 = baseColor, BackgroundTransparency = 0.5, ZIndex = 1, Parent = decorCrown }, UDim.new(1, 0))
+			box({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(bx, CROWN_Y + 1), Size = UDim2.fromOffset(16, 4), BackgroundColor3 = rgb(50, 52, 60), ZIndex = 2, Parent = decorCrown }, 1)
+			local beacon = box({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(bx, CROWN_Y - 2), Size = UDim2.fromOffset(13, 11), BackgroundColor3 = baseColor, ZIndex = 3, Parent = decorCrown }, 5)
 			UIUtil.Gradient(beacon, seq(WHITE, rgb(210, 210, 210)), 90)
-			local beam = box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(36, 59), Size = UDim2.fromOffset(34, 5), BackgroundColor3 = baseColor, BackgroundTransparency = 0.5, ZIndex = 2, Parent = decorFront }, UDim.new(1, 0))
+			UIUtil.Stroke(beacon, darker(baseColor, 0.45), 1)
 			tierAnim.Beacon = beacon
 			tierAnim.BeaconBeam = beam
 		end
 		if style.Digital then
-			-- Afficheur numérique de pression sur la traverse
-			local screen = box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(MX + 70, CROWN_Y + CROWN_H / 2), Size = UDim2.fromOffset(44, 16), BackgroundColor3 = rgb(10, 16, 12), ZIndex = 4, Parent = decorFront }, 3)
+			-- Afficheur numérique de pression (gauche de la traverse)
+			local screen = box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(CROWN_X + 34, CROWN_Y + CROWN_H / 2), Size = UDim2.fromOffset(44, 14), BackgroundColor3 = rgb(10, 16, 12), ZIndex = 4, Parent = decorCrown }, 3)
 			UIUtil.Stroke(screen, rgb(120, 130, 140), 1)
 			tierAnim.Digital = Create("TextLabel", {
 				Size = UDim2.fromScale(1, 1),
@@ -1597,7 +1758,7 @@ function Press.Start(ctx)
 			})
 		end
 		if style.Shine then
-			-- Reflet qui passe sur la traverse
+			-- Reflet qui passe sur la traverse (découpé par la traverse)
 			local shineFrame = box({ Position = UDim2.fromOffset(-40, 3), Size = UDim2.new(0, 34, 1, -6), BackgroundColor3 = WHITE, ZIndex = 8, Parent = crown })
 			local gradient = UIUtil.Gradient(shineFrame, ColorSequence.new(WHITE), 20)
 			gradient.Transparency = NumberSequence.new({
@@ -1608,17 +1769,18 @@ function Press.Start(ctx)
 			tierAnim.Shine = shineFrame
 		end
 		if style.Sparkle then
-			for _, pos in ipairs({ Vector2.new(MX - 120, 110), Vector2.new(MX + 112, 132), Vector2.new(MX - 106, 180), Vector2.new(MX + 30, 42), Vector2.new(MX - 30, 116) }) do
+			-- Étincelles AU MUR (derrière la machine et les objets)
+			for _, pos in ipairs({ Vector2.new(50, 184), Vector2.new(MX - 46, 118), Vector2.new(MX + 46, 138), Vector2.new(286, 144), Vector2.new(MX + 58, 40) }) do
 				local star = UIUtil.Label({
 					Text = "✦",
 					Font = Theme.Fonts.Title,
 					TextColor3 = style.Sparkle,
 					AnchorPoint = Vector2.new(0.5, 0.5),
 					Position = UDim2.fromOffset(pos.X, pos.Y),
-					Size = UDim2.fromOffset(14, 14),
-					MaxTextSize = 14,
-					ZIndex = 4,
-					Parent = decorFront,
+					Size = UDim2.fromOffset(16, 16),
+					MaxTextSize = 16,
+					ZIndex = 2,
+					Parent = decorBack,
 				})
 				table.insert(tierAnim.Twinkles, star)
 			end
@@ -1626,34 +1788,39 @@ function Press.Start(ctx)
 		if style.Gems then
 			-- Rubis sur la traverse et l'enclume
 			for _, x in ipairs({ MX - 90, MX - 30, MX + 30 }) do
-				local gem = box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(x, CROWN_Y + CROWN_H / 2), Size = UDim2.fromOffset(9, 9), Rotation = 45, BackgroundColor3 = rgb(220, 20, 60), ZIndex = 4, Parent = decorFront }, 2)
-				UIUtil.Stroke(gem, rgb(255, 220, 120), 1.5)
-				UIUtil.Gradient(gem, seq(rgb(255, 180, 190), rgb(200, 200, 200)), 45)
+				gem(decorCrown, x, CROWN_Y + CROWN_H / 2, 10, rgb(220, 20, 60), rgb(255, 220, 120))
 			end
 			for _, x in ipairs({ MX - 70, MX + 70 }) do
-				local gem = box({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(x, FLOOR_Y - 9), Size = UDim2.fromOffset(8, 8), Rotation = 45, BackgroundColor3 = rgb(220, 20, 60), ZIndex = 4, Parent = decorFront }, 2)
-				UIUtil.Stroke(gem, rgb(255, 220, 120), 1.5)
+				gem(decorBolster, x, FLOOR_Y - 9, 9, rgb(220, 20, 60), rgb(255, 220, 120))
 			end
 		end
 		if style.Crystal then
-			-- Cristaux aux pieds des colonnes et sur la traverse
-			for _, x in ipairs({ PILLAR_X[1] - 6, PILLAR_X[2] + PILLAR_W + 6 }) do
-				for j, h in ipairs({ 16, 11 }) do
-					local shard = box({
-						AnchorPoint = Vector2.new(0.5, 1),
-						Position = UDim2.fromOffset(x + (j - 1.5) * 7, FLOOR_Y - 6),
-						Size = UDim2.fromOffset(7, h),
-						Rotation = (j - 1.5) * 24,
-						BackgroundColor3 = rgb(180, 240, 255),
-						BackgroundTransparency = 0.1,
-						ZIndex = 4,
-						Parent = decorFront,
-					}, 3)
-					UIUtil.Gradient(shard, seq(WHITE, rgb(120, 200, 255)), 90)
-					local stroke = UIUtil.Stroke(shard, style.Neon and style.Outline or WHITE, 1, 0.2)
-					if style.Neon then
-						table.insert(tierAnim.NeonStrokes, stroke)
-					end
+			-- Diamants sertis (traverse + enclume) et amas de cristaux sur la traverse
+			local rim = style.Neon and style.Outline or WHITE
+			for _, x in ipairs({ MX - 90, MX - 30, MX + 30 }) do
+				local stroke = gem(decorCrown, x, CROWN_Y + CROWN_H / 2, 10, rgb(150, 225, 255), rim)
+				if style.Neon then
+					table.insert(tierAnim.NeonStrokes, stroke)
+				end
+			end
+			for _, x in ipairs({ MX - 70, MX + 70 }) do
+				gem(decorBolster, x, FLOOR_Y - 9, 9, rgb(150, 225, 255), rim)
+			end
+			for j, spec in ipairs({ { -9, 12, -22 }, { 0, 19, 0 }, { 9, 13, 22 } }) do
+				local shard = box({
+					AnchorPoint = Vector2.new(0.5, 1),
+					Position = UDim2.fromOffset(MX + 58 + spec[1], CROWN_Y + 2),
+					Size = UDim2.fromOffset(8, spec[2]),
+					Rotation = spec[3],
+					BackgroundColor3 = rgb(180, 240, 255),
+					BackgroundTransparency = 0.05,
+					ZIndex = 1 + j % 2,
+					Parent = decorCrown,
+				}, 3)
+				UIUtil.Gradient(shard, seq(WHITE, rgb(120, 200, 255)), 90)
+				local stroke = UIUtil.Stroke(shard, rim, 1, 0.2)
+				if style.Neon then
+					table.insert(tierAnim.NeonStrokes, stroke)
 				end
 			end
 		end
@@ -1727,7 +1894,10 @@ function Press.Start(ctx)
 			fitting.BackgroundColor3 = style.Fitting
 		end
 		gauge2.Visible = style.Gauge2 == true
+		panelLamp.Visible = style.Gauge2 ~= true
 		mainBezel.Color = style.Neon and style.Outline or INK
+		gaugePanelStroke.Color = style.Neon and style.Outline or INK
+		gaugePanelStroke.Transparency = style.Neon and 0 or 0.3
 		consoleStroke.Color = style.Neon and style.Outline or INK
 		tierChip.BackgroundColor3 = style.Chip
 		tierChipLabel.TextColor3 = style.ChipText
@@ -1785,7 +1955,7 @@ function Press.Start(ctx)
 						emit(MX, 130, math.cos(angle) * speed, math.sin(angle) * speed - 60, random:NextInteger(4, 7), pickFrom({ style.Chip, style.AccentA, WHITE }, random), random:NextNumber(0.6, 1), 260, false)
 					end
 				end
-				shout(style.Icon .. " " .. Locale.Pick(style.Shout), style.Chip, 140)
+				shout(style.Icon .. " " .. Locale.Pick(style.Shout), rgb(255, 226, 70), 124, true)
 			end
 		end
 	end
@@ -1832,6 +2002,9 @@ function Press.Start(ctx)
 		Splat: Frame?,
 		Icon: string?,
 		NoPile: boolean?,
+		Regrow: boolean?,
+		Puddle: Frame?,
+		Dropped: boolean?,
 	}
 
 	local lastKind = ""
@@ -1874,28 +2047,36 @@ function Press.Start(ctx)
 			Position = UDim2.fromOffset(x, BELT_Y),
 			Size = UDim2.fromOffset(60, 60),
 			BackgroundTransparency = 1,
-			ZIndex = 7,
+			ZIndex = Z.Item,
 			Parent = rig,
 		})
+		-- Flaque (jus, peinture...) qui apparaît sous la galette au CRUNCH
+		local function addPuddle(color: Color3): Frame
+			local puddle = box({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, 2), Size = UDim2.new(1.3, 0, 0, 6), BackgroundColor3 = color, BackgroundTransparency = 0.1, Visible = false, ZIndex = 1, Parent = holder }, PILL)
+			UIUtil.Gradient(puddle, seq(lighter(color, 0.3), darker(color, 0.2)), 90)
+			return puddle
+		end
 		if drawn then
-			holder.Size = UDim2.fromOffset(drawn.W, drawn.H)
+			local w, h = math.floor(drawn.W * ITEM_SCALE + 0.5), math.floor(drawn.H * ITEM_SCALE + 0.5)
+			holder.Size = UDim2.fromOffset(w, h)
 			local built = drawn.Build(kit, holder)
 			return {
-				Holder = holder, W = drawn.W, H = drawn.H, X = x, Words = drawn.Words,
+				Holder = holder, W = w, H = h, X = x, Words = drawn.Words,
 				Colors = built.Colors, Main = built.Main, Special = drawn.Special, Wobble = drawn.Wobble or 1.5, Built = built,
+				Puddle = (drawn.Juice or drawn.Id == "Jelly" or drawn.Id == "Paint") and addPuddle(drawn.Juice or built.Main) or nil,
 			}
 		end
 		local item = emoji or EMOJI_ITEMS[1]
-		local size = 58
+		local size = math.floor(58 * ITEM_SCALE + 0.5)
 		holder.Size = UDim2.fromOffset(size, size)
-		local label = UIUtil.Label({ Text = item.Icon, Size = UDim2.fromScale(1, 1), MaxTextSize = 56, ZIndex = 3, Parent = holder })
+		local label = UIUtil.Label({ Text = item.Icon, Size = UDim2.fromScale(1, 1), MaxTextSize = 64, ZIndex = 3, Parent = holder })
 		local splat = box({ Size = UDim2.fromScale(1, 1), BackgroundColor3 = item.Color, Visible = false, ZIndex = 2, Parent = holder }, PILL)
 		UIUtil.Stroke(splat, darker(item.Color, 0.35), 1.5)
 		UIUtil.Gradient(splat, SHADE_V, 90)
 		return {
 			Holder = holder, W = size, H = size, X = x, Words = item.Words,
 			Colors = { item.Color, lighter(item.Color, 0.35) }, Main = item.Color, Wobble = 1.5,
-			Label = label, Splat = splat, Icon = item.Icon,
+			Label = label, Splat = splat, Icon = item.Icon, Puddle = addPuddle(item.Color),
 		}
 	end
 
@@ -1914,7 +2095,7 @@ function Press.Start(ctx)
 			holder:Destroy()
 			return
 		end
-		holder.ZIndex = 5
+		-- Chute : devant le fond du bac, DERRIÈRE sa face (Z.Item < Z.BinFront)
 		UIUtil.Tween(holder, 0.35, {
 			Position = UDim2.fromOffset(BIN_X, BIN_TOP + 26),
 			Size = UDim2.fromOffset(BIN_W - 10, 7),
@@ -1948,22 +2129,25 @@ function Press.Start(ctx)
 	local shakeTime = 0
 	local shakePower = 1
 
-	local function crumbs(colors: { Color3 }, count: number, y: number)
-		for _ = 1, count do
+	-- Éclats projetés SUR LES CÔTÉS depuis la fente plateau / tapis (ils
+	-- retombent et rebondissent sur le tapis, voir updateParticles)
+	local function crumbs(colors: { Color3 }, count: number, halfWidth: number)
+		for i = 1, count do
 			local color = colors[random:NextInteger(1, #colors)]
 			if random:NextNumber() < 0.15 then
 				color = WHITE
 			end
-			local dir = random:NextNumber() < 0.5 and -1 or 1
-			emit(MX + random:NextNumber(-34, 34), y, dir * random:NextNumber(60, 220), -random:NextNumber(80, 260), random:NextInteger(3, 8), color, random:NextNumber(0.55, 0.9), 700, random:NextNumber() < 0.4)
+			local dir = i % 2 == 0 and -1 or 1
+			emit(MX + dir * random:NextNumber(halfWidth * 0.6, halfWidth + 4), BELT_Y - random:NextNumber(3, 9), dir * random:NextNumber(70, 250), -random:NextNumber(60, 240), random:NextInteger(4, 8), color, random:NextNumber(0.7, 1.1), 700, random:NextNumber() < 0.4)
 		end
 	end
 
-	local function sparks(colors: { Color3 }, count: number)
-		for _ = 1, count do
-			local angle = random:NextNumber(-math.pi * 0.95, -math.pi * 0.05)
-			local speed = random:NextNumber(160, 320)
-			emit(MX + random:NextNumber(-60, 60), BELT_Y - 4, math.cos(angle) * speed, math.sin(angle) * speed, 5, colors[random:NextInteger(1, #colors)], random:NextNumber(0.25, 0.45), 320, false, true)
+	local function sparks(colors: { Color3 }, count: number, halfWidth: number)
+		for i = 1, count do
+			local dir = i % 2 == 0 and -1 or 1
+			local angle = dir > 0 and random:NextNumber(-0.75, -0.1) or random:NextNumber(-math.pi + 0.1, -math.pi + 0.75)
+			local speed = random:NextNumber(170, 330)
+			emit(MX + dir * (halfWidth + 2), BELT_Y - 4, math.cos(angle) * speed, math.sin(angle) * speed, 5, colors[random:NextInteger(1, #colors)], random:NextNumber(0.25, 0.45), 320, false, true)
 		end
 	end
 
@@ -1971,10 +2155,55 @@ function Press.Start(ctx)
 		shockRing.Size = UDim2.fromOffset(40, 8)
 		shockStroke.Color = color
 		shockStroke.Transparency = 0
-		UIUtil.Tween(shockRing, 0.35, { Size = UDim2.fromOffset(290, 34) }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+		UIUtil.Tween(shockRing, 0.35, { Size = UDim2.fromOffset(300, 36) }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 		UIUtil.Tween(shockStroke, 0.35, { Transparency = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-		impactFlash.BackgroundTransparency = 0.35
+		impactFlash.BackgroundTransparency = 0.25
 		UIUtil.Tween(impactFlash, 0.25, { BackgroundTransparency = 1 })
+	end
+
+	-- Éclat "BD" : étoile + rayons derrière la machine (animé dans OnRender)
+	local BURST_LIFE = 0.5
+	local burstLife = 0
+	local function startBurst(starColor: Color3, rayColor: Color3)
+		burstLife = BURST_LIFE
+		for _, star in ipairs(burstStars) do
+			star.BackgroundColor3 = starColor
+			star.BackgroundTransparency = 0.05
+		end
+		for _, stroke in ipairs(burstStrokes) do
+			stroke.Color = darker(starColor, 0.25)
+			stroke.Transparency = 0.2
+		end
+		for i, ray in ipairs(burstRays) do
+			ray.BackgroundColor3 = i % 2 == 1 and rayColor or starColor
+			ray.BackgroundTransparency = 0
+		end
+		burstScale.Scale = 0.35
+		burst.Rotation = random:NextNumber(-12, 12)
+		burst.Visible = true
+	end
+
+	local function updateBurst(dt: number)
+		if burstLife <= 0 then
+			return
+		end
+		burstLife -= dt
+		if burstLife <= 0 then
+			burst.Visible = false
+			return
+		end
+		local age = 1 - burstLife / BURST_LIFE
+		burstScale.Scale = 0.35 + 0.85 * easeOut(math.min(1, age * 2.2))
+		local fade = age < 0.45 and 0 or (age - 0.45) / 0.55
+		for _, star in ipairs(burstStars) do
+			star.BackgroundTransparency = 0.05 + 0.95 * fade
+		end
+		for _, stroke in ipairs(burstStrokes) do
+			stroke.Transparency = 0.2 + 0.8 * fade
+		end
+		for _, ray in ipairs(burstRays) do
+			ray.BackgroundTransparency = fade
+		end
 	end
 
 	------------------------------------------------------------------
@@ -2012,28 +2241,25 @@ function Press.Start(ctx)
 		phaseDuration = (DURATIONS[name] or 0.5) / speedMul
 	end
 
-	local function dropIn(entry: Entry)
-		-- Arrive par le haut (trémie) et rebondit sur le tapis
-		entry.Holder.Position = UDim2.fromOffset(entry.X, BELT_Y - 60)
-		UIUtil.Tween(entry.Holder, 0.45, { Position = UDim2.fromOffset(entry.X, BELT_Y) }, Enum.EasingStyle.Bounce)
-	end
-
-	-- Le tapis avance d'un pas : galette -> sortie, file -> presse
+	-- Le tapis avance d'un pas (SPACING) : la galette part vers le bac,
+	-- l'objet en attente passe sous la presse, un nouvel objet entre par la
+	-- droite de la carte (jamais par le haut : il passait derrière le pupitre)
 	local function loadNext()
 		factor = speedFactor()
 		speedLabel.Text = "⚡ x" .. (math.floor(factor * 10 + 0.5) / 10)
 		table.clear(movers)
 		if outgoing then
-			table.insert(movers, { Entry = outgoing, From = MX, To = EXIT_X })
+			table.insert(movers, { Entry = outgoing, From = MX, To = MX - SPACING })
 		end
-		while #queue < 1 do
-			local entry = newEntry(SLOT_X[#queue + 1])
-			table.insert(queue, entry)
+		while #queue < #SLOT_X do
+			table.insert(queue, newEntry(SLOT_X[#queue + 1]))
 		end
 		current = table.remove(queue, 1)
 		if current then
 			table.insert(movers, { Entry = current, From = current.X, To = MX })
 		end
+		local incoming = newEntry(ENTRY_X)
+		table.insert(queue, incoming)
 		for i, entry in ipairs(queue) do
 			table.insert(movers, { Entry = entry, From = entry.X, To = SLOT_X[i] })
 		end
@@ -2041,21 +2267,24 @@ function Press.Start(ctx)
 		setPhase("Load")
 	end
 
+	-- La galette arrive au bout du tapis : elle bascule dans le bac
+	local function checkOutgoing()
+		local entry = outgoing
+		if entry and not entry.Dropped and entry.X <= BELT_X0 + 4 then
+			entry.Dropped = true
+			dropIntoBin(entry)
+		end
+	end
+
 	local function finishLoad()
 		for _, mover in ipairs(movers) do
-			placeEntry(mover.Entry, mover.To)
+			if not mover.Entry.Dropped then
+				placeEntry(mover.Entry, mover.To)
+			end
 		end
 		table.clear(movers)
-		if outgoing then
-			dropIntoBin(outgoing)
-			outgoing = nil
-		end
-		-- La file se remplit par le haut
-		while #queue < #SLOT_X do
-			local entry = newEntry(SLOT_X[#queue + 1])
-			table.insert(queue, entry)
-			dropIn(entry)
-		end
+		checkOutgoing()
+		outgoing = nil
 	end
 
 	local function itemHeight(): number
@@ -2080,8 +2309,9 @@ function Press.Start(ctx)
 		ctx.Sound.Play("Crush", random:NextNumber(0.85, 1.15) * (turbo and 0.85 or 1))
 
 		-- Secousse de la machine (plus forte aux paliers élevés et en turbo)
-		shakeTime = turbo and 0.38 or 0.26
-		shakePower = 1 + (tierIndex - 1) * 0.06 + (turbo and 0.4 or 0)
+		shakeTime = turbo and 0.42 or 0.3
+		shakePower = 1.2 + (tierIndex - 1) * 0.06 + (turbo and 0.4 or 0)
+		local halfWidth = entry.W * 0.8
 
 		local words = Locale.Pick(entry.Words)
 		local word = words[random:NextInteger(1, #words)]
@@ -2093,25 +2323,30 @@ function Press.Start(ctx)
 		plateFlash.BackgroundTransparency = 0.15
 		UIUtil.Tween(plateFlash, 0.3, { BackgroundTransparency = 1 })
 		shockwave(style.Neon and rgb(0, 230, 255) or WHITE)
+		-- Grand éclat BD derrière la presse (couleurs du palier)
+		startBurst(style.Sparkle or rgb(255, 214, 60), style.Dark and style.Chip or rgb(255, 140, 40))
+		if entry.Puddle then
+			entry.Puddle.Visible = true
+		end
 
 		local debrisColors = table.clone(entry.Colors)
 		for _, color in ipairs(style.Debris) do
 			table.insert(debrisColors, color)
 		end
-		crumbs(debrisColors, effects and (turbo and 18 or 13) or 4, BELT_Y - 10)
+		crumbs(debrisColors, effects and (turbo and 20 or 14) or 4, halfWidth)
 		if effects then
 			-- Poussière au ras du tapis + vapeur du vérin
 			for _, dir in ipairs({ -1, 1 }) do
-				puff(MX + dir * 64, BELT_Y - 6, 12, dir * 46, -16, style.Dark and rgb(170, 170, 190) or rgb(236, 236, 240))
+				puff(MX + dir * (halfWidth + 6), BELT_Y - 6, 13, dir * 52, -14, style.Dark and rgb(170, 170, 190) or rgb(236, 236, 240))
 			end
 			if style.Steam or style.Neon then
 				puff(MX + 34, CYL_Y + 8, 10, 26, -18)
 				puff(MX - 34, CYL_Y + 8, 10, -26, -18)
 			end
 			if style.Sparkle then
-				sparks({ style.Sparkle, WHITE }, style.Neon and 14 or 9)
+				sparks({ style.Sparkle, WHITE }, style.Neon and 14 or 9, halfWidth)
 			elseif turbo or tierIndex >= 3 then
-				sparks({ rgb(255, 200, 60), rgb(255, 250, 200) }, turbo and 8 or 4)
+				sparks({ rgb(255, 200, 60), rgb(255, 250, 200) }, turbo and 8 or 4, halfWidth)
 			end
 		end
 
@@ -2126,7 +2361,7 @@ function Press.Start(ctx)
 					local bit = UIUtil.Label({
 						Text = entry.Icon or "",
 						AnchorPoint = Vector2.new(0.5, 0.5),
-						Position = UDim2.fromOffset(MX, BELT_Y - 12),
+						Position = UDim2.fromOffset(MX, BELT_Y - 8),
 						Size = UDim2.fromOffset(20, 20),
 						MaxTextSize = 20,
 						ZIndex = 12,
@@ -2159,19 +2394,21 @@ function Press.Start(ctx)
 				built.Stroke.Thickness = 3
 			end
 			if effects then
-				crumbs({ rgb(30, 30, 30), rgb(255, 90, 100) }, 6, BELT_Y - 8)
+				crumbs({ rgb(30, 30, 30), rgb(255, 90, 100) }, 6, halfWidth)
 			end
 		elseif entry.Special == "Pop" then
 			entry.Holder.Visible = false
 			entry.NoPile = true
 			if effects then
 				for _ = 1, 14 do
-					emit(MX + random:NextNumber(-20, 20), BELT_Y - 20, random:NextNumber(-200, 200), -random:NextNumber(120, 300), 5, pickFrom(entry.Colors, random), random:NextNumber(0.7, 1.1), 420, false)
+					local dir = random:NextNumber() < 0.5 and -1 or 1
+					emit(MX + dir * random:NextNumber(10, halfWidth), BELT_Y - 8, dir * random:NextNumber(60, 220), -random:NextNumber(80, 260), 5, pickFrom(entry.Colors, random), random:NextNumber(0.7, 1.1), 420, false)
 				end
 			end
 		elseif entry.Special == "Paint" and effects then
 			for _ = 1, 10 do
-				emit(MX + random:NextNumber(-30, 30), BELT_Y - 8, random:NextNumber(-240, 240), -random:NextNumber(40, 200), random:NextInteger(5, 9), entry.Main, random:NextNumber(0.5, 0.8), 600, true)
+				local dir = random:NextNumber() < 0.5 and -1 or 1
+				emit(MX + dir * random:NextNumber(halfWidth * 0.5, halfWidth), BELT_Y - 6, dir * random:NextNumber(80, 240), -random:NextNumber(40, 200), random:NextInteger(5, 9), entry.Main, random:NextNumber(0.6, 0.9), 600, true)
 			end
 		end
 	end
@@ -2183,8 +2420,9 @@ function Press.Start(ctx)
 			return
 		end
 		if entry.Special == "Sponge" then
-			-- L'éponge reprend sa forme... puis repart quand même
-			UIUtil.Tween(entry.Holder, 0.4, { Size = UDim2.fromOffset(entry.W, entry.H) }, Enum.EasingStyle.Back)
+			-- L'éponge reprend sa forme en SUIVANT le plateau (elle ne passe
+			-- jamais derrière lui), voir la phase "Rise"... puis repart quand même
+			entry.Regrow = true
 			shout(Locale.T("...and it's back"), rgb(120, 220, 255), 98)
 		end
 		outgoing = entry
@@ -2253,6 +2491,8 @@ function Press.Start(ctx)
 	loadNext()
 
 	local clock = 0
+	local speedFade = 1
+	local shownSpeedFade = 1
 	local lastRollerOffset = -1
 	local lastPressure = -1
 	ctx.OnRender(function(dt: number)
@@ -2269,8 +2509,11 @@ function Press.Start(ctx)
 			plateY = PLATE_TOP
 			local e = easeInOut(t)
 			for _, mover in ipairs(movers) do
-				placeEntry(mover.Entry, mover.From + (mover.To - mover.From) * e)
+				if not mover.Entry.Dropped then
+					placeEntry(mover.Entry, mover.From + (mover.To - mover.From) * e)
+				end
 			end
+			checkOutgoing()
 			beltOffset = beltBase + SPACING * e
 			if t >= 1 then
 				finishLoad()
@@ -2280,8 +2523,17 @@ function Press.Start(ctx)
 				setPhase("Descend")
 			end
 		elseif phase == "Descend" then
+			-- Élan (le plateau remonte un peu) puis descente qui ACCÉLÈRE : il
+			-- claque sur l'objet
 			local contact = BELT_Y - itemHeight() - PLATE_H
-			plateY = phaseStartPlate + (contact - phaseStartPlate) * easeInOut(t)
+			if t < 0.2 then
+				plateY = phaseStartPlate - 5 * easeOut(t / 0.2)
+			else
+				local u = (t - 0.2) / 0.8
+				plateY = phaseStartPlate - 5 + (contact - phaseStartPlate + 5) * u * u * u
+			end
+			-- (seulement loin sous la traverse : les traits ne la chevauchent jamais)
+			speedFade = plateY > PLATE_TOP + 26 and 0.2 or 1
 			targetPressure = 0.15 + 0.2 * t
 			if t >= 1 then
 				setPhase("Squeeze")
@@ -2340,10 +2592,28 @@ function Press.Start(ctx)
 			end
 		elseif phase == "Rise" then
 			plateY = phaseStartPlate + (PLATE_TOP - phaseStartPlate) * easeOut(t)
+			local sponge = outgoing
+			if sponge and sponge.Regrow then
+				local room = BELT_Y - plateY - PLATE_H
+				local height = math.min(sponge.H, room)
+				local k = math.clamp((height - FLAT_H) / math.max(1, sponge.H - FLAT_H), 0, 1)
+				sponge.Holder.Size = UDim2.fromOffset(sponge.W * (1.5 - 0.5 * k), height)
+			end
 			targetPressure = 0.1
 			if t >= 1 then
 				plateY = PLATE_TOP
 				loadNext()
+			end
+		end
+
+		-- Traits de vitesse au-dessus du plateau
+		if phase ~= "Descend" then
+			speedFade = 1
+		end
+		if speedFade ~= shownSpeedFade then
+			shownSpeedFade = speedFade
+			for _, line in ipairs(speedLines) do
+				line.BackgroundTransparency = speedFade
 			end
 		end
 
@@ -2375,6 +2645,7 @@ function Press.Start(ctx)
 		if led.BackgroundColor3 ~= lampColor then
 			led.BackgroundColor3 = lampColor
 			statusLamp.BackgroundColor3 = lampColor
+			panelLamp.BackgroundColor3 = lampColor
 		end
 
 		-- Tapis + rouleaux (seulement quand la bande bouge)
@@ -2390,6 +2661,7 @@ function Press.Start(ctx)
 		updateParticles(dt)
 		updatePuffs(dt)
 		updateShouts(dt)
+		updateBurst(dt)
 
 		-- Animations du palier
 		local style = TIERS[math.max(1, tierIndex)]

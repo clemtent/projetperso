@@ -46,6 +46,8 @@
 	      Priority = number (plus petit = placé d'abord),
 	      Anchor = function(button: Rect, canvas: Vector2): Vector2 (centre préféré),
 	      MinScale, MaxScale, Near (écart max. avec le bouton, en px, facultatif),
+	      SizePenalty (v9.1, facultatif : plus grand = préfère une place plus
+	      grande, même plus loin — les claviers cliquables veulent de grosses touches),
 	      OnPlace = function(placement | nil) }
 	  GearLayout.Unregister(id)
 	  GearLayout.GetPlacement(id) -> placement | nil
@@ -85,6 +87,7 @@ export type Spec = {
 	MinScale: number?,
 	MaxScale: number?,
 	Near: number?,
+	SizePenalty: number?, -- v9.1 : "coût" d'une taille 2x plus petite (défaut SIZE_PENALTY)
 	OnPlace: (placement: Placement?) -> (),
 }
 
@@ -550,8 +553,8 @@ local function shapesOf(spec: Spec): { { Size: Vector2, Index: number, Visual: n
 	return list
 end
 
-local function sizeCost(scale: number, maxScale: number, visual: number, shapeIndex: number): number
-	return (1 - (scale * visual) / maxScale) * SIZE_PENALTY + (shapeIndex > 0 and SHAPE_PENALTY or 0)
+local function sizeCost(scale: number, maxScale: number, visual: number, shapeIndex: number, penalty: number?): number
+	return (1 - (scale * visual) / maxScale) * (penalty or SIZE_PENALTY) + (shapeIndex > 0 and SHAPE_PENALTY or 0)
 end
 
 -- Meilleure place pour `spec` entre les échelles maxScale et minScale (nil si aucune)
@@ -572,7 +575,7 @@ local function search(
 		local size = shape.Size
 		local scale = maxScale
 		while scale >= minScale - 1e-4 do
-			local penalty = sizeCost(scale, maxScale, shape.Visual, shape.Index)
+			local penalty = sizeCost(scale, maxScale, shape.Visual, shape.Index, spec.SizePenalty)
 			if penalty >= bestCost then
 				break
 			end
@@ -669,7 +672,7 @@ local function refine(
 	end
 	local function cost(cx: number, cy: number, scale: number): number
 		local dx, dy = cx - anchor.X, cy - anchor.Y
-		return math.sqrt(dx * dx + dy * dy) + sizeCost(scale, maxScale, visual, shapeIndex)
+		return math.sqrt(dx * dx + dy * dy) + sizeCost(scale, maxScale, visual, shapeIndex, spec.SizePenalty)
 	end
 	local bestX, bestY, bestScale = placement.CX, placement.CY, placement.Scale
 	if not fits(bestX, bestY, bestScale) then

@@ -4,39 +4,36 @@
 
 	La petite chambre "lofi" (slot R3, 384x268), entièrement dessinée en
 	code (Frames, UICorner, UIGradient, UIStroke — aucun emoji pour le décor
-	ni les personnages). v9 :
-	  - lumière : halo chaud de la lampe sur le mur (plusieurs couches),
-	    cône de lumière et flaque de lumière sur le bureau, ombre de la
-	    fille sur le mur, rayon (lune ou soleil) qui entre par la fenêtre
-	    avec des poussières qui flottent dedans, vignettage (profondeur) ;
-	  - l'heure : le ciel suit l'heure LOCALE du joueur (nuit, aube, jour,
-	    crépuscule : couleurs du ciel, du mur et de la ville, soleil ou lune
-	    qui traverse la fenêtre, étoiles et fenêtres allumées la nuit,
-	    oiseaux le jour, avion la nuit) ;
-	  - la météo : des averses vont et viennent (pluie, gouttes qui glissent
-	    sur la vitre en laissant une traînée, gouttelettes, éclairs la nuit) ;
-	  - la fille : hoche la tête en rythme, cligne des yeux, écrit (les mots
-	    apparaissent sur la page), tourne les pages, boit de temps en temps
-	    une gorgée de sa tasse fumante, casque lumineux qui pulse ;
-	  - le chat : dort sur le rebord (respire, "z z z"), se réveille, regarde
-	    la pluie puis la chambre, remue la queue, bâille, se rendort ;
-	  - plante suspendue qui se balance, guirlande qui scintille, horloge à
-	    l'heure réelle, post-it, polaroïds ;
-	  - collection de vinyles (amélioration "Vinyl", ctx.GetLevel) : CHAQUE
-	    niveau ajoute un disque dans la caisse à côté de la platine, et des
-	    paliers se voient sur la platine elle-même : pochette posée (1),
-	    vinyle rose (3), enceinte qui pulse (5), vinyle marbré (6), néon
-	    sous la platine (7), disque arc-en-ciel (9), disque d'or + bras doré
-	    + disque d'or encadré au mur (10) ;
+	ni les personnages). v9.1 : la carte fait ≈ 350x245 px à l'écran, donc
+	une composition CLAIRE avec peu d'éléments, GROS et contrastés (contours
+	sombres), et des animations bien visibles :
+	  - à gauche, une grande fenêtre : ciel qui suit l'heure LOCALE du joueur
+	    (nuit, aube, jour, crépuscule), grosse lune ou soleil, étoiles qui
+	    scintillent, étoile filante, ville avec fenêtres allumées, averses
+	    qui vont et viennent (éclairs la nuit), guirlande lumineuse ;
+	  - le chat roux dort sur le rebord (respire, gros "Z z z"), se réveille,
+	    regarde la pluie puis la chambre, remue la queue, bâille ;
+	  - au centre, la fille (plus grande) : hoche franchement la tête en
+	    rythme, casque qui pulse, écrit dans son cahier (les lignes
+	    apparaissent, la page se tourne), boit une gorgée de sa tasse
+	    fumante, et de temps en temps lève les yeux et sourit (petit cœur) ;
+	  - à droite, la lampe : grand halo chaud sur le mur, cône et flaque de
+	    lumière sur le bureau (contraste chaud / nuit bleue = ambiance cosy) ;
+	  - collection de vinyles (amélioration "Vinyl", ctx.GetLevel) : une
+	    étagère murale à 10 emplacements, CHAQUE niveau y ajoute un disque
+	    (emplacements vides en pointillé : on voit la progression) ; paliers
+	    sur la platine : pochette (1), vinyle rose (3), enceinte qui pulse
+	    (5), vinyle marbré (6), néon sous le bureau (7), arc-en-ciel (9),
+	    disque et bras dorés + étagère dorée (10) ;
 	  - le lecteur en bas : pochette + vinyle qui tourne, titre du morceau
 	    (SoundManager.GetMusicInfo si disponible, sinon GetCurrentTrack),
 	    progression + temps, visualiseur piloté par le volume réel du morceau
 	    (PlaybackLoudness) ou animé tout seul, bouton ⏭ (NextTrack).
 	Si la playlist est vide : dans Studio, un rappel "Ajoute une musique
 	dans Config.Music" ; en jeu, simplement la petite chambre.
-	Performance : UNE boucle ctx.OnRender, limitée à 30 images/s ; objets
-	recyclés (pluie, notes, poussières), aucune création par image ; pause
-	complète quand la carte n'est pas visible.
+	Performance : ≈ 520 instances (contre ≈ 1045 en v9), UNE boucle
+	ctx.OnRender limitée à 30 images/s ; objets recyclés (pluie, notes),
+	aucune création par image ; pause complète quand la carte est cachée.
 ]]
 
 local RunService = game:GetService("RunService")
@@ -50,28 +47,28 @@ Lofi.Slot = "R3"
 local SCENE_X, SCENE_Y = 6, 6
 local SCENE_W, SCENE_H = 368, 204
 local BAR_Y, BAR_H = 214, 42
-local DESK_Y = 148 -- dessus du bureau (plateau vu en perspective)
-local DESK_FRONT = 164 -- face avant du bureau
+local DESK_Y = 146 -- dessus du bureau (plateau vu en perspective)
+local DESK_FRONT = 160 -- face avant du bureau
 local SCENE_RADIUS = 10 -- coins arrondis de la scène (repris par la face avant du bureau)
-local ITEM_BASE = 158 -- les objets "posés" sur le plateau
-local WINDOW_X, WINDOW_Y, WINDOW_W, WINDOW_H = 20, 16, 146, 96
-local GLASS_W, GLASS_H = WINDOW_W - 10, WINDOW_H - 10
+local ITEM_BASE = 154 -- les objets "posés" sur le plateau
+local WINDOW_X, WINDOW_Y, WINDOW_W, WINDOW_H = 18, 28, 156, 86
+local FRAME_T = 6 -- épaisseur du cadre de la fenêtre
+local GLASS_W, GLASS_H = WINDOW_W - FRAME_T * 2, WINDOW_H - FRAME_T * 2
 local SILL_Y = WINDOW_Y + WINDOW_H - 2
-local LAMP_X = 338
-local PX = 258 -- centre du personnage
-local HEAD_Y = 84 -- centre de la tête
+local RACK_X, RACK_Y, RACK_W = 198, 24, 164 -- étagère à vinyles (bas de l'étagère)
+local LAMP_X = 336
+local PX = 256 -- centre de la fille
+local HEAD_Y = 80 -- centre de la tête
 local TURNTABLE_X = 60 -- centre de la platine
-local TT_W = 74 -- largeur de la platine
-local CRATE_X = 119 -- centre de la caisse de disques
-local MUG_X, MUG_Y = 204, ITEM_BASE - 9 -- tasse posée (centre)
-local SHAFT_X1, SHAFT_Y1, SHAFT_X2, SHAFT_Y2 = 100, 108, 206, 206 -- rayon de la fenêtre
+local TT_W = 88 -- largeur de la platine
+local MUG_X, MUG_Y = 166, ITEM_BASE - 10 -- tasse posée (centre)
+local SHAFT_X1, SHAFT_Y1, SHAFT_X2, SHAFT_Y2 = 96, 110, 170, 204 -- rayon de la fenêtre
 local EQ_BARS = 12
 local BEAT = 60 / 78 -- une pulsation (78 BPM, tranquille)
 local STEP = 1 / 30 -- la scène est animée à 30 images/s au maximum
 local NOTE_POOL = 7
 local NOTE_LIFE = 2.4
-local RAIN_DROPS = 16
-local DUST_COUNT = 9
+local RAIN_DROPS = 10
 local MAX_RECORDS = 10
 
 local WHITE = Color3.new(1, 1, 1)
@@ -79,14 +76,15 @@ local BLACK = Color3.new(0, 0, 0)
 local RAIN_COLOR = Color3.fromRGB(196, 214, 255)
 local EQ_LOW = Color3.fromRGB(255, 120, 190)
 local EQ_HIGH = Color3.fromRGB(100, 220, 255)
-local WARM = Color3.fromRGB(255, 196, 120)
+local WARM = Color3.fromRGB(255, 176, 96)
 local WARM_LIGHT = Color3.fromRGB(255, 226, 170)
+local OUTLINE = Color3.fromRGB(40, 22, 52) -- contours "dessin animé"
 
 -- Palette du personnage (original : cheveux indigo, sweat menthe, casque rose)
-local SKIN = Color3.fromRGB(255, 222, 200)
-local SKIN_SHADE = Color3.fromRGB(242, 186, 166)
+local SKIN = Color3.fromRGB(255, 224, 204)
+local SKIN_SHADE = Color3.fromRGB(244, 190, 170)
 local HAIR = Color3.fromRGB(58, 44, 96)
-local HAIR_LIGHT = Color3.fromRGB(112, 92, 164)
+local HAIR_LIGHT = Color3.fromRGB(116, 96, 170)
 local HOODIE = Color3.fromRGB(112, 212, 196)
 local HOODIE_DARK = Color3.fromRGB(62, 150, 150)
 local PHONES = Color3.fromRGB(255, 118, 176)
@@ -94,14 +92,15 @@ local PHONES_DARK = Color3.fromRGB(196, 58, 124)
 local PHONES_GLOW = Color3.fromRGB(255, 150, 210)
 local LINE_INK = Color3.fromRGB(72, 44, 78)
 local EYE_INK = Color3.fromRGB(50, 30, 66)
-local CAT_COLOR = Color3.fromRGB(248, 182, 104)
-local CAT_LIGHT = Color3.fromRGB(255, 218, 160)
-local CAT_DARK = Color3.fromRGB(214, 136, 64)
+local CAT_COLOR = Color3.fromRGB(250, 170, 88)
+local CAT_LIGHT = Color3.fromRGB(255, 214, 150)
+local CAT_DARK = Color3.fromRGB(214, 124, 52)
+local CAT_CREAM = Color3.fromRGB(255, 238, 210)
+local CAT_LINE = Color3.fromRGB(120, 62, 30)
 local LEAF_LIGHT = Color3.fromRGB(150, 226, 150)
 local LEAF_DARK = Color3.fromRGB(56, 146, 98)
-local VINE_LIGHT = Color3.fromRGB(128, 204, 148) -- lianes (un peu dans l'ombre)
-local VINE_DARK = Color3.fromRGB(44, 118, 88)
 local NOTE_COLORS = { PHONES_GLOW, EQ_HIGH, Color3.fromRGB(255, 226, 120), Color3.fromRGB(196, 170, 255) }
+local HEART_COLOR = Color3.fromRGB(255, 110, 160)
 local RECORD_COLORS = {
 	Color3.fromRGB(255, 120, 150),
 	Color3.fromRGB(110, 190, 255),
@@ -112,8 +111,10 @@ local RECORD_COLORS = {
 	Color3.fromRGB(240, 240, 250),
 	Color3.fromRGB(255, 110, 210),
 	Color3.fromRGB(80, 210, 230),
-	Color3.fromRGB(255, 236, 150),
+	Color3.fromRGB(255, 120, 150),
 }
+local GOLD = Color3.fromRGB(255, 206, 80)
+local GOLD_DARK = Color3.fromRGB(196, 136, 30)
 
 local TRACKS = {
 	en = {
@@ -147,34 +148,34 @@ end
 -- allumées), puissance de la lampe, couleur et force du rayon de la fenêtre
 local PALETTES = {
 	Night = {
-		SkyTop = rgb(14, 16, 56), SkyMid = rgb(54, 40, 112), SkyLow = rgb(146, 78, 148),
-		Glow = rgb(255, 128, 186), GlowPower = 0.4,
-		WallTop = rgb(52, 40, 94), WallLow = rgb(88, 62, 132),
-		Cloud = rgb(118, 98, 170), CloudAlpha = 0.5,
-		Far = rgb(84, 64, 132), NearTop = rgb(44, 36, 84), NearLow = rgb(20, 16, 42),
-		Night = 1, Lamp = 1, Shaft = rgb(150, 172, 255), ShaftPower = 0.55,
+		SkyTop = rgb(18, 20, 66), SkyMid = rgb(58, 44, 120), SkyLow = rgb(150, 82, 150),
+		Glow = rgb(255, 128, 186), GlowPower = 0.45,
+		WallTop = rgb(44, 36, 86), WallLow = rgb(84, 58, 124),
+		Cloud = rgb(118, 98, 170), CloudAlpha = 0.45,
+		Far = rgb(84, 64, 132), NearTop = rgb(40, 32, 80), NearLow = rgb(20, 16, 42),
+		Night = 1, Lamp = 1, Shaft = rgb(150, 172, 255), ShaftPower = 0.6,
 	},
 	Dawn = {
 		SkyTop = rgb(66, 76, 158), SkyMid = rgb(232, 146, 176), SkyLow = rgb(255, 206, 150),
 		Glow = rgb(255, 214, 160), GlowPower = 0.5,
-		WallTop = rgb(80, 60, 116), WallLow = rgb(122, 88, 148),
-		Cloud = rgb(255, 186, 200), CloudAlpha = 0.3,
+		WallTop = rgb(74, 56, 112), WallLow = rgb(120, 86, 146),
+		Cloud = rgb(255, 186, 200), CloudAlpha = 0.25,
 		Far = rgb(150, 116, 170), NearTop = rgb(76, 60, 116), NearLow = rgb(44, 34, 76),
 		Night = 0.35, Lamp = 0.85, Shaft = rgb(255, 196, 170), ShaftPower = 0.75,
 	},
 	Day = {
 		SkyTop = rgb(80, 156, 236), SkyMid = rgb(138, 200, 250), SkyLow = rgb(210, 238, 255),
 		Glow = rgb(255, 255, 255), GlowPower = 0.4,
-		WallTop = rgb(104, 86, 152), WallLow = rgb(146, 118, 186),
-		Cloud = rgb(255, 255, 255), CloudAlpha = 0.08,
+		WallTop = rgb(100, 84, 150), WallLow = rgb(146, 118, 186),
+		Cloud = rgb(255, 255, 255), CloudAlpha = 0.05,
 		Far = rgb(150, 178, 216), NearTop = rgb(98, 118, 170), NearLow = rgb(66, 82, 132),
 		Night = 0, Lamp = 0.6, Shaft = rgb(255, 238, 190), ShaftPower = 1,
 	},
 	Dusk = {
 		SkyTop = rgb(56, 46, 126), SkyMid = rgb(224, 102, 140), SkyLow = rgb(255, 178, 96),
 		Glow = rgb(255, 170, 110), GlowPower = 0.55,
-		WallTop = rgb(78, 52, 106), WallLow = rgb(124, 78, 134),
-		Cloud = rgb(255, 156, 168), CloudAlpha = 0.25,
+		WallTop = rgb(72, 48, 104), WallLow = rgb(122, 76, 132),
+		Cloud = rgb(255, 156, 168), CloudAlpha = 0.2,
 		Far = rgb(122, 78, 132), NearTop = rgb(62, 44, 96), NearLow = rgb(34, 24, 58),
 		Night = 0.65, Lamp = 0.95, Shaft = rgb(255, 170, 120), ShaftPower = 0.8,
 	},
@@ -236,31 +237,19 @@ local UPPER_ARC = NumberSequence.new({
 	NumberSequenceKeypoint.new(0.54, 1),
 	NumberSequenceKeypoint.new(1, 1),
 })
--- "Mots" écrits dans le cahier (traits séparés par des espaces) : 14 points
+-- "Mots" écrits dans le cahier (traits séparés par des espaces) : 10 points
 local WORDS = NumberSequence.new({
 	NumberSequenceKeypoint.new(0, 0),
-	NumberSequenceKeypoint.new(0.2, 0),
-	NumberSequenceKeypoint.new(0.21, 1),
-	NumberSequenceKeypoint.new(0.27, 1),
-	NumberSequenceKeypoint.new(0.28, 0),
-	NumberSequenceKeypoint.new(0.46, 0),
-	NumberSequenceKeypoint.new(0.47, 1),
-	NumberSequenceKeypoint.new(0.53, 1),
-	NumberSequenceKeypoint.new(0.54, 0),
-	NumberSequenceKeypoint.new(0.8, 0),
-	NumberSequenceKeypoint.new(0.81, 1),
-	NumberSequenceKeypoint.new(0.87, 1),
-	NumberSequenceKeypoint.new(0.88, 0),
+	NumberSequenceKeypoint.new(0.3, 0),
+	NumberSequenceKeypoint.new(0.31, 1),
+	NumberSequenceKeypoint.new(0.38, 1),
+	NumberSequenceKeypoint.new(0.39, 0),
+	NumberSequenceKeypoint.new(0.68, 0),
+	NumberSequenceKeypoint.new(0.69, 1),
+	NumberSequenceKeypoint.new(0.76, 1),
+	NumberSequenceKeypoint.new(0.77, 0),
 	NumberSequenceKeypoint.new(1, 0),
 })
--- Séquence de couleurs "à bords nets" : { {position, couleur}, ... } (20 points max)
-local function bands(list: { { any } }): ColorSequence
-	local keypoints = {}
-	for _, entry in ipairs(list) do
-		table.insert(keypoints, ColorSequenceKeypoint.new(entry[1], entry[2]))
-	end
-	return ColorSequence.new(keypoints)
-end
 
 -- Vinyle sur la platine selon le niveau de la collection : { base, reflet }
 local function vinylLook(level: number): ColorSequence
@@ -287,9 +276,9 @@ local function vinylLook(level: number): ColorSequence
 	end
 	return ColorSequence.new({
 		ColorSequenceKeypoint.new(0, base),
-		ColorSequenceKeypoint.new(0.42, base),
+		ColorSequenceKeypoint.new(0.4, base),
 		ColorSequenceKeypoint.new(0.5, shine),
-		ColorSequenceKeypoint.new(0.58, base),
+		ColorSequenceKeypoint.new(0.6, base),
 		ColorSequenceKeypoint.new(1, base),
 	})
 end
@@ -340,6 +329,11 @@ function Lofi.Start(ctx)
 		return UI.Create("UIGradient", { Transparency = sequence, Rotation = rotation or 90, Parent = guiObject })
 	end
 
+	-- Contour sombre (lisible en petit)
+	local function outline(guiObject: Instance, color: Color3?, thickness: number?, transparency: number?): UIStroke
+		return UI.Stroke(guiObject, color or OUTLINE, thickness or 1.5, transparency or 0.25)
+	end
+
 	-- Contour circulaire dont on ne garde que le haut ou le bas
 	local function arc(props: { [string]: any }, color: Color3, thickness: number, sequence: NumberSequence): (Frame, UIStroke)
 		props.BackgroundTransparency = 1
@@ -387,7 +381,6 @@ function Lofi.Start(ctx)
 	local S = {
 		acc = 0, -- temps accumulé (boucle à 30 images/s)
 		frame = 0, -- numéro de l'image (le décor lent est animé une image sur deux)
-		dropletRain = -1, -- pluie utilisée pour les gouttelettes
 		timeStamp = -1, -- dernier temps affiché dans le lecteur
 		clock = 0,
 		shown = true,
@@ -410,7 +403,7 @@ function Lofi.Start(ctx)
 		discAngle = 0,
 		fakeProgress = random:NextNumber(0.1, 0.6),
 		fakeLength = random:NextInteger(140, 220),
-		nextStar = 12, -- étoile filante
+		nextStar = 8, -- étoile filante
 		starAge = -1,
 		nextFlash = 20, -- éclair lointain
 		flash = 0,
@@ -421,6 +414,8 @@ function Lofi.Start(ctx)
 		noteColorIndex = 0,
 		vinylLevel = -1,
 		armLift = 0, -- bras de la platine levé (0) ou posé sur le disque (1)
+		popDisc = 0, -- disque qui vient d'arriver sur l'étagère (animation)
+		popT = -1,
 		-- Heure et météo
 		hour = 22,
 		night = 1,
@@ -439,6 +434,9 @@ function Lofi.Start(ctx)
 		blinkAge = -1,
 		sipTimer = random:NextNumber(9, 14),
 		sipT = -1,
+		happyTimer = random:NextNumber(5, 9), -- elle lève les yeux et sourit
+		happyT = -1,
+		happy = 0, -- 0..1 lissé
 		-- Le chat
 		catMode = "sleep",
 		catTimer = random:NextNumber(10, 16),
@@ -479,18 +477,13 @@ function Lofi.Start(ctx)
 	UI.Corner(scene, SCENE_RADIUS)
 	local wallGradient = gradient(scene, PALETTES.Night.WallTop, PALETTES.Night.WallLow)
 
-	-- Papier peint : fines rayures verticales très discrètes
-	for i = 0, 7 do
-		frame({ Name = "Stripe", Position = UDim2.fromOffset(20 + i * 46, 0), Size = UDim2.new(0, 2, 1, 0), BackgroundColor3 = WHITE, BackgroundTransparency = 0.955, ZIndex = 1, Parent = scene })
-	end
-
-	-- Halo chaud de la lampe sur le mur (4 couches : dégradé radial)
-	local LAMP_HALO_ALPHA = 0.88
-	local lampHalo = halo({ Name = "LampGlow", BackgroundColor3 = WARM, BackgroundTransparency = LAMP_HALO_ALPHA, ZIndex = 1, Parent = scene }, LAMP_X - 18, 108, 270, 240, 4)
+	-- Grand halo chaud de la lampe sur le mur (3 couches : dégradé radial)
+	local LAMP_HALO_ALPHA = 0.76
+	local lampHalo = halo({ Name = "LampGlow", BackgroundColor3 = WARM, BackgroundTransparency = LAMP_HALO_ALPHA, ZIndex = 1, Parent = scene }, LAMP_X - 14, 104, 250, 230, 3)
 
 	------------------------------------------------------------------
 	-- Fenêtre : ciel (heure locale), soleil / lune, étoiles, nuages,
-	-- ville en deux plans, pluie, gouttes, reflets
+	-- ville en deux plans, pluie, reflets
 	------------------------------------------------------------------
 	local WIN = {
 		Stars = {} :: { { Parts: { Frame }, Phase: number, Speed: number } },
@@ -500,13 +493,11 @@ function Lofi.Start(ctx)
 		Near = {} :: { UIGradient },
 		Lit = {} :: { { Frame: Frame, On: boolean } },
 		Drops = {} :: { { Frame: Frame, X: number, Y: number, Speed: number } },
-		Beads = {} :: { { Frame: Frame, Trail: Frame, X: number, Y: number, Speed: number, Length: number } },
-		Droplets = {} :: { Frame },
 		Fairy = {} :: { { Frame: Frame, Glow: UIStroke, Phase: number } },
-		Roof = {} :: { Frame }, -- antenne, château d'eau (couleur de la ville)
+		Roof = {} :: { Frame }, -- antenne (couleur de la ville)
 	}
 	do
-		local WOOD_LIGHT = Color3.fromRGB(236, 214, 182)
+		local WOOD_LIGHT = Color3.fromRGB(240, 220, 190)
 		local windowFrame = frame({
 			Name = "Window",
 			Position = UDim2.fromOffset(WINDOW_X, WINDOW_Y),
@@ -515,13 +506,13 @@ function Lofi.Start(ctx)
 			ZIndex = 2,
 			Parent = scene,
 		})
-		UI.Corner(windowFrame, 5)
-		gradient(windowFrame, WOOD_LIGHT, Color3.fromRGB(206, 176, 140))
-		UI.Stroke(windowFrame, Color3.fromRGB(120, 92, 76), 1.5, 0.3)
+		UI.Corner(windowFrame, 6)
+		gradient(windowFrame, WOOD_LIGHT, Color3.fromRGB(210, 180, 146))
+		outline(windowFrame, Color3.fromRGB(90, 60, 70), 2, 0.2)
 
 		local glass = frame({
 			Name = "Glass",
-			Position = UDim2.fromOffset(5, 5),
+			Position = UDim2.fromOffset(FRAME_T, FRAME_T),
 			Size = UDim2.fromOffset(GLASS_W, GLASS_H),
 			BackgroundColor3 = WHITE,
 			ClipsDescendants = true,
@@ -531,116 +522,101 @@ function Lofi.Start(ctx)
 		WIN.Sky = UI.Gradient(glass, ColorSequence.new(PALETTES.Night.SkyTop, PALETTES.Night.SkyLow), 90)
 
 		-- Lueur de l'horizon (ville la nuit, soleil couchant...)
-		WIN.Horizon = frame({ Name = "Horizon", Position = UDim2.fromOffset(0, GLASS_H - 44), Size = UDim2.fromOffset(GLASS_W, 44), BackgroundColor3 = PALETTES.Night.Glow, BackgroundTransparency = 0.6, ZIndex = 1, Parent = glass })
+		WIN.Horizon = frame({ Name = "Horizon", Position = UDim2.fromOffset(0, GLASS_H - 40), Size = UDim2.fromOffset(GLASS_W, 40), BackgroundColor3 = PALETTES.Night.Glow, BackgroundTransparency = 0.6, ZIndex = 1, Parent = glass })
 		fade(WIN.Horizon, NumberSequence.new(1, 0))
 
-		-- Étoiles qui scintillent (quelques-unes en forme de croix)
-		for i = 1, 11 do
-			local x, y = random:NextInteger(4, GLASS_W - 8), random:NextInteger(3, 40)
+		-- Étoiles qui scintillent (les plus grosses en forme de croix)
+		for i, spec in ipairs({ { 62, 10 }, { 110, 20 }, { 132, 7 }, { 20, 30 }, { 84, 5 }, { 124, 34 }, { 44, 20 } }) do
+			local x, y = spec[1], spec[2]
 			local parts = {}
-			if i <= 3 then
-				local sparkle = frame(at({ Name = "Sparkle", BackgroundTransparency = 1, ZIndex = 1, Parent = glass }, x, y, 7, 7))
-				table.insert(parts, frame(at({ BackgroundColor3 = Color3.fromRGB(255, 255, 235), ZIndex = 1, Parent = sparkle }, 3.5, 3.5, 7, 1)))
-				table.insert(parts, frame(at({ BackgroundColor3 = Color3.fromRGB(255, 255, 235), ZIndex = 1, Parent = sparkle }, 3.5, 3.5, 1, 7)))
+			if i <= 2 then
+				local sparkle = frame(at({ Name = "Sparkle", BackgroundTransparency = 1, ZIndex = 1, Parent = glass }, x, y, 9, 9))
+				table.insert(parts, frame(at({ BackgroundColor3 = Color3.fromRGB(255, 255, 235), ZIndex = 1, Parent = sparkle }, 4.5, 4.5, 9, 1.5)))
+				table.insert(parts, frame(at({ BackgroundColor3 = Color3.fromRGB(255, 255, 235), ZIndex = 1, Parent = sparkle }, 4.5, 4.5, 1.5, 9)))
 			else
-				local size = random:NextInteger(1, 2) + 0.5
-				table.insert(parts, frame(at({ Name = "Star", BackgroundColor3 = Color3.fromRGB(255, 255, 230), ZIndex = 1, Parent = glass }, x, y, size, size)))
+				table.insert(parts, frame(at({ Name = "Star", BackgroundColor3 = Color3.fromRGB(255, 255, 230), Rotation = 45, ZIndex = 1, Parent = glass }, x, y, 3, 3)))
 			end
 			table.insert(WIN.Stars, { Parts = parts, Phase = random:NextNumber(0, math.pi * 2), Speed = random:NextNumber(1.5, 3.5) })
 		end
 
-		-- Soleil (disque + halo) et lune (disque, cratères, halo)
-		WIN.Sun = frame(at({ Name = "Sun", BackgroundTransparency = 1, ZIndex = 2, Parent = glass }, 0, 0, 44, 44))
-		halo({ BackgroundColor3 = Color3.fromRGB(255, 236, 170), BackgroundTransparency = 0.8, ZIndex = 2, Parent = WIN.Sun }, 22, 22, 44, 44, 2)
-		local sunDisc = circle(at({ Name = "Disc", BackgroundColor3 = WHITE, ZIndex = 2, Parent = WIN.Sun }, 22, 22, 17, 17))
-		gradient(sunDisc, Color3.fromRGB(255, 250, 214), Color3.fromRGB(255, 206, 110), 45)
-		WIN.Moon = frame(at({ Name = "Moon", BackgroundTransparency = 1, ZIndex = 2, Parent = glass }, 0, 0, 50, 50))
-		WIN.MoonGlow = halo({ BackgroundColor3 = Color3.fromRGB(255, 244, 200), BackgroundTransparency = 0.86, ZIndex = 2, Parent = WIN.Moon }, 25, 25, 50, 50, 2)
-		local moonDisc = circle(at({ Name = "Disc", BackgroundColor3 = WHITE, ZIndex = 2, Parent = WIN.Moon }, 25, 25, 21, 21))
-		gradient(moonDisc, Color3.fromRGB(255, 250, 222), Color3.fromRGB(232, 220, 178), 45)
-		for i, spec in ipairs({ { 7, 8, 5.5 }, { 14, 13, 4 }, { 14.5, 5.5, 3 }, { 6, 15, 2.5 } }) do
-			circle(at({ Name = "Crater" .. i, BackgroundColor3 = Color3.fromRGB(224, 210, 168), ZIndex = 2, Parent = moonDisc }, spec[1], spec[2], spec[3], spec[3]))
+		-- Soleil (disque + halo) et grosse lune (disque, cratères, halo)
+		WIN.Sun = frame(at({ Name = "Sun", BackgroundTransparency = 1, ZIndex = 2, Parent = glass }, 0, 0, 48, 48))
+		halo({ BackgroundColor3 = Color3.fromRGB(255, 236, 170), BackgroundTransparency = 0.7, ZIndex = 2, Parent = WIN.Sun }, 24, 24, 48, 48, 1)
+		local sunDisc = circle(at({ Name = "Disc", BackgroundColor3 = WHITE, ZIndex = 2, Parent = WIN.Sun }, 24, 24, 22, 22))
+		gradient(sunDisc, Color3.fromRGB(255, 250, 214), Color3.fromRGB(255, 200, 100), 45)
+		WIN.Moon = frame(at({ Name = "Moon", BackgroundTransparency = 1, ZIndex = 2, Parent = glass }, 0, 0, 56, 56))
+		WIN.MoonGlow = halo({ BackgroundColor3 = Color3.fromRGB(255, 244, 200), BackgroundTransparency = 0.84, ZIndex = 2, Parent = WIN.Moon }, 28, 28, 56, 56, 2)
+		local moonDisc = circle(at({ Name = "Disc", BackgroundColor3 = WHITE, ZIndex = 2, Parent = WIN.Moon }, 28, 28, 26, 26))
+		gradient(moonDisc, Color3.fromRGB(255, 252, 226), Color3.fromRGB(236, 222, 176), 45)
+		for i, spec in ipairs({ { 9, 10, 7 }, { 17, 17, 5 } }) do
+			circle(at({ Name = "Crater" .. i, BackgroundColor3 = Color3.fromRGB(226, 210, 166), ZIndex = 2, Parent = moonDisc }, spec[1], spec[2], spec[3], spec[3]))
 		end
 
 		-- Étoile filante (une seule, réutilisée)
-		WIN.Shooting = frame({ Name = "ShootingStar", AnchorPoint = Vector2.new(1, 0.5), Size = UDim2.fromOffset(28, 2), BackgroundColor3 = WHITE, Rotation = 18, Visible = false, ZIndex = 2, Parent = glass })
+		WIN.Shooting = frame({ Name = "ShootingStar", AnchorPoint = Vector2.new(1, 0.5), Size = UDim2.fromOffset(34, 2.5), BackgroundColor3 = WHITE, Rotation = 18, Visible = false, ZIndex = 2, Parent = glass })
+		UI.Corner(WIN.Shooting, UDim.new(1, 0))
 		fade(WIN.Shooting, NumberSequence.new(1, 0), 0)
 
 		-- Oiseau (le jour) ou avion (la nuit) qui traverse le ciel
-		WIN.Flyer = frame({ Name = "Flyer", AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(12, 6), BackgroundTransparency = 1, Visible = false, ZIndex = 3, Parent = glass })
-		WIN.WingL = frame({ AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.fromOffset(6.5, 3), Size = UDim2.fromOffset(6, 1.5), BackgroundColor3 = Color3.fromRGB(60, 54, 90), ZIndex = 3, Parent = WIN.Flyer })
-		WIN.WingR = frame({ AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromOffset(5.5, 3), Size = UDim2.fromOffset(6, 1.5), BackgroundColor3 = Color3.fromRGB(60, 54, 90), ZIndex = 3, Parent = WIN.Flyer })
-		WIN.PlaneLight = circle(at({ BackgroundColor3 = Color3.fromRGB(255, 80, 90), ZIndex = 3, Parent = WIN.Flyer }, 6, 3, 2.5, 2.5))
+		WIN.Flyer = frame({ Name = "Flyer", AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(14, 7), BackgroundTransparency = 1, Visible = false, ZIndex = 3, Parent = glass })
+		WIN.WingL = frame({ AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.fromOffset(7.5, 3.5), Size = UDim2.fromOffset(7, 2), BackgroundColor3 = Color3.fromRGB(60, 54, 90), ZIndex = 3, Parent = WIN.Flyer })
+		WIN.WingR = frame({ AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromOffset(6.5, 3.5), Size = UDim2.fromOffset(7, 2), BackgroundColor3 = Color3.fromRGB(60, 54, 90), ZIndex = 3, Parent = WIN.Flyer })
+		WIN.PlaneLight = circle(at({ BackgroundColor3 = Color3.fromRGB(255, 80, 90), ZIndex = 3, Parent = WIN.Flyer }, 7, 3.5, 3, 3))
 
 		-- Nuages qui passent lentement
-		for i, spec in ipairs({ { 8, 30, 3 }, { 76, 12, 2 }, { 118, 38, 2.5 } }) do
-			local cloud = frame({ Name = "Cloud", Size = UDim2.fromOffset(44, 16), BackgroundTransparency = 1, ZIndex = 3, Parent = glass })
-			for _, puff in ipairs({ { 12, 10, 18, 13 }, { 24, 7, 22, 17 }, { 34, 11, 16, 12 }, { 22, 12, 30, 9 } }) do
+		for _, spec in ipairs({ { 10, 26, 3 }, { 90, 12, 2 } }) do
+			local cloud = frame({ Name = "Cloud", Size = UDim2.fromOffset(46, 18), BackgroundTransparency = 1, ZIndex = 3, Parent = glass })
+			for _, puff in ipairs({ { 15, 11, 24, 14 }, { 29, 9, 26, 18 } }) do
 				table.insert(WIN.Puffs, circle(at({ BackgroundColor3 = WHITE, BackgroundTransparency = 0.5, ZIndex = 3, Parent = cloud }, puff[1], puff[2], puff[3], puff[4])))
 			end
-			local scale = i == 2 and 0.8 or 1
-			UI.Create("UIScale", { Scale = scale, Parent = cloud })
 			cloud.Position = UDim2.fromOffset(spec[1], spec[2])
 			table.insert(WIN.Clouds, { Frame = cloud, X = spec[1], Y = spec[2], Speed = spec[3] })
 		end
 
 		-- Ville au loin (silhouettes) puis ville proche (fenêtres allumées)
 		local x = -2
-		for _, h in ipairs({ 30, 46, 26, 52, 36, 42, 30, 48, 34 }) do
-			local w = random:NextInteger(14, 20)
-			table.insert(WIN.Far, frame({ Name = "FarBuilding", AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromOffset(x, GLASS_H), Size = UDim2.fromOffset(w, h), BackgroundColor3 = PALETTES.Night.Far, ZIndex = 4, Parent = glass }))
-			x += w + 1
-			if x > GLASS_W then
-				break
-			end
+		for _, spec in ipairs({ { 24, 20 }, { 22, 30 }, { 26, 18 }, { 22, 34 }, { 28, 24 }, { 26, 28 } }) do
+			table.insert(WIN.Far, frame({ Name = "FarBuilding", AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromOffset(x, GLASS_H), Size = UDim2.fromOffset(spec[1], spec[2]), BackgroundColor3 = PALETTES.Night.Far, ZIndex = 4, Parent = glass }))
+			x += spec[1] + 1
 		end
 		local LIGHT_COLORS = { Color3.fromRGB(255, 214, 110), Color3.fromRGB(255, 170, 210), Color3.fromRGB(150, 230, 255) }
-		x = 0
-		for index, spec in ipairs({ { 22, 34 }, { 18, 48 }, { 26, 28 }, { 20, 58 }, { 24, 36 }, { 28, 44 } }) do
+		x = 2
+		local LIT_SPOTS = {
+			-- { bâtiment, colonne, rangée } : fenêtres allumées (grosses, lisibles)
+			{ 1, 0, 0 }, { 1, 1, 1 }, { 2, 0, 1 }, { 2, 1, 0 }, { 2, 1, 2 },
+			{ 3, 1, 0 }, { 4, 0, 0 }, { 4, 1, 1 }, { 5, 1, 0 }, { 5, 0, 1 },
+		}
+		local buildings = {}
+		for index, spec in ipairs({ { 26, 24 }, { 22, 30 }, { 30, 18 }, { 24, 36 }, { 30, 26 } }) do
 			local w, h = spec[1], spec[2]
 			local building = frame({ Name = "Building", AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromOffset(x, GLASS_H), Size = UDim2.fromOffset(w, h), BackgroundColor3 = WHITE, ZIndex = 5, Parent = glass })
 			table.insert(WIN.Near, gradient(building, PALETTES.Night.NearTop, PALETTES.Night.NearLow))
-			-- Grille de fenêtres (quelques-unes allumées, qui changent)
-			for row = 0, math.floor((h - 10) / 8) - 1 do
-				for col = 0, math.floor((w - 4) / 6) - 1 do
-					if #WIN.Lit < 16 and random:NextNumber() < 0.42 then
-						local lit = frame({
-							Name = "Lit",
-							Position = UDim2.fromOffset(3 + col * 6, 6 + row * 8),
-							Size = UDim2.fromOffset(3, 4),
-							BackgroundColor3 = LIGHT_COLORS[random:NextInteger(1, #LIGHT_COLORS)],
-							BackgroundTransparency = 1,
-							ZIndex = 5,
-							Parent = building,
-						})
-						table.insert(WIN.Lit, { Frame = lit, On = random:NextNumber() < 0.65 })
-					end
-				end
-			end
+			buildings[index] = building
 			if index == 4 then
 				-- La tour : antenne + voyant rouge qui clignote
-				table.insert(WIN.Roof, frame({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0, 0), Size = UDim2.fromOffset(1.5, 12), BackgroundColor3 = PALETTES.Night.NearTop, ZIndex = 5, Parent = building }))
-				WIN.TowerLight = circle(at({ BackgroundColor3 = Color3.fromRGB(255, 60, 70), ZIndex = 6, Parent = building }, w / 2, -12, 3, 3))
-			elseif index == 6 then
-				-- Enseigne néon sur le toit
-				local sign = frame({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0, -1), Size = UDim2.fromOffset(14, 5), BackgroundColor3 = Color3.fromRGB(255, 110, 200), ZIndex = 6, Parent = building })
-				UI.Corner(sign, 2)
-				WIN.Neon = UI.Stroke(sign, Color3.fromRGB(255, 150, 220), 1.5, 0.5)
-				WIN.NeonSign = sign
+				table.insert(WIN.Roof, frame({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0, 0), Size = UDim2.fromOffset(2, 9), BackgroundColor3 = PALETTES.Night.NearTop, ZIndex = 5, Parent = building }))
+				WIN.TowerLight = circle(at({ BackgroundColor3 = Color3.fromRGB(255, 60, 70), ZIndex = 6, Parent = building }, w / 2, -9, 4, 4))
 			elseif index == 5 then
-				-- Château d'eau sur le toit (sur pilotis)
-				local tank = frame({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 2, 0, -5), Size = UDim2.fromOffset(10, 8), BackgroundColor3 = PALETTES.Night.NearTop, ZIndex = 5, Parent = building })
-				UI.Corner(tank, 2)
-				table.insert(WIN.Roof, tank)
-				for leg = -1, 1, 2 do
-					table.insert(WIN.Roof, frame({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 2 + leg * 3, 0, 0), Size = UDim2.fromOffset(1, 6), BackgroundColor3 = PALETTES.Night.NearTop, ZIndex = 5, Parent = building }))
-				end
-				table.insert(WIN.Roof, frame({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 2, 0, -13), Size = UDim2.fromOffset(12, 3), BackgroundColor3 = PALETTES.Night.NearTop, ZIndex = 5, Parent = building }))
+				-- Enseigne néon sur le toit
+				local sign = frame({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0, -1), Size = UDim2.fromOffset(18, 6), BackgroundColor3 = Color3.fromRGB(255, 110, 200), ZIndex = 6, Parent = building })
+				UI.Corner(sign, 2)
+				WIN.Neon = UI.Stroke(sign, Color3.fromRGB(255, 150, 220), 2, 0.5)
+				WIN.NeonSign = sign
 			end
-			x += w + 2
-			if x > GLASS_W then
-				break
-			end
+			x += w + 3
+		end
+		for _, spot in ipairs(LIT_SPOTS) do
+			local building = buildings[spot[1]]
+			local lit = frame({
+				Name = "Lit",
+				Position = UDim2.fromOffset(4 + spot[2] * 10, 5 + spot[3] * 9),
+				Size = UDim2.fromOffset(5, 5),
+				BackgroundColor3 = LIGHT_COLORS[random:NextInteger(1, #LIGHT_COLORS)],
+				BackgroundTransparency = 1,
+				ZIndex = 5,
+				Parent = building,
+			})
+			table.insert(WIN.Lit, { Frame = lit, On = random:NextNumber() < 0.75 })
 		end
 
 		-- Pluie : réserve de traits recyclés (aucune création par image)
@@ -648,82 +624,52 @@ function Lofi.Start(ctx)
 			local drop = frame({
 				Name = "Rain",
 				AnchorPoint = Vector2.new(0.5, 0.5),
-				Size = UDim2.fromOffset(1.5, random:NextInteger(8, 14)),
+				Size = UDim2.fromOffset(2, random:NextInteger(12, 18)),
 				BackgroundColor3 = RAIN_COLOR,
-				BackgroundTransparency = random:NextNumber(0.3, 0.6),
+				BackgroundTransparency = random:NextNumber(0.25, 0.5),
 				Rotation = 12,
 				ZIndex = 6,
 				Parent = glass,
 			})
-			fade(drop, NumberSequence.new(0.9, 0))
-			table.insert(WIN.Drops, { Frame = drop, X = random:NextNumber(0, GLASS_W + 30), Y = random:NextNumber(-20, GLASS_H), Speed = 230 * random:NextNumber(0.8, 1.2) })
+			table.insert(WIN.Drops, { Frame = drop, X = random:NextNumber(0, GLASS_W + 30), Y = random:NextNumber(-20, GLASS_H), Speed = 200 * random:NextNumber(0.85, 1.15) })
 		end
 
-		-- Gouttelettes immobiles sur la vitre
-		for _ = 1, 8 do
-			local size = random:NextNumber(1.5, 3)
-			table.insert(WIN.Droplets, circle(at({ Name = "Droplet", BackgroundColor3 = Color3.fromRGB(220, 234, 255), BackgroundTransparency = 0.5, ZIndex = 7, Parent = glass }, random:NextNumber(4, GLASS_W - 4), random:NextNumber(4, GLASS_H - 4), size, size * 1.15)))
-		end
-
-		-- Gouttes qui glissent sur la vitre (avec leur traînée)
-		for _ = 1, 4 do
-			local trail = frame({ Name = "BeadTrail", AnchorPoint = Vector2.new(0.5, 1), Size = UDim2.fromOffset(1.5, 0), BackgroundColor3 = Color3.fromRGB(220, 235, 255), BackgroundTransparency = 0.55, ZIndex = 7, Parent = glass })
-			fade(trail, NumberSequence.new(1, 0))
-			local bead = circle({ Name = "Bead", AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(4, 5), BackgroundColor3 = Color3.fromRGB(230, 242, 255), BackgroundTransparency = 0.3, ZIndex = 7, Parent = glass })
-			UI.Stroke(bead, Color3.fromRGB(150, 170, 220), 0.8, 0.5)
-			table.insert(WIN.Beads, { Frame = bead, Trail = trail, X = random:NextNumber(8, GLASS_W - 8), Y = random:NextNumber(0, GLASS_H), Speed = random:NextNumber(6, 16), Length = 0 })
-		end
-
-		-- Buée en bas de la vitre (quand il pleut)
-		WIN.Fog = frame({ Name = "Fog", Position = UDim2.fromOffset(0, GLASS_H - 26), Size = UDim2.fromOffset(GLASS_W, 26), BackgroundColor3 = Color3.fromRGB(220, 226, 255), BackgroundTransparency = 0.72, ZIndex = 7, Parent = glass })
-		fade(WIN.Fog, NumberSequence.new(1, 0))
 		-- Éclair (voile blanc) + reflets sur la vitre
 		WIN.Flash = frame({ Name = "Flash", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(230, 225, 255), BackgroundTransparency = 1, ZIndex = 8, Parent = glass })
-		for _, spec in ipairs({ { 30, 30, 12, 0.88 }, { 48, 30, 5, 0.9 }, { 104, 50, 8, 0.93 } }) do
+		for _, spec in ipairs({ { 34, 30, 16, 0.86 } }) do
 			local reflection = frame(at({ Name = "Reflection", Rotation = 35, BackgroundColor3 = WHITE, BackgroundTransparency = spec[4], ZIndex = 9, Parent = glass }, spec[1], spec[2], spec[3], 120))
 			fade(reflection, NumberSequence.new(1, 0.2), 0)
 		end
 
 		-- Croisillons de la fenêtre (au-dessus de la vitre)
-		frame({ Name = "MullionV", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 0), Size = UDim2.new(0, 5, 1, 0), BackgroundColor3 = WOOD_LIGHT, ZIndex = 10, Parent = windowFrame })
-		frame({ Name = "MullionH", AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(1, 0, 0, 5), BackgroundColor3 = WOOD_LIGHT, ZIndex = 10, Parent = windowFrame })
-		-- Ombre intérieure en haut de la vitre (épaisseur du mur)
-		local reveal = frame({ Name = "Reveal", Position = UDim2.fromOffset(5, 5), Size = UDim2.fromOffset(GLASS_W, 7), BackgroundColor3 = Color3.fromRGB(40, 24, 50), BackgroundTransparency = 0.55, ZIndex = 10, Parent = windowFrame })
-		fade(reveal, NumberSequence.new(0, 1))
+		frame({ Name = "MullionV", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 0), Size = UDim2.new(0, 6, 1, 0), BackgroundColor3 = WOOD_LIGHT, ZIndex = 10, Parent = windowFrame })
+		frame({ Name = "MullionH", AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(1, 0, 0, 6), BackgroundColor3 = WOOD_LIGHT, ZIndex = 10, Parent = windowFrame })
 
 		-- Rebord
-		local sill = frame({ Name = "Sill", Position = UDim2.fromOffset(WINDOW_X - 8, SILL_Y), Size = UDim2.fromOffset(WINDOW_W + 16, 8), BackgroundColor3 = WHITE, ZIndex = 6, Parent = scene })
+		local sill = frame({ Name = "Sill", Position = UDim2.fromOffset(WINDOW_X - 10, SILL_Y), Size = UDim2.fromOffset(WINDOW_W + 20, 9), BackgroundColor3 = WHITE, ZIndex = 6, Parent = scene })
 		UI.Corner(sill, 3)
-		gradient(sill, Color3.fromRGB(240, 214, 176), Color3.fromRGB(176, 144, 110))
-		local sillShadow = frame({ Name = "SillShadow", Position = UDim2.fromOffset(WINDOW_X - 6, SILL_Y + 8), Size = UDim2.fromOffset(WINDOW_W + 12, 6), BackgroundColor3 = Color3.fromRGB(20, 10, 30), BackgroundTransparency = 0.6, ZIndex = 6, Parent = scene })
-		fade(sillShadow, NumberSequence.new(0, 1))
+		gradient(sill, Color3.fromRGB(246, 222, 186), Color3.fromRGB(180, 146, 112))
+		outline(sill, Color3.fromRGB(90, 60, 70), 1.5, 0.3)
 
-		-- Rideaux (plis dans le dégradé) + tringle
-		local FOLDS = bands({
-			{ 0, Color3.fromRGB(214, 128, 158) },
-			{ 0.25, Color3.fromRGB(176, 92, 128) },
-			{ 0.5, Color3.fromRGB(222, 140, 168) },
-			{ 0.75, Color3.fromRGB(176, 92, 128) },
-			{ 1, Color3.fromRGB(206, 120, 150) },
+		-- Rideaux (plis dans le dégradé) + embrasse, tringle
+		local FOLDS = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(226, 128, 160)),
+			ColorSequenceKeypoint.new(0.33, Color3.fromRGB(176, 84, 124)),
+			ColorSequenceKeypoint.new(0.66, Color3.fromRGB(230, 140, 170)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(170, 80, 120)),
 		})
 		for side = -1, 1, 2 do
-			local cx = side < 0 and WINDOW_X - 12 or WINDOW_X + WINDOW_W - 12
-			local curtain = frame({ Name = "Curtain", Position = UDim2.fromOffset(cx, WINDOW_Y - 8), Size = UDim2.fromOffset(24, WINDOW_H + 10), BackgroundColor3 = WHITE, ZIndex = 9, Parent = scene })
-			UI.Corner(curtain, 6)
+			local cx = side < 0 and WINDOW_X - 14 or WINDOW_X + WINDOW_W - 12
+			local curtain = frame({ Name = "Curtain", Position = UDim2.fromOffset(cx, WINDOW_Y - 8), Size = UDim2.fromOffset(26, WINDOW_H + 8), BackgroundColor3 = WHITE, ZIndex = 9, Parent = scene })
+			UI.Corner(curtain, 8)
 			UI.Gradient(curtain, FOLDS, 0)
-			-- Ombre du pli en bas + embrasse (lien qui retient le rideau)
-			local shade = frame({ Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(60, 20, 50), BackgroundTransparency = 0.3, ZIndex = 9, Parent = curtain })
-			UI.Corner(shade, 6)
-			fade(shade, NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.6, 1), NumberSequenceKeypoint.new(1, 0.4) }))
-			frame(at({ BackgroundColor3 = Color3.fromRGB(255, 214, 120), ZIndex = 9, Parent = curtain }, 12, WINDOW_H - 20, 26, 3))
+			outline(curtain, Color3.fromRGB(96, 36, 70), 1.5, 0.35)
+			frame(at({ Name = "Tie", BackgroundColor3 = Color3.fromRGB(255, 214, 120), ZIndex = 9, Parent = curtain }, 13, WINDOW_H - 22, 28, 4))
 		end
-		local rod = frame({ Name = "Rod", Position = UDim2.fromOffset(WINDOW_X - 16, WINDOW_Y - 10), Size = UDim2.fromOffset(WINDOW_W + 32, 4), BackgroundColor3 = Color3.fromRGB(110, 76, 60), ZIndex = 10, Parent = scene })
+		local rod = frame({ Name = "Rod", Position = UDim2.fromOffset(WINDOW_X - 18, WINDOW_Y - 11), Size = UDim2.fromOffset(WINDOW_W + 36, 5), BackgroundColor3 = Color3.fromRGB(120, 80, 62), ZIndex = 10, Parent = scene })
 		UI.Corner(rod, 2)
-		for side = 0, 1 do
-			circle(at({ BackgroundColor3 = Color3.fromRGB(150, 106, 80), ZIndex = 10, Parent = rod }, side * (WINDOW_W + 32), 2, 7, 7))
-		end
 
-		-- Guirlande lumineuse le long de la tringle
+		-- Guirlande lumineuse (grosses ampoules) le long de la tringle
 		local FAIRY_COLORS = {
 			Color3.fromRGB(255, 220, 110),
 			Color3.fromRGB(255, 140, 200),
@@ -731,18 +677,16 @@ function Lofi.Start(ctx)
 			Color3.fromRGB(255, 170, 90),
 			Color3.fromRGB(190, 160, 255),
 			Color3.fromRGB(140, 240, 170),
-			Color3.fromRGB(255, 220, 110),
 		}
-		-- fil (petits segments qui suivent la courbe)
-		for i = 0, 3 do
-			local u0, u1 = i / 4, (i + 1) / 4
-			local x0, x1 = WINDOW_X - 6 + u0 * (WINDOW_W + 12), WINDOW_X - 6 + u1 * (WINDOW_W + 12)
-			limb({ BackgroundColor3 = Color3.fromRGB(60, 80, 60), BackgroundTransparency = 0.3, ZIndex = 10, Parent = scene }, x0, WINDOW_Y - 5 + math.sin(u0 * math.pi) * 5, x1, WINDOW_Y - 5 + math.sin(u1 * math.pi) * 5, 1)
+		for i = 0, 1 do
+			local u0, u1 = i / 2, (i + 1) / 2
+			local x0, x1 = WINDOW_X - 4 + u0 * (WINDOW_W + 8), WINDOW_X - 4 + u1 * (WINDOW_W + 8)
+			limb({ BackgroundColor3 = Color3.fromRGB(60, 80, 60), BackgroundTransparency = 0.2, ZIndex = 10, Parent = scene }, x0, WINDOW_Y - 6 + math.sin(u0 * math.pi) * 7, x1, WINDOW_Y - 6 + math.sin(u1 * math.pi) * 7, 1.2)
 		end
 		for i, color in ipairs(FAIRY_COLORS) do
 			local u = (i - 0.5) / #FAIRY_COLORS
-			local bulbFrame = circle(at({ Name = "Fairy" .. i, BackgroundColor3 = color, ZIndex = 10, Parent = scene }, WINDOW_X - 6 + u * (WINDOW_W + 12), WINDOW_Y - 2 + math.sin(u * math.pi) * 5, 5, 6))
-			table.insert(WIN.Fairy, { Frame = bulbFrame, Glow = UI.Stroke(bulbFrame, color, 2.5, 0.55), Phase = random:NextNumber(0, math.pi * 2) })
+			local bulbFrame = circle(at({ Name = "Fairy" .. i, BackgroundColor3 = color, ZIndex = 10, Parent = scene }, WINDOW_X - 4 + u * (WINDOW_W + 8), WINDOW_Y - 2 + math.sin(u * math.pi) * 7, 7, 8))
+			table.insert(WIN.Fairy, { Frame = bulbFrame, Glow = UI.Stroke(bulbFrame, color, 3, 0.55), Phase = random:NextNumber(0, math.pi * 2) })
 		end
 	end
 
@@ -750,221 +694,126 @@ function Lofi.Start(ctx)
 	-- Le chat sur le rebord (dort, se réveille, regarde, bâille)
 	------------------------------------------------------------------
 	local CAT = {} -- parties animées
-	local catX, catBottom = WINDOW_X + 14, SILL_Y + 1
-	local CAT_HEAD_X, CAT_HEAD_Y = catX + 66, catBottom - 12
+	local catX, catBottom = WINDOW_X + 8, SILL_Y + 1
+	local CAT_HEAD_X, CAT_HEAD_Y = catX + 80, catBottom - 15
 	do
 		local cat = frame({ Name = "Cat", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = 7, Parent = scene })
 		-- Queue en deux segments (courbe) : enroulée devant le corps quand il
 		-- dort, dressée derrière lui quand il est réveillé (ZIndex changé)
-		CAT.Tail1 = limb({ Name = "Tail1", BackgroundColor3 = WHITE, ZIndex = 5, Parent = cat }, catX + 6, catBottom - 5, catX + 18, catBottom - 5, 7)
-		gradient(CAT.Tail1, CAT_DARK, CAT_DARK:Lerp(BLACK, 0.12))
-		UI.Stroke(CAT.Tail1, Color3.fromRGB(150, 86, 40), 0.8, 0.5)
-		CAT.Tail2 = limb({ Name = "Tail2", BackgroundColor3 = WHITE, ZIndex = 5, Parent = cat }, catX + 18, catBottom - 5, catX + 28, catBottom - 10, 6)
-		UI.Gradient(CAT.Tail2, bands({
-			{ 0, CAT_DARK:Lerp(BLACK, 0.12) },
-			{ 0.6, CAT_DARK },
-			{ 0.62, Color3.fromRGB(255, 236, 206) },
-			{ 1, Color3.fromRGB(255, 236, 206) },
+		CAT.Tail1 = limb({ Name = "Tail1", BackgroundColor3 = CAT_DARK, ZIndex = 5, Parent = cat }, catX + 6, catBottom - 6, catX + 20, catBottom - 6, 9)
+		outline(CAT.Tail1, CAT_LINE, 1.2, 0.35)
+		CAT.Tail2 = limb({ Name = "Tail2", BackgroundColor3 = WHITE, ZIndex = 5, Parent = cat }, catX + 20, catBottom - 6, catX + 32, catBottom - 12, 8)
+		UI.Gradient(CAT.Tail2, ColorSequence.new({
+			ColorSequenceKeypoint.new(0, CAT_DARK),
+			ColorSequenceKeypoint.new(0.6, CAT_DARK),
+			ColorSequenceKeypoint.new(0.62, CAT_CREAM),
+			ColorSequenceKeypoint.new(1, CAT_CREAM),
 		}), 90)
-		UI.Stroke(CAT.Tail2, Color3.fromRGB(150, 86, 40), 0.8, 0.5)
+		outline(CAT.Tail2, CAT_LINE, 1.2, 0.35)
 		-- Corps (respire), rayures, cuisse
-		local body = circle({ Name = "CatBody", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(catX + 30, catBottom), Size = UDim2.fromOffset(62, 25), BackgroundColor3 = WHITE, ZIndex = 2, Parent = cat })
+		local body = circle({ Name = "CatBody", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(catX + 36, catBottom), Size = UDim2.fromOffset(74, 30), BackgroundColor3 = WHITE, ZIndex = 2, Parent = cat })
 		gradient(body, CAT_LIGHT, CAT_COLOR)
+		outline(body, CAT_LINE, 1.5, 0.3)
 		CAT.BodyScale = UI.Create("UIScale", { Parent = body })
 		for i = 1, 3 do
-			frame({ Name = "Stripe", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(18 + i * 9, 1), Size = UDim2.fromOffset(3, 9), Rotation = 12, BackgroundColor3 = CAT_DARK, ZIndex = 2, Parent = body })
+			frame({ Name = "Stripe", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(22 + i * 11, 1), Size = UDim2.fromOffset(4, 11), Rotation = 12, BackgroundColor3 = CAT_DARK, ZIndex = 2, Parent = body })
 		end
-		local thigh = circle(at({ Name = "Thigh", BackgroundColor3 = WHITE, ZIndex = 2, Parent = body }, 14, 15, 22, 18))
-		gradient(thigh, CAT_COLOR, CAT_DARK)
+		circle(at({ Name = "Thigh", BackgroundColor3 = CAT_DARK, ZIndex = 2, Parent = body }, 16, 18, 24, 20))
 		-- Pattes avant repliées
 		for i = 0, 1 do
-			circle(at({ Name = "Paw", BackgroundColor3 = Color3.fromRGB(255, 232, 196), ZIndex = 4, Parent = cat }, catX + 52 + i * 8, catBottom - 2.5, 9, 5))
+			circle(at({ Name = "Paw", BackgroundColor3 = CAT_CREAM, ZIndex = 4, Parent = cat }, catX + 64 + i * 10, catBottom - 3, 11, 6))
 		end
 		-- Tête (support qui bouge : levée, penchée)
-		local head = frame(at({ Name = "CatHead", BackgroundTransparency = 1, ZIndex = 3, Parent = cat }, CAT_HEAD_X, CAT_HEAD_Y, 36, 32))
+		local head = frame(at({ Name = "CatHead", BackgroundTransparency = 1, ZIndex = 3, Parent = cat }, CAT_HEAD_X, CAT_HEAD_Y, 44, 38))
 		CAT.Head = head
 		CAT.Ears = {}
 		for side = -1, 1, 2 do
-			local ear = frame(at({ Name = "CatEar", BackgroundColor3 = CAT_DARK, Rotation = 45, ZIndex = 1, Parent = head }, 18 + side * 7, 7, 10, 10))
-			UI.Corner(ear, 2)
-			frame(at({ BackgroundColor3 = Color3.fromRGB(255, 160, 170), ZIndex = 1, Parent = ear }, 6, 6, 5, 5))
+			local ear = frame(at({ Name = "CatEar", BackgroundColor3 = CAT_DARK, Rotation = 45, ZIndex = 1, Parent = head }, 22 + side * 9, 9, 13, 13))
+			UI.Corner(ear, 3)
+			outline(ear, CAT_LINE, 1.2, 0.35)
+			frame(at({ BackgroundColor3 = Color3.fromRGB(255, 160, 170), ZIndex = 1, Parent = ear }, 7.5, 7.5, 6, 6))
 			table.insert(CAT.Ears, ear)
 		end
-		local skull = circle(at({ Name = "Face", BackgroundColor3 = WHITE, ZIndex = 2, Parent = head }, 18, 17, 28, 23))
+		local skull = circle(at({ Name = "Face", BackgroundColor3 = WHITE, ZIndex = 2, Parent = head }, 22, 21, 36, 29))
 		gradient(skull, CAT_LIGHT, CAT_COLOR)
+		outline(skull, CAT_LINE, 1.5, 0.3)
 		-- Joues duveteuses + rayures du front
-		for side = -1, 1, 2 do
-			circle(at({ BackgroundColor3 = Color3.fromRGB(255, 236, 206), ZIndex = 2, Parent = head }, 18 + side * 8, 22, 12, 9))
-		end
+		circle(at({ Name = "Muzzle", BackgroundColor3 = CAT_CREAM, ZIndex = 2, Parent = head }, 22, 27, 28, 12))
 		for i = -1, 1 do
-			frame(at({ BackgroundColor3 = CAT_DARK, ZIndex = 3, Parent = head }, 18 + i * 3, 8.5, 1.8, 4 - math.abs(i)))
+			frame(at({ BackgroundColor3 = CAT_DARK, ZIndex = 3, Parent = head }, 22 + i * 4, 10.5, 2.4, 5 - math.abs(i)))
 		end
 		-- Yeux fermés (arcs) / ouverts (ovales + reflet)
 		CAT.Closed = {}
 		CAT.Open = {}
 		for side = -1, 1, 2 do
-			local closed = arc(at({ Name = "EyeClosed", ZIndex = 3, Parent = head }, 18 + side * 6, 15, 6, 6), Color3.fromRGB(70, 40, 30), 1.3, LOWER_ARC)
+			local closed = arc(at({ Name = "EyeClosed", ZIndex = 3, Parent = head }, 22 + side * 8, 18, 8, 8), Color3.fromRGB(70, 40, 30), 1.8, LOWER_ARC)
 			table.insert(CAT.Closed, closed)
-			local open = circle(at({ Name = "EyeOpen", BackgroundColor3 = Color3.fromRGB(56, 44, 30), Visible = false, ZIndex = 3, Parent = head }, 18 + side * 6, 16, 4.5, 5.5))
-			UI.Stroke(open, Color3.fromRGB(190, 220, 120), 0.8, 0.2)
-			circle(at({ BackgroundColor3 = WHITE, ZIndex = 3, Parent = open }, 3, 1.6, 1.6, 1.6))
+			local open = circle(at({ Name = "EyeOpen", BackgroundColor3 = Color3.fromRGB(56, 44, 30), Visible = false, ZIndex = 3, Parent = head }, 22 + side * 8, 20, 6, 7))
+			circle(at({ BackgroundColor3 = WHITE, ZIndex = 3, Parent = open }, 4, 2, 2.2, 2.2))
 			table.insert(CAT.Open, open)
-			-- Moustaches
-			for k = 0, 1 do
-				frame(at({ BackgroundColor3 = WHITE, BackgroundTransparency = 0.25, Rotation = side * (k == 0 and 8 or -6), ZIndex = 4, Parent = head }, 18 + side * 15, 20 + k * 2.5, 10, 1))
-			end
 		end
-		frame(at({ Name = "Nose", BackgroundColor3 = Color3.fromRGB(255, 130, 150), ZIndex = 3, Parent = head }, 18, 19.5, 4, 3))
-		CAT.Mouth = circle(at({ Name = "Yawn", BackgroundColor3 = Color3.fromRGB(200, 70, 100), Visible = false, ZIndex = 3, Parent = head }, 18, 24, 5, 0))
-		-- "z z z" qui montent quand il dort (3 lettres recyclées)
+		frame(at({ Name = "Nose", BackgroundColor3 = Color3.fromRGB(255, 120, 144), ZIndex = 3, Parent = head }, 22, 24, 5, 3.5))
+		CAT.Mouth = circle(at({ Name = "Yawn", BackgroundColor3 = Color3.fromRGB(200, 70, 100), Visible = false, ZIndex = 3, Parent = head }, 22, 29, 6, 0))
+		-- "Z z z" qui montent quand il dort (3 lettres recyclées)
 		CAT.Z = {}
 		for i = 1, 3 do
 			CAT.Z[i] = label({
 				Name = "Z",
-				Text = i == 3 and "Z" or "z",
+				Text = "Z",
 				Font = Theme.Fonts.Title,
-				TextSize = 12,
+				TextSize = 14,
 				TextColor3 = WHITE,
+				TextStrokeColor3 = Color3.fromRGB(60, 40, 110),
+				TextStrokeTransparency = 0.3,
 				AnchorPoint = Vector2.new(0.5, 0.5),
-				Size = UDim2.fromOffset(20, 20),
+				Size = UDim2.fromOffset(24, 24),
 				ZIndex = 19,
 				Parent = scene,
 			})
 		end
 
-		-- Plantes sur le rebord : succulente + petit cactus
-		local potX = WINDOW_X + WINDOW_W - 16
-		local pot = frame({ Name = "Pot", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(potX, SILL_Y + 1), Size = UDim2.fromOffset(16, 12), BackgroundColor3 = WHITE, ZIndex = 8, Parent = scene })
+		-- Petite plante sur le rebord
+		local potX = WINDOW_X + WINDOW_W - 22
+		local pot = frame({ Name = "Pot", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(potX, SILL_Y + 1), Size = UDim2.fromOffset(16, 13), BackgroundColor3 = WHITE, ZIndex = 8, Parent = scene })
 		UI.Corner(pot, 3)
-		gradient(pot, Color3.fromRGB(240, 150, 110), Color3.fromRGB(196, 100, 76))
-		for i, rotation in ipairs({ -60, -28, 0, 28, 60 }) do
-			local leaf = frame({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(potX, SILL_Y - 9), Size = UDim2.fromOffset(6, 12 + (i % 2) * 3), Rotation = rotation, BackgroundColor3 = WHITE, ZIndex = 8, Parent = scene })
+		gradient(pot, Color3.fromRGB(246, 150, 110), Color3.fromRGB(196, 100, 76))
+		for i, rotation in ipairs({ -50, 0, 50 }) do
+			local leaf = frame({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(potX, SILL_Y - 10), Size = UDim2.fromOffset(8, 14 + (i % 2) * 4), Rotation = rotation, BackgroundColor3 = i == 2 and LEAF_LIGHT or LEAF_DARK, ZIndex = 8, Parent = scene })
 			UI.Corner(leaf, UDim.new(1, 0))
-			gradient(leaf, LEAF_LIGHT, LEAF_DARK)
 		end
-		local cactusPot = frame({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(potX - 21, SILL_Y + 1), Size = UDim2.fromOffset(11, 8), BackgroundColor3 = Color3.fromRGB(120, 180, 255), ZIndex = 8, Parent = scene })
-		UI.Corner(cactusPot, 2)
-		local cactus = frame({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(potX - 21, SILL_Y - 6), Size = UDim2.fromOffset(7, 14), BackgroundColor3 = Color3.fromRGB(90, 190, 120), ZIndex = 8, Parent = scene })
-		UI.Corner(cactus, UDim.new(1, 0))
-		circle(at({ BackgroundColor3 = Color3.fromRGB(255, 140, 180), ZIndex = 8, Parent = cactus }, 3.5, 0, 4, 4))
 	end
 
 	------------------------------------------------------------------
-	-- Mur : plante suspendue, horloge, étagère, photos, post-it
+	-- Étagère à vinyles (amélioration "Vinyl") : 10 emplacements
 	------------------------------------------------------------------
-	local VINES: { { Holder: Frame, X: number, Y: number, Length: number, Phase: number, Tilt: number } } = {}
-	local CLOCK_X, CLOCK_Y = 229, 26
-	local hourHand, minuteHand
-	local goldPlaque: Frame
+	local RACK = { Discs = {} :: { { Disc: Frame, Ring: UIStroke, Label: Frame, X: number } } }
 	do
-		-- Plante suspendue (pot en macramé, lianes qui se balancent)
-		local potX, potY = 193, 34
-		for side = -1, 1 do
-			limb({ BackgroundColor3 = Color3.fromRGB(236, 220, 196), BackgroundTransparency = 0.25, ZIndex = 11, Parent = scene }, potX, -4, potX + side * 7, potY - 5, 1)
+		RACK.Shelf = frame({ Name = "VinylShelf", Position = UDim2.fromOffset(RACK_X - 4, RACK_Y), Size = UDim2.fromOffset(RACK_W + 8, 5), BackgroundColor3 = WHITE, ZIndex = 3, Parent = scene })
+		UI.Corner(RACK.Shelf, 2)
+		RACK.ShelfGradient = gradient(RACK.Shelf, Color3.fromRGB(226, 174, 126), Color3.fromRGB(140, 94, 66))
+		outline(RACK.Shelf, OUTLINE, 1, 0.45)
+		local step = RACK_W / MAX_RECORDS
+		for i = 1, MAX_RECORDS do
+			local x = RACK_X + step * (i - 0.5)
+			local disc = circle({
+				Name = "RackDisc" .. i,
+				AnchorPoint = Vector2.new(0.5, 1),
+				Position = UDim2.fromOffset(x, RACK_Y),
+				Size = UDim2.fromOffset(15, 15),
+				BackgroundColor3 = Color3.fromRGB(28, 26, 38),
+				ZIndex = 3,
+				Parent = scene,
+			})
+			local ring = UI.Stroke(disc, WHITE, 1.2, 0.7)
+			local center = circle(at({ Name = "Label", BackgroundColor3 = RECORD_COLORS[i], ZIndex = 3, Parent = disc }, 7.5, 7.5, 6, 6))
+			table.insert(RACK.Discs, { Disc = disc, Ring = ring, Label = center, X = x })
 		end
-		local pot = frame(at({ Name = "HangingPot", BackgroundColor3 = WHITE, ZIndex = 11, Parent = scene }, potX, potY, 18, 12))
-		UI.Corner(pot, 4)
-		gradient(pot, Color3.fromRGB(250, 240, 226), Color3.fromRGB(206, 190, 176))
-		frame(at({ BackgroundColor3 = Color3.fromRGB(255, 150, 170), ZIndex = 11, Parent = pot }, 9, 4, 18, 2))
-		for _, r in ipairs({ -55, -22, 14, 48 }) do
-			local leaf = frame({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(potX + r / 9, potY - 4), Size = UDim2.fromOffset(6, 10), Rotation = r, BackgroundColor3 = WHITE, ZIndex = 11, Parent = scene })
-			UI.Corner(leaf, UDim.new(1, 0))
-			gradient(leaf, LEAF_LIGHT, LEAF_DARK)
-		end
-		for i, spec in ipairs({ { -6, 34, 7 }, { 1, 26, 0 }, { 7, 18, -8 } }) do
-			local length = spec[2]
-			local holder = frame({ Name = "Vine" .. i, AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(14, length), BackgroundTransparency = 1, ZIndex = 11, Parent = scene })
-			frame({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 0), Size = UDim2.new(0, 1.2, 1, -3), BackgroundColor3 = Color3.fromRGB(70, 130, 80), ZIndex = 11, Parent = holder })
-			local count = math.max(3, math.floor(length / 7.5))
-			for k = 1, count do
-				local side = (k % 2 == 0) and 1 or -1
-				local leaf = frame({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, side * 2.6, 0, k * (length / count) - 3), Size = UDim2.fromOffset(6, 4.2), Rotation = side * 38, BackgroundColor3 = WHITE, ZIndex = 11, Parent = holder })
-				UI.Corner(leaf, UDim.new(1, 0))
-				gradient(leaf, VINE_LIGHT, VINE_DARK)
-			end
-			table.insert(VINES, { Holder = holder, X = potX + spec[1], Y = potY + 4, Length = length, Phase = random:NextNumber(0, 6), Tilt = spec[3] })
-		end
-
-		-- Horloge à aiguilles (heure locale)
-		local clockFace = circle(at({ Name = "Clock", BackgroundColor3 = WHITE, ZIndex = 3, Parent = scene }, CLOCK_X, CLOCK_Y, 28, 28))
-		gradient(clockFace, Color3.fromRGB(255, 250, 238), Color3.fromRGB(236, 224, 206))
-		UI.Stroke(clockFace, Color3.fromRGB(150, 100, 76), 2.5)
-		for i = 0, 11 do
-			local angle = i * math.pi / 6
-			local long = i % 3 == 0
-			frame(at({ BackgroundColor3 = Color3.fromRGB(110, 80, 70), Rotation = i * 30, ZIndex = 3, Parent = clockFace }, 14 + math.sin(angle) * 10.5, 14 - math.cos(angle) * 10.5, long and 1.5 or 1, long and 3.5 or 2))
-		end
-		hourHand = frame({ Name = "Hour", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(14, 14), Size = UDim2.fromOffset(2.5, 7), BackgroundColor3 = Color3.fromRGB(60, 40, 50), ZIndex = 4, Parent = clockFace })
-		minuteHand = frame({ Name = "Minute", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(14, 14), Size = UDim2.fromOffset(1.5, 10), BackgroundColor3 = Color3.fromRGB(60, 40, 50), ZIndex = 4, Parent = clockFace })
-		circle(at({ BackgroundColor3 = PHONES, ZIndex = 5, Parent = clockFace }, 14, 14, 4, 4))
-
-		-- Étagère : livres, bougie (derrière la fille, à gauche)
-		local SHELF_X, SHELF_Y, SHELF_W = 176, 80, 66
-		local shelf = frame({ Name = "Shelf", Position = UDim2.fromOffset(SHELF_X, SHELF_Y), Size = UDim2.fromOffset(SHELF_W, 4), BackgroundColor3 = WHITE, ZIndex = 3, Parent = scene })
-		UI.Corner(shelf, 1)
-		gradient(shelf, Color3.fromRGB(220, 170, 124), Color3.fromRGB(140, 94, 66))
-		for side = 0, 1 do
-			frame({ Position = UDim2.fromOffset(6 + side * (SHELF_W - 16), 4), Size = UDim2.fromOffset(4, 6), BackgroundColor3 = Color3.fromRGB(120, 84, 60), ZIndex = 3, Parent = shelf })
-		end
-		local bx = SHELF_X + 3
-		for i, spec in ipairs({ { 5, 17, rgb(240, 110, 120) }, { 4, 14, rgb(110, 170, 240) }, { 6, 19, rgb(250, 206, 96) }, { 4, 15, rgb(150, 110, 220) }, { 5, 13, rgb(120, 214, 170) } }) do
-			local book = frame({ Name = "Book" .. i, AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromOffset(bx, SHELF_Y), Size = UDim2.fromOffset(spec[1], spec[2]), BackgroundColor3 = WHITE, ZIndex = 4, Parent = scene })
-			gradient(book, spec[3]:Lerp(WHITE, 0.15), spec[3]:Lerp(BLACK, 0.2), 0)
-			frame({ Position = UDim2.fromOffset(0, 3), Size = UDim2.new(1, 0, 0, 1), BackgroundColor3 = WHITE, BackgroundTransparency = 0.5, ZIndex = 4, Parent = book })
-			bx += spec[1] + 0.5
-		end
-		-- Bougie (flamme qui vacille)
-		local candleX = bx + 6
-		local candle = frame({ Name = "Candle", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(candleX, SHELF_Y), Size = UDim2.fromOffset(7, 9), BackgroundColor3 = WHITE, ZIndex = 4, Parent = scene })
-		UI.Corner(candle, 2)
-		gradient(candle, Color3.fromRGB(255, 246, 230), Color3.fromRGB(236, 214, 196))
-		WIN.CandleGlow = circle(at({ Name = "FlameGlow", BackgroundColor3 = Color3.fromRGB(255, 190, 110), BackgroundTransparency = 0.8, ZIndex = 3, Parent = scene }, candleX, SHELF_Y - 12, 16, 16))
-		WIN.CandleFlame = circle({ Name = "Flame", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(candleX, SHELF_Y - 9), Size = UDim2.fromOffset(3, 5), BackgroundColor3 = Color3.fromRGB(255, 200, 90), ZIndex = 4, Parent = scene })
-
-		-- Disque d'or encadré (Vinyl niveau 10), sous l'étagère
-		goldPlaque = frame({ Name = "GoldRecord", Position = UDim2.fromOffset(SHELF_X + 6, SHELF_Y + 12), Size = UDim2.fromOffset(26, 32), BackgroundColor3 = Color3.fromRGB(40, 30, 50), Visible = false, ZIndex = 3, Parent = scene })
-		UI.Corner(goldPlaque, 2)
-		UI.Stroke(goldPlaque, Color3.fromRGB(236, 206, 150), 1.5)
-		local disc = circle(at({ BackgroundColor3 = WHITE, ZIndex = 3, Parent = goldPlaque }, 13, 13, 20, 20))
-		gradient(disc, Color3.fromRGB(255, 240, 150), Color3.fromRGB(206, 146, 36), 45)
-		circle(at({ BackgroundColor3 = Color3.fromRGB(255, 120, 150), ZIndex = 3, Parent = disc }, 10, 10, 6, 6))
-		frame({ Position = UDim2.fromOffset(5, 26), Size = UDim2.fromOffset(16, 2), BackgroundColor3 = Color3.fromRGB(236, 206, 150), ZIndex = 3, Parent = goldPlaque })
-
-		-- Guirlande de photos (polaroïds sur une ficelle) + post-it
-		frame({ Name = "String", Position = UDim2.fromOffset(248, 13), Size = UDim2.fromOffset(52, 1), Rotation = 3, BackgroundColor3 = Color3.fromRGB(230, 210, 190), BackgroundTransparency = 0.3, ZIndex = 3, Parent = scene })
-		for i, spec in ipairs({ { 256, -6, rgb(120, 180, 255), rgb(255, 190, 150) }, { 274, 5, rgb(255, 150, 190), rgb(150, 110, 220) }, { 292, -3, rgb(130, 220, 170), rgb(60, 120, 150) } }) do
-			local photo = frame({ Name = "Photo" .. i, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(spec[1], 12 + i * 0.6), Size = UDim2.fromOffset(15, 18), Rotation = spec[2], BackgroundColor3 = Color3.fromRGB(252, 250, 244), ZIndex = 3, Parent = scene })
-			local picture = frame({ Position = UDim2.fromOffset(2, 2), Size = UDim2.fromOffset(11, 10), BackgroundColor3 = WHITE, ZIndex = 3, Parent = photo })
-			gradient(picture, spec[3], spec[4])
-			frame(at({ BackgroundColor3 = Color3.fromRGB(200, 170, 120), ZIndex = 4, Parent = photo }, 7.5, 0, 3, 4))
-		end
-		local note = frame({ Name = "PostIt", Position = UDim2.fromOffset(305, 14), Size = UDim2.fromOffset(54, 38), Rotation = 5, BackgroundColor3 = WHITE, ZIndex = 3, Parent = scene })
-		gradient(note, Color3.fromRGB(255, 240, 140), Color3.fromRGB(250, 214, 96))
-		UI.Stroke(note, BLACK, 1, 0.8)
-		frame(at({ BackgroundColor3 = Color3.fromRGB(255, 120, 150), BackgroundTransparency = 0.15, ZIndex = 4, Parent = note }, 27, 1, 14, 4))
-		label({
-			Text = Locale.T("<s>study</s>\nclick ✅"),
-			RichText = true,
-			Font = Theme.Fonts.Body,
-			TextSize = 11,
-			TextColor3 = Color3.fromRGB(50, 40, 40),
-			TextWrapped = true,
-			Size = UDim2.new(1, -6, 1, -6),
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5, 0.55),
-			ZIndex = 4,
-			Parent = note,
-		})
-		local heartNote = frame({ Name = "PostIt2", Position = UDim2.fromOffset(331, 55), Size = UDim2.fromOffset(22, 20), Rotation = -8, BackgroundColor3 = Color3.fromRGB(255, 170, 200), ZIndex = 3, Parent = scene })
-		label({ Text = "♥", Font = Theme.Fonts.Title, TextSize = 13, TextColor3 = Color3.fromRGB(220, 60, 110), Size = UDim2.fromScale(1, 1), ZIndex = 3, Parent = heartNote })
 	end
 
 	------------------------------------------------------------------
 	-- Ombre de la fille sur le mur (la lampe est à droite)
 	------------------------------------------------------------------
-	local shadowHead = circle(at({ Name = "ShadowHead", BackgroundColor3 = Color3.fromRGB(16, 8, 34), BackgroundTransparency = 0.8, ZIndex = 4, Parent = scene }, PX - 24, HEAD_Y + 4, 74, 70))
-	local shadowBody = frame(at({ Name = "ShadowBody", BackgroundColor3 = Color3.fromRGB(16, 8, 34), BackgroundTransparency = 0.8, ZIndex = 4, Parent = scene }, PX - 22, 138, 92, 70))
-	UI.Corner(shadowBody, 30)
+	local shadowHead = circle(at({ Name = "ShadowHead", BackgroundColor3 = Color3.fromRGB(16, 8, 34), BackgroundTransparency = 0.8, ZIndex = 4, Parent = scene }, PX - 26, HEAD_Y + 4, 92, 86))
 
 	------------------------------------------------------------------
 	-- La fille (corps + tête) derrière le bureau
@@ -974,37 +823,36 @@ function Lofi.Start(ctx)
 
 	-- Cheveux longs derrière le dos, capuche, buste
 	do
-		local backLong = frame(at({ Name = "LongHair", BackgroundColor3 = WHITE, ZIndex = 1, Parent = person }, PX, 116, 68, 54))
-		UI.Corner(backLong, 22)
+		local backLong = frame(at({ Name = "LongHair", BackgroundColor3 = WHITE, ZIndex = 1, Parent = person }, PX, 126, 84, 56))
+		UI.Corner(backLong, 24)
 		gradient(backLong, HAIR, HAIR:Lerp(BLACK, 0.3))
-		G.Hood = frame(at({ Name = "HoodBack", BackgroundColor3 = WHITE, ZIndex = 2, Parent = person }, PX, 107, 72, 22))
-		UI.Corner(G.Hood, 11)
+		G.Hood = frame(at({ Name = "HoodBack", BackgroundColor3 = WHITE, ZIndex = 2, Parent = person }, PX, 120, 84, 24))
+		UI.Corner(G.Hood, 12)
 		gradient(G.Hood, HOODIE_DARK:Lerp(WHITE, 0.1), HOODIE_DARK:Lerp(BLACK, 0.12))
 	end
-	G.Torso = frame(at({ Name = "Torso", BackgroundColor3 = WHITE, ZIndex = 3, Parent = person }, PX, 142, 84, 66))
-	UI.Corner(G.Torso, 30)
+	G.Torso = frame(at({ Name = "Torso", BackgroundColor3 = WHITE, ZIndex = 3, Parent = person }, PX, 158, 108, 80))
+	UI.Corner(G.Torso, 34)
 	UI.Gradient(G.Torso, ColorSequence.new({
 		ColorSequenceKeypoint.new(0, HOODIE:Lerp(WHITE, 0.15)),
 		ColorSequenceKeypoint.new(0.6, HOODIE),
 		ColorSequenceKeypoint.new(1, HOODIE_DARK),
 	}), 90)
+	outline(G.Torso, Color3.fromRGB(30, 80, 86), 1.5, 0.3)
 	-- Lumière chaude de la lampe sur l'épaule droite
 	G.Rim = frame({ Name = "RimLight", Size = UDim2.fromScale(1, 1), BackgroundColor3 = WARM_LIGHT, BackgroundTransparency = 0.25, ZIndex = 3, Parent = G.Torso })
-	UI.Corner(G.Rim, 30)
+	UI.Corner(G.Rim, 34)
 	fade(G.Rim, NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.6, 1), NumberSequenceKeypoint.new(1, 0.35) }), 0)
 	for side = -1, 1, 2 do
-		local cord = frame(at({ Name = "String", BackgroundColor3 = Color3.fromRGB(245, 245, 255), BackgroundTransparency = 0.1, ZIndex = 3, Parent = G.Torso }, 42 + side * 7, 17, 2, 15))
-		UI.Corner(cord, 1)
-		circle(at({ BackgroundColor3 = Color3.fromRGB(255, 200, 220), ZIndex = 3, Parent = G.Torso }, 42 + side * 7, 25, 3.5, 3.5))
+		frame(at({ Name = "String", BackgroundColor3 = Color3.fromRGB(245, 245, 255), ZIndex = 3, Parent = G.Torso }, 54 + side * 9, 20, 3, 18))
 	end
-	G.Neck = frame(at({ Name = "Neck", BackgroundColor3 = SKIN_SHADE, ZIndex = 4, Parent = person }, PX, 104, 13, 12))
+	G.Neck = frame(at({ Name = "Neck", BackgroundColor3 = SKIN_SHADE, ZIndex = 4, Parent = person }, PX, 114, 16, 12))
 	UI.Corner(G.Neck, 4)
-	G.Collar = frame(at({ Name = "Collar", BackgroundColor3 = WHITE, ZIndex = 5, Parent = person }, PX, 111, 50, 13))
-	UI.Corner(G.Collar, 7)
+	G.Collar = frame(at({ Name = "Collar", BackgroundColor3 = WHITE, ZIndex = 5, Parent = person }, PX, 123, 58, 15))
+	UI.Corner(G.Collar, 8)
 	gradient(G.Collar, HOODIE_DARK:Lerp(WHITE, 0.15), HOODIE_DARK)
 
 	-- Tête (support qui hoche : tout ce qui est dedans bouge avec)
-	local headHolder = frame(at({ Name = "Head", BackgroundTransparency = 1, ZIndex = 6, Parent = person }, PX, HEAD_Y, 80, 80))
+	local headHolder = frame(at({ Name = "Head", BackgroundTransparency = 1, ZIndex = 6, Parent = person }, PX, HEAD_Y, 100, 100))
 	G.Head = headHolder
 
 	-- Pièce de la tête, centrée sur (x, y) par rapport au centre de la tête
@@ -1016,103 +864,69 @@ function Lofi.Start(ctx)
 		return frame(props)
 	end
 
-	-- Halo lumineux des écouteurs (derrière tout)
-	G.PhoneGlows = {}
-	for side = -1, 1, 2 do
-		local glow = headPart({ Name = "PhoneGlow", BackgroundColor3 = PHONES_GLOW, BackgroundTransparency = 0.78, ZIndex = 1 }, side * 33, 6, 40, 40)
-		UI.Corner(glow, UDim.new(1, 0))
-		table.insert(G.PhoneGlows, glow)
-	end
-
 	G.Eyes = {}
+	G.Cups = {}
 	do
-		-- Cheveux (arrière) + mèches sur les côtés + longues mèches devant les épaules
-		local backHair = headPart({ Name = "BackHair", BackgroundColor3 = WHITE, ZIndex = 2 }, 0, -2, 58, 56)
+		-- Cheveux (arrière) + mèches sur les côtés
+		local backHair = headPart({ Name = "BackHair", BackgroundColor3 = WHITE, ZIndex = 2 }, 0, -2, 74, 70)
 		UI.Corner(backHair, UDim.new(1, 0))
 		gradient(backHair, HAIR_LIGHT, HAIR)
+		outline(backHair, OUTLINE, 1.5, 0.2)
 		for side = -1, 1, 2 do
-			local lock = headPart({ Name = "Lock", BackgroundColor3 = WHITE, ZIndex = 4 }, side * 23, 13, 13, 34)
-			UI.Corner(lock, 7)
+			local lock = headPart({ Name = "Lock", BackgroundColor3 = WHITE, Rotation = side * -5, ZIndex = 4 }, side * 29, 20, 15, 44)
+			UI.Corner(lock, 8)
 			gradient(lock, HAIR, HAIR:Lerp(BLACK, 0.15))
-			local front = headPart({ Name = "FrontLock", BackgroundColor3 = WHITE, Rotation = side * -6, ZIndex = 4 }, side * 22, 30, 9, 26)
-			UI.Corner(front, UDim.new(1, 0))
-			gradient(front, HAIR, HAIR_LIGHT:Lerp(HAIR, 0.6))
 		end
 
-		-- Visage : yeux baissés (ovales + cils, clignent), joues, taches de rousseur
-		local face = headPart({ Name = "Face", BackgroundColor3 = WHITE, ZIndex = 3 }, 0, 5, 46, 43)
+		-- Visage : yeux baissés (ovales + cils, clignent), joues
+		local face = headPart({ Name = "Face", BackgroundColor3 = WHITE, ZIndex = 3 }, 0, 6, 58, 54)
 		UI.Corner(face, UDim.new(0.48, 0))
 		gradient(face, SKIN, SKIN_SHADE)
-		-- Lumière chaude de la lampe sur la joue droite
-		local warmCheek = frame({ Name = "WarmLight", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(255, 200, 140), BackgroundTransparency = 0.45, ZIndex = 3, Parent = face })
-		UI.Corner(warmCheek, UDim.new(0.48, 0))
-		fade(warmCheek, NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.62, 1), NumberSequenceKeypoint.new(1, 0.55) }), 0)
 		for side = -1, 1, 2 do
-			local eye = headPart({ Name = "Eye", AnchorPoint = Vector2.new(0.5, 1), BackgroundColor3 = EYE_INK, ZIndex = 5 }, side * 10, 9, 7.5, 5)
+			local eye = headPart({ Name = "Eye", AnchorPoint = Vector2.new(0.5, 1), BackgroundColor3 = EYE_INK, ZIndex = 5 }, side * 12, 13, 10, 6)
 			UI.Corner(eye, UDim.new(1, 0))
-			local shine = circle({ Name = "Shine", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(side < 0 and 0.66 or 0.34, 0.62), Size = UDim2.fromOffset(2, 2), BackgroundColor3 = WHITE, ZIndex = 5, Parent = eye })
-			local lash = headPart({ Name = "Lash", BackgroundColor3 = LINE_INK, Rotation = side * 9, ZIndex = 6 }, side * 10, 4, 10.5, 2)
-			UI.Corner(lash, 1)
-			local flick = headPart({ Name = "Flick", BackgroundColor3 = LINE_INK, Rotation = side * 38, ZIndex = 6 }, side * 15.2, 5, 3.5, 1.4)
-			UI.Corner(flick, 1)
-			table.insert(G.Eyes, { Eye = eye, Lash = lash, Flick = flick, Shine = shine, Side = side })
-			local brow = headPart({ Name = "Brow", BackgroundColor3 = HAIR, Rotation = side * -6, ZIndex = 5 }, side * 10, -3.5, 8, 1.6)
-			UI.Corner(brow, 1)
-			local blush = headPart({ Name = "Blush", BackgroundColor3 = Color3.fromRGB(255, 136, 160), BackgroundTransparency = 0.5, ZIndex = 5 }, side * 13.5, 13.5, 9, 5)
+			local shine = circle({ Name = "Shine", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(side < 0 and 0.68 or 0.32, 0.36), Size = UDim2.fromOffset(3, 3), BackgroundColor3 = WHITE, ZIndex = 5, Parent = eye })
+			local lash = headPart({ Name = "Lash", BackgroundColor3 = LINE_INK, Rotation = side * 9, ZIndex = 6 }, side * 12, 7, 14, 2.6)
+			table.insert(G.Eyes, { Eye = eye, Lash = lash, Shine = shine, Side = side })
+			headPart({ Name = "Brow", BackgroundColor3 = HAIR, Rotation = side * -6, ZIndex = 5 }, side * 12, -3, 10, 2.2)
+			local blush = headPart({ Name = "Blush", BackgroundColor3 = Color3.fromRGB(255, 130, 158), BackgroundTransparency = 0.4, ZIndex = 5 }, side * 18, 18, 12, 6)
 			UI.Corner(blush, UDim.new(1, 0))
-			for k = 0, 1 do
-				headPart({ BackgroundColor3 = Color3.fromRGB(214, 140, 120), BackgroundTransparency = 0.3, ZIndex = 5 }, side * (12 + k * 3), 11 + k, 1.3, 1.3)
-			end
 		end
-		local nose = headPart({ Name = "Nose", BackgroundColor3 = SKIN_SHADE:Lerp(Color3.fromRGB(200, 120, 110), 0.4), ZIndex = 5 }, 0, 11.5, 2.5, 2)
-		UI.Corner(nose, 1)
-		local mouth = headPart({ Name = "Mouth", ZIndex = 5 }, 0, 14.5, 6, 6)
-		mouth.BackgroundTransparency = 1
-		UI.Corner(mouth, UDim.new(1, 0))
-		local mouthStroke = UI.Stroke(mouth, LINE_INK, 1.5, 0.1)
-		UI.Create("UIGradient", { Rotation = 90, Transparency = LOWER_ARC, Parent = mouthStroke })
+		-- Bouche : petit arc (sourire), plus grand quand elle lève les yeux
+		G.Mouth, G.MouthStroke = arc({ Name = "Mouth", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 19), Size = UDim2.fromOffset(8, 8), ZIndex = 5, Parent = headHolder }, LINE_INK, 1.8, LOWER_ARC)
 
-		-- Frange, reflet, épi, barrette
-		for _, spec in ipairs({ { -11, -13, 28, 17, -20 }, { 12, -13, 28, 17, 22 }, { 0, -16, 30, 14, 0 } }) do
+		-- Frange + reflet
+		for _, spec in ipairs({ { -14, -16, 34, 21, -20 }, { 15, -16, 34, 21, 22 }, { 0, -21, 38, 17, 0 } }) do
 			local bang = headPart({ Name = "Bang", BackgroundColor3 = WHITE, Rotation = spec[5], ZIndex = 6 }, spec[1], spec[2], spec[3], spec[4])
 			UI.Corner(bang, UDim.new(1, 0))
 			gradient(bang, HAIR_LIGHT:Lerp(HAIR, 0.45), HAIR)
 		end
-		local shine = headPart({ Name = "HairShine", BackgroundColor3 = HAIR_LIGHT:Lerp(WHITE, 0.3), BackgroundTransparency = 0.25, Rotation = -18, ZIndex = 7 }, -9, -21, 14, 3.5)
+		local shine = headPart({ Name = "HairShine", BackgroundColor3 = HAIR_LIGHT:Lerp(WHITE, 0.35), BackgroundTransparency = 0.2, Rotation = -18, ZIndex = 7 }, -12, -26, 17, 4)
 		UI.Corner(shine, UDim.new(1, 0))
-		-- Reflet chaud de la lampe sur les cheveux (côté droit)
-		local warmShine = headPart({ Name = "WarmShine", BackgroundColor3 = WARM_LIGHT, BackgroundTransparency = 0.55, Rotation = 30, ZIndex = 7 }, 18, -14, 12, 3)
-		UI.Corner(warmShine, UDim.new(1, 0))
-		local ahoge = headPart({ Name = "Ahoge", BackgroundColor3 = HAIR, Rotation = 30, ZIndex = 6 }, 5, -31, 3.5, 12)
-		UI.Corner(ahoge, UDim.new(1, 0))
-		local clip = headPart({ Name = "Clip", BackgroundColor3 = Color3.fromRGB(255, 226, 110), Rotation = -20, ZIndex = 7 }, -17, -14, 9, 3.5)
-		UI.Corner(clip, 2)
 
 		-- GROS casque : arceau (haut d'un cercle) + deux écouteurs vernis
-		local band = headPart({ Name = "Band", BackgroundTransparency = 1, ZIndex = 7 }, 0, 4, 64, 64)
+		local band = headPart({ Name = "Band", BackgroundTransparency = 1, ZIndex = 7 }, 0, 4, 84, 84)
 		UI.Corner(band, UDim.new(1, 0))
-		local bandStroke = UI.Stroke(band, WHITE, 6, 0)
+		local bandStroke = UI.Stroke(band, WHITE, 7, 0)
 		UI.Create("UIGradient", { Rotation = 90, Color = ColorSequence.new(PHONES:Lerp(WHITE, 0.3), PHONES_DARK), Transparency = UPPER_ARC, Parent = bandStroke })
 		G.Leds = {}
 		for side = -1, 1, 2 do
-			local cushion = headPart({ Name = "Cushion", BackgroundColor3 = Color3.fromRGB(70, 44, 90), ZIndex = 7 }, side * 26, 6, 7, 20)
+			local cushion = headPart({ Name = "Cushion", BackgroundColor3 = Color3.fromRGB(70, 44, 90), ZIndex = 7 }, side * 33, 8, 8, 24)
 			UI.Corner(cushion, 3)
-			local cup = headPart({ Name = "Cup", BackgroundColor3 = WHITE, ZIndex = 8 }, side * 33, 6, 16, 26)
-			UI.Corner(cup, 7)
+			local cup = headPart({ Name = "Cup", BackgroundColor3 = WHITE, ZIndex = 8 }, side * 42, 8, 20, 32)
+			UI.Corner(cup, 8)
 			UI.Gradient(cup, ColorSequence.new({
 				ColorSequenceKeypoint.new(0, PHONES:Lerp(WHITE, 0.35)),
 				ColorSequenceKeypoint.new(0.45, PHONES),
 				ColorSequenceKeypoint.new(1, PHONES_DARK),
 			}), 90)
-			UI.Stroke(cup, PHONES_DARK, 1.5, 0.2)
-			local cupShine = headPart({ Name = "CupShine", BackgroundColor3 = WHITE, BackgroundTransparency = 0.35, ZIndex = 9 }, side * 33 - 3, -1, 3, 8)
+			outline(cup, Color3.fromRGB(110, 24, 70), 1.5, 0.15)
+			table.insert(G.Cups, cup)
+			local cupShine = frame({ Name = "CupShine", Position = UDim2.fromOffset(4, 4), Size = UDim2.fromOffset(4, 10), BackgroundColor3 = WHITE, BackgroundTransparency = 0.3, ZIndex = 9, Parent = cup })
 			UI.Corner(cupShine, UDim.new(1, 0))
-			-- Anneau lumineux (pulse sur la musique) + petit cœur
-			local led = headPart({ Name = "Led", BackgroundTransparency = 1, ZIndex = 9 }, side * 33 + 1, 8, 9, 9)
-			UI.Corner(led, UDim.new(1, 0))
-			table.insert(G.Leds, UI.Stroke(led, Color3.fromRGB(255, 220, 240), 1.5, 0.3))
-			local heart = headPart({ BackgroundColor3 = WHITE, BackgroundTransparency = 0.15, Rotation = 45, ZIndex = 9 }, side * 33 + 1, 8, 3.5, 3.5)
-			UI.Corner(heart, 1)
+			-- Anneau lumineux (pulse sur la musique)
+			local led = circle({ Name = "Led", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.58), Size = UDim2.fromOffset(11, 11), BackgroundColor3 = WHITE, BackgroundTransparency = 0.2, ZIndex = 9, Parent = cup })
+			table.insert(G.Leds, UI.Stroke(led, Color3.fromRGB(255, 230, 245), 2, 0.3))
 		end
 	end
 
@@ -1126,159 +940,87 @@ function Lofi.Start(ctx)
 		-- (ClipsDescendants découpe en rectangle : sinon coins carrés qui dépassent)
 		local deskFront = frame({ Name = "DeskFront", Position = UDim2.fromOffset(0, DESK_FRONT - SCENE_RADIUS), Size = UDim2.new(1, 0, 0, SCENE_H - DESK_FRONT + SCENE_RADIUS), BackgroundColor3 = WHITE, ZIndex = 12, Parent = scene })
 		UI.Corner(deskFront, SCENE_RADIUS)
-		gradient(deskFront, Color3.fromRGB(118, 78, 58), Color3.fromRGB(70, 44, 36))
-		-- Tiroir + poignée, veines du bois
-		local drawer = frame({ Name = "Drawer", Position = UDim2.fromOffset(122, SCENE_RADIUS + 8), Size = UDim2.fromOffset(92, 22), BackgroundColor3 = Color3.fromRGB(134, 90, 64), ZIndex = 12, Parent = deskFront })
-		UI.Corner(drawer, 3)
-		UI.Stroke(drawer, Color3.fromRGB(70, 44, 34), 1, 0.4)
-		local handle = frame(at({ BackgroundColor3 = Color3.fromRGB(236, 206, 150), ZIndex = 12, Parent = drawer }, 46, 11, 20, 3.5))
-		UI.Corner(handle, 2)
-		for i, y in ipairs({ 18, 32 }) do
-			frame({ Position = UDim2.fromOffset(8 + i * 20, y), Size = UDim2.fromOffset(80, 1), BackgroundColor3 = Color3.fromRGB(60, 36, 28), BackgroundTransparency = 0.6, ZIndex = 12, Parent = deskFront })
-			frame({ Position = UDim2.fromOffset(236 + i * 14, y + 4), Size = UDim2.fromOffset(90, 1), BackgroundColor3 = Color3.fromRGB(60, 36, 28), BackgroundTransparency = 0.6, ZIndex = 12, Parent = deskFront })
+		gradient(deskFront, Color3.fromRGB(120, 78, 58), Color3.fromRGB(64, 40, 34))
+		-- Deux tiroirs + poignées
+		for _, dx in ipairs({ 40, 200 }) do
+			local drawer = frame({ Name = "Drawer", Position = UDim2.fromOffset(dx, SCENE_RADIUS + 9), Size = UDim2.fromOffset(128, 24), BackgroundColor3 = Color3.fromRGB(138, 92, 66), ZIndex = 12, Parent = deskFront })
+			UI.Corner(drawer, 4)
+			outline(drawer, Color3.fromRGB(60, 36, 30), 1.2, 0.35)
+			local handle = frame(at({ BackgroundColor3 = Color3.fromRGB(240, 208, 150), ZIndex = 12, Parent = drawer }, 64, 12, 26, 5))
+			UI.Corner(handle, 2)
 		end
-		-- Autocollants sur la face avant : cœur, lune, smiley
-		local heart = frame({ Name = "StickerHeart", Size = UDim2.fromOffset(12, 11), Position = UDim2.fromOffset(62, SCENE_RADIUS + 13), Rotation = -12, BackgroundTransparency = 1, ZIndex = 12, Parent = deskFront })
-		for side = -1, 1, 2 do
-			circle(at({ BackgroundColor3 = Color3.fromRGB(255, 150, 190), ZIndex = 12, Parent = heart }, 6 + side * 2.6, 4, 6.5, 6.5))
-		end
-		local tip = frame(at({ BackgroundColor3 = Color3.fromRGB(255, 150, 190), Rotation = 45, ZIndex = 12, Parent = heart }, 6, 6.2, 6.4, 6.4))
-		UI.Corner(tip, 1)
-		local smiley = circle(at({ Name = "StickerSmile", BackgroundColor3 = Color3.fromRGB(255, 220, 90), Rotation = 10, ZIndex = 12, Parent = deskFront }, 262, SCENE_RADIUS + 22, 13, 13))
-		UI.Stroke(smiley, WHITE, 1.5, 0.1)
-		for side = -1, 1, 2 do
-			circle(at({ BackgroundColor3 = Color3.fromRGB(80, 50, 40), ZIndex = 12, Parent = smiley }, 6.5 + side * 2.5, 5, 1.8, 2.2))
-		end
-		arc(at({ ZIndex = 12, Parent = smiley }, 6.5, 7, 6, 5), Color3.fromRGB(80, 50, 40), 1.1, LOWER_ARC)
-		local moonSticker = circle(at({ Name = "StickerMoon", BackgroundColor3 = Color3.fromRGB(190, 170, 255), ZIndex = 12, Parent = deskFront }, 282, SCENE_RADIUS + 12, 9, 9))
-		circle(at({ BackgroundColor3 = Color3.fromRGB(104, 68, 52), ZIndex = 12, Parent = moonSticker }, 6.5, 3, 7, 7))
 		local deskTop = frame({ Name = "DeskTop", Position = UDim2.fromOffset(0, DESK_Y), Size = UDim2.new(1, 0, 0, DESK_FRONT - DESK_Y), BackgroundColor3 = WHITE, ZIndex = 13, Parent = scene })
 		UI.Gradient(deskTop, ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Color3.fromRGB(142, 98, 72)),
-			ColorSequenceKeypoint.new(0.85, Color3.fromRGB(186, 134, 96)),
-			ColorSequenceKeypoint.new(0.9, Color3.fromRGB(218, 168, 122)),
-			ColorSequenceKeypoint.new(1, Color3.fromRGB(218, 168, 122)),
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(150, 104, 76)),
+			ColorSequenceKeypoint.new(0.82, Color3.fromRGB(192, 140, 100)),
+			ColorSequenceKeypoint.new(0.86, Color3.fromRGB(226, 176, 128)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(226, 176, 128)),
 		}), 90)
 		-- La lumière de la lampe déborde sur la face avant du bureau
-		D.Spill = frame({ Name = "LightSpill", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(318, DESK_FRONT), Size = UDim2.fromOffset(130, 30), BackgroundColor3 = WARM_LIGHT, BackgroundTransparency = 0.8, ZIndex = 13, Parent = scene })
-		UI.Corner(D.Spill, 14)
+		D.Spill = frame({ Name = "LightSpill", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(316, DESK_FRONT), Size = UDim2.fromOffset(150, 40), BackgroundColor3 = WARM_LIGHT, BackgroundTransparency = 0.78, ZIndex = 13, Parent = scene })
+		UI.Corner(D.Spill, 20)
 		fade(D.Spill, NumberSequence.new(0, 1))
 		-- Ombre portée du plateau sur la face avant
-		local lip = frame({ Name = "DeskLip", Position = UDim2.fromOffset(0, DESK_FRONT), Size = UDim2.new(1, 0, 0, 6), BackgroundColor3 = BLACK, BackgroundTransparency = 0.6, ZIndex = 13, Parent = scene })
+		local lip = frame({ Name = "DeskLip", Position = UDim2.fromOffset(0, DESK_FRONT), Size = UDim2.new(1, 0, 0, 6), BackgroundColor3 = BLACK, BackgroundTransparency = 0.55, ZIndex = 13, Parent = scene })
 		fade(lip, NumberSequence.new(0, 1))
+		-- Néon sous le plateau (Vinyl niveau 7) : bande qui change de couleur
+		D.Neon = frame({ Name = "DeskNeon", Position = UDim2.fromOffset(4, DESK_FRONT - 1), Size = UDim2.new(1, -8, 0, 3), BackgroundColor3 = Color3.fromRGB(255, 120, 220), Visible = false, ZIndex = 14, Parent = scene })
+		UI.Corner(D.Neon, UDim.new(1, 0))
+		D.NeonGlow = UI.Stroke(D.Neon, Color3.fromRGB(255, 120, 220), 3, 0.5)
+		D.NeonWash = frame({ Name = "NeonWash", Position = UDim2.fromOffset(0, DESK_FRONT + 1), Size = UDim2.new(1, 0, 0, 22), BackgroundColor3 = Color3.fromRGB(255, 120, 220), BackgroundTransparency = 0.6, Visible = false, ZIndex = 13, Parent = scene })
+		fade(D.NeonWash, NumberSequence.new(0, 1))
 
 		-- Flaque de lumière chaude sous la lampe
-		D.Pool = halo({ Name = "LightPool", BackgroundColor3 = WARM_LIGHT, BackgroundTransparency = 0.72, ZIndex = 14, Parent = scene }, 318, 156, 150, 18, 3)
+		D.Pool = halo({ Name = "LightPool", BackgroundColor3 = WARM_LIGHT, BackgroundTransparency = 0.7, ZIndex = 14, Parent = scene }, 314, 153, 160, 18, 2)
 		-- Ombres douces sous les objets
-		for _, spec in ipairs({ { TURNTABLE_X, 80 }, { CRATE_X, 42 }, { 158, 44 }, { 352, 34 }, { 318, 16 } }) do
-			circle(at({ Name = "ItemShadow", BackgroundColor3 = Color3.fromRGB(40, 20, 16), BackgroundTransparency = 0.72, ZIndex = 14, Parent = scene }, spec[1], ITEM_BASE + 2, spec[2], 5))
+		for _, spec in ipairs({ { TURNTABLE_X, 92 }, { 350, 34 } }) do
+			circle(at({ Name = "ItemShadow", BackgroundColor3 = Color3.fromRGB(40, 20, 16), BackgroundTransparency = 0.7, ZIndex = 14, Parent = scene }, spec[1], ITEM_BASE + 3, spec[2], 6))
 		end
-		D.MugShadow = circle(at({ Name = "MugShadow", BackgroundColor3 = Color3.fromRGB(40, 20, 16), BackgroundTransparency = 0.7, ZIndex = 14, Parent = scene }, MUG_X + 1, ITEM_BASE + 1, 22, 5))
-		-- Néon sous la platine (Vinyl niveau 7)
-		D.Led = halo({ Name = "TurntableLed", BackgroundColor3 = Color3.fromRGB(255, 120, 220), BackgroundTransparency = 0.7, Visible = false, ZIndex = 14, Parent = scene }, TURNTABLE_X, ITEM_BASE + 2, 104, 14, 2)
-
-		-- Pile de livres + pot à crayons + succulente
-		for i, spec in ipairs({
-			{ 158, 40, 7, rgb(96, 150, 230) },
-			{ 160, 34, 6, rgb(240, 110, 120) },
-			{ 157, 38, 7, rgb(250, 200, 90) },
-		}) do
-			local book = frame(at({ Name = "DeskBook" .. i, BackgroundColor3 = WHITE, ZIndex = 16, Parent = scene }, spec[1], ITEM_BASE - 3 - (i - 1) * 6.5, spec[2], spec[3]))
-			UI.Corner(book, 2)
-			gradient(book, spec[4]:Lerp(WHITE, 0.2), spec[4]:Lerp(BLACK, 0.2))
-			UI.Stroke(book, Color3.fromRGB(40, 24, 30), 1, 0.5)
-			frame(at({ BackgroundColor3 = Color3.fromRGB(255, 250, 235), ZIndex = 16, Parent = book }, spec[2] - 3, spec[3] / 2, 3, spec[3] - 2))
-		end
-		local pens = frame({ Name = "PenCup", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(318, ITEM_BASE + 1), Size = UDim2.fromOffset(12, 15), BackgroundColor3 = WHITE, ZIndex = 16, Parent = scene })
-		UI.Corner(pens, 3)
-		gradient(pens, Color3.fromRGB(190, 170, 255), Color3.fromRGB(120, 100, 200))
-		for i, spec in ipairs({ { -3, -10, rgb(255, 200, 60) }, { 1, 6, rgb(255, 120, 150) }, { 3, 14, rgb(100, 200, 255) } }) do
-			frame({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(318 + spec[1], ITEM_BASE - 12), Size = UDim2.fromOffset(2.5, 12 + i), Rotation = spec[2], BackgroundColor3 = spec[3], ZIndex = 15, Parent = scene })
-		end
-		-- Succulente posée sur la pile de livres
-		local plantY = ITEM_BASE - 19
-		local succulentPot = frame({ Name = "Succulent", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(162, plantY), Size = UDim2.fromOffset(12, 9), BackgroundColor3 = WHITE, ZIndex = 16, Parent = scene })
-		UI.Corner(succulentPot, 3)
-		gradient(succulentPot, Color3.fromRGB(255, 240, 220), Color3.fromRGB(220, 200, 180))
-		for _, r in ipairs({ -50, -18, 18, 50 }) do
-			local leaf = frame({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(162, plantY - 7), Size = UDim2.fromOffset(5, 9), Rotation = r, BackgroundColor3 = WHITE, ZIndex = 16, Parent = scene })
-			UI.Corner(leaf, UDim.new(1, 0))
-			gradient(leaf, Color3.fromRGB(170, 230, 190), Color3.fromRGB(90, 170, 130))
-		end
+		D.MugShadow = circle(at({ Name = "MugShadow", BackgroundColor3 = Color3.fromRGB(40, 20, 16), BackgroundTransparency = 0.7, ZIndex = 14, Parent = scene }, MUG_X + 1, ITEM_BASE + 2, 26, 6))
 	end
 
 	------------------------------------------------------------------
-	-- Platine vinyle + collection (amélioration "Vinyl")
+	-- Platine vinyle (disque vu de 3/4 qui tourne) + paliers "Vinyl"
 	------------------------------------------------------------------
 	local TT = {} -- platine
 	do
 		-- Pochette posée contre le mur derrière la platine (niveau 1)
-		TT.Sleeve = frame({ Name = "NowPlaying", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(TURNTABLE_X + 28, DESK_Y + 3), Size = UDim2.fromOffset(24, 24), Rotation = 7, BackgroundColor3 = WHITE, Visible = false, ZIndex = 15, Parent = scene })
-		UI.Corner(TT.Sleeve, 2)
+		TT.Sleeve = frame({ Name = "NowPlaying", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(TURNTABLE_X + 34, DESK_Y + 2), Size = UDim2.fromOffset(30, 30), Rotation = 8, BackgroundColor3 = WHITE, Visible = false, ZIndex = 15, Parent = scene })
+		UI.Corner(TT.Sleeve, 3)
 		gradient(TT.Sleeve, Color3.fromRGB(255, 150, 190), Color3.fromRGB(110, 90, 220), 45)
-		circle(at({ BackgroundColor3 = Color3.fromRGB(255, 240, 180), ZIndex = 15, Parent = TT.Sleeve }, 15, 8, 7, 7))
-		frame({ Position = UDim2.fromOffset(0, 16), Size = UDim2.fromOffset(24, 8), BackgroundColor3 = Color3.fromRGB(40, 30, 70), BackgroundTransparency = 0.25, ZIndex = 15, Parent = TT.Sleeve })
+		circle(at({ BackgroundColor3 = Color3.fromRGB(255, 240, 180), ZIndex = 15, Parent = TT.Sleeve }, 20, 10, 9, 9))
 
 		-- Enceinte (niveau 5) : la membrane pulse sur le temps
-		TT.Speaker = frame({ Name = "Speaker", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(11, ITEM_BASE + 2), Size = UDim2.fromOffset(16, 27), BackgroundColor3 = WHITE, Visible = false, ZIndex = 15, Parent = scene })
-		UI.Corner(TT.Speaker, 3)
-		gradient(TT.Speaker, Color3.fromRGB(150, 104, 76), Color3.fromRGB(96, 62, 46))
-		UI.Stroke(TT.Speaker, Color3.fromRGB(50, 30, 24), 1, 0.4)
-		circle(at({ BackgroundColor3 = Color3.fromRGB(40, 34, 44), ZIndex = 15, Parent = TT.Speaker }, 8, 6.5, 6, 6))
-		TT.Woofer = circle(at({ Name = "Woofer", BackgroundColor3 = Color3.fromRGB(40, 34, 44), ZIndex = 15, Parent = TT.Speaker }, 8, 18, 11, 11))
-		UI.Stroke(TT.Woofer, Color3.fromRGB(120, 110, 130), 1, 0.3)
-		circle(at({ BackgroundColor3 = Color3.fromRGB(110, 100, 120), ZIndex = 15, Parent = TT.Woofer }, 5.5, 5.5, 4, 4))
+		TT.Speaker = frame({ Name = "Speaker", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(TURNTABLE_X + 60, ITEM_BASE + 3), Size = UDim2.fromOffset(20, 32), BackgroundColor3 = WHITE, Visible = false, ZIndex = 16, Parent = scene })
+		UI.Corner(TT.Speaker, 4)
+		gradient(TT.Speaker, Color3.fromRGB(156, 108, 78), Color3.fromRGB(96, 62, 46))
+		outline(TT.Speaker, OUTLINE, 1.2, 0.3)
+		TT.Woofer = circle(at({ Name = "Woofer", BackgroundColor3 = Color3.fromRGB(40, 34, 44), ZIndex = 16, Parent = TT.Speaker }, 10, 18, 14, 14))
+		UI.Stroke(TT.Woofer, Color3.fromRGB(150, 140, 160), 1.2, 0.2)
 
 		-- Corps de la platine (bois clair) : boutons + voyant
 		local body = frame({ Name = "Turntable", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(TURNTABLE_X, ITEM_BASE + 3), Size = UDim2.fromOffset(TT_W, 13), BackgroundColor3 = WHITE, ZIndex = 16, Parent = scene })
 		UI.Corner(body, 3)
-		gradient(body, Color3.fromRGB(250, 236, 214), Color3.fromRGB(206, 178, 146))
-		UI.Stroke(body, Color3.fromRGB(110, 80, 60), 1, 0.4)
-		for i = 0, 1 do
-			circle(at({ BackgroundColor3 = Color3.fromRGB(90, 80, 90), ZIndex = 16, Parent = body }, 8 + i * 8, 7, 5, 5))
-		end
-		TT.LedLight = circle(at({ BackgroundColor3 = Color3.fromRGB(90, 255, 150), ZIndex = 16, Parent = body }, TT_W - 8, 7, 4, 4))
-		-- Plateau vu du dessus + vinyle (dégradé qui tourne), sillons, étiquette
-		local top = frame({ Name = "Deck", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(TURNTABLE_X, ITEM_BASE - 9), Size = UDim2.fromOffset(TT_W, 12), BackgroundColor3 = WHITE, ZIndex = 16, Parent = scene })
-		UI.Corner(top, 4)
-		gradient(top, Color3.fromRGB(236, 218, 196), Color3.fromRGB(222, 200, 172))
-		local platter = circle(at({ Name = "Vinyl", BackgroundColor3 = WHITE, ZIndex = 16, Parent = top }, 30, 5.5, 52, 12))
+		gradient(body, Color3.fromRGB(250, 236, 214), Color3.fromRGB(200, 170, 138))
+		outline(body, OUTLINE, 1.2, 0.3)
+		circle(at({ BackgroundColor3 = Color3.fromRGB(90, 80, 90), ZIndex = 16, Parent = body }, 10, 6.5, 7, 7))
+		TT.LedLight = circle(at({ BackgroundColor3 = Color3.fromRGB(90, 255, 150), ZIndex = 16, Parent = body }, TT_W - 9, 6.5, 5, 5))
+		-- Plateau vu de 3/4 + vinyle (dégradé qui tourne), étiquette, reflet
+		-- qui tourne autour du disque (la rotation se voit bien)
+		local top = frame({ Name = "Deck", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(TURNTABLE_X, ITEM_BASE - 9), Size = UDim2.fromOffset(TT_W, 22), BackgroundColor3 = WHITE, ZIndex = 16, Parent = scene })
+		UI.Corner(top, 6)
+		gradient(top, Color3.fromRGB(240, 222, 200), Color3.fromRGB(222, 198, 170))
+		outline(top, OUTLINE, 1.2, 0.3)
+		local platter = circle(at({ Name = "Vinyl", BackgroundColor3 = WHITE, ZIndex = 16, Parent = top }, 36, 11, 64, 18))
 		TT.Spin = UI.Gradient(platter, vinylLook(0), 0)
-		local groove = circle(at({ BackgroundTransparency = 1, ZIndex = 16, Parent = platter }, 26, 6, 36, 8))
-		UI.Stroke(groove, Color3.fromRGB(70, 66, 90), 1, 0.45)
-		TT.Label = circle(at({ Name = "Label", BackgroundColor3 = WHITE, ZIndex = 16, Parent = platter }, 26, 6, 11, 4))
+		TT.Label = circle(at({ Name = "Label", BackgroundColor3 = WHITE, ZIndex = 16, Parent = platter }, 32, 9, 18, 6))
 		UI.Gradient(TT.Label, ColorSequence.new(EQ_LOW, EQ_HIGH), 0)
+		TT.Glint = circle(at({ Name = "Glint", BackgroundColor3 = WHITE, BackgroundTransparency = 0.25, ZIndex = 16, Parent = platter }, 32, 3, 8, 3))
 		-- Bras de lecture (pivot à droite, pointe sur le disque)
-		TT.Pivot = circle(at({ Name = "Pivot", BackgroundColor3 = Color3.fromRGB(180, 180, 196), ZIndex = 16, Parent = top }, TT_W - 10, 4, 7, 7))
-		TT.Arm = limb({ Name = "Tonearm", BackgroundColor3 = Color3.fromRGB(200, 200, 214), ZIndex = 16, Parent = scene }, TURNTABLE_X + TT_W / 2 - 10, ITEM_BASE - 17, TURNTABLE_X + 14, ITEM_BASE - 13, 2)
+		TT.Pivot = circle(at({ Name = "Pivot", BackgroundColor3 = Color3.fromRGB(180, 180, 196), ZIndex = 16, Parent = top }, TT_W - 9, 7, 9, 9))
+		outline(TT.Pivot, OUTLINE, 1, 0.4)
+		TT.Arm = limb({ Name = "Tonearm", BackgroundColor3 = Color3.fromRGB(210, 210, 224), ZIndex = 16, Parent = scene }, TURNTABLE_X + TT_W / 2 - 9, ITEM_BASE - 24, TURNTABLE_X + 16, ITEM_BASE - 17, 3)
 		TT.ArmRest = TT.Arm.Rotation
-
-		-- Caisse de disques : un disque de plus par niveau
-		TT.Records = {}
-		for i = 1, MAX_RECORDS do
-			local color = RECORD_COLORS[i]
-			local record = frame({
-				Name = "Record" .. i,
-				AnchorPoint = Vector2.new(0.5, 1),
-				Position = UDim2.fromOffset(CRATE_X - 14.5 + (i - 1) * 3.2, ITEM_BASE),
-				Size = UDim2.fromOffset(3.2, 19 + (i * 7) % 4),
-				Rotation = ((i * 5) % 7 - 3) * 1.3,
-				BackgroundColor3 = WHITE,
-				Visible = false,
-				ZIndex = 15,
-				Parent = scene,
-			})
-			gradient(record, color:Lerp(WHITE, 0.35), color:Lerp(BLACK, 0.15), 0)
-			TT.Records[i] = record
-		end
-		local crate = frame({ Name = "RecordCrate", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(CRATE_X, ITEM_BASE + 2), Size = UDim2.fromOffset(38, 13), BackgroundColor3 = WHITE, ZIndex = 16, Parent = scene })
-		UI.Corner(crate, 2)
-		gradient(crate, Color3.fromRGB(214, 164, 112), Color3.fromRGB(160, 110, 74))
-		UI.Stroke(crate, Color3.fromRGB(90, 56, 40), 1, 0.35)
-		frame({ Position = UDim2.fromOffset(2, 6), Size = UDim2.fromOffset(34, 1), BackgroundColor3 = Color3.fromRGB(110, 70, 50), BackgroundTransparency = 0.3, ZIndex = 16, Parent = crate })
-		local tag = frame(at({ BackgroundColor3 = Color3.fromRGB(255, 244, 220), ZIndex = 16, Parent = crate }, 19, 9.5, 12, 4))
-		UI.Corner(tag, 1)
-		frame(at({ BackgroundColor3 = Color3.fromRGB(236, 120, 150), ZIndex = 16, Parent = tag }, 6, 2, 8, 1))
 	end
 
 	------------------------------------------------------------------
@@ -1286,35 +1028,31 @@ function Lofi.Start(ctx)
 	------------------------------------------------------------------
 	local LAMP = {}
 	do
-		local ARM_GRAD = ColorSequence.new(Color3.fromRGB(120, 120, 140), Color3.fromRGB(60, 60, 74))
-		local lower = limb({ Name = "LampArm", BackgroundColor3 = WHITE, ZIndex = 16, Parent = scene }, LAMP_X + 16, ITEM_BASE - 2, LAMP_X + 22, 120, 4)
-		UI.Gradient(lower, ARM_GRAD, 0)
-		local upper = limb({ Name = "LampArm2", BackgroundColor3 = WHITE, ZIndex = 16, Parent = scene }, LAMP_X + 22, 120, LAMP_X + 4, 100, 4)
-		UI.Gradient(upper, ARM_GRAD, 0)
-		limb({ BackgroundColor3 = Color3.fromRGB(200, 200, 214), BackgroundTransparency = 0.3, ZIndex = 16, Parent = scene }, LAMP_X + 20, 148, LAMP_X + 24, 126, 1.5)
-		circle(at({ BackgroundColor3 = Color3.fromRGB(150, 150, 170), ZIndex = 16, Parent = scene }, LAMP_X + 22, 120, 7, 7))
-		local base = frame(at({ Name = "LampBase", BackgroundColor3 = WHITE, ZIndex = 16, Parent = scene }, LAMP_X + 16, ITEM_BASE, 28, 7))
+		local ARM = Color3.fromRGB(96, 96, 116)
+		limb({ Name = "LampArm", BackgroundColor3 = ARM, ZIndex = 16, Parent = scene }, LAMP_X + 16, ITEM_BASE - 2, LAMP_X + 24, 122, 5)
+		limb({ Name = "LampArm2", BackgroundColor3 = ARM, ZIndex = 16, Parent = scene }, LAMP_X + 24, 122, LAMP_X + 4, 102, 5)
+		local base = frame(at({ Name = "LampBase", BackgroundColor3 = WHITE, ZIndex = 16, Parent = scene }, LAMP_X + 16, ITEM_BASE, 32, 8))
 		UI.Corner(base, 3)
-		gradient(base, Color3.fromRGB(120, 120, 140), Color3.fromRGB(52, 52, 64))
-		-- Cône de lumière : 3 rayons qui s'ouvrent (plus lumineux au centre)
+		gradient(base, Color3.fromRGB(124, 124, 146), Color3.fromRGB(52, 52, 64))
+		-- Cône de lumière (plus lumineux près de l'ampoule)
 		LAMP.Rays = {}
-		for i, spec in ipairs({ { -24, 0.8 }, { 0, 0.72 }, { 20, 0.82 } }) do
-			local ray = limb({ Name = "LightRay" .. i, BackgroundColor3 = WARM_LIGHT, BackgroundTransparency = spec[2], ZIndex = 15, Parent = scene }, LAMP_X - 6, 109, LAMP_X - 6 + spec[1], DESK_FRONT + 2, 44)
+		for i, spec in ipairs({ { -8, 0.7 } }) do
+			local ray = limb({ Name = "LightRay" .. i, BackgroundColor3 = WARM_LIGHT, BackgroundTransparency = spec[2], ZIndex = 15, Parent = scene }, LAMP_X - 8, 110, LAMP_X - 8 + spec[1], DESK_FRONT + 2, 64)
 			fade(ray, NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(0.7, 0.75), NumberSequenceKeypoint.new(1, 1) }))
 			table.insert(LAMP.Rays, { Frame = ray, Alpha = spec[2] })
 		end
-		local shade = frame(at({ Name = "LampShade", BackgroundColor3 = WHITE, Rotation = -18, ZIndex = 16, Parent = scene }, LAMP_X - 2, 100, 40, 18))
+		local shade = frame(at({ Name = "LampShade", BackgroundColor3 = WHITE, Rotation = -20, ZIndex = 16, Parent = scene }, LAMP_X - 2, 101, 46, 20))
 		UI.Corner(shade, UDim.new(0.5, 0))
-		gradient(shade, Color3.fromRGB(255, 206, 100), Color3.fromRGB(228, 116, 60))
-		frame(at({ BackgroundColor3 = WHITE, BackgroundTransparency = 0.5, ZIndex = 16, Parent = shade }, 14, 5, 12, 2))
-		LAMP.Bulb = circle({ Name = "Bulb", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 1, 0), Size = UDim2.fromOffset(13, 8), BackgroundColor3 = Color3.fromRGB(255, 250, 210), ZIndex = 16, Parent = shade })
-		LAMP.BulbGlow = circle(at({ Name = "BulbGlow", BackgroundColor3 = Color3.fromRGB(255, 240, 190), BackgroundTransparency = 0.6, ZIndex = 16, Parent = scene }, LAMP_X - 5, 108, 26, 16))
+		gradient(shade, Color3.fromRGB(255, 210, 100), Color3.fromRGB(232, 112, 60))
+		outline(shade, Color3.fromRGB(120, 50, 30), 1.5, 0.25)
+		LAMP.Bulb = circle({ Name = "Bulb", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 1, 0), Size = UDim2.fromOffset(15, 9), BackgroundColor3 = Color3.fromRGB(255, 250, 210), ZIndex = 16, Parent = shade })
+		LAMP.BulbGlow = circle(at({ Name = "BulbGlow", BackgroundColor3 = Color3.fromRGB(255, 240, 190), BackgroundTransparency = 0.55, ZIndex = 16, Parent = scene }, LAMP_X - 6, 110, 30, 18))
 	end
 
 	------------------------------------------------------------------
 	-- Rayon de lumière de la fenêtre (lune la nuit, soleil le jour)
 	------------------------------------------------------------------
-	local shaft = limb({ Name = "WindowLight", BackgroundColor3 = PALETTES.Night.Shaft, BackgroundTransparency = 0.8, ZIndex = 14, Parent = scene }, SHAFT_X1, SHAFT_Y1, SHAFT_X2, SHAFT_Y2, 64)
+	local shaft = limb({ Name = "WindowLight", BackgroundColor3 = PALETTES.Night.Shaft, BackgroundTransparency = 0.8, ZIndex = 14, Parent = scene }, SHAFT_X1, SHAFT_Y1, SHAFT_X2, SHAFT_Y2, 70)
 	fade(shaft, NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(0.55, 0.65), NumberSequenceKeypoint.new(1, 1) }))
 
 	------------------------------------------------------------------
@@ -1324,12 +1062,13 @@ function Lofi.Start(ctx)
 	local H = {} -- parties animées des mains
 
 	-- Cahier ouvert (page de gauche déjà écrite, page de droite en cours)
-	local NOTE_W, NOTE_H = 66, 13
-	local noteLeft, noteTop = PX - NOTE_W / 2, 157 - NOTE_H / 2
-	local WRITE_X, WRITE_W = 37, 24 -- zone d'écriture (page de droite)
+	local NOTE_W, NOTE_H = 80, 17
+	local NOTE_Y = 155
+	local noteLeft, noteTop = PX - NOTE_W / 2, NOTE_Y - NOTE_H / 2
+	local WRITE_X, WRITE_W = 45, 30 -- zone d'écriture (page de droite)
 	do
-		local notebook = frame(at({ Name = "Notebook", BackgroundColor3 = WHITE, ZIndex = 1, Parent = hands }, PX, 157, NOTE_W, NOTE_H))
-		UI.Corner(notebook, 2)
+		local notebook = frame(at({ Name = "Notebook", BackgroundColor3 = WHITE, ZIndex = 1, Parent = hands }, PX, NOTE_Y, NOTE_W, NOTE_H))
+		UI.Corner(notebook, 3)
 		UI.Gradient(notebook, ColorSequence.new({
 			ColorSequenceKeypoint.new(0, Color3.fromRGB(236, 228, 212)),
 			ColorSequenceKeypoint.new(0.46, WHITE),
@@ -1337,43 +1076,42 @@ function Lofi.Start(ctx)
 			ColorSequenceKeypoint.new(0.54, WHITE),
 			ColorSequenceKeypoint.new(1, Color3.fromRGB(236, 228, 212)),
 		}), 0)
-		UI.Stroke(notebook, Color3.fromRGB(120, 100, 90), 1, 0.4)
+		outline(notebook, OUTLINE, 1.2, 0.35)
 		-- Page de gauche : déjà écrite (mots)
 		for i = 1, 2 do
-			local written = frame({ Name = "Written" .. i, Position = UDim2.fromOffset(5, 3 + (i - 1) * 4.5), Size = UDim2.fromOffset(i == 1 and 25 or 18, 1.5), BackgroundColor3 = LINE_INK, BackgroundTransparency = 0.35, ZIndex = 2, Parent = notebook })
+			local written = frame({ Name = "Written" .. i, Position = UDim2.fromOffset(6, 4 + (i - 1) * 6), Size = UDim2.fromOffset(i == 1 and 30 or 22, 2), BackgroundColor3 = LINE_INK, BackgroundTransparency = 0.3, ZIndex = 2, Parent = notebook })
 			fade(written, WORDS, 0)
 		end
 		-- Page de droite : les mots apparaissent au passage du crayon
 		-- (fenêtre qui s'élargit et découpe la ligne complète)
 		H.Lines = {}
 		for i = 1, 2 do
-			local reveal = frame({ Name = "Reveal" .. i, Position = UDim2.fromOffset(WRITE_X, 2.5 + (i - 1) * 4.5), Size = UDim2.fromOffset(0, 2.5), BackgroundTransparency = 1, ClipsDescendants = true, ZIndex = 2, Parent = notebook })
-			local ink = frame({ Name = "Ink", Position = UDim2.fromOffset(0, 0.5), Size = UDim2.fromOffset(WRITE_W, 1.5), BackgroundColor3 = LINE_INK, BackgroundTransparency = 0.1, ZIndex = 2, Parent = reveal })
+			local reveal = frame({ Name = "Reveal" .. i, Position = UDim2.fromOffset(WRITE_X, 3.5 + (i - 1) * 6), Size = UDim2.fromOffset(0, 3), BackgroundTransparency = 1, ClipsDescendants = true, ZIndex = 2, Parent = notebook })
+			local ink = frame({ Name = "Ink", Position = UDim2.fromOffset(0, 0.5), Size = UDim2.fromOffset(WRITE_W, 2), BackgroundColor3 = LINE_INK, BackgroundTransparency = 0.05, ZIndex = 2, Parent = reveal })
 			fade(ink, WORDS, 0)
 			H.Lines[i] = reveal
 		end
 		-- Page qui se tourne (feuille qui passe de droite à gauche)
 		H.Page = frame({ Name = "TurningPage", AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromOffset(NOTE_W / 2, NOTE_H / 2), Size = UDim2.fromOffset(0, NOTE_H + 2), BackgroundColor3 = Color3.fromRGB(255, 252, 244), Visible = false, ZIndex = 3, Parent = notebook })
 		UI.Corner(H.Page, 2)
-		UI.Stroke(H.Page, Color3.fromRGB(150, 130, 120), 1, 0.5)
+		UI.Stroke(H.Page, Color3.fromRGB(150, 130, 120), 1, 0.4)
 	end
 
-	-- Tasse fumante (posée à gauche du cahier ; elle la boit de temps en temps)
-	H.Mug = frame(at({ Name = "Mug", BackgroundTransparency = 1, ZIndex = 2, Parent = hands }, MUG_X, MUG_Y, 30, 30))
+	-- Tasse fumante (posée à gauche ; elle la boit de temps en temps)
+	H.Mug = frame(at({ Name = "Mug", BackgroundTransparency = 1, ZIndex = 2, Parent = hands }, MUG_X, MUG_Y, 34, 34))
 	do
-		local handleRing = circle(at({ Name = "Handle", BackgroundTransparency = 1, ZIndex = 2, Parent = H.Mug }, 6, 15, 9, 9))
-		UI.Stroke(handleRing, Color3.fromRGB(226, 218, 208), 2.5, 0)
-		local cup = frame(at({ Name = "Cup", BackgroundColor3 = WHITE, ZIndex = 2, Parent = H.Mug }, 15, 15, 16, 18))
-		UI.Corner(cup, 4)
+		local handleRing = circle(at({ Name = "Handle", BackgroundTransparency = 1, ZIndex = 2, Parent = H.Mug }, 6, 17, 11, 11))
+		UI.Stroke(handleRing, Color3.fromRGB(236, 228, 218), 3, 0)
+		local cup = frame(at({ Name = "Cup", BackgroundColor3 = WHITE, ZIndex = 2, Parent = H.Mug }, 17, 17, 20, 22))
+		UI.Corner(cup, 5)
 		gradient(cup, Color3.fromRGB(255, 250, 240), Color3.fromRGB(214, 206, 196), 0)
-		frame(at({ Name = "Stripe", BackgroundColor3 = PHONES, ZIndex = 2, Parent = cup }, 8, 10, 16, 3))
-		local heart = frame(at({ BackgroundColor3 = PHONES, Rotation = 45, ZIndex = 2, Parent = cup }, 8, 4.5, 3, 3))
-		UI.Corner(heart, 1)
-		circle(at({ Name = "Coffee", BackgroundColor3 = Color3.fromRGB(110, 66, 44), ZIndex = 2, Parent = H.Mug }, 15, 7, 13, 4))
+		outline(cup, OUTLINE, 1.2, 0.3)
+		frame(at({ Name = "Stripe", BackgroundColor3 = PHONES, ZIndex = 2, Parent = cup }, 10, 13, 20, 4))
+		circle(at({ Name = "Coffee", BackgroundColor3 = Color3.fromRGB(110, 66, 44), ZIndex = 2, Parent = H.Mug }, 17, 8, 16, 5))
 	end
 	H.Steam = {}
 	for i = 1, 3 do
-		H.Steam[i] = circle({ Name = "Steam", AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(5, 5), BackgroundColor3 = WHITE, BackgroundTransparency = 1, ZIndex = 3, Parent = hands })
+		H.Steam[i] = circle({ Name = "Steam", AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(6, 6), BackgroundColor3 = WHITE, BackgroundTransparency = 1, ZIndex = 3, Parent = hands })
 	end
 
 	-- Manches du sweat (dégradé le long du bras, poignet plus foncé)
@@ -1384,44 +1122,43 @@ function Lofi.Start(ctx)
 		ColorSequenceKeypoint.new(1, HOODIE_DARK),
 	})
 	local UPPER_SLEEVE = ColorSequence.new(HOODIE:Lerp(WHITE, 0.12), HOODIE_DARK)
-	local L_SHOULDER = Vector2.new(PX - 32, 118)
-	local L_REST_ELBOW, L_REST_HAND = Vector2.new(PX - 48, 150), Vector2.new(PX - 15, 157)
-	local R_SHOULDER = Vector2.new(PX + 32, 118)
-	local R_ELBOW = Vector2.new(PX + 50, 150)
+	local SLEEVE_LINE = Color3.fromRGB(30, 80, 86)
+	local L_SHOULDER = Vector2.new(PX - 38, 130)
+	local L_REST_ELBOW, L_REST_HAND = Vector2.new(PX - 56, 152), Vector2.new(PX - 18, 156)
+	local R_SHOULDER = Vector2.new(PX + 38, 130)
+	local R_ELBOW = Vector2.new(PX + 58, 152)
 	do
-		H.LeftUpper = limb({ Name = "LeftUpperArm", BackgroundColor3 = WHITE, ZIndex = 4, Parent = hands }, L_SHOULDER.X, L_SHOULDER.Y, L_REST_ELBOW.X, L_REST_ELBOW.Y, 17)
+		H.LeftUpper = limb({ Name = "LeftUpperArm", BackgroundColor3 = WHITE, ZIndex = 4, Parent = hands }, L_SHOULDER.X, L_SHOULDER.Y, L_REST_ELBOW.X, L_REST_ELBOW.Y, 20)
 		UI.Gradient(H.LeftUpper, UPPER_SLEEVE, 0)
-		H.LeftFore = limb({ Name = "LeftForearm", BackgroundColor3 = WHITE, ZIndex = 4, Parent = hands }, L_REST_ELBOW.X, L_REST_ELBOW.Y, L_REST_HAND.X - 5, L_REST_HAND.Y, 15)
+		outline(H.LeftUpper, SLEEVE_LINE, 1.2, 0.35)
+		H.LeftFore = limb({ Name = "LeftForearm", BackgroundColor3 = WHITE, ZIndex = 4, Parent = hands }, L_REST_ELBOW.X, L_REST_ELBOW.Y, L_REST_HAND.X - 5, L_REST_HAND.Y, 17)
 		UI.Gradient(H.LeftFore, SLEEVE, 90)
-		H.LeftHand = circle(at({ Name = "LeftHand", BackgroundColor3 = WHITE, ZIndex = 6, Parent = hands }, L_REST_HAND.X, L_REST_HAND.Y, 11, 10))
+		outline(H.LeftFore, SLEEVE_LINE, 1.2, 0.35)
+		H.LeftHand = circle(at({ Name = "LeftHand", BackgroundColor3 = WHITE, ZIndex = 6, Parent = hands }, L_REST_HAND.X, L_REST_HAND.Y, 13, 12))
 		gradient(H.LeftHand, SKIN, SKIN_SHADE)
-		local rightUpper = limb({ Name = "RightUpperArm", BackgroundColor3 = WHITE, ZIndex = 4, Parent = hands }, R_SHOULDER.X, R_SHOULDER.Y, R_ELBOW.X, R_ELBOW.Y, 17)
+		local rightUpper = limb({ Name = "RightUpperArm", BackgroundColor3 = WHITE, ZIndex = 4, Parent = hands }, R_SHOULDER.X, R_SHOULDER.Y, R_ELBOW.X, R_ELBOW.Y, 20)
 		UI.Gradient(rightUpper, UPPER_SLEEVE, 180)
-		-- Lumière de la lampe sur le bras droit
-		local warm = frame({ Size = UDim2.fromScale(1, 1), BackgroundColor3 = WARM_LIGHT, BackgroundTransparency = 0.45, ZIndex = 4, Parent = rightUpper })
-		UI.Corner(warm, UDim.new(1, 0))
-		fade(warm, NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.55, 1), NumberSequenceKeypoint.new(1, 0.4) }), 180)
-		H.RightFore = limb({ Name = "RightForearm", BackgroundColor3 = WHITE, ZIndex = 4, Parent = hands }, R_ELBOW.X, R_ELBOW.Y, PX + 20, 152, 15)
+		outline(rightUpper, SLEEVE_LINE, 1.2, 0.35)
+		H.RightFore = limb({ Name = "RightForearm", BackgroundColor3 = WHITE, ZIndex = 4, Parent = hands }, R_ELBOW.X, R_ELBOW.Y, PX + 20, 152, 17)
 		UI.Gradient(H.RightFore, SLEEVE, 90)
-		H.Pencil = limb({ Name = "Pencil", BackgroundColor3 = WHITE, ZIndex = 5, Parent = hands }, PX + 10, 155, PX + 19, 139, 3.5)
-		UI.Gradient(H.Pencil, bands({
-			{ 0, Color3.fromRGB(60, 56, 70) },
-			{ 0.1, Color3.fromRGB(60, 56, 70) },
-			{ 0.11, Color3.fromRGB(242, 206, 158) },
-			{ 0.24, Color3.fromRGB(242, 206, 158) },
-			{ 0.25, Color3.fromRGB(255, 204, 60) },
-			{ 0.83, Color3.fromRGB(255, 190, 40) },
-			{ 0.84, Color3.fromRGB(200, 200, 214) },
-			{ 0.9, Color3.fromRGB(200, 200, 214) },
-			{ 0.91, Color3.fromRGB(255, 140, 164) },
-			{ 1, Color3.fromRGB(255, 140, 164) },
+		outline(H.RightFore, SLEEVE_LINE, 1.2, 0.35)
+		H.Pencil = limb({ Name = "Pencil", BackgroundColor3 = WHITE, ZIndex = 5, Parent = hands }, PX + 10, 155, PX + 20, 136, 4)
+		UI.Gradient(H.Pencil, ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(60, 56, 70)),
+			ColorSequenceKeypoint.new(0.12, Color3.fromRGB(60, 56, 70)),
+			ColorSequenceKeypoint.new(0.13, Color3.fromRGB(242, 206, 158)),
+			ColorSequenceKeypoint.new(0.26, Color3.fromRGB(242, 206, 158)),
+			ColorSequenceKeypoint.new(0.27, Color3.fromRGB(255, 204, 60)),
+			ColorSequenceKeypoint.new(0.86, Color3.fromRGB(255, 190, 40)),
+			ColorSequenceKeypoint.new(0.87, Color3.fromRGB(255, 140, 164)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 140, 164)),
 		}), 90)
-		H.RightHand = circle(at({ Name = "RightHand", BackgroundColor3 = WHITE, ZIndex = 6, Parent = hands }, PX + 14, 150, 11, 10))
+		H.RightHand = circle(at({ Name = "RightHand", BackgroundColor3 = WHITE, ZIndex = 6, Parent = hands }, PX + 14, 150, 13, 12))
 		gradient(H.RightHand, SKIN, SKIN_SHADE)
 	end
 
 	------------------------------------------------------------------
-	-- Particules : notes de musique, poussières dans la lumière
+	-- Particules : notes de musique (et petits cœurs)
 	------------------------------------------------------------------
 	local notes: { { Label: TextLabel, Active: boolean, Age: number, X: number, Y: number, Dir: number, Rise: number } } = {}
 	for i = 1, NOTE_POOL do
@@ -1429,13 +1166,13 @@ function Lofi.Start(ctx)
 			Name = "Note",
 			Text = i % 2 == 1 and "♪" or "♫",
 			Font = Theme.Fonts.Title,
-			TextSize = 16,
+			TextSize = 18,
 			TextColor3 = NOTE_COLORS[(i - 1) % #NOTE_COLORS + 1],
 			TextStrokeColor3 = Color3.fromRGB(40, 20, 60),
-			TextStrokeTransparency = 0.5,
+			TextStrokeTransparency = 0.35,
 			TextTransparency = 1,
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Size = UDim2.fromOffset(20, 20),
+			Size = UDim2.fromOffset(24, 24),
 			Visible = false,
 			ZIndex = 19,
 			Parent = scene,
@@ -1443,7 +1180,7 @@ function Lofi.Start(ctx)
 		table.insert(notes, { Label = noteLabel, Active = false, Age = 0, X = 0, Y = 0, Dir = 1, Rise = 58 })
 	end
 
-	local function spawnNote(x: number, y: number, dir: number, rise: number)
+	local function spawnNote(x: number, y: number, dir: number, rise: number, heart: boolean?)
 		for _, n in ipairs(notes) do
 			if not n.Active then
 				n.Active = true
@@ -1451,51 +1188,31 @@ function Lofi.Start(ctx)
 				n.Dir = dir
 				n.X, n.Y = x, y
 				n.Rise = rise
-				S.noteColorIndex = S.noteColorIndex % #NOTE_COLORS + 1
-				n.Label.TextColor3 = NOTE_COLORS[S.noteColorIndex]
-				n.Label.Text = random:NextNumber() < 0.5 and "♪" or "♫"
+				if heart then
+					n.Label.TextColor3 = HEART_COLOR
+					n.Label.Text = "♥"
+				else
+					S.noteColorIndex = S.noteColorIndex % #NOTE_COLORS + 1
+					n.Label.TextColor3 = NOTE_COLORS[S.noteColorIndex]
+					n.Label.Text = random:NextNumber() < 0.5 and "♪" or "♫"
+				end
 				n.Label.Visible = true
 				return
 			end
 		end
 	end
 
-	-- Poussières : 5 dans le rayon de la fenêtre, 4 dans la lumière de la lampe
-	local dust: { { Frame: Frame, CX: number, CY: number, RX: number, RY: number, Speed: number, Phase: number, Lamp: boolean } } = {}
-	for i = 1, DUST_COUNT do
-		local lamp = i > 5
-		local cx, cy
-		if lamp then
-			cx, cy = LAMP_X - 8 + random:NextNumber(-18, 18), random:NextNumber(118, 150)
-		else
-			local u = random:NextNumber(0.12, 0.75)
-			cx = SHAFT_X1 + u * (SHAFT_X2 - SHAFT_X1) + random:NextNumber(-12, 12)
-			cy = SHAFT_Y1 + u * (SHAFT_Y2 - SHAFT_Y1) + random:NextNumber(-10, 10)
-		end
-		local size = random:NextNumber(1.5, 2.6)
-		local mote = circle(at({ Name = "Dust", BackgroundColor3 = lamp and WARM_LIGHT or Color3.fromRGB(235, 240, 255), BackgroundTransparency = 1, ZIndex = 19, Parent = scene }, cx, cy, size, size))
-		table.insert(dust, { Frame = mote, CX = cx, CY = cy, RX = random:NextNumber(5, 12), RY = random:NextNumber(4, 9), Speed = random:NextNumber(0.15, 0.4), Phase = random:NextNumber(0, 6.28), Lamp = lamp })
-	end
-
 	------------------------------------------------------------------
 	-- Vignettage (bords plus sombres : profondeur, regard vers le centre)
 	------------------------------------------------------------------
 	do
-		local horizontal = frame({ Name = "VignetteX", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(10, 4, 24), ZIndex = 20, Parent = scene })
-		UI.Corner(horizontal, SCENE_RADIUS)
-		fade(horizontal, NumberSequence.new({
-			NumberSequenceKeypoint.new(0, 0.55),
-			NumberSequenceKeypoint.new(0.16, 1),
-			NumberSequenceKeypoint.new(0.84, 1),
-			NumberSequenceKeypoint.new(1, 0.55),
-		}), 0)
 		local vertical = frame({ Name = "VignetteY", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(10, 4, 24), ZIndex = 20, Parent = scene })
 		UI.Corner(vertical, SCENE_RADIUS)
 		fade(vertical, NumberSequence.new({
-			NumberSequenceKeypoint.new(0, 0.6),
-			NumberSequenceKeypoint.new(0.14, 1),
-			NumberSequenceKeypoint.new(0.8, 1),
-			NumberSequenceKeypoint.new(1, 0.45),
+			NumberSequenceKeypoint.new(0, 0.75),
+			NumberSequenceKeypoint.new(0.1, 1),
+			NumberSequenceKeypoint.new(0.82, 1),
+			NumberSequenceKeypoint.new(1, 0.5),
 		}), 90)
 	end
 
@@ -1509,20 +1226,15 @@ function Lofi.Start(ctx)
 	UI.Corner(bar, 10)
 	gradient(bar, Color3.fromRGB(46, 36, 80), Color3.fromRGB(20, 16, 36))
 	UI.Stroke(bar, Color3.fromRGB(130, 104, 196), 1, 0.4)
-	-- reflet en haut de la barre (verre)
-	local barShine = frame({ Name = "Shine", Position = UDim2.fromOffset(10, 1), Size = UDim2.new(1, -20, 0, 1), BackgroundColor3 = WHITE, BackgroundTransparency = 0.8, Parent = bar })
-	fade(barShine, NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.5, 0.2), NumberSequenceKeypoint.new(1, 1) }), 0)
 
 	-- Vinyle qui sort de sa pochette (tourne pendant la musique)
 	B.Disc = circle({ Name = "Vinyl", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(35, BAR_H / 2), Size = UDim2.fromOffset(32, 32), BackgroundColor3 = Color3.fromRGB(28, 26, 34), ZIndex = 1, Parent = bar })
 	do
 		UI.Stroke(B.Disc, Color3.fromRGB(70, 64, 90), 1)
-		local groove = circle(at({ Name = "Groove", BackgroundTransparency = 1, ZIndex = 1, Parent = B.Disc }, 16, 16, 22, 22))
-		UI.Stroke(groove, Color3.fromRGB(64, 60, 82), 1)
 		local labelDisc = circle(at({ Name = "Label", BackgroundColor3 = WHITE, ZIndex = 1, Parent = B.Disc }, 16, 16, 11, 11))
 		UI.Gradient(labelDisc, ColorSequence.new(EQ_LOW, EQ_HIGH), 0)
 		frame({ Name = "Shine", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0.5, -6), Size = UDim2.fromOffset(2, 7), BackgroundColor3 = WHITE, BackgroundTransparency = 0.55, ZIndex = 1, Parent = B.Disc })
-		-- Pochette (ciel de nuit, lune, ville, chat), par-dessus le disque
+		-- Pochette (ciel de nuit, lune, ville), par-dessus le disque
 		local art = frame(at({ Name = "Cover", BackgroundColor3 = WHITE, ZIndex = 2, Parent = bar }, 22, BAR_H / 2, 32, 32))
 		UI.Corner(art, 6)
 		UI.Gradient(art, ColorSequence.new({
@@ -1532,13 +1244,8 @@ function Lofi.Start(ctx)
 		}), 90)
 		UI.Stroke(art, WHITE, 1, 0.6)
 		circle(at({ BackgroundColor3 = Color3.fromRGB(255, 244, 200), ZIndex = 2, Parent = art }, 22, 9, 8, 8))
-		for i, h in ipairs({ 8, 13, 6, 10 }) do
-			frame({ AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromOffset(2 + (i - 1) * 7, 32), Size = UDim2.fromOffset(6, h), BackgroundColor3 = Color3.fromRGB(30, 22, 60), ZIndex = 2, Parent = art })
-		end
-		-- petit chat sur le toit
-		circle(at({ BackgroundColor3 = Color3.fromRGB(30, 22, 60), ZIndex = 2, Parent = art }, 11, 17, 7, 5))
-		for side = -1, 1, 2 do
-			frame(at({ BackgroundColor3 = Color3.fromRGB(30, 22, 60), Rotation = 45, ZIndex = 2, Parent = art }, 11 + side * 2, 14.5, 2.5, 2.5))
+		for i, h in ipairs({ 9, 14, 11 }) do
+			frame({ AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromOffset(3 + (i - 1) * 9, 32), Size = UDim2.fromOffset(8, h), BackgroundColor3 = Color3.fromRGB(30, 22, 60), ZIndex = 2, Parent = art })
 		end
 	end
 
@@ -1586,7 +1293,6 @@ function Lofi.Start(ctx)
 	UI.Corner(B.Fill, UDim.new(1, 0))
 	UI.Gradient(B.Fill, ColorSequence.new(EQ_LOW, EQ_HIGH), 0)
 	B.Knob = circle({ Name = "Knob", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.3, 0.5), Size = UDim2.fromOffset(7, 7), BackgroundColor3 = WHITE, Parent = B.Progress })
-	UI.Stroke(B.Knob, EQ_LOW, 1.5, 0.45)
 
 	-- Bouton "morceau suivant"
 	B.Skip = UI.Create("TextButton", {
@@ -1607,27 +1313,20 @@ function Lofi.Start(ctx)
 	UI.Stroke(B.Skip, EQ_HIGH, 1.5, 0.4)
 	UI.AnimateButton(B.Skip, 1.1, 0.88)
 
-	-- Visualiseur audio (barres arrondies + petits "pics" qui retombent)
+	-- Visualiseur audio (barres arrondies, du rose au bleu)
 	local EQ_W, EQ_H = 74, 28
 	B.Eq = frame({ Name = "Equalizer", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(EQ_W, EQ_H), BackgroundTransparency = 1, Parent = bar })
 	local barWidth = 4
 	local barGap = (EQ_W - EQ_BARS * barWidth) / (EQ_BARS - 1)
 	local eqBars: { Frame } = {}
-	local eqPeaks: { Frame } = {}
 	local eqHeights: { number } = {}
 	local eqTargets: { number } = {}
-	local peakHeights: { number } = {}
 	for i = 1, EQ_BARS do
 		local t = (i - 1) / (EQ_BARS - 1)
-		local color = EQ_LOW:Lerp(EQ_HIGH, t)
-		local eqBar = frame({ Name = "Bar" .. i, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, (i - 1) * (barWidth + barGap), 1, 0), Size = UDim2.fromOffset(barWidth, 4), BackgroundColor3 = WHITE, Parent = B.Eq })
-		UI.Corner(eqBar, UDim.new(0, 2))
-		gradient(eqBar, color:Lerp(WHITE, 0.4), color)
-		eqPeaks[i] = frame({ Name = "Peak" .. i, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, (i - 1) * (barWidth + barGap), 1, -6), Size = UDim2.fromOffset(barWidth, 1.5), BackgroundColor3 = color:Lerp(WHITE, 0.5), Parent = B.Eq })
+		local eqBar = frame({ Name = "Bar" .. i, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, (i - 1) * (barWidth + barGap), 1, 0), Size = UDim2.fromOffset(barWidth, 4), BackgroundColor3 = EQ_LOW:Lerp(EQ_HIGH, t), Parent = B.Eq })
 		eqBars[i] = eqBar
 		eqHeights[i] = 0.2
 		eqTargets[i] = 0.2
-		peakHeights[i] = 0.2
 	end
 
 	------------------------------------------------------------------
@@ -1707,14 +1406,12 @@ function Lofi.Start(ctx)
 		local eqW = compact and 50 or EQ_W
 		B.Eq.Size = UDim2.fromOffset(eqW, EQ_H)
 		B.Eq.Position = B.Skip.Visible and UDim2.new(1, -44, 0.5, 0) or UDim2.new(1, -10, 0.5, 0)
-		local gap = (eqW - EQ_BARS * (compact and 3 or barWidth)) / (EQ_BARS - 1)
+		local w = compact and 3 or barWidth
+		local gap = (eqW - EQ_BARS * w) / (EQ_BARS - 1)
 		for i, eqBar in ipairs(eqBars) do
-			local w = compact and 3 or barWidth
 			eqBar.Size = UDim2.fromOffset(w, eqBar.Size.Y.Offset)
 			eqBar.Position = UDim2.new(0, (i - 1) * (w + gap), 1, 0)
-			eqPeaks[i].Size = UDim2.fromOffset(w, 1.5)
 		end
-		B.EqStep = (compact and 3 or barWidth) + gap
 		-- Textes : toute la place jusqu'au visualiseur
 		local textWidth = SCENE_W - TEXT_X - eqW - (B.Skip.Visible and 52 or 20)
 		if compact then
@@ -1737,7 +1434,6 @@ function Lofi.Start(ctx)
 			B.Progress.Size = UDim2.fromOffset(textWidth - 62, 3)
 		end
 	end
-	B.EqStep = barWidth + barGap
 
 	local function refreshSubtitle()
 		refreshMusic()
@@ -1811,14 +1507,12 @@ function Lofi.Start(ctx)
 	end)
 
 	------------------------------------------------------------------
-	-- Heure locale : horloge, ciel, lumières
+	-- Heure locale : ciel, lumières
 	------------------------------------------------------------------
 	local function localHour(): number
 		-- Roblox : os.date ne gère que "*t" / "!*t" (heure locale du joueur)
 		local now = os.date("*t")
 		if type(now) == "table" and now.hour and now.min then
-			minuteHand.Rotation = now.min * 6
-			hourHand.Rotation = (now.hour % 12) * 30 + now.min * 0.5
 			return (now.hour + now.min / 60) % 24
 		end
 		return 22
@@ -1828,8 +1522,8 @@ function Lofi.Start(ctx)
 	local function placeSky(hour: number)
 		local isSun = hour >= 6 and hour < 20
 		local t = isSun and (hour - 6) / 14 or ((hour - 20) % 24) / 10
-		local x = 18 + t * (GLASS_W - 36)
-		local y = 60 - math.sqrt(math.sin(t * math.pi)) * 44
+		local x = 22 + t * (GLASS_W - 44)
+		local y = 44 - math.sqrt(math.sin(t * math.pi)) * 30
 		WIN.Sun.Visible = isSun
 		WIN.Moon.Visible = not isSun
 		local body = isSun and WIN.Sun or WIN.Moon
@@ -1839,7 +1533,7 @@ function Lofi.Start(ctx)
 	-- Fenêtres allumées de la ville (la nuit seulement)
 	local function refreshCityLights()
 		for _, lit in ipairs(WIN.Lit) do
-			lit.Frame.BackgroundTransparency = lit.On and (0.1 + (1 - S.night) * 0.9) or 1
+			lit.Frame.BackgroundTransparency = lit.On and (0.05 + (1 - S.night) * 0.95) or 1
 		end
 	end
 
@@ -1882,8 +1576,8 @@ function Lofi.Start(ctx)
 		placeSky(S.hour)
 	end
 
-	-- Collection de vinyles (amélioration "Vinyl") : un disque par niveau +
-	-- paliers visibles sur la platine
+	-- Collection de vinyles (amélioration "Vinyl") : un disque par niveau
+	-- sur l'étagère + paliers visibles sur la platine
 	local function refreshVinyl()
 		local level = math.clamp(math.floor(tonumber(ctx.GetLevel("Vinyl")) or 0), 0, MAX_RECORDS)
 		if level == S.vinylLevel then
@@ -1891,23 +1585,43 @@ function Lofi.Start(ctx)
 		end
 		local grew = S.vinylLevel >= 0 and level > S.vinylLevel
 		S.vinylLevel = level
-		for i, record in ipairs(TT.Records) do
-			record.Visible = i <= level
+		for i, slot in ipairs(RACK.Discs) do
+			local owned = i <= level
+			local gold = owned and i == MAX_RECORDS
+			-- Emplacement vide : cercle en pointillé ; disque : noir (or au niveau 10)
+			slot.Disc.BackgroundTransparency = owned and 0 or 1
+			slot.Disc.BackgroundColor3 = gold and GOLD or Color3.fromRGB(28, 26, 38)
+			slot.Ring.Color = gold and Color3.fromRGB(255, 244, 190) or (owned and Color3.fromRGB(110, 100, 140) or WHITE)
+			slot.Ring.Transparency = owned and 0.1 or 0.72
+			slot.Label.Visible = owned
 		end
+		RACK.ShelfGradient.Color = level >= 10 and ColorSequence.new(Color3.fromRGB(255, 232, 140), GOLD_DARK) or ColorSequence.new(Color3.fromRGB(226, 174, 126), Color3.fromRGB(140, 94, 66))
 		TT.Sleeve.Visible = level >= 1
 		TT.Speaker.Visible = level >= 5
-		for _, glow in ipairs(D.Led) do
-			glow.Visible = level >= 7
-		end
-		goldPlaque.Visible = level >= 10
+		D.Neon.Visible = level >= 7
+		D.NeonWash.Visible = level >= 7
 		TT.Spin.Color = vinylLook(level)
-		TT.Arm.BackgroundColor3 = level >= 10 and Color3.fromRGB(255, 214, 90) or Color3.fromRGB(200, 200, 214)
+		TT.Arm.BackgroundColor3 = level >= 10 and Color3.fromRGB(255, 214, 90) or Color3.fromRGB(210, 210, 224)
 		TT.Pivot.BackgroundColor3 = level >= 10 and Color3.fromRGB(255, 200, 70) or Color3.fromRGB(180, 180, 196)
-		if grew and effectsOn() then
-			-- Nouveau disque : petite pluie de notes depuis la caisse
-			spawnNote(CRATE_X, ITEM_BASE - 20, -1, 50)
-			spawnNote(TURNTABLE_X, ITEM_BASE - 20, 1, 56)
+		-- Disque qui était en train de "sauter" : remis à sa place
+		local previous = RACK.Discs[S.popDisc]
+		if previous then
+			previous.Disc.Size = UDim2.fromOffset(15, 15)
+			previous.Disc.Position = UDim2.fromOffset(previous.X, RACK_Y)
+		end
+		S.popT = -1
+		if grew then
+			-- Nouveau disque : il "saute" sur l'étagère + petite pluie de notes
+			S.popDisc = level
+			S.popT = 0
 			S.discSpin = 12
+			if effectsOn() then
+				local slot = RACK.Discs[level]
+				if slot then
+					spawnNote(slot.X, RACK_Y + 6, -1, 40)
+				end
+				spawnNote(TURNTABLE_X, ITEM_BASE - 26, 1, 56)
+			end
 		end
 	end
 	refreshVinyl()
@@ -1939,6 +1653,7 @@ function Lofi.Start(ctx)
 	local RAIN_DX = math.tan(math.rad(12))
 	local LINE_TIME, PAUSE_TIME = 2.2, 0.9
 	local CYCLE = LINE_TIME * 2 + PAUSE_TIME
+	local HAPPY_TIME = 3.2
 
 	-- Chaque seconde : spectateurs, sous-titre, heure, fenêtres de la ville, météo
 	local function everySecond()
@@ -1961,7 +1676,7 @@ function Lofi.Start(ctx)
 		if #WIN.Lit > 0 and random:NextNumber() < 0.4 then
 			local lit = WIN.Lit[random:NextInteger(1, #WIN.Lit)]
 			lit.On = not lit.On
-			lit.Frame.BackgroundTransparency = lit.On and (0.1 + (1 - S.night) * 0.9) or 1
+			lit.Frame.BackgroundTransparency = lit.On and (0.05 + (1 - S.night) * 0.95) or 1
 		end
 		-- Météo : les averses vont et viennent
 		S.weatherTimer -= 1
@@ -1976,14 +1691,14 @@ function Lofi.Start(ctx)
 		end
 	end
 
-	-- Écriture, clignements, gorgée de café : la fille
+	-- Écriture, clignements, gorgée de café, sourire : la fille
 	local SIP_KEYS = {
 		-- { temps, main X, main Y, coude X, coude Y, tasse X, tasse Y, tasse rotation, tête }
 		{ 0, L_REST_HAND.X, L_REST_HAND.Y, L_REST_ELBOW.X, L_REST_ELBOW.Y, MUG_X, MUG_Y, 0, 0 },
-		{ 0.9, MUG_X - 9, MUG_Y + 1, PX - 58, 136, MUG_X, MUG_Y, 0, 0 },
-		{ 1.8, PX - 16, 101, PX - 40, 134, PX - 5, 100, -8, 1 },
-		{ 3.1, PX - 15, 98, PX - 39, 132, PX - 4, 97, -20, 1 },
-		{ 3.9, MUG_X - 9, MUG_Y + 1, PX - 58, 136, MUG_X, MUG_Y, 0, 0 },
+		{ 0.9, MUG_X - 12, MUG_Y + 1, PX - 70, 140, MUG_X, MUG_Y, 0, 0 },
+		{ 1.8, PX - 22, 106, PX - 52, 140, PX - 8, 104, -8, 1 },
+		{ 3.1, PX - 21, 103, PX - 51, 138, PX - 7, 101, -20, 1 },
+		{ 3.9, MUG_X - 12, MUG_Y + 1, PX - 70, 140, MUG_X, MUG_Y, 0, 0 },
 		{ 4.7, L_REST_HAND.X, L_REST_HAND.Y, L_REST_ELBOW.X, L_REST_ELBOW.Y, MUG_X, MUG_Y, 0, 0 },
 	}
 	local SIP_TIME = SIP_KEYS[#SIP_KEYS][1]
@@ -2008,7 +1723,7 @@ function Lofi.Start(ctx)
 	local function updateGirl(dt: number, clock: number, beatPhase: number, onBeat: boolean, beatNow: number, pulse: number, fx: boolean)
 		-- Gorgée de café de temps en temps
 		S.sipTimer -= dt
-		if S.sipT < 0 and S.sipTimer <= 0 and S.pageFlip < 0 then
+		if S.sipT < 0 and S.happyT < 0 and S.sipTimer <= 0 and S.pageFlip < 0 then
 			S.sipT = 0
 		end
 		local sipping = S.sipT >= 0
@@ -2017,7 +1732,7 @@ function Lofi.Start(ctx)
 			S.sipT += dt
 			if S.sipT >= SIP_TIME then
 				S.sipT = -1
-				S.sipTimer = random:NextNumber(24, 40)
+				S.sipTimer = random:NextNumber(22, 36)
 				sipping = false
 			end
 		end
@@ -2027,29 +1742,49 @@ function Lofi.Start(ctx)
 		else
 			sampleSip(0)
 		end
+		-- De temps en temps, elle lève les yeux vers la fenêtre et sourit
+		S.happyTimer -= dt
+		if S.happyT < 0 and not sipping and S.happyTimer <= 0 then
+			S.happyT = 0
+			if fx then
+				spawnNote(PX - 30, HEAD_Y - 30, -1, 40, true)
+			end
+		end
+		if S.happyT >= 0 then
+			S.happyT += dt
+			if S.happyT >= HAPPY_TIME then
+				S.happyT = -1
+				S.happyTimer = random:NextNumber(14, 22)
+			end
+		end
+		local happyTarget = S.happyT >= 0 and 1 or 0
+		S.happy += (happyTarget - S.happy) * math.min(1, dt * 6)
+		local happy = S.happy
+
 		local handX, handY, elbowX, elbowY = sipPose[2], sipPose[3], sipPose[4], sipPose[5]
 		H.Mug.Position = UDim2.fromOffset(sipPose[6], sipPose[7])
 		H.Mug.Rotation = sipPose[8]
 		local lifted = math.clamp((MUG_Y - sipPose[7]) / 40, 0, 1)
 		D.MugShadow.BackgroundTransparency = 0.7 + lifted * 0.3
-		setLimb(H.LeftUpper, L_SHOULDER.X, L_SHOULDER.Y, elbowX, elbowY, 17)
-		setLimb(H.LeftFore, elbowX, elbowY, handX - 4, handY, 15)
+		setLimb(H.LeftUpper, L_SHOULDER.X, L_SHOULDER.Y, elbowX, elbowY, 20)
+		setLimb(H.LeftFore, elbowX, elbowY, handX - 4, handY, 17)
 		H.LeftHand.Position = UDim2.fromOffset(handX, handY)
 
-		-- Tête : hoche en rythme, se balance, suit un peu le crayon ; penchée
-		-- en arrière pendant la gorgée
+		-- Tête : hoche franchement en rythme, se balance ; penchée en arrière
+		-- pendant la gorgée, relevée (vers la fenêtre) quand elle sourit
+		local calm = (1 - sipHead) * (1 - happy * 0.6)
 		local nod = math.sin(beatPhase * math.pi)
-		local headOffset = nod * (1.5 + S.grooveLevel * 2.5) * (1 - sipHead)
-		local headNowY = HEAD_Y + headOffset - sipHead * 2
-		local lean = (1 - sipHead) * (math.sin(clock * math.pi / BEAT) * (2 + S.grooveLevel * 2.5))
-		headHolder.Position = UDim2.fromOffset(PX + (S.writeTime < LINE_TIME * 2 and (S.writeTime % LINE_TIME) / LINE_TIME - 0.5 or 0) * 1.2, headNowY)
-		headHolder.Rotation = lean - sipHead * 5
+		local headOffset = nod * (2.5 + S.grooveLevel * 3) * calm
+		local headNowY = HEAD_Y + headOffset - sipHead * 2 - happy * 4
+		local lean = calm * (math.sin(clock * math.pi / BEAT) * (3 + S.grooveLevel * 3)) - happy * 7
+		headHolder.Position = UDim2.fromOffset(PX + (S.writeTime < LINE_TIME * 2 and (S.writeTime % LINE_TIME) / LINE_TIME - 0.5 or 0) * 2 * calm - happy * 2, headNowY)
+		headHolder.Rotation = lean - sipHead * 6
 		local breathe = math.sin(clock * 1.4)
-		G.Torso.Position = UDim2.fromOffset(PX, 142 + nod * 0.8 + breathe * 0.5)
-		G.Collar.Position = UDim2.fromOffset(PX, 111 + headOffset * 0.5)
-		G.Neck.Position = UDim2.fromOffset(PX, 104 + headOffset * 0.5)
-		G.Hood.Position = UDim2.fromOffset(PX, 107 + headOffset * 0.4)
-		shadowHead.Position = UDim2.fromOffset(PX - 24, headNowY + 4)
+		G.Torso.Position = UDim2.fromOffset(PX, 158 + nod * 1.2 * calm + breathe * 0.6)
+		G.Collar.Position = UDim2.fromOffset(PX, 123 + headOffset * 0.5)
+		G.Neck.Position = UDim2.fromOffset(PX, 114 + headOffset * 0.5)
+		G.Hood.Position = UDim2.fromOffset(PX, 120 + headOffset * 0.4)
+		shadowHead.Position = UDim2.fromOffset(PX - 26, headNowY + 4)
 		shadowHead.Rotation = lean
 
 		-- Clignements (et yeux fermés pendant la gorgée)
@@ -2074,26 +1809,31 @@ function Lofi.Start(ctx)
 		if sipping and S.sipT > 1.5 and S.sipT < 3.3 then
 			openness = 0
 		end
-		local eyeH = 1.2 + openness * 3.8
+		-- Yeux baissés (6 px) ou grands ouverts quand elle sourit (9 px)
+		local eyeH = 1.5 + openness * (4.5 + happy * 4)
 		for _, e in ipairs(G.Eyes) do
-			e.Eye.Size = UDim2.fromOffset(7.5, eyeH)
+			e.Eye.Size = UDim2.fromOffset(10 - happy, eyeH)
 			e.Shine.Visible = openness > 0.6
-			e.Lash.Position = UDim2.new(0.5, e.Side * 10, 0.5, 9 - eyeH - 0.4)
-			e.Flick.Position = UDim2.new(0.5, e.Side * 15.2, 0.5, 9.6 - eyeH)
+			e.Lash.Position = UDim2.new(0.5, e.Side * 12, 0.5, 13 - eyeH - 1)
 		end
+		local mouthW = 8 + happy * 5
+		G.Mouth.Size = UDim2.fromOffset(mouthW, mouthW)
+		G.Mouth.Position = UDim2.new(0.5, 0, 0.5, 19 - happy * 1.5)
+		G.MouthStroke.Thickness = 1.8 + happy * 0.6
 
-		-- Casque lumineux : halo + anneaux qui pulsent sur la musique
-		for _, glow in ipairs(G.PhoneGlows) do
-			glow.BackgroundTransparency = 0.82 - pulse * 0.3
-			glow.Size = UDim2.fromOffset(38 + pulse * 8, 38 + pulse * 8)
+		-- Casque lumineux : halo + écouteurs qui pulsent sur la musique
+		for _, cup in ipairs(G.Cups) do
+			cup.Size = UDim2.fromOffset(20 + pulse * 2, 32 + pulse * 2)
 		end
 		for _, led in ipairs(G.Leds) do
-			led.Transparency = 0.55 - pulse * 0.5
+			led.Transparency = 0.6 - pulse * 0.55
 		end
 
 		-- Écriture : le crayon avance sur la ligne, 2 lignes, pause, et
-		-- toutes les 3 pages la feuille se tourne (en pause pendant la gorgée)
-		if not sipping then
+		-- toutes les 3 pages la feuille se tourne (en pause pendant la gorgée
+		-- et quand elle lève les yeux)
+		local paused = sipping or S.happyT >= 0
+		if not paused then
 			local previous = S.writeTime
 			S.writeTime = (S.writeTime + dt) % CYCLE
 			if S.writeTime < previous then
@@ -2111,7 +1851,7 @@ function Lofi.Start(ctx)
 		else
 			lineIndex, progressLine, pencilUp = 1, 0, true
 		end
-		if sipping then
+		if paused then
 			pencilUp = true
 		end
 		local flipping = false
@@ -2128,54 +1868,54 @@ function Lofi.Start(ctx)
 				local width = math.abs(math.cos(p * math.pi)) * (NOTE_W / 2)
 				H.Page.AnchorPoint = Vector2.new(p < 0.5 and 0 or 1, 0.5)
 				H.Page.Size = UDim2.fromOffset(width, NOTE_H + 2 - math.sin(p * math.pi) * 3)
-				H.Page.Position = UDim2.fromOffset(NOTE_W / 2, NOTE_H / 2 - math.sin(p * math.pi) * 2)
+				H.Page.Position = UDim2.fromOffset(NOTE_W / 2, NOTE_H / 2 - math.sin(p * math.pi) * 3)
 			end
 			pencilUp = true
 		end
 		if flipping then
 			-- Page pleine qui part, puis page blanche une fois tournée
 			local full = S.pageFlip < 0.5
-			H.Lines[1].Size = UDim2.fromOffset(full and WRITE_W or 0, 2.5)
-			H.Lines[2].Size = UDim2.fromOffset(full and WRITE_W or 0, 2.5)
-		elseif sipping then
-			-- (lignes figées pendant la gorgée)
+			H.Lines[1].Size = UDim2.fromOffset(full and WRITE_W or 0, 3)
+			H.Lines[2].Size = UDim2.fromOffset(full and WRITE_W or 0, 3)
+		elseif paused then
+			-- (lignes figées pendant la gorgée / le sourire)
 		elseif pencilUp and S.writeTime >= LINE_TIME * 2 then
 			-- Pause en fin de cycle : les deux lignes sont écrites
-			H.Lines[1].Size = UDim2.fromOffset(WRITE_W, 2.5)
-			H.Lines[2].Size = UDim2.fromOffset(WRITE_W, 2.5)
+			H.Lines[1].Size = UDim2.fromOffset(WRITE_W, 3)
+			H.Lines[2].Size = UDim2.fromOffset(WRITE_W, 3)
 		else
-			H.Lines[1].Size = UDim2.fromOffset(lineIndex == 1 and WRITE_W * progressLine or WRITE_W, 2.5)
-			H.Lines[2].Size = UDim2.fromOffset(lineIndex == 2 and WRITE_W * progressLine or 0, 2.5)
+			H.Lines[1].Size = UDim2.fromOffset(lineIndex == 1 and WRITE_W * progressLine or WRITE_W, 3)
+			H.Lines[2].Size = UDim2.fromOffset(lineIndex == 2 and WRITE_W * progressLine or 0, 3)
 		end
 		local scribble = pencilUp and 0 or 1
-		local tipX = noteLeft + WRITE_X + (pencilUp and WRITE_W * 0.5 or WRITE_W * progressLine) + math.sin(clock * 14) * 0.8 * scribble
-		local tipY = noteTop + 3.75 + (lineIndex - 1) * 4.5 + math.sin(clock * 26) * 0.9 * scribble - (pencilUp and 4 or 0)
-		setLimb(H.Pencil, tipX, tipY, tipX + 9, tipY - 16, 3.5)
-		local rhX, rhY = tipX + 4, tipY - 6
+		local tipX = noteLeft + WRITE_X + (pencilUp and WRITE_W * 0.5 or WRITE_W * progressLine) + math.sin(clock * 14) * 1.2 * scribble
+		local tipY = noteTop + 5 + (lineIndex - 1) * 6 + math.sin(clock * 26) * 1.2 * scribble - (pencilUp and 5 or 0)
+		setLimb(H.Pencil, tipX, tipY, tipX + 10, tipY - 18, 4)
+		local rhX, rhY = tipX + 5, tipY - 7
 		H.RightHand.Position = UDim2.fromOffset(rhX, rhY)
-		setLimb(H.RightFore, R_ELBOW.X, R_ELBOW.Y, rhX + 3, rhY, 15)
+		setLimb(H.RightFore, R_ELBOW.X, R_ELBOW.Y, rhX + 3, rhY, 17)
 
-		-- Notes de musique : du casque sur certains temps, de la platine parfois
+		-- Notes de musique : du casque sur certains temps, de la platine
 		-- (plus souvent avec une grande collection de vinyles)
 		if onBeat and fx then
 			if S.musicSound or beatNow % 2 == 0 then
-				spawnNote(PX + S.nextNoteSide * 36, headNowY + 2, S.nextNoteSide, 58)
+				spawnNote(PX + S.nextNoteSide * 46, headNowY + 2, S.nextNoteSide, 62)
 				S.nextNoteSide = -S.nextNoteSide
 			end
 			local every = S.vinylLevel >= 6 and 2 or 4
 			if beatNow % every == 1 then
-				spawnNote(TURNTABLE_X + 6, ITEM_BASE - 22, 1, 44)
+				spawnNote(TURNTABLE_X + 8, ITEM_BASE - 30, 1, 48)
 			end
 		end
 
 		-- Vapeur du café (suit la tasse)
-		local mugTopX, mugTopY = sipPose[6] + 1, sipPose[7] - 12
+		local mugTopX, mugTopY = sipPose[6] + 1, sipPose[7] - 14
 		for i, puff in ipairs(H.Steam) do
 			if fx then
 				local p = ((clock / 2.2) + (i - 1) / 3) % 1
-				puff.Position = UDim2.fromOffset(mugTopX + math.sin(p * 7 + i) * 4, mugTopY - p * 24)
-				puff.Size = UDim2.fromOffset(5 + p * 9, 5 + p * 9)
-				puff.BackgroundTransparency = 0.62 + p * 0.38
+				puff.Position = UDim2.fromOffset(mugTopX + math.sin(p * 7 + i) * 5, mugTopY - p * 28)
+				puff.Size = UDim2.fromOffset(6 + p * 11, 6 + p * 11)
+				puff.BackgroundTransparency = 0.5 + p * 0.5
 			elseif puff.BackgroundTransparency < 1 then
 				puff.BackgroundTransparency = 1
 			end
@@ -2224,11 +1964,11 @@ function Lofi.Start(ctx)
 			end
 		end
 		S.catLook += (look - S.catLook) * math.min(1, dt * 4)
-		CAT.Head.Position = UDim2.fromOffset(CAT_HEAD_X + S.catLook * 1.5, CAT_HEAD_Y - lift * 5)
-		CAT.Head.Rotation = S.catLook * 9 + (yawn and -6 or 0)
+		CAT.Head.Position = UDim2.fromOffset(CAT_HEAD_X + S.catLook * 2, CAT_HEAD_Y - lift * 7)
+		CAT.Head.Rotation = S.catLook * 10 + (yawn and -8 or 0)
 		for i, eye in ipairs(CAT.Open) do
 			eye.Visible = eyesOpen
-			eye.Position = UDim2.fromOffset(18 + (i == 1 and -6 or 6) + S.catLook * 1.4, 16)
+			eye.Position = UDim2.fromOffset(22 + (i == 1 and -8 or 8) + S.catLook * 1.8, 19)
 		end
 		for _, eye in ipairs(CAT.Closed) do
 			eye.Visible = not eyesOpen
@@ -2236,14 +1976,14 @@ function Lofi.Start(ctx)
 		CAT.Mouth.Visible = yawn
 		if yawn then
 			local p = (t - (S.catAwake - 2.3)) / 1
-			CAT.Mouth.Size = UDim2.fromOffset(5, 1 + math.sin(p * math.pi) * 5)
+			CAT.Mouth.Size = UDim2.fromOffset(6, 1 + math.sin(p * math.pi) * 7)
 		end
 		-- Oreilles : petit frémissement quand il est réveillé
 		local twitch = (awake and math.sin(clock * 9) > 0.97) and 14 or 0
 		CAT.Ears[1].Rotation = 45 - twitch
 		CAT.Ears[2].Rotation = 45 + (awake and (math.sin(clock * 7 + 2) > 0.985 and 14 or 0) or 0)
 		-- Respiration + queue (lente quand il dort, qui fouette réveillé)
-		CAT.BodyScale.Scale = 1 + (awake and 0.02 or 0.045) * (0.5 + 0.5 * math.sin(clock * (awake and 2.4 or 1.6)))
+		CAT.BodyScale.Scale = 1 + (awake and 0.02 or 0.05) * (0.5 + 0.5 * math.sin(clock * (awake and 2.4 or 1.6)))
 		local baseX, baseY, a1, a2
 		local tailZ = awake and 1 or 5
 		if CAT.Tail1.ZIndex ~= tailZ then
@@ -2252,34 +1992,37 @@ function Lofi.Start(ctx)
 		end
 		if awake then
 			-- dressée derrière le corps, le bout fouette
-			baseX, baseY = catX + 5, catBottom - 12
-			a1 = math.rad(252 + math.sin(clock * 3) * 8)
-			a2 = a1 + math.rad(38 + math.sin(clock * 4.2) * 30)
+			baseX, baseY = catX + 6, catBottom - 14
+			a1 = math.rad(252 + math.sin(clock * 3) * 10)
+			a2 = a1 + math.rad(38 + math.sin(clock * 4.2) * 34)
 		else
 			-- enroulée devant le corps, le bout remue doucement
-			baseX, baseY = catX + 4, catBottom - 4
+			baseX, baseY = catX + 5, catBottom - 5
 			a1 = math.rad(-6)
-			a2 = a1 - math.rad(28 + math.sin(clock * 0.9) * 14)
+			a2 = a1 - math.rad(28 + math.sin(clock * 0.9) * 18)
 		end
-		local midX, midY = baseX + math.cos(a1) * 13, baseY + math.sin(a1) * 13
-		setLimb(CAT.Tail1, baseX, baseY, midX, midY, 7)
-		setLimb(CAT.Tail2, midX, midY, midX + math.cos(a2) * 11, midY + math.sin(a2) * 11, 6)
-		-- "z z z" seulement quand il dort
+		local midX, midY = baseX + math.cos(a1) * 15, baseY + math.sin(a1) * 15
+		setLimb(CAT.Tail1, baseX, baseY, midX, midY, 9)
+		setLimb(CAT.Tail2, midX, midY, midX + math.cos(a2) * 13, midY + math.sin(a2) * 13, 8)
+		-- "Z z z" seulement quand il dort (gros, lisibles)
 		for i, z in ipairs(CAT.Z) do
 			if awake then
 				if z.TextTransparency < 1 then
 					z.TextTransparency = 1
+					z.TextStrokeTransparency = 1
 				end
 			else
 				local p = ((clock / 3.3) + (i - 1) / 3) % 1
-				z.Position = UDim2.fromOffset(CAT_HEAD_X + 8 + p * 22 + math.sin(p * 6) * 3, CAT_HEAD_Y - 12 - p * 40)
-				z.TextSize = math.floor(9 + p * 9)
-				z.TextTransparency = p < 0.12 and (1 - p / 0.12) or (p * p)
+				z.Position = UDim2.fromOffset(CAT_HEAD_X + 12 + p * 26 + math.sin(p * 6) * 4, CAT_HEAD_Y - 16 - p * 46)
+				z.TextSize = math.floor(11 + p * 12)
+				local alpha = p < 0.12 and (1 - p / 0.12) or (p * p)
+				z.TextTransparency = alpha
+				z.TextStrokeTransparency = 0.3 + alpha * 0.7
 			end
 		end
 	end
 
-	-- Ciel : pluie, gouttes, nuages, étoiles, soleil / lune, oiseau / avion
+	-- Ciel : pluie, nuages, étoiles, soleil / lune, oiseau / avion
 	local function updateWindow(dt: number, clock: number, fx: boolean, slow: boolean)
 		-- Intensité de la pluie (lissée) ; le ciel est recalculé si elle a changé
 		if S.rain ~= S.rainTarget then
@@ -2306,56 +2049,34 @@ function Lofi.Start(ctx)
 				drop.Frame.Position = UDim2.fromOffset(drop.X, drop.Y)
 			end
 		end
-		-- Gouttelettes et gouttes qui glissent (avec traînée) quand il pleut
-		local wetAlpha = 1 - math.clamp((rain - 0.15) / 0.5, 0, 1)
-		if math.abs(rain - S.dropletRain) > 0.02 then
-			S.dropletRain = rain
-			for _, droplet in ipairs(WIN.Droplets) do
-				droplet.BackgroundTransparency = 0.45 + wetAlpha * 0.55
-			end
-			WIN.Fog.BackgroundTransparency = 0.72 + wetAlpha * 0.28
-		end
-		for _, bead in ipairs(WIN.Beads) do
-			if rain > 0.2 then
-				local jerk = (math.sin(clock * 2 + bead.X) > 0.6) and 3 or 0.4
-				bead.Y += bead.Speed * jerk * dt
-				bead.Length = math.min(12, bead.Length + bead.Speed * jerk * dt * 0.5)
-				if bead.Y > GLASS_H + 6 then
-					bead.Y = -6
-					bead.Length = 0
-					bead.X = random:NextNumber(8, GLASS_W - 8)
-				end
-				bead.Frame.Position = UDim2.fromOffset(bead.X, bead.Y)
-				bead.Trail.Position = UDim2.fromOffset(bead.X, bead.Y - 1)
-				bead.Trail.Size = UDim2.fromOffset(1.5, bead.Length)
-			end
-			local alpha = 0.3 + wetAlpha * 0.7
-			bead.Frame.BackgroundTransparency = alpha
-			bead.Trail.BackgroundTransparency = 0.55 + wetAlpha * 0.45
-		end
 
 		-- Nuages qui dérivent
 		for _, cloud in ipairs(WIN.Clouds) do
 			cloud.X += cloud.Speed * dt * (1 + rain)
 			if cloud.X > GLASS_W + 4 then
-				cloud.X = -48
+				cloud.X = -50
 			end
 			cloud.Frame.Position = UDim2.fromOffset(cloud.X, cloud.Y)
 		end
 
-		-- Étoiles (la nuit), lune, voyant de la tour, néon, guirlande, bougie
+		-- Étoiles (la nuit), lune, voyant de la tour, néon, guirlande
 		-- (décor lent : une image sur deux)
 		local night = S.night
 		if slow then
 			for _, star in ipairs(WIN.Stars) do
 				local twinkle = 0.5 + 0.5 * math.sin(clock * star.Speed + star.Phase)
-				local alpha = 1 - night * (1 - rain * 0.5) * (0.25 + 0.75 * twinkle)
+				local alpha = 1 - night * (1 - rain * 0.5) * (0.2 + 0.8 * twinkle)
 				for _, part in ipairs(star.Parts) do
 					part.BackgroundTransparency = alpha
 				end
 			end
 			for i, glow in ipairs(WIN.MoonGlow) do
-				glow.BackgroundTransparency = 0.84 + 0.06 * math.sin(clock * 0.8 + i)
+				glow.BackgroundTransparency = 0.82 + 0.06 * math.sin(clock * 0.8 + i)
+			end
+			for _, light in ipairs(WIN.Fairy) do
+				local twinkle = 0.5 + 0.5 * math.sin(clock * 2.2 + light.Phase)
+				light.Frame.BackgroundTransparency = (1 - twinkle) * 0.35
+				light.Glow.Transparency = 0.35 + (1 - twinkle) * 0.55
 			end
 		end
 		if WIN.TowerLight then
@@ -2365,30 +2086,20 @@ function Lofi.Start(ctx)
 			WIN.Neon.Transparency = math.min(1, 0.3 + (1 - night) * 0.6 + ((math.sin(clock * 23) > 0.93) and 0.3 or 0))
 			WIN.NeonSign.BackgroundTransparency = (1 - night) * 0.5
 		end
-		if slow then
-			for _, light in ipairs(WIN.Fairy) do
-				local twinkle = 0.5 + 0.5 * math.sin(clock * 2.2 + light.Phase)
-				light.Frame.BackgroundTransparency = 0.05 + (1 - twinkle) * 0.35
-				light.Glow.Transparency = 0.45 + (1 - twinkle) * 0.5
-			end
-			local flameFlicker = math.sin(clock * 11) * 0.5 + math.sin(clock * 17) * 0.5
-			WIN.CandleFlame.Size = UDim2.fromOffset(3, 5 + flameFlicker * 0.8)
-			WIN.CandleGlow.BackgroundTransparency = 0.78 + flameFlicker * 0.05
-		end
 
 		-- Étoile filante (nuit claire) et éclair lointain (nuit d'orage)
 		S.nextStar -= dt
 		if S.nextStar <= 0 then
-			S.nextStar = random:NextNumber(10, 22)
+			S.nextStar = random:NextNumber(9, 18)
 			if fx and night > 0.6 and rain < 0.5 then
 				S.starAge = 0
 				WIN.Shooting.Visible = true
-				WIN.Shooting.Position = UDim2.fromOffset(random:NextNumber(10, GLASS_W * 0.5), random:NextNumber(4, 20))
+				WIN.Shooting.Position = UDim2.fromOffset(random:NextNumber(30, GLASS_W * 0.6), random:NextNumber(4, 18))
 			end
 		end
 		if S.starAge >= 0 then
 			S.starAge += dt
-			local p = S.starAge / 0.7
+			local p = S.starAge / 0.8
 			if p >= 1 then
 				S.starAge = -1
 				WIN.Shooting.Visible = false
@@ -2408,7 +2119,7 @@ function Lofi.Start(ctx)
 		if S.flash > 0 then
 			S.flash = math.max(0, S.flash - dt * 3)
 			local flicker = (S.flash > 0.6 and S.flash < 0.8) and 0.2 or S.flash
-			WIN.Flash.BackgroundTransparency = 1 - flicker * 0.55
+			WIN.Flash.BackgroundTransparency = 1 - flicker * 0.6
 		end
 
 		-- Oiseau (le jour) ou avion (la nuit) qui traverse de temps en temps
@@ -2422,7 +2133,7 @@ function Lofi.Start(ctx)
 				WIN.WingR.Visible = bird
 				WIN.PlaneLight.Visible = not bird
 				WIN.Flyer.Visible = true
-				S.flyerY = random:NextNumber(10, 34)
+				S.flyerY = random:NextNumber(8, 28)
 				S.flyerSpeed = bird and random:NextNumber(24, 34) or random:NextNumber(9, 13)
 			end
 		end
@@ -2446,62 +2157,58 @@ function Lofi.Start(ctx)
 		end
 	end
 
-	-- Lumières (lampe qui respire, halo, flaque, poussières), plante, platine
-	local function updateRoom(clock: number, pulse: number, fx: boolean, slow: boolean)
+	-- Lumières (lampe qui respire, halo, flaque), étagère, platine
+	local function updateRoom(dt: number, clock: number, pulse: number, slow: boolean)
 		-- Collection de vinyles : enceinte qui pulse, néon qui change de couleur
 		if S.vinylLevel >= 5 then
-			local size = 11 + pulse * 2
+			local size = 14 + pulse * 3
 			TT.Woofer.Size = UDim2.fromOffset(size, size)
 		end
 		if S.vinylLevel >= 7 then
-			local color = Color3.fromHSV((clock * 0.05) % 1, 0.55, 1)
-			for i, glow in ipairs(D.Led) do
-				glow.BackgroundColor3 = color
-				glow.BackgroundTransparency = 0.72 + (i - 1) * 0.06 - pulse * 0.12
+			local color = Color3.fromHSV((clock * 0.06) % 1, 0.6, 1)
+			D.Neon.BackgroundColor3 = color
+			D.NeonGlow.Color = color
+			D.NeonGlow.Transparency = 0.55 - pulse * 0.3
+			D.NeonWash.BackgroundColor3 = color
+			D.NeonWash.BackgroundTransparency = 0.72 - pulse * 0.12
+		end
+		-- Nouveau disque sur l'étagère : il saute et grossit un instant
+		if S.popT >= 0 then
+			S.popT += dt
+			local slot = RACK.Discs[S.popDisc]
+			if S.popT >= 0.8 or not slot then
+				S.popT = -1
+				if slot then
+					slot.Disc.Size = UDim2.fromOffset(15, 15)
+					slot.Disc.Position = UDim2.fromOffset(slot.X, RACK_Y)
+				end
+			else
+				local p = S.popT / 0.8
+				local bump = math.sin(p * math.pi)
+				local size = 15 + bump * 6
+				slot.Disc.Size = UDim2.fromOffset(size, size)
+				slot.Disc.Position = UDim2.fromOffset(slot.X, RACK_Y - bump * 2)
 			end
 		end
 		if not slow then
-			return -- (lumières, poussières et plante : une image sur deux)
+			return -- (lumières : une image sur deux)
 		end
 		local power = S.lampPower
 		local breath = 0.5 + 0.5 * math.sin(clock * 1.2)
 		local flicker = (math.sin(clock * 37) > 0.985) and 0.05 or 0
 		for _, glow in ipairs(lampHalo) do
-			glow.BackgroundTransparency = math.min(1, 1 - (1 - LAMP_HALO_ALPHA) * power * (0.9 + 0.1 * breath) + flicker)
+			glow.BackgroundTransparency = math.min(1, 1 - (1 - LAMP_HALO_ALPHA) * power * (0.85 + 0.15 * breath) + flicker)
 		end
 		for _, glow in ipairs(D.Pool) do
-			glow.BackgroundTransparency = math.min(1, 1 - 0.34 * power * (0.9 + 0.1 * breath) + flicker)
+			glow.BackgroundTransparency = math.min(1, 1 - 0.36 * power * (0.9 + 0.1 * breath) + flicker)
 		end
-		D.Spill.BackgroundTransparency = math.min(1, 1 - 0.22 * power * (0.9 + 0.1 * breath) + flicker)
+		D.Spill.BackgroundTransparency = math.min(1, 1 - 0.24 * power * (0.9 + 0.1 * breath) + flicker)
 		for _, ray in ipairs(LAMP.Rays) do
 			ray.Frame.BackgroundTransparency = math.min(1, 1 - (1 - ray.Alpha) * power + flicker)
 		end
 		LAMP.Bulb.BackgroundTransparency = flicker * 4
-		LAMP.BulbGlow.BackgroundTransparency = 0.55 + (1 - power) * 0.3 + flicker * 3
-		local shadowAlpha = 1 - 0.2 * power
-		shadowHead.BackgroundTransparency = shadowAlpha
-		shadowBody.BackgroundTransparency = shadowAlpha
-
-		-- Poussières qui flottent dans la lumière
-		for _, mote in ipairs(dust) do
-			if fx then
-				local a = clock * mote.Speed + mote.Phase
-				mote.Frame.Position = UDim2.fromOffset(mote.CX + math.sin(a) * mote.RX, mote.CY + math.cos(a * 0.8) * mote.RY - math.sin(a * 0.5) * 3)
-				local strength = mote.Lamp and power or (0.5 + 0.5 * S.palette.ShaftPower) * (1 - S.rain * 0.5)
-				local twinkle = 0.5 + 0.5 * math.sin(clock * 1.7 + mote.Phase * 3)
-				mote.Frame.BackgroundTransparency = 1 - strength * (0.25 + 0.5 * twinkle)
-			elseif mote.Frame.BackgroundTransparency < 1 then
-				mote.Frame.BackgroundTransparency = 1
-			end
-		end
-
-		-- Plante suspendue : les lianes se balancent (pivot en haut)
-		for _, vine in ipairs(VINES) do
-			local angle = vine.Tilt + math.sin(clock * 0.8 + vine.Phase) * 3
-			local r = math.rad(angle)
-			vine.Holder.Rotation = angle
-			vine.Holder.Position = UDim2.fromOffset(vine.X - math.sin(r) * vine.Length / 2, vine.Y + math.cos(r) * vine.Length / 2)
-		end
+		LAMP.BulbGlow.BackgroundTransparency = 0.5 + (1 - power) * 0.3 + flicker * 3
+		shadowHead.BackgroundTransparency = 1 - 0.22 * power
 	end
 
 	-- Visualiseur, vinyles, progression et temps
@@ -2540,24 +2247,23 @@ function Lofi.Start(ctx)
 					eqTargets[i] = math.clamp(base, 0.1, 1)
 				end
 			end
-			S.discSpin += (0.8 - S.discSpin) * math.min(1, dt * 2)
+			S.discSpin += (1.2 - S.discSpin) * math.min(1, dt * 2)
 		end
 		local k = math.min(1, dt * 16)
-		local step = B.EqStep
 		for i, eqBar in ipairs(eqBars) do
 			eqHeights[i] += (eqTargets[i] - eqHeights[i]) * k
 			local h = 3 + eqHeights[i] * (EQ_H - 5)
 			eqBar.Size = UDim2.fromOffset(eqBar.Size.X.Offset, math.floor(h))
-			-- Pic : monte avec la barre, retombe doucement
-			peakHeights[i] = math.max(h + 2, peakHeights[i] - dt * 14)
-			eqPeaks[i].Position = UDim2.new(0, (i - 1) * step, 1, -math.floor(peakHeights[i]))
 		end
 
 		-- Vinyles (barre + platine) et progression du morceau
 		S.discAngle = (S.discAngle + S.discSpin * 60 * dt) % 360
 		B.Disc.Rotation = S.discAngle
-		TT.Spin.Offset = Vector2.new(math.sin(math.rad(S.discAngle)) * 0.35, 0)
-		TT.Label.Position = UDim2.fromOffset(26 + math.sin(math.rad(S.discAngle)) * 0.8, 6)
+		local angle = math.rad(S.discAngle)
+		TT.Spin.Offset = Vector2.new(math.sin(angle) * 0.35, 0)
+		-- Reflet qui fait le tour du disque (ellipse vue de 3/4)
+		TT.Glint.Position = UDim2.fromOffset(32 + math.cos(angle) * 22, 9 + math.sin(angle) * 5.5)
+		TT.Glint.Rotation = math.deg(math.atan2(math.sin(angle) * 5.5, math.cos(angle) * 22)) + 90
 		TT.LedLight.BackgroundTransparency = playing and 0 or (0.3 + 0.3 * math.sin(clock * 2))
 		-- Bras de lecture : posé sur le disque quand la musique joue, sinon relevé
 		S.armLift += ((playing and 1 or 0) - S.armLift) * math.min(1, dt * 3)
@@ -2644,9 +2350,9 @@ function Lofi.Start(ctx)
 		updateWindow(dt, clock, fx, slow)
 		updateCat(dt, clock)
 		updateGirl(dt, clock, beatPhase, onBeat, beatNow, pulse, fx)
-		updateRoom(clock, pulse, fx, slow)
+		updateRoom(dt, clock, pulse, slow)
 
-		-- Notes de musique qui s'envolent
+		-- Notes de musique (et cœurs) qui s'envolent
 		for _, n in ipairs(notes) do
 			if n.Active then
 				n.Age += dt
@@ -2656,12 +2362,12 @@ function Lofi.Start(ctx)
 					n.Label.Visible = false
 				else
 					local noteLabel = n.Label
-					noteLabel.Position = UDim2.fromOffset(n.X + n.Dir * p * 30 + math.sin(p * 9) * 4, n.Y - p * n.Rise)
+					noteLabel.Position = UDim2.fromOffset(n.X + n.Dir * p * 32 + math.sin(p * 9) * 5, n.Y - p * n.Rise)
 					noteLabel.Rotation = math.sin(p * 8) * 18
-					noteLabel.TextSize = math.floor(12 + math.min(1, p * 5) * 6)
+					noteLabel.TextSize = math.floor(14 + math.min(1, p * 5) * 8)
 					local alpha = p < 0.12 and (1 - p / 0.12) or math.max(0, (p - 0.55) / 0.45)
 					noteLabel.TextTransparency = alpha
-					noteLabel.TextStrokeTransparency = 0.5 + alpha * 0.5
+					noteLabel.TextStrokeTransparency = 0.35 + alpha * 0.65
 				end
 			end
 		end

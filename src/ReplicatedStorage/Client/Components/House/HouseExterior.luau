@@ -17,6 +17,11 @@
 	    escalier double, jardin à la française, fontaine, grille, lanternes).
 	Le mode nuit teinte tout en bleu nuit (comme HouseScenery), allume les
 	fenêtres et les lanternes, fait sortir les lucioles.
+	(v9.1) Build(parent, size, looks?) : couleur de la façade (Facade) et du
+	toit (Roof), motif du toit (RoofStyle : cœurs, pois, rayures, étoiles,
+	fleurs, neige, écailles) et bande de jardin devant la maison avec la
+	déco choisie (Garden, dessins GardenArt) ; SetLooks(looks) redessine la
+	façade sans toucher aux pièces.
 
 	API (contrat A) :
 	  HouseExterior.CELL_H                 hauteur d'une pièce (px de maquette)
@@ -37,6 +42,7 @@
 ]]
 
 local HouseCommon = require(script.Parent.HouseCommon)
+local HouseArt = require(script.Parent.HouseArt)
 
 type SizeDef = HouseCommon.SizeDef
 
@@ -57,6 +63,7 @@ export type Exterior = {
 	Cells: { [number]: Rect },
 	CellLayer: Frame,
 	SetDark: (dark: boolean) -> (),
+	SetLooks: (looks: any) -> (),
 	Update: (dt: number) -> (),
 	Destroy: () -> (),
 }
@@ -107,6 +114,15 @@ local P = {
 	Water = Color3.fromRGB(150, 215, 255),
 	Interior = Color3.fromRGB(232, 206, 230),
 }
+
+-- (v9.1) Couleurs choisies par le joueur pendant qu'un style se dessine
+-- (façade : Wall ; toit : P.RoofPink / P.Slate remplacés le temps du dessin)
+local LOOK: { Wall: Color3? } = {}
+-- Jardin devant la maison (déco choisie) : sa hauteur suit la largeur du
+-- bâtiment (la déco reste bien visible une fois le manoir réduit à l'écran)
+local function gardenHeight(width: number): number
+	return math.clamp(math.floor(width * 0.1), 110, 170)
+end
 
 ----------------------------------------------------------------------
 -- Formes de base (même esprit que le kit de HouseArt)
@@ -633,7 +649,7 @@ STYLES.Cottage = function(ctx, size, cellW)
 	end
 	local cells, colX, floorY = makeGrid(size, cellW, bodyX + M, cellTop, gaps, S)
 
-	local WALL = Color3.fromRGB(255, 242, 228)
+	local WALL = LOOK.Wall or Color3.fromRGB(255, 242, 228)
 	local TIMBER = Color3.fromRGB(206, 150, 112)
 
 	-- Pelouse (derrière la maison)
@@ -657,7 +673,7 @@ STYLES.Cottage = function(ctx, size, cellW)
 	local annexX = bodyX + bodyW - 14
 	local annexTop = cellTop + 64
 	local annexCx = annexX + annexW / 2
-	part(back, annexX, annexTop, annexW, groundY - annexTop, Color3.fromRGB(255, 226, 234), { R = 8, Z = 9, Th = 2.5 })
+	part(back, annexX, annexTop, annexW, groundY - annexTop, if LOOK.Wall then LOOK.Wall:Lerp(C.Pink, 0.12) else Color3.fromRGB(255, 226, 234), { R = 8, Z = 9, Th = 2.5 })
 	-- Petit pignon rose du porche (tuiles, rives, cœur, lucarne ronde)
 	local gableH = 64
 	local gableTop = annexTop - gableH + 6
@@ -793,7 +809,7 @@ STYLES.Cottage = function(ctx, size, cellW)
 	part(front, mbX + 14, fenceTop - 62, 4, 18, C.Heart, { R = 2, Z = 12, Th = 1.5, Shade = false })
 
 	fireflies(ctx, ctx.Fx, 20, groundY - 150, width - 40, 160, 7, 1)
-	return { Width = width, Height = height, Cells = cells }
+	return { Width = width, Height = height, Cells = cells, Roof = { CX = cx, Top = roofTop, TopW = topW, BaseW = baseW, H = roofH, Z = 13 } }
 end
 
 -- ░░ Townhouse : maison de ville pastel ░░
@@ -821,8 +837,8 @@ STYLES.Townhouse = function(ctx, size, cellW)
 	end
 	local cells, colX, floorY = makeGrid(size, cellW, bodyX + M, cellTop, gaps, S)
 
-	local WALL = Color3.fromRGB(196, 238, 220)
-	local WALL_DARK = Color3.fromRGB(150, 208, 186)
+	local WALL = LOOK.Wall or Color3.fromRGB(196, 238, 220)
+	local WALL_DARK = if LOOK.Wall then LOOK.Wall:Lerp(INK, 0.22) else Color3.fromRGB(150, 208, 186)
 	local TRIM = C.Cream
 
 	-- Trottoir, bordure, rue
@@ -1001,7 +1017,7 @@ STYLES.Townhouse = function(ctx, size, cellW)
 	end
 
 	fireflies(ctx, ctx.Fx, 20, groundY - 200, width - 40, 200, 6, 1)
-	return { Width = width, Height = height, Cells = cells }
+	return { Width = width, Height = height, Cells = cells, Roof = { CX = cx, Top = roofTop, TopW = topW, BaseW = baseW, H = roofH, Z = 21 } }
 end
 
 -- ░░ Loft : entrepôt de briques reconverti ░░
@@ -1283,7 +1299,8 @@ STYLES.Loft = function(ctx, size, cellW)
 	end
 
 	fireflies(ctx, ctx.Fx, 40, parapetY - 140, width - 80, 150, 7, 1)
-	return { Width = width, Height = height, Cells = cells }
+	-- (toit-terrasse : le motif du toit décore la cuve du château d'eau)
+	return { Width = width, Height = height, Cells = cells, Roof = { CX = wtX, Top = legTop - 80, TopW = 104, BaseW = 104, H = 84, Z = 5 } }
 end
 
 -- ░░ Mansion : le grand manoir kawaii ░░
@@ -1320,10 +1337,10 @@ STYLES.Mansion = function(ctx, size, cellW)
 	local bayX = colX[math.floor(cols / 2)] + cellW
 	local bayCx = bayX + BAY / 2
 
-	local WALL = Color3.fromRGB(255, 232, 242)
-	local WALL_SHADE = Color3.fromRGB(246, 208, 228)
+	local WALL = LOOK.Wall or Color3.fromRGB(255, 232, 242)
+	local WALL_SHADE = if LOOK.Wall then LOOK.Wall:Lerp(INK, 0.1) else Color3.fromRGB(246, 208, 228)
 	local TRIM = Color3.fromRGB(255, 250, 244)
-	local TOWER = Color3.fromRGB(255, 218, 234)
+	local TOWER = if LOOK.Wall then LOOK.Wall:Lerp(C.Pink, 0.1) else Color3.fromRGB(255, 218, 234)
 	local ROOF = P.Slate
 	local ROOF_DARK = P.SlateDark
 
@@ -1692,7 +1709,7 @@ STYLES.Mansion = function(ctx, size, cellW)
 	end
 
 	fireflies(ctx, ctx.Fx, 60, groundY - 30, width - 120, 250, 8, 1)
-	return { Width = width, Height = height, Cells = cells }
+	return { Width = width, Height = height, Cells = cells, Roof = { CX = cx, Top = roofTop, TopW = roofTopW, BaseW = roofBase, H = roofH, Z = 6, Skip = 330 } }
 end
 
 ----------------------------------------------------------------------
@@ -1712,7 +1729,245 @@ local function layer(parent: Instance, name: string, z: number): Frame
 	return frame
 end
 
-function HouseExterior.Build(parent: Instance, size: SizeDef): Exterior
+-- (v9.1) Motif du toit (RoofStyle) posé sur le pan principal du toit :
+-- uniquement aux endroits qui sont DANS le trapèze du toit
+type RoofRect = { CX: number, Top: number, TopW: number, BaseW: number, H: number, Z: number, Skip: number? }
+
+local function roofHalfWidth(roof: RoofRect, y: number): number
+	local k = math.clamp((y - roof.Top) / math.max(1, roof.H), 0, 1)
+	return (roof.TopW + (roof.BaseW - roof.TopW) * k) / 2
+end
+
+local function insideRoof(roof: RoofRect, x: number, y: number, margin: number): boolean
+	if y < roof.Top + margin or y > roof.Top + roof.H - margin then
+		return false
+	end
+	local dx = math.abs(x - roof.CX)
+	if roof.Skip and dx < roof.Skip and y > roof.Top + roof.H * 0.3 then
+		return false
+	end
+	return dx <= roofHalfWidth(roof, y) - margin
+end
+
+local function roofPattern(ctx: Ctx, roof: RoofRect, pattern: string, roofColor: Color3)
+	local parent = ctx.Back
+	local z = roof.Z
+	local light = roofColor:Lerp(WHITE, 0.55)
+	local deep = roofColor:Lerp(INK, 0.3)
+	local stepX, stepY = 46, 38
+	local function grid(draw: (x: number, y: number, index: number) -> ())
+		local row = 0
+		local y = roof.Top + stepY * 0.6
+		local index = 0
+		while y < roof.Top + roof.H - 8 do
+			local half = roofHalfWidth(roof, y)
+			local x = roof.CX - half + ((row % 2) * stepX / 2) + stepX * 0.4
+			while x < roof.CX + half do
+				if insideRoof(roof, x, y, 12) then
+					index += 1
+					draw(x, y, index)
+				end
+				x += stepX
+			end
+			y += stepY
+			row += 1
+		end
+	end
+	if pattern == "Hearts" then
+		grid(function(x, y, index)
+			heart(parent, x, y, 18, if index % 3 == 0 then C.Heart else light, 0, z)
+		end)
+	elseif pattern == "Dots" then
+		grid(function(x, y, index)
+			circle(parent, x, y, 15, 15, if index % 2 == 0 then WHITE else light, 0.1, z)
+		end)
+	elseif pattern == "Stars" then
+		grid(function(x, y, index)
+			sparkle(parent, x, y, if index % 2 == 0 then 22 else 14, if index % 3 == 0 then C.Butter else WHITE, 0, z)
+		end)
+	elseif pattern == "Flowers" then
+		grid(function(x, y, index)
+			blob(parent, x + 8, y + 6, 18, 10, P.Leaf, { Z = z, Th = 1.2, Shade = false })
+			flower(parent, x, y, 16, if index % 3 == 0 then C.Butter elseif index % 3 == 1 then C.Pink else WHITE, z + 1)
+		end)
+	elseif pattern == "Stripes" then
+		-- bandes verticales : chaque bande commence là où le toit est assez large
+		local stripe = 22
+		local k = 0
+		local x = roof.CX - roof.BaseW / 2 + 12
+		while x < roof.CX + roof.BaseW / 2 - 12 do
+			if k % 2 == 0 then
+				local dx = math.max(math.abs(x - roof.CX), math.abs(x + stripe - roof.CX))
+				local widen = math.max(1, roof.BaseW - roof.TopW)
+				local enter = roof.Top + roof.H * math.clamp((2 * dx - roof.TopW) / widen, 0, 1)
+				local bottom = roof.Top + roof.H - 6
+				if bottom - enter > 8 and not (roof.Skip and math.abs(x + stripe / 2 - roof.CX) < roof.Skip) then
+					box(parent, x, enter + 4, stripe, bottom - enter - 4, WHITE, 0.25, z)
+				end
+			end
+			x += stripe
+			k += 1
+		end
+	elseif pattern == "Snow" then
+		-- neige sur le faîte + congères et gouttes le long du toit
+		trapezoid(parent, roof.CX, roof.Top - 4, roof.TopW + 10, roof.TopW + (roof.BaseW - roof.TopW) * 0.22 + 10, roof.H * 0.22, WHITE, Color3.fromRGB(236, 242, 255), z, 8)
+		local y = roof.Top + roof.H * 0.22
+		local half = roofHalfWidth(roof, y)
+		local count = math.floor(half * 2 / 26)
+		for index = 0, count do
+			local x = roof.CX - half + index * (half * 2) / math.max(1, count)
+			circle(parent, x, y, 24, 16 + (index % 3) * 5, WHITE, 0, z)
+		end
+		local eave = roof.Top + roof.H
+		local eaveHalf = roof.BaseW / 2
+		for index = 0, math.floor(eaveHalf * 2 / 30) do
+			local x = roof.CX - eaveHalf + 10 + index * 30
+			local icicle = box(parent, x - 3, eave - 4, 6, 12 + (index % 3) * 6, Color3.fromRGB(226, 240, 255), 0, z + 6)
+			round(icicle, 3)
+		end
+	elseif pattern == "Scales" then
+		local tones = { Color3.fromRGB(120, 214, 210), Color3.fromRGB(170, 150, 240), Color3.fromRGB(255, 170, 214) }
+		local row = 0
+		local y = roof.Top + 16
+		while y < roof.Top + roof.H - 6 do
+			local half = roofHalfWidth(roof, y)
+			local x = roof.CX - half + ((row % 2) * 17) + 16
+			while x < roof.CX + half - 12 do
+				if insideRoof(roof, x, y, 8) then
+					local scale = circle(parent, x, y, 32, 28, tones[row % #tones + 1], 0.15, z)
+					circle(scale, 9, 6, 9, 6, WHITE, 0.45, 2)
+				end
+				x += 34
+			end
+			y += 18
+			row += 1
+		end
+	elseif pattern == "Checkered" then
+		-- (v9.2) damier de course noir et blanc (cases dans le toit seulement)
+		local cell = 18
+		local row = 0
+		local y = roof.Top + 10
+		while y < roof.Top + roof.H - cell do
+			local half = roofHalfWidth(roof, y)
+			local x = roof.CX - half + 10 + (row % 2) * cell
+			while x < roof.CX + half - 10 do
+				for k = 0, 1 do
+					local sx = x + k * cell
+					if insideRoof(roof, sx, y, 3) and insideRoof(roof, sx + cell, y, 3) and insideRoof(roof, sx, y + cell, 3) and insideRoof(roof, sx + cell, y + cell, 3) then
+						box(parent, sx, y, cell, cell, if k == 0 then Color3.fromRGB(40, 42, 56) else WHITE, if k == 0 then 0.05 else 0.1, z)
+					end
+				end
+				x += cell * 2
+			end
+			y += cell
+			row += 1
+		end
+	elseif pattern == "Bolts" then
+		-- (v9.2) éclairs jaunes en quinconce
+		grid(function(x, y, index)
+			local s = if index % 2 == 0 then 26 else 20
+			local color = if index % 3 == 0 then WHITE else C.Butter
+			line(parent, x + s * 0.2, y - s / 2, x - s * 0.2, y + s * 0.02, 5, color, 0, z)
+			line(parent, x - s * 0.2, y + s * 0.02, x + s * 0.18, y - s * 0.02, 5, color, 0, z)
+			line(parent, x + s * 0.18, y - s * 0.02, x - s * 0.22, y + s / 2, 5, color, 0, z)
+		end)
+	elseif pattern == "Camo" then
+		-- (v9.2) camouflage : taches arrondies en 3 teintes
+		local tones = { Color3.fromRGB(96, 120, 76), Color3.fromRGB(60, 76, 50), Color3.fromRGB(150, 160, 110) }
+		local row = 0
+		local y = roof.Top + 12
+		while y < roof.Top + roof.H - 8 do
+			local half = roofHalfWidth(roof, y)
+			local x = roof.CX - half + 14 + (row % 2) * 16
+			local index = 0
+			while x < roof.CX + half - 10 do
+				if insideRoof(roof, x, y, 12) then
+					local n = noise(x, y)
+					local spot = circle(parent, x, y, 30 + n * 20, 16 + n * 10, tones[(index + row) % #tones + 1], 0, z)
+					spot.Rotation = (n - 0.5) * 90
+				end
+				x += 30
+				index += 1
+			end
+			y += 16
+			row += 1
+		end
+	elseif pattern == "Flames" then
+		-- (v9.2) flammes qui montent depuis le bas du toit (orange + cœur jaune)
+		local eave = roof.Top + roof.H
+		local half = roof.BaseW / 2
+		local count = math.max(3, math.floor(half * 2 / 34))
+		for index = 0, count - 1 do
+			local cx = roof.CX - half + (index + 0.5) * (half * 2 / count)
+			if not (roof.Skip and math.abs(cx - roof.CX) < roof.Skip) then
+				local tall = roof.H * (0.38 + 0.3 * noise(index, 3))
+				local baseY = eave - 6
+				-- la pointe reste dans le toit (plus étroit en haut)
+				while tall > 14 and not insideRoof(roof, cx, baseY - tall, 6) do
+					tall -= 6
+				end
+				local tipY = baseY - tall
+				if tall > 14 and insideRoof(roof, cx, baseY - 10, 10) then
+					circle(parent, cx, baseY - 8, 30, 20, Color3.fromRGB(255, 120, 50), 0, z)
+					line(parent, cx - 10, baseY - 10, cx, tipY, 12, Color3.fromRGB(255, 120, 50), 0, z)
+					line(parent, cx + 10, baseY - 10, cx + 4, tipY + tall * 0.3, 10, Color3.fromRGB(255, 120, 50), 0, z)
+					circle(parent, cx, baseY - 8, 16, 12, C.Butter, 0, z + 1)
+					line(parent, cx - 3, baseY - 10, cx, tipY + tall * 0.35, 6, C.Butter, 0, z + 1)
+				end
+			end
+		end
+	end
+	local _ = deep
+end
+
+-- (v9.1) Jardin devant la maison : pelouse + déco choisie (HouseArt,
+-- dessins du dossier GardenArt), GardenSlots places fixes
+local function gardenStrip(ctx: Ctx, width: number, top: number, garden: { string })
+	local front = ctx.Front
+	local GARDEN_H = gardenHeight(width)
+	local decoSize = GARDEN_H - 6
+	local lawn = part(front, 12, top, width - 24, GARDEN_H - 8, P.Grass, { R = 26, Z = 50, Line = P.GrassDark, Shade = 0.14 })
+	local _ = lawn
+	-- bordure fleurie en haut de la pelouse
+	local count = math.floor((width - 60) / 34)
+	local colors = { C.Pink, C.Butter, WHITE, C.Lilac, C.Peach }
+	for index = 0, count do
+		local fx = 30 + index * (width - 60) / math.max(1, count)
+		flower(front, fx, top + 10 + (index % 2) * 3, 11, colors[index % #colors + 1], 52)
+	end
+	local slots = HouseCommon.GardenSlots
+	local margin = 70
+	local spacing = (width - margin * 2) / math.max(1, slots)
+	local byId = ((HouseCommon.LookKinds :: any).Garden or {}).ById or {}
+	for index = 1, slots do
+		local cx = margin + (index - 0.5) * spacing
+		local id = garden[index]
+		local entry = id and byId[id]
+		if entry then
+			local holder = group(front, cx - decoSize / 2, top + GARDEN_H - 4 - decoSize, decoSize, decoSize, 60)
+			local body = group(holder, 0, 0, 100, 100, 1)
+			body.AnchorPoint = Vector2.new(0.5, 1)
+			body.Position = UDim2.fromOffset(decoSize / 2, decoSize)
+			local scale = Instance.new("UIScale")
+			scale.Scale = decoSize / 100
+			scale.Parent = body
+			circle(holder, decoSize / 2, decoSize * 0.96, decoSize * 0.76, decoSize * 0.12, BLACK, 0.85, 0)
+			local ok, err = pcall(function()
+				HouseArt.PaintGarden(body, entry, true)
+			end)
+			if not ok then
+				warn("[HouseExterior] Jardin " .. tostring(id) .. " : " .. tostring(err))
+			end
+		else
+			-- place libre : petite touffe d'herbe
+			blob(front, cx, top + GARDEN_H - 30, 26, 12, P.GrassDark, { Z = 53, Line = false, Shade = false, T = 0.3 })
+		end
+	end
+end
+
+type Looks = { Facade: any?, Roof: any?, RoofStyle: any?, Garden: { string }? }
+
+function HouseExterior.Build(parent: Instance, size: SizeDef, looks: Looks?): Exterior
 	local root = Instance.new("Frame")
 	root.Name = "HouseExterior"
 	root.BackgroundTransparency = 1
@@ -1739,33 +1994,78 @@ function HouseExterior.Build(parent: Instance, size: SizeDef): Exterior
 	local styleName = size.Exterior or STYLE_BY_SIZE[size.Id] or "Cottage"
 	local painter = STYLES[styleName] or STYLES.Cottage
 	local cellW = HouseExterior.CellWidth(size)
-	local ok, built = pcall(painter, ctx, size, cellW)
-	if not ok then
-		warn("[HouseExterior] " .. tostring(styleName) .. " : " .. tostring(built))
-		-- Repli : simple bâtiment arrondi avec la grille
-		for _, child in ipairs(ctx.Back:GetChildren()) do
-			child:Destroy()
-		end
-		for _, child in ipairs(ctx.Front:GetChildren()) do
-			child:Destroy()
+
+	local function clearLayers()
+		for _, container in ipairs({ ctx.Back, ctx.Front, ctx.Fx }) do
+			for _, child in ipairs(container:GetChildren()) do
+				child:Destroy()
+			end
 		end
 		table.clear(ctx.Lit)
 		table.clear(ctx.Glows)
 		table.clear(ctx.Anims)
-		local gap, pad = 16, 30
-		local cols, floors = size.Columns, size.Floors
-		local w = cols * cellW + (cols - 1) * gap + pad * 2
-		local h = floors * HouseExterior.CELL_H + (floors - 1) * gap + pad * 2
-		part(ctx.Back, 0, 0, w, h, C.PinkSoft, { R = 18, Th = 3 })
-		local gaps = {}
-		for index = 1, cols - 1 do
-			gaps[index] = gap
-		end
-		local cells = makeGrid(size, cellW, pad, pad, gaps, gap)
-		cellBacks(ctx.Back, cells, P.Interior, 2)
-		built = { Width = w, Height = h, Cells = cells }
+		table.clear(ctx.NightOnly)
+		table.clear(ctx.DayOnly)
 	end
-	root.Size = UDim2.fromOffset(built.Width, built.Height)
+
+	-- Dessine le bâtiment avec les couleurs choisies (palette remise ensuite)
+	local function paint(chosen: Looks?): any
+		local wall = chosen and chosen.Facade and chosen.Facade.Color or nil
+		local roofColor = chosen and chosen.Roof and chosen.Roof.Color or nil
+		local saved = table.clone(P)
+		LOOK.Wall = wall
+		if roofColor then
+			local dark = roofColor:Lerp(INK, 0.28)
+			P.RoofPink, P.RoofPinkDark = roofColor, dark
+			P.Slate, P.SlateDark = roofColor, dark
+		end
+		if wall then
+			P.Brick = wall:Lerp(BLACK, 0.06)
+			P.BrickDark = wall:Lerp(INK, 0.28)
+			P.BrickLight = wall:Lerp(WHITE, 0.35)
+		end
+		local ok, built = pcall(painter, ctx, size, cellW)
+		for key, value in pairs(saved) do
+			(P :: any)[key] = value
+		end
+		LOOK.Wall = nil
+		if not ok then
+			warn("[HouseExterior] " .. tostring(styleName) .. " : " .. tostring(built))
+			-- Repli : simple bâtiment arrondi avec la grille
+			clearLayers()
+			local gap, pad = 16, 30
+			local cols, floors = size.Columns, size.Floors
+			local w = cols * cellW + (cols - 1) * gap + pad * 2
+			local h = floors * HouseExterior.CELL_H + (floors - 1) * gap + pad * 2
+			part(ctx.Back, 0, 0, w, h, wall or C.PinkSoft, { R = 18, Th = 3 })
+			local gaps = {}
+			for index = 1, cols - 1 do
+				gaps[index] = gap
+			end
+			local cells = makeGrid(size, cellW, pad, pad, gaps, gap)
+			cellBacks(ctx.Back, cells, P.Interior, 2)
+			built = { Width = w, Height = h, Cells = cells }
+		end
+		-- Motif du toit
+		local style = chosen and chosen.RoofStyle
+		local roof = (built :: any).Roof
+		if roof and style and style.Pattern and style.Pattern ~= "None" then
+			local okPattern, err = pcall(roofPattern, ctx, roof, style.Pattern, roofColor or (if styleName == "Cottage" then P.RoofPink else P.Slate))
+			if not okPattern then
+				warn("[HouseExterior] Motif du toit : " .. tostring(err))
+			end
+		end
+		-- Jardin (toujours là : la taille du bâtiment ne change pas)
+		local okGarden, errGarden = pcall(gardenStrip, ctx, built.Width, built.Height - 6, chosen and chosen.Garden or {})
+		if not okGarden then
+			warn("[HouseExterior] Jardin : " .. tostring(errGarden))
+		end
+		return built
+	end
+
+	local built = paint(looks)
+	local fullHeight = built.Height + gardenHeight(built.Width)
+	root.Size = UDim2.fromOffset(built.Width, fullHeight)
 	root.Parent = parent
 
 	-- Mode nuit : couleurs du jour mémorisées une fois
@@ -1791,7 +2091,7 @@ function HouseExterior.Build(parent: Instance, size: SizeDef): Exterior
 	local exterior = {} :: Exterior
 	exterior.Frame = root
 	exterior.Width = built.Width
-	exterior.Height = built.Height
+	exterior.Height = fullHeight
 	exterior.Cells = built.Cells
 	exterior.CellLayer = cellLayer
 
@@ -1825,6 +2125,15 @@ function HouseExterior.Build(parent: Instance, size: SizeDef): Exterior
 		for _, anim in ipairs(ctx.Anims) do
 			anim(clock, dark)
 		end
+	end
+
+	-- (v9.1) Nouvelles couleurs / nouveau jardin : on redessine la façade
+	-- (mêmes dimensions, les pièces du calque Cells ne bougent pas)
+	function exterior.SetLooks(newLooks: Looks?)
+		clearLayers()
+		paint(newLooks)
+		records = nil
+		exterior.SetDark(dark)
 	end
 
 	function exterior.Update(dt: number)

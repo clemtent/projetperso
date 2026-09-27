@@ -712,7 +712,15 @@ function Weather.Start(ctx)
 			stripHeight = 40
 			chaser.Position = UDim2.fromOffset(0, 0)
 		end
-		chaser.Size = UDim2.new(1, 0, 0, stripHeight)
+		-- v9.1 (téléphone) : la bande ne passe pas sous les boutons Roblox de la barre du haut
+		local left, right = 0, 0
+		local tickerInsets = (ctx.Interface :: any).TickerInsets
+		if type(tickerInsets) == "table" then
+			left = tonumber(tickerInsets.Left) or 0
+			right = tonumber(tickerInsets.Right) or 0
+		end
+		chaser.Position = UDim2.fromOffset(left, chaser.Position.Y.Offset)
+		chaser.Size = UDim2.new(1, -(left + right), 0, stripHeight)
 		roadY = stripHeight - 2
 		refreshSizes()
 	end

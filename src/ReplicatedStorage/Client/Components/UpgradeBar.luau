@@ -236,9 +236,10 @@ local function hideTooltip()
 	end
 end
 
--- Place l'infobulle sous `target` (en coordonnées de la toile)
+-- Place l'infobulle sous `target` (en coordonnées de son calque : sur
+-- téléphone, le calque Panels commence Interface.SafeTop sous la toile)
 local function placeTooltip(target: GuiObject)
-	local topLeft = Interface.ScreenToCanvas(target.AbsolutePosition)
+	local topLeft = Interface.ScreenToCanvas(target.AbsolutePosition) - Vector2.new(0, Interface.SafeTop or 0)
 	local size = target.AbsoluteSize / Interface.Scale
 	local canvas = Interface.CanvasSize
 	local halfWidth = tooltip.AbsoluteSize.X / Interface.Scale / 2

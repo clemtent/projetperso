@@ -122,6 +122,10 @@ local forceSync = false
 local renderConnection: RBXScriptConnection? = nil
 local previewWallpaper: string? = nil
 local previewFloor: string? = nil
+-- (v9.1) essais de la boutique : boiseries / ambiance / vue (pièce ouverte),
+-- façade / toit / motif du toit / déco du jardin (vue de la maison)
+local previewLooks: { [string]: string? } = {}
+local ROOM_LOOKS = { Trim = true, Mood = true, View = true }
 local pendingPlace: { { Id: string, Until: number } } = {}
 local pendingPulse: { [string]: number } = {} -- pièces à faire "rebondir" dès qu'elles existent
 local pendingSlotPulse: { [number]: number } = {}
@@ -465,8 +469,14 @@ local function applyRoomStyle()
 	local wallpaper = (previewWallpaper and HouseCommon.WallpapersById[previewWallpaper]) or HouseCommon.GetRoomWallpaper(roomData)
 	local floor = (previewFloor and HouseCommon.FloorsById[previewFloor]) or HouseCommon.GetRoomFloor(roomData)
 	currentRoomView.SetStyle(size, wallpaper, floor)
+	currentRoomView.SetLooks(
+		HouseCommon.Look("Trim", previewLooks.Trim or roomData.Trim),
+		HouseCommon.Look("View", previewLooks.View or roomData.View),
+		HouseCommon.Look("Mood", previewLooks.Mood or roomData.Mood)
+	)
 	currentRoomView.SetExterior(size.Exterior)
-	previewChip.Visible = view == "room" and (previewWallpaper ~= nil or previewFloor ~= nil)
+	local lookPreview = previewLooks.Trim ~= nil or previewLooks.View ~= nil or previewLooks.Mood ~= nil
+	previewChip.Visible = view == "room" and (previewWallpaper ~= nil or previewFloor ~= nil or lookPreview)
 end
 
 ----------------------------------------------------------------------
@@ -696,7 +706,7 @@ end
 local function refreshOverview()
 	local currentOverview = overview
 	if currentOverview and view == "overview" then
-		currentOverview.SetHouse(latestHouse, overrides())
+		currentOverview.SetHouse(latestHouse, overrides(), previewLooks)
 		for roomId, untilTime in pairs(pendingPulse) do
 			if os.clock() > untilTime then
 				pendingPulse[roomId] = nil
@@ -748,6 +758,7 @@ local function showRoomNow(roomId: string)
 	currentRoomId = roomId
 	lastRoomId = roomId
 	previewWallpaper, previewFloor = nil, nil
+	table.clear(previewLooks)
 	currentEditor.SetRoom(roomId)
 	setView("room")
 	applyRoomStyle()
@@ -803,6 +814,7 @@ local function backToOverview()
 		currentEditor.Flush()
 	end
 	previewWallpaper, previewFloor = nil, nil
+	table.clear(previewLooks)
 	local leaving = currentRoomId
 	currentRoomId = nil
 	setView("overview")
@@ -1029,19 +1041,24 @@ open3D = function()
 	-- Pièce telle qu'on la voit (disposition locale comprise)
 	local placed = {}
 	for _, entry in ipairs(currentLayout()) do
-		table.insert(placed, { I = entry.I, X = entry.X, Y = entry.Y, S = entry.S, Z = entry.Z, F = entry.F == true or nil })
+		table.insert(placed, { I = entry.I, X = entry.X, Y = entry.Y, S = entry.S, Z = entry.Z, F = entry.F == true or nil, C = entry.C })
 	end
+	-- (v9.1) boiseries, ambiance et vue de la fenêtre : aussi en 3D
 	local record = {
 		Id = roomData.Id,
 		Type = roomData.Type,
 		Slot = roomData.Slot,
 		Wallpaper = roomData.Wallpaper,
 		Floor = roomData.Floor,
+		Trim = roomData.Trim,
+		Mood = roomData.Mood,
+		View = roomData.View,
 		Placed = placed,
 	}
 	SoundManager.Play("Open", 1.2)
 	local ok, opened = pcall(module.Open, {
 		Room = record,
+		House = latestHouse,
 		SizeId = latestHouse.Size,
 		Title = roomLabel(roomData),
 		OnClose = function()
@@ -1134,13 +1151,24 @@ local function ensureBuilt()
 			end
 		end,
 		OnPreview = function(kind: string, id: string?)
+			if kind ~= "Wallpaper" and kind ~= "Floor" and not ROOM_LOOKS[kind] then
+				-- (v9.1) extérieur : essayé sur la façade (vue de la maison)
+				if previewLooks[kind] == id then
+					return
+				end
+				previewLooks[kind] = id
+				refreshOverview()
+				return
+			end
 			if view ~= "room" then
 				return
 			end
 			if kind == "Wallpaper" then
 				previewWallpaper = id
-			else
+			elseif kind == "Floor" then
 				previewFloor = id
+			else
+				previewLooks[kind] = id
 			end
 			applyRoomStyle()
 		end,
@@ -1171,7 +1199,9 @@ local function ensureBuilt()
 	drawerFrame:GetPropertyChangedSignal("Visible"):Connect(function()
 		if not drawerFrame.Visible then
 			previewWallpaper, previewFloor = nil, nil
+			table.clear(previewLooks)
 			applyRoomStyle()
+			refreshOverview()
 			layoutLeft(true)
 			refreshEditUi()
 		end

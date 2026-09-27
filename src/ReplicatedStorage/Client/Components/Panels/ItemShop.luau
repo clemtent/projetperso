@@ -30,6 +30,7 @@ local ClientState = require(Client.ClientState)
 local Effects = require(Client.Effects)
 local SoundManager = require(Client.SoundManager)
 local Notifications = require(script.Parent.Parent.Notifications)
+local CosmeticArt = require(script.Parent.Parent.CosmeticArt)
 local NeedDopamine = require(script.Parent.Parent.NeedDopamine)
 local Config = require(ReplicatedStorage.Shared.Config)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
@@ -174,11 +175,15 @@ local function showPreview(skinId: string, hatId: string, caption: string)
 		previewGradient.Color = ColorSequence.new(Theme.Colors.Button, Theme.Colors.ButtonBottom)
 		previewLabel.TextColor3 = Theme.Colors.Text
 	end
+	-- (v9.2) motif dessiné des boutons "cool" (carbone, flammes...)
+	CosmeticArt.ApplySkin(previewButton, skin, 10, 4)
 	local hat = Config.CosmeticsById[hatId]
-	local hatText = hat and hat.Icon or ""
-	if previewHat.Text ~= hatText then
-		previewHat.Text = hatText
-		if hatText ~= "" then
+	local hatKey = hat and hat.Id or ""
+	if previewHat:GetAttribute("HatId") ~= hatKey then
+		previewHat:SetAttribute("HatId", hatKey)
+		-- chapeaux dessinés (v9.2) ou emoji
+		CosmeticArt.ApplyHat(previewHat, hat)
+		if hat then
 			UIUtil.Pop(previewHat, 0.4, 0.35)
 		end
 	end
@@ -516,6 +521,7 @@ local function buildCard(grid: ScrollingFrame, cosmetic, layoutOrder: number)
 		UIUtil.Corner(swatch, 9)
 		UIUtil.Stroke(swatch, Theme.Colors.Border, 1.5)
 		UIUtil.Gradient(swatch, ColorSequence.new(cosmetic.Top, cosmetic.Bottom), 90)
+		CosmeticArt.ApplySkin(swatch, cosmetic, 9, 4) -- (v9.2) motif dessiné
 		visual = swatch
 		UIUtil.Label({
 			Text = Locale.T("Click me"),
@@ -537,6 +543,8 @@ local function buildCard(grid: ScrollingFrame, cosmetic, layoutOrder: number)
 			ZIndex = 4,
 			Parent = showcase,
 		})
+		-- (v9.2) chapeau dessiné (sinon l'emoji reste)
+		CosmeticArt.ApplyHat(visual :: GuiObject, cosmetic)
 	end
 
 	-- Pastille de rareté
