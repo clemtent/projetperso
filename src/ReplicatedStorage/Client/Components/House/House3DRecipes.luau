@@ -1481,6 +1481,7 @@ local CRITTERS: { [string]: string } = {
 	PandaPlush = "Panda", Fox = "Fox", UnicornPlush = "Unicorn", PiggyBank = "Pig",
 	Chick = "Bird", Parrot = "Bird", PenguinPlush = "Bird", RubberDucky = "Bird",
 	Goldfish = "Fish", Turtle = "Turtle",
+	Duckling = "Bird", Penguin = "Bird", Owl = "Bird", Axolotl = "Bear", WhalePlush = "Bear", OctopusPlush = "Bear",
 	FroggyPlush = "Bear", DinoPlush = "Bear",
 }
 for id, kind in pairs(CRITTERS) do
@@ -1861,6 +1862,181 @@ R.ToyRocket = function(b, _ctx)
 	b.Footprint(50, 50, 96)
 end
 
+-- v9.1 : NOUVEAUX MEUBLES (Art/Cozy91, Art/Fun91) ------------------------
+
+R.ToyChest = function(b, ctx)
+	local top = ctx.TopY(1, 68)
+	local x0, x1 = ctx.Span(1, -42, 42)
+	local w, depth = x1 - x0, 52
+	local body = accent(b, 1, rgb(255, 170, 190))
+	b.Box(0, 0, 0, w, top - 10, depth, body, M.Wood)
+	b.Box(0, top - 10, 0, w + 3, 10, depth + 3, lighten(body, 0.15), M.Wood)
+	for _, x in ipairs({ -w / 3, w / 3 }) do
+		b.Box(x, 0, 0, 5, top + 0.4, depth + 3.4, accent(b, 2, BUTTER), M.Wood)
+	end
+	b.Box(0, top - 18, depth / 2 + 1.8, 10, 10, 1, GOLD, M.Metal)
+	b.Top(1, 0, top, 0, w, depth)
+	b.Footprint(w + 3, depth + 3, top)
+end
+R.Pouf = function(b, ctx)
+	local seat = ctx.TopY(1, 48)
+	local color = accent(b, 1, LILAC)
+	b.Cyl(0, 0, 0, 64, seat - 6, color, M.Fabric)
+	b.Cyl(0, seat - 8, 0, 60, 8, lighten(color, 0.12), M.Fabric)
+	b.Ball(0, seat - 1, 0, 8, darken(color, 0.2), M.Fabric)
+	b.Top(1, 0, seat, 0, 50, 50)
+	b.Footprint(64, 64, seat)
+end
+R.LadderShelf = function(b, ctx)
+	local wood = woodOf(b, WOOD)
+	for _, side in ipairs({ -1, 1 }) do
+		b.BoxR(CFrame.new(side * 40, 46, -4) * CFrame.Angles(-0.18, 0, 0), 4, 94, 4, darken(wood, 0.1), M.Wood)
+	end
+	for index = 1, 3 do
+		local y = ctx.TopY(index, 30 * index)
+		local x0, x1 = ctx.Span(index, -40, 40)
+		local z = 8 - index * 5
+		b.Box((x0 + x1) / 2, y - 3, z, x1 - x0 + 4, 3, 24 - index * 3, wood, M.Wood)
+		b.Top(index, (x0 + x1) / 2, y, z, x1 - x0, 18 - index * 3)
+	end
+	b.Footprint(86, 36, 96)
+end
+R.KotatsuTable = function(b, ctx)
+	local top = ctx.TopY(1, 58)
+	local x0, x1 = ctx.Span(1, -46, 46)
+	local w, depth = x1 - x0, 60
+	local quilt = accent(b, 1, rgb(255, 170, 190))
+	b.Box(0, 0, 0, w - 4, top - 6, depth - 4, quilt, M.Fabric)
+	for _, sx in ipairs({ -1, 1 }) do
+		b.Box(sx * (w / 2 - 1), 0, 0, 4, top - 10, depth + 2, darken(quilt, 0.08), M.Fabric)
+	end
+	b.Box(0, top - 6, 0, w + 4, 6, depth + 4, woodOf(b, WOOD), M.Wood)
+	b.Top(1, 0, top, 0, w, depth)
+	b.Footprint(w + 6, depth + 6, top)
+end
+R.HeartArmchair = function(b, ctx)
+	sofa(b, ctx, 36, 92, 1)
+	local color = accent(b, 1, PINK)
+	local seat = ctx.TopY(1, 36)
+	for _, side in ipairs({ -1, 1 }) do
+		b.Ball(side * 16, seat + 40, -20, 36, color, M.Fabric)
+	end
+	b.BoxR(CFrame.new(0, seat + 28, -20) * CFrame.Angles(0, 0, math.pi / 4), 32, 32, 10, color, M.Fabric)
+end
+R.CatSofa = function(b, ctx)
+	sofa(b, ctx, 36, 100, 3)
+	local color = accent(b, 1, rgb(255, 190, 150))
+	local seat = ctx.TopY(1, 36)
+	for _, side in ipairs({ -1, 1 }) do
+		b.Wedge(side * 30, seat + 30, -21, 16, 16, 8, color, "Front", M.Fabric)
+		b.Ball(side * 8, seat + 20, -14, 6, INK)
+	end
+end
+R.CrystalThrone = function(b, ctx)
+	chair(b, ctx, 44, 56, 64, 56, accent(b, 1, LILAC))
+	local crystal = accent(b, 2, rgb(170, 220, 255))
+	local seat = ctx.TopY(1, 44)
+	for index = -2, 2 do
+		local spike = b.Wedge(index * 11, seat + 50 - math.abs(index) * 8, -25, 9, 22 - math.abs(index) * 4, 6, crystal, "Front", M.Glass)
+		spike.Transparency = 0.2
+	end
+end
+R.Hammock = function(b, ctx)
+	local seat = ctx.TopY(1, 44)
+	local wood = woodOf(b, WOOD)
+	local fabric = accent(b, 1, rgb(255, 170, 120))
+	for _, side in ipairs({ -1, 1 }) do
+		b.Box(side * 46, 0, 0, 5, 70, 5, wood, M.Wood)
+		b.Box(side * 46, 0, 0, 12, 4, 30, darken(wood, 0.15), M.Wood)
+	end
+	for index = -3, 3 do
+		local y = seat - 6 + math.abs(index) ^ 1.6 * 2.2
+		b.Box(index * 12, y, 0, 13, 3, 32, index % 2 == 0 and fabric or lighten(fabric, 0.3), M.Fabric)
+	end
+	for _, side in ipairs({ -1, 1 }) do
+		b.BoxR(CFrame.new(side * 44, seat + 12, 0) * CFrame.Angles(0, 0, side * 0.9), 1.5, 22, 1.5, INK)
+	end
+	b.Top(1, 0, seat, 0, 60, 26)
+	b.Footprint(100, 34, 70)
+end
+R.KitchenSink = function(b, ctx)
+	local top = ctx.TopY(1, 62)
+	local body = accent(b, 1, MINT)
+	local w, depth = 98, 48
+	b.Box(0, 0, 0, w, top - 6, depth, body, M.SmoothPlastic)
+	for index = 1, 3 do
+		local x = -w / 2 + (index - 0.5) * w / 3
+		b.Box(x, 6, depth / 2, w / 3 - 3, top - 18, 1.2, lighten(body, 0.2))
+		knob(b, x, top - 16, depth / 2 + 1.4, 3.5)
+	end
+	b.Box(0, top - 6, 0, w + 2, 6, depth + 2, lightOf(b, WHITE), M.Marble)
+	b.Box(0, top - 5, 0, 36, 5.2, 30, rgb(150, 170, 190), M.Metal)
+	local water = b.Box(0, top - 3, 0, 32, 1, 26, rgb(170, 220, 255), M.Glass)
+	water.Transparency = 0.3
+	b.Cyl(0, top, -18, 4, 16, GREY, M.Metal)
+	b.CylZ(0, top + 16, -13, 4, 10, GREY, M.Metal)
+	local x0, x1 = ctx.Span(1, -46, -22)
+	b.Top(1, (x0 + x1) / 2, top, 0, x1 - x0, depth - 6)
+	local x2, x3 = ctx.Span(2, 22, 46)
+	b.Top(2, (x2 + x3) / 2, top, 0, x3 - x2, depth - 6)
+	b.Footprint(w + 2, depth + 2, top + 18)
+end
+R.Jukebox = function(b, _ctx)
+	local body = accent(b, 1, rgb(255, 120, 150))
+	b.Box(0, 0, 0, 70, 60, 40, body, M.SmoothPlastic)
+	b.CylZ(0, 60, 0, 70, 40, body, M.SmoothPlastic)
+	local arch = b.CylZ(0, 60, 20.5, 56, 1, BUTTER)
+	b.Neon(arch)
+	b.Box(0, 20, 20.5, 50, 30, 1, rgb(60, 50, 90), M.Glass)
+	for index = 0, 3 do
+		b.Box(-15 + index * 10, 24, 21.2, 6, 20, 0.5, ({ PINK, SKY, MINT, BUTTER })[index + 1])
+	end
+	b.Light(arch, BUTTER, 10, 0.8)
+	b.Footprint(70, 40, 95)
+end
+R.PinballMachine = function(b, _ctx)
+	local body = accent(b, 1, rgb(120, 110, 230))
+	for _, x in ipairs({ -26, 26 }) do
+		for _, z in ipairs({ -30, 30 }) do
+			b.Box(x, 0, z, 4, 40, 4, INK, M.Metal)
+		end
+	end
+	b.BoxR(CFrame.new(0, 46, 0) * CFrame.Angles(-0.12, 0, 0), 60, 10, 76, body)
+	local field = b.BoxR(CFrame.new(0, 51.5, 0) * CFrame.Angles(-0.12, 0, 0), 52, 1, 68, rgb(40, 40, 90))
+	field.Name = "Plateau"
+	b.Box(0, 46, -38, 60, 40, 8, body)
+	local panel = b.Box(0, 56, -33.8, 52, 26, 0.6, accent(b, 2, PINK))
+	b.Neon(panel)
+	for index = 0, 2 do
+		local bumper = b.Ball(-14 + index * 14, 56 - index * 0.8, -10 + index * 8, 8, ({ PINK, BUTTER, MINT })[index + 1])
+		b.Neon(bumper)
+	end
+	b.Footprint(64, 84, 86)
+end
+R.RetroComputer = R.DesktopPC
+R.TulipLamp = function(b, _ctx)
+	local color = accent(b, 1, PINK)
+	b.Cyl(0, 0, 0, 34, 5, greenOf(b, LEAF_DARK))
+	b.Cyl(0, 5, 0, 4, 50, greenOf(b, LEAF_DARK))
+	b.BoxR(CFrame.new(8, 26, 0) * CFrame.Angles(0, 0, -0.6), 16, 2, 8, greenOf(b, LEAF))
+	local bulb = b.Ball(0, 66, 0, 34, color)
+	b.Neon(bulb)
+	for index = 0, 2 do
+		local angle = index / 3 * math.pi * 2
+		b.Wedge(math.cos(angle) * 8, 74, math.sin(angle) * 8, 10, 16, 6, color, "Front")
+	end
+	b.Light(bulb, lighten(color, 0.4), 12, 0.9)
+	b.Footprint(40, 40, 92)
+end
+R.ToyBlocks = function(b, _ctx)
+	local colors = { accent(b, 1, PINK), accent(b, 2, SKY), accent(b, 3, BUTTER), accent(b, 4, MINT) }
+	local specs = { { -22, 0, 0 }, { 0, 0, 4 }, { 22, 0, -2 }, { -11, 26, 2 }, { 11, 26, 0 }, { 0, 52, 1 } }
+	for index, spec in ipairs(specs) do
+		b.BoxR(CFrame.new(spec[1], spec[2] + 13, spec[3]) * CFrame.Angles(0, (index % 3 - 1) * 0.2, 0), 24, 24, 24, colors[index % 4 + 1])
+	end
+	b.Footprint(70, 30, 78)
+end
+
 ----------------------------------------------------------------------
 -- Familles par défaut (objets sans recette dédiée)
 ----------------------------------------------------------------------
@@ -1872,6 +2048,7 @@ local AGAINST_WALL: { [string]: boolean } = {
 	Wardrobe = true, Bookshelf = true, Fridge = true, Fireplace = true, Dresser = true, DrawerCabinet = true,
 	HomeCinema = true, TVStand = true, KitchenIsland = false, Shower = true, ToriiGate = true, ArcadeMachine = true,
 	SlotMachine = true, Speaker = true, VanityTable = true, Aquarium = true, Stove = true, Toilet = true,
+	KitchenSink = true, Jukebox = true, PinballMachine = false, LadderShelf = true,
 }
 
 function House3DRecipes.Has(itemId: string): boolean

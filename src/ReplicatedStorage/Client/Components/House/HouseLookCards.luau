@@ -196,7 +196,7 @@ local function trimPreview(frame: Frame, w: number, h: number, entry: any, conte
 	stroke(door, edge, 1.2)
 	local inner = Box(frame, doorX + 6, 32, 22, wallH - 44, C.Pink:Lerp(WHITE, 0.3), 0, 4)
 	Round(inner, UDim.new(0, 8))
-	Circle(frame, doorX + 24, 26 + (wallH - 38) * 0.6, 4, 4, C.Gold, 0, 5)
+	Circle(frame, doorX + 24, 26 + (wallH - 38) * 0.6, 4, 4, Color3.fromRGB(245, 190, 60), 0, 5)
 end
 
 -- Petite pièce meublée sous l'ambiance choisie

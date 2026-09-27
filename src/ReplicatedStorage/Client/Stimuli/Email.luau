@@ -43,13 +43,33 @@
 	    n'est animé image par image quand il n'y a ni carte ni fenêtre.
 	Plus de 90 mails absurdes (une liste par langue, même ordre) choisis par
 	info.Variant.
+
+	v9.1 : mails entre AMIS Roblox (FriendMailService côté serveur).
+	  - Rédaction : onglets "🎭 Personnages" / "👥 Amis" ; les amis Roblox
+	    (liste du serveur, en cache) avec leur photo et leur statut : sur ce
+	    serveur / en ligne ailleurs / hors ligne. Grille "virtuelle" : une
+	    petite réserve de pastilles recyclées, même avec 200 amis.
+	  - Anti-spam vérifié par le serveur (1 nouveau mail / 10 min, 1 réponse
+	    à un mail d'ami / 2 min, gardé d'une partie à l'autre) : compte à
+	    rebours sur le bouton Envoyer ("⏳ 7:32").
+	  - Envoi : texte d'abord passé par "FilterText" (copie "Envoyés" du
+	    joueur, filtrée), puis "FriendMail" ("Send") : le serveur vérifie tout,
+	    garde le texte brut pour lui seul et le filtre POUR le destinataire à
+	    la livraison. Jamais de réponse automatique : c'est un vrai ami.
+	  - Réception : "FriendMailEvent" (et "Inbox" au démarrage) apporte des
+	    mails DÉJÀ filtrés pour ce joueur ; étiquette "AMI 💌", photo, dossier
+	    "💌 Amis", aucune Dopamine. Répondre, Supprimer, Signaler (caché +
+	    expéditeur bloqué, rien n'est envoyé ailleurs), Bloquer.
+	  - Studio sans accès aux API : "indisponible dans Studio", rien ne casse.
 ]]
 
 local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TextService = game:GetService("TextService")
 
-local Locale = require(game:GetService("ReplicatedStorage").Shared.Locale)
+local Locale = require(ReplicatedStorage.Shared.Locale)
+local FriendMailRules = require(ReplicatedStorage.Shared.FriendMailRules)
 
 local Email = {}
 Email.Slot = "Overlay"
@@ -74,6 +94,11 @@ local SEPARATOR = " — " -- sépare l'objet du texte : UN seul appel au filtre 
 local SEND_TIMEOUT = 12
 local REPLY_DELAY_MIN = 3
 local REPLY_DELAY_MAX = 6
+-- Mails d'amis : envoi plus long (filtre + contrôles + DataStore côté serveur)
+local FRIEND_SEND_TIMEOUT = 25
+local FRIENDS_REFRESH = 120 -- liste d'amis redemandée au plus toutes les 2 min
+local ONLINE_REFRESH = 45 -- amis en ligne (GetFriendsOnline) : au plus toutes les 45 s
+local STATUS_REFRESH = 60 -- état anti-spam redemandé au serveur
 -- Le cadre du mail passe au-dessus des autres stimuli plein écran (boule
 -- disco, pluie d'emojis...) : compteur lisible, cartes et fenêtre cliquables
 local RAISED_Z = 1000
@@ -101,6 +126,7 @@ local TAGS = {
 	NEWS = { Text = "📰 NEWSLETTER", Color = Color3.fromRGB(140, 60, 220) },
 	SUPPORT = { Text = "🛠️ SUPPORT", Color = Color3.fromRGB(0, 160, 170) },
 	PERSO = { Text = "✉️ PERSONAL", Color = Color3.fromRGB(40, 170, 90) },
+	FRIEND = { Text = "FRIEND 💌", Color = Color3.fromRGB(222, 52, 180) },
 }
 
 -- { étiquette, avatar, expéditeur, objet, texte, signature, [pièce jointe] }
@@ -696,6 +722,7 @@ local MAIL_COUNT = {
 -- Dossiers (ordre de la barre latérale)
 local FOLDERS = {
 	{ Id = "Inbox", Icon = "📥" },
+	{ Id = "Friends", Icon = "💌" },
 	{ Id = "Starred", Icon = "⭐" },
 	{ Id = "Sent", Icon = "📤" },
 	{ Id = "Spam", Icon = "🚫" },
@@ -704,12 +731,12 @@ local FOLDERS = {
 -- Noms courts (barre latérale) et longs (en-tête de la liste)
 local FOLDER_NAMES = {
 	en = {
-		Short = { Inbox = "Inbox", Starred = "Starred", Sent = "Sent", Spam = "Spam", Trash = "Trash" },
-		Long = { Inbox = "Inbox", Starred = "Starred", Sent = "Sent", Spam = "Spam", Trash = "Trash" },
+		Short = { Inbox = "Inbox", Friends = "Friends", Starred = "Starred", Sent = "Sent", Spam = "Spam", Trash = "Trash" },
+		Long = { Inbox = "Inbox", Friends = "Friend mail", Starred = "Starred", Sent = "Sent", Spam = "Spam", Trash = "Trash" },
 	},
 	fr = {
-		Short = { Inbox = "Réception", Starred = "Favoris", Sent = "Envoyés", Spam = "Spams", Trash = "Corbeille" },
-		Long = { Inbox = "Boîte de réception", Starred = "Favoris", Sent = "Envoyés", Spam = "Spams", Trash = "Corbeille" },
+		Short = { Inbox = "Réception", Friends = "Amis", Starred = "Favoris", Sent = "Envoyés", Spam = "Spams", Trash = "Corbeille" },
+		Long = { Inbox = "Boîte de réception", Friends = "Mails d'amis", Starred = "Favoris", Sent = "Envoyés", Spam = "Spams", Trash = "Corbeille" },
 	},
 }
 
@@ -1441,6 +1468,8 @@ function Email.Start(ctx)
 	local me = {
 		Name = Locale.T("Me"),
 		Avatar = "😎",
+		-- (photo du joueur : sur les mails envoyés à un ami)
+		Image = player and ("rbxthumb://type=AvatarHeadShot&id=" .. tostring(player.UserId) .. "&w=150&h=150") or nil,
 		Address = string.lower(player and player.Name or "you") .. Locale.T("@dopamail.com"),
 	}
 
@@ -1466,6 +1495,54 @@ function Email.Start(ctx)
 	for _, contact in ipairs(contacts) do
 		contactsById[contact.Id] = contact
 	end
+
+	-- Amis Roblox : un "correspondant" par ami (photo, nom affiché, @pseudo)
+	local function headshot(userId: number): string
+		return "rbxthumb://type=AvatarHeadShot&id=" .. tostring(userId) .. "&w=150&h=150"
+	end
+	local friendContacts: { [number]: any } = {}
+	local function friendContact(userId: number, name: any, display: any)
+		local contact = friendContacts[userId]
+		if not contact then
+			contact = {
+				Id = "Friend_" .. tostring(userId),
+				Friend = true,
+				UserId = userId,
+				Avatar = "👤",
+				Tag = "FRIEND",
+				Image = headshot(userId),
+				Short = "#" .. tostring(userId),
+				Address = "#" .. tostring(userId),
+			}
+			friendContacts[userId] = contact
+		end
+		if type(display) == "string" and display ~= "" then
+			contact.Short = display
+		elseif type(name) == "string" and name ~= "" then
+			contact.Short = name
+		end
+		if type(name) == "string" and name ~= "" then
+			contact.Address = "@" .. name
+		end
+		contact.Name = "👤 " .. contact.Short
+		return contact
+	end
+
+	-- État des mails d'amis (réponses du serveur, liste d'amis, présence)
+	local FS = {
+		Status = nil :: any, -- { Enabled, Reason, NewIn, ReplyIn } (secondes au moment StatusClock)
+		StatusClock = 0,
+		Friends = nil :: { any }?, -- { { Id, Name, Display } }
+		FriendsClock = -math.huge,
+		Loading = false,
+		Error = nil :: string?,
+		Online = {} :: { [number]: boolean },
+		OnlineClock = -math.huge,
+		Blocked = {} :: { [string]: boolean },
+		Known = {} :: { [string]: any }, -- id serveur -> mail
+		Booted = false,
+		Sorted = {} :: { any },
+	}
 
 	------------------------------------------------------------------
 	-- Modèle : TOUS les mails de la session (les plus récents en premier)
@@ -1493,6 +1570,9 @@ function Email.Start(ctx)
 		SnackToken = 0,
 		SnackAction = nil :: any,
 		SnackTarget = nil :: any, -- mail annoncé par le snack (caché quand on l'ouvre)
+		Group = "Characters", -- destinataires de la rédaction : "Characters" | "Friends"
+		Confirm = nil :: any, -- { Id, Mail, Until } : Signaler / Bloquer attendent un 2e clic
+		StatusHold = 0, -- un message d'erreur reste affiché jusque-là
 	}
 	local UI: any = nil -- fenêtre (construite à la première ouverture, puis réutilisée)
 
@@ -1509,6 +1589,8 @@ function Email.Start(ctx)
 	local spawnCard: (mail: any, info: any?) -> ()
 	local removeEnvelope: (envelope: any, opened: boolean) -> ()
 	local expireMail: (mail: any) -> ()
+	local updateFriendSend: () -> ()
+	local renderFriendArea: () -> ()
 
 	local function now(): number
 		return os.clock()
@@ -1621,9 +1703,27 @@ function Email.Start(ctx)
 			ZIndex = zIndex + 1,
 			Parent = circle,
 		})
+		-- Photo (amis Roblox) : par-dessus l'emoji, ronde elle aussi
+		local photo = UIUtil.Create("ImageLabel", {
+			Name = "Photo",
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			Image = "",
+			ScaleType = Enum.ScaleType.Crop,
+			Visible = false,
+			ZIndex = zIndex + 1,
+			Parent = circle,
+		})
+		UIUtil.Corner(photo, UDim.new(1, 0))
 		local avatar = { Frame = circle }
-		function avatar.Set(value: string, color: Color3)
-			emoji.Text = value
+		function avatar.Set(value: string, color: Color3, image: string?)
+			local hasImage = type(image) == "string" and image ~= ""
+			emoji.Text = hasImage and "" or value
+			photo.Visible = hasImage
+			if hasImage and photo.Image ~= image then
+				photo.Image = image :: string
+			end
 			gradient.Color = ColorSequence.new(color:Lerp(C.White, 0.72), color:Lerp(C.White, 0.36))
 			stroke.Color = color
 		end
@@ -1668,7 +1768,11 @@ function Email.Start(ctx)
 		if minutes < 60 then
 			return Locale.T("%d min", minutes)
 		end
-		return Locale.T("%d h", math.floor(minutes / 60))
+		local hours = math.floor(minutes / 60)
+		if hours < 24 then
+			return Locale.T("%d h", hours)
+		end
+		return Locale.T("%d d", math.floor(hours / 24))
 	end
 
 	local function countText(count: number, forms): string
@@ -1704,6 +1808,9 @@ function Email.Start(ctx)
 	end
 
 	local function inFolder(mail, folder: string): boolean
+		if folder == "Friends" then
+			return mail.Friend == true and (mail.Folder == "Inbox" or mail.Folder == "Sent")
+		end
 		if folder == "Starred" then
 			return mail.Starred == true and (mail.Folder == "Inbox" or mail.Folder == "Sent")
 		end
@@ -1723,6 +1830,15 @@ function Email.Start(ctx)
 	local function folderCount(folder: string): number
 		if folder == "Inbox" then
 			return unreadCount()
+		end
+		if folder == "Friends" then
+			local count = 0
+			for _, mail in ipairs(mails) do
+				if mail.Kind == "Friend" and mail.Folder == "Inbox" and not mail.Read then
+					count += 1
+				end
+			end
+			return count
 		end
 		local count = 0
 		for _, mail in ipairs(mails) do
@@ -1750,6 +1866,9 @@ function Email.Start(ctx)
 		if mail.SpawnId and bySpawn[mail.SpawnId] == mail then
 			bySpawn[mail.SpawnId] = nil
 		end
+		if mail.FriendId and FS.Known[mail.FriendId] == mail then
+			FS.Known[mail.FriendId] = nil
+		end
 		if mail.Envelope then
 			removeEnvelope(mail.Envelope, false)
 		end
@@ -1775,7 +1894,8 @@ function Email.Start(ctx)
 			local mail = mails[index]
 			local isSent = mail.Kind == "Sent"
 			local over = (isSent and sent > MAX_SENT) or (not isSent and received > MAX_RECEIVED)
-			if over and not mail.Starred and mail.Read and mail.State ~= "Live" and mail ~= S.Selected then
+			-- (mails d'amis reçus : gardés par le serveur, jamais oubliés ici)
+			if over and mail.Kind ~= "Friend" and not mail.Starred and mail.Read and mail.State ~= "Live" and mail ~= S.Selected then
 				removeMail(mail)
 				if isSent then
 					sent -= 1
@@ -1790,7 +1910,7 @@ function Email.Start(ctx)
 				break
 			end
 			local mail = mails[index]
-			if mail.Kind ~= "Sent" and not mail.Starred and mail.State ~= "Live" and mail ~= S.Selected then
+			if mail.Kind ~= "Sent" and mail.Kind ~= "Friend" and not mail.Starred and mail.State ~= "Live" and mail ~= S.Selected then
 				removeMail(mail)
 				received -= 1
 			end
@@ -1800,7 +1920,15 @@ function Email.Start(ctx)
 	local function addMail(mail)
 		keySeq += 1
 		mail.Key = keySeq
-		table.insert(mails, 1, mail)
+		-- Du plus récent au plus ancien (un mail d'ami peut dater d'hier)
+		local position = #mails + 1
+		for index, other in ipairs(mails) do
+			if other.Time <= mail.Time then
+				position = index
+				break
+			end
+		end
+		table.insert(mails, position, mail)
 		if mail.SpawnId then
 			bySpawn[mail.SpawnId] = mail
 		end
@@ -2019,7 +2147,7 @@ function Email.Start(ctx)
 		entry.Row.Position = UDim2.fromOffset(6, 4 + (index - 1) * ui.L.Row)
 		paintRow(entry)
 		entry.Dot.Visible = not mail.Read
-		entry.Avatar.Set(e.Avatar, e.Tag.Color)
+		entry.Avatar.Set(e.Avatar, e.Tag.Color, e.Image)
 		if mail.Kind == "Sent" then
 			entry.Sender.Text = Locale.T("To: %s", mail.To.Name)
 		else
@@ -2037,7 +2165,7 @@ function Email.Start(ctx)
 			local width = entry.Chip.Set(Locale.T("🎁 NEW · +%s", ctx.Format.Format(mail.Estimate or 0)), C.Green)
 			entry.Chip.Frame.Visible = true
 			x += width + 6
-		elseif mail.Kind ~= "Sent" then
+		elseif mail.Kind ~= "Sent" or mail.Friend then
 			local width = entry.Chip.Set(e.Tag.Text, e.Tag.Color)
 			entry.Chip.Frame.Visible = true
 			x += width + 6
@@ -2064,9 +2192,11 @@ function Email.Start(ctx)
 		return list
 	end
 
-	local EMPTY_ICONS = { Inbox = "🎉", Starred = "⭐", Sent = "📤", Spam = "🚫", Trash = "🗑️" }
+	local EMPTY_ICONS = { Inbox = "🎉", Friends = "💌", Starred = "⭐", Sent = "📤", Spam = "🚫", Trash = "🗑️" }
 	local function emptyText(folder: string): string
-		if folder == "Starred" then
+		if folder == "Friends" then
+			return Locale.T("No friend mail yet. Tap ✏️ Write to send one to a Roblox friend!")
+		elseif folder == "Starred" then
 			return Locale.T("No starred mail. Tap ☆ on a mail to keep it here.")
 		elseif folder == "Sent" then
 			return Locale.T("Nothing sent yet. Grandma is waiting for your news!")
@@ -2109,6 +2239,8 @@ function Email.Start(ctx)
 			action = Locale.T("✓ All read")
 		elseif folder == "Trash" and #list > 0 and not searching then
 			action = Locale.T("🧹 Empty")
+		elseif folder == "Friends" and not searching then
+			action = Locale.T("✏️ Write")
 		end
 		ui.ListAction.Visible = action ~= nil
 		ui.ListActionLabel.Text = action or ""
@@ -2154,6 +2286,8 @@ function Email.Start(ctx)
 				if def.Id == "Inbox" then
 					-- Comme le compteur du bandeau : rouge à partir de 10 non lus
 					item.Badge.BackgroundColor3 = (count >= 10 or ui.Mode == "Phone") and C.Red or C.Blue
+				elseif def.Id == "Friends" then
+					item.Badge.BackgroundColor3 = TAGS.FRIEND.Color
 				end
 			end
 		end
@@ -2171,7 +2305,7 @@ function Email.Start(ctx)
 		end
 	end
 
-	local ACTION_ORDER = { "Reply", "Forward", "Spam", "NotSpam", "Delete", "Restore", "Forever" }
+	local ACTION_ORDER = { "Reply", "Forward", "Spam", "NotSpam", "Delete", "Restore", "Forever", "Report", "Block" }
 
 	-- État variable d'un mail affiché : étoile, récompense, boutons d'action
 	local function updateMessageState(mail)
@@ -2181,7 +2315,18 @@ function Email.Start(ctx)
 		end
 		local msg = ui.Msg
 		msg.StarLabel.Text = mail.Starred and "⭐" or "☆"
-		if mail.Kind == "Spawn" then
+		-- (Signaler / Bloquer : la demande de confirmation repart de zéro)
+		S.Confirm = nil
+		for id, label in pairs(msg.ActionLabels) do
+			label.Text = msg.ActionTexts[id]
+		end
+		if mail.Kind == "Friend" then
+			if mail.Replied then
+				setBanner(msg.Reward, Locale.T("↩️ You answered this mail."), C.Field, C.Line, C.InkDim)
+			else
+				setBanner(msg.Reward, nil)
+			end
+		elseif mail.Kind == "Spawn" then
 			if mail.State == "Claimed" and mail.Reward then
 				setBanner(msg.Reward, Locale.T("🎁 +%s Dopamine collected!", ctx.Format.Format(mail.Reward)), Color3.fromRGB(226, 248, 234), Color3.fromRGB(120, 210, 150), Color3.fromRGB(16, 120, 60))
 			elseif mail.State == "Claimed" then
@@ -2196,7 +2341,10 @@ function Email.Start(ctx)
 		end
 		-- Boutons selon le dossier
 		local visible
-		if mail.Folder == "Trash" then
+		if mail.Kind == "Friend" then
+			-- Mail d'un ami : pas de spam ni de transfert ; signaler / bloquer
+			visible = { Reply = true, Delete = true, Report = true, Block = true }
+		elseif mail.Folder == "Trash" then
 			visible = { Restore = true, Forever = true }
 		elseif mail.Folder == "Spam" then
 			visible = { NotSpam = true, Delete = true }
@@ -2231,21 +2379,37 @@ function Email.Start(ctx)
 		local e = mail.Email
 		msg.Subject.Text = e.Subject ~= "" and e.Subject or Locale.T("(no subject)")
 		if mail.Kind == "Sent" then
-			msg.Avatar.Set(me.Avatar, C.Blue)
+			msg.Avatar.Set(me.Avatar, C.Blue, mail.Friend and me.Image or nil)
 			msg.Sender.Text = me.Name
 			msg.Meta.Text = Locale.T("to %s <%s> · %s", mail.To.Name, mail.To.Address, timeLabel(mail.Time))
 			msg.Chip.Frame.Visible = false
 			msg.Sender.Size = UDim2.fromOffset(ui.ReadW - ui.L.Pad * 2 - 52, 20)
 		else
-			msg.Avatar.Set(e.Avatar, e.Tag.Color)
+			msg.Avatar.Set(e.Avatar, e.Tag.Color, e.Image)
 			msg.Sender.Text = e.Sender
 			msg.Meta.Text = Locale.T("<%s> · to me · %s", e.Address, timeLabel(mail.Time))
 			local chipW = msg.Chip.Set(e.Tag.Text, e.Tag.Color)
 			msg.Chip.Frame.Visible = true
 			msg.Sender.Size = UDim2.fromOffset(math.max(40, ui.ReadW - ui.L.Pad * 2 - 52 - chipW - 8), 20)
 		end
-		-- Avertissement (spams et arnaques)
-		if e.Suspicious then
+		-- Avertissement (spams et arnaques) / mot d'un ami Roblox
+		if mail.Kind == "Friend" then
+			setBanner(
+				msg.Warning,
+				Locale.T("💌 From your Roblox friend, filtered by Roblox. Friend mails give no Dopamine: just friendship!"),
+				Color3.fromRGB(255, 236, 250),
+				Color3.fromRGB(240, 160, 222),
+				Color3.fromRGB(150, 24, 118)
+			)
+		elseif mail.Kind == "Sent" and mail.Friend then
+			setBanner(
+				msg.Warning,
+				Locale.T("💌 Sent to your Roblox friend. Roblox filters it for them too."),
+				Color3.fromRGB(255, 236, 250),
+				Color3.fromRGB(240, 160, 222),
+				Color3.fromRGB(150, 24, 118)
+			)
+		elseif e.Suspicious then
 			local scam = e.Tag.Id == "ARNAQUE"
 			setBanner(
 				msg.Warning,
