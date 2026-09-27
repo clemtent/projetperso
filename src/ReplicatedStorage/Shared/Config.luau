@@ -1355,6 +1355,9 @@ Config.House = {
 		{ Id = "Gaming", Name = "Gaming", Icon = "🎮", Tint = Color3.fromRGB(212, 236, 255) },
 		{ Id = "Sports", Name = "Sports", Icon = "🏀", Tint = Color3.fromRGB(255, 226, 204) },
 		{ Id = "Adventure", Name = "Adventure", Icon = "🚀", Tint = Color3.fromRGB(226, 226, 255) },
+		-- v9.5 🖥️ "Dopamine Setup" : les stimuli du clicker deviennent de vrais
+		-- objets de la maison (voir la fin de Items)
+		{ Id = "Setup", Name = "Dopamine Setup", Icon = "🖥️", Tint = Color3.fromRGB(222, 214, 255) },
 	},
 
 	Items = {
