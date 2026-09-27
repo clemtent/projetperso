@@ -892,7 +892,10 @@ local function restoreCamera(s: Session)
 		return
 	end
 	local subject = saved.CameraSubject
-	if subject and not subject:IsDescendantOf(game) then
+	local okAlive, alive = pcall(function()
+		return subject ~= nil and subject:IsDescendantOf(game)
+	end)
+	if subject and not (okAlive and alive) then
 		-- (le personnage a réapparu pendant la vue : on suit le nouveau)
 		local player = Players.LocalPlayer
 		local character = player and player.Character
@@ -1058,7 +1061,7 @@ local function closeSession()
 		end)
 	end
 	table.clear(s.Connections)
-	restoreCamera(s)
+	pcall(restoreCamera, s)
 	for _, gui in ipairs(s.Hidden) do
 		if gui.Parent then
 			pcall(function()

@@ -131,7 +131,6 @@ function InfiniteScroll.Start(ctx)
 			ClipsDescendants = true,
 			ZIndex = 2,
 		})
-		Kit.Corner(screen, 4)
 		local caption = if dark then Kit.Rgb(70, 66, 100) else Kit.Rgb(245, 244, 250)
 		local feed = Kit.Box(screen, {
 			Name = "Feed",
@@ -143,8 +142,6 @@ function InfiniteScroll.Start(ctx)
 		})
 		Kit.Gradient(feed, feedSequence(app, caption), nil, 90)
 		phone.Feed = feed
-		-- Encoche
-		Kit.Box(root, { Name = "Notch", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(PHONE_W / 2, 5), Size = UDim2.fromOffset(12, 3), Color = if dark then Kit.Rgb(220, 210, 255) else Kit.Rgb(60, 56, 80), Alpha = 0.3, ZIndex = 4 })
 		-- Cœurs (niveau 2+ ; 2 au niveau 8+)
 		if level >= 2 then
 			for heartIndex = 1, if level >= 8 then 2 else 1 do
@@ -155,7 +152,7 @@ function InfiniteScroll.Start(ctx)
 		end
 		-- Pastille de notification (niveau 3+)
 		if level >= 3 then
-			local badge = Kit.Circle(root, PHONE_W - 5, 5, 9, Kit.Rgb(255, 60, 70), 0, 6)
+			local badge = Kit.Diamond(root, PHONE_W - 5, 5, 8, Kit.Rgb(255, 60, 70), 0, 6)
 			badge.Name = "Badge"
 			phone.Badge = badge
 		end

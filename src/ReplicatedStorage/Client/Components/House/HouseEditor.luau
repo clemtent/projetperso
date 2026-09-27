@@ -746,30 +746,76 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 			fitDockHost(true)
 			return
 		end
+		-- Tout est calculé en px de maquette de la pièce (repère de l'Overlay).
+		-- La barre reste ENTIÈREMENT dans la partie visible de la pièce
+		-- (pièce ∩ scène) ; si elle n'y tient pas : dans la scène ; si elle
+		-- n'y tient toujours pas : elle rétrécit.
 		local scale = math.max(0.2, room.Scale)
-		toolbarScale.Scale = 1 / scale
-		local _, top, _, bottom = rectOf(entry)
-		local toolbarSize = toolbar.AbsoluteSize
+		local base = 1 / scale
+		local current = math.max(0.01, toolbarScale.Scale)
 		local pixelRatio = room.Frame.AbsoluteSize.X / math.max(1, room.Width)
-		local heightInRoom = pixelRatio > 0 and toolbarSize.Y / pixelRatio or 120 / scale
-		local widthInRoom = pixelRatio > 0 and toolbarSize.X / pixelRatio or 560 / scale
-		-- (barre plus large que la pièce : centrée ; math.clamp exige min <= max)
-		local minX = widthInRoom / 2 - 10
-		local maxX = room.Width - widthInRoom / 2 + 10
-		local x = minX <= maxX and math.clamp(entry.X * room.Width, minX, maxX) or room.Width / 2
-		if top - heightInRoom - 8 >= -16 then
-			-- au-dessus de l'objet
-			toolbar.AnchorPoint = Vector2.new(0.5, 1)
-			toolbar.Position = UDim2.fromOffset(x, top - 6)
-		elseif bottom + heightInRoom + 6 <= room.Height + 14 then
-			-- en dessous
-			toolbar.AnchorPoint = Vector2.new(0.5, 0)
-			toolbar.Position = UDim2.fromOffset(x, bottom + 6)
-		else
-			-- objet très haut : en haut de la pièce
-			toolbar.AnchorPoint = Vector2.new(0.5, 0)
-			toolbar.Position = UDim2.fromOffset(x, -10)
+		local toolbarSize = toolbar.AbsoluteSize
+		-- taille "naturelle" de la barre (échelle de base), en px de la pièce
+		local naturalW, naturalH = 560 * base, 120 * base
+		if pixelRatio > 0 and toolbarSize.X > 0 and toolbarSize.Y > 0 then
+			naturalW = toolbarSize.X / pixelRatio * base / current
+			naturalH = toolbarSize.Y / pixelRatio * base / current
 		end
+		local margin = 6 * base
+		-- partie visible de la scène, dans le repère de la pièce
+		local stageL, stageT, stageR, stageB = -math.huge, -math.huge, math.huge, math.huge
+		if pixelRatio > 0 then
+			local offset = room.Stage.AbsolutePosition - room.Frame.AbsolutePosition
+			local stageSize = room.Stage.AbsoluteSize
+			if stageSize.X > 0 and stageSize.Y > 0 then
+				stageL, stageT = offset.X / pixelRatio, offset.Y / pixelRatio
+				stageR, stageB = stageL + stageSize.X / pixelRatio, stageT + stageSize.Y / pixelRatio
+			end
+		end
+		local function bounds(low: number, high: number, stageLow: number, stageHigh: number, size: number): (number, number)
+			local a, b = math.max(low, stageLow) + margin, math.min(high, stageHigh) - margin
+			if b - a >= size then
+				return a, b
+			end
+			if stageHigh - stageLow < math.huge then
+				return stageLow + margin, stageHigh - margin
+			end
+			return low + margin, high - margin
+		end
+		local left, right = bounds(0, room.Width, stageL, stageR, naturalW)
+		local ceiling, floorLine = bounds(0, room.Height, stageT, stageB, naturalH)
+		-- trop large / trop haute même pour la scène : on rétrécit
+		local fit = 1
+		if naturalW > right - left and right - left > 0 then
+			fit = math.min(fit, (right - left) / naturalW)
+		end
+		if naturalH > floorLine - ceiling and floorLine - ceiling > 0 then
+			fit = math.min(fit, (floorLine - ceiling) / naturalH)
+		end
+		fit = math.max(0.4, fit)
+		local wanted = base * fit
+		if math.abs(wanted - toolbarScale.Scale) > 1e-3 then
+			toolbarScale.Scale = wanted
+		end
+		local w, h = naturalW * fit, naturalH * fit
+		-- horizontal : centrée sur l'objet, bornée (math.clamp exige min <= max)
+		local x = entry.X * room.Width - w / 2
+		x = right - w >= left and math.clamp(x, left, right - w) or (left + right - w) / 2
+		-- vertical : au-dessus de l'objet, sinon en dessous, sinon du côté le plus libre
+		local _, top, _, bottom = rectOf(entry)
+		local y
+		if top - 6 - h >= ceiling then
+			y = top - 6 - h
+		elseif bottom + 6 + h <= floorLine then
+			y = bottom + 6
+		elseif top - ceiling >= floorLine - bottom then
+			y = ceiling
+		else
+			y = floorLine - h
+		end
+		y = floorLine - h >= ceiling and math.clamp(y, ceiling, floorLine - h) or (ceiling + floorLine - h) / 2
+		toolbar.AnchorPoint = Vector2.new(0, 0)
+		toolbar.Position = UDim2.fromOffset(x, y)
 		toolbar.Visible = true
 	end
 
@@ -1878,6 +1924,19 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		if selected and editing then
 			positionToolbar()
 		end
+	end)
+	-- (la taille de la barre change avec le nom / l'étiquette : on la reborne
+	-- au rendu suivant ; même échelle -> même taille, pas de boucle)
+	local toolbarQueued = false
+	toolbar:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+		if toolbarQueued or docked or not (selected and editing) then
+			return
+		end
+		toolbarQueued = true
+		task.defer(function()
+			toolbarQueued = false
+			positionToolbar()
+		end)
 	end)
 
 	----------------------------------------------------------------------

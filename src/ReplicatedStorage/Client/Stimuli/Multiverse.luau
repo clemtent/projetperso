@@ -108,7 +108,7 @@ function Multiverse.Start(ctx)
 		local sky = Kit.Circle(root, C, C, 56, Color3.new(1, 1, 1), 0, 2)
 		sky.Name = "Sky"
 		Kit.Gradient(sky, ColorSequence.new(world.SkyTop, world.SkyBottom), nil, 90)
-		for _, spec in ipairs({ { 0.3, 0.28, 4 }, { 0.72, 0.36, 3 } }) do
+		for _, spec in ipairs({ { 0.3, 0.28, 4 } }) do
 			local star = Kit.Diamond(root, BOX * spec[1], BOX * spec[2], spec[3], Kit.Rgb(255, 250, 220), 0, 3)
 			table.insert(portal.Stars, star)
 		end
@@ -141,7 +141,6 @@ function Multiverse.Start(ctx)
 			ZIndex = 6,
 		})
 		Kit.Corner(button, 3)
-		Kit.Stroke(button, Kit.Rgb(40, 40, 50), 1, 0)
 		portal.Button = button
 		local plus = Kit.Text(root, "+1", C, C - 12, 10, Kit.Rgb(255, 236, 120), 7)
 		plus.TextTransparency = 1

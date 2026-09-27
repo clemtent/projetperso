@@ -164,7 +164,7 @@ function DreamMachine.Start(ctx)
 			ZIndex = 4,
 		})
 		-- Bosses du nuage (derrière l'intérieur)
-		local bumps = if index == 1 then { { 0.3, 34 }, { 0.68, 28 } } else { { 0.42, 30 } }
+		local bumps = if index == 1 then { { 0.3, 34 }, { 0.68, 28 } } else {}
 		for _, bump in ipairs(bumps) do
 			local puff = Kit.Circle(holder, size.X * bump[1], 4, bump[2], rim, 0, 4)
 			puff.Name = "Puff"
@@ -231,7 +231,7 @@ function DreamMachine.Start(ctx)
 			if index == 1 then
 				cloud1 = inside
 				-- Herbe + barrière
-				local grass = Kit.Box(inside, {
+				Kit.Box(inside, {
 					Name = "Grass",
 					AnchorPoint = Vector2.new(0.5, 1),
 					Position = UDim2.new(0.5, 0, 1, -3),
@@ -239,7 +239,6 @@ function DreamMachine.Start(ctx)
 					Color = Kit.Rgb(122, 214, 132),
 					ZIndex = 6,
 				})
-				Kit.Corner(grass, 5)
 				local wood = Kit.Rgb(196, 140, 96)
 				local fx, groundY = size.X / 2, size.Y - 12
 				for _, dx in ipairs({ -8, 8 }) do
@@ -255,7 +254,7 @@ function DreamMachine.Start(ctx)
 					table.insert(sheep, { Frame = body, Offset = (k - 1) / count })
 				end
 				-- Deux étoiles dans le ciel du rêve
-				for _, spec in ipairs({ { 0.16, 0.22, 4 }, { 0.84, 0.3, 3 } }) do
+				for _, spec in ipairs({ { 0.16, 0.22, 4 } }) do
 					local star = Kit.Diamond(inside, size.X * spec[1], size.Y * spec[2], spec[3], Kit.Rgb(255, 246, 204), 0, 6)
 					table.insert(twinkles, { Frame = star, Phase = random:NextNumber(0, 6) })
 				end
@@ -276,7 +275,7 @@ function DreamMachine.Start(ctx)
 				local biteY = moonY - 6
 				local bite = Kit.Circle(inside, moonX + 9, biteY, 22, Color3.new(1, 1, 1), 0, 7)
 				Kit.Gradient(bite, ColorSequence.new(skyTop:Lerp(skyBottom, (biteY - 11) / size.Y), skyTop:Lerp(skyBottom, (biteY + 11) / size.Y)), nil, 90)
-				for _, spec in ipairs({ { 0.7, 0.3, 5 }, { 0.8, 0.66, 3 }, { 0.58, 0.8, 3 } }) do
+				for _, spec in ipairs({ { 0.7, 0.3, 5 }, { 0.8, 0.66, 3 } }) do
 					local star = Kit.Diamond(inside, size.X * spec[1], size.Y * spec[2], spec[3], Kit.Rgb(255, 246, 204), 0, 8)
 					table.insert(twinkles, { Frame = star, Phase = random:NextNumber(0, 6) })
 				end
@@ -336,7 +335,7 @@ function DreamMachine.Start(ctx)
 
 		-- Étincelles autour de la machine (niveau 8+)
 		if level >= 8 then
-			for _, spec in ipairs({ { -48, -24, 7 }, { 50, -30, 5 }, { -42, 22, 5 } }) do
+			for _, spec in ipairs({ { -48, -24, 7 }, { 50, -30, 5 } }) do
 				local star = Kit.Diamond(root, d.X + spec[1], d.Y + spec[2], spec[3], Kit.Rgb(255, 214, 110), 0, 12)
 				table.insert(twinkles, { Frame = star, Phase = random:NextNumber(0, 6) })
 			end

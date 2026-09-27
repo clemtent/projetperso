@@ -10,7 +10,7 @@
 	qui passe le plus dans le fond VISIBLE (Cosmos/Zones.PickPath : ni cartes,
 	ni colonne, ni objets posés), recalculé quand la mise en page change.
 	Chaque niveau rend la rivière plus dense et plus lumineuse :
-	  - étoiles : 12 + 3 par niveau (42 au niveau 10), voile plus large ;
+	  - étoiles : 10 + 3 par niveau (40 au niveau 10), voile plus large ;
 	  - niveau 4+ : éclats dorés ; niveau 7+ : étoiles filantes le long du
 	    courant ; niveau 10 : courant central doré.
 	Effet d'ambiance (sous les cartes). ≤ 15 images/s, particules recyclées.
@@ -51,7 +51,7 @@ local STAR_COLORS_LIGHT = {
 }
 
 local function starCount(level: number): number
-	return 12 + 3 * level
+	return 10 + 3 * level
 end
 
 function GalaxyStream.Start(ctx)
@@ -135,7 +135,7 @@ function GalaxyStream.Start(ctx)
 				ZIndex = 1,
 			})
 			Kit.Gradient(segment, ColorSequence.new(edge, other), fade, 90)
-			local current = Kit.Box(holder, {
+			Kit.Box(holder, {
 				Name = "Current",
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				Position = centre,
@@ -145,7 +145,6 @@ function GalaxyStream.Start(ctx)
 				Alpha = math.clamp((if dark then 0.72 else 0.6) - level * 0.02, 0.4, 0.8),
 				ZIndex = 2,
 			})
-			Kit.Corner(current, 3)
 		end
 
 		-- Étoiles qui coulent
