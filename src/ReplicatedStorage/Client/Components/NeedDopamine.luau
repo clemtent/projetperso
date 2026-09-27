@@ -422,7 +422,7 @@ local function hintFor(missing: number): string
 	end
 	local pack, amount = suggestPack(missing)
 	if pack then
-		return Locale.T("💡 %s gives ≈ %s Dopamine", pack.Icon .. " " .. Locale.T(tostring(pack.Name)), NumberFormatter.Format(amount))
+		return Locale.T("💡 %s gives ~%s Dopamine", pack.Icon .. " " .. Locale.T(tostring(pack.Name)), NumberFormatter.Format(amount))
 	end
 	return ""
 end

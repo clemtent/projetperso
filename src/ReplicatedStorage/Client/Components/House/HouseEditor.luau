@@ -182,7 +182,7 @@ local function signature(list: { Placed }): string
 end
 
 local function copyEntry(entry: Placed): Placed
-	return { I = entry.I, X = entry.X, Y = entry.Y, S = entry.S, Z = entry.Z, F = entry.F == true or nil, C = entry.C }
+	return { I = entry.I, X = entry.X, Y = entry.Y, S = entry.S, Z = entry.Z, F = entry.F == true or nil, C = entry.C, R = entry.R }
 end
 
 local function copyList(list: { Placed }): { Placed }
@@ -205,6 +205,7 @@ local function payloadOf(list: { Placed }): { Placed }
 			Z = math.clamp(math.floor(entry.Z), 0, HouseCommon.MAX_Z),
 			F = entry.F == true or nil,
 			C = entry.C,
+			R = entry.R, -- v9.3 : rotation 3D gardée
 		}
 	end
 	return payload
@@ -1254,7 +1255,7 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 	-- Meuble agrandi / rétréci : ce qui est posé dessus reste sur le dessus,
 	-- les chaises restent rangées à leur place autour de la table
 	local function rescaleRiders(entry: Placed, item: Item, oldX: number, oldY: number, oldS: number, riders: { Rider }, parents: { [Placed]: Placed }, seats: { [Placed]: string })
-		local old: Placed = { I = entry.I, X = oldX, Y = oldY, S = oldS, Z = entry.Z, F = entry.F, C = entry.C }
+		local old: Placed = { I = entry.I, X = oldX, Y = oldY, S = oldS, Z = entry.Z, F = entry.F, C = entry.C, R = entry.R }
 		-- Ce qui est posé sur une chaise suit sa chaise
 		local seatOf: { [Placed]: Placed } = {}
 		for _, rider in ipairs(riders) do
@@ -1920,7 +1921,7 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		end
 		pushUndo()
 		local item = sticker.Item
-		local copy: Placed = { I = entry.I, X = entry.X, Y = entry.Y, S = entry.S, Z = math.min(HouseCommon.MAX_Z, entry.Z + 1), F = entry.F, C = entry.C }
+		local copy: Placed = { I = entry.I, X = entry.X, Y = entry.Y, S = entry.S, Z = math.min(HouseCommon.MAX_Z, entry.Z + 1), F = entry.F, C = entry.C, R = entry.R }
 		local offset = math.max(GRID, item.Size * entry.S * 0.35) / math.max(1, room.Width)
 		local support = HouseSurfaces.SupportOf(entry, layout, room.Width, room.Height)
 		local seat: HouseSurfaces.SeatSpot? = nil
@@ -1972,7 +1973,7 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		for _, other in ipairs(targetList) do
 			z = math.max(z, other.Z)
 		end
-		table.insert(targetList, { I = entry.I, X = x, Y = y, S = entry.S, Z = z, F = entry.F, C = entry.C })
+		table.insert(targetList, { I = entry.I, X = x, Y = y, S = entry.S, Z = z, F = entry.F, C = entry.C, R = entry.R })
 		pushUndo(nil, { Room = targetId, Before = before, After = copyList(targetList) })
 		extras[targetId] = targetList
 		floatAt(sticker, "🚪 → " .. HouseCommon.GetRoomType(target).Icon, C.Lilac)

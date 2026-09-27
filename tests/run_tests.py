@@ -1840,10 +1840,47 @@ def friend_mail_test():
     return "local FRIEND_MAIL_SRC = [=====[%s]=====]\n%s" % (body, FRIEND_MAIL_TESTS)
 
 
+SIM_PATH = os.path.join(ROOT, "tests", "economy_sim.luau")
+
+
+def sim_loader():
+    """Le simulateur d'économie (tests/economy_sim.luau) comme module "EconomySim"."""
+    body = read(SIM_PATH)
+    return 'loaders["EconomySim"] = function()\nlocal require = req\n%s\nend\n' % body
+
+
+def run_sim():
+    """python3 tests/run_tests.py --sim [--robux | --whale | --sessions | --all] :
+    lance le simulateur d'économie avec les vrais modules Shared et affiche le rapport."""
+    profile = "Active"
+    for flag, name in (("--robux", "Robux"), ("--whale", "Whale"), ("--sessions", "Sessions")):
+        if flag in sys.argv:
+            profile = name
+    parts = [HEADER]
+    for name in MODULES:
+        body = read(os.path.join(SHARED, name + ".luau"))
+        parts.append('loaders["%s"] = function()\nlocal require = req\n%s\nend\n' % (name, body))
+    parts.append(sim_loader())
+    parts.append('req("EconomySim").Main({ profile = "%s", all = %s })\n' % (profile, "true" if "--all" in sys.argv else "false"))
+    with tempfile.NamedTemporaryFile("w", suffix=".luau", delete=False, encoding="utf-8") as f:
+        f.write("\n".join(parts))
+        path = f.name
+    try:
+        proc = subprocess.run([LUAU, path], capture_output=True, text=True, timeout=900)
+    finally:
+        os.unlink(path)
+    sys.stdout.write(proc.stdout)
+    if proc.stderr:
+        sys.stdout.write(proc.stderr)
+    return proc.returncode
+
+
 def main():
     if not os.path.exists(LUAU):
         print("FAIL : Luau CLI introuvable (%s)" % LUAU)
         return 1
+    if "--sim" in sys.argv:
+        return run_sim()
     bundle = build_bundle(config_key_test() + "\n" + lang_test() + "\n" + house_art_test() + "\n" + arcade_shop_test() + "\n" + friend_mail_test())
     with tempfile.NamedTemporaryFile("w", suffix=".luau", delete=False, encoding="utf-8") as f:
         f.write(bundle)

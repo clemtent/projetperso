@@ -219,7 +219,7 @@ local function buildHeader(card: Frame)
 			Size = UDim2.fromOffset(20, 20),
 			BackgroundTransparency = 1,
 			Font = Theme.Fonts.Title,
-			Text = index % 2 == 0 and "✦" or "✧",
+			Text = index % 2 == 0 and "✨" or "•",
 			TextColor3 = WHITE,
 			TextSize = spec[3],
 			TextTransparency = 0.15,
@@ -307,10 +307,10 @@ local function build(missing: number, have: number, item: string?)
 		end,
 	})
 
-	-- Pastille "-N 🎟️" sur le bandeau (en haut à gauche : le ✕ est à droite)
+	-- Pastille "-N 🎟️" sur le bandeau (en haut à gauche : la croix est à droite)
 	local chip = UIUtil.Chip({
 		Name = "Missing",
-		Text = "−" .. NumberFormatter.Format(missing) .. " " .. TICKET,
+		Text = "-" .. NumberFormatter.Format(missing) .. " " .. TICKET,
 		Color = WHITE,
 		TextColor3 = Color3.fromRGB(200, 50, 60),
 		Height = 24,

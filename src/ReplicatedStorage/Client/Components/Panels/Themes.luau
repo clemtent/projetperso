@@ -359,16 +359,7 @@ local function buildCard(list: ScrollingFrame, theme)
 	})
 	UIUtil.Corner(check, UDim.new(1, 0))
 	UIUtil.Stroke(check, WHITE, 2)
-	UIUtil.Create("TextLabel", {
-		Size = UDim2.fromScale(1, 1),
-		BackgroundTransparency = 1,
-		Font = Theme.Fonts.Title,
-		Text = "✓",
-		TextColor3 = WHITE,
-		TextSize = 15,
-		ZIndex = 7,
-		Parent = check,
-	})
+	UIUtil.Icon("Check", { Size = 14, Thickness = 3, Color = WHITE, ZIndex = 7, Parent = check })
 	local lock = UIUtil.Create("TextLabel", {
 		Name = "Lock",
 		AnchorPoint = Vector2.new(1, 1),
@@ -559,7 +550,7 @@ function Themes.Update(data)
 
 		if isEquipped then
 			card.Action = "none"
-			primary.Text = Locale.T("✔ Equipped")
+			primary.Text = Locale.T("✅ Equipped")
 			primary:SetAttribute("BaseColor", Theme.Colors.ButtonBottom)
 			UIUtil.SetButtonEnabled(primary, true)
 			primary.TextColor3 = Theme.Colors.Text
@@ -574,7 +565,7 @@ function Themes.Update(data)
 			primary:SetAttribute("BaseColor", Theme.Colors.Blue)
 			UIUtil.SetButtonEnabled(primary, true)
 			primary.TextColor3 = Theme.Colors.TextLight
-			card.Status.Text = (theme.Premium and isVIP) and Locale.T("👑 Included with VIP") or Locale.T("✔ Owned")
+			card.Status.Text = (theme.Premium and isVIP) and Locale.T("👑 Included with VIP") or Locale.T("✅ Owned")
 			card.Status.TextColor3 = Theme.Colors.TextDim
 			card.Stroke.Color = Theme.Colors.CardBorder
 			card.Stroke.Thickness = 1.5

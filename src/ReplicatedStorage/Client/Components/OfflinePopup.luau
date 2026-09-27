@@ -238,7 +238,7 @@ local function buildSky(card: Frame): { twinkle: { TextLabel }, zzz: { TextLabel
 	for index = 1, 14 do
 		local star = UIUtil.Label({
 			Name = "Star" .. index,
-			Text = index % 4 == 0 and "✦" or "•",
+			Text = index % 4 == 0 and "⭐" or "•",
 			TextColor3 = Color3.fromRGB(255, 250, 220),
 			Size = UDim2.fromOffset(16, 16),
 			AnchorPoint = Vector2.new(0.5, 0.5),

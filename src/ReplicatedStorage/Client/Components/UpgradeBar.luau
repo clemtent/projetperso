@@ -1069,7 +1069,7 @@ local function removeCard(id: string, maxed: boolean?)
 		sweep(card)
 		local layer = Effects.GetLayer()
 		if layer then
-			Effects.Pop(layer, Interface.CanvasPosition(card.Button, Vector2.new(0, -48)), Locale.T("MAX ✓"), {
+			Effects.Pop(layer, Interface.CanvasPosition(card.Button, Vector2.new(0, -48)), Locale.T("MAX ✅"), {
 				Color = MAX_GOLD,
 				Size = 24,
 				Style = "Bonus",

@@ -80,7 +80,7 @@ local SECTION_AUDIO = Theme.Colors.Blue
 local SECTION_DISPLAY = Theme.Colors.Purple
 local SECTION_GAME = Theme.Colors.Orange
 
-type Toggle = { Button: TextButton, Knob: Frame, Stroke: UIStroke, Glyph: TextLabel }
+type Toggle = { Button: TextButton, Knob: Frame, Stroke: UIStroke, OnIcon: Frame, OffIcon: Frame }
 type Slider = { Set: (value: number) -> (), SetEnabled: (enabled: boolean) -> () }
 
 local toggles: { [string]: Toggle } = {} -- [clé] = interrupteur
@@ -245,8 +245,8 @@ local function refreshMusicInfo()
 		text = Locale.T("Music off")
 		status = Locale.T("Paused")
 	elseif playing and name then
-		text = "♫ " .. name
-		status = Locale.T("♫ Now playing")
+		text = "🎵 " .. name
+		status = Locale.T("🎶 Now playing")
 	else
 		text = Locale.T("Loading...")
 		status = Locale.T("Loading")
@@ -286,13 +286,24 @@ local function refreshMusicInfo()
 		local art = mode == "Shuffle" and not (info and info.Key) and SHUFFLE_ART or artFor(info and info.Key or mode, index)
 		ui.VinylGradient.Color = ColorSequence.new(art.A, art.B)
 		ui.VinylIcon.Text = locked and "🔒" or art.Icon
-		ui.Play.Text = (current.Music and not locked) and "❚❚" or "►"
+		-- (icônes dessinées : pause pendant la lecture, sinon lecture)
+		local showPause = current.Music == true and not locked
+		local pauseIcon = ui.Play:FindFirstChild("IconPause")
+		local playIcon = ui.Play:FindFirstChild("IconPlay")
+		if pauseIcon and playIcon and pauseIcon:IsA("GuiObject") and playIcon:IsA("GuiObject") then
+			pauseIcon.Visible = showPause
+			playIcon.Visible = not showPause
+			UIUtil.SetIconTransparency(pauseIcon, locked and 0.5 or 0)
+			UIUtil.SetIconTransparency(playIcon, locked and 0.5 or 0)
+		end
 		local canSkip = not locked and SoundManager.HasPlaylist()
 		for _, button in ipairs({ ui.Prev, ui.Next }) do
-			button.TextTransparency = canSkip and 0 or 0.6
+			local icon = button:FindFirstChild("IconPrev") or button:FindFirstChild("IconNext")
+			if icon then
+				UIUtil.SetIconTransparency(icon, canSkip and 0 or 0.6)
+			end
 			button.BackgroundTransparency = canSkip and 0.82 or 0.92
 		end
-		ui.Play.TextTransparency = locked and 0.5 or 0
 		UIUtil.Tween(ui.Arm, 0.5, { Rotation = live and 28 or 8 }, Enum.EasingStyle.Sine)
 	end
 	local banner = lockBanner
@@ -311,8 +322,10 @@ local function paintToggle(ui: Toggle, value: boolean, animate: boolean)
 	}, Enum.EasingStyle.Back)
 	UIUtil.Tween(ui.Button, duration, { BackgroundColor3 = value and ON_COLOR or OFF_COLOR })
 	UIUtil.Tween(ui.Stroke, duration, { Color = (value and ON_COLOR or OFF_COLOR):Lerp(BLACK, 0.25) })
-	ui.Glyph.Text = value and "✓" or "✕"
-	ui.Glyph.TextColor3 = (value and ON_COLOR or OFF_COLOR):Lerp(BLACK, 0.2)
+	-- Coche / croix DESSINÉES dans le bouton rond (plus de ✓ / ✕ en texte)
+	ui.OnIcon.Visible = value
+	ui.OffIcon.Visible = not value
+	UIUtil.SetIconColor(value and ui.OnIcon or ui.OffIcon, (value and ON_COLOR or OFF_COLOR):Lerp(BLACK, 0.2))
 end
 
 -- Applique un réglage localement (son / musique / effets)
@@ -443,7 +456,7 @@ local function buildClickOption(grid: Frame, entry, order: number)
 	local stroke = UIUtil.Stroke(card, ROW_BORDER, 1.5)
 	UIUtil.AnimateButton(card, 1.03, 0.96)
 
-	-- Bouton ▶ (écouter sans choisir)
+	-- Bouton "écouter sans choisir" (triangle dessiné)
 	local play = UIUtil.Create("TextButton", {
 		Name = "Preview",
 		Size = UDim2.fromOffset(34, 34),
@@ -452,12 +465,13 @@ local function buildClickOption(grid: Frame, entry, order: number)
 		BackgroundColor3 = WHITE,
 		AutoButtonColor = false,
 		Font = Theme.Fonts.Title,
-		Text = "▶",
+		Text = "",
 		TextColor3 = Theme.Colors.TextLight,
 		TextSize = 14,
 		ZIndex = 2,
 		Parent = card,
 	})
+	local playIcon = UIUtil.Icon("Play", { Name = "IconPlay", Size = 14, Color = Theme.Colors.TextLight, ZIndex = 3, Parent = play })
 	UIUtil.Corner(play, UDim.new(1, 0))
 	UIUtil.Gradient(play, ColorSequence.new(Theme.Colors.Blue:Lerp(WHITE, 0.2), Theme.Colors.Blue:Lerp(BLACK, 0.2)), 90)
 	UIUtil.AnimateButton(play, 1.12, 0.9)
@@ -468,10 +482,12 @@ local function buildClickOption(grid: Frame, entry, order: number)
 		-- Petite note pendant l'écoute
 		previewToken += 1
 		local token = previewToken
-		play.Text = "♪"
+		play.Text = "🎵"
+		playIcon.Visible = false
 		task.delay(0.45, function()
 			if token == previewToken then
-				play.Text = "▶"
+				play.Text = ""
+				playIcon.Visible = true
 			end
 		end)
 	end)
@@ -512,16 +528,7 @@ local function buildClickOption(grid: Frame, entry, order: number)
 		Parent = card,
 	})
 	UIUtil.Corner(check, UDim.new(1, 0))
-	UIUtil.Label({
-		Text = "✔",
-		Font = Theme.Fonts.Title,
-		TextColor3 = Theme.Colors.TextLight,
-		Size = UDim2.new(1, -6, 1, -6),
-		Position = UDim2.fromOffset(3, 3),
-		MaxTextSize = 14,
-		ZIndex = 3,
-		Parent = check,
-	})
+	UIUtil.Icon("Check", { Size = 14, Thickness = 3, Color = Theme.Colors.TextLight, ZIndex = 3, Parent = check })
 
 	local option: ClickOption = { Id = entry.Id, Card = card, Stroke = stroke, Check = check, Name = name, Hovered = false }
 	card.MouseEnter:Connect(function()
@@ -729,19 +736,10 @@ local function buildToggle(row: Frame, key: string)
 	})
 	UIUtil.Corner(knob, UDim.new(1, 0))
 	UIUtil.Stroke(knob, BLACK, 1, 0.8)
-	local glyph = UIUtil.Label({
-		Name = "Glyph",
-		Text = "✓",
-		Font = Theme.Fonts.Title,
-		TextColor3 = ON_COLOR,
-		Size = UDim2.new(1, -10, 1, -10),
-		Position = UDim2.fromOffset(5, 5),
-		MaxTextSize = 13,
-		ZIndex = 3,
-		Parent = knob,
-	})
+	local onIcon = UIUtil.Icon("Check", { Name = "OnIcon", Size = 13, Thickness = 3, Color = ON_COLOR, ZIndex = 3, Parent = knob })
+	local offIcon = UIUtil.Icon("Cross", { Name = "OffIcon", Size = 10, Thickness = 3, Color = OFF_COLOR, ZIndex = 3, Parent = knob })
 	UIUtil.AnimateButton(button, 1.06, 0.93)
-	local ui: Toggle = { Button = button, Knob = knob, Stroke = stroke, Glyph = glyph }
+	local ui: Toggle = { Button = button, Knob = knob, Stroke = stroke, OnIcon = onIcon, OffIcon = offIcon }
 	toggles[key] = ui
 	paintToggle(ui, current[key] == true, false)
 
@@ -1060,7 +1058,7 @@ local function buildAudio(content: Instance)
 		Parent = clickHeader,
 	})
 	UIUtil.Label({
-		Text = Locale.T("▶ to listen, tap the card to choose"),
+		Text = Locale.T("🎧 Round button = listen, card = choose"),
 		TextColor3 = Theme.Colors.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Size = UDim2.new(1, -16, 0, 15),
@@ -1191,6 +1189,7 @@ end
 ----------------------------------------------------------------------
 
 -- Bouton rond du lecteur (⏮ ⏯ ⏭)
+-- `glyph` : icône dessinée ("Prev", "Next" ou "PlayPause" = pause + lecture)
 local function playerButton(parent: Instance, name: string, glyph: string, size: number, x: number, filled: boolean, onActivated: () -> ()): TextButton
 	local button = UIUtil.Create("TextButton", {
 		Name = name,
@@ -1200,14 +1199,19 @@ local function playerButton(parent: Instance, name: string, glyph: string, size:
 		BackgroundColor3 = WHITE,
 		BackgroundTransparency = filled and 0 or 0.82,
 		AutoButtonColor = false,
-		Font = Theme.Fonts.Title,
-		Text = glyph,
-		TextColor3 = filled and PLAYER_BOTTOM or WHITE,
-		TextSize = filled and 22 or 15,
+		Text = "",
 		ZIndex = 4,
 		Parent = parent,
 	})
 	UIUtil.Corner(button, UDim.new(1, 0))
+	local iconColor = filled and PLAYER_BOTTOM or WHITE
+	if glyph == "PlayPause" then
+		UIUtil.Icon("Pause", { Name = "IconPause", Size = math.floor(size * 0.36), Color = iconColor, ZIndex = 5, Parent = button })
+		local playIcon = UIUtil.Icon("Play", { Name = "IconPlay", Size = math.floor(size * 0.42), Color = iconColor, ZIndex = 5, Parent = button })
+		playIcon.Visible = false
+	else
+		UIUtil.Icon(glyph, { Name = "Icon" .. glyph, Size = math.floor(size * 0.46), Color = iconColor, ZIndex = 5, Parent = button })
+	end
 	UIUtil.Stroke(button, WHITE, filled and 0 or 1.5, filled and 1 or 0.55)
 	if filled then
 		UIUtil.Gradient(button, ColorSequence.new(WHITE, Color3.fromRGB(230, 222, 255)), 90)
@@ -1484,13 +1488,13 @@ local function buildPlayerCard(section: Frame)
 		barLevels[index] = 0.08
 	end
 
-	-- Commandes ⏮ ⏯ ⏭
-	local prev = playerButton(card, "Previous", "◄◄", 40, -146, false, function()
+	-- Commandes précédent / lecture-pause / suivant (icônes dessinées)
+	local prev = playerButton(card, "Previous", "Prev", 40, -146, false, function()
 		if type(SoundManager.PreviousTrack) == "function" and SoundManager.PreviousTrack() then
 			SoundManager.Play("Open", 1.1)
 		end
 	end)
-	local play = playerButton(card, "PlayPause", "❚❚", 56, -92, true, function()
+	local play = playerButton(card, "PlayPause", "PlayPause", 56, -92, true, function()
 		if not ClientState.HasFeature("Lofi") then
 			Notifications.Toast(Locale.T("🔒 Unlocks with 🎧 %s", Locale.T("Lofi Beats")), Theme.Colors.Purple)
 			return
@@ -1500,7 +1504,7 @@ local function buildPlayerCard(section: Frame)
 		SoundManager.Play("Open", newValue and 1.3 or 0.8)
 		saveSetting("Music", newValue)
 	end)
-	local nextButton = playerButton(card, "Next", "►►", 40, -38, false, function()
+	local nextButton = playerButton(card, "Next", "Next", 40, -38, false, function()
 		if SoundManager.NextTrack() then
 			SoundManager.Play("Open", 1.25)
 		end
@@ -1593,16 +1597,7 @@ local function buildTrackCard(parent: Instance, key: string, name: string, subti
 		Parent = card,
 	})
 	UIUtil.Corner(check, UDim.new(1, 0))
-	UIUtil.Label({
-		Text = "✓",
-		Font = Theme.Fonts.Title,
-		TextColor3 = Theme.Colors.TextLight,
-		Size = UDim2.new(1, -6, 1, -6),
-		Position = UDim2.fromOffset(3, 3),
-		MaxTextSize = 15,
-		ZIndex = 3,
-		Parent = check,
-	})
+	UIUtil.Icon("Check", { Size = 14, Thickness = 3, Color = Theme.Colors.TextLight, ZIndex = 3, Parent = check })
 	-- Mini-égaliseur "en cours"
 	local eqHolder = UIUtil.Create("Frame", {
 		Name = "Eq",

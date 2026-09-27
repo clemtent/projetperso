@@ -561,12 +561,13 @@ local function buildCard(grid: ScrollingFrame, cosmetic, layoutOrder: number)
 	})
 	rarityChip.Position = UDim2.fromOffset(6, 6)
 
-	-- Pastille ronde "✔" (verte = équipé, blanche = possédé) : à côté d'une
+	-- Pastille ronde cochée (verte = équipé, blanche = possédé ; coche
+	-- DESSINÉE, pas de caractère ✔) : à côté d'une
 	-- rareté longue ("Légendaire"), un ruban "✔ POSSÉDÉ" ne tenait pas sur la
 	-- ligne et chevauchait la rareté ; la ligne d'état le dit en toutes lettres
 	local ribbon = UIUtil.Chip({
 		Name = "Ribbon",
-		Text = "✔",
+		Text = "",
 		Color = Theme.Colors.Green,
 		TextColor3 = Theme.Colors.TextDark,
 		Height = 18,
@@ -577,6 +578,9 @@ local function buildCard(grid: ScrollingFrame, cosmetic, layoutOrder: number)
 	})
 	ribbon.AnchorPoint = Vector2.new(1, 0)
 	ribbon.Position = UDim2.new(1, -6, 0, 6)
+	ribbon.AutomaticSize = Enum.AutomaticSize.None
+	ribbon.Size = UDim2.fromOffset(18, 18) -- pastille ronde
+	UIUtil.Icon("Check", { Name = "Tick", Size = 11, Thickness = 2, Color = Theme.Colors.TextDark, ZIndex = 6, Parent = ribbon })
 
 	-- Verrou (objet débloqué par les visites à l'océan) : voile + cadenas
 	local lockBadge = UIUtil.Create("Frame", {
@@ -829,19 +833,15 @@ function ItemShop.Update(data)
 				visual.TextTransparency = locked and 0.45 or 0
 			end
 		end
-		local ribbonLabel = ui.Ribbon:FindFirstChild("Label") :: TextLabel?
 		if isEquipped then
 			ui.Button.Text = Locale.T("Remove")
 			ui.Button:SetAttribute("BaseColor", Theme.Colors.ButtonBottom)
 			UIUtil.SetButtonEnabled(ui.Button, true)
 			ui.Button.TextColor3 = Theme.Colors.Text
-			ui.Status.Text = Locale.T("✔ On your button")
+			ui.Status.Text = Locale.T("✅ On your button")
 			ui.Status.TextColor3 = Theme.Colors.Green:Lerp(Color3.new(0, 0, 0), 0.35)
 			ui.Ribbon.Visible = true
 			ui.Ribbon.BackgroundColor3 = Theme.Colors.Green
-			if ribbonLabel then
-				ribbonLabel.Text = "✔"
-			end
 		elseif isOwned then
 			ui.Button.Text = Locale.T("Equip")
 			ui.Button:SetAttribute("BaseColor", Theme.Colors.Blue)
@@ -851,9 +851,6 @@ function ItemShop.Update(data)
 			ui.Status.TextColor3 = Theme.Colors.TextDim
 			ui.Ribbon.Visible = true
 			ui.Ribbon.BackgroundColor3 = WHITE
-			if ribbonLabel then
-				ribbonLabel.Text = "✔"
-			end
 		elseif isLocked(cosmetic) then
 			ui.Button.Text = lockText(cosmetic)
 			ui.Button:SetAttribute("BaseColor", Color3.fromRGB(214, 232, 244))

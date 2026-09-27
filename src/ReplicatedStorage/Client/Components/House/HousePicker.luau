@@ -375,7 +375,7 @@ function HousePicker.new(parent: Frame): Picker
 				if isCurrent then
 					local badge = UIUtil.Chip({
 						Name = "Current",
-						Text = Locale.T("✓ Current"),
+						Text = Locale.T("✅ Current"),
 						Color = Theme.Colors.Green,
 						TextColor3 = WHITE,
 						Height = 22,

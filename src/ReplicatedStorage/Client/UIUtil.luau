@@ -822,7 +822,7 @@ function UIUtil.PillButton(props: { [string]: any }): TextButton
 	return button
 end
 
--- Bouton "basique" clair (boutons neutres, ✕...) : v9 blanc nacré en relief,
+-- Bouton "basique" clair (boutons neutres, fermer...) : v9 blanc nacré en relief,
 -- contour gris bleuté doux, reflet et ombre portée.
 function UIUtil.BasicButton(props: { [string]: any }): TextButton
 	local button = UIUtil.Create("TextButton", {
@@ -852,49 +852,290 @@ function UIUtil.BasicButton(props: { [string]: any }): TextButton
 end
 
 --[[
-	Bouton de fermeture "✕" rond, commun à toutes les fenêtres : disque
-	blanc nacré en relief, croix foncée, qui passe au rouge au survol.
+	v9.3 — ICÔNES DESSINÉES (petits cadres arrondis), jamais un caractère
+	Unicode "symbole" : les polices Roblox (BuilderSans, FredokaOne,
+	LuckiestGuy...) n'ont pas ✕ ✓ ▶ ★ ♪ ⟲... Roblox dessine alors un carré
+	"tofu" qui ressemble au logo Roblox. Les vrais emoji en couleur
+	(✅ ⭐ 🔄 🎵 ❌...) s'affichent bien, eux.
+	UIUtil.Icon(kind, props) -> Frame transparent (carré Size x Size) :
+	  kind : "Cross" (✕), "Check" (✓), "Play" (▶), "Pause" (❚❚),
+	         "Next" (►►), "Prev" (◄◄), "Up" / "Down" / "Left" / "Right"
+	         (▲ ▼ ◀ ▶), "Chevron" (▾), "Dot" (●), "Ring" (◯), "Diamond" (✦).
+	  props : Size (px, 20), Color (blanc), Thickness (px, épaisseur des
+	          traits), Position, AnchorPoint (0.5, 0.5 par défaut), ZIndex,
+	          Name, Parent, Rotation, Transparency.
+	L'icône ignore DarkSkin (ses couleurs sont choisies par l'appelant).
+	UIUtil.SetIconColor(icon, color), UIUtil.SetIconTransparency(icon, t).
+]]
+local ICON_ROOT_2 = math.sqrt(2)
+
+local function iconPart(parent: Instance, className: string, props: { [string]: any }): any
+	local part = UIUtil.Create(className, props)
+	part:SetAttribute("IconPart", true)
+	part.Parent = parent
+	return part
+end
+
+-- Trait arrondi du point (x1, y1) au point (x2, y2) (pixels dans l'icône)
+local function iconBar(icon: Frame, x1: number, y1: number, x2: number, y2: number, thickness: number, color: Color3, zIndex: number, alpha: number)
+	local dx, dy = x2 - x1, y2 - y1
+	local length = math.sqrt(dx * dx + dy * dy) + thickness
+	local bar = iconPart(icon, "Frame", {
+		Name = "Bar",
+		Size = UDim2.fromOffset(length, thickness),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromOffset((x1 + x2) / 2, (y1 + y2) / 2),
+		Rotation = math.deg(math.atan2(dy, dx)),
+		BackgroundColor3 = color,
+		BackgroundTransparency = alpha,
+		BorderSizePixel = 0,
+		ZIndex = zIndex,
+	})
+	UIUtil.Create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = bar })
+	return bar
+end
+
+-- Triangle plein de base `base` (px), pointe vers `direction`, centré en
+-- (cx, cy) : un carré tourné de 45° dont une moitié est cachée par un cadre
+-- qui découpe (le cadre découpeur n'est jamais tourné : ClipsDescendants
+-- marche dans Roblox)
+local function iconTriangle(icon: Frame, direction: string, cx: number, cy: number, base: number, color: Color3, zIndex: number, alpha: number)
+	local depth = base / 2
+	local horizontal = direction == "Left" or direction == "Right"
+	local clip = UIUtil.Create("Frame", {
+		Name = "Tri" .. direction,
+		Size = horizontal and UDim2.fromOffset(depth, base) or UDim2.fromOffset(base, depth),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromOffset(cx, cy),
+		BackgroundTransparency = 1,
+		ClipsDescendants = true,
+		ZIndex = zIndex,
+		Parent = icon,
+	})
+	local center = Vector2.new(0, base / 2) -- "Right" : centre du carré sur le bord gauche
+	if direction == "Left" then
+		center = Vector2.new(depth, base / 2)
+	elseif direction == "Up" then
+		center = Vector2.new(base / 2, depth)
+	elseif direction == "Down" then
+		center = Vector2.new(base / 2, 0)
+	end
+	local side = base / ICON_ROOT_2
+	local square = iconPart(clip, "Frame", {
+		Name = "Fill",
+		Size = UDim2.fromOffset(side, side),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromOffset(center.X, center.Y),
+		Rotation = 45,
+		BackgroundColor3 = color,
+		BackgroundTransparency = alpha,
+		BorderSizePixel = 0,
+		ZIndex = zIndex,
+	})
+	UIUtil.Create("UICorner", { CornerRadius = UDim.new(0, math.max(1, math.floor(side * 0.16))), Parent = square })
+	return clip
+end
+
+function UIUtil.Icon(kind: string, props: { [string]: any }?): Frame
+	local options = props or {}
+	local size = options.Size or 20
+	local color = options.Color or WHITE
+	local alpha = options.Transparency or 0
+	local thickness = options.Thickness or math.max(2, math.floor(size * 0.16 + 0.5))
+	local zIndex = options.ZIndex or 1
+	local icon = UIUtil.Create("Frame", {
+		Name = options.Name or ("Icon" .. kind),
+		Size = UDim2.fromOffset(size, size),
+		AnchorPoint = options.AnchorPoint or Vector2.new(0.5, 0.5),
+		Position = options.Position or UDim2.fromScale(0.5, 0.5),
+		Rotation = options.Rotation or 0,
+		BackgroundTransparency = 1,
+		ZIndex = zIndex,
+	})
+	icon:SetAttribute("DarkSkinIgnore", true)
+	icon:SetAttribute("IconKind", kind)
+	local s = size
+	local half = thickness / 2
+	if kind == "Cross" then
+		local a, b = half + s * 0.04, s - half - s * 0.04
+		iconBar(icon, a, a, b, b, thickness, color, zIndex, alpha)
+		iconBar(icon, b, a, a, b, thickness, color, zIndex, alpha)
+	elseif kind == "Check" then
+		iconBar(icon, s * 0.14, s * 0.52, s * 0.4, s * 0.76, thickness, color, zIndex, alpha)
+		iconBar(icon, s * 0.4, s * 0.76, s * 0.86, s * 0.26, thickness, color, zIndex, alpha)
+	elseif kind == "Play" then
+		-- (léger décalage à droite : centre optique d'un triangle)
+		iconTriangle(icon, "Right", s * 0.56, s / 2, s * 0.86, color, zIndex, alpha)
+	elseif kind == "Pause" then
+		for _, x in ipairs({ 0.3, 0.7 }) do
+			local bar = iconPart(icon, "Frame", {
+				Name = "Bar",
+				Size = UDim2.fromOffset(math.max(2, s * 0.24), s * 0.76),
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromOffset(s * x, s / 2),
+				BackgroundColor3 = color,
+				BackgroundTransparency = alpha,
+				BorderSizePixel = 0,
+				ZIndex = zIndex,
+			})
+			UIUtil.Create("UICorner", { CornerRadius = UDim.new(0, math.max(1, math.floor(s * 0.07))), Parent = bar })
+		end
+	elseif kind == "Next" or kind == "Prev" then
+		local direction = kind == "Next" and "Right" or "Left"
+		local base = s * 0.66
+		iconTriangle(icon, direction, s * 0.5 - base / 4, s / 2, base, color, zIndex, alpha)
+		iconTriangle(icon, direction, s * 0.5 + base / 4, s / 2, base, color, zIndex, alpha)
+	elseif kind == "Up" or kind == "Down" or kind == "Left" or kind == "Right" then
+		iconTriangle(icon, kind, s / 2, s / 2, s, color, zIndex, alpha)
+	elseif kind == "Chevron" then
+		iconBar(icon, s * 0.18, s * 0.36, s * 0.5, s * 0.68, thickness, color, zIndex, alpha)
+		iconBar(icon, s * 0.5, s * 0.68, s * 0.82, s * 0.36, thickness, color, zIndex, alpha)
+	elseif kind == "Dot" or kind == "Diamond" then
+		local dot = iconPart(icon, "Frame", {
+			Name = "Fill",
+			Size = kind == "Dot" and UDim2.fromScale(0.62, 0.62) or UDim2.fromScale(0.56, 0.56),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Rotation = kind == "Diamond" and 45 or 0,
+			BackgroundColor3 = color,
+			BackgroundTransparency = alpha,
+			BorderSizePixel = 0,
+			ZIndex = zIndex,
+		})
+		UIUtil.Create("UICorner", { CornerRadius = kind == "Dot" and UDim.new(1, 0) or UDim.new(0.18, 0), Parent = dot })
+	elseif kind == "Ring" then
+		local ring = UIUtil.Create("Frame", {
+			Name = "Ring",
+			Size = UDim2.new(1, -thickness * 2, 1, -thickness * 2),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			BackgroundTransparency = 1,
+			ZIndex = zIndex,
+			Parent = icon,
+		})
+		UIUtil.Create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = ring })
+		iconPart(ring, "UIStroke", {
+			Color = color,
+			Thickness = thickness,
+			Transparency = alpha,
+			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		})
+	end
+	icon.Parent = options.Parent
+	return icon
+end
+
+-- Recolore une icône dessinée (UIUtil.Icon)
+function UIUtil.SetIconColor(icon: Instance, color: Color3)
+	for _, part in ipairs(icon:GetDescendants()) do
+		if part:GetAttribute("IconPart") == true then
+			if part:IsA("UIStroke") then
+				part.Color = color
+			elseif part:IsA("GuiObject") then
+				part.BackgroundColor3 = color
+			end
+		end
+	end
+end
+
+-- Transparence d'une icône dessinée (0 = opaque)
+function UIUtil.SetIconTransparency(icon: Instance, transparency: number)
+	for _, part in ipairs(icon:GetDescendants()) do
+		if part:GetAttribute("IconPart") == true then
+			if part:IsA("UIStroke") then
+				part.Transparency = transparency
+			elseif part:IsA("GuiObject") then
+				part.BackgroundTransparency = transparency
+			end
+		end
+	end
+end
+
+--[[
+	Bouton de fermeture rond, commun à toutes les fenêtres (v9.3) : disque
+	blanc nacré en relief, VRAIE croix dessinée (deux traits arrondis, plus
+	de caractère "✕" que Roblox affichait comme un carré façon logo
+	Roblox). Survol : le disque passe au rouge et la croix au blanc ;
+	appui : écrasement. Toujours clair (ignore DarkSkin) : bien visible sur
+	les fenêtres claires comme sombres.
 	props : Name, Size (diamètre, 40), Position, AnchorPoint, ZIndex, Parent,
 	Hitbox (diamètre de la zone tactile invisible, 0 = aucune),
 	OnClose (appelée par le bouton ET par sa zone tactile).
 ]]
+local CLOSE_INK = Color3.fromRGB(46, 48, 66)
+local CLOSE_HOT = Color3.fromRGB(232, 56, 76)
+local CLOSE_EDGE = Color3.fromRGB(168, 174, 194)
 function UIUtil.CloseButton(props: { [string]: any }): TextButton
 	local diameter = props.Size or 40
 	local button = UIUtil.BasicButton({
 		Name = props.Name or "Close",
-		Text = "✕",
-		Font = Theme.Fonts.Title,
-		TextSize = math.floor(diameter * 0.46),
-		TextColor3 = Color3.fromRGB(58, 60, 76),
+		Text = "",
 		Size = UDim2.fromOffset(diameter, diameter),
 		AnchorPoint = props.AnchorPoint or Vector2.zero,
 		Position = props.Position or UDim2.new(),
 		CornerRadius = UDim.new(1, 0),
+		StrokeThickness = diameter >= 32 and 2 or 1.5,
 		ZIndex = props.ZIndex or 1,
 		Shadow = props.Shadow,
-		Parent = props.Parent,
 	})
-	-- Survol : la croix et l'anneau passent au rouge
-	local hot = Color3.fromRGB(235, 64, 80)
+	-- (attribut posé AVANT d'entrer dans l'interface : DarkSkin repeint dès
+	-- l'ajout)
+	button:SetAttribute("DarkSkinIgnore", true)
 	local stroke = button:FindFirstChild("ButtonStroke") :: UIStroke?
-	button.MouseEnter:Connect(function()
-		button.TextColor3 = hot
-		if stroke then
-			stroke.Color = hot
+	if stroke then
+		stroke.Color = CLOSE_EDGE
+	end
+	local cross = UIUtil.Icon("Cross", {
+		Name = "Cross",
+		Size = math.floor(diameter * 0.4 + 0.5),
+		Thickness = math.max(2, math.floor(diameter * 0.1 + 0.5)),
+		Color = CLOSE_INK,
+		ZIndex = button.ZIndex + 1,
+		Parent = button,
+	})
+	button.Parent = props.Parent
+	-- Survol : disque rouge, croix blanche ; appui : rouge plus sombre
+	local function paint(state: string)
+		if state == "rest" then
+			button.BackgroundColor3 = WHITE
+			UIUtil.SetIconColor(cross, CLOSE_INK)
+			if stroke then
+				stroke.Color = CLOSE_EDGE
+			end
+		else
+			local fill = state == "press" and CLOSE_HOT:Lerp(INK, 0.18) or CLOSE_HOT
+			button.BackgroundColor3 = fill
+			UIUtil.SetIconColor(cross, WHITE)
+			if stroke then
+				stroke.Color = fill:Lerp(INK, 0.3)
+			end
 		end
+	end
+	-- (survol du bouton OU de sa zone tactile agrandie)
+	local overButton, overHitbox = false, false
+	local function restState(): string
+		return (overButton or overHitbox) and "hover" or "rest"
+	end
+	button.MouseEnter:Connect(function()
+		overButton = true
+		paint("hover")
 	end)
 	button.MouseLeave:Connect(function()
-		button.TextColor3 = Color3.fromRGB(58, 60, 76)
-		if stroke then
-			stroke.Color = LIGHT_EDGE
-		end
+		overButton = false
+		paint(restState())
+	end)
+	button.MouseButton1Down:Connect(function()
+		paint("press")
+	end)
+	button.MouseButton1Up:Connect(function()
+		paint(restState())
 	end)
 	local onClose = props.OnClose
 	local hitboxSize = props.Hitbox or 0
 	if hitboxSize > diameter and button.Parent then
-		-- Zone tactile agrandie : bouton invisible SOUS le ✕ (même parent),
-		-- centré sur lui ; le ✕ garde le survol et l'appui, la zone attrape
-		-- les appuis tout autour
+		-- Zone tactile agrandie : bouton invisible SOUS la croix (même
+		-- parent), centré sur elle ; le bouton garde le survol et l'appui, la
+		-- zone attrape les appuis tout autour
 		local anchor = button.AnchorPoint
 		local center = button.Position + UDim2.fromOffset((0.5 - anchor.X) * diameter, (0.5 - anchor.Y) * diameter)
 		local hitbox = UIUtil.Create("TextButton", {
@@ -909,12 +1150,22 @@ function UIUtil.CloseButton(props: { [string]: any }): TextButton
 			Parent = button.Parent,
 		})
 		local animScale = button:FindFirstChild("AnimScale") :: UIScale?
+		hitbox.MouseEnter:Connect(function()
+			overHitbox = true
+			paint("hover")
+		end)
+		hitbox.MouseLeave:Connect(function()
+			overHitbox = false
+			paint(restState())
+		end)
 		hitbox.MouseButton1Down:Connect(function()
+			paint("press")
 			if animScale then
 				UIUtil.Tween(animScale, 0.08, { Scale = 0.9 })
 			end
 		end)
 		hitbox.MouseButton1Up:Connect(function()
+			paint(restState())
 			if animScale then
 				UIUtil.Tween(animScale, 0.2, { Scale = 1 }, Enum.EasingStyle.Back)
 			end

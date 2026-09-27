@@ -72,6 +72,8 @@ export type Builder = {
 	Height: number,
 	Pal: { Color3 },
 	Painted: Painted?,
+	PaintFn: (() -> Painted?)?,
+	Item: any?,
 	P: (index: number, fallback: Color3) -> Color3,
 	Map: (color: Color3) -> Color3,
 	Part: (className: string, cframe: CFrame, size: Vector3, color: Color3, material: Enum.Material?, name: string?) -> BasePart,
@@ -82,6 +84,14 @@ export type Builder = {
 	CylX: (x: number, y: number, z: number, diameter: number, length: number, color: Color3, material: Enum.Material?) -> BasePart,
 	CylZ: (x: number, y: number, z: number, diameter: number, length: number, color: Color3, material: Enum.Material?) -> BasePart,
 	Wedge: (x: number, y: number, z: number, w: number, h: number, d: number, color: Color3, facing: string, material: Enum.Material?) -> BasePart,
+	Egg: (x: number, y: number, z: number, w: number, h: number, d: number, color: Color3, material: Enum.Material?) -> BasePart,
+	EggR: (cframe: CFrame, w: number, h: number, d: number, color: Color3, material: Enum.Material?) -> BasePart,
+	Tube: (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, diameter: number, color: Color3, material: Enum.Material?) -> BasePart,
+	Round: (x: number, y: number, z: number, w: number, h: number, d: number, r: number, color: Color3, material: Enum.Material?) -> BasePart,
+	Cushion: (x: number, y: number, z: number, w: number, h: number, d: number, color: Color3, material: Enum.Material?) -> BasePart,
+	Seat: (x: number, y: number, z: number, w: number, d: number) -> (),
+	SeatAt: { X: number, Y: number, Z: number, W: number, D: number }?,
+	Flags: { [string]: any },
 	Light: (part: BasePart, color: Color3, range: number, brightness: number) -> (),
 	Neon: (part: BasePart) -> (),
 	Top: (index: number, x: number, y: number, z: number, w: number, d: number) -> (),
@@ -250,6 +260,58 @@ function House3DKit.Builder(parent: Instance, origin: CFrame, k: number, mirror:
 		local size = (facing == "Left" or facing == "Right") and Vector3.new(d, h, w) or Vector3.new(w, h, d)
 		return b.Part("WedgePart", CFrame.new(x, y + h / 2, z) * CFrame.Angles(0, yaw, 0), size, color, material, "Pente")
 	end
+	-- Ellipsoïde (centre x, y, z) : Part + SpecialMesh "Sphere" (une Ball de
+	-- Roblox est toujours ronde : taille uniforme forcée ; le maillage
+	-- Sphere, lui, suit la taille de la pièce sur les 3 axes)
+	b.EggR = function(cframe: CFrame, w: number, h: number, d: number, color: Color3, material: Enum.Material?): BasePart
+		local part = b.Part("Part", cframe, Vector3.new(w, h, d), color, material, "Ovale")
+		local mesh = Instance.new("SpecialMesh")
+		mesh.MeshType = Enum.MeshType.Sphere
+		mesh.Parent = part
+		return part
+	end
+	b.Egg = function(x: number, y: number, z: number, w: number, h: number, d: number, color: Color3, material: Enum.Material?): BasePart
+		if math.abs(w - h) < 0.01 and math.abs(h - d) < 0.01 then
+			return b.Ball(x, y, z, w, color, material)
+		end
+		return b.EggR(CFrame.new(x, y, z), w, h, d, color, material)
+	end
+	-- Tube (cylindre) d'un point à un autre (pieds, tiges, anses, bras...)
+	b.Tube = function(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, diameter: number, color: Color3, material: Enum.Material?): BasePart
+		local a, c = Vector3.new(x0, y0, z0), Vector3.new(x1, y1, z1)
+		local delta = c - a
+		local length = math.max(0.01, delta.Magnitude)
+		local direction = length > 0.01 and delta / length or Vector3.new(0, 1, 0)
+		local up = math.abs(direction.Y) > 0.95 and Vector3.new(1, 0, 0) or Vector3.new(0, 1, 0)
+		-- (le cylindre de Roblox est couché sur X : on aligne X sur le tube)
+		local cf = CFrame.lookAt((a + c) / 2, (a + c) / 2 + direction, up) * CFrame.Angles(0, math.pi / 2, 0)
+		local part = b.Part("Part", cf, Vector3.new(length, diameter, diameter), color, material, "Tube")
+		;(part :: Part).Shape = Enum.PartType.Cylinder
+		return part
+	end
+	-- Bloc aux arêtes verticales arrondies (y = bas) : 2 blocs + 4 cylindres
+	b.Round = function(x: number, y: number, z: number, w: number, h: number, d: number, r: number, color: Color3, material: Enum.Material?): BasePart
+		r = math.clamp(r, 0.2, math.min(w, d) / 2 - 0.05)
+		local main = b.Box(x, y, z, w - 2 * r, h, d, color, material)
+		b.Box(x, y, z, w, h, d - 2 * r, color, material)
+		for _, sx in ipairs({ -1, 1 }) do
+			for _, sz in ipairs({ -1, 1 }) do
+				b.Cyl(x + sx * (w / 2 - r), y, z + sz * (d / 2 - r), 2 * r, h, color, material)
+			end
+		end
+		return main
+	end
+	-- Coussin moelleux (y = bas) : cœur en bloc + enveloppe ovale
+	b.Cushion = function(x: number, y: number, z: number, w: number, h: number, d: number, color: Color3, material: Enum.Material?): BasePart
+		local core = b.Box(x, y + h * 0.12, z, w * 0.9, h * 0.72, d * 0.86, color, material or Enum.Material.Fabric)
+		b.Egg(x, y + h / 2, z, w, h, d, color, material or Enum.Material.Fabric)
+		return core
+	end
+	-- Place assise (unités, face vers +z) : un personnage peut s'y asseoir (monde)
+	b.Seat = function(x: number, y: number, z: number, w: number, d: number)
+		b.SeatAt = { X = mirror and -x or x, Y = y, Z = z, W = w, D = d }
+	end
+	b.Flags = {}
 	b.Light = function(part: BasePart, color: Color3, range: number, brightness: number)
 		local light = Instance.new("PointLight")
 		light.Color = color
@@ -278,6 +340,10 @@ function House3DKit.Builder(parent: Instance, origin: CFrame, k: number, mirror:
 		local panel = b.Box(x, y, z, w, h, 1, b.P(1, WHITE), Enum.Material.SmoothPlastic)
 		panel.CastShadow = false
 		local painted = b.Painted
+		if not painted and b.PaintFn then
+			painted = b.PaintFn()
+			b.Painted = painted
+		end
 		if not painted then
 			return panel
 		end
