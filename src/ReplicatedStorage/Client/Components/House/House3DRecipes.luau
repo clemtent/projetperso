@@ -2854,12 +2854,15 @@ end
 
 -- API publique : modèle 3D d'un objet (nil si l'objet n'existe pas)
 function House3DRecipes.BuildItem(itemId: string, entry: any?, options: BuildOptions?): Model?
-	local ok, model = pcall(House3DRecipes.BuildModel, itemId, entry, options)
-	if ok then
-		return model
+	local result: Model? = nil
+	local ok, err = pcall(function()
+		result = (House3DRecipes.BuildModel(itemId, entry, options))
+	end)
+	if not ok then
+		warn("[House3D] BuildItem " .. tostring(itemId) .. " : " .. tostring(err))
+		return nil
 	end
-	warn("[House3D] BuildItem " .. tostring(itemId) .. " : " .. tostring(model))
-	return nil
+	return result
 end
 
 -- (pour les couleurs de secours ailleurs)

@@ -43,10 +43,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local HouseCommon = require(script.Parent.HouseCommon)
 local HousePatterns = require(script.Parent.HousePatterns)
-local HouseSurfaces = require(script.Parent.HouseSurfaces)
 local House3DFloor = require(script.Parent.House3DFloor)
 local House3DKit = require(script.Parent.House3DKit)
-local House3DRecipes = require(script.Parent.House3DRecipes)
 local House3DLayout = require(script.Parent.House3DLayout)
 
 type Placed = HouseCommon.Placed
@@ -68,7 +66,6 @@ local SLAB = 1.2
 local LAWN_SIDE = 4
 local LAWN_FRONT = 5
 local LAWN_BACK = 3
-local DEPTH_CURVE = 1.35 -- (Y 2D -> profondeur) les objets du fond vont vraiment contre le mur
 local MAX_LAMPS = 8 -- vraies lumières d'objets au plus
 local DROP = 1.4 -- (studs) les objets tombent doucement à leur place
 local DROP_TIME = 0.45
@@ -247,7 +244,6 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 	local views = configTable("HouseViewsById")
 	local viewEntry = views[tostring(roomData.View or "Garden")] or views.Garden
 	local HouseViews = requireSibling("HouseViews")
-	local HouseTints = requireSibling("HouseTints")
 
 	local folder = Instance.new("Folder")
 	folder.Name = House3DScene.FOLDER_NAME
