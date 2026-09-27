@@ -36,7 +36,7 @@ Art.Xylophone = function(body, kit, _item)
 	kit.Line(mallet, 0, 0, 16, -22, 2.5, C.WoodLight, 0, 1)
 	kit.Blob(mallet, 0, 0, 10, 10, C.Pink, { Z = 2 })
 	kit.Animate(mallet, "Sway", 10, 2, 0)
-	local note = kit.Text(body, "♪", 88, 26, 14, C.PinkDeep, 5)
+	local note = kit.Text(body, "🎵", 88, 26, 14, C.PinkDeep, 5)
 	kit.Animate(note, "Bob", 3, 1, 0.3)
 	return nil
 end
@@ -160,7 +160,7 @@ Art.Jukebox = function(body, kit, _item)
 	for index = 0, 3 do
 		kit.Box(speaker, 4, 3 + index * 4, 40, 2, C.Gold, 0.2, 2)
 	end
-	local note = kit.Text(body, "♫", 90, 30, 14, C.PinkDeep, 5)
+	local note = kit.Text(body, "🎶", 90, 30, 14, C.PinkDeep, 5)
 	kit.Animate(note, "Bob", 3, 1, 0)
 	return { Bulbs = bulbs, Glow = Color3.fromRGB(255, 220, 150) }
 end
@@ -178,7 +178,7 @@ Art.PinballMachine = function(body, kit, _item)
 	kit.Animate(ball, "Drift", 20, 1.2, 0)
 	local head = kit.Part(body, 56, 6, 38, 50, purple, { Radius = 8, Z = 3, Shine = true })
 	local screen = kit.Part(head, 5, 6, 28, 26, C.Navy, { Radius = 5, Z = 2 })
-	kit.Text(screen, "★", 14, 13, 16, C.Butter, 3)
+	kit.Text(screen, "⭐", 14, 13, 16, C.Butter, 3)
 	local bulbs = {}
 	for index = 0, 2 do
 		local color = ({ C.Pink, C.Butter, C.Mint })[index + 1]

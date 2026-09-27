@@ -30,7 +30,7 @@ end
 
 -- Note de musique qui flotte
 local function note(kit, parent, x, y, color, phase)
-	local label = kit.Text(parent, "♪", x, y, 14, color, 8)
+	local label = kit.Text(parent, "🎵", x, y, 14, color, 8)
 	kit.Animate(label, "Bob", 3, 1.2, phase)
 	return label
 end

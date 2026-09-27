@@ -349,7 +349,7 @@ Art.Harp = function(body, kit, _item)
 		kit.Animate(string, "Drift", 0.6, 3, index)
 	end
 	for index, note in ipairs({ { 86, 24 }, { 12, 44 } }) do
-		local label = kit.Text(body, index == 1 and "♪" or "♫", note[1], note[2], 14, C.PinkDeep, 5)
+		local label = kit.Text(body, index == 1 and "🎵" or "🎶", note[1], note[2], 14, C.PinkDeep, 5)
 		kit.Animate(label, "Bob", 3, 0.8, index)
 	end
 	return { Glow = Color3.fromRGB(255, 230, 160) }

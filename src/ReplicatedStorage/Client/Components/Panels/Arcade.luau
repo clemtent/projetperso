@@ -756,7 +756,7 @@ local function cardArt(parent: Instance, entry, height: number)
 	local sparkles = { { 0.12, 0.56, 13 }, { 0.88, 0.5, 11 }, { 0.78, 0.84, 12 }, { 0.24, 0.82, 9 } }
 	for _, spec in ipairs(sparkles) do
 		text({
-			Text = "✦",
+			Text = "✨",
 			TextSize = spec[3],
 			Color = WHITE,
 			Size = UDim2.fromOffset(16, 16),
@@ -842,7 +842,7 @@ local function buildGameCard(parent: Instance, entry, order: number)
 		ZIndex = 6,
 		Parent = card,
 	})
-	local play = chip(card, isDuel and T("⚔️ Challenge") or T("▶ Play"), entry.Color, {
+	local play = chip(card, isDuel and T("⚔️ Challenge") or T("🎮 Play"), entry.Color, {
 		AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -9, 1, -7), ZIndex = 7, Height = 22, TextSize = 13, Transparency = 0,
 	})
 	UIUtil.Stroke(play, WHITE, 1, 0.55)
@@ -1120,8 +1120,9 @@ local function buildDuelSetup(parent: Frame)
 			Size = UDim2.new(1, -62, 0, 32), Position = UDim2.fromOffset(56, 5), ZIndex = 7, Parent = tile }).LineHeight = 0.95
 		text({ Text = T(entry.Tagline or ""), Font = Theme.Fonts.Body, TextSize = 12, Color = C.TextDim,
 			Size = UDim2.new(1, -62, 0, 16), Position = UDim2.fromOffset(56, 38), ZIndex = 7, Parent = tile })
-		local check = text({ Name = "Check", Text = "✓", TextSize = 14, Color = WHITE, XAlign = Enum.TextXAlignment.Center,
+		local check = text({ Name = "Check", Text = "", TextSize = 14, Color = WHITE, XAlign = Enum.TextXAlignment.Center,
 			Size = UDim2.fromOffset(18, 18), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -5, 0, 5), ZIndex = 9, Parent = tile })
+		UIUtil.Icon("Check", { Size = 11, Thickness = 2, Color = WHITE, ZIndex = 10, Parent = check })
 		check.BackgroundTransparency = 0
 		check.BackgroundColor3 = entry.Color
 		UIUtil.Corner(check, UDim.new(1, 0))
@@ -1366,7 +1367,7 @@ local function buildDuelsPage(body: Frame)
 		Parent = page,
 	})
 	L.Title = text({ Text = T("3. Challenge a player"), TextSize = 16, Size = UDim2.new(1, -120, 0, 22), Position = UDim2.fromOffset(12, 10), Parent = right })
-	local refresh = neonButton({ Name = "Refresh", Text = T("↻ Refresh"), Color = C.Purple, Size = UDim2.fromOffset(100, 28),
+	local refresh = neonButton({ Name = "Refresh", Text = T("🔄 Refresh"), Color = C.Purple, Size = UDim2.fromOffset(100, 28),
 		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 7), TextSize = 13, ZIndex = 7, Parent = right })
 	refresh.Activated:Connect(function()
 		sound("Click", 1.1)
@@ -1516,7 +1517,7 @@ local function shopState(item): (string, boolean, Color3)
 		local owned = arcade.Badges and arcade.Badges[item.Id]
 		if owned then
 			if arcade.Badge == item.Id then
-				return T("✓ Equipped"), false, C.Green
+				return T("✅ Equipped"), false, C.Green
 			end
 			return T("Equip"), true, C.Cyan
 		end
@@ -1832,7 +1833,7 @@ local function buildGameView(root: Frame)
 		BackgroundTransparency = 1, Visible = false, ZIndex = 20, Parent = root })
 	G.View = view
 	-- Barre du haut : retour | titre (solo) ou bandeau VS (duel) | abandon
-	local back = neonButton({ Name = "Back", Text = T("← Back"), Color = C.Purple, Size = UDim2.fromOffset(96, 40), TextSize = 15, ZIndex = 22, Parent = view })
+	local back = neonButton({ Name = "Back", Text = T("⬅️ Back"), Color = C.Purple, Size = UDim2.fromOffset(96, 40), TextSize = 15, ZIndex = 22, Parent = view })
 	back.Activated:Connect(function()
 		sound("Click", 0.95)
 		local running = S.Active and S.Active.IsDuel and S.Duel and not S.Duel.Over
@@ -1914,6 +1915,12 @@ local function buildGameView(root: Frame)
 		local score = text({ Text = "", Font = Theme.Fonts.Number, TextSize = 26, XAlign = Enum.TextXAlignment.Center,
 			Size = UDim2.fromOffset(40, 40), AnchorPoint = Vector2.new(side == 1 and 1 or 0, 0.5),
 			Position = side == 1 and UDim2.new(1, -6, 0.5, 0) or UDim2.new(0, 6, 0.5, 0), ZIndex = 23, Parent = card })
+		-- Marques des duels au tour par tour (X / O / jeton) : DESSINÉES (les
+		-- polices Roblox n'ont pas ✕ ◯ ●)
+		for _, kind in ipairs({ "Cross", "Ring", "Dot" }) do
+			local mark = UIUtil.Icon(kind, { Name = "Mark" .. kind, Size = kind == "Dot" and 28 or 24, Thickness = 5, ZIndex = 24, Parent = score })
+			mark.Visible = false
+		end
 		if side == 2 then
 			name.Position = UDim2.fromOffset(50, 7)
 			name.Size = UDim2.new(1, -104, 0, 19)
@@ -2046,8 +2053,8 @@ updateDuelStrip = function()
 			ring.Color = color
 		end
 		if turnBased then
-			card.Score.Text = seat == 1 and (duel.Game == "TicTacToe" and "✕" or "●") or (duel.Game == "TicTacToe" and "◯" or "●")
-			card.Score.TextColor3 = color
+			card.Score.Text = ""
+			setScoreMark(card, duel.Game == "TicTacToe" and (seat == 1 and "Cross" or "Ring") or "Dot", color)
 			if duel.Over then
 				card.Status.Text = duel.Winner == seat and T("🏆 Winner!") or (duel.Winner == 0 and T("🤝 Draw") or "")
 			elseif duel.Turn == seat then
@@ -2065,6 +2072,7 @@ updateDuelStrip = function()
 		else
 			card.Score.Text = tostring(duel.Scores and duel.Scores[seat] or 0)
 			card.Score.TextColor3 = color
+			setScoreMark(card, nil, color)
 			card.Timer.Visible = false
 			if duel.Over then
 				card.Status.Text = duel.Winner == seat and T("🏆 Winner!") or (duel.Winner == 0 and T("🤝 Draw") or "")
@@ -2334,8 +2342,8 @@ local function buildInvitePopup()
 	UIUtil.Corner(swords, UDim.new(1, 0))
 	P.Title = text({ Text = "", TextSize = 17, Size = UDim2.new(1, -124, 0, 22), Position = UDim2.fromOffset(80, 10), ZIndex = 52, Parent = card })
 	P.Info = text({ Text = "", Font = Theme.Fonts.Body, TextSize = 14, Color = C.Yellow, Size = UDim2.new(1, -94, 0, 18), Position = UDim2.fromOffset(80, 33), ZIndex = 52, Parent = card })
-	P.Accept = neonButton({ Name = "Accept", Text = T("✓ Accept"), Color = C.Green, Size = UDim2.fromOffset(136, 36), Position = UDim2.fromOffset(80, 62), TextSize = 15, ZIndex = 53, Parent = card })
-	P.Decline = neonButton({ Name = "Decline", Text = T("✕ No thanks"), Color = Color3.fromRGB(110, 90, 150), Size = UDim2.fromOffset(136, 36),
+	P.Accept = neonButton({ Name = "Accept", Text = T("✅ Accept"), Color = C.Green, Size = UDim2.fromOffset(136, 36), Position = UDim2.fromOffset(80, 62), TextSize = 15, ZIndex = 53, Parent = card })
+	P.Decline = neonButton({ Name = "Decline", Text = T("No thanks"), Color = Color3.fromRGB(110, 90, 150), Size = UDim2.fromOffset(136, 36),
 		Position = UDim2.fromOffset(224, 62), TextSize = 15, ZIndex = 53, Parent = card })
 	P.Later = text({ Text = "", Font = Theme.Fonts.Body, TextSize = 12, Color = C.TextDim, XAlign = Enum.TextXAlignment.Right,
 		Size = UDim2.fromOffset(40, 16), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 14), ZIndex = 52, Parent = card })
@@ -2408,7 +2416,7 @@ showInvitePopup = function(invite)
 		head.Image = UIUtil.HeadshotUrl(from.UserId or 0, 100)
 	end
 	local canPay = S.Trophies >= (invite.Stake or 0)
-	setButton(P.Accept, canPay, canPay and T("✓ Accept") or T("Not enough 🏆"))
+	setButton(P.Accept, canPay, canPay and T("✅ Accept") or T("Not enough 🏆"))
 	local left = math.max(1, (invite.Seconds or 20) - (os.clock() - (invite.ReceivedAt or os.clock())))
 	P.Bar.Size = UDim2.fromScale(math.clamp(left / (invite.Total or 30), 0, 1), 1)
 	UIUtil.Tween(P.Bar, left, { Size = UDim2.fromScale(0, 1) }, Enum.EasingStyle.Linear)

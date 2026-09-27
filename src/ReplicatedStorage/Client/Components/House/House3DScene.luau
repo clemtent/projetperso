@@ -47,10 +47,9 @@ local HouseSurfaces = require(script.Parent.HouseSurfaces)
 local House3DFloor = require(script.Parent.House3DFloor)
 local House3DKit = require(script.Parent.House3DKit)
 local House3DRecipes = require(script.Parent.House3DRecipes)
+local House3DLayout = require(script.Parent.House3DLayout)
 
 type Placed = HouseCommon.Placed
-type Builder = House3DKit.Builder
-type Painted = House3DKit.Painted
 
 local House3DScene = {}
 
@@ -109,31 +108,8 @@ export type Scene = {
 	Destroy: () -> (),
 }
 
-type Build = {
-	Entry: Placed,
-	Item: any,
-	Painted: Painted?,
-	Recipe: House3DRecipes.Recipe?,
-	Info: House3DRecipes.Info,
-	Model: Builder?,
-	K: number,
-	Kind: string, -- "Wall" | "Flat" | "Floor"
-	Parent: Build?,
-	Relation: string?, -- "On" | "At"
-	SeatKind: string?,
-	SurfaceIndex: number,
-	Surface: any?,
-	Origin: CFrame,
-	X: number,
-	Z: number,
-	FW: number, -- empreinte (studs) une fois tourné
-	FD: number,
-	Yaw: number,
-	Placed: boolean,
-	Order: number,
-	Card: BasePart?,
-	LightScore: number,
-}
+type Build = House3DLayout.Build
+type Pet = { Parts: { BasePart }, Finals: { CFrame }, Phase: number, Amount: number }
 
 type SideWall = {
 	Side: number,
@@ -153,6 +129,18 @@ type Arrival = { Parts: { BasePart }, Finals: { CFrame }, Delay: number, Clock: 
 ----------------------------------------------------------------------
 
 local newPart = House3DKit.NewPart
+
+-- Déplace beaucoup de pièces d'un coup (BulkMoveTo ; sinon une par une)
+local function moveParts(parts: { BasePart }, cframes: { CFrame })
+	local ok = pcall(function()
+		workspace:BulkMoveTo(parts, cframes, Enum.BulkMoveMode.FireCFrameChanged)
+	end)
+	if not ok then
+		for index, p in ipairs(parts) do
+			p.CFrame = cframes[index]
+		end
+	end
+end
 
 local function noise(a: number, b: number): number
 	local value = math.sin(a * 12.9898 + b * 78.233) * 43758.5453
@@ -682,409 +670,56 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 	folder.Parent = workspace
 
 	------------------------------------------------------------------
-	-- Objets
+	-- Objets : vrais modèles 3D (House3DRecipes), placés par House3DLayout
 	------------------------------------------------------------------
-	local entries: { Placed } = {}
-	local roomPlaced = roomData.Placed
-	if type(roomPlaced) == "table" then
-		for _, raw in ipairs(roomPlaced) do
-			if type(raw) == "table" and type(raw.I) == "string" and HouseCommon.ItemsById[raw.I] then
-				local entry: any = {
-					I = raw.I,
-					X = math.clamp(finite(raw.X, 0.5), 0, 1),
-					Y = math.clamp(finite(raw.Y, 0.8), 0, 1),
-					S = math.clamp(finite(raw.S, 1), 0.2, 3),
-					Z = finite(raw.Z, 0),
-					F = raw.F == true or nil,
-					C = type(raw.C) == "string" and raw.C or nil,
-				}
-				table.insert(entries, entry)
-			end
-		end
-	end
-
-	-- 2D (px de la pièce) -> 3D : les murs de côté 2D prennent SIDE_PX en perspective
-	local function mapX(x: number, t: number, half: number): number
-		local sidePx = SIDE_PX * (1 - math.clamp(t, 0, 1))
-		local px = (x * roomWpx - sidePx) / math.max(1, roomWpx - 2 * sidePx) * roomWpx
-		local studs = (px - roomWpx / 2) * PX
-		local limit = math.max(0, W / 2 - half - 0.1)
-		return math.clamp(studs, -limit, limit)
-	end
-	local function depthOf(y: number): number
-		return math.clamp((y - wallRatio) / math.max(0.05, 1 - wallRatio), 0, 1)
-	end
-
+	local entries = House3DLayout.Entries(roomData)
+	local dims = House3DLayout.Dims(size, PX, D, WH)
+	local frame = CFrame.new(origin)
 	local itemFolder = Instance.new("Folder")
 	itemFolder.Name = "Items"
 	itemFolder.Parent = folder
-	local staging = Instance.new("Folder")
-	staging.Name = "Staging"
+	local pets: { Pet } = {}
+	local petClock = 0
 
-	local function tintFor(entry: any): (((Color3) -> Color3)?, ((root: Instance) -> ())?)
-		local tintId = entry.C
-		if not HouseTints or type(tintId) ~= "string" then
-			return nil, nil
-		end
-		local mapper = nil
-		if type(HouseTints.Mapper) == "function" then
-			local ok, result = pcall(HouseTints.Mapper, entry.I, tintId)
-			if ok and type(result) == "function" then
-				mapper = function(color: Color3): Color3
-					local okMap, mapped = pcall(result, color)
-					return okMap and typeof(mapped) == "Color3" and mapped or color
-				end
-			end
-		end
-		local apply = nil
-		if type(HouseTints.Apply) == "function" then
-			apply = function(root: Instance)
-				HouseTints.Apply(root, tintId)
-			end
-		end
-		return mapper, apply
-	end
-
-	-- 1. dessin 2D (palette / carton) + modèle 3D (hors écran, repère de l'objet)
-	local function prepare(entry: any, order: number): Build
-		local item = HouseCommon.ItemsById[entry.I]
-		local recipe, info = House3DRecipes.For(item)
-		local mapper, apply = tintFor(entry)
-		local painted = House3DKit.Paint(item, entry, apply)
-		local k = (tonumber(item.Size) or 80) * entry.S * PX / 100
-		local wall = item.Placement == "Wall"
-		if not recipe and painted.Flat and not wall then
-			recipe = House3DRecipes.For({ Id = "KnittedRug", Category = "Decor" })
-			info.Flat = true
-		end
-		local build: Build = {
-			Entry = entry,
-			Item = item,
-			Painted = painted,
-			Recipe = recipe,
-			Info = info,
-			Model = nil,
-			K = k,
-			Kind = wall and "Wall" or (info.Flat and "Flat" or "Floor"),
-			Parent = nil,
-			Relation = nil,
-			SeatKind = nil,
-			SurfaceIndex = 1,
-			Surface = nil,
-			Origin = CFrame.identity,
-			X = 0,
-			Z = 0,
-			FW = 100 * k,
-			FD = 0.3,
-			Yaw = 0,
-			Placed = false,
-			Order = order,
-			Card = nil,
-			LightScore = 0,
-		}
-		if recipe then
-			local b = House3DKit.Builder(staging, CFrame.identity, k, entry.F == true, mapper, painted.Colors)
-			b.Painted = painted
-			local ctx = House3DRecipes.Context(item, trim)
-			local ok, err = pcall(recipe, b, ctx)
-			if ok and #b.Parts > 0 then
-				build.Model = b
-				build.FW = b.Width * k
-				build.FD = math.max(0.2, b.Depth * k)
-				-- dessus déclarés par HouseSurfaces mais pas par la recette
-				local raw = ctx.Raw
-				if raw then
-					for index, surface in ipairs(raw) do
-						if not b.Tops[index] and type(surface) == "table" then
-							local x0, x1, y = tonumber(surface[1]) or 10, tonumber(surface[2]) or 90, tonumber(surface[3]) or 50
-							b.Tops[index] = { X = ((x0 + x1) / 2 - 50) * (entry.F and -1 or 1), Y = 100 - y, Z = 0, W = x1 - x0, D = b.Depth * 0.8 }
-						end
-					end
-				end
-			else
-				if not ok then
-					warn("[House3D] Recette " .. tostring(item.Id) .. " : " .. tostring(err))
-				end
-				for _, p in ipairs(b.Parts) do
-					p:Destroy()
-				end
-				-- (le dessin a pu partir avec les pièces : on le refait pour le carton)
-				build.Painted = House3DKit.Paint(item, entry, apply)
-			end
-		end
-		return build
-	end
-
-	-- 2. relations, positions
-	local function layout(builds: { Build })
-		local byEntry: { [Placed]: Build } = {}
-		local list: { Placed } = {}
-		for _, build in ipairs(builds) do
-			byEntry[build.Entry] = build
-			table.insert(list, build.Entry)
-		end
-		local seatedAt = (HouseSurfaces :: any).SeatedAt
-		for _, build in ipairs(builds) do
-			if build.Kind ~= "Wall" then
-				local okSupport, support = pcall(HouseSurfaces.SupportOf, build.Entry, list, roomWpx, roomHpx)
-				local supportEntry = okSupport and type(support) == "table" and support.Entry or nil
-				if supportEntry and byEntry[supportEntry] and supportEntry ~= build.Entry then
-					build.Parent = byEntry[supportEntry]
-					build.Relation = "On"
-					build.Surface = support
-					build.SurfaceIndex = tonumber(support.Index) or 1
-					if build.Kind == "Flat" then
-						build.Kind = "Floor"
-					end
-				elseif type(seatedAt) == "function" and build.Kind == "Floor" then
-					local okSeat, seat = pcall(seatedAt, build.Entry, list, roomWpx, roomHpx)
-					local tableEntry = okSeat and type(seat) == "table" and seat.Table or nil
-					if tableEntry and byEntry[tableEntry] and tableEntry ~= build.Entry then
-						build.Parent = byEntry[tableEntry]
-						build.Relation = "At"
-						build.SeatKind = tostring(seat.Kind)
-					end
-				end
-			end
-		end
-		-- (boucles éventuelles coupées)
-		for _, build in ipairs(builds) do
-			local node = build
-			local steps = 0
-			while node.Parent and steps < 8 do
-				node = node.Parent :: Build
-				steps += 1
-			end
-			if steps >= 8 then
-				build.Parent = nil
-				build.Relation = nil
-			end
-		end
-
-		-- Racines au sol : du fond vers l'avant ; on écarte ce qui se chevauche
-		local roots: { Build } = {}
-		for _, build in ipairs(builds) do
-			if build.Parent == nil then
-				table.insert(roots, build)
-			end
-		end
-		table.sort(roots, function(a, b)
-			if a.Entry.Y ~= b.Entry.Y then
-				return a.Entry.Y < b.Entry.Y
-			end
-			return a.Order < b.Order
-		end)
-		local placedFloor: { Build } = {}
-		local wallRank = 0
-		for _, build in ipairs(roots) do
-			local entry = build.Entry
-			if build.Kind == "Wall" then
-				local half = math.min(build.FW / 2, W / 2)
-				build.X = mapX(entry.X, 0, half)
-				local centerY = math.clamp((wallPx - entry.Y * roomHpx) * PX, 0.4, WH - 0.2)
-				wallRank += 1
-				build.Z = 0.02 + wallRank * 0.01
-				build.Origin = CFrame.new(at(build.X, centerY - 50 * build.K, build.Z))
-			else
-				local t = depthOf(entry.Y)
-				local seat = HouseSurfaces.Seat(entry.I)
-				if build.Model and seat and seat.View == "Side" then
-					-- (chaise de profil en 2D : un peu tournée vers où elle regarde)
-					build.Yaw = entry.F and -math.rad(35) or math.rad(35)
-				end
-				local fw, fd = build.FW, build.FD
-				local half = fw / 2
-				build.X = mapX(entry.X, t, half)
-				local zFront = (t ^ DEPTH_CURVE) * D
-				local z
-				if build.Info.Wall and t < 0.55 then
-					z = fd / 2 + 0.08
-				else
-					z = math.clamp(zFront - fd / 2, fd / 2 + 0.08, math.max(fd / 2 + 0.08, D - fd / 2 - 0.1))
-				end
-				if build.Kind == "Floor" and build.Model then
-					-- chevauchement avec un objet déjà posé : on avance un peu
-					for _ = 1, 6 do
-						local moved = false
-						for _, other in ipairs(placedFloor) do
-							local overlapX = math.abs(other.X - build.X) < (other.FW + fw) / 2 - 0.15
-							local overlapZ = math.abs(other.Z - z) < (other.FD + fd) / 2
-							if overlapX and overlapZ then
-								local pushed = other.Z + (other.FD + fd) / 2 + 0.05
-								if pushed + fd / 2 <= D + 0.5 then
-									z = pushed
-									moved = true
-								end
-							end
-						end
-						if not moved then
-							break
-						end
-					end
-					table.insert(placedFloor, build)
-				elseif build.Kind == "Floor" then
-					-- carton : juste devant ce qui est déjà là
-					z = math.clamp(zFront, 0.6, D - 0.3)
-					for _, other in ipairs(placedFloor) do
-						if math.abs(other.X - build.X) < (other.FW + fw) * 0.4 and math.abs(other.Z - z) < other.FD / 2 + 0.3 then
-							z = math.min(D - 0.3, other.Z + other.FD / 2 + 0.3)
-						end
-					end
-					build.FD = 0.3
-					table.insert(placedFloor, build)
-				end
-				build.Z = z
-				local lift = build.Kind == "Flat" and 0.01 + (#placedFloor % 5) * 0.004 or 0
-				build.Origin = CFrame.new(at(build.X, lift, z)) * CFrame.Angles(0, build.Yaw, 0)
-			end
-			build.Placed = true
-		end
-
-		-- Membres des groupes (posés sur / rangés à)
-		local function place(build: Build, guard: number)
-			if build.Placed or guard > 10 then
-				return
-			end
-			local parent = build.Parent
-			if not parent then
-				build.Placed = true
-				return
-			end
-			place(parent, guard + 1)
-			local entry = build.Entry
-			if build.Relation == "On" then
-				local surface = build.Surface
-				local centerX = surface and ((tonumber(surface.L) or entry.X) + (tonumber(surface.R) or entry.X)) / 2 or parent.Entry.X
-				local dx = (entry.X - centerX) * roomWpx * PX
-				local model = parent.Model
-				local top = model and model.Tops[build.SurfaceIndex]
-				local base: CFrame
-				if model and top then
-					local k = parent.K
-					dx = math.clamp(dx, -top.W * k / 2, top.W * k / 2)
-					base = parent.Origin * CFrame.new(top.X * k, top.Y * k, top.Z * k)
-				else
-					-- meuble en carton : hauteur d'après la 2D, juste devant le carton
-					local heightStuds = surface and (parent.Entry.Y - (tonumber(surface.Y) or parent.Entry.Y)) * roomHpx * PX or 0
-					if parent.Kind == "Wall" then
-						heightStuds = (tonumber(surface and surface.Y) or 0)
-						heightStuds = (wallPx - heightStuds * roomHpx) * PX - (parent.Origin.Y - origin.Y)
-					end
-					base = parent.Origin * CFrame.new(0, math.max(0, heightStuds), 0.35)
-				end
-				local world = base.Position + Vector3.new(dx, 0, 0)
-				build.X = world.X - origin.X
-				build.Z = world.Z - origin.Z
-				build.Origin = CFrame.new(world)
-			else
-				-- chaise à une table : de côté (tournée vers elle), derrière ou devant
-				local tableX, tableZ = parent.X, parent.Z
-				local tw, td = parent.FW, parent.FD
-				local cd = build.FD
-				local tuck = math.min(cd * 0.3, 0.8)
-				local kind = build.SeatKind or "Front"
-				local x, z, yaw = tableX, tableZ, 0
-				local dx = (entry.X - parent.Entry.X) * roomWpx * PX
-				if kind == "Left" then
-					x = tableX - tw / 2 - cd / 2 + tuck
-					yaw = math.pi / 2
-				elseif kind == "Right" then
-					x = tableX + tw / 2 + cd / 2 - tuck
-					yaw = -math.pi / 2
-				elseif kind == "Behind" then
-					x = tableX + math.clamp(dx, -tw / 2, tw / 2)
-					z = tableZ - td / 2 - cd / 2 + tuck
-					yaw = 0
-				else
-					x = tableX + math.clamp(dx, -tw / 2, tw / 2)
-					z = tableZ + td / 2 + cd / 2 - tuck
-					yaw = math.pi
-				end
-				x = math.clamp(x, -W / 2 + 0.3, W / 2 - 0.3)
-				z = math.clamp(z, 0.3, D + 0.6)
-				build.X, build.Z, build.Yaw = x, z, yaw
-				build.Origin = CFrame.new(at(x, 0, z)) * CFrame.Angles(0, yaw, 0)
-				if build.Model == nil then
-					-- (carton : face à la caméra, juste à côté)
-					build.Origin = CFrame.new(at(x, 0, z))
-				end
-			end
-			build.Placed = true
-		end
-		for _, build in ipairs(builds) do
-			place(build, 0)
-		end
-	end
-
-	-- 3. montage dans la pièce (+ arrivée en douceur)
+	-- montage dans la pièce (+ arrivée en douceur)
 	local lampCount = 0
 	local function mount(build: Build, delay: number)
 		local model = build.Model
+		model.Name = "Item_" .. tostring(build.Item.Id)
+		local data = build.Data
+		for _, light in ipairs(data.Lights) do
+			lampCount += 1
+			if lampCount > MAX_LAMPS then
+				light.Enabled = false
+			end
+			table.insert(itemLights, { Light = light, Base = light.Brightness })
+			light.Brightness = light.Brightness * (night and 1.7 or 0.9) * mood.Brightness
+		end
+		for _, glow in ipairs(data.Glows) do
+			table.insert(glowParts, glow)
+		end
+		model:PivotTo(build.Pivot)
 		local parts: { BasePart } = {}
 		local finals: { CFrame } = {}
-		local holder = Instance.new("Folder")
-		holder.Name = "Item_" .. tostring(build.Item.Id)
-		holder.Parent = itemFolder
-		if model then
-			for index, p in ipairs(model.Parts) do
-				local final = build.Origin * model.Locals[index]
-				p.CFrame = final
-				p.Parent = holder
-				table.insert(parts, p)
-				table.insert(finals, final)
-			end
-			for _, glow in ipairs(model.Glows) do
-				table.insert(glowParts, glow)
-			end
-			for _, light in ipairs(model.Lights) do
-				lampCount += 1
-				if lampCount > MAX_LAMPS then
-					light.Enabled = false
-				end
-				table.insert(itemLights, { Light = light, Base = light.Brightness })
-				light.Brightness = light.Brightness * (night and 1.7 or 0.9) * mood.Brightness
-			end
-			-- petit tapis : pas d'ombre
-			if build.Kind == "Flat" then
-				for _, p in ipairs(parts) do
+		for _, p in ipairs(model:GetDescendants()) do
+			if p:IsA("BasePart") then
+				-- petit tapis : pas d'ombre
+				if build.Kind == "Flat" then
 					p.CastShadow = false
 				end
-			end
-		else
-			local painted = build.Painted
-			if not painted then
-				return
-			end
-			local twoSided = build.Kind ~= "Wall"
-			local cf = build.Origin
-			if build.Kind == "Wall" then
-				cf = cf * CFrame.new(0, 50 * build.K, 0.08)
-			end
-			local card = House3DKit.Card(holder, cf, painted, build.K, twoSided, 0.6)
-			build.Card = card
-			table.insert(parts, card)
-			table.insert(finals, card.CFrame)
-			-- petit socle en bois sous les cartons posés au sol
-			if build.Kind == "Floor" and build.Relation ~= "On" then
-				local base = newPart("Part", "CardStand", Vector3.new(math.max(0.6, 60 * build.K), 0.18, 0.7), build.Origin * CFrame.new(0, 0.09, 0), Color3.fromRGB(214, 170, 130), M.Wood)
-				base.Parent = holder
-				table.insert(parts, base)
-				table.insert(finals, base.CFrame)
-			end
-			if painted.Glow and lampCount < MAX_LAMPS then
-				lampCount += 1
-				local light = Instance.new("PointLight")
-				light.Color = painted.Glow
-				light.Range = math.clamp(4 + 100 * build.K * 1.4, 6, 16)
-				light.Brightness = 0.8 * (night and 1.7 or 0.9) * mood.Brightness
-				light.Shadows = false
-				light.Parent = card
-				table.insert(itemLights, { Light = light, Base = 0.8 })
+				table.insert(parts, p)
+				table.insert(finals, p.CFrame)
 			end
 		end
-		for index, p in ipairs(parts) do
-			p.CFrame = finals[index] + Vector3.new(0, DROP, 0)
+		if data.Info.Pet then
+			table.insert(pets, { Parts = parts, Finals = finals, Phase = #pets * 1.7, Amount = math.clamp(data.H * 0.035, 0.03, 0.12) })
 		end
+		local lifted = table.create(#finals)
+		for index, final in ipairs(finals) do
+			lifted[index] = final + Vector3.new(0, DROP, 0)
+		end
+		moveParts(parts, lifted)
+		model.Parent = itemFolder
 		table.insert(arrivals, { Parts = parts, Finals = finals, Delay = delay, Clock = 0 })
 	end
 
@@ -1120,32 +755,39 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 				end
 				return alive() and not destroyed
 			end
+			local function discard()
+				for _, build in ipairs(builds) do
+					if build.Model.Parent == nil then
+						build.Model:Destroy()
+					end
+				end
+			end
 			for index, entry in ipairs(entries) do
-				local ok, result = pcall(prepare, entry, index)
-				if ok then
+				local ok, result = pcall(House3DLayout.Prepare, entry, index, dims, { Collide = false, Query = false, Trim = trim })
+				if ok and result then
 					table.insert(builds, result)
-				else
+				elseif not ok then
 					warn("[House3D] Objet " .. tostring(entry.I) .. " : " .. tostring(result))
 				end
 				done += 1
 				if not breathe() then
+					discard()
 					return
 				end
 			end
-			local okLayout, err = pcall(layout, builds)
+			local okLayout, err = pcall(House3DLayout.Layout, builds, dims, frame)
 			if not okLayout then
 				warn("[House3D] Disposition : " .. tostring(err))
 				for _, build in ipairs(builds) do
 					if not build.Placed then
-						local z = math.clamp(depthOf(build.Entry.Y) * D, 0.6, D - 0.3)
-						build.Origin = CFrame.new(at(mapX(build.Entry.X, depthOf(build.Entry.Y), 0), 0, z))
+						build.Pivot = frame * CFrame.new(0, 0, D * 0.6) * CFrame.Angles(0, math.pi, 0)
 					end
 				end
 			end
 			if not alive() or destroyed then
+				discard()
 				return
 			end
-			-- les plus grosses lampes d'abord (elles reçoivent une vraie lumière)
 			local order = table.clone(builds)
 			table.sort(order, function(a, b)
 				if a.Entry.Y ~= b.Entry.Y then
@@ -1157,9 +799,13 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 				local ok, mountErr = pcall(mount, build, 0.05 + math.min(1.2, index * 0.04))
 				if not ok then
 					warn("[House3D] Objet " .. tostring(build.Entry.I) .. " : " .. tostring(mountErr))
+					pcall(function()
+						build.Model:Destroy()
+					end)
 				end
 				done += 1
 				if not breathe() then
+					discard()
 					return
 				end
 			end
@@ -1240,15 +886,30 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 					local s = 1.70158
 					local eased = 1 + (s + 1) * (t - 1) ^ 3 + s * (t - 1) ^ 2
 					local offset = Vector3.new(0, DROP * (1 - eased), 0)
-					for i, p in ipairs(arrival.Parts) do
-						p.CFrame = arrival.Finals[i] + offset
-					end
 					if t >= 1 then
-						for i, p in ipairs(arrival.Parts) do
-							p.CFrame = arrival.Finals[i]
-						end
+						moveParts(arrival.Parts, arrival.Finals)
 						table.remove(arrivals, index)
+					elseif arrival.Clock >= arrival.Delay then
+						local moved = table.create(#arrival.Finals)
+						for i, final in ipairs(arrival.Finals) do
+							moved[i] = final + offset
+						end
+						moveParts(arrival.Parts, moved)
 					end
+				end
+			end
+			-- Animaux : petite respiration (≤ 30 fois par seconde, une fois tous arrivés)
+			petClock += dt
+			if #pets > 0 and petClock >= 1 / 30 and #arrivals == 0 then
+				petClock = 0
+				local now = os.clock()
+				for _, pet in ipairs(pets) do
+					local lift = Vector3.new(0, (math.sin(now * 2.4 + pet.Phase) * 0.5 + 0.5) * pet.Amount, 0)
+					local moved = table.create(#pet.Finals)
+					for i, final in ipairs(pet.Finals) do
+						moved[i] = final + lift
+					end
+					moveParts(pet.Parts, moved)
 				end
 			end
 			if mood.Effect == "Storm" then
@@ -1282,7 +943,6 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 				end)
 			end
 			folder:Destroy()
-			staging:Destroy()
 		end,
 	}
 	return scene

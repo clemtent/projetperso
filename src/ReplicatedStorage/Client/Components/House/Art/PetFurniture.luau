@@ -276,7 +276,7 @@ Art.BirdCage = function(body, kit, _item)
 	kit.Part(body, 12, 78, 76, 10, C.PinkSoft, { Radius = -1, Z = 6, Shine = true })
 	kit.Part(body, 44, 88, 12, 6, gold, { Radius = 2, Z = 5 })
 	kit.Part(body, 30, 93, 40, 6, C.Pink, { Radius = -1, Z = 6, Shade = 0.2 })
-	local note = kit.Text(body, "♪", 84, 18, 12, C.Purple, 7)
+	local note = kit.Text(body, "🎵", 84, 18, 12, C.Purple, 7)
 	kit.Animate(note, "Bob", 2, 0.8, 1.2)
 	return nil
 end
