@@ -48,6 +48,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
+local TextService = game:GetService("TextService")
 
 local Client = script.Parent.Parent.Parent
 local Theme = require(Client.Theme)
@@ -710,6 +711,67 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		end
 	end
 
+	-- Taille "naturelle" (px, avant UIScale) d'un cadre à AutomaticSize,
+	-- calculée depuis son contenu (listes, marges, textes) : juste dès la
+	-- première image, sans attendre qu'AbsoluteSize soit mis à jour
+	local function measure(gui: GuiObject): (number, number)
+		local width, height = gui.Size.X.Offset, gui.Size.Y.Offset
+		local auto = gui.AutomaticSize
+		if auto == Enum.AutomaticSize.None then
+			return width, height
+		end
+		local contentW, contentH = 0, 0
+		if gui:IsA("TextLabel") or gui:IsA("TextButton") then
+			local label = gui :: TextLabel
+			if label.Text ~= "" then
+				local ok, size = pcall(function()
+					return TextService:GetTextSize(label.Text, label.TextSize, label.Font, Vector2.new(4000, 1000))
+				end)
+				if ok and typeof(size) == "Vector2" then
+					contentW, contentH = size.X, size.Y
+				else
+					contentW, contentH = (utf8.len(label.Text) or #label.Text) * label.TextSize * 0.55, label.TextSize
+				end
+			end
+		end
+		local list = gui:FindFirstChildOfClass("UIListLayout")
+		local horizontal = list ~= nil and list.FillDirection == Enum.FillDirection.Horizontal
+		local count = 0
+		local sumW, sumH, maxW, maxH = 0, 0, 0, 0
+		for _, child in ipairs(gui:GetChildren()) do
+			if child:IsA("GuiObject") and child.Visible then
+				local w, h = measure(child)
+				count += 1
+				sumW += w
+				sumH += h
+				maxW = math.max(maxW, w)
+				maxH = math.max(maxH, h)
+			end
+		end
+		if list then
+			local gap = list.Padding.Offset * math.max(0, count - 1)
+			if horizontal then
+				contentW, contentH = math.max(contentW, sumW + gap), math.max(contentH, maxH)
+			else
+				contentW, contentH = math.max(contentW, maxW), math.max(contentH, sumH + gap)
+			end
+		else
+			contentW, contentH = math.max(contentW, maxW), math.max(contentH, maxH)
+		end
+		local padding = gui:FindFirstChildOfClass("UIPadding")
+		if padding then
+			contentW += padding.PaddingLeft.Offset + padding.PaddingRight.Offset
+			contentH += padding.PaddingTop.Offset + padding.PaddingBottom.Offset
+		end
+		if auto == Enum.AutomaticSize.X or auto == Enum.AutomaticSize.XY then
+			width = math.max(width, contentW)
+		end
+		if auto == Enum.AutomaticSize.Y or auto == Enum.AutomaticSize.XY then
+			height = math.max(height, contentH)
+		end
+		return width, height
+	end
+
 	-- Hôte (téléphone) : visible avec la barre ; la barre rétrécit si besoin
 	local function fitDockHost(visible: boolean)
 		local host = dockHost
@@ -720,9 +782,13 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		if visible then
 			local factor = Interface.Scale > 0 and Interface.Scale or 1
 			local hostWidth = host.AbsoluteSize.X / factor
-			local barWidth = toolbar.AbsoluteSize.X / factor / math.max(0.2, toolbarScale.Scale)
+			local measuredWidth = measure(toolbar)
+			local barWidth = math.max(measuredWidth, toolbar.AbsoluteSize.X / factor / math.max(0.2, toolbarScale.Scale))
 			if hostWidth > 0 and barWidth > 0 then
-				toolbarScale.Scale = math.clamp((hostWidth - 12) / barWidth, 0.5, 1)
+				local wanted = math.clamp((hostWidth - 12) / barWidth, 0.5, 1)
+				if math.abs(wanted - toolbarScale.Scale) > 1e-3 then
+					toolbarScale.Scale = wanted
+				end
 			end
 		end
 	end
@@ -756,10 +822,15 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 		local pixelRatio = room.Frame.AbsoluteSize.X / math.max(1, room.Width)
 		local toolbarSize = toolbar.AbsoluteSize
 		-- taille "naturelle" de la barre (échelle de base), en px de la pièce
-		local naturalW, naturalH = 560 * base, 120 * base
+		-- (contenu mesuré ; AbsoluteSize peut avoir une image de retard)
+		local measuredW, measuredH = measure(toolbar)
+		local naturalW, naturalH = measuredW * base, measuredH * base
 		if pixelRatio > 0 and toolbarSize.X > 0 and toolbarSize.Y > 0 then
-			naturalW = toolbarSize.X / pixelRatio * base / current
-			naturalH = toolbarSize.Y / pixelRatio * base / current
+			naturalW = math.max(naturalW, toolbarSize.X / pixelRatio * base / current)
+			naturalH = math.max(naturalH, toolbarSize.Y / pixelRatio * base / current)
+		end
+		if naturalW <= 0 or naturalH <= 0 then
+			naturalW, naturalH = 560 * base, 120 * base
 		end
 		local margin = 6 * base
 		-- partie visible de la scène, dans le repère de la pièce
@@ -1929,7 +2000,7 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 	-- au rendu suivant ; même échelle -> même taille, pas de boucle)
 	local toolbarQueued = false
 	toolbar:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-		if toolbarQueued or docked or not (selected and editing) then
+		if toolbarQueued or not (selected and editing) then
 			return
 		end
 		toolbarQueued = true
