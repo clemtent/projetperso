@@ -909,6 +909,10 @@ local function step(dt: number)
 		if shops and root and type(shops.Step) == "function" then
 			pcall(shops.Step, root.Position)
 		end
+		local traffic = optionalModule("TownTraffic")
+		if traffic and root and type(traffic.Step) == "function" then
+			pcall(traffic.Step, root.Position)
+		end
 		local facades = optionalModule("TownFacades")
 		if facades and root and type(facades.Step) == "function" then
 			pcall(facades.Step, root.Position)
@@ -1148,6 +1152,14 @@ local function enter(options: any)
 				warn("[Town] ShopInteriors.Start : " .. tostring(errShops))
 			end
 		end
+		-- v9.7 🚦 circulation d'ambiance + véhicules du décor en flux (TownTraffic, VEHICLES97)
+		local traffic = optionalModule("TownTraffic")
+		if traffic and type(traffic.Start) == "function" then
+			local okTraffic, errTraffic = pcall(traffic.Start, { Toast = toast })
+			if not okTraffic then
+				warn("[Town] TownTraffic.Start : " .. tostring(errTraffic))
+			end
+		end
 		-- v9.7 🏘️ détail des immeubles de rue + 🛒 supermarché MégaDopa (BUILDINGS97)
 		local facades = optionalModule("TownFacades")
 		if facades and type(facades.Start) == "function" then
@@ -1320,6 +1332,11 @@ local function teardown()
 	local shops = optionalModule("ShopInteriors")
 	if shops and type(shops.Stop) == "function" then
 		pcall(shops.Stop)
+	end
+	-- (v9.7) circulation + décor véhicules retirés
+	local traffic = optionalModule("TownTraffic")
+	if traffic and type(traffic.Stop) == "function" then
+		pcall(traffic.Stop)
 	end
 	local facades = optionalModule("TownFacades")
 	if facades and type(facades.Stop) == "function" then
