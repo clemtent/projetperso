@@ -7,5 +7,6 @@ return {
 	fr = {
 		["clack!"] = "clac !",
 		["CLACK!"] = "CLAC !",
+		["BAM!"] = "BAM !",
 	},
 }
