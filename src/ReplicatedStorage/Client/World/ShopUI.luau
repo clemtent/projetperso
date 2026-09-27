@@ -583,7 +583,7 @@ buildGui = function(): any
 	local grid = UIUtil.Create("ScrollingFrame", { Name = "Grid", Position = UDim2.fromOffset(14, 148), Size = UDim2.new(1, -28, 1, -196), BackgroundTransparency = 1,
 		BorderSizePixel = 0, ScrollBarThickness = 7, ScrollBarImageColor3 = LILAC, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		ScrollingDirection = Enum.ScrollingDirection.Y, ZIndex = 22, Parent = card })
-	local gridLayout = UIUtil.Create("UIGridLayout", { CellSize = UDim2.fromOffset(156, 214), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder,
+	local gridLayout = UIUtil.Create("UIGridLayout", { CellSize = UDim2.fromOffset(156, 222), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder,
 		HorizontalAlignment = Enum.HorizontalAlignment.Center, Parent = grid })
 	UIUtil.Create("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 8), PaddingRight = UDim.new(0, 6), Parent = grid })
 	-- pied : astuce + état
@@ -712,10 +712,13 @@ buildGui = function(): any
 	end
 
 	local function makeCard(entry: Entry, order: number): Card
+		-- (téléphone : vignette plus basse, carte plus compacte)
+		local thumbH = self.Phone and 84 or 112
+		local nameY = thumbH + 8
 		local frame = UIUtil.Create("Frame", { Name = "Card_" .. entry.Id, BackgroundColor3 = WHITE, LayoutOrder = order, ZIndex = 23, Parent = grid })
 		UIUtil.Corner(frame, 18)
 		UIUtil.Stroke(frame, Color3.fromRGB(236, 222, 250), 2, 0)
-		local thumb = UIUtil.Create("Frame", { Name = "Thumb", Size = UDim2.new(1, -12, 0, 112), Position = UDim2.fromOffset(6, 6),
+		local thumb = UIUtil.Create("Frame", { Name = "Thumb", Size = UDim2.new(1, -12, 0, thumbH), Position = UDim2.fromOffset(6, 6),
 			BackgroundColor3 = entry.Kind == "Car" and Color3.fromRGB(236, 240, 252) or HouseCommon.CategoryTint(entry.Kind == "Item" and tostring(entry.Def.Category) or "Plants"),
 			ZIndex = 23, ClipsDescendants = true, Parent = frame })
 		UIUtil.Corner(thumb, 14)
@@ -724,12 +727,12 @@ buildGui = function(): any
 		owned.BackgroundColor3 = MINT
 		owned.BackgroundTransparency = 0
 		UIUtil.Corner(owned, UDim.new(1, 0))
-		label({ Name = "Name", Text = entry.Icon .. " " .. Locale.T(entry.Name), Color = INK, TextSize = 15, Wrap = true, Size = UDim2.new(1, -14, 0, 38),
-			Position = UDim2.fromOffset(7, 120), ZIndex = 24, Parent = frame })
-		local price = label({ Name = "Price", Text = "", Color = PINK_DEEP, TextSize = 17, Size = UDim2.new(1, -14, 0, 20), Position = UDim2.fromOffset(7, 157),
+		label({ Name = "Name", Text = entry.Icon .. " " .. Locale.T(entry.Name), Color = INK, TextSize = self.Phone and 14 or 15, Wrap = true, Size = UDim2.new(1, -14, 0, 36),
+			Position = UDim2.fromOffset(7, nameY), ZIndex = 24, Parent = frame })
+		local price = label({ Name = "Price", Text = "", Color = PINK_DEEP, TextSize = 17, Size = UDim2.new(1, -14, 0, 20), Position = UDim2.fromOffset(7, nameY + 37),
 			ZIndex = 24, Parent = frame })
 		local lock = label({ Name = "Lock", Text = "", Color = Color3.fromRGB(130, 100, 200), TextSize = 12, Font = Theme.Fonts.Body, Wrap = true,
-			Size = UDim2.new(1, -14, 0, 26), Position = UDim2.fromOffset(7, 153), ZIndex = 24, Parent = frame })
+			Size = UDim2.new(1, -14, 0, 26), Position = UDim2.fromOffset(7, nameY + 33), ZIndex = 24, Parent = frame })
 		local button = UIUtil.PillButton({ Name = "Buy", Text = Locale.T("Buy"), Color = GREEN, Height = 30, TextSize = 16, ZIndex = 24, AnchorPoint = Vector2.new(0.5, 1),
 			Position = UDim2.new(0.5, 0, 1, -7), Parent = frame })
 		button.AutomaticSize = Enum.AutomaticSize.None
@@ -831,7 +834,7 @@ buildGui = function(): any
 		root.Size = UDim2.fromOffset(size.X / s, size.Y / s)
 		local rootW, rootH = size.X / s, size.Y / s
 		card.Size = UDim2.fromOffset(math.min(900, rootW - 24), math.min(phone and 420 or 560, rootH - 16))
-		gridLayout.CellSize = phone and UDim2.fromOffset(146, 206) or UDim2.fromOffset(156, 214)
+		gridLayout.CellSize = phone and UDim2.fromOffset(140, 192) or UDim2.fromOffset(156, 222)
 		footer.Visible = not phone
 	end
 	gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(layout)
