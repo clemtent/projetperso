@@ -184,6 +184,7 @@ function Disco.Start(ctx)
 		})
 		table.insert(rays, {
 			Frame = ray,
+			Tint = PALETTE[(index - 1) % #PALETTE + 1],
 			Length = length,
 			Offset = (index - 1) * (RANGE_MAX - RANGE_MIN) / (fullEffects and RAY_COUNT or 5) + random:NextNumber(-6, 6),
 			Alpha = random:NextNumber(0.3, 0.5),
@@ -229,6 +230,7 @@ function Disco.Start(ctx)
 			table.insert(spots, {
 				Frame = glow,
 				Core = core,
+				Tint = color,
 				Reach = reach,
 				Offset = random:NextNumber(0, RANGE_MAX - RANGE_MIN),
 				Speed = SWEEP_SPEED * random:NextNumber(0.8, 1.2) * (reach < 0.35 and 1.15 or 1),
@@ -507,6 +509,23 @@ function Disco.Start(ctx)
 	------------------------------------------------------------------
 	-- Animation (30 fois par seconde ; facettes 12 fois par seconde)
 	------------------------------------------------------------------
+	-- Thème clair : rayons et taches colorés (le blanc disparaîtrait sur un fond clair)
+	local darkTheme = nil :: boolean?
+	local function applyTheme()
+		local dark = ctx.State.DarkMode == true
+		if dark == darkTheme then
+			return
+		end
+		darkTheme = dark
+		for _, ray in ipairs(rays) do
+			ray.Frame.BackgroundColor3 = dark and WHITE:Lerp(ray.Tint, 0.35) or WHITE:Lerp(ray.Tint, 0.9)
+		end
+		for _, spot in ipairs(spots) do
+			spot.Core.BackgroundColor3 = dark and WHITE:Lerp(spot.Tint, 0.3) or spot.Tint
+		end
+	end
+	applyTheme()
+
 	local time = 0
 	local pending = 0
 	local layoutClock = 0
@@ -554,6 +573,7 @@ function Disco.Start(ctx)
 		layoutClock += step
 		if layoutClock >= 1 then
 			layoutClock = 0
+			applyTheme()
 			local offset = computeBallOffset()
 			if math.abs(offset - ballOffset) > 0.5 then
 				ballOffset = offset
@@ -575,7 +595,7 @@ function Disco.Start(ctx)
 			local halfLength = beam.Length / 2
 			beam.Frame.Position = UDim2.new(0.5, cx + math.cos(radians) * halfLength, 0, cy + math.sin(radians) * halfLength)
 			beam.Frame.Rotation = angle
-			beam.Frame.BackgroundColor3 = Color3.fromHSV((hue + beam.Hue) % 1, 0.72, 1)
+			beam.Frame.BackgroundColor3 = Color3.fromHSV((hue + beam.Hue) % 1, darkTheme and 0.72 or 0.9, 1)
 			beam.Frame.BackgroundTransparency = 0.58 + 0.12 * (0.5 + 0.5 * math.sin(time * 1.3 + beam.Phase))
 		end
 
@@ -587,7 +607,7 @@ function Disco.Start(ctx)
 			local halfLength = ray.Length / 2
 			ray.Frame.Position = UDim2.new(0.5, cx + math.cos(radians) * halfLength, 0, cy + math.sin(radians) * halfLength)
 			ray.Frame.Rotation = angle
-			local alpha = ray.Alpha * edgeFade(angle) * (0.75 + 0.25 * math.sin(time * 4 + ray.Twinkle))
+			local alpha = ray.Alpha * edgeFade(angle) * (0.75 + 0.25 * math.sin(time * 4 + ray.Twinkle)) * (darkTheme and 1 or 1.25)
 			ray.Frame.BackgroundTransparency = 1 - alpha
 		end
 
