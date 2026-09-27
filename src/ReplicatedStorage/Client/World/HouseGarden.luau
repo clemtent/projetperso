@@ -77,12 +77,35 @@ function HouseGarden.Bike(kit: any, x: number, d: number, color: Color3)
 	kit:Ball("Bloom", x + 1.6, 2.4, d, 0.5, PINK, M.SmoothPlastic, DECO)
 end
 
--- Banc (assise + dossier roses, pieds d'acier)
+-- Banc de jardin (v9.6, refait comme le banc de la ville) : 3 lattes
+-- d'assise à 1,9 stud, dossier de 2 lattes incliné de 12° vers l'ARRIÈRE
+-- (+d, côté maison), 2 flasques en fonte avec accoudoirs ; on le regarde
+-- depuis la rue (-d). (v9.4 : dossier flottant, pieds qui traversaient
+-- l'assise.) Seule l'assise bloque (une seule grosse pièce invisible).
 function HouseGarden.Bench(kit: any, x: number, d: number, color: Color3)
-	kit:Box("BenchSeat", x - 2.5, x + 2.5, 1.4, 1.7, d - 0.6, d + 0.6, color, M.Wood, SOLID)
-	kit:Box("BenchBack", x - 2.5, x + 2.5, 1.9, 3, d + 0.5, d + 0.7, color, M.Wood, DECO)
-	for _, lx in ipairs({ x - 2.1, x + 2.1 }) do
-		kit:Box("BenchLeg", lx - 0.15, lx + 0.15, 0, 1.4, d - 0.5, d + 0.5, Color3.fromRGB(96, 78, 124), M.Metal, DECO)
+	local iron = Color3.fromRGB(86, 70, 110)
+	local H = 1.9
+	-- collision : un seul bloc invisible (rien de petit pour trébucher)
+	local block = kit:Box("BenchBlock", x - 2.6, x + 2.6, 0, H, d - 0.7, d + 0.5, color, M.Wood, SOLID)
+	block.Transparency = 1
+	block.CastShadow = false
+	for i = 0, 2 do
+		local d0 = d - 0.7 + i * 0.42
+		kit:Box("BenchSlat", x - 2.5, x + 2.5, H - 0.16, H, d0, d0 + 0.36, color, M.Wood, DECO)
+	end
+	local pivot = CFrame.new(x, H + 0.05, -(d + 0.5)) * CFrame.Angles(-math.rad(12), 0, 0)
+	for _, h in ipairs({ 0.55, 1.2 }) do
+		kit:Part("BenchBack", Vector3.new(5, 0.45, 0.14), pivot * CFrame.new(0, h, -0.07), color, M.Wood, DECO)
+	end
+	for _, sx in ipairs({ -1, 1 }) do
+		local fx = x + sx * 2.63
+		kit:Box("BenchLeg", fx - 0.11, fx + 0.11, 0, H + 0.72, d - 0.58, d - 0.36, iron, M.Metal, DECO)
+		kit:Box("BenchLeg", fx - 0.11, fx + 0.11, 0, H, d + 0.24, d + 0.46, iron, M.Metal, DECO)
+		kit:Part("BenchPost", Vector3.new(0.22, 1.75, 0.2), CFrame.new(fx, H + 0.05, -(d + 0.5)) * CFrame.Angles(-math.rad(12), 0, 0) * CFrame.new(0, 0.755, 0.02),
+			iron, M.Metal, DECO)
+		kit:Box("BenchArm", fx - 0.15, fx + 0.15, H + 0.72, H + 0.86, d - 0.75, d + 0.45, iron, M.Metal, DECO)
+		local r0, r1 = x + sx * 2.25, x + sx * 2.6
+		kit:Box("BenchRail", math.min(r0, r1), math.max(r0, r1), H - 0.32, H - 0.16, d - 0.7, d + 0.54, iron, M.Metal, DECO)
 	end
 end
 
@@ -231,7 +254,9 @@ MAKERS.RainbowArch = function(kit, x, d)
 		Color3.fromRGB(183, 148, 246), WHITE,
 	}
 	for k, color in ipairs(colors) do
-		kit:CylD("Rainbow", x, 0, d + k * 0.02, 5.6 - (k - 1) * 0.55, 0.3, color, M.SmoothPlastic, DECO)
+		-- (v9.6 z-fighting : 0.02 d'écart -> 0.06, et le plus PETIT arc devant
+		-- (côté rue) : on voit enfin les 7 bandes au lieu d'un disque qui scintille)
+		kit:CylD("Rainbow", x, 0, d - k * 0.06, 5.6 - (k - 1) * 0.55, 0.3, color, M.SmoothPlastic, DECO)
 	end
 	for _, s in ipairs({ -1, 1 }) do
 		kit:Ball("Cloud", x + s * 2.5, 0.5, d - 0.4, 1.3, WHITE, M.Fabric, DECO)

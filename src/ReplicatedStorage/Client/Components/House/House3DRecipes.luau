@@ -383,7 +383,7 @@ R.Bookshelf = function(b, ctx)
 	for _, side in ipairs({ -1, 1 }) do
 		b.Box(side * (w / 2 - 2), 0, 0, 4, top, depth, wood, M.Wood)
 	end
-	local shelves = 4
+	local shelves = 3 -- (v9.6) 3 cases, comme le dessin 2D
 	local colors = {}
 	for index = 1, 6 do
 		colors[index] = accent(b, index, ({ PINK, SKY, MINT, BUTTER, LILAC, rgb(255, 170, 120) })[index])
@@ -400,13 +400,17 @@ R.Bookshelf = function(b, ctx)
 				local bw = 4 + ((n * 7 + index * 3) % 4)
 				local bh = (top - 4) / shelves - 8 - ((n * 5 + index) % 5)
 				if (n + index) % 5 ~= 0 then
-					b.Box(x + bw / 2, y + 4, 2, bw, bh, depth - 8, colors[(n + index) % 6 + 1], M.SmoothPlastic)
+					b.Box(x + bw / 2, y + 4, -5, bw, bh, depth - 18, colors[(n + index) % 6 + 1], M.SmoothPlastic)
 				end
 				x += bw + 0.6
 			end
 		end
 	end
 	b.Top(1, 0, top, 0, w, depth)
+	-- (v9.6) rayons devant les livres : dessus 2 (haut) .. 4 (bas), = HouseSurfaces
+	for index = 0, shelves - 1 do
+		b.Top(shelves + 1 - index, 0, index * (top - 4) / shelves + 4, depth / 2 - 6, w - 10, 10)
+	end
 	b.Footprint(w, depth, top)
 end
 R.StorageBox = function(b, ctx)
@@ -2772,13 +2776,20 @@ function House3DRecipes.Make(item: any, entry: any?, k: number, parent: Instance
 			b.SeatAt = { X = top.X, Y = top.Y, Z = top.Z, W = top.W, D = top.D }
 		end
 	end
+	-- (v9.6) anti-scintillement : faces confondues de l'objet écartées
+	local okSep, errSep = pcall(House3DKit.Separate, b.Parts)
+	if not okSep then
+		warn("[House3D] Separate " .. tostring(item.Id) .. " : " .. tostring(errSep))
+	end
 	-- dessus déclarés par HouseSurfaces mais pas par la recette
 	local raw = ctx.Raw
 	if raw then
 		for index, surface in ipairs(raw) do
 			if not b.Tops[index] and type(surface) == "table" then
 				local x0, x1, y = tonumber(surface[1]) or 10, tonumber(surface[2]) or 90, tonumber(surface[3]) or 50
-				b.Tops[index] = { X = ((x0 + x1) / 2 - 50) * (mirror and -1 or 1), Y = 100 - y, Z = 0, W = x1 - x0, D = b.Depth * 0.8 }
+				-- (v9.6 PLACE96) 4e valeur facultative : profondeur du centre du niveau,
+				-- en fraction de la profondeur du modèle (-0,5 = fond, +0,5 = devant)
+				b.Tops[index] = { X = ((x0 + x1) / 2 - 50) * (mirror and -1 or 1), Y = 100 - y, Z = (tonumber(surface[4]) or 0) * b.Depth, W = x1 - x0, D = b.Depth * 0.8 }
 			end
 		end
 	end
@@ -2840,7 +2851,8 @@ function House3DRecipes.BuildModel(itemId: string, entry: any?, options: BuildOp
 	end
 	if opts.Night ~= nil then
 		for _, light in ipairs(data.Lights) do
-			light.Brightness *= opts.Night == true and 1.7 or 0.9
+			-- (v9.6 "flash bang" : plus de x1,7 la nuit dans les pièces de la ville)
+			light.Brightness *= opts.Night == true and 1.15 or 0.85
 		end
 	end
 	-- Pièce de base (PrimaryPart) : pivot = bas du centre de l'empreinte
@@ -2886,6 +2898,11 @@ function House3DRecipes.BuildModel(itemId: string, entry: any?, options: BuildOp
 	if top then
 		model:SetAttribute("TopCenter", Vector3.new(-top.X * k, top.Y * k, -top.Z * k))
 		model:SetAttribute("TopSize", Vector2.new(top.W * k, top.D * k))
+	end
+	-- (v9.6 PLACE96) chaque niveau (étagères...) : FurnitureEdit choisit le
+	-- niveau d'après la hauteur touchée en 3D (repère du modèle, devant -Z)
+	for index, t in pairs(data.Tops) do
+		model:SetAttribute("Top" .. tostring(index), Vector3.new(-t.X * k, t.Y * k, -t.Z * k))
 	end
 	model:SetAttribute("Wall", wall)
 	model:SetAttribute("Flat", data.Info.Flat == true)

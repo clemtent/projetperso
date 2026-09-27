@@ -21,6 +21,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
+local CarModels = require(ReplicatedStorage.Shared.CarModels) -- (v9.6, GARAGE96) voitures garées
 
 local TownKit = {}
 
@@ -205,28 +206,44 @@ end
 -- Lumières (budget global)
 ----------------------------------------------------------------------
 
+-- v9.6 (FIXES96) "flash bang" : plafonds pour TOUTES les lumières de la
+-- ville (même si un appelant demande plus) ; lumières "NightOnly" : le
+-- client (TownAtmosphere) ne les allume que la nuit
+TownKit.MAX_LIGHT_BRIGHTNESS = 1
+TownKit.MAX_LIGHT_RANGE = 20
+
 function TownKit.Light(host: BasePart, color: Color3, range: number, brightness: number, kind: string?): Light?
 	if stats.Lights >= TownKit.MAX_LIGHTS then
 		return nil
 	end
 	stats.Lights += 1
 	local light: Light
+	local r = math.min(range, TownKit.MAX_LIGHT_RANGE)
 	if kind == "Spot" then
 		local spot = Instance.new("SpotLight")
 		spot.Angle = 70
 		spot.Face = Enum.NormalId.Bottom
-		spot.Range = range
+		spot.Range = r
 		light = spot
 	else
 		local point = Instance.new("PointLight")
-		point.Range = range
+		point.Range = r
 		light = point
 	end
 	light.Color = color
-	light.Brightness = brightness
+	light.Brightness = math.min(brightness, TownKit.MAX_LIGHT_BRIGHTNESS)
 	light.Shadows = false
+	light:SetAttribute("NightOnly", true)
 	light.Parent = host
 	return light
+end
+
+-- Verre de lanterne / ampoule : mat (SmoothPlastic) le jour, Neon la nuit
+-- (bascule côté client, TownAtmosphere) ; à garder PETIT (≤ ~1 stud)
+function TownKit.Glow(p: BasePart): BasePart
+	p.Material = M.SmoothPlastic
+	p:SetAttribute("NightGlow", true)
+	return p
 end
 
 ----------------------------------------------------------------------
@@ -239,7 +256,8 @@ function TownKit.Surface(board: BasePart, face: Enum.NormalId, pixelsPerStud: nu
 	gui.Face = face
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	gui.PixelsPerStud = pixelsPerStud
-	gui.LightInfluence = lightInfluence or 0.2
+	-- (v9.6 : 0.5 par défaut, un panneau n'est plus une boîte lumineuse la nuit)
+	gui.LightInfluence = lightInfluence or 0.5
 	gui.MaxDistance = maxDistance or 400
 	gui.Parent = board
 	local frame = Instance.new("Frame")
@@ -355,26 +373,84 @@ function TownKit.Lamp(parent: Instance, base: Vector3, facing: number, light: bo
 		local armEnd = rot * CFrame.new(side * 2.2, 11.6, 0)
 		TownKit.Beam(model, "Arm", (rot * CFrame.new(0, 11.8, 0)).Position, armEnd.Position, 0.22, 0.22, C.Metal, M.Metal, "deco")
 		part(model, "Hood", Vector3.new(1.6, 0.35, 1.6), armEnd * CFrame.new(0, -0.1, 0), C.Metal, M.Metal, "deco")
-		local glow = part(model, "Glow", Vector3.new(1.1, 1.1, 1.1), armEnd * CFrame.new(0, -0.8, 0), C.Glow, M.Neon, "deco")
+		-- (v9.6 : verre dépoli sous le chapeau, Neon la nuit seulement)
+		local glow = part(model, "Glow", Vector3.new(0.9, 0.9, 0.9), armEnd * CFrame.new(0, -0.74, 0), C.Glow, M.SmoothPlastic, "deco")
+		TownKit.Glow(glow)
 		glowPart = glowPart or glow
 	end
 	part(model, "Cap", Vector3.new(0.7, 0.5, 0.7), rot * CFrame.new(0, 12.2, 0), C.Metal, M.Metal, "deco")
 	if light and glowPart then
-		TownKit.Light(glowPart, C.Glow, 26, 1.4)
+		-- (v9.6 : 26 / 1.4 -> 18 / 0.85)
+		TownKit.Light(glowPart, C.Glow, 18, 0.85)
 	end
 	return model
 end
 
--- Banc public (vrai Seat) : `cf` au sol, le dossier du côté +Z local
+-- Banc public (v9.6, refait) : banc de parc réaliste, vrai Seat.
+-- `cf` = au sol, milieu du banc ; l'AVANT (LookVector, -Z local) est le côté
+-- où l'on s'assoit, le DOSSIER est du côté +Z local. Signature inchangée.
+--   - 2 flasques en fonte (pied avant qui monte jusqu'à l'accoudoir, pied
+--     arrière qui continue en montant du dossier, accoudoir) : 14 pièces en
+--     tout (budget de la ville) ;
+--   - 3 lattes d'assise + 2 lattes de dossier en bois, dossier incliné de
+--     12° vers l'ARRIÈRE (+Z) ; (v9.4 : incliné vers l'avant, flottant) ;
+--   - assise à 1.9 stud (R15) ; le Seat (invisible) est une seule pièce
+--     dont le DESSUS = le dessus des lattes et la face avant (-Z) regarde à
+--     l'opposé du dossier -> le personnage s'assoit face à l'avant, le dos
+--     contre le dossier ;
+--   - seul le Seat a CanTouch ; tout est ancré ; lattes / accoudoirs sans
+--     collision (pas de petites pièces qui font trébucher).
+TownKit.BENCH = {
+	Length = 5.4, -- lattes (x)
+	SeatTop = 1.9, -- dessus de l'assise (y)
+	SeatFront = -0.85, -- bord avant de l'assise (z)
+	SeatBack = 0.75, -- bord arrière de l'assise (z)
+	Tilt = 12, -- (°) dossier incliné vers l'arrière
+}
 function TownKit.Bench(parent: Instance, cf: CFrame)
+	local B = TownKit.BENCH
 	local model = TownKit.Model(parent, "Bench")
-	local seat = part(model, "Seat", Vector3.new(6, 0.35, 1.9), cf * CFrame.new(0, 1.7, 0), C.WoodLight, M.WoodPlanks, "solid", "Seat")
+	local wood = Color3.fromRGB(196, 140, 92)
+	local iron = Color3.fromRGB(58, 54, 66)
+	local L, H = B.Length, B.SeatTop
+	local SLAT_T = 0.16
+	-- Seat : une pièce invisible, dessus = assise visible, avant = -Z ; un
+	-- peu reculée (le personnage s'assoit au CENTRE du Seat : le dos vient
+	-- contre le dossier, les cuisses sur les lattes avant)
+	local zFront, zBack = B.SeatFront, B.SeatBack
+	local seatDepth = zBack - zFront
+	local seat = part(model, "Seat", Vector3.new(L, 1, seatDepth - 0.25), cf * CFrame.new(0, H - 0.5, (zFront + 0.25 + zBack) / 2), wood, M.Wood, "solid", "Seat")
+	seat.Transparency = 1
 	seat.CanCollide = true
-	seat.CanTouch = true -- (un Seat s'active au contact)
-	part(model, "Back", Vector3.new(6, 1.5, 0.25), cf * CFrame.new(0, 2.9, 0.95) * CFrame.Angles(math.rad(-10), 0, 0), C.WoodLight, M.WoodPlanks, "deco")
-	for _, x in ipairs({ -2.6, 2.6 }) do
-		part(model, "Leg", Vector3.new(0.3, 1.6, 1.8), cf * CFrame.new(x, 0.8, 0.1), C.Metal, M.Metal, "prop")
-		part(model, "ArmRest", Vector3.new(0.3, 0.25, 1.8), cf * CFrame.new(x, 2.35, 0.1), C.Metal, M.Metal, "deco")
+	seat.CanQuery = true
+	seat.CanTouch = true -- (un Seat s'active au contact : SEULE pièce touchable)
+	seat.CastShadow = false
+	-- 3 lattes d'assise (visibles, sans collision)
+	local slatW = (seatDepth - 2 * 0.08) / 3
+	for i = 0, 2 do
+		local z = zFront + slatW / 2 + i * (slatW + 0.08)
+		part(model, "SeatSlat", Vector3.new(L, SLAT_T, slatW), cf * CFrame.new(0, H - SLAT_T / 2, z), wood, M.Wood, "deco").CastShadow = true
+	end
+	-- dossier : 2 lattes sur un repère incliné (pivot au bord arrière de l'assise)
+	local tilt = CFrame.Angles(math.rad(B.Tilt), 0, 0) -- (+X : le haut part vers +Z)
+	local pivot = cf * CFrame.new(0, H + 0.05, zBack - 0.05) * tilt
+	for i, y in ipairs({ 0.55, 1.2 }) do
+		local slat = part(model, "BackSlat", Vector3.new(L, 0.5, 0.14), pivot * CFrame.new(0, y, 0.07), wood, M.Wood, "prop")
+		slat.CastShadow = true
+		slat.Name = "BackSlat" .. i
+	end
+	-- 2 flasques en fonte, JUSTE à l'extérieur des lattes
+	local fx = L / 2 + 0.13
+	local armY = H + 0.72
+	for _, sx in ipairs({ -1, 1 }) do
+		local x = sx * fx
+		-- pied avant (du sol jusqu'à l'accoudoir)
+		part(model, "FrontLeg", Vector3.new(0.22, armY, 0.22), cf * CFrame.new(x, armY / 2, zFront + 0.2), iron, M.Metal, "prop")
+		-- pied arrière (du sol à l'assise), puis montant du dossier (incliné)
+		part(model, "RearLeg", Vector3.new(0.22, H, 0.22), cf * CFrame.new(x, H / 2, zBack - 0.12), iron, M.Metal, "prop")
+		part(model, "BackPost", Vector3.new(0.22, 1.75, 0.2), pivot * CFrame.new(x, 0.755, -0.02), iron, M.Metal, "deco")
+		-- accoudoir
+		part(model, "ArmRest", Vector3.new(0.3, 0.14, seatDepth + 0.1), cf * CFrame.new(x, armY + 0.07, (zFront + zBack) / 2 - 0.08), iron, M.Metal, "deco")
 	end
 	return model
 end
@@ -431,7 +507,8 @@ function TownKit.BikeRack(parent: Instance, cf: CFrame, bikes: number)
 			local wheel = part(model, "Wheel", Vector3.new(0.15, 2, 2), bcf * CFrame.new(0, 1, z), C.Metal, M.Rubber, "deco")
 			;(wheel :: Part).Shape = Enum.PartType.Cylinder
 		end
-		part(model, "Frame", Vector3.new(0.18, 0.22, 2.8), bcf * CFrame.new(0, 1.6, 0) * CFrame.Angles(math.rad(8), 0, 0), frame, M.Metal, "deco")
+		-- (v9.6 : cadre plus large que la roue (0.24 > 0.15) : faces distinctes)
+		part(model, "Frame", Vector3.new(0.24, 0.22, 2.8), bcf * CFrame.new(0, 1.6, 0) * CFrame.Angles(math.rad(8), 0, 0), frame, M.Metal, "deco")
 		part(model, "Saddle", Vector3.new(0.4, 0.2, 0.8), bcf * CFrame.new(0, 2.3, 0.7), C.Metal, M.Leather, "deco")
 	end
 	return model
@@ -444,40 +521,39 @@ function TownKit.RoadSign(parent: Instance, base: Vector3, facing: number, color
 	local cf = CFrame.new(base + Vector3.new(0, 7.2, 0)) * CFrame.Angles(0, facing, 0)
 	if shape == "Diamond" then
 		part(model, "Plate", Vector3.new(1.8, 1.8, 0.12), cf * CFrame.Angles(0, 0, math.rad(45)), color, M.Metal, "deco")
-		part(model, "Inner", Vector3.new(1.3, 1.3, 0.14), cf * CFrame.Angles(0, 0, math.rad(45)), C.White, M.SmoothPlastic, "deco")
+		-- (v9.6 z-fighting : 0.2 d'épaisseur, 0.04 devant / derrière la plaque)
+		part(model, "Inner", Vector3.new(1.3, 1.3, 0.2), cf * CFrame.Angles(0, 0, math.rad(45)), C.White, M.SmoothPlastic, "deco")
 	elseif shape == "Rect" then
 		part(model, "Plate", Vector3.new(2.6, 1.6, 0.12), cf, color, M.Metal, "deco")
-		part(model, "Inner", Vector3.new(2.2, 1.2, 0.14), cf, C.White, M.SmoothPlastic, "deco")
+		part(model, "Inner", Vector3.new(2.2, 1.2, 0.2), cf, C.White, M.SmoothPlastic, "deco")
 	else
 		local plate = part(model, "Plate", Vector3.new(0.12, 2.2, 2.2), cf * CFrame.Angles(0, math.rad(90), 0), color, M.Metal, "deco")
 		;(plate :: Part).Shape = Enum.PartType.Cylinder
-		part(model, "Bar", Vector3.new(1.4, 0.36, 0.16), cf, C.White, M.SmoothPlastic, "deco")
+		part(model, "Bar", Vector3.new(1.4, 0.36, 0.22), cf, C.White, M.SmoothPlastic, "deco")
 	end
 	return model
 end
 
 -- Voiture garée (carrosserie + cabine vitrée + roues + phares) ; `cf` au sol, avant vers -Z
-function TownKit.Car(parent: Instance, cf: CFrame, color: Color3, kind: string?)
-	local model = TownKit.Model(parent, "Car")
-	local long = kind == "Van" and 11 or 9
-	local cabinH = kind == "Van" and 3 or 2.1
-	part(model, "Body", Vector3.new(4.6, 1.8, long), cf * CFrame.new(0, 1.9, 0), color, M.SmoothPlastic, "solid")
-	part(model, "Skirt", Vector3.new(4.7, 0.6, long - 0.4), cf * CFrame.new(0, 1.05, 0), C.Metal, M.SmoothPlastic, "deco")
-	local cabinLen = kind == "Van" and long - 2.6 or long * 0.52
-	local cabinZ = kind == "Van" and 1.1 or 0.6
-	part(model, "Cabin", Vector3.new(4.1, cabinH, cabinLen), cf * CFrame.new(0, 2.8 + cabinH / 2, cabinZ), color:Lerp(C.White, 0.12), M.SmoothPlastic, "deco")
-	part(model, "Windows", Vector3.new(4.16, cabinH * 0.62, cabinLen - 0.5), cf * CFrame.new(0, 2.85 + cabinH * 0.55, cabinZ), C.GlassDark, M.Glass, "deco")
-	part(model, "Windshield", Vector3.new(3.7, cabinH * 0.7, 0.12), cf * CFrame.new(0, 2.85 + cabinH * 0.5, cabinZ - cabinLen / 2 - 0.02), C.GlassDark, M.Glass, "deco")
-	for _, x in ipairs({ -2.1, 2.1 }) do
-		for _, z in ipairs({ -long / 2 + 1.7, long / 2 - 1.7 }) do
-			local w = part(model, "Wheel", Vector3.new(0.9, 2, 2), cf * CFrame.new(x, 1, z), Color3.fromRGB(40, 40, 46), M.Rubber, "deco")
-			;(w :: Part).Shape = Enum.PartType.Cylinder
+-- (v9.6, GARAGE96) vrais modèles de Shared/CarModels, en version "Parked"
+-- (~45-55 pièces, sans intérieur) : `kind` = Id de CarModels / Config.Cars
+-- (nil = "CityCar") ; "Van" SANS `opts` garde le gabarit v9.4 (camion à
+-- tacos de TownNature : 4,7 x 11 studs). `opts` = options de CarModels.Build.
+-- Seule la boîte "Root" (invisible) est solide ; aucune lumière, aucun Neon.
+function TownKit.Car(parent: Instance, cf: CFrame, color: Color3, kind: string?, opts: any?)
+	local options: { [string]: any } = { Detail = "Parked" }
+	if type(opts) == "table" then
+		for key, value in pairs(opts) do
+			options[key] = value
 		end
+	elseif kind == "Van" then
+		options.Scale = Vector3.new(0.78, 0.87, 0.85)
 	end
-	for _, x in ipairs({ -1.6, 1.6 }) do
-		part(model, "Headlight", Vector3.new(0.9, 0.45, 0.12), cf * CFrame.new(x, 2.2, -long / 2 - 0.02), C.Glow, M.Neon, "deco")
-		part(model, "Taillight", Vector3.new(0.8, 0.4, 0.12), cf * CFrame.new(x, 2.3, long / 2 + 0.02), Color3.fromRGB(230, 60, 80), M.Neon, "deco")
-	end
+	local model = CarModels.Build(kind or "CityCar", color, options)
+	model.Name = "Car"
+	model:PivotTo(cf)
+	model.Parent = parent
+	stats.Parts += tonumber(model:GetAttribute("PartCount")) or 0
 	return model
 end
 

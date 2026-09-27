@@ -201,12 +201,12 @@ local function gamerChair(b: Builder, z: number, seatY: number, main: Color3, tr
 	b.Cyl(0, seatY - 7, z, 8, 2, CARBON, M.Metal)
 	-- assise
 	b.Round(0, seatY - 6, z, 30, 6, 28, 3, CARBON, M.Leather)
-	b.Box(0, seatY - 5.6, z, 12, 5.8, 27, main, M.Leather)
+	b.Box(0, seatY - 5.6, z, 12, 6.8, 27, main, M.Leather) -- (v9.6 : dépasse de 1.2, plus 0.2)
 	-- dossier (côté +z), un peu penché vers l'arrière
 	local back = CFrame.new(0, seatY, z + 14) * CFrame.Angles(0.12, 0, 0)
 	b.BoxR(back * CFrame.new(0, 19, 0), 28, 38, 5, CARBON, M.Leather)
 	b.BoxR(back * CFrame.new(0, 17, -2.6), 11, 30, 0.6, main, M.Leather)
-	b.BoxR(back * CFrame.new(0, 17, -2.9), 2, 30, 0.4, trim, M.Leather)
+	b.BoxR(back * CFrame.new(0, 17, -3.5), 2, 30, 1.2, trim, M.Leather)
 	for _, side in ipairs({ -1, 1 }) do
 		b.BoxR(back * CFrame.new(side * 12, 16, -2.5) * CFrame.Angles(0, side * 0.35, 0), 6, 28, 4, main, M.Leather)
 		-- accoudoirs
@@ -253,15 +253,17 @@ local DESK_STYLES = {
 -- Tour PC (au sol, sous le bureau) : façade vitrée + ventilateurs lumineux
 local function pcTower(b: Builder, x: number, z: number, h: number, glow: Color3, rgbFans: boolean)
 	b.Box(x, 0, z, 17, h, 32, CARBON, M.SmoothPlastic)
-	b.Box(x, 1, z + 16.1, 15, h - 2, 0.4, rgb(60, 70, 96), M.Glass).Transparency = 0.35
+	-- (v9.6 z-fighting : vitre puis ventilateurs empilés SANS faces confondues :
+	-- vitre 16..16.5, anneau 16.5..17.5, moyeu 17.5..18.2, centre 18.2..18.9)
+	b.Box(x, 1, z + 16.25, 15, h - 2, 0.5, rgb(60, 70, 96), M.Glass).Transparency = 0.35
 	for index = 1, 3 do
 		local y = h * (index / 3.6) + 2
-		local ring = b.CylZ(x, y, z + 15.6, 10, 0.8, rgbFans and RAINBOW[index * 2] or glow, M.Neon)
+		local ring = b.CylZ(x, y, z + 17, 10, 1, rgbFans and RAINBOW[index * 2] or glow, M.Neon)
 		neon(b, ring, rgbFans and "RGB" or "Glow")
-		b.CylZ(x, y, z + 15.8, 7, 0.9, INK, M.SmoothPlastic)
-		b.CylZ(x, y, z + 16, 2.4, 1, CARBON_LIGHT, M.Metal)
+		b.CylZ(x, y, z + 17.85, 7, 0.7, INK, M.SmoothPlastic)
+		b.CylZ(x, y, z + 18.55, 2.4, 0.7, CARBON_LIGHT, M.Metal)
 	end
-	local power = b.CylZ(x + 5, h - 3, z + 16.2, 2, 0.4, glow, M.Neon)
+	local power = b.CylZ(x + 5, h - 3, z + 16.9, 2, 0.8, glow, M.Neon)
 	neon(b, power, "Glow")
 end
 
@@ -281,7 +283,7 @@ local function desk(b: Builder, ctx: any)
 	local edge = b.Map(style.Edge)
 	-- plateau + chant lumineux
 	b.Box(0, T - 3, deskZ, deskW, 3, deskD, top, M.SmoothPlastic)
-	b.Box(0, T - 3.2, deskZ, deskW - 4, 0.3, deskD - 4, darken(top, 0.3), M.SmoothPlastic)
+	b.Box(0, T - 4, deskZ, deskW - 4, 1, deskD - 4, darken(top, 0.3), M.SmoothPlastic) -- (v9.6 : dessous 1 plus bas, plus 0.2)
 	local strip = b.Box(0, T - 2.6, deskZ + deskD / 2 + 0.2, deskW - 2, 1.2, 0.6, edge, M.Neon)
 	neon(b, strip, rgbAll and "RGB" or "Glow")
 	-- tapis de bureau XXL (fin, à l'avant)
@@ -302,7 +304,7 @@ local function desk(b: Builder, ctx: any)
 	-- goulotte à câbles + lumière sous le bureau
 	b.Box(0, T - 9, -44, deskW * 0.6, 4, 6, CARBON, M.Metal)
 	if tier >= 2 then
-		local under = b.Box(0, T - 3.8, -40, deskW - 12, 0.6, 2, edge, M.Neon)
+		local under = b.Box(0, T - 4.8, -40, deskW - 12, 0.8, 2, edge, M.Neon)
 		neon(b, under, rgbAll and "RGB" or "Glow")
 	end
 	-- tour PC (au sol, à droite) ; bureau ultime : une seconde à gauche
@@ -324,7 +326,8 @@ local function desk(b: Builder, ctx: any)
 		local cf = CFrame.new(slot.X, y, monitorZ) * CFrame.Angles(0, slot.Yaw, 0)
 		if slot.Curved and setup.Curved ~= false then
 			-- ultra-large incurvé : panneau central + deux ailes tournées vers soi
-			monitor(b, cf, slot.W, slot.H, kind, index, frame, true, 8)
+			-- (v9.6 : pied posé SUR le plateau, plus enfoncé de 0.2 dedans)
+			monitor(b, cf, slot.W, slot.H, kind, index, frame, true, y - T - 1.4)
 			local wing = 9
 			for _, side in ipairs({ -1, 1 }) do
 				local a = -side * 0.38
@@ -407,7 +410,8 @@ R.SetupKeyboard = function(b, _ctx)
 	-- boîtier + plaque + halo dessous
 	b.Round(0, 0, 0, w, 5, d, 2.5, caseColor, M.SmoothPlastic)
 	named(b.Box(0, 5, 0, w - 5, 0.6, d - 5, rgb(26, 26, 36), M.Metal), "KeyboardBase")
-	local glow = b.Box(0, 0.4, 0, w + 0.6, 1.4, d + 0.6, RAINBOW[5], M.Neon)
+	-- (v9.6 z-fighting : halo 1.2 plus large de chaque côté, plus 0.3)
+	local glow = b.Box(0, 0.4, 0, w + 2.4, 1.4, d + 2.4, RAINBOW[5], M.Neon)
 	neon(b, glow, "RGB")
 	glow.Transparency = 0.3
 	local unit = 8.4
@@ -450,28 +454,35 @@ end
 R.SetupMouse = function(b, _ctx)
 	local body = b.Map(rgb(36, 36, 50))
 	-- tapis (bord lumineux)
-	b.Round(0, 0, 0, 100, 1.4, 76, 5, rgb(30, 30, 42), M.Fabric)
+	-- (v9.6 z-fighting : tapis de 4 d'épaisseur (le tapis du bureau fait
+	-- 0,03 stud : le dessus du tapis de souris est maintenant bien au-dessus),
+	-- autocollant de 2 ; la souris posée dessus (+2.6))
+	local pad = 4
+	b.Round(0, 0, 0, 100, pad, 76, 5, rgb(30, 30, 42), M.Fabric)
 	for _, side in ipairs({ -1, 1 }) do
-		neon(b, b.Box(0, 0.2, side * 38.2, 94, 1, 0.8, RAINBOW[5], M.Neon), "RGB")
-		neon(b, b.Box(side * 50.2, 0.2, 0, 0.8, 1, 70, RAINBOW[1], M.Neon), "RGB")
+		-- (bords lumineux épais de 3 : l'épaisseur mini des pièces (0,03 stud)
+		-- ne les ramène plus sur les faces du tapis)
+		neon(b, b.Box(0, 0.2, side * 40, 94, pad - 1.4, 3, RAINBOW[5], M.Neon), "RGB")
+		neon(b, b.Box(side * 52, 0.2, 0, 3, pad - 1.4, 70, RAINBOW[1], M.Neon), "RGB")
 	end
-	b.Box(-30, 1.4, -26, 22, 0.15, 10, rgb(255, 92, 170), M.SmoothPlastic)
+	b.Box(-30, pad, -26, 22, 2, 10, rgb(255, 92, 170), M.SmoothPlastic)
 	-- souris
 	local mx, mz = 12, 4
-	named(b.Egg(mx, 7, mz + 3, 30, 14, 46, body, M.SmoothPlastic), "MouseBody")
-	b.Box(mx, 1.4, mz + 3, 22, 3, 36, body, M.SmoothPlastic)
+	local up = pad - 1.4
+	named(b.Egg(mx, 7 + up, mz + 3, 30, 14, 46, body, M.SmoothPlastic), "MouseBody")
+	b.Box(mx, pad, mz + 3, 22, 3, 36, body, M.SmoothPlastic)
 	for _, side in ipairs({ -1, 1 }) do
-		local button = b.BoxR(CFrame.new(mx + side * 6.6, 12.4, mz - 9) * CFrame.Angles(0.22, 0, 0), 12, 2, 18, lighten(body, 0.12), M.SmoothPlastic)
+		local button = b.BoxR(CFrame.new(mx + side * 6.6, 12.4 + up, mz - 9) * CFrame.Angles(0.22, 0, 0), 12, 2, 18, lighten(body, 0.12), M.SmoothPlastic)
 		button.Name = side == -1 and "MouseLeft" or "MouseRight"
-		b.BoxR(CFrame.new(mx + side * 14.4, 8, mz + 2) * CFrame.Angles(0, 0, side * 0.35), 1.2, 6, 24, CARBON_LIGHT, M.Rubber)
+		b.BoxR(CFrame.new(mx + side * 14.4, 8 + up, mz + 2) * CFrame.Angles(0, 0, side * 0.35), 1.2, 6, 24, CARBON_LIGHT, M.Rubber)
 	end
-	local wheel = b.CylX(mx, 13.6, mz - 10, 5, 3, RAINBOW[6], M.Neon)
+	local wheel = b.CylX(mx, 13.6 + up, mz - 10, 5, 3, RAINBOW[6], M.Neon)
 	neon(b, wheel, "MouseWheel")
-	local logo = b.Ball(mx, 12.2, mz + 14, 4.5, RAINBOW[5], M.Neon)
+	local logo = b.Ball(mx, 12.2 + up, mz + 14, 4.5, RAINBOW[5], M.Neon)
 	neon(b, logo, "RGB")
 	-- câble (tressé) vers l'arrière
-	House3DKit.Path(b, { { mx, 4, mz - 20 }, { mx - 4, 2.2, mz - 30 }, { mx - 20, 2, -36 }, { mx - 30, 2, -40 } }, 1.6, INK, M.Fabric)
-	b.Footprint(100, 76, 16)
+	House3DKit.Path(b, { { mx, 4 + up, mz - 20 }, { mx - 4, 2.2 + up, mz - 30 }, { mx - 20, 2 + up, -36 }, { mx - 30, 2 + up, -40 } }, 1.6, INK, M.Fabric)
+	b.Footprint(100, 76, 16 + up)
 end
 
 ----------------------------------------------------------------------
@@ -493,8 +504,9 @@ end
 
 local function soundbar(b: Builder, x: number, y: number, z: number, w: number)
 	b.Round(x, y, z, w, 4, 6, 2, CARBON, M.SmoothPlastic)
-	b.Box(x, y + 0.6, z + 3.05, w - 4, 2.8, 0.2, rgb(70, 70, 90), M.Fabric)
-	neon(b, b.Box(x, y + 0.3, z + 3.2, 3, 0.5, 0.2, CYAN, M.Neon), "Glow")
+	-- (v9.6 z-fighting : grille 3..3.8 puis diode 3.8..4.4 devant le boîtier)
+	b.Box(x, y + 0.6, z + 3.4, w - 4, 2.8, 0.8, rgb(70, 70, 90), M.Fabric)
+	neon(b, b.Box(x, y + 0.3, z + 4.1, 3, 0.5, 0.6, CYAN, M.Neon), "Glow")
 end
 
 local function tvRecipe(b: Builder, _ctx: any)
@@ -515,7 +527,7 @@ local function tvRecipe(b: Builder, _ctx: any)
 		local y0 = 50 - h / 2
 		if rank >= 4 then
 			-- "ambilight" : halo de couleur derrière la télé
-			local halo = b.Box(0, y0 - 3, 5.2, w + 8, h + 6, 0.4, CYAN, M.Neon)
+			local halo = b.Box(0, y0 - 3, 4.2, w + 8, h + 6, 0.4, CYAN, M.Neon) -- (v9.6 : 1 plus en retrait)
 			neon(b, halo, "Ambilight")
 			halo.Transparency = 0.45
 		end
@@ -574,8 +586,9 @@ R.SetupNewsTV = function(b, _ctx)
 	local h = w * 9 / 16
 	local y0 = 50 - h / 2 - 2
 	b.Box(0, y0 - 2, 5, w + 6, h + 8, 2.4, rgb(40, 14, 24), M.SmoothPlastic)
-	neon(b, b.Box(0, y0 - 2.6, 5.2, w + 7, 1.2, 2.6, RED, M.Neon), "Glow")
-	neon(b, b.Box(0, y0 + h + 5, 5.2, w + 7, 1.2, 2.6, RED, M.Neon), "Glow")
+	-- (v9.6 z-fighting : bandeaux 1 plus larges et 0.5 plus épais que le cadre)
+	neon(b, b.Box(0, y0 - 3.2, 5, w + 8, 1.2, 4.4, RED, M.Neon), "Glow")
+	neon(b, b.Box(0, y0 + h + 6, 5, w + 8, 1.2, 4.4, RED, M.Neon), "Glow")
 	screenPart(b, CFrame.new(0, y0 + 2, 6.45), w, h, "News", 1)
 	-- voyant "ON AIR" au-dessus
 	local lamp = b.Round(0, y0 + h + 7, 4, 22, 5, 3, 1.5, RED, M.Neon)
@@ -592,16 +605,21 @@ R.SetupTVStand = function(b, ctx)
 		b.Box(side * 44, 0, 0, 4, 6, 30, CARBON_LIGHT, M.Metal)
 	end
 	local inner = T - 9
+	-- (v9.6 z-fighting : flancs plus larges que les plateaux (±50.5), cloisons
+	-- posées SUR le plateau bas, fond en retrait : aucune face confondue)
 	b.Box(0, 6, 0, 100, 3, d, body, M.Wood)
-	b.Box(0, 6, -d / 2 + 1, 100, inner, 2, darken(body, 0.2), M.Wood)
-	for _, x in ipairs({ -48.5, -14.5, 14.5, 48.5 }) do
-		b.Box(x, 6, 0, 3, inner, d, body, M.Wood)
+	b.Box(0, 6.5, -d / 2 + 2.5, 99, inner - 0.5, 2, darken(body, 0.2), M.Wood)
+	for _, x in ipairs({ -49, 49 }) do
+		b.Box(x, 5.5, 0, 3, inner + 0.5, d - 1, body, M.Wood)
+	end
+	for _, x in ipairs({ -14.5, 14.5 }) do
+		b.Box(x, 9, 0, 3, inner - 3, d - 1, body, M.Wood)
 	end
 	b.Box(0, T - 3, 0, 100, 3, d + 1, darken(body, 0.25), M.SmoothPlastic)
 	-- portes pleines (côtés) + niche ouverte au centre
 	for _, side in ipairs({ -1, 1 }) do
 		b.Box(side * 31.5, 9, d / 2 - 0.6, 31, inner - 6, 1.2, lighten(body, 0.12), M.Wood)
-		b.Box(side * 31.5, 10.5, d / 2 + 0.05, 27, inner - 9, 0.2, lighten(body, 0.2), M.Wood)
+		b.Box(side * 31.5, 10.5, d / 2 + 0.3, 27, inner - 9, 0.6, lighten(body, 0.2), M.Wood)
 		b.Box(side * 17.5, 9 + (inner - 6) / 2 - 3, d / 2 + 0.4, 1, 6, 1, CHROME, M.Metal)
 	end
 	b.Box(0, 9, 0, 26, 0.6, d - 4, rgb(24, 22, 34), M.SmoothPlastic)
@@ -633,13 +651,15 @@ local function transport(b: Builder, x: number, y: number, z: number, scale: num
 	nextButton.Name = "NextButton"
 end
 
--- Barres de niveau (VU) : `count` barres lumineuses, bas à `y`
+-- Barres de niveau (VU) : `count` barres lumineuses, bas à `y` ; `z` = face
+-- sur laquelle on les monte (v9.6 z-fighting : fond z..z+1.4, barres
+-- z+1.4..z+2.8 : même dans un petit objet, faces à plus de 0,02 stud)
 local function vuBars(b: Builder, x: number, y: number, z: number, w: number, h: number, count: number)
-	b.Box(x, y - 1, z - 0.3, w + 2, h + 2, 0.6, INK, M.SmoothPlastic)
+	b.Box(x, y - 1, z + 0.7, w + 2, h + 2, 1.4, INK, M.SmoothPlastic)
 	local step = w / count
 	for index = 1, count do
 		local color = index <= count * 0.6 and MINT or (index <= count * 0.85 and YELLOW or RED)
-		local bar = b.Box(x - w / 2 + step * (index - 0.5), y, z, step * 0.6, h, 0.6, color, M.Neon)
+		local bar = b.Box(x - w / 2 + step * (index - 0.5), y, z + 2.1, step * 0.6, h, 1.4, color, M.Neon)
 		neon(b, bar, "VU_" .. index)
 	end
 end
@@ -647,13 +667,15 @@ end
 -- Haut-parleur (face +z) : caisson, membranes qui battent
 local function speaker(b: Builder, x: number, y: number, z: number, w: number, h: number, d: number, body: Color3, cones: number)
 	b.Round(x, y, z, w, h, d, 1.5, body, M.Wood)
-	b.Box(x, y + 1, z + d / 2 + 0.05, w - 3, h - 2, 0.2, rgb(40, 40, 52), M.Fabric)
+	-- (v9.6 z-fighting : grille, anneau, membrane, cache empilés sans faces
+	-- confondues : d/2..+0.8, +0.8..+1.6, +1.6..+2.4, +2.4..+3)
+	b.Box(x, y + 1, z + d / 2 + 0.4, w - 3, h - 2, 0.8, rgb(40, 40, 52), M.Fabric)
 	for index = 1, cones do
 		local cy = y + h * (index - 0.4) / (cones + 0.2)
 		local size = math.min(w - 5, h / cones - 2) * (index == cones and 1 or 0.62)
-		b.CylZ(x, cy, z + d / 2 + 0.4, size + 1.4, 0.6, CHROME, M.Metal)
-		named(b.CylZ(x, cy, z + d / 2 + 0.8, size, 0.8, rgb(30, 30, 40), M.SmoothPlastic), "SpeakerCone")
-		b.CylZ(x, cy, z + d / 2 + 1.2, size * 0.34, 0.6, rgb(70, 70, 86), M.SmoothPlastic)
+		b.CylZ(x, cy, z + d / 2 + 1.2, size + 1.4, 0.8, CHROME, M.Metal)
+		named(b.CylZ(x, cy, z + d / 2 + 2, size, 0.8, rgb(30, 30, 40), M.SmoothPlastic), "SpeakerCone")
+		b.CylZ(x, cy, z + d / 2 + 2.7, size * 0.34, 0.6, rgb(70, 70, 86), M.SmoothPlastic)
 	end
 end
 
@@ -666,10 +688,11 @@ local function turntable(b: Builder, x: number, y: number, z: number, w: number,
 	b.Cyl(cx, y + 5.2, z, diameter + 1, 1, CHROME, M.Metal)
 	pivot(b, "Pivot_Vinyl", cx, y + 6.2, z)
 	named(b.Cyl(cx, y + 6.2, z, diameter, 0.6, rgb(20, 20, 26), M.SmoothPlastic), "Vinyl")
-	named(b.Cyl(cx, y + 6.6, z, diameter * 0.36, 0.3, rgb(255, 90, 120), M.SmoothPlastic), "Vinyl")
+	-- (v9.6 z-fighting : étiquette SUR le disque (6.8..7.2), repères au-dessus)
+	named(b.Cyl(cx, y + 6.8, z, diameter * 0.36, 0.4, rgb(255, 90, 120), M.SmoothPlastic), "Vinyl")
 	-- repère sur l'étiquette (on voit le disque tourner)
-	named(b.Box(cx + diameter * 0.1, y + 6.8, z, diameter * 0.12, 0.3, 1.6, CREAM, M.SmoothPlastic), "Vinyl")
-	named(b.Box(cx - diameter * 0.32, y + 6.7, z, diameter * 0.1, 0.2, 1.2, rgb(60, 60, 72), M.SmoothPlastic), "Vinyl")
+	named(b.Box(cx + diameter * 0.1, y + 7.2, z, diameter * 0.12, 0.3, 1.6, CREAM, M.SmoothPlastic), "Vinyl")
+	named(b.Box(cx - diameter * 0.32, y + 6.8, z, diameter * 0.1, 0.4, 1.2, rgb(60, 60, 72), M.SmoothPlastic), "Vinyl")
 	b.Cyl(cx, y + 6.6, z, 1, 1.4, CHROME, M.Metal)
 	-- bras de lecture
 	local ax, az = x + w * 0.36, z - d * 0.3
@@ -678,10 +701,11 @@ local function turntable(b: Builder, x: number, y: number, z: number, w: number,
 	b.Box(cx + diameter * 0.3, y + 6.8, z + d * 0.18, 2, 1, 3, INK, M.SmoothPlastic)
 end
 
--- Petit écran LCD (morceau en cours)
+-- Petit écran LCD (morceau en cours) ; `z` = face de montage (v9.6 : cadre
+-- z..z+1.4, écran z+1.4..z+1.9)
 local function lcd(b: Builder, x: number, y: number, z: number, w: number, h: number)
-	b.Box(x, y - 0.8, z - 0.3, w + 1.6, h + 1.6, 0.6, INK, M.SmoothPlastic)
-	screenPart(b, CFrame.new(x, y, z + 0.3), w, h, "Music", 1)
+	b.Box(x, y - 0.8, z + 0.7, w + 1.6, h + 1.6, 1.4, INK, M.SmoothPlastic)
+	screenPart(b, CFrame.new(x, y, z + 1.65), w, h, "Music", 1)
 end
 
 local function hifi(b: Builder, _ctx: any)
@@ -691,22 +715,25 @@ local function hifi(b: Builder, _ctx: any)
 		-- radio-cassette rétro
 		local body = b.Map(rgb(255, 140, 180))
 		b.Round(0, 0, 0, 100, 48, 30, 5, body, M.SmoothPlastic)
-		b.Box(0, 4, 15.1, 94, 40, 0.4, darken(body, 0.2), M.SmoothPlastic)
+		-- (v9.6 z-fighting : petit objet (~0,02 stud / unité, épaisseur mini
+		-- 0,03) -> façade 15..16.4 puis couches de 1,4 : anneau, tissu, membrane,
+		-- cache ; fenêtre, bobines, repères)
+		b.Box(0, 4, 15.7, 94, 40, 1.4, darken(body, 0.2), M.SmoothPlastic)
 		for _, side in ipairs({ -1, 1 }) do
-			b.CylZ(side * 29, 24, 15.3, 36, 0.8, CHROME, M.Metal)
-			b.CylZ(side * 29, 24, 15.6, 32, 0.6, rgb(40, 40, 52), M.Fabric)
-			named(b.CylZ(side * 29, 24, 16, 22, 1, rgb(30, 30, 40), M.SmoothPlastic), "SpeakerCone")
-			b.CylZ(side * 29, 24, 16.6, 8, 1, CHROME, M.Metal)
+			b.CylZ(side * 29, 24, 17.1, 36, 1.4, CHROME, M.Metal)
+			b.CylZ(side * 29, 24, 18.5, 32, 1.4, rgb(40, 40, 52), M.Fabric)
+			named(b.CylZ(side * 29, 24, 19.9, 22, 1.4, rgb(30, 30, 40), M.SmoothPlastic), "SpeakerCone")
+			b.CylZ(side * 29, 24, 21.3, 8, 1.4, CHROME, M.Metal)
 		end
 		-- fenêtre de la cassette + bobines
-		b.Box(0, 20, 15.3, 22, 16, 0.6, rgb(60, 50, 80), M.Glass).Transparency = 0.2
+		b.Box(0, 20, 17.1, 22, 16, 1.4, rgb(60, 50, 80), M.Glass).Transparency = 0.2
 		for _, side in ipairs({ -1, 1 }) do
-			pivot(b, side == -1 and "Pivot_Spool1" or "Pivot_Spool2", side * 5.5, 28, 15.7)
-			named(b.CylZ(side * 5.5, 28, 15.7, 6, 0.6, WHITE, M.SmoothPlastic), side == -1 and "Spool1" or "Spool2")
-			named(b.Box(side * 5.5, 28, 16, 5.4, 1, 0.3, INK, M.SmoothPlastic), side == -1 and "Spool1" or "Spool2")
+			pivot(b, side == -1 and "Pivot_Spool1" or "Pivot_Spool2", side * 5.5, 28, 18.5)
+			named(b.CylZ(side * 5.5, 28, 18.5, 6, 1.4, WHITE, M.SmoothPlastic), side == -1 and "Spool1" or "Spool2")
+			named(b.Box(side * 5.5, 28, 19.9, 5.4, 1, 1.4, INK, M.SmoothPlastic), side == -1 and "Spool1" or "Spool2")
 		end
-		vuBars(b, 0, 8, 15.6, 20, 7, 5)
-		lcd(b, 0, 38, 15.3, 24, 6)
+		vuBars(b, 0, 8, 16.4, 20, 7, 5)
+		lcd(b, 0, 38, 16.4, 24, 6)
 		-- poignée
 		House3DKit.Path(b, { { -34, 48, 0 }, { -30, 60, 0 }, { 30, 60, 0 }, { 34, 48, 0 } }, 3, CHROME, M.Metal)
 		transport(b, -14, 48, 4, 1)
@@ -727,8 +754,8 @@ local function hifi(b: Builder, _ctx: any)
 		named(b.Box(-7, 45.2, 3, 6, 0.2, 2, rgb(120, 220, 255), M.Neon), "Vinyl")
 		local lid = b.Cyl(0, 44.9, 0, 30, 3, rgb(200, 230, 255), M.Glass)
 		lid.Transparency = 0.6
-		lcd(b, 0, 30, 17.1, 30, 8)
-		vuBars(b, 0, 20, 17.3, 28, 6, 7)
+		lcd(b, 0, 30, 17, 30, 8)
+		vuBars(b, 0, 20, 17, 28, 6, 7)
 		b.CylZ(-12, 10, 17.2, 8, 1.6, CHROME, M.Metal)
 		transport(b, 6, 8, 17, 1)
 		for _, side in ipairs({ -1, 1 }) do
@@ -743,9 +770,9 @@ local function hifi(b: Builder, _ctx: any)
 		b.Box(0, 0, 0, 56, 36, 34, wood, M.Wood)
 		b.Box(0, 36, 0, 58, 2, 36, darken(wood, 0.2), M.Wood)
 		-- ampli (façade + VU + boutons) dans le meuble
-		b.Box(0, 20, 16.4, 48, 13, 1.2, rgb(34, 32, 40), M.Metal)
-		vuBars(b, -10, 23, 17.4, 20, 7, 8)
-		b.CylZ(12, 26.5, 17.3, 7, 1.4, CHROME, M.Metal)
+		b.Box(0, 20, 17, 48, 13, 2, rgb(34, 32, 40), M.Metal)
+		vuBars(b, -10, 23, 18, 20, 7, 8)
+		b.CylZ(12, 26.5, 18.7, 7, 1.4, CHROME, M.Metal)
 		transport(b, 14, 21, 17.5, 0.9)
 		-- bac à vinyles (pochettes colorées)
 		for index = 1, 7 do
@@ -787,8 +814,8 @@ local function hifi(b: Builder, _ctx: any)
 		b.Box(8 + index * 3, 40, 2, 1, 1.2, 12, CHROME, M.Metal)
 	end
 	transport(b, 16, 40, -6, 0.8)
-	vuBars(b, 0, 20, 14.4, 40, 10, 10)
-	lcd(b, 0, 46, -13.3, 26, 8)
+	vuBars(b, 0, 20, 14, 40, 10, 10)
+	lcd(b, 0, 46, -14, 26, 8)
 	-- enceintes colonnes
 	for _, side in ipairs({ -1, 1 }) do
 		speaker(b, side * 42, 0, -2, 16, 86, 20, rgb(30, 30, 38), 3)
@@ -866,10 +893,11 @@ R.SetupPress = function(b, _ctx)
 	-- socle + bandes de danger
 	b.Box(0, 0, 0, 92, 8, 56, frame, M.Metal)
 	for index = 0, 8 do
-		b.BoxR(CFrame.new(-40 + index * 10, 4, 28.1) * CFrame.Angles(0, 0, 0.7), 4, 12, 0.4, index % 2 == 0 and yellowC or INK, M.SmoothPlastic)
+		-- (v9.6 z-fighting : bandes 28..28.8, baguettes 28..29.6)
+		b.BoxR(CFrame.new(-40 + index * 10, 4, 28.4) * CFrame.Angles(0, 0, 0.7), 4, 12, 0.8, index % 2 == 0 and yellowC or INK, M.SmoothPlastic)
 	end
-	b.Box(0, 0, 28.3, 92, 1.2, 0.6, frame, M.Metal)
-	b.Box(0, 6.8, 28.3, 92, 1.2, 0.6, frame, M.Metal)
+	b.Box(0, 0, 28.8, 92, 1.2, 1.6, frame, M.Metal)
+	b.Box(0, 6.8, 28.8, 92, 1.2, 1.6, frame, M.Metal)
 	-- enclume (matrice)
 	b.Box(0, 8, 0, 50, 10, 40, rgb(110, 116, 132), M.DiamondPlate)
 	pivot(b, "Pivot_Anvil", 0, 18, 0)
@@ -879,16 +907,16 @@ R.SetupPress = function(b, _ctx)
 		b.Box(side * 36, 8, -6, 14, 5, 14, frame, M.Metal)
 	end
 	b.Box(0, 84, -6, 92, 14, 26, yellowC, M.Metal)
-	b.Box(0, 88, 7.1, 60, 6, 0.4, INK, M.SmoothPlastic)
+	b.Box(0, 88, 7.5, 60, 6, 1, INK, M.SmoothPlastic)
 	-- vérin hydraulique
 	b.Cyl(0, 70, -2, 22, 14, frame, M.Metal)
 	b.Cyl(0, 66, -2, 18, 4, CHROME, M.Metal)
 	-- piston (descend) : tige + plateau
 	pivot(b, "Pivot_Ram", 0, 60, 0)
-	named(b.Cyl(0, 58, -2, 10, 40, CHROME, M.Metal), "PressRam")
+	named(b.Cyl(0, 58, -2, 10, 39, CHROME, M.Metal), "PressRam")
 	named(b.Box(0, 50, 0, 46, 8, 36, rgb(90, 96, 112), M.Metal), "PressRam")
 	for index = 0, 4 do
-		named(b.BoxR(CFrame.new(-18 + index * 9, 54, 18.1) * CFrame.Angles(0, 0, 0.7), 3, 9, 0.4, index % 2 == 0 and yellowC or INK, M.SmoothPlastic), "PressRam")
+		named(b.BoxR(CFrame.new(-18 + index * 9, 54, 18.4) * CFrame.Angles(0, 0, 0.7), 3, 9, 0.8, index % 2 == 0 and yellowC or INK, M.SmoothPlastic), "PressRam")
 	end
 	-- objets à écraser (un seul visible à la fois)
 	-- 1 : canard en caoutchouc
@@ -942,7 +970,7 @@ R.SetupBubbleWrap = function(b, ctx)
 	b.CylX(0, T + 9, -18, 4, 90, CHROME, M.Metal)
 	local roll = b.CylX(0, T + 9, -18, 16, 84, rgb(200, 230, 255), M.Glass)
 	roll.Transparency = 0.35
-	b.CylX(0, T + 9, -18, 12, 84.4, rgb(230, 244, 255), M.SmoothPlastic).Transparency = 0.55
+	b.CylX(0, T + 9, -18, 12, 86, rgb(230, 244, 255), M.SmoothPlastic).Transparency = 0.55
 	-- feuille dépliée + bulles (cliquables)
 	local sheet = b.Box(0, T, 6, 84, 0.6, 34, rgb(220, 240, 255), M.SmoothPlastic)
 	sheet.Transparency = 0.35
@@ -1116,7 +1144,10 @@ local function gardenFlower(b: Builder, flower: string, y: number, height: numbe
 		local originCF = (b.Parts[1] and (b.Parts[1].CFrame * b.Locals[1]:Inverse())) or CFrame.new()
 		local base = originCF * CFrame.new((x or 0) * b.K, y * b.K, (z or 0) * b.K) * CFrame.Angles(0, (x or 0) * 0.07, -(lean or 0))
 		for _, part in ipairs(model:GetDescendants()) do
-			if part:IsA("BasePart") and part.Name ~= "Root" then
+			-- (v9.6 z-fighting : le pot du lotus a déjà son eau et ses nénuphars ;
+			-- la mare du jardin se superposait exactement à eux)
+			local skip = flower == "Lotus" and (part.Name == "Water" or part.Name == "WaterRim" or part.Name == "Pad")
+			if part:IsA("BasePart") and part.Name ~= "Root" and not skip then
 				local rel = source:ToObjectSpace(part.CFrame)
 				part.Size = part.Size * scale
 				part.CFrame = base * CFrame.new(rel.Position * scale) * rel.Rotation
@@ -1156,12 +1187,14 @@ R.SetupPlant = function(b, _ctx)
 		-- vasque dorée + eau + nénuphar
 		b.Cyl(0, 0, 0, 44, 4, darken(potColor, 0.2), M.Metal)
 		b.Cyl(0, 4, 0, 70, 16, potColor, M.Metal)
-		b.Cyl(0, 19, 0, 74, 1.2, rim, M.Metal)
-		local water = b.Cyl(0, 20, 0, 66, 0.6, rgb(90, 190, 230), M.SmoothPlastic)
+		-- (v9.6 z-fighting : liseré sous le bord (18..19.4), eau puis nénuphars
+		-- empilés à 1 d'écart ; la fleur du jardin n'apporte plus sa propre mare)
+		b.Cyl(0, 17, 0, 74, 1.4, rim, M.Metal)
+		local water = b.Cyl(0, 20, 0, 66, 1, rgb(90, 190, 230), M.SmoothPlastic)
 		water.Transparency = 0.1
-		b.Cyl(14, 20.4, 8, 20, 0.5, LEAF, M.SmoothPlastic)
-		b.Cyl(-16, 20.4, -6, 16, 0.5, LEAF_DARK, M.SmoothPlastic)
-		soil = 20.6
+		b.Cyl(14, 21, 8, 20, 1, LEAF, M.SmoothPlastic)
+		b.Cyl(-16, 21, -6, 16, 1, LEAF_DARK, M.SmoothPlastic)
+		soil = 21
 	elseif flower == "Sunflower" then
 		-- jardinière en bois
 		b.Box(0, 0, 0, 50, 30, 40, potColor, M.Wood)
@@ -1174,7 +1207,7 @@ R.SetupPlant = function(b, _ctx)
 		b.Cyl(0, 0, 0, 34, 4, darken(potColor, 0.15), M.SmoothPlastic)
 		b.Cyl(0, 4, 0, 40, 22, potColor, M.SmoothPlastic)
 		b.Cyl(0, 24, 0, 46, 6, rim, M.SmoothPlastic)
-		b.Cyl(0, 29.4, 0, 40, 1, rgb(110, 76, 56), M.Grass)
+		b.Cyl(0, 29.4, 0, 40, 2, rgb(110, 76, 56), M.Grass) -- (v9.6 : dessus 1.4 au-dessus du pot)
 		if tier >= 3 then
 			-- motif en cœur sur le pot
 			House3DKit.Heart(b, 0, 14, 20.2, 10, 0.6, PINK, M.SmoothPlastic)

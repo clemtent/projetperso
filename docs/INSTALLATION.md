@@ -76,7 +76,7 @@ Clic droit sur le parent → **Insert Object** → **Folder**, puis renomme-le.
 
 `StarterPlayer > StarterPlayerScripts` existe déjà. **Ne crée pas** `ReplicatedStorage > Remotes` : le serveur le crée tout seul.
 
-### 2. Puis chaque script (liste complète, 255 fichiers)
+### 2. Puis chaque script (liste complète, 266 fichiers)
 
 Crée l'objet du bon type à l'emplacement indiqué, renomme-le **exactement**, ouvre-le et colle **tout** le contenu du fichier.
 
@@ -234,6 +234,7 @@ Crée l'objet du bon type à l'emplacement indiqué, renomme-le **exactement**, 
 | `ReplicatedStorage > Client > StimulusManager` | ModuleScript | `src/ReplicatedStorage/Client/StimulusManager.luau` |
 | `ReplicatedStorage > Client > Theme` | ModuleScript | `src/ReplicatedStorage/Client/Theme.luau` |
 | `ReplicatedStorage > Client > UIUtil` | ModuleScript | `src/ReplicatedStorage/Client/UIUtil.luau` |
+| `ReplicatedStorage > Client > World > CarClient` | ModuleScript | `src/ReplicatedStorage/Client/World/CarClient.luau` |
 | `ReplicatedStorage > Client > World > DeskMode` | ModuleScript | `src/ReplicatedStorage/Client/World/DeskMode.luau` |
 | `ReplicatedStorage > Client > World > FurnitureEdit` | ModuleScript | `src/ReplicatedStorage/Client/World/FurnitureEdit.luau` |
 | `ReplicatedStorage > Client > World > GardenBuilder` | ModuleScript | `src/ReplicatedStorage/Client/World/GardenBuilder.luau` |
@@ -244,6 +245,8 @@ Crée l'objet du bon type à l'emplacement indiqué, renomme-le **exactement**, 
 | `ReplicatedStorage > Client > World > HouseStairs` | ModuleScript | `src/ReplicatedStorage/Client/World/HouseStairs.luau` |
 | `ReplicatedStorage > Client > World > LiveProps` | ModuleScript | `src/ReplicatedStorage/Client/World/LiveProps.luau` |
 | `ReplicatedStorage > Client > World > LiveScreens` | ModuleScript | `src/ReplicatedStorage/Client/World/LiveScreens.luau` |
+| `ReplicatedStorage > Client > World > ShopInteriors` | ModuleScript | `src/ReplicatedStorage/Client/World/ShopInteriors.luau` |
+| `ReplicatedStorage > Client > World > ShopUI` | ModuleScript | `src/ReplicatedStorage/Client/World/ShopUI.luau` |
 | `ReplicatedStorage > Client > World > TownArrival` | ModuleScript | `src/ReplicatedStorage/Client/World/TownArrival.luau` |
 | `ReplicatedStorage > Client > World > TownAtmosphere` | ModuleScript | `src/ReplicatedStorage/Client/World/TownAtmosphere.luau` |
 | `ReplicatedStorage > Client > World > TownClient` | ModuleScript | `src/ReplicatedStorage/Client/World/TownClient.luau` |
@@ -251,11 +254,13 @@ Crée l'objet du bon type à l'emplacement indiqué, renomme-le **exactement**, 
 | `ReplicatedStorage > Client > World > TownHud` | ModuleScript | `src/ReplicatedStorage/Client/World/TownHud.luau` |
 | `ReplicatedStorage > Client > World > WorldLink` | ModuleScript | `src/ReplicatedStorage/Client/World/WorldLink.luau` |
 | `ReplicatedStorage > Shared > ArcadeConfig` | ModuleScript | `src/ReplicatedStorage/Shared/ArcadeConfig.luau` |
+| `ReplicatedStorage > Shared > CarModels` | ModuleScript | `src/ReplicatedStorage/Shared/CarModels.luau` |
 | `ReplicatedStorage > Shared > ChatTopics` | ModuleScript | `src/ReplicatedStorage/Shared/ChatTopics.luau` |
 | `ReplicatedStorage > Shared > Config` | ModuleScript | `src/ReplicatedStorage/Shared/Config.luau` |
 | `ReplicatedStorage > Shared > DVDMath` | ModuleScript | `src/ReplicatedStorage/Shared/DVDMath.luau` |
 | `ReplicatedStorage > Shared > Formulas` | ModuleScript | `src/ReplicatedStorage/Shared/Formulas.luau` |
 | `ReplicatedStorage > Shared > FriendMailRules` | ModuleScript | `src/ReplicatedStorage/Shared/FriendMailRules.luau` |
+| `ReplicatedStorage > Shared > GarageLayout` | ModuleScript | `src/ReplicatedStorage/Shared/GarageLayout.luau` |
 | `ReplicatedStorage > Shared > GardenSnapshot` | ModuleScript | `src/ReplicatedStorage/Shared/GardenSnapshot.luau` |
 | `ReplicatedStorage > Shared > Lang > FR_Config` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_Config.luau` |
 | `ReplicatedStorage > Shared > Lang > FR_House` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_House.luau` |
@@ -288,6 +293,10 @@ Crée l'objet du bon type à l'emplacement indiqué, renomme-le **exactement**, 
 | `ReplicatedStorage > Shared > Lang > FR_V95_Garden3D` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V95_Garden3D.luau` |
 | `ReplicatedStorage > Shared > Lang > FR_V95_Setup3D` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V95_Setup3D.luau` |
 | `ReplicatedStorage > Shared > Lang > FR_V95_SetupData` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V95_SetupData.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V96_Fixes` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V96_Fixes.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V96_Garage` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V96_Garage.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V96_Place` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V96_Place.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V96_Shops` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V96_Shops.luau` |
 | `ReplicatedStorage > Shared > Lang > FR_V9_Arcade` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V9_Arcade.luau` |
 | `ReplicatedStorage > Shared > Lang > FR_V9_Cosmos` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V9_Cosmos.luau` |
 | `ReplicatedStorage > Shared > Lang > FR_V9_Fun` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V9_Fun.luau` |
@@ -308,6 +317,7 @@ Crée l'objet du bon type à l'emplacement indiqué, renomme-le **exactement**, 
 | `ServerScriptService > Main` | Script | `src/ServerScriptService/Main.server.luau` |
 | `ServerScriptService > Services > AchievementService` | ModuleScript | `src/ServerScriptService/Services/AchievementService.luau` |
 | `ServerScriptService > Services > Arcade > SoloGames` | ModuleScript | `src/ServerScriptService/Services/Arcade/SoloGames.luau` |
+| `ServerScriptService > Services > CarService` | ModuleScript | `src/ServerScriptService/Services/CarService.luau` |
 | `ServerScriptService > Services > CasinoService` | ModuleScript | `src/ServerScriptService/Services/CasinoService.luau` |
 | `ServerScriptService > Services > ChatService` | ModuleScript | `src/ServerScriptService/Services/ChatService.luau` |
 | `ServerScriptService > Services > CosmeticService` | ModuleScript | `src/ServerScriptService/Services/CosmeticService.luau` |
@@ -334,6 +344,7 @@ Crée l'objet du bon type à l'emplacement indiqué, renomme-le **exactement**, 
 | `ServerScriptService > Services > World > TownMap` | ModuleScript | `src/ServerScriptService/Services/World/TownMap.luau` |
 | `ServerScriptService > Services > World > TownNature` | ModuleScript | `src/ServerScriptService/Services/World/TownNature.luau` |
 | `ServerScriptService > Services > World > TownPlaza` | ModuleScript | `src/ServerScriptService/Services/World/TownPlaza.luau` |
+| `ServerScriptService > Services > World > TownShops` | ModuleScript | `src/ServerScriptService/Services/World/TownShops.luau` |
 | `ServerScriptService > Services > World > TownStreets` | ModuleScript | `src/ServerScriptService/Services/World/TownStreets.luau` |
 | `ServerScriptService > Services > WorldService` | ModuleScript | `src/ServerScriptService/Services/WorldService.luau` |
 | `StarterPlayer > StarterPlayerScripts > ClientMain` | LocalScript | `src/StarterPlayer/StarterPlayerScripts/ClientMain.client.luau` |
@@ -390,6 +401,7 @@ C → S = le client **demande**, le serveur valide tout. S → C = le serveur **
 | `FilterText` | C -> S (purpose "Live" \| "Mail", texte) -> (succès, { Text, Topics } \| message) : texte tapé, filtré par Roblox |
 | `FriendMail` | C -> S (action, argument) -> (succès, résultat \| message, état?) : mails entre amis Roblox (FriendMailService) |
 | `World` | C -> S (action, argument) -> (succès, résultat \| message) : 🚶 Dopamine Town (entrer, visiter, s'asseoir, j'aime) (WorldService) |
+| `Car` | C -> S (action, a, b) -> (succès, message, extra?) : 🚗 voitures (acheter, couleur, choisir, garage, conduire, klaxon) (CarService) |
 | `DebugCommand` | C -> S (commande, argument) -> (succès, message) : UNIQUEMENT dans Studio |
 
 ---

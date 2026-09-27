@@ -34,29 +34,36 @@ local NIGHT_CLOCK = 21.3
 local FADE_TIME = 2.5
 
 -- Réglages de Lighting (jour / nuit) : mêmes clés dans les deux
+-- v9.6 (FIXES96) "FLASH BANG" en vrai Roblox (Future / ShadowMap) : la v9.4
+-- cumulait Brightness 3 + ExposureCompensation positive + ColorShift_Top
+-- presque blanc (s'AJOUTE à la lumière du soleil) + reflets d'environnement
+-- à 1 (plastique lisse / verre / métal qui éblouissent) + halo Atmosphere
+-- (Glare 0.45, Haze 1.4) + Bloom de nuit à seuil bas (0.95 : chaque pièce
+-- Neon devenait un phare). Valeurs douces et naturelles (tableau avant /
+-- après dans le rapport v9.6) :
 local DAY: { [string]: any } = {
-	Brightness = 3,
-	Ambient = Color3.fromRGB(96, 92, 106),
-	OutdoorAmbient = Color3.fromRGB(132, 128, 142),
-	ColorShift_Top = Color3.fromRGB(255, 238, 220),
-	ColorShift_Bottom = Color3.fromRGB(40, 32, 48),
-	EnvironmentDiffuseScale = 1,
-	EnvironmentSpecularScale = 1,
-	ExposureCompensation = 0.15,
-	ShadowSoftness = 0.18,
-	FogColor = Color3.fromRGB(214, 222, 236),
+	Brightness = 1.8, -- (3)
+	Ambient = Color3.fromRGB(72, 70, 80), -- (96, 92, 106) intérieurs moins "cramés"
+	OutdoorAmbient = Color3.fromRGB(118, 116, 126), -- (132, 128, 142)
+	ColorShift_Top = Color3.fromRGB(46, 38, 30), -- (255, 238, 220) léger ton chaud, plus un 2e soleil
+	ColorShift_Bottom = Color3.fromRGB(0, 0, 0), -- (40, 32, 48)
+	EnvironmentDiffuseScale = 0.45, -- (1)
+	EnvironmentSpecularScale = 0.35, -- (1) plus de reflets aveuglants
+	ExposureCompensation = -0.15, -- (+0.15)
+	ShadowSoftness = 0.25, -- (0.18)
+	FogColor = Color3.fromRGB(206, 214, 228),
 }
 local NIGHT: { [string]: any } = {
-	Brightness = 1.4,
-	Ambient = Color3.fromRGB(58, 56, 88),
-	OutdoorAmbient = Color3.fromRGB(78, 82, 128),
-	ColorShift_Top = Color3.fromRGB(170, 184, 255),
-	ColorShift_Bottom = Color3.fromRGB(20, 16, 40),
-	EnvironmentDiffuseScale = 0.7,
-	EnvironmentSpecularScale = 1,
-	ExposureCompensation = 0.35,
-	ShadowSoftness = 0.3,
-	FogColor = Color3.fromRGB(40, 44, 80),
+	Brightness = 0.9, -- (1.4)
+	Ambient = Color3.fromRGB(40, 40, 58), -- (58, 56, 88)
+	OutdoorAmbient = Color3.fromRGB(62, 66, 100), -- (78, 82, 128)
+	ColorShift_Top = Color3.fromRGB(22, 26, 46), -- (170, 184, 255)
+	ColorShift_Bottom = Color3.fromRGB(0, 0, 0), -- (20, 16, 40)
+	EnvironmentDiffuseScale = 0.3, -- (0.7)
+	EnvironmentSpecularScale = 0.3, -- (1)
+	ExposureCompensation = -0.1, -- (+0.35)
+	ShadowSoftness = 0.35, -- (0.3)
+	FogColor = Color3.fromRGB(34, 38, 68),
 }
 -- (fixés une fois, sans fondu)
 local FIXED: { [string]: any } = {
@@ -67,26 +74,33 @@ local FIXED: { [string]: any } = {
 	ClockTime = DAY_CLOCK,
 }
 
--- Effets : valeurs jour / nuit
+-- Effets : valeurs jour / nuit (v9.6 : halo, bloom et rayons très adoucis)
 local EFFECTS = {
 	Atmosphere = {
 		Class = "Atmosphere",
-		Day = { Density = 0.3, Offset = 0.22, Color = Color3.fromRGB(214, 206, 222), Decay = Color3.fromRGB(112, 118, 140), Glare = 0.45, Haze = 1.4 },
-		Night = { Density = 0.36, Offset = 0.1, Color = Color3.fromRGB(70, 76, 120), Decay = Color3.fromRGB(34, 32, 70), Glare = 0, Haze = 1.1 },
+		-- (Glare 0.45 -> 0.1, Haze 1.4 -> 0.7, Density 0.3 -> 0.26)
+		Day = { Density = 0.26, Offset = 0.2, Color = Color3.fromRGB(206, 206, 220), Decay = Color3.fromRGB(106, 112, 134), Glare = 0.1, Haze = 0.7 },
+		-- (Haze 1.1 -> 0.6)
+		Night = { Density = 0.32, Offset = 0.1, Color = Color3.fromRGB(62, 68, 108), Decay = Color3.fromRGB(30, 28, 62), Glare = 0, Haze = 0.6 },
 	},
 	ColorCorrection = {
 		Class = "ColorCorrectionEffect",
-		Day = { Saturation = 0.1, Contrast = 0.08, Brightness = 0.01, TintColor = Color3.fromRGB(255, 249, 242) },
-		Night = { Saturation = 0.02, Contrast = 0.1, Brightness = 0.02, TintColor = Color3.fromRGB(222, 228, 255) },
+		-- (Brightness 0.01 -> -0.02, Contrast 0.08 -> 0.05)
+		Day = { Saturation = 0.06, Contrast = 0.05, Brightness = -0.02, TintColor = Color3.fromRGB(255, 250, 244) },
+		-- (Brightness 0.02 -> -0.03)
+		Night = { Saturation = 0, Contrast = 0.06, Brightness = -0.03, TintColor = Color3.fromRGB(226, 230, 255) },
 	},
 	Bloom = {
 		Class = "BloomEffect",
-		Day = { Intensity = 0.35, Size = 28, Threshold = 1.3 },
-		Night = { Intensity = 0.8, Size = 32, Threshold = 0.95 },
+		-- (0.35 / 28 / 1.3 -> seules les vraies sources de lumière fleurissent)
+		Day = { Intensity = 0.2, Size = 18, Threshold = 1.8 },
+		-- (0.8 / 32 / 0.95 = le "flash" de nuit -> 0.3 / 20 / 1.5)
+		Night = { Intensity = 0.3, Size = 20, Threshold = 1.5 },
 	},
 	SunRays = {
 		Class = "SunRaysEffect",
-		Day = { Intensity = 0.07, Spread = 0.55 },
+		-- (0.07 / 0.55)
+		Day = { Intensity = 0.04, Spread = 0.35 },
 		Night = { Intensity = 0, Spread = 0.2 },
 	},
 	DepthOfField = {
@@ -95,6 +109,9 @@ local EFFECTS = {
 		Night = { FarIntensity = 0.16, FocusDistance = 60, InFocusRadius = 80, NearIntensity = 0 },
 	},
 }
+TownAtmosphere.DAY = DAY
+TownAtmosphere.NIGHT = NIGHT
+TownAtmosphere.EFFECTS = EFFECTS
 local EFFECT_ORDER = { "Atmosphere", "ColorCorrection", "Bloom", "SunRays", "DepthOfField" }
 
 local active = false
@@ -126,6 +143,87 @@ local function smooth(t: number): number
 	return t * t * (3 - 2 * t)
 end
 
+----------------------------------------------------------------------
+-- v9.6 : lampes de la ville allumées LA NUIT seulement. Le serveur
+-- (TownKit) marque ses vraies lumières "NightOnly" et les verres de
+-- lanterne "NightGlow" : le jour, lumières éteintes et verre mat
+-- (SmoothPlastic) au lieu de Neon ; remis tels quels à la sortie.
+-- (DescendantAdded : pièces qui arrivent plus tard avec le streaming)
+----------------------------------------------------------------------
+
+local lightSaved: { [Instance]: boolean } = {}
+local glowSaved: { [Instance]: Enum.Material } = {}
+local lampsOn = false
+local townConnection: RBXScriptConnection? = nil
+
+local function trackLamp(d: Instance)
+	if d:IsA("Light") then
+		if d:GetAttribute("NightOnly") == true then
+			if lightSaved[d] == nil then
+				lightSaved[d] = (d :: Light).Enabled
+			end
+			(d :: Light).Enabled = lampsOn
+		end
+	elseif d:IsA("BasePart") and d:GetAttribute("NightGlow") == true then
+		if glowSaved[d] == nil then
+			glowSaved[d] = (d :: BasePart).Material
+		end
+		(d :: BasePart).Material = lampsOn and Enum.Material.Neon or Enum.Material.SmoothPlastic
+	end
+end
+
+local function setLamps(on: boolean)
+	if lampsOn == on then
+		return
+	end
+	lampsOn = on
+	for light in pairs(lightSaved) do
+		if light.Parent then
+			(light :: Light).Enabled = on
+		end
+	end
+	for part in pairs(glowSaved) do
+		if part.Parent then
+			(part :: BasePart).Material = on and Enum.Material.Neon or Enum.Material.SmoothPlastic
+		end
+	end
+end
+
+local function watchLamps()
+	local town = workspace:FindFirstChild("DopamineTown")
+	if not town then
+		return
+	end
+	for _, d in ipairs(town:GetDescendants()) do
+		trackLamp(d)
+	end
+	townConnection = town.DescendantAdded:Connect(trackLamp)
+end
+
+local function restoreLamps()
+	if townConnection then
+		townConnection:Disconnect()
+		townConnection = nil
+	end
+	for light, enabled in pairs(lightSaved) do
+		if light.Parent then
+			(light :: Light).Enabled = enabled
+		end
+	end
+	for part, material in pairs(glowSaved) do
+		if part.Parent then
+			(part :: BasePart).Material = material
+		end
+	end
+	table.clear(lightSaved)
+	table.clear(glowSaved)
+end
+
+-- (tests) lampes allumées ?
+function TownAtmosphere.LampsOn(): boolean
+	return lampsOn
+end
+
 -- Heure du soleil : cycle doux le jour, nuit fixe ; mélangée pendant le fondu
 local function clockNow(): number
 	local day = DAY_CLOCK + DAY_SWING * math.sin(elapsed / CYCLE_PERIOD * math.pi * 2)
@@ -152,6 +250,7 @@ local function applyMix()
 		set(cloud, "Cover", lerp(0.52, 0.4, m))
 	end
 	set(Lighting, "ClockTime", clockNow())
+	setLamps(m >= 0.5)
 end
 
 local function remember(saved: any, key: string)
@@ -182,6 +281,7 @@ function TownAtmosphere.Apply(saved: any)
 	clockTimer = 0
 	mixTimer = 0
 	mix = night and 1 or 0
+	lampsOn = mix >= 0.5
 	-- 1) valeurs actuelles gardées (remise exacte)
 	for key in pairs(DAY) do
 		remember(saved, key)
@@ -252,6 +352,7 @@ function TownAtmosphere.Apply(saved: any)
 			table.insert(created, cloud)
 		end
 	end
+	watchLamps()
 	applyMix()
 end
 
@@ -266,6 +367,7 @@ function TownAtmosphere.Restore(saved: any)
 	table.clear(created)
 	table.clear(effects)
 	clouds = nil
+	restoreLamps()
 	for key, value in pairs(saved.Lighting) do
 		set(Lighting, key, value)
 	end

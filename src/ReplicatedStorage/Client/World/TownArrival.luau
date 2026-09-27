@@ -8,17 +8,14 @@
 	    de la ville, on tourne autour de la place en descendant, et on finit
 	    juste DERRIÈRE l'avatar, à la porte de la ville, regard vers la place.
 	    Caméra Scriptable pendant le survol, rendue à Roblox (Custom) à la fin.
-	  - Guide : un arc lumineux (Beam) de l'avatar jusqu'à SA porte + un
-	    repère "🏠 Ta maison" au-dessus, jusqu'à ce qu'on y soit ; la
-	    boussole du HUD est calculée ici (Bearing).
+	  - Guide : (v9.6) plus AUCUNE ligne ni repère à l'écran ; il suit la
+	    distance jusqu'à sa porte ; la petite boussole du HUD est calculée
+	    ici (Bearing).
 	Rien n'est créé par image : le survol ne fait que des calculs de CFrame,
-	le guide se met à jour ~4 fois / s.
+	le guide (distance) se met à jour ~4 fois / s.
 ]]
 
 local RunService = game:GetService("RunService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local Locale = require(ReplicatedStorage.Shared.Locale)
 
 local TownArrival = {}
 
@@ -252,28 +249,17 @@ end
 local Guide = {}
 Guide.__index = Guide
 
-local BEAM_COLOR = ColorSequence.new({
-	ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 120, 190)),
-	ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 214, 120)),
-	ColorSequenceKeypoint.new(1, Color3.fromRGB(150, 220, 255)),
-})
-local BEAM_ALPHA = NumberSequence.new({
-	NumberSequenceKeypoint.new(0, 0.85),
-	NumberSequenceKeypoint.new(0.12, 0.25),
-	NumberSequenceKeypoint.new(0.88, 0.15),
-	NumberSequenceKeypoint.new(1, 0.1),
-})
--- (axe X de l'attache vers le haut : l'arc monte au lieu de traverser les murs)
-local AXIS_UP = CFrame.fromMatrix(Vector3.zero, Vector3.new(0, 1, 0), Vector3.new(1, 0, 0))
-
-function TownArrival.Guide(parent: Instance): any
+-- v9.6 (FIXES96) : le joueur ne veut PLUS de ligne à l'écran vers sa maison.
+-- L'arc lumineux (Beam) et le repère flottant "🏠 Ta maison" (toujours
+-- devant, à travers les murs) sont supprimés. Le guide ne fait plus que
+-- suivre la distance jusqu'à sa porte (message "voici ta maison" à
+-- l'arrivée) ; la petite boussole du HUD et le bouton "🏠 Rentrer" restent.
+-- (API inchangée pour TownClient : Start / Attach / Update / Stop /
+-- IsActive / Destroy ; plus aucune Instance créée.)
+function TownArrival.Guide(_parent: Instance): any
 	local self = setmetatable({
-		Parent = parent,
-		Anchor = nil :: BasePart?,
-		Target = nil :: Attachment?,
-		Source = nil :: Attachment?,
-		Beam = nil :: Beam?,
-		Marker = nil :: BillboardGui?,
+		Target = nil :: Vector3?,
+		Beam = nil, -- (toujours nil : plus d'arc)
 		Active = false,
 		Distance = math.huge,
 	}, Guide)
@@ -281,68 +267,7 @@ function TownArrival.Guide(parent: Instance): any
 end
 
 function Guide.Build(self: any, target: Vector3)
-	local anchor = self.Anchor
-	if not anchor then
-		local part = Instance.new("Part")
-		part.Name = "HomeGuide"
-		part.Anchored = true
-		part.CanCollide = false
-		part.CanQuery = false
-		part.CanTouch = false
-		part.CastShadow = false
-		part.Transparency = 1
-		part.Size = Vector3.new(1, 1, 1)
-		part.Parent = self.Parent
-		anchor = part
-		self.Anchor = part
-		local attachment = Instance.new("Attachment")
-		attachment.Name = "GuideEnd"
-		attachment.CFrame = AXIS_UP
-		attachment.Parent = part
-		self.Target = attachment
-		-- repère au-dessus de la porte
-		local marker = Instance.new("BillboardGui")
-		marker.Name = "HomeMarker"
-		marker.Size = UDim2.fromOffset(160, 66)
-		marker.StudsOffsetWorldSpace = Vector3.new(0, 15, 0)
-		marker.AlwaysOnTop = true
-		marker.LightInfluence = 0
-		marker.MaxDistance = 2000
-		marker.Adornee = part
-		local pill = Instance.new("TextLabel")
-		pill.Name = "Pill"
-		pill.AnchorPoint = Vector2.new(0.5, 0)
-		pill.Position = UDim2.fromScale(0.5, 0)
-		pill.Size = UDim2.fromOffset(152, 36)
-		pill.BackgroundColor3 = Color3.fromRGB(255, 96, 160)
-		pill.Font = Enum.Font.FredokaOne
-		pill.TextSize = 20
-		pill.TextColor3 = Color3.new(1, 1, 1)
-		pill.Text = Locale.T("🏠 Your house")
-		pill.Parent = marker
-		local corner = Instance.new("UICorner")
-		corner.CornerRadius = UDim.new(1, 0)
-		corner.Parent = pill
-		local stroke = Instance.new("UIStroke")
-		stroke.Color = Color3.new(1, 1, 1)
-		stroke.Thickness = 3
-		stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-		stroke.Parent = pill
-		-- petite flèche vers le bas (carré tourné, moitié cachée par la pastille)
-		local tip = Instance.new("Frame")
-		tip.Name = "Tip"
-		tip.AnchorPoint = Vector2.new(0.5, 0.5)
-		tip.Position = UDim2.new(0.5, 0, 0, 38)
-		tip.Size = UDim2.fromOffset(17, 17)
-		tip.Rotation = 45
-		tip.BackgroundColor3 = Color3.fromRGB(255, 96, 160)
-		tip.BorderSizePixel = 0
-		tip.ZIndex = 0
-		tip.Parent = marker
-		marker.Parent = part
-		self.Marker = marker
-	end
-	(anchor :: BasePart).CFrame = CFrame.new(target + Vector3.new(0, 1.5, 0))
+	self.Target = target
 end
 
 function Guide.Start(self: any, character: Model?, target: Vector3)
@@ -350,81 +275,24 @@ function Guide.Start(self: any, character: Model?, target: Vector3)
 	self.Active = true
 	self.Distance = math.huge
 	self:Attach(character)
-	if self.Marker then
-		self.Marker.Enabled = true
-	end
 end
 
--- (nouveau personnage : l'arc repart de lui)
-function Guide.Attach(self: any, character: Model?)
-	if self.Source then
-		self.Source:Destroy()
-		self.Source = nil
-	end
-	if self.Beam then
-		self.Beam:Destroy()
-		self.Beam = nil
-	end
-	if not self.Active or not character then
-		return
-	end
-	local root = character:FindFirstChild("HumanoidRootPart")
-	if not root or not root:IsA("BasePart") then
-		return
-	end
-	local source = Instance.new("Attachment")
-	source.Name = "TownGuideStart"
-	source.CFrame = CFrame.new(0, -2.6, -2) * AXIS_UP
-	source.Parent = root
-	self.Source = source
-	local beam = Instance.new("Beam")
-	beam.Name = "HomeBeam"
-	beam.Attachment0 = source
-	beam.Attachment1 = self.Target
-	beam.Color = BEAM_COLOR
-	beam.Transparency = BEAM_ALPHA
-	beam.LightEmission = 0.6
-	beam.LightInfluence = 0
-	beam.FaceCamera = true
-	beam.Segments = 48
-	beam.Width0 = 0.9
-	beam.Width1 = 2.4
-	beam.CurveSize0 = 10
-	beam.CurveSize1 = -10
-	beam.Parent = self.Anchor
-	self.Beam = beam
-end
+-- (nouveau personnage : rien à rattacher, il n'y a plus d'arc)
+function Guide.Attach(_self: any, _character: Model?) end
 
--- ~4 fois / s : hauteur de l'arc selon la distance ; renvoie la distance
+-- ~4 fois / s : distance (à plat) jusqu'à sa porte
 function Guide.Update(self: any, from: Vector3?): number
-	local anchor = self.Anchor
-	if not self.Active or not anchor or not from then
+	local target = self.Target
+	if not self.Active or not target or not from then
 		return math.huge
 	end
-	local distance = (flat(anchor.Position - from)).Magnitude
+	local distance = (flat(target - from)).Magnitude
 	self.Distance = distance
-	local beam = self.Beam
-	if beam then
-		local curve = math.clamp(distance * 0.3, 3, 55)
-		beam.CurveSize0 = curve
-		beam.CurveSize1 = -curve
-	end
 	return distance
 end
 
 function Guide.Stop(self: any)
 	self.Active = false
-	if self.Beam then
-		self.Beam:Destroy()
-		self.Beam = nil
-	end
-	if self.Source then
-		self.Source:Destroy()
-		self.Source = nil
-	end
-	if self.Marker then
-		self.Marker.Enabled = false
-	end
 end
 
 function Guide.IsActive(self: any): boolean
@@ -433,11 +301,6 @@ end
 
 function Guide.Destroy(self: any)
 	self:Stop()
-	if self.Anchor then
-		self.Anchor:Destroy()
-		self.Anchor = nil
-	end
-	self.Marker = nil
 	self.Target = nil
 end
 

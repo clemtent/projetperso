@@ -372,13 +372,32 @@ function House3DLayout.Layout(builds: { Build }, dims: Dims, frame: CFrame)
 		place(build, 0)
 	end
 	-- Rotation libre (entry.R) autour du centre de l'empreinte (objets au
-	-- sol ; une chaise rangée à une table y reste tournée si R est absent)
+	-- sol ; une chaise rangée à une table y reste tournée si R est absent).
+	-- v9.6 : ce qui est posé sur un meuble / rangé à une table tourne AVEC
+	-- lui (autour du pivot du meuble), puis selon sa propre rotation.
+	local unrotated: { [Build]: CFrame } = {}
 	for _, build in ipairs(builds) do
+		unrotated[build] = build.Origin
+	end
+	local function spin(build: Build): CFrame
 		local degrees = (build.Entry :: any).R
 		if build.Kind ~= "Wall" and type(degrees) == "number" and degrees ~= 0 then
-			build.Origin = build.Origin * CFrame.Angles(0, math.rad(degrees), 0)
+			local origin = unrotated[build]
+			return origin * CFrame.Angles(0, math.rad(degrees), 0) * origin:Inverse()
 		end
-		build.Pivot = build.Origin * TURN
+		return CFrame.identity
+	end
+	for _, build in ipairs(builds) do
+		local cframe = spin(build) * unrotated[build]
+		local node = build.Parent
+		local guard = 0
+		while node and guard < 10 do
+			cframe = spin(node) * cframe
+			node = node.Parent
+			guard += 1
+		end
+		build.Origin = cframe
+		build.Pivot = cframe * TURN
 	end
 end
 

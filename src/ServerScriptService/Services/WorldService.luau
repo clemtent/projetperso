@@ -375,6 +375,7 @@ local function snapshotOf(player: Player): any?
 		RoofStyle = house.RoofStyle,
 		Garden = garden,
 		DopamineGarden = gardenSnapshotOf(data),
+		Garage = services.CarService ~= nil and services.CarService:GarageSnapshot(player) or false, -- v9.6 🏎️ (GARAGE96)
 		Rooms = rooms,
 	}
 end

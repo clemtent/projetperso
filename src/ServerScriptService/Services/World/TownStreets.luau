@@ -60,7 +60,9 @@ local CAR_COLORS = {
 ----------------------------------------------------------------------
 
 -- Pièces le long de x (repère `cf`) de x0 à x1, sans les intervalles `gaps`
-local function strip(parent: Instance, name: string, cf: CFrame, x0: number, x1: number, z0: number, z1: number, top: number, thick: number, color: Color3, material: Enum.Material, profile: string?, gaps: { { number } }?)
+-- (v9.6 : `grow` allonge chaque morceau aux deux bouts : une bordure dépasse
+-- ainsi du trottoir au lieu d'avoir ses faces d'extrémité confondues)
+local function strip(parent: Instance, name: string, cf: CFrame, x0: number, x1: number, z0: number, z1: number, top: number, thick: number, color: Color3, material: Enum.Material, profile: string?, gaps: { { number } }?, grow: number?)
 	local ranges = { { x0, x1 } }
 	for _, gap in ipairs(gaps or {}) do
 		local nextRanges = {}
@@ -78,10 +80,11 @@ local function strip(parent: Instance, name: string, cf: CFrame, x0: number, x1:
 		end
 		ranges = nextRanges
 	end
+	local g = grow or 0
 	for _, r in ipairs(ranges) do
 		local len = r[2] - r[1]
 		if len > 0.2 then
-			part(parent, name, Vector3.new(len, thick, math.abs(z1 - z0)), cf * CFrame.new((r[1] + r[2]) / 2, top - thick / 2, (z0 + z1) / 2), color, material, profile)
+			part(parent, name, Vector3.new(len + 2 * g, thick, math.abs(z1 - z0)), cf * CFrame.new((r[1] + r[2]) / 2, top - thick / 2, (z0 + z1) / 2), color, material, profile)
 		end
 	end
 end
@@ -111,10 +114,12 @@ local function buildBoulevard(folder: Instance, geo: TownKit.Geo)
 		-- trottoirs (surélevés) + bordures
 		local innerHalf = (A - hw) * tanH
 		strip(side, "Sidewalk", F, -innerHalf, innerHalf, -hw - WALK_W, -hw, WALK_Y, 1.3, C.Walk, M.Pavement, "solid", innerGaps)
-		strip(side, "Curb", F, -innerHalf, innerHalf, -hw - 0.8, -hw, WALK_Y + 0.03, 0.4, C.Curb, M.Concrete, "deco", innerGaps)
+		-- (v9.6 z-fighting : la bordure avance de 0.05 vers la chaussée et dépasse
+		-- de 0.05 aux bouts : sa face n'est plus confondue avec celle du trottoir)
+		strip(side, "Curb", F, -innerHalf, innerHalf, -hw - 0.8, -hw + 0.05, WALK_Y + 0.03, 0.4, C.Curb, M.Concrete, "deco", innerGaps, 0.05)
 		local outerHalf = (A + hw + WALK_W) * tanH
 		strip(side, "Sidewalk", F, -outerHalf, outerHalf, hw, hw + WALK_W, WALK_Y, 1.3, C.Walk, M.Pavement, "solid")
-		strip(side, "Curb", F, -(A + hw + 0.8) * tanH, (A + hw + 0.8) * tanH, hw, hw + 0.8, WALK_Y + 0.03, 0.4, C.Curb, M.Concrete, "deco")
+		strip(side, "Curb", F, -(A + hw + 0.8) * tanH, (A + hw + 0.8) * tanH, hw - 0.05, hw + 0.8, WALK_Y + 0.03, 0.4, C.Curb, M.Concrete, "deco")
 		-- lignes de rive
 		local edgeZ = hw - 1.1
 		strip(side, "EdgeLine", F, -(A + edgeZ) * tanH, (A + edgeZ) * tanH, edgeZ - 0.18, edgeZ + 0.18, ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "deco")
@@ -165,7 +170,9 @@ local function buildBoulevard(folder: Instance, geo: TownKit.Geo)
 		if hash(k, 99) < 0.55 and not (k == 0) then
 			local cx = (hash(k, 5) - 0.5) * half * 0.9
 			if not (junction and math.abs(cx) < jw + 12) then
-				TownKit.Car(side, F * CFrame.new(cx, ROAD_Y, -hw + 3.4) * CFrame.Angles(0, math.rad(90), 0), CAR_COLORS[k % #CAR_COLORS + 1], hash(k, 6) < 0.25 and "Van" or nil)
+				-- (v9.6, GARAGE96) vrais modèles variés de CarModels (garés le long du trottoir)
+				local parkedKind = ({ "CityCar", "Hatchback", "SUV", "BubbleCar", "Pickup", "SportsCar", "Van" })[math.floor(hash(k, 6) * 7) % 7 + 1]
+				TownKit.Car(side, F * CFrame.new(cx, ROAD_Y, -hw + 3.6) * CFrame.Angles(0, math.rad(90), 0), CAR_COLORS[k % #CAR_COLORS + 1], parkedKind, {})
 			end
 		end
 		-- bouche d'incendie + poubelle sur le trottoir intérieur
@@ -202,14 +209,16 @@ local function buildAvenue(folder: Instance, geo: TownKit.Geo)
 	radialBox(ave, "PedestrianZone", R, plazaR - 2, s0, -AVE_OUT, AVE_OUT, WALK_Y, 1.3, C.Paving, M.Cobblestone, "solid")
 	-- promenade centrale (pavés roses bordés de pierre)
 	radialBox(ave, "Promenade", R, s0, roadEdge, -PROM, PROM, WALK_Y, 1.3, C.Paving, M.Cobblestone, "solid")
-	radialBox(ave, "PromenadeBand", R, s0, roadEdge, -2, 2, WALK_Y + 0.03, 0.2, C.PavingRose, M.Cobblestone, "deco")
+	-- (v9.6 z-fighting : bande raccourcie de 0.05 aux bouts, bordures qui
+	-- dépassent de 0.05 : plus aucune face confondue avec la promenade)
+	radialBox(ave, "PromenadeBand", R, s0 + 0.05, roadEdge - 0.05, -2, 2, WALK_Y + 0.03, 0.2, C.PavingRose, M.Cobblestone, "deco")
 	for _, sx in ipairs({ -1, 1 }) do
-		radialBox(ave, "PromenadeCurb", R, s0, roadEdge, sx * (PROM - 0.8), sx * PROM, WALK_Y + 0.03, 0.4, C.Curb, M.Concrete, "deco")
+		radialBox(ave, "PromenadeCurb", R, s0 - 0.05, roadEdge + 0.05, sx * (PROM - 0.8), sx * (PROM + 0.05), WALK_Y + 0.03, 0.4, C.Curb, M.Concrete, "deco")
 		-- voie (sens unique) + ligne de rive
 		radialBox(ave, "Lane", R, s0, roadEdge + 0.5, sx * PROM, sx * LANE_OUT, ROAD_Y, 0.7, C.Asphalt, M.Asphalt, "solid")
 		-- trottoir extérieur + bordure
 		radialBox(ave, "Sidewalk", R, s0, geo.Inner + 0.5, sx * LANE_OUT, sx * AVE_OUT, WALK_Y, 1.3, C.Walk, M.Pavement, "solid")
-		radialBox(ave, "Curb", R, s0, geo.Inner + 0.5, sx * LANE_OUT, sx * (LANE_OUT + 0.8), WALK_Y + 0.03, 0.4, C.Curb, M.Concrete, "deco")
+		radialBox(ave, "Curb", R, s0 - 0.05, geo.Inner + 0.55, sx * (LANE_OUT - 0.05), sx * (LANE_OUT + 0.8), WALK_Y + 0.03, 0.4, C.Curb, M.Concrete, "deco")
 		-- ligne d'arrêt au bout de la voie + flèche
 		radialBox(ave, "StopLine", R, roadEdge - 2.4, roadEdge - 1.8, sx * (PROM + 0.4), sx * (LANE_OUT - 0.4), ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "deco")
 		-- bornes à l'entrée de la zone piétonne
@@ -263,7 +272,7 @@ local function buildSideStreet(folder: Instance, geo: TownKit.Geo, slot: number)
 	radialBox(st, "Asphalt", R, s0, roadEdge + 0.5, -ST_HALF, ST_HALF, ROAD_Y, 0.7, C.Asphalt, M.Asphalt, "solid")
 	for _, sx in ipairs({ -1, 1 }) do
 		radialBox(st, "Sidewalk", R, s0, geo.Inner + 0.5, sx * ST_HALF, sx * ST_OUT, WALK_Y, 1.3, C.Walk, M.Pavement, "solid")
-		radialBox(st, "Curb", R, s0, geo.Inner + 0.5, sx * ST_HALF, sx * (ST_HALF + 0.8), WALK_Y + 0.03, 0.4, C.Curb, M.Concrete, "deco")
+		radialBox(st, "Curb", R, s0 - 0.05, geo.Inner + 0.55, sx * (ST_HALF - 0.05), sx * (ST_HALF + 0.8), WALK_Y + 0.03, 0.4, C.Curb, M.Concrete, "deco")
 		for i = 0, 2 do
 			TownKit.Bollard(st, (R * CFrame.new(sx * (1.5 + i * 2.6), WALK_Y, -s0 + 0.8)).Position)
 		end
@@ -297,7 +306,7 @@ local function buildSideStreet(folder: Instance, geo: TownKit.Geo, slot: number)
 		end
 	end
 	-- une voiture garée dans la rue
-	TownKit.Car(st, R * CFrame.new(ST_HALF - 3.2, ROAD_Y, -(s0 + length * 0.55)), CAR_COLORS[(slot + 2) % #CAR_COLORS + 1])
+	TownKit.Car(st, R * CFrame.new(ST_HALF - 3.4, ROAD_Y, -(s0 + length * 0.55)), CAR_COLORS[(slot + 2) % #CAR_COLORS + 1], slot % 2 == 0 and "Hatchback" or "CityCar", {}) -- (v9.6) CarModels
 end
 
 -- Immeubles des deux côtés d'une rue (façades alignées sur le trottoir)

@@ -24,8 +24,8 @@
 	  - arrivée : écran de chargement (barre = maisons construites), puis
 	    1re fois de la session un survol de la ville (TownArrival, ~4 s,
 	    passable) qui finit derrière l'avatar posé à la PORTE de la ville
-	    (attribut "EntranceCF" de TOWN94) ; arc lumineux + repère jusqu'à
-	    SA maison, boussole dans le HUD, "🏠 Rentrer" ;
+	    (attribut "EntranceCF" de TOWN94) ; boussole discrète dans le HUD,
+	    "🏠 Rentrer" (v9.6 : plus d'arc lumineux ni de repère à l'écran) ;
 	  - émotes (TownEmotes) : la piste est gardée et s'arrête en bougeant,
 	    en sautant, avec une autre émote, le bouton ■, en s'asseyant, en
 	    mode édition, en sortant, à la mort / au retrait du personnage ;
@@ -426,6 +426,9 @@ local KEEP_GUIS: { [string]: boolean } = {
 	Chat = true,
 	Freecam = true,
 	DeskModeGui = true, -- v9.5 🖥️ barre "Se lever" du bureau (DeskMode)
+	TownInventoryGui = true, -- v9.6 plateau inventaire 3D (FurnitureEdit, PLACE96)
+	TownShopGui = true, -- v9.6 catalogue des magasins (ShopUI, SHOPS96)
+	CarGui = true, -- v9.6 conduite (CarClient, GARAGE96)
 }
 local function keepGui(name: string): boolean
 	return KEEP_GUIS[name] == true or string.find(name, "Touch", 1, true) ~= nil or string.find(name, "Prompt", 1, true) ~= nil
@@ -892,6 +895,10 @@ local function step(dt: number)
 		if live and root and type(live.SetFocus) == "function" then
 			pcall(live.SetFocus, root.Position)
 		end
+		local shops = optionalModule("ShopInteriors")
+		if shops and root and type(shops.Step) == "function" then
+			pcall(shops.Step, root.Position)
+		end
 	end
 	if clocks.Tag >= TAG_EVERY then
 		clocks.Tag = 0
@@ -1032,7 +1039,7 @@ local function playIntro(character: Model)
 				followCamera(LocalPlayer.Character)
 				startGuide()
 				toast(Locale.T("🚶 Welcome to Dopamine Town!"), Color3.fromRGB(236, 72, 140))
-				toast(Locale.T("Follow the glowing arc to your house 🏠"))
+				toast(Locale.T("Your house: follow the 🧭 compass, or tap 🏠 Go home"))
 			end
 		end,
 	})
@@ -1100,8 +1107,24 @@ local function enter(options: any)
 			return
 		end
 		inTown = true
+		-- v9.6 🚗 voitures (CarClient, GARAGE96) : bouton, conduite, garages des manoirs
+		local car = optionalModule("CarClient")
+		if car and type(car.Start) == "function" then
+			local okCar, errCar = pcall(car.Start, { Toast = toast })
+			if not okCar then
+				warn("[Town] CarClient.Start : " .. tostring(errCar))
+			end
+		end
 		TownAtmosphere.SetNight(ClientState.IsUserDarkMode())
 		TownAtmosphere.Apply(s)
+		-- v9.6 🛍️ boutiques où l'on entre : intérieurs en flux (SHOPS96)
+		local shops = optionalModule("ShopInteriors")
+		if shops and type(shops.Start) == "function" then
+			local okShops, errShops = pcall(shops.Start, { Toast = toast })
+			if not okShops then
+				warn("[Town] ShopInteriors.Start : " .. tostring(errShops))
+			end
+		end
 		local folder = Instance.new("Folder")
 		folder.Name = HOUSES_FOLDER
 		folder.Parent = workspace
@@ -1182,7 +1205,7 @@ local function enter(options: any)
 			if arrival then
 				startGuide()
 				toast(Locale.T("🚶 Welcome to Dopamine Town!"), Color3.fromRGB(236, 72, 140))
-				toast(Locale.T("Follow the glowing arc to your house 🏠"))
+				toast(Locale.T("Your house: follow the 🧭 compass, or tap 🏠 Go home"))
 			else
 				toast(Locale.T("🚶 Welcome to Dopamine Town!"), Color3.fromRGB(236, 72, 140))
 			end
@@ -1234,6 +1257,16 @@ local function teardown()
 	currentContext = nil
 	-- (DeskMode rend sa caméra AVANT qu'on remette la nôtre)
 	deskCall("Stop")
+	-- v9.6 🚗 on descend de voiture, HUD retiré (avant de rendre la caméra)
+	local car = optionalModule("CarClient")
+	if car and type(car.Stop) == "function" then
+		pcall(car.Stop)
+	end
+	-- (v9.6) boutiques : intérieurs détruits, catalogue fermé, portes remises
+	local shops = optionalModule("ShopInteriors")
+	if shops and type(shops.Stop) == "function" then
+		pcall(shops.Stop)
+	end
 	hud:SetDeskMode(false)
 	local s = saved
 	if s then

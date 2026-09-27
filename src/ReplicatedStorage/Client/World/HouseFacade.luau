@@ -35,9 +35,12 @@
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local CollectionService = game:GetService("CollectionService")
 
 local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
 local Config = require(ReplicatedStorage.Shared.Config)
+local GarageLayout = require(ReplicatedStorage.Shared.GarageLayout) -- (v9.6, GARAGE96) 🏎️ aile du garage
 local HouseGarden = require(script.Parent.HouseGarden)
 local HouseKit = require(script.Parent.HouseKit)
 
@@ -95,7 +98,7 @@ local DEFAULT_ROOF: { [string]: Color3 } = {
 local CHIMNEYS: { [string]: number } = { Cottage = 1, Townhouse = 2, Loft = 0, Mansion = 2 }
 HouseFacade.Chimneys = CHIMNEYS
 
-export type Looks = { Wall: Color3?, Roof: Color3?, Pattern: string?, Garden: { string }, Rooms: { [number]: any }, Name: string }
+export type Looks = { Wall: Color3?, Roof: Color3?, Pattern: string?, Garden: { string }, Rooms: { [number]: any }, Name: string, Garage: boolean? }
 export type Built = {
 	Door: BasePart?,
 	Hinge: CFrame?,
@@ -125,6 +128,7 @@ type Ctx = {
 	Hall1: number,
 	DoorX: number,
 	Built: Built,
+	Garage: boolean, -- (v9.6) 🏎️ aile du garage (manoir)
 }
 
 ----------------------------------------------------------------------
@@ -144,10 +148,11 @@ local function roomWindow(ctx: Ctx, slot: number?, x0: number, x1: number, y0: n
 	local glass = kit:Box("Glass", x0, x1, y0, y1, 0.35, 0.5, P.Glass, M.Glass, { T = 0.62, Shadow = false })
 	glass.CastShadow = false
 	local f = if kind == "Grid" then 0.3 else 0.35
-	kit:Box("WinFrame", x0 - f, x1 + f, y1, y1 + f, -0.45, 0.35, frame, M.Wood)
-	kit:Box("WinFrame", x0 - f, x1 + f, y0 - f, y0, -0.45, 0.35, frame, M.Wood)
-	kit:Box("WinFrame", x0 - f, x0, y0, y1, -0.45, 0.35, frame, M.Wood)
-	kit:Box("WinFrame", x1, x1 + f, y0, y1, -0.45, 0.35, frame, M.Wood)
+	-- (v9.6 : le cadre déborde de 0,05 dans le trou -> jamais coplanaire avec les bords du mur)
+	kit:Box("WinFrame", x0 - f, x1 + f, y1 - 0.05, y1 + f, -0.45, 0.35, frame, M.Wood)
+	kit:Box("WinFrame", x0 - f, x1 + f, y0 - f, y0 + 0.05, -0.45, 0.35, frame, M.Wood)
+	kit:Box("WinFrame", x0 - f, x0 + 0.05, y0, y1, -0.45, 0.35, frame, M.Wood)
+	kit:Box("WinFrame", x1 - 0.05, x1 + f, y0, y1, -0.45, 0.35, frame, M.Wood)
 	local cx = (x0 + x1) / 2
 	if kind == "Grid" then
 		-- cadre d'usine : 3 x 2 carreaux
@@ -500,7 +505,8 @@ local function porch(ctx: Ctx, x0: number, x1: number, landingD: number, steps: 
 	local kit = ctx.Kit
 	local yTop = WorldLayout.FloorY(1)
 	local tread = 1.25
-	kit:Box("Porch", x0, x1, 0, yTop, -landingD, 0, color, material, { Solid = true })
+	-- (v9.6 : 0,04 sous le seuil : pas coplanaire avec le mur sous la porte)
+	kit:Box("Porch", x0, x1, 0, yTop - 0.04, -landingD, 0, color, material, { Solid = true })
 	-- `steps` contremarches : la dernière arrive sur la pelouse
 	local rise = yTop / steps
 	for k = 1, steps - 1 do
@@ -594,7 +600,7 @@ local function frontDoor(ctx: Ctx, leafColor: Color3, frameColor: Color3, withGl
 	for _, sx in ipairs({ -1, 1 }) do
 		kit:Box("DoorFrame", x + sx * (w / 2) - 0.3, x + sx * (w / 2) + 0.3, y0, y0 + h + 0.4, -0.7, 0.25, frameColor, M.Wood, { Solid = true })
 	end
-	kit:Box("DoorFrame", x - w / 2 - 0.45, x + w / 2 + 0.45, y0 + h, y0 + h + 0.6, -0.75, 0.25, frameColor, M.Wood)
+	kit:Box("DoorFrame", x - w / 2 - 0.45, x + w / 2 + 0.45, y0 + h - 0.05, y0 + h + 0.6, -0.75, 0.25, frameColor, M.Wood)
 	local leaf = kit:Box("DoorLeaf", x - w / 2 + 0.05, x + w / 2 - 0.05, y0, y0 + h - 0.05, 0.15, 0.55, leafColor, M.Wood, { Solid = true, Shadow = true })
 	ctx.Built.Door = leaf
 	ctx.Built.Hinge = ctx.Kit.CF * CFrame.new(x - w / 2 + 0.05, y0, -0.35)
@@ -656,15 +662,18 @@ local function bodyWalls(ctx: Ctx, holes: { [number]: { { number } } }, material
 	-- soubassement (devant) + fondations pleines sous les pièces
 	local yGround = WorldLayout.FloorY(1)
 	kit:WallX("Plinth", L - 0.3, R + 0.3, 0, WorldLayout.PLINTH, -0.6, T, {}, plinthColor, plinthMaterial, { Solid = true })
-	kit:Box("Foundation", ctx.Left, ctx.Right, 0, WorldLayout.PLINTH, T, ctx.Depth - T, plinthColor:Lerp(BLACK, 0.1), M.Concrete, { Solid = true, Shadow = false })
+	kit:Box("Foundation", ctx.Left, ctx.Right, -0.05, WorldLayout.PLINTH, T, ctx.Depth - T, plinthColor:Lerp(BLACK, 0.1), M.Concrete, { Solid = true, Shadow = false })
 	kit:Box("PlinthCap", L - 0.4, R + 0.4, WorldLayout.PLINTH - 0.25, WorldLayout.PLINTH + 0.1, -0.75, 0, ctx.Trim, M.Limestone, { Shadow = false })
 	local _ = yGround
 	-- bouts (à l'extérieur des colonnes) et fond (derrière les coques)
-	kit:Box("EndLeft", L, ctx.Left, 0, ctx.Top, -0.3, ctx.Depth, ctx.Wall, material, { Solid = true })
-	kit:Box("EndRight", ctx.Right, R, 0, ctx.Top, -0.3, ctx.Depth, ctx.Wall, material, { Solid = true })
+	-- (v9.6 : pieds 0,1 sous le sol : pas coplanaires avec le soubassement)
+	kit:Box("EndLeft", L, ctx.Left, -0.1, ctx.Top, -0.3, ctx.Depth, ctx.Wall, material, { Solid = true })
+	kit:Box("EndRight", ctx.Right, R, -0.1, ctx.Top, -0.3, ctx.Depth, ctx.Wall, material, { Solid = true })
 	kit:Box("Back", L, R, 0, ctx.Top, ctx.Depth - T + 0.05, ctx.Depth + 0.3, ctx.Wall, material, { Solid = true })
 	-- dalle du toit (ferme la maison par le haut)
-	kit:Box("TopSlab", L, R, ctx.Top, ctx.Top + 0.6, -0.3, ctx.Depth + 0.3, ctx.Trim, M.SmoothPlastic, { Solid = true, Shadow = false })
+	-- (v9.6 : décalée de 0,05 : jamais coplanaire avec les plafonds des pièces du dernier étage)
+	-- (et 0,05 en retrait sur les 4 côtés : jamais coplanaire avec les parapets du loft)
+	kit:Box("TopSlab", L + 0.05, R - 0.05, ctx.Top + 0.05, ctx.Top + 0.65, -0.25, ctx.Depth + 0.25, ctx.Trim, M.SmoothPlastic, { Solid = true, Shadow = false })
 end
 
 -- Fenêtre des pièces par style : { part de la largeur, bas (au-dessus du sol), hauteur }
@@ -750,10 +759,11 @@ STYLES.Cottage = function(ctx)
 			end
 		end
 	end
-	kit:Box("Beam", ctx.Left - T - 0.3, ctx.Right + T + 0.3, ctx.Top - 1, ctx.Top, -0.66, -0.3, TIMBER, M.Wood, { Shadow = false })
+	-- (v9.6 : dessus des poutres décalés de 0,05 des bords de l'enduit du porche)
+	kit:Box("Beam", ctx.Left - T - 0.3, ctx.Right + T + 0.3, ctx.Top - 1, ctx.Top + 0.05, -0.66, -0.3, TIMBER, M.Wood, { Shadow = false })
 	for floor = 2, dims.Floors do
 		local y = WorldLayout.FloorY(floor) - WorldLayout.SLAB
-		kit:Box("Beam", ctx.Left - T - 0.3, ctx.Right + T + 0.3, y - 0.3, y + 0.7, -0.66, -0.3, TIMBER, M.Wood, { Shadow = false })
+		kit:Box("Beam", ctx.Left - T - 0.3, ctx.Right + T + 0.3, y - 0.3, y + 0.75, -0.66, -0.3, TIMBER, M.Wood, { Shadow = false })
 	end
 	kit:Box("Beam", ctx.Left - T - 0.3, ctx.Right + T + 0.3, WorldLayout.PLINTH - 0.1, WorldLayout.PLINTH + 0.5, -0.7, -0.3, TIMBER, M.Wood, { Shadow = false })
 
@@ -800,7 +810,8 @@ STYLES.Cottage = function(ctx)
 		local edge = if s < 0 then hx0 - 0.9 else hx1 + 0.9
 		kit:SlabX("PorchRoof", ctx.Depth / 2 - 0.5, { edge, yEave - 0.9 * hRise / ((hx1 - hx0) / 2) }, { hcx, yEave + hRise }, ctx.Depth + 2.4, 0.6, ctx.Roof, M.ClayRoofTiles,
 			{ Solid = true, Shadow = true })
-		kit:Part("PorchGable", Vector3.new(1, hRise, (hx1 - hx0) / 2), CFrame.new(hcx + s * (hx1 - hx0) / 4, yEave + hRise / 2, 0.2) * CFrame.Angles(0, -s * math.pi / 2, 0),
+		-- (v9.6 : pignon 0,3 plus bas : sa pente passe sous le toit, jamais coplanaire)
+		kit:Part("PorchGable", Vector3.new(1, hRise, (hx1 - hx0) / 2), CFrame.new(hcx + s * (hx1 - hx0) / 4, yEave + hRise / 2 - 0.3, 0.2) * CFrame.Angles(0, -s * math.pi / 2, 0),
 			annex, M.Plaster, { Solid = true }, "WedgePart")
 		kit:SlabX("PorchBarge", -1.6, { edge - 0.1, yEave - 0.9 * hRise / ((hx1 - hx0) / 2) + 0.3 }, { hcx, yEave + hRise + 0.35 }, 0.5, 0.9, ctx.RoofDark, M.Wood,
 			{ Shadow = false })
@@ -810,13 +821,13 @@ STYLES.Cottage = function(ctx)
 	heart(ctx, hcx, yEave + hRise + 1.1, -0.6, 1.2, C.Heart)
 	local sc = math.floor((hx1 - hx0) / 1.9)
 	for j = 0, sc - 1 do
-		kit:CylD("Scallop", hx0 + (j + 0.5) * (hx1 - hx0) / sc, yEave - 0.25, -0.55, 1.6, 0.3, ctx.RoofDark, M.ClayRoofTiles, { Shadow = false })
+		kit:CylD("Scallop", hx0 + (j + 0.5) * (hx1 - hx0) / sc, yEave - 0.25, -0.68, 1.6, 0.3, ctx.RoofDark, M.ClayRoofTiles, { Shadow = false })
 	end
 	-- porte ronde : cadre de bois + haut arrondi (disque)
 	frontDoor(ctx, C.Pink, TIMBER, false)
 	kit:CylD("DoorArch", gx, WorldLayout.FloorY(1) + WorldLayout.DOOR_H, -0.5, WorldLayout.DOOR_W + 1.2, 0.35, TIMBER, M.Wood, { Shadow = false })
-	kit:CylD("DoorArchGlass", gx, WorldLayout.FloorY(1) + WorldLayout.DOOR_H + 0.1, -0.7, WorldLayout.DOOR_W - 0.6, 0.12, P.Glass, M.Glass, { Shadow = false })
-	heart(ctx, gx, WorldLayout.FloorY(1) + WorldLayout.DOOR_H + 1, -0.85, 1.1, C.Heart, M.Neon)
+	kit:CylD("DoorArchGlass", gx, WorldLayout.FloorY(1) + WorldLayout.DOOR_H + 0.1, -0.85, WorldLayout.DOOR_W - 0.6, 0.12, P.Glass, M.Glass, { Shadow = false })
+	heart(ctx, gx, WorldLayout.FloorY(1) + WorldLayout.DOOR_H + 1, -0.85, 1.1, C.Heart, M.SmoothPlastic) -- (v9.6 : plus de Neon, "flash bang")
 	wallLantern(ctx, gx + WorldLayout.DOOR_W / 2 + 1.2, WorldLayout.FloorY(1) + 4.2, true)
 	local foot = porch(ctx, gx - 3.5, gx + 3.5, 2.2, 3, P.StoneDark, M.Slate)
 	namePlate(ctx, gx, WorldLayout.FloorY(1) + WorldLayout.DOOR_H + 3.6, -0.5, 7)
@@ -832,7 +843,7 @@ STYLES.Cottage = function(ctx)
 	local gateX = 0
 	local stones = { { gateX, -20 }, { gateX * 0.8 + gx * 0.2, -16.5 }, { gateX * 0.5 + gx * 0.5, -13 }, { gateX * 0.2 + gx * 0.8, -10 }, { gx, foot - 1.2 } }
 	for index, s in ipairs(stones) do
-		ctx.G:CylY("SteppingStone", s[1], -0.1, s[2], 2.6 - index * 0.12, 0.2, P.Stone:Lerp(P.StoneDark, (index % 2) * 0.4), M.Slate, { Shadow = false })
+		ctx.G:CylY("SteppingStone", s[1], -0.1, s[2], 2.6 - index * 0.12, 0.25, P.Stone:Lerp(P.StoneDark, (index % 2) * 0.4), M.Slate, { Shadow = false })
 	end
 	path(ctx, { { gx, foot - 0.5 }, { gx, foot - 2.5 } }, 3, P.Pave, M.Pebble)
 	path(ctx, { { gateX, -29.5 }, { gateX, -21.5 } }, 3, P.Pave, M.Pebble)
@@ -942,7 +953,7 @@ STYLES.Townhouse = function(ctx)
 	local crest = math.max(2, math.floor((r1 - r0 - 2 * inset) / 5))
 	for k = 0, crest do
 		local x = r0 + inset + k * (r1 - r0 - 2 * inset) / crest
-		kit:Box("CrestPost", x - 0.1, x + 0.1, yBase + rise, yBase + rise + 1.4, inset - 0.1, inset + 0.1, C.Ink:Lerp(C.Lilac, 0.3), M.Metal, { Shadow = false })
+		kit:Box("CrestPost", x - 0.1, x + 0.1, yBase + rise, yBase + rise + 1.4, inset - 0.16, inset + 0.16, C.Ink:Lerp(C.Lilac, 0.3), M.Metal, { Shadow = false })
 		kit:Ball("CrestBall", x, yBase + rise + 1.5, inset, 0.5, P.Gold, M.Metal, { Shadow = false })
 	end
 	heart(ctx, (r0 + r1) / 2, yBase + rise + 2.2, inset, 1.6, C.Heart)
@@ -1109,14 +1120,14 @@ STYLES.Loft = function(ctx)
 		kit:Box("SignBracket", sx + 1.4, ctx.Left - T, by, by + 0.3, -0.9, -0.5, steel, M.Metal, { Shadow = false })
 	end
 	local board = kit:Box("NeonSign", sx - 1.6, sx + 1.6, ctx.Top - 14, ctx.Top - 2, -1.2, -0.4, Color3.fromRGB(86, 64, 120), M.SmoothPlastic, { Solid = true })
-	heart(ctx, sx, ctx.Top - 3.3, -1.35, 1.8, Color3.fromRGB(255, 150, 206), M.Neon)
+	heart(ctx, sx, ctx.Top - 3.3, -1.35, 1.8, Color3.fromRGB(255, 150, 206), M.SmoothPlastic) -- (v9.6 : plus de Neon, "flash bang")
 	local sign = Instance.new("SurfaceGui")
 	sign.Name = "Neon"
 	sign.Face = Enum.NormalId.Back
 	sign.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	sign.PixelsPerStud = 20
 	sign.LightInfluence = 0
-	sign.Brightness = 2
+	sign.Brightness = 1 -- (v9.6 FIXES96 : 2 -> 1, enseigne pas éblouissante)
 	sign.MaxDistance = 400
 	sign.Parent = board
 	for index, letter in ipairs({ "L", "O", "F", "T" }) do
@@ -1153,7 +1164,7 @@ STYLES.Loft = function(ctx)
 	end
 	-- trottoir : caisses fleuries, banc, plantes
 	ctx.G:Box("Sidewalk", ctx.Left - 8, ctx.Right + 6, -0.1, 0.12, -6, -0.6, P.Pave, M.Pavement, { Shadow = false })
-	for index, c in ipairs({ { ctx.Left + 2, -3 }, { ctx.Left + 5, -3.4 }, { ctx.Left + 3.2, -5 } }) do
+	for index, c in ipairs({ { ctx.Left + 2, -3 }, { ctx.Left + 5, -3.4 }, { ctx.Left + 3.2, -4.9 } }) do
 		ctx.G:Box("Crate", c[1] - 1.2, c[1] + 1.2, 0, 1.8 - (index % 2) * 0.3, c[2] - 1, c[2] + 1, C.Wood, M.WoodPlanks, { Shadow = false })
 		ctx.G:Ball("CrateBush", c[1], 2.2, c[2], 1.8, P.Leaf, M.Grass, { Shadow = false })
 	end
@@ -1162,6 +1173,168 @@ STYLES.Loft = function(ctx)
 	HouseGarden.PottedBall(ctx.G, gx - 6.5, -2, 1.2, C.Peach)
 	path(ctx, { { 0, -29.5 }, { 0, -7 }, { gx, -7 }, { gx, foot } }, 3.2, P.Pave, M.Pavement)
 	picketFence(ctx, ctx.Left - 8, ctx.Right + 4, -21, -2.2, 2.2)
+end
+
+----------------------------------------------------------------------
+-- (v9.6, GARAGE96) 🏎️ Aile du garage du manoir (GarageLayout) : 3 places
+-- côte à côte dans la cour de devant (côté droit vu de la rue), enduit de
+-- la façade, chaînes d'angle, corniche, toit-terrasse à balustrade, 3
+-- portes basculantes (Model "Door_<n>" : Panel + nervures + hublots +
+-- poignée ; attribut OpenCF = CFrame monde du panneau OUVERT, animées par
+-- CarClient), plafonnier (lumière douce, allumée par CarClient porte
+-- ouverte), lanternes, enseigne, allée pavée jusqu'à la rue avec rampe
+-- invisible vers le trottoir. Model "Garage" étiqueté "DopamineGarage",
+-- attribut HouseCF ; dossier "Cars" (voitures garées : CarClient).
+----------------------------------------------------------------------
+
+-- Garage possédé ? (instantané -> looks.Garage ; sinon attribut répliqué du propriétaire)
+local function hasGarage(kit: any, looks: Looks): boolean
+	if looks.Garage == true then
+		return true
+	end
+	if looks.Garage == false then
+		return false
+	end
+	local ok, result = pcall(function()
+		local folder = kit.Folder
+		local model = folder and folder.Parent
+		local ownerId = model and model:GetAttribute("OwnerId")
+		local owner = type(ownerId) == "number" and Players:GetPlayerByUserId(ownerId) or nil
+		return owner ~= nil and owner:GetAttribute("DopamineGarage") == true
+	end)
+	return ok and result == true
+end
+
+-- Grille sans portail (reprise de la grille à droite du garage)
+local function fenceRun(ctx: Ctx, a: number, b: number, d: number)
+	if b - a < 1 then
+		return
+	end
+	local kit = ctx.G
+	local iron = C.Ink:Lerp(C.Lilac, 0.25)
+	kit:Box("FenceRail", a, b, 0.6, 0.8, d - 0.1, d + 0.1, iron, M.Metal, { Solid = true, Shadow = false })
+	kit:Box("FenceRail", a, b, 3.0, 3.2, d - 0.1, d + 0.1, iron, M.Metal, { Shadow = false })
+	local count = math.max(2, math.floor((b - a) / 2.6))
+	for k = 0, count do
+		local x = a + k * (b - a) / count
+		kit:Box("FenceBar", x - 0.1, x + 0.1, 0, 3.8, d - 0.1, d + 0.1, iron, M.Metal, { Shadow = false })
+	end
+end
+
+local function garageWing(ctx: Ctx)
+	local model = Instance.new("Model")
+	model.Name = "Garage"
+	model:SetAttribute("HouseCF", ctx.Kit.CF)
+	model.Parent = ctx.Kit.Folder
+	local kit = ctx.Kit:Sub(CFrame.new(), model)
+	local G = GarageLayout
+	local X0, X1, D0, D1, W = G.X0, G.X1, G.D0, G.D1, G.WALL
+	local H, FLOOR = G.HEIGHT, G.FLOOR
+	local TRIM = Color3.fromRGB(255, 250, 244)
+	local wall = ctx.Wall
+	local stone = P.Stone
+	-- dalle, allée pavée jusqu'à la rue (+ bordures), rampe invisible vers le trottoir
+	kit:Box("GarageSlab", X0 + 0.05, X1 - 0.05, 0.2, FLOOR, D0 + 0.05, D1 - 0.05, Color3.fromRGB(214, 210, 216), M.Concrete, { Solid = true })
+	local street = G.STREET_D
+	kit:Box("Driveway", X0 + 1.2, X1 - 1.2, 0.3, 0.62, street, D0, P.Pave, M.Pavement, { Solid = true })
+	for _, x in ipairs({ X0 + 0.7, X1 - 0.7 }) do
+		kit:Box("DrivewayEdge", x - 0.5, x + 0.5, 0.3, 0.75, street, D0, TRIM, M.Limestone, { Solid = true, Shadow = false })
+	end
+	kit:Part("DrivewayRamp", Vector3.new(X1 - X0 - 2.4, 0.42, 1.6), CFrame.new((X0 + X1) / 2, 0.62 + 0.21, -(street + 0.8)), WHITE, M.SmoothPlastic,
+		{ Solid = true, Query = false, T = 1, Shadow = false }, "WedgePart")
+	-- murs (enduit de la façade) : fond, côtés (fenêtre cintrée côté fontaine), façade percée de 3 portes
+	kit:Box("GarageBack", X0, X1, 0, H, D1 - W, D1, wall, M.Plaster, { Solid = true })
+	local winD0, winD1, winY0, winY1 = -17.5, -12.5, 3.2, 7
+	kit:WallD("GarageSide", X0, X0 + W, 0, H, D0, D1, { { winD0, winD1, winY0, winY1 } }, wall, M.Plaster, { Solid = true })
+	kit:Box("GarageSideGlass", X0 + 0.25, X0 + 0.55, winY0, winY1, winD0, winD1, P.Glass, M.Glass, { T = 0.35, Shadow = false })
+	kit:Box("GarageSideSill", X0 - 0.35, X0 + 0.1, winY0 - 0.35, winY0 + 0.06, winD0 - 0.4, winD1 + 0.4, TRIM, M.Limestone, { Shadow = false })
+	kit:Box("GarageSideR", X1 - W, X1, 0, H, D0, D1, wall, M.Plaster, { Solid = true })
+	local holes = {}
+	for bay = 1, G.BAYS do
+		local cx = G.BayX(bay)
+		table.insert(holes, { cx - G.DOOR_W / 2, cx + G.DOOR_W / 2, FLOOR, FLOOR + G.DOOR_H })
+	end
+	kit:WallX("GarageFront", X0, X1, FLOOR, H, D0, D0 + W, holes, wall, M.Plaster, { Solid = true })
+	-- soubassement, chaînes d'angle, corniche, bandeau doré
+	kit:Box("GaragePlinth", X0 - 0.15, X0 + 0.9, -0.05, 1.2, D0 - 0.15, D1 + 0.08, stone, M.Limestone, { Shadow = false })
+	kit:Box("GaragePlinth", X1 - 0.9, X1 + 0.15, -0.05, 1.2, D0 - 0.15, D1 + 0.08, stone, M.Limestone, { Shadow = false })
+	for _, x in ipairs({ X0, X1 }) do
+		for k = 0, 3 do
+			local y = 1.2 + k * 2.2
+			kit:Box("Quoin", x - 0.55, x + 0.55, y, y + 1.2, D0 - 0.2, D0 + 1.1, TRIM, M.Limestone, { Shadow = false })
+		end
+	end
+	kit:Box("GarageCornice", X0 - 0.6, X1 + 0.6, H - 0.2, H + 0.7, D0 - 0.7, D1 + 0.12, TRIM, M.Limestone, { Solid = true })
+	kit:Box("GarageBand", X0 - 0.2, X1 + 0.2, H - 1.4, H - 1.2, D0 - 0.24, D0 - 0.02, P.Gold, M.Metal, { Shadow = false })
+	-- toit-terrasse : parapet plein + lisse + pots à boule
+	kit:Box("GarageParapet", X0 - 0.4, X1 + 0.4, H + 0.7, H + 2.1, D0 - 0.5, D0 + 0.3, TRIM, M.Limestone, { Shadow = false })
+	kit:Box("GarageParapet", X0 - 0.4, X0 + 0.4, H + 0.7, H + 2.1, D0 + 0.3, D1, TRIM, M.Limestone, { Shadow = false })
+	kit:Box("GarageParapet", X1 - 0.4, X1 + 0.4, H + 0.7, H + 2.1, D0 + 0.3, D1, TRIM, M.Limestone, { Shadow = false })
+	kit:Box("GarageRail", X0 - 0.5, X1 + 0.5, H + 2.1, H + 2.35, D0 - 0.6, D0 + 0.4, P.Gold, M.Metal, { Shadow = false })
+	for _, x in ipairs({ X0, X1 }) do
+		kit:Box("GarageUrn", x - 0.5, x + 0.5, H + 2.35, H + 3.1, D0 - 0.3, D0 + 0.5, TRIM, M.Limestone, { Shadow = false })
+		kit:Ball("GarageUrnBall", x, H + 3.5, D0 + 0.1, 0.9, P.Gold, M.Metal, { Shadow = false })
+	end
+	-- enseigne "GARAGE" (au-dessus de la porte du milieu) + cœur
+	local sign = kit:Box("GarageSign", G.BayX(2) - 4.2, G.BayX(2) + 4.2, FLOOR + G.DOOR_H + 0.55, FLOOR + G.DOOR_H + 1.6, D0 - 0.3, D0 - 0.05, TRIM, M.SmoothPlastic,
+		{ Shadow = false })
+	kit:Text(sign, Enum.NormalId.Back, "🏎️ GARAGE", C.PinkDeep, Enum.Font.FredokaOne, 30, 160)
+	-- encadrements, clés de voûte, portes basculantes
+	local doorColor = TRIM:Lerp(C.Pink, 0.12)
+	local rib = C.PinkSoft:Lerp(C.Pink, 0.25)
+	for bay = 1, G.BAYS do
+		local cx = G.BayX(bay)
+		local x0, x1 = cx - G.DOOR_W / 2, cx + G.DOOR_W / 2
+		local top = FLOOR + G.DOOR_H
+		-- (encadrement : 0,05 dans l'ouverture et en retrait du nu intérieur -> aucune face coplanaire)
+		kit:Box("DoorJamb", x0 - 0.45, x0 + 0.05, FLOOR, top, D0 - 0.25, D0 + W - 0.05, TRIM, M.Limestone, { Shadow = false })
+		kit:Box("DoorJamb", x1 - 0.05, x1 + 0.45, FLOOR, top, D0 - 0.25, D0 + W - 0.05, TRIM, M.Limestone, { Shadow = false })
+		kit:Box("DoorHeader", x0 - 0.45, x1 + 0.45, top - 0.05, top + 0.45, D0 - 0.25, D0 + W - 0.05, TRIM, M.Limestone, { Shadow = false })
+		if bay ~= 2 then
+			kit:Box("Keystone", cx - 0.5, cx + 0.5, top + 0.45, top + 1.4, D0 - 0.35, D0 + 0.2, TRIM, M.Limestone, { Shadow = false })
+		end
+		local door = Instance.new("Model")
+		door.Name = "Door_" .. bay
+		door.Parent = model
+		local dk = ctx.Kit:Sub(CFrame.new(), door)
+		local dz = D0 + W * 0.5
+		local panel = dk:Box("Panel", x0 + 0.05, x1 - 0.05, FLOOR + 0.02, top - 0.02, dz - 0.12, dz + 0.12, doorColor, M.SmoothPlastic, { Solid = true })
+		for k = 1, 3 do
+			local y = FLOOR + k * G.DOOR_H / 4
+			dk:Box("Rib", x0 + 0.2, x1 - 0.2, y - 0.08, y + 0.08, dz - 0.2, dz - 0.12, rib, M.SmoothPlastic, { Shadow = false })
+		end
+		dk:Box("DoorWindows", x0 + 0.9, x1 - 0.9, top - 1.5, top - 0.7, dz - 0.18, dz - 0.1, P.Glass, M.Glass, { Shadow = false })
+		dk:Box("DoorHandle", cx - 0.6, cx + 0.6, FLOOR + 0.9, FLOOR + 1.1, dz - 0.3, dz - 0.12, P.Gold, M.Metal, { Shadow = false })
+		-- ouverte : couchée sous le plafond, vers l'intérieur (porte basculante)
+		local openLocal = CFrame.new(cx, top + 0.45, -(D0 + W + G.DOOR_H / 2)) * CFrame.Angles(math.rad(90), 0, 0)
+		door:SetAttribute("OpenCF", ctx.Kit.CF * openLocal)
+		door.PrimaryPart = panel
+	end
+	-- lanternes entre les portes (sans vraie lumière)
+	for k = 1, G.BAYS - 1 do
+		local x = (G.BayX(k) + G.BayX(k + 1)) / 2
+		kit:Box("LanternArm", x - 0.1, x + 0.1, FLOOR + 5.4, FLOOR + 5.6, D0 - 0.8, D0, C.Ink, M.Metal, { Shadow = false })
+		kit:Box("Lantern", x - 0.35, x + 0.35, FLOOR + 4.1, FLOOR + 5.4, D0 - 1.15, D0 - 0.45, P.Lamp, M.SmoothPlastic, { Shadow = false })
+		kit:Box("LanternCap", x - 0.45, x + 0.45, FLOOR + 5.4, FLOOR + 5.7, D0 - 1.25, D0 - 0.35, C.Ink, M.Metal, { Shadow = false })
+	end
+	-- intérieur : plafond, marquages, étagère, plafonnier (lumière douce, éteinte)
+	kit:Box("GarageCeiling", X0 + W, X1 - W, H - 0.45, H - 0.25, D0 + W, D1 - W, Color3.fromRGB(246, 240, 244), M.SmoothPlastic, { Shadow = false })
+	for k = 1, G.BAYS - 1 do
+		local x = (G.BayX(k) + G.BayX(k + 1)) / 2
+		kit:Box("BayLine", x - 0.12, x + 0.12, FLOOR, FLOOR + 0.03, D0 + W + 1, D1 - W - 1, WHITE, M.SmoothPlastic, { Shadow = false })
+	end
+	kit:Box("Shelf", X0 + 3, X1 - 3, 5.2, 5.4, D1 - W - 1.1, D1 - W, Color3.fromRGB(214, 164, 120), M.Wood, { Shadow = false })
+	kit:Box("ShelfBox", X0 + 4, X0 + 6, 5.4, 6.6, D1 - W - 1, D1 - W - 0.1, C.Pink, M.SmoothPlastic, { Shadow = false })
+	kit:Box("ShelfBox", X1 - 7, X1 - 4.5, 5.4, 6.2, D1 - W - 1, D1 - W - 0.1, C.Sky, M.SmoothPlastic, { Shadow = false })
+	local lamp = kit:Box("CeilingLamp", (X0 + X1) / 2 - 3, (X0 + X1) / 2 + 3, H - 0.75, H - 0.47, (D0 + D1) / 2 - 0.6, (D0 + D1) / 2 + 0.6, Color3.fromRGB(255, 246, 226),
+		M.SmoothPlastic, { Shadow = false })
+	local light = ctx.Kit:Light(lamp, Color3.fromRGB(255, 226, 190), 18, 0.9)
+	if light then
+		light.Enabled = false
+	end
+	-- grille qui reprend à droite (les voitures garées : CarClient, dossier "GarageCars" de la maison)
+	fenceRun(ctx, X1, ctx.Right + WorldLayout.WALL_T + 7, -21)
+	CollectionService:AddTag(model, "DopamineGarage")
 end
 
 -- ░░ Mansion : le grand manoir kawaii ░░
@@ -1245,7 +1418,7 @@ STYLES.Mansion = function(ctx)
 		end
 		if floor == 2 then
 			-- petit balcon arrondi de la travée centrale
-			kit:CylY("CenterBalcony", ctx.DoorX, y - 0.4, -0.6, 7, 0.4, TRIM, M.Limestone, { Solid = true })
+			kit:CylY("CenterBalcony", ctx.DoorX, y - 0.45, -0.6, 7, 0.4, TRIM, M.Limestone, { Solid = true }) -- (v9.6 : 0,05 sous le palier)
 		end
 	end
 	-- corniche + modillons + liseré doré
@@ -1265,7 +1438,7 @@ STYLES.Mansion = function(ctx)
 	local crest = math.max(2, math.floor((ctx.Right - ctx.Left - 2 * inset) / 12))
 	for k = 0, crest do
 		local x = ctx.Left + inset + k * (ctx.Right - ctx.Left - 2 * inset) / crest
-		kit:Box("CrestPost", x - 0.12, x + 0.12, yBase + rise, yBase + rise + 1.6, inset - 0.12, inset + 0.12, P.Gold:Lerp(C.Ink, 0.2), M.Metal, { Shadow = false })
+		kit:Box("CrestPost", x - 0.12, x + 0.12, yBase + rise, yBase + rise + 1.6, inset - 0.18, inset + 0.18, P.Gold:Lerp(C.Ink, 0.2), M.Metal, { Shadow = false })
 		kit:Ball("CrestBall", x, yBase + rise + 1.75, inset, 0.6, P.Gold, M.Metal, { Shadow = false })
 	end
 	for _, column in ipairs({ 1, dims.Columns }) do
@@ -1292,7 +1465,7 @@ STYLES.Mansion = function(ctx)
 	for _, s in ipairs({ -1, 1 }) do
 		kit:Part("Pediment", Vector3.new(1.2, pedH, pedW / 2), CFrame.new(ctx.DoorX + s * pedW / 4, pedY + pedH / 2, 0.9) * CFrame.Angles(0, -s * math.pi / 2, 0), TRIM,
 			M.Limestone, { Solid = true }, "WedgePart")
-		kit:Part("PedimentInner", Vector3.new(0.3, pedH - 3, pedW / 2 - 4.5), CFrame.new(ctx.DoorX + s * (pedW / 2 - 4.5) / 2, pedY + 0.9 + (pedH - 3) / 2, 0.45)
+		kit:Part("PedimentInner", Vector3.new(0.3, pedH - 3, pedW / 2 - 4.5), CFrame.new(ctx.DoorX + s * (pedW / 2 - 4.5) / 2, pedY + 0.9 + (pedH - 3) / 2, 0.4)
 			* CFrame.Angles(0, -s * math.pi / 2, 0), ctx.Wall:Lerp(C.Pink, 0.3), M.Plaster, { Shadow = false }, "WedgePart")
 	end
 	heart(ctx, ctx.DoorX, pedY + pedH + 1.1, -0.9, 2.2, C.Heart)
@@ -1310,8 +1483,9 @@ STYLES.Mansion = function(ctx)
 		local tx = if s < 0 then ctx.Left - T - 1 else ctx.Right + T + 1
 		local td = 0.5
 		local top = ctx.Top + 3
-		kit:CylY("Tower", tx, 0, td, radius * 2, top, TOWER, M.Plaster, { Solid = true })
-		kit:CylY("TowerPlinth", tx, 0, td, radius * 2 + 0.6, WorldLayout.PLINTH + 0.4, P.Stone, M.Limestone, { Solid = true })
+		-- (v9.6 : pieds décalés sous le sol : jamais coplanaires avec les fondations)
+		kit:CylY("Tower", tx, -0.15, td, radius * 2, top + 0.15, TOWER, M.Plaster, { Solid = true })
+		kit:CylY("TowerPlinth", tx, -0.2, td, radius * 2 + 0.6, WorldLayout.PLINTH + 0.6, P.Stone, M.Limestone, { Solid = true })
 		for floor = 1, dims.Floors do
 			local y = WorldLayout.FloorY(floor)
 			if floor > 1 then
@@ -1391,12 +1565,20 @@ STYLES.Mansion = function(ctx)
 		flowerDots(ctx, x1 + 1, x2 - 1, -3.8, 6)
 		-- topiaire à étages près de la tour
 		local tcx = if s < 0 then ctx.Left - T - 1 else ctx.Right + T + 1
-		HouseGarden.Topiary(ctx.G, tcx, -10)
+		if not (ctx.Garage and s > 0) then -- (v9.6 : place du garage)
+			HouseGarden.Topiary(ctx.G, tcx, -10)
+		end
 		-- parterre rond fleuri
 		local bx = gx + s * (ctx.Right - ctx.Left) * 0.24
 		HouseGarden.FlowerBed(ctx.G, bx, -12, 5)
 	end
-	ironFence(ctx, ctx.Left - T - 7, ctx.Right + T + 7, -21, gx - 3.5, gx + 3.5)
+	if ctx.Garage then
+		-- (v9.6) la grille s'arrête contre l'aile du garage, reprend après
+		ironFence(ctx, ctx.Left - T - 7, GarageLayout.X0, -21, gx - 3.5, gx + 3.5)
+		garageWing(ctx)
+	else
+		ironFence(ctx, ctx.Left - T - 7, ctx.Right + T + 7, -21, gx - 3.5, gx + 3.5)
+	end
 end
 
 ----------------------------------------------------------------------
@@ -1433,10 +1615,13 @@ function HouseFacade.Build(kit: any, size: any, looks: Looks): Built
 		Hall1 = hall1,
 		DoorX = WorldLayout.DoorX(size),
 		Built = built,
+		Garage = style == "Mansion" and GarageLayout.Supports(size) and hasGarage(kit, looks),
 	}
 	STYLES[style](ctx)
 	-- déco du jardin choisie dans la maison 2D : mêmes places (de gauche à droite)
-	HouseGarden.Decorations(ctx.G, looks.Garden, dims.Left - 4, dims.Left + dims.Width + 4, -15, style == "Mansion")
+	-- (v9.6 : avec le garage, elle s'arrête avant l'aile)
+	local decoRight = if ctx.Garage then GarageLayout.X0 - 3 else dims.Left + dims.Width + 4
+	HouseGarden.Decorations(ctx.G, looks.Garden, dims.Left - 4, decoRight, -15, style == "Mansion")
 	return built
 end
 

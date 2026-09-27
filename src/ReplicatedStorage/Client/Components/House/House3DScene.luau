@@ -26,6 +26,12 @@
 	    petites particules) ; l'éclairage du lieu est réglé par House3D
 	    (scene.Lighting) et remis à la fermeture.
 
+	v9.6 ("le mode 3D c'est n'importe quoi") : la maquette a les MÊMES
+	mesures que la pièce de la maison en ville (WorldLayout.PX / DEPTH /
+	WALL_H) : mêmes places d'objets qu'en ville (écart mesuré 0 stud au lieu
+	de 2,5), fenêtre à la place de la fenêtre 2D (aperçu et ville) ; lumières
+	douces (≤ 1,2, soleil 1,6 au plus, exposition ≤ 0, éclair d'orage doux).
+
 	Champs de pièce lus (tous facultatifs, valeurs par défaut sinon) :
 	  Wallpaper, Floor, Trim (Config.HouseTrimsById), Mood
 	  (Config.HouseMoodsById), View (Config.HouseViewsById) ; objets :
@@ -89,12 +95,20 @@ local House3DScene = {}
 House3DScene.ORIGIN = Vector3.new(0, 5000, 0) -- loin du monde (au-dessus de tout)
 House3DScene.FOLDER_NAME = "House3DPreview"
 
-local PX = 0.05 -- studs par px de maquette de la pièce 2D
+-- v9.6 (PREVIEW96) : la maquette a EXACTEMENT les mesures d'une pièce de la
+-- maison en ville (WorldLayout : 0,036 stud / px, 24 de profondeur, 12 sous
+-- plafond). Avant : 0,05 / 22 / 10,1 -> pièce 1,4 fois plus large mais
+-- moins profonde, objets tassés vers l'avant et décalés jusqu'à 2,5 studs
+-- par rapport à la même pièce en ville.
+local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
+local PX = tonumber(WorldLayout.PX) or 0.036 -- studs par px de maquette de la pièce 2D
 local ROOM_BASE_WIDTH = 760 -- (= HouseRoom.BASE_WIDTH)
 local ROOM_HEIGHT = 440 -- (= HouseRoom.HEIGHT)
 local SIDE_PX = 42 -- murs de côté en perspective de la pièce 2D (HouseRoom)
-local DEPTH = 22 -- (studs) profondeur de la pièce
+local DEPTH = tonumber(WorldLayout.DEPTH) or 24 -- (studs) profondeur de la pièce
+local WALL_H = tonumber(WorldLayout.WALL_H) or 12 -- (studs) hauteur des murs
 local DEPTH_PX = math.floor(DEPTH / PX)
+local WALL_PX = math.floor(WALL_H / PX) -- hauteur des toiles des murs (motifs non étirés)
 local WALL_T = 0.8 -- épaisseur de la coque
 local SKIN = 0.1 -- épaisseur de la "peau" papier peint
 local SLAB = 1.2
@@ -102,6 +116,11 @@ local LAWN_SIDE = 4
 local LAWN_FRONT = 5
 local LAWN_BACK = 3
 local MAX_LAMPS = 8 -- vraies lumières d'objets au plus
+-- v9.6 ("flash bang") : lumières douces, jamais plus de 1,2 de luminosité
+local LIGHT_MAX = 1.2
+local function soft(brightness: number): number
+	return math.clamp(brightness, 0, LIGHT_MAX)
+end
 local DROP = 1.4 -- (studs) les objets tombent doucement à leur place
 local DROP_TIME = 0.45
 local BATCH_ITEMS = 4
@@ -152,6 +171,8 @@ type SideWall = {
 	Edge: BasePart,
 	Gui: SurfaceGui?,
 	Lowered: boolean,
+	-- (v9.6) écarts anti-scintillement de la pose "levée" (gardés en baissant / relevant)
+	Deltas: { [BasePart]: { P: Vector3, S: Vector3 } }?,
 }
 
 type Arrival = { Parts: { BasePart }, Finals: { CFrame }, Delay: number, Clock: number }
@@ -216,6 +237,21 @@ local function asColor(value: any, default: Color3): Color3
 	return default
 end
 
+-- Fenêtre de la pièce 2D (HouseRoom : à gauche, 104 x 92 px, 36 px sous le
+-- haut du mur) -> rectangle sur le mur du fond, avec le MÊME passage 2D -> 3D
+-- que les objets muraux (House3DLayout) : (centre x, centre y, largeur,
+-- hauteur) en studs. v9.6 : aperçu ET ville (un tableau posé à côté de la
+-- fenêtre en 2D ne la chevauche plus en 3D)
+local function windowRect(roomWpx: number, scale: number): (number, number, number, number)
+	local wallPx = math.floor(ROOM_HEIGHT * (tonumber(HouseCommon.Config.WallRatio) or 0.46) + 0.5)
+	local k = roomWpx / math.max(1, roomWpx - 2 * SIDE_PX)
+	local x2D = SIDE_PX + math.floor(roomWpx * 0.1) + 52
+	local cx = ((x2D - SIDE_PX) * k - roomWpx / 2) * scale
+	local ww, wh = 104 * k * scale, 92 * scale
+	local cy = (wallPx - 36) * scale - wh / 2
+	return cx, cy, ww, wh
+end
+
 -- Matière d'un mur / d'un sol selon son motif (la couleur suffit déjà)
 local WALL_MATERIAL: { [string]: Enum.Material } = {
 	Bricks = M.Brick,
@@ -250,11 +286,9 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 	local size = HouseCommon.SizesById[sizeId or ""] or config.Sizes[1]
 	local widthFactor = tonumber(size and size.Width) or 1
 	local roomWpx = math.floor(ROOM_BASE_WIDTH * widthFactor + 0.5)
-	local roomHpx = ROOM_HEIGHT
-	local wallRatio = tonumber(config.WallRatio) or 0.46
-	local wallPx = math.floor(roomHpx * wallRatio + 0.5)
 	local W = roomWpx * PX
-	local WH = wallPx * PX
+	-- (murs de la ville : la bande murale 2D en occupe le bas, comme en ville)
+	local WH = WALL_H
 	local D = DEPTH
 	local origin = House3DScene.ORIGIN
 	local roomData = type(room) == "table" and room or {}
@@ -414,8 +448,8 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 			-- la lave éclaire la pièce par en dessous
 			local glow = Instance.new("PointLight")
 			glow.Color = Color3.fromRGB(255, 130, 60)
-			glow.Range = 20
-			glow.Brightness = 1.2
+			glow.Range = 16
+			glow.Brightness = 1
 			glow.Shadows = false
 			glow.Parent = floorPart
 		end
@@ -438,13 +472,13 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 		sheet.Size = UDim2.fromScale(1, 1)
 		sheet.ClipsDescendants = true
 		sheet.Parent = gui
-		local ok, err = pcall(HousePatterns.BuildWall, sheet, widthPx, wallPx, wallpaper, 1)
+		local ok, err = pcall(HousePatterns.BuildWall, sheet, widthPx, WALL_PX, wallpaper, 1)
 		if not ok then
 			warn("[House3D] Papier peint : " .. tostring(err))
 		end
 		sheet.BackgroundTransparency = 1
 		-- ombre au pied du mur
-		local ao = HousePatterns.Box(sheet, 0, wallPx - 30, widthPx, 30, BLACK, 0.8, 20)
+		local ao = HousePatterns.Box(sheet, 0, WALL_PX - 30, widthPx, 30, BLACK, 0.8, 20)
 		local fade = Instance.new("UIGradient")
 		fade.Rotation = 90
 		fade.Transparency = NumberSequence.new(1, 0)
@@ -455,7 +489,7 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 	part("WallBack", Vector3.new(W + WALL_T * 2, WH + 0.4, WALL_T), CFrame.new(at(0, (WH + 0.4) / 2 - 0.2, -WALL_T / 2 - SKIN)), SHELL, M.SmoothPlastic, false)
 	do
 		local skin = facing("WallBackPaper", at(0, WH / 2, 0), X_AXIS, Y_AXIS, W, WH, SKIN, wallA, wallMaterial)
-		local gui = House3DKit.Surface(skin, Enum.NormalId.Back, Vector2.new(roomWpx, wallPx), 1)
+		local gui = House3DKit.Surface(skin, Enum.NormalId.Back, Vector2.new(roomWpx, WALL_PX), 1)
 		paper(gui, roomWpx)
 	end
 	-- Murs de côté (se baissent quand la caméra passe derrière eux)
@@ -465,7 +499,7 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 			CFrame.new(at(side * (W / 2 + SKIN + WALL_T / 2), (WH + 0.4) / 2 - 0.2, (D - WALL_T - SKIN) / 2)), SHELL, M.SmoothPlastic, false)
 		local right = side < 0 and BACKWARD or -BACKWARD
 		local skin = facing(side < 0 and "WallLeftPaper" or "WallRightPaper", at(side * W / 2, WH / 2, D / 2), right, Y_AXIS, D, WH, SKIN, wallA:Lerp(BLACK, 0.04), wallMaterial)
-		local gui = House3DKit.Surface(skin, Enum.NormalId.Back, Vector2.new(DEPTH_PX, wallPx), 1)
+		local gui = House3DKit.Surface(skin, Enum.NormalId.Back, Vector2.new(DEPTH_PX, WALL_PX), 1)
 		paper(gui, DEPTH_PX)
 		local crown = part("TrimCrownSide", Vector3.new(0.36, crownH, D), CFrame.new(at(side * (W / 2 - 0.18), WH - crownH / 2, D / 2)), trim, M.SmoothPlastic, false)
 		local skirt = part("TrimSkirtSide", Vector3.new(0.2, 0.6, D), CFrame.new(at(side * (W / 2 - 0.1), 0.3, D / 2)), trim, M.SmoothPlastic, false)
@@ -484,10 +518,8 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 	------------------------------------------------------------------
 	-- Fenêtre fixe (à gauche, comme la pièce 2D) : vraie fenêtre en relief
 	------------------------------------------------------------------
-	local windowW, windowH, windowTop = 104 * PX, 92 * PX, 36 * PX
-	local windowX2D = (SIDE_PX + roomWpx * 0.1) + 52
-	local windowCX = ((windowX2D - SIDE_PX) / math.max(1, roomWpx - 2 * SIDE_PX) * roomWpx - roomWpx / 2) * PX
-	local windowCY = WH - windowTop - windowH / 2
+	-- (v9.6 : place et taille de la fenêtre 2D, comme la pièce en ville)
+	local windowCX, windowCY, windowW, windowH = windowRect(roomWpx, PX)
 	do
 		-- vue (panneau opaque derrière la vitre, dessiné par HouseViews)
 		local view = facing("WindowView", at(windowCX, windowCY, 0.02), X_AXIS, Y_AXIS, windowW - 0.5, windowH - 0.5, 0.05, Color3.fromRGB(170, 214, 255), M.SmoothPlastic)
@@ -546,9 +578,9 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 	-- Prise électrique (à droite)
 	do
 		local ox = ((roomWpx - SIDE_PX - 70 + 11 - SIDE_PX) / math.max(1, roomWpx - 2 * SIDE_PX) * roomWpx - roomWpx / 2) * PX
-		part("Outlet", Vector3.new(1.1, 1.3, 0.12), CFrame.new(at(ox, 1.6, 0.06)), WHITE, M.SmoothPlastic, false)
-		for _, dx in ipairs({ -0.2, 0.2 }) do
-			part("OutletHole", Vector3.new(0.12, 0.3, 0.05), CFrame.new(at(ox + dx, 1.7, 0.14)), Color3.fromRGB(90, 70, 90), M.SmoothPlastic, false)
+		part("Outlet", Vector3.new(0.8, 0.95, 0.12), CFrame.new(at(ox, 1.2, 0.06)), WHITE, M.SmoothPlastic, false)
+		for _, dx in ipairs({ -0.15, 0.15 }) do
+			part("OutletHole", Vector3.new(0.1, 0.24, 0.05), CFrame.new(at(ox + dx, 1.26, 0.14)), Color3.fromRGB(90, 70, 90), M.SmoothPlastic, false)
 		end
 	end
 
@@ -603,7 +635,8 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 			emitter.Speed = NumberRange.new(spec.Speed * 0.5, spec.Speed)
 			emitter.SpreadAngle = Vector2.new(180, 180)
 			emitter.Acceleration = Vector3.new(0, spec.Up, 0)
-			emitter.LightEmission = spec.Emission
+			-- (particules douces : peu d'émission, pas d'éblouissement)
+			emitter.LightEmission = spec.Emission * 0.4
 			emitter.LightInfluence = 0
 			emitter.Size = NumberSequence.new({
 				NumberSequenceKeypoint.new(0, 0),
@@ -675,29 +708,32 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 			end
 		end
 		paintViews()
-		local lampBoost = night and 1.7 or 0.9
+		local lampBoost = night and 1.25 or 0.8
 		for _, entry in ipairs(itemLights) do
-			entry.Light.Brightness = entry.Base * lampBoost * mood.Brightness
+			entry.Light.Brightness = soft(entry.Base * lampBoost * mood.Brightness)
 			entry.Light.Color = entry.Light.Color
 		end
 		local ceiling = ceilingLight
 		if ceiling then
-			ceiling.Brightness = (night and 0.8 or 0.7) * mood.Brightness
+			ceiling.Brightness = soft((night and 0.75 or 0.55) * mood.Brightness)
 			ceiling.Color = night and Color3.fromRGB(255, 214, 170):Lerp(mood.Light, 0.5) or mood.Light
 		end
 		local fill = fillLight
 		if fill then
 			fill.Enabled = mood.Amount > 0.01
 			fill.Color = mood.Tint
-			fill.Brightness = mood.Amount * 1.2
+			fill.Brightness = soft(mood.Amount * 1.2)
 		end
 		local spot = sunLight
 		if spot then
-			spot.Brightness = (night and 0.8 or 2) * math.max(0.4, mood.Brightness)
+			spot.Brightness = soft((night and 0.5 or 1.1) * math.clamp(mood.Brightness, 0.4, 1))
 			spot.Color = night and Color3.fromRGB(150, 170, 255) or Color3.fromRGB(255, 236, 200)
 		end
 	end
 	applyNight()
+	-- (v9.6) anti-scintillement du décor : moulures, fenêtre, rideaux...
+	-- écartés des murs / du sol / du studio (qui ne bougent pas)
+	pcall(House3DScene.SeparateShell, folder, nil)
 	folder.Parent = workspace
 
 	------------------------------------------------------------------
@@ -725,7 +761,7 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 				light.Enabled = false
 			end
 			table.insert(itemLights, { Light = light, Base = light.Brightness })
-			light.Brightness = light.Brightness * (night and 1.7 or 0.9) * mood.Brightness
+			light.Brightness = soft(light.Brightness * (night and 1.25 or 0.8) * mood.Brightness)
 		end
 		for _, glow in ipairs(data.Glows) do
 			table.insert(glowParts, glow)
@@ -820,6 +856,16 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 				discard()
 				return
 			end
+			-- (v9.6) anti-scintillement entre objets voisins et avec le décor
+			-- (avant l'arrivée en douceur, qui garde les places finales)
+			pcall(function()
+				local models: { Instance } = {}
+				for _, build in ipairs(builds) do
+					build.Model:PivotTo(build.Pivot)
+					table.insert(models, build.Model)
+				end
+				House3DScene.SeparateShell(folder, models)
+			end)
 			local order = table.clone(builds)
 			table.sort(order, function(a, b)
 				if a.Entry.Y ~= b.Entry.Y then
@@ -847,6 +893,11 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 				if okLive and type(handles) == "table" then
 					liveHandles = handles
 				end
+				-- (v9.6 : un point de focus laissé par la ville, ~2 s après la
+				-- sortie, mettait les écrans de l'aperçu en pause : focus = caméra)
+				if #liveHandles > 0 and type(live.SetFocus) == "function" then
+					pcall(live.SetFocus, nil)
+				end
 			end
 			applyNight()
 			if progress then
@@ -864,19 +915,21 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 		Lighting = function(isNight: boolean): { [string]: any }
 			local tint = mood.Tint
 			local amount = mood.Amount
-			local ambientDay = Color3.fromRGB(150, 140, 160):Lerp(tint, amount * 0.5)
+			-- v9.6 ("flash bang") : soleil plus doux, lumière ambiante moins
+			-- forte (150 délavait tout dans le vrai Roblox), exposition ≤ 0
+			local ambientDay = Color3.fromRGB(118, 110, 128):Lerp(tint, amount * 0.5)
 			local ambientNight = Color3.fromRGB(64, 56, 110):Lerp(tint, amount * 0.4)
 			local bright = mood.Brightness
 			return {
 				ClockTime = isNight and 0.5 or 14.5,
-				Brightness = (isNight and 0.35 or 2.2) * math.clamp(bright, 0.5, 1.3),
+				Brightness = (isNight and 0.35 or 1.6) * math.clamp(bright, 0.6, 1.1),
 				Ambient = isNight and ambientNight or ambientDay,
-				OutdoorAmbient = isNight and Color3.fromRGB(70, 64, 120):Lerp(tint, amount * 0.4) or Color3.fromRGB(170, 164, 184):Lerp(tint, amount * 0.5),
+				OutdoorAmbient = isNight and Color3.fromRGB(70, 64, 120):Lerp(tint, amount * 0.4) or Color3.fromRGB(138, 132, 150):Lerp(tint, amount * 0.5),
 				ColorShift_Top = isNight and Color3.fromRGB(40, 40, 90) or tint:Lerp(BLACK, 1 - amount * 0.35),
 				ColorShift_Bottom = BLACK,
-				EnvironmentDiffuseScale = 0.5,
-				EnvironmentSpecularScale = 0.4,
-				ExposureCompensation = isNight and 0.15 or 0,
+				EnvironmentDiffuseScale = 0.4,
+				EnvironmentSpecularScale = 0.3,
+				ExposureCompensation = isNight and 0 or -0.1,
 				GlobalShadows = true,
 				ShadowSoftness = 0.35,
 				FogStart = 0,
@@ -897,17 +950,33 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 				end
 				if lower ~= nil then
 					wall.Lowered = lower
-					local height = lower and 1.2 or WH
 					local x = wall.Side * (W / 2 + SKIN + WALL_T / 2)
-					wall.Shell.Size = Vector3.new(WALL_T, height + 0.4, D + WALL_T + SKIN)
-					wall.Shell.CFrame = CFrame.new(at(x, (height + 0.4) / 2 - 0.2, (D - WALL_T - SKIN) / 2))
 					local right = wall.Side < 0 and BACKWARD or -BACKWARD
 					local normal = right:Cross(Y_AXIS)
-					wall.Skin.Size = Vector3.new(D, height, SKIN)
-					wall.Skin.CFrame = CFrame.fromMatrix(at(wall.Side * W / 2, height / 2, D / 2) - normal * (SKIN / 2), right, Y_AXIS)
-					wall.Crown.CFrame = CFrame.new(at(wall.Side * (W / 2 - 0.18), height - crownH / 2, D / 2))
-					wall.Edge.Size = Vector3.new(WALL_T + SKIN + 0.1, height + 0.4, 0.2)
-					wall.Edge.CFrame = CFrame.new(at(wall.Side * (W / 2 + (WALL_T + SKIN) / 2), (height + 0.4) / 2 - 0.2, D + 0.05))
+					-- pose d'un mur de hauteur `height` (tailles, repères)
+					local function pose(height: number): { { Part: BasePart, S: Vector3, C: CFrame } }
+						return {
+							{ Part = wall.Shell, S = Vector3.new(WALL_T, height + 0.4, D + WALL_T + SKIN), C = CFrame.new(at(x, (height + 0.4) / 2 - 0.2, (D - WALL_T - SKIN) / 2)) },
+							{ Part = wall.Skin, S = Vector3.new(D, height, SKIN), C = CFrame.fromMatrix(at(wall.Side * W / 2, height / 2, D / 2) - normal * (SKIN / 2), right, Y_AXIS) },
+							{ Part = wall.Crown, S = wall.Crown.Size, C = CFrame.new(at(wall.Side * (W / 2 - 0.18), height - crownH / 2, D / 2)) },
+							{ Part = wall.Edge, S = Vector3.new(WALL_T + SKIN + 0.1, height + 0.4, 0.2), C = CFrame.new(at(wall.Side * (W / 2 + (WALL_T + SKIN) / 2), (height + 0.4) / 2 - 0.2, D + 0.05)) },
+						}
+					end
+					-- (v9.6) écarts anti-scintillement de la pose levée, gardés dans les deux poses
+					local deltas = wall.Deltas
+					if not deltas then
+						local fresh: { [BasePart]: { P: Vector3, S: Vector3 } } = {}
+						for _, spec in ipairs(pose(WH)) do
+							fresh[spec.Part] = { P = spec.Part.Position - spec.C.Position, S = spec.Part.Size - spec.S }
+						end
+						wall.Deltas = fresh
+						deltas = fresh
+					end
+					for _, spec in ipairs(pose(lower and 1.2 or WH)) do
+						local delta = (deltas :: any)[spec.Part]
+						spec.Part.Size = spec.S + (delta and delta.S or Vector3.zero)
+						spec.Part.CFrame = spec.C + (delta and delta.P or Vector3.zero)
+					end
 					local gui = wall.Gui
 					if gui then
 						gui.Enabled = not lower
@@ -959,10 +1028,11 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 					if stormClock > 6 then
 						stormClock = 0
 					end
-					local flash = (stormClock < 0.12 or (stormClock > 0.25 and stormClock < 0.33)) and 3 or 0
+					-- (éclair doux : plus d'éblouissement, luminosité ≤ 1,2)
+					local flash = (stormClock < 0.12 or (stormClock > 0.25 and stormClock < 0.33)) and 0.8 or 0
 					fill.Enabled = true
 					fill.Color = Color3.fromRGB(210, 225, 255)
-					fill.Brightness = mood.Amount * 1.2 + flash
+					fill.Brightness = soft(mood.Amount * 1.2 + flash)
 				end
 			end
 			if mood.Effect == "Disco" or mood.Effect == "RGB" or mood.Effect == "Neon" then
@@ -1122,7 +1192,9 @@ function House3DScene.BuildRoomShell(roomData: any, sizeDef: any?, options: Shel
 		wall("WallFront", Vector3.new(0, 0, D / 2 + T / 2), X, W + 2 * T, -Z, doors.Front == true)
 	end
 	if opts.Ceiling == true then
-		shellPart(model, "Ceiling", Vector3.new(W + 2 * T, 0.6, D + 2 * T), CFrame.new(0, WH + 0.3, 0), trim:Lerp(WHITE, 0.5), M.SmoothPlastic, true)
+		-- (v9.6 : dessous 0,04 plus bas que le dessous du plancher de l'étage :
+		-- plus de faces confondues avec lui, ni avec la dalle de la façade)
+		shellPart(model, "Ceiling", Vector3.new(W + 2 * T, 0.56, D + 2 * T), CFrame.new(0, WH + 0.24, 0), trim:Lerp(WHITE, 0.5), M.SmoothPlastic, true)
 	end
 	-- Papier peint (décoration) sur le mur du fond
 	if patterns then
@@ -1143,8 +1215,8 @@ function House3DScene.BuildRoomShell(roomData: any, sizeDef: any?, options: Shel
 	end
 	-- Fenêtre du mur du fond (cadre, vitre, rebord ; décor)
 	do
-		local ww, wh = math.min(8, W * 0.22), math.min(6.5, WH * 0.45)
-		local cx, cy = -W * 0.3, WH * 0.58
+		-- (v9.6 : place et taille de la fenêtre de la pièce 2D, comme les objets muraux)
+		local cx, cy, ww, wh = windowRect(roomWpx, scale)
 		local z = -D / 2
 		local views = configTable("HouseViewsById")
 		local viewEntry = views[tostring(room.View or "Garden")] or views.Garden
@@ -1169,6 +1241,9 @@ function House3DScene.BuildRoomShell(roomData: any, sizeDef: any?, options: Shel
 	model:SetAttribute("Scale", scale)
 	model:SetAttribute("RoomWpx", roomWpx)
 	model.WorldPivot = CFrame.new()
+	-- (v9.6) anti-scintillement : moulures, chambranles, fenêtre écartés des
+	-- murs / du sol (qui ne bougent pas : collisions et portes intactes)
+	pcall(House3DScene.SeparateShell, model, nil)
 	return model
 end
 
@@ -1227,7 +1302,39 @@ function House3DScene.PlaceItems(roomModel: Model, roomData: any, options: Place
 		build.Model.Parent = folder
 		table.insert(models, build.Model)
 	end
+	-- (v9.6) anti-scintillement entre objets voisins et avec la coque
+	pcall(House3DScene.SeparateShell, roomModel, models)
 	return models
+end
+
+-- v9.6 : faces confondues (z-fighting) d'une coque et de ses objets. Les
+-- grandes pièces de la coque (sol, murs, plafond, motifs) restent fixes ;
+-- les moulures et les pièces des objets s'écartent de 0,035 stud.
+local SHELL_FIXED: { [string]: boolean } = {
+	Floor = true, FloorPattern = true, WallPattern = true, Ceiling = true,
+	WallBack = true, WallLeft = true, WallRight = true, WallFront = true,
+	-- (maquette de la vue 3D : coque, peaux papier peint, socle, studio)
+	WallBackPaper = true, WallLeftPaper = true, WallRightPaper = true, Slab = true, Lawn = true, Base = true,
+}
+function House3DScene.SeparateShell(shell: Instance, items: { any }?)
+	local parts: { BasePart } = {}
+	local fixed: { [BasePart]: boolean } = {}
+	for _, child in ipairs(shell:GetChildren()) do
+		if child:IsA("BasePart") then
+			table.insert(parts, child)
+			if SHELL_FIXED[child.Name] or string.sub(child.Name, 1, 6) == "Studio" then
+				fixed[child] = true
+			end
+		end
+	end
+	for _, model in ipairs(items or {}) do
+		for _, d in ipairs(model:GetDescendants()) do
+			if d:IsA("BasePart") then
+				table.insert(parts, d)
+			end
+		end
+	end
+	House3DKit.Separate(parts, fixed)
 end
 
 return House3DScene

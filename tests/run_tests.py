@@ -1160,9 +1160,13 @@ do
 		fakeFunctions[name] = fakeFunctions[name] or {}
 		return fakeFunctions[name]
 	end }
-	local fakeModules = { Config = Config, Formulas = Formulas, NumberFormatter = N, Net = fakeNet,
+	-- (v9.6 PLACE96) zone valide partagée : WorldLayout (source telle quelle)
+	local wlFn, wlErr = loadstring(HS_WORLD_LAYOUT_SRC, "=WorldLayout")
+	assert(wlFn, wlErr)
+	local WL = wlFn()
+	local fakeModules = { Config = Config, Formulas = Formulas, NumberFormatter = N, Net = fakeNet, WorldLayout = WL,
 		RateLimiter = { Check = function() return true end } }
-	local shared = { Config = "Config", Formulas = "Formulas", NumberFormatter = "NumberFormatter", Net = "Net" }
+	local shared = { Config = "Config", Formulas = "Formulas", NumberFormatter = "NumberFormatter", Net = "Net", WorldLayout = "WorldLayout" }
 	local env = {
 		game = { GetService = function() return { Shared = shared } end },
 		script = { Parent = { RateLimiter = "RateLimiter" } },
@@ -1214,7 +1218,9 @@ do
 		eq(check, placed[4].F, true, "chaise de droite : retournée (F gardé)")
 		eq(check, placed[5].F, nil, "F invalide ignoré")
 		check(near(placed[5].Y, 0.18, 1e-6), "coussin posé en hauteur (étagère murale...) " .. tostring(placed[5].Y))
-		check(near(placed[6].Y, H.WallRatio * 0.85, 1e-6), "chaise recalée au sol : " .. tostring(placed[6].Y))
+		-- (v9.6) même zone que l'éditeur 2D : bande du sol (WorldLayout.PlacementArea)
+		local _, _, chairY0 = WL.PlacementArea("Floor", Config.HouseItemsById.DiningChair.Size, WL.RoomWidthPx(Config.HouseSizesById.Studio), 440, H.WallRatio)
+		check(placed[6].Y >= H.WallRatio + 0.03 and near(placed[6].Y, chairY0, 2e-4), "chaise recalée au sol : " .. tostring(placed[6].Y))
 		-- Trop haut même pour un petit objet : recalé à TabletopMinY
 		ok = invoke(player, "saveLayout", { Rooms = { R1 = { { I = "CocoaMug", X = 0.5, Y = 0.01, S = 1, Z = 1 } } } })
 		check(ok == true and near(data.House.Rooms[1].Placed[1].Y, H.TabletopMinY, 1e-6), "tasse trop haute recalée")
@@ -1298,7 +1304,10 @@ do
 		house.Size = "Apartment"
 		ok = invoke(player, "buyRoom", "Kitchen")
 		local newRoom = house.Rooms[#house.Rooms]
-		check(ok == true and newRoom.Trim == H.Trims[1].Id and newRoom.Mood == H.Moods[1].Id and newRoom.View == H.Views[1].Id, "nouvelle pièce : styles par défaut")
+		-- (v9.6) le look du type (boiseries / ambiance), sinon les styles par défaut
+		local kitchenType = Config.HouseRoomTypesById.Kitchen
+		check(ok == true and newRoom.Trim == (kitchenType.Trim or H.Trims[1].Id) and newRoom.Mood == (kitchenType.Mood or H.Moods[1].Id)
+			and newRoom.View == H.Views[1].Id, "nouvelle pièce : styles par défaut")
 	end)
 
 	-- (v9.5) SETUPDATA95 : "Dopamine Setup", le serveur vérifie RequiresUpgrade
@@ -1352,6 +1361,103 @@ do
 			end
 		end
 	end)
+	-- (v9.6) PLACE96 : zone valide partagée (2D / 3D / serveur) + réparation
+	-- des anciennes dispositions + look des types de pièces
+	test("HouseService (simulation) v9.6 : dispositions hors de la pièce réparées au chargement et à la sauvegarde", function(check)
+		local invoke = fakeFunctions.House and fakeFunctions.House.OnServerInvoke
+		if type(invoke) ~= "function" then check(false, "RemoteFunction House") return end
+		local H = Config.House
+		local mansion = Config.HouseSizesById.Mansion
+		local wpx = WL.RoomWidthPx(mansion)
+		-- sauvegarde "cassée" par l'ancienne édition 3D : objets hors des bords, sofa dans le mur, tableau au plafond
+		data = { Dopamine = 0, Rebirths = 5, Stats = {}, House = { Size = "Mansion", OwnedSizes = { Studio = true, Mansion = true },
+			Items = { Sofa = 1, FramedPicture = 1, CocoaMug = 1, Bookshelf = 1 },
+			Rooms = { { Id = "R1", Type = "Living", Slot = 1, Placed = {
+				{ I = "Sofa", X = 0.001, Y = H.WallRatio + 0.001, S = 1.4, Z = 100 },
+				{ I = "FramedPicture", X = 0.999, Y = 0, S = 1, Z = 100 },
+				{ I = "CocoaMug", X = 1, Y = 0.999, S = 1, Z = 100 },
+				{ I = "Bookshelf", X = 0.5, Y = 0.9999, S = 1.6, Z = 100 },
+			} } } } }
+		HouseService:PlayerReady(player, data)
+		local placed = data.House.Rooms[1].Placed
+		eq(check, #placed, 4, "4 objets gardés")
+		for _, e in ipairs(placed) do
+			local item = Config.HouseItemsById[e.I]
+			local raised = item.Placement ~= "Wall" and Formulas.GetHouseFloorMinY(item) < H.WallRatio * 0.85 and Formulas.GetHouseFloorMinY(item) or nil
+			local x0, x1, y0, y1 = WL.PlacementArea(item.Placement, item.Size * e.S, wpx, 440, H.WallRatio, raised)
+			check(e.X >= x0 - 1e-9 and e.X <= x1 + 1e-9 and e.Y >= y0 - 1e-9 and e.Y <= y1 + 1e-9,
+				string.format("%s réparé dans la zone : %.4f %.4f (x %.4f..%.4f y %.4f..%.4f)", e.I, e.X, e.Y, x0, x1, y0, y1))
+		end
+		check(placed[1].Y >= H.WallRatio + 0.035 - 1e-9, "sofa : pieds dans la bande du sol (plus dans le mur)")
+		-- idempotent : recharger ne bouge plus rien
+		local before = {}
+		for i, e in ipairs(placed) do before[i] = { e.X, e.Y } end
+		HouseService:PlayerReady(player, data)
+		for i, e in ipairs(data.House.Rooms[1].Placed) do
+			check(e.X == before[i][1] and e.Y == before[i][2], "réparation stable " .. e.I)
+		end
+		-- sauvegarde hors zone : bornée pareil
+		local ok = invoke(player, "saveLayout", { Rooms = { R1 = { { I = "Sofa", X = -3, Y = 0.2, S = 1, Z = 100 } } } })
+		local sofa = data.House.Rooms[1].Placed[1]
+		local x0, _, y0 = WL.PlacementArea("Floor", Config.HouseItemsById.Sofa.Size, wpx, 440, H.WallRatio)
+		check(ok == true and near(sofa.X, x0, 2e-4) and near(sofa.Y, y0, 2e-4), "sauvegarde bornée : " .. tostring(sofa.X) .. " / " .. tostring(sofa.Y))
+	end)
+
+	test("HouseService (simulation) v9.6 : look automatique des types de pièces (achat, changement de type, choix gardé)", function(check)
+		local invoke = fakeFunctions.House and fakeFunctions.House.OnServerInvoke
+		if type(invoke) ~= "function" then check(false, "RemoteFunction House") return end
+		local H = Config.House
+		local types = Config.HouseRoomTypesById
+		data = { Dopamine = 1e12, Rebirths = 5, Stats = {}, House = { Size = "Mansion", OwnedSizes = { Studio = true, Mansion = true }, Items = {} } }
+		HouseService:PlayerReady(player, data)
+		local house = data.House
+		-- chaque type a un look connu
+		for _, roomType in ipairs(H.RoomTypes) do
+			check(Config.HouseWallpapersById[roomType.Wallpaper] ~= nil and Config.HouseFloorsById[roomType.Floor] ~= nil, "look connu : " .. roomType.Id)
+			check(roomType.Trim == nil or Config.HouseTrimsById[roomType.Trim] ~= nil, "boiserie connue : " .. roomType.Id)
+			check(roomType.Mood == nil or Config.HouseMoodsById[roomType.Mood] ~= nil, "ambiance connue : " .. roomType.Id)
+		end
+		-- nouvelle salle de bain : murs + sol du type, GRATUITS (pas achetés)
+		local ok, message = invoke(player, "buyRoom", "Bathroom")
+		check(ok == true, "salle de bain achetée : " .. tostring(message))
+		local bath = house.Rooms[#house.Rooms]
+		eq(check, bath.Wallpaper, types.Bathroom.Wallpaper, "salle de bain : papier peint du type")
+		eq(check, bath.Floor, types.Bathroom.Floor, "salle de bain : sol du type")
+		eq(check, bath.Trim, types.Bathroom.Trim, "salle de bain : boiseries du type")
+		check(house.OwnedWallpapers[types.Bathroom.Wallpaper] == nil, "le style du type n'est PAS offert pour toute la maison")
+		-- salle de jeux : néon sombre + ambiance
+		ok = invoke(player, "buyRoom", "GameRoom")
+		local game = house.Rooms[#house.Rooms]
+		check(ok == true and game.Wallpaper == types.GameRoom.Wallpaper and game.Floor == types.GameRoom.Floor and game.Mood == types.GameRoom.Mood,
+			"salle de jeux : look du type " .. tostring(game.Wallpaper) .. " / " .. tostring(game.Floor) .. " / " .. tostring(game.Mood))
+		-- rechargement : le look gratuit reste (pas remis au 1er style)
+		HouseService:PlayerReady(player, data)
+		bath = house.Rooms[#house.Rooms - 1]
+		eq(check, bath.Wallpaper, types.Bathroom.Wallpaper, "rechargement : look du type gardé")
+		eq(check, bath.Floor, types.Bathroom.Floor, "rechargement : sol du type gardé")
+		-- changer le type : le look suit
+		ok = invoke(player, "setRoomType", { Room = bath.Id, Type = "Kitchen" })
+		check(ok == true and bath.Wallpaper == types.Kitchen.Wallpaper and bath.Floor == types.Kitchen.Floor, "cuisine : look du type appliqué")
+		-- un style choisi à la main n'est plus remplacé
+		ok = invoke(player, "buyFloor", { Room = bath.Id, Id = "CherryWood" })
+		check(ok == true and bath.Floor == "CherryWood", "sol choisi à la main")
+		ok = invoke(player, "setRoomType", { Room = bath.Id, Type = "Bathroom" })
+		check(ok == true and bath.Floor == "CherryWood", "type changé : le sol choisi reste " .. tostring(bath.Floor))
+		eq(check, bath.Wallpaper, types.Bathroom.Wallpaper, "type changé : les murs (pas choisis) suivent")
+		-- le look du type se remet gratuitement (même non acheté), un autre style non
+		ok = invoke(player, "setFloor", { Room = bath.Id, Id = types.Bathroom.Floor })
+		check(ok == true and bath.Floor == types.Bathroom.Floor, "sol du type remis gratuitement")
+		local dopamine = data.Dopamine
+		ok = invoke(player, "buyFloor", { Room = bath.Id, Id = types.Bathroom.Floor })
+		check(ok == true and data.Dopamine == dopamine, "\"acheter\" le sol du type : gratuit")
+		ok = invoke(player, "setFloor", { Room = bath.Id, Id = "GoldenMarble" })
+		check(ok == false and bath.Floor == types.Bathroom.Floor, "autre sol pas acheté : refusé")
+		ok = invoke(player, "setRoomType", { Room = bath.Id, Type = "Library" })
+		check(ok == true and bath.Floor == types.Library.Floor, "sol du type (plus choisi à la main) : suit le nouveau type")
+		-- un style d'un AUTRE type n'est pas gratuit ici
+		ok = invoke(player, "setWallpaper", { Room = bath.Id, Id = types.GameRoom.Wallpaper })
+		check(ok == false, "papier peint d'un autre type : refusé")
+	end)
 end
 """
 
@@ -1362,7 +1468,10 @@ def house_service_test():
     body = read(path)
     if "]=====]" in body:
         raise ValueError("délimiteur ]=====] interdit dans " + path)
-    return "local HOUSE_SERVICE_SRC = [=====[%s]=====]\n%s" % (body, HOUSE_SERVICE_TESTS)
+    wl = read(os.path.join(SHARED, "WorldLayout.luau"))
+    if "]=====]" in wl:
+        raise ValueError("délimiteur ]=====] interdit dans WorldLayout.luau")
+    return "local HOUSE_SERVICE_SRC = [=====[%s]=====]\nlocal HS_WORLD_LAYOUT_SRC = [=====[%s]=====]\n%s" % (body, wl, HOUSE_SERVICE_TESTS)
 
 
 def house_surfaces_test():
@@ -1379,8 +1488,8 @@ def house_surfaces_test():
 
     surfaces = []
     for m in re.finditer(r"^\t(\w+) = \{ (.*?) \},?\s*(?:--.*)?$", block("SURFACES"), re.M):
-        for s in re.finditer(r"\{ ([\d.]+), ([\d.]+), ([\d.]+) \}", m.group(2)):
-            surfaces.append('{ "%s", %s, %s, %s }' % (m.group(1), s.group(1), s.group(2), s.group(3)))
+        for s in re.finditer(r"\{ ([\d.]+), ([\d.]+), ([\d.]+)(?:, (-?[\d.]+))?(?:, ([\d.]+))? \}", m.group(2)):
+            surfaces.append('{ "%s", %s, %s, %s, %s, %s }' % (m.group(1), s.group(1), s.group(2), s.group(3), s.group(4) or "nil", s.group(5) or "nil"))
     seats = re.findall(r"^\t(\w+) = \{ View = \"(\w+)\"", block("SEATS"), re.M)
     tables = re.findall(r"^\t(\w+) = true", block("TABLES"), re.M)
     beds = re.findall(r"^\t(\w+) = true", block("BEDS"), re.M)
@@ -1393,12 +1502,17 @@ def house_surfaces_test():
         "\tlocal beds = { %s }" % ", ".join('"%s"' % b for b in beds),
         '\tcheck(#surfaces >= 30 and #seats >= 6 and #tables >= 6, "données de HouseSurfaces lues")',
         "\tlocal hasSurface = {}",
+        "\tlocal levels = {}",
         "\tfor _, s in ipairs(surfaces) do",
         "\t\tlocal item = Config.HouseItemsById[s[1]]",
         '\t\tcheck(item ~= nil, "dessus d\'un objet inconnu : " .. s[1])',
         '\t\tcheck(s[2] >= 0 and s[3] <= 100 and s[2] < s[3] and s[4] >= 0 and s[4] <= 100, "coordonnées du dessus " .. s[1])',
+        '\t\tcheck(s[5] == nil or (s[5] >= -0.5 and s[5] <= 0.5), "profondeur 3D du dessus (v9.6) " .. s[1])',
+        '\t\tcheck(s[6] == nil or (s[6] > 0 and s[6] < 100), "place libre du rayon (v9.6) " .. s[1])',
+        "\t\tlevels[s[1]] = (levels[s[1]] or 0) + 1",
         "\t\thasSurface[s[1]] = true",
         "\tend",
+        '\tcheck((levels.Bookshelf or 0) >= 4 and levels.WallShelf == 1 and levels.TrophyShelf == 1 and (levels.FloatingShelf or 0) >= 2, "(v9.6) étagères à plusieurs niveaux")',
         "\tfor _, t in ipairs(tables) do",
         '\t\tcheck(Config.HouseItemsById[t] ~= nil and hasSurface[t] == true, "table sans dessus : " .. t)',
         "\tend",
@@ -2199,6 +2313,99 @@ do
 		end
 	end)
 
+	-- (v9.6 PLACE96) UNE zone valide pour l'éditeur 2D, l'édition 3D et le serveur
+	test("WorldLayout v9.6 : aller-retour 2D -> 3D -> 2D (positions au hasard dans la zone valide)", function(check)
+		-- (petit générateur déterministe : pas de Random dans la CLI Luau)
+		local seed = 96
+		local rng = {}
+		function rng:NextNumber(a: number?, b: number?): number
+			seed = (seed * 1103515245 + 12345) % 2147483648
+			local t = seed / 2147483648
+			if a and b then
+				return a + (b - a) * t
+			end
+			return t
+		end
+		local bad = 0
+		local count = 0
+		for _, size in ipairs(SIZES) do
+			local dims = L.RoomDims(size, ratio)
+			for _ = 1, 400 do
+				local sizePx = rng:NextNumber(40, 160) * rng:NextNumber(0.6, 1.6)
+				local fw = sizePx * L.PX * rng:NextNumber(0.5, 0.95)
+				local fd = rng:NextNumber(0.3, 3)
+				local against = rng:NextNumber() < 0.3
+				local x0, x1, y0, y1 = L.PlacementArea("Floor", sizePx, dims.RoomWpx, dims.RoomHpx, ratio)
+				local X, Y = L.ClampToArea(rng:NextNumber(x0, x1), rng:NextNumber(y0, y1), x0, x1, y0, y1)
+				-- 3D (ce que montre le fantôme) puis relâché : la 2D sauvée retombe au même endroit 3D
+				local x, z = L.FloorForward(dims, X, Y, fw, fd, against)
+				local x2, z2, X2, Y2 = L.FloorClamp(dims, x, z, fw, fd, x0, x1, y0, y1, against)
+				local x3, z3 = L.FloorForward(dims, X2, Y2, fw, fd, against)
+				count += 1
+				-- le fantôme montré = l'image 3D exacte de la 2D sauvée (point fixe)
+				if not (math.abs(x3 - x2) < 1e-6 and math.abs(z3 - z2) < 1e-6) then
+					bad += 1
+				end
+				-- hors des bords bornés par la 3D (murs de côté / fond / devant) : la 2D revient à l'identique
+				local zFront = z + fd / 2
+				local limit = dims.W / 2 - fw / 2 - 0.1
+				if not against and math.abs(x) < limit - 1e-6 and zFront > fd + 0.09 and zFront < dims.D - 0.11 then
+					if not (math.abs(X2 - X) < 2e-4 and math.abs(Y2 - Y) < 2e-4) then
+						bad += 1
+					end
+				end
+				if not (X2 >= x0 - 1e-9 and X2 <= x1 + 1e-9 and Y2 >= y0 - 1e-9 and Y2 <= y1 + 1e-9) then
+					bad += 1
+				end
+				-- mur
+				local w0, w1, v0, v1 = L.PlacementArea("Wall", sizePx, dims.RoomWpx, dims.RoomHpx, ratio)
+				local WX, WY = L.ClampToArea(rng:NextNumber(w0, w1), rng:NextNumber(v0, v1), w0, w1, v0, v1)
+				local k = sizePx * L.PX / 100
+				local wx, wy = L.WallForward(dims, WX, WY, fw, k)
+				local wx2, wy2, WX2, WY2 = L.WallClamp(dims, wx, wy, fw, k, w0, w1, v0, v1)
+				local wx3, wy3 = L.WallForward(dims, WX2, WY2, fw, k)
+				if not (math.abs(wx3 - wx2) < 1e-6 and math.abs(wy3 - wy2) < 1e-6) then
+					bad += 1
+				end
+				local wlimit = dims.W / 2 - math.min(fw / 2, dims.W / 2) - 0.1
+				if math.abs(wx) < wlimit - 1e-6 and not (math.abs(WX2 - WX) < 2e-4 and math.abs(WY2 - WY) < 2e-4) then
+					bad += 1
+				end
+			end
+		end
+		check(bad == 0, string.format("%d / %d allers-retours faux", bad, count))
+	end)
+
+	test("WorldLayout v9.6 : les extrêmes 3D restent dans la zone 2D (plus aucun débordement)", function(check)
+		for _, size in ipairs(SIZES) do
+			local dims = L.RoomDims(size, ratio)
+			for _, sizePx in ipairs({ 40, 80, 120, 160 * 1.6 }) do
+				local fw, fd = sizePx * L.PX * 0.9, 2
+				local x0, x1, y0, y1 = L.PlacementArea("Floor", sizePx, dims.RoomWpx, dims.RoomHpx, ratio)
+				for _, x in ipairs({ -999, -dims.W / 2, 0, dims.W / 2, 999 }) do
+					for _, z in ipairs({ -50, 0, fd / 2, dims.D / 2, dims.D, 500 }) do
+						local _, _, X, Y = L.FloorClamp(dims, x, z, fw, fd, x0, x1, y0, y1, false)
+						check(X >= x0 - 1e-9 and X <= x1 + 1e-9 and Y >= y0 - 1e-9 and Y <= y1 + 1e-9, string.format("%s sol %d (%.1f, %.1f) -> %.4f %.4f", size.Id, sizePx, x, z, X, Y))
+					end
+				end
+				local w0, w1, v0, v1 = L.PlacementArea("Wall", sizePx, dims.RoomWpx, dims.RoomHpx, ratio)
+				for _, x in ipairs({ -999, 0, 999 }) do
+					for _, y in ipairs({ -20, 0, 6, L.WALL_H, 40 }) do
+						local _, _, X, Y = L.WallClamp(dims, x, y, fw, sizePx * L.PX / 100, w0, w1, v0, v1)
+						check(X >= w0 - 1e-9 and X <= w1 + 1e-9 and Y >= v0 - 1e-9 and Y <= v1 + 1e-9, string.format("%s mur %d (%.1f, %.1f) -> %.4f %.4f", size.Id, sizePx, x, y, X, Y))
+					end
+				end
+			end
+			-- la zone garde l'objet dans la pièce 2D : bords visibles et tête sous le plafond
+			local x0, x1, y0 = L.PlacementArea("Floor", 160, dims.RoomWpx, dims.RoomHpx, ratio)
+			check(x0 * dims.RoomWpx >= 160 * 0.38 - 1e-6 and (1 - x1) * dims.RoomWpx >= 160 * 0.38 - 1e-6, size.Id .. " : largeur dans la pièce")
+			check(y0 >= ratio + 0.035 - 1e-9, size.Id .. " : pieds sous le mur")
+		end
+		-- valeurs arrondies à 0,0001 sans ressortir des bornes
+		local X, Y = L.ClampToArea(0.123456, 2, 0.12346, 0.9, 0.5, 0.98549)
+		check(X >= 0.12346 - 1e-9 and Y <= 0.98549 + 1e-9, "arrondi dans les bornes " .. X .. " " .. Y)
+	end)
+
 	test("WorldLayout : maison, pièces, parcelles", function(check)
 		for _, size in ipairs(SIZES) do
 			local dims = L.Dims(size)
@@ -2327,6 +2534,129 @@ def world_layout_test():
     return "local WORLD_LAYOUT_SRC = [=====[%s]=====]\n%s" % (body, WORLD_LAYOUT_TESTS)
 
 
+GARAGE_TESTS = r"""
+do
+	local fnW, errW = loadstring(GARAGE_WORLD_SRC, "=WorldLayout")
+	assert(fnW, errW)
+	local WL = fnW()
+	local fnG, errG = loadstring(GARAGE_LAYOUT_SRC, "=GarageLayout")
+	assert(fnG, errG)
+	local GL = fnG()
+
+	test("Voitures v9.6 : catalogue Config.Cars (ids, modèles, prix, verrous, peintures)", function(check)
+		local cars = Config.Cars
+		check(type(cars) == "table" and #cars.List >= 6 and #cars.List <= 8, "6 à 8 voitures")
+		local ids, colors = {}, {}
+		for _, paint in ipairs(cars.Colors) do
+			check(not colors[paint.Id], "peinture en double " .. tostring(paint.Id))
+			colors[paint.Id] = true
+			check(type(paint.Name) == "string" and type(paint.Color) == "table", "peinture " .. tostring(paint.Id))
+			check(Config.CarColorsById[paint.Id] == paint, "CarColorsById " .. tostring(paint.Id))
+		end
+		check(#cars.Colors >= 8, "au moins 8 peintures")
+		local lastCost, lastGate = 0, 0
+		for index, car in ipairs(cars.List) do
+			check(not ids[car.Id], "voiture en double " .. tostring(car.Id))
+			ids[car.Id] = true
+			check(Config.CarsById[car.Id] == car and car.Order == index, "CarsById / Order " .. car.Id)
+			check(CAR_KINDS[car.Kind] == true, "modèle 3D (CarModels) " .. tostring(car.Kind))
+			check(colors[car.DefaultColor] == true, "couleur par défaut " .. car.Id)
+			check(type(car.Cost) == "number" and car.Cost > lastCost, "prix croissants " .. car.Id)
+			check(type(car.RequiresRebirths) == "number" and car.RequiresRebirths >= lastGate, "verrous croissants " .. car.Id)
+			check(type(car.Icon) == "string" and #car.Icon > 0 and type(car.Name) == "string" and type(car.Desc) == "string", "textes " .. car.Id)
+			lastCost, lastGate = car.Cost, car.RequiresRebirths
+		end
+		check(cars.List[1].RequiresRebirths == 0, "une voiture dès le début")
+		check(cars.MaxSpeed > 20 and cars.MaxSpeed <= 60, "vitesse max raisonnable")
+		check(cars.IdleDespawn >= 30 and cars.SpawnCooldown >= 1 and cars.HonkCooldown >= 0.5, "délais")
+		-- garage (entrée de Config.House), dans la gamme du manoir
+		local garage = Config.House.Garage
+		local mansion = Config.HouseSizesById[garage.RequiresSize]
+		check(mansion ~= nil and mansion.Exterior == "Mansion", "garage : pour le manoir")
+		check(garage.RequiresRebirths >= (mansion.RequiresRebirths or 0), "garage : verrou >= manoir")
+		check(garage.Cost >= mansion.Cost * 0.5 and garage.Cost <= mansion.Cost * 20, "garage : prix dans la gamme du manoir")
+		eq(check, garage.Bays, GL.BAYS, "places du garage")
+	end)
+
+	test("Voitures v9.6 : garage du manoir dans la parcelle (GarageLayout)", function(check)
+		local mansion = Config.HouseSizesById.Mansion
+		local dims = WL.Dims(mansion)
+		local right = dims.Left + dims.Width
+		check(GL.Supports(mansion) and not GL.Supports(Config.HouseSizesById.Studio), "manoir seulement")
+		-- dans la cour de devant, sans toucher la maison, la tour de droite, les arbres, la boîte aux lettres, le panneau
+		check(GL.D1 < 0 and GL.D0 > -WL.GARDEN_D + 4, "entre la rue et la façade")
+		check(GL.X1 <= WL.PLOT_W / 2 - 4, "dans la parcelle (largeur)")
+		local tx, td, tr = right + WL.WALL_T + 1, 0.5, 7 + 0.4
+		local cx = math.clamp(tx, GL.X0, GL.X1)
+		local cd = math.clamp(td, GL.D0, GL.D1)
+		check(math.sqrt((tx - cx) ^ 2 + (td - cd) ^ 2) > tr, "loin de la tour de droite")
+		check(GL.X0 > 7 + 2, "boîte aux lettres / panneau libres")
+		check(GL.X1 < 83 - 3, "arbre du coin libre")
+		check(GL.X0 > WL.DoorX(mansion) + 12, "allée de la porte libre")
+		-- places : chaque voiture tient (largeur par la porte, longueur dedans)
+		local bayW = (GL.X1 - GL.X0 - 2 * GL.WALL) / GL.BAYS
+		check(GL.DOOR_W <= bayW - 1, "portes plus étroites que les places")
+		check(CAR_MAX_W <= GL.DOOR_W - 1.2, "la plus large voiture passe la porte (" .. CAR_MAX_W .. ")")
+		check(CAR_MAX_L <= GL.InnerDepth() - 0.4, "la plus longue voiture tient dedans (" .. CAR_MAX_L .. ")")
+		check(GL.DOOR_H >= CAR_MAX_H + 0.4, "la plus haute voiture passe sous la porte")
+		for bay = 1, GL.BAYS - 1 do
+			check(GL.BayX(bay + 1) - GL.BayX(bay) >= CAR_MAX_W + 1, "places séparées")
+		end
+		check(GL.BayX(1) - GL.DOOR_W / 2 > GL.X0 + GL.WALL and GL.BayX(GL.BAYS) + GL.DOOR_W / 2 < GL.X1 - GL.WALL, "portes dans la façade")
+		check(GL.Inside((GL.X0 + GL.X1) / 2, 2, (GL.D0 + GL.D1) / 2) and not GL.Inside(0, 2, 5), "Inside")
+		-- attribution des places : la voiture choisie au milieu, 3 au plus
+		local a = GL.Assign({ "BubbleCar", "SUV", "SportsCar", "Limo" }, "SportsCar")
+		eq(check, a.SportsCar, 2, "choisie au milieu")
+		check(a.BubbleCar == 1 and a.SUV == 3 and a.Limo == nil, "autres places, 3 au plus")
+		local b = GL.Assign({ "CityCar" }, "")
+		eq(check, b.CityCar, 2, "une seule voiture : au milieu")
+	end)
+
+	test("Voitures v9.6 : textes traduits (Config.Cars, garage)", function(check)
+		for _, text in ipairs(CAR_TEXTS_MISSING) do
+			check(false, "traduction française manquante : " .. text)
+		end
+	end)
+end
+"""
+
+
+def garage_test():
+    """Tests GARAGE96 : catalogue des voitures, garage du manoir (Shared/GarageLayout), traductions."""
+    world = read(os.path.join(SHARED, "WorldLayout.luau"))
+    garage = read(os.path.join(SHARED, "GarageLayout.luau"))
+    models = read(os.path.join(SHARED, "CarModels.luau"))
+    for body in (world, garage):
+        if "]=====]" in body:
+            raise ValueError("délimiteur ]=====] interdit")
+    # modèles 3D (SPECS de CarModels) : largeur / longueur / hauteur max
+    kinds, max_w, max_l, max_h = [], 0.0, 0.0, 0.0
+    for m in re.finditer(r"^\t(\w+) = \{ L = ([\d.]+), W = ([\d.]+),.*?Belt = ([\d.]+), Roof = ([\d.]+),", models, re.M):
+        kinds.append(m.group(1))
+        max_l = max(max_l, float(m.group(2)))
+        max_w = max(max_w, float(m.group(3)))
+        max_h = max(max_h, float(m.group(5)))
+    # textes à traduire (Config.Cars + garage) : clés présentes dans Shared/Lang
+    config = read(os.path.join(SHARED, "Config.luau"))
+    start = config.find("Config.Cars = {")
+    block = config[start:config.find("\n}\n", start)] if start >= 0 else ""
+    texts = re.findall(r'(?:Name|Desc) = "([^"]+)"', block)
+    garage_line = re.search(r'Garage = \{ Id = "Garage", Name = "([^"]+)"', config)
+    if garage_line:
+        texts.append(garage_line.group(1))
+    keys = set()
+    lang_dir = os.path.join(SHARED, "Lang")
+    for name in os.listdir(lang_dir):
+        if name.endswith(".luau"):
+            keys.update(re.findall(r'\["((?:[^"\\]|\\.)*)"\]\s*=', read(os.path.join(lang_dir, name))))
+    missing = [t for t in texts if t not in keys]
+    lua_list = "{ " + ", ".join('"%s"' % t.replace('"', '\\"') for t in missing) + " }"
+    kinds_set = "{ " + ", ".join("%s = true" % k for k in kinds) + " }"
+    return ("local GARAGE_WORLD_SRC = [=====[%s]=====]\nlocal GARAGE_LAYOUT_SRC = [=====[%s]=====]\n"
+            "local CAR_KINDS = %s\nlocal CAR_MAX_W, CAR_MAX_L, CAR_MAX_H = %s, %s, %s\nlocal CAR_TEXTS_MISSING = %s\n%s") % (
+        world, garage, kinds_set, max_w, max_l, max_h, lua_list, GARAGE_TESTS)
+
+
 SIM_PATH = os.path.join(ROOT, "tests", "economy_sim.luau")
 
 
@@ -2436,7 +2766,7 @@ def main():
     if "--sim" in sys.argv:
         return run_sim()
     bundle = build_bundle(config_key_test() + "\n" + lang_test() + "\n" + house_art_test() + "\n" + arcade_shop_test() + "\n" + friend_mail_test()
-                          + "\n" + economy_test() + "\n" + world_layout_test() + "\n" + garden_snapshot_test())
+                          + "\n" + economy_test() + "\n" + world_layout_test() + "\n" + garden_snapshot_test() + "\n" + garage_test())
     with tempfile.NamedTemporaryFile("w", suffix=".luau", delete=False, encoding="utf-8") as f:
         f.write(bundle)
         path = f.name

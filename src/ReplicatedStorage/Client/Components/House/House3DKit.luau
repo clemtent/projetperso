@@ -28,6 +28,7 @@
 	  House3DKit.Triangle / Heart / Star / StarSoft / HeartPoints / StarPoints / Path / Frame (formes)
 	  House3DKit.NewPart(className, name, size, cframe, color, material?, transparency?) -> BasePart
 	  House3DKit.Surface(part, face, canvasSize, lightInfluence) -> SurfaceGui
+	  House3DKit.Separate(parts) -> number   (v9.6 : écarte les faces confondues, anti-scintillement)
 	  House3DKit.Wood / Dist / Darken / Lighten / Pick (couleurs)
 ]]
 
@@ -364,6 +365,182 @@ function House3DKit.Builder(parent: Instance, origin: CFrame, k: number, mirror:
 		return panel
 	end
 	return b
+end
+
+----------------------------------------------------------------------
+-- v9.6 : anti-scintillement (z-fighting). Deux faces de pièces DIFFÉRENTES
+-- (couleur / matière / transparence) dans le même plan, du même côté, qui se
+-- recouvrent : Roblox les dessine en alternance ("bugs de texture" vus par
+-- le joueur). Separate écarte la plus petite des deux de SEP_GAP studs vers
+-- l'extérieur (la pièce grandit de ce côté-là, rien ne s'ouvre ni ne flotte).
+----------------------------------------------------------------------
+
+local SEP_GAP = 0.035 -- (studs) écart visé entre deux faces du même côté
+local SEP_NEAR = 0.025 -- en dessous : faces "confondues"
+local SEP_OVERLAP = 0.02 -- (studs²) recouvrement minimal pris en compte
+
+type SepFace = { Part: BasePart, Axis: number, N: Vector3, D: number, U0: number, U1: number, V0: number, V1: number, Area: number }
+
+local function sepBasis(n: Vector3): (Vector3, Vector3)
+	local u = n:Cross(math.abs(n.Y) < 0.9 and Vector3.new(0, 1, 0) or Vector3.new(1, 0, 0)).Unit
+	return u, n:Cross(u)
+end
+
+-- Faces planes d'une pièce (bloc : 6 ; cylindre : 2 disques ; pente : dessous, dos, côtés)
+local function sepFaces(part: BasePart, out: { SepFace })
+	if part.Transparency >= 0.99 then
+		return
+	end
+	local shape = "Block"
+	if part:IsA("WedgePart") then
+		shape = "Wedge"
+	elseif part:IsA("Part") then
+		local partShape = (part :: Part).Shape
+		if partShape == Enum.PartType.Ball then
+			return
+		elseif partShape == Enum.PartType.Cylinder then
+			shape = "Cylinder"
+		elseif partShape ~= Enum.PartType.Block then
+			return
+		end
+	else
+		return
+	end
+	local cf, size = part.CFrame, part.Size
+	local axes = { cf.RightVector, cf.UpVector, -cf.LookVector }
+	local half = { size.X / 2, size.Y / 2, size.Z / 2 }
+	for axis = 1, 3 do
+		for _, sign in ipairs({ 1, -1 }) do
+			local keep = true
+			if shape == "Cylinder" then
+				keep = axis == 1
+			elseif shape == "Wedge" then
+				keep = (axis == 2 and sign < 0) or (axis == 3 and sign > 0) or axis == 1
+			end
+			if keep then
+				local n = axes[axis] * sign
+				local center = cf.Position + n * half[axis]
+				local b, c = axis == 1 and 2 or 1, axis == 3 and 2 or 3
+				local hb, hc = axes[b] * half[b], axes[c] * half[c]
+				if shape == "Cylinder" then
+					local r = math.min(size.Y, size.Z) / 2
+					hb, hc = axes[2] * r, axes[3] * r
+				end
+				local u, v = sepBasis(n)
+				local u0, u1, v0, v1 = math.huge, -math.huge, math.huge, -math.huge
+				for _, corner in ipairs({ center + hb + hc, center + hb - hc, center - hb + hc, center - hb - hc }) do
+					local pu, pv = corner:Dot(u), corner:Dot(v)
+					u0, u1 = math.min(u0, pu), math.max(u1, pu)
+					v0, v1 = math.min(v0, pv), math.max(v1, pv)
+				end
+				table.insert(out, { Part = part, Axis = axis, N = n, D = n:Dot(center), U0 = u0, U1 = u1, V0 = v0, V1 = v1, Area = (u1 - u0) * (v1 - v0) })
+			end
+		end
+	end
+end
+
+local function sepDiffers(a: BasePart, b: BasePart): boolean
+	if a.Material ~= b.Material or math.abs(a.Transparency - b.Transparency) > 0.05 then
+		return true
+	end
+	local ca, cb = a.Color, b.Color
+	return math.max(math.abs(ca.R - cb.R), math.abs(ca.G - cb.G), math.abs(ca.B - cb.B)) > 3 / 255
+end
+
+-- Écarte les faces confondues d'une liste de pièces (un objet, une coque de
+-- pièce...) ; renvoie le nombre de faces déplacées
+function House3DKit.Separate(parts: { BasePart }, fixed: { [BasePart]: boolean }?): number
+	local still = fixed or {}
+	local order: { [BasePart]: number } = {}
+	for index, part in ipairs(parts) do
+		order[part] = index
+	end
+	local function keyOf(n: Vector3, slot: number): string
+		return string.format("%d,%d,%d,%d", math.floor(n.X * 50 + 0.5), math.floor(n.Y * 50 + 0.5), math.floor(n.Z * 50 + 0.5), slot)
+	end
+	local function overlaps(a: SepFace, b: SepFace, minimum: number): boolean
+		local ou = math.min(a.U1, b.U1) - math.max(a.U0, b.U0)
+		local ov = math.min(a.V1, b.V1) - math.max(a.V0, b.V0)
+		return ou > 0 and ov > 0 and ou * ov > minimum
+	end
+	local moved = 0
+	for _ = 1, 8 do
+		local faces: { SepFace } = {}
+		for _, part in ipairs(parts) do
+			sepFaces(part, faces)
+		end
+		local buckets: { [string]: { SepFace } } = {}
+		local function add(face: SepFace)
+			local key = keyOf(face.N, math.floor(face.D / 0.05))
+			local list = buckets[key]
+			if not list then
+				list = {}
+				buckets[key] = list
+			end
+			table.insert(list, face)
+		end
+		for _, face in ipairs(faces) do
+			add(face)
+		end
+		-- une face voisine (autre pièce, autre couleur) trop près du plan `d` ?
+		local function clashes(face: SepFace, d: number): boolean
+			for ek = -1, 1 do
+				for _, other in ipairs(buckets[keyOf(face.N, math.floor(d / 0.05) + ek)] or {}) do
+					if other.Part ~= face.Part and other.N:Dot(face.N) > 0.999 and math.abs(other.D - d) < SEP_NEAR
+						and overlaps(other, face, 0) and sepDiffers(other.Part, face.Part) then
+						return true
+					end
+				end
+			end
+			return false
+		end
+		local touched: { [BasePart]: boolean } = {}
+		local fixes = 0
+		for _, a in ipairs(faces) do
+			local slot = math.floor(a.D / 0.05)
+			for dk = -1, 1 do
+				for _, b in ipairs(buckets[keyOf(a.N, slot + dk)] or {}) do
+					if b.Part ~= a.Part and not touched[a.Part] and not touched[b.Part] and a.N:Dot(b.N) > 0.999
+						and math.abs(a.D - b.D) < SEP_NEAR and overlaps(a, b, SEP_OVERLAP) and sepDiffers(a.Part, b.Part) then
+						-- la plus petite face avance (à aire égale : la pièce ajoutée après) ;
+						-- une pièce "fixe" (mur, sol...) ne bouge jamais
+						local small, large = a, b
+						if b.Area < a.Area or (b.Area == a.Area and (order[b.Part] or 0) > (order[a.Part] or 0)) then
+							small, large = b, a
+						end
+						if still[small.Part] then
+							small, large = large, small
+						end
+						if not still[small.Part] then
+							-- plan visé : SEP_GAP devant la grande face, loin de toute autre
+							-- face voisine (deux corrections ne se recollent pas)
+							local target = math.max(small.D, large.D) + SEP_GAP
+							for _ = 1, 8 do
+								if not clashes(small, target) then
+									break
+								end
+								target += SEP_GAP
+							end
+							local grow = target - small.D
+							local part = small.Part
+							local extra = small.Axis == 1 and Vector3.new(grow, 0, 0) or (small.Axis == 2 and Vector3.new(0, grow, 0) or Vector3.new(0, 0, grow))
+							part.Size += extra
+							part.CFrame = part.CFrame + small.N * (grow / 2)
+							touched[part] = true
+							fixes += 1
+							-- (le nouveau plan compte tout de suite pour les corrections suivantes)
+							add({ Part = part, Axis = small.Axis, N = small.N, D = target, U0 = small.U0, U1 = small.U1, V0 = small.V0, V1 = small.V1, Area = small.Area })
+						end
+					end
+				end
+			end
+		end
+		moved += fixes
+		if fixes == 0 then
+			break
+		end
+	end
+	return moved
 end
 
 ----------------------------------------------------------------------

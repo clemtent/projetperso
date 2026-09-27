@@ -1763,7 +1763,8 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 				local pref = HouseSurfaces.Preference(item, entry.I)
 				if pref > 0 then
 					for _, surface in ipairs(HouseSurfaces.Of(entry, room.Width, room.Height)) do
-						if surface.Y >= HouseSurfaces.MinY() and surface.Y - height * 0.92 > -0.02 and surface.R - surface.L > halfW * 2 then
+						if surface.Y >= HouseSurfaces.MinY() and surface.Y - height * 0.92 > -0.02 and surface.R - surface.L > halfW * 2
+							and HouseSurfaces.Fits(surface, height) then
 							for _, t in ipairs({ 0.2, 0.5, 0.8 }) do
 								local x = surface.L + (surface.R - surface.L) * t
 								local free = true
@@ -2310,6 +2311,8 @@ function HouseEditor.new(room: Room, notify: (text: string, color: Color3?) -> (
 			if snapEnabled then
 				x = math.clamp(roundTo(x, GRID / math.max(1, room.Width)), surface.L, surface.R)
 			end
+			-- (v9.6) n'importe où le long du rayon, à côté des objets déjà posés (sans chevauchement)
+			x = HouseSurfaces.FreeX(surface, layout, item, current.Entry.S, x, room.Width, room.Height, current.Skip)
 			x, y = HouseCommon.ClampPosition(item, x, surface.Y, current.Entry.S, room.Width, room.Height, true)
 		elseif seat then
 			x, y = HouseCommon.ClampPosition(item, seat.X, seat.Y, current.Entry.S, room.Width, room.Height)

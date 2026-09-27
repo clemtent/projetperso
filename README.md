@@ -27,6 +27,30 @@ Les autres méthodes (Rojo, copie manuelle) sont décrites dans [`docs/INSTALLAT
 
 ---
 
+## 🆕 Nouveautés v9.6 — magasins, garage, voitures, et beaucoup de corrections
+
+- 🛍️ **7 magasins où l'on entre** dans Dopamine Town :
+  - la liste : 🐾 Animalerie, 🧸 Jouets, 🍰 Cuisine & Maison, 🛋️ Meubles & Déco, 🖥️ Setup Store, 🪴 Jardinerie et 🚗 Concession auto ;
+  - portes qui s'ouvrent, objets en 3D sur les étagères avec leur prix ;
+  - achat sur place ou au comptoir (catalogue).
+- 🚗 **Voitures** :
+  - 8 modèles bien plus réalistes, aussi garés dans les rues ;
+  - achat à la concession, couleurs au choix, **conduite en ville** (ZQSD / flèches / joystick), klaxon visuel ;
+  - les voitures ne touchent jamais les joueurs.
+- 🏎️ **Garage du manoir** (3 places), en 2D et en 3D : portes qui s'ouvrent, tes voitures dedans, allée jusqu'à la rue.
+- 📦 **Acheter et placer en 3D** : inventaire dans le mode déco de la ville, aperçu fantôme, pose au sol, au mur ou sur un meuble. On peut acheter depuis l'inventaire.
+- 📚 **Étagères** :
+  - pose libre sur tous les niveaux (bibliothèque 4 niveaux, étagères murales), plusieurs objets côte à côte ;
+  - même résultat en 2D et en 3D.
+- 🎨 **Style selon le type de pièce** : une salle de bain, une salle de jeux, etc. prend automatiquement ses murs et son sol assortis (gratuit).
+- Corrigés :
+  - lumières « flash bang » (ville, maisons, écrans, aperçu 3D adoucis ; lampadaires seulement la nuit) ;
+  - bancs refaits (vrais bancs de parc, on s'assoit dans le bon sens) ;
+  - bugs de texture / clignotements : détecteur automatique, plus de 1 700 surfaces superposées corrigées ;
+  - plus de ligne à l'écran vers ta maison ;
+  - objets qui dépassaient de la pièce en 2D après un placement en 3D ;
+  - aperçu 🧊 3D réparé (mêmes dimensions que la ville, lumière stable).
+
 ## 🆕 Nouveautés v9.4 / v9.5 — une vraie ville, et ton setup en vrai dans ta maison
 
 - 🖥️ **Dopamine Setup** (nouvelle catégorie de la boutique maison) : les stimulus du clicker deviennent de vrais objets de ta maison, vivants en 3D.

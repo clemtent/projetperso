@@ -1922,7 +1922,180 @@ end
 
 -- (v9.1) Jardin devant la maison : pelouse + déco choisie (HouseArt,
 -- dessins du dossier GardenArt), GardenSlots places fixes
-local function gardenStrip(ctx: Ctx, width: number, top: number, garden: { string })
+----------------------------------------------------------------------
+-- (v9.6, GARAGE96) 🏎️ Garage du manoir en 2D : aile à 3 portes dans la
+-- cour de devant, à DROITE (comme en 3D, HouseFacade / GarageLayout) ;
+-- les voitures possédées sont garées dedans (vues de face, porte relevée),
+-- la voiture choisie au milieu. Données : ClientState.Data.Cars.
+----------------------------------------------------------------------
+
+type GarageInfo = { Cars: { { Id: string, Color: Color3 } }, Selected: string }
+
+local clientStateModule: any = nil
+local function clientState(): any
+	if clientStateModule == nil then
+		clientStateModule = false
+		pcall(function()
+			clientStateModule = require((script.Parent.Parent.Parent :: any).ClientState)
+		end)
+	end
+	return clientStateModule or nil
+end
+
+-- Garage possédé (et voitures) d'après l'état du client ; nil = pas de garage
+local function garageInfo(styleName: string): GarageInfo?
+	if styleName ~= "Mansion" then
+		return nil
+	end
+	local cs = clientState()
+	local data = cs and cs.Data
+	local cars = data and data.Cars
+	if type(cars) ~= "table" or cars.Garage ~= true then
+		return nil
+	end
+	local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Config") :: any) :: any
+	local list = {}
+	local selected = type(cars.Selected) == "string" and cars.Selected or ""
+	local ordered = {}
+	for _, car in ipairs(Config.Cars and Config.Cars.List or {}) do
+		if type(cars.Owned) == "table" and cars.Owned[car.Id] then
+			if car.Id == selected then
+				table.insert(ordered, 1, car)
+			else
+				table.insert(ordered, car)
+			end
+		end
+	end
+	for _, car in ipairs(ordered) do
+		local colorId = type(cars.Colors) == "table" and cars.Colors[car.Id] or car.DefaultColor
+		local paint = Config.CarColorsById and (Config.CarColorsById[colorId] or Config.CarColorsById[car.DefaultColor])
+		table.insert(list, { Id = car.Id, Color = paint and paint.Color or C.Pink })
+	end
+	return { Cars = list, Selected = selected }
+end
+
+local function garageKey(info: GarageInfo?): string
+	if not info then
+		return "none"
+	end
+	local parts = { info.Selected }
+	for _, car in ipairs(info.Cars) do
+		table.insert(parts, string.format("%s=%d/%d/%d", car.Id, math.floor(car.Color.R * 255 + 0.5), math.floor(car.Color.G * 255 + 0.5), math.floor(car.Color.B * 255 + 0.5)))
+	end
+	return table.concat(parts, ",")
+end
+
+-- Voiture vue de face (w de large), posée sur `bottom`
+local TALL = { SUV = 1.18, Van = 1.28, Pickup = 1.14, SportsCar = 0.72, Limo = 1, BubbleCar = 1.05, CityCar = 1, Hatchback = 1 }
+local function carFront(ctx: Ctx, parent: Instance, cx: number, bottom: number, w: number, id: string, color: Color3, z: number)
+	local k = TALL[id] or 1
+	local h = w * 0.62 * k
+	local x0 = cx - w / 2
+	local tyre = Color3.fromRGB(52, 48, 62)
+	-- pneus, bas de caisse, pare-chocs
+	part(parent, x0 + w * 0.04, bottom - h * 0.28, w * 0.18, h * 0.28, tyre, { R = 5, Z = z, Shade = false })
+	part(parent, x0 + w * 0.78, bottom - h * 0.28, w * 0.18, h * 0.28, tyre, { R = 5, Z = z, Shade = false })
+	local bodyTop = bottom - h * 0.62
+	part(parent, x0, bodyTop, w, h * 0.5, color, { R = 12, Z = z + 1, Shade = 0.16 })
+	part(parent, x0 - 3, bottom - h * 0.2, w + 6, h * 0.12, Color3.fromRGB(70, 64, 84), { R = -1, Z = z + 2, Shade = false })
+	-- calandre, phares (allumés la nuit), plaque
+	part(parent, cx - w * 0.2, bodyTop + h * 0.2, w * 0.4, h * 0.12, Color3.fromRGB(70, 64, 84), { R = 4, Z = z + 2, Shade = false })
+	for _, sx in ipairs({ -1, 1 }) do
+		local lamp = circle(parent, cx + sx * w * 0.34, bodyTop + h * 0.2, w * 0.14, w * 0.11, Color3.fromRGB(255, 248, 226), 0, z + 3)
+		lit(ctx, lamp, LIT)
+	end
+	part(parent, cx - w * 0.12, bottom - h * 0.21, w * 0.24, h * 0.08, WHITE, { R = 2, Z = z + 3, Th = 1, Shade = false })
+	-- habitacle : vitre + toit (le roadster n'a qu'un pare-brise)
+	if id == "SportsCar" then
+		part(parent, cx - w * 0.36, bodyTop - h * 0.26, w * 0.72, h * 0.28, P.Glass, { R = 6, Z = z, Th = 2, Shade = false })
+	else
+		local cw = w * (if id == "Van" or id == "SUV" then 0.86 else 0.74)
+		local ch = h * 0.42
+		part(parent, cx - cw / 2, bodyTop - ch, cw, ch + 6, color:Lerp(WHITE, if id == "BubbleCar" or id == "Van" then 0.7 else 0.08), { R = 14, Z = z })
+		local glass = part(parent, cx - cw / 2 + 5, bodyTop - ch + 8, cw - 10, ch - 6, P.Glass, { R = 8, Z = z + 1, Th = 1.5, Shade = false })
+		grad(glass, WHITE, Color3.fromRGB(200, 214, 240), 90)
+	end
+end
+
+local function drawGarage(ctx: Ctx, width: number, top: number, gh: number, info: GarageInfo): number
+	local front = ctx.Front
+	local wall = (LOOK.Wall or Color3.fromRGB(255, 232, 242))
+	local trim = C.Cream
+	local w2 = math.clamp(width * 0.34, 380, 640)
+	local gx1 = width - 34
+	local gx0 = gx1 - w2
+	local bottom = top + gh - 12
+	local h2 = gh + 78
+	local gy0 = bottom - h2
+	-- ombre, allée pavée
+	circle(front, (gx0 + gx1) / 2, bottom + 2, w2 * 1.04, 16, BLACK, 0.85, 54)
+	-- murs
+	part(front, gx0, gy0 + 26, w2, h2 - 26, wall, { R = 8, Z = 55, Shade = 0.12 })
+	-- corniche + liseré doré + balustrade + urnes
+	part(front, gx0 - 8, gy0 + 16, w2 + 16, 16, trim, { R = 4, Z = 58, Shade = false })
+	box(front, gx0 - 4, gy0 + 30, w2 + 8, 3, P.Gold, 0, 59)
+	part(front, gx0 - 4, gy0 + 4, w2 + 8, 5, trim, { R = 2, Z = 57, Th = 1.5, Shade = false })
+	local count = math.floor(w2 / 16)
+	for k = 0, count do
+		local x = gx0 + k * w2 / count
+		part(front, x - 2.5, gy0 + 8, 5, 9, trim, { R = 2, Z = 57, Th = 1, Shade = false })
+	end
+	for _, x in ipairs({ gx0 - 2, gx1 + 2 }) do
+		part(front, x - 7, gy0 - 4, 14, 14, trim, { R = 3, Z = 58, Th = 1.5, Shade = false })
+		circle(front, x, gy0 - 9, 11, 11, P.Gold, 0, 59)
+	end
+	-- 3 portes : voiture visible (porte relevée) ou porte fermée à nervures
+	local gap = 14
+	local dw = (w2 - gap * 4) / 3
+	local doorTop = gy0 + 52
+	local dh = bottom - doorTop - 4
+	local interior = Color3.fromRGB(96, 84, 112)
+	local doorColor = trim:Lerp(C.Pink, 0.14)
+	for bay = 1, 3 do
+		local dx = gx0 + gap + (bay - 1) * (dw + gap)
+		part(front, dx - 5, doorTop - 5, dw + 10, dh + 8, trim, { R = 5, Z = 60, Shade = false })
+		local car = info.Cars[({ 2, 1, 3 })[bay]]
+		if car then
+			box(front, dx, doorTop, dw, dh, interior, 0, 61)
+			local glowFrame = box(front, dx, doorTop, dw, dh * 0.4, LIT_SOFT, 0.75, 62)
+			ctx.Lit[glowFrame] = LIT_SOFT
+			table.insert(ctx.NightOnly, glowFrame)
+			carFront(ctx, front, dx + dw / 2, doorTop + dh, dw * 0.8, car.Id, car.Color, 63)
+			-- porte relevée (haut de l'ouverture)
+			part(front, dx, doorTop, dw, dh * 0.22, doorColor, { R = 2, Z = 70, Th = 1.5, Shade = false })
+			box(front, dx + 4, doorTop + dh * 0.1, dw - 8, 2, C.PinkSoft:Lerp(C.Pink, 0.3), 0, 71)
+		else
+			part(front, dx, doorTop, dw, dh, doorColor, { R = 2, Z = 61, Th = 1.5, Shade = 0.08 })
+			for r = 1, 4 do
+				box(front, dx + 5, doorTop + r * dh / 5, dw - 10, 2.5, C.PinkSoft:Lerp(C.Pink, 0.3), 0, 62)
+			end
+			local win = box(front, dx + dw * 0.18, doorTop + 6, dw * 0.64, dh * 0.12, P.Glass, 0, 62)
+			round(win, 3)
+			lit(ctx, win, LIT_SOFT)
+			part(front, dx + dw / 2 - 12, doorTop + dh - 16, 24, 5, P.Gold, { R = -1, Z = 63, Th = 1, Shade = false })
+		end
+	end
+	-- lanternes entre les portes
+	for k = 1, 2 do
+		local x = gx0 + k * (dw + gap) + gap / 2 - 12
+		wallLantern(ctx, front, x, doorTop + 10, 72)
+	end
+	-- enseigne
+	local sign = part(front, (gx0 + gx1) / 2 - 64, gy0 + 34, 128, 17, WHITE, { R = -1, Z = 73, Line = C.Pink, Th = 2, Shade = false })
+	local label = Instance.new("TextLabel")
+	label.Name = "GarageSign"
+	label.BackgroundTransparency = 1
+	label.Size = UDim2.fromScale(1, 1)
+	label.Font = FONT
+	label.TextScaled = true
+	label.TextColor3 = C.PinkDeep or C.Pink
+	label.Text = "🏎️ GARAGE"
+	label.ZIndex = 74
+	label.Parent = sign
+	return gx0
+end
+
+local function gardenStrip(ctx: Ctx, width: number, top: number, garden: { string }, garage: GarageInfo?)
 	local front = ctx.Front
 	local GARDEN_H = gardenHeight(width)
 	local decoSize = GARDEN_H - 6
@@ -1938,6 +2111,11 @@ local function gardenStrip(ctx: Ctx, width: number, top: number, garden: { strin
 	local slots = HouseCommon.GardenSlots
 	local margin = 70
 	local spacing = (width - margin * 2) / math.max(1, slots)
+	-- (v9.6) 🏎️ garage du manoir à droite : la déco se range à sa gauche
+	if garage then
+		local gx0 = drawGarage(ctx, width, top, GARDEN_H, garage)
+		spacing = (gx0 - 24 - margin) / math.max(1, slots)
+	end
 	local byId = ((HouseCommon.LookKinds :: any).Garden or {}).ById or {}
 	for index = 1, slots do
 		local cx = margin + (index - 0.5) * spacing
@@ -2056,7 +2234,8 @@ function HouseExterior.Build(parent: Instance, size: SizeDef, looks: Looks?): Ex
 			end
 		end
 		-- Jardin (toujours là : la taille du bâtiment ne change pas)
-		local okGarden, errGarden = pcall(gardenStrip, ctx, built.Width, built.Height - 6, chosen and chosen.Garden or {})
+		local okInfo, garage = pcall(garageInfo, styleName)
+		local okGarden, errGarden = pcall(gardenStrip, ctx, built.Width, built.Height - 6, chosen and chosen.Garden or {}, if okInfo then garage else nil)
 		if not okGarden then
 			warn("[HouseExterior] Jardin : " .. tostring(errGarden))
 		end
@@ -2129,11 +2308,34 @@ function HouseExterior.Build(parent: Instance, size: SizeDef, looks: Looks?): Ex
 
 	-- (v9.1) Nouvelles couleurs / nouveau jardin : on redessine la façade
 	-- (mêmes dimensions, les pièces du calque Cells ne bougent pas)
+	local currentLooks: Looks? = looks
 	function exterior.SetLooks(newLooks: Looks?)
+		currentLooks = newLooks
 		clearLayers()
 		paint(newLooks)
 		records = nil
 		exterior.SetDark(dark)
+	end
+
+	-- (v9.6) 🏎️ garage acheté / nouvelle voiture / autre couleur : on redessine
+	local garageConnection: RBXScriptConnection? = nil
+	if styleName == "Mansion" then
+		local cs = clientState()
+		local okKey, key = pcall(function()
+			return garageKey(garageInfo(styleName))
+		end)
+		local lastKey = if okKey then key else ""
+		if cs and cs.Changed then
+			garageConnection = cs.Changed:Connect(function()
+				local ok, newKey = pcall(function()
+					return garageKey(garageInfo(styleName))
+				end)
+				if ok and newKey ~= lastKey and root.Parent then
+					lastKey = newKey
+					exterior.SetLooks(currentLooks)
+				end
+			end)
+		end
 	end
 
 	function exterior.Update(dt: number)
@@ -2144,6 +2346,10 @@ function HouseExterior.Build(parent: Instance, size: SizeDef, looks: Looks?): Ex
 	end
 
 	function exterior.Destroy()
+		if garageConnection then
+			garageConnection:Disconnect()
+			garageConnection = nil
+		end
 		table.clear(ctx.Anims)
 		records = nil
 		root:Destroy()

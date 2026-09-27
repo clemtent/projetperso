@@ -882,8 +882,11 @@ Config.Monetization = {
 --                ("Cottage" | "Townhouse" | "Loft" | "Mansion").
 --   RoomTypes  : types de pièces (salon, chambre, cuisine...). Les objets
 --                "préférés" d'une pièce (Categories / Items) y donnent
---                +HarmonyBonus de confort. Wallpaper / Floor = style de départ
---                (s'il est possédé, sinon le 1er gratuit).
+--                +HarmonyBonus de confort. Wallpaper / Floor (+ Trim / Mood
+--                facultatifs) = le "look" du type (v9.6) : appliqué tout seul
+--                à l'achat de la pièce et quand on change son type (sauf un
+--                style choisi à la main), GRATUIT et débloqué pour cette pièce
+--                même s'il n'est pas acheté.
 --   RoomCost   : prix de la pièce n°2, x RoomCostGrowth pour chaque suivante.
 --   Wallpapers : papiers peints (Pattern = "Plain" | "Stripes" | "Checker" |
 --                "Dots" | "Hearts" | "Stars" | "Clouds" | "Bricks" | "Wood" |
@@ -927,6 +930,11 @@ Config.House = {
 			Width = 1.25, RoomItems = 48, Exterior = "Mansion" },
 	},
 
+	-- (v9.6) 🏎️ Garage du manoir (CarService, "buyGarage") : aile à 3 places
+	-- devant le manoir (côté droit vu de la rue), porte qui s'ouvre quand on
+	-- arrive en voiture, voitures possédées garées dedans (Config.Cars)
+	Garage = { Id = "Garage", Name = "Mansion garage", Icon = "🏎️", Cost = 8e12, RequiresRebirths = 5, RequiresSize = "Mansion", Bays = 3 },
+
 	-- (v9.3) Paliers des visites à l'océan : un objet / un style (papier peint,
 	-- sol, boiserie, ambiance, vue, façade, toit, jardin) SANS RequiresRebirths
 	-- reçoit le palier de son prix de base (Cost >= palier.Cost), puis son prix
@@ -949,25 +957,28 @@ Config.House = {
 		{ Id = "Living", Name = "Living room", Icon = "🛋️", Wallpaper = "PinkStripes", Floor = "PlumChecker",
 			Categories = { "Decor" }, Items = { "Sofa", "Beanbag", "Fireplace", "RetroTV", "HomeCinema", "Bookshelf", "DrawerCabinet",
 				"Armchair", "CoffeeTable", "TVStand", "SideTable", "HeartArmchair", "CatSofa", "CloudRug", "KotatsuTable" } },
-		{ Id = "Bedroom", Name = "Bedroom", Icon = "🛏️", Wallpaper = "LilacDots", Floor = "PinkCarpet",
+		{ Id = "Bedroom", Name = "Bedroom", Icon = "🛏️", Wallpaper = "LilacDots", Floor = "PinkCarpet", Trim = "LavenderTrim",
 			Categories = { "Lights" }, Items = { "LoftBed", "CloudBed", "CanopyBed", "Nightstand", "Wardrobe", "VanityTable", "TeddyBear", "BigBear",
 				"DoubleBed", "Dresser", "HeartPillow", "MoonPillow", "BlanketStack", "HeartRug", "Pouf", "Mannequin", "CrystalThrone",
 				"BunkBed", "RaceCarBed", "LockerCabinet" } },
-		{ Id = "Kitchen", Name = "Kitchen", Icon = "🍳", Wallpaper = "MintGingham", Floor = "MintTiles",
+		{ Id = "Kitchen", Name = "Kitchen", Icon = "🍳", Wallpaper = "MintGingham", Floor = "PeachChecker", Trim = "SnowTrim",
 			Categories = { "Kitchen" }, Items = { "DiningTable", "DiningChair", "KitchenIsland", "BarStool", "CafeTable", "BarTable" } },
-		{ Id = "Bathroom", Name = "Bathroom", Icon = "🛁", Wallpaper = "BabyBlueWaves", Floor = "SkyTiles",
+		{ Id = "Bathroom", Name = "Bathroom", Icon = "🛁", Wallpaper = "BabyBlueWaves", Floor = "SkyTiles", Trim = "SnowTrim",
 			Categories = {}, Items = { "Toilet", "Shower", "Bathtub", "HeartMirror", "RubberDucky", "Vase", "ScentedCandle" } },
-		{ Id = "KidsRoom", Name = "Kids room", Icon = "🧸", RequiresRebirths = 1, Wallpaper = "PeachHearts", Floor = "SoftCream",
+		{ Id = "KidsRoom", Name = "Kids room", Icon = "🧸", RequiresRebirths = 1, Wallpaper = "PeachHearts", Floor = "SoftCream", Trim = "ButterTrim",
 			Categories = { "Toys" }, Items = { "MushroomStool", "FloorCushion", "ToyChest", "HeartRug", "StarGarland",
 				"BunkBed", "RaceCarBed", "BrickTable", "RaceTrackRug", "HeroPoster", "ComicPoster", "DinoEggLamp" } },
-		{ Id = "GameRoom", Name = "Game room", Icon = "🎮", RequiresRebirths = 1, Wallpaper = "StarryNight", Floor = "LilacShag",
+		{ Id = "GameRoom", Name = "Game room", Icon = "🎮", RequiresRebirths = 1, Wallpaper = "NeonGrid", Floor = "StarryCarpet", Trim = "ElectricBlueTrim",
+			Mood = "NeonNight",
 			Categories = { "Electronics", "Gaming" }, Items = { "GamingChair", "Beanbag", "BoardGame", "BarTable", "BarStool",
 				"GamerChair", "GamingDesk", "GamerBeanbag", "LightningNeon" } },
-		{ Id = "Greenhouse", Name = "Greenhouse", Icon = "🌿", RequiresRebirths = 1, Wallpaper = "MatchaLatte", Floor = "LightOak",
+		{ Id = "Greenhouse", Name = "Greenhouse", Icon = "🌿", RequiresRebirths = 1, Wallpaper = "MatchaLatte", Floor = "MeadowGrass", Trim = "MintTrim",
+			Mood = "FreshForest",
 			Categories = { "Plants" }, Items = { "Fountain", "WindChime", "GardenBench", "PicnicTable", "Lemonade" } },
-		{ Id = "PetRoom", Name = "Pet corner", Icon = "🐾", RequiresRebirths = 2, Wallpaper = "VanillaCream", Floor = "HoneyHerringbone",
+		{ Id = "PetRoom", Name = "Pet corner", Icon = "🐾", RequiresRebirths = 2, Wallpaper = "VanillaCream", Floor = "HoneyHerringbone", Trim = "HoneyTrim",
 			Categories = { "Pets" }, Items = { "Aquarium", "KnittedRug" } },
-		{ Id = "Library", Name = "Library", Icon = "📚", RequiresRebirths = 2, Wallpaper = "HoneyPanels", Floor = "CherryWood",
+		{ Id = "Library", Name = "Library", Icon = "📚", RequiresRebirths = 2, Wallpaper = "HoneyPanels", Floor = "CherryWood", Trim = "WalnutTrim",
+			Mood = "CozyLamp",
 			Categories = {}, Items = { "Bookshelf", "StudyDesk", "DeskGlobe", "WallShelf", "MapPoster", "Telescope",
 				"MantelClock", "CuckooClock", "Laptop", "WoodenChair", "FloorLamp", "SecretDoor",
 				"BigDesk", "BookStack", "Typewriter", "DeskLamp", "RockingChair", "FloatingShelf", "LadderShelf", "RetroComputer", "KittyClock" } },
@@ -975,19 +986,20 @@ Config.House = {
 			Categories = {}, Items = { "GrandPiano", "PinkGuitar", "RecordPlayer", "KaraokeMic", "Speaker", "ToyDrum",
 				"RetroRadio", "CatHeadphones", "DiscoBall", "MusicBox", "Harp", "Jukebox", "Xylophone", "NeonStar",
 				"GuitarAmp", "ElectricGuitar", "DrumKit", "DJBooth", "RGBHeadset" } },
-		{ Id = "Spa", Name = "Spa", Icon = "♨️", RequiresRebirths = 3, Wallpaper = "CloudySky", Floor = "CloudMarble",
+		{ Id = "Spa", Name = "Spa", Icon = "♨️", RequiresRebirths = 3, Wallpaper = "CloudySky", Floor = "CloudMarble", Trim = "SnowTrim",
 			Categories = {}, Items = { "HotSpring", "Bathtub", "Shower", "Fountain", "ScentedCandle", "OilLamp",
 				"Bamboo", "Hibiscus", "Vase", "Beanbag", "EggChair", "Bonsai", "LotusBowl", "SwanStatue", "Hammock", "CloudRug" } },
-		{ Id = "Attic", Name = "Starry attic", Icon = "🌙", RequiresRebirths = 5, Wallpaper = "GalaxyDream", Floor = "RoseQuartz",
+		{ Id = "Attic", Name = "Starry attic", Icon = "🌙", RequiresRebirths = 5, Wallpaper = "GalaxyDream", Floor = "RoseQuartz", Mood = "Moonlight",
 			Categories = {}, Items = { "Telescope", "FloatingPlanet", "GlowStars", "MoonGarland", "MoonLamp",
 				"StarNightLight", "ShootingStarWindow", "GalaxyWindow", "CrystalBall", "Suitcase", "StorageBox", "Ladder",
 				"SnowGlobe", "MushroomLamp", "StarGarland", "JellyfishLamp", "Hologram", "Owl",
 				"PlanetMobile", "RocketModel", "Observatory", "RocketLavaLamp" } },
 		-- v9.2 : pièces "cool"
-		{ Id = "SportsRoom", Name = "Sports room", Icon = "🏀", RequiresRebirths = 5, Wallpaper = "RacingStripes", Floor = "SportsCourt",
+		{ Id = "SportsRoom", Name = "Sports room", Icon = "🏀", RequiresRebirths = 5, Wallpaper = "RacingStripes", Floor = "SportsCourt", Trim = "RacingRedTrim",
+			Mood = "Stadium",
 			Categories = { "Sports" }, Items = { "LockerCabinet", "GamerBeanbag", "Surfboard", "BMXBike", "JerseyFrame",
 				"TrophyShelf", "GoldenTrophy", "Motorbike", "RaceTrackRug" } },
-		{ Id = "SpaceBase", Name = "Space base", Icon = "🛰️", RequiresRebirths = 8, Wallpaper = "DeepSpace", Floor = "MetalPlate",
+		{ Id = "SpaceBase", Name = "Space base", Icon = "🛰️", RequiresRebirths = 8, Wallpaper = "DeepSpace", Floor = "MetalPlate", Trim = "ChromeTrim",
 			Categories = { "Adventure" }, Items = { "Telescope", "ToyRocket", "ToyRobot", "Hologram", "FloatingPlanet",
 				"GalaxyWindow", "UFOLamp", "VRHeadset", "GamerPC", "RocketLavaLamp" } },
 	},
@@ -2228,6 +2240,56 @@ Config.House = {
 }
 
 ----------------------------------------------------------------------
+-- 🚗 Voitures (v9.6, CarService) : achetées à la concession de Dopamine
+-- Town (ou via "Car" : "buy"), gardées pour toujours (même après l'océan),
+-- conduites en ville (bouton "🚗 Ma voiture" ou le garage du manoir).
+--   List   : Id, Name, Icon, Cost (Dopamine), RequiresRebirths, Kind (modèle
+--            3D de CarModels), DefaultColor (Id de Colors), Desc
+--   Colors : peintures (changer la couleur est gratuit)
+-- Conduite : MaxSpeed en studs/s, une voiture par joueur, rangée toute
+-- seule après IdleDespawn secondes sans conducteur.
+----------------------------------------------------------------------
+Config.Cars = {
+	MaxSpeed = 50, -- studs/s en marche avant
+	ReverseSpeed = 18, -- studs/s en marche arrière
+	IdleDespawn = 60, -- s sans conducteur -> la voiture rentre au garage
+	SpawnCooldown = 4, -- s entre deux "🚗 Ma voiture"
+	HonkCooldown = 1.5, -- s entre deux "💨" (klaxon VISUEL : aucun son)
+	List = {
+		{ Id = "BubbleCar", Name = "Bubble car", Icon = "🍬", Cost = 1.5e6, RequiresRebirths = 0, Kind = "BubbleCar", DefaultColor = "Bubblegum",
+			Desc = "A tiny round kawaii car" },
+		{ Id = "CityCar", Name = "City car", Icon = "🚗", Cost = 8e7, RequiresRebirths = 1, Kind = "CityCar", DefaultColor = "Sky",
+			Desc = "Small, cute and easy to park" },
+		{ Id = "Hatchback", Name = "Hatchback", Icon = "🚘", Cost = 1.2e9, RequiresRebirths = 1, Kind = "Hatchback", DefaultColor = "Mint",
+			Desc = "Five doors and a roof spoiler" },
+		{ Id = "Pickup", Name = "Pickup truck", Icon = "🛻", Cost = 2e10, RequiresRebirths = 2, Kind = "Pickup", DefaultColor = "Tangerine",
+			Desc = "Big wheels and a cargo bed" },
+		{ Id = "SUV", Name = "Family SUV", Icon = "🚙", Cost = 1.5e11, RequiresRebirths = 3, Kind = "SUV", DefaultColor = "Pearl",
+			Desc = "Tall, comfy, roof rails and spare wheel" },
+		{ Id = "Van", Name = "Camper van", Icon = "🚐", Cost = 8e11, RequiresRebirths = 3, Kind = "Van", DefaultColor = "Lilac",
+			Desc = "Two-tone camper for road trips" },
+		{ Id = "SportsCar", Name = "Sports roadster", Icon = "🏎️", Cost = 5e12, RequiresRebirths = 4, Kind = "SportsCar", DefaultColor = "Cherry",
+			Desc = "Convertible, rear wing, twin exhausts" },
+		{ Id = "Limo", Name = "Stretch limo", Icon = "🎩", Cost = 2e13, RequiresRebirths = 5, Kind = "Limo", DefaultColor = "Midnight",
+			Desc = "The longest car in town, chrome everywhere" },
+	},
+	Colors = {
+		{ Id = "Bubblegum", Name = "Bubblegum pink", Color = Color3.fromRGB(255, 150, 196) },
+		{ Id = "Cherry", Name = "Cherry red", Color = Color3.fromRGB(220, 44, 64) },
+		{ Id = "Tangerine", Name = "Tangerine", Color = Color3.fromRGB(255, 140, 60) },
+		{ Id = "Sunny", Name = "Sunny yellow", Color = Color3.fromRGB(255, 212, 80) },
+		{ Id = "Mint", Name = "Mint", Color = Color3.fromRGB(120, 214, 176) },
+		{ Id = "Racing", Name = "Racing green", Color = Color3.fromRGB(34, 110, 76) },
+		{ Id = "Sky", Name = "Sky blue", Color = Color3.fromRGB(120, 186, 250) },
+		{ Id = "Denim", Name = "Denim blue", Color = Color3.fromRGB(56, 90, 170) },
+		{ Id = "Lilac", Name = "Lilac", Color = Color3.fromRGB(186, 156, 246) },
+		{ Id = "Pearl", Name = "Pearl white", Color = Color3.fromRGB(246, 244, 240) },
+		{ Id = "Silver", Name = "Silver", Color = Color3.fromRGB(176, 182, 192) },
+		{ Id = "Midnight", Name = "Midnight black", Color = Color3.fromRGB(38, 38, 48) },
+	},
+}
+
+----------------------------------------------------------------------
 -- Index calculés automatiquement (ne pas modifier)
 ----------------------------------------------------------------------
 Config.UpgradesById = {}
@@ -2438,6 +2500,18 @@ Config.HouseTintsById = {}
 for index, tint in ipairs(Config.House.Tints) do
 	tint.Order = index
 	Config.HouseTintsById[tint.Id] = tint
+end
+
+-- 🚗 Voitures (v9.6)
+Config.CarsById = {}
+for index, car in ipairs(Config.Cars.List) do
+	car.Order = index
+	Config.CarsById[car.Id] = car
+end
+Config.CarColorsById = {}
+for index, paint in ipairs(Config.Cars.Colors) do
+	paint.Order = index
+	Config.CarColorsById[paint.Id] = paint
 end
 
 return Config

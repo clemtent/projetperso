@@ -39,6 +39,11 @@
 	ne marche plus pendant la vue (PlayerModule, remis à la fermeture) ;
 	souris libérée (MouseBehavior / icône remis à la fermeture) ; objets
 	déplacés en lot (BulkMoveTo).
+	v9.6 (avec Dopamine Town, son ambiance et les LiveProps) : pendant la vue,
+	chaque seconde, l'éclairage de la vue est repris si un autre script l'a
+	changé, un halo / flou / brume ajouté entre-temps est coupé (et remis à
+	la fermeture), et la barre d'outils (✕) reste visible même si un autre
+	script masque les interfaces.
 	Robuste : double ouverture (la vue précédente est fermée proprement),
 	réapparition du personnage, nouvelle caméra, erreurs (un objet cassé
 	n'empêche pas les autres de s'afficher). Travail par image = caméra
@@ -122,6 +127,8 @@ type Session = {
 	Alive: boolean,
 	LightingSaved: { [string]: any },
 	EffectsSaved: { { Instance: Instance, Property: string, Value: any } },
+	Muted: { [Instance]: boolean }, -- effets déjà gardés (voir muteEffects)
+	Applied: { [string]: any }, -- réglages de Lighting posés par la vue
 	OnClose: (() -> ())?,
 	Saved: Saved?,
 	Hidden: { ScreenGui },
@@ -171,6 +178,7 @@ type Session = {
 
 local session: Session? = nil
 local applyLighting: (s: Session) -> ()
+local keepLighting: (s: Session) -> ()
 
 ----------------------------------------------------------------------
 -- Outils
@@ -415,6 +423,13 @@ local function stepCamera(s: Session, dt: number)
 				gui.Enabled = false
 			end
 		end
+		-- (v9.6) notre barre d'outils reste visible (un autre script qui masque
+		-- les interfaces, ex. la ville, ne doit pas faire disparaître ✕ Fermer)
+		local own = s.Gui
+		if own and own.Parent and not own.Enabled then
+			own.Enabled = true
+		end
+		keepLighting(s)
 	end
 end
 
@@ -454,6 +469,53 @@ end
 -- Éclairage du lieu (réglé pendant la vue, remis EXACTEMENT à la fermeture)
 ----------------------------------------------------------------------
 
+-- Coupe les effets (Lighting + caméra) pas encore coupés : à l'ouverture,
+-- puis chaque seconde (v9.6 : un effet ajouté pendant la vue par un autre
+-- script, ex. l'ambiance de la ville, est coupé aussi et remis à la fermeture)
+-- Propriété coupée pendant la vue pour un enfant de Lighting / de la caméra
+local function muteProperty(child: Instance): string?
+	if child:IsA("Atmosphere") then
+		return "Density"
+	end
+	for _, className in ipairs(EFFECT_CLASSES) do
+		if child:IsA(className) then
+			return "Enabled"
+		end
+	end
+	return nil
+end
+
+local function muteEffects(s: Session)
+	local holders: { Instance } = Lighting:GetChildren()
+	local camera = workspace.CurrentCamera
+	if camera then
+		for _, child in ipairs(camera:GetChildren()) do
+			table.insert(holders, child)
+		end
+	end
+	for _, child in ipairs(holders) do
+		local property = muteProperty(child)
+		if property then
+			local off: any = property == "Density" and 0 or false
+			if not s.Muted[child] then
+				-- (valeur d'origine gardée une seule fois, remise à la fermeture)
+				local ok, value = pcall(function()
+					return (child :: any)[property]
+				end)
+				if ok then
+					s.Muted[child] = true
+					table.insert(s.EffectsSaved, { Instance = child, Property = property, Value = value })
+				end
+			end
+			pcall(function()
+				if (child :: any)[property] ~= off then
+					(child :: any)[property] = off
+				end
+			end)
+		end
+	end
+end
+
 local function saveLighting(s: Session)
 	for _, key in ipairs(LIGHTING_KEYS) do
 		local ok, value = pcall(function()
@@ -463,40 +525,7 @@ local function saveLighting(s: Session)
 			s.LightingSaved[key] = value
 		end
 	end
-	local holders: { Instance } = Lighting:GetChildren()
-	local camera = workspace.CurrentCamera
-	if camera then
-		for _, child in ipairs(camera:GetChildren()) do
-			table.insert(holders, child)
-		end
-	end
-	for _, child in ipairs(holders) do
-		if child:IsA("Atmosphere") then
-			local ok, density = pcall(function()
-				return child.Density
-			end)
-			if ok then
-				table.insert(s.EffectsSaved, { Instance = child, Property = "Density", Value = density })
-				pcall(function()
-					child.Density = 0
-				end)
-			end
-		else
-			for _, className in ipairs(EFFECT_CLASSES) do
-				if child:IsA(className) then
-					local ok, enabled = pcall(function()
-						return (child :: any).Enabled
-					end)
-					if ok then
-						table.insert(s.EffectsSaved, { Instance = child, Property = "Enabled", Value = enabled })
-						pcall(function()
-							(child :: any).Enabled = false
-						end)
-					end
-				end
-			end
-		end
-	end
+	muteEffects(s)
 end
 
 applyLighting = function(s: Session)
@@ -508,13 +537,39 @@ applyLighting = function(s: Session)
 	if not okProps or type(props) ~= "table" then
 		return
 	end
+	table.clear(s.Applied)
 	for key, value in pairs(props) do
 		if s.LightingSaved[key] ~= nil then
+			s.Applied[key] = value
 			pcall(function()
 				(Lighting :: any)[key] = value
 			end)
 		end
 	end
+end
+
+-- v9.6 : un autre script (ambiance de la ville, cycle du soleil...) a
+-- changé l'éclairage pendant la vue : on remet celui de la vue
+-- (comparaison tolérante : on ne réécrit Lighting que s'il a vraiment changé)
+local function sameValue(a: any, b: any): boolean
+	if type(a) == "number" and type(b) == "number" then
+		return math.abs(a - b) < 1e-3
+	end
+	if typeof(a) == "Color3" and typeof(b) == "Color3" then
+		return math.abs(a.R - b.R) < 0.005 and math.abs(a.G - b.G) < 0.005 and math.abs(a.B - b.B) < 0.005
+	end
+	return a == b
+end
+
+keepLighting = function(s: Session)
+	for key, value in pairs(s.Applied) do
+		pcall(function()
+			if not sameValue((Lighting :: any)[key], value) then
+				(Lighting :: any)[key] = value
+			end
+		end)
+	end
+	muteEffects(s)
 end
 
 local function restoreLighting(s: Session)
@@ -530,6 +585,8 @@ local function restoreLighting(s: Session)
 		end)
 	end
 	table.clear(s.EffectsSaved)
+	table.clear(s.Muted)
+	table.clear(s.Applied)
 end
 
 local function toggleNight(s: Session)
@@ -1309,6 +1366,8 @@ local function openSession(options: Options?): boolean
 		Alive = true,
 		LightingSaved = {},
 		EffectsSaved = {},
+		Muted = {},
+		Applied = {},
 		OnClose = type(options.OnClose) == "function" and options.OnClose or nil,
 		Saved = nil,
 		Hidden = {},
