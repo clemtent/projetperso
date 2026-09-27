@@ -215,6 +215,9 @@ local function tabEntries(tabId: string): { Entry }
 	tabCache[tabId] = list
 	return list
 end
+-- (v9.7, BUILDINGS97) entrées d'un onglet / d'une catégorie (triées par prix) :
+-- rayons du supermarché (MarketInterior)
+ShopUI.TabEntries = tabEntries
 
 -- Toutes les entrées d'une boutique (par onglet, dans l'ordre)
 function ShopUI.ShopEntries(shopId: string): { Entry }
@@ -940,9 +943,20 @@ do
 	end
 	table.insert(ALL_SHOP.Tabs, "SetupPlants")
 end
+-- (v9.7, BUILDINGS97) "🛒 MégaDopa" : le supermarché vend TOUT (catalogue
+-- complet de la maison + déco du jardin), ouvert aux caisses
+local MARKET_SHOP: ShopDef = { Id = "Market", Name = "🛒 MegaDopa", Icon = "🛒", Accent = Color3.fromRGB(236, 72, 140), Tabs = table.clone(ALL_SHOP.Tabs),
+	Blurb = "Everything for your home, at brainy prices" }
+table.insert(MARKET_SHOP.Tabs, "GardenDecor")
+ShopUI.MARKET = MARKET_SHOP
 
 function ShopUI.OpenShop(shopId: string, options: { Tab: string?, Anchor: Vector3? }?)
-	local shop = ShopUI.SHOPS[shopId] or (shopId == "All" and ALL_SHOP or nil)
+	local shop: ShopDef? = ShopUI.SHOPS[shopId]
+	if shopId == "All" then
+		shop = ALL_SHOP
+	elseif shopId == "Market" then
+		shop = MARKET_SHOP
+	end
 	if not shop then
 		return
 	end

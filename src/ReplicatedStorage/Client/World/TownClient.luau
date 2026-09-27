@@ -116,6 +116,7 @@ local gardens: { [number]: any } = {} -- 🌻 jardins de Dopamine 3D (GardenBuil
 local locLabels: { Instance } = {} -- panneaux de la ville à traduire (attribut "LocText")
 local LOC_EVERY = 2
 local deskWired = false
+local plazaFxWarned = false -- (v9.7) une seule alerte si TownPlazaFx.Step échoue
 
 ----------------------------------------------------------------------
 -- Utilitaires
@@ -850,6 +851,15 @@ local function step(dt: number)
 	clocks.Guide += dt
 	clocks.Loc += dt
 	TownAtmosphere.Step(dt)
+	-- v9.7 🎠 place centrale (TownPlazaFx : 30 Hz au plus, en pause au loin)
+	local plazaFx = optionalModule("TownPlazaFx")
+	if plazaFx and type(plazaFx.Step) == "function" then
+		local okFx, errFx = pcall(plazaFx.Step, dt)
+		if not okFx and not plazaFxWarned then
+			plazaFxWarned = true
+			warn("[Town] TownPlazaFx.Step : " .. tostring(errFx))
+		end
+	end
 	if clocks.Loc >= LOC_EVERY then
 		clocks.Loc = 0
 		pcall(localizeTown)
@@ -898,6 +908,23 @@ local function step(dt: number)
 		local shops = optionalModule("ShopInteriors")
 		if shops and root and type(shops.Step) == "function" then
 			pcall(shops.Step, root.Position)
+		end
+		local traffic = optionalModule("TownTraffic")
+		if traffic and root and type(traffic.Step) == "function" then
+			pcall(traffic.Step, root.Position)
+		end
+		local facades = optionalModule("TownFacades")
+		if facades and root and type(facades.Step) == "function" then
+			pcall(facades.Step, root.Position)
+		end
+		local marketMod = optionalModule("MarketInterior")
+		if marketMod and root and type(marketMod.Step) == "function" then
+			pcall(marketMod.Step, root.Position)
+		end
+		-- v9.7 🌳 nature : détails de près autour de l'avatar (TownGreenery, NATURE97)
+		local greenery = optionalModule("TownGreenery")
+		if greenery and root and type(greenery.Step) == "function" then
+			pcall(greenery.Step, root.Position)
 		end
 	end
 	if clocks.Tag >= TAG_EVERY then
@@ -1125,6 +1152,45 @@ local function enter(options: any)
 				warn("[Town] ShopInteriors.Start : " .. tostring(errShops))
 			end
 		end
+		-- v9.7 🚦 circulation d'ambiance + véhicules du décor en flux (TownTraffic, VEHICLES97)
+		local traffic = optionalModule("TownTraffic")
+		if traffic and type(traffic.Start) == "function" then
+			local okTraffic, errTraffic = pcall(traffic.Start, { Toast = toast })
+			if not okTraffic then
+				warn("[Town] TownTraffic.Start : " .. tostring(errTraffic))
+			end
+		end
+		-- v9.7 🏘️ détail des immeubles de rue + 🛒 supermarché MégaDopa (BUILDINGS97)
+		local facades = optionalModule("TownFacades")
+		if facades and type(facades.Start) == "function" then
+			local okF, errF = pcall(facades.Start)
+			if not okF then
+				warn("[Town] TownFacades.Start : " .. tostring(errF))
+			end
+		end
+		local marketMod = optionalModule("MarketInterior")
+		if marketMod and type(marketMod.Start) == "function" then
+			local okM, errM = pcall(marketMod.Start, { Toast = toast })
+			if not okM then
+				warn("[Town] MarketInterior.Start : " .. tostring(errM))
+			end
+		end
+		-- v9.7 🎠 place centrale animée (TownPlazaFx, PLAZA97) : manège, ballons, pigeons…
+		local plazaFx = optionalModule("TownPlazaFx")
+		if plazaFx and type(plazaFx.Start) == "function" then
+			local okFx, errFx = pcall(plazaFx.Start)
+			if not okFx then
+				warn("[Town] TownPlazaFx.Start : " .. tostring(errFx))
+			end
+		end
+		-- v9.7 🌳 nature : détails de près (arbres, lac, aire de jeux) côté client (NATURE97)
+		local greenery = optionalModule("TownGreenery")
+		if greenery and type(greenery.Start) == "function" then
+			local okGreen, errGreen = pcall(greenery.Start)
+			if not okGreen then
+				warn("[Town] TownGreenery.Start : " .. tostring(errGreen))
+			end
+		end
 		local folder = Instance.new("Folder")
 		folder.Name = HOUSES_FOLDER
 		folder.Parent = workspace
@@ -1266,6 +1332,29 @@ local function teardown()
 	local shops = optionalModule("ShopInteriors")
 	if shops and type(shops.Stop) == "function" then
 		pcall(shops.Stop)
+	end
+	-- (v9.7) circulation + décor véhicules retirés
+	local traffic = optionalModule("TownTraffic")
+	if traffic and type(traffic.Stop) == "function" then
+		pcall(traffic.Stop)
+	end
+	local facades = optionalModule("TownFacades")
+	if facades and type(facades.Stop) == "function" then
+		pcall(facades.Stop)
+	end
+	local marketMod = optionalModule("MarketInterior")
+	if marketMod and type(marketMod.Stop) == "function" then
+		pcall(marketMod.Stop)
+	end
+	-- (v9.7) place centrale : pièces locales (manège, ballons, pigeons…) détruites
+	local plazaFx = optionalModule("TownPlazaFx")
+	if plazaFx and type(plazaFx.Stop) == "function" then
+		pcall(plazaFx.Stop)
+	end
+	-- v9.7 🌳 nature : détails de près détruits (NATURE97)
+	local greenery = optionalModule("TownGreenery")
+	if greenery and type(greenery.Stop) == "function" then
+		pcall(greenery.Stop)
 	end
 	hud:SetDeskMode(false)
 	local s = saved

@@ -20,6 +20,8 @@
 	  - TownShops (v9.6) : les boutiques où l'on ENTRE (6 autour de la place,
 	                    placées par TownPlaza) et la 🚗 concession auto (à
 	                    droite de la place d'accueil), dans le dossier Shops ;
+	  - TownMarket (v9.7) : le 🛒 supermarché MégaDopa et son parking, hors
+	                    de la porte (WorldLayout.MarketCFrame), dossier Market ;
 	  - ici : les N parcelles (WorldLayout) : pelouse, clôtures, haie, arbres,
 	    boîte aux lettres et panneau du propriétaire (SetPlotSign, appelé par
 	    WorldService) ; le grand écran et le plan suivent les panneaux.
@@ -49,6 +51,7 @@ local TownPlaza = require(script.Parent.TownPlaza)
 local TownEntrance = require(script.Parent.TownEntrance)
 local TownNature = require(script.Parent.TownNature)
 local TownShops = require(script.Parent.TownShops)
+local TownMarket = require(script.Parent.TownMarket) -- (v9.7) 🛒 supermarché
 
 local TownMap = {}
 
@@ -124,10 +127,13 @@ local function buildPlot(parent: Instance, index: number, count: number): PlotIn
 			part(model, "FencePost", Vector3.new(0.6, 3.4, 0.6), plotCF * CFrame.new(x, g + 1.7, z), fence, M.Wood, "deco")
 		end
 	end
-	part(model, "Hedge", Vector3.new(W - 1.6, 4.2, 2.6), plotCF * CFrame.new(0, g + 2.1, D / 2 - 1.35), C.GrassDark, M.Grass, "prop")
-	-- deux arbres aux coins avant (hors de la zone des décorations de jardin)
+	-- (v9.7 NATURE97) haie taillée au dessus arrondi
+	TownKit.Hedge(model, plotCF * CFrame.new(0, g, D / 2 - 1.35), W - 1.6, 2.6, 4.2, index)
+	-- deux arbres aux coins avant (hors de la zone des décorations de jardin) :
+	-- (v9.7 NATURE97) arbre fruitier / cerisier / bouleau selon la parcelle
 	for _, sx in ipairs({ -1, 1 }) do
-		TownKit.Tree(model, (plotCF * CFrame.new(sx * (W / 2 - 5), g, -D / 2 + 5)).Position, 13 + (index % 3), index * 7 + sx, (index + sx) % 3 == 0 and 2 or 1)
+		local species = ({ "Fruit", "Cherry", "Birch", "Maple" })[(index + (sx > 0 and 1 or 0)) % 4 + 1]
+		TownKit.Tree(model, (plotCF * CFrame.new(sx * (W / 2 - 5), g, -D / 2 + 5)).Position, 13 + (index % 3), index * 7 + sx, species, { Lawn = true })
 	end
 	-- boîte aux lettres (à gauche du chemin vu de la rue)
 	local mailCF = plotCF * CFrame.new(-7, g, -D / 2 + 2.5)
@@ -271,8 +277,19 @@ function TownMap.Build(plotCount: number): Town
 	-- 🚗 concession auto : à droite de la place d'accueil (avant la nature :
 	-- sa place est réservée)
 	TownShops.BuildDealership(shops, geo)
+	-- (v9.7, BUILDINGS97) 🛒 supermarché MégaDopa + parking, hors de la porte
+	-- (coque ; intérieur : client MarketInterior) ; dossier Market
+	local market = Instance.new("Folder")
+	market.Name = "Market"
+	market.Parent = folder
+	local okMarket, errMarket = pcall(TownMarket.Build, market, geo)
+	if not okMarket then
+		warn("[TownMap] supermarché : " .. tostring(errMarket))
+	end
 	TownStreets.Build(decor, geo)
 	TownNature.Build(decor, geo)
+	-- (v9.7) aucun arbre du bois planté sur le parking / dans le magasin
+	pcall(TownMarket.ClearSite, decor, plotCount)
 
 	local plots: { PlotInfo } = {}
 	for index = 1, plotCount do

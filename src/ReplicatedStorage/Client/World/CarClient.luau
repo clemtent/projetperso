@@ -227,6 +227,7 @@ end
 
 local refreshHud: () -> () = function() end
 local setPicker: (open: boolean) -> () = function() end
+local refreshPrompts: () -> () = function() end -- (v9.7) invites "Conduire"
 
 local function buildPicker(root: Frame)
 	local dimmer = UIUtil.Create("TextButton", {
@@ -663,6 +664,7 @@ local function stopDriving()
 		end
 	end
 	refreshHud()
+	refreshPrompts() -- (v9.7) l'invite "Conduire" revient une fois descendu
 end
 
 local function startDriving(seat: VehicleSeat)
@@ -717,7 +719,12 @@ local function startDriving(seat: VehicleSeat)
 		camera.CameraType = Enum.CameraType.Custom
 		camera.CameraSubject = seat
 	end
+	-- (v9.7) au volant : plus d'invite "Conduire", fenêtre "Mes voitures" fermée
+	if pickerOpen then
+		setPicker(false)
+	end
 	refreshHud()
+	refreshPrompts()
 end
 
 -- Un pas de conduite (dt en s) : exporté pour les tests (CarClient.Debug().Step)
@@ -857,13 +864,55 @@ end
 -- Invites "Conduire" (SA voiture seulement, traduites)
 ----------------------------------------------------------------------
 
+-- (v9.7, VEHICLES97) bug "le bouton Conduire reste affiché quand je conduis" :
+-- l'invite n'est active que sur SA voiture ET si personne n'est au volant
+-- (siège occupé, attribut serveur "Occupied", ou c'est nous qui conduisons).
+-- Le serveur ne touche jamais à Enabled (pas de conflit de réplication) :
+-- le client recalcule à chaque changement + 4 fois par seconde (filet).
+local drivePrompts: { [ProximityPrompt]: boolean } = setmetatable({} :: any, { __mode = "k" })
+
+local function promptBusy(model: Instance?): boolean
+	if not model then
+		return false
+	end
+	if driving and driving.Model == model then
+		return true
+	end
+	if model:GetAttribute("Occupied") == true then
+		return true
+	end
+	local seat = model:FindFirstChild("DriverSeat", true)
+	return seat ~= nil and seat:IsA("VehicleSeat") and seat.Occupant ~= nil
+end
+
+local function updatePrompt(prompt: ProximityPrompt)
+	local model = prompt:FindFirstAncestorWhichIsA("Model")
+	local mine = model ~= nil and model:GetAttribute("OwnerId") == LocalPlayer.UserId
+	local enabled = mine and not promptBusy(model)
+	if prompt.Enabled ~= enabled then
+		prompt.Enabled = enabled
+	end
+end
+
+local carsFolder: Instance? = nil
+
 local function fixPrompt(prompt: Instance)
 	if not prompt:IsA("ProximityPrompt") or prompt.Name ~= "DrivePrompt" then
 		return
 	end
 	local model = prompt:FindFirstAncestorWhichIsA("Model")
 	local mine = model ~= nil and model:GetAttribute("OwnerId") == LocalPlayer.UserId
-	prompt.Enabled = mine
+	if drivePrompts[prompt :: ProximityPrompt] then
+		updatePrompt(prompt :: ProximityPrompt)
+		return
+	end
+	drivePrompts[prompt :: ProximityPrompt] = true
+	updatePrompt(prompt :: ProximityPrompt)
+	if model and mine then
+		track(model:GetAttributeChangedSignal("Occupied"):Connect(function()
+			updatePrompt(prompt)
+		end))
+	end
 	if mine then
 		prompt.ActionText = Locale.T("Drive")
 		local def = model and Config.CarsById[tostring(model:GetAttribute("CarId"))]
@@ -873,11 +922,42 @@ local function fixPrompt(prompt: Instance)
 	end
 end
 
+-- (v9.7) recalcul : invites connues + invites des voitures du dossier (au cas
+-- où DescendantAdded serait arrivé avant l'invite : quelques voitures au plus)
+refreshPrompts = function()
+	for prompt in pairs(drivePrompts) do
+		if prompt.Parent then
+			updatePrompt(prompt)
+		else
+			drivePrompts[prompt] = nil
+		end
+	end
+	local folder = carsFolder
+	if folder and folder.Parent then
+		for _, model in ipairs(folder:GetChildren()) do
+			local root = model:IsA("Model") and model.PrimaryPart
+			local prompt = root and root:FindFirstChild("DrivePrompt")
+			if prompt and not drivePrompts[prompt :: ProximityPrompt] then
+				fixPrompt(prompt)
+			end
+		end
+	end
+end
+
 local function watchCarsFolder(folder: Instance)
+	carsFolder = folder
 	for _, d in ipairs(folder:GetDescendants()) do
 		fixPrompt(d)
 	end
-	track(folder.DescendantAdded:Connect(fixPrompt))
+	-- (v9.7 : un modèle entier peut arriver d'un coup : on fouille aussi dedans)
+	track(folder.DescendantAdded:Connect(function(d: Instance)
+		fixPrompt(d)
+		if d:IsA("Model") then
+			for _, x in ipairs(d:GetDescendants()) do
+				fixPrompt(x)
+			end
+		end
+	end))
 end
 
 ----------------------------------------------------------------------
@@ -1131,6 +1211,7 @@ function CarClient.Start(startOptions: any?)
 			if not driving and gui then
 				refreshHud()
 			end
+			refreshPrompts() -- (v9.7) filet : siège occupé / libéré
 		end
 	end))
 end
@@ -1150,6 +1231,8 @@ function CarClient.Stop()
 	end
 	table.clear(charConnections)
 	table.clear(garages)
+	table.clear(drivePrompts)
+	carsFolder = nil
 	pickerOpen = false
 	if gui then
 		gui:Destroy()

@@ -13,7 +13,11 @@
 	  - la MAIRIE au fond de la place : portique à colonnes, fronton,
 	    tour de l'horloge, et le GRAND ÉCRAN des meilleurs joueurs du serveur
 	    (SurfaceGui mis à jour par TownMap) ;
-	  - silhouette lointaine d'une ville (au-delà des collines).
+	  - silhouette lointaine d'une ville (au-delà des collines) ;
+	  - (v9.7, BUILDINGS97) IMMEUBLES DE RUE en 5 styles (Haussmann, briques,
+	    pastel à pignon, moderne, colombages) : coque ici, détail en flux
+	    côté client (Client/World/TownFacades) ; boutiques de décor et mairie
+	    finies sur toutes leurs faces (arrière, côtés), pancarte "Fermé".
 	v9.6 : ces boutiques restent du DÉCOR (portes fermées) ; celles où l'on
 	entre sont dans TownShops (qui réutilise Window / GableRoof d'ici).
 	Plus de néon sur les grandes surfaces (marquise, bandeaux, portail de la
@@ -92,11 +96,8 @@ local function gableRoof(parent: Instance, cf: CFrame, w: number, d: number, h: 
 	TownKit.Wedge(parent, "Roof", Vector3.new(w + 1.6, h, half), cf * CFrame.new(0, h / 2, d / 2 - half / 2), color, M.ClayRoofTiles, "decoS")
 	TownKit.Wedge(parent, "Roof", Vector3.new(w + 1.6, h, half), cf * CFrame.new(0, h / 2, d / 2 + half / 2) * CFrame.Angles(0, math.pi, 0), color, M.ClayRoofTiles, "decoS")
 	part(parent, "Ridge", Vector3.new(w + 1.8, 0.5, 0.8), cf * CFrame.new(0, h + 0.1, d / 2), color:Lerp(Color3.new(0, 0, 0), 0.25), M.Slate, "deco")
-	-- pignons (triangles) : deux coins sous le toit de chaque côté
-	for _, sx in ipairs({ -1, 1 }) do
-		TownKit.Wedge(parent, "Gable", Vector3.new(0.4, h - 0.2, d / 2), cf * CFrame.new(sx * (w / 2 - 0.2), (h - 0.2) / 2, d / 4), C.Cream, M.Plaster, "deco")
-		TownKit.Wedge(parent, "Gable", Vector3.new(0.4, h - 0.2, d / 2), cf * CFrame.new(sx * (w / 2 - 0.2), (h - 0.2) / 2, d * 3 / 4) * CFrame.Angles(0, math.pi, 0), C.Cream, M.Plaster, "deco")
-	end
+	-- (v9.7) plus de coins "pignon" : ils étaient ENFERMÉS dans le toit
+	-- (invisibles) et leurs faces se confondaient avec celles du toit
 end
 
 -- (v9.6) partagés avec TownShops (boutiques où l'on entre)
@@ -254,6 +255,19 @@ function TownBuildings.Shop(parent: Instance, cf: CFrame, spec: ShopSpec, seed: 
 	-- gouttière
 	part(model, "Drainpipe", Vector3.new(0.4, height, 0.4), cf * CFrame.new(w / 2 - 0.3, height / 2, -0.25), C.MetalLight, M.Metal, "deco")
 	shopExtras(model, cf, spec, height)
+	-- (v9.7) arrière / côtés / pancarte "Fermé" : détail client (TownFacades)
+	model:SetAttribute("FacadeStyle", "DecorShop")
+	model:SetAttribute("FacadeCF", cf)
+	model:SetAttribute("W", w)
+	model:SetAttribute("D", d)
+	model:SetAttribute("Floors", spec.Floors)
+	model:SetAttribute("Height", height)
+	model:SetAttribute("Seed", seed)
+	model:SetAttribute("Wall", spec.Wall)
+	model:SetAttribute("Trim", trim)
+	model:SetAttribute("Accent", spec.Awning[1])
+	model:SetAttribute("GroundH", GROUND_H)
+	model:SetAttribute("FloorH", FLOOR_H)
 	return model
 end
 
@@ -305,7 +319,8 @@ function TownBuildings.TownHall(parent: Instance, cf: CFrame): (Model, Screen)
 	TownKit.Wedge(model, "Roof", Vector3.new(w, 6, d / 2), top * CFrame.new(0, 3, d * 3 / 4) * CFrame.Angles(0, math.pi, 0), roof, M.Slate, "decoS")
 	-- tour de l'horloge (au-dessus du portique)
 	local tower = cf * CFrame.new(0, h + 1.4, 8)
-	part(model, "Tower", Vector3.new(12, 16, 12), tower * CFrame.new(0, 8, 0), wall, M.Limestone, "solid")
+	-- (v9.7 : pied de la tour 0,1 au-dessus du bas du toit : faces non confondues)
+	part(model, "Tower", Vector3.new(12, 15.9, 12), tower * CFrame.new(0, 8.05, 0), wall, M.Limestone, "solid")
 	part(model, "TowerCornice", Vector3.new(13.4, 1, 13.4), tower * CFrame.new(0, 16.5, 0), trim, M.Marble, "deco")
 	local clock = part(model, "Clock", Vector3.new(0.6, 8, 8), tower * CFrame.new(0, 9, -6.2) * CFrame.Angles(0, math.rad(90), 0), C.White, M.SmoothPlastic, "deco")
 	;(clock :: Part).Shape = Enum.PartType.Cylinder
@@ -340,70 +355,176 @@ function TownBuildings.TownHall(parent: Instance, cf: CFrame): (Model, Screen)
 		rows[i] = row
 	end
 	local footer = TownKit.Label(body, "Footer", "❤️ Like houses to climb the board!", 0.06, 0.88, 0.88, 0.09, Color3.fromRGB(255, 160, 210), Enum.Font.GothamBold, true)
+	-- (v9.7) arrière (côté parc) et côtés : fenêtres, porte de service... en
+	-- détail client (TownFacades, style "Hall") ; repère = pied du corps
+	model:SetAttribute("FacadeStyle", "Hall")
+	model:SetAttribute("FacadeCF", cf * CFrame.new(0, 0, 3))
+	model:SetAttribute("W", w)
+	model:SetAttribute("D", d)
+	model:SetAttribute("Floors", 2)
+	model:SetAttribute("Height", h)
+	model:SetAttribute("Seed", 7)
+	model:SetAttribute("Wall", wall)
+	model:SetAttribute("Trim", trim)
+	model:SetAttribute("Accent", roof)
 	return model, { Rows = rows, Title = title, Footer = footer }
 end
 
 ----------------------------------------------------------------------
--- Immeubles de rue (économes : ≈ 17 pièces) le long de l'avenue et des rues
+-- Immeubles de rue (v9.7) : COQUE serveur + DÉTAIL client (TownFacades)
 ----------------------------------------------------------------------
+-- Cinq styles qui alternent le long d'une rue (deux voisins ne se
+-- ressemblent jamais) :
+--   Haussmann : pierre de taille crème, toit à la Mansart en zinc ;
+--   Brick     : briques, toit à deux pans en tuiles, cheminée ;
+--   Pastel    : enduit pastel, PIGNON SUR RUE (toit à deux pans tourné) ;
+--   Modern    : béton clair ou anthracite, toit-terrasse ;
+--   Timber    : colombages (enduit crème + poutres sombres), tuiles.
+-- Le serveur ne pose que la coque (volume solide, socle, corniche, toit,
+-- cheminées) et, pour la vue de loin, des bandeaux vitrés "FarLOD" que le
+-- client masque (localement) dès qu'il a construit le vrai détail :
+-- fenêtres encadrées, balcons, volets, vitrine FERMÉE (store roulé, stores
+-- baissés, pancarte "Fermé"), porte et perron, arrière fini (fenêtres,
+-- porte de service, jardinet), pignons exposés (fenêtres, réclame peinte).
+-- Attributs lus par le client : FacadeStyle, FacadeCF, W, D, Floors,
+-- Height, Seed, Wall, Trim, Accent, Detail, GroundH, FloorH.
 
-local ROW_COLORS = {
-	Color3.fromRGB(255, 214, 196),
-	Color3.fromRGB(206, 236, 220),
-	Color3.fromRGB(226, 214, 250),
-	Color3.fromRGB(255, 240, 196),
-	Color3.fromRGB(204, 226, 250),
-	Color3.fromRGB(255, 206, 222),
-	Color3.fromRGB(240, 232, 222),
+TownBuildings.STYLES = { "Haussmann", "Brick", "Pastel", "Modern", "Timber" }
+
+local PASTELS = {
+	Color3.fromRGB(255, 206, 214),
+	Color3.fromRGB(196, 234, 216),
+	Color3.fromRGB(255, 234, 176),
+	Color3.fromRGB(216, 204, 248),
+	Color3.fromRGB(190, 222, 248),
+	Color3.fromRGB(255, 212, 184),
 }
-local ROW_ROOFS = {
-	Color3.fromRGB(150, 96, 96),
-	Color3.fromRGB(96, 104, 136),
-	Color3.fromRGB(126, 100, 160),
-	Color3.fromRGB(170, 110, 84),
+local BRICKS = {
+	Color3.fromRGB(172, 84, 66),
+	Color3.fromRGB(150, 96, 80),
+	Color3.fromRGB(196, 128, 96),
+	Color3.fromRGB(128, 74, 66),
 }
+-- devantures (bois peint) et volets
+local ACCENTS = {
+	Color3.fromRGB(46, 92, 78),
+	Color3.fromRGB(48, 62, 104),
+	Color3.fromRGB(122, 44, 62),
+	Color3.fromRGB(214, 110, 140),
+	Color3.fromRGB(86, 150, 170),
+	Color3.fromRGB(120, 90, 160),
+}
+
+export type RowPalette = { Wall: Color3, Material: Enum.Material, Trim: Color3, Roof: Color3, RoofMat: Enum.Material, Accent: Color3, Detail: Color3 }
+
+-- Style + couleurs d'un immeuble (déterministe : même ville à chaque démarrage)
+function TownBuildings.RowStyle(seed: number): (string, RowPalette)
+	local style = TownBuildings.STYLES[seed % #TownBuildings.STYLES + 1]
+	local accent = ACCENTS[math.floor(hash(seed, 83) * #ACCENTS) + 1]
+	if style == "Haussmann" then
+		return style, { Wall = Color3.fromRGB(238, 228, 208), Material = M.Limestone, Trim = Color3.fromRGB(248, 242, 230),
+			Roof = Color3.fromRGB(104, 112, 132), RoofMat = M.Slate, Accent = accent, Detail = Color3.fromRGB(46, 48, 58) }
+	elseif style == "Brick" then
+		return style, { Wall = BRICKS[math.floor(hash(seed, 84) * #BRICKS) + 1], Material = M.Brick, Trim = Color3.fromRGB(246, 242, 236),
+			Roof = Color3.fromRGB(92, 84, 96), RoofMat = M.Slate, Accent = accent, Detail = Color3.fromRGB(40, 40, 48) }
+	elseif style == "Pastel" then
+		local wall = PASTELS[math.floor(hash(seed, 85) * #PASTELS) + 1]
+		return style, { Wall = wall, Material = M.Plaster, Trim = C.White, Roof = Color3.fromRGB(176, 96, 82), RoofMat = M.ClayRoofTiles,
+			Accent = accent, Detail = wall:Lerp(Color3.fromRGB(60, 60, 90), 0.45) }
+	elseif style == "Modern" then
+		local dark = hash(seed, 86) < 0.4
+		return style, { Wall = dark and Color3.fromRGB(74, 78, 92) or Color3.fromRGB(236, 238, 242), Material = M.Concrete,
+			Trim = dark and Color3.fromRGB(214, 218, 226) or Color3.fromRGB(70, 74, 88), Roof = Color3.fromRGB(150, 150, 160), RoofMat = M.Concrete,
+			Accent = accent, Detail = Color3.fromRGB(60, 64, 76) }
+	end
+	return style, { Wall = Color3.fromRGB(250, 244, 230), Material = M.Plaster, Trim = Color3.fromRGB(250, 244, 230), Roof = Color3.fromRGB(140, 86, 72),
+		RoofMat = M.ClayRoofTiles, Accent = accent, Detail = Color3.fromRGB(92, 62, 46) }
+end
+
+-- Toit à deux pans : repère F = milieu de la ligne d'égout "avant", toit sur
+-- x ∈ [-W/2, W/2], z ∈ [0, D] (faîtage à z = D/2). Pignons pleins (couleur
+-- du mur) + deux pans de couverture qui débordent + faîtière.
+local function pitchedRoof(parent: Instance, F: CFrame, W: number, D: number, h: number, wall: Color3, wallMat: Enum.Material, roof: Color3, roofMat: Enum.Material)
+	TownKit.Wedge(parent, "Gable", Vector3.new(W, h, D / 2), F * CFrame.new(0, h / 2, D / 4), wall, wallMat, "decoS")
+	TownKit.Wedge(parent, "Gable", Vector3.new(W, h, D / 2), F * CFrame.new(0, h / 2, D * 3 / 4) * CFrame.Angles(0, math.pi, 0), wall, wallMat, "decoS")
+	local half = D / 2
+	local a = math.atan2(h, half)
+	local len = math.sqrt(half * half + h * h)
+	local t = 0.35
+	for _, back in ipairs({ false, true }) do
+		local side = back and F * CFrame.new(0, 0, D) * CFrame.Angles(0, math.pi, 0) or F
+		-- (pan posé 0,05 au-dessus de la pente : jamais de faces confondues)
+		local cf = side * CFrame.new(0, h / 2, half / 2) * CFrame.Angles(-a, 0, 0) * CFrame.new(0, t / 2 + 0.05, -0.45)
+		part(parent, "RoofPlane", Vector3.new(W + 1, t, len + 0.9), cf, roof, roofMat, "decoS")
+	end
+	part(parent, "Ridge", Vector3.new(W + 1.2, 0.45, 0.9), F * CFrame.new(0, h + 0.42, half), roof:Lerp(Color3.new(0, 0, 0), 0.25), M.Slate, "deco")
+end
+TownBuildings.PitchedRoof = pitchedRoof
 
 function TownBuildings.RowHouse(parent: Instance, cf: CFrame, w: number, d: number, floors: number, seed: number): Model
 	local model = TownKit.Model(parent, "RowHouse")
-	local wall = ROW_COLORS[seed % #ROW_COLORS + 1]
-	local trim = C.White
+	local style, pal = TownBuildings.RowStyle(seed)
 	local height = GROUND_H + (floors - 1) * FLOOR_H
-	local brick = hash(seed, 81) < 0.35
-	part(model, "Body", Vector3.new(w, height, d), cf * CFrame.new(0, height / 2, d / 2), wall, brick and M.Brick or M.Plaster, "solid")
-	part(model, "Plinth", Vector3.new(w + 0.4, 1.8, d + 0.4), cf * CFrame.new(0, 0.3, d / 2), C.StoneDark, M.Granite, "prop")
-	-- rez-de-chaussée : vitrine en bandeau, porte, petit auvent
-	local accent = ROW_ROOFS[seed % #ROW_ROOFS + 1]
-	part(model, "Front", Vector3.new(w - 2, GROUND_H - 3, 0.3), cf * CFrame.new(0, 1.2 + (GROUND_H - 3) / 2, -0.1), accent, M.Wood, "deco")
-	local glass = part(model, "Glass", Vector3.new(w - 8, GROUND_H - 5, 0.3), cf * CFrame.new(-2, 1.2 + (GROUND_H - 3) / 2 + 0.3, -0.2), Color3.fromRGB(255, 226, 190), M.Glass, "deco")
-	glass.Reflectance = 0.2
-	part(model, "Door", Vector3.new(3, 6.4, 0.3), cf * CFrame.new(w / 2 - 3.2, 1.25 + 3.2, -0.2), C.Cream, M.Wood, "deco")
-	part(model, "Awning", Vector3.new(w - 1.6, 0.25, 3), cf * CFrame.new(0, GROUND_H - 1.4, -1.4) * CFrame.Angles(math.rad(18), 0, 0), TownKit.FLOWERS[seed % #TownKit.FLOWERS + 1]:Lerp(C.White, 0.2), M.Fabric, "decoS")
-	-- étages : bandeau clair + fenêtres
-	local n = math.max(2, math.floor(w / 7))
+	part(model, "Body", Vector3.new(w, height, d), cf * CFrame.new(0, height / 2, d / 2), pal.Wall, pal.Material, "solid")
+	-- socle en pierre (déborde de 0,6 tout autour : les détails de façade tiennent au-dessus)
+	part(model, "Plinth", Vector3.new(w + 0.5, 1.8, d + 1.2), cf * CFrame.new(0, 0.3, d / 2), C.StoneDark, M.Granite, "prop")
+	-- vue de loin : bandeaux vitrés (masqués par le client quand le détail est là)
+	local farGlass = Color3.fromRGB(120, 150, 180)
+	local function far(name: string, size: Vector3, at: CFrame)
+		local g = part(model, name, size, at, farGlass, M.Glass, "deco")
+		g.Reflectance = 0.12
+		g:SetAttribute("FarLOD", true)
+	end
+	far("FarShop", Vector3.new(w - 4, GROUND_H - 4.6, 0.2), cf * CFrame.new(0, 1.2 + (GROUND_H - 4.6) / 2 + 1, -0.1))
 	for f = 1, floors - 1 do
-		local y = GROUND_H + (f - 1) * FLOOR_H + FLOOR_H / 2 + 0.4
-		part(model, "WinBand", Vector3.new(w - 1.6, 5.4, 0.25), cf * CFrame.new(0, y, -0.08), trim, M.SmoothPlastic, "deco")
-		for i = 1, n do
-			local x = -w / 2 + 0.8 + (i - 0.5) * (w - 1.6) / n
-			local pane = part(model, "Window", Vector3.new((w - 1.6) / n - 1.6, 4.4, 0.3), cf * CFrame.new(x, y, -0.14), Color3.fromRGB(150, 196, 226), M.Glass, "deco")
-			pane.Reflectance = 0.15
+		local y = GROUND_H + (f - 1) * FLOOR_H + FLOOR_H / 2 + 0.3
+		far("FarFront", Vector3.new(w - 3, 4.4, 0.2), cf * CFrame.new(0, y, -0.1))
+		far("FarBack", Vector3.new(w - 5, 3.8, 0.2), cf * CFrame.new(0, y, d + 0.1))
+	end
+	local top = cf * CFrame.new(0, height, 0)
+	if style == "Haussmann" then
+		-- corniche, puis toit à la Mansart (brisis raide + terrasson) en zinc, 2 souches de cheminée
+		part(model, "Cornice", Vector3.new(w + 0.8, 0.9, d + 0.8), top * CFrame.new(0, 0.45, d / 2), pal.Trim, M.Limestone, "decoS")
+		local mh, md = 5.2, 2
+		local base = top * CFrame.new(0, 0.9, 0)
+		part(model, "MansardCore", Vector3.new(w - 0.2, mh, d - 2 * md), base * CFrame.new(0, mh / 2, d / 2), pal.Roof, pal.RoofMat, "decoS")
+		TownKit.Wedge(model, "Mansard", Vector3.new(w - 0.2, mh, md), base * CFrame.new(0, mh / 2, md / 2), pal.Roof, pal.RoofMat, "decoS")
+		TownKit.Wedge(model, "Mansard", Vector3.new(w - 0.2, mh, md), base * CFrame.new(0, mh / 2, d - md / 2) * CFrame.Angles(0, math.pi, 0), pal.Roof, pal.RoofMat, "decoS")
+		part(model, "MansardCap", Vector3.new(w - 0.4, 0.4, d - 2 * md + 0.6), base * CFrame.new(0, mh + 0.2, d / 2), pal.Roof:Lerp(C.White, 0.2), M.Metal, "deco")
+		for _, sx in ipairs({ -1, 1 }) do
+			part(model, "Chimney", Vector3.new(1.6, 3.2, 3.4), base * CFrame.new(sx * (w / 2 - 1.2), mh + 1.8, d * 0.55), pal.Wall, M.Limestone, "deco")
 		end
-	end
-	-- fenêtres de l'arrière (côté parc) : un bandeau vitré par étage
-	for f = 1, floors - 1 do
-		local y = GROUND_H + (f - 1) * FLOOR_H + FLOOR_H / 2 + 0.4
-		part(model, "BackWindows", Vector3.new(w - 4, 3.8, 0.3), cf * CFrame.new(0, y, d + 0.1), Color3.fromRGB(150, 196, 226), M.Glass, "deco")
-	end
-	part(model, "Cornice", Vector3.new(w + 0.8, 0.9, d + 0.8), cf * CFrame.new(0, height + 0.45, d / 2), trim, M.Concrete, "decoS")
-	if hash(seed, 82) < 0.55 then
-		local roof = ROW_ROOFS[(seed + 1) % #ROW_ROOFS + 1]
-		local h = math.min(7, d * 0.4)
-		local top = cf * CFrame.new(0, height + 0.9, 0)
-		TownKit.Wedge(model, "Roof", Vector3.new(w + 0.8, h, d / 2 + 0.4), top * CFrame.new(0, h / 2, d / 4 - 0.2), roof, M.ClayRoofTiles, "decoS")
-		TownKit.Wedge(model, "Roof", Vector3.new(w + 0.8, h, d / 2 + 0.4), top * CFrame.new(0, h / 2, d * 3 / 4 + 0.2) * CFrame.Angles(0, math.pi, 0), roof, M.ClayRoofTiles, "decoS")
+	elseif style == "Pastel" then
+		-- pignon sur rue : faîtage perpendiculaire à la rue
+		part(model, "Cornice", Vector3.new(w + 0.6, 0.6, d + 0.6), top * CFrame.new(0, 0.3, d / 2), pal.Trim, M.SmoothPlastic, "decoS")
+		local h = math.min(9, w * 0.4)
+		local F = top * CFrame.new(-w / 2, 0.6, d / 2) * CFrame.Angles(0, math.pi / 2, 0)
+		pitchedRoof(model, F, d, w, h, pal.Wall, pal.Material, pal.Roof, pal.RoofMat)
+		part(model, "Chimney", Vector3.new(1.8, 4.4, 1.8), top * CFrame.new(w * 0.22, 0.6 + h * 0.55 + 1.6, d * 0.7), Color3.fromRGB(196, 120, 100), M.Brick, "deco")
+	elseif style == "Modern" then
+		-- toit-terrasse : acrotère + édicule
+		part(model, "Parapet", Vector3.new(w + 0.4, 1.4, d + 0.4), top * CFrame.new(0, 0.7, d / 2), pal.Trim, M.Concrete, "decoS")
+		part(model, "RoofDeck", Vector3.new(w * 0.36, 3, d * 0.34), top * CFrame.new(-w * 0.18, 2.9, d * 0.62), pal.Wall, pal.Material, "deco")
 	else
-		part(model, "RoofBox", Vector3.new(w * 0.3, 2.2, d * 0.3), cf * CFrame.new(w * 0.2, height + 2, d * 0.6), C.MetalLight, M.DiamondPlate, "deco")
+		-- Brick / Timber : corniche + toit à deux pans (faîtage parallèle à la rue) + cheminée
+		part(model, "Cornice", Vector3.new(w + 0.8, 0.9, d + 0.8), top * CFrame.new(0, 0.45, d / 2), style == "Brick" and pal.Trim or pal.Detail, style == "Brick" and M.Concrete or M.Wood, "decoS")
+		local h = math.min(8, d * 0.42)
+		pitchedRoof(model, top * CFrame.new(0, 0.9, 0), w, d, h, pal.Wall, pal.Material, pal.Roof, pal.RoofMat)
+		part(model, "Chimney", Vector3.new(2, 4.8, 2), top * CFrame.new(w * 0.3 * (seed % 2 == 0 and 1 or -1), 0.9 + h * 0.6 + 1.4, d * 0.66), style == "Brick" and pal.Wall or Color3.fromRGB(176, 110, 96), M.Brick, "deco")
 	end
+	model:SetAttribute("FacadeStyle", style)
+	model:SetAttribute("FacadeCF", cf)
+	model:SetAttribute("W", w)
+	model:SetAttribute("D", d)
+	model:SetAttribute("Floors", floors)
+	model:SetAttribute("Height", height)
+	model:SetAttribute("Seed", seed)
+	model:SetAttribute("Wall", pal.Wall)
+	model:SetAttribute("Trim", pal.Trim)
+	model:SetAttribute("Accent", pal.Accent)
+	model:SetAttribute("Detail", pal.Detail)
+	model:SetAttribute("GroundH", GROUND_H)
+	model:SetAttribute("FloorH", FLOOR_H)
 	return model
 end
 

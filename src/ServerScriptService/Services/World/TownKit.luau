@@ -22,6 +22,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
 local CarModels = require(ReplicatedStorage.Shared.CarModels) -- (v9.6, GARAGE96) voitures garées
+local VehicleModels = require(ReplicatedStorage.Shared.VehicleModels) -- (v9.7, VEHICLES97) bus, vélos, camions
+local Greenery = require(ReplicatedStorage.Shared.Greenery) -- (v9.7, NATURE97) arbres
 
 local TownKit = {}
 
@@ -325,38 +327,109 @@ function TownKit.Hash(a: number, b: number?): number
 end
 local hash = TownKit.Hash
 
--- Arbre : tronc + feuillage en couches (3 boules) ; `kind` 1 = feuillu,
--- 2 = cerisier, 3 = sapin (cônes en étages), 4 = boule taillée
-function TownKit.Tree(parent: Instance, base: Vector3, height: number, seed: number, kind: number?)
-	local model = TownKit.Model(parent, "Tree")
-	local k = kind or (hash(seed, 3) < 0.18 and 2 or 1)
-	local trunkH = height * 0.55
-	TownKit.Column(model, "Trunk", base, trunkH, 0.8 + height * 0.04, C.Bark, M.Wood, "prop")
-	if k == 3 then
-		local green = Color3.fromRGB(70, 138, 96):Lerp(Color3.fromRGB(96, 160, 104), hash(seed, 5))
-		for i = 0, 1 do
-			local w = height * (0.6 - i * 0.2)
-			local h = height * 0.42
-			local y = trunkH * 0.45 + i * height * 0.3
-			-- (étage de sapin : deux coins croisés = pyramide)
-			TownKit.Wedge(model, "Fir", Vector3.new(w, h, w / 2), CFrame.new(base + Vector3.new(0, y + h / 2, 0)) * CFrame.new(0, 0, -w / 4), green, M.Grass, "deco")
-			TownKit.Wedge(model, "Fir", Vector3.new(w, h, w / 2), CFrame.new(base + Vector3.new(0, y + h / 2, 0)) * CFrame.Angles(0, math.pi, 0) * CFrame.new(0, 0, -w / 4), green, M.Grass, "deco")
+-- Arbre (v9.7, NATURE97) : espèces réalistes stylisées de Shared/Greenery
+-- (tronc évasé, branches, grappes irrégulières en 2-3 teintes).
+-- `kind` : nom d'espèce ("Oak", "Maple", "Cherry", "Birch", "Fir", "Palm",
+-- "Poplar", "Fruit", "Willow", "Round") ou ancien numéro v9.4 (1 feuillu
+-- au hasard, 2 cerisier, 3 sapin, 4 boule taillée).
+-- `opts.Tier` : niveau de détail construit par le SERVEUR (0 = silhouette,
+-- défaut ; 1 = arbre "vedette" avec branches) ; le client (TownGreenery)
+-- ajoute le niveau 2 aux arbres proches. `opts.Lawn` : sur pelouse (pétales
+-- au sol permis).
+TownKit.SPECIES = Greenery.SPECIES
+function TownKit.Tree(parent: Instance, base: Vector3, height: number, seed: number, kind: any?, opts: { Tier: number?, Lawn: boolean? }?)
+	local o = opts or {}
+	local species = Greenery.Species(kind or 1, seed)
+	local model, n = Greenery.Tree(parent, base, height, seed, species, o.Tier or 0, 0, { Lawn = o.Lawn == true })
+	stats.Parts += n
+	return model
+end
+
+-- Buisson : 3-4 boules qui se chevauchent (+ fleurs si `flower`)
+function TownKit.Bush(parent: Instance, base: Vector3, size: number, seed: number, flower: Color3?)
+	local model = TownKit.Model(parent, "Bush")
+	local a = hash(seed, 81) * math.pi * 2
+	local green = TownKit.FOLIAGE[1 + math.floor(hash(seed, 82) * 3) % 3]
+	local function at(ang: number, r: number, y: number): Vector3
+		return base + Vector3.new(math.cos(ang) * r, y, math.sin(ang) * r)
+	end
+	TownKit.Ball(model, "Bush", at(a, size * 0.06, size * 0.36), size, green, M.Grass, "decoS")
+	TownKit.Ball(model, "Bush", at(a + 2.2, size * 0.42, size * 0.26), size * 0.7, green:Lerp(C.White, 0.1), M.Grass, "deco")
+	TownKit.Ball(model, "Bush", at(a + 4.1, size * 0.38, size * 0.22), size * 0.62, green:Lerp(Color3.new(0, 0, 0), 0.1), M.Grass, "deco")
+	if flower then
+		for k = 0, 1 do
+			local p = at(a + 1 + k * 2.6, size * 0.4, size * 0.62)
+			TownKit.Egg(model, "Blossom", CFrame.new(p), Vector3.new(size * 0.34, size * 0.2, size * 0.34), flower, M.SmoothPlastic, "deco")
 		end
-		return model
 	end
-	local greens = { 1, 2, 3, 5 }
-	local color = k == 2 and TownKit.FOLIAGE[4] or TownKit.FOLIAGE[greens[1 + math.floor(hash(seed, 7) * 4) % 4]]
-	if k == 4 then
-		TownKit.Ball(model, "Crown", base + Vector3.new(0, trunkH + height * 0.28, 0), height * 0.62, color, M.Grass, "decoS")
-		return model
+	return model
+end
+
+-- Ovale (Part + SpecialMesh "Sphere" : une Ball de Roblox reste ronde)
+function TownKit.Egg(parent: Instance, name: string, cf: CFrame, size: Vector3, color: Color3, material: Enum.Material?, profile: Profile?): BasePart
+	local p = part(parent, name, size, cf, color, material or M.Grass, profile or "deco")
+	local mesh = Instance.new("SpecialMesh")
+	mesh.MeshType = Enum.MeshType.Sphere
+	mesh.Parent = p
+	return p
+end
+
+-- Haie taillée au dessus ARRONDI : corps + boudin (cylindre couché) + bouts
+-- arrondis (colonne + boule). `cf` au sol, au milieu, longueur le long de X.
+-- 6 pièces ; seul le corps est solide.
+TownKit.HEDGE = Color3.fromRGB(78, 146, 76)
+function TownKit.Hedge(parent: Instance, cf: CFrame, length: number, width: number, height: number, seed: number?)
+	local model = TownKit.Model(parent, "Hedge")
+	local w = width
+	local L = math.max(length, w + 0.5)
+	local body = height - w / 2
+	local green = TownKit.HEDGE:Lerp(Color3.fromRGB(96, 160, 84), hash(seed or 1, 83) * 0.6)
+	local top = green:Lerp(Color3.fromRGB(150, 200, 110), 0.18)
+	part(model, "Hedge", Vector3.new(L - w, body - 0.04, w - 0.04), cf * CFrame.new(0, (body - 0.04) / 2, 0), green, M.Grass, "prop")
+	local roll = part(model, "HedgeTop", Vector3.new(L - w - 0.1, w, w), cf * CFrame.new(0, body, 0), top, M.Grass, "decoS")
+	;(roll :: Part).Shape = Enum.PartType.Cylinder
+	for _, sx in ipairs({ -1, 1 }) do
+		local x = sx * (L - w) / 2
+		TownKit.Column(model, "HedgeEnd", (cf * CFrame.new(x, 0, 0)).Position, body - 0.08, w, green, M.Grass, "deco")
+		TownKit.Ball(model, "HedgeCap", (cf * CFrame.new(x, body, 0)).Position, w, top, M.Grass, "deco")
 	end
-	local crown = height * 0.62
-	local top = base + Vector3.new(0, trunkH + crown * 0.35, 0)
-	TownKit.Ball(model, "Crown", top, crown, color, M.Grass, "decoS")
-	local a = hash(seed, 11) * math.pi * 2
-	TownKit.Ball(model, "Crown2", top + Vector3.new(math.cos(a) * crown * 0.32, -crown * 0.12, math.sin(a) * crown * 0.32), crown * 0.72, color:Lerp(C.White, 0.1), M.Grass, "deco")
-	if hash(seed, 12) < 0.5 then
-		TownKit.Ball(model, "Crown3", top + Vector3.new(-math.cos(a) * crown * 0.28, crown * 0.18, -math.sin(a) * crown * 0.28), crown * 0.66, color:Lerp(Color3.new(0, 0, 0), 0.08), M.Grass, "deco")
+	return model
+end
+
+-- Massif de fleurs rond : bordure en pierre, terre, touffes de feuilles et
+-- VRAIS bouquets (ovales de couleur posés sur les feuilles) ; ~11 pièces
+function TownKit.FlowerBed(parent: Instance, center: Vector3, radius: number, seed: number)
+	local model = TownKit.Model(parent, "FlowerBed")
+	TownKit.Disc(model, "BedEdge", center + Vector3.new(0, 0.45, 0), radius + 0.4, 0.45, C.Stone, M.Cobblestone, "prop")
+	TownKit.Disc(model, "BedSoil", center + Vector3.new(0, 0.52, 0), radius, 0.2, Color3.fromRGB(104, 74, 58), M.Ground, "deco")
+	local a = hash(seed, 84) * math.pi * 2
+	local leaf = Color3.fromRGB(86, 150, 78)
+	for k = 0, 2 do
+		local ang = a + k * math.pi * 2 / 3
+		-- (hauteurs décalées de 0,06 : aucune face de boîte confondue, même pour un détecteur qui ignore le maillage)
+		local p = center + Vector3.new(math.cos(ang) * radius * 0.42, 0.62 + k * 0.06, math.sin(ang) * radius * 0.42)
+		TownKit.Egg(model, "Leaves", CFrame.new(p) * CFrame.Angles(0, -ang, 0), Vector3.new(radius * 0.95, 1.1, radius * 0.75), leaf:Lerp(C.White, k * 0.06), M.Grass, "deco")
+	end
+	local n = radius >= 3 and 6 or 4
+	for k = 0, n - 1 do
+		local ang = a + 0.5 + k * math.pi * 2 / n
+		local r = radius * (k % 2 == 0 and 0.62 or 0.36)
+		local p = center + Vector3.new(math.cos(ang) * r, 1.1 + (k % 2) * 0.2 + k * 0.05, math.sin(ang) * r)
+		local color = TownKit.FLOWERS[(seed + k) % #TownKit.FLOWERS + 1]
+		TownKit.Egg(model, "Blooms", CFrame.new(p) * CFrame.Angles(0, ang, 0), Vector3.new(1.5, 0.75, 1.3), color, M.SmoothPlastic, "deco")
+	end
+	TownKit.Egg(model, "Blooms", CFrame.new(center + Vector3.new(0, 1.55, 0)), Vector3.new(1.6, 1, 1.6), TownKit.FLOWERS[(seed + 2) % #TownKit.FLOWERS + 1], M.SmoothPlastic, "deco")
+	return model
+end
+
+-- Touffes d'herbe haute (3 ovales fins penchés) dans un rectangle w x d
+function TownKit.Tufts(parent: Instance, cf: CFrame, w: number, d: number, seed: number)
+	local model = TownKit.Model(parent, "Tufts")
+	for k = 0, 2 do
+		local x = (hash(seed, 85 + k) - 0.5) * w
+		local z = (hash(seed, 88 + k) - 0.5) * d
+		local h = 1.2 + hash(seed, 91 + k) * 0.8
+		TownKit.Egg(model, "Tuft", cf * CFrame.new(x, h * 0.3, z) * CFrame.Angles(math.rad(8), hash(seed, 94 + k) * 6, math.rad(-6)), Vector3.new(1.3, h, 0.9), Color3.fromRGB(96, 164, 80):Lerp(Color3.fromRGB(150, 196, 96), hash(seed, 97 + k)), M.Grass, "deco")
 	end
 	return model
 end
@@ -482,34 +555,65 @@ function TownKit.Planter(parent: Instance, cf: CFrame, length: number, width: nu
 	local model = TownKit.Model(parent, "Planter")
 	part(model, "Box", Vector3.new(length, 1.6, width), cf * CFrame.new(0, 0.8, 0), C.Stone, M.Concrete, "prop")
 	part(model, "Soil", Vector3.new(length - 0.6, 0.2, width - 0.6), cf * CFrame.new(0, 1.62, 0), Color3.fromRGB(110, 78, 60), M.Ground, "deco")
+	-- (v9.7) touffes de feuillage arrondies + bouquets (ovales posés dessus)
+	local leaves = math.max(1, math.floor(length / 4 + 0.5))
+	for i = 1, leaves do
+		local x = -length / 2 + (i - 0.5) * length / leaves
+		TownKit.Egg(model, "Leaves", cf * CFrame.new(x, 2 + (i % 2) * 0.06, 0), Vector3.new(length / leaves + 0.6, 1.3, width - 0.46 - (i % 2) * 0.24), C.GrassDark:Lerp(C.White, (i % 2) * 0.08), M.Grass, "deco")
+	end
 	local n = math.max(2, math.floor(length / 2.2))
-	TownKit.Beam(model, "Leaves", (cf * CFrame.new(-length / 2 + 0.8, 2, 0)).Position, (cf * CFrame.new(length / 2 - 0.8, 2, 0)).Position, width - 0.9, 0.9, C.GrassDark, M.Grass, "deco")
 	for i = 1, n do
 		local x = -length / 2 + (i - 0.5) * length / n
-		TownKit.Ball(model, "Flower", (cf * CFrame.new(x, 2.5, (hash(seed, i) - 0.5) * (width - 1.4))).Position, 1.1, TownKit.FLOWERS[(seed + i) % #TownKit.FLOWERS + 1], M.SmoothPlastic, "deco")
+		local color = TownKit.FLOWERS[(seed + i) % #TownKit.FLOWERS + 1]
+		TownKit.Egg(model, "Flower", cf * CFrame.new(x, 2.55 + (i % 2) * 0.12, (hash(seed, i) - 0.5) * (width - 1.6)) * CFrame.Angles(0, hash(seed, i + 9) * 3, 0), Vector3.new(1.4, 0.7, 1.2), color, M.SmoothPlastic, "deco")
 	end
 	return model
 end
 
 -- Arceau à vélos + un vélo garé
-function TownKit.BikeRack(parent: Instance, cf: CFrame, bikes: number)
-	local model = TownKit.Model(parent, "BikeRack")
-	for i = 0, 2 do
-		local x = (i - 1) * 1.6
-		part(model, "Hoop", Vector3.new(0.2, 2.2, 0.2), cf * CFrame.new(x, 1.1, -0.9), C.MetalLight, M.Metal, "deco")
-		part(model, "Hoop", Vector3.new(0.2, 2.2, 0.2), cf * CFrame.new(x, 1.1, 0.9), C.MetalLight, M.Metal, "deco")
-		part(model, "HoopTop", Vector3.new(0.2, 0.2, 2), cf * CFrame.new(x, 2.2, 0), C.MetalLight, M.Metal, "deco")
+-- (v9.7, VEHICLES97) Place réservée à un véhicule construit côté CLIENT
+-- (TownTraffic, en flux : bus complet, vélos, trottinettes, voitures garées
+-- en plus...) : une Configuration (0 pièce) dans DopamineTown/VehicleSpots,
+-- attributs Kind + CF (au sol, avant vers -Z) + options (Color, Variant...).
+-- `collider` (facultatif) : boîte invisible solide côté serveur (1 pièce),
+-- pour qu'on ne traverse pas un bus / un camion.
+TownKit.SPOTS_FOLDER = "VehicleSpots"
+function TownKit.VehicleSpot(parent: Instance, kind: string, cf: CFrame, attrs: { [string]: any }?, collider: { Size: Vector3, CF: CFrame }?): Instance
+	local root = parent:FindFirstAncestor("DopamineTown") or parent
+	local folder = root:FindFirstChild(TownKit.SPOTS_FOLDER)
+	if not folder then
+		folder = Instance.new("Folder")
+		folder.Name = TownKit.SPOTS_FOLDER
+		folder.Parent = root
 	end
-	for i = 1, bikes do
-		local bcf = cf * CFrame.new((i - 2) * 1.6 + 0.4, 0, 0)
-		local frame = ({ C.Sky, C.Pink, C.Mint })[i % 3 + 1]
-		for _, z in ipairs({ -1.4, 1.4 }) do
-			local wheel = part(model, "Wheel", Vector3.new(0.15, 2, 2), bcf * CFrame.new(0, 1, z), C.Metal, M.Rubber, "deco")
-			;(wheel :: Part).Shape = Enum.PartType.Cylinder
+	local spot = Instance.new("Configuration")
+	spot.Name = kind
+	spot:SetAttribute("Kind", kind)
+	spot:SetAttribute("CF", cf)
+	for key, value in pairs(attrs or {}) do
+		spot:SetAttribute(key, value)
+	end
+	spot.Parent = folder
+	if collider then
+		part(parent, "VehicleCollider", collider.Size, collider.CF, C.White, M.SmoothPlastic, "ghost")
+	end
+	return spot
+end
+
+-- Arceaux à vélos (v9.7, VEHICLES97) : 3 arceaux inox en U (serveur, sans
+-- coudes : 10 pièces) + `bikes` vélos réalistes (cadre, roues à rayons,
+-- panier...) construits côté client entre les arceaux (TownTraffic).
+function TownKit.BikeRack(parent: Instance, cf: CFrame, bikes: number)
+	local model = VehicleModels.BikeRack({ Count = 3, Gap = 2.2, Plate = false, Bends = false })
+	model:PivotTo(cf)
+	model.Parent = parent
+	stats.Parts += tonumber(model:GetAttribute("PartCount")) or 0
+	local colors = { C.Sky, C.Pink, C.Mint, C.Lemon }
+	for i, x in ipairs({ -1.1, 1.1, 3.3, -3.3 }) do
+		if i > bikes then
+			break
 		end
-		-- (v9.6 : cadre plus large que la roue (0.24 > 0.15) : faces distinctes)
-		part(model, "Frame", Vector3.new(0.24, 0.22, 2.8), bcf * CFrame.new(0, 1.6, 0) * CFrame.Angles(math.rad(8), 0, 0), frame, M.Metal, "deco")
-		part(model, "Saddle", Vector3.new(0.4, 0.2, 0.8), bcf * CFrame.new(0, 2.3, 0.7), C.Metal, M.Leather, "deco")
+		TownKit.VehicleSpot(parent, "Bike", cf * CFrame.new(x, 0, 0.15), { Variant = if i == 3 then "Kid" else "City", Color = colors[i] })
 	end
 	return model
 end

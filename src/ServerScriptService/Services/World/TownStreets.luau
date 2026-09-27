@@ -23,6 +23,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
 local TownKit = require(script.Parent.TownKit)
 local TownBuildings = require(script.Parent.TownBuildings)
+local TownVehicles = require(script.Parent.TownVehicles) -- (v9.7, VEHICLES97) places de stationnement, 2-roues
 
 local TownStreets = {}
 
@@ -45,15 +46,7 @@ local ST_HALF = WorldLayout.AVENUE_W / 2 -- 8
 local ST_WALK = 5
 local ST_OUT = ST_HALF + ST_WALK -- 13
 
-local CAR_COLORS = {
-	Color3.fromRGB(255, 150, 190),
-	Color3.fromRGB(130, 200, 255),
-	Color3.fromRGB(255, 236, 150),
-	Color3.fromRGB(170, 230, 190),
-	Color3.fromRGB(250, 250, 250),
-	Color3.fromRGB(200, 170, 250),
-	Color3.fromRGB(236, 96, 110),
-}
+-- (v9.7, VEHICLES97 : teintes des voitures garées -> TownVehicles.PARKED_COLORS)
 
 ----------------------------------------------------------------------
 -- Bandes droites avec trous (croisements)
@@ -164,15 +157,22 @@ local function buildBoulevard(folder: Instance, geo: TownKit.Geo)
 			local tx = -treeHalf + i * (2 * treeHalf) / math.max(1, n)
 			if not (junction and math.abs(tx) < jw + 7) then
 				local base = (F * CFrame.new(tx, WorldLayout.GROUND_Y, -hw - WALK_W - 4)).Position
-				TownKit.Tree(side, base, 12 + hash(k, i) * 5, k * 17 + i, (i + k) % 5 == 0 and 2 or 1)
+				-- (v9.7 NATURE97) boulevard : chênes, érables, peupliers, cerisiers (silhouette ; détails de près côté client)
+				TownKit.Tree(side, base, 12 + hash(k, i) * 5, k * 17 + i, ({ "Oak", "Poplar", "Maple", "Oak", "Cherry" })[(i + k) % 5 + 1], { Lawn = true })
 			end
 		end
-		if hash(k, 99) < 0.55 and not (k == 0) then
+		if not (k == 0) then
+			-- (v9.7, VEHICLES97) 3 places marquées le long du trottoir intérieur
+			-- (voitures alignées, roues sur la chaussée, conduite à droite) ;
+			-- budget du serveur : 1 voiture serveur sur un côté sur quatre, les
+			-- autres places occupées sont remplies côté client (TownTraffic, en flux)
+			local rowHalf = 1.5 * TownVehicles.BAY_LENGTH
 			local cx = (hash(k, 5) - 0.5) * half * 0.9
-			if not (junction and math.abs(cx) < jw + 12) then
-				-- (v9.6, GARAGE96) vrais modèles variés de CarModels (garés le long du trottoir)
-				local parkedKind = ({ "CityCar", "Hatchback", "SUV", "BubbleCar", "Pickup", "SportsCar", "Van" })[math.floor(hash(k, 6) * 7) % 7 + 1]
-				TownKit.Car(side, F * CFrame.new(cx, ROAD_Y, -hw + 3.6) * CFrame.Angles(0, math.rad(90), 0), CAR_COLORS[k % #CAR_COLORS + 1], parkedKind, {})
+			if junction and math.abs(cx) < jw + 12 + rowHalf then
+				cx = (if cx < 0 then -1 else 1) * (jw + 12 + rowHalf)
+			end
+			if math.abs(cx) + rowHalf < (A - hw) * tanH - 8 then
+				TownVehicles.ParkingRow(side, F * CFrame.new(cx, ROAD_Y, -hw + 0.05) * CFrame.Angles(0, math.pi, 0), 3, k * 13 + 5, if k % 4 == 1 then 1 else 0)
 			end
 		end
 		-- bouche d'incendie + poubelle sur le trottoir intérieur
@@ -238,7 +238,8 @@ local function buildAvenue(folder: Instance, geo: TownKit.Geo)
 		for _, sx in ipairs({ -1, 1 }) do
 			local base = (R * CFrame.new(sx * (PROM - 2.2), WALK_Y, -s)).Position
 			part(ave, "TreeGrate", Vector3.new(3, 0.1, 3), CFrame.new(base + Vector3.new(0, 0.05, 0)), C.Metal, M.DiamondPlate, "deco")
-			TownKit.Tree(ave, base, 13 + hash(i, sx) * 3, i * 7 + sx, (i % 4 == 1) and 2 or 1)
+			-- (v9.7 NATURE97) avenue : allée de cerisiers, d'érables et de chênes (détails de près côté client)
+			TownKit.Tree(ave, base, 13 + hash(i, sx) * 3, i * 7 + sx, (i % 3 == 1) and "Cherry" or (i % 3 == 2 and "Maple" or "Oak"))
 		end
 		if i < n then
 			local sm = s + length / n / 2
@@ -299,14 +300,22 @@ local function buildSideStreet(folder: Instance, geo: TownKit.Geo, slot: number)
 			local base = (R * CFrame.new(sx * (ST_OUT - 1.8), WALK_Y, -si)).Position
 			if (i + (sx > 0 and 1 or 0)) % 2 == 0 then
 				part(st, "TreeGrate", Vector3.new(2.6, 0.1, 2.6), CFrame.new(base + Vector3.new(0, 0.05, 0)), C.Metal, M.DiamondPlate, "deco")
-				TownKit.Tree(st, base, 11 + hash(slot, i) * 4, slot * 31 + i + sx, 1)
+				TownKit.Tree(st, base, 11 + hash(slot, i) * 4, slot * 31 + i + sx, (i % 2 == 0) and "Birch" or "Oak") -- (v9.7 NATURE97)
 			else
 				TownKit.Lamp(st, base, TownKit.Facing(R.RightVector * -sx), false)
 			end
 		end
 	end
-	-- une voiture garée dans la rue
-	TownKit.Car(st, R * CFrame.new(ST_HALF - 3.4, ROAD_Y, -(s0 + length * 0.55)), CAR_COLORS[(slot + 2) % #CAR_COLORS + 1], slot % 2 == 0 and "Hatchback" or "CityCar", {}) -- (v9.6) CarModels
+	-- (v9.7, VEHICLES97) stationnement marqué des deux côtés (conduite à
+	-- droite : côté +x vers l'extérieur, côté -x vers la place) ; 1 voiture
+	-- serveur, les autres côté client ; camion de livraison devant les
+	-- boutiques d'une des deux rues ; trottinettes / scooter sur le trottoir
+	TownVehicles.ParkingRow(st, R * CFrame.new(ST_HALF - 0.05, ROAD_Y, -(s0 + length * 0.55)) * CFrame.Angles(0, math.pi / 2, 0), 3, slot * 7 + 1, 1)
+	TownVehicles.ParkingRow(st, R * CFrame.new(-ST_HALF + 0.05, ROAD_Y, -(s0 + length * 0.3)) * CFrame.Angles(0, -math.pi / 2, 0), 2, slot * 7 + 2, 0)
+	if slot == geo.SideR then
+		TownVehicles.DeliveryVan(st, R * CFrame.new(-(ST_HALF - TownVehicles.CURB_GAP - 3.3), ROAD_Y, -(s0 + length * 0.78)) * CFrame.Angles(0, math.pi, 0))
+	end
+	TownVehicles.TwoWheelers(st, R * CFrame.new(ST_HALF + 1.8, WALK_Y, -(s0 + 15)) * CFrame.Angles(0, math.pi / 2, 0), 3, slot)
 end
 
 -- Immeubles des deux côtés d'une rue (façades alignées sur le trottoir)

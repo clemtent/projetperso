@@ -578,6 +578,22 @@ function WorldLayout.EntranceCFrame(count: number): CFrame
 	return CFrame.lookAt(p, p - Vector3.new(0, 0, 1))
 end
 
+-- (v9.7, BUILDINGS97) 🛒 Supermarché, hors de la porte, à droite de la
+-- route d'arrivée (en venant de la ville) : façade tournée vers la route
+-- (-X monde), parking entre les deux. Tient dans les murs de 4 à 12
+-- parcelles (coin le plus loin : x = 122, z = porte + 77) sans toucher
+-- les parcelles, la concession ni le rond-point.
+WorldLayout.MARKET_W = 70 -- façade (le long de la route)
+WorldLayout.MARKET_D = 48 -- profondeur
+WorldLayout.MARKET_X = 74 -- distance de la façade à l'axe de la route
+WorldLayout.MARKET_LOT = 42 -- profondeur du parking devant la façade (trottoir compris : +10)
+
+-- Pied de la façade (milieu), LookVector vers la route ; volume derrière (+Z local)
+function WorldLayout.MarketCFrame(count: number): CFrame
+	local p = WorldLayout.Origin() + Vector3.new(WorldLayout.MARKET_X, WorldLayout.WALK_Y, WorldLayout.GateDistance(count) + 7 + WorldLayout.MARKET_W / 2)
+	return CFrame.lookAt(p, p - Vector3.new(1, 0, 0))
+end
+
 -- Centre de la place, au sol (dessus du pavé)
 function WorldLayout.PlazaCFrame(): CFrame
 	return CFrame.new(WorldLayout.Origin() + Vector3.new(0, WorldLayout.WALK_Y, 0))
