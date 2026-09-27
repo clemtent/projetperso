@@ -370,6 +370,7 @@ function TownKit.Bench(parent: Instance, cf: CFrame)
 	local model = TownKit.Model(parent, "Bench")
 	local seat = part(model, "Seat", Vector3.new(6, 0.35, 1.9), cf * CFrame.new(0, 1.7, 0), C.WoodLight, M.WoodPlanks, "solid", "Seat")
 	seat.CanCollide = true
+	seat.CanTouch = true -- (un Seat s'active au contact)
 	part(model, "Back", Vector3.new(6, 1.5, 0.25), cf * CFrame.new(0, 2.9, 0.95) * CFrame.Angles(math.rad(-10), 0, 0), C.WoodLight, M.WoodPlanks, "deco")
 	for _, x in ipairs({ -2.6, 2.6 }) do
 		part(model, "Leg", Vector3.new(0.3, 1.6, 1.8), cf * CFrame.new(x, 0.8, 0.1), C.Metal, M.Metal, "prop")

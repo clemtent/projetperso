@@ -210,7 +210,7 @@ local function hallWalls(kit: any, size: any, floor: number, colors: Colors)
 	kit:Text(plaque, Enum.NormalId.Back, text, colors.Accent, Enum.Font.FredokaOne, 30, 90)
 	if floor > 1 then
 		local down = kit:Box("DownSign", cx - 1.8, cx + 1.8, y + 4.8, y + 5.9, dBack - 0.14, dBack - 0.02, colors.Accent, M.SmoothPlastic, { Shadow = false })
-		kit:Text(down, Enum.NormalId.Back, "⬇ " .. floorName(floor - 1), WHITE, Enum.Font.GothamBold, 30, 90)
+		kit:Text(down, Enum.NormalId.Back, "⬇️ " .. floorName(floor - 1), WHITE, Enum.Font.GothamBold, 30, 90)
 	end
 end
 
@@ -231,7 +231,7 @@ function HouseStairs.Build(kit: any, size: any, colors: Colors): Result
 			local y = WorldLayout.FloorY(floor)
 			local up = kit:Box("UpSign", s0 + 0.8, s1 - 0.8, y + 0.5, y + 0.95, WorldLayout.STAIR_D0 + 0.2, WorldLayout.STAIR_D0 + 0.58, colors.Accent, M.SmoothPlastic,
 				{ Shadow = false })
-			kit:Text(up, Enum.NormalId.Back, "⬆ " .. floorName(floor + 1), WHITE, Enum.Font.GothamBold, 40, 60)
+			kit:Text(up, Enum.NormalId.Back, "⬆️ " .. floorName(floor + 1), WHITE, Enum.Font.GothamBold, 40, 60)
 		end
 	end
 	-- Rez-de-chaussée : placard sous la première volée (panneaux en coin)

@@ -842,7 +842,7 @@ function GardenBuilder._buildBed(self: Garden, folder: Instance, index: number, 
 	elseif kind == "Locked" then
 		bed.Title.Text = "🔒 " .. Locale.T("Dopamine Garden")
 		bed.Bar.Visible = false
-		bed.Timer.Text = ""
+		bed.Timer.Text = Locale.T("The garden isn't unlocked yet")
 		bed.Billboard.Enabled = index == 2
 		bed.Billboard.StudsOffsetWorldSpace = Vector3.new(0, 3, 0)
 	end

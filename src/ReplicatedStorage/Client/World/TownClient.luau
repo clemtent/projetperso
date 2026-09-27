@@ -1429,6 +1429,9 @@ function TownClient.Debug(): any
 		optionalCache[name] = module or false
 		if name == "DeskMode" then
 			deskWired = false
+			if inTown then
+				wireDesk()
+			end
 		end
 	end, Step = step, Event = onEvent }
 end

@@ -727,7 +727,7 @@ function TownHud.SetContext(self: any, context: Context?)
 	local parts = self.Parts
 	local snapshot = context and context.Snapshot
 	parts.Banner.Visible = snapshot ~= nil
-	parts.Edit.Visible = context ~= nil and context.IsOwner and context.InHouse
+	parts.Edit.Visible = context ~= nil and context.IsOwner and context.InHouse and not self.DeskActive
 	parts.Like.Visible = snapshot ~= nil and not (context and context.IsOwner)
 	if not snapshot or not context then
 		return
@@ -1086,8 +1086,27 @@ function TownHud.SetIntroProgress(self: any, t: number)
 	parts.CinemaSubStroke.Transparency = 0.2 + 0.8 * alpha
 end
 
+-- 🖥️ Au bureau (DeskMode) : pas d'émotes ni de meubles, pas de pastille
+-- (DeskMode montre son propre "Se lever")
+function TownHud.SetDeskMode(self: any, active: boolean)
+	self.DeskActive = active
+	local parts = self.Parts
+	parts.Emote.Visible = not active
+	if active then
+		self:SetEmoteWheel(false)
+		parts.Edit.Visible = false
+		self:SetAction(nil)
+	else
+		local context = self.Context
+		parts.Edit.Visible = context ~= nil and context.IsOwner and context.InHouse
+	end
+end
+
 -- Pastille d'action : "Emote" -> ■ Arrêter, "Sit" -> Se lever, nil -> cachée
 function TownHud.SetAction(self: any, state: string?)
+	if self.DeskActive then
+		state = nil
+	end
 	self.ActionState = state
 	local parts = self.Parts
 	local action: TextButton = parts.Action

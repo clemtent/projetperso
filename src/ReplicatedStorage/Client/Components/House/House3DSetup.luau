@@ -616,9 +616,10 @@ end
 
 -- Boutons lecture / suivant (dessus d'un appareil)
 local function transport(b: Builder, x: number, y: number, z: number, scale: number)
-	local play = b.Round(x - 4 * scale, y, z, 6 * scale, 2 * scale, 5 * scale, 1.5 * scale, rgb(90, 220, 140), M.SmoothPlastic)
+	b.Box(x, y, z, 15 * scale, 1, 7 * scale, INK, M.SmoothPlastic)
+	local play = b.Box(x - 3.6 * scale, y + 1, z, 6 * scale, 2 * scale, 5 * scale, rgb(90, 220, 140), M.SmoothPlastic)
 	play.Name = "PlayButton"
-	local nextButton = b.Round(x + 4 * scale, y, z, 6 * scale, 2 * scale, 5 * scale, 1.5 * scale, rgb(110, 170, 255), M.SmoothPlastic)
+	local nextButton = b.Box(x + 3.6 * scale, y + 1, z, 6 * scale, 2 * scale, 5 * scale, rgb(110, 170, 255), M.SmoothPlastic)
 	nextButton.Name = "NextButton"
 end
 

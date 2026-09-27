@@ -10,7 +10,8 @@
 	  - Cottage (studio) : chaumière crème à colombages, grand toit de tuiles
 	    roses festonné, cheminée qui fume, chat sur le toit, lucarne ronde
 	    fleurie, porche rose à pignon avec porte ronde, soubassement de
-	    pierres, pas japonais, barrière blanche, boîte aux lettres, pommier.
+	    pierres, pas japonais, barrière blanche, pommier (boîte aux lettres :
+	    celle de la parcelle, TownMap).
 	  - Townhouse (appartement) : maison de ville menthe, chaînes d'angle,
 	    pilastres, corniche à modillons, toit mansardé d'ardoises lilas avec
 	    lucarnes roses et crête dorée, 2 cheminées, balcons en fer forgé,
@@ -492,19 +493,20 @@ local function porch(ctx: Ctx, x0: number, x1: number, landingD: number, steps: 
 	local yTop = WorldLayout.FloorY(1)
 	local tread = 1.25
 	kit:Box("Porch", x0, x1, 0, yTop, -landingD, 0, color, material, { Solid = true })
+	-- `steps` contremarches : la dernière arrive sur la pelouse
 	local rise = yTop / steps
-	for k = 1, steps do
+	for k = 1, steps - 1 do
 		local top = yTop - k * rise
 		local d0 = -landingD - k * tread
 		kit:Box("PorchStep", x0 + 0.3, x1 - 0.3, 0, top, d0, d0 + tread, color:Lerp(WHITE, (k % 2) * 0.12), material, { Shadow = false })
 	end
-	-- rampe lisse (invisible) sur les marches
-	local run = steps * tread
+	-- rampe lisse (invisible) par le nez des marches, jusqu'à la pelouse
+	local run = (steps - 0.5) * tread
 	local lawn = HouseKit.LAWN
 	local slope = (yTop - lawn) / run
 	kit:Slab("PorchRamp", (x0 + x1) / 2, { lawn - 0.6 * slope, -landingD - run - 0.6 }, { yTop, -landingD }, x1 - x0 - 0.8, 1, WHITE, M.SmoothPlastic,
 		{ Solid = true, Query = true, T = 1, Shadow = false })
-	return -landingD - run
+	return -landingD - (steps - 1) * tread
 end
 
 -- Allée : suite de dalles d'un point (x, d) à l'autre
@@ -562,16 +564,6 @@ local function ironFence(ctx: Ctx, x0: number, x1: number, d: number, gate0: num
 		kit:Box("GatePillarCap", x - 1, x + 1, 4.6, 5, d - 1, d + 1, C.Cream, M.Limestone, { Shadow = false })
 		postLantern(ctx, x, d, 5, 0.6, false, kit)
 	end
-end
-
--- Boîte aux lettres (poteau + boîte ronde + cœur + drapeau)
-local function mailbox(ctx: Ctx, x: number, d: number, color: Color3)
-	local kit = ctx.Kit
-	kit:Box("MailPost", x - 0.15, x + 0.15, 0, 3, d - 0.15, d + 0.15, C.Wood, M.Wood, { Shadow = false })
-	kit:Box("Mailbox", x - 0.6, x + 0.6, 3, 4, d - 0.9, d + 0.9, color, M.SmoothPlastic, { Shadow = false })
-	kit:CylD("MailboxTop", x, 4, d, 1.2, 1.8, color, M.SmoothPlastic, { Shadow = false })
-	heart(ctx, x, 3.55, d - 0.95, 0.55, WHITE)
-	kit:Box("MailFlag", x + 0.6, x + 0.72, 3.4, 4.6, d - 0.1, d + 0.1, C.Heart, M.SmoothPlastic, { Shadow = false })
 end
 
 -- Plaque au nom du propriétaire
@@ -667,13 +659,27 @@ local function bodyWalls(ctx: Ctx, holes: { [number]: { { number } } }, material
 	kit:Box("TopSlab", L, R, ctx.Top, ctx.Top + 0.6, -0.3, ctx.Depth + 0.3, ctx.Trim, M.SmoothPlastic, { Solid = true, Shadow = false })
 end
 
--- Trou de fenêtre d'une pièce : centré dans la colonne
-local function windowRect(ctx: Ctx, column: number, floor: number, widthRatio: number, y0: number, height: number): { number }
-	local x0, x1 = WorldLayout.ColumnSpan(ctx.Size, column)
+-- Fenêtre des pièces par style : { part de la largeur, bas (au-dessus du sol), hauteur }
+local WINDOWS: { [string]: { number } } = {
+	Cottage = { 0.56, 3.2, 6.6 },
+	Townhouse = { 0.42, 2.2, 8.2 },
+	Loft = { 0.7, 1.8, 7.2 },
+	Mansion = { 0.4, 2.4, 7 },
+}
+
+-- Trou de fenêtre d'une pièce (repère local) : { x0, x1, y0, y1 } ; aussi
+-- utilisé par HouseBuilder pour le mur avant intérieur de la pièce
+function HouseFacade.WindowRect(size: any, column: number, floor: number): { number }
+	local spec = WINDOWS[WorldLayout.StyleOf(size)] or WINDOWS.Cottage
+	local x0, x1 = WorldLayout.ColumnSpan(size, column)
 	local cx = (x0 + x1) / 2
-	local w = math.clamp((x1 - x0) * widthRatio, 7, 26)
+	local w = math.clamp((x1 - x0) * spec[1], 7, 26)
 	local yFloor = WorldLayout.FloorY(floor)
-	return { cx - w / 2, cx + w / 2, yFloor + y0, yFloor + y0 + height }
+	return { cx - w / 2, cx + w / 2, yFloor + spec[2], yFloor + spec[2] + spec[3] }
+end
+
+local function windowRect(ctx: Ctx, column: number, floor: number): { number }
+	return HouseFacade.WindowRect(ctx.Size, column, floor)
 end
 
 ----------------------------------------------------------------------
@@ -694,7 +700,7 @@ STYLES.Cottage = function(ctx)
 	for floor = 1, dims.Floors do
 		holes[floor] = {}
 		for column = 1, dims.Columns do
-			local r = windowRect(ctx, column, floor, 0.56, 3.2, 6.6)
+			local r = windowRect(ctx, column, floor)
 			table.insert(holes[floor], r)
 			table.insert(windows, { r, (floor - 1) * dims.Columns + column })
 		end
@@ -791,7 +797,7 @@ STYLES.Cottage = function(ctx)
 	local foot = porch(ctx, gx - 3.5, gx + 3.5, 2.2, 3, P.StoneDark, M.Slate)
 	namePlate(ctx, gx, WorldLayout.FloorY(1) + WorldLayout.DOOR_H + 3.6, -0.5, 7)
 
-	-- jardin : pommier, buissons, pas japonais, barrière, boîte aux lettres, fleurs
+	-- jardin : pommier, buissons, pas japonais, barrière, fleurs
 	tree(ctx, ctx.Left - 9, 6, 1.2, C.Pink)
 	for column = 1, dims.Columns do
 		local x0, x1 = WorldLayout.ColumnSpan(ctx.Size, column)
@@ -802,12 +808,12 @@ STYLES.Cottage = function(ctx)
 	local gateX = 0
 	local stones = { { gateX, -20 }, { gateX * 0.8 + gx * 0.2, -16.5 }, { gateX * 0.5 + gx * 0.5, -13 }, { gateX * 0.2 + gx * 0.8, -10 }, { gx, foot - 1.2 } }
 	for index, s in ipairs(stones) do
-		kit:CylY("SteppingStone", s[1], 0, s[2], 2.6 - index * 0.12, 0.2, P.Stone:Lerp(P.StoneDark, (index % 2) * 0.4), M.Slate, { Shadow = false })
+		ctx.G:CylY("SteppingStone", s[1], -0.1, s[2], 2.6 - index * 0.12, 0.2, P.Stone:Lerp(P.StoneDark, (index % 2) * 0.4), M.Slate, { Shadow = false })
 	end
 	path(ctx, { { gx, foot - 0.5 }, { gx, foot - 2.5 } }, 3, P.Pave, M.Pebble)
+	path(ctx, { { gateX, -29.5 }, { gateX, -21.5 } }, 3, P.Pave, M.Pebble)
 	local fence0, fence1 = ctx.Left - 4, ctx.Right + 4
 	picketFence(ctx, fence0, fence1, -21, gateX - 2.2, gateX + 2.2)
-	mailbox(ctx, gateX - 4.5, -22, C.Pink)
 	flowerDots(ctx, fence0 + 1, gateX - 6, -20.2, 10)
 	flowerDots(ctx, gateX + 3, fence1 - 1, -20.2, 10)
 end
@@ -824,7 +830,7 @@ STYLES.Townhouse = function(ctx)
 	for floor = 1, dims.Floors do
 		holes[floor] = {}
 		for column = 1, dims.Columns do
-			local r = windowRect(ctx, column, floor, 0.42, 2.2, 8.2)
+			local r = windowRect(ctx, column, floor)
 			table.insert(holes[floor], r)
 			table.insert(windows, { r, (floor - 1) * dims.Columns + column })
 		end
@@ -880,7 +886,7 @@ STYLES.Townhouse = function(ctx)
 		kit:Box("Band", ctx.Left - T - 0.4, ctx.Right + T + 0.4, y - 1.3, y - 0.2, -0.7, -0.3, TRIM, M.Plaster, { Shadow = false })
 		kit:Box("BandLine", ctx.Left - T - 0.4, ctx.Right + T + 0.4, y - 0.85, y - 0.65, -0.75, -0.7, C.Pink, M.SmoothPlastic, { Shadow = false })
 		for column = 1, dims.Columns do
-			local r = windowRect(ctx, column, floor, 0.42, 2.2, 8.2)
+			local r = windowRect(ctx, column, floor)
 			local b0, b1 = r[1] - 1.2, r[2] + 1.2
 			kit:Box("Balcony", b0, b1, y - 0.4, y, -2.4, -0.3, TRIM, M.Limestone, { Solid = true })
 			kit:Box("BalconyRail", b0, b1, y + 3, y + 3.2, -2.35, -2.15, WHITE, M.Metal, { Shadow = false })
@@ -939,20 +945,19 @@ STYLES.Townhouse = function(ctx)
 	wallLantern(ctx, gx + WorldLayout.DOOR_W / 2 + 1.4, yDoor + 3.6, true)
 	local foot = porch(ctx, gx - 3.8, gx + 3.8, 2, 3, P.Stone, M.Limestone)
 	for _, s in ipairs({ -1, 1 }) do
-		HouseGarden.PottedBall(kit, gx + s * 5.2, -1.6, 1, C.Lilac)
+		HouseGarden.PottedBall(ctx.G, gx + s * 5.2, -1.6, 1, C.Lilac)
 	end
 	namePlate(ctx, gx, yDoor + WorldLayout.DOOR_H + 4.8, -0.35, 6)
 	-- trottoir, lampadaire, vélo, allée
-	kit:Box("Sidewalk", ctx.Left - 6, ctx.Right + 6, 0, 0.15, -6, -0.6, P.Pave, M.Pavement, { Shadow = false })
-	postLantern(ctx, ctx.Left + 3, -5, 0, 8, false)
-	HouseGarden.Bike(kit, ctx.Left + 7, -4.2, C.Mint:Lerp(C.Sky, 0.3))
-	path(ctx, { { 0, -21 }, { 0, -8 }, { gx, -8 }, { gx, foot } }, 3.2, P.Pave, M.Pavement)
+	ctx.G:Box("Sidewalk", ctx.Left - 6, ctx.Right + 6, -0.1, 0.12, -6, -0.6, P.Pave, M.Pavement, { Shadow = false })
+	postLantern(ctx, ctx.Left + 3, -5, 0, 8, false, ctx.G)
+	HouseGarden.Bike(ctx.G, ctx.Left + 7, -4.2, C.Mint:Lerp(C.Sky, 0.3))
+	path(ctx, { { 0, -29.5 }, { 0, -8 }, { gx, -8 }, { gx, foot } }, 3.2, P.Pave, M.Pavement)
 	for column = 1, dims.Columns do
 		local x0, x1 = WorldLayout.ColumnSpan(ctx.Size, column)
 		bush(ctx, (x0 + x1) / 2, -7.3, 5, 2, P.Leaf)
 	end
 	picketFence(ctx, ctx.Left - 4, ctx.Right + 4, -21, -2.2, 2.2)
-	mailbox(ctx, 4.5, -22, C.Mint)
 end
 
 -- ░░ Loft : entrepôt de briques reconverti ░░
@@ -966,7 +971,7 @@ STYLES.Loft = function(ctx)
 	for floor = 1, dims.Floors do
 		holes[floor] = {}
 		for column = 1, dims.Columns do
-			local r = windowRect(ctx, column, floor, 0.7, 1.8, 7.2)
+			local r = windowRect(ctx, column, floor)
 			table.insert(holes[floor], r)
 			table.insert(windows, { r, (floor - 1) * dims.Columns + column })
 		end
@@ -1111,17 +1116,16 @@ STYLES.Loft = function(ctx)
 		end
 	end
 	-- trottoir : caisses fleuries, banc, plantes
-	kit:Box("Sidewalk", ctx.Left - 8, ctx.Right + 6, 0, 0.15, -6, -0.6, P.Pave, M.Pavement, { Shadow = false })
+	ctx.G:Box("Sidewalk", ctx.Left - 8, ctx.Right + 6, -0.1, 0.12, -6, -0.6, P.Pave, M.Pavement, { Shadow = false })
 	for index, c in ipairs({ { ctx.Left + 2, -3 }, { ctx.Left + 5, -3.4 }, { ctx.Left + 3.2, -5 } }) do
-		kit:Box("Crate", c[1] - 1.2, c[1] + 1.2, 0, 1.8 - (index % 2) * 0.3, c[2] - 1, c[2] + 1, C.Wood, M.WoodPlanks, { Shadow = false })
-		kit:Ball("CrateBush", c[1], 2.2, c[2], 1.8, P.Leaf, M.Grass, { Shadow = false })
+		ctx.G:Box("Crate", c[1] - 1.2, c[1] + 1.2, 0, 1.8 - (index % 2) * 0.3, c[2] - 1, c[2] + 1, C.Wood, M.WoodPlanks, { Shadow = false })
+		ctx.G:Ball("CrateBush", c[1], 2.2, c[2], 1.8, P.Leaf, M.Grass, { Shadow = false })
 	end
 	local benchX = (WorldLayout.ColumnSpan(ctx.Size, 1) + select(2, WorldLayout.ColumnSpan(ctx.Size, 1))) / 2 + 12
-	HouseGarden.Bench(kit, benchX, -3, C.Pink)
-	HouseGarden.PottedBall(kit, gx - 6.5, -2, 1.2, C.Peach)
-	path(ctx, { { 0, -21 }, { 0, -7 }, { gx, -7 }, { gx, foot } }, 3.2, P.Pave, M.Pavement)
+	HouseGarden.Bench(ctx.G, benchX, -3, C.Pink)
+	HouseGarden.PottedBall(ctx.G, gx - 6.5, -2, 1.2, C.Peach)
+	path(ctx, { { 0, -29.5 }, { 0, -7 }, { gx, -7 }, { gx, foot } }, 3.2, P.Pave, M.Pavement)
 	picketFence(ctx, ctx.Left - 8, ctx.Right + 4, -21, -2.2, 2.2)
-	mailbox(ctx, 4.5, -22, P.Steel:Lerp(C.Mint, 0.35))
 end
 
 -- ░░ Mansion : le grand manoir kawaii ░░
@@ -1136,7 +1140,7 @@ STYLES.Mansion = function(ctx)
 	for floor = 1, dims.Floors do
 		holes[floor] = {}
 		for column = 1, dims.Columns do
-			local r = windowRect(ctx, column, floor, 0.4, 2.4, 7)
+			local r = windowRect(ctx, column, floor)
 			table.insert(holes[floor], r)
 			table.insert(windows, { r, (floor - 1) * dims.Columns + column })
 		end
@@ -1310,24 +1314,25 @@ STYLES.Mansion = function(ctx)
 	kit:Box("LandingEdge", gx - landW / 2 - 0.2, gx + landW / 2 + 0.2, yDoor - 0.3, yDoor + 0.1, -landD - 0.2, 0, TRIM, M.Limestone, { Shadow = false })
 	local steps = 3
 	local tread = 1.3
-	local rise = yDoor / steps
+	local stepRise = yDoor / steps
 	for _, s in ipairs({ -1, 1 }) do
 		local x0 = gx + s * landW / 2
-		for k = 1, steps do
-			local top = yDoor - k * rise
+		for k = 1, steps - 1 do
+			local top = yDoor - k * stepRise
 			local a, b = x0 + s * (k - 1) * tread, x0 + s * k * tread
 			kit:Box("GrandStep", math.min(a, b), math.max(a, b), 0, top, -landD + 0.2, -0.3, P.Stone:Lerp(WHITE, (k % 2) * 0.15), M.Limestone, { Shadow = false })
 		end
-		local run = steps * tread
+		local run = (steps - 0.5) * tread
 		local xEnd = x0 + s * run
-		kit:SlabX("GrandRamp", -landD / 2, { if s < 0 then xEnd - s * 0.6 else x0, if s < 0 then -0.6 * yDoor / run else yDoor },
-			{ if s < 0 then x0 else xEnd + 0.6, if s < 0 then yDoor else -0.6 * yDoor / run }, landD - 0.6, 1, WHITE, M.SmoothPlastic,
+		local lawn = HouseKit.LAWN
+		local slope = (yDoor - lawn) / run
+		kit:SlabX("GrandRamp", -landD / 2, { xEnd + s * 0.6, lawn - 0.6 * slope }, { x0, yDoor }, landD - 0.6, 1, WHITE, M.SmoothPlastic,
 			{ Solid = true, Query = true, T = 1, Shadow = false })
 		-- rampe à balustres + piliers + lanternes
 		kit:SlabX("StairRail", -landD - 0.1, { x0, yDoor + 2.6 }, { xEnd, 2.6 }, 0.4, 0.35, TRIM, M.Limestone, { Shadow = false })
-		for k = 1, 3 do
+		for k = 1, steps - 1 do
 			local x = x0 + s * (k - 0.5) * tread
-			kit:CylY("StairBaluster", x, yDoor - k * rise, -landD - 0.1, 0.45, 2.6, TRIM, M.Limestone, { Shadow = false })
+			kit:CylY("StairBaluster", x, yDoor - k * stepRise, -landD - 0.1, 0.45, 2.6, TRIM, M.Limestone, { Shadow = false })
 		end
 		kit:Box("StairPillar", xEnd - 0.7, xEnd + 0.7, 0, 3.4, -landD - 0.8, -landD + 0.6, TRIM, M.Limestone, { Solid = true })
 		postLantern(ctx, xEnd, -landD - 0.1, 3.4, 0.6, s > 0)
@@ -1335,24 +1340,24 @@ STYLES.Mansion = function(ctx)
 	end
 	-- parvis, fontaine, parterres, haies, topiaires, grille
 	local court0, court1 = gx - landW / 2 - steps * tread - 3, gx + landW / 2 + steps * tread + 3
-	kit:Box("Forecourt", court0, court1, 0, 0.12, -9, -landD, P.Pave, M.Pavement, { Shadow = false })
-	path(ctx, { { gx, -21 }, { gx, -18 } }, 4, P.Pave, M.Pavement)
-	HouseGarden.Fountain(kit, gx, -13.5)
+	ctx.G:Box("Forecourt", court0, court1, -0.1, 0.1, -9, -landD, P.Pave, M.Pavement, { Shadow = false })
+	path(ctx, { { gx, -29.5 }, { gx, -18 } }, 4, P.Pave, M.Pavement)
+	HouseGarden.Fountain(ctx.G, gx, -13.5)
 	for _, s in ipairs({ -1, 1 }) do
 		local x1 = if s < 0 then ctx.Left - T - 1 + 7.5 else court1 + 1
 		local x2 = if s < 0 then court0 - 1 else ctx.Right + T + 1 - 7.5
-		kit:Box("Hedge", x1, x2, 0, 1.6, -3.4, -1.4, P.Leaf, M.Grass)
+		ctx.G:Box("Hedge", x1, x2, 0, 1.6, -3.4, -1.4, P.Leaf, M.Grass)
 		local bumps = math.max(1, math.floor((x2 - x1) / 5))
 		for k = 0, bumps - 1 do
-			kit:CylX("HedgeTop", x1 + (k + 0.5) * (x2 - x1) / bumps, 1.6, -2.4, 2, (x2 - x1) / bumps - 0.4, P.Leaf:Lerp(WHITE, 0.06), M.Grass, { Shadow = false })
+			ctx.G:CylX("HedgeTop", x1 + (k + 0.5) * (x2 - x1) / bumps, 1.6, -2.4, 2, (x2 - x1) / bumps - 0.4, P.Leaf:Lerp(WHITE, 0.06), M.Grass, { Shadow = false })
 		end
 		flowerDots(ctx, x1 + 1, x2 - 1, -3.8, 6)
 		-- topiaire à étages près de la tour
 		local tcx = if s < 0 then ctx.Left - T - 1 else ctx.Right + T + 1
-		HouseGarden.Topiary(kit, tcx, -10)
+		HouseGarden.Topiary(ctx.G, tcx, -10)
 		-- parterre rond fleuri
 		local bx = gx + s * (ctx.Right - ctx.Left) * 0.24
-		HouseGarden.FlowerBed(kit, bx, -12, 5)
+		HouseGarden.FlowerBed(ctx.G, bx, -12, 5)
 	end
 	ironFence(ctx, ctx.Left - T - 7, ctx.Right + T + 7, -21, gx - 3.5, gx + 3.5)
 end
@@ -1394,7 +1399,7 @@ function HouseFacade.Build(kit: any, size: any, looks: Looks): Built
 	}
 	STYLES[style](ctx)
 	-- déco du jardin choisie dans la maison 2D : mêmes places (de gauche à droite)
-	HouseGarden.Decorations(kit, looks.Garden, dims.Left - 4, dims.Left + dims.Width + 4, -15, style == "Mansion")
+	HouseGarden.Decorations(ctx.G, looks.Garden, dims.Left - 4, dims.Left + dims.Width + 4, -15, style == "Mansion")
 	return built
 end
 

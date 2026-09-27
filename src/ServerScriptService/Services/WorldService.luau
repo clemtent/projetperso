@@ -60,6 +60,16 @@ local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local RateLimiter = require(script.Parent.RateLimiter)
 local TownMap = require(script.Parent:WaitForChild("World"):WaitForChild("TownMap"))
+-- 🌻 jardin de Dopamine 3D (GARDEN3D95) : module facultatif, jamais bloquant
+local GardenSnapshot: any = nil
+do
+	local ok, result = pcall(function()
+		return require(ReplicatedStorage.Shared:FindFirstChild("GardenSnapshot") :: ModuleScript)
+	end)
+	if ok and type(result) == "table" and type(result.From) == "function" then
+		GardenSnapshot = result
+	end
+end
 
 local WorldService = {}
 
@@ -241,6 +251,10 @@ local function refreshSign(index: number)
 	local data = owner and dataOf(owner)
 	if not owner or not data then
 		pcall(TownMap.SetPlotSign, plot, "✨ Free plot", "", "")
+		-- (le client traduit le panneau d'après la clé "LocText")
+		pcall(function()
+			plot.Title:SetAttribute("LocText", "✨ Free plot")
+		end)
 		plot.Model:SetAttribute("OwnerId", 0)
 		plot.Model:SetAttribute("OwnerName", "")
 		plot.Model:SetAttribute("Likes", 0)
@@ -260,6 +274,9 @@ local function refreshSign(index: number)
 		end
 	end
 	local crown = best == owner and "👑 " or "🏠 "
+	pcall(function()
+		plot.Title:SetAttribute("LocText", nil)
+	end)
 	-- (noms Roblox : pas de filtre nécessaire ; titre en anglais neutre + emoji)
 	pcall(TownMap.SetPlotSign, plot, crown .. owner.DisplayName,
 		string.format("%s %s · 🌊 %s", tostring(size.Icon or "🏠"), tostring(size.Name or ""), tostring(tonumber(data.Rebirths) or 0)),
@@ -296,6 +313,16 @@ local function copyPlaced(list: any): { any }
 		end
 	end
 	return placed
+end
+
+-- 🌻 jardin de Dopamine (GardenSnapshot.From : petit, stable, sans heure)
+local function gardenSnapshotOf(data: any): any?
+	local module = GardenSnapshot
+	if not module then
+		return nil
+	end
+	local ok, result = pcall(module.From, data)
+	return ok and result or nil
 end
 
 local function snapshotOf(player: Player): any?
@@ -347,6 +374,7 @@ local function snapshotOf(player: Player): any?
 		Roof = house.Roof,
 		RoofStyle = house.RoofStyle,
 		Garden = garden,
+		DopamineGarden = gardenSnapshotOf(data),
 		Rooms = rooms,
 	}
 end
@@ -872,6 +900,15 @@ function WorldService:Start()
 		town = result
 	else
 		warn("[WorldService] Construction de la ville : " .. tostring(result))
+	end
+	-- panneaux "✨ Free plot" : tous marqués pour la traduction côté client
+	local built = town
+	if built then
+		for index = 1, #built.Plots do
+			if not plotOwners[index] then
+				pcall(refreshSign, index)
+			end
+		end
 	end
 	-- (le client lit l'entrée pour le survol d'arrivée : posée si TownMap ne l'a pas fait)
 	pcall(function()

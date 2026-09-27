@@ -299,6 +299,7 @@ local function busStop(folder: Instance, cf: CFrame)
 	end
 	local seat = part(model, "Bench", Vector3.new(8, 0.4, 1.6), cf * CFrame.new(0, 1.8, 1.3), C.WoodLight, M.WoodPlanks, "solid", "Seat")
 	seat.CanCollide = true
+	seat.CanTouch = true
 	local ad = part(model, "Ad", Vector3.new(0.3, 5.4, 3.4), cf * CFrame.new(6.1, 4.2, 0.4), C.White, M.SmoothPlastic, "deco")
 	local _, body = TownKit.Surface(ad, Enum.NormalId.Right, 40, nil, 150, 0)
 	TownKit.Gradient(body, Color3.fromRGB(255, 190, 222), Color3.fromRGB(190, 170, 255), 90)

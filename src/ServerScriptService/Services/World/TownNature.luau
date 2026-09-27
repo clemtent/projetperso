@@ -357,13 +357,15 @@ end
 local function hills(folder: Instance, geo: TownKit.Geo)
 	local model = TownKit.Model(folder, "Hills")
 	local O = geo.Origin
-	local n = 20
+	-- (grandes boules très enterrées : on ne voit qu'un dôme doux de 25 à 55 studs)
+	local n = 18
 	for i = 1, n do
 		local a = (i + hash(i, 61) * 0.6) / n * math.pi * 2
-		local dist = geo.Town + 90 + hash(i, 62) * 120
-		local d = 160 + hash(i, 63) * 170
-		local p = O + Vector3.new(math.sin(a) * (dist + d * 0.25), GROUND_Y - d * 0.42, math.cos(a) * (dist + d * 0.25))
-		local tone = Color3.fromRGB(116, 186, 104):Lerp(Color3.fromRGB(150, 206, 130), hash(i, 64))
+		local d = 380 + hash(i, 63) * 260
+		local rise = 25 + hash(i, 65) * 30
+		local dist = geo.Town + 60 + math.sqrt(d * rise) * 0.9 + hash(i, 62) * 60
+		local p = O + Vector3.new(math.sin(a) * dist, GROUND_Y - d / 2 + rise, math.cos(a) * dist)
+		local tone = C.Grass:Lerp(Color3.fromRGB(106, 176, 98), hash(i, 64))
 		TownKit.Ball(model, "Hill", p, d, tone, M.Grass, "deco")
 	end
 	-- montagnes enneigées (pyramides approchées) dans le dos de l'entrée
@@ -393,6 +395,8 @@ end
 -- Arbres semés dans les zones libres de l'anneau intérieur
 local function scatterTrees(folder: Instance, geo: TownKit.Geo, target: number)
 	local model = TownKit.Model(folder, "ParkTrees")
+	-- (grandes villes : plus d'arbres, surtout des boules taillées à 2 pièces)
+	local roundish = geo.Slots >= 11 and 0.65 or 0.3
 	local placed = 0
 	local r0 = WorldLayout.PLAZA_R + 30
 	local r1 = geo.Inner
@@ -405,7 +409,7 @@ local function scatterTrees(folder: Instance, geo: TownKit.Geo, target: number)
 		local p = geo.Origin + Vector3.new(math.sin(a) * r, 0, math.cos(a) * r)
 		local size = 10 + hash(i, 73) * 8
 		if geo.IsFree(p, 4) then
-			local kind = hash(i, 74) < 0.15 and 3 or (hash(i, 75) < 0.2 and 2 or (hash(i, 76) < 0.3 and 4 or 1))
+			local kind = hash(i, 74) < 0.15 and 3 or (hash(i, 75) < 0.2 and 2 or (hash(i, 76) < roundish and 4 or 1))
 			TownKit.Tree(model, p + Vector3.new(0, GROUND_Y, 0), size, i, kind)
 			geo.Reserve(p, 6)
 			placed += 1
@@ -505,7 +509,7 @@ function TownNature.Build(folder: Instance, geo: TownKit.Geo): number
 	for _, anchor in ipairs(anchors) do
 		footpath(paths, geo, geo.At(anchor[1], r0 - 1), geo.At(anchor[1], anchor[2]))
 	end
-	local trees = scatterTrees(nature, geo, math.clamp(math.floor(depth * 0.35), 25, 44))
+	local trees = scatterTrees(nature, geo, math.clamp(math.floor(depth * 0.35), 25, geo.Slots >= 11 and 56 or 44))
 	belt(nature, geo)
 	hills(nature, geo)
 	TownBuildings.Skyline(nature, O, math.rad(125), math.rad(235), geo.Town + 320, 20)
