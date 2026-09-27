@@ -2563,6 +2563,7 @@ end
 loadFamilies("House3DCritters")
 loadFamilies("House3DObjects")
 loadFamilies("House3DToys")
+loadFamilies("House3DSetup") -- v9.5 🖥️ objets "Dopamine Setup"
 
 local DOORS_AS_CARD: { [string]: boolean } = {}
 
