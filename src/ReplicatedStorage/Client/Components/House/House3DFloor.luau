@@ -9,7 +9,8 @@
 	mêmes couleurs (A / B du style), mais en grille régulière : c'est la
 	caméra 3D qui fait la perspective.
 	  Motifs : Plain, Checker, Wood, Tiles, Carpet, Marble, Herringbone
-	  (+ v9.1 : Terrazzo, Mosaic, Grass, Clouds, Starry ; motif inconnu = uni).
+	  (+ v9.1 : Terrazzo, Mosaic, Grass, Clouds, Starry ; v9.2 : Concrete,
+	  Court, Turf, TreadPlate, Road, Lava ; motif inconnu = uni).
 	  + la pelouse du socle (herbe, touffes et petites fleurs, comme la
 	    pelouse sous la maison en 2D).
 	Uniquement des Frames (comme HousePatterns) ; `container` doit couper
@@ -311,6 +312,166 @@ FLOOR.Starry = function(holder, w, h, a, b, u)
 			x += step * (0.7 + noise(index, 7) * 0.8)
 		end
 		y += step * 0.8
+	end
+end
+
+-- v9.2 : sols "sport / gamer" (vus de dessus, la caméra 3D fait la perspective)
+-- Anneau (contour seul) centré
+local function ring(parent: Instance, cx: number, cy: number, w: number, h: number, color: Color3, thickness: number, z: number?): Frame
+	local frame = Box(parent, cx - w / 2, cy - h / 2, w, h, color, 1, z)
+	Round(frame)
+	local line = Instance.new("UIStroke")
+	line.Color = color
+	line.Thickness = thickness
+	line.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	line.Parent = frame
+	return frame
+end
+
+-- Béton : grandes dalles, joints, mouchetures, quelques fissures
+FLOOR.Concrete = function(holder, w, h, a, b, u)
+	local cell = 140 * u
+	local seam = b:Lerp(BLACK, 0.15)
+	local x = (w % cell) / 2
+	while x < w do
+		Box(holder, x, 0, math.max(1, 2 * u), h, seam, 0.35)
+		x += cell
+	end
+	local y = cell * 0.6
+	while y < h do
+		Box(holder, 0, y, w, math.max(1, 2 * u), seam, 0.35)
+		y += cell
+	end
+	for index = 1, math.floor(w * h / (900 * u * u)) do
+		local size = (2 + 3 * noise(index, 1)) * u
+		Circle(holder, noise(index, 2) * w, noise(index, 3) * h, size, size, index % 3 == 0 and a:Lerp(WHITE, 0.4) or b, 0.45)
+	end
+	for index = 1, 6 do
+		local crack = Box(holder, noise(index, 4) * w, noise(index, 5) * h, (40 + 50 * noise(index, 6)) * u, math.max(1, 1.2 * u), seam, 0.3)
+		crack.Rotation = (noise(index, 7) - 0.5) * 120
+	end
+end
+
+-- Terrain de basket : parquet + lignes blanches (bords, milieu, rond central, raquettes)
+FLOOR.Court = function(holder, w, h, a, b, u)
+	FLOOR.Wood(holder, w, h, a, a:Lerp(BLACK, 0.08), u)
+	local line = math.max(2, 5 * u)
+	local m = 24 * u
+	local frame = Box(holder, m, m, w - 2 * m, h - 2 * m, b, 1, 3)
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = b
+	stroke.Thickness = line
+	stroke.Parent = frame
+	Box(holder, w / 2 - line / 2, m, line, h - 2 * m, b, 0, 3)
+	ring(holder, w / 2, h / 2, 130 * u, 130 * u, b, line, 3)
+	Circle(holder, w / 2, h / 2, 36 * u, 36 * u, Color3.fromRGB(240, 110, 60), 0.1, 3)
+	for _, side in ipairs({ -1, 1 }) do
+		local keyW, keyH = 150 * u, 150 * u
+		local kx = side < 0 and m or w - m - keyW
+		Box(holder, kx, h / 2 - keyH / 2, keyW, keyH, Color3.fromRGB(240, 110, 60), 0.55, 2)
+		local key = Box(holder, kx, h / 2 - keyH / 2, keyW, keyH, b, 1, 3)
+		local keyStroke = Instance.new("UIStroke")
+		keyStroke.Color = b
+		keyStroke.Thickness = line
+		keyStroke.Parent = key
+		ring(holder, side < 0 and m + keyW or w - m - keyW, h / 2, 110 * u, 110 * u, b, line, 3)
+		ring(holder, side < 0 and m or w - m, h / 2, 520 * u, h * 0.86, b, line, 3)
+	end
+end
+
+-- Pelouse de foot : bandes de tonte, lignes blanches, rond central
+FLOOR.Turf = function(holder, w, h, a, b, u)
+	local band = 60 * u
+	local x = 0
+	local index = 0
+	while x < w do
+		Box(holder, x, 0, band, h, index % 2 == 0 and b or a:Lerp(WHITE, 0.08), index % 2 == 0 and 0.2 or 0.5)
+		x += band
+		index += 1
+	end
+	local white = Color3.fromRGB(250, 252, 255)
+	local line = math.max(2, 4 * u)
+	local m = 20 * u
+	local frame = Box(holder, m, m, w - 2 * m, h - 2 * m, white, 1, 3)
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = white
+	stroke.Thickness = line
+	stroke.Parent = frame
+	Box(holder, w / 2 - line / 2, m, line, h - 2 * m, white, 0, 3)
+	ring(holder, w / 2, h / 2, 150 * u, 150 * u, white, line, 3)
+	Circle(holder, w / 2, h / 2, 10 * u, 10 * u, white, 0, 3)
+	for _, side in ipairs({ -1, 1 }) do
+		local bw, bh = 120 * u, 230 * u
+		local box = Box(holder, side < 0 and m or w - m - bw, h / 2 - bh / 2, bw, bh, white, 1, 3)
+		local boxStroke = Instance.new("UIStroke")
+		boxStroke.Color = white
+		boxStroke.Thickness = line
+		boxStroke.Parent = box
+	end
+end
+
+-- Tôle larmée : petits reliefs en diagonale, alternés
+FLOOR.TreadPlate = function(holder, w, h, a, b, u)
+	local step = 26 * u
+	local row = 0
+	local y = step / 2
+	while y < h do
+		local col = 0
+		local x = step / 2
+		while x < w do
+			local bar = Box(holder, x - 7 * u, y - 2 * u, 14 * u, 4 * u, (row + col) % 2 == 0 and b or a:Lerp(WHITE, 0.3), 0.1)
+			bar.Rotation = (row + col) % 2 == 0 and 45 or -45
+			Round(bar)
+			x += step
+			col += 1
+		end
+		y += step
+		row += 1
+	end
+	Box(holder, 0, 0, w, h * 0.3, WHITE, 0.88)
+end
+
+-- Route : asphalte, pointillés jaunes au milieu, bords blancs, passage piéton
+FLOOR.Road = function(holder, w, h, a, b, u)
+	for index = 1, math.floor(w * h / (700 * u * u)) do
+		local size = (2 + 2 * noise(index, 1)) * u
+		Circle(holder, noise(index, 2) * w, noise(index, 3) * h, size, size, a:Lerp(WHITE, 0.2 + 0.2 * noise(index, 4)), 0.4)
+	end
+	local white = Color3.fromRGB(245, 245, 245)
+	Box(holder, 0, 18 * u, w, 5 * u, white, 0.1, 2)
+	Box(holder, 0, h - 23 * u, w, 5 * u, white, 0.1, 2)
+	local x = 20 * u
+	while x < w do
+		Box(holder, x, h / 2 - 4 * u, 50 * u, 8 * u, b, 0, 2)
+		x += 90 * u
+	end
+	local cross = w * 0.72
+	for index = 0, 6 do
+		Box(holder, cross, 34 * u + index * (h - 68 * u) / 7, 70 * u, (h - 68 * u) / 14, white, 0.05, 3)
+	end
+end
+
+-- Lave : roche sombre en plaques, fissures et flaques qui brillent
+FLOOR.Lava = function(holder, w, h, a, b, u)
+	local glow = b:Lerp(Color3.fromRGB(255, 220, 90), 0.35)
+	for index = 1, 26 do
+		local cx, cy = noise(index, 1) * w, noise(index, 2) * h
+		local length = (60 + 90 * noise(index, 3)) * u
+		local crack = Box(holder, cx, cy, length, (3 + 3 * noise(index, 4)) * u, b, 0, 2)
+		crack.Rotation = noise(index, 5) * 180
+		Round(crack)
+		local core = Box(holder, cx + length * 0.2, cy, length * 0.5, 1.5 * u, glow, 0, 3)
+		core.Rotation = crack.Rotation
+	end
+	for index = 1, 8 do
+		local size = (26 + 30 * noise(index, 6)) * u
+		local pool = Circle(holder, noise(index, 7) * w, noise(index, 8) * h, size * 1.4, size, b, 0.05, 2)
+		pool.Name = "Pool"
+		Circle(holder, noise(index, 7) * w, noise(index, 8) * h, size * 0.8, size * 0.5, glow, 0, 3)
+	end
+	for index = 1, 30 do
+		local size = (5 + 6 * noise(index, 9)) * u
+		Circle(holder, noise(index, 10) * w, noise(index, 11) * h, size, size, a:Lerp(WHITE, 0.12), 0.3)
 	end
 end
 

@@ -1787,11 +1787,10 @@ R.MoaiStatue = function(b, _ctx)
 	b.Footprint(50, 42, 96)
 end
 R.BeachBall = function(b, _ctx)
-	b.Ball(0, 50, 0, 96, WHITE)
-	for index = 0, 2 do
-		local stripe = b.BoxR(CFrame.new(0, 50, 0) * CFrame.Angles(0, index * math.pi / 3, 0), 97, 90, 14, ({ accent(b, 1, PINK), accent(b, 2, SKY), accent(b, 3, BUTTER) })[index + 1])
-		stripe.Name = "Bande"
-	end
+	b.Ball(0, 48, 0, 96, accent(b, 1, PINK))
+	b.Cyl(0, 40, 0, 97, 16, accent(b, 2, SKY))
+	b.Cyl(0, 58, 0, 91, 8, WHITE)
+	b.Ball(0, 90, 0, 20, WHITE)
 	b.Footprint(96, 96, 96)
 end
 R.GiantDice = function(b, _ctx)

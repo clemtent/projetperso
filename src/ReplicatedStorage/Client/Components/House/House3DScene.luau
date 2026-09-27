@@ -213,6 +213,12 @@ local FLOOR_MATERIAL: { [string]: Enum.Material } = {
 	Mosaic = M.SmoothPlastic,
 	Clouds = M.Fabric,
 	Starry = M.SmoothPlastic,
+	Concrete = M.Concrete,
+	Court = M.WoodPlanks,
+	Turf = M.Grass,
+	TreadPlate = M.DiamondPlate,
+	Road = M.Asphalt,
+	Lava = M.CrackedLava,
 }
 
 ----------------------------------------------------------------------
@@ -289,6 +295,7 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 	local arrivals: { Arrival } = {}
 	local effects: { ParticleEmitter } = {}
 	local discoClock = 0
+	local stormClock = 0
 
 	------------------------------------------------------------------
 	-- Studio : boîte pastel en bandes (Parts opaques, pas d'ombre)
@@ -384,6 +391,15 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 		end
 		-- (la couleur vient de la pièce : le fond de la toile reste transparent)
 		sheet.BackgroundTransparency = 1
+		if pattern == "Lava" then
+			-- la lave éclaire la pièce par en dessous
+			local glow = Instance.new("PointLight")
+			glow.Color = Color3.fromRGB(255, 130, 60)
+			glow.Range = 20
+			glow.Brightness = 1.2
+			glow.Shadows = false
+			glow.Parent = floorPart
+		end
 		-- ombres douces au pied des murs
 		local back = HousePatterns.Box(sheet, 0, 0, roomWpx, 40, BLACK, 0.75, 20)
 		local fade = Instance.new("UIGradient")
@@ -538,6 +554,11 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 	-- Petites particules d'ambiance (Room.Mood.Effect), dans le volume de la pièce
 	do
 		local specs: { [string]: { Colors: { Color3 }, Rate: number, Size: number, Speed: number, Up: number, Life: number, Emission: number } } = {
+			Neon = { Colors = { Color3.fromRGB(255, 80, 200), Color3.fromRGB(80, 230, 255) }, Rate = 8, Size = 0.3, Speed = 0.3, Up = 0.1, Life = 3, Emission = 1 },
+			Floodlights = { Colors = { WHITE, Color3.fromRGB(230, 240, 255) }, Rate = 5, Size = 0.22, Speed = 0.2, Up = 0.05, Life = 5, Emission = 1 },
+			RGB = { Colors = { Color3.fromRGB(255, 60, 90), Color3.fromRGB(90, 255, 120), Color3.fromRGB(80, 140, 255) }, Rate = 10, Size = 0.3, Speed = 0.8, Up = 0, Life = 2, Emission = 1 },
+			Storm = { Colors = { Color3.fromRGB(170, 200, 255), Color3.fromRGB(120, 140, 200) }, Rate = 14, Size = 0.18, Speed = 3, Up = -6, Life = 1.2, Emission = 0.6 },
+			Embers = { Colors = { Color3.fromRGB(255, 200, 80), Color3.fromRGB(255, 90, 30) }, Rate = 9, Size = 0.28, Speed = 0.6, Up = 0.8, Life = 3, Emission = 1 },
 			Sparkles = { Colors = { Color3.fromRGB(255, 244, 190), WHITE }, Rate = 6, Size = 0.35, Speed = 0.3, Up = 0.2, Life = 3, Emission = 1 },
 			Bubbles = { Colors = { Color3.fromRGB(190, 230, 255), WHITE }, Rate = 5, Size = 0.5, Speed = 0.6, Up = 0.5, Life = 5, Emission = 0.4 },
 			Hearts = { Colors = { C.Pink, C.PinkDeep }, Rate = 5, Size = 0.45, Speed = 0.5, Up = 0.4, Life = 4, Emission = 0.7 },
@@ -1230,7 +1251,21 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 					end
 				end
 			end
-			if mood.Effect == "Disco" then
+			if mood.Effect == "Storm" then
+				-- éclair de temps en temps (lumière de remplissage)
+				stormClock += dt
+				local fill = fillLight
+				if fill then
+					if stormClock > 6 then
+						stormClock = 0
+					end
+					local flash = (stormClock < 0.12 or (stormClock > 0.25 and stormClock < 0.33)) and 3 or 0
+					fill.Enabled = true
+					fill.Color = Color3.fromRGB(210, 225, 255)
+					fill.Brightness = mood.Amount * 1.2 + flash
+				end
+			end
+			if mood.Effect == "Disco" or mood.Effect == "RGB" or mood.Effect == "Neon" then
 				discoClock += dt
 				local ceiling = ceilingLight
 				if ceiling and discoClock > 0.25 then
