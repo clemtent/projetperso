@@ -405,14 +405,15 @@ function TownKit.FlowerBed(parent: Instance, center: Vector3, radius: number, se
 	local leaf = Color3.fromRGB(86, 150, 78)
 	for k = 0, 2 do
 		local ang = a + k * math.pi * 2 / 3
-		local p = center + Vector3.new(math.cos(ang) * radius * 0.42, 0.62, math.sin(ang) * radius * 0.42)
+		-- (hauteurs décalées de 0,06 : aucune face de boîte confondue, même pour un détecteur qui ignore le maillage)
+		local p = center + Vector3.new(math.cos(ang) * radius * 0.42, 0.62 + k * 0.06, math.sin(ang) * radius * 0.42)
 		TownKit.Egg(model, "Leaves", CFrame.new(p) * CFrame.Angles(0, -ang, 0), Vector3.new(radius * 0.95, 1.1, radius * 0.75), leaf:Lerp(C.White, k * 0.06), M.Grass, "deco")
 	end
 	local n = radius >= 3 and 6 or 4
 	for k = 0, n - 1 do
 		local ang = a + 0.5 + k * math.pi * 2 / n
 		local r = radius * (k % 2 == 0 and 0.62 or 0.36)
-		local p = center + Vector3.new(math.cos(ang) * r, 1.1 + (k % 2) * 0.2, math.sin(ang) * r)
+		local p = center + Vector3.new(math.cos(ang) * r, 1.1 + (k % 2) * 0.2 + k * 0.05, math.sin(ang) * r)
 		local color = TownKit.FLOWERS[(seed + k) % #TownKit.FLOWERS + 1]
 		TownKit.Egg(model, "Blooms", CFrame.new(p) * CFrame.Angles(0, ang, 0), Vector3.new(1.5, 0.75, 1.3), color, M.SmoothPlastic, "deco")
 	end
@@ -557,7 +558,7 @@ function TownKit.Planter(parent: Instance, cf: CFrame, length: number, width: nu
 	local leaves = math.max(1, math.floor(length / 4 + 0.5))
 	for i = 1, leaves do
 		local x = -length / 2 + (i - 0.5) * length / leaves
-		TownKit.Egg(model, "Leaves", cf * CFrame.new(x, 2, 0), Vector3.new(length / leaves + 0.6, 1.3, width - 0.5), C.GrassDark:Lerp(C.White, (i % 2) * 0.08), M.Grass, "deco")
+		TownKit.Egg(model, "Leaves", cf * CFrame.new(x, 2 + (i % 2) * 0.06, 0), Vector3.new(length / leaves + 0.6, 1.3, width - 0.5), C.GrassDark:Lerp(C.White, (i % 2) * 0.08), M.Grass, "deco")
 	end
 	local n = math.max(2, math.floor(length / 2.2))
 	for i = 1, n do
