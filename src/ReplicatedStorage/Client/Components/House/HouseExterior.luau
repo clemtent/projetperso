@@ -17,6 +17,11 @@
 	    escalier double, jardin à la française, fontaine, grille, lanternes).
 	Le mode nuit teinte tout en bleu nuit (comme HouseScenery), allume les
 	fenêtres et les lanternes, fait sortir les lucioles.
+	(v9.1) Build(parent, size, looks?) : couleur de la façade (Facade) et du
+	toit (Roof), motif du toit (RoofStyle : cœurs, pois, rayures, étoiles,
+	fleurs, neige, écailles) et bande de jardin devant la maison avec la
+	déco choisie (Garden, dessins GardenArt) ; SetLooks(looks) redessine la
+	façade sans toucher aux pièces.
 
 	API (contrat A) :
 	  HouseExterior.CELL_H                 hauteur d'une pièce (px de maquette)

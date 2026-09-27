@@ -311,6 +311,7 @@ function HouseOverview.new(parent: Frame, handlers: Handlers): Overview
 	local size: SizeDef? = nil
 	local exterior: Exterior? = nil
 	local exteriorLooks: any = nil -- (v9.1) façade, toit, jardin
+	local gardenFocus = false -- (v9.1) essai d'une déco du jardin en cours
 	local looksKey = ""
 	local cards: { [string]: Card } = {}
 	local empties: { [number]: EmptySlot } = {}
@@ -1220,6 +1221,10 @@ function HouseOverview.new(parent: Frame, handlers: Handlers): Overview
 		if minX < maxX then
 			minX, maxX = math.max(0, minX - 90), math.min(ext.Width, maxX + 90)
 			minY, maxY = math.max(0, minY - 150), math.min(ext.Height, maxY + 70)
+			-- (v9.1) essai d'une déco du jardin depuis la boutique : le jardin reste à l'écran
+			if gardenFocus then
+				maxY = ext.Height
+			end
 			local focus = math.max(0.05, math.min(availW / (maxX - minX), availH / (maxY - minY)))
 			-- (PC / tablette : l'immeuble entier tant qu'il reste assez grand)
 			if full < focus * (Interface.IsPhone() and 0.85 or 0.5) then
@@ -1304,6 +1309,13 @@ function HouseOverview.new(parent: Frame, handlers: Handlers): Overview
 				looks.RoofStyle and looks.RoofStyle.Id or "",
 				table.concat(garden, ","),
 			}, "|")
+			local wantFocus = extra ~= nil
+			if wantFocus ~= gardenFocus then
+				gardenFocus = wantFocus
+				task.defer(function()
+					refit(true)
+				end)
+			end
 			local looksChanged = key ~= looksKey
 			looksKey = key
 			exteriorLooks = looks

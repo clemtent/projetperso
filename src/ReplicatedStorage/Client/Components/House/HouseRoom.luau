@@ -11,7 +11,11 @@
 	  - fenêtre à rideaux + tache de lumière sur le sol, prise électrique
 	    rigolote, lumière douce du coin haut-gauche, vignettage ;
 	  - mode nuit (mode sombre) : voile bleu nuit, lune et étoiles dans la
-	    fenêtre, les lumières (catégorie "Lights") brillent davantage.
+	    fenêtre, les lumières (catégorie "Lights") brillent davantage ;
+	  - (v9.1) SetLooks : couleur des boiseries (plinthe, moulure, fenêtre,
+	    plafond), vue par la fenêtre (HouseViews), ambiance lumineuse
+	    (HouseMoods, par-dessus les objets) ; couleur de chaque objet
+	    (entry.C, HouseTints ; SetTint la change sans recréer l'objet).
 	  - objets = gros emojis "autocollants" (ombre portée, halo pour les
 	    lumières, détails dessinés à la main pour certains objets : tapis,
 	    guirlande, fenêtres, portes, cheminée, aquarium, frigo...) ; un

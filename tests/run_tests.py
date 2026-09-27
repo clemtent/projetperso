@@ -513,9 +513,10 @@ test("Config.House : catalogue (ids, catégories, zones, motifs, prix)", functio
 		end
 	end
 	checkSkins(H.Wallpapers, Config.HouseWallpapersById, { Plain = true, Stripes = true, Checker = true, Dots = true, Hearts = true,
-		Stars = true, Clouds = true, Bricks = true, Wood = true, Waves = true }, 12, "Papier peint")
+		Stars = true, Clouds = true, Bricks = true, Wood = true, Waves = true,
+		Plaid = true, Flowers = true, Diamonds = true, Chevron = true, Moons = true }, 26, "Papier peint")
 	checkSkins(H.Floors, Config.HouseFloorsById, { Plain = true, Checker = true, Wood = true, Tiles = true, Carpet = true,
-		Marble = true, Herringbone = true }, 10, "Sol")
+		Marble = true, Herringbone = true, Terrazzo = true, Mosaic = true, Grass = true, Clouds = true, Starry = true }, 22, "Sol")
 	eq(check, H.Wallpapers[1].Pattern, "Stripes", "1er papier peint : rayures roses")
 	eq(check, H.Floors[1].Pattern, "Checker", "1er sol : damier prune")
 
@@ -686,6 +687,91 @@ test("Maison v9 : tables vides, chaises, objets posés SUR les meubles", functio
 			{ I = "DiningChair", X = 0.6, Y = 0.8, S = 1, Z = 1, F = true } } } } } }
 	check(near(Formulas.GetHouseComfort(plain), 2 * I.DiningChair.Comfort * (1 + H.HarmonyBonus)), "confort avec chaises retournées")
 end)
+
+test("Maison v9.1 : 48 nouveaux objets et personnalisation (couleurs, boiseries, ambiances, vues, extérieur, jardin)", function(check)
+	-- (faux Color3 des tests : une table { R, G, B })
+	local function typeOf(value)
+		if type(value) == "table" and type(value.R) == "number" and type(value.G) == "number" and type(value.B) == "number" then
+			return "Color3"
+		end
+		return type(value)
+	end
+	local H = Config.House
+	local I = Config.HouseItemsById
+	check(#H.Items >= 295, "au moins 295 objets (v9.1 : +40) : " .. #H.Items)
+	local newIds = { "ToyChest", "Pouf", "LadderShelf", "KotatsuTable", "HeartArmchair", "Hammock", "CatSofa", "CrystalThrone",
+		"HeartRug", "StarGarland", "KittyClock", "Tapestry", "ButterflyFrame", "CloudRug", "Mannequin", "Harp", "SwanStatue",
+		"CrownCushion", "ToyBlocks", "Xylophone", "JackInTheBox", "ToyCar", "PlushPile", "SucculentTrio", "LavenderPot",
+		"HangingTerrarium", "LotusBowl", "RainbowTree", "RetroComputer", "Jukebox", "PinballMachine", "Hologram", "Popsicles",
+		"WaffleMaker", "DumplingSteamer", "KitchenSink", "GingerbreadHouse", "TulipLamp", "JellyfishLamp", "NeonStar",
+		"ArchWindow", "StainedGlass", "DutchDoor", "CastleGate", "Duckling", "Penguin", "Axolotl", "Owl" }
+	check(#newIds >= 40, "au moins 40 nouveaux objets")
+	local gated = 0
+	for _, id in ipairs(newIds) do
+		check(I[id] ~= nil, "objet v9.1 manquant : " .. id)
+		if I[id] and Formulas.GetHouseRequiredRebirths(I[id]) > 0 then
+			gated += 1
+		end
+	end
+	check(gated >= 8, "objets chers verrouillés par l'océan : " .. gated)
+	check(Formulas.GetHouseRequiredRebirths(I.CrystalThrone) >= 3, "trône de cristal : 3 visites")
+	check(Formulas.GetHouseRequiredRebirths(I.RainbowTree) >= 2, "arbre arc-en-ciel : 2 visites")
+	eq(check, Formulas.GetHouseRequiredRebirths(I.ToyChest), 0, "coffre à jouets : tout de suite")
+	eq(check, Formulas.CanGoOnFurniture(I.HeartRug), false, "tapis : pas sur un meuble")
+	eq(check, Formulas.CanGoOnFurniture(I.Popsicles), true, "glaces : sur la table")
+	-- Genres de personnalisation
+	local kinds = { Trim = "Room", Mood = "Room", View = "Room", Facade = "House", Roof = "House", RoofStyle = "House", Garden = "Garden" }
+	for kind, scope in pairs(kinds) do
+		local def = Config.HouseLookKinds[kind]
+		check(def ~= nil and def.Scope == scope, "genre " .. kind)
+		if def then
+			check(#def.List >= 8, kind .. " : au moins 8 choix (" .. #def.List .. ")")
+			if scope ~= "Garden" then
+				eq(check, def.List[1].Cost, 0, kind .. " : le 1er est gratuit")
+			end
+			local ids = {}
+			for index, entry in ipairs(def.List) do
+				check(type(entry.Id) == "string" and not ids[entry.Id], kind .. " : Id " .. tostring(entry.Id))
+				ids[entry.Id] = true
+				eq(check, def.ById[entry.Id], entry, kind .. " index " .. entry.Id)
+				check(type(entry.Name) == "string" and #entry.Name > 0 and isSingleEmoji(entry.Icon), kind .. " Name/Icon " .. entry.Id)
+				check(type(entry.Cost) == "number" and entry.Cost >= 0 and entry.Cost == math.floor(entry.Cost), kind .. " Cost " .. entry.Id)
+				if index > 1 or scope == "Garden" then
+					check(entry.Cost > 0, kind .. " : payant " .. entry.Id)
+				end
+			end
+		end
+	end
+	for _, trim in ipairs(H.Trims) do
+		check(typeOf(trim.Color) == "Color3", "boiseries : couleur " .. trim.Id)
+	end
+	for _, mood in ipairs(H.Moods) do
+		check(typeOf(mood.Tint) == "Color3" and typeOf(mood.Light) == "Color3" and type(mood.Amount) == "number"
+			and mood.Amount >= 0 and mood.Amount < 1 and type(mood.Brightness) == "number" and type(mood.Effect) == "string",
+			"ambiance " .. mood.Id)
+	end
+	local viewKinds = { Garden = true, Sunset = true, City = true, Beach = true, Snow = true, Sakura = true, Mountains = true,
+		Underwater = true, Candy = true, Space = true, Rainbow = true }
+	for _, view in ipairs(H.Views) do
+		check(viewKinds[view.Kind] == true and typeOf(view.Sky) == "Color3", "vue " .. view.Id)
+	end
+	local roofPatterns = { None = true, Hearts = true, Dots = true, Stripes = true, Stars = true, Flowers = true, Snow = true, Scales = true }
+	for _, style in ipairs(H.RoofStyles) do
+		check(roofPatterns[style.Pattern] == true, "motif de toit " .. style.Id)
+	end
+	check(H.GardenSlots >= 4 and H.GardenSlots <= 8, "places du jardin")
+	-- Couleurs des objets
+	check(#H.Tints >= 8, "au moins 8 couleurs d'objet")
+	for _, tint in ipairs(H.Tints) do
+		eq(check, Config.HouseTintsById[tint.Id], tint, "couleur index " .. tint.Id)
+		check(typeOf(tint.Color) == "Color3" and isSingleEmoji(tint.Icon), "couleur " .. tint.Id)
+		check(I[tint.Id] == nil, "id de couleur différent d'un objet : " .. tint.Id)
+	end
+	check(Formulas.GetHouseRequiredRebirths(Config.HouseTintsById.Gold) >= 1, "couleur or : après l'océan")
+	-- Les nouveaux styles chers sont verrouillés
+	check(Formulas.GetHouseRequiredRebirths(Config.HouseLooksById.Mood.RainbowGlow) >= 3, "lueur arc-en-ciel : 3 visites")
+	check(Formulas.GetHouseRequiredRebirths(Config.HouseLooksById.Garden.UnicornStatue) >= 3, "statue de licorne : 3 visites")
+end)
 """
 
 
@@ -788,7 +874,8 @@ test("Lang : tous les textes de Config.House ont une traduction française", fun
 		end
 	end
 	local H = Config.House
-	for _, list in ipairs({ H.Sizes, H.Wallpapers, H.Floors, H.Categories, H.Items, H.RoomTypes }) do
+	for _, list in ipairs({ H.Sizes, H.Wallpapers, H.Floors, H.Categories, H.Items, H.RoomTypes,
+		H.Tints, H.Trims, H.Moods, H.Views, H.Facades, H.Roofs, H.RoofStyles, H.GardenDecor }) do
 		for _, entry in ipairs(list) do
 			check(type(fr[entry.Name]) == "string", "pas de traduction : " .. tostring(entry.Name))
 		end
@@ -819,7 +906,31 @@ def house_art_test():
         '\t\tcheck(Config.HouseItemsById[id] ~= nil, "dessin sans objet : " .. id .. " (" .. file .. ")")',
         "\tend",
         "end)",
-    ]) + "\n" + house_surfaces_test() + "\n" + house_service_test()
+    ]) + "\n" + house_garden_art_test() + "\n" + house_surfaces_test() + "\n" + house_service_test()
+
+
+def house_garden_art_test():
+    """(v9.1) Chaque déco du jardin (Config.House.GardenDecor) a son dessin
+    (Garden.<Id> = function ... dans Client/Components/House/GardenArt/*.luau)."""
+    garden_dir = os.path.join(SRC, "ReplicatedStorage", "Client", "Components", "House", "GardenArt")
+    drawn = {}
+    if os.path.isdir(garden_dir):
+        for fname in sorted(os.listdir(garden_dir)):
+            if fname.endswith(".luau"):
+                for m in re.finditer(r"^Garden\.(\w+)\s*=\s*function", read(os.path.join(garden_dir, fname)), re.M):
+                    drawn[m.group(1)] = fname
+    ids = ", ".join('["%s"] = "%s"' % (k, v) for k, v in sorted(drawn.items()))
+    return "\n".join([
+        'test("Maison v9.1 : chaque déco du jardin a son dessin (%d dessins)", function(check)' % len(drawn),
+        "\tlocal drawn = { %s }" % ids,
+        "\tfor _, decor in ipairs(Config.House.GardenDecor) do",
+        '\t\tcheck(drawn[decor.Id] ~= nil, "pas de dessin pour la déco " .. decor.Id)',
+        "\tend",
+        "\tfor id, file in pairs(drawn) do",
+        '\t\tcheck(Config.HouseLooksById.Garden[id] ~= nil, "dessin sans déco : " .. id .. " (" .. file .. ")")',
+        "\tend",
+        "end)",
+    ])
 
 
 # 🏠 Simulation SERVEUR de HouseService (source injectée telle quelle, faux
@@ -893,6 +1004,85 @@ do
 		check(ok == true and near(data.House.Rooms[1].Placed[1].Y, H.TabletopMinY, 1e-6), "tasse trop haute recalée")
 		-- Comfort identique avec ou sans F
 		eq(check, Formulas.GetHouseComfort(data), Config.HouseItemsById.CocoaMug.Comfort * (1 + (Formulas.IsRoomFavorite(Formulas.GetRoomType("Living"), Config.HouseItemsById.CocoaMug) and H.HarmonyBonus or 0)), "confort")
+	end)
+
+	test("HouseService (simulation) v9.1 : personnalisation sauvegardée et vérifiée (styles, jardin, couleurs d'objets)", function(check)
+		local H = Config.House
+		-- Sauvegarde d'avant la v9.1 (sans aucun champ nouveau) + champs abîmés
+		data = { Dopamine = 1e6, Rebirths = 0, Stats = {}, House = { Size = "Studio", Items = { Sofa = 2, TeddyBear = 1 },
+			OwnedMoods = { Moonlight = true, Nope = true, [5] = true }, Facade = "Nope", Garden = { "PinkFlamingo", 12 },
+			Rooms = { { Id = "R1", Type = "Living", Slot = 1, Mood = "Moonlight", View = "Nope",
+				Placed = { { I = "Sofa", X = 0.5, Y = 0.8, S = 1, Z = 1, C = "Mint" }, { I = "Sofa", X = 0.3, Y = 0.8, S = 1, Z = 1, C = "Gold" },
+					{ I = "TeddyBear", X = 0.6, Y = 0.8, S = 1, Z = 1, C = "Nope" } } } } } }
+		HouseService:PlayerReady(player, data)
+		local house = data.House
+		local room = house.Rooms[1]
+		eq(check, room.Trim, H.Trims[1].Id, "boiseries par défaut")
+		eq(check, room.Mood, "Moonlight", "ambiance possédée gardée")
+		eq(check, room.View, H.Views[1].Id, "vue inconnue -> par défaut")
+		eq(check, house.Facade, H.Facades[1].Id, "façade inconnue -> d'origine")
+		eq(check, house.Roof, H.Roofs[1].Id, "toit par défaut")
+		eq(check, house.RoofStyle, H.RoofStyles[1].Id, "motif par défaut")
+		eq(check, #house.Garden, 0, "déco du jardin non possédée retirée")
+		eq(check, house.OwnedMoods.Nope, nil, "ambiance inconnue retirée")
+		eq(check, house.OwnedMoods[H.Moods[1].Id], true, "1re ambiance gratuite possédée")
+		eq(check, room.Placed[1].C, "Mint", "couleur d'objet gardée")
+		eq(check, room.Placed[2].C, nil, "couleur or verrouillée (0 visite) retirée")
+		eq(check, room.Placed[3].C, nil, "couleur inconnue retirée")
+		local invoke = fakeFunctions.House.OnServerInvoke
+		-- Achat d'une ambiance pour la pièce R1
+		local ok, message = invoke(player, "buyLook", { Kind = "Mood", Id = "CozyLamp", Room = "R1" })
+		check(ok == true, "achat ambiance : " .. tostring(message))
+		eq(check, room.Mood, "CozyLamp", "ambiance appliquée")
+		eq(check, data.Dopamine, 1e6 - Config.HouseMoodsById.CozyLamp.Cost, "prix payé")
+		ok = invoke(player, "buyLook", { Kind = "Mood", Id = "CozyLamp", Room = "R1" })
+		check(ok == false, "déjà possédée")
+		ok = invoke(player, "setLook", { Kind = "Mood", Id = "Moonlight", Room = "R1" })
+		check(ok == true and room.Mood == "Moonlight", "ambiance possédée réappliquée")
+		ok = invoke(player, "setLook", { Kind = "View", Id = "BeachView", Room = "R1" })
+		check(ok == false and room.View == H.Views[1].Id, "vue pas achetée : refusée")
+		ok = invoke(player, "buyLook", { Kind = "Mood", Id = "RainbowGlow", Room = "R1" })
+		check(ok == false and room.Mood == "Moonlight", "ambiance verrouillée par l'océan : refusée")
+		ok = invoke(player, "buyLook", { Kind = "Nope", Id = "X" })
+		check(ok == false, "genre inconnu refusé")
+		ok = invoke(player, "buyLook", { Kind = "Trim", Id = "MintTrim", Room = "R99" })
+		check(ok == false, "pièce inconnue refusée")
+		-- Extérieur
+		ok = invoke(player, "buyLook", { Kind = "Facade", Id = "StrawberryFacade" })
+		check(ok == true and house.Facade == "StrawberryFacade", "façade achetée et appliquée")
+		ok = invoke(player, "buyLook", { Kind = "RoofStyle", Id = "HeartRoof" })
+		check(ok == true and house.RoofStyle == "HeartRoof", "motif du toit acheté")
+		-- Jardin : achat = posé, rangé / ressorti, plein au-delà de GardenSlots
+		data.Dopamine = 1e12
+		data.Rebirths = 5
+		local bought = 0
+		for _, decor in ipairs(H.GardenDecor) do
+			if invoke(player, "buyLook", { Kind = "Garden", Id = decor.Id }) then
+				bought += 1
+			end
+		end
+		eq(check, bought, #H.GardenDecor, "toute la déco achetée")
+		eq(check, #house.Garden, H.GardenSlots, "jardin rempli (places max)")
+		local extra = H.GardenDecor[#H.GardenDecor].Id
+		check(table.find(house.Garden, extra) == nil, "déco en trop achetée mais rangée")
+		ok = invoke(player, "setLook", { Kind = "Garden", Id = extra, On = true })
+		check(ok == false, "jardin plein : refusé")
+		ok = invoke(player, "setLook", { Kind = "Garden", Id = house.Garden[1], On = false })
+		check(ok == true and #house.Garden == H.GardenSlots - 1, "déco rangée")
+		ok = invoke(player, "setLook", { Kind = "Garden", Id = extra, On = true })
+		check(ok == true and table.find(house.Garden, extra) ~= nil, "déco sortie")
+		-- Couleurs des objets posés : envoyées avec la disposition
+		ok = invoke(player, "saveLayout", { Rooms = { R1 = { { I = "Sofa", X = 0.5, Y = 0.8, S = 1, Z = 1, C = "Gold" },
+			{ I = "TeddyBear", X = 0.6, Y = 0.8, S = 1, Z = 1, C = string.rep("x", 200) } } } })
+		check(ok == true, "disposition avec couleurs acceptée")
+		eq(check, room.Placed[1].C, "Gold", "couleur or après 5 visites")
+		eq(check, room.Placed[2].C, nil, "couleur trop longue ignorée")
+		-- Nouvelle pièce : styles par défaut
+		house.OwnedSizes.Apartment = true
+		house.Size = "Apartment"
+		ok = invoke(player, "buyRoom", "Kitchen")
+		local newRoom = house.Rooms[#house.Rooms]
+		check(ok == true and newRoom.Trim == H.Trims[1].Id and newRoom.Mood == H.Moods[1].Id and newRoom.View == H.Views[1].Id, "nouvelle pièce : styles par défaut")
 	end)
 end
 """

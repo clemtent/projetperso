@@ -37,6 +37,7 @@ local ORDER = {
 	"GardenService",
 	"MinigameService",
 	"ChatService",
+	"FriendMailService", -- mails entre amis Roblox (après ChatService ; lit data.FriendMail)
 	"CosmeticService",
 	"HouseService",
 	"QuestService",

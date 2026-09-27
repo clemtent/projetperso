@@ -3,9 +3,16 @@
 	Emplacement : ReplicatedStorage > Client > Components > House > HouseShop
 
 	Tiroir "🛍️ Boutique" de la maison (glisse depuis la droite) :
-	  - onglets : 🛋️ Objets / 🎨 Murs / 🟫 Sols / 🚪 Pièces / 🏡 Maisons ;
-	    l'onglet choisi s'élargit (icône + nom), les autres gardent leur
-	    icône : les 5 onglets tiennent même sur téléphone ;
+	  - onglets : 🛋️ Objets / 🎨 Style de pièce / 🌷 Dehors / 🚪 Pièces /
+	    🏡 Maisons ; l'onglet choisi s'élargit (icône + nom), les autres
+	    gardent leur icône : les 5 onglets tiennent même sur téléphone ;
+	  - (v9.1) "Style de pièce" : sous-onglets 🧱 Murs, 🟫 Sols, 🎀 Boiseries,
+	    💡 Lumière (ambiance), 🪟 Vue (par la fenêtre), par pièce ; "Dehors" :
+	    🏠 Peinture de la façade, 🔺 Toit, ✨ Motif du toit, 🌷 Jardin (déco
+	    à sortir / ranger, GardenSlots places) ; chaque carte a son aperçu
+	    dessiné (House/HouseLookCards) et s'essaie au survol / au toucher
+	    (sur la pièce ouverte ou sur la façade) ; pastille "🆕 Nouveautés"
+	    dans les objets ;
 	  - Objets : pastilles de catégories (+ "préférés" de la pièce ouverte)
 	    et grille de cartes (dessin sur vignette pastel, nom, ❤️ confort,
 	    exemplaires possédés, "✨ Nouveau" si abordable, prix du prochain
@@ -2609,7 +2616,7 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 				if sectionKind == "Garden" then
 					text = Locale.T("🌷 Garden: %d/%d spots used • tap to put out / away", #house.Garden, HouseCommon.GardenSlots)
 				else
-					text = Locale.T("🏡 For the whole house • hover or tap a picture to try it")
+					text = Locale.T("🏡 Whole house • hover or tap a picture to try it")
 				end
 				if outsideHint.Text ~= text then
 					outsideHint.Text = text

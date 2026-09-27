@@ -22,11 +22,31 @@
 	tout est donc affiché plus gros. Les composants s'adaptent (colonne
 	centrale, fenêtres, bandeaux) et les emplacements des stimuli rétrécissent
 	si besoin (voir Slots). Sur PC rien ne change (toile 1280x720).
+
+	v9.1 (plein écran) : les deux ScreenGui couvrent TOUT l'écran
+	(ScreenInsets = None, SafeAreaCompatibility = None, ClipToDeviceSafeArea
+	= false : sinon Roblox découpe le fond à l'encoche et laisse des bandes).
+	La toile "Root" est placée par nous dans l'écran :
+	  - PC / tablette : exactement la zone sûre "CoreUI" (comme avant) ;
+	  - téléphone : la zone sûre de l'appareil un peu rognée (on garde juste
+	    de quoi éviter l'encoche et la barre d'accueil), et le haut de la toile
+	    remonte DANS la barre Roblox : la rangée du bandeau d'actualités
+	    (30 px "design") occupe la partie libre de la barre, à droite des
+	    boutons Roblox (GuiService.TopbarInset), le reste commence sous eux.
+	Les zones sûres sont MESURÉES (ScreenGui-sondes en DeviceSafeInsets /
+	CoreUISafeInsets) : aucune valeur d'appareil n'est devinée.
+	Interface.Bleed = marges (pixels "design") entre la toile et les bords de
+	l'écran : le calque Background les recouvre (fond de bord à bord) et
+	Interface.ApplyBleed(objet) étend n'importe quel cadre "plein écran" (voiles
+	sombres des fenêtres : les "Dimmer" des calques Panels / Toasts / Overlay
+	sont étendus automatiquement). Interface.TickerInsets = { Left, Right } :
+	partie de la rangée du bandeau cachée par les boutons Roblox (voir Slots).
 ]]
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
+local GuiService = game:GetService("GuiService")
 
 local Theme = require(script.Parent.Theme)
 local UIUtil = require(script.Parent.UIUtil)
@@ -45,6 +65,10 @@ Interface.ScaleChanged = Signal.new() -- (scale, canvasSize)
 Interface.Device = "Desktop" -- "Phone" | "Tablet" | "Desktop"
 Interface.DeviceChanged = Signal.new() -- (device)
 Interface.DesignResolution = Theme.DesignResolution -- toile de référence de l'appareil
+-- Marges (pixels "design") entre la toile et les bords de l'écran (zones non sûres)
+Interface.Bleed = { Left = 0, Top = 0, Right = 0, Bottom = 0 }
+-- Rangée du bandeau (y ∈ [0, 30] de la toile) : largeur cachée par les boutons Roblox
+Interface.TickerInsets = { Left = 0, Right = 0 }
 
 -- Forçage du profil (tests dans Studio) : nil = détection automatique
 local deviceOverride: string? = nil
@@ -70,13 +94,92 @@ end
 
 Interface.LayerOrder = { "Background", "Slots", "Main", "Overlay", "Panels", "Toasts", "Effects", "Cinematic" }
 
+-- Téléphone : part des marges de l'appareil (encoche, barre d'accueil) que la
+-- toile garde. L'encoche ne fait qu'une trentaine de pixels de profondeur au
+-- milieu d'un bord et iOS annonce la même marge des DEUX côtés : on en garde
+-- ~45 % (jamais moins que marge - 26 px) ; en bas ~30 % (le trait d'accueil
+-- ne gêne que les glissements, pas les touchers).
+local function phoneSide(inset: number): number
+	if inset <= 0 then
+		return 0
+	end
+	return math.max(math.floor(inset * 0.45 + 0.5), inset - 26)
+end
+local function phoneBottom(inset: number): number
+	if inset <= 0 then
+		return 0
+	end
+	return math.floor(inset * 0.3 + 0.5)
+end
+-- Rangée du bandeau d'actualités en haut de la toile (pixels "design", = Slots)
+local TICKER_ROW = 30
+-- Le contenu sous le bandeau commence à (bas de la barre Roblox - 4 px) :
+-- les boutons Roblox (44 px) s'arrêtent ~7 px au-dessus du bas de la barre
+local TOPBAR_OVERLAP = 4
+-- Largeur libre minimale (pixels écran) dans la barre pour y mettre le bandeau
+local MIN_TOPBAR_ROOM = 240
+
+-- ScreenGui "plein écran" réglée explicitement (ordre des propriétés : sans
+-- effet de bord de IgnoreGuiInset sur ScreenInsets)
+local function makeScreenGui(name: string, insets: Enum.ScreenInsets, displayOrder: number, parent: Instance): ScreenGui
+	local gui = Instance.new("ScreenGui")
+	gui.Name = name
+	gui.ResetOnSpawn = false
+	gui.IgnoreGuiInset = insets == Enum.ScreenInsets.None
+	gui.ScreenInsets = insets
+	gui.SafeAreaCompatibility = Enum.SafeAreaCompatibility.None
+	gui.ClipToDeviceSafeArea = false
+	gui.DisplayOrder = displayOrder
+	gui.Parent = parent
+	return gui
+end
+
+-- Marges (pixels écran) d'une ScreenGui-sonde par rapport à l'écran entier
+local function probeInsets(probe: ScreenGui, full: Vector2): (number, number, number, number)
+	local position = probe.AbsolutePosition
+	local size = probe.AbsoluteSize
+	if size.X < 1 or size.Y < 1 then
+		return 0, 0, 0, 0
+	end
+	local left = math.max(0, position.X)
+	local top = math.max(0, position.Y)
+	return left, top, math.max(0, full.X - left - size.X), math.max(0, full.Y - top - size.Y)
+end
+
+-- Zone libre de la barre Roblox (pixels écran) : minX, maxX, bas ; nil si inconnue
+local function topbarFree(): (number?, number?, number?)
+	local ok, rect = pcall(function()
+		return GuiService.TopbarInset
+	end)
+	if not ok or typeof(rect) ~= "Rect" and type(rect) ~= "table" then
+		return nil, nil, nil
+	end
+	local r = rect :: any
+	local height = r.Height
+	if type(height) ~= "number" or height <= 0 or type(r.Width) ~= "number" or r.Width <= 0 then
+		return nil, nil, nil
+	end
+	return r.Min.X, r.Max.X, r.Max.Y
+end
+
+-- Cadres étendus jusqu'aux bords de l'écran (voir Interface.ApplyBleed)
+local bleedTargets: { [GuiObject]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+local BLEED_NAMES = { Dimmer = true, MailDimmer = true }
+
+local function applyBleedTo(object: GuiObject)
+	local b = Interface.Bleed
+	object.AnchorPoint = Vector2.zero
+	object.Position = UDim2.fromOffset(-b.Left, -b.Top)
+	object.Size = UDim2.new(1, b.Left + b.Right, 1, b.Top + b.Bottom)
+end
+
 function Interface.Build(): ScreenGui
 	local player = Players.LocalPlayer
 	local playerGui = player:WaitForChild("PlayerGui") :: PlayerGui
 	-- Le jeu se joue en paysage sur mobile
 	playerGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeSensor
 
-	for _, name in ipairs({ "DopamineGui", "DopamineBackdrop" }) do
+	for _, name in ipairs({ "DopamineGui", "DopamineBackdrop", "DopamineSafeProbe", "DopamineCoreProbe" }) do
 		local old = playerGui:FindFirstChild(name)
 		if old then
 			old:Destroy()
@@ -85,13 +188,8 @@ function Interface.Build(): ScreenGui
 
 	-- Fond plein écran (sous l'encoche / la barre Roblox) : simple couleur,
 	-- pour ne jamais voir le monde 3D autour de la zone sûre
-	local backdropGui = UIUtil.Create("ScreenGui", {
-		Name = "DopamineBackdrop",
-		ResetOnSpawn = false,
-		IgnoreGuiInset = true,
-		DisplayOrder = 0,
-		Parent = playerGui,
-	})
+	-- (ClipToDeviceSafeArea = false : sinon Roblox coupe le fond à l'encoche)
+	local backdropGui = makeScreenGui("DopamineBackdrop", Enum.ScreenInsets.None, 0, playerGui)
 	local backdrop = UIUtil.Create("Frame", {
 		Name = "Backdrop",
 		BackgroundColor3 = Color3.new(1, 1, 1),
@@ -140,16 +238,12 @@ function Interface.Build(): ScreenGui
 	ClientState.Changed:Connect(applyBackdrop)
 	applyBackdrop()
 
-	-- L'interface du jeu reste dans la zone sûre : ni sous l'encoche des
-	-- téléphones, ni sous les boutons Roblox de la barre du haut
-	local screenGui = UIUtil.Create("ScreenGui", {
-		Name = "DopamineGui",
-		ResetOnSpawn = false,
-		ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets,
-		DisplayOrder = 1,
-		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-		Parent = playerGui,
-	}) :: ScreenGui
+	-- L'interface couvre tout l'écran ; la toile (Root) est placée par
+	-- updateScale selon les zones sûres mesurées par deux sondes vides
+	local screenGui = makeScreenGui("DopamineGui", Enum.ScreenInsets.None, 1, playerGui)
+	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	local safeProbe = makeScreenGui("DopamineSafeProbe", Enum.ScreenInsets.DeviceSafeInsets, -1, playerGui)
+	local coreProbe = makeScreenGui("DopamineCoreProbe", Enum.ScreenInsets.CoreUISafeInsets, -1, playerGui)
 
 	-- Toile virtuelle mise à l'échelle
 	local root = UIUtil.Create("Frame", {
@@ -171,25 +265,90 @@ function Interface.Build(): ScreenGui
 			Parent = root,
 		})
 	end
+	-- Le calque Background déborde jusqu'aux bords de l'écran (fond de bord à
+	-- bord) ; Slots.Create y recale les cadres des stimuli sur la toile
+	local backgroundLayer = Interface.Layers.Background
+	bleedTargets[backgroundLayer] = true
+	-- Voiles sombres des fenêtres / popups ("Dimmer") : tout l'écran aussi
+	for _, name in ipairs({ "Overlay", "Panels", "Toasts" }) do
+		Interface.Layers[name].DescendantAdded:Connect(function(object)
+			if BLEED_NAMES[object.Name] and object:IsA("GuiObject") then
+				Interface.ApplyBleed(object)
+			end
+		end)
+	end
 
-	-- Recalcule l'échelle quand la zone sûre (taille de la ScreenGui) change
+	-- Recalcule l'échelle et la place de la toile quand l'écran, les zones
+	-- sûres ou la barre Roblox changent
 	local function updateScale()
-		local available = screenGui.AbsoluteSize
-		if available.X < 1 or available.Y < 1 then
+		local full = screenGui.AbsoluteSize
+		if full.X < 1 or full.Y < 1 then
 			return
 		end
 		local device = detectDevice()
 		local design = Theme.DeviceResolutions[device] or Theme.DesignResolution
-		local scale = math.clamp(math.min(available.X / design.X, available.Y / design.Y), Theme.MinScale, Theme.MaxScale)
+		local dl, dt, dr, db = probeInsets(safeProbe, full)
+		local cl, ct, cr, cb = probeInsets(coreProbe, full)
+		local tbMin, tbMax, tbBottom = topbarFree()
+
+		local left, top, right, bottom = cl, ct, cr, cb
+		local tickerLeft, tickerRight = 0, 0
+		local scale
+		local reclaim = false
+		if device == "Phone" then
+			left, right, bottom = phoneSide(dl), phoneSide(dr), phoneBottom(db)
+			top = dt
+			local barBottom = tbBottom or math.max(ct, dt)
+			-- Bandeau dans la partie libre de la barre Roblox (s'il y a la place)
+			reclaim = tbMin ~= nil and tbMax ~= nil and tbBottom ~= nil and (tbMax :: number) - (tbMin :: number) >= MIN_TOPBAR_ROOM
+			if reclaim then
+				-- haut de la toile = bas de la barre - overlap - bandeau (x échelle)
+				local k = math.min((full.X - left - right) / design.X, (full.Y - bottom - barBottom + TOPBAR_OVERLAP) / (design.Y - TICKER_ROW))
+				scale = math.clamp(k, Theme.MinScale, Theme.MaxScale)
+				top = math.max(dt, barBottom - TOPBAR_OVERLAP - TICKER_ROW * scale)
+			else
+				top = math.max(dt, barBottom)
+			end
+		end
+		local available = Vector2.new(full.X - left - right, full.Y - top - bottom)
+		if available.X < 1 or available.Y < 1 then
+			return
+		end
+		if not scale then
+			scale = math.clamp(math.min(available.X / design.X, available.Y / design.Y), Theme.MinScale, Theme.MaxScale)
+		end
 		local canvas = Vector2.new(available.X / scale, available.Y / scale)
+		if reclaim then
+			-- Partie de la rangée du bandeau cachée par les boutons Roblox
+			tickerLeft = math.max(0, ((tbMin :: number) + 6 - left) / scale)
+			if (tbMax :: number) < full.X - dr - 20 then
+				tickerRight = math.max(0, (left + available.X - (tbMax :: number) + 6) / scale)
+			end
+			if canvas.X - tickerLeft - tickerRight < 420 then
+				tickerLeft, tickerRight = 0, 0
+			end
+		end
 		local deviceChanged = device ~= Interface.Device
 		Interface.Device = device
 		Interface.DesignResolution = design
 		Interface.Scale = scale
 		Interface.CanvasSize = canvas
+		Interface.Bleed = {
+			Left = left / scale,
+			Top = top / scale,
+			Right = right / scale,
+			Bottom = bottom / scale,
+		}
+		Interface.TickerInsets = { Left = tickerLeft, Right = tickerRight }
 		uiScale.Scale = scale
-		-- Root fait (zone sûre / échelle) pour la couvrir exactement une fois agrandi
+		-- Root fait (zone utile / échelle) pour la couvrir exactement une fois agrandi
+		root.Position = UDim2.fromOffset(left, top)
 		root.Size = UDim2.fromOffset(canvas.X, canvas.Y)
+		for object in pairs(bleedTargets) do
+			if object.Parent then
+				applyBleedTo(object)
+			end
+		end
 		if deviceChanged then
 			Interface.DeviceChanged:Fire(device)
 		end
@@ -198,6 +357,13 @@ function Interface.Build(): ScreenGui
 	updateScaleFn = updateScale
 
 	screenGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateScale)
+	for _, probe in ipairs({ safeProbe, coreProbe }) do
+		probe:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateScale)
+		probe:GetPropertyChangedSignal("AbsolutePosition"):Connect(updateScale)
+	end
+	pcall(function()
+		GuiService:GetPropertyChangedSignal("TopbarInset"):Connect(updateScale)
+	end)
 	-- Tactile / souris qui apparaissent (tablette + clavier...) : on revérifie le profil
 	UserInputService.LastInputTypeChanged:Connect(function()
 		if detectDevice() ~= Interface.Device then
@@ -210,6 +376,13 @@ function Interface.Build(): ScreenGui
 	Interface.ScreenGui = screenGui
 	Interface.Root = root
 	return screenGui
+end
+
+-- Étend un cadre "plein écran" (Size 1,1 dans un parent qui couvre la toile,
+-- ex. un voile sombre) jusqu'aux bords réels de l'écran, et le tient à jour.
+function Interface.ApplyBleed(object: GuiObject)
+	bleedTargets[object] = true
+	applyBleedTo(object)
 end
 
 -- Vrai sur téléphone (interface compacte : une seule ligne de menus, etc.)

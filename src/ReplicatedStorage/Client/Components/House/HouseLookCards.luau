@@ -163,29 +163,40 @@ end
 -- Coin de pièce avec les boiseries dans la couleur choisie
 local function trimPreview(frame: Frame, w: number, h: number, entry: any, context: Context?)
 	local trim = entry.Color or C.Cream
-	local wallH = roomBack(frame, w, h, context, 0.7)
-	-- plafond (coque) teinté
-	local ceiling = Box(frame, 0, 0, w, 12, trim:Lerp(WHITE, 0.25), 0, 3)
-	stroke(ceiling, trim:Lerp(C.Ink, 0.35), 1)
-	Box(frame, 0, 12, w, 5, trim, 0, 3)
-	for index = 0, math.floor(w / 12) do
-		Circle(frame, 6 + index * 12, 17, 10, 7, trim:Lerp(C.Pink, 0.2), 0, 2)
+	local edge = trim:Lerp(C.Ink, 0.4)
+	local wallH = roomBack(frame, w, h, context, 0.72)
+	-- plafond (coque) + moulure festonnée dans la couleur des boiseries
+	local ceiling = Box(frame, 0, 0, w, 14, trim, 0, 3)
+	stroke(ceiling, edge, 1.2)
+	Box(frame, 0, 14, w, 6, trim:Lerp(WHITE, 0.25), 0, 3)
+	for index = 0, math.floor(w / 14) do
+		Circle(frame, 7 + index * 14, 20, 12, 9, trim, 0, 2)
 	end
-	-- plinthe
-	Box(frame, 0, wallH - 8, w, 8, trim, 0, 3)
-	Box(frame, 0, wallH - 8, w, 2, WHITE, 0.3, 4)
-	-- fenêtre (cadre, croisillon, rebord)
-	local winX, winY, winW, winH = w * 0.5 - 24, 22, 48, 30
+	-- plinthe épaisse
+	local base = Box(frame, 0, wallH - 12, w, 12, trim, 0, 3)
+	stroke(base, edge, 1)
+	Box(frame, 0, wallH - 12, w, 3, WHITE, 0.35, 4)
+	-- fenêtre (cadre épais, croisillon, rebord)
+	local winX, winY, winW, winH = w * 0.3 - 26, 24, 52, 28
 	local outer = Box(frame, winX, winY, winW, winH, trim, 0, 3)
 	Round(outer, UDim.new(0, 7))
-	stroke(outer, trim:Lerp(C.Ink, 0.4), 1.2)
-	local glass = Box(frame, winX + 4, winY + 4, winW - 8, winH - 8, WHITE, 0, 4)
+	stroke(outer, edge, 1.2)
+	local glass = Box(frame, winX + 5, winY + 5, winW - 10, winH - 10, WHITE, 0, 4)
 	glass.ClipsDescendants = true
 	Round(glass, UDim.new(0, 4))
-	HouseViews.Paint(glass, winW - 8, winH - 8, HouseCommon.Look("View", nil) :: any, false)
-	Box(frame, winX + winW / 2 - 1.5, winY + 4, 3, winH - 8, trim, 0, 5)
-	local sill = Box(frame, winX - 5, winY + winH - 3, winW + 10, 6, trim, 0, 6)
+	HouseViews.Paint(glass, winW - 10, winH - 10, HouseCommon.Look("View", nil) :: any, false)
+	Box(frame, winX + winW / 2 - 2, winY + 5, 4, winH - 10, trim, 0, 5)
+	local sill = Box(frame, winX - 5, winY + winH - 3, winW + 10, 7, trim, 0, 6)
 	Round(sill, UDim.new(0, 3))
+	stroke(sill, edge, 1)
+	-- encadrement de porte
+	local doorX = w * 0.58
+	local door = Box(frame, doorX, 26, 34, wallH - 38, trim, 0, 3)
+	Round(door, UDim.new(0, 12))
+	stroke(door, edge, 1.2)
+	local inner = Box(frame, doorX + 6, 32, 22, wallH - 44, C.Pink:Lerp(WHITE, 0.3), 0, 4)
+	Round(inner, UDim.new(0, 8))
+	Circle(frame, doorX + 24, 26 + (wallH - 38) * 0.6, 4, 4, C.Gold, 0, 5)
 end
 
 -- Petite pièce meublée sous l'ambiance choisie
@@ -259,7 +270,8 @@ function HouseLookCards.Paint(frame: Frame, kind: string, entry: any, w: number,
 		elseif kind == "View" then
 			viewPreview(frame, w, h, entry, context)
 		elseif kind == "Facade" then
-			miniHouse(frame, w, h, entry.Color or (context and context.Facade) or HOUSE_WALL, (context and context.Roof) or HOUSE_ROOF, nil)
+			-- (Color nil = couleurs d'origine : l'aperçu les montre, pas la couleur actuelle)
+			miniHouse(frame, w, h, entry.Color or HOUSE_WALL, (context and context.Roof) or HOUSE_ROOF, nil)
 		elseif kind == "Roof" then
 			miniHouse(frame, w, h, (context and context.Facade) or HOUSE_WALL, entry.Color or HOUSE_ROOF, nil)
 		elseif kind == "RoofStyle" then

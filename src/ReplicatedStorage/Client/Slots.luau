@@ -31,6 +31,15 @@
 	UIPadding : le contenu garde exactement sa place, mais le contour (UIStroke,
 	dessiné À L'EXTÉRIEUR des cartes, et jamais réduit par les UIScale) n'est
 	plus coupé, même sur téléphone. Taille "design" : Slots.GetDesignSize(name).
+
+	v9.1 (plein écran) : le calque Background déborde de la toile jusqu'aux
+	bords de l'écran (Interface.Bleed). Les cadres "Background" des stimuli
+	restent recalés sur la toile (leurs coordonnées = pixels "design" de la
+	toile, comme avant), sauf les fonds purement décoratifs de
+	Slots.BleedBackgrounds (ex. NeonMode) qui couvrent tout l'écran. Le slot
+	"Ticker" évite la partie de la barre Roblox occupée par ses boutons
+	(Interface.TickerInsets, non nul sur téléphone où le bandeau vit dans la
+	barre Roblox).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -75,6 +84,15 @@ local layout = {
 
 -- Cadres créés par Slots.Create (pour les replacer si l'écran change)
 local frames: { [Frame]: string } = setmetatable({}, { __mode = "k" }) :: any
+-- Cadres "Background" (recalés sur la toile dans le calque qui déborde)
+local backgroundFrames: { [Frame]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+-- Débords de la toile (pixels "design") et parties cachées de la rangée du bandeau
+local bleed = { Left = 0, Top = 0, Right = 0, Bottom = 0 }
+local tickerInsets = { Left = 0, Right = 0 }
+
+-- Stimuli "Background" purement décoratifs, à mise en page 100 % relative
+-- (Scale) : leur cadre couvre tout l'écran au lieu de la seule toile
+Slots.BleedBackgrounds = { NeonMode = true }
 
 -- Vrai si `name` est un emplacement connu (y compris Overlay / Background)
 function Slots.IsValid(name: string): boolean
@@ -177,8 +195,10 @@ function Slots.GetPlacement(name: string): (UDim2, UDim2)
 	local xUDim
 	local size
 	if def.Anchor == "T" then
-		xUDim = UDim.new(0.5, 0)
-		size = UDim2.new(1, 0, 0, def.H)
+		-- (téléphone : pas sous les boutons Roblox de la barre du haut)
+		local cutLeft, cutRight = tickerInsets.Left, tickerInsets.Right
+		xUDim = UDim.new(0.5, (cutLeft - cutRight) / 2)
+		size = UDim2.new(1, -(cutLeft + cutRight), 0, def.H)
 	elseif def.Anchor == "L" then
 		xUDim = UDim.new(0, (def.X + def.W / 2) * k)
 		size = UDim2.fromOffset(def.W + Slots.ClipMargin * 2, def.H + Slots.ClipMargin * 2)
@@ -207,12 +227,37 @@ local function place(frame: Frame, name: string)
 	end
 end
 
--- Recalcule la mise en page (appelé par Slots.Bind quand l'écran change)
-function Slots.UpdateLayout(device: string, canvas: Vector2)
+-- Cadre "Background" : recalé sur la toile (ou tout l'écran pour les fonds
+-- décoratifs de Slots.BleedBackgrounds, reconnus à leur nom de stimulus)
+local function placeBackground(frame: Frame)
+	frame.AnchorPoint = Vector2.zero
+	if Slots.BleedBackgrounds[frame.Name] then
+		frame.Position = UDim2.new()
+		frame.Size = UDim2.fromScale(1, 1)
+	else
+		frame.Position = UDim2.fromOffset(bleed.Left, bleed.Top)
+		frame.Size = UDim2.new(1, -(bleed.Left + bleed.Right), 1, -(bleed.Top + bleed.Bottom))
+	end
+end
+
+-- Recalcule la mise en page (appelé par Slots.Bind quand l'écran change).
+-- `interfaceBleed` / `interfaceTicker` : Interface.Bleed / Interface.TickerInsets
+function Slots.UpdateLayout(device: string, canvas: Vector2, interfaceBleed: any?, interfaceTicker: any?)
+	if type(interfaceBleed) == "table" then
+		bleed = interfaceBleed
+	end
+	if type(interfaceTicker) == "table" then
+		tickerInsets = interfaceTicker
+	end
 	computeLayout(device, canvas)
 	for frame, name in pairs(frames) do
 		if frame.Parent then
 			place(frame, name)
+		end
+	end
+	for frame in pairs(backgroundFrames) do
+		if frame.Parent then
+			placeBackground(frame)
 		end
 	end
 	Slots.Changed:Fire()
@@ -233,7 +278,7 @@ function Slots.Bind(interface: any)
 	end
 	bound = true
 	local function update()
-		Slots.UpdateLayout(interface.Device or "Desktop", interface.CanvasSize or Vector2.new(1280, 720))
+		Slots.UpdateLayout(interface.Device or "Desktop", interface.CanvasSize or Vector2.new(1280, 720), interface.Bleed, interface.TickerInsets)
 	end
 	interface.ScaleChanged:Connect(update)
 	interface.DeviceChanged:Connect(update)
@@ -258,6 +303,14 @@ function Slots.Create(name: string, parent: Instance?): Frame
 		frame.Position = UDim2.fromScale(0.5, 0.5)
 		frame.Size = UDim2.fromScale(1, 1)
 		frame.ClipsDescendants = false
+		if name == "Background" then
+			-- Le calque Background déborde de la toile : on s'y recale
+			backgroundFrames[frame] = true
+			placeBackground(frame)
+			frame:GetPropertyChangedSignal("Name"):Connect(function()
+				placeBackground(frame)
+			end)
+		end
 	else
 		frame.ClipsDescendants = true
 		if Slots.Definitions[name].Anchor ~= "T" then

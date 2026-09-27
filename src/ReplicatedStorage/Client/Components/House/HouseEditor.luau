@@ -15,8 +15,9 @@
 	  - sélection + BARRE D'OUTILS "bonbons" (House/HouseButtons) près de
 	    l'objet (ou en bas de la scène sur téléphone) : vignette + nom +
 	    confort + "📍 sur la table", taille ➖ 100 % ➕, ⏬ derrière /
-	    ⏫ devant, ↔️ retourner (miroir), 📑 copier, 🚪 envoyer dans une
-	    autre pièce, 📦 ranger (rouge) ; bulle au survol (nom + raccourci) ;
+	    ⏫ devant, ↔️ retourner (miroir), 🎨 couleur (v9.1 : la rangée des
+	    couleurs remplace les outils ; touche C), 📑 copier, 🚪 envoyer
+	    dans une autre pièce, 📦 ranger (rouge) ; bulle au survol (nom + raccourci) ;
 	    les clics dans la barre ne désélectionnent jamais l'objet ;
 	  - ANNULER / RÉTABLIR (30 étapes par pièce ; Ctrl+Z / Ctrl+Y) ;
 	  - clavier : flèches = petit déplacement (Maj = plus grand), + / - =

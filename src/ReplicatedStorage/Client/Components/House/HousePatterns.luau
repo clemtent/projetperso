@@ -6,9 +6,10 @@
 	Frames (pas d'image à importer) :
 	  Murs : Plain (lambris), Stripes, Checker (vichy), Dots, Hearts, Stars
 	         (étincelles), Clouds, Bricks, Wood (lambris de bois), Waves
-	         (écailles / vaguelettes).
+	         (écailles / vaguelettes) ; v9.1 : Plaid (écossais), Flowers,
+	         Diamonds (arlequin), Chevron, Moons.
 	  Sols : Plain, Checker, Wood, Tiles, Carpet, Marble, Herringbone
-	         (parquet) — en PERSPECTIVE : les rangées grandissent vers
+	         (parquet) ; v9.1 : Terrazzo, Mosaic, Grass, Clouds, Starry — en PERSPECTIVE : les rangées grandissent vers
 	         l'avant et les colonnes s'écartent depuis le centre (lignes de
 	         fuite), sans aucune rotation.
 	Le conteneur doit couper son contenu (ClipsDescendants) ; son fond
