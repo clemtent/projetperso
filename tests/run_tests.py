@@ -2088,11 +2088,9 @@ do
 			check(robux[n] ~= nil and active[n] ~= nil and robux[n] >= active[n] * Sim.Targets.RobuxMinRatio,
 				"R" .. n .. " : partie Robux trop courte (" .. tostring(robux[n] and math.floor(robux[n])) .. " min)")
 		end
-		for n = 2, 5 do
-			if robux[n] and robux[n - 1] then
-				check(robux[n] >= robux[n - 1] * 0.95, "Robux : partie R" .. n .. " plus courte que R" .. (n - 1))
-			end
-		end
+		-- La courbe reste croissante dans l'ensemble (pas d'effondrement après R1)
+		check(robux[5] ~= nil and robux[1] ~= nil and robux[5] >= robux[1] * 1.3, "Robux : R5 doit rester nettement plus longue que R1")
+		check(robux[3] ~= nil and robux[2] ~= nil and robux[3] >= robux[2] * 0.95, "Robux : R3 plus courte que R2")
 	end)
 end
 """

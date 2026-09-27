@@ -54,7 +54,7 @@ Sim.Targets = {
 		[2] = { 60, 75 },
 		[3] = { 75, 90 },
 		[5] = { 90, 120 },
-		[8] = { 150, 400 },
+		[8] = { 150, 240 },
 	},
 	FirstPurchaseSeconds = 30, -- 1re amélioration achetée en moins de 30 s
 	PurchasesIn5Min = 8, -- au moins 8 achats pendant les 5 premières minutes

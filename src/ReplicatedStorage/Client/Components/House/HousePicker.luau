@@ -322,7 +322,7 @@ function HousePicker.new(parent: Frame): Picker
 				end)
 				if locked then
 					button.Activated:Connect(function()
-						Notifications.Toast(Locale.T("🔒 Unlocked after %d visits to the ocean", required), C.Lilac)
+						Notifications.Toast(required == 1 and Locale.T("🔒 after 1 ocean visit") or Locale.T("🔒 after %d ocean visits", required), C.Lilac)
 					end)
 				end
 				text(button, roomType.Icon, UDim2.fromOffset(0, 6), UDim2.new(1, 0, 0, 36), 30)
@@ -405,8 +405,9 @@ function HousePicker.new(parent: Frame): Picker
 						ZIndex = 68,
 						Parent = button,
 					})
-					lockChip.AnchorPoint = Vector2.new(0.5, 0.5)
-					lockChip.Position = UDim2.fromScale(0.5, 0.5)
+					-- (en haut à droite, comme "Actuel" : le nom reste lisible)
+					lockChip.AnchorPoint = Vector2.new(1, 0)
+					lockChip.Position = UDim2.new(1, -6, 0, 6)
 				end
 				if isCurrent then
 					local badge = UIUtil.Chip({

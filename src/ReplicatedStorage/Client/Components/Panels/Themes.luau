@@ -293,7 +293,8 @@ local function onPrimary(card: Card)
 		-- v9.3 : thème réservé aux visites à l'océan (le serveur refuse aussi)
 		SoundManager.Play("Error", 0.7)
 		UIUtil.Shake(card.Primary)
-		Notifications.Toast(Locale.T("🔒 Unlocked after %d visits to the ocean", tonumber(theme.RequiresRebirths) or 0), Theme.Colors.Purple)
+		local required = tonumber(theme.RequiresRebirths) or 0
+		Notifications.Toast(required == 1 and Locale.T("🔒 after 1 ocean visit") or Locale.T("🔒 after %d ocean visits", required), Theme.Colors.Purple)
 	else
 		popCard(card) -- déjà équipé
 	end
@@ -587,8 +588,9 @@ function Themes.Update(data)
 				primary.Text = required == 1 and Locale.T("🔒 after 1 ocean visit") or Locale.T("🔒 after %d ocean visits", required)
 				primary:SetAttribute("BaseColor", Color3.fromRGB(214, 232, 244))
 				UIUtil.SetButtonEnabled(primary, false)
-				primary.TextColor3 = Color3.fromRGB(0, 90, 140)
-				card.Status.Text = Locale.T("🌊 Visit the ocean to unlock it")
+				primary.TextColor3 = Theme.Colors.Text
+				primary.TextTransparency = 0.1
+				card.Status.Text = Locale.T("🌊 Ocean reward")
 				card.Status.TextColor3 = Theme.Colors.TextDim
 			elseif cost then
 				-- Achetable en Dopamine (et peut-être aussi en Robux)

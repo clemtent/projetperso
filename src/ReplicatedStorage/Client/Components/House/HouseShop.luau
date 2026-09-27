@@ -1093,7 +1093,7 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 		end
 		SoundManager.Play("Error", 0.7)
 		UIUtil.Shake(button)
-		handlers.Notify(Locale.T("🔒 Unlocked after %d visits to the ocean", HouseCommon.RequiredRebirths(entry)), C.Lilac)
+		handlers.Notify("🔒 " .. lockText(HouseCommon.RequiredRebirths(entry)), C.Lilac) -- (bon accord : 1 visite / N visites)
 		return true
 	end
 
