@@ -94,6 +94,12 @@ local function gableRoof(parent: Instance, cf: CFrame, w: number, d: number, h: 
 	end
 end
 
+-- (v9.6) partagés avec TownShops (boutiques où l'on entre)
+TownBuildings.Window = window
+TownBuildings.GableRoof = gableRoof
+TownBuildings.GROUND_H = GROUND_H
+TownBuildings.FLOOR_H = FLOOR_H
+
 -- Détail propre à chaque métier (devant / sur la boutique)
 local function shopExtras(parent: Instance, cf: CFrame, spec: ShopSpec, height: number)
 	local kind = spec.Kind
