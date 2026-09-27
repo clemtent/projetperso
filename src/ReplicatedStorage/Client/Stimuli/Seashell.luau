@@ -20,10 +20,10 @@ local Seashell = {}
 Seashell.Slot = "Background"
 
 local ID = "Seashell"
-local BOX_W, BOX_H = 120, 106
-local HINGE_X, HINGE_Y = 60, 74 -- charnière (centre de l'éventail)
+local BOX_W, BOX_H = 108, 104
+local HINGE_X, HINGE_Y = 54, 74 -- charnière (centre de l'éventail)
 local RIB_LENGTH = 52
-local RIB_ANGLES = { -64, 64, -32, 32, 0 } -- côtés d'abord, celle du milieu par-dessus
+local RIB_ANGLES = { -56, 56, -28, 28, 0 } -- côtés d'abord, celle du milieu par-dessus
 local PEARL_Y = 67
 local BUBBLES = 3
 
@@ -55,9 +55,9 @@ function Seashell.Start(ctx)
 		local outlineAlpha = if dark then 0.45 else 0
 
 		-- Flaque d'eau + reflets
-		local pool = Kit.Ellipse(root, HINGE_X, 94, 116, 20, if dark then Kit.Rgb(90, 200, 255) else Kit.Rgb(110, 214, 226), if dark then 0.55 else 0.4, 1)
+		local pool = Kit.Ellipse(root, HINGE_X, 94, 104, 20, if dark then Kit.Rgb(90, 200, 255) else Kit.Rgb(110, 214, 226), if dark then 0.55 else 0.4, 1)
 		pool.Name = "Pool"
-		for index, spec in ipairs({ { 30, 93, 22 }, { 80, 97, 30 }, { 56, 90, 14 } }) do
+		for index, spec in ipairs({ { 26, 93, 20 }, { 74, 97, 28 }, { 50, 90, 14 } }) do
 			local line = Kit.Box(root, {
 				Name = "Shimmer",
 				AnchorPoint = Vector2.new(0.5, 0.5),
@@ -72,7 +72,7 @@ function Seashell.Start(ctx)
 		end
 
 		-- Halo nacré de la perle (derrière l'éventail)
-		for index, spec in ipairs({ { 104, 0.86 }, { 70, 0.74 } }) do
+		for index, spec in ipairs({ { 96, 0.86 }, { 68, 0.74 } }) do
 			local glow = Kit.Circle(root, HINGE_X, PEARL_Y - 8, spec[1], Kit.Rgb(255, 214, 236), spec[2], 2 + index)
 			glow.Name = "Glow"
 			table.insert(glows, glow)
@@ -122,13 +122,13 @@ function Seashell.Start(ctx)
 		-- Lèvre avant (valve du bas, moitié basse d'une ellipse), devant la perle
 		local lipClip = Kit.Box(root, {
 			Name = "Lip",
-			Position = UDim2.fromOffset(HINGE_X - 50, HINGE_Y),
-			Size = UDim2.fromOffset(100, 20),
+			Position = UDim2.fromOffset(HINGE_X - 48, HINGE_Y),
+			Size = UDim2.fromOffset(96, 20),
 			BackgroundTransparency = 1,
 			ClipsDescendants = true,
 			ZIndex = 9,
 		})
-		local lip = Kit.Ellipse(lipClip, 50, 0, 92, 32, Color3.new(1, 1, 1), 0, 9)
+		local lip = Kit.Ellipse(lipClip, 48, 0, 88, 32, Color3.new(1, 1, 1), 0, 9)
 		Kit.Gradient(lip, ColorSequence.new(Kit.Rgb(255, 204, 190), Kit.Rgb(240, 138, 156)), nil, 90)
 		Kit.Stroke(lip, outline, 1.5, outlineAlpha)
 
@@ -148,7 +148,7 @@ function Seashell.Start(ctx)
 			})
 			Kit.Corner(frame)
 			local stroke = Kit.Stroke(frame, if dark then Kit.Rgb(200, 240, 255) else Kit.Rgb(80, 170, 200), 1, 0.2)
-			table.insert(bubbles, { Frame = frame, Stroke = stroke, P = random:NextNumber(), X = random:NextNumber(30, 90), Speed = random:NextNumber(0.25, 0.4) })
+			table.insert(bubbles, { Frame = frame, Stroke = stroke, P = random:NextNumber(), X = random:NextNumber(26, 82), Speed = random:NextNumber(0.25, 0.4) })
 		end
 	end
 
@@ -159,7 +159,7 @@ function Seashell.Start(ctx)
 	end)
 
 	Zones.Request(ID, {
-		{ W = BOX_W, H = BOX_H, Anchor = Vector2.new(0.62, 0.97), MinScale = 0.4, MaxScale = 1.15 },
+		{ W = BOX_W, H = BOX_H, Anchor = Vector2.new(0.62, 0.97), MinScale = 0.4, MaxScale = 1.15, Gap = 4 },
 	}, function(placements)
 		Kit.Place(piece, placements[1])
 	end)
@@ -201,7 +201,7 @@ function Seashell.Start(ctx)
 				b.P += dt * b.Speed
 				if b.P >= 1 then
 					b.P -= 1
-					b.X = random:NextNumber(30, 90)
+					b.X = random:NextNumber(26, 82)
 				end
 				local y = 66 - b.P * 64
 				b.Frame.Position = UDim2.fromOffset(b.X + math.sin(b.P * 12) * 3, y)

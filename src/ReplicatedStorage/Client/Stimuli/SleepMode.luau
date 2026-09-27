@@ -26,7 +26,7 @@ local SleepMode = {}
 SleepMode.Slot = "Background"
 
 local UPGRADE_ID = "SleepMode"
-local BOX_W, BOX_H = 120, 130
+local BOX_W, BOX_H = 112, 130
 
 -- Géométrie (pixels "design" dans la boîte 120 x 130)
 local BUBBLE = { X = 56, Y = 76, D = 100 }
@@ -92,7 +92,7 @@ function SleepMode.Start(ctx)
 		content = root
 
 		-- Lueur de lune autour du hublot
-		Kit.Circle(root, BUBBLE.X, BUBBLE.Y, BUBBLE.D + 18, Kit.Rgb(255, 232, 160), if dark then 0.78 else 0.7, 1)
+		Kit.Circle(root, BUBBLE.X, BUBBLE.Y, BUBBLE.D + 8, Kit.Rgb(255, 232, 160), if dark then 0.78 else 0.7, 1)
 
 		-- Hublot de nuit (dégradé bleu nuit -> violet)
 		local skyTop = Kit.Rgb(30, 36, 92)
@@ -184,7 +184,7 @@ function SleepMode.Start(ctx)
 	end)
 
 	Zones.Request(UPGRADE_ID, {
-		{ W = BOX_W, H = BOX_H, Anchor = Vector2.new(0.86, 0.2), MinScale = 0.4, MaxScale = 1.3 },
+		{ W = BOX_W, H = BOX_H, Anchor = Vector2.new(0.86, 0.2), MinScale = 0.4, MaxScale = 1.3, Gap = 4 },
 	}, function(placements)
 		Kit.Place(piece, placements[1])
 	end)

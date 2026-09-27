@@ -196,6 +196,9 @@ local function newPart(name: string, size: Vector3, cframe: CFrame, color: Color
 	return part
 end
 
+-- (Lumière : cartons à LightInfluence 0 = couleurs exactes du dessin 2D, et
+-- Brightness agit alors à coup sûr pour la nuit ; murs / sol un peu éclairés
+-- par les lampes, 0.18.)
 -- Toile : SurfaceGui sur la face Back d'une pièce invisible dont la face
 -- visible est centrée en `center`, orientée (right, up) ; la pièce s'étend
 -- de `depth` studs DERRIÈRE sa face (ordre d'affichage). `canvasSize` :
@@ -600,7 +603,7 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 		-- Rideaux : un carton juste devant le mur (dessin de la pièce 2D)
 		local curtainW, curtainH = windowW + 64, windowH + 24
 		local cardW, cardH = curtainW * PX, curtainH * PX
-		local part, gui = newCanvas("Curtains", at(windowCenterX, wallHeightOf(windowTop - 6 + curtainH / 2), 0.26), X_AXIS, Y_AXIS, cardW, cardH, DEPTH_CARD, 0.12)
+		local part, gui = newCanvas("Curtains", at(windowCenterX, wallHeightOf(windowTop - 6 + curtainH / 2), 0.26), X_AXIS, Y_AXIS, cardW, cardH, DEPTH_CARD, 0)
 		local holder = designFrame(gui, "Curtains", curtainW, curtainH, wallScale, 1)
 		for _, side in ipairs({ -1, 1 }) do
 			local x = side < 0 and 18 or curtainW - 48
@@ -1103,7 +1106,7 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 			local kz = k * FLAT_STRETCH
 			local zCenter = build.Z + (marginBottom - (100 + marginTop)) / 2 * kz
 			local part, gui = newCanvas("Rug_" .. name, at(build.X, 0.03 + build.Rank * 0.004, zCenter), X_AXIS, BACKWARD, unitsW * k, unitsH * kz,
-				DEPTH_RUG - build.Rank * 4, 0.1, Vector2.new(unitsW * FLAT_RES, unitsH * FLAT_RES))
+				DEPTH_RUG - build.Rank * 4, 0, Vector2.new(unitsW * FLAT_RES, unitsH * FLAT_RES))
 			local uiScale = Instance.new("UIScale")
 			uiScale.Scale = FLAT_RES
 			uiScale.Parent = content
@@ -1116,7 +1119,7 @@ function House3DScene.new(room: any, sizeId: string?, startNight: boolean?): Sce
 		-- Carton debout (pieds de la boîte en H) ou objet mural (centre en H)
 		local centerH = wall and build.H + (marginTop - marginBottom) / 2 * k or build.H + (50 + (marginTop - marginBottom) / 2) * k
 		local target = at(build.X, centerH, build.Z)
-		local part, gui = newCanvas("Card_" .. name, target, X_AXIS, Y_AXIS, unitsW * k, unitsH * k, DEPTH_CARD, 0.1)
+		local part, gui = newCanvas("Card_" .. name, target, X_AXIS, Y_AXIS, unitsW * k, unitsH * k, DEPTH_CARD, 0)
 		local uiScale = Instance.new("UIScale")
 		uiScale.Scale = k * PPS
 		uiScale.Parent = content

@@ -21,9 +21,9 @@ local Singularity = {}
 Singularity.Slot = "Background"
 
 local ID = "Singularity"
-local BOX_W, BOX_H = 124, 92
-local CX, CY = 62, 46 -- centre du trou
-local DISK_W, DISK_H = 118, 30
+local BOX_W, BOX_H = 112, 90
+local CX, CY = 56, 45 -- centre du trou
+local DISK_W, DISK_H = 106, 28
 local PARTICLES = 12
 local STREAKS = 4
 local OUTER_R, INNER_R = 58, 20
@@ -146,7 +146,7 @@ function Singularity.Start(ctx)
 	end)
 
 	Zones.Request(ID, {
-		{ W = BOX_W, H = BOX_H, Anchor = Vector2.new(0.78, 0.58), MinScale = 0.4, MaxScale = 1.2 },
+		{ W = BOX_W, H = BOX_H, Anchor = Vector2.new(0.78, 0.58), MinScale = 0.4, MaxScale = 1.2, Gap = 4 },
 	}, function(placements)
 		Kit.Place(piece, placements[1])
 	end)

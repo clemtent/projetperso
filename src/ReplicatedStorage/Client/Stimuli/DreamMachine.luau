@@ -369,6 +369,7 @@ function DreamMachine.Start(ctx)
 				Anchor = Vector2.new(0.3, 0.84),
 				MinScale = 0.45,
 				MaxScale = 1.15,
+				Gap = 4,
 			},
 		}, function(placements)
 			local placement = placements[1]

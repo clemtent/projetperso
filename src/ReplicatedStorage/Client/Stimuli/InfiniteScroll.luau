@@ -173,7 +173,7 @@ function InfiniteScroll.Start(ctx)
 		end
 		local items = {}
 		for index = 1, #phones do
-			table.insert(items, { W = PHONE_W, H = PHONE_H, Anchor = ANCHORS[index], MinScale = 0.5, MaxScale = 1.1, Gap = 5 })
+			table.insert(items, { W = PHONE_W, H = PHONE_H, Anchor = ANCHORS[index], MinScale = 0.5, MaxScale = 1.1, Gap = 4 })
 		end
 		Zones.Request(ID, items, function(placements)
 			for index, phone in ipairs(phones) do

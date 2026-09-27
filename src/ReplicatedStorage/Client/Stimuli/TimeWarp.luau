@@ -140,7 +140,7 @@ function TimeWarp.Start(ctx)
 	-- Origine des ondes : l'horloge si elle a une place, sinon le compteur
 	local centre: Vector2? = nil
 	Zones.Request(ID, {
-		{ W = BOX, H = BOX, Anchor = Vector2.new(0.2, 0.56), MinScale = 0.4, MaxScale = 1.15 },
+		{ W = BOX, H = BOX, Anchor = Vector2.new(0.2, 0.56), MinScale = 0.4, MaxScale = 1.15, Gap = 4 },
 	}, function(placements)
 		local placement = placements[1]
 		Kit.Place(piece, placement)

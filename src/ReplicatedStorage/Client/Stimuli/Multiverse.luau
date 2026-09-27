@@ -22,7 +22,7 @@ local Multiverse = {}
 Multiverse.Slot = "Background"
 
 local ID = "Multiverse"
-local BOX = 84
+local BOX = 74
 local C = BOX / 2
 
 type World = {
@@ -105,7 +105,7 @@ function Multiverse.Start(ctx)
 
 		portal.Glow = Kit.Circle(root, C, C, BOX - 2, world.Glow, if dark then 0.72 else 0.8, 1)
 		-- Ciel du monde
-		local sky = Kit.Circle(root, C, C, 62, Color3.new(1, 1, 1), 0, 2)
+		local sky = Kit.Circle(root, C, C, 56, Color3.new(1, 1, 1), 0, 2)
 		sky.Name = "Sky"
 		Kit.Gradient(sky, ColorSequence.new(world.SkyTop, world.SkyBottom), nil, 90)
 		for _, spec in ipairs({ { 0.3, 0.28, 4 }, { 0.72, 0.36, 3 } }) do
@@ -116,27 +116,27 @@ function Multiverse.Start(ctx)
 		local planet = Kit.Box(root, {
 			Name = "Planet",
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromOffset(C, C + 10),
-			Size = UDim2.fromOffset(32, 32),
+			Position = UDim2.fromOffset(C, C + 9),
+			Size = UDim2.fromOffset(28, 28),
 			BackgroundTransparency = 1,
 			ZIndex = 4,
 		})
 		portal.Planet = planet
-		local ball = Kit.Circle(planet, 16, 16, 32, Color3.new(1, 1, 1), 0, 4)
+		local ball = Kit.Circle(planet, 14, 14, 28, Color3.new(1, 1, 1), 0, 4)
 		Kit.Gradient(ball, ColorSequence.new(world.Planet, world.PlanetDark), nil, 60)
 		if world.Name == "Lava" then
-			local ringFrame = Kit.Ellipse(planet, 16, 18, 50, 12, Color3.new(1, 1, 1), 1, 5)
+			local ringFrame = Kit.Ellipse(planet, 14, 16, 44, 10, Color3.new(1, 1, 1), 1, 5)
 			Kit.Stroke(ringFrame, Kit.Rgb(255, 226, 170), 2, 0.1)
 		elseif world.Name == "Ocean" then
 			-- Petit voilier
-			Kit.Box(planet, { Name = "Sail", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(24, 2), Size = UDim2.fromOffset(6, 8), Rotation = 8, Color = Color3.new(1, 1, 1), ZIndex = 5 })
+			Kit.Box(planet, { Name = "Sail", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromOffset(21, 2), Size = UDim2.fromOffset(6, 8), Rotation = 8, Color = Color3.new(1, 1, 1), ZIndex = 5 })
 		end
 		-- Minuscule bouton « Clique-moi » sur la planète (l'autre toi clique aussi)
 		local button = Kit.Box(planet, {
 			Name = "TinyButton",
 			AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.fromOffset(if world.Name == "Ocean" then 12 else 16, 3),
-			Size = UDim2.fromOffset(14, 7),
+			Position = UDim2.fromOffset(if world.Name == "Ocean" then 11 else 14, 3),
+			Size = UDim2.fromOffset(13, 6),
 			Color = Kit.Rgb(236, 236, 240),
 			ZIndex = 6,
 		})
@@ -151,7 +151,7 @@ function Multiverse.Start(ctx)
 		stroke.Parent = plus
 		portal.Plus = plus
 		-- Bord tourbillonnant
-		local rim, rimStroke = Kit.Ring(root, C, C, 64, Color3.new(1, 1, 1), 5, 0, 8)
+		local rim, rimStroke = Kit.Ring(root, C, C, 58, Color3.new(1, 1, 1), 4, 0, 8)
 		rim.Name = "Rim"
 		portal.Rim = Kit.Gradient(rimStroke, RIM, nil, 0)
 	end
@@ -166,7 +166,7 @@ function Multiverse.Start(ctx)
 	for index, world in ipairs(WORLDS) do
 		local piece = Kit.Piece(ctx.Container, "Portal" .. world.Name, BOX, BOX)
 		portals[index] = { Piece = piece, Content = nil, Rim = nil, Glow = nil, Planet = nil, Button = nil, Plus = nil, Stars = {}, Phase = random:NextNumber(0, 6) }
-		table.insert(items, { W = BOX, H = BOX, Anchor = world.Anchor, MinScale = 0.42, MaxScale = 1.1, Gap = 5 })
+		table.insert(items, { W = BOX, H = BOX, Anchor = world.Anchor, MinScale = 0.4, MaxScale = 1.1, Gap = 3 })
 	end
 	buildAll()
 	Kit.WatchTheme(ctx, function(isDark)
@@ -193,13 +193,13 @@ function Multiverse.Start(ctx)
 				end
 				local planet = portal.Planet
 				if planet then
-					planet.Position = UDim2.fromOffset(C, C + 10 + math.sin(t * 1.4 + portal.Phase) * 1.5)
+					planet.Position = UDim2.fromOffset(C, C + 9 + math.sin(t * 1.4 + portal.Phase) * 1.5)
 				end
 				-- Le mini bouton s'enfonce toutes les ~1,6 s, un « +1 » s'envole
 				local cycle = (t / 1.6 + portal.Phase) % 1
 				local button = portal.Button
 				if button then
-					button.Size = if cycle < 0.12 then UDim2.fromOffset(15, 5) else UDim2.fromOffset(14, 7)
+					button.Size = if cycle < 0.12 then UDim2.fromOffset(14, 4) else UDim2.fromOffset(13, 6)
 				end
 				local plus = portal.Plus
 				if plus and effects then

@@ -266,6 +266,40 @@ local function collectStack(list: { Rect }, stack: GuiObject): number
 			else
 				table.insert(list, inflate(rect, 4, 2))
 			end
+		elseif item.Name == "UpgradeBar" then
+			-- Barre d'améliorations : les cartes visibles (la barre peut être à moitié vide)
+			local box: Rect? = nil
+			local reliable = true
+			for _, child in ipairs(item:GetChildren()) do
+				if child:IsA("GuiObject") and child.Visible then
+					local childRect = GearKit.CanvasRect(child)
+					if child:IsA("ScrollingFrame") then
+						-- Cartes du défilement, coupées au cadre visible
+						local cards = visibleChildRects(child)
+						if not noOverlap(cards) then
+							reliable = false
+						end
+						for _, card in ipairs(cards) do
+							local clipped = {
+								X0 = math.max(card.X0, childRect.X0),
+								Y0 = math.max(card.Y0, childRect.Y0),
+								X1 = math.min(card.X1, childRect.X1),
+								Y1 = math.min(card.Y1, childRect.Y1),
+							}
+							if validRect(clipped) then
+								box = union(box, clipped)
+							end
+						end
+					elseif validRect(childRect) then
+						box = union(box, childRect)
+					end
+				end
+			end
+			if box and reliable then
+				table.insert(list, inflate(box :: Rect, 6, 4))
+			else
+				table.insert(list, rect)
+			end
 		else
 			table.insert(list, rect)
 			-- Enfants qui dépassent (bandeau Rush sur la ligne "par seconde"...)
@@ -521,7 +555,16 @@ local function sizeCost(scale: number, maxScale: number, visual: number, shapeIn
 end
 
 -- Meilleure place pour `spec` entre les échelles maxScale et minScale (nil si aucune)
-local function search(grid: Grid, spec: Spec, button: Rect, canvas: Vector2, maxScale: number, minScale: number, near: number?): Placement?
+local function search(
+	grid: Grid,
+	spec: Spec,
+	button: Rect,
+	canvas: Vector2,
+	territory: Rect,
+	maxScale: number,
+	minScale: number,
+	near: number?
+): Placement?
 	local anchor = spec.Anchor(button, canvas)
 	local bestCost = math.huge
 	local best: Placement? = nil
@@ -535,16 +578,17 @@ local function search(grid: Grid, spec: Spec, button: Rect, canvas: Vector2, max
 			end
 			local w, h = size.X * scale, size.Y * scale
 			local cw, ch = math.max(1, math.ceil(w / CELL)), math.max(1, math.ceil(h / CELL))
-			-- Zone de recherche (limitée autour du bouton si Near)
-			local cMin, cMax = 0, grid.Cols - cw
-			local rMin, rMax = 0, grid.Rows - ch
+			-- Zone de recherche : le territoire (et autour du bouton si Near)
+			local cMin = math.max(0, math.floor(territory.X0 / CELL))
+			local cMax = math.min(grid.Cols, math.ceil(territory.X1 / CELL)) - cw
+			local rMin = math.max(0, math.floor(territory.Y0 / CELL))
+			local rMax = math.min(grid.Rows, math.ceil(territory.Y1 / CELL)) - ch
 			if near then
 				cMin = math.max(cMin, math.floor((button.X0 - near - w) / CELL) - 1)
 				cMax = math.min(cMax, math.ceil((button.X1 + near) / CELL) + 1)
 				rMin = math.max(rMin, math.floor((button.Y0 - near - h) / CELL) - 1)
 				rMax = math.min(rMax, math.ceil((button.Y1 + near) / CELL) + 1)
 			end
-			local foundHere: { number }? = nil
 			local function try(c0: number, r0: number)
 				local cx = (c0 + cw / 2) * CELL
 				local cy = (r0 + ch / 2) * CELL
@@ -559,23 +603,12 @@ local function search(grid: Grid, spec: Spec, button: Rect, canvas: Vector2, max
 					end
 					bestCost = cost
 					best = makePlacement(cx, cy, scale, size, shape.Index, button)
-					foundHere = { c0, r0 }
 				end
 			end
-			-- Passe grossière (1 case sur 2), puis affinage autour du meilleur
-			for r0 = rMin, rMax, 2 do
-				for c0 = cMin, cMax, 2 do
+			-- Toutes les cases (une place de 3 cases de haut exactement doit être trouvée)
+			for r0 = rMin, rMax do
+				for c0 = cMin, cMax do
 					try(c0, r0)
-				end
-			end
-			local found = foundHere
-			if found then
-				for r0 = found[2] - 2, found[2] + 2 do
-					for c0 = found[1] - 2, found[1] + 2 do
-						if r0 >= rMin and r0 <= rMax and c0 >= cMin and c0 <= cMax then
-							try(c0, r0)
-						end
-					end
 				end
 			end
 			scale *= 0.9
@@ -796,12 +829,12 @@ local function doLayout(force: boolean)
 		else
 			local maxScale = spec.MaxScale or 1
 			local minScale = math.min(maxScale, spec.MinScale or 0.45)
-			placement = search(grid, spec, button, canvas, maxScale, minScale, spec.Near)
+			placement = search(grid, spec, button, canvas, territory, maxScale, minScale, spec.Near)
 			local near = spec.Near
 			if not placement then
 				-- Dernier recours : plus petit, et n'importe où dans le territoire
 				near = nil
-				placement = search(grid, spec, button, canvas, minScale * 0.9, maxScale * LAST_RESORT_SCALE, nil)
+				placement = search(grid, spec, button, canvas, territory, minScale * 0.9, maxScale * LAST_RESORT_SCALE, nil)
 			end
 			if placement then
 				placement = refine(placement, spec, obstacles, placed, button, canvas, territory, near)
