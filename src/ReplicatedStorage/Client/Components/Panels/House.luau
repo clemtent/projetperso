@@ -104,6 +104,7 @@ local arrangeButton: TextButton
 local editButton: TextButton
 local shopButton: TextButton
 local view3DButton: TextButton
+local walkButton: TextButton -- (v9.3) 🚶 entrer dans sa maison en 3D (Dopamine Town)
 local shopBadge: TextLabel
 local previewChip: Frame
 
@@ -253,7 +254,7 @@ local function refreshHeader()
 				favorites += 1
 			end
 		end
-		local typeText = roomLabel(roomData) .. "  ▾"
+		local typeText = roomLabel(roomData) .. "  🔄"
 		if typeButton.Text ~= typeText then
 			typeButton.Text = typeText
 		end
@@ -288,7 +289,7 @@ local function showSaved(status: string)
 		setChip(savedChip, Locale.T("💾 Saving…"))
 		savedChip.BackgroundColor3 = C.LilacSoft
 	elseif status == "saved" then
-		setChip(savedChip, Locale.T("Saved ✓"))
+		setChip(savedChip, Locale.T("Saved ✅"))
 		savedChip.BackgroundColor3 = C.MintSoft
 		UIUtil.Pop(savedChip, 1.2, 0.35)
 		task.delay(2.2, function()
@@ -334,7 +335,7 @@ local function layoutHeader()
 	houseChip.Visible = not inRoom
 	local buttonsWidth = 0
 	local gap = 8
-	for _, button in ipairs({ arrangeButton, view3DButton, editButton, shopButton }) do
+	for _, button in ipairs({ walkButton, arrangeButton, view3DButton, editButton, shopButton }) do
 		if button.Visible then
 			buttonsWidth += pillWidth(button) + gap
 		end
@@ -343,7 +344,7 @@ local function layoutHeader()
 	rightGroup.Size = UDim2.new(0, buttonsWidth, 1, 0)
 	local leftWidth = contentWidth() - buttonsWidth - 10
 	leftGroup.Size = UDim2.new(0, leftWidth, 1, 0)
-	local backText = isPhone() and "⬅" or Locale.T("⬅ House")
+	local backText = isPhone() and "⬅️" or Locale.T("⬅️ House")
 	if backButton.Text ~= backText then
 		backButton.Text = backText
 	end
@@ -1041,7 +1042,7 @@ open3D = function()
 	-- Pièce telle qu'on la voit (disposition locale comprise)
 	local placed = {}
 	for _, entry in ipairs(currentLayout()) do
-		table.insert(placed, { I = entry.I, X = entry.X, Y = entry.Y, S = entry.S, Z = entry.Z, F = entry.F == true or nil, C = entry.C })
+		table.insert(placed, { I = entry.I, X = entry.X, Y = entry.Y, S = entry.S, Z = entry.Z, F = entry.F == true or nil, C = entry.C, R = (entry :: any).R })
 	end
 	-- (v9.1) boiseries, ambiance et vue de la fenêtre : aussi en 3D
 	local record = {
@@ -1293,7 +1294,7 @@ function House.Build(frame: Frame)
 	UIUtil.Create("UIPadding", { PaddingLeft = UDim.new(0, 2), Parent = leftGroup })
 
 	-- Vue pièce : retour + onglets des pièces
-	backButton = barButton("Back", Locale.T("⬅ House"), C.PinkDeep, 1)
+	backButton = barButton("Back", Locale.T("⬅️ House"), C.PinkDeep, 1)
 	backButton.Parent = leftGroup
 	backButton.Visible = false
 	tabsScroller = UIUtil.Create("ScrollingFrame", {
@@ -1416,6 +1417,12 @@ function House.Build(frame: Frame)
 	-- Aperçu 3D de la pièce (House/House3D, chargé à la demande)
 	view3DButton = barButton("View3D", Locale.T("🧊 3D"), Color3.fromRGB(92, 172, 238), 2)
 	view3DButton.Parent = rightGroup
+	-- (v9.3) 🚶 marcher dans sa maison en 3D avec son avatar (Dopamine Town)
+	walkButton = barButton("WalkIn3D", Locale.T("🚶 Walk in"), Color3.fromRGB(80, 196, 150), 0)
+	walkButton.Parent = rightGroup
+	HouseButtons.Tip(walkButton, function()
+		return Locale.T("Walk inside your house with your avatar (Dopamine Town)")
+	end)
 	view3DButton.Visible = false
 	HouseButtons.Tip(view3DButton, function()
 		return Locale.T("See this room in 3D")
@@ -1775,6 +1782,17 @@ function House.Build(frame: Frame)
 	end)
 	backButton.Activated:Connect(backToOverview)
 	view3DButton.Activated:Connect(open3D)
+	walkButton.Activated:Connect(function()
+		local ok, link = pcall(function()
+			return require(script.Parent.Parent.Parent:WaitForChild("World"):WaitForChild("WorldLink")) :: any
+		end)
+		if not ok or not link.Available() then
+			UIUtil.Shake(walkButton)
+			return
+		end
+		local roomData = view == "room" and currentRoom() or nil
+		link.Enter({ Slot = roomData and roomData.Slot or nil })
+	end)
 	typeButton.Activated:Connect(function()
 		if currentRoomId then
 			changeRoomType(currentRoomId :: string)

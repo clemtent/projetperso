@@ -676,7 +676,7 @@ function Ocean.Play(ctx)
 	for index = 1, SPARKS do
 		local spark = UIUtil.Label({
 			Name = "Spark",
-			Text = index % 3 == 0 and "✨" or "✦",
+			Text = index % 3 == 0 and "✨" or "•",
 			TextColor3 = index % 2 == 0 and Color3.fromRGB(255, 226, 120) or WHITE,
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Size = UDim2.fromOffset(26, 26),

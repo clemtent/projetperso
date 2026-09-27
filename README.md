@@ -27,6 +27,16 @@ Les autres méthodes (Rojo, copie manuelle) sont décrites dans [`docs/INSTALLAT
 
 ---
 
+## 🆕 Nouveautés v9.3 — plus dur, vraie 3D, Dopamine Town
+
+- 🚶 **Dopamine Town** : bouton « 🚶 Ville » (ou « Entrer à pied » dans la Maison). Tu entres avec **ton avatar** dans une ville où chaque joueur du serveur a sa maison, construite en vraie 3D à partir de sa maison du jeu. Tu te promènes de pièce en pièce, tu montes les étages et tu t'assois sur les canapés. Tu peux **visiter** les autres (ouverte à tous / amis / fermée), faire des **emotes** et mettre des **❤️** (bonus pour toi et le propriétaire, 👑 pour la maison la plus aimée).
+- ✏️ **Déplacer tes meubles avec ton perso** : clique un meuble, il suit ta souris ou ton doigt, **R** le tourne, clic pour le poser. La maison 2D est mise à jour pareil.
+- 🏠 **Maison 3D refaite** : les 354 objets sont de vrais modèles 3D (plus aucune carte plate). Pendant la vue 3D, ton avatar ne peut plus bouger et la souris n'est plus bloquée.
+- 📈 **Économie rééquilibrée** : ~57 min pour la 1re renaissance, puis chaque partie est un peu plus longue (≈ 1 h 30 à la 3e, ≈ 2 h 30 à la 8e). Les prix montent après chaque visite à l'océan. Détails et tableau avant/après : [`docs/ECONOMIE.md`](docs/ECONOMIE.md).
+- 🔒 **Contenus débloqués par les renaissances** : thèmes, types de pièces, tailles de maison, objets de la maison, cosmétiques, Arcade / Casino / Jardin. Le cadenas indique combien de visites à l'océan il faut.
+- ✖️ **Vraies croix** : les boutons fermer (et les autres symboles qui s'affichaient en carré « logo Roblox ») sont maintenant dessinés.
+- Corrigés : la sauvegarde en quittant pouvait être sautée pendant une sauvegarde auto ; un joueur qui partait pendant le chargement restait en mémoire ; badge « possédé » illisible en mode sombre.
+
 ## 🆕 Nouveautés v9.1 / v9.2
 
 - 🎬 **Vidéo de présentation** : [`docs/video/presentation.mp4`](docs/video/presentation.mp4) · 📝 **Description Roblox** prête à coller : [`docs/DESCRIPTION.md`](docs/DESCRIPTION.md).
@@ -308,5 +318,6 @@ Toutes les valeurs se modifient dans **`ReplicatedStorage > Shared > Config`**.
 ## 📚 Documentation
 
 - [`docs/INSTALLATION.md`](docs/INSTALLATION.md) — 3 méthodes d'installation, liste complète des fichiers, Remotes, sons, ajouter un stimulus.
+- [`docs/ECONOMIE.md`](docs/ECONOMIE.md) — rythme de progression, prix, déblocages par renaissance, simulateur.
 - [`docs/TESTS.md`](docs/TESTS.md) — checklist de test v2, commandes Studio, tests automatiques, erreurs courantes.
 - [`docs/MONETISATION.md`](docs/MONETISATION.md) — Game Passes, boosts, règles Roblox (casino, coffres), promotion.

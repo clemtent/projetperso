@@ -40,6 +40,7 @@ local ORDER = {
 	"FriendMailService", -- mails entre amis Roblox (après ChatService ; lit data.FriendMail)
 	"CosmeticService",
 	"HouseService",
+	"WorldService", -- 🚶 Dopamine Town (après HouseService : la maison est déjà corrigée)
 	"QuestService",
 	"AchievementService",
 	"DailyRewardService",
@@ -71,26 +72,10 @@ end
 -- Joueurs
 ----------------------------------------------------------------------
 
-local function onPlayerAdded(player: Player)
-	local data = services.DataService:LoadAsync(player)
-	if not data or not player.Parent then
-		return
-	end
-
-	for _, name in ipairs(ORDER) do
-		local service = services[name]
-		if service.PlayerReady then
-			local ok, err = pcall(service.PlayerReady, service, player, data)
-			if not ok then
-				warn("[Main] Erreur PlayerReady dans " .. name .. " :", err)
-			end
-		end
-	end
-
-	services.GameService:SendFullSync(player)
-end
-
-local function onPlayerRemoving(player: Player)
+-- Ménage de sortie (tous les services, puis sauvegarde + oubli des données).
+-- Sans risque s'il est appelé deux fois : chaque PlayerRemoving vide ses
+-- tables, ReleaseAsync ne fait rien si les données sont déjà libérées.
+local function cleanupPlayer(player: Player)
 	for _, name in ipairs(ORDER) do
 		local service = services[name]
 		if service.PlayerRemoving then
@@ -101,6 +86,41 @@ local function onPlayerRemoving(player: Player)
 		end
 	end
 	services.DataService:ReleaseAsync(player)
+end
+
+local function onPlayerAdded(player: Player)
+	local data = services.DataService:LoadAsync(player)
+	if not data or not player.Parent then
+		return
+	end
+
+	for _, name in ipairs(ORDER) do
+		-- v9.3 : le joueur a pu partir pendant un PlayerReady qui attend
+		-- (ex. vérification des Game Passes) : on arrête de le préparer
+		if not player.Parent then
+			break
+		end
+		local service = services[name]
+		if service.PlayerReady then
+			local ok, err = pcall(service.PlayerReady, service, player, data)
+			if not ok then
+				warn("[Main] Erreur PlayerReady dans " .. name .. " :", err)
+			end
+		end
+	end
+
+	if not player.Parent then
+		-- Parti pendant la préparation : PlayerRemoving est déjà passé, mais un
+		-- service a pu finir sa préparation APRÈS (états par joueur jamais
+		-- libérés) : on refait le ménage
+		cleanupPlayer(player)
+		return
+	end
+	services.GameService:SendFullSync(player)
+end
+
+local function onPlayerRemoving(player: Player)
+	cleanupPlayer(player)
 end
 
 Players.PlayerAdded:Connect(onPlayerAdded)

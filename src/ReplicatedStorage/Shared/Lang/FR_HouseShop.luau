@@ -19,7 +19,7 @@ return {
 		-- Objets : préférés de la pièce ouverte
 		["%s Favourites"] = "%s Préférés",
 		["✨ +%s comfort"] = "✨ +%s confort",
-		["MAX ✓"] = "MAX ✓",
+		["MAX ✅"] = "MAX ✅",
 
 		-- Murs / sols par pièce
 		["🎨 Walls of this room:"] = "🎨 Murs de cette pièce :",

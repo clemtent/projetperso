@@ -946,7 +946,7 @@ function NewsTicker.Start(ctx)
 			local up = change >= 0
 			panel.Icon.Text = up and "📈" or "📉"
 			panel.Name.Text = names[i]
-			panel.Value.Text = string.format('<font color="#%s">%s %s%.1f%%</font>', up and "3CDC6E" or "FF5A64", up and "▲" or "▼", up and "+" or "", change)
+			panel.Value.Text = string.format('<font color="#%s">%s%.1f%%</font>', up and "3CDC6E" or "FF5A64", up and "+" or "", change)
 		else
 			-- Production du joueur
 			panel.Icon.Text = "⚡"
@@ -1099,7 +1099,7 @@ function NewsTicker.Start(ctx)
 	local alertEdge = frame({ AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0), Size = UDim2.new(0, 12, 1, 0), BackgroundColor3 = red, ZIndex = 52, Parent = alertBox })
 	local alertTitle = text({ Size = UDim2.new(1, -12, 0, 26), Position = UDim2.fromOffset(8, 6), Text = Locale.T("BREAKING"), TextColor3 = white, TextSize = 22, TextScaled = true, ZIndex = 53, Parent = alertBox }, italicFont)
 	UIUtil.Create("UITextSizeConstraint", { MaxTextSize = 22, MinTextSize = 10, Parent = alertTitle })
-	local alertSub = text({ Size = UDim2.new(1, -12, 0, 14), Position = UDim2.fromOffset(8, 34), Font = Theme.Fonts.Title, Text = Locale.T("NEWS ● LIVE"), TextColor3 = Color3.fromRGB(255, 225, 225), TextSize = 11, ZIndex = 53, Parent = alertBox })
+	local alertSub = text({ Size = UDim2.new(1, -12, 0, 14), Position = UDim2.fromOffset(8, 34), Font = Theme.Fonts.Title, Text = Locale.T("NEWS • LIVE"), TextColor3 = Color3.fromRGB(255, 225, 225), TextSize = 11, ZIndex = 53, Parent = alertBox })
 	local bannerHeadline = UIUtil.Label({
 		Text = "",
 		Font = Theme.Fonts.Title,
@@ -1161,7 +1161,7 @@ function NewsTicker.Start(ctx)
 		local token = bannerToken
 		bannerHeadline.Text = message or ""
 		local subtitles = Locale.Pick(BREAKING_SUBTITLES)
-		bannerSub.Text = "● " .. clockLabel.Text .. "  ·  " .. subtitles[random:NextInteger(1, #subtitles)]
+		bannerSub.Text = "🔴 " .. clockLabel.Text .. "  ·  " .. subtitles[random:NextInteger(1, #subtitles)]
 		banner.Visible = true
 		banner.Position = UDim2.new(0.5, 0, 0, -BANNER_H - 20)
 		UIUtil.Tween(banner, 0.5, { Position = UDim2.new(0.5, 0, 0, HEIGHT + 6) }, Enum.EasingStyle.Back)

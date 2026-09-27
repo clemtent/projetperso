@@ -57,7 +57,7 @@ return {
 		["Cosmetics: just for the look"] = "Cosmétiques : juste pour le style",
 		["🔜 Coming soon"] = "🔜 Bientôt",
 		["COMING SOON"] = "BIENTÔT",
-		["💸 −%s%% per ticket"] = "💸 −%s %% par ticket",
+		["💸 -%s%% per ticket"] = "💸 -%s %% par ticket",
 		["🕹️ For the arcade"] = "🕹️ Pour l'arcade",
 		["✨ Just for style"] = "✨ Juste pour le style",
 		["👉 Best fit"] = "👉 Conseillé",

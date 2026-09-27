@@ -21,6 +21,8 @@ local Theme = require(Client.Theme)
 local UIUtil = require(Client.UIUtil)
 local Interface = require(Client.Interface)
 local SoundManager = require(Client.SoundManager)
+local ClientState = require(Client.ClientState)
+local Notifications = require(script.Parent.Parent.Notifications)
 local Locale = require(ReplicatedStorage.Shared.Locale)
 local HouseCommon = require(script.Parent.HouseCommon)
 local HouseArt = require(script.Parent.HouseArt)
@@ -311,9 +313,18 @@ function HousePicker.new(parent: Frame): Picker
 					tint = a:Lerp(WHITE, luminance < 0.6 and 0.72 or 0.35)
 				end
 				local isCurrent = options.Current == roomType.Id
-				local button = cell(index, tint, not isCurrent, function()
+				-- v9.3 : type réservé aux visites à l'océan (le type ACTUEL reste
+				-- affiché normalement : les anciennes sauvegardes le gardent)
+				local required = HouseCommon.RequiredRebirths(roomType)
+				local locked = not isCurrent and not HouseCommon.IsUnlocked(ClientState.Data, roomType)
+				local button = cell(index, tint, not isCurrent and not locked, function()
 					options.OnPick(roomType.Id)
 				end)
+				if locked then
+					button.Activated:Connect(function()
+						Notifications.Toast(required == 1 and Locale.T("🔒 after 1 ocean visit") or Locale.T("🔒 after %d ocean visits", required), C.Lilac)
+					end)
+				end
 				text(button, roomType.Icon, UDim2.fromOffset(0, 6), UDim2.new(1, 0, 0, 36), 30)
 				text(button, HouseCommon.Name(roomType), UDim2.fromOffset(4, 44), UDim2.new(1, -8, 0, 20), phone and 14 or 16, C.Ink, true)
 				-- Préférés : icônes des catégories + vignettes de quelques objets
@@ -372,10 +383,36 @@ function HousePicker.new(parent: Frame): Picker
 						HouseArt.Thumbnail(holder, item, 30, 66)
 					end
 				end
+				if locked then
+					-- Voile grisé + pastille "🔒 N" (visites à l'océan)
+					local veil = UIUtil.Create("Frame", {
+						Name = "LockVeil",
+						Size = UDim2.fromScale(1, 1),
+						BackgroundColor3 = Color3.fromRGB(96, 86, 120),
+						BackgroundTransparency = 0.45,
+						ZIndex = 67,
+						Parent = button,
+					})
+					veil:SetAttribute("DarkSkinIgnore", true)
+					UIUtil.Corner(veil, 16)
+					local lockChip = UIUtil.Chip({
+						Name = "Locked",
+						Text = "🔒 🌊 " .. tostring(required),
+						Color = C.Lilac,
+						TextColor3 = WHITE,
+						Height = 24,
+						TextSize = 14,
+						ZIndex = 68,
+						Parent = button,
+					})
+					-- (en haut à droite, comme "Actuel" : le nom reste lisible)
+					lockChip.AnchorPoint = Vector2.new(1, 0)
+					lockChip.Position = UDim2.new(1, -6, 0, 6)
+				end
 				if isCurrent then
 					local badge = UIUtil.Chip({
 						Name = "Current",
-						Text = Locale.T("✓ Current"),
+						Text = Locale.T("✅ Current"),
 						Color = Theme.Colors.Green,
 						TextColor3 = WHITE,
 						Height = 22,

@@ -20,13 +20,47 @@ function Formulas.GetLevel(data, upgradeId: string): number
 	return data.Upgrades[upgradeId] or 0
 end
 
--- Rebirth ("Aller à l'océan")
-function Formulas.GetRebirthCost(rebirths: number): number
-	return Config.Rebirth.BaseCost * (Config.Rebirth.CostGrowth ^ rebirths)
+-- Nombre de visites à l'océan lisible (nil, NaN, négatif -> 0)
+local function cleanRebirths(rebirths: any): number
+	local value = tonumber(rebirths) or 0
+	if value ~= value or value < 0 then
+		return 0
+	end
+	return math.min(math.floor(value), 1000)
 end
 
+-- Rebirth ("Aller à l'océan") : prix de la PROCHAINE visite quand on en a
+-- déjà fait `rebirths`. BaseCost x CostGrowth^r x (1 + r)^CostPower : la
+-- partie polynomiale rend chaque visite nettement plus longue que la
+-- précédente (le multiplicateur gagné ne suffit jamais à la rattraper).
+function Formulas.GetRebirthCost(rebirths: number): number
+	local settings = Config.Rebirth
+	local r = cleanRebirths(rebirths)
+	return settings.BaseCost * (settings.CostGrowth ^ r) * ((1 + r) ^ (settings.CostPower or 0))
+end
+
+-- Multiplicateur permanent des visites : +MultiplierPerRebirth par visite,
+-- de moins en moins (x MultiplierDecay à chaque visite suivante)
 function Formulas.GetRebirthMultiplier(rebirths: number): number
-	return 1 + rebirths * Config.Rebirth.MultiplierPerRebirth
+	local settings = Config.Rebirth
+	local r = cleanRebirths(rebirths)
+	local decay = settings.MultiplierDecay or 1
+	local bonus = 0
+	local step = settings.MultiplierPerRebirth
+	for _ = 1, r do
+		bonus += step
+		step *= decay
+	end
+	return 1 + bonus
+end
+
+-- Les améliorations (non permanentes) coûtent PriceGrowth^r x (1 + r)^PricePower
+-- fois plus après r visites à l'océan : chaque partie coûte plus cher que la
+-- précédente (surtout au début, puis de moins en moins vite)
+function Formulas.GetUpgradePriceScale(rebirths: number?): number
+	local settings = Config.Rebirth
+	local r = cleanRebirths(rebirths)
+	return (settings.PriceGrowth or 1) ^ r * (1 + r) ^ (settings.PricePower or 0)
 end
 
 -- Prix du PROCHAIN niveau (level = niveau actuel)
@@ -34,7 +68,8 @@ function Formulas.GetUpgradeCost(upgrade, level: number, rebirths: number?): num
 	if upgrade.Effect == "Detox" then
 		return Formulas.GetRebirthCost(rebirths or 0)
 	end
-	return math.floor(upgrade.Cost * (upgrade.CostGrowth ^ level) + 0.5)
+	local scale = upgrade.Permanent and 1 or Formulas.GetUpgradePriceScale(rebirths)
+	return math.floor(upgrade.Cost * (upgrade.CostGrowth ^ level) * scale + 0.5)
 end
 
 function Formulas.IsMaxed(upgrade, level: number): boolean
@@ -183,6 +218,31 @@ function Formulas.CountCosmetics(data): number
 	return countKeys(cosmetics.Owned, Config.CosmeticsById)
 end
 
+-- Bonus permanents : +Config.CosmeticBonus par objet cosmétique possédé,
+-- +Config.AchievementBonus par succès (linéaires, petits : jamais une boule
+-- de neige, même avec tout le catalogue)
+function Formulas.GetCosmeticMultiplier(count: number?): number
+	return 1 + math.max(0, tonumber(count) or 0) * Config.CosmeticBonus
+end
+
+function Formulas.GetAchievementMultiplier(count: number?): number
+	return 1 + math.max(0, tonumber(count) or 0) * Config.AchievementBonus
+end
+
+-- Verrous des renaissances (visites à l'océan) des cosmétiques et des thèmes
+function Formulas.GetRequiredRebirths(entry): number
+	return type(entry) == "table" and tonumber(entry.RequiresRebirths) or 0
+end
+
+function Formulas.IsCosmeticUnlocked(data, cosmetic): boolean
+	local rebirths = type(data) == "table" and tonumber(data.Rebirths) or 0
+	return Formulas.GetRequiredRebirths(cosmetic) <= (rebirths or 0)
+end
+
+function Formulas.IsThemeUnlocked(data, theme): boolean
+	return Formulas.IsCosmeticUnlocked(data, theme)
+end
+
 -- `data` = données sauvegardées du joueur, `eventMultiplier` = Rush en cours (ou 1),
 -- `bonusMultiplier` = bonus Robux (Game Passes x Boost actif), calculé par le serveur (ou 1)
 function Formulas.ComputeStats(data, eventMultiplier: number?, bonusMultiplier: number?)
@@ -214,8 +274,8 @@ function Formulas.ComputeStats(data, eventMultiplier: number?, bonusMultiplier: 
 	end
 
 	local rebirthMultiplier = Formulas.GetRebirthMultiplier(data.Rebirths)
-	local achievementMultiplier = 1 + Formulas.CountAchievements(data) * Config.AchievementBonus
-	local cosmeticMultiplier = 1 + Formulas.CountCosmetics(data) * Config.CosmeticBonus
+	local achievementMultiplier = Formulas.GetAchievementMultiplier(Formulas.CountAchievements(data))
+	local cosmeticMultiplier = Formulas.GetCosmeticMultiplier(Formulas.CountCosmetics(data))
 	local eventMult = eventMultiplier or 1
 	local bonusMult = bonusMultiplier or 1
 	local globalMultiplier = upgradeMultiplier * rebirthMultiplier * achievementMultiplier * cosmeticMultiplier * eventMult * bonusMult
@@ -515,14 +575,25 @@ function Formulas.GetHouseComfort(data): number
 	return total
 end
 
--- Multiplicateur de gains du confort : 1 + min(Max, confort x bonus par point)
+-- Multiplicateur de gains du confort, à rendements décroissants :
+-- 1 + Max x c / (c + Max / ParPoint). Les premiers points valent
+-- ComfortBonusPerPoint chacun, puis de moins en moins ; on approche
+-- MaxComfortBonus sans jamais l'atteindre (moitié du max à Max / ParPoint
+-- points de confort).
 function Formulas.GetHouseBonus(comfort: number?): number
 	local points = tonumber(comfort) or 0
 	if points ~= points or points < 0 then
 		points = 0
 	end
+	points = math.min(points, 1e12)
 	local house = Config.House
-	return 1 + math.min(house.MaxComfortBonus, points * house.ComfortBonusPerPoint)
+	local max = house.MaxComfortBonus
+	local perPoint = house.ComfortBonusPerPoint
+	if max <= 0 or perPoint <= 0 then
+		return 1
+	end
+	local half = max / perPoint
+	return 1 + max * points / (points + half)
 end
 
 return Formulas

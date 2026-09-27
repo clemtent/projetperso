@@ -448,7 +448,7 @@ function refreshOffer(offer: Offer)
 	end
 	if owned then
 		pendingPasses[offer.Id] = nil
-		styleButton(offer.Button, Locale.T("✔ Purchased"), Color3.fromRGB(222, 247, 232), Theme.Colors.RobuxDark, false)
+		styleButton(offer.Button, Locale.T("✅ Purchased"), Color3.fromRGB(222, 247, 232), Theme.Colors.RobuxDark, false)
 		offer.Stroke.Color = Theme.Colors.Robux
 		offer.Stroke.Thickness = 2
 		offer.Stroke.Transparency = 0
@@ -550,7 +550,7 @@ function refreshExtra(offer: Offer, data)
 		end
 	elseif def.Kind == "Dopamine" then
 		local amount = Formulas.ScaledReward(stats, tonumber(def.Seconds) or 0, tonumber(def.Minimum) or 0)
-		text = "≈ +" .. NumberFormatter.Format(amount) .. " Dopamine"
+		text = "~ +" .. NumberFormatter.Format(amount) .. " Dopamine"
 		color = Theme.Colors.Blue
 	elseif def.Kind == "Boost" then
 		local multiplier, remaining = ClientState.GetBoost()
@@ -566,7 +566,7 @@ function refreshExtra(offer: Offer, data)
 	elseif def.Kind == "Tickets" then
 		local saving = ticketSavings(offer)
 		if saving then
-			text = Locale.T("💸 −%s%% per ticket", tostring(saving))
+			text = Locale.T("💸 -%s%% per ticket", tostring(saving))
 			color = Theme.Colors.RobuxDark
 		else
 			text = Locale.T("🕹️ For the arcade")
@@ -574,7 +574,7 @@ function refreshExtra(offer: Offer, data)
 		end
 	elseif def.Kind == "Combo" then
 		local amount = Formulas.ScaledReward(stats, tonumber(def.Seconds) or 0, tonumber(def.Minimum) or 0)
-		text = string.format("%s %s + ≈ %s 🧠", TICKET, NumberFormatter.Format(tonumber(def.Tickets) or 0), NumberFormatter.Format(amount))
+		text = string.format("%s %s + ~%s 🧠", TICKET, NumberFormatter.Format(tonumber(def.Tickets) or 0), NumberFormatter.Format(amount))
 		color = offer.Color:Lerp(BLACK, 0.35)
 	elseif def.Kind == "Stylish" then
 		text = Locale.T("✨ Just for style")
@@ -641,7 +641,7 @@ local function buildHero(content: Frame)
 	for index = 1, 12 do
 		local star = UIUtil.Label({
 			Name = "Sparkle" .. index,
-			Text = index % 3 == 0 and "✦" or "•",
+			Text = index % 3 == 0 and "✨" or "•",
 			TextColor3 = WHITE,
 			Size = UDim2.fromOffset(14, 14),
 			AnchorPoint = Vector2.new(0.5, 0.5),
@@ -1038,7 +1038,7 @@ local function buildCard(section: Section, def, isPass: boolean, order: number)
 		-- En haut à gauche, à la place de "Pour toujours" : ne cache pas l'icône
 		local ownedChip = UIUtil.Chip({
 			Name = "Owned",
-			Text = Locale.T("✔ PURCHASED"),
+			Text = Locale.T("✅ PURCHASED"),
 			Color = Theme.Colors.Robux,
 			TextColor3 = WHITE,
 			Height = 18,

@@ -148,13 +148,13 @@ end
 local function funnyTotal(seconds: number): string
 	local films = seconds / (2 * 3600)
 	if films >= 1 then
-		return Locale.T("≈ %s two-hour movie%s 🎬", NumberFormatter.Format(films, 1), films >= 2 and "s" or "")
+		return Locale.T("~%s two-hour movie%s 🎬", NumberFormatter.Format(films, 1), films >= 2 and "s" or "")
 	end
 	local episodes = seconds / (22 * 60)
 	if episodes >= 1 then
-		return Locale.T("≈ %s TV episode%s 📺", NumberFormatter.Format(episodes, 1), episodes >= 2 and "s" or "")
+		return Locale.T("~%s TV episode%s 📺", NumberFormatter.Format(episodes, 1), episodes >= 2 and "s" or "")
 	end
-	return Locale.T("≈ %s three-second videos 📱", tostring(math.floor(seconds / 3 + 0.5)))
+	return Locale.T("~%s three-second videos 📱", tostring(math.floor(seconds / 3 + 0.5)))
 end
 
 local function refreshTimes()
@@ -165,7 +165,7 @@ local function refreshTimes()
 	stats.Session.Value.Text = NumberFormatter.Time(session)
 	stats.Today.Value.Text = NumberFormatter.Time(today)
 	stats.Total.Value.Text = NumberFormatter.Time(total)
-	stats.Session.Sub.Text = Locale.T("● live since you arrived")
+	stats.Session.Sub.Text = Locale.T("🔴 live since you arrived")
 	stats.Today.Sub.Text = Locale.T("%.1f%% of your day", today / 864)
 	stats.Total.Sub.Text = funnyTotal(total)
 

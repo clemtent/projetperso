@@ -194,7 +194,7 @@ Art.MusicBox = function(body, kit, _item)
 	kit.Animate(dancer, "Sway", 6, 1.3, 0)
 	-- notes
 	for index, x in ipairs({ 6, 92 }) do
-		local note = kit.Text(body, index == 1 and "♪" or "♫", x, 34, 14, C.PinkDeep, 5)
+		local note = kit.Text(body, index == 1 and "🎵" or "🎶", x, 34, 14, C.PinkDeep, 5)
 		kit.Animate(note, "Bob", 3, 0.8, index * 1.3)
 	end
 	return nil

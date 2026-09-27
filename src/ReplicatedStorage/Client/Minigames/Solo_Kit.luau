@@ -549,7 +549,7 @@ function Kit:_BuildHud()
 	-- Boutons du bas
 	local restart = candyButton({
 		Name = "Restart",
-		Text = "↻ " .. self:T("Restart"),
+		Text = "🔄 " .. self:T("Restart"),
 		Color = self.Accent,
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.fromScale(0, 1),
@@ -1120,7 +1120,7 @@ function Kit:_BuildResult()
 	-- Boutons
 	local again = candyButton({
 		Name = "Again",
-		Text = "↻ " .. self:T("Play again"),
+		Text = "🔄 " .. self:T("Play again"),
 		Color = self.Accent,
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.new(0, 18, 0.96, 0),

@@ -12,6 +12,7 @@
 ]]
 
 local Kit = require(script.Parent.Solo_Kit)
+local UIUtil = require(script.Parent.Parent.UIUtil)
 local Logic = Kit.Logic
 local C = Kit.Colors
 local create = Kit.Create
@@ -328,7 +329,8 @@ function Module.Build(container: Frame, api)
 		})
 		Kit.Corner(pad, UDim.new(1, 0))
 		Kit.Stroke(pad, kit.Accent, 1.5, 0.5)
-		-- (un seul symbole "▲" tourné : ▶ / ◀ s'affichent en emoji sur certains appareils)
+		-- Flèches DESSINÉES (triangles) : les polices Roblox n'ont pas ▲ ▶ ▼ ◀
+		local ARROW_KINDS = { "Up", "Right", "Down", "Left" }
 		local arrows = { { 0.5, 0.17 }, { 0.83, 0.5 }, { 0.5, 0.83 }, { 0.17, 0.5 } }
 		for dir, info in ipairs(arrows) do
 			local button = Kit.Button({
@@ -343,16 +345,7 @@ function Module.Build(container: Frame, api)
 				ZIndex = 4,
 				Parent = pad,
 			})
-			Kit.Label({
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.fromScale(0.5, 0.5),
-				Size = UDim2.fromScale(0.6, 0.6),
-				Text = "▲",
-				Rotation = (dir - 1) * 90,
-				MaxTextSize = 22,
-				ZIndex = 5,
-				Parent = button,
-			})
+			UIUtil.Icon(ARROW_KINDS[dir], { Name = "Arrow", Size = 18, Color = C.White, ZIndex = 5, Parent = button })
 			button.InputBegan:Connect(function(input)
 				if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
 					steer(dir)

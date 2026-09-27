@@ -11,12 +11,32 @@
 	HouseSurfaces (R.TopY) pour que les objets posés dessus tombent juste.
 
 	Recette = function(b: Builder, R: Ctx)
-	Un objet sans recette (House3DRecipes.For -> nil) devient un carton
-	découpé épais (House3DKit.Card).
+	v9.3 : les 354 objets ont un vrai modèle 3D (ici + House3DCritters,
+	House3DObjects, House3DToys) ; un objet inconnu (future mise à jour)
+	reçoit une forme 3D de repli à ses couleurs, jamais un carton.
 
 	API :
-	  House3DRecipes.For(item) -> (Recipe?, Info)   Info = { Wall = contre le mur ?, Flat = tapis ? }
+	  House3DRecipes.For(item) -> (Recipe, Info)   Info = { Wall = contre le mur ?, Flat = tapis ?, Pet = animal ? }
 	  House3DRecipes.Has(itemId) -> boolean
+	  House3DRecipes.Make(item, entry, k, parent, origin, trim?) -> ItemData  (pièces au repère `origin`, devant +Z)
+
+	API du monde (Dopamine Town ; aucun lien avec la vue 3D, la caméra ou l'interface) :
+	  House3DRecipes.BuildItem(itemId, entry?, options?) -> Model?
+	    entry : { S?, F?, C? } (taille, miroir, variante de couleur ; R n'est
+	    PAS appliqué ici : c'est l'appelant qui tourne le modèle)
+	    options : Scale (studs par px de la pièce 2D, 0.05 par défaut : la
+	    boîte 2D fait item.Size x S x Scale studs), Night, Collide (true),
+	    Query (true), Trim (Color3), Shadows (true)
+	    Modèle : toutes les pièces Anchored, CanTouch = false ; pièces visibles
+	    CanCollide = false, CanQuery = Query ; PrimaryPart "Root" (invisible,
+	    0.1 d'épaisseur) ; pivot = bas du centre de l'empreinte (objet mural :
+	    bas de sa boîte 2D, contre le mur, l'objet avance vers -Z) ; DEVANT =
+	    -Z ; gros meubles au sol : "Hitbox" invisible CanCollide = true jusqu'à
+	    l'assise / au dessus ; "SeatPart" (Part transparente, face -Z) pour
+	    s'asseoir ; attributs ItemId, Footprint (Vector3 L, H, P), TopHeight,
+	    TopCenter (Vector3, repère du modèle), TopSize (Vector2), Wall,
+	    AgainstWall, Flat, Pet.
+	  House3DRecipes.BuildModel(itemId, entry?, options?) -> (Model?, ItemData?)
 ]]
 
 local HouseSurfaces = require(script.Parent.HouseSurfaces)
@@ -32,7 +52,7 @@ export type Ctx = {
 	Trim: Color3,
 }
 export type Recipe = (b: Builder, R: Ctx) -> ()
-export type Info = { Wall: boolean, Flat: boolean, Glow: boolean }
+export type Info = { Wall: boolean, Flat: boolean, Glow: boolean, Pet: boolean }
 
 local House3DRecipes = {}
 
@@ -503,11 +523,17 @@ R.FloorCushion = function(b, ctx)
 end
 R.Beanbag = function(b, _ctx)
 	local color = accent(b, 1, LILAC)
-	b.Ball(0, 22, 0, 90, color, M.Fabric)
-	b.Ball(0, 42, -20, 64, darken(color, 0.06), M.Fabric)
-	b.Box(0, 0, 0, 84, 4, 80, darken(color, 0.1), M.Fabric)
-	b.Top(1, 0, 58, 8, 50, 40)
-	b.Footprint(90, 90, 70)
+	-- pouf poire : grosse goutte affaissée, creux d'assise, dossier relevé
+	b.Egg(0, 24, 2, 92, 48, 86, color, M.Fabric)
+	b.EggR(CFrame.new(0, 50, -18) * CFrame.Angles(-0.35, 0, 0), 70, 50, 40, darken(color, 0.05), M.Fabric)
+	b.Egg(0, 44, 12, 56, 12, 46, lighten(color, 0.12), M.Fabric)
+	for _, side in ipairs({ -1, 1 }) do
+		b.Egg(side * 32, 30, 8, 26, 30, 50, darken(color, 0.03), M.Fabric)
+	end
+	b.Ball(26, 20, 40, 5, lighten(color, 0.4), M.Fabric)
+	b.Top(1, 0, 50, 10, 50, 40)
+	b.Seat(0, 48, 10, 50, 40)
+	b.Footprint(92, 86, 76)
 end
 local function sofa(b: Builder, ctx: Ctx, seatDefault: number, width: number, cushions: number)
 	local seat = ctx.TopY(1, seatDefault)
@@ -2464,10 +2490,81 @@ R.DinoSkeleton = function(b, _ctx)
 end
 
 ----------------------------------------------------------------------
--- Familles par défaut (objets sans recette dédiée)
+-- Familles (v9.3) : recettes des autres modules + repli par catégorie
 ----------------------------------------------------------------------
 
-local DOORS_AS_CARD: { [string]: boolean } = { DreamPortal = true, MouseHole = true, Elevator = false }
+-- Aides partagées avec les modules de recettes (House3DCritters, House3DObjects)
+local H = {
+	M = M,
+	rgb = rgb,
+	WHITE = WHITE,
+	BLACK = BLACK,
+	CREAM = CREAM,
+	WOOD = WOOD,
+	WOOD_LIGHT = WOOD_LIGHT,
+	WOOD_DARK = WOOD_DARK,
+	PINK = PINK,
+	PINK_SOFT = PINK_SOFT,
+	LILAC = LILAC,
+	MINT = MINT,
+	SKY = SKY,
+	BUTTER = BUTTER,
+	GOLD = GOLD,
+	GREY = GREY,
+	GREY_DARK = GREY_DARK,
+	INK = INK,
+	LEAF = LEAF,
+	LEAF_DARK = LEAF_DARK,
+	GLASS = GLASS,
+	FIRE = FIRE,
+	darken = darken,
+	lighten = lighten,
+	woodOf = woodOf,
+	accent = accent,
+	greenOf = greenOf,
+	lightOf = lightOf,
+	legs4 = legs4,
+	knob = knob,
+	cabinet = cabinet,
+	bush = bush,
+	pot = pot,
+	rug = rug,
+	door = door,
+	windowRecipe = windowRecipe,
+	plaque = plaque,
+	screen = screen,
+	critter = critter,
+	smallPlant = smallPlant,
+	tree = tree,
+}
+House3DRecipes.Helpers = H
+
+-- Recettes par famille (id -> recette), remplies par les autres modules
+local FAMILY: { [string]: Recipe } = {}
+-- Objets à plat (tapis) / animaux (petite respiration dans la vue 3D)
+local FLAT: { [string]: boolean } = {}
+local PETS: { [string]: boolean } = {}
+
+local function loadFamilies(name: string)
+	local module = script.Parent:FindFirstChild(name)
+	if not module or not module:IsA("ModuleScript") then
+		return
+	end
+	local ok, result = pcall(require, module)
+	if ok and type(result) == "table" and type(result.Register) == "function" then
+		local okRegister, err = pcall(result.Register, R, FAMILY, H, { Flat = FLAT, Pets = PETS })
+		if not okRegister then
+			warn("[House3D] " .. name .. " : " .. tostring(err))
+		end
+	elseif not ok then
+		warn("[House3D] " .. name .. " : " .. tostring(result))
+	end
+end
+loadFamilies("House3DCritters")
+loadFamilies("House3DObjects")
+loadFamilies("House3DToys")
+
+local DOORS_AS_CARD: { [string]: boolean } = {}
 
 -- Objets qu'on colle contre le mur du fond (portes, grands rangements)
 local AGAINST_WALL: { [string]: boolean } = {
@@ -2479,18 +2576,36 @@ local AGAINST_WALL: { [string]: boolean } = {
 	LockerCabinet = true, NeonArcade = true, SharkTank = true, GuitarAmp = true,
 }
 
-function House3DRecipes.Has(itemId: string): boolean
-	return R[itemId] ~= nil
+-- Repli (objet inconnu d'une future mise à jour) : une forme 3D simple aux
+-- couleurs de l'objet, jamais un carton
+local function fallback(b: Builder, _ctx: Ctx)
+	local main = accent(b, 1, PINK)
+	local item = b.Item
+	if item and item.Placement == "Wall" then
+		b.Round(0, 10, 3, 84, 80, 6, 6, darken(main, 0.2), M.Wood)
+		b.Round(0, 16, 6, 70, 68, 2, 4, lighten(main, 0.35), M.SmoothPlastic)
+		b.Ball(0, 50, 8, 30, main)
+		b.Footprint(84, 8, 90)
+		return
+	end
+	b.Round(0, 0, 0, 70, 12, 50, 8, darken(main, 0.25), M.Wood)
+	b.Egg(0, 40, 0, 56, 56, 40, main)
+	b.Ball(0, 74, 0, 24, lighten(main, 0.3))
+	b.Footprint(70, 50, 86)
 end
 
--- Recette d'un objet (nil = carton découpé)
-function House3DRecipes.For(item: any): (Recipe?, Info)
-	local info: Info = { Wall = false, Flat = false, Glow = item.Category == "Lights" }
+function House3DRecipes.Has(itemId: string): boolean
+	return R[itemId] ~= nil or FAMILY[itemId] ~= nil
+end
+
+-- Recette d'un objet (jamais nil : repli 3D par défaut)
+function House3DRecipes.For(item: any): (Recipe, Info)
+	local info: Info = { Wall = false, Flat = false, Glow = type(item) == "table" and item.Category == "Lights", Pet = false }
 	if type(item) ~= "table" or type(item.Id) ~= "string" then
-		return nil, info
+		return fallback, info
 	end
 	local id = item.Id
-	local recipe = R[id]
+	local recipe = R[id] or FAMILY[id]
 	if not recipe and item.Category == "Windows" and item.Placement == "Wall" then
 		recipe = windowRecipe
 	end
@@ -2498,7 +2613,7 @@ function House3DRecipes.For(item: any): (Recipe?, Info)
 		info.Wall = true
 		recipe = recipe or door
 	end
-	if id == "KnittedRug" or string.find(id, "Rug$") then
+	if FLAT[id] or id == "KnittedRug" or string.find(id, "Rug$") then
 		info.Flat = true
 		recipe = recipe or rug
 	end
@@ -2508,7 +2623,8 @@ function House3DRecipes.For(item: any): (Recipe?, Info)
 	if AGAINST_WALL[id] then
 		info.Wall = true
 	end
-	return recipe, info
+	info.Pet = PETS[id] == true
+	return recipe or fallback, info
 end
 
 -- Contexte d'une recette (dessus de HouseSurfaces, couleur des moulures)
@@ -2541,6 +2657,254 @@ function House3DRecipes.Context(item: any, trim: Color3): Ctx
 		end,
 	}
 	return ctx
+end
+
+----------------------------------------------------------------------
+-- Construction d'un objet (vue 3D et monde)
+----------------------------------------------------------------------
+
+local HouseCommon = require(script.Parent.HouseCommon)
+local HouseTints: any = nil
+do
+	local module = script.Parent:FindFirstChild("HouseTints")
+	if module and module:IsA("ModuleScript") then
+		local ok, result = pcall(require, module)
+		if ok and type(result) == "table" then
+			HouseTints = result
+		end
+	end
+end
+
+-- Palette du dessin 2D d'un objet (peinte une seule fois, hors écran)
+local paletteCache: { [string]: { Color3 } } = {}
+function House3DRecipes.PaletteOf(item: any): { Color3 }
+	local id = tostring(item.Id)
+	local cached = paletteCache[id]
+	if cached then
+		return cached
+	end
+	local colors = {}
+	local ok, painted = pcall(House3DKit.Paint, item, nil, nil)
+	if ok and type(painted) == "table" then
+		colors = painted.Colors
+		pcall(function()
+			painted.Content:Destroy()
+		end)
+	end
+	paletteCache[id] = colors
+	return colors
+end
+
+-- Couleur d'un objet teint (entry.C = id de Config.House.Tints)
+local function tintMapper(itemId: string, tintId: any): ((Color3) -> Color3)?
+	if not HouseTints or type(tintId) ~= "string" or type(HouseTints.Mapper) ~= "function" then
+		return nil
+	end
+	local ok, result = pcall(HouseTints.Mapper, itemId, tintId)
+	if not ok or type(result) ~= "function" then
+		return nil
+	end
+	return function(color: Color3): Color3
+		local okMap, mapped = pcall(result, color)
+		return okMap and typeof(mapped) == "Color3" and mapped or color
+	end
+end
+
+export type ItemData = {
+	Item: any,
+	K: number, -- studs par unité (la boîte 2D fait 100 x 100 unités)
+	FW: number, -- empreinte (studs) : largeur, profondeur, hauteur
+	FD: number,
+	H: number,
+	Tops: { [number]: House3DKit.Top }, -- dessus (unités, repère de la recette)
+	Info: Info,
+	SeatAt: { X: number, Y: number, Z: number, W: number, D: number }?,
+	Lights: { Light },
+	Glows: { BasePart },
+	Parts: { BasePart },
+	Locals: { CFrame },
+}
+
+-- Objets où l'on peut s'asseoir / s'allonger (monde) en plus des sièges et lits de HouseSurfaces
+local SITTABLE: { [string]: boolean } = {
+	Sofa = true, Armchair = true, Beanbag = true, EggChair = true, GardenBench = true, Pouf = true, HeartArmchair = true,
+	CatSofa = true, CrystalThrone = true, Hammock = true, GamerBeanbag = true, FloorCushion = true, GamerChair = true,
+	GamingChair = true, RockingChair = true, BarStool = true, MushroomStool = true, RacingRig = true, BunkBed = true,
+	RaceCarBed = true, PetBed = true, KotatsuTable = false,
+}
+
+-- Construit les pièces d'un objet dans `parent`, au repère `origin` (x à
+-- droite, y en haut depuis le sol, +z = le devant de l'objet)
+function House3DRecipes.Make(item: any, entry: any?, k: number, parent: Instance, origin: CFrame, trim: Color3?): ItemData
+	local recipe, info = House3DRecipes.For(item)
+	local mirror = type(entry) == "table" and entry.F == true
+	local tintId = type(entry) == "table" and entry.C or nil
+	local mapper = tintMapper(item.Id, tintId)
+	local b = House3DKit.Builder(parent, origin, k, mirror, mapper, House3DRecipes.PaletteOf(item))
+	b.Item = item
+	-- dessin 2D (tableaux, affiches) : peint seulement si la recette le demande
+	b.PaintFn = function(): House3DKit.Painted?
+		local okPaint, painted = pcall(House3DKit.Paint, item, entry, function(root: Instance)
+			if HouseTints and type(HouseTints.Apply) == "function" and type(tintId) == "string" then
+				HouseTints.Apply(root, tintId)
+			end
+		end)
+		return okPaint and painted or nil
+	end
+	local ctx = House3DRecipes.Context(item, trim or CREAM)
+	local ok, err = pcall(recipe, b, ctx)
+	if not ok or #b.Parts == 0 then
+		if not ok then
+			warn("[House3D] Recette " .. tostring(item.Id) .. " : " .. tostring(err))
+		end
+		for _, p in ipairs(b.Parts) do
+			p:Destroy()
+		end
+		b = House3DKit.Builder(parent, origin, k, mirror, mapper, House3DRecipes.PaletteOf(item))
+		b.Item = item
+		pcall(fallback, b, ctx)
+	end
+	-- place assise par défaut (sièges, lits, canapés) : le premier dessus
+	if not b.SeatAt and (SITTABLE[item.Id] or HouseSurfaces.IsSeat(item.Id) or HouseSurfaces.IsBed(item.Id)) then
+		local top = b.Tops[1]
+		if top then
+			b.SeatAt = { X = top.X, Y = top.Y, Z = top.Z, W = top.W, D = top.D }
+		end
+	end
+	-- dessus déclarés par HouseSurfaces mais pas par la recette
+	local raw = ctx.Raw
+	if raw then
+		for index, surface in ipairs(raw) do
+			if not b.Tops[index] and type(surface) == "table" then
+				local x0, x1, y = tonumber(surface[1]) or 10, tonumber(surface[2]) or 90, tonumber(surface[3]) or 50
+				b.Tops[index] = { X = ((x0 + x1) / 2 - 50) * (mirror and -1 or 1), Y = 100 - y, Z = 0, W = x1 - x0, D = b.Depth * 0.8 }
+			end
+		end
+	end
+	return {
+		Item = item,
+		K = k,
+		FW = b.Width * k,
+		FD = math.max(0.2, b.Depth * k),
+		H = b.Height * k,
+		Tops = b.Tops,
+		Info = info,
+		SeatAt = b.SeatAt,
+		Lights = b.Lights,
+		Glows = b.Glows,
+		Parts = b.Parts,
+		Locals = b.Locals,
+	}
+end
+
+-- Taille d'un objet posé : studs par unité (`scale` = studs par px de la pièce 2D)
+function House3DRecipes.UnitScale(item: any, entry: any?, scale: number): number
+	local s = type(entry) == "table" and tonumber(entry.S) or 1
+	if s == nil or s ~= s then
+		s = 1
+	end
+	return (tonumber(item.Size) or 80) * math.clamp(s, 0.2, 3) * scale / 100
+end
+
+export type BuildOptions = {
+	Scale: number?, -- studs par px de la pièce 2D (0.05 par défaut, comme la vue 3D)
+	Night: boolean?, -- lampes plus fortes
+	Collide: boolean?, -- false = aucune collision (vue 3D) ; sinon gros meubles solides
+	Query: boolean?, -- false = invisibles aux rayons (vue 3D) ; true par défaut
+	Trim: Color3?, -- couleur des moulures (fenêtres, portes)
+	Shadows: boolean?, -- false = aucune ombre portée
+}
+
+-- Modèle 3D autonome d'un objet (voir l'en-tête du module) + ses données
+function House3DRecipes.BuildModel(itemId: string, entry: any?, options: BuildOptions?): (Model?, ItemData?)
+	local item = HouseCommon.ItemsById[itemId]
+	if type(item) ~= "table" then
+		return nil, nil
+	end
+	local opts: BuildOptions = type(options) == "table" and options or {}
+	local scale = tonumber(opts.Scale) or 0.05
+	local k = House3DRecipes.UnitScale(item, entry, scale)
+	local model = Instance.new("Model")
+	model.Name = tostring(item.Id)
+	-- (le devant de l'objet regarde -Z : demi-tour autour de Y)
+	local turn = CFrame.Angles(0, math.pi, 0)
+	local data = House3DRecipes.Make(item, entry, k, model, turn, opts.Trim)
+	local wall = item.Placement == "Wall"
+	local query = opts.Query ~= false
+	for _, p in ipairs(data.Parts) do
+		p.CanQuery = query
+		if opts.Shadows == false then
+			p.CastShadow = false
+		end
+	end
+	if opts.Night ~= nil then
+		for _, light in ipairs(data.Lights) do
+			light.Brightness *= opts.Night == true and 1.7 or 0.9
+		end
+	end
+	-- Pièce de base (PrimaryPart) : pivot = bas du centre de l'empreinte
+	-- (objet mural : bas de la boîte, contre le mur), devant vers -Z
+	local fw, fd, height = data.FW, data.FD, math.max(0.2, data.H)
+	local rootZ = wall and -fd / 2 or 0
+	local root = House3DKit.NewPart("Part", "Root", Vector3.new(math.max(0.2, fw), 0.1, fd), CFrame.new(0, 0.05, rootZ), WHITE, nil, 1)
+	root.CastShadow = false
+	root.CanQuery = query
+	root.PivotOffset = CFrame.new(0, -0.05, -rootZ)
+	root.Parent = model
+	model.PrimaryPart = root
+	-- Collisions (monde) : un bloc invisible pour les gros meubles au sol
+	local collide = opts.Collide ~= false
+	if collide and not wall and not data.Info.Flat and height >= 1.5 and math.max(fw, fd) >= 1.8 then
+		local top = data.Tops[1]
+		local solidH = height
+		if data.SeatAt then
+			solidH = math.max(0.4, data.SeatAt.Y * k)
+		elseif top and top.Y * k > 0.8 then
+			solidH = top.Y * k
+		end
+		local hitbox = House3DKit.NewPart("Part", "Hitbox", Vector3.new(math.max(0.4, fw * 0.92), solidH, math.max(0.4, fd * 0.92)), CFrame.new(0, solidH / 2, 0), WHITE, nil, 1)
+		hitbox.CanCollide = true
+		hitbox.CanQuery = true
+		hitbox.CastShadow = false
+		hitbox.Parent = model
+	end
+	-- Place assise
+	local seat = data.SeatAt
+	if seat then
+		local seatPart = House3DKit.NewPart("Part", "SeatPart", Vector3.new(math.max(0.3, seat.W * k), 0.2, math.max(0.3, seat.D * k)),
+			turn * CFrame.new(seat.X * k, seat.Y * k + 0.1, seat.Z * k) * turn, WHITE, nil, 1)
+		seatPart.CastShadow = false
+		seatPart.CanQuery = query
+		seatPart.Parent = model
+	end
+	-- Attributs (voir l'en-tête)
+	local top = data.Tops[1]
+	model:SetAttribute("ItemId", tostring(item.Id))
+	model:SetAttribute("Footprint", Vector3.new(fw, height, fd))
+	model:SetAttribute("TopHeight", top and top.Y * k or 0)
+	if top then
+		model:SetAttribute("TopCenter", Vector3.new(-top.X * k, top.Y * k, -top.Z * k))
+		model:SetAttribute("TopSize", Vector2.new(top.W * k, top.D * k))
+	end
+	model:SetAttribute("Wall", wall)
+	model:SetAttribute("Flat", data.Info.Flat == true)
+	model:SetAttribute("Pet", data.Info.Pet == true)
+	model:SetAttribute("AgainstWall", data.Info.Wall == true)
+	model.WorldPivot = CFrame.new()
+	return model, data
+end
+
+-- API publique : modèle 3D d'un objet (nil si l'objet n'existe pas)
+function House3DRecipes.BuildItem(itemId: string, entry: any?, options: BuildOptions?): Model?
+	local result: Model? = nil
+	local ok, err = pcall(function()
+		result = (House3DRecipes.BuildModel(itemId, entry, options))
+	end)
+	if not ok then
+		warn("[House3D] BuildItem " .. tostring(itemId) .. " : " .. tostring(err))
+		return nil
+	end
+	return result
 end
 
 -- (pour les couleurs de secours ailleurs)

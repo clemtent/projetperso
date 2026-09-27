@@ -177,7 +177,7 @@ test("Formulas.ComputeStats", function(check)
 	d.Achievements = { Clicks100 = true, Bogus = true }
 	d.Cosmetics.Owned = { Cap = true, NotACosmetic = true }
 	local st = Formulas.ComputeStats(d, 2)
-	local global = U.Boost.Value * (1 + 2 * Config.Rebirth.MultiplierPerRebirth) * (1 + Config.AchievementBonus) * (1 + Config.CosmeticBonus) * 2
+	local global = U.Boost.Value * Formulas.GetRebirthMultiplier(2) * (1 + Config.AchievementBonus) * (1 + Config.CosmeticBonus) * 2
 	check(near(st.GlobalMultiplier, global), "global " .. st.GlobalMultiplier .. " vs " .. global)
 	check(near(st.ClickValue, (1 + 3 * U.Finger.Value) * U.Megaphone.Value * global), "ClickValue " .. st.ClickValue)
 	check(near(st.PerSecond, (U.NewsTicker.Value + 2 * U.Press.Value) * global), "PerSecond " .. st.PerSecond)
@@ -206,9 +206,22 @@ test("Formulas.GetUpgradeCost (Detox compris)", function(check)
 	local U = Config.UpgradesById
 	eq(check, Formulas.GetUpgradeCost(U.Finger, 0, 0), U.Finger.Cost, "niveau 0")
 	eq(check, Formulas.GetUpgradeCost(U.Finger, 1, 0), math.floor(U.Finger.Cost * U.Finger.CostGrowth + 0.5), "niveau 1")
-	eq(check, Formulas.GetUpgradeCost(U.Finger, 3, 5), Formulas.GetUpgradeCost(U.Finger, 3, 0), "rebirths sans effet")
-	eq(check, Formulas.GetUpgradeCost(U.Ocean, 0, 0), Config.Rebirth.BaseCost, "océan 0")
-	eq(check, Formulas.GetUpgradeCost(U.Ocean, 0, 2), Config.Rebirth.BaseCost * Config.Rebirth.CostGrowth ^ 2, "océan 2")
+	-- (v9.3) Après r visites, les améliorations non permanentes coûtent GetUpgradePriceScale(r) fois plus
+	local R = Config.Rebirth
+	eq(check, Formulas.GetUpgradePriceScale(0), 1, "échelle des prix 0")
+	check(near(Formulas.GetUpgradePriceScale(3), (R.PriceGrowth or 1) ^ 3 * 4 ^ (R.PricePower or 0)), "échelle des prix 3")
+	eq(check, Formulas.GetUpgradeCost(U.Finger, 3, 5), math.floor(U.Finger.Cost * U.Finger.CostGrowth ^ 3 * Formulas.GetUpgradePriceScale(5) + 0.5), "prix x échelle")
+	eq(check, Formulas.GetUpgradeCost(U.SleepMode, 1, 5), Formulas.GetUpgradeCost(U.SleepMode, 1, 0), "permanente : même prix")
+	local lastScale = 0
+	for r = 0, 30 do
+		local scale = Formulas.GetUpgradePriceScale(r)
+		check(scale > lastScale, "échelle croissante " .. r)
+		lastScale = scale
+	end
+	eq(check, Formulas.GetUpgradeCost(U.Ocean, 0, 0), R.BaseCost, "océan 0")
+	check(near(Formulas.GetUpgradeCost(U.Ocean, 0, 2), R.BaseCost * R.CostGrowth ^ 2 * 3 ^ (R.CostPower or 0)), "océan 2")
+	eq(check, Formulas.GetRebirthCost(0 / 0), R.BaseCost, "océan NaN")
+	eq(check, Formulas.GetRebirthCost(-3), R.BaseCost, "océan négatif")
 	eq(check, Formulas.GetUpgradeCost(U.Ocean, 0, nil), Config.Rebirth.BaseCost, "océan nil")
 	check(not Formulas.IsMaxed(U.Ocean, 1000), "océan jamais au max")
 	check(Formulas.IsMaxed(U.NewsTicker, 1) and not Formulas.IsMaxed(U.NewsTicker, 0), "IsMaxed")
@@ -221,7 +234,18 @@ test("Formulas.GetUpgradeCost (Detox compris)", function(check)
 		end
 	end
 	eq(check, Formulas.GetRebirthMultiplier(0), 1, "mult 0")
-	eq(check, Formulas.GetRebirthMultiplier(2), 1 + 2 * Config.Rebirth.MultiplierPerRebirth, "mult 2")
+	eq(check, Formulas.GetRebirthMultiplier(1), 1 + R.MultiplierPerRebirth, "mult 1")
+	check(near(Formulas.GetRebirthMultiplier(2), 1 + R.MultiplierPerRebirth * (1 + (R.MultiplierDecay or 1))), "mult 2")
+	local lastMult, lastGain = 1, math.huge
+	for r = 1, 30 do
+		local m = Formulas.GetRebirthMultiplier(r)
+		check(m > lastMult, "multiplicateur croissant " .. r)
+		check(m - lastMult <= lastGain + 1e-9, "gain par visite décroissant " .. r)
+		lastGain = m - lastMult
+		lastMult = m
+		-- Chaque visite coûte bien plus que la précédente, plus vite que le multiplicateur ne grandit
+		check(Formulas.GetRebirthCost(r) / Formulas.GetRebirthCost(r - 1) > m / Formulas.GetRebirthMultiplier(r - 1), "océan plus cher que le gain " .. r)
+	end
 end)
 
 test("Formulas.GetVisibleUpgrades : progression", function(check)
@@ -454,7 +478,8 @@ end
 test("Config.House : catalogue (ids, catégories, zones, motifs, prix)", function(check)
 	local H = Config.House
 	check(type(H) == "table", "Config.House manquant")
-	check(near(H.ComfortBonusPerPoint, 0.005) and H.MaxComfortBonus == 1 and H.WallRatio > 0.3 and H.WallRatio < 0.6, "réglages")
+	check(H.ComfortBonusPerPoint > 0 and H.ComfortBonusPerPoint <= 0.005 and H.MaxComfortBonus > 0 and H.MaxComfortBonus <= 2
+		and H.WallRatio > 0.3 and H.WallRatio < 0.6, "réglages")
 
 	-- Tailles : dans l'ordre, de plus en plus grandes
 	local sizeIds = { "Studio", "Apartment", "Loft", "Mansion" }
@@ -553,7 +578,10 @@ test("Config.House : catalogue (ids, catégories, zones, motifs, prix)", functio
 		if item.Category == "Windows" then eq(check, item.Placement, "Wall", "fenêtre au mur " .. id) end
 		if item.Category == "Doors" then eq(check, item.Placement, "Floor", "porte au sol " .. id) end
 		check(type(item.Size) == "number" and item.Size >= 40 and item.Size <= 160, "Size 40..160 " .. id)
-		check(type(item.Cost) == "number" and item.Cost >= 100 and item.Cost <= 2e9 and item.Cost == math.floor(item.Cost), "Cost " .. id)
+		-- (v9.3) Cost = prix réel (palier compris), BaseCost = prix d'origine de la config
+		check(type(item.BaseCost) == "number" and item.BaseCost >= 100 and item.BaseCost <= 2e9 and item.BaseCost == math.floor(item.BaseCost), "BaseCost " .. id)
+		check(type(item.Cost) == "number" and item.Cost >= item.BaseCost and item.Cost <= 1e11 and item.Cost == math.floor(item.Cost), "Cost " .. id)
+		check(type(item.RequiresRebirths) == "number", "palier calculé " .. id)
 		check(type(item.CostGrowth) == "number" and item.CostGrowth >= 1.1 and item.CostGrowth <= 2, "CostGrowth " .. id)
 		check(type(item.Comfort) == "number" and item.Comfort >= 1 and item.Comfort <= 25 and item.Comfort == math.floor(item.Comfort), "Comfort 1..25 " .. id)
 		check(item.MaxOwned == nil or (type(item.MaxOwned) == "number" and item.MaxOwned >= 1 and item.MaxOwned == math.floor(item.MaxOwned)), "MaxOwned " .. id)
@@ -637,10 +665,20 @@ test("Formulas maison (prix, confort, bonus)", function(check)
 	eq(check, Formulas.GetRoomCost(nil), H.RoomCost, "prix pièce nil")
 	eq(check, Formulas.GetRoomType("Inconnu"), H.RoomTypes[1], "type inconnu -> salon")
 
-	-- Bonus : 1 + min(Max, confort x par point)
+	-- Bonus (v9.3, rendements décroissants) : 1 + Max x c / (c + Max / ParPoint)
+	local half = H.MaxComfortBonus / H.ComfortBonusPerPoint
 	eq(check, Formulas.GetHouseBonus(0), 1, "bonus 0")
-	check(near(Formulas.GetHouseBonus(10), 1 + 10 * H.ComfortBonusPerPoint), "bonus 10")
-	eq(check, Formulas.GetHouseBonus(1e9), 1 + H.MaxComfortBonus, "bonus plafonné")
+	check(near(Formulas.GetHouseBonus(10), 1 + H.MaxComfortBonus * 10 / (10 + half)), "bonus 10")
+	check(Formulas.GetHouseBonus(10) <= 1 + 10 * H.ComfortBonusPerPoint, "les premiers points valent au plus ParPoint")
+	check(near(Formulas.GetHouseBonus(half), 1 + H.MaxComfortBonus / 2), "moitié du max à Max / ParPoint points")
+	check(Formulas.GetHouseBonus(1e9) < 1 + H.MaxComfortBonus and Formulas.GetHouseBonus(1e9) > 1 + H.MaxComfortBonus * 0.99, "bonus plafonné")
+	local last = 1
+	for c = 0, 5000, 50 do
+		local b = Formulas.GetHouseBonus(c)
+		check(b >= last, "bonus croissant " .. c)
+		check(c == 0 or b - last <= 50 * H.ComfortBonusPerPoint + 1e-9, "rendements décroissants " .. c)
+		last = b
+	end
 	eq(check, Formulas.GetHouseBonus(-5), 1, "bonus négatif")
 	eq(check, Formulas.GetHouseBonus(nil), 1, "bonus nil")
 	eq(check, Formulas.GetHouseBonus(0 / 0), 1, "bonus NaN")
@@ -648,7 +686,7 @@ test("Formulas maison (prix, confort, bonus)", function(check)
 	local d = emptyData()
 	local base = Formulas.ComputeStats(d, 1, 1)
 	local boosted = Formulas.ComputeStats(d, 1, Formulas.GetHouseBonus(40))
-	check(near(boosted.ClickValue, base.ClickValue * (1 + 40 * H.ComfortBonusPerPoint)), "bonus appliqué au clic")
+	check(near(boosted.ClickValue, base.ClickValue * Formulas.GetHouseBonus(40)), "bonus appliqué au clic")
 end)
 
 test("Maison v9 : tables vides, chaises, objets posés SUR les meubles", function(check)
@@ -1110,7 +1148,7 @@ do
 		check(ok == true and house.RoofStyle == "HeartRoof", "motif du toit acheté")
 		-- Jardin : achat = posé, rangé / ressorti, plein au-delà de GardenSlots
 		data.Dopamine = 1e12
-		data.Rebirths = 5
+		data.Rebirths = 8 -- (v9.3) toute la déco du jardin débloquée (paliers jusqu'à 8 visites)
 		local bought = 0
 		for _, decor in ipairs(H.GardenDecor) do
 			if invoke(player, "buyLook", { Kind = "Garden", Id = decor.Id }) then
@@ -1840,11 +1878,264 @@ def friend_mail_test():
     return "local FRIEND_MAIL_SRC = [=====[%s]=====]\n%s" % (body, FRIEND_MAIL_TESTS)
 
 
+WORLD_LAYOUT_TESTS = r"""
+do
+	local fn, err = loadstring(WORLD_LAYOUT_SRC, "=WorldLayout")
+	assert(fn, err)
+	local L = fn()
+	local SIZES = { Config.HouseSizesById.Studio, Config.HouseSizesById.Apartment, Config.HouseSizesById.Loft, Config.HouseSizesById.Mansion }
+	local ratio = Config.House.WallRatio
+
+	test("WorldLayout : 2D -> 3D -> 2D (sol) retombe sur les mêmes X / Y", function(check)
+		for _, size in ipairs(SIZES) do
+			local dims = L.RoomDims(size, ratio)
+			for _, fd in ipairs({ 0.6, 2.2, 4 }) do
+				for X = 0.1, 0.91, 0.1 do
+					for Y = ratio + 0.08, 0.99, 0.07 do
+						local x, z = L.FloorForward(dims, X, Y, 1, fd)
+						-- (hors des bords bornés : l'aller-retour est exact)
+						local zFront = z + fd / 2
+						if zFront > fd + 0.09 and zFront < dims.D - 0.11 then
+							local X2, Y2 = L.FloorInverse(dims, x, z, fd)
+							check(math.abs(X2 - X) < 1e-6 and math.abs(Y2 - Y) < 1e-6,
+								string.format("%s X %.3f Y %.3f -> %.5f %.5f", size.Id, X, Y, X2, Y2))
+						end
+					end
+				end
+			end
+		end
+	end)
+
+	test("WorldLayout : objets muraux (aller-retour) et bornes", function(check)
+		for _, size in ipairs(SIZES) do
+			local dims = L.RoomDims(size, ratio)
+			for X = 0.15, 0.86, 0.1 do
+				for Y = 0.08, ratio - 0.08, 0.05 do
+					local k = 0.03
+					local x, y = L.WallForward(dims, X, Y, 1, k)
+					local X2, Y2 = L.WallInverse(dims, x, y, k)
+					check(math.abs(X2 - X) < 1e-6 and math.abs(Y2 - Y) < 1e-6, string.format("%s mur %.2f %.2f -> %.4f %.4f", size.Id, X, Y, X2, Y2))
+				end
+			end
+			-- un pointeur hors de la pièce reste dans la zone du sol / du mur
+			local X, Y = L.FloorInverse(dims, 999, -50, 2)
+			check(X == 1 and Y >= ratio and Y <= 1, "sol : borné")
+			local WX, WY = L.WallInverse(dims, -999, 999, 0.03)
+			check(WX == 0 and WY >= 0 and WY <= ratio, "mur : borné")
+		end
+	end)
+
+	test("WorldLayout : maison, pièces, parcelles", function(check)
+		for _, size in ipairs(SIZES) do
+			local dims = L.Dims(size)
+			check(dims.Width <= L.PLOT_W - 16, size.Id .. " : la maison tient sur la parcelle (" .. dims.Width .. ")")
+			for slot = 1, size.Floors * size.Columns do
+				local floor, column = L.SlotCell(size, slot)
+				eq(check, (floor - 1) * size.Columns + column, slot, size.Id .. " emplacement")
+				local x, y, d = L.RoomCenter(size, slot)
+				eq(check, L.SlotAt(size, x, y + 1, d), slot, size.Id .. " SlotAt(centre)")
+				check(L.InsideHouse(size, x, y, d, 0), size.Id .. " centre dans la maison")
+				local xMin, xMax = L.RoomInterior(size, slot)
+				check(math.abs((xMax - xMin) - L.RoomWidth(size)) < 1e-9, size.Id .. " largeur intérieure = coque")
+			end
+			check(L.SlotAt(size, dims.Left + 2, 3, 10) == nil, size.Id .. " : la cage n'est pas une pièce")
+			check(not L.InsideHouse(size, 0, 3, -8, 0), size.Id .. " : le jardin n'est pas dans la maison")
+			-- porte d'entrée dans la cage, à droite de l'escalier
+			local door = L.DoorX(size)
+			check(door - L.DOOR_W / 2 >= dims.Left + L.STAIR_W and door + L.DOOR_W / 2 <= dims.Left + L.HALL_W, size.Id .. " porte")
+		end
+		for _, n in ipairs({ 4, 8, 12 }) do
+			local r = L.PlotRadius(n)
+			local x1, z1 = L.PlotPlace(1, n)
+			local x2, z2 = L.PlotPlace(2, n)
+			local frontR = r - L.PLOT_D / 2
+			-- coins avant de deux parcelles voisines : jamais l'un sur l'autre
+			local gap = 2 * frontR * math.sin(math.pi / n) - L.PLOT_W * math.cos(math.pi / n)
+			check(gap > 0, n .. " parcelles : coins avant séparés (" .. gap .. ")")
+			check(math.abs(math.sqrt(x1 * x1 + z1 * z1) - r) < 1e-6 and math.abs(math.sqrt(x2 * x2 + z2 * z2) - r) < 1e-6, "rayon")
+			check(L.RingRoadRadius(n) > L.PLAZA_R + 60, "route loin de la place")
+		end
+		eq(check, L.PlotCount(50), 12, "PlotCount max")
+		eq(check, L.PlotCount(1), 4, "PlotCount min")
+		eq(check, L.PlotCount(nil), 8, "PlotCount défaut")
+	end)
+
+	test("WorldLayout : rotation R (sauvegarde)", function(check)
+		eq(check, L.NormalizeRotation(nil), nil, "nil")
+		eq(check, L.NormalizeRotation(0), nil, "0 -> nil")
+		eq(check, L.NormalizeRotation(360), nil, "360 -> nil")
+		eq(check, L.NormalizeRotation(45), 45, "45")
+		eq(check, L.NormalizeRotation(44), 45, "arrondi 15")
+		eq(check, L.NormalizeRotation(-45), 315, "négatif")
+		eq(check, L.NormalizeRotation(0 / 0), nil, "NaN")
+		eq(check, L.NormalizeRotation(math.huge), nil, "inf")
+		eq(check, L.NormalizeRotation("90"), nil, "texte")
+		eq(check, L.Rotate(nil, 45), 45, "tourner")
+		eq(check, L.Rotate(315, 45), nil, "tour complet")
+		eq(check, L.Rotate(0, -45), 315, "sens inverse")
+		eq(check, L.Snap(3.4, 1), 3, "grille")
+		eq(check, L.Snap(3.5, 1), 4, "grille (milieu)")
+	end)
+
+	test("WorldLayout : ouverture, visites, j'aime (limites par jour)", function(check)
+		check(L.CanEnter("Everyone", false, false), "tout le monde")
+		check(L.CanEnter("Friends", false, true) and not L.CanEnter("Friends", false, false), "amis")
+		check(not L.CanEnter("Nobody", false, true), "personne")
+		check(L.CanEnter("Nobody", true, false), "le propriétaire entre toujours")
+		eq(check, L.NormalizeOpen("Hack"), "Everyone", "valeur inconnue")
+		local now = 1760000000
+		local liker = L.SanitizeTown(nil, now)
+		local owner = L.SanitizeTown({ Open = "Friends", Likes = 5, Visits = "x", Liked = "bad" }, now)
+		eq(check, owner.Open, "Friends", "Open gardé")
+		eq(check, owner.Likes, 5, "Likes gardés")
+		eq(check, owner.Visits, 0, "Visits réparé")
+		local ok, why = L.CanLike(liker, 1, 1)
+		check(not ok and why == "Self", "pas sa propre maison")
+		ok = L.CanLike(liker, 1, 2)
+		check(ok, "premier j'aime")
+		check(L.ApplyLike(liker, owner, 2), "récompense du propriétaire")
+		eq(check, owner.Likes, 6, "compteur")
+		ok, why = L.CanLike(liker, 1, 2)
+		check(not ok and why == "Already", "une fois par maison et par jour")
+		for id = 3, 11 do
+			L.ApplyLike(liker, owner, id)
+		end
+		ok, why = L.CanLike(liker, 1, 99)
+		check(not ok and why == "Limit", "10 par jour")
+		-- le lendemain tout repart
+		local tomorrow = L.SanitizeTown(liker, now + 86400)
+		check(L.CanLike(tomorrow, 1, 2), "nouveau jour")
+		eq(check, tomorrow.LikesGiven, 0, "remis à zéro")
+		-- récompenses reçues : 30 par jour au plus
+		local busy = L.SanitizeTown({ LikedRewards = 30, RewardDay = L.DayNumber(now) }, now)
+		check(not L.ApplyLike(L.SanitizeTown(nil, now), busy, 7), "plafond des récompenses")
+		eq(check, busy.Likes, 1, "le j'aime compte quand même")
+		eq(check, L.RewardAmount(1000, 60), 60000, "60 s de production")
+		eq(check, L.RewardAmount(0 / 0, 60), 0, "NaN")
+		eq(check, L.RewardAmount(-5, 60), 0, "négatif")
+	end)
+end
+"""
+
+
+def world_layout_test():
+    """Tests WORLD93 : géométrie de Dopamine Town, 2D <-> 3D, règles (Shared/WorldLayout)."""
+    body = read(os.path.join(SHARED, "WorldLayout.luau"))
+    if "]=====]" in body:
+        raise ValueError("délimiteur ]=====] interdit dans WorldLayout.luau")
+    return "local WORLD_LAYOUT_SRC = [=====[%s]=====]\n%s" % (body, WORLD_LAYOUT_TESTS)
+
+
+SIM_PATH = os.path.join(ROOT, "tests", "economy_sim.luau")
+
+
+def sim_loader():
+    """Le simulateur d'économie (tests/economy_sim.luau) comme module "EconomySim"."""
+    body = read(SIM_PATH)
+    return 'loaders["EconomySim"] = function()\nlocal require = req\n%s\nend\n' % body
+
+
+ECONOMY_TESTS = r"""
+do
+	local Sim = req("EconomySim")
+
+	test("Économie (simulateur) : rythme des renaissances, joueur actif sans Robux", function(check)
+		local result = Sim.Run("Active", { MaxHours = 40, MaxRebirths = 10 })
+		local runs = Sim.RunMinutes(result)
+		local parts = {}
+		for n = 1, 10 do
+			table.insert(parts, "R" .. n .. "=" .. (runs[n] and tostring(math.floor(runs[n] + 0.5)) or "-"))
+		end
+		print("    parties (min) : " .. table.concat(parts, " "))
+		check(result.Rebirths >= 10, "10 visites en moins de 40 h de jeu : " .. result.Rebirths)
+		-- Chaque partie dure au moins autant que la précédente (tolérance 2 %)
+		for n = 2, 10 do
+			if runs[n] and runs[n - 1] then
+				check(runs[n] >= runs[n - 1] * 0.98, string.format("partie R%d (%.0f min) plus courte que R%d (%.0f min)", n, runs[n], n - 1, runs[n - 1]))
+			end
+		end
+		-- Objectifs (Sim.Targets.RunMinutes)
+		for n, range in pairs(Sim.Targets.RunMinutes) do
+			local minutes = runs[n]
+			check(minutes ~= nil and minutes >= range[1] and minutes <= range[2],
+				string.format("partie R%d : %s min hors [%d, %d]", n, tostring(minutes and math.floor(minutes + 0.5)), range[1], range[2]))
+		end
+		-- Début de partie : des achats tout de suite
+		local first = result.Purchases[1]
+		check(first ~= nil and first.T <= Sim.Targets.FirstPurchaseSeconds, "1er achat en moins de " .. Sim.Targets.FirstPurchaseSeconds .. " s")
+		local early = 0
+		for _, p in ipairs(result.Purchases) do
+			if p.T <= 300 then
+				early += 1
+			end
+		end
+		check(early >= Sim.Targets.PurchasesIn5Min, "achats pendant les 5 premières minutes : " .. early)
+		-- Tout le contenu prend des jours : R10 jamais avant Sim.Targets.MinTotalHours h de jeu actif
+		local total = result.RebirthAt[10]
+		check(total ~= nil and total >= Sim.Targets.MinTotalHours * 3600, "R10 trop tôt : " .. tostring(total and math.floor(total / 60)) .. " min")
+	end)
+
+	test("Économie (simulateur) : les Robux accélèrent sans casser la courbe", function(check)
+		local active = Sim.RunMinutes(Sim.Run("Active", { MaxHours = 40, MaxRebirths = 5 }))
+		local robux = Sim.RunMinutes(Sim.Run("Robux", { MaxHours = 40, MaxRebirths = 5 }))
+		local parts = {}
+		for n = 1, 5 do
+			table.insert(parts, "R" .. n .. "=" .. (robux[n] and tostring(math.floor(robux[n] + 0.5)) or "-"))
+		end
+		print("    Game Passes x2 + VIP + auto-clic, parties (min) : " .. table.concat(parts, " "))
+		for n = 1, 5 do
+			check(robux[n] ~= nil and active[n] ~= nil and robux[n] < active[n], "R" .. n .. " : les Game Passes doivent faire gagner du temps")
+			check(robux[n] ~= nil and active[n] ~= nil and robux[n] >= active[n] * Sim.Targets.RobuxMinRatio,
+				"R" .. n .. " : partie Robux trop courte (" .. tostring(robux[n] and math.floor(robux[n])) .. " min)")
+		end
+		-- La courbe reste croissante dans l'ensemble (pas d'effondrement après R1)
+		check(robux[5] ~= nil and robux[1] ~= nil and robux[5] >= robux[1] * 1.3, "Robux : R5 doit rester nettement plus longue que R1")
+		check(robux[3] ~= nil and robux[2] ~= nil and robux[3] >= robux[2] * 0.95, "Robux : R3 plus courte que R2")
+	end)
+end
+"""
+
+
+def economy_test():
+    """Tests ECONOMY93 : le simulateur tests/economy_sim.luau (vrais modules
+    Shared) doit respecter les objectifs de rythme (Sim.Targets)."""
+    return sim_loader() + ECONOMY_TESTS
+
+
+def run_sim():
+    """python3 tests/run_tests.py --sim [--robux | --whale | --sessions | --all] :
+    lance le simulateur d'économie avec les vrais modules Shared et affiche le rapport."""
+    profile = "Active"
+    for flag, name in (("--robux", "Robux"), ("--whale", "Whale"), ("--sessions", "Sessions")):
+        if flag in sys.argv:
+            profile = name
+    parts = [HEADER]
+    for name in MODULES:
+        body = read(os.path.join(SHARED, name + ".luau"))
+        parts.append('loaders["%s"] = function()\nlocal require = req\n%s\nend\n' % (name, body))
+    parts.append(sim_loader())
+    parts.append('req("EconomySim").Main({ profile = "%s", all = %s })\n' % (profile, "true" if "--all" in sys.argv else "false"))
+    with tempfile.NamedTemporaryFile("w", suffix=".luau", delete=False, encoding="utf-8") as f:
+        f.write("\n".join(parts))
+        path = f.name
+    try:
+        proc = subprocess.run([LUAU, path], capture_output=True, text=True, timeout=900)
+    finally:
+        os.unlink(path)
+    sys.stdout.write(proc.stdout)
+    if proc.stderr:
+        sys.stdout.write(proc.stderr)
+    return proc.returncode
+
+
 def main():
     if not os.path.exists(LUAU):
         print("FAIL : Luau CLI introuvable (%s)" % LUAU)
         return 1
-    bundle = build_bundle(config_key_test() + "\n" + lang_test() + "\n" + house_art_test() + "\n" + arcade_shop_test() + "\n" + friend_mail_test())
+    if "--sim" in sys.argv:
+        return run_sim()
+    bundle = build_bundle(config_key_test() + "\n" + lang_test() + "\n" + house_art_test() + "\n" + arcade_shop_test() + "\n" + friend_mail_test()
+                          + "\n" + economy_test() + "\n" + world_layout_test())
     with tempfile.NamedTemporaryFile("w", suffix=".luau", delete=False, encoding="utf-8") as f:
         f.write(bundle)
         path = f.name

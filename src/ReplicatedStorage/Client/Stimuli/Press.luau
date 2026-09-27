@@ -1772,7 +1772,7 @@ function Press.Start(ctx)
 			-- Étincelles AU MUR (derrière la machine et les objets)
 			for _, pos in ipairs({ Vector2.new(50, 184), Vector2.new(MX - 46, 118), Vector2.new(MX + 46, 138), Vector2.new(286, 144), Vector2.new(MX + 58, 40) }) do
 				local star = UIUtil.Label({
-					Text = "✦",
+					Text = "✨",
 					Font = Theme.Fonts.Title,
 					TextColor3 = style.Sparkle,
 					AnchorPoint = Vector2.new(0.5, 0.5),

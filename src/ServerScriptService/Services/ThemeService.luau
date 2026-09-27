@@ -12,6 +12,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local Formulas = require(ReplicatedStorage.Shared.Formulas)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local Net = require(ReplicatedStorage.Shared.Net)
 local RateLimiter = require(script.Parent.RateLimiter)
@@ -100,6 +101,10 @@ local function onThemeShop(player: Player, action: any, themeId: any)
 		end
 		if not isValidNumber(cost) or cost < 0 then
 			return false, T(player, "Theme unavailable")
+		end
+		-- (v9.3) Thèmes verrouillés par les visites à l'océan (RequiresRebirths)
+		if not Formulas.IsThemeUnlocked(data, theme) then
+			return false, T(player, "🔒 Unlocked after %d visits to the ocean", Formulas.GetRequiredRebirths(theme))
 		end
 		if data.Dopamine < cost then
 			return false, T(player, "Not enough %s", Config.Game.CurrencyName)

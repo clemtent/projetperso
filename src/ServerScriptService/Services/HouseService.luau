@@ -127,6 +127,16 @@ local function tintOf(entry, rebirths: number): string?
 	return id
 end
 
+-- (v9.3) Rotation 3D d'un objet posé (Dopamine Town) : degrés entiers,
+-- multiple de 15 dans 15..345 ; nil = 0 (même règle que WorldLayout.NormalizeRotation)
+local function rotationOf(value): number?
+	if not isValidNumber(value) then
+		return nil
+	end
+	local r = (math.floor(value / 15 + 0.5) * 15) % 360
+	return if r == 0 then nil else r
+end
+
 local function normalizeEntry(entry, item, rebirths: number?)
 	local minY, maxY = FLOOR_MIN_Y, 1
 	if item.Placement == "Wall" then
@@ -148,6 +158,8 @@ local function normalizeEntry(entry, item, rebirths: number?)
 		Z = z,
 		F = entry.F == true or nil,
 		C = tintOf(entry, rebirths or 0),
+		-- (v9.3 🚶 Dopamine Town) rotation 3D facultative : degrés, multiple de 15, nil = 0
+		R = rotationOf(entry.R),
 	}
 end
 
@@ -674,6 +686,11 @@ local function buyRoom(player: Player, data, argument: any): (boolean, string)
 	if type(typeId) ~= "string" or not Config.HouseRoomTypesById[typeId] then
 		return false, T(player, "Unknown room type")
 	end
+	-- (v9.3) Types de pièces verrouillés par les visites à l'océan
+	local roomTypeEntry = Config.HouseRoomTypesById[typeId]
+	if not Formulas.IsHouseEntryUnlocked(data, roomTypeEntry) then
+		return false, T(player, "🔒 Unlocked after %d visits to the ocean", Formulas.GetHouseRequiredRebirths(roomTypeEntry))
+	end
 	local house = data.House
 	local size = Formulas.GetHouseSize(data)
 	if #house.Rooms >= size.MaxRooms then
@@ -739,6 +756,11 @@ local function setRoomType(player: Player, data, argument: any): (boolean, strin
 	local typeId = argument.Type
 	if not room or type(typeId) ~= "string" or not Config.HouseRoomTypesById[typeId] then
 		return false, T(player, "Invalid request")
+	end
+	-- (v9.3) Types de pièces verrouillés par les visites à l'océan
+	local wanted = Config.HouseRoomTypesById[typeId]
+	if room.Type ~= typeId and not Formulas.IsHouseEntryUnlocked(data, wanted) then
+		return false, T(player, "🔒 Unlocked after %d visits to the ocean", Formulas.GetHouseRequiredRebirths(wanted))
 	end
 	room.Type = typeId
 	updateComfortStat(data)

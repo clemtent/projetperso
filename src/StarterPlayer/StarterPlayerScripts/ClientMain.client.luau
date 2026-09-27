@@ -147,6 +147,16 @@ do
 	end
 end
 
+-- 🚶 Dopamine Town (promenade 3D avec son avatar, visites) : chargée sans bloquer le reste
+do
+	local ok, err = pcall(function()
+		require(Client:WaitForChild("World"):WaitForChild("TownClient")).Init()
+	end)
+	if not ok then
+		warn("[ClientMain] Erreur au chargement de Dopamine Town : " .. tostring(err))
+	end
+end
+
 -- Outils de test : UNIQUEMENT dans Studio (panneau "🛠️ Test" + commandes de chat)
 if DebugTools.Enabled then
 	local debugModule = Panels:FindFirstChild("Debug")

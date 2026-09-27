@@ -454,13 +454,13 @@ function Disco.Start(ctx)
 	round(shineCore)
 
 	------------------------------------------------------------------
-	-- Étincelles ✦ sur les facettes qui flashent (réserve recyclée)
+	-- Étincelles ✨ sur les facettes qui flashent (réserve recyclée)
 	------------------------------------------------------------------
 	local sparkles = {}
 	for index = 1, SPARKLE_COUNT do
 		local star = UIUtil.Label({
 			Name = "Sparkle",
-			Text = "✦",
+			Text = "✨",
 			TextColor3 = WHITE,
 			TextTransparency = 1,
 			AnchorPoint = Vector2.new(0.5, 0.5),

@@ -569,7 +569,7 @@ local function buildHero(content: Frame)
 	for index = 1, 12 do
 		local star = UIUtil.Label({
 			Name = "Sparkle" .. index,
-			Text = index % 3 == 0 and "✦" or "•",
+			Text = index % 3 == 0 and "✨" or "•",
 			TextColor3 = WHITE,
 			Size = UDim2.fromOffset(14, 14),
 			AnchorPoint = Vector2.new(0.5, 0.5),
@@ -863,7 +863,7 @@ local function buildCard(row: Frame, day: number): Card
 	})
 	UIUtil.Corner(dim, Theme.Radius.L)
 
-	-- Tampon "✔"
+	-- Tampon "coché"
 	local stamp = UIUtil.Create("Frame", {
 		Name = "Stamp",
 		Size = UDim2.fromOffset(54, 54),
@@ -889,18 +889,8 @@ local function buildCard(row: Frame, day: number): Card
 	})
 	round(innerRing)
 	UIUtil.Stroke(innerRing, WHITE, 1.5, 0.3)
-	UIUtil.Label({
-		Name = "Check",
-		Text = "✔",
-		Font = Theme.Fonts.Title,
-		TextColor3 = WHITE,
-		Size = UDim2.fromScale(0.62, 0.62),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		MaxTextSize = 30,
-		ZIndex = 23,
-		Parent = stamp,
-	})
+	-- (coche DESSINÉE : Roblox n'a pas le caractère ✔ dans ses polices)
+	UIUtil.Icon("Check", { Name = "Check", Size = 28, Thickness = 5, Color = WHITE, ZIndex = 23, Parent = stamp })
 	local stampScale = UIUtil.Create("UIScale", { Parent = stamp })
 
 	-- Cadenas / sablier
@@ -1275,7 +1265,7 @@ local function setButton(mode: string)
 		buttonLabel.TextTransparency = 0
 	elseif mode == "claimed" then
 		UIUtil.SetButtonEnabled(button, false)
-		buttonLabel.Text = Locale.T("✔  ALREADY CLAIMED")
+		buttonLabel.Text = Locale.T("✅  ALREADY CLAIMED")
 		buttonLabel.TextTransparency = 0.1
 	else
 		UIUtil.SetButtonEnabled(button, false)
@@ -1388,13 +1378,13 @@ local function apply(data)
 		end
 		local text
 		if state == "claimed" then
-			text = Locale.T("✔ Claimed")
+			text = Locale.T("✅ Claimed")
 		elseif state == "today" then
 			text = formatReward(reward)
 		else
 			local estimate = estimateReward(data, day)
 			if estimate then
-				text = "≈ " .. formatReward(estimate)
+				text = "~ " .. formatReward(estimate)
 			else
 				local ratio = rewardSeconds(day) / rewardSeconds(reference)
 				text = NumberFormatter.Multiplier(math.floor(ratio * 10 + 0.5) / 10)
@@ -1408,7 +1398,7 @@ local function apply(data)
 	if not available then
 		local tomorrow = estimateReward(data, streak + 1)
 		if tomorrow then
-			tomorrowText = Locale.T("  •  tomorrow ≈ %s", formatReward(tomorrow))
+			tomorrowText = Locale.T("  •  tomorrow ~%s", formatReward(tomorrow))
 		end
 	end
 
@@ -1420,7 +1410,7 @@ local function apply(data)
 	else
 		heroStatus.Text = streak >= DAYS and Locale.T("Max streak! A 💎 chest awaits you every day.")
 			or Locale.T("Well done! Come back tomorrow for day %d.", claimedCount + 1)
-		setChipText(rewardChip, Locale.T("✔ Claimed today"))
+		setChipText(rewardChip, Locale.T("✅ Claimed today"))
 	end
 	rewardChip.Visible = true
 	setChipText(streakChip, Locale.T("🔥 Streak: %d day%s", activeStreak, pluralS(activeStreak)))
@@ -1435,7 +1425,7 @@ local function apply(data)
 		setButton("ready")
 		hintLabel.Text = Locale.T("Come back every day: the reward grows with your streak 🔥")
 	else
-		amountCaption.Text = Locale.T("✔ CLAIMED TODAY")
+		amountCaption.Text = Locale.T("✅ CLAIMED TODAY")
 		amountLabel.Text = formatReward(reward)
 		amountLabel.TextColor3 = GREEN_DARK
 		setButton("claimed")
@@ -1543,7 +1533,7 @@ local function stampCard(card: Card)
 	card.Stroke.Color = Theme.Colors.Divider
 	card.Stroke.Thickness = 1.5
 	card.Pill.BackgroundColor3 = Theme.Colors.Green:Lerp(WHITE, 0.72)
-	card.Amount.Text = Locale.T("✔ Claimed")
+	card.Amount.Text = Locale.T("✅ Claimed")
 	card.Amount.TextColor3 = GREEN_DARK
 	task.delay(0.2, function()
 		if not card.Card.Parent then

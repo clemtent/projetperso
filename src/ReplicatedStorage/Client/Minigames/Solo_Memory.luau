@@ -93,7 +93,7 @@ function Module.Build(container: Frame, api)
 		card.Gradient.Rotation = 45
 		card.Stroke.Color = C.White
 		card.Stroke.Transparency = 0.45
-		card.Emoji.Text = "✦"
+		card.Emoji.Text = "✨"
 		card.Emoji.TextColor3 = C.White
 		card.Emoji.TextTransparency = 0.25
 		card.Emoji.Size = UDim2.fromScale(0.42, 0.42)
@@ -154,7 +154,7 @@ function Module.Build(container: Frame, api)
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
 			Size = UDim2.fromScale(0.42, 0.42),
-			Text = "✦",
+			Text = "✨",
 			MaxTextSize = 64,
 			ZIndex = 6,
 			Parent = face,

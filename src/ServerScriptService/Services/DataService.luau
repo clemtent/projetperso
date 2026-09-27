@@ -80,6 +80,9 @@ local TEMPLATE = {
 	-- nouveau mail / d'une réponse (os.time(), anti-spam gardé d'une partie à
 	-- l'autre) et expéditeurs bloqués { ["UserId"] = true }
 	FriendMail = { LastNew = 0, LastReply = 0, Blocked = {} },
+	-- 🚶 Dopamine Town (WorldService) : ouverture de la maison aux visiteurs
+	-- ("Everyone" | "Friends" | "Nobody"), ❤️ reçus, visites, ❤️ donnés aujourd'hui
+	Town = { Open = "Everyone", Likes = 0, Visits = 0, LikeDay = 0, Liked = {}, LikesGiven = 0, LikedRewards = 0, RewardDay = 0 },
 	Stats = {
 		TotalClicks = 0,
 		LifetimeDopamine = 0, -- Dopamine gagnée depuis toujours (classement)
@@ -385,7 +388,9 @@ function DataService:ReleaseAsync(player: Player)
 	while profile.Saving and waited < 10 do
 		waited += task.wait(0.1)
 	end
-	self:SaveAsync(player)
+	-- v9.3 : sauvegarde de sortie même si une sauvegarde lente est encore en
+	-- cours (sinon les derniers changements étaient perdus)
+	self:SaveAsync(player, true)
 	profiles[player] = nil
 end
 

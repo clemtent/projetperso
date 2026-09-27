@@ -76,10 +76,14 @@ Config.UpgradeBar = {
 --                 débloquées en progressant ; cachées avant)
 --   Color       : couleur de la carte en mode "Icônes HD"
 --
--- Équilibrage (simulé : 5 clics/s, ~50 % des bonus attrapés, on achète
--- toujours l'amélioration abordable la moins chère) : une nouveauté à
--- l'écran toutes les 1 à 3 min, jamais plus de ~3 min sans achat, 1re
--- visite à l'océan après ~70 min ; la 2e partie est ~2x plus rapide.
+-- Équilibrage (v9.3, simulé par tests/economy_sim.luau : 6 clics/s, combo,
+-- bonus attrapés, achats les plus rentables) : les 5 premières minutes
+-- restent rapides (achats toutes les quelques secondes), puis chaque carte
+-- coûte environ 1 à 3 min de gains ; les prix des cartes non permanentes sont
+-- multipliés après chaque visite à l'océan (voir Config.Rebirth). Les
+-- nouveautés RequiresRebirths (1, 2, 3, 5, 8 visites) s'achètent pendant la
+-- partie où elles apparaissent. Arcade, machine chanceuse, parterres (1 visite)
+-- et coffre mystère (2 visites) ne sont plus là dès le début.
 ----------------------------------------------------------------------
 Config.Upgrades = {
 	{ Id = "Finger", Name = "Buff Finger", Icon = "👆", Description = "+%s Dopamine per click",
@@ -107,152 +111,152 @@ Config.Upgrades = {
 		Cost = 9000, CostGrowth = 2, MaxLevel = 12, Effect = "Click", Feature = "Keyboard", Value = 12,
 		Color = Color3.fromRGB(90, 90, 110) },
 	{ Id = "Lofi", Name = "Lofi Beats", Icon = "🎧", Description = "Beats to relax/study to. +%s Dopamine/s",
-		Cost = 12000, MaxLevel = 1, Effect = "PerSecond", Value = 40, Feature = "Lofi",
+		Cost = 9000, MaxLevel = 1, Effect = "PerSecond", Value = 150, Feature = "Lofi",
 		Color = Color3.fromRGB(120, 90, 200) },
 	{ Id = "RunnerShoes", Name = "Running Shoes", Icon = "👟", Description = "The runner goes faster. +%s Dopamine/s",
-		Cost = 15000, CostGrowth = 1.8, MaxLevel = 10, Effect = "PerSecond", Value = 20, Requires = "Runner",
+		Cost = 10000, CostGrowth = 1.8, MaxLevel = 10, Effect = "PerSecond", Value = 150, Requires = "Runner",
 		Color = Color3.fromRGB(255, 90, 60) },
 	{ Id = "Press", Name = "Hydraulic Press", Icon = "🗜️", Description = "Crushes stuff. Every level upgrades the press (wood, steel, gold, diamond...). +%s Dopamine/s",
-		Cost = 18000, CostGrowth = 1.75, MaxLevel = 10, Effect = "PerSecond", Value = 20, Feature = "Press",
+		Cost = 12000, CostGrowth = 1.75, MaxLevel = 10, Effect = "PerSecond", Value = 150, Feature = "Press",
 		Color = Color3.fromRGB(255, 200, 0) },
 	{ Id = "Achievements", Name = "Achievements", Icon = "🏆", Description = "Unlocks the achievements menu (kept forever)",
-		Cost = 25000, MaxLevel = 1, Effect = "Feature", Feature = "Achievements", Permanent = true,
+		Cost = 15000, MaxLevel = 1, Effect = "Feature", Feature = "Achievements", Permanent = true,
 		Color = Color3.fromRGB(150, 60, 220) },
 	{ Id = "Pinwheel", Name = "Pinwheel", Icon = "🌀", Description = "It spins. Blow on it! +%s Dopamine/s",
-		Cost = 28000, MaxLevel = 1, Effect = "PerSecond", Value = 75, Feature = "Pinwheel",
+		Cost = 18000, MaxLevel = 1, Effect = "PerSecond", Value = 90, Feature = "Pinwheel",
 		Color = Color3.fromRGB(80, 200, 255) },
 	{ Id = "SleepMode", Name = "Sleep Mode", Icon = "😴", Description = "Earn more Dopamine while you're away (kept forever)",
 		Cost = 20000, CostGrowth = 3, MaxLevel = 5, Effect = "Offline", Feature = "SleepMode", Value = 1, Permanent = true,
 		Color = Color3.fromRGB(90, 110, 200) },
 	{ Id = "BubbleWrap", Name = "Bubble Wrap", Icon = "🔘", Description = "Pop the bubbles to earn Dopamine",
-		Cost = 30000, MaxLevel = 1, Effect = "Feature", Feature = "BubbleWrap",
+		Cost = 25000, MaxLevel = 1, Effect = "Feature", Feature = "BubbleWrap",
 		Color = Color3.fromRGB(160, 220, 255) },
 	{ Id = "Weather", Name = "Thunderstorm", Icon = "⛈️", Description = "Catch the lightning! +%s Dopamine/s",
-		Cost = 33000, MaxLevel = 1, Effect = "PerSecond", Value = 100, Feature = "Weather",
+		Cost = 30000, MaxLevel = 1, Effect = "PerSecond", Value = 120, Feature = "Weather",
 		Color = Color3.fromRGB(30, 110, 200) },
 	{ Id = "Vinyl", Name = "Vinyl Collection", Icon = "💿", Description = "More records for the lofi. +%s Dopamine/s",
-		Cost = 40000, CostGrowth = 1.8, MaxLevel = 10, Effect = "PerSecond", Value = 45, Requires = "Lofi",
+		Cost = 35000, CostGrowth = 1.8, MaxLevel = 10, Effect = "PerSecond", Value = 250, Requires = "Lofi",
 		Color = Color3.fromRGB(150, 110, 230) },
 	{ Id = "ItemShop", Name = "Item Shop", Icon = "🧢", Description = "Hats for your button (kept forever)",
-		Cost = 55000, MaxLevel = 1, Effect = "Feature", Feature = "ItemShop", Permanent = true,
+		Cost = 40000, MaxLevel = 1, Effect = "Feature", Feature = "ItemShop", Permanent = true,
 		Color = Color3.fromRGB(60, 200, 60) },
 	{ Id = "Garden", Name = "Dopamine Garden", Icon = "🌻", Description = "Grow flowers and harvest them for Dopamine",
-		Cost = 60000, MaxLevel = 1, Effect = "Feature", Feature = "Garden",
+		Cost = 150000, MaxLevel = 1, Effect = "Feature", Feature = "Garden",
 		Color = Color3.fromRGB(90, 190, 90) },
 	{ Id = "Boost", Name = "Green Arrow", Icon = "⬆️", Description = "Everything goes up. EVERYTHING. Earnings x%s",
-		Cost = 68000, MaxLevel = 1, Effect = "Multiplier", Value = 2, Feature = "Boost",
+		Cost = 180000, MaxLevel = 1, Effect = "Multiplier", Value = 2, Feature = "Boost",
 		Color = Color3.fromRGB(40, 220, 60) },
 	{ Id = "WindPower", Name = "Wind Power", Icon = "🌬️", Description = "The pinwheel spins faster. +%s Dopamine/s",
-		Cost = 70000, CostGrowth = 1.8, MaxLevel = 10, Effect = "PerSecond", Value = 60, Requires = "Pinwheel",
+		Cost = 300000, CostGrowth = 1.8, MaxLevel = 10, Effect = "PerSecond", Value = 400, Requires = "Pinwheel",
 		Color = Color3.fromRGB(120, 210, 255) },
 	{ Id = "GardenPlots", Name = "Flower Beds", Icon = "🪴", Description = "One more flower bed in the garden",
-		Cost = 150000, CostGrowth = 3, MaxLevel = 5, Effect = "Feature", Feature = "GardenPlots", Requires = "Garden",
+		Cost = 400000, CostGrowth = 3, MaxLevel = 5, RequiresRebirths = 1, Effect = "Feature", Feature = "GardenPlots", Requires = "Garden",
 		Color = Color3.fromRGB(120, 200, 100) },
 	{ Id = "LiveStream", Name = "ASMR Stream", Icon = "🥪", Description = "Someone is eating live. +%s Dopamine/s",
-		Cost = 100000, MaxLevel = 1, Effect = "PerSecond", Value = 120, Feature = "LiveStream",
+		Cost = 400000, MaxLevel = 1, Effect = "PerSecond", Value = 500, Feature = "LiveStream",
 		Color = Color3.fromRGB(240, 170, 90) },
 	{ Id = "Butter", Name = "Crunchy Butter", Icon = "🧈", Description = "A stick of butter to bite into on stream. *CRUNCH*",
-		Cost = 140000, MaxLevel = 1, Effect = "Feature", Feature = "Butter",
+		Cost = 2e6, MaxLevel = 1, Effect = "Feature", Feature = "Butter",
 		Color = Color3.fromRGB(255, 215, 90) },
 	{ Id = "Followers", Name = "Followers", Icon = "👥", Description = "More viewers on the stream. +%s Dopamine/s",
-		Cost = 150000, CostGrowth = 1.6, MaxLevel = 15, Effect = "PerSecond", Value = 50, Feature = "Followers",
+		Cost = 2.5e6, CostGrowth = 1.6, MaxLevel = 15, Effect = "PerSecond", Value = 1500, Feature = "Followers",
 		Color = Color3.fromRGB(255, 60, 100) },
 	{ Id = "PhoneNotifs", Name = "Notifications", Icon = "🔔", Description = "Ding! Ding! Ding! +%s Dopamine/s",
-		Cost = 200000, MaxLevel = 1, Effect = "PerSecond", Value = 150, Feature = "PhoneNotifs",
+		Cost = 3e6, MaxLevel = 1, Effect = "PerSecond", Value = 1200, Feature = "PhoneNotifs",
 		Color = Color3.fromRGB(255, 70, 70) },
 	{ Id = "Combo", Name = "Combo", Icon = "⚡", Description = "Click fast to multiply your clicks (up to x3)",
-		Cost = 260000, MaxLevel = 1, Effect = "Feature", Feature = "Combo",
+		Cost = 3.5e6, MaxLevel = 1, Effect = "Feature", Feature = "Combo",
 		Color = Color3.fromRGB(255, 220, 0) },
 	{ Id = "Email", Name = "Inbox", Icon = "📧", Description = "You have (a lot of) new messages",
-		Cost = 320000, MaxLevel = 1, Effect = "Feature", Feature = "Email",
+		Cost = 6e6, MaxLevel = 1, Effect = "Feature", Feature = "Email",
 		Color = Color3.fromRGB(0, 120, 255) },
 	{ Id = "Mouse", Name = "Gaming Mouse", Icon = "🖱️", Description = "RGB = more clicks. +%s Dopamine per click",
-		Cost = 450000, CostGrowth = 2.1, MaxLevel = 10, Effect = "Click", Feature = "Mouse", Value = 150,
+		Cost = 7e6, CostGrowth = 2.1, MaxLevel = 10, Effect = "Click", Feature = "Mouse", Value = 150,
 		Color = Color3.fromRGB(60, 200, 255) },
 	{ Id = "Quests", Name = "Quests", Icon = "📜", Description = "Unlocks quests (kept forever)",
-		Cost = 520000, MaxLevel = 1, Effect = "Feature", Feature = "Quests", Permanent = true,
+		Cost = 8e6, MaxLevel = 1, Effect = "Feature", Feature = "Quests", Permanent = true,
 		Color = Color3.fromRGB(255, 140, 30) },
 	{ Id = "Casino", Name = "Lucky Machine", Icon = "🎰", Description = "Free spins earned by playing. Win Dopamine!",
-		Cost = 600000, MaxLevel = 1, Effect = "Feature", Feature = "Casino",
+		Cost = 1.2e7, MaxLevel = 1, RequiresRebirths = 1, Effect = "Feature", Feature = "Casino",
 		Color = Color3.fromRGB(200, 0, 60) },
 	{ Id = "PressStart", Name = "Turbo Press", Icon = "⚙️", Description = "A START button to crush things yourself",
-		Cost = 650000, MaxLevel = 1, Effect = "Feature", Feature = "PressStart",
+		Cost = 1.2e7, MaxLevel = 1, Effect = "Feature", Feature = "PressStart",
 		Color = Color3.fromRGB(130, 130, 140) },
 	{ Id = "LiveChat", Name = "Live Chat", Icon = "💬", Description = "The stream chat goes wild. Clicks x%s",
-		Cost = 800000, MaxLevel = 1, Effect = "ClickMultiplier", Value = 3, Feature = "LiveChat",
+		Cost = 1.5e7, MaxLevel = 1, Effect = "ClickMultiplier", Value = 3, Feature = "LiveChat",
 		Color = Color3.fromRGB(145, 70, 255) },
 	{ Id = "StormChaser", Name = "Storm Chaser", Icon = "🌪️", Description = "Bigger storms, more lightning. +%s Dopamine/s",
-		Cost = 900000, CostGrowth = 1.9, MaxLevel = 8, Effect = "PerSecond", Value = 400, Requires = "Weather",
+		Cost = 1.8e7, CostGrowth = 1.9, MaxLevel = 8, Effect = "PerSecond", Value = 6000, Requires = "Weather",
 		Color = Color3.fromRGB(70, 90, 160) },
 	{ Id = "Minigames", Name = "Arcade", Icon = "🕹️", Description = "Mini-games and duels with the server (kept forever)",
-		Cost = 950000, MaxLevel = 1, Effect = "Feature", Feature = "Minigames", Permanent = true,
+		Cost = 2e7, MaxLevel = 1, RequiresRebirths = 1, Effect = "Feature", Feature = "Minigames", Permanent = true,
 		Color = Color3.fromRGB(255, 70, 160) },
 	{ Id = "ScreenTime", Name = "Screen Time", Icon = "📱", Description = "Find out how much time you've wasted here",
-		Cost = 1e6, MaxLevel = 1, Effect = "Feature", Feature = "ScreenTime", Permanent = true,
+		Cost = 2e7, MaxLevel = 1, Effect = "Feature", Feature = "ScreenTime", Permanent = true,
 		Color = Color3.fromRGB(45, 45, 50) },
 	{ Id = "LootBox", Name = "Mystery Chest", Icon = "📦", Description = "A chest fills up over time. Open it!",
-		Cost = 1.2e6, MaxLevel = 1, Effect = "Feature", Feature = "LootBox",
+		Cost = 1.5e7, MaxLevel = 1, RequiresRebirths = 2, Effect = "Feature", Feature = "LootBox",
 		Color = Color3.fromRGB(170, 110, 50) },
 	{ Id = "EmojiRain", Name = "Emoji Rain", Icon = "😂", Description = "It's raining emojis. +%s Dopamine/s",
-		Cost = 1.5e6, MaxLevel = 1, Effect = "PerSecond", Value = 1000, Feature = "EmojiRain",
+		Cost = 1.5e8, MaxLevel = 1, Effect = "PerSecond", Value = 15000, Feature = "EmojiRain",
 		Color = Color3.fromRGB(255, 210, 60) },
 	{ Id = "StreamStudio", Name = "Stream Studio", Icon = "🎙️", Description = "Pro mic, ring light, more viewers. +%s Dopamine/s",
-		Cost = 1.7e6, CostGrowth = 1.8, MaxLevel = 10, Effect = "PerSecond", Value = 900, Requires = "LiveStream",
+		Cost = 1.8e8, CostGrowth = 1.8, MaxLevel = 10, Effect = "PerSecond", Value = 15000, Requires = "LiveStream",
 		Color = Color3.fromRGB(255, 80, 120) },
 	{ Id = "HDIcons", Name = "HD Icons", Icon = "✨", Description = "Super shiny icons. Earnings x%s",
-		Cost = 1.9e6, MaxLevel = 1, Effect = "Multiplier", Value = 1.5, Feature = "HDIcons",
+		Cost = 2e8, MaxLevel = 1, Effect = "Multiplier", Value = 1.5, Feature = "HDIcons",
 		Color = Color3.fromRGB(255, 120, 220) },
 	{ Id = "GoldenStar", Name = "Golden Star", Icon = "🌟", Description = "Golden stars show up. Catch them!",
-		Cost = 2.8e6, MaxLevel = 1, Effect = "Feature", Feature = "GoldenStar",
+		Cost = 2.5e8, MaxLevel = 1, Effect = "Feature", Feature = "GoldenStar",
 		Color = Color3.fromRGB(255, 190, 0) },
 	{ Id = "MegaFinger", Name = "Mega Finger", Icon = "💪", Description = "+%s Dopamine per click",
-		Cost = 3.5e6, CostGrowth = 2.1, MaxLevel = 10, Effect = "Click", Feature = "MegaFinger", Value = 1500,
+		Cost = 3e8, CostGrowth = 2.1, MaxLevel = 10, Effect = "Click", Feature = "MegaFinger", Value = 1500,
 		Color = Color3.fromRGB(255, 150, 60) },
 	{ Id = "NeonMode", Name = "Neon Mode", Icon = "🌈", Description = "The screen goes full neon. Earnings x%s",
-		Cost = 4.5e6, MaxLevel = 1, Effect = "Multiplier", Value = 2, Feature = "NeonMode",
+		Cost = 3.5e8, MaxLevel = 1, Effect = "Multiplier", Value = 2, Feature = "NeonMode",
 		Color = Color3.fromRGB(157, 78, 221) },
 	{ Id = "CursorTrail", Name = "Magic Trail", Icon = "💫", Description = "Your mouse leaves sparkles behind. Clicks x%s",
-		Cost = 7.5e6, MaxLevel = 1, Effect = "ClickMultiplier", Value = 2, Feature = "CursorTrail",
+		Cost = 1e9, MaxLevel = 1, Effect = "ClickMultiplier", Value = 2, Feature = "CursorTrail",
 		Color = Color3.fromRGB(255, 80, 200) },
 	{ Id = "Disco", Name = "Disco Ball", Icon = "💃", Description = "It's party time! Earnings x%s",
-		Cost = 1.2e7, MaxLevel = 1, Effect = "Multiplier", Value = 2, Feature = "Disco",
+		Cost = 1.5e9, MaxLevel = 1, Effect = "Multiplier", Value = 2, Feature = "Disco",
 		Color = Color3.fromRGB(200, 60, 255) },
 	-- 🌊 Débloquées par les visites à l'océan (RequiresRebirths)
 	{ Id = "DeepFocus", Name = "Deep Focus", Icon = "🧘", Description = "Calm mind, big gains. +%s Dopamine/s",
-		Cost = 6e7, CostGrowth = 1.7, MaxLevel = 10, Effect = "PerSecond", Feature = "DeepFocus", Value = 2e4, RequiresRebirths = 1,
+		Cost = 3e8, CostGrowth = 1.7, MaxLevel = 10, Effect = "PerSecond", Feature = "DeepFocus", Value = 100000, RequiresRebirths = 1,
 		Color = Color3.fromRGB(110, 200, 190) },
 	{ Id = "Seashell", Name = "Seashell", Icon = "🐚", Description = "The sound of the sea. Earnings x%s",
-		Cost = 1.2e8, MaxLevel = 1, Effect = "Multiplier", Feature = "Seashell", Value = 1.5, RequiresRebirths = 1,
+		Cost = 6e8, MaxLevel = 1, Effect = "Multiplier", Feature = "Seashell", Value = 1.5, RequiresRebirths = 1,
 		Color = Color3.fromRGB(255, 190, 170) },
 	{ Id = "CoralKeys", Name = "Coral Keyboard", Icon = "🪸", Description = "+%s Dopamine per click",
-		Cost = 9e7, CostGrowth = 1.9, MaxLevel = 10, Effect = "Click", Feature = "CoralKeys", Value = 2.5e4, RequiresRebirths = 1,
+		Cost = 1e9, CostGrowth = 1.9, MaxLevel = 10, Effect = "Click", Feature = "CoralKeys", Value = 5000, RequiresRebirths = 1,
 		Color = Color3.fromRGB(255, 120, 130) },
 	{ Id = "DreamMachine", Name = "Dream Machine", Icon = "💤", Description = "Earn while you dream. +%s Dopamine/s",
-		Cost = 2.5e8, CostGrowth = 1.7, MaxLevel = 10, Effect = "PerSecond", Feature = "DreamMachine", Value = 1.6e5, RequiresRebirths = 2,
+		Cost = 6e8, CostGrowth = 1.7, MaxLevel = 10, Effect = "PerSecond", Feature = "DreamMachine", Value = 400000, RequiresRebirths = 2,
 		Color = Color3.fromRGB(150, 130, 230) },
 	{ Id = "Aurora", Name = "Aurora", Icon = "🌌", Description = "The sky lights up. Earnings x%s",
-		Cost = 5e8, MaxLevel = 1, Effect = "Multiplier", Feature = "Aurora", Value = 2, RequiresRebirths = 2,
+		Cost = 1e9, MaxLevel = 1, Effect = "Multiplier", Feature = "Aurora", Value = 2, RequiresRebirths = 2,
 		Color = Color3.fromRGB(80, 220, 180) },
 	{ Id = "QuantumFinger", Name = "Quantum Finger", Icon = "⚛️", Description = "Clicks in several universes. +%s Dopamine per click",
-		Cost = 6e8, CostGrowth = 1.9, MaxLevel = 10, Effect = "Click", Feature = "QuantumFinger", Value = 8e5, RequiresRebirths = 3,
+		Cost = 1.5e9, CostGrowth = 1.9, MaxLevel = 10, Effect = "Click", Feature = "QuantumFinger", Value = 20000, RequiresRebirths = 3,
 		Color = Color3.fromRGB(90, 160, 255) },
 	{ Id = "NeuralLink", Name = "Neural Link", Icon = "🧠", Description = "Click with your mind. Clicks x%s",
-		Cost = 1.2e9, MaxLevel = 1, Effect = "ClickMultiplier", Feature = "NeuralLink", Value = 3, RequiresRebirths = 3,
+		Cost = 2.5e9, MaxLevel = 1, Effect = "ClickMultiplier", Feature = "NeuralLink", Value = 3, RequiresRebirths = 3,
 		Color = Color3.fromRGB(255, 120, 200) },
 	{ Id = "TimeWarp", Name = "Time Warp", Icon = "⏳", Description = "Time flies. Earnings x%s",
-		Cost = 2e9, MaxLevel = 1, Effect = "Multiplier", Feature = "TimeWarp", Value = 2, RequiresRebirths = 3,
+		Cost = 3e9, MaxLevel = 1, Effect = "Multiplier", Feature = "TimeWarp", Value = 2, RequiresRebirths = 3,
 		Color = Color3.fromRGB(230, 180, 90) },
 	{ Id = "GalaxyStream", Name = "Galaxy Stream", Icon = "🌠", Description = "A river of stars. +%s Dopamine/s",
-		Cost = 4e9, CostGrowth = 1.7, MaxLevel = 10, Effect = "PerSecond", Feature = "GalaxyStream", Value = 8e6, RequiresRebirths = 5,
+		Cost = 1e10, CostGrowth = 1.7, MaxLevel = 10, Effect = "PerSecond", Feature = "GalaxyStream", Value = 3e6, RequiresRebirths = 5,
 		Color = Color3.fromRGB(120, 100, 230) },
 	{ Id = "Singularity", Name = "Singularity", Icon = "🕳️", Description = "Everything falls in. Earnings x%s",
-		Cost = 1.2e10, MaxLevel = 1, Effect = "Multiplier", Feature = "Singularity", Value = 3, RequiresRebirths = 5,
+		Cost = 2e10, MaxLevel = 1, Effect = "Multiplier", Feature = "Singularity", Value = 3, RequiresRebirths = 5,
 		Color = Color3.fromRGB(40, 30, 60) },
 	{ Id = "InfiniteScroll", Name = "Infinite Scroll", Icon = "♾️", Description = "It never ends. +%s Dopamine/s",
-		Cost = 6e10, CostGrowth = 1.7, MaxLevel = 10, Effect = "PerSecond", Feature = "InfiniteScroll", Value = 2.5e8, RequiresRebirths = 8,
+		Cost = 8e10, CostGrowth = 1.7, MaxLevel = 10, Effect = "PerSecond", Feature = "InfiniteScroll", Value = 1e7, RequiresRebirths = 8,
 		Color = Color3.fromRGB(255, 90, 90) },
 	{ Id = "Multiverse", Name = "Multiverse", Icon = "🪐", Description = "Infinite you's, infinite clicks. Earnings x%s",
-		Cost = 2e11, MaxLevel = 1, Effect = "Multiplier", Feature = "Multiverse", Value = 3, RequiresRebirths = 8,
+		Cost = 1.5e11, MaxLevel = 1, Effect = "Multiplier", Feature = "Multiverse", Value = 3, RequiresRebirths = 8,
 		Color = Color3.fromRGB(200, 120, 255) },
 	{ Id = "Ocean", Name = "Go to the Ocean", Icon = "🌊", Description = "Let it all go and breathe. Start over with x%s earnings forever (your 🏠 house is kept)",
 		Cost = 0, MaxLevel = nil, Effect = "Detox", Feature = nil,
@@ -262,10 +266,25 @@ Config.Upgrades = {
 ----------------------------------------------------------------------
 -- Rebirth ("Aller à l'océan")
 ----------------------------------------------------------------------
+-- (v9.3) Réglé avec le simulateur tests/economy_sim.luau (python3 tests/run_tests.py
+-- --sim) : joueur actif sans Robux -> R1 ~1 h, R2 ~1 h 05, R3 ~1 h 30, R5 ~1 h 50,
+-- R8+ ~2 h 30 ; chaque partie dure au moins autant que la précédente (voir
+-- docs/ECONOMIE.md). Avant : R1 en 35 min, puis 1 à 3 min par visite.
+--   Prix de la visite n°r+1 : BaseCost x CostGrowth^r x (1 + r)^CostPower
+--   Prix des améliorations NON permanentes après r visites :
+--     prix x PriceGrowth^r x (1 + r)^PricePower (x3,2 après 1 visite, x6,5
+--     après 2, x10,6 après 3, x21 après 5, x42 après 8)
+--   Multiplicateur permanent : +MultiplierPerRebirth par visite (x
+--     MultiplierDecay à chaque visite suivante : 1 = linéaire)
+----------------------------------------------------------------------
 Config.Rebirth = {
-	BaseCost = 4.5e7, -- prix de la 1re visite à l'océan
-	CostGrowth = 2.5, -- chaque visite coûte x2,5 de plus
+	BaseCost = 5e8, -- prix de la 1re visite à l'océan
+	CostGrowth = 3.5, -- chaque visite coûte x3,5 de plus...
+	CostPower = 1.55, -- ... et encore x(1 + r)^1,55 en plus
+	PriceGrowth = 1, -- (améliorations) x1 par visite...
+	PricePower = 1.7, -- ... x(1 + r)^1,7 : les améliorations coûtent plus cher à chaque visite
 	MultiplierPerRebirth = 0.5, -- +50 % de gains permanents par visite
+	MultiplierDecay = 1, -- (1 = toujours +50 %)
 }
 
 ----------------------------------------------------------------------
@@ -277,8 +296,10 @@ Config.Rewards = {
 	EstimatedClicksPerSecond = 3,
 }
 
-Config.AchievementBonus = 0.02 -- +2 % de gains permanents par succès débloqué
-Config.CosmeticBonus = 0.02 -- +2 % de gains permanents par objet cosmétique possédé
+-- (v9.3) +1 % au lieu de +2 % : avec ~36 succès et ~40 objets, le bonus
+-- restait trop fort dès la 1re partie (x1,7 et x1,8 cumulés)
+Config.AchievementBonus = 0.01 -- +1 % de gains permanents par succès débloqué
+Config.CosmeticBonus = 0.01 -- +1 % de gains permanents par objet cosmétique possédé
 
 ----------------------------------------------------------------------
 -- Succès (toujours comptés ; le menu apparaît avec l'amélioration "Succès")
@@ -288,7 +309,7 @@ Config.Achievements = {
 	{ Id = "Clicks100", Name = "Hot Finger", Icon = "👆", Stat = "TotalClicks", Goal = 100, Reward = 50},
 	{ Id = "Clicks1K", Name = "Click Addict", Icon = "🔥", Stat = "TotalClicks", Goal = 1000, Reward = 2500},
 	{ Id = "Clicks10K", Name = "Tendinitis", Icon = "🩹", Stat = "TotalClicks", Goal = 10000, Reward = 200000},
-	{ Id = "Clicks100K", Name = "Human Machine", Icon = "🦿", Stat = "TotalClicks", Goal = 100000, Reward = 1e8},
+	{ Id = "Clicks100K", Name = "Human Machine", Icon = "🦿", Stat = "TotalClicks", Goal = 100000, Reward = 1e7},
 	{ Id = "Earn1K", Name = "First Hit", Icon = "💧", Stat = "LifetimeDopamine", Goal = 1000, Reward = 100},
 	{ Id = "Earn1M", Name = "Happiness Millionaire", Icon = "💰", Stat = "LifetimeDopamine", Goal = 1e6, Reward = 75000},
 	{ Id = "Earn1B", Name = "Neural Billionaire", Icon = "💎", Stat = "LifetimeDopamine", Goal = 1e9, Reward = 5e6},
@@ -318,9 +339,10 @@ Config.Achievements = {
 	{ Id = "Quests5", Name = "Adventurer", Icon = "📜", Stat = "QuestsCompleted", Goal = 5, Reward = 200000},
 	{ Id = "Daily3", Name = "Loyal", Icon = "📅", Stat = "DailyClaims", Goal = 3, Reward = 50000},
 	{ Id = "Play1h", Name = "Just 5 More Minutes...", Icon = "⏰", Stat = "PlaySeconds", Goal = 3600, Reward = 2e6},
-	{ Id = "Play10h", Name = "Go Touch Grass", Icon = "🌳", Stat = "PlaySeconds", Goal = 36000, Reward = 1e8},
+	{ Id = "Play10h", Name = "Go Touch Grass", Icon = "🌳", Stat = "PlaySeconds", Goal = 36000, Reward = 1e7},
 	{ Id = "Rebirth1", Name = "Breath of Fresh Air", Icon = "🌊", Stat = "Rebirths", Goal = 1, Reward = 25000},
-	{ Id = "Rebirth5", Name = "Total Zen", Icon = "🧘", Stat = "Rebirths", Goal = 5, Reward = 1e9},
+	-- (v9.3) 5e6 au lieu de 1e9 : donné juste après l'océan, 1e9 sautait tout le début de la partie
+	{ Id = "Rebirth5", Name = "Total Zen", Icon = "🧘", Stat = "Rebirths", Goal = 5, Reward = 5e6},
 }
 
 ----------------------------------------------------------------------
@@ -507,11 +529,12 @@ Config.Garden = {
 	HarvestCooldown = 0.3,
 	Flowers = {
 		-- v9 : pousse plus lente (x2), récolte un peu plus grosse
-		{ Id = "Daisy", Name = "Daisy", Icon = "🌼", GrowSeconds = 60, RewardSeconds = 20, Weight = 40 },
-		{ Id = "Tulip", Name = "Tulip", Icon = "🌷", GrowSeconds = 120, RewardSeconds = 46, Weight = 30 },
-		{ Id = "Rose", Name = "Rose", Icon = "🌹", GrowSeconds = 240, RewardSeconds = 105, Weight = 18 },
-		{ Id = "Sunflower", Name = "Sunflower", Icon = "🌻", GrowSeconds = 480, RewardSeconds = 240, Weight = 9 },
-		{ Id = "Lotus", Name = "Golden Lotus", Icon = "🪷", GrowSeconds = 840, RewardSeconds = 520, Weight = 3 },
+		-- v9.3 : récolte / 2 (8 parterres rapportaient 2,5x la production à eux seuls)
+		{ Id = "Daisy", Name = "Daisy", Icon = "🌼", GrowSeconds = 60, RewardSeconds = 10, Weight = 40 },
+		{ Id = "Tulip", Name = "Tulip", Icon = "🌷", GrowSeconds = 120, RewardSeconds = 23, Weight = 30 },
+		{ Id = "Rose", Name = "Rose", Icon = "🌹", GrowSeconds = 240, RewardSeconds = 50, Weight = 18 },
+		{ Id = "Sunflower", Name = "Sunflower", Icon = "🌻", GrowSeconds = 480, RewardSeconds = 120, Weight = 9 },
+		{ Id = "Lotus", Name = "Golden Lotus", Icon = "🪷", GrowSeconds = 840, RewardSeconds = 260, Weight = 3 },
 	},
 	MinReward = 30,
 }
@@ -538,63 +561,66 @@ Config.LootBox = {
 --   Slot "Skin" : couleurs du bouton (dégradé Top -> Bottom)
 ----------------------------------------------------------------------
 Config.Cosmetics = {
-	{ Id = "Cap", Name = "Red Cap", Icon = "🧢", Slot = "Hat", Cost = 20000},
-	{ Id = "PartyHat", Name = "Party Hat", Icon = "🥳", Slot = "Hat", Cost = 80000},
-	{ Id = "TopHat", Name = "Top Hat", Icon = "🎩", Slot = "Hat", Cost = 300000},
-	{ Id = "Headphones", Name = "Headphones", Icon = "🎧", Slot = "Hat", Cost = 600000},
-	{ Id = "Graduation", Name = "Graduation Cap", Icon = "🎓", Slot = "Hat", Cost = 2.5e6},
-	{ Id = "Crown", Name = "Crown", Icon = "👑", Slot = "Hat", Cost = 6e6},
-	{ Id = "Halo", Name = "Halo", Icon = "😇", Slot = "Hat", Cost = 3e7},
-	{ Id = "Unicorn", Name = "Unicorn Horn", Icon = "🦄", Slot = "Hat", Cost = 2e8},
-	{ Id = "Bow", Name = "Pink Bow", Icon = "🎀", Slot = "Hat", Cost = 1e6 },
-	{ Id = "Wizard", Name = "Wizard Hat", Icon = "🧙", Slot = "Hat", Cost = 1.5e7 },
-	{ Id = "Astronaut", Name = "Space Helmet", Icon = "🚀", Slot = "Hat", Cost = 6e7, RequiresRebirths = 1 },
-	{ Id = "Tiara", Name = "Diamond Tiara", Icon = "💎", Slot = "Hat", Cost = 4e8, RequiresRebirths = 2 },
-	{ Id = "Flame", Name = "Flame Crown", Icon = "🔥", Slot = "Hat", Cost = 3e9, RequiresRebirths = 3 },
-	{ Id = "Planet", Name = "Tiny Planet", Icon = "🪐", Slot = "Hat", Cost = 3e10, RequiresRebirths = 5 },
-	{ Id = "SkinMint", Name = "Mint Button", Icon = "🟩", Slot = "Skin", Cost = 40000,
+	-- (v9.3) Seuls 8 objets sont là dès le début ; les autres arrivent avec
+	-- les visites à l'océan (RequiresRebirths = 1, 2, 3, 5, 8) et coûtent de
+	-- plus en plus cher (prix d'origine x5 / x30 / x100 / x300 / x1000 / x3000)
+	{ Id = "Cap", Name = "Red Cap", Icon = "🧢", Slot = "Hat", Cost = 100000},
+	{ Id = "PartyHat", Name = "Party Hat", Icon = "🥳", Slot = "Hat", Cost = 400000},
+	{ Id = "TopHat", Name = "Top Hat", Icon = "🎩", Slot = "Hat", Cost = 1e7, RequiresRebirths = 1},
+	{ Id = "Headphones", Name = "Headphones", Icon = "🎧", Slot = "Hat", Cost = 2e7, RequiresRebirths = 1},
+	{ Id = "Graduation", Name = "Graduation Cap", Icon = "🎓", Slot = "Hat", Cost = 2.5e8, RequiresRebirths = 2},
+	{ Id = "Crown", Name = "Crown", Icon = "👑", Slot = "Hat", Cost = 6e8, RequiresRebirths = 2},
+	{ Id = "Halo", Name = "Halo", Icon = "😇", Slot = "Hat", Cost = 1e10, RequiresRebirths = 3},
+	{ Id = "Unicorn", Name = "Unicorn Horn", Icon = "🦄", Slot = "Hat", Cost = 2e11, RequiresRebirths = 5},
+	{ Id = "Bow", Name = "Pink Bow", Icon = "🎀", Slot = "Hat", Cost = 3e7, RequiresRebirths = 1 },
+	{ Id = "Wizard", Name = "Wizard Hat", Icon = "🧙", Slot = "Hat", Cost = 5e9, RequiresRebirths = 3 },
+	{ Id = "Astronaut", Name = "Space Helmet", Icon = "🚀", Slot = "Hat", Cost = 2e10, RequiresRebirths = 3 },
+	{ Id = "Tiara", Name = "Diamond Tiara", Icon = "💎", Slot = "Hat", Cost = 4e11, RequiresRebirths = 5 },
+	{ Id = "Flame", Name = "Flame Crown", Icon = "🔥", Slot = "Hat", Cost = 1e13, RequiresRebirths = 8 },
+	{ Id = "Planet", Name = "Tiny Planet", Icon = "🪐", Slot = "Hat", Cost = 1e14, RequiresRebirths = 8 },
+	{ Id = "SkinMint", Name = "Mint Button", Icon = "🟩", Slot = "Skin", Cost = 200000,
 		Top = Color3.fromRGB(210, 255, 225), Bottom = Color3.fromRGB(120, 220, 160) },
-	{ Id = "SkinSky", Name = "Sky Button", Icon = "🟦", Slot = "Skin", Cost = 150000,
+	{ Id = "SkinSky", Name = "Sky Button", Icon = "🟦", Slot = "Skin", Cost = 750000,
 		Top = Color3.fromRGB(215, 240, 255), Bottom = Color3.fromRGB(110, 180, 255) },
-	{ Id = "SkinCandy", Name = "Candy Button", Icon = "🍬", Slot = "Skin", Cost = 1.2e6,
+	{ Id = "SkinCandy", Name = "Candy Button", Icon = "🍬", Slot = "Skin", Cost = 4e7, RequiresRebirths = 1,
 		Top = Color3.fromRGB(255, 220, 240), Bottom = Color3.fromRGB(255, 110, 180) },
-	{ Id = "SkinGold", Name = "Golden Button", Icon = "🟨", Slot = "Skin", Cost = 1.2e7,
+	{ Id = "SkinGold", Name = "Golden Button", Icon = "🟨", Slot = "Skin", Cost = 1.2e9, RequiresRebirths = 2,
 		Top = Color3.fromRGB(255, 240, 160), Bottom = Color3.fromRGB(230, 160, 0) },
-	{ Id = "SkinVoid", Name = "Void Button", Icon = "⬛", Slot = "Skin", Cost = 8e7,
+	{ Id = "SkinVoid", Name = "Void Button", Icon = "⬛", Slot = "Skin", Cost = 2.5e10, RequiresRebirths = 3,
 		Top = Color3.fromRGB(70, 60, 90), Bottom = Color3.fromRGB(5, 5, 10) },
-	{ Id = "SkinOcean", Name = "Ocean Button", Icon = "🌊", Slot = "Skin", Cost = 2e8, RequiresRebirths = 1,
+	{ Id = "SkinOcean", Name = "Ocean Button", Icon = "🌊", Slot = "Skin", Cost = 2e11, RequiresRebirths = 5,
 		Top = Color3.fromRGB(190, 240, 255), Bottom = Color3.fromRGB(20, 130, 200) },
-	{ Id = "SkinSakura", Name = "Sakura Button", Icon = "🌸", Slot = "Skin", Cost = 1.5e9, RequiresRebirths = 2,
+	{ Id = "SkinSakura", Name = "Sakura Button", Icon = "🌸", Slot = "Skin", Cost = 1.5e12, RequiresRebirths = 5,
 		Top = Color3.fromRGB(255, 235, 245), Bottom = Color3.fromRGB(245, 150, 190) },
-	{ Id = "SkinAurora", Name = "Aurora Button", Icon = "🌌", Slot = "Skin", Cost = 1.2e10, RequiresRebirths = 3,
+	{ Id = "SkinAurora", Name = "Aurora Button", Icon = "🌌", Slot = "Skin", Cost = 4e13, RequiresRebirths = 8,
 		Top = Color3.fromRGB(150, 255, 210), Bottom = Color3.fromRGB(110, 60, 200) },
-	{ Id = "SkinDiamond", Name = "Diamond Button", Icon = "💠", Slot = "Skin", Cost = 1e11, RequiresRebirths = 5,
+	{ Id = "SkinDiamond", Name = "Diamond Button", Icon = "💠", Slot = "Skin", Cost = 3e14, RequiresRebirths = 8,
 		Top = Color3.fromRGB(240, 255, 255), Bottom = Color3.fromRGB(120, 200, 255) },
 	-- v9.2 : chapeaux et boutons "cool" (dessinés par Client > Components >
 	-- CosmeticArt ; Pattern = motif dessiné par-dessus le dégradé du bouton)
-	{ Id = "Snapback", Name = "Backwards snapback", Icon = "🧢", Slot = "Hat", Cost = 50000 },
-	{ Id = "NinjaBand", Name = "Ninja headband", Icon = "🥷", Slot = "Hat", Cost = 150000 },
-	{ Id = "GamerHeadset", Name = "Gamer headset", Icon = "🎧", Slot = "Hat", Cost = 450000 },
-	{ Id = "PirateHat", Name = "Pirate hat", Icon = "🏴", Slot = "Hat", Cost = 1.8e6 },
-	{ Id = "RacingHelmet", Name = "Racing helmet", Icon = "⛑️", Slot = "Hat", Cost = 9e6 },
-	{ Id = "VikingHelmet", Name = "Viking helmet", Icon = "🛡️", Slot = "Hat", Cost = 5e7, RequiresRebirths = 1 },
-	{ Id = "DinoHood", Name = "Dino hood", Icon = "🦖", Slot = "Hat", Cost = 2.5e8, RequiresRebirths = 2 },
-	{ Id = "RobotVisor", Name = "Robot visor", Icon = "🤖", Slot = "Hat", Cost = 2e9, RequiresRebirths = 3 },
-	{ Id = "SkinCarbon", Name = "Carbon Button", Icon = "⬛", Slot = "Skin", Cost = 60000, Pattern = "Carbon",
+	{ Id = "Snapback", Name = "Backwards snapback", Icon = "🧢", Slot = "Hat", Cost = 250000 },
+	{ Id = "NinjaBand", Name = "Ninja headband", Icon = "🥷", Slot = "Hat", Cost = 750000 },
+	{ Id = "GamerHeadset", Name = "Gamer headset", Icon = "🎧", Slot = "Hat", Cost = 1.5e7, RequiresRebirths = 1 },
+	{ Id = "PirateHat", Name = "Pirate hat", Icon = "🏴", Slot = "Hat", Cost = 2e8, RequiresRebirths = 2 },
+	{ Id = "RacingHelmet", Name = "Racing helmet", Icon = "⛑️", Slot = "Hat", Cost = 2.5e9, RequiresRebirths = 3 },
+	{ Id = "VikingHelmet", Name = "Viking helmet", Icon = "🛡️", Slot = "Hat", Cost = 5e10, RequiresRebirths = 5 },
+	{ Id = "DinoHood", Name = "Dino hood", Icon = "🦖", Slot = "Hat", Cost = 2.5e11, RequiresRebirths = 5 },
+	{ Id = "RobotVisor", Name = "Robot visor", Icon = "🤖", Slot = "Hat", Cost = 6e12, RequiresRebirths = 8 },
+	{ Id = "SkinCarbon", Name = "Carbon Button", Icon = "⬛", Slot = "Skin", Cost = 300000, Pattern = "Carbon",
 		Top = Color3.fromRGB(96, 100, 112), Bottom = Color3.fromRGB(34, 36, 44) },
-	{ Id = "SkinCamo", Name = "Camo Button", Icon = "🌲", Slot = "Skin", Cost = 250000, Pattern = "Camo",
+	{ Id = "SkinCamo", Name = "Camo Button", Icon = "🌲", Slot = "Skin", Cost = 1.2e6, Pattern = "Camo",
 		Top = Color3.fromRGB(160, 184, 120), Bottom = Color3.fromRGB(90, 116, 70) },
-	{ Id = "SkinBasketball", Name = "Basketball Button", Icon = "🏀", Slot = "Skin", Cost = 900000, Pattern = "Basketball",
+	{ Id = "SkinBasketball", Name = "Basketball Button", Icon = "🏀", Slot = "Skin", Cost = 2.5e7, RequiresRebirths = 1, Pattern = "Basketball",
 		Top = Color3.fromRGB(255, 176, 90), Bottom = Color3.fromRGB(226, 110, 40) },
-	{ Id = "SkinController", Name = "Controller Button", Icon = "🎮", Slot = "Skin", Cost = 4e6, Pattern = "Controller",
+	{ Id = "SkinController", Name = "Controller Button", Icon = "🎮", Slot = "Skin", Cost = 4e8, RequiresRebirths = 2, Pattern = "Controller",
 		Top = Color3.fromRGB(130, 130, 160), Bottom = Color3.fromRGB(60, 60, 90) },
-	{ Id = "SkinFlames", Name = "Flames Button", Icon = "🔥", Slot = "Skin", Cost = 2.5e7, Pattern = "Flames",
+	{ Id = "SkinFlames", Name = "Flames Button", Icon = "🔥", Slot = "Skin", Cost = 7.5e9, RequiresRebirths = 3, Pattern = "Flames",
 		Top = Color3.fromRGB(70, 60, 80), Bottom = Color3.fromRGB(30, 24, 36) },
-	{ Id = "SkinLava", Name = "Lava Button", Icon = "🌋", Slot = "Skin", Cost = 5e8, RequiresRebirths = 1, Pattern = "Lava",
+	{ Id = "SkinLava", Name = "Lava Button", Icon = "🌋", Slot = "Skin", Cost = 5e11, RequiresRebirths = 5, Pattern = "Lava",
 		Top = Color3.fromRGB(90, 60, 60), Bottom = Color3.fromRGB(40, 24, 28) },
-	{ Id = "SkinGalaxy", Name = "Galaxy Button", Icon = "🌠", Slot = "Skin", Cost = 4e9, RequiresRebirths = 2, Pattern = "Galaxy",
+	{ Id = "SkinGalaxy", Name = "Galaxy Button", Icon = "🌠", Slot = "Skin", Cost = 1.2e13, RequiresRebirths = 8, Pattern = "Galaxy",
 		Top = Color3.fromRGB(90, 70, 190), Bottom = Color3.fromRGB(20, 16, 60) },
-	{ Id = "SkinCircuit", Name = "Neon Circuit Button", Icon = "💻", Slot = "Skin", Cost = 3e10, RequiresRebirths = 3, Pattern = "Circuit",
+	{ Id = "SkinCircuit", Name = "Neon Circuit Button", Icon = "💻", Slot = "Skin", Cost = 1e14, RequiresRebirths = 8, Pattern = "Circuit",
 		Top = Color3.fromRGB(30, 60, 70), Bottom = Color3.fromRGB(8, 20, 30) },
 }
 
@@ -698,10 +724,11 @@ Config.ClickSounds = {
 --   Taux = BaseRate + RatePerLevel x niveau ; Durée max = BaseMaxHours + HoursPerLevel x niveau
 ----------------------------------------------------------------------
 Config.Offline = {
+	-- (v9.3) plus modeste : 35 % pendant 7 h au mieux (avant : 60 % pendant 12 h)
 	BaseRate = 0.1, -- 10 % de la production par seconde
-	RatePerLevel = 0.1, -- +10 % par niveau de "Mode veille"
+	RatePerLevel = 0.05, -- +5 % par niveau de "Mode veille"
 	BaseMaxHours = 2,
-	HoursPerLevel = 2,
+	HoursPerLevel = 1,
 	MinSeconds = 60, -- en dessous d'une minute d'absence : rien
 }
 
@@ -714,27 +741,29 @@ Config.Offline = {
 --   Decor      : animation du fond ("None", "Kawaii", "Stars", "Sunset",
 --                "Leaves", "Bubbles", "Candy", "Grid")
 --   Dark       : true = textes clairs (fond sombre)
+--   RequiresRebirths : (v9.3) visites à l'océan nécessaires pour l'acheter
+--                (vérifié par le serveur : Formulas.IsThemeUnlocked)
 -- Les thèmes sont conservés pour toujours (même après l'océan).
 ----------------------------------------------------------------------
 Config.Themes = {
 	{ Id = "Classic", Name = "Classic", Icon = "⬜", Cost = 0, GamePassId = 0, Decor = "None", Dark = false,
 		Top = Color3.fromRGB(255, 255, 255), Bottom = Color3.fromRGB(226, 226, 226), Accent = Color3.fromRGB(30, 30, 30) },
-	{ Id = "Kawaii", Name = "Kawaii", Icon = "🌸", Cost = 50000, GamePassId = 0, Decor = "Kawaii", Dark = false,
+	{ Id = "Kawaii", Name = "Kawaii", Icon = "🌸", Cost = 250000, GamePassId = 0, Decor = "Kawaii", Dark = false,
 		Top = Color3.fromRGB(255, 228, 240), Bottom = Color3.fromRGB(225, 210, 255), Accent = Color3.fromRGB(255, 120, 180) },
-	{ Id = "Matcha", Name = "Matcha", Icon = "🍵", Cost = 250000, GamePassId = 0, Decor = "Leaves", Dark = false,
+	{ Id = "Matcha", Name = "Matcha", Icon = "🍵", Cost = 1.2e6, GamePassId = 0, Decor = "Leaves", Dark = false,
 		Top = Color3.fromRGB(236, 248, 228), Bottom = Color3.fromRGB(190, 222, 180), Accent = Color3.fromRGB(90, 150, 80) },
-	{ Id = "Sunset", Name = "Sunset", Icon = "🌅", Cost = 1e6, GamePassId = 0, Decor = "Sunset", Dark = false,
+	{ Id = "Sunset", Name = "Sunset", Icon = "🌅", Cost = 3e7, RequiresRebirths = 1, GamePassId = 0, Decor = "Sunset", Dark = false,
 		Top = Color3.fromRGB(255, 200, 140), Bottom = Color3.fromRGB(255, 120, 150), Accent = Color3.fromRGB(255, 240, 180) },
-	{ Id = "Ocean", Name = "Ocean", Icon = "🐠", Cost = 5e6, GamePassId = 0, Decor = "Bubbles", Dark = false,
+	{ Id = "Ocean", Name = "Ocean", Icon = "🐠", Cost = 1e8, RequiresRebirths = 1, GamePassId = 0, Decor = "Bubbles", Dark = false,
 		Top = Color3.fromRGB(200, 240, 255), Bottom = Color3.fromRGB(90, 170, 230), Accent = Color3.fromRGB(255, 255, 255) },
-	{ Id = "LofiNight", Name = "Lofi Night", Icon = "🌙", Cost = 2.5e7, GamePassId = 0, Decor = "Stars", Dark = true,
+	{ Id = "LofiNight", Name = "Lofi Night", Icon = "🌙", Cost = 2.5e9, RequiresRebirths = 2, GamePassId = 0, Decor = "Stars", Dark = true,
 		Top = Color3.fromRGB(30, 28, 60), Bottom = Color3.fromRGB(70, 50, 100), Accent = Color3.fromRGB(255, 220, 150) },
 	-- v9.2 : thèmes "cool" (skatepark en ville, setup de gamer RGB, station spatiale)
-	{ Id = "Street", Name = "Street", Icon = "🛹", Cost = 1.2e7, GamePassId = 0, Decor = "Street", Dark = false,
+	{ Id = "Street", Name = "Street", Icon = "🛹", Cost = 3e10, RequiresRebirths = 3, GamePassId = 0, Decor = "Street", Dark = false,
 		Top = Color3.fromRGB(150, 206, 255), Bottom = Color3.fromRGB(226, 236, 248), Accent = Color3.fromRGB(255, 120, 60) },
-	{ Id = "Gamer", Name = "Gamer", Icon = "🎮", Cost = 6e7, GamePassId = 0, Decor = "Gamer", Dark = true,
+	{ Id = "Gamer", Name = "Gamer", Icon = "🎮", Cost = 5e11, RequiresRebirths = 5, GamePassId = 0, Decor = "Gamer", Dark = true,
 		Top = Color3.fromRGB(14, 12, 34), Bottom = Color3.fromRGB(36, 20, 70), Accent = Color3.fromRGB(0, 230, 255) },
-	{ Id = "SpaceStation", Name = "Space Station", Icon = "🛰️", Cost = 2.5e8, GamePassId = 0, Decor = "Station", Dark = true,
+	{ Id = "SpaceStation", Name = "Space Station", Icon = "🛰️", Cost = 1e13, RequiresRebirths = 8, GamePassId = 0, Decor = "Station", Dark = true,
 		Top = Color3.fromRGB(8, 10, 30), Bottom = Color3.fromRGB(26, 34, 76), Accent = Color3.fromRGB(120, 220, 255) },
 	{ Id = "Candy", Name = "Candy", Icon = "🍭", Cost = nil, GamePassId = 1995902528, Premium = true, Decor = "Candy", Dark = false,
 		Top = Color3.fromRGB(255, 240, 250), Bottom = Color3.fromRGB(180, 235, 255), Accent = Color3.fromRGB(255, 90, 170) },
@@ -870,8 +899,11 @@ Config.Monetization = {
 --   Icônes : un seul emoji (pas de séquence ZWJ ni de couleur de peau).
 ----------------------------------------------------------------------
 Config.House = {
-	ComfortBonusPerPoint = 0.005, -- +0,5 % de TOUS les gains par point de confort des objets posés
-	MaxComfortBonus = 1.0, -- plafonné à +100 %
+	-- (v9.3) Rendements décroissants (Formulas.GetHouseBonus) : les premiers
+	-- points valent +0,2 % chacun, puis de moins en moins ; +75 % à 750 points
+	-- de confort, jamais plus de +150 % (avant : +100 % dès 200 points)
+	ComfortBonusPerPoint = 0.002, -- +0,2 % de TOUS les gains par point (les premiers points)
+	MaxComfortBonus = 1.5, -- limite jamais atteinte : +150 %
 	WallRatio = 0.46, -- haut de la pièce = murs, bas = sol (rendu client + limites du serveur)
 	-- Petits objets "de sol" : on peut aussi les poser SUR un meuble (table,
 	-- bureau, étagère, lit, canapé...) : ils peuvent alors monter jusqu'à
@@ -887,25 +919,30 @@ Config.House = {
 	Sizes = {
 		{ Id = "Studio", Name = "Cozy studio", Icon = "🏠", Cost = 0, Floors = 1, Columns = 2,
 			Width = 1.0, RoomItems = 30, Exterior = "Cottage" },
-		{ Id = "Apartment", Name = "Sweet apartment", Icon = "🏡", Cost = 5e6, RequiresRebirths = 0, Floors = 2, Columns = 2,
+		{ Id = "Apartment", Name = "Sweet apartment", Icon = "🏡", Cost = 2e8, RequiresRebirths = 1, Floors = 2, Columns = 2,
 			Width = 1.05, RoomItems = 34, Exterior = "Townhouse" },
-		{ Id = "Loft", Name = "Dreamy loft", Icon = "🏘️", Cost = 5e8, RequiresRebirths = 1, Floors = 2, Columns = 3,
+		{ Id = "Loft", Name = "Dreamy loft", Icon = "🏘️", Cost = 5e10, RequiresRebirths = 3, Floors = 2, Columns = 3,
 			Width = 1.2, RoomItems = 40, Exterior = "Loft" },
-		{ Id = "Mansion", Name = "Kawaii mansion", Icon = "🏰", Cost = 5e10, RequiresRebirths = 3, Floors = 3, Columns = 4,
+		{ Id = "Mansion", Name = "Kawaii mansion", Icon = "🏰", Cost = 5e12, RequiresRebirths = 5, Floors = 3, Columns = 4,
 			Width = 1.25, RoomItems = 48, Exterior = "Mansion" },
 	},
 
-	-- Objets / styles chers débloqués par les visites à l'océan (selon leur
-	-- prix, sauf RequiresRebirths explicite) : on n'a pas tout d'un coup
+	-- (v9.3) Paliers des visites à l'océan : un objet / un style (papier peint,
+	-- sol, boiserie, ambiance, vue, façade, toit, jardin) SANS RequiresRebirths
+	-- reçoit le palier de son prix de base (Cost >= palier.Cost), puis son prix
+	-- est multiplié par Price (calculé une fois au chargement, voir la fin du
+	-- fichier : entry.BaseCost garde le prix d'origine). Au début, il ne reste
+	-- que les ~100 petits objets pas chers.
 	RebirthGates = {
-		{ Cost = 3e6, Rebirths = 1 },
-		{ Cost = 3e7, Rebirths = 2 },
-		{ Cost = 3e8, Rebirths = 3 },
-		{ Cost = 3e9, Rebirths = 5 },
+		{ Cost = 8e3, Rebirths = 1, Price = 3 },
+		{ Cost = 6e4, Rebirths = 2, Price = 6 },
+		{ Cost = 5e5, Rebirths = 3, Price = 9 },
+		{ Cost = 5e6, Rebirths = 5, Price = 18 },
+		{ Cost = 5e7, Rebirths = 8, Price = 34 },
 	},
 
-	RoomCost = 25000, -- 2e pièce
-	RoomCostGrowth = 5, -- x5 pour chaque pièce suivante
+	RoomCost = 60000, -- 2e pièce
+	RoomCostGrowth = 6, -- x6 pour chaque pièce suivante
 	HarmonyBonus = 0.5, -- +50 % de confort pour un objet "préféré" de sa pièce
 
 	RoomTypes = {
@@ -920,37 +957,37 @@ Config.House = {
 			Categories = { "Kitchen" }, Items = { "DiningTable", "DiningChair", "KitchenIsland", "BarStool", "CafeTable", "BarTable" } },
 		{ Id = "Bathroom", Name = "Bathroom", Icon = "🛁", Wallpaper = "BabyBlueWaves", Floor = "SkyTiles",
 			Categories = {}, Items = { "Toilet", "Shower", "Bathtub", "HeartMirror", "RubberDucky", "Vase", "ScentedCandle" } },
-		{ Id = "KidsRoom", Name = "Kids room", Icon = "🧸", Wallpaper = "PeachHearts", Floor = "SoftCream",
+		{ Id = "KidsRoom", Name = "Kids room", Icon = "🧸", RequiresRebirths = 1, Wallpaper = "PeachHearts", Floor = "SoftCream",
 			Categories = { "Toys" }, Items = { "MushroomStool", "FloorCushion", "ToyChest", "HeartRug", "StarGarland",
 				"BunkBed", "RaceCarBed", "BrickTable", "RaceTrackRug", "HeroPoster", "ComicPoster", "DinoEggLamp" } },
-		{ Id = "GameRoom", Name = "Game room", Icon = "🎮", Wallpaper = "StarryNight", Floor = "LilacShag",
+		{ Id = "GameRoom", Name = "Game room", Icon = "🎮", RequiresRebirths = 1, Wallpaper = "StarryNight", Floor = "LilacShag",
 			Categories = { "Electronics", "Gaming" }, Items = { "GamingChair", "Beanbag", "BoardGame", "BarTable", "BarStool",
 				"GamerChair", "GamingDesk", "GamerBeanbag", "LightningNeon" } },
-		{ Id = "Greenhouse", Name = "Greenhouse", Icon = "🌿", Wallpaper = "MatchaLatte", Floor = "LightOak",
+		{ Id = "Greenhouse", Name = "Greenhouse", Icon = "🌿", RequiresRebirths = 1, Wallpaper = "MatchaLatte", Floor = "LightOak",
 			Categories = { "Plants" }, Items = { "Fountain", "WindChime", "GardenBench", "PicnicTable", "Lemonade" } },
-		{ Id = "PetRoom", Name = "Pet corner", Icon = "🐾", Wallpaper = "VanillaCream", Floor = "HoneyHerringbone",
+		{ Id = "PetRoom", Name = "Pet corner", Icon = "🐾", RequiresRebirths = 2, Wallpaper = "VanillaCream", Floor = "HoneyHerringbone",
 			Categories = { "Pets" }, Items = { "Aquarium", "KnittedRug" } },
-		{ Id = "Library", Name = "Library", Icon = "📚", Wallpaper = "HoneyPanels", Floor = "CherryWood",
+		{ Id = "Library", Name = "Library", Icon = "📚", RequiresRebirths = 2, Wallpaper = "HoneyPanels", Floor = "CherryWood",
 			Categories = {}, Items = { "Bookshelf", "StudyDesk", "DeskGlobe", "WallShelf", "MapPoster", "Telescope",
 				"MantelClock", "CuckooClock", "Laptop", "WoodenChair", "FloorLamp", "SecretDoor",
 				"BigDesk", "BookStack", "Typewriter", "DeskLamp", "RockingChair", "FloatingShelf", "LadderShelf", "RetroComputer", "KittyClock" } },
-		{ Id = "MusicRoom", Name = "Music room", Icon = "🎹", Wallpaper = "LavenderLove", Floor = "WalnutHerringbone",
+		{ Id = "MusicRoom", Name = "Music room", Icon = "🎹", RequiresRebirths = 3, Wallpaper = "LavenderLove", Floor = "WalnutHerringbone",
 			Categories = {}, Items = { "GrandPiano", "PinkGuitar", "RecordPlayer", "KaraokeMic", "Speaker", "ToyDrum",
 				"RetroRadio", "CatHeadphones", "DiscoBall", "MusicBox", "Harp", "Jukebox", "Xylophone", "NeonStar",
 				"GuitarAmp", "ElectricGuitar", "DrumKit", "DJBooth", "RGBHeadset" } },
-		{ Id = "Spa", Name = "Spa", Icon = "♨️", Wallpaper = "CloudySky", Floor = "CloudMarble",
+		{ Id = "Spa", Name = "Spa", Icon = "♨️", RequiresRebirths = 3, Wallpaper = "CloudySky", Floor = "CloudMarble",
 			Categories = {}, Items = { "HotSpring", "Bathtub", "Shower", "Fountain", "ScentedCandle", "OilLamp",
 				"Bamboo", "Hibiscus", "Vase", "Beanbag", "EggChair", "Bonsai", "LotusBowl", "SwanStatue", "Hammock", "CloudRug" } },
-		{ Id = "Attic", Name = "Starry attic", Icon = "🌙", Wallpaper = "GalaxyDream", Floor = "RoseQuartz",
+		{ Id = "Attic", Name = "Starry attic", Icon = "🌙", RequiresRebirths = 5, Wallpaper = "GalaxyDream", Floor = "RoseQuartz",
 			Categories = {}, Items = { "Telescope", "FloatingPlanet", "GlowStars", "MoonGarland", "MoonLamp",
 				"StarNightLight", "ShootingStarWindow", "GalaxyWindow", "CrystalBall", "Suitcase", "StorageBox", "Ladder",
 				"SnowGlobe", "MushroomLamp", "StarGarland", "JellyfishLamp", "Hologram", "Owl",
 				"PlanetMobile", "RocketModel", "Observatory", "RocketLavaLamp" } },
 		-- v9.2 : pièces "cool"
-		{ Id = "SportsRoom", Name = "Sports room", Icon = "🏀", Wallpaper = "RacingStripes", Floor = "SportsCourt",
+		{ Id = "SportsRoom", Name = "Sports room", Icon = "🏀", RequiresRebirths = 5, Wallpaper = "RacingStripes", Floor = "SportsCourt",
 			Categories = { "Sports" }, Items = { "LockerCabinet", "GamerBeanbag", "Surfboard", "BMXBike", "JerseyFrame",
 				"TrophyShelf", "GoldenTrophy", "Motorbike", "RaceTrackRug" } },
-		{ Id = "SpaceBase", Name = "Space base", Icon = "🛰️", Wallpaper = "DeepSpace", Floor = "MetalPlate",
+		{ Id = "SpaceBase", Name = "Space base", Icon = "🛰️", RequiresRebirths = 8, Wallpaper = "DeepSpace", Floor = "MetalPlate",
 			Categories = { "Adventure" }, Items = { "Telescope", "ToyRocket", "ToyRobot", "Hologram", "FloatingPlanet",
 				"GalaxyWindow", "UFOLamp", "VRHeadset", "GamerPC", "RocketLavaLamp" } },
 	},
@@ -1228,7 +1265,7 @@ Config.House = {
 	-- nil = couleurs d'origine du bâtiment), motif du toit, déco du jardin
 	Facades = {
 		{ Id = "ClassicFacade", Name = "Original colours", Icon = "🏠", Cost = 0 },
-		{ Id = "StrawberryFacade", Name = "Strawberry milk", Icon = "🍓", Cost = 20000, Color = Color3.fromRGB(255, 208, 222) },
+		{ Id = "StrawberryFacade", Name = "Strawberry milk", Icon = "🍓", Cost = 20000, RequiresRebirths = 0, Color = Color3.fromRGB(255, 208, 222) },
 		{ Id = "MintFacade", Name = "Mint ice cream", Icon = "🍃", Cost = 60000, Color = Color3.fromRGB(200, 240, 222) },
 		{ Id = "SkyFacade", Name = "Baby blue", Icon = "💙", Cost = 150000, Color = Color3.fromRGB(204, 228, 255) },
 		{ Id = "LavenderFacade", Name = "Lavender", Icon = "💜", Cost = 400000, Color = Color3.fromRGB(226, 212, 255) },
@@ -1246,7 +1283,7 @@ Config.House = {
 	},
 	Roofs = {
 		{ Id = "ClassicRoof", Name = "Original colours", Icon = "🏠", Cost = 0 },
-		{ Id = "BubblegumRoof", Name = "Bubblegum", Icon = "💗", Cost = 15000, Color = Color3.fromRGB(255, 140, 188) },
+		{ Id = "BubblegumRoof", Name = "Bubblegum", Icon = "💗", Cost = 15000, RequiresRebirths = 0, Color = Color3.fromRGB(255, 140, 188) },
 		{ Id = "LilacRoof", Name = "Lilac", Icon = "💜", Cost = 45000, Color = Color3.fromRGB(180, 150, 240) },
 		{ Id = "MintRoof", Name = "Mint", Icon = "💚", Cost = 120000, Color = Color3.fromRGB(110, 206, 170) },
 		{ Id = "SkyRoof", Name = "Sky blue", Icon = "💙", Cost = 300000, Color = Color3.fromRGB(116, 180, 246) },
@@ -1264,7 +1301,7 @@ Config.House = {
 	},
 	RoofStyles = {
 		{ Id = "PlainRoof", Name = "Classic tiles", Icon = "🧱", Cost = 0, Pattern = "None" },
-		{ Id = "HeartRoof", Name = "Love hearts", Icon = "💕", Cost = 30000, Pattern = "Hearts" },
+		{ Id = "HeartRoof", Name = "Love hearts", Icon = "💕", Cost = 30000, RequiresRebirths = 0, Pattern = "Hearts" },
 		{ Id = "PolkaRoof", Name = "Polka dots", Icon = "🔴", Cost = 90000, Pattern = "Dots" },
 		{ Id = "CandyRoof", Name = "Candy stripes", Icon = "🍬", Cost = 250000, Pattern = "Stripes" },
 		{ Id = "StarRoof", Name = "Twinkle stars", Icon = "⭐", Cost = 700000, Pattern = "Stars" },
@@ -2220,6 +2257,59 @@ for kind, def in pairs(Config.HouseLookKinds) do
 	def.Kind = kind
 	Config.HouseLooksById[kind] = byId
 end
+-- (v9.3) Paliers des visites à l'océan de la maison (Config.House.RebirthGates) :
+-- chaque objet / style sans RequiresRebirths reçoit le palier de son prix de
+-- base, puis son prix est multiplié par le Price du palier. Fait UNE fois ici
+-- (serveur et client voient les mêmes prix ; BaseCost = prix d'origine).
+do
+	local gates = Config.House.RebirthGates
+	local function priceFor(rebirths: number): number
+		local price = 1
+		for _, gate in ipairs(gates) do
+			if rebirths >= gate.Rebirths then
+				price = gate.Price or price
+			end
+		end
+		return price
+	end
+	local function applyGate(entry)
+		if type(entry) ~= "table" or type(entry.Cost) ~= "number" or entry.BaseCost ~= nil then
+			return
+		end
+		entry.BaseCost = entry.Cost
+		local rebirths = tonumber(entry.RequiresRebirths)
+		if not rebirths then
+			rebirths = 0
+			for _, gate in ipairs(gates) do
+				if entry.Cost >= gate.Cost then
+					rebirths = math.max(rebirths, gate.Rebirths)
+				end
+			end
+			entry.RequiresRebirths = rebirths
+		end
+		if entry.Cost > 0 then
+			-- arrondi à 2 chiffres significatifs (prix lisibles)
+			local price = entry.Cost * priceFor(rebirths)
+			local unit = 10 ^ math.max(0, math.floor(math.log10(price)) - 1)
+			entry.Cost = math.floor(price / unit + 0.5) * unit
+		end
+	end
+	for _, item in ipairs(Config.House.Items) do
+		applyGate(item)
+	end
+	for _, entry in ipairs(Config.House.Wallpapers) do
+		applyGate(entry)
+	end
+	for _, entry in ipairs(Config.House.Floors) do
+		applyGate(entry)
+	end
+	for _, def in pairs(Config.HouseLookKinds) do
+		for _, entry in ipairs(def.List) do
+			applyGate(entry)
+		end
+	end
+end
+
 Config.HouseTrimsById = Config.HouseLooksById.Trim
 Config.HouseMoodsById = Config.HouseLooksById.Mood
 Config.HouseViewsById = Config.HouseLooksById.View

@@ -292,7 +292,7 @@ function Achievements.Build(content: Frame)
 		Parent = content,
 		Tabs = {
 			{ Id = "All", Text = Locale.T("🏆 All") },
-			{ Id = "Done", Text = Locale.T("✔ Unlocked") },
+			{ Id = "Done", Text = Locale.T("✅ Unlocked") },
 			{ Id = "Todo", Text = Locale.T("🎯 To do") },
 		},
 		Color = Theme.Colors.Purple,
@@ -367,7 +367,7 @@ function Achievements.Update(data)
 			item.Stroke.Transparency = 0.2
 			item.Card.BackgroundColor3 = tier.Top:Lerp(Color3.new(1, 1, 1), 0.75)
 			item.Name.TextColor3 = Theme.Colors.Text
-			item.Status.Text = Locale.T("✔ Unlocked  •  🎁 +%s", NumberFormatter.Format(tonumber(achievement.Reward) or 0))
+			item.Status.Text = Locale.T("✅ Unlocked  •  🎁 +%s", NumberFormatter.Format(tonumber(achievement.Reward) or 0))
 			item.Status.TextColor3 = tier.Ring
 			item.Track.Visible = false
 		else

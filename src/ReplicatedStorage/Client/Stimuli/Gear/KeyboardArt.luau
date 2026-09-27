@@ -342,7 +342,7 @@ end
 function KeyboardArt.Artisan(key: Key, _z: number)
 	KeyboardArt.SetColor(key, Color3.fromRGB(255, 200, 60))
 	key.Artisan = true
-	key.Label.Text = "★"
+	key.Label.Text = "⭐"
 	key.Label.TextColor3 = Color3.new(1, 1, 1)
 	key.Label.TextSize = math.max(6, math.floor(key.H * 0.62))
 	local stroke = Instance.new("UIStroke")

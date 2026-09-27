@@ -33,7 +33,7 @@ return {
 		-- Pas assez de Dopamine
 		["You need %s more Dopamine."] = "Il te manque %s de Dopamine.",
 		["⏳ Or just wait ~%s: your production gets there."] = "⏳ Ou attends ~%s : ta production y arrive toute seule.",
-		["💡 %s gives ≈ %s Dopamine"] = "💡 %s donne ≈ %s de Dopamine",
+		["💡 %s gives ~%s Dopamine"] = "💡 %s donne ~%s de Dopamine",
 
 		-- Offres Robux (OfferPopup)
 		["No thanks"] = "Non merci",

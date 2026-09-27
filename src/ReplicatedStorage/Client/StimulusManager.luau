@@ -406,6 +406,12 @@ local function computeVisibility(record: Record, overlay: GuiObject?, holder: Gu
 	if not container.Parent or not container.Visible then
 		return "Hidden"
 	end
+	-- v9.3 : interface du clicker masquée (Dopamine Town, vue 3D) : rien ne tourne
+	-- (même AlwaysRender), et les touches du clavier ne cliquent plus
+	local gui = Interface.ScreenGui
+	if gui and not gui.Enabled then
+		return "Hidden"
+	end
 	if record.AlwaysRender then
 		return "Visible"
 	end

@@ -363,7 +363,7 @@ local function benefitText(offer: Offer): string
 		local data = ClientState.Data
 		local stats = { PerSecond = tonumber(data and data.PerSecond) or 0, ClickValue = tonumber(data and data.ClickValue) or 0 }
 		local amount = Formulas.ScaledReward(stats, tonumber(def.Seconds) or 0, tonumber(def.Minimum) or 0)
-		return "💧 ≈ +" .. NumberFormatter.Format(amount) .. " Dopamine"
+		return "💧 ~ +" .. NumberFormatter.Format(amount) .. " Dopamine"
 	elseif def.Kind == "Boost" then
 		local seconds = tonumber(def.Duration) or 0
 		local duration = seconds % 60 == 0 and string.format("%d min", seconds // 60) or NumberFormatter.Time(seconds)

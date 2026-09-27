@@ -52,7 +52,7 @@ type Card = {
 	Status: TextLabel,
 	Check: Frame,
 	Lock: TextLabel,
-	Action: string, -- action du bouton principal : "equip" | "buy" | "vip" | "robux" | "none"
+	Action: string, -- action du bouton principal : "equip" | "buy" | "vip" | "robux" | "locked" | "none"
 }
 
 local header: TextLabel
@@ -289,6 +289,12 @@ local function onPrimary(card: Card)
 		promptPass(vipPassId(), "Monetization.GamePasses VIP")
 	elseif action == "robux" then
 		promptPass(tonumber(theme.GamePassId) or 0, "Themes." .. theme.Id .. ".GamePassId")
+	elseif action == "locked" then
+		-- v9.3 : thème réservé aux visites à l'océan (le serveur refuse aussi)
+		SoundManager.Play("Error", 0.7)
+		UIUtil.Shake(card.Primary)
+		local required = tonumber(theme.RequiresRebirths) or 0
+		Notifications.Toast(required == 1 and Locale.T("🔒 after 1 ocean visit") or Locale.T("🔒 after %d ocean visits", required), Theme.Colors.Purple)
 	else
 		popCard(card) -- déjà équipé
 	end
@@ -359,16 +365,7 @@ local function buildCard(list: ScrollingFrame, theme)
 	})
 	UIUtil.Corner(check, UDim.new(1, 0))
 	UIUtil.Stroke(check, WHITE, 2)
-	UIUtil.Create("TextLabel", {
-		Size = UDim2.fromScale(1, 1),
-		BackgroundTransparency = 1,
-		Font = Theme.Fonts.Title,
-		Text = "✓",
-		TextColor3 = WHITE,
-		TextSize = 15,
-		ZIndex = 7,
-		Parent = check,
-	})
+	UIUtil.Icon("Check", { Size = 14, Thickness = 3, Color = WHITE, ZIndex = 7, Parent = check })
 	local lock = UIUtil.Create("TextLabel", {
 		Name = "Lock",
 		AnchorPoint = Vector2.new(1, 1),
@@ -540,6 +537,7 @@ function Themes.Update(data)
 	local owned, equipped = getThemesData(data)
 	local dopamine = getDopamine()
 	local isVIP = data and data.IsVIP == true
+	local rebirths = (data and tonumber(data.Rebirths)) or 0
 	local ownedCount = 0
 
 	for id, card in pairs(cards) do
@@ -559,7 +557,7 @@ function Themes.Update(data)
 
 		if isEquipped then
 			card.Action = "none"
-			primary.Text = Locale.T("✔ Equipped")
+			primary.Text = Locale.T("✅ Equipped")
 			primary:SetAttribute("BaseColor", Theme.Colors.ButtonBottom)
 			UIUtil.SetButtonEnabled(primary, true)
 			primary.TextColor3 = Theme.Colors.Text
@@ -574,7 +572,7 @@ function Themes.Update(data)
 			primary:SetAttribute("BaseColor", Theme.Colors.Blue)
 			UIUtil.SetButtonEnabled(primary, true)
 			primary.TextColor3 = Theme.Colors.TextLight
-			card.Status.Text = (theme.Premium and isVIP) and Locale.T("👑 Included with VIP") or Locale.T("✔ Owned")
+			card.Status.Text = (theme.Premium and isVIP) and Locale.T("👑 Included with VIP") or Locale.T("✅ Owned")
 			card.Status.TextColor3 = Theme.Colors.TextDim
 			card.Stroke.Color = Theme.Colors.CardBorder
 			card.Stroke.Thickness = 1.5
@@ -583,7 +581,18 @@ function Themes.Update(data)
 			card.Stroke.Color = Theme.Colors.CardBorder
 			card.Stroke.Thickness = 1.5
 			card.Stroke.Transparency = 0.15
-			if cost then
+			local required = tonumber(theme.RequiresRebirths) or 0
+			if required > rebirths then
+				-- v9.3 : débloqué par les visites à l'océan (grisé, non achetable)
+				card.Action = "locked"
+				primary.Text = required == 1 and Locale.T("🔒 after 1 ocean visit") or Locale.T("🔒 after %d ocean visits", required)
+				primary:SetAttribute("BaseColor", Color3.fromRGB(214, 232, 244))
+				UIUtil.SetButtonEnabled(primary, false)
+				primary.TextColor3 = Theme.Colors.Text
+				primary.TextTransparency = 0.1
+				card.Status.Text = Locale.T("🌊 Ocean reward")
+				card.Status.TextColor3 = Theme.Colors.TextDim
+			elseif cost then
 				-- Achetable en Dopamine (et peut-être aussi en Robux)
 				local affordable = dopamine >= cost
 				card.Action = "buy"

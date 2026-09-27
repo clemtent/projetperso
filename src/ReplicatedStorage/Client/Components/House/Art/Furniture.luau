@@ -723,7 +723,7 @@ Art.HotSpring = function(body, kit, _item)
 	-- panneau ♨
 	kit.Part(body, 85, 22, 4, 40, C.WoodDark, { Radius = 2, Z = 1 })
 	local sign = kit.Part(body, 75, 16, 24, 16, C.WoodLight, { Radius = 4, Z = 2, Shine = true })
-	kit.Text(sign, "♨", 12, 8.5, 12, C.Red, 3)
+	kit.Text(sign, "♨️", 12, 8.5, 12, C.Red, 3)
 	-- pierres du fond
 	for _, s in ipairs({ { 9, 64, 20, 16 }, { 27, 58, 22, 14 }, { 50, 56, 26, 14 }, { 73, 58, 22, 14 }, { 91, 64, 20, 16 } }) do
 		kit.Blob(body, s[1], s[2], s[3], s[4], stone, { Z = 3 })

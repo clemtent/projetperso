@@ -35,7 +35,7 @@ return {
 		-- Sauvegarde automatique
 		["✏️ Changes…"] = "✏️ Modifications…",
 		["💾 Saving…"] = "💾 Enregistrement…",
-		["Saved ✓"] = "Enregistré ✓",
+		["Saved ✅"] = "Enregistré ✅",
 		["⚠️ Not saved"] = "⚠️ Non enregistré",
 		["Couldn't save your room, try again."] = "Impossible d'enregistrer ta chambre, réessaie.",
 
@@ -63,11 +63,10 @@ return {
 		["You already have the maximum of %s"] = "Tu as déjà le maximum de %s",
 		["%s is yours!"] = "%s est à toi !",
 		["🏠 New item"] = "🏠 Nouvel objet",
-		["✔ Applied"] = "✔ Appliqué",
+		["✅ Applied"] = "✅ Appliqué",
 		["Apply"] = "Appliquer",
 		["Applied!"] = "Appliqué !",
-		["↔ x%s wide  •  up to %d items"] = "↔ largeur x%s  •  jusqu'à %d objets",
-		["✔ Home"] = "✔ Chez toi",
+		["✅ Home"] = "✅ Chez toi",
 		["🏠 You live here"] = "🏠 Tu habites ici",
 		["Move in"] = "Emménager",
 		["Welcome home!"] = "Bienvenue chez toi !",

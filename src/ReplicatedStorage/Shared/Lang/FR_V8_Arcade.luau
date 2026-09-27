@@ -74,7 +74,7 @@ return {
 		["DUEL"] = "DUEL",
 		["SOLO"] = "SOLO",
 		["⚔️ Challenge"] = "⚔️ Défier",
-		["▶ Play"] = "▶ Jouer",
+		["🎮 Play"] = "🎮 Jouer",
 		["🏅 %s wins"] = "🏅 %s victoires",
 
 		-- Onglet Duels
@@ -85,7 +85,7 @@ return {
 		["Friendly duel: no stake, just glory"] = "Duel amical : pas de mise, juste la gloire",
 		["🏆 Winner: both stakes + a Dopamine prize\n🏳️ Leaving or giving up = defeat\n🎟️ Tickets are earned by playing, never bought"] =
 			"🏆 Gagnant : les deux mises + un prix en Dopamine\n🏳️ Partir ou abandonner = défaite\n🎟️ Les tickets se gagnent en jouant, jamais achetés",
-		["↻ Refresh"] = "↻ Actualiser",
+		["🔄 Refresh"] = "🔄 Actualiser",
 		["Cancel"] = "Annuler",
 		["Nobody to duel yet..."] = "Personne à défier pour l'instant...",
 		["Players who unlock the Arcade on this server appear here. Invite your friends!"] =
@@ -103,8 +103,7 @@ return {
 		["%s challenges you!"] = "%s te défie !",
 		["%s %s each"] = "%s %s chacun",
 		["Free duel"] = "Duel amical",
-		["✓ Accept"] = "✓ Accepter",
-		["✕ No thanks"] = "✕ Non merci",
+		["✅ Accept"] = "✅ Accepter",
 		["Not enough 🎟️"] = "Pas assez de 🎟️",
 		["%s said no this time"] = "%s a dit non cette fois",
 		["Invitation to %s expired"] = "L'invitation à %s a expiré",
@@ -116,7 +115,7 @@ return {
 		["Invitation sent to %s"] = "Invitation envoyée à %s",
 
 		-- Duel en cours
-		["← Back"] = "← Retour",
+		["⬅️ Back"] = "⬅️ Retour",
 		["🏳️ Give up"] = "🏳️ Abandonner",
 		["Sure?"] = "Sûr ?",
 		["Your duel is still running!"] = "Ton duel continue !",
@@ -163,7 +162,6 @@ return {
 		["Instant Dopamine and short boosts"] = "Dopamine immédiate et petits boosts",
 		["Arcade badges"] = "Badges d'arcade",
 		["Shown next to your name in duels"] = "Affichés à côté de ton nom en duel",
-		["✓ Equipped"] = "✓ Équipé",
 		["Sold out today"] = "Épuisé aujourd'hui",
 		["%s left today"] = "Encore %s aujourd'hui",
 		["Not enough tickets: win games to earn more!"] = "Pas assez de tickets : gagne des parties pour en avoir plus !",

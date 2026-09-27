@@ -67,14 +67,16 @@ Clic droit sur le parent → **Insert Object** → **Folder**, puis renomme-le.
 | `Cosmos` | `ReplicatedStorage > Client > Stimuli > Cosmos` |
 | `Gear` | `ReplicatedStorage > Client > Stimuli > Gear` |
 | `Live` | `ReplicatedStorage > Client > Stimuli > Live` |
+| `World` | `ReplicatedStorage > Client > World` |
 | `Shared` | `ReplicatedStorage > Shared` |
 | `Lang` | `ReplicatedStorage > Shared > Lang` |
 | `Services` | `ServerScriptService > Services` |
 | `Arcade` | `ServerScriptService > Services > Arcade` |
+| `World` | `ServerScriptService > Services > World` |
 
 `StarterPlayer > StarterPlayerScripts` existe déjà. **Ne crée pas** `ReplicatedStorage > Remotes` : le serveur le crée tout seul.
 
-### 2. Puis chaque script (liste complète, 215 fichiers)
+### 2. Puis chaque script (liste complète, 229 fichiers)
 
 Crée l'objet du bon type à l'emplacement indiqué, renomme-le **exactement**, ouvre-le et colle **tout** le contenu du fichier.
 
@@ -110,10 +112,14 @@ Crée l'objet du bon type à l'emplacement indiqué, renomme-le **exactement**, 
 | `ReplicatedStorage > Client > Components > House > GardenArt > Cool92Garden` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/GardenArt/Cool92Garden.luau` |
 | `ReplicatedStorage > Client > Components > House > GardenArt > Garden` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/GardenArt/Garden.luau` |
 | `ReplicatedStorage > Client > Components > House > House3D` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/House3D.luau` |
+| `ReplicatedStorage > Client > Components > House > House3DCritters` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/House3DCritters.luau` |
 | `ReplicatedStorage > Client > Components > House > House3DFloor` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/House3DFloor.luau` |
 | `ReplicatedStorage > Client > Components > House > House3DKit` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/House3DKit.luau` |
+| `ReplicatedStorage > Client > Components > House > House3DLayout` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/House3DLayout.luau` |
+| `ReplicatedStorage > Client > Components > House > House3DObjects` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/House3DObjects.luau` |
 | `ReplicatedStorage > Client > Components > House > House3DRecipes` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/House3DRecipes.luau` |
 | `ReplicatedStorage > Client > Components > House > House3DScene` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/House3DScene.luau` |
+| `ReplicatedStorage > Client > Components > House > House3DToys` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/House3DToys.luau` |
 | `ReplicatedStorage > Client > Components > House > HouseArt` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/HouseArt.luau` |
 | `ReplicatedStorage > Client > Components > House > HouseButtons` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/HouseButtons.luau` |
 | `ReplicatedStorage > Client > Components > House > HouseCommon` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/HouseCommon.luau` |
@@ -226,6 +232,11 @@ Crée l'objet du bon type à l'emplacement indiqué, renomme-le **exactement**, 
 | `ReplicatedStorage > Client > StimulusManager` | ModuleScript | `src/ReplicatedStorage/Client/StimulusManager.luau` |
 | `ReplicatedStorage > Client > Theme` | ModuleScript | `src/ReplicatedStorage/Client/Theme.luau` |
 | `ReplicatedStorage > Client > UIUtil` | ModuleScript | `src/ReplicatedStorage/Client/UIUtil.luau` |
+| `ReplicatedStorage > Client > World > FurnitureEdit` | ModuleScript | `src/ReplicatedStorage/Client/World/FurnitureEdit.luau` |
+| `ReplicatedStorage > Client > World > HouseBuilder` | ModuleScript | `src/ReplicatedStorage/Client/World/HouseBuilder.luau` |
+| `ReplicatedStorage > Client > World > TownClient` | ModuleScript | `src/ReplicatedStorage/Client/World/TownClient.luau` |
+| `ReplicatedStorage > Client > World > TownHud` | ModuleScript | `src/ReplicatedStorage/Client/World/TownHud.luau` |
+| `ReplicatedStorage > Client > World > WorldLink` | ModuleScript | `src/ReplicatedStorage/Client/World/WorldLink.luau` |
 | `ReplicatedStorage > Shared > ArcadeConfig` | ModuleScript | `src/ReplicatedStorage/Shared/ArcadeConfig.luau` |
 | `ReplicatedStorage > Shared > ChatTopics` | ModuleScript | `src/ReplicatedStorage/Shared/ChatTopics.luau` |
 | `ReplicatedStorage > Shared > Config` | ModuleScript | `src/ReplicatedStorage/Shared/Config.luau` |
@@ -255,6 +266,8 @@ Crée l'objet du bon type à l'emplacement indiqué, renomme-le **exactement**, 
 | `ReplicatedStorage > Shared > Lang > FR_V91_Gear91` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V91_Gear91.luau` |
 | `ReplicatedStorage > Shared > Lang > FR_V91_House` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V91_House.luau` |
 | `ReplicatedStorage > Shared > Lang > FR_V92_Shop` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V92_Shop.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V93_UIFix` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V93_UIFix.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V93_World` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V93_World.luau` |
 | `ReplicatedStorage > Shared > Lang > FR_V9_Arcade` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V9_Arcade.luau` |
 | `ReplicatedStorage > Shared > Lang > FR_V9_Cosmos` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V9_Cosmos.luau` |
 | `ReplicatedStorage > Shared > Lang > FR_V9_Fun` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V9_Fun.luau` |
@@ -271,6 +284,7 @@ Crée l'objet du bon type à l'emplacement indiqué, renomme-le **exactement**, 
 | `ReplicatedStorage > Shared > Net` | ModuleScript | `src/ReplicatedStorage/Shared/Net.luau` |
 | `ReplicatedStorage > Shared > NumberFormatter` | ModuleScript | `src/ReplicatedStorage/Shared/NumberFormatter.luau` |
 | `ReplicatedStorage > Shared > Signal` | ModuleScript | `src/ReplicatedStorage/Shared/Signal.luau` |
+| `ReplicatedStorage > Shared > WorldLayout` | ModuleScript | `src/ReplicatedStorage/Shared/WorldLayout.luau` |
 | `ServerScriptService > Main` | Script | `src/ServerScriptService/Main.server.luau` |
 | `ServerScriptService > Services > AchievementService` | ModuleScript | `src/ServerScriptService/Services/AchievementService.luau` |
 | `ServerScriptService > Services > Arcade > SoloGames` | ModuleScript | `src/ServerScriptService/Services/Arcade/SoloGames.luau` |
@@ -294,6 +308,8 @@ Crée l'objet du bon type à l'emplacement indiqué, renomme-le **exactement**, 
 | `ServerScriptService > Services > QuestService` | ModuleScript | `src/ServerScriptService/Services/QuestService.luau` |
 | `ServerScriptService > Services > RateLimiter` | ModuleScript | `src/ServerScriptService/Services/RateLimiter.luau` |
 | `ServerScriptService > Services > ThemeService` | ModuleScript | `src/ServerScriptService/Services/ThemeService.luau` |
+| `ServerScriptService > Services > World > TownMap` | ModuleScript | `src/ServerScriptService/Services/World/TownMap.luau` |
+| `ServerScriptService > Services > WorldService` | ModuleScript | `src/ServerScriptService/Services/WorldService.luau` |
 | `StarterPlayer > StarterPlayerScripts > ClientMain` | LocalScript | `src/StarterPlayer/StarterPlayerScripts/ClientMain.client.luau` |
 
 ⚠️ `Main` doit être un **Script**, `ClientMain` un **LocalScript**, tout le reste des **ModuleScript**.
@@ -329,6 +345,7 @@ C → S = le client **demande**, le serveur valide tout. S → C = le serveur **
 | `LeaderboardUpdate` | S -> C (top) : top du classement |
 | `ArcadeEvent` | S <-> C (kind, payload) : arcade en temps réel (invitations, coups des duels...) |
 | `FriendMailEvent` | S -> C ("New", mail filtré) : un mail d'ami Roblox arrive (FriendMailService) |
+| `WorldEvent` | S -> C (kind, payload) : 🚶 Dopamine Town (maisons, "j'aime", messages) (WorldService) |
 
 ### RemoteFunctions (C → S, avec réponse)
 
@@ -346,30 +363,8 @@ C → S = le client **demande**, le serveur valide tout. S → C = le serveur **
 | `Arcade` | C -> S (action, argument) -> (succès, résultat \| message) : mini-jeux, tickets, duels |
 | `FilterText` | C -> S (purpose "Live" \| "Mail", texte) -> (succès, { Text, Topics } \| message) : texte tapé, filtré par Roblox |
 | `FriendMail` | C -> S (action, argument) -> (succès, résultat \| message, état?) : mails entre amis Roblox (FriendMailService) |
+| `World` | C -> S (action, argument) -> (succès, résultat \| message) : 🚶 Dopamine Town (entrer, visiter, s'asseoir, j'aime) (WorldService) |
 | `DebugCommand` | C -> S (commande, argument) -> (succès, message) : UNIQUEMENT dans Studio |
-
----|---|
-| `BuyUpgrade` | C -> S (upgradeId) -> (succès, message) |
-| `ClaimDaily` | C -> S () -> (succès, message) |
-| `SetSetting` | C -> S (nom, valeur) -> succès |
-| `CasinoSpin` | C -> S () -> (succès, résultat \| message) : tour GRATUIT (1 jeton) de la machine chanceuse |
-| `OpenChest` | C -> S () -> (succès, résultat \| message) |
-| `ItemShop` | C -> S ("buy" \| "equip" \| "unequip", cosmeticId) -> (succès, message) |
-| `ThemeShop` | C -> S ("buy" \| "equip", themeId) -> (succès, message) |
-| `House` | C -> S (action, argument) -> (succès, message) : maison (achats, papier peint, sol, disposition) |
-| `Garden` | C -> S (action, argument) -> (succès, résultat \| message) : jardin de Dopamine |
-| `Arcade` | C -> S (action, argument) -> (succès, résultat \| message) : mini-jeux, tickets, duels |
-| `FilterText` | C -> S (purpose "Live" \| "Mail", texte) -> (succès, { Text, Topics } \| message) : texte tapé, filtré par Roblox |
-| `DebugCommand` | C -> S (commande, argument) -> (succès, message) : UNIQUEMENT dans Studio |
-
----|---|---|---|
-| `BuyUpgrade` | `upgradeId` | `(succès, message)` | Acheter un niveau d'amélioration (ou « Aller à l'océan ») |
-| `ClaimDaily` | *(aucun)* | `(succès, message)` | Récupérer le cadeau du jour |
-| `SetSetting` | `nom, valeur` | `succès` | `Sound`, `Music` ou `Effects` (booléen) |
-| `StockTrade` | `"buy"` \| `"sell"`, `fraction` | `(succès, message)` | Acheter / vendre des actions DOPA |
-| `CasinoSpin` | `fraction` | `(succès, résultat \| message)` | Un tour de machine à sous ; `résultat = { Reels, Bet, Payout, Multiplier }` |
-| `OpenChest` | *(aucun)* | `(succès, résultat \| message)` | Ouvrir un coffre ; `résultat = { Tier, Amount }` |
-| `ItemShop` | `"buy"` \| `"equip"` \| `"unequip"`, `cosmeticId` | `(succès, message)` | Boutique d'objets |
 
 ---
 

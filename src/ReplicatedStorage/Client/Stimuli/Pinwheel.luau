@@ -612,12 +612,12 @@ function Pinwheel.Start(ctx)
 	for i = 1, SPARKLE_POOL do
 		local sparkle = UIUtil.Create("TextLabel", {
 			Name = "Sparkle" .. i,
-			Text = "✦",
+			Text = "✨",
 			Font = Theme.Fonts.Title,
 			TextSize = 16,
 			TextColor3 = SPARKLE_COLORS[(i - 1) % #SPARKLE_COLORS + 1],
 			TextStrokeColor3 = Color3.fromRGB(200, 120, 40),
-			TextStrokeTransparency = 0.6,
+			TextStrokeTransparency = 1, -- (emoji ✨ : pas de contour)
 			TextTransparency = 1,
 			BackgroundTransparency = 1,
 			AnchorPoint = Vector2.new(0.5, 0.5),
@@ -641,7 +641,7 @@ function Pinwheel.Start(ctx)
 			local distance = random:NextNumber(far * 0.6, far)
 			sparkle.Position = UDim2.fromOffset(originX, originY)
 			sparkle.TextTransparency = 0
-			sparkle.TextStrokeTransparency = 0.6
+			sparkle.TextStrokeTransparency = 1
 			sparkle.TextSize = random:NextInteger(12, 18)
 			sparkle.Rotation = 0
 			UIUtil.Tween(sparkle, random:NextNumber(0.45, 0.65), {

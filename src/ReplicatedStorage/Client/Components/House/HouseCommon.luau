@@ -86,7 +86,7 @@ export type Category = { Id: string, Name: string, Icon: string, Order: number? 
 
 -- Un objet posé (format du serveur) ; F = dessin retourné (miroir) ;
 -- C = couleur (Config.House.Tints, nil = couleurs d'origine)
-export type Placed = { I: string, X: number, Y: number, S: number, Z: number, F: boolean?, C: string? }
+export type Placed = { I: string, X: number, Y: number, S: number, Z: number, F: boolean?, C: string?, R: number? }
 
 -- Une pièce (format du serveur) ; Slot = (étage - 1) x Columns + colonne,
 -- étage 1 = rez-de-chaussée
@@ -261,6 +261,7 @@ local function readPlaced(list: any): { Placed }
 					Z = tonumber(entry.Z) or 0,
 					F = entry.F == true or nil,
 					C = type(entry.C) == "string" and entry.C or nil,
+					R = tonumber(entry.R), -- v9.3 : rotation 3D (Dopamine Town), en degrés
 				})
 			end
 		end

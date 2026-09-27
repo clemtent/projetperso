@@ -167,7 +167,7 @@ return {
 		["🪟 Window of this room:"] = "🪟 Fenêtre de cette pièce :",
 		["🌷 Garden: %d/%d spots used • tap to put out / away"] = "🌷 Jardin : %d/%d places prises • touche pour sortir / ranger",
 		["🏡 Whole house • hover or tap a picture to try it"] = "🏡 Toute la maison • survole ou touche pour essayer",
-		["✔ In the garden"] = "✔ Au jardin",
+		["✅ In the garden"] = "✅ Au jardin",
 		["🌷 Put out"] = "🌷 Sortir",
 		["🆕 New!"] = "🆕 Nouveautés !",
 		["Colour"] = "Couleur",

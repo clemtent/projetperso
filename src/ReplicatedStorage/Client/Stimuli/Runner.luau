@@ -2963,7 +2963,7 @@ function Runner.Start(ctx)
 	UIUtil.Stroke(hud.Replay, rgb(10, 90, 40), math.max(1, 1.5 * U), 0)
 	hud.ReplayScale = Create("UIScale", { Parent = hud.Replay })
 	local replayLabel = UIUtil.Label({
-		Text = "▶ " .. Locale.T("Play again"),
+		Text = "🔄 " .. Locale.T("Play again"),
 		Font = Theme.Fonts.Number,
 		TextColor3 = WHITE,
 		AnchorPoint = Vector2.new(0.5, 0.5),

@@ -36,6 +36,22 @@ python3 tests/run_tests.py --luau /chemin/vers/luau  # autre emplacement
 
 Lance-le après **chaque** modification de `Config` ou de `Formulas` (prix, valeurs, casino…).
 
+### 📈 Simulateur d'économie : `tests/economy_sim.luau`
+
+Un joueur simulé joue avec les **vrais** modules `Shared` (mêmes prix, mêmes formules, même barre d'améliorations, mêmes verrous des visites à l'océan) : il clique à 6 clics/s pendant 75 % du temps avec le combo, touche la production passive, attrape les bonus (étoile dorée, éclairs, notifications, mails, dons, presse turbo, bulles, DVD), tourne la machine chanceuse, cueille le jardin, ouvre les coffres, finit des quêtes, gagne quelques parties d'arcade ; il achète ce qui se rembourse le plus vite (améliorations, objets de la maison, cosmétiques), agrandit sa maison, s'offre des styles, et va à l'océan dès que c'est possible. Le détail du modèle est en tête du fichier (`Sim.Behaviour`).
+
+```bash
+python3 tests/run_tests.py --sim             # joueur actif sans Robux : minutes jusqu'à R1..R10, courbe des gains
+python3 tests/run_tests.py --sim --robux     # + Game Passes x2, VIP et auto-clic
+python3 tests/run_tests.py --sim --whale     # + tous les Game Passes (x10 compris)
+python3 tests/run_tests.py --sim --sessions  # 3 h de jeu par jour + gains hors-ligne (jours pour tout finir)
+python3 tests/run_tests.py --sim --all       # les 4 profils
+```
+
+Le rapport affiche, pour chaque visite à l'océan, les minutes de jeu cumulées et la durée de chaque partie, les achats des 10 premières minutes, puis la courbe (gains/s, production de référence `P` des récompenses, part des clics et des bonus, multiplicateurs : visites, améliorations, clics, succès, cosmétiques, maison, confort).
+
+Les tests `Économie (simulateur) : …` de `run_tests.py` lancent le profil « Actif, sans Robux » et vérifient les objectifs de `Sim.Targets` : chaque partie dure au moins autant que la précédente, R1 en 45–60 min, R2 en 60–75 min, R3 en 75–90 min, R5 en 1 h 30–2 h, R8 et plus ≥ 2 h 30, R10 jamais avant 16 h de jeu, des achats dès les premières secondes ; avec les Game Passes, chaque partie est plus rapide mais la courbe reste croissante. Après un changement de prix, relance `--sim` et regarde le tableau : si un test échoue, c'est que le rythme a cassé. Les chiffres avant / après la v9.3 sont dans [`docs/ECONOMIE.md`](ECONOMIE.md).
+
 ---
 
 ## 🛠️ Avant de tester dans Studio

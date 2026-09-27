@@ -10,7 +10,7 @@
 return {
 	fr = {
 		-- 🎰 Machine chanceuse (client)
-		["★ LUCKY MACHINE ★"] = "★ MACHINE CHANCEUSE ★",
+		["⭐ LUCKY MACHINE ⭐"] = "⭐ MACHINE CHANCEUSE ⭐",
 		["📜 Payouts"] = "📜 Gains",
 		["3 alike"] = "3 identiques",
 		["2 alike"] = "2 identiques",
@@ -33,7 +33,7 @@ return {
 		-- 🌻 Jardin (client)
 		["🧺 Harvest all (%d)"] = "🧺 Tout cueillir (%d)",
 		["🌸 Tap the flower!"] = "🌸 Touche la fleur !",
-		["⏱ Next bloom %s"] = "⏱ Éclosion %s",
+		["⏱️ Next bloom %s"] = "⏱️ Éclosion %s",
 		["%s · ready in %s"] = "%s · prête dans %s",
 		["The garden is resting 🌙"] = "Le jardin se repose 🌙",
 

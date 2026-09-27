@@ -2112,8 +2112,9 @@ function Email.Start(ctx)
 		entry.Chip = makeChip(row, 17, 7)
 		entry.Chip.Frame.Position = UDim2.fromOffset(textX, 44)
 		entry.Preview = text({ Position = UDim2.fromOffset(textX, 44), Size = UDim2.fromOffset(100, 17), TextColor3 = C.InkDim, TextSize = 12 + F, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 7, Parent = row })
-		local star, starLabel = makeButton({ Name = "RowStar", AnchorPoint = Vector2.new(1, 1), Position = UDim2.fromOffset(rowW - 5, rowH - 3), Size = UDim2.fromOffset(32, 32), ZIndex = 8, Parent = row }, "ghost", "☆", 19 + F, 8)
+		local star, starLabel = makeButton({ Name = "RowStar", AnchorPoint = Vector2.new(1, 1), Position = UDim2.fromOffset(rowW - 5, rowH - 3), Size = UDim2.fromOffset(32, 32), ZIndex = 8, Parent = row }, "ghost", "⭐", 19 + F, 8)
 		starLabel.TextColor3 = C.Gold
+		starLabel.TextTransparency = 0.72
 		entry.StarLabel = starLabel
 		onClick(row, function()
 			if entry.Mail then
@@ -2158,7 +2159,8 @@ function Email.Start(ctx)
 		entry.Time.Text = timeLabel(mail.Time)
 		local subject = e.Subject ~= "" and e.Subject or Locale.T("(no subject)")
 		entry.Subject.Text = (e.Attachment and "📎 " or "") .. subject
-		entry.StarLabel.Text = mail.Starred and "⭐" or "☆"
+		-- (⭐ emoji estompée = pas en favori : le caractère ☆ n'existe pas dans les polices Roblox)
+		entry.StarLabel.TextTransparency = mail.Starred and 0 or 0.72
 		-- Ligne 3 : pastille ("🎁 NOUVEAU · +X" tant qu'il est réclamable, sinon étiquette) + aperçu
 		local x = entry.TextX
 		if isLive(mail) then
@@ -2197,7 +2199,7 @@ function Email.Start(ctx)
 		if folder == "Friends" then
 			return Locale.T("No friend mail yet. Tap ✏️ Write to send one to a Roblox friend!")
 		elseif folder == "Starred" then
-			return Locale.T("No starred mail. Tap ☆ on a mail to keep it here.")
+			return Locale.T("No starred mail. Tap ⭐ on a mail to keep it here.")
 		elseif folder == "Sent" then
 			return Locale.T("Nothing sent yet. Grandma is waiting for your news!")
 		elseif folder == "Spam" then
@@ -2236,7 +2238,7 @@ function Email.Start(ctx)
 		-- Action d'en-tête : "Tout lu" (Réception) / "Vider" (Corbeille)
 		local action = nil
 		if folder == "Inbox" and unreadCount() > 0 and not searching then
-			action = Locale.T("✓ All read")
+			action = Locale.T("✅ All read")
 		elseif folder == "Trash" and #list > 0 and not searching then
 			action = Locale.T("🧹 Empty")
 		elseif folder == "Friends" and not searching then
@@ -2314,7 +2316,7 @@ function Email.Start(ctx)
 			return
 		end
 		local msg = ui.Msg
-		msg.StarLabel.Text = mail.Starred and "⭐" or "☆"
+		msg.StarLabel.TextTransparency = mail.Starred and 0 or 0.72
 		-- (Signaler / Bloquer : la demande de confirmation repart de zéro)
 		S.Confirm = nil
 		for id, label in pairs(msg.ActionLabels) do
@@ -2514,8 +2516,8 @@ function Email.Start(ctx)
 
 	-- Présence d'un ami : sur ce serveur / en ligne ailleurs / hors ligne (/ bloqué)
 	local PRESENCE = {
-		Here = { Text = "● Here", Color = Color3.fromRGB(24, 158, 88), Rank = 1 },
-		Online = { Text = "● Online", Color = Color3.fromRGB(40, 120, 240), Rank = 2 },
+		Here = { Text = "Here", Color = Color3.fromRGB(24, 158, 88), Rank = 1 },
+		Online = { Text = "Online", Color = Color3.fromRGB(40, 120, 240), Rank = 2 },
 		Offline = { Text = "Offline", Color = Color3.fromRGB(140, 146, 160), Rank = 3 },
 		Blocked = { Text = "🚫 Blocked", Color = Color3.fromRGB(226, 38, 52), Rank = 4 },
 	}
@@ -2837,8 +2839,9 @@ function Email.Start(ctx)
 				Visible = false,
 				ZIndex = 5,
 				Parent = titleBar,
-			}, "ghost", "←", 24, 10)
-			back:FindFirstChild("Label").TextColor3 = C.White
+			}, "ghost", "", 24, 10)
+			-- Flèche retour DESSINÉE (le caractère ← n'est pas sûr dans les polices Roblox)
+			UIUtil.Icon("ArrowLeft", { Name = "Arrow", Size = 20, Thickness = 3, Color = C.White, ZIndex = 6, Parent = back })
 			onClick(back, function()
 				ctx.Sound.Play("Click", 1)
 				goBack()
@@ -3110,7 +3113,7 @@ function Email.Start(ctx)
 						end
 					end)
 				end
-				snack(Locale.T("✓ All caught up!"))
+				snack(Locale.T("✅ All caught up!"))
 			elseif S.Folder == "Trash" then
 				local removed = 0
 				for index = #mails, 1, -1 do
@@ -3167,8 +3170,9 @@ function Email.Start(ctx)
 		local messageView = frame({ Name = "MessageView", Size = UDim2.fromScale(1, 1), Visible = false, ZIndex = 4, Parent = readPane })
 		msg.Frame = messageView
 		msg.Subject = text({ Name = "Subject", Position = UDim2.fromOffset(P, 8), Size = UDim2.fromOffset(readW - P - 58, 48), Font = FONT_TITLE, TextSize = 18 + F, TextWrapped = true, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 5, Parent = messageView })
-		local star, starLabel = makeButton({ Name = "StarButton", AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromOffset(readW - 10, 12), Size = UDim2.fromOffset(40, 40), ZIndex = 5, Parent = messageView }, "ghost", "☆", 26, 10)
+		local star, starLabel = makeButton({ Name = "StarButton", AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromOffset(readW - 10, 12), Size = UDim2.fromOffset(40, 40), ZIndex = 5, Parent = messageView }, "ghost", "⭐", 26, 10)
 		starLabel.TextColor3 = C.Gold
+		starLabel.TextTransparency = 0.72
 		msg.StarLabel = starLabel
 		onClick(star, function()
 			local mail = S.Selected
@@ -3443,7 +3447,7 @@ function Email.Start(ctx)
 		cmp.NoteText = text({ Position = UDim2.fromOffset(60, 0), Size = UDim2.new(1, -72, 1, 0), Font = FONT_TITLE, TextColor3 = C.InkSoft, TextSize = 13 + F, TextWrapped = true, ZIndex = 9, Parent = note })
 		local retryW = phone and 118 or 96
 		cmp.NoteRetryW = retryW
-		cmp.NoteRetry = makeButton({ Name = "FriendRetry", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(retryW, 32), Visible = false, ZIndex = 9, Parent = note }, "secondary", Locale.T("↻ Retry"), 13 + F, 10)
+		cmp.NoteRetry = makeButton({ Name = "FriendRetry", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(retryW, 32), Visible = false, ZIndex = 9, Parent = note }, "secondary", Locale.T("🔄 Retry"), 13 + F, 10)
 		onClick(cmp.NoteRetry, function()
 			ctx.Sound.Play("Click", 1)
 			FS.Error = nil
@@ -4611,7 +4615,7 @@ function Email.Start(ctx)
 		local appIcon = frame({ Position = UDim2.fromOffset(12, 7), Size = UDim2.fromOffset(14, 14), BackgroundColor3 = C.Blue, ZIndex = 33, Parent = body })
 		UIUtil.Corner(appIcon, 4)
 		UIUtil.Gradient(appIcon, ColorSequence.new(C.White, Color3.fromRGB(190, 205, 235)), 90)
-		text({ Size = UDim2.fromScale(1, 1), Text = "✉", Font = FONT_TITLE, TextColor3 = C.White, TextSize = 10, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 34, Parent = appIcon })
+		text({ Size = UDim2.fromScale(1, 1), Text = "✉️", Font = FONT_TITLE, TextColor3 = C.White, TextSize = 10, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 34, Parent = appIcon })
 		text({ Position = UDim2.fromOffset(31, 6), Size = UDim2.fromOffset(120, 16), Font = FONT_TITLE, Text = "DOPAMAIL · " .. Locale.T("now"), TextColor3 = C.InkDim, TextSize = 10, ZIndex = 33, Parent = body })
 		local chip = makeChip(body, 15, 34)
 		chip.Frame.AnchorPoint = Vector2.new(1, 0)
