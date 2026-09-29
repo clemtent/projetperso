@@ -67,7 +67,7 @@ WorldLayout.ROAD_Y = 0.5 -- dessus de la chaussée
 WorldLayout.WALK_Y = 1 -- dessus des trottoirs et de la place (bordure de 0,5)
 WorldLayout.GATE_BACK = 60 -- porte de la ville : distance depuis le bord des parcelles côté rue
 WorldLayout.SPAWN_INSIDE = 12 -- apparition : juste à l'intérieur de la porte
-WorldLayout.TOWN_MARGIN = 80 -- pré au-delà du fond des parcelles (murs invisibles)
+WorldLayout.TOWN_MARGIN = 140 -- pré au-delà du fond des parcelles (murs invisibles) ; v9.8 : 80 -> 140 (MégaDopa agrandi)
 
 -- Porte d'entrée (dans la cage d'escalier) et passages entre pièces
 WorldLayout.DOOR_W = 5
