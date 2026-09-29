@@ -4701,6 +4701,9 @@ function House3DRecipes.BuildModel(itemId: string, entry: any?, options: BuildOp
 	-- (le devant de l'objet regarde -Z : demi-tour autour de Y)
 	local turn = CFrame.Angles(0, math.pi, 0)
 	local data = House3DRecipes.Make(item, entry, k, model, turn, opts.Trim)
+	-- (v9.9 SCALE99) échelle réelle de l'objet (House3DScale) : dessus, assise,
+	-- boîte de collision et attributs en studs avec CE k-là
+	k = data.K
 	local wall = item.Placement == "Wall"
 	local query = opts.Query ~= false
 	for _, p in ipairs(data.Parts) do
@@ -4729,7 +4732,10 @@ function House3DRecipes.BuildModel(itemId: string, entry: any?, options: BuildOp
 	local collide = opts.Collide ~= false
 	-- (v9.8) le tunnel-aquarium est une arche sous laquelle on passe : pas de bloc plein
 	local walkUnder = itemId == "AquariumTunnel"
-	if collide and not wall and not walkUnder and not data.Info.Flat and height >= 1.5 and math.max(fw, fd) >= 1.8 then
+	-- (v9.9 SCALE99) les chaises et tabourets, plus larges maintenant, restent
+	-- sans bloc (comme avant) : on se glisse entre eux autour d'une table
+	local smallSeat = HouseSurfaces.IsSeat(itemId) and math.max(fw, fd) < 2.5
+	if collide and not wall and not walkUnder and not smallSeat and not data.Info.Flat and height >= 1.5 and math.max(fw, fd) >= 1.8 then
 		local top = data.Tops[1]
 		local solidH = height
 		if data.SeatAt then

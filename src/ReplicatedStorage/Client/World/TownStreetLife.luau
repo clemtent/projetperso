@@ -254,15 +254,16 @@ local function buildBench(m: Model, F: CFrame, _seed: number)
 	local iron = rgb(58, 54, 66)
 	for _, sx in ipairs({ -1, 1 }) do
 		local x = sx * 2.58
-		box(m, "BenchLeg", F, x - 0.1, x + 0.1, -0.05, 1.8, -0.75, -0.55, iron, M.Metal)
-		box(m, "BenchLeg", F, x - 0.1, x + 0.1, -0.05, 3.0, 0.55, 0.75, iron, M.Metal)
-		box(m, "BenchArm", F, x - 0.14, x + 0.14, 2.3, 2.44, -0.85, 0.7, iron, M.Metal)
-		box(m, "BenchArmPost", F, x - 0.1, x + 0.1, 1.8, 2.3, -0.75, -0.55, iron, M.Metal)
+		-- (v9.9 CITY99, échelle SCALE99 : assise à 1,45 = ~45 cm, comme TownKit.BENCH)
+		box(m, "BenchLeg", F, x - 0.1, x + 0.1, -0.05, 1.35, -0.75, -0.55, iron, M.Metal)
+		box(m, "BenchLeg", F, x - 0.1, x + 0.1, -0.05, 2.75, 0.55, 0.75, iron, M.Metal)
+		box(m, "BenchArm", F, x - 0.14, x + 0.14, 2.05, 2.19, -0.85, 0.7, iron, M.Metal)
+		box(m, "BenchArmPost", F, x - 0.1, x + 0.1, 1.35, 2.05, -0.75, -0.55, iron, M.Metal)
 	end
-	box(m, "BenchSeat", F, -2.45, 2.45, 1.72, 1.9, -0.8, -0.05, WOOD, M.Wood, true)
-	box(m, "BenchSeat", F, -2.45, 2.45, 1.72, 1.9, 0.05, 0.62, WOOD, M.Wood, true)
-	box(m, "BenchBack", F, -2.45, 2.45, 2.2, 2.6, 0.62, 0.78, WOOD, M.Wood)
-	box(m, "BenchBack", F, -2.45, 2.45, 2.75, 3.1, 0.66, 0.82, WOOD, M.Wood)
+	box(m, "BenchSeat", F, -2.45, 2.45, 1.27, 1.45, -0.8, -0.05, WOOD, M.Wood, true)
+	box(m, "BenchSeat", F, -2.45, 2.45, 1.27, 1.45, 0.05, 0.62, WOOD, M.Wood, true)
+	box(m, "BenchBack", F, -2.45, 2.45, 1.8, 2.2, 0.62, 0.78, WOOD, M.Wood)
+	box(m, "BenchBack", F, -2.45, 2.45, 2.35, 2.7, 0.66, 0.82, WOOD, M.Wood)
 end
 
 -- Jardinière longue (bac béton, arbustes, fleurs)
@@ -612,9 +613,9 @@ local function buildBusShelter(m: Model, F: CFrame, seed: number)
 	poster(adFace, Enum.NormalId.Left, ADS[seed % #ADS + 1], 90)
 	local _ = adBox
 	-- banc
-	box(m, "ShelterBench", F, -2.8, 2.6, 1.65, 1.9, 0.6, 1.5, WOOD, M.Wood, true)
+	box(m, "ShelterBench", F, -2.8, 2.6, 1.2, 1.45, 0.6, 1.5, WOOD, M.Wood, true)
 	for _, x in ipairs({ -2.2, 2.0 }) do
-		box(m, "ShelterBenchLeg", F, x - 0.1, x + 0.1, -0.05, 1.7, 1.2, 1.5, frame, M.Metal)
+		box(m, "ShelterBenchLeg", F, x - 0.1, x + 0.1, -0.05, 1.25, 1.2, 1.5, frame, M.Metal)
 	end
 	-- nom de l'arrêt sur le bandeau du toit
 	local strip = box(m, "ShelterName", F, -3.0, 3.0, 7.0, 7.62, -1.35, -1.25, WHITE, M.SmoothPlastic)
@@ -702,14 +703,15 @@ local function buildTerrace(m: Model, F: CFrame, seed: number)
 	for i = -1, 1 do
 		local x = i * 3.2
 		column(m, "TableFoot", F, x, 0, -0.05, 0.12, 0.9, GRAPHITE, M.Metal)
-		column(m, "TableLeg", F, x, 0, 0.1, 2.62, 0.16, GRAPHITE, M.Metal)
-		column(m, "TableTop", F, x, 0, 2.6, 2.72, 1.5, rgb(236, 232, 226), M.Marble, true)
+		-- (v9.9 CITY99, échelle : plateau à 2,3 = ~75 cm, chaises à 1,25 = SitHeight - 0,2 de TownPeople)
+		column(m, "TableLeg", F, x, 0, 0.1, 2.2, 0.16, GRAPHITE, M.Metal)
+		column(m, "TableTop", F, x, 0, 2.18, 2.3, 1.5, rgb(236, 232, 226), M.Marble, true)
 		for _, sz in ipairs({ -1, 1 }) do
 			local c = F * CFrame.new(x, 0, sz * 1.25) * CFrame.Angles(0, sz < 0 and math.pi or 0, 0)
-			box(m, "ChairSeat", c, -0.5, 0.5, 1.55, 1.7, -0.5, 0.5, rgb(160, 110, 70), M.Wood)
-			box(m, "ChairBack", c, -0.5, 0.5, 1.66, 2.9, 0.42, 0.55, rgb(160, 110, 70), M.Wood)
+			box(m, "ChairSeat", c, -0.5, 0.5, 1.1, 1.25, -0.5, 0.5, rgb(160, 110, 70), M.Wood)
+			box(m, "ChairBack", c, -0.5, 0.5, 1.21, 2.6, 0.42, 0.55, rgb(160, 110, 70), M.Wood)
 			for _, lx in ipairs({ -0.42, 0.42 }) do
-				box(m, "ChairFrame", c, lx - 0.05, lx + 0.05, -0.05, 1.58, -0.44, 0.44, GRAPHITE, M.Metal)
+				box(m, "ChairFrame", c, lx - 0.05, lx + 0.05, -0.05, 1.13, -0.44, 0.44, GRAPHITE, M.Metal)
 			end
 		end
 		if i ~= 0 then
@@ -764,9 +766,10 @@ end
 local function buildChessTables(m: Model, F: CFrame, _seed: number)
 	for _, x in ipairs({ -3, 3 }) do
 		local T = F * CFrame.new(x, 0, 0)
-		column(m, "ChessFoot", T, 0, 0, -0.05, 2.55, 1.0, CONCRETE, M.Concrete, true)
-		box(m, "ChessTop", T, -1.4, 1.4, 2.5, 2.8, -1.4, 1.4, rgb(220, 214, 206), M.Marble, true)
-		local board = box(m, "ChessBoard", T, -0.9, 0.9, 2.78, 2.84, -0.9, 0.9, WHITE, M.SmoothPlastic)
+		-- (v9.9 CITY99, échelle : plateau à 2,3, tabourets à 1,45 = NPCModels.SitHeight)
+		column(m, "ChessFoot", T, 0, 0, -0.05, 2.05, 1.0, CONCRETE, M.Concrete, true)
+		box(m, "ChessTop", T, -1.4, 1.4, 2.0, 2.3, -1.4, 1.4, rgb(220, 214, 206), M.Marble, true)
+		local board = box(m, "ChessBoard", T, -0.9, 0.9, 2.28, 2.34, -0.9, 0.9, WHITE, M.SmoothPlastic)
 		local gui = Instance.new("SurfaceGui")
 		gui.Face = Enum.NormalId.Top
 		gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
@@ -787,11 +790,11 @@ local function buildChessTables(m: Model, F: CFrame, _seed: number)
 			end
 		end
 		for _, sz in ipairs({ -1, 1 }) do
-			column(m, "ChessStool", T, 0, sz * 2.3, -0.05, 1.9, 1.1, CONCRETE, M.Concrete, true)
+			column(m, "ChessStool", T, 0, sz * 2.3, -0.05, 1.45, 1.1, CONCRETE, M.Concrete, true)
 		end
 		-- quelques pièces
 		for k = 0, 3 do
-			column(m, "ChessPiece", T, -0.6 + k * 0.4, (k % 2 == 0 and -0.5 or 0.55), 2.82, 3.2, 0.2, k % 2 == 0 and WHITE or INK, M.SmoothPlastic)
+			column(m, "ChessPiece", T, -0.6 + k * 0.4, (k % 2 == 0 and -0.5 or 0.55), 2.32, 2.7, 0.2, k % 2 == 0 and WHITE or INK, M.SmoothPlastic)
 		end
 	end
 end

@@ -1611,8 +1611,10 @@ local function localCharacter(): (Model?, Humanoid?, BasePart?)
 	return character, humanoid, (root and root:IsA("BasePart")) and root or nil
 end
 
+-- (v9.9 PARK99) les sièges des jeux du parc (balançoire, tape-cul, tourniquet,
+-- jeux à ressort : attribut ParkPose) sont animés par ParkPlay seul
 local function isSittable(seat: Instance?): boolean
-	return seat ~= nil and seat:IsA("Seat")
+	return seat ~= nil and seat:IsA("Seat") and seat:GetAttribute("ParkPose") ~= true
 end
 
 -- Autres joueurs assis près de nous (et fin de ceux qui sont partis)

@@ -57,6 +57,7 @@ local RETRY = 1 -- (s) place pas encore répliquée : on réessaie
 local FAR_PLAZA = 260
 local FAR_CAROUSEL = 170
 local FAR_SMALL = 110
+local PIGEONS_LIVE = 60 -- (v9.9) pigeons animés à chaque image à moins de 60 studs
 -- (v9.8) vitesse du manège et des chevaux : FairRides (PLAZA_SPIN, CAROUSEL_BOB_*)
 
 local M = Enum.Material
@@ -618,6 +619,20 @@ function TownPlazaFx.Step(dt: number)
 			stepCarousel(rc, serverNow())
 		end
 	end
+	-- (v9.9, CITY99) pigeons à CHAQUE image quand ils sont près de l'avatar /
+	-- de la caméra (marche + hochement de tête sans saccade) ; sinon 30 Hz
+	local pigeonsLive = false
+	if s.Built and s.Pigeons then
+		local camera = workspace.CurrentCamera
+		local eye = camera and camera.CFrame.Position
+		local near = focusPoint()
+		pigeonsLive = (eye ~= nil and TownPigeons.Near(s.Pigeons, eye, PIGEONS_LIVE)) or (near ~= nil and TownPigeons.Near(s.Pigeons, near, PIGEONS_LIVE))
+		if pigeonsLive then
+			local character = LocalPlayer and LocalPlayer.Character
+			local root = character and character:FindFirstChild("HumanoidRootPart")
+			TownPigeons.Step(s.Pigeons, dt, root and (root :: BasePart).Position or nil)
+		end
+	end
 	s.Acc += dt
 	if s.Acc < STEP then
 		return
@@ -664,7 +679,7 @@ function TownPlazaFx.Step(dt: number)
 		stepBalloons(b, s.Time)
 	end
 	local p = s.Pigeons
-	if p and fromCenter < FAR_SMALL + 40 then
+	if p and not pigeonsLive and fromCenter < FAR_SMALL + 40 then
 		local character = LocalPlayer and LocalPlayer.Character
 		local root = character and character:FindFirstChild("HumanoidRootPart")
 		TownPigeons.Step(p, elapsed, root and (root :: BasePart).Position or nil)

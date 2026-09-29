@@ -22,6 +22,8 @@
 	Pas de service Roblox ici (CFrame seulement) : testable hors jeu.
 ]]
 
+local FairTrack = require(script.Parent.FairTrack)
+
 local FairRides = {}
 
 local TAU = math.pi * 2
@@ -253,6 +255,9 @@ function FairRides.Pose(def: RideDef, t: number, out: { CFrame }): number
 		out[1] = CFrame.new(0, y, 0) * CFrame.Angles(0, rot, 0)
 		return 1
 	end
+	if kind == "Pirate" or kind == "Coaster" or kind == "Ghost" or kind == "Circus" then
+		return FairRides.PoseAnnex(def, t, out)
+	end
 	local progress, speed = FairRides.Cycle(def.Cycle, t)
 	local theta = (progress * def.Speed) % TAU
 	if kind == "Carousel" then
@@ -337,6 +342,8 @@ function FairRides.Seats(kind: string): { SeatSpec }
 		for k = 1, FairRides.SWING_N do
 			table.insert(list, { Group = 1 + k, Local = CFrame.new(0, -0.35, 0), Size = Vector3.new(1.4, 0.16, 1.2) })
 		end
+	elseif kind == "Pirate" or kind == "Coaster" or kind == "Ghost" or kind == "Circus" then
+		list = FairRides.AnnexSeats(kind)
 	elseif kind == "Tower" then
 		for k = 1, FairRides.TOWER_N do
 			local a = (k - 1) / FairRides.TOWER_N * TAU
@@ -358,6 +365,14 @@ function FairRides.Phase(def: RideDef, t: number): (string, number)
 	if def.Kind == "Tower" then
 		local _, _, phase, left = FairRides.TowerState(def.Cycle, t)
 		return phase, left
+	end
+	if def.Kind == "Coaster" or def.Kind == "Ghost" or def.Kind == "Pirate" then
+		local P = FairRides.Period(def.Cycle)
+		local tm = t % P
+		if tm < def.Cycle.Load then
+			return "load", def.Cycle.Load - tm
+		end
+		return "run", P - tm
 	end
 	local _, _, phase, left = FairRides.Cycle(def.Cycle, t)
 	return phase, left

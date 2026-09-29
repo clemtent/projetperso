@@ -37,6 +37,7 @@ Net.Events = {
 	"ArcadeEvent", -- S <-> C (kind, payload) : arcade en temps réel (invitations, coups des duels...)
 	"FriendMailEvent", -- S -> C ("New", mail filtré) : un mail d'ami Roblox arrive (FriendMailService)
 	"WorldEvent", -- S -> C (kind, payload) : 🚶 Dopamine Town (maisons, "j'aime", messages) (WorldService)
+	"MusicEvent", -- C <-> S (kind, ...) : 🎵 scène musicale de la place (notes relayées aux voisins, morceaux, radio) (TownMusic, v9.9)
 }
 
 Net.Functions = {

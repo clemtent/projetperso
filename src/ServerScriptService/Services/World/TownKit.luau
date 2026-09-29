@@ -482,7 +482,7 @@ end
 --     collision (pas de petites pièces qui font trébucher).
 TownKit.BENCH = {
 	Length = 5.4, -- lattes (x)
-	SeatTop = 1.9, -- dessus de l'assise (y)
+	SeatTop = 1.45, -- dessus de l'assise (y) ; v9.9 (CITY99, échelle SCALE99) : 1,9 -> 1,45 (~45 cm, assise réelle)
 	SeatFront = -0.85, -- bord avant de l'assise (z)
 	SeatBack = 0.75, -- bord arrière de l'assise (z)
 	Tilt = 12, -- (°) dossier incliné vers l'arrière
