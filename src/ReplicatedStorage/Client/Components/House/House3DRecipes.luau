@@ -3854,7 +3854,7 @@ R.NeonArcade = function(b, _ctx)
 	b.Box(0, 0, -1, 64, 100, 48, body, M.SmoothPlastic)
 	for index, x in ipairs({ -32 - g / 2, 32 + g / 2 }) do
 		-- liseré en retrait du dos (le dos de la borne touche le mur)
-		local strip = b.Box(x, 6, (g - 2) / 2, g, 90, 48 - 3 * g, index == 1 and NEON_CYAN or NEON_PINK)
+		local strip = b.Box(x, 6, (3 - g) / 2, g, 90, 43 - g, index == 1 and NEON_CYAN or NEON_PINK)
 		b.Neon(strip)
 	end
 	b.Box(0, 44, 26, 62, 8, 14, NAVY)
