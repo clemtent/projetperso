@@ -42,7 +42,7 @@
 	  "enter" { Visit = UserId?, Slot = number? } -> { Plot, Owner, Arrival = "Entrance" | "Door" }
 	  "leave" | "home" | "stand" (détruit son siège)
 	  "visit" UserId | "room" { Owner = UserId, Slot } | "setOpen" "Everyone" | "Friends" | "Nobody"
-	  "like" UserId | "sit" { Owner = UserId, Slot, CFrame } | "houses" (-> liste des instantanés)
+	  "like" UserId | "sit" { Owner = UserId, Slot, CFrame, Kind? } | "houses" (-> liste des instantanés)
 	RemoteEvent WorldEvent (S -> C) :
 	  ("Houses", { instantané, ... }) | ("House", instantané) | ("Gone", UserId)
 	  ("Liked", { Owner, By, Likes }) | ("Toast", texte) | ("Spawned", { Slot?, Owner })
@@ -771,6 +771,13 @@ local function sit(player: Player, argument: any): (boolean, any)
 	seat.CanTouch = false -- personne ne s'assoit dessus par accident
 	seat.Anchored = true
 	seat.CFrame = CFrame.lookAt(position, position + flat.Unit)
+	-- v9.8 🪑 (SEAT98) nature du siège + heure de l'assise : chaque client anime
+	-- les joueurs assis avec le même tirage (SitAnimator), sans nouveau remote
+	local kind = type(argument.Kind) == "string" and argument.Kind or "seat"
+	local kinds = { chair = true, desk = true, stool = true, sofa = true, bed = true, bench = true, seat = true }
+	seat:SetAttribute("SitKind", kinds[kind] and kind or "seat")
+	seat:SetAttribute("SitAt", workspace:GetServerTimeNow())
+	seat:SetAttribute("SitUser", player.UserId)
 	seat.Parent = current.Seats
 	state.Seat = seat
 	local okSit = pcall(seat.Sit, seat, humanoid)

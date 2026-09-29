@@ -551,7 +551,7 @@ test("Config.House : catalogue (ids, catégories, zones, motifs, prix)", functio
 
 	-- Catégories
 	local categoryIds = { "Furniture", "Decor", "Toys", "Plants", "Electronics", "Kitchen", "Doors", "Windows", "Lights", "Pets",
-		"Gaming", "Sports", "Adventure", "Setup" } -- (v9.2, v9.5 : Dopamine Setup)
+		"Gaming", "Sports", "Adventure", "Setup", "Luxury" } -- (v9.2, v9.5 : Dopamine Setup, v9.8 : 💎 Luxe)
 	eq(check, #H.Categories, #categoryIds, "nombre de catégories")
 	for i, category in ipairs(H.Categories) do
 		eq(check, category.Id, categoryIds[i], "catégorie " .. i)
@@ -957,7 +957,105 @@ def house_art_test():
         '\t\tcheck(Config.HouseItemsById[id] ~= nil, "dessin sans objet : " .. id .. " (" .. file .. ")")',
         "\tend",
         "end)",
-    ]) + "\n" + house_garden_art_test() + "\n" + house_surfaces_test() + "\n" + house_service_test() + "\n" + cool92_test() + "\n" + setup95_test()
+    ]) + "\n" + house_garden_art_test() + "\n" + house_surfaces_test() + "\n" + house_service_test() + "\n" + cool92_test() + "\n" + setup95_test() \
+        + "\n" + catalog98_test()
+
+
+# (v9.8) CATALOG98 : les nouveaux objets (moderne, loft, luxe, gamer, sport,
+# nature, tech, objets incroyables, télés XXL) : ids uniques, dessin 2D
+# (Art/Modern98 ou Art/Luxe98), vrai modèle 3D (House3DLuxe, sinon une autre
+# famille House3D*), dessus des meubles (HouseSurfaces), prix et verrous sains
+CATALOG98_IDS = [
+    "SimpleChair", "CoatRack", "BarrelTable", "ModernBarStool", "OakDesk", "MediaConsole", "GlassCoffeeTable", "LoftShelf",
+    "PlatformBed", "Workbench", "SectionalSofa", "Chesterfield", "BookshelfWall", "MarbleIsland",
+    "RoundMirror", "AbstractCanvas", "BigWallMirror", "GrandfatherClock",
+    "EdisonPendant", "ArcFloorLamp", "DopaNeon", "InfinityMirror", "PlanetariumDome", "GrandChandelier",
+    "SnakePlant", "FiddleFig", "BirdOfParadise", "MapleBonsai", "OliveTree", "MossWall",
+    "SmartSpeaker", "CameraDrone", "Printer3D", "ButlerRobot", "StandMixer", "EspressoMachine", "SteelFridge",
+    "HexPanels", "FoosballTable", "AirHockey", "ClawMachine", "TwinArcade", "VRStation", "RacingCockpit",
+    "YogaMat", "PingPongTable", "RowingMachine", "WeightBench", "Treadmill", "ClimbingWall",
+    "VelvetChaise", "MarbleStatue", "KingBed", "PoolTable", "AmethystGeode", "ModernFireplace", "CinemaRecliners",
+    "WhitePiano", "Jacuzzi", "AquariumWall", "RollercoasterModel", "GoldThrone", "IndoorWaterfall", "CapsuleBed",
+    "DragonStatue", "AquariumTunnel",
+    "SetupTVCinemaXXL", "SetupTVWallXXL", "SetupCinemaScreen",
+]
+# meubles à dessus (tables, bureaux, étagères, lits, sièges) : dessus obligatoire
+CATALOG98_TOPS = [
+    "SimpleChair", "BarrelTable", "ModernBarStool", "OakDesk", "MediaConsole", "GlassCoffeeTable", "LoftShelf", "PlatformBed",
+    "Workbench", "SectionalSofa", "Chesterfield", "BookshelfWall", "MarbleIsland", "SteelFridge", "PingPongTable", "PoolTable",
+    "VelvetChaise", "KingBed", "CinemaRecliners", "GoldThrone",
+]
+
+
+def catalog98_test():
+    comp = os.path.join(SRC, "ReplicatedStorage", "Client", "Components", "House")
+    drawn = {}
+    for fname in ("Modern98.luau", "Luxe98.luau"):
+        path = os.path.join(comp, "Art", fname)
+        if os.path.exists(path):
+            for name in re.findall(r"^Art\.(\w+)\s*=\s*function", read(path), re.M):
+                drawn[name] = fname
+    recipes = set()
+    for fname in os.listdir(comp):
+        if fname.startswith("House3D") and fname.endswith(".luau"):
+            recipes.update(re.findall(r"^R\.(\w+)\s*=", read(os.path.join(comp, fname)), re.M))
+    luxe = set(re.findall(r"^R\.(\w+)\s*=", read(os.path.join(comp, "House3DLuxe.luau")), re.M)) if os.path.exists(os.path.join(comp, "House3DLuxe.luau")) else set()
+    surf = read(os.path.join(comp, "HouseSurfaces.luau"))
+    surfaced = set(re.findall(r"^\t(\w+) = \{ \{", surf, re.M))
+    lua = lambda names: "{ " + ", ".join('["%s"] = true' % n for n in sorted(names)) + " }"
+    ids = "{ " + ", ".join('"%s"' % n for n in CATALOG98_IDS) + " }"
+    return r'''
+test("Maison v9.8 : catalogue CATALOG98 (%d objets, %d dessins, %d modèles 3D House3DLuxe)", function(check)
+	local ids, drawn, recipes, luxe, surfaced, tops = %s, %s, %s, %s, %s, %s
+	local seen, count, basic, dream = {}, 0, 0, 0
+	for _, id in ipairs(ids) do
+		check(not seen[id], "id en double " .. id)
+		seen[id] = true
+		local item = Config.HouseItemsById[id]
+		check(item ~= nil, "objet manquant " .. id)
+		if item then
+			count += 1
+			check(drawn[id] == true, "dessin 2D (Art/Modern98 ou Art/Luxe98) " .. id)
+			if item.Category == "Setup" then
+				-- télés XXL : modèle 3D de House3DSetup (Kind TV), réglages pour DESK98
+				check(type(item.Setup) == "table" and item.Setup.Kind == "TV" and type(item.Setup.Scale) == "number" and item.Setup.Scale > 1, "télé XXL : Setup.Scale " .. id)
+				check(item.Size == 160, "télé XXL : taille maximale " .. id)
+			elseif id == "BigWallMirror" then
+				check(recipes[id] == true, "modèle 3D (RECIPES98, House3DObjects) " .. id)
+			else
+				check(luxe[id] == true, "modèle 3D House3DLuxe " .. id)
+			end
+			-- prix sains : le confort n'est jamais plus rentable que les petits objets du début
+			check(item.BaseCost >= 500 * item.Comfort * item.Comfort, "confort trop rentable " .. id .. " (" .. item.BaseCost .. " / " .. item.Comfort .. ")")
+			check(item.CostGrowth >= 1.2, "CostGrowth " .. id)
+			if item.BaseCost < 8000 then basic += 1 end
+			if item.BaseCost >= 5e6 then
+				dream += 1
+				check(Formulas.GetHouseRequiredRebirths(item) >= 5, "objet de rêve sans 5 visites à l'océan : " .. id)
+			end
+			if item.Category == "Luxury" then
+				check(Formulas.GetHouseRequiredRebirths(item) >= 2, "objet de luxe trop tôt : " .. id)
+			end
+			if item.Placement == "Floor" and item.Size > Config.House.TabletopMaxSize then
+				check(not Formulas.CanGoOnFurniture(item), "gros objet posé sur un meuble ? " .. id)
+			end
+		end
+	end
+	for _, id in ipairs(tops) do
+		check(surfaced[id] == true, "meuble sans dessus (HouseSurfaces) : " .. id)
+	end
+	for id in pairs(drawn) do
+		check(seen[id] == true, "dessin CATALOG98 sans objet : " .. id)
+	end
+	for id in pairs(luxe) do
+		check(seen[id] == true, "modèle House3DLuxe sans objet : " .. id)
+	end
+	check(count >= 60, "au moins 60 nouveaux objets : " .. count)
+	check(basic >= 12 and dream >= 10, "du tout simple (" .. basic .. ") à l'incroyable (" .. dream .. ")")
+	local luxury = Config.HouseCategoriesById.Luxury
+	check(luxury ~= nil and luxury.Icon == "💎" and #(Config.HouseItemsByCategory.Luxury or {}) >= 10, "catégorie 💎 Luxe")
+end)''' % (len(CATALOG98_IDS), len(drawn), len(luxe), ids, lua(drawn), lua(recipes), lua(luxe), lua(surfaced),
+            "{ " + ", ".join('"%s"' % n for n in CATALOG98_TOPS) + " }")
 
 
 # (v9.5) SETUPDATA95 : "🖥️ Dopamine Setup" (Config.House, Art/Setup95,
@@ -970,6 +1068,8 @@ SETUP95_IDS = [
     "SetupHiFiBoombox", "SetupHiFiCD", "SetupHiFiVinyl", "SetupHiFiStudio",
     "SetupWindmill", "SetupPress", "SetupBubbleWrap", "SetupLiveStudio",
     "SetupPlantDaisy", "SetupPlantTulip", "SetupPlantRose", "SetupPlantSunflower", "SetupPlantLotus",
+    # (v9.8 CATALOG98) télés XXL + écran de home cinéma (dessins : Art/Luxe98)
+    "SetupTVCinemaXXL", "SetupTVWallXXL", "SetupCinemaScreen",
 ]
 
 
@@ -977,6 +1077,10 @@ def setup95_test():
     comp = os.path.join(SRC, "ReplicatedStorage", "Client", "Components", "House")
     art_path = os.path.join(comp, "Art", "Setup95.luau")
     drawn = re.findall(r"^Art\.(\w+)\s*=\s*function", read(art_path), re.M) if os.path.exists(art_path) else []
+    # (v9.8) les objets Setup dessinés par CATALOG98 (Art/Luxe98) comptent aussi
+    luxe_path = os.path.join(comp, "Art", "Luxe98.luau")
+    if os.path.exists(luxe_path):
+        drawn += [n for n in re.findall(r"^Art\.(Setup\w+)\s*=\s*function", read(luxe_path), re.M)]
     surf = read(os.path.join(comp, "HouseSurfaces.luau"))
     surfaced = re.findall(r"^\t(Setup\w+) = \{ \{", surf, re.M)
     lua = lambda names: "{ " + ", ".join('"%s"' % n for n in names) + " }"
@@ -1039,6 +1143,7 @@ test("Maison v9.5 : Dopamine Setup (%d objets, %d dessins Setup95)", function(ch
 		SetupNewsTV = { "NewsTicker", 0 },
 		SetupPlantDaisy = { "Garden", 0 }, SetupPlantTulip = { "Garden", 0 }, SetupPlantRose = { "Garden", 1 }, SetupPlantSunflower = { "Garden", 2 },
 		SetupPlantLotus = { "Garden", 3 },
+		SetupTVCinemaXXL = { "DVD", 5 }, SetupTVWallXXL = { "DVD", 5 }, SetupCinemaScreen = { "DVD", 8 },
 	}
 	for id, gate in pairs(gates) do
 		local item = I[id]
@@ -1052,8 +1157,8 @@ test("Maison v9.5 : Dopamine Setup (%d objets, %d dessins Setup95)", function(ch
 	-- prix strictement croissants avec le palier dans chaque famille
 	for _, family in ipairs({
 		{ "SetupDeskSolo", "SetupDeskDuo", "SetupDeskTrio", "SetupDeskUltra" },
-		{ "SetupTVSmall", "SetupTVMedium", "SetupTVLarge", "SetupTVGiant" },
-		{ "SetupTVWallMedium", "SetupTVWallLarge", "SetupTVWallGiant" },
+		{ "SetupTVSmall", "SetupTVMedium", "SetupTVLarge", "SetupTVGiant", "SetupTVCinemaXXL" },
+		{ "SetupTVWallMedium", "SetupTVWallLarge", "SetupTVWallGiant", "SetupTVWallXXL", "SetupCinemaScreen" },
 		{ "SetupHiFiBoombox", "SetupHiFiCD", "SetupHiFiVinyl", "SetupHiFiStudio" },
 		{ "SetupPlantDaisy", "SetupPlantTulip", "SetupPlantRose", "SetupPlantSunflower", "SetupPlantLotus" },
 	}) do
@@ -1066,7 +1171,8 @@ test("Maison v9.5 : Dopamine Setup (%d objets, %d dessins Setup95)", function(ch
 		end
 	end
 	-- le support mural coûte un peu plus que la télé sur pied
-	for _, pair in ipairs({ { "SetupTVMedium", "SetupTVWallMedium" }, { "SetupTVLarge", "SetupTVWallLarge" }, { "SetupTVGiant", "SetupTVWallGiant" } }) do
+	for _, pair in ipairs({ { "SetupTVMedium", "SetupTVWallMedium" }, { "SetupTVLarge", "SetupTVWallLarge" }, { "SetupTVGiant", "SetupTVWallGiant" },
+		{ "SetupTVCinemaXXL", "SetupTVWallXXL" } }) do
 		check(I[pair[2]].Cost >= I[pair[1]].Cost, "télé murale >= sur pied " .. pair[2])
 	end
 	-- prix raisonnables : au moins le prix de l'amélioration à 0 visite, confort
@@ -2241,6 +2347,92 @@ do
 		end
 		check(GS.Stage({ Flower = "", PlantedAt = 0, ReadyAt = 0 }, 10) == "Empty", "vide")
 	end)
+
+	-- v9.8 (GARDEN98) : jardin libre, agrandissements, objets de jardin
+	test("GardenSnapshot v9.8 : objets de jardin et agrandissements (Config.Garden)", function(check)
+		local ids = {}
+		for _, piece in ipairs(Config.Garden.Pieces) do
+			check(not ids[piece.Id], "id en double : " .. piece.Id)
+			ids[piece.Id] = true
+			check(type(piece.Name) == "string" and type(piece.Icon) == "string", "nom / icône : " .. piece.Id)
+			check(piece.Cost > 0 and piece.W > 0 and piece.D > 0 and piece.Max >= 1, "prix / taille / Max : " .. piece.Id)
+			check(GS.PieceCost(piece, 0) == piece.Cost and GS.PieceCost(piece, 3) > GS.PieceCost(piece, 2), "prix +15 % par exemplaire : " .. piece.Id)
+		end
+		local last = 0
+		for index, info in ipairs(Config.Garden.Expansion) do
+			check(info.Level == index and info.Cost > last, "niveaux et prix croissants : " .. tostring(info.Name))
+			last = info.Cost
+			check(GS.DecorSlots(index) > GS.DecorSlots(index - 1) and GS.PieceCap(index) > GS.PieceCap(index - 1), "plus de places au niveau " .. index)
+		end
+		check(GS.DecorSlots(0) == Config.House.GardenSlots, "niveau 0 : places de déco de toujours")
+		check(GS.Level({ Garden = { Level = 99 } }) == GS.MAX_LEVEL and GS.Level({ Garden = { Level = -3 } }) == 0 and GS.Level({ Garden = { Level = 0 / 0 } }) == 0, "niveau borné")
+		local owned = GS.OwnedPieces({ Garden = { Pieces = { TerracottaPot = 3.7, Nope = 2, Gazebo = 50, RoseBush = -1 } } })
+		check(owned.TerracottaPot == 3 and owned.Nope == nil and owned.Gazebo == 1 and owned.RoseBush == nil, "objets possédés nettoyés")
+	end)
+
+	test("GardenSnapshot v9.8 : disposition vérifiée (zones, couloirs, possession, maximum)", function(check)
+		local data = { Upgrades = { Garden = 1 }, House = { Size = "Studio", Garden = { "GardenGnome" } },
+			Garden = { Level = 0, Pieces = { TerracottaPot = 2 }, Layout = {
+				B1 = { X = -10, D = 40, R = 90 }, -- ok
+				B2 = { X = 0, D = 70, R = 0 }, -- hors de la parcelle
+				B9 = { X = 5, D = 40, R = 0 }, -- parterre pas possédé
+				["D:GardenGnome"] = { X = -12, D = -10, R = 45 }, -- ok
+				["D:Snowman"] = { X = -20, D = -10, R = 0 }, -- pas sortie
+				["P:TerracottaPot:1"] = { X = 20, D = 44, R = 7 }, -- ok (R arrondi)
+				["P:TerracottaPot:3"] = { X = 22, D = 44, R = 0 }, -- 3e pot pas possédé
+				["P:Gazebo:1"] = { X = 0, D = 44, R = 0 }, -- pas possédé
+				["F:Sign"] = { X = 30, D = 34, R = 345 }, -- ok
+				["F:Windmill"] = { X = 20, D = 34, R = 0 }, -- pas de moulin
+				["F:KoiPond"] = { X = 20, D = 34, R = 0 }, -- bonus d'un niveau pas acheté
+				["P:TerracottaPot:2"] = { X = 60, D = 44, R = 0 }, -- hors de la zone du niveau 0
+				hack = { X = 0, D = 0 },
+			} } }
+		local snap = GS.From(data)
+		local L = snap.Layout
+		check(L.B1 and L.B1.R == 90, "parterre déplacé gardé")
+		check(L["D:GardenGnome"] and L["D:GardenGnome"].R == 45, "déco gardée")
+		check(L["P:TerracottaPot:1"] and L["P:TerracottaPot:1"].R == 0, "pot gardé, rotation au multiple de 15")
+		check(L["F:Sign"] ~= nil, "panneau gardé")
+		for _, key in ipairs({ "B2", "B9", "D:Snowman", "P:TerracottaPot:3", "P:Gazebo:1", "F:Windmill", "F:KoiPond", "P:TerracottaPot:2", "hack" }) do
+			check(L[key] == nil, "refusé : " .. key)
+		end
+		check(jsonSafe(snap), "JSON")
+		check(ser(GS.Sanitize(snap)) == ser(snap), "Sanitize(From(x)) == From(x)")
+		-- niveau 2 : toute la largeur de la parcelle
+		data.Garden.Level = 2
+		check(GS.From(data).Layout["P:TerracottaPot:2"] ~= nil, "niveau 2 : zone élargie")
+		-- couloir de la porte d'entrée toujours libre (objets non plats)
+		local corridors = GS.Corridors("Studio")
+		local lane = corridors[1]
+		local x = (lane[1] + lane[2]) / 2
+		check(not GS.Fits(2, "Studio", "D:GardenGnome", x, -8, 0), "allée de la porte d'entrée libre")
+		check(GS.Fits(2, "Studio", "P:SteppingStones:1", x, -8, 0), "pas japonais (plats) permis sur l'allée")
+		-- maximum d'objets posés au niveau 0
+		local many = { Garden = { Level = 0, Pieces = { TerracottaPot = 20 }, Layout = {} }, House = { Size = "Studio" } }
+		for k = 1, 20 do
+			many.Garden.Layout["P:TerracottaPot:" .. k] = { X = -38 + k * 3.6, D = 50, R = 0 }
+		end
+		local n = 0
+		for _ in pairs(GS.From(many).Layout) do n += 1 end
+		check(n == GS.PieceCap(0), "objets posés <= maximum du niveau (" .. n .. ")")
+	end)
+
+	test("GardenSnapshot v9.8 : places par défaut (Arrange) stables et dans le jardin", function(check)
+		for _, sizeId in ipairs({ "Studio", "Apartment", "Loft", "Mansion" }) do
+			for _, count in ipairs({ 3, 5, 8 }) do
+				local decor = {}
+				for index = 1, 12 do decor[index] = Config.House.GardenDecor[index].Id end
+				local state = { Unlocked = true, Count = count, Max = 8, Windmill = true, Plots = {}, Level = 3, Size = sizeId, Decor = decor, Layout = {} }
+				local a, b = GS.Arrange(state), GS.Arrange(state)
+				check(ser(a) == ser(b), "stable : " .. sizeId)
+				for _, entry in ipairs(a) do
+					if string.sub(entry.Key, 1, 1) == "B" or string.sub(entry.Key, 1, 2) == "F:" then
+						check(GS.Fits(3, sizeId, entry.Key, entry.X, entry.D, entry.R), sizeId .. " " .. count .. " : " .. entry.Key .. " dans le jardin")
+					end
+				end
+			end
+		end
+	end)
 end
 """
 
@@ -2451,6 +2643,18 @@ do
 			minHead = math.min(minHead, ceiling - L.StairHeight(d))
 		end
 		check(minHead >= 7, "hauteur libre sur l'escalier " .. minHead)
+		-- (v9.8 HOUSE98) "la tête touche" : portes >= 6 x 9, >= 8 studs libres sur l'escalier
+		check(minHead >= 8, "v9.8 : hauteur libre sur l'escalier >= 8 (" .. minHead .. ")")
+		check(L.DOOR_W >= 6 and L.DOOR_H >= 9 and L.PASS_W >= 6 and L.PASS_H >= 9, "v9.8 : portes et passages >= 6 x 9")
+		check(L.PASS_H <= L.WALL_H - 2 and L.DOOR_H <= L.WALL_H - 2, "v9.8 : linteaux sous le plafond")
+		for _, size in ipairs(SIZES) do
+			local h0, h1 = L.HallSpan(size)
+			local bx = L.BackDoorX(size)
+			check(bx - L.DOOR_W / 2 >= h0 and bx + L.DOOR_W / 2 <= h1, size.Id .. " : porte de derrière dans la cage")
+			check(L.BackDoorD(size) > L.Dims(size).Depth and L.BackStepsD(size) > L.BackDoorD(size) + 3, size.Id .. " : perron de derrière")
+			local a, b, c, d = L.BackWindowRect(size, 0.46)
+			check(b - a > 3 and d - c > 5 and c > 1 and d < L.WALL_H - 1 and a > -L.RoomWidth(size) / 2 + 0.5, size.Id .. " : vraie fenêtre du fond")
+		end
 		check(L.STAIR_D1 <= L.WALL_T + L.DEPTH - 2, "palier du haut")
 		for _, n in ipairs({ 4, 8, 12 }) do
 			local r = L.PlotRadius(n)
@@ -2733,6 +2937,107 @@ def economy_test():
     return sim_loader() + ECONOMY_TESTS
 
 
+FOOD_TESTS = r"""
+do
+	local FR = req("FoodRules")
+	local Sim = req("EconomySim")
+	local near = function(a, b, eps) return math.abs(a - b) <= (eps or 1e-6) end
+
+	test("Nourriture v9.8 : Config.Food (aliments, boosts, bouchées, modèles 3D)", function(check)
+		local F = Config.Food
+		check(type(F) == "table" and #F.Items >= 9, "au moins 9 aliments")
+		check(F.MaxMultiplier <= 2 and F.MaxSeconds <= 300 and F.PriceFactor >= 0.6 and F.PriceFactor < 1, "plafonds sages")
+		local ids = {}
+		for _, food in ipairs(F.Items) do
+			check(not ids[food.Id], "aliment en double " .. tostring(food.Id))
+			ids[food.Id] = true
+			check(Config.FoodById[food.Id] == food, "FoodById " .. tostring(food.Id))
+			check(type(food.Name) == "string" and type(food.Icon) == "string" and type(food.Desc) == "string", "textes " .. food.Id)
+			check(food.Multiplier > 1 and food.Multiplier <= F.MaxMultiplier, "multiplicateur " .. food.Id)
+			check(food.Duration >= 30 and food.Duration <= F.MaxSeconds, "durée " .. food.Id)
+			check(food.Bites >= 2 and food.Bites <= 6 and math.floor(food.Bites) == food.Bites, "bouchées " .. food.Id)
+			-- valeur du boost comparable d'un aliment à l'autre (40..90 s de production)
+			local v = FR.BoostSeconds(food)
+			check(v >= 40 and v <= 90.001, "valeur du boost " .. food.Id .. " = " .. v)
+			-- modèle 3D : une recette, et des bouchées Bite1..Bite(n-1)
+			local body = FOOD_MODELS_SRC:match("RECIPES%." .. food.Id .. " = function%(add%)(.-)\nend")
+			check(body ~= nil, "recette 3D (FoodModels) " .. food.Id)
+			if body and not body:find('"Bite" %.%.') then
+				for k = 1, food.Bites - 1 do
+					check(body:find('"Bite' .. k .. '"', 1, true) ~= nil, food.Id .. " : bouchée Bite" .. k)
+				end
+				check(body:find('"Bite' .. food.Bites .. '"', 1, true) == nil, food.Id .. " : trop de bouchées")
+			end
+		end
+	end)
+
+	test("Nourriture v9.8 : prix (secondes de production) et cumul des boosts (plafonds)", function(check)
+		local F = Config.Food
+		local ice = Config.FoodById.IceCream
+		local shake = Config.FoodById.Milkshake
+		local pop = Config.FoodById.Popcorn
+		-- prix
+		eq(check, FR.Price(ice, 0, 0, 1), F.MinPrice, "prix minimum")
+		local p = FR.Price(ice, 1000, 0, 1)
+		check(p >= F.PriceFactor * 45 * 1000 and p <= F.PriceFactor * 45 * 1000 * 1.1, "0,7 x 45 s de 1 000/s : " .. p)
+		eq(check, FR.Price(ice, 2000, 0, 2), p, "le boost nourriture actif ne rend pas plus cher")
+		check(FR.Price(ice, 0 / 0, 1 / 0, -3) == F.MinPrice, "valeurs folles -> prix minimum")
+		check(FR.Price(ice, 0, 100, 1) == FR.Price(ice, 100 * Config.Rewards.EstimatedClicksPerSecond, 0, 1), "les clics comptent")
+		-- cumul
+		local m, s = FR.Stack(1, 0, ice)
+		check(m == 1.5 and s == 90, "1er aliment : x1,5 pendant 90 s")
+		m, s = FR.Stack(1.5, 60, shake)
+		check(m == 2 and near(s, 60 + 60 * 0.5 / 1), "plus fort : remplace, le reste est converti : " .. s)
+		m, s = FR.Stack(2, 30, ice)
+		check(m == 2 and near(s, 30 + 90 * 0.5 / 1), "moins fort : prolonge (converti) : " .. s)
+		m, s = FR.Stack(1.3, 290, pop)
+		check(m == 1.3 and s == F.MaxSeconds, "jamais plus de MaxSeconds")
+		m, s = FR.Stack(5, 100, ice)
+		check(m <= F.MaxMultiplier or m == 5, "multiplicateur existant gardé (le serveur le borne au chargement)")
+		m, s = FR.Stack(1, 0, { Multiplier = 9, Duration = 999 })
+		check(m == F.MaxMultiplier and s == F.MaxSeconds, "aliment trop fort -> borné")
+		m, s = FR.Stack(1.5, 30, { Multiplier = 0 / 0, Duration = 50 })
+		check(m == 1.5 and s == 30, "aliment invalide -> rien ne change")
+		-- en mangeant sans arrêt : gain moyen net borné
+		check(FR.MaxNetMultiplier() <= 1.35, "gain net max " .. FR.MaxNetMultiplier())
+	end)
+
+	test("Nourriture v9.8 : manger sans arrêt ne casse pas le rythme des parties", function(check)
+		local active = Sim.RunMinutes(Sim.Run("Active", { MaxHours = 40, MaxRebirths = 5 }))
+		Config.GamePassesById.__FoodTest = { Id = "__FoodTest", Multiplier = FR.MaxNetMultiplier() }
+		local ok, result = pcall(Sim.Run, { Name = "Actif + nourriture sans arrêt", ClicksPerSecond = 6, ClickDuty = 0.75, Passes = { "__FoodTest" }, AutoClicks = 0 },
+			{ MaxHours = 40, MaxRebirths = 5 })
+		Config.GamePassesById.__FoodTest = nil
+		check(ok, tostring(result))
+		if not ok then
+			return
+		end
+		local food = Sim.RunMinutes(result)
+		local parts = {}
+		for n = 1, 5 do
+			table.insert(parts, "R" .. n .. "=" .. (food[n] and tostring(math.floor(food[n] + 0.5)) or "-"))
+		end
+		print("    nourriture sans arrêt (x" .. FR.MaxNetMultiplier() .. " net), parties (min) : " .. table.concat(parts, " "))
+		for n = 1, 5 do
+			check(food[n] ~= nil and active[n] ~= nil and food[n] >= active[n] * 0.7, "R" .. n .. " : partie trop courte avec la nourriture")
+		end
+		check(food[5] ~= nil and food[1] ~= nil and food[5] >= food[1] * 1.3, "la courbe reste croissante")
+	end)
+end
+"""
+
+
+def food_test():
+    """Tests FAIR98 : nourriture (Config.Food, Shared/FoodRules, recettes FoodModels),
+    et un joueur qui mange sans arrêt garde un rythme de parties sain (simulateur)."""
+    rules = read(os.path.join(SHARED, "FoodRules.luau"))
+    models = read(os.path.join(SHARED, "FoodModels.luau"))
+    if "]=====]" in models:
+        raise ValueError("délimiteur ]=====] interdit dans FoodModels.luau")
+    return ('loaders["FoodRules"] = function()\nlocal require = req\n%s\nend\n' % rules
+            + "local FOOD_MODELS_SRC = [=====[%s]=====]\n" % models + FOOD_TESTS)
+
+
 def run_sim():
     """python3 tests/run_tests.py --sim [--robux | --whale | --sessions | --all] :
     lance le simulateur d'économie avec les vrais modules Shared et affiche le rapport."""
@@ -2759,6 +3064,154 @@ def run_sim():
     return proc.returncode
 
 
+# 🎮 DESK98 (v9.8) : "Desk Runner" jouable au bureau gamer. Simulation pure
+# (Shared/DeskRunnerLogic) rejouée par le serveur (Arcade/SoloGames, handler
+# caché "DeskRunner"), comme le Snake : même score client / serveur, partie
+# jamais injouable, étoiles, partie trop rapide refusée, récompense de l'arcade.
+DESK_RUNNER_TESTS = r"""
+do
+	local function load(src, name)
+		local fn, err = loadstring(src, "=" .. name)
+		assert(fn, err)
+		return fn()
+	end
+	local L = load(DESKRUNNER_SRC, "DeskRunnerLogic")
+	local Logic = load(SOLO_LOGIC_SRC, "Solo_Logic")
+	local ArcadeCfg = load(DR_ARCADE_SRC, "ArcadeConfig")
+	local Solo = load(SOLO_GAMES_SRC, "SoloGames")
+	Solo._Inject(Logic, ArcadeCfg)
+	Solo._InjectRunner(L)
+
+	-- joueur automatique : va vers la voie libre de trains le plus longtemps, saute / roule
+	local function trainFree(s, lane)
+		local best = 999
+		for _, o in ipairs(s.Obstacles) do
+			local rel = o.P - s.Distance
+			if o.Lane == lane and o.Kind == "Train" and rel + o.Len > -0.5 and rel < best then best = math.max(rel, -0.1) end
+		end
+		return best
+	end
+	local function near(s, lane, kind, horizon)
+		for _, o in ipairs(s.Obstacles) do
+			local rel = o.P - s.Distance
+			if o.Lane == lane and o.Kind == kind and rel > -0.3 and rel < horizon then return rel end
+		end
+		return nil
+	end
+	local function play(seed, maxTicks, lazy)
+		local s = L.New(seed)
+		local inputs = {}
+		while s.Alive and s.Tick < maxTicks do
+			local act = nil
+			if not lazy then
+				local cur = trainFree(s, s.Lane)
+				if cur < s.Speed * 0.6 then
+					local bestLane, bestV = s.Lane, cur
+					for _, l in ipairs({ -1, 0, 1 }) do
+						local ok = true
+						local step = l > s.Lane and 1 or -1
+						for m = s.Lane + step, l, step do if trainFree(s, m) < 1.5 then ok = false end end
+						local v = trainFree(s, l)
+						if ok and v > bestV then bestLane, bestV = l, v end
+					end
+					if bestLane < s.Lane then act = 1 elseif bestLane > s.Lane then act = 2 end
+				end
+				if not act then
+					if near(s, s.Lane, "Low", s.Speed * 0.12 + 0.6) and s.JumpTick < 0 then act = 3 end
+					if near(s, s.Lane, "High", s.Speed * 0.12 + 0.6) and s.RollTick <= 3 then act = 4 end
+				end
+			end
+			if act then
+				table.insert(inputs, s.Tick + 1)
+				table.insert(inputs, act)
+				L.Input(s, act)
+			end
+			L.Step(s)
+		end
+		return s, inputs
+	end
+
+	test("DeskRunner : simulation déterministe, rejeu identique, jamais injouable", function(check)
+		for seed = 1, 12 do
+			local s, inputs = play(seed * 104729, 3600, false)
+			check(s.Alive, "graine " .. seed .. " : le bot survit 2 min (" .. tostring(s.Crash) .. " au pas " .. s.Tick .. ")")
+			local score, coins, _, played = L.Replay(seed * 104729, inputs, s.Tick)
+			eq(check, score, s.Score, "rejeu : même score (graine " .. seed .. ")")
+			eq(check, coins, s.Coins, "rejeu : mêmes pièces")
+			eq(check, played, s.Tick, "rejeu : mêmes pas")
+			check(s.Coins > 10, "des pièces ramassées (" .. s.Coins .. ")")
+		end
+		local lazy = play(777, 3600, true)
+		check(not lazy.Alive and lazy.Tick < 3600, "sans rien faire : on finit par tomber")
+		-- journal truqué : action inconnue / pas dans le désordre -> ignorés
+		local score = L.Replay(5, { 10, 9, 5, 1, 3, 2 }, 30)
+		check(type(score) == "number" and score >= 0, "journal abîmé toléré")
+		eq(check, (L.Stars(0)), 0, "0 étoile à 0")
+		eq(check, (L.Stars(2500)), 3, "3 étoiles à 2500")
+		local st = Logic.Stars("DeskRunner", Logic.Games.DeskRunner.Difficulties.Normal, { Score = 1200 })
+		eq(check, st, 2, "Solo_Logic.Stars DeskRunner")
+		check(ArcadeCfg.GamesById.DeskRunner ~= nil and ArcadeCfg.GamesById.DeskRunner.Hidden == true, "ArcadeConfig : DeskRunner (caché)")
+		for _, entry in ipairs(ArcadeCfg.SoloGames) do check(entry.Id ~= "DeskRunner", "DeskRunner absent de la liste Solo (panneau)") end
+		for _, id in ipairs(Logic.GameOrder) do check(id ~= "DeskRunner", "DeskRunner absent de GameOrder") end
+	end)
+
+	test("DeskRunner : SoloGames (graine serveur, rejeu, durée minimale, récompense)", function(check)
+		local clock = 1000
+		local rewarded, plays = 0, 0
+		local api = {
+			Now = function() return clock end,
+			Config = ArcadeCfg,
+			RewardWin = function(_, gameId) rewarded += 1 return { Tickets = ArcadeCfg.GamesById[gameId].Tickets, Trophies = 1, Dopamine = 5, Capped = false } end,
+			CountPlay = function() plays += 1 end,
+			GrantTickets = function(_, n) return n end,
+			GrantDopamineSeconds = function(_, s) return s end,
+			T = function(_, text) return text end,
+		}
+		local player, data = {}, {}
+		local ok, reply = Solo.Handle(player, data, "solo:start", { Game = "DeskRunner", Difficulty = "Normal" }, api)
+		check(ok and type(reply) == "table" and type(reply.Seed) == "number" and reply.Token ~= nil, "solo:start -> graine + jeton")
+		if not ok then return end
+		local s, inputs = play(reply.Seed, 2400, false)
+		-- trop vite (80 s de jeu annoncées en 1 s) : refusé
+		clock += 1
+		local ok2, result = Solo.Handle(player, data, "solo:finish", { Token = reply.Token, Inputs = inputs, Ticks = s.Tick }, api)
+		check(ok2 and result.Rejected ~= nil and result.Tickets == 0, "partie trop rapide : refusée")
+		-- partie honnête : rejouée, récompensée
+		ok, reply = Solo.Handle(player, data, "solo:start", { Game = "DeskRunner", Difficulty = "Normal" }, api)
+		s, inputs = play(reply.Seed, 2400, false)
+		clock += s.Tick / 30 + 2
+		local ok3, result3 = Solo.Handle(player, data, "solo:finish", { Token = reply.Token, Inputs = inputs, Ticks = s.Tick }, api)
+		check(ok3 and result3.Rejected == nil, "partie honnête acceptée")
+		eq(check, result3.Score, s.Score, "score du serveur = score du client")
+		check(result3.Stars >= 1 and result3.Tickets > 0 and rewarded == 1, "récompense de l'arcade (étoiles " .. tostring(result3.Stars) .. ")")
+		check(data.Arcade.Solo.Best["DeskRunner:Normal"] == s.Score, "record gardé")
+		-- score annoncé ignoré : seul le rejeu compte
+		ok, reply = Solo.Handle(player, data, "solo:start", { Game = "DeskRunner", Difficulty = "Normal" }, api)
+		clock += 100
+		local ok4, result4 = Solo.Handle(player, data, "solo:finish", { Token = reply.Token, Inputs = {}, Ticks = 60, Score = 999999 }, api)
+		check(ok4 and result4.Score < 200 and result4.Stars == 0, "score inventé ignoré (" .. tostring(result4.Score) .. ")")
+	end)
+end
+"""
+
+
+def desk_runner_test():
+    """Tests DESK98 : DeskRunnerLogic + handler DeskRunner de SoloGames."""
+    sources = [
+        ("DESKRUNNER_SRC", os.path.join(SHARED, "DeskRunnerLogic.luau")),
+        ("SOLO_LOGIC_SRC", os.path.join(SRC, "ReplicatedStorage", "Client", "Minigames", "Solo_Logic.luau")),
+        ("DR_ARCADE_SRC", os.path.join(SHARED, "ArcadeConfig.luau")),
+        ("SOLO_GAMES_SRC", os.path.join(SRC, "ServerScriptService", "Services", "Arcade", "SoloGames.luau")),
+    ]
+    lines = []
+    for name, path in sources:
+        body = read(path)
+        if "]=====]" in body:
+            raise ValueError("délimiteur ]=====] interdit dans " + path)
+        lines.append("local %s = [=====[%s]=====]" % (name, body))
+    return "\n".join(lines) + "\n" + DESK_RUNNER_TESTS
+
+
 def main():
     if not os.path.exists(LUAU):
         print("FAIL : Luau CLI introuvable (%s)" % LUAU)
@@ -2766,7 +3219,9 @@ def main():
     if "--sim" in sys.argv:
         return run_sim()
     bundle = build_bundle(config_key_test() + "\n" + lang_test() + "\n" + house_art_test() + "\n" + arcade_shop_test() + "\n" + friend_mail_test()
-                          + "\n" + economy_test() + "\n" + world_layout_test() + "\n" + garden_snapshot_test() + "\n" + garage_test())
+                          + "\n" + economy_test() + "\n" + world_layout_test() + "\n" + garden_snapshot_test() + "\n" + garage_test()
+                          + "\n" + desk_runner_test()
+                          + "\n" + food_test())
     with tempfile.NamedTemporaryFile("w", suffix=".luau", delete=False, encoding="utf-8") as f:
         f.write(bundle)
         path = f.name

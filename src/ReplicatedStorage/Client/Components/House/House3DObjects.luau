@@ -139,22 +139,63 @@ R.PhotoString = function(b, _ctx)
 	b.Footprint(100, 6, 100)
 end
 
+-- (v9.8) VRAI miroir : cadre en cœur (deux épaisseurs), glace en cœur
+-- réfléchissante et, au centre, la surface "Mirror" (ovale) taguée pour les
+-- reflets en temps réel de REALISM98 ; perles autour, attache
 R.HeartMirror = function(b, _ctx)
 	local frame = vivid(b, 1, rgb(255, 150, 190))
+	local g = House3DKit.Gap(b, 0.8)
 	House3DKit.Heart(b, 0, 50, 0, 90, 4, frame, M.SmoothPlastic)
-	-- miroir : un cœur plus petit, réfléchissant
+	House3DKit.Heart(b, 0, 50.4, 4, 82, g, lighten(frame, 0.25), M.SmoothPlastic)
 	local before = #b.Parts
-	House3DKit.Heart(b, 0, 51, 3, 72, 2, rgb(220, 236, 250), M.Glass)
+	House3DKit.Heart(b, 0, 51, 4 + g, 72, 2, rgb(214, 228, 238), M.Glass)
 	for index = before + 1, #b.Parts do
-		b.Parts[index].Reflectance = 0.35
+		b.Parts[index].Reflectance = 0.45
+		b.Parts[index].CastShadow = false
 	end
-	b.Egg(-14, 62, 5.5, 14, 8, 1, WHITE, M.SmoothPlastic)
+	House3DKit.Mirror(b, 0, 53, 6 + g + 0.4, 44, 40, "Oval")
 	for index, p in ipairs(House3DKit.HeartPoints(0, 50, 5, 90, 14)) do
 		if index <= 14 then
-			b.Ball(p[1], p[2], 5, 5, index % 2 == 0 and GOLD or WHITE, M.SmoothPlastic)
+			b.Ball(p[1], p[2], 5, 5, index % 2 == 0 and GOLD or WHITE, M.SmoothPlastic).Reflectance = index % 2 == 0 and 0.3 or 0.1
 		end
 	end
+	b.Ball(0, 90, 2, 5, GOLD, M.Metal)
 	b.Footprint(90, 8, 90)
+end
+
+-- (v9.8) Grand miroir mural en arche : moulure dorée en relief (montants,
+-- arc, filet intérieur), glace pleine hauteur taguée "Mirror" (rectangle +
+-- arc réfléchissant), tablette basse, attaches
+R.BigWallMirror = function(b, _ctx)
+	local frame = vivid(b, 1, rgb(230, 190, 110))
+	local g = House3DKit.Gap(b, 0.8)
+	local w, y0, yArc = 56, 6, 64
+	-- glace : partie droite = surface Mirror (Rect), arc = verre réfléchissant
+	House3DKit.Mirror(b, 0, (y0 + yArc) / 2, 2 + g, w, yArc - y0, "Rect")
+	local arc = b.CylZ(0, yArc, 2 - g / 2, w, g, rgb(214, 228, 238), M.Glass)
+	arc.Reflectance = 0.45
+	arc.CastShadow = false
+	b.Box(0, y0, 0.5, w + 2, yArc - y0, 1, darken(frame, 0.5), M.SmoothPlastic)
+	-- cadre mouluré
+	for _, side in ipairs({ -1, 1 }) do
+		b.Box(side * (w / 2 + 3), y0 - 2, 2, 6, yArc - y0 + 2, 6, frame, M.Metal)
+		b.Box(side * (w / 2 + 0.6), y0, 3.4 + g, 1.2, yArc - y0, 2, lighten(frame, 0.25), M.Metal)
+	end
+	local points = {}
+	for index = 0, 12 do
+		local a = index / 12 * math.pi
+		table.insert(points, { math.cos(a) * (w / 2 + 3), yArc + math.sin(a) * (w / 2 + 3), 5 })
+	end
+	for _, part in ipairs(House3DKit.Path(b, points, 6, frame, M.Metal)) do
+		part.Reflectance = 0.25
+	end
+	b.Box(0, y0 - 6, 3, w + 14, 5, 8, frame, M.Metal)
+	b.Box(0, y0 - 7, 5, w + 10, 2, 8, darken(frame, 0.15), M.Metal)
+	House3DKit.StarSoft(b, 0, yArc + w / 2 + 3, 6, 4, 2, lighten(frame, 0.2), M.Metal)
+	for _, x in ipairs({ -w / 2 - 3, w / 2 + 3 }) do
+		b.Ball(x, y0 - 4, 7, 5, lighten(frame, 0.2), M.Metal).Reflectance = 0.3
+	end
+	b.Footprint(w + 14, 10, 100)
 end
 
 R.GlowStars = function(b, _ctx)
@@ -251,7 +292,8 @@ end
 R.ButterflyFrame = function(b, _ctx)
 	local frame = vivid(b, 1, rgb(210, 170, 110))
 	local wing = { vivid(b, 2, rgb(120, 190, 255)), vivid(b, 3, rgb(255, 150, 200)) }
-	House3DKit.Frame(b, 0, 8, 3, 76, 84, 7, 6, frame, M.Wood)
+	local g = House3DKit.Gap(b, 0.8)
+	House3DKit.Frame(b, 0, 8, (6 + g) / 2, 76, 84, 7, 6 + g, frame, M.Wood)
 	b.Box(0, 12, 1, 66, 76, 1, rgb(255, 250, 240), M.SmoothPlastic)
 	for _, side in ipairs({ -1, 1 }) do
 		b.EggR(CFrame.new(side * 12, 58, 2.5) * CFrame.Angles(0, 0, side * -0.4), 22, 28, 1.5, wing[1], M.SmoothPlastic)
@@ -260,8 +302,9 @@ R.ButterflyFrame = function(b, _ctx)
 		b.Tube(0, 66, 3, side * 8, 78, 3, 0.8, INK, M.SmoothPlastic)
 	end
 	b.EggR(CFrame.new(0, 50, 3), 5, 34, 3, INK, M.SmoothPlastic)
-	local glass = b.Box(0, 12, 6.2, 66, 76, 0.4, GLASS, M.Glass)
+	local glass = b.Box(0, 12, 4.3, 66, 76, 0.4, GLASS, M.Glass)
 	glass.Transparency = 0.85
+	glass.Reflectance = 0.15
 	b.Footprint(76, 8, 100)
 end
 
@@ -367,14 +410,14 @@ R.Pinata = function(b, _ctx)
 		end
 	end
 	b.Box(22, 60, 8, 14, 22, 14, colors[1], M.Fabric)
-	b.Box(26, 72, 8, 16, 12, 16, colors[2], M.Fabric)
-	b.Box(34, 76, 8, 8, 8, 12, colors[3], M.Fabric)
+	b.Box(26, 72, 8, 16, 12, 18, colors[2], M.Fabric)
+	b.Box(34, 76, 8, 8, 5, 10, colors[3], M.Fabric)
 	b.Ball(33, 80, 15, 3.5, INK, M.SmoothPlastic)
 	for _, dz in ipairs({ -4, 4 }) do
 		House3DKit.Triangle(b, 22, 92, 8 + dz, 6, 10, 0, 2, colors[4], M.Fabric)
 	end
 	for index = 0, 4 do
-		b.BoxR(CFrame.new(-32, 46 - index * 3, 8) * CFrame.Angles(0, 0, 0.3), 2, 18, 3, colors[index % 4 + 1], M.Fabric)
+		b.BoxR(CFrame.new(-32 - index * 0.6, 46 - index * 3, 8) * CFrame.Angles(0, index * 0.25, 0.3 + index * 0.07), 2, 18, 3, colors[index % 4 + 1], M.Fabric)
 	end
 	b.Footprint(80, 24, 100)
 end
@@ -473,7 +516,7 @@ R.Kite = function(b, _ctx)
 	local cy, r = 62, 30
 	local quarters = { { -1, 1 }, { 1, 1 }, { 1, -1 }, { -1, -1 } }
 	for index, q in ipairs(quarters) do
-		b.BoxR(CFrame.new(q[1] * r / 4, cy + q[2] * r / 4, 3) * CFrame.Angles(0, 0, math.pi / 4), r * 0.707, r * 0.707, 1.5, colors[index], M.Fabric)
+		b.BoxR(CFrame.new(q[1] * r / 4, cy + q[2] * r / 4, 3 + (index - 1) * House3DKit.Gap(b, 0.4)) * CFrame.Angles(0, 0, math.pi / 4), r * 0.707, r * 0.707, 1.5, colors[index], M.Fabric)
 	end
 	b.Tube(0, cy + r, 4.2, 0, cy - r, 4.2, 1.5, rgb(160, 110, 70), M.Wood)
 	b.Tube(-r, cy, 4.2, r, cy, 4.2, 1.5, rgb(160, 110, 70), M.Wood)
@@ -527,10 +570,11 @@ end
 R.PhotoFrame = function(b, _ctx)
 	local frame = vivid(b, 1, rgb(255, 170, 200))
 	b.BoxR(CFrame.new(0, 44, 0) * CFrame.Angles(-0.2, 0, 0), 76, 84, 6, frame, M.Wood)
-	b.BoxR(CFrame.new(0, 44, 0) * CFrame.Angles(-0.2, 0, 0) * CFrame.new(0, 0, 3.2), 58, 64, 1, rgb(160, 210, 255), M.SmoothPlastic)
-	b.BoxR(CFrame.new(0, 44, 0) * CFrame.Angles(-0.2, 0, 0) * CFrame.new(0, -14, 3.8), 58, 22, 1, rgb(140, 214, 140), M.SmoothPlastic)
-	b.BoxR(CFrame.new(-8, 44, 0) * CFrame.Angles(-0.2, 0, 0) * CFrame.new(0, 2, 4), 14, 20, 1, rgb(255, 214, 170), M.SmoothPlastic)
-	b.BoxR(CFrame.new(10, 44, 0) * CFrame.Angles(-0.2, 0, 0) * CFrame.new(0, 0, 4), 12, 16, 1, rgb(255, 200, 150), M.SmoothPlastic)
+	local g = House3DKit.Gap(b, 0.6)
+	b.BoxR(CFrame.new(0, 44, 0) * CFrame.Angles(-0.2, 0, 0) * CFrame.new(0, 0, 3 + g / 2), 58, 64, g, rgb(160, 210, 255), M.SmoothPlastic)
+	b.BoxR(CFrame.new(0, 44, 0) * CFrame.Angles(-0.2, 0, 0) * CFrame.new(0, -14, 3 + 1.5 * g), 58, 22, g, rgb(140, 214, 140), M.SmoothPlastic)
+	b.BoxR(CFrame.new(-8, 44, 0) * CFrame.Angles(-0.2, 0, 0) * CFrame.new(0, 2, 3 + 2.5 * g), 14, 20, g, rgb(255, 214, 170), M.SmoothPlastic)
+	b.BoxR(CFrame.new(10, 44, 0) * CFrame.Angles(-0.2, 0, 0) * CFrame.new(0, 0, 3 + 2.5 * g), 12, 16, g, rgb(255, 200, 150), M.SmoothPlastic)
 	b.Ball(20, 58, 12, 10, rgb(255, 236, 130), M.Neon)
 	b.BoxR(CFrame.new(0, 24, -14) * CFrame.Angles(0.5, 0, 0), 10, 48, 3, darken(frame, 0.2), M.Wood)
 	b.Footprint(76, 36, 90)
@@ -771,26 +815,51 @@ R.UFOLamp = function(b, _ctx)
 	b.Footprint(86, 56, 100)
 end
 
+-- (v9.8) Lustre à pampilles : rosace, chaîne, fût à nœuds, couronne dorée,
+-- bras courbes, bobèches, bougies-ampoules, guirlandes de perles de cristal
+-- et pendeloques à facettes (reflets)
 R.CrystalChandelier = function(b, _ctx)
 	local gold = b.Map(GOLD)
-	b.Tube(0, 100, 20, 0, 80, 20, 1.5, gold, M.Metal)
-	b.Ball(0, 78, 20, 10, gold, M.Metal)
-	b.Cyl(0, 56, 20, 60, 4, gold, M.Metal)
+	local crystalColor = rgb(230, 245, 255)
+	b.Cyl(0, 97, 20, 16, 3, gold, M.Metal).Reflectance = 0.3
+	for index = 0, 3 do
+		b.Egg(0, 94 - index * 4, 20, 2.4, 4, 1.4, gold, M.Metal)
+	end
+	b.Ball(0, 78, 20, 10, gold, M.Metal).Reflectance = 0.3
+	b.Cyl(0, 62, 20, 4, 16, gold, M.Metal)
+	b.Egg(0, 66, 20, 8, 6, 8, gold, M.Metal).Reflectance = 0.3
+	b.Cyl(0, 56, 20, 60, 4, gold, M.Metal).Reflectance = 0.3
 	for index = 0, 7 do
 		local a = index / 8 * math.pi * 2
 		local x, z = math.cos(a) * 30, 20 + math.sin(a) * 18
-		b.Tube(0, 76, 20, x, 60, z, 1.5, gold, M.Metal)
-		b.Cyl(x, 60, z, 7, 3, gold, M.Metal)
-		b.Cyl(x, 63, z, 3, 10, rgb(255, 250, 240), M.SmoothPlastic)
-		local flame = b.Ball(x, 76, z, 4, rgb(255, 214, 140), M.Neon)
+		b.Tube(0, 70, 20, x * 0.6, 62, 20 + (z - 20) * 0.6, 1.5, gold, M.Metal)
+		b.Tube(x * 0.6, 62, 20 + (z - 20) * 0.6, x, 60, z, 1.5, gold, M.Metal)
+		b.Cyl(x, 60, z, 7, 2, gold, M.Metal).Reflectance = 0.3
+		b.Cyl(x, 62, z, 3, 10, rgb(255, 250, 240), M.SmoothPlastic)
+		local flame = b.Egg(x, 74, z, 3.4, 5, 3.4, rgb(255, 214, 140), M.Neon)
 		flame.CastShadow = false
 		for drop = 1, 2 do
-			local crystal = b.Egg(x, 56 - drop * 7, z, 4, 7, 4, rgb(230, 245, 255), M.Glass)
+			local crystal = b.Egg(x, 56 - drop * 6, z, 3.6, 6, 3.6, crystalColor, M.Glass)
 			crystal.Transparency = 0.2
+			crystal.Reflectance = 0.3
+		end
+		local prism = b.EggR(CFrame.new(x, 40, z) * CFrame.Angles(0, a, 0), 3, 9, 1.6, crystalColor, M.Glass)
+		prism.Transparency = 0.15
+		prism.Reflectance = 0.35
+		-- guirlande de perles vers le bras suivant
+		local a2 = (index + 1) / 8 * math.pi * 2
+		local x2, z2 = math.cos(a2) * 30, 20 + math.sin(a2) * 18
+		for bead = 1, 3 do
+			local t = bead / 4
+			local sag = math.sin(t * math.pi) * 5
+			local pearl = b.Ball(x + (x2 - x) * t, 55 - sag, z + (z2 - z) * t, 2, crystalColor, M.Glass)
+			pearl.Reflectance = 0.3
 		end
 	end
-	local core = b.Egg(0, 44, 20, 14, 22, 14, rgb(220, 240, 255), M.Glass)
+	local core = b.Egg(0, 44, 20, 14, 22, 14, crystalColor, M.Glass)
 	core.Transparency = 0.1
+	core.Reflectance = 0.25
+	b.Egg(0, 30, 20, 6, 10, 6, crystalColor, M.Glass).Reflectance = 0.3
 	b.Light(core, rgb(255, 236, 200), 18, 1)
 	b.Footprint(76, 40, 100)
 end
@@ -875,6 +944,8 @@ end
 ----------------------------------------------------------------------
 
 -- Porte : cadre (moulures), battant à panneaux, poignée, seuil
+-- (v9.8) chambranle mouluré (baguette intérieure en retrait), corniche en
+-- tête, plinthes de pied, paumelles en laiton, seuil biseauté
 local function doorBase(b: Builder, ctx: any, panel: Color3, material: Enum.Material?, width: number?, height: number?): (number, number)
 	local w = width or 66
 	local h = height or 94
@@ -882,8 +953,18 @@ local function doorBase(b: Builder, ctx: any, panel: Color3, material: Enum.Mate
 	b.Box(-w / 2 - 3, 0, 0, 6, h + 2, 7, frame, M.Wood)
 	b.Box(w / 2 + 3, 0, 0, 6, h + 2, 7, frame, M.Wood)
 	b.Box(0, h + 2, 0, w + 14, 6, 8, frame, M.Wood)
+	b.Box(0, h + 7.6, 0.6, w + 17, 1.8, 9.2, lighten(frame, 0.08), M.Wood)
+	for _, side in ipairs({ -1, 1 }) do
+		b.Box(side * (w / 2 - 0.6), 0, 1.6, 1.2, h + 2, 2.2, darken(frame, 0.08), M.Wood)
+		local g = House3DKit.Gap(b, 0.8)
+		b.Box(side * (w / 2 + g + 3.4), 0, 0.6, 6.8, 10, 8.2, darken(frame, 0.06), M.Wood)
+	end
 	b.Box(0, 0, -1, w, h + 2, 3, panel, material or M.Wood)
-	b.Box(0, 0, 4, w + 4, 1, 8, darken(panel, 0.25), M.Wood)
+	for _, y in ipairs({ h * 0.12, h * 0.5, h * 0.86 }) do
+		local hinge = b.Box(-w / 2 + 0.6, y, 1, 1.6, 7, 1.6, rgb(214, 172, 92), M.Metal)
+		hinge.Reflectance = 0.25
+	end
+	House3DKit.Bevel(b, 0, 0, 4, w + 4, 1.2, 8, 0.5, darken(panel, 0.25), M.Wood)
 	return w, h
 end
 
@@ -902,7 +983,7 @@ R.GardenDoor = function(b, ctx)
 	local paint = vivid(b, 1, rgb(140, 200, 140))
 	local w, h = doorBase(b, ctx, paint, M.Wood)
 	-- vitre à croisillons en haut, panneaux en bas
-	local glass = b.Box(0, 50, 0.5, w - 16, 38, 1, rgb(190, 230, 255), M.Glass)
+	local glass = b.Box(0, 50, 0.5 + House3DKit.Gap(b, 0.6) / 2, w - 16, 38, House3DKit.Gap(b, 0.6), rgb(190, 230, 255), M.Glass)
 	glass.Transparency = 0.3
 	House3DKit.Frame(b, 0, 48, 1.2, w - 12, 42, 4, 2, lighten(paint, 0.2), M.Wood)
 	b.Box(0, 50, 1.4, 3, 38, 1.5, lighten(paint, 0.2), M.Wood)
@@ -1021,8 +1102,9 @@ end
 R.MouseHole = function(b, _ctx)
 	-- petit trou arrondi au pied du mur (tunnel sombre)
 	local frame = rgb(150, 110, 90)
-	b.Box(0, 0, -0.5, 60, 34, 1, rgb(30, 24, 30))
-	b.CylZ(0, 34, -0.5, 60, 1, rgb(30, 24, 30))
+	local g = House3DKit.Gap(b, 0.6)
+	b.Box(0, 0, -g / 2, 60, 34, g, rgb(30, 24, 30))
+	b.CylZ(0, 34, -g / 2, 60, g, rgb(30, 24, 30))
 	local points = {}
 	for index = 0, 12 do
 		local a = index / 12 * math.pi
@@ -1031,11 +1113,11 @@ R.MouseHole = function(b, _ctx)
 	table.insert(points, 1, { 32, 0, 1 })
 	table.insert(points, { -32, 0, 1 })
 	House3DKit.Path(b, points, 6, frame, M.Wood)
-	b.Box(0, 0, 6, 70, 2, 12, frame, M.Wood)
+	b.Box(0, 0, 6, 70, 2 + g, 12, frame, M.Wood)
 	-- petite porte en bois entrouverte + paillasson
-	b.Box(-10, 2, 1, 24, 40, 2, rgb(200, 140, 90), M.WoodPlanks)
-	b.Ball(-2, 22, 3, 4, GOLD, M.Metal)
-	b.Box(12, 0, 12, 26, 1.5, 10, rgb(255, 150, 180), M.Fabric)
+	b.Box(-10, 2 + g, 1.5 * g, 24, 40, g, rgb(200, 140, 90), M.WoodPlanks)
+	b.Ball(-2, 22, 2 * g + 1.5, 4, GOLD, M.Metal)
+	b.Box(12, 0, 12, 26, 2 + 2 * g, 10, rgb(255, 150, 180), M.Fabric)
 	b.Footprint(76, 16, 70)
 end
 
@@ -1149,7 +1231,7 @@ R.StainedGlass = function(b, ctx)
 	b.Box(0, 8, 0.4, 70, 58, 1, rgb(255, 250, 240), M.SmoothPlastic)
 	for row = 0, 3 do
 		for column = 0, 3 do
-			local pane = b.Box(-26.25 + column * 17.5, 8 + row * 14.5, 1.5, 17, 14, 1, colors[(row + column * 2) % #colors + 1], M.Glass)
+			local pane = b.Box(-26.25 + column * 17.5, 8 + row * 14.5, 1.5 + House3DKit.Gap(b, 0.8), 17, 14, 1, colors[(row + column * 2) % #colors + 1], M.Glass)
 			pane.Transparency = 0.2
 		end
 	end
@@ -1159,7 +1241,7 @@ R.StainedGlass = function(b, ctx)
 		local a = index / 6 * math.pi
 		b.Tube(0, 66, 2.4, math.cos(a) * 34, 66 + math.sin(a) * 34, 2.4, 2, rgb(70, 60, 80), M.Metal)
 	end
-	b.CylZ(0, 66, 2.6, 14, 1, colors[2], M.Neon)
+	b.CylZ(0, 66, 2.5 + House3DKit.Gap(b, 0.8), 14, 1, colors[2], M.Neon)
 	local points = { { 36, 6, 3 } }
 	for index = 0, 12 do
 		local a = index / 12 * math.pi
@@ -1190,11 +1272,23 @@ end
 
 -- Pot arrondi (+ terre) ; renvoie le haut de la terre
 local function roundPot(b: Builder, diameter: number, height: number, color: Color3): number
-	b.Cyl(0, 0, 0, diameter * 0.74, height * 0.16, darken(color, 0.15), M.SmoothPlastic)
-	b.Egg(0, height * 0.5, 0, diameter * 0.96, height * 0.9, diameter * 0.96, color, M.SmoothPlastic)
-	b.Cyl(0, height * 0.72, 0, diameter, height * 0.2, lighten(color, 0.12), M.SmoothPlastic)
-	b.Cyl(0, height * 0.86, 0, diameter * 0.86, height * 0.08, rgb(110, 80, 66), M.Ground)
-	return height * 0.94
+	-- (v9.8) soucoupe, pot galbé à reflet de céramique, lèvre roulée, terreau
+	-- et petits cailloux
+	b.Cyl(0, 0, 0, diameter * 0.9, height * 0.06, darken(color, 0.25), M.SmoothPlastic)
+	b.Cyl(0, height * 0.06, 0, diameter * 0.74, height * 0.12, darken(color, 0.15), M.SmoothPlastic)
+	local body = b.Egg(0, height * 0.5, 0, diameter * 0.96, height * 0.9, diameter * 0.96, color, M.SmoothPlastic)
+	body.Reflectance = 0.05
+	local g = House3DKit.Gap(b, 0.6)
+	b.Cyl(0, height * 0.72, 0, diameter, height * 0.16, lighten(color, 0.12), M.SmoothPlastic)
+	local rimTop = height * 0.88 + math.max(1.4, 2 * g)
+	b.Cyl(0, height * 0.88, 0, diameter + 1, rimTop - height * 0.88, lighten(color, 0.2), M.SmoothPlastic)
+	local soil = rimTop - g
+	b.Cyl(0, height * 0.8, 0, diameter * 0.86, soil - height * 0.8, rgb(110, 80, 66), M.Ground)
+	for index = 1, 3 do
+		local a = index * 2.1
+		b.Ball(math.cos(a) * diameter * 0.25, soil, math.sin(a) * diameter * 0.22, diameter * 0.07, rgb(214, 204, 196), M.Slate)
+	end
+	return soil
 end
 
 -- Feuille (ovale plat incliné) au bout d'une tige
@@ -1219,9 +1313,16 @@ local function flowerPot(kind: string)
 			or kind == "Hibiscus" and { { 0, 80, 4 }, { -14, 66, -4 } }
 			or kind == "Lavender" and { { -10, 84, 0 }, { 0, 92, 4 }, { 10, 86, -2 }, { -4, 80, -8 }, { 6, 78, 10 } }
 			or { { -12, 80, 2 }, { 0, 90, -2 }, { 12, 78, 4 }, { 4, 74, 12 } }
+		-- (v9.8) rosette de feuilles nervurées au pied des tiges
+		for index = 1, 6 do
+			local a = index * 2.4
+			House3DKit.Leaf(b, math.cos(a) * 3, soil + 1, math.sin(a) * 3, 15, 6, math.atan2(math.cos(a), math.sin(a)), -0.45 - (index % 2) * 0.2,
+				House3DKit.Vary(green, index, 0.1), darken(green, 0.3))
+		end
 		for index, top in ipairs(stems) do
 			b.Tube(top[1] * 0.3, soil, top[3] * 0.3, top[1], top[2] - 4, top[3], 2.5, darken(green, 0.15), M.SmoothPlastic)
 			leaf(b, top[1] * 0.6, soil + 14 + index * 3, top[3] * 0.6, 16, index * 1.9, 0.9, green)
+			House3DKit.Leaf(b, top[1] * 0.75, soil + 24 + index * 2, top[3] * 0.75, 12, 5, index * 1.9 + math.pi, -0.2, lighten(green, 0.08), darken(green, 0.3))
 			local x, y, z = top[1], top[2], top[3]
 			if kind == "Tulip" then
 				for petal = 0, 2 do
@@ -1459,7 +1560,8 @@ end
 function House3DObjects.Register(recipes: { [string]: any }, _family: { [string]: any }, helpers: any, flags: any)
 	H = helpers
 	for id, recipe in pairs(R) do
-		recipes[id] = recipe
+		-- (v9.8) finition réaliste : reflets du métal, du verre, du marbre
+		recipes[id] = House3DKit.Polished(recipe)
 	end
 	flags.Flat.CloudRug = true
 	flags.Flat.RaceTrackRug = true

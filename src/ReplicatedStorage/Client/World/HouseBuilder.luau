@@ -42,17 +42,33 @@
 	  HouseBuilder.OnItemAttach / OnItemDetach (facultatifs, v9.5) :
 	    function(house, slot, model, entry, itemId) appelées pour CHAQUE
 	    modèle d'objet construit / retiré (voir attachItems / detachItems)
+	(v9.8 HOUSE98) :
+	  - porte d'entrée DOUBLE (6,5 x 9,5) et porte de DERRIÈRE vers le jardin
+	    (s'ouvre toute seule quand quelqu'un approche, fermée si 🔒) ;
+	  - VRAIES fenêtres des deux côtés (le mur du fond de chaque pièce est
+	    percé : on voit le jardin) ;
+	  - 🪟 rideaux animés sur chaque fenêtre (devant + fond) et 💡 un
+	    interrupteur mural par pièce (près du passage vers la cage) : le
+	    propriétaire clique (invites "Fermer les rideaux" / "Éteindre") ->
+	    animation tout de suite + sauvegarde (House "setRoomState") ; tout le
+	    monde voit l'état (attributs du propriétaire "HouseLightsOff" /
+	    "HouseCurtainsClosed", HouseService) ; l'interrupteur commande le
+	    plafonnier ET les lampes posées dans la pièce ;
+	  house:ToggleRoom(slot, "Lights" | "Curtains") ; house:BackDoorPosition()
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+local Players = game:GetService("Players")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
 local Locale = require(ReplicatedStorage.Shared.Locale)
+local Net = require(ReplicatedStorage.Shared.Net)
 local HouseKit = require(script.Parent.HouseKit)
 local HouseFacade = require(script.Parent.HouseFacade)
 local HouseStairs = require(script.Parent.HouseStairs)
+local HouseToggles = require(script.Parent.HouseToggles)
 
 local HouseFolder = script.Parent.Parent.Components.House
 
@@ -66,6 +82,8 @@ HouseBuilder.OnItemDetach = nil :: ((house: any, slot: number, model: Model, ent
 
 local NEAR = 62 -- (studs) une pièce plus proche que ça est meublée
 local FAR = 90 -- plus loin : on la vide
+local BACK_RANGE = 8.5 -- (v9.8, studs) la porte de derrière s'ouvre quand un avatar est plus près
+local DOOR_SWING = math.rad(100)
 local M = Enum.Material
 local WHITE = Color3.new(1, 1, 1)
 local CREAM = Color3.fromRGB(255, 247, 236)
@@ -102,8 +120,21 @@ export type RoomState = {
 	State: string, -- "None" | "Building" | "Built"
 	Signature: string,
 	Fill: BasePart?, -- lueur de la pièce derrière la fenêtre (quand elle est vide)
+	BackFill: BasePart?, -- (v9.8) idem, fenêtre du fond (côté jardin)
 	Prompts: { ProximityPrompt },
 	Token: number,
+	Toggles: RoomToggles?, -- (v9.8) rideaux / interrupteur / lumières de la pièce construite
+}
+
+-- (v9.8 HOUSE98) ce qui s'allume / s'ouvre dans une pièce construite
+export type RoomToggles = {
+	Curtains: { any },
+	Switch: any?,
+	Lights: any,
+	CurtainsOpen: boolean,
+	LightsOn: boolean,
+	CurtainPrompts: { ProximityPrompt },
+	SwitchPrompt: ProximityPrompt?,
 }
 
 export type Audit = {
@@ -135,6 +166,10 @@ export type House = typeof(setmetatable({} :: {
 	DoorHinge: CFrame?,
 	DoorOpen: boolean,
 	DoorLock: TextLabel?,
+	Leaves: { any }, -- (v9.8) battants de la porte d'entrée (HouseFacade.Leaf)
+	BackLeaves: { any }, -- (v9.8) battants de la porte de derrière
+	BackDoorOpen: boolean,
+	FlagKey: string, -- (v9.8) attributs 💡 / 🪟 du propriétaire déjà appliqués
 	Ramps: { BasePart },
 	Style: string,
 	Chimneys: number,
@@ -239,6 +274,25 @@ local function newPart(parent: Instance, name: string, size: Vector3, cf: CFrame
 	return p
 end
 
+-- (v9.8) Battants d'une porte double (HouseFacade.Leaf) : ouverts / fermés,
+-- en tournant autour de leurs gonds (Sign = sens de rotation)
+local function swingLeaves(leaves: { any }, open: boolean)
+	for _, leaf in ipairs(leaves) do
+		local part: BasePart = leaf.Part
+		if part.Parent then
+			local offset = CFrame.new(leaf.Sign * leaf.Width / 2, leaf.Height / 2, 0)
+			local target = if open then leaf.Hinge * CFrame.Angles(0, leaf.Sign * DOOR_SWING, 0) * offset else leaf.Hinge * offset
+			part.CanCollide = not open
+			local ok = pcall(function()
+				TweenService:Create(part, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { CFrame = target }):Play()
+			end)
+			if not ok then
+				part.CFrame = target
+			end
+		end
+	end
+end
+
 ----------------------------------------------------------------------
 -- Construction de l'extérieur
 ----------------------------------------------------------------------
@@ -281,6 +335,10 @@ function HouseBuilder.new(snapshot: any, plotCF: CFrame, parent: Instance): Hous
 		DoorHinge = nil,
 		DoorOpen = false,
 		DoorLock = nil,
+		Leaves = {},
+		BackLeaves = {},
+		BackDoorOpen = false,
+		FlagKey = "",
 		Ramps = {},
 		Style = "Cottage",
 		Chimneys = 0,
@@ -343,6 +401,9 @@ function HouseBuilder.BuildExterior(self: House)
 	self.Door = built.Door
 	self.DoorHinge = built.Hinge
 	self.DoorLock = built.Lock
+	self.Leaves = built.Leaves or {}
+	self.BackLeaves = built.BackLeaves or {}
+	self.BackDoorOpen = false
 	self.Style = built.Style
 	self.Chimneys = built.Chimneys
 	self.ExteriorParts = kit.Stats.Count
@@ -355,7 +416,8 @@ function HouseBuilder.BuildExterior(self: House)
 		local room = bySlot[slot]
 		local state = self.Rooms[slot]
 		if not state then
-			state = { Slot = slot, Data = room, Shell = nil, Items = {}, State = "None", Signature = roomSignature(room), Fill = nil, Prompts = {}, Token = 0 }
+			state = { Slot = slot, Data = room, Shell = nil, Items = {}, State = "None", Signature = roomSignature(room), Fill = nil, BackFill = nil, Prompts = {}, Token = 0,
+				Toggles = nil }
 			self.Rooms[slot] = state
 		end
 		state.Data = room
@@ -363,6 +425,11 @@ function HouseBuilder.BuildExterior(self: House)
 		state.Fill = fill
 		if fill and state.State ~= "None" then
 			fill.Transparency = 1
+		end
+		local backFill = built.BackFills and built.BackFills[slot]
+		state.BackFill = backFill
+		if backFill and state.State ~= "None" then
+			backFill.Transparency = 1
 		end
 	end
 end
@@ -413,15 +480,7 @@ local function roomFront(self: House, shell: Model, room: any, slot: number)
 	kit:Box("FrontCrown", xMin, xMax, top - 0.5, top, T + 0.12, T + 0.32, trim, M.SmoothPlastic, { Shadow = false })
 	-- (v9.6 anti-scintillement : dessus 0,04 au-dessus du bas de la fenêtre du mur)
 	kit:Box("InnerSill", rect[1] - 0.5, rect[2] + 0.5, rect[3] - 0.3, rect[3] + 0.04, T, T + 0.7, trim, M.Wood, { Shadow = false })
-	-- rideaux (couleur secondaire du papier peint) + tringle
-	local style = wallpaperOf(room)
-	local curtain = style and typeof(style.B) == "Color3" and style.B or Color3.fromRGB(255, 190, 214)
-	kit:Box("CurtainRod", rect[1] - 1.6, rect[2] + 1.6, rect[4] + 0.6, rect[4] + 0.8, T + 0.5, T + 0.7, Color3.fromRGB(246, 196, 84), M.Metal, { Shadow = false })
-	for _, sx in ipairs({ -1, 1 }) do
-		local x = if sx < 0 then rect[1] - 0.2 else rect[2] + 0.2
-		-- (v9.6 : rideau 0,05 devant le rebord, plus de faces confondues)
-		kit:Box("Curtain", x - 1.2, x + 1.2, rect[3] - 0.6, rect[4] + 0.6, T + 0.35, T + 0.75, curtain, M.Fabric, { Shadow = false })
-	end
+	-- (v9.8) les rideaux (animés) sont posés par roomToggles
 	-- plafonnier : vraie lumière chaude
 	local cx = (xMin + xMax) / 2
 	local cd = T + WorldLayout.DEPTH * 0.5
@@ -429,7 +488,182 @@ local function roomFront(self: House, shell: Model, room: any, slot: number)
 	kit:CylY("LampShade", cx, top - 2.8, cd, 2.2, 1, trim:Lerp(WHITE, 0.4), M.Fabric, { Shadow = false })
 	local bulb = kit:Ball("LampBulb", cx, top - 2.9, cd, 0.8, Color3.fromRGB(255, 236, 190), M.Neon, { Shadow = false })
 	-- (v9.6 "flash bang" : portée 30 -> 16, la lumière ne traverse plus 3 pièces ; 0.9 -> 0.75)
-	kit:Light(bulb, Color3.fromRGB(255, 226, 184), 16, 0.75)
+	local light = kit:Light(bulb, Color3.fromRGB(255, 226, 184), 16, 0.75)
+	return bulb, light
+end
+
+----------------------------------------------------------------------
+-- (v9.8 HOUSE98) 🪟 rideaux + 💡 interrupteur + lumières d'une pièce
+----------------------------------------------------------------------
+
+local function localIsOwner(self: House): boolean
+	local me = Players.LocalPlayer
+	return me ~= nil and me.UserId == self.UserId
+end
+
+-- Id des pièces listés dans un attribut du propriétaire ("R1,R4")
+local function flagSet(text: any): { [string]: boolean }
+	local set: { [string]: boolean } = {}
+	if type(text) == "string" then
+		for id in string.gmatch(text, "[^,]+") do
+			set[id] = true
+		end
+	end
+	return set
+end
+
+-- Attributs 💡 / 🪟 du propriétaire (HouseService) : (lumières éteintes, rideaux fermés, clé)
+local function ownerFlags(self: House): ({ [string]: boolean }, { [string]: boolean }, string)
+	local owner = Players:GetPlayerByUserId(self.UserId)
+	local off = owner and owner:GetAttribute("HouseLightsOff")
+	local closed = owner and owner:GetAttribute("HouseCurtainsClosed")
+	return flagSet(off), flagSet(closed), tostring(off) .. "|" .. tostring(closed)
+end
+
+local function roomWanted(self: House, room: any): (boolean, boolean)
+	local off, closed = ownerFlags(self)
+	local id = room and tostring(room.Id) or ""
+	return not off[id], not closed[id]
+end
+
+local function prompt(parent: Instance, action: string, object: string, key: Enum.KeyCode, enabled: boolean): ProximityPrompt
+	local p = Instance.new("ProximityPrompt")
+	p.Name = "TogglePrompt"
+	p.ActionText = action
+	p.ObjectText = object
+	p.MaxActivationDistance = 9
+	p.RequiresLineOfSight = false
+	p.HoldDuration = 0
+	p.KeyboardKeyCode = key
+	p.Enabled = enabled
+	p.Parent = parent
+	return p
+end
+
+local function curtainTexts(open: boolean): string
+	return if open then Locale.T("Close the curtains") else Locale.T("Open the curtains")
+end
+
+local function switchTexts(on: boolean): string
+	return if on then Locale.T("Turn off") else Locale.T("Turn on")
+end
+
+-- Côté (Left / Right) du passage vers la cage d'escalier : l'interrupteur y va
+local function switchSide(size: any, column: number): string
+	local doors = WorldLayout.RoomDoors(size, column)
+	local towardHall = if column <= WorldLayout.HallAfter(size) then "Right" else "Left"
+	if table.find(doors, towardHall) then
+		return towardHall
+	end
+	return doors[1] or "Right"
+end
+
+-- Est-ce une lampe (commandée par l'interrupteur) ?
+local function isLamp(itemId: string): boolean
+	local item = Config.HouseItemsById and Config.HouseItemsById[itemId]
+	if type(item) == "table" and item.Category == "Lights" then
+		return true
+	end
+	return string.find(itemId, "Lamp", 1, true) ~= nil or string.find(itemId, "Chandelier", 1, true) ~= nil or string.find(itemId, "Candle", 1, true) ~= nil
+end
+
+local function roomToggles(self: House, shell: Model, room: any, slot: number, bulb: BasePart?, lamp: Light?): RoomToggles
+	local size = self.Size
+	local floor, column = WorldLayout.SlotCell(size, slot)
+	local owner = localIsOwner(self)
+	local lightsOn, curtainsOpen = roomWanted(self, room)
+	local style = wallpaperOf(room)
+	local fabric = style and typeof(style.B) == "Color3" and style.B or Color3.fromRGB(255, 190, 214)
+	local brass = Color3.fromRGB(214, 170, 96)
+	local toggles: RoomToggles = {
+		Curtains = {},
+		Switch = nil,
+		Lights = HouseToggles.Lights(),
+		CurtainsOpen = curtainsOpen,
+		LightsOn = lightsOn,
+		CurtainPrompts = {},
+		SwitchPrompt = nil,
+	}
+	-- 🪟 fenêtre de devant (sur la façade vue de dedans)
+	local rect = HouseFacade.WindowRect(size, column, floor)
+	local T = WorldLayout.WALL_T
+	local front = self.HouseCF * CFrame.new((rect[1] + rect[2]) / 2, (rect[3] + rect[4]) / 2, -(T + 0.12)) * CFrame.Angles(0, math.pi, 0)
+	table.insert(toggles.Curtains, HouseToggles.Curtains(shell, front, rect[2] - rect[1], rect[4] - rect[3], fabric, brass, curtainsOpen))
+	-- 🪟 fenêtre du fond (côté jardin)
+	local b0, b1, b2, b3 = WorldLayout.BackWindowRect(size, Config.House.WallRatio)
+	local back = shell:GetPivot() * CFrame.new((b0 + b1) / 2, (b2 + b3) / 2, -WorldLayout.DEPTH / 2 + 0.06)
+	table.insert(toggles.Curtains, HouseToggles.Curtains(shell, back, b1 - b0, b3 - b2, fabric, brass, curtainsOpen))
+	for _, curtain in ipairs(toggles.Curtains) do
+		local p = prompt(curtain.Anchor, curtainTexts(curtainsOpen), Locale.T("🪟 Curtains"), Enum.KeyCode.G, owner)
+		p.Triggered:Connect(function()
+			self:ToggleRoom(slot, "Curtains")
+		end)
+		table.insert(toggles.CurtainPrompts, p)
+	end
+	-- 💡 interrupteur, à côté du passage vers la cage (face intérieure du mur de côté)
+	local W = WorldLayout.RoomWidth(size)
+	local side = switchSide(size, column)
+	local sx = if side == "Right" then 1 else -1
+	local z = WorldLayout.PASS_W / 2 + 1.05
+	local switchCF = shell:GetPivot() * CFrame.new(sx * W / 2, 4.3, z) * CFrame.Angles(0, -sx * math.pi / 2, 0)
+	local switch = HouseToggles.Switch(shell, switchCF, lightsOn)
+	toggles.Switch = switch
+	local sp = prompt(switch.Plate, switchTexts(lightsOn), Locale.T("💡 Lights"), Enum.KeyCode.Q, owner)
+	sp.MaxActivationDistance = 8
+	sp.Triggered:Connect(function()
+		self:ToggleRoom(slot, "Lights")
+	end)
+	toggles.SwitchPrompt = sp
+	-- 💡 lumières commandées : plafonnier + lampes posées
+	local lights = toggles.Lights
+	if lamp then
+		lights:Add(lamp)
+	end
+	if bulb then
+		lights:AddGlow(bulb)
+	end
+	local items = shell:FindFirstChild("Items")
+	for _, model in ipairs(items and items:GetChildren() or {}) do
+		if isLamp(tostring(model:GetAttribute("ItemId"))) then
+			lights:Collect(model, true)
+		end
+	end
+	lights:Set(lightsOn, false)
+	shell:SetAttribute("LightsOn", lightsOn)
+	shell:SetAttribute("CurtainsOpen", curtainsOpen)
+	return toggles
+end
+
+-- Applique un état (animé) à une pièce construite
+local function applyToggles(state: RoomState, lightsOn: boolean, curtainsOpen: boolean, animate: boolean)
+	local t = state.Toggles
+	if not t then
+		return
+	end
+	if t.CurtainsOpen ~= curtainsOpen then
+		t.CurtainsOpen = curtainsOpen
+		for _, curtain in ipairs(t.Curtains) do
+			curtain:Set(curtainsOpen, animate)
+		end
+		for _, p in ipairs(t.CurtainPrompts) do
+			p.ActionText = curtainTexts(curtainsOpen)
+		end
+	end
+	if t.LightsOn ~= lightsOn then
+		t.LightsOn = lightsOn
+		if t.Switch then
+			t.Switch:Set(lightsOn, animate)
+		end
+		t.Lights:Set(lightsOn, animate)
+		if t.SwitchPrompt then
+			t.SwitchPrompt.ActionText = switchTexts(lightsOn)
+		end
+	end
+	local shell = state.Shell
+	if shell then
+		shell:SetAttribute("LightsOn", lightsOn)
+		shell:SetAttribute("CurtainsOpen", curtainsOpen)
+	end
 end
 
 -- (v9.5) crochets : chaque modèle d'objet construit / retiré
@@ -479,8 +713,12 @@ function HouseBuilder.DestroyRoom(self: House, slot: number)
 	table.clear(state.Prompts)
 	state.Items = {}
 	state.State = "None"
+	state.Toggles = nil
 	if state.Fill then
 		state.Fill.Transparency = 0
+	end
+	if state.BackFill then
+		state.BackFill.Transparency = 0
 	end
 end
 
@@ -552,6 +790,8 @@ function HouseBuilder.BuildRoom(self: House, slot: number)
 			Front = false,
 			Ceiling = true,
 			Patterns = true,
+			-- (v9.8) vraie fenêtre côté jardin (même trou que la façade : HouseFacade.BackWindowRect)
+			BackWindow = { WorldLayout.BackWindowRect(size, Config.House.WallRatio) },
 		})
 		if ok and typeof(result) == "Instance" and result:IsA("Model") then
 			shell = result
@@ -566,14 +806,17 @@ function HouseBuilder.BuildRoom(self: House, slot: number)
 	s.Name = "Room_" .. slot
 	s:SetAttribute("Slot", slot)
 	s:PivotTo(WorldLayout.ShellPivot(self.HouseCF, size, slot))
-	local okFront, errFront = pcall(roomFront, self, s, room, slot)
+	local okFront, bulbOrErr, lamp = pcall(roomFront, self, s, room, slot)
 	if not okFront then
-		warn("[World] Mur avant : " .. tostring(errFront))
+		warn("[World] Mur avant : " .. tostring(bulbOrErr))
 	end
 	s.Parent = self.Interiors
 	state.Shell = s
 	if state.Fill then
 		state.Fill.Transparency = 1
+	end
+	if state.BackFill then
+		state.BackFill.Transparency = 1
 	end
 	-- pièce vide : panneau "à acheter"
 	if not room then
@@ -622,7 +865,15 @@ function HouseBuilder.BuildRoom(self: House, slot: number)
 		if seatPart and seatPart:IsA("BasePart") then
 			local prompt = Instance.new("ProximityPrompt")
 			prompt.Name = "SitPrompt"
-			prompt.ActionText = Locale.T("Sit")
+			-- (v9.8 : sur un lit / un hamac -> "S'allonger" ; SEAT98 y joue la sieste)
+			local sitId = tostring(itemModel:GetAttribute("ItemId"))
+			local lying = false
+			if sitId == "Hammock" then
+				lying = true
+			elseif sitId ~= "PetBed" then
+				lying = string.find(sitId, "Bed", 1, true) ~= nil
+			end
+			prompt.ActionText = if lying then Locale.T("Lie down") else Locale.T("Sit")
 			local item = HouseCommon and HouseCommon.ItemsById[tostring(itemModel:GetAttribute("ItemId"))]
 			prompt.ObjectText = item and Locale.T(item.Name) or ""
 			prompt.MaxActivationDistance = 8
@@ -638,6 +889,14 @@ function HouseBuilder.BuildRoom(self: House, slot: number)
 			end)
 			table.insert(state.Prompts, prompt)
 		end
+	end
+	-- (v9.8) 🪟 rideaux + 💡 interrupteur + lumières (après les objets : les lampes posées suivent l'interrupteur)
+	local okToggles, toggles = pcall(roomToggles, self, s, room, slot, if okFront and typeof(bulbOrErr) == "Instance" then bulbOrErr :: BasePart else nil,
+		if okFront and typeof(lamp) == "Instance" then lamp :: Light else nil)
+	if okToggles then
+		state.Toggles = toggles
+	else
+		warn("[World] Rideaux / interrupteur : " .. tostring(toggles))
 	end
 	state.State = "Built"
 	attachItems(self, slot, state)
@@ -682,11 +941,39 @@ function HouseBuilder.StepDoor(self: House, open: boolean, locked: boolean)
 	if lock then
 		lock.Text = locked and "🔒" or ""
 	end
+	-- (v9.8) porte de derrière : ouverte si quelqu'un (n'importe quel avatar) en est proche
+	if #self.BackLeaves > 0 then
+		local backDoor = self:BackDoorPosition()
+		local near = false
+		for _, player in ipairs(Players:GetPlayers()) do
+			local character = player.Character
+			local root = character and character:FindFirstChild("HumanoidRootPart")
+			if root and root:IsA("BasePart") and (root.Position - backDoor).Magnitude < BACK_RANGE then
+				near = true
+				break
+			end
+		end
+		local wantBack = near and not locked
+		if wantBack ~= self.BackDoorOpen then
+			self.BackDoorOpen = wantBack
+			swingLeaves(self.BackLeaves, wantBack)
+		end
+	end
+	-- (v9.8) 💡 / 🪟 changés par le propriétaire (ou refus du serveur) : appliqués ici (5 fois / s)
+	local _, _, key = ownerFlags(self)
+	if key ~= self.FlagKey then
+		self.FlagKey = key
+		self:ApplyRoomFlags(true)
+	end
 	local want = open and not locked
 	if want == self.DoorOpen then
 		return
 	end
 	self.DoorOpen = want
+	if #self.Leaves > 0 then
+		swingLeaves(self.Leaves, want)
+		return
+	end
 	local closedCF = hinge * CFrame.new(WorldLayout.DOOR_W / 2 - 0.05, (WorldLayout.DOOR_H - 0.05) / 2, 0)
 	local target = want and hinge * CFrame.Angles(0, math.rad(100), 0) * CFrame.new(WorldLayout.DOOR_W / 2 - 0.05, (WorldLayout.DOOR_H - 0.05) / 2, 0) or closedCF
 	leaf.CanCollide = not want
@@ -696,6 +983,55 @@ function HouseBuilder.StepDoor(self: House, open: boolean, locked: boolean)
 	if not ok then
 		leaf.CFrame = target
 	end
+end
+
+-- (v9.8) Milieu de la porte de derrière (monde), côté jardin
+function HouseBuilder.BackDoorPosition(self: House): Vector3
+	return WorldLayout.ToWorld(self.HouseCF, WorldLayout.BackDoorX(self.Size), WorldLayout.FloorY(1) + 2, WorldLayout.BackDoorD(self.Size) - 0.4)
+end
+
+-- (v9.8) Applique les attributs 💡 / 🪟 du propriétaire à toutes les pièces construites
+function HouseBuilder.ApplyRoomFlags(self: House, animate: boolean)
+	local off, closed, key = ownerFlags(self)
+	self.FlagKey = key
+	for _, state in pairs(self.Rooms) do
+		if state.Toggles and state.Data then
+			local id = tostring(state.Data.Id)
+			applyToggles(state, not off[id], not closed[id], animate)
+		end
+	end
+end
+
+-- (v9.8) Le propriétaire bascule les rideaux ou les lumières d'une pièce :
+-- animation tout de suite, puis sauvegarde (en cas de refus : retour à
+-- l'état du serveur)
+function HouseBuilder.ToggleRoom(self: House, slot: number, what: string): boolean
+	local state = self.Rooms[slot]
+	local t = state and state.Toggles
+	if not state or not t or not state.Data or not localIsOwner(self) then
+		return false
+	end
+	local lightsOn, curtainsOpen = t.LightsOn, t.CurtainsOpen
+	local argument: { [string]: any } = { Room = tostring(state.Data.Id) }
+	if what == "Lights" then
+		lightsOn = not lightsOn
+		argument.LightsOn = lightsOn
+	elseif what == "Curtains" then
+		curtainsOpen = not curtainsOpen
+		argument.CurtainsOpen = curtainsOpen
+	else
+		return false
+	end
+	applyToggles(state, lightsOn, curtainsOpen, true)
+	task.spawn(function()
+		local ok, success = pcall(function()
+			return Net.Function("House"):InvokeServer("setRoomState", argument)
+		end)
+		if not (ok and success == true) and self.Alive then
+			self:ApplyRoomFlags(true)
+		end
+	end)
+	return true
 end
 
 -- Position de la porte (monde) : pour savoir si quelqu'un approche

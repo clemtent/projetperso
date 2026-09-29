@@ -554,8 +554,9 @@ R.RetroHandheld = function(b, _ctx)
 	local body = vivid(b, 1, rgb(170, 150, 230))
 	local cf = CFrame.new(0, 40, 0) * CFrame.Angles(-0.3, 0, 0)
 	b.BoxR(cf, 50, 76, 12, body, M.SmoothPlastic)
-	b.BoxR(cf * CFrame.new(0, 16, 6.2), 40, 32, 0.6, rgb(90, 90, 110))
-	local lcd = b.BoxR(cf * CFrame.new(0, 16, 6.6), 32, 24, 0.6, rgb(170, 230, 150), M.Neon)
+	local g = House3DKit.Gap(b, 0.6)
+	b.BoxR(cf * CFrame.new(0, 16, 6 + g / 2), 40, 32, g, rgb(90, 90, 110))
+	local lcd = b.BoxR(cf * CFrame.new(0, 16, 6 + 1.5 * g), 32, 24, g, rgb(170, 230, 150), M.Neon)
 	table.insert(b.Glows, lcd)
 	b.BoxR(cf * CFrame.new(-12, -16, 6.8), 14, 4, 2, CARBON)
 	b.BoxR(cf * CFrame.new(-12, -16, 6.8), 4, 14, 2, CARBON)
@@ -620,12 +621,21 @@ end
 
 R.AirConditioner = function(b, _ctx)
 	local body = rgb(248, 248, 252)
+	local g = House3DKit.Gap(b, 0.6)
+	-- (v9.8) split mural : coque arrondie, grille d'aspiration sur le dessus,
+	-- volet orientable, lamelles, afficheur, tuyau d'évacuation
 	b.Round(0, 30, 10, 96, 40, 20, 8, body, M.SmoothPlastic)
-	b.BoxR(CFrame.new(0, 34, 20) * CFrame.Angles(0.5, 0, 0), 84, 8, 2, lighten(body, 0.1), M.SmoothPlastic)
-	for index = 0, 5 do
-		b.Box(0, 36 + index * 4, 20.3, 80, 1, 0.5, rgb(220, 224, 236))
+	for index = 0, 9 do
+		b.Box(-40 + index * 8.8, 70, 10, 5, g, 16, rgb(220, 224, 236), M.SmoothPlastic)
 	end
-	local led = b.Box(36, 56, 20.3, 6, 3, 0.6, rgb(120, 255, 170), M.Neon)
+	b.BoxR(CFrame.new(0, 34, 20) * CFrame.Angles(0.5, 0, 0), 84, 8, 2, lighten(body, 0.1), M.SmoothPlastic)
+	b.Box(0, 30.6, 17, 78, 3, 5, rgb(60, 64, 76), M.SmoothPlastic)
+	for index = 0, 5 do
+		b.Box(0, 36 + index * 4, 20 + g / 2, 80, 1, g, rgb(220, 224, 236))
+	end
+	b.Box(36, 54.5, 20 + g / 2, 12, 6, g, rgb(40, 44, 52), M.SmoothPlastic)
+	b.Tube(-44, 32, 4, -46, 4, 4, 2.4, rgb(220, 220, 228), M.SmoothPlastic)
+	local led = b.Box(36, 56, 20 + 1.5 * g, 6, 3, g, rgb(120, 255, 170), M.Neon)
 	table.insert(b.Glows, led)
 	-- petit souffle froid (flocons)
 	for index = 0, 4 do
@@ -814,11 +824,12 @@ R.DrawingTablet = function(b, _ctx)
 	local body = vivid(b, 1, rgb(90, 90, 110))
 	local cf = CFrame.new(0, 14, 0) * CFrame.Angles(-1.1, 0, 0)
 	b.BoxR(cf, 80, 56, 5, body, M.SmoothPlastic)
-	local panel = b.BoxR(cf * CFrame.new(0, 0, 2.7), 66, 44, 0.6, rgb(255, 250, 244), M.Neon)
+	local g = House3DKit.Gap(b, 0.6)
+	local panel = b.BoxR(cf * CFrame.new(0, 0, 2.5 + g / 2), 66, 44, g, rgb(255, 250, 244), M.Neon)
 	table.insert(b.Glows, panel)
 	-- dessin : un arc-en-ciel de petits traits
 	for index, color in ipairs({ rgb(255, 110, 140), rgb(255, 200, 90), rgb(120, 200, 255) }) do
-		b.BoxR(cf * CFrame.new(-10 + index * 6, 4 - index * 3, 3.2) * CFrame.Angles(0, 0, 0.3), 24, 2.5, 0.4, color)
+		b.BoxR(cf * CFrame.new(-10 + index * 6, 4 - index * 3, 2.5 + 1.5 * g) * CFrame.Angles(0, 0, 0.3), 24, 2.5, g, color)
 	end
 	b.BoxR(CFrame.new(30, 6, 20) * CFrame.Angles(0, 0.6, 0), 4, 4, 40, rgb(250, 250, 255), M.SmoothPlastic)
 	b.Footprint(84, 40, 34)
@@ -855,7 +866,7 @@ R.CroissantBasket = function(b, _ctx)
 	b.Cyl(0, 0, 0, 60, 6, darken(wicker, 0.15), M.WoodPlanks)
 	b.Egg(0, 16, 0, 84, 28, 64, wicker, M.WoodPlanks)
 	b.Cyl(0, 22, 0, 76, 4, lighten(wicker, 0.1), M.WoodPlanks)
-	b.Cyl(0, 24, 0, 70, 2, rgb(255, 240, 240), M.Fabric)
+	b.Cyl(0, 24, 0, 70, 2 + House3DKit.Gap(b, 0.6), rgb(255, 240, 240), M.Fabric)
 	for index, p in ipairs({ { -18, 32, 4, 0.4 }, { 14, 34, -4, -0.5 }, { 0, 40, 10, 0.1 } }) do
 		local cf = CFrame.new(p[1], p[2], p[3]) * CFrame.Angles(0, p[4], 0)
 		for seg = -2, 2 do
@@ -1045,15 +1056,29 @@ end
 ----------------------------------------------------------------------
 
 R.BigScreenTV = function(b, _ctx)
+	-- (v9.8) support mural, dos, cadre fin en alu brossé, vitre brillante
+	-- devant la dalle, barre de son sous l'écran
+	local g = House3DKit.Gap(b, 0.8)
+	b.Box(0, 30, 0.5, 30, 20, 1, rgb(60, 60, 70), M.Metal)
 	b.Round(0, 12, 3, 100, 60, 6, 3, CARBON, M.SmoothPlastic)
-	local panel = screen(b, 0, 15, 6.2, 94, 54, rgb(90, 150, 255))
+	b.Box(0, 12, 6 + g / 2, 99, 60, g, rgb(160, 164, 176), M.Metal).Reflectance = 0.2
+	local cover = b.Box(0, 14.4, 6.6 + 5.5 * g, 95, 55.4, 0.4, rgb(220, 230, 250), M.Glass)
+	cover.Transparency = 0.9
+	cover.Reflectance = 0.2
+	cover.CastShadow = false
+	b.Box(0, 12.6, 6 + 1.5 * g, 16, 1, g, rgb(220, 224, 236), M.Metal)
+	b.Round(0, 2.4, 6, 70, 5, 6, 2, rgb(34, 34, 44), M.Fabric)
+	for index = -3, 3 do
+		b.CylZ(index * 9, 4.9, 9 + g / 2, 3, g, rgb(20, 20, 26), M.SmoothPlastic)
+	end
+	local panel = screen(b, 0, 15, 6.2 + g, 94, 54, rgb(90, 150, 255))
 	b.Light(panel, rgb(120, 170, 255), 14, 0.8)
 	-- image de jeu : sol, montagnes, personnage
-	b.Box(0, 15, 6.8, 94, 12, 0.4, rgb(110, 210, 120), M.Neon)
-	House3DKit.Triangle(b, -24, 34, 6.7, 34, 20, 0, 0.4, rgb(140, 120, 220), M.Neon)
-	House3DKit.Triangle(b, 10, 32, 6.7, 26, 16, 0, 0.4, rgb(170, 150, 240), M.Neon)
-	b.Box(22, 27, 7.2, 6, 8, 0.4, rgb(255, 90, 90), M.Neon)
-	b.Box(30, 44, 7.2, 8, 3, 0.4, rgb(255, 214, 90), M.Neon)
+	b.Box(0, 15, 6.6 + 1.5 * g, 94, 12, g, rgb(110, 210, 120), M.Neon)
+	House3DKit.Triangle(b, -24, 34, 6.6 + 2 * g, 34, 20, 0, g, rgb(140, 120, 220), M.Neon)
+	House3DKit.Triangle(b, 10, 32, 6.6 + 3 * g, 26, 16, 0, g, rgb(170, 150, 240), M.Neon)
+	b.Box(22, 27, 6.6 + 4.5 * g, 6, 8, g, rgb(255, 90, 90), M.Neon)
+	b.Box(30, 44, 6.6 + 4.5 * g, 8, 3, g, rgb(255, 214, 90), M.Neon)
 	-- rampe LED sous l'écran
 	local strip = b.Box(0, 8, 4, 90, 2, 2, NEON_PINK, M.Neon)
 	table.insert(b.Glows, strip)
@@ -1115,12 +1140,12 @@ R.BMXBike = function(b, _ctx)
 	local frame = vivid(b, 1, rgb(80, 180, 255))
 	for _, x in ipairs({ -30, 30 }) do
 		b.CylZ(x, 20, 0, 40, 5, CARBON, M.Rubber)
-		b.CylZ(x, 20, 0, 32, 5.4, rgb(250, 250, 255), M.SmoothPlastic)
+		b.CylZ(x, 20, 0, 32, 5 + 2 * House3DKit.Gap(b, 0.4), rgb(250, 250, 255), M.SmoothPlastic)
 		for index = 0, 3 do
 			local a = index / 4 * math.pi
 			b.Tube(x + math.cos(a) * 15, 20 + math.sin(a) * 15, 0, x - math.cos(a) * 15, 20 - math.sin(a) * 15, 0, 0.8, CHROME, M.Metal)
 		end
-		b.CylZ(x, 20, 0, 6, 6, CHROME, M.Metal)
+		b.CylZ(x, 20, 0, 6, 5 + 4 * House3DKit.Gap(b, 0.4), CHROME, M.Metal)
 	end
 	b.Tube(-30, 20, 0, -6, 22, 0, 3.5, frame, M.Metal)
 	b.Tube(-6, 22, 0, 22, 44, 0, 3.5, frame, M.Metal)
@@ -1318,7 +1343,8 @@ end
 function House3DToys.Register(recipes: { [string]: any }, _family: { [string]: any }, helpers: any, _flags: any)
 	H = helpers
 	for id, recipe in pairs(R) do
-		recipes[id] = recipe
+		-- (v9.8) finition réaliste : reflets du métal, du verre, du marbre
+		recipes[id] = House3DKit.Polished(recipe)
 	end
 end
 

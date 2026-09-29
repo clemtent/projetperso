@@ -41,8 +41,11 @@ local TEMPLATE = {
 	-- ClickSound = Id de Config.ClickSounds ; Language = "Auto" | "en" | "fr"
 	-- ("Auto" = langue de Roblox du joueur) ; DarkMode = mode sombre de l'interface ;
 	-- MusicTrack = "Shuffle" (aléatoire) ou Key d'une musique de Config.Music.Playlist
+	-- v9.8 🎨 Gfx* = Graphismes / Mode réaliste (Shared/GraphicsQuality : "Auto" = selon
+	-- l'appareil et le Mode réaliste ; valeurs validées par SetSetting)
 	Settings = { Sound = true, Music = true, Effects = true, ClickSound = "Default", Language = "Auto", DarkMode = false,
-		MusicTrack = "Shuffle" },
+		MusicTrack = "Shuffle", GfxRealistic = "Auto", GfxReflections = "Auto", GfxWeather = "Auto", GfxRain = "Auto",
+		GfxShadows = "Auto", GfxEffects = "Auto", GfxDetail = "Auto" },
 	Cosmetics = {
 		Owned = {}, -- [cosmeticId] = true
 		Equipped = { Hat = "", Skin = "" }, -- "" = rien d'équipé
@@ -86,6 +89,8 @@ local TEMPLATE = {
 	-- 🚗 Voitures (v9.6, CarService) : possédées, couleur de chacune (Id de
 	-- Config.Cars.Colors), voiture choisie ("" = aucune), 🏎️ garage du manoir
 	Cars = { Owned = {}, Colors = {}, Selected = "", Garage = false },
+	-- 🍦 (v9.8, FoodService) boost "nourriture" en cours (EndsAt = os.time() de fin)
+	Food = { Multiplier = 1, EndsAt = 0, Food = "" },
 	Stats = {
 		TotalClicks = 0,
 		LifetimeDopamine = 0, -- Dopamine gagnée depuis toujours (classement)

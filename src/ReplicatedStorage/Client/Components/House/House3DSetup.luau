@@ -34,6 +34,20 @@
 	  - "Pivot_*" : repères invisibles (pivots des animations ; leur axe Y =
 	    la verticale du modèle, leur axe Z = l'axe avant-arrière).
 
+	v9.8 (DESK98) :
+	  - clavier mécanique 65 % refait (63 touches avec légendes, plaque RGB,
+	    liseré lumineux) : les touches étaient cachées DANS la plaque (voir
+	    la recette) ;
+	  - télés refaites (dalle fine aux coins arrondis, dos bombé, pieds /
+	    supports, barre de son, caisson, halo doux) + champs Setup.Scale
+	    (largeur x Scale) et Setup.Cinema (toile + projecteur au plafond) ;
+	  - presse refaite (4 colonnes, vérin, manomètres, pupitre, tapis
+	    roulant, bac, centrale hydraulique, bandes de danger) aux couleurs des
+	    10 paliers de la presse du clicker (House3DSetup.PressTiers) ;
+	  - règle d'épaisseur th() : aucune couche < 0,03 stud, faces parallèles
+	    de couleurs différentes à plus de 0,03 stud (House3DKit.Separate ne
+	    déforme plus rien).
+
 	API :
 	  House3DSetup.Register(recipes, family, helpers, flags)  (House3DRecipes)
 	  House3DSetup.Has(itemId) -> boolean
@@ -143,6 +157,12 @@ end
 -- Petits morceaux
 ----------------------------------------------------------------------
 
+-- Épaisseur (unités) d'au moins `studs` à l'échelle de l'objet
+local function th(b: Builder, units: number, studs: number?): number
+	return math.max(units, (studs or 0.036) / math.max(0.001, b.K))
+end
+
+
 local function named(part: BasePart, name: string): BasePart
 	part.Name = name
 	return part
@@ -165,8 +185,8 @@ local function pivot(b: Builder, name: string, x: number, y: number, z: number):
 end
 
 -- Écran : sa face Front regarde le devant (repère `cf`, bas-centre du verre)
-local function screenPart(b: Builder, cf: CFrame, w: number, h: number, kind: string, index: number): BasePart
-	local part = b.Part("Part", cf * CFrame.new(0, h / 2, 0) * CFrame.Angles(0, math.pi, 0), Vector3.new(w, h, 0.5), SCREEN_OFF, M.SmoothPlastic, "Screen")
+local function screenPart(b: Builder, cf: CFrame, w: number, h: number, kind: string, index: number, depth: number?): BasePart
+	local part = b.Part("Part", cf * CFrame.new(0, h / 2, 0) * CFrame.Angles(0, math.pi, 0), Vector3.new(w, h, depth or 0.5), SCREEN_OFF, M.SmoothPlastic, "Screen")
 	part.CastShadow = false
 	part:SetAttribute("ScreenKind", kind)
 	part:SetAttribute("ScreenIndex", index)
@@ -334,10 +354,10 @@ local function desk(b: Builder, ctx: any)
 				local inner = CFrame.new(slot.X + side * (slot.W / 2 + 1.4), y, monitorZ)
 				local wingCF = inner * CFrame.Angles(0, a, 0) * CFrame.new(side * wing / 2, 0, 0)
 				b.BoxR(wingCF * CFrame.new(0, slot.H / 2, 0), wing + 1.4, slot.H + 2.8, 1.6, frame, M.SmoothPlastic)
-				local w = b.Part("Part", wingCF * CFrame.new(0, slot.H / 2, 1.05) * CFrame.Angles(0, math.pi, 0), Vector3.new(wing, slot.H, 0.5), rgb(60, 110, 170), M.Neon, "ScreenWing")
+				-- (v9.8 : ailes en verre sombre, plus des dalles Neon cyan éblouissantes)
+				local w = b.Part("Part", wingCF * CFrame.new(0, slot.H / 2, 1.05) * CFrame.Angles(0, math.pi, 0), Vector3.new(wing, slot.H, 0.5), rgb(18, 22, 34), M.SmoothPlastic, "ScreenWing")
 				w.CastShadow = false
 				w:SetAttribute("ScreenIndex", index)
-				table.insert(b.Glows, w)
 			end
 		else
 			monitor(b, cf, slot.W, slot.H, kind, index, frame, not slot.Top, y - T - 1.4)
@@ -394,57 +414,93 @@ R.SetupDeskTrio = desk
 R.SetupDeskUltra = desk
 
 ----------------------------------------------------------------------
--- ⌨️ CLAVIER MÉCANIQUE RGB
+-- ⌨️ CLAVIER MÉCANIQUE RGB (v9.8 : refait)
+-- Cause du clavier "cassé" (v9.5 -> v9.7) : à cette échelle (1 unité ≈
+-- 0,02 stud) la plaque "KeyboardBase" de 0,6 unité était gonflée à
+-- l'épaisseur minimale (0,03 stud) puis encore poussée par l'anti-
+-- scintillement (House3DKit.Separate) AU-DESSUS des touches : seules la
+-- barre d'espace et les grandes touches dépassaient. Ici chaque couche
+-- fait au moins l'épaisseur minimale et deux faces parallèles de couleurs
+-- différentes sont toujours à plus de 0,03 stud l'une de l'autre.
+-- Clavier 65 % : 5 rangées de 15 unités de touche, flèches, touches larges ;
+-- légendes posées par LiveProps (une SurfaceGui par touche, seulement de
+-- près) grâce à l'attribut "Legend" ; plaque RGB entre les touches (douce,
+-- pas de néon) + fin liseré lumineux sous le boîtier.
 ----------------------------------------------------------------------
 
-local KEY_ROWS = {
-	{ "1", "2", "3", "4", "5", "6", "7", "8", "9", "0" },
-	{ "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P" },
-	{ "A", "S", "D", "F", "G", "H", "J", "K", "L" },
-	{ "Z", "X", "C", "V", "B", "N", "M" },
+-- { nom, légende, largeur (unités de touche), style } ; style : "A" lettre,
+-- "M" modificateur, "X" accent
+local KEY_LAYOUT: { { any } } = {
+	{ { "Grave", "`" }, { "1" }, { "2" }, { "3" }, { "4" }, { "5" }, { "6" }, { "7" }, { "8" }, { "9" }, { "0" }, { "Minus", "-" }, { "Equals", "=" }, { "Backspace", "⌫", 2, "M" } },
+	{ { "Tab", "Tab", 1.5, "M" }, { "Q" }, { "W" }, { "E" }, { "R" }, { "T" }, { "Y" }, { "U" }, { "I" }, { "O" }, { "P" }, { "LBracket", "[" }, { "RBracket", "]" }, { "Backslash", "\\", 1.5, "M" } },
+	{ { "Caps", "Caps", 1.75, "M" }, { "A" }, { "S" }, { "D" }, { "F" }, { "G" }, { "H" }, { "J" }, { "K" }, { "L" }, { "Semicolon", ";" }, { "Quote", "'" }, { "Enter", "Enter", 2.25, "X" } },
+	{ { "LShift", "Shift", 2.25, "M" }, { "Z" }, { "X" }, { "C" }, { "V" }, { "B" }, { "N" }, { "M" }, { "Comma", "," }, { "Period", "." }, { "Slash", "/" }, { "RShift", "Shift", 1.75, "M" }, { "Up", "▲", 1, "X" } },
+	{ { "LCtrl", "Ctrl", 1.25, "M" }, { "Win", "◆", 1.25, "M" }, { "LAlt", "Alt", 1.25, "M" }, { "Space", "", 6.25, "A" }, { "RAlt", "Alt", 1, "M" }, { "Fn", "Fn", 1, "M" }, { "Left", "◀", 1, "X" }, { "Down", "▼", 1, "X" }, { "Right", "▶", 1, "X" } },
 }
+House3DSetup.KeyLayout = KEY_LAYOUT
 
 R.SetupKeyboard = function(b, _ctx)
-	local caseColor = b.Map(rgb(40, 40, 56))
-	local w, d = 100, 36
-	-- boîtier + plaque + halo dessous
-	b.Round(0, 0, 0, w, 5, d, 2.5, caseColor, M.SmoothPlastic)
-	named(b.Box(0, 5, 0, w - 5, 0.6, d - 5, rgb(26, 26, 36), M.Metal), "KeyboardBase")
-	-- (v9.6 z-fighting : halo 1.2 plus large de chaque côté, plus 0.3)
-	local glow = b.Box(0, 0.4, 0, w + 2.4, 1.4, d + 2.4, RAINBOW[5], M.Neon)
+	local caseColor = b.Map(rgb(46, 48, 64))
+	local rimColor = caseColor -- (même teinte que le bac : aucune face confondue de couleur différente)
+	local alpha = b.Map(rgb(246, 242, 234))
+	local modifier = b.Map(rgb(112, 108, 150))
+	local accent = b.Map(rgb(255, 104, 170))
+	local w, d = 100, 44
+	local U = 6 -- une unité de touche
+	local gap = 0.9
+	local layer = th(b, 2.2)
+	-- (règle anti-scintillement : deux faces parallèles, tournées du même
+	-- côté, de couleurs différentes, qui se recouvrent -> au moins 0,03 stud
+	-- d'écart ; sinon House3DKit.Separate déforme les pièces)
+	local clear = th(b, 1.4, 0.031)
+	-- boîtier (bac arrondi) + liseré lumineux dessous (doux, en retrait)
+	local trayH = 5
+	b.Round(0, 0, 0, w, trayH, d, 3, caseColor, M.SmoothPlastic)
+	local glowY = clear
+	local glow = b.Box(0, glowY, 0, w + clear * 2, th(b, 1.6), d + clear * 2, RAINBOW[5], M.Neon)
 	neon(b, glow, "RGB")
-	glow.Transparency = 0.3
-	local unit = 8.4
-	local cap = 7.2
-	for rowIndex, row in ipairs(KEY_ROWS) do
-		local z = -14 + (rowIndex - 1) * 7.2
-		local offset = ({ 0, 0.25, 0.55, 1.05 })[rowIndex] * unit
-		local startX = -w / 2 + 4.5 + offset + unit / 2
-		for keyIndex, letter in ipairs(row) do
-			local x = startX + (keyIndex - 1) * unit
-			local color = RAINBOW[(keyIndex + rowIndex) % #RAINBOW + 1]:Lerp(WHITE, 0.45)
-			local key = b.Box(x, 5.3, z, cap, 3.4, cap - 0.6, color, M.SmoothPlastic)
-			key.Name = "Key_" .. letter
-		end
-		-- touches larges au bout des rangées (Tab / Maj / Entrée)
-		local rowEnd = startX + (#row - 1) * unit + unit / 2 + 0.6
-		local wide = w / 2 - 4 - rowEnd
-		if wide > 3 then
-			b.Box(rowEnd + wide / 2, 5.3, z, wide - 0.8, 3.2, cap - 0.6, rgb(90, 90, 116), M.SmoothPlastic)
-		end
-		if offset > 1 then
-			b.Box(-w / 2 + 4.5 + offset / 2, 5.3, z, offset - 1, 3.2, cap - 0.6, rgb(90, 90, 116), M.SmoothPlastic)
+	glow.Transparency = 0.45
+	-- plaque (couleur RGB animée, SmoothPlastic : lueur douce entre les touches)
+	local plateTop = trayH + clear
+	local plateBottom = plateTop - layer
+	local plateW, plateD = 90 + clear * 2 + 0.9, 30 + clear * 2 + 0.9
+	named(b.Box(0, plateBottom, 0, plateW, layer, plateD, rgb(120, 90, 255), M.SmoothPlastic), "RGB").CastShadow = false
+	-- rebord du boîtier (4 baguettes au-dessus de la plaque, même teinte que le bac)
+	local rimH = math.max(th(b, 2.8), plateTop - plateBottom + clear)
+	local rimTop = plateBottom + rimH
+	local rimW = 2
+	b.Box(0, plateBottom, d / 2 - rimW / 2, w, rimH, rimW, rimColor, M.SmoothPlastic)
+	b.Box(0, plateBottom, -d / 2 + rimW / 2, w, rimH, rimW, rimColor, M.SmoothPlastic)
+	b.Box(-w / 2 + rimW / 2, plateBottom, 0, rimW, rimH, d - rimW * 2 + 0.4, rimColor, M.SmoothPlastic)
+	b.Box(w / 2 - rimW / 2, plateBottom, 0, rimW, rimH, d - rimW * 2 + 0.4, rimColor, M.SmoothPlastic)
+	-- touches (le bas des touches est pris dans la plaque : aucune face confondue)
+	local keyBottom = plateTop - math.min(0.5, layer - clear)
+	local keyH = math.max(4, rimTop - keyBottom + 2.2)
+	for rowIndex, row in ipairs(KEY_LAYOUT) do
+		local z = -12 + (rowIndex - 1) * U -- rangée 1 au fond, espace devant
+		local cursor = -45
+		for _, spec in ipairs(row) do
+			local id = spec[1]
+			local legend = spec[2] or id
+			local width = tonumber(spec[3]) or 1
+			local style = spec[4] or "A"
+			local x = cursor + width * U / 2
+			cursor += width * U
+			local color = style == "M" and modifier or (style == "X" and accent or alpha)
+			-- rangée du fond un peu plus haute (profil "sculpté")
+			local lift = (rowIndex == 1 and 0.5) or (rowIndex == 5 and -0.3) or 0
+			local key = b.Box(x, keyBottom, z, width * U - gap, keyH + lift, U - gap, color, M.SmoothPlastic)
+			key.Name = "Key_" .. id
+			key:SetAttribute("Legend", legend)
+			key:SetAttribute("KeyStyle", style)
 		end
 	end
-	-- barre d'espace
-	local space = b.Box(0, 5.3, 14.6, 44, 3.2, 6.2, rgb(240, 236, 250), M.SmoothPlastic)
-	space.Name = "Key_Space"
-	for _, side in ipairs({ -1, 1 }) do
-		b.Box(side * 33, 5.3, 14.6, 18, 3.2, 6.2, rgb(90, 90, 116), M.SmoothPlastic)
-	end
-	-- molette de volume + LED
-	b.CylX(w / 2 - 6, 8, -16.5, 5, 3, CHROME, M.Metal)
-	b.Footprint(w, d, 10)
+	-- molette de volume (sur le rebord arrière droit) + diode
+	b.Cyl(w / 2 - 7, rimTop - 1, -d / 2 + rimW / 2, 3.6, 2.6, CHROME, M.Metal)
+	neon(b, b.Ball(w / 2 - 14, rimTop - 0.3, -d / 2 + rimW / 2, 1.6, MINT, M.Neon), "Glow")
+	-- câble tressé vers l'arrière
+	House3DKit.Path(b, { { -20, 3, -d / 2 - 0.5 }, { -22, 2, -d / 2 - 8 }, { -30, 1.6, -d / 2 - 14 } }, 2.2, INK, M.Fabric)
+	b.Footprint(w, d, rimTop + keyH)
 end
 
 ----------------------------------------------------------------------
@@ -489,86 +545,189 @@ end
 -- 📺 TÉLÉS (logo DVD) + MEUBLE TÉLÉ + ÉCRAN D'INFOS
 ----------------------------------------------------------------------
 
--- Dalle : cadre fin + écran (bas-centre `cf`), largeur `w` (16:9)
-local function flatPanel(b: Builder, cf: CFrame, w: number, kind: string, frameColor: Color3): number
-	local h = w * 9 / 16
-	local bezel = 1.6
-	b.BoxR(cf * CFrame.new(0, h / 2 + bezel, 0), w + bezel * 2, h + bezel * 2, 2.4, frameColor, M.SmoothPlastic)
-	b.BoxR(cf * CFrame.new(0, h / 2 + bezel, -2.2), w * 0.7, h * 0.7, 2.2, darken(frameColor, 0.1), M.SmoothPlastic)
-	screenPart(b, cf * CFrame.new(0, bezel, 1.45), w, h, kind, 1)
-	-- logo de la marque + diode
-	b.BoxR(cf * CFrame.new(0, 0.7, 1.3), 6, 0.6, 0.3, CHROME, M.Metal)
-	neon(b, b.BoxR(cf * CFrame.new(w / 2 - 2, 0.7, 1.3), 1, 0.5, 0.3, RED, M.Neon), "Glow")
-	return h + bezel * 2
+-- v9.8 📺 Télés "10x" : dalle ultra-fine aux coins arrondis, bords fins,
+-- dos bombé, pieds / supports réalistes, barre de son, halo doux pour les
+-- grandes, écran de cinéma (projecteur au plafond + toile). Les épaisseurs
+-- suivent l'échelle (th) : aucune couche plus fine que 0,03 stud, aucune
+-- face confondue (l'écran dépasse de 0,03 stud du cadre).
+
+-- Bloc aux coins arrondis dans le plan de l'image (arêtes le long de Z) ;
+-- `cf` = centre du bloc
+local function roundRectZ(b: Builder, cf: CFrame, w: number, h: number, d: number, r: number, color: Color3, material: Enum.Material?)
+	r = math.clamp(r, 0.3, math.min(w, h) / 2 - 0.05)
+	local main = b.BoxR(cf, w - 2 * r, h, d, color, material)
+	b.BoxR(cf, w, h - 2 * r, d, color, material)
+	for _, sx in ipairs({ -1, 1 }) do
+		for _, sy in ipairs({ -1, 1 }) do
+			local corner = b.Part("Part", cf * CFrame.new(sx * (w / 2 - r), sy * (h / 2 - r), 0) * CFrame.Angles(0, math.pi / 2, 0), Vector3.new(d, 2 * r, 2 * r), color, material, "Cylindre")
+			;(corner :: Part).Shape = Enum.PartType.Cylinder
+		end
+	end
+	return main
 end
 
+type Panel = { W: number, H: number, Back: number, Screen: BasePart }
+
+-- Dalle 16:9 : `cf` = bas-centre de la FACE AVANT du cadre ; renvoie ses mesures
+local function tvPanel(b: Builder, cf: CFrame, w: number, kind: string, frameColor: Color3): Panel
+	local h = w * 9 / 16
+	local bezel = math.max(1.1, w * 0.011)
+	local chin = bezel * 2.4
+	local depth = th(b, 2.2)
+	local bulge = th(b, 2.6)
+	local gap = th(b, 0, 0.032)
+	local W, H = w + bezel * 2, h + bezel + chin
+	roundRectZ(b, cf * CFrame.new(0, H / 2, -depth / 2), W, H, depth, math.max(1.4, w * 0.018), frameColor, M.SmoothPlastic)
+	-- dos bombé (électronique) : en partie pris dans la dalle
+	roundRectZ(b, cf * CFrame.new(0, H * 0.52, -depth - bulge * 0.35), W * 0.7, H * 0.62, bulge, math.max(2, w * 0.05), darken(frameColor, 0.14), M.SmoothPlastic)
+	-- écran : sa face avant à 0,03 stud devant le cadre
+	local screenDepth = th(b, 0.8)
+	local screen = screenPart(b, cf * CFrame.new(0, chin, gap - screenDepth / 2), w, h, kind, 1, screenDepth)
+	-- logo de la marque + diode (dans le menton, même plan que l'écran)
+	b.BoxR(cf * CFrame.new(0, chin / 2, gap - screenDepth / 2), math.min(10, w * 0.07), chin * 0.28, screenDepth, CHROME, M.Metal)
+	neon(b, b.BoxR(cf * CFrame.new(w / 2 - 2, chin / 2, gap - screenDepth / 2), 1.2, chin * 0.24, screenDepth, RED, M.Neon), "Glow")
+	return { W = W, H = H, Back = depth + bulge * 0.85, Screen = screen }
+end
+
+-- Barre de son (bouts arrondis, grille en tissu, diode) ; `z` = face arrière
 local function soundbar(b: Builder, x: number, y: number, z: number, w: number)
-	b.Round(x, y, z, w, 4, 6, 2, CARBON, M.SmoothPlastic)
-	-- (v9.6 z-fighting : grille 3..3.8 puis diode 3.8..4.4 devant le boîtier)
-	b.Box(x, y + 0.6, z + 3.4, w - 4, 2.8, 0.8, rgb(70, 70, 90), M.Fabric)
-	neon(b, b.Box(x, y + 0.3, z + 4.1, 3, 0.5, 0.6, CYAN, M.Neon), "Glow")
+	local h = 5
+	local d = 6.5
+	local r = h / 2
+	b.Box(x, y, z + d / 2, w - h, h, d, CARBON, M.SmoothPlastic)
+	for _, side in ipairs({ -1, 1 }) do
+		-- (cylindre couché avant-arrière : bouts arrondis vus de face)
+		local cap = b.Part("Part", CFrame.new(x + side * (w / 2 - r), y + r, z + d / 2) * CFrame.Angles(0, math.pi / 2, 0), Vector3.new(d, h, h), CARBON, M.SmoothPlastic, "Cylindre")
+		;(cap :: Part).Shape = Enum.PartType.Cylinder
+	end
+	-- grille (tissu) : devant la barre, un peu en retrait des bouts
+	local fabric = th(b, 1)
+	b.Box(x, y + 0.6, z + d + fabric / 2 - fabric * 0.4, w - h - 2, h - 1.2, fabric, rgb(62, 62, 78), M.Fabric)
+	neon(b, b.Box(x + w * 0.3, y + h - 0.2, z + d * 0.5, 2.4, th(b, 0.6), 1.2, CYAN, M.Neon), "Glow")
+end
+
+-- 🎬 Écran de cinéma : toile déroulante + projecteur accroché au plafond
+local function cinema(b: Builder, setup: { [string]: any }, kind: string)
+	local w = 94 * math.clamp(tonumber(setup.Scale) or 2.2, 1, 3)
+	local h = w * 9 / 16
+	local border = math.max(3, w * 0.025)
+	local W, H = w + border * 2, h + border * 2
+	local t = th(b, 1.2)
+	local gap = th(b, 0, 0.032)
+	local y0 = 6
+	-- fond noir (bordure de la toile)
+	b.Box(0, y0, 2 + t / 2, W, H, t, rgb(20, 20, 26), M.Fabric)
+	-- toile blanche (l'écran) : 0,03 stud devant le fond
+	local screenDepth = th(b, 0.8)
+	screenPart(b, CFrame.new(0, y0 + border, 2 + t + gap - screenDepth / 2), w, h, kind, 1, screenDepth).Material = M.Fabric
+	-- carter du rouleau (en haut) + barre de lestage (en bas) + tirette
+	local top = y0 + H
+	b.CylX(0, top + 3.2, 4, 7, W + 8, rgb(236, 236, 244), M.SmoothPlastic)
+	for _, side in ipairs({ -1, 1 }) do
+		b.CylX(side * (W / 2 + 4.6), top + 3.2, 4, 8, 1.4, CARBON, M.SmoothPlastic)
+		b.Box(side * (W / 2 + 2), top + 1, 0, 3, 6, 4, CARBON_LIGHT, M.Metal)
+	end
+	b.CylX(0, y0 - 1.4, 2 + t / 2, 2.8, W + 2, CARBON, M.Metal)
+	House3DKit.Path(b, { { 0, y0 - 2.4, 2 + t / 2 }, { 0, y0 - 9, 2 + t / 2 } }, 0.8, INK, M.Fabric)
+	b.Ball(0, y0 - 10, 2 + t / 2, 2.6, CARBON, M.SmoothPlastic)
+	-- projecteur au plafond (devant la toile, objectif tourné vers elle)
+	local pz = math.max(60, w * 0.45)
+	local py = top + 6
+	b.Cyl(0, py + 12, pz, 12, th(b, 1.4), rgb(236, 236, 244), M.SmoothPlastic) -- platine de plafond
+	b.Cyl(0, py + 6, pz, 2, 7, CHROME, M.Metal)
+	b.Round(0, py - 4, pz, 28, 10, 24, 3, rgb(244, 244, 250), M.SmoothPlastic)
+	b.Box(0, py - 4.6, pz, 20, th(b, 1), 18, CARBON_LIGHT, M.SmoothPlastic) -- dessous
+	b.CylZ(-6, py + 1, pz - 12.6, 7, 2.4, CARBON, M.Metal)
+	neon(b, b.CylZ(-6, py + 1, pz - 13.8 - th(b, 0.4) / 2, 4.4, th(b, 0.4), rgb(200, 230, 255), M.Neon), "Glow")
+	for index = 0, 3 do
+		b.Box(6 + index * 3, py + 3, pz + 12 + th(b, 0.6) / 2, 1.6, 4, th(b, 0.6), CARBON, M.SmoothPlastic)
+	end
+	neon(b, b.Ball(10, py + 6.2, pz - 8, 1.4, MINT, M.Neon), "Glow")
+	b.Footprint(W + 12, 14, 100)
 end
 
 local function tvRecipe(b: Builder, _ctx: any)
 	local setup = setupOf(b)
 	local rank = sizeRank(setup)
-	local frameColor = rank >= 3 and rgb(24, 24, 32) or b.Map(rgb(46, 46, 62))
+	local scale = math.clamp(tonumber(setup.Scale) or 1, 1, 3)
+	local frameColor = rank >= 3 and rgb(26, 26, 34) or b.Map(rgb(40, 40, 54))
 	local feeds = type(setup.Feeds) == "table" and setup.Feeds or {}
 	local kind = tostring(feeds[1] or "DVD")
-	local w = 94
-	local h = w * 9 / 16 + 3.2
+	if setup.Cinema == true then
+		cinema(b, setup, kind)
+		return
+	end
+	local w = 94 * scale
+	local h = w * 9 / 16
+	local big = rank >= 4 or scale > 1
 	if tostring(setup.Mount) == "Wall" then
-		-- au mur : platine + bras articulé, la télé 7 unités devant le mur
-		b.Box(0, 42, 0.8, 30, 20, 1.6, CARBON_LIGHT, M.Metal)
-		for _, side in ipairs({ -1, 1 }) do
-			b.Box(side * 8, 50, 4, 3, 3, 6, STEEL, M.Metal)
-			b.Box(side * 8, 44, 4, 3, 3, 6, STEEL, M.Metal)
+		-- au mur : platine fine + bras (moyenne) ; la dalle presque contre le mur
+		local armed = rank <= 2 and not big
+		local plate = th(b, 1.2)
+		local front = armed and 12 or 7.5
+		local H = h + math.max(1.1, w * 0.011) * 3.4
+		local y0 = math.max(4, 50 - H / 2)
+		b.Box(0, y0 + H * 0.3, plate / 2, 26, 22, plate, CARBON_LIGHT, M.Metal)
+		if armed then
+			-- bras articulé (2 segments + rotules)
+			House3DKit.Path(b, { { 0, y0 + H * 0.42, plate }, { -8, y0 + H * 0.46, front * 0.55 }, { 0, y0 + H * 0.5, front - 3.5 } }, 2.6, STEEL, M.Metal)
+		else
+			for _, side in ipairs({ -1, 1 }) do
+				b.Box(side * 9, y0 + H * 0.34, plate, 3, 3, front - 3 - plate, STEEL, M.Metal)
+			end
 		end
-		local y0 = 50 - h / 2
-		if rank >= 4 then
-			-- "ambilight" : halo de couleur derrière la télé
-			local halo = b.Box(0, y0 - 3, 4.2, w + 8, h + 6, 0.4, CYAN, M.Neon) -- (v9.6 : 1 plus en retrait)
+		if big then
+			-- halo doux derrière la télé (entre la télé et le mur)
+			local halo = b.Box(0, y0 - 3, plate + th(b, 0.8), w + 10, H + 6, th(b, 0.4), CYAN, M.Neon)
 			neon(b, halo, "Ambilight")
-			halo.Transparency = 0.45
+			halo.Transparency = 0.6
 		end
-		flatPanel(b, CFrame.new(0, y0, 8.4), w, kind, frameColor)
-		if rank >= 3 then
-			soundbar(b, 0, y0 - 9, 6, w * 0.7)
-			b.Box(0, y0 - 5, 4, 20, 1.2, 4, STEEL, M.Metal)
+		tvPanel(b, CFrame.new(0, y0, front), w, kind, frameColor)
+		if rank >= 3 or big then
+			soundbar(b, 0, y0 - 8.5, plate + 1, math.min(w * 0.7, 110))
+			b.Box(0, y0 - 4, plate, 18, 1.4, 3, STEEL, M.Metal)
 		end
-		b.Footprint(w + 4, 14, 100)
+		b.Footprint(w + 6, 14, 100)
 		return
 	end
-	if rank >= 4 then
-		-- géante : grand pied en chevalet au sol + barre de son
-		local y0 = 26
+	if big then
+		-- grande sur pied : deux mâts de studio + barre de son
+		local y0 = 24
+		local panelBack = -3.4
+		local legX = math.min(w * 0.3, 44)
 		for _, side in ipairs({ -1, 1 }) do
-			b.BoxR(CFrame.new(side * 26, y0 / 2 + 2, -4) * CFrame.Angles(0, 0, side * 0.08), 4, y0 + 6, 4, CARBON_LIGHT, M.Metal)
-			b.Box(side * 26, 0, -4, 10, 2, 26, CARBON, M.Metal)
+			b.Cyl(side * legX, 2, panelBack - 4, 3.2, y0 + h * 0.6, CHROME, M.Metal)
+			b.Round(side * legX, 0, panelBack - 2, 12, th(b, 2), 30, 3, CARBON, M.Metal)
 		end
-		b.Box(0, y0 - 6, -4, 60, 3, 4, CARBON_LIGHT, M.Metal)
-		flatPanel(b, CFrame.new(0, y0, 0), w, kind, frameColor)
-		soundbar(b, 0, 2, 12, w * 0.8)
-		b.Footprint(100, 30, y0 + h + 2)
+		b.Box(0, y0 + h * 0.3, panelBack - 4.6, legX * 2 + 4, 3, 2.6, CARBON_LIGHT, M.Metal)
+		local halo = b.Box(0, y0 - 2, panelBack - 7.5, w + 8, h + 8, th(b, 0.4), CYAN, M.Neon)
+		neon(b, halo, "Ambilight")
+		halo.Transparency = 0.6
+		tvPanel(b, CFrame.new(0, y0, 0), w, kind, frameColor)
+		soundbar(b, 0, 3.4, 8, math.min(w * 0.75, 120))
+		-- caisson de basses à côté
+		b.Round(legX + 18, 0, 6, 16, 16, 16, 2.5, CARBON, M.SmoothPlastic)
+		b.CylZ(legX + 18, 8, 14 + th(b, 0.8) / 2, 10, th(b, 0.8), rgb(56, 56, 70), M.Fabric)
+		b.Footprint(math.max(w + 6, 100), 34, y0 + h + 8)
 		return
 	end
-	-- petite / moyenne / grande : pieds (sur un meuble ou au sol)
-	local y0 = rank >= 3 and 8 or 7
-	if rank == 1 then
-		-- petite télé : pied central rond
-		b.Cyl(0, 0, -1, 28, 1.6, CARBON, M.Metal)
-		b.Box(0, 1.6, -3, 6, y0 - 1, 3, CHROME, M.Metal)
+	-- petite / moyenne / grande sur meuble : pied central (petite, grande) ou lames (moyenne)
+	local y0 = rank == 3 and 8 or 7
+	if rank == 2 then
+		for _, side in ipairs({ -1, 1 }) do
+			local x = side * w * 0.36
+			b.BoxR(CFrame.new(x, y0 * 0.5, -2) * CFrame.Angles(0, 0, side * 0.32), 2.2, y0 + 2.5, 3.2, CHROME, M.Metal)
+			b.Round(x + side * 2, 0, -1, 9, th(b, 1.2), 14, 2, CHROME, M.Metal)
+		end
 	else
-		for _, side in ipairs({ -1, 1 }) do
-			b.BoxR(CFrame.new(side * 36, y0 / 2, 0) * CFrame.Angles(0, 0, side * 0.35), 2.6, y0 + 2, 3, CHROME, M.Metal)
-			b.Box(side * 38, 0, 0, 8, 1.2, 14, CHROME, M.Metal)
-		end
+		b.Box(0, 0.8, -4.2, 7, y0 + 6, th(b, 1.6), CHROME, M.Metal)
+		b.Round(0, 0, -2, rank == 3 and 40 or 30, th(b, 1.4), 14, 5, CARBON_LIGHT, M.Metal)
 	end
-	flatPanel(b, CFrame.new(0, y0, 0), w, kind, frameColor)
+	tvPanel(b, CFrame.new(0, y0, 0), w, kind, frameColor)
 	if rank >= 3 then
-		soundbar(b, 0, 0, 10, w * 0.6)
+		soundbar(b, 0, 0, 5, w * 0.6)
 	end
-	b.Footprint(100, rank >= 3 and 24 or 18, y0 + h)
+	b.Footprint(100, rank >= 3 and 24 or 18, y0 + h + 5)
 end
 
 R.SetupTVSmall = tvRecipe
@@ -884,70 +1043,205 @@ R.SetupWindmill = function(b, _ctx)
 end
 
 ----------------------------------------------------------------------
--- 🗜️ PRESSE HYDRAULIQUE
+-- 🗜️ PRESSE HYDRAULIQUE (v9.8 : refaite "comme la presse du clicker")
+-- Bâti en H (lit + montants + traverse), vérin hydraulique chromé, coulisseau
+-- (bélier) à bandes de danger, enclume striée, deux manomètres, pupitre
+-- (gros bouton rouge, voyants, afficheur), tapis roulant qui AMÈNE les objets
+-- sous la presse (lamelles qui défilent), bac à galettes, centrale
+-- hydraulique + flexibles, gyrophare. Les pièces portent un attribut "Tint"
+-- (Frame / FrameDark / AccentA / AccentB / Chrome / Hose / Bolt) : LiveProps
+-- les peint aux couleurs du palier de la presse du clicker (niveau
+-- "Presse hydraulique" du propriétaire, 10 paliers : bois -> diamant néon).
 ----------------------------------------------------------------------
 
+-- Paliers de la presse du clicker (Stimuli > Press, TIERS) : couleurs 3D
+House3DSetup.PressTiers = {
+	{ Name = "Rustic wood", Frame = rgb(186, 128, 74), Dark = rgb(150, 100, 56), AccentA = rgb(226, 196, 138), AccentB = rgb(186, 150, 92), Chrome = rgb(214, 170, 84), Hose = rgb(122, 76, 42), Bolt = rgb(70, 58, 50), Wood = true, Debris = { rgb(186, 128, 74), rgb(226, 196, 138) } },
+	{ Name = "Oak & iron", Frame = rgb(140, 90, 50), Dark = rgb(92, 94, 104), AccentA = rgb(92, 94, 104), AccentB = rgb(62, 64, 72), Chrome = rgb(160, 164, 172), Hose = rgb(64, 46, 32), Bolt = rgb(44, 44, 50), Wood = true, Debris = { rgb(140, 90, 50), rgb(120, 122, 130) } },
+	{ Name = "Steel", Frame = rgb(160, 168, 182), Dark = rgb(110, 116, 132), AccentA = rgb(255, 200, 30), AccentB = INK, Chrome = rgb(210, 216, 226), Hose = rgb(40, 40, 46), Bolt = rgb(90, 96, 110), Debris = { rgb(200, 205, 215) } },
+	{ Name = "Blue steel", Frame = rgb(48, 114, 204), Dark = rgb(36, 80, 150), AccentA = rgb(255, 200, 30), AccentB = INK, Chrome = rgb(214, 220, 230), Hose = rgb(30, 30, 36), Bolt = rgb(220, 226, 236), Debris = { rgb(48, 114, 204), rgb(220, 226, 236) } },
+	{ Name = "Industrial", Frame = rgb(244, 140, 30), Dark = rgb(70, 74, 86), AccentA = rgb(255, 214, 40), AccentB = INK, Chrome = rgb(214, 220, 230), Hose = rgb(28, 28, 32), Bolt = rgb(60, 60, 66), Beacon = true, Steam = true, Debris = { rgb(244, 140, 30), rgb(120, 126, 140) } },
+	{ Name = "Factory", Frame = rgb(78, 88, 104), Dark = rgb(50, 56, 68), AccentA = rgb(60, 214, 110), AccentB = rgb(26, 30, 36), Chrome = rgb(214, 220, 230), Hose = rgb(20, 20, 24), Bolt = rgb(150, 160, 176), Beacon = true, Steam = true, Debris = { rgb(78, 88, 104), rgb(60, 214, 110) } },
+	{ Name = "Solid gold", Frame = rgb(240, 180, 40), Dark = rgb(200, 140, 30), AccentA = rgb(255, 240, 170), AccentB = rgb(214, 150, 20), Chrome = rgb(255, 230, 140), Hose = rgb(120, 72, 20), Bolt = rgb(150, 100, 10), Shine = true, Debris = { rgb(255, 214, 70), rgb(255, 246, 200) } },
+	{ Name = "Royal gold", Frame = rgb(246, 190, 50), Dark = rgb(150, 20, 44), AccentA = rgb(196, 24, 56), AccentB = rgb(255, 222, 120), Chrome = rgb(255, 236, 160), Hose = rgb(150, 20, 44), Bolt = rgb(255, 236, 160), Shine = true, Debris = { rgb(255, 214, 70), rgb(196, 24, 56) } },
+	{ Name = "Diamond", Frame = rgb(176, 232, 255), Dark = rgb(120, 190, 235), AccentA = WHITE, AccentB = rgb(130, 206, 255), Chrome = rgb(236, 250, 255), Hose = rgb(80, 164, 230), Bolt = rgb(90, 170, 230), Shine = true, Crystal = true, Debris = { rgb(190, 240, 255), WHITE } },
+	{ Name = "Neon diamond", Frame = rgb(200, 238, 255), Dark = rgb(40, 24, 80), AccentA = rgb(0, 230, 255), AccentB = rgb(255, 60, 200), Chrome = rgb(236, 250, 255), Hose = rgb(255, 60, 200), Bolt = rgb(0, 230, 255), Beacon = true, Shine = true, Crystal = true, Neon = true, Debris = { rgb(0, 230, 255), rgb(255, 60, 200) } },
+}
+House3DSetup.PRESS_DEFAULT_TIER = 5 -- (visiteurs : palier "industriel")
+
+local HAZARD_A, HAZARD_B = rgb(255, 204, 36), rgb(34, 34, 40)
+
+-- Bandes de danger en diagonale sur une face (une SurfaceGui, 8 bandes)
+local function hazard(part: BasePart, face: Enum.NormalId, faceW: number, faceH: number, stripes: number)
+	local canvas = Vector2.new(256, math.max(16, math.floor(256 * faceH / math.max(0.01, faceW) + 0.5)))
+	local gui = House3DKit.Surface(part, face, canvas, 1)
+	gui.Name = "Hazard"
+	local fill = Instance.new("Frame")
+	fill.BorderSizePixel = 0
+	fill.BackgroundColor3 = WHITE
+	fill.Size = UDim2.fromScale(1, 1)
+	fill.Parent = gui
+	local n = math.clamp(stripes, 2, 10)
+	local keypoints = {}
+	for i = 1, n do
+		local color = i % 2 == 1 and HAZARD_A or HAZARD_B
+		table.insert(keypoints, ColorSequenceKeypoint.new((i - 1) / n, color))
+		table.insert(keypoints, ColorSequenceKeypoint.new(math.min(1, i / n - 0.002), color))
+	end
+	keypoints[#keypoints] = ColorSequenceKeypoint.new(1, n % 2 == 1 and HAZARD_A or HAZARD_B)
+	local gradient = Instance.new("UIGradient")
+	gradient.Color = ColorSequence.new(keypoints)
+	gradient.Rotation = 35
+	gradient.Parent = fill
+end
+
+local function tint(part: BasePart, role: string): BasePart
+	part:SetAttribute("Tint", role)
+	return part
+end
+
 R.SetupPress = function(b, _ctx)
-	local yellowC = b.Map(rgb(255, 200, 40))
-	local frame = rgb(60, 64, 80)
-	-- socle + bandes de danger
-	b.Box(0, 0, 0, 92, 8, 56, frame, M.Metal)
-	for index = 0, 8 do
-		-- (v9.6 z-fighting : bandes 28..28.8, baguettes 28..29.6)
-		b.BoxR(CFrame.new(-40 + index * 10, 4, 28.4) * CFrame.Angles(0, 0, 0.7), 4, 12, 0.8, index % 2 == 0 and yellowC or INK, M.SmoothPlastic)
+	local tierStyle = House3DSetup.PressTiers[House3DSetup.PRESS_DEFAULT_TIER]
+	local frame = b.Map(tierStyle.Frame)
+	local dark = tierStyle.Dark
+	local chrome = tierStyle.Chrome
+	local t = th(b, 1.2)
+	local PX, PZ = -10, -4 -- axe de la presse
+	local ANVIL = 22 -- dessus de l'enclume
+	-- plancher (tôle striée) + bande de danger au bord avant
+	b.Box(0, 0, 0, 100, 3, 60, rgb(82, 86, 98), M.DiamondPlate)
+	local strip = b.Box(0, 2.4, 26.5, 98, th(b, 1.6), 5, HAZARD_A, M.SmoothPlastic)
+	hazard(strip, Enum.NormalId.Top, 98, 5, 10)
+	-- lit (bâti bas) + enclume striée
+	tint(b.Box(PX, 2.4, PZ, 56, 16, 42, frame, M.Metal), "Frame")
+	b.Box(PX, 18, PZ, 34, ANVIL - 18, 28, rgb(120, 126, 142), M.DiamondPlate)
+	pivot(b, "Pivot_Anvil", PX, ANVIL, PZ)
+	-- presse à 4 colonnes chromées (le tapis passe entre elles) + écrous
+	for _, sx in ipairs({ -1, 1 }) do
+		for _, sz in ipairs({ -1, 1 }) do
+			local x, z = PX + sx * 24, PZ + sz * 15.5
+			tint(b.Cyl(x, 17.6, z, 6, 67, chrome, M.Metal), "Chrome")
+			tint(b.Cyl(x, 18.4, z, 9, 3, tierStyle.Bolt, M.Metal), "Bolt")
+			tint(b.Cyl(x, 80.6, z, 9, 3, tierStyle.Bolt, M.Metal), "Bolt")
+		end
 	end
-	b.Box(0, 0, 28.8, 92, 1.2, 1.6, frame, M.Metal)
-	b.Box(0, 6.8, 28.8, 92, 1.2, 1.6, frame, M.Metal)
-	-- enclume (matrice)
-	b.Box(0, 8, 0, 50, 10, 40, rgb(110, 116, 132), M.DiamondPlate)
-	pivot(b, "Pivot_Anvil", 0, 18, 0)
-	-- colonnes + traverse
+	-- traverse + bandeau de danger + manomètres
+	tint(b.Box(PX, 83.4, PZ, 60, 16, 40, frame, M.Metal), "Frame")
+	local band = b.Box(PX, 87.4, PZ + 20 + t * 0.3, 28, 7, t, HAZARD_A, M.SmoothPlastic)
+	hazard(band, Enum.NormalId.Back, 28, 7, 6) -- (face vers +z : "Back" une fois l'objet retourné)
+	for index, gx in ipairs({ PX - 21, PX + 21 }) do
+		local dz = PZ + 20
+		-- (couches à plus de 0,03 stud l'une de l'autre : boîtier, cadran, aiguille)
+		b.CylZ(gx, 91.4, dz + t * 0.1, 11, t, INK, M.Metal) -- boîtier (avant à +0,6 t)
+		local face = dz + t * 1.4
+		named(b.CylZ(gx, 91.4, face - t / 2, 9, t, rgb(250, 248, 240), M.SmoothPlastic), "GaugeDial" .. index)
+		-- zone rouge du cadran
+		b.BoxR(CFrame.new(gx + 2.4, 93.6, face + th(b, 0.3) / 2 - 0.1) * CFrame.Angles(0, 0, -0.7), 2.6, 0.9, th(b, 0.3), RED, M.SmoothPlastic)
+		named(b.BoxR(CFrame.new(gx, 93.4, face + th(b, 0.8)), 0.8, 4.6, th(b, 0.6), RED, M.SmoothPlastic), "Gauge" .. index)
+		b.CylZ(gx, 91.4, face + th(b, 1.6), 1.6, th(b, 0.8), INK, M.Metal)
+	end
+	-- vérin hydraulique (sur la traverse) + gyrophare
+	tint(b.Cyl(PX, 99, PZ, 24, 18, dark, M.Metal), "FrameDark")
+	tint(b.Cyl(PX, 116.6, PZ, 26, 3, chrome, M.Metal), "Chrome")
+	for _, dx in ipairs({ -11, 11 }) do
+		tint(b.Cyl(PX + dx, 99, PZ + 9, 2.4, 17.6, chrome, M.Metal), "Chrome") -- tirants
+	end
+	b.Cyl(PX, 119.4, PZ, 7, 2, CARBON, M.Metal)
+	neon(b, b.Egg(PX, 124.6, PZ, 6, 8, 6, ORANGE, M.Neon), "PressBeacon")
+	-- coulisseau (descend) : tige chromée longue (reste dans le vérin), bélier, guides
+	pivot(b, "Pivot_Ram", PX, 52, PZ)
+	tint(named(b.Cyl(PX, 62, PZ, 9, 51, chrome, M.Metal), "PressRam"), "Chrome")
+	local ram = named(b.Box(PX, 52, PZ, 44, 10, 23, dark, M.Metal), "PressRam")
+	tint(ram, "FrameDark")
+	local ramBand = named(b.Box(PX, 53.5, PZ + 11.5 + t * 0.3, 38, 7, t, HAZARD_A, M.SmoothPlastic), "PressRam")
+	hazard(ramBand, Enum.NormalId.Back, 38, 7, 8)
+	-- pupitre (devant à droite) : gros bouton rouge, voyants, afficheur
+	local cx, cz = 43, 21
+	b.Box(cx, 3.2, cz, 5, 36, 5, CARBON, M.Metal)
+	b.Box(cx, 2.4, cz, 14, th(b, 2), 14, CARBON_LIGHT, M.Metal)
+	local head = CFrame.new(cx, 42, cz) * CFrame.Angles(-0.55, 0, 0)
+	tint(b.BoxR(head, 24, 7, 16, tierStyle.AccentA, M.Metal), "AccentA")
+	local topFace = head * CFrame.new(0, 3.5, 0)
+	local button = b.Part("Part", topFace * CFrame.new(-4, 1.2, 1) * CFrame.Angles(0, 0, math.pi / 2), Vector3.new(2.4, 6.4, 6.4), RED, M.SmoothPlastic, "PressButton")
+	;(button :: Part).Shape = Enum.PartType.Cylinder
+	b.Part("Part", topFace * CFrame.new(-4, 0.1, 1) * CFrame.Angles(0, 0, math.pi / 2), Vector3.new(1.6, 8.4, 8.4), rgb(255, 214, 60), M.SmoothPlastic, "Collar").CastShadow = false
+	;(b.Parts[#b.Parts] :: Part).Shape = Enum.PartType.Cylinder
+	for index, color in ipairs({ MINT, YELLOW, RED }) do
+		neon(b, b.Part("Part", topFace * CFrame.new(3 + index * 2.6, 0.5, -4), Vector3.new(1.8, 1.4, 1.8), color, M.Neon, "Lamp" .. index), nil)
+	end
+	named(b.Part("Part", topFace * CFrame.new(6, 0.3, 2.6), Vector3.new(10, th(b, 1.2), 5), rgb(10, 22, 16), M.SmoothPlastic, "PressDisplay"), "PressDisplay")
+	-- tapis roulant (amène les objets de la droite vers l'enclume)
+	local beltX0, beltX1 = PX + 29, 50
+	local beltMid, beltLen = (beltX0 + beltX1) / 2, beltX1 - beltX0
+	local beltTop = ANVIL
+	b.Box(beltMid, beltTop - 2.6, PZ, beltLen, 2.6 - th(b, 0.2, 0.004), 22, rgb(36, 36, 44), M.Rubber)
 	for _, side in ipairs({ -1, 1 }) do
-		b.Cyl(side * 36, 8, -6, 9, 80, CHROME, M.Metal)
-		b.Box(side * 36, 8, -6, 14, 5, 14, frame, M.Metal)
+		tint(b.Box(beltMid, beltTop - 5, PZ + side * 12.4, beltLen + 4, 7, 2.4, tierStyle.AccentA, M.Metal), "AccentA")
+		b.Box(beltX0 + 4, 2.4, PZ + side * 9, 3, beltTop - 8, 3, CARBON, M.Metal)
+		b.Box(beltX1 - 3, 2.4, PZ + side * 9, 3, beltTop - 8, 3, CARBON, M.Metal)
 	end
-	b.Box(0, 84, -6, 92, 14, 26, yellowC, M.Metal)
-	b.Box(0, 88, 7.5, 60, 6, 1, INK, M.SmoothPlastic)
-	-- vérin hydraulique
-	b.Cyl(0, 70, -2, 22, 14, frame, M.Metal)
-	b.Cyl(0, 66, -2, 18, 4, CHROME, M.Metal)
-	-- piston (descend) : tige + plateau
-	pivot(b, "Pivot_Ram", 0, 60, 0)
-	named(b.Cyl(0, 58, -2, 10, 39, CHROME, M.Metal), "PressRam")
-	named(b.Box(0, 50, 0, 46, 8, 36, rgb(90, 96, 112), M.Metal), "PressRam")
-	for index = 0, 4 do
-		named(b.BoxR(CFrame.new(-18 + index * 9, 54, 18.4) * CFrame.Angles(0, 0, 0.7), 3, 9, 0.8, index % 2 == 0 and yellowC or INK, M.SmoothPlastic), "PressRam")
+	b.CylZ(beltX1, beltTop - 1.6, PZ, 3.4, 24.6, CHROME, M.Metal)
+	b.CylZ(beltX0 + 0.5, beltTop - 1.6, PZ, 3.2, 24.6, CHROME, M.Metal)
+	for index = 0, 5 do
+		local x = beltX0 + 2 + index * (beltLen - 4) / 6
+		named(b.Box(x, beltTop - th(b, 1) * 0.6, PZ, 1.8, th(b, 1), 20, rgb(78, 78, 92), M.Rubber), "BeltSlat")
 	end
-	-- objets à écraser (un seul visible à la fois)
-	-- 1 : canard en caoutchouc
-	local duck = { b.Egg(0, 28, 0, 26, 20, 22, YELLOW, M.SmoothPlastic), b.Ball(0, 40, -4, 14, YELLOW, M.SmoothPlastic),
-		b.Egg(0, 39, -12, 8, 4, 8, ORANGE, M.SmoothPlastic), b.Ball(-4, 42, -9.5, 2.4, INK, M.SmoothPlastic), b.Ball(4, 42, -9.5, 2.4, INK, M.SmoothPlastic) }
-	-- 2 : canette de soda
-	local can = { b.Cyl(0, 18, 0, 16, 26, RED, M.Metal), b.Cyl(0, 44, 0, 14, 1.6, CHROME, M.Metal), b.Cyl(0, 30, 0, 16.4, 5, WHITE, M.SmoothPlastic) }
-	-- 3 : pastèque
-	local melon = { b.Egg(0, 30, 0, 30, 24, 24, rgb(70, 170, 80), M.SmoothPlastic), b.Egg(0, 30, 0, 30.6, 12, 24.6, rgb(40, 120, 60), M.SmoothPlastic) }
-	for variant, list in ipairs({ duck, can, melon }) do
+	-- bac à galettes (à gauche) : les objets écrasés y tombent
+	local binX = -44
+	b.Box(binX, 1.2, PZ, 9, th(b, 1.4) + 1.2, 24.6, CARBON, M.Metal)
+	for _, side in ipairs({ -1, 1 }) do
+		tint(b.Box(binX, 2.4, PZ + side * 12, 10.6, 14, 2, tierStyle.AccentB, M.Metal), "AccentB")
+		tint(b.Box(binX + side * 4.3, 2.4, PZ, 2, 14, 23, tierStyle.AccentB, M.Metal), "AccentB")
+	end
+	for index, color in ipairs({ YELLOW, RED, rgb(70, 170, 80), rgb(255, 150, 190) }) do
+		b.Cyl(binX + (index % 2) * 1.2 - 0.6, 2.2 + th(b, 1.4) + (index - 1) * 1.6, PZ + (index - 2.5) * 3, 7, 1.8, color, M.SmoothPlastic)
+	end
+	-- centrale hydraulique (au fond à droite) + flexibles jusqu'au vérin
+	local ux, uz = 34, -22
+	tint(b.Round(ux, 2.4, uz, 22, 20, 14, 3, dark, M.Metal), "FrameDark")
+	tint(b.CylX(ux, 27, uz, 10, 16, chrome, M.Metal), "Chrome")
+	b.CylX(ux - 9.6, 27, uz, 6, 3, CARBON, M.Metal)
+	neon(b, b.Ball(ux + 6, 21, uz + 7.2, 1.6, MINT, M.Neon), "Glow")
+	for index, dz in ipairs({ -3, 3 }) do
+		local hose = House3DKit.Path(b, { { ux - 6, 23, uz + dz * 0.5 }, { ux - 14, 60, uz + dz }, { PX + 14, 108, PZ + dz * 1.4 } }, 2.4, tierStyle.Hose, M.Rubber, false, true)
+		for _, part in ipairs(hose) do
+			tint(part, "Hose")
+		end
+		local _ = index
+	end
+	-- objets à écraser (un seul visible à la fois ; ils arrivent par le tapis)
+	-- (les variantes 2+ sont cachées : elles occupent la même place ; LiveProps
+	-- les montre une à une, transparence de base = attribut "BaseTransparency")
+	local function crushable(list: { BasePart }, variant: number)
 		for _, part in ipairs(list) do
 			part.Name = "Crushable"
 			part:SetAttribute("Variant", variant)
+			part:SetAttribute("BaseTransparency", part.Transparency)
+			if variant > 1 then
+				part.Transparency = 1
+			end
 		end
 	end
-	-- pupitre de commande (à droite) : gros bouton rouge, manomètre
-	local px, pz = 44, 20
-	b.Box(px + 6, 0, pz, 3, 42, 3, frame, M.Metal)
-	b.BoxR(CFrame.new(px + 6, 46, pz) * CFrame.Angles(-0.4, 0, 0), 16, 12, 10, yellowC, M.Metal)
-	b.CylZ(px + 6, 47, pz + 4.6, 9, 1.4, INK, M.Metal)
-	local button = b.Part("Part", CFrame.new(px + 6, 47.4, pz + 6) * CFrame.Angles(-0.4, 0, 0) * CFrame.Angles(0, math.pi / 2, 0), Vector3.new(3, 7, 7), RED, M.SmoothPlastic, "PressButton")
-	;(button :: Part).Shape = Enum.PartType.Cylinder
-	b.Ball(px + 6, 48.6, pz + 8.4, 5, RED, M.SmoothPlastic).Name = "PressButton"
-	b.CylZ(px + 1, 52, pz + 2, 6, 1, WHITE, M.SmoothPlastic)
-	named(b.BoxR(CFrame.new(px + 1, 52.6, pz + 2.6) * CFrame.Angles(0, 0, 0.6), 0.5, 2.6, 0.3, RED, M.SmoothPlastic), "Gauge")
-	-- gyrophare
-	b.Cyl(0, 98, -6, 8, 2, frame, M.Metal)
-	neon(b, b.Egg(0, 102, -6, 7, 8, 7, ORANGE, M.Neon), "PressBeacon")
-	-- tuyaux hydrauliques
-	House3DKit.Path(b, { { -20, 90, -18 }, { -40, 90, -20 }, { -44, 40, -18 }, { -44, 8, -16 } }, 2.4, INK, M.Rubber, false, true)
-	b.Footprint(100, 56, 106)
+	local y = ANVIL - 0.8 -- (posés dans l'enclume : aucune face collée)
+	-- 1 : canard en caoutchouc
+	crushable({ b.Egg(PX, y + 8, PZ, 22, 16, 18, YELLOW, M.SmoothPlastic), b.Ball(PX + 1, y + 18, PZ - 3, 12, YELLOW, M.SmoothPlastic),
+		b.Egg(PX + 1, y + 17, PZ - 10, 7, 3.4, 7, ORANGE, M.SmoothPlastic), b.Ball(PX - 2.6, y + 20, PZ - 7.4, 2.2, INK, M.SmoothPlastic),
+		b.Ball(PX + 4.6, y + 20, PZ - 7.4, 2.2, INK, M.SmoothPlastic) }, 1)
+	-- 2 : canette de soda
+	crushable({ b.Cyl(PX, y, PZ, 14, 22, RED, M.Metal), b.Cyl(PX, y + 21.6, PZ, 12, 1.6, CHROME, M.Metal), b.Cyl(PX, y + 9, PZ, 14.6, 5, WHITE, M.SmoothPlastic) }, 2)
+	-- 3 : pastèque
+	crushable({ b.Egg(PX, y + 11, PZ, 26, 21, 20, rgb(70, 170, 80), M.SmoothPlastic), b.Egg(PX, y + 11, PZ, 26.6, 10, 20.6, rgb(40, 120, 60), M.SmoothPlastic) }, 3)
+	-- 4 : gâteau (deux étages, glaçage, cerise)
+	crushable({ b.Cyl(PX, y, PZ, 22, 8, rgb(255, 170, 200), M.SmoothPlastic), b.Cyl(PX, y + 7.6, PZ, 17, 7, rgb(255, 236, 214), M.SmoothPlastic),
+		b.Cyl(PX, y + 14.2, PZ, 17.8, 1.8, WHITE, M.SmoothPlastic), b.Ball(PX, y + 17.2, PZ, 4.6, RED, M.SmoothPlastic) }, 4)
+	-- 5 : paquet cadeau
+	crushable({ b.Box(PX, y, PZ, 18, 16, 18, rgb(120, 110, 255), M.SmoothPlastic), b.Box(PX, y - 0.3, PZ, 4, 16.8, 18.8, GOLD, M.SmoothPlastic),
+		b.Box(PX, y - 0.3, PZ, 18.8, 16.8, 4, GOLD, M.SmoothPlastic), b.Ball(PX - 2.4, y + 17.4, PZ, 4.4, GOLD, M.SmoothPlastic),
+		b.Ball(PX + 2.4, y + 17.4, PZ, 4.4, GOLD, M.SmoothPlastic) }, 5)
+	-- 6 : cube magique (faces colorées)
+	crushable({ b.Box(PX, y, PZ, 16, 16, 16, INK, M.SmoothPlastic), b.Box(PX, y + 1, PZ + 8 + t * 0.2, 14, 14, t, RED, M.SmoothPlastic),
+		b.Box(PX, y + 16 - t * 0.6, PZ, 14, t, 14, WHITE, M.SmoothPlastic), b.Box(PX + 8 + t * 0.2, y + 1, PZ, t, 14, 14, rgb(60, 200, 90), M.SmoothPlastic) }, 6)
+	b.Footprint(100, 60, 130)
 end
 
 ----------------------------------------------------------------------

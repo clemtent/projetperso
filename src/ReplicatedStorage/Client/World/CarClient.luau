@@ -30,6 +30,20 @@
 	    douce allumée porte ouverte.
 	  - Invites "Conduire" : traduites, visibles seulement sur SA voiture.
 
+	v9.8 (CARS98) :
+	  - "🏎️ Mes voitures" REFAITE : grand aperçu 3D (ViewportFrame) de la
+	    voiture qui tourne lentement sur un podium (on la fait tourner au
+	    doigt / à la souris), nuancier INSTANTANÉ (on repeint le modèle, un
+	    seul envoi au serveur 0,6 s après le dernier clic), fiche avec étoiles
+	    (vitesse, accélération, maniabilité, confort), "🚗 Conduire" (choisit
+	    puis sort la voiture), "Choisir", "Acheter" pour les autres voitures,
+	    carrousel de miniatures 3D, infos du garage ; ordinateur + téléphone.
+	    Plus de reconstruction de la fenêtre 4 fois par seconde (le lag).
+	  - Conduite : caractère par modèle (CarModels.Handling), accélération
+	    qui s'essouffle, volant lissé, glisse / drift avec fumée douce aux
+	    roues arrière, champ de vision lissé.
+	  - Garages : changement de couleur = on repeint (pas de reconstruction).
+
 	API (TownClient) :
 	  CarClient.Start({ Toast = function(text) end? })  -- en entrant en ville
 	  CarClient.Stop()                                     -- en sortant (avant de rendre la caméra)
@@ -88,6 +102,7 @@ type Garage = {
 	Cars: Instance,
 	Light: Light?,
 	Key: string,
+	ShapeKey: string?,
 }
 
 local started = false
@@ -229,13 +244,268 @@ local refreshHud: () -> () = function() end
 local setPicker: (open: boolean) -> () = function() end
 local refreshPrompts: () -> () = function() end -- (v9.7) invites "Conduire"
 
+-- ░░ (v9.8, CARS98) fenêtre "🏎️ Mes voitures" refaite ░░
+-- Grand APERÇU 3D (ViewportFrame) de la voiture choisie qui tourne
+-- lentement sur un podium, lumière douce (on peut la faire tourner au doigt
+-- / à la souris) ; nuancier : la couleur change TOUT DE SUITE (on repeint les
+-- pièces du modèle, jamais de reconstruction), puis elle est enregistrée au
+-- serveur une seule fois, 0,6 s après le dernier clic ; fiche (étoiles,
+-- prix), boutons "🚗 Conduire" / "Choisir" / "Acheter" ; carrousel de
+-- TOUTES les voitures (miniatures 3D, possédées d'abord) ; infos du garage.
+-- Plus aucune reconstruction de la fenêtre 4 fois par seconde (c'était le
+-- "lag" de la v9.7) : mise à jour légère quand les données changent.
+
+local COLOR_DEBOUNCE = 0.6
+local PREVIEW_SPIN = 0.32 -- rad/s
+
+type Thumb = { Card: TextButton, View: ViewportFrame, Model: Model?, Badge: TextLabel, Name: TextLabel, CarId: string }
+local picker: any = {
+	Viewing = "", -- voiture affichée dans l'aperçu
+	Models = {}, -- [carId] = Model (aperçu, construit une fois)
+	Thumbs = {}, -- [carId] = Thumb
+	Pending = {}, -- [carId] = colorId (pas encore envoyé)
+	PendingClock = 0,
+	Local = {}, -- [carId] = colorId (affiché tout de suite, en attendant le serveur)
+	Yaw = math.rad(-35),
+	Dragging = false,
+	DragX = 0,
+	LastDrag = -math.huge,
+	OwnedKey = "",
+	Sending = false,
+}
+local requestSpawn: () -> () = function() end
+
+local STAT_ROWS = {
+	{ "Speed", "⚡ Speed" },
+	{ "Accel", "🏁 Acceleration" },
+	{ "Grip", "🌀 Handling" },
+	{ "Comfort", "🛋️ Comfort" },
+}
+
+local function colorIdOf(carId: string): string
+	local pending = picker.Pending[carId] or picker.Local[carId]
+	if pending then
+		return pending
+	end
+	local cars = carsData()
+	local id = cars.Colors and cars.Colors[carId]
+	if type(id) == "string" and Config.CarColorsById[id] then
+		return id
+	end
+	local def = Config.CarsById[carId]
+	return def and def.DefaultColor or "Bubblegum"
+end
+
+local function owns(carId: string): boolean
+	local cars = carsData()
+	return cars.Owned ~= nil and cars.Owned[carId] == true
+end
+
+-- Liste affichée : voitures possédées d'abord, puis les autres (ordre du catalogue)
+local function pickerList(): { any }
+	local list = {}
+	for _, car in ipairs(Config.Cars.List) do
+		if owns(car.Id) then
+			table.insert(list, car)
+		end
+	end
+	for _, car in ipairs(Config.Cars.List) do
+		if not owns(car.Id) then
+			table.insert(list, car)
+		end
+	end
+	return list
+end
+
+local function lockOf(carId: string): string?
+	local ok, reason = pcall(CarModels.LockReason, ClientState.Data, carId)
+	if ok then
+		return reason
+	end
+	return nil
+end
+
+local function frame(props: { [string]: any }): Frame
+	props.BorderSizePixel = 0
+	return UIUtil.Create("Frame", props)
+end
+
+local function setButton(button: TextButton, text: string, color: Color3, visible: boolean)
+	button.Visible = visible
+	button.Text = text
+	button.BackgroundColor3 = color
+	button:SetAttribute("BaseColor", color)
+end
+
+-- ░ aperçu 3D ░
+local function previewModel(carId: string): Model?
+	local model = picker.Models[carId]
+	if model then
+		return model
+	end
+	local ok, built = pcall(CarModels.Build, carId, colorIdOf(carId), { Detail = "Full", Plate = "DOPA " .. tostring(LocalPlayer.UserId % 1000) })
+	if not ok or typeof(built) ~= "Instance" or not built:IsA("Model") then
+		return nil
+	end
+	local car = built :: Model
+	car:PivotTo(CFrame.new())
+	picker.Models[carId] = car
+	return car
+end
+
+local function showPreview(carId: string)
+	local view: ViewportFrame? = parts.Preview
+	if not view then
+		return
+	end
+	picker.Viewing = carId
+	for id, model in pairs(picker.Models) do
+		if id ~= carId then
+			model.Parent = nil
+		end
+	end
+	local model = previewModel(carId)
+	if model then
+		CarModels.Repaint(model, carId, colorIdOf(carId))
+		model.Parent = view
+	end
+end
+
+local function updateCamera()
+	local camera: Camera? = parts.PreviewCamera
+	local model = picker.Models[picker.Viewing]
+	if not camera then
+		return
+	end
+	local length = model and tonumber(model:GetAttribute("Length")) or 12
+	local height = model and tonumber(model:GetAttribute("Height")) or 5
+	local dist = 4 + length * 0.86
+	local target = Vector3.new(0, height * 0.42, 0)
+	local eye = (CFrame.Angles(0, picker.Yaw, 0) * CFrame.new(0, height * 0.55 + 2.6, dist)).Position
+	camera.CFrame = CFrame.lookAt(eye, target)
+end
+
+local function stepPreview(dt: number)
+	if not pickerOpen then
+		return
+	end
+	if not picker.Dragging and os.clock() - picker.LastDrag > 1.6 then
+		picker.Yaw = (picker.Yaw + PREVIEW_SPIN * dt) % (math.pi * 2)
+	end
+	updateCamera()
+	-- couleur : un seul envoi au serveur, après le dernier clic
+	if next(picker.Pending) ~= nil and not picker.Sending and os.clock() - picker.PendingClock >= COLOR_DEBOUNCE then
+		local batch = picker.Pending
+		picker.Pending = {}
+		picker.Sending = true
+		task.spawn(function()
+			for carId, colorId in pairs(batch) do
+				local ok, message = invoke("setColor", carId, colorId)
+				if not ok then
+					picker.Local[carId] = nil
+					toast(message)
+				end
+			end
+			picker.Sending = false
+		end)
+	end
+end
+
+-- ░ miniatures ░
+local function thumbModel(thumb: Thumb)
+	if thumb.Model then
+		return
+	end
+	local ok, built = pcall(CarModels.Build, thumb.CarId, colorIdOf(thumb.CarId), { Detail = "Parked" })
+	if ok and typeof(built) == "Instance" and built:IsA("Model") then
+		local model = built :: Model
+		model:PivotTo(CFrame.Angles(0, math.rad(-35), 0))
+		model.Parent = thumb.View
+		thumb.Model = model
+		local camera = Instance.new("Camera")
+		camera.FieldOfView = 40
+		local length = tonumber(model:GetAttribute("Length")) or 12
+		camera.CFrame = CFrame.lookAt(Vector3.new(0, 4.5, 3 + length * 1.25), Vector3.new(0, 1.9, 0))
+		camera.Parent = thumb.View
+		thumb.View.CurrentCamera = camera
+	end
+end
+
+local refreshPicker: () -> () = function() end
+
+local function selectInPicker(carId: string)
+	if picker.Viewing ~= carId then
+		showPreview(carId)
+	end
+	refreshPicker()
+end
+
+local function buildThumbs()
+	local list = parts.Carousel
+	if not list then
+		return
+	end
+	for _, car in ipairs(Config.Cars.List) do
+		if not picker.Thumbs[car.Id] then
+			local card = UIUtil.Create("TextButton", {
+				Name = "Thumb_" .. car.Id,
+				Text = "",
+				AutoButtonColor = false,
+				BackgroundColor3 = WHITE,
+				Size = UDim2.fromOffset(128, 98),
+				ZIndex = 23,
+				Parent = list,
+			})
+			UIUtil.Corner(card, 14)
+			UIUtil.Stroke(card, Color3.fromRGB(236, 220, 232), 2)
+			local view = UIUtil.Create("ViewportFrame", {
+				Name = "View",
+				BackgroundTransparency = 1,
+				Size = UDim2.new(1, -8, 1, -26),
+				Position = UDim2.fromOffset(4, 2),
+				Ambient = Color3.fromRGB(170, 166, 180),
+				LightColor = Color3.fromRGB(255, 250, 244),
+				LightDirection = Vector3.new(-0.5, -1, -0.6),
+				ZIndex = 24,
+				Parent = card,
+			})
+			local name = label({ Name = "Name", Text = car.Icon .. " " .. Locale.T(car.Name), TextSize = 13, Size = UDim2.new(1, -8, 0, 20),
+				Position = UDim2.new(0, 4, 1, -22), ZIndex = 25, Parent = card })
+			name.TextTruncate = Enum.TextTruncate.AtEnd
+			local badge = label({ Name = "Badge", Text = "", Color = WHITE, TextSize = 12, Size = UDim2.fromOffset(0, 20), Position = UDim2.fromOffset(6, 6), ZIndex = 26, Parent = card })
+			badge.AutomaticSize = Enum.AutomaticSize.X
+			badge.BackgroundTransparency = 0
+			badge.BackgroundColor3 = MINT
+			UIUtil.Corner(badge, UDim.new(1, 0))
+			UIUtil.Create("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6), Parent = badge })
+			local thumb: Thumb = { Card = card, View = view, Model = nil, Badge = badge, Name = name, CarId = car.Id }
+			picker.Thumbs[car.Id] = thumb
+			card.Activated:Connect(function()
+				selectInPicker(car.Id)
+			end)
+		end
+	end
+end
+
+local function statBar(parent: Instance, order: number, key: string, text: string): Frame
+	local row = frame({ Name = "Stat_" .. key, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 22), LayoutOrder = order, ZIndex = 23, Parent = parent })
+	label({ Name = "Label", Text = Locale.T(text), TextSize = 15, Font = Theme.Fonts.Body, Size = UDim2.new(0.46, 0, 1, 0), XAlign = Enum.TextXAlignment.Left, ZIndex = 24, Parent = row })
+	local bar = frame({ Name = "Bar", BackgroundTransparency = 1, Size = UDim2.new(0.54, 0, 0, 12), Position = UDim2.new(0.46, 0, 0.5, -6), ZIndex = 24, Parent = row })
+	UIUtil.Create("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder, Parent = bar })
+	for k = 1, 5 do
+		local seg = frame({ Name = "Seg" .. k, BackgroundColor3 = Color3.fromRGB(236, 224, 236), Size = UDim2.new(0.2, -4, 1, 0), LayoutOrder = k, ZIndex = 25, Parent = bar })
+		UIUtil.Corner(seg, UDim.new(1, 0))
+	end
+	return row
+end
+
 local function buildPicker(root: Frame)
 	local dimmer = UIUtil.Create("TextButton", {
 		Name = "PickerDimmer",
 		Text = "",
 		AutoButtonColor = false,
 		BackgroundColor3 = Color3.new(0, 0, 0),
-		BackgroundTransparency = 0.55,
+		BackgroundTransparency = 0.5,
 		Size = UDim2.new(1, 400, 1, 400),
 		Position = UDim2.fromOffset(-200, -200),
 		Visible = false,
@@ -245,54 +515,161 @@ local function buildPicker(root: Frame)
 	dimmer.Activated:Connect(function()
 		setPicker(false)
 	end)
-	local card = UIUtil.Create("Frame", {
+	local card = frame({
 		Name = "CarPicker",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.52),
-		Size = UDim2.fromOffset(560, 400),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(960, 570),
 		BackgroundColor3 = CARD,
 		Visible = false,
 		ZIndex = 21,
 		Parent = root,
 	})
-	UIUtil.Corner(card, 22)
+	UIUtil.Corner(card, 24)
 	UIUtil.Stroke(card, PINK, 3)
 	UIUtil.SinkClicks(card)
-	label({ Name = "Title", Text = Locale.T("🏎️ My cars"), Color = PINK_DEEP, TextSize = 26, Size = UDim2.new(1, -80, 0, 40),
-		Position = UDim2.fromOffset(20, 12), XAlign = Enum.TextXAlignment.Left, ZIndex = 22, Parent = card })
-	local close = UIUtil.CloseButton({ Name = "ClosePicker", Size = 40, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 12), ZIndex = 23 })
+	label({ Name = "Title", Text = Locale.T("🏎️ My cars"), Color = PINK_DEEP, TextSize = 26, Size = UDim2.new(0, 300, 0, 40),
+		Position = UDim2.fromOffset(22, 10), XAlign = Enum.TextXAlignment.Left, ZIndex = 22, Parent = card })
+	local close = UIUtil.CloseButton({ Name = "ClosePicker", Size = 40, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 10), ZIndex = 23 })
 	close.Parent = card
 	close.Activated:Connect(function()
 		setPicker(false)
 	end)
-	local list = UIUtil.Create("ScrollingFrame", {
-		Name = "List",
-		Position = UDim2.fromOffset(14, 60),
-		Size = UDim2.new(1, -28, 1, -136),
+	-- ░ scène 3D : fond dégradé + ViewportFrame ░
+	local stage = frame({ Name = "Stage", BackgroundColor3 = WHITE, Position = UDim2.fromOffset(16, 56), Size = UDim2.fromOffset(580, 330), ZIndex = 22, Parent = card })
+	UIUtil.Corner(stage, 18)
+	UIUtil.Gradient(stage, ColorSequence.new(Color3.fromRGB(255, 236, 246), Color3.fromRGB(206, 196, 246)), 90)
+	local view = UIUtil.Create("ViewportFrame", {
+		Name = "Preview",
 		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		ScrollBarThickness = 6,
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		CanvasSize = UDim2.new(),
-		ZIndex = 22,
-		Parent = card,
+		Size = UDim2.fromScale(1, 1),
+		Ambient = Color3.fromRGB(150, 146, 162),
+		LightColor = Color3.fromRGB(255, 248, 238),
+		LightDirection = Vector3.new(-0.55, -1, -0.45),
+		ZIndex = 23,
+		Parent = stage,
 	})
-	UIUtil.Create("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, Parent = list })
-	local garageRow = UIUtil.Create("Frame", {
-		Name = "GarageRow",
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -12),
-		Size = UDim2.new(1, -28, 0, 60),
-		BackgroundColor3 = Color3.fromRGB(255, 236, 246),
-		ZIndex = 22,
-		Parent = card,
-	})
-	UIUtil.Corner(garageRow, 16)
-	local garageText = label({ Name = "Text", Text = "", Color = INK, TextSize = 16, Font = Theme.Fonts.Body, Size = UDim2.new(1, -220, 1, 0),
-		Position = UDim2.fromOffset(14, 0), XAlign = Enum.TextXAlignment.Left, Wrap = true, ZIndex = 23, Parent = garageRow })
-	local garageButton = UIUtil.PillButton({ Name = "BuyGarage", Text = "", Color = PINK, Height = 42, TextSize = 16, ZIndex = 23, Parent = garageRow })
-	garageButton.AnchorPoint = Vector2.new(1, 0.5)
-	garageButton.Position = UDim2.new(1, -10, 0.5, 0)
+	local camera = Instance.new("Camera")
+	camera.Name = "PreviewCamera"
+	camera.FieldOfView = 34
+	camera.Parent = view
+	view.CurrentCamera = camera
+	-- podium : disque clair + anneau rose (dans la scène)
+	local podium = Instance.new("Part")
+	podium.Name = "Podium"
+	podium.Anchored = true
+	podium.Shape = Enum.PartType.Cylinder
+	podium.Size = Vector3.new(0.4, 21, 21)
+	podium.CFrame = CFrame.new(0, -0.2, 0) * CFrame.Angles(0, 0, math.rad(90))
+	podium.Color = Color3.fromRGB(250, 246, 252)
+	podium.Material = Enum.Material.SmoothPlastic
+	podium.Parent = view
+	local rim = podium:Clone()
+	rim.Name = "PodiumRim"
+	rim.Size = Vector3.new(0.3, 22, 22)
+	rim.CFrame = CFrame.new(0, -0.3, 0) * CFrame.Angles(0, 0, math.rad(90))
+	rim.Color = PINK
+	rim.Parent = view
+	local carTitle = label({ Name = "CarTitle", Text = "", Color = INK, TextSize = 24, Size = UDim2.new(1, -24, 0, 30), Position = UDim2.fromOffset(14, 8),
+		XAlign = Enum.TextXAlignment.Left, ZIndex = 25, Parent = stage })
+	local carDesc = label({ Name = "CarDesc", Text = "", Color = INK, TextSize = 15, Font = Theme.Fonts.Body, Size = UDim2.new(1, -24, 0, 20),
+		Position = UDim2.fromOffset(14, 38), XAlign = Enum.TextXAlignment.Left, ZIndex = 25, Parent = stage })
+	carDesc.TextTransparency = 0.2
+	local dragHint = label({ Name = "DragHint", Text = Locale.T("⟲ Drag to turn"), Color = INK, TextSize = 13, Font = Theme.Fonts.Body, Size = UDim2.fromOffset(160, 18),
+		AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -12, 1, -8), XAlign = Enum.TextXAlignment.Right, ZIndex = 25, Parent = stage })
+	dragHint.TextTransparency = 0.35
+	-- rotation au doigt / à la souris
+	view.InputBegan:Connect(function(input: InputObject)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			picker.Dragging = true
+			picker.DragX = input.Position.X
+		end
+	end)
+	track(UserInputService.InputChanged:Connect(function(input: InputObject)
+		if picker.Dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			local dx = input.Position.X - picker.DragX
+			picker.DragX = input.Position.X
+			picker.Yaw -= dx * 0.012
+			picker.LastDrag = os.clock()
+		end
+	end))
+	track(UserInputService.InputEnded:Connect(function(input: InputObject)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			if picker.Dragging then
+				picker.LastDrag = os.clock()
+			end
+			picker.Dragging = false
+		end
+	end))
+	-- ░ nuancier (sous l'aperçu) ░
+	local paintRow = frame({ Name = "PaintRow", BackgroundTransparency = 1, Position = UDim2.fromOffset(16, 394), Size = UDim2.fromOffset(580, 44), ZIndex = 22, Parent = card })
+	local swatches = frame({ Name = "Swatches", BackgroundTransparency = 1, Size = UDim2.new(1, -150, 1, 0), ZIndex = 23, Parent = paintRow })
+	local swatchLayout = UIUtil.Create("UIGridLayout", { CellSize = UDim2.fromOffset(30, 30), CellPadding = UDim2.fromOffset(5, 5), SortOrder = Enum.SortOrder.LayoutOrder, Parent = swatches })
+	local paintName = label({ Name = "PaintName", Text = "", Color = INK, TextSize = 15, Font = Theme.Fonts.Body, Size = UDim2.new(0, 146, 1, 0), AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, 0, 0, 0), XAlign = Enum.TextXAlignment.Right, Wrap = true, ZIndex = 23, Parent = paintRow })
+	local swatchButtons = {}
+	for k, paint in ipairs(Config.Cars.Colors) do
+		local dot = UIUtil.Create("TextButton", { Name = "Paint_" .. paint.Id, Text = "", AutoButtonColor = false, BackgroundColor3 = paint.Color,
+			LayoutOrder = k, ZIndex = 24, Parent = swatches })
+		UIUtil.Corner(dot, UDim.new(1, 0))
+		local stroke = UIUtil.Stroke(dot, Color3.fromRGB(210, 200, 214), 1.5)
+		-- reflet (petit point clair) : la pastille a l'air vernie
+		local shine = frame({ Name = "Shine", BackgroundColor3 = WHITE, BackgroundTransparency = 0.55, Size = UDim2.fromScale(0.3, 0.3), Position = UDim2.fromScale(0.2, 0.16), ZIndex = 25, Parent = dot })
+		UIUtil.Corner(shine, UDim.new(1, 0))
+		swatchButtons[paint.Id] = { Button = dot, Stroke = stroke }
+		dot.Activated:Connect(function()
+			local carId = picker.Viewing
+			if carId == "" then
+				return
+			end
+			-- tout de suite à l'écran (aperçu + miniature), serveur plus tard
+			picker.Local[carId] = paint.Id
+			local model = picker.Models[carId]
+			if model then
+				CarModels.Repaint(model, carId, paint.Id)
+			end
+			local thumb = picker.Thumbs[carId]
+			if thumb and thumb.Model then
+				CarModels.Repaint(thumb.Model, carId, paint.Id)
+			end
+			if owns(carId) then
+				picker.Pending[carId] = paint.Id
+				picker.PendingClock = os.clock()
+			end
+			refreshPicker()
+		end)
+	end
+	-- ░ fiche (à droite) ░
+	local info = frame({ Name = "Info", BackgroundColor3 = WHITE, Position = UDim2.fromOffset(612, 56), Size = UDim2.fromOffset(332, 382), ZIndex = 22, Parent = card })
+	UIUtil.Corner(info, 18)
+	UIUtil.Stroke(info, Color3.fromRGB(244, 222, 236), 2)
+	local infoTitle = label({ Name = "InfoTitle", Text = "", Color = PINK_DEEP, TextSize = 22, Size = UDim2.new(1, -24, 0, 30), Position = UDim2.fromOffset(14, 10),
+		XAlign = Enum.TextXAlignment.Left, ZIndex = 23, Parent = info })
+	infoTitle.TextTruncate = Enum.TextTruncate.AtEnd
+	local status = label({ Name = "Status", Text = "", Color = INK, TextSize = 15, Font = Theme.Fonts.Body, Size = UDim2.new(1, -24, 0, 22), Position = UDim2.fromOffset(14, 40),
+		XAlign = Enum.TextXAlignment.Left, Wrap = true, ZIndex = 23, Parent = info })
+	local stats = frame({ Name = "Stats", BackgroundTransparency = 1, Position = UDim2.fromOffset(14, 72), Size = UDim2.new(1, -28, 0, 110), ZIndex = 23, Parent = info })
+	UIUtil.Create("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder, Parent = stats })
+	local statRows = {}
+	for k, row in ipairs(STAT_ROWS) do
+		statRows[row[1]] = statBar(stats, k, row[1], row[2])
+	end
+	local drive = UIUtil.PillButton({ Name = "DriveCar", Text = "", Color = PINK_DEEP, Height = 46, TextSize = 19, ZIndex = 24, Parent = info })
+	drive.AutomaticSize = Enum.AutomaticSize.None
+	drive.Size = UDim2.new(1, -28, 0, 46)
+	drive.Position = UDim2.fromOffset(14, 196)
+	local choose = UIUtil.PillButton({ Name = "Select", Text = "", Color = SKY, Height = 38, TextSize = 16, ZIndex = 24, Parent = info })
+	choose.AutomaticSize = Enum.AutomaticSize.None
+	choose.Size = UDim2.new(1, -28, 0, 38)
+	choose.Position = UDim2.fromOffset(14, 250)
+	-- garage
+	local garageRow = frame({ Name = "GarageRow", BackgroundColor3 = Color3.fromRGB(255, 236, 246), Position = UDim2.new(0, 10, 1, -86), Size = UDim2.new(1, -20, 0, 76), ZIndex = 23, Parent = info })
+	UIUtil.Corner(garageRow, 14)
+	local garageText = label({ Name = "Text", Text = "", Color = INK, TextSize = 14, Font = Theme.Fonts.Body, Size = UDim2.new(1, -16, 0, 36),
+		Position = UDim2.fromOffset(8, 2), XAlign = Enum.TextXAlignment.Left, Wrap = true, ZIndex = 24, Parent = garageRow })
+	local garageButton = UIUtil.PillButton({ Name = "BuyGarage", Text = "", Color = PINK, Height = 32, TextSize = 15, ZIndex = 24, Parent = garageRow })
+	garageButton.AnchorPoint = Vector2.new(1, 1)
+	garageButton.Position = UDim2.new(1, -8, 1, -6)
 	garageButton.Activated:Connect(function()
 		task.spawn(function()
 			local ok, message, missing = invoke("buyGarage")
@@ -305,76 +682,173 @@ local function buildPicker(root: Frame)
 			end
 		end)
 	end)
+	drive.Activated:Connect(function()
+		local carId = picker.Viewing
+		if carId == "" then
+			return
+		end
+		task.spawn(function()
+			if not owns(carId) then
+				-- acheter (le serveur vérifie tout : prix, verrou)
+				local ok, message, missing = invoke("buy", carId)
+				toast(message)
+				if not ok and type(missing) == "number" and missing > 0 then
+					pcall(function()
+						local NeedDopamine = require(Client.Components:WaitForChild("NeedDopamine", 2) :: any) :: any
+						NeedDopamine.Offer(missing)
+					end)
+				end
+				return
+			end
+			-- conduire : la couleur choisie part d'abord, puis on sort la voiture
+			local pending = picker.Pending[carId]
+			if pending then
+				picker.Pending[carId] = nil
+				invoke("setColor", carId, pending)
+			end
+			if carsData().Selected ~= carId then
+				local ok, message = invoke("select", carId)
+				if not ok then
+					toast(message)
+					return
+				end
+			end
+			setPicker(false)
+			requestSpawn()
+		end)
+	end)
+	choose.Activated:Connect(function()
+		local carId = picker.Viewing
+		if carId ~= "" and owns(carId) and carsData().Selected ~= carId then
+			task.spawn(function()
+				local _, message = invoke("select", carId)
+				toast(message)
+			end)
+		end
+	end)
+	-- ░ carrousel (toutes les voitures) ░
+	local carousel = UIUtil.Create("ScrollingFrame", {
+		Name = "Carousel",
+		Position = UDim2.fromOffset(16, 446),
+		Size = UDim2.new(1, -32, 0, 112),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 5,
+		ScrollingDirection = Enum.ScrollingDirection.X,
+		AutomaticCanvasSize = Enum.AutomaticSize.X,
+		CanvasSize = UDim2.new(),
+		ZIndex = 22,
+		Parent = card,
+	})
+	UIUtil.Create("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder,
+		VerticalAlignment = Enum.VerticalAlignment.Center, Parent = carousel })
+	UIUtil.Create("UIPadding", { PaddingLeft = UDim.new(0, 2), PaddingRight = UDim.new(0, 2), Parent = carousel })
 	parts.Dimmer = dimmer
 	parts.Picker = card
-	parts.PickerList = list
+	parts.Stage = stage
+	parts.Preview = view
+	parts.PreviewCamera = camera
+	parts.CarTitle = carTitle
+	parts.CarDesc = carDesc
+	parts.PaintRow = paintRow
+	parts.Swatches = swatches
+	parts.SwatchLayout = swatchLayout
+	parts.SwatchButtons = swatchButtons
+	parts.PaintName = paintName
+	parts.Info = info
+	parts.InfoTitle = infoTitle
+	parts.Status = status
+	parts.StatRows = statRows
+	parts.Drive = drive
+	parts.Choose = choose
+	parts.Carousel = carousel
 	parts.GarageText = garageText
 	parts.GarageButton = garageButton
 end
 
-local function fillPicker()
-	local list = parts.PickerList
-	if not list then
+-- Mise à jour LÉGÈRE (textes, boutons, badges, contours) : jamais de reconstruction
+refreshPicker = function()
+	if not parts.Picker or not pickerOpen then
 		return
 	end
-	for _, child in ipairs(list:GetChildren()) do
-		if child:IsA("Frame") then
-			child:Destroy()
-		end
-	end
 	local cars = carsData()
-	local any = false
-	for index, car in ipairs(Config.Cars.List) do
-		if cars.Owned and cars.Owned[car.Id] then
-			any = true
-			local row = UIUtil.Create("Frame", {
-				Name = "Car_" .. car.Id,
-				Size = UDim2.new(1, -8, 0, 86),
-				BackgroundColor3 = if cars.Selected == car.Id then Color3.fromRGB(255, 226, 240) else WHITE,
-				LayoutOrder = index,
-				ZIndex = 23,
-				Parent = list,
-			})
-			UIUtil.Corner(row, 14)
-			UIUtil.Stroke(row, if cars.Selected == car.Id then PINK else Color3.fromRGB(236, 220, 232), 2)
-			label({ Name = "Name", Text = car.Icon .. " " .. Locale.T(car.Name), TextSize = 19, Size = UDim2.new(0.5, 0, 0, 30), Position = UDim2.fromOffset(12, 6),
-				XAlign = Enum.TextXAlignment.Left, ZIndex = 24, Parent = row })
-			local selected = cars.Selected == car.Id
-			local choose = UIUtil.PillButton({ Name = "Select", Text = if selected then Locale.T("✅ Selected") else Locale.T("Drive this one"),
-				Color = if selected then MINT else SKY, Height = 32, TextSize = 15, ZIndex = 24, Parent = row })
-			choose.AnchorPoint = Vector2.new(1, 0)
-			choose.Position = UDim2.new(1, -10, 0, 8)
-			choose.Activated:Connect(function()
-				if not selected then
-					task.spawn(function()
-						local _, message = invoke("select", car.Id)
-						toast(message)
-					end)
-				end
-			end)
-			-- nuancier (12 peintures)
-			local swatches = UIUtil.Create("Frame", { Name = "Swatches", BackgroundTransparency = 1, Size = UDim2.new(1, -24, 0, 34),
-				Position = UDim2.fromOffset(12, 44), ZIndex = 24, Parent = row })
-			UIUtil.Create("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder, Parent = swatches })
-			local current = cars.Colors and cars.Colors[car.Id] or car.DefaultColor
-			for k, paint in ipairs(Config.Cars.Colors) do
-				local dot = UIUtil.Create("TextButton", { Name = "Paint_" .. paint.Id, Text = "", AutoButtonColor = false, BackgroundColor3 = paint.Color,
-					Size = UDim2.fromOffset(30, 30), LayoutOrder = k, ZIndex = 25, Parent = swatches })
-				UIUtil.Corner(dot, UDim.new(1, 0))
-				UIUtil.Stroke(dot, if paint.Id == current then PINK_DEEP else Color3.fromRGB(210, 200, 214), if paint.Id == current then 3 else 1.5)
-				dot.Activated:Connect(function()
-					task.spawn(function()
-						local _, message = invoke("setColor", car.Id, paint.Id)
-						toast(message)
-					end)
-				end)
+	local list = pickerList()
+	-- ordre du carrousel (possédées d'abord) + miniatures
+	for index, car in ipairs(list) do
+		local thumb: Thumb? = picker.Thumbs[car.Id]
+		if thumb then
+			thumb.Card.LayoutOrder = index
+			local owned = owns(car.Id)
+			local lock = if owned then nil else lockOf(car.Id)
+			local badge = thumb.Badge
+			if cars.Selected == car.Id then
+				badge.Text = Locale.T("✅ Selected")
+				badge.BackgroundColor3 = MINT
+			elseif owned then
+				badge.Text = Locale.T("In the garage")
+				badge.BackgroundColor3 = SKY
+			elseif lock then
+				badge.Text = "🔒"
+				badge.BackgroundColor3 = LILAC
+			else
+				badge.Text = "🧠 " .. NumberFormatter.Format(car.Cost)
+				badge.BackgroundColor3 = PINK
+			end
+			thumb.View.ImageTransparency = if owned or lock == nil then 0 else 0.45
+			local stroke = thumb.Card:FindFirstChildOfClass("UIStroke")
+			if stroke then
+				stroke.Color = if picker.Viewing == car.Id then PINK_DEEP else Color3.fromRGB(236, 220, 232)
+				stroke.Thickness = if picker.Viewing == car.Id then 3 else 2
+			end
+			if thumb.Model then
+				CarModels.Repaint(thumb.Model, car.Id, colorIdOf(car.Id))
 			end
 		end
 	end
-	if not any then
-		local empty = UIUtil.Create("Frame", { Name = "Empty", BackgroundTransparency = 1, Size = UDim2.new(1, -8, 0, 90), ZIndex = 23, Parent = list })
-		label({ Text = Locale.T("No car yet: visit the 🚗 car dealership next to the welcome square!"), TextSize = 18, Font = Theme.Fonts.Body, Wrap = true,
-			ZIndex = 24, Parent = empty })
+	-- fiche de la voiture affichée
+	local carId = picker.Viewing
+	local def = Config.CarsById[carId]
+	if def then
+		local owned = owns(carId)
+		local lock = if owned then nil else lockOf(carId)
+		parts.CarTitle.Text = def.Icon .. " " .. Locale.T(def.Name)
+		parts.CarDesc.Text = Locale.T(def.Desc)
+		parts.InfoTitle.Text = def.Icon .. " " .. Locale.T(def.Name)
+		if owned then
+			parts.Status.Text = if cars.Selected == carId then Locale.T("✅ Your chosen car") else Locale.T("🔑 Yours — parked in your garage")
+		elseif lock then
+			parts.Status.Text = lock
+		else
+			parts.Status.Text = Locale.T("On sale at the 🚗 dealership: 🧠 %s", NumberFormatter.Format(def.Cost))
+		end
+		local h = CarModels.Handling(carId)
+		for key, row in pairs(parts.StatRows) do
+			local n = h.Stars[key] or 0
+			for k = 1, 5 do
+				local seg = row.Bar:FindFirstChild("Seg" .. k)
+				if seg then
+					seg.BackgroundColor3 = if k <= n then (if key == "Speed" then PINK_DEEP elseif key == "Accel" then Color3.fromRGB(255, 160, 60) elseif key == "Grip" then SKY else MINT) else Color3.fromRGB(236, 224, 236)
+				end
+			end
+		end
+		if owned then
+			setButton(parts.Drive, Locale.T("🚗 Drive"), PINK_DEEP, true)
+			setButton(parts.Choose, if cars.Selected == carId then Locale.T("✅ Selected") else Locale.T("Choose this one"), if cars.Selected == carId then MINT else SKY, true)
+		elseif lock then
+			setButton(parts.Drive, "🔒 " .. Locale.T("Locked"), LILAC, true)
+			setButton(parts.Choose, "", SKY, false)
+		else
+			setButton(parts.Drive, Locale.T("Buy — 🧠 %s", NumberFormatter.Format(def.Cost)), PINK_DEEP, true)
+			setButton(parts.Choose, "", SKY, false)
+		end
+		-- nuancier : contour sur la couleur affichée
+		local current = colorIdOf(carId)
+		for id, sw in pairs(parts.SwatchButtons) do
+			sw.Stroke.Color = if id == current then PINK_DEEP else Color3.fromRGB(210, 200, 214)
+			sw.Stroke.Thickness = if id == current then 3.5 else 1.5
+		end
+		local paint = Config.CarColorsById[current]
+		parts.PaintName.Text = "🎨 " .. Locale.T(paint and paint.Name or current) .. (if owned then "" else "\n" .. Locale.T("(preview)"))
 	end
 	-- garage
 	local garage = Config.House.Garage
@@ -397,6 +871,81 @@ local function fillPicker()
 	end
 end
 
+-- Mise en page (ordinateur / téléphone) de la fenêtre
+local function layoutPicker()
+	local card = parts.Picker
+	if not card then
+		return
+	end
+	if phone then
+		card.Size = UDim2.fromOffset(800, 410)
+		parts.Stage.Position = UDim2.fromOffset(12, 52)
+		parts.Stage.Size = UDim2.fromOffset(430, 226)
+		parts.PaintRow.Position = UDim2.fromOffset(12, 282)
+		parts.PaintRow.Size = UDim2.fromOffset(430, 30)
+		parts.SwatchLayout.CellSize = UDim2.fromOffset(24, 24)
+		parts.SwatchLayout.CellPadding = UDim2.fromOffset(3, 3)
+		parts.PaintName.Size = UDim2.new(0, 96, 1, 0)
+		parts.Swatches.Size = UDim2.new(1, -98, 1, 0)
+		parts.Info.Position = UDim2.fromOffset(454, 52)
+		parts.Info.Size = UDim2.fromOffset(334, 262)
+		parts.Carousel.Position = UDim2.fromOffset(12, 318)
+		parts.Carousel.Size = UDim2.new(1, -24, 0, 86)
+		parts.Status.Position = UDim2.fromOffset(14, 36)
+		parts.StatRows.Speed.Parent.Position = UDim2.fromOffset(14, 58)
+		parts.Drive.Position = UDim2.fromOffset(14, 136)
+		parts.Drive.Size = UDim2.new(0.5, -18, 0, 40)
+		parts.Choose.Position = UDim2.new(0.5, 4, 0, 138)
+		parts.Choose.Size = UDim2.new(0.5, -18, 0, 36)
+		parts.GarageText.Parent.Position = UDim2.fromOffset(10, 184)
+		parts.GarageText.Parent.Size = UDim2.new(1, -20, 0, 70)
+		for _, thumb in pairs(picker.Thumbs) do
+			thumb.Card.Size = UDim2.fromOffset(104, 80)
+		end
+		parts.StatRows.Speed.Parent.Size = UDim2.new(1, -28, 0, 72)
+		for _, row in pairs(parts.StatRows) do
+			row.Size = UDim2.new(1, 0, 0, 15)
+		end
+		local statLayout = parts.StatRows.Speed.Parent:FindFirstChildOfClass("UIListLayout")
+		if statLayout then
+			statLayout.Padding = UDim.new(0, 3)
+		end
+	else
+		card.Size = UDim2.fromOffset(960, 570)
+		parts.Stage.Position = UDim2.fromOffset(16, 56)
+		parts.Stage.Size = UDim2.fromOffset(580, 330)
+		parts.PaintRow.Position = UDim2.fromOffset(16, 394)
+		parts.PaintRow.Size = UDim2.fromOffset(580, 44)
+		parts.SwatchLayout.CellSize = UDim2.fromOffset(30, 30)
+		parts.SwatchLayout.CellPadding = UDim2.fromOffset(5, 5)
+		parts.PaintName.Size = UDim2.new(0, 146, 1, 0)
+		parts.Swatches.Size = UDim2.new(1, -150, 1, 0)
+		parts.Info.Position = UDim2.fromOffset(612, 56)
+		parts.Info.Size = UDim2.fromOffset(332, 382)
+		parts.Carousel.Position = UDim2.fromOffset(16, 446)
+		parts.Carousel.Size = UDim2.new(1, -32, 0, 112)
+		parts.Status.Position = UDim2.fromOffset(14, 40)
+		parts.StatRows.Speed.Parent.Position = UDim2.fromOffset(14, 72)
+		parts.Drive.Position = UDim2.fromOffset(14, 196)
+		parts.Drive.Size = UDim2.new(1, -28, 0, 46)
+		parts.Choose.Position = UDim2.fromOffset(14, 250)
+		parts.Choose.Size = UDim2.new(1, -28, 0, 38)
+		parts.GarageText.Parent.Position = UDim2.new(0, 10, 1, -86)
+		parts.GarageText.Parent.Size = UDim2.new(1, -20, 0, 76)
+		for _, thumb in pairs(picker.Thumbs) do
+			thumb.Card.Size = UDim2.fromOffset(128, 98)
+		end
+		parts.StatRows.Speed.Parent.Size = UDim2.new(1, -28, 0, 110)
+		for _, row in pairs(parts.StatRows) do
+			row.Size = UDim2.new(1, 0, 0, 22)
+		end
+		local statLayout = parts.StatRows.Speed.Parent:FindFirstChildOfClass("UIListLayout")
+		if statLayout then
+			statLayout.Padding = UDim.new(0, 6)
+		end
+	end
+end
+
 setPicker = function(open: boolean)
 	pickerOpen = open
 	if parts.Picker then
@@ -404,7 +953,31 @@ setPicker = function(open: boolean)
 		parts.Dimmer.Visible = open
 	end
 	if open then
-		fillPicker()
+		buildThumbs()
+		layoutPicker()
+		-- miniatures 3D : une par image (jamais de gros à-coup à l'ouverture)
+		task.spawn(function()
+			for _, car in ipairs(Config.Cars.List) do
+				local thumb = picker.Thumbs[car.Id]
+				if not pickerOpen then
+					break
+				end
+				if thumb and not thumb.Model then
+					thumbModel(thumb)
+					task.wait()
+				end
+			end
+		end)
+		local cars = carsData()
+		local first = if cars.Selected ~= "" and Config.CarsById[cars.Selected] then cars.Selected else (pickerList()[1] and pickerList()[1].Id or "")
+		if picker.Viewing == "" or not Config.CarsById[picker.Viewing] then
+			picker.Viewing = first
+		end
+		showPreview(picker.Viewing)
+		updateCamera()
+		refreshPicker()
+	else
+		picker.Dragging = false
 	end
 end
 
@@ -427,6 +1000,8 @@ local function spawnCar()
 		refreshHud()
 	end)
 end
+
+requestSpawn = spawnCar
 
 local function exitCar()
 	local character = LocalPlayer.Character
@@ -567,7 +1142,7 @@ local function layout()
 	end
 	parts.Gauge.Position = if phone then UDim2.new(0.5, 0, 1, -76) else UDim2.new(0.5, 0, 1, -84)
 	parts.Hint.Visible = not phone
-	parts.Picker.Size = if phone then UDim2.fromOffset(560, 360) else UDim2.fromOffset(560, 400)
+	layoutPicker()
 end
 
 refreshHud = function()
@@ -589,9 +1164,7 @@ refreshHud = function()
 		parts.CarName.Text = def and def.Icon or "🚗"
 		parts.Hint.Text = Locale.T("WASD / arrows to drive · Space to get out")
 	end
-	if pickerOpen then
-		fillPicker()
-	end
+	-- (v9.8) plus de reconstruction de "Mes voitures" ici (c'était le lag)
 end
 
 ----------------------------------------------------------------------
@@ -700,6 +1273,30 @@ local function startDriving(seat: VehicleSeat)
 		table.insert(lights, attachment)
 		table.insert(lights, spot)
 	end
+	-- (v9.8) fumée de dérapage aux roues arrière (particules douces, locales)
+	local smoke = {}
+	for _, sx in ipairs({ -1, 1 }) do
+		local attachment = Instance.new("Attachment")
+		attachment.Name = "DriftSmoke"
+		attachment.Position = Vector3.new(sx * width * 0.36, -root.Size.Y / 2 + 0.2, length / 2 - 2.2)
+		attachment.Parent = root
+		local emitter = Instance.new("ParticleEmitter")
+		emitter.Name = "DriftSmoke"
+		emitter.Texture = "rbxasset://textures/particles/smoke_main.dds"
+		emitter.Color = ColorSequence.new(Color3.fromRGB(236, 236, 240))
+		emitter.LightEmission = 0
+		emitter.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.8), NumberSequenceKeypoint.new(1, 3.2) })
+		emitter.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.55), NumberSequenceKeypoint.new(1, 1) })
+		emitter.Lifetime = NumberRange.new(0.6, 1.1)
+		emitter.Speed = NumberRange.new(1, 3)
+		emitter.SpreadAngle = Vector2.new(40, 40)
+		emitter.Rate = 22
+		emitter.Enabled = false
+		emitter.Parent = attachment
+		table.insert(lights, attachment) -- (détruit avec les phares à la sortie)
+		table.insert(smoke, emitter)
+	end
+	local carId = tostring(model:GetAttribute("CarId") or "")
 	driving = {
 		Seat = seat,
 		Model = model,
@@ -708,11 +1305,16 @@ local function startDriving(seat: VehicleSeat)
 		Align = root:FindFirstChild("DriveAlign"),
 		Heading = headingOf(root.CFrame),
 		Speed = 0,
+		Steer = 0,
+		Vel = Vector3.zero,
+		Slip = 0,
+		Smoke = smoke,
+		Handling = CarModels.Handling(carId),
 		LastSafe = root.CFrame,
 		SafeClock = 0,
 		LightClock = 0,
 		Lights = lights,
-		CarId = tostring(model:GetAttribute("CarId") or ""),
+		CarId = carId,
 	}
 	local camera = workspace.CurrentCamera
 	if camera then
@@ -728,6 +1330,15 @@ local function startDriving(seat: VehicleSeat)
 end
 
 -- Un pas de conduite (dt en s) : exporté pour les tests (CarClient.Debug().Step)
+-- (v9.8, CARS98) conduite plus douce et plus "voiture" :
+--  - chaque modèle a son caractère (CarModels.Handling : vitesse max,
+--    accélération, adhérence) ; accélération qui s'essouffle près de la
+--    vitesse max ; direction lissée (le volant ne claque plus) ;
+--  - GLISSE : la vitesse garde une part latérale qui ne se résorbe que
+--    progressivement (adhérence) ; à fond en braquant fort, l'adhérence
+--    baisse -> la voiture dérape (drift) avec un peu de fumée aux roues
+--    arrière (particules locales, douces) ;
+--  - caméra : champ de vision qui s'élargit avec la vitesse.
 local function step(dt: number)
 	local d = driving
 	if not d then
@@ -748,7 +1359,11 @@ local function step(dt: number)
 	end
 	throttle = math.clamp(throttle, -1, 1)
 	steer = math.clamp(steer, -1, 1)
-	local maxSpeed = Config.Cars.MaxSpeed
+	local h = d.Handling
+	-- volant lissé (plus vite pour revenir au centre)
+	local steerRate = if math.abs(steer) < math.abs(d.Steer) then 7 else 4.5
+	d.Steer += math.clamp(steer - d.Steer, -steerRate * dt, steerRate * dt)
+	local maxSpeed = Config.Cars.MaxSpeed * h.Speed
 	local look = Vector3.new(-math.sin(d.Heading), 0, -math.cos(d.Heading))
 	local actual = root.AssemblyLinearVelocity:Dot(look)
 	-- vitesse visée
@@ -756,7 +1371,8 @@ local function step(dt: number)
 	local rate = COAST
 	if throttle > 0.05 then
 		target = throttle * maxSpeed
-		rate = if actual < -1 then BRAKE else ACCEL
+		local fade = 1 - 0.55 * math.clamp(math.max(actual, 0) / maxSpeed, 0, 1) ^ 2
+		rate = if actual < -1 then BRAKE else ACCEL * h.Accel * fade
 	elseif throttle < -0.05 then
 		if actual > 1 then
 			target = 0
@@ -777,14 +1393,25 @@ local function step(dt: number)
 	-- virage : proportionnel à la vitesse (pas de rotation à l'arrêt), plus doux à fond
 	local factor = math.clamp(math.abs(speed) / 12, 0, 1) * (1 - 0.4 * math.clamp(math.abs(speed) / maxSpeed, 0, 1))
 	local direction = if speed >= 0 then 1 else -1
-	d.Heading -= steer * TURN_RATE * factor * direction * dt
+	d.Heading -= d.Steer * TURN_RATE * factor * direction * dt
 	look = Vector3.new(-math.sin(d.Heading), 0, -math.cos(d.Heading))
-	local velocity = look * speed
+	local right = Vector3.new(-look.Z, 0, look.X)
+	-- glisse latérale : ce qui reste de l'ancienne vitesse sur le côté
+	local drifting = math.abs(d.Steer) > 0.6 and speed > maxSpeed * 0.62 and throttle > 0.3
+	local grip = (if drifting then 3 else 10) * h.Grip
+	local lateral = d.Vel:Dot(right) * math.exp(-grip * dt)
+	if math.abs(lateral) < 0.05 then
+		lateral = 0
+	end
+	local velocity = look * speed + right * lateral
+	d.Vel = velocity
+	d.Slip = math.abs(lateral)
 	-- pas d'entrée dans les boutiques (sauf la concession) : remise en arrière
 	local ahead = root.Position + velocity * 0.2
 	if #shopZones > 0 and inZone(ahead) then
 		velocity = Vector3.zero
 		d.Speed = 0
+		d.Vel = Vector3.zero
 		if inZone(root.Position) then
 			root.CFrame = d.LastSafe
 			root.AssemblyLinearVelocity = Vector3.zero
@@ -808,10 +1435,15 @@ local function step(dt: number)
 	if align then
 		align.CFrame = CFrame.Angles(0, d.Heading, 0)
 	end
+	-- fumée de dérapage (douce, locale)
+	for _, smoke in ipairs(d.Smoke) do
+		smoke.Enabled = d.Slip > 5
+	end
 	-- caméra : champ de vision un peu plus large en allant vite
 	local camera = workspace.CurrentCamera
 	if camera then
-		camera.FieldOfView = BASE_FOV + 10 * math.clamp(math.abs(actual) / maxSpeed, 0, 1)
+		local want = BASE_FOV + 12 * math.clamp(math.abs(actual) / maxSpeed, 0, 1)
+		camera.FieldOfView += (want - camera.FieldOfView) * math.clamp(dt * 3, 0, 1)
 	end
 	-- HUD (compteur : 1 stud/s ≈ 1 km/h, arrondi)
 	if gui then
@@ -999,9 +1631,26 @@ local function refreshGarage(g: Garage)
 	if key == g.Key then
 		return
 	end
-	g.Key = key
-	g.Cars:ClearAllChildren()
 	local list = parseCars(text)
+	-- (v9.8) seules les couleurs ont changé : on repeint, sans reconstruire
+	local shape = {}
+	for _, entry in ipairs(list) do
+		table.insert(shape, entry.Id)
+	end
+	local shapeKey = table.concat(shape, ",") .. "|" .. tostring(selected) .. "|" .. tostring(out)
+	if shapeKey == g.ShapeKey then
+		g.Key = key
+		for _, entry in ipairs(list) do
+			local model = g.Cars:FindFirstChild("Parked_" .. entry.Id)
+			if model then
+				CarModels.Repaint(model, entry.Id, entry.Color)
+			end
+		end
+		return
+	end
+	g.Key = key
+	g.ShapeKey = shapeKey
+	g.Cars:ClearAllChildren()
 	local ids = {}
 	for _, entry in ipairs(list) do
 		table.insert(ids, entry.Id)
@@ -1166,7 +1815,7 @@ function CarClient.Start(startOptions: any?)
 	end
 	track(ClientState.Changed:Connect(function()
 		if pickerOpen then
-			fillPicker()
+			refreshPicker()
 		end
 	end))
 	track(LocalPlayer.CharacterAdded:Connect(watchCharacter))
@@ -1197,6 +1846,12 @@ function CarClient.Start(startOptions: any?)
 			end
 		end
 		animateDoors(dt)
+		if pickerOpen then
+			local okP, errP = pcall(stepPreview, dt)
+			if not okP then
+				warn("[CarClient] Mes voitures : " .. tostring(errP))
+			end
+		end
 		targetClock += dt
 		if targetClock >= 0.1 then
 			targetClock = 0
@@ -1234,6 +1889,16 @@ function CarClient.Stop()
 	table.clear(drivePrompts)
 	carsFolder = nil
 	pickerOpen = false
+	-- (v9.8) aperçus 3D de "Mes voitures"
+	for _, model in pairs(picker.Models) do
+		pcall(model.Destroy, model)
+	end
+	table.clear(picker.Models)
+	table.clear(picker.Thumbs)
+	table.clear(picker.Pending)
+	table.clear(picker.Local)
+	picker.Viewing = ""
+	picker.Dragging = false
 	if gui then
 		gui:Destroy()
 		gui = nil

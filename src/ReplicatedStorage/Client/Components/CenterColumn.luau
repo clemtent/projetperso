@@ -49,6 +49,7 @@ local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local Locale = require(ReplicatedStorage.Shared.Locale)
 local HouseCommon = require(script.Parent:WaitForChild("House"):WaitForChild("HouseCommon"))
 local CosmeticArt = require(script.Parent.CosmeticArt) -- (v9.2) chapeaux dessinés, motifs de boutons
+local FoodBoostBadge = require(script.Parent.FoodBoostBadge) -- (v9.8) 🍦 boost de nourriture
 
 local CenterColumn = {}
 
@@ -135,6 +136,7 @@ local statusLeft: Frame
 local vipChip: Frame
 local bonusChip: Frame
 local boostCard: Frame
+local foodBadge -- (v9.8) badge 🍩 du boost de nourriture (FoodBoostBadge)
 local boostTitle: TextLabel
 local boostTimer: TextLabel
 local rushBanner: Frame
@@ -837,6 +839,7 @@ local function buildStatus(column: Frame, buttonCenterX: number, buttonCenterY: 
 		local stroke = UIUtil.Stroke(label, Color3.fromRGB(120, 40, 0), 1, 0.5)
 		stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 	end
+	foodBadge = FoodBoostBadge.Create(statusLeft, 4)
 end
 
 local function chipText(frame: Frame, text: string)
@@ -887,6 +890,7 @@ local function updateStatus(dt: number)
 		local speed = remaining < 60 and 9 or 3
 		boostCard.Rotation = math.sin(os.clock() * speed) * 3
 	end
+	FoodBoostBadge.Update(foodBadge)
 
 	-- Auto-clic (Game Pass) : petit robot qui tape le coin du bouton
 	local hasAuto = ClientState.HasPass("AutoClick")

@@ -661,6 +661,11 @@ local function hills(folder: Instance, geo: TownKit.Geo)
 		local p = O + Vector3.new(math.sin(a) * dist, GROUND_Y - d / 2 + rise, math.cos(a) * dist)
 		local tone = C.Grass:Lerp(Color3.fromRGB(106, 176, 98), hash(i, 64))
 		TownKit.Ball(model, "Hill", p, d, tone, M.Grass, "deco")
+		-- (v9.8, CITY98) éoliennes sur quelques sommets (client : pales qui tournent)
+		if i % 4 == 1 then
+			local top = O + Vector3.new(math.sin(a) * dist, GROUND_Y + rise - 0.6, math.cos(a) * dist)
+			TownKit.LifeSpot("Turbine", CFrame.lookAt(top, Vector3.new(O.X, top.Y, O.Z)), i)
+		end
 	end
 	-- montagnes enneigées (pyramides approchées) dans le dos de l'entrée
 	for i = 1, 5 do
@@ -765,6 +770,58 @@ local function belt(folder: Instance, geo: TownKit.Geo)
 end
 
 ----------------------------------------------------------------------
+-- (v9.8, CITY98) Parcs : emplacements du mobilier construit côté client
+----------------------------------------------------------------------
+
+-- Zones tenues libres pour les autres (fête foraine derrière la mairie et
+-- son allée ; repère : centre de la ville, 8 parcelles, tailles fixes)
+local function inKeepOut(geo: TownKit.Geo, p: Vector3, r: number): boolean
+	local rel = p - geo.Origin
+	-- fête foraine + allée derrière la mairie (FAIR98 : x -55..55, z -176..-92)
+	if rel.X > -58 - r and rel.X < 58 + r and rel.Z > -179 - r and rel.Z < -89 + r then
+		return true
+	end
+	-- chemins latéraux (x = ±39) et axe central jusqu'à la mairie
+	if math.abs(rel.X) < 10 + r and rel.Z > -100 - r and rel.Z < -60 + r then
+		return true
+	end
+	if math.abs(math.abs(rel.X) - 39) < 4 + r and rel.Z > -100 - r and rel.Z < -70 + r then
+		return true
+	end
+	return false
+end
+
+local function lifeParks(geo: TownKit.Geo, r0: number)
+	local O = geo.Origin
+	local wanted = {
+		{ Kind = "MarketSquare", R = 15, Count = 1 },
+		{ Kind = "Statue", R = 6, Count = 2 },
+		{ Kind = "ChessTables", R = 6, Count = 1 },
+		{ Kind = "Statue", R = 6, Count = 1 },
+	}
+	local salt = 0
+	for _, w in ipairs(wanted) do
+		local placed = 0
+		for _ = 1, 500 do
+			if placed >= w.Count then
+				break
+			end
+			salt += 1
+			local a = hash(salt, 91) * math.pi * 2
+			local r = r0 + w.R + math.sqrt(hash(salt, 92)) * (geo.Inner - r0 - 2 * w.R - 6)
+			local p = O + Vector3.new(math.sin(a) * r, 0, math.cos(a) * r)
+			if geo.IsFree(p, w.R) and not inKeepOut(geo, p, w.R) then
+				-- (tourné vers le centre de la ville)
+				local cf = CFrame.lookAt(p + Vector3.new(0, GROUND_Y, 0), Vector3.new(O.X, O.Y + GROUND_Y, O.Z))
+				TownKit.LifeSpot(w.Kind, cf, salt)
+				geo.Reserve(p, w.R)
+				placed += 1
+			end
+		end
+	end
+end
+
+----------------------------------------------------------------------
 -- Construction
 ----------------------------------------------------------------------
 
@@ -774,7 +831,15 @@ function TownNature.Build(folder: Instance, geo: TownKit.Geo): number
 	nature.Parent = folder
 	local O = geo.Origin
 	-- pré (sous tout le reste) et murs invisibles
-	TownKit.Disc(nature, "Meadow", O + Vector3.new(0, GROUND_Y, 0), 1000, 4, C.Grass, M.Grass, "solid")
+	-- (v9.8, CITY98) 4 quarts de 2048 x 2048 (taille maximale d'une pièce)
+	-- au lieu d'un disque de rayon 1000 : les montagnes et la ville
+	-- lointaine des grandes villes (12 parcelles, jusqu'à ~1050 studs) ne
+	-- dépassent plus du pré. Côtés jointifs, sans chevauchement.
+	for _, qx in ipairs({ -1, 1 }) do
+		for _, qz in ipairs({ -1, 1 }) do
+			part(nature, "Meadow", Vector3.new(2048, 4, 2048), CFrame.new(O + Vector3.new(qx * 1024, GROUND_Y - 2, qz * 1024)), C.Grass, M.Grass, "solid")
+		end
+	end
 	local walls = 40
 	for i = 1, walls do
 		local a = (i - 0.5) / walls * math.pi * 2
@@ -852,10 +917,14 @@ function TownNature.Build(folder: Instance, geo: TownKit.Geo): number
 			end
 		end
 	end
+	-- (v9.8, CITY98) statues, petit marché, tables d'échecs (construits côté client)
+	lifeParks(geo, r0)
 	local trees = scatterTrees(nature, geo, math.clamp(math.floor(depth * 0.28), 22, geo.Slots >= 11 and 46 or 36))
 	belt(nature, geo)
 	hills(nature, geo)
 	TownBuildings.Skyline(nature, O, math.rad(125), math.rad(235), geo.Town + 320, 20)
+	-- (v9.8, CITY98) publie les emplacements du mobilier client + chemins des passants
+	TownKit.PublishLife(folder.Parent or folder)
 	return trees
 end
 

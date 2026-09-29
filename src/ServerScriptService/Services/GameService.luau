@@ -46,6 +46,7 @@ local Formulas = require(Shared.Formulas)
 local Locale = require(Shared.Locale)
 local NumberFormatter = require(Shared.NumberFormatter)
 local Net = require(Shared.Net)
+local GraphicsQuality = require(Shared.GraphicsQuality) -- v9.8 🎨 réglages "Graphismes" (clés Gfx*)
 local RateLimiter = require(script.Parent.RateLimiter)
 
 local GameService = {}
@@ -244,6 +245,7 @@ function GameService:GetStats(player: Player)
 		data,
 		services.EventService:GetMultiplier(),
 		services.MonetizationService:GetBonusMultiplier(player) * services.HouseService:GetBonus(player)
+			* (if services.FoodService then services.FoodService:GetMultiplier(player) else 1) -- (v9.8) 🍦 boost nourriture
 	)
 end
 
@@ -853,6 +855,11 @@ local function onSetSetting(player: Player, name: any, value: any)
 	elseif name == "Language" then
 		-- Langue : "Auto" | "en" | "fr" (appliquée par le client au prochain lancement)
 		if type(value) ~= "string" or not VALID_LANGUAGES[value] then
+			return false
+		end
+	elseif GraphicsQuality.IsKey(name) then
+		-- v9.8 🎨 Graphismes / Mode réaliste : clé Gfx* connue + valeur de sa liste
+		if not GraphicsQuality.IsValid(name, value) then
 			return false
 		end
 	elseif not VALID_SETTINGS[name] or type(value) ~= "boolean" then

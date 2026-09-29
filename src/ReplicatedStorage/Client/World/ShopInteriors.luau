@@ -757,7 +757,7 @@ local function windowDisplays(shop: Shop, parent: Instance, plan: Plan)
 end
 
 -- Étagère murale (planches, montants, fond coloré, socle)
-local function shelfUnit(parent: Instance, unit: any, t: Theme)
+local function shelfUnit(parent: Instance, unit: any, t: Theme, caption: string?)
 	local cf, L, Dp, H = unit.CF, unit.L, unit.Dp, unit.H
 	local hl = L / 2
 	-- montants + dessus
@@ -769,7 +769,215 @@ local function shelfUnit(parent: Instance, unit: any, t: Theme)
 	for index, y in ipairs(unit.Levels) do
 		local y0 = index == 1 and 0.1 or y - 0.2
 		box(parent, index == 1 and "ShelfBase" or "ShelfBoard", cf, -hl + 0.2, hl - 0.2, y0, y, 0.05, Dp - 0.25 - GAP, t.Shelf, t.ShelfMat, index == 1)
+		-- (v9.8) barre de prix colorée au bord de la planche
+		box(parent, "PriceRail", cf, -hl + 0.25, hl - 0.25, y - 0.19, y - 0.02, 0, 0.03, t.Accent:Lerp(WHITE, 0.25), M.SmoothPlastic)
 	end
+	-- (v9.8) en-tête du rayon au-dessus de l'étagère
+	if caption then
+		local head = box(parent, "ShelfHeader", cf, -math.min(hl - 0.6, 3), math.min(hl - 0.6, 3), H + 0.25, H + 1.15, Dp * 0.4, Dp * 0.4 + 0.12, WHITE, M.SmoothPlastic)
+		local gui = Instance.new("SurfaceGui")
+		gui.Name = "Sign"
+		gui.Face = Enum.NormalId.Front
+		gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		gui.PixelsPerStud = 40
+		gui.LightInfluence = 0.3
+		gui.MaxDistance = 60
+		gui.Parent = head
+		local l = Instance.new("TextLabel")
+		l.BackgroundTransparency = 1
+		l.Size = UDim2.fromScale(0.92, 0.8)
+		l.Position = UDim2.fromScale(0.04, 0.1)
+		l.Font = Enum.Font.FredokaOne
+		l.TextScaled = true
+		l.Text = caption
+		l.TextColor3 = t.Accent
+		l.Parent = gui
+	end
+end
+
+-- (v9.8, MARKET98) personnages de CITY98 (NPCModels, paresseux)
+local npcModule: any = nil
+local function NPC(): any?
+	if npcModule == nil then
+		npcModule = optional(ReplicatedStorage.Shared, "NPCModels") or false
+	end
+	return npcModule or nil
+end
+
+-- Personnage animé d'une boutique (fixe, ou sur un parcours fermé `path`)
+local function shopActor(shop: Shop, parent: Instance, style: string, seed: number, cf: CFrame, anim: string, opts: { [string]: any }?, path: { Vector3 }?): boolean
+	local N = NPC()
+	if not N or type(N.Build) ~= "function" then
+		return false
+	end
+	local o: { [string]: any } = { Seed = seed }
+	for k, v in pairs(opts or {}) do
+		o[k] = v
+	end
+	local ok, model = pcall(N.Build, style, o)
+	if not ok or typeof(model) ~= "Instance" or not model:IsA("Model") then
+		return false
+	end
+	model:PivotTo(cf)
+	model.Parent = parent
+	pcall(N.Animate, model, anim, seed * 1.37)
+	local s: any = shop
+	s.Actors = s.Actors or {}
+	local length = 0
+	if path then
+		for i = 1, #path do
+			length += (path[i % #path + 1] - path[i]).Magnitude
+		end
+	end
+	table.insert(s.Actors, { Model = model, Anim = anim, Offset = seed * 1.37, Path = path, Length = length, Speed = 2.2, Pos = cf.Position })
+	return true
+end
+
+-- Point et direction (lissée aux virages) sur un parcours fermé
+local function pathAt(path: { Vector3 }, s: number): (Vector3, Vector3)
+	local n = #path
+	for i = 1, n do
+		local a, b = path[i], path[i % n + 1]
+		local seg = (b - a).Magnitude
+		if s <= seg or i == n then
+			local dir = seg > 0 and (b - a) / seg or Vector3.new(0, 0, -1)
+			local p = a + dir * math.min(s, seg)
+			local turn = 1.2
+			if seg - s < turn then
+				local c = path[(i + 1) % n + 1]
+				local nd = (c - b).Magnitude > 0 and (c - b).Unit or dir
+				dir = dir:Lerp(nd, (turn - (seg - s)) / (turn * 2))
+			elseif s < turn then
+				local z = path[(i - 2) % n + 1]
+				local pd = (a - z).Magnitude > 0 and (a - z).Unit or dir
+				dir = dir:Lerp(pd, (turn - s) / (turn * 2))
+			end
+			if dir.Magnitude < 1e-3 then
+				dir = Vector3.new(0, 0, -1)
+			end
+			return p, dir.Unit
+		end
+		s -= seg
+	end
+	return path[1], Vector3.new(0, 0, -1)
+end
+
+-- Étiquette imprimée (SurfaceGui) sur la face avant d'un article, plafonnée
+local MAX_PRINTS = 60
+local function printLabel(shop: Shop, p: BasePart, caption: string, icon: string, color: Color3)
+	local s: any = shop
+	s.Prints = (s.Prints or 0) + 1
+	if s.Prints > MAX_PRINTS then
+		return
+	end
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "Print"
+	gui.Face = Enum.NormalId.Front
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 60
+	gui.LightInfluence = 0.8
+	gui.MaxDistance = 26
+	gui.Parent = p
+	local band = Instance.new("Frame")
+	band.Name = "Band"
+	band.BorderSizePixel = 0
+	band.BackgroundColor3 = WHITE
+	band.Position = UDim2.fromScale(0.08, 0.34)
+	band.Size = UDim2.fromScale(0.84, 0.32)
+	band.Parent = gui
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0.25, 0)
+	c.Parent = band
+	local l = Instance.new("TextLabel")
+	l.BackgroundTransparency = 1
+	l.Size = UDim2.fromScale(0.9, 0.84)
+	l.Position = UDim2.fromScale(0.05, 0.08)
+	l.Font = Enum.Font.FredokaOne
+	l.TextScaled = true
+	l.Text = caption
+	l.TextColor3 = color:Lerp(Color3.new(0, 0, 0), 0.4)
+	l.Parent = band
+	local i = Instance.new("TextLabel")
+	i.BackgroundTransparency = 1
+	i.Size = UDim2.fromScale(0.5, 0.28)
+	i.Position = UDim2.fromScale(0.25, 0.68)
+	i.Font = Enum.Font.GothamBold
+	i.TextScaled = true
+	i.Text = icon
+	i.Parent = gui
+end
+
+-- Marchandise de chaque métier (rayons pleins autour des vrais objets) :
+-- { forme, largeur, hauteur, profondeur, pas, couleurs, légendes }
+local STOCK: { [string]: { any } } = {
+	Pets = { { "Bag", 0.9, 1.5, 0.55, 1.05, { rgb(236, 150, 60), rgb(120, 180, 90), rgb(90, 150, 220) }, { "🐶 Croquettes", "🐱 Miaou", "🐰 Foin" } },
+		{ "Can", 0.55, 0.6, 0.55, 0.68, { rgb(214, 90, 90), rgb(90, 170, 200), rgb(250, 200, 80) }, nil } },
+	Toys = { { "Box", 1.3, 1.2, 0.8, 1.45, { rgb(255, 120, 150), rgb(120, 190, 255), rgb(255, 210, 90), rgb(150, 220, 150) }, { "🧸 Doudou", "🚀 Fusée", "🧩 Puzzle", "🎲 Jeu" } },
+		{ "Ball", 0.8, 0.8, 0.8, 0.95, { rgb(255, 90, 90), rgb(90, 170, 255), rgb(255, 214, 80) }, nil } },
+	Kitchen = { { "Pot", 1, 0.8, 1, 1.2, { rgb(214, 120, 90), rgb(200, 196, 210), rgb(236, 130, 146) }, nil },
+		{ "Plates", 1.1, 0.5, 1.1, 1.25, { rgb(250, 250, 252), rgb(214, 242, 230), rgb(255, 226, 236) }, nil } },
+	Furniture = { { "Cushion", 1.1, 1.1, 0.5, 1.25, { rgb(236, 190, 160), rgb(180, 150, 220), rgb(160, 200, 190) }, nil },
+		{ "Vase", 0.6, 1.2, 0.6, 0.9, { rgb(96, 140, 200), rgb(236, 226, 214), rgb(200, 120, 100) }, nil } },
+	Setup = { { "Box", 1.2, 0.9, 0.9, 1.35, { rgb(46, 44, 60), rgb(70, 66, 100), rgb(30, 30, 38) }, { "🎧 Casque", "🖱️ Souris", "⌨️ Clavier", "🎮 Manette" } },
+		{ "Box", 0.8, 1.3, 0.5, 0.95, { rgb(120, 110, 170), rgb(60, 60, 80) }, { "💡 LED", "🔌 USB" } } },
+	Garden = { { "Pot", 0.8, 0.7, 0.8, 1, { rgb(206, 124, 90), rgb(180, 110, 80) }, nil },
+		{ "Bag", 0.9, 1.3, 0.5, 1.05, { rgb(96, 70, 50), rgb(120, 160, 80) }, { "🌱 Terreau", "🌸 Engrais" } } },
+}
+
+-- Rangée de marchandise sur un emplacement d'étagère resté vide
+local function stockRow(shop: Shop, parent: Instance, slot: Slot, seed: number)
+	local specs = STOCK[shop.Id]
+	if not specs then
+		return
+	end
+	local spec = specs[(seed % #specs) + 1]
+	local shape, w, h, d, pitch = spec[1] :: string, spec[2] :: number, spec[3] :: number, spec[4] :: number, spec[5] :: number
+	local colors = spec[6] :: { Color3 }
+	local captions = spec[7] :: { string }?
+	h = math.min(h, slot.MaxH - 0.1)
+	local count = math.max(1, math.floor(slot.MaxW / pitch))
+	local x0 = -((count - 1) * pitch) / 2
+	-- (au fond de l'emplacement, un peu en retrait du bord : jamais au bord)
+	local z = math.min(slot.MaxD / 2 - d / 2, 0.2)
+	for i = 0, count - 1 do
+		local color = colors[((seed + math.floor(i / 2)) % #colors) + 1]
+		local x = x0 + i * pitch
+		local base = slot.CF * CFrame.new(x, 0, z)
+		if shape == "Can" or shape == "Pot" or shape == "Vase" or shape == "Plates" then
+			-- (pile d'assiettes : une seule pièce)
+			local height = shape == "Plates" and 0.45 or h
+			local n = 1
+			for k = 0, n - 1 do
+				local p = newPart(parent, shape, Vector3.new(height, w, w), base * CFrame.new(0, 0.02 + height / 2 + k * (height + 0.02), 0) * CFrame.Angles(0, 0, math.rad(90)), color, shape == "Can" and M.Metal or (shape == "Pot" and shop.Id == "Garden" and M.Slate or M.SmoothPlastic))
+				;(p :: Part).Shape = Enum.PartType.Cylinder
+			end
+			if shape == "Pot" and shop.Id == "Garden" then
+				local leaves = newPart(parent, "Leaves", Vector3.new(w * 1.2, w * 1.2, w * 1.2), base * CFrame.new(0, h + w * 0.45, 0), rgb(90, 170, 90), M.Grass)
+				;(leaves :: Part).Shape = Enum.PartType.Ball
+			elseif shape == "Vase" then
+				local neck = newPart(parent, "VaseNeck", Vector3.new(0.3, w * 0.55, w * 0.55), base * CFrame.new(0, h + 0.17, 0) * CFrame.Angles(0, 0, math.rad(90)), color, M.SmoothPlastic)
+				;(neck :: Part).Shape = Enum.PartType.Cylinder
+			end
+		elseif shape == "Ball" then
+			local p = newPart(parent, "Ball", Vector3.new(w, w, w), base * CFrame.new(0, 0.02 + w / 2, 0), color, M.SmoothPlastic)
+			;(p :: Part).Shape = Enum.PartType.Ball
+		else
+			local p = newPart(parent, shape, Vector3.new(w, h, d), base * CFrame.new(0, 0.02 + h / 2, 0), color, (shape == "Bag" or shape == "Cushion") and M.Fabric or M.SmoothPlastic)
+			if captions and i % 2 == 0 then
+				printLabel(shop, p, captions[((seed + i) % #captions) + 1], "✨", color)
+			end
+		end
+	end
+end
+
+-- Nom de rayon d'une catégorie (en-têtes des étagères)
+local function categoryCaption(id: string, fallback: string): string
+	for _, c in ipairs(HouseCommon.Config.Categories or {}) do
+		if tostring(c.Id) == id then
+			return tostring(c.Icon or "") .. " " .. Locale.T(tostring(c.Name))
+		end
+	end
+	return fallback
 end
 
 local function counter(shop: Shop, parent: Instance)
@@ -785,11 +993,22 @@ local function counter(shop: Shop, parent: Instance)
 	local screen = box(parent, "RegisterScreen", F, 1.6, 3.0, 4.45, 5.35, z0 + 1.2, z0 + 1.35, rgb(40, 38, 56), M.SmoothPlastic)
 	screen.CFrame *= CFrame.Angles(math.rad(-12), 0, 0)
 	-- panneau "🛍️ Voir tout" (sur le comptoir)
-	sign(parent, "SeeAll", Vector3.new(3.2, 1.3, 0.12), F * CFrame.new(-2, 4.25, z0 + 0.8) * CFrame.Angles(math.rad(-10), 0, 0), WHITE, Locale.T("🛍️ See everything"), t.Accent, 60)
-	box(parent, "SignFoot", F, -2.6, -1.4, 3.55, 3.7, z0 + 0.6, z0 + 1.2, rgb(200, 196, 210), M.Metal)
-	-- vendeur·se derrière le comptoir (petit personnage en blocs)
+	sign(parent, "SeeAll", Vector3.new(3.2, 1.3, 0.12), F * CFrame.new(-2.7, 4.25, z0 + 0.8) * CFrame.Angles(math.rad(-10), 0, 0), WHITE, Locale.T("🛍️ See everything"), t.Accent, 60)
+	box(parent, "SignFoot", F, -3.3, -2.1, 3.55, 3.7, z0 + 0.6, z0 + 1.2, rgb(200, 196, 210), M.Metal)
+	-- vendeur·se derrière le comptoir : vrai personnage animé (NPCModels,
+	-- v9.8) ; repli : petit personnage en blocs
 	local kz = D - 1.55
+	local style = (shop.Id == "Furniture" or shop.Id == "Setup") and "salesperson" or (shop.Id == "Kitchen" and "baker" or "cashier")
+	local seed = 0
+	for i = 1, #shop.Id do
+		seed += string.byte(shop.Id, i)
+	end
+	if shopActor(shop, parent, style, seed, F * CFrame.new(-0.2, 0.12, kz), style == "salesperson" and "type" or "idle", { Shirt = t.Keeper }) then
+		-- (le reste du personnage en blocs n'est pas construit)
+		kz = -1000
+	end
 	local skin = rgb(255, 216, 186)
+	if kz > 0 then
 	box(parent, "KeeperLegs", F, -0.55, 0.55, 0.1, 2.3, kz - 0.35, kz + 0.35, rgb(80, 78, 110), M.SmoothPlastic)
 	box(parent, "KeeperBody", F, -0.95, 0.95, 2.3, 4.4, kz - 0.45, kz + 0.45, t.Keeper, M.Fabric)
 	box(parent, "KeeperApron", F, -0.7, 0.7, 2.4, 3.9, kz - 0.5 - GAP, kz - 0.45 - GAP, WHITE, M.Fabric)
@@ -802,6 +1021,7 @@ local function counter(shop: Shop, parent: Instance)
 		ball(parent, "KeeperEye", F, sx * 0.3, 5.2, kz - 0.7, 0.2, INK, M.SmoothPlastic)
 	end
 	box(parent, "KeeperSmile", F, -0.18, 0.18, 4.83, 4.9, kz - 0.74, kz - 0.7, rgb(220, 90, 110), M.SmoothPlastic)
+	end
 	-- grande enseigne du fond
 	local shopDef = ShopUI.SHOPS[shop.Id]
 	sign(parent, "BackSign", Vector3.new(11, 2, 0.15), F * CFrame.new(0, 8.6, D - 0.2 - 2 * GAP - 0.2), WHITE, Locale.T(shopDef and shopDef.Name or shop.Id), t.Accent, 30)
@@ -831,10 +1051,13 @@ local function lamps(shop: Shop, parent: Instance, spots: { { number } })
 	local H = shop.Size.Y
 	for index, spot in ipairs(spots) do
 		local x, z = spot[1], spot[2]
-		box(parent, "LampCord", F, x - 0.05, x + 0.05, H - 1.6, H - 0.1, z - 0.05, z + 0.05, rgb(60, 60, 70), M.SmoothPlastic)
-		local shade = cylinder(parent, "LampShade", F, x, H - 2.3, z, 0.8, 2.6, t.Accent, M.SmoothPlastic)
+		-- (v9.8) suspension plate : cordon, cache-piton, abat-jour en disque, diffuseur
+		box(parent, "LampCord", F, x - 0.04, x + 0.04, H - 1.25, H - 0.25, z - 0.04, z + 0.04, rgb(60, 60, 70), M.SmoothPlastic)
+		cylinder(parent, "LampCanopy", F, x, H - 0.25, z, 0.15, 0.7, WHITE, M.SmoothPlastic)
+		local shade = cylinder(parent, "LampShade", F, x, H - 1.6, z, 0.35, 2.4, t.Accent, M.SmoothPlastic)
 		shade.CastShadow = false
-		local bulb = ball(parent, "LampBulb", F, x, H - 2.45, z, 0.9, t.Lamp, M.SmoothPlastic)
+		cylinder(parent, "LampRim", F, x, H - 1.25, z, 0.06, 1.2, t.Accent:Lerp(WHITE, 0.3), M.SmoothPlastic)
+		local bulb = cylinder(parent, "LampBulb", F, x, H - 1.66, z, 0.06, 2.1, t.Lamp, M.SmoothPlastic)
 		if index <= 2 then
 			local light = Instance.new("PointLight")
 			light.Name = "ShopLight"
@@ -936,101 +1159,49 @@ end
 -- Concession : voitures sur les plateaux, bureau de vente
 ----------------------------------------------------------------------
 
-local function carSlots(shop: Shop): { Slot }
-	local list = {}
-	for index = 1, tonumber(shop.Model:GetAttribute("ShowroomSlots")) or 8 do
-		local disc = shop.Model:FindFirstChild("CarSlot_" .. index)
-		local cf = disc and disc:GetAttribute("CarCF")
-		if typeof(cf) == "CFrame" then
-			-- étiquette sur un petit pupitre devant la voiture (côté allée)
-			local side = (shop.F:PointToObjectSpace(cf.Position).X < 0) and 1 or -1
-			table.insert(list, { CF = cf, MaxW = 8, MaxH = 7, MaxD = 17, Kind = "Car", Tag = cf * CFrame.new(side * 4.6, 1.2, -6.2) })
-		end
+-- (v9.8, CARS98) le décor de la concession est dans DealerShowroom (grand
+-- hall 70 x 50, plateau tournant, vendeur, pupitres…) : ici, on délègue
+local dealerModule: any = nil
+local function Dealer(): any
+	if dealerModule == nil then
+		dealerModule = optional(script.Parent, "DealerShowroom") or false
 	end
-	return list
+	return dealerModule or nil
+end
+
+local function dealerCtx(): any
+	return {
+		AddTag = addTag,
+		Entries = (ShopUI.ShopEntries("Cars")),
+		Stats = stats,
+		OpenCatalog = function(anchor: Vector3)
+			ShopUI.OpenShop("Cars", { Anchor = anchor })
+		end,
+	}
 end
 
 local function carsFront(shop: Shop, parent: Instance): { () -> () }
-	local jobs = {}
-	local CarModels = optional(ReplicatedStorage.Shared, "CarModels")
-	local cars = (ShopUI.ShopEntries("Cars"))
-	local slots = carSlots(shop)
-	for index, slot in ipairs(slots) do
-		local entry = cars[index]
-		if entry and CarModels and type(CarModels.Build) == "function" then
-			table.insert(jobs, function()
-				local ok, model = pcall(CarModels.Build, entry.Id, nil, { Detail = "Full", Plate = "DOPAMINE" })
-				if ok and typeof(model) == "Instance" and model:IsA("Model") then
-					model:PivotTo(slot.CF)
-					model.Parent = parent
-					table.insert(shop.Displays, { Entry = entry, Model = model, Labels = {}, Key = "Car:" .. entry.Id })
-					stats.Items += 1
-				end
-			end)
+	local dealer = Dealer()
+	if dealer and type(dealer.FrontJobs) == "function" then
+		local ok, jobs = pcall(dealer.FrontJobs, shop, parent, dealerCtx())
+		if ok and type(jobs) == "table" then
+			return jobs
 		end
+		warn("[ShopInteriors] concession : " .. tostring(jobs))
 	end
-	return jobs
+	return {}
 end
 
 local function carsFull(shop: Shop, parent: Instance): { () -> () }
-	local jobs = {}
-	local t = shop.Theme
-	local F = shop.F
-	local D = shop.Size.Z
-	table.insert(jobs, function()
-		-- bureau de vente, salon d'attente, plantes, grande affiche
-		local z0 = D - 5.2
-		box(parent, "Counter", F, -5, 5, 0.1, 3.3, z0, z0 + 2.2, rgb(70, 74, 92), M.SmoothPlastic, true)
-		box(parent, "CounterFront", F, -4.8, 4.8, 1, 2.6, z0 - GAP - 0.1, z0 - GAP, t.Accent, M.SmoothPlastic)
-		box(parent, "CounterTop", F, -5.3, 5.3, 3.3, 3.55, z0 - 0.3, z0 + 2.4, WHITE, M.Marble)
-		sign(parent, "SeeAll", Vector3.new(3.4, 1.3, 0.12), F * CFrame.new(-2.2, 4.25, z0 + 0.8) * CFrame.Angles(math.rad(-10), 0, 0), WHITE, Locale.T("🛍️ See everything"), t.Accent, 60)
-		box(parent, "SignFoot", F, -2.8, -1.6, 3.55, 3.7, z0 + 0.6, z0 + 1.2, rgb(200, 196, 210), M.Metal)
-		local shopDef = ShopUI.SHOPS.Cars
-		sign(parent, "BackSign", Vector3.new(16, 2.6, 0.15), F * CFrame.new(0, 9, D - 0.2 - 2 * GAP - 0.2), WHITE, Locale.T(shopDef.Name), t.Accent, 24)
-		for _, sx in ipairs({ -1, 1 }) do
-			box(parent, "Sofa", F, sx * 9 - 2, sx * 9 + 2, 0.1, 1.5, D - 4, D - 2.4, rgb(236, 226, 240), M.Fabric, true)
-			box(parent, "SofaBack", F, sx * 9 - 2, sx * 9 + 2, 1.5, 3, D - 2.4, D - 1.9, rgb(236, 226, 240), M.Fabric)
-			cylinder(parent, "PlantPot", F, sx * 17.5, 0.1, D - 3, 1.6, 1.8, WHITE, M.SmoothPlastic, true)
-			ball(parent, "PlantLeaves", F, sx * 17.5, 3, D - 3, 2.8, rgb(96, 170, 100), M.Grass)
+	local dealer = Dealer()
+	if dealer and type(dealer.FullJobs) == "function" then
+		local ok, jobs = pcall(dealer.FullJobs, shop, parent, dealerCtx())
+		if ok and type(jobs) == "table" then
+			return jobs
 		end
-		local anchor = newPart(parent, "CatalogPoint", Vector3.new(1, 1, 1), F * CFrame.new(0, 3.9, z0 - 0.4), WHITE, M.SmoothPlastic)
-		anchor.Transparency = 1
-		local prompt = Instance.new("ProximityPrompt")
-		prompt.Name = "CatalogPrompt"
-		prompt.ActionText = Locale.T("🛍️ See everything")
-		prompt.ObjectText = Locale.T(shopDef.Name)
-		prompt.HoldDuration = 0
-		prompt.MaxActivationDistance = 8
-		prompt.RequiresLineOfSight = false
-		prompt.Parent = anchor
-		local counterPos = anchor.Position
-		shop.Counter = counterPos
-		prompt.Triggered:Connect(function()
-			ShopUI.OpenShop("Cars", { Anchor = counterPos })
-		end)
-		lamps(shop, parent, { { -9, D * 0.3 }, { 9, D * 0.62 }, { 9, D * 0.3 }, { -9, D * 0.62 } })
-	end)
-	-- pupitres + étiquettes + invites des voitures
-	for _, d in ipairs(shop.Displays) do
-		if d.Model and d.Entry.Kind == "Car" then
-			local slot: Slot? = nil
-			for _, s in ipairs(carSlots(shop)) do
-				if (s.CF.Position - d.Model:GetPivot().Position).Magnitude < 0.5 then
-					slot = s
-				end
-			end
-			if slot then
-				local chosen = slot :: Slot
-				table.insert(jobs, function()
-					local tagCF = chosen.Tag
-					box(parent, "Lectern", tagCF, -0.5, 0.5, -1.2, -0.05, -0.3, 0.3, rgb(70, 74, 92), M.Metal, true)
-					local center = (chosen.CF * CFrame.new(0, 3, 0)).Position
-					addTag(shop, parent, d, tagCF, center)
-				end)
-			end
-		end
+		warn("[ShopInteriors] concession : " .. tostring(jobs))
 	end
-	return jobs
+	return {}
 end
 
 ----------------------------------------------------------------------
@@ -1054,9 +1225,7 @@ local function jobsFor(shop: Shop, level: number): { () -> () }
 	local jobs: { () -> () } = {}
 	if shop.Kind == "Cars" then
 		if level == 1 then
-			table.insert(jobs, function()
-				lining(shop, parent)
-			end)
+			-- (v9.8) habillage propre à la concession (mur vitré côté porte de la ville)
 			for _, job in ipairs(carsFront(shop, parent)) do
 				table.insert(jobs, job)
 			end
@@ -1088,8 +1257,12 @@ local function jobsFor(shop: Shop, level: number): { () -> () }
 		return jobs
 	end
 	table.insert(jobs, function()
-		for _, unit in ipairs(plan.ShelfUnits) do
-			shelfUnit(parent, unit, shop.Theme)
+		local shopDef = ShopUI.SHOPS[shop.Id]
+		local tabs = shopDef and shopDef.Tabs or {}
+		for i, unit in ipairs(plan.ShelfUnits) do
+			local tab = tabs[((i - 1) % math.max(1, #tabs)) + 1]
+			local caption = tab and categoryCaption(tab, Locale.T(shopDef and shopDef.Name or shop.Id)) or nil
+			shelfUnit(parent, unit, shop.Theme, caption)
 		end
 	end)
 	table.insert(jobs, function()
@@ -1124,6 +1297,43 @@ local function jobsFor(shop: Shop, level: number): { () -> () }
 			end)
 		end
 	end
+	-- (v9.8, MARKET98) rayons pleins : marchandise du métier sur les
+	-- emplacements d'étagère restés vides (plus de planches nues)
+	local used: { [Slot]: boolean } = {}
+	for _, p in ipairs(placements) do
+		used[p.Slot] = true
+	end
+	local empty = {}
+	for _, slot in ipairs(plan.Shelf) do
+		if not used[slot] then
+			table.insert(empty, slot)
+		end
+	end
+	table.insert(jobs, function()
+		local s: any = shop
+		s.Prints = 0
+		for i, slot in ipairs(empty) do
+			stockRow(shop, parent, slot, i * 7 + #shop.Id)
+		end
+	end)
+	-- (v9.8) clients : un·e qui se promène dans l'allée, un·e qui regarde un rayon
+	table.insert(jobs, function()
+		local F = shop.F
+		local D = shop.Size.Z
+		local wide = shop.Theme.Sides == "Platforms"
+		local ax = wide and 4.8 or 2.6
+		local path = {}
+		for _, q in ipairs({ { -ax, 4.4 }, { -ax, D - 6.6 }, { ax, D - 6.6 }, { ax, 4.4 } }) do
+			table.insert(path, (F * CFrame.new(q[1], 0.12, q[2])).Position)
+		end
+		shopActor(shop, parent, "shopper", 300 + #shop.Id * 13, CFrame.lookAt(path[1], path[2]), "walk", { Prop = "bag" }, path)
+		local back = shop.Size.X / 2 - 0.45
+		if wide then
+			shopActor(shop, parent, "elder", 400 + #shop.Id, F * CFrame.new(back - 4.9, 0.12, D * 0.5) * FACE_PX, "idle", { Prop = "none" })
+		else
+			shopActor(shop, parent, "shopper", 410 + #shop.Id, F * CFrame.new(-(back - SHELF_DEPTH - 1.1), 0.12, D * 0.45) * FACE_NX, "idle", { Prop = "phone" })
+		end
+	end)
 	return jobs
 end
 
@@ -1162,6 +1372,7 @@ local function downgrade(shop: Shop, level: number)
 				table.clear(shop.Lights)
 				shop.LightsOn = false
 				shop.Counter = nil
+				;(shop :: any).Actors = nil
 			end
 			f:Destroy()
 			shop.Tiers[tier] = nil
@@ -1382,11 +1593,50 @@ function ShopInteriors.Step(position: Vector3?)
 	end
 end
 
+-- (v9.8) personnages : ~24 images/s, seulement dans les boutiques proches
+local ANIM_EVERY = 1 / 24
+local animClock = 0
+local function animateShops(position: Vector3, now: number)
+	local N = NPC()
+	if not N then
+		return
+	end
+	for _, shop in ipairs(shops) do
+		local actors = (shop :: any).Actors
+		if actors and shop.Level >= 2 and flatDistance(position, shop.InteriorCF.Position) <= 45 then
+			for _, a in ipairs(actors) do
+				if a.Model.Parent then
+					if a.Path and a.Length > 0 then
+						local p, dir = pathAt(a.Path, ((now + a.Offset) * a.Speed) % a.Length)
+						local cf = CFrame.lookAt(p, p + Vector3.new(dir.X, 0, dir.Z))
+						-- (racine placée directement : jamais de PivotTo répété)
+						local root = a.Model.PrimaryPart
+						if root then
+							root.CFrame = cf
+						else
+							a.Model:PivotTo(cf)
+						end
+					end
+					pcall(N.Animate, a.Model, a.Anim, now + a.Offset)
+				end
+			end
+		end
+	end
+end
+
 local function heartbeat(dt: number)
 	if not started then
 		return
 	end
 	runJobs()
+	animClock += dt
+	if animClock >= ANIM_EVERY then
+		animClock = 0
+		local here = localPosition()
+		if here then
+			animateShops(here, os.clock())
+		end
+	end
 	clock += dt
 	if clock < STEP_EVERY then
 		return
@@ -1518,6 +1768,9 @@ function ShopInteriors.Debug(): any
 		Stats = stats,
 		Folder = folder,
 		Refresh = refreshAll,
+		Animate = function(position: Vector3, now: number)
+			animateShops(position, now)
+		end,
 		Decide = function(position: Vector3)
 			decide(position)
 		end,

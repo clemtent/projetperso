@@ -42,6 +42,7 @@ local ORDER = {
 	"HouseService",
 	"WorldService", -- 🚶 Dopamine Town (après HouseService : la maison est déjà corrigée)
 	"CarService", -- 🚗 voitures + garage du manoir (v9.6 ; après WorldService : conduite en ville seulement)
+	"FoodService", -- 🍦 nourriture de la ville + boost (v9.8 ; après CarService, avant QuestService)
 	"QuestService",
 	"AchievementService",
 	"DailyRewardService",

@@ -27,6 +27,52 @@ Les autres méthodes (Rojo, copie manuelle) sont décrites dans [`docs/INSTALLAT
 
 ---
 
+## 🆕 Nouveautés v9.8 — tout en réel, plus vivant et plus réaliste
+
+- 🖥️ **Bureau gamer jouable** : assis au bureau, l'écran principal lance un vrai petit jeu de course façon Subway Surfers (Desk Runner). Les écrans voisins affichent les vrais écrans du clicker (live, DVD, news).
+  - Clavier 3D reconstruit.
+  - TV plus grandes, jusqu'au XXL et au cinéma.
+  - Presse refaite (10 niveaux, tapis roulant).
+- 🪑 **S'asseoir** : la chaise se tire puis se rapproche, et des animations d'attente varient selon le siège (étirement, jambes croisées, sieste 💤, allongé sur le lit).
+- 🏠 **Maison** :
+  - portes plus grandes et porte double ;
+  - vraies fenêtres sur le jardin, rideaux animés (G) ;
+  - interrupteurs (Q) ;
+  - porte de derrière vers le jardin ;
+  - plaque de nom toujours visible ;
+  - petite plaque dorée à la place du panneau « Rez-de-chaussée ».
+- 🌷 **Jardin** :
+  - placement libre de tout (bouton « 🌷 Jardin ») ;
+  - 19 objets de jardin à acheter ;
+  - 3 agrandissements payés en Dopamine (roseraie, serre, bassin à koï).
+- 🐾 **Animaux** réalistes qui se promènent dans la maison et sortent au jardin.
+- 🚗 **Voitures** plus réalistes et conduite plus fine.
+  - Fenêtre « Mes voitures » refaite, avec aperçu 3D qui tourne et couleurs instantanées.
+  - Grande concession vitrée avec plateau tournant.
+  - Circulation avec clignotants et feux stop.
+- 🎡 **Fête foraine** derrière la mairie, avec 6 manèges où l'on s'assoit vraiment : grande roue, carrousel, tasses, chaises volantes, tour de chute douce, autos tamponneuses. Le manège de la place est aussi montable.
+- 🍦 **Nourriture** : 11 gourmandises (glace, barbe à papa, tacos, churros, milkshake…) qu'on tient en main et qu'on croque.
+  - La dernière bouchée donne un boost de Dopamine limité (x2 max, 5 min max).
+  - Le boost est affiché dans le clicker et en ville.
+- 🛒 **MégaDopa** agrandi (104×68) :
+  - classements en direct à l'entrée ;
+  - boutique Robux dans des vitrines ;
+  - café, pizzeria ;
+  - showrooms de meubles ;
+  - 6 caisses animées.
+- 🏪 **Boutiques de la ville** : vrais caissiers et clients, rayons pleins.
+- 🏙️ **Rues** :
+  - 282 éléments de mobilier urbain (abribus, kiosque, terrasse, feux animés, panneaux, éoliennes…) ;
+  - 73 passants ;
+  - pigeons réalistes qui s'envolent ;
+  - fontaine refaite.
+- 🛋️ **Objets de la maison** :
+  - 69 nouveaux objets, du basique au luxe ;
+  - environ 170 objets existants refaits bien plus réalistes (poignées, pieds, coussins, feuilles, lampes douces).
+- 🪞 **Vrais miroirs** : ton perso et la pièce se reflètent en direct. Écrans et sols brillants en mode « Tout ».
+- 🌧️ **Météo en ville**, la même pour tous : nuages, pluie, orage aux éclairs doux, flaques qui reflètent, arc-en-ciel. Jamais de pluie à l'intérieur.
+- ⚙️ **Paramètres → « 🎨 Graphismes / Mode réaliste »** (aussi via ⚙️ en ville) : reflets, météo, pluie, ombres, effets, niveau de détail. Réglages sauvegardés.
+
 ## 🆕 Nouveautés v9.7 — une ville bien plus vivante
 
 - 🛒 **Supermarché MégaDopa** à l'entrée de la ville :

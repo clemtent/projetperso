@@ -13,11 +13,12 @@
 	    VRAIE porte de 6 studs à portes coulissantes vitrées que le client
 	    ouvre à l'approche), enseigne traduisible, stores, enseigne en
 	    drapeau, étage avec fenêtres, toit ; murs, sol et plafond solides ;
-	  - la 🚗 CONCESSION AUTO (placée par TownMap à côté de la place
-	    d'accueil, face au boulevard) : grand hall vitré 44 x 48, porte de
-	    12 studs pour les voitures, 8 plateaux tournants "CarSlot_<n>"
-	    (attribut CarCF : sol du plateau, LookVector = avant de la voiture,
-	    vers la vitrine), parvis pavé, oriflammes.
+	  - la 🚗 CONCESSION AUTO (v9.8 : hors de la porte, à gauche de la route
+	    d'arrivée, WorldLayout.DealershipCFrame) : grand hall vitré 70 x 50,
+	    porte de 14 studs pour les voitures, 8 podiums "CarSlot_<n>"
+	    (attribut CarCF : sol du podium, LookVector = avant de la voiture),
+	    parvis pavé avec le socle du plateau tournant (attributs
+	    TurntableCF / TurntableR), totem ; décor : client (DealerShowroom).
 	Repère d'une boutique (`cf`) : milieu du pied de la façade au niveau
 	des trottoirs (WALK_Y), LookVector vers la rue, volume derrière (+Z).
 
@@ -102,9 +103,8 @@ TownShops.SPECS = {
 } :: { ShopSpec }
 
 TownShops.DEALER = { Id = "Cars", Sign = "🚗 Car Dealership", Icon = "🚗" }
-TownShops.DEALER_W = 44
-TownShops.DEALER_D = 48
-TownShops.DEALER_SLOTS = 8
+TownShops.DEALER_W = WorldLayout.DEALER_W -- (v9.8) 44 -> 70
+TownShops.DEALER_D = WorldLayout.DEALER_D -- (v9.8) 48 -> 50
 
 local GLASS = Color3.fromRGB(196, 228, 246)
 
@@ -254,24 +254,35 @@ function TownShops.Shop(parent: Instance, cf: CFrame, spec: ShopSpec, seed: numb
 end
 
 ----------------------------------------------------------------------
--- 🚗 Concession auto (hall vitré, ≈ 110 pièces)
+-- 🚗 Concession auto (v9.8, CARS98) : GRAND hall vitré 70 x 50, hors de la
+-- porte, à gauche de la route d'arrivée (WorldLayout.DealershipCFrame) ;
+-- coque seulement (≈ 65 pièces) : tout le décor (plateau tournant animé,
+-- couronnes lumineuses, podiums, pupitres, bureau de vente + vendeur·se,
+-- salon, drapeaux, voitures) est construit par le client
+-- (Client/World/DealerShowroom, via ShopInteriors).
 ----------------------------------------------------------------------
 
-local DEALER_H = 14 -- hauteur du hall
-local CAR_DOOR = 12 -- largeur de la porte (voitures)
-local CAR_DOOR_H = 10
+local DEALER_H = 16 -- hauteur du hall
+local CAR_DOOR = 14 -- largeur de la porte (voitures)
+local CAR_DOOR_H = 11
+local APRON_Y = WorldLayout.ROAD_Y + 0.05 - WorldLayout.WALK_Y -- dessus du parvis (repère de la façade)
+TownShops.DEALER_H = DEALER_H
+TownShops.DEALER_SLOTS = 8
+TownShops.TURNTABLE = Vector3.new(-14, 0.35, -18) -- plateau tournant (repère de la façade)
+TownShops.TURNTABLE_R = 8
 
 -- Places des 8 voitures (repère du hall : x, z du centre, lacet en degrés)
--- 2 rangées de 4, allée centrale face à la porte ; place de 8 x 17 studs
-local SLOT_X = { -17, -9, 9, 17 }
-local SLOT_Z = { 12.5, 32 }
+-- 2 rangées de 4 de part et d'autre d'une large allée centrale (porte ->
+-- bureau de vente) ; podiums de 13 studs, voitures tournées vers l'allée
+local SLOT_X = { -24, -10, 10, 24 }
+local SLOT_Z = { 15, 33 }
 
 function TownShops.SlotFrames(cf: CFrame): { CFrame }
 	local list = {}
 	for row, z in ipairs(SLOT_Z) do
 		for i, x in ipairs(SLOT_X) do
-			local yaw = (i <= 2 and -1 or 1) * (row == 1 and 7 or 5)
-			table.insert(list, cf * CFrame.new(x, FLOOR_TOP + 0.3, z) * CFrame.Angles(0, math.rad(yaw), 0))
+			local yaw = (i <= 2 and -1 or 1) * (row == 1 and 22 or 16)
+			table.insert(list, cf * CFrame.new(x, FLOOR_TOP + 0.35, z) * CFrame.Angles(0, math.rad(yaw), 0))
 		end
 	end
 	return list
@@ -280,112 +291,147 @@ end
 function TownShops.Dealership(parent: Instance, cf: CFrame): Model
 	local spec = TownShops.DEALER
 	local model = TownKit.Model(parent, "Shop_Cars")
-	local W, D = TownShops.DEALER_W, TownShops.DEALER_D
+	local W, D, H = TownShops.DEALER_W, TownShops.DEALER_D, DEALER_H
 	local hw = W / 2
 	local white = Color3.fromRGB(246, 246, 250)
-	local frame = Color3.fromRGB(70, 74, 92)
+	local frame = Color3.fromRGB(58, 62, 78)
 	local accent = Color3.fromRGB(236, 72, 120)
-	-- plancher, murs pleins (côté parcelles + fond), toit
-	box(model, "Floor", cf, -hw + 0.1, hw - 0.1, FLOOR_TOP - 1.2, FLOOR_TOP, 0.1, D - 0.1, C.StoneDark, M.Concrete, "solid")
-	box(model, "Threshold", cf, -CAR_DOOR / 2, CAR_DOOR / 2, FLOOR_TOP - 0.5, FLOOR_TOP - 0.02, -0.5, 0.3, C.MetalLight, M.Metal, "solid")
-	box(model, "SideWall", cf, hw - 1, hw, 0, DEALER_H + 0.8, 1, D, white, M.SmoothPlastic, "solid")
-	box(model, "BackWall", cf, -hw + 1, hw - 1, 0, DEALER_H + 0.8, D - 1, D, white, M.SmoothPlastic, "solid")
-	box(model, "Roof", cf, -hw - 0.6, hw + 0.6, DEALER_H + 0.5, DEALER_H + 1.6, -0.8, D + 0.6, white, M.SmoothPlastic, "decoS")
-	-- toit vu d'en haut : acrotère rose, verrières, groupes de clim
+	-- plancher (sur un socle : le pré est plus bas), murs pleins (côté opposé
+	-- à la porte de la ville + fond), toit, plafond
+	box(model, "Floor", cf, -hw + 0.1, hw - 0.1, FLOOR_TOP - 1.4, FLOOR_TOP, 0.1, D - 0.1, C.StoneDark, M.Concrete, "solid")
+	box(model, "BackWall", cf, -hw, hw, 0, H + 0.8, D - 1, D, white, M.SmoothPlastic, "solid")
+	box(model, "SideWall", cf, hw - 1, hw, 0, H + 0.8, 1, D - 1, white, M.SmoothPlastic, "solid")
+	box(model, "Roof", cf, -hw - 0.6, hw + 0.6, H + 0.5, H + 1.6, -0.8, D + 0.6, white, M.SmoothPlastic, "decoS")
+	box(model, "Ceiling", cf, -hw + 0.9, hw - 0.9, H - 0.6, H + 0.55, 0.9, D - 0.9, white, M.SmoothPlastic, "solid")
 	for _, sx in ipairs({ -1, 1 }) do
-		box(model, "Parapet", cf, sx < 0 and -hw - 0.55 or hw - 0.2, sx < 0 and -hw - 0.2 or hw + 0.55, DEALER_H + 1.5, DEALER_H + 2.4, -0.1, D + 0.55, accent, M.SmoothPlastic, "deco")
+		box(model, "Parapet", cf, sx < 0 and -hw - 0.55 or hw - 0.2, sx < 0 and -hw - 0.2 or hw + 0.55, H + 1.5, H + 2.4, -0.1, D + 0.55, accent, M.SmoothPlastic, "deco")
 	end
-	box(model, "ParapetBack", cf, -hw - 0.2, hw + 0.2, DEALER_H + 1.5, DEALER_H + 2.4, D + 0.2, D + 0.55, accent, M.SmoothPlastic, "deco")
+	box(model, "ParapetBack", cf, -hw - 0.2, hw + 0.2, H + 1.5, H + 2.4, D + 0.2, D + 0.55, accent, M.SmoothPlastic, "deco")
 	for k = 0, 2 do
-		local z = 10 + k * 12
-		glass(model, "Skylight", Vector3.new(W * 0.5, 0.5, 5), cf * CFrame.new(-4, DEALER_H + 1.9, z), 0.35).CanCollide = false
+		glass(model, "Skylight", Vector3.new(W * 0.55, 0.5, 6), cf * CFrame.new(-4, H + 1.9, 10 + k * 14), 0.35).CanCollide = false
 	end
-	box(model, "RoofUnit", cf, 12, 17, DEALER_H + 1.5, DEALER_H + 3.4, D - 12, D - 6, C.MetalLight, M.DiamondPlate, "deco")
-	box(model, "Ceiling", cf, -hw + 0.9, hw - 0.9, DEALER_H - 0.6, DEALER_H + 0.55, 0.9, D - 0.9, white, M.SmoothPlastic, "solid")
-	-- façade vitrée (côté boulevard) : poteaux, soubassement, vitres, porte
+	box(model, "RoofUnit", cf, 20, 27, H + 1.5, H + 3.6, D - 14, D - 7, C.MetalLight, M.DiamondPlate, "deco")
+	-- façade vitrée (côté route) : poteaux, soubassement, vitres, grande porte
 	local doorTop = FLOOR_TOP + CAR_DOOR_H
-	box(model, "Beam", cf, -hw, hw, DEALER_H - 1.1, DEALER_H + 0.6, -0.2, 1, frame, M.Metal, "solid")
+	local glassY0, glassY1 = 1, H - 1.4
+	box(model, "Beam", cf, -hw, hw, glassY1, H + 0.6, -0.2, 1, frame, M.Metal, "solid")
 	for _, sx in ipairs({ -1, 1 }) do
-		box(model, "Post", cf, sx < 0 and -hw or hw - 1, sx < 0 and -hw + 1 or hw, 0, DEALER_H - 1.1, -0.2, 1, frame, M.Metal, "solid")
+		box(model, "Post", cf, sx < 0 and -hw or hw - 1, sx < 0 and -hw + 1 or hw, 0, glassY1, -0.2, 1, frame, M.Metal, "solid")
 		local x0, x1 = CAR_DOOR / 2 + 0.6, hw - 1
 		local a, b = sx * x0, sx * x1
-		box(model, "Kick", cf, math.min(a, b), math.max(a, b), 0, 1, -0.2, 1, frame, M.Metal, "solid")
-		box(model, "DoorPost", cf, sx < 0 and -CAR_DOOR / 2 - 0.6 or CAR_DOOR / 2, sx < 0 and -CAR_DOOR / 2 or CAR_DOOR / 2 + 0.6, 0, DEALER_H - 1.1, -0.2, 1, frame, M.Metal, "solid")
-		local gx = sx * (x0 + x1) / 2
-		glass(model, "Showcase", Vector3.new(x1 - x0 - 0.1, DEALER_H - 2.2, 0.3), cf * CFrame.new(gx, (1 + DEALER_H - 1.1) / 2, 0.4), 0.7)
-		for k = 1, 2 do
-			local mx = sx * (x0 + (x1 - x0) * k / 3)
-			part(model, "Mullion", Vector3.new(0.35, DEALER_H - 2.2, 0.55), cf * CFrame.new(mx, (1 + DEALER_H - 1.1) / 2, 0.4), frame, M.Metal, "deco")
+		box(model, "Kick", cf, math.min(a, b), math.max(a, b), 0, glassY0, -0.2, 1, frame, M.Metal, "solid")
+		box(model, "DoorPost", cf, sx < 0 and -CAR_DOOR / 2 - 0.6 or CAR_DOOR / 2, sx < 0 and -CAR_DOOR / 2 or CAR_DOOR / 2 + 0.6, 0, glassY1, -0.2, 1, frame, M.Metal, "solid")
+		glass(model, "Showcase", Vector3.new(x1 - x0 - 0.1, glassY1 - glassY0, 0.3), cf * CFrame.new(sx * (x0 + x1) / 2, (glassY0 + glassY1) / 2, 0.4), 0.72)
+		for k = 1, 3 do
+			local mx = sx * (x0 + (x1 - x0) * k / 4)
+			part(model, "Mullion", Vector3.new(0.3, glassY1 - glassY0, 0.55), cf * CFrame.new(mx, (glassY0 + glassY1) / 2, 0.4), frame, M.Metal, "deco")
 		end
 		doorPanel(model, cf * CFrame.new(sx * CAR_DOOR / 4, FLOOR_TOP + (CAR_DOOR_H - 0.1) / 2, 0.35), CAR_DOOR / 2 - 0.05, CAR_DOOR_H - 0.1, sx * (CAR_DOOR / 2 - 0.5))
 	end
 	box(model, "DoorHeader", cf, -CAR_DOOR / 2, CAR_DOOR / 2, doorTop, doorTop + 0.4, -0.2, 1, frame, M.Metal, "solid")
-	glass(model, "Transom", Vector3.new(CAR_DOOR - 0.1, DEALER_H - 1.1 - doorTop - 0.5, 0.3), cf * CFrame.new(0, (doorTop + 0.4 + DEALER_H - 1.1) / 2, 0.4), 0.7)
-	-- côté place d'accueil (x < 0) : mur-rideau vitré
-	local side = cf * CFrame.new(-hw + 0.5, 0, 0)
-	box(model, "SideKick", side, -0.5, 0.5, 0, 1, 1, D - 5, frame, M.Metal, "solid")
-	box(model, "SideBeam", side, -0.5, 0.5, DEALER_H - 1.1, DEALER_H + 0.6, 1, D - 5, frame, M.Metal, "solid")
-	box(model, "SideBack", side, -0.5, 0.5, 0, DEALER_H + 0.6, D - 5, D, white, M.SmoothPlastic, "solid")
-	glass(model, "SideGlass", Vector3.new(0.3, DEALER_H - 2.2, D - 6.1), side * CFrame.new(0, (1 + DEALER_H - 1.1) / 2, (1 + D - 5) / 2), 0.7)
-	for k = 1, 5 do
-		local z = 1 + (D - 6) * k / 6
-		part(model, "SideMullion", Vector3.new(0.55, DEALER_H - 2.2, 0.35), side * CFrame.new(0, (1 + DEALER_H - 1.1) / 2, z), frame, M.Metal, "deco")
+	glass(model, "Transom", Vector3.new(CAR_DOOR - 0.1, glassY1 - doorTop - 0.4, 0.3), cf * CFrame.new(0, (doorTop + 0.4 + glassY1) / 2, 0.4), 0.72)
+	-- auvent d'entrée (dalle en porte-à-faux + 2 colonnes fines)
+	box(model, "Canopy", cf, -11, 11, doorTop + 0.9, doorTop + 1.6, -7.5, -0.2, white, M.SmoothPlastic, "decoS")
+	box(model, "CanopyEdge", cf, -11.05, 11.05, doorTop + 0.7, doorTop + 0.95, -7.55, -7.3, accent, M.SmoothPlastic, "deco")
+	for _, sx in ipairs({ -1, 1 }) do
+		TownKit.Column(model, "CanopyPost", (cf * CFrame.new(sx * 10.2, APRON_Y, -6.6)).Position, doorTop + 0.9 - APRON_Y, 0.45, frame, M.Metal, "prop")
 	end
-	-- grand bandeau d'enseigne (façade + côté place) et bande d'accent
-	local sign = part(model, "SignBand", Vector3.new(W + 1.2, 3.4, 0.6), cf * CFrame.new(0, DEALER_H + 3.3, -0.5), white, M.SmoothPlastic, "decoS")
-	local _, sb = TownKit.Surface(sign, Enum.NormalId.Front, 20, nil, 500, 0.2)
-	local title = TownKit.Label(sb, "Title", spec.Sign, 0.1, 0.08, 0.8, 0.84, accent, Enum.Font.FredokaOne, true)
+	-- côté porte de la ville (x < 0) : mur-rideau vitré
+	local side = cf * CFrame.new(-hw + 0.5, 0, 0)
+	box(model, "SideKick", side, -0.5, 0.5, 0, glassY0, 1, D - 6, frame, M.Metal, "solid")
+	box(model, "SideBeam", side, -0.5, 0.5, glassY1, H + 0.6, 1, D - 6, frame, M.Metal, "solid")
+	box(model, "SideBack", side, -0.5, 0.5, 0, H + 0.6, D - 6, D, white, M.SmoothPlastic, "solid")
+	glass(model, "SideGlass", Vector3.new(0.3, glassY1 - glassY0, D - 7.1), side * CFrame.new(0, (glassY0 + glassY1) / 2, (1 + D - 6) / 2), 0.72)
+	for k = 1, 5 do
+		local z = 1 + (D - 7) * k / 6
+		part(model, "SideMullion", Vector3.new(0.55, glassY1 - glassY0, 0.3), side * CFrame.new(0, (glassY0 + glassY1) / 2, z), frame, M.Metal, "deco")
+	end
+	-- enseigne (façade + côté porte de la ville) et bande d'accent
+	local sign = part(model, "SignBand", Vector3.new(W * 0.62, 4.2, 0.6), cf * CFrame.new(0, H + 3.7, -0.5), white, M.SmoothPlastic, "decoS")
+	local _, sb = TownKit.Surface(sign, Enum.NormalId.Front, 20, nil, 600, 0.2)
+	local title = TownKit.Label(sb, "Title", spec.Sign, 0.06, 0.1, 0.88, 0.8, accent, Enum.Font.FredokaOne, true)
 	local stroke = Instance.new("UIStroke")
 	stroke.Color = C.White
 	stroke.Thickness = 2
 	stroke.Parent = title
-	part(model, "SignStripe", Vector3.new(W + 1.3, 0.5, 0.7), cf * CFrame.new(0, DEALER_H + 1.85, -0.5), accent, M.SmoothPlastic, "deco")
-	local sideSign = part(model, "SideSign", Vector3.new(0.6, 3.4, D * 0.7), cf * CFrame.new(-hw - 0.75, DEALER_H + 3.3, D * 0.4), white, M.SmoothPlastic, "deco")
-	local _, ss = TownKit.Surface(sideSign, Enum.NormalId.Left, 20, nil, 500, 0.2)
-	TownKit.Label(ss, "Title", spec.Sign, 0.06, 0.08, 0.88, 0.84, accent, Enum.Font.FredokaOne, true)
-	-- plateaux des voitures (déco : les voitures roulent dessus)
+	part(model, "SignStripe", Vector3.new(W + 1.3, 0.5, 0.7), cf * CFrame.new(0, H + 1.85, -0.5), accent, M.SmoothPlastic, "deco")
+	local sideSign = part(model, "SideSign", Vector3.new(0.6, 4.2, D * 0.6), cf * CFrame.new(-hw - 0.75, H + 3.7, D * 0.4), white, M.SmoothPlastic, "deco")
+	local _, ss = TownKit.Surface(sideSign, Enum.NormalId.Left, 20, nil, 600, 0.2)
+	TownKit.Label(ss, "Title", spec.Sign, 0.06, 0.1, 0.88, 0.8, accent, Enum.Font.FredokaOne, true)
+	-- podiums des voitures (le client y pose les voitures et les couronnes)
 	for index, slotCF in ipairs(TownShops.SlotFrames(cf)) do
-		local disc = part(model, "CarSlot_" .. index, Vector3.new(0.2, 11.6, 11.6), slotCF * CFrame.new(0, -0.1, 0) * CFrame.Angles(0, 0, math.rad(90)), white, M.Marble, "deco")
+		local disc = part(model, "CarSlot_" .. index, Vector3.new(0.35, 13, 13), slotCF * CFrame.new(0, -0.175, 0) * CFrame.Angles(0, 0, math.rad(90)), white, M.Marble, "deco")
 		;(disc :: Part).Shape = Enum.PartType.Cylinder
 		disc:SetAttribute("CarCF", slotCF)
 		disc:SetAttribute("Slot", index)
 	end
 	model:SetAttribute("ShowroomSlots", TownShops.DEALER_SLOTS)
 	model:SetAttribute("AllowCars", true)
-	attributes(model, spec, "Cars", cf * CFrame.new(0, FLOOR_TOP, D / 2), Vector3.new(W - 2, DEALER_H - 0.6 - FLOOR_TOP, D - 2), cf * CFrame.new(0, FLOOR_TOP, 0))
+	model:SetAttribute("DealerW", W)
+	model:SetAttribute("DealerD", D)
+	attributes(model, spec, "Cars", cf * CFrame.new(0, FLOOR_TOP, D / 2), Vector3.new(W - 2, H - 0.6 - FLOOR_TOP, D - 2), cf * CFrame.new(0, FLOOR_TOP, 0))
 	return model
 end
 
--- Place la concession à DROITE de la place d'accueil (en regardant la
--- ville depuis la porte), entre le boulevard et la porte de la ville,
--- vitrine vers le boulevard ; parvis, oriflammes, totem
+-- Place la concession hors de la porte, à gauche de la route d'arrivée
+-- (WorldLayout.DealershipCFrame) : parvis pavé, rampe, allée jusqu'à la
+-- route, SOCLE du plateau tournant (le plateau et la voiture qui tourne :
+-- client), totem. Réserve la zone (pas d'arbres de TownNature dessus).
 function TownShops.BuildDealership(folder: Instance, geo: TownKit.Geo): Model
-	local W, D = TownShops.DEALER_W, TownShops.DEALER_D
-	local O = geo.Origin
-	local x = 48 + W / 2 -- (bord gauche à 48 : au-delà des murets de la porte)
-	local faceZ = geo.Front + 7
-	local p = O + Vector3.new(x, WorldLayout.WALK_Y, faceZ)
-	local cf = CFrame.lookAt(p, p - Vector3.new(0, 0, 1))
+	local W = TownShops.DEALER_W
+	local cf = WorldLayout.DealershipCFrame(geo.Count)
 	local model = TownShops.Dealership(folder, cf)
-	-- parvis (du trottoir du boulevard à la vitrine) : un peu au-dessus du
-	-- trottoir pour ne jamais être coplanaire avec lui
-	local apron = part(model, "Forecourt", Vector3.new(W + 4, 1.3, 7.2), cf * CFrame.new(0, -0.65 + 0.03, -3.6), C.Walk, M.Pavement, "solid")
+	local hw = W / 2
+	local depth = WorldLayout.DEALER_X - 24 -- parvis : de la façade à 24 studs de l'axe de la route
+	-- parvis (sans toucher le petit parking d'arrivée, côté porte de la ville)
+	local apron = box(model, "Forecourt", cf, -24, hw, APRON_Y - 0.7, APRON_Y, -depth, -0.05, C.Walk, M.Pavement, "solid")
 	apron.CastShadow = false
-	part(model, "ForecourtStripe", Vector3.new(CAR_DOOR, 0.05, 7), cf * CFrame.new(0, 0.05, -3.6), Color3.fromRGB(96, 96, 110), M.Asphalt, "deco")
-	for _, sx in ipairs({ -1, 1 }) do
-		for k = 0, 1 do
-			local base = (cf * CFrame.new(sx * (CAR_DOOR / 2 + 4 + k * 9), 0, -5.2)).Position
-			TownKit.Column(model, "FlagPole", base, 9, 0.25, C.MetalLight, M.Metal, "deco")
-			part(model, "Flag", Vector3.new(0.1, 5.2, 1.6), CFrame.new(base + Vector3.new(0, 6, 0)) * CFrame.new(0, 0, -0.85), (k + (sx > 0 and 1 or 0)) % 2 == 0 and Color3.fromRGB(236, 72, 120) or Color3.fromRGB(120, 196, 255), M.Fabric, "deco")
-		end
-		TownKit.Planter(model, cf * CFrame.new(sx * (W / 2 - 1), 0, -2.6), 5, 2, 11 + sx)
-	end
-	-- totem (au coin, côté place d'accueil)
-	local totem = cf * CFrame.new(-W / 2 - 3.2, 0, -4)
-	part(model, "TotemBase", Vector3.new(2.6, 1, 1.4), totem * CFrame.new(0, 0.5, 0), C.StoneDark, M.Granite, "prop")
-	plaque(model, "Totem", Vector3.new(2.2, 7, 0.8), totem * CFrame.new(0, 4.5, 0), Color3.fromRGB(70, 74, 92), "🚗", C.White, 30, 300)
-	geo.Reserve(cf * Vector3.new(0, 0, D / 2), math.sqrt((W / 2) ^ 2 + (D / 2) ^ 2) + 4)
+	box(model, "ForecourtSide", cf, -hw, -24, APRON_Y - 0.7, APRON_Y, -12, -0.05, C.Walk, M.Pavement, "solid").CastShadow = false
+	-- rampe douce jusqu'au plancher du hall (voitures et avatars)
+	TownKit.Wedge(model, "Ramp", Vector3.new(CAR_DOOR, FLOOR_TOP - APRON_Y, 2.6), cf * CFrame.new(0, (FLOOR_TOP + APRON_Y) / 2, -1.35), C.MetalLight, M.Concrete, "solid")
+	-- allée jusqu'à la route (asphalte)
+	box(model, "Driveway", cf, -12, -2, APRON_Y - 0.7, APRON_Y - 0.02, -(WorldLayout.DEALER_X - 8), -depth, C.Asphalt, M.Asphalt, "solid")
+	-- socle du plateau tournant (on marche dessus ; le plateau tourne côté client)
+	local t = TownShops.TURNTABLE
+	local base = part(model, "TurntableBase", Vector3.new(t.Y - APRON_Y, TownShops.TURNTABLE_R * 2, TownShops.TURNTABLE_R * 2),
+		cf * CFrame.new(t.X, (t.Y + APRON_Y) / 2, t.Z) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(58, 62, 78), M.Metal, "solid")
+	;(base :: Part).Shape = Enum.PartType.Cylinder
+	model:SetAttribute("TurntableCF", cf * CFrame.new(t.X, t.Y, t.Z))
+	model:SetAttribute("TurntableR", TownShops.TURNTABLE_R)
+	model:SetAttribute("ApronY", APRON_Y)
+	-- totem au bord de l'allée
+	local totem = cf * CFrame.new(-16, APRON_Y, -(depth - 3)) * CFrame.Angles(0, math.rad(-35), 0)
+	part(model, "TotemBase", Vector3.new(3, 1, 1.6), totem * CFrame.new(0, 0.5, 0), C.StoneDark, M.Granite, "prop")
+	plaque(model, "Totem", Vector3.new(2.6, 9, 0.9), totem * CFrame.new(0, 5.5, 0), Color3.fromRGB(58, 62, 78), "🚗", C.White, 30, 300)
+	-- zones réservées (hall + parvis) : TownNature n'y plante rien
+	geo.Reserve(cf * Vector3.new(0, 0, WorldLayout.DEALER_D / 2), math.sqrt(hw ^ 2 + (WorldLayout.DEALER_D / 2) ^ 2) + 4)
+	geo.Reserve(cf * Vector3.new(0, 0, -depth / 2), math.max(hw, depth / 2) + 2)
 	return model
+end
+
+-- Retire les arbres (modèles "Tree*") posés par d'autres modules sur le hall
+-- ou le parvis (à appeler APRÈS la nature, comme TownMarket.ClearSite)
+function TownShops.ClearDealerSite(decor: Instance, count: number): number
+	local cf = WorldLayout.DealershipCFrame(count)
+	local hw = TownShops.DEALER_W / 2 + 4
+	local depth = WorldLayout.DEALER_X - 24 + 3
+	local removed = 0
+	for _, d in ipairs(decor:GetDescendants()) do
+		if d:IsA("Model") and string.sub(d.Name, 1, 4) == "Tree" and d.Parent and not d:FindFirstAncestor("Shop_Cars") then
+			local first = d:FindFirstChildWhichIsA("BasePart", true)
+			local p = cf:PointToObjectSpace(first and first.Position or d:GetPivot().Position)
+			if math.abs(p.X) <= hw and p.Z >= -depth and p.Z <= WorldLayout.DEALER_D + 4 then
+				for _, x in ipairs(d:GetDescendants()) do
+					if x:IsA("BasePart") then
+						removed += 1
+					end
+				end
+				d:Destroy()
+			end
+		end
+	end
+	TownKit.Stats.Parts -= removed
+	return removed
 end
 
 return TownShops

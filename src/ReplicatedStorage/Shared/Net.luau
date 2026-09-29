@@ -54,6 +54,7 @@ Net.Functions = {
 	"FriendMail", -- C -> S (action, argument) -> (succès, résultat | message, état?) : mails entre amis Roblox (FriendMailService)
 	"World", -- C -> S (action, argument) -> (succès, résultat | message) : 🚶 Dopamine Town (entrer, visiter, s'asseoir, j'aime) (WorldService)
 	"Car", -- C -> S (action, a, b) -> (succès, message, extra?) : 🚗 voitures (acheter, couleur, choisir, garage, conduire, klaxon) (CarService)
+	"Food", -- C -> S ("buy", foodId, stallId | "bite") -> (succès, message, manquant?) : 🍦 nourriture de Dopamine Town (FoodService, v9.8)
 	"DebugCommand", -- C -> S (commande, argument) -> (succès, message) : UNIQUEMENT dans Studio
 }
 

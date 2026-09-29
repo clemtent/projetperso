@@ -95,9 +95,16 @@ TownKit.FLOWERS = {
 local stats = { Parts = 0, Lights = 0 }
 TownKit.Stats = stats
 
+-- (v9.8, CITY98) mobilier de rue + chemins des passants construits côté
+-- CLIENT (TownStreetLife / TownPeople) : le serveur ne fait que noter les
+-- emplacements (0 pièce), publiés en attributs par TownKit.PublishLife
+local life: { Spots: { string }, Paths: { [string]: { Points: { Vector3 }, Loop: boolean } } } = { Spots = {}, Paths = {} }
+
 function TownKit.Reset()
 	stats.Parts = 0
 	stats.Lights = 0
+	life.Spots = {}
+	life.Paths = {}
 end
 
 ----------------------------------------------------------------------
@@ -598,6 +605,92 @@ function TownKit.VehicleSpot(parent: Instance, kind: string, cf: CFrame, attrs: 
 		part(parent, "VehicleCollider", collider.Size, collider.CF, C.White, M.SmoothPlastic, "ghost")
 	end
 	return spot
+end
+
+-- (v9.8, CITY98) VIE DE LA RUE, construite côté CLIENT (0 pièce serveur) :
+--   TownKit.LifeSpot(kind, cf, seed)   un objet de rue (poubelle, abribus,
+--       kiosque, feux, panneau publicitaire, moulin...) : `cf` au sol, avant
+--       du mobilier vers -Z (seule la rotation autour de Y est gardée) ;
+--   TownKit.LifePath(name, points, loop)  un chemin des passants (au sol) ;
+--   TownKit.PublishLife(root)          à la fin du Build : dossier
+--       "StreetLife" (Configuration par case de 64 studs, attribut "Data" =
+--       lignes "kind;x;y;z;yaw;seed[;sx,sy,sz]") + Configuration "Path" (attributs
+--       Name, Loop, Points = "x,y,z;x,y,z...").
+TownKit.LIFE_FOLDER = "StreetLife"
+TownKit.LIFE_CELL = 64
+
+local function r2(v: number): string
+	return string.format("%.2f", v)
+end
+
+-- `size` (facultatif) : taille d'une pièce simple (peinture au sol : "Paint")
+function TownKit.LifeSpot(kind: string, cf: CFrame, seed: number?, size: Vector3?)
+	local _, yaw = cf:ToEulerAnglesYXZ()
+	local p = cf.Position
+	local fields = { kind, r2(p.X), r2(p.Y), r2(p.Z), string.format("%.4f", yaw), tostring(math.floor(seed or 0)) }
+	if size then
+		table.insert(fields, r2(size.X) .. "," .. r2(size.Y) .. "," .. r2(size.Z))
+	end
+	table.insert(life.Spots, table.concat(fields, ";"))
+end
+
+function TownKit.LifePath(name: string, points: { Vector3 }, loop: boolean)
+	life.Paths[name] = { Points = points, Loop = loop }
+end
+
+function TownKit.LifeCount(): number
+	return #life.Spots
+end
+
+function TownKit.PublishLife(root: Instance): Folder
+	local old = root:FindFirstChild(TownKit.LIFE_FOLDER)
+	if old then
+		old:Destroy()
+	end
+	local folder = Instance.new("Folder")
+	folder.Name = TownKit.LIFE_FOLDER
+	local cells: { [string]: { string } } = {}
+	local order: { string } = {}
+	for _, line in ipairs(life.Spots) do
+		local fields = string.split(line, ";")
+		local cx = math.floor((tonumber(fields[2]) or 0) / TownKit.LIFE_CELL)
+		local cz = math.floor((tonumber(fields[4]) or 0) / TownKit.LIFE_CELL)
+		local key = cx .. "_" .. cz
+		if not cells[key] then
+			cells[key] = {}
+			table.insert(order, key)
+		end
+		table.insert(cells[key], line)
+	end
+	for _, key in ipairs(order) do
+		local cell = Instance.new("Configuration")
+		cell.Name = "Cell_" .. key
+		cell:SetAttribute("Data", table.concat(cells[key], "\n"))
+		cell:SetAttribute("Count", #cells[key])
+		cell.Parent = folder
+	end
+	local names = {}
+	for name in pairs(life.Paths) do
+		table.insert(names, name)
+	end
+	table.sort(names)
+	for _, name in ipairs(names) do
+		local path = life.Paths[name]
+		local pts = {}
+		for _, p in ipairs(path.Points) do
+			table.insert(pts, r2(p.X) .. "," .. r2(p.Y) .. "," .. r2(p.Z))
+		end
+		local conf = Instance.new("Configuration")
+		conf.Name = "Path"
+		conf:SetAttribute("Name", name)
+		conf:SetAttribute("Loop", path.Loop)
+		conf:SetAttribute("Points", table.concat(pts, ";"))
+		conf.Parent = folder
+	end
+	folder:SetAttribute("Version", 1)
+	folder:SetAttribute("Spots", #life.Spots)
+	folder.Parent = root
+	return folder
 end
 
 -- Arceaux à vélos (v9.7, VEHICLES97) : 3 arceaux inox en U (serveur, sans

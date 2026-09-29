@@ -28,10 +28,24 @@
 	"lueur" de la couleur de la pièce tant qu'elle n'est pas construite).
 	Perron à marches : rampe de collision invisible (on ne bute jamais).
 
+	(v9.8 HOUSE98) :
+	  - portes 6,5 x 9,5 (la tête ne touche plus), porte d'entrée DOUBLE,
+	    perrons plus grands ;
+	  - plaque au nom (bois, liseré doré, plaque gravée) toujours SOUS les
+	    avant-toits et AU-DESSUS de la porte, rien devant : chaumière = la
+	    travée de l'entrée monte au-dessus du toit (les festons ne cachent plus
+	    le nom) ; maison de ville = entre le bandeau et la fenêtre du palier ;
+	    loft = debout sur l'auvent ; manoir = panneau du balcon central ;
+	  - côté JARDIN : mur du fond percé de vraies fenêtres (une par pièce,
+	    même trou que la coque : BackWindowRect), fenêtres de palier, porte
+	    double de derrière + auvent + perron à marches (rampe invisible).
+
 	API :
 	  HouseFacade.Build(kit, size, snapshot, looks) -> Built
 	    looks = { Wall, Roof, Pattern, Garden, Rooms (par emplacement), Name }
-	    Built = { Door, Hinge, Lock, Fills[slot], Chimneys, Style, Colors }
+	    Built = { Door, Hinge, Lock, Fills[slot], Chimneys, Style, Colors,
+	      Leaves, BackLeaves (battants), BackFills[slot] }
+	  HouseFacade.WindowRect / BackWindowRect(size, column, floor) -> { x0, x1, y0, y1 }
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -99,6 +113,9 @@ local CHIMNEYS: { [string]: number } = { Cottage = 1, Townhouse = 2, Loft = 0, M
 HouseFacade.Chimneys = CHIMNEYS
 
 export type Looks = { Wall: Color3?, Roof: Color3?, Pattern: string?, Garden: { string }, Rooms: { [number]: any }, Name: string, Garage: boolean? }
+-- (v9.8 HOUSE98) un battant de porte : pivote autour de `Hinge` (bas du
+-- chant côté gonds) ; Sign = +1 battant gauche (s'étend vers +x), -1 droit
+export type Leaf = { Part: BasePart, Hinge: CFrame, Sign: number, Width: number, Height: number }
 export type Built = {
 	Door: BasePart?,
 	Hinge: CFrame?,
@@ -106,6 +123,9 @@ export type Built = {
 	Fills: { [number]: BasePart },
 	Chimneys: number,
 	Style: string,
+	Leaves: { Leaf }?, -- (v9.8) porte d'entrée DOUBLE (2 battants)
+	BackLeaves: { Leaf }?, -- (v9.8) porte de derrière (jardin)
+	BackFills: { [number]: BasePart }?, -- (v9.8) "rideau" des fenêtres du fond tant que la pièce n'est pas construite
 }
 
 type Ctx = {
@@ -135,17 +155,21 @@ type Ctx = {
 -- Petits éléments
 ----------------------------------------------------------------------
 
-local function wallpaperColor(room: any): Color3
+-- (v9.8 HOUSE98) couleur des rideaux d'une pièce (= HouseBuilder : 2e
+-- couleur du papier peint) ; une pièce pas encore construite montre ses
+-- rideaux tirés derrière la vitre au lieu d'un aplat opaque
+local function curtainColor(room: any): Color3
 	local style = room and Config.HouseWallpapersById[room.Wallpaper]
-	local color = style and style.A
-	return typeof(color) == "Color3" and color or Color3.fromRGB(240, 236, 244)
+	local color = style and style.B
+	return typeof(color) == "Color3" and color or Color3.fromRGB(255, 190, 214)
 end
 
 -- Fenêtre d'une pièce (trou déjà percé dans le mur) : vitre, cadre, appui,
 -- "lueur" de la pièce ; `kind` = "Cross" | "Grid" | "Tall"
 local function roomWindow(ctx: Ctx, slot: number?, x0: number, x1: number, y0: number, y1: number, frame: Color3, kind: string)
 	local kit = ctx.Kit
-	local glass = kit:Box("Glass", x0, x1, y0, y1, 0.35, 0.5, P.Glass, M.Glass, { T = 0.62, Shadow = false })
+	-- (v9.8 : 0,62 -> 0,72, on voit mieux au travers)
+	local glass = kit:Box("Glass", x0, x1, y0, y1, 0.35, 0.5, P.Glass, M.Glass, { T = 0.72, Shadow = false })
 	glass.CastShadow = false
 	local f = if kind == "Grid" then 0.3 else 0.35
 	-- (v9.6 : le cadre déborde de 0,05 dans le trou -> jamais coplanaire avec les bords du mur)
@@ -171,7 +195,7 @@ local function roomWindow(ctx: Ctx, slot: number?, x0: number, x1: number, y0: n
 	-- lueur de la pièce (masquée quand la pièce est construite)
 	if slot then
 		local room = ctx.Looks.Rooms[slot]
-		local fill = kit:Box("Fill", x0 - 0.4, x1 + 0.4, y0 - 0.4, y1 + 0.4, 1.4, 1.6, if room then wallpaperColor(room) else Color3.fromRGB(236, 232, 242), M.SmoothPlastic,
+		local fill = kit:Box("Fill", x0 - 0.4, x1 + 0.4, y0 - 0.4, y1 + 0.4, 1.4, 1.6, if room then curtainColor(room) else Color3.fromRGB(236, 232, 242), M.Fabric,
 			{ Shadow = false })
 		ctx.Built.Fills[slot] = fill
 	end
@@ -191,11 +215,12 @@ end
 
 -- Fenêtre cintrée : imposte en demi-cercle dessinée (SurfaceGui) au-dessus
 -- d'une vitre rectangulaire (le mur n'est percé que du rectangle)
-local function archTop(ctx: Ctx, x0: number, x1: number, y1: number, frame: Color3)
+local function archTop(ctx: Ctx, x0: number, x1: number, y1: number, frame: Color3, maxH: number?)
 	local kit = ctx.Kit
 	local w = x1 - x0 + 0.7
 	-- arc surbaissé (demi-ellipse) : ne monte jamais sur l'étage du dessus
-	local h = math.min(w / 2, 2.3)
+	-- (v9.8 : `maxH` = imposte plus basse au-dessus des grandes portes)
+	local h = math.min(w / 2, maxH or 2.3)
 	local panel = kit:Box("ArchTop", x0 - 0.35, x1 + 0.35, y1, y1 + h, -0.42, -0.38, WHITE, M.SmoothPlastic, { T = 1, Shadow = false })
 	local gui = Instance.new("SurfaceGui")
 	gui.Name = "Arch"
@@ -506,7 +531,8 @@ local function porch(ctx: Ctx, x0: number, x1: number, landingD: number, steps: 
 	local yTop = WorldLayout.FloorY(1)
 	local tread = 1.25
 	-- (v9.6 : 0,04 sous le seuil : pas coplanaire avec le mur sous la porte)
-	kit:Box("Porch", x0, x1, 0, yTop - 0.04, -landingD, 0, color, material, { Solid = true })
+	-- (v9.8 : pied 0,06 sous le sol : jamais coplanaire avec le soubassement)
+	kit:Box("Porch", x0, x1, -0.06, yTop - 0.04, -landingD, 0, color, material, { Solid = true })
 	-- `steps` contremarches : la dernière arrive sur la pelouse
 	local rise = yTop / steps
 	for k = 1, steps - 1 do
@@ -563,11 +589,11 @@ local function ironFence(ctx: Ctx, x0: number, x1: number, d: number, gate0: num
 		if b - a > 1 then
 			kit:Box("FenceRail", a, b, 0.6, 0.8, d - 0.1, d + 0.1, iron, M.Metal, { Solid = true, Shadow = false })
 			kit:Box("FenceRail", a, b, 3.0, 3.2, d - 0.1, d + 0.1, iron, M.Metal, { Shadow = false })
-			local count = math.max(2, math.floor((b - a) / 2.6))
+			local count = math.max(2, math.floor((b - a) / 3.3)) -- (v9.8 : budget de pièces)
 			for k = 0, count do
 				local x = a + k * (b - a) / count
 				kit:Box("FenceBar", x - 0.1, x + 0.1, 0, 3.8, d - 0.1, d + 0.1, iron, M.Metal, { Shadow = false })
-				if k % 3 == 1 then
+				if k % 4 == 1 then -- (v9.8 : budget de pièces)
 					kit:Ball("FenceBall", x, 3.95, d, 0.35, P.Gold, M.Metal, { Shadow = false })
 				end
 			end
@@ -580,47 +606,97 @@ local function ironFence(ctx: Ctx, x0: number, x1: number, d: number, gate0: num
 	end
 end
 
--- Plaque au nom du propriétaire
-local function namePlate(ctx: Ctx, x: number, y: number, d: number, w: number)
+-- Plaque au nom du propriétaire (v9.8 HOUSE98 : vraie enseigne lisible
+-- depuis la rue, SOUS l'avant-toit et AU-DESSUS de la porte) : planche de
+-- bois foncé, liseré doré, plaque crème gravée, 2 vis en laiton.
+-- (x, y) = milieu du BAS de la plaque, `dWall` = face du mur (ou du support)
+-- contre laquelle elle est fixée ; elle dépasse vers la rue (d plus petit).
+local PLATE_H = 1.7
+local function namePlate(ctx: Ctx, x: number, y: number, dWall: number, w: number)
 	local kit = ctx.Kit
-	local plate = kit:Box("NamePlate", x - w / 2, x + w / 2, y, y + 1.5, d - 0.25, d, WHITE, M.SmoothPlastic, { Shadow = false })
-	kit:Box("NamePlateFrame", x - w / 2 - 0.15, x + w / 2 + 0.15, y - 0.15, y + 1.65, d - 0.1, d + 0.1, P.Gold, M.Metal, { Shadow = false })
-	kit:Text(plate, Enum.NormalId.Back, "🏠 " .. ctx.Looks.Name, C.PinkDeep, Enum.Font.FredokaOne, 40, 220)
+	local board = Color3.fromRGB(122, 80, 62)
+	kit:Box("NamePlateBoard", x - w / 2 - 0.3, x + w / 2 + 0.3, y - 0.3, y + PLATE_H + 0.3, dWall - 0.22, dWall - 0.02, board, M.Wood, { Shadow = false })
+	kit:Box("NamePlateRim", x - w / 2 - 0.1, x + w / 2 + 0.1, y - 0.1, y + PLATE_H + 0.1, dWall - 0.27, dWall - 0.2, P.Gold, M.Metal, { Shadow = false })
+	local plate = kit:Box("NamePlate", x - w / 2, x + w / 2, y, y + PLATE_H, dWall - 0.33, dWall - 0.24, Color3.fromRGB(255, 250, 238), M.SmoothPlastic, { Shadow = false })
+	for _, s in ipairs({ -1, 1 }) do
+		kit:Ball("NamePlateScrew", x + s * (w / 2 + 0.16), y + PLATE_H / 2, dWall - 0.23, 0.16, P.Gold, M.Metal, { Shadow = false })
+	end
+	local label = kit:Text(plate, Enum.NormalId.Back, "🏠 " .. ctx.Looks.Name, Color3.fromRGB(110, 52, 86), Enum.Font.FredokaOne, 40, 260)
+	label.Size = UDim2.fromScale(0.94, 0.86)
+	label.Position = UDim2.fromScale(0.03, 0.07)
+	label.TextStrokeColor3 = Color3.fromRGB(255, 214, 232)
+	label.TextStrokeTransparency = 0.4
+	plate:SetAttribute("NamePlate", true)
 end
 
 ----------------------------------------------------------------------
 -- Porte d'entrée (battant qui pivote : HouseBuilder.StepDoor)
 ----------------------------------------------------------------------
 
-local function frontDoor(ctx: Ctx, leafColor: Color3, frameColor: Color3, withGlass: boolean)
+-- (v9.8 HOUSE98) porte DOUBLE (2 battants de DOOR_W / 2) dans le mur de
+-- devant (back = false : s'ouvre vers l'intérieur) ou du fond (back = true :
+-- s'ouvre vers le jardin). Repère "devant" : d = o ; "fond" : d = Depth - o
+-- (miroir : la face extérieure du mur du fond = celle de la façade).
+-- Décor de chaque battant soudé (WeldConstraint) : il pivote avec lui.
+local function doorLeaves(ctx: Ctx, x: number, back: boolean, leafColor: Color3, frameColor: Color3, withGlass: boolean): { Leaf }
 	local kit = ctx.Kit
-	local x = ctx.DoorX
 	local y0 = WorldLayout.FloorY(1)
 	local w, h = WorldLayout.DOOR_W, WorldLayout.DOOR_H
+	local depth = ctx.Depth
+	local function D(o: number): number
+		return if back then depth - o else o
+	end
+	local function box(name: string, x0: number, x1: number, y1: number, y2: number, o0: number, o1: number, color: Color3, material: Enum.Material, opts: any): BasePart
+		local a, b = D(o0), D(o1)
+		return kit:Box(name, x0, x1, y1, y2, math.min(a, b), math.max(a, b), color, material, opts)
+	end
+	-- chambranle (0,05 dans l'ouverture : jamais coplanaire avec les tranches du mur)
 	for _, sx in ipairs({ -1, 1 }) do
-		kit:Box("DoorFrame", x + sx * (w / 2) - 0.3, x + sx * (w / 2) + 0.3, y0, y0 + h + 0.4, -0.7, 0.25, frameColor, M.Wood, { Solid = true })
+		box("DoorFrame", x + sx * (w / 2) - 0.3, x + sx * (w / 2) + 0.3, y0, y0 + h + 0.4, -0.7, 0.25, frameColor, M.Wood, { Solid = true })
 	end
-	kit:Box("DoorFrame", x - w / 2 - 0.45, x + w / 2 + 0.45, y0 + h - 0.05, y0 + h + 0.6, -0.75, 0.25, frameColor, M.Wood)
-	local leaf = kit:Box("DoorLeaf", x - w / 2 + 0.05, x + w / 2 - 0.05, y0, y0 + h - 0.05, 0.15, 0.55, leafColor, M.Wood, { Solid = true, Shadow = true })
+	box("DoorFrame", x - w / 2 - 0.45, x + w / 2 + 0.45, y0 + h - 0.05, y0 + h + 0.6, -0.75, 0.25, frameColor, M.Wood)
+	local leaves: { Leaf } = {}
+	local lw = w / 2 - 0.08 -- largeur d'un battant
+	local lh = h - 0.05
+	for _, sign in ipairs({ 1, -1 }) do
+		-- sign = +1 : battant gauche (gonds à gauche) ; -1 : battant droit
+		local hingeX = x - sign * (w / 2 - 0.05)
+		local x0, x1 = math.min(hingeX, hingeX + sign * lw), math.max(hingeX, hingeX + sign * lw)
+		local leaf = box("DoorLeaf", x0, x1, y0, y0 + lh, 0.15, 0.55, leafColor, M.Wood, { Solid = true, Shadow = true })
+		local function welded(part: BasePart)
+			part.Anchored = false
+			part.CanCollide = false
+			part.CanQuery = false
+			part.Massless = true
+			local weld = Instance.new("WeldConstraint")
+			weld.Part0 = leaf
+			weld.Part1 = part
+			weld.Parent = leaf
+		end
+		-- moulures (panneau bas + vitre ou panneau haut) des deux côtés, poignée côté milieu
+		local tint = leafColor:Lerp(WHITE, 0.18)
+		for _, face in ipairs({ { 0.05, 0.16 } }) do -- (côté dehors ; budget de pièces)
+			welded(box("DoorPanel", x0 + 0.45, x1 - 0.45, y0 + 0.8, y0 + lh * 0.42, face[1], face[2], tint, M.Wood, { Shadow = false }))
+			if withGlass then
+				welded(box("DoorGlass", x0 + 0.6, x1 - 0.6, y0 + lh * 0.52, y0 + lh - 0.9, face[1], face[2], P.Glass, M.Glass, { T = 0.35, Shadow = false }))
+			else
+				welded(box("DoorPanel", x0 + 0.45, x1 - 0.45, y0 + lh * 0.5, y0 + lh - 0.8, face[1], face[2], tint, M.Wood, { Shadow = false }))
+			end
+		end
+		local knobX = hingeX + sign * (lw - 0.45)
+		-- poignée (boule qui traverse le battant : visible des deux côtés)
+		welded(kit:Ball("DoorKnob", knobX, y0 + 4.1, D(0.35), 0.62, P.Gold, M.Metal, { Shadow = false }))
+		table.insert(leaves, { Part = leaf, Hinge = kit.CF * CFrame.new(hingeX, y0, -D(0.35)), Sign = sign, Width = lw, Height = lh })
+	end
+	return leaves
+end
+
+local function frontDoor(ctx: Ctx, leafColor: Color3, frameColor: Color3, withGlass: boolean)
+	local leaves = doorLeaves(ctx, ctx.DoorX, false, leafColor, frameColor, withGlass)
+	ctx.Built.Leaves = leaves
+	local leaf = leaves[1].Part
 	ctx.Built.Door = leaf
-	ctx.Built.Hinge = ctx.Kit.CF * CFrame.new(x - w / 2 + 0.05, y0, -0.35)
-	-- décor soudé au battant (il pivote avec lui)
-	local function welded(part: BasePart)
-		part.Anchored = false
-		part.CanCollide = false
-		part.Massless = true
-		local weld = Instance.new("WeldConstraint")
-		weld.Part0 = leaf
-		weld.Part1 = part
-		weld.Parent = leaf
-	end
-	welded(kit:Ball("DoorKnob", x + w / 2 - 0.75, y0 + h * 0.48, 0.05, 0.4, P.Gold, M.Metal, { Shadow = false }))
-	welded(kit:Box("DoorPanel", x - w / 2 + 0.6, x + w / 2 - 0.6, y0 + 0.7, y0 + h * 0.42, 0.05, 0.16, leafColor:Lerp(WHITE, 0.18), M.Wood, { Shadow = false }))
-	if withGlass then
-		welded(kit:Box("DoorGlass", x - w / 2 + 0.9, x + w / 2 - 0.9, y0 + h * 0.55, y0 + h - 0.8, 0.05, 0.16, P.Glass, M.Glass, { Shadow = false }))
-	else
-		welded(kit:Box("DoorPanel", x - w / 2 + 0.6, x + w / 2 - 0.6, y0 + h * 0.5, y0 + h - 0.7, 0.05, 0.16, leafColor:Lerp(WHITE, 0.18), M.Wood, { Shadow = false }))
-	end
+	ctx.Built.Hinge = leaves[1].Hinge
 	-- 🔒 sur la porte (propriétaire qui ne reçoit pas ce joueur)
 	local lockGui = Instance.new("SurfaceGui")
 	lockGui.Name = "Lock"
@@ -647,6 +723,132 @@ end
 -- Murs du bâtiment
 ----------------------------------------------------------------------
 
+----------------------------------------------------------------------
+-- (v9.8 HOUSE98) Le côté JARDIN : mur du fond percé de vraies fenêtres
+-- (une par pièce, à la place de la fenêtre 2D de la pièce :
+-- WorldLayout.BackWindowRect ; la coque de la pièce est percée au même
+-- endroit : House3DScene BackWindow), fenêtres de palier, porte double de
+-- derrière + perron à marches vers le jardin (rampe invisible).
+----------------------------------------------------------------------
+
+-- Rectangle de la fenêtre du fond d'une pièce (repère local de la maison) :
+-- { x0, x1, y0, y1 } = exactement le trou de la coque
+function HouseFacade.BackWindowRect(size: any, column: number, floor: number): { number }
+	local x0, x1 = WorldLayout.ColumnSpan(size, column)
+	local cx = (x0 + x1) / 2
+	local yFloor = WorldLayout.FloorY(floor)
+	local a, b, c, d = WorldLayout.BackWindowRect(size, Config.House.WallRatio)
+	return { cx + a, cx + b, yFloor + c, yFloor + d }
+end
+
+local function backSide(ctx: Ctx, material: Enum.Material)
+	local kit = ctx.Kit
+	local dims = ctx.Dims
+	local T = WorldLayout.WALL_T
+	local L, R = ctx.Left - T, ctx.Right + T
+	local depth = ctx.Depth
+	local out = depth + WorldLayout.BACK_WALL_OUT -- face extérieure
+	local frame = if ctx.Style == "Loft" then P.SteelDark else C.Cream
+	local frameMat = if ctx.Style == "Loft" then M.Metal else M.Wood
+	local backX = WorldLayout.BackDoorX(ctx.Size)
+	local W, H = WorldLayout.DOOR_W, WorldLayout.DOOR_H
+	local backFills: { [number]: BasePart } = ctx.Built.BackFills or {}
+	ctx.Built.BackFills = backFills
+	for floor = 1, dims.Floors do
+		local yFloor = WorldLayout.FloorY(floor)
+		local y0 = if floor == 1 then 0 else yFloor - WorldLayout.SLAB
+		local y1 = if floor == dims.Floors then ctx.Top else yFloor + WorldLayout.WALL_H
+		local holes = {}
+		local windows = {}
+		for column = 1, dims.Columns do
+			local r = HouseFacade.BackWindowRect(ctx.Size, column, floor)
+			-- (trou de la façade 0,05 plus grand que celui de la coque : tranches jamais confondues)
+			table.insert(holes, { r[1] - 0.05, r[2] + 0.05, r[3] - 0.05, r[4] + 0.05 })
+			table.insert(windows, { r, (floor - 1) * dims.Columns + column })
+		end
+		if floor == 1 then
+			table.insert(holes, { backX - W / 2, backX + W / 2, yFloor, yFloor + H })
+		else
+			-- fenêtre du palier (cage)
+			local r = { backX - 2, backX + 2, yFloor + 3.2, yFloor + 9.4 }
+			table.insert(holes, { r[1] - 0.05, r[2] + 0.05, r[3] - 0.05, r[4] + 0.05 })
+			table.insert(windows, { r, nil })
+		end
+		-- (bandes pleines sous / sur les ouvertures + trumeaux : moins de pièces)
+		local lo, hi = math.huge, -math.huge
+		for _, h in ipairs(holes) do
+			lo, hi = math.min(lo, h[3]), math.max(hi, h[4])
+		end
+		lo, hi = math.max(y0, lo), math.min(y1, hi)
+		if lo > y0 + 0.05 then
+			kit:Box("Back", L, R, y0, lo, depth - T + 0.05, out, ctx.Wall, material, { Solid = true })
+		end
+		if hi < y1 - 0.05 then
+			kit:Box("Back", L, R, hi, y1, depth - T + 0.05, out, ctx.Wall, material, { Solid = true })
+		end
+		kit:WallX("Back", L, R, lo, hi, depth - T + 0.05, out, holes, ctx.Wall, material, { Solid = true })
+		for _, w in ipairs(windows) do
+			local r, slot = w[1], w[2]
+			local x0, x1, wy0, wy1 = r[1], r[2], r[3], r[4]
+			-- vitre (vraie, transparente) dans l'épaisseur du mur de la façade
+			local glass = kit:Box("BackGlass", x0, x1, wy0, wy1, depth + 0.05, depth + 0.13, P.Glass, M.Glass, { T = 0.72, Shadow = false })
+			glass.CastShadow = false
+			-- cadre extérieur (déborde de 0,1 dans le trou) : linteau, 2 montants,
+			-- appui (bas du cadre, qui avance), imposte (budget : 6 pièces par fenêtre)
+			local f = 0.38
+			kit:Box("BackFrame", x0 - f, x1 + f, wy1 - 0.1, wy1 + f, out - 0.2, out + 0.22, frame, frameMat)
+			kit:Box("BackFrame", x0 - f, x0 + 0.1, wy0 + 0.1, wy1 - 0.1, out - 0.2, out + 0.22, frame, frameMat)
+			kit:Box("BackFrame", x1 - 0.1, x1 + f, wy0 + 0.1, wy1 - 0.1, out - 0.2, out + 0.22, frame, frameMat)
+			kit:Box("BackSill", x0 - 0.6, x1 + 0.6, wy0 - 0.45, wy0 + 0.1, depth + 0.16, out + 0.7, frame:Lerp(WHITE, 0.2), frameMat, { Shadow = false })
+			local ym = wy0 + (wy1 - wy0) * 0.66
+			kit:Box("BackMullion", x0 + 0.1, x1 - 0.1, ym - 0.1, ym + 0.1, depth + 0.13, depth + 0.33, frame, frameMat, { Shadow = false })
+			-- pièce pas encore construite : rideaux tirés (masqués quand la pièce est là)
+			if slot then
+				local room = ctx.Looks.Rooms[slot]
+				local fill = kit:Box("BackFill", x0 - 0.3, x1 + 0.3, wy0 - 0.3, wy1 + 0.3, depth - T - 1.6, depth - T - 1.45,
+					if room then curtainColor(room) else Color3.fromRGB(236, 232, 242), M.Fabric, { Shadow = false })
+				backFills[slot] = fill
+			end
+		end
+	end
+	-- Porte de derrière (double, s'ouvre vers le jardin) + imposte + lanterne
+	local leafColor = if ctx.Style == "Loft" then P.Steel:Lerp(C.Mint, 0.35) else ctx.Wall:Lerp(C.PinkDeep, 0.35)
+	ctx.Built.BackLeaves = doorLeaves(ctx, backX, true, leafColor, frame, true)
+	local yDoor = WorldLayout.FloorY(1)
+	kit:Box("BackDoorHood", backX - W / 2 - 1.2, backX + W / 2 + 1.2, yDoor + H + 0.75, yDoor + H + 1.1, out, out + 2.2, frame, frameMat, { Shadow = false })
+	for _, s in ipairs({ -1, 1 }) do
+		kit:Slab("BackHoodBrace", backX + s * (W / 2 + 0.9), { yDoor + H - 0.9, out + 0.02 }, { yDoor + H + 0.75, out + 1.9 }, 0.18, 0.18, frame, frameMat, { Shadow = false })
+		-- lanterne murale (sans vraie lumière : budget de la maison)
+		local lx = backX + s * (W / 2 + 1.5)
+		kit:Box("BackLanternArm", lx - 0.1, lx + 0.1, yDoor + 5.5, yDoor + 5.7, out, out + 0.7, C.Ink, M.Metal, { Shadow = false })
+		kit:Box("BackLantern", lx - 0.35, lx + 0.35, yDoor + 4.2, yDoor + 5.5, out + 0.35, out + 1.05, P.Lamp, M.SmoothPlastic, { Shadow = false })
+		kit:Box("BackLanternCap", lx - 0.45, lx + 0.45, yDoor + 5.5, yDoor + 5.8, out + 0.25, out + 1.15, C.Ink, M.Metal, { Shadow = false })
+	end
+	-- perron : palier + marches + rampe lisse invisible jusqu'à la pelouse
+	local landing = WorldLayout.BACK_LANDING
+	local steps = WorldLayout.BACK_STEPS
+	local tread = WorldLayout.BACK_TREAD
+	local px0, px1 = backX - W / 2 - 1.6, backX + W / 2 + 1.6
+	local stone = if ctx.Style == "Loft" then Color3.fromRGB(226, 216, 232) else P.Stone
+	kit:Box("BackPorch", px0, px1, 0, yDoor - 0.04, out, out + landing, stone, M.Limestone, { Solid = true })
+	kit:Box("BackPorchEdge", px0 - 0.1, px1 + 0.1, yDoor - 0.3, yDoor - 0.02, out + landing - 0.35, out + landing + 0.1, frame:Lerp(WHITE, 0.3), M.Limestone, { Shadow = false })
+	local rise = yDoor / steps
+	for k = 1, steps - 1 do
+		local top = yDoor - k * rise
+		local d0 = out + landing + (k - 1) * tread
+		kit:Box("BackStep", px0 + 0.3 + k * 0.2, px1 - 0.3 - k * 0.2, 0, top, d0 + 0.1, d0 + tread, stone:Lerp(WHITE, (k % 2) * 0.12), M.Limestone, { Shadow = false })
+	end
+	local run = (steps - 0.5) * tread
+	local lawn = HouseKit.LAWN
+	local slope = (yDoor - lawn) / run
+	kit:Slab("BackRamp", backX, { yDoor, out + landing }, { lawn - 0.6 * slope, out + landing + run + 0.6 }, px1 - px0 - 0.8, 1, WHITE, M.SmoothPlastic,
+		{ Solid = true, Query = true, T = 1, Shadow = false })
+	-- deux pots fleuris sur le palier
+	for _, s in ipairs({ -1, 1 }) do
+		HouseGarden.PottedBall(kit:Sub(CFrame.new(0, yDoor - 0.04, 0)), backX + s * (W / 2 + 0.9), out + landing - 0.9, 0.8, if s < 0 then C.Pink else C.Lilac)
+	end
+end
+
 -- Façade (une par étage, trous = fenêtres + porte), murs des bouts, mur du
 -- fond, soubassement, dalle du toit. `holes[floor]` = { { x0, x1, y0, y1 } }
 local function bodyWalls(ctx: Ctx, holes: { [number]: { { number } } }, material: Enum.Material, plinthColor: Color3, plinthMaterial: Enum.Material)
@@ -669,7 +871,9 @@ local function bodyWalls(ctx: Ctx, holes: { [number]: { { number } } }, material
 	-- (v9.6 : pieds 0,1 sous le sol : pas coplanaires avec le soubassement)
 	kit:Box("EndLeft", L, ctx.Left, -0.1, ctx.Top, -0.3, ctx.Depth, ctx.Wall, material, { Solid = true })
 	kit:Box("EndRight", ctx.Right, R, -0.1, ctx.Top, -0.3, ctx.Depth, ctx.Wall, material, { Solid = true })
-	kit:Box("Back", L, R, 0, ctx.Top, ctx.Depth - T + 0.05, ctx.Depth + 0.3, ctx.Wall, material, { Solid = true })
+	-- (v9.8 HOUSE98) mur du fond PERCÉ : une vraie fenêtre par pièce (côté
+	-- jardin), une fenêtre de palier aux étages de la cage, la porte de derrière
+	backSide(ctx, material)
 	-- dalle du toit (ferme la maison par le haut)
 	-- (v9.6 : décalée de 0,05 : jamais coplanaire avec les plafonds des pièces du dernier étage)
 	-- (et 0,05 en retrait sur les 4 côtés : jamais coplanaire avec les parapets du loft)
@@ -732,8 +936,14 @@ STYLES.Cottage = function(ctx)
 	end
 	bodyWalls(ctx, holes, M.Plaster, P.Stone, M.Cobblestone)
 	-- porche (travée de la cage) : enduit rosé devant la façade
+	-- (v9.8 HOUSE98 : la travée de l'entrée monte de ANNEX_RAISE au-dessus du
+	-- toit des pièces : grande porte + imposte + plaque au nom SOUS ses
+	-- festons, plus rien ne cache le nom)
+	local ANNEX_RAISE = 2.6
 	local annex = ctx.Wall:Lerp(C.Pink, 0.14)
-	kit:WallX("AnnexSkin", ctx.Hall0 + 0.3, ctx.Hall1 + T - 0.3, WorldLayout.PLINTH, ctx.Top, -0.36, -0.3, hallHoles, annex, M.Plaster, { Shadow = false })
+	local annexTop = ctx.Top + 0.6 + ANNEX_RAISE
+	kit:WallX("AnnexSkin", ctx.Hall0 + 0.3, ctx.Hall1 + T - 0.3, WorldLayout.PLINTH, annexTop, -0.36, -0.3, hallHoles, annex, M.Plaster, { Shadow = false })
+	kit:Box("AnnexUpper", ctx.Hall0, ctx.Hall1 + T, ctx.Top + 0.4, annexTop, -0.3, ctx.Depth + WorldLayout.BACK_WALL_OUT, annex, M.Plaster, { Solid = true })
 	for _, w in ipairs(windows) do
 		local r = w[1]
 		roomWindow(ctx, w[2], r[1], r[2], r[3], r[4], C.Cream, "Cross")
@@ -752,7 +962,9 @@ STYLES.Cottage = function(ctx)
 	local last = -math.huge
 	for _, x in ipairs(posts) do
 		if x - last > 1.5 then
-			kit:Box("Timber", x - 0.5, x + 0.5, WorldLayout.PLINTH, ctx.Top, -0.62, -0.3, TIMBER, M.Wood, { Shadow = false })
+			-- (v9.8 : le poteau du bout de l'entrée monte avec elle)
+			local postTop = if x > ctx.Hall0 + 1 then annexTop - 0.35 else ctx.Top
+			kit:Box("Timber", x - 0.5, x + 0.5, WorldLayout.PLINTH, postTop, -0.62, -0.3, TIMBER, M.Wood, { Shadow = false })
 			last = x
 			if x > ctx.Left and x < ctx.Right then
 				heart(ctx, x, ctx.Top - 2.2, -0.75, 0.9, C.Pink)
@@ -760,7 +972,8 @@ STYLES.Cottage = function(ctx)
 		end
 	end
 	-- (v9.6 : dessus des poutres décalés de 0,05 des bords de l'enduit du porche)
-	kit:Box("Beam", ctx.Left - T - 0.3, ctx.Right + T + 0.3, ctx.Top - 1, ctx.Top + 0.05, -0.66, -0.3, TIMBER, M.Wood, { Shadow = false })
+	-- (v9.8 : la poutre haute s'arrête au poteau de l'entrée : l'imposte et la plaque au nom restent dégagées)
+	kit:Box("Beam", ctx.Left - T - 0.3, ctx.Hall0 + 0.45, ctx.Top - 1, ctx.Top + 0.05, -0.66, -0.3, TIMBER, M.Wood, { Shadow = false })
 	for floor = 2, dims.Floors do
 		local y = WorldLayout.FloorY(floor) - WorldLayout.SLAB
 		kit:Box("Beam", ctx.Left - T - 0.3, ctx.Right + T + 0.3, y - 0.3, y + 0.75, -0.66, -0.3, TIMBER, M.Wood, { Shadow = false })
@@ -805,13 +1018,16 @@ STYLES.Cottage = function(ctx)
 	local hx0, hx1 = ctx.Hall0, ctx.Hall1 + T
 	local hcx = (hx0 + hx1) / 2
 	local hRise = 5.5
-	local yEave = ctx.Top + 0.6
+	local yEave = annexTop
 	for _, s in ipairs({ -1, 1 }) do
 		local edge = if s < 0 then hx0 - 0.9 else hx1 + 0.9
 		kit:SlabX("PorchRoof", ctx.Depth / 2 - 0.5, { edge, yEave - 0.9 * hRise / ((hx1 - hx0) / 2) }, { hcx, yEave + hRise }, ctx.Depth + 2.4, 0.6, ctx.Roof, M.ClayRoofTiles,
 			{ Solid = true, Shadow = true })
 		-- (v9.6 : pignon 0,3 plus bas : sa pente passe sous le toit, jamais coplanaire)
 		kit:Part("PorchGable", Vector3.new(1, hRise, (hx1 - hx0) / 2), CFrame.new(hcx + s * (hx1 - hx0) / 4, yEave + hRise / 2 - 0.3, 0.2) * CFrame.Angles(0, -s * math.pi / 2, 0),
+			annex, M.Plaster, { Solid = true }, "WedgePart")
+		-- (v9.8) pignon du fond aussi (côté jardin, le toit n'est plus ouvert)
+		kit:Part("PorchGable", Vector3.new(1, hRise, (hx1 - hx0) / 2), CFrame.new(hcx + s * (hx1 - hx0) / 4, yEave + hRise / 2 - 0.3, -(ctx.Depth - 0.2)) * CFrame.Angles(0, -s * math.pi / 2, 0),
 			annex, M.Plaster, { Solid = true }, "WedgePart")
 		kit:SlabX("PorchBarge", -1.6, { edge - 0.1, yEave - 0.9 * hRise / ((hx1 - hx0) / 2) + 0.3 }, { hcx, yEave + hRise + 0.35 }, 0.5, 0.9, ctx.RoofDark, M.Wood,
 			{ Shadow = false })
@@ -823,14 +1039,15 @@ STYLES.Cottage = function(ctx)
 	for j = 0, sc - 1 do
 		kit:CylD("Scallop", hx0 + (j + 0.5) * (hx1 - hx0) / sc, yEave - 0.25, -0.68, 1.6, 0.3, ctx.RoofDark, M.ClayRoofTiles, { Shadow = false })
 	end
-	-- porte ronde : cadre de bois + haut arrondi (disque)
+	-- porte ronde : porte double en bois + imposte cintrée (v9.8 : 6,5 x 9,5,
+	-- la tête ne touche plus) ; plaque au nom entre l'imposte et les festons
+	local yTopDoor = WorldLayout.FloorY(1) + WorldLayout.DOOR_H
 	frontDoor(ctx, C.Pink, TIMBER, false)
-	kit:CylD("DoorArch", gx, WorldLayout.FloorY(1) + WorldLayout.DOOR_H, -0.5, WorldLayout.DOOR_W + 1.2, 0.35, TIMBER, M.Wood, { Shadow = false })
-	kit:CylD("DoorArchGlass", gx, WorldLayout.FloorY(1) + WorldLayout.DOOR_H + 0.1, -0.85, WorldLayout.DOOR_W - 0.6, 0.12, P.Glass, M.Glass, { Shadow = false })
-	heart(ctx, gx, WorldLayout.FloorY(1) + WorldLayout.DOOR_H + 1, -0.85, 1.1, C.Heart, M.SmoothPlastic) -- (v9.6 : plus de Neon, "flash bang")
-	wallLantern(ctx, gx + WorldLayout.DOOR_W / 2 + 1.2, WorldLayout.FloorY(1) + 4.2, true)
-	local foot = porch(ctx, gx - 3.5, gx + 3.5, 2.2, 3, P.StoneDark, M.Slate)
-	namePlate(ctx, gx, WorldLayout.FloorY(1) + WorldLayout.DOOR_H + 3.6, -0.5, 7)
+	archTop(ctx, gx - WorldLayout.DOOR_W / 2, gx + WorldLayout.DOOR_W / 2, yTopDoor + 0.6, TIMBER, 1.5)
+	heart(ctx, gx, yTopDoor + 1.3, -0.56, 0.8, C.Heart, M.SmoothPlastic) -- (v9.6 : plus de Neon, "flash bang")
+	wallLantern(ctx, gx + WorldLayout.DOOR_W / 2 + 1.5, WorldLayout.FloorY(1) + 4.2, true)
+	local foot = porch(ctx, gx - 5, gx + 5, 3.2, 3, P.StoneDark, M.Slate)
+	namePlate(ctx, gx, yTopDoor + 2.45, -0.36, 6.4)
 
 	-- jardin : pommier, buissons, pas japonais, barrière, fleurs
 	tree(ctx, ctx.Left - 9, 6, 1.2, C.Pink)
@@ -843,7 +1060,7 @@ STYLES.Cottage = function(ctx)
 	local gateX = 0
 	local stones = { { gateX, -20 }, { gateX * 0.8 + gx * 0.2, -16.5 }, { gateX * 0.5 + gx * 0.5, -13 }, { gateX * 0.2 + gx * 0.8, -10 }, { gx, foot - 1.2 } }
 	for index, s in ipairs(stones) do
-		ctx.G:CylY("SteppingStone", s[1], -0.1, s[2], 2.6 - index * 0.12, 0.25, P.Stone:Lerp(P.StoneDark, (index % 2) * 0.4), M.Slate, { Shadow = false })
+		ctx.G:CylY("SteppingStone", s[1], -0.13, s[2], 2.6 - index * 0.12, 0.3, P.Stone:Lerp(P.StoneDark, (index % 2) * 0.4), M.Slate, { Shadow = false })
 	end
 	path(ctx, { { gx, foot - 0.5 }, { gx, foot - 2.5 } }, 3, P.Pave, M.Pebble)
 	path(ctx, { { gateX, -29.5 }, { gateX, -21.5 } }, 3, P.Pave, M.Pebble)
@@ -870,8 +1087,10 @@ STYLES.Townhouse = function(ctx)
 			table.insert(windows, { r, (floor - 1) * dims.Columns + column })
 		end
 		local yFloor = WorldLayout.FloorY(floor)
+		-- (v9.8 : fenêtre du palier un peu plus haute : la plaque au nom et la
+		-- jardinière tiennent au-dessus de la grande porte)
 		local r = if floor == 1 then { ctx.DoorX - WorldLayout.DOOR_W / 2, ctx.DoorX + WorldLayout.DOOR_W / 2, yFloor, yFloor + WorldLayout.DOOR_H }
-			else { ctx.DoorX - 1.9, ctx.DoorX + 1.9, yFloor + 2.4, yFloor + 8.4 }
+			else { ctx.DoorX - 1.9, ctx.DoorX + 1.9, yFloor + 4, yFloor + 9.2 }
 		table.insert(holes[floor], r)
 		table.insert(hallHoles, r)
 		if floor > 1 then
@@ -975,26 +1194,27 @@ STYLES.Townhouse = function(ctx)
 	-- entrée : porte cintrée, marquise rayée, 3 marches, lanterne, topiaires
 	local gx = ctx.DoorX
 	local yDoor = WorldLayout.FloorY(1)
+	-- (v9.8 HOUSE98) grande porte double + imposte basse, encadrement à
+	-- pilastres, puis (au-dessus du bandeau de l'étage) la plaque au nom sous
+	-- sa corniche : plus de marquise qui la cachait
+	local yTopDoor = yDoor + WorldLayout.DOOR_H
 	frontDoor(ctx, C.PinkDeep:Lerp(C.Pink, 0.5), TRIM, true)
-	archTop(ctx, gx - WorldLayout.DOOR_W / 2, gx + WorldLayout.DOOR_W / 2, yDoor + WorldLayout.DOOR_H + 0.6, TRIM)
-	heart(ctx, gx, yDoor + WorldLayout.DOOR_H + 1.6, -0.55, 0.9, C.Heart)
-	local awW = WorldLayout.DOOR_W + 3.4
-	local awY = yDoor + WorldLayout.DOOR_H + 3.6
-	local awning = kit:Slab("Awning", gx, { awY - 1.8, -3 }, { awY, -0.3 }, awW, 0.3, WHITE, M.Fabric, { Shadow = true })
-	local _ = awning
-	for k = 0, 4 do
-		local x = gx - awW / 2 + (k + 0.5) * awW / 5
-		if k % 2 == 0 then
-			kit:Slab("AwningStripe", x, { awY - 1.74, -3.02 }, { awY + 0.06, -0.3 }, awW / 5, 0.3, C.Pink, M.Fabric, { Shadow = false })
-		end
-		kit:CylD("AwningScallop", x, awY - 2.05, -3, awW / 5, 0.25, if k % 2 == 0 then C.Pink else WHITE, M.Fabric, { Shadow = false })
-	end
-	wallLantern(ctx, gx + WorldLayout.DOOR_W / 2 + 1.4, yDoor + 3.6, true)
-	local foot = porch(ctx, gx - 3.8, gx + 3.8, 2, 3, P.Stone, M.Limestone)
+	archTop(ctx, gx - WorldLayout.DOOR_W / 2, gx + WorldLayout.DOOR_W / 2, yTopDoor + 0.6, TRIM, 1.3)
+	heart(ctx, gx, yTopDoor + 1.2, -0.55, 0.8, C.Heart)
+	local pilX = WorldLayout.DOOR_W / 2 + 0.95
+	local bandY = WorldLayout.FloorY(2) - 1.3 -- (bandeau de l'étage : dims.Floors >= 2 pour une maison de ville)
 	for _, s in ipairs({ -1, 1 }) do
-		HouseGarden.PottedBall(ctx.G, gx + s * 5.2, -1.6, 1, C.Lilac)
+		kit:Box("DoorPilaster", gx + s * pilX - 0.45, gx + s * pilX + 0.45, yDoor, bandY, -0.72, -0.36, TRIM, M.Plaster, { Shadow = false })
+		kit:Box("DoorPilasterCap", gx + s * pilX - 0.6, gx + s * pilX + 0.6, bandY - 0.45, bandY, -0.8, -0.36, TRIM:Lerp(C.Pink, 0.15), M.Limestone, { Shadow = false })
 	end
-	namePlate(ctx, gx, yDoor + WorldLayout.DOOR_H + 4.8, -0.35, 6)
+	wallLantern(ctx, gx + WorldLayout.DOOR_W / 2 + 2.3, yDoor + 3.6, true)
+	local foot = porch(ctx, gx - 5, gx + 5, 3, 3, P.Stone, M.Limestone)
+	for _, s in ipairs({ -1, 1 }) do
+		HouseGarden.PottedBall(ctx.G, gx + s * 6.3, -1.3, 1, C.Lilac)
+	end
+	local plateY = bandY + 1.4
+	namePlate(ctx, gx, plateY, -0.36, 6.4)
+	kit:Box("NamePlateCornice", gx - 3.9, gx + 3.9, plateY + PLATE_H + 0.32, plateY + PLATE_H + 0.58, -0.8, -0.36, TRIM, M.Limestone, { Shadow = false })
 	-- trottoir, lampadaire, vélo, allée
 	ctx.G:Box("Sidewalk", ctx.Left - 6, ctx.Right + 6, -0.1, 0.12, -6, -0.6, P.Pave, M.Pavement, { Shadow = false })
 	postLantern(ctx, ctx.Left + 3, -5, 0, 8, false, ctx.G)
@@ -1107,13 +1327,16 @@ STYLES.Loft = function(ctx)
 	local gx = ctx.DoorX
 	local yDoor = WorldLayout.FloorY(1)
 	frontDoor(ctx, P.Steel:Lerp(C.Mint, 0.35), steel, true)
-	kit:Box("DoorCanopy", gx - 3.6, gx + 3.6, yDoor + WorldLayout.DOOR_H + 1.1, yDoor + WorldLayout.DOOR_H + 1.5, -2.4, -0.3, steel, M.Metal)
+	-- (v9.8 HOUSE98) auvent d'acier plus large ; la plaque au nom se dresse
+	-- sur son bord avant (enseigne d'atelier), rien au-dessus pour la cacher
+	local yTopDoor = yDoor + WorldLayout.DOOR_H
+	kit:Box("DoorCanopy", gx - 4.6, gx + 4.6, yTopDoor + 1.1, yTopDoor + 1.5, -2.8, -0.3, steel, M.Metal)
 	for _, s in ipairs({ -1, 1 }) do
-		kit:Slab("CanopyRod", gx + s * 3.2, { yDoor + WorldLayout.DOOR_H + 1.3, -2.2 }, { yDoor + WorldLayout.DOOR_H + 3.2, -0.3 }, 0.12, 0.12, steel, M.Metal, { Shadow = false })
+		kit:Slab("CanopyRod", gx + s * 4.2, { yTopDoor + 1.3, -2.6 }, { yTopDoor + 3.2, -0.3 }, 0.12, 0.12, steel, M.Metal, { Shadow = false })
 	end
 	wallLantern(ctx, gx - WorldLayout.DOOR_W / 2 - 1.6, yDoor + 3.6, true)
-	local foot = porch(ctx, gx - 3.4, gx + 3.4, 1.6, 3, Color3.fromRGB(226, 216, 232), M.Concrete)
-	namePlate(ctx, gx, yDoor + WorldLayout.DOOR_H + 1.8, -2.45, 6)
+	local foot = porch(ctx, gx - 5, gx + 5, 2.6, 3, Color3.fromRGB(226, 216, 232), M.Concrete)
+	namePlate(ctx, gx, yTopDoor + 1.65, -2.55, 6.4)
 	-- enseigne néon verticale "LOFT" (à gauche, sur consoles)
 	local sx = ctx.Left - T - 3.4
 	for _, by in ipairs({ ctx.Top - 4, ctx.Top - 12 }) do
@@ -1147,8 +1370,9 @@ STYLES.Loft = function(ctx)
 	-- escalier de secours devant la travée de droite (décor)
 	if dims.Floors >= 2 then
 		local ly = WorldLayout.FloorY(dims.Floors)
-		local f0, f1 = gx - 5, ctx.Right + T + 2.5
-		kit:Box("FireLanding", f0, f1, ly - 0.3, ly, -3.2, -0.3, steel, M.DiamondPlate, { Shadow = false })
+		-- (v9.8 : commence à droite de l'auvent : la plaque au nom reste dégagée)
+		local f0, f1 = gx + 4.9, ctx.Right + T + 7.5
+		kit:Box("FireLanding", f0, f1, ly - 0.3, ly, -3.2, -0.36, steel, M.DiamondPlate, { Shadow = false })
 		kit:Box("FireRail", f0, f1, ly + 2.8, ly + 3, -3.2, -3, steel, M.Metal, { Shadow = false })
 		for k = 0, 6 do
 			local x = f0 + k * (f1 - f0) / 6
@@ -1214,7 +1438,7 @@ local function fenceRun(ctx: Ctx, a: number, b: number, d: number)
 	local iron = C.Ink:Lerp(C.Lilac, 0.25)
 	kit:Box("FenceRail", a, b, 0.6, 0.8, d - 0.1, d + 0.1, iron, M.Metal, { Solid = true, Shadow = false })
 	kit:Box("FenceRail", a, b, 3.0, 3.2, d - 0.1, d + 0.1, iron, M.Metal, { Shadow = false })
-	local count = math.max(2, math.floor((b - a) / 2.6))
+	local count = math.max(2, math.floor((b - a) / 3.3)) -- (v9.8 : budget de pièces)
 	for k = 0, count do
 		local x = a + k * (b - a) / count
 		kit:Box("FenceBar", x - 0.1, x + 0.1, 0, 3.8, d - 0.1, d + 0.1, iron, M.Metal, { Shadow = false })
@@ -1357,7 +1581,8 @@ STYLES.Mansion = function(ctx)
 		if floor == 1 then
 			table.insert(holes[floor], { ctx.DoorX - WorldLayout.DOOR_W / 2, ctx.DoorX + WorldLayout.DOOR_W / 2, yFloor, yFloor + WorldLayout.DOOR_H })
 		elseif floor == 2 then
-			local r = { ctx.DoorX - 2, ctx.DoorX + 2, yFloor + 1.6, yFloor + 8.4 }
+			-- (v9.8 : un peu plus haute : le panneau au nom du balcon ne la cache pas)
+			local r = { ctx.DoorX - 2, ctx.DoorX + 2, yFloor + 2.7, yFloor + 8.9 }
 			table.insert(holes[floor], r)
 			table.insert(windows, { r, nil })
 		end
@@ -1410,7 +1635,7 @@ STYLES.Mansion = function(ctx)
 			local b0, b1 = x0 + 1.4, x1 - 1.4
 			kit:Box("Balustrade", b0, b1, y + 2.2, y + 2.6, -1.6, -0.3, TRIM, M.Limestone, { Shadow = false })
 			kit:Box("BalustradeBase", b0, b1, y - 0.1, y + 0.3, -1.6, -0.3, TRIM, M.Limestone, { Solid = true, Shadow = false })
-			local count = math.floor((b1 - b0) / 3.2)
+			local count = math.floor((b1 - b0) / 4.2) -- (v9.8 : budget de pièces du manoir)
 			for k = 0, count do
 				local x = b0 + 0.4 + k * (b1 - b0 - 0.8) / count
 				kit:CylY("Baluster", x, y + 0.3, -0.95, 0.6, 1.9, TRIM, M.Limestone, { Shadow = false })
@@ -1418,7 +1643,12 @@ STYLES.Mansion = function(ctx)
 		end
 		if floor == 2 then
 			-- petit balcon arrondi de la travée centrale
-			kit:CylY("CenterBalcony", ctx.DoorX, y - 0.45, -0.6, 7, 0.4, TRIM, M.Limestone, { Solid = true }) -- (v9.6 : 0,05 sous le palier)
+			-- (v9.6 : 0,05 sous le palier) (v9.8 HOUSE98 : balcon droit 9,2 x 3,3 sur
+			-- 2 consoles ; son garde-corps avant = le panneau de la plaque au nom)
+			kit:Box("CenterBalcony", ctx.DoorX - 4.6, ctx.DoorX + 4.6, y - 0.45, y - 0.05, -3.6, -0.3, TRIM, M.Limestone, { Solid = true })
+			for _, s in ipairs({ -1, 1 }) do
+				kit:Box("BalconyCorbel", ctx.DoorX + s * 3.9 - 0.3, ctx.DoorX + s * 3.9 + 0.3, y - 1.7, y - 0.45, -2.7, -0.3, TRIM, M.Limestone, { Shadow = false })
+			end
 		end
 	end
 	-- corniche + modillons + liseré doré
@@ -1502,12 +1732,12 @@ STYLES.Mansion = function(ctx)
 		end
 		kit:CylD("TowerOculus", tx, top - 2.2, td - radius - 0.1, 2.4, 0.3, P.Glass, M.Glass, { Shadow = false })
 		kit:CylY("TowerCrown", tx, top - 0.3, td, radius * 2 + 1.6, 1.2, TRIM, M.Limestone, { Solid = true })
-		local scallops = 10
+		local scallops = 8 -- (v9.8 : 10 -> 8, budget de pièces)
 		for k = 0, scallops - 1 do
 			local a = k / scallops * math.pi * 2
 			kit:Ball("TowerScallop", tx + math.cos(a) * (radius + 0.5), top - 0.6, td + math.sin(a) * (radius + 0.5), 1.1, C.Pink, M.SmoothPlastic, { Shadow = false })
 		end
-		kit:Cone("TowerRoof", tx, top + 0.9, td, radius + 1.6, 12, 10, ctx.Roof, M.Slate)
+		kit:Cone("TowerRoof", tx, top + 0.9, td, radius + 1.6, 12, 8, ctx.Roof, M.Slate) -- (v9.8 : 8 pans)
 		kit:Ball("TowerTop", tx, top + 13.1, td, 0.9, P.Gold, M.Metal, { Shadow = false })
 		kit:Box("FlagPole", tx - 0.1, tx + 0.1, top + 13.3, top + 17.5, td - 0.1, td + 0.1, WHITE, M.Metal, { Shadow = false })
 		kit:Box("Flag", tx + 0.1, tx + 2.6, top + 15.8, top + 17.4, td - 0.06, td + 0.06, if index == 1 then C.Pink else C.Lilac, M.Fabric, { Shadow = false })
@@ -1517,10 +1747,19 @@ STYLES.Mansion = function(ctx)
 	local gx = ctx.DoorX
 	local yDoor = WorldLayout.FloorY(1)
 	frontDoor(ctx, C.PinkDeep:Lerp(C.Pink, 0.45), TRIM, true)
-	archTop(ctx, gx - WorldLayout.DOOR_W / 2, gx + WorldLayout.DOOR_W / 2, yDoor + WorldLayout.DOOR_H + 0.6, TRIM)
-	heart(ctx, gx, yDoor + WorldLayout.DOOR_H + 4.2, -0.5, 1.2, C.Heart)
-	namePlate(ctx, gx, yDoor + WorldLayout.DOOR_H + 5.2, -0.4, 7)
-	local landD, landW = 4, 9
+	archTop(ctx, gx - WorldLayout.DOOR_W / 2, gx + WorldLayout.DOOR_W / 2, yDoor + WorldLayout.DOOR_H + 0.6, TRIM, 1.2)
+	-- (v9.8 HOUSE98) la plaque au nom sur un panneau de pierre dressé sur le
+	-- balcon rond au-dessus de la porte : bien en vue depuis la rue
+	if dims.Floors >= 2 then
+		local balY = WorldLayout.FloorY(2) - 0.05 -- dessus du balcon central
+		kit:Box("NamePanel", gx - 4.3, gx + 4.3, balY, balY + 2.4, -3.52, -3.22, TRIM, M.Limestone, { Solid = true, Shadow = false })
+		kit:Box("NamePanelCap", gx - 4.5, gx + 4.5, balY + 2.4, balY + 2.65, -3.62, -3.12, TRIM:Lerp(C.Pink, 0.12), M.Limestone, { Shadow = false })
+		namePlate(ctx, gx, balY + 0.38, -3.52, 6.8)
+		heart(ctx, gx, balY + 3.3, -3.37, 1, C.Heart)
+	else
+		namePlate(ctx, gx, yDoor + WorldLayout.DOOR_H + 2.1, -0.4, 6.4)
+	end
+	local landD, landW = 5, 11
 	kit:Box("Landing", gx - landW / 2, gx + landW / 2, 0, yDoor, -landD, 0, P.Stone, M.Limestone, { Solid = true })
 	kit:Box("LandingEdge", gx - landW / 2 - 0.2, gx + landW / 2 + 0.2, yDoor - 0.3, yDoor + 0.1, -landD - 0.2, 0, TRIM, M.Limestone, { Shadow = false })
 	local steps = 3
@@ -1558,7 +1797,7 @@ STYLES.Mansion = function(ctx)
 		local x1 = if s < 0 then ctx.Left - T - 1 + 7.5 else court1 + 1
 		local x2 = if s < 0 then court0 - 1 else ctx.Right + T + 1 - 7.5
 		ctx.G:Box("Hedge", x1, x2, 0, 1.6, -3.4, -1.4, P.Leaf, M.Grass)
-		local bumps = math.max(1, math.floor((x2 - x1) / 5))
+		local bumps = math.max(1, math.floor((x2 - x1) / 6.5)) -- (v9.8 : budget de pièces)
 		for k = 0, bumps - 1 do
 			ctx.G:CylX("HedgeTop", x1 + (k + 0.5) * (x2 - x1) / bumps, 1.6, -2.4, 2, (x2 - x1) / bumps - 0.4, P.Leaf:Lerp(WHITE, 0.06), M.Grass, { Shadow = false })
 		end
@@ -1594,7 +1833,7 @@ function HouseFacade.Build(kit: any, size: any, looks: Looks): Built
 	local wall = looks.Wall or DEFAULT_WALL[style]
 	local roof = looks.Roof or DEFAULT_ROOF[style]
 	local hall0, hall1 = WorldLayout.HallSpan(size)
-	local built: Built = { Door = nil, Hinge = nil, Lock = nil, Fills = {}, Chimneys = 0, Style = style }
+	local built: Built = { Door = nil, Hinge = nil, Lock = nil, Fills = {}, Chimneys = 0, Style = style, Leaves = nil, BackLeaves = nil, BackFills = {} }
 	local ctx: Ctx = {
 		Kit = kit,
 		G = kit:Sub(CFrame.new(0, HouseKit.LAWN, 0)),

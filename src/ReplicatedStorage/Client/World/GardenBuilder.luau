@@ -28,6 +28,19 @@
 	    deux lanternes (vraie lumière la nuit), arrosoir, buissons, papillons,
 	    moulin à vent (si le joueur a le moulin "Pinwheel") dont les pales
 	    tournent.
+	  - v9.8 (GARDEN98) 🌷 JARDIN LIBRE : TOUT ce qui est dans le jardin (les
+	    parterres, la déco du jardin choisie dans la maison 2D — avant dessinée
+	    avec la façade —, les objets de jardin achetés : pots, massifs,
+	    lanterne, banc, kiosque..., et les aménagements : panneau, allées,
+	    lanternes, arrosoir, buissons, moulin, bonus des agrandissements :
+	    arche de roses, serre, bassin aux carpes qui nagent) est posé où le
+	    joueur l'a mis, devant OU derrière la maison (GardenSnapshot.Arrange :
+	    places choisies, sinon places par défaut ; repère de la maison).
+	    Chaque objet est un Model (attribut GardenKey) reconstruit seulement
+	    si sa place change ; tout est retiré loin de la parcelle (> 280
+	    studs) et reconstruit en s'approchant (8 objets par pas).
+	    Mode édition (GardenEdit) : SetEditing / Preview / MakeGhost /
+	    ApplyLocal / KeyOf / PlaceCF / ToLocal.
 	Performance : pièces ancrées, sans collision sauf les bords des bacs ;
 	fleurs reconstruites seulement quand leur stade change (au plus 2
 	parterres par image) ; animations à 20 Hz, en pause au-delà de ~110
@@ -62,6 +75,8 @@ local Net = require(ReplicatedStorage.Shared.Net)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
 local GardenSnapshot = require(ReplicatedStorage.Shared.GardenSnapshot)
+local HouseKit = require(script.Parent.HouseKit)
+local HouseGarden = require(script.Parent.HouseGarden)
 
 local GardenBuilder = {}
 GardenBuilder.__index = GardenBuilder
@@ -74,13 +89,12 @@ local TAU = math.pi * 2
 local LAWN_TOP = 0.45 -- dessus de la pelouse de la parcelle (TownMap v9.4)
 local BED_W, BED_D, BED_H = 6.2, 3.6, 1.4
 local PLANK = 0.4
-local BED_GAP = 3.6
+local _BED_GAP = 3.6 -- (v9.8 : pas des parterres par défaut dans GardenSnapshot.BedSlots)
 local PATH_W = 3.4
 local SOIL_TOP = BED_H - 0.12
 
 -- Distances (studs) de la caméra au bord du jardin
 local ANIM_RANGE = 110 -- animations
-local SHOW_RANGE = 150 -- fleurs construites
 local HIDE_RANGE = 175 -- fleurs retirées
 local STEP = 1 / 20 -- 20 Hz
 local BUILDS_PER_STEP = 2
@@ -247,12 +261,15 @@ local function buildPlant(model: Model, flowerId: string, stage: number, opts: F
 	-- Lotus : petite mare + nénuphars (pas de tige visible)
 	if flowerId == "Lotus" then
 		if hero then
-			local water = disc(model, "Water", 2.5, 0.06, CFrame.new(0, 0.03, 0), Color3.fromRGB(104, 178, 224), M.Glass)
+			local water = disc(model, "Water", 2.5, 0.06, CFrame.new(0, 0.06, 0), Color3.fromRGB(104, 178, 224), M.Glass)
 			water.Transparency = 0.25
-			-- (v9.6 z-fighting : dessus du bord à 0.02, de l'eau à 0.06)
-			disc(model, "WaterRim", 2.75, 0.04, CFrame.new(0, 0, 0), Color3.fromRGB(120, 104, 90), M.Slate)
+			-- (v9.8 z-fighting : dessus du bord à 0.05 (au-dessus des sillons du bac), de l'eau à 0.09)
+			disc(model, "WaterRim", 2.75, 0.1, CFrame.new(0, 0, 0), Color3.fromRGB(120, 104, 90), M.Slate)
 		end
 		local padCount = stage == 0 and 1 or (stage == 1 and 2 or 3)
+		if not hero then
+			padCount = math.min(padCount, 2) -- (v9.8 : le 3e frôlait le rebord du bac)
+		end
 		for i = 1, padCount do
 			local a = i * 2.1 + 0.4
 			local r = stage == 0 and 0.3 or 0.62
@@ -413,6 +430,9 @@ local function makeFlower(flowerId: string, stage: any, opts: FlowerOptions): Mo
 	model.Name = "Flower_" .. id
 	local root = newPart(model, "Root", Vector3.new(0.2, 0.2, 0.2), CFrame.new(0, 0.1, 0), WHITE, M.SmoothPlastic)
 	root.Transparency = 1
+	-- (v9.8 : pivot = bas du modèle, comme annoncé ; avant, PivotTo enfonçait
+	-- la fleur de 0,1 stud : nénuphars au ras de la terre -> scintillement)
+	root.PivotOffset = CFrame.new(0, -0.1, 0)
 	model.PrimaryPart = root
 	local height = buildPlant(model, id, stageN, opts)
 	-- balance des fleurs prêtes : plus grandes, étincelles (option Fx)
@@ -475,8 +495,9 @@ function GardenBuilder.BackyardCFrame(plotCF: CFrame): CFrame
 	local cf = GardenBuilder.BackyardArea(plotCF)
 	return cf
 end
-local _, backyardSize = GardenBuilder.BackyardArea(CFrame.identity)
+local backyardOrigin, backyardSize = GardenBuilder.BackyardArea(CFrame.identity)
 GardenBuilder.BACKYARD_SIZE = backyardSize
+local BACKYARD_Z = backyardOrigin.Position.Z -- (repère de la parcelle)
 
 ----------------------------------------------------------------------
 -- Heure du serveur, textes
@@ -537,6 +558,7 @@ export type Bed = {
 	Bar: Frame,
 	Fill: Frame,
 	Prompt: ProximityPrompt?,
+	Click: ClickDetector?,
 	Flower: string,
 	Key: string,
 	Stage: string,
@@ -546,20 +568,37 @@ export type Bed = {
 	Phase: number,
 }
 
+-- (v9.8) un objet du jardin construit (parterre, déco, objet, aménagement)
+export type Item = {
+	Key: string,
+	Sig: string,
+	Model: Model,
+	Arr: any, -- entrée de GardenSnapshot.Arrange
+	CF: CFrame, -- repère posé (devant vers la rue)
+	Bed: any?,
+	Lights: { PointLight },
+	Glows: { BasePart },
+	Kois: { BasePart },
+	EditBox: BasePart?,
+}
+
 export type Garden = typeof(setmetatable({} :: {
 	Model: Model,
 	Origin: CFrame,
+	HouseCF: CFrame,
+	Center: Vector3,
 	Area: Vector2,
 	IsOwner: boolean,
 	Options: any,
 	State: any,
-	LayoutKey: string,
+	Arranged: { any },
+	Items: { [string]: Item },
+	Pending: { any },
 	Beds: { Bed },
 	Layout: Folder?,
 	Blades: Model?,
 	BladesCF: CFrame,
 	Butterflies: { any },
-	Lights: { PointLight },
 	SignPrompt: ProximityPrompt?,
 	SignSub: TextLabel?,
 	Connections: { RBXScriptConnection },
@@ -567,30 +606,45 @@ export type Garden = typeof(setmetatable({} :: {
 	FocusUntil: number,
 	Near: boolean,
 	Animate: boolean,
+	Editing: boolean,
+	Night: boolean?,
 	Clock: number,
 	Tick: number,
 	Slow: number,
 	ClockOffset: number,
 	HarvestingAll: boolean,
 	Destroyed: boolean,
+	EditLayout: any?,
+	FlowersNear: boolean?,
 }, GardenBuilder))
+
+-- Distances (studs) de la caméra au centre de la parcelle
+local SHOW_ITEMS = 230 -- objets du jardin construits
+local HIDE_ITEMS = 280 -- ... retirés
+local ITEMS_PER_STEP = 8 -- constructions par pas (20 Hz)
+local TURN = CFrame.Angles(0, math.pi, 0) -- repère "devant vers la rue" <-> modèles natifs (devant -Z)
 
 function GardenBuilder.new(parent: Instance, originCF: CFrame, areaSize: Vector2, isOwner: boolean, options: any?): Garden
 	local self = setmetatable({}, GardenBuilder) :: any
 	self.Origin = originCF
+	local plotCF = originCF * CFrame.new(0, -LAWN_TOP, -BACKYARD_Z)
+	self.HouseCF = WorldLayout.HouseCFrame(plotCF)
+	self.Center = plotCF.Position
 	self.Area = areaSize
 	self.IsOwner = isOwner == true
 	self.Options = type(options) == "table" and options or {}
 	self.State = GardenSnapshot.Sanitize(nil)
-	self.LayoutKey = ""
+	self.Arranged = {}
+	self.Items = {}
+	self.Pending = {}
 	self.Beds = {}
 	self.Butterflies = {}
-	self.Lights = {}
 	self.Connections = {}
 	self.BladesCF = CFrame.identity
 	self.FocusUntil = 0
 	self.Near = true
 	self.Animate = true
+	self.Editing = false
 	self.Clock = 0
 	self.Tick = 0
 	self.Slow = 0
@@ -603,7 +657,7 @@ function GardenBuilder.new(parent: Instance, originCF: CFrame, areaSize: Vector2
 	model:SetAttribute("IsOwner", self.IsOwner)
 	self.Model = model
 
-	self:_layout()
+	self:_sync()
 	model.Parent = parent
 
 	table.insert(self.Connections, RunService.Heartbeat:Connect(function(dt)
@@ -620,40 +674,49 @@ function GardenBuilder._now(self: Garden): number
 	return rawServerNow() + self.ClockOffset
 end
 
+-- Repère posé d'un objet du jardin : (x, d) du repère de la maison, R degrés ;
+-- R = 0 : le devant de l'objet regarde la rue
+function GardenBuilder.PlaceCF(self: Garden, x: number, d: number, r: number?): CFrame
+	return self.HouseCF * CFrame.new(x, LAWN_TOP, -d) * CFrame.Angles(0, math.rad(r or 0), 0)
+end
+
+-- Point du monde -> (x, d) du repère de la maison
+function GardenBuilder.ToLocal(self: Garden, point: Vector3): (number, number)
+	local p = self.HouseCF:PointToObjectSpace(point)
+	return p.X, -p.Z
+end
+
 -- Instantané (GardenSnapshot) -> reconstruit ce qui a changé
 function GardenBuilder.Update(self: Garden, gardenState: any)
 	if self.Destroyed then
 		return
 	end
 	local state = GardenSnapshot.Sanitize(gardenState)
-	self.State = state
-	local key = table.concat({ tostring(state.Unlocked), state.Count, state.Max, tostring(state.Windmill) }, "|")
-	if key ~= self.LayoutKey then
-		self:_layout()
+	-- (mode édition : la disposition affichée est celle en cours d'édition)
+	if self.Editing and self.EditLayout then
+		state.Layout = self.EditLayout.Layout
+		state.Decor = self.EditLayout.Decor
 	end
+	self.State = state
+	self:_sync()
 	for _, bed in ipairs(self.Beds) do
-		if bed.Kind == "Plot" then
-			local plot = state.Plots[bed.Index]
-			local flower = plot and plot.Flower or ""
-			local plotKey = flower .. "|" .. tostring(plot and plot.PlantedAt or 0)
-			if plotKey ~= bed.Key then
-				-- une fleur prête remplacée par une graine = cueillie (par le
-				-- propriétaire, vu ici par un visiteur) : même éclat, sans "+X"
-				if bed.Hero and bed.Stage == "Ready" and bed.Flower ~= "" and flower ~= "" then
-					self:_pop(bed, bed.Flower, nil)
-				end
-				bed.Key = plotKey
-				bed.Flower = flower
-				bed.Stage = ""
-				bed.Dirty = true
-				if bed.Tag then
-					local style = FLOWER_STYLE[flower]
-					bed.Tag.Color = style and style.Petal or WOOD_LIGHT
-				end
-			end
-		end
+		self:_bedPlot(bed, true)
 	end
 	self:_refreshStages(true)
+end
+
+-- (v9.8, mode édition) disposition locale en attendant le serveur
+function GardenBuilder.ApplyLocal(self: Garden, layout: { [string]: any }, decor: { string })
+	if self.Destroyed then
+		return
+	end
+	self.State.Layout = layout
+	self.State.Decor = decor
+	if self.Editing then
+		self.EditLayout = { Layout = layout, Decor = decor }
+	end
+	self:_sync()
+	self:_buildPending(#self.Pending)
 end
 
 function GardenBuilder.SetFocus(self: Garden, position: Vector3?)
@@ -662,32 +725,8 @@ function GardenBuilder.SetFocus(self: Garden, position: Vector3?)
 end
 
 ----------------------------------------------------------------------
--- Construction du jardin (bacs, allée, déco)
+-- Construction du jardin (objets placés)
 ----------------------------------------------------------------------
-
--- Emplacements des bacs (repère du jardin) : 1 rangée jusqu'à 5, sinon 2
--- (de part et d'autre de l'allée ; les fleurs regardent toujours l'allée)
-local function bedSlots(total: number, area: Vector2): ({ CFrame }, number, number)
-	local slots = {}
-	local rows = total <= 5 and 1 or 2
-	local perRow = math.ceil(total / rows)
-	local pitch = math.min(BED_W + BED_GAP, (area.X - 24) / math.max(1, perRow))
-	local rowZ = rows == 1 and { 1.6 } or { -(PATH_W / 2 + 0.9 + BED_D / 2), PATH_W / 2 + 0.9 + BED_D / 2 }
-	local pathZ = rows == 1 and (1.6 - BED_D / 2 - 0.9 - PATH_W / 2) or 0
-	local index = 0
-	for row = 1, rows do
-		local count = math.min(perRow, total - index)
-		for k = 1, count do
-			index += 1
-			-- 1er parterre à GAUCHE pour qui regarde le jardin depuis la maison (+X local à gauche)
-			local x = ((count + 1) / 2 - k) * pitch
-			local facePath = rows == 2 and row == 1 -- rangée côté maison : tournée vers l'allée
-			slots[index] = CFrame.new(x, 0, rowZ[row]) * CFrame.Angles(0, facePath and math.pi or 0, 0)
-		end
-	end
-	local halfLength = perRow * pitch / 2
-	return slots, pathZ, halfLength
-end
 
 local function billboardFor(bed: any, parent: Part)
 	local gui = Instance.new("BillboardGui")
@@ -766,9 +805,9 @@ local function billboardFor(bed: any, parent: Part)
 	bed.Fill = fill
 end
 
--- Un bac surélevé (planches, poteaux, terre, herbe, étiquette)
-function GardenBuilder._buildBed(self: Garden, folder: Instance, index: number, kind: string, localCF: CFrame): any
-	local cf = self.Origin * localCF
+-- Un bac surélevé (planches, poteaux, terre, herbe, étiquette) ; `cf` = repère
+-- du bac dans le monde (devant -Z : l'étiquette et les fleurs regardent par là)
+function GardenBuilder._buildBed(self: Garden, folder: Instance, index: number, kind: string, cf: CFrame): any
 	local model = Instance.new("Model")
 	model.Name = kind == "Plot" and ("Bed_" .. index) or ("Bed_" .. kind)
 	local ghost = kind == "Ghost"
@@ -802,7 +841,7 @@ function GardenBuilder._buildBed(self: Garden, folder: Instance, index: number, 
 		soil.CastShadow = false
 		-- sillons
 		for k = -1, 1 do
-			newPart(model, "Furrow", Vector3.new(w - 2 * PLANK - 0.4, 0.06, 0.18), cf * CFrame.new(0, SOIL_TOP + 0.02, k * 0.95), SOIL_DARK, M.Ground)
+			newPart(model, "Furrow", Vector3.new(w - 2 * PLANK - 0.4, 0.06, 0.18), cf * CFrame.new(0, SOIL_TOP + 0.005, k * 0.95), SOIL_DARK, M.Ground)
 		end
 		-- touffes d'herbe aux coins du fond
 		for _, sx in ipairs({ -1, 1 }) do
@@ -823,7 +862,6 @@ function GardenBuilder._buildBed(self: Garden, folder: Instance, index: number, 
 	local hitbox = newPart(model, "Hitbox", Vector3.new(w, h + 3, d), cf * CFrame.new(0, (h + 3) / 2, 0), WHITE, M.SmoothPlastic)
 	hitbox.Transparency = 1
 	hitbox.CanQuery = self.IsOwner
-	model.PrimaryPart = hitbox
 	model.Parent = folder
 
 	local bed: any = {
@@ -872,33 +910,33 @@ function GardenBuilder._buildBed(self: Garden, folder: Instance, index: number, 
 		end))
 		bed.Prompt = prompt
 		local click = Instance.new("ClickDetector")
-		click.MaxActivationDistance = 26
+		click.MaxActivationDistance = self.Editing and 0 or 26
 		click.Parent = hitbox
 		table.insert(self.Connections, click.MouseClick:Connect(function()
 			self:_activate(index)
 		end))
+		bed.Click = click
 	end
 	return bed
 end
 
-function GardenBuilder._buildDecor(self: Garden, folder: Instance, pathZ: number, halfLength: number, rows: number)
-	local O = self.Origin
-	local length = halfLength * 2 + 10
-	-- allée de gravier + pas japonais
-	newPart(folder, "Path", Vector3.new(length, 0.12, PATH_W), O * CFrame.new(0, 0.06, pathZ), GRAVEL, M.Pebble)
+-- Allée de gravier (20 studs le long de x) + bordures + pas japonais
+local function buildPath(folder: Instance, cf: CFrame)
+	local length = 20
+	newPart(folder, "Path", Vector3.new(length, 0.12, PATH_W), cf * CFrame.new(0, 0.06, 0), GRAVEL, M.Pebble)
 	for _, side in ipairs({ -1, 1 }) do
-		newPart(folder, "PathEdge", Vector3.new(length, 0.2, 0.22), O * CFrame.new(0, 0.1, pathZ + side * (PATH_W / 2 + 0.1)), Color3.fromRGB(196, 184, 170), M.Slate)
+		newPart(folder, "PathEdge", Vector3.new(length, 0.2, 0.22), cf * CFrame.new(0, 0.14, side * (PATH_W / 2 + 0.1)), Color3.fromRGB(196, 184, 170), M.Slate)
 	end
-	local stones = math.floor(length / 3.4)
+	local stones = 6
 	for k = 1, stones do
 		local x = -length / 2 + (k - 0.5) * (length / stones)
-		local stone = disc(folder, "Stone", 1.7 + (k % 3) * 0.2, 0.12, O * CFrame.new(x, 0.16, pathZ + ((k % 2) - 0.5) * 0.5), STONE, M.Slate)
+		local stone = disc(folder, "Stone", 1.7 + (k % 3) * 0.2, 0.12, cf * CFrame.new(x, 0.16, ((k % 2) - 0.5) * 0.5), STONE, M.Slate)
 		stone.CastShadow = false
 	end
+end
 
-	-- panneau en bois (début de l'allée, côté gauche vu de la maison)
-	local signX = halfLength + 3.2
-	local signCF = O * CFrame.new(signX, 0, pathZ - PATH_W / 2 - 1.4) * CFrame.Angles(0, rad(-12), 0)
+-- Panneau en bois "Jardin de Dopamine" (devant -Z du repère `signCF`)
+function GardenBuilder._buildSign(self: Garden, folder: Instance, signCF: CFrame)
 	for _, sx in ipairs({ -1, 1 }) do
 		newPart(folder, "SignPost", Vector3.new(0.35, 4.2, 0.35), signCF * CFrame.new(sx * 2.4, 2.1, 0), WOOD_DARK, M.Wood, true)
 	end
@@ -937,6 +975,7 @@ function GardenBuilder._buildDecor(self: Garden, folder: Instance, pathZ: number
 	sub.Parent = gui
 	gui.Parent = board
 	self.SignSub = sub
+	self:_signText()
 	if self.IsOwner then
 		local prompt = Instance.new("ProximityPrompt")
 		prompt.Name = "HarvestAll"
@@ -952,48 +991,66 @@ function GardenBuilder._buildDecor(self: Garden, folder: Instance, pathZ: number
 		end))
 		self.SignPrompt = prompt
 	end
+end
 
-	-- lanternes aux deux bouts de l'allée (allumées la nuit)
-	for _, side in ipairs({ -1, 1 }) do
-		local p = O * CFrame.new(side * (halfLength + 1.2), 0, pathZ + PATH_W / 2 + 0.9)
-		newPart(folder, "LanternPost", Vector3.new(0.3, 3.6, 0.3), p * CFrame.new(0, 1.8, 0), Color3.fromRGB(70, 64, 70), M.Metal, true)
-		newPart(folder, "LanternTop", Vector3.new(0.9, 0.18, 0.9), p * CFrame.new(0, 4.25, 0), Color3.fromRGB(70, 64, 70), M.Metal)
-		local lamp = newPart(folder, "Lamp", Vector3.new(0.62, 0.7, 0.62), p * CFrame.new(0, 3.8, 0), Color3.fromRGB(255, 226, 160), M.Neon)
-		local light = Instance.new("PointLight")
-		light.Color = Color3.fromRGB(255, 214, 150)
-		light.Range = 12 -- (v9.6 : 14 / 1.4 -> 12 / 0.8)
-		light.Brightness = 0.8
-		light.Shadows = false
-		light.Enabled = false
-		light.Parent = lamp
-		table.insert(self.Lights, light)
+function GardenBuilder._signText(self: Garden)
+	local sub = self.SignSub
+	if not sub then
+		return
 	end
+	local name = self.Options.OwnerName
+	if not self.State.Unlocked then
+		sub.Text = Locale.T("🔒 Unlock the Dopamine Garden")
+	elseif type(name) == "string" and name ~= "" then
+		sub.Text = Locale.T("%s's garden", name)
+	else
+		sub.Text = "🌷 " .. Locale.T("Dopamine Garden")
+	end
+end
 
-	-- buissons ronds aux coins, arrosoir près du 1er bac
-	local backZ = rows == 1 and (1.6 + BED_D / 2 + 1.6) or (PATH_W / 2 + 0.9 + BED_D + 1.4)
-	for _, side in ipairs({ -1, 1 }) do
-		local base = O * CFrame.new(side * (halfLength + 2.4), 0, backZ)
-		ball(folder, "Bush", 2.6, (base * CFrame.new(0, 1.1, 0)).Position, LEAF_DARK, M.Grass)
-		ball(folder, "Bush", 1.9, (base * CFrame.new(side * 1.1, 0.8, -0.8)).Position, LEAF, M.Grass)
-		for k = 1, 3 do
-			ball(folder, "Berry", 0.36, (base * CFrame.new(math.cos(k * 2.1) * 1.05, 1.5 + (k % 2) * 0.4, -0.95 + math.sin(k) * 0.3)).Position, Color3.fromRGB(255, 120, 170), M.SmoothPlastic)
-		end
+-- Lanterne sur poteau (vraie lumière douce la nuit)
+local function buildLantern(folder: Instance, cf: CFrame, item: any)
+	newPart(folder, "LanternPost", Vector3.new(0.3, 3.6, 0.3), cf * CFrame.new(0, 1.8, 0), Color3.fromRGB(70, 64, 70), M.Metal, true)
+	newPart(folder, "LanternTop", Vector3.new(0.9, 0.18, 0.9), cf * CFrame.new(0, 4.25, 0), Color3.fromRGB(70, 64, 70), M.Metal)
+	local lamp = newPart(folder, "Lamp", Vector3.new(0.62, 0.7, 0.62), cf * CFrame.new(0, 3.8, 0), Color3.fromRGB(255, 226, 160), M.SmoothPlastic)
+	lamp:SetAttribute("NightGlow", true)
+	table.insert(item.Glows, lamp)
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 214, 150)
+	light.Range = 12 -- (v9.6 : 14 / 1.4 -> 12 / 0.8)
+	light.Brightness = 0.8
+	light.Shadows = false
+	light.Enabled = false
+	light.Parent = lamp
+	table.insert(item.Lights, light)
+end
+
+-- Buisson rond à baies
+local function buildBush(folder: Instance, base: CFrame, side: number)
+	ball(folder, "Bush", 2.6, (base * CFrame.new(0, 1.1, 0)).Position, LEAF_DARK, M.Grass)
+	ball(folder, "Bush", 1.9, (base * CFrame.new(side * 1.1, 0.8, -0.8)).Position, LEAF, M.Grass)
+	for k = 1, 3 do
+		ball(folder, "Berry", 0.36, (base * CFrame.new(math.cos(k * 2.1) * 1.05, 1.5 + (k % 2) * 0.4, -0.95 + math.sin(k) * 0.3)).Position, Color3.fromRGB(255, 120, 170), M.SmoothPlastic)
 	end
-	local canCF = O * CFrame.new(halfLength - 1.5, 0, pathZ - PATH_W / 2 + 0.2) * CFrame.Angles(0, rad(-30), 0)
+end
+
+-- Arrosoir
+local function buildCan(folder: Instance, canCF: CFrame)
 	local can = Color3.fromRGB(96, 190, 220)
-	local body = newPart(folder, "CanBody", Vector3.new(0.9, 0.9, 0.9), canCF * CFrame.new(0, 0.45, 0) * CFrame.Angles(0, 0, math.pi / 2), can, M.Metal)
+	local body = newPart(folder, "CanBody", Vector3.new(0.9, 0.9, 0.9), canCF * CFrame.new(0, 0.53, 0) * CFrame.Angles(0, 0, math.pi / 2), can, M.Metal)
 	body.Shape = Enum.PartType.Cylinder
 	tube(folder, "CanSpout", (canCF * CFrame.new(0.3, 0.35, 0)).Position, (canCF * CFrame.new(1.1, 0.95, 0)).Position, 0.14, can, M.Metal)
 	disc(folder, "CanRose", 0.3, 0.08, canCF * CFrame.new(1.15, 1.0, 0) * CFrame.Angles(0, 0, rad(-50)), lerp(can, WHITE, 0.3), M.Metal)
 	tube(folder, "CanHandle", (canCF * CFrame.new(-0.3, 0.9, 0)).Position, (canCF * CFrame.new(0.15, 1.05, 0)).Position, 0.1, lerp(can, Color3.new(0, 0, 0), 0.2), M.Metal)
+end
 
-	-- moulin à vent (le moulin "Pinwheel" du clicker)
-	if self.State.Windmill then
-		local mill = O * CFrame.new(-(halfLength + 6.5), 0, backZ - 0.5)
-		newPart(folder, "MillBase", Vector3.new(3.2, 0.5, 3.2), mill * CFrame.new(0, 0.25, 0), STONE, M.Slate, true)
-		newPart(folder, "MillTower", Vector3.new(2.6, 2.6, 2.6), mill * CFrame.new(0, 1.8, 0), Color3.fromRGB(255, 246, 236), M.WoodPlanks, true)
-		newPart(folder, "MillTower", Vector3.new(2.1, 2.2, 2.1), mill * CFrame.new(0, 4.2, 0), Color3.fromRGB(255, 236, 226), M.WoodPlanks, true)
-		newPart(folder, "MillTower", Vector3.new(1.7, 1.8, 1.7), mill * CFrame.new(0, 6.2, 0), Color3.fromRGB(255, 226, 214), M.WoodPlanks, true)
+-- Moulin à vent (le moulin "Pinwheel" du clicker) ; pales tournées vers -Z
+function GardenBuilder._buildWindmill(self: Garden, folder: Instance, mill: CFrame)
+	newPart(folder, "MillBase", Vector3.new(3.2, 0.5, 3.2), mill * CFrame.new(0, 0.25, 0), STONE, M.Slate, true)
+	newPart(folder, "MillTower", Vector3.new(2.6, 2.6, 2.6), mill * CFrame.new(0, 1.8, 0), Color3.fromRGB(255, 246, 236), M.WoodPlanks, true)
+	newPart(folder, "MillTower", Vector3.new(2.1, 2.2, 2.1), mill * CFrame.new(0, 4.2, 0), Color3.fromRGB(255, 236, 226), M.WoodPlanks, true)
+	newPart(folder, "MillTower", Vector3.new(1.7, 1.8, 1.7), mill * CFrame.new(0, 6.2, 0), Color3.fromRGB(255, 226, 214), M.WoodPlanks, true)
+	for _, s in ipairs({ -1, 1 }) do
 		local roof = Instance.new("WedgePart")
 		roof.Name = "MillRoof"
 		roof.Anchored = true
@@ -1001,33 +1058,217 @@ function GardenBuilder._buildDecor(self: Garden, folder: Instance, pathZ: number
 		roof.CanQuery = false
 		roof.CanTouch = false
 		roof.Size = Vector3.new(2.2, 1.4, 1.1)
-		roof.CFrame = mill * CFrame.new(0, 7.8, -0.55)
+		roof.CFrame = mill * CFrame.new(0, 7.8, s * 0.55) * (s > 0 and CFrame.Angles(0, math.pi, 0) or CFrame.identity)
 		roof.Color = Color3.fromRGB(236, 104, 140)
 		roof.Material = M.SmoothPlastic
 		roof.Parent = folder
-		local roof2 = roof:Clone()
-		roof2.CFrame = mill * CFrame.new(0, 7.8, 0.55) * CFrame.Angles(0, math.pi, 0)
-		roof2.Parent = folder
-		newPart(folder, "MillDoor", Vector3.new(0.9, 1.5, 0.1), mill * CFrame.new(0, 1.3, -1.32), WOOD_DARK, M.Wood)
-		newPart(folder, "MillWindow", Vector3.new(0.6, 0.6, 0.1), mill * CFrame.new(0, 4.3, -1.07), Color3.fromRGB(170, 216, 255), M.Glass)
-		-- pales : un modèle qui tourne autour de l'axe Z (vers la maison)
-		local hubCF = mill * CFrame.new(0, 6.4, -1.2)
-		local blades = Instance.new("Model")
-		blades.Name = "Blades"
-		local hub = newPart(blades, "Hub", Vector3.new(0.5, 0.5, 0.5), hubCF, WOOD_DARK, M.Wood)
-		hub.Shape = Enum.PartType.Ball
-		for k = 0, 3 do
-			local arm = hubCF * CFrame.Angles(0, 0, k * math.pi / 2)
-			newPart(blades, "Arm", Vector3.new(0.2, 3.2, 0.12), arm * CFrame.new(0, 1.7, 0), WOOD_DARK, M.Wood)
-			newPart(blades, "Sail", Vector3.new(0.9, 2.5, 0.06), arm * CFrame.new(0.52, 1.95, 0.1), k % 2 == 0 and Color3.fromRGB(255, 250, 244) or Color3.fromRGB(255, 196, 214), M.Fabric)
-		end
-		blades.PrimaryPart = hub
-		blades.Parent = folder
-		self.Blades = blades
-		self.BladesCF = hubCF
 	end
+	newPart(folder, "MillDoor", Vector3.new(0.9, 1.5, 0.1), mill * CFrame.new(0, 1.3, -1.32), WOOD_DARK, M.Wood)
+	newPart(folder, "MillWindow", Vector3.new(0.6, 0.6, 0.1), mill * CFrame.new(0, 4.3, -1.07), Color3.fromRGB(170, 216, 255), M.Glass)
+	-- pales : un modèle qui tourne autour de son axe Z
+	local hubCF = mill * CFrame.new(0, 6.4, -1.2)
+	local blades = Instance.new("Model")
+	blades.Name = "Blades"
+	local hub = newPart(blades, "Hub", Vector3.new(0.5, 0.5, 0.5), hubCF, WOOD_DARK, M.Wood)
+	hub.Shape = Enum.PartType.Ball
+	for k = 0, 3 do
+		local arm = hubCF * CFrame.Angles(0, 0, k * math.pi / 2)
+		newPart(blades, "Arm", Vector3.new(0.2, 3.2, 0.12), arm * CFrame.new(0, 1.7, 0), WOOD_DARK, M.Wood)
+		newPart(blades, "Sail", Vector3.new(0.9, 2.5, 0.06), arm * CFrame.new(0.52, 1.95, 0.1), k % 2 == 0 and Color3.fromRGB(255, 250, 244) or Color3.fromRGB(255, 196, 214), M.Fabric)
+	end
+	blades.PrimaryPart = hub
+	blades.Parent = folder
+	self.Blades = blades
+	self.BladesCF = hubCF
+end
 
-	-- papillons (visibles quand une fleur est ouverte)
+-- Signature : un objet n'est reconstruit que si elle change
+function GardenBuilder._sigOf(self: Garden, entry: any): string
+	local extra = ""
+	local kind = GardenSnapshot.Parse(entry.Key)
+	if kind == "B" then
+		extra = self.State.Unlocked and "Plot" or "Locked"
+	elseif entry.Key == "F:Sign" then
+		extra = tostring(self.State.Unlocked)
+	end
+	return string.format("%s|%.2f|%.2f|%d|%s", entry.Key, entry.X, entry.D, entry.R, extra)
+end
+
+-- Disposition voulue (GardenSnapshot.Arrange) -> ce qui doit être construit / retiré
+function GardenBuilder._sync(self: Garden)
+	if self.Destroyed then
+		return
+	end
+	local arranged = GardenSnapshot.Arrange(self.State)
+	self.Arranged = arranged
+	table.clear(self.Pending)
+	if not self.Near then
+		return
+	end
+	if not self.Layout then
+		local folder = Instance.new("Folder")
+		folder.Name = "Layout"
+		folder.Parent = self.Model
+		self.Layout = folder
+		self:_buildButterflies(folder)
+	end
+	local seen = {}
+	for _, entry in ipairs(arranged) do
+		seen[entry.Key] = true
+		local sig = self:_sigOf(entry)
+		local item = self.Items[entry.Key]
+		if item and item.Sig ~= sig then
+			self:_destroyItem(entry.Key)
+			item = nil
+		end
+		if item then
+			item.Arr = entry
+		else
+			table.insert(self.Pending, entry)
+		end
+	end
+	for key in pairs(self.Items) do
+		if not seen[key] then
+			self:_destroyItem(key)
+		end
+	end
+	-- parterres d'abord, puis aménagements, puis le reste
+	local order = { B = 1, G = 1, F = 2 }
+	table.sort(self.Pending, function(a, b)
+		local ka = order[string.sub(a.Key, 1, 1)] or 3
+		local kb = order[string.sub(b.Key, 1, 1)] or 3
+		if ka ~= kb then
+			return ka < kb
+		end
+		return a.Key < b.Key
+	end)
+	-- (les parterres tout de suite : les invites et les étiquettes en dépendent)
+	local beds = 0
+	for _, entry in ipairs(self.Pending) do
+		local first = string.sub(entry.Key, 1, 1)
+		if first == "B" or first == "G" then
+			beds += 1
+		end
+	end
+	self:_buildPending(math.max(beds, 1))
+	self:_signText()
+end
+
+function GardenBuilder._destroyItem(self: Garden, key: string)
+	local item = self.Items[key]
+	if not item then
+		return
+	end
+	self.Items[key] = nil
+	if item.Bed then
+		local index = table.find(self.Beds, item.Bed)
+		if index then
+			table.remove(self.Beds, index)
+		end
+	end
+	if key == "F:Windmill" then
+		self.Blades = nil
+	elseif key == "F:Sign" then
+		self.SignPrompt = nil
+		self.SignSub = nil
+	end
+	item.Model:Destroy()
+end
+
+-- Construit jusqu'à `budget` objets en attente
+function GardenBuilder._buildPending(self: Garden, budget: number)
+	local built = 0
+	while built < budget and #self.Pending > 0 and self.Layout do
+		local entry = table.remove(self.Pending, 1)
+		if not self.Items[entry.Key] then
+			local ok, err = pcall(self._buildItem, self, entry)
+			if not ok then
+				warn("[Jardin] " .. tostring(entry.Key) .. " : " .. tostring(err))
+			end
+			built += 1
+		end
+	end
+	if built > 0 then
+		table.sort(self.Beds, function(a, b)
+			if (a.Kind == "Ghost") ~= (b.Kind == "Ghost") then
+				return b.Kind == "Ghost"
+			end
+			return a.Index < b.Index
+		end)
+	end
+end
+
+function GardenBuilder._buildItem(self: Garden, entry: any)
+	local key = entry.Key
+	local cf = self:PlaceCF(entry.X, entry.D, entry.R)
+	local model = Instance.new("Model")
+	model.Name = key
+	model:SetAttribute("GardenKey", key)
+	local item: any = { Key = key, Sig = self:_sigOf(entry), Model = model, Arr = entry, CF = cf, Lights = {}, Glows = {}, Kois = {} }
+	local kind, id, n = GardenSnapshot.Parse(key)
+	if key == "G" or kind == "B" then
+		local bedKind = key == "G" and "Ghost" or (self.State.Unlocked and "Plot" or "Locked")
+		local index = key == "G" and (self.State.Count + 1) or (n :: number)
+		local bed = self:_buildBed(model, index, bedKind, cf * TURN)
+		item.Bed = bed
+		table.insert(self.Beds, bed)
+		if bedKind == "Plot" then
+			self:_bedPlot(bed, false)
+		end
+	elseif kind == "D" then
+		local kit = HouseKit.new(cf, model, 0)
+		HouseGarden.BuildDecor(kit, id :: string)
+	elseif kind == "P" then
+		local kit = HouseKit.new(cf, model, 0)
+		HouseGarden.BuildPiece(kit, id :: string, n)
+	elseif kind == "F" then
+		if id == "Sign" then
+			self:_buildSign(model, cf * TURN)
+		elseif id == "Path1" or id == "Path2" then
+			buildPath(model, cf)
+		elseif id == "Lantern1" or id == "Lantern2" then
+			buildLantern(model, cf, item)
+		elseif id == "Bush1" or id == "Bush2" then
+			buildBush(model, cf * TURN, id == "Bush1" and 1 or -1)
+		elseif id == "Can" then
+			buildCan(model, cf * TURN)
+		elseif id == "Windmill" then
+			self:_buildWindmill(model, cf * TURN)
+		else
+			local kit = HouseKit.new(cf, model, 0)
+			HouseGarden.BuildPiece(kit, id :: string, 1)
+		end
+	end
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") then
+			if d:GetAttribute("NightGlow") and not table.find(item.Glows, d) then
+				table.insert(item.Glows, d)
+			elseif d:GetAttribute("KoiIndex") then
+				table.insert(item.Kois, d)
+			end
+		end
+	end
+	model.WorldPivot = cf
+	model.Parent = self.Layout
+	self.Items[key] = item
+	if self.Editing then
+		self:_editBox(item)
+	end
+	-- nuit : les lanternes déjà allumées
+	if self.Night ~= nil then
+		for _, glow in ipairs(item.Glows) do
+			glow.Material = self.Night and M.Neon or M.SmoothPlastic
+		end
+		for _, light in ipairs(item.Lights) do
+			light.Enabled = self.Night and self.Near
+		end
+	end
+end
+
+-- Papillons (visibles quand une fleur est ouverte)
+function GardenBuilder._buildButterflies(self: Garden, folder: Instance)
+	table.clear(self.Butterflies)
+	local O = self.Origin
 	for k = 1, 2 do
 		local fly = Instance.new("Model")
 		fly.Name = "Butterfly"
@@ -1035,62 +1276,152 @@ function GardenBuilder._buildDecor(self: Garden, folder: Instance, pathZ: number
 		local bodyPart = egg(fly, "Body", Vector3.new(0.1, 0.1, 0.42), O, Color3.fromRGB(60, 40, 50), M.SmoothPlastic)
 		local left = egg(fly, "Wing", Vector3.new(0.5, 0.04, 0.44), O, color, M.SmoothPlastic)
 		local right = egg(fly, "Wing", Vector3.new(0.5, 0.04, 0.44), O, color, M.SmoothPlastic)
+		bodyPart.Transparency, left.Transparency, right.Transparency = 1, 1, 1
 		fly.Parent = folder
 		table.insert(self.Butterflies, { Body = bodyPart, Left = left, Right = right, Phase = k * 2.4, Bed = 0 })
 	end
 end
 
-function GardenBuilder._layout(self: Garden)
-	if self.Layout then
-		self.Layout:Destroy()
+-- Le parterre suit l'instantané (fleur plantée / cueillie)
+function GardenBuilder._bedPlot(self: Garden, bed: any, allowPop: boolean)
+	if bed.Kind ~= "Plot" then
+		return
 	end
-	table.clear(self.Beds)
-	table.clear(self.Butterflies)
-	table.clear(self.Lights)
-	self.Blades = nil
-	self.SignPrompt = nil
-	self.SignSub = nil
-	-- (les connexions des anciennes invites partent avec leurs Instances)
-	local state = self.State
-	self.LayoutKey = table.concat({ tostring(state.Unlocked), state.Count, state.Max, tostring(state.Windmill) }, "|")
-	local folder = Instance.new("Folder")
-	folder.Name = "Layout"
-	local kinds = {}
-	if state.Unlocked then
-		for index = 1, state.Count do
-			kinds[index] = "Plot"
-		end
-		if state.Count < state.Max then
-			table.insert(kinds, "Ghost")
-		end
-	else
-		for index = 1, math.max(1, (Config.Garden and Config.Garden.BasePlots) or 3) do
-			kinds[index] = "Locked"
+	local plot = self.State.Plots[bed.Index]
+	local flower = plot and plot.Flower or ""
+	local plotKey = flower .. "|" .. tostring(plot and plot.PlantedAt or 0)
+	if plotKey == bed.Key then
+		return
+	end
+	-- une fleur prête remplacée par une graine = cueillie (par le
+	-- propriétaire, vu ici par un visiteur) : même éclat, sans "+X"
+	if allowPop and bed.Hero and bed.Stage == "Ready" and bed.Flower ~= "" and flower ~= "" then
+		self:_pop(bed, bed.Flower, nil)
+	end
+	bed.Key = plotKey
+	bed.Flower = flower
+	bed.Stage = ""
+	bed.Dirty = true
+	if bed.Tag then
+		local style = FLOWER_STYLE[flower]
+		bed.Tag.Color = style and style.Petal or WOOD_LIGHT
+	end
+end
+
+----------------------------------------------------------------------
+-- v9.8 : mode édition du jardin (GardenEdit)
+----------------------------------------------------------------------
+
+-- Boîte invisible cliquable de la taille de l'empreinte (mode édition)
+function GardenBuilder._editBox(self: Garden, item: any)
+	if item.EditBox or not self.IsOwner or item.Key == "G" then
+		return
+	end
+	local arr = item.Arr
+	local box = Instance.new("Part")
+	box.Name = "GardenEditBox"
+	box.Anchored = true
+	box.CanCollide = false
+	box.CanTouch = false
+	box.CanQuery = true
+	box.CastShadow = false
+	box.Transparency = 1
+	box.Size = Vector3.new(math.max(1, arr.W), 3, math.max(1, arr.Dp))
+	box.CFrame = item.CF * CFrame.new(0, 1.5, 0)
+	box:SetAttribute("GardenKey", item.Key)
+	box.Parent = item.Model
+	item.EditBox = box
+end
+
+function GardenBuilder.SetEditing(self: Garden, on: boolean)
+	if self.Destroyed then
+		return
+	end
+	self.Editing = on == true
+	if not self.Editing then
+		self.EditLayout = nil
+	end
+	for _, item in pairs(self.Items) do
+		if self.Editing then
+			self:_editBox(item)
+		elseif item.EditBox then
+			item.EditBox:Destroy()
+			item.EditBox = nil
 		end
 	end
-	local slots, pathZ, halfLength = bedSlots(#kinds, self.Area)
-	local beds = Instance.new("Folder")
-	beds.Name = "Beds"
-	beds.Parent = folder
-	for index, kind in ipairs(kinds) do
-		table.insert(self.Beds, self:_buildBed(beds, index, kind, slots[index]))
+	for _, bed in ipairs(self.Beds) do
+		if bed.Click then
+			bed.Click.MaxActivationDistance = self.Editing and 0 or 26
+		end
 	end
-	local decor = Instance.new("Folder")
-	decor.Name = "Decor"
-	decor.Parent = folder
-	self:_buildDecor(decor, pathZ, halfLength, #kinds <= 5 and 1 or 2)
-	if self.SignSub then
-		local name = self.Options.OwnerName
-		if not state.Unlocked then
-			self.SignSub.Text = Locale.T("🔒 Unlock the Dopamine Garden")
-		elseif type(name) == "string" and name ~= "" then
-			self.SignSub.Text = Locale.T("%s's garden", name)
+	self:_refreshStages(false)
+end
+
+-- Déplace (aperçu) un objet construit ; renvoie son modèle
+function GardenBuilder.Preview(self: Garden, key: string, x: number, d: number, r: number): Model?
+	local item = self.Items[key]
+	if not item then
+		return nil
+	end
+	item.Model:PivotTo(self:PlaceCF(x, d, r))
+	return item.Model
+end
+
+-- Remet un objet à sa place (aperçu annulé)
+function GardenBuilder.ResetPreview(self: Garden, key: string)
+	local item = self.Items[key]
+	if item then
+		item.Model:PivotTo(item.CF)
+	end
+end
+
+-- Nouveau modèle (fantôme) d'un objet pas encore posé : déco / objet de jardin
+function GardenBuilder.MakeGhost(self: Garden, key: string): Model?
+	local kind, id, n = GardenSnapshot.Parse(key)
+	if kind ~= "D" and kind ~= "P" then
+		return nil
+	end
+	local cf = self:PlaceCF(0, 0, 0)
+	local model = Instance.new("Model")
+	model.Name = "GardenGhost"
+	local kit = HouseKit.new(cf, model, 0)
+	local ok = pcall(function()
+		if kind == "D" then
+			HouseGarden.BuildDecor(kit, id :: string)
 		else
-			self.SignSub.Text = "🌷 " .. Locale.T("Dopamine Garden")
+			HouseGarden.BuildPiece(kit, id :: string, n)
+		end
+	end)
+	if not ok then
+		model:Destroy()
+		return nil
+	end
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") then
+			d.CanCollide = false
+			d.CanQuery = false
+		elseif d:IsA("ParticleEmitter") then
+			d.Enabled = false
 		end
 	end
-	folder.Parent = self.Model
-	self.Layout = folder
+	model.WorldPivot = cf
+	return model
+end
+
+-- Objet du jardin sous un point (partie touchée) -> clé
+function GardenBuilder.KeyOf(_self: Garden, part: Instance?): string?
+	local node = part
+	while node and node:IsA("Instance") do
+		local key = node:GetAttribute("GardenKey")
+		if type(key) == "string" then
+			return key
+		end
+		if node:IsA("Model") and node.Name == "DopamineGarden" then
+			return nil
+		end
+		node = node.Parent
+	end
+	return nil
 end
 
 ----------------------------------------------------------------------
@@ -1170,7 +1501,7 @@ function GardenBuilder._refreshStages(self: Garden, force: boolean?)
 			bed.Billboard.StudsOffsetWorldSpace = Vector3.new(0, SOIL_TOP + math.max(1.2, bed.TopHeight) + 1.3, 0)
 			local prompt = bed.Prompt
 			if prompt then
-				local canAct = (bed.Flower == "" or ready) and not bed.Pending
+				local canAct = (bed.Flower == "" or ready) and not bed.Pending and not self.Editing
 				prompt.Enabled = canAct
 				if bed.Flower == "" then
 					prompt.ActionText = Locale.T("Plant")
@@ -1183,14 +1514,23 @@ function GardenBuilder._refreshStages(self: Garden, force: boolean?)
 		end
 	end
 	if self.SignPrompt then
-		self.SignPrompt.Enabled = readyCount >= 2 and not self.HarvestingAll
+		self.SignPrompt.Enabled = readyCount >= 2 and not self.HarvestingAll and not self.Editing
 		self.SignPrompt.ActionText = Locale.T("🧺 Harvest all (%d)", readyCount)
 	end
 	-- lanternes : la nuit seulement (et quand on est près)
 	local clock = Lighting.ClockTime
 	local night = clock < 6.3 or clock > 17.7
-	for _, light in ipairs(self.Lights) do
-		light.Enabled = night and self.Near
+	local changed = night ~= self.Night
+	self.Night = night
+	for _, item in pairs(self.Items) do
+		for _, light in ipairs(item.Lights) do
+			light.Enabled = night and self.Near
+		end
+		if changed then
+			for _, glow in ipairs(item.Glows) do
+				glow.Material = night and M.Neon or M.SmoothPlastic
+			end
+		end
 	end
 	if force then
 		self:_buildDirty(#self.Beds)
@@ -1226,6 +1566,23 @@ function GardenBuilder._focus(self: Garden): Vector3?
 	return camera and camera.CFrame.Position or nil
 end
 
+-- Loin : tout le contenu est retiré (il revient en s'approchant)
+function GardenBuilder._unload(self: Garden)
+	for key in pairs(self.Items) do
+		self:_destroyItem(key)
+	end
+	table.clear(self.Beds)
+	table.clear(self.Pending)
+	table.clear(self.Butterflies)
+	self.Blades = nil
+	self.SignPrompt = nil
+	self.SignSub = nil
+	if self.Layout then
+		self.Layout:Destroy()
+		self.Layout = nil
+	end
+end
+
 function GardenBuilder._heartbeat(self: Garden, dt: number)
 	if self.Destroyed then
 		return
@@ -1239,35 +1596,31 @@ function GardenBuilder._heartbeat(self: Garden, dt: number)
 	self.Tick += elapsed
 	self.Slow += elapsed
 
-	-- distance (2 fois / s) : fleurs retirées de loin, animations en pause
+	-- distance (2 fois / s) : contenu retiré de loin, animations en pause
 	if self.Slow >= 0.5 then
 		self.Slow = 0
 		local focus = self:_focus()
 		if focus then
-			local distance = (focus - self.Origin.Position).Magnitude - self.Area.X * 0.25
-			self.Animate = distance < ANIM_RANGE
-			if self.Near and distance > HIDE_RANGE then
+			local distance = (focus - self.Center).Magnitude
+			self.Animate = distance < ANIM_RANGE + 40 and not self.Editing
+			if self.Near and distance > HIDE_ITEMS and not self.Editing then
 				self.Near = false
-				for _, bed in ipairs(self.Beds) do
-					if bed.Plants then
-						bed.Plants:Destroy()
-						bed.Plants = nil
-						bed.Hero = nil
-					end
-					bed.Billboard.Enabled = false
-				end
-				for _, fly in ipairs(self.Butterflies) do
-					fly.Body.Transparency = 1
-					fly.Left.Transparency = 1
-					fly.Right.Transparency = 1
-				end
-			elseif not self.Near and distance < SHOW_RANGE then
+				self:_unload()
+			elseif not self.Near and distance < SHOW_ITEMS then
 				self.Near = true
-				for _, bed in ipairs(self.Beds) do
+				self:_sync()
+			end
+			-- fleurs : seulement de près (comme v9.5)
+			local flowersNear = distance < HIDE_RANGE + 40
+			for _, bed in ipairs(self.Beds) do
+				if not flowersNear and bed.Plants then
+					bed.Plants:Destroy()
+					bed.Plants = nil
+					bed.Hero = nil
 					bed.Dirty = bed.Kind == "Plot"
-					bed.Billboard.Enabled = bed.Kind ~= "Locked" or bed.Index == 2
 				end
 			end
+			self.FlowersNear = flowersNear
 		end
 		if self.Near then
 			self:_refreshStages(false)
@@ -1276,7 +1629,10 @@ function GardenBuilder._heartbeat(self: Garden, dt: number)
 	if not self.Near then
 		return
 	end
-	self:_buildDirty(BUILDS_PER_STEP)
+	self:_buildPending(ITEMS_PER_STEP)
+	if self.FlowersNear ~= false then
+		self:_buildDirty(BUILDS_PER_STEP)
+	end
 	if not self.Animate then
 		return
 	end
@@ -1298,6 +1654,17 @@ function GardenBuilder._heartbeat(self: Garden, dt: number)
 	local blades = self.Blades
 	if blades then
 		blades:PivotTo(self.BladesCF * CFrame.Angles(0, 0, -t * 1.6))
+	end
+	-- carpes du bassin : elles tournent lentement, en ondulant
+	for _, item in pairs(self.Items) do
+		for _, fish in ipairs(item.Kois) do
+			local k = tonumber(fish:GetAttribute("KoiIndex")) or 1
+			local a = t * (0.35 + k * 0.06) + k * 2.1
+			local rx, rz = 2.5 - k * 0.3, 1.35 - k * 0.12
+			local pos = item.CF * Vector3.new(math.cos(a) * rx, 0.24, math.sin(a) * rz)
+			local ahead = item.CF * Vector3.new(math.cos(a + 0.1) * rx, 0.24, math.sin(a + 0.1) * rz)
+			fish.CFrame = CFrame.lookAt(pos, ahead) * CFrame.Angles(0, math.sin(t * 6 + k) * 0.18, 0)
+		end
 	end
 	-- papillons autour d'une fleur ouverte
 	for k, fly in ipairs(self.Butterflies) do
@@ -1357,6 +1724,11 @@ function GardenBuilder._float(self: Garden, position: Vector3, text: string, col
 	task.delay(1.6, function()
 		anchor:Destroy()
 	end)
+end
+
+-- (v9.8) petit texte flottant au-dessus d'un point (GardenEdit : achat, agrandissement)
+function GardenBuilder.Float(self: Garden, position: Vector3, text: string, color: Color3?)
+	self:_float(position, text, color or GOLD, true)
 end
 
 -- Éclat de la cueillette : pétales + étincelles + anneau + "+X 🧠"
@@ -1432,7 +1804,17 @@ function GardenBuilder._applyPlots(self: Garden, plots: any)
 		return
 	end
 	local state = self.State
-	self:Update({ Unlocked = true, Count = math.max(#plots, 1), Max = math.max(state.Max, #plots), Windmill = state.Windmill, Plots = plots })
+	self:Update({
+		Unlocked = true,
+		Count = math.max(#plots, 1),
+		Max = math.max(state.Max, #plots),
+		Windmill = state.Windmill,
+		Plots = plots,
+		Level = state.Level,
+		Size = state.Size,
+		Decor = state.Decor,
+		Layout = state.Layout,
+	})
 end
 
 local function invokeGarden(action: string, arg: any): (boolean, any, any)
@@ -1441,12 +1823,21 @@ local function invokeGarden(action: string, arg: any): (boolean, any, any)
 	end)
 end
 
+local function bedAt(self: Garden, index: number): any?
+	for _, bed in ipairs(self.Beds) do
+		if bed.Index == index and bed.Kind == "Plot" then
+			return bed
+		end
+	end
+	return nil
+end
+
 function GardenBuilder._activate(self: Garden, index: number)
-	if self.Destroyed or not self.IsOwner then
+	if self.Destroyed or not self.IsOwner or self.Editing then
 		return
 	end
-	local bed = self.Beds[index]
-	if not bed or bed.Kind ~= "Plot" or bed.Pending then
+	local bed = bedAt(self, index)
+	if not bed or bed.Pending then
 		return
 	end
 	local plot = self.State.Plots[index]
@@ -1503,7 +1894,7 @@ function GardenBuilder._activate(self: Garden, index: number)
 end
 
 function GardenBuilder._harvestAll(self: Garden)
-	if self.Destroyed or not self.IsOwner or self.HarvestingAll then
+	if self.Destroyed or not self.IsOwner or self.HarvestingAll or self.Editing then
 		return
 	end
 	self.HarvestingAll = true
@@ -1519,8 +1910,8 @@ function GardenBuilder._harvestAll(self: Garden)
 		if callOk and success == true and type(result) == "table" and type(result.Harvested) == "table" then
 			self:_syncClock(result.Now)
 			for order, entry in ipairs(result.Harvested) do
-				local bed = type(entry) == "table" and self.Beds[tonumber(entry.Plot) or 0]
-				if bed and bed.Kind == "Plot" then
+				local bed = type(entry) == "table" and bedAt(self, tonumber(entry.Plot) or 0)
+				if bed then
 					task.delay((order - 1) * 0.09, function()
 						self:_pop(bed, tostring(entry.Flower or bed.Flower), tonumber(entry.Reward) or 0)
 					end)
@@ -1551,7 +1942,8 @@ function GardenBuilder.Destroy(self: Garden)
 	table.clear(self.Connections)
 	table.clear(self.Beds)
 	table.clear(self.Butterflies)
-	table.clear(self.Lights)
+	table.clear(self.Items)
+	table.clear(self.Pending)
 	self.Layout = nil
 	self.Blades = nil
 	pcall(function()

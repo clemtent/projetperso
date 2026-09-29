@@ -52,6 +52,11 @@ local WHITE = Color3.new(1, 1, 1)
 
 local FOLDER_NAME = "TownFacadeDetail"
 local BUILD_RANGE, DROP_RANGE = 200, 260
+-- v9.8 🎨 Graphismes > Détail (REALISM98) : distances de flux ×0,65 / ×1 / ×1,35
+local okGQ, GraphicsQuality = pcall(require, game:GetService("ReplicatedStorage").Shared.GraphicsQuality)
+local function detailScale(): number
+	return okGQ and type(GraphicsQuality) == "table" and GraphicsQuality.DetailScale and GraphicsQuality.DetailScale() or 1
+end
 local STEP_EVERY = 0.5
 local STEP_BUDGET = 0.003 -- (s) de construction par image
 local SIGN_DISTANCE = 90
@@ -866,9 +871,10 @@ local function flat(a: Vector3, b: Vector3): number
 end
 
 local function decide(position: Vector3)
+	local k = detailScale()
 	for _, b in ipairs(buildings) do
 		local dist = flat(position, b.Center)
-		if (b.Built or b.Jobs) and dist > DROP_RANGE then
+		if (b.Built or b.Jobs) and dist > DROP_RANGE * k then
 			destroyDetail(b)
 		end
 	end
@@ -882,7 +888,7 @@ local function decide(position: Vector3)
 	local bestD = math.huge
 	for _, b in ipairs(buildings) do
 		local dist = flat(position, b.Center)
-		if not b.Built and dist <= BUILD_RANGE and dist < bestD then
+		if not b.Built and dist <= BUILD_RANGE * k and dist < bestD then
 			best, bestD = b, dist
 		end
 	end

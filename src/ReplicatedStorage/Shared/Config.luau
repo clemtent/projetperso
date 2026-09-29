@@ -537,6 +537,43 @@ Config.Garden = {
 		{ Id = "Lotus", Name = "Golden Lotus", Icon = "🪷", GrowSeconds = 840, RewardSeconds = 260, Weight = 3 },
 	},
 	MinReward = 30,
+	-- v9.8 (GARDEN98) 🌷 jardin de la maison en ville, aménagé LIBREMENT (mode
+	-- édition du jardin : GardenEdit ; données data.Garden.Level / Pieces / Layout,
+	-- vérifiées par GardenService, règles partagées : Shared/GardenSnapshot).
+	-- Agrandissements achetés avec la Dopamine (niveau 0 = de base) : zone
+	-- utilisable plus grande (dans la parcelle), plus de places de déco
+	-- (Config.House.GardenSlots au niveau 0), plus d'objets de jardin posés
+	-- et un aménagement offert (Bonus).
+	BasePieces = 8, -- objets de jardin posés au niveau 0
+	Expansion = {
+		{ Level = 1, Name = "Blooming garden", Icon = "🌸", Cost = 5e5, DecorSlots = 8, Pieces = 16, Bonus = "RoseArch" },
+		{ Level = 2, Name = "Big garden", Icon = "🌳", Cost = 5e7, RequiresRebirths = 1, DecorSlots = 10, Pieces = 26, Bonus = "Greenhouse" },
+		{ Level = 3, Name = "Dream park", Icon = "🏞️", Cost = 5e9, RequiresRebirths = 3, DecorSlots = 12, Pieces = 40, Bonus = "KoiPond" },
+	},
+	-- Objets de jardin (plusieurs exemplaires, jusqu'à Max) : achetés avec la
+	-- Dopamine, rangés dans l'inventaire du jardin, posés où l'on veut.
+	-- W x D = empreinte au sol (studs) ; Flat = plat (on marche / pose dessus).
+	Pieces = {
+		{ Id = "TerracottaPot", Name = "Terracotta flower pot", Icon = "🪴", Cost = 2500, W = 1.9, D = 1.9, Max = 20 },
+		{ Id = "SteppingStones", Name = "Stepping stones", Icon = "🪨", Cost = 6000, W = 2.8, D = 7, Max = 12, Flat = true },
+		{ Id = "FlowerUrn", Name = "Stone flower urn", Icon = "🏺", Cost = 12000, W = 2.4, D = 2.4, Max = 12 },
+		{ Id = "RoseBush", Name = "Rose bush", Icon = "🌹", Cost = 15000, W = 2.8, D = 2.8, Max = 12 },
+		{ Id = "GardenLantern", Name = "Garden lantern", Icon = "🏮", Cost = 20000, W = 1.3, D = 1.3, Max = 12 },
+		{ Id = "LavenderPlanter", Name = "Lavender planter", Icon = "💜", Cost = 25000, W = 4.8, D = 1.9, Max = 10 },
+		{ Id = "HydrangeaBush", Name = "Hydrangea bush", Icon = "💠", Cost = 30000, W = 3.3, D = 3.3, Max = 10 },
+		{ Id = "BirdHouse", Name = "Birdhouse", Icon = "🐦", Cost = 35000, W = 1.5, D = 1.5, Max = 6 },
+		{ Id = "HangingBasket", Name = "Hanging basket", Icon = "🧺", Cost = 40000, W = 1.8, D = 1.8, Max = 8 },
+		{ Id = "RoundFlowerBed", Name = "Round flower bed", Icon = "🌺", Cost = 45000, W = 5.8, D = 5.8, Max = 6 },
+		{ Id = "GardenBench", Name = "Wooden garden bench", Icon = "🪑", Cost = 60000, W = 5.6, D = 2.4, Max = 6 },
+		{ Id = "VegetablePatch", Name = "Vegetable patch", Icon = "🥕", Cost = 80000, W = 6.4, D = 3.8, Max = 6 },
+		{ Id = "PicnicTable", Name = "Picnic table", Icon = "🧺", Cost = 150000, W = 5.4, D = 5, Max = 4 },
+		{ Id = "Sundial", Name = "Sundial", Icon = "☀️", Cost = 250000, W = 2.4, D = 2.4, Max = 3 },
+		{ Id = "RoseArbor", Name = "Rose arbor", Icon = "🌸", Cost = 1.5e6, RequiresRebirths = 1, W = 5.4, D = 2.4, Max = 4 },
+		{ Id = "GardenSwing", Name = "Garden swing", Icon = "🌼", Cost = 4e6, RequiresRebirths = 1, W = 5.8, D = 3.4, Max = 2 },
+		{ Id = "StoneStatue", Name = "Stone angel statue", Icon = "🗿", Cost = 2e7, RequiresRebirths = 2, W = 3, D = 3, Max = 3 },
+		{ Id = "Gazebo", Name = "White gazebo", Icon = "🛖", Cost = 8e7, RequiresRebirths = 3, W = 10.5, D = 10.5, Max = 1 },
+		{ Id = "TieredFountain", Name = "Tiered fountain", Icon = "⛲", Cost = 3e8, RequiresRebirths = 3, W = 9.2, D = 9.2, Max = 2 },
+	},
 }
 
 ----------------------------------------------------------------------
@@ -1370,6 +1407,9 @@ Config.House = {
 		-- v9.5 🖥️ "Dopamine Setup" : les stimuli du clicker deviennent de vrais
 		-- objets de la maison (voir la fin de Items)
 		{ Id = "Setup", Name = "Dopamine Setup", Icon = "🖥️", Tint = Color3.fromRGB(222, 214, 255) },
+		-- v9.8 💎 Luxe : les objets de rêve (jacuzzi, piano, mur d'aquarium,
+		-- tunnel aquarium, trône d'or, dragon...) ; voir la fin de Items
+		{ Id = "Luxury", Name = "Luxury", Icon = "💎", Tint = Color3.fromRGB(255, 236, 200) },
 	},
 
 	Items = {
@@ -2236,6 +2276,167 @@ Config.House = {
 		{ Id = "SetupPlantLotus", Name = "Golden dopamine lotus", Icon = "🪷", Category = "Setup", Placement = "Floor", Size = 75,
 			Cost = 4e6, CostGrowth = 1.45, Comfort = 14, Tabletop = true, RequiresUpgrade = "Garden", RequiresRebirths = 3,
 			Setup = { Kind = "Plant", Tier = 5, Flower = "Lotus", Size = "M", Mount = "Surface" } },
+
+		-- v9.8 🛍️ CATALOG98 : 68 nouveaux objets, du tout simple à l'incroyable,
+		-- pas seulement kawaii : moderne / minimaliste, loft industriel, luxe,
+		-- gamer, sport, nature, tech, et les objets de rêve (tunnel aquarium,
+		-- cascade intérieure, dragon d'or...). Dessins : Art/Modern98 +
+		-- Art/Luxe98 ; modèles 3D : House3DLuxe ; dessus : HouseSurfaces.
+		-- Pas de RequiresRebirths : le palier vient du prix (RebirthGates).
+		-- 🛋️ Moderne / minimaliste / loft
+		{ Id = "SimpleChair", Name = "Simple white chair", Icon = "🪑", Category = "Furniture", Placement = "Floor", Size = 75,
+			Cost = 700, CostGrowth = 1.25, Comfort = 1 },
+		{ Id = "CoatRack", Name = "Standing coat rack", Icon = "🧥", Category = "Furniture", Placement = "Floor", Size = 115,
+			Cost = 1500, CostGrowth = 1.25, Comfort = 1, MaxOwned = 4 },
+		{ Id = "BarrelTable", Name = "Barrel side table", Icon = "🛢️", Category = "Furniture", Placement = "Floor", Size = 65,
+			Cost = 2500, CostGrowth = 1.25, Comfort = 2 },
+		{ Id = "ModernBarStool", Name = "Modern bar stool", Icon = "🪑", Category = "Furniture", Placement = "Floor", Size = 90,
+			Cost = 3500, CostGrowth = 1.25, Comfort = 2 },
+		{ Id = "OakDesk", Name = "Minimalist oak desk", Icon = "🖋️", Category = "Furniture", Placement = "Floor", Size = 130,
+			Cost = 4500, CostGrowth = 1.3, Comfort = 2 },
+		{ Id = "MediaConsole", Name = "Walnut media console", Icon = "🗄️", Category = "Furniture", Placement = "Floor", Size = 130,
+			Cost = 6500, CostGrowth = 1.3, Comfort = 3 },
+		{ Id = "GlassCoffeeTable", Name = "Glass coffee table", Icon = "☕", Category = "Furniture", Placement = "Floor", Size = 115,
+			Cost = 14000, CostGrowth = 1.3, Comfort = 4 },
+		{ Id = "LoftShelf", Name = "Industrial pipe shelf", Icon = "🔩", Category = "Furniture", Placement = "Floor", Size = 140,
+			Cost = 20000, CostGrowth = 1.3, Comfort = 5 },
+		{ Id = "PlatformBed", Name = "Low platform bed", Icon = "🛌", Category = "Furniture", Placement = "Floor", Size = 155,
+			Cost = 25000, CostGrowth = 1.3, Comfort = 5 },
+		{ Id = "Workbench", Name = "Loft workbench table", Icon = "🛠️", Category = "Furniture", Placement = "Floor", Size = 150,
+			Cost = 30000, CostGrowth = 1.3, Comfort = 5 },
+		{ Id = "SectionalSofa", Name = "Modern sectional sofa", Icon = "🛋️", Category = "Furniture", Placement = "Floor", Size = 158,
+			Cost = 40000, CostGrowth = 1.3, Comfort = 6 },
+		{ Id = "Chesterfield", Name = "Leather Chesterfield sofa", Icon = "🛋️", Category = "Furniture", Placement = "Floor", Size = 150,
+			Cost = 65000, CostGrowth = 1.35, Comfort = 7 },
+		{ Id = "BookshelfWall", Name = "Library bookshelf wall", Icon = "📚", Category = "Furniture", Placement = "Floor", Size = 155,
+			Cost = 90000, CostGrowth = 1.35, Comfort = 7, MaxOwned = 4 },
+		{ Id = "MarbleIsland", Name = "Marble kitchen island", Icon = "🍽️", Category = "Furniture", Placement = "Floor", Size = 150,
+			Cost = 600000, CostGrowth = 1.4, Comfort = 10, MaxOwned = 3 },
+		-- 🖼️ Déco
+		{ Id = "RoundMirror", Name = "Round wall mirror", Icon = "🪞", Category = "Decor", Placement = "Wall", Size = 75,
+			Cost = 2500, CostGrowth = 1.25, Comfort = 2 },
+		{ Id = "AbstractCanvas", Name = "Abstract canvas", Icon = "🎨", Category = "Decor", Placement = "Wall", Size = 100,
+			Cost = 5000, CostGrowth = 1.25, Comfort = 2 },
+		-- (demandé par RECIPES98 : son modèle 3D est R.BigWallMirror dans House3DObjects)
+		{ Id = "BigWallMirror", Name = "Big wall mirror", Icon = "🪞", Category = "Decor", Placement = "Wall", Size = 130,
+			Cost = 14000, CostGrowth = 1.3, Comfort = 3 },
+		{ Id = "GrandfatherClock", Name = "Grandfather clock", Icon = "🕰️", Category = "Decor", Placement = "Floor", Size = 140,
+			Cost = 250000, CostGrowth = 1.4, Comfort = 8, MaxOwned = 3 },
+		-- 💡 Lumières
+		{ Id = "EdisonPendant", Name = "Edison bulb pendant", Icon = "💡", Category = "Lights", Placement = "Wall", Size = 90,
+			Cost = 4000, CostGrowth = 1.25, Comfort = 2 },
+		{ Id = "ArcFloorLamp", Name = "Arc floor lamp", Icon = "🔦", Category = "Lights", Placement = "Floor", Size = 145,
+			Cost = 9000, CostGrowth = 1.3, Comfort = 4 },
+		{ Id = "DopaNeon", Name = "DOPA neon sign", Icon = "✨", Category = "Lights", Placement = "Wall", Size = 100,
+			Cost = 25000, CostGrowth = 1.3, Comfort = 4 },
+		{ Id = "InfinityMirror", Name = "Infinity mirror", Icon = "🌀", Category = "Lights", Placement = "Wall", Size = 90,
+			Cost = 150000, CostGrowth = 1.35, Comfort = 7 },
+		{ Id = "PlanetariumDome", Name = "Planetarium dome lamp", Icon = "🌌", Category = "Lights", Placement = "Floor", Size = 110,
+			Cost = 1.8e6, CostGrowth = 1.45, Comfort = 12, Tabletop = false },
+		{ Id = "GrandChandelier", Name = "Grand crystal chandelier", Icon = "🕯️", Category = "Lights", Placement = "Wall", Size = 155,
+			Cost = 3e6, CostGrowth = 1.45, Comfort = 13, MaxOwned = 3 },
+		-- 🪴 Plantes
+		{ Id = "SnakePlant", Name = "Snake plant", Icon = "🪴", Category = "Plants", Placement = "Floor", Size = 70,
+			Cost = 1200, CostGrowth = 1.2, Comfort = 1 },
+		{ Id = "FiddleFig", Name = "Fiddle-leaf fig", Icon = "🌿", Category = "Plants", Placement = "Floor", Size = 130,
+			Cost = 5000, CostGrowth = 1.25, Comfort = 3 },
+		{ Id = "BirdOfParadise", Name = "Bird of paradise", Icon = "🌺", Category = "Plants", Placement = "Floor", Size = 145,
+			Cost = 12000, CostGrowth = 1.3, Comfort = 4 },
+		{ Id = "MapleBonsai", Name = "Red maple bonsai", Icon = "🍁", Category = "Plants", Placement = "Floor", Size = 65,
+			Cost = 20000, CostGrowth = 1.3, Comfort = 4 },
+		{ Id = "OliveTree", Name = "Potted olive tree", Icon = "🫒", Category = "Plants", Placement = "Floor", Size = 140,
+			Cost = 150000, CostGrowth = 1.35, Comfort = 7 },
+		{ Id = "MossWall", Name = "Living moss wall", Icon = "🌱", Category = "Plants", Placement = "Wall", Size = 140,
+			Cost = 400000, CostGrowth = 1.4, Comfort = 8 },
+		-- 📺 Tech
+		{ Id = "SmartSpeaker", Name = "Smart speaker", Icon = "🔊", Category = "Electronics", Placement = "Floor", Size = 40,
+			Cost = 1500, CostGrowth = 1.2, Comfort = 1 },
+		{ Id = "CameraDrone", Name = "Camera drone", Icon = "🚁", Category = "Electronics", Placement = "Floor", Size = 55,
+			Cost = 25000, CostGrowth = 1.3, Comfort = 4 },
+		{ Id = "Printer3D", Name = "3D printer", Icon = "🖨️", Category = "Electronics", Placement = "Floor", Size = 75,
+			Cost = 50000, CostGrowth = 1.3, Comfort = 5 },
+		{ Id = "ButlerRobot", Name = "Butler robot", Icon = "🤖", Category = "Electronics", Placement = "Floor", Size = 120,
+			Cost = 2.5e6, CostGrowth = 1.45, Comfort = 12, MaxOwned = 3 },
+		-- 🍰 Cuisine
+		{ Id = "StandMixer", Name = "Stand mixer", Icon = "🥣", Category = "Kitchen", Placement = "Floor", Size = 55,
+			Cost = 3000, CostGrowth = 1.25, Comfort = 2 },
+		{ Id = "EspressoMachine", Name = "Espresso machine", Icon = "☕", Category = "Kitchen", Placement = "Floor", Size = 55,
+			Cost = 6000, CostGrowth = 1.25, Comfort = 3 },
+		{ Id = "SteelFridge", Name = "Double-door steel fridge", Icon = "🧊", Category = "Kitchen", Placement = "Floor", Size = 140,
+			Cost = 200000, CostGrowth = 1.4, Comfort = 8, MaxOwned = 2 },
+		-- 🎮 Gamer
+		{ Id = "HexPanels", Name = "Hexagon LED panels", Icon = "🔷", Category = "Gaming", Placement = "Wall", Size = 110,
+			Cost = 45000, CostGrowth = 1.3, Comfort = 5 },
+		{ Id = "FoosballTable", Name = "Foosball table", Icon = "⚽", Category = "Gaming", Placement = "Floor", Size = 140,
+			Cost = 120000, CostGrowth = 1.35, Comfort = 7, MaxOwned = 2 },
+		{ Id = "AirHockey", Name = "Air hockey table", Icon = "🏒", Category = "Gaming", Placement = "Floor", Size = 150,
+			Cost = 350000, CostGrowth = 1.4, Comfort = 8, MaxOwned = 2 },
+		{ Id = "ClawMachine", Name = "Claw machine", Icon = "🕹️", Category = "Gaming", Placement = "Floor", Size = 130,
+			Cost = 800000, CostGrowth = 1.4, Comfort = 10, MaxOwned = 3 },
+		{ Id = "TwinArcade", Name = "Twin neon arcade", Icon = "👾", Category = "Gaming", Placement = "Floor", Size = 150,
+			Cost = 3e6, CostGrowth = 1.45, Comfort = 12, MaxOwned = 3 },
+		{ Id = "VRStation", Name = "VR free-roam station", Icon = "🥽", Category = "Gaming", Placement = "Floor", Size = 150,
+			Cost = 6e6, CostGrowth = 1.5, Comfort = 15, MaxOwned = 2 },
+		{ Id = "RacingCockpit", Name = "Pro racing cockpit", Icon = "🏁", Category = "Gaming", Placement = "Floor", Size = 155,
+			Cost = 1.8e7, CostGrowth = 1.5, Comfort = 17, MaxOwned = 2 },
+		-- 🏀 Sport
+		{ Id = "YogaMat", Name = "Yoga mat & gym ball", Icon = "🧘", Category = "Sports", Placement = "Floor", Size = 110,
+			Cost = 3000, CostGrowth = 1.25, Comfort = 2, Tabletop = false },
+		{ Id = "PingPongTable", Name = "Ping-pong table", Icon = "🏓", Category = "Sports", Placement = "Floor", Size = 155,
+			Cost = 45000, CostGrowth = 1.3, Comfort = 5, MaxOwned = 2 },
+		{ Id = "RowingMachine", Name = "Rowing machine", Icon = "🚣", Category = "Sports", Placement = "Floor", Size = 150,
+			Cost = 90000, CostGrowth = 1.35, Comfort = 6, MaxOwned = 3 },
+		{ Id = "WeightBench", Name = "Weight bench & rack", Icon = "🏋️", Category = "Sports", Placement = "Floor", Size = 150,
+			Cost = 150000, CostGrowth = 1.35, Comfort = 7, MaxOwned = 3 },
+		{ Id = "Treadmill", Name = "Treadmill", Icon = "🏃", Category = "Sports", Placement = "Floor", Size = 140,
+			Cost = 250000, CostGrowth = 1.4, Comfort = 8, MaxOwned = 3 },
+		{ Id = "ClimbingWall", Name = "Climbing wall", Icon = "🧗", Category = "Sports", Placement = "Wall", Size = 150,
+			Cost = 700000, CostGrowth = 1.4, Comfort = 9, MaxOwned = 3 },
+		-- 💎 Luxe et objets incroyables
+		{ Id = "VelvetChaise", Name = "Velvet chaise longue", Icon = "💜", Category = "Luxury", Placement = "Floor", Size = 140,
+			Cost = 120000, CostGrowth = 1.35, Comfort = 7 },
+		{ Id = "MarbleStatue", Name = "Marble statue", Icon = "🏛️", Category = "Luxury", Placement = "Floor", Size = 130,
+			Cost = 500000, CostGrowth = 1.4, Comfort = 9, Tabletop = false },
+		{ Id = "KingBed", Name = "King-size bed", Icon = "🛏️", Category = "Luxury", Placement = "Floor", Size = 160,
+			Cost = 600000, CostGrowth = 1.4, Comfort = 10, MaxOwned = 3 },
+		{ Id = "PoolTable", Name = "Pool table", Icon = "🎱", Category = "Luxury", Placement = "Floor", Size = 155,
+			Cost = 900000, CostGrowth = 1.4, Comfort = 10, MaxOwned = 2 },
+		{ Id = "AmethystGeode", Name = "Giant amethyst geode", Icon = "💎", Category = "Luxury", Placement = "Floor", Size = 90,
+			Cost = 1e6, CostGrowth = 1.45, Comfort = 10, Tabletop = false },
+		{ Id = "ModernFireplace", Name = "Linear wall fireplace", Icon = "🔥", Category = "Luxury", Placement = "Wall", Size = 150,
+			Cost = 1.5e6, CostGrowth = 1.45, Comfort = 11, MaxOwned = 3 },
+		{ Id = "CinemaRecliners", Name = "Cinema recliner row", Icon = "🍿", Category = "Luxury", Placement = "Floor", Size = 160,
+			Cost = 2e6, CostGrowth = 1.45, Comfort = 12, MaxOwned = 3 },
+		{ Id = "WhitePiano", Name = "White concert piano", Icon = "🎹", Category = "Luxury", Placement = "Floor", Size = 150,
+			Cost = 4e6, CostGrowth = 1.45, Comfort = 13, MaxOwned = 2 },
+		{ Id = "Jacuzzi", Name = "Bubbling jacuzzi", Icon = "🫧", Category = "Luxury", Placement = "Floor", Size = 155,
+			Cost = 8e6, CostGrowth = 1.5, Comfort = 15, MaxOwned = 2 },
+		{ Id = "AquariumWall", Name = "Aquarium wall", Icon = "🐠", Category = "Luxury", Placement = "Floor", Size = 160,
+			Cost = 1.2e7, CostGrowth = 1.5, Comfort = 16, MaxOwned = 3 },
+		{ Id = "RollercoasterModel", Name = "Mini rollercoaster", Icon = "🎢", Category = "Luxury", Placement = "Floor", Size = 150,
+			Cost = 1.5e7, CostGrowth = 1.5, Comfort = 17, MaxOwned = 2 },
+		{ Id = "GoldThrone", Name = "Golden throne", Icon = "👑", Category = "Luxury", Placement = "Floor", Size = 140,
+			Cost = 2e7, CostGrowth = 1.5, Comfort = 17, MaxOwned = 2 },
+		{ Id = "IndoorWaterfall", Name = "Indoor waterfall", Icon = "💧", Category = "Luxury", Placement = "Floor", Size = 150,
+			Cost = 3e7, CostGrowth = 1.55, Comfort = 19, MaxOwned = 2 },
+		{ Id = "CapsuleBed", Name = "Space capsule bed", Icon = "🛸", Category = "Luxury", Placement = "Floor", Size = 160,
+			Cost = 4e7, CostGrowth = 1.55, Comfort = 20, MaxOwned = 2 },
+		{ Id = "DragonStatue", Name = "Golden dragon statue", Icon = "🐉", Category = "Luxury", Placement = "Floor", Size = 150,
+			Cost = 6e7, CostGrowth = 1.55, Comfort = 21, MaxOwned = 2 },
+		{ Id = "AquariumTunnel", Name = "Aquarium tunnel", Icon = "🐟", Category = "Luxury", Placement = "Floor", Size = 160,
+			Cost = 1.2e8, CostGrowth = 1.6, Comfort = 23, MaxOwned = 2 },
+		-- 📺 XXL (pour DESK98 : House3DSetup les dessine d'après Setup ; Scale =
+		-- largeur de l'écran par rapport à la télé géante, Cinema = projecteur +
+		-- toile). La télé montre le live du clicker.
+		{ Id = "SetupTVCinemaXXL", Name = "XXL cinema TV", Icon = "📺", Category = "Setup", Placement = "Floor", Size = 160,
+			Cost = 2.2e7, CostGrowth = 1.5, Comfort = 19, MaxOwned = 2, Tabletop = false, RequiresUpgrade = "DVD", RequiresRebirths = 5,
+			Setup = { Kind = "TV", Tier = 5, Screens = 1, Feeds = { "Live" }, Size = "XL", Mount = "Stand", Scale = 1.5 } },
+		{ Id = "SetupTVWallXXL", Name = "XXL wall TV", Icon = "📺", Category = "Setup", Placement = "Wall", Size = 160,
+			Cost = 2.5e7, CostGrowth = 1.5, Comfort = 19, MaxOwned = 2, RequiresUpgrade = "DVD", RequiresRebirths = 5,
+			Setup = { Kind = "TV", Tier = 5, Screens = 1, Feeds = { "Live" }, Size = "XL", Mount = "Wall", Scale = 1.5 } },
+		{ Id = "SetupCinemaScreen", Name = "Home cinema screen", Icon = "🎬", Category = "Setup", Placement = "Wall", Size = 160,
+			Cost = 8e7, CostGrowth = 1.55, Comfort = 22, MaxOwned = 2, RequiresUpgrade = "DVD", RequiresRebirths = 8,
+			Setup = { Kind = "TV", Tier = 6, Screens = 1, Feeds = { "Live" }, Size = "XL", Mount = "Wall", Scale = 2.2, Cinema = true } },
 	},
 }
 
@@ -2288,6 +2489,60 @@ Config.Cars = {
 		{ Id = "Midnight", Name = "Midnight black", Color = Color3.fromRGB(38, 38, 48) },
 	},
 }
+
+----------------------------------------------------------------------
+-- 🍦 Nourriture de Dopamine Town (v9.8, FAIR98 ; FoodService) : achetée
+-- aux stands (place, fête foraine, coin gourmand), tenue en main, mangée
+-- bouchée par bouchée ; la dernière bouchée donne un BOOST de Dopamine
+-- (x Multiplier pendant Duration s, vérifié par le serveur).
+--   Prix : PriceFactor x la valeur du boost ((Multiplier - 1) x Duration
+--          secondes de production), au moins MinPrice : manger rapporte
+--          un peu plus que ça ne coûte, sans remplacer les Game Passes.
+--   Cumul (FoodRules.Stack) : un seul boost "nourriture" à la fois ; un
+--          aliment plus fort remplace le multiplicateur (le reste est
+--          converti), un aliment moins fort ou égal prolonge (converti) ;
+--          jamais plus de MaxSeconds restantes, jamais plus que MaxMultiplier.
+--   Items : Id, Name, Icon, Multiplier, Duration (s), Bites (bouchées),
+--           Color / Crumb (miettes), Desc
+----------------------------------------------------------------------
+Config.Food = {
+	PriceFactor = 0.7,
+	MinPrice = 40,
+	MaxSeconds = 300,
+	MaxMultiplier = 2,
+	BiteCooldown = 0.55, -- s entre deux bouchées
+	BuyCooldown = 1.5, -- s entre deux achats
+	BuyDistance = 16, -- studs max entre l'avatar et le stand
+	Items = {
+		{ Id = "IceCream", Name = "Ice cream cone", Icon = "🍦", Multiplier = 1.5, Duration = 90, Bites = 4,
+			Color = Color3.fromRGB(255, 176, 206), Crumb = Color3.fromRGB(226, 176, 112), Desc = "Two scoops, strawberry and mint" },
+		{ Id = "CandyFloss", Name = "Candy floss", Icon = "🍭", Multiplier = 1.5, Duration = 120, Bites = 4,
+			Color = Color3.fromRGB(255, 190, 224), Crumb = Color3.fromRGB(255, 200, 230), Desc = "A pink cloud on a stick" },
+		{ Id = "Churros", Name = "Churros", Icon = "🥖", Multiplier = 1.4, Duration = 150, Bites = 3,
+			Color = Color3.fromRGB(214, 150, 80), Crumb = Color3.fromRGB(236, 196, 120), Desc = "Crunchy, with sugar and cinnamon" },
+		{ Id = "Popcorn", Name = "Popcorn", Icon = "🍿", Multiplier = 1.3, Duration = 180, Bites = 5,
+			Color = Color3.fromRGB(255, 244, 214), Crumb = Color3.fromRGB(255, 240, 190), Desc = "A striped box of buttery popcorn" },
+		{ Id = "Crepe", Name = "Crêpe", Icon = "🥞", Multiplier = 1.6, Duration = 120, Bites = 4,
+			Color = Color3.fromRGB(236, 196, 130), Crumb = Color3.fromRGB(120, 76, 50), Desc = "Rolled crêpe with chocolate" },
+		{ Id = "PizzaSlice", Name = "Pizza slice", Icon = "🍕", Multiplier = 1.8, Duration = 90, Bites = 4,
+			Color = Color3.fromRGB(255, 206, 110), Crumb = Color3.fromRGB(214, 90, 60), Desc = "Cheesy slice with pepperoni" },
+		{ Id = "Taco", Name = "Taco", Icon = "🌮", Multiplier = 1.8, Duration = 100, Bites = 4,
+			Color = Color3.fromRGB(240, 196, 100), Crumb = Color3.fromRGB(110, 190, 90), Desc = "Crispy shell, salad and tomato" },
+		{ Id = "Milkshake", Name = "Milkshake", Icon = "🥤", Multiplier = 2, Duration = 60, Bites = 4,
+			Color = Color3.fromRGB(255, 200, 220), Crumb = Color3.fromRGB(255, 236, 244), Desc = "Strawberry shake with whipped cream" },
+		{ Id = "HotDog", Name = "Hot dog", Icon = "🌭", Multiplier = 1.6, Duration = 150, Bites = 4,
+			Color = Color3.fromRGB(226, 110, 80), Crumb = Color3.fromRGB(236, 190, 120), Desc = "With mustard and ketchup" },
+		{ Id = "CandyApple", Name = "Candy apple", Icon = "🍎", Multiplier = 1.4, Duration = 180, Bites = 3,
+			Color = Color3.fromRGB(214, 36, 56), Crumb = Color3.fromRGB(255, 120, 130), Desc = "A shiny red caramel apple" },
+		{ Id = "Donut", Name = "Donut", Icon = "🍩", Multiplier = 1.5, Duration = 120, Bites = 3,
+			Color = Color3.fromRGB(255, 150, 196), Crumb = Color3.fromRGB(214, 160, 100), Desc = "Pink glaze and sprinkles" },
+	},
+}
+Config.FoodById = {}
+for index, food in ipairs(Config.Food.Items) do
+	food.Order = index
+	Config.FoodById[food.Id] = food
+end
 
 ----------------------------------------------------------------------
 -- Index calculés automatiquement (ne pas modifier)

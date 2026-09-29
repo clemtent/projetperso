@@ -122,6 +122,32 @@ local SURFACES: { [string]: { { number } } } = {
 	SetupDeskUltra = { { 4, 96, 50 } },
 	SetupTVStand = { { 3, 97, 55 } },
 	SetupBubbleWrap = { { 6, 94, 52 } },
+	-- v9.8 HOUSE98 : meubles qui avaient un dessus en 3D (recette : Top) mais
+	-- pas en 2D -> on ne pouvait rien y poser (mêmes cotes que la recette)
+	Beanbag = { { 26, 74, 50 } },
+	HomeCinema = { { 15, 85, 82, 0.1 } },
+	-- v9.8 CATALOG98 (Art/Modern98, Art/Luxe98 ; mêmes hauteurs que les
+	-- modèles 3D de House3DLuxe) : tables, bureaux, étagères, lits, sièges
+	SimpleChair = { { 18, 82, 56 } },
+	BarrelTable = { { 12, 88, 27 } },
+	ModernBarStool = { { 28, 72, 25 } },
+	OakDesk = { { 2, 98, 41 } },
+	MediaConsole = { { 2, 98, 58 } },
+	GlassCoffeeTable = { { 2, 98, 61 } },
+	LoftShelf = { { 6, 94, 8 }, { 8, 92, 34, 0.2, 22 }, { 8, 92, 60, 0.2, 22 }, { 8, 92, 86, 0.2, 22 } },
+	PlatformBed = { { 10, 94, 69 } },
+	Workbench = { { 2, 98, 39 } },
+	SectionalSofa = { { 8, 92, 61 } },
+	Chesterfield = { { 14, 86, 59 } },
+	BookshelfWall = { { 3, 97, 3 }, { 6, 94, 28, 0.25, 20 }, { 6, 94, 52, 0.25, 20 }, { 6, 94, 76, 0.25, 20 } },
+	MarbleIsland = { { 2, 98, 39 } },
+	SteelFridge = { { 10, 90, 3 } },
+	PingPongTable = { { 4, 46, 50 } },
+	PoolTable = { { 8, 92, 39 } },
+	VelvetChaise = { { 12, 94, 59 } },
+	KingBed = { { 10, 96, 59 } },
+	CinemaRecliners = { { 6, 94, 59 } },
+	GoldThrone = { { 26, 74, 57 } },
 }
 
 -- Meubles "lits" : les animaux grimpeurs y font la sieste
@@ -142,6 +168,13 @@ local BEDS: { [string]: boolean } = {
 	GamerBeanbag = true,
 	BunkBed = true,
 	RaceCarBed = true,
+	-- v9.8 CATALOG98
+	PlatformBed = true,
+	KingBed = true,
+	SectionalSofa = true,
+	Chesterfield = true,
+	VelvetChaise = true,
+	CinemaRecliners = true,
 }
 
 -- Sièges : View = "Side" (dessin de profil qui regarde à droite : retourné
@@ -166,6 +199,11 @@ local SEATS: { [string]: SeatInfo } = {
 	CatSofa = { View = "Front", Half = 0.48 },
 	GamerChair = { View = "Front", Half = 0.32 },
 	GamerBeanbag = { View = "Round", Half = 0.46 },
+	-- v9.8 CATALOG98
+	SimpleChair = { View = "Front", Half = 0.4 },
+	ModernBarStool = { View = "Round", Half = 0.28 },
+	SectionalSofa = { View = "Front", Half = 0.48 },
+	Chesterfield = { View = "Front", Half = 0.48 },
 }
 
 -- Tables "où l'on s'assoit" (chaises rangées autour)
@@ -183,6 +221,12 @@ local TABLES: { [string]: boolean } = {
 	KotatsuTable = true,
 	GamingDesk = true,
 	BrickTable = true,
+	-- v9.8 CATALOG98
+	OakDesk = true,
+	GlassCoffeeTable = true,
+	Workbench = true,
+	MarbleIsland = true,
+	BarrelTable = true,
 }
 
 export type Spot = {

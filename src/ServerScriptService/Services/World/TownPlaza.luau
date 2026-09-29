@@ -49,6 +49,7 @@ local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
 local TownKit = require(script.Parent.TownKit)
 local TownBuildings = require(script.Parent.TownBuildings)
 local TownShops = require(script.Parent.TownShops)
+local TownFair = require(script.Parent.TownFair) -- (v9.8, FAIR98) manège où l'on monte, bornes des stands
 
 local TownPlaza = {}
 
@@ -448,7 +449,7 @@ local function carousel(folder: Instance, F: CFrame): CFrame
 	-- guérite à tickets (devant, à droite en arrivant de la place)
 	local booth = F * CFrame.new(-8.5, 0, -12) * CFrame.Angles(0, math.rad(20), 0)
 	local pinkBooth = Color3.fromRGB(255, 176, 206)
-	part(model, "Booth", Vector3.new(2.8, 3.2, 2.4), booth * CFrame.new(0, 1.6, 0), pinkBooth, M.WoodPlanks, "solid")
+	local boothPart = part(model, "Booth", Vector3.new(2.8, 3.2, 2.4), booth * CFrame.new(0, 1.6, 0), pinkBooth, M.WoodPlanks, "solid")
 	part(model, "BoothWindow", Vector3.new(1.8, 1.1, 0.1), booth * CFrame.new(0, 2.25, -1.24), C.GlassDark, M.Glass, "deco").Transparency = 0.3
 	part(model, "BoothShelf", Vector3.new(2.2, 0.14, 0.6), booth * CFrame.new(0, 1.62, -1.45), C.Cream, M.Wood, "deco")
 	part(model, "BoothRoof", Vector3.new(3.4, 0.35, 3), booth * CFrame.new(0, 3.38, 0), C.Cream, M.SmoothPlastic, "deco")
@@ -458,6 +459,13 @@ local function carousel(folder: Instance, F: CFrame): CFrame
 	local sign = part(model, "BoothSign", Vector3.new(2.6, 0.9, 0.12), booth * CFrame.new(0, 4.1, -1.62), C.Cream, M.SmoothPlastic, "deco")
 	local _, body = TownKit.Surface(sign, Enum.NormalId.Front, 50, Color3.fromRGB(255, 244, 232), 120, 0.4)
 	TownKit.Label(body, "Text", "🎠 Carousel", 0.04, 0.08, 0.92, 0.84, Color3.fromRGB(196, 64, 124), Enum.Font.FredokaOne, true)
+	-- (v9.8, FAIR98) on MONTE sur le manège : 12 places (10 chevaux + 2
+	-- carrosses, sièges ancrés qui suivent le plateau : TownFair / FairRides),
+	-- invite "Monter" à la guérite ; le client (TownPlazaFx) les lisse
+	local pcallOk, pcallErr = pcall(TownFair.AddPlazaCarousel, model, F * CFrame.new(0, CAROUSEL_TOP, 0), boothPart)
+	if not pcallOk then
+		warn("[TownPlaza] manège : " .. tostring(pcallErr))
+	end
 	return F * CFrame.new(0, CAROUSEL_TOP, 0)
 end
 
@@ -537,6 +545,8 @@ local function iceCreamStall(folder: Instance, cf: CFrame)
 	TownKit.Ball(model, "Scoop", (cone * CFrame.new(0, 7.05, 0)).Position, 1.5, Color3.fromRGB(255, 170, 200), M.SmoothPlastic, "deco")
 	TownKit.Ball(model, "Scoop2", (cone * CFrame.new(0, 7.95, 0)).Position, 1.25, Color3.fromRGB(170, 236, 206), M.SmoothPlastic, "deco")
 	TownKit.Ball(model, "Cherry", (cone * CFrame.new(0.1, 8.7, 0)).Position, 0.45, Color3.fromRGB(226, 40, 70), M.SmoothPlastic, "deco")
+	-- (v9.8, FAIR98) on ACHÈTE ici : glaces et milkshakes (FoodService)
+	TownFair.StallAnchor(model, cf * CFrame.new(0, 0, -2.6), "PlazaIce", { "IceCream", "Milkshake" }, "🍦 🥤 Snacks")
 end
 
 -- (v9.7) Stand de BARBE À PAPA : chariot rond rayé, machine (cuve + nuage
@@ -565,6 +575,8 @@ local function candyStall(folder: Instance, cf: CFrame)
 	local sign = part(model, "Sign", Vector3.new(2.6, 0.8, 0.12), cf * CFrame.new(0, 1.2, -1.88), C.White, M.SmoothPlastic, "deco")
 	local _, body = TownKit.Surface(sign, Enum.NormalId.Front, 50, Color3.fromRGB(255, 244, 250), 100, 0.4)
 	TownKit.Label(body, "Text", "🍭 Candy floss", 0.04, 0.08, 0.92, 0.84, Color3.fromRGB(196, 64, 150), Enum.Font.FredokaOne, true)
+	-- (v9.8, FAIR98) on ACHÈTE ici : barbe à papa et pommes d'amour (FoodService)
+	TownFair.StallAnchor(model, cf * CFrame.new(0, 0, -2.9), "PlazaCandy", { "CandyFloss", "CandyApple" }, "🍭 🍎 Snacks")
 end
 
 -- (v9.7) Coin du MUSICIEN DE RUE (sans personnage : "je reviens dans 5
@@ -825,6 +837,7 @@ function TownPlaza.Build(folder: Instance, geo: TownKit.Geo, shopsFolder: Instan
 		local a = (i + 0.5) / 6 * math.pi * 2
 		local p = ground + Vector3.new(math.sin(a) * 19, 0, math.cos(a) * 19)
 		TownKit.Bench(plaza, CFrame.lookAt(p, ground))
+		TownKit.LifeSpot("SitBench", CFrame.lookAt(p, ground), 70 + i) -- (v9.8, CITY98) passants assis (client)
 	end
 	-- lampadaires à deux lanternes (anneau) ; 2 vraies lumières douces
 	-- (les guirlandes lumineuses et les fanions entre eux : client)
@@ -864,6 +877,10 @@ function TownPlaza.Build(folder: Instance, geo: TownKit.Geo, shopsFolder: Instan
 	plaza:SetAttribute("FxFlock1", spot(math.rad(8), 23))
 	plaza:SetAttribute("FxFlock2", spot(math.rad(292), 27))
 	plaza:SetAttribute("FxFlock3", spot(math.rad(-30), 27))
+	-- (v9.8, CITY98) fontaine animée (eau, jets, pièces : TownFountainFx) et
+	-- pigeons 10x (TownPigeons) : repères pour le client
+	plaza:SetAttribute("FxFountainBase", ground + Vector3.new(0, 0.15, 0))
+	plaza:SetAttribute("FxFlock4", spot(math.rad(200), 30))
 	-- parterres fleuris + arbres en bacs
 	for i, deg in ipairs({ 58, 110, 160, 200, 250, 302, 322 }) do
 		local p = spot(math.rad(deg), 48)

@@ -117,6 +117,7 @@ local locLabels: { Instance } = {} -- panneaux de la ville à traduire (attribut
 local LOC_EVERY = 2
 local deskWired = false
 local plazaFxWarned = false -- (v9.7) une seule alerte si TownPlazaFx.Step échoue
+local fairFxWarned = false -- (v9.8) une seule alerte si FairFx.Step échoue
 
 ----------------------------------------------------------------------
 -- Utilitaires
@@ -263,20 +264,29 @@ end
 -- Maisons
 ----------------------------------------------------------------------
 
-local function onSeat(house: any, slot: number, _model: Model, seatPart: BasePart)
+local function onSeat(house: any, slot: number, model: Model, seatPart: BasePart)
 	if edit and edit:IsEnabled() then
 		return
 	end
-	local cf = seatPart.CFrame * CFrame.new(0, seatPart.Size.Y / 2, 0)
 	if emotes then
 		emotes:Stop("sit")
 	end
-	task.spawn(function()
-		local ok, message = invoke("sit", { Owner = house.UserId, Slot = slot, CFrame = cf })
-		if not ok and type(message) == "string" then
-			toast(message, Color3.fromRGB(226, 80, 90))
+	local function sit(cf: CFrame, kind: string?)
+		task.spawn(function()
+			local ok, message = invoke("sit", { Owner = house.UserId, Slot = slot, CFrame = cf, Kind = kind })
+			if not ok and type(message) == "string" then
+				toast(message, Color3.fromRGB(226, 80, 90))
+			end
+		end)
+	end
+	-- v9.8 🪑 (SEAT98) : tirer la chaise, s'avancer, puis s'asseoir (SitAnimator)
+	local sitAnimator = optionalModule("SitAnimator")
+	if sitAnimator and type(sitAnimator.Approach) == "function" then
+		if pcall(sitAnimator.Approach, model, seatPart, sit) then
+			return
 		end
-	end)
+	end
+	sit(seatPart.CFrame * CFrame.new(0, seatPart.Size.Y / 2, 0), nil)
 end
 
 local function syncHouses()
@@ -427,6 +437,9 @@ local KEEP_GUIS: { [string]: boolean } = {
 	Chat = true,
 	Freecam = true,
 	DeskModeGui = true, -- v9.5 🖥️ barre "Se lever" du bureau (DeskMode)
+	FairGui = true, -- v9.8 🍦 menu des stands, badge du boost, bouton Croquer (FairFx, FAIR98)
+	GardenEditGui = true, -- v9.8 🌷 mode édition du jardin (GardenEdit, GARDEN98)
+	TownGraphicsGui = true, -- v9.8 🎨 fenêtre Graphismes en ville (TownGraphics, REALISM98)
 	TownInventoryGui = true, -- v9.6 plateau inventaire 3D (FurnitureEdit, PLACE96)
 	TownShopGui = true, -- v9.6 catalogue des magasins (ShopUI, SHOPS96)
 	CarGui = true, -- v9.6 conduite (CarClient, GARAGE96)
@@ -851,6 +864,16 @@ local function step(dt: number)
 	clocks.Guide += dt
 	clocks.Loc += dt
 	TownAtmosphere.Step(dt)
+	-- v9.8 🐾 animaux (pause pendant l'édition des meubles) + 🌷 bouton / sauvegarde du jardin (GARDEN98)
+	local petRoam = optionalModule("PetRoam")
+	if petRoam and type(petRoam.Step) == "function" then
+		pcall(petRoam.SetPaused, edit ~= nil and edit:IsEnabled())
+		pcall(petRoam.Step, dt)
+	end
+	local gardenEdit = optionalModule("GardenEdit")
+	if gardenEdit and type(gardenEdit.Step) == "function" then
+		pcall(gardenEdit.Step, dt)
+	end
 	-- v9.7 🎠 place centrale (TownPlazaFx : 30 Hz au plus, en pause au loin)
 	local plazaFx = optionalModule("TownPlazaFx")
 	if plazaFx and type(plazaFx.Step) == "function" then
@@ -858,6 +881,15 @@ local function step(dt: number)
 		if not okFx and not plazaFxWarned then
 			plazaFxWarned = true
 			warn("[Town] TownPlazaFx.Step : " .. tostring(errFx))
+		end
+	end
+	-- v9.8 🎡 fête foraine (FairFx : 30 Hz au plus ; le manège où l'on est assis : à chaque image)
+	local fairFx = optionalModule("FairFx")
+	if fairFx and type(fairFx.Step) == "function" then
+		local okFair, errFair = pcall(fairFx.Step, dt)
+		if not okFair and not fairFxWarned then
+			fairFxWarned = true
+			warn("[Town] FairFx.Step : " .. tostring(errFair))
 		end
 	end
 	if clocks.Loc >= LOC_EVERY then
@@ -925,6 +957,13 @@ local function step(dt: number)
 		local greenery = optionalModule("TownGreenery")
 		if greenery and root and type(greenery.Step) == "function" then
 			pcall(greenery.Step, root.Position)
+		end
+		-- v9.8 🏙️ vie de la rue (CITY98)
+		for _, name in ipairs({ "TownStreetLife", "TownPeople" }) do
+			local lifeMod = optionalModule(name)
+			if lifeMod and root and type(lifeMod.Step) == "function" then
+				pcall(lifeMod.Step, root.Position)
+			end
 		end
 	end
 	if clocks.Tag >= TAG_EVERY then
@@ -1144,12 +1183,51 @@ local function enter(options: any)
 		end
 		TownAtmosphere.SetNight(ClientState.IsUserDarkMode())
 		TownAtmosphere.Apply(s)
+		-- v9.8 🌦️ pas de pluie dans une pièce (Weather3D, REALISM98)
+		local weather = optionalModule("Weather3D")
+		if weather and type(weather.SetIndoorProbe) == "function" then
+			weather.SetIndoorProbe(function(p: Vector3): boolean
+				for _, house in pairs(houses) do
+					if house:RoomAt(p) ~= nil then
+						return true
+					end
+				end
+				return false
+			end)
+		end
 		-- v9.6 🛍️ boutiques où l'on entre : intérieurs en flux (SHOPS96)
 		local shops = optionalModule("ShopInteriors")
 		if shops and type(shops.Start) == "function" then
 			local okShops, errShops = pcall(shops.Start, { Toast = toast })
 			if not okShops then
 				warn("[Town] ShopInteriors.Start : " .. tostring(errShops))
+			end
+		end
+		-- v9.8 🌷 jardin libre (GardenEdit) + 🐾 animaux qui se promènent (PetRoam) (GARDEN98)
+		local gardenEdit = optionalModule("GardenEdit")
+		if gardenEdit and type(gardenEdit.Start) == "function" then
+			local okGE, errGE = pcall(gardenEdit.Start, {
+				Toast = toast,
+				GetGarden = function()
+					return gardens[LocalPlayer.UserId]
+				end,
+				IsBusy = function()
+					return (edit ~= nil and edit:IsEnabled()) or deskActive()
+				end,
+			})
+			if not okGE then
+				warn("[Town] GardenEdit.Start : " .. tostring(errGE))
+			end
+		end
+		local petRoam = optionalModule("PetRoam")
+		if petRoam and type(petRoam.Start) == "function" then
+			local okPR, errPR = pcall(petRoam.Start, {
+				GetHouses = function()
+					return houses
+				end,
+			})
+			if not okPR then
+				warn("[Town] PetRoam.Start : " .. tostring(errPR))
 			end
 		end
 		-- v9.7 🚦 circulation d'ambiance + véhicules du décor en flux (TownTraffic, VEHICLES97)
@@ -1183,12 +1261,38 @@ local function enter(options: any)
 				warn("[Town] TownPlazaFx.Start : " .. tostring(errFx))
 			end
 		end
+		-- v9.8 🎡 fête foraine + 🍦 nourriture (FairFx, FAIR98)
+		local fairFx = optionalModule("FairFx")
+		if fairFx and type(fairFx.Start) == "function" then
+			local okFair, errFair = pcall(fairFx.Start, { Toast = toast })
+			if not okFair then
+				warn("[Town] FairFx.Start : " .. tostring(errFair))
+			end
+		end
 		-- v9.7 🌳 nature : détails de près (arbres, lac, aire de jeux) côté client (NATURE97)
 		local greenery = optionalModule("TownGreenery")
 		if greenery and type(greenery.Start) == "function" then
 			local okGreen, errGreen = pcall(greenery.Start)
 			if not okGreen then
 				warn("[Town] TownGreenery.Start : " .. tostring(errGreen))
+			end
+		end
+		-- v9.8 🏙️ vie de la rue : mobilier en flux + passants (CITY98)
+		for _, name in ipairs({ "TownStreetLife", "TownPeople" }) do
+			local lifeMod = optionalModule(name)
+			if lifeMod and type(lifeMod.Start) == "function" then
+				local okL, errL = pcall(lifeMod.Start)
+				if not okL then
+					warn("[Town] " .. name .. ".Start : " .. tostring(errL))
+				end
+			end
+		end
+		-- v9.8 🪑 s'asseoir pour de vrai : chaise tirée, transitions, animations d'attente (SEAT98)
+		local sitAnimator = optionalModule("SitAnimator")
+		if sitAnimator and type(sitAnimator.Start) == "function" then
+			local okSit, errSit = pcall(sitAnimator.Start)
+			if not okSit then
+				warn("[Town] SitAnimator.Start : " .. tostring(errSit))
 			end
 		end
 		local folder = Instance.new("Folder")
@@ -1305,6 +1409,17 @@ local function teardown()
 		connection:Disconnect()
 	end
 	table.clear(connections)
+	-- v9.8 (GARDEN98) : jardin (sauvegarde en attente, interface) + animaux (originaux rendus)
+	do
+		local gardenEdit = optionalModule("GardenEdit")
+		if gardenEdit and type(gardenEdit.Stop) == "function" then
+			pcall(gardenEdit.Stop)
+		end
+		local petRoam = optionalModule("PetRoam")
+		if petRoam and type(petRoam.Stop) == "function" then
+			pcall(petRoam.Stop)
+		end
+	end
 	for userId in pairs(gardens) do
 		destroyGarden(userId)
 	end
@@ -1351,10 +1466,32 @@ local function teardown()
 	if plazaFx and type(plazaFx.Stop) == "function" then
 		pcall(plazaFx.Stop)
 	end
+	-- v9.8 🎡 fête foraine : pièces locales détruites (FairFx)
+	local fairFx = optionalModule("FairFx")
+	if fairFx and type(fairFx.Stop) == "function" then
+		pcall(fairFx.Stop)
+	end
 	-- v9.7 🌳 nature : détails de près détruits (NATURE97)
 	local greenery = optionalModule("TownGreenery")
 	if greenery and type(greenery.Stop) == "function" then
 		pcall(greenery.Stop)
+	end
+	-- v9.8 🏙️ vie de la rue : mobilier + passants détruits (CITY98)
+	for _, name in ipairs({ "TownStreetLife", "TownPeople" }) do
+		local lifeMod = optionalModule(name)
+		if lifeMod and type(lifeMod.Stop) == "function" then
+			pcall(lifeMod.Stop)
+		end
+	end
+	-- v9.8 🎨 fenêtre Graphismes fermée (REALISM98)
+	local gfx = optionalModule("TownGraphics")
+	if gfx and type(gfx.Close) == "function" then
+		pcall(gfx.Close)
+	end
+	-- v9.8 🪑 poses rendues aux animations de Roblox, chaises remises (SEAT98)
+	local sitAnimator = optionalModule("SitAnimator")
+	if sitAnimator and type(sitAnimator.Stop) == "function" then
+		pcall(sitAnimator.Stop)
 	end
 	hud:SetDeskMode(false)
 	local s = saved
@@ -1448,6 +1585,10 @@ local function callbacks(): any
 		end,
 		Emote = playEmote,
 		ToggleEdit = function()
+			local gardenEdit = optionalModule("GardenEdit")
+			if gardenEdit and type(gardenEdit.IsActive) == "function" and gardenEdit.IsActive() then
+				pcall(gardenEdit.SetEnabled, false)
+			end
 			if not edit then
 				return
 			end

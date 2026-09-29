@@ -67,13 +67,15 @@ WorldLayout.ROAD_Y = 0.5 -- dessus de la chaussée
 WorldLayout.WALK_Y = 1 -- dessus des trottoirs et de la place (bordure de 0,5)
 WorldLayout.GATE_BACK = 60 -- porte de la ville : distance depuis le bord des parcelles côté rue
 WorldLayout.SPAWN_INSIDE = 12 -- apparition : juste à l'intérieur de la porte
-WorldLayout.TOWN_MARGIN = 80 -- pré au-delà du fond des parcelles (murs invisibles)
+WorldLayout.TOWN_MARGIN = 140 -- pré au-delà du fond des parcelles (murs invisibles) ; v9.8 : 80 -> 140 (MégaDopa agrandi)
 
 -- Porte d'entrée (dans la cage d'escalier) et passages entre pièces
-WorldLayout.DOOR_W = 5
-WorldLayout.DOOR_H = 8
-WorldLayout.PASS_W = 5 -- passage entre deux pièces / cage -> pièce (centré en profondeur)
-WorldLayout.PASS_H = 8.5
+-- (v9.8 HOUSE98 : "la tête touche" -> toutes les portes font au moins
+-- 6 x 9 studs : 6,5 x 9,5 ; la porte d'entrée devient une porte DOUBLE)
+WorldLayout.DOOR_W = 6.5
+WorldLayout.DOOR_H = 9.5
+WorldLayout.PASS_W = 6.5 -- passage entre deux pièces / cage -> pièce (centré en profondeur)
+WorldLayout.PASS_H = 9.5
 
 -- Escalier (v9.4, dans la cage) : une volée droite par étage (étage k -> k+1),
 -- au MILIEU de la cage (face à la porte d'entrée), couloirs de chaque côté.
@@ -89,8 +91,18 @@ WorldLayout.STAIR_STEPS = 13 -- = STORY / STAIR_RISE
 WorldLayout.STAIR_TREAD = 1.4
 WorldLayout.STAIR_D0 = 4
 WorldLayout.STAIR_D1 = 4 + 13 * 1.4 -- 22,2
-WorldLayout.HEADROOM = 7.5
-WorldLayout.STAIR_HOLE_D0 = 4 + (12 - 7.5) * 1.4 -- 10,3 (marche à 4,5 : 12 - 4,5 = 7,5 de hauteur libre)
+-- (v9.8 HOUSE98 : 7,5 -> 8,5 studs de hauteur libre : trémie plus longue)
+WorldLayout.HEADROOM = 8.5
+WorldLayout.STAIR_HOLE_D0 = 4 + (12 - 8.5) * 1.4 -- 8,9 (marche à 3,5 : 12 - 3,5 = 8,5 de hauteur libre)
+
+-- (v9.8 HOUSE98) Porte de DERRIÈRE (vers le jardin) : au rez-de-chaussée,
+-- dans le mur du fond de la cage, derrière l'escalier (couloir du fond
+-- STAIR_D1..DEPTH, toute la largeur de la cage), même taille que la porte
+-- d'entrée ; dehors : palier + BACK_STEPS marches + rampe invisible.
+WorldLayout.BACK_LANDING = 3 -- profondeur du palier (studs)
+WorldLayout.BACK_STEPS = 3 -- contremarches jusqu'à la pelouse
+WorldLayout.BACK_TREAD = 1.25 -- giron d'une marche
+WorldLayout.BACK_WALL_OUT = 0.3 -- le mur du fond déborde de 0,3 derrière les pièces
 
 export type SizeDef = { Floors: number, Columns: number, Width: number?, Exterior: string?, Id: string? }
 
@@ -218,6 +230,25 @@ function WorldLayout.StairSpan(size: SizeDef?): (number, number)
 	return x - WorldLayout.STAIR_W / 2, x + WorldLayout.STAIR_W / 2
 end
 
+-- (v9.8 HOUSE98) Porte de derrière : x du milieu (repère local de la maison)
+-- = milieu de la cage, comme la porte d'entrée (même largeur DOOR_W)
+function WorldLayout.BackDoorX(size: SizeDef?): number
+	return WorldLayout.DoorX(size)
+end
+
+-- d de la face EXTÉRIEURE du mur du fond (seuil de la porte de derrière,
+-- au niveau du rez-de-chaussée FloorY(1))
+function WorldLayout.BackDoorD(size: SizeDef?): number
+	return WorldLayout.Dims(size).Depth + WorldLayout.BACK_WALL_OUT
+end
+
+-- d du pied des marches de derrière (sur la pelouse du jardin) : tout ce qui
+-- est entre BackDoorD et ça, sur x = BackDoorX ± (DOOR_W / 2 + 1), doit
+-- rester libre (palier, marches, rampe)
+function WorldLayout.BackStepsD(size: SizeDef?): number
+	return WorldLayout.BackDoorD(size) + WorldLayout.BACK_LANDING + WorldLayout.BACK_STEPS * WorldLayout.BACK_TREAD
+end
+
 -- Hauteur (au-dessus du sol de l'étage) du dessus de la rampe / des marches à
 -- la profondeur d (0 avant STAIR_D0, STORY après STAIR_D1)
 function WorldLayout.StairHeight(d: number): number
@@ -250,6 +281,26 @@ function WorldLayout.RoomInterior(size: SizeDef?, slot: number): (number, number
 	local x0, x1 = WorldLayout.ColumnSpan(size, column)
 	local t = WorldLayout.WALL_T
 	return x0 + t, x1 - t, WorldLayout.FloorY(floor), t, t + WorldLayout.DEPTH
+end
+
+-- (v9.8 HOUSE98) VRAIE fenêtre du mur du fond d'une pièce (côté jardin) :
+-- même place et même largeur que la fenêtre de la pièce 2D (HouseRoom : à
+-- gauche, 104 x 92 px, 36 px sous le haut du mur ; = House3DScene
+-- windowRect), mais prolongée vers le haut jusqu'à BACK_WINDOW_TOP (la
+-- partie du mur au-dessus de la 2D, où aucun objet mural ne va) : une
+-- porte-fenêtre en hauteur. -> (x0, x1, y0, y1) par rapport au milieu de la
+-- pièce (x) et au dessus de son sol (y)
+WorldLayout.BACK_WINDOW_TOP = 9.6
+function WorldLayout.BackWindowRect(size: SizeDef?, wallRatio: number?): (number, number, number, number)
+	local roomWpx = WorldLayout.RoomWidthPx(size)
+	local side = WorldLayout.SIDE_PX
+	local wallPx = math.floor(WorldLayout.ROOM_HEIGHT_PX * math.clamp(finite(wallRatio, WorldLayout.WALL_RATIO), 0.1, 0.9) + 0.5)
+	local k = roomWpx / math.max(1, roomWpx - 2 * side)
+	local x2D = side + math.floor(roomWpx * 0.1) + 52
+	local cx = ((x2D - side) * k - roomWpx / 2) * WorldLayout.PX
+	local ww, wh = 104 * k * WorldLayout.PX, 92 * WorldLayout.PX
+	local cy = (wallPx - 36) * WorldLayout.PX - wh / 2
+	return cx - ww / 2, cx + ww / 2, cy - wh / 2, math.max(cy + wh / 2, WorldLayout.BACK_WINDOW_TOP)
 end
 
 -- Centre du dessus du sol d'une pièce (repère local) : x, y, d
@@ -580,18 +631,62 @@ end
 
 -- (v9.7, BUILDINGS97) 🛒 Supermarché, hors de la porte, à droite de la
 -- route d'arrivée (en venant de la ville) : façade tournée vers la route
--- (-X monde), parking entre les deux. Tient dans les murs de 4 à 12
--- parcelles (coin le plus loin : x = 122, z = porte + 77) sans toucher
--- les parcelles, la concession ni le rond-point.
-WorldLayout.MARKET_W = 70 -- façade (le long de la route)
-WorldLayout.MARKET_D = 48 -- profondeur
+-- (-X monde), parking entre les deux. (v9.8, MARKET98) agrandi à 104 x 68,
+-- reculé (+Z : l'entrée fait face au rond-point) ; tient dans les murs de
+-- 4 à 12 parcelles (TOWN_MARGIN 140 ; coin le plus loin : x = 148,
+-- z = porte + 124) sans toucher les parcelles, la route ni le rond-point.
+WorldLayout.MARKET_W = 104 -- façade (le long de la route) ; v9.7 : 70
+WorldLayout.MARKET_D = 68 -- profondeur ; v9.7 : 48
 WorldLayout.MARKET_X = 74 -- distance de la façade à l'axe de la route
 WorldLayout.MARKET_LOT = 42 -- profondeur du parking devant la façade (trottoir compris : +10)
 
 -- Pied de la façade (milieu), LookVector vers la route ; volume derrière (+Z local)
 function WorldLayout.MarketCFrame(count: number): CFrame
-	local p = WorldLayout.Origin() + Vector3.new(WorldLayout.MARKET_X, WorldLayout.WALK_Y, WorldLayout.GateDistance(count) + 7 + WorldLayout.MARKET_W / 2)
+	local p = WorldLayout.Origin() + Vector3.new(WorldLayout.MARKET_X, WorldLayout.WALK_Y, WorldLayout.GateDistance(count) + 20 + WorldLayout.MARKET_W / 2)
 	return CFrame.lookAt(p, p - Vector3.new(1, 0, 0))
+end
+
+-- (v9.8, CARS98) 🚗 CONCESSION AUTO, hors de la porte, à GAUCHE de la route
+-- d'arrivée (le miroir du supermarché) : grand hall vitré DEALER_W (façade,
+-- le long de la route) x DEALER_D (profondeur), façade tournée vers la route
+-- (+X monde) ; parvis avec le plateau tournant entre le hall et la route.
+-- Tout est relatif à la porte : tient de 4 à 12 parcelles (derrière le fond
+-- des parcelles, avant le rond-point, dans les murs).
+WorldLayout.DEALER_W = 70
+WorldLayout.DEALER_D = 50
+WorldLayout.DEALER_X = 60 -- distance de la façade à l'axe de la route
+WorldLayout.DEALER_Z0 = 14 -- début du hall après la porte (le long de la route)
+
+-- Pied de la façade (milieu), LookVector vers la route ; volume derrière (+Z local)
+function WorldLayout.DealershipCFrame(count: number): CFrame
+	local p = WorldLayout.Origin() + Vector3.new(-WorldLayout.DEALER_X, WorldLayout.WALK_Y, WorldLayout.GateDistance(count) + WorldLayout.DEALER_Z0 + WorldLayout.DEALER_W / 2)
+	return CFrame.lookAt(p, p + Vector3.new(1, 0, 0))
+end
+
+-- (v9.8, FAIR98) 🎡 FÊTE FORAINE : derrière la mairie, dans le secteur
+-- arrière de l'anneau (axe -Z), rectangle FAIR_W x FAIR_D dont le bord
+-- avant est à FAIR_NEAR studs du centre. Tient de 4 à 12 parcelles (bord
+-- du boulevard, lac, jardin, terrain de basket : vérifié). Repère : centre
+-- du sol de la fête (FairRides.GROUND au-dessus du pré), LookVector vers
+-- la place (l'entrée) ; x local ∈ [-FAIR_W/2, FAIR_W/2], z ∈ [-FAIR_D/2, FAIR_D/2].
+WorldLayout.FAIR_W = 110
+WorldLayout.FAIR_D = 72
+WorldLayout.FAIR_NEAR = 104 -- (couloir de ~14 studs derrière la mairie)
+WorldLayout.FAIR_GROUND = 0.15
+
+function WorldLayout.FairCFrame(): CFrame
+	local p = WorldLayout.Origin() + Vector3.new(0, WorldLayout.GROUND_Y + WorldLayout.FAIR_GROUND, -(WorldLayout.FAIR_NEAR + WorldLayout.FAIR_D / 2))
+	return CFrame.lookAt(p, p + Vector3.new(0, 0, 1))
+end
+
+-- (v9.8, FAIR98) 🍦 Coin gourmand (ancienne place de la concession, à
+-- droite de la place d'accueil) : centre au sol, LookVector vers le
+-- boulevard (-Z monde) ; x local = x monde ; FOOD_W x FOOD_D
+WorldLayout.FOOD_W = 40
+WorldLayout.FOOD_D = 44
+function WorldLayout.FoodCornerCFrame(count: number): CFrame
+	local p = WorldLayout.Origin() + Vector3.new(70, WorldLayout.WALK_Y, WorldLayout.PlotFrontRadius(count) + 9 + WorldLayout.FOOD_D / 2)
+	return CFrame.lookAt(p, p - Vector3.new(0, 0, 1))
 end
 
 -- Centre de la place, au sol (dessus du pavé)

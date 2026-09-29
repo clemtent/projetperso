@@ -26,6 +26,11 @@
 	     trottinettes, scooters, camion de livraison, voitures garées en plus.
 	     Au plus 2 constructions par passe (0,5 s).
 	Aucune lumière, aucun son.
+	v9.8 (CARS98) : 10 véhicules (1 bus + 9 voitures, dont roadster et
+	limousine), démarrages progressifs, FEUX STOP (feux arrière en Neon fin
+	quand on freine / à l'arrêt), CLIGNOTANTS (petits feux orange, 2 Hz)
+	avant chaque virage du boulevard, le bus s'arrête aussi aux carrefours
+	des rues latérales (3,5 s) ; les nouvelles voitures (CarModels v9.8).
 
 	Crochet TownClient (envoyé à main) :
 	  - à l'entrée en ville  : TownTraffic.Start({ Toast = toast })
@@ -44,8 +49,28 @@ local Locale = require(ReplicatedStorage.Shared.Locale)
 
 local TownTraffic = {}
 
+-- (v9.8) réglage "Graphismes > Détail" (REALISM98) : portée d'animation et
+-- nombre de véhicules réduits en détail bas
+local okGQ, GraphicsQuality = pcall(require, ReplicatedStorage.Shared:FindFirstChild("GraphicsQuality") :: any)
+local function detailScale(): number
+	if okGQ and type(GraphicsQuality) == "table" and type(GraphicsQuality.DetailScale) == "function" then
+		local ok, value = pcall(GraphicsQuality.DetailScale)
+		if ok and type(value) == "number" then
+			return value
+		end
+	end
+	return 1
+end
+local function lowDetail(): boolean
+	if okGQ and type(GraphicsQuality) == "table" and type(GraphicsQuality.Get) == "function" then
+		local ok, q = pcall(GraphicsQuality.Get)
+		return ok and type(q) == "table" and q.Detail == "Low"
+	end
+	return false
+end
+
 TownTraffic.FOLDER_NAME = "TownTraffic"
-TownTraffic.MAX_MOVING = 6
+TownTraffic.MAX_MOVING = 10 -- (v9.8) 6 -> 10 (1 bus + 9 voitures)
 TownTraffic.RATE = 1 / 30 -- 30 Hz au plus
 TownTraffic.MOVE_RANGE = 420 -- au-delà : pièces non déplacées
 TownTraffic.SPOT_IN = 170
@@ -53,6 +78,8 @@ TownTraffic.SPOT_OUT = 230
 TownTraffic.SPEED = 20 -- studs / s (voitures)
 TownTraffic.BUS_SPEED = 21 -- (un peu plus vite : compense ses arrêts)
 TownTraffic.BUS_STOP_TIME = 5
+TownTraffic.SIDE_STOP_TIME = 3.5 -- (v9.8) arrêts aux carrefours des rues latérales
+TownTraffic.BLINK_AHEAD = 34 -- (v9.8) clignotant allumé à moins de 34 studs d'un virage
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -64,9 +91,14 @@ local TRAFFIC = {
 	{ "BubbleCar", Color3.fromRGB(255, 150, 196) },
 	{ "Pickup", Color3.fromRGB(220, 44, 64) },
 	{ "Van", Color3.fromRGB(186, 156, 246) },
+	{ "SportsCar", Color3.fromRGB(255, 212, 80) },
+	{ "Limo", Color3.fromRGB(38, 38, 48) },
+	{ "Hatchback", Color3.fromRGB(34, 110, 76) },
 }
+local AMBER = Color3.fromRGB(255, 170, 60)
+local BRAKE_ON = Color3.fromRGB(255, 58, 70)
 
-type Path = { Points: { Vector3 }, Cum: { number }, Length: number }
+type Path = { Points: { Vector3 }, Cum: { number }, Length: number, Corners: { { S: number, Turn: number } } }
 type Vehicle = {
 	Model: Model,
 	Parts: { BasePart },
@@ -81,6 +113,11 @@ type Vehicle = {
 	StopClock: number,
 	LastStopLap: number,
 	Placed: boolean,
+	Blinkers: { [number]: { BasePart } }, -- (v9.8) [-1] gauche / [1] droite
+	Brakes: { BasePart }, -- (v9.8) feux stop
+	BlinkSide: number,
+	Braking: boolean,
+	StopLaps: { [number]: number }, -- (v9.8) arrêts de bus déjà faits (par arrêt)
 }
 type Spot = { Config: Instance, Kind: string, CF: CFrame, Model: Model? }
 
@@ -93,6 +130,7 @@ local spots: { Spot } = {}
 local focus: Vector3? = nil
 local zebra: { CF: CFrame, S: number }? = nil
 local busStopS: number? = nil
+local sideStops: { number } = {} -- (v9.8) arrêts de bus aux carrefours des rues latérales
 local accum = 0
 local sensorClock = 0
 local spotClock = 0
@@ -125,6 +163,7 @@ local function buildPath(count: number): Path
 	end
 	local pts: { Vector3 } = {}
 	local radius = 12
+	local cornerIdx: { { I: number, Turn: number } } = {}
 	for i = 1, m do
 		local prev = corners[(i - 2) % m + 1]
 		local c = corners[i]
@@ -140,7 +179,8 @@ local function buildPath(count: number): Path
 		for j = 0, n - 1 do
 			table.insert(pts, startP:Lerp(pIn, j / n))
 		end
-		-- virage (courbe de Bézier)
+		-- virage (courbe de Bézier) ; sens du virage (+1 gauche / -1 droite)
+		table.insert(cornerIdx, { I = #pts + 4, Turn = if dIn:Cross(dOut).Y > 0 then -1 else 1 })
 		for j = 0, 7 do
 			local t = j / 8
 			local u = 1 - t
@@ -152,7 +192,11 @@ local function buildPath(count: number): Path
 		cum[i] = cum[i - 1] + (pts[i] - pts[i - 1]).Magnitude
 	end
 	local total = cum[#pts] + (pts[1] - pts[#pts]).Magnitude
-	return { Points = pts, Cum = cum, Length = total }
+	local corners = {}
+	for _, c in ipairs(cornerIdx) do
+		table.insert(corners, { S = cum[c.I] or 0, Turn = c.Turn })
+	end
+	return { Points = pts, Cum = cum, Length = total, Corners = corners }
 end
 
 -- Point de la trajectoire à l'abscisse curviligne s (boucle)
@@ -216,7 +260,40 @@ local function ghost(model: Model)
 	end
 end
 
+-- (v9.8) clignotants (4 petits feux orange, éteints = invisibles) + feux stop
+local function addLights(model: Model): ({ [number]: { BasePart } }, { BasePart })
+	local pivot = model:GetPivot()
+	local length = tonumber(model:GetAttribute("Length")) or 12
+	local width = tonumber(model:GetAttribute("Width")) or 5.5
+	local height = tonumber(model:GetAttribute("Height")) or 5
+	local y = math.clamp(height * 0.34, 1.5, 3.4)
+	local blinkers: { [number]: { BasePart } } = { [-1] = {}, [1] = {} }
+	for _, sx in ipairs({ -1, 1 }) do
+		for _, sz in ipairs({ -1, 1 }) do
+			local p = Instance.new("Part")
+			p.Name = "Blinker"
+			p.Size = Vector3.new(0.14, 0.26, 0.5)
+			p.CFrame = pivot * CFrame.new(sx * (width / 2 + 0.04), y, sz * (length / 2 - 0.55))
+			p.Color = AMBER
+			p.Material = Enum.Material.Neon
+			p.Transparency = 1
+			p.CastShadow = false
+			p.Parent = model
+			table.insert(blinkers[sx], p)
+		end
+	end
+	local brakes = {}
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") and d.Name == "Taillight" then
+			d:SetAttribute("OffColor", d.Color)
+			table.insert(brakes, d)
+		end
+	end
+	return blinkers, brakes
+end
+
 local function addVehicle(model: Model, s: number, isBus: boolean)
+	local blinkers, brakes = addLights(model)
 	ghost(model)
 	local pivot = model:GetPivot()
 	local parts, offsets, frames = {}, {}, {}
@@ -243,6 +320,11 @@ local function addVehicle(model: Model, s: number, isBus: boolean)
 		StopClock = 0,
 		LastStopLap = -1,
 		Placed = false,
+		Blinkers = blinkers,
+		Brakes = brakes,
+		BlinkSide = 0,
+		Braking = false,
+		StopLaps = {},
 	}
 	model.Parent = folder
 	table.insert(vehicles, v)
@@ -253,7 +335,7 @@ local function spawnTraffic()
 	if not p then
 		return
 	end
-	local n = TownTraffic.MAX_MOVING
+	local n = if lowDetail() then math.min(6, TownTraffic.MAX_MOVING) else TownTraffic.MAX_MOVING
 	local step = p.Length / n
 	-- le bus
 	local bus = VehicleModels.Bus({ Detail = "Light", T = Locale.T })
@@ -314,6 +396,7 @@ local function stepTraffic(dt: number, camPos: Vector3?)
 	end
 	local L = p.Length
 	local ideal = L / #vehicles
+	local range = TownTraffic.MOVE_RANGE * detailScale()
 	-- tri circulaire : véhicule suivant = plus petite avance positive
 	for _, v in ipairs(vehicles) do
 		local ahead = math.huge
@@ -349,30 +432,68 @@ local function stepTraffic(dt: number, camPos: Vector3?)
 				target = math.min(target, math.max(0, toZebra - 1) / 21 * v.Cruise)
 			end
 		end
-		-- arrêt de bus (une fois par tour)
-		if v.IsBus and busStopS then
-			-- (n° de passage : constant de l'approche à la fin de l'arrêt)
-			local lap = math.floor((v.S + 25 - busStopS) / L)
-			local toStop = (busStopS - v.S) % L
+		-- arrêts de bus (une fois par tour à chaque arrêt : entrée + carrefours)
+		if v.IsBus then
 			if v.StopClock > 0 then
 				v.StopClock -= dt
 				target = 0
-				if v.StopClock <= 0 then
-					v.LastStopLap = lap
+			else
+				local stops = { busStopS }
+				for _, st in ipairs(sideStops) do
+					table.insert(stops, st)
 				end
-			elseif toStop < 25 and v.LastStopLap ~= lap then
-				target = math.min(target, (toStop + 2) / 25 * v.Cruise)
-				if toStop < 1.5 then
-					v.StopClock = TownTraffic.BUS_STOP_TIME
+				for k, stopS in ipairs(stops) do
+					if stopS then
+						-- (n° de passage : constant de l'approche à la fin de l'arrêt)
+						local lap = math.floor((v.S + 25 - stopS) / L)
+						local toStop = (stopS - v.S) % L
+						if toStop < 25 and v.StopLaps[k] ~= lap then
+							target = math.min(target, (toStop + 2) / 25 * v.Cruise)
+							if toStop < 1.5 then
+								v.StopClock = if k == 1 then TownTraffic.BUS_STOP_TIME else TownTraffic.SIDE_STOP_TIME
+								v.StopLaps[k] = lap
+								v.LastStopLap = lap
+							end
+						end
+					end
 				end
 			end
 		end
-		-- accélération / freinage doux
-		local accel = if target > v.Speed then 6 elseif urgent then 30 else 16
+		-- (v9.8) clignotant avant les virages du boulevard
+		local blink = 0
+		for _, c in ipairs(p.Corners) do
+			local toCorner = (c.S - v.S) % L
+			local past = (v.S - c.S) % L
+			if toCorner < TownTraffic.BLINK_AHEAD + v.HalfLen or past < 6 then
+				blink = c.Turn
+			end
+		end
+		-- accélération / freinage doux (démarrage progressif, jamais d'à-coup)
+		local accel = if target > v.Speed then 3 + 5 * math.clamp(v.Speed / v.Cruise, 0, 1) elseif urgent then 30 else 12
+		local before = v.Speed
 		v.Speed = v.Speed + math.clamp(target - v.Speed, -accel * dt, accel * dt)
 		v.S += v.Speed * dt
+		-- feux stop quand on freine (ou à l'arrêt), clignotants (2 Hz)
+		local braking = v.Speed < before - 0.02 or (v.Speed < 0.3 and target < 0.5)
+		if braking ~= v.Braking then
+			v.Braking = braking
+			for _, b in ipairs(v.Brakes) do
+				b.Color = if braking then BRAKE_ON else (b:GetAttribute("OffColor") or b.Color)
+				b.Material = if braking then Enum.Material.Neon else Enum.Material.Glass
+			end
+		end
+		local on = blink ~= 0 and (os.clock() * 2) % 1 < 0.55
+		local side = if on then blink else 0
+		if side ~= v.BlinkSide then
+			v.BlinkSide = side
+			for _, sx in ipairs({ -1, 1 }) do
+				for _, b in ipairs(v.Blinkers[sx]) do
+					b.Transparency = if sx == side then 0 else 1
+				end
+			end
+		end
 		-- déplacement des pièces (seulement près de la caméra)
-		local near = camPos == nil or (cf.Position - camPos).Magnitude < TownTraffic.MOVE_RANGE
+		local near = camPos == nil or (cf.Position - camPos).Magnitude < range
 		if near and (v.Speed > 0.01 or not v.Placed) then
 			local pivot = frameAt(p, v.S)
 			local frames = v.Frames
@@ -501,6 +622,17 @@ function TownTraffic.Start(_options: any?)
 	local side0 = CFrame.lookAt(O + Vector3.new(0, WorldLayout.ROAD_Y, A), O + Vector3.new(0, WorldLayout.ROAD_Y, A - 1))
 	zebra = { CF = side0, S = nearestS(p, (side0 * CFrame.new(0, 0, WorldLayout.ROAD_W / 4)).Position) }
 	busStopS = nearestS(p, (side0 * CFrame.new(26, 0, WorldLayout.ROAD_W / 4)).Position)
+	-- (v9.8) 2 autres arrêts : aux carrefours des rues latérales (1/4 et 3/4 du tour)
+	table.clear(sideStops)
+	local m = WorldLayout.PlotSlots(count)
+	local sideR = math.max(1, math.floor(m / 4 + 0.5))
+	for _, slot in ipairs({ sideR, m - sideR }) do
+		local a = slot / m * math.pi * 2
+		local dirv = Vector3.new(math.sin(a), 0, math.cos(a))
+		local at = O + dirv * (A + WorldLayout.ROAD_W / 4)
+		local tangent = Vector3.new(dirv.Z, 0, -dirv.X)
+		table.insert(sideStops, nearestS(p, at + tangent * 22))
+	end
 	spawnTraffic()
 	readSpots()
 	local list = town and town:FindFirstChild("VehicleSpots")
@@ -570,6 +702,7 @@ function TownTraffic.Stop()
 	path = nil
 	zebra = nil
 	busStopS = nil
+	table.clear(sideStops)
 	focus = nil
 	accum, sensorClock, spotClock = 0, 0, 0
 	if folder then
@@ -593,6 +726,7 @@ function TownTraffic.Debug(): any
 		Zebra = function()
 			return zebra
 		end,
+		SideStops = sideStops,
 		BusStop = function()
 			return busStopS
 		end,

@@ -81,7 +81,7 @@ local LIST_INSET = 31 -- largeur du tiroir - largeur utile d'une liste (marges)
 local LOOK_ART_W = 200 -- (v9.1) largeur de maquette des aperçus de personnalisation
 -- Les objets ajoutés à partir de celui-ci forment la pastille "🆕 Nouveautés"
 -- (v9.2 : les objets "cool" ; sinon ceux de la v9.1)
-local NEW_ITEM = HouseCommon.ItemsById.RGBHeadset or HouseCommon.ItemsById.ToyChest
+local NEW_ITEM = HouseCommon.ItemsById.SimpleChair or HouseCommon.ItemsById.RGBHeadset or HouseCommon.ItemsById.ToyChest
 local NEW_FROM = (NEW_ITEM and NEW_ITEM.Order) or math.huge
 
 export type Handlers = {
@@ -1231,10 +1231,10 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 			needDopamine(card.Button, cost, styleContext)
 			return
 		end
-		if isGarden and isOwned and not equipped and #house.Garden >= HouseCommon.GardenSlots then
+		if isGarden and isOwned and not equipped and #house.Garden >= HouseCommon.GardenSlotsFor() then
 			SoundManager.Play("Error", 0.7)
 			UIUtil.Shake(card.Button)
-			handlers.Notify(Locale.T("Your garden is full (max %d): put something away first", HouseCommon.GardenSlots), Theme.Colors.Orange)
+			handlers.Notify(Locale.T("Your garden is full (max %d): put something away first", HouseCommon.GardenSlotsFor()), Theme.Colors.Orange)
 			return
 		end
 		local action, argument
@@ -2675,7 +2675,7 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 			else
 				local text
 				if sectionKind == "Garden" then
-					text = Locale.T("🌷 Garden: %d/%d spots used • tap to put out / away", #house.Garden, HouseCommon.GardenSlots)
+					text = Locale.T("🌷 Garden: %d/%d spots used • tap to put out / away", #house.Garden, HouseCommon.GardenSlotsFor())
 				else
 					text = Locale.T("🏡 Whole house • hover or tap a picture to try it")
 				end

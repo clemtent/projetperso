@@ -43,6 +43,11 @@ local LAKE = Greenery.LAKE
 local FOLDER_NAME = "TownGreenery"
 local TREE_IN, TREE_OUT = 150, 190 -- (studs) construire / détruire
 local DETAIL_IN, DETAIL_OUT = 220, 270
+-- v9.8 🎨 Graphismes > Détail (REALISM98) : distances de flux ×0,65 / ×1 / ×1,35
+local okGQ, GraphicsQuality = pcall(require, game:GetService("ReplicatedStorage").Shared.GraphicsQuality)
+local function detailScale(): number
+	return okGQ and type(GraphicsQuality) == "table" and GraphicsQuality.DetailScale and GraphicsQuality.DetailScale() or 1
+end
 local BUILDS_PER_STEP = 5
 local BIRD_HZ = 15
 
@@ -110,7 +115,7 @@ local function rod(parent: Instance, name: string, a: Vector3, b: Vector3, d: nu
 end
 
 ----------------------------------------------------------------------
--- Oiseaux du lac (un Model par oiseau, déplacé par PivotTo)
+-- Oiseaux du lac (un Model par oiseau, pièces placées depuis des décalages figés)
 ----------------------------------------------------------------------
 
 local function duck(parent: Instance, kind: number): Model
@@ -212,8 +217,18 @@ local function buildLake(d: Detail, parent: Model)
 		if freeWater(x, z, orbit + 1.5) then
 			spots += 1
 			local m = spots <= 2 and swan(parent) or duck(parent, spots % 3)
+			-- décalages figés par rapport au corps : chaque image repart de ces valeurs exactes
+			-- (PivotTo répété accumule des erreurs d'arrondi → dérive puis NaN)
+			local offsets = {}
+			local rootCF = (m.PrimaryPart :: BasePart).CFrame
+			for _, part in ipairs(m:GetDescendants()) do
+				if part:IsA("BasePart") then
+					table.insert(offsets, { Part = part, Off = rootCF:ToObjectSpace(part.CFrame) })
+				end
+			end
 			table.insert(birds, {
 				Model = m,
+				Offsets = offsets,
 				Center = Vector3.new(x, 0, z),
 				Orbit = orbit,
 				Speed = (0.08 + hash(k, 213) * 0.06) * (hash(k, 214) < 0.5 and -1 or 1),
@@ -320,7 +335,10 @@ local function moveBirds(dt: number)
 				local pos = d.CF * Vector3.new(x, b.Y + math.sin(b.Phase * 7) * 0.04, z)
 				local ahead = d.CF * Vector3.new(x + tx, b.Y, z + tz)
 				if b.Model.Parent and (ahead - pos).Magnitude > 1e-4 then
-					b.Model:PivotTo(CFrame.lookAt(pos, Vector3.new(ahead.X, pos.Y, ahead.Z)))
+					local cf = CFrame.lookAt(pos, Vector3.new(ahead.X, pos.Y, ahead.Z))
+					for _, o in ipairs(b.Offsets) do
+						o.Part.CFrame = cf * o.Off
+					end
 				end
 			end
 		end
@@ -347,6 +365,7 @@ function TownGreenery.Step(position: Vector3?)
 			discover()
 		end
 	end
+	local k = detailScale()
 	local function dist(p: Vector3): number
 		return Vector3.new(p.X - pos.X, 0, p.Z - pos.Z).Magnitude
 	end
@@ -360,21 +379,21 @@ function TownGreenery.Step(position: Vector3?)
 			end
 		else
 			local dd = dist(t.Base)
-			if t.Near and dd > TREE_OUT then
+			if t.Near and dd > TREE_OUT * k then
 				t.Near:Destroy()
 				t.Near = nil
-			elseif not t.Near and dd < TREE_IN then
+			elseif not t.Near and dd < TREE_IN * k then
 				table.insert(want, { t, dd })
 			end
 		end
 	end
 	for _, d in ipairs(details) do
 		local dd = dist(d.CF.Position)
-		if d.Near and dd > DETAIL_OUT then
+		if d.Near and dd > DETAIL_OUT * k then
 			d.Near:Destroy()
 			d.Near = nil
 			d.Birds = nil
-		elseif not d.Near and dd < DETAIL_IN and d.Model.Parent then
+		elseif not d.Near and dd < DETAIL_IN * k and d.Model.Parent then
 			buildDetail(d)
 		end
 	end

@@ -16,6 +16,12 @@
 	  - mobilier : arbres d'alignement, lampadaires (quelques vraies
 	    lumières), bancs, poubelles, bouches d'incendie, voitures garées.
 	Construit une fois par TownMap.Build.
+	v9.8 (CITY98) : les rues PLEINES DE VIE. Le serveur note seulement les
+	emplacements (TownKit.LifeSpot, 0 pièce) du mobilier que le client
+	construit en flux (TownStreetLife : poubelles, bacs de tri, bancs,
+	abribus, kiosque, cabines, distributeurs, feux tricolores, passages
+	piétons, pistes cyclables, oriflammes, plaques de rue...) et les
+	chemins des passants (TownKit.LifePath -> TownPeople).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -77,9 +83,21 @@ local function strip(parent: Instance, name: string, cf: CFrame, x0: number, x1:
 	for _, r in ipairs(ranges) do
 		local len = r[2] - r[1]
 		if len > 0.2 then
-			part(parent, name, Vector3.new(len + 2 * g, thick, math.abs(z1 - z0)), cf * CFrame.new((r[1] + r[2]) / 2, top - thick / 2, (z0 + z1) / 2), color, material, profile)
+			local size = Vector3.new(len + 2 * g, thick, math.abs(z1 - z0))
+			local pcf = cf * CFrame.new((r[1] + r[2]) / 2, top - thick / 2, (z0 + z1) / 2)
+			if profile == "paint" then
+				-- (v9.8, CITY98) peinture au sol : construite côté client (TownStreetLife)
+				TownKit.LifeSpot("Paint", pcf, 0, size)
+			else
+				part(parent, name, size, pcf, color, material, profile)
+			end
 		end
 	end
+end
+
+-- (v9.8, CITY98) marquage au sol construit côté CLIENT (0 pièce serveur)
+local function paint(size: Vector3, cf: CFrame)
+	TownKit.LifeSpot("Paint", cf, 0, size)
 end
 
 ----------------------------------------------------------------------
@@ -115,15 +133,15 @@ local function buildBoulevard(folder: Instance, geo: TownKit.Geo)
 		strip(side, "Curb", F, -(A + hw + 0.8) * tanH, (A + hw + 0.8) * tanH, hw - 0.05, hw + 0.8, WALK_Y + 0.03, 0.4, C.Curb, M.Concrete, "deco")
 		-- lignes de rive
 		local edgeZ = hw - 1.1
-		strip(side, "EdgeLine", F, -(A + edgeZ) * tanH, (A + edgeZ) * tanH, edgeZ - 0.18, edgeZ + 0.18, ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "deco")
-		strip(side, "EdgeLine", F, -(A - edgeZ) * tanH, (A - edgeZ) * tanH, -edgeZ - 0.18, -edgeZ + 0.18, ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "deco", innerGaps)
+		strip(side, "EdgeLine", F, -(A + edgeZ) * tanH, (A + edgeZ) * tanH, edgeZ - 0.18, edgeZ + 0.18, ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "paint")
+		strip(side, "EdgeLine", F, -(A - edgeZ) * tanH, (A - edgeZ) * tanH, -edgeZ - 0.18, -edgeZ + 0.18, ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "paint", innerGaps)
 		-- ligne médiane en pointillés (arrêtée avant les coins et les croisements)
 		local limit = A * tanH - 10
 		local x = -limit
 		while x + 5 <= limit do
 			local cx = x + 2.5
 			if not (junction and math.abs(cx) < jw + 5) then
-				part(side, "Dash", Vector3.new(6, 0.1, 0.4), F * CFrame.new(cx, ROAD_Y + 0.05, 0), C.Line, M.SmoothPlastic, "deco")
+				paint(Vector3.new(6, 0.1, 0.4), F * CFrame.new(cx, ROAD_Y + 0.05, 0))
 			end
 			x += 18
 		end
@@ -132,12 +150,12 @@ local function buildBoulevard(folder: Instance, geo: TownKit.Geo)
 				-- passage piéton : de la place d'accueil à la promenade de l'avenue
 				for i = 0, 7 do
 					local z = -hw + 1.6 + i * (ROAD_W - 3.2) / 7
-					part(side, "Zebra", Vector3.new(12, 0.1, 1.1), F * CFrame.new(0, ROAD_Y + 0.05, z), C.Line, M.SmoothPlastic, "deco")
+					paint(Vector3.new(12, 0.1, 1.1), F * CFrame.new(0, ROAD_Y + 0.05, z))
 				end
 			else
 				-- flèches de tourne-à-gauche / droite : simple ligne "cédez" pointillée
 				for i = -3, 3 do
-					part(side, "Yield", Vector3.new(1.6, 0.1, 0.4), F * CFrame.new(i * 2.4, ROAD_Y + 0.05, -hw + 3), C.Line, M.SmoothPlastic, "deco")
+					paint(Vector3.new(1.6, 0.1, 0.4), F * CFrame.new(i * 2.4, ROAD_Y + 0.05, -hw + 3))
 				end
 			end
 		end
@@ -196,7 +214,14 @@ end
 
 -- Segment radial (s0 -> s1, x0 -> x1) dans le repère radial
 local function radialBox(parent: Instance, name: string, R: CFrame, s0: number, s1: number, x0: number, x1: number, top: number, thick: number, color: Color3, material: Enum.Material, profile: string?)
-	part(parent, name, Vector3.new(math.abs(x1 - x0), thick, math.abs(s1 - s0)), R * CFrame.new((x0 + x1) / 2, top - thick / 2, -(s0 + s1) / 2), color, material, profile)
+	local size = Vector3.new(math.abs(x1 - x0), thick, math.abs(s1 - s0))
+	local cf = R * CFrame.new((x0 + x1) / 2, top - thick / 2, -(s0 + s1) / 2)
+	if profile == "paint" then
+		-- (v9.8, CITY98) peinture au sol : construite côté client (TownStreetLife)
+		TownKit.LifeSpot("Paint", cf, 0, size)
+	else
+		part(parent, name, size, cf, color, material, profile)
+	end
 end
 
 local function buildAvenue(folder: Instance, geo: TownKit.Geo)
@@ -206,7 +231,8 @@ local function buildAvenue(folder: Instance, geo: TownKit.Geo)
 	local s0 = geo.StreetStart
 	local roadEdge = geo.Road - ROAD_W / 2
 	-- zone piétonne entre la place et le début des voies
-	radialBox(ave, "PedestrianZone", R, plazaR - 2, s0, -AVE_OUT, AVE_OUT, WALK_Y, 1.3, C.Paving, M.Cobblestone, "solid")
+	-- (v9.8 z-fighting : 0,03 sous le pavage de la place qu'elle chevauche)
+	radialBox(ave, "PedestrianZone", R, plazaR - 2, s0, -AVE_OUT, AVE_OUT, WALK_Y - 0.03, 1.3, C.Paving, M.Cobblestone, "solid")
 	-- promenade centrale (pavés roses bordés de pierre)
 	radialBox(ave, "Promenade", R, s0, roadEdge, -PROM, PROM, WALK_Y, 1.3, C.Paving, M.Cobblestone, "solid")
 	-- (v9.6 z-fighting : bande raccourcie de 0.05 aux bouts, bordures qui
@@ -220,7 +246,7 @@ local function buildAvenue(folder: Instance, geo: TownKit.Geo)
 		radialBox(ave, "Sidewalk", R, s0, geo.Inner + 0.5, sx * LANE_OUT, sx * AVE_OUT, WALK_Y, 1.3, C.Walk, M.Pavement, "solid")
 		radialBox(ave, "Curb", R, s0 - 0.05, geo.Inner + 0.55, sx * (LANE_OUT - 0.05), sx * (LANE_OUT + 0.8), WALK_Y + 0.03, 0.4, C.Curb, M.Concrete, "deco")
 		-- ligne d'arrêt au bout de la voie + flèche
-		radialBox(ave, "StopLine", R, roadEdge - 2.4, roadEdge - 1.8, sx * (PROM + 0.4), sx * (LANE_OUT - 0.4), ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "deco")
+		radialBox(ave, "StopLine", R, roadEdge - 2.4, roadEdge - 1.8, sx * (PROM + 0.4), sx * (LANE_OUT - 0.4), ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "paint")
 		-- bornes à l'entrée de la zone piétonne
 		for i = 0, 3 do
 			local x = sx * (PROM + 1.2 + i * 2.2)
@@ -250,7 +276,9 @@ local function buildAvenue(folder: Instance, geo: TownKit.Geo)
 					-- (vraies lumières : une sur trois, 4 au plus)
 					TownKit.Lamp(ave, base, TownKit.Facing(R.RightVector * -sx), lamps % 3 == 1 and lamps <= 10)
 				else
-					TownKit.Bench(ave, R * CFrame.new(sx * (PROM - 1.8), WALK_Y, -sm) * CFrame.Angles(0, math.rad(sx * 90), 0))
+					local benchCF = R * CFrame.new(sx * (PROM - 1.8), WALK_Y, -sm) * CFrame.Angles(0, math.rad(sx * 90), 0)
+					TownKit.Bench(ave, benchCF)
+					TownKit.LifeSpot("SitBench", benchCF, i * 2 + (sx > 0 and 1 or 0)) -- (v9.8, CITY98) un passant peut s'y asseoir
 				end
 			end
 		end
@@ -269,7 +297,7 @@ local function buildSideStreet(folder: Instance, geo: TownKit.Geo, slot: number)
 	local plazaR = WorldLayout.PLAZA_R
 	local s0 = geo.StreetStart
 	local roadEdge = geo.Road - ROAD_W / 2
-	radialBox(st, "PedestrianZone", R, plazaR - 2, s0, -ST_OUT, ST_OUT, WALK_Y, 1.3, C.Paving, M.Cobblestone, "solid")
+	radialBox(st, "PedestrianZone", R, plazaR - 2, s0, -ST_OUT, ST_OUT, WALK_Y - 0.03, 1.3, C.Paving, M.Cobblestone, "solid") -- (v9.8 : 0,03 sous la place)
 	radialBox(st, "Asphalt", R, s0, roadEdge + 0.5, -ST_HALF, ST_HALF, ROAD_Y, 0.7, C.Asphalt, M.Asphalt, "solid")
 	for _, sx in ipairs({ -1, 1 }) do
 		radialBox(st, "Sidewalk", R, s0, geo.Inner + 0.5, sx * ST_HALF, sx * ST_OUT, WALK_Y, 1.3, C.Walk, M.Pavement, "solid")
@@ -281,15 +309,15 @@ local function buildSideStreet(folder: Instance, geo: TownKit.Geo, slot: number)
 	-- pointillés, passage piéton, ligne d'arrêt
 	local s = s0 + 4
 	while s + 5 < geo.Inner - 10 do
-		radialBox(st, "Dash", R, s, s + 5, -0.2, 0.2, ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "deco")
+		radialBox(st, "Dash", R, s, s + 5, -0.2, 0.2, ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "paint")
 		s += 18
 	end
 	local zs = geo.Inner - 6
 	for i = 0, 5 do
 		local x = -ST_HALF + 1.4 + i * (2 * ST_HALF - 2.8) / 5
-		radialBox(st, "Zebra", R, zs - 2.5, zs + 2.5, x - 0.55, x + 0.55, ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "deco")
+		radialBox(st, "Zebra", R, zs - 2.5, zs + 2.5, x - 0.55, x + 0.55, ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "paint")
 	end
-	radialBox(st, "StopLine", R, zs - 4.2, zs - 3.6, 0.2, ST_HALF - 0.4, ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "deco")
+	radialBox(st, "StopLine", R, zs - 4.2, zs - 3.6, 0.2, ST_HALF - 0.4, ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "paint")
 	TownKit.RoadSign(st, (R * CFrame.new(ST_HALF + 1.4, WALK_Y, -(zs - 5))).Position, geo.SlotAngle(slot), Color3.fromRGB(220, 60, 70), "Diamond")
 	-- arbres d'alignement + lampadaires
 	local length = geo.Inner - 8 - (s0 + 6)
@@ -343,6 +371,291 @@ local function frontage(folder: Instance, geo: TownKit.Geo, slot: number, edge: 
 	end
 end
 
+----------------------------------------------------------------------
+-- (v9.8, CITY98) VIE DE LA RUE : emplacements du mobilier construit côté
+-- CLIENT (TownStreetLife, en flux) et chemins des passants (TownPeople).
+-- 0 pièce serveur : TownKit.LifeSpot / LifePath (voir TownKit).
+-- Conventions : `cf` au sol (dessus du trottoir ou de la chaussée), avant
+-- du mobilier = -Z local (le côté où l'on passe / lit / s'assoit).
+----------------------------------------------------------------------
+
+-- Mobilier du trottoir intérieur du boulevard (poids) ; zone "curb" = le
+-- long de la bordure (petits objets), "back" = côté pelouse (tourné vers
+-- la rue)
+local BOULEVARD_MIX = {
+	{ "Bin", 20, "curb" },
+	{ "Bench", 15, "back" },
+	{ "Planter", 11, "back" },
+	{ "Recycle", 8, "back" },
+	{ "Mailbox", 6, "curb" },
+	{ "NewsBox", 6, "curb" },
+	{ "Bollards", 5, "curb" },
+	{ "PhoneBooth", 3, "back" },
+	{ "Vending", 4, "back" },
+	{ "SpeedSign", 4, "curb" },
+	{ "DogStation", 3, "back" },
+	{ "", 15, "" },
+}
+local MIX_TOTAL = 0
+for _, row in ipairs(BOULEVARD_MIX) do
+	MIX_TOTAL += row[2] :: number
+end
+
+local function pickMix(h: number): (string, string)
+	local x = h * MIX_TOTAL
+	for _, row in ipairs(BOULEVARD_MIX) do
+		x -= row[2] :: number
+		if x < 0 then
+			return row[1] :: string, row[3] :: string
+		end
+	end
+	return "", ""
+end
+
+-- Ligne de l'anneau des passants (trottoir intérieur, à 3,2 de la bordure)
+local RING_IN = 3.2
+
+local function lifeBoulevard(geo: TownKit.Geo)
+	local m = geo.Slots
+	local A = geo.Road
+	local tanH = math.tan(geo.HalfAngle)
+	local hw = ROAD_W / 2
+	local spot = TownKit.LifeSpot
+	local rowHalf = 1.5 * TownVehicles.BAY_LENGTH
+	for k = 0, m - 1 do
+		local F = geo.SideFrame(k, A)
+		local junction = isStreet(geo, k)
+		local jw = k == 0 and LANE_OUT or ST_HALF
+		local half = A * tanH
+		local innerHalf = (A - hw) * tanH
+		local usable = innerHalf - 10
+		local hx = half * 0.25
+		-- même rangée de stationnement que buildBoulevard
+		local rowX: number? = nil
+		if k ~= 0 then
+			local cx = (hash(k, 5) - 0.5) * half * 0.9
+			if junction and math.abs(cx) < jw + 12 + rowHalf then
+				cx = (if cx < 0 then -1 else 1) * (jw + 12 + rowHalf)
+			end
+			if math.abs(cx) + rowHalf < (A - hw) * tanH - 8 then
+				rowX = cx
+			end
+		end
+		-- passage piéton au milieu du côté (face à l'allée de la parcelle, ou
+		-- décalé si une rangée de stationnement est là)
+		local zebraX: number? = nil
+		if not junction then
+			-- (côtés impairs : pas à +30, la bouche d'incendie y est)
+			for _, zx in ipairs(k % 2 == 1 and { 0, -30 } or { 0, -30, 30 }) do
+				if rowX == nil or math.abs(zx - (rowX :: number)) > rowHalf + 10 then
+					zebraX = zx
+					break
+				end
+			end
+		end
+		local zebra = zebraX ~= nil
+		local zx = zebraX or 0
+		if zebraX then
+			spot("Zebra", F * CFrame.new(zx, ROAD_Y, 0), ROAD_W * 10)
+			spot("Beacon", F * CFrame.new(zx - 7.2, WALK_Y, -hw - 1.1), k)
+			spot("Beacon", F * CFrame.new(zx + 7.2, WALK_Y, hw + 1.1) * CFrame.Angles(0, math.pi, 0), k + 1)
+		end
+		if rowX then
+			spot("ParkMeter", F * CFrame.new(rowX - rowHalf - 1.4, WALK_Y, -hw - 1.1), k)
+		end
+		-- trottoir intérieur : un emplacement tous les 10,5 studs
+		local j = 0
+		local x = -usable
+		while x <= usable do
+			j += 1
+			local free = true
+			if junction and math.abs(x) < jw + 9 then
+				free = false
+			elseif k % 2 == 1 and math.abs(x - (hx + 1.5)) < 5 then
+				free = false
+			elseif zebra and math.abs(x - zx) < 9.5 then
+				free = false
+			elseif rowX and math.abs(x - (rowX - rowHalf - 1.4)) < 3 then
+				free = false
+			end
+			if free then
+				local kind, zone = pickMix(hash(k * 31 + j, 7))
+				if kind ~= "" then
+					if zone == "curb" then
+						spot(kind, F * CFrame.new(x, WALK_Y, -hw - 1.2), k * 100 + j)
+					else
+						spot(kind, F * CFrame.new(x, WALK_Y, -hw - WALK_W + 1.3) * CFrame.Angles(0, math.pi, 0), k * 100 + j)
+					end
+				end
+			end
+			x += 10.5
+		end
+		-- plaques d'égout (milieu des voies) + avaloirs le long des bordures
+		for i = 1, 2 do
+			local mx = (hash(k, 40 + i) - 0.5) * half * 1.2
+			if not (junction and math.abs(mx) < jw + 6) and not (zebra and math.abs(mx - zx) < 8) then
+				spot("Manhole", F * CFrame.new(mx, ROAD_Y, 4.8), k * 10 + i)
+			end
+			local dx = (i == 1 and -1 or 1) * half * (0.35 + hash(k, 44 + i) * 0.3)
+			spot("Drain", F * CFrame.new(dx, ROAD_Y, hw - 0.55) * CFrame.Angles(0, math.pi, 0), k * 10 + i)
+		end
+		-- trottoir extérieur (côté parcelles) : abribus / colonne d'affiches
+		if not junction then
+			if k % 3 == 2 then
+				spot("BusShelter", F * CFrame.new(-half * 0.5 - 14, WALK_Y, hw + 3.4), k)
+				spot("Bin", F * CFrame.new(-half * 0.5 - 22.5, WALK_Y, hw + 1.2) * CFrame.Angles(0, math.pi, 0), k)
+			elseif k % 3 == 1 then
+				spot("Morris", F * CFrame.new(half * 0.5 + 12, WALK_Y, hw + 3), k)
+			end
+			-- panneau publicitaire sur la pelouse, derrière les arbres (1 côté sur 2)
+			if k % 2 == 0 then
+				local bx = (hash(k, 77) - 0.5) * half * 0.8
+				local bcf = F * CFrame.new(bx, WorldLayout.GROUND_Y, -hw - WALK_W - 12) * CFrame.Angles(0, math.pi, 0)
+				spot("Billboard", bcf, k)
+				geo.Reserve(bcf.Position, 9)
+			end
+		end
+	end
+	-- chemin des passants : l'anneau du trottoir intérieur (polygone)
+	local ring = {}
+	local r = (A - hw - RING_IN) / math.cos(geo.HalfAngle)
+	for k = 0, m - 1 do
+		local a = geo.SlotAngle(k) + geo.HalfAngle
+		table.insert(ring, geo.Origin + Vector3.new(math.sin(a) * r, WALK_Y, math.cos(a) * r))
+	end
+	TownKit.LifePath("Ring", ring, true)
+end
+
+-- Repère d'un objet posé côté `sx` d'une rue radiale, face à la chaussée
+-- (avant -Z vers l'axe de la rue)
+local function faceAxis(R: CFrame, x: number, y: number, s: number): CFrame
+	local sx = if x < 0 then -1 else 1
+	return R * CFrame.new(x, y, -s) * CFrame.Angles(0, sx * math.pi / 2, 0)
+end
+
+local function lifeAvenue(geo: TownKit.Geo)
+	local spot = TownKit.LifeSpot
+	local R = radialFrame(geo, 0)
+	local s0 = geo.StreetStart
+	local roadEdge = geo.Road - ROAD_W / 2
+	local ringS = geo.Road - ROAD_W / 2 - RING_IN -- (l'anneau traverse l'avenue ici)
+	-- pistes cyclables peintes (bord extérieur des voies) + pictogrammes
+	local b0, b1 = s0 + 3, ringS - 3.5
+	for _, sx in ipairs({ -1, 1 }) do
+		spot("BikeLane", R * CFrame.new(sx * (LANE_OUT - 1.3), ROAD_Y, -(b0 + b1) / 2), math.floor(b1 - b0))
+		-- passages piétons de l'anneau sur chaque voie
+		spot("Zebra", R * CFrame.new(sx * (PROM + LANE_OUT) / 2, ROAD_Y, -ringS) * CFrame.Angles(0, math.pi / 2, 0), math.floor((LANE_OUT - PROM) * 10))
+		-- feux tricolores (sur la promenade, avant la ligne d'arrêt)
+		spot("TrafficLight", R * CFrame.new(sx * (PROM - 0.8), WALK_Y, -(roadEdge - 1.1)) * CFrame.Angles(0, math.pi, 0), sx > 0 and 1 or 2)
+	end
+	-- zone piétonne (entre la place et le début des voies) : kiosque à
+	-- journaux, distributeurs, terrasse de café, cabine, gens qui discutent
+	local plazaR = WorldLayout.PLAZA_R
+	local pz = (plazaR + s0) / 2
+	spot("Kiosk", faceAxis(R, -(AVE_OUT - 4.5), WALK_Y, pz), 1)
+	spot("Vending", faceAxis(R, -(AVE_OUT - 1.5), WALK_Y, pz + 8), 3)
+	spot("Terrace", faceAxis(R, AVE_OUT - 5, WALK_Y, pz - 1), 1)
+	spot("PhoneBooth", faceAxis(R, AVE_OUT - 1.5, WALK_Y, pz + 9), 2)
+	spot("Bin", R * CFrame.new(-(AVE_OUT - 9), WALK_Y, -(pz - 8)), 4)
+	spot("Bin", R * CFrame.new(AVE_OUT - 9, WALK_Y, -(pz + 9)), 5)
+	spot("Chat", R * CFrame.new(-8, WALK_Y, -(pz - 5)) * CFrame.Angles(0, 0.6, 0), 5)
+	spot("Chat", R * CFrame.new(8.5, WALK_Y, -(pz + 7)) * CFrame.Angles(0, -2.2, 0), 6)
+	-- trottoirs de l'avenue : petit mobilier près de la bordure (les
+	-- passants marchent entre lui et les façades)
+	for _, sx in ipairs({ -1, 1 }) do
+		local n = 0
+		local s = s0 + 9
+		while s < ringS - 8 do
+			n += 1
+			local kinds = { "Bin", "Bollards", "Mailbox", "NewsBox", "Bin", "Planter" }
+			local kind = kinds[(n + (sx > 0 and 2 or 0)) % #kinds + 1]
+			if kind == "Planter" then
+				spot("PlanterSmall", R * CFrame.new(sx * (LANE_OUT + 1.35), WALK_Y, -s), n)
+			else
+				spot(kind, faceAxis(R, sx * (LANE_OUT + 1.25), WALK_Y, s) * CFrame.Angles(0, math.pi, 0), n)
+			end
+			s += 19
+		end
+	end
+	-- oriflammes sur les lampadaires de la promenade (mêmes positions que buildAvenue)
+	local length = roadEdge - 6 - (s0 + 6)
+	local nL = math.clamp(math.floor(length / 14), 2, 8)
+	for i = 0, nL - 1 do
+		local sm = s0 + 6 + i * length / nL + length / nL / 2
+		for _, sx in ipairs({ -1, 1 }) do
+			if (i + (sx > 0 and 1 or 0)) % 2 == 0 then
+				spot("Banner", R * CFrame.new(sx * (PROM - 1.6), WALK_Y, -sm) * CFrame.Angles(0, sx * math.pi / 2, 0), i)
+			end
+		end
+	end
+	-- panneaux des noms de rue au croisement avec le boulevard
+	spot("StreetName", R * CFrame.new(LANE_OUT + 4.4, WALK_Y, -(geo.Inner - 1.6)), 1)
+	-- chemins : la promenade (de la porte à la place) et la boucle des trottoirs
+	local function at(x: number, s: number): Vector3
+		return (R * CFrame.new(x, WALK_Y, -s)).Position
+	end
+	local gateS = geo.Gate - 18 -- (distance depuis le centre, sur l'axe)
+	TownKit.LifePath("Promenade", { at(-2.8, gateS), at(-2.8, s0 + 2), at(2.8, s0 + 2), at(2.8, gateS) }, true)
+	local walk = AVE_OUT - 3.1
+	TownKit.LifePath("AvenueLoop", { at(walk, ringS - 3), at(walk, s0 - 4), at(-walk, s0 - 4), at(-walk, ringS - 3), at(-walk, ringS), at(walk, ringS) }, true)
+end
+
+local function lifeSideStreet(geo: TownKit.Geo, slot: number, name: number)
+	local spot = TownKit.LifeSpot
+	local R = radialFrame(geo, slot)
+	local s0 = geo.StreetStart
+	local ringS = geo.Road - ROAD_W / 2 - RING_IN
+	local zs = geo.Inner - 6
+	local length = geo.Inner - 8 - (s0 + 6)
+	-- feux tricolores au passage piéton (un par sens) + passage de l'anneau
+	spot("TrafficLight", R * CFrame.new(ST_HALF + 1.1, WALK_Y, -(zs - 3.9)) * CFrame.Angles(0, math.pi, 0), 3)
+	spot("TrafficLight", R * CFrame.new(-ST_HALF - 1.1, WALK_Y, -(zs + 3.9)), 4)
+	spot("Zebra", R * CFrame.new(0, ROAD_Y, -ringS) * CFrame.Angles(0, math.pi / 2, 0), math.floor(2 * ST_HALF * 10))
+	spot("StreetName", R * CFrame.new(-(ST_OUT - 0.9), WALK_Y, -(geo.Inner - 1.6)), name)
+	-- mobilier entre les arbres (côté immeubles) : poubelles, bornes, boîte aux lettres
+	local n = math.clamp(math.floor(length / 20), 1, 7)
+	for i = 0, n - 1 do
+		local si = s0 + 6 + (i + 0.5) * length / n
+		for _, sx in ipairs({ -1, 1 }) do
+			local kinds = { "Bin", "Mailbox", "Bollards", "NewsBox", "Planter" }
+			local kind = kinds[(i * 2 + (sx > 0 and 1 or 0) + slot) % #kinds + 1]
+			if not (sx > 0 and math.abs(si - (s0 + 15)) < 6) then
+				if kind == "Planter" then
+					spot("PlanterSmall", R * CFrame.new(sx * (ST_OUT - 0.9), WALK_Y, -si), i)
+				else
+					spot(kind, faceAxis(R, sx * (ST_OUT - 0.8), WALK_Y, si), slot * 10 + i)
+				end
+			end
+		end
+	end
+	-- horodateurs au bout des rangées de stationnement (mêmes rangées que buildSideStreet)
+	spot("ParkMeter", faceAxis(R, ST_HALF + 1.1, WALK_Y, s0 + length * 0.55 - 1.5 * TownVehicles.BAY_LENGTH - 1.5), slot)
+	spot("ParkMeter", faceAxis(R, -ST_HALF - 1.1, WALK_Y, s0 + length * 0.3 + TownVehicles.BAY_LENGTH + 1.5), slot + 1)
+	-- plaques d'égout
+	for i = 1, 3 do
+		spot("Manhole", R * CFrame.new(0, ROAD_Y, -(s0 + 10 + i * length / 3.4)), slot * 10 + i)
+	end
+	-- étal (fleuriste / bouquiniste) dans la zone piétonne
+	local pz = (WorldLayout.PLAZA_R + s0) / 2
+	spot(name == 2 and "FlowerStall" or "BookStall", faceAxis(R, -(ST_OUT - 2.4), WALK_Y, pz + 3), slot)
+	spot("Chat", R * CFrame.new(4, WALK_Y, -(pz - 4)) * CFrame.Angles(0, 1.2 + slot, 0), slot + 20)
+	-- chemin des passants : boucle des deux trottoirs (détour autour des 2-roues)
+	local function at(x: number, s: number): Vector3
+		return (R * CFrame.new(x, WALK_Y, -s)).Position
+	end
+	local w = ST_HALF + 1.6
+	TownKit.LifePath("Side" .. name, {
+		at(w, s0 - 3),
+		at(w, s0 + 9),
+		at(ST_OUT - 1, s0 + 12),
+		at(ST_OUT - 1, s0 + 18),
+		at(w, s0 + 21),
+		at(w, ringS),
+		at(-w, ringS),
+		at(-w, s0 - 3),
+	}, true)
+end
+
 function TownStreets.Build(folder: Instance, geo: TownKit.Geo)
 	local streets = Instance.new("Folder")
 	streets.Name = "Streets"
@@ -354,6 +667,11 @@ function TownStreets.Build(folder: Instance, geo: TownKit.Geo)
 	frontage(streets, geo, 0, AVE_OUT + 0.2, 4)
 	frontage(streets, geo, geo.SideR, ST_OUT + 0.2, 3)
 	frontage(streets, geo, geo.SideL, ST_OUT + 0.2, 3)
+	-- (v9.8, CITY98) mobilier de rue + passants : emplacements pour le client
+	lifeBoulevard(geo)
+	lifeAvenue(geo)
+	lifeSideStreet(geo, geo.SideR, 2)
+	lifeSideStreet(geo, geo.SideL, 3)
 end
 
 return TownStreets

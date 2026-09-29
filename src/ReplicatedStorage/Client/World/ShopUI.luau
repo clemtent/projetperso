@@ -93,7 +93,7 @@ ShopUI.SHOPS = {
 	Kitchen = { Id = "Kitchen", Name = "🍰 Kitchen & Home", Icon = "🍰", Accent = Color3.fromRGB(214, 90, 110), Tabs = { "Kitchen" },
 		Blurb = "Everything for a sweet kitchen" },
 	Furniture = { Id = "Furniture", Name = "🛋️ Furniture & Decor", Icon = "🛋️", Accent = Color3.fromRGB(160, 116, 84),
-		Tabs = { "Furniture", "Decor", "Lights", "Doors", "Windows" }, Blurb = "Sofas, beds, lamps, frames, doors and windows" },
+		Tabs = { "Furniture", "Decor", "Lights", "Luxury", "Doors", "Windows" }, Blurb = "Sofas, beds, lamps, frames, doors and windows" },
 	Setup = { Id = "Setup", Name = "🖥️ Setup Store", Icon = "🖥️", Accent = Color3.fromRGB(106, 90, 210), Tabs = { "Setup", "Electronics", "Gaming" },
 		Blurb = "Desks, screens, TVs, hi-fi and gaming gear" },
 	Garden = { Id = "Garden", Name = "🪴 Garden Centre", Icon = "🪴", Accent = Color3.fromRGB(84, 160, 96), Tabs = { "Plants", "SetupPlants", "GardenDecor" },
