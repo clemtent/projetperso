@@ -867,7 +867,12 @@ function HouseBuilder.BuildRoom(self: House, slot: number)
 			prompt.Name = "SitPrompt"
 			-- (v9.8 : sur un lit / un hamac -> "S'allonger" ; SEAT98 y joue la sieste)
 			local sitId = tostring(itemModel:GetAttribute("ItemId"))
-			local lying = string.find(sitId, "Bed", 1, true) ~= nil and sitId ~= "PetBed" or sitId == "Hammock"
+			local lying = false
+			if sitId == "Hammock" then
+				lying = true
+			elseif sitId ~= "PetBed" then
+				lying = string.find(sitId, "Bed", 1, true) ~= nil
+			end
 			prompt.ActionText = if lying then Locale.T("Lie down") else Locale.T("Sit")
 			local item = HouseCommon and HouseCommon.ItemsById[tostring(itemModel:GetAttribute("ItemId"))]
 			prompt.ObjectText = item and Locale.T(item.Name) or ""

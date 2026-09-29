@@ -512,7 +512,7 @@ R.Dresser = function(b, ctx)
 	local w, depth = x1 - x0, 50
 	local body = woodOf(b, WOOD_LIGHT)
 	cabinet(b, w, depth, top - 4, body, accent(b, 1, PINK_SOFT), 3, 0, 6)
-	House3DKit.Bevel(b, 0, top - 4, 0, w + 4, 4, depth + 2.8, 1.4, lighten(body, 0.12), M.Wood)
+	House3DKit.Bevel(b, 0, top - 4, 0, w + 4, 4, depth + 1.6, 1.4, lighten(body, 0.12), M.Wood)
 	b.Top(1, 0, top, 0, w, depth)
 	b.Footprint(w + 4, depth + 3, top)
 end
@@ -4074,7 +4074,7 @@ R.SharkTank = function(b, _ctx)
 	local water = b.Box(0, 28, 0, 90, 56, 40, rgb(60, 140, 220), M.Glass)
 	water.Transparency = 0.45
 	water.CastShadow = false
-	b.Box(0, 26, -1, 90, 4, 38, rgb(240, 220, 180), M.Sand)
+	b.Box(0, 26, -1, 90, 4, 37, rgb(240, 220, 180), M.Sand)
 	for index = 0, 3 do
 		b.Egg(-34 + index * 22, 32, -12, 14, 10, 12, ({ rgb(170, 160, 180), rgb(255, 120, 130), rgb(255, 170, 90), rgb(160, 150, 170) })[index + 1], M.Slate)
 	end

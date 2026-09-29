@@ -1682,10 +1682,12 @@ end
 -- Rotation du bras (en plus de la pose "outil" : bras tendu devant)
 local function armOffset(r15: boolean, k: number): CFrame
 	if r15 then
-		return CFrame.Angles(0, math.rad(58) * k, 0) * CFrame.Angles(math.rad(48) * k, 0, 0)
+		-- bras (tendu devant, pose "outil") relevé de 35° puis ramené de 45°
+		-- vers le milieu : la main arrive devant la bouche
+		return CFrame.Angles(0, math.rad(45) * k, 0) * CFrame.Angles(math.rad(35) * k, 0, 0)
 	end
-	-- R6 : l'épaule tourne autour de son axe Z
-	return CFrame.Angles(math.rad(-30) * k, 0, math.rad(55) * k)
+	-- R6 : l'épaule tourne autour de son axe Z (lever le bras vers l'avant)
+	return CFrame.Angles(0, 0, math.rad(35) * k)
 end
 
 local function crumbs(tool: Tool, food: any)
@@ -2054,7 +2056,7 @@ function FairFx.Start(options: any?)
 	end
 	state = {
 		Acc = 0,
-		Retry = 0,
+		Frame = 0,
 		Time = 0,
 		Slow = 0,
 		Fair = nil,
@@ -2144,9 +2146,14 @@ function FairFx.Step(dt: number)
 				stepBuild(fx)
 			end
 			if dist < ANIM_R then
+				-- (manèges loin de l'avatar : 15 fois / s suffisent)
+				s.Frame += 1
 				for _, r in ipairs(fx.Rides) do
 					if r.Def.Id ~= s.RidingId then
-						stepRide(r, t)
+						local far = (r.Base.Position - focus).Magnitude > 90
+						if not far or s.Frame % 2 == 0 then
+							stepRide(r, t)
+						end
 					end
 				end
 				if fx.Ducks then

@@ -180,7 +180,7 @@ local function framing(handle: any): CFrame?
 		for _, rec in ipairs(list) do
 			minY = math.min(minY, rec.Part.Position.Y - rec.Part.Size.Y / 2)
 		end
-		low = keyboardAt and math.max(keyboardAt.Y, minY - (maxY - minY) * 0.35) or minY - (maxY - minY) * 0.2
+		low = minY - (maxY - minY) * 0.12
 	elseif keyboardAt then
 		low = keyboardAt.Y
 	else
@@ -193,14 +193,14 @@ local function framing(handle: any): CFrame?
 	local camera0 = workspace.CurrentCamera
 	local short = camera0 ~= nil and camera0.ViewportSize.Y < 500 -- (téléphone en paysage : la barre prend plus de place)
 	local lookAt = base + right * ((minX + maxX) / 2) + up * (low + height * (short and 0.42 or 0.6) - base.Y)
-	height *= (short and 1.5 or 1.3) * (gameScreen and 0.92 or 1)
+	height *= gameScreen and (short and 1.3 or 1.15) or (short and 1.5 or 1.3)
 	local vfov = math.rad(FOV)
 	local camera = workspace.CurrentCamera
 	local viewport = camera and camera.ViewportSize or Vector2.new(1280, 720)
 	local aspect = viewport.X / math.max(1, viewport.Y)
 	local hfov = 2 * math.atan(math.tan(vfov / 2) * aspect)
 	local distance = math.max((width * 0.56) / math.tan(hfov / 2), (height * 0.62) / math.tan(vfov / 2))
-	distance = math.clamp(distance, 2.2, 14)
+	distance = math.clamp(distance, gameScreen and 1.1 or 2.2, 14)
 	-- l'œil : devant le bureau, un peu au-dessus du clavier, regard légèrement plongeant
 	local eye = lookAt + front * distance + up * (distance * 0.22)
 	return CFrame.lookAt(eye, lookAt)

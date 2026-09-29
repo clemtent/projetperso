@@ -665,8 +665,8 @@ PIECES.RoundFlowerBed = function(kit, variant)
 	local radius = 2.7
 	for k = 0, 13 do
 		local a = k / 14 * math.pi * 2
-		local cf = along(math.cos(a) * radius, 0.22, math.sin(a) * radius, -math.sin(a), math.cos(a))
-		kit:Part("BedStone", Vector3.new(1.18, 0.44 + (k % 3) * 0.03, 0.42), cf, GREY_STONE:Lerp(PALE_STONE, (k % 4) / 4), M.Slate, DECO)
+		local cf = along(math.cos(a) * radius, 0.21, math.sin(a) * radius, -math.sin(a), math.cos(a))
+		kit:Part("BedStone", Vector3.new(1.18, 0.42 + (k % 3) * 0.1, 0.42), cf, GREY_STONE:Lerp(PALE_STONE, (k % 4) / 4), M.Slate, DECO)
 	end
 	kit:CylY("BedSoil", 0, 0, 0, radius * 2 - 0.3, 0.36, EARTH, M.Ground, DECO)
 	-- cercle extérieur de petites fleurs, puis un cœur plus haut
@@ -884,18 +884,18 @@ PIECES.TieredFountain = function(kit, _variant)
 	for k = 0, 7 do
 		local a = k / 8 * math.pi * 2
 		local side = 2 * r * math.tan(math.pi / 8) + 0.02 * (k % 2)
-		kit:Part("FountainRim", Vector3.new(side, 1.1 + (k % 2) * 0.03, 0.6), along(math.cos(a) * r, 0.55, math.sin(a) * r, -math.sin(a), math.cos(a)), stone, M.Limestone, SOLID)
+		kit:Part("FountainRim", Vector3.new(side, 1.1 + (k % 2) * 0.1, 0.6), along(math.cos(a) * r, 0.55, math.sin(a) * r, -math.sin(a), math.cos(a)), stone, M.Limestone, SOLID)
 	end
-	kit:CylY("FountainFloor", 0, 0, 0, r * 2 - 0.2, 0.3, GREY_STONE, M.Slate, DECO)
+	kit:CylY("FountainFloor", 0, 0.04, 0, r * 2 - 0.2, 0.28, GREY_STONE, M.Slate, DECO)
 	kit:CylY("FountainWater", 0, 0.3, 0, r * 2 - 0.3, 0.55, water, M.Glass, { Shadow = false, T = 0.3 })
 	kit:CylY("FountainColumn", 0, 0.3, 0, 1.1, 2.6, stone, M.Limestone, SOLID)
 	egg(kit, "FountainBowl1", Vector3.new(4.4, 1.0, 4.4), L(0, 2.9, 0), stone, M.Limestone)
 	kit:CylY("FountainRim1", 0, 3.2, 0, 4.5, 0.22, stone:Lerp(WHITE, 0.2), M.Limestone, DECO)
-	kit:CylY("FountainWater1", 0, 3.22, 0, 4.1, 0.26, water, M.Glass, { Shadow = false, T = 0.25 })
+	kit:CylY("FountainWater1", 0, 3.26, 0, 4.1, 0.24, water, M.Glass, { Shadow = false, T = 0.25 })
 	kit:CylY("FountainColumn2", 0, 3.45, 0, 0.6, 1.5, stone, M.Limestone, DECO)
 	egg(kit, "FountainBowl2", Vector3.new(2.2, 0.6, 2.2), L(0, 5.0, 0), stone, M.Limestone)
 	kit:CylY("FountainRim2", 0, 5.18, 0, 2.3, 0.16, stone:Lerp(WHITE, 0.2), M.Limestone, DECO)
-	kit:CylY("FountainWater2", 0, 5.2, 0, 2.0, 0.2, water, M.Glass, { Shadow = false, T = 0.25 })
+	kit:CylY("FountainWater2", 0, 5.24, 0, 2.0, 0.18, water, M.Glass, { Shadow = false, T = 0.25 })
 	kit:CylY("FountainTop", 0, 5.4, 0, 0.36, 0.8, stone, M.Limestone, DECO)
 	local spout = kit:Ball("FountainSpout", 0, 6.3, 0, 0.44, stone, M.Limestone, DECO)
 	local emitter = Instance.new("ParticleEmitter")
@@ -993,8 +993,8 @@ PIECES.KoiPond = function(kit, variant)
 	local rx, rd = 4.2, 2.7
 	for k = 0, 17 do
 		local a = k / 18 * math.pi * 2
-		local cf = along(math.cos(a) * rx, 0.22, math.sin(a) * rd, -math.sin(a) * rx, math.cos(a) * rd)
-		kit:Part("PondStone", Vector3.new(1.3, 0.44 + (k % 3) * 0.04, 0.7), cf, GREY_STONE:Lerp(PALE_STONE, rng:NextNumber(0, 0.7)), M.Slate, DECO)
+		local cf = along(math.cos(a) * rx, 0.21, math.sin(a) * rd, -math.sin(a) * rx, math.cos(a) * rd)
+		kit:Part("PondStone", Vector3.new(1.3, 0.42 + (k % 3) * 0.1, 0.7), cf, GREY_STONE:Lerp(PALE_STONE, rng:NextNumber(0, 0.7)), M.Slate, DECO)
 	end
 	egg(kit, "PondBed", Vector3.new(rx * 2 - 0.2, 0.3, rd * 2 - 0.2), L(0, -0.05, 0), Color3.fromRGB(52, 76, 70), M.Slate)
 	local water = kit:Part("PondWater", Vector3.new(rx * 2 - 0.4, 0.06, rd * 2 - 0.4), L(0, 0.3, 0), Color3.fromRGB(70, 130, 140), M.Glass, { Shadow = false, T = 0.35 })

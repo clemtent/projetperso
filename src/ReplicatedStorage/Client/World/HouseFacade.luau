@@ -28,10 +28,24 @@
 	"lueur" de la couleur de la pièce tant qu'elle n'est pas construite).
 	Perron à marches : rampe de collision invisible (on ne bute jamais).
 
+	(v9.8 HOUSE98) :
+	  - portes 6,5 x 9,5 (la tête ne touche plus), porte d'entrée DOUBLE,
+	    perrons plus grands ;
+	  - plaque au nom (bois, liseré doré, plaque gravée) toujours SOUS les
+	    avant-toits et AU-DESSUS de la porte, rien devant : chaumière = la
+	    travée de l'entrée monte au-dessus du toit (les festons ne cachent plus
+	    le nom) ; maison de ville = entre le bandeau et la fenêtre du palier ;
+	    loft = debout sur l'auvent ; manoir = panneau du balcon central ;
+	  - côté JARDIN : mur du fond percé de vraies fenêtres (une par pièce,
+	    même trou que la coque : BackWindowRect), fenêtres de palier, porte
+	    double de derrière + auvent + perron à marches (rampe invisible).
+
 	API :
 	  HouseFacade.Build(kit, size, snapshot, looks) -> Built
 	    looks = { Wall, Roof, Pattern, Garden, Rooms (par emplacement), Name }
-	    Built = { Door, Hinge, Lock, Fills[slot], Chimneys, Style, Colors }
+	    Built = { Door, Hinge, Lock, Fills[slot], Chimneys, Style, Colors,
+	      Leaves, BackLeaves (battants), BackFills[slot] }
+	  HouseFacade.WindowRect / BackWindowRect(size, column, floor) -> { x0, x1, y0, y1 }
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -1046,7 +1060,7 @@ STYLES.Cottage = function(ctx)
 	local gateX = 0
 	local stones = { { gateX, -20 }, { gateX * 0.8 + gx * 0.2, -16.5 }, { gateX * 0.5 + gx * 0.5, -13 }, { gateX * 0.2 + gx * 0.8, -10 }, { gx, foot - 1.2 } }
 	for index, s in ipairs(stones) do
-		ctx.G:CylY("SteppingStone", s[1], -0.14, s[2], 2.6 - index * 0.12, 0.25, P.Stone:Lerp(P.StoneDark, (index % 2) * 0.4), M.Slate, { Shadow = false })
+		ctx.G:CylY("SteppingStone", s[1], -0.13, s[2], 2.6 - index * 0.12, 0.3, P.Stone:Lerp(P.StoneDark, (index % 2) * 0.4), M.Slate, { Shadow = false })
 	end
 	path(ctx, { { gx, foot - 0.5 }, { gx, foot - 2.5 } }, 3, P.Pave, M.Pebble)
 	path(ctx, { { gateX, -29.5 }, { gateX, -21.5 } }, 3, P.Pave, M.Pebble)

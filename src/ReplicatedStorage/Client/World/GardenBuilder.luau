@@ -427,6 +427,9 @@ local function makeFlower(flowerId: string, stage: any, opts: FlowerOptions): Mo
 	model.Name = "Flower_" .. id
 	local root = newPart(model, "Root", Vector3.new(0.2, 0.2, 0.2), CFrame.new(0, 0.1, 0), WHITE, M.SmoothPlastic)
 	root.Transparency = 1
+	-- (v9.8 : pivot = bas du modèle, comme annoncé ; avant, PivotTo enfonçait
+	-- la fleur de 0,1 stud : nénuphars au ras de la terre -> scintillement)
+	root.PivotOffset = CFrame.new(0, -0.1, 0)
 	model.PrimaryPart = root
 	local height = buildPlant(model, id, stageN, opts)
 	-- balance des fleurs prêtes : plus grandes, étincelles (option Fx)
@@ -835,7 +838,7 @@ function GardenBuilder._buildBed(self: Garden, folder: Instance, index: number, 
 		soil.CastShadow = false
 		-- sillons
 		for k = -1, 1 do
-			newPart(model, "Furrow", Vector3.new(w - 2 * PLANK - 0.4, 0.06, 0.18), cf * CFrame.new(0, SOIL_TOP + 0.02, k * 0.95), SOIL_DARK, M.Ground)
+			newPart(model, "Furrow", Vector3.new(w - 2 * PLANK - 0.4, 0.06, 0.18), cf * CFrame.new(0, SOIL_TOP + 0.005, k * 0.95), SOIL_DARK, M.Ground)
 		end
 		-- touffes d'herbe aux coins du fond
 		for _, sx in ipairs({ -1, 1 }) do
@@ -919,7 +922,7 @@ local function buildPath(folder: Instance, cf: CFrame)
 	local length = 20
 	newPart(folder, "Path", Vector3.new(length, 0.12, PATH_W), cf * CFrame.new(0, 0.06, 0), GRAVEL, M.Pebble)
 	for _, side in ipairs({ -1, 1 }) do
-		newPart(folder, "PathEdge", Vector3.new(length, 0.2, 0.22), cf * CFrame.new(0, 0.1, side * (PATH_W / 2 + 0.1)), Color3.fromRGB(196, 184, 170), M.Slate)
+		newPart(folder, "PathEdge", Vector3.new(length, 0.2, 0.22), cf * CFrame.new(0, 0.14, side * (PATH_W / 2 + 0.1)), Color3.fromRGB(196, 184, 170), M.Slate)
 	end
 	local stones = 6
 	for k = 1, stones do
@@ -1031,7 +1034,7 @@ end
 -- Arrosoir
 local function buildCan(folder: Instance, canCF: CFrame)
 	local can = Color3.fromRGB(96, 190, 220)
-	local body = newPart(folder, "CanBody", Vector3.new(0.9, 0.9, 0.9), canCF * CFrame.new(0, 0.45, 0) * CFrame.Angles(0, 0, math.pi / 2), can, M.Metal)
+	local body = newPart(folder, "CanBody", Vector3.new(0.9, 0.9, 0.9), canCF * CFrame.new(0, 0.53, 0) * CFrame.Angles(0, 0, math.pi / 2), can, M.Metal)
 	body.Shape = Enum.PartType.Cylinder
 	tube(folder, "CanSpout", (canCF * CFrame.new(0.3, 0.35, 0)).Position, (canCF * CFrame.new(1.1, 0.95, 0)).Position, 0.14, can, M.Metal)
 	disc(folder, "CanRose", 0.3, 0.08, canCF * CFrame.new(1.15, 1.0, 0) * CFrame.Angles(0, 0, rad(-50)), lerp(can, WHITE, 0.3), M.Metal)
