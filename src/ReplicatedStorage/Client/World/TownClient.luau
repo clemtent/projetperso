@@ -117,6 +117,7 @@ local locLabels: { Instance } = {} -- panneaux de la ville à traduire (attribut
 local LOC_EVERY = 2
 local deskWired = false
 local plazaFxWarned = false -- (v9.7) une seule alerte si TownPlazaFx.Step échoue
+local fairFxWarned = false -- (v9.8) une seule alerte si FairFx.Step échoue
 
 ----------------------------------------------------------------------
 -- Utilitaires
@@ -435,9 +436,10 @@ local KEEP_GUIS: { [string]: boolean } = {
 	BubbleChat = true,
 	Chat = true,
 	Freecam = true,
-	DeskModeGui = true,
+	DeskModeGui = true, -- v9.5 🖥️ barre "Se lever" du bureau (DeskMode)
+	FairGui = true, -- v9.8 🍦 menu des stands, badge du boost, bouton Croquer (FairFx, FAIR98)
 	GardenEditGui = true, -- v9.8 🌷 mode édition du jardin (GardenEdit, GARDEN98)
-	TownGraphicsGui = true, -- v9.8 🎨 fenêtre Graphismes en ville (TownGraphics, REALISM98) -- v9.5 🖥️ barre "Se lever" du bureau (DeskMode)
+	TownGraphicsGui = true, -- v9.8 🎨 fenêtre Graphismes en ville (TownGraphics, REALISM98)
 	TownInventoryGui = true, -- v9.6 plateau inventaire 3D (FurnitureEdit, PLACE96)
 	TownShopGui = true, -- v9.6 catalogue des magasins (ShopUI, SHOPS96)
 	CarGui = true, -- v9.6 conduite (CarClient, GARAGE96)
@@ -881,6 +883,15 @@ local function step(dt: number)
 			warn("[Town] TownPlazaFx.Step : " .. tostring(errFx))
 		end
 	end
+	-- v9.8 🎡 fête foraine (FairFx : 30 Hz au plus ; le manège où l'on est assis : à chaque image)
+	local fairFx = optionalModule("FairFx")
+	if fairFx and type(fairFx.Step) == "function" then
+		local okFair, errFair = pcall(fairFx.Step, dt)
+		if not okFair and not fairFxWarned then
+			fairFxWarned = true
+			warn("[Town] FairFx.Step : " .. tostring(errFair))
+		end
+	end
 	if clocks.Loc >= LOC_EVERY then
 		clocks.Loc = 0
 		pcall(localizeTown)
@@ -946,6 +957,13 @@ local function step(dt: number)
 		local greenery = optionalModule("TownGreenery")
 		if greenery and root and type(greenery.Step) == "function" then
 			pcall(greenery.Step, root.Position)
+		end
+		-- v9.8 🏙️ vie de la rue (CITY98)
+		for _, name in ipairs({ "TownStreetLife", "TownPeople" }) do
+			local lifeMod = optionalModule(name)
+			if lifeMod and root and type(lifeMod.Step) == "function" then
+				pcall(lifeMod.Step, root.Position)
+			end
 		end
 	end
 	if clocks.Tag >= TAG_EVERY then
@@ -1243,12 +1261,30 @@ local function enter(options: any)
 				warn("[Town] TownPlazaFx.Start : " .. tostring(errFx))
 			end
 		end
+		-- v9.8 🎡 fête foraine + 🍦 nourriture (FairFx, FAIR98)
+		local fairFx = optionalModule("FairFx")
+		if fairFx and type(fairFx.Start) == "function" then
+			local okFair, errFair = pcall(fairFx.Start, { Toast = toast })
+			if not okFair then
+				warn("[Town] FairFx.Start : " .. tostring(errFair))
+			end
+		end
 		-- v9.7 🌳 nature : détails de près (arbres, lac, aire de jeux) côté client (NATURE97)
 		local greenery = optionalModule("TownGreenery")
 		if greenery and type(greenery.Start) == "function" then
 			local okGreen, errGreen = pcall(greenery.Start)
 			if not okGreen then
 				warn("[Town] TownGreenery.Start : " .. tostring(errGreen))
+			end
+		end
+		-- v9.8 🏙️ vie de la rue : mobilier en flux + passants (CITY98)
+		for _, name in ipairs({ "TownStreetLife", "TownPeople" }) do
+			local lifeMod = optionalModule(name)
+			if lifeMod and type(lifeMod.Start) == "function" then
+				local okL, errL = pcall(lifeMod.Start)
+				if not okL then
+					warn("[Town] " .. name .. ".Start : " .. tostring(errL))
+				end
 			end
 		end
 		-- v9.8 🪑 s'asseoir pour de vrai : chaise tirée, transitions, animations d'attente (SEAT98)
@@ -1430,10 +1466,22 @@ local function teardown()
 	if plazaFx and type(plazaFx.Stop) == "function" then
 		pcall(plazaFx.Stop)
 	end
+	-- v9.8 🎡 fête foraine : pièces locales détruites (FairFx)
+	local fairFx = optionalModule("FairFx")
+	if fairFx and type(fairFx.Stop) == "function" then
+		pcall(fairFx.Stop)
+	end
 	-- v9.7 🌳 nature : détails de près détruits (NATURE97)
 	local greenery = optionalModule("TownGreenery")
 	if greenery and type(greenery.Stop) == "function" then
 		pcall(greenery.Stop)
+	end
+	-- v9.8 🏙️ vie de la rue : mobilier + passants détruits (CITY98)
+	for _, name in ipairs({ "TownStreetLife", "TownPeople" }) do
+		local lifeMod = optionalModule(name)
+		if lifeMod and type(lifeMod.Stop) == "function" then
+			pcall(lifeMod.Stop)
+		end
 	end
 	-- v9.8 🎨 fenêtre Graphismes fermée (REALISM98)
 	local gfx = optionalModule("TownGraphics")

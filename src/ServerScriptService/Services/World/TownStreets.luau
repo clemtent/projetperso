@@ -16,6 +16,12 @@
 	  - mobilier : arbres d'alignement, lampadaires (quelques vraies
 	    lumières), bancs, poubelles, bouches d'incendie, voitures garées.
 	Construit une fois par TownMap.Build.
+	v9.8 (CITY98) : les rues PLEINES DE VIE. Le serveur note seulement les
+	emplacements (TownKit.LifeSpot, 0 pièce) du mobilier que le client
+	construit en flux (TownStreetLife : poubelles, bacs de tri, bancs,
+	abribus, kiosque, cabines, distributeurs, feux tricolores, passages
+	piétons, pistes cyclables, oriflammes, plaques de rue...) et les
+	chemins des passants (TownKit.LifePath -> TownPeople).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -206,7 +212,8 @@ local function buildAvenue(folder: Instance, geo: TownKit.Geo)
 	local s0 = geo.StreetStart
 	local roadEdge = geo.Road - ROAD_W / 2
 	-- zone piétonne entre la place et le début des voies
-	radialBox(ave, "PedestrianZone", R, plazaR - 2, s0, -AVE_OUT, AVE_OUT, WALK_Y, 1.3, C.Paving, M.Cobblestone, "solid")
+	-- (v9.8 z-fighting : 0,03 sous le pavage de la place qu'elle chevauche)
+	radialBox(ave, "PedestrianZone", R, plazaR - 2, s0, -AVE_OUT, AVE_OUT, WALK_Y - 0.03, 1.3, C.Paving, M.Cobblestone, "solid")
 	-- promenade centrale (pavés roses bordés de pierre)
 	radialBox(ave, "Promenade", R, s0, roadEdge, -PROM, PROM, WALK_Y, 1.3, C.Paving, M.Cobblestone, "solid")
 	-- (v9.6 z-fighting : bande raccourcie de 0.05 aux bouts, bordures qui
@@ -271,7 +278,7 @@ local function buildSideStreet(folder: Instance, geo: TownKit.Geo, slot: number)
 	local plazaR = WorldLayout.PLAZA_R
 	local s0 = geo.StreetStart
 	local roadEdge = geo.Road - ROAD_W / 2
-	radialBox(st, "PedestrianZone", R, plazaR - 2, s0, -ST_OUT, ST_OUT, WALK_Y, 1.3, C.Paving, M.Cobblestone, "solid")
+	radialBox(st, "PedestrianZone", R, plazaR - 2, s0, -ST_OUT, ST_OUT, WALK_Y - 0.03, 1.3, C.Paving, M.Cobblestone, "solid") -- (v9.8 : 0,03 sous la place)
 	radialBox(st, "Asphalt", R, s0, roadEdge + 0.5, -ST_HALF, ST_HALF, ROAD_Y, 0.7, C.Asphalt, M.Asphalt, "solid")
 	for _, sx in ipairs({ -1, 1 }) do
 		radialBox(st, "Sidewalk", R, s0, geo.Inner + 0.5, sx * ST_HALF, sx * ST_OUT, WALK_Y, 1.3, C.Walk, M.Pavement, "solid")
@@ -607,7 +614,7 @@ local function lifeSideStreet(geo: TownKit.Geo, slot: number, name: number)
 	spot("ParkMeter", faceAxis(R, -ST_HALF - 1.1, WALK_Y, s0 + length * 0.3 + TownVehicles.BAY_LENGTH + 1.5), slot + 1)
 	-- plaques d'égout
 	for i = 1, 3 do
-		spot("Manhole", R * CFrame.new((i % 2 == 0 and -1 or 1) * 1.3, ROAD_Y, -(s0 + 10 + i * length / 3.4)), slot * 10 + i)
+		spot("Manhole", R * CFrame.new(0, ROAD_Y, -(s0 + 10 + i * length / 3.4)), slot * 10 + i)
 	end
 	-- étal (fleuriste / bouquiniste) dans la zone piétonne
 	local pz = (WorldLayout.PLAZA_R + s0) / 2

@@ -272,7 +272,8 @@ local function buildPlanter(m: Model, F: CFrame, seed: number)
 		egg(m, "Shrub", F * CFrame.new(-1.3 + i * 2.6, 2.0, 0), Vector3.new(2.3, 1.3, 1.2), rgb(84, 150, 84):Lerp(rgb(110, 176, 96), i), M.Grass)
 	end
 	for i = 0, 2 do
-		egg(m, "Flowers", F * CFrame.new(-1.9 + i * 1.9, 2.55, (hash(seed, i) - 0.5) * 0.5), Vector3.new(1.1, 0.55, 0.9), FLOWERS[(seed + i) % #FLOWERS + 1], M.SmoothPlastic)
+		local dz = ({ -0.12, 0.1, 0 })[(seed + i) % 3 + 1]
+		egg(m, "Flowers", F * CFrame.new(-1.8 + i * 1.8, 2.55, dz), Vector3.new(1.1, 0.55, 0.8), FLOWERS[(seed + i) % #FLOWERS + 1], M.SmoothPlastic)
 	end
 end
 
@@ -515,7 +516,7 @@ local function buildSignpost(m: Model, F: CFrame, _seed: number)
 	local arrows = {
 		{ "🏰 Dopamine Town", -1, 7.8 },
 		{ "🛒 MégaDopa", 1, 6.8 },
-		{ "🎡 " .. Locale.T("Fun fair"), -1, 5.8 },
+		{ "🎡 Fun fair", -1, 5.8 },
 	}
 	for _, a in ipairs(arrows) do
 		local dir = a[2] :: number

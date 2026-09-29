@@ -50,8 +50,8 @@ local TAILP_INV = TAILP:Inverse()
 -- aile repliée (au repos) / dépliée (en vol : envergure ~2 studs, corde
 -- à plat) ; les barres noires suivent leur aile
 local WING_FOLD = {
-	CFrame.new(-0.22, 0.5, 0.12) * CFrame.Angles(math.rad(10), 0, 0),
-	CFrame.new(0.22, 0.5, 0.12) * CFrame.Angles(math.rad(10), 0, 0),
+	CFrame.new(-0.235, 0.5, 0.12) * CFrame.Angles(math.rad(10), 0, 0),
+	CFrame.new(0.235, 0.5, 0.12) * CFrame.Angles(math.rad(10), 0, 0),
 }
 local WING_OPEN = {
 	CFrame.fromMatrix(Vector3.new(-0.62, 0.6, -0.02), Vector3.new(0, 1, 0), Vector3.new(0, 0, -1)),
@@ -128,14 +128,14 @@ local function buildBird(parent: Instance, bird: Bird, seed: number, all: { Base
 	end
 	-- corps fuselé (légèrement relevé vers l'avant) + poitrail
 	add("Body", Vector3.new(0.5, 0.48, 0.98), CFrame.new(0, 0.44, 0.04) * CFrame.Angles(math.rad(12), 0, 0), plume.Body, "Egg", 0)
-	add("Breast", Vector3.new(0.46, 0.46, 0.52), CFrame.new(0, 0.5, -0.22), plume.Breast, "Egg", 0)
+	add("Breast", Vector3.new(0.42, 0.46, 0.52), CFrame.new(0, 0.5, -0.22), plume.Breast, "Egg", 0)
 	-- queue (éventail + bande sombre au bout)
 	add("Tail", Vector3.new(0.3, 0.06, 0.46), CFrame.new(0, 0.44, 0.62) * CFrame.Angles(math.rad(-8), 0, 0), plume.Body, nil, 6)
 	add("TailBand", Vector3.new(0.31, 0.07, 0.1), CFrame.new(0, 0.42, 0.82) * CFrame.Angles(math.rad(-8), 0, 0), rgb(46, 46, 58), nil, 6)
 	-- cou irisé (vert / violet, un peu brillant) + tête + bec + cire + yeux
-	local neck = add("Neck", Vector3.new(0.3, 0.34, 0.3), CFrame.new(0, 0.7, -0.32), rgb(86, 140, 116), "Egg", 1)
+	local neck = add("Neck", Vector3.new(0.3, 0.34, 0.3), CFrame.new(0, 0.7, -0.3), rgb(86, 140, 116), "Egg", 1)
 	neck.Reflectance = 0.25
-	local patch = add("NeckPatch", Vector3.new(0.32, 0.2, 0.28), CFrame.new(0, 0.62, -0.3), rgb(132, 92, 156), "Egg", 1)
+	local patch = add("NeckPatch", Vector3.new(0.34, 0.2, 0.24), CFrame.new(0, 0.6, -0.3), rgb(132, 92, 156), "Egg", 1)
 	patch.Reflectance = 0.25
 	add("Head", Vector3.new(0.28, 0.28, 0.28), CFrame.new(0, 0.9, -0.42), plume.Head, "Ball", 1)
 	add("Beak", Vector3.new(0.07, 0.07, 0.18), CFrame.new(0, 0.87, -0.6), rgb(52, 46, 50), "Egg", 1)
@@ -146,8 +146,8 @@ local function buildBird(parent: Instance, bird: Bird, seed: number, all: { Base
 	-- ailes repliées + 2 barres noires chacune
 	for i, sx in ipairs({ -1, 1 }) do
 		local kind = i == 1 and 2 or 3
-		add("Wing", Vector3.new(0.12, 0.32, 0.78), CFrame.new(sx * 0.22, 0.5, 0.12) * CFrame.Angles(math.rad(10), 0, 0), plume.Wing, "Egg", kind)
-		add("WingBar", Vector3.new(0.04, 0.06, 0.26), CFrame.new(sx * 0.283, 0.49, 0.16) * CFrame.Angles(math.rad(10), 0, 0), rgb(40, 40, 50), nil, kind)
+		add("Wing", Vector3.new(0.12, 0.32, 0.78), CFrame.new(sx * 0.235, 0.5, 0.12) * CFrame.Angles(math.rad(10), 0, 0), plume.Wing, "Egg", kind)
+		add("WingBar", Vector3.new(0.04, 0.06, 0.26), CFrame.new(sx * 0.298, 0.49, 0.16) * CFrame.Angles(math.rad(10), 0, 0), rgb(40, 40, 50), nil, kind)
 	end
 	-- pattes rouges + doigts
 	for i, sx in ipairs({ -1, 1 }) do
@@ -407,7 +407,17 @@ function TownPigeons.Step(P: any, dt: number, avatar: Vector3?)
 		elseif mode == "walk" then
 			local step = Vector3.new(-math.sin(bird.Yaw), 0, -math.cos(bird.Yaw)) * (1.3 * dt)
 			local nextPos = bird.Pos + step
-			if (nextPos - bird.Home).Magnitude > 5.5 then
+			-- (on ne marche pas dans un autre pigeon : on se détourne)
+			local blocked = false
+			for _, other: Bird in ipairs(P.List) do
+				if other ~= bird and other.Mode ~= "fly" and (other.Pos - nextPos).Magnitude < 0.8 and (other.Pos - bird.Pos).Magnitude > (other.Pos - nextPos).Magnitude then
+					blocked = true
+					break
+				end
+			end
+			if blocked then
+				bird.Yaw += dt * 4
+			elseif (nextPos - bird.Home).Magnitude > 5.5 then
 				bird.Yaw = yawTo(bird.Pos, bird.Home, bird.Yaw)
 			else
 				bird.Pos = nextPos

@@ -777,10 +777,15 @@ end
 -- son allée ; repère : centre de la ville, 8 parcelles, tailles fixes)
 local function inKeepOut(geo: TownKit.Geo, p: Vector3, r: number): boolean
 	local rel = p - geo.Origin
-	if rel.X > -58 - r and rel.X < 58 + r and rel.Z > -179 - r and rel.Z < -97 + r then
+	-- fête foraine + allée derrière la mairie (FAIR98 : x -55..55, z -176..-92)
+	if rel.X > -58 - r and rel.X < 58 + r and rel.Z > -179 - r and rel.Z < -89 + r then
 		return true
 	end
+	-- chemins latéraux (x = ±39) et axe central jusqu'à la mairie
 	if math.abs(rel.X) < 10 + r and rel.Z > -100 - r and rel.Z < -60 + r then
+		return true
+	end
+	if math.abs(math.abs(rel.X) - 39) < 4 + r and rel.Z > -100 - r and rel.Z < -70 + r then
 		return true
 	end
 	return false
