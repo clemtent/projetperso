@@ -1854,7 +1854,7 @@ local function plaque(kind: string)
 			local frameColor = kind == "Calendar" and lighten(back, 0.3) or back
 			House3DKit.Frame(b, 0, 6 - g, (4 + 2 * g) / 2, 88 + 2 * g, 88 + 2 * g, 5 + g, 4 + 2 * g, frameColor, M.Wood)
 			-- filet doré : ses bords extérieurs se cachent dans le cadre (pas de faces jointives)
-			House3DKit.Frame(b, 0, 11 - g, (4 + 5.5 * g) / 2, 78 + 2 * g, 78 + 2 * g, 1.2 + g, 4 + 0.5 * g, GOLD, M.Metal)
+			House3DKit.Frame(b, 0, 11 - g, (4 + 5.5 * g) / 2, 78 + 2 * g, 78 + 2 * g, 1.2 + 2 * g, 4 + 0.5 * g, GOLD, M.Metal)
 			local cover = b.Box(0, 12.2, 3 * g, 75.6, 75.6, 0.4, rgb(230, 240, 255), M.Glass)
 			cover.Transparency = 0.88
 			cover.Reflectance = 0.2
@@ -2933,7 +2933,7 @@ R.MacaronTower = function(b, _ctx)
 	b.Cyl(0, 0, 0, 60, 4, GOLD, M.Metal).Reflectance = 0.3
 	for index = 0, 5 do
 		local r = 24 - index * 4
-		local n = math.max(1, 8 - index)
+		local n = math.max(1, 7 - index)
 		local y = 4 + index * 12
 		b.Cyl(0, y, 0, r * 2, 10, lighten(colors[index % 4 + 1], 0.1))
 		for m = 0, n - 1 do

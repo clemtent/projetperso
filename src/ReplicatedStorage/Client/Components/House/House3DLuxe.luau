@@ -1606,14 +1606,15 @@ end
 R.AquariumWall = function(b, _ctx)
 	local depth = 36
 	local frame = b.Map(IRON_DARK)
-	b.Box(0, 0, 0, 98, 14, depth, b.Map(rgb(80, 64, 50)), M.Wood)
-	b.Box(0, 14, 0, 98, 4, depth, frame, M.Metal)
-	b.Box(0, 94, 0, 98, 6, depth, frame, M.Metal)
+	-- (v9.8 z-fighting : le dos recule d'une unité, il ne touche plus le mur de la pièce)
+	b.Box(0, 0, 0.5, 98, 14, depth - 1, b.Map(rgb(80, 64, 50)), M.Wood)
+	b.Box(0, 14, 0.5, 98, 4, depth - 1, frame, M.Metal)
+	b.Box(0, 94, 0.5, 98, 6, depth - 1, frame, M.Metal)
 	for _, sx in ipairs({ -1, 1 }) do
-		b.Box(sx * 47, 18, 0, 4, 76, depth, frame, M.Metal)
+		b.Box(sx * 47, 18, 0.5, 4, 76, depth - 1, frame, M.Metal)
 	end
 	-- eau + fond + sable
-	b.Box(0, 18, -depth / 2 + 1, 90, 76, 2, WATER_DEEP, M.SmoothPlastic)
+	b.Box(0, 18, -depth / 2 + 2, 90, 76, 2, WATER_DEEP, M.SmoothPlastic)
 	glass(b.Box(0, 18, 0, 90, 76, depth - 4, b.Map(WATER), M.Glass), 0.55)
 	b.Box(0, 18, 0, 89, 6, depth - 5, rgb(236, 214, 160), M.Sand)
 	-- coraux, algues, rochers
