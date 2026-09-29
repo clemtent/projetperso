@@ -796,7 +796,8 @@ local function buildGui()
 	local gui = newInstance("ScreenGui", { Name = GUI_NAME, ResetOnSpawn = false, IgnoreGuiInset = false, DisplayOrder = 6, Enabled = true }, playerGui)
 	state.Gui = gui
 	-- bouton 🌷 Jardin (à gauche)
-	local toggle = button(gui, "GardenToggle", "🌷 " .. Locale.T("Garden"), GREEN, UDim2.fromOffset(128, 46), UDim2.new(0, 12, 0.56, 0), Vector2.new(0, 0.5))
+	-- (à gauche, sous le bouton "Retour" : la colonne des voitures du HUD est plus bas)
+	local toggle = button(gui, "GardenToggle", "🌷 " .. Locale.T("Garden"), GREEN, UDim2.fromOffset(128, 46), UDim2.new(0, 12, 0.3, 0), Vector2.new(0, 0.5))
 	toggle.Visible = false
 	toggle.Activated:Connect(function()
 		GardenEdit.SetEnabled(not state.Active)
@@ -805,7 +806,7 @@ local function buildGui()
 	-- barre du haut (mode édition)
 	local top = newInstance("Frame", {
 		Name = "Top", BackgroundColor3 = CARD, BackgroundTransparency = 0.05, BorderSizePixel = 0, Visible = false,
-		AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 58), Size = UDim2.new(0.92, 0, 0, 58),
+		AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 178), Size = UDim2.new(0.92, 0, 0, 58), -- (sous le compteur et la plaque de la maison du HUD)
 	}, gui)
 	newInstance("UISizeConstraint", { MaxSize = Vector2.new(760, 58) }, top)
 	corner(top, 14)
@@ -826,9 +827,10 @@ local function buildGui()
 	-- boutons quand on tient un objet
 	local actions = newInstance("Frame", {
 		Name = "Actions", BackgroundTransparency = 1, Visible = false,
-		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0), Size = UDim2.fromOffset(130, 220),
+		AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -236), Size = UDim2.fromOffset(4 * 130 + 3 * 8, 46),
 	}, gui)
-	newInstance("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, actions)
+	-- (rangée au-dessus du plateau : les boutons du HUD à droite restent libres)
+	newInstance("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, actions)
 	local specs = {
 		{ "Drop", "✅ " .. Locale.T("Place"), GREEN_DARK, drop },
 		{ "Rotate", "🔄 " .. Locale.T("Rotate"), Color3.fromRGB(96, 150, 230), function() rotate(STEP) end },
@@ -1037,7 +1039,7 @@ function GardenEdit.SetEnabled(on: boolean)
 			state.Panel.Visible = true
 		end
 		if state.Toggle then
-			state.Toggle.Text = "✅ " .. Locale.T("Done")
+			state.Toggle.Visible = false -- (le bouton ✅ Terminé est dans la barre du haut)
 		end
 		connectInputs()
 		pcall(function()
