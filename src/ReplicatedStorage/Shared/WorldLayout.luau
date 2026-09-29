@@ -670,8 +670,8 @@ end
 -- du sol de la fête (FairRides.GROUND au-dessus du pré), LookVector vers
 -- la place (l'entrée) ; x local ∈ [-FAIR_W/2, FAIR_W/2], z ∈ [-FAIR_D/2, FAIR_D/2].
 WorldLayout.FAIR_W = 110
-WorldLayout.FAIR_D = 76
-WorldLayout.FAIR_NEAR = 100
+WorldLayout.FAIR_D = 72
+WorldLayout.FAIR_NEAR = 104 -- (couloir de ~14 studs derrière la mairie)
 WorldLayout.FAIR_GROUND = 0.15
 
 function WorldLayout.FairCFrame(): CFrame

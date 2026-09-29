@@ -13,7 +13,7 @@
 	   Reflet "vivant" : une SurfaceGui sur la face du miroir, avec une
 	   ViewportFrame qui filme un MONDE RÉFLÉCHI :
 	     (SurfaceGui dans le PlayerGui, Adornee = "Mirror" : rien dans le Workspace)
-	     - le décor proche (pièces de la pièce / maison, devant le plan du
+	     - le décor proche (pièces de la maison / de la vue, devant le plan du
 	       miroir, ≤ 36 studs, ≤ 650 pièces) cloné UNE fois et réfléchi par
 	       rapport au plan (mis en cache, reconstruit si la pièce change) ;
 	     - une copie légère du personnage local (Humanoid + vêtements, sans
@@ -325,13 +325,14 @@ local function cloneVisual(part: BasePart): BasePart?
 	return c
 end
 
--- Racine de la zone à copier : "Interiors" de la maison, sinon l'enfant du Workspace
+-- Racine de la zone à copier : la maison (Interiors + Exterior : le mur de
+-- façade d'une pièce est dans Exterior), sinon l'enfant du Workspace
 local function scopeOf(part: BasePart): Instance?
 	local node: Instance? = part.Parent
 	local top: Instance? = nil
 	while node and node ~= workspace do
 		if node.Name == "Interiors" then
-			return node
+			return node.Parent or node
 		end
 		top = node
 		node = node.Parent

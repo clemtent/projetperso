@@ -925,17 +925,29 @@ local function buildGrounds(folder: Instance, F: CFrame)
 	model.Name = "Grounds"
 	model.Parent = folder
 	-- allée en planches (de l'arche à la grande roue) + bordures
-	local z0, z1 = -FairRides.FAIR_HALF_D - 12, 14
+	local z0, z1 = -FairRides.FAIR_HALF_D - 5, 14
 	local len = z1 - z0
 	newPart(model, "Alley", Vector3.new(11, 0.12, len), F * CFrame.new(0, 0.06, (z0 + z1) / 2), Color3.fromRGB(214, 170, 122), M.WoodPlanks)
 	for _, sx in ipairs({ -1, 1 }) do
 		newPart(model, "AlleyEdge", Vector3.new(0.5, 0.2, len), F * CFrame.new(sx * 5.75, 0.1, (z0 + z1) / 2), Color3.fromRGB(150, 110, 80), M.Wood)
 	end
+	-- allée en gravier derrière la mairie (le couloir entre la mairie et
+	-- la fête) + deux chemins depuis les passages de chaque côté de la mairie
+	-- (sol du pré : y = -GROUND ; dessus 0,1 au-dessus)
+	local g = -FairRides.GROUND
+	local walk = Color3.fromRGB(222, 212, 196)
+	local zc = -FairRides.FAIR_HALF_D - 6.5
+	newPart(model, "Walkway", Vector3.new(84, 0.1, 5), F * CFrame.new(0, g + 0.05, zc), walk, M.Pavement)
+	for _, sx in ipairs({ -1, 1 }) do
+		local a0 = Vector3.new(sx * 39, g + 0.07, zc)
+		local a1 = Vector3.new(sx * 39, g + 0.07, zc - 24)
+		newPart(model, "SidePath", Vector3.new(4, 0.1, 24.5), F * CFrame.lookAt((a0 + a1) / 2, a1), walk, M.Pavement)
+	end
 	-- place ronde devant la grande roue
 	newPart(model, "Round", Vector3.new(0.07, 22, 22), F * CFrame.new(0, 0.035, 8) * VERTICAL, Color3.fromRGB(236, 214, 190), M.Pavement, CYL)
 	-- poteaux + guirlandes au-dessus de l'allée (en zigzag)
 	local poles = {}
-	for i, z in ipairs({ -36, -21, -6 }) do
+	for i, z in ipairs({ -33, -20, -6 }) do
 		for _, sx in ipairs({ -1, 1 }) do
 			local base = Vector3.new(sx * 7.6, 0, z)
 			solid(newPart(model, "Pole", Vector3.new(0.4, 9, 0.4), F * CFrame.new(base + Vector3.new(0, 4.5, 0)), WHITE, M.Metal))
@@ -962,11 +974,11 @@ local function buildGrounds(folder: Instance, F: CFrame)
 	bench(F * CFrame.new(7.6, 0, -13) * CFrame.Angles(0, math.rad(90), 0))
 	bench(F * CFrame.new(-6, 0, 18) * CFrame.Angles(0, math.rad(200), 0))
 	bench(F * CFrame.new(6, 0, 18) * CFrame.Angles(0, math.rad(160), 0))
-	for i, p in ipairs({ Vector3.new(-7.4, 0, -33), Vector3.new(7.4, 0, -33), Vector3.new(-9, 0, 15) }) do
+	for i, p in ipairs({ Vector3.new(-7.4, 0, -31), Vector3.new(7.4, 0, -31), Vector3.new(-9, 0, 15) }) do
 		solid(newPart(model, "Bin", Vector3.new(1.6, 1, 1), F * CFrame.new(p + Vector3.new(0, 0.8, 0)) * VERTICAL, PALETTE[i + 1], M.SmoothPlastic, CYL))
 		newPart(model, "BinLid", Vector3.new(0.2, 1.1, 1.1), F * CFrame.new(p + Vector3.new(0, 1.7, 0)) * VERTICAL, WHITE, M.SmoothPlastic, CYL)
 	end
-	for i, p in ipairs({ Vector3.new(-9.5, 0, -37), Vector3.new(9.5, 0, -37), Vector3.new(-52, 0, -35), Vector3.new(52, 0, -35), Vector3.new(-52, 0, 35), Vector3.new(52, 0, 35) }) do
+	for i, p in ipairs({ Vector3.new(-10.5, 0, -39.5), Vector3.new(10.5, 0, -39.5), Vector3.new(-52, 0, -33), Vector3.new(52, 0, -33), Vector3.new(-52, 0, 33), Vector3.new(52, 0, 33) }) do
 		solid(newPart(model, "Planter", Vector3.new(1.2, 2.4, 2.4), F * CFrame.new(p + Vector3.new(0, 0.6, 0)) * VERTICAL, WHITE, M.Concrete, CYL))
 		newPart(model, "Shrub", Vector3.new(2.8, 2.4, 2.8), F * CFrame.new(p + Vector3.new(0, 2.2, 0)), Color3.fromRGB(100, 176, 96), M.Grass, BALL)
 		newPart(model, "Flowers", Vector3.new(1, 1, 1), F * CFrame.new(p + Vector3.new(0.6, 3, -0.5)), PALETTE[i], M.SmoothPlastic, BALL)

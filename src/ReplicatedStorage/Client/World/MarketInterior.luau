@@ -1608,8 +1608,8 @@ local function outsideJobs(m: Market, parent: Instance): { () -> () }
 			box(parent, "LaneDash", cf, x - 1.6, x + 1.6, lineY0, lineY1, -49.1, -48.8, line, M.SmoothPlastic)
 		end
 		-- places « famille » (pictogramme bleu) près de l'entrée
-		for _, x in ipairs({ -9, 9 }) do
-			local p = box(parent, "FamilyBay", cf, x - 2.6, x + 2.6, lineY0, lineY1 - 0.01, ROW_B[2] - 4.6, ROW_B[2] - 0.6, rgb(90, 140, 220), M.SmoothPlastic)
+		for _, x in ipairs({ -STALL_W, STALL_W }) do
+			local p = box(parent, "FamilyBay", cf, x - 2.3, x + 2.3, lineY0, lineY1 - 0.03, ROW_B[2] - 4.6, ROW_B[2] - 0.6, rgb(90, 140, 220), M.SmoothPlastic)
 			label(p, Enum.NormalId.Top, "👪", WHITE, nil, 30, 120)
 		end
 	end)

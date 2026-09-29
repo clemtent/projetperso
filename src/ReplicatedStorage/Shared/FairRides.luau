@@ -15,7 +15,7 @@
 
 	Repères :
 	  - la fête : WorldLayout.FairCFrame() (centre du sol, -Z local vers la
-	    place / l'entrée), coordonnées locales x ∈ [-55, 55], z ∈ [-38, 38] ;
+	    place / l'entrée), coordonnées locales x ∈ [-55, 55], z ∈ [-36, 36] ;
 	  - chaque manège a son repère (Base, au sol) ; Pose() remplit des
 	    "groupes" (CFrame relatifs à la Base) : plateau, nacelles,
 	    chevaux… ; un siège = Base * groupe * Local.
@@ -128,7 +128,7 @@ end
 ----------------------------------------------------------------------
 
 FairRides.FAIR_HALF_W = 55
-FairRides.FAIR_HALF_D = 38
+FairRides.FAIR_HALF_D = 36
 FairRides.GROUND = 0.15 -- dessus du sol de la fête au-dessus du pré
 
 -- Grande roue
@@ -177,8 +177,8 @@ FairRides.Rides = {
 		Cycle = { Load = 8, Ramp = 3, Run = 40 }, Speed = TAU / 14, Gate = Vector3.new(-19.8, 0, -12), Exit = Vector3.new(-19.8, 0, -23) },
 	{ Id = "Cups", Kind = "Cups", Name = "Teacups", Icon = "☕", Pos = Vector3.new(33, 0, -18), Yaw = 0,
 		Cycle = { Load = 8, Ramp = 3, Run = 32 }, Speed = TAU / 14, Gate = Vector3.new(19.6, 0, -12), Exit = Vector3.new(19.6, 0, -23) },
-	{ Id = "Swings", Kind = "Swings", Name = "Swing ride", Icon = "🎢", Pos = Vector3.new(-36, 0, 21), Yaw = 0,
-		Cycle = { Load = 8, Ramp = 4, Run = 36 }, Speed = TAU / 6.5, Gate = Vector3.new(-20.5, 0, 9.5), Exit = Vector3.new(-21, 0, 34) },
+	{ Id = "Swings", Kind = "Swings", Name = "Swing ride", Icon = "🎢", Pos = Vector3.new(-36, 0, 20), Yaw = 0,
+		Cycle = { Load = 8, Ramp = 4, Run = 36 }, Speed = TAU / 6.5, Gate = Vector3.new(-20.5, 0, 8.5), Exit = Vector3.new(-21, 0, 32) },
 	{ Id = "Tower", Kind = "Tower", Name = "Drop tower", Icon = "🗼", Pos = Vector3.new(-17, 0, 3), Yaw = 0,
 		Cycle = { Load = 10, Ramp = 0, Run = 22.2 }, Speed = 0, Gate = Vector3.new(-9.4, 0, 0), Exit = Vector3.new(-9.4, 0, 6.5) },
 	{ Id = "Bumper", Kind = "Bumper", Name = "Bumper cars", Icon = "🚗", Pos = Vector3.new(35, 0, 22), Yaw = 0,
