@@ -1849,9 +1849,9 @@ local function plaque(kind: string)
 			b.Box(0, 6, 1, 88, 88, 2, back, M.Wood)
 			b.Art(0, 6, 2.1, 88, 88, 1)
 			local frameColor = kind == "Calendar" and lighten(back, 0.3) or back
-			House3DKit.Frame(b, -0.3, 5.7, 2.6, 88.6, 88.6, 5.3, 4.4, frameColor, M.Wood)
-			House3DKit.Frame(b, 0, 10.4, 2.9, 77.2, 79.2, 1.2, 2.8 + g, GOLD, M.Metal)
-			local cover = b.Box(0, 11.8, 3.6 + g, 75, 76.4, 0.4, rgb(230, 240, 255), M.Glass)
+			House3DKit.Frame(b, 0, 6 - g, 2 + g, 88 + 2 * g, 88 + 2 * g, 5 + g, 4, frameColor, M.Wood)
+			House3DKit.Frame(b, 0, 11, 3.3 + g, 78, 78, 1.2, 1.4 + 2 * g, GOLD, M.Metal)
+			local cover = b.Box(0, 12.2, 4, 75.6, 75.6, 0.4, rgb(230, 240, 255), M.Glass)
 			cover.Transparency = 0.88
 			cover.Reflectance = 0.2
 			cover.CastShadow = false
