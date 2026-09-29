@@ -113,7 +113,9 @@ function TownFountainFx.Build(folder: Instance, base: Vector3): any
 		local a = hash(i, 1) * math.pi * 2
 		local r = 3.2 + math.sqrt(hash(i, 2)) * 9.2
 		local p = base + Vector3.new(math.sin(a) * r, 0, math.cos(a) * r)
-		disc(model, "Coin", p, base.Y + FLOOR_Y + 0.03, 0.16 + hash(i, 3) * 0.05, 0.06, coins[i % 3 + 1], M.Metal)
+		-- (hauteur par couleur : deux pièces qui se chevauchent ne scintillent jamais)
+		local lift = (i % 3) * 0.025
+		disc(model, "Coin", p, base.Y + FLOOR_Y + 0.03 + lift, 0.16 + hash(i, 3) * 0.05, 0.06 + lift, coins[i % 3 + 1], M.Metal)
 	end
 	-- médaillons sur la margelle (face extérieure des 12 pans) + petit cerveau en relief
 	for i = 0, 11 do

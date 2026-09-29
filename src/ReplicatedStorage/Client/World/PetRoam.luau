@@ -1486,6 +1486,10 @@ function PetRoam.Step(dt: number?)
 end
 
 function PetRoam.SetPaused(value: boolean)
+	-- (appelable à chaque image : ne fait rien si rien ne change)
+	if (value == true) == paused then
+		return
+	end
 	paused = value == true
 	if paused then
 		for _, pet in pairs(pets) do

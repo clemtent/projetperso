@@ -15,8 +15,9 @@
 	  - "News"   : plateau du flash info (LiveScreens) + le VRAI bandeau
 	    Stimuli.NewsTicker en bas (et ses "ALERTE INFO" par-dessus).
 	Bac à sable : AUCUN appel serveur (Interact, ClaimSpawn, Net -> muets),
-	AUCUN son (ctx.Sound muet), pas de confettis / flash plein écran, pas
-	d'apparitions (dons, bonus). La toile est inerte (SurfaceGui.Active =
+	AUCUN son (ctx.Sound muet), AUCUN effet partagé (ctx.Effects / FloatText
+	muets : les réserves de cadres d'Effects sont communes avec le clicker),
+	pas d'apparitions (dons, bonus). La toile est inerte (SurfaceGui.Active =
 	false, posée par LiveProps) : on regarde, on ne clique pas dedans.
 	Le rendu est piloté par LiveProps (Step(dt), ≤ 30 images / s, seulement
 	les écrans proches : voir LiveProps.REAL_MAX / REAL_DISTANCE).

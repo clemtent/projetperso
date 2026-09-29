@@ -34,6 +34,20 @@
 	  - "Pivot_*" : repères invisibles (pivots des animations ; leur axe Y =
 	    la verticale du modèle, leur axe Z = l'axe avant-arrière).
 
+	v9.8 (DESK98) :
+	  - clavier mécanique 65 % refait (63 touches avec légendes, plaque RGB,
+	    liseré lumineux) : les touches étaient cachées DANS la plaque (voir
+	    la recette) ;
+	  - télés refaites (dalle fine aux coins arrondis, dos bombé, pieds /
+	    supports, barre de son, caisson, halo doux) + champs Setup.Scale
+	    (largeur x Scale) et Setup.Cinema (toile + projecteur au plafond) ;
+	  - presse refaite (4 colonnes, vérin, manomètres, pupitre, tapis
+	    roulant, bac, centrale hydraulique, bandes de danger) aux couleurs des
+	    10 paliers de la presse du clicker (House3DSetup.PressTiers) ;
+	  - règle d'épaisseur th() : aucune couche < 0,03 stud, faces parallèles
+	    de couleurs différentes à plus de 0,03 stud (House3DKit.Separate ne
+	    déforme plus rien).
+
 	API :
 	  House3DSetup.Register(recipes, family, helpers, flags)  (House3DRecipes)
 	  House3DSetup.Has(itemId) -> boolean

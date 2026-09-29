@@ -468,7 +468,7 @@ local function lifeBoulevard(geo: TownKit.Geo)
 		for i = 1, 2 do
 			local mx = (hash(k, 40 + i) - 0.5) * half * 1.2
 			if not (junction and math.abs(mx) < jw + 6) and not (zebra and math.abs(mx - zx) < 8) then
-				spot("Manhole", F * CFrame.new(mx, ROAD_Y, (i == 1 and 1 or -1) * 4.6), k * 10 + i)
+				spot("Manhole", F * CFrame.new(mx, ROAD_Y, 4.8), k * 10 + i)
 			end
 			local dx = (i == 1 and -1 or 1) * half * (0.35 + hash(k, 44 + i) * 0.3)
 			spot("Drain", F * CFrame.new(dx, ROAD_Y, hw - 0.55) * CFrame.Angles(0, math.pi, 0), k * 10 + i)
@@ -607,7 +607,7 @@ local function lifeSideStreet(geo: TownKit.Geo, slot: number, name: number)
 	spot("ParkMeter", faceAxis(R, -ST_HALF - 1.1, WALK_Y, s0 + length * 0.3 + TownVehicles.BAY_LENGTH + 1.5), slot + 1)
 	-- plaques d'égout
 	for i = 1, 3 do
-		spot("Manhole", R * CFrame.new((i % 2 == 0 and -1 or 1) * 3.6, ROAD_Y, -(s0 + 10 + i * length / 3.4)), slot * 10 + i)
+		spot("Manhole", R * CFrame.new((i % 2 == 0 and -1 or 1) * 1.3, ROAD_Y, -(s0 + 10 + i * length / 3.4)), slot * 10 + i)
 	end
 	-- étal (fleuriste / bouquiniste) dans la zone piétonne
 	local pz = (WorldLayout.PLAZA_R + s0) / 2

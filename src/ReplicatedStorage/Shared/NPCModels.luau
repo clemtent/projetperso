@@ -480,7 +480,7 @@ function NPCModels.Build(style: string, opts: Opts?): Model
 				for _, sx in ipairs({ -1, 1 }) do
 					add(ctx, G_BODY, "Jacket", Vector3.new(0.44, 1.66, 0.74), at(sx * 0.47, 3.44, 0), jacket, M.Fabric)
 				end
-				add(ctx, G_BODY, "JacketBack", Vector3.new(1.3, 1.66, 0.1), at(0, 3.44, 0.35), jacket, M.Fabric)
+				add(ctx, G_BODY, "JacketBack", Vector3.new(1.3, 1.62, 0.1), at(0, 3.43, 0.35), jacket, M.Fabric)
 			end)
 		end
 	end
@@ -499,7 +499,7 @@ function NPCModels.Build(style: string, opts: Opts?): Model
 		add(ctx, G_BODY, "Hips", Vector3.new(1.14, 0.6, 0.62), at(0, 2.45, 0), pants, M.Fabric)
 	end
 	if look.Belt and not skirt and style ~= "baker" then
-		add(ctx, G_BODY, "Belt", Vector3.new(1.34, 0.12, 0.72), at(0, 2.72, 0), rgb(60, 40, 30), M.Leather)
+		add(ctx, G_BODY, "Belt", Vector3.new(1.2, 0.12, 0.68), at(0, 2.62, 0), rgb(60, 40, 30), M.Leather)
 	end
 	head(ctx, skin, hair, look.HairStyle, seed, look.Female)
 	arm(ctx, -1, sleeve, skin, longSleeve, cuff)

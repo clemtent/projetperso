@@ -315,7 +315,7 @@ end
 -- Cabine téléphonique vitrée
 local function buildPhoneBooth(m: Model, F: CFrame, _seed: number)
 	local frame = rgb(60, 70, 90)
-	box(m, "BoothBase", F, -1.3, 1.3, -0.05, 0.2, -1.3, 1.3, GRAPHITE, M.Concrete)
+	box(m, "BoothBase", F, -1.25, 1.25, -0.05, 0.2, -1.25, 1.25, GRAPHITE, M.Concrete)
 	for _, x in ipairs({ -1.2, 1.2 }) do
 		for _, z in ipairs({ -1.2, 1.2 }) do
 			box(m, "BoothPost", F, x - 0.1, x + 0.1, 0.15, 7.25, z - 0.1, z + 0.1, frame, M.Metal, true)
@@ -656,7 +656,7 @@ local function buildBillboard(m: Model, F: CFrame, seed: number)
 		glow(box(m, "BillLamp", F, x - 0.45, x + 0.45, 17.0, 17.35, -2.3, -1.6, rgb(255, 236, 200), M.SmoothPlastic))
 	end
 	-- (panneau double face : une autre affiche au dos)
-	local back = box(m, "BillBack", F, -8.2, 8.2, 9, 17.4, 0.35, 0.55, steel, M.Metal)
+	local back = box(m, "BillBack", F, -8.1, 8.1, 9.1, 17.3, 0.35, 0.55, steel, M.Metal)
 	local backFace = box(m, "BillFaceBack", F, -7.9, 7.9, 9.3, 17.1, 0.5, 0.67, WHITE, M.SmoothPlastic)
 	poster(backFace, Enum.NormalId.Back, ADS[(seed + 3) % #ADS + 1], 400)
 	local _ = back
@@ -667,7 +667,7 @@ local function buildKiosk(m: Model, F: CFrame, _seed: number)
 	box(m, "KioskBody", F, -2.4, 2.4, -0.05, 3.2, -1.6, 2, GREEN, M.Metal, true)
 	box(m, "KioskCounter", F, -2.1, 2.1, 3.15, 3.45, -1.95, -1.4, rgb(120, 86, 60), M.Wood)
 	-- (fenêtre ouverte : on voit le marchand ; parois intérieures sombres)
-	box(m, "KioskBackWall", F, -2.3, 2.3, 3.15, 6.25, 1.5, 2.0, rgb(70, 60, 56), M.SmoothPlastic)
+	box(m, "KioskBackWall", F, -2.3, 2.3, 3.15, 6.25, 1.5, 1.95, rgb(70, 60, 56), M.SmoothPlastic)
 	for _, sx in ipairs({ -1, 1 }) do
 		box(m, "KioskSideWall", F, sx < 0 and -2.4 or 2.05, sx < 0 and -2.05 or 2.4, 3.15, 6.25, -1.2, 1.55, GREEN, M.Metal)
 	end
@@ -748,7 +748,7 @@ local function buildStall(m: Model, F: CFrame, seed: number, flowers: boolean)
 		box(m, "Greens", F, -2.4, 2.4, 2.4, 2.75, 0.3, 1.0, rgb(84, 150, 84), M.Grass)
 	else
 		-- boîtes vertes de bouquiniste + livres
-		box(m, "BookBox", F, -2.5, 2.5, 2.4, 3.2, -1.1, 1.1, rgb(40, 100, 70), M.Wood)
+		box(m, "BookBox", F, -2.35, 2.35, 2.4, 3.2, -1.1, 0.9, rgb(40, 100, 70), M.Wood)
 		local covers = { rgb(170, 60, 60), rgb(60, 90, 160), rgb(220, 190, 110), rgb(90, 140, 90), rgb(120, 80, 140) }
 		for i = 0, 9 do
 			local x = -2.2 + i * 0.48
@@ -835,7 +835,7 @@ local function buildMarketSquare(m: Model, F: CFrame, seed: number)
 		box(m, "StallTable", S, -3, 3, 2.1, 2.35, -1.3, 1.3, rgb(150, 104, 70), M.Wood, true)
 		box(m, "StallSkirt", S, -2.9, 2.9, 0.1, 2.15, -1.2, -1.1, c:Lerp(WHITE, 0.5), M.Fabric)
 		for _, x in ipairs({ -2.8, 2.8 }) do
-			box(m, "StallPost", S, x - 0.1, x + 0.1, 0.08, 6.6, 1.1, 1.3, GRAPHITE, M.Metal)
+			box(m, "StallPost", S, x - 0.1, x + 0.1, 0.08, 6.6, 1.05, 1.25, GRAPHITE, M.Metal)
 		end
 		for i = 0, 4 do
 			wedge(m, "StallAwning", Vector3.new(1.2, 0.9, 3.2), S * CFrame.new(-2.4 + i * 1.2, 6.8, -0.4) * CFrame.Angles(0, math.pi, 0), i % 2 == 0 and c or WHITE, M.Fabric)

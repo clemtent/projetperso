@@ -1051,8 +1051,8 @@ local function lamps(shop: Shop, parent: Instance, spots: { { number } })
 	for index, spot in ipairs(spots) do
 		local x, z = spot[1], spot[2]
 		-- (v9.8) suspension plate : cordon, cache-piton, abat-jour en disque, diffuseur
-		box(parent, "LampCord", F, x - 0.04, x + 0.04, H - 1.25, H - 0.12, z - 0.04, z + 0.04, rgb(60, 60, 70), M.SmoothPlastic)
-		cylinder(parent, "LampCanopy", F, x, H - 0.12, z, 0.07, 0.7, WHITE, M.SmoothPlastic)
+		box(parent, "LampCord", F, x - 0.04, x + 0.04, H - 1.25, H - 0.25, z - 0.04, z + 0.04, rgb(60, 60, 70), M.SmoothPlastic)
+		cylinder(parent, "LampCanopy", F, x, H - 0.25, z, 0.15, 0.7, WHITE, M.SmoothPlastic)
 		local shade = cylinder(parent, "LampShade", F, x, H - 1.6, z, 0.35, 2.4, t.Accent, M.SmoothPlastic)
 		shade.CastShadow = false
 		cylinder(parent, "LampRim", F, x, H - 1.25, z, 0.06, 1.2, t.Accent:Lerp(WHITE, 0.3), M.SmoothPlastic)

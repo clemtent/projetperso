@@ -2347,6 +2347,92 @@ do
 		end
 		check(GS.Stage({ Flower = "", PlantedAt = 0, ReadyAt = 0 }, 10) == "Empty", "vide")
 	end)
+
+	-- v9.8 (GARDEN98) : jardin libre, agrandissements, objets de jardin
+	test("GardenSnapshot v9.8 : objets de jardin et agrandissements (Config.Garden)", function(check)
+		local ids = {}
+		for _, piece in ipairs(Config.Garden.Pieces) do
+			check(not ids[piece.Id], "id en double : " .. piece.Id)
+			ids[piece.Id] = true
+			check(type(piece.Name) == "string" and type(piece.Icon) == "string", "nom / icône : " .. piece.Id)
+			check(piece.Cost > 0 and piece.W > 0 and piece.D > 0 and piece.Max >= 1, "prix / taille / Max : " .. piece.Id)
+			check(GS.PieceCost(piece, 0) == piece.Cost and GS.PieceCost(piece, 3) > GS.PieceCost(piece, 2), "prix +15 % par exemplaire : " .. piece.Id)
+		end
+		local last = 0
+		for index, info in ipairs(Config.Garden.Expansion) do
+			check(info.Level == index and info.Cost > last, "niveaux et prix croissants : " .. tostring(info.Name))
+			last = info.Cost
+			check(GS.DecorSlots(index) > GS.DecorSlots(index - 1) and GS.PieceCap(index) > GS.PieceCap(index - 1), "plus de places au niveau " .. index)
+		end
+		check(GS.DecorSlots(0) == Config.House.GardenSlots, "niveau 0 : places de déco de toujours")
+		check(GS.Level({ Garden = { Level = 99 } }) == GS.MAX_LEVEL and GS.Level({ Garden = { Level = -3 } }) == 0 and GS.Level({ Garden = { Level = 0 / 0 } }) == 0, "niveau borné")
+		local owned = GS.OwnedPieces({ Garden = { Pieces = { TerracottaPot = 3.7, Nope = 2, Gazebo = 50, RoseBush = -1 } } })
+		check(owned.TerracottaPot == 3 and owned.Nope == nil and owned.Gazebo == 1 and owned.RoseBush == nil, "objets possédés nettoyés")
+	end)
+
+	test("GardenSnapshot v9.8 : disposition vérifiée (zones, couloirs, possession, maximum)", function(check)
+		local data = { Upgrades = { Garden = 1 }, House = { Size = "Studio", Garden = { "GardenGnome" } },
+			Garden = { Level = 0, Pieces = { TerracottaPot = 2 }, Layout = {
+				B1 = { X = -10, D = 40, R = 90 }, -- ok
+				B2 = { X = 0, D = 70, R = 0 }, -- hors de la parcelle
+				B9 = { X = 5, D = 40, R = 0 }, -- parterre pas possédé
+				["D:GardenGnome"] = { X = -12, D = -10, R = 45 }, -- ok
+				["D:Snowman"] = { X = -20, D = -10, R = 0 }, -- pas sortie
+				["P:TerracottaPot:1"] = { X = 20, D = 44, R = 7 }, -- ok (R arrondi)
+				["P:TerracottaPot:3"] = { X = 22, D = 44, R = 0 }, -- 3e pot pas possédé
+				["P:Gazebo:1"] = { X = 0, D = 44, R = 0 }, -- pas possédé
+				["F:Sign"] = { X = 30, D = 34, R = 345 }, -- ok
+				["F:Windmill"] = { X = 20, D = 34, R = 0 }, -- pas de moulin
+				["F:KoiPond"] = { X = 20, D = 34, R = 0 }, -- bonus d'un niveau pas acheté
+				["P:TerracottaPot:2"] = { X = 60, D = 44, R = 0 }, -- hors de la zone du niveau 0
+				hack = { X = 0, D = 0 },
+			} } }
+		local snap = GS.From(data)
+		local L = snap.Layout
+		check(L.B1 and L.B1.R == 90, "parterre déplacé gardé")
+		check(L["D:GardenGnome"] and L["D:GardenGnome"].R == 45, "déco gardée")
+		check(L["P:TerracottaPot:1"] and L["P:TerracottaPot:1"].R == 0, "pot gardé, rotation au multiple de 15")
+		check(L["F:Sign"] ~= nil, "panneau gardé")
+		for _, key in ipairs({ "B2", "B9", "D:Snowman", "P:TerracottaPot:3", "P:Gazebo:1", "F:Windmill", "F:KoiPond", "P:TerracottaPot:2", "hack" }) do
+			check(L[key] == nil, "refusé : " .. key)
+		end
+		check(jsonSafe(snap), "JSON")
+		check(ser(GS.Sanitize(snap)) == ser(snap), "Sanitize(From(x)) == From(x)")
+		-- niveau 2 : toute la largeur de la parcelle
+		data.Garden.Level = 2
+		check(GS.From(data).Layout["P:TerracottaPot:2"] ~= nil, "niveau 2 : zone élargie")
+		-- couloir de la porte d'entrée toujours libre (objets non plats)
+		local corridors = GS.Corridors("Studio")
+		local lane = corridors[1]
+		local x = (lane[1] + lane[2]) / 2
+		check(not GS.Fits(2, "Studio", "D:GardenGnome", x, -8, 0), "allée de la porte d'entrée libre")
+		check(GS.Fits(2, "Studio", "P:SteppingStones:1", x, -8, 0), "pas japonais (plats) permis sur l'allée")
+		-- maximum d'objets posés au niveau 0
+		local many = { Garden = { Level = 0, Pieces = { TerracottaPot = 20 }, Layout = {} }, House = { Size = "Studio" } }
+		for k = 1, 20 do
+			many.Garden.Layout["P:TerracottaPot:" .. k] = { X = -38 + k * 3.6, D = 50, R = 0 }
+		end
+		local n = 0
+		for _ in pairs(GS.From(many).Layout) do n += 1 end
+		check(n == GS.PieceCap(0), "objets posés <= maximum du niveau (" .. n .. ")")
+	end)
+
+	test("GardenSnapshot v9.8 : places par défaut (Arrange) stables et dans le jardin", function(check)
+		for _, sizeId in ipairs({ "Studio", "Apartment", "Loft", "Mansion" }) do
+			for _, count in ipairs({ 3, 5, 8 }) do
+				local decor = {}
+				for index = 1, 12 do decor[index] = Config.House.GardenDecor[index].Id end
+				local state = { Unlocked = true, Count = count, Max = 8, Windmill = true, Plots = {}, Level = 3, Size = sizeId, Decor = decor, Layout = {} }
+				local a, b = GS.Arrange(state), GS.Arrange(state)
+				check(ser(a) == ser(b), "stable : " .. sizeId)
+				for _, entry in ipairs(a) do
+					if string.sub(entry.Key, 1, 1) == "B" or string.sub(entry.Key, 1, 2) == "F:" then
+						check(GS.Fits(3, sizeId, entry.Key, entry.X, entry.D, entry.R), sizeId .. " " .. count .. " : " .. entry.Key .. " dans le jardin")
+					end
+				end
+			end
+		end
+	end)
 end
 """
 
@@ -2557,6 +2643,18 @@ do
 			minHead = math.min(minHead, ceiling - L.StairHeight(d))
 		end
 		check(minHead >= 7, "hauteur libre sur l'escalier " .. minHead)
+		-- (v9.8 HOUSE98) "la tête touche" : portes >= 6 x 9, >= 8 studs libres sur l'escalier
+		check(minHead >= 8, "v9.8 : hauteur libre sur l'escalier >= 8 (" .. minHead .. ")")
+		check(L.DOOR_W >= 6 and L.DOOR_H >= 9 and L.PASS_W >= 6 and L.PASS_H >= 9, "v9.8 : portes et passages >= 6 x 9")
+		check(L.PASS_H <= L.WALL_H - 2 and L.DOOR_H <= L.WALL_H - 2, "v9.8 : linteaux sous le plafond")
+		for _, size in ipairs(SIZES) do
+			local h0, h1 = L.HallSpan(size)
+			local bx = L.BackDoorX(size)
+			check(bx - L.DOOR_W / 2 >= h0 and bx + L.DOOR_W / 2 <= h1, size.Id .. " : porte de derrière dans la cage")
+			check(L.BackDoorD(size) > L.Dims(size).Depth and L.BackStepsD(size) > L.BackDoorD(size) + 3, size.Id .. " : perron de derrière")
+			local a, b, c, d = L.BackWindowRect(size, 0.46)
+			check(b - a > 3 and d - c > 5 and c > 1 and d < L.WALL_H - 1 and a > -L.RoomWidth(size) / 2 + 0.5, size.Id .. " : vraie fenêtre du fond")
+		end
 		check(L.STAIR_D1 <= L.WALL_T + L.DEPTH - 2, "palier du haut")
 		for _, n in ipairs({ 4, 8, 12 }) do
 			local r = L.PlotRadius(n)
