@@ -174,7 +174,14 @@ local function framing(handle: any): CFrame?
 		end
 	end
 	local topHeight = tonumber(model:GetAttribute("TopHeight")) or 2.5
-	if keyboardAt then
+	if gameScreen then
+		-- (jeu : l'écran remplit l'image, le haut du clavier en bas)
+		local minY = math.huge
+		for _, rec in ipairs(list) do
+			minY = math.min(minY, rec.Part.Position.Y - rec.Part.Size.Y / 2)
+		end
+		low = keyboardAt and math.max(keyboardAt.Y, minY - (maxY - minY) * 0.35) or minY - (maxY - minY) * 0.2
+	elseif keyboardAt then
 		low = keyboardAt.Y
 	else
 		low = base.Y + topHeight
@@ -186,7 +193,7 @@ local function framing(handle: any): CFrame?
 	local camera0 = workspace.CurrentCamera
 	local short = camera0 ~= nil and camera0.ViewportSize.Y < 500 -- (téléphone en paysage : la barre prend plus de place)
 	local lookAt = base + right * ((minX + maxX) / 2) + up * (low + height * (short and 0.42 or 0.6) - base.Y)
-	height *= short and 1.5 or 1.3
+	height *= (short and 1.5 or 1.3) * (gameScreen and 0.92 or 1)
 	local vfov = math.rad(FOV)
 	local camera = workspace.CurrentCamera
 	local viewport = camera and camera.ViewportSize or Vector2.new(1280, 720)
