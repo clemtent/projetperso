@@ -2058,12 +2058,12 @@ R.Speaker = function(b, _ctx)
 	end
 	House3DKit.Bevel(b, 0, 3, 0, 56, 93, 46, 2, body, M.Wood)
 	b.Box(0, 6, 23 + g / 2, 50, 86, g, darken(body, 0.25), M.SmoothPlastic)
-	b.CylZ(0, 30, 23 + g, 38, g, GREY_DARK, M.Metal)
-	b.CylZ(0, 30, 23 + 2 * g, 32, g, rgb(40, 40, 48), M.SmoothPlastic)
-	b.Egg(0, 30, 23 + 2.5 * g, 12, 12, 4, GREY, M.Metal)
-	b.CylZ(0, 70, 23 + g, 22, g, GREY_DARK, M.Metal)
-	b.Egg(0, 70, 23 + 1.5 * g, 10, 10, 4, CHROME_METAL, M.Metal).Reflectance = 0.3
-	b.CylZ(0, 12, 23 + g, 10, g * 2, rgb(20, 20, 26), M.SmoothPlastic)
+	b.CylZ(0, 34, 23 + 1.5 * g, 38, g, GREY_DARK, M.Metal)
+	b.CylZ(0, 34, 23 + 2.5 * g, 32, g, rgb(40, 40, 48), M.SmoothPlastic)
+	b.Egg(0, 34, 23 + 3 * g, 12, 12, 4, GREY, M.Metal)
+	b.CylZ(0, 70, 23 + 1.5 * g, 22, g, GREY_DARK, M.Metal)
+	b.Egg(0, 70, 23 + 2 * g, 10, 10, 4, CHROME_METAL, M.Metal).Reflectance = 0.3
+	b.CylZ(0, 9, 23 + g, 10, g * 2, rgb(20, 20, 26), M.SmoothPlastic)
 	b.Top(1, 0, 96, 0, 50, 40)
 	b.Footprint(56, 46, 96)
 end
@@ -2139,16 +2139,16 @@ R.RecordPlayer = function(b, ctx)
 	local wood = woodOf(b, WOOD)
 	-- gramophone : caisse biseautée, plateau chromé, disque (sillons, étiquette),
 	-- bras de lecture, grand pavillon évasé doré
+	local g = House3DKit.Gap(b, 0.8)
 	House3DKit.Bevel(b, 0, 0, 0, 90, 26, 60, 2, wood, M.Wood)
-	b.Box(0, 8, 30.4, 70, 12, 1, darken(wood, 0.2), M.Wood)
-	b.CylZ(38, 14, 30, 5, 3, GOLD, M.Metal)
+	b.Box(0, 8, 30 + g / 2, 70, 12, g, darken(wood, 0.2), M.Wood)
+	b.CylZ(38, 14, 30 + g, 5, 3, GOLD, M.Metal)
 	b.Cyl(-8, 26, 0, 54, 1.4, CHROME_METAL, M.Metal).Reflectance = 0.3
-	b.Cyl(-8, 27.4, 0, 52, 1, INK)
-	for _, d in ipairs({ 44, 34 }) do
-		b.Cyl(-8, 27.6, 0, d, 1, rgb(50, 44, 60))
-	end
-	b.Cyl(-8, 28, 0, 14, 1, accent(b, 1, PINK))
-	b.Cyl(-8, 28, 0, 2, 3, CHROME_METAL, M.Metal)
+	local r0 = 27.4
+	b.Cyl(-8, r0, 0, 52, g, INK)
+	b.Cyl(-8, r0 + g / 2, 0, 44, 1.5 * g, rgb(50, 44, 60))
+	b.Cyl(-8, r0 + g, 0, 14, 2 * g, accent(b, 1, PINK))
+	b.Cyl(-8, r0 + g, 0, 2, 3 * g + 1, CHROME_METAL, M.Metal)
 	b.Cyl(22, 26, 18, 6, 4, GREY_DARK, M.Metal)
 	b.Tube(22, 30, 18, 4, 30, -2, 2, CHROME_METAL, M.Metal).Reflectance = 0.3
 	b.Box(3, 28.4, -3, 4, 2, 5, INK, M.Metal)
@@ -2768,12 +2768,12 @@ R.Aquarium = function(b, ctx)
 	glass.Reflectance = 0.1
 	glass.CastShadow = false
 	for _, sx in ipairs({ -1, 1 }) do
-		b.Box(sx * 44.6, tankY, 0, 1.4, tankH, 41, INK, M.SmoothPlastic)
+		b.Box(sx * (44.3 + House3DKit.Gap(b, 0.8) / 2), tankY, 0, 1.4 + House3DKit.Gap(b, 0.8), tankH, 40 + 2 * House3DKit.Gap(b, 0.8), INK, M.SmoothPlastic)
 	end
 	local water = b.Box(0, tankY + 2, 0, 86, tankH - 8, 36, rgb(130, 200, 250), M.Glass)
 	water.Transparency = 0.4
 	water.CastShadow = false
-	b.Box(0, tankY, 0, 86, 4, 36, rgb(240, 220, 180), M.Sand)
+	b.Box(0, tankY, 0, 86, 4, 35, rgb(240, 220, 180), M.Sand)
 	for index = 0, 2 do
 		b.Egg(-30 + index * 26, tankY + 5, -10 + index * 4, 12, 8, 10, rgb(170, 160, 180), M.Slate)
 	end
@@ -2868,17 +2868,19 @@ R.FruitBowl = bowl
 local function plate(b: Builder, _ctx: Ctx)
 	local dish = lightOf(b, WHITE)
 	-- assiette à marli (bord relevé) et filet, 4 bouchées garnies
+	local g = House3DKit.Gap(b, 0.8)
 	b.Cyl(0, 0, 0, 70, 2, darken(dish, 0.08))
 	b.Cyl(0, 2, 0, 96, 3, dish)
-	b.Cyl(0, 4.4, 0, 96, 1.6, lighten(dish, 0.3))
-	b.Cyl(0, 3.4, 0, 70, 1.4, darken(dish, 0.04))
+	b.Cyl(0, 5, 0, 90, g, accent(b, 2, rgb(120, 170, 230)))
+	b.Cyl(0, 5 + g / 2, 0, 82, 1.5 * g, lighten(dish, 0.1))
+	local y0 = 5 + 2 * g
 	for index = 0, 3 do
 		local angle = index / 4 * math.pi * 2
 		local c = accent(b, index % 3 + 1, rgb(255, 210, 160))
 		local x, z = math.cos(angle) * 20, math.sin(angle) * 18
-		b.Round(x, 5, z, 24, 10, 20, 4, c, M.SmoothPlastic)
-		b.Egg(x, 15, z, 20, 5, 16, lighten(c, 0.25), M.SmoothPlastic)
-		b.Ball(x + 4, 17, z, 5, rgb(255, 90, 100), M.SmoothPlastic)
+		b.Round(x, y0, z, 24, 10, 20, 4, c, M.SmoothPlastic)
+		b.Egg(x, y0 + 10, z, 20, 5, 16, lighten(c, 0.25), M.SmoothPlastic)
+		b.Ball(x + 4, y0 + 12, z, 5, rgb(255, 90, 100), M.SmoothPlastic)
 	end
 	b.Footprint(96, 96, 20)
 end
@@ -3024,10 +3026,11 @@ R.GiftPile = function(b, _ctx)
 	for index, spec in ipairs(specs) do
 		local x, y, z, s, h = spec[1], spec[2], spec[3], spec[4], spec[5]
 		local c = colors[index]
-		b.Box(x, y, z, s, h, s * 0.9, c)
+		local g = House3DKit.Gap(b, 0.6)
+		b.Box(x, y, z, s, h - 3, s * 0.9, c)
 		b.Box(x, y + h - 3, z, s + 1, 3, s * 0.9 + 1, lighten(c, 0.15))
-		b.Box(x, y, z, 6, h + 0.4, s * 0.9 + 1.4, BUTTER, M.Fabric)
-		b.Box(x, y, z, s + 1.4, h + 0.4, 6, BUTTER, M.Fabric)
+		b.Box(x, y, z, 6, h + g, s * 0.9 + 1 + 2 * g, BUTTER, M.Fabric)
+		b.Box(x, y, z, s + 1 + 2 * g, h + g, 6, BUTTER, M.Fabric)
 		for _, side in ipairs({ -1, 1 }) do
 			b.EggR(CFrame.new(x + side * 6, y + h + 3, z) * CFrame.Angles(0, 0, side * 0.4), 10, 6, 5, BUTTER, M.Fabric)
 		end
@@ -3564,16 +3567,16 @@ R.Jukebox = function(b, _ctx)
 	b.CylZ(0, 60, 0, 70, 40, body, M.SmoothPlastic)
 	local arch = b.CylZ(0, 60, 20 + g / 2, 56, g, BUTTER)
 	b.Neon(arch)
-	b.CylZ(0, 60, 20 + g, 48, g, darken(body, 0.2), M.SmoothPlastic)
+	b.CylZ(0, 60, 20 + 1.5 * g, 48, g, darken(body, 0.2), M.SmoothPlastic)
 	for index = 0, 5 do
 		local a = math.pi * (0.1 + index * 0.16)
 		local bub = b.Ball(math.cos(a) * 26, 60 + math.sin(a) * 26, 20 + 1.5 * g, 3, rgb(120, 230, 255), M.Glass)
 		bub.Transparency = 0.2
 	end
-	local glass = b.Box(0, 20, 20 + g / 2, 50, 30, g, rgb(60, 50, 90), M.Glass)
+	local glass = b.Box(0, 20, 20 + 2.5 * g, 50, 30, g, rgb(60, 50, 90), M.Glass)
 	glass.Reflectance = 0.2
 	for index = 0, 3 do
-		b.CylZ(-15 + index * 10, 34, 20 + g, 9, g, ({ PINK, SKY, MINT, BUTTER })[index + 1], M.SmoothPlastic)
+		b.CylZ(-15 + index * 10, 34, 20 + 3.5 * g, 9, g, ({ PINK, SKY, MINT, BUTTER })[index + 1], M.SmoothPlastic)
 	end
 	for index = 0, 5 do
 		b.Box(0, 4 + index * 2.4, 20 + g / 2, 44, 1.2, g, CHROME_METAL, M.Metal).Reflectance = 0.35
@@ -3714,7 +3717,7 @@ R.BrickTable = function(b, ctx)
 			for _, tz in ipairs({ -12, 0, 12 }) do
 				b.Cyl(side * (w / 2 - 9), y + (top - 8) / 3, tz, 5, 1.5, color, M.SmoothPlastic)
 			end
-			b.Box(side * (w / 2 - 9), y, 0, 14.6, 0.8, 40.6, darken(color, 0.25), M.SmoothPlastic)
+			b.Box(side * (w / 2 - 9), y, 0, 14 + 2 * House3DKit.Gap(b, 0.4), 0.8, 40 + 2 * House3DKit.Gap(b, 0.4), darken(color, 0.25), M.SmoothPlastic)
 		end
 	end
 	local plate = b.Map(rgb(96, 196, 110))
@@ -3870,20 +3873,20 @@ R.GamerPC = function(b, _ctx)
 	end
 	screen(b, -16, 18, -2, 60, 36, rgb(120, 170, 255))
 	b.Box(-16, 0, 18, 58, 3, 14, CARBON)
+	local g = House3DKit.Gap(b, 0.6)
 	for row = 0, 3 do
-		local keys = b.Box(-16, 3, 13 + row * 3.2, 52, 0.6, 2.4, ({ NEON_PINK, NEON_CYAN, rgb(160, 120, 255), NEON_PINK })[row + 1])
+		local keys = b.Box(-16, 3, 13 + row * 3.2, 52, g, 2.4, ({ NEON_PINK, NEON_CYAN, rgb(160, 120, 255), NEON_PINK })[row + 1])
 		b.Neon(keys)
 	end
 	b.Egg(22, 1.6, 18, 6, 3.4, 9, INK, M.SmoothPlastic)
 	b.Box(32, 0, 0, 22, 62, 42, CARBON)
-	local glass = b.Box(32, 6, 21.2, 16, 50, 0.6, NEON_CYAN)
+	local glass = b.Box(32, 6, 21 + g / 2, 16, 50, g, NEON_CYAN)
 	b.Neon(glass)
 	glass.Transparency = 0.3
 	for index = 0, 2 do
-		local fan = b.CylZ(32, 14 + index * 16, 21.8, 12, 0.6, index == 1 and NEON_PINK or NEON_CYAN)
+		local fan = b.CylZ(32, 14 + index * 16, 21 + 1.5 * g, 12, g, index == 1 and NEON_PINK or NEON_CYAN)
 		b.Neon(fan)
 	end
-	b.Box(32, 30, 20.4, 14, 5, 1, GREY_DARK, M.Metal)
 	b.Light(glass, NEON_CYAN, 10, 0.7)
 	b.Footprint(90, 44, 62)
 end
@@ -4061,6 +4064,7 @@ R.DJBooth = function(b, _ctx)
 	b.Footprint(96, 44, 70)
 end
 R.SharkTank = function(b, _ctx)
+	local g = House3DKit.Gap(b, 0.8)
 	-- aquarium à requins : meuble, cuve à profilés, eau profonde, sable,
 	-- rochers et coraux, requins (nageoires, queue), bulles, rampe lumineuse
 	b.Box(0, 0, 0, 96, 26, 46, CARBON, M.SmoothPlastic)
@@ -4069,12 +4073,12 @@ R.SharkTank = function(b, _ctx)
 	glass.Reflectance = 0.1
 	glass.CastShadow = false
 	for _, sx in ipairs({ -1, 1 }) do
-		b.Box(sx * 46.4, 26, 0, 1.2, 66, 44.4, INK, M.Metal)
+		b.Box(sx * (46.4 + g / 2), 26, 0, 1.2 + g, 66, 44 + 2 * g, INK, M.Metal)
 	end
 	local water = b.Box(0, 28, 0, 90, 56, 40, rgb(60, 140, 220), M.Glass)
 	water.Transparency = 0.45
 	water.CastShadow = false
-	b.Box(0, 26, -1, 90, 4, 37, rgb(240, 220, 180), M.Sand)
+	b.Box(0, 26, 0, 90, 4, 36, rgb(240, 220, 180), M.Sand)
 	for index = 0, 3 do
 		b.Egg(-34 + index * 22, 32, -12, 14, 10, 12, ({ rgb(170, 160, 180), rgb(255, 120, 130), rgb(255, 170, 90), rgb(160, 150, 170) })[index + 1], M.Slate)
 	end

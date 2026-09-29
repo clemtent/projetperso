@@ -864,7 +864,7 @@ R.CroissantBasket = function(b, _ctx)
 	b.Cyl(0, 0, 0, 60, 6, darken(wicker, 0.15), M.WoodPlanks)
 	b.Egg(0, 16, 0, 84, 28, 64, wicker, M.WoodPlanks)
 	b.Cyl(0, 22, 0, 76, 4, lighten(wicker, 0.1), M.WoodPlanks)
-	b.Cyl(0, 24, 0, 70, 2, rgb(255, 240, 240), M.Fabric)
+	b.Cyl(0, 24, 0, 70, 2 + House3DKit.Gap(b, 0.6), rgb(255, 240, 240), M.Fabric)
 	for index, p in ipairs({ { -18, 32, 4, 0.4 }, { 14, 34, -4, -0.5 }, { 0, 40, 10, 0.1 } }) do
 		local cf = CFrame.new(p[1], p[2], p[3]) * CFrame.Angles(0, p[4], 0)
 		for seg = -2, 2 do

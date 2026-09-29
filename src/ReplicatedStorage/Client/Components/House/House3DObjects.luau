@@ -301,8 +301,9 @@ R.ButterflyFrame = function(b, _ctx)
 		b.Tube(0, 66, 3, side * 8, 78, 3, 0.8, INK, M.SmoothPlastic)
 	end
 	b.EggR(CFrame.new(0, 50, 3), 5, 34, 3, INK, M.SmoothPlastic)
-	local glass = b.Box(0, 12, 6.2, 66, 76, 0.4, GLASS, M.Glass)
+	local glass = b.Box(0, 12, 4.3, 66, 76, 0.4, GLASS, M.Glass)
 	glass.Transparency = 0.85
+	glass.Reflectance = 0.15
 	b.Footprint(76, 8, 100)
 end
 
@@ -953,7 +954,8 @@ local function doorBase(b: Builder, ctx: any, panel: Color3, material: Enum.Mate
 	b.Box(0, h + 7.6, 0.6, w + 17, 1.8, 9.2, lighten(frame, 0.08), M.Wood)
 	for _, side in ipairs({ -1, 1 }) do
 		b.Box(side * (w / 2 - 0.6), 0, 1.6, 1.2, h + 2, 2.2, darken(frame, 0.08), M.Wood)
-		b.Box(side * (w / 2 + 3), 0, 0.6, 7.4, 10, 8.2, darken(frame, 0.06), M.Wood)
+		local g = House3DKit.Gap(b, 0.8)
+		b.Box(side * (w / 2 + g + 3.4), 0, 0.6, 6.8, 10, 8.2, darken(frame, 0.06), M.Wood)
 	end
 	b.Box(0, 0, -1, w, h + 2, 3, panel, material or M.Wood)
 	for _, y in ipairs({ h * 0.12, h * 0.5, h * 0.86 }) do
