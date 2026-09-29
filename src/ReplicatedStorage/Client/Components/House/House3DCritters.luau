@@ -832,7 +832,7 @@ local function quad(b: Builder, s: QuadSpec)
 		marker(b, joint, x, legTop, z)
 		local thigh = sz < 0 and 1.35 or 1.1
 		jn(b.Egg(x, legTop - legTop * 0.2, z - sz * s.LegW * 0.1, s.LegW * thigh, legTop * 0.62, s.LegW * thigh * 1.15, sz < 0 and s.Main or legColor, M.Fabric), joint, "Upper")
-		jn(b.Tube(x, legTop * 0.58, z, x, s.LegW * 0.45, z + s.LegW * 0.08, s.LegW * 0.62, legColor, M.Fabric), joint, "Lower")
+		jn(b.Tube(x, legTop * 0.6, z, x, s.LegW * 0.45, z + s.LegW * 0.08, s.LegW * 0.74, legColor, M.Fabric), joint, "Lower")
 		jn(b.Egg(x, s.LegW * 0.28, z + s.LegW * 0.22, s.LegW * 0.78, s.LegW * 0.56, s.LegW * 1.05, paws, M.Fabric), joint, "Paw")
 	end
 	-- cou + tête (pivot à la base du cou)
@@ -894,13 +894,13 @@ local function quad(b: Builder, s: QuadSpec)
 	local tc = s.TailColor or s.Main
 	local tl = s.TailLen
 	if s.Tail == "Wag" then
-		jn(b.Tube(0, tailY, tailZ, 0, tailY + tl * 0.45, tailZ - tl * 0.55, W * 0.2, tc, M.Fabric), "Tail", "Base")
-		jn(b.Tube(0, tailY + tl * 0.45, tailZ - tl * 0.55, 0, tailY + tl * 0.8, tailZ - tl * 0.72, W * 0.15, tc, M.Fabric), "Tail", "Tip")
+		jn(b.EggR(CFrame.new(0, tailY + tl * 0.22, tailZ - tl * 0.28) * CFrame.Angles(-0.7, 0, 0), W * 0.3, tl * 0.62, W * 0.3, tc, M.Fabric), "Tail", "Base")
+		jn(b.EggR(CFrame.new(0, tailY + tl * 0.62, tailZ - tl * 0.62) * CFrame.Angles(-0.35, 0, 0), W * 0.26, tl * 0.46, W * 0.26, tc, M.Fabric), "Tail", "Tip")
 		jn(b.Ball(0, tailY + tl * 0.8, tailZ - tl * 0.72, W * 0.15, s.TailTip or tc, M.Fabric), "Tail", "End")
 	elseif s.Tail == "Cat" then
-		jn(b.Tube(0, tailY, tailZ, 0, tailY + tl * 0.35, tailZ - tl * 0.42, W * 0.16, tc, M.Fabric), "Tail", "Base")
-		jn(b.Tube(0, tailY + tl * 0.35, tailZ - tl * 0.42, 0, tailY + tl * 0.85, tailZ - tl * 0.5, W * 0.15, tc, M.Fabric), "Tail", "Mid")
-		jn(b.Tube(0, tailY + tl * 0.85, tailZ - tl * 0.5, 0, tailY + tl * 1.05, tailZ - tl * 0.4, W * 0.14, s.TailTip or tc, M.Fabric), "Tail", "Tip")
+		jn(b.Tube(0, tailY, tailZ, 0, tailY + tl * 0.35, tailZ - tl * 0.42, W * 0.24, tc, M.Fabric), "Tail", "Base")
+		jn(b.Tube(0, tailY + tl * 0.35, tailZ - tl * 0.42, 0, tailY + tl * 0.85, tailZ - tl * 0.5, W * 0.22, tc, M.Fabric), "Tail", "Mid")
+		jn(b.Tube(0, tailY + tl * 0.85, tailZ - tl * 0.5, 0, tailY + tl * 1.05, tailZ - tl * 0.4, W * 0.2, s.TailTip or tc, M.Fabric), "Tail", "Tip")
 	elseif s.Tail == "Bushy" then
 		jn(b.EggR(CFrame.new(0, tailY - tl * 0.05, tailZ - tl * 0.42) * CFrame.Angles(-0.9, 0, 0), W * 0.52, tl * 0.9, W * 0.52, tc, M.Fabric), "Tail", "Brush")
 		jn(b.EggR(CFrame.new(0, tailY - tl * 0.3, tailZ - tl * 0.8) * CFrame.Angles(-1.1, 0, 0), W * 0.38, tl * 0.32, W * 0.38, s.TailTip or tc, M.Fabric), "Tail", "Tip")
@@ -1024,7 +1024,7 @@ REAL.Kitten = function(b)
 		Main = white, Belly = rgb(252, 250, 246), Legs = white, Muzzle = white, Nose = rgb(236, 140, 150),
 		Ears = "Pointy", EarColor = rgb(230, 140, 60), EarIn = rgb(250, 196, 200), EarSize = 13, Tail = "Cat", TailColor = rgb(230, 140, 60), TailTip = rgb(50, 40, 40), TailLen = 40,
 		Eye = 6.2, Iris = rgb(150, 190, 70), Slit = true, Whiskers = true,
-		Patches = { { -6, 42, -8, 16, 14, 24, rgb(230, 140, 60) }, { 7, 44, 12, 12, 10, 16, rgb(52, 44, 44) }, { 0, 44, -22, 18, 12, 16, rgb(52, 44, 44) } },
+		Patches = { { -5, 39.2, -8, 16, 10.8, 24, rgb(230, 140, 60) }, { 6, 39.2, 12, 12, 10.8, 16, rgb(52, 44, 44) }, { 0, 39.2, -22, 16, 10.8, 16, rgb(52, 44, 44) } },
 	})
 	b.Footprint(36, 96, 84)
 end
@@ -1038,7 +1038,7 @@ REAL.SleepyCat = function(b)
 		Main = grey, Belly = rgb(236, 230, 220), Legs = grey, Muzzle = rgb(226, 222, 216), Nose = rgb(220, 130, 140),
 		Ears = "Pointy", EarColor = grey, EarIn = rgb(240, 196, 200), EarSize = 13, Tail = "Cat", TailColor = grey, TailTip = stripe, TailLen = 42,
 		Eye = 6.4, Iris = rgb(230, 170, 60), Slit = true, Whiskers = true,
-		Patches = { { 0, 44, 6, 24.6, 6, 8, stripe }, { 0, 45, -8, 24.8, 6, 8, stripe }, { 0, 44, -22, 24.6, 6, 8, stripe } },
+		Patches = { { 0, 40.8, 8, 19, 11.7, 5, stripe }, { 0, 40.8, -4, 19.4, 11.7, 5, stripe }, { 0, 40.8, -16, 19, 11.7, 5, stripe } },
 	})
 	b.Footprint(38, 100, 86)
 end

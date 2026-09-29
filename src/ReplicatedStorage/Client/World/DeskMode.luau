@@ -180,19 +180,26 @@ local function framing(handle: any): CFrame?
 		for _, rec in ipairs(list) do
 			minY = math.min(minY, rec.Part.Position.Y - rec.Part.Size.Y / 2)
 		end
-		low = minY - (maxY - minY) * 0.12
+		-- (grand écran : on garde le clavier 3D dans le bas de l'image pour voir
+		-- les touches s'enfoncer ; téléphone : l'écran d'abord)
+		local short0 = workspace.CurrentCamera ~= nil and workspace.CurrentCamera.ViewportSize.Y < 500
+		low = minY - (maxY - minY) * (short0 and 0.12 or 0.7)
 	elseif keyboardAt then
 		low = keyboardAt.Y
 	else
 		low = base.Y + topHeight
 	end
-	local width = math.max(2, maxX - minX)
-	local height = math.max(1.5, maxY - low)
+	local width = math.max(gameScreen and 1 or 2, maxX - minX)
+	local height = math.max(gameScreen and 0.6 or 1.5, maxY - low)
 	-- (marges : le bandeau de la ville en haut, "Se lever" en bas ; le contenu
 	-- est un peu plus bas que le centre de l'image)
 	local camera0 = workspace.CurrentCamera
 	local short = camera0 ~= nil and camera0.ViewportSize.Y < 500 -- (téléphone en paysage : la barre prend plus de place)
 	local lookAt = base + right * ((minX + maxX) / 2) + up * (low + height * (short and 0.42 or 0.6) - base.Y)
+	if gameScreen then
+		-- (jeu : on vise le plan de l'écran, pas le bord du bureau)
+		lookAt += front * (center - base):Dot(front)
+	end
 	height *= gameScreen and (short and 1.3 or 1.15) or (short and 1.5 or 1.3)
 	local vfov = math.rad(FOV)
 	local camera = workspace.CurrentCamera

@@ -267,6 +267,9 @@ local function buildPlant(model: Model, flowerId: string, stage: number, opts: F
 			disc(model, "WaterRim", 2.75, 0.04, CFrame.new(0, 0, 0), Color3.fromRGB(120, 104, 90), M.Slate)
 		end
 		local padCount = stage == 0 and 1 or (stage == 1 and 2 or 3)
+		if not hero then
+			padCount = math.min(padCount, 2) -- (v9.8 : le 3e frôlait le rebord du bac)
+		end
 		for i = 1, padCount do
 			local a = i * 2.1 + 0.4
 			local r = stage == 0 and 0.3 or 0.62

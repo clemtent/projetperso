@@ -1318,7 +1318,8 @@ end
 function House3DToys.Register(recipes: { [string]: any }, _family: { [string]: any }, helpers: any, _flags: any)
 	H = helpers
 	for id, recipe in pairs(R) do
-		recipes[id] = recipe
+		-- (v9.8) finition réaliste : reflets du métal, du verre, du marbre
+		recipes[id] = House3DKit.Polished(recipe)
 	end
 end
 

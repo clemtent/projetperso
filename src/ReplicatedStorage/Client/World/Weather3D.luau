@@ -79,7 +79,7 @@ local PUDDLE_RANGE = 46
 local STEP_RATE = 1 / 30
 local PARK = CFrame.new(0, 3000, 0) -- gouttes au repos (hors de vue)
 
-local DROP_COLOR = Color3.fromRGB(196, 210, 228)
+local DROP_COLOR = Color3.fromRGB(206, 218, 234)
 local SPLASH_COLOR = Color3.fromRGB(214, 226, 240)
 local PUDDLE_COLOR = Color3.fromRGB(62, 72, 86)
 local BOLT_COLOR = Color3.fromRGB(222, 230, 255)
@@ -427,8 +427,8 @@ local function ensureDrops(count: number)
 	end
 	while #drops < count do
 		local i = #drops + 1
-		local len = 1.5 + hash01(i * 13 + 5) * 1.1
-		local part = newPart("RainDrop", Vector3.new(0.055, len, 0.055), DROP_COLOR, 0.42)
+		local len = 1.7 + hash01(i * 13 + 5) * 1.3
+		local part = newPart("RainDrop", Vector3.new(0.065, len, 0.065), DROP_COLOR, 0.38)
 		part.Parent = parent
 		table.insert(drops, {
 			Part = part,
@@ -514,8 +514,11 @@ local function stepDrops(t: number, cam: CFrame, rain: number, storm: number)
 			local z = wrap(wz + math.floor(camPos.Z / (2 * BOX_R)) * 2 * BOX_R, camPos.Z, BOX_R)
 			local y = top - fall
 			local stop = heightAt(x, z, camPos.Y)
+			local near = (Vector3.new(x, y, z) - camPos).Magnitude < 3.5 -- (collée à la caméra : une grosse barre)
 			if y - d.Len * 0.5 > stop then
-				cf = CFrame.new(x, y, z) * tilt
+				if not near then
+					cf = CFrame.new(x, y, z) * tilt
+				end
 			elseif d.Landed ~= cycle then
 				d.Landed = cycle
 				local dx, dz = x - camPos.X, z - camPos.Z
@@ -619,7 +622,7 @@ local puddleCellCount = 0
 
 local function puddleLookup(ix: number, iz: number, camY: number): (Vector3?, number, number, number)
 	local seed = ix * 92821 + iz * 68917
-	if hash01(seed) > 0.42 then
+	if hash01(seed) > 0.55 then
 		return nil, 0, 0, 0
 	end
 	local x = (ix + 0.2 + 0.6 * hash01(seed + 1)) * PUDDLE_CELL
@@ -636,7 +639,7 @@ local function puddleLookup(ix: number, iz: number, camY: number): (Vector3?, nu
 	if hit.Normal.Y < 0.95 then
 		return nil, 0, 0, 0
 	end
-	local w = 2.6 + 3.4 * hash01(seed + 3)
+	local w = 3 + 4.5 * hash01(seed + 3)
 	local d = w * (0.55 + 0.35 * hash01(seed + 4))
 	return hit.Position, w, d, hash01(seed + 5) * math.pi
 end
@@ -705,7 +708,7 @@ local function stepPuddles(camPos: Vector3, level: number)
 		if want[key] then
 			local k = 0.35 + 0.65 * level
 			puddle.Part.Size = Vector3.new(puddle.W * k, 0.06, puddle.D * k)
-			puddle.Part.Transparency = 1 - (0.72 * math.min(1, level * 1.6))
+			puddle.Part.Transparency = 1 - (0.78 * math.min(1, level * 1.6))
 			puddle.Part.Reflectance = reflect
 		else
 			puddle.Part.CFrame = PARK
@@ -855,7 +858,7 @@ local function stepRainbow(amount: number, camPos: Vector3)
 	pcall(function()
 		workspace:BulkMoveTo(parts, cframes, Enum.BulkMoveMode.FireCFrameChanged)
 	end)
-	local transparency = 1 - 0.32 * smooth(amount)
+	local transparency = 1 - 0.4 * smooth(amount)
 	if math.abs(transparency - rainbowShown) > 0.01 then
 		rainbowShown = transparency
 		for _, part in ipairs(rainbowParts) do

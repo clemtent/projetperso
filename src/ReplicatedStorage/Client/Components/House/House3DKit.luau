@@ -44,6 +44,7 @@
 	  House3DKit.Bulb(b, x, y, z, d, color, range, brightness?)               (ampoule douce, Brightness <= 1)
 	  House3DKit.Mirror(b, x, y, z, w, h, shape?) -> BasePart                 (miroir tagué Mirror = true)
 	  House3DKit.Planks(b, x, y, z, w, h, d, n, color, material?, seed?)      (lames de bois aux teintes variées)
+	  House3DKit.Polish(b, fromIndex) / House3DKit.Polished(recipe)            (reflets du métal, du verre, du marbre)
 ]]
 
 local HouseArt = require(script.Parent.HouseArt)
@@ -844,6 +845,34 @@ function House3DKit.Mirror(b: Builder, x: number, y: number, z: number, w: numbe
 	mirror:SetAttribute("MirrorFace", "Front")
 	mirror:SetAttribute("MirrorShape", oval and "Oval" or "Rect")
 	return mirror
+end
+
+-- Finition "réaliste" des pièces créées depuis `fromIndex` : le métal
+-- brille (reflet), le verre reflète un peu, le marbre est légèrement lustré
+-- (seulement si la recette n'a pas déjà choisi un reflet)
+local POLISH: { [Enum.Material]: number } = {
+	[MAT.Metal] = 0.2,
+	[MAT.DiamondPlate] = 0.15,
+	[MAT.Glass] = 0.12,
+	[MAT.Marble] = 0.04,
+}
+function House3DKit.Polish(b: Builder, fromIndex: number)
+	for index = fromIndex + 1, #b.Parts do
+		local part = b.Parts[index]
+		local reflect = POLISH[part.Material]
+		if reflect and part.Reflectance == 0 then
+			part.Reflectance = reflect
+		end
+	end
+end
+
+-- Recette "polie" : la recette, puis Polish sur ses pièces
+function House3DKit.Polished(recipe: (b: Builder, ctx: any) -> ()): (b: Builder, ctx: any) -> ()
+	return function(b: Builder, ctx: any)
+		local before = #b.Parts
+		recipe(b, ctx)
+		House3DKit.Polish(b, before)
+	end
 end
 
 -- Lames de bois côte à côte le long de x (y = bas) : teintes légèrement

@@ -1027,6 +1027,9 @@ function GardenEdit.SetEnabled(on: boolean)
 		if not state.Gui or not state.Gui.Parent then
 			buildGui()
 		end
+		if state.Gui then
+			state.Gui.Enabled = true
+		end
 		if state.Top then
 			state.Top.Visible = true
 		end
@@ -1113,7 +1116,11 @@ function GardenEdit.Step(dt: number?)
 		return
 	end
 	if state.Toggle then
-		state.Toggle.Visible = g ~= nil and onOwnPlot(g)
+		local show = g ~= nil and onOwnPlot(g)
+		state.Toggle.Visible = show
+		if show and state.Gui and not state.Gui.Enabled then
+			state.Gui.Enabled = true
+		end
 	end
 end
 

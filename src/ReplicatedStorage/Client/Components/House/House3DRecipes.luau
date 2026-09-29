@@ -4295,6 +4295,20 @@ R.DinoSkeleton = function(b, _ctx)
 	b.Footprint(96, 36, 86)
 end
 
+-- (v9.8) finition réaliste de toutes les recettes ci-dessus : reflets du
+-- métal, du verre, du marbre (voir House3DKit.Polish)
+do
+	local polished: { [Recipe]: Recipe } = {}
+	for id, recipe in pairs(R) do
+		local wrapped = polished[recipe]
+		if not wrapped then
+			wrapped = House3DKit.Polished(recipe)
+			polished[recipe] = wrapped
+		end
+		R[id] = wrapped
+	end
+end
+
 ----------------------------------------------------------------------
 -- Familles (v9.3) : recettes des autres modules + repli par catégorie
 ----------------------------------------------------------------------
