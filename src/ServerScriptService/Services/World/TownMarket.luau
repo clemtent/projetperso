@@ -371,7 +371,7 @@ local function parking(model: Model, cf: CFrame, geo: TownKit.Geo): (number, num
 		local p = (cf * CFrame.new(sx * (hw - 2.3), LOT_Y + 0.5, (row[1] + row[2]) / 2)).Position
 		pcall(TownKit.Tree, model, p, 12, math.floor(p.X + p.Z), nil)
 	end
-	local stalls = math.floor((W - 12) / 6)
+	local stalls = 15 -- (places de 6,4 : marquages côté client)
 	return stalls, stalls
 end
 

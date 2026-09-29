@@ -364,7 +364,7 @@ local function buildFerris(r: RideFx)
 		moving(r, g, "Roof", Vector3.new(4.9, 0.7, 3.8), CFrame.new(0, -1.5, 0), color, M.SmoothPlastic, BALL)
 		moving(r, g, "RoofRim", Vector3.new(4.9, 0.22, 3.6), CFrame.new(0, -1.62, 0), WHITE, M.SmoothPlastic)
 		for _, sx in ipairs({ -1, 1 }) do
-			for _, z in ipairs({ -1.6, 1.6 }) do
+			for _, z in ipairs({ -1.58, 1.58 }) do
 				moving(r, g, "Post", Vector3.new(0.16, drop - 1.75, 0.16), CFrame.new(sx * 2.2, -1.72 - (drop - 1.75) / 2, z), WHITE, M.Metal)
 			end
 			-- banquette + dossier (face au centre de la nacelle)
@@ -372,7 +372,7 @@ local function buildFerris(r: RideFx)
 			moving(r, g, "Back", Vector3.new(0.3, 1.5, 3), CFrame.new(sx * 2.05, -drop + 1.95, 0), color, M.SmoothPlastic)
 		end
 		moving(r, g, "Floor", Vector3.new(4.6, 0.3, 3.4), CFrame.new(0, -drop + 0.15, 0), Color3.fromRGB(236, 232, 244), M.Metal)
-		for _, z in ipairs({ -1.62, 1.62 }) do
+		for _, z in ipairs({ -1.64, 1.64 }) do
 			moving(r, g, "Panel", Vector3.new(4.5, 1.2, 0.14), CFrame.new(0, -drop + 0.9, z), color, M.SmoothPlastic)
 		end
 		moving(r, g, "Under", Vector3.new(3.4, 0.5, 2.4), CFrame.new(0, -drop - 0.15, 0), color, M.SmoothPlastic, BALL)
@@ -507,7 +507,7 @@ local function buildCups(r: RideFx)
 	for k = 1, FairRides.CUPS_N do
 		local g = 1 + k
 		local color = CUP_COLORS[(k - 1) % #CUP_COLORS + 1]
-		moving(r, g, "Saucer", Vector3.new(0.25, 5.2, 5.2), CFrame.new(0, 0.12, 0) * VERTICAL, WHITE, M.SmoothPlastic, CYL)
+		moving(r, g, "Saucer", Vector3.new(0.25, 5.2, 5.2), CFrame.new(0, 0.16, 0) * VERTICAL, WHITE, M.SmoothPlastic, CYL)
 		moving(r, g, "CupFloor", Vector3.new(0.3, 4.2, 4.2), CFrame.new(0, 0.35, 0) * VERTICAL, color, M.SmoothPlastic, CYL)
 		-- paroi : 10 panneaux (on voit dedans), bord doré
 		local n = 10
@@ -547,7 +547,8 @@ local function buildSwings(r: RideFx)
 	-- sol d'embarquement (anneau de dalles)
 	for i = 0, 11 do
 		local a = (i + 0.5) / 12 * TAU
-		local p = Vector3.new(math.sin(a) * 8.5, 0.06, math.cos(a) * 8.5)
+		-- (une dalle sur deux un peu plus haute : jamais coplanaires aux coins)
+		local p = Vector3.new(math.sin(a) * 8.5, if i % 2 == 0 then 0.06 else 0.1, math.cos(a) * 8.5)
 		fixed(r, "Pad", Vector3.new(4.2, 0.12, 3.2), CFrame.lookAt(p, p + Vector3.new(p.X, 0, p.Z)), i % 2 == 0 and Color3.fromRGB(236, 226, 250) or Color3.fromRGB(214, 226, 250), M.Slate)
 	end
 	-- dessus qui tourne : chapeau rayé (12 pans), bandeau à ampoules
@@ -644,10 +645,10 @@ local function buildBumperHall(r: RideFx)
 	for i, s in ipairs({ { 0, -D / 2 - 2.05, W + 4.2, 0.2 }, { 0, D / 2 + 2.05, W + 4.2, 0.2 }, { -W / 2 - 2.05, 0, 0.2, D + 4.2 }, { W / 2 + 2.05, 0, 0.2, D + 4.2 } }) do
 		fixed(r, "Fascia", Vector3.new(s[3], 1.3, s[4]), CFrame.new(s[1], roofY - 0.1, s[2]), i % 2 == 0 and PINK or SKY, M.SmoothPlastic)
 	end
-	local board = fixed(r, "Board", Vector3.new(14, 2.4, 0.3), CFrame.new(0, roofY + 1.7, -D / 2 - 2.1), Color3.fromRGB(255, 244, 250), M.SmoothPlastic)
+	local board = fixed(r, "Board", Vector3.new(14, 2.4, 0.3), CFrame.new(0, roofY + 1.7, -D / 2 - 2.4), Color3.fromRGB(255, 244, 250), M.SmoothPlastic)
 	sign(board, "🚗 " .. Locale.T("Bumper cars"), HOT, Color3.fromRGB(255, 244, 250))
 	for i = 0, 9 do
-		glow(fixed(r, "Bulb", Vector3.new(0.34, 0.34, 0.34), CFrame.new(-6.5 + i * 1.45, roofY + 3.05, -D / 2 - 2.1), BULB, M.SmoothPlastic, BALL))
+		glow(fixed(r, "Bulb", Vector3.new(0.34, 0.34, 0.34), CFrame.new(-6.5 + i * 1.45, roofY + 3.05, -D / 2 - 2.4), BULB, M.SmoothPlastic, BALL))
 	end
 end
 
@@ -754,7 +755,7 @@ local function buildStall(folder: Instance, cf: CFrame, style: string, foods: { 
 		solid(newPart(model, "Box", Vector3.new(9, 5.2, 5), cf * CFrame.new(0, 3.3, 0.6), body, M.SmoothPlastic))
 		solid(newPart(model, "Cab", Vector3.new(3.4, 3.6, 4.8), cf * CFrame.new(-6.2, 2.5, 0.6), body, M.SmoothPlastic))
 		newPart(model, "Windshield", Vector3.new(0.12, 1.6, 4.2), cf * CFrame.new(-7.93, 3.3, 0.6), Color3.fromRGB(150, 196, 230), M.Glass).Transparency = 0.25
-		newPart(model, "Stripe", Vector3.new(12.6, 0.6, 5.04), cf * CFrame.new(-1.7, 1.5, 0.6), WHITE, M.SmoothPlastic)
+		newPart(model, "Stripe", Vector3.new(12.6, 0.6, 5.1), cf * CFrame.new(-1.7, 1.5, 0.6), WHITE, M.SmoothPlastic)
 		for _, x in ipairs({ -6, 2.6 }) do
 			for _, z in ipairs({ -1.9, 3.1 }) do
 				newPart(model, "Wheel", Vector3.new(0.7, 1.7, 1.7), cf * CFrame.new(x, 0.85, z) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(40, 40, 48), M.Rubber, CYL)
@@ -784,7 +785,7 @@ local function buildStall(folder: Instance, cf: CFrame, style: string, foods: { 
 		solid(newPart(model, "Side", Vector3.new(0.3, 6.4, 3.5), cf * CFrame.new(sx * 2.95, 3.2, 1.6), th.Wall, M.WoodPlanks))
 		newPart(model, "Post", Vector3.new(0.22, 3.9, 0.22), cf * CFrame.new(sx * 2.85, 5, -1.05), WHITE, M.Metal)
 	end
-	newPart(model, "Roof", Vector3.new(6.4, 0.3, 4.6), cf * CFrame.new(0, 6.5, 1.2), th.A, M.SmoothPlastic).CastShadow = true
+	newPart(model, "Roof", Vector3.new(6.3, 0.3, 4.6), cf * CFrame.new(0, 6.5, 1.2), th.A, M.SmoothPlastic).CastShadow = true
 	awning(model, cf * CFrame.new(0, 6.85, 0.1), 6.4, 2.9, 8, th.A, th.B)
 	local board = newPart(model, "Sign", Vector3.new(5.6, 1.1, 0.12), cf * CFrame.new(0, 7.55, -0.2), WHITE, M.SmoothPlastic)
 	sign(board, Locale.T(th.Title), HOT, WHITE)
@@ -931,7 +932,7 @@ local function buildGrounds(folder: Instance, F: CFrame)
 		newPart(model, "AlleyEdge", Vector3.new(0.5, 0.2, len), F * CFrame.new(sx * 5.75, 0.1, (z0 + z1) / 2), Color3.fromRGB(150, 110, 80), M.Wood)
 	end
 	-- place ronde devant la grande roue
-	newPart(model, "Round", Vector3.new(0.1, 22, 22), F * CFrame.new(0, 0.05, 8) * VERTICAL, Color3.fromRGB(236, 214, 190), M.Pavement, CYL)
+	newPart(model, "Round", Vector3.new(0.07, 22, 22), F * CFrame.new(0, 0.035, 8) * VERTICAL, Color3.fromRGB(236, 214, 190), M.Pavement, CYL)
 	-- poteaux + guirlandes au-dessus de l'allée (en zigzag)
 	local poles = {}
 	for i, z in ipairs({ -36, -21, -6 }) do

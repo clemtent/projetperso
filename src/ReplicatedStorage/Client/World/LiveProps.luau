@@ -764,7 +764,8 @@ local function buildLegends(h: Handle)
 		plate.CastShadow = false
 		plate.Transparency = 1
 		plate.Size = Vector3.new(math.max(0.05, width), 0.01, math.max(0.05, depth))
-		plate.CFrame = frameCF * CFrame.new((minX + maxX) / 2, top + 0.006, 0)
+		-- (toile 0,03 stud au-dessus des touches : pas de scintillement avec leur dessus)
+		plate.CFrame = frameCF * CFrame.new((minX + maxX) / 2, top + 0.025, 0)
 		local canvas = Vector2.new(math.max(16, math.floor(width * LEGEND_PPS + 0.5)), math.max(8, math.floor(depth * LEGEND_PPS + 0.5)))
 		local gui = Instance.new("SurfaceGui")
 		gui.Name = "Legends"

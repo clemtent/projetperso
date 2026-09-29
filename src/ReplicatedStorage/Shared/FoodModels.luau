@@ -62,7 +62,7 @@ end
 RECIPES.Popcorn = function(add)
 	add("Handle", Vector3.new(0.7, 0.8, 0.55), CFrame.identity, Color3.fromRGB(255, 252, 246), M.SmoothPlastic)
 	for _, x in ipairs({ -0.22, 0.22 }) do
-		add("Stripe", Vector3.new(0.14, 0.82, 0.57), CFrame.new(x, 0, 0), Color3.fromRGB(226, 40, 60), M.SmoothPlastic)
+		add("Stripe", Vector3.new(0.14, 0.86, 0.61), CFrame.new(x, 0, 0), Color3.fromRGB(226, 40, 60), M.SmoothPlastic)
 	end
 	local corn = { Color3.fromRGB(255, 248, 226), Color3.fromRGB(255, 236, 180) }
 	local spots = { { -0.18, 0.5, -0.1 }, { 0.16, 0.52, 0.08 }, { 0, 0.62, 0 }, { -0.1, 0.6, 0.14 }, { 0.2, 0.62, -0.12 }, { -0.2, 0.7, 0.05 }, { 0.08, 0.76, -0.04 }, { 0.02, 0.84, 0.08 } }

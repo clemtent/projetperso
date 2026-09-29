@@ -26,11 +26,17 @@
 	  NPCModels.Build(style, opts?) -> Model   (non parenté)
 	    opts : { Seed, Skin, Shirt, Pants, Hair, Scale, Prop, Name }
 	    (même Seed -> même personne sur tous les clients)
+	  NPCModels.Place(model, cf)               LA façon de DÉPLACER un PNJ qui
+	    bouge (à chaque image) : ne pose que la pièce racine (pas de
+	    Model:PivotTo répété, dont les erreurs d'arrondi s'accumulent
+	    jusqu'à des CFrame NaN) ; Animate repose ensuite tout le reste
 	  NPCModels.Animate(model, anim, t)        (CLIENT, à chaque image, léger)
 	    anim : "idle" | "walk" | "talk" | "wave" | "scan" | "push" | "sit" | "type"
 	    t : temps en secondes. La pose est relative au pivot ACTUEL du modèle
-	    (PivotTo d'abord, puis Animate). Marche aussi sur un PNJ construit
-	    par le serveur : la pose de repos est rangée en attributs.
+	    (Place / PivotTo d'abord, puis Animate). Chaque pièce est recalculée
+	    à partir de la racine et de sa pose de repos (rien ne s'accumule).
+	    Marche aussi sur un PNJ construit par le serveur : la pose de repos
+	    est rangée en attributs.
 	  NPCModels.Height, NPCModels.SitHeight, NPCModels.Styles
 ]]
 
@@ -253,7 +259,7 @@ local function arm(ctx: Ctx, sx: number, sleeve: Color3, skin: Color3, longSleev
 	add(ctx, up, "UpperArm", Vector3.new(0.42, 1.02, 0.44), at(x, 3.66, 0), sleeve, M.Fabric)
 	add(ctx, lo, "Forearm", Vector3.new(0.36, 0.98, 0.38), at(x, 2.72, 0), longSleeve and sleeve or skin, longSleeve and M.Fabric or M.SmoothPlastic)
 	if cuff then
-		add(ctx, lo, "Cuff", Vector3.new(0.4, 0.1, 0.42), at(x, 2.28, 0), cuff, M.SmoothPlastic)
+		add(ctx, lo, "Cuff", Vector3.new(0.4, 0.1, 0.42), at(x, 2.31, 0), cuff, M.SmoothPlastic)
 	end
 	add(ctx, lo, "Hand", Vector3.new(0.34, 0.4, 0.3), at(x, 2.06, -0.02), skin, M.SmoothPlastic, "Egg")
 end
@@ -717,6 +723,16 @@ local function pose(anim: string, t: number, propKind: string?): Pose
 		P.RLo = 0.05
 	end
 	return P
+end
+
+-- Déplace un PNJ (pièce racine seulement ; Animate repose les autres)
+function NPCModels.Place(model: Model, cf: CFrame)
+	local root = model.PrimaryPart
+	if root then
+		root.CFrame = cf
+	else
+		model:PivotTo(cf)
+	end
 end
 
 function NPCModels.Animate(model: Model, anim: string, t: number)

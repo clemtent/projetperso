@@ -665,6 +665,15 @@ function TownHud.Layout(self: any)
 		end
 		button.Size = UDim2.fromOffset(phone and 52 or textWidth(text, 19) + pad * 2 + 6, phone and 52 or 46)
 	end
+	-- v9.8 🎨 bouton Graphismes (REALISM98) : toujours visible, même taille que ses voisins
+	local gfx = parts.GraphicsButton
+	if gfx then
+		local d = phone and 52 or 46
+		gfx.AutomaticSize = Enum.AutomaticSize.None
+		gfx.Size = UDim2.fromOffset(d, d)
+		gfx.TextSize = math.floor(d * 0.46)
+		gfx.Visible = true
+	end
 	parts.Counter.Size = UDim2.fromOffset(phone and 220 or 260, 58)
 	-- téléphone : colonne compacte sous les boutons du haut (le bouton
 	-- "sauter" de Roblox est en bas à droite, plus à gauche que la colonne)

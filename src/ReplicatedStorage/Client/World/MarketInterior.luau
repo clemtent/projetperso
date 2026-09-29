@@ -1556,12 +1556,13 @@ end
 -- Niveau 1 : dehors (parking, chariots, camion, vitrines, écrans)
 ----------------------------------------------------------------------
 
-local CAR_KINDS = { "CityCar", "Hatchback", "SUV", "BubbleCar", "Van", "SportsCar", "Pickup", "CityCar", "Hatchback", "SUV" }
+local CAR_KINDS = { "CityCar", "Hatchback", "SUV", "BubbleCar", "Van", "Hatchback", "Pickup", "CityCar", "Hatchback", "SUV" }
 local CAR_COLORS = {
 	rgb(255, 150, 190), rgb(130, 200, 255), rgb(255, 236, 150), rgb(170, 230, 190), rgb(250, 250, 250),
 	rgb(236, 72, 90), rgb(200, 170, 250), rgb(60, 64, 80), rgb(236, 96, 110), rgb(96, 170, 120),
 }
 local LOT_Y = -0.5
+local STALLS, STALL_W = 15, 6.4 -- places par rangée (6,4 de large : même les SUV y tiennent)
 local ROW_A = { -46, -35.5 }
 local ROW_B = { -28, -17.5 }
 
@@ -1574,8 +1575,8 @@ local function outsideJobs(m: Market, parent: Instance): { () -> () }
 	-- marquages : places (2 rangées), passage piéton, flèches, voie le long de la route
 	table.insert(jobs, function()
 		for _, row in ipairs({ ROW_A, ROW_B }) do
-			for i = 0, 16 do
-				local x = -48 + i * 6
+			for i = 0, STALLS do
+				local x = -48 + i * STALL_W
 				box(parent, "StallLine", cf, x - 0.15, x + 0.15, lineY0, lineY1, row[1] + 0.3, row[2] - 0.3, line, M.SmoothPlastic)
 			end
 			-- ligne de fond de place (en T)
@@ -1613,7 +1614,7 @@ local function outsideJobs(m: Market, parent: Instance): { () -> () }
 		end
 	end)
 	-- voitures garées (rangée A : nez vers la route ; rangée B : nez vers le magasin)
-	local spots = { { "A", 3 }, { "A", 9 }, { "A", 14 }, { "B", 2 }, { "B", 6 }, { "B", 13 } }
+	local spots = { { "A", 3 }, { "A", 9 }, { "A", 13 }, { "B", 2 }, { "B", 6 }, { "B", 12 } }
 	for index, spot in ipairs(spots) do
 		table.insert(jobs, function()
 			local cm = sharedModule("CarModels")
@@ -1621,7 +1622,7 @@ local function outsideJobs(m: Market, parent: Instance): { () -> () }
 				return
 			end
 			local row, i = spot[1], spot[2]
-			local x = -48 + (i - 0.5) * 6
+			local x = -48 + (i - 0.5) * STALL_W
 			local z = row == "A" and (ROW_A[1] + ROW_A[2]) / 2 or (ROW_B[1] + ROW_B[2]) / 2
 			local rot = row == "A" and CFrame.new() or CFrame.Angles(0, math.pi, 0)
 			local ok, model = pcall(cm.Build, CAR_KINDS[index], CAR_COLORS[index], { Detail = "Parked" })
@@ -1633,7 +1634,7 @@ local function outsideJobs(m: Market, parent: Instance): { () -> () }
 		end)
 	end
 	-- abris à chariots (2) : barrières + toit + chariots emboîtés
-	for _, spot in ipairs({ { -33, (ROW_B[1] + ROW_B[2]) / 2 }, { 39, (ROW_A[1] + ROW_A[2]) / 2 } }) do
+	for _, spot in ipairs({ { -32, (ROW_B[1] + ROW_B[2]) / 2 }, { 38.4, (ROW_A[1] + ROW_A[2]) / 2 } }) do
 		table.insert(jobs, function()
 			local P = cf * CFrame.new(spot[1], LOT_Y, spot[2])
 			for _, sx in ipairs({ -1, 1 }) do
@@ -2402,7 +2403,7 @@ local function robuxShell(m: Market, parent: Instance)
 	-- coin « Bientôt » (étagère contre le mur de gauche)
 	box(parent, "SoonShelf", F, -50.9, -49.4, INLAY_TOP, 6.2, 3, 12.6, rgb(236, 226, 250), M.SmoothPlastic, true)
 	for level = 0, 1 do
-		box(parent, "SoonBoard", F, -50.9, -49.2, 2.2 + level * 2.4, 2.32 + level * 2.4, 3, 12.6, GOLD, M.Metal)
+		box(parent, "SoonBoard", F, -50.85, -49.2, 2.2 + level * 2.4, 2.32 + level * 2.4, 3.05, 12.55, GOLD, M.Metal)
 	end
 	local soon = box(parent, "SoonSign", F, -49.35, -49.3, 6.4, 7.6, 4, 11.6, SOONPINK, M.SmoothPlastic)
 	label(soon, Enum.NormalId.Right, Locale.T("🔜 Coming soon"), WHITE, nil, 30, 60)

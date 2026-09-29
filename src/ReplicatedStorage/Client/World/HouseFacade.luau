@@ -517,7 +517,8 @@ local function porch(ctx: Ctx, x0: number, x1: number, landingD: number, steps: 
 	local yTop = WorldLayout.FloorY(1)
 	local tread = 1.25
 	-- (v9.6 : 0,04 sous le seuil : pas coplanaire avec le mur sous la porte)
-	kit:Box("Porch", x0, x1, 0, yTop - 0.04, -landingD, 0, color, material, { Solid = true })
+	-- (v9.8 : pied 0,06 sous le sol : jamais coplanaire avec le soubassement)
+	kit:Box("Porch", x0, x1, -0.06, yTop - 0.04, -landingD, 0, color, material, { Solid = true })
 	-- `steps` contremarches : la dernière arrive sur la pelouse
 	local rise = yTop / steps
 	for k = 1, steps - 1 do
@@ -784,7 +785,7 @@ local function backSide(ctx: Ctx, material: Enum.Material)
 			kit:Box("BackFrame", x0 - f, x1 + f, wy1 - 0.1, wy1 + f, out - 0.2, out + 0.22, frame, frameMat)
 			kit:Box("BackFrame", x0 - f, x0 + 0.1, wy0 + 0.1, wy1 - 0.1, out - 0.2, out + 0.22, frame, frameMat)
 			kit:Box("BackFrame", x1 - 0.1, x1 + f, wy0 + 0.1, wy1 - 0.1, out - 0.2, out + 0.22, frame, frameMat)
-			kit:Box("BackSill", x0 - 0.6, x1 + 0.6, wy0 - 0.45, wy0 + 0.1, out - 0.25, out + 0.7, frame:Lerp(WHITE, 0.2), frameMat, { Shadow = false })
+			kit:Box("BackSill", x0 - 0.6, x1 + 0.6, wy0 - 0.45, wy0 + 0.1, depth + 0.16, out + 0.7, frame:Lerp(WHITE, 0.2), frameMat, { Shadow = false })
 			local ym = wy0 + (wy1 - wy0) * 0.66
 			kit:Box("BackMullion", x0 + 0.1, x1 - 0.1, ym - 0.1, ym + 0.1, depth + 0.13, depth + 0.33, frame, frameMat, { Shadow = false })
 			-- pièce pas encore construite : rideaux tirés (masqués quand la pièce est là)
@@ -1045,7 +1046,7 @@ STYLES.Cottage = function(ctx)
 	local gateX = 0
 	local stones = { { gateX, -20 }, { gateX * 0.8 + gx * 0.2, -16.5 }, { gateX * 0.5 + gx * 0.5, -13 }, { gateX * 0.2 + gx * 0.8, -10 }, { gx, foot - 1.2 } }
 	for index, s in ipairs(stones) do
-		ctx.G:CylY("SteppingStone", s[1], -0.1, s[2], 2.6 - index * 0.12, 0.25, P.Stone:Lerp(P.StoneDark, (index % 2) * 0.4), M.Slate, { Shadow = false })
+		ctx.G:CylY("SteppingStone", s[1], -0.14, s[2], 2.6 - index * 0.12, 0.25, P.Stone:Lerp(P.StoneDark, (index % 2) * 0.4), M.Slate, { Shadow = false })
 	end
 	path(ctx, { { gx, foot - 0.5 }, { gx, foot - 2.5 } }, 3, P.Pave, M.Pebble)
 	path(ctx, { { gateX, -29.5 }, { gateX, -21.5 } }, 3, P.Pave, M.Pebble)
@@ -1357,7 +1358,7 @@ STYLES.Loft = function(ctx)
 		local ly = WorldLayout.FloorY(dims.Floors)
 		-- (v9.8 : commence à droite de l'auvent : la plaque au nom reste dégagée)
 		local f0, f1 = gx + 4.9, ctx.Right + T + 7.5
-		kit:Box("FireLanding", f0, f1, ly - 0.3, ly, -3.2, -0.3, steel, M.DiamondPlate, { Shadow = false })
+		kit:Box("FireLanding", f0, f1, ly - 0.3, ly, -3.2, -0.36, steel, M.DiamondPlate, { Shadow = false })
 		kit:Box("FireRail", f0, f1, ly + 2.8, ly + 3, -3.2, -3, steel, M.Metal, { Shadow = false })
 		for k = 0, 6 do
 			local x = f0 + k * (f1 - f0) / 6

@@ -439,8 +439,7 @@ local function buildAgent(s: any, a: Agent)
 	-- (les marchands en tablier : NPCModels "baker" = tablier + toque ; au marché on garde la toque)
 	local m = NPCModels.Build(style, { Seed = a.Seed, Prop = a.Prop or "none" })
 	m.Name = "Person"
-	local root = m.PrimaryPart :: BasePart
-	root.CFrame = agentCF(a, s.Now)
+	NPCModels.Place(m, agentCF(a, s.Now))
 	m.Parent = s.Folder
 	a.Model = m
 	if a.Dog then
@@ -485,10 +484,9 @@ local function animateAgent(a: Agent, now: number)
 	end
 	local cf = agentCF(a, now)
 	a.Pos = cf.Position
-	local root = m.PrimaryPart
-	if root then
-		root.CFrame = cf
-	end
+	-- (NPCModels.Place : seule la racine bouge, Animate repose le reste ;
+	-- jamais de PivotTo répété -> pas d'erreurs d'arrondi accumulées)
+	NPCModels.Place(m, cf)
 	local t = now + a.Phase
 	if a.Kind == "walk" then
 		-- (cadence proportionnelle à la vitesse : ~4 studs / s = pas normal)
@@ -712,8 +710,8 @@ function TownPeople.Step(position: Vector3)
 	s.Built = built
 end
 
--- (rendus / tests) une image d'animation tout de suite
-function TownPeople.Frame(_dt: number?, position: Vector3?)
+-- (rendus / tests) une image d'animation tout de suite ; `at` : heure imposée
+function TownPeople.Frame(_dt: number?, position: Vector3?, at: number?)
 	local s = state
 	if not s or not s.Loaded then
 		return
@@ -721,7 +719,7 @@ function TownPeople.Frame(_dt: number?, position: Vector3?)
 	if position then
 		s.Focus = position
 	end
-	local now = serverNow()
+	local now = at or serverNow()
 	for _, a: Agent in ipairs(s.Built) do
 		animateAgent(a, now)
 	end

@@ -883,24 +883,32 @@ local function layoutPicker()
 		parts.Stage.Size = UDim2.fromOffset(430, 226)
 		parts.PaintRow.Position = UDim2.fromOffset(12, 282)
 		parts.PaintRow.Size = UDim2.fromOffset(430, 30)
-		parts.SwatchLayout.CellSize = UDim2.fromOffset(26, 26)
-		parts.SwatchLayout.CellPadding = UDim2.fromOffset(4, 4)
-		parts.PaintName.Size = UDim2.new(0, 110, 1, 0)
-		parts.Swatches.Size = UDim2.new(1, -110, 1, 0)
+		parts.SwatchLayout.CellSize = UDim2.fromOffset(24, 24)
+		parts.SwatchLayout.CellPadding = UDim2.fromOffset(3, 3)
+		parts.PaintName.Size = UDim2.new(0, 96, 1, 0)
+		parts.Swatches.Size = UDim2.new(1, -98, 1, 0)
 		parts.Info.Position = UDim2.fromOffset(454, 52)
 		parts.Info.Size = UDim2.fromOffset(334, 262)
 		parts.Carousel.Position = UDim2.fromOffset(12, 318)
 		parts.Carousel.Size = UDim2.new(1, -24, 0, 86)
-		parts.Drive.Position = UDim2.fromOffset(14, 150)
-		parts.Drive.Size = UDim2.new(0.5, -18, 0, 42)
-		parts.Choose.Position = UDim2.new(0.5, 4, 0, 152)
-		parts.Choose.Size = UDim2.new(0.5, -18, 0, 38)
+		parts.Status.Position = UDim2.fromOffset(14, 36)
+		parts.StatRows.Speed.Parent.Position = UDim2.fromOffset(14, 58)
+		parts.Drive.Position = UDim2.fromOffset(14, 136)
+		parts.Drive.Size = UDim2.new(0.5, -18, 0, 40)
+		parts.Choose.Position = UDim2.new(0.5, 4, 0, 138)
+		parts.Choose.Size = UDim2.new(0.5, -18, 0, 36)
+		parts.GarageText.Parent.Position = UDim2.fromOffset(10, 184)
+		parts.GarageText.Parent.Size = UDim2.new(1, -20, 0, 70)
 		for _, thumb in pairs(picker.Thumbs) do
 			thumb.Card.Size = UDim2.fromOffset(104, 80)
 		end
 		parts.StatRows.Speed.Parent.Size = UDim2.new(1, -28, 0, 72)
 		for _, row in pairs(parts.StatRows) do
-			row.Size = UDim2.new(1, 0, 0, 16)
+			row.Size = UDim2.new(1, 0, 0, 15)
+		end
+		local statLayout = parts.StatRows.Speed.Parent:FindFirstChildOfClass("UIListLayout")
+		if statLayout then
+			statLayout.Padding = UDim.new(0, 3)
 		end
 	else
 		card.Size = UDim2.fromOffset(960, 570)
@@ -916,16 +924,24 @@ local function layoutPicker()
 		parts.Info.Size = UDim2.fromOffset(332, 382)
 		parts.Carousel.Position = UDim2.fromOffset(16, 446)
 		parts.Carousel.Size = UDim2.new(1, -32, 0, 112)
+		parts.Status.Position = UDim2.fromOffset(14, 40)
+		parts.StatRows.Speed.Parent.Position = UDim2.fromOffset(14, 72)
 		parts.Drive.Position = UDim2.fromOffset(14, 196)
 		parts.Drive.Size = UDim2.new(1, -28, 0, 46)
 		parts.Choose.Position = UDim2.fromOffset(14, 250)
 		parts.Choose.Size = UDim2.new(1, -28, 0, 38)
+		parts.GarageText.Parent.Position = UDim2.new(0, 10, 1, -86)
+		parts.GarageText.Parent.Size = UDim2.new(1, -20, 0, 76)
 		for _, thumb in pairs(picker.Thumbs) do
 			thumb.Card.Size = UDim2.fromOffset(128, 98)
 		end
 		parts.StatRows.Speed.Parent.Size = UDim2.new(1, -28, 0, 110)
 		for _, row in pairs(parts.StatRows) do
 			row.Size = UDim2.new(1, 0, 0, 22)
+		end
+		local statLayout = parts.StatRows.Speed.Parent:FindFirstChildOfClass("UIListLayout")
+		if statLayout then
+			statLayout.Padding = UDim.new(0, 6)
 		end
 	end
 end
