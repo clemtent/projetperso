@@ -121,6 +121,32 @@ local navCache: { [any]: any } = {}
 local footprintCache: { [string]: any } = {}
 local Recipes: any = nil
 local recipesTried = false
+local Surfaces: any = nil
+local surfacesTried = false
+
+-- (HouseSurfaces : un objet posé SUR un meuble ?)
+local function surfaces(): any
+	if not surfacesTried then
+		surfacesTried = true
+		local module = HouseFolder:FindFirstChild("HouseSurfaces")
+		if module then
+			local ok, result = pcall(require, module)
+			if ok and type(result) == "table" then
+				Surfaces = result
+			end
+		end
+	end
+	return Surfaces
+end
+
+local function onFurniture(entry: any, list: { any }, size: any): boolean
+	local S = surfaces()
+	if not S or type(S.SupportOf) ~= "function" then
+		return false
+	end
+	local ok, support = pcall(S.SupportOf, entry, list, WorldLayout.RoomWidthPx(size), WorldLayout.ROOM_HEIGHT_PX)
+	return ok and type(support) == "table" and support.Entry ~= nil and support.Entry ~= entry
+end
 
 local function recipes(): any
 	if not recipesTried then
@@ -941,7 +967,15 @@ local function buildRig(pet: Pet): boolean
 		model:Destroy()
 		return false
 	end
-	local extents = model:GetExtentsSize()
+	-- (encombrement mesuré sur les pièces : haut, longueur)
+	local top, zMin, zMax = 0.5, 0, 0
+	for index, part in ipairs(parts) do
+		local p = (joints[jointOf[index]] * rel[index]).Position
+		top = math.max(top, p.Y + part.Size.Y / 2)
+		zMin = math.min(zMin, p.Z - part.Size.Z / 2)
+		zMax = math.max(zMax, p.Z + part.Size.Z / 2)
+	end
+	local extents = Vector3.new(0, top, zMax - zMin)
 	pet.Model = model
 	pet.Rig = {
 		Parts = parts,
@@ -1265,7 +1299,7 @@ local function refresh()
 								PlanCycle = -1,
 								Visible = false,
 								Hidden = {},
-								Perch = (tonumber(entry.Y) or 0.8) < (tonumber(Config.House.WallRatio) or 0.46) * 0.85,
+								Perch = onFurniture(entry, roomData.Placed, size),
 							} :: any
 							pets[key] = pet
 						end

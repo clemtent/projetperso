@@ -280,7 +280,7 @@ local function give(player: Player, food: any): boolean
 	if not tool then
 		return false
 	end
-	local holding: Holding = { Tool = tool, Food = food, Done = 0, Finished = false, LastBite = os.clock() }
+	local holding: Holding = { Tool = tool, Food = food, Done = 0, Finished = false, LastBite = os.clock() - Config.Food.BiteCooldown }
 	holdings[player] = holding
 	tool.Activated:Connect(function()
 		pcall(bite, player)

@@ -1196,13 +1196,33 @@ R.Fridge = function(b, ctx)
 	end, b.Map(rgb(240, 250, 255)))
 	local x0, x1 = ctx.Span(1, -30, 30)
 	local w, depth = math.max(52, (x1 - x0) * 1.1), 46
-	b.Box(0, 0, 0, w, 4, depth, darken(body, 0.3))
-	b.Box(0, 4, 0, w, top - 4, depth, body, M.SmoothPlastic)
-	b.Box(0, top * 0.62, depth / 2, w - 3, 1, 1, darken(body, 0.2))
-	for _, y in ipairs({ top * 0.3, top * 0.8 }) do
-		b.Box(w / 2 - 7, y - 8, depth / 2 + 1.2, 2.5, 18, 2.5, GREY, M.Metal)
+	local g = House3DKit.Gap(b, 0.8)
+	-- frigo rétro : coins arrondis, socle à grille, deux portes à joints,
+	-- poignées chromées, distributeur d'eau, magnets et petit mot
+	b.Box(0, 0, -1, w - 6, 4, depth - 6, darken(body, 0.45), M.SmoothPlastic)
+	for index = 0, 3 do
+		b.Box(0, 0.8 + index * 0.8, depth / 2 - 3.6, w - 14, 0.4, g, darken(body, 0.6), M.Metal)
 	end
-	b.CylZ(-w * 0.18, top * 0.8, depth / 2 + 0.8, 9, 1, accent(b, 1, PINK))
+	b.Round(0, 4, 0, w, top - 4, depth, 4, body, M.SmoothPlastic)
+	local split = top * 0.62
+	local doorColor = lighten(body, 0.05)
+	b.Box(0, 5, depth / 2 + g / 2, w - 5, split - 6, g, doorColor, M.SmoothPlastic)
+	b.Box(0, split + 1, depth / 2 + g / 2, w - 5, top - split - 2, g, doorColor, M.SmoothPlastic)
+	b.Box(0, split - 1, depth / 2 + g / 2, w - 5, 2, g * 0.5, darken(body, 0.35), M.Rubber)
+	for _, y in ipairs({ top * 0.3, top * 0.8 }) do
+		House3DKit.Handle(b, w / 2 - 7, y, depth / 2 + g, 18, true)
+	end
+	-- distributeur (porte du haut)
+	b.Box(-w * 0.18, split + 8, depth / 2 + g, 14, 18, g, rgb(60, 66, 80), M.SmoothPlastic)
+	local screen = b.Box(-w * 0.18, split + 22, depth / 2 + g, 8, 3, g * 1.6, rgb(120, 220, 255))
+	b.Neon(screen)
+	b.Box(-w * 0.18, split + 10, depth / 2 + 2 * g, 4, 5, 2, GREY, M.Metal)
+	-- magnets + petit mot
+	b.CylZ(-w * 0.2, top * 0.46, depth / 2 + g + 0.6, 7, 1.2, accent(b, 1, PINK), M.SmoothPlastic)
+	House3DKit.Heart(b, -w * 0.02, top * 0.4, depth / 2 + g, 6, 1.2, accent(b, 2, rgb(255, 120, 150)), M.SmoothPlastic)
+	House3DKit.StarSoft(b, -w * 0.22, top * 0.3, depth / 2 + g, 3.4, 1.2, BUTTER, M.SmoothPlastic)
+	b.BoxR(CFrame.new(-w * 0.08, top * 0.25, depth / 2 + g + 0.3) * CFrame.Angles(0, 0, 0.08), 10, 12, 0.6, rgb(255, 250, 220), M.SmoothPlastic)
+	b.Ball(-w * 0.08, top * 0.25 + 5, depth / 2 + g + 1, 2, rgb(255, 90, 110), M.SmoothPlastic)
 	b.Top(1, 0, top, 0, w, depth)
 	b.Footprint(w, depth, top)
 end
@@ -1211,16 +1231,39 @@ R.Stove = function(b, ctx)
 	local x0, x1 = ctx.Span(1, -44, 44)
 	local w, depth = x1 - x0, 50
 	local body = accent(b, 1, rgb(255, 180, 190))
+	local g = House3DKit.Gap(b, 0.8)
+	-- cuisinière : caisson, plan émaillé biseauté, dosseret à horloge,
+	-- four vitré (cadre, poignée chromée), tiroir bas, brûleurs à grilles
 	b.Box(0, 0, 0, w, top - 4, depth, body, M.SmoothPlastic)
-	b.Box(0, top - 4, 0, w + 2, 4, depth + 2, lightOf(b, WHITE), M.SmoothPlastic)
-	b.Box(0, 8, depth / 2, w * 0.7, top * 0.5, 1.2, rgb(60, 50, 70), M.Glass)
-	b.Box(0, top * 0.62, depth / 2 + 1, w * 0.6, 2.5, 2.5, GREY, M.Metal)
+	b.Box(0, 0, depth / 2 - 2, w - 6, 3, 2, darken(body, 0.5), M.SmoothPlastic)
+	House3DKit.Bevel(b, 0, top - 4, 0, w + 2, 4, depth + 2, 1.2, lightOf(b, WHITE), M.SmoothPlastic)
+	b.Box(0, top - 4, -depth / 2 + 2, w + 2, 14, 4, body, M.SmoothPlastic)
+	b.Box(0, top + 4, -depth / 2 + 4 + g / 2, 12, 4, g, rgb(40, 40, 52), M.SmoothPlastic)
+	local digits = b.Box(0, top + 5, -depth / 2 + 4 + g, 8, 2, g, rgb(120, 255, 170))
+	b.Neon(digits)
+	-- four
+	b.Box(0, 12, depth / 2 + g / 2, w * 0.8, top * 0.56, g, darken(body, 0.12), M.SmoothPlastic)
+	local window = b.Box(0, 16, depth / 2 + g, w * 0.62, top * 0.4, g, rgb(40, 34, 52), M.Glass)
+	window.Reflectance = 0.2
+	b.Box(0, 17, depth / 2 + g * 0.5, w * 0.5, 1.4, g, rgb(255, 200, 120), M.SmoothPlastic) -- lueur du four (derrière la vitre)
+	House3DKit.Handle(b, 0, top * 0.66, depth / 2 + g, w * 0.6, false)
+	-- tiroir bas
+	b.Box(0, 3.4, depth / 2 + g / 2, w * 0.8, 7, g, darken(body, 0.08), M.SmoothPlastic)
+	House3DKit.Handle(b, 0, 7, depth / 2 + g, w * 0.3, false)
+	-- manettes
 	for index = 1, 4 do
-		knob(b, -w / 2 + index * w / 5, top - 10, depth / 2 + 1, 4, INK)
+		local kx = -w / 2 + index * w / 5
+		b.CylZ(kx, top - 10, depth / 2 + 0.8, 6, 1.6, CHROME_METAL, M.Metal).Reflectance = 0.3
+		b.CylZ(kx, top - 10, depth / 2 + 2, 4, 2.4, INK, M.SmoothPlastic)
+		b.Box(kx, top - 8.6, depth / 2 + 3.3, 0.8, 1.6, 0.4, WHITE, M.SmoothPlastic)
 	end
-	for _, x in ipairs({ -w / 4, w / 4 }) do
-		for _, z in ipairs({ -depth / 4, depth / 4 }) do
-			b.Cyl(x, top, z, 16, 1, rgb(70, 60, 80), M.Metal)
+	-- brûleurs (tête, chapeau) + grilles en fonte
+	for _, bx in ipairs({ -w / 4, w / 4 }) do
+		for _, bz in ipairs({ -depth / 4, depth / 4 }) do
+			b.Cyl(bx, top, bz, 14, 0.8, rgb(70, 60, 80), M.Metal)
+			b.Cyl(bx, top + 0.8, bz, 7, 0.8, rgb(40, 36, 48), M.Metal)
+			b.Box(bx, top + 1.2, bz, 18, 1, 1.4, INK, M.Metal)
+			b.Box(bx, top + 1.2, bz, 1.4, 1, 18, INK, M.Metal)
 		end
 	end
 	b.Top(1, 0, top, 0, w, depth)
@@ -1228,20 +1271,52 @@ R.Stove = function(b, ctx)
 end
 R.Microwave = function(b, _ctx)
 	local body = lightOf(b, WHITE)
-	b.Box(0, 0, 0, 90, 56, 50, body, M.SmoothPlastic)
-	b.Box(-10, 8, 25, 56, 40, 1, rgb(50, 44, 70), M.Glass)
-	b.Box(30, 8, 25, 18, 40, 1, accent(b, 1, PINK))
+	local g = House3DKit.Gap(b, 0.8)
+	-- micro-ondes : coins arrondis, porte à hublot sombre (reflet), plateau
+	-- tournant, panneau de commande (afficheur + touches), poignée, pieds
+	for _, sx in ipairs({ -1, 1 }) do
+		for _, sz in ipairs({ -1, 1 }) do
+			b.Cyl(sx * 38, 0, sz * 18, 5, 2, INK, M.Rubber)
+		end
+	end
+	b.Round(0, 2, 0, 90, 54, 50, 4, body, M.SmoothPlastic)
+	b.Box(-10, 7, 25 + g / 2, 60, 44, g, darken(body, 0.08), M.SmoothPlastic)
+	local glass = b.Box(-12, 11, 25 + g, 50, 36, g, rgb(44, 38, 62), M.Glass)
+	glass.Reflectance = 0.25
+	House3DKit.Handle(b, 17, 29, 25 + g, 26, true)
+	-- panneau de commande
+	b.Box(30, 7, 25 + g / 2, 18, 44, g, accent(b, 1, PINK), M.SmoothPlastic)
+	b.Box(30, 42, 25 + g, 13, 5, g, rgb(30, 40, 30), M.SmoothPlastic)
+	local digits = b.Box(30, 43.2, 25 + 1.6 * g, 9, 2.4, g * 0.6, rgb(120, 255, 170))
+	b.Neon(digits)
+	for row = 0, 3 do
+		for col = 0, 2 do
+			b.Box(26 + col * 4, 14 + row * 5.6, 25 + 1.6 * g, 3, 3.6, g * 0.8, row == 0 and GREY_DARK or lighten(accent(b, 1, PINK), 0.35), M.SmoothPlastic)
+		end
+	end
 	b.Top(1, 0, 56, 0, 80, 46)
 	b.Footprint(90, 50, 56)
 end
 R.Toaster = function(b, _ctx)
 	local body = accent(b, 1, rgb(255, 170, 190))
-	b.Box(0, 0, 0, 80, 56, 44, body, M.SmoothPlastic)
-	for _, z in ipairs({ -8, 8 }) do
-		b.Box(0, 56, z, 60, 1, 7, INK)
-		b.Box(0, 52, z, 40, 10, 5, rgb(222, 170, 110))
+	local g = House3DKit.Gap(b, 0.8)
+	-- grille-pain rétro : coque arrondie, bandeau chromé, fentes avec deux
+	-- tranches dorées (croûte), levier, molette, pieds
+	for _, sx in ipairs({ -1, 1 }) do
+		b.Box(sx * 32, 0, 0, 8, 3, 36, INK, M.Rubber)
 	end
-	b.Box(42, 30, 0, 4, 6, 10, INK)
+	b.Round(0, 3, 0, 80, 50, 44, 10, body, M.SmoothPlastic)
+	b.Egg(0, 53, 0, 76, 8, 40, body, M.SmoothPlastic)
+	local band = b.Box(0, 22, 0, 80 + 2 * g, 5, 44 + 2 * g, CHROME_METAL, M.Metal)
+	band.Reflectance = 0.35
+	for _, z in ipairs({ -8, 8 }) do
+		b.Box(0, 54, z, 60, 3, 7, INK, M.SmoothPlastic)
+		b.Box(0, 50, z, 40, 12, 4.4, rgb(214, 160, 96), M.SmoothPlastic)
+		b.Egg(0, 62, z, 40, 6, 4.4, rgb(176, 110, 60), M.SmoothPlastic)
+	end
+	b.Box(41, 34, 0, 4, 5, 10, INK, M.SmoothPlastic)
+	b.Box(40 + g, 18, 0, g, 30, 4, darken(body, 0.35), M.SmoothPlastic)
+	b.CylX(41, 14, 12, 7, 3, CHROME_METAL, M.Metal).Reflectance = 0.3
 	b.Footprint(80, 44, 60)
 end
 
@@ -1251,63 +1326,138 @@ R.Bathtub = function(b, ctx)
 	local top = ctx.TopY(1, 54)
 	local body = lightOf(b, WHITE)
 	local w, depth = 96, 52
+	local g = House3DKit.Gap(b, 0.8)
+	-- baignoire sur pieds griffes : cuve arrondie, rebord roulé, eau
+	-- transparente avec mousse, robinet col-de-cygne chromé à croisillons
 	for _, sx in ipairs({ -1, 1 }) do
 		for _, sz in ipairs({ -1, 1 }) do
-			b.Ball(sx * 40, 4, sz * 18, 9, GOLD, M.Metal)
+			local fx, fz = sx * 38, sz * 16
+			local foot = b.Ball(fx, 4.4, fz, 8, GOLD, M.Metal)
+			foot.Reflectance = 0.3
+			b.Cyl(fx, 0, fz, 7, 2, GOLD, M.Metal)
+			b.Wedge(fx + sx * 3, 0, fz, 3, 4, 6, darken(GOLD, 0.1), sx > 0 and "Right" or "Left", M.Metal)
 		end
 	end
-	b.Box(0, 6, 0, w, top - 10, depth, body, M.SmoothPlastic)
-	b.Box(0, top - 4, 0, w + 2, 4, depth + 2, lighten(body, 0.2), M.SmoothPlastic)
-	b.Box(0, top - 7, 0, w - 10, 4, depth - 10, rgb(170, 220, 255), M.Glass).Transparency = 0.15
-	for index = 1, 7 do
-		b.Ball(-30 + index * 9, top - 3, ((index * 13) % 20) - 10, 8 + index % 3 * 2, WHITE)
+	b.Round(0, 8, 0, w - 4, top - 12, depth - 4, 14, body, M.SmoothPlastic)
+	b.Egg(0, 9, 0, w - 8, 8, depth - 8, body, M.SmoothPlastic)
+	b.Round(0, top - 4, 0, w + 2, 4, depth + 2, 16, lighten(body, 0.2), M.SmoothPlastic)
+	local water = b.Box(0, top - 7, 0, w - 10, 3.4, depth - 10, rgb(170, 220, 255), M.Glass)
+	water.Transparency = 0.25
+	for index = 1, 9 do
+		b.Ball(-32 + index * 7.5, top - 3.2, ((index * 13) % 20) - 10, 7 + index % 3 * 2.4, WHITE)
 	end
-	b.Cyl(-w / 2 + 6, top, 0, 4, 18, GREY, M.Metal)
-	b.CylX(-w / 2 + 11, top + 17, 0, 4, 12, GREY, M.Metal)
-	b.Box(0, 10, depth / 2 + 0.5, w * 0.6, 8, 1, accent(b, 1, PINK))
+	-- robinet
+	local chrome = CHROME_METAL
+	b.Cyl(-w / 2 + 6, top, 0, 4, 16, chrome, M.Metal).Reflectance = 0.4
+	b.Tube(-w / 2 + 6, top + 16, 0, -w / 2 + 12, top + 18, 0, 3.4, chrome, M.Metal).Reflectance = 0.4
+	b.Tube(-w / 2 + 12, top + 18, 0, -w / 2 + 14, top + 12, 0, 3, chrome, M.Metal).Reflectance = 0.4
+	for _, sz in ipairs({ -1, 1 }) do
+		b.Cyl(-w / 2 + 6, top, sz * 8, 3, 6, chrome, M.Metal)
+		b.CylX(-w / 2 + 6, top + 6.5, sz * 8, 1.4, 7, chrome, M.Metal).Reflectance = 0.4
+		b.CylZ(-w / 2 + 6, top + 6.5, sz * 8, 1.4, 7, chrome, M.Metal)
+	end
+	b.Box(0, 12, depth / 2 - 2 + g, w * 0.6, 7, g, accent(b, 1, PINK), M.SmoothPlastic)
 	b.Top(1, 0, top, 0, w - 8, depth - 8)
 	b.Footprint(w + 2, depth + 2, top)
 end
 R.Toilet = function(b, ctx)
 	local top = ctx.TopY(1, 82)
 	local body = lightOf(b, WHITE)
+	-- WC : pied galbé, cuvette, lunette + abattant, réservoir aux angles
+	-- arrondis, couvercle biseauté, bouton poussoir chromé
+	b.Egg(0, 4, 8, 34, 12, 40, body, M.SmoothPlastic)
 	b.Cyl(0, 0, 8, 28, 26, body, M.SmoothPlastic)
-	b.Cyl(0, 22, 10, 46, 12, body, M.SmoothPlastic)
-	b.Cyl(0, 34, 10, 48, 3, accent(b, 1, PINK), M.SmoothPlastic)
-	b.Box(0, 30, -20, 46, top - 30, 18, body, M.SmoothPlastic)
-	b.Box(0, top - 3, -20, 50, 4, 20, lighten(body, 0.2), M.SmoothPlastic)
-	b.Box(14, top - 12, -10, 8, 3, 2, GREY, M.Metal)
+	for _, sx in ipairs({ -1, 1 }) do
+		b.Ball(sx * 15, 3, 12, 4, lighten(body, 0.1), M.SmoothPlastic)
+	end
+	b.Egg(0, 28, 10, 46, 16, 50, body, M.SmoothPlastic)
+	b.Cyl(0, 22, 10, 44, 12, body, M.SmoothPlastic)
+	b.Cyl(0, 34, 10, 48, 2, lighten(body, 0.15), M.SmoothPlastic)
+	b.Egg(0, 37, 11, 46, 3.4, 48, accent(b, 1, PINK), M.SmoothPlastic)
+	b.CylX(0, 37, -12, 3, 16, CHROME_METAL, M.Metal)
+	b.Round(0, 30, -20, 46, top - 34, 18, 4, body, M.SmoothPlastic)
+	House3DKit.Bevel(b, 0, top - 4, -20, 50, 4, 20, 1.2, lighten(body, 0.2), M.SmoothPlastic)
+	b.Cyl(0, top, -20, 7, 1.2, CHROME_METAL, M.Metal).Reflectance = 0.35
+	b.Box(14, top - 12, -10.4, 8, 3, 2, GREY, M.Metal)
 	b.Top(1, 0, top, -20, 40, 16)
 	b.Footprint(50, 56, top)
 end
 R.Shower = function(b, _ctx)
 	local tray = lightOf(b, WHITE)
+	local chrome = CHROME_METAL
+	local g = House3DKit.Gap(b, 0.8)
+	-- receveur + bonde, faïence du fond (carreaux et joints), parois vitrées
+	-- à profilés chromés, pommeau de pluie, douchette sur barre, mitigeur,
+	-- tablette avec flacons
 	b.Box(0, 0, 0, 80, 6, 60, tray, M.SmoothPlastic)
+	b.Box(0, 6, 0, 72, 0.6, 52, darken(tray, 0.05), M.SmoothPlastic)
+	b.Cyl(8, 6, 6, 6, 0.8, chrome, M.Metal)
+	b.Box(0, 6, -29, 80, 90, 2, rgb(170, 180, 190), M.SmoothPlastic)
+	local tile = accent(b, 1, SKY)
+	for row = 0, 5 do
+		for col = 0, 3 do
+			b.Box(-30 + col * 20, 7.5 + row * 14.8, -28 + g / 2, 18.6, 13.4, g, vary(lighten(tile, 0.35), row * 5 + col, 0.05), M.SmoothPlastic)
+		end
+	end
 	local glass = b.Box(0, 6, 29, 78, 90, 1.2, rgb(200, 230, 255), M.Glass)
 	glass.Transparency = 0.6
 	glass.CastShadow = false
 	local side = b.Box(39, 6, 0, 1.2, 90, 58, rgb(200, 230, 255), M.Glass)
 	side.Transparency = 0.6
 	side.CastShadow = false
-	b.Cyl(-30, 6, -26, 4, 92, GREY, M.Metal)
-	b.CylZ(-30, 96, -18, 4, 16, GREY, M.Metal)
-	b.Cyl(-30, 88, -10, 16, 3, GREY, M.Metal)
+	for _, spec in ipairs({ { 39.8, 29.8 }, { -39.8, 29.8 }, { 39.8, -28 } }) do
+		b.Box(spec[1], 6, spec[2], 1.8, 90, 1.8, chrome, M.Metal).Reflectance = 0.35
+	end
+	b.Box(0, 94.6, 29.8, 80, 1.8, 1.8, chrome, M.Metal).Reflectance = 0.35
+	House3DKit.Handle(b, 20, 50, 29.6, 24, true)
+	-- pommeau de pluie + bras
+	b.Tube(-30, 92, -27, -30, 92, -12, 2.4, chrome, M.Metal).Reflectance = 0.4
+	b.Cyl(-30, 88, -8, 18, 3, chrome, M.Metal).Reflectance = 0.4
+	b.Cyl(-30, 87.6, -8, 15, 0.6, GREY_DARK, M.Metal)
+	-- mitigeur + douchette sur barre
+	b.CylZ(-30, 46, -27, 10, 2, chrome, M.Metal).Reflectance = 0.4
+	b.Box(-30, 45, -24, 6, 2, 4, chrome, M.Metal)
+	b.Box(-14, 30, -27.4, 2, 50, 2, chrome, M.Metal).Reflectance = 0.35
+	b.Tube(-14, 70, -25, -14, 80, -22, 3, chrome, M.Metal)
+	b.Cyl(-14, 80, -21, 7, 2, chrome, M.Metal)
+	-- tablette et flacons
+	b.Box(22, 50, -25, 18, 1.6, 6, chrome, M.Metal)
+	for index, c in ipairs({ PINK, MINT, BUTTER }) do
+		b.Cyl(16 + index * 4.4, 51.6, -25, 3.6, 7 + index % 2 * 2, c, M.SmoothPlastic)
+	end
 	b.Box(0, 96, 0, 82, 3, 60, accent(b, 1, SKY))
 	b.Footprint(82, 62, 100)
 end
 R.HotSpring = function(b, _ctx)
 	local stone = b.Map(rgb(170, 160, 180))
-	for index = 0, 13 do
-		local angle = index / 14 * math.pi * 2
-		b.Ball(math.cos(angle) * 44, 10, math.sin(angle) * 30, 20 + index % 3 * 3, index % 2 == 0 and stone or darken(stone, 0.12), M.Slate)
+	-- source chaude : rochers variés, eau, bec en bambou qui verse, vapeur,
+	-- seau en bois
+	for index = 0, 15 do
+		local angle = index / 16 * math.pi * 2
+		local s = 18 + (index * 7) % 4 * 2.4
+		b.EggR(CFrame.new(math.cos(angle) * 44, 8 + (index % 3) * 1.4, math.sin(angle) * 30) * CFrame.Angles(0, -angle, 0.2 * ((index % 2) * 2 - 1)), s * 1.2, s * 0.8, s,
+			vary(index % 2 == 0 and stone or darken(stone, 0.12), index, 0.1), M.Slate)
 	end
 	b.Cyl(0, 0, 0, 80, 12, rgb(150, 210, 240), M.Glass)
-	b.Cyl(0, 11, 0, 76, 2, rgb(190, 235, 255), M.SmoothPlastic)
+	local surface = b.Cyl(0, 11, 0, 76, 2, rgb(190, 235, 255), M.Glass)
+	surface.Transparency = 0.2
+	surface.Reflectance = 0.2
+	b.Tube(-44, 30, -18, -26, 22, -10, 4, rgb(150, 190, 90), M.Wood)
+	b.Tube(-44, 30, -18, -44, 8, -18, 4.4, rgb(130, 170, 80), M.Wood)
+	local stream = b.Tube(-26, 22, -10, -24, 12, -9, 2, rgb(200, 235, 255), M.Glass)
+	stream.Transparency = 0.4
 	for index = 1, 5 do
 		local steam = b.Ball(-20 + index * 8, 30 + index * 6, (index % 2) * 8, 14, WHITE)
 		steam.Transparency = 0.55
 		steam.CastShadow = false
 	end
+	-- seau en bois cerclé + serviette pliée
+	b.Cyl(40, 12, 22, 12, 9, rgb(200, 150, 100), M.Wood)
+	for _, y in ipairs({ 13.5, 18.5 }) do
+		b.Cyl(40, y, 22, 12.6, 1, GREY_DARK, M.Metal)
+	end
+	b.Box(30, 14, -24, 14, 3, 9, WHITE, M.Fabric)
+	b.CylZ(23, 15.5, -24, 3, 9, WHITE, M.Fabric)
 	b.Footprint(100, 70, 20)
 end
 

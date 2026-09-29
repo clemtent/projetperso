@@ -42,7 +42,7 @@
 	  "enter" { Visit = UserId?, Slot = number? } -> { Plot, Owner, Arrival = "Entrance" | "Door" }
 	  "leave" | "home" | "stand" (détruit son siège)
 	  "visit" UserId | "room" { Owner = UserId, Slot } | "setOpen" "Everyone" | "Friends" | "Nobody"
-	  "like" UserId | "sit" { Owner = UserId, Slot, CFrame } | "houses" (-> liste des instantanés)
+	  "like" UserId | "sit" { Owner = UserId, Slot, CFrame, Kind? } | "houses" (-> liste des instantanés)
 	RemoteEvent WorldEvent (S -> C) :
 	  ("Houses", { instantané, ... }) | ("House", instantané) | ("Gone", UserId)
 	  ("Liked", { Owner, By, Likes }) | ("Toast", texte) | ("Spawned", { Slot?, Owner })

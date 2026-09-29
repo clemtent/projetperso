@@ -1884,7 +1884,8 @@ local function driveBumper(s: any, seat: VehicleSeat, dt: number)
 		throttle = 0
 	end
 	local look = Vector3.new(-math.sin(d.Heading), 0, -math.cos(d.Heading))
-	local actual = body.AssemblyLinearVelocity:Dot(look)
+	local current = body.AssemblyLinearVelocity
+	local actual = if typeof(current) == "Vector3" then current:Dot(look) else d.Speed
 	local target = if throttle > 0.05 then throttle * BUMP_MAX elseif throttle < -0.05 then throttle * BUMP_REVERSE else 0
 	local base = if math.abs(actual - d.Speed) > 5 then actual else d.Speed
 	local speed = base + math.clamp(target - base, -BUMP_ACCEL * dt, BUMP_ACCEL * dt)

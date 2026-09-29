@@ -263,20 +263,29 @@ end
 -- Maisons
 ----------------------------------------------------------------------
 
-local function onSeat(house: any, slot: number, _model: Model, seatPart: BasePart)
+local function onSeat(house: any, slot: number, model: Model, seatPart: BasePart)
 	if edit and edit:IsEnabled() then
 		return
 	end
-	local cf = seatPart.CFrame * CFrame.new(0, seatPart.Size.Y / 2, 0)
 	if emotes then
 		emotes:Stop("sit")
 	end
-	task.spawn(function()
-		local ok, message = invoke("sit", { Owner = house.UserId, Slot = slot, CFrame = cf })
-		if not ok and type(message) == "string" then
-			toast(message, Color3.fromRGB(226, 80, 90))
+	local function sit(cf: CFrame, kind: string?)
+		task.spawn(function()
+			local ok, message = invoke("sit", { Owner = house.UserId, Slot = slot, CFrame = cf, Kind = kind })
+			if not ok and type(message) == "string" then
+				toast(message, Color3.fromRGB(226, 80, 90))
+			end
+		end)
+	end
+	-- v9.8 🪑 (SEAT98) : tirer la chaise, s'avancer, puis s'asseoir (SitAnimator)
+	local sitAnimator = optionalModule("SitAnimator")
+	if sitAnimator and type(sitAnimator.Approach) == "function" then
+		if pcall(sitAnimator.Approach, model, seatPart, sit) then
+			return
 		end
-	end)
+	end
+	sit(seatPart.CFrame * CFrame.new(0, seatPart.Size.Y / 2, 0), nil)
 end
 
 local function syncHouses()
@@ -1191,6 +1200,14 @@ local function enter(options: any)
 				warn("[Town] TownGreenery.Start : " .. tostring(errGreen))
 			end
 		end
+		-- v9.8 🪑 s'asseoir pour de vrai : chaise tirée, transitions, animations d'attente (SEAT98)
+		local sitAnimator = optionalModule("SitAnimator")
+		if sitAnimator and type(sitAnimator.Start) == "function" then
+			local okSit, errSit = pcall(sitAnimator.Start)
+			if not okSit then
+				warn("[Town] SitAnimator.Start : " .. tostring(errSit))
+			end
+		end
 		local folder = Instance.new("Folder")
 		folder.Name = HOUSES_FOLDER
 		folder.Parent = workspace
@@ -1355,6 +1372,11 @@ local function teardown()
 	local greenery = optionalModule("TownGreenery")
 	if greenery and type(greenery.Stop) == "function" then
 		pcall(greenery.Stop)
+	end
+	-- v9.8 🪑 poses rendues aux animations de Roblox, chaises remises (SEAT98)
+	local sitAnimator = optionalModule("SitAnimator")
+	if sitAnimator and type(sitAnimator.Stop) == "function" then
+		pcall(sitAnimator.Stop)
 	end
 	hud:SetDeskMode(false)
 	local s = saved
