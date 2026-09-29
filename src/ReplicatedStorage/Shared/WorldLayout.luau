@@ -77,23 +77,34 @@ WorldLayout.DOOR_H = 9.5
 WorldLayout.PASS_W = 6.5 -- passage entre deux pièces / cage -> pièce (centré en profondeur)
 WorldLayout.PASS_H = 9.5
 
--- Escalier (v9.4, dans la cage) : une volée droite par étage (étage k -> k+1),
--- au MILIEU de la cage (face à la porte d'entrée), couloirs de chaque côté.
--- 13 marches de STAIR_RISE (1 stud) x STAIR_TREAD (1,4 stud) : pente ~35,5°.
--- Bas de la volée à STAIR_D0 (vestibule devant), haut à STAIR_D1 (palier du
--- fond, toute la largeur de la cage). Trémie dans le plancher du dessus entre
--- STAIR_HOLE_D0 et STAIR_D1 : là où la marche dépasse WALL_H - HEADROOM, pour
--- garder >= HEADROOM studs sous le plancher partout sur le chemin.
+-- Escalier (v9.9 HOUSE99 : "l'escalier est au milieu de l'entrée, ça n'a
+-- aucun sens") : une volée droite par étage (étage k -> k+1) LE LONG DU MUR
+-- DE DROITE de la cage (StairSpan : bande de STAIR_W), plus jamais face à la
+-- porte. Le couloir d'entrée (CorridorSpan, ~7,4 studs) reste libre à gauche,
+-- de la porte d'entrée jusqu'à la porte de derrière (vestibule meublé devant).
+-- 18 contremarches de STORY / 18 (0,72 stud) ; bas de la volée à STAIR_D0
+-- (le battant de la porte d'entrée s'ouvre devant), haut au palier du fond
+-- (StairRun : STAIR_D1, ou MANSION_STAIR_D1 : dans le manoir, le passage vers
+-- les pièces de DROITE est au fond de la cage, derrière le haut de la volée).
+-- Giron = longueur / 17 : ~1,06 stud (pente ~34°) ; manoir ~0,91 (~38°).
+-- Les volées des étages sont empilées dans la même bande (12 studs libres
+-- entre deux volées). Trémie dans le plancher du dessus (StairHole) : là où
+-- le nez des marches dépasse WALL_H - HEADROOM (>= 8,5 studs libres).
 -- Collision : une rampe lisse invisible (pas de marche où l'avatar accroche).
-WorldLayout.STAIR_W = 5
-WorldLayout.STAIR_RISE = 1
-WorldLayout.STAIR_STEPS = 13 -- = STORY / STAIR_RISE
-WorldLayout.STAIR_TREAD = 1.4
-WorldLayout.STAIR_D0 = 4
-WorldLayout.STAIR_D1 = 4 + 13 * 1.4 -- 22,2
--- (v9.8 HOUSE98 : 7,5 -> 8,5 studs de hauteur libre : trémie plus longue)
+-- Tout est dérivé de STORY / DEPTH / WALL_T : les pièces peuvent changer de taille.
+WorldLayout.STAIR_W = 4.3 -- largeur de la bande (limon côté couloir compris)
+WorldLayout.STAIR_RISERS = 18
+WorldLayout.STAIR_STEPS = 18 -- (compat : = STAIR_RISERS)
+WorldLayout.STAIR_RISE = WorldLayout.STORY / 18 -- 0,72
+WorldLayout.STAIR_D0 = WorldLayout.WALL_T + 2.8 -- 3,8 : premier nez de marche (d)
+WorldLayout.STAIR_D1 = WorldLayout.WALL_T + WorldLayout.DEPTH - 3.2 -- 21,8 : arrivée (palier du fond)
+WorldLayout.MANSION_BACK_PASS = 5 -- (manoir) passage cage -> pièces de droite, au fond
+WorldLayout.MANSION_STAIR_D1 = WorldLayout.WALL_T + WorldLayout.DEPTH - 0.4 - WorldLayout.MANSION_BACK_PASS - 0.3 -- 19,3
+WorldLayout.STAIR_TREAD = (WorldLayout.STAIR_D1 - WorldLayout.STAIR_D0) / (WorldLayout.STAIR_RISERS - 1) -- 1,06
+-- (v9.8 HOUSE98 : 7,5 -> 8,5 studs de hauteur libre)
 WorldLayout.HEADROOM = 8.5
-WorldLayout.STAIR_HOLE_D0 = 4 + (12 - 8.5) * 1.4 -- 8,9 (marche à 3,5 : 12 - 3,5 = 8,5 de hauteur libre)
+WorldLayout.STAIR_HOLE_D0 = WorldLayout.STAIR_D0
+	+ (WorldLayout.WALL_H - WorldLayout.HEADROOM - WorldLayout.STAIR_RISE) / WorldLayout.STAIR_RISE * WorldLayout.STAIR_TREAD -- ~7,9
 
 -- (v9.8 HOUSE98) Porte de DERRIÈRE (vers le jardin) : au rez-de-chaussée,
 -- dans le mur du fond de la cage, derrière l'escalier (couloir du fond
@@ -128,6 +139,11 @@ local function sizeOf(size: SizeDef?): (number, number, number)
 	local columns = math.clamp(math.floor(finite(size and size.Columns, 1)), 1, 8)
 	local width = math.clamp(finite(size and size.Width, 1), 0.5, 2)
 	return floors, columns, width
+end
+
+local function sizeOfColumns(size: SizeDef?): number
+	local _, columns = sizeOf(size)
+	return columns
 end
 
 -- Largeur 2D (px de maquette) d'une pièce (pour HouseSurfaces / House3DLayout)
@@ -218,16 +234,53 @@ function WorldLayout.ColumnAt(size: SizeDef?, x: number): number?
 	return math.clamp(math.floor(rel / dims.Pitch) + 1, 1, dims.Columns)
 end
 
--- x du milieu de la porte d'entrée = milieu de la cage (l'escalier lui fait face)
+-- x du milieu de la porte d'entrée = milieu de la cage (v9.9 : l'escalier
+-- est le long du mur de droite, la porte donne sur le couloir d'entrée)
 function WorldLayout.DoorX(size: SizeDef?): number
 	local x0, x1 = WorldLayout.HallSpan(size)
 	return (x0 + x1) / 2
 end
 
--- Bande de l'escalier (x gauche, x droite) : centrée dans la cage
+-- (v9.9 HOUSE99) Épaisseur de la peau des murs intérieurs de la cage
+WorldLayout.HALL_SKIN = 0.15
+
+-- Bande de l'escalier (x gauche, x droite) : contre le mur de DROITE de la cage
+-- (x gauche = limon côté couloir, x droite = face intérieure du mur)
 function WorldLayout.StairSpan(size: SizeDef?): (number, number)
-	local x = WorldLayout.DoorX(size)
-	return x - WorldLayout.STAIR_W / 2, x + WorldLayout.STAIR_W / 2
+	local _, h1 = WorldLayout.HallSpan(size)
+	local x1 = h1 - WorldLayout.HALL_SKIN
+	return x1 - WorldLayout.STAIR_W, x1
+end
+
+-- (v9.9) Couloir d'entrée libre (x gauche, x droite) : de la face intérieure
+-- du mur de gauche de la cage au limon de l'escalier
+function WorldLayout.CorridorSpan(size: SizeDef?): (number, number)
+	local h0 = WorldLayout.HallSpan(size)
+	local s0 = WorldLayout.StairSpan(size)
+	return h0 + WorldLayout.HALL_SKIN, s0
+end
+
+-- (v9.9) x du milieu du couloir (chemins des animaux, tests)
+function WorldLayout.CorridorX(size: SizeDef?): number
+	local x0, x1 = WorldLayout.CorridorSpan(size)
+	return (x0 + x1) / 2
+end
+
+-- (v9.9) Une volée : premier nez de marche d0, arrivée d1 (d), giron, hauteur
+-- de marche. Manoir : arrivée plus tôt (passage du fond vers la droite)
+function WorldLayout.StairRun(size: SizeDef?): (number, number, number, number)
+	local d0 = WorldLayout.STAIR_D0
+	-- (pièces à DROITE de la cage = manoir : leur passage est au fond)
+	local d1 = if WorldLayout.HallAfter(size) < sizeOfColumns(size) then WorldLayout.MANSION_STAIR_D1 else WorldLayout.STAIR_D1
+	local tread = (d1 - d0) / (WorldLayout.STAIR_RISERS - 1)
+	return d0, d1, tread, WorldLayout.STAIR_RISE
+end
+
+-- (v9.9) Trémie (d0, d1) dans le plancher de l'étage du dessus : là où le nez
+-- des marches dépasse WALL_H - HEADROOM, jusqu'à l'arrivée
+function WorldLayout.StairHole(size: SizeDef?): (number, number)
+	local d0, d1, tread, rise = WorldLayout.StairRun(size)
+	return d0 + (WorldLayout.WALL_H - WorldLayout.HEADROOM - rise) / rise * tread, d1
 end
 
 -- (v9.8 HOUSE98) Porte de derrière : x du milieu (repère local de la maison)
@@ -249,16 +302,60 @@ function WorldLayout.BackStepsD(size: SizeDef?): number
 	return WorldLayout.BackDoorD(size) + WorldLayout.BACK_LANDING + WorldLayout.BACK_STEPS * WorldLayout.BACK_TREAD
 end
 
--- Hauteur (au-dessus du sol de l'étage) du dessus de la rampe / des marches à
--- la profondeur d (0 avant STAIR_D0, STORY après STAIR_D1)
-function WorldLayout.StairHeight(d: number): number
-	local t = (d - WorldLayout.STAIR_D0) / (WorldLayout.STAIR_D1 - WorldLayout.STAIR_D0)
-	return math.clamp(t, 0, 1) * WorldLayout.STORY
+-- Hauteur (au-dessus du sol de l'étage) de la rampe de collision à la
+-- profondeur d (v9.9 : ligne du MILIEU des marches, parallèle aux nez : pieds
+-- à ± une demi-marche des girons ; 0 avant d0 - giron / 2, STORY à l'arrivée)
+function WorldLayout.StairHeight(d: number, size: SizeDef?): number
+	local d0, _, tread, rise = WorldLayout.StairRun(size)
+	return math.clamp((d - d0 + tread / 2) / tread * rise, 0, WorldLayout.STORY)
+end
+
+-- (v9.9) Hauteur du dessus du giron (nez de marche) sous d (0 avant la 1re marche)
+function WorldLayout.StepTop(d: number, size: SizeDef?): number
+	local d0, d1, tread, rise = WorldLayout.StairRun(size)
+	if d < d0 then
+		return 0
+	elseif d >= d1 then
+		return WorldLayout.STORY
+	end
+	return (math.floor((d - d0) / tread) + 1) * rise
 end
 
 -- Pente de la volée (degrés)
-function WorldLayout.StairSlope(): number
-	return math.deg(math.atan2(WorldLayout.STORY, WorldLayout.STAIR_D1 - WorldLayout.STAIR_D0))
+function WorldLayout.StairSlope(size: SizeDef?): number
+	local _, _, tread, rise = WorldLayout.StairRun(size)
+	return math.deg(math.atan2(rise, tread))
+end
+
+-- (v9.9 HOUSE99) Passage d'un côté d'une pièce (d0, d1 : profondeur, repère
+-- local de la maison). Au milieu de la profondeur, sauf dans le manoir : le
+-- passage de la cage vers les pièces de DROITE est au fond (derrière le haut
+-- de la volée, qui longe ce mur). `side` = "Left" | "Right" (côté de la pièce)
+function WorldLayout.PassageSpan(size: SizeDef?, column: number, side: string): (number, number)
+	local T = WorldLayout.WALL_T
+	local hall = WorldLayout.HallAfter(size)
+	if side == "Left" and column == hall + 1 then
+		local d1 = T + WorldLayout.DEPTH - 0.4
+		return d1 - WorldLayout.MANSION_BACK_PASS, d1
+	end
+	local mid = T + WorldLayout.DEPTH / 2
+	return mid - WorldLayout.PASS_W / 2, mid + WorldLayout.PASS_W / 2
+end
+
+-- (v9.9) Passages des murs de la cage : { Left = { d0, d1 }?, Right = { d0, d1 }? }
+function WorldLayout.HallPassages(size: SizeDef?): { [string]: { number } }
+	local hall = WorldLayout.HallAfter(size)
+	local columns = sizeOfColumns(size)
+	local out: { [string]: { number } } = {}
+	if hall >= 1 then
+		local a, b = WorldLayout.PassageSpan(size, hall, "Right")
+		out.Left = { a, b }
+	end
+	if hall < columns then
+		local a, b = WorldLayout.PassageSpan(size, hall + 1, "Left")
+		out.Right = { a, b }
+	end
+	return out
 end
 
 -- Côtés d'une colonne qui ont un passage (voisin ou cage) : { "Left"?, "Right"? }

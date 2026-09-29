@@ -183,27 +183,45 @@ Art.GiantBow = function(body, kit, _item)
 	return { WallShadow = Vector2.new(0.9, 0.7) }
 end
 
--- Calendrier mural : anneaux, bandeau rose, grille des jours, un jour en cœur
+-- Calendrier mural : spirale, bandeau du mois EN COURS (français), grille
+-- des jours qui commence le lundi, aujourd'hui en cœur (v9.9 SCALE99)
+local MONTHS_SHORT = { "JANV.", "FÉVR.", "MARS", "AVRIL", "MAI", "JUIN", "JUIL.", "AOÛT", "SEPT.", "OCT.", "NOV.", "DÉC." }
+local function today(): (number, number, number)
+	local ok, t = pcall(os.date, "*t")
+	if ok and type(t) == "table" and tonumber(t.year) then
+		return tonumber(t.year) or 2026, tonumber(t.month) or 1, tonumber(t.day) or 1
+	end
+	return 2026, 1, 1
+end
 Art.WallCalendar = function(body, kit, _item)
 	local C = kit.C
 	hanger(kit, body, 50, 6, 32, 68, 20, 1)
 	local page = kit.Part(body, 18, 18, 64, 72, C.White, { Radius = 6, Z = 2 })
 	kit.Part(body, 22, 88, 58, 5, kit.Darken(C.Cream, 0.04), { Radius = 3, Z = 1 })
-	local head = kit.Part(page, 0, 0, 64, 22, C.Pink, { Radius = 6, Z = 2, Shade = 0.1 })
-	kit.Text(head, "JUNE", 32, 12.5, 10, C.White, 3)
-	for _, x in ipairs({ 14, 26, 38, 50 }) do
-		kit.Part(page, x - 2, -5, 4, 9, C.GreyDark, { Radius = -1, Z = 4, Outline = false, Shade = false })
+	local year, month, day = today()
+	local head = kit.Part(page, 0, 0, 64, 20, C.Pink, { Radius = 6, Z = 2, Shade = 0.1 })
+	kit.Text(head, MONTHS_SHORT[month] or "", 32, 11.5, 9, C.White, 3)
+	for index = 0, 6 do
+		kit.Part(page, 5 + index * 9, -5, 3, 9, C.GreyDark, { Radius = -1, Z = 4, Outline = false, Shade = false })
 	end
-	for row = 0, 2 do
-		for col = 0, 4 do
-			local x = 6 + col * 11
-			local y = 28 + row * 12
-			if row == 1 and col == 3 then
-				kit.Heart(page, x + 4, y + 4.5, 11, C.Heart, 0, 4)
-			else
-				local cell = kit.Box(page, x, y, 8, 8, if (row + col) % 4 == 0 then C.MintSoft else C.PinkMist, 0, 3)
-				kit.Round(cell, 2)
-			end
+	-- premier jour du mois (Sakamoto : 1 = lundi .. 7 = dimanche) et nombre de jours
+	local offsets = { 0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4 }
+	local y = month < 3 and year - 1 or year
+	local first = (y + y // 4 - y // 100 + y // 400 + offsets[month] + 1) % 7
+	first = first == 0 and 7 or first
+	local leap = (year % 4 == 0 and year % 100 ~= 0) or year % 400 == 0
+	local days = ({ 31, leap and 29 or 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 })[month] or 30
+	for d = 1, days do
+		local slot = first - 1 + d - 1
+		local col, row = slot % 7, slot // 7
+		local x = 4 + col * 8.2
+		local cy = 25 + row * 7.6
+		if d == day then
+			kit.Heart(page, x + 3, cy + 3, 8, C.Heart, 0, 4)
+		else
+			local tint = if col == 6 then C.PinkMist elseif d < day then kit.Darken(C.Cream, 0.02) else C.MintSoft
+			local cell = kit.Box(page, x, cy, 6, 5.6, tint, 0, 3)
+			kit.Round(cell, 1.5)
 		end
 	end
 	return { WallShadow = Vector2.new(0.66, 0.72) }

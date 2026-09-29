@@ -14,6 +14,8 @@
 ]]
 
 local House3DKit = require(script.Parent.House3DKit)
+-- (v9.9 SCALE99) aiguilles à l'heure réelle
+local House3DTime = require(script.Parent.House3DTime)
 
 type Builder = House3DKit.Builder
 
@@ -769,9 +771,12 @@ R.AlarmClock = function(b, _ctx)
 		local a = index / 12 * math.pi * 2
 		b.Box(math.sin(a) * 23, 44 + math.cos(a) * 23 - 1.5, 15.8, 2, 3, 0.6, INK)
 	end
-	b.BoxR(CFrame.new(0, 52, 16.4), 2.5, 16, 0.6, INK)
-	b.BoxR(CFrame.new(5, 41, 16.6) * CFrame.Angles(0, 0, -2.2), 2.5, 12, 0.6, INK)
-	b.Ball(0, 44, 16.8, 4, GOLD, M.Metal)
+	-- (v9.9 SCALE99) aiguilles à l'heure réelle + trotteuse rouge
+	local g = House3DKit.Gap(b, 0.6)
+	House3DTime.Hand(b, "H", 0, 44, 16.1 + g, 14, 3, 3, 0.6, INK)
+	House3DTime.Hand(b, "M", 0, 44, 16.7 + 2 * g, 21, 4, 2.2, 0.6, INK)
+	House3DTime.Hand(b, "S", 0, 44, 17.3 + 3 * g, 23, 6, 0.9, 0.5, rgb(220, 50, 60))
+	b.Ball(0, 44, 17.8 + 4 * g, 4, GOLD, M.Metal)
 	b.Footprint(76, 34, 92)
 end
 

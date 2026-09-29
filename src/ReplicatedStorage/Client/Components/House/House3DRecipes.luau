@@ -43,6 +43,8 @@ local HouseSurfaces = require(script.Parent.HouseSurfaces)
 local House3DKit = require(script.Parent.House3DKit)
 -- (v9.9 SCALE99) proportions réelles à côté de l'avatar
 local House3DScale = require(script.Parent.House3DScale)
+-- (v9.9 SCALE99) aiguilles à l'heure réelle, page du calendrier du jour
+local House3DTime = require(script.Parent.House3DTime)
 
 type Builder = House3DKit.Builder
 
@@ -1874,7 +1876,43 @@ local function plaque(kind: string)
 end
 R.FramedPicture = plaque("Frame")
 R.MapPoster = plaque("Poster")
-R.WallCalendar = plaque("Calendar")
+-- (v9.9 SCALE99) 📅 vrai calendrier mural : carton de fond, 3 feuillets
+-- (on voit l'épaisseur du bloc en bas), reliure spirale en fil d'acier qui
+-- traverse les trous, suspente en V sur un clou ; la page du dessus montre
+-- le mois EN COURS (photo du mois, grille, aujourd'hui entouré : House3DTime)
+R.WallCalendar = function(b: Builder, _ctx: Ctx)
+	local g = House3DKit.Gap(b, 0.6)
+	local board = rgb(186, 160, 128)
+	-- carton de fond
+	b.Box(0, 1.6, 0.6, 67, 90.6, 1.2, board, M.SmoothPlastic)
+	-- feuillets du dessous (de plus en plus bas et clairs vers l'avant)
+	local z = 1.2
+	local sheets = { { 2.2, 62.8, rgb(236, 232, 224) }, { 2.9, 62.5, rgb(244, 241, 234) } }
+	for _, sheet in ipairs(sheets) do
+		z += g
+		b.Box(0, sheet[1], z + 0.3, sheet[2], 91 - sheet[1], 0.6, sheet[3], M.SmoothPlastic)
+		z += 0.6
+	end
+	z += g
+	local front = b.Box(0, 3.6, z + 0.3, 62, 87.4, 0.6, rgb(252, 251, 247), M.SmoothPlastic)
+	front.Name = "CalendarSheet"
+	front.CastShadow = false
+	House3DTime.CalendarPage(front, Enum.NormalId.Back)
+	local stackMid = (1.2 + z + 0.6) / 2
+	-- spirale : 14 boucles de fil qui passent dans les trous du haut
+	local steel = rgb(176, 180, 190)
+	for index = 0, 13 do
+		local x = -31 + 3.6 + index * (62 - 7.2) / 13
+		b.CylX(x, 89.4, stackMid, 4.6, 0.9, steel, M.Metal)
+	end
+	-- suspente en V et clou
+	for _, sx in ipairs({ -1, 1 }) do
+		b.Tube(sx * 7, 91.2, stackMid, 0, 97, 0.9, 0.9, steel, M.Metal)
+	end
+	b.CylZ(0, 97, 1.4, 1.6, 2.8, rgb(90, 90, 98), M.Metal)
+	b.CylZ(0, 97, 2.9, 3, 0.6, rgb(120, 120, 128), M.Metal)
+	b.Footprint(70, 6, 100)
+end
 
 -- ÉLECTRONIQUE -----------------------------------------------------------
 
@@ -3171,9 +3209,11 @@ R.MantelClock = function(b, _ctx)
 		local a = index / 12 * math.pi * 2
 		b.Box(math.sin(a) * 15, 42 + math.cos(a) * 15 - 0.8, 18 + 1.5 * g, 1.2, index % 3 == 0 and 2.6 or 1.6, g, INK)
 	end
-	b.BoxR(CFrame.new(0, 48, 18 + 1.5 * g) * CFrame.Angles(0, 0, 0.2), 2, 14, g, INK)
-	b.BoxR(CFrame.new(3, 42, 18 + 2.5 * g) * CFrame.Angles(0, 0, 1.3), 2, 10, g, INK)
-	b.Ball(0, 42, 18 + 3 * g, 2.4, GOLD, M.Metal)
+	-- (v9.9 SCALE99) aiguilles à l'heure réelle (House3DTime) + trotteuse
+	House3DTime.Hand(b, "H", 0, 42, 18 + 2.5 * g, 9, 2, 2.2, g, INK)
+	House3DTime.Hand(b, "M", 0, 42, 18 + 4 * g, 13.5, 2.5, 1.5, g, INK)
+	House3DTime.Hand(b, "S", 0, 42, 18 + 5.5 * g, 14.5, 4, 0.6, g, rgb(200, 50, 60))
+	b.Ball(0, 42, 18 + 7 * g, 2.4, GOLD, M.Metal)
 	b.CylZ(0, 12, 17 + g / 2, 7, g, GOLD, M.Metal)
 	b.Box(0, 8, 17 + 1.5 * g, 20, 12, g, rgb(200, 220, 240), M.Glass).Transparency = 0.5
 	b.Footprint(80, 40, 70)

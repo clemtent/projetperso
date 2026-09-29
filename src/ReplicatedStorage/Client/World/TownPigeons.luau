@@ -76,8 +76,6 @@ local HIP = { CFrame.new(-0.065, 0.22, 0.02), CFrame.new(0.065, 0.22, 0.02) }
 local HIP_INV = { HIP[1]:Inverse(), HIP[2]:Inverse() }
 local TAIL_P = CFrame.new(0, 0.4, 0.3)
 local TAIL_INV = TAIL_P:Inverse()
-local BODY_C = CFrame.new(0, 0.37, 0) -- (bascule en vol autour du centre du corps)
-local BODY_C_INV = BODY_C:Inverse()
 
 -- Aile dépliée : le X de la pièce (épaisseur) -> vers le haut, son Y
 -- (largeur) -> la corde (vers l'arrière), son Z (longueur) -> l'envergure
@@ -87,6 +85,11 @@ local function openAt(x: number, y: number, z: number, sweep: number?): CFrame
 		return CFrame.new(x, y, z) * CFrame.Angles(0, sweep, 0) * (CFrame.new(x, y, z):Inverse() * base)
 	end
 	return base
+end
+
+-- Barre d'aile dépliée : X de la pièce -> haut, Y (longueur) -> envergure, Z -> corde
+local function openBar(x: number, y: number, z: number): CFrame
+	return CFrame.fromMatrix(Vector3.new(x, y, z), Vector3.new(0, 1, 0), Vector3.new(1, 0, 0))
 end
 
 type Spec = {
@@ -101,7 +104,7 @@ type Spec = {
 	Shine: number?,
 }
 
--- Pièces d'un pigeon (34) : construites une fois pour toutes
+-- Pièces d'un pigeon (36) : construites une fois pour toutes
 local SPECS: { Spec } = {}
 local function spec(name: string, size: Vector3, shape: string, color: string, group: number, fold: CFrame, open: CFrame?, hand: boolean?, shine: number?)
 	table.insert(SPECS, { Name = name, Size = size, Shape = shape, Color = color, Group = group, Fold = fold, Open = open, Hand = hand, Shine = shine })
@@ -117,14 +120,20 @@ do
 	spec("Rump", Vector3.new(0.28, 0.2, 0.34), "Egg", "Rump", G_BODY, CFrame.new(0, 0.44, 0.29) * rx(-6))
 	spec("UnderTail", Vector3.new(0.19, 0.1, 0.3), "Egg", "Belly", G_BODY, CFrame.new(0, 0.33, 0.42) * rx(-12))
 	-- tête + cou (pivot : base du cou)
-	spec("Neck", Vector3.new(0.25, 0.36, 0.26), "Egg", "Neck", G_HEAD, CFrame.new(0, 0.58, -0.27) * rx(-18), nil, nil, 0.18)
-	spec("NeckSheen", Vector3.new(0.27, 0.2, 0.25), "Egg", "Sheen", G_HEAD, CFrame.new(0, 0.51, -0.25) * rx(-10), nil, nil, 0.2)
-	spec("Head", Vector3.new(0.22, 0.22, 0.27), "Egg", "Head", G_HEAD, CFrame.new(0, 0.76, -0.37) * rx(-6))
-	spec("Beak", Vector3.new(0.05, 0.05, 0.15), "Egg", "Beak", G_HEAD, CFrame.new(0, 0.735, -0.525) * rx(-12))
-	spec("Cere", Vector3.new(0.075, 0.05, 0.075), "Egg", "Cere", G_HEAD, CFrame.new(0, 0.768, -0.482))
+	-- (le cou est gris-bleu devant ; le VERT irisé sur les côtés du haut du
+	-- cou, le VIOLET en bas : deux plaques par côté, un peu brillantes)
+	spec("Neck", Vector3.new(0.25, 0.36, 0.26), "Egg", "Head", G_HEAD, CFrame.new(0, 0.58, -0.27) * rx(-18))
+	spec("NeckSheen", Vector3.new(0.27, 0.2, 0.25), "Egg", "Sheen", G_HEAD, CFrame.new(0, 0.51, -0.25) * rx(-10), nil, nil, 0.16)
 	for _, sx in ipairs({ -1, 1 }) do
-		spec("Eye", Vector3.new(0.062, 0.062, 0.062), "Ball", "Eye", G_HEAD, CFrame.new(sx * 0.093, 0.785, -0.42))
-		spec("Pupil", Vector3.new(0.032, 0.032, 0.032), "Ball", "Pupil", G_HEAD, CFrame.new(sx * 0.121, 0.787, -0.426))
+		spec("NeckGreen", Vector3.new(0.12, 0.24, 0.2), "Egg", "Neck", G_HEAD, CFrame.new(sx * 0.07, 0.6, -0.26) * rx(-18), nil, nil, 0.2)
+	end
+	spec("Head", Vector3.new(0.22, 0.22, 0.27), "Egg", "Head", G_HEAD, CFrame.new(0, 0.76, -0.37) * rx(-6))
+	spec("Beak", Vector3.new(0.045, 0.045, 0.15), "Egg", "Beak", G_HEAD, CFrame.new(0, 0.735, -0.525) * rx(-12))
+	spec("Cere", Vector3.new(0.058, 0.04, 0.065), "Egg", "Cere", G_HEAD, CFrame.new(0, 0.766, -0.482))
+	for _, sx in ipairs({ -1, 1 }) do
+		-- œil à fleur de tête (lentille aplatie), pupille au centre
+		spec("Eye", Vector3.new(0.03, 0.062, 0.062), "Egg", "Eye", G_HEAD, CFrame.new(sx * 0.094, 0.787, -0.425))
+		spec("Pupil", Vector3.new(0.014, 0.03, 0.03), "Egg", "Pupil", G_HEAD, CFrame.new(sx * 0.106, 0.788, -0.427))
 	end
 	-- ailes : couverture (+ 2 barres) et rémiges ; pliées le long du dos /
 	-- dépliées (envergure totale ~2,2 studs = ~70 cm, comme un vrai)
@@ -132,8 +141,10 @@ do
 		local g = i == 1 and G_WING_L or G_WING_R
 		local s = SHOULDER[i].Position
 		spec("Wing", Vector3.new(0.11, 0.28, 0.66), "Egg", "Wing", g, CFrame.new(sx * 0.172, 0.43, 0.1) * rx(6) * CFrame.Angles(0, 0, sx * math.rad(-6)), openAt(s.X + sx * 0.33, s.Y, s.Z + 0.05))
-		spec("WingBar", Vector3.new(0.034, 0.05, 0.25), "Egg", "Bar", g, CFrame.new(sx * 0.222, 0.45, 0.13) * rx(6), openAt(s.X + sx * 0.36, s.Y + 0.046, s.Z + 0.1))
-		spec("WingBar", Vector3.new(0.034, 0.05, 0.22), "Egg", "Bar", g, CFrame.new(sx * 0.214, 0.385, 0.2) * rx(6), openAt(s.X + sx * 0.3, s.Y + 0.046, s.Z + 0.16))
+		-- 2 barres noires : bandes obliques sur l'arrière de l'aile repliée,
+		-- bandes le long de l'envergure sur l'aile ouverte
+		spec("WingBar", Vector3.new(0.03, 0.2, 0.06), "Egg", "Bar", g, CFrame.new(sx * 0.214, 0.43, 0.14) * rx(28), openBar(s.X + sx * 0.36, s.Y + 0.046, s.Z + 0.1))
+		spec("WingBar", Vector3.new(0.03, 0.19, 0.06), "Egg", "Bar", g, CFrame.new(sx * 0.206, 0.42, 0.27) * rx(28), openBar(s.X + sx * 0.3, s.Y + 0.046, s.Z + 0.17))
 		spec("Primaries", Vector3.new(0.07, 0.16, 0.48), "Egg", "Prim", g, CFrame.new(sx * 0.105, 0.44, 0.46) * rx(-5) * CFrame.Angles(0, sx * math.rad(4), 0), openAt(s.X + sx * 0.84, s.Y, s.Z + 0.12, sx * math.rad(-14)), true)
 	end
 	-- queue en deux moitiés (éventail) + bande terminale sombre
@@ -432,20 +443,37 @@ end
 -- Places libres (atterrissage, marche)
 ----------------------------------------------------------------------
 
-local function clearOf(P: any, me: any, p: Vector3, gap: number): boolean
-	for _, other in ipairs(P.List) do
-		if other ~= me then
-			local q = other.Fly and other.Dest or other.Pos
-			if q and math.abs(q.Y - p.Y) < 1.5 and Vector3.new(q.X - p.X, 0, q.Z - p.Z).Magnitude < gap then
-				return false
-			end
-			local t = other.Target
-			if t and Vector3.new(t.X - p.X, 0, t.Z - p.Z).Magnitude < gap then
-				return false
+-- Distance horizontale de `p` à la place la plus proche prise par un autre
+-- pigeon : où il se tient (au sol, ou accroupi avant l'envol), où il va se
+-- poser, où il marche
+local function nearestTaken(P: any, me: any, p: Vector3): number
+	local best = math.huge
+	local function consider(q: Vector3?)
+		if q and math.abs(q.Y - p.Y) < 1.5 then
+			local d = Vector3.new(q.X - p.X, 0, q.Z - p.Z).Magnitude
+			if d < best then
+				best = d
 			end
 		end
 	end
-	return true
+	for _, other in ipairs(P.List) do
+		if other ~= me then
+			if other.Fly then
+				consider(other.Dest)
+				if other.Fly.T < 0 then
+					consider(other.Pos)
+				end
+			else
+				consider(other.Pos)
+			end
+			consider(other.Target)
+		end
+	end
+	return best
+end
+
+local function clearOf(P: any, me: any, p: Vector3, gap: number): boolean
+	return nearestTaken(P, me, p) >= gap
 end
 
 local function freeSpot(P: any, me: any, center: Vector3, radius: number, rng: Random): Vector3?
@@ -667,25 +695,45 @@ local function pose(P: any, bird: any, dt: number)
 			pitch = -0.12 * k
 			spreadTarget = 0.2 * k
 			bird.Pos = plan.From
+			-- (se tourne déjà vers là où il va s'envoler)
+			local first = plan.Segs[1]
+			if first then
+				local h = Vector3.new(first.V0.X, 0, first.V0.Z)
+				if h.Magnitude > 0.1 then
+					local d = angleDiff(math.atan2(-h.X, -h.Z), bird.Yaw)
+					bird.Yaw += math.clamp(d, -9 * dt, 9 * dt)
+				end
+			end
 		else
 			local s = plan.Segs[plan.I]
 			while s and plan.T > s.Dur do
 				plan.T -= s.Dur
 				plan.I += 1
 				s = plan.Segs[plan.I]
+				-- début de la descente : la place visée est-elle toujours libre ?
+				-- (sinon une autre, tout près : jamais posé sur un voisin)
+				if s and s.Kind == "land" and not bird.WillPerch and plan.T < 0.05 and not clearOf(P, bird, s.P1, 2 * BIRD_R + 0.1) then
+					local spot = freeSpot(P, bird, s.P1, 2.5, bird.Rng)
+					if spot then
+						s.P1 = spot
+						bird.Dest = spot
+					end
+				end
 			end
 			if not s then
 				land(P, bird)
-				return pose(P, bird, 0)
+				pose(P, bird, 0)
+				return
 			end
 			local pos, vel = hermite(s, plan.T)
 			bird.Pos = pos
 			local speed = vel.Magnitude
 			if Vector3.new(vel.X, 0, vel.Z).Magnitude > 0.4 then
+				-- cap = direction du vol, tourné progressivement (9 rad/s au plus)
 				local newYaw = math.atan2(-vel.X, -vel.Z)
-				local turn = angleDiff(newYaw, bird.Yaw)
-				bird.Yaw = newYaw
-				bird.YawTarget = newYaw
+				local turn = math.clamp(angleDiff(newYaw, bird.Yaw), -9 * dt, 9 * dt)
+				bird.Yaw += turn
+				bird.YawTarget = bird.Yaw
 				bird.Bank = approach(bird.Bank, math.clamp(-turn / math.max(dt, 1 / 120) * 0.12, -0.55, 0.55), 5, dt)
 			end
 			local climbPitch = speed > 0.1 and math.asin(math.clamp(vel.Y / speed, -1, 1)) or 0
@@ -741,16 +789,8 @@ local function pose(P: any, bird: any, dt: number)
 				local step = Vector3.new(-math.sin(bird.Yaw), 0, -math.cos(bird.Yaw)) * (speed * dt)
 				local nextPos = bird.Pos + step
 				-- (un voisin devant : on attend / on change de but, jamais l'un dans l'autre)
-				local blocked = false
-				for _, other in ipairs(P.List) do
-					if other ~= bird and not other.Fly and not other.Perched then
-						local dNext = Vector3.new(other.Pos.X - nextPos.X, 0, other.Pos.Z - nextPos.Z).Magnitude
-						if dNext < 2 * BIRD_R + 0.05 and dNext < Vector3.new(other.Pos.X - bird.Pos.X, 0, other.Pos.Z - bird.Pos.Z).Magnitude then
-							blocked = true
-							break
-						end
-					end
-				end
+				local dNext = nearestTaken(P, bird, nextPos)
+				local blocked = dNext < 2 * BIRD_R + 0.05 and dNext < nearestTaken(P, bird, bird.Pos)
 				if blocked then
 					bird.Target = freeSpot(P, bird, bird.Flock.Home, HOME_R, rng)
 					if not bird.Target then
@@ -839,28 +879,34 @@ local function pose(P: any, bird: any, dt: number)
 		bird.Bank = approach(bird.Bank, 0, 6, dt)
 	end
 	bird.Pitch = approach(bird.Pitch, pitch, center and 6 or 14, dt)
-	bird.Pose = {
-		Lift = lift,
-		Roll = roll,
-		HeadFwd = headFwd,
-		HeadPitch = headPitch,
-		HeadLift = headLift,
-		LegA = legA,
-		LegLift = legLift,
-		TailPitch = tailPitch,
-		Center = center,
-	}
+	-- toute la pose est LISSÉE (constante de temps ~50 ms) : on passe d'un
+	-- geste à l'autre (picorer -> marcher, vol -> sol) sans aucun saut
+	local S = bird.Pose
+	if not S then
+		S = { Lift = 0, Roll = 0, HeadFwd = 0, HeadPitch = 0, HeadLift = 0, LegA = { 0, 0 }, LegLift = { 0, 0 }, TailPitch = 0, PivotY = 0 }
+		bird.Pose = S
+	end
+	local k = 1 - math.exp(-20 * dt)
+	local kf = 1 - math.exp(-35 * dt) -- (hochement de tête : plus vif)
+	S.Lift += (lift - S.Lift) * k
+	S.Roll += (roll - S.Roll) * k
+	S.HeadFwd += (headFwd - S.HeadFwd) * kf
+	S.HeadPitch += (headPitch - S.HeadPitch) * k
+	S.HeadLift += (headLift - S.HeadLift) * k
+	for i = 1, 2 do
+		S.LegA[i] += (legA[i] - S.LegA[i]) * k
+		S.LegLift[i] += (legLift[i] - S.LegLift[i]) * k
+	end
+	S.TailPitch += (tailPitch - S.TailPitch) * k
+	-- pivot de la bascule : pieds au sol, centre du corps en vol (glissé)
+	S.PivotY += ((center and 0.37 or 0) - S.PivotY) * (1 - math.exp(-6 * dt))
 end
 
 -- Écrit les CFrames des pièces d'un pigeon dans `frames`
 local function write(bird: any, frames: { CFrame })
 	local ps = bird.Pose
-	local root = CFrame.new(bird.Pos + Vector3.new(0, ps.Lift, 0)) * CFrame.Angles(0, bird.Yaw, 0)
-	if ps.Center then
-		root = root * BODY_C * CFrame.Angles(bird.Pitch, 0, ps.Roll) * BODY_C_INV
-	else
-		root = root * CFrame.Angles(bird.Pitch, 0, ps.Roll)
-	end
+	local pivot = CFrame.new(0, ps.PivotY, 0)
+	local root = CFrame.new(bird.Pos + Vector3.new(0, ps.Lift, 0)) * CFrame.Angles(0, bird.Yaw, 0) * pivot * CFrame.Angles(bird.Pitch, 0, ps.Roll) * pivot:Inverse()
 	local head = root * CFrame.new(0, ps.HeadLift, -ps.HeadFwd) * NECK_P * CFrame.Angles(0, bird.HeadYaw, 0) * CFrame.Angles(-ps.HeadPitch, 0, 0) * NECK_INV
 	local theta = bird.FlapMean + bird.Flap * math.sin(bird.FlapPhase * math.pi * 2)
 	local theta2 = bird.Flap * 0.45 * math.sin((bird.FlapPhase - 0.1) * math.pi * 2)
@@ -993,8 +1039,9 @@ function TownPigeons.Step(P: any, dt: number, avatar: Vector3?)
 					local m = d.Magnitude
 					local need = 2 * BIRD_R
 					if m < need then
+						-- (poussée douce : 3 studs/s au plus, pas de saut visible)
 						local n = m > 1e-3 and d / m or Vector3.new(1, 0, 0)
-						local push = (need - m) / 2 + 0.002
+						local push = math.min((need - m) / 2 + 0.002, 3 * dt)
 						a.Pos -= n * push
 						b.Pos += n * push
 					end
@@ -1015,17 +1062,22 @@ function TownPigeons.Debug(P: any): any
 		return {}
 	end
 	local minGap = math.huge
+	local info = ""
 	local modes = {}
 	for i, a in ipairs(P.List) do
 		modes[a.Mode] = (modes[a.Mode] or 0) + 1
 		for j = i + 1, #P.List do
 			local b = P.List[j]
-			if not a.Fly and not b.Fly and not a.Perched and not b.Perched then
-				minGap = math.min(minGap, Vector3.new(a.Pos.X - b.Pos.X, 0, a.Pos.Z - b.Pos.Z).Magnitude)
+			if not a.Fly and not b.Fly and not a.Perched and not b.Perched and math.abs(a.Pos.Y - b.Pos.Y) < 1 then
+				local g = Vector3.new(a.Pos.X - b.Pos.X, 0, a.Pos.Z - b.Pos.Z).Magnitude
+				if g < minGap then
+					minGap = g
+					info = a.Mode .. "/" .. b.Mode .. " " .. a.Id .. "," .. b.Id
+				end
 			end
 		end
 	end
-	return { Birds = #P.List, Parts = #P.Parts, MinGap = minGap, Modes = modes }
+	return { Birds = #P.List, Parts = #P.Parts, MinGap = minGap, MinPair = info, Modes = modes }
 end
 
 return TownPigeons

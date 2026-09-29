@@ -13,6 +13,8 @@
 ]]
 
 local House3DKit = require(script.Parent.House3DKit)
+-- (v9.9 SCALE99) aiguilles à l'heure réelle
+local House3DTime = require(script.Parent.House3DTime)
 
 type Builder = House3DKit.Builder
 
@@ -243,8 +245,15 @@ R.CuckooClock = function(b, _ctx)
 		b.BoxR(CFrame.new(side * 15, 82, 5) * CFrame.Angles(0, 0, side * -0.62), 38, 6, 16, darken(wood, 0.25), M.Wood)
 	end
 	b.CylZ(0, 50, 8.5, 30, 2, rgb(255, 248, 232), M.SmoothPlastic)
-	b.BoxR(CFrame.new(0, 54, 10), 1.6, 10, 1, INK)
-	b.BoxR(CFrame.new(3, 50, 10) * CFrame.Angles(0, 0, -1.2), 1.6, 8, 1, INK)
+	-- (v9.9 SCALE99) index + aiguilles à l'heure réelle
+	local g = House3DKit.Gap(b, 0.5)
+	for index = 0, 11 do
+		local a = index / 12 * math.pi * 2
+		b.Box(math.sin(a) * 12, 50 + math.cos(a) * 12 - 1, 9.5, 1, index % 3 == 0 and 2.4 or 1.4, 2 * g, INK)
+	end
+	House3DTime.Hand(b, "H", 0, 50, 9.5 + 1.5 * g, 7, 1.5, 1.8, 0.8, INK)
+	House3DTime.Hand(b, "M", 0, 50, 10.3 + 2.5 * g, 10.5, 2, 1.2, 0.8, INK)
+	b.CylZ(0, 50, 11.1 + 3.5 * g, 2.4, 1, GOLD, M.Metal)
 	b.Box(0, 72, 7, 10, 8, 2, rgb(60, 40, 40))
 	b.Ball(0, 76, 11, 7, rgb(255, 214, 90))
 	b.Tube(0, 30, 6, 0, 10, 6, 1, GOLD, M.Metal)
@@ -269,9 +278,12 @@ R.KittyClock = function(b, _ctx)
 		local a = index / 12 * math.pi * 2
 		b.Box(math.sin(a) * 23, 50 + math.cos(a) * 23 - 1.5, 7.2, 2, 3, 0.8, INK)
 	end
-	b.BoxR(CFrame.new(0, 58, 8), 2, 16, 1, INK)
-	b.BoxR(CFrame.new(5, 48, 8.5) * CFrame.Angles(0, 0, -1.4), 2, 12, 1, INK)
-	b.Ball(0, 50, 8.6, 4, body, M.SmoothPlastic)
+	-- (v9.9 SCALE99) aiguilles à l'heure réelle + trotteuse
+	local g = House3DKit.Gap(b, 0.5)
+	House3DTime.Hand(b, "H", 0, 50, 7.6 + g, 14, 3, 2.6, 0.8, INK)
+	House3DTime.Hand(b, "M", 0, 50, 8.4 + 2 * g, 20, 4, 1.8, 0.8, INK)
+	House3DTime.Hand(b, "S", 0, 50, 9.2 + 3 * g, 22, 5, 0.8, 0.6, rgb(230, 70, 110))
+	b.Ball(0, 50, 9.8 + 4 * g, 4, body, M.SmoothPlastic)
 	-- queue-balancier
 	b.Tube(0, 16, 4, 6, 4, 4, 5, body, M.SmoothPlastic)
 	b.Footprint(76, 12, 100)

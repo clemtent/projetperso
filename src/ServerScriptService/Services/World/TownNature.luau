@@ -265,158 +265,29 @@ end
 ----------------------------------------------------------------------
 -- Aire de jeux (v9.7, NATURE97), pique-nique, coin du parc
 ----------------------------------------------------------------------
--- Sol souple en couleurs, petite clôture avec portillon (côté place),
--- toboggan (tour, toit, échelle, glissière à rebords), balançoires à
--- chaînes (vrais Seat), cage à grimper, bac à sable (jouets : client),
--- tape-cul, lapin à ressort, tourniquet. `cf` : centre au sol, -Z vers la
--- place. Tout ce qui se touche est solide, le reste est du décor.
+-- (v9.9, PARK99) 🛝 aire de jeux QUI MARCHE : ici, seulement le squelette
+-- serveur (TownPark : sol souple, murs invisibles, volumes où l'on marche,
+-- mur d'escalade, SIÈGES + invites E des balançoires, tape-cul, tourniquet,
+-- jeux à ressort, bancs ; repères des invites Glisser / Traverser /
+-- Creuser). Tout le décor réaliste et les animations sont côté CLIENT
+-- (ParkPlay, via TownGreenery : NearDetail "Playground"). `cf` : centre au
+-- sol, -Z vers la place. (v9.7 : ~110 pièces serveur, rien ne bougeait.)
 
-local PW, PD = 38, 30 -- (largeur, profondeur de l'aire)
+local TownPark = require(script.Parent.TownPark)
 
 local function playground(folder: Instance, geo: TownKit.Geo, cf: CFrame)
 	local model = TownKit.Model(folder, "Playground")
 	local g = cf * CFrame.new(0, GROUND_Y, 0)
 	model:SetAttribute("NearDetail", "Playground")
 	model:SetAttribute("DetailCF", g)
-	-- sol souple + taches de couleur (à des hauteurs distinctes)
-	TownKit.Part(model, "SoftFloor", Vector3.new(PW, 0.3, PD), g * CFrame.new(0, 0.05, 0), Color3.fromRGB(236, 150, 128), M.Rubber, "solid")
-	local patches = { { -9, -6, 5.2, C.Mint }, { 9, 6, 5.6, C.Lilac }, { 1, 0, 6.4, C.Lemon }, { -11, 8, 4.6, C.Sky } }
-	for i, pt in ipairs(patches) do
-		TownKit.Disc(model, "SoftPatch", (g * CFrame.new(pt[1], 0.22 + i * 0.03, pt[2])).Position, pt[3], 0.1, pt[4], M.Rubber, "deco")
-	end
-	-- clôture basse (poteaux + 2 lisses) avec portillon ouvert face à la place
-	local fence = Color3.fromRGB(255, 255, 255)
-	local rail = Color3.fromRGB(120, 196, 226)
-	local hw, hd = PW / 2 + 0.6, PD / 2 + 0.6
-	local sides = {
-		{ Vector3.new(-hw, 0, hd), Vector3.new(hw, 0, hd) },
-		{ Vector3.new(-hw, 0, -hd), Vector3.new(hw, 0, -hd) },
-		{ Vector3.new(-hw, 0, -hd), Vector3.new(-hw, 0, hd) },
-		{ Vector3.new(hw, 0, -hd), Vector3.new(hw, 0, hd) },
-	}
-	local gate = 2.4 -- (demi-largeur du portillon)
-	for si, s in ipairs(sides) do
-		local runs = { s }
-		if si == 2 then
-			runs = { { s[1], Vector3.new(-gate, 0, -hd) }, { Vector3.new(gate, 0, -hd), s[2] } }
-		end
-		for _, r in ipairs(runs) do
-			local a, b = (g * CFrame.new(r[1])).Position, (g * CFrame.new(r[2])).Position
-			for _, y in ipairs({ 1.1, 2.3 }) do
-				TownKit.Beam(model, "FenceRail", a + Vector3.new(0, y, 0), b + Vector3.new(0, y, 0), 0.18, 0.24, rail, M.Wood, "prop")
-			end
-			local len = (b - a).Magnitude
-			local n = math.max(1, math.floor(len / 12 + 0.5))
-			for k = 0, n do
-				local p = a:Lerp(b, k / n)
-				TownKit.Column(model, "FencePost", p, 2.7, 0.4, fence, M.Wood, "prop")
-			end
-		end
-	end
-	for _, sx in ipairs({ -1, 1 }) do
-		local p = (g * CFrame.new(sx * gate, 0, -hd)).Position
-		TownKit.Column(model, "GatePost", p, 3.2, 0.6, fence, M.Wood, "prop")
-		TownKit.Ball(model, "GateCap", p + Vector3.new(0, 3.4, 0), 0.8, C.Pink, M.SmoothPlastic, "deco")
-	end
-	-- (battant ouvert vers l'extérieur)
-	TownKit.Part(model, "Gate", Vector3.new(0.16, 1.6, 2.2), g * CFrame.new(-gate - 0.1, 1.6, -hd - 1.2), rail, M.Wood, "deco")
-	-- TOBOGGAN : tour 4 poteaux, plancher, toit à 2 pans, échelle, glissière
-	local tower = g * CFrame.new(-10, 0, 3)
-	local deckY = 4.6
-	for _, x in ipairs({ -1.5, 1.5 }) do
-		for _, z in ipairs({ -1.5, 1.5 }) do
-			TownKit.Column(model, "TowerPost", (tower * CFrame.new(x, 0, z)).Position, 8.2, 0.5, C.Sky, M.Metal, "prop")
-		end
-	end
-	TownKit.Part(model, "TowerDeck", Vector3.new(3.6, 0.4, 3.6), tower * CFrame.new(0, deckY - 0.2, 0), C.WoodLight, M.WoodPlanks, "solid")
-	for _, s in ipairs({ -1, 1 }) do
-		TownKit.Wedge(model, "TowerRoof", Vector3.new(4.4, 1.6, 2.3), tower * CFrame.new(0, 9, s * 1.15) * CFrame.Angles(0, s > 0 and math.pi or 0, 0), C.HotPink, M.SmoothPlastic, "deco")
-	end
-	-- échelle (côté -X) : 2 montants + 5 barreaux
-	for _, z in ipairs({ -0.8, 0.8 }) do
-		TownKit.Part(model, "LadderSide", Vector3.new(0.25, deckY + 1, 0.25), tower * CFrame.new(-2.4, (deckY + 1) / 2, z), C.Metal, M.Metal, "prop")
-	end
-	for k = 1, 5 do
-		TownKit.Part(model, "Rung", Vector3.new(0.22, 0.22, 1.6), tower * CFrame.new(-2.4, k * deckY / 6 + 0.1, 0), C.Metal, M.Metal, "deco")
-	end
-	-- glissière (+Z) : pente continue, rebords, sortie à plat
-	local top = (tower * CFrame.new(0, deckY, 1.8)).Position
-	local foot = (tower * CFrame.new(0, 0.9, 8.6)).Position
-	TownKit.Beam(model, "Chute", top - Vector3.new(0, 0.15, 0), foot - Vector3.new(0, 0.15, 0), 1.8, 0.3, C.Lemon, M.SmoothPlastic, "solid")
-	local right = (tower.RightVector)
-	for _, s in ipairs({ -1, 1 }) do
-		TownKit.Beam(model, "ChuteRim", top + right * s * 1.0 + Vector3.new(0, 0.2, 0), foot + right * s * 1.0 + Vector3.new(0, 0.2, 0), 0.2, 0.6, C.Peach, M.SmoothPlastic, "deco")
-	end
-	TownKit.Part(model, "ChuteOut", Vector3.new(1.8, 0.3, 1.6), tower * CFrame.new(0, 0.6, 9.3), C.Lemon, M.SmoothPlastic, "prop")
-	-- BALANÇOIRES : portique en A, barre, 2 sièges (vrais Seat) sur chaînes
-	local swing = g * CFrame.new(9, 0, -5)
-	for _, x in ipairs({ -4.6, 4.6 }) do
-		for _, z in ipairs({ -1, 1 }) do
-			local foot2 = (swing * CFrame.new(x, 0, z * 1.6)).Position
-			local head = (swing * CFrame.new(x, 7.6, 0)).Position
-			TownKit.Rod(model, "SwingLeg", foot2, head, 0.42, C.Mint, M.Metal, "prop")
-		end
-	end
-	local bar = TownKit.Rod(model, "SwingBar", (swing * CFrame.new(-4.9, 7.6, 0)).Position, (swing * CFrame.new(4.9, 7.6, 0)).Position, 0.45, C.Mint, M.Metal, "deco")
-	bar.CastShadow = true
-	for _, x in ipairs({ -2, 2 }) do
-		for _, dx in ipairs({ -0.7, 0.7 }) do
-			TownKit.Rod(model, "Chain", (swing * CFrame.new(x + dx, 7.4, 0)).Position, (swing * CFrame.new(x + dx, 2.1, 0)).Position, 0.1, C.MetalLight, M.Metal, "deco")
-		end
-		local seat = TownKit.Part(model, "SwingSeat", Vector3.new(1.7, 0.3, 0.9), swing * CFrame.new(x, 1.95, 0), C.Pink, M.Rubber, "solid", "Seat")
-		seat.CanTouch = true
-		seat.CanQuery = true
-	end
-	-- CAGE À GRIMPER : cube de barres + plateforme
-	local gym = g * CFrame.new(9, 0, 7.5)
-	for _, x in ipairs({ -2.2, 2.2 }) do
-		for _, z in ipairs({ -2.2, 2.2 }) do
-			TownKit.Column(model, "GymPost", (gym * CFrame.new(x, 0, z)).Position, 4.5, 0.36, C.Lilac, M.Metal, "prop")
-		end
-	end
-	TownKit.Part(model, "GymTop", Vector3.new(4.8, 0.3, 4.8), gym * CFrame.new(0, 4.45, 0), C.Sky, M.Rubber, "solid")
-	for _, y in ipairs({ 1.5, 3 }) do
-		for _, s in ipairs({ -1, 1 }) do
-			TownKit.Part(model, "GymBar", Vector3.new(4.4, 0.22, 0.22), gym * CFrame.new(0, y, s * 2.2), C.Lemon, M.Metal, "deco")
-		end
-	end
-	TownKit.Part(model, "GymBar", Vector3.new(0.22, 0.22, 4.4), gym * CFrame.new(-2.2, 2.25, 0), C.Lemon, M.Metal, "deco")
-	-- BAC À SABLE : 4 planches + sable (jouets : client)
-	local box = g * CFrame.new(-8, 0, -7.5)
-	TownKit.Part(model, "SandPit", Vector3.new(7, 0.5, 7), box * CFrame.new(0, 0.3, 0), C.Sand, M.Sand, "deco")
-	for _, s in ipairs({ -1, 1 }) do
-		TownKit.Part(model, "SandBorder", Vector3.new(7.8, 0.8, 0.4), box * CFrame.new(0, 0.42, s * 3.7), C.WoodLight, M.WoodPlanks, "prop")
-		TownKit.Part(model, "SandBorder", Vector3.new(0.4, 0.78, 7), box * CFrame.new(s * 3.7, 0.41, 0), C.WoodLight, M.WoodPlanks, "prop")
-	end
-	-- TAPE-CUL
-	local seesaw = g * CFrame.new(0, 0, 10) * CFrame.Angles(0, math.rad(90), 0)
-	TownKit.Part(model, "Pivot", Vector3.new(0.9, 1.3, 0.9), seesaw * CFrame.new(0, 0.65, 0), C.Metal, M.Metal, "prop")
-	local plankCF = seesaw * CFrame.new(0, 1.45, 0) * CFrame.Angles(math.rad(11), 0, 0)
-	TownKit.Part(model, "Plank", Vector3.new(0.9, 0.3, 9), plankCF, C.Peach, M.WoodPlanks, "deco")
-	for _, z in ipairs({ -3.6, 3.6 }) do
-		TownKit.Part(model, "Handle", Vector3.new(1.2, 0.8, 0.16), plankCF * CFrame.new(0, 0.55, z), C.Metal, M.Metal, "deco")
-	end
-	-- LAPIN À RESSORT
-	local rider = g * CFrame.new(-1, 0, -8) * CFrame.Angles(0, math.rad(30), 0)
-	TownKit.Column(model, "Spring", rider.Position, 1.3, 0.45, C.MetalLight, M.Metal, "deco")
-	TownKit.Egg(model, "BunnyBody", rider * CFrame.new(0, 2, 0), Vector3.new(1.3, 1.5, 2.4), C.White, M.SmoothPlastic, "prop")
-	TownKit.Ball(model, "BunnyHead", (rider * CFrame.new(0, 2.9, -1.1)).Position, 1.4, C.White, M.SmoothPlastic, "deco")
-	for _, sx in ipairs({ -1, 1 }) do
-		TownKit.Egg(model, "BunnyEar", rider * CFrame.new(sx * 0.3, 4, -1.1) * CFrame.Angles(0, 0, math.rad(-sx * 10)), Vector3.new(0.35, 1.3, 0.25), C.Pink, M.SmoothPlastic, "deco")
-	end
-	-- TOURNIQUET
-	local mg = g * CFrame.new(0, 0, 1)
-	TownKit.Disc(model, "RoundPlate", (mg * CFrame.new(0, 0.85, 0)).Position, 3.2, 0.5, C.Pink, M.Metal, "solid")
-	TownKit.Disc(model, "RoundInner", (mg * CFrame.new(0, 0.9, 0)).Position, 2.2, 0.1, C.White, M.Metal, "deco")
-	TownKit.Column(model, "RoundPole", (mg * CFrame.new(0, 0.9, 0)).Position, 2.6, 0.4, C.Metal, M.Metal, "prop")
-	for k = 0, 3 do
-		local a = k * math.pi / 2
-		TownKit.Rod(model, "RoundBar", (mg * CFrame.new(0, 3.3, 0)).Position, (mg * CFrame.new(math.cos(a) * 2.7, 0.95, math.sin(a) * 2.7)).Position, 0.18, C.Sky, M.Metal, "deco")
-	end
+	TownPark.Build(model, g)
 	-- un banc pour les parents + une poubelle, dehors, près du portillon
+	local hd = 30 / 2 + 0.6
 	TownKit.Bench(model, CFrame.lookAt((g * CFrame.new(-9, 0, -hd - 4.5)).Position, (g * CFrame.new(-9, 0, 0)).Position))
-	TownKit.Bin(model, (g * CFrame.new(gate + 3.2, 0, -hd - 2.4)).Position, Color3.fromRGB(96, 150, 110))
+	TownKit.Bin(model, (g * CFrame.new(2.4 + 3.2, 0, -hd - 2.4)).Position, Color3.fromRGB(96, 150, 110))
 	geo.Reserve(cf.Position, 23)
+	-- (après toute la nature : invite "S'asseoir" sur les bancs du parc)
+	task.defer(TownPark.BenchPrompts, folder)
 end
 
 local function picnic(folder: Instance, geo: TownKit.Geo, cf: CFrame, count: number)

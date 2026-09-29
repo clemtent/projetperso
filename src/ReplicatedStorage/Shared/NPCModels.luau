@@ -2,42 +2,74 @@
 	NPCModels (ModuleScript)
 	Emplacement : ReplicatedStorage > Shared > NPCModels
 
-	🧍 Personnages non joueurs de Dopamine Town (v9.8, CITY98), partagés par
-	le serveur ET le client (construction pure d'Instances, aucun service) :
-	caissier·ère, boulanger·ère, client·e, vendeur·se, passant·e, joggeur·se,
-	enfant, personne âgée, ouvrier·ère. Style "réaliste stylisé" :
-	  - tête ovale (peau de 8 teintes réalistes), yeux avec reflet, sourcils,
-	    nez, bouche, oreilles, 7 coiffures (courte, longue, chignon, queue de
-	    cheval, bouclée, rasée, chauve) ;
-	  - cou, buste (chemise / polo / veste), épaules arrondies, bras en deux
-	    segments (coude) + mains, bassin, cuisses + tibias (genou), chaussures ;
-	  - jupe, short, manches courtes ou longues selon la tenue ;
-	  - accessoires de métier : visière + badge (caisse), toque + tablier
-	    (boulangerie), veste + cravate + tablette (vente), gilet fluo +
-	    casque (chantier), sac de courses, téléphone, café, canne.
-	~26 à 36 pièces, toutes ANCRÉES, sans collision / requête / contact,
-	sans ombre pour les petites. Aucune lumière, aucun son, aucun script.
+	🧍 Personnages non joueurs de Dopamine Town, partagés par le serveur ET le
+	client (v9.8 CITY98 ; v9.9 NPC99 : "20x plus réalistes").
+	Styles : caissier·ère, boulanger·ère, client·e, vendeur·se, passant·e,
+	joggeur·se, enfant, personne âgée, ouvrier·ère.
+
+	v9.9 (NPC99) — un vrai corps humain, "mignon-réaliste" :
+	  - PROPORTIONS d'adulte (≈ 6,3 têtes : tête 0,84 pour 5,3 studs), épaules
+	    à 4,16, coudes à 3,32, hanches à 2,6, genoux à 1,5, chevilles à 0,34 ;
+	    torse arrondi (buste + cage thoracique ovale + ventre + bassin +
+	    fessiers), cou, membres CYLINDRIQUES avec rotules (épaule, coude,
+	    genou) : ils plient sans trou ;
+	  - VISAGE : crâne + mâchoire, yeux dessinés (SurfaceGui, que des Frame :
+	    blanc en amande, iris coloré, pupille, reflet, ligne de cils),
+	    paupières qui CLIGNENT, sourcils, nez, lèvres (SurfaceGui), oreilles ;
+	    barbe / moustache pour certains hommes, lunettes, maquillage léger ;
+	  - CHEVEUX en volume (calotte + nuque + mèches, 10 coiffures : courte,
+	    raie, longue, carré, chignon, queue de cheval, bouclée, afro, rasée,
+	    chauve) ;
+	  - VÊTEMENTS : col (rond, polo, chemise, V), coutures (ourlet, patte de
+	    boutonnage, poche), ceinture + boucle, ourlets de pantalon, manches
+	    courtes (ourlet) ou longues (poignets), jupe évasée, chaussures avec
+	    SEMELLE contrastée, bout arrondi et lacets ;
+	  - MAINS : paume, doigts légèrement repliés, POUCE ;
+	  - accessoires de métier (visière + badge, toque + tablier, costume +
+	    cravate + pochette + tablette, gilet fluo + casque, bandeau, cartable)
+	    et objets tenus (sac, téléphone, café, canne, tablette).
+	  ~55 à 75 pièces, ANCRÉES, sans collision / requête / contact (sauf la
+	  capsule de collision, voir SetSolid), sans ombre pour les petites.
+	  Aucune lumière, aucun son, aucun script.
+
+	ANIMATION (v9.9) : marche avec attaque du talon, genou qui plie pendant
+	l'oscillation, déroulé du pied, bassin qui se balance et tourne, buste en
+	contre-rotation, bras en opposition, rebond vertical ; respiration et
+	transfert du poids au repos, clignements des yeux ; la tête se TOURNE
+	doucement vers le joueur proche (automatique côté client, ou `look`).
+
+	COLLISION (v9.9) : chaque PNJ reçoit une capsule invisible, ancrée,
+	CanCollide (cylindre debout ; boîte quand il est assis) qui suit le
+	personnage : le joueur ne le traverse plus. Jamais piégé : si l'avatar
+	local se retrouve DANS la capsule (PNJ apparu sur lui), la capsule
+	devient traversable jusqu'à ce qu'il en sorte.
 
 	Repère : le PIVOT du modèle est entre les pieds, au sol ; le personnage
 	regarde vers -Z (LookVector du pivot). On le place avec
 	`m:PivotTo(solCF)`.
 
-	API :
+	API (compatible v9.8) :
 	  NPCModels.Build(style, opts?) -> Model   (non parenté)
-	    opts : { Seed, Skin, Shirt, Pants, Hair, Scale, Prop, Name }
+	    opts : { Seed, Skin, Shirt, Pants, Hair, Scale, Prop, Name,
+	             SitHeight?, Solid? (défaut true), Look? (défaut true) }
 	    (même Seed -> même personne sur tous les clients)
-	  NPCModels.Place(model, cf)               LA façon de DÉPLACER un PNJ qui
-	    bouge (à chaque image) : ne pose que la pièce racine (pas de
-	    Model:PivotTo répété, dont les erreurs d'arrondi s'accumulent
-	    jusqu'à des CFrame NaN) ; Animate repose ensuite tout le reste
-	  NPCModels.Animate(model, anim, t)        (CLIENT, à chaque image, léger)
-	    anim : "idle" | "walk" | "talk" | "wave" | "scan" | "push" | "sit" | "type"
-	    t : temps en secondes. La pose est relative au pivot ACTUEL du modèle
-	    (Place / PivotTo d'abord, puis Animate). Chaque pièce est recalculée
-	    à partir de la racine et de sa pose de repos (rien ne s'accumule).
-	    Marche aussi sur un PNJ construit par le serveur : la pose de repos
-	    est rangée en attributs.
-	  NPCModels.Height, NPCModels.SitHeight, NPCModels.Styles
+	  NPCModels.Place(model, cf)       LA façon de DÉPLACER un PNJ qui bouge
+	    (à chaque image) : ne pose que la pièce racine ; Animate repose le reste
+	  NPCModels.Animate(model, anim, t, look?)   (CLIENT, à chaque image, léger)
+	    anim : "idle" | "walk" | "talk" | "wave" | "scan" | "push" | "sit" |
+	           "type" | "clap" | "cheer"
+	    t : temps en secondes (+ décalage propre au PNJ) ; `look` (facultatif) :
+	    point du monde à regarder (sinon : l'avatar local s'il est proche).
+	    La pose est relative au pivot ACTUEL (Place / PivotTo d'abord).
+	  NPCModels.SetSolid(model, on)    capsule de collision (défaut : on)
+	  NPCModels.SetSitHeight(model, h) dessus du siège (studs au-dessus du
+	    pivot) pour "sit" et pour un PNJ ASSIS qui fait autre chose ;
+	  NPCModels.SetSeated(model, h?)   h = nombre : assis (les jambes restent
+	    assises quelle que soit l'anim : caissier·ère sur un tabouret qui
+	    "scan", client qui "talk" en terrasse) ; nil : debout
+	  NPCModels.Height (5,3), NPCModels.SitHeight (1,45 : dessus d'un banc /
+	    d'une chaise v9.9), NPCModels.Styles, NPCModels.Anims,
+	  NPCModels.PartCount(model)
 ]]
 
 local NPCModels = {}
@@ -45,96 +77,130 @@ local NPCModels = {}
 local M = Enum.Material
 local rgb = Color3.fromRGB
 
--- (échelle de base : un adulte mesure ~5,3 studs, cheveux compris)
-local BASE = 0.95
 NPCModels.Height = 5.3
-NPCModels.SitHeight = 1.9 -- dessus d'un banc (TownKit.BENCH) : bassin posé dessus
+-- (v9.9) dessus d'un siège "standard" (banc de la ville, chaise) : le bassin
+-- s'y pose (articulation de la hanche ≈ 0,24 au-dessus, fessiers dessus)
+NPCModels.SitHeight = 1.45
 NPCModels.Styles = { "cashier", "baker", "shopper", "salesperson", "pedestrian", "jogger", "kid", "elder", "worker" }
-NPCModels.Anims = { "idle", "walk", "talk", "wave", "scan", "push", "sit", "type" }
+NPCModels.Anims = { "idle", "walk", "talk", "wave", "scan", "push", "sit", "type", "clap", "cheer" }
 
 -- Groupes articulés (attribut "NpcG" de chaque pièce)
-local G_BODY, G_HEAD = 1, 2
+local G_CHEST, G_HEAD = 1, 2
 local G_LUP, G_LLO, G_RUP, G_RLO = 3, 4, 5, 6
 local G_LTH, G_LSH, G_RTH, G_RSH = 7, 8, 9, 10
+local G_PELVIS, G_LFT, G_RFT = 11, 12, 13
+local G_LID, G_COL = 14, 15
+local NGROUPS = 15
 
--- Articulations au repos (repère du pivot, avant échelle)
+-- Articulations au repos (repère du pivot, échelle 1)
 local J = {
-	Waist = Vector3.new(0, 2.6, 0),
-	Neck = Vector3.new(0, 4.35, 0),
-	ShoulderL = Vector3.new(-0.86, 4.12, 0),
-	ShoulderR = Vector3.new(0.86, 4.12, 0),
-	ElbowL = Vector3.new(-0.93, 3.2, 0),
-	ElbowR = Vector3.new(0.93, 3.2, 0),
-	HipL = Vector3.new(-0.29, 2.42, 0),
-	HipR = Vector3.new(0.29, 2.42, 0),
-	KneeL = Vector3.new(-0.29, 1.32, 0),
-	KneeR = Vector3.new(0.29, 1.32, 0),
+	Pelvis = Vector3.new(0, 2.66, 0),
+	Waist = Vector3.new(0, 3.05, 0),
+	Neck = Vector3.new(0, 4.42, 0.02),
+	ShoulderL = Vector3.new(-0.68, 4.14, 0),
+	ShoulderR = Vector3.new(0.68, 4.14, 0),
+	ElbowL = Vector3.new(-0.73, 3.32, 0.02),
+	ElbowR = Vector3.new(0.73, 3.32, 0.02),
+	HipL = Vector3.new(-0.27, 2.6, 0),
+	HipR = Vector3.new(0.27, 2.6, 0),
+	KneeL = Vector3.new(-0.27, 1.5, 0),
+	KneeR = Vector3.new(0.27, 1.5, 0),
+	AnkleL = Vector3.new(-0.27, 0.34, 0.03),
+	AnkleR = Vector3.new(0.27, 0.34, 0.03),
 }
+local THIGH_LEN = 1.1 -- (hanche -> genou)
+local KNEE_Y = 1.5 -- (genou -> sol, pied à plat)
+local HIP_OVER_SEAT = 0.26 -- (articulation de la hanche au-dessus du siège)
+NPCModels.Joints = J
+
+-- Tête (centre du crâne) et visage
+local HY = 4.84
+local HEAD = Vector3.new(0.68, 0.84, 0.76) -- crâne (ovale)
 
 ----------------------------------------------------------------------
 -- Palettes réalistes
 ----------------------------------------------------------------------
 
 local SKINS = {
-	rgb(255, 224, 196),
-	rgb(247, 210, 178),
-	rgb(236, 190, 150),
-	rgb(222, 170, 126),
-	rgb(198, 142, 102),
-	rgb(168, 112, 78),
-	rgb(130, 86, 60),
-	rgb(98, 64, 46),
+	rgb(255, 226, 204),
+	rgb(246, 212, 184),
+	rgb(236, 192, 156),
+	rgb(222, 172, 132),
+	rgb(200, 146, 106),
+	rgb(170, 116, 82),
+	rgb(134, 90, 64),
+	rgb(100, 66, 48),
 }
 local HAIRS = {
-	rgb(36, 28, 26), -- noir
-	rgb(70, 48, 36), -- brun foncé
-	rgb(110, 74, 48), -- châtain
-	rgb(160, 110, 64), -- châtain clair
-	rgb(222, 184, 120), -- blond
-	rgb(176, 84, 48), -- roux
-	rgb(58, 40, 34),
-	rgb(236, 206, 150), -- blond clair
+	rgb(34, 26, 24), -- noir
+	rgb(64, 44, 32), -- brun foncé
+	rgb(104, 70, 46), -- châtain
+	rgb(150, 104, 62), -- châtain clair
+	rgb(214, 176, 116), -- blond
+	rgb(168, 80, 46), -- roux
+	rgb(52, 36, 30),
+	rgb(230, 200, 146), -- blond clair
 }
-local GREYS = { rgb(214, 214, 214), rgb(186, 186, 190), rgb(240, 238, 234) }
+local GREYS = { rgb(208, 208, 208), rgb(180, 180, 184), rgb(236, 234, 230), rgb(150, 148, 150) }
+local IRIS = { rgb(92, 60, 38), rgb(62, 40, 28), rgb(120, 96, 52), rgb(70, 116, 160), rgb(84, 120, 84), rgb(110, 124, 136) }
 local SHIRTS = {
 	rgb(66, 110, 170), -- bleu jean
 	rgb(236, 236, 232), -- blanc cassé
-	rgb(196, 64, 72), -- rouge
+	rgb(186, 60, 70), -- rouge
 	rgb(84, 140, 110), -- vert sauge
-	rgb(246, 196, 92), -- moutarde
-	rgb(150, 110, 180), -- lilas
+	rgb(238, 190, 88), -- moutarde
+	rgb(146, 110, 176), -- lilas
 	rgb(52, 58, 72), -- anthracite
-	rgb(255, 170, 190), -- rose
-	rgb(120, 180, 220), -- ciel
-	rgb(214, 120, 70), -- terracotta
-	rgb(236, 226, 200), -- beige
-	rgb(40, 110, 120), -- canard
+	rgb(246, 170, 188), -- rose
+	rgb(120, 176, 216), -- ciel
+	rgb(206, 116, 72), -- terracotta
+	rgb(230, 220, 196), -- beige
+	rgb(40, 106, 118), -- canard
+	rgb(96, 74, 64), -- chocolat
+	rgb(210, 214, 222), -- gris perle
 }
 local PANTS = {
-	rgb(52, 70, 110), -- jean
-	rgb(40, 44, 54), -- noir
-	rgb(120, 104, 84), -- chino
-	rgb(82, 90, 100), -- gris
-	rgb(70, 90, 140), -- jean clair
-	rgb(196, 176, 140), -- beige
+	rgb(50, 68, 106), -- jean
+	rgb(38, 42, 52), -- noir
+	rgb(128, 108, 84), -- chino
+	rgb(82, 88, 98), -- gris
+	rgb(72, 94, 140), -- jean clair
+	rgb(196, 178, 142), -- beige
+	rgb(70, 78, 60), -- kaki
 }
-local SHOES = { rgb(40, 38, 40), rgb(240, 240, 240), rgb(110, 70, 44), rgb(60, 70, 110), rgb(200, 60, 70) }
-local INK = rgb(34, 28, 30)
-local WHITE = rgb(250, 250, 250)
+local SHOES = { rgb(38, 36, 38), rgb(240, 240, 238), rgb(108, 68, 42), rgb(58, 68, 108), rgb(186, 56, 64), rgb(150, 130, 110) }
+local INK = rgb(30, 24, 26)
+local WHITE = rgb(250, 250, 248)
 
-local HAIR_STYLES = { "short", "long", "bun", "pony", "curly", "buzz", "short", "long" }
+local HAIR_F = { "long", "bob", "bun", "pony", "curly", "long", "afro", "part" }
+local HAIR_M = { "short", "part", "buzz", "curly", "short", "afro", "part", "short" }
 
 ----------------------------------------------------------------------
--- Hasard déterministe
+-- Hasard déterministe (ENTIERS : identique sur tous les processeurs)
 ----------------------------------------------------------------------
 
+local MODP = 2147483647
 local function hash(a: number, b: number): number
-	local x = math.sin(a * 12.9898 + b * 78.233) * 43758.5453
-	return x - math.floor(x)
+	-- (Park-Miller : produits < 2^53, exacts en double partout)
+	local x = (math.floor(a) * 7919 + math.floor(b) * 104729 + 12345) % MODP
+	x = (x * 48271) % MODP
+	x = (x * 48271) % MODP
+	x = (x * 48271) % MODP
+	return x / MODP
 end
+NPCModels.Hash = hash
 
 local function pick<T>(list: { T }, seed: number, salt: number): T
 	return list[math.floor(hash(seed, salt) * #list) % #list + 1]
+end
+
+-- légère variation d'une couleur (tissus : jamais deux fois exactement la même)
+local function vary(c: Color3, seed: number, salt: number, amount: number?): Color3
+	local k = ((hash(seed, salt) - 0.5) * 2) * (amount or 0.06)
+	if k > 0 then
+		return c:Lerp(WHITE, k)
+	end
+	return c:Lerp(INK, -k)
 end
 
 ----------------------------------------------------------------------
@@ -150,6 +216,9 @@ export type Opts = {
 	Scale: number?,
 	Prop: string?,
 	Name: string?,
+	SitHeight: number?,
+	Solid: boolean?,
+	Look: boolean?,
 }
 
 type Ctx = {
@@ -159,13 +228,13 @@ type Ctx = {
 	Count: number,
 }
 
--- Pièce dans le groupe `g` : `cf` et `size` dans le repère de repos (avant
--- échelle). Les pièces de la tête sont agrandies autour du cou (HS).
+-- Pièce dans le groupe `g` : `cf` et `size` dans le repère de repos (échelle
+-- 1). Les pièces de la tête sont agrandies autour du cou (HS).
 local function add(ctx: Ctx, g: number, name: string, size: Vector3, cf: CFrame, color: Color3, material: Enum.Material?, shape: string?): BasePart
 	local s = ctx.S
 	local pos = cf.Position
 	local sz = size
-	if g == G_HEAD and ctx.HS ~= 1 then
+	if (g == G_HEAD or g == G_LID) and ctx.HS ~= 1 then
 		pos = J.Neck + (pos - J.Neck) * ctx.HS
 		sz = size * ctx.HS
 	end
@@ -176,7 +245,7 @@ local function add(ctx: Ctx, g: number, name: string, size: Vector3, cf: CFrame,
 	p.CanCollide = false
 	p.CanQuery = false
 	p.CanTouch = false
-	p.CastShadow = (g == G_BODY and name == "Torso")
+	p.CastShadow = (name == "Chest" or name == "Pelvis" or name == "Thigh" or name == "Skull")
 	p.Size = sz * s
 	p.CFrame = rest
 	p.Color = color
@@ -203,86 +272,96 @@ local UPRIGHT = CFrame.Angles(0, 0, math.rad(90)) -- cylindre debout (axe X -> Y
 local function at(x: number, y: number, z: number): CFrame
 	return CFrame.new(x, y, z)
 end
+-- cylindre debout centré en (x, y, z)
+local function cylY(x: number, y: number, z: number): CFrame
+	return CFrame.new(x, y, z) * UPRIGHT
+end
 
--- Tête : ovale, visage, oreilles, coiffure (groupe G_HEAD, centre ~ (0, 4.95))
-local HEAD_Y = 4.95
-local function head(ctx: Ctx, skin: Color3, hair: Color3, hairStyle: string, seed: number, female: boolean)
-	local hy = HEAD_Y
-	add(ctx, G_HEAD, "Head", Vector3.new(0.92, 1.1, 1), at(0, hy, 0), skin, M.SmoothPlastic, "Egg")
-	-- oreilles
-	for _, sx in ipairs({ -1, 1 }) do
-		add(ctx, G_HEAD, "Ear", Vector3.new(0.12, 0.26, 0.2), at(sx * 0.475, hy - 0.02, 0.04), skin, M.SmoothPlastic, "Egg")
+-- Point de la surface du crâne (ovale) vu depuis l'avant, à (x, y) :
+-- position + repère tourné pour suivre la courbure (plaques du visage)
+local function onEgg(center: Vector3, size: Vector3, x: number, y: number, out: number): CFrame
+	local a, b, c = size.X / 2, size.Y / 2, size.Z / 2
+	local dx, dy = x - center.X, y - center.Y
+	local k = 1 - (dx / a) ^ 2 - (dy / b) ^ 2
+	local z = -c * math.sqrt(math.max(k, 0.02))
+	-- normale (gradient de l'ovale)
+	local n = Vector3.new(dx / (a * a), dy / (b * b), z / (c * c)).Unit
+	local p = Vector3.new(x, y, center.Z + z) + n * out
+	return CFrame.lookAt(p, p + n)
+end
+local function onSkull(x: number, y: number, out: number): CFrame
+	return onEgg(Vector3.new(0, HY, 0), HEAD, x, y, out)
+end
+
+----------------------------------------------------------------------
+-- Visage dessiné (SurfaceGui, uniquement des Frame arrondies)
+----------------------------------------------------------------------
+
+local function frame(parent: Instance, name: string, size: UDim2, pos: UDim2, color: Color3, round: number?, yy: boolean?): Frame
+	local f = Instance.new("Frame")
+	f.Name = name
+	f.AnchorPoint = Vector2.new(0.5, 0.5)
+	f.Size = size
+	f.Position = pos
+	f.BackgroundColor3 = color
+	f.BorderSizePixel = 0
+	if yy then
+		f.SizeConstraint = Enum.SizeConstraint.RelativeYY
 	end
-	-- yeux (blanc + iris foncé devant), sourcils
-	local eye = pick({ rgb(60, 40, 30), rgb(70, 110, 150), rgb(80, 110, 70), rgb(40, 30, 28) }, seed, 21)
-	for _, sx in ipairs({ -1, 1 }) do
-		add(ctx, G_HEAD, "EyeWhite", Vector3.new(0.19, 0.13, 0.08), at(sx * 0.19, hy + 0.04, -0.43), WHITE, M.SmoothPlastic, "Egg")
-		add(ctx, G_HEAD, "Eye", Vector3.new(0.1, 0.12, 0.06), at(sx * 0.19, hy + 0.04, -0.5), eye, M.SmoothPlastic, "Egg")
-		add(ctx, G_HEAD, "Brow", Vector3.new(0.22, 0.05, 0.06), at(sx * 0.2, hy + 0.2, -0.4) * CFrame.Angles(0, 0, sx * -0.12), hair, M.SmoothPlastic)
+	if round then
+		local c = Instance.new("UICorner")
+		c.CornerRadius = UDim.new(round, 0)
+		c.Parent = f
 	end
-	add(ctx, G_HEAD, "Nose", Vector3.new(0.13, 0.2, 0.14), at(0, hy - 0.09, -0.5), skin:Lerp(rgb(200, 120, 100), 0.12), M.SmoothPlastic, "Egg")
-	add(ctx, G_HEAD, "Mouth", Vector3.new(0.22, 0.05, 0.05), at(0, hy - 0.3, -0.425), female and rgb(196, 86, 100) or rgb(150, 80, 76), M.SmoothPlastic)
-	-- coiffure : chaque coque garde >= 0,03 stud d'écart avec le crâne et
-	-- les autres coques, sur chaque face de sa boîte (aucun z-fighting,
-	-- même avec un détecteur qui prend les ovales pour des boîtes)
-	if hairStyle == "none" then
-		return
-	end
-	if hairStyle == "bald" then
-		add(ctx, G_HEAD, "HairSide", Vector3.new(1.0, 0.34, 0.9), at(0, hy - 0.02, 0.1), hair, M.SmoothPlastic, "Egg")
-		return
-	end
-	local capH = hairStyle == "buzz" and 0.6 or 0.74
-	add(ctx, G_HEAD, "Hair", Vector3.new(0.98, capH, 1.06), at(0, hy + (hairStyle == "buzz" and 0.35 or 0.3), 0.06), hair, M.SmoothPlastic, "Egg")
-	if hairStyle ~= "buzz" then
-		add(ctx, G_HEAD, "HairBack", Vector3.new(0.76, 0.8, 0.5), at(0, hy + 0.02, 0.39), hair, M.SmoothPlastic, "Egg")
-	end
-	if hairStyle == "long" then
-		add(ctx, G_HEAD, "HairLong", Vector3.new(0.7, 1.15, 0.34), at(0, hy - 0.5, 0.3), hair, M.SmoothPlastic, "Egg")
-		add(ctx, G_HEAD, "Fringe", Vector3.new(0.78, 0.24, 0.3), at(0.08, hy + 0.36, -0.38) * CFrame.Angles(math.rad(-20), 0, -0.15), hair, M.SmoothPlastic, "Egg")
-	elseif hairStyle == "bun" then
-		add(ctx, G_HEAD, "Bun", Vector3.new(0.44, 0.44, 0.44), at(0, hy + 0.58, 0.28), hair, M.SmoothPlastic, "Ball")
-	elseif hairStyle == "pony" then
-		add(ctx, G_HEAD, "Pony", Vector3.new(0.26, 0.9, 0.3), at(0, hy - 0.05, 0.58) * CFrame.Angles(math.rad(-18), 0, 0), hair, M.SmoothPlastic, "Egg")
-		add(ctx, G_HEAD, "Tie", Vector3.new(0.2, 0.12, 0.2), at(0, hy + 0.36, 0.7), pick({ rgb(236, 72, 140), rgb(90, 140, 230), rgb(250, 250, 250) }, seed, 22), M.SmoothPlastic, "Egg")
-	elseif hairStyle == "curly" then
-		for i = 0, 4 do
-			local a = (i / 4 - 0.5) * 2.4
-			add(ctx, G_HEAD, "Curl", Vector3.new(0.42, 0.42, 0.42), at(math.sin(a) * 0.4, hy + 0.34 + math.cos(a) * 0.12, 0.12 + math.abs(math.sin(a)) * 0.05), hair, M.SmoothPlastic, "Ball")
-		end
-	elseif hairStyle == "short" and not female then
-		add(ctx, G_HEAD, "Quiff", Vector3.new(0.7, 0.26, 0.4), at(0.05, hy + 0.5, -0.28) * CFrame.Angles(math.rad(-15), 0, 0), hair, M.SmoothPlastic, "Egg")
+	f.Parent = parent
+	return f
+end
+
+local function faceGui(part: BasePart, name: string): SurfaceGui
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = name
+	gui.Face = Enum.NormalId.Front
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 400
+	gui.LightInfluence = 1
+	gui.MaxDistance = 140
+	gui.ClipsDescendants = true
+	gui.Parent = part
+	return gui
+end
+
+-- Œil : blanc en amande, iris, pupille, reflet, ligne de cils (côté `sx`)
+local function eyeGui(part: BasePart, iris: Color3, lash: Color3, female: boolean, sx: number)
+	local gui = faceGui(part, "EyeGui")
+	local white = frame(gui, "White", UDim2.fromScale(0.94, 0.74), UDim2.fromScale(0.5, 0.55), rgb(246, 242, 238), 0.5)
+	local ir = frame(white, "Iris", UDim2.fromScale(0.98, 0.98), UDim2.fromScale(0.5 - sx * 0.02, 0.48), iris, 1, true)
+	frame(ir, "Ring", UDim2.fromScale(0.72, 0.72), UDim2.fromScale(0.5, 0.5), iris:Lerp(WHITE, 0.18), 1)
+	frame(ir, "Pupil", UDim2.fromScale(0.44, 0.44), UDim2.fromScale(0.5, 0.5), rgb(16, 12, 14), 1)
+	frame(ir, "Glint", UDim2.fromScale(0.24, 0.24), UDim2.fromScale(0.66, 0.32), WHITE, 1)
+	frame(ir, "Glint2", UDim2.fromScale(0.1, 0.1), UDim2.fromScale(0.34, 0.68), WHITE, 1)
+	-- paupière supérieure (ligne de cils), plus marquée chez les femmes
+	frame(gui, "Lash", UDim2.fromScale(1, female and 0.26 or 0.16), UDim2.fromScale(0.5, female and 0.2 or 0.2), lash, 0.5)
+	if female then
+		-- petite aile de cils vers l'extérieur
+		local wing = frame(gui, "Wing", UDim2.fromScale(0.22, 0.14), UDim2.fromScale(sx > 0 and 0.95 or 0.05, 0.16), lash, 0.5)
+		wing.Rotation = sx * -22
 	end
 end
 
--- Bras (épaule arrondie, bras, avant-bras, main) ; `longSleeve` : avant-bras vêtu
-local function arm(ctx: Ctx, sx: number, sleeve: Color3, skin: Color3, longSleeve: boolean, cuff: Color3?)
-	local up = sx < 0 and G_LUP or G_RUP
-	local lo = sx < 0 and G_LLO or G_RLO
-	local x = sx * 0.93
-	add(ctx, up, "Shoulder", Vector3.new(0.56, 0.56, 0.56), at(sx * 0.84, 4.1, 0), sleeve, M.Fabric, "Ball")
-	add(ctx, up, "UpperArm", Vector3.new(0.42, 1.02, 0.44), at(x, 3.66, 0), sleeve, M.Fabric)
-	add(ctx, lo, "Forearm", Vector3.new(0.36, 0.98, 0.38), at(x, 2.72, 0), longSleeve and sleeve or skin, longSleeve and M.Fabric or M.SmoothPlastic)
-	if cuff then
-		add(ctx, lo, "Cuff", Vector3.new(0.4, 0.1, 0.42), at(x, 2.31, 0), cuff, M.SmoothPlastic)
-	end
-	add(ctx, lo, "Hand", Vector3.new(0.34, 0.4, 0.3), at(x, 2.06, -0.02), skin, M.SmoothPlastic, "Egg")
-end
-
--- Jambes (cuisse, tibia, chaussure) ; `shorts` : tibia nu
-local function legs(ctx: Ctx, pants: Color3, skin: Color3, shoe: Color3, shorts: boolean, bareThigh: boolean?)
+-- Lèvres : lèvre supérieure, lèvre inférieure, commissure, petit sourire
+local function mouthGui(part: BasePart, lip: Color3, smile: number)
+	local gui = faceGui(part, "MouthGui")
+	frame(gui, "LowerLip", UDim2.fromScale(0.62, 0.5), UDim2.fromScale(0.5, 0.62), lip:Lerp(WHITE, 0.08), 0.5)
+	frame(gui, "UpperLip", UDim2.fromScale(0.72, 0.36), UDim2.fromScale(0.5, 0.36), lip, 0.5)
+	frame(gui, "Line", UDim2.fromScale(0.74, 0.1), UDim2.fromScale(0.5, 0.5), lip:Lerp(INK, 0.55), 0.5)
 	for _, sx in ipairs({ -1, 1 }) do
-		local th = sx < 0 and G_LTH or G_RTH
-		local sh = sx < 0 and G_LSH or G_RSH
-		local x = sx * 0.29
-		add(ctx, th, "Thigh", Vector3.new(0.52, 1.24, 0.58), at(x, 1.92, 0), bareThigh and skin or pants, bareThigh and M.SmoothPlastic or M.Fabric)
-		add(ctx, sh, "Shin", Vector3.new(0.44, 1.06, 0.48), at(x, 0.84, 0.01), shorts and skin or pants, shorts and M.SmoothPlastic or M.Fabric)
-		add(ctx, sh, "Shoe", Vector3.new(0.5, 0.3, 0.92), at(x, 0.15, -0.15), shoe, M.SmoothPlastic)
+		local c = frame(gui, "Corner", UDim2.fromScale(0.14, 0.09), UDim2.fromScale(0.5 + sx * 0.4, 0.45 - smile * 0.06), lip:Lerp(INK, 0.5), 0.5)
+		c.Rotation = sx * -(18 + smile * 20)
 	end
 end
 
 ----------------------------------------------------------------------
--- Tenues par style
+-- Tête
 ----------------------------------------------------------------------
 
 type Look = {
@@ -292,65 +371,330 @@ type Look = {
 	Shirt: Color3,
 	Pants: Color3,
 	Shoe: Color3,
+	Sole: Color3,
 	Female: boolean,
 	LongSleeve: boolean,
 	Shorts: boolean,
 	Skirt: boolean,
 	Belt: boolean,
+	Collar: string, -- "crew" | "polo" | "shirt" | "v" | "none"
+	Beard: string, -- "none" | "stubble" | "beard" | "mustache"
+	Glasses: boolean,
+	Iris: Color3,
 }
+
+local function head(ctx: Ctx, look: Look, seed: number)
+	local skin, hair = look.Skin, look.Hair
+	local female = look.Female
+	add(ctx, G_HEAD, "Skull", HEAD, at(0, HY, 0), skin, M.SmoothPlastic, "Egg")
+	-- mâchoire / menton (plus carrée chez les hommes)
+	local jawC, jawS = Vector3.new(0, HY - 0.21, -0.06), Vector3.new(female and 0.5 or 0.56, 0.46, 0.6)
+	local function onJaw(x: number, y: number, out: number): CFrame
+		return onEgg(jawC, jawS, x, y, out)
+	end
+	add(ctx, G_HEAD, "Jaw", jawS, CFrame.new(jawC), skin, M.SmoothPlastic, "Egg")
+	-- oreilles
+	for _, sx in ipairs({ -1, 1 }) do
+		add(ctx, G_HEAD, "Ear", Vector3.new(0.08, 0.2, 0.15), at(sx * 0.33, HY - 0.02, 0.03) * CFrame.Angles(0, sx * -0.3, 0), skin:Lerp(rgb(200, 120, 110), 0.08), M.SmoothPlastic, "Egg")
+	end
+	-- nez (arête + bout)
+	add(ctx, G_HEAD, "Nose", Vector3.new(0.1, 0.2, 0.12), onSkull(0, HY - 0.08, 0.0) * CFrame.Angles(math.rad(-10), 0, 0), skin:Lerp(rgb(210, 130, 110), 0.1), M.SmoothPlastic, "Egg")
+	-- yeux (plaques dessinées) + paupières (clignent) + sourcils
+	local lash = look.HairStyle == "bald" and INK or hair:Lerp(INK, 0.6)
+	for _, sx in ipairs({ -1, 1 }) do
+		local e = add(ctx, G_HEAD, "Eye", Vector3.new(0.15, 0.1, 0.01), onSkull(sx * 0.125, HY + 0.01, 0.006), WHITE, M.SmoothPlastic)
+		e.Transparency = 1
+		eyeGui(e, look.Iris, lash, female, sx)
+		-- paupière : cachée DANS le crâne ; au clignement elle avance devant l'œil
+		add(ctx, G_LID, "Lid", Vector3.new(0.17, 0.12, 0.03), onSkull(sx * 0.125, HY + 0.015, -0.045), skin:Lerp(INK, 0.04), M.SmoothPlastic, "Egg")
+		local browColor = look.HairStyle == "bald" and GREYS[1]:Lerp(INK, 0.3) or hair:Lerp(INK, 0.25)
+		add(ctx, G_HEAD, "Brow", Vector3.new(0.16, female and 0.03 or 0.042, 0.04), onSkull(sx * 0.13, HY + 0.11, 0.0) * CFrame.Angles(0, 0, sx * (female and -0.14 or -0.06)), browColor, M.SmoothPlastic)
+	end
+	-- bouche
+	local lip = skin:Lerp(rgb(176, 84, 88), female and 0.45 or 0.28)
+	if female and hash(seed, 70) < 0.35 then
+		lip = pick({ rgb(190, 60, 80), rgb(200, 100, 110), rgb(160, 70, 70) }, seed, 71)
+	end
+	local mouth = add(ctx, G_HEAD, "Mouth", Vector3.new(0.2, 0.08, 0.01), onJaw(0, HY - 0.25, 0.008), WHITE, M.SmoothPlastic)
+	mouth.Transparency = 1
+	mouthGui(mouth, lip, hash(seed, 72))
+	-- barbe / moustache
+	local bc = hair:Lerp(INK, 0.1)
+	if look.Beard == "beard" then
+		-- (barbe du menton et des joues : derrière la bouche, devant le menton)
+		add(ctx, G_HEAD, "Beard", Vector3.new(0.62, 0.34, 0.66), at(0, HY - 0.34, -0.04), bc, M.SmoothPlastic, "Egg")
+		add(ctx, G_HEAD, "Mustache", Vector3.new(0.22, 0.05, 0.05), onJaw(0, HY - 0.195, 0.01), bc, M.SmoothPlastic)
+	elseif look.Beard == "mustache" then
+		add(ctx, G_HEAD, "Mustache", Vector3.new(0.24, 0.06, 0.05), onJaw(0, HY - 0.195, 0.01), bc, M.SmoothPlastic)
+	end
+	if look.Glasses then
+		local frameC = pick({ rgb(40, 34, 34), rgb(120, 80, 50), rgb(180, 170, 160) }, seed, 73)
+		for _, sx in ipairs({ -1, 1 }) do
+			local lens = add(ctx, G_HEAD, "Glasses", Vector3.new(0.02, 0.15, 0.2), onSkull(sx * 0.125, HY + 0.005, 0.05) * CFrame.Angles(0, math.rad(90), 0), rgb(210, 226, 236), M.Glass, "Cyl")
+			lens.Transparency = 0.55
+			add(ctx, G_HEAD, "GlassesArm", Vector3.new(0.025, 0.025, 0.36), at(sx * 0.34, HY + 0.03, -0.13), frameC, M.SmoothPlastic)
+		end
+		add(ctx, G_HEAD, "GlassesBridge", Vector3.new(0.07, 0.025, 0.025), onSkull(0, HY + 0.03, 0.06), frameC, M.SmoothPlastic)
+	end
+	-- coiffure (volumes superposés, chacun à >= 0,03 des autres faces)
+	local hs = look.HairStyle
+	if hs == "none" then
+		return
+	end
+	local hairM = M.SmoothPlastic
+	if hs == "bald" then
+		add(ctx, G_HEAD, "HairSide", Vector3.new(0.74, 0.3, 0.7), at(0, HY + 0.04, 0.1), hair, hairM, "Egg")
+		return
+	end
+	local dark = hair:Lerp(INK, 0.12)
+	if hs == "buzz" then
+		add(ctx, G_HEAD, "Hair", Vector3.new(HEAD.X * 1.02, HEAD.Y * 0.9, HEAD.Z * 1.06), at(0, HY + 0.14, 0.07) * CFrame.Angles(math.rad(-15), 0, 0), hair, hairM, "Egg")
+		return
+	end
+	-- calotte (inclinée : dégage le front) + nuque
+	-- (ovale 1,04 x 0,9 x 1,1 du crâne, remonté de 0,14, reculé de 0,08, incliné
+	-- de 15° : naissance des cheveux à ~0,23 au-dessus des yeux, tempes
+	-- dégagées au-dessus des sourcils ; cherché numériquement)
+	add(ctx, G_HEAD, "Hair", Vector3.new(HEAD.X * 1.04, HEAD.Y * 0.9, HEAD.Z * 1.1), at(0, HY + 0.14, 0.08) * CFrame.Angles(math.rad(-15), 0, 0), hair, hairM, "Egg")
+	add(ctx, G_HEAD, "HairBack", Vector3.new(0.7, 0.62, 0.42), at(0, HY - 0.02, 0.2), dark, hairM, "Egg")
+	if hs == "short" then
+		add(ctx, G_HEAD, "Quiff", Vector3.new(0.56, 0.2, 0.34), at(0.03, HY + 0.4, -0.2) * CFrame.Angles(math.rad(-22), 0, 0), hair:Lerp(WHITE, 0.05), hairM, "Egg")
+	elseif hs == "part" then
+		-- raie sur le côté : mèche qui retombe
+		add(ctx, G_HEAD, "Fringe", Vector3.new(0.62, 0.2, 0.4), at(0.07, HY + 0.33, -0.22) * CFrame.Angles(math.rad(-20), 0, -0.18), hair:Lerp(WHITE, 0.05), hairM, "Egg")
+	elseif hs == "long" or hs == "bob" or hs == "pony" or hs == "bun" then
+		for _, sx in ipairs({ -1, 1 }) do
+			local len = hs == "long" and 0.95 or (hs == "bob" and 0.56 or 0.34)
+			add(ctx, G_HEAD, "HairSideLock", Vector3.new(0.14, len, 0.36), at(sx * 0.34, HY + 0.2 - len / 2, 0.06) * CFrame.Angles(0, 0, sx * 0.05), hair, hairM, "Egg")
+		end
+		add(ctx, G_HEAD, "Fringe", Vector3.new(0.66, 0.22, 0.36), at(-0.05, HY + 0.32, -0.23) * CFrame.Angles(math.rad(-24), 0, 0.14), hair:Lerp(WHITE, 0.06), hairM, "Egg")
+		if hs == "long" then
+			add(ctx, G_HEAD, "HairLong", Vector3.new(0.72, 1.08, 0.3), at(0, HY - 0.34, 0.27) * CFrame.Angles(math.rad(8), 0, 0), dark, hairM, "Egg")
+		elseif hs == "bob" then
+			add(ctx, G_HEAD, "HairBob", Vector3.new(0.8, 0.46, 0.5), at(0, HY - 0.12, 0.16), dark, hairM, "Egg")
+		elseif hs == "bun" then
+			add(ctx, G_HEAD, "Bun", Vector3.new(0.32, 0.32, 0.32), at(0, HY + 0.34, 0.36), hair, hairM, "Ball")
+		else
+			add(ctx, G_HEAD, "Pony", Vector3.new(0.22, 0.72, 0.24), at(0, HY - 0.12, 0.5) * CFrame.Angles(math.rad(-16), 0, 0), dark, hairM, "Egg")
+			add(ctx, G_HEAD, "Tie", Vector3.new(0.14, 0.09, 0.14), at(0, HY + 0.22, 0.43), pick({ rgb(236, 72, 140), rgb(90, 140, 230), rgb(250, 250, 250), rgb(40, 40, 44) }, seed, 22), M.SmoothPlastic, "Egg")
+		end
+	elseif hs == "curly" then
+		for i = 0, 5 do
+			local a = (i / 5 - 0.5) * 2.6
+			add(ctx, G_HEAD, "Curl", Vector3.new(0.3, 0.3, 0.3), at(math.sin(a) * 0.3, HY + 0.3 + math.cos(a) * 0.1, 0.04 + math.abs(math.sin(a)) * 0.08 - (i % 2) * 0.1), i % 2 == 0 and hair or dark, hairM, "Ball")
+		end
+	elseif hs == "afro" then
+		add(ctx, G_HEAD, "Afro", Vector3.new(0.98, 0.86, 0.96), at(0, HY + 0.24, 0.09), dark, M.Fabric, "Egg")
+	end
+end
+
+----------------------------------------------------------------------
+-- Corps
+----------------------------------------------------------------------
+
+-- Bras : épaule (deltoïde), bras, coude, avant-bras, main (paume, doigts,
+-- POUCE) ; manches courtes (ourlet) ou longues (poignet)
+local function arm(ctx: Ctx, sx: number, sleeve: Color3, skin: Color3, longSleeve: boolean, cuff: Color3?, bare: boolean?)
+	local up = sx < 0 and G_LUP or G_RUP
+	local lo = sx < 0 and G_LLO or G_RLO
+	local x = sx * 0.73
+	add(ctx, up, "Deltoid", Vector3.new(0.42, 0.42, 0.42), at(sx * 0.65, 4.1, 0), bare and skin or sleeve, bare and M.SmoothPlastic or M.Fabric, "Ball")
+	add(ctx, up, "UpperArm", Vector3.new(0.84, 0.34, 0.34), cylY(sx * 0.72, 3.72, 0.01), (longSleeve and not bare) and sleeve or skin, (longSleeve and not bare) and M.Fabric or M.SmoothPlastic, "Cyl")
+	if not longSleeve and not bare then
+		-- manche courte : ourlet un peu plus large
+		add(ctx, up, "Sleeve", Vector3.new(0.4, 0.42, 0.42), cylY(sx * 0.72, 3.9, 0.01), sleeve, M.Fabric, "Cyl")
+		add(ctx, up, "SleeveHem", Vector3.new(0.05, 0.43, 0.43), cylY(sx * 0.72, 3.72, 0.01), sleeve:Lerp(INK, 0.12), M.Fabric, "Cyl")
+	end
+	add(ctx, lo, "Elbow", Vector3.new(0.33, 0.33, 0.33), at(x, 3.32, 0.02), longSleeve and sleeve or skin, longSleeve and M.Fabric or M.SmoothPlastic, "Ball")
+	add(ctx, lo, "Forearm", Vector3.new(0.72, 0.3, 0.3), cylY(x, 2.97, 0.02), longSleeve and sleeve or skin, longSleeve and M.Fabric or M.SmoothPlastic, "Cyl")
+	if longSleeve then
+		add(ctx, lo, "Cuff", Vector3.new(0.12, 0.33, 0.33), cylY(x, 2.66, 0.02), cuff or sleeve:Lerp(INK, 0.1), M.Fabric, "Cyl")
+	end
+	-- main (paume face à la cuisse) : doigts un peu repliés, pouce devant
+	local hx = sx * 0.745
+	add(ctx, lo, "Palm", Vector3.new(0.12, 0.3, 0.25), at(hx, 2.46, 0.01), skin, M.SmoothPlastic)
+	add(ctx, lo, "Fingers", Vector3.new(0.1, 0.24, 0.22), at(hx - sx * 0.02, 2.22, 0.0) * CFrame.Angles(0, 0, sx * 0.22), skin, M.SmoothPlastic)
+	add(ctx, lo, "Thumb", Vector3.new(0.08, 0.2, 0.08), at(hx - sx * 0.035, 2.42, -0.14) * CFrame.Angles(math.rad(-18), 0, sx * 0.3), skin, M.SmoothPlastic)
+end
+
+-- Jambes : cuisse, genou, tibia, mollet, ourlet ; pied : chaussure, bout
+-- arrondi, semelle, lacets
+local function legs(ctx: Ctx, look: Look, pants: Color3, shorts: boolean, bareThigh: boolean?)
+	local skin = look.Skin
+	for _, sx in ipairs({ -1, 1 }) do
+		local th = sx < 0 and G_LTH or G_RTH
+		local sh = sx < 0 and G_LSH or G_RSH
+		local ft = sx < 0 and G_LFT or G_RFT
+		local x = sx * 0.27
+		local thighC = bareThigh and skin or pants
+		local thighM = bareThigh and M.SmoothPlastic or M.Fabric
+		add(ctx, th, "Thigh", Vector3.new(1.2, 0.5, 0.5), cylY(x, 2.02, 0), thighC, thighM, "Cyl")
+		if shorts and not bareThigh then
+			add(ctx, th, "ShortsHem", Vector3.new(0.1, 0.54, 0.54), cylY(x, 1.66, 0), pants:Lerp(INK, 0.12), M.Fabric, "Cyl")
+		end
+		local legC = shorts and skin or pants
+		local legM = shorts and M.SmoothPlastic or M.Fabric
+		add(ctx, sh, "Knee", Vector3.new(0.42, 0.42, 0.42), at(x, 1.5, 0), (shorts or bareThigh) and skin or pants, (shorts or bareThigh) and M.SmoothPlastic or M.Fabric, "Ball")
+		add(ctx, sh, "Shin", Vector3.new(1.1, 0.38, 0.38), cylY(x, 0.93, 0.02), legC, legM, "Cyl")
+		add(ctx, sh, "Calf", Vector3.new(0.32, 0.6, 0.34), at(x, 1.14, 0.08), legC, legM, "Egg")
+		if not shorts then
+			add(ctx, sh, "Hem", Vector3.new(0.09, 0.43, 0.43), cylY(x, 0.43, 0.02), pants:Lerp(INK, 0.1), M.Fabric, "Cyl")
+		else
+			add(ctx, sh, "Sock", Vector3.new(0.14, 0.4, 0.4), cylY(x, 0.42, 0.02), WHITE, M.Fabric, "Cyl")
+		end
+		-- pied (tourne à la cheville)
+		add(ctx, ft, "Shoe", Vector3.new(0.36, 0.26, 0.74), at(x, 0.2, -0.13), look.Shoe, M.SmoothPlastic)
+		add(ctx, ft, "ToeCap", Vector3.new(0.33, 0.2, 0.34), at(x, 0.215, -0.47), look.Shoe, M.SmoothPlastic, "Egg")
+		add(ctx, ft, "Sole", Vector3.new(0.4, 0.09, 0.9), at(x, 0.05, -0.18), look.Sole, M.Rubber)
+		add(ctx, ft, "Laces", Vector3.new(0.18, 0.04, 0.3), at(x, 0.345, -0.28) * CFrame.Angles(math.rad(-12), 0, 0), look.Shoe:Lerp(WHITE, 0.55), M.Fabric)
+	end
+end
+
+-- Buste + bassin + cou + col / coutures
+local function torso(ctx: Ctx, look: Look, shirt: Color3, pants: Color3, skirt: boolean, style: string, seed: number)
+	local skin = look.Skin
+	local female = look.Female
+	-- sections en "stade" (bloc + 2 cylindres debout) : torse arrondi, sans
+	-- arêtes vives ni bosses ovales qui dépassent
+	local function stadium(g: number, name: string, width: number, depth: number, y0: number, y1: number, color: Color3, z: number?)
+		local h = y1 - y0
+		local y = (y0 + y1) / 2
+		local zz = z or 0
+		add(ctx, g, name, Vector3.new(width - depth, h, depth), at(0, y, zz), color, M.Fabric)
+		for _, sx in ipairs({ -1, 1 }) do
+			add(ctx, g, name .. "Side", Vector3.new(h, depth, depth), cylY(sx * (width - depth) / 2, y, zz), color, M.Fabric, "Cyl")
+		end
+	end
+	stadium(G_CHEST, "Chest", female and 1.06 or 1.16, female and 0.5 or 0.52, 3.36, 4.2, shirt)
+	-- ligne des épaules (arrondie)
+	add(ctx, G_CHEST, "Shoulders", Vector3.new(1.0, 0.44, 0.44), at(0, 4.14, 0.0), shirt, M.Fabric, "Cyl")
+	if female then
+		add(ctx, G_CHEST, "Bust", Vector3.new(0.5, 0.32, 0.32), at(0, 3.9, -0.12), shirt, M.Fabric, "Cyl")
+	end
+	stadium(G_CHEST, "Belly", female and 0.9 or 1.02, female and 0.46 or 0.48, 2.9, 3.4, shirt)
+	add(ctx, G_CHEST, "Neck", Vector3.new(0.36, 0.3, 0.3), cylY(0, 4.44, 0.03), skin, M.SmoothPlastic, "Cyl")
+	-- col
+	local col = look.Collar
+	if col == "crew" then
+		add(ctx, G_CHEST, "Collar", Vector3.new(0.07, 0.4, 0.4), cylY(0, 4.36, 0.03), shirt:Lerp(INK, 0.1), M.Fabric, "Cyl")
+	elseif col == "v" then
+		for _, sx in ipairs({ -1, 1 }) do
+			add(ctx, G_CHEST, "Collar", Vector3.new(0.05, 0.2, 0.04), at(sx * 0.06, 4.24, -0.29) * CFrame.Angles(0, 0, sx * 0.55), shirt:Lerp(INK, 0.14), M.Fabric)
+		end
+	elseif col == "polo" or col == "shirt" then
+		local cc = col == "polo" and shirt:Lerp(WHITE, 0.12) or shirt
+		for _, sx in ipairs({ -1, 1 }) do
+			add(ctx, G_CHEST, "Collar", Vector3.new(0.2, 0.06, 0.24), at(sx * 0.13, 4.35, -0.14) * CFrame.Angles(math.rad(-22), sx * 0.4, sx * -0.3), cc, M.Fabric)
+		end
+		add(ctx, G_CHEST, "Placket", Vector3.new(0.1, col == "polo" and 0.36 or 1.0, 0.03), at(0, col == "polo" and 4.1 or 3.62, -0.3), shirt:Lerp(INK, 0.08), M.Fabric)
+		for i = 0, (col == "polo" and 1 or 3) do
+			add(ctx, G_CHEST, "Button", Vector3.new(0.05, 0.05, 0.03), at(0, 4.18 - i * 0.24, -0.325), shirt:Lerp(WHITE, 0.5), M.SmoothPlastic, "Ball")
+		end
+		if col == "shirt" and hash(seed, 80) < 0.6 then
+			add(ctx, G_CHEST, "Pocket", Vector3.new(0.22, 0.24, 0.03), at(-0.26, 3.86, -0.3), shirt:Lerp(INK, 0.06), M.Fabric)
+		end
+	end
+	-- bassin + fessiers (ou jupe)
+	local hipW = female and 1.08 or 1.0
+	local hipD = female and 0.54 or 0.52
+	stadium(G_PELVIS, "Pelvis", hipW, hipD, 2.46, 2.94, pants)
+	if skirt then
+		-- jupe en corolle (s'arrête au-dessus du genou)
+		add(ctx, G_PELVIS, "Skirt", Vector3.new(1.18, 1.1, 0.82), at(0, 2.32, 0.01), pants, M.Fabric, "Egg")
+	else
+		add(ctx, G_PELVIS, "Glutes", Vector3.new(hipW - 0.4, 0.42, 0.42), at(0, 2.6, 0.09), pants, M.Fabric, "Cyl")
+		add(ctx, G_PELVIS, "Crotch", Vector3.new(0.4, 0.3, 0.44), at(0, 2.42, 0), pants, M.Fabric, "Egg")
+	end
+	if look.Belt and style ~= "baker" and not skirt then
+		-- ceinture tout autour (même "stade", un peu plus large) + boucle
+		local belt = rgb(56, 38, 28)
+		add(ctx, G_PELVIS, "Belt", Vector3.new(hipW - hipD, 0.1, hipD + 0.04), at(0, 2.88, 0), belt, M.Leather)
+		for _, sx in ipairs({ -1, 1 }) do
+			add(ctx, G_PELVIS, "BeltSide", Vector3.new(0.1, hipD + 0.04, hipD + 0.04), cylY(sx * (hipW - hipD) / 2, 2.88, 0), belt, M.Leather, "Cyl")
+		end
+		add(ctx, G_PELVIS, "Buckle", Vector3.new(0.14, 0.1, 0.03), at(0, 2.88, -hipD / 2 - 0.03), rgb(196, 182, 150), M.Metal)
+	end
+	return skin
+end
+
+----------------------------------------------------------------------
+-- Tenues par style
+----------------------------------------------------------------------
 
 local function baseLook(style: string, seed: number, opts: Opts): Look
 	local female = hash(seed, 1) < 0.5
-	local hairStyle = pick(HAIR_STYLES, seed, 2)
-	if not female and (hairStyle == "long" or hairStyle == "bun" or hairStyle == "pony") then
-		hairStyle = hash(seed, 3) < 0.5 and "short" or "buzz"
-	end
-	if female and hairStyle == "buzz" then
-		hairStyle = "long"
-	end
+	local hairStyle = female and pick(HAIR_F, seed, 2) or pick(HAIR_M, seed, 2)
 	local hair = pick(HAIRS, seed, 4)
+	local skin = opts.Skin or pick(SKINS, seed, 7)
+	-- (cheveux crépus / afro plus fréquents avec les peaux foncées, jamais imposés)
+	if hairStyle == "afro" and hash(seed, 3) < 0.5 then
+		hairStyle = female and "curly" or "short"
+	end
+	local beard = "none"
+	if not female and style ~= "kid" then
+		local b = hash(seed, 14)
+		beard = b < 0.12 and "beard" or (b < 0.2 and "mustache" or "none")
+	end
+	local glasses = style ~= "kid" and hash(seed, 15) < 0.18
 	if style == "elder" then
 		hair = pick(GREYS, seed, 5)
-		if not female and hash(seed, 6) < 0.5 then
+		if not female and hash(seed, 6) < 0.45 then
 			hairStyle = "bald"
+		elseif female then
+			hairStyle = hash(seed, 6) < 0.5 and "bun" or "bob"
 		end
+		glasses = hash(seed, 57) < 0.6
 	end
+	local collars = { "crew", "crew", "v", "shirt", "polo", "crew" }
+	local sole = pick({ rgb(236, 232, 224), rgb(40, 36, 36), rgb(170, 120, 70) }, seed, 16)
 	return {
-		Skin = opts.Skin or pick(SKINS, seed, 7),
+		Skin = skin,
 		Hair = opts.Hair or hair,
 		HairStyle = hairStyle,
-		Shirt = opts.Shirt or pick(SHIRTS, seed, 8),
-		Pants = opts.Pants or pick(PANTS, seed, 9),
+		Shirt = opts.Shirt or vary(pick(SHIRTS, seed, 8), seed, 17),
+		Pants = opts.Pants or vary(pick(PANTS, seed, 9), seed, 18),
 		Shoe = pick(SHOES, seed, 10),
+		Sole = sole,
 		Female = female,
 		LongSleeve = hash(seed, 11) < 0.45,
 		Shorts = false,
 		Skirt = female and hash(seed, 12) < 0.3,
-		Belt = hash(seed, 13) < 0.5,
+		Belt = hash(seed, 13) < 0.55,
+		Collar = pick(collars, seed, 19),
+		Beard = beard,
+		Glasses = glasses,
+		Iris = pick(IRIS, seed, 21),
 	}
 end
 
--- Accessoire tenu dans la main droite (groupe avant-bras droit)
+-- Main droite / gauche (repos) : pour les objets tenus
+local HAND_R = Vector3.new(0.745, 2.3, 0.0)
+local HAND_L = Vector3.new(-0.745, 2.3, 0.0)
+
+-- Objet tenu (groupe avant-bras)
 local function prop(ctx: Ctx, kind: string, seed: number)
-	local hand = Vector3.new(0.93, 2.06, -0.02)
+	local h = HAND_R
 	if kind == "bag" then
-		local c = pick({ rgb(236, 72, 140), rgb(255, 255, 255), rgb(120, 180, 90), rgb(90, 140, 230), rgb(214, 170, 120) }, seed, 30)
-		add(ctx, G_RLO, "Bag", Vector3.new(0.34, 0.9, 0.8), at(hand.X + 0.08, hand.Y - 0.72, 0), c, M.SmoothPlastic)
-		add(ctx, G_RLO, "BagHandle", Vector3.new(0.06, 0.34, 0.5), at(hand.X + 0.08, hand.Y - 0.12, 0), c:Lerp(INK, 0.3), M.SmoothPlastic)
+		local c = pick({ rgb(236, 72, 140), rgb(250, 250, 248), rgb(120, 190, 90), rgb(90, 140, 230), rgb(206, 166, 118) }, seed, 30)
+		add(ctx, G_RLO, "Bag", Vector3.new(0.32, 0.84, 0.78), at(h.X + 0.12, h.Y - 0.72, 0), c, M.SmoothPlastic)
+		add(ctx, G_RLO, "BagFold", Vector3.new(0.34, 0.1, 0.8), at(h.X + 0.12, h.Y - 0.32, 0), c:Lerp(INK, 0.15), M.SmoothPlastic)
+		add(ctx, G_RLO, "BagHandle", Vector3.new(0.05, 0.36, 0.44), at(h.X + 0.1, h.Y - 0.1, 0), c:Lerp(INK, 0.35), M.SmoothPlastic)
 	elseif kind == "phone" then
-		add(ctx, G_RLO, "Phone", Vector3.new(0.2, 0.06, 0.36), at(hand.X - 0.02, hand.Y + 0.02, -0.26), rgb(30, 30, 36), M.SmoothPlastic)
-		add(ctx, G_RLO, "PhoneScreen", Vector3.new(0.16, 0.02, 0.3), at(hand.X - 0.02, hand.Y + 0.06, -0.26), rgb(120, 190, 255), M.Glass)
+		add(ctx, G_RLO, "Phone", Vector3.new(0.06, 0.34, 0.18), at(h.X - 0.08, h.Y + 0.04, -0.12), rgb(28, 28, 34), M.SmoothPlastic)
+		add(ctx, G_RLO, "PhoneScreen", Vector3.new(0.02, 0.3, 0.15), at(h.X - 0.115, h.Y + 0.04, -0.12), rgb(120, 180, 250), M.Glass)
 	elseif kind == "coffee" then
-		add(ctx, G_RLO, "Cup", Vector3.new(0.5, 0.26, 0.26), at(hand.X, hand.Y + 0.14, -0.2) * UPRIGHT, WHITE, M.SmoothPlastic, "Cyl")
-		add(ctx, G_RLO, "CupSleeve", Vector3.new(0.2, 0.28, 0.28), at(hand.X, hand.Y + 0.1, -0.2) * UPRIGHT, rgb(170, 120, 80), M.Cardboard, "Cyl")
-		add(ctx, G_RLO, "CupLid", Vector3.new(0.06, 0.3, 0.3), at(hand.X, hand.Y + 0.41, -0.2) * UPRIGHT, rgb(60, 50, 50), M.SmoothPlastic, "Cyl")
+		add(ctx, G_RLO, "Cup", Vector3.new(0.4, 0.24, 0.24), cylY(h.X - 0.02, h.Y + 0.08, -0.16), WHITE, M.SmoothPlastic, "Cyl")
+		add(ctx, G_RLO, "CupSleeve", Vector3.new(0.16, 0.26, 0.26), cylY(h.X - 0.02, h.Y + 0.05, -0.16), rgb(170, 120, 80), M.Cardboard, "Cyl")
+		add(ctx, G_RLO, "CupLid", Vector3.new(0.05, 0.27, 0.27), cylY(h.X - 0.02, h.Y + 0.3, -0.16), rgb(60, 50, 50), M.SmoothPlastic, "Cyl")
 	elseif kind == "cane" then
-		add(ctx, G_RLO, "Cane", Vector3.new(0.12, 2.1, 0.12), at(hand.X + 0.02, hand.Y - 1.02, -0.05), rgb(110, 70, 44), M.Wood)
-		add(ctx, G_RLO, "CaneGrip", Vector3.new(0.12, 0.12, 0.44), at(hand.X + 0.02, hand.Y + 0.04, -0.14), rgb(110, 70, 44), M.Wood)
+		add(ctx, G_RLO, "Cane", Vector3.new(0.1, 2.1, 0.1), at(h.X + 0.02, h.Y - 1.05, -0.12), rgb(104, 66, 40), M.Wood)
+		add(ctx, G_RLO, "CaneGrip", Vector3.new(0.34, 0.1, 0.1), cylY(h.X + 0.02, h.Y + 0.05, -0.2) * CFrame.Angles(0, math.rad(90), 0), rgb(104, 66, 40), M.Wood, "Cyl")
+		add(ctx, G_RLO, "CaneTip", Vector3.new(0.12, 0.12, 0.12), cylY(h.X + 0.02, h.Y - 2.1, -0.12), rgb(30, 28, 28), M.Rubber, "Cyl")
 	elseif kind == "tablet" then
 		-- (main GAUCHE : la droite tape dessus)
-		add(ctx, G_LLO, "Tablet", Vector3.new(0.7, 0.06, 0.95), at(-0.72, 2.12, -0.38) * CFrame.Angles(0, 0, math.rad(-12)), rgb(40, 40, 46), M.SmoothPlastic)
-		add(ctx, G_LLO, "TabletScreen", Vector3.new(0.6, 0.04, 0.82), at(-0.715, 2.17, -0.38) * CFrame.Angles(0, 0, math.rad(-12)), rgb(150, 210, 255), M.Glass)
+		local l = HAND_L
+		add(ctx, G_LLO, "Tablet", Vector3.new(0.06, 0.62, 0.86), at(l.X + 0.1, l.Y + 0.1, -0.3) * CFrame.Angles(0, 0, math.rad(8)), rgb(40, 40, 46), M.SmoothPlastic)
+		add(ctx, G_LLO, "TabletScreen", Vector3.new(0.02, 0.54, 0.76), at(l.X + 0.14, l.Y + 0.1, -0.3) * CFrame.Angles(0, 0, math.rad(8)), rgb(150, 210, 255), M.Glass)
 	end
 end
 
@@ -366,11 +710,14 @@ function NPCModels.Build(style: string, opts: Opts?): Model
 	local seed = o.Seed or 1
 	local model = Instance.new("Model")
 	model.Name = o.Name or ("NPC_" .. style)
-	local scale = (o.Scale or 1) * BASE
-	local hs = 1
+	local scale = o.Scale or 1
+	local hs = 1.06 -- (tête un peu plus grande : "mignon-réaliste")
 	if style == "kid" and o.Scale == nil then
-		scale = BASE * (0.6 + hash(seed, 40) * 0.08)
-		hs = 1.22
+		scale = 0.6 + hash(seed, 40) * 0.1
+		hs = 1.28
+	elseif o.Scale == nil then
+		-- tailles variées : 0,94 à 1,05
+		scale = 0.94 + hash(seed, 41) * 0.11
 	end
 	local ctx: Ctx = { Model = model, S = scale, HS = hs, Count = 0 }
 	local look = baseLook(style, seed, o)
@@ -386,107 +733,153 @@ function NPCModels.Build(style: string, opts: Opts?): Model
 	if style == "cashier" then
 		shirt = o.Shirt or pick({ rgb(40, 150, 150), rgb(214, 60, 90), rgb(60, 110, 200) }, seed, 50)
 		sleeve, longSleeve, skirt = shirt, false, false
-		pants = o.Pants or rgb(46, 50, 62)
+		pants = o.Pants or rgb(44, 48, 60)
+		look.Collar = "polo"
+		look.Belt = true
 		table.insert(extras, function()
-			-- polo : col + badge + visière
-			add(ctx, G_BODY, "Collar", Vector3.new(0.18, 0.78, 0.78), at(0, 4.3, 0) * UPRIGHT, shirt:Lerp(WHITE, 0.25), M.Fabric, "Cyl")
-			add(ctx, G_BODY, "Badge", Vector3.new(0.36, 0.2, 0.06), at(0.32, 3.9, -0.35), WHITE, M.SmoothPlastic)
-			add(ctx, G_BODY, "BadgeDot", Vector3.new(0.08, 0.08, 0.05), at(0.2, 3.9, -0.385), shirt, M.SmoothPlastic)
-			add(ctx, G_HEAD, "Visor", Vector3.new(1.06, 0.16, 1.08), at(0, HEAD_Y + 0.3, 0), shirt, M.SmoothPlastic, "Egg")
-			add(ctx, G_HEAD, "VisorBrim", Vector3.new(0.72, 0.06, 0.44), at(0, HEAD_Y + 0.3, -0.62) * CFrame.Angles(math.rad(8), 0, 0), shirt, M.SmoothPlastic)
+			-- badge + cordon + visière
+			add(ctx, G_CHEST, "Badge", Vector3.new(0.26, 0.16, 0.03), at(0.27, 3.86, -0.3), WHITE, M.SmoothPlastic)
+			add(ctx, G_CHEST, "BadgeStripe", Vector3.new(0.26, 0.04, 0.03), at(0.27, 3.92, -0.315), shirt, M.SmoothPlastic)
+			add(ctx, G_HEAD, "Visor", Vector3.new(0.8, 0.12, 0.88), at(0, HY + 0.25, 0.02), shirt, M.SmoothPlastic, "Egg")
+			add(ctx, G_HEAD, "VisorBrim", Vector3.new(0.56, 0.04, 0.34), at(0, HY + 0.24, -0.46) * CFrame.Angles(math.rad(10), 0, 0), shirt:Lerp(INK, 0.15), M.SmoothPlastic)
 		end)
 	elseif style == "baker" then
 		shirt = WHITE
 		sleeve, longSleeve, skirt = WHITE, true, false
-		pants = o.Pants or rgb(60, 60, 70)
-		cuff = rgb(230, 230, 226)
+		pants = o.Pants or rgb(58, 58, 68)
+		cuff = rgb(228, 228, 224)
+		look.Collar = "none"
 		table.insert(extras, function()
-			add(ctx, G_BODY, "Apron", Vector3.new(1.08, 2.1, 0.08), at(0, 2.65, -0.36), rgb(236, 190, 130), M.Fabric)
-			for i = 0, 1 do
-				add(ctx, G_BODY, "Button", Vector3.new(0.1, 0.1, 0.1), at(0.3, 4.12 - i * 0.24, -0.34), rgb(200, 200, 200), M.SmoothPlastic, "Ball")
+			-- veste croisée (2 rangées de boutons), col officier, tablier, toque plissée
+			add(ctx, G_CHEST, "Collar", Vector3.new(0.12, 0.42, 0.42), cylY(0, 4.34, 0.03), rgb(236, 236, 232), M.Fabric, "Cyl")
+			for i = 0, 2 do
+				for _, bx in ipairs({ -0.2, 0.2 }) do
+					add(ctx, G_CHEST, "Button", Vector3.new(0.06, 0.06, 0.04), at(bx, 4.02 - i * 0.26, -0.3), rgb(200, 200, 196), M.SmoothPlastic, "Ball")
+				end
 			end
-			add(ctx, G_HEAD, "Toque", Vector3.new(0.7, 1.04, 1.04), at(0, HEAD_Y + 0.72, 0.02) * UPRIGHT, WHITE, M.Fabric, "Cyl")
-			add(ctx, G_HEAD, "ToquePuff", Vector3.new(1.18, 0.62, 1.18), at(0, HEAD_Y + 1.1, 0.02), WHITE, M.Fabric, "Egg")
+			add(ctx, G_CHEST, "Apron", Vector3.new(0.9, 0.62, 0.04), at(0, 3.08, -0.265), rgb(232, 188, 128), M.Fabric)
+			add(ctx, G_PELVIS, "ApronSkirt", Vector3.new(1.0, 1.1, 0.04), at(0, 2.3, -0.3), rgb(232, 188, 128), M.Fabric)
+			add(ctx, G_PELVIS, "ApronTie", Vector3.new(1.02, 0.07, 0.56), at(0, 2.86, 0), rgb(214, 170, 112), M.Fabric)
+			add(ctx, G_HEAD, "Toque", Vector3.new(0.5, 0.74, 0.74), cylY(0, HY + 0.52, 0.03), WHITE, M.Fabric, "Cyl")
+			add(ctx, G_HEAD, "ToquePuff", Vector3.new(0.92, 0.46, 0.92), at(0, HY + 0.82, 0.03), WHITE, M.Fabric, "Egg")
+			add(ctx, G_HEAD, "ToqueBand", Vector3.new(0.14, 0.77, 0.77), cylY(0, HY + 0.33, 0.03), rgb(236, 236, 232), M.Fabric, "Cyl")
 		end)
 	elseif style == "salesperson" then
-		local jacket = o.Shirt or pick({ rgb(36, 44, 70), rgb(40, 40, 44), rgb(90, 90, 100) }, seed, 51)
+		local jacket = o.Shirt or pick({ rgb(36, 44, 70), rgb(40, 40, 44), rgb(90, 90, 100), rgb(64, 50, 44) }, seed, 51)
 		shirt, sleeve, longSleeve, skirt = jacket, jacket, true, false
 		pants = o.Pants or jacket
 		cuff = WHITE
+		look.Collar = "none"
+		look.Belt = false
 		propKind = propKind or "tablet"
 		table.insert(extras, function()
-			-- plastron de chemise en V + cravate + revers
-			add(ctx, G_BODY, "ShirtFront", Vector3.new(0.5, 0.9, 0.06), at(0, 3.85, -0.35), WHITE, M.Fabric)
-			add(ctx, G_BODY, "Tie", Vector3.new(0.14, 0.78, 0.06), at(0, 3.82, -0.38), pick({ rgb(200, 40, 60), rgb(236, 72, 140), rgb(60, 110, 200) }, seed, 52), M.Fabric)
+			-- chemise en V + cravate + revers + pochette + boutons
+			local tieC = pick({ rgb(180, 36, 56), rgb(220, 70, 130), rgb(50, 96, 180), rgb(30, 30, 34) }, seed, 52)
+			add(ctx, G_CHEST, "ShirtFront", Vector3.new(0.3, 0.5, 0.04), at(0, 4.04, -0.285), WHITE, M.Fabric)
+			add(ctx, G_CHEST, "Tie", Vector3.new(0.1, 0.52, 0.03), at(0, 3.98, -0.31), tieC, M.Fabric)
+			add(ctx, G_CHEST, "TieKnot", Vector3.new(0.12, 0.09, 0.05), at(0, 4.25, -0.3), tieC:Lerp(INK, 0.2), M.Fabric)
 			for _, sx in ipairs({ -1, 1 }) do
-				add(ctx, G_BODY, "Lapel", Vector3.new(0.2, 0.95, 0.09), at(sx * 0.3, 3.85, -0.37) * CFrame.Angles(0, 0, sx * 0.3), jacket:Lerp(INK, 0.25), M.Fabric)
+				add(ctx, G_CHEST, "Lapel", Vector3.new(0.12, 0.62, 0.04), at(sx * 0.19, 4.0, -0.305) * CFrame.Angles(0, 0, sx * 0.34), jacket:Lerp(INK, 0.25), M.Fabric)
+				add(ctx, G_CHEST, "ShirtCollar", Vector3.new(0.14, 0.06, 0.2), at(sx * 0.1, 4.33, -0.15) * CFrame.Angles(math.rad(-22), sx * 0.4, sx * -0.3), WHITE, M.Fabric)
 			end
-			add(ctx, G_BODY, "Pocket", Vector3.new(0.2, 0.06, 0.06), at(-0.44, 3.95, -0.35), WHITE, M.SmoothPlastic)
+			add(ctx, G_CHEST, "Pocket", Vector3.new(0.18, 0.08, 0.04), at(-0.33, 3.95, -0.285), WHITE, M.SmoothPlastic)
+			add(ctx, G_CHEST, "JacketButton", Vector3.new(0.06, 0.06, 0.04), at(0, 3.3, -0.26), rgb(30, 30, 30), M.SmoothPlastic, "Ball")
 		end)
-		look.Shoe = rgb(40, 30, 28)
+		look.Shoe = rgb(36, 26, 24)
+		look.Sole = rgb(26, 22, 22)
 	elseif style == "shopper" then
 		propKind = propKind or "bag"
 	elseif style == "jogger" then
 		shirt = o.Shirt or pick({ rgb(255, 120, 60), rgb(80, 200, 160), rgb(236, 72, 140), rgb(90, 150, 240) }, seed, 53)
 		sleeve, longSleeve, skirt, shorts = shirt, false, false, true
-		pants = o.Pants or rgb(40, 44, 54)
+		pants = o.Pants or rgb(38, 42, 52)
 		look.Shoe = pick({ rgb(250, 250, 250), rgb(255, 90, 90), rgb(90, 200, 255) }, seed, 54)
+		look.Sole = WHITE
 		look.Belt = false
+		look.Collar = "crew"
 		table.insert(extras, function()
-			add(ctx, G_HEAD, "Headband", Vector3.new(0.12, 1.06, 1.1), at(0, HEAD_Y + 0.2, 0) * UPRIGHT, WHITE, M.Fabric, "Cyl")
+			add(ctx, G_HEAD, "Headband", Vector3.new(0.12, 0.74, 0.8), cylY(0, HY + 0.17, 0.03) * CFrame.Angles(0, 0, math.rad(-14)), WHITE, M.Fabric, "Cyl")
+			add(ctx, G_LLO, "Watch", Vector3.new(0.1, 0.32, 0.32), cylY(-0.73, 2.7, 0.02), rgb(40, 40, 46), M.SmoothPlastic, "Cyl")
 		end)
 	elseif style == "elder" then
-		shirt = o.Shirt or pick({ rgb(150, 120, 100), rgb(120, 130, 150), rgb(170, 90, 90), rgb(110, 130, 100) }, seed, 55)
+		shirt = o.Shirt or pick({ rgb(150, 120, 100), rgb(120, 130, 150), rgb(160, 90, 90), rgb(110, 130, 100), rgb(200, 190, 170) }, seed, 55)
 		sleeve, longSleeve = shirt, true
+		look.Collar = "v"
 		propKind = propKind or (hash(seed, 56) < 0.5 and "cane" or nil)
 		table.insert(extras, function()
-			-- gilet : boutons
+			-- gilet boutonné (cardigan)
+			add(ctx, G_CHEST, "Placket", Vector3.new(0.1, 1.05, 0.03), at(0, 3.55, -0.3), shirt:Lerp(INK, 0.12), M.Fabric)
 			for i = 0, 3 do
-				add(ctx, G_BODY, "Button", Vector3.new(0.09, 0.09, 0.09), at(0, 4.05 - i * 0.36, -0.34), rgb(230, 220, 200), M.SmoothPlastic, "Ball")
+				add(ctx, G_CHEST, "Button", Vector3.new(0.06, 0.06, 0.04), at(0, 3.95 - i * 0.28, -0.32), rgb(226, 216, 196), M.SmoothPlastic, "Ball")
 			end
-			if hash(seed, 57) < 0.6 then
-				-- lunettes
-				for _, sx in ipairs({ -1, 1 }) do
-					local lens = add(ctx, G_HEAD, "Glasses", Vector3.new(0.04, 0.24, 0.28), at(sx * 0.19, HEAD_Y + 0.04, -0.57) * CFrame.Angles(0, math.rad(90), 0), rgb(200, 226, 240), M.Glass, "Cyl")
-					lens.Transparency = 0.45
-				end
+			if not look.Female and hash(seed, 58) < 0.5 then
+				-- casquette plate
+				local cap = pick({ rgb(90, 80, 70), rgb(70, 76, 90), rgb(120, 100, 76) }, seed, 59)
+				add(ctx, G_HEAD, "FlatCap", Vector3.new(0.8, 0.26, 0.9), at(0, HY + 0.34, 0.0) * CFrame.Angles(math.rad(-8), 0, 0), cap, M.Fabric, "Egg")
+				add(ctx, G_HEAD, "CapBrim", Vector3.new(0.6, 0.06, 0.3), at(0, HY + 0.29, -0.4) * CFrame.Angles(math.rad(12), 0, 0), cap:Lerp(INK, 0.1), M.Fabric)
 			end
 		end)
 	elseif style == "worker" then
 		shirt = o.Shirt or rgb(70, 90, 130)
 		sleeve, longSleeve, skirt = shirt, true, false
-		pants = o.Pants or rgb(60, 70, 90)
+		pants = o.Pants or rgb(58, 68, 90)
 		look.Shoe = rgb(96, 70, 44)
+		look.Sole = rgb(40, 34, 30)
 		look.HairStyle = "none" -- (le casque couvre les cheveux)
+		look.Collar = "shirt"
+		look.Belt = true
 		table.insert(extras, function()
-			local vest = rgb(255, 150, 40)
-			add(ctx, G_BODY, "Vest", Vector3.new(1.38, 1.3, 0.76), at(0, 3.6, 0), vest, M.Fabric)
-			add(ctx, G_BODY, "VestStripe", Vector3.new(1.2, 0.14, 0.06), at(0, 3.35, -0.38), rgb(230, 230, 220), M.Glass)
-			add(ctx, G_HEAD, "Helmet", Vector3.new(1.12, 0.74, 1.12), at(0, HEAD_Y + 0.33, 0.02), rgb(255, 210, 40), M.SmoothPlastic, "Egg")
-			add(ctx, G_HEAD, "HelmetBrim", Vector3.new(0.08, 1.2, 1.26), at(0, HEAD_Y + 0.14, 0.02) * UPRIGHT, rgb(255, 210, 40), M.SmoothPlastic, "Cyl")
+			local vest = rgb(255, 146, 36)
+			add(ctx, G_CHEST, "Vest", Vector3.new(1.14, 1.2, 0.64), at(0, 3.62, 0), vest, M.Fabric)
+			for _, y in ipairs({ 3.3, 3.62 }) do
+				add(ctx, G_CHEST, "VestStripe", Vector3.new(1.16, 0.09, 0.66), at(0, y, 0), rgb(226, 230, 222), M.Glass)
+			end
+			add(ctx, G_HEAD, "Helmet", Vector3.new(0.84, 0.54, 0.9), at(0, HY + 0.26, 0.02), rgb(255, 206, 36), M.SmoothPlastic, "Egg")
+			add(ctx, G_HEAD, "HelmetBrim", Vector3.new(0.05, 0.94, 1.02), cylY(0, HY + 0.1, 0.0), rgb(250, 200, 30), M.SmoothPlastic, "Cyl")
+			add(ctx, G_HEAD, "HelmetRidge", Vector3.new(0.12, 0.08, 0.8), at(0, HY + 0.52, 0.02), rgb(240, 192, 30), M.SmoothPlastic, "Egg")
+			add(ctx, G_PELVIS, "ToolPouch", Vector3.new(0.14, 0.4, 0.34), at(0.56, 2.64, 0.02), rgb(110, 76, 44), M.Leather)
 		end)
 	elseif style == "kid" then
 		shorts = hash(seed, 58) < 0.5 and not skirt
 		longSleeve = false
 		look.Belt = false
+		look.Beard = "none"
+		look.Collar = "crew"
 		table.insert(extras, function()
-			if hash(seed, 59) < 0.5 then
-				-- sac à dos
+			if hash(seed, 59) < 0.55 then
+				-- cartable
 				local c = pick({ rgb(255, 120, 160), rgb(90, 160, 240), rgb(255, 200, 60), rgb(120, 200, 120) }, seed, 60)
-				add(ctx, G_BODY, "Backpack", Vector3.new(0.98, 1.1, 0.42), at(0, 3.45, 0.53), c, M.Fabric)
-				add(ctx, G_BODY, "BackpackPocket", Vector3.new(0.7, 0.44, 0.12), at(0, 3.12, 0.78), c:Lerp(WHITE, 0.3), M.Fabric)
+				add(ctx, G_CHEST, "Backpack", Vector3.new(0.86, 0.96, 0.36), at(0, 3.6, 0.47), c, M.Fabric)
+				add(ctx, G_CHEST, "BackpackPocket", Vector3.new(0.6, 0.4, 0.12), at(0, 3.32, 0.7), c:Lerp(WHITE, 0.3), M.Fabric)
+				for _, sx in ipairs({ -1, 1 }) do
+					add(ctx, G_CHEST, "Strap", Vector3.new(0.12, 0.9, 0.05), at(sx * 0.3, 3.8, -0.305), c:Lerp(INK, 0.2), M.Fabric)
+				end
 			end
 		end)
 	elseif style == "pedestrian" then
 		if hash(seed, 61) < 0.35 then
-			-- veste ouverte par-dessus le t-shirt
-			local jacket = pick({ rgb(60, 70, 90), rgb(120, 80, 60), rgb(180, 160, 130), rgb(70, 110, 90), rgb(150, 40, 60) }, seed, 62)
+			-- veste ouverte par-dessus le t-shirt (le buste prend la couleur de
+			-- la veste ; le t-shirt se voit devant)
+			local jacket = pick({ rgb(60, 70, 90), rgb(120, 80, 60), rgb(180, 160, 130), rgb(70, 110, 90), rgb(150, 40, 60), rgb(40, 40, 44) }, seed, 62)
+			local tee = shirt
+			shirt = jacket
 			sleeve, longSleeve = jacket, true
+			look.Collar = "none"
 			table.insert(extras, function()
+				add(ctx, G_CHEST, "Tee", Vector3.new(0.34, 1.26, 0.04), at(0, 3.62, -0.265), tee, M.Fabric)
+				add(ctx, G_CHEST, "TeeCollar", Vector3.new(0.07, 0.4, 0.4), cylY(0, 4.36, 0.03), tee:Lerp(INK, 0.1), M.Fabric, "Cyl")
 				for _, sx in ipairs({ -1, 1 }) do
-					add(ctx, G_BODY, "Jacket", Vector3.new(0.44, 1.66, 0.74), at(sx * 0.47, 3.44, 0), jacket, M.Fabric)
+					add(ctx, G_CHEST, "JacketLapel", Vector3.new(0.1, 0.56, 0.04), at(sx * 0.21, 3.98, -0.285) * CFrame.Angles(0, 0, sx * 0.28), jacket:Lerp(INK, 0.18), M.Fabric)
+					add(ctx, G_CHEST, "JacketEdge", Vector3.new(0.05, 0.8, 0.04), at(sx * 0.19, 3.25, -0.265), jacket:Lerp(INK, 0.12), M.Fabric)
+					add(ctx, G_CHEST, "JacketPocket", Vector3.new(0.2, 0.04, 0.04), at(sx * 0.36, 3.12, -0.255), jacket:Lerp(INK, 0.22), M.Fabric)
 				end
-				add(ctx, G_BODY, "JacketBack", Vector3.new(1.18, 1.62, 0.1), at(0, 3.43, 0.35), jacket, M.Fabric)
+			end)
+		elseif look.Female and hash(seed, 63) < 0.4 then
+			-- écharpe
+			local sc = pick({ rgb(200, 60, 80), rgb(236, 200, 120), rgb(120, 160, 210) }, seed, 64)
+			table.insert(extras, function()
+				add(ctx, G_CHEST, "Scarf", Vector3.new(0.16, 0.5, 0.5), cylY(0, 4.34, 0.03), sc, M.Fabric, "Cyl")
+				add(ctx, G_CHEST, "ScarfEnd", Vector3.new(0.16, 0.56, 0.05), at(0.14, 3.98, -0.31), sc:Lerp(INK, 0.1), M.Fabric)
 			end)
 		end
 	end
@@ -494,23 +887,11 @@ function NPCModels.Build(style: string, opts: Opts?): Model
 		propKind = nil
 	end
 
-	-- buste, bassin, ceinture, cou
-	local skin, hair = look.Skin, look.Hair
-	add(ctx, G_BODY, "Torso", Vector3.new(1.3, 1.62, 0.68), at(0, 3.5, 0), shirt, M.Fabric)
-	add(ctx, G_BODY, "Chest", Vector3.new(1.16, 0.5, 0.6), at(0, 4.3, 0.02), shirt, M.Fabric, "Egg")
-	add(ctx, G_BODY, "Neck", Vector3.new(0.34, 0.38, 0.38), at(0, 4.45, 0.02) * UPRIGHT, skin, M.SmoothPlastic, "Cyl")
-	if skirt then
-		add(ctx, G_BODY, "Skirt", Vector3.new(1.24, 1.0, 0.86), at(0, 2.3, 0), pants:Lerp(rgb(200, 90, 120), 0.4), M.Fabric)
-	else
-		add(ctx, G_BODY, "Hips", Vector3.new(1.14, 0.6, 0.62), at(0, 2.45, 0), pants, M.Fabric)
-	end
-	if look.Belt and not skirt and style ~= "baker" then
-		add(ctx, G_BODY, "Belt", Vector3.new(1.2, 0.12, 0.68), at(0, 2.62, 0), rgb(60, 40, 30), M.Leather)
-	end
-	head(ctx, skin, hair, look.HairStyle, seed, look.Female)
-	arm(ctx, -1, sleeve, skin, longSleeve, cuff)
-	arm(ctx, 1, sleeve, skin, longSleeve, cuff)
-	legs(ctx, pants, skin, look.Shoe, shorts, skirt)
+	torso(ctx, look, shirt, pants, skirt, style, seed)
+	head(ctx, look, seed)
+	arm(ctx, -1, sleeve, look.Skin, longSleeve, cuff)
+	arm(ctx, 1, sleeve, look.Skin, longSleeve, cuff)
+	legs(ctx, look, pants, shorts, skirt)
 	for _, fn in ipairs(extras) do
 		fn()
 	end
@@ -534,8 +915,88 @@ function NPCModels.Build(style: string, opts: Opts?): Model
 	model:SetAttribute("NpcStyle", style)
 	model:SetAttribute("NpcScale", scale)
 	model:SetAttribute("NpcHeadScale", hs)
+	model:SetAttribute("NpcSeed", seed)
+	if o.SitHeight then
+		model:SetAttribute("NpcSitHeight", o.SitHeight)
+	end
+	if o.Look == false then
+		model:SetAttribute("NpcNoLook", true)
+	end
 	model:SetAttribute("PartCount", ctx.Count + 1)
+	if o.Solid ~= false then
+		NPCModels.SetSolid(model, true)
+	end
 	return model
+end
+
+----------------------------------------------------------------------
+-- Collision (capsule invisible)
+----------------------------------------------------------------------
+
+local COL_RADIUS = 0.78 -- (studs, échelle 1)
+local COL_HEIGHT = 5.0
+
+-- Repos de la capsule : debout (cylindre vertical) ou assis (boîte)
+local function colliderRest(s: number, sitting: boolean, seatTop: number?): (Vector3, CFrame)
+	if sitting then
+		local top = seatTop or NPCModels.SitHeight
+		local y0 = math.max(0.3, top - 1.2 * s)
+		local y1 = top + 2.95 * s
+		-- (buste au-dessus du siège + jambes vers l'avant)
+		return Vector3.new(1.3 * s, y1 - y0, 1.9 * s), CFrame.new(0, (y0 + y1) / 2, -0.45 * s)
+	end
+	return Vector3.new(COL_HEIGHT * s, 2 * COL_RADIUS * s, 2 * COL_RADIUS * s), CFrame.new(0, 0.2 * s + COL_HEIGHT * s / 2, 0) * UPRIGHT
+end
+
+local rigs: { [Model]: any } = setmetatable({}, { __mode = "k" }) :: any
+
+function NPCModels.SetSolid(model: Model, on: boolean)
+	local old = model:FindFirstChild("NpcCollider")
+	if not on then
+		if old then
+			old:Destroy()
+		end
+		model:SetAttribute("NpcSolid", false)
+		rigs[model] = nil
+		return
+	end
+	if old then
+		return
+	end
+	local s = tonumber(model:GetAttribute("NpcScale")) or 1
+	local size, rest = colliderRest(s, false, nil)
+	local root = model.PrimaryPart
+	local base = root and root.CFrame or CFrame.new()
+	local c = Instance.new("Part")
+	c.Name = "NpcCollider"
+	c.Shape = Enum.PartType.Cylinder
+	c.Anchored = true
+	c.CanCollide = true
+	c.CanTouch = false
+	c.CastShadow = false
+	c.Transparency = 1
+	c.Size = size
+	c.CFrame = base * rest
+	c.Material = M.SmoothPlastic
+	c:SetAttribute("NpcG", G_COL)
+	c:SetAttribute("NpcRest", rest)
+	c.Parent = model
+	model:SetAttribute("NpcSolid", true)
+	rigs[model] = nil
+end
+
+function NPCModels.SetSitHeight(model: Model, h: number)
+	model:SetAttribute("NpcSitHeight", h)
+end
+
+-- h (nombre) : le PNJ est ASSIS sur un siège dont le dessus est à h ; nil : debout
+function NPCModels.SetSeated(model: Model, h: number?)
+	if h then
+		model:SetAttribute("NpcSitHeight", h)
+		model:SetAttribute("NpcSeated", true)
+	else
+		model:SetAttribute("NpcSeated", nil)
+	end
 end
 
 ----------------------------------------------------------------------
@@ -549,10 +1010,20 @@ type Rig = {
 	Groups: { number },
 	Frames: { CFrame },
 	S: number,
+	HS: number,
 	Prop: string?,
+	Seed: number,
+	Collider: BasePart?,
+	ColIndex: number,
+	ColSitting: boolean,
+	ColSolid: boolean,
+	LookYaw: number,
+	LookPitch: number,
+	LookW: number,
+	Clock: number,
+	NoLook: boolean,
+	SitTop: number?,
 }
-
-local rigs: { [Model]: Rig } = setmetatable({}, { __mode = "k" }) :: any
 
 local function rigOf(model: Model): Rig?
 	local rig = rigs[model]
@@ -563,9 +1034,28 @@ local function rigOf(model: Model): Rig?
 	if not root or not root:IsA("BasePart") then
 		return nil
 	end
-	local r: Rig = { Root = root, Parts = {}, Rests = {}, Groups = {}, Frames = {}, S = tonumber(model:GetAttribute("NpcScale")) or BASE, Prop = nil }
 	local p = model:GetAttribute("NpcProp")
-	r.Prop = type(p) == "string" and p or nil
+	local r: Rig = {
+		Root = root,
+		Parts = {},
+		Rests = {},
+		Groups = {},
+		Frames = {},
+		S = tonumber(model:GetAttribute("NpcScale")) or 1,
+		HS = tonumber(model:GetAttribute("NpcHeadScale")) or 1,
+		Prop = type(p) == "string" and p or nil,
+		Seed = tonumber(model:GetAttribute("NpcSeed")) or 1,
+		Collider = nil,
+		ColIndex = 0,
+		ColSitting = false,
+		ColSolid = true,
+		LookYaw = 0,
+		LookPitch = 0,
+		LookW = 0,
+		Clock = os.clock(),
+		NoLook = model:GetAttribute("NpcNoLook") == true,
+		SitTop = nil,
+	}
 	for _, d in ipairs(model:GetChildren()) do
 		if d:IsA("BasePart") then
 			local g = d:GetAttribute("NpcG")
@@ -575,6 +1065,10 @@ local function rigOf(model: Model): Rig?
 				table.insert(r.Rests, rest)
 				table.insert(r.Groups, g)
 				table.insert(r.Frames, rest)
+				if g == G_COL then
+					r.Collider = d
+					r.ColIndex = #r.Parts
+				end
 			end
 		end
 	end
@@ -588,145 +1082,286 @@ local function about(p: Vector3, rot: CFrame): CFrame
 end
 
 local ANG = CFrame.Angles
-local T: { CFrame } = table.create(10, CFrame.new())
+local T: { CFrame } = table.create(NGROUPS, CFrame.new())
+local sin, cos, max, min, abs = math.sin, math.cos, math.max, math.min, math.abs
 
--- Pose : angles (radians). x > 0 = membre vers l'avant.
+-- Pose. Conventions (toutes en radians) :
+--   membres : x > 0 = vers l'AVANT (bras levé devant, cuisse levée) ;
+--   Knee / Elbow : flexion (> 0 : le tibia part vers l'arrière, l'avant-bras vers l'avant) ;
+--   Foot : > 0 = pointe vers le HAUT ;
+--   Lean > 0 = buste penché EN AVANT ; HeadPitch > 0 = regarde en BAS ;
+--   Yaw > 0 = tourne vers la GAUCHE du personnage (-X local).
 type Pose = {
 	Bob: number,
+	SwayX: number,
+	PelvisYaw: number,
+	PelvisRoll: number,
 	Lean: number,
 	Twist: number,
+	Side: number,
 	HeadYaw: number,
 	HeadPitch: number,
+	HeadRoll: number,
 	LUp: CFrame,
 	LLo: number,
 	RUp: CFrame,
 	RLo: number,
-	LTh: number,
-	LSh: number,
-	RTh: number,
-	RSh: number,
-	Drop: number,
 	LLoRot: CFrame?,
 	RLoRot: CFrame?,
+	LTh: number,
+	LThRoll: number,
+	LKnee: number,
+	LFoot: number,
+	RTh: number,
+	RThRoll: number,
+	RKnee: number,
+	RFoot: number,
+	Sit: boolean,
+	Blink: number,
+	LookW: number, -- (0..1) poids du regard vers le joueur
 }
 
-local function pose(anim: string, t: number, propKind: string?): Pose
-	local P: Pose = {
+local function newPose(): Pose
+	return {
 		Bob = 0,
+		SwayX = 0,
+		PelvisYaw = 0,
+		PelvisRoll = 0,
 		Lean = 0,
 		Twist = 0,
+		Side = 0,
 		HeadYaw = 0,
 		HeadPitch = 0,
+		HeadRoll = 0,
 		LUp = CFrame.identity,
-		LLo = 0,
+		LLo = 0.12,
 		RUp = CFrame.identity,
-		RLo = 0,
+		RLo = 0.12,
 		LTh = 0,
-		LSh = 0,
+		LThRoll = 0,
+		LKnee = 0,
+		LFoot = 0,
 		RTh = 0,
-		RSh = 0,
-		Drop = 0,
+		RThRoll = 0,
+		RKnee = 0,
+		RFoot = 0,
+		Sit = false,
+		Blink = 0,
+		LookW = 1,
 	}
-	local breathe = math.sin(t * 1.7) * 0.012
-	if anim == "walk" or anim == "push" then
-		local w = t * math.pi * 2 * 0.9 -- ~1,8 pas / s
-		local sw = math.sin(w)
-		P.LTh = sw * 0.5
-		P.RTh = -sw * 0.5
-		-- genou : plié pendant que la jambe revient vers l'avant
-		P.LSh = -math.max(0, math.sin(w + 1.3)) * 0.75 - 0.05
-		P.RSh = -math.max(0, math.sin(w + 1.3 + math.pi)) * 0.75 - 0.05
-		P.Bob = math.abs(math.cos(w)) * 0.07 - 0.05
-		P.Twist = sw * 0.06
-		P.HeadYaw = -sw * 0.04 + math.sin(t * 0.37) * 0.25
-		if anim == "push" then
-			P.Lean = 0.12
-			P.LUp = ANG(0.95, 0, 0.08)
-			P.RUp = ANG(0.95, 0, -0.08)
-			P.LLo, P.RLo = 0.55, 0.55
-		else
-			P.LUp = ANG(-sw * 0.42, 0, -0.06)
-			P.RUp = ANG(sw * 0.42, 0, 0.06)
-			P.LLo = 0.2 + math.max(0, -sw) * 0.3
-			P.RLo = 0.2 + math.max(0, sw) * 0.3
-		end
-	elseif anim == "sit" then
-		P.Drop = 0
-		P.LTh, P.RTh = 1.5, 1.45
-		P.LSh, P.RSh = -1.45 + math.sin(t * 1.3) * 0.12, -1.4 - math.sin(t * 1.3 + 1) * 0.12
-		P.Lean = -0.08
-		P.LUp = ANG(0.35, 0, -0.05)
-		P.RUp = ANG(0.35, 0, 0.05)
-		P.LLo, P.RLo = 0.9, 0.9
-		P.HeadYaw = math.sin(t * 0.31) * 0.45
-		P.HeadPitch = math.sin(t * 0.5) * 0.05
-		P.Bob = breathe
-	elseif anim == "wave" then
-		P.Bob = breathe
-		P.RUp = ANG(0, 0, 2.55)
-		P.RLo = 0.35
-		P.RLoRot = ANG(0, 0, math.sin(t * 7) * 0.45)
-		P.LUp = ANG(0.05, 0, -0.06)
-		P.LLo = 0.15
-		P.HeadPitch = -0.08
-		P.HeadYaw = 0.1
-	elseif anim == "scan" then
-		-- caisse : les mains passent les articles devant le scanner (droite -> gauche)
-		local cyc = (t * 0.9) % 1
-		local sweep = math.sin(cyc * math.pi * 2)
-		P.Bob = breathe
-		P.Lean = 0.12
-		P.Twist = sweep * 0.12
-		P.LUp = ANG(0.55, sweep * 0.25, 0)
-		P.RUp = ANG(0.6, sweep * 0.3, 0)
-		P.LLo, P.RLo = 1.15, 1.1
-		P.HeadPitch = 0.3
-		P.HeadYaw = sweep * 0.15
-	elseif anim == "type" then
-		P.Bob = breathe
-		P.LUp = ANG(0.35, 0, 0.12)
-		P.LLo = 1.25
-		P.RUp = ANG(0.45, 0.2, -0.05)
-		P.RLo = 1.05 + math.sin(t * 9) * 0.08
-		P.HeadPitch = 0.35
-		P.Lean = 0.04
-	elseif anim == "talk" then
-		local g = math.sin(t * 2.2)
-		P.Bob = breathe
-		P.HeadPitch = math.sin(t * 3.1) * 0.08
-		P.HeadYaw = math.sin(t * 0.6) * 0.2
-		P.RUp = ANG(0.35 + g * 0.12, 0, 0.12)
-		P.RLo = 0.95 + math.sin(t * 3.3) * 0.25
-		P.LUp = ANG(0.08, 0, -0.08)
-		P.LLo = 0.25 + math.max(0, math.sin(t * 1.1)) * 0.6
-		P.Twist = g * 0.05
-	else -- idle
-		P.Bob = breathe
-		P.HeadYaw = math.sin(t * 0.33) * 0.35 + math.sin(t * 0.91) * 0.1
-		P.HeadPitch = math.sin(t * 0.47) * 0.05
-		P.LUp = ANG(0.02, 0, -0.05 - breathe)
-		P.RUp = ANG(0.02, 0, 0.05 + breathe)
-		P.LLo, P.RLo = 0.12, 0.12
-		P.LTh, P.RTh = 0.02, -0.02
+end
+
+local function smoothPulse(x: number): number
+	-- 0 -> 1 -> 0 sur [0, 1] (cloche douce)
+	if x <= 0 or x >= 1 then
+		return 0
 	end
-	-- accessoires tenus : le téléphone se regarde, le café se porte
-	local handsBusy = (anim == "wave" or anim == "push" or anim == "scan")
+	return sin(x * math.pi) ^ 2
+end
+
+-- Jambes assises : cuisses à l'horizontale (ou genoux qui remontent sur un
+-- siège bas), tibias verticaux, pieds à plat ; siège haut : pieds qui pendent
+local function sitLegs(P: Pose, t: number, seatTop: number, s: number)
+	local yh = seatTop + HIP_OVER_SEAT * s
+	local c = math.clamp((yh - KNEE_Y * s) / (THIGH_LEN * s), -0.55, 0.3)
+	local th = math.acos(c) -- angle de la cuisse (0 = pendante, pi/2 = horizontale)
+	local dangle = (yh - KNEE_Y * s) / (THIGH_LEN * s) > 0.3
+	local swing = dangle and sin(t * 1.6) * 0.18 or 0
+	P.LTh, P.RTh = th + 0.02, th - 0.02
+	P.LThRoll, P.RThRoll = 0.06, -0.06
+	-- tibias verticaux (ou qui se balancent)
+	P.LKnee = th + 0.02 - 0.05 + swing
+	P.RKnee = th - 0.02 - 0.05 - swing
+	-- pieds à plat
+	P.LFoot = -((th + 0.02) - P.LKnee)
+	P.RFoot = -((th - 0.02) - P.RKnee)
+	-- petit mouvement de pied de temps en temps
+	P.RFoot += max(0, sin(t * 0.7)) ^ 8 * 0.35
+	P.Sit = true
+end
+
+-- Point le plus bas d'une jambe sous la hanche (échelle 1) : cuisse (1,1),
+-- tibia (1,16), pied (cheville à 0,34 du sol ; talon 0,24 derrière, pointe
+-- 0,66 devant)
+local HIP_Y = 2.6
+local function legLow(th: number, knee: number, foot: number): number
+	local phi = th - knee + foot
+	local c, s2 = cos(phi), sin(phi)
+	local heel = -0.34 * c - 0.24 * s2
+	local toe = -0.34 * c + 0.66 * s2
+	return -(1.1 * cos(th) + 1.16 * cos(th - knee)) + min(heel, toe)
+end
+local function groundBob(lth: number, lk: number, lf: number, rth: number, rk: number, rf: number): number
+	return -min(legLow(lth, lk, lf), legLow(rth, rk, rf)) - HIP_Y
+end
+
+local function pose(anim: string, t: number, propKind: string?, seed: number, seated: boolean, seatTop: number, s: number): Pose
+	local P = newPose()
+	local breathe = sin(t * 1.55) -- (~15 respirations / min)
+	-- clignement : toutes les 2,8 à 5 s, 0,14 s
+	local period = 2.8 + (seed % 7) * 0.31
+	P.Blink = smoothPulse(((t + seed * 0.37) % period) / 0.14)
+	-- transfert du poids (repos) : lent, propre à chacun
+	local shift = sin(t * 0.42 + seed)
+	if anim == "walk" or anim == "push" then
+		local w = t * math.pi * 2 * 0.95 -- (0,95 cycle / s à t normal : ~1,9 pas / s)
+		local sl, sr = sin(w), sin(w + math.pi)
+		local cl, cr = cos(w), cos(w + math.pi)
+		local amp = anim == "push" and 0.34 or 0.42
+		-- cuisses : avant / arrière
+		P.LTh = sl * amp + 0.04
+		P.RTh = sr * amp + 0.04
+		-- genoux : grande flexion pendant l'oscillation (jambe qui revient),
+		-- petite flexion à l'attaque du talon (amorti)
+		P.LKnee = max(0, cl) ^ 1.6 * 1.05 + max(0, sin(w - 2.2)) * 0.16 + 0.05
+		P.RKnee = max(0, cr) ^ 1.6 * 1.05 + max(0, sin(w + math.pi - 2.2)) * 0.16 + 0.05
+		-- pieds : pointe relevée à l'attaque, poussée sur les orteils au départ
+		P.LFoot = -0.15 * max(0, sl) + 0.14 * max(0, -cl) + 0.3 * max(0, cl)
+		P.RFoot = -0.15 * max(0, sr) + 0.14 * max(0, -cr) + 0.3 * max(0, cr)
+		-- bassin : rebond (2 par cycle), balancement latéral vers la jambe d'appui,
+		-- rotation avec la jambe avant, léger roulis
+		P.SwayX = cl * 0.045
+		P.PelvisYaw = -sl * 0.1
+		P.PelvisRoll = -cl * 0.045
+		-- buste en contre-rotation, tête stable
+		P.Twist = sl * 0.08
+		P.Lean = anim == "push" and 0.2 or 0.05
+		P.HeadYaw = -sl * 0.02
+		P.HeadPitch = -0.03
+		if anim == "push" then
+			-- mains sur la poignée du chariot
+			P.LUp = ANG(0.95, 0, 0.1)
+			P.RUp = ANG(0.95, 0, -0.1)
+			P.LLo, P.RLo = 0.6, 0.6
+			P.LookW = 0.5
+		else
+			-- bras en opposition des jambes, coude qui plie en avant
+			P.LUp = ANG(-sl * 0.4, 0, -0.07)
+			P.RUp = ANG(-sr * 0.4, 0, 0.07)
+			P.LLo = 0.22 + max(0, -sl) * 0.35
+			P.RLo = 0.22 + max(0, -sr) * 0.35
+		end
+	else
+		-- debout (ou assis) : respiration, poids d'une jambe sur l'autre
+		P.Bob = breathe * 0.008
+		P.SwayX = shift * 0.035
+		P.PelvisRoll = shift * 0.035
+		P.Side = -shift * 0.03
+		local relaxL = max(0, -shift) -- (la jambe qui ne porte pas se plie un peu)
+		local relaxR = max(0, shift)
+		P.LKnee = relaxL * 0.18
+		P.RKnee = relaxR * 0.18
+		P.LTh = relaxL * 0.09
+		P.RTh = relaxR * 0.09
+		P.LFoot = -relaxL * 0.05
+		P.RFoot = -relaxR * 0.05
+		P.LThRoll = -shift * 0.03
+		P.RThRoll = -shift * 0.03
+		P.LUp = ANG(0.02 - breathe * 0.01, 0, -0.07)
+		P.RUp = ANG(0.02 - breathe * 0.01, 0, 0.07)
+		P.LLo, P.RLo = 0.14, 0.14
+		P.HeadYaw = sin(t * 0.29 + seed) * 0.3 + sin(t * 0.83) * 0.08
+		P.HeadPitch = sin(t * 0.41) * 0.05
+		P.HeadRoll = sin(t * 0.23) * 0.03
+
+		if anim == "sit" then
+			P.Lean = -0.06
+			-- mains posées sur les cuisses
+			P.LUp = ANG(0.2, 0, 0.12)
+			P.RUp = ANG(0.2, 0, -0.12)
+			P.LLo, P.RLo = 0.72, 0.72
+			P.HeadYaw = sin(t * 0.31 + seed) * 0.4
+		elseif anim == "wave" then
+			P.RUp = ANG(0.25, 0, 2.5)
+			P.RLo = 0.4
+			P.RLoRot = ANG(0, 0, sin(t * 7) * 0.45)
+			P.HeadPitch = -0.06
+			P.HeadYaw = 0.1
+			P.HeadRoll = 0.08
+		elseif anim == "scan" then
+			-- caisse : les mains passent les articles devant le scanner (droite -> gauche)
+			local cyc = (t * 0.8) % 1
+			local sweep = sin(cyc * math.pi * 2)
+			local lift = max(0, sin(cyc * math.pi * 2 + 1)) * 0.12
+			P.Lean = 0.12
+			P.Twist = -sweep * 0.14
+			P.LUp = ANG(0.6 + lift, -sweep * 0.2, -0.05)
+			P.RUp = ANG(0.7 + lift, -sweep * 0.3, 0.05)
+			P.LLo, P.RLo = 1.1, 1.05
+			P.HeadPitch = 0.32
+			P.HeadYaw = -sweep * 0.18
+			P.LookW = 0.45
+		elseif anim == "type" then
+			P.LUp = ANG(0.4, 0, 0.12)
+			P.LLo = 1.25
+			P.RUp = ANG(0.5, 0.2, -0.05)
+			P.RLo = 1.1 + sin(t * 9) * 0.08
+			P.RLoRot = ANG(0, 0, sin(t * 11) * 0.06)
+			P.HeadPitch = 0.34
+			P.Lean = 0.05
+			P.LookW = 0.4
+		elseif anim == "talk" then
+			local g = sin(t * 2.2)
+			P.HeadPitch = sin(t * 3.1) * 0.07
+			P.HeadYaw = sin(t * 0.6) * 0.2
+			P.HeadRoll = sin(t * 1.3) * 0.05
+			P.RUp = ANG(0.35 + g * 0.12, 0.1, 0.1)
+			P.RLo = 0.95 + sin(t * 3.3) * 0.25
+			P.RLoRot = ANG(0, sin(t * 2.7) * 0.3, 0)
+			P.LUp = ANG(0.08 + max(0, sin(t * 1.1)) * 0.3, 0, -0.08)
+			P.LLo = 0.25 + max(0, sin(t * 1.1)) * 0.7
+			P.Twist = g * 0.05
+		elseif anim == "clap" then
+			local c = abs(sin(t * 6))
+			P.LUp = ANG(0.8, 0, 0.3 - c * 0.22)
+			P.RUp = ANG(0.8, 0, -0.3 + c * 0.22)
+			P.LLo, P.RLo = 1.2, 1.2
+			P.HeadPitch = -0.08
+			P.Bob += c * 0.01
+		elseif anim == "cheer" then
+			local c = sin(t * 5)
+			P.LUp = ANG(0.2, 0, -2.5 - c * 0.15)
+			P.RUp = ANG(0.2, 0, 2.5 + c * 0.15)
+			P.LLo, P.RLo = 0.3, 0.3
+			P.HeadPitch = -0.15
+			P.Bob += max(0, c) * 0.06
+		end
+	end
+	-- debout : le bassin se place pour que le pied le plus bas touche le sol
+	-- (talon ou pointe selon l'inclinaison du pied) : aucun pied qui flotte
+	-- ni qui s'enfonce, rebond naturel de la marche
+	if anim ~= "sit" and not seated then
+		P.Bob += groundBob(P.LTh, P.LKnee, P.LFoot, P.RTh, P.RKnee, P.RFoot)
+	end
+	-- assis (anim "sit" ou PNJ assis qui fait autre chose)
+	if anim == "sit" or seated then
+		P.Bob, P.SwayX, P.PelvisRoll, P.PelvisYaw = breathe * 0.006, 0, 0, 0
+		P.Side = 0
+		sitLegs(P, t + seed, seatTop, s)
+	end
+	-- objets tenus : le téléphone se regarde, le café se porte
+	local handsBusy = (anim == "wave" or anim == "push" or anim == "scan" or anim == "clap" or anim == "cheer")
 	local typing = (anim == "type")
-	local casual = (anim == "walk" or anim == "idle")
+	local casual = (anim == "walk" or anim == "idle" or anim == "sit")
 	if propKind == "phone" and not handsBusy then
-		P.RUp = ANG(0.35, 0.25, 0.05)
-		P.RLo = 1.35
-		P.HeadPitch = 0.45
-		P.HeadYaw = 0.1
+		P.RUp = ANG(0.42, 0.25, 0.1)
+		P.RLo = 1.45
+		P.RLoRot = ANG(0, 0.5, 0)
+		P.HeadPitch = 0.42
+		P.HeadYaw = 0.12
+		P.LookW = 0.35
 	elseif propKind == "coffee" and not handsBusy then
-		P.RUp = ANG(0.25, 0, 0.05)
-		P.RLo = 1.2
+		P.RUp = ANG(0.25, 0, 0.08)
+		P.RLo = 1.25
 	elseif propKind == "tablet" and not typing then
-		P.LUp = ANG(0.3, 0, 0.1)
-		P.LLo = 1.2
-	elseif propKind == "bag" and casual then
-		P.RUp = ANG(0.03, 0, 0.12)
-		P.RLo = 0.05
+		P.LUp = ANG(0.35, 0, 0.1)
+		P.LLo = 1.25
+	elseif propKind == "bag" and casual and not P.Sit then
+		P.RUp = ANG(0.02, 0, 0.14)
+		P.RLo = 0.08
+	elseif propKind == "cane" and not handsBusy and not P.Sit then
+		P.RUp = ANG(0.18, 0, 0.1)
+		P.RLo = 0.35
 	end
 	return P
 end
@@ -741,33 +1376,180 @@ function NPCModels.Place(model: Model, cf: CFrame)
 	end
 end
 
-function NPCModels.Animate(model: Model, anim: string, t: number)
+----------------------------------------------------------------------
+-- Joueur local (regard + anti-piège de la capsule), mis en cache
+----------------------------------------------------------------------
+
+local focusAt = -1
+local focusHead: Vector3? = nil
+local focusRoot: Vector3? = nil
+local function localFocus(): (Vector3?, Vector3?)
+	local now = os.clock()
+	if now - focusAt < 0.05 then
+		return focusHead, focusRoot
+	end
+	focusAt = now
+	focusHead, focusRoot = nil, nil
+	local ok = pcall(function()
+		local Players = game:GetService("Players")
+		local player = Players.LocalPlayer
+		local character = player and player.Character
+		if character then
+			local hrp = character:FindFirstChild("HumanoidRootPart")
+			local headPart = character:FindFirstChild("Head")
+			if hrp and hrp:IsA("BasePart") then
+				focusRoot = hrp.Position
+				focusHead = (headPart and headPart:IsA("BasePart")) and headPart.Position or hrp.Position + Vector3.new(0, 1.5, 0)
+			end
+		end
+	end)
+	if not ok then
+		focusHead, focusRoot = nil, nil
+	end
+	return focusHead, focusRoot
+end
+
+-- Dessus du siège sous le PNJ assis : attribut, sinon rayon vers le bas (une fois)
+local function seatTopOf(model: Model, rig: Rig): number
+	local attr = tonumber(model:GetAttribute("NpcSitHeight"))
+	if attr then
+		return attr
+	end
+	if rig.SitTop then
+		return rig.SitTop
+	end
+	local top = NPCModels.SitHeight
+	pcall(function()
+		local params = RaycastParams.new()
+		params.FilterType = Enum.RaycastFilterType.Exclude
+		params.FilterDescendantsInstances = { model }
+		local pivot = rig.Root.CFrame
+		local from = (pivot * CFrame.new(0, 3.2 * rig.S, 0.1 * rig.S)).Position
+		local hit = workspace:Raycast(from, pivot.UpVector * -3.1 * rig.S, params)
+		if hit then
+			local h = pivot:PointToObjectSpace(hit.Position).Y
+			if h > 0.6 * rig.S and h < 3.2 * rig.S then
+				top = h
+			end
+		end
+	end)
+	rig.SitTop = top
+	return top
+end
+
+function NPCModels.Animate(model: Model, anim: string, t: number, look: Vector3?)
 	local rig = rigOf(model)
 	if not rig then
 		return
 	end
 	local s = rig.S
-	local P = pose(anim, t, rig.Prop)
+	local seated = model:GetAttribute("NpcSeated") == true
+	local sitting = anim == "sit" or seated
+	local seatTop = sitting and seatTopOf(model, rig) or NPCModels.SitHeight
+	local P = pose(anim, t, rig.Prop, rig.Seed, seated, seatTop, s)
 	local pivot = rig.Root.CFrame
-	-- (assis : le bassin se pose sur le banc -> descend de ~0,4 ; SitHeight 1,9)
-	local sitDrop = anim == "sit" and (J.HipL.Y * s - (NPCModels.SitHeight + 0.2)) or 0
-	local body = CFrame.new(0, P.Bob * s - sitDrop, 0)
-	local waist = J.Waist * s
-	local torso = body * about(waist, ANG(P.Lean, P.Twist, 0))
-	T[G_BODY] = torso
-	T[G_HEAD] = torso * about(J.Neck * s, ANG(P.HeadPitch, P.HeadYaw, 0))
-	local lu = torso * about(J.ShoulderL * s, P.LUp)
+	local clock = os.clock()
+	local dt = math.clamp(clock - rig.Clock, 0, 0.25)
+	rig.Clock = clock
+
+	-- regard : vers `look`, sinon vers l'avatar local proche (≤ 14 studs, devant)
+	local wantYaw, wantPitch, wantW = 0, 0, 0
+	local headPos, rootPos = localFocus()
+	local target = look
+	if not target and not rig.NoLook and headPos then
+		target = headPos
+	end
+	if target and P.LookW > 0 then
+		local neckW = pivot * (J.Neck * s + Vector3.new(0, sitting and (seatTop + HIP_OVER_SEAT * s - J.HipL.Y * s) or 0, 0))
+		local rel = pivot:VectorToObjectSpace(target - neckW)
+		local flat = Vector3.new(rel.X, 0, rel.Z).Magnitude
+		if flat < 14 * max(s, 0.8) and flat > 0.5 then
+			local yaw = math.atan2(-rel.X, -rel.Z)
+			if abs(yaw) < 2.0 then
+				wantYaw = math.clamp(yaw, -1.2, 1.2)
+				wantPitch = math.clamp(-math.atan2(rel.Y, flat), -0.45, 0.5)
+				-- (poids : plein à moins de 9 studs, s'efface jusqu'à 14)
+				wantW = math.clamp((14 * s - flat) / (5 * s), 0, 1) * P.LookW
+			end
+		end
+	end
+	local k = min(1, dt * 3.2) -- (lissage : ~0,3 s)
+	rig.LookYaw += (wantYaw - rig.LookYaw) * k
+	rig.LookPitch += (wantPitch - rig.LookPitch) * k
+	rig.LookW += (wantW - rig.LookW) * k
+	local lw = rig.LookW
+	local headYaw = P.HeadYaw * (1 - lw) + rig.LookYaw * lw
+	local headPitch = P.HeadPitch * (1 - lw) + rig.LookPitch * lw
+	-- (au-delà de ~0,8 rad, le buste suit un peu)
+	local chestFollow = math.clamp(rig.LookYaw - 0.8 * math.sign(rig.LookYaw), -0.35, 0.35)
+	if abs(rig.LookYaw) < 0.8 then
+		chestFollow = 0
+	end
+	local twist = P.Twist + chestFollow * lw
+	headYaw -= chestFollow * lw
+
+	-- assis : le bassin descend sur le siège (articulation de la hanche au-dessus)
+	local drop = 0
+	if sitting then
+		drop = (seatTop + HIP_OVER_SEAT * s) - J.HipL.Y * s
+	end
+	local body = CFrame.new(P.SwayX * s, P.Bob * s + drop, 0)
+	local pel = body * about(J.Pelvis * s, ANG(0, P.PelvisYaw, P.PelvisRoll))
+	T[G_PELVIS] = pel
+	local chest = pel * about(J.Waist * s, ANG(-P.Lean, twist - P.PelvisYaw * 0.4, P.Side - P.PelvisRoll * 0.6))
+	T[G_CHEST] = chest
+	local hd = chest * about(J.Neck * s, ANG(-headPitch, headYaw, P.HeadRoll))
+	T[G_HEAD] = hd
+	T[G_LID] = hd * CFrame.new(0, 0, -P.Blink * 0.06 * s * rig.HS)
+	local lu = chest * about(J.ShoulderL * s, P.LUp)
 	T[G_LUP] = lu
 	T[G_LLO] = lu * about(J.ElbowL * s, ANG(P.LLo, 0, 0) * (P.LLoRot or CFrame.identity))
-	local ru = torso * about(J.ShoulderR * s, P.RUp)
+	local ru = chest * about(J.ShoulderR * s, P.RUp)
 	T[G_RUP] = ru
 	T[G_RLO] = ru * about(J.ElbowR * s, ANG(P.RLo, 0, 0) * (P.RLoRot or CFrame.identity))
-	local lt = body * about(J.HipL * s, ANG(P.LTh, 0, 0))
+	local lt = pel * about(J.HipL * s, ANG(P.LTh, 0, P.LThRoll))
 	T[G_LTH] = lt
-	T[G_LSH] = lt * about(J.KneeL * s, ANG(P.LSh, 0, 0))
-	local rt = body * about(J.HipR * s, ANG(P.RTh, 0, 0))
+	local ls = lt * about(J.KneeL * s, ANG(-P.LKnee, 0, 0))
+	T[G_LSH] = ls
+	T[G_LFT] = ls * about(J.AnkleL * s, ANG(P.LFoot, 0, 0))
+	local rt = pel * about(J.HipR * s, ANG(P.RTh, 0, P.RThRoll))
 	T[G_RTH] = rt
-	T[G_RSH] = rt * about(J.KneeR * s, ANG(P.RSh, 0, 0))
+	local rs = rt * about(J.KneeR * s, ANG(-P.RKnee, 0, 0))
+	T[G_RSH] = rs
+	T[G_RFT] = rs * about(J.AnkleR * s, ANG(P.RFoot, 0, 0))
+	T[G_COL] = CFrame.identity
+
+	-- capsule : forme (debout / assis) + anti-piège (avatar local dedans)
+	local col = rig.Collider
+	if col and rig.ColIndex > 0 then
+		if rig.ColSitting ~= sitting then
+			rig.ColSitting = sitting
+			local size, rest = colliderRest(s, sitting, seatTop)
+			col.Shape = sitting and Enum.PartType.Block or Enum.PartType.Cylinder
+			col.Size = size
+			rig.Rests[rig.ColIndex] = rest
+		end
+		if rootPos then
+			local rel = pivot:PointToObjectSpace(rootPos)
+			local inside
+			if sitting then
+				local size = col.Size
+				local c = rig.Rests[rig.ColIndex].Position
+				inside = abs(rel.X - c.X) < size.X / 2 + 0.3 and abs(rel.Z - c.Z) < size.Z / 2 + 0.3 and rel.Y > -1 and rel.Y < size.Y + 3
+			else
+				local d = Vector3.new(rel.X, 0, rel.Z).Magnitude
+				local r = COL_RADIUS * s
+				-- (hystérésis : on redevient solide une fois bien sorti)
+				inside = d < r + (rig.ColSolid and 0.35 or 1.1) and rel.Y > -3 and rel.Y < COL_HEIGHT * s + 3
+			end
+			local solid = not inside
+			if solid ~= rig.ColSolid then
+				rig.ColSolid = solid
+				col.CanCollide = solid
+			end
+		end
+	end
+
 	local frames = rig.Frames
 	local groups = rig.Groups
 	local rests = rig.Rests

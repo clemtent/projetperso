@@ -1617,6 +1617,123 @@ local function isSittable(seat: Instance?): boolean
 	return seat ~= nil and seat:IsA("Seat") and seat:GetAttribute("ParkPose") ~= true
 end
 
+----------------------------------------------------------------------
+-- (v9.9 REALISM99) Assis : plus AUCUNE invite "S'asseoir"
+-- Tant que l'avatar local est sur un siège (Humanoid.SeatPart), toutes les
+-- invites de type "s'asseoir / s'allonger / monter" (sièges des maisons,
+-- bancs, jeux du parc, sièges du jardin, manèges) sont cachées ; elles
+-- reviennent quand il se lève. On NE touche PAS à Enabled (d'autres modules
+-- s'en servent : mode édition, manèges, voitures) : on met leur portée
+-- (MaxActivationDistance) à 0 et on remet la valeur d'origine ensuite.
+-- Reconnues : nom (SitPrompt, ParkPrompt, SeatPrompt, BenchPrompt,
+-- GardenSeatPrompt), attribut SitPrompt = true (convention pour les
+-- nouveaux sièges), invite de manège (FairPrompt + RideId), ou texte
+-- "S'asseoir" / "S'allonger".
+----------------------------------------------------------------------
+
+local SIT_PROMPT_NAMES: { [string]: boolean } = {
+	SitPrompt = true,
+	ParkPrompt = true,
+	SeatPrompt = true,
+	BenchPrompt = true,
+	GardenSeatPrompt = true,
+}
+local PROMPT_EVERY = 0.2 -- (s) nouvelles invites apparues pendant qu'on est assis
+local knownPrompts: { [ProximityPrompt]: boolean } = setmetatable({} :: any, { __mode = "k" })
+local hiddenPrompts: { [ProximityPrompt]: number } = {} -- invite -> portée d'origine
+local promptsHidden = false
+local promptClock = 0
+local promptConn: RBXScriptConnection? = nil
+local sitTexts: { [string]: boolean }? = nil
+
+local function isSitPrompt(prompt: ProximityPrompt): boolean
+	if SIT_PROMPT_NAMES[prompt.Name] or prompt:GetAttribute("SitPrompt") == true then
+		return true
+	end
+	if prompt.Name == "FairPrompt" and prompt:GetAttribute("RideId") ~= nil then
+		return true
+	end
+	if not sitTexts then
+		local texts: { [string]: boolean } = { ["Sit"] = true, ["Lie down"] = true, ["S'asseoir"] = true, ["S'allonger"] = true }
+		pcall(function()
+			texts[Locale.T("Sit")] = true
+			texts[Locale.T("Lie down")] = true
+		end)
+		sitTexts = texts
+	end
+	return (sitTexts :: { [string]: boolean })[prompt.ActionText] == true
+end
+
+local function notePrompt(d: Instance)
+	if d:IsA("ProximityPrompt") then
+		knownPrompts[d] = true
+	end
+end
+
+local function hidePrompts()
+	for prompt in pairs(knownPrompts) do
+		if prompt.Parent == nil then
+			knownPrompts[prompt] = nil
+		elseif hiddenPrompts[prompt] == nil and isSitPrompt(prompt) then
+			local distance = prompt.MaxActivationDistance
+			if distance > 0 then
+				hiddenPrompts[prompt] = distance
+				prompt.MaxActivationDistance = 0
+			end
+		end
+	end
+end
+
+local function showPrompts()
+	for prompt, distance in pairs(hiddenPrompts) do
+		-- (quelqu'un d'autre a changé la portée entre-temps : on la lui laisse)
+		if prompt.Parent and prompt.MaxActivationDistance == 0 then
+			prompt.MaxActivationDistance = distance
+		end
+	end
+	table.clear(hiddenPrompts)
+end
+
+-- Appelé à chaque image : assis -> invites cachées ; debout -> remises
+local function stepPrompts(dt: number, seated: boolean)
+	if seated then
+		promptClock -= dt
+		if not promptsHidden or promptClock <= 0 then
+			promptsHidden = true
+			promptClock = PROMPT_EVERY
+			hidePrompts()
+		end
+	elseif promptsHidden then
+		promptsHidden = false
+		showPrompts()
+	end
+end
+
+local function startPrompts()
+	if promptConn then
+		return
+	end
+	for _, d in ipairs(workspace:GetDescendants()) do
+		notePrompt(d)
+	end
+	promptConn = workspace.DescendantAdded:Connect(notePrompt)
+end
+
+local function stopPrompts()
+	if promptConn then
+		promptConn:Disconnect()
+		promptConn = nil
+	end
+	promptsHidden = false
+	pcall(showPrompts)
+	table.clear(knownPrompts)
+end
+
+-- (tests) les invites cachées (assis)
+function SitAnimator.HiddenPrompts(): { [ProximityPrompt]: number }
+	return hiddenPrompts
+end
+
 -- Autres joueurs assis près de nous (et fin de ceux qui sont partis)
 local function scanRemote()
 	local _, _, myRoot = localCharacter()
@@ -1657,7 +1774,16 @@ local function scanRemote()
 end
 
 local function step(dt: number)
-	if not started or failed then
+	if not started then
+		return
+	end
+	-- (v9.9) invites "S'asseoir" cachées tant qu'on est assis (même si
+	-- l'animation s'est coupée sur une erreur)
+	pcall(function()
+		local _, humanoid = localCharacter()
+		stepPrompts(dt, humanoid ~= nil and humanoid.SeatPart ~= nil and humanoid.Health > 0)
+	end)
+	if failed then
 		return
 	end
 	local ok, err = pcall(function()
@@ -1819,6 +1945,7 @@ function SitAnimator.Start()
 	started = true
 	failed = false
 	scanClock = 0
+	pcall(startPrompts)
 	table.insert(connections, RunService.Stepped:Connect(function(_time: number, dt: number)
 		step(dt)
 	end))
@@ -1851,6 +1978,7 @@ function SitAnimator.Stop()
 		connection:Disconnect()
 	end
 	table.clear(connections)
+	stopPrompts()
 	if deskConnection then
 		pcall(function()
 			(deskConnection :: any):Disconnect()

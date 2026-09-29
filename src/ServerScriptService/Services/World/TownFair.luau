@@ -62,7 +62,13 @@ TownFair.WALKER_GROUP = "DopamineWalkers" -- (= CarService.WALKER_GROUP)
 local M = TownKit.M
 local part = TownKit.Part
 
-local SERVER_RATE = 0.1 -- (s) sièges occupés déplacés 10 fois / s
+-- (v9.9, FAIR99) sièges occupés déplacés 4 fois / s seulement : chaque
+-- client déplace LUI-MÊME tous les sièges occupés à chaque image (FairFx),
+-- la valeur du serveur ne sert plus qu'à garder l'avatar à peu près au bon
+-- endroit côté serveur (et ne se voit jamais : le client la réécrit avant
+-- le rendu). Avant : 10 fois / s, et ces mises à jour répliquées faisaient
+-- reculer les passagers d'une image sur les autres écrans ("saccadé").
+local SERVER_RATE = 0.25
 local GATE_RANGE = 14 -- (studs) distance max à la borne pour monter
 local BUMPER_SPEED_CLAMP = 60
 
@@ -262,6 +268,15 @@ local function board(ride: Ride, player: Player)
 		end
 		return
 	end
+	-- (v9.9) grand huit, train fantôme, bateau : on monte seulement en gare
+	-- (pendant l'embarquement), jamais dans un wagon en marche
+	local kind = ride.Def.Kind
+	if kind == "Coaster" or kind == "Ghost" or kind == "Pirate" then
+		local phase, left = FairRides.Phase(ride.Def, serverNow())
+		if phase ~= "load" or left < 0.8 then
+			return
+		end
+	end
 	local seat, index = pickSeat(ride)
 	if not seat or not index then
 		return
@@ -282,7 +297,8 @@ local function addGate(ride: Ride, parent: Instance, gateCF: CFrame)
 	local gate = invisible(part(parent, "RideGate", Vector3.new(1.2, 5, 1.2), gateCF * CFrame.new(0, 2.5, 0), Color3.fromRGB(255, 255, 255), M.SmoothPlastic, "deco"))
 	gate:SetAttribute("RideId", ride.Def.Id)
 	local def = ride.Def
-	local p = prompt(gate, "Ride", def.Icon .. " " .. def.Name, 10)
+	local action = if def.Kind == "Circus" then "Watch the show" else "Ride"
+	local p = prompt(gate, action, def.Icon .. " " .. def.Name, 10)
 	p:SetAttribute("RideId", def.Id)
 	table.insert(connections, p.Triggered:Connect(function(player)
 		local ok, err = pcall(board, ride, player)
@@ -297,6 +313,7 @@ local function makeRide(parent: Instance, def: any, base: CFrame, exitCF: CFrame
 	local ride: Ride = { Def = def, Base = base, Seats = {}, Riders = {}, Groups = {}, Exit = exitCF }
 	local model = Instance.new("Folder")
 	model.Name = def.Id
+	model:SetAttribute("BaseCF", base) -- (v9.9 : le client lit la place de l'annexe ici)
 	model.Parent = parent
 	if def.Kind ~= "Bumper" then
 		poseRide(ride, serverNow())
@@ -479,7 +496,7 @@ local function stepRides()
 	table.clear(moveParts)
 	table.clear(moveFrames)
 	for _, ride in ipairs(rides) do
-		if ride.Def.Kind ~= "Bumper" and next(ride.Riders) ~= nil then
+		if ride.Def.Kind ~= "Bumper" and ride.Def.Kind ~= "Circus" and next(ride.Riders) ~= nil then
 			poseRide(ride, t)
 			for i, seat in ipairs(ride.Seats) do
 				if seat.Occupant ~= nil then
@@ -603,6 +620,117 @@ local function reserve(geo: TownKit.Geo, F: CFrame)
 	geo.Reserve(F * Vector3.new(0, 0, -44), 10) -- allée devant l'arche
 end
 
+
+----------------------------------------------------------------------
+-- (v9.9, FAIR99) 🎪 ANNEXE : cirque, grand huit, bateau pirate, train
+-- fantôme, trampolines, palais des glaces. Leur place dépend de la taille
+-- de la ville : FairRides.SolveAnnex cherche des places LIBRES (geo : rues,
+-- boulevard, place, zones réservées) autour de la fête, AVANT que la
+-- nature ne soit posée. Les sites fixes de la nature (lac, jardin fleuri,
+-- basket : TownNature) sont évités ici (même calcul que TownNature) ; le
+-- jardin et le basket ne sont "empiétés" qu'en dernier recours (2e passe :
+-- ils doivent alors tester geo.IsFree, c'est convenu avec CITY99 / main).
+----------------------------------------------------------------------
+
+-- Sites fixes de TownNature (copie de ses formules : lac, jardin, basket)
+local function natureSites(geo: TownKit.Geo): { { P: Vector3, R: number, Lake: boolean } }
+	local sites = {}
+	local ok = pcall(function()
+		local aR = geo.SlotAngle(geo.SideR)
+		local aL = geo.SlotAngle(geo.SideL)
+		local r0 = WorldLayout.PLAZA_R + 30
+		local depth = geo.Inner - r0
+		local mid = r0 + depth / 2
+		local lakeR = math.min(math.clamp(depth / 2 - 12, 20, 42) * 1.15, depth / 2 - 18)
+		table.insert(sites, { P = geo.At((aR + math.pi) / 2 + 0.05, mid + 4), R = lakeR + 9, Lake = true })
+		table.insert(sites, { P = geo.At((math.pi + aL) / 2 + 0.06, r0 + 25), R = 16, Lake = false })
+		if depth > 70 then
+			table.insert(sites, { P = geo.At((math.pi + aL) / 2 - 0.05, geo.Inner - 18), R = 17, Lake = false })
+		end
+	end)
+	return if ok then sites else {}
+end
+
+local function solveAnnex(geo: TownKit.Geo, F: CFrame): { [string]: any }
+	local sites = natureSites(geo)
+	local function free(lx: number, lz: number, loose: boolean): boolean
+		local p = F * Vector3.new(lx, 0, lz)
+		if not geo.IsFree(p, 0) then
+			return false
+		end
+		for _, s in ipairs(sites) do
+			if (s.Lake or not loose) and Vector3.new(p.X - s.P.X, 0, p.Z - s.P.Z).Magnitude < s.R then
+				return false
+			end
+		end
+		return true
+	end
+	local ok, result = pcall(FairRides.SolveAnnex, function(x, z)
+		return free(x, z, false)
+	end, function(x, z)
+		return free(x, z, true)
+	end)
+	if not ok then
+		warn("[TownFair] annexe : " .. tostring(result))
+		return {}
+	end
+	return result
+end
+
+local function buildAnnex(folder: Instance, ridesFolder: Instance, geo: TownKit.Geo, F: CFrame, placements: { [string]: any }): number
+	local annex = Instance.new("Folder")
+	annex.Name = "Annex"
+	annex.Parent = folder
+	local count = 0
+	local boxes = { { X0 = -FairRides.FAIR_HALF_W - 1, X1 = FairRides.FAIR_HALF_W + 1, Z0 = -FairRides.FAIR_HALF_D - 1, Z1 = FairRides.FAIR_HALF_D + 1 } }
+	for _, def in ipairs(FairRides.Annex) do
+		local place = placements[def.Id]
+		if place then
+			table.insert(boxes, place.Box)
+		end
+	end
+	for _, def in ipairs(FairRides.Annex) do
+		local place = placements[def.Id]
+		if place then
+			count += 1
+			local base = F * place.CF
+			-- sol (terre battue, comme la fête) sous le corps + le parvis
+			local b, a = def.Body, def.Apron
+			local x0, x1 = math.min(b.X0, a.X0) - 1, math.max(b.X1, a.X1) + 1
+			local z0, z1 = math.min(b.Z0, a.Z0) - 1, b.Z1 + 1
+			local ground = part(annex, "AnnexGround", Vector3.new(x1 - x0, 0.3, z1 - z0), base * CFrame.new((x0 + x1) / 2, -0.15 - 0.01 * count, (z0 + z1) / 2), Color3.fromRGB(226, 206, 170), M.Ground, "solid")
+			ground.CastShadow = false
+			ground:SetAttribute("AnnexId", def.Id)
+			local center = base * Vector3.new((x0 + x1) / 2, 0, (z0 + z1) / 2)
+			geo.Reserve(center, math.sqrt((x1 - x0) ^ 2 + (z1 - z0) ^ 2) / 2 + 2)
+			-- allée depuis la porte de la fête la plus proche (réservée : pas d'arbre dessus)
+			local path = FairRides.AnnexPath(def, place.CF, boxes)
+			for i = 1, #path - 1 do
+				local p0, p1 = path[i], path[i + 1]
+				local len = (p1 - p0).Magnitude
+				local n = math.max(1, math.ceil(len / 5))
+				for k = 0, n do
+					geo.Reserve(F * p0:Lerp(p1, k / n), 3.5)
+				end
+			end
+			if def.Kind == "Trampolines" or def.Kind == "Mirrors" then
+				-- (pas de siège : tout est côté client ; le dossier porte la place)
+				local model = Instance.new("Folder")
+				model.Name = def.Id
+				model:SetAttribute("BaseCF", base)
+				model.Parent = ridesFolder
+			else
+				local ride = makeRide(ridesFolder, def, base, base * CFrame.new(def.Exit))
+				addGate(ride, ridesFolder, base * CFrame.new(def.Gate))
+				table.insert(rides, ride)
+			end
+		else
+			warn("[TownFair] annexe : pas de place pour " .. def.Id)
+		end
+	end
+	return count
+end
+
 function TownFair.Build(decor: Instance, geo: TownKit.Geo): Folder
 	-- (reconstruction : l'ancienne boucle s'arrête, les sièges partent avec la ville)
 	local plaza = pendingPlaza
@@ -612,6 +740,9 @@ function TownFair.Build(decor: Instance, geo: TownKit.Geo): Folder
 	end
 	table.clear(rides)
 	local F = WorldLayout.FairCFrame()
+	-- (v9.9) places de l'annexe AVANT les réserves de la fête (ses cercles
+	-- débordent un peu de la clôture)
+	local placements = solveAnnex(geo, F)
 	reserve(geo, F)
 	local folder = Instance.new("Folder")
 	folder.Name = TownFair.FOLDER_NAME
@@ -634,6 +765,9 @@ function TownFair.Build(decor: Instance, geo: TownKit.Geo): Folder
 		end
 		table.insert(rides, ride)
 	end
+	-- (v9.9) 🎪 l'annexe : cirque + nouveaux manèges
+	local annexCount = buildAnnex(folder, ridesFolder, geo, F, placements)
+	folder:SetAttribute("Annex", annexCount)
 	if plaza then
 		table.insert(rides, plaza) -- (sièges et invite créés juste avant par TownPlaza)
 	end

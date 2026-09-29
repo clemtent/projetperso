@@ -39,6 +39,7 @@ export type Track = {
 export type Profile = {
 	Track: Track,
 	Times: { number }, -- temps (s) pour atteindre l'échantillon i (1 = gare)
+	Speeds: { number }, -- vitesse (studs/s) à l'échantillon i
 	Lap: number,
 	MaxSpeed: number,
 }
@@ -186,7 +187,7 @@ function FairTrack.Profile(track: Track, spec: any): Profile
 	local lift = spec.Lift
 	local cruise = spec.Cruise
 	local decel = spec.Decel or 3.2
-	local startV = spec.StartV or 0.9
+	local startV = spec.StartV or 0
 	local topH, topV = 0, 0
 	if lift then
 		topH = FairTrack.Height(track, lift.B)
@@ -218,7 +219,7 @@ function FairTrack.Profile(track: Track, spec: any): Profile
 		local vm = (speeds[i - 1] + speeds[i]) / 2
 		times[i] = times[i - 1] + step / math.max(0.2, vm)
 	end
-	return { Track = track, Times = times, Lap = times[N + 1], MaxSpeed = maxSeen }
+	return { Track = track, Times = times, Speeds = speeds, Lap = times[N + 1], MaxSpeed = maxSeen }
 end
 
 -- u secondes après le départ -> abscisse s (0 <= s <= Length)
@@ -240,9 +241,18 @@ function FairTrack.Distance(profile: Profile, u: number): number
 			hi = mid
 		end
 	end
+	-- accélération CONSTANTE dans l'intervalle (vitesse continue : aucune
+	-- secousse d'une image à l'autre, même au départ de la gare)
 	local span = times[hi] - times[lo]
-	local f = if span > 1e-9 then (u - times[lo]) / span else 0
-	return ((lo - 1) + f) * profile.Track.Step
+	local step = profile.Track.Step
+	if span <= 1e-9 then
+		return (lo - 1) * step
+	end
+	local va, vb = profile.Speeds[lo], profile.Speeds[hi]
+	local tau = u - times[lo]
+	local ds = va * tau + 0.5 * (vb - va) / span * tau * tau
+	-- (la vitesse moyenne de l'intervalle est bornée à 0,2 : on reste dedans)
+	return (lo - 1) * step + math.clamp(ds * step / math.max(1e-6, (va + vb) / 2 * span), 0, step)
 end
 
 return FairTrack
