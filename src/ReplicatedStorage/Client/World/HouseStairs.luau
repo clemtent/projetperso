@@ -158,7 +158,7 @@ local function hallFloor(kit: any, size: any, floor: number, floors: number)
 		kit:Box("GuardRail", x - 0.16, x + 0.16, y + railH, y + railH + 0.24, H0, D1, RAIL, M.Wood, { Solid = true, Shadow = false })
 		-- (v9.6 : dessous 0.03 sous le plancher : ne se confond plus avec celui du poteau, visible depuis l'escalier)
 		kit:Box("GuardBase", x - 0.1, x + 0.1, y - 0.03, y + 0.25, H0, D1, WHITE, M.SmoothPlastic, { Solid = true, Shadow = false })
-		local count = math.floor((D1 - H0) / 1.35) -- (v9.8 : trémie plus longue, même nombre de balustres)
+		local count = math.floor((D1 - H0) / 1.7) -- (v9.8 : budget de pièces du manoir)
 		for i = 0, count do
 			local d = H0 + 0.2 + i * (D1 - H0 - 0.4) / math.max(1, count)
 			kit:Box("GuardBaluster", x - 0.09, x + 0.09, y + 0.25, y + railH, d - 0.09, d + 0.09, WHITE, M.SmoothPlastic, { Solid = i % 3 == 0, Shadow = false })

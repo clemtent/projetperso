@@ -2526,7 +2526,7 @@ Config.Food = {
 			Color = Color3.fromRGB(236, 196, 130), Crumb = Color3.fromRGB(120, 76, 50), Desc = "Rolled crêpe with chocolate" },
 		{ Id = "PizzaSlice", Name = "Pizza slice", Icon = "🍕", Multiplier = 1.8, Duration = 90, Bites = 4,
 			Color = Color3.fromRGB(255, 206, 110), Crumb = Color3.fromRGB(214, 90, 60), Desc = "Cheesy slice with pepperoni" },
-		{ Id = "Taco", Name = "Taco", Icon = "🌮", Multiplier = 1.8, Duration = 120, Bites = 4,
+		{ Id = "Taco", Name = "Taco", Icon = "🌮", Multiplier = 1.8, Duration = 100, Bites = 4,
 			Color = Color3.fromRGB(240, 196, 100), Crumb = Color3.fromRGB(110, 190, 90), Desc = "Crispy shell, salad and tomato" },
 		{ Id = "Milkshake", Name = "Milkshake", Icon = "🥤", Multiplier = 2, Duration = 60, Bites = 4,
 			Color = Color3.fromRGB(255, 200, 220), Crumb = Color3.fromRGB(255, 236, 244), Desc = "Strawberry shake with whipped cream" },

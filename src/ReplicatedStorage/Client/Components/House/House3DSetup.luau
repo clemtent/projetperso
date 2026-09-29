@@ -431,32 +431,37 @@ R.SetupKeyboard = function(b, _ctx)
 	local alpha = b.Map(rgb(246, 242, 234))
 	local modifier = b.Map(rgb(112, 108, 150))
 	local accent = b.Map(rgb(255, 104, 170))
-	local w, d = 100, 40
+	local w, d = 100, 44
 	local U = 6 -- une unité de touche
 	local gap = 0.9
-	local layer = th(b, 1.6)
+	local layer = th(b, 2.2)
+	-- (règle anti-scintillement : deux faces parallèles, tournées du même
+	-- côté, de couleurs différentes, qui se recouvrent -> au moins 0,03 stud
+	-- d'écart ; sinon House3DKit.Separate déforme les pièces)
+	local clear = th(b, 1.4, 0.031)
 	-- boîtier (bac arrondi) + liseré lumineux dessous (doux, en retrait)
 	local trayH = 5
 	b.Round(0, 0, 0, w, trayH, d, 3, caseColor, M.SmoothPlastic)
-	local glowY = th(b, 1.4)
-	local out = th(b, 1.4, 0.032) * 2
-	local glow = b.Box(0, glowY, 0, w + out, layer, d + out, RAINBOW[5], M.Neon)
+	local glowY = clear
+	local glow = b.Box(0, glowY, 0, w + clear * 2, th(b, 1.6), d + clear * 2, RAINBOW[5], M.Neon)
 	neon(b, glow, "RGB")
 	glow.Transparency = 0.45
 	-- plaque (couleur RGB animée, SmoothPlastic : lueur douce entre les touches)
-	local plateBottom = trayH - layer * 0.4
-	local plateTop = plateBottom + layer
-	named(b.Box(0, plateBottom, 0, 90.4, layer, 30.4, rgb(120, 90, 255), M.SmoothPlastic), "RGB").CastShadow = false
-	-- rebord du boîtier (4 baguettes au-dessus de la plaque)
-	local rimH = th(b, 2.8)
+	local plateTop = trayH + clear
+	local plateBottom = plateTop - layer
+	local plateW, plateD = 90 + clear * 2 + 0.9, 30 + clear * 2 + 0.9
+	named(b.Box(0, plateBottom, 0, plateW, layer, plateD, rgb(120, 90, 255), M.SmoothPlastic), "RGB").CastShadow = false
+	-- rebord du boîtier (4 baguettes au-dessus de la plaque, même teinte que le bac)
+	local rimH = math.max(th(b, 2.8), plateTop - plateBottom + clear)
 	local rimTop = plateBottom + rimH
-	b.Box(0, plateBottom, d / 2 - 2, w, rimH, 4, rimColor, M.SmoothPlastic)
-	b.Box(0, plateBottom, -d / 2 + 2, w, rimH, 4, rimColor, M.SmoothPlastic)
-	b.Box(-w / 2 + 2, plateBottom, 0, 4, rimH, d - 8, rimColor, M.SmoothPlastic)
-	b.Box(w / 2 - 2, plateBottom, 0, 4, rimH, d - 8, rimColor, M.SmoothPlastic)
+	local rimW = 2
+	b.Box(0, plateBottom, d / 2 - rimW / 2, w, rimH, rimW, rimColor, M.SmoothPlastic)
+	b.Box(0, plateBottom, -d / 2 + rimW / 2, w, rimH, rimW, rimColor, M.SmoothPlastic)
+	b.Box(-w / 2 + rimW / 2, plateBottom, 0, rimW, rimH, d - rimW * 2 + 0.4, rimColor, M.SmoothPlastic)
+	b.Box(w / 2 - rimW / 2, plateBottom, 0, rimW, rimH, d - rimW * 2 + 0.4, rimColor, M.SmoothPlastic)
 	-- touches (le bas des touches est pris dans la plaque : aucune face confondue)
-	local keyH = math.max(4, rimTop - plateTop + 2.6)
-	local keyBottom = plateTop - th(b, 0.6, 0.012)
+	local keyBottom = plateTop - math.min(0.5, layer - clear)
+	local keyH = math.max(4, rimTop - keyBottom + 2.2)
 	for rowIndex, row in ipairs(KEY_LAYOUT) do
 		local z = -12 + (rowIndex - 1) * U -- rangée 1 au fond, espace devant
 		local cursor = -45
@@ -477,8 +482,8 @@ R.SetupKeyboard = function(b, _ctx)
 		end
 	end
 	-- molette de volume (sur le rebord arrière droit) + diode
-	b.Cyl(w / 2 - 7, rimTop - 1, -d / 2 + 2, 3.6, 2.6, CHROME, M.Metal)
-	neon(b, b.Ball(w / 2 - 14, rimTop - 0.3, -d / 2 + 2, 1.6, MINT, M.Neon), "Glow")
+	b.Cyl(w / 2 - 7, rimTop - 1, -d / 2 + rimW / 2, 3.6, 2.6, CHROME, M.Metal)
+	neon(b, b.Ball(w / 2 - 14, rimTop - 0.3, -d / 2 + rimW / 2, 1.6, MINT, M.Neon), "Glow")
 	-- câble tressé vers l'arrière
 	House3DKit.Path(b, { { -20, 3, -d / 2 - 0.5 }, { -22, 2, -d / 2 - 8 }, { -30, 1.6, -d / 2 - 14 } }, 2.2, INK, M.Fabric)
 	b.Footprint(w, d, rimTop + keyH)

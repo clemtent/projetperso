@@ -574,7 +574,7 @@ local function ironFence(ctx: Ctx, x0: number, x1: number, d: number, gate0: num
 		if b - a > 1 then
 			kit:Box("FenceRail", a, b, 0.6, 0.8, d - 0.1, d + 0.1, iron, M.Metal, { Solid = true, Shadow = false })
 			kit:Box("FenceRail", a, b, 3.0, 3.2, d - 0.1, d + 0.1, iron, M.Metal, { Shadow = false })
-			local count = math.max(2, math.floor((b - a) / 2.6))
+			local count = math.max(2, math.floor((b - a) / 3.3)) -- (v9.8 : budget de pièces)
 			for k = 0, count do
 				local x = a + k * (b - a) / count
 				kit:Box("FenceBar", x - 0.1, x + 0.1, 0, 3.8, d - 0.1, d + 0.1, iron, M.Metal, { Shadow = false })
@@ -759,7 +759,19 @@ local function backSide(ctx: Ctx, material: Enum.Material)
 			table.insert(holes, { r[1] - 0.05, r[2] + 0.05, r[3] - 0.05, r[4] + 0.05 })
 			table.insert(windows, { r, nil })
 		end
-		kit:WallX("Back", L, R, y0, y1, depth - T + 0.05, out, holes, ctx.Wall, material, { Solid = true })
+		-- (bandes pleines sous / sur les ouvertures + trumeaux : moins de pièces)
+		local lo, hi = math.huge, -math.huge
+		for _, h in ipairs(holes) do
+			lo, hi = math.min(lo, h[3]), math.max(hi, h[4])
+		end
+		lo, hi = math.max(y0, lo), math.min(y1, hi)
+		if lo > y0 + 0.05 then
+			kit:Box("Back", L, R, y0, lo, depth - T + 0.05, out, ctx.Wall, material, { Solid = true })
+		end
+		if hi < y1 - 0.05 then
+			kit:Box("Back", L, R, hi, y1, depth - T + 0.05, out, ctx.Wall, material, { Solid = true })
+		end
+		kit:WallX("Back", L, R, lo, hi, depth - T + 0.05, out, holes, ctx.Wall, material, { Solid = true })
 		for _, w in ipairs(windows) do
 			local r, slot = w[1], w[2]
 			local x0, x1, wy0, wy1 = r[1], r[2], r[3], r[4]
@@ -1411,7 +1423,7 @@ local function fenceRun(ctx: Ctx, a: number, b: number, d: number)
 	local iron = C.Ink:Lerp(C.Lilac, 0.25)
 	kit:Box("FenceRail", a, b, 0.6, 0.8, d - 0.1, d + 0.1, iron, M.Metal, { Solid = true, Shadow = false })
 	kit:Box("FenceRail", a, b, 3.0, 3.2, d - 0.1, d + 0.1, iron, M.Metal, { Shadow = false })
-	local count = math.max(2, math.floor((b - a) / 2.6))
+	local count = math.max(2, math.floor((b - a) / 3.3)) -- (v9.8 : budget de pièces)
 	for k = 0, count do
 		local x = a + k * (b - a) / count
 		kit:Box("FenceBar", x - 0.1, x + 0.1, 0, 3.8, d - 0.1, d + 0.1, iron, M.Metal, { Shadow = false })
@@ -1705,12 +1717,12 @@ STYLES.Mansion = function(ctx)
 		end
 		kit:CylD("TowerOculus", tx, top - 2.2, td - radius - 0.1, 2.4, 0.3, P.Glass, M.Glass, { Shadow = false })
 		kit:CylY("TowerCrown", tx, top - 0.3, td, radius * 2 + 1.6, 1.2, TRIM, M.Limestone, { Solid = true })
-		local scallops = 10
+		local scallops = 8 -- (v9.8 : 10 -> 8, budget de pièces)
 		for k = 0, scallops - 1 do
 			local a = k / scallops * math.pi * 2
 			kit:Ball("TowerScallop", tx + math.cos(a) * (radius + 0.5), top - 0.6, td + math.sin(a) * (radius + 0.5), 1.1, C.Pink, M.SmoothPlastic, { Shadow = false })
 		end
-		kit:Cone("TowerRoof", tx, top + 0.9, td, radius + 1.6, 12, 10, ctx.Roof, M.Slate)
+		kit:Cone("TowerRoof", tx, top + 0.9, td, radius + 1.6, 12, 8, ctx.Roof, M.Slate) -- (v9.8 : 8 pans)
 		kit:Ball("TowerTop", tx, top + 13.1, td, 0.9, P.Gold, M.Metal, { Shadow = false })
 		kit:Box("FlagPole", tx - 0.1, tx + 0.1, top + 13.3, top + 17.5, td - 0.1, td + 0.1, WHITE, M.Metal, { Shadow = false })
 		kit:Box("Flag", tx + 0.1, tx + 2.6, top + 15.8, top + 17.4, td - 0.06, td + 0.06, if index == 1 then C.Pink else C.Lilac, M.Fabric, { Shadow = false })
@@ -1770,7 +1782,7 @@ STYLES.Mansion = function(ctx)
 		local x1 = if s < 0 then ctx.Left - T - 1 + 7.5 else court1 + 1
 		local x2 = if s < 0 then court0 - 1 else ctx.Right + T + 1 - 7.5
 		ctx.G:Box("Hedge", x1, x2, 0, 1.6, -3.4, -1.4, P.Leaf, M.Grass)
-		local bumps = math.max(1, math.floor((x2 - x1) / 5))
+		local bumps = math.max(1, math.floor((x2 - x1) / 6.5)) -- (v9.8 : budget de pièces)
 		for k = 0, bumps - 1 do
 			ctx.G:CylX("HedgeTop", x1 + (k + 0.5) * (x2 - x1) / bumps, 1.6, -2.4, 2, (x2 - x1) / bumps - 0.4, P.Leaf:Lerp(WHITE, 0.06), M.Grass, { Shadow = false })
 		end

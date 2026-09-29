@@ -127,22 +127,14 @@ local FAKE_NET = setmetatable({
 	end,
 })
 
-local function safeEffects(): any
-	local effects = clientModule("Effects")
-	return setmetatable({
-		Burst = effects and effects.Burst or noop,
-		FloatingText = effects and effects.FloatingText or noop,
-		Pop = effects and effects.Pop or noop,
-		AmountStyle = effects and effects.AmountStyle or noop,
-		Confetti = noop, -- (plein écran : jamais depuis un écran 3D)
-		Flash = noop,
-		Shake = noop,
-	}, {
-		__index = function()
-			return noop
-		end,
-	})
-end
+-- Effets : AUCUN effet partagé du clicker (Effects garde des réserves de
+-- cadres réutilisés : un cadre détruit avec un écran 3D ferait planter les
+-- effets du clicker ensuite, "Parent property locked") -> muets ici
+local SAFE_EFFECTS = setmetatable({}, {
+	__index = function()
+		return noop
+	end,
+})
 
 local DEAD_CONNECTION = { Connected = false, Disconnect = noop }
 
@@ -164,7 +156,7 @@ local function sandbox(feature: string, module: any, container: Frame, overlay: 
 	ctx.Net = FAKE_NET
 	ctx.Theme = clientModule("Theme")
 	ctx.UIUtil = clientModule("UIUtil")
-	ctx.Effects = safeEffects()
+	ctx.Effects = SAFE_EFFECTS
 	ctx.Sound = SILENT
 	ctx.Random = Random.new()
 	ctx.World3D = true -- (un stimulus peut savoir qu'il est sur un écran 3D)
@@ -178,10 +170,7 @@ local function sandbox(feature: string, module: any, container: Frame, overlay: 
 		return design
 	end
 	ctx.Notify = noop
-	function ctx.FloatText(parent: GuiObject, position: UDim2, text: string, color: Color3?, size: number?)
-		local effects = ctx.Effects
-		pcall(effects.FloatingText, parent, position, text, color, size)
-	end
+	ctx.FloatText = noop
 	function ctx.GetLevel(upgradeId: string): number
 		local ok, value = pcall(ClientState.GetLevel, upgradeId)
 		return ok and tonumber(value) or 0

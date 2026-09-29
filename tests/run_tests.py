@@ -2839,6 +2839,107 @@ def economy_test():
     return sim_loader() + ECONOMY_TESTS
 
 
+FOOD_TESTS = r"""
+do
+	local FR = req("FoodRules")
+	local Sim = req("EconomySim")
+	local near = function(a, b, eps) return math.abs(a - b) <= (eps or 1e-6) end
+
+	test("Nourriture v9.8 : Config.Food (aliments, boosts, bouchées, modèles 3D)", function(check)
+		local F = Config.Food
+		check(type(F) == "table" and #F.Items >= 9, "au moins 9 aliments")
+		check(F.MaxMultiplier <= 2 and F.MaxSeconds <= 300 and F.PriceFactor >= 0.6 and F.PriceFactor < 1, "plafonds sages")
+		local ids = {}
+		for _, food in ipairs(F.Items) do
+			check(not ids[food.Id], "aliment en double " .. tostring(food.Id))
+			ids[food.Id] = true
+			check(Config.FoodById[food.Id] == food, "FoodById " .. tostring(food.Id))
+			check(type(food.Name) == "string" and type(food.Icon) == "string" and type(food.Desc) == "string", "textes " .. food.Id)
+			check(food.Multiplier > 1 and food.Multiplier <= F.MaxMultiplier, "multiplicateur " .. food.Id)
+			check(food.Duration >= 30 and food.Duration <= F.MaxSeconds, "durée " .. food.Id)
+			check(food.Bites >= 2 and food.Bites <= 6 and math.floor(food.Bites) == food.Bites, "bouchées " .. food.Id)
+			-- valeur du boost comparable d'un aliment à l'autre (40..90 s de production)
+			local v = FR.BoostSeconds(food)
+			check(v >= 40 and v <= 90, "valeur du boost " .. food.Id .. " = " .. v)
+			-- modèle 3D : une recette, et des bouchées Bite1..Bite(n-1)
+			local body = FOOD_MODELS_SRC:match("RECIPES%." .. food.Id .. " = function%(add%)(.-)\nend")
+			check(body ~= nil, "recette 3D (FoodModels) " .. food.Id)
+			if body and not body:find('"Bite" %.%.') then
+				for k = 1, food.Bites - 1 do
+					check(body:find('"Bite' .. k .. '"', 1, true) ~= nil, food.Id .. " : bouchée Bite" .. k)
+				end
+				check(body:find('"Bite' .. food.Bites .. '"', 1, true) == nil, food.Id .. " : trop de bouchées")
+			end
+		end
+	end)
+
+	test("Nourriture v9.8 : prix (secondes de production) et cumul des boosts (plafonds)", function(check)
+		local F = Config.Food
+		local ice = Config.FoodById.IceCream
+		local shake = Config.FoodById.Milkshake
+		local pop = Config.FoodById.Popcorn
+		-- prix
+		eq(check, FR.Price(ice, 0, 0, 1), F.MinPrice, "prix minimum")
+		local p = FR.Price(ice, 1000, 0, 1)
+		check(p >= F.PriceFactor * 45 * 1000 and p <= F.PriceFactor * 45 * 1000 * 1.1, "0,7 x 45 s de 1 000/s : " .. p)
+		eq(check, FR.Price(ice, 2000, 0, 2), p, "le boost nourriture actif ne rend pas plus cher")
+		check(FR.Price(ice, 0 / 0, 1 / 0, -3) == F.MinPrice, "valeurs folles -> prix minimum")
+		check(FR.Price(ice, 0, 100, 1) == FR.Price(ice, 100 * Config.Rewards.EstimatedClicksPerSecond, 0, 1), "les clics comptent")
+		-- cumul
+		local m, s = FR.Stack(1, 0, ice)
+		check(m == 1.5 and s == 90, "1er aliment : x1,5 pendant 90 s")
+		m, s = FR.Stack(1.5, 60, shake)
+		check(m == 2 and near(s, 60 + 60 * 0.5 / 1), "plus fort : remplace, le reste est converti : " .. s)
+		m, s = FR.Stack(2, 30, ice)
+		check(m == 2 and near(s, 30 + 90 * 0.5 / 1), "moins fort : prolonge (converti) : " .. s)
+		m, s = FR.Stack(1.3, 290, pop)
+		check(m == 1.3 and s == F.MaxSeconds, "jamais plus de MaxSeconds")
+		m, s = FR.Stack(5, 100, ice)
+		check(m <= F.MaxMultiplier or m == 5, "multiplicateur existant gardé (le serveur le borne au chargement)")
+		m, s = FR.Stack(1, 0, { Multiplier = 9, Duration = 999 })
+		check(m == F.MaxMultiplier and s == F.MaxSeconds, "aliment trop fort -> borné")
+		m, s = FR.Stack(1.5, 30, { Multiplier = 0 / 0, Duration = 50 })
+		check(m == 1.5 and s == 30, "aliment invalide -> rien ne change")
+		-- en mangeant sans arrêt : gain moyen net borné
+		check(FR.MaxNetMultiplier() <= 1.35, "gain net max " .. FR.MaxNetMultiplier())
+	end)
+
+	test("Nourriture v9.8 : manger sans arrêt ne casse pas le rythme des parties", function(check)
+		local active = Sim.RunMinutes(Sim.Run("Active", { MaxHours = 40, MaxRebirths = 5 }))
+		Config.GamePassesById.__FoodTest = { Id = "__FoodTest", Multiplier = FR.MaxNetMultiplier() }
+		local ok, result = pcall(Sim.Run, { Name = "Actif + nourriture sans arrêt", ClicksPerSecond = 6, ClickDuty = 0.75, Passes = { "__FoodTest" }, AutoClicks = 0 },
+			{ MaxHours = 40, MaxRebirths = 5 })
+		Config.GamePassesById.__FoodTest = nil
+		check(ok, tostring(result))
+		if not ok then
+			return
+		end
+		local food = Sim.RunMinutes(result)
+		local parts = {}
+		for n = 1, 5 do
+			table.insert(parts, "R" .. n .. "=" .. (food[n] and tostring(math.floor(food[n] + 0.5)) or "-"))
+		end
+		print("    nourriture sans arrêt (x" .. FR.MaxNetMultiplier() .. " net), parties (min) : " .. table.concat(parts, " "))
+		for n = 1, 5 do
+			check(food[n] ~= nil and active[n] ~= nil and food[n] >= active[n] * 0.7, "R" .. n .. " : partie trop courte avec la nourriture")
+		end
+		check(food[5] ~= nil and food[1] ~= nil and food[5] >= food[1] * 1.3, "la courbe reste croissante")
+	end)
+end
+"""
+
+
+def food_test():
+    """Tests FAIR98 : nourriture (Config.Food, Shared/FoodRules, recettes FoodModels),
+    et un joueur qui mange sans arrêt garde un rythme de parties sain (simulateur)."""
+    rules = read(os.path.join(SHARED, "FoodRules.luau"))
+    models = read(os.path.join(SHARED, "FoodModels.luau"))
+    if "]=====]" in models:
+        raise ValueError("délimiteur ]=====] interdit dans FoodModels.luau")
+    return ('loaders["FoodRules"] = function()\nlocal require = req\n%s\nend\n' % rules
+            + "local FOOD_MODELS_SRC = [=====[%s]=====]\n" % models + FOOD_TESTS)
+
+
 def run_sim():
     """python3 tests/run_tests.py --sim [--robux | --whale | --sessions | --all] :
     lance le simulateur d'économie avec les vrais modules Shared et affiche le rapport."""
@@ -3021,7 +3122,8 @@ def main():
         return run_sim()
     bundle = build_bundle(config_key_test() + "\n" + lang_test() + "\n" + house_art_test() + "\n" + arcade_shop_test() + "\n" + friend_mail_test()
                           + "\n" + economy_test() + "\n" + world_layout_test() + "\n" + garden_snapshot_test() + "\n" + garage_test()
-                          + "\n" + desk_runner_test())
+                          + "\n" + desk_runner_test()
+                          + "\n" + food_test())
     with tempfile.NamedTemporaryFile("w", suffix=".luau", delete=False, encoding="utf-8") as f:
         f.write(bundle)
         path = f.name

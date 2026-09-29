@@ -1125,17 +1125,21 @@ local function bedInfo(anim: Anim)
 	-- Yaw : lacet du corps ; Drop : descente du bassin couché ; SitShift / Shift :
 	-- recul du bassin (vers la tête de lit) assis / couché, dans le repère tourné
 	local info = { Yaw = 0, Drop = 0.6, SitShift = 0, Shift = 0 }
-	local headDist = 2.6 * rig.Scale
+	-- bassin -> centre de la tête, pose de repos (chaîne Root, Waist, Neck du rig)
+	local headDist = 0
+	for _, key in ipairs({ "Root", "Waist", "Neck" }) do
+		local joint = rig.Joints[key]
+		if joint then
+			headDist += (key ~= "Root" and math.abs(joint.C0.Y) or 0) + math.abs(joint.Motor.C1.Y)
+		end
+	end
+	headDist = math.clamp(headDist, 1, 5)
 	-- hauteur : le dos à ~0,5 stud au-dessus du matelas
 	pcall(function()
 		local root = rig.Joints.Root
 		local pivot = (rig.Root.CFrame * root.C0).Position
 		local top = (seat.CFrame * CFrame.new(0, seat.Size.Y / 2, 0)).Position
 		info.Drop = math.clamp(pivot.Y - top.Y - 0.55 * rig.Scale, 0, 2.5)
-		local head = rig.Head
-		if head then
-			headDist = math.clamp(head.Position.Y - pivot.Y, 1, 5)
-		end
 	end)
 	if model then
 		pcall(function()

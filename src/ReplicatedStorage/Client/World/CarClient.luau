@@ -1242,6 +1242,30 @@ local function startDriving(seat: VehicleSeat)
 		table.insert(lights, attachment)
 		table.insert(lights, spot)
 	end
+	-- (v9.8) fumée de dérapage aux roues arrière (particules douces, locales)
+	local smoke = {}
+	for _, sx in ipairs({ -1, 1 }) do
+		local attachment = Instance.new("Attachment")
+		attachment.Name = "DriftSmoke"
+		attachment.Position = Vector3.new(sx * width * 0.36, -root.Size.Y / 2 + 0.2, length / 2 - 2.2)
+		attachment.Parent = root
+		local emitter = Instance.new("ParticleEmitter")
+		emitter.Name = "DriftSmoke"
+		emitter.Texture = "rbxasset://textures/particles/smoke_main.dds"
+		emitter.Color = ColorSequence.new(Color3.fromRGB(236, 236, 240))
+		emitter.LightEmission = 0
+		emitter.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.8), NumberSequenceKeypoint.new(1, 3.2) })
+		emitter.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.55), NumberSequenceKeypoint.new(1, 1) })
+		emitter.Lifetime = NumberRange.new(0.6, 1.1)
+		emitter.Speed = NumberRange.new(1, 3)
+		emitter.SpreadAngle = Vector2.new(40, 40)
+		emitter.Rate = 22
+		emitter.Enabled = false
+		emitter.Parent = attachment
+		table.insert(lights, attachment) -- (détruit avec les phares à la sortie)
+		table.insert(smoke, emitter)
+	end
+	local carId = tostring(model:GetAttribute("CarId") or "")
 	driving = {
 		Seat = seat,
 		Model = model,
@@ -1250,11 +1274,16 @@ local function startDriving(seat: VehicleSeat)
 		Align = root:FindFirstChild("DriveAlign"),
 		Heading = headingOf(root.CFrame),
 		Speed = 0,
+		Steer = 0,
+		Vel = Vector3.zero,
+		Slip = 0,
+		Smoke = smoke,
+		Handling = CarModels.Handling(carId),
 		LastSafe = root.CFrame,
 		SafeClock = 0,
 		LightClock = 0,
 		Lights = lights,
-		CarId = tostring(model:GetAttribute("CarId") or ""),
+		CarId = carId,
 	}
 	local camera = workspace.CurrentCamera
 	if camera then
@@ -1270,6 +1299,15 @@ local function startDriving(seat: VehicleSeat)
 end
 
 -- Un pas de conduite (dt en s) : exporté pour les tests (CarClient.Debug().Step)
+-- (v9.8, CARS98) conduite plus douce et plus "voiture" :
+--  - chaque modèle a son caractère (CarModels.Handling : vitesse max,
+--    accélération, adhérence) ; accélération qui s'essouffle près de la
+--    vitesse max ; direction lissée (le volant ne claque plus) ;
+--  - GLISSE : la vitesse garde une part latérale qui ne se résorbe que
+--    progressivement (adhérence) ; à fond en braquant fort, l'adhérence
+--    baisse -> la voiture dérape (drift) avec un peu de fumée aux roues
+--    arrière (particules locales, douces) ;
+--  - caméra : champ de vision qui s'élargit avec la vitesse.
 local function step(dt: number)
 	local d = driving
 	if not d then
@@ -1290,7 +1328,11 @@ local function step(dt: number)
 	end
 	throttle = math.clamp(throttle, -1, 1)
 	steer = math.clamp(steer, -1, 1)
-	local maxSpeed = Config.Cars.MaxSpeed
+	local h = d.Handling
+	-- volant lissé (plus vite pour revenir au centre)
+	local steerRate = if math.abs(steer) < math.abs(d.Steer) then 7 else 4.5
+	d.Steer += math.clamp(steer - d.Steer, -steerRate * dt, steerRate * dt)
+	local maxSpeed = Config.Cars.MaxSpeed * h.Speed
 	local look = Vector3.new(-math.sin(d.Heading), 0, -math.cos(d.Heading))
 	local actual = root.AssemblyLinearVelocity:Dot(look)
 	-- vitesse visée
@@ -1298,7 +1340,8 @@ local function step(dt: number)
 	local rate = COAST
 	if throttle > 0.05 then
 		target = throttle * maxSpeed
-		rate = if actual < -1 then BRAKE else ACCEL
+		local fade = 1 - 0.55 * math.clamp(math.max(actual, 0) / maxSpeed, 0, 1) ^ 2
+		rate = if actual < -1 then BRAKE else ACCEL * h.Accel * fade
 	elseif throttle < -0.05 then
 		if actual > 1 then
 			target = 0
@@ -1319,14 +1362,25 @@ local function step(dt: number)
 	-- virage : proportionnel à la vitesse (pas de rotation à l'arrêt), plus doux à fond
 	local factor = math.clamp(math.abs(speed) / 12, 0, 1) * (1 - 0.4 * math.clamp(math.abs(speed) / maxSpeed, 0, 1))
 	local direction = if speed >= 0 then 1 else -1
-	d.Heading -= steer * TURN_RATE * factor * direction * dt
+	d.Heading -= d.Steer * TURN_RATE * factor * direction * dt
 	look = Vector3.new(-math.sin(d.Heading), 0, -math.cos(d.Heading))
-	local velocity = look * speed
+	local right = Vector3.new(-look.Z, 0, look.X)
+	-- glisse latérale : ce qui reste de l'ancienne vitesse sur le côté
+	local drifting = math.abs(d.Steer) > 0.6 and speed > maxSpeed * 0.62 and throttle > 0.3
+	local grip = (if drifting then 3 else 10) * h.Grip
+	local lateral = d.Vel:Dot(right) * math.exp(-grip * dt)
+	if math.abs(lateral) < 0.05 then
+		lateral = 0
+	end
+	local velocity = look * speed + right * lateral
+	d.Vel = velocity
+	d.Slip = math.abs(lateral)
 	-- pas d'entrée dans les boutiques (sauf la concession) : remise en arrière
 	local ahead = root.Position + velocity * 0.2
 	if #shopZones > 0 and inZone(ahead) then
 		velocity = Vector3.zero
 		d.Speed = 0
+		d.Vel = Vector3.zero
 		if inZone(root.Position) then
 			root.CFrame = d.LastSafe
 			root.AssemblyLinearVelocity = Vector3.zero
@@ -1350,10 +1404,15 @@ local function step(dt: number)
 	if align then
 		align.CFrame = CFrame.Angles(0, d.Heading, 0)
 	end
+	-- fumée de dérapage (douce, locale)
+	for _, smoke in ipairs(d.Smoke) do
+		smoke.Enabled = d.Slip > 5
+	end
 	-- caméra : champ de vision un peu plus large en allant vite
 	local camera = workspace.CurrentCamera
 	if camera then
-		camera.FieldOfView = BASE_FOV + 10 * math.clamp(math.abs(actual) / maxSpeed, 0, 1)
+		local want = BASE_FOV + 12 * math.clamp(math.abs(actual) / maxSpeed, 0, 1)
+		camera.FieldOfView += (want - camera.FieldOfView) * math.clamp(dt * 3, 0, 1)
 	end
 	-- HUD (compteur : 1 stud/s ≈ 1 km/h, arrondi)
 	if gui then

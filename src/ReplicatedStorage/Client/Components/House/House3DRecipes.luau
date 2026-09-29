@@ -278,16 +278,17 @@ local function rectTable(depth: number, cloth: boolean, legColor: Color3?)
 			local clothColor = lightOf(b, WHITE)
 			local stripe = accent(b, 1, PINK)
 			local runW = w * 0.3
-			b.Box(cx, top - 0.2, 0, runW, 0.6, depth + 1.2, clothColor, M.Fabric)
+			local g = House3DKit.Gap(b, 0.6)
+			b.Box(cx, top - 0.2, 0, runW, g + 0.2, depth + 2 * g, clothColor, M.Fabric)
 			for _, sz in ipairs({ -1, 1 }) do
-				b.Box(cx, top - 10, sz * (depth / 2 + 0.3), runW, 10.4, 0.6, clothColor, M.Fabric)
-				b.Box(cx, top - 8, sz * (depth / 2 + 0.7), runW - 1, 1.4, 0.4, stripe, M.Fabric)
+				b.Box(cx, top - 10, sz * (depth / 2 + g / 2), runW, 10 + g, g, clothColor, M.Fabric)
+				b.Box(cx, top - 8, sz * (depth / 2 + g), runW - 1, 1.4, g, stripe, M.Fabric)
 				for _, sx in ipairs({ -1, 0, 1 }) do
-					b.Ball(cx + sx * runW * 0.4, top - 11, sz * (depth / 2 + 0.6), 2.4, stripe, M.Fabric)
+					b.Ball(cx + sx * runW * 0.4, top - 11, sz * (depth / 2 + g), 2.4, stripe, M.Fabric)
 				end
 			end
 			for _, sx in ipairs({ -1, 1 }) do
-				b.Box(cx + sx * runW * 0.38, top + 0.4, 0, 1.2, 0.2, depth - 4, stripe, M.Fabric)
+				b.Box(cx + sx * runW * 0.38, top + g - 0.2, 0, 1.2, g, depth - 4, stripe, M.Fabric)
 			end
 		end
 		b.Top(1, (x0 + x1) / 2, top, 0, w, depth)
@@ -343,7 +344,7 @@ R.BigDesk = function(b, ctx)
 		House3DKit.Handle(b, cx, y + rowH / 2, 24 + 4 * g, math.min(12, cw * 0.36), false)
 	end
 	-- voile de fond (panneau de modestie)
-	b.Box((x0 + x1) / 2 - cw / 2, top - 30, -20, x1 - x0 - cw - 14, 22, 1.6, darken(wood, 0.1), M.Wood)
+	b.Box((x0 + x1) / 2 - cw / 2 - 1, top - 30, -17.5, x1 - x0 - cw - 20, 22, 1.6, darken(wood, 0.1), M.Wood)
 end
 R.StudyDesk = R.BigDesk
 R.PicnicTable = function(b, ctx)
@@ -395,7 +396,7 @@ R.KitchenIsland = function(b, ctx)
 	b.Box(0, 5, -1, w - 4, top - 11, depth - 6, body, M.SmoothPlastic)
 	local g = House3DKit.Gap(b, 0.8)
 	local fz = depth / 2 - 3
-	b.Box(0, 6, fz, w - 6, top - 13, 2 * g, darken(body, 0.5), M.SmoothPlastic)
+	b.Box(0, 6, fz, w - 8, top - 13, 2 * g, darken(body, 0.5), M.SmoothPlastic)
 	for index = 1, 3 do
 		local x = -w / 2 + 2 + (index - 0.5) * (w - 4) / 3
 		local dw = (w - 4) / 3 - 1.6
@@ -405,7 +406,6 @@ R.KitchenIsland = function(b, ctx)
 	end
 	-- plan de travail en marbre, débord et chant biseauté
 	House3DKit.Bevel(b, 0, top - 6, 0, w, 6, depth, 1.6, lightOf(b, rgb(248, 246, 252)), M.Marble)
-	b.Box(0, top - 7.6, 0, w - 4, 1.6, depth - 4, darken(body, 0.3), M.SmoothPlastic)
 	b.Top(1, 0, top, 0, w, depth)
 	b.Footprint(w, depth, top)
 end
@@ -465,11 +465,11 @@ R.VanityTable = function(b, ctx)
 	end
 	House3DKit.Bevel(b, 0, top - 10, 0, w, 10, depth, 1.4, wood, M.Wood)
 	local g = House3DKit.Gap(b, 0.8)
-	b.Box(0, top - 8.6, depth / 2, w * 0.5, 7.2, 2 * g, darken(wood, 0.45), M.SmoothPlastic)
+	b.Box(0, top - 8.6, depth / 2, w * 0.5, 6.4, 2 * g, darken(wood, 0.45), M.SmoothPlastic)
 	b.Box(0, top - 8.2, depth / 2 + 1.5 * g, w * 0.5 - 1.4, 6.4, 3 * g, trim, M.Wood)
 	knob(b, 0, top - 5, depth / 2 + 3 * g + 1.2, 3)
 	for _, sx in ipairs({ -1, 1 }) do
-		b.Box(sx * w * 0.36, top - 8.2, depth / 2 + g / 2, w * 0.14, 6.4, g, lighten(trim, 0.3), M.Wood)
+		b.Box(sx * w * 0.36, top - 8.2, depth / 2 + 0.75 * g, w * 0.14, 5.6, 1.5 * g, lighten(trim, 0.3), M.Wood)
 	end
 	-- miroir ovale sur pied, cadre en anneau, ampoules de loge autour
 	local mirrorH = math.max(20, 96 - top)
@@ -480,10 +480,10 @@ R.VanityTable = function(b, ctx)
 	local frame = b.CylZ(0, my, mz, mirrorH * 0.9, 3, trim, M.SmoothPlastic)
 	frame.Name = "Cadre"
 	b.CylZ(0, my, mz + 1, mirrorH * 0.82, 2.4, lighten(trim, 0.35), M.SmoothPlastic)
-	House3DKit.Mirror(b, 0, my, mz + 2.6, mirrorH * 0.74, mirrorH * 0.74, "Oval")
+	House3DKit.Mirror(b, 0, my, mz + 2.2 + g, mirrorH * 0.74, mirrorH * 0.74, "Oval")
 	for index = 0, 7 do
 		local a = index / 8 * math.pi * 2 + math.pi / 8
-		local bulb = b.Ball(math.cos(a) * mirrorH * 0.43, my + math.sin(a) * mirrorH * 0.43, mz + 2.4, mirrorH * 0.07, rgb(255, 244, 214))
+		local bulb = b.Ball(math.cos(a) * mirrorH * 0.43, my + math.sin(a) * mirrorH * 0.43, mz + 2.2 + g, mirrorH * 0.07, rgb(255, 244, 214))
 		b.Neon(bulb)
 		if index == 2 then
 			b.Light(bulb, rgb(255, 236, 200), 10, 0.6)
@@ -543,10 +543,9 @@ R.Wardrobe = function(b, ctx)
 	local front = accent(b, 1, rgb(255, 200, 220))
 	cabinet(b, w, depth, top - 5, body, front, 0, 2, 6)
 	-- corniche : gorge en pente + dessus biseauté
-	b.Box(0, top - 8, 0, w + 0.4, 3, depth + 0.4, darken(body, 0.05), M.Wood)
-	cove(b, 0, top - 8, depth / 2 + 0.2, w + 5, 3, 2.3, 0, lighten(body, 0.06), M.Wood)
-	cove(b, -w / 2 - 0.2, top - 8, 0, depth + 0.4, 3, 2.3, -math.pi / 2, lighten(body, 0.06), M.Wood)
-	cove(b, w / 2 + 0.2, top - 8, 0, depth + 0.4, 3, 2.3, math.pi / 2, lighten(body, 0.06), M.Wood)
+	cove(b, 0, top - 8, depth / 2, w + 5, 3, 2.3, 0, lighten(body, 0.06), M.Wood)
+	cove(b, -w / 2, top - 8, 0, depth, 3, 2.3, -math.pi / 2, lighten(body, 0.06), M.Wood)
+	cove(b, w / 2, top - 8, 0, depth, 3, 2.3, math.pi / 2, lighten(body, 0.06), M.Wood)
 	House3DKit.Bevel(b, 0, top - 5, 0, w + 5, 5, depth + 4, 1.6, lighten(body, 0.12), M.Wood)
 	-- médaillons ovales sculptés sur les portes (cœur en relief au centre)
 	local g = House3DKit.Gap(b, 0.8)
@@ -563,7 +562,7 @@ R.Bookshelf = function(b, ctx)
 	local w, depth = x1 - x0 + 4, 30
 	local wood = woodOf(b, WOOD)
 	-- fond, montants, socle en retrait, corniche biseautée
-	b.Box(0, 0, -depth / 2 + 1, w, top, 2, darken(wood, 0.2), M.Wood)
+	b.Box(0, 0, -depth / 2 + 1, w - 4, top - 4, 2, darken(wood, 0.2), M.Wood)
 	for _, side in ipairs({ -1, 1 }) do
 		b.Box(side * (w / 2 - 2), 0, 0, 4, top - 4, depth, wood, M.Wood)
 	end
@@ -581,7 +580,8 @@ R.Bookshelf = function(b, ctx)
 			b.Box(0, y, 0, w - 8, 4, depth - 0.4, wood, M.Wood)
 		end
 		-- chant du rayon (plus clair, un peu en saillie)
-		b.Box(0, y + 0.6, depth / 2 - 0.2, w - 8, 3, 1, lighten(wood, 0.12), M.Wood)
+		local g = House3DKit.Gap(b, 0.8)
+		b.Box(0, y, depth / 2 - 0.2 + g / 2, w - 8, 4, g, lighten(wood, 0.12), M.Wood)
 		-- livres aux dos variés + un objet déco au bout du rayon
 		local x1 = w / 2 - 17
 		House3DKit.Books(b, -w / 2 + 5, x1, y + 4, 1.5, depth - 18, caseH - 7, colors, index + 1)
@@ -617,8 +617,9 @@ R.StorageBox = function(b, ctx)
 	-- ruban adhésif, arêtes plus sombres
 	b.Box(0, 0, 0, w, top - 6, depth, body, M.Cardboard)
 	b.Box(0, top - 6, 0, w + 3, 6, depth + 3, lighten(body, 0.1), M.Cardboard)
-	b.Box(0, top - 0.4, 0, 8, 0.6, depth + 3.6, rgb(222, 200, 150), M.SmoothPlastic)
-	b.Box(0, top - 6.4, depth / 2 + 1.6, 8, 6.4, 0.6, rgb(222, 200, 150), M.SmoothPlastic)
+	local g = House3DKit.Gap(b, 0.6)
+	b.Box(0, top - 0.4, 0, 8, 0.4 + g, depth + 3 + 2 * g, rgb(222, 200, 150), M.SmoothPlastic)
+	b.Box(0, top - 6.4, depth / 2 + 1.5 + g / 2, 8, 6.4, g, rgb(222, 200, 150), M.SmoothPlastic)
 	for _, sx in ipairs({ -1, 1 }) do
 		b.Box(sx * (w / 2 + 0.2), top - 22, 0, 0.8, 6, 16, darken(body, 0.55), M.SmoothPlastic)
 		for _, sz in ipairs({ -1, 1 }) do
@@ -637,11 +638,13 @@ R.Suitcase = function(b, _ctx)
 	local body = accent(b, 1, PINK)
 	-- coque aux arêtes arrondies, nervures, fermeture éclair, coins renforcés
 	b.Round(0, 5, 0, 70, 61, 30, 5, body, M.SmoothPlastic)
+	local g = House3DKit.Gap(b, 0.8)
 	for _, x in ipairs({ -22, -8, 8, 22 }) do
-		b.Box(x, 9, 15.2, 3, 53, 0.8, lighten(body, 0.12), M.SmoothPlastic)
-		b.Box(x, 9, -15.2, 3, 53, 0.8, lighten(body, 0.12), M.SmoothPlastic)
+		for _, sz in ipairs({ -1, 1 }) do
+			b.Box(x, 9, sz * 15, 3, 53, 2 * g, lighten(body, 0.12), M.SmoothPlastic)
+		end
 	end
-	b.Box(0, 34, 0, 70.6, 1.6, 30.6, darken(body, 0.45), M.Fabric) -- fermeture
+	b.Box(0, 34, 0, 70 + 4 * g, 1.6, 30 + 4 * g, darken(body, 0.45), M.Fabric) -- fermeture
 	for _, sx in ipairs({ -1, 1 }) do
 		for _, sy in ipairs({ 7, 63 }) do
 			b.Box(sx * 33, sy - 2, 0, 5, 4, 31, darken(body, 0.5), M.Rubber)
