@@ -16,15 +16,47 @@
 	    fin d'après-midi -> matin, 16 min), jamais la nuit par surprise ;
 	    passage jour <-> nuit en fondu (~2,5 s) ;
 	  - AUCUN son.
-	Travail : Step(dt) met à jour l'heure 1 fois / s (5 fois / s pendant un
-	fondu), rien d'autre par image.
+	v9.8 (REALISM98) 🌦️ météo + 🎨 réglages "Graphismes / Mode réaliste" :
+	  - la météo de Weather3D (cycle commun à tous les joueurs) s'ajoute au
+	    jour / nuit : ciel couvert (soleil plus faible, ombres douces, plus
+	    de lumière ambiante, nuages Cover / Density / couleur), pluie (brume
+	    Atmosphere plus dense, couleurs un peu désaturées, sols qui
+	    brillent : EnvironmentSpecularScale), orage (plus sombre, lampadaires
+	    allumés), éclairs DOUX : ColorCorrection +0,07 au plus (jamais
+	    au-delà de +0,08), nuages éclaircis un instant ;
+	  - Graphismes : Effets Off = Bloom / SunRays / flou lointain coupés ;
+	    Ombres Low = GlobalShadows coupé ; Mode réaliste = matières un peu
+	    plus riches (reflets d'environnement +0,08, ombres un peu plus
+	    nettes) ;
+	  - démarre / arrête Weather3D (pluie, flaques, sol mouillé) et les
+	    miroirs (Reflections.Acquire("Town") / Release).
+	Travail : Step(dt) : Weather3D.Step, éclairage recalculé 2 fois / s
+	(5 fois / s pendant un fondu), l'éclair seul à chaque image.
 
 	API : TownAtmosphere.Apply(saved) / Restore(saved) / Step(dt) /
-	      SetNight(on) / IsNight()
+	      SetNight(on) / IsNight() / Weather() -> état de Weather3D
 	saved = { Lighting = {}, Effects = {}, Moved = {} } (table de TownClient)
 ]]
 
 local Lighting = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local GraphicsQuality = require(ReplicatedStorage.Shared.GraphicsQuality)
+
+-- (v9.8) modules du même dossier, chargés en pcall : la ville marche sans eux
+local function optional(name: string): any
+	local module = script.Parent:FindFirstChild(name)
+	if module and module:IsA("ModuleScript") then
+		local ok, result = pcall(require, module)
+		if ok and type(result) == "table" then
+			return result
+		end
+		warn("[TownAtmosphere] " .. name .. " : " .. tostring(result))
+	end
+	return nil
+end
+local Weather3D = optional("Weather3D")
+local Reflections = optional("Reflections")
 
 local TownAtmosphere = {}
 
@@ -114,6 +146,23 @@ TownAtmosphere.NIGHT = NIGHT
 TownAtmosphere.EFFECTS = EFFECTS
 local EFFECT_ORDER = { "Atmosphere", "ColorCorrection", "Bloom", "SunRays", "DepthOfField" }
 
+-- v9.8 🌦️ météo : cibles "ciel couvert" (k = couverture), "pluie" (r), "orage" (s)
+local OVERCAST = {
+	OutdoorAmbient = Color3.fromRGB(134, 136, 146),
+	FogColor = Color3.fromRGB(172, 178, 190),
+	AtmoColor = Color3.fromRGB(184, 190, 200),
+	AtmoDecay = Color3.fromRGB(122, 128, 142),
+	Tint = Color3.fromRGB(236, 242, 255),
+	Clouds = Color3.fromRGB(172, 176, 186),
+}
+local STORM = {
+	OutdoorAmbient = Color3.fromRGB(96, 100, 114),
+	Clouds = Color3.fromRGB(112, 116, 130),
+}
+local FLASH_CC = 0.07 -- éclair : ColorCorrection.Brightness en plus (doux)
+local FLASH_CC_MAX = 0.08 -- plafond absolu (pas de "flash bang")
+TownAtmosphere.FLASH_CC_MAX = FLASH_CC_MAX
+
 local active = false
 local created: { Instance } = {}
 local effects: { [string]: Instance } = {}
@@ -123,6 +172,11 @@ local mix = 0 -- 0 = jour, 1 = nuit (fondu)
 local elapsed = 0
 local clockTimer = 0
 local mixTimer = 0
+local ccBase = 0 -- ColorCorrection.Brightness sans éclair
+local cloudBase = Color3.new(1, 1, 1) -- couleur des nuages sans éclair
+local lastFlash = 0
+local weatherWarned = false
+local qualityConn: any = nil
 
 local function lerp(a: any, b: any, t: number): any
 	if typeof(a) == "Color3" then
@@ -231,26 +285,98 @@ local function clockNow(): number
 	return day + (NIGHT_CLOCK - day) * m
 end
 
+-- (v9.8) état de la météo (beau temps si Weather3D est absent)
+local function weatherState(): any
+	if Weather3D and Weather3D.IsActive() then
+		return Weather3D.State()
+	end
+	return { Cloud = 0.3, Rain = 0, Storm = 0, Wet = 0, Flash = 0, Enabled = false }
+end
+
+-- Valeurs finales = jour / nuit (fondu) + météo + réglages 🎨
 local function applyMix()
 	local m = smooth(mix)
+	local w = weatherState()
+	local q = GraphicsQuality.Get()
+	-- couverture : 0 = ciel dégagé, 1 = tout gris
+	local k = smooth(math.clamp((w.Cloud - 0.35) / 0.6, 0, 1))
+	local r, s = w.Rain, w.Storm
+	local L: { [string]: any } = {}
 	for key, dayValue in pairs(DAY) do
-		set(Lighting, key, lerp(dayValue, NIGHT[key], m))
+		L[key] = lerp(dayValue, NIGHT[key], m)
 	end
+	L.Brightness *= 1 - 0.3 * k - 0.15 * s
+	L.OutdoorAmbient = (L.OutdoorAmbient :: Color3):Lerp(OVERCAST.OutdoorAmbient, 0.55 * k * (1 - m)):Lerp(STORM.OutdoorAmbient, 0.6 * s * (1 - m))
+	L.ColorShift_Top = (L.ColorShift_Top :: Color3):Lerp(Color3.new(0, 0, 0), k)
+	L.ShadowSoftness = lerp(L.ShadowSoftness, 0.8, k)
+	L.EnvironmentSpecularScale += 0.28 * w.Wet
+	L.ExposureCompensation -= 0.1 * s
+	L.FogColor = (L.FogColor :: Color3):Lerp(OVERCAST.FogColor, k * (1 - m))
+	if q.Realistic then
+		L.EnvironmentSpecularScale += 0.08
+		L.EnvironmentDiffuseScale += 0.1
+		L.ShadowSoftness = math.max(0.12, L.ShadowSoftness - 0.05)
+	end
+	for key, value in pairs(L) do
+		set(Lighting, key, value)
+	end
+	set(Lighting, "GlobalShadows", q.Shadows ~= "Low")
 	for name, spec in pairs(EFFECTS) do
 		local instance = effects[name]
 		if instance then
+			local E: { [string]: any } = {}
 			for key, dayValue in pairs(spec.Day) do
-				set(instance, key, lerp(dayValue, (spec.Night :: any)[key], m))
+				E[key] = lerp(dayValue, (spec.Night :: any)[key], m)
+			end
+			if name == "Atmosphere" then
+				E.Density += 0.14 * r + 0.05 * k
+				E.Haze += 1.3 * r
+				E.Glare *= 1 - k
+				E.Color = (E.Color :: Color3):Lerp(OVERCAST.AtmoColor, k * (1 - m))
+				E.Decay = (E.Decay :: Color3):Lerp(OVERCAST.AtmoDecay, k * (1 - m))
+			elseif name == "ColorCorrection" then
+				E.Saturation -= 0.18 * k
+				E.Contrast += 0.02 * s
+				E.Brightness -= 0.02 * s
+				E.TintColor = (E.TintColor :: Color3):Lerp(OVERCAST.Tint, 0.6 * k)
+				ccBase = E.Brightness
+				E.Brightness = ccBase + math.min(FLASH_CC * lastFlash, FLASH_CC_MAX)
+			elseif name == "SunRays" then
+				E.Intensity *= 1 - k
+			end
+			for key, value in pairs(E) do
+				set(instance, key, value)
+			end
+			-- Graphismes > Effets : halo, rayons, flou lointain
+			if name == "Bloom" or name == "SunRays" or name == "DepthOfField" then
+				set(instance, "Enabled", q.Effects)
 			end
 		end
 	end
 	local cloud = clouds
 	if cloud then
-		set(cloud, "Color", Color3.fromRGB(255, 255, 255):Lerp(Color3.fromRGB(90, 96, 140), m))
-		set(cloud, "Cover", lerp(0.52, 0.4, m))
+		local color = Color3.fromRGB(255, 255, 255):Lerp(OVERCAST.Clouds, k):Lerp(STORM.Clouds, s)
+		cloudBase = color:Lerp(Color3.fromRGB(90, 96, 140), m)
+		set(cloud, "Color", cloudBase:Lerp(Color3.new(1, 1, 1), 0.5 * lastFlash))
+		local cover = w.Enabled and (0.25 + 0.7 * w.Cloud) or 0.52
+		set(cloud, "Cover", lerp(cover, math.max(0.4, cover - 0.1), m))
+		set(cloud, "Density", 0.5 + 0.45 * math.clamp(w.Cloud, 0, 1))
 	end
 	set(Lighting, "ClockTime", clockNow())
-	setLamps(m >= 0.5)
+	-- (orage : les lampadaires s'allument aussi le jour)
+	setLamps(m >= 0.5 or s > 0.55)
+end
+
+-- (v9.8) éclair : seulement la ColorCorrection et les nuages, à chaque image
+local function applyFlash(flash: number)
+	local cc = effects.ColorCorrection
+	if cc then
+		set(cc, "Brightness", ccBase + math.min(FLASH_CC * flash, FLASH_CC_MAX))
+	end
+	local cloud = clouds
+	if cloud then
+		set(cloud, "Color", cloudBase:Lerp(Color3.new(1, 1, 1), 0.5 * flash))
+	end
 end
 
 local function remember(saved: any, key: string)
@@ -353,6 +479,30 @@ function TownAtmosphere.Apply(saved: any)
 		end
 	end
 	watchLamps()
+	-- v9.8 🌦️ météo + 🪞 miroirs (pcall : une erreur n'empêche pas la ville)
+	lastFlash = 0
+	if Weather3D then
+		local okW, errW = pcall(Weather3D.Start, {
+			IsNight = function()
+				return mix >= 0.5
+			end,
+		})
+		if not okW then
+			warn("[TownAtmosphere] Weather3D.Start : " .. tostring(errW))
+		end
+	end
+	if Reflections then
+		local okR, errR = pcall(Reflections.Acquire, "Town")
+		if not okR then
+			warn("[TownAtmosphere] Reflections : " .. tostring(errR))
+		end
+	end
+	-- Graphismes changés en ville : appliqués tout de suite
+	qualityConn = GraphicsQuality.Changed:Connect(function()
+		if active then
+			applyMix()
+		end
+	end)
 	applyMix()
 end
 
@@ -361,6 +511,17 @@ function TownAtmosphere.Restore(saved: any)
 		return
 	end
 	active = false
+	if qualityConn then
+		qualityConn:Disconnect()
+		qualityConn = nil
+	end
+	if Weather3D then
+		pcall(Weather3D.Stop)
+	end
+	if Reflections then
+		pcall(Reflections.Release, "Town")
+	end
+	lastFlash = 0
 	for _, instance in ipairs(created) do
 		pcall(instance.Destroy, instance)
 	end
@@ -396,11 +557,29 @@ function TownAtmosphere.Mix(): number
 	return mix
 end
 
+-- (v9.8) météo en cours (Weather3D.State() ; beau temps sans Weather3D)
+function TownAtmosphere.Weather(): any
+	return weatherState()
+end
+
 function TownAtmosphere.Step(dt: number)
 	if not active then
 		return
 	end
 	elapsed += dt
+	-- v9.8 🌦️ pluie, flaques, éclairs (Weather3D) : une seule alerte en cas d'erreur
+	if Weather3D then
+		local okW, errW = pcall(Weather3D.Step, dt)
+		if not okW and not weatherWarned then
+			weatherWarned = true
+			warn("[TownAtmosphere] Weather3D.Step : " .. tostring(errW))
+		end
+		local flash = Weather3D.State().Flash or 0
+		if flash > 0 or lastFlash > 0 then
+			lastFlash = flash
+			applyFlash(flash)
+		end
+	end
 	local target = night and 1 or 0
 	if mix ~= target then
 		mixTimer += dt
@@ -416,10 +595,11 @@ function TownAtmosphere.Step(dt: number)
 		end
 		return
 	end
+	-- heure du soleil + météo : 2 fois / s (changements lents)
 	clockTimer += dt
-	if clockTimer >= 1 then
+	if clockTimer >= 0.5 then
 		clockTimer = 0
-		set(Lighting, "ClockTime", clockNow())
+		applyMix()
 	end
 end
 

@@ -646,6 +646,23 @@ function WorldLayout.MarketCFrame(count: number): CFrame
 	return CFrame.lookAt(p, p - Vector3.new(1, 0, 0))
 end
 
+-- (v9.8, CARS98) 🚗 CONCESSION AUTO, hors de la porte, à GAUCHE de la route
+-- d'arrivée (le miroir du supermarché) : grand hall vitré DEALER_W (façade,
+-- le long de la route) x DEALER_D (profondeur), façade tournée vers la route
+-- (+X monde) ; parvis avec le plateau tournant entre le hall et la route.
+-- Tout est relatif à la porte : tient de 4 à 12 parcelles (derrière le fond
+-- des parcelles, avant le rond-point, dans les murs).
+WorldLayout.DEALER_W = 70
+WorldLayout.DEALER_D = 50
+WorldLayout.DEALER_X = 60 -- distance de la façade à l'axe de la route
+WorldLayout.DEALER_Z0 = 14 -- début du hall après la porte (le long de la route)
+
+-- Pied de la façade (milieu), LookVector vers la route ; volume derrière (+Z local)
+function WorldLayout.DealershipCFrame(count: number): CFrame
+	local p = WorldLayout.Origin() + Vector3.new(-WorldLayout.DEALER_X, WorldLayout.WALK_Y, WorldLayout.GateDistance(count) + WorldLayout.DEALER_Z0 + WorldLayout.DEALER_W / 2)
+	return CFrame.lookAt(p, p + Vector3.new(1, 0, 0))
+end
+
 -- (v9.8, FAIR98) 🎡 FÊTE FORAINE : derrière la mairie, dans le secteur
 -- arrière de l'anneau (axe -Z), rectangle FAIR_W x FAIR_D dont le bord
 -- avant est à FAIR_NEAR studs du centre. Tient de 4 à 12 parcelles (bord

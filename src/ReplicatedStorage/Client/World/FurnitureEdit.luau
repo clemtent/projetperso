@@ -395,6 +395,16 @@ function FurnitureEdit.SetPrompts(_self: any, house: any, enabled: boolean)
 		for _, prompt in ipairs(room.Prompts) do
 			prompt.Enabled = enabled
 		end
+		-- (v9.8 HOUSE98) 🪟 rideaux / 💡 interrupteur : coupés aussi pendant l'édition
+		local toggles = room.Toggles
+		if toggles then
+			for _, prompt in ipairs(toggles.CurtainPrompts or {}) do
+				prompt.Enabled = enabled
+			end
+			if toggles.SwitchPrompt then
+				toggles.SwitchPrompt.Enabled = enabled
+			end
+		end
 	end
 end
 

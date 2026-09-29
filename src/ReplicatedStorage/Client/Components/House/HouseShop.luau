@@ -81,7 +81,7 @@ local LIST_INSET = 31 -- largeur du tiroir - largeur utile d'une liste (marges)
 local LOOK_ART_W = 200 -- (v9.1) largeur de maquette des aperçus de personnalisation
 -- Les objets ajoutés à partir de celui-ci forment la pastille "🆕 Nouveautés"
 -- (v9.2 : les objets "cool" ; sinon ceux de la v9.1)
-local NEW_ITEM = HouseCommon.ItemsById.RGBHeadset or HouseCommon.ItemsById.ToyChest
+local NEW_ITEM = HouseCommon.ItemsById.SimpleChair or HouseCommon.ItemsById.RGBHeadset or HouseCommon.ItemsById.ToyChest
 local NEW_FROM = (NEW_ITEM and NEW_ITEM.Order) or math.huge
 
 export type Handlers = {

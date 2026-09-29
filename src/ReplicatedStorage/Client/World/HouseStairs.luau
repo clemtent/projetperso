@@ -13,14 +13,18 @@
 	    monte et descend sans jamais accrocher. Le haut de la rampe arrive au
 	    ras du palier (WorldLayout.StairHeight) ; le palier ne devient solide
 	    qu'à STAIR_D1 (le nez de la dernière marche n'est que décor).
-	  - Trémie dans le plancher du dessus (STAIR_HOLE_D0..STAIR_D1) : >= 7,5
+	  - Trémie dans le plancher du dessus (STAIR_HOLE_D0..STAIR_D1) : >= 8,5 (v9.8)
 	    studs de hauteur libre partout sur le chemin ; garde-corps autour
 	    (et en travers au dernier étage).
 	  - Couloirs de chaque côté (3,5 studs) vers les passages des pièces
 	    (alignés sur les passages des coques : milieu de la profondeur).
 	  - Rez-de-chaussée : placard sous l'escalier (panneaux en coin), dallage,
-	    paillasson ; plaques "Étage N" et flèches ⬆ / ⬇ pour s'y retrouver ;
-	    une applique lumineuse par étage (budget du kit).
+	    paillasson ; (v9.8) petite plaque gravée "Étage N" (laiton sur bois)
+	    à hauteur des yeux dans le vestibule, avec ⬆ / ⬇ ; une applique
+	    lumineuse par étage (budget du kit) ;
+	  - (v9.8) hauteur libre >= 8,5 studs sur l'escalier (trémie plus
+	    longue), passages 6,5 x 9,5 ; couloir du fond (STAIR_D1..fond) vers
+	    la porte de derrière (jardin), paillasson.
 
 	API :
 	  HouseStairs.Build(kit, size, colors) -> { Ramps: { BasePart }, Holes: { { number } } }
@@ -154,7 +158,7 @@ local function hallFloor(kit: any, size: any, floor: number, floors: number)
 		kit:Box("GuardRail", x - 0.16, x + 0.16, y + railH, y + railH + 0.24, H0, D1, RAIL, M.Wood, { Solid = true, Shadow = false })
 		-- (v9.6 : dessous 0.03 sous le plancher : ne se confond plus avec celui du poteau, visible depuis l'escalier)
 		kit:Box("GuardBase", x - 0.1, x + 0.1, y - 0.03, y + 0.25, H0, D1, WHITE, M.SmoothPlastic, { Solid = true, Shadow = false })
-		local count = math.floor((D1 - H0) / 1.1)
+		local count = math.floor((D1 - H0) / 1.35) -- (v9.8 : trémie plus longue, même nombre de balustres)
 		for i = 0, count do
 			local d = H0 + 0.2 + i * (D1 - H0 - 0.4) / math.max(1, count)
 			kit:Box("GuardBaluster", x - 0.09, x + 0.09, y + 0.25, y + railH, d - 0.09, d + 0.09, WHITE, M.SmoothPlastic, { Solid = i % 3 == 0, Shadow = false })
@@ -217,13 +221,54 @@ local function hallWalls(kit: any, size: any, floor: number, colors: Colors)
 	-- (v9.6 "flash bang" : globe en verre dépoli, plus une boule Neon ; 22 / 1.1 -> 14 / 0.7)
 	local shade = kit:Ball("HallLamp", cx, lampY, lampD, 1.3, Color3.fromRGB(255, 240, 214), M.SmoothPlastic, { Shadow = false })
 	kit:Light(shade, Color3.fromRGB(255, 226, 180), 14, 0.7)
-	-- plaque de l'étage (fond du palier) + flèches
-	local plaque = kit:Box("FloorPlaque", cx - 2.6, cx + 2.6, y + 6.2, y + 7.6, dBack - 0.14, dBack - 0.02, WHITE, M.SmoothPlastic, { Shadow = false })
-	local text = floorName(floor)
-	kit:Text(plaque, Enum.NormalId.Back, text, colors.Accent, Enum.Font.FredokaOne, 30, 90)
+	-- (v9.8 HOUSE98) petite plaque GRAVÉE (laiton sur bois) sur le mur de
+	-- gauche du vestibule, à hauteur des yeux : nom de l'étage + flèches
+	-- (remplace le grand panneau "Rez-de-chaussée" du fond du palier)
+	local wall = h0 + 0.15 -- face intérieure du mur de gauche de la cage
+	local p0, p1 = WorldLayout.WALL_T + 1.3, WorldLayout.WALL_T + 3.9
+	kit:Box("FloorPlaqueBoard", wall, wall + 0.14, y + 4.35, y + 5.95, p0, p1, Color3.fromRGB(120, 78, 58), M.Wood, { Shadow = false })
+	local plaque = kit:Box("FloorPlaque", wall + 0.14, wall + 0.2, y + 4.5, y + 5.8, p0 + 0.15, p1 - 0.15, Color3.fromRGB(226, 184, 96), M.Metal, { Shadow = false })
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "Engraving"
+	gui.Face = Enum.NormalId.Right
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 60
+	gui.LightInfluence = 1
+	gui.MaxDistance = 60
+	gui.Parent = plaque
+	local ink = Color3.fromRGB(78, 50, 32)
+	local function line(text: string, y0: number, h: number, font: Enum.Font)
+		local label = Instance.new("TextLabel")
+		label.BackgroundTransparency = 1
+		label.Size = UDim2.fromScale(0.9, h)
+		label.Position = UDim2.fromScale(0.05, y0)
+		label.Font = font
+		label.TextScaled = true
+		label.TextColor3 = ink
+		label.TextStrokeColor3 = Color3.fromRGB(255, 236, 190)
+		label.TextStrokeTransparency = 0.55
+		label.Text = text
+		label.Parent = gui
+	end
+	line(floorName(floor), 0.1, 0.5, Enum.Font.Garamond)
+	local hints = {}
 	if floor > 1 then
-		local down = kit:Box("DownSign", cx - 1.8, cx + 1.8, y + 4.8, y + 5.9, dBack - 0.14, dBack - 0.02, colors.Accent, M.SmoothPlastic, { Shadow = false })
-		kit:Text(down, Enum.NormalId.Back, "⬇️ " .. floorName(floor - 1), WHITE, Enum.Font.GothamBold, 30, 90)
+		table.insert(hints, "⬇️ " .. floorName(floor - 1))
+	end
+	if floor < WorldLayout.Dims(size).Floors then
+		table.insert(hints, "⬆️ " .. floorName(floor + 1))
+	end
+	if #hints > 0 then
+		line(table.concat(hints, "   "), 0.62, 0.28, Enum.Font.GothamMedium)
+	end
+	-- vis en laiton aux coins
+	for _, d in ipairs({ p0 + 0.08, p1 - 0.08 }) do
+		kit:Ball("PlaqueScrew", wall + 0.17, y + 5.15, d, 0.12, Color3.fromRGB(246, 196, 84), M.Metal, { Shadow = false })
+	end
+	if floor == 1 then
+		-- paillasson devant la porte de derrière (couloir du fond)
+		local backX = WorldLayout.BackDoorX(size)
+		kit:Box("BackDoorMat", backX - 2, backX + 2, y, y + 0.05, dBack - 1.9, dBack - 0.2, Color3.fromRGB(196, 150, 110), M.Fabric, { Shadow = false })
 	end
 end
 
@@ -239,12 +284,7 @@ function HouseStairs.Build(kit: any, size: any, colors: Colors): Result
 		if floor < floors then
 			flight(kit, size, floor, colors, ramps)
 			table.insert(holes, { floor + 1, WorldLayout.STAIR_HOLE_D0, WorldLayout.STAIR_D1 })
-			-- flèche ⬆ au pied de la volée (sur la face de la première contremarche)
-			local s0, s1 = WorldLayout.StairSpan(size)
-			local y = WorldLayout.FloorY(floor)
-			local riser = WorldLayout.STAIR_D0 + 0.5 * WorldLayout.STAIR_TREAD - 0.12
-			local up = kit:Box("UpSign", s0 + 0.9, s1 - 0.9, y + 0.12, y + 0.72, riser - 0.05, riser - 0.01, colors.Accent, M.SmoothPlastic, { Shadow = false })
-			kit:Text(up, Enum.NormalId.Back, "⬆️ " .. floorName(floor + 1), WHITE, Enum.Font.GothamBold, 40, 60)
+			-- (v9.8 : plus d'étiquette sur la première marche : la plaque gravée du vestibule suffit)
 		end
 	end
 	-- Rez-de-chaussée : placard sous la première volée (panneaux en coin)

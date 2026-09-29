@@ -551,7 +551,7 @@ test("Config.House : catalogue (ids, catégories, zones, motifs, prix)", functio
 
 	-- Catégories
 	local categoryIds = { "Furniture", "Decor", "Toys", "Plants", "Electronics", "Kitchen", "Doors", "Windows", "Lights", "Pets",
-		"Gaming", "Sports", "Adventure", "Setup" } -- (v9.2, v9.5 : Dopamine Setup)
+		"Gaming", "Sports", "Adventure", "Setup", "Luxury" } -- (v9.2, v9.5 : Dopamine Setup, v9.8 : 💎 Luxe)
 	eq(check, #H.Categories, #categoryIds, "nombre de catégories")
 	for i, category in ipairs(H.Categories) do
 		eq(check, category.Id, categoryIds[i], "catégorie " .. i)
@@ -957,7 +957,105 @@ def house_art_test():
         '\t\tcheck(Config.HouseItemsById[id] ~= nil, "dessin sans objet : " .. id .. " (" .. file .. ")")',
         "\tend",
         "end)",
-    ]) + "\n" + house_garden_art_test() + "\n" + house_surfaces_test() + "\n" + house_service_test() + "\n" + cool92_test() + "\n" + setup95_test()
+    ]) + "\n" + house_garden_art_test() + "\n" + house_surfaces_test() + "\n" + house_service_test() + "\n" + cool92_test() + "\n" + setup95_test() \
+        + "\n" + catalog98_test()
+
+
+# (v9.8) CATALOG98 : les nouveaux objets (moderne, loft, luxe, gamer, sport,
+# nature, tech, objets incroyables, télés XXL) : ids uniques, dessin 2D
+# (Art/Modern98 ou Art/Luxe98), vrai modèle 3D (House3DLuxe, sinon une autre
+# famille House3D*), dessus des meubles (HouseSurfaces), prix et verrous sains
+CATALOG98_IDS = [
+    "SimpleChair", "CoatRack", "BarrelTable", "ModernBarStool", "OakDesk", "MediaConsole", "GlassCoffeeTable", "LoftShelf",
+    "PlatformBed", "Workbench", "SectionalSofa", "Chesterfield", "BookshelfWall", "MarbleIsland",
+    "RoundMirror", "AbstractCanvas", "BigWallMirror", "GrandfatherClock",
+    "EdisonPendant", "ArcFloorLamp", "DopaNeon", "InfinityMirror", "PlanetariumDome", "GrandChandelier",
+    "SnakePlant", "FiddleFig", "BirdOfParadise", "MapleBonsai", "OliveTree", "MossWall",
+    "SmartSpeaker", "CameraDrone", "Printer3D", "ButlerRobot", "StandMixer", "EspressoMachine", "SteelFridge",
+    "HexPanels", "FoosballTable", "AirHockey", "ClawMachine", "TwinArcade", "VRStation", "RacingCockpit",
+    "YogaMat", "PingPongTable", "RowingMachine", "WeightBench", "Treadmill", "ClimbingWall",
+    "VelvetChaise", "MarbleStatue", "KingBed", "PoolTable", "AmethystGeode", "ModernFireplace", "CinemaRecliners",
+    "WhitePiano", "Jacuzzi", "AquariumWall", "RollercoasterModel", "GoldThrone", "IndoorWaterfall", "CapsuleBed",
+    "DragonStatue", "AquariumTunnel",
+    "SetupTVCinemaXXL", "SetupTVWallXXL", "SetupCinemaScreen",
+]
+# meubles à dessus (tables, bureaux, étagères, lits, sièges) : dessus obligatoire
+CATALOG98_TOPS = [
+    "SimpleChair", "BarrelTable", "ModernBarStool", "OakDesk", "MediaConsole", "GlassCoffeeTable", "LoftShelf", "PlatformBed",
+    "Workbench", "SectionalSofa", "Chesterfield", "BookshelfWall", "MarbleIsland", "SteelFridge", "PingPongTable", "PoolTable",
+    "VelvetChaise", "KingBed", "CinemaRecliners", "GoldThrone",
+]
+
+
+def catalog98_test():
+    comp = os.path.join(SRC, "ReplicatedStorage", "Client", "Components", "House")
+    drawn = {}
+    for fname in ("Modern98.luau", "Luxe98.luau"):
+        path = os.path.join(comp, "Art", fname)
+        if os.path.exists(path):
+            for name in re.findall(r"^Art\.(\w+)\s*=\s*function", read(path), re.M):
+                drawn[name] = fname
+    recipes = set()
+    for fname in os.listdir(comp):
+        if fname.startswith("House3D") and fname.endswith(".luau"):
+            recipes.update(re.findall(r"^R\.(\w+)\s*=", read(os.path.join(comp, fname)), re.M))
+    luxe = set(re.findall(r"^R\.(\w+)\s*=", read(os.path.join(comp, "House3DLuxe.luau")), re.M)) if os.path.exists(os.path.join(comp, "House3DLuxe.luau")) else set()
+    surf = read(os.path.join(comp, "HouseSurfaces.luau"))
+    surfaced = set(re.findall(r"^\t(\w+) = \{ \{", surf, re.M))
+    lua = lambda names: "{ " + ", ".join('["%s"] = true' % n for n in sorted(names)) + " }"
+    ids = "{ " + ", ".join('"%s"' % n for n in CATALOG98_IDS) + " }"
+    return r'''
+test("Maison v9.8 : catalogue CATALOG98 (%d objets, %d dessins, %d modèles 3D House3DLuxe)", function(check)
+	local ids, drawn, recipes, luxe, surfaced, tops = %s, %s, %s, %s, %s, %s
+	local seen, count, basic, dream = {}, 0, 0, 0
+	for _, id in ipairs(ids) do
+		check(not seen[id], "id en double " .. id)
+		seen[id] = true
+		local item = Config.HouseItemsById[id]
+		check(item ~= nil, "objet manquant " .. id)
+		if item then
+			count += 1
+			check(drawn[id] == true, "dessin 2D (Art/Modern98 ou Art/Luxe98) " .. id)
+			if item.Category == "Setup" then
+				-- télés XXL : modèle 3D de House3DSetup (Kind TV), réglages pour DESK98
+				check(type(item.Setup) == "table" and item.Setup.Kind == "TV" and type(item.Setup.Scale) == "number" and item.Setup.Scale > 1, "télé XXL : Setup.Scale " .. id)
+				check(item.Size == 160, "télé XXL : taille maximale " .. id)
+			elseif id == "BigWallMirror" then
+				check(recipes[id] == true, "modèle 3D (RECIPES98, House3DObjects) " .. id)
+			else
+				check(luxe[id] == true, "modèle 3D House3DLuxe " .. id)
+			end
+			-- prix sains : le confort n'est jamais plus rentable que les petits objets du début
+			check(item.BaseCost >= 500 * item.Comfort * item.Comfort, "confort trop rentable " .. id .. " (" .. item.BaseCost .. " / " .. item.Comfort .. ")")
+			check(item.CostGrowth >= 1.2, "CostGrowth " .. id)
+			if item.BaseCost < 8000 then basic += 1 end
+			if item.BaseCost >= 5e6 then
+				dream += 1
+				check(Formulas.GetHouseRequiredRebirths(item) >= 5, "objet de rêve sans 5 visites à l'océan : " .. id)
+			end
+			if item.Category == "Luxury" then
+				check(Formulas.GetHouseRequiredRebirths(item) >= 2, "objet de luxe trop tôt : " .. id)
+			end
+			if item.Placement == "Floor" and item.Size > Config.House.TabletopMaxSize then
+				check(not Formulas.CanGoOnFurniture(item), "gros objet posé sur un meuble ? " .. id)
+			end
+		end
+	end
+	for _, id in ipairs(tops) do
+		check(surfaced[id] == true, "meuble sans dessus (HouseSurfaces) : " .. id)
+	end
+	for id in pairs(drawn) do
+		check(seen[id] == true, "dessin CATALOG98 sans objet : " .. id)
+	end
+	for id in pairs(luxe) do
+		check(seen[id] == true, "modèle House3DLuxe sans objet : " .. id)
+	end
+	check(count >= 60, "au moins 60 nouveaux objets : " .. count)
+	check(basic >= 12 and dream >= 10, "du tout simple (" .. basic .. ") à l'incroyable (" .. dream .. ")")
+	local luxury = Config.HouseCategoriesById.Luxury
+	check(luxury ~= nil and luxury.Icon == "💎" and #(Config.HouseItemsByCategory.Luxury or {}) >= 10, "catégorie 💎 Luxe")
+end)''' % (len(CATALOG98_IDS), len(drawn), len(luxe), ids, lua(drawn), lua(recipes), lua(luxe), lua(surfaced),
+            "{ " + ", ".join('"%s"' % n for n in CATALOG98_TOPS) + " }")
 
 
 # (v9.5) SETUPDATA95 : "🖥️ Dopamine Setup" (Config.House, Art/Setup95,
@@ -970,6 +1068,8 @@ SETUP95_IDS = [
     "SetupHiFiBoombox", "SetupHiFiCD", "SetupHiFiVinyl", "SetupHiFiStudio",
     "SetupWindmill", "SetupPress", "SetupBubbleWrap", "SetupLiveStudio",
     "SetupPlantDaisy", "SetupPlantTulip", "SetupPlantRose", "SetupPlantSunflower", "SetupPlantLotus",
+    # (v9.8 CATALOG98) télés XXL + écran de home cinéma (dessins : Art/Luxe98)
+    "SetupTVCinemaXXL", "SetupTVWallXXL", "SetupCinemaScreen",
 ]
 
 
@@ -977,6 +1077,10 @@ def setup95_test():
     comp = os.path.join(SRC, "ReplicatedStorage", "Client", "Components", "House")
     art_path = os.path.join(comp, "Art", "Setup95.luau")
     drawn = re.findall(r"^Art\.(\w+)\s*=\s*function", read(art_path), re.M) if os.path.exists(art_path) else []
+    # (v9.8) les objets Setup dessinés par CATALOG98 (Art/Luxe98) comptent aussi
+    luxe_path = os.path.join(comp, "Art", "Luxe98.luau")
+    if os.path.exists(luxe_path):
+        drawn += [n for n in re.findall(r"^Art\.(Setup\w+)\s*=\s*function", read(luxe_path), re.M)]
     surf = read(os.path.join(comp, "HouseSurfaces.luau"))
     surfaced = re.findall(r"^\t(Setup\w+) = \{ \{", surf, re.M)
     lua = lambda names: "{ " + ", ".join('"%s"' % n for n in names) + " }"
@@ -1039,6 +1143,7 @@ test("Maison v9.5 : Dopamine Setup (%d objets, %d dessins Setup95)", function(ch
 		SetupNewsTV = { "NewsTicker", 0 },
 		SetupPlantDaisy = { "Garden", 0 }, SetupPlantTulip = { "Garden", 0 }, SetupPlantRose = { "Garden", 1 }, SetupPlantSunflower = { "Garden", 2 },
 		SetupPlantLotus = { "Garden", 3 },
+		SetupTVCinemaXXL = { "DVD", 5 }, SetupTVWallXXL = { "DVD", 5 }, SetupCinemaScreen = { "DVD", 8 },
 	}
 	for id, gate in pairs(gates) do
 		local item = I[id]
@@ -1052,8 +1157,8 @@ test("Maison v9.5 : Dopamine Setup (%d objets, %d dessins Setup95)", function(ch
 	-- prix strictement croissants avec le palier dans chaque famille
 	for _, family in ipairs({
 		{ "SetupDeskSolo", "SetupDeskDuo", "SetupDeskTrio", "SetupDeskUltra" },
-		{ "SetupTVSmall", "SetupTVMedium", "SetupTVLarge", "SetupTVGiant" },
-		{ "SetupTVWallMedium", "SetupTVWallLarge", "SetupTVWallGiant" },
+		{ "SetupTVSmall", "SetupTVMedium", "SetupTVLarge", "SetupTVGiant", "SetupTVCinemaXXL" },
+		{ "SetupTVWallMedium", "SetupTVWallLarge", "SetupTVWallGiant", "SetupTVWallXXL", "SetupCinemaScreen" },
 		{ "SetupHiFiBoombox", "SetupHiFiCD", "SetupHiFiVinyl", "SetupHiFiStudio" },
 		{ "SetupPlantDaisy", "SetupPlantTulip", "SetupPlantRose", "SetupPlantSunflower", "SetupPlantLotus" },
 	}) do
@@ -1066,7 +1171,8 @@ test("Maison v9.5 : Dopamine Setup (%d objets, %d dessins Setup95)", function(ch
 		end
 	end
 	-- le support mural coûte un peu plus que la télé sur pied
-	for _, pair in ipairs({ { "SetupTVMedium", "SetupTVWallMedium" }, { "SetupTVLarge", "SetupTVWallLarge" }, { "SetupTVGiant", "SetupTVWallGiant" } }) do
+	for _, pair in ipairs({ { "SetupTVMedium", "SetupTVWallMedium" }, { "SetupTVLarge", "SetupTVWallLarge" }, { "SetupTVGiant", "SetupTVWallGiant" },
+		{ "SetupTVCinemaXXL", "SetupTVWallXXL" } }) do
 		check(I[pair[2]].Cost >= I[pair[1]].Cost, "télé murale >= sur pied " .. pair[2])
 	end
 	-- prix raisonnables : au moins le prix de l'amélioration à 0 visite, confort

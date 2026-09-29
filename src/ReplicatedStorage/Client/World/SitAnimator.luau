@@ -885,8 +885,8 @@ CLIPS.Phone = {
 	FadeOut = 0.7,
 	Apply = function(pose, t, _d, w, anim)
 		local tap = 0.03 * math.max(0, wave(t, 0.45))
-		reach(pose, "R", Vector3.new(0.3, 0.05 + tap, -1.2), Vector3.new(1, -1, 0.4), w)
-		reach(pose, "L", Vector3.new(-0.05, -0.05, -1.15), Vector3.new(-1, -1, 0.4), w)
+		reach(pose, "R", Vector3.new(0.28, -0.05 + tap, -0.85), Vector3.new(0.6, -1, 0.5), w)
+		reach(pose, "L", Vector3.new(-0.12, -0.15, -0.8), Vector3.new(-0.6, -1, 0.5), w)
 		add(pose, "Neck", CFrame.Angles(rad(-26 + 3 * wave(t, 3.1)), rad(4), 0), w)
 		add(pose, "Waist", CFrame.Angles(rad(-4), 0, 0), w)
 		anim.WantPhone = w > 0.25
@@ -916,13 +916,18 @@ CLIPS.Sleep = {
 	Apply = function(pose, t, _d, w, anim)
 		local bed = anim.Bed
 		local drop = bed and bed.Drop or 0.6
-		add(pose, "Root", CFrame.new(0, -drop, 0.1) * CFrame.Angles(rad(86), 0, 0), w)
+		-- (repère tourné du lit ; la pose de base a déjà tourné et reculé le corps)
+		local yaw = CFrame.Angles(0, rad(bed and bed.Yaw or 0), 0)
+		local sitShift = CFrame.new(0, 0, bed and bed.SitShift or 0)
+		add(pose, "Root", yaw * CFrame.new(0, -drop, bed and bed.Shift or 0) * CFrame.Angles(rad(86), 0, 0) * sitShift:Inverse() * yaw:Inverse(), w)
 		abs(pose, "RHip", CFrame.Angles(rad(4), 0, rad(3)), w)
 		abs(pose, "LHip", CFrame.Angles(rad(4), 0, rad(-3)), w)
 		abs(pose, "RKnee", CFrame.Angles(rad(-5), 0, 0), w)
 		abs(pose, "LKnee", CFrame.Angles(rad(-5), 0, 0), w)
-		reach(pose, "R", Vector3.new(0.3, -0.45, -0.7), Vector3.new(1, 0, 0.4), w)
-		reach(pose, "L", Vector3.new(-0.3, -0.35, -0.7), Vector3.new(-1, 0, 0.4), w)
+		-- bras le long du corps, posés sur le matelas
+		local down = anim.Rig.R6 and -1.7 or -0.85
+		reach(pose, "R", Vector3.new(1.25, down, -0.12), Vector3.new(1, 0, 1), w)
+		reach(pose, "L", Vector3.new(-1.25, down, -0.12), Vector3.new(-1, 0, 1), w)
 		add(pose, "Neck", CFrame.Angles(rad(-10), rad(18), 0), w)
 		add(pose, "Waist", CFrame.Angles(rad(1.8 * wave(t, 4.2)), 0, 0), w)
 		anim.WantZzz = w > 0.6
@@ -945,7 +950,8 @@ CLIPS.Hands = {
 
 -- Programme par nature de siège : { clip, poids }
 local PROGRAM: { [string]: { { any } } } = {
-	chair = { { "Look", 3 }, { "Stretch", 2 }, { "Cross", 2 }, { "Phone", 3 }, { "Lean", 1 } },
+	-- (chaise à une table : pas de jambes croisées, le genou passerait dans le plateau)
+	chair = { { "Look", 3 }, { "Stretch", 2 }, { "Phone", 3 }, { "Lean", 2 }, { "Swing", 1 } },
 	desk = { { "Look", 2 }, { "Stretch", 3 }, { "Lean", 2 }, { "Phone", 1 } },
 	stool = { { "Look", 3 }, { "Swing", 3 }, { "Phone", 2 }, { "Stretch", 1 } },
 	sofa = { { "Lean", 3 }, { "Cross", 2 }, { "Phone", 3 }, { "Stretch", 2 }, { "Look", 2 }, { "Doze", 2 } },
@@ -1116,13 +1122,20 @@ local function bedInfo(anim: Anim)
 	local seat: BasePart = anim.Seat
 	local model: Model? = anim.Model
 	local rig: Rig = anim.Rig
-	local info = { Yaw = 0, Drop = 0.6 }
+	-- Yaw : lacet du corps ; Drop : descente du bassin couché ; SitShift / Shift :
+	-- recul du bassin (vers la tête de lit) assis / couché, dans le repère tourné
+	local info = { Yaw = 0, Drop = 0.6, SitShift = 0, Shift = 0 }
+	local headDist = 2.6 * rig.Scale
 	-- hauteur : le dos à ~0,5 stud au-dessus du matelas
 	pcall(function()
 		local root = rig.Joints.Root
 		local pivot = (rig.Root.CFrame * root.C0).Position
 		local top = (seat.CFrame * CFrame.new(0, seat.Size.Y / 2, 0)).Position
 		info.Drop = math.clamp(pivot.Y - top.Y - 0.55 * rig.Scale, 0, 2.5)
+		local head = rig.Head
+		if head then
+			headDist = math.clamp(head.Position.Y - pivot.Y, 1, 5)
+		end
 	end)
 	if model then
 		pcall(function()
@@ -1132,10 +1145,11 @@ local function bedInfo(anim: Anim)
 			local parts = {}
 			for _, d in ipairs(model:GetDescendants()) do
 				if d:IsA("BasePart") and d.Transparency < 1 then
-					local p = frame:PointToObjectSpace(d.Position)
+					local rel = frame:ToObjectSpace(d.CFrame)
+					local p = rel.Position
 					minX, maxX = math.min(minX, p.X), math.max(maxX, p.X)
 					minZ, maxZ = math.min(minZ, p.Z), math.max(maxZ, p.Z)
-					table.insert(parts, { p, d.Size })
+					table.insert(parts, { p, d.Size, rel })
 				end
 			end
 			for _, entry in ipairs(parts) do
@@ -1158,6 +1172,21 @@ local function bedInfo(anim: Anim)
 			else
 				info.Yaw = highF > highB + 0.3 and 180 or 0
 			end
+			-- bord du lit côté tête : assis, le dos contre la tête de lit ;
+			-- couché, la tête sur l'oreiller (jamais dans la tête de lit)
+			local h = CFrame.Angles(0, rad(info.Yaw), 0):VectorToWorldSpace(Vector3.new(0, 0, 1))
+			local edge = -math.huge
+			for _, entry in ipairs(parts) do
+				local p: Vector3, size: Vector3, rel: CFrame = entry[1], entry[2], entry[3]
+				-- (demi-épaisseur de la pièce tournée le long de h)
+				local half = math.abs(rel.RightVector:Dot(h)) * size.X / 2 + math.abs(rel.UpVector:Dot(h)) * size.Y / 2
+					+ math.abs(rel.LookVector:Dot(h)) * size.Z / 2
+				edge = math.max(edge, p:Dot(h) + half)
+			end
+			if edge > -math.huge then
+				info.SitShift = math.clamp(edge - 0.5 - 0.65 * rig.Scale, 0, 3)
+				info.Shift = math.clamp(edge - 0.5 - 0.7 * rig.Scale - headDist, -4, 3)
+			end
 		end)
 	end
 	return info
@@ -1168,8 +1197,8 @@ end
 local function applyKindBase(pose: Pose, anim: Anim, w: number, t: number)
 	if anim.Kind == "bed" then
 		local bed = anim.Bed
-		if bed and bed.Yaw ~= 0 then
-			add(pose, "Root", CFrame.Angles(0, rad(bed.Yaw), 0), w)
+		if bed then
+			add(pose, "Root", CFrame.Angles(0, rad(bed.Yaw), 0) * CFrame.new(0, 0, bed.SitShift), w)
 		end
 		abs(pose, "RHip", CFrame.Angles(rad(86), 0, rad(2)), w)
 		abs(pose, "LHip", CFrame.Angles(rad(86), 0, rad(-2)), w)

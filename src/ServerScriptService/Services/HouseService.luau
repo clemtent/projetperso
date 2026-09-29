@@ -1218,7 +1218,8 @@ local function setRoomState(player: Player, data, argument: any): (boolean, stri
 	if type(argument) ~= "table" then
 		return false, T(player, "Invalid request")
 	end
-	if not RateLimiter.Check(player, "HouseToggle", TOGGLE_INTERVAL) then
+	-- (limite séparée pour l'interrupteur et pour les rideaux)
+	if not RateLimiter.Check(player, if argument.LightsOn ~= nil then "HouseToggleL" else "HouseToggleC", TOGGLE_INTERVAL) then
 		return false, T(player, "Slow down!")
 	end
 	local room = findRoom(data.House, argument.Room)

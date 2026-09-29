@@ -29,6 +29,18 @@
 	  DeskMode.Exit()
 	  DeskMode.IsActive() -> boolean
 	  DeskMode.Changed : signal (active: boolean)   (:Connect)
+	v9.8 (DESK98) :
+	  - le GRAND écran du bureau devient un jeu jouable (World/DeskGames,
+	    "Desk Runner") : mode "🎮 Jouer" par défaut ; ← → / A D / Q pour
+	    changer de voie, ↑ / Espace / W / Z pour sauter, ↓ / S pour rouler,
+	    glisser le doigt sur téléphone ; les touches 3D du clavier et la
+	    souris 3D s'enfoncent avec les vraies touches ; ces touches sont
+	    captées en priorité (ContextActionService) : Espace ne relève plus le
+	    personnage pendant le jeu (on sort avec Échap ou "Se lever") ;
+	  - mode "⌨️ Cliquer" (bouton de la barre) : comme avant, chaque touche
+	    = un vrai clic du clicker ; l'écran repasse au vrai coureur du clicker ;
+	  - la caméra cadre le grand écran en mode jeu.
+	  DeskMode.SetMode("Game" | "Click")   DeskMode.GetMode() -> string
 ]]
 
 local Players = game:GetService("Players")
@@ -40,6 +52,8 @@ local Locale = require(ReplicatedStorage.Shared.Locale)
 local Signal = require(ReplicatedStorage.Shared.Signal)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local LiveProps = require(script.Parent.LiveProps)
+local DeskGames = require(script.Parent.DeskGames)
+local ContextActionService = game:GetService("ContextActionService")
 
 local DeskMode = {}
 
@@ -69,6 +83,7 @@ local saved: Saved? = nil
 local target: CFrame? = nil
 local startCF: CFrame? = nil
 local blend = 0
+local fovBlend = 0 -- (le champ de vision ne se refait pas à un changement de mode)
 local viaSeat = false
 local gui: ScreenGui? = nil
 local counter: TextLabel? = nil
@@ -77,6 +92,12 @@ local connections: { any } = {} -- pendant le mode
 local watchers: { any } = {} -- entre Start et Stop
 local humanoidConnections: { any } = {}
 local hidden: { BasePart } = {} -- pièces de l'avatar masquées (vue "à la première personne")
+local mode = "Game" -- "Game" (jeu sur le grand écran) | "Click" (touches = clics)
+local modeButton: TextButton? = nil
+local hintLabel: TextLabel? = nil
+local GAME_ACTION = "DopamineDeskRunner"
+local touchStart: Vector2? = nil
+local setMode: (newMode: string) -> () = function(_newMode: string) end -- (défini plus bas)
 
 local function clientState(): any
 	local ok, result = pcall(function()
@@ -123,7 +144,13 @@ local function framing(handle: any): CFrame?
 	local count = 0
 	local minX, maxX, maxY = math.huge, -math.huge, -math.huge
 	local base = root.Position
-	for _, rec in ipairs(handle.Screens) do
+	-- (v9.8 mode jeu : on cadre le grand écran du jeu, plus gros)
+	local list = handle.Screens
+	local gameScreen = mode == "Game" and DeskGames.Screen() or nil
+	if gameScreen then
+		list = { gameScreen }
+	end
+	for _, rec in ipairs(list) do
 		local part: BasePart = rec.Part
 		local p = part.Position
 		sum += p
@@ -176,6 +203,22 @@ end
 -- Interface (bouton "Se lever", aide, compteur)
 ----------------------------------------------------------------------
 
+-- Textes de la barre selon le mode
+local function refreshBar()
+	local touch = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+	if modeButton then
+		modeButton.Text = mode == "Game" and Locale.T("⌨️ Click mode") or Locale.T("🎮 Play")
+		modeButton.BackgroundColor3 = mode == "Game" and rgb(90, 120, 255) or rgb(255, 150, 60)
+	end
+	if hintLabel then
+		if mode == "Game" then
+			hintLabel.Text = touch and Locale.T("👆 Swipe to dodge · tap to jump") or Locale.T("🎮 ← → lane · ↑ Space jump · ↓ roll")
+		else
+			hintLabel.Text = touch and Locale.T("👆 Tap the keys and the mouse to click!") or Locale.T("⌨️ Type or click the keys · 🖱️ click the mouse")
+		end
+	end
+end
+
 local function buildGui()
 	local player = Players.LocalPlayer
 	local parent = player and player:FindFirstChildOfClass("PlayerGui")
@@ -192,7 +235,7 @@ local function buildGui()
 	bar.Name = "Bar"
 	bar.AnchorPoint = Vector2.new(0.5, 1)
 	bar.Position = UDim2.new(0.5, 0, 1, -14)
-	bar.Size = UDim2.fromOffset(540, 56)
+	bar.Size = UDim2.fromOffset(660, 56)
 	bar.BackgroundColor3 = rgb(34, 26, 52)
 	bar.BackgroundTransparency = 0.15
 	bar.BorderSizePixel = 0
@@ -206,13 +249,13 @@ local function buildGui()
 	strokeLine.Transparency = 0.2
 	strokeLine.Parent = bar
 	local sizeLimit = Instance.new("UISizeConstraint")
-	sizeLimit.MaxSize = Vector2.new(540, 56)
+	sizeLimit.MaxSize = Vector2.new(660, 56)
 	sizeLimit.Parent = bar
 	local scale = Instance.new("UIScale")
 	scale.Name = "Fit"
 	local camera = workspace.CurrentCamera
 	local viewport = camera and camera.ViewportSize or Vector2.new(1280, 720)
-	scale.Scale = math.clamp(math.min((viewport.X - 24) / 540, viewport.Y / 560), 0.55, 1)
+	scale.Scale = math.clamp(math.min((viewport.X - 24) / 660, viewport.Y / 560), 0.5, 1)
 	scale.Parent = bar
 	local button = Instance.new("TextButton")
 	button.Name = "GetUp"
@@ -229,11 +272,31 @@ local function buildGui()
 	local buttonCorner = Instance.new("UICorner")
 	buttonCorner.CornerRadius = UDim.new(0, 12)
 	buttonCorner.Parent = button
+	-- (v9.8) bouton de mode : 🎮 Jouer <-> ⌨️ Cliquer
+	local toggle = Instance.new("TextButton")
+	toggle.Name = "Mode"
+	toggle.AutoButtonColor = true
+	toggle.Position = UDim2.fromOffset(156, 8)
+	toggle.Size = UDim2.fromOffset(150, 40)
+	toggle.BackgroundColor3 = rgb(90, 120, 255)
+	toggle.BorderSizePixel = 0
+	toggle.Font = Enum.Font.GothamBlack
+	toggle.TextSize = 15
+	toggle.TextColor3 = WHITE
+	toggle.Text = ""
+	toggle.Parent = bar
+	local toggleCorner = Instance.new("UICorner")
+	toggleCorner.CornerRadius = UDim.new(0, 12)
+	toggleCorner.Parent = toggle
+	modeButton = toggle
+	table.insert(connections, toggle.Activated:Connect(function()
+		setMode(mode == "Game" and "Click" or "Game")
+	end))
 	local hint = Instance.new("TextLabel")
 	hint.Name = "Hint"
 	hint.BackgroundTransparency = 1
-	hint.Position = UDim2.fromOffset(158, 6)
-	hint.Size = UDim2.fromOffset(372, 22)
+	hint.Position = UDim2.fromOffset(316, 6)
+	hint.Size = UDim2.fromOffset(336, 22)
 	hint.Font = Enum.Font.GothamBold
 	hint.TextSize = 14
 	hint.TextXAlignment = Enum.TextXAlignment.Left
@@ -245,8 +308,8 @@ local function buildGui()
 	local count = Instance.new("TextLabel")
 	count.Name = "Counter"
 	count.BackgroundTransparency = 1
-	count.Position = UDim2.fromOffset(158, 28)
-	count.Size = UDim2.fromOffset(372, 22)
+	count.Position = UDim2.fromOffset(316, 28)
+	count.Size = UDim2.fromOffset(336, 22)
 	count.Font = Enum.Font.GothamBlack
 	count.TextSize = 16
 	count.TextXAlignment = Enum.TextXAlignment.Left
@@ -259,6 +322,8 @@ local function buildGui()
 	screen.Parent = parent
 	gui = screen
 	counter = count
+	hintLabel = hint
+	refreshBar()
 end
 
 local function refreshCounter()
@@ -298,6 +363,85 @@ do
 			KEY_NAMES[code] = "Key_" .. tostring(index - 1)
 		end
 	end
+	-- (v9.8) touches du clavier 65 % : espace, entrée, flèches, ponctuation...
+	local extra = {
+		Space = "Space", Return = "Enter", Backspace = "Backspace", Tab = "Tab", CapsLock = "Caps", LeftShift = "LShift",
+		RightShift = "RShift", LeftControl = "LCtrl", LeftAlt = "LAlt", RightAlt = "RAlt", Left = "Left", Right = "Right",
+		Up = "Up", Down = "Down", Minus = "Minus", Equals = "Equals", LeftBracket = "LBracket", RightBracket = "RBracket",
+		BackSlash = "Backslash", Semicolon = "Semicolon", Quote = "Quote", Comma = "Comma", Period = "Period", Slash = "Slash",
+		Backquote = "Grave",
+	}
+	for codeName, keyName in pairs(extra) do
+		local ok, code = pcall(function()
+			return (Enum.KeyCode :: any)[codeName]
+		end)
+		if ok and code then
+			KEY_NAMES[code] = "Key_" .. keyName
+		end
+	end
+end
+
+-- (v9.8) Touches du jeu : action (1 gauche, 2 droite, 3 saut, 4 roulade,
+-- 0 = lancer) + touche 3D qui s'enfonce (QWERTY et AZERTY)
+local GAME_KEYS: { [Enum.KeyCode]: { any } } = {
+	[Enum.KeyCode.Left] = { 1, "Key_Left" },
+	[Enum.KeyCode.A] = { 1, "Key_A" },
+	[Enum.KeyCode.Q] = { 1, "Key_Q" },
+	[Enum.KeyCode.Right] = { 2, "Key_Right" },
+	[Enum.KeyCode.D] = { 2, "Key_D" },
+	[Enum.KeyCode.Up] = { 3, "Key_Up" },
+	[Enum.KeyCode.W] = { 3, "Key_W" },
+	[Enum.KeyCode.Z] = { 3, "Key_Z" },
+	[Enum.KeyCode.Space] = { 3, "Key_Space" },
+	[Enum.KeyCode.Down] = { 4, "Key_Down" },
+	[Enum.KeyCode.S] = { 4, "Key_S" },
+	[Enum.KeyCode.Return] = { 0, "Key_Enter" },
+}
+local GAME_KEY_LIST: { Enum.KeyCode } = {}
+for code in pairs(GAME_KEYS) do
+	table.insert(GAME_KEY_LIST, code)
+end
+
+-- Clavier / souris posés sur le bureau actif
+local function peripheral(kind: string): any
+	if not active then
+		return nil
+	end
+	for _, other in ipairs(LiveProps.Peripherals(active)) do
+		if other.Kind == kind then
+			return other
+		end
+	end
+	return nil
+end
+
+-- Touches du jeu captées en priorité (Espace ne relève pas le personnage)
+local function onGameAction(_name: string, state: Enum.UserInputState, input: InputObject): Enum.ContextActionResult
+	if state == Enum.UserInputState.Begin and active and mode == "Game" then
+		local entry = GAME_KEYS[input.KeyCode]
+		if entry then
+			DeskGames.Input(entry[1])
+			local keyboard = peripheral("Keyboard")
+			if keyboard then
+				LiveProps.PressVisual(keyboard, entry[2])
+			end
+		end
+	end
+	return Enum.ContextActionResult.Sink
+end
+
+local function bindGameKeys(on: boolean)
+	pcall(function()
+		ContextActionService:UnbindAction(GAME_ACTION)
+	end)
+	if on then
+		local ok, err = pcall(function()
+			ContextActionService:BindActionAtPriority(GAME_ACTION, onGameAction, false, Enum.ContextActionPriority.High.Value + 50, table.unpack(GAME_KEY_LIST))
+		end)
+		if not ok then
+			warn("[DeskMode] Touches du jeu : " .. tostring(err))
+		end
+	end
 end
 
 local function onRender(dt: number)
@@ -322,7 +466,9 @@ local function onRender(dt: number)
 		camera.CameraType = Enum.CameraType.Scriptable
 	end
 	camera.CFrame = from:Lerp(goal, t)
-	camera.FieldOfView = (saved and saved.FOV or 70) + (FOV - (saved and saved.FOV or 70)) * t
+	fovBlend = math.min(1, fovBlend + dt / ENTER_TIME)
+	local tf = 1 - (1 - fovBlend) ^ 3
+	camera.FieldOfView = (saved and saved.FOV or 70) + (FOV - (saved and saved.FOV or 70)) * tf
 	if UserInputService.MouseBehavior ~= Enum.MouseBehavior.Default then
 		UserInputService.MouseBehavior = Enum.MouseBehavior.Default
 	end
@@ -345,6 +491,42 @@ local function onRender(dt: number)
 			DeskMode.Exit(false)
 		end
 	end
+end
+
+-- (v9.8) 🎮 Jouer / ⌨️ Cliquer
+setMode = function(newMode: string)
+	if newMode ~= "Game" and newMode ~= "Click" then
+		return
+	end
+	mode = newMode
+	local handle = active
+	if handle then
+		if mode == "Game" then
+			if DeskGames.Start(handle) then
+				bindGameKeys(true)
+			else
+				mode = "Click"
+			end
+		else
+			bindGameKeys(false)
+			DeskGames.Stop()
+		end
+		-- la caméra glisse vers le nouveau cadrage
+		local camera = workspace.CurrentCamera
+		if camera then
+			startCF = camera.CFrame
+			blend = 0
+		end
+	end
+	refreshBar()
+end
+
+function DeskMode.SetMode(newMode: string)
+	setMode(newMode)
+end
+
+function DeskMode.GetMode(): string
+	return mode
 end
 
 function DeskMode.IsActive(): boolean
@@ -376,6 +558,7 @@ function DeskMode.Enter(handle: any): boolean
 	active = handle
 	startCF = camera.CFrame
 	blend = 0
+	fovBlend = 0
 	target = framing(handle)
 	LiveProps.SetDeskFocus(handle)
 	UserInputService.MouseIconEnabled = true
@@ -390,6 +573,16 @@ function DeskMode.Enter(handle: any): boolean
 	end
 	buildGui()
 	refreshCounter()
+	-- (v9.8) mode jeu : le grand écran devient le Desk Runner
+	if mode == "Game" then
+		if DeskGames.Start(handle) then
+			bindGameKeys(true)
+		else
+			mode = "Click"
+		end
+		refreshBar()
+		target = framing(handle)
+	end
 	local ok = pcall(function()
 		RunService:BindToRenderStep(BIND_NAME, Enum.RenderPriority.Camera.Value + 1, onRender)
 	end)
@@ -402,7 +595,23 @@ function DeskMode.Enter(handle: any): boolean
 			DeskMode.Exit(true)
 			return
 		end
-		if processed or input.UserInputType ~= Enum.UserInputType.Keyboard then
+		if processed then
+			return
+		end
+		if mode == "Game" then
+			-- (v9.8) jeu : glisser le doigt ; clic = la souris 3D s'enfonce
+			local kind = input.UserInputType
+			if kind == Enum.UserInputType.Touch then
+				touchStart = Vector2.new(input.Position.X, input.Position.Y)
+			elseif kind == Enum.UserInputType.MouseButton1 then
+				local mouse = peripheral("Mouse")
+				if mouse then
+					LiveProps.PressVisual(mouse, "MouseLeft")
+				end
+			end
+			return
+		end
+		if input.UserInputType ~= Enum.UserInputType.Keyboard then
 			return
 		end
 		local keyName = KEY_NAMES[input.KeyCode]
@@ -413,6 +622,27 @@ function DeskMode.Enter(handle: any): boolean
 					break
 				end
 			end
+		end
+	end))
+	table.insert(connections, UserInputService.InputEnded:Connect(function(input: InputObject)
+		local from = touchStart
+		if mode ~= "Game" or not from or input.UserInputType ~= Enum.UserInputType.Touch then
+			return
+		end
+		touchStart = nil
+		local delta = Vector2.new(input.Position.X, input.Position.Y) - from
+		local action = 3 -- (tape = saut / lancer)
+		if delta.Magnitude >= 28 then
+			if math.abs(delta.X) > math.abs(delta.Y) then
+				action = delta.X < 0 and 1 or 2
+			else
+				action = delta.Y < 0 and 3 or 4
+			end
+		end
+		DeskGames.Input(action)
+		local keyboard = peripheral("Keyboard")
+		if keyboard then
+			LiveProps.PressVisual(keyboard, ({ "Key_Left", "Key_Right", "Key_Up", "Key_Down" })[action] or "Key_Space")
 		end
 	end))
 	table.insert(connections, UserInputService.JumpRequest:Connect(function()
@@ -446,6 +676,11 @@ function DeskMode.Exit(standUp: boolean?)
 		RunService:UnbindFromRenderStep(BIND_NAME)
 	end)
 	disconnectAll(connections)
+	bindGameKeys(false)
+	DeskGames.Stop()
+	touchStart = nil
+	modeButton = nil
+	hintLabel = nil
 	LiveProps.SetDeskFocus(nil)
 	for _, part in ipairs(hidden) do
 		if part.Parent then

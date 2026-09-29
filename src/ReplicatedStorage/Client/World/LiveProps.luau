@@ -52,6 +52,20 @@
 	  LiveProps.DeskUsed : Signal (handle) (invite "🖥️ Utiliser" / clic sur un écran de bureau)
 	  LiveProps.Press(handle, partName)    (appui programmé : touche, bouton... pour DeskMode)
 	  LiveProps.Count() -> number
+	v9.8 (DESK98) :
+	  - écrans : le VRAI contenu du clicker (World/StimulusScreen : Runner,
+	    LiveStream, DVD, NewsTicker) sur les REAL_MAX écrans les plus proches
+	    (≤ REAL_DISTANCE studs, bureau du mode bureau d'abord) ; les autres
+	    gardent le dessin léger (LiveScreens) ; toiles inertes (Active = false) ;
+	  - télés : clic sur l'écran = chaîne suivante (Live, DVD, Infos, Coureur) ;
+	  - clavier : légendes des touches (une toile par rangée, seulement sur le
+	    clavier le plus proche) ; appui "visuel" (jeu du bureau, sans clic) ;
+	  - presse : tapis roulant qui amène l'objet, écrasement, éjection vers le
+	    bac, manomètres, afficheur, éclats, couleurs du palier du clicker.
+	  LiveProps.MainScreen(deskHandle) -> ScreenRec?    (le plus grand écran du bureau)
+	  LiveProps.SetOverride(rec, override?)             (override = { Canvas(aspect), Build(gui, canvas) -> Screen })
+	  LiveProps.PressVisual(handle, partName) -> boolean (touche / bouton qui s'enfonce, sans clic ni son)
+	  LiveProps.SetChannel(rec, kind)
 ]]
 
 local Players = game:GetService("Players")
@@ -64,13 +78,17 @@ local Locale = require(ReplicatedStorage.Shared.Locale)
 local Signal = require(ReplicatedStorage.Shared.Signal)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local LiveScreens = require(script.Parent.LiveScreens)
+local StimulusScreen = require(script.Parent.StimulusScreen)
 
 local Client = script.Parent.Parent
 
 local LiveProps = {}
 
 LiveProps.MAX_GUIS = 8 -- écrans dessinés en même temps (tous objets confondus)
-LiveProps.PAUSE_DISTANCE = 60 -- (studs) au-delà : animations en pause
+LiveProps.REAL_MAX = 3 -- écrans avec le VRAI stimulus du clicker (les plus proches)
+LiveProps.REAL_DISTANCE = 40 -- (studs) au-delà : dessin léger
+LiveProps.LEGEND_DISTANCE = 22 -- (studs) légendes du clavier le plus proche
+LiveProps.PAUSE_DISTANCE = 45 -- (studs) au-delà : animations en pause (v9.8 : 60 -> 45)
 LiveProps.SCREEN_DISTANCE = 120 -- MaxDistance des SurfaceGui
 LiveProps.CLICK_DISTANCE = 14 -- (studs) personnage -> objet pour cliquer
 
@@ -81,6 +99,7 @@ local RGB_STEP = 1 / 15
 
 local rgb = Color3.fromRGB
 local WHITE = Color3.new(1, 1, 1)
+local CYAN_SOFT = rgb(120, 200, 255)
 
 LiveProps.DeskUsed = Signal.new()
 
@@ -187,13 +206,20 @@ end
 type Mover = { Part: BasePart, Offset: CFrame, Size: Vector3 }
 type Spinner = { Pivot: BasePart, Parts: { BasePart }, Offsets: { CFrame }, CFrames: { CFrame }, Axis: string, Angle: number, Speed: number, Target: number }
 type Press = { Part: BasePart, Offset: CFrame, Base: Color3, Material: Enum.Material, T: number, Depth: number }
-type ScreenRec = {
+export type Override = {
+	Canvas: (aspect: number) -> Vector2,
+	Build: (gui: SurfaceGui, canvas: Vector2) -> any,
+}
+export type ScreenRec = {
 	Part: BasePart,
 	Kind: string,
 	Index: number,
 	Handle: any,
 	Gui: SurfaceGui?,
-	Screen: LiveScreens.Screen?,
+	Screen: any?, -- LiveScreens.Screen | StimulusScreen.Screen | écran d'un override
+	Real: boolean, -- vrai stimulus du clicker dessiné
+	RealBroken: boolean, -- le vrai stimulus a planté : dessin léger pour de bon
+	Override: Override?, -- (jeu du bureau) prend l'écran
 	Wings: { BasePart },
 	BaseColor: Color3,
 	BaseMaterial: Enum.Material,
@@ -225,6 +251,7 @@ export type Handle = {
 	Prompt: ProximityPrompt?,
 	Step: ((h: Handle, dt: number) -> ())?,
 	Click: ((h: Handle, part: BasePart, role: string, point: Vector3) -> ())?,
+	Visual: ((h: Handle, part: BasePart) -> ())?, -- (v9.8) appui sans clic ni son
 }
 
 local handles: { Handle } = {}
@@ -309,7 +336,8 @@ local function partsNamed(model: Model, name: string): { BasePart }
 	return list
 end
 
--- Appui (touche, bouton) : la pièce s'enfonce puis remonte
+-- Appui (touche, bouton) : la pièce s'enfonce puis remonte (v9.8 : l'éclair
+-- de couleur n'est plus du Neon ; la légende de la touche s'estompe)
 local function press(h: Handle, part: BasePart, depth: number?, flash: Color3?)
 	local m = mover(h, part)
 	for _, p in ipairs(h.Presses) do
@@ -321,7 +349,6 @@ local function press(h: Handle, part: BasePart, depth: number?, flash: Color3?)
 	table.insert(h.Presses, { Part = part, Offset = m.Offset, Base = part.Color, Material = part.Material, T = 0, Depth = depth or m.Size.Y * 0.55 })
 	if flash then
 		part.Color = flash
-		part.Material = Enum.Material.Neon
 	end
 end
 
@@ -331,23 +358,31 @@ local function stepPresses(h: Handle, dt: number)
 		return
 	end
 	local ref = refCF(h)
+	local legends: { [BasePart]: TextLabel }? = h.State.LegendLabels
 	for index = #list, 1, -1 do
 		local p = list[index]
 		p.T += dt
 		local t = p.T
 		local down
-		if t < 0.05 then
-			down = t / 0.05
-		elseif t < 0.13 then
+		if t < 0.04 then
+			down = t / 0.04
+		elseif t < 0.12 then
 			down = 1
 		else
-			down = math.max(0, 1 - (t - 0.13) / 0.12)
+			down = math.max(0, 1 - (t - 0.12) / 0.12)
 		end
 		p.Part.CFrame = ref * p.Offset * CFrame.new(0, -p.Depth * down, 0)
-		if t >= 0.25 then
+		local label = legends and legends[p.Part]
+		if label then
+			label.TextTransparency = 0.05 + 0.6 * down
+		end
+		if t >= 0.24 then
 			p.Part.CFrame = ref * p.Offset
 			p.Part.Color = p.Base
 			p.Part.Material = p.Material
+			if label then
+				label.TextTransparency = 0.05
+			end
 			table.remove(list, index)
 		end
 	end
@@ -479,20 +514,33 @@ local function releaseGui(rec: ScreenRec)
 		rec.Gui = nil
 		gui:Destroy()
 	end
+	rec.Real = false
 	if rec.Part.Parent then
 		screenOff(rec)
 	end
 end
 
-local function claimGui(rec: ScreenRec)
+-- Dessine l'écran : override (jeu du bureau), vrai stimulus du clicker
+-- (`real`) ou dessin léger (LiveScreens)
+local function claimGui(rec: ScreenRec, real: boolean)
 	if rec.Gui then
 		return
 	end
 	local part = rec.Part
 	local size = part.Size
-	local aspect = size.Y / math.max(0.05, size.X)
-	local width = rec.Kind == "Music" and 256 or 320
-	local canvas = Vector2.new(width, math.max(40, math.floor(width * aspect + 0.5)))
+	local aspect = size.X / math.max(0.05, size.Y)
+	local override = rec.Override
+	local useReal = real and not override and not rec.RealBroken and StimulusScreen.Supports(rec.Kind)
+	local canvas: Vector2
+	if override then
+		local ok, value = pcall(override.Canvas, aspect)
+		canvas = (ok and typeof(value) == "Vector2") and value or Vector2.new(400, math.floor(400 / aspect + 0.5))
+	elseif useReal then
+		canvas = StimulusScreen.Canvas(rec.Kind, aspect)
+	else
+		local width = rec.Kind == "Music" and 256 or 320
+		canvas = Vector2.new(width, math.max(40, math.floor(width / aspect + 0.5)))
+	end
 	local gui = Instance.new("SurfaceGui")
 	gui.Name = "LiveScreen_" .. rec.Kind
 	gui.Face = Enum.NormalId.Front
@@ -505,21 +553,50 @@ local function claimGui(rec: ScreenRec)
 	gui.ClipsDescendants = true
 	gui.ResetOnSpawn = false
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	gui.Active = false -- (v9.8 : toile inerte, les clics 3D passent au travers)
 	gui.Adornee = part
-	local ok, screen = pcall(LiveScreens.New, rec.Kind, gui, canvas)
-	if not ok then
-		warn("[LiveProps] Écran " .. tostring(rec.Kind) .. " : " .. tostring(screen))
-		gui:Destroy()
-		return
+	local screen: any = nil
+	if override then
+		local ok, result = pcall(override.Build, gui, canvas)
+		if ok then
+			screen = result
+		else
+			warn("[LiveProps] Écran du jeu : " .. tostring(result))
+		end
+	elseif useReal then
+		local ok, result = pcall(StimulusScreen.New, rec.Kind, gui, canvas)
+		if ok and result then
+			screen = result
+		else
+			if not ok then
+				warn("[LiveProps] Vrai écran " .. tostring(rec.Kind) .. " : " .. tostring(result))
+			end
+			rec.RealBroken = true
+			gui:ClearAllChildren()
+			local width = 320
+			canvas = Vector2.new(width, math.max(40, math.floor(width / aspect + 0.5)))
+			gui.CanvasSize = canvas
+		end
+	end
+	if not screen then
+		local ok, result = pcall(LiveScreens.New, rec.Kind, gui, canvas)
+		if not ok then
+			warn("[LiveProps] Écran " .. tostring(rec.Kind) .. " : " .. tostring(result))
+			gui:Destroy()
+			return
+		end
+		screen = result
 	end
 	gui.Parent = playerGui() or part
 	rec.Gui = gui
 	rec.Screen = screen
+	rec.Real = useReal and type(screen) == "table" and screen.Real == true
 	part.Material = Enum.Material.SmoothPlastic
 	part.Color = Color3.new(0, 0, 0)
 end
 
--- Qui a droit à un écran dessiné ? (les plus proches, le bureau actif d'abord)
+-- Qui a droit à un écran dessiné ? (les plus proches, le bureau actif et le
+-- jeu du bureau d'abord) ; qui a droit au VRAI stimulus du clicker ?
 local ranked: { ScreenRec } = {}
 local rankDistance: { [ScreenRec]: number } = {}
 local function manageScreens(focus: Vector3)
@@ -529,7 +606,9 @@ local function manageScreens(focus: Vector3)
 		local h = rec.Handle
 		if h.Alive and rec.Part.Parent then
 			local distance = (rec.Part.Position - focus).Magnitude
-			if h == deskFocus then
+			if rec.Override then
+				distance = -2
+			elseif h == deskFocus then
 				distance = -1
 			elseif h.Paused or distance > h.ScreenDistance then
 				distance = math.huge
@@ -541,16 +620,44 @@ local function manageScreens(focus: Vector3)
 	table.sort(ranked, function(a, b)
 		return rankDistance[a] < rankDistance[b]
 	end)
-	for index, rec in ipairs(ranked) do
-		local wanted = index <= LiveProps.MAX_GUIS and rankDistance[rec] < math.huge
-		if not wanted and rec.Gui then
+	-- écran planté : on repasse au dessin léger
+	for _, rec in ipairs(ranked) do
+		local screen = rec.Screen
+		if screen and type(screen) == "table" and screen.Failed == true then
+			rec.RealBroken = true
 			releaseGui(rec)
 		end
 	end
+	local wanted: { [ScreenRec]: boolean } = {}
+	local wantReal: { [ScreenRec]: boolean } = {}
+	local realCount = 0
 	for index, rec in ipairs(ranked) do
-		local wanted = index <= LiveProps.MAX_GUIS and rankDistance[rec] < math.huge
-		if wanted and not rec.Gui then
-			claimGui(rec)
+		local distance = rankDistance[rec]
+		local want = index <= LiveProps.MAX_GUIS and distance < math.huge
+		wanted[rec] = want
+		if want and not rec.Override and not rec.RealBroken and realCount < LiveProps.REAL_MAX and distance <= LiveProps.REAL_DISTANCE
+			and rec.Handle.Interactive and StimulusScreen.Supports(rec.Kind) then
+			realCount += 1
+			wantReal[rec] = true
+		end
+	end
+	for _, rec in ipairs(ranked) do
+		if rec.Gui and (not wanted[rec] or (not rec.Override and rec.Real ~= (wantReal[rec] == true))) then
+			releaseGui(rec)
+		end
+	end
+	-- (au plus un vrai stimulus construit par passage : le coût est étalé)
+	local built = false
+	for _, rec in ipairs(ranked) do
+		if wanted[rec] and not rec.Gui then
+			local real = wantReal[rec] == true
+			if real and built then
+				real = false -- (dessin léger en attendant le prochain passage)
+			end
+			claimGui(rec, real)
+			if rec.Real then
+				built = true
+			end
 		end
 	end
 end
@@ -604,23 +711,137 @@ BEHAVIOURS.Desk = function(h: Handle)
 	end
 end
 
--- ⌨️ Clavier : touches -> vrais clics
+-- ⌨️ Clavier : touches -> vrais clics (v9.8 : légendes, éclair doux)
 local KEY_FLASH = rgb(255, 120, 220)
+local LEGEND_PPS = 320 -- pixels de toile par stud (légendes)
+local LEGEND_DARK = rgb(58, 54, 80)
+
+-- Légendes : une plaque invisible par rangée, juste au-dessus des touches,
+-- avec une SurfaceGui (face Top) et un texte par touche
+local function buildLegends(h: Handle)
+	if h.State.LegendPlates then
+		return
+	end
+	local keys: { BasePart } = h.State.Keys or {}
+	if #keys == 0 then
+		return
+	end
+	local ref = refCF(h)
+	local rows: { [string]: { BasePart } } = {}
+	local order: { string } = {}
+	for _, key in ipairs(keys) do
+		local rel = ref:PointToObjectSpace(h.Movers[key] and (ref * h.Movers[key].Offset).Position or key.Position)
+		local rowKey = string.format("%.2f", rel.Z * 20)
+		if not rows[rowKey] then
+			rows[rowKey] = {}
+			table.insert(order, rowKey)
+		end
+		table.insert(rows[rowKey], key)
+	end
+	local plates: { BasePart } = {}
+	local labels: { [BasePart]: TextLabel } = {}
+	for _, rowKey in ipairs(order) do
+		local list = rows[rowKey]
+		local first = list[1]
+		local rotation = (ref * h.Movers[first].Offset).Rotation
+		local minX, maxX, top, depth = math.huge, -math.huge, -math.huge, 0
+		local frameCF = CFrame.new((ref * h.Movers[first].Offset).Position) * rotation
+		for _, key in ipairs(list) do
+			local rest = ref * h.Movers[key].Offset
+			local rel = frameCF:PointToObjectSpace(rest.Position)
+			minX = math.min(minX, rel.X - key.Size.X / 2)
+			maxX = math.max(maxX, rel.X + key.Size.X / 2)
+			top = math.max(top, rel.Y + key.Size.Y / 2)
+			depth = math.max(depth, key.Size.Z)
+		end
+		local width = maxX - minX
+		local plate = Instance.new("Part")
+		plate.Name = "KeyLegends"
+		plate.Anchored = true
+		plate.CanCollide = false
+		plate.CanQuery = false
+		plate.CanTouch = false
+		plate.CastShadow = false
+		plate.Transparency = 1
+		plate.Size = Vector3.new(math.max(0.05, width), 0.01, math.max(0.05, depth))
+		plate.CFrame = frameCF * CFrame.new((minX + maxX) / 2, top + 0.006, 0)
+		local canvas = Vector2.new(math.max(16, math.floor(width * LEGEND_PPS + 0.5)), math.max(8, math.floor(depth * LEGEND_PPS + 0.5)))
+		local gui = Instance.new("SurfaceGui")
+		gui.Name = "Legends"
+		gui.Face = Enum.NormalId.Top
+		gui.SizingMode = Enum.SurfaceGuiSizingMode.FixedSize
+		gui.CanvasSize = canvas
+		gui.LightInfluence = 1
+		gui.Brightness = 1
+		gui.MaxDistance = LiveProps.LEGEND_DISTANCE + 10
+		gui.ClipsDescendants = true
+		gui.Active = false
+		gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+		gui.Parent = plate
+		for _, key in ipairs(list) do
+			local legend = key:GetAttribute("Legend")
+			if type(legend) == "string" and legend ~= "" then
+				local rel = plate.CFrame:PointToObjectSpace((ref * h.Movers[key].Offset).Position)
+				local w = key.Size.X * LEGEND_PPS
+				local d = key.Size.Z * LEGEND_PPS
+				local label = Instance.new("TextLabel")
+				label.Name = key.Name
+				label.BackgroundTransparency = 1
+				label.AnchorPoint = Vector2.new(0.5, 0.5)
+				label.Position = UDim2.fromOffset((rel.X / plate.Size.X + 0.5) * canvas.X, (rel.Z / plate.Size.Z + 0.5) * canvas.Y)
+				label.Size = UDim2.fromOffset(w, d)
+				label.Font = Enum.Font.GothamBold
+				label.TextSize = math.max(6, math.floor(d * (utf8.len(legend) == 1 and 0.62 or 0.36)))
+				label.TextColor3 = key:GetAttribute("KeyStyle") == "A" and LEGEND_DARK or WHITE
+				label.TextTransparency = 0.05
+				label.Text = legend
+				label.Parent = gui
+				labels[key] = label
+			end
+		end
+		plate.Parent = h.Model
+		table.insert(plates, plate)
+	end
+	h.State.LegendPlates = plates
+	h.State.LegendLabels = labels
+end
+
+local function dropLegends(h: Handle)
+	local plates = h.State.LegendPlates
+	if not plates then
+		return
+	end
+	h.State.LegendPlates = nil
+	h.State.LegendLabels = nil
+	for _, plate in ipairs(plates) do
+		plate:Destroy()
+	end
+end
+
 BEHAVIOURS.Keyboard = function(h: Handle)
 	local keys: { BasePart } = {}
+	local byName: { [string]: BasePart } = {}
 	for _, d in ipairs(h.Model:GetDescendants()) do
 		if d:IsA("BasePart") and string.sub(d.Name, 1, 4) == "Key_" then
 			table.insert(keys, d)
+			byName[d.Name] = d
 			h.Roles[d] = "Key"
 			table.insert(h.Clickables, d)
 			mover(h, d)
 		end
 	end
 	h.State.Keys = keys
+	h.State.KeysByName = byName
 	local base = findPart(h.Model, "KeyboardBase")
 	if base then
 		h.Roles[base] = "AnyKey"
 		table.insert(h.Clickables, base)
+	end
+	local function flashFor(key: BasePart): Color3
+		return key.Color:Lerp(KEY_FLASH, 0.55)
+	end
+	h.Visual = function(_h, part)
+		press(h, part, nil, flashFor(part))
 	end
 	h.Click = function(_h, part, role, point)
 		local key = part
@@ -638,7 +859,7 @@ BEHAVIOURS.Keyboard = function(h: Handle)
 			end
 			key = best
 		end
-		press(h, key, nil, KEY_FLASH:Lerp(WHITE, random:NextNumber(0, 0.4)))
+		press(h, key, nil, flashFor(key):Lerp(WHITE, random:NextNumber(0, 0.3)))
 		local gear = gearClick()
 		if gear then
 			pcall(gear.PlayKeySound, math.max(1, levelOf("Keyboard")), 1, 0)
@@ -660,6 +881,9 @@ BEHAVIOURS.Mouse = function(h: Handle)
 	end
 	local left = findPart(h.Model, "MouseLeft")
 	local right = findPart(h.Model, "MouseRight")
+	h.Visual = function(_h, part)
+		press(h, part, part.Size.Y * 0.5, rgb(120, 220, 255))
+	end
 	h.Click = function(_h, part, role, _point)
 		local button = (role == "MouseRight" and right) or left
 		if button then
@@ -792,12 +1016,21 @@ BEHAVIOURS.Windmill = function(h: Handle)
 	end
 end
 
--- 🗜️ Presse : cycle descente / écrasement / remontée ; bouton = Interact("Press")
+-- 🗜️ Presse (v9.8) : le tapis amène l'objet sous la presse, descente,
+-- écrasement (éclats, vapeur), remontée, la galette part au bac ; manomètres,
+-- voyants, afficheur, gyrophare ; couleurs du palier de la presse du clicker
+-- (niveau "Presse hydraulique" du propriétaire). Gros bouton = Interact("Press").
 type Crush = { Part: BasePart, Offset: CFrame, Size: Vector3, Axis: Vector3, Transparency: number, Variant: number }
+local PRESS_DURATIONS = { Load = 1.3, Settle = 0.35, Descend = 0.9, Squeeze = 0.45, Hold = 0.35, Rise = 0.8, Eject = 0.9 }
+local PRESS_NEXT = { Load = "Settle", Settle = "Descend", Descend = "Squeeze", Squeeze = "Hold", Hold = "Rise", Rise = "Eject", Eject = "Load" }
+local TINT_ROLES = { Frame = "Frame", FrameDark = "Dark", AccentA = "AccentA", AccentB = "AccentB", Chrome = "Chrome", Hose = "Hose", Bolt = "Bolt" }
 BEHAVIOURS.Press = function(h: Handle)
-	local ramPivot = findPart(h.Model, "Pivot_Ram")
-	local anvil = findPart(h.Model, "Pivot_Anvil")
-	local ramParts = partsNamed(h.Model, "PressRam")
+	local model = h.Model
+	local ramPivot = findPart(model, "Pivot_Ram")
+	local anvil = findPart(model, "Pivot_Anvil")
+	local footprint = model:GetAttribute("Footprint")
+	local k = typeof(footprint) == "Vector3" and footprint.X / 100 or 0.05 -- studs par unité
+	local ramParts = partsNamed(model, "PressRam")
 	local ramOffsets = {}
 	local ramCFrames = {}
 	if ramPivot then
@@ -806,12 +1039,12 @@ BEHAVIOURS.Press = function(h: Handle)
 			ramCFrames[index] = part.CFrame
 		end
 	end
+	-- objets (une variante visible à la fois), repère de l'enclume
 	local crushables: { Crush } = {}
 	local variants = 0
 	if anvil then
 		local up = anvil.CFrame.UpVector
-		for _, part in ipairs(partsNamed(h.Model, "Crushable")) do
-			-- axe local vertical de la pièce (cylindre couché, ovale...)
+		for _, part in ipairs(partsNamed(model, "Crushable")) do
 			local cf = part.CFrame
 			local dots = { math.abs(cf.RightVector:Dot(up)), math.abs(cf.UpVector:Dot(up)), math.abs(cf.LookVector:Dot(up)) }
 			local axis = Vector3.new(0, 1, 0)
@@ -822,15 +1055,33 @@ BEHAVIOURS.Press = function(h: Handle)
 			end
 			local variant = tonumber(part:GetAttribute("Variant")) or 1
 			variants = math.max(variants, variant)
-			table.insert(crushables, { Part = part, Offset = anvil.CFrame:ToObjectSpace(cf), Size = part.Size, Axis = axis, Transparency = part.Transparency, Variant = variant })
+			local offset = anvil.CFrame:ToObjectSpace(cf)
+			table.insert(crushables, { Part = part, Offset = offset, Size = part.Size, Axis = axis, Transparency = part.Transparency, Variant = variant })
 		end
 	end
-	local beacon = findPart(h.Model, "PressBeacon")
-	local gauge = findPart(h.Model, "Gauge")
-	if gauge then
-		mover(h, gauge)
+	-- trajets (studs, repère de l'enclume : +X = vers le tapis)
+	local slats = partsNamed(model, "BeltSlat")
+	local slatOffsets: { CFrame } = {}
+	local slatCFrames: { CFrame } = {}
+	local beltMin, beltMax = math.huge, -math.huge
+	if anvil then
+		for index, slat in ipairs(slats) do
+			local offset = anvil.CFrame:ToObjectSpace(slat.CFrame)
+			slatOffsets[index] = offset
+			slatCFrames[index] = slat.CFrame
+			beltMin = math.min(beltMin, offset.X)
+			beltMax = math.max(beltMax, offset.X)
+		end
 	end
-	-- course du piston : jusqu'à ~4 unités au-dessus de l'enclume
+	-- (objet en miroir : le tapis est de l'autre côté)
+	local beltSide = (#slats == 0 or (beltMin + beltMax) / 2 >= 0) and 1 or -1
+	local range = beltMax > beltMin and beltMax - beltMin or 0
+	local loadDX = #slats > 0 and (beltSide > 0 and beltMax + range * 0.1 or beltMin - range * 0.1) or 40 * k
+	local binDX = -33 * k * beltSide
+	local binDY = -16 * k
+	local slatGap = #slats > 1 and (beltMax - beltMin) / (#slats - 1) or 1
+	local slatShift = 0
+	-- course du coulisseau : jusqu'à la hauteur d'une galette au-dessus de l'enclume
 	local travel = 0
 	if ramPivot and anvil then
 		local plateBottom = math.huge
@@ -838,28 +1089,155 @@ BEHAVIOURS.Press = function(h: Handle)
 			local rel = anvil.CFrame:PointToObjectSpace(part.Position)
 			plateBottom = math.min(plateBottom, rel.Y - part.Size.Y / 2)
 		end
-		travel = math.max(0, plateBottom - anvil.Size.Y * 0.35)
+		travel = math.max(0, plateBottom - 3 * k)
 	end
-	local current = 1
-	local phase = "Wait"
-	local phaseTime = random:NextNumber(0, 3)
-	local turbo = false
-	local pendingTurbo = false
-	local squash = 1
-	local cooldownEnd = 0
-	local settings = (Config.Interactions and Config.Interactions.Press) or {}
-	local cooldown = tonumber(settings.Cooldown) or 3
-	local function showVariant(variant: number)
-		for _, c in ipairs(crushables) do
-			c.Part.Transparency = c.Variant == variant and c.Transparency or 1
+	local beacon = findPart(model, "PressBeacon")
+	local display = findPart(model, "PressDisplay")
+	local lamps = { findPart(model, "Lamp1"), findPart(model, "Lamp2"), findPart(model, "Lamp3") }
+	type Needle = { Part: BasePart, Dial: BasePart, Rel: CFrame, Value: number }
+	local needles: { Needle } = {}
+	for index = 1, 2 do
+		local needle = findPart(model, "Gauge" .. index)
+		local dial = findPart(model, "GaugeDial" .. index)
+		if needle and dial then
+			mover(h, needle)
+			table.insert(needles, { Part = needle, Dial = dial, Rel = dial.CFrame:ToObjectSpace(needle.CFrame), Value = 0 })
 		end
 	end
-	local function applySquash(s: number)
+	-- couleurs du palier (propriétaire : son niveau ; visiteur : palier par défaut)
+	local tinted: { BasePart } = {}
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") and type(d:GetAttribute("Tint")) == "string" then
+			table.insert(tinted, d)
+		end
+	end
+	local style: any = nil
+	local function applyTier()
+		local module = setupModule()
+		local tiers = module and module.PressTiers
+		if type(tiers) ~= "table" then
+			return
+		end
+		local level = h.IsOwner and levelOf("Press") or 0
+		local tier = level > 0 and math.clamp(math.floor(level), 1, #tiers) or (tonumber(module.PRESS_DEFAULT_TIER) or 5)
+		if h.State.Tier == tier then
+			return
+		end
+		h.State.Tier = tier
+		style = tiers[tier]
+		for _, part in ipairs(tinted) do
+			local key = TINT_ROLES[part:GetAttribute("Tint")]
+			local color = key and style[key]
+			if typeof(color) == "Color3" then
+				part.Color = color
+				local role = part:GetAttribute("Tint")
+				if role == "Frame" or role == "FrameDark" then
+					part.Material = (style.Wood and role == "Frame") and Enum.Material.Wood or (style.Crystal and Enum.Material.Glass or Enum.Material.Metal)
+				end
+			end
+		end
+	end
+	applyTier()
+	-- éclats + vapeur (seulement dans la ville)
+	local debris: ParticleEmitter? = nil
+	local steam: ParticleEmitter? = nil
+	if h.Interactive and anvil then
+		for _, name in ipairs({ "PressDebris", "PressSteam" }) do
+			local old = anvil:FindFirstChild(name)
+			if old then
+				old:Destroy()
+			end
+		end
+		local s = math.max(0.3, k * 18)
+		local emitter = Instance.new("ParticleEmitter")
+		emitter.Name = "PressDebris"
+		emitter.Rate = 0
+		emitter.Lifetime = NumberRange.new(0.35, 0.75)
+		emitter.Speed = NumberRange.new(4 * s, 9 * s)
+		emitter.SpreadAngle = Vector2.new(75, 75)
+		emitter.Acceleration = Vector3.new(0, -35 * s, 0)
+		emitter.Drag = 1.5
+		emitter.Size = NumberSequence.new(0.22 * s, 0.05 * s)
+		emitter.Rotation = NumberRange.new(0, 360)
+		emitter.RotSpeed = NumberRange.new(-240, 240)
+		emitter.LightEmission = 0
+		emitter.EmissionDirection = Enum.NormalId.Top
+		emitter.Parent = anvil
+		debris = emitter
+		local puff = Instance.new("ParticleEmitter")
+		puff.Name = "PressSteam"
+		puff.Rate = 0
+		puff.Lifetime = NumberRange.new(0.8, 1.4)
+		puff.Speed = NumberRange.new(1.5 * s, 3 * s)
+		puff.SpreadAngle = Vector2.new(35, 35)
+		puff.Acceleration = Vector3.new(0, 2 * s, 0)
+		puff.Size = NumberSequence.new(0.5 * s, 1.4 * s)
+		puff.Transparency = NumberSequence.new(0.45, 1)
+		puff.Color = ColorSequence.new(rgb(245, 245, 250))
+		puff.LightEmission = 0
+		puff.EmissionDirection = Enum.NormalId.Top
+		puff.Parent = anvil
+		steam = puff
+	end
+	-- afficheur (compteur d'écrasements)
+	local counter: TextLabel? = nil
+	local crushes = 0
+	if h.Interactive and display then
+		local state = clientState()
+		local stats = state and state.Data and state.Data.Stats
+		crushes = h.IsOwner and tonumber(stats and stats.PressCrushes) or 0
+		local old = display:FindFirstChild("PressCounter")
+		if old then
+			old:Destroy()
+		end
+		local gui = Instance.new("SurfaceGui")
+		gui.Name = "PressCounter"
+		gui.Face = Enum.NormalId.Top
+		gui.SizingMode = Enum.SurfaceGuiSizingMode.FixedSize
+		gui.CanvasSize = Vector2.new(200, 100)
+		gui.LightInfluence = 0
+		gui.Brightness = 1
+		gui.MaxDistance = 40
+		gui.Active = false
+		gui.Parent = display
+		local text = Instance.new("TextLabel")
+		text.BackgroundTransparency = 1
+		text.Size = UDim2.fromScale(1, 1)
+		text.Font = Enum.Font.Code
+		text.TextSize = 40
+		text.TextColor3 = rgb(110, 255, 150)
+		text.Text = ""
+		text.Parent = gui
+		counter = text
+	end
+	local function showCount()
+		if counter then
+			counter.Text = string.format("💥%06d", math.floor(crushes) % 1000000)
+		end
+	end
+	showCount()
+
+	local current = 1
+	local phase = "Load"
+	local phaseTime = random:NextNumber(0, 1)
+	local turbo = false
+	local pendingTurbo = false
+	local cooldownEnd = 0
+	local tierClock = 0
+	local settings = (Config.Interactions and Config.Interactions.Press) or {}
+	local cooldown = tonumber(settings.Cooldown) or 3
+	local function showVariant(variant: number, transparency: number?)
+		for _, c in ipairs(crushables) do
+			c.Part.Transparency = c.Variant == variant and math.max(c.Transparency, transparency or 0) or 1
+		end
+	end
+	-- pose de l'objet : écrasement `s` (1 = intact), décalage (repère de l'enclume)
+	local function placeItem(s: number, slide: Vector3)
 		if not anvil then
 			return
 		end
 		local g = math.min(1.9, 1 / math.sqrt(math.max(0.15, s)))
-		local base = anvil.CFrame
+		local base = anvil.CFrame * CFrame.new(slide)
 		for _, c in ipairs(crushables) do
 			if c.Variant == current then
 				local o = c.Offset
@@ -881,75 +1259,139 @@ BEHAVIOURS.Press = function(h: Handle)
 		end
 		workspace:BulkMoveTo(ramParts, ramCFrames, Enum.BulkMoveMode.FireCFrameChanged)
 	end
+	local function moveBelt(dx: number)
+		if not anvil or #slats == 0 then
+			return
+		end
+		local span = slatGap * #slats
+		slatShift = (slatShift + dx) % span
+		local base = anvil.CFrame
+		local lo = beltMin - slatGap * 0.5
+		for index, offset in ipairs(slatOffsets) do
+			-- (les lamelles avancent vers l'enclume et reviennent au bout du tapis)
+			local x = lo + ((offset.X - beltSide * slatShift - lo) % span)
+			slatCFrames[index] = base * CFrame.new(x - offset.X, 0, 0) * offset
+		end
+		workspace:BulkMoveTo(slats, slatCFrames, Enum.BulkMoveMode.FireCFrameChanged)
+	end
+	local function setLamps(on: number)
+		for index, lamp in ipairs(lamps) do
+			if lamp then
+				lamp.Transparency = index == on and 0 or 0.72
+			end
+		end
+	end
+	local squash = 1
 	showVariant(current)
-	local DURATIONS = { Wait = 3.2, Descend = 1.4, Squeeze = 0.5, Rise = 1.1, Regrow = 0.8 }
+	placeItem(1, Vector3.new(loadDX, 0, 0))
 	h.Step = function(_h, dt)
-		phaseTime += dt * (turbo and 3.5 or 1)
-		local duration = DURATIONS[phase] or 1
+		tierClock += dt
+		if tierClock > 3 then
+			tierClock = 0
+			applyTier()
+		end
+		local speed = (turbo and 3.2 or 1) * (1 + ((h.State.Tier or 5) - 1) * 0.05)
+		phaseTime += dt * speed
+		local duration = PRESS_DURATIONS[phase] or 1
 		local t = math.clamp(phaseTime / duration, 0, 1)
-		if phase == "Wait" then
+		local pressure = 0
+		if phase == "Load" then
+			-- le tapis amène l'objet jusqu'à l'enclume
+			local eased = 1 - (1 - t) ^ 2
+			placeItem(1, Vector3.new(loadDX * (1 - eased), 0, 0))
+			moveBelt(dt * speed * math.abs(loadDX) / duration * (1 - t * 0.6))
 			setRam(0)
-			if t >= 1 or pendingTurbo then
-				phase, phaseTime = "Descend", 0
-				turbo = pendingTurbo
-				pendingTurbo = false
+			setLamps(1)
+		elseif phase == "Settle" then
+			placeItem(1, Vector3.zero)
+			setLamps(1)
+			if pendingTurbo then
+				t = 1
 			end
 		elseif phase == "Descend" then
-			-- le piston touche l'objet à ~60 % de la course, puis l'écrase
 			local drop = travel * (t * t)
 			setRam(drop)
-			local touch = 0.62
+			pressure = t * 0.7
+			-- le coulisseau touche l'objet vers 60 % de la course, puis l'écrase
+			local touch = 0.6
 			if t > touch then
-				squash = 1 - (t - touch) / (1 - touch) * 0.82
-				applySquash(squash)
+				squash = 1 - (t - touch) / (1 - touch) * 0.85
+				placeItem(squash, Vector3.zero)
+				pressure = 0.7 + (t - touch) / (1 - touch) * 0.3
 			end
-			if t >= 1 then
-				phase, phaseTime = "Squeeze", 0
-				if beacon then
-					beacon.Color = rgb(255, 60, 60)
+			setLamps(3)
+		elseif phase == "Squeeze" then
+			setRam(travel + math.sin(t * math.pi * 7) * 0.012)
+			pressure = 1
+			setLamps(3)
+		elseif phase == "Hold" then
+			setRam(travel)
+			pressure = 1 - t * 0.2
+			setLamps(3)
+		elseif phase == "Rise" then
+			setRam(travel * (1 - t) ^ 2)
+			pressure = 0.8 * (1 - t)
+			setLamps(2)
+		elseif phase == "Eject" then
+			-- la galette glisse vers le bac, tombe et s'efface
+			local fall = math.max(0, t - 0.55) / 0.45
+			placeItem(0.15, Vector3.new(binDX * math.min(1, t / 0.7), binDY * fall * fall, 0))
+			showVariant(current, math.clamp((t - 0.7) / 0.3, 0, 1))
+			moveBelt(dt * speed * math.abs(loadDX) / PRESS_DURATIONS.Load * 0.5)
+			setLamps(2)
+		end
+		-- manomètres (aiguilles qui suivent la pression, un peu de retard / tremblement)
+		for index, needle in ipairs(needles) do
+			local target = pressure * (index == 1 and 1 or 0.82) + (pressure > 0.95 and math.sin(h.Clock * 40) * 0.03 or 0)
+			needle.Value += (target - needle.Value) * math.min(1, dt * (index == 1 and 9 or 5))
+			needle.Part.CFrame = needle.Dial.CFrame * CFrame.Angles(needle.Value * 2.4, 0, 0) * needle.Rel
+		end
+		if beacon then
+			local active = phase == "Descend" or phase == "Squeeze" or phase == "Hold"
+			beacon.Transparency = active and ((math.floor(h.Clock * 6) % 2 == 0) and 0 or 0.55) or 0.25
+		end
+		if t >= 1 then
+			local nextPhase = PRESS_NEXT[phase] or "Load"
+			if phase == "Descend" then
+				-- CRUNCH : éclats de la couleur du palier (+ l'objet) et son (si clic)
+				squash = 0.15
+				placeItem(squash, Vector3.zero)
+				if debris then
+					local first = style and style.Debris and style.Debris[1] or rgb(200, 205, 215)
+					local itemColor = first
+					for _, c in ipairs(crushables) do
+						if c.Variant == current then
+							itemColor = c.Part.Color
+							break
+						end
+					end
+					debris.Color = ColorSequence.new(itemColor, first)
+					debris:Emit(18)
 				end
+				crushes += 1
+				showCount()
 				if h.State.Loud then
 					h.State.Loud = false
 					playSound("Crush", random:NextNumber(0.85, 1.15) * (turbo and 0.85 or 1))
 				end
-			end
-		elseif phase == "Squeeze" then
-			setRam(travel + math.sin(t * math.pi * 6) * 0.02)
-			if t >= 1 then
-				phase, phaseTime = "Rise", 0
-			end
-		elseif phase == "Rise" then
-			setRam(travel * (1 - t) ^ 2)
-			if t >= 1 then
-				phase, phaseTime = "Regrow", 0
-				-- nouvel objet
+			elseif phase == "Rise" and steam and style and style.Steam then
+				steam:Emit(6)
+			elseif phase == "Eject" then
+				-- objet suivant, remis intact au bout du tapis
 				current = variants > 0 and (current % variants + 1) or 1
-				showVariant(current)
-				squash = 0.05
+				squash = 1
 				turbo = false
+				showVariant(current)
+				placeItem(1, Vector3.new(loadDX, 0, 0))
+			elseif phase == "Settle" then
+				turbo = pendingTurbo or turbo
+				pendingTurbo = false
 			end
-		elseif phase == "Regrow" then
-			squash = 0.05 + 0.95 * (1 - (1 - t) ^ 3)
-			applySquash(squash)
-			if t >= 1 then
-				phase, phaseTime = "Wait", 0
-				applySquash(1)
-				if beacon then
-					beacon.Color = rgb(255, 150, 50)
-				end
-			end
-		end
-		if beacon then
-			beacon.Transparency = (phase == "Descend" or phase == "Squeeze") and ((math.floor(h.Clock * 6) % 2 == 0) and 0 or 0.5) or 0
-		end
-		if gauge then
-			local m = h.Movers[gauge]
-			local pressure = (phase == "Descend" and t or (phase == "Squeeze" and 1 or (phase == "Rise" and 1 - t or 0)))
-			gauge.CFrame = refCF(h) * m.Offset * CFrame.Angles(0, 0, -pressure * 2.2)
+			phase, phaseTime = nextPhase, 0
 		end
 	end
 	if h.Interactive then
-		for _, d in ipairs(h.Model:GetDescendants()) do
+		for _, d in ipairs(model:GetDescendants()) do
 			if d:IsA("BasePart") and d.Transparency < 1 and d.Name ~= "Hitbox" then
 				table.insert(h.Clickables, d)
 				h.Roles[d] = d.Name == "PressButton" and "PressButton" or "Press"
@@ -957,9 +1399,9 @@ BEHAVIOURS.Press = function(h: Handle)
 		end
 	end
 	h.Click = function(_h, part, role, point)
-		local button = role == "PressButton" and part or findPart(h.Model, "PressButton")
+		local button = role == "PressButton" and part or findPart(model, "PressButton")
 		if button then
-			press(h, button, button.Size.X * 0.25, nil)
+			press(h, button, button.Size.X * 0.4, nil)
 		end
 		if not hasFeature("PressStart") then
 			-- sans "Turbo Press" : l'écrasement démarre quand même, sans bonus
@@ -978,10 +1420,11 @@ BEHAVIOURS.Press = function(h: Handle)
 		h.State.Loud = true
 		h.State.BonusSource = "Press"
 		h.State.BonusAt = now
-		if phase == "Descend" or phase == "Squeeze" then
+		if phase == "Descend" or phase == "Squeeze" or phase == "Hold" then
 			turbo = true
 		else
 			pendingTurbo = true
+			turbo = true
 		end
 	end
 end
@@ -1175,13 +1618,38 @@ BEHAVIOURS.LiveStudio = function(h: Handle)
 	end
 end
 
--- 📺 Télé : "ambilight" qui suit l'écran
+-- 📺 Télé : clic sur l'écran = chaîne suivante (v9.8) ; halo doux ("ambilight")
+-- de la couleur de la chaîne
+local CHANNELS = { "Live", "DVD", "News", "Runner" }
+local CHANNEL_NAMES = { Live = "🔴 Live", DVD = "📀 DVD", News = "📰 News", Runner = "🏃 Runner" }
+local HALO_COLORS = { Live = rgb(220, 120, 255), DVD = rgb(90, 200, 255), News = rgb(90, 140, 255), Runner = rgb(255, 190, 120) }
 BEHAVIOURS.TV = function(h: Handle)
 	local halo = findPart(h.Model, "Ambilight")
+	local rec = h.Screens[1]
 	if halo then
 		h.Step = function(_h, _dt)
-			halo.Color = Color3.fromHSV((h.Clock * 0.07) % 1, 0.6, 1)
+			local base = HALO_COLORS[rec and rec.Kind or "DVD"] or CYAN_SOFT
+			halo.Color = base:Lerp(WHITE, 0.25 + 0.15 * math.sin(h.Clock * 0.9))
 		end
+	end
+	if h.Interactive and rec then
+		table.insert(h.Clickables, rec.Part)
+		h.Roles[rec.Part] = "Channel"
+	end
+	local last = -math.huge
+	h.Click = function(_h, part, role, point)
+		if role ~= "Channel" or not rec then
+			return
+		end
+		local now = os.clock()
+		if now - last < 0.35 then
+			return
+		end
+		last = now
+		local index = table.find(CHANNELS, rec.Kind) or 0
+		local kind = CHANNELS[index % #CHANNELS + 1]
+		;(LiveProps :: any).SetChannel(rec, kind)
+		popText(part, point, "📺 " .. Locale.T(CHANNEL_NAMES[kind] or kind), WHITE, 20)
 	end
 end
 
@@ -1367,6 +1835,36 @@ local function manage()
 	end
 	manageScreens(focus)
 	rebuildClickList()
+	-- légendes : seulement le clavier le plus proche (ou celui du mode bureau)
+	local best: Handle? = nil
+	local bestDistance = LiveProps.LEGEND_DISTANCE
+	local deskKeyboards: { [Handle]: boolean } = {}
+	if deskFocus then
+		for _, other in ipairs(LiveProps.Peripherals(deskFocus)) do
+			deskKeyboards[other] = true
+		end
+	end
+	for _, h in ipairs(handles) do
+		if h.Alive and h.Kind == "Keyboard" and h.Interactive then
+			local distance = deskKeyboards[h] and -1 or h.Distance
+			if distance < bestDistance then
+				best, bestDistance = h, distance
+			end
+		end
+	end
+	for _, h in ipairs(handles) do
+		if h.Kind == "Keyboard" then
+			if h == best then
+				local ok, err = pcall(buildLegends, h)
+				if not ok then
+					warn("[LiveProps] Légendes : " .. tostring(err))
+					h.State.LegendPlates = h.State.LegendPlates or {}
+				end
+			else
+				dropLegends(h)
+			end
+		end
+	end
 end
 
 -- Une image d'animation d'un objet (appelée dans un pcall, sans fermeture)
@@ -1581,6 +2079,7 @@ function LiveProps.Attach(model: Model, itemId: string?, context: { [string]: an
 		Prompt = nil,
 		Step = nil,
 		Click = nil,
+		Visual = nil,
 	}
 	-- écrans + bandes RGB (toutes familles)
 	local wings: { [number]: { BasePart } } = {}
@@ -1594,6 +2093,9 @@ function LiveProps.Attach(model: Model, itemId: string?, context: { [string]: an
 					Handle = h,
 					Gui = nil,
 					Screen = nil,
+					Real = false,
+					RealBroken = false,
+					Override = nil,
 					Wings = {},
 					BaseColor = d.Color,
 					BaseMaterial = d.Material,
@@ -1687,6 +2189,10 @@ function LiveProps.Detach(handle: Handle?)
 		end
 	end
 	table.clear(h.Presses)
+	pcall(dropLegends, h)
+	for _, rec in ipairs(h.Screens) do
+		rec.Override = nil
+	end
 	if deskFocus == h then
 		deskFocus = nil
 	end
@@ -1837,6 +2343,62 @@ function LiveProps.BindHouseBuilder(builder: any)
 			LiveProps.Detach(h)
 		end
 	end
+end
+
+-- (v9.8) Le plus grand écran d'un bureau (celui du jeu)
+function LiveProps.MainScreen(desk: Handle?): ScreenRec?
+	if type(desk) ~= "table" or not desk.Alive then
+		return nil
+	end
+	local best: ScreenRec? = nil
+	local bestArea = -1
+	for _, rec in ipairs(desk.Screens) do
+		local area = rec.Part.Size.X * rec.Part.Size.Y
+		if area > bestArea + 1e-4 then
+			best, bestArea = rec, area
+		end
+	end
+	return best
+end
+
+-- (v9.8) Un écran pris par un autre contenu (jeu du bureau) ; nil = rendu
+function LiveProps.SetOverride(rec: ScreenRec?, override: Override?)
+	if type(rec) ~= "table" then
+		return
+	end
+	if rec.Override == override then
+		return
+	end
+	rec.Override = override
+	releaseGui(rec)
+	manageClock = MANAGE_STEP -- (redessiné à la prochaine image)
+end
+
+-- (v9.8) Chaîne d'un écran (télé) : redessiné tout de suite
+function LiveProps.SetChannel(rec: ScreenRec?, kind: string)
+	if type(rec) ~= "table" or type(kind) ~= "string" or rec.Kind == kind then
+		return
+	end
+	rec.Kind = kind
+	rec.RealBroken = false
+	releaseGui(rec)
+	manageClock = MANAGE_STEP
+end
+
+-- (v9.8) Appui visuel (jeu du bureau) : la touche / le bouton s'enfonce, sans
+-- clic ni son
+function LiveProps.PressVisual(handle: Handle?, partName: string): boolean
+	local h = handle
+	if type(h) ~= "table" or not h.Alive or not h.Visual then
+		return false
+	end
+	local byName = h.State.KeysByName
+	local part = (byName and byName[partName]) or findPart(h.Model, partName)
+	if not part then
+		return false
+	end
+	local ok = pcall(h.Visual :: any, h, part)
+	return ok
 end
 
 -- Appui programmé (DeskMode : vraies touches du clavier du joueur)

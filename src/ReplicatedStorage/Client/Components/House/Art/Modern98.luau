@@ -393,6 +393,19 @@ Art.RoundMirror = function(body, kit, _item)
 	return { WallShadow = Vector2.new(84, 84) }
 end
 
+-- Grand miroir mural (arche haute, cadre doré fin, reflets) : modèle 3D =
+-- R.BigWallMirror de House3DObjects (RECIPES98)
+Art.BigWallMirror = function(body, kit, _item)
+	local frame = kit.Part(body, 22, 2, 56, 96, rgb(212, 176, 96), { Radius = 28, Z = 1, Shine = true })
+	local _ = frame
+	local glassPart = kit.Part(body, 26, 6, 48, 88, rgb(206, 226, 234), { Radius = 24, Z = 2, Outline = rgb(170, 140, 80), Thickness = 1 })
+	kit.Gradient(glassPart, WHITE, rgb(170, 196, 214), 135)
+	kit.Line(glassPart, 10, 40, 30, 14, 5, WHITE, 0.45, 2)
+	kit.Line(glassPart, 14, 56, 38, 26, 3, WHITE, 0.6, 2)
+	kit.Line(glassPart, 26, 80, 42, 60, 2, WHITE, 0.7, 2)
+	return { WallShadow = Vector2.new(56, 96) }
+end
+
 -- Toile abstraite (formes de couleur, style galerie)
 Art.AbstractCanvas = function(body, kit, _item)
 	local canvas = kit.Part(body, 8, 12, 84, 76, rgb(246, 242, 234), { Radius = 1, Z = 1, Outline = rgb(60, 56, 60), Thickness = 2 })

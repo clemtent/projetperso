@@ -21,6 +21,7 @@ return {
 		-- Déco
 		["Round wall mirror"] = "Miroir mural rond",
 		["Abstract canvas"] = "Toile abstraite",
+		["Big wall mirror"] = "Grand miroir mural",
 		["Grandfather clock"] = "Horloge de parquet",
 		-- Lumières
 		["Edison bulb pendant"] = "Suspension ampoule Edison",

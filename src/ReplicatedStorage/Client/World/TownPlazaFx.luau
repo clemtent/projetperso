@@ -38,6 +38,10 @@
 ]]
 
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- (v9.8, FAIR98) pose du manège partagée avec le serveur (sièges où l'on monte)
+local FairRides = require(ReplicatedStorage.Shared.FairRides)
 
 local TownPlazaFx = {}
 
@@ -48,9 +52,7 @@ local RETRY = 1 -- (s) place pas encore répliquée : on réessaie
 local FAR_PLAZA = 260
 local FAR_CAROUSEL = 170
 local FAR_SMALL = 110
-local SPIN = math.pi * 2 / 16 -- (rad/s) un tour en 16 s
-local BOB_SPEED = math.pi * 2 / 2.6 -- (rad/s) une montée-descente en 2,6 s
-local BOB_AMP = 0.5 -- (studs)
+-- (v9.8) vitesse du manège et des chevaux : FairRides (PLAZA_SPIN, CAROUSEL_BOB_*)
 local FLEE_R = 5.5 -- (studs) un avatar plus près : les pigeons s'envolent
 
 local M = Enum.Material
@@ -190,7 +192,8 @@ local function buildCarousel(folder: Instance, R0: CFrame)
 	local model = Instance.new("Model")
 	model.Name = "Carousel"
 	model.Parent = folder
-	local c = { Base = R0, Parts = {}, Locals = {}, Group = {}, Frames = {}, HorseBase = {}, HorsePhase = {}, HorseCF = {} }
+	local c = { Base = R0, Parts = {}, Locals = {}, Group = {}, Frames = {}, HorseBase = {}, HorsePhase = {}, HorseCF = {},
+		Groups = {}, Seats = {}, SeatIndex = {}, SeatFrames = {}, SeatCheck = 0 }
 	-- pièce FIXE (symétrique autour de l'axe : inutile de la tourner)
 	local function fixed(name: string, size: Vector3, loc: CFrame, color: Color3, material: Enum.Material?, shape: Enum.PartType?, solid: boolean?): BasePart
 		local p = newPart(model, name, size, R0 * loc, color, material, shape)
@@ -273,18 +276,11 @@ local function buildCarousel(folder: Instance, R0: CFrame)
 	local fSize, fLoc = triCF(Vector3.new(0, 15, 0), Vector3.new(1, 0, 0), Vector3.new(0, -1, 0), 1.6, 0.9, 0.06)
 	rotor("Flag", fSize, fLoc, Color3.fromRGB(236, 72, 140), M.Fabric, nil, "WedgePart")
 	-- 10 chevaux (6 au bord, 4 à l'intérieur) + 2 carrosses, barres de laiton
-	local spots = {}
-	for k = 0, 7 do
-		table.insert(spots, { A = k / 8 * math.pi * 2, R = 6.6, Carriage = k == 0 or k == 4 })
-	end
-	for k = 0, 3 do
-		table.insert(spots, { A = (k + 0.25) / 4 * math.pi * 2, R = 4, Carriage = false })
-	end
+	-- (v9.8 : emplacements et pose partagés avec le serveur : FairRides)
 	local horseIndex = 0
-	for _, s in ipairs(spots) do
-		local pos = Vector3.new(math.sin(s.A) * s.R, 0, math.cos(s.A) * s.R)
-		local fwd = Vector3.new(math.cos(s.A), 0, -math.sin(s.A)) -- sens de la rotation
-		local base = CFrame.lookAt(pos, pos + fwd)
+	for _, s in ipairs(FairRides.CarouselSpots()) do
+		local pos = s.Pos
+		local base = s.Base
 		if s.Carriage then
 			carriage(function(name, size, loc, color, material, shape, className)
 				rotor(name, size, base * loc, color, material, shape, className)
@@ -292,9 +288,9 @@ local function buildCarousel(folder: Instance, R0: CFrame)
 		else
 			horseIndex += 1
 			local k = horseIndex
-			local hb = base * CFrame.new(0, 2.75, 0)
+			local hb = base * CFrame.new(0, FairRides.HORSE_Y, 0)
 			c.HorseBase[k] = hb
-			c.HorsePhase[k] = (k % 2) * math.pi + k * 0.35
+			c.HorsePhase[k] = s.Phase
 			c.HorseCF[k] = R0 * hb
 			rotor("Pole", Vector3.new(7.6, 0.24, 0.24), CFrame.new(pos.X, 4.1, pos.Z) * VERTICAL, GOLD, M.Metal, Enum.PartType.Cylinder)
 			horse(function(name, size, loc, color, material, shape, className)
@@ -305,13 +301,16 @@ local function buildCarousel(folder: Instance, R0: CFrame)
 	return c
 end
 
+-- (v9.8) sièges du serveur (TownFair) sur les chevaux : on les déplace
+-- aussi localement, à la même pose -> l'avatar assis suit en douceur
+local PLAZA_RIDE = { Kind = "PlazaCarousel" }
 local function stepCarousel(c: any, now: number)
-	local theta = (now * SPIN) % (math.pi * 2)
-	local rot = c.Base * CFrame.Angles(0, theta, 0)
+	local groups = c.Groups
+	FairRides.Pose(PLAZA_RIDE :: any, now, groups)
+	local rot = c.Base * groups[1]
 	local horseCF = c.HorseCF
-	for k, hb in ipairs(c.HorseBase) do
-		local bob = BOB_AMP * math.sin(now * BOB_SPEED + c.HorsePhase[k])
-		horseCF[k] = rot * hb * CFrame.new(0, bob, 0)
+	for k = 1, #c.HorseBase do
+		horseCF[k] = c.Base * groups[1 + k]
 	end
 	local frames, locals, group = c.Frames, c.Locals, c.Group
 	for i = 1, #frames do
@@ -319,6 +318,33 @@ local function stepCarousel(c: any, now: number)
 		frames[i] = (g == 0 and rot or horseCF[g]) * locals[i]
 	end
 	workspace:BulkMoveTo(c.Parts, frames, Enum.BulkMoveMode.FireCFrameChanged)
+	local seats, seatFrames, seatIndex = c.Seats, c.SeatFrames, c.SeatIndex
+	if #seats > 0 then
+		for i = 1, #seats do
+			seatFrames[i] = c.Base * FairRides.SeatLocal("PlazaCarousel", seatIndex[i], groups)
+		end
+		workspace:BulkMoveTo(seats, seatFrames, Enum.BulkMoveMode.FireCFrameChanged)
+	end
+end
+
+-- (v9.8) sièges du manège de la place (répliqués par le serveur, peut-être
+-- plus tard que la place) : Plaza > Carousel > RideSeats > RideSeat
+local function findCarouselSeats(c: any, plaza: Instance)
+	table.clear(c.Seats)
+	table.clear(c.SeatIndex)
+	table.clear(c.SeatFrames)
+	local model = plaza:FindFirstChild("Carousel")
+	local folder = model and model:FindFirstChild("RideSeats")
+	if not folder then
+		return
+	end
+	for _, d in ipairs(folder:GetChildren()) do
+		local index = d:GetAttribute("SeatIndex")
+		if d:IsA("Seat") and type(index) == "number" then
+			table.insert(c.Seats, d)
+			table.insert(c.SeatIndex, index)
+		end
+	end
 end
 
 ----------------------------------------------------------------------
@@ -661,6 +687,8 @@ local function build(): boolean
 	local carCF = cfAttr(plaza, "FxCarouselCF")
 	if carCF then
 		s.Carousel = buildCarousel(folder, carCF)
+		findCarouselSeats(s.Carousel, plaza)
+		s.Plaza = plaza
 	end
 	local tie = vec3Attr(plaza, "FxBalloonTie")
 	if tie then
@@ -711,10 +739,33 @@ function TownPlazaFx.Start()
 	end
 end
 
+-- (v9.8) l'avatar local est-il assis sur le manège de la place ?
+local function ridingCarousel(c: any): boolean
+	local character = LocalPlayer and LocalPlayer.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local seat = humanoid and humanoid.SeatPart
+	return seat ~= nil and table.find(c.Seats, seat) ~= nil
+end
+
 function TownPlazaFx.Step(dt: number)
 	local s = state
 	if not s then
 		return
+	end
+	-- (v9.8) sur le manège : plateau, chevaux et sièges à CHAQUE image
+	-- (fluide sous la caméra) ; sinon 30 fois / s au plus comme avant
+	local riding = false
+	local rc = s.Built and s.Carousel
+	if rc then
+		rc.SeatCheck -= dt
+		if #rc.Seats == 0 and rc.SeatCheck <= 0 and s.Plaza then
+			rc.SeatCheck = 1
+			findCarouselSeats(rc, s.Plaza)
+		end
+		riding = ridingCarousel(rc)
+		if riding then
+			stepCarousel(rc, serverNow())
+		end
 	end
 	s.Acc += dt
 	if s.Acc < STEP then
@@ -754,7 +805,7 @@ function TownPlazaFx.Step(dt: number)
 		return
 	end
 	local c = s.Carousel
-	if c and (focus - c.Base.Position).Magnitude < FAR_CAROUSEL then
+	if c and not riding and (focus - c.Base.Position).Magnitude < FAR_CAROUSEL then
 		stepCarousel(c, serverNow())
 	end
 	local b = s.Balloons

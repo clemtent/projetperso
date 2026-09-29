@@ -323,6 +323,22 @@ local function outside(folder: Instance, geo: TownKit.Geo, gcf: CFrame)
 	TownKit.VehicleSpot(model, "Car", lot * CFrame.new(-12 + 3 * 6, ROAD_Y, -9) * CFrame.Angles(0, math.pi, 0), { CarId = "BubbleCar", Color = Color3.fromRGB(128, 222, 190) })
 	TownKit.Lamp(model, (lot * CFrame.new(0, ROAD_Y, 6)).Position, 0, false, true)
 	geo.Reserve((loop * CFrame.new(0, 0, 0)).Position, 24)
+	-- (v9.8, CITY98) vie de la rue (client) : on attend le bus, lampadaires
+	-- le long de la route, poteau indicateur, grand panneau "bienvenue",
+	-- colline au moulin à vent derrière le rond-point
+	local stopCF = gcf * CFrame.new(13, WALK_Y - 0.3, 30) * CFrame.Angles(0, math.rad(90), 0)
+	TownKit.LifeSpot("SitBench", stopCF * CFrame.new(0, 0.3, 0.9), 40)
+	TownKit.LifeSpot("Wait", stopCF * CFrame.new(-3.6, 0.3, -1.4) * CFrame.Angles(0, 0.3, 0), 41)
+	for i, z in ipairs({ 12, 44 }) do
+		TownKit.LifeSpot("Lamppost", gcf * CFrame.new(9.6, WALK_Y, z) * CFrame.Angles(0, math.rad(90), 0), 50 + i)
+	end
+	for i, z in ipairs({ 14, 30 }) do
+		TownKit.LifeSpot("Lamppost", gcf * CFrame.new(-9.8, WorldLayout.GROUND_Y, z) * CFrame.Angles(0, math.rad(-90), 0), 52 + i)
+	end
+	TownKit.LifeSpot("Signpost", gcf * CFrame.new(-11.5, WorldLayout.GROUND_Y, len - 4), 60)
+	TownKit.LifeSpot("Billboard", gcf * CFrame.new(-30, WorldLayout.GROUND_Y, len + 6), 61)
+	TownKit.LifeSpot("Bin", gcf * CFrame.new(12.6, WALK_Y, 22), 62)
+	TownKit.LifeSpot("WindmillHill", gcf * CFrame.new(-24, WorldLayout.GROUND_Y, len + 68) * CFrame.Angles(0, math.rad(200), 0), 63)
 end
 
 ----------------------------------------------------------------------
@@ -359,7 +375,11 @@ function TownEntrance.Build(folder: Instance, geo: TownKit.Geo): EntranceResult
 		TownKit.Planter(entrance, CFrame.new(center + Vector3.new(sx * 18, 0, 6)), 8, 3, 3 + sx)
 		TownKit.Planter(entrance, CFrame.new(center + Vector3.new(sx * 18, 0, -14)), 8, 3, 7 + sx)
 		-- bancs face à l'axe
-		TownKit.Bench(entrance, CFrame.lookAt(center + Vector3.new(sx * 24, 0, -4), center + Vector3.new(0, 0, -4)))
+		local benchCF = CFrame.lookAt(center + Vector3.new(sx * 24, 0, -4), center + Vector3.new(0, 0, -4))
+		TownKit.Bench(entrance, benchCF)
+		TownKit.LifeSpot("SitBench", benchCF, 30 + sx) -- (v9.8, CITY98) un passant peut s'y asseoir
+		-- (v9.8, CITY98) mobilier construit côté client : poubelle près du banc
+		TownKit.LifeSpot("Bin", CFrame.new(center + Vector3.new(sx * 24.3, 0, -0.2)), 32 + sx)
 	end
 	-- rosace d'apparition (juste à l'intérieur de la porte)
 	local spawnCF = WorldLayout.EntranceCFrame(geo.Count)
@@ -396,6 +416,14 @@ function TownEntrance.Build(folder: Instance, geo: TownKit.Geo): EntranceResult
 	TownKit.BikeRack(entrance, CFrame.new(center + Vector3.new(26, 0, 12)) * CFrame.Angles(0, math.rad(90), 0), 3)
 	-- (v9.7, VEHICLES97) trottinettes / scooter garés à côté des vélos (client)
 	TownVehicles.TwoWheelers(entrance, CFrame.new(center + Vector3.new(24.5, 0, 18.5)) * CFrame.Angles(0, math.rad(90), 0), 3, 4)
+	-- (v9.8, CITY98) vie de la rue (client) : colonne d'affiches, distributeurs,
+	-- gens qui discutent, fontaine à boire
+	TownKit.LifeSpot("Morris", CFrame.new(center + Vector3.new(-27, 0, 11)), 1)
+	TownKit.LifeSpot("Vending", CFrame.lookAt(center + Vector3.new(29, 0, -12), center + Vector3.new(0, 0, -12)), 2)
+	TownKit.LifeSpot("Vending", CFrame.lookAt(center + Vector3.new(29, 0, -9.6), center + Vector3.new(0, 0, -9.6)), 3)
+	TownKit.LifeSpot("DrinkFountain", CFrame.lookAt(center + Vector3.new(-9, 0, -22), center + Vector3.new(0, 0, -22)), 4)
+	TownKit.LifeSpot("Chat", CFrame.new(center + Vector3.new(9, 0, -8)) * CFrame.Angles(0, 2.4, 0), 7)
+	TownKit.LifeSpot("Chat", CFrame.new(center + Vector3.new(-8, 0, 6)) * CFrame.Angles(0, -0.8, 0), 8)
 	-- dehors
 	outside(entrance, geo, gcf)
 	return { Map = map, Spawn = spawn }

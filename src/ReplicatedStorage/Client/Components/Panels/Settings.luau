@@ -42,6 +42,13 @@
 	  appliqué et sauvegardé par SoundManager.SetMusicTrack
 	  (SetSetting "MusicTrack") ;
 	- animations seulement quand la fenêtre est ouverte (30 images/s max).
+
+	v9.8 (REALISM98) — 🎨 section "Graphismes / Mode réaliste" (entre
+	Affichage et Langue) : Mode réaliste, Reflets, Météo, Pluie, Ombres,
+	Effets, Détail (Components/GraphicsControls), sauvegardés côté serveur
+	(SetSetting "Gfx*", validés par Shared/GraphicsQuality) et appliqués
+	tout de suite en ville. Update(data) transmet Data.Settings à
+	GraphicsQuality (lu par la ville, les miroirs, la météo...).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -57,12 +64,14 @@ local ClientState = require(Client.ClientState)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Config = require(ReplicatedStorage.Shared.Config)
 local Locale = require(ReplicatedStorage.Shared.Locale)
+local GraphicsQuality = require(ReplicatedStorage.Shared.GraphicsQuality)
 local Notifications = require(script.Parent.Parent.Notifications)
+local GraphicsControls = require(script.Parent.Parent.GraphicsControls)
 
 -- Title / Subtitle en anglais : traduits par PanelManager
 local Settings = {
 	Title = "⚙️ Settings",
-	Subtitle = "Sound, music, display and language",
+	Subtitle = "Sound, music, graphics and language",
 	Color = Theme.Colors.Dark,
 	Size = Vector2.new(680, 600),
 }
@@ -79,6 +88,8 @@ local SELECTED_SOFT = Color3.fromRGB(230, 242, 255)
 local SECTION_AUDIO = Theme.Colors.Blue
 local SECTION_DISPLAY = Theme.Colors.Purple
 local SECTION_GAME = Theme.Colors.Orange
+local SECTION_GRAPHICS = Theme.Colors.Cyan:Lerp(Theme.Colors.Blue, 0.35) -- v9.8 🎨
+local graphicsControls: any = nil
 
 type Toggle = { Button: TextButton, Knob: Frame, Stroke: UIStroke, OnIcon: Frame, OffIcon: Frame }
 type Slider = { Set: (value: number) -> (), SetEnabled: (enabled: boolean) -> () }
@@ -1159,8 +1170,20 @@ local function chooseLanguage(value: string)
 	end)
 end
 
+-- v9.8 🎨 Graphismes / Mode réaliste (lignes : Components/GraphicsControls)
+local function buildGraphics(content: Instance)
+	local section = buildSection(content, 4, "🎨", Locale.T("Graphics / Realistic mode"), Locale.T("Mirrors, weather, reflections and detail"), SECTION_GRAPHICS)
+	graphicsControls = GraphicsControls.Build(section, {
+		Order = 1,
+		Accent = SECTION_GRAPHICS,
+		Toast = function(text: string, color: Color3?)
+			Notifications.Toast(text, color)
+		end,
+	})
+end
+
 local function buildLanguage(content: Instance)
-	local section = buildSection(content, 4, "🌐", Locale.T("Language"), Locale.T("Applied the next time you join"), Theme.Colors.Cyan)
+	local section = buildSection(content, 5, "🌐", Locale.T("Language"), Locale.T("Applied the next time you join"), Theme.Colors.Cyan)
 	local holder = UIUtil.Create("Frame", {
 		Name = "LanguageRow",
 		Size = UDim2.new(1, 0, 0, 52),
@@ -1774,7 +1797,7 @@ local function buildMusic(content: Instance)
 end
 
 local function buildGame(content: Instance)
-	local section = buildSection(content, 5, "🎮", Locale.T("Game"), Locale.T("Credits and version"), SECTION_GAME)
+	local section = buildSection(content, 6, "🎮", Locale.T("Game"), Locale.T("Credits and version"), SECTION_GAME)
 
 	-- Crédits et version
 	local credits = UIUtil.Create("Frame", {
@@ -1862,6 +1885,7 @@ function Settings.Build(panel: Frame)
 	buildAudio(content)
 	buildMusic(content)
 	buildDisplay(content)
+	buildGraphics(content)
 	buildLanguage(content)
 	buildGame(content)
 
@@ -1906,6 +1930,10 @@ function Settings.OnOpen()
 	if not equalizerConnection then
 		equalizerConnection = RunService.Heartbeat:Connect(stepPlayer)
 	end
+	-- (v9.8) temps en ville à jour
+	if graphicsControls then
+		pcall(graphicsControls.Refresh)
+	end
 end
 
 function Settings.OnClose()
@@ -1923,6 +1951,8 @@ function Settings.Update(data)
 	if type(data) ~= "table" or type(data.Settings) ~= "table" then
 		return
 	end
+	-- v9.8 🎨 réglages Graphismes sauvegardés -> qualité lue par la ville
+	GraphicsQuality.SetSaved(data.Settings)
 	if not applied then
 		applied = true
 		for _, key in ipairs({ "Sound", "Music", "Effects" }) do

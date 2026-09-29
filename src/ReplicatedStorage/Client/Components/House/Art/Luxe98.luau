@@ -41,7 +41,6 @@ local MAGENTA = rgb(255, 84, 196)
 local RED = rgb(220, 60, 60)
 local AMBER = rgb(255, 196, 110)
 local FIRE = rgb(255, 140, 50)
-local LINEN = rgb(236, 230, 220)
 local SCREEN = rgb(24, 26, 44)
 
 ----------------------------------------------------------------------

@@ -52,6 +52,7 @@ local TownEntrance = require(script.Parent.TownEntrance)
 local TownNature = require(script.Parent.TownNature)
 local TownShops = require(script.Parent.TownShops)
 local TownMarket = require(script.Parent.TownMarket) -- (v9.7) 🛒 supermarché
+local TownFair = require(script.Parent.TownFair) -- (v9.8, FAIR98) 🎡 fête foraine + 🍦 coin gourmand
 
 local TownMap = {}
 
@@ -285,6 +286,16 @@ function TownMap.Build(plotCount: number): Town
 	local okMarket, errMarket = pcall(TownMarket.Build, market, geo)
 	if not okMarket then
 		warn("[TownMap] supermarché : " .. tostring(errMarket))
+	end
+	-- (v9.8, FAIR98) 🎡 fête foraine derrière la mairie + 🍦 coin gourmand près
+	-- de l'arrivée : AVANT les rues et la nature (leur place est réservée)
+	local okFair, errFair = pcall(TownFair.Build, decor, geo)
+	if not okFair then
+		warn("[TownMap] fête foraine : " .. tostring(errFair))
+	end
+	local okCorner, errCorner = pcall(TownFair.BuildFoodCorner, decor, geo)
+	if not okCorner then
+		warn("[TownMap] coin gourmand : " .. tostring(errCorner))
 	end
 	TownStreets.Build(decor, geo)
 	TownNature.Build(decor, geo)

@@ -173,7 +173,7 @@ export type RideDef = {
 FairRides.Rides = {
 	{ Id = "Ferris", Kind = "Ferris", Name = "Big wheel", Icon = "🎡", Pos = Vector3.new(0, 0, 24), Yaw = 0,
 		Cycle = { Load = 10, Ramp = 4, Run = 60 }, Speed = TAU / 36, Gate = Vector3.new(6.5, 0, 14.5), Exit = Vector3.new(-6.5, 0, 13) },
-	{ Id = "Carousel", Kind = "Carousel", Name = "Carousel", Icon = "🎠", Pos = Vector3.new(-33, 0, -18), Yaw = 0,
+	{ Id = "Carousel", Kind = "Carousel", Name = "Carousel", Icon = "🎠", Pos = Vector3.new(-33, 1.2, -18), Yaw = 0, -- (repère = dessus du socle, comme celui de la place)
 		Cycle = { Load = 8, Ramp = 3, Run = 40 }, Speed = TAU / 14, Gate = Vector3.new(-19.8, 0, -12), Exit = Vector3.new(-19.8, 0, -23) },
 	{ Id = "Cups", Kind = "Cups", Name = "Teacups", Icon = "☕", Pos = Vector3.new(33, 0, -18), Yaw = 0,
 		Cycle = { Load = 8, Ramp = 3, Run = 32 }, Speed = TAU / 14, Gate = Vector3.new(19.6, 0, -12), Exit = Vector3.new(19.6, 0, -23) },

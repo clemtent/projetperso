@@ -427,7 +427,7 @@ House3DSetup.KeyLayout = KEY_LAYOUT
 
 R.SetupKeyboard = function(b, _ctx)
 	local caseColor = b.Map(rgb(46, 48, 64))
-	local rimColor = b.Map(rgb(64, 66, 88))
+	local rimColor = caseColor -- (même teinte que le bac : aucune face confondue de couleur différente)
 	local alpha = b.Map(rgb(246, 242, 234))
 	local modifier = b.Map(rgb(112, 108, 150))
 	local accent = b.Map(rgb(255, 104, 170))
@@ -439,7 +439,8 @@ R.SetupKeyboard = function(b, _ctx)
 	local trayH = 5
 	b.Round(0, 0, 0, w, trayH, d, 3, caseColor, M.SmoothPlastic)
 	local glowY = th(b, 1.4)
-	local glow = b.Box(0, glowY, 0, w + 1.6, layer, d + 1.6, RAINBOW[5], M.Neon)
+	local out = th(b, 1.4, 0.032) * 2
+	local glow = b.Box(0, glowY, 0, w + out, layer, d + out, RAINBOW[5], M.Neon)
 	neon(b, glow, "RGB")
 	glow.Transparency = 0.45
 	-- plaque (couleur RGB animée, SmoothPlastic : lueur douce entre les touches)
@@ -1023,70 +1024,196 @@ R.SetupWindmill = function(b, _ctx)
 end
 
 ----------------------------------------------------------------------
--- 🗜️ PRESSE HYDRAULIQUE
+-- 🗜️ PRESSE HYDRAULIQUE (v9.8 : refaite "comme la presse du clicker")
+-- Bâti en H (lit + montants + traverse), vérin hydraulique chromé, coulisseau
+-- (bélier) à bandes de danger, enclume striée, deux manomètres, pupitre
+-- (gros bouton rouge, voyants, afficheur), tapis roulant qui AMÈNE les objets
+-- sous la presse (lamelles qui défilent), bac à galettes, centrale
+-- hydraulique + flexibles, gyrophare. Les pièces portent un attribut "Tint"
+-- (Frame / FrameDark / AccentA / AccentB / Chrome / Hose / Bolt) : LiveProps
+-- les peint aux couleurs du palier de la presse du clicker (niveau
+-- "Presse hydraulique" du propriétaire, 10 paliers : bois -> diamant néon).
 ----------------------------------------------------------------------
 
+-- Paliers de la presse du clicker (Stimuli > Press, TIERS) : couleurs 3D
+House3DSetup.PressTiers = {
+	{ Name = "Rustic wood", Frame = rgb(186, 128, 74), Dark = rgb(150, 100, 56), AccentA = rgb(226, 196, 138), AccentB = rgb(186, 150, 92), Chrome = rgb(214, 170, 84), Hose = rgb(122, 76, 42), Bolt = rgb(70, 58, 50), Wood = true, Debris = { rgb(186, 128, 74), rgb(226, 196, 138) } },
+	{ Name = "Oak & iron", Frame = rgb(140, 90, 50), Dark = rgb(92, 94, 104), AccentA = rgb(92, 94, 104), AccentB = rgb(62, 64, 72), Chrome = rgb(160, 164, 172), Hose = rgb(64, 46, 32), Bolt = rgb(44, 44, 50), Wood = true, Debris = { rgb(140, 90, 50), rgb(120, 122, 130) } },
+	{ Name = "Steel", Frame = rgb(160, 168, 182), Dark = rgb(110, 116, 132), AccentA = rgb(255, 200, 30), AccentB = INK, Chrome = rgb(210, 216, 226), Hose = rgb(40, 40, 46), Bolt = rgb(90, 96, 110), Debris = { rgb(200, 205, 215) } },
+	{ Name = "Blue steel", Frame = rgb(48, 114, 204), Dark = rgb(36, 80, 150), AccentA = rgb(255, 200, 30), AccentB = INK, Chrome = rgb(214, 220, 230), Hose = rgb(30, 30, 36), Bolt = rgb(220, 226, 236), Debris = { rgb(48, 114, 204), rgb(220, 226, 236) } },
+	{ Name = "Industrial", Frame = rgb(244, 140, 30), Dark = rgb(70, 74, 86), AccentA = rgb(255, 214, 40), AccentB = INK, Chrome = rgb(214, 220, 230), Hose = rgb(28, 28, 32), Bolt = rgb(60, 60, 66), Beacon = true, Steam = true, Debris = { rgb(244, 140, 30), rgb(120, 126, 140) } },
+	{ Name = "Factory", Frame = rgb(78, 88, 104), Dark = rgb(50, 56, 68), AccentA = rgb(60, 214, 110), AccentB = rgb(26, 30, 36), Chrome = rgb(214, 220, 230), Hose = rgb(20, 20, 24), Bolt = rgb(150, 160, 176), Beacon = true, Steam = true, Debris = { rgb(78, 88, 104), rgb(60, 214, 110) } },
+	{ Name = "Solid gold", Frame = rgb(240, 180, 40), Dark = rgb(200, 140, 30), AccentA = rgb(255, 240, 170), AccentB = rgb(214, 150, 20), Chrome = rgb(255, 230, 140), Hose = rgb(120, 72, 20), Bolt = rgb(150, 100, 10), Shine = true, Debris = { rgb(255, 214, 70), rgb(255, 246, 200) } },
+	{ Name = "Royal gold", Frame = rgb(246, 190, 50), Dark = rgb(150, 20, 44), AccentA = rgb(196, 24, 56), AccentB = rgb(255, 222, 120), Chrome = rgb(255, 236, 160), Hose = rgb(150, 20, 44), Bolt = rgb(255, 236, 160), Shine = true, Debris = { rgb(255, 214, 70), rgb(196, 24, 56) } },
+	{ Name = "Diamond", Frame = rgb(176, 232, 255), Dark = rgb(120, 190, 235), AccentA = WHITE, AccentB = rgb(130, 206, 255), Chrome = rgb(236, 250, 255), Hose = rgb(80, 164, 230), Bolt = rgb(90, 170, 230), Shine = true, Crystal = true, Debris = { rgb(190, 240, 255), WHITE } },
+	{ Name = "Neon diamond", Frame = rgb(200, 238, 255), Dark = rgb(40, 24, 80), AccentA = rgb(0, 230, 255), AccentB = rgb(255, 60, 200), Chrome = rgb(236, 250, 255), Hose = rgb(255, 60, 200), Bolt = rgb(0, 230, 255), Beacon = true, Shine = true, Crystal = true, Neon = true, Debris = { rgb(0, 230, 255), rgb(255, 60, 200) } },
+}
+House3DSetup.PRESS_DEFAULT_TIER = 5 -- (visiteurs : palier "industriel")
+
+local HAZARD_A, HAZARD_B = rgb(255, 204, 36), rgb(34, 34, 40)
+
+-- Bandes de danger en diagonale sur une face (une SurfaceGui, 8 bandes)
+local function hazard(part: BasePart, face: Enum.NormalId, faceW: number, faceH: number, stripes: number)
+	local canvas = Vector2.new(256, math.max(16, math.floor(256 * faceH / math.max(0.01, faceW) + 0.5)))
+	local gui = House3DKit.Surface(part, face, canvas, 1)
+	gui.Name = "Hazard"
+	local fill = Instance.new("Frame")
+	fill.BorderSizePixel = 0
+	fill.BackgroundColor3 = WHITE
+	fill.Size = UDim2.fromScale(1, 1)
+	fill.Parent = gui
+	local n = math.clamp(stripes, 2, 10)
+	local keypoints = {}
+	for i = 1, n do
+		local color = i % 2 == 1 and HAZARD_A or HAZARD_B
+		table.insert(keypoints, ColorSequenceKeypoint.new((i - 1) / n, color))
+		table.insert(keypoints, ColorSequenceKeypoint.new(math.min(1, i / n - 0.002), color))
+	end
+	keypoints[#keypoints] = ColorSequenceKeypoint.new(1, n % 2 == 1 and HAZARD_A or HAZARD_B)
+	local gradient = Instance.new("UIGradient")
+	gradient.Color = ColorSequence.new(keypoints)
+	gradient.Rotation = 35
+	gradient.Parent = fill
+end
+
+local function tint(part: BasePart, role: string): BasePart
+	part:SetAttribute("Tint", role)
+	return part
+end
+
 R.SetupPress = function(b, _ctx)
-	local yellowC = b.Map(rgb(255, 200, 40))
-	local frame = rgb(60, 64, 80)
-	-- socle + bandes de danger
-	b.Box(0, 0, 0, 92, 8, 56, frame, M.Metal)
-	for index = 0, 8 do
-		-- (v9.6 z-fighting : bandes 28..28.8, baguettes 28..29.6)
-		b.BoxR(CFrame.new(-40 + index * 10, 4, 28.4) * CFrame.Angles(0, 0, 0.7), 4, 12, 0.8, index % 2 == 0 and yellowC or INK, M.SmoothPlastic)
-	end
-	b.Box(0, 0, 28.8, 92, 1.2, 1.6, frame, M.Metal)
-	b.Box(0, 6.8, 28.8, 92, 1.2, 1.6, frame, M.Metal)
-	-- enclume (matrice)
-	b.Box(0, 8, 0, 50, 10, 40, rgb(110, 116, 132), M.DiamondPlate)
-	pivot(b, "Pivot_Anvil", 0, 18, 0)
-	-- colonnes + traverse
+	local tierStyle = House3DSetup.PressTiers[House3DSetup.PRESS_DEFAULT_TIER]
+	local frame = b.Map(tierStyle.Frame)
+	local dark = tierStyle.Dark
+	local chrome = tierStyle.Chrome
+	local t = th(b, 1.2)
+	local PX, PZ = -10, -4 -- axe de la presse
+	local ANVIL = 22 -- dessus de l'enclume
+	-- plancher (tôle striée) + bande de danger au bord avant
+	b.Box(0, 0, 0, 100, 3, 60, rgb(82, 86, 98), M.DiamondPlate)
+	local strip = b.Box(0, 2.4, 27, 98, th(b, 1.6), 5, HAZARD_A, M.SmoothPlastic)
+	hazard(strip, Enum.NormalId.Top, 98, 5, 10)
+	-- lit (bâti bas) + enclume striée
+	tint(b.Box(PX, 2.4, PZ, 46, 16, 34, frame, M.Metal), "Frame")
+	b.Box(PX, 18, PZ, 34, ANVIL - 18, 28, rgb(120, 126, 142), M.DiamondPlate)
+	pivot(b, "Pivot_Anvil", PX, ANVIL, PZ)
+	-- montants
 	for _, side in ipairs({ -1, 1 }) do
-		b.Cyl(side * 36, 8, -6, 9, 80, CHROME, M.Metal)
-		b.Box(side * 36, 8, -6, 14, 5, 14, frame, M.Metal)
+		tint(b.Box(PX + side * 27, 2.4, PZ, 10, 84, 22, frame, M.Metal), "Frame")
+		-- boulons sur les montants
+		for _, y in ipairs({ 14, 78 }) do
+			tint(b.Ball(PX + side * 27, y, PZ + 11 + t * 0.2, 2.6, tierStyle.Bolt, M.Metal), "Bolt")
+		end
 	end
-	b.Box(0, 84, -6, 92, 14, 26, yellowC, M.Metal)
-	b.Box(0, 88, 7.5, 60, 6, 1, INK, M.SmoothPlastic)
-	-- vérin hydraulique
-	b.Cyl(0, 70, -2, 22, 14, frame, M.Metal)
-	b.Cyl(0, 66, -2, 18, 4, CHROME, M.Metal)
-	-- piston (descend) : tige + plateau
-	pivot(b, "Pivot_Ram", 0, 60, 0)
-	named(b.Cyl(0, 58, -2, 10, 39, CHROME, M.Metal), "PressRam")
-	named(b.Box(0, 50, 0, 46, 8, 36, rgb(90, 96, 112), M.Metal), "PressRam")
-	for index = 0, 4 do
-		named(b.BoxR(CFrame.new(-18 + index * 9, 54, 18.4) * CFrame.Angles(0, 0, 0.7), 3, 9, 0.8, index % 2 == 0 and yellowC or INK, M.SmoothPlastic), "PressRam")
+	-- traverse + bandeau de danger + manomètres
+	tint(b.Box(PX, 84, PZ, 72, 16, 26, frame, M.Metal), "Frame")
+	local band = b.Box(PX, 88, PZ + 13 + t * 0.3, 40, 7, t, HAZARD_A, M.SmoothPlastic)
+	hazard(band, Enum.NormalId.Back, 40, 7, 8) -- (face vers +z : "Back" une fois l'objet retourné)
+	for index, gx in ipairs({ PX - 27, PX + 27 }) do
+		local dz = PZ + 13
+		b.CylZ(gx, 92, dz - t * 0.15, 11, t, INK, M.Metal) -- boîtier
+		named(b.CylZ(gx, 92, dz + t * 0.6, 9, t, rgb(250, 248, 240), M.SmoothPlastic), "GaugeDial" .. index)
+		-- zone rouge du cadran
+		b.BoxR(CFrame.new(gx + 2.4, 94.2, dz + t * 1.1 + th(b, 0.3) / 2 - 0.1) * CFrame.Angles(0, 0, -0.7), 2.6, 0.9, th(b, 0.3), RED, M.SmoothPlastic)
+		named(b.BoxR(CFrame.new(gx, 94, dz + t * 1.1 + th(b, 0.8)), 0.8, 4.6, th(b, 0.6), RED, M.SmoothPlastic), "Gauge" .. index)
+		b.CylZ(gx, 92, dz + t * 1.1 + th(b, 1.6), 1.6, th(b, 0.8), INK, M.Metal)
 	end
-	-- objets à écraser (un seul visible à la fois)
-	-- 1 : canard en caoutchouc
-	local duck = { b.Egg(0, 28, 0, 26, 20, 22, YELLOW, M.SmoothPlastic), b.Ball(0, 40, -4, 14, YELLOW, M.SmoothPlastic),
-		b.Egg(0, 39, -12, 8, 4, 8, ORANGE, M.SmoothPlastic), b.Ball(-4, 42, -9.5, 2.4, INK, M.SmoothPlastic), b.Ball(4, 42, -9.5, 2.4, INK, M.SmoothPlastic) }
-	-- 2 : canette de soda
-	local can = { b.Cyl(0, 18, 0, 16, 26, RED, M.Metal), b.Cyl(0, 44, 0, 14, 1.6, CHROME, M.Metal), b.Cyl(0, 30, 0, 16.4, 5, WHITE, M.SmoothPlastic) }
-	-- 3 : pastèque
-	local melon = { b.Egg(0, 30, 0, 30, 24, 24, rgb(70, 170, 80), M.SmoothPlastic), b.Egg(0, 30, 0, 30.6, 12, 24.6, rgb(40, 120, 60), M.SmoothPlastic) }
-	for variant, list in ipairs({ duck, can, melon }) do
+	-- vérin hydraulique (sur la traverse) + gyrophare
+	tint(b.Cyl(PX, 99, PZ, 24, 18, dark, M.Metal), "FrameDark")
+	tint(b.Cyl(PX, 116.6, PZ, 26, 3, chrome, M.Metal), "Chrome")
+	for _, dx in ipairs({ -11, 11 }) do
+		tint(b.Cyl(PX + dx, 99, PZ + 9, 2.4, 17.6, chrome, M.Metal), "Chrome") -- tirants
+	end
+	b.Cyl(PX, 119.4, PZ, 7, 2, CARBON, M.Metal)
+	neon(b, b.Egg(PX, 124.6, PZ, 6, 8, 6, ORANGE, M.Neon), "PressBeacon")
+	-- coulisseau (descend) : tige chromée longue (reste dans le vérin), bélier, guides
+	pivot(b, "Pivot_Ram", PX, 52, PZ)
+	tint(named(b.Cyl(PX, 62, PZ, 9, 51, chrome, M.Metal), "PressRam"), "Chrome")
+	local ram = named(b.Box(PX, 52, PZ, 46, 10, 24, dark, M.Metal), "PressRam")
+	tint(ram, "FrameDark")
+	local ramBand = named(b.Box(PX, 53.5, PZ + 12 + t * 0.3, 40, 7, t, HAZARD_A, M.SmoothPlastic), "PressRam")
+	hazard(ramBand, Enum.NormalId.Back, 40, 7, 8)
+	-- pupitre (devant à droite) : gros bouton rouge, voyants, afficheur
+	local cx, cz = 38, 18
+	b.Box(cx, 2.4, cz, 5, 36, 5, CARBON, M.Metal)
+	b.Box(cx, 2.4, cz, 14, th(b, 1.6), 14, CARBON_LIGHT, M.Metal)
+	local head = CFrame.new(cx, 42, cz) * CFrame.Angles(-0.55, 0, 0)
+	tint(b.BoxR(head, 24, 7, 16, tierStyle.AccentA, M.Metal), "AccentA")
+	local topFace = head * CFrame.new(0, 3.5, 0)
+	local button = b.Part("Part", topFace * CFrame.new(-4, 1.2, 1) * CFrame.Angles(0, 0, math.pi / 2), Vector3.new(2.4, 6.4, 6.4), RED, M.SmoothPlastic, "PressButton")
+	;(button :: Part).Shape = Enum.PartType.Cylinder
+	b.Part("Part", topFace * CFrame.new(-4, 0.4, 1) * CFrame.Angles(0, 0, math.pi / 2), Vector3.new(1.6, 8.4, 8.4), rgb(255, 214, 60), M.SmoothPlastic, "Collar").CastShadow = false
+	;(b.Parts[#b.Parts] :: Part).Shape = Enum.PartType.Cylinder
+	for index, color in ipairs({ MINT, YELLOW, RED }) do
+		neon(b, b.Part("Part", topFace * CFrame.new(3 + index * 2.6, 0.5, -4), Vector3.new(1.8, 1.4, 1.8), color, M.Neon, "Lamp" .. index), nil)
+	end
+	named(b.Part("Part", topFace * CFrame.new(6, 0.3, 2.6), Vector3.new(10, th(b, 1.2), 5), rgb(10, 22, 16), M.SmoothPlastic, "PressDisplay"), "PressDisplay")
+	-- tapis roulant (amène les objets de la droite vers l'enclume)
+	local beltX0, beltX1 = PX + 24, 50
+	local beltMid, beltLen = (beltX0 + beltX1) / 2, beltX1 - beltX0
+	local beltTop = ANVIL
+	b.Box(beltMid, beltTop - 2.6, PZ, beltLen, 2.6 - th(b, 0.2, 0.004), 22, rgb(36, 36, 44), M.Rubber)
+	for _, side in ipairs({ -1, 1 }) do
+		tint(b.Box(beltMid, beltTop - 5, PZ + side * 12.4, beltLen + 4, 7, 2.4, tierStyle.AccentA, M.Metal), "AccentA")
+		b.Box(beltX0 + 4, 2.4, PZ + side * 9, 3, beltTop - 7.4, 3, CARBON, M.Metal)
+		b.Box(beltX1 - 3, 2.4, PZ + side * 9, 3, beltTop - 7.4, 3, CARBON, M.Metal)
+	end
+	b.CylZ(beltX1, beltTop - 1.6, PZ, 3.4, 23, CHROME, M.Metal)
+	b.CylZ(beltX0 + 0.5, beltTop - 1.6, PZ, 3.2, 23, CHROME, M.Metal)
+	for index = 0, 5 do
+		local x = beltX0 + 2 + index * (beltLen - 4) / 6
+		named(b.Box(x, beltTop - th(b, 1) * 0.6, PZ, 1.8, th(b, 1), 20, rgb(78, 78, 92), M.Rubber), "BeltSlat")
+	end
+	-- bac à galettes (à gauche) : les objets écrasés y tombent
+	local binX = -43
+	b.Box(binX, 2.4, PZ, 14, th(b, 1.4), 26, CARBON, M.Metal)
+	for _, side in ipairs({ -1, 1 }) do
+		tint(b.Box(binX, 2.4, PZ + side * 12, 14, 14, 2, tierStyle.AccentB, M.Metal), "AccentB")
+		tint(b.Box(binX + side * 6, 2.4, PZ, 2, 14, 23, tierStyle.AccentB, M.Metal), "AccentB")
+	end
+	for index, color in ipairs({ YELLOW, RED, rgb(70, 170, 80), rgb(255, 150, 190) }) do
+		b.Cyl(binX + (index % 2) * 2 - 1, 2.2 + th(b, 1.4) + (index - 1) * 1.6, PZ + (index - 2.5) * 3, 9, 1.8, color, M.SmoothPlastic)
+	end
+	-- centrale hydraulique (au fond à droite) + flexibles jusqu'au vérin
+	local ux, uz = 34, -21
+	tint(b.Round(ux, 2.4, uz, 22, 20, 14, 3, dark, M.Metal), "FrameDark")
+	tint(b.CylX(ux, 27, uz, 10, 16, chrome, M.Metal), "Chrome")
+	b.CylX(ux - 9.6, 27, uz, 6, 3, CARBON, M.Metal)
+	neon(b, b.Ball(ux + 6, 21, uz + 7.2, 1.6, MINT, M.Neon), "Glow")
+	for index, dz in ipairs({ -3, 3 }) do
+		local hose = House3DKit.Path(b, { { ux - 6, 23, uz + dz * 0.5 }, { ux - 14, 60, uz + dz }, { PX + 14, 108, PZ + dz * 1.4 } }, 2.4, tierStyle.Hose, M.Rubber, false, true)
+		for _, part in ipairs(hose) do
+			tint(part, "Hose")
+		end
+		local _ = index
+	end
+	-- objets à écraser (un seul visible à la fois ; ils arrivent par le tapis)
+	local function crushable(list: { BasePart }, variant: number)
 		for _, part in ipairs(list) do
 			part.Name = "Crushable"
 			part:SetAttribute("Variant", variant)
 		end
 	end
-	-- pupitre de commande (à droite) : gros bouton rouge, manomètre
-	local px, pz = 44, 20
-	b.Box(px + 6, 0, pz, 3, 42, 3, frame, M.Metal)
-	b.BoxR(CFrame.new(px + 6, 46, pz) * CFrame.Angles(-0.4, 0, 0), 16, 12, 10, yellowC, M.Metal)
-	b.CylZ(px + 6, 47, pz + 4.6, 9, 1.4, INK, M.Metal)
-	local button = b.Part("Part", CFrame.new(px + 6, 47.4, pz + 6) * CFrame.Angles(-0.4, 0, 0) * CFrame.Angles(0, math.pi / 2, 0), Vector3.new(3, 7, 7), RED, M.SmoothPlastic, "PressButton")
-	;(button :: Part).Shape = Enum.PartType.Cylinder
-	b.Ball(px + 6, 48.6, pz + 8.4, 5, RED, M.SmoothPlastic).Name = "PressButton"
-	b.CylZ(px + 1, 52, pz + 2, 6, 1, WHITE, M.SmoothPlastic)
-	named(b.BoxR(CFrame.new(px + 1, 52.6, pz + 2.6) * CFrame.Angles(0, 0, 0.6), 0.5, 2.6, 0.3, RED, M.SmoothPlastic), "Gauge")
-	-- gyrophare
-	b.Cyl(0, 98, -6, 8, 2, frame, M.Metal)
-	neon(b, b.Egg(0, 102, -6, 7, 8, 7, ORANGE, M.Neon), "PressBeacon")
-	-- tuyaux hydrauliques
-	House3DKit.Path(b, { { -20, 90, -18 }, { -40, 90, -20 }, { -44, 40, -18 }, { -44, 8, -16 } }, 2.4, INK, M.Rubber, false, true)
-	b.Footprint(100, 56, 106)
+	local y = ANVIL - 0.8 -- (posés dans l'enclume : aucune face collée)
+	-- 1 : canard en caoutchouc
+	crushable({ b.Egg(PX, y + 8, PZ, 22, 16, 18, YELLOW, M.SmoothPlastic), b.Ball(PX + 1, y + 18, PZ - 3, 12, YELLOW, M.SmoothPlastic),
+		b.Egg(PX + 1, y + 17, PZ - 10, 7, 3.4, 7, ORANGE, M.SmoothPlastic), b.Ball(PX - 2.6, y + 20, PZ - 7.4, 2.2, INK, M.SmoothPlastic),
+		b.Ball(PX + 4.6, y + 20, PZ - 7.4, 2.2, INK, M.SmoothPlastic) }, 1)
+	-- 2 : canette de soda
+	crushable({ b.Cyl(PX, y, PZ, 14, 22, RED, M.Metal), b.Cyl(PX, y + 21.6, PZ, 12, 1.6, CHROME, M.Metal), b.Cyl(PX, y + 9, PZ, 14.6, 5, WHITE, M.SmoothPlastic) }, 2)
+	-- 3 : pastèque
+	crushable({ b.Egg(PX, y + 11, PZ, 26, 21, 20, rgb(70, 170, 80), M.SmoothPlastic), b.Egg(PX, y + 11, PZ, 26.6, 10, 20.6, rgb(40, 120, 60), M.SmoothPlastic) }, 3)
+	-- 4 : gâteau (deux étages, glaçage, cerise)
+	crushable({ b.Cyl(PX, y, PZ, 24, 8, rgb(255, 170, 200), M.SmoothPlastic), b.Cyl(PX, y + 7.6, PZ, 18, 7, rgb(255, 236, 214), M.SmoothPlastic),
+		b.Cyl(PX, y + 14.2, PZ, 18.8, 1.8, WHITE, M.SmoothPlastic), b.Ball(PX, y + 17.2, PZ, 4.6, RED, M.SmoothPlastic) }, 4)
+	-- 5 : paquet cadeau
+	crushable({ b.Box(PX, y, PZ, 18, 16, 18, rgb(120, 110, 255), M.SmoothPlastic), b.Box(PX, y - 0.3, PZ, 4, 16.8, 18.8, GOLD, M.SmoothPlastic),
+		b.Box(PX, y - 0.3, PZ, 18.8, 16.8, 4, GOLD, M.SmoothPlastic), b.Ball(PX - 2.4, y + 17.4, PZ, 4.4, GOLD, M.SmoothPlastic),
+		b.Ball(PX + 2.4, y + 17.4, PZ, 4.4, GOLD, M.SmoothPlastic) }, 5)
+	-- 6 : cube magique (faces colorées)
+	crushable({ b.Box(PX, y, PZ, 16, 16, 16, INK, M.SmoothPlastic), b.Box(PX, y + 1, PZ + 8 + t * 0.2, 14, 14, t, RED, M.SmoothPlastic),
+		b.Box(PX, y + 16 - t * 0.6, PZ, 14, t, 14, WHITE, M.SmoothPlastic), b.Box(PX + 8 + t * 0.2, y + 1, PZ, t, 14, 14, rgb(60, 200, 90), M.SmoothPlastic) }, 6)
+	b.Footprint(100, 60, 130)
 end
 
 ----------------------------------------------------------------------

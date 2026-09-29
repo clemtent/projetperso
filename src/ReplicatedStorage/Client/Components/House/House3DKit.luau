@@ -32,6 +32,7 @@
 	  House3DKit.Wood / Dist / Darken / Lighten / Pick (couleurs)
 	  v9.8 (RECIPES98, objets "20x plus réalistes") :
 	  House3DKit.Vary(color, seed, amount) -> Color3   (variation déterministe : veinage, dos de livres)
+	  House3DKit.Gap(b, units?) -> number              (écart minimal entre faces superposées, anti-scintillement)
 	  House3DKit.Chrome(part, reflectance?) -> part    (métal poli)
 	  House3DKit.Bevel(b, x, y, z, w, h, d, e, color, material?) -> BasePart   (bloc au dessus chanfreiné)
 	  House3DKit.Handle(b, x, y, z, length, vertical, color?)                 (poignée barre sur 2 plots)
@@ -647,6 +648,205 @@ function House3DKit.Frame(b: Builder, x: number, y: number, z: number, w: number
 	b.Box(x, y + h - bar, z, w, bar, depth, color, material)
 	b.Box(x - w / 2 + bar / 2, y + bar, z, bar, h - 2 * bar, depth, color, material)
 	b.Box(x + w / 2 - bar / 2, y + bar, z, bar, h - 2 * bar, depth, color, material)
+end
+
+----------------------------------------------------------------------
+-- v9.8 (RECIPES98) : aides "réalistes" pour les recettes. Toutes en unités
+-- de la recette (repère du Builder, +z = devant), y = bas sauf mention.
+----------------------------------------------------------------------
+
+local MAT = Enum.Material
+
+-- Variation déterministe d'une couleur (planches, livres, feuilles...) :
+-- même `seed` = même teinte (les maisons de tous les joueurs se ressemblent)
+function House3DKit.Vary(color: Color3, seed: number, amount: number): Color3
+	local t = math.sin(seed * 12.9898 + 78.233) * 43758.5453
+	t = (t - math.floor(t)) * 2 - 1
+	if t >= 0 then
+		return color:Lerp(WHITE, t * amount)
+	end
+	return color:Lerp(BLACK, -t * amount)
+end
+
+-- Écart minimal (unités) entre deux faces parallèles superposées (façade
+-- devant un fond, panneau en relief...) : au moins 0,034 stud à l'échelle
+-- de l'objet, sinon Separate les écarterait en cascade
+function House3DKit.Gap(b: Builder, units: number?): number
+	return math.max(units or 0.8, 0.034 / math.max(b.K, 1e-3))
+end
+
+-- Métal poli / chromé (reflet du ciel de Roblox)
+function House3DKit.Chrome(part: BasePart, reflectance: number?): BasePart
+	part.Reflectance = reflectance or 0.3
+	return part
+end
+
+-- Bloc au dessus chanfreiné (y = bas) : les 4 arêtes du dessus sont
+-- biseautées de `e` (6 pièces), comme un plateau / un dessus de meuble
+function House3DKit.Bevel(b: Builder, x: number, y: number, z: number, w: number, h: number, d: number, e: number, color: Color3, material: Enum.Material?): BasePart
+	e = math.clamp(e, 0.2, math.min(h, w / 2, d / 2) * 0.9)
+	local main = b.Box(x, y, z, w, h - e, d, color, material)
+	b.Box(x, y + h - e, z, w - 2 * e, e, d - 2 * e, color, material)
+	b.Wedge(x, y + h - e, z + d / 2 - e / 2, w, e, e, color, "Front", material)
+	b.Wedge(x, y + h - e, z - d / 2 + e / 2, w, e, e, color, "Back", material)
+	b.Wedge(x + w / 2 - e / 2, y + h - e, z, e, e, d - 2 * e, color, "Right", material)
+	b.Wedge(x - w / 2 + e / 2, y + h - e, z, e, e, d - 2 * e, color, "Left", material)
+	return main
+end
+
+-- Poignée en barre sur deux plots (centre x, y ; z = la face du meuble) :
+-- barre chromée à l'horizontale (ou debout si `vertical`)
+function House3DKit.Handle(b: Builder, x: number, y: number, z: number, length: number, vertical: boolean, color: Color3?)
+	local metal = color or Color3.fromRGB(206, 210, 222)
+	local t = math.max(0.9, length * 0.09)
+	local out = t * 2.2
+	local parts = {}
+	if vertical then
+		table.insert(parts, b.Tube(x, y - length / 2, z + out, x, y + length / 2, z + out, t, metal, MAT.Metal))
+		for _, s in ipairs({ -1, 1 }) do
+			table.insert(parts, b.CylZ(x, y + s * length * 0.36, z + out / 2, t * 0.8, out, metal, MAT.Metal))
+		end
+	else
+		table.insert(parts, b.CylX(x, y, z + out, t, length, metal, MAT.Metal))
+		for _, s in ipairs({ -1, 1 }) do
+			table.insert(parts, b.CylZ(x + s * length * 0.36, y, z + out / 2, t * 0.8, out, metal, MAT.Metal))
+		end
+	end
+	for _, part in ipairs(parts) do
+		part.Reflectance = 0.3
+	end
+end
+
+-- Pied fuselé (y = bas) : fût du haut, fût affiné du bas, patin (3 pièces)
+function House3DKit.Leg(b: Builder, x: number, y: number, z: number, d: number, h: number, color: Color3, material: Enum.Material?, foot: Color3?)
+	local footH = math.min(h * 0.08, d * 0.6)
+	b.Cyl(x, y + h * 0.45, z, d, h * 0.55, color, material or MAT.Wood)
+	b.Cyl(x, y + footH, z, d * 0.74, h * 0.45 - footH, color, material or MAT.Wood)
+	local cap = b.Cyl(x, y, z, d * 0.8, footH, foot or Color3.fromRGB(196, 160, 90), MAT.Metal)
+	cap.Reflectance = 0.2
+end
+
+-- Coussin d'assise (y = bas) : bloc aux bords roulés devant / derrière et un
+-- passepoil sur le devant (4 pièces)
+function House3DKit.SeatCushion(b: Builder, x: number, y: number, z: number, w: number, h: number, d: number, color: Color3, piping: Color3?): BasePart
+	local r = math.min(h, d * 0.45)
+	local main = b.Box(x, y, z, w, h, d - r, color, MAT.Fabric)
+	b.CylX(x, y + h / 2, z + d / 2 - r / 2, h, w, color, MAT.Fabric)
+	b.CylX(x, y + h / 2, z - d / 2 + r / 2, h, w, color, MAT.Fabric)
+	if piping then
+		local pipe = math.max(0.8, h * 0.1)
+		b.CylX(x, y + h / 2, z + d / 2 - pipe * 0.35, pipe, w + 0.2, piping, MAT.Fabric)
+	end
+	return main
+end
+
+-- Coussin moelleux orienté (centre = cframe) : cœur + enveloppe ovale (2 pièces)
+function House3DKit.PillowR(b: Builder, cframe: CFrame, w: number, h: number, d: number, color: Color3, material: Enum.Material?): BasePart
+	local core = b.BoxR(cframe, w * 0.9, h * 0.84, d * 0.62, color, material or MAT.Fabric)
+	b.EggR(cframe, w, h, d, color, material or MAT.Fabric)
+	return core
+end
+
+-- Feuille : ovale aplati qui part de (x, y, z) dans la direction (yaw autour
+-- de y, puis pitch : > 0 vers le bas, < 0 vers le haut) ; nervure en option
+function House3DKit.Leaf(b: Builder, x: number, y: number, z: number, length: number, width: number, yaw: number, pitch: number, color: Color3, rib: Color3?): BasePart
+	local cf = CFrame.new(x, y, z) * CFrame.Angles(0, yaw, 0) * CFrame.Angles(pitch, 0, 0) * CFrame.new(0, 0, length / 2)
+	local thick = math.max(0.5, width * 0.09)
+	local leaf = b.EggR(cf, width, thick, length, color, MAT.SmoothPlastic)
+	leaf.Name = "Feuille"
+	if rib then
+		b.BoxR(cf * CFrame.new(0, thick * 0.3, 0), math.max(0.4, width * 0.06), thick * 0.5, length * 0.86, rib, MAT.SmoothPlastic)
+	end
+	return leaf
+end
+
+-- Rangée de livres entre x0 et x1, posés en y, dos (face +z) en zFront :
+-- épaisseurs, hauteurs et teintes variées, bandeaux dorés, un livre penché
+function House3DKit.Books(b: Builder, x0: number, x1: number, y: number, zFront: number, depth: number, maxH: number, colors: { Color3 }, seed: number): number
+	local x = x0
+	local n = 0
+	local gold = Color3.fromRGB(236, 196, 96)
+	while x < x1 - 3 do
+		n += 1
+		local s = seed * 31 + n * 7
+		local bw = 2.4 + ((s * 13) % 7) * 0.45
+		if x + bw > x1 then
+			break
+		end
+		local bh = maxH * (0.72 + ((s * 5) % 6) * 0.05)
+		local bd = depth * (0.82 + ((s * 3) % 4) * 0.05)
+		local color = House3DKit.Vary(colors[(s % #colors) + 1], s, 0.18)
+		if n > 3 and (s % 11) == 0 and x + bh * 0.5 < x1 then
+			-- livre penché contre le précédent
+			local angle = -0.42
+			local cx = x + math.sin(-angle) * bh / 2 + bw / 2
+			b.BoxR(CFrame.new(cx, y + math.cos(angle) * bh / 2 + math.abs(math.sin(angle)) * bw / 2, zFront - bd / 2) * CFrame.Angles(0, 0, angle), bw, bh, bd, color, MAT.SmoothPlastic)
+			break
+		end
+		b.Box(x + bw / 2, y, zFront - bd / 2, bw, bh, bd, color, MAT.SmoothPlastic)
+		if (s % 3) ~= 0 then
+			-- bandeaux du dos (titre doré), en léger relief
+			local g = House3DKit.Gap(b, 0.5)
+			b.Box(x + bw / 2, y + bh * 0.72, zFront + g / 2 - 0.25, bw * 0.8, math.max(0.6, bh * 0.08), g + 0.5, gold, MAT.SmoothPlastic)
+		end
+		x += bw + 0.25
+	end
+	return n
+end
+
+-- Ampoule douce : boule lumineuse + PointLight (Brightness plafonnée à 1)
+function House3DKit.Bulb(b: Builder, x: number, y: number, z: number, d: number, color: Color3, range: number, brightness: number?): BasePart
+	local bulb = b.Ball(x, y, z, d, color)
+	b.Neon(bulb)
+	b.Light(bulb, color, range, math.min(1, brightness or 0.9))
+	return bulb
+end
+
+-- Miroir (centre x, y ; z = plan de la glace, face vers +z = la pièce).
+-- Contrat REALISM98 : une pièce "Mirror" (bloc fin), attributs Mirror = true,
+-- MirrorFace = "Front" (normale = LookVector, vers la pièce) et MirrorShape
+-- ("Rect" / "Oval"). Rect : cette pièce EST la glace (Reflectance = reflet
+-- statique quand les reflets sont coupés) ; Oval : une glace ovale visible
+-- et la pièce Mirror invisible juste devant (la SurfaceGui s'y pose).
+function House3DKit.Mirror(b: Builder, x: number, y: number, z: number, w: number, h: number, shape: string?): BasePart
+	local glassColor = Color3.fromRGB(214, 228, 238)
+	local oval = shape == "Oval"
+	local thin = 0.8
+	if oval then
+		local glass
+		if math.abs(w - h) < 0.01 then
+			glass = b.CylZ(x, y, z - thin / 2, w, thin, glassColor, MAT.Glass)
+		else
+			glass = b.EggR(CFrame.new(x, y, z - thin / 2), w, h, thin, glassColor, MAT.Glass)
+		end
+		glass.Name = "Glace"
+		glass.Reflectance = 0.45
+		glass.CastShadow = false
+	end
+	local k = math.max(b.K, 1e-3)
+	local gap = oval and math.max(1.2, 0.05 / k) or 0
+	local mirror = b.Part("Part", CFrame.new(x, y, z + gap - thin / 2) * CFrame.Angles(0, math.pi, 0), Vector3.new(w, h, thin), glassColor, MAT.Glass, "Mirror")
+	mirror.Reflectance = 0.45
+	mirror.CastShadow = false
+	if oval then
+		-- (ovale : la pièce taguée couvre le rectangle de l'ovale, invisible ;
+		-- REALISM98 découpe l'image en ovale : MirrorShape = "Oval")
+		mirror.Transparency = 1
+	end
+	mirror:SetAttribute("Mirror", true)
+	mirror:SetAttribute("MirrorFace", "Front")
+	mirror:SetAttribute("MirrorShape", oval and "Oval" or "Rect")
+	return mirror
+end
+
+-- Lames de bois côte à côte le long de x (y = bas) : teintes légèrement
+-- différentes, comme un vrai plateau en planches
+function House3DKit.Planks(b: Builder, x: number, y: number, z: number, w: number, h: number, d: number, n: number, color: Color3, material: Enum.Material?, seed: number?)
+	local pw = w / n
+	for index = 1, n do
+		local px = x - w / 2 + (index - 0.5) * pw
+		b.Box(px, y, z, pw, h, d, House3DKit.Vary(color, (seed or 1) * 17 + index, 0.08), material or MAT.Wood)
+	end
 end
 
 ----------------------------------------------------------------------

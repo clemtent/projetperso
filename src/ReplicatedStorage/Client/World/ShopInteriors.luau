@@ -936,101 +936,49 @@ end
 -- Concession : voitures sur les plateaux, bureau de vente
 ----------------------------------------------------------------------
 
-local function carSlots(shop: Shop): { Slot }
-	local list = {}
-	for index = 1, tonumber(shop.Model:GetAttribute("ShowroomSlots")) or 8 do
-		local disc = shop.Model:FindFirstChild("CarSlot_" .. index)
-		local cf = disc and disc:GetAttribute("CarCF")
-		if typeof(cf) == "CFrame" then
-			-- étiquette sur un petit pupitre devant la voiture (côté allée)
-			local side = (shop.F:PointToObjectSpace(cf.Position).X < 0) and 1 or -1
-			table.insert(list, { CF = cf, MaxW = 8, MaxH = 7, MaxD = 17, Kind = "Car", Tag = cf * CFrame.new(side * 4.6, 1.2, -6.2) })
-		end
+-- (v9.8, CARS98) le décor de la concession est dans DealerShowroom (grand
+-- hall 70 x 50, plateau tournant, vendeur, pupitres…) : ici, on délègue
+local dealerModule: any = nil
+local function Dealer(): any
+	if dealerModule == nil then
+		dealerModule = optional(script.Parent, "DealerShowroom") or false
 	end
-	return list
+	return dealerModule or nil
+end
+
+local function dealerCtx(): any
+	return {
+		AddTag = addTag,
+		Entries = (ShopUI.ShopEntries("Cars")),
+		Stats = stats,
+		OpenCatalog = function(anchor: Vector3)
+			ShopUI.OpenShop("Cars", { Anchor = anchor })
+		end,
+	}
 end
 
 local function carsFront(shop: Shop, parent: Instance): { () -> () }
-	local jobs = {}
-	local CarModels = optional(ReplicatedStorage.Shared, "CarModels")
-	local cars = (ShopUI.ShopEntries("Cars"))
-	local slots = carSlots(shop)
-	for index, slot in ipairs(slots) do
-		local entry = cars[index]
-		if entry and CarModels and type(CarModels.Build) == "function" then
-			table.insert(jobs, function()
-				local ok, model = pcall(CarModels.Build, entry.Id, nil, { Detail = "Full", Plate = "DOPAMINE" })
-				if ok and typeof(model) == "Instance" and model:IsA("Model") then
-					model:PivotTo(slot.CF)
-					model.Parent = parent
-					table.insert(shop.Displays, { Entry = entry, Model = model, Labels = {}, Key = "Car:" .. entry.Id })
-					stats.Items += 1
-				end
-			end)
+	local dealer = Dealer()
+	if dealer and type(dealer.FrontJobs) == "function" then
+		local ok, jobs = pcall(dealer.FrontJobs, shop, parent, dealerCtx())
+		if ok and type(jobs) == "table" then
+			return jobs
 		end
+		warn("[ShopInteriors] concession : " .. tostring(jobs))
 	end
-	return jobs
+	return {}
 end
 
 local function carsFull(shop: Shop, parent: Instance): { () -> () }
-	local jobs = {}
-	local t = shop.Theme
-	local F = shop.F
-	local D = shop.Size.Z
-	table.insert(jobs, function()
-		-- bureau de vente, salon d'attente, plantes, grande affiche
-		local z0 = D - 5.2
-		box(parent, "Counter", F, -5, 5, 0.1, 3.3, z0, z0 + 2.2, rgb(70, 74, 92), M.SmoothPlastic, true)
-		box(parent, "CounterFront", F, -4.8, 4.8, 1, 2.6, z0 - GAP - 0.1, z0 - GAP, t.Accent, M.SmoothPlastic)
-		box(parent, "CounterTop", F, -5.3, 5.3, 3.3, 3.55, z0 - 0.3, z0 + 2.4, WHITE, M.Marble)
-		sign(parent, "SeeAll", Vector3.new(3.4, 1.3, 0.12), F * CFrame.new(-2.2, 4.25, z0 + 0.8) * CFrame.Angles(math.rad(-10), 0, 0), WHITE, Locale.T("🛍️ See everything"), t.Accent, 60)
-		box(parent, "SignFoot", F, -2.8, -1.6, 3.55, 3.7, z0 + 0.6, z0 + 1.2, rgb(200, 196, 210), M.Metal)
-		local shopDef = ShopUI.SHOPS.Cars
-		sign(parent, "BackSign", Vector3.new(16, 2.6, 0.15), F * CFrame.new(0, 9, D - 0.2 - 2 * GAP - 0.2), WHITE, Locale.T(shopDef.Name), t.Accent, 24)
-		for _, sx in ipairs({ -1, 1 }) do
-			box(parent, "Sofa", F, sx * 9 - 2, sx * 9 + 2, 0.1, 1.5, D - 4, D - 2.4, rgb(236, 226, 240), M.Fabric, true)
-			box(parent, "SofaBack", F, sx * 9 - 2, sx * 9 + 2, 1.5, 3, D - 2.4, D - 1.9, rgb(236, 226, 240), M.Fabric)
-			cylinder(parent, "PlantPot", F, sx * 17.5, 0.1, D - 3, 1.6, 1.8, WHITE, M.SmoothPlastic, true)
-			ball(parent, "PlantLeaves", F, sx * 17.5, 3, D - 3, 2.8, rgb(96, 170, 100), M.Grass)
+	local dealer = Dealer()
+	if dealer and type(dealer.FullJobs) == "function" then
+		local ok, jobs = pcall(dealer.FullJobs, shop, parent, dealerCtx())
+		if ok and type(jobs) == "table" then
+			return jobs
 		end
-		local anchor = newPart(parent, "CatalogPoint", Vector3.new(1, 1, 1), F * CFrame.new(0, 3.9, z0 - 0.4), WHITE, M.SmoothPlastic)
-		anchor.Transparency = 1
-		local prompt = Instance.new("ProximityPrompt")
-		prompt.Name = "CatalogPrompt"
-		prompt.ActionText = Locale.T("🛍️ See everything")
-		prompt.ObjectText = Locale.T(shopDef.Name)
-		prompt.HoldDuration = 0
-		prompt.MaxActivationDistance = 8
-		prompt.RequiresLineOfSight = false
-		prompt.Parent = anchor
-		local counterPos = anchor.Position
-		shop.Counter = counterPos
-		prompt.Triggered:Connect(function()
-			ShopUI.OpenShop("Cars", { Anchor = counterPos })
-		end)
-		lamps(shop, parent, { { -9, D * 0.3 }, { 9, D * 0.62 }, { 9, D * 0.3 }, { -9, D * 0.62 } })
-	end)
-	-- pupitres + étiquettes + invites des voitures
-	for _, d in ipairs(shop.Displays) do
-		if d.Model and d.Entry.Kind == "Car" then
-			local slot: Slot? = nil
-			for _, s in ipairs(carSlots(shop)) do
-				if (s.CF.Position - d.Model:GetPivot().Position).Magnitude < 0.5 then
-					slot = s
-				end
-			end
-			if slot then
-				local chosen = slot :: Slot
-				table.insert(jobs, function()
-					local tagCF = chosen.Tag
-					box(parent, "Lectern", tagCF, -0.5, 0.5, -1.2, -0.05, -0.3, 0.3, rgb(70, 74, 92), M.Metal, true)
-					local center = (chosen.CF * CFrame.new(0, 3, 0)).Position
-					addTag(shop, parent, d, tagCF, center)
-				end)
-			end
-		end
+		warn("[ShopInteriors] concession : " .. tostring(jobs))
 	end
-	return jobs
+	return {}
 end
 
 ----------------------------------------------------------------------
@@ -1054,9 +1002,7 @@ local function jobsFor(shop: Shop, level: number): { () -> () }
 	local jobs: { () -> () } = {}
 	if shop.Kind == "Cars" then
 		if level == 1 then
-			table.insert(jobs, function()
-				lining(shop, parent)
-			end)
+			-- (v9.8) habillage propre à la concession (mur vitré côté porte de la ville)
 			for _, job in ipairs(carsFront(shop, parent)) do
 				table.insert(jobs, job)
 			end

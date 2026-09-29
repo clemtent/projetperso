@@ -2317,6 +2317,9 @@ Config.House = {
 			Cost = 2500, CostGrowth = 1.25, Comfort = 2 },
 		{ Id = "AbstractCanvas", Name = "Abstract canvas", Icon = "🎨", Category = "Decor", Placement = "Wall", Size = 100,
 			Cost = 5000, CostGrowth = 1.25, Comfort = 2 },
+		-- (demandé par RECIPES98 : son modèle 3D est R.BigWallMirror dans House3DObjects)
+		{ Id = "BigWallMirror", Name = "Big wall mirror", Icon = "🪞", Category = "Decor", Placement = "Wall", Size = 130,
+			Cost = 14000, CostGrowth = 1.3, Comfort = 3 },
 		{ Id = "GrandfatherClock", Name = "Grandfather clock", Icon = "🕰️", Category = "Decor", Placement = "Floor", Size = 140,
 			Cost = 250000, CostGrowth = 1.4, Comfort = 8, MaxOwned = 3 },
 		-- 💡 Lumières

@@ -187,6 +187,48 @@ function CarModels.ColorOf(carId: string?, color: any?): Color3
 	return Color3.fromRGB(255, 150, 196)
 end
 
+-- (v9.8) Comportement au volant par modèle (multiplicateurs de la conduite
+-- de CarClient : vitesse max, accélération, adhérence en virage) + confort,
+-- et notes de 1 à 5 étoiles (fenêtre "Mes voitures", pupitres de la concession)
+export type Handling = { Speed: number, Accel: number, Grip: number, Comfort: number, Stars: { Speed: number, Accel: number, Grip: number, Comfort: number } }
+local HANDLING: { [string]: { number } } = {
+	BubbleCar = { 0.8, 0.9, 1.05, 3 },
+	CityCar = { 0.88, 1.0, 1.1, 3 },
+	Hatchback = { 0.95, 1.05, 1.05, 3 },
+	Pickup = { 0.92, 0.9, 0.85, 3 },
+	SUV = { 0.95, 0.9, 0.9, 5 },
+	Van = { 0.85, 0.8, 0.85, 4 },
+	SportsCar = { 1.16, 1.35, 1.2, 2 },
+	Limo = { 1.0, 0.85, 0.8, 5 },
+}
+function CarModels.Handling(carId: string?): Handling
+	local h = HANDLING[kindOf(carId)] or HANDLING.CityCar
+	local function stars(v: number): number
+		return math.clamp(math.floor(v + 0.5), 1, 5)
+	end
+	return {
+		Speed = h[1],
+		Accel = h[2],
+		Grip = h[3],
+		Comfort = h[4],
+		Stars = { Speed = stars((h[1] - 0.7) / 0.1), Accel = stars((h[2] - 0.7) / 0.13), Grip = stars((h[3] - 0.7) / 0.1), Comfort = stars(h[4]) },
+	}
+end
+
+-- (v9.8) Repeint un modèle déjà construit (pièces marquées "Paint") : pour
+-- changer de couleur SANS reconstruire (fenêtre "Mes voitures", concession)
+function CarModels.Repaint(model: Instance, carId: string?, color: any?)
+	local paint = CarModels.ColorOf(carId, color)
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") and d:GetAttribute("Paint") then
+			d.Color = paint
+		end
+	end
+	if model:IsA("Model") then
+		model:SetAttribute("PaintColor", paint)
+	end
+end
+
 -- 🔒 Raison du verrou (nil = débloquée) : visites à l'océan
 function CarModels.LockReason(data: any, carId: string): string?
 	local car = Config.CarsById and Config.CarsById[carId]
