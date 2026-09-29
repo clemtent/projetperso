@@ -944,8 +944,9 @@ local function stockRow(shop: Shop, parent: Instance, slot: Slot, seed: number)
 		local x = x0 + i * pitch
 		local base = slot.CF * CFrame.new(x, 0, z)
 		if shape == "Can" or shape == "Pot" or shape == "Vase" or shape == "Plates" then
-			local height = shape == "Plates" and 0.12 or h
-			local n = shape == "Plates" and 4 or 1
+			-- (pile d'assiettes : une seule pièce)
+			local height = shape == "Plates" and 0.45 or h
+			local n = 1
 			for k = 0, n - 1 do
 				local p = newPart(parent, shape, Vector3.new(height, w, w), base * CFrame.new(0, 0.02 + height / 2 + k * (height + 0.02), 0) * CFrame.Angles(0, 0, math.rad(90)), color, shape == "Can" and M.Metal or (shape == "Pot" and shop.Id == "Garden" and M.Slate or M.SmoothPlastic))
 				;(p :: Part).Shape = Enum.PartType.Cylinder
