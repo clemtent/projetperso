@@ -537,6 +537,43 @@ Config.Garden = {
 		{ Id = "Lotus", Name = "Golden Lotus", Icon = "🪷", GrowSeconds = 840, RewardSeconds = 260, Weight = 3 },
 	},
 	MinReward = 30,
+	-- v9.8 (GARDEN98) 🌷 jardin de la maison en ville, aménagé LIBREMENT (mode
+	-- édition du jardin : GardenEdit ; données data.Garden.Level / Pieces / Layout,
+	-- vérifiées par GardenService, règles partagées : Shared/GardenSnapshot).
+	-- Agrandissements achetés avec la Dopamine (niveau 0 = de base) : zone
+	-- utilisable plus grande (dans la parcelle), plus de places de déco
+	-- (Config.House.GardenSlots au niveau 0), plus d'objets de jardin posés
+	-- et un aménagement offert (Bonus).
+	BasePieces = 8, -- objets de jardin posés au niveau 0
+	Expansion = {
+		{ Level = 1, Name = "Blooming garden", Icon = "🌸", Cost = 5e5, DecorSlots = 8, Pieces = 16, Bonus = "RoseArch" },
+		{ Level = 2, Name = "Big garden", Icon = "🌳", Cost = 5e7, RequiresRebirths = 1, DecorSlots = 10, Pieces = 26, Bonus = "Greenhouse" },
+		{ Level = 3, Name = "Dream park", Icon = "🏞️", Cost = 5e9, RequiresRebirths = 3, DecorSlots = 12, Pieces = 40, Bonus = "KoiPond" },
+	},
+	-- Objets de jardin (plusieurs exemplaires, jusqu'à Max) : achetés avec la
+	-- Dopamine, rangés dans l'inventaire du jardin, posés où l'on veut.
+	-- W x D = empreinte au sol (studs) ; Flat = plat (on marche / pose dessus).
+	Pieces = {
+		{ Id = "TerracottaPot", Name = "Terracotta flower pot", Icon = "🪴", Cost = 2500, W = 1.9, D = 1.9, Max = 20 },
+		{ Id = "SteppingStones", Name = "Stepping stones", Icon = "🪨", Cost = 6000, W = 2.8, D = 7, Max = 12, Flat = true },
+		{ Id = "FlowerUrn", Name = "Stone flower urn", Icon = "🏺", Cost = 12000, W = 2.4, D = 2.4, Max = 12 },
+		{ Id = "RoseBush", Name = "Rose bush", Icon = "🌹", Cost = 15000, W = 2.8, D = 2.8, Max = 12 },
+		{ Id = "GardenLantern", Name = "Garden lantern", Icon = "🏮", Cost = 20000, W = 1.3, D = 1.3, Max = 12 },
+		{ Id = "LavenderPlanter", Name = "Lavender planter", Icon = "💜", Cost = 25000, W = 4.8, D = 1.9, Max = 10 },
+		{ Id = "HydrangeaBush", Name = "Hydrangea bush", Icon = "💠", Cost = 30000, W = 3.3, D = 3.3, Max = 10 },
+		{ Id = "BirdHouse", Name = "Birdhouse", Icon = "🐦", Cost = 35000, W = 1.5, D = 1.5, Max = 6 },
+		{ Id = "HangingBasket", Name = "Hanging basket", Icon = "🧺", Cost = 40000, W = 1.8, D = 1.8, Max = 8 },
+		{ Id = "RoundFlowerBed", Name = "Round flower bed", Icon = "🌺", Cost = 45000, W = 5.8, D = 5.8, Max = 6 },
+		{ Id = "GardenBench", Name = "Wooden garden bench", Icon = "🪑", Cost = 60000, W = 5.6, D = 2.4, Max = 6 },
+		{ Id = "VegetablePatch", Name = "Vegetable patch", Icon = "🥕", Cost = 80000, W = 6.4, D = 3.8, Max = 6 },
+		{ Id = "PicnicTable", Name = "Picnic table", Icon = "🧺", Cost = 150000, W = 5.4, D = 5, Max = 4 },
+		{ Id = "Sundial", Name = "Sundial", Icon = "☀️", Cost = 250000, W = 2.4, D = 2.4, Max = 3 },
+		{ Id = "RoseArbor", Name = "Rose arbor", Icon = "🌸", Cost = 1.5e6, RequiresRebirths = 1, W = 5.4, D = 2.4, Max = 4 },
+		{ Id = "GardenSwing", Name = "Garden swing", Icon = "🌼", Cost = 4e6, RequiresRebirths = 1, W = 5.8, D = 3.4, Max = 2 },
+		{ Id = "StoneStatue", Name = "Stone angel statue", Icon = "🗿", Cost = 2e7, RequiresRebirths = 2, W = 3, D = 3, Max = 3 },
+		{ Id = "Gazebo", Name = "White gazebo", Icon = "🛖", Cost = 8e7, RequiresRebirths = 3, W = 10.5, D = 10.5, Max = 1 },
+		{ Id = "TieredFountain", Name = "Tiered fountain", Icon = "⛲", Cost = 3e8, RequiresRebirths = 3, W = 9.2, D = 9.2, Max = 2 },
+	},
 }
 
 ----------------------------------------------------------------------

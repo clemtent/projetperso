@@ -334,10 +334,12 @@ end
 
 type WheelLook = { Rim: Color3, Cap: Color3, Caliper: Color3, Spokes: number }
 
--- Roue : passage sombre, pneu, jante (lèvre), disque de frein, étrier, rayons,
--- cache-moyeu. Depuis la face extérieure du pneu (vers l'extérieur) :
--- lèvre +0,04 | disque +0,07 | étrier +0,05..+0,10 | rayons +0,07..+0,13 |
--- cache-moyeu +0,095..+0,195 (aucune face confondue : pas de z-fighting)
+-- Roue (v9.8) : passage sombre, pneu (bande de roulement) + FLANC plus clair,
+-- fond de jante, disque de frein, étrier, rayons, cache-moyeu. Couches depuis
+-- la face extérieure du pneu (vers l'extérieur), toutes espacées de ≥ 0,025
+-- (aucune face confondue : pas de z-fighting) :
+-- pneu 0 | flanc +0,025 | fond de jante +0,05 | disque +0,075 |
+-- étrier +0,0625..+0,10 | rayons +0,125..+0,16 | cache-moyeu +0,10..+0,195
 local function wheel(b: B, s: Spec, x: number, z: number, full: boolean, look: WheelLook)
 	local D = s.WheelD
 	local r = D / 2
@@ -345,34 +347,47 @@ local function wheel(b: B, s: Spec, x: number, z: number, full: boolean, look: W
 	cylX(b, "WheelArch", side * (s.W / 2 - 0.01), r + 0.1, z, 0.1, D + 0.55, TRIM, M.SmoothPlastic)
 	cylX(b, "Tyre", x, r, z, s.TyreW, D, TYRE, M.Rubber, true)
 	local face = x + side * s.TyreW / 2
-	cylX(b, "Rim", face - side * 0.08, r, z, 0.24, D * 0.66, look.Rim, M.Metal)
+	local function layer(name: string, outer: number, thick: number, diameter: number, color: Color3, material: Enum.Material)
+		cylX(b, name, face + side * (outer - thick / 2), r, z, thick, diameter, color, material)
+	end
 	if not full then
-		cylX(b, "Hub", face + side * 0.02, r, z, 0.12, D * 0.24, look.Cap, M.Metal)
+		layer("Rim", 0.05, 0.3, D * 0.66, look.Rim, M.Metal)
+		layer("Hub", 0.1, 0.1, D * 0.24, look.Cap, M.Metal)
 		return
 	end
+	layer("Sidewall", 0.025, 0.08, D - 0.14, SIDEWALL, M.Rubber)
 	if look.Spokes <= 0 then
-		-- jante tôle (kawaii) : grand enjoliveur + bouton central
-		cylX(b, "HubCap", face + side * 0.03, r, z, 0.1, D * 0.44, look.Cap, M.Metal)
-		cylX(b, "HubCenter", face + side * 0.1, r, z, 0.08, D * 0.16, look.Rim, M.SmoothPlastic)
+		-- jante tôle (kawaii) : grande jante + enjoliveur + bouton central
+		layer("Rim", 0.05, 0.3, D * 0.66, look.Rim, M.SmoothPlastic)
+		layer("HubCap", 0.075, 0.1, D * 0.46, look.Cap, M.Metal)
+		layer("HubCenter", 0.1, 0.1, D * 0.16, look.Rim, M.SmoothPlastic)
 		return
 	end
-	cylX(b, "BrakeDisc", face + side * 0.02, r, z, 0.1, D * 0.5, DISC, M.Metal)
+	layer("Rim", 0.05, 0.3, D * 0.68, GRAPHITE:Lerp(look.Rim, 0.35), M.Metal)
+	layer("BrakeDisc", 0.075, 0.12, D * 0.5, DISC, M.Metal)
 	local ca = math.rad(40)
-	boxRotX(b, "Caliper", face + side * 0.075, r + math.cos(ca) * D * 0.19, z + math.sin(ca) * D * 0.19, 0.05, D * 0.1, D * 0.2, ca, look.Caliper)
-	local len = D * 0.6
+	boxRotX(b, "Caliper", face + side * 0.08125, r + math.cos(ca) * D * 0.19, z + math.sin(ca) * D * 0.19, 0.0375, D * 0.1, D * 0.2, ca, look.Caliper)
+	local len = D * 0.62
 	local sw = D * 0.075
+	local sx = face + side * 0.1425
 	if look.Spokes == 5 then
 		for k = 0, 4 do
 			local a = k / 5 * 2 * PI
-			boxRotX(b, "Spoke", face + side * 0.1, r + math.cos(a) * len / 4, z + math.sin(a) * len / 4, 0.06, sw, len / 2, a - PI / 2, look.Rim, M.Metal)
+			boxRotX(b, "Spoke", sx, r + math.cos(a) * len / 4, z + math.sin(a) * len / 4, 0.035, sw, len / 2, a - PI / 2, look.Rim, M.Metal)
 		end
 	else
 		local bars = if look.Spokes >= 10 then 5 else 3
 		for k = 0, bars - 1 do
-			boxRotX(b, "Spoke", face + side * 0.1, r, z, 0.06, sw, len, k / bars * PI - PI / 2, look.Rim, M.Metal)
+			boxRotX(b, "Spoke", sx, r, z, 0.035, sw, len, k / bars * PI - PI / 2, look.Rim, M.Metal)
 		end
 	end
-	cylX(b, "Hub", face + side * 0.145, r, z, 0.1, D * 0.17, look.Cap, M.Metal)
+	-- lèvre de jante (anneau chromé : 6 segments fins, couche +0,085..+0,115)
+	for k = 0, 5 do
+		local a = (k + 0.5) / 6 * 2 * PI
+		local rr = D * 0.33
+		boxRotX(b, "RimLip", face + side * 0.1, r + math.cos(a) * rr, z + math.sin(a) * rr, 0.03, 0.07, 2 * rr * math.tan(PI / 6) + 0.03, a, CHROME, M.Metal)
+	end
+	layer("Hub", 0.195, 0.095, D * 0.17, look.Cap, M.Metal)
 end
 
 -- Arche d'aile évasée au-dessus d'une roue : 3 segments tangents (±52°),
@@ -382,11 +397,11 @@ local function archFlare(b: B, s: Spec, z: number, side: number, topAt: (number)
 	local r = s.WheelD / 2
 	local ra = r + 0.32
 	local thick = 0.24
-	local half = ra * math.sin(math.rad(26)) + 0.05
+	local half = ra * math.sin(math.rad(13)) + 0.04 -- (v9.8) 5 segments de 26° : arche lisse
 	local x = side * (s.W / 2 + 0.045)
 	local hump = false
-	for k = -1, 1 do
-		local a = k * math.rad(52)
+	for k = -2, 2 do
+		local a = k * math.rad(26)
 		local y = r + math.cos(a) * ra
 		local zc = z + math.sin(a) * ra
 		local maxY = y + math.abs(math.sin(a)) * half + math.abs(math.cos(a)) * thick / 2

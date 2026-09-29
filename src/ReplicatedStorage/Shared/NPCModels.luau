@@ -266,8 +266,7 @@ local function legs(ctx: Ctx, pants: Color3, skin: Color3, shoe: Color3, shorts:
 		local x = sx * 0.29
 		add(ctx, th, "Thigh", Vector3.new(0.52, 1.24, 0.58), at(x, 1.92, 0), bareThigh and skin or pants, bareThigh and M.SmoothPlastic or M.Fabric)
 		add(ctx, sh, "Shin", Vector3.new(0.44, 1.06, 0.48), at(x, 0.84, 0.01), shorts and skin or pants, shorts and M.SmoothPlastic or M.Fabric)
-		add(ctx, sh, "Shoe", Vector3.new(0.5, 0.28, 0.92), at(x, 0.18, -0.15), shoe, M.SmoothPlastic)
-		add(ctx, sh, "Sole", Vector3.new(0.54, 0.08, 0.96), at(x, 0.04, -0.15), shoe:Lerp(WHITE, 0.6), M.SmoothPlastic)
+		add(ctx, sh, "Shoe", Vector3.new(0.5, 0.3, 0.92), at(x, 0.15, -0.15), shoe, M.SmoothPlastic)
 	end
 end
 
@@ -437,7 +436,8 @@ function NPCModels.Build(style: string, opts: Opts?): Model
 			if hash(seed, 57) < 0.6 then
 				-- lunettes
 				for _, sx in ipairs({ -1, 1 }) do
-					add(ctx, G_HEAD, "Glasses", Vector3.new(0.05, 0.2, 0.24), at(sx * 0.19, HEAD_Y + 0.04, -0.5) * CFrame.Angles(0, math.rad(90), 0), INK, M.SmoothPlastic, "Cyl")
+					local lens = add(ctx, G_HEAD, "Glasses", Vector3.new(0.04, 0.24, 0.28), at(sx * 0.19, HEAD_Y + 0.04, -0.52) * CFrame.Angles(0, math.rad(90), 0), rgb(200, 226, 240), M.Glass, "Cyl")
+					lens.Transparency = 0.45
 				end
 			end
 		end)
@@ -494,7 +494,6 @@ function NPCModels.Build(style: string, opts: Opts?): Model
 	end
 	if look.Belt and not skirt and style ~= "baker" then
 		add(ctx, G_BODY, "Belt", Vector3.new(1.34, 0.12, 0.72), at(0, 2.72, 0), rgb(60, 40, 30), M.Leather)
-		add(ctx, G_BODY, "Buckle", Vector3.new(0.18, 0.14, 0.04), at(0, 2.72, -0.375), rgb(210, 190, 120), M.Metal)
 	end
 	head(ctx, skin, hair, look.HairStyle, seed, look.Female)
 	arm(ctx, -1, sleeve, skin, longSleeve, cuff)
