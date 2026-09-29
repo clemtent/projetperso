@@ -769,7 +769,7 @@ local function stepBolt(t: number, flash: number, slot: number?, camPos: Vector3
 	if flash <= 0.02 or slot == nil or hash01(slot * 9 + 5) > 0.55 then
 		if boltSlot ~= nil then
 			boltSlot = nil
-			for _, part in ipairs(bolt) do
+			for i, part in ipairs(bolt) do
 				part.Transparency = 1
 				part.CFrame = parkAt(3, i)
 			end

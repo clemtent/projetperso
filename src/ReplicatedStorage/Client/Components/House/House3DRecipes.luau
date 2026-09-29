@@ -912,7 +912,7 @@ local function sofa(b: Builder, ctx: Ctx, seatDefault: number, width: number, cu
 	for _, side in ipairs({ -1, 1 }) do
 		local ax = side * (width / 2 - 5)
 		b.Box(ax, 7 - 2 * g, 0, 10, seat - 1 + 2 * g, depth - 2, darken(main, 0.04), M.Fabric)
-		b.CylZ(ax, seat + 5, 0, 12, depth - 2 + 2 * g, lighten(main, 0.06), M.Fabric)
+		b.CylZ(ax, seat + 5, 0, 12, depth - 2 - 2 * g, lighten(main, 0.06), M.Fabric)
 		b.Box(ax, 8, depth / 2 - 1 + g / 2, 9, seat - 4, g, lighten(main, 0.02), M.Fabric)
 		b.CylZ(ax, seat + 5, depth / 2 - 1 + 1.5 * g, 13, g, pipe, M.Fabric)
 	end
@@ -1043,9 +1043,9 @@ local function bed(b: Builder, ctx: Ctx, topDefault: number, width: number, dept
 	b.CylZ(x0, top + 1, 0, 5.2, depth + 2 * g + 1, sheet, M.Fabric)
 	-- plaid tricoté au pied
 	local throw = accent(b, 2, lighten(blanket, 0.45))
-	b.Box(x1 - 9, frameTop - 3, 0, 12, top + 1.6 + g - (frameTop - 3), depth + 4 * g, throw, M.Fabric)
+	b.Box(x1 - 9, frameTop - 3, 0, 12, top + 1.6 + g - (frameTop - 3), depth + 5 * g, throw, M.Fabric)
 	for _, tx in ipairs({ -4, 0, 4 }) do
-		b.Box(x1 - 9 + tx, top + 1.6 + g, 0, 1, g, depth + 4 * g, darken(throw, 0.12), M.Fabric)
+		b.Box(x1 - 9 + tx, top + 1.6 + g, 0, 1, g, depth + 3 * g, darken(throw, 0.12), M.Fabric)
 	end
 	-- oreillers + coussin déco
 	local n = depth > 60 and 2 or 1
@@ -1217,7 +1217,7 @@ R.Fridge = function(b, ctx)
 	end
 	-- distributeur (porte du haut)
 	b.Box(-w * 0.18, split + 8, depth / 2 + 1.5 * g, 14, 18, g, rgb(60, 66, 80), M.SmoothPlastic)
-	local screen = b.Box(-w * 0.18, split + 22, depth / 2 + 1.5 * g, 8, 3, g, rgb(120, 220, 255))
+	local screen = b.Box(-w * 0.18, split + 22, depth / 2 + 2.5 * g, 8, 3, g, rgb(120, 220, 255))
 	b.Neon(screen)
 	b.Box(-w * 0.18, split + 10, depth / 2 + 2 * g, 4, 5, 2, GREY, M.Metal)
 	-- magnets + petit mot
@@ -1793,7 +1793,7 @@ local function windowRecipe(b: Builder, ctx: Ctx)
 	local frame = ctx.Trim
 	local g = House3DKit.Gap(b, 0.8)
 	b.Art(0, 12, 0.5, 78, 76, 1.3)
-	local glass = b.Box(0, 12, 3, 78, 76, 0.6, GLASS, M.Glass)
+	local glass = b.Box(0, 12, 2.5, 78, 76, 0.4, GLASS, M.Glass)
 	glass.Transparency = 0.8
 	glass.Reflectance = 0.15
 	glass.CastShadow = false
@@ -1805,11 +1805,11 @@ local function windowRecipe(b: Builder, ctx: Ctx)
 	end
 	b.Box(0, 94.5, 3, 96, 3, 7, lighten(frame, 0.08), M.Wood)
 	for _, x in ipairs({ -37.5, 37.5 }) do
-		b.Box(x, 12, 2.5, 3, 76, 3, darken(frame, 0.08), M.Wood)
+		b.Box(x, 12, 2.4, 3, 76, 2.4, darken(frame, 0.08), M.Wood)
 	end
 	-- petits bois (croisillon)
-	b.Box(0, 12, 2.5, 3, 76, 4, frame, M.Wood)
-	b.Box(0, 48.5, 2.5, 78, 3, 4, frame, M.Wood)
+	b.Box(0, 12, 2.75, 3, 76, 3.5, frame, M.Wood)
+	b.Box(0, 48.5, 2.75, 78, 3, 3.5, frame, M.Wood)
 	-- rebord biseauté + console
 	House3DKit.Bevel(b, 0, 1, 7, 100, 5, 14, 1.2, frame, M.Wood)
 	b.Box(0, -3, 3, 80, 4, 6, darken(frame, 0.1), M.Wood)
@@ -1847,12 +1847,14 @@ local function plaque(kind: string)
 			end
 		else
 			-- tableau : fond, dessin, cadre mouluré (baguettes + filet doré), verre
-			b.Box(0, 6, 1, 88, 88, 2, back, M.Wood)
-			b.Art(0, 6, 2.1, 88, 88, 1)
+			-- (couches : fond, dessin, filet doré, verre, cadre ; toutes espacées de g)
+			b.Box(0, 7, 0.5 * g + 0.6, 86, 86, 1.2, back, M.Wood)
+			local artFront = 0.5 * g + 2.2
+			b.Art(0, 6, artFront - 0.5, 88, 88, 1)
 			local frameColor = kind == "Calendar" and lighten(back, 0.3) or back
-			House3DKit.Frame(b, 0, 6 - g, 2 + g, 88 + 2 * g, 88 + 2 * g, 5 + g, 4, frameColor, M.Wood)
-			House3DKit.Frame(b, 0, 11, 3.3 + g, 78, 78, 1.2, 1.4 + 2 * g, GOLD, M.Metal)
-			local cover = b.Box(0, 12.2, 4, 75.6, 75.6, 0.4, rgb(230, 240, 255), M.Glass)
+			House3DKit.Frame(b, 0, 6 - g, (4 + g) / 2, 88 + 2 * g, 88 + 2 * g, 5 + g, 4 + g, frameColor, M.Wood)
+			House3DKit.Frame(b, 0, 11, (artFront - 0.6 + 4 + 2 * g) / 2, 78, 78, 1.2, 4.6 + 2 * g - artFront, GOLD, M.Metal)
+			local cover = b.Box(0, 12.2, artFront + g, 75.6, 75.6, 0.4, rgb(230, 240, 255), M.Glass)
 			cover.Transparency = 0.88
 			cover.Reflectance = 0.2
 			cover.CastShadow = false
@@ -2670,15 +2672,15 @@ R.DogHouse = function(b, _ctx)
 	for index = 0, 6 do
 		b.Box(0, 4 + index * 7.4, 0, 80, 7.4, 64, vary(wall, index, 0.05), M.WoodPlanks)
 	end
-	b.Box(0, 4, 32 - 0.6 + g / 4, 30, 30, 1.2 + g / 2, rgb(50, 32, 40))
-	b.CylZ(0, 34, 32 - 0.6 + g / 4, 30, 1.2 + g / 2, rgb(50, 32, 40))
-	b.Box(-16, 4, 32 + 0.75 * g, 3, 30, 1.5 * g, lighten(wall, 0.25), M.Wood)
-	b.Box(16, 4, 32 + 0.75 * g, 3, 30, 1.5 * g, lighten(wall, 0.25), M.Wood)
+	b.Box(0, 4, 32 - 0.6 + g / 2, 30, 30, 1.2 + g, rgb(50, 32, 40))
+	b.CylZ(0, 34, 32 - 0.6 + g / 2, 30, 1.2 + g, rgb(50, 32, 40))
+	b.Box(-16, 4, 32 + g, 3, 30, 2 * g, lighten(wall, 0.25), M.Wood)
+	b.Box(16, 4, 32 + g, 3, 30, 2 * g, lighten(wall, 0.25), M.Wood)
 	b.Wedge(-21, 56, 0, 44, 26, 72, roof, "Left", M.RoofShingles)
 	b.Wedge(21, 56, 0, 44, 26, 72, roof, "Right", M.RoofShingles)
 	b.CylZ(0, 81, 0, 4, 74, darken(roof, 0.25), M.Wood)
-	b.Box(0, 40, 32 + 0.75 * g, 24, 7, 1.5 * g, lightOf(b, CREAM), M.Wood)
-	House3DKit.Heart(b, 0, 43.5, 32 + 1.5 * g, 4, 0.6, accent(b, 3, PINK), M.SmoothPlastic)
+	b.Box(0, 40, 32 + g, 24, 7, 2 * g, lightOf(b, CREAM), M.Wood)
+	House3DKit.Heart(b, 0, 43.5, 32 + 2 * g, 4, 0.6, accent(b, 3, PINK), M.SmoothPlastic)
 	b.Cyl(30, 0, 36, 14, 5, accent(b, 3, SKY), M.SmoothPlastic)
 	b.Cyl(30, 4, 36, 11, 1 + g, rgb(160, 110, 70), M.Pebble)
 	b.Footprint(84, 70, 82)
@@ -2955,7 +2957,7 @@ local function jar(b: Builder, _ctx: Ctx)
 	b.Cyl(0, 62, 0, 64, 6, lighten(GLASS, 0.1), M.Glass).Transparency = 0.3
 	local lid = accent(b, 2, PINK)
 	b.Cyl(0, 66, 0, 74, 8, lid)
-	for index = 0, 2 do
+	for index = 0, 1 do
 		b.Cyl(0, 67.4 + index * 2.4, 0, 74 + 2 * House3DKit.Gap(b, 0.5), 0.8, darken(lid, 0.15))
 	end
 	b.Egg(0, 76, 0, 60, 6, 60, lighten(lid, 0.4), M.Fabric)

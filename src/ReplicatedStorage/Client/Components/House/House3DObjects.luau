@@ -410,7 +410,7 @@ R.Pinata = function(b, _ctx)
 	end
 	b.Box(22, 60, 8, 14, 22, 14, colors[1], M.Fabric)
 	b.Box(26, 72, 8, 16, 12, 16, colors[2], M.Fabric)
-	b.Box(34, 76, 8, 8, 8, 12, colors[3], M.Fabric)
+	b.Box(34, 76, 8, 8, 7, 12, colors[3], M.Fabric)
 	b.Ball(33, 80, 15, 3.5, INK, M.SmoothPlastic)
 	for _, dz in ipairs({ -4, 4 }) do
 		House3DKit.Triangle(b, 22, 92, 8 + dz, 6, 10, 0, 2, colors[4], M.Fabric)
@@ -515,7 +515,7 @@ R.Kite = function(b, _ctx)
 	local cy, r = 62, 30
 	local quarters = { { -1, 1 }, { 1, 1 }, { 1, -1 }, { -1, -1 } }
 	for index, q in ipairs(quarters) do
-		b.BoxR(CFrame.new(q[1] * r / 4, cy + q[2] * r / 4, 3) * CFrame.Angles(0, 0, math.pi / 4), r * 0.707, r * 0.707, 1.5, colors[index], M.Fabric)
+		b.BoxR(CFrame.new(q[1] * r / 4, cy + q[2] * r / 4, 3 + (index - 1) * House3DKit.Gap(b, 0.4)) * CFrame.Angles(0, 0, math.pi / 4), r * 0.707, r * 0.707, 1.5, colors[index], M.Fabric)
 	end
 	b.Tube(0, cy + r, 4.2, 0, cy - r, 4.2, 1.5, rgb(160, 110, 70), M.Wood)
 	b.Tube(-r, cy, 4.2, r, cy, 4.2, 1.5, rgb(160, 110, 70), M.Wood)
@@ -569,10 +569,11 @@ end
 R.PhotoFrame = function(b, _ctx)
 	local frame = vivid(b, 1, rgb(255, 170, 200))
 	b.BoxR(CFrame.new(0, 44, 0) * CFrame.Angles(-0.2, 0, 0), 76, 84, 6, frame, M.Wood)
-	b.BoxR(CFrame.new(0, 44, 0) * CFrame.Angles(-0.2, 0, 0) * CFrame.new(0, 0, 3.2), 58, 64, 1, rgb(160, 210, 255), M.SmoothPlastic)
-	b.BoxR(CFrame.new(0, 44, 0) * CFrame.Angles(-0.2, 0, 0) * CFrame.new(0, -14, 3.8), 58, 22, 1, rgb(140, 214, 140), M.SmoothPlastic)
-	b.BoxR(CFrame.new(-8, 44, 0) * CFrame.Angles(-0.2, 0, 0) * CFrame.new(0, 2, 4), 14, 20, 1, rgb(255, 214, 170), M.SmoothPlastic)
-	b.BoxR(CFrame.new(10, 44, 0) * CFrame.Angles(-0.2, 0, 0) * CFrame.new(0, 0, 4), 12, 16, 1, rgb(255, 200, 150), M.SmoothPlastic)
+	local g = House3DKit.Gap(b, 0.6)
+	b.BoxR(CFrame.new(0, 44, 0) * CFrame.Angles(-0.2, 0, 0) * CFrame.new(0, 0, 3 + g / 2), 58, 64, g, rgb(160, 210, 255), M.SmoothPlastic)
+	b.BoxR(CFrame.new(0, 44, 0) * CFrame.Angles(-0.2, 0, 0) * CFrame.new(0, -14, 3 + 1.5 * g), 58, 22, g, rgb(140, 214, 140), M.SmoothPlastic)
+	b.BoxR(CFrame.new(-8, 44, 0) * CFrame.Angles(-0.2, 0, 0) * CFrame.new(0, 2, 3 + 2.5 * g), 14, 20, g, rgb(255, 214, 170), M.SmoothPlastic)
+	b.BoxR(CFrame.new(10, 44, 0) * CFrame.Angles(-0.2, 0, 0) * CFrame.new(0, 0, 3 + 2.5 * g), 12, 16, g, rgb(255, 200, 150), M.SmoothPlastic)
 	b.Ball(20, 58, 12, 10, rgb(255, 236, 130), M.Neon)
 	b.BoxR(CFrame.new(0, 24, -14) * CFrame.Angles(0.5, 0, 0), 10, 48, 3, darken(frame, 0.2), M.Wood)
 	b.Footprint(76, 36, 90)
@@ -1114,7 +1115,7 @@ R.MouseHole = function(b, _ctx)
 	-- petite porte en bois entrouverte + paillasson
 	b.Box(-10, 2, 1, 24, 40, 2, rgb(200, 140, 90), M.WoodPlanks)
 	b.Ball(-2, 22, 3, 4, GOLD, M.Metal)
-	b.Box(12, 0, 12, 26, 1.5, 10, rgb(255, 150, 180), M.Fabric)
+	b.Box(12, 0, 12, 26, 2 + House3DKit.Gap(b, 0.6), 10, rgb(255, 150, 180), M.Fabric)
 	b.Footprint(76, 16, 70)
 end
 
@@ -1228,7 +1229,7 @@ R.StainedGlass = function(b, ctx)
 	b.Box(0, 8, 0.4, 70, 58, 1, rgb(255, 250, 240), M.SmoothPlastic)
 	for row = 0, 3 do
 		for column = 0, 3 do
-			local pane = b.Box(-26.25 + column * 17.5, 8 + row * 14.5, 1.5, 17, 14, 1, colors[(row + column * 2) % #colors + 1], M.Glass)
+			local pane = b.Box(-26.25 + column * 17.5, 8 + row * 14.5, 1.5 + House3DKit.Gap(b, 0.8), 17, 14, 1, colors[(row + column * 2) % #colors + 1], M.Glass)
 			pane.Transparency = 0.2
 		end
 	end
@@ -1238,7 +1239,7 @@ R.StainedGlass = function(b, ctx)
 		local a = index / 6 * math.pi
 		b.Tube(0, 66, 2.4, math.cos(a) * 34, 66 + math.sin(a) * 34, 2.4, 2, rgb(70, 60, 80), M.Metal)
 	end
-	b.CylZ(0, 66, 2.6, 14, 1, colors[2], M.Neon)
+	b.CylZ(0, 66, 2.5 + House3DKit.Gap(b, 0.8), 14, 1, colors[2], M.Neon)
 	local points = { { 36, 6, 3 } }
 	for index = 0, 12 do
 		local a = index / 12 * math.pi
