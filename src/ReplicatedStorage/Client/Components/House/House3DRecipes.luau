@@ -41,6 +41,8 @@
 
 local HouseSurfaces = require(script.Parent.HouseSurfaces)
 local House3DKit = require(script.Parent.House3DKit)
+-- (v9.9 SCALE99) proportions réelles à côté de l'avatar
+local House3DScale = require(script.Parent.House3DScale)
 
 type Builder = House3DKit.Builder
 
@@ -4584,7 +4586,12 @@ function House3DRecipes.Make(item: any, entry: any?, k: number, parent: Instance
 	local mirror = type(entry) == "table" and entry.F == true
 	local tintId = type(entry) == "table" and entry.C or nil
 	local mapper = tintMapper(item.Id, tintId)
-	local b = House3DKit.Builder(parent, origin, k, mirror, mapper, House3DRecipes.PaletteOf(item))
+	-- (v9.9 SCALE99) f = facteur uniforme, wide = élargissement horizontal
+	-- (House3DScale) ; K (renvoyé) = k * f ; dessus / assise / empreinte
+	-- sont rendus dans ces unités-là (x, z, largeur, profondeur x wide)
+	local f, wide = House3DScale.Of(item)
+	k *= f
+	local b = House3DKit.Builder(parent, origin, k, mirror, mapper, House3DRecipes.PaletteOf(item), wide)
 	b.Item = item
 	-- dessin 2D (tableaux, affiches) : peint seulement si la recette le demande
 	b.PaintFn = function(): House3DKit.Painted?
@@ -4604,7 +4611,7 @@ function House3DRecipes.Make(item: any, entry: any?, k: number, parent: Instance
 		for _, p in ipairs(b.Parts) do
 			p:Destroy()
 		end
-		b = House3DKit.Builder(parent, origin, k, mirror, mapper, House3DRecipes.PaletteOf(item))
+		b = House3DKit.Builder(parent, origin, k, mirror, mapper, House3DRecipes.PaletteOf(item), wide)
 		b.Item = item
 		pcall(fallback, b, ctx)
 	end
@@ -4632,15 +4639,29 @@ function House3DRecipes.Make(item: any, entry: any?, k: number, parent: Instance
 			end
 		end
 	end
+	-- (v9.9 SCALE99) objet élargi : x, z, largeur, profondeur des dessus et de
+	-- l'assise passent à l'échelle horizontale (les appelants font `* K`)
+	local tops = b.Tops
+	local seatAt = b.SeatAt
+	if wide ~= 1 then
+		local wideTops: { [number]: House3DKit.Top } = {}
+		for index, t in pairs(tops) do
+			wideTops[index] = { X = t.X * wide, Y = t.Y, Z = t.Z * wide, W = t.W * wide, D = t.D * wide }
+		end
+		tops = wideTops
+		if seatAt then
+			seatAt = { X = seatAt.X * wide, Y = seatAt.Y, Z = seatAt.Z * wide, W = seatAt.W * wide, D = seatAt.D * wide }
+		end
+	end
 	return {
 		Item = item,
 		K = k,
-		FW = b.Width * k,
-		FD = math.max(0.2, b.Depth * k),
+		FW = b.Width * k * wide,
+		FD = math.max(0.2, b.Depth * k * wide),
 		H = b.Height * k,
-		Tops = b.Tops,
+		Tops = tops,
 		Info = info,
-		SeatAt = b.SeatAt,
+		SeatAt = seatAt,
 		Lights = b.Lights,
 		Glows = b.Glows,
 		Parts = b.Parts,
