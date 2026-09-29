@@ -30,6 +30,19 @@
 	  House3DKit.Surface(part, face, canvasSize, lightInfluence) -> SurfaceGui
 	  House3DKit.Separate(parts) -> number   (v9.6 : écarte les faces confondues, anti-scintillement)
 	  House3DKit.Wood / Dist / Darken / Lighten / Pick (couleurs)
+	  v9.8 (RECIPES98, objets "20x plus réalistes") :
+	  House3DKit.Vary(color, seed, amount) -> Color3   (variation déterministe : veinage, dos de livres)
+	  House3DKit.Chrome(part, reflectance?) -> part    (métal poli)
+	  House3DKit.Bevel(b, x, y, z, w, h, d, e, color, material?) -> BasePart   (bloc au dessus chanfreiné)
+	  House3DKit.Handle(b, x, y, z, length, vertical, color?)                 (poignée barre sur 2 plots)
+	  House3DKit.Leg(b, x, y, z, d, h, color, material?, foot?)               (pied fuselé + patin)
+	  House3DKit.SeatCushion(b, x, y, z, w, h, d, color, piping?)             (assise aux bords roulés, passepoil)
+	  House3DKit.PillowR(b, cframe, w, h, d, color, material?)                (coussin moelleux orienté)
+	  House3DKit.Leaf(b, x, y, z, length, width, yaw, pitch, color, rib?)      (feuille ovale orientée)
+	  House3DKit.Books(b, x0, x1, y, zFront, depth, maxH, colors, seed)        (rangée de livres variés)
+	  House3DKit.Bulb(b, x, y, z, d, color, range, brightness?)               (ampoule douce, Brightness <= 1)
+	  House3DKit.Mirror(b, x, y, z, w, h, shape?) -> BasePart                 (miroir tagué Mirror = true)
+	  House3DKit.Planks(b, x, y, z, w, h, d, n, color, material?, seed?)      (lames de bois aux teintes variées)
 ]]
 
 local HouseArt = require(script.Parent.HouseArt)

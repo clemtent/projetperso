@@ -99,6 +99,9 @@ local CHIMNEYS: { [string]: number } = { Cottage = 1, Townhouse = 2, Loft = 0, M
 HouseFacade.Chimneys = CHIMNEYS
 
 export type Looks = { Wall: Color3?, Roof: Color3?, Pattern: string?, Garden: { string }, Rooms: { [number]: any }, Name: string, Garage: boolean? }
+-- (v9.8 HOUSE98) un battant de porte : pivote autour de `Hinge` (bas du
+-- chant côté gonds) ; Sign = +1 battant gauche (s'étend vers +x), -1 droit
+export type Leaf = { Part: BasePart, Hinge: CFrame, Sign: number, Width: number, Height: number }
 export type Built = {
 	Door: BasePart?,
 	Hinge: CFrame?,
@@ -106,6 +109,9 @@ export type Built = {
 	Fills: { [number]: BasePart },
 	Chimneys: number,
 	Style: string,
+	Leaves: { Leaf }?, -- (v9.8) porte d'entrée DOUBLE (2 battants)
+	BackLeaves: { Leaf }?, -- (v9.8) porte de derrière (jardin)
+	BackFills: { [number]: BasePart }?, -- (v9.8) "rideau" des fenêtres du fond tant que la pièce n'est pas construite
 }
 
 type Ctx = {
@@ -191,11 +197,12 @@ end
 
 -- Fenêtre cintrée : imposte en demi-cercle dessinée (SurfaceGui) au-dessus
 -- d'une vitre rectangulaire (le mur n'est percé que du rectangle)
-local function archTop(ctx: Ctx, x0: number, x1: number, y1: number, frame: Color3)
+local function archTop(ctx: Ctx, x0: number, x1: number, y1: number, frame: Color3, maxH: number?)
 	local kit = ctx.Kit
 	local w = x1 - x0 + 0.7
 	-- arc surbaissé (demi-ellipse) : ne monte jamais sur l'étage du dessus
-	local h = math.min(w / 2, 2.3)
+	-- (v9.8 : `maxH` = imposte plus basse au-dessus des grandes portes)
+	local h = math.min(w / 2, maxH or 2.3)
 	local panel = kit:Box("ArchTop", x0 - 0.35, x1 + 0.35, y1, y1 + h, -0.42, -0.38, WHITE, M.SmoothPlastic, { T = 1, Shadow = false })
 	local gui = Instance.new("SurfaceGui")
 	gui.Name = "Arch"
@@ -580,12 +587,27 @@ local function ironFence(ctx: Ctx, x0: number, x1: number, d: number, gate0: num
 	end
 end
 
--- Plaque au nom du propriétaire
-local function namePlate(ctx: Ctx, x: number, y: number, d: number, w: number)
+-- Plaque au nom du propriétaire (v9.8 HOUSE98 : vraie enseigne lisible
+-- depuis la rue, SOUS l'avant-toit et AU-DESSUS de la porte) : planche de
+-- bois foncé, liseré doré, plaque crème gravée, 2 vis en laiton.
+-- (x, y) = milieu du BAS de la plaque, `dWall` = face du mur (ou du support)
+-- contre laquelle elle est fixée ; elle dépasse vers la rue (d plus petit).
+local PLATE_H = 1.7
+local function namePlate(ctx: Ctx, x: number, y: number, dWall: number, w: number)
 	local kit = ctx.Kit
-	local plate = kit:Box("NamePlate", x - w / 2, x + w / 2, y, y + 1.5, d - 0.25, d, WHITE, M.SmoothPlastic, { Shadow = false })
-	kit:Box("NamePlateFrame", x - w / 2 - 0.15, x + w / 2 + 0.15, y - 0.15, y + 1.65, d - 0.1, d + 0.1, P.Gold, M.Metal, { Shadow = false })
-	kit:Text(plate, Enum.NormalId.Back, "🏠 " .. ctx.Looks.Name, C.PinkDeep, Enum.Font.FredokaOne, 40, 220)
+	local board = Color3.fromRGB(122, 80, 62)
+	kit:Box("NamePlateBoard", x - w / 2 - 0.3, x + w / 2 + 0.3, y - 0.3, y + PLATE_H + 0.3, dWall - 0.22, dWall - 0.02, board, M.Wood, { Shadow = false })
+	kit:Box("NamePlateRim", x - w / 2 - 0.1, x + w / 2 + 0.1, y - 0.1, y + PLATE_H + 0.1, dWall - 0.27, dWall - 0.2, P.Gold, M.Metal, { Shadow = false })
+	local plate = kit:Box("NamePlate", x - w / 2, x + w / 2, y, y + PLATE_H, dWall - 0.33, dWall - 0.24, Color3.fromRGB(255, 250, 238), M.SmoothPlastic, { Shadow = false })
+	for _, s in ipairs({ -1, 1 }) do
+		kit:Ball("NamePlateScrew", x + s * (w / 2 + 0.16), y + PLATE_H / 2, dWall - 0.23, 0.16, P.Gold, M.Metal, { Shadow = false })
+	end
+	local label = kit:Text(plate, Enum.NormalId.Back, "🏠 " .. ctx.Looks.Name, Color3.fromRGB(110, 52, 86), Enum.Font.FredokaOne, 40, 260)
+	label.Size = UDim2.fromScale(0.94, 0.86)
+	label.Position = UDim2.fromScale(0.03, 0.07)
+	label.TextStrokeColor3 = Color3.fromRGB(255, 214, 232)
+	label.TextStrokeTransparency = 0.4
+	plate:SetAttribute("NamePlate", true)
 end
 
 ----------------------------------------------------------------------

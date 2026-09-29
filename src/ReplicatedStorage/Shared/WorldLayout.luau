@@ -283,6 +283,26 @@ function WorldLayout.RoomInterior(size: SizeDef?, slot: number): (number, number
 	return x0 + t, x1 - t, WorldLayout.FloorY(floor), t, t + WorldLayout.DEPTH
 end
 
+-- (v9.8 HOUSE98) VRAIE fenêtre du mur du fond d'une pièce (côté jardin) :
+-- même place et même largeur que la fenêtre de la pièce 2D (HouseRoom : à
+-- gauche, 104 x 92 px, 36 px sous le haut du mur ; = House3DScene
+-- windowRect), mais prolongée vers le haut jusqu'à BACK_WINDOW_TOP (la
+-- partie du mur au-dessus de la 2D, où aucun objet mural ne va) : une
+-- porte-fenêtre en hauteur. -> (x0, x1, y0, y1) par rapport au milieu de la
+-- pièce (x) et au dessus de son sol (y)
+WorldLayout.BACK_WINDOW_TOP = 9.6
+function WorldLayout.BackWindowRect(size: SizeDef?, wallRatio: number?): (number, number, number, number)
+	local roomWpx = WorldLayout.RoomWidthPx(size)
+	local side = WorldLayout.SIDE_PX
+	local wallPx = math.floor(WorldLayout.ROOM_HEIGHT_PX * math.clamp(finite(wallRatio, WorldLayout.WALL_RATIO), 0.1, 0.9) + 0.5)
+	local k = roomWpx / math.max(1, roomWpx - 2 * side)
+	local x2D = side + math.floor(roomWpx * 0.1) + 52
+	local cx = ((x2D - side) * k - roomWpx / 2) * WorldLayout.PX
+	local ww, wh = 104 * k * WorldLayout.PX, 92 * WorldLayout.PX
+	local cy = (wallPx - 36) * WorldLayout.PX - wh / 2
+	return cx - ww / 2, cx + ww / 2, cy - wh / 2, math.max(cy + wh / 2, WorldLayout.BACK_WINDOW_TOP)
+end
+
 -- Centre du dessus du sol d'une pièce (repère local) : x, y, d
 function WorldLayout.RoomCenter(size: SizeDef?, slot: number): (number, number, number)
 	local xMin, xMax, yFloor, dMin, dMax = WorldLayout.RoomInterior(size, slot)

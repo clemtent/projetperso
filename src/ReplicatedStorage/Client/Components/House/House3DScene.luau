@@ -1076,6 +1076,11 @@ export type ShellOptions = {
 	Front: boolean?, -- mur avant (avec sa porte) ; true par défaut
 	Ceiling: boolean?, -- plafond ; false par défaut
 	Patterns: boolean?, -- motifs du papier peint / du sol (SurfaceGui décoratives) ; true par défaut
+	-- (v9.8 HOUSE98) VRAIE fenêtre dans le mur du fond (ville) : { x0, x1, y0, y1 }
+	-- (x depuis le milieu de la pièce, y depuis le sol) : trou dans le mur,
+	-- chambranle + appui intérieurs, PAS de vue peinte ni de vitre (la vitre
+	-- est dans le mur du fond de la façade, HouseFacade) ; nil = fenêtre décor
+	BackWindow: { number }?,
 }
 
 local SHELL_WALL_T = 1
@@ -1141,7 +1146,8 @@ function House3DScene.BuildRoomShell(roomData: any, sizeDef: any?, options: Shel
 	end
 
 	-- Un mur (avec une porte ouverte au milieu si demandé) ; `along` = axe du mur
-	local function wall(name: string, center: Vector3, along: Vector3, length: number, inward: Vector3, withDoor: boolean)
+	-- (v9.8 HOUSE98) `hole` = { a0, a1, y0, y1 } : vraie fenêtre (a le long de `along`)
+	local function wall(name: string, center: Vector3, along: Vector3, length: number, inward: Vector3, withDoor: boolean, hole: { number }?)
 		local across = Vector3.new(math.abs(inward.X), 0, math.abs(inward.Z)) * T
 		local lengthVec = Vector3.new(math.abs(along.X), 0, math.abs(along.Z))
 		local function segment(offset: number, segLength: number, y0: number, y1: number)
@@ -1164,6 +1170,13 @@ function House3DScene.BuildRoomShell(roomData: any, sizeDef: any?, options: Shel
 			end
 			shellPart(model, "DoorFrame", lengthVec * (doorW + 1) + Vector3.new(math.abs(inward.X), 0, math.abs(inward.Z)) * 0.3 + Vector3.new(0, 0.5, 0),
 				CFrame.new(face + Vector3.new(0, doorH + 0.25, 0)), trim, M.Wood, false)
+		elseif hole then
+			-- mur percé d'une vraie fenêtre : gauche, droite (pleine hauteur), dessous, dessus
+			local a0, a1 = math.max(-length / 2, hole[1]), math.min(length / 2, hole[2])
+			segment((-length / 2 + a0) / 2, a0 + length / 2, 0, WH)
+			segment((a1 + length / 2) / 2, length / 2 - a1, 0, WH)
+			segment((a0 + a1) / 2, a1 - a0, 0, hole[3])
+			segment((a0 + a1) / 2, a1 - a0, hole[4], WH)
 		else
 			segment(0, length, 0, WH)
 		end
@@ -1185,7 +1198,16 @@ function House3DScene.BuildRoomShell(roomData: any, sizeDef: any?, options: Shel
 	end
 	local X = Vector3.new(1, 0, 0)
 	local Z = Vector3.new(0, 0, 1)
-	wall("WallBack", Vector3.new(0, 0, -D / 2 - T / 2), X, W + 2 * T, Z, doors.Back == true)
+	local backWindow: { number }? = nil
+	if type(opts.BackWindow) == "table" and #opts.BackWindow >= 4 then
+		local b = opts.BackWindow :: { number }
+		local bx0, bx1 = math.clamp(tonumber(b[1]) or 0, -W / 2 + 0.6, W / 2 - 1.6), math.clamp(tonumber(b[2]) or 0, -W / 2 + 1.6, W / 2 - 0.6)
+		local by0, by1 = math.clamp(tonumber(b[3]) or 0, 0.8, WH - 2), math.clamp(tonumber(b[4]) or 0, 1.8, WH - 1)
+		if bx1 - bx0 > 1 and by1 - by0 > 1 then
+			backWindow = { bx0, bx1, by0, by1 }
+		end
+	end
+	wall("WallBack", Vector3.new(0, 0, -D / 2 - T / 2), X, W + 2 * T, Z, doors.Back == true, backWindow)
 	wall("WallLeft", Vector3.new(-W / 2 - T / 2, 0, 0), Z, D, X, doors.Left == true)
 	wall("WallRight", Vector3.new(W / 2 + T / 2, 0, 0), Z, D, -X, doors.Right == true)
 	if opts.Front ~= false then
@@ -1197,7 +1219,39 @@ function House3DScene.BuildRoomShell(roomData: any, sizeDef: any?, options: Shel
 		shellPart(model, "Ceiling", Vector3.new(W + 2 * T, 0.56, D + 2 * T), CFrame.new(0, WH + 0.24, 0), trim:Lerp(WHITE, 0.5), M.SmoothPlastic, true)
 	end
 	-- Papier peint (décoration) sur le mur du fond
-	if patterns then
+	if patterns and backWindow then
+		-- (v9.8) peau percée : à gauche / à droite de la fenêtre (motif : la même
+		-- feuille décalée, donc raccord parfait), dessous / dessus (couleur unie)
+		local bw = backWindow :: { number }
+		local wallPx = math.floor(ROOM_HEIGHT * (tonumber(HouseCommon.Config.WallRatio) or 0.46) + 0.5)
+		local s = wallPx / WH -- px de feuille par stud
+		local canvasW = math.floor(W * s)
+		local function piece(x0: number, x1: number, y0: number, y1: number, painted: boolean)
+			if x1 - x0 < 0.05 or y1 - y0 < 0.05 then
+				return
+			end
+			local skin = shellPart(model, "WallPattern", Vector3.new(x1 - x0, y1 - y0, 0.05), CFrame.new((x0 + x1) / 2, (y0 + y1) / 2, -D / 2 + 0.03), wallA, wallMaterial, false)
+			skin.CastShadow = false
+			if not painted then
+				return
+			end
+			local gui = House3DKit.Surface(skin, Enum.NormalId.Back, Vector2.new((x1 - x0) * s, (y1 - y0) * s), 1)
+			local sheet = Instance.new("Frame")
+			sheet.Name = "Paper"
+			sheet.BackgroundTransparency = 1
+			sheet.BorderSizePixel = 0
+			sheet.Position = UDim2.fromOffset(-math.floor((x0 + W / 2) * s + 0.5), -math.floor((WH - y1) * s + 0.5))
+			sheet.Size = UDim2.fromOffset(canvasW, wallPx)
+			sheet.ClipsDescendants = true
+			sheet.Parent = gui
+			pcall(HousePatterns.BuildWall, sheet, canvasW, wallPx, wallpaper, 1)
+			sheet.BackgroundTransparency = 1
+		end
+		piece(-W / 2, bw[1], 0, WH, true)
+		piece(bw[2], W / 2, 0, WH, true)
+		piece(bw[1], bw[2], 0, bw[3], false)
+		piece(bw[1], bw[2], bw[4], WH, false)
+	elseif patterns then
 		local wallPx = math.floor(ROOM_HEIGHT * (tonumber(HouseCommon.Config.WallRatio) or 0.46) + 0.5)
 		local skin = shellPart(model, "WallPattern", Vector3.new(W, WH, 0.05), CFrame.new(0, WH / 2, -D / 2 + 0.03), wallA, wallMaterial, false)
 		skin.CastShadow = false
@@ -1214,7 +1268,21 @@ function House3DScene.BuildRoomShell(roomData: any, sizeDef: any?, options: Shel
 		sheet.BackgroundTransparency = 1
 	end
 	-- Fenêtre du mur du fond (cadre, vitre, rebord ; décor)
-	do
+	if backWindow then
+		-- (v9.8) vraie fenêtre : chambranle mouluré (4 pièces, 0,05 dans le trou :
+		-- jamais coplanaire avec les tranches du mur) + appui intérieur en bois
+		local bw = backWindow :: { number }
+		local z = -D / 2
+		local f = 0.4
+		local x0, x1, y0, y1 = bw[1], bw[2], bw[3], bw[4]
+		local ww = x1 - x0
+		shellPart(model, "WindowFrame", Vector3.new(ww + 2 * f, f, 0.3), CFrame.new((x0 + x1) / 2, y1 + f / 2 - 0.05, z + 0.12), trim, M.Wood, false)
+		shellPart(model, "WindowFrame", Vector3.new(f, y1 - y0, 0.3), CFrame.new(x0 - f / 2 + 0.05, (y0 + y1) / 2, z + 0.12), trim, M.Wood, false)
+		shellPart(model, "WindowFrame", Vector3.new(f, y1 - y0, 0.3), CFrame.new(x1 + f / 2 - 0.05, (y0 + y1) / 2, z + 0.12), trim, M.Wood, false)
+		shellPart(model, "WindowSill", Vector3.new(ww + 1.3, 0.28, 0.75), CFrame.new((x0 + x1) / 2, y0 - 0.1, z + 0.3), trim, M.Wood, false)
+		model:SetAttribute("BackWindow", Vector3.new((x0 + x1) / 2, (y0 + y1) / 2, 0))
+	else
+		-- (fenêtre décor de la vue 3D de la maison 2D : vue peinte derrière une vitre)
 		-- (v9.6 : place et taille de la fenêtre de la pièce 2D, comme les objets muraux)
 		local cx, cy, ww, wh = windowRect(roomWpx, scale)
 		local z = -D / 2

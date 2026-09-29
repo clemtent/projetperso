@@ -143,6 +143,12 @@ end
 -- Petits morceaux
 ----------------------------------------------------------------------
 
+-- Épaisseur (unités) d'au moins `studs` à l'échelle de l'objet
+local function th(b: Builder, units: number, studs: number?): number
+	return math.max(units, (studs or 0.036) / math.max(0.001, b.K))
+end
+
+
 local function named(part: BasePart, name: string): BasePart
 	part.Name = name
 	return part
@@ -165,8 +171,8 @@ local function pivot(b: Builder, name: string, x: number, y: number, z: number):
 end
 
 -- Écran : sa face Front regarde le devant (repère `cf`, bas-centre du verre)
-local function screenPart(b: Builder, cf: CFrame, w: number, h: number, kind: string, index: number): BasePart
-	local part = b.Part("Part", cf * CFrame.new(0, h / 2, 0) * CFrame.Angles(0, math.pi, 0), Vector3.new(w, h, 0.5), SCREEN_OFF, M.SmoothPlastic, "Screen")
+local function screenPart(b: Builder, cf: CFrame, w: number, h: number, kind: string, index: number, depth: number?): BasePart
+	local part = b.Part("Part", cf * CFrame.new(0, h / 2, 0) * CFrame.Angles(0, math.pi, 0), Vector3.new(w, h, depth or 0.5), SCREEN_OFF, M.SmoothPlastic, "Screen")
 	part.CastShadow = false
 	part:SetAttribute("ScreenKind", kind)
 	part:SetAttribute("ScreenIndex", index)
@@ -419,11 +425,6 @@ local KEY_LAYOUT: { { any } } = {
 }
 House3DSetup.KeyLayout = KEY_LAYOUT
 
--- Épaisseur (unités) d'au moins `studs` à l'échelle de l'objet
-local function th(b: Builder, units: number, studs: number?): number
-	return math.max(units, (studs or 0.036) / math.max(0.001, b.K))
-end
-
 R.SetupKeyboard = function(b, _ctx)
 	local caseColor = b.Map(rgb(46, 48, 64))
 	local rimColor = b.Map(rgb(64, 66, 88))
@@ -524,86 +525,189 @@ end
 -- 📺 TÉLÉS (logo DVD) + MEUBLE TÉLÉ + ÉCRAN D'INFOS
 ----------------------------------------------------------------------
 
--- Dalle : cadre fin + écran (bas-centre `cf`), largeur `w` (16:9)
-local function flatPanel(b: Builder, cf: CFrame, w: number, kind: string, frameColor: Color3): number
-	local h = w * 9 / 16
-	local bezel = 1.6
-	b.BoxR(cf * CFrame.new(0, h / 2 + bezel, 0), w + bezel * 2, h + bezel * 2, 2.4, frameColor, M.SmoothPlastic)
-	b.BoxR(cf * CFrame.new(0, h / 2 + bezel, -2.2), w * 0.7, h * 0.7, 2.2, darken(frameColor, 0.1), M.SmoothPlastic)
-	screenPart(b, cf * CFrame.new(0, bezel, 1.45), w, h, kind, 1)
-	-- logo de la marque + diode
-	b.BoxR(cf * CFrame.new(0, 0.7, 1.3), 6, 0.6, 0.3, CHROME, M.Metal)
-	neon(b, b.BoxR(cf * CFrame.new(w / 2 - 2, 0.7, 1.3), 1, 0.5, 0.3, RED, M.Neon), "Glow")
-	return h + bezel * 2
+-- v9.8 📺 Télés "10x" : dalle ultra-fine aux coins arrondis, bords fins,
+-- dos bombé, pieds / supports réalistes, barre de son, halo doux pour les
+-- grandes, écran de cinéma (projecteur au plafond + toile). Les épaisseurs
+-- suivent l'échelle (th) : aucune couche plus fine que 0,03 stud, aucune
+-- face confondue (l'écran dépasse de 0,03 stud du cadre).
+
+-- Bloc aux coins arrondis dans le plan de l'image (arêtes le long de Z) ;
+-- `cf` = centre du bloc
+local function roundRectZ(b: Builder, cf: CFrame, w: number, h: number, d: number, r: number, color: Color3, material: Enum.Material?)
+	r = math.clamp(r, 0.3, math.min(w, h) / 2 - 0.05)
+	local main = b.BoxR(cf, w - 2 * r, h, d, color, material)
+	b.BoxR(cf, w, h - 2 * r, d, color, material)
+	for _, sx in ipairs({ -1, 1 }) do
+		for _, sy in ipairs({ -1, 1 }) do
+			local corner = b.Part("Part", cf * CFrame.new(sx * (w / 2 - r), sy * (h / 2 - r), 0) * CFrame.Angles(0, math.pi / 2, 0), Vector3.new(d, 2 * r, 2 * r), color, material, "Cylindre")
+			;(corner :: Part).Shape = Enum.PartType.Cylinder
+		end
+	end
+	return main
 end
 
+type Panel = { W: number, H: number, Back: number, Screen: BasePart }
+
+-- Dalle 16:9 : `cf` = bas-centre de la FACE AVANT du cadre ; renvoie ses mesures
+local function tvPanel(b: Builder, cf: CFrame, w: number, kind: string, frameColor: Color3): Panel
+	local h = w * 9 / 16
+	local bezel = math.max(1.1, w * 0.011)
+	local chin = bezel * 2.4
+	local depth = th(b, 2.2)
+	local bulge = th(b, 2.6)
+	local gap = th(b, 0, 0.032)
+	local W, H = w + bezel * 2, h + bezel + chin
+	roundRectZ(b, cf * CFrame.new(0, H / 2, -depth / 2), W, H, depth, math.max(1.4, w * 0.018), frameColor, M.SmoothPlastic)
+	-- dos bombé (électronique) : en partie pris dans la dalle
+	roundRectZ(b, cf * CFrame.new(0, H * 0.52, -depth - bulge * 0.35), W * 0.7, H * 0.62, bulge, math.max(2, w * 0.05), darken(frameColor, 0.14), M.SmoothPlastic)
+	-- écran : sa face avant à 0,03 stud devant le cadre
+	local screenDepth = th(b, 0.8)
+	local screen = screenPart(b, cf * CFrame.new(0, chin, gap - screenDepth / 2), w, h, kind, 1, screenDepth)
+	-- logo de la marque + diode (dans le menton, même plan que l'écran)
+	b.BoxR(cf * CFrame.new(0, chin / 2, gap - screenDepth / 2), math.min(10, w * 0.07), chin * 0.28, screenDepth, CHROME, M.Metal)
+	neon(b, b.BoxR(cf * CFrame.new(w / 2 - 2, chin / 2, gap - screenDepth / 2), 1.2, chin * 0.24, screenDepth, RED, M.Neon), "Glow")
+	return { W = W, H = H, Back = depth + bulge * 0.85, Screen = screen }
+end
+
+-- Barre de son (bouts arrondis, grille en tissu, diode) ; `z` = face arrière
 local function soundbar(b: Builder, x: number, y: number, z: number, w: number)
-	b.Round(x, y, z, w, 4, 6, 2, CARBON, M.SmoothPlastic)
-	-- (v9.6 z-fighting : grille 3..3.8 puis diode 3.8..4.4 devant le boîtier)
-	b.Box(x, y + 0.6, z + 3.4, w - 4, 2.8, 0.8, rgb(70, 70, 90), M.Fabric)
-	neon(b, b.Box(x, y + 0.3, z + 4.1, 3, 0.5, 0.6, CYAN, M.Neon), "Glow")
+	local h = 5
+	local d = 6.5
+	local r = h / 2
+	b.Box(x, y, z + d / 2, w - h, h, d, CARBON, M.SmoothPlastic)
+	for _, side in ipairs({ -1, 1 }) do
+		-- (cylindre couché avant-arrière : bouts arrondis vus de face)
+		local cap = b.Part("Part", CFrame.new(x + side * (w / 2 - r), y + r, z + d / 2) * CFrame.Angles(0, math.pi / 2, 0), Vector3.new(d, h, h), CARBON, M.SmoothPlastic, "Cylindre")
+		;(cap :: Part).Shape = Enum.PartType.Cylinder
+	end
+	-- grille (tissu) : devant la barre, un peu en retrait des bouts
+	local fabric = th(b, 1)
+	b.Box(x, y + 0.6, z + d + fabric / 2 - fabric * 0.4, w - h - 2, h - 1.2, fabric, rgb(62, 62, 78), M.Fabric)
+	neon(b, b.Box(x + w * 0.3, y + h - 0.2, z + d * 0.5, 2.4, th(b, 0.6), 1.2, CYAN, M.Neon), "Glow")
+end
+
+-- 🎬 Écran de cinéma : toile déroulante + projecteur accroché au plafond
+local function cinema(b: Builder, setup: { [string]: any }, kind: string)
+	local w = 94 * math.clamp(tonumber(setup.Scale) or 2.2, 1, 3)
+	local h = w * 9 / 16
+	local border = math.max(3, w * 0.025)
+	local W, H = w + border * 2, h + border * 2
+	local t = th(b, 1.2)
+	local gap = th(b, 0, 0.032)
+	local y0 = 6
+	-- fond noir (bordure de la toile)
+	b.Box(0, y0, 2 + t / 2, W, H, t, rgb(20, 20, 26), M.Fabric)
+	-- toile blanche (l'écran) : 0,03 stud devant le fond
+	local screenDepth = th(b, 0.8)
+	screenPart(b, CFrame.new(0, y0 + border, 2 + t + gap - screenDepth / 2), w, h, kind, 1, screenDepth).Material = M.Fabric
+	-- carter du rouleau (en haut) + barre de lestage (en bas) + tirette
+	local top = y0 + H
+	b.CylX(0, top + 3.2, 4, 7, W + 8, rgb(236, 236, 244), M.SmoothPlastic)
+	for _, side in ipairs({ -1, 1 }) do
+		b.CylX(side * (W / 2 + 4.6), top + 3.2, 4, 8, 1.4, CARBON, M.SmoothPlastic)
+		b.Box(side * (W / 2 + 2), top + 1, 0, 3, 6, 4, CARBON_LIGHT, M.Metal)
+	end
+	b.CylX(0, y0 - 1.4, 2 + t / 2, 2.8, W + 2, CARBON, M.Metal)
+	House3DKit.Path(b, { { 0, y0 - 2.4, 2 + t / 2 }, { 0, y0 - 9, 2 + t / 2 } }, 0.8, INK, M.Fabric)
+	b.Ball(0, y0 - 10, 2 + t / 2, 2.6, CARBON, M.SmoothPlastic)
+	-- projecteur au plafond (devant la toile, objectif tourné vers elle)
+	local pz = math.max(60, w * 0.45)
+	local py = top + 6
+	b.Cyl(0, py + 12, pz, 12, th(b, 1.4), rgb(236, 236, 244), M.SmoothPlastic) -- platine de plafond
+	b.Cyl(0, py + 6, pz, 2, 7, CHROME, M.Metal)
+	b.Round(0, py - 4, pz, 28, 10, 24, 3, rgb(244, 244, 250), M.SmoothPlastic)
+	b.Box(0, py - 4.6, pz, 20, th(b, 1), 18, CARBON_LIGHT, M.SmoothPlastic) -- dessous
+	b.CylZ(-6, py + 1, pz - 12.6, 7, 2.4, CARBON, M.Metal)
+	neon(b, b.CylZ(-6, py + 1, pz - 13.8 - th(b, 0.4) / 2, 4.4, th(b, 0.4), rgb(200, 230, 255), M.Neon), "Glow")
+	for index = 0, 3 do
+		b.Box(6 + index * 3, py + 3, pz + 12 + th(b, 0.6) / 2, 1.6, 4, th(b, 0.6), CARBON, M.SmoothPlastic)
+	end
+	neon(b, b.Ball(10, py + 6.2, pz - 8, 1.4, MINT, M.Neon), "Glow")
+	b.Footprint(W + 12, 14, 100)
 end
 
 local function tvRecipe(b: Builder, _ctx: any)
 	local setup = setupOf(b)
 	local rank = sizeRank(setup)
-	local frameColor = rank >= 3 and rgb(24, 24, 32) or b.Map(rgb(46, 46, 62))
+	local scale = math.clamp(tonumber(setup.Scale) or 1, 1, 3)
+	local frameColor = rank >= 3 and rgb(26, 26, 34) or b.Map(rgb(40, 40, 54))
 	local feeds = type(setup.Feeds) == "table" and setup.Feeds or {}
 	local kind = tostring(feeds[1] or "DVD")
-	local w = 94
-	local h = w * 9 / 16 + 3.2
+	if setup.Cinema == true then
+		cinema(b, setup, kind)
+		return
+	end
+	local w = 94 * scale
+	local h = w * 9 / 16
+	local big = rank >= 4 or scale > 1
 	if tostring(setup.Mount) == "Wall" then
-		-- au mur : platine + bras articulé, la télé 7 unités devant le mur
-		b.Box(0, 42, 0.8, 30, 20, 1.6, CARBON_LIGHT, M.Metal)
-		for _, side in ipairs({ -1, 1 }) do
-			b.Box(side * 8, 50, 4, 3, 3, 6, STEEL, M.Metal)
-			b.Box(side * 8, 44, 4, 3, 3, 6, STEEL, M.Metal)
+		-- au mur : platine fine + bras (moyenne) ; la dalle presque contre le mur
+		local armed = rank <= 2 and not big
+		local plate = th(b, 1.2)
+		local front = armed and 12 or 7.5
+		local H = h + math.max(1.1, w * 0.011) * 3.4
+		local y0 = math.max(4, 50 - H / 2)
+		b.Box(0, y0 + H * 0.3, plate / 2, 26, 22, plate, CARBON_LIGHT, M.Metal)
+		if armed then
+			-- bras articulé (2 segments + rotules)
+			House3DKit.Path(b, { { 0, y0 + H * 0.42, plate }, { -8, y0 + H * 0.46, front * 0.55 }, { 0, y0 + H * 0.5, front - 3.5 } }, 2.6, STEEL, M.Metal)
+		else
+			for _, side in ipairs({ -1, 1 }) do
+				b.Box(side * 9, y0 + H * 0.34, plate, 3, 3, front - 3 - plate, STEEL, M.Metal)
+			end
 		end
-		local y0 = 50 - h / 2
-		if rank >= 4 then
-			-- "ambilight" : halo de couleur derrière la télé
-			local halo = b.Box(0, y0 - 3, 4.2, w + 8, h + 6, 0.4, CYAN, M.Neon) -- (v9.6 : 1 plus en retrait)
+		if big then
+			-- halo doux derrière la télé (entre la télé et le mur)
+			local halo = b.Box(0, y0 - 3, plate + th(b, 0.8), w + 10, H + 6, th(b, 0.4), CYAN, M.Neon)
 			neon(b, halo, "Ambilight")
-			halo.Transparency = 0.45
+			halo.Transparency = 0.6
 		end
-		flatPanel(b, CFrame.new(0, y0, 8.4), w, kind, frameColor)
-		if rank >= 3 then
-			soundbar(b, 0, y0 - 9, 6, w * 0.7)
-			b.Box(0, y0 - 5, 4, 20, 1.2, 4, STEEL, M.Metal)
+		tvPanel(b, CFrame.new(0, y0, front), w, kind, frameColor)
+		if rank >= 3 or big then
+			soundbar(b, 0, y0 - 8.5, plate + 1, math.min(w * 0.7, 110))
+			b.Box(0, y0 - 4, plate, 18, 1.4, 3, STEEL, M.Metal)
 		end
-		b.Footprint(w + 4, 14, 100)
+		b.Footprint(w + 6, 14, 100)
 		return
 	end
-	if rank >= 4 then
-		-- géante : grand pied en chevalet au sol + barre de son
-		local y0 = 26
+	if big then
+		-- grande sur pied : deux mâts de studio + barre de son
+		local y0 = 24
+		local panelBack = -3.4
+		local legX = math.min(w * 0.3, 44)
 		for _, side in ipairs({ -1, 1 }) do
-			b.BoxR(CFrame.new(side * 26, y0 / 2 + 2, -4) * CFrame.Angles(0, 0, side * 0.08), 4, y0 + 6, 4, CARBON_LIGHT, M.Metal)
-			b.Box(side * 26, 0, -4, 10, 2, 26, CARBON, M.Metal)
+			b.Cyl(side * legX, 2, panelBack - 4, 3.2, y0 + h * 0.6, CHROME, M.Metal)
+			b.Round(side * legX, 0, panelBack - 2, 12, th(b, 2), 30, 3, CARBON, M.Metal)
 		end
-		b.Box(0, y0 - 6, -4, 60, 3, 4, CARBON_LIGHT, M.Metal)
-		flatPanel(b, CFrame.new(0, y0, 0), w, kind, frameColor)
-		soundbar(b, 0, 2, 12, w * 0.8)
-		b.Footprint(100, 30, y0 + h + 2)
+		b.Box(0, y0 + h * 0.3, panelBack - 4.6, legX * 2 + 4, 3, 2.6, CARBON_LIGHT, M.Metal)
+		local halo = b.Box(0, y0 - 2, panelBack - 7.5, w + 8, h + 8, th(b, 0.4), CYAN, M.Neon)
+		neon(b, halo, "Ambilight")
+		halo.Transparency = 0.6
+		tvPanel(b, CFrame.new(0, y0, 0), w, kind, frameColor)
+		soundbar(b, 0, 3.4, 8, math.min(w * 0.75, 120))
+		-- caisson de basses à côté
+		b.Round(legX + 18, 0, 6, 16, 16, 16, 2.5, CARBON, M.SmoothPlastic)
+		b.CylZ(legX + 18, 8, 14 + th(b, 0.8) / 2, 10, th(b, 0.8), rgb(56, 56, 70), M.Fabric)
+		b.Footprint(math.max(w + 6, 100), 34, y0 + h + 8)
 		return
 	end
-	-- petite / moyenne / grande : pieds (sur un meuble ou au sol)
-	local y0 = rank >= 3 and 8 or 7
-	if rank == 1 then
-		-- petite télé : pied central rond
-		b.Cyl(0, 0, -1, 28, 1.6, CARBON, M.Metal)
-		b.Box(0, 1.6, -3, 6, y0 - 1, 3, CHROME, M.Metal)
+	-- petite / moyenne / grande sur meuble : pied central (petite, grande) ou lames (moyenne)
+	local y0 = rank == 3 and 8 or 7
+	if rank == 2 then
+		for _, side in ipairs({ -1, 1 }) do
+			local x = side * w * 0.36
+			b.BoxR(CFrame.new(x, y0 * 0.5, -2) * CFrame.Angles(0, 0, side * 0.32), 2.2, y0 + 2.5, 3.2, CHROME, M.Metal)
+			b.Round(x + side * 2, 0, -1, 9, th(b, 1.2), 14, 2, CHROME, M.Metal)
+		end
 	else
-		for _, side in ipairs({ -1, 1 }) do
-			b.BoxR(CFrame.new(side * 36, y0 / 2, 0) * CFrame.Angles(0, 0, side * 0.35), 2.6, y0 + 2, 3, CHROME, M.Metal)
-			b.Box(side * 38, 0, 0, 8, 1.2, 14, CHROME, M.Metal)
-		end
+		b.Box(0, 0.8, -4.2, 7, y0 + 6, th(b, 1.6), CHROME, M.Metal)
+		b.Round(0, 0, -2, rank == 3 and 40 or 30, th(b, 1.4), 14, 5, CARBON_LIGHT, M.Metal)
 	end
-	flatPanel(b, CFrame.new(0, y0, 0), w, kind, frameColor)
+	tvPanel(b, CFrame.new(0, y0, 0), w, kind, frameColor)
 	if rank >= 3 then
-		soundbar(b, 0, 0, 10, w * 0.6)
+		soundbar(b, 0, 0, 5, w * 0.6)
 	end
-	b.Footprint(100, rank >= 3 and 24 or 18, y0 + h)
+	b.Footprint(100, rank >= 3 and 24 or 18, y0 + h + 5)
 end
 
 R.SetupTVSmall = tvRecipe
