@@ -1378,11 +1378,12 @@ local function ensureGui(s: any): any
 	local sub = Instance.new("TextLabel")
 	sub.Name = "Sub"
 	sub.BackgroundTransparency = 1
-	sub.Position = UDim2.fromOffset(22, 52)
-	sub.Size = UDim2.new(1, -44, 0, 22)
+	sub.Position = UDim2.fromOffset(22, 54)
+	sub.Size = UDim2.new(1, -44, 0, 34)
 	sub.Font = Enum.Font.GothamBold
 	sub.TextColor3 = INK
-	sub.TextScaled = true
+	sub.TextSize = 15
+	sub.TextWrapped = true
 	sub.TextXAlignment = Enum.TextXAlignment.Left
 	sub.Text = ""
 	sub.Parent = card
@@ -1391,8 +1392,8 @@ local function ensureGui(s: any): any
 	local list = Instance.new("Frame")
 	list.Name = "List"
 	list.BackgroundTransparency = 1
-	list.Position = UDim2.fromOffset(16, 84)
-	list.Size = UDim2.new(1, -32, 1, -128)
+	list.Position = UDim2.fromOffset(16, 96)
+	list.Size = UDim2.new(1, -32, 1, -136)
 	list.Parent = card
 	local layout = Instance.new("UIListLayout")
 	layout.FillDirection = Enum.FillDirection.Horizontal
@@ -1444,7 +1445,8 @@ local function layoutGui(gui: any)
 	local phone = isPhone()
 	gui.Scale.Scale = if phone then 0.72 else 1
 	gui.Badge.Position = UDim2.new(0.5, 0, 0, if phone then 64 else 84)
-	gui.Bite.Position = UDim2.new(0.5, 0, 1, if phone then -12 else -26)
+	-- (au-dessus du bouton "Se lever" du HUD, lui aussi en bas au milieu)
+	gui.Bite.Position = UDim2.new(0.5, 0, 1, if phone then -64 else -92)
 end
 
 -- Carte d'un aliment dans le menu
@@ -1573,7 +1575,7 @@ function FairFx.OpenMenu(stallId: string, foods: { string }, anchor: Vector3?)
 	for _ in pairs(gui.Cards) do
 		n += 1
 	end
-	gui.Card.Size = UDim2.fromOffset(math.max(380, n * 172 + 40), 340)
+	gui.Card.Size = UDim2.fromOffset(math.max(400, n * 172 + 40), 344)
 	gui.Title.Text = table.concat(icons, " ") .. "  " .. Locale.T("Snacks")
 	gui.Sub.Text = Locale.T("Eat it for a Dopamine boost! One boost at a time, it stacks up to 5 min.")
 	gui.Status.Text = ""
