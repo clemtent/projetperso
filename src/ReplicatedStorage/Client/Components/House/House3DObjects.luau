@@ -292,7 +292,8 @@ end
 R.ButterflyFrame = function(b, _ctx)
 	local frame = vivid(b, 1, rgb(210, 170, 110))
 	local wing = { vivid(b, 2, rgb(120, 190, 255)), vivid(b, 3, rgb(255, 150, 200)) }
-	House3DKit.Frame(b, 0, 8, 3, 76, 84, 7, 6, frame, M.Wood)
+	local g = House3DKit.Gap(b, 0.8)
+	House3DKit.Frame(b, 0, 8, (6 + g) / 2, 76, 84, 7, 6 + g, frame, M.Wood)
 	b.Box(0, 12, 1, 66, 76, 1, rgb(255, 250, 240), M.SmoothPlastic)
 	for _, side in ipairs({ -1, 1 }) do
 		b.EggR(CFrame.new(side * 12, 58, 2.5) * CFrame.Angles(0, 0, side * -0.4), 22, 28, 1.5, wing[1], M.SmoothPlastic)
@@ -409,14 +410,14 @@ R.Pinata = function(b, _ctx)
 		end
 	end
 	b.Box(22, 60, 8, 14, 22, 14, colors[1], M.Fabric)
-	b.Box(26, 72, 8, 16, 12, 16, colors[2], M.Fabric)
-	b.Box(34, 76, 8, 8, 7, 12, colors[3], M.Fabric)
+	b.Box(26, 72, 8, 16, 12, 18, colors[2], M.Fabric)
+	b.Box(34, 76, 8, 8, 5, 10, colors[3], M.Fabric)
 	b.Ball(33, 80, 15, 3.5, INK, M.SmoothPlastic)
 	for _, dz in ipairs({ -4, 4 }) do
 		House3DKit.Triangle(b, 22, 92, 8 + dz, 6, 10, 0, 2, colors[4], M.Fabric)
 	end
 	for index = 0, 4 do
-		b.BoxR(CFrame.new(-32, 46 - index * 3, 8) * CFrame.Angles(0, 0, 0.3), 2, 18, 3, colors[index % 4 + 1], M.Fabric)
+		b.BoxR(CFrame.new(-32 - index * 0.6, 46 - index * 3, 8) * CFrame.Angles(0, index * 0.25, 0.3 + index * 0.07), 2, 18, 3, colors[index % 4 + 1], M.Fabric)
 	end
 	b.Footprint(80, 24, 100)
 end
@@ -1101,8 +1102,9 @@ end
 R.MouseHole = function(b, _ctx)
 	-- petit trou arrondi au pied du mur (tunnel sombre)
 	local frame = rgb(150, 110, 90)
-	b.Box(0, 0, -0.5, 60, 34, 1, rgb(30, 24, 30))
-	b.CylZ(0, 34, -0.5, 60, 1, rgb(30, 24, 30))
+	local g = House3DKit.Gap(b, 0.6)
+	b.Box(0, 0, -g / 2, 60, 34, g, rgb(30, 24, 30))
+	b.CylZ(0, 34, -g / 2, 60, g, rgb(30, 24, 30))
 	local points = {}
 	for index = 0, 12 do
 		local a = index / 12 * math.pi
@@ -1111,11 +1113,11 @@ R.MouseHole = function(b, _ctx)
 	table.insert(points, 1, { 32, 0, 1 })
 	table.insert(points, { -32, 0, 1 })
 	House3DKit.Path(b, points, 6, frame, M.Wood)
-	b.Box(0, 0, 6, 70, 2, 12, frame, M.Wood)
+	b.Box(0, 0, 6, 70, 2 + g, 12, frame, M.Wood)
 	-- petite porte en bois entrouverte + paillasson
-	b.Box(-10, 2, 1, 24, 40, 2, rgb(200, 140, 90), M.WoodPlanks)
-	b.Ball(-2, 22, 3, 4, GOLD, M.Metal)
-	b.Box(12, 0, 12, 26, 2 + House3DKit.Gap(b, 0.6), 10, rgb(255, 150, 180), M.Fabric)
+	b.Box(-10, 2 + g, 1.5 * g, 24, 40, g, rgb(200, 140, 90), M.WoodPlanks)
+	b.Ball(-2, 22, 2 * g + 1.5, 4, GOLD, M.Metal)
+	b.Box(12, 0, 12, 26, 2 + 2 * g, 10, rgb(255, 150, 180), M.Fabric)
 	b.Footprint(76, 16, 70)
 end
 

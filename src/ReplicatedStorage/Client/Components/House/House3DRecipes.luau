@@ -1043,9 +1043,9 @@ local function bed(b: Builder, ctx: Ctx, topDefault: number, width: number, dept
 	b.CylZ(x0, top + 1, 0, 5.2, depth + 2 * g + 1, sheet, M.Fabric)
 	-- plaid tricoté au pied
 	local throw = accent(b, 2, lighten(blanket, 0.45))
-	b.Box(x1 - 9, frameTop - 3, 0, 12, top + 1.6 + g - (frameTop - 3), depth + 5 * g, throw, M.Fabric)
+	b.Box(x1 - 9, frameTop - 3, 0, 12, top + 1.6 + g - (frameTop - 3), depth + 6 * g, throw, M.Fabric)
 	for _, tx in ipairs({ -4, 0, 4 }) do
-		b.Box(x1 - 9 + tx, top + 1.6 + g, 0, 1, g, depth + 3 * g, darken(throw, 0.12), M.Fabric)
+		b.Box(x1 - 9 + tx, top + 1.6 + g, 0, 1, g, depth + 4 * g, darken(throw, 0.12), M.Fabric)
 	end
 	-- oreillers + coussin déco
 	local n = depth > 60 and 2 or 1
@@ -1848,13 +1848,14 @@ local function plaque(kind: string)
 		else
 			-- tableau : fond, dessin, cadre mouluré (baguettes + filet doré), verre
 			-- (couches : fond, dessin, filet doré, verre, cadre ; toutes espacées de g)
-			b.Box(0, 7, 0.5 * g + 0.6, 86, 86, 1.2, back, M.Wood)
-			local artFront = 0.5 * g + 2.2
-			b.Art(0, 6, artFront - 0.5, 88, 88, 1)
+			-- (fond [0.5g,1.5g], dessin centré 2g, filet doré dès 2.5g, verre 3g)
+			b.Box(0, 7, g, 86, 86, g, back, M.Wood)
+			b.Art(0, 6, 2 * g, 88, 88, 1)
 			local frameColor = kind == "Calendar" and lighten(back, 0.3) or back
-			House3DKit.Frame(b, 0, 6 - g, (4 + g) / 2, 88 + 2 * g, 88 + 2 * g, 5 + g, 4 + g, frameColor, M.Wood)
-			House3DKit.Frame(b, 0, 11, (artFront - 0.6 + 4 + 2 * g) / 2, 78, 78, 1.2, 4.6 + 2 * g - artFront, GOLD, M.Metal)
-			local cover = b.Box(0, 12.2, artFront + g, 75.6, 75.6, 0.4, rgb(230, 240, 255), M.Glass)
+			House3DKit.Frame(b, 0, 6 - g, (4 + 2 * g) / 2, 88 + 2 * g, 88 + 2 * g, 5 + g, 4 + 2 * g, frameColor, M.Wood)
+			-- filet doré : ses bords extérieurs se cachent dans le cadre (pas de faces jointives)
+			House3DKit.Frame(b, 0, 11 - g, (4 + 5.5 * g) / 2, 78 + 2 * g, 78 + 2 * g, 1.2 + g, 4 + 0.5 * g, GOLD, M.Metal)
+			local cover = b.Box(0, 12.2, 3 * g, 75.6, 75.6, 0.4, rgb(230, 240, 255), M.Glass)
 			cover.Transparency = 0.88
 			cover.Reflectance = 0.2
 			cover.CastShadow = false
@@ -2957,8 +2958,10 @@ local function jar(b: Builder, _ctx: Ctx)
 	b.Cyl(0, 62, 0, 64, 6, lighten(GLASS, 0.1), M.Glass).Transparency = 0.3
 	local lid = accent(b, 2, PINK)
 	b.Cyl(0, 66, 0, 74, 8, lid)
-	for index = 0, 1 do
-		b.Cyl(0, 67.4 + index * 2.4, 0, 74 + 2 * House3DKit.Gap(b, 0.5), 0.8, darken(lid, 0.15))
+	-- stries du couvercle (une seule si le bocal est trop petit pour deux)
+	local ribs = House3DKit.Gap(b, 0.5) <= 1.3 and 2 or 1
+	for index = 1, ribs do
+		b.Cyl(0, 66 + 8 * index / (ribs + 1) - 0.4, 0, 74 + 2 * House3DKit.Gap(b, 0.5), 0.8, darken(lid, 0.15))
 	end
 	b.Egg(0, 76, 0, 60, 6, 60, lighten(lid, 0.4), M.Fabric)
 	b.Ball(0, 78, 0, 14, lid)
@@ -3850,7 +3853,8 @@ R.NeonArcade = function(b, _ctx)
 	-- écran encastré, fronton néon, trappe à pièces
 	b.Box(0, 0, -1, 64, 100, 48, body, M.SmoothPlastic)
 	for index, x in ipairs({ -32 - g / 2, 32 + g / 2 }) do
-		local strip = b.Box(x, 6, 0, g, 90, 46, index == 1 and NEON_CYAN or NEON_PINK)
+		-- liseré en retrait du dos (le dos de la borne touche le mur)
+		local strip = b.Box(x, 6, (g - 2) / 2, g, 90, 48 - 3 * g, index == 1 and NEON_CYAN or NEON_PINK)
 		b.Neon(strip)
 	end
 	b.Box(0, 44, 26, 62, 8, 14, NAVY)
