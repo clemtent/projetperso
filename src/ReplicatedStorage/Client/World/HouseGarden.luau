@@ -356,9 +356,30 @@ function HouseGarden.Has(id: string): boolean
 	return MAKERS[id] ~= nil
 end
 
+-- (v9.8 GARDEN98) une déco du jardin dessinée au centre du repère du kit
+-- (x = 0, d = 0, devant vers la rue = -d) : GardenBuilder la pose où le
+-- joueur l'a mise (mode édition du jardin)
+function HouseGarden.BuildDecor(kit: any, id: string)
+	local maker = MAKERS[id]
+	if maker then
+		maker(kit, 0, 0)
+	else
+		local byId = Config.HouseLooksById and Config.HouseLooksById.Garden or {}
+		fallback(kit, 0, 0, byId[id])
+	end
+end
+
+-- (v9.8 GARDEN98) la déco du jardin n'est plus dessinée avec la façade :
+-- GardenBuilder la pose (places libres choisies par le joueur, mêmes
+-- modèles). HouseFacade garde l'appel : il ne fait plus rien.
+HouseGarden.DECOR_IN_GARDEN = true
+
 -- Déco choisie : GardenSlots places réparties entre x0 et x1 (comme la 2D),
 -- à la profondeur d ; avoidCenter : on laisse la fontaine / l'allée libres
 function HouseGarden.Decorations(kit: any, ids: { string }?, x0: number, x1: number, d: number, avoidCenter: boolean?)
+	if HouseGarden.DECOR_IN_GARDEN then
+		return
+	end
 	local list = type(ids) == "table" and ids or {}
 	local slots = tonumber((Config.House :: any).GardenSlots) or 6
 	local byId = Config.HouseLooksById and Config.HouseLooksById.Garden or {}

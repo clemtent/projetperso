@@ -394,57 +394,92 @@ R.SetupDeskTrio = desk
 R.SetupDeskUltra = desk
 
 ----------------------------------------------------------------------
--- ⌨️ CLAVIER MÉCANIQUE RGB
+-- ⌨️ CLAVIER MÉCANIQUE RGB (v9.8 : refait)
+-- Cause du clavier "cassé" (v9.5 -> v9.7) : à cette échelle (1 unité ≈
+-- 0,02 stud) la plaque "KeyboardBase" de 0,6 unité était gonflée à
+-- l'épaisseur minimale (0,03 stud) puis encore poussée par l'anti-
+-- scintillement (House3DKit.Separate) AU-DESSUS des touches : seules la
+-- barre d'espace et les grandes touches dépassaient. Ici chaque couche
+-- fait au moins l'épaisseur minimale et deux faces parallèles de couleurs
+-- différentes sont toujours à plus de 0,03 stud l'une de l'autre.
+-- Clavier 65 % : 5 rangées de 15 unités de touche, flèches, touches larges ;
+-- légendes posées par LiveProps (une SurfaceGui par touche, seulement de
+-- près) grâce à l'attribut "Legend" ; plaque RGB entre les touches (douce,
+-- pas de néon) + fin liseré lumineux sous le boîtier.
 ----------------------------------------------------------------------
 
-local KEY_ROWS = {
-	{ "1", "2", "3", "4", "5", "6", "7", "8", "9", "0" },
-	{ "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P" },
-	{ "A", "S", "D", "F", "G", "H", "J", "K", "L" },
-	{ "Z", "X", "C", "V", "B", "N", "M" },
+-- { nom, légende, largeur (unités de touche), style } ; style : "A" lettre,
+-- "M" modificateur, "X" accent
+local KEY_LAYOUT: { { any } } = {
+	{ { "Grave", "`" }, { "1" }, { "2" }, { "3" }, { "4" }, { "5" }, { "6" }, { "7" }, { "8" }, { "9" }, { "0" }, { "Minus", "-" }, { "Equals", "=" }, { "Backspace", "⌫", 2, "M" } },
+	{ { "Tab", "Tab", 1.5, "M" }, { "Q" }, { "W" }, { "E" }, { "R" }, { "T" }, { "Y" }, { "U" }, { "I" }, { "O" }, { "P" }, { "LBracket", "[" }, { "RBracket", "]" }, { "Backslash", "\\", 1.5, "M" } },
+	{ { "Caps", "Caps", 1.75, "M" }, { "A" }, { "S" }, { "D" }, { "F" }, { "G" }, { "H" }, { "J" }, { "K" }, { "L" }, { "Semicolon", ";" }, { "Quote", "'" }, { "Enter", "Enter", 2.25, "X" } },
+	{ { "LShift", "Shift", 2.25, "M" }, { "Z" }, { "X" }, { "C" }, { "V" }, { "B" }, { "N" }, { "M" }, { "Comma", "," }, { "Period", "." }, { "Slash", "/" }, { "RShift", "Shift", 1.75, "M" }, { "Up", "▲", 1, "X" } },
+	{ { "LCtrl", "Ctrl", 1.25, "M" }, { "Win", "◆", 1.25, "M" }, { "LAlt", "Alt", 1.25, "M" }, { "Space", "", 6.25, "A" }, { "RAlt", "Alt", 1, "M" }, { "Fn", "Fn", 1, "M" }, { "Left", "◀", 1, "X" }, { "Down", "▼", 1, "X" }, { "Right", "▶", 1, "X" } },
 }
+House3DSetup.KeyLayout = KEY_LAYOUT
+
+-- Épaisseur (unités) d'au moins `studs` à l'échelle de l'objet
+local function th(b: Builder, units: number, studs: number?): number
+	return math.max(units, (studs or 0.036) / math.max(0.001, b.K))
+end
 
 R.SetupKeyboard = function(b, _ctx)
-	local caseColor = b.Map(rgb(40, 40, 56))
-	local w, d = 100, 36
-	-- boîtier + plaque + halo dessous
-	b.Round(0, 0, 0, w, 5, d, 2.5, caseColor, M.SmoothPlastic)
-	named(b.Box(0, 5, 0, w - 5, 0.6, d - 5, rgb(26, 26, 36), M.Metal), "KeyboardBase")
-	-- (v9.6 z-fighting : halo 1.2 plus large de chaque côté, plus 0.3)
-	local glow = b.Box(0, 0.4, 0, w + 2.4, 1.4, d + 2.4, RAINBOW[5], M.Neon)
+	local caseColor = b.Map(rgb(46, 48, 64))
+	local rimColor = b.Map(rgb(64, 66, 88))
+	local alpha = b.Map(rgb(246, 242, 234))
+	local modifier = b.Map(rgb(112, 108, 150))
+	local accent = b.Map(rgb(255, 104, 170))
+	local w, d = 100, 40
+	local U = 6 -- une unité de touche
+	local gap = 0.9
+	local layer = th(b, 1.6)
+	-- boîtier (bac arrondi) + liseré lumineux dessous (doux, en retrait)
+	local trayH = 5
+	b.Round(0, 0, 0, w, trayH, d, 3, caseColor, M.SmoothPlastic)
+	local glowY = th(b, 1.4)
+	local glow = b.Box(0, glowY, 0, w + 1.6, layer, d + 1.6, RAINBOW[5], M.Neon)
 	neon(b, glow, "RGB")
-	glow.Transparency = 0.3
-	local unit = 8.4
-	local cap = 7.2
-	for rowIndex, row in ipairs(KEY_ROWS) do
-		local z = -14 + (rowIndex - 1) * 7.2
-		local offset = ({ 0, 0.25, 0.55, 1.05 })[rowIndex] * unit
-		local startX = -w / 2 + 4.5 + offset + unit / 2
-		for keyIndex, letter in ipairs(row) do
-			local x = startX + (keyIndex - 1) * unit
-			local color = RAINBOW[(keyIndex + rowIndex) % #RAINBOW + 1]:Lerp(WHITE, 0.45)
-			local key = b.Box(x, 5.3, z, cap, 3.4, cap - 0.6, color, M.SmoothPlastic)
-			key.Name = "Key_" .. letter
-		end
-		-- touches larges au bout des rangées (Tab / Maj / Entrée)
-		local rowEnd = startX + (#row - 1) * unit + unit / 2 + 0.6
-		local wide = w / 2 - 4 - rowEnd
-		if wide > 3 then
-			b.Box(rowEnd + wide / 2, 5.3, z, wide - 0.8, 3.2, cap - 0.6, rgb(90, 90, 116), M.SmoothPlastic)
-		end
-		if offset > 1 then
-			b.Box(-w / 2 + 4.5 + offset / 2, 5.3, z, offset - 1, 3.2, cap - 0.6, rgb(90, 90, 116), M.SmoothPlastic)
+	glow.Transparency = 0.45
+	-- plaque (couleur RGB animée, SmoothPlastic : lueur douce entre les touches)
+	local plateBottom = trayH - layer * 0.4
+	local plateTop = plateBottom + layer
+	named(b.Box(0, plateBottom, 0, 90.4, layer, 30.4, rgb(120, 90, 255), M.SmoothPlastic), "RGB").CastShadow = false
+	-- rebord du boîtier (4 baguettes au-dessus de la plaque)
+	local rimH = th(b, 2.8)
+	local rimTop = plateBottom + rimH
+	b.Box(0, plateBottom, d / 2 - 2, w, rimH, 4, rimColor, M.SmoothPlastic)
+	b.Box(0, plateBottom, -d / 2 + 2, w, rimH, 4, rimColor, M.SmoothPlastic)
+	b.Box(-w / 2 + 2, plateBottom, 0, 4, rimH, d - 8, rimColor, M.SmoothPlastic)
+	b.Box(w / 2 - 2, plateBottom, 0, 4, rimH, d - 8, rimColor, M.SmoothPlastic)
+	-- touches (le bas des touches est pris dans la plaque : aucune face confondue)
+	local keyH = math.max(4, rimTop - plateTop + 2.6)
+	local keyBottom = plateTop - th(b, 0.6, 0.012)
+	for rowIndex, row in ipairs(KEY_LAYOUT) do
+		local z = -12 + (rowIndex - 1) * U -- rangée 1 au fond, espace devant
+		local cursor = -45
+		for _, spec in ipairs(row) do
+			local id = spec[1]
+			local legend = spec[2] or id
+			local width = tonumber(spec[3]) or 1
+			local style = spec[4] or "A"
+			local x = cursor + width * U / 2
+			cursor += width * U
+			local color = style == "M" and modifier or (style == "X" and accent or alpha)
+			-- rangée du fond un peu plus haute (profil "sculpté")
+			local lift = (rowIndex == 1 and 0.5) or (rowIndex == 5 and -0.3) or 0
+			local key = b.Box(x, keyBottom, z, width * U - gap, keyH + lift, U - gap, color, M.SmoothPlastic)
+			key.Name = "Key_" .. id
+			key:SetAttribute("Legend", legend)
+			key:SetAttribute("KeyStyle", style)
 		end
 	end
-	-- barre d'espace
-	local space = b.Box(0, 5.3, 14.6, 44, 3.2, 6.2, rgb(240, 236, 250), M.SmoothPlastic)
-	space.Name = "Key_Space"
-	for _, side in ipairs({ -1, 1 }) do
-		b.Box(side * 33, 5.3, 14.6, 18, 3.2, 6.2, rgb(90, 90, 116), M.SmoothPlastic)
-	end
-	-- molette de volume + LED
-	b.CylX(w / 2 - 6, 8, -16.5, 5, 3, CHROME, M.Metal)
-	b.Footprint(w, d, 10)
+	-- molette de volume (sur le rebord arrière droit) + diode
+	b.Cyl(w / 2 - 7, rimTop - 1, -d / 2 + 2, 3.6, 2.6, CHROME, M.Metal)
+	neon(b, b.Ball(w / 2 - 14, rimTop - 0.3, -d / 2 + 2, 1.6, MINT, M.Neon), "Glow")
+	-- câble tressé vers l'arrière
+	House3DKit.Path(b, { { -20, 3, -d / 2 - 0.5 }, { -22, 2, -d / 2 - 8 }, { -30, 1.6, -d / 2 - 14 } }, 2.2, INK, M.Fabric)
+	b.Footprint(w, d, rimTop + keyH)
 end
 
 ----------------------------------------------------------------------

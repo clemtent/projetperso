@@ -49,6 +49,7 @@
 	  "buyWallpaper" / "setWallpaper" / "buyFloor" / "setFloor" { Room, Id } (ou Id seul = 1re pièce)
 	  "saveLayout" { Rooms = { [roomId] = { { I, X, Y, S, Z, F?, C? }, ... } } }  (ou { Room, Placed })
 	  "buyLook" { Kind, Id, Room? }  achète (et applique) une personnalisation
+	  "setRoomState" { Room, LightsOn?, CurtainsOpen? }  (v9.8) 💡 interrupteur / 🪟 rideaux d'une pièce
 	  "setLook" { Kind, Id, Room?, On? }  applique une personnalisation possédée
 	    (Kind "Garden" : On = true / false pose / range la déco du jardin)
 ]]
@@ -100,6 +101,16 @@ end
 
 local LOOK_KINDS = Config.HouseLookKinds
 local GARDEN_SLOTS = HOUSE.GardenSlots or 6
+
+-- (v9.8 GARDEN98) places de déco du jardin : GardenSlots, plus celles des
+-- agrandissements du jardin (Config.Garden.Expansion[data.Garden.Level].DecorSlots)
+local function gardenSlots(data): number
+	local garden = type(data) == "table" and data.Garden or nil
+	local level = type(garden) == "table" and tonumber(garden.Level) or 0
+	local levels = Config.Garden and Config.Garden.Expansion
+	local entry = type(levels) == "table" and level and level == level and levels[math.floor(level)] or nil
+	return math.max(GARDEN_SLOTS, type(entry) == "table" and tonumber(entry.DecorSlots) or 0)
+end
 
 local function numberOr(value, default: number): number
 	if isValidNumber(value) then
@@ -465,8 +476,9 @@ local function sanitizeHouse(data)
 		elseif def.Scope == "Garden" then
 			local garden, seen = {}, {}
 			if type(house.Garden) == "table" then
+				local slots = gardenSlots(data) -- (v9.8 GARDEN98)
 				for _, id in ipairs(house.Garden) do
-					if #garden >= GARDEN_SLOTS then
+					if #garden >= slots then
 						break
 					end
 					if type(id) == "string" and owned[id] and not seen[id] then
@@ -573,6 +585,9 @@ local function sanitizeHouse(data)
 				end
 				room.Custom = next(custom) ~= nil and custom or nil
 			end
+			-- (v9.8 HOUSE98) 💡 lumières éteintes / 🪟 rideaux fermés (absent = allumées / ouverts)
+			room.LightsOff = raw.LightsOff == true or nil
+			room.CurtainsClosed = raw.CurtainsClosed == true or nil
 			if id then
 				ids[id] = true
 				local number = tonumber(string.match(id, "^R(%d+)$"))
@@ -1083,7 +1098,7 @@ local function lookTarget(house, argument: any)
 end
 
 -- Applique une entrée possédée ; Garden : On (défaut true) pose / range
-local function applyLook(player: Player, house, def, entry, room, on: boolean): (boolean, string?)
+local function applyLook(player: Player, house, def, entry, room, on: boolean, slots: number?): (boolean, string?)
 	if def.Scope == "Room" then
 		room[def.Field] = entry.Id
 		if table.find(TYPE_STYLE_KINDS, def.Field) then
@@ -1093,9 +1108,10 @@ local function applyLook(player: Player, house, def, entry, room, on: boolean): 
 		house[def.Field] = entry.Id
 	else
 		local index = table.find(house.Garden, entry.Id)
+		local maxSlots = slots or GARDEN_SLOTS -- (v9.8 GARDEN98 : agrandissements du jardin)
 		if on and not index then
-			if #house.Garden >= GARDEN_SLOTS then
-				return false, T(player, "Your garden is full (max %d): put something away first", GARDEN_SLOTS)
+			if #house.Garden >= maxSlots then
+				return false, T(player, "Your garden is full (max %d): put something away first", maxSlots)
 			end
 			table.insert(house.Garden, entry.Id)
 		elseif not on and index then
@@ -1137,7 +1153,7 @@ local function buyLook(player: Player, data, argument: any): (boolean, string)
 	data.Dopamine -= cost
 	owned[entry.Id] = true
 	-- appliqué tout de suite (jardin plein : acheté quand même, rangé)
-	applyLook(player, house, def, entry, room, true)
+	applyLook(player, house, def, entry, room, true, gardenSlots(data))
 	services.GameService:SendState(player)
 	return true, T(player, "🎨 %s %s is yours! (%s)", entry.Icon or "", T(player, entry.Name), NumberFormatter.Format(cost))
 end
@@ -1157,12 +1173,70 @@ local function setLook(player: Player, data, argument: any): (boolean, string)
 	if not house[def.Owned][entry.Id] and not (def.Scope == "Room" and isTypeStyle(room, def.Field, entry.Id)) then
 		return false, T(player, "You don't own this style yet")
 	end
-	local ok, message = applyLook(player, house, def, entry, room, argument.On ~= false)
+	local ok, message = applyLook(player, house, def, entry, room, argument.On ~= false, gardenSlots(data))
 	if not ok then
 		return false, message or T(player, "Invalid request")
 	end
 	services.GameService:SendState(player)
 	return true, T(player, "🎨 %s %s applied", entry.Icon or "", T(player, entry.Name))
+end
+
+----------------------------------------------------------------------
+-- (v9.8 HOUSE98) 💡 Interrupteur et 🪟 rideaux de chaque pièce (maison 3D)
+-- Données : room.LightsOff = true (lumières éteintes) / room.CurtainsClosed
+-- = true (rideaux fermés) ; absent = allumées / ouverts (anciennes
+-- sauvegardes). Copie répliquée pour la ville (tous les clients voient la
+-- même maison) : attributs du joueur "HouseLightsOff" / "HouseCurtainsClosed"
+-- = Id des pièces concernées séparés par des virgules ("R1,R4").
+----------------------------------------------------------------------
+local TOGGLE_INTERVAL = 0.25 -- secondes entre deux clics d'interrupteur / de rideaux
+
+local function publishRoomStates(player: Player, data)
+	local house = type(data) == "table" and data.House or nil
+	if type(house) ~= "table" or type(house.Rooms) ~= "table" then
+		return
+	end
+	local off, closed = {}, {}
+	for _, room in ipairs(house.Rooms) do
+		if type(room) == "table" and type(room.Id) == "string" then
+			if room.LightsOff == true then
+				table.insert(off, room.Id)
+			end
+			if room.CurtainsClosed == true then
+				table.insert(closed, room.Id)
+			end
+		end
+	end
+	pcall(function()
+		player:SetAttribute("HouseLightsOff", table.concat(off, ","))
+		player:SetAttribute("HouseCurtainsClosed", table.concat(closed, ","))
+	end)
+end
+
+-- "setRoomState" { Room = id, LightsOn = bool? , CurtainsOpen = bool? }
+local function setRoomState(player: Player, data, argument: any): (boolean, string)
+	if type(argument) ~= "table" then
+		return false, T(player, "Invalid request")
+	end
+	if not RateLimiter.Check(player, "HouseToggle", TOGGLE_INTERVAL) then
+		return false, T(player, "Slow down!")
+	end
+	local room = findRoom(data.House, argument.Room)
+	if not room then
+		return false, T(player, "Invalid request")
+	end
+	local lights, curtains = argument.LightsOn, argument.CurtainsOpen
+	if (lights ~= nil and type(lights) ~= "boolean") or (curtains ~= nil and type(curtains) ~= "boolean") or (lights == nil and curtains == nil) then
+		return false, T(player, "Invalid request")
+	end
+	if lights ~= nil then
+		room.LightsOff = lights == false or nil
+	end
+	if curtains ~= nil then
+		room.CurtainsClosed = curtains == false or nil
+	end
+	publishRoomStates(player, data)
+	return true, ""
 end
 
 local STRING_ACTIONS = { buyItem = true, buySize = true, setSize = true }
@@ -1219,6 +1293,8 @@ local function onHouse(player: Player, action: any, argument: any)
 		return buyLook(player, data, argument)
 	elseif action == "setLook" then
 		return setLook(player, data, argument)
+	elseif action == "setRoomState" then
+		return setRoomState(player, data, argument)
 	end
 	return false, T(player, "Invalid request")
 end
@@ -1227,8 +1303,9 @@ end
 -- Cycle de vie
 ----------------------------------------------------------------------
 
-function HouseService:PlayerReady(_player: Player, data)
+function HouseService:PlayerReady(player: Player, data)
 	sanitizeHouse(data)
+	publishRoomStates(player, data) -- (v9.8 HOUSE98) 💡 / 🪟 pour la ville
 end
 
 function HouseService:Start()

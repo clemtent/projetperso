@@ -14,8 +14,23 @@
 	      "harvestAll"      -> cueille toutes les fleurs prêtes
 	    Gain = RewardSeconds de production (Formulas.ScaledReward, au moins
 	    MinReward), puis un nouveau bulbe est planté automatiquement.
+	    v9.8 (GARDEN98) 🌷 jardin de la maison aménagé librement :
+	      "saveLayout", { Layout = { [clé] = { X, D, R } }, Decor = { id, ... }? }
+	          -> places choisies dans le mode édition du jardin (GardenEdit) ;
+	             TOUT est revérifié (GardenSnapshot.CleanLayout : clés connues,
+	             objets possédés, zones du niveau, couloirs des portes, nombre
+	             d'objets posés) ; Decor = la déco du jardin sortie (possédée,
+	             places du niveau) -> data.House.Garden ; limité à 1 / 0,5 s
+	      "buyPiece", id    -> achète un objet de jardin (Config.Garden.Pieces :
+	             +15 % par exemplaire possédé, Max, RequiresRebirths)
+	      "expand"          -> agrandit le jardin d'un niveau (Config.Garden.Expansion)
 	  - Envoyé au client par GetClientState :
-	      Garden = { Plots = { { Flower, PlantedAt, ReadyAt } }, Now = os.time() }
+	      Garden = { Plots = { { Flower, PlantedAt, ReadyAt } }, Now = os.time(),
+	                 Level = n, Pieces = { [id] = n }, Layout = { ... } }
+	  Données (anciennes sauvegardes : tout ce qui manque = niveau 0, rien) :
+	    data.Garden = { Plots, Level, Pieces = { [id] = n }, Layout = { [clé] = { X, D, R } } }
+	    (data.Garden n'est jamais remis à zéro par l'océan : seuls les
+	    parterres en trop disparaissent)
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -25,6 +40,7 @@ local Formulas = require(ReplicatedStorage.Shared.Formulas)
 local Locale = require(ReplicatedStorage.Shared.Locale)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local Net = require(ReplicatedStorage.Shared.Net)
+local GardenSnapshot = require(ReplicatedStorage.Shared.GardenSnapshot)
 local RateLimiter = require(script.Parent.RateLimiter)
 
 local GardenService = {}
@@ -35,6 +51,8 @@ local settings = Config.Garden
 
 local MAX_PLOTS = 24 -- garde-fou (sauvegarde abîmée, configuration extrême)
 local RARE_BROADCAST_WEIGHT = 3 -- fleurs au plus aussi rares que ça : annoncées au serveur
+local LAYOUT_INTERVAL = 0.5 -- (s) entre deux sauvegardes du jardin
+local BUY_INTERVAL = 0.2 -- (s) entre deux achats du jardin
 
 local flowersById = {}
 for _, flower in ipairs(settings.Flowers) do
@@ -75,8 +93,38 @@ local function plotCount(data): number
 	return math.clamp(math.floor(Formulas.GetGardenPlotCount(data)), 1, MAX_PLOTS)
 end
 
+-- (v9.8) Contexte de vérification de la disposition du jardin
+local function layoutContext(data): any
+	local owned = Formulas.HasFeature(data, settings.Feature)
+	local house = type(data.House) == "table" and data.House or {}
+	local decor = {}
+	if type(house.Garden) == "table" then
+		for _, id in ipairs(house.Garden) do
+			if type(id) == "string" then
+				decor[id] = true
+			end
+		end
+	end
+	return {
+		Level = GardenSnapshot.Level(data),
+		Size = type(house.Size) == "string" and house.Size or nil,
+		Beds = owned and plotCount(data) or math.max(1, settings.BasePlots or 3),
+		Decor = decor,
+		Pieces = GardenSnapshot.OwnedPieces(data),
+		Windmill = GardenSnapshot.From(data).Windmill,
+	}
+end
+
+-- (v9.8) Niveau, objets possédés et disposition : réparés (jamais d'erreur)
+local function sanitizeLayout(data)
+	local garden = data.Garden
+	garden.Level = GardenSnapshot.Level(data)
+	garden.Pieces = GardenSnapshot.OwnedPieces(data)
+	garden.Layout = GardenSnapshot.CleanLayout(garden.Layout, layoutContext(data))
+end
+
 -- Répare data.Garden (types, fleurs retirées de la config, dates impossibles)
--- et ajuste le nombre de parterres. Ne fait rien sans la Feature.
+-- et ajuste le nombre de parterres. Les parterres ne bougent pas sans la Feature.
 local function sanitize(data)
 	if type(data.Garden) ~= "table" then
 		data.Garden = {}
@@ -85,6 +133,7 @@ local function sanitize(data)
 	if type(garden.Plots) ~= "table" then
 		garden.Plots = {}
 	end
+	sanitizeLayout(data)
 	if not Formulas.HasFeature(data, settings.Feature) then
 		return
 	end
@@ -116,8 +165,15 @@ function GardenService:GetClientState(_player: Player, data)
 	sanitize(data)
 	-- (la table est copiée par le RemoteEvent : on peut l'envoyer telle quelle)
 	local owned = Formulas.HasFeature(data, settings.Feature)
+	local garden = data.Garden
 	return {
-		Garden = { Plots = owned and data.Garden.Plots or {}, Now = os.time() },
+		Garden = {
+			Plots = owned and garden.Plots or {},
+			Now = os.time(),
+			Level = garden.Level,
+			Pieces = garden.Pieces,
+			Layout = garden.Layout,
+		},
 	}
 end
 
@@ -156,7 +212,136 @@ local function announceRare(player: Player, flower, amount: number)
 	end, player)
 end
 
+----------------------------------------------------------------------
+-- v9.8 (GARDEN98) : jardin de la maison (disposition, objets, agrandissement)
+----------------------------------------------------------------------
+
+local function gardenResult(data): any
+	local garden = data.Garden
+	return { Level = garden.Level, Pieces = garden.Pieces, Layout = garden.Layout, Decor = (data.House and data.House.Garden) or {} }
+end
+
+-- Déco du jardin sortie demandée par le mode édition -> data.House.Garden
+local function applyDecor(data, requested: any)
+	local house = data.House
+	if type(house) ~= "table" or type(requested) ~= "table" then
+		return
+	end
+	local owned = type(house.OwnedGarden) == "table" and house.OwnedGarden or {}
+	local looks = Config.HouseLooksById and Config.HouseLooksById.Garden or {}
+	local slots = GardenSnapshot.DecorSlots(GardenSnapshot.Level(data))
+	local list, seen = {}, {}
+	for index, id in ipairs(requested) do
+		if index > 64 or #list >= slots then
+			break
+		end
+		if type(id) == "string" and #id <= 64 and owned[id] == true and looks[id] and not seen[id] then
+			seen[id] = true
+			table.insert(list, id)
+		end
+	end
+	house.Garden = list
+end
+
+local function saveLayout(player: Player, data, argument: any)
+	if type(argument) ~= "table" or type(argument.Layout) ~= "table" then
+		return false, T(player, "Invalid request")
+	end
+	local requested = 0
+	for _ in pairs(argument.Layout) do
+		requested += 1
+		if requested > GardenSnapshot.MAX_ENTRIES * 2 then
+			return false, T(player, "Invalid request")
+		end
+	end
+	if argument.Decor ~= nil then
+		applyDecor(data, argument.Decor)
+	end
+	local clean = GardenSnapshot.CleanLayout(argument.Layout, layoutContext(data))
+	local kept = 0
+	for _ in pairs(clean) do
+		kept += 1
+	end
+	data.Garden.Layout = clean
+	services.GameService:SendState(player)
+	local result = gardenResult(data)
+	result.Dropped = math.max(0, requested - kept)
+	return true, result
+end
+
+local function buyPiece(player: Player, data, pieceId: any)
+	local piece = type(pieceId) == "string" and GardenSnapshot.PiecesById[pieceId] or nil
+	if not piece then
+		return false, T(player, "Invalid request")
+	end
+	local rebirths = isValidNumber(data.Rebirths) and data.Rebirths or 0
+	local needed = tonumber(piece.RequiresRebirths) or 0
+	if rebirths < needed then
+		return false, T(player, "🔒 Unlocked after %d visits to the ocean", needed)
+	end
+	local pieces = data.Garden.Pieces
+	local owned = pieces[piece.Id] or 0
+	if owned >= (tonumber(piece.Max) or 10) then
+		return false, T(player, "You have the maximum of this item")
+	end
+	local cost = GardenSnapshot.PieceCost(piece, owned)
+	if not isValidNumber(data.Dopamine) or data.Dopamine < cost then
+		return false, T(player, "Not enough %s", Config.Game.CurrencyName)
+	end
+	data.Dopamine -= cost
+	pieces[piece.Id] = owned + 1
+	services.GameService:SendState(player)
+	local result = gardenResult(data)
+	result.Piece = piece.Id
+	result.Count = owned + 1
+	result.Message = T(player, "%s %s is yours! (%s)", piece.Icon or "🪴", T(player, piece.Name), NumberFormatter.Format(cost))
+	return true, result
+end
+
+local function expand(player: Player, data)
+	local level = GardenSnapshot.Level(data)
+	local info = GardenSnapshot.LevelInfo(level + 1)
+	if not info then
+		return false, T(player, "Your garden is already at its biggest!")
+	end
+	local rebirths = isValidNumber(data.Rebirths) and data.Rebirths or 0
+	local needed = tonumber(info.RequiresRebirths) or 0
+	if rebirths < needed then
+		return false, T(player, "🔒 Unlocked after %d visits to the ocean", needed)
+	end
+	local cost = tonumber(info.Cost) or math.huge
+	if not isValidNumber(data.Dopamine) or data.Dopamine < cost then
+		return false, T(player, "Not enough %s", Config.Game.CurrencyName)
+	end
+	data.Dopamine -= cost
+	data.Garden.Level = level + 1
+	sanitizeLayout(data)
+	services.GameService:SendState(player)
+	local result = gardenResult(data)
+	result.Message = T(player, "%s %s: your garden is bigger! (%s)", info.Icon or "🌳", T(player, info.Name), NumberFormatter.Format(cost))
+	return true, result
+end
+
+local HOUSE_ACTIONS = { saveLayout = true, buyPiece = true, expand = true }
+
 local function onGarden(player: Player, action: any, arg: any)
+	if HOUSE_ACTIONS[action] then
+		local interval = action == "saveLayout" and LAYOUT_INTERVAL or BUY_INTERVAL
+		if not RateLimiter.Check(player, "Garden_" .. action, interval) then
+			return false, T(player, "Slow down!")
+		end
+		local data = services.DataService:GetData(player)
+		if not data or not services.GameService:IsReady(player) then
+			return false, T(player, "Loading...")
+		end
+		sanitize(data)
+		if action == "saveLayout" then
+			return saveLayout(player, data, arg)
+		elseif action == "buyPiece" then
+			return buyPiece(player, data, arg)
+		end
+		return expand(player, data)
+	end
 	if action ~= "harvest" and action ~= "harvestAll" then
 		return false, T(player, "Invalid request")
 	end
@@ -229,7 +414,14 @@ function GardenService:PlayerReady(_player: Player, data)
 end
 
 function GardenService:Start()
-	Net.Function("Garden").OnServerInvoke = onGarden
+	Net.Function("Garden").OnServerInvoke = function(player: Player, action: any, arg: any)
+		local ok, success, result = pcall(onGarden, player, action, arg)
+		if not ok then
+			warn("[GardenService] Erreur pour " .. player.Name .. " :", success)
+			return false, T(player, "Invalid request")
+		end
+		return success, result
+	end
 end
 
 return GardenService

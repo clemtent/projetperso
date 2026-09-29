@@ -626,6 +626,32 @@ function WorldLayout.MarketCFrame(count: number): CFrame
 	return CFrame.lookAt(p, p - Vector3.new(1, 0, 0))
 end
 
+-- (v9.8, FAIR98) 🎡 FÊTE FORAINE : derrière la mairie, dans le secteur
+-- arrière de l'anneau (axe -Z), rectangle FAIR_W x FAIR_D dont le bord
+-- avant est à FAIR_NEAR studs du centre. Tient de 4 à 12 parcelles (bord
+-- du boulevard, lac, jardin, terrain de basket : vérifié). Repère : centre
+-- du sol de la fête (FairRides.GROUND au-dessus du pré), LookVector vers
+-- la place (l'entrée) ; x local ∈ [-FAIR_W/2, FAIR_W/2], z ∈ [-FAIR_D/2, FAIR_D/2].
+WorldLayout.FAIR_W = 110
+WorldLayout.FAIR_D = 76
+WorldLayout.FAIR_NEAR = 100
+WorldLayout.FAIR_GROUND = 0.15
+
+function WorldLayout.FairCFrame(): CFrame
+	local p = WorldLayout.Origin() + Vector3.new(0, WorldLayout.GROUND_Y + WorldLayout.FAIR_GROUND, -(WorldLayout.FAIR_NEAR + WorldLayout.FAIR_D / 2))
+	return CFrame.lookAt(p, p + Vector3.new(0, 0, 1))
+end
+
+-- (v9.8, FAIR98) 🍦 Coin gourmand (ancienne place de la concession, à
+-- droite de la place d'accueil) : centre au sol, LookVector vers le
+-- boulevard (-Z monde) ; x local = x monde ; FOOD_W x FOOD_D
+WorldLayout.FOOD_W = 40
+WorldLayout.FOOD_D = 44
+function WorldLayout.FoodCornerCFrame(count: number): CFrame
+	local p = WorldLayout.Origin() + Vector3.new(70, WorldLayout.WALK_Y, WorldLayout.PlotFrontRadius(count) + 9 + WorldLayout.FOOD_D / 2)
+	return CFrame.lookAt(p, p - Vector3.new(0, 0, 1))
+end
+
 -- Centre de la place, au sol (dessus du pavé)
 function WorldLayout.PlazaCFrame(): CFrame
 	return CFrame.new(WorldLayout.Origin() + Vector3.new(0, WorldLayout.WALK_Y, 0))

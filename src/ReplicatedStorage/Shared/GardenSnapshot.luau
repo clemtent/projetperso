@@ -324,26 +324,34 @@ local function sizeDef(sizeId: any): any
 	return type(sizeId) == "string" and byId and byId[sizeId] or (Config.House and Config.House.Sizes and Config.House.Sizes[1]) or nil
 end
 
--- (demi-largeur de la maison, profondeur, x de la porte, x de la porte de derrière?)
-local function houseGeometry(sizeId: any): (number, number, number, number?)
+-- Appel facultatif d'une fonction de WorldLayout (v9.8 : porte de derrière de HOUSE98)
+local function layoutNumber(name: string, size: any): number?
+	local fn = WorldLayout and WorldLayout[name]
+	if type(fn) ~= "function" then
+		return nil
+	end
+	local ok, value = pcall(fn, size)
+	return ok and finite(value) or nil
+end
+
+-- (demi-largeur de la maison, profondeur, x de la porte, x de la porte de
+-- derrière?, d de sa face?, d du pied de ses marches?)
+local function houseGeometry(sizeId: any): (number, number, number, number?, number?, number?)
 	local size = sizeDef(sizeId)
 	if WorldLayout then
 		local ok, dims = pcall(WorldLayout.Dims, size)
 		if ok and type(dims) == "table" then
-			local okDoor, doorX = pcall(WorldLayout.DoorX, size)
-			local backX: number? = nil
-			if type(WorldLayout.BackDoorX) == "function" then
-				local okBack, value = pcall(WorldLayout.BackDoorX, size)
-				backX = okBack and finite(value) or nil
-			end
-			return dims.Width / 2, dims.Depth, okDoor and finite(doorX) or 0, backX
+			local backX = layoutNumber("BackDoorX", size)
+			local backD = layoutNumber("BackDoorD", size)
+			local stepsD = layoutNumber("BackStepsD", size)
+			return dims.Width / 2, dims.Depth, layoutNumber("DoorX", size) or 0, backX, backD, stepsD
 		end
 	end
 	-- secours (tests sans WorldLayout) : même formule que WorldLayout.Dims
 	local columns = size and finite(size.Columns) or 2
 	local widthFactor = size and finite(size.Width) or 1
 	local roomW = math.floor(760 * widthFactor + 0.5) * 0.036
-	return (12 + columns * (roomW + 2)) / 2, HOUSE_DEPTH, 0, nil
+	return (12 + columns * (roomW + 2)) / 2, HOUSE_DEPTH, 0, nil, nil, nil
 end
 GardenSnapshot.HouseGeometry = houseGeometry
 
@@ -374,11 +382,16 @@ function GardenSnapshot.Zones(level: number, sizeId: any): { { number } }
 end
 
 -- Couloirs toujours libres : allée de la porte d'entrée, sortie de derrière
+-- (v9.8 HOUSE98 : portes de 6,5 de large ; derrière : DOOR_W / 2 + 1,5 de
+-- chaque côté, de la façade arrière au pied des marches + 1,5)
 function GardenSnapshot.Corridors(sizeId: any): { { number } }
-	local _, depth, doorX, backX = houseGeometry(sizeId)
-	local list = { { doorX - 3.2, doorX + 3.2, -31, 0.5 } }
+	local _, depth, doorX, backX, backD, stepsD = houseGeometry(sizeId)
+	local doorW = (WorldLayout and finite(WorldLayout.DOOR_W)) or 6.5
+	local halfFront = doorW / 2 + 1
+	local list = { { doorX - halfFront, doorX + halfFront, -31, 0.5 } }
 	if backX then
-		table.insert(list, { backX - 3.2, backX + 3.2, depth - 0.5, depth + 7.5 })
+		local half = doorW / 2 + 1.5
+		table.insert(list, { backX - half, backX + half, (backD or depth) - 0.5, (stepsD or (depth + 7)) + 1.5 })
 	end
 	return list
 end
@@ -618,8 +631,9 @@ local BED_PITCH = 9.8
 function GardenSnapshot.BedSlots(total: number): ({ { number } }, number, number, number)
 	local rows = total <= 5 and 1 or 2
 	local perRow = math.max(1, math.ceil(total / rows))
-	local rowD = rows == 1 and { BACK_CENTER + 1.6 } or { BACK_CENTER - 4.4, BACK_CENTER + 4.4 }
-	local pathD = rows == 1 and BACK_CENTER - 2.8 or BACK_CENTER
+	-- (v9.8 : un stud plus loin que v9.5 -> la sortie de la porte de derrière reste libre)
+	local rowD = rows == 1 and { BACK_CENTER + 1.6 } or { BACK_CENTER - 3.4, BACK_CENTER + 5.4 }
+	local pathD = rows == 1 and BACK_CENTER - 2.8 or BACK_CENTER + 1
 	local slots = {}
 	local index = 0
 	for row = 1, rows do
@@ -630,7 +644,7 @@ function GardenSnapshot.BedSlots(total: number): ({ { number } }, number, number
 		end
 	end
 	local halfLength = perRow * BED_PITCH / 2
-	local backD = rows == 1 and (BACK_CENTER + 5) or (BACK_CENTER + 7.6)
+	local backD = rows == 1 and (BACK_CENTER + 5) or (BACK_CENTER + 8.2)
 	return slots, pathD, halfLength, backD
 end
 

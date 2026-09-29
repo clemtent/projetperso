@@ -2488,6 +2488,60 @@ Config.Cars = {
 }
 
 ----------------------------------------------------------------------
+-- 🍦 Nourriture de Dopamine Town (v9.8, FAIR98 ; FoodService) : achetée
+-- aux stands (place, fête foraine, coin gourmand), tenue en main, mangée
+-- bouchée par bouchée ; la dernière bouchée donne un BOOST de Dopamine
+-- (x Multiplier pendant Duration s, vérifié par le serveur).
+--   Prix : PriceFactor x la valeur du boost ((Multiplier - 1) x Duration
+--          secondes de production), au moins MinPrice : manger rapporte
+--          un peu plus que ça ne coûte, sans remplacer les Game Passes.
+--   Cumul (FoodRules.Stack) : un seul boost "nourriture" à la fois ; un
+--          aliment plus fort remplace le multiplicateur (le reste est
+--          converti), un aliment moins fort ou égal prolonge (converti) ;
+--          jamais plus de MaxSeconds restantes, jamais plus que MaxMultiplier.
+--   Items : Id, Name, Icon, Multiplier, Duration (s), Bites (bouchées),
+--           Color / Crumb (miettes), Desc
+----------------------------------------------------------------------
+Config.Food = {
+	PriceFactor = 0.7,
+	MinPrice = 40,
+	MaxSeconds = 300,
+	MaxMultiplier = 2,
+	BiteCooldown = 0.55, -- s entre deux bouchées
+	BuyCooldown = 1.5, -- s entre deux achats
+	BuyDistance = 16, -- studs max entre l'avatar et le stand
+	Items = {
+		{ Id = "IceCream", Name = "Ice cream cone", Icon = "🍦", Multiplier = 1.5, Duration = 90, Bites = 4,
+			Color = Color3.fromRGB(255, 176, 206), Crumb = Color3.fromRGB(226, 176, 112), Desc = "Two scoops, strawberry and mint" },
+		{ Id = "CandyFloss", Name = "Candy floss", Icon = "🍭", Multiplier = 1.5, Duration = 120, Bites = 4,
+			Color = Color3.fromRGB(255, 190, 224), Crumb = Color3.fromRGB(255, 200, 230), Desc = "A pink cloud on a stick" },
+		{ Id = "Churros", Name = "Churros", Icon = "🥖", Multiplier = 1.4, Duration = 150, Bites = 3,
+			Color = Color3.fromRGB(214, 150, 80), Crumb = Color3.fromRGB(236, 196, 120), Desc = "Crunchy, with sugar and cinnamon" },
+		{ Id = "Popcorn", Name = "Popcorn", Icon = "🍿", Multiplier = 1.3, Duration = 180, Bites = 5,
+			Color = Color3.fromRGB(255, 244, 214), Crumb = Color3.fromRGB(255, 240, 190), Desc = "A striped box of buttery popcorn" },
+		{ Id = "Crepe", Name = "Crêpe", Icon = "🥞", Multiplier = 1.6, Duration = 120, Bites = 4,
+			Color = Color3.fromRGB(236, 196, 130), Crumb = Color3.fromRGB(120, 76, 50), Desc = "Rolled crêpe with chocolate" },
+		{ Id = "PizzaSlice", Name = "Pizza slice", Icon = "🍕", Multiplier = 1.8, Duration = 90, Bites = 4,
+			Color = Color3.fromRGB(255, 206, 110), Crumb = Color3.fromRGB(214, 90, 60), Desc = "Cheesy slice with pepperoni" },
+		{ Id = "Taco", Name = "Taco", Icon = "🌮", Multiplier = 1.8, Duration = 120, Bites = 4,
+			Color = Color3.fromRGB(240, 196, 100), Crumb = Color3.fromRGB(110, 190, 90), Desc = "Crispy shell, salad and tomato" },
+		{ Id = "Milkshake", Name = "Milkshake", Icon = "🥤", Multiplier = 2, Duration = 60, Bites = 4,
+			Color = Color3.fromRGB(255, 200, 220), Crumb = Color3.fromRGB(255, 236, 244), Desc = "Strawberry shake with whipped cream" },
+		{ Id = "HotDog", Name = "Hot dog", Icon = "🌭", Multiplier = 1.6, Duration = 150, Bites = 4,
+			Color = Color3.fromRGB(226, 110, 80), Crumb = Color3.fromRGB(236, 190, 120), Desc = "With mustard and ketchup" },
+		{ Id = "CandyApple", Name = "Candy apple", Icon = "🍎", Multiplier = 1.4, Duration = 180, Bites = 3,
+			Color = Color3.fromRGB(214, 36, 56), Crumb = Color3.fromRGB(255, 120, 130), Desc = "A shiny red caramel apple" },
+		{ Id = "Donut", Name = "Donut", Icon = "🍩", Multiplier = 1.5, Duration = 120, Bites = 3,
+			Color = Color3.fromRGB(255, 150, 196), Crumb = Color3.fromRGB(214, 160, 100), Desc = "Pink glaze and sprinkles" },
+	},
+}
+Config.FoodById = {}
+for index, food in ipairs(Config.Food.Items) do
+	food.Order = index
+	Config.FoodById[food.Id] = food
+end
+
+----------------------------------------------------------------------
 -- Index calculés automatiquement (ne pas modifier)
 ----------------------------------------------------------------------
 Config.UpgradesById = {}

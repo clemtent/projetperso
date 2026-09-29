@@ -573,8 +573,8 @@ Art.OliveTree = function(body, kit, _item)
 	local olive = rgb(134, 158, 110)
 	for index, s in ipairs({ { 30, 26, 34 }, { 66, 22, 36 }, { 48, 14, 36 }, { 40, 38, 28 }, { 60, 38, 26 }, { 22, 40, 20 }, { 78, 36, 20 } }) do
 		local c = kit.Blob(body, s[1], s[2], s[3], s[3] * 0.62, index % 2 == 0 and olive or rgb(164, 184, 140), { Z = 2 + index % 2 })
-		for k = 0, 2 do
-			kit.Circle(c, s[3] * (0.25 + k * 0.22), s[3] * 0.34, 3, 3, rgb(70, 60, 80), 0, 2)
+		if index % 3 == 1 then
+			kit.Blob(c, s[3] * 0.3, s[3] * 0.44, 3, 4, rgb(80, 64, 96), { Z = 2, Outline = false })
 		end
 	end
 	pot(kit, body, 50, 100, 46, 26, TERRACOTTA, 5)
@@ -772,19 +772,27 @@ end
 Art.HexPanels = function(body, kit, _item)
 	local colors = { CYAN, rgb(150, 110, 255), MAGENTA, LIME, rgb(255, 180, 60), CYAN, MAGENTA }
 	local spots = { { 30, 30 }, { 50, 20 }, { 70, 30 }, { 40, 50 }, { 60, 50 }, { 50, 70 }, { 80, 60 } }
+	-- un hexagone = 3 rectangles (côté x côté*√3) tournés de 60° ; néon
+	-- autour (grand hexagone de couleur), dalle sombre au centre
+	local function hexagon(parent, side, color, transparency, z)
+		for k = 0, 2 do
+			local slab = kit.Box(parent, 0, 0, side, side * 1.732, color, transparency, z)
+			slab.AnchorPoint = Vector2.new(0.5, 0.5)
+			slab.Position = UDim2.fromOffset(0, 0)
+			slab.Rotation = 30 + k * 60
+		end
+	end
 	for index, s in ipairs(spots) do
 		local hex = kit.Pivot(body, s[1], s[2], 1 + index)
 		local color = colors[index]
-		local halo = kit.Circle(hex, 0, 0, 30, 30, color, 0.75, 1)
+		local halo = kit.Circle(hex, 0, 0, 30, 30, color, 0.78, 1)
 		kit.Animate(halo, "Pulse", 0.2, 1.1, index * 0.7)
-		for k = 0, 2 do
-			local slab = kit.Box(hex, -7, -10, 14, 20, rgb(24, 26, 40), 0, 2)
-			slab.AnchorPoint = Vector2.new(0.5, 0.5)
-			slab.Position = UDim2.fromOffset(0, 0)
-			slab.Rotation = k * 60
-			kit.Stroke(slab, color, 1.6, 0)
-		end
-		kit.Circle(hex, 0, 0, 10, 10, kit.Lighten(color, 0.3), 0.25, 3)
+		local rim = kit.Pivot(hex, 0, 0, 2)
+		hexagon(rim, 11.5, color, 0, 1)
+		local core = kit.Pivot(hex, 0, 0, 3)
+		hexagon(core, 9.2, rgb(26, 28, 44), 0, 1)
+		local glow = kit.Pivot(hex, 0, 0, 4)
+		hexagon(glow, 5, kit.Lighten(color, 0.35), 0.35, 1)
 	end
 	return { Glow = CYAN, WallShadow = Vector2.new(0, 0) }
 end
