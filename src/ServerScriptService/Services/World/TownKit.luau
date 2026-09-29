@@ -614,7 +614,7 @@ end
 --   TownKit.LifePath(name, points, loop)  un chemin des passants (au sol) ;
 --   TownKit.PublishLife(root)          à la fin du Build : dossier
 --       "StreetLife" (Configuration par case de 64 studs, attribut "Data" =
---       lignes "kind;x;y;z;yaw;seed") + Configuration "Path" (attributs
+--       lignes "kind;x;y;z;yaw;seed[;sx,sy,sz]") + Configuration "Path" (attributs
 --       Name, Loop, Points = "x,y,z;x,y,z...").
 TownKit.LIFE_FOLDER = "StreetLife"
 TownKit.LIFE_CELL = 64
@@ -623,10 +623,15 @@ local function r2(v: number): string
 	return string.format("%.2f", v)
 end
 
-function TownKit.LifeSpot(kind: string, cf: CFrame, seed: number?)
+-- `size` (facultatif) : taille d'une pièce simple (peinture au sol : "Paint")
+function TownKit.LifeSpot(kind: string, cf: CFrame, seed: number?, size: Vector3?)
 	local _, yaw = cf:ToEulerAnglesYXZ()
 	local p = cf.Position
-	table.insert(life.Spots, table.concat({ kind, r2(p.X), r2(p.Y), r2(p.Z), string.format("%.4f", yaw), tostring(math.floor(seed or 0)) }, ";"))
+	local fields = { kind, r2(p.X), r2(p.Y), r2(p.Z), string.format("%.4f", yaw), tostring(math.floor(seed or 0)) }
+	if size then
+		table.insert(fields, r2(size.X) .. "," .. r2(size.Y) .. "," .. r2(size.Z))
+	end
+	table.insert(life.Spots, table.concat(fields, ";"))
 end
 
 function TownKit.LifePath(name: string, points: { Vector3 }, loop: boolean)

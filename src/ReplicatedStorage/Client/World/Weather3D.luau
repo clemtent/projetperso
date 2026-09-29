@@ -77,7 +77,12 @@ local PUDDLE_MAX = 16
 local PUDDLE_CELL = 15
 local PUDDLE_RANGE = 46
 local STEP_RATE = 1 / 30
-local PARK = CFrame.new(0, 3000, 0) -- gouttes au repos (hors de vue)
+local PARK = CFrame.new(0, 3000, 0) -- pièces au repos (hors de vue)
+-- Place de repos PROPRE à chaque pièce (famille, n°) : deux pièces au repos ne se
+-- superposent jamais (pas de faces confondues, même hors de vue)
+local function parkAt(kind: number, index: number): CFrame
+	return PARK * CFrame.new(index * 2.5, kind * 40, 0)
+end
 
 local DROP_COLOR = Color3.fromRGB(206, 218, 234)
 local SPLASH_COLOR = Color3.fromRGB(214, 226, 240)
@@ -295,8 +300,8 @@ end
 -- Rendu (client)
 ----------------------------------------------------------------------
 
-type Drop = { Part: BasePart, Seed: number, Phase: number, Speed: number, Len: number, Landed: number }
-type Splash = { Part: BasePart, Age: number, Size: number }
+type Drop = { Part: BasePart, Seed: number, Phase: number, Speed: number, Len: number, Landed: number, Park: CFrame }
+type Splash = { Part: BasePart, Age: number, Size: number, Park: CFrame }
 type Puddle = { Part: BasePart, Key: string, Base: Vector3, W: number, D: number }
 type WetRec = { Part: BasePart, Color: Color3, Reflectance: number }
 
@@ -309,6 +314,8 @@ local splashes: { Splash } = {}
 local splashFree: { Splash } = {}
 local puddles: { [string]: Puddle } = {}
 local puddlePool: { BasePart } = {}
+local puddleParks: { [BasePart]: CFrame } = {}
+local puddleParkCount = 0
 local heights: { [number]: number } = {}
 local heightCount = 0
 local RAYS_PER_STEP = 24
@@ -429,6 +436,7 @@ local function ensureDrops(count: number)
 		local i = #drops + 1
 		local len = 1.7 + hash01(i * 13 + 5) * 1.3
 		local part = newPart("RainDrop", Vector3.new(0.065, len, 0.065), DROP_COLOR, 0.38)
+		part.CFrame = parkAt(0, i)
 		part.Parent = parent
 		table.insert(drops, {
 			Part = part,
@@ -437,6 +445,7 @@ local function ensureDrops(count: number)
 			Speed = FALL_SPEED * (0.9 + 0.2 * hash01(i * 17 + 3)),
 			Len = len,
 			Landed = -1,
+			Park = parkAt(0, i),
 		})
 	end
 end
@@ -447,10 +456,12 @@ local function spawnSplash(position: Vector3, size: number)
 		if #splashes >= SPLASH_MAX or not folder then
 			return
 		end
+		local park = parkAt(1, #splashes + #splashFree + 1)
 		local part = newPart("RainSplash", Vector3.new(0.04, 0.2, 0.2), SPLASH_COLOR, 0.4)
 		part.Shape = Enum.PartType.Cylinder
+		part.CFrame = park
 		part.Parent = folder
-		s = { Part = part, Age = 0, Size = size }
+		s = { Part = part, Age = 0, Size = size, Park = park }
 	end
 	local splash = s :: Splash
 	splash.Age = 0
@@ -466,7 +477,7 @@ local function stepSplashes(dt: number)
 		s.Age += dt
 		local k = s.Age / SPLASH_LIFE
 		if k >= 1 then
-			s.Part.CFrame = PARK
+			s.Part.CFrame = s.Park
 			table.insert(splashFree, s)
 			table.remove(splashes, i)
 		else
@@ -501,7 +512,7 @@ local function stepDrops(t: number, cam: CFrame, rain: number, storm: number)
 	local parts, cframes = {}, {}
 	for i = 1, #drops do
 		local d = drops[i]
-		local cf = PARK
+		local cf = d.Park
 		if i <= want then
 			local s = t * d.Speed + d.Phase * height
 			local cycle = math.floor(s / height)
@@ -556,7 +567,7 @@ local function collectWet()
 		return
 	end
 	for _, d in ipairs(town:GetDescendants()) do
-		if d:IsA("BasePart") and HARD[d.Material] and d.Transparency < 0.5 then
+		if d:IsA("BasePart") and HARD[d.Material] and (tonumber(d.Transparency) or 0) < 0.5 and typeof(d.Color) == "Color3" then
 			local size = d.Size
 			local up = d.CFrame.UpVector.Y
 			if up > 0.9 and size.Y <= 4 and size.X * size.Z >= 24 then
@@ -685,6 +696,8 @@ local function stepPuddles(camPos: Vector3, level: number)
 							local part = table.remove(puddlePool)
 							if not part and folder then
 								local p = newPart("Puddle", Vector3.new(1, 0.06, 1), PUDDLE_COLOR, 0.3)
+								puddleParkCount += 1
+								puddleParks[p] = parkAt(2, puddleParkCount)
 								local mesh = Instance.new("SpecialMesh")
 								mesh.MeshType = Enum.MeshType.Sphere
 								mesh.Parent = p
@@ -711,7 +724,7 @@ local function stepPuddles(camPos: Vector3, level: number)
 			puddle.Part.Transparency = 1 - (0.78 * math.min(1, level * 1.6))
 			puddle.Part.Reflectance = reflect
 		else
-			puddle.Part.CFrame = PARK
+			puddle.Part.CFrame = puddleParks[puddle.Part] or PARK
 			table.insert(puddlePool, puddle.Part)
 			puddles[key] = nil
 		end
@@ -743,6 +756,7 @@ local function ensureBolt()
 	end
 	for i = 1, 8 do
 		local part = newPart("Lightning", Vector3.new(1.4, 1, 1.4), BOLT_COLOR, 1)
+		part.CFrame = parkAt(3, i)
 		part.Parent = folder
 		bolt[i] = part
 	end
@@ -757,7 +771,7 @@ local function stepBolt(t: number, flash: number, slot: number?, camPos: Vector3
 			boltSlot = nil
 			for _, part in ipairs(bolt) do
 				part.Transparency = 1
-				part.CFrame = PARK
+				part.CFrame = parkAt(3, i)
 			end
 		end
 		return
@@ -828,6 +842,7 @@ local function stepRainbow(amount: number, camPos: Vector3)
 		for band = 1, #RAINBOW do
 			for seg = 1, RB_SEGMENTS do
 				local part = newPart("Rainbow", Vector3.new(1, 1, 1), RAINBOW[band], 1)
+				part.CFrame = parkAt(4, (band - 1) * RB_SEGMENTS + seg)
 				part:SetAttribute("Band", band)
 				part:SetAttribute("Seg", seg)
 				part.Parent = folder
@@ -847,10 +862,12 @@ local function stepRainbow(amount: number, camPos: Vector3)
 		local am = (a0 + a1) / 2
 		local radial = e1 * math.cos(am) + e2 * math.sin(am)
 		local tangent = -e1 * math.sin(am) + e2 * math.cos(am)
-		local pos = center + radial * r
+		-- (bandes décalées de 0,8 stud en profondeur, largeur exacte : jamais deux
+		-- faces de couleurs différentes dans le même plan)
+		local pos = center + radial * r + dir * ((band - 1) * 0.8)
 		local length = r * (a1 - a0) * 1.04
 		if part.Size.Y ~= length then
-			part.Size = Vector3.new(bandW * 1.02, length, 1)
+			part.Size = Vector3.new(bandW, length, 0.6)
 		end
 		table.insert(parts, part)
 		table.insert(cframes, CFrame.fromMatrix(pos, radial, tangent))
@@ -1023,6 +1040,8 @@ function Weather3D.Stop()
 	table.clear(splashFree)
 	table.clear(puddles)
 	table.clear(puddlePool)
+	table.clear(puddleParks)
+	puddleParkCount = 0
 	table.clear(bolt)
 	table.clear(heights)
 	heightCount = 0

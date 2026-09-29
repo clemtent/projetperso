@@ -981,7 +981,7 @@ R.GardenDoor = function(b, ctx)
 	local paint = vivid(b, 1, rgb(140, 200, 140))
 	local w, h = doorBase(b, ctx, paint, M.Wood)
 	-- vitre à croisillons en haut, panneaux en bas
-	local glass = b.Box(0, 50, 0.5, w - 16, 38, 1, rgb(190, 230, 255), M.Glass)
+	local glass = b.Box(0, 50, 0.5 + House3DKit.Gap(b, 0.6) / 2, w - 16, 38, House3DKit.Gap(b, 0.6), rgb(190, 230, 255), M.Glass)
 	glass.Transparency = 0.3
 	House3DKit.Frame(b, 0, 48, 1.2, w - 12, 42, 4, 2, lighten(paint, 0.2), M.Wood)
 	b.Box(0, 50, 1.4, 3, 38, 1.5, lighten(paint, 0.2), M.Wood)
@@ -1275,14 +1275,17 @@ local function roundPot(b: Builder, diameter: number, height: number, color: Col
 	b.Cyl(0, height * 0.06, 0, diameter * 0.74, height * 0.12, darken(color, 0.15), M.SmoothPlastic)
 	local body = b.Egg(0, height * 0.5, 0, diameter * 0.96, height * 0.9, diameter * 0.96, color, M.SmoothPlastic)
 	body.Reflectance = 0.05
-	b.Cyl(0, height * 0.72, 0, diameter, height * 0.2, lighten(color, 0.12), M.SmoothPlastic)
-	b.Cyl(0, height * 0.9, 0, diameter + 1, height * 0.04, lighten(color, 0.2), M.SmoothPlastic)
-	b.Cyl(0, height * 0.86, 0, diameter * 0.86, height * 0.08, rgb(110, 80, 66), M.Ground)
+	local g = House3DKit.Gap(b, 0.6)
+	b.Cyl(0, height * 0.72, 0, diameter, height * 0.16, lighten(color, 0.12), M.SmoothPlastic)
+	local rimTop = height * 0.88 + math.max(1.4, 2 * g)
+	b.Cyl(0, height * 0.88, 0, diameter + 1, rimTop - height * 0.88, lighten(color, 0.2), M.SmoothPlastic)
+	local soil = rimTop - g
+	b.Cyl(0, height * 0.8, 0, diameter * 0.86, soil - height * 0.8, rgb(110, 80, 66), M.Ground)
 	for index = 1, 3 do
 		local a = index * 2.1
-		b.Ball(math.cos(a) * diameter * 0.25, height * 0.95, math.sin(a) * diameter * 0.22, diameter * 0.07, rgb(214, 204, 196), M.Slate)
+		b.Ball(math.cos(a) * diameter * 0.25, soil, math.sin(a) * diameter * 0.22, diameter * 0.07, rgb(214, 204, 196), M.Slate)
 	end
-	return height * 0.94
+	return soil
 end
 
 -- Feuille (ovale plat incliné) au bout d'une tige

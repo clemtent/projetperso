@@ -220,10 +220,11 @@ local function pot(b: Builder, diameter: number, height: number, color: Color3)
 	b.Cyl(0, height * 0.06, 0, diameter * 0.8, height * 0.3, darken(color, 0.06), M.SmoothPlastic)
 	b.Cyl(0, height * 0.34, 0, diameter * 0.88, height * 0.48, color, M.SmoothPlastic)
 	b.Cyl(0, height * 0.8, 0, diameter, height * 0.2, lighten(color, 0.12), M.SmoothPlastic)
-	b.Cyl(0, height * 0.9, 0, diameter * 0.84, height * 0.12, rgb(96, 70, 56), M.Ground)
+	local soilTop = height - House3DKit.Gap(b, 0.6)
+	b.Cyl(0, height * 0.86, 0, diameter * 0.84, soilTop - height * 0.86, rgb(96, 70, 56), M.Ground)
 	for index = 1, 3 do
 		local angle = index * 2.1
-		b.Ball(math.cos(angle) * diameter * 0.26, height * 1.01, math.sin(angle) * diameter * 0.22, diameter * 0.07, rgb(214, 204, 196), M.Slate)
+		b.Ball(math.cos(angle) * diameter * 0.26, soilTop, math.sin(angle) * diameter * 0.22, diameter * 0.07, rgb(214, 204, 196), M.Slate)
 	end
 end
 
@@ -768,11 +769,12 @@ local function racingChair(b: Builder, seat: number, main: Color3, dark: Color3,
 	-- dossier à ailes
 	local backCF = CFrame.new(0, seat + 26, -22) * CFrame.Angles(-0.12, 0, 0)
 	b.BoxR(backCF, 40, 62, 8, main, M.Leather)
-	b.BoxR(backCF * CFrame.new(0, 0, 4.2), 3, 54, 0.8, stitch, M.Leather)
+	local g = House3DKit.Gap(b, 0.6)
+	b.BoxR(backCF * CFrame.new(0, 0, 4 + g / 2), 3, 54, g, stitch, M.Leather)
 	for _, side in ipairs({ -1, 1 }) do
 		b.BoxR(backCF * CFrame.new(side * 22, -4, 2) * CFrame.Angles(0, side * 0.45, 0), 8, 50, 10, dark, M.Leather)
-		b.BoxR(backCF * CFrame.new(side * 12, 0, 4.2), 1, 54, 0.8, stitch, M.Leather)
-		b.BoxR(backCF * CFrame.new(side * 14, 26, 0), 8, 5, 9, dark, M.Leather) -- passage de harnais
+		b.BoxR(backCF * CFrame.new(side * 12, 0, 4 + g / 2), 1, 54, g, stitch, M.Leather)
+		b.BoxR(backCF * CFrame.new(side * 14, 26, 0), 8, 5, 8 + 2 * g, dark, M.Leather) -- passage de harnais
 	end
 	House3DKit.PillowR(b, backCF * CFrame.new(0, 22, 6), 18, 9, 5, dark, M.Fabric) -- coussin de tête
 	House3DKit.PillowR(b, backCF * CFrame.new(0, -20, 6), 26, 9, 5, dark, M.Fabric) -- coussin lombaire
@@ -809,7 +811,7 @@ R.BarStool = function(b, ctx)
 	end
 	b.Cyl(0, seat - 10.2, 0, 30, 2.4, GREY_DARK, M.Metal)
 	b.Cyl(0, seat - 8, 0, 44, 6, color, M.Leather)
-	b.Cyl(0, seat - 8.6, 0, 46, 1.4, darken(color, 0.3), M.Leather) -- passepoil
+	b.Cyl(0, seat - 8 - House3DKit.Gap(b, 0.6), 0, 46, 1.4 + House3DKit.Gap(b, 0.6), darken(color, 0.3), M.Leather) -- passepoil
 	b.Egg(0, seat - 2.4, 0, 44, 4.8, 44, color, M.Leather)
 	b.Ball(0, seat - 0.2, 0, 3, darken(color, 0.25), M.Leather)
 	b.Top(1, 0, seat, 0, 36, 36)
@@ -1004,7 +1006,7 @@ local function bed(b: Builder, ctx: Ctx, topDefault: number, width: number, dept
 			House3DKit.Leg(b, sx * (width / 2 - 5), 0, sz * (depth / 2 - 4), 5.6, frameTop * 0.45 + 0.5, darken(wood, 0.1), M.Wood, darken(wood, 0.45))
 		end
 	end
-	b.Box(0, frameTop * 0.45, 0, width - 8, frameTop * 0.55, depth, wood, M.Wood)
+	b.Box(0, frameTop * 0.45, 0, width - 8, frameTop * 0.55, depth - 2 * g, wood, M.Wood)
 	House3DKit.SeatCushion(b, 1, frameTop, 0, width - 14, 12, depth - 4, sheet, darken(sheet, 0.12))
 	-- tête de lit (gauche) : montants, panneau, capiton, boudin
 	local hx = -width / 2 + 3
@@ -1024,7 +1026,7 @@ local function bed(b: Builder, ctx: Ctx, topDefault: number, width: number, dept
 	b.CylZ(hx, top + 26, 0, 7, depth - 6, lighten(wood, 0.1), M.Wood)
 	-- pied de lit (droite)
 	b.Box(width / 2 - 3, 0, 0, 6, top + 6, depth, wood, M.Wood)
-	b.CylZ(width / 2 - 3, top + 6, 0, 7, depth + 1, lighten(wood, 0.1), M.Wood)
+	b.CylZ(width / 2 - 3, top + 6, 0, 7, depth + 2 * g, lighten(wood, 0.1), M.Wood)
 	-- couette : bloc qui enveloppe le matelas, bords arrondis, ourlet, piqûres
 	local x0, x1 = -width * 0.26, width / 2 - 7
 	local len = x1 - x0
@@ -1032,7 +1034,7 @@ local function bed(b: Builder, ctx: Ctx, topDefault: number, width: number, dept
 	b.Box(xc, frameTop - 5, 0, len, top + 1.6 - (frameTop - 5), depth + 2 * g, blanket, M.Fabric)
 	for _, sz in ipairs({ -1, 1 }) do
 		b.CylX(xc, top + 0.2, sz * (depth / 2 + g - 1.2), 2.8, len, blanket, M.Fabric)
-		b.Box(xc, frameTop - 4.4, sz * (depth / 2 + g), len - 0.4, 2, g, darken(blanket, 0.2), M.Fabric)
+		b.Box(xc, frameTop - 4.4, sz * (depth / 2 + 1.5 * g), len - 0.4, 2, g, darken(blanket, 0.2), M.Fabric)
 	end
 	for _, qx in ipairs({ 0.3, 0.62 }) do
 		b.Box(x0 + len * qx, top + 1.6, 0, 1, g, depth - 4, lighten(blanket, 0.25), M.Fabric)
@@ -1244,9 +1246,8 @@ R.Stove = function(b, ctx)
 	b.Neon(digits)
 	-- four
 	b.Box(0, 12, depth / 2 + g / 2, w * 0.8, top * 0.56, g, darken(body, 0.12), M.SmoothPlastic)
-	local window = b.Box(0, 16, depth / 2 + g, w * 0.62, top * 0.4, g, rgb(40, 34, 52), M.Glass)
+	local window = b.Box(0, 16, depth / 2 + 1.5 * g, w * 0.62, top * 0.4, g, rgb(40, 34, 52), M.Glass)
 	window.Reflectance = 0.2
-	b.Box(0, 17, depth / 2 + g * 0.5, w * 0.5, 1.4, g, rgb(255, 200, 120), M.SmoothPlastic) -- lueur du four (derrière la vitre)
 	House3DKit.Handle(b, 0, top * 0.66, depth / 2 + g, w * 0.6, false)
 	-- tiroir bas
 	b.Box(0, 3.4, depth / 2 + g / 2, w * 0.8, 7, g, darken(body, 0.08), M.SmoothPlastic)
@@ -1282,17 +1283,17 @@ R.Microwave = function(b, _ctx)
 	end
 	b.Round(0, 2, 0, 90, 54, 50, 4, body, M.SmoothPlastic)
 	b.Box(-10, 7, 25 + g / 2, 60, 44, g, darken(body, 0.08), M.SmoothPlastic)
-	local glass = b.Box(-12, 11, 25 + g, 50, 36, g, rgb(44, 38, 62), M.Glass)
+	local glass = b.Box(-12, 11, 25 + 1.5 * g, 50, 36, g, rgb(44, 38, 62), M.Glass)
 	glass.Reflectance = 0.25
 	House3DKit.Handle(b, 17, 29, 25 + g, 26, true)
 	-- panneau de commande
 	b.Box(30, 7, 25 + g / 2, 18, 44, g, accent(b, 1, PINK), M.SmoothPlastic)
-	b.Box(30, 42, 25 + g, 13, 5, g, rgb(30, 40, 30), M.SmoothPlastic)
-	local digits = b.Box(30, 43.2, 25 + 1.6 * g, 9, 2.4, g * 0.6, rgb(120, 255, 170))
+	b.Box(30, 42, 25 + 1.5 * g, 13, 5, g, rgb(30, 40, 30), M.SmoothPlastic)
+	local digits = b.Box(30, 43.2, 25 + 2.5 * g, 9, 2.4, g, rgb(120, 255, 170))
 	b.Neon(digits)
 	for row = 0, 3 do
 		for col = 0, 2 do
-			b.Box(26 + col * 4, 14 + row * 5.6, 25 + 1.6 * g, 3, 3.6, g * 0.8, row == 0 and GREY_DARK or lighten(accent(b, 1, PINK), 0.35), M.SmoothPlastic)
+			b.Box(26 + col * 4, 14 + row * 5.6, 25 + 1.5 * g, 3, 3.6, g, row == 0 and GREY_DARK or lighten(accent(b, 1, PINK), 0.35), M.SmoothPlastic)
 		end
 	end
 	b.Top(1, 0, 56, 0, 80, 46)
@@ -1471,7 +1472,7 @@ local function lampShade(b: Builder, y: number, diameter: number, height: number
 	shade.CastShadow = false
 	local upper = b.Cyl(0, y + height * 0.55, 0, diameter * 0.88, height * 0.45, color, M.Fabric)
 	upper.CastShadow = false
-	b.Cyl(0, y - 0.6, 0, diameter + 1, 1.4, darken(color, 0.18), M.Fabric)
+	b.Cyl(0, y - 1.2, 0, diameter + 1, 1.8, darken(color, 0.18), M.Fabric)
 	b.Cyl(0, y + height - 0.6, 0, diameter * 0.88 + 1, 1.4, darken(color, 0.18), M.Fabric)
 	-- lyre (deux tiges) + pommeau
 	for _, sx in ipairs({ -1, 1 }) do
@@ -1804,7 +1805,7 @@ local function windowRecipe(b: Builder, ctx: Ctx)
 	end
 	b.Box(0, 94.5, 3, 96, 3, 7, lighten(frame, 0.08), M.Wood)
 	for _, x in ipairs({ -37.5, 37.5 }) do
-		b.Box(x, 12, 2.8, 3, 76, 3.6, darken(frame, 0.08), M.Wood)
+		b.Box(x, 12, 2.5, 3, 76, 3, darken(frame, 0.08), M.Wood)
 	end
 	-- petits bois (croisillon)
 	b.Box(0, 12, 2.5, 3, 76, 4, frame, M.Wood)
@@ -1892,7 +1893,7 @@ R.RetroTV = function(b, ctx)
 	end
 	b.Round(0, 10, 0, 90, top - 10, 50, 6, body, M.SmoothPlastic)
 	b.Box(-10, 17, 25 + g / 2, 60, top - 28, g, darken(body, 0.35), M.SmoothPlastic)
-	screen(b, -10, 21, 25 + g, 52, top - 36, rgb(120, 180, 255))
+	screen(b, -10, 21, 25.5 + g, 52, top - 36, rgb(120, 180, 255))
 	local bulge = b.EggR(CFrame.new(-10, 21 + (top - 36) / 2, 25 + g * 2), 52, top - 36, 3, rgb(200, 230, 255), M.Glass)
 	bulge.Transparency = 0.75
 	bulge.Reflectance = 0.2
@@ -1924,7 +1925,7 @@ R.HomeCinema = function(b, _ctx)
 	b.Box(0, 0, 0, 94, 1.6, 26, darken(wood, 0.4), M.Wood)
 	for _, x in ipairs({ -30, 0, 30 }) do
 		b.Box(x, 3, 15 + g / 2, 26, 12, g, darken(wood, 0.35), M.Wood)
-		b.Box(x, 4, 15 + g, 24, 3, g, rgb(40, 40, 50), M.SmoothPlastic)
+		b.Box(x, 4, 15 + 1.5 * g, 24, 3, g, rgb(40, 40, 50), M.SmoothPlastic)
 	end
 	b.Box(0, 18, -4, 16, 2, 10, GREY_DARK, M.Metal).Reflectance = 0.25
 	b.Box(0, 20, -4, 5, 9, 3, GREY_DARK, M.Metal)
@@ -1937,8 +1938,8 @@ R.HomeCinema = function(b, _ctx)
 		for index, y in ipairs({ 24, 34, 43 }) do
 			local d = index == 3 and 4 or 8
 			b.CylZ(sx, y, 12 + g / 2, d + 1.6, g, GREY_DARK, M.Metal)
-			b.CylZ(sx, y, 12 + g, d, g, rgb(60, 60, 72), M.SmoothPlastic)
-			b.CylZ(sx, y, 12 + 1.5 * g, d * 0.35, g, GREY, M.Metal)
+			b.CylZ(sx, y, 12 + 1.5 * g, d, g, rgb(60, 60, 72), M.SmoothPlastic)
+			b.CylZ(sx, y, 12 + 2.5 * g, d * 0.35, g, GREY, M.Metal)
 		end
 	end
 	b.Top(1, 0, 18, 8, 70, 14)
@@ -2026,14 +2027,14 @@ R.SlotMachine = function(b, _ctx)
 	-- symboles), ligne gagnante, bac à pièces, levier à boule, gyrophare
 	b.Round(0, 0, 0, 64, 90, 44, 5, body, M.SmoothPlastic)
 	b.Box(0, 42, 22 + g / 2, 54, 30, g, GOLD, M.Metal).Reflectance = 0.25
-	b.Box(0, 44, 22 + g, 50, 26, g, WHITE, M.SmoothPlastic)
+	b.Box(0, 44, 22 + 1.5 * g, 50, 26, g, WHITE, M.SmoothPlastic)
 	for index = 0, 2 do
 		local x = -16 + index * 16
 		b.CylX(x, 57, 21, 20, 13, WHITE, M.SmoothPlastic)
 		local sym = ({ PINK, BUTTER, MINT })[index + 1]
-		b.Box(x, 53.6, 22 + 2 * g, 8, 7, g, sym, M.SmoothPlastic)
+		b.Box(x, 53.6, 22 + 2.5 * g, 8, 7, g, sym, M.SmoothPlastic)
 	end
-	b.Box(0, 56.4, 22 + 2.6 * g, 50, 0.8, g, rgb(255, 60, 80), M.SmoothPlastic)
+	b.Box(0, 56.4, 22 + 3.5 * g, 50, 0.8, g, rgb(255, 60, 80), M.SmoothPlastic)
 	b.Box(0, 14, 22 + 2 * g, 36, 8, 8, darken(GOLD, 0.2), M.Metal)
 	for index = 0, 4 do
 		b.CylZ(-10 + index * 5, 21, 22 + 3 * g, 4, 1, GOLD, M.Metal)
@@ -2429,7 +2430,7 @@ R.Sunflower = function(b, _ctx)
 		b.EggR(CFrame.new(math.cos(a) * 13, 82 + math.sin(a) * 13, 3) * CFrame.Angles(0, 0, a - math.pi / 2), 6, 13, 1.6, vary(rgb(255, 210, 60), index, 0.08), M.SmoothPlastic)
 	end
 	b.CylZ(0, 82, 4, 20, 4, rgb(120, 80, 50))
-	b.CylZ(0, 82, 5, 12, 3.4, rgb(90, 60, 40))
+	b.CylZ(0, 82, 5.5 + House3DKit.Gap(b, 0.6) / 2, 12, 1 + House3DKit.Gap(b, 0.6), rgb(90, 60, 40))
 	b.Footprint(46, 46, 100)
 end
 R.GiantMushroom = R.MushroomStool
@@ -2669,17 +2670,17 @@ R.DogHouse = function(b, _ctx)
 	for index = 0, 6 do
 		b.Box(0, 4 + index * 7.4, 0, 80, 7.4, 64, vary(wall, index, 0.05), M.WoodPlanks)
 	end
-	b.Box(0, 4, 32, 30, 30, 1.2, rgb(50, 32, 40))
-	b.CylZ(0, 34, 32, 30, 1.2, rgb(50, 32, 40))
-	b.Box(-16, 4, 32 + g / 2, 3, 30, g, lighten(wall, 0.25), M.Wood)
-	b.Box(16, 4, 32 + g / 2, 3, 30, g, lighten(wall, 0.25), M.Wood)
+	b.Box(0, 4, 32 - 0.6 + g / 4, 30, 30, 1.2 + g / 2, rgb(50, 32, 40))
+	b.CylZ(0, 34, 32 - 0.6 + g / 4, 30, 1.2 + g / 2, rgb(50, 32, 40))
+	b.Box(-16, 4, 32 + 0.75 * g, 3, 30, 1.5 * g, lighten(wall, 0.25), M.Wood)
+	b.Box(16, 4, 32 + 0.75 * g, 3, 30, 1.5 * g, lighten(wall, 0.25), M.Wood)
 	b.Wedge(-21, 56, 0, 44, 26, 72, roof, "Left", M.RoofShingles)
 	b.Wedge(21, 56, 0, 44, 26, 72, roof, "Right", M.RoofShingles)
 	b.CylZ(0, 81, 0, 4, 74, darken(roof, 0.25), M.Wood)
-	b.Box(0, 40, 32 + g / 2, 24, 7, g, lightOf(b, CREAM), M.Wood)
-	House3DKit.Heart(b, 0, 43.5, 32 + g, 4, 0.6, accent(b, 3, PINK), M.SmoothPlastic)
+	b.Box(0, 40, 32 + 0.75 * g, 24, 7, 1.5 * g, lightOf(b, CREAM), M.Wood)
+	House3DKit.Heart(b, 0, 43.5, 32 + 1.5 * g, 4, 0.6, accent(b, 3, PINK), M.SmoothPlastic)
 	b.Cyl(30, 0, 36, 14, 5, accent(b, 3, SKY), M.SmoothPlastic)
-	b.Cyl(30, 4, 36, 11, 1.2, rgb(160, 110, 70), M.Pebble)
+	b.Cyl(30, 4, 36, 11, 1 + g, rgb(160, 110, 70), M.Pebble)
 	b.Footprint(84, 70, 82)
 end
 R.ScratchingPost = function(b, _ctx)
@@ -2774,7 +2775,7 @@ R.Aquarium = function(b, ctx)
 	local water = b.Box(0, tankY + 2, 0, 86, tankH - 8, 36, rgb(130, 200, 250), M.Glass)
 	water.Transparency = 0.4
 	water.CastShadow = false
-	b.Box(0, tankY, 0, 86, 4, 35, rgb(240, 220, 180), M.Sand)
+	b.Box(0, tankY, 0, 84, 4, 34, rgb(240, 220, 180), M.Sand)
 	for index = 0, 2 do
 		b.Egg(-30 + index * 26, tankY + 5, -10 + index * 4, 12, 8, 10, rgb(170, 160, 180), M.Slate)
 	end
@@ -2827,11 +2828,11 @@ local function cup(straw: boolean)
 		else
 			b.Cyl(0, 0, 0, 56, 2, lighten(color, 0.3), M.SmoothPlastic)
 			b.Cyl(0, 2, 0, 44, 4, color, M.SmoothPlastic)
-			b.Cyl(0, 6, 0, 50, 54, color, M.SmoothPlastic)
-			b.Cyl(0, 58, 0, 52, 2, lighten(color, 0.25), M.SmoothPlastic)
-			b.Cyl(0, 56, 0, 44, 3, rgb(140, 90, 60), M.SmoothPlastic)
-			b.Egg(-6, 59, 4, 10, 4, 8, WHITE, M.SmoothPlastic)
-			b.Egg(6, 59, -4, 8, 4, 8, rgb(255, 214, 230), M.SmoothPlastic)
+			local g = House3DKit.Gap(b, 0.6)
+			b.Cyl(0, 6, 0, 50, 51, color, M.SmoothPlastic)
+			b.Cyl(0, 56, 0, 44, 1 + g, rgb(140, 90, 60), M.SmoothPlastic)
+			b.Egg(-6, 57 + g, 4, 10, 4, 8, WHITE, M.SmoothPlastic)
+			b.Egg(6, 57 + g, -4, 8, 4, 8, rgb(255, 214, 230), M.SmoothPlastic)
 			b.Tube(24, 48, 0, 34, 42, 0, 5, color, M.SmoothPlastic)
 			b.Tube(34, 42, 0, 34, 26, 0, 5, color, M.SmoothPlastic)
 			b.Tube(34, 26, 0, 24, 18, 0, 5, color, M.SmoothPlastic)
@@ -3156,17 +3157,18 @@ R.MantelClock = function(b, _ctx)
 	end
 	House3DKit.Bevel(b, 0, 2, 0, 80, 48, 34, 1.6, wood, M.Wood)
 	b.Ball(0, 50, 0, 40, wood, M.Wood)
+	local g = House3DKit.Gap(b, 0.6)
 	b.CylZ(0, 42, 17, 42, 2, GOLD, M.Metal).Reflectance = 0.3
-	b.CylZ(0, 42, 17.6, 38, 2, WHITE)
+	b.CylZ(0, 42, 17.5 + g / 2, 38, 1 + g, WHITE)
 	for index = 0, 11 do
 		local a = index / 12 * math.pi * 2
-		b.Box(math.sin(a) * 15, 42 + math.cos(a) * 15 - 0.8, 18.8, 1.2, index % 3 == 0 and 2.6 or 1.6, 0.6, INK)
+		b.Box(math.sin(a) * 15, 42 + math.cos(a) * 15 - 0.8, 18 + 1.5 * g, 1.2, index % 3 == 0 and 2.6 or 1.6, g, INK)
 	end
-	b.BoxR(CFrame.new(0, 48, 19) * CFrame.Angles(0, 0, 0.2), 2, 14, 0.6, INK)
-	b.BoxR(CFrame.new(3, 42, 19.2) * CFrame.Angles(0, 0, 1.3), 2, 10, 0.6, INK)
-	b.Ball(0, 42, 19.4, 2.4, GOLD, M.Metal)
-	b.Box(0, 8, 17.2, 20, 12, 0.6, rgb(200, 220, 240), M.Glass).Transparency = 0.5
-	b.CylZ(0, 12, 16.6, 7, 1, GOLD, M.Metal)
+	b.BoxR(CFrame.new(0, 48, 18 + 1.5 * g) * CFrame.Angles(0, 0, 0.2), 2, 14, g, INK)
+	b.BoxR(CFrame.new(3, 42, 18 + 2.5 * g) * CFrame.Angles(0, 0, 1.3), 2, 10, g, INK)
+	b.Ball(0, 42, 18 + 3 * g, 2.4, GOLD, M.Metal)
+	b.CylZ(0, 12, 17 + g / 2, 7, g, GOLD, M.Metal)
+	b.Box(0, 8, 17 + 1.5 * g, 20, 12, g, rgb(200, 220, 240), M.Glass).Transparency = 0.5
 	b.Footprint(80, 40, 70)
 end
 R.Vase = function(b, _ctx)
@@ -3765,11 +3767,11 @@ R.LockerCabinet = function(b, ctx)
 		local x = -w / 4 + index * w / 2
 		b.Box(x, 9, depth / 2 + 1.5 * g, w / 2 - 4, top - 14, 3 * g, lighten(blue, 0.08), M.Metal)
 		for vent = 0, 3 do
-			b.Box(x, top - 16 - vent * 5, depth / 2 + 3 * g, w / 2 - 16, 2, 2 * g, darken(blue, 0.3), M.Metal)
+			b.Box(x, top - 16 - vent * 5, depth / 2 + 3.5 * g, w / 2 - 16, 2, g, darken(blue, 0.3), M.Metal)
 		end
 		local hx = x + (index == 0 and 14 or -14)
 		b.Box(hx, top * 0.5, depth / 2 + 3 * g, 3, 12, 3, CHROME, M.Metal).Reflectance = 0.3
-		b.Box(x, top * 0.72, depth / 2 + 3.2 * g, 10, 4, g, WHITE, M.SmoothPlastic)
+		b.Box(x, top - 12, depth / 2 + 3.5 * g, 10, 4, g, WHITE, M.SmoothPlastic)
 	end
 	b.Box(14 - w / 4, top * 0.46, depth / 2 + 3 * g + 2, 4, 5, 2, GOLD, M.Metal)
 	b.Top(1, 0, top, 0, w - 8, depth - 6)
@@ -3928,9 +3930,10 @@ R.BasketHoop = function(b, _ctx)
 	b.Cyl(-10, 12, 0, 7, 76, GREY, M.Metal).Reflectance = 0.2
 	b.BoxR(CFrame.new(4, 88, 0) * CFrame.Angles(0, 0, -0.5), 30, 4, 4, GREY, M.Metal)
 	b.Box(22, 80, -2, 4, 30, 44, WHITE)
-	b.Box(24.4, 80, -2, 0.4, 30, 44, darken(WHITE, 0.08))
-	b.Box(24.8, 86, -2, 0.4, 12, 16, RACE_RED)
-	b.Box(25, 87, -2, 0.4, 10, 14, WHITE)
+	local g = House3DKit.Gap(b, 0.4)
+	b.Box(24 + g / 2, 80, -2, g, 30, 44, darken(WHITE, 0.08))
+	b.Box(24 + 1.5 * g, 86, -2, g, 12, 16, RACE_RED)
+	b.Box(24 + 2.5 * g, 87, -2, g, 10, 14, WHITE)
 	for index = 0, 7 do
 		local angle = index / 8 * math.pi * 2
 		b.Box(36 + math.cos(angle) * 10, 80, math.sin(angle) * 10, 5, 2, 5, rgb(255, 130, 50), M.Metal)
@@ -3997,15 +4000,16 @@ R.GuitarAmp = function(b, _ctx)
 			b.Box(sx * 40, sy, 18, 5, 4, 5, CHROME, M.Metal).Reflectance = 0.3
 		end
 	end
-	b.Box(0, 62, 20.3, 78, 10, 0.8, GOLD, M.Metal)
+	local g = House3DKit.Gap(b, 0.6)
+	b.Box(0, 62, 20 + g / 2, 78, 10, g, GOLD, M.Metal)
 	for index = 0, 4 do
-		knob(b, -26 + index * 12, 67, 21.2, 5, INK)
+		knob(b, -26 + index * 12, 67, 20 + g + 2.2, 5, INK)
 	end
-	local lamp = b.Ball(32, 67, 21.2, 3, rgb(255, 80, 80))
+	local lamp = b.Ball(32, 67, 20 + g + 1, 3, rgb(255, 80, 80))
 	b.Neon(lamp)
-	b.Box(0, 6, 20.3, 76, 52, 0.8, rgb(70, 64, 80), M.Fabric)
-	b.CylZ(0, 32, 20.8, 36, 0.6, INK, M.Fabric)
-	b.Box(-20, 50, 21.2, 16, 4, 0.6, GOLD, M.Metal)
+	b.Box(0, 6, 20 + g / 2, 76, 52, g, rgb(70, 64, 80), M.Fabric)
+	b.CylZ(0, 30, 20 + 1.5 * g, 36, g, INK, M.Fabric)
+	b.Box(-20, 52, 20 + 1.5 * g, 16, 4, g, GOLD, M.Metal)
 	b.Box(0, 76, 0, 34, 4, 8, INK, M.Leather)
 	b.Footprint(84, 40, 80)
 end
@@ -4013,26 +4017,27 @@ R.DrumKit = function(b, _ctx)
 	local shell = b.Map(rgb(80, 110, 230))
 	-- batterie : grosse caisse (cercles, tirants, peau à logo), toms montés,
 	-- caisse claire chromée, tom basse sur pieds, cymbales, charleston
+	local g = House3DKit.Gap(b, 0.6)
 	b.CylZ(0, 26, 0, 50, 32, shell, M.SmoothPlastic)
-	for _, dz in ipairs({ -15, 15 }) do
-		b.CylZ(0, 26, dz, 52, 2, CHROME, M.Metal).Reflectance = 0.3
+	for _, sz in ipairs({ -1, 1 }) do
+		b.CylZ(0, 26, sz * (15 + g / 2), 52, 2 + g, CHROME, M.Metal).Reflectance = 0.3
 	end
-	b.CylZ(0, 26, 16.2, 44, 0.6, rgb(244, 246, 255), M.SmoothPlastic)
-	b.CylZ(0, 26, 16.6, 16, 0.4, RACE_RED, M.SmoothPlastic)
+	b.CylZ(0, 26, 15.5 + g, 44, 1 + 2 * g, rgb(244, 246, 255), M.SmoothPlastic)
+	b.CylZ(0, 26, 16 + 2.5 * g, 16, g, RACE_RED, M.SmoothPlastic)
 	for index = 0, 5 do
 		local a = index / 6 * math.pi * 2
 		b.BoxR(CFrame.new(math.cos(a) * 25.4, 26 + math.sin(a) * 25.4, 0) * CFrame.Angles(0, 0, a), 1.4, 2, 30, CHROME, M.Metal)
 	end
 	for _, x in ipairs({ -14, 14 }) do
 		b.Cyl(x, 52, -6, 20, 14, shell, M.SmoothPlastic)
-		b.Cyl(x, 65, -6, 21, 1.4, CHROME, M.Metal)
+		b.Cyl(x, 65, -6, 21, 1 + g, CHROME, M.Metal)
 		b.Tube(0, 50, -4, x, 52, -6, 1.4, CHROME, M.Metal)
 	end
 	b.Cyl(-40, 0, 6, 3, 44, GREY, M.Metal)
 	b.Cyl(-40, 44, 6, 26, 10, CHROME, M.Metal).Reflectance = 0.35 -- caisse claire
 	b.Cyl(-40, 54, 6, 25, 0.6, WHITE, M.SmoothPlastic)
 	b.Cyl(40, 0, 6, 28, 38, shell, M.SmoothPlastic) -- tom basse
-	b.Cyl(40, 37, 6, 29, 1.4, CHROME, M.Metal)
+	b.Cyl(40, 37, 6, 29, 1 + g, CHROME, M.Metal)
 	for _, spec in ipairs({ { -46, 70, -10 }, { 46, 78, -10 } }) do
 		b.Cyl(spec[1], 0, spec[3], 2.5, spec[2], GREY, M.Metal)
 		local cym = b.Cyl(spec[1], spec[2], spec[3], 30, 1, GOLD, M.Metal)

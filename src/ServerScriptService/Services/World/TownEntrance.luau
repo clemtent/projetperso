@@ -295,7 +295,8 @@ local function outside(folder: Instance, geo: TownKit.Geo, gcf: CFrame)
 	-- route depuis la porte, puis rond-point
 	part(model, "Road", Vector3.new(16, 0.7, len), gcf * CFrame.new(0, ROAD_Y - 0.35, len / 2 + 3), C.Asphalt, M.Asphalt, "solid")
 	for i = 0, 3 do
-		part(model, "Dash", Vector3.new(0.4, 0.1, 5), gcf * CFrame.new(0, ROAD_Y + 0.05, 10 + i * 11), C.Line, M.SmoothPlastic, "deco")
+		-- (v9.8, CITY98) peinture au sol construite côté client (TownStreetLife)
+		TownKit.LifeSpot("Paint", gcf * CFrame.new(0, ROAD_Y + 0.05, 10 + i * 11), 0, Vector3.new(0.4, 0.1, 5))
 	end
 	local loop = gcf * CFrame.new(0, 0, len + 16)
 	-- (v9.8 z-fighting : l'anneau 0,03 au-dessus de la route qui y entre)

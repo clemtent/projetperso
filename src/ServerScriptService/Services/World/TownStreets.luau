@@ -83,9 +83,21 @@ local function strip(parent: Instance, name: string, cf: CFrame, x0: number, x1:
 	for _, r in ipairs(ranges) do
 		local len = r[2] - r[1]
 		if len > 0.2 then
-			part(parent, name, Vector3.new(len + 2 * g, thick, math.abs(z1 - z0)), cf * CFrame.new((r[1] + r[2]) / 2, top - thick / 2, (z0 + z1) / 2), color, material, profile)
+			local size = Vector3.new(len + 2 * g, thick, math.abs(z1 - z0))
+			local pcf = cf * CFrame.new((r[1] + r[2]) / 2, top - thick / 2, (z0 + z1) / 2)
+			if profile == "paint" then
+				-- (v9.8, CITY98) peinture au sol : construite côté client (TownStreetLife)
+				TownKit.LifeSpot("Paint", pcf, 0, size)
+			else
+				part(parent, name, size, pcf, color, material, profile)
+			end
 		end
 	end
+end
+
+-- (v9.8, CITY98) marquage au sol construit côté CLIENT (0 pièce serveur)
+local function paint(size: Vector3, cf: CFrame)
+	TownKit.LifeSpot("Paint", cf, 0, size)
 end
 
 ----------------------------------------------------------------------
@@ -121,15 +133,15 @@ local function buildBoulevard(folder: Instance, geo: TownKit.Geo)
 		strip(side, "Curb", F, -(A + hw + 0.8) * tanH, (A + hw + 0.8) * tanH, hw - 0.05, hw + 0.8, WALK_Y + 0.03, 0.4, C.Curb, M.Concrete, "deco")
 		-- lignes de rive
 		local edgeZ = hw - 1.1
-		strip(side, "EdgeLine", F, -(A + edgeZ) * tanH, (A + edgeZ) * tanH, edgeZ - 0.18, edgeZ + 0.18, ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "deco")
-		strip(side, "EdgeLine", F, -(A - edgeZ) * tanH, (A - edgeZ) * tanH, -edgeZ - 0.18, -edgeZ + 0.18, ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "deco", innerGaps)
+		strip(side, "EdgeLine", F, -(A + edgeZ) * tanH, (A + edgeZ) * tanH, edgeZ - 0.18, edgeZ + 0.18, ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "paint")
+		strip(side, "EdgeLine", F, -(A - edgeZ) * tanH, (A - edgeZ) * tanH, -edgeZ - 0.18, -edgeZ + 0.18, ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "paint", innerGaps)
 		-- ligne médiane en pointillés (arrêtée avant les coins et les croisements)
 		local limit = A * tanH - 10
 		local x = -limit
 		while x + 5 <= limit do
 			local cx = x + 2.5
 			if not (junction and math.abs(cx) < jw + 5) then
-				part(side, "Dash", Vector3.new(6, 0.1, 0.4), F * CFrame.new(cx, ROAD_Y + 0.05, 0), C.Line, M.SmoothPlastic, "deco")
+				paint(Vector3.new(6, 0.1, 0.4), F * CFrame.new(cx, ROAD_Y + 0.05, 0))
 			end
 			x += 18
 		end
@@ -138,12 +150,12 @@ local function buildBoulevard(folder: Instance, geo: TownKit.Geo)
 				-- passage piéton : de la place d'accueil à la promenade de l'avenue
 				for i = 0, 7 do
 					local z = -hw + 1.6 + i * (ROAD_W - 3.2) / 7
-					part(side, "Zebra", Vector3.new(12, 0.1, 1.1), F * CFrame.new(0, ROAD_Y + 0.05, z), C.Line, M.SmoothPlastic, "deco")
+					paint(Vector3.new(12, 0.1, 1.1), F * CFrame.new(0, ROAD_Y + 0.05, z))
 				end
 			else
 				-- flèches de tourne-à-gauche / droite : simple ligne "cédez" pointillée
 				for i = -3, 3 do
-					part(side, "Yield", Vector3.new(1.6, 0.1, 0.4), F * CFrame.new(i * 2.4, ROAD_Y + 0.05, -hw + 3), C.Line, M.SmoothPlastic, "deco")
+					paint(Vector3.new(1.6, 0.1, 0.4), F * CFrame.new(i * 2.4, ROAD_Y + 0.05, -hw + 3))
 				end
 			end
 		end
@@ -202,7 +214,14 @@ end
 
 -- Segment radial (s0 -> s1, x0 -> x1) dans le repère radial
 local function radialBox(parent: Instance, name: string, R: CFrame, s0: number, s1: number, x0: number, x1: number, top: number, thick: number, color: Color3, material: Enum.Material, profile: string?)
-	part(parent, name, Vector3.new(math.abs(x1 - x0), thick, math.abs(s1 - s0)), R * CFrame.new((x0 + x1) / 2, top - thick / 2, -(s0 + s1) / 2), color, material, profile)
+	local size = Vector3.new(math.abs(x1 - x0), thick, math.abs(s1 - s0))
+	local cf = R * CFrame.new((x0 + x1) / 2, top - thick / 2, -(s0 + s1) / 2)
+	if profile == "paint" then
+		-- (v9.8, CITY98) peinture au sol : construite côté client (TownStreetLife)
+		TownKit.LifeSpot("Paint", cf, 0, size)
+	else
+		part(parent, name, size, cf, color, material, profile)
+	end
 end
 
 local function buildAvenue(folder: Instance, geo: TownKit.Geo)
@@ -227,7 +246,7 @@ local function buildAvenue(folder: Instance, geo: TownKit.Geo)
 		radialBox(ave, "Sidewalk", R, s0, geo.Inner + 0.5, sx * LANE_OUT, sx * AVE_OUT, WALK_Y, 1.3, C.Walk, M.Pavement, "solid")
 		radialBox(ave, "Curb", R, s0 - 0.05, geo.Inner + 0.55, sx * (LANE_OUT - 0.05), sx * (LANE_OUT + 0.8), WALK_Y + 0.03, 0.4, C.Curb, M.Concrete, "deco")
 		-- ligne d'arrêt au bout de la voie + flèche
-		radialBox(ave, "StopLine", R, roadEdge - 2.4, roadEdge - 1.8, sx * (PROM + 0.4), sx * (LANE_OUT - 0.4), ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "deco")
+		radialBox(ave, "StopLine", R, roadEdge - 2.4, roadEdge - 1.8, sx * (PROM + 0.4), sx * (LANE_OUT - 0.4), ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "paint")
 		-- bornes à l'entrée de la zone piétonne
 		for i = 0, 3 do
 			local x = sx * (PROM + 1.2 + i * 2.2)
@@ -290,15 +309,15 @@ local function buildSideStreet(folder: Instance, geo: TownKit.Geo, slot: number)
 	-- pointillés, passage piéton, ligne d'arrêt
 	local s = s0 + 4
 	while s + 5 < geo.Inner - 10 do
-		radialBox(st, "Dash", R, s, s + 5, -0.2, 0.2, ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "deco")
+		radialBox(st, "Dash", R, s, s + 5, -0.2, 0.2, ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "paint")
 		s += 18
 	end
 	local zs = geo.Inner - 6
 	for i = 0, 5 do
 		local x = -ST_HALF + 1.4 + i * (2 * ST_HALF - 2.8) / 5
-		radialBox(st, "Zebra", R, zs - 2.5, zs + 2.5, x - 0.55, x + 0.55, ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "deco")
+		radialBox(st, "Zebra", R, zs - 2.5, zs + 2.5, x - 0.55, x + 0.55, ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "paint")
 	end
-	radialBox(st, "StopLine", R, zs - 4.2, zs - 3.6, 0.2, ST_HALF - 0.4, ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "deco")
+	radialBox(st, "StopLine", R, zs - 4.2, zs - 3.6, 0.2, ST_HALF - 0.4, ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "paint")
 	TownKit.RoadSign(st, (R * CFrame.new(ST_HALF + 1.4, WALK_Y, -(zs - 5))).Position, geo.SlotAngle(slot), Color3.fromRGB(220, 60, 70), "Diamond")
 	-- arbres d'alignement + lampadaires
 	local length = geo.Inner - 8 - (s0 + 6)

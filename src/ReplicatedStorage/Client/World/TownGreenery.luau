@@ -115,7 +115,7 @@ local function rod(parent: Instance, name: string, a: Vector3, b: Vector3, d: nu
 end
 
 ----------------------------------------------------------------------
--- Oiseaux du lac (un Model par oiseau, déplacé par PivotTo)
+-- Oiseaux du lac (un Model par oiseau, pièces placées depuis des décalages figés)
 ----------------------------------------------------------------------
 
 local function duck(parent: Instance, kind: number): Model
@@ -217,8 +217,18 @@ local function buildLake(d: Detail, parent: Model)
 		if freeWater(x, z, orbit + 1.5) then
 			spots += 1
 			local m = spots <= 2 and swan(parent) or duck(parent, spots % 3)
+			-- décalages figés par rapport au corps : chaque image repart de ces valeurs exactes
+			-- (PivotTo répété accumule des erreurs d'arrondi → dérive puis NaN)
+			local offsets = {}
+			local rootCF = (m.PrimaryPart :: BasePart).CFrame
+			for _, part in ipairs(m:GetDescendants()) do
+				if part:IsA("BasePart") then
+					table.insert(offsets, { Part = part, Off = rootCF:ToObjectSpace(part.CFrame) })
+				end
+			end
 			table.insert(birds, {
 				Model = m,
+				Offsets = offsets,
 				Center = Vector3.new(x, 0, z),
 				Orbit = orbit,
 				Speed = (0.08 + hash(k, 213) * 0.06) * (hash(k, 214) < 0.5 and -1 or 1),
@@ -325,7 +335,10 @@ local function moveBirds(dt: number)
 				local pos = d.CF * Vector3.new(x, b.Y + math.sin(b.Phase * 7) * 0.04, z)
 				local ahead = d.CF * Vector3.new(x + tx, b.Y, z + tz)
 				if b.Model.Parent and (ahead - pos).Magnitude > 1e-4 then
-					b.Model:PivotTo(CFrame.lookAt(pos, Vector3.new(ahead.X, pos.Y, ahead.Z)))
+					local cf = CFrame.lookAt(pos, Vector3.new(ahead.X, pos.Y, ahead.Z))
+					for _, o in ipairs(b.Offsets) do
+						o.Part.CFrame = cf * o.Off
+					end
 				end
 			end
 		end

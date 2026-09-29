@@ -261,10 +261,10 @@ local function buildPlant(model: Model, flowerId: string, stage: number, opts: F
 	-- Lotus : petite mare + nénuphars (pas de tige visible)
 	if flowerId == "Lotus" then
 		if hero then
-			local water = disc(model, "Water", 2.5, 0.06, CFrame.new(0, 0.03, 0), Color3.fromRGB(104, 178, 224), M.Glass)
+			local water = disc(model, "Water", 2.5, 0.06, CFrame.new(0, 0.06, 0), Color3.fromRGB(104, 178, 224), M.Glass)
 			water.Transparency = 0.25
-			-- (v9.6 z-fighting : dessus du bord à 0.02, de l'eau à 0.06)
-			disc(model, "WaterRim", 2.75, 0.04, CFrame.new(0, 0, 0), Color3.fromRGB(120, 104, 90), M.Slate)
+			-- (v9.8 z-fighting : dessus du bord à 0.05 (au-dessus des sillons du bac), de l'eau à 0.09)
+			disc(model, "WaterRim", 2.75, 0.1, CFrame.new(0, 0, 0), Color3.fromRGB(120, 104, 90), M.Slate)
 		end
 		local padCount = stage == 0 and 1 or (stage == 1 and 2 or 3)
 		if not hero then

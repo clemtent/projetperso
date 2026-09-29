@@ -92,7 +92,7 @@ local FLOWERS = {
 }
 
 -- Types d'objets "gros" (vus de plus loin) et "lointains"
-local BIG = { Billboard = true, WindmillHill = true, MarketSquare = true, Statue = true, Kiosk = true, BikeLane = true, BusShelter = true }
+local BIG = { Paint = true, Billboard = true, WindmillHill = true, MarketSquare = true, Statue = true, Kiosk = true, BikeLane = true, BusShelter = true }
 local FAR = { Turbine = true }
 -- Emplacements qui ne sont PAS du mobilier (ancres des passants : TownPeople)
 local ANCHORS = { SitBench = true, Chat = true, Wait = true }
@@ -102,6 +102,7 @@ type Spot = {
 	CF: CFrame,
 	Seed: number,
 	Pos: Vector3,
+	Size: Vector3?,
 	Model: Model?,
 	Anim: any?,
 }
@@ -921,7 +922,15 @@ end
 -- Table des fabriques
 ----------------------------------------------------------------------
 
-local BUILDERS: { [string]: (Model, CFrame, number) -> any } = {
+-- Marquage au sol (lignes de rive, pointillés, passages, lignes d'arrêt) :
+-- une pièce blanche à la taille donnée par le serveur (v9.8 : 0 pièce serveur)
+local function buildPaint(m: Model, F: CFrame, _seed: number, spot: Spot?)
+	local size = spot and spot.Size or Vector3.new(1, 0.1, 1)
+	newPart(m, "Paint", size, F, rgb(250, 250, 246), M.SmoothPlastic)
+end
+
+local BUILDERS: { [string]: (Model, CFrame, number, Spot?) -> any } = {
+	Paint = buildPaint,
 	Bin = buildBin,
 	Recycle = buildRecycle,
 	Bench = buildBench,
@@ -979,7 +988,15 @@ local function parseSpots(folder: Instance): { Spot }
 				local x, y, z, yaw = tonumber(f[2]), tonumber(f[3]), tonumber(f[4]), tonumber(f[5])
 				if #f >= 6 and x and y and z and yaw then
 					local cf = CFrame.new(x, y, z) * CFrame.Angles(0, yaw, 0)
-					table.insert(list, { Kind = f[1], CF = cf, Seed = tonumber(f[6]) or 0, Pos = cf.Position })
+					local size: Vector3? = nil
+					if f[7] then
+						local c = string.split(f[7], ",")
+						local sx, sy, sz = tonumber(c[1]), tonumber(c[2]), tonumber(c[3])
+						if sx and sy and sz then
+							size = Vector3.new(sx, sy, sz)
+						end
+					end
+					table.insert(list, { Kind = f[1], CF = cf, Seed = tonumber(f[6]) or 0, Pos = cf.Position, Size = size })
 				end
 			end
 		end
@@ -1008,7 +1025,7 @@ local function buildSpot(spot: Spot, parent: Instance)
 	end
 	local m = Instance.new("Model")
 	m.Name = spot.Kind
-	local ok, anim = pcall(builder, m, spot.CF, spot.Seed)
+	local ok, anim = pcall(builder, m, spot.CF, spot.Seed, spot)
 	if not ok then
 		m:Destroy()
 		warn("[TownStreetLife] " .. spot.Kind .. " : " .. tostring(anim))

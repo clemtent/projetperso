@@ -831,7 +831,15 @@ function TownNature.Build(folder: Instance, geo: TownKit.Geo): number
 	nature.Parent = folder
 	local O = geo.Origin
 	-- pré (sous tout le reste) et murs invisibles
-	TownKit.Disc(nature, "Meadow", O + Vector3.new(0, GROUND_Y, 0), 1000, 4, C.Grass, M.Grass, "solid")
+	-- (v9.8, CITY98) 4 quarts de 2048 x 2048 (taille maximale d'une pièce)
+	-- au lieu d'un disque de rayon 1000 : les montagnes et la ville
+	-- lointaine des grandes villes (12 parcelles, jusqu'à ~1050 studs) ne
+	-- dépassent plus du pré. Côtés jointifs, sans chevauchement.
+	for _, qx in ipairs({ -1, 1 }) do
+		for _, qz in ipairs({ -1, 1 }) do
+			part(nature, "Meadow", Vector3.new(2048, 4, 2048), CFrame.new(O + Vector3.new(qx * 1024, GROUND_Y - 2, qz * 1024)), C.Grass, M.Grass, "solid")
+		end
+	end
 	local walls = 40
 	for i = 1, walls do
 		local a = (i - 0.5) / walls * math.pi * 2

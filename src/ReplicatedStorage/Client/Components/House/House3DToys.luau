@@ -628,13 +628,13 @@ R.AirConditioner = function(b, _ctx)
 		b.Box(-40 + index * 8.8, 70, 10, 5, g, 16, rgb(220, 224, 236), M.SmoothPlastic)
 	end
 	b.BoxR(CFrame.new(0, 34, 20) * CFrame.Angles(0.5, 0, 0), 84, 8, 2, lighten(body, 0.1), M.SmoothPlastic)
-	b.Box(0, 30.6, 17, 80, 3, 5, rgb(60, 64, 76), M.SmoothPlastic)
+	b.Box(0, 30.6, 17, 78, 3, 5, rgb(60, 64, 76), M.SmoothPlastic)
 	for index = 0, 5 do
 		b.Box(0, 36 + index * 4, 20 + g / 2, 80, 1, g, rgb(220, 224, 236))
 	end
 	b.Box(36, 54.5, 20 + g / 2, 12, 6, g, rgb(40, 44, 52), M.SmoothPlastic)
 	b.Tube(-44, 32, 4, -46, 4, 4, 2.4, rgb(220, 220, 228), M.SmoothPlastic)
-	local led = b.Box(36, 56, 20 + g, 6, 3, 0.6, rgb(120, 255, 170), M.Neon)
+	local led = b.Box(36, 56, 20 + 1.5 * g, 6, 3, g, rgb(120, 255, 170), M.Neon)
 	table.insert(b.Glows, led)
 	-- petit souffle froid (flocons)
 	for index = 0, 4 do

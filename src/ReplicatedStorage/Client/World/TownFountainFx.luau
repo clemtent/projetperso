@@ -164,9 +164,11 @@ function TownFountainFx.Build(folder: Instance, base: Vector3): any
 		table.insert(F.Jets, jet)
 		-- 2 ronds par point de chute (déphasés)
 		for k = 0, 1 do
-			local ring = disc(model, "Ripple", landing, base.Y + WATER_Y + 0.17, 0.4, 0.03, FOAM, M.Glass)
+			-- (2e rond 0,03 plus haut : jamais deux faces confondues)
+			local top = base.Y + WATER_Y + 0.17 + k * 0.03
+			local ring = disc(model, "Ripple", landing, top, 0.4, 0.03, FOAM, M.Glass)
 			ring.Transparency = 0.5
-			table.insert(F.Ripples, { Part = ring, Center = landing, Top = base.Y + WATER_Y + 0.17, Phase = j * 0.37 + k * 0.6 })
+			table.insert(F.Ripples, { Part = ring, Center = landing, Top = top, Phase = j * 0.37 + k * 0.6 })
 		end
 	end
 	-- gerbe du cerveau : monte puis retombe dans la vasque haute
