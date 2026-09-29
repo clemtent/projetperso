@@ -111,7 +111,7 @@ local function layoutContext(data): any
 		Beds = owned and plotCount(data) or math.max(1, settings.BasePlots or 3),
 		Decor = decor,
 		Pieces = GardenSnapshot.OwnedPieces(data),
-		Windmill = GardenSnapshot.From(data).Windmill,
+		Windmill = GardenSnapshot.HasWindmill(data),
 	}
 end
 

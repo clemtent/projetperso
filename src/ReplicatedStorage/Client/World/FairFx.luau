@@ -1311,7 +1311,7 @@ local function ensureGui(s: any): any
 	screen.Name = "FairGui"
 	screen.ResetOnSpawn = false
 	screen.IgnoreGuiInset = false
-	screen.DisplayOrder = 6
+	screen.DisplayOrder = 25 -- (au-dessus du HUD de la ville : le menu est une fenêtre)
 	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	local scale = Instance.new("UIScale")
 	scale.Parent = screen
@@ -1456,7 +1456,8 @@ end
 
 local function layoutGui(gui: any)
 	local phone = isPhone()
-	gui.Scale.Scale = if phone then 0.72 else 1
+	gui.Scale.Scale = if phone then 0.62 else 1
+	gui.Card.Position = UDim2.fromScale(0.5, if phone then 0.58 else 0.52)
 	gui.Badge.Position = UDim2.new(0.5, 0, 0, if phone then 64 else 84)
 	-- (au-dessus du bouton "Se lever" du HUD, lui aussi en bas au milieu)
 	gui.Bite.Position = UDim2.new(0.5, 0, 1, if phone then -64 else -92)

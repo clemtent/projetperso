@@ -211,35 +211,40 @@ local function head(ctx: Ctx, skin: Color3, hair: Color3, hairStyle: string, see
 	add(ctx, G_HEAD, "Head", Vector3.new(0.92, 1.1, 1), at(0, hy, 0), skin, M.SmoothPlastic, "Egg")
 	-- oreilles
 	for _, sx in ipairs({ -1, 1 }) do
-		add(ctx, G_HEAD, "Ear", Vector3.new(0.12, 0.26, 0.2), at(sx * 0.45, hy - 0.02, 0.04), skin, M.SmoothPlastic, "Egg")
+		add(ctx, G_HEAD, "Ear", Vector3.new(0.12, 0.26, 0.2), at(sx * 0.475, hy - 0.02, 0.04), skin, M.SmoothPlastic, "Egg")
 	end
 	-- yeux (blanc + iris foncé devant), sourcils
 	local eye = pick({ rgb(60, 40, 30), rgb(70, 110, 150), rgb(80, 110, 70), rgb(40, 30, 28) }, seed, 21)
 	for _, sx in ipairs({ -1, 1 }) do
-		add(ctx, G_HEAD, "EyeWhite", Vector3.new(0.19, 0.13, 0.08), at(sx * 0.19, hy + 0.04, -0.44), WHITE, M.SmoothPlastic, "Egg")
-		add(ctx, G_HEAD, "Eye", Vector3.new(0.1, 0.12, 0.06), at(sx * 0.19, hy + 0.04, -0.475), eye, M.SmoothPlastic, "Egg")
-		add(ctx, G_HEAD, "Brow", Vector3.new(0.22, 0.05, 0.06), at(sx * 0.2, hy + 0.2, -0.42) * CFrame.Angles(0, 0, sx * -0.12), hair, M.SmoothPlastic)
+		add(ctx, G_HEAD, "EyeWhite", Vector3.new(0.19, 0.13, 0.08), at(sx * 0.19, hy + 0.04, -0.43), WHITE, M.SmoothPlastic, "Egg")
+		add(ctx, G_HEAD, "Eye", Vector3.new(0.1, 0.12, 0.06), at(sx * 0.19, hy + 0.04, -0.5), eye, M.SmoothPlastic, "Egg")
+		add(ctx, G_HEAD, "Brow", Vector3.new(0.22, 0.05, 0.06), at(sx * 0.2, hy + 0.2, -0.4) * CFrame.Angles(0, 0, sx * -0.12), hair, M.SmoothPlastic)
 	end
 	add(ctx, G_HEAD, "Nose", Vector3.new(0.13, 0.2, 0.14), at(0, hy - 0.09, -0.5), skin:Lerp(rgb(200, 120, 100), 0.12), M.SmoothPlastic, "Egg")
 	add(ctx, G_HEAD, "Mouth", Vector3.new(0.22, 0.05, 0.05), at(0, hy - 0.3, -0.425), female and rgb(196, 86, 100) or rgb(150, 80, 76), M.SmoothPlastic)
-	-- coiffure (calotte un peu plus grande que le crâne, jamais la même surface)
+	-- coiffure : chaque coque garde >= 0,03 stud d'écart avec le crâne et
+	-- les autres coques, sur chaque face de sa boîte (aucun z-fighting,
+	-- même avec un détecteur qui prend les ovales pour des boîtes)
+	if hairStyle == "none" then
+		return
+	end
 	if hairStyle == "bald" then
-		add(ctx, G_HEAD, "HairSide", Vector3.new(0.96, 0.34, 0.9), at(0, hy - 0.02, 0.1), hair, M.SmoothPlastic, "Egg")
+		add(ctx, G_HEAD, "HairSide", Vector3.new(1.0, 0.34, 0.9), at(0, hy - 0.02, 0.1), hair, M.SmoothPlastic, "Egg")
 		return
 	end
 	local capH = hairStyle == "buzz" and 0.6 or 0.74
-	add(ctx, G_HEAD, "Hair", Vector3.new(0.98, capH, 1.06), at(0, hy + 0.3 - (hairStyle == "buzz" and 0.03 or 0), 0.03), hair, M.SmoothPlastic, "Egg")
+	add(ctx, G_HEAD, "Hair", Vector3.new(0.98, capH, 1.06), at(0, hy + (hairStyle == "buzz" and 0.35 or 0.3), 0.06), hair, M.SmoothPlastic, "Egg")
 	if hairStyle ~= "buzz" then
-		add(ctx, G_HEAD, "HairBack", Vector3.new(0.96, 0.8, 0.5), at(0, hy + 0.02, 0.26), hair, M.SmoothPlastic, "Egg")
+		add(ctx, G_HEAD, "HairBack", Vector3.new(0.76, 0.8, 0.5), at(0, hy + 0.02, 0.39), hair, M.SmoothPlastic, "Egg")
 	end
 	if hairStyle == "long" then
-		add(ctx, G_HEAD, "HairLong", Vector3.new(0.9, 1.15, 0.34), at(0, hy - 0.5, 0.3), hair, M.SmoothPlastic, "Egg")
-		add(ctx, G_HEAD, "Fringe", Vector3.new(0.78, 0.24, 0.3), at(0.08, hy + 0.36, -0.38) * CFrame.Angles(0, 0, -0.15), hair, M.SmoothPlastic, "Egg")
+		add(ctx, G_HEAD, "HairLong", Vector3.new(0.7, 1.15, 0.34), at(0, hy - 0.5, 0.3), hair, M.SmoothPlastic, "Egg")
+		add(ctx, G_HEAD, "Fringe", Vector3.new(0.78, 0.24, 0.3), at(0.08, hy + 0.36, -0.38) * CFrame.Angles(math.rad(-20), 0, -0.15), hair, M.SmoothPlastic, "Egg")
 	elseif hairStyle == "bun" then
 		add(ctx, G_HEAD, "Bun", Vector3.new(0.44, 0.44, 0.44), at(0, hy + 0.58, 0.28), hair, M.SmoothPlastic, "Ball")
 	elseif hairStyle == "pony" then
 		add(ctx, G_HEAD, "Pony", Vector3.new(0.26, 0.9, 0.3), at(0, hy - 0.05, 0.58) * CFrame.Angles(math.rad(-18), 0, 0), hair, M.SmoothPlastic, "Egg")
-		add(ctx, G_HEAD, "Tie", Vector3.new(0.2, 0.12, 0.2), at(0, hy + 0.36, 0.52), pick({ rgb(236, 72, 140), rgb(90, 140, 230), rgb(250, 250, 250) }, seed, 22), M.SmoothPlastic, "Egg")
+		add(ctx, G_HEAD, "Tie", Vector3.new(0.2, 0.12, 0.2), at(0, hy + 0.36, 0.7), pick({ rgb(236, 72, 140), rgb(90, 140, 230), rgb(250, 250, 250) }, seed, 22), M.SmoothPlastic, "Egg")
 	elseif hairStyle == "curly" then
 		for i = 0, 4 do
 			local a = (i / 4 - 0.5) * 2.4
@@ -345,7 +350,7 @@ local function prop(ctx: Ctx, kind: string, seed: number)
 	elseif kind == "tablet" then
 		-- (main GAUCHE : la droite tape dessus)
 		add(ctx, G_LLO, "Tablet", Vector3.new(0.7, 0.06, 0.95), at(-0.72, 2.12, -0.38) * CFrame.Angles(0, 0, math.rad(-12)), rgb(40, 40, 46), M.SmoothPlastic)
-		add(ctx, G_LLO, "TabletScreen", Vector3.new(0.6, 0.02, 0.82), at(-0.715, 2.155, -0.38) * CFrame.Angles(0, 0, math.rad(-12)), rgb(150, 210, 255), M.Glass)
+		add(ctx, G_LLO, "TabletScreen", Vector3.new(0.6, 0.04, 0.82), at(-0.715, 2.17, -0.38) * CFrame.Angles(0, 0, math.rad(-12)), rgb(150, 210, 255), M.Glass)
 	end
 end
 
@@ -387,7 +392,7 @@ function NPCModels.Build(style: string, opts: Opts?): Model
 			add(ctx, G_BODY, "Collar", Vector3.new(0.18, 0.78, 0.78), at(0, 4.3, 0) * UPRIGHT, shirt:Lerp(WHITE, 0.25), M.Fabric, "Cyl")
 			add(ctx, G_BODY, "Badge", Vector3.new(0.36, 0.2, 0.06), at(0.32, 3.9, -0.35), WHITE, M.SmoothPlastic)
 			add(ctx, G_BODY, "BadgeDot", Vector3.new(0.08, 0.08, 0.05), at(0.2, 3.9, -0.385), shirt, M.SmoothPlastic)
-			add(ctx, G_HEAD, "Visor", Vector3.new(1.02, 0.16, 1.08), at(0, HEAD_Y + 0.32, 0.02), shirt, M.SmoothPlastic, "Egg")
+			add(ctx, G_HEAD, "Visor", Vector3.new(1.06, 0.16, 1.08), at(0, HEAD_Y + 0.3, 0), shirt, M.SmoothPlastic, "Egg")
 			add(ctx, G_HEAD, "VisorBrim", Vector3.new(0.72, 0.06, 0.44), at(0, HEAD_Y + 0.3, -0.62) * CFrame.Angles(math.rad(8), 0, 0), shirt, M.SmoothPlastic)
 		end)
 	elseif style == "baker" then
@@ -400,7 +405,7 @@ function NPCModels.Build(style: string, opts: Opts?): Model
 			for i = 0, 1 do
 				add(ctx, G_BODY, "Button", Vector3.new(0.1, 0.1, 0.1), at(0.3, 4.12 - i * 0.24, -0.34), rgb(200, 200, 200), M.SmoothPlastic, "Ball")
 			end
-			add(ctx, G_HEAD, "Toque", Vector3.new(0.7, 0.98, 0.98), at(0, HEAD_Y + 0.72, 0.02) * UPRIGHT, WHITE, M.Fabric, "Cyl")
+			add(ctx, G_HEAD, "Toque", Vector3.new(0.7, 1.04, 1.04), at(0, HEAD_Y + 0.72, 0.02) * UPRIGHT, WHITE, M.Fabric, "Cyl")
 			add(ctx, G_HEAD, "ToquePuff", Vector3.new(1.18, 0.62, 1.18), at(0, HEAD_Y + 1.1, 0.02), WHITE, M.Fabric, "Egg")
 		end)
 	elseif style == "salesperson" then
@@ -442,7 +447,7 @@ function NPCModels.Build(style: string, opts: Opts?): Model
 			if hash(seed, 57) < 0.6 then
 				-- lunettes
 				for _, sx in ipairs({ -1, 1 }) do
-					local lens = add(ctx, G_HEAD, "Glasses", Vector3.new(0.04, 0.24, 0.28), at(sx * 0.19, HEAD_Y + 0.04, -0.52) * CFrame.Angles(0, math.rad(90), 0), rgb(200, 226, 240), M.Glass, "Cyl")
+					local lens = add(ctx, G_HEAD, "Glasses", Vector3.new(0.04, 0.24, 0.28), at(sx * 0.19, HEAD_Y + 0.04, -0.57) * CFrame.Angles(0, math.rad(90), 0), rgb(200, 226, 240), M.Glass, "Cyl")
 					lens.Transparency = 0.45
 				end
 			end
@@ -452,11 +457,12 @@ function NPCModels.Build(style: string, opts: Opts?): Model
 		sleeve, longSleeve, skirt = shirt, true, false
 		pants = o.Pants or rgb(60, 70, 90)
 		look.Shoe = rgb(96, 70, 44)
+		look.HairStyle = "none" -- (le casque couvre les cheveux)
 		table.insert(extras, function()
 			local vest = rgb(255, 150, 40)
 			add(ctx, G_BODY, "Vest", Vector3.new(1.38, 1.3, 0.76), at(0, 3.6, 0), vest, M.Fabric)
 			add(ctx, G_BODY, "VestStripe", Vector3.new(1.2, 0.14, 0.06), at(0, 3.35, -0.38), rgb(230, 230, 220), M.Glass)
-			add(ctx, G_HEAD, "Helmet", Vector3.new(1.06, 0.74, 1.12), at(0, HEAD_Y + 0.33, 0.02), rgb(255, 210, 40), M.SmoothPlastic, "Egg")
+			add(ctx, G_HEAD, "Helmet", Vector3.new(1.12, 0.74, 1.12), at(0, HEAD_Y + 0.33, 0.02), rgb(255, 210, 40), M.SmoothPlastic, "Egg")
 			add(ctx, G_HEAD, "HelmetBrim", Vector3.new(0.08, 1.2, 1.26), at(0, HEAD_Y + 0.14, 0.02) * UPRIGHT, rgb(255, 210, 40), M.SmoothPlastic, "Cyl")
 		end)
 	elseif style == "kid" then
@@ -480,7 +486,7 @@ function NPCModels.Build(style: string, opts: Opts?): Model
 				for _, sx in ipairs({ -1, 1 }) do
 					add(ctx, G_BODY, "Jacket", Vector3.new(0.44, 1.66, 0.74), at(sx * 0.47, 3.44, 0), jacket, M.Fabric)
 				end
-				add(ctx, G_BODY, "JacketBack", Vector3.new(1.3, 1.62, 0.1), at(0, 3.43, 0.35), jacket, M.Fabric)
+				add(ctx, G_BODY, "JacketBack", Vector3.new(1.18, 1.62, 0.1), at(0, 3.43, 0.35), jacket, M.Fabric)
 			end)
 		end
 	end

@@ -436,6 +436,7 @@ local KEEP_GUIS: { [string]: boolean } = {
 	Chat = true,
 	Freecam = true,
 	DeskModeGui = true,
+	GardenEditGui = true, -- v9.8 🌷 mode édition du jardin (GardenEdit, GARDEN98)
 	TownGraphicsGui = true, -- v9.8 🎨 fenêtre Graphismes en ville (TownGraphics, REALISM98) -- v9.5 🖥️ barre "Se lever" du bureau (DeskMode)
 	TownInventoryGui = true, -- v9.6 plateau inventaire 3D (FurnitureEdit, PLACE96)
 	TownShopGui = true, -- v9.6 catalogue des magasins (ShopUI, SHOPS96)
@@ -861,6 +862,16 @@ local function step(dt: number)
 	clocks.Guide += dt
 	clocks.Loc += dt
 	TownAtmosphere.Step(dt)
+	-- v9.8 🐾 animaux (pause pendant l'édition des meubles) + 🌷 bouton / sauvegarde du jardin (GARDEN98)
+	local petRoam = optionalModule("PetRoam")
+	if petRoam and type(petRoam.Step) == "function" then
+		pcall(petRoam.SetPaused, edit ~= nil and edit:IsEnabled())
+		pcall(petRoam.Step, dt)
+	end
+	local gardenEdit = optionalModule("GardenEdit")
+	if gardenEdit and type(gardenEdit.Step) == "function" then
+		pcall(gardenEdit.Step, dt)
+	end
 	-- v9.7 🎠 place centrale (TownPlazaFx : 30 Hz au plus, en pause au loin)
 	local plazaFx = optionalModule("TownPlazaFx")
 	if plazaFx and type(plazaFx.Step) == "function" then
@@ -1174,6 +1185,33 @@ local function enter(options: any)
 				warn("[Town] ShopInteriors.Start : " .. tostring(errShops))
 			end
 		end
+		-- v9.8 🌷 jardin libre (GardenEdit) + 🐾 animaux qui se promènent (PetRoam) (GARDEN98)
+		local gardenEdit = optionalModule("GardenEdit")
+		if gardenEdit and type(gardenEdit.Start) == "function" then
+			local okGE, errGE = pcall(gardenEdit.Start, {
+				Toast = toast,
+				GetGarden = function()
+					return gardens[LocalPlayer.UserId]
+				end,
+				IsBusy = function()
+					return (edit ~= nil and edit:IsEnabled()) or deskActive()
+				end,
+			})
+			if not okGE then
+				warn("[Town] GardenEdit.Start : " .. tostring(errGE))
+			end
+		end
+		local petRoam = optionalModule("PetRoam")
+		if petRoam and type(petRoam.Start) == "function" then
+			local okPR, errPR = pcall(petRoam.Start, {
+				GetHouses = function()
+					return houses
+				end,
+			})
+			if not okPR then
+				warn("[Town] PetRoam.Start : " .. tostring(errPR))
+			end
+		end
 		-- v9.7 🚦 circulation d'ambiance + véhicules du décor en flux (TownTraffic, VEHICLES97)
 		local traffic = optionalModule("TownTraffic")
 		if traffic and type(traffic.Start) == "function" then
@@ -1335,6 +1373,17 @@ local function teardown()
 		connection:Disconnect()
 	end
 	table.clear(connections)
+	-- v9.8 (GARDEN98) : jardin (sauvegarde en attente, interface) + animaux (originaux rendus)
+	do
+		local gardenEdit = optionalModule("GardenEdit")
+		if gardenEdit and type(gardenEdit.Stop) == "function" then
+			pcall(gardenEdit.Stop)
+		end
+		local petRoam = optionalModule("PetRoam")
+		if petRoam and type(petRoam.Stop) == "function" then
+			pcall(petRoam.Stop)
+		end
+	end
 	for userId in pairs(gardens) do
 		destroyGarden(userId)
 	end
@@ -1488,6 +1537,10 @@ local function callbacks(): any
 		end,
 		Emote = playEmote,
 		ToggleEdit = function()
+			local gardenEdit = optionalModule("GardenEdit")
+			if gardenEdit and type(gardenEdit.IsActive) == "function" and gardenEdit.IsActive() then
+				pcall(gardenEdit.SetEnabled, false)
+			end
 			if not edit then
 				return
 			end

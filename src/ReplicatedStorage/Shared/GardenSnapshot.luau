@@ -110,6 +110,11 @@ local function upgradeFor(feature: string): string?
 	return nil
 end
 
+-- Moulin (Feature "Pinwheel") possédé ?
+function GardenSnapshot.HasWindmill(data: any): boolean
+	return levelOf(data, upgradeFor("Pinwheel")) > 0
+end
+
 -- Nombre maximum de parterres (tous les niveaux de "Flower Beds" achetés)
 function GardenSnapshot.MaxPlots(): number
 	local count = settings.BasePlots or 3
@@ -335,8 +340,21 @@ local function layoutNumber(name: string, size: any): number?
 end
 
 -- (demi-largeur de la maison, profondeur, x de la porte, x de la porte de
--- derrière?, d de sa face?, d du pied de ses marches?)
+-- derrière?, d de sa face?, d du pied de ses marches?) ; en cache par taille
+local houseGeometryRaw: (sizeId: any) -> (number, number, number, number?, number?, number?)
+local geometryCache: { [any]: { any } } = {}
 local function houseGeometry(sizeId: any): (number, number, number, number?, number?, number?)
+	local cached = geometryCache[sizeId or "?"]
+	if cached then
+		return cached[1], cached[2], cached[3], cached[4], cached[5], cached[6]
+	end
+	local a, b, c, d, e, f = houseGeometryRaw(sizeId)
+	geometryCache[sizeId or "?"] = { a, b, c, d, e, f }
+	return a, b, c, d, e, f
+end
+GardenSnapshot.HouseGeometry = houseGeometry
+
+function houseGeometryRaw(sizeId: any): (number, number, number, number?, number?, number?)
 	local size = sizeDef(sizeId)
 	if WorldLayout then
 		local ok, dims = pcall(WorldLayout.Dims, size)
@@ -353,7 +371,6 @@ local function houseGeometry(sizeId: any): (number, number, number, number?, num
 	local roomW = math.floor(760 * widthFactor + 0.5) * 0.036
 	return (12 + columns * (roomW + 2)) / 2, HOUSE_DEPTH, 0, nil, nil, nil
 end
-GardenSnapshot.HouseGeometry = houseGeometry
 
 -- Rectangles où l'on peut poser (tout l'objet doit tenir dans l'un d'eux)
 function GardenSnapshot.Zones(level: number, sizeId: any): { { number } }

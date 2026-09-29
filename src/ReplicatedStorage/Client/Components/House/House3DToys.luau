@@ -620,12 +620,21 @@ end
 
 R.AirConditioner = function(b, _ctx)
 	local body = rgb(248, 248, 252)
+	local g = House3DKit.Gap(b, 0.6)
+	-- (v9.8) split mural : coque arrondie, grille d'aspiration sur le dessus,
+	-- volet orientable, lamelles, afficheur, tuyau d'évacuation
 	b.Round(0, 30, 10, 96, 40, 20, 8, body, M.SmoothPlastic)
-	b.BoxR(CFrame.new(0, 34, 20) * CFrame.Angles(0.5, 0, 0), 84, 8, 2, lighten(body, 0.1), M.SmoothPlastic)
-	for index = 0, 5 do
-		b.Box(0, 36 + index * 4, 20.3, 80, 1, 0.5, rgb(220, 224, 236))
+	for index = 0, 9 do
+		b.Box(-40 + index * 8.8, 70, 10, 5, g, 16, rgb(220, 224, 236), M.SmoothPlastic)
 	end
-	local led = b.Box(36, 56, 20.3, 6, 3, 0.6, rgb(120, 255, 170), M.Neon)
+	b.BoxR(CFrame.new(0, 34, 20) * CFrame.Angles(0.5, 0, 0), 84, 8, 2, lighten(body, 0.1), M.SmoothPlastic)
+	b.Box(0, 30.6, 17, 80, 3, 5, rgb(60, 64, 76), M.SmoothPlastic)
+	for index = 0, 5 do
+		b.Box(0, 36 + index * 4, 20 + g / 2, 80, 1, g, rgb(220, 224, 236))
+	end
+	b.Box(36, 54.5, 20 + g / 2, 12, 6, g, rgb(40, 44, 52), M.SmoothPlastic)
+	b.Tube(-44, 32, 4, -46, 4, 4, 2.4, rgb(220, 220, 228), M.SmoothPlastic)
+	local led = b.Box(36, 56, 20 + g, 6, 3, 0.6, rgb(120, 255, 170), M.Neon)
 	table.insert(b.Glows, led)
 	-- petit souffle froid (flocons)
 	for index = 0, 4 do
@@ -1045,15 +1054,29 @@ end
 ----------------------------------------------------------------------
 
 R.BigScreenTV = function(b, _ctx)
+	-- (v9.8) support mural, dos, cadre fin en alu brossé, vitre brillante
+	-- devant la dalle, barre de son sous l'écran
+	local g = House3DKit.Gap(b, 0.8)
+	b.Box(0, 30, 0.5, 30, 20, 1, rgb(60, 60, 70), M.Metal)
 	b.Round(0, 12, 3, 100, 60, 6, 3, CARBON, M.SmoothPlastic)
-	local panel = screen(b, 0, 15, 6.2, 94, 54, rgb(90, 150, 255))
+	b.Box(0, 12, 6 + g / 2, 99, 60, g, rgb(160, 164, 176), M.Metal).Reflectance = 0.2
+	local cover = b.Box(0, 14.4, 7.6 + 2 * g, 95, 55.4, 0.4, rgb(220, 230, 250), M.Glass)
+	cover.Transparency = 0.9
+	cover.Reflectance = 0.2
+	cover.CastShadow = false
+	b.Box(0, 12.6, 6 + g, 16, 1, g, rgb(220, 224, 236), M.Metal)
+	b.Round(0, 2.4, 6, 70, 5, 6, 2, rgb(34, 34, 44), M.Fabric)
+	for index = -3, 3 do
+		b.CylZ(index * 9, 4.9, 9 + g / 2, 3, g, rgb(20, 20, 26), M.SmoothPlastic)
+	end
+	local panel = screen(b, 0, 15, 6.2 + g, 94, 54, rgb(90, 150, 255))
 	b.Light(panel, rgb(120, 170, 255), 14, 0.8)
 	-- image de jeu : sol, montagnes, personnage
-	b.Box(0, 15, 6.8, 94, 12, 0.4, rgb(110, 210, 120), M.Neon)
-	House3DKit.Triangle(b, -24, 34, 6.7, 34, 20, 0, 0.4, rgb(140, 120, 220), M.Neon)
-	House3DKit.Triangle(b, 10, 32, 6.7, 26, 16, 0, 0.4, rgb(170, 150, 240), M.Neon)
-	b.Box(22, 27, 7.2, 6, 8, 0.4, rgb(255, 90, 90), M.Neon)
-	b.Box(30, 44, 7.2, 8, 3, 0.4, rgb(255, 214, 90), M.Neon)
+	b.Box(0, 15, 6.8 + g, 94, 12, 0.4, rgb(110, 210, 120), M.Neon)
+	House3DKit.Triangle(b, -24, 34, 6.7 + g, 34, 20, 0, 0.4, rgb(140, 120, 220), M.Neon)
+	House3DKit.Triangle(b, 10, 32, 6.7 + g, 26, 16, 0, 0.4, rgb(170, 150, 240), M.Neon)
+	b.Box(22, 27, 7.2 + g, 6, 8, 0.4, rgb(255, 90, 90), M.Neon)
+	b.Box(30, 44, 7.2 + g, 8, 3, 0.4, rgb(255, 214, 90), M.Neon)
 	-- rampe LED sous l'écran
 	local strip = b.Box(0, 8, 4, 90, 2, 2, NEON_PINK, M.Neon)
 	table.insert(b.Glows, strip)
