@@ -1313,8 +1313,6 @@ local function ensureGui(s: any): any
 	screen.IgnoreGuiInset = false
 	screen.DisplayOrder = 25 -- (au-dessus du HUD de la ville : le menu est une fenêtre)
 	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	local scale = Instance.new("UIScale")
-	scale.Parent = screen
 	-- badge du boost (sous le compteur de Dopamine du HUD)
 	local badge = Instance.new("Frame")
 	badge.Name = "FoodBadge"
@@ -1325,6 +1323,10 @@ local function ensureGui(s: any): any
 	badge.Parent = screen
 	UIUtil.Corner(badge, UDim.new(1, 0))
 	UIUtil.Stroke(badge, PINK, 2, 0)
+	-- (échelle téléphone : un UIScale par élément, jamais sur la ScreenGui)
+	local badgeScale = Instance.new("UIScale")
+	badgeScale.Name = "FitScale"
+	badgeScale.Parent = badge
 	local badgeText = Instance.new("TextLabel")
 	badgeText.Name = "Text"
 	badgeText.BackgroundTransparency = 1
@@ -1350,6 +1352,9 @@ local function ensureGui(s: any): any
 	bite.Parent = screen
 	UIUtil.Corner(bite, UDim.new(1, 0))
 	UIUtil.Stroke(bite, WHITE, 3, 0)
+	local biteScale = Instance.new("UIScale")
+	biteScale.Name = "FitScale"
+	biteScale.Parent = bite
 	local pad = Instance.new("UIPadding")
 	pad.PaddingTop = UDim.new(0, 9)
 	pad.PaddingBottom = UDim.new(0, 9)
@@ -1366,14 +1371,24 @@ local function ensureGui(s: any): any
 	dim.Text = ""
 	dim.Visible = false
 	dim.Parent = screen
+	-- support transparent (taille + échelle téléphone) ; la carte le remplit
+	-- (la carte garde son propre "PopScale" pour UIUtil.Pop)
+	local holder = Instance.new("Frame")
+	holder.Name = "MenuHolder"
+	holder.AnchorPoint = Vector2.new(0.5, 0.5)
+	holder.Position = UDim2.fromScale(0.5, 0.52)
+	holder.Size = UDim2.fromOffset(560, 344)
+	holder.BackgroundTransparency = 1
+	holder.Parent = screen
+	local cardScale = Instance.new("UIScale")
+	cardScale.Name = "FitScale"
+	cardScale.Parent = holder
 	local card = Instance.new("Frame")
 	card.Name = "Menu"
-	card.AnchorPoint = Vector2.new(0.5, 0.5)
-	card.Position = UDim2.fromScale(0.5, 0.52)
-	card.Size = UDim2.fromOffset(560, 340)
+	card.Size = UDim2.fromScale(1, 1)
 	card.BackgroundColor3 = Color3.fromRGB(255, 250, 253)
 	card.Visible = false
-	card.Parent = screen
+	card.Parent = holder
 	UIUtil.Corner(card, UDim.new(0, 22))
 	UIUtil.Stroke(card, PINK, 3, 0)
 	UIUtil.SinkClicks(card)
@@ -1428,7 +1443,8 @@ local function ensureGui(s: any): any
 	screen.Parent = playerGui
 	local gui = {
 		Screen = screen,
-		Scale = scale,
+		Scales = { badgeScale, biteScale, cardScale },
+		Holder = holder,
 		Badge = badge,
 		BadgeText = badgeText,
 		Bite = bite,
@@ -1456,8 +1472,10 @@ end
 
 local function layoutGui(gui: any)
 	local phone = isPhone()
-	gui.Scale.Scale = if phone then 0.62 else 1
-	gui.Card.Position = UDim2.fromScale(0.5, if phone then 0.58 else 0.52)
+	for _, scale in ipairs(gui.Scales) do
+		scale.Scale = if phone then 0.62 else 1
+	end
+	gui.Holder.Position = UDim2.fromScale(0.5, if phone then 0.6 else 0.52)
 	gui.Badge.Position = UDim2.new(0.5, 0, 0, if phone then 64 else 84)
 	-- (au-dessus du bouton "Se lever" du HUD, lui aussi en bas au milieu)
 	gui.Bite.Position = UDim2.new(0.5, 0, 1, if phone then -64 else -92)
@@ -1589,7 +1607,7 @@ function FairFx.OpenMenu(stallId: string, foods: { string }, anchor: Vector3?)
 	for _ in pairs(gui.Cards) do
 		n += 1
 	end
-	gui.Card.Size = UDim2.fromOffset(math.max(400, n * 172 + 40), 344)
+	gui.Holder.Size = UDim2.fromOffset(math.max(400, n * 172 + 40), 344)
 	gui.Title.Text = table.concat(icons, " ") .. "  " .. Locale.T("Snacks")
 	gui.Sub.Text = Locale.T("Eat it for a Dopamine boost! One boost at a time, it stacks up to 5 min.")
 	gui.Status.Text = ""

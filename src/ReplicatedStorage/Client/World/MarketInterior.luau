@@ -2397,7 +2397,8 @@ local function robuxShell(m: Market, parent: Instance)
 		cyl(parent, "PassPedestal", F, x, INLAY_TOP, PASS_Z, 3, 2.4, c:Lerp(ROBUX_DARK, 0.35), M.SmoothPlastic, true)
 		cyl(parent, "PassRim", F, x, INLAY_TOP + 3, PASS_Z, 0.12, 2.6, GOLD, M.Metal)
 		local case = box(parent, "PassCase", F, x - 1.05, x + 1.05, INLAY_TOP + 3.12, INLAY_TOP + 5.3, PASS_Z - 1.05, PASS_Z + 1.05, rgb(220, 230, 255), M.Glass)
-		case.Transparency = 0.72
+		case.Transparency = 0.55
+		case.Reflectance = 0.1
 		box(parent, "PassCaseTop", F, x - 1.1, x + 1.1, INLAY_TOP + 5.3, INLAY_TOP + 5.38, PASS_Z - 1.1, PASS_Z + 1.1, GOLD, M.Metal)
 	end
 	-- coin « Bientôt » (étagère contre le mur de gauche)

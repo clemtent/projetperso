@@ -1231,10 +1231,10 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 			needDopamine(card.Button, cost, styleContext)
 			return
 		end
-		if isGarden and isOwned and not equipped and #house.Garden >= HouseCommon.GardenSlots then
+		if isGarden and isOwned and not equipped and #house.Garden >= HouseCommon.GardenSlotsFor() then
 			SoundManager.Play("Error", 0.7)
 			UIUtil.Shake(card.Button)
-			handlers.Notify(Locale.T("Your garden is full (max %d): put something away first", HouseCommon.GardenSlots), Theme.Colors.Orange)
+			handlers.Notify(Locale.T("Your garden is full (max %d): put something away first", HouseCommon.GardenSlotsFor()), Theme.Colors.Orange)
 			return
 		end
 		local action, argument
@@ -2675,7 +2675,7 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 			else
 				local text
 				if sectionKind == "Garden" then
-					text = Locale.T("🌷 Garden: %d/%d spots used • tap to put out / away", #house.Garden, HouseCommon.GardenSlots)
+					text = Locale.T("🌷 Garden: %d/%d spots used • tap to put out / away", #house.Garden, HouseCommon.GardenSlotsFor())
 				else
 					text = Locale.T("🏡 Whole house • hover or tap a picture to try it")
 				end

@@ -283,6 +283,18 @@ HouseCommon.TintsById = ((Config :: any).HouseTintsById or {}) :: { [string]: Lo
 HouseCommon.Tints = ((Config.House :: any).Tints or {}) :: { Look }
 HouseCommon.GardenSlots = tonumber((Config.House :: any).GardenSlots) or 6
 
+-- (v9.8 GARDEN98) places de déco du jardin avec les agrandissements du jardin
+-- (Config.Garden.Expansion[data.Garden.Level].DecorSlots : 6 / 8 / 10 / 12),
+-- même règle que HouseService (serveur) ; data = état du joueur (ClientState.Data par défaut)
+function HouseCommon.GardenSlotsFor(data: any?): number
+	local source = data or ClientState.Data
+	local garden = type(source) == "table" and source.Garden or nil
+	local level = type(garden) == "table" and tonumber(garden.Level) or 0
+	local levels = Config.Garden and (Config.Garden :: any).Expansion
+	local entry = type(levels) == "table" and level and level == level and levels[math.floor(level)] or nil
+	return math.max(HouseCommon.GardenSlots, type(entry) == "table" and tonumber(entry.DecorSlots) or 0)
+end
+
 -- Id valide d'un genre (sinon la 1re entrée de la liste)
 local function lookId(kind: string, value: any): string
 	local byId = LOOKS_BY_ID[kind]

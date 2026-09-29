@@ -500,7 +500,7 @@ function NPCModels.Build(style: string, opts: Opts?): Model
 	add(ctx, G_BODY, "Chest", Vector3.new(1.16, 0.5, 0.6), at(0, 4.3, 0.02), shirt, M.Fabric, "Egg")
 	add(ctx, G_BODY, "Neck", Vector3.new(0.34, 0.38, 0.38), at(0, 4.45, 0.02) * UPRIGHT, skin, M.SmoothPlastic, "Cyl")
 	if skirt then
-		add(ctx, G_BODY, "Skirt", Vector3.new(1.24, 1.0, 0.8), at(0, 2.3, 0), pants:Lerp(rgb(200, 90, 120), 0.4), M.Fabric)
+		add(ctx, G_BODY, "Skirt", Vector3.new(1.24, 1.0, 0.86), at(0, 2.3, 0), pants:Lerp(rgb(200, 90, 120), 0.4), M.Fabric)
 	else
 		add(ctx, G_BODY, "Hips", Vector3.new(1.14, 0.6, 0.62), at(0, 2.45, 0), pants, M.Fabric)
 	end
