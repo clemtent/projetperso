@@ -2887,7 +2887,7 @@ local function furnitureZone(m: Market, parent: Instance, jobs: { () -> () })
 		end
 		fillJobs(m, parent, "Furniture", jobs, back, i == 1 and big or spread(big, #big))
 		fillJobs(m, parent, "Furniture", jobs, front, small)
-		fillJobs(m, parent, "Furniture", jobs, wall, categoryEntries({ "Decor", "Lights" }, isWall))
+		fillJobs(m, parent, "Furniture", jobs, wall, categoryEntries(i == 2 and { "Luxury", "Decor", "Lights" } or { "Decor", "Lights" }, isWall))
 	end
 	table.insert(jobs, function()
 		actor(m, parent, "Furniture", "salesperson", 91, m.F * CFrame.new(13.5, FLOOR_TOP, 53), "talk")

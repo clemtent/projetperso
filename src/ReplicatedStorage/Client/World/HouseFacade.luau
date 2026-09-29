@@ -578,7 +578,7 @@ local function ironFence(ctx: Ctx, x0: number, x1: number, d: number, gate0: num
 			for k = 0, count do
 				local x = a + k * (b - a) / count
 				kit:Box("FenceBar", x - 0.1, x + 0.1, 0, 3.8, d - 0.1, d + 0.1, iron, M.Metal, { Shadow = false })
-				if k % 3 == 1 then
+				if k % 4 == 1 then -- (v9.8 : budget de pièces)
 					kit:Ball("FenceBall", x, 3.95, d, 0.35, P.Gold, M.Metal, { Shadow = false })
 				end
 			end
@@ -1620,7 +1620,7 @@ STYLES.Mansion = function(ctx)
 			local b0, b1 = x0 + 1.4, x1 - 1.4
 			kit:Box("Balustrade", b0, b1, y + 2.2, y + 2.6, -1.6, -0.3, TRIM, M.Limestone, { Shadow = false })
 			kit:Box("BalustradeBase", b0, b1, y - 0.1, y + 0.3, -1.6, -0.3, TRIM, M.Limestone, { Solid = true, Shadow = false })
-			local count = math.floor((b1 - b0) / 3.8) -- (v9.8 : budget de pièces du manoir)
+			local count = math.floor((b1 - b0) / 4.2) -- (v9.8 : budget de pièces du manoir)
 			for k = 0, count do
 				local x = b0 + 0.4 + k * (b1 - b0 - 0.8) / count
 				kit:CylY("Baluster", x, y + 0.3, -0.95, 0.6, 1.9, TRIM, M.Limestone, { Shadow = false })

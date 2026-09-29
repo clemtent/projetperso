@@ -808,7 +808,7 @@ local function setFloors(on: boolean)
 				local gloss = FLOOR_GLOSS[part.Material]
 				if gloss then
 					if floorSaved[part] == nil then
-						floorSaved[part] = part.Reflectance
+						floorSaved[part] = tonumber(part.Reflectance) or 0
 					end
 					part.Reflectance = math.max(floorSaved[part], gloss)
 				end

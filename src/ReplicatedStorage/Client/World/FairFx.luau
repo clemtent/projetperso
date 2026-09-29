@@ -517,12 +517,14 @@ local function buildCups(r: RideFx)
 			local rr = 2.05
 			local p = Vector3.new(math.sin(a) * rr, 1.35, math.cos(a) * rr)
 			local w = TAU * rr / n + 0.1
-			moving(r, g, "Wall", Vector3.new(w, 1.9, 0.18), CFrame.lookAt(p, p + Vector3.new(p.X, 0, p.Z)), color, M.SmoothPlastic)
+			local wallCF = CFrame.lookAt(p, p + Vector3.new(p.X, 0, p.Z))
+			moving(r, g, "Wall", Vector3.new(w, 1.9, 0.18), wallCF, color, M.SmoothPlastic)
+			-- bord doré (un tronçon par panneau : on voit dans la tasse)
+			moving(r, g, "Rim", Vector3.new(w + 0.02, 0.16, 0.3), wallCF * CFrame.new(0, 0.99, 0), GOLD, M.Metal)
 			if i % 3 == 0 then
 				moving(r, g, "Dot", Vector3.new(0.05, 0.5, 0.5), CFrame.lookAt(p, p + Vector3.new(p.X, 0, p.Z)) * CFrame.new(0, 0.1, -0.12) * CFrame.Angles(0, math.rad(90), 0), WHITE, M.SmoothPlastic, CYL)
 			end
 		end
-		moving(r, g, "Rim", Vector3.new(0.14, 4.5, 4.5), CFrame.new(0, 2.33, 0) * VERTICAL, GOLD, M.Metal, CYL)
 		moving(r, g, "CupHandle", Vector3.new(0.35, 1.3, 0.35), CFrame.new(0, 1.4, 2.45), color, M.SmoothPlastic)
 		moving(r, g, "Wheel", Vector3.new(0.18, 1.1, 1.1), CFrame.new(0, 1.8, 0) * CFrame.Angles(0, 0, 0) * VERTICAL, WHITE, M.SmoothPlastic, CYL)
 		moving(r, g, "WheelPost", Vector3.new(0.2, 1.3, 0.2), CFrame.new(0, 1.15, 0), GOLD, M.Metal)
@@ -630,7 +632,11 @@ local function buildBumperHall(r: RideFx)
 			solid(fixed(r, "Post", Vector3.new(0.6, roofY, 0.6), CFrame.new(x, roofY / 2, z), STEEL_LIGHT, M.Metal))
 		end
 	end
-	fixed(r, "Roof", Vector3.new(W + 4, 0.5, D + 4), CFrame.new(0, roofY + 0.25, 0), Color3.fromRGB(236, 240, 250), M.Metal).CastShadow = true
+	-- toit rayé (6 bandes)
+	for i = 0, 5 do
+		local w = (W + 4) / 6
+		fixed(r, "Roof", Vector3.new(w, 0.5, D + 4), CFrame.new(-(W + 4) / 2 + (i + 0.5) * w, roofY + 0.25, 0), if i % 2 == 0 then Color3.fromRGB(255, 176, 206) else Color3.fromRGB(252, 250, 255), M.SmoothPlastic).CastShadow = true
+	end
 	-- filet électrique (au plafond) : quelques câbles
 	for i = -3, 3 do
 		fixed(r, "Grid", Vector3.new(W, 0.08, 0.08), CFrame.new(0, roofY - 0.1, i * D / 7), STEEL, M.Metal)
@@ -859,10 +865,11 @@ local function buildArch(folder: Instance, F: CFrame)
 		prev = p
 	end
 	-- grand panneau (lisible des deux côtés)
-	local board = newPart(model, "Board", Vector3.new(13, 2.8, 0.3), F * CFrame.new(0, 9, z) * CFrame.Angles(0, math.pi, 0), Color3.fromRGB(255, 244, 250), M.SmoothPlastic)
+	-- (face avant -Z : vers la place, d'où l'on arrive ; le dos, vers la fête)
+	local board = newPart(model, "Board", Vector3.new(13, 2.8, 0.3), F * CFrame.new(0, 9, z), Color3.fromRGB(255, 244, 250), M.SmoothPlastic)
 	board.CastShadow = true
 	sign(board, "🎡 " .. Locale.T("Fun fair") .. " 🎠", HOT, Color3.fromRGB(255, 244, 250))
-	local back = newPart(model, "BoardBack", Vector3.new(13, 2.8, 0.05), F * CFrame.new(0, 9, z + 0.18), Color3.fromRGB(255, 244, 250), M.SmoothPlastic)
+	local back = newPart(model, "BoardBack", Vector3.new(12.6, 2.5, 0.1), F * CFrame.new(0, 9, z + 0.18) * CFrame.Angles(0, math.pi, 0), Color3.fromRGB(255, 244, 250), M.SmoothPlastic)
 	sign(back, "🎡 " .. Locale.T("Fun fair") .. " 🎠", HOT, Color3.fromRGB(255, 244, 250))
 	for i = 0, 11 do
 		glow(newPart(model, "BoardBulb", Vector3.new(0.3, 0.3, 0.3), F * CFrame.new(-6 + i * 12 / 11, 10.55, z - 0.3), PALETTE[i % #PALETTE + 1], M.SmoothPlastic, BALL))

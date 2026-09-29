@@ -550,7 +550,7 @@ local function collectWet()
 			local size = d.Size
 			local up = d.CFrame.UpVector.Y
 			if up > 0.9 and size.Y <= 4 and size.X * size.Z >= 24 then
-				table.insert(wetList, { Part = d, Color = d.Color, Reflectance = d.Reflectance })
+				table.insert(wetList, { Part = d, Color = d.Color, Reflectance = tonumber(d.Reflectance) or 0 })
 				if #wetList >= 2500 then
 					break
 				end

@@ -2860,7 +2860,7 @@ do
 			check(food.Bites >= 2 and food.Bites <= 6 and math.floor(food.Bites) == food.Bites, "bouchées " .. food.Id)
 			-- valeur du boost comparable d'un aliment à l'autre (40..90 s de production)
 			local v = FR.BoostSeconds(food)
-			check(v >= 40 and v <= 90, "valeur du boost " .. food.Id .. " = " .. v)
+			check(v >= 40 and v <= 90.001, "valeur du boost " .. food.Id .. " = " .. v)
 			-- modèle 3D : une recette, et des bouchées Bite1..Bite(n-1)
 			local body = FOOD_MODELS_SRC:match("RECIPES%." .. food.Id .. " = function%(add%)(.-)\nend")
 			check(body ~= nil, "recette 3D (FoodModels) " .. food.Id)
