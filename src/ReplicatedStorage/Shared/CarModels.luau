@@ -38,6 +38,20 @@
 	"Full" ≈ 110-160 pièces (voiture qu'on conduit, concession) ;
 	"Parked" ≈ 40-48 pièces (voitures garées de la ville, garages).
 
+	v9.8 (CARS98) "10x plus réalistes" : nez en ELLIPSOÏDE (arrondi de face
+	et vu de dessus), lèvres de pare-chocs arrondies, toit = panneau aux
+	bords roulés + BOMBÉ central (ellipsoïde aplati) avec toit panoramique en
+	verre, gouttières chromées, ciel de toit clair ; épaules arrondies le long
+	de la ligne de caisse, nervure latérale, joints de capot, trappe à
+	carburant, répétiteurs, essuie-glaces ; verre teinté (reflet) ; peinture
+	vernie (Reflectance 0,1) ; roues : FLANC de pneu, fond de jante, lèvre
+	chromée, disque, étrier, rayons, cache-moyeu (couches espacées de 0,025 :
+	aucun z-fighting) ; arches d'ailes lisses (5 segments) ; blocs optiques
+	(réflecteur chromé, 2 projecteurs, feu de jour, glace bombée), bandeau
+	de feux arrière ; rétroviseurs arrondis avec clignotant ; console,
+	levier, panneaux de portes. Dimensions et API inchangées.
+	"Full" ≈ 150-235 pièces ; "Parked" ≈ 43-54 pièces.
+
 	API :
 	  CarModels.Build(carId, color?, opts?) -> Model
 	    color : Color3 | Id de Config.Cars.Colors | nil (couleur par défaut)
@@ -54,6 +68,10 @@
 	  CarModels.ColorOf(carId, color?) -> Color3
 	  CarModels.LockReason(data, carId) -> string? (nil = débloquée ; texte traduit)
 	  CarModels.Kinds : ids des modèles
+	  CarModels.Handling(carId) -> { Speed, Accel, Grip, Comfort, Stars } (v9.8 :
+	    caractère au volant, notes 1-5 pour "Mes voitures" et la concession)
+	  CarModels.Repaint(model, carId, color?) (v9.8 : repeint les pièces "Paint"
+	    d'un modèle déjà construit, sans rien reconstruire)
 ]]
 
 local Config = require(script.Parent.Config)

@@ -740,10 +740,17 @@ function House3DKit.SeatCushion(b: Builder, x: number, y: number, z: number, w: 
 	return main
 end
 
--- Coussin moelleux orienté (centre = cframe) : cœur + enveloppe ovale (2 pièces)
+-- Coussin moelleux orienté (centre = cframe, épaisseur d vers +z local) :
+-- bloc aux bords haut / bas roulés + ventre bombé devant et derrière (4 pièces)
 function House3DKit.PillowR(b: Builder, cframe: CFrame, w: number, h: number, d: number, color: Color3, material: Enum.Material?): BasePart
-	local core = b.BoxR(cframe, w * 0.9, h * 0.84, d * 0.62, color, material or MAT.Fabric)
-	b.EggR(cframe, w, h, d, color, material or MAT.Fabric)
+	local mat = material or MAT.Fabric
+	local r = math.min(d, h * 0.45)
+	local core = b.BoxR(cframe, w, h - r, r, color, mat)
+	for _, sy in ipairs({ -1, 1 }) do
+		local roll = b.Part("Part", cframe * CFrame.new(0, sy * (h - r) / 2, 0), Vector3.new(w, r, r), color, mat, "Cylindre")
+		;(roll :: Part).Shape = Enum.PartType.Cylinder
+	end
+	b.EggR(cframe, w * 0.92, h * 0.86, math.max(d, r * 1.3), color, mat)
 	return core
 end
 
@@ -776,7 +783,7 @@ function House3DKit.Books(b: Builder, x0: number, x1: number, y: number, zFront:
 		local bh = maxH * (0.72 + ((s * 5) % 6) * 0.05)
 		local bd = depth * (0.82 + ((s * 3) % 4) * 0.05)
 		local color = House3DKit.Vary(colors[(s % #colors) + 1], s, 0.18)
-		if n > 3 and (s % 11) == 0 and x + bh * 0.5 < x1 then
+		if x > x0 + (x1 - x0) * 0.72 and (s % 3) == 0 and x + bh * 0.5 < x1 then
 			-- livre penché contre le précédent
 			local angle = -0.42
 			local cx = x + math.sin(-angle) * bh / 2 + bw / 2

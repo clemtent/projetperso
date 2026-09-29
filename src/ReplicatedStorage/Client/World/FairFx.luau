@@ -63,7 +63,6 @@ local FairFx = {}
 local LocalPlayer = Players.LocalPlayer
 
 local STEP = 1 / 30
-local RETRY = 1
 local BUILD_R = 300 -- (studs) du centre de la fête : on construit
 local DROP_R = 380 -- ... au-delà : on détruit
 local ANIM_R = 230 -- manèges animés
@@ -1707,7 +1706,8 @@ local function watchTool(s: any, character: Model, tool: Tool)
 	end
 	local entry = { Character = character, Tool = tool, Food = Config.FoodById[tool:GetAttribute("FoodId") or ""], Last = tool:GetAttribute("BiteAt") }
 	s.Tools[tool] = entry
-	entry.Conn = tool:GetAttributeChangedSignal("BiteAt"):Connect(function()
+	-- (signal + relevé à 10 Hz dans scanEaters : jamais de bouchée manquée)
+	entry.Check = function()
 		local at = tool:GetAttribute("BiteAt")
 		if type(at) ~= "number" or at == entry.Last then
 			return
@@ -1728,7 +1728,8 @@ local function watchTool(s: any, character: Model, tool: Tool)
 			local food = entry.Food
 			toast("⚡ " .. Locale.T("Dopamine boost %s for %s!", fmtMult(food.Multiplier), fmtClock(food.Duration)), HOT)
 		end
-	end)
+	end
+	entry.Conn = tool:GetAttributeChangedSignal("BiteAt"):Connect(entry.Check)
 end
 
 local function stepArms(s: any, dt: number)
@@ -1784,6 +1785,10 @@ local function scanEaters(s: any)
 			local tool = character:FindFirstChild("DopamineFood")
 			if tool and tool:IsA("Tool") then
 				watchTool(s, character, tool)
+				local entry = s.Tools[tool]
+				if entry and entry.Check then
+					entry.Check()
+				end
 				if player == LocalPlayer then
 					mine = tool
 				end
@@ -1873,8 +1878,8 @@ local function driveBumper(s: any, seat: VehicleSeat, dt: number)
 	end
 	local def = FairRides.ById.Bumper
 	local phase = FairRides.Phase(def, workspace:GetServerTimeNow())
-	local throttle = math.clamp(seat.ThrottleFloat, -1, 1)
-	local steer = math.clamp(seat.SteerFloat, -1, 1)
+	local throttle = math.clamp(tonumber(seat.ThrottleFloat) or 0, -1, 1)
+	local steer = math.clamp(tonumber(seat.SteerFloat) or 0, -1, 1)
 	if phase ~= "run" then
 		throttle = 0
 	end

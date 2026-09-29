@@ -1029,12 +1029,14 @@ end
 -- Remplit des emplacements avec les objets d'une liste (échantillon
 -- régulier du moins cher au plus cher) ; un objet trop lourd cède sa place
 -- au suivant de la liste ; jamais deux fois le même objet
-local function fillJobs(m: Market, parent: Instance, owner: string, jobs: { () -> () }, slots: { Slot }, entries: { ShopUI.Entry })
-	local pool = spread(entries, math.min(#entries, #slots * 3))
+local function fillJobs(m: Market, parent: Instance, owner: string, jobs: { () -> () }, slots: { Slot }, entries: { ShopUI.Entry }, ordered: boolean?)
+	local pool = ordered and entries or spread(entries, math.min(#entries, #slots * 3))
 	local cursor = 1
 	for i, slot in ipairs(slots) do
 		table.insert(jobs, function()
-			cursor = math.max(cursor, math.floor(1 + (i - 1) * #pool / #slots))
+			if not ordered then
+				cursor = math.max(cursor, math.floor(1 + (i - 1) * #pool / #slots))
+			end
 			for _ = 1, 4 do
 				local entry = pool[cursor]
 				if not entry then
@@ -1646,8 +1648,8 @@ local function outsideJobs(m: Market, parent: Instance): { () -> () }
 	-- affiches collées sur les vitrines (dehors, entre les meneaux)
 	table.insert(jobs, function()
 		local posters = {
-			{ 42.4, "PROMO -30%", BRAND },
-			{ 48.1, "🍓 Fresh fruit!", rgb(64, 160, 90) },
+			{ 42.4, "🧸 New toys!", BRAND },
+			{ 48.1, "🛋️ Home deals", rgb(230, 130, 60) },
 			{ -42.4, "💎 Robux Shop", ROBUX },
 			{ -48.1, "☕ Café & food court", rgb(170, 110, 60) },
 		}
@@ -2067,7 +2069,12 @@ local function toySlots(m: Market): { Slot }
 end
 
 -- 🛋️ Salons d'exposition : deux pièces meublées en taille réelle
-local VIGNETTES = { { -2, 12.5, "🛋️ Cozy living room", rgb(236, 214, 200), { "Furniture" } }, { 14.5, 29, "👑 Luxury suite", rgb(226, 214, 246), { "Luxury", "Furniture" } } }
+local VIGNETTES = {
+	{ -2, 12.5, "🛋️ Cozy living room", rgb(236, 214, 200), { "Furniture" },
+		{ "SectionalSofa", "Chesterfield", "Sofa", "Fireplace", "BookshelfWall", "TVStand" }, { "GlassCoffeeTable", "Armchair", "CoffeeTable", "EggChair" } },
+	{ 14.5, 29, "👑 Luxury suite", rgb(226, 214, 246), { "Luxury", "Furniture" },
+		{ "KingBed", "WhitePiano", "AquariumWall", "CanopyBed", "PoolTable" }, { "GoldThrone", "MarbleStatue", "VelvetChaise", "AmethystGeode" } },
+}
 local function furnitureRooms(m: Market, parent: Instance)
 	local F = m.F
 	for i, v in ipairs(VIGNETTES) do
@@ -2080,8 +2087,10 @@ local function furnitureRooms(m: Market, parent: Instance)
 			local xx = sx < 0 and x0 + 0.1 or x1 - 0.1
 			box(parent, "RoomSide", F, xx - 0.1, xx + 0.1, 0.5, 8, 59, 65.6, WHITE, M.SmoothPlastic)
 		end
-		local plaque = box(parent, "RoomPlaque", F, (x0 + x1) / 2 - 3, (x0 + x1) / 2 + 3, 0.1, 0.45, 51.35, 51.5, WHITE, M.SmoothPlastic)
-		label(plaque, Enum.NormalId.Front, Locale.T(v[3] :: string), BRAND2, nil, 40, 50)
+		local cx = (x0 + x1) / 2
+		box(parent, "PlaquePost", F, cx - 0.06, cx + 0.06, 0.5, 1.2, 51.9, 52.02, DARKSTEEL, M.Metal)
+		local plaque = box(parent, "RoomPlaque", F, cx - 2.6, cx + 2.6, 1.2, 2.1, 51.8, 51.9, WHITE, M.SmoothPlastic)
+		label(plaque, Enum.NormalId.Front, Locale.T(v[3] :: string), BRAND2, WHITE, 40, 60)
 		local _ = i
 	end
 	hangingSign(m, parent, 13.5, 50, 12, Locale.T("🛋️ Furniture showroom"), rgb(160, 116, 84))
@@ -2092,14 +2101,14 @@ local function furnitureSlots(m: Market, vignette: number): ({ Slot }, { Slot })
 	local x0, x1 = v[1] :: number, v[2] :: number
 	local cx = (x0 + x1) / 2
 	local floor, wall = {}, {}
-	-- rang du fond (contre le mur), rang de devant (petits meubles)
-	for k = -1, 1 do
-		local S = m.F * CFrame.new(cx + k * 4.5, 0.56, 62.8) -- LookVector -Z : vers le visiteur
-		table.insert(floor, { CF = S, MaxW = 4.2, MaxH = 7, MaxD = 5, Tag = m.F * CFrame.new(cx + k * 4.5, 0.4, 51.2), Heavy = true })
+	-- rang du fond (2 grands meubles contre le mur), rang de devant (2 plus petits)
+	for k = -1, 1, 2 do
+		local S = m.F * CFrame.new(cx + k * 3.45, 0.56, 62.5) -- LookVector -Z : vers le visiteur
+		table.insert(floor, { CF = S, MaxW = 6.2, MaxH = 7.5, MaxD = 5.6, Tag = m.F * CFrame.new(cx + k * 3.45, 1.4, 51.2), Heavy = true })
 	end
 	for k = -1, 1, 2 do
-		local S = m.F * CFrame.new(cx + k * 3.3, 0.56, 56.5)
-		table.insert(floor, { CF = S, MaxW = 3.2, MaxH = 4.5, MaxD = 3, Tag = m.F * CFrame.new(cx + k * 3.3, 0.4, 51.2), Heavy = true })
+		local S = m.F * CFrame.new(cx + k * 3.9, 0.56, 55.6)
+		table.insert(floor, { CF = S, MaxW = 3.6, MaxH = 5, MaxD = 3.4, Tag = m.F * CFrame.new(cx + k * 3.9, 1.4, 51.2), Heavy = true })
 	end
 	for k = -1, 1, 2 do
 		local S = m.F * CFrame.new(cx + k * 3.6, 6.6, 65.35)
@@ -2366,7 +2375,7 @@ local function robuxShell(m: Market, parent: Instance)
 	-- présentoir mural des cartes cadeaux
 	box(parent, "Pegboard", F, -50.2, -37.2, 0.8, 9.6, 0.1, 0.3, rgb(120, 90, 200), M.SmoothPlastic)
 	local head = box(parent, "PegHeader", F, -50.2, -37.2, 9.6, 10.8, 0.1, 0.34, ROBUX_DARK, M.SmoothPlastic)
-	label(head, Enum.NormalId.Front, Locale.T("🎁 Robux gift cards"), rgb(255, 214, 120), nil, 24, 80)
+	label(head, Enum.NormalId.Back, Locale.T("🎁 Robux gift cards"), rgb(255, 214, 120), nil, 24, 80)
 	-- socles des Game Passes (cloche vitrée, bordure dorée)
 	for i, x in ipairs(PASS_X) do
 		local c = ({ rgb(150, 110, 220), rgb(80, 150, 230), rgb(70, 200, 200), rgb(236, 190, 90) })[i]
@@ -2374,7 +2383,7 @@ local function robuxShell(m: Market, parent: Instance)
 		cyl(parent, "PassRim", F, x, INLAY_TOP + 3, PASS_Z, 0.12, 2.6, GOLD, M.Metal)
 		local case = box(parent, "PassCase", F, x - 1.05, x + 1.05, INLAY_TOP + 3.12, INLAY_TOP + 5.3, PASS_Z - 1.05, PASS_Z + 1.05, rgb(220, 230, 255), M.Glass)
 		case.Transparency = 0.72
-		box(parent, "PassCaseTop", F, x - 1.1, x + 1.1, INLAY_TOP + 5.3, INLAY_TOP + 5.42, PASS_Z - 1.1, PASS_Z + 1.1, GOLD, M.Metal)
+		box(parent, "PassCaseTop", F, x - 1.1, x + 1.1, INLAY_TOP + 5.3, INLAY_TOP + 5.38, PASS_Z - 1.1, PASS_Z + 1.1, GOLD, M.Metal)
 	end
 	-- coin « Bientôt » (étagère contre le mur de gauche)
 	box(parent, "SoonShelf", F, -50.9, -49.4, INLAY_TOP, 6.2, 3, 12.6, rgb(236, 226, 250), M.SmoothPlastic, true)
@@ -2441,7 +2450,7 @@ local function cafeShell(m: Market, parent: Instance)
 		else
 			-- four à pizza (dôme en briques)
 			ball(parent, "PizzaOven", F, x1 - 2, 3.5, 1.3, 2.4, rgb(176, 96, 70), M.Brick)
-			box(parent, "OvenMouth", F, x1 - 2.6, x1 - 1.4, 3.55, 4.25, 2.3, 2.46, rgb(40, 24, 20), M.SmoothPlastic)
+			box(parent, "OvenMouth", F, x1 - 2.6, x1 - 1.4, 3.55, 4.25, 2.3, 2.46, rgb(120, 52, 30), M.SmoothPlastic)
 			box(parent, "PizzaPeel", F, x0 + 0.8, x0 + 1.2, 3.5, 6.2, 0.4, 0.6, rgb(190, 140, 90), M.Wood)
 		end
 	end
@@ -2712,8 +2721,8 @@ local function robuxZone(m: Market, parent: Instance, jobs: { () -> () })
 			table.insert(m.Spinners, { Part = gem, Base = F * CFrame.new(x, INLAY_TOP + 4.2, PASS_Z), Owner = "Robux", Offset = i * 0.9, Pos = gem.Position })
 			local bb = Instance.new("BillboardGui")
 			bb.Name = "Icon"
-			bb.Size = UDim2.fromScale(1.6, 1.6)
-			bb.StudsOffsetWorldSpace = Vector3.new(0, 1.9, 0)
+			bb.Size = UDim2.fromScale(1.2, 1.2)
+			bb.StudsOffsetWorldSpace = Vector3.new(0, 2, 0)
 			bb.MaxDistance = 45
 			bb.LightInfluence = 0
 			bb.Parent = gem
@@ -2758,7 +2767,7 @@ local function robuxZone(m: Market, parent: Instance, jobs: { () -> () })
 			box(parent, "Peg", F, cx - 0.05, cx + 0.05, y0 + 3.25, y0 + 3.35, 0.3, 0.9, STEEL, M.Metal)
 			local gui = Instance.new("SurfaceGui")
 			gui.Name = "Card"
-			gui.Face = Enum.NormalId.Front
+			gui.Face = Enum.NormalId.Back
 			gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 			gui.PixelsPerStud = 60
 			gui.LightInfluence = 0.2
@@ -2858,39 +2867,41 @@ local function showroomZone(m: Market, parent: Instance, jobs: { () -> () })
 	end)
 end
 
+-- Entrées choisies (dans l'ordre), puis la catégorie en secours
+local function curated(ids: { string }, fallback: { ShopUI.Entry }): { ShopUI.Entry }
+	local list, seen = {}, {}
+	for _, id in ipairs(ids) do
+		local e = ShopUI.Entry("Item", id)
+		if e then
+			table.insert(list, e)
+			seen[id] = true
+		end
+	end
+	for _, e in ipairs(fallback) do
+		if not seen[e.Id] then
+			table.insert(list, e)
+		end
+	end
+	return list
+end
+
 local function furnitureZone(m: Market, parent: Instance, jobs: { () -> () })
 	for i, v in ipairs(VIGNETTES) do
 		local floor, wall = furnitureSlots(m, i)
 		local cats = v[5] :: { string }
-		local big = categoryEntries(cats, function(def)
-			return not isWall(def) and (tonumber(def.Size) or 80) >= 100
-		end)
-		if #big < 3 then
-			big = categoryEntries({ "Furniture" }, function(def)
-				return not isWall(def) and (tonumber(def.Size) or 80) >= 100
-			end)
-		end
-		local small = categoryEntries(cats, function(def)
-			return not isWall(def) and (tonumber(def.Size) or 80) < 100 and (tonumber(def.Size) or 80) >= 50
-		end)
-		if #small < 2 then
-			small = categoryEntries({ "Furniture", "Decor" }, function(def)
-				return not isWall(def) and (tonumber(def.Size) or 80) < 100 and (tonumber(def.Size) or 80) >= 50
-			end)
-		end
-		local back, front = {}, {}
-		for k = 1, 3 do
-			table.insert(back, floor[k])
-		end
-		for k = 4, 5 do
-			table.insert(front, floor[k])
-		end
-		fillJobs(m, parent, "Furniture", jobs, back, i == 1 and big or spread(big, #big))
-		fillJobs(m, parent, "Furniture", jobs, front, small)
-		fillJobs(m, parent, "Furniture", jobs, wall, categoryEntries(i == 2 and { "Luxury", "Decor", "Lights" } or { "Decor", "Lights" }, isWall))
+		local big = curated(v[6] :: { string }, categoryEntries(cats, function(def)
+			return not isWall(def) and (tonumber(def.Size) or 80) >= 120
+		end))
+		local small = curated(v[7] :: { string }, categoryEntries(cats, function(def)
+			return not isWall(def) and (tonumber(def.Size) or 80) < 120 and (tonumber(def.Size) or 80) >= 60
+		end))
+		fillJobs(m, parent, "Furniture", jobs, { floor[1], floor[2] }, big, true)
+		fillJobs(m, parent, "Furniture", jobs, { floor[3], floor[4] }, small, true)
+		local walls = categoryEntries(i == 2 and { "Luxury", "Decor", "Lights" } or { "Decor", "Lights" }, isWall)
+		fillJobs(m, parent, "Furniture", jobs, wall, i == 2 and walls or spread(walls, #walls), i == 2)
 	end
 	table.insert(jobs, function()
-		actor(m, parent, "Furniture", "salesperson", 91, m.F * CFrame.new(13.5, FLOOR_TOP, 53), "talk")
+		actor(m, parent, "Furniture", "salesperson", 91, m.F * CFrame.new(13.5, FLOOR_TOP, 50.6), "talk")
 	end)
 end
 

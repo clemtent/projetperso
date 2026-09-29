@@ -254,7 +254,7 @@ local function facade(model: Model, cf: CFrame)
 		end
 	end
 	-- enseignes de rayons sur la façade (au-dessus des vitrines)
-	sign(model, "SubSign", cf, x0 + 20, hw - 2.5, 13.3, 16.3, -0.55, -0.35, C.White, "🥕 Groceries", Color3.fromRGB(64, 150, 90), 26, 300)
+	sign(model, "SubSign", cf, x0 + 20, hw - 2.5, 13.3, 16.3, -0.55, -0.35, C.White, "🏠 Home & Garden", BRAND2, 26, 300)
 	sign(model, "SubSign", cf, -hw + 2.5, -x0 - 20, 13.3, 16.3, -0.55, -0.35, C.White, "💎 Robux Shop & ☕ Café", BRAND2, 26, 300)
 	-- trottoir devant le magasin (+ bordure)
 	box(model, "Apron", cf, -hw - 1, hw + 1, -1.3, 0, LOT_Z1 + 0.4, 0, C.Walk, M.Pavement, "solid")

@@ -584,8 +584,7 @@ R.Bookshelf = function(b, ctx)
 		local g = House3DKit.Gap(b, 0.8)
 		b.Box(0, y, depth / 2 - 0.2 + g / 2, w - 8, 4, g, lighten(wood, 0.12), M.Wood)
 		-- livres aux dos variés + un objet déco au bout du rayon
-		local x1 = w / 2 - 17
-		House3DKit.Books(b, -w / 2 + 5, x1, y + 4, 1.5, depth - 18, caseH - 7, colors, index + 1)
+		House3DKit.Books(b, -w / 2 + 5, w / 2 - 17, y + 4, 1.5, depth - 18, caseH - 7, colors, index + 1)
 		local dx = w / 2 - 10
 		if index == 0 then
 			for pile = 0, 2 do
@@ -672,18 +671,50 @@ end
 
 -- SIÈGES -----------------------------------------------------------------
 
+-- (v9.8) Chaise en bois : pieds avant fuselés, montants arrière d'un seul
+-- tenant (légèrement inclinés), ceinture, entretoises, assise biseautée,
+-- galette passepoilée (chaise rembourrée) ou barreaux (chaise en bois)
 local function chair(b: Builder, ctx: Ctx, seatDefault: number, backH: number, width: number, depth: number, padColor: Color3?)
 	local seat = ctx.TopY(1, seatDefault)
 	local wood = woodOf(b, WOOD)
-	legs4(b, width - 4, depth - 4, seat - 5, 5, darken(wood, 0.1), M.Wood)
-	b.Box(0, seat - 5, 0, width, 5, depth, wood, M.Wood)
-	if padColor then
-		b.Box(0, seat, 1, width - 6, 2.2, depth - 8, padColor, M.Fabric)
+	local legC = darken(wood, 0.1)
+	local fx, fz = width / 2 - 4, depth / 2 - 4
+	local h = seat + backH
+	local tilt = 0.06
+	local function backZ(y: number): number
+		return -fz - 1 - (y - h / 2) * tilt
 	end
-	-- dossier (derrière = -z)
-	b.Box(-width / 2 + 3, seat, -depth / 2 + 2.5, 5, backH, 5, darken(wood, 0.05), M.Wood)
-	b.Box(width / 2 - 3, seat, -depth / 2 + 2.5, 5, backH, 5, darken(wood, 0.05), M.Wood)
-	b.Box(0, seat + backH * 0.45, -depth / 2 + 2.5, width - 6, backH * 0.5, 3, padColor or wood, padColor and M.Fabric or M.Wood)
+	for _, sx in ipairs({ -1, 1 }) do
+		House3DKit.Leg(b, sx * fx, 0, fz, 5.2, seat - 5, legC, M.Wood, darken(legC, 0.45))
+		b.BoxR(CFrame.new(sx * fx, h / 2, backZ(h / 2)) * CFrame.Angles(-tilt, 0, 0), 5, h, 5, legC, M.Wood)
+		-- entretoise basse (côté)
+		b.Box(sx * fx, seat * 0.22, -1, 2.4, 2.6, 2 * fz - 6, legC, M.Wood)
+	end
+	b.Box(0, seat * 0.3, fz, 2 * fx - 5, 2.6, 2.4, legC, M.Wood)
+	-- ceinture sous l'assise
+	for _, sz in ipairs({ -1, 1 }) do
+		b.Box(0, seat - 10, sz * fz, 2 * fx - 5.2, 5, 2.2, wood, M.Wood)
+	end
+	House3DKit.Bevel(b, 0, seat - 5, 0.5, width, 5, depth - 1, 1.4, wood, M.Wood)
+	-- dossier : traverse haute cintrée
+	local railY = h - 7
+	b.BoxR(CFrame.new(0, railY + 3.5, backZ(railY + 3.5)) * CFrame.Angles(-tilt, 0, 0), 2 * fx - 4.8, 7, 3.4, wood, M.Wood)
+	if padColor then
+		House3DKit.SeatCushion(b, 0, seat - 0.4, 1.5, width - 7, 2.6, depth - 9, padColor, darken(padColor, 0.25))
+		-- dossier rembourré capitonné
+		local py = seat + (railY - seat) / 2
+		House3DKit.PillowR(b, CFrame.new(0, py, backZ(py) + 1.2) * CFrame.Angles(-tilt, 0, 0), 2 * fx - 6, railY - seat - 4, 4, padColor, M.Fabric)
+		for _, bx in ipairs({ -0.22, 0.22 }) do
+			b.Ball(bx * (2 * fx - 6), py, backZ(py) + 3.2, 1.8, darken(padColor, 0.25), M.Fabric)
+		end
+	else
+		-- 3 barreaux + traverse basse du dossier
+		b.BoxR(CFrame.new(0, seat + 3, backZ(seat + 3)) * CFrame.Angles(-tilt, 0, 0), 2 * fx - 4.8, 3, 2.6, wood, M.Wood)
+		for _, bx in ipairs({ -0.25, 0, 0.25 }) do
+			local sy = (seat + 4.5 + railY) / 2
+			b.BoxR(CFrame.new(bx * (2 * fx), sy, backZ(sy)) * CFrame.Angles(-tilt, 0, 0), 3, railY - seat - 4.5, 2, lighten(wood, 0.05), M.Wood)
+		end
+	end
 	b.Top(1, 0, seat + (padColor and 2 or 0), 3, width - 10, depth - 10)
 	b.Footprint(width, depth, seat + backH)
 end
@@ -696,37 +727,91 @@ end
 R.RockingChair = function(b, ctx)
 	chair(b, ctx, 43, 50, 58, 54, accent(b, 1, rgb(255, 190, 200)))
 	local wood = woodOf(b, WOOD)
+	-- patins courbes (arc en 5 segments) + accoudoirs
 	for _, side in ipairs({ -1, 1 }) do
-		b.BoxR(CFrame.new(side * 27, 3, 0) * CFrame.Angles(0.12, 0, 0), 4, 3, 74, darken(wood, 0.2), M.Wood)
+		local r, cy = 120, 123
+		local prev = nil
+		for index = 0, 5 do
+			local a = -0.36 + index * 0.144
+			local p = { side * 25, cy - math.cos(a) * r, math.sin(a) * r }
+			if prev then
+				b.Tube(prev[1], prev[2], prev[3], p[1], p[2], p[3], 3.4, darken(wood, 0.2), M.Wood)
+			end
+			prev = p
+		end
+		local seat = ctx.TopY(1, 43)
+		b.Box(side * 27, seat + 16, -2, 4, 3, 36, darken(wood, 0.05), M.Wood)
+		b.Box(side * 27, seat, 14, 3, 16, 3, darken(wood, 0.1), M.Wood)
+	end
+end
+-- (v9.8) Fauteuil gamer "baquet" : piétement étoile à roulettes, vérin chromé,
+-- assise baquet à bourrelets, dossier à ailes, coussins lombaire et de tête,
+-- accoudoirs réglables, surpiqûres contrastées
+local function racingChair(b: Builder, seat: number, main: Color3, dark: Color3, stitch: Color3)
+	for index = 0, 4 do
+		local angle = index / 5 * math.pi * 2 + math.pi / 2
+		local cx, cz = math.cos(angle), math.sin(angle)
+		b.BoxR(CFrame.new(cx * 11, 4, cz * 11) * CFrame.Angles(0, -angle, 0) * CFrame.Angles(0, 0, -0.08), 24, 3, 4.4, dark, M.Metal)
+		b.Cyl(cx * 23, 1.4, cz * 23, 2, 2.4, GREY, M.Metal)
+		b.CylX(cx * 23, 1.6, cz * 23, 3.4, 3, INK, M.Rubber)
+	end
+	b.Cyl(0, 2.4, 0, 9, 4, dark, M.Metal)
+	local lift = b.Cyl(0, 6, 0, 4.4, seat - 18, CHROME_METAL, M.Metal)
+	lift.Reflectance = 0.35
+	b.Cyl(0, 6, 0, 6, 8, INK, M.Plastic)
+	b.Box(0, seat - 13, -2, 26, 3, 26, dark, M.Metal) -- mécanisme
+	-- assise baquet
+	House3DKit.SeatCushion(b, 0, seat - 10, 3, 44, 10, 46, main, stitch)
+	for _, side in ipairs({ -1, 1 }) do
+		b.BoxR(CFrame.new(side * 24, seat - 3.5, 3) * CFrame.Angles(0, 0, side * 0.35), 7, 12, 44, dark, M.Leather)
+	end
+	-- dossier à ailes
+	local backCF = CFrame.new(0, seat + 26, -22) * CFrame.Angles(-0.12, 0, 0)
+	b.BoxR(backCF, 40, 62, 8, main, M.Leather)
+	b.BoxR(backCF * CFrame.new(0, 0, 4.2), 3, 54, 0.8, stitch, M.Leather)
+	for _, side in ipairs({ -1, 1 }) do
+		b.BoxR(backCF * CFrame.new(side * 22, -4, 2) * CFrame.Angles(0, side * 0.45, 0), 8, 50, 10, dark, M.Leather)
+		b.BoxR(backCF * CFrame.new(side * 12, 0, 4.2), 1, 54, 0.8, stitch, M.Leather)
+		b.BoxR(backCF * CFrame.new(side * 14, 26, 0), 8, 5, 9, dark, M.Leather) -- passage de harnais
+	end
+	House3DKit.PillowR(b, backCF * CFrame.new(0, 22, 6), 18, 9, 5, dark, M.Fabric) -- coussin de tête
+	House3DKit.PillowR(b, backCF * CFrame.new(0, -20, 6), 26, 9, 5, dark, M.Fabric) -- coussin lombaire
+	-- accoudoirs réglables
+	for _, side in ipairs({ -1, 1 }) do
+		b.Box(side * 27, seat - 10, -2, 3, 12, 6, dark, M.Metal)
+		b.Box(side * 27, seat + 2, 2, 7, 3, 20, INK, M.Rubber)
 	end
 end
 R.GamingChair = function(b, ctx)
 	local seat = ctx.TopY(1, 37)
 	local main = accent(b, 1, PINK)
 	local dark = darken(accent(b, 2, INK), 0.2)
-	for index = 0, 4 do
-		local angle = index / 5 * math.pi * 2
-		b.BoxR(CFrame.new(math.cos(angle) * 12, 2, math.sin(angle) * 12) * CFrame.Angles(0, -angle, 0), 26, 3, 4, dark, M.Metal)
-		b.Ball(math.cos(angle) * 24, 2, math.sin(angle) * 24, 4, INK, M.Rubber)
-	end
-	b.Cyl(0, 3, 0, 6, seat - 10, GREY, M.Metal)
-	b.Box(0, seat - 8, 0, 54, 8, 50, main, M.Leather)
-	b.Box(0, seat - 8, -22, 50, 60, 8, main, M.Leather)
-	b.Box(0, seat + 10, -18, 20, 40, 1, dark, M.Leather)
-	for _, side in ipairs({ -1, 1 }) do
-		b.Box(side * 26, seat, 2, 4, 14, 30, dark, M.Leather)
-		b.Wedge(side * 16, seat + 52, -22, 10, 12, 8, dark, "Front", M.Leather)
-	end
+	racingChair(b, seat, main, dark, lighten(main, 0.5))
 	b.Top(1, 0, seat, 4, 44, 36)
 	b.Footprint(56, 56, seat + 60)
 end
 R.BarStool = function(b, ctx)
 	local seat = ctx.TopY(1, 74)
 	local color = accent(b, 1, PINK)
-	b.Cyl(0, 0, 0, 34, 3, GREY_DARK, M.Metal)
-	b.Cyl(0, 3, 0, 6, seat - 10, GREY, M.Metal)
-	b.Cyl(0, seat * 0.35, 0, 30, 2, GOLD, M.Metal)
-	b.Cyl(0, seat - 8, 0, 46, 8, color, M.Leather)
+	-- socle lesté (bord caoutchouc), colonne chromée, repose-pieds, galette capitonnée
+	b.Cyl(0, 0, 0, 36, 1.4, INK, M.Rubber)
+	b.Cyl(0, 1.4, 0, 34, 2.4, GREY_DARK, M.Metal).Reflectance = 0.25
+	b.Cyl(0, 3.8, 0, 16, 2, GREY, M.Metal).Reflectance = 0.25
+	b.Cyl(0, 5.8, 0, 6, seat - 16, CHROME_METAL, M.Metal).Reflectance = 0.35
+	b.Cyl(0, seat * 0.35, 0, 8, 3, GREY_DARK, M.Metal)
+	for index = 0, 7 do
+		local a0, a1 = index / 8 * math.pi * 2, (index + 1) / 8 * math.pi * 2
+		b.Tube(math.cos(a0) * 14, seat * 0.35 + 1.5, math.sin(a0) * 14, math.cos(a1) * 14, seat * 0.35 + 1.5, math.sin(a1) * 14, 2.2, GOLD, M.Metal).Reflectance = 0.3
+	end
+	for index = 0, 3 do
+		local a = index / 4 * math.pi * 2
+		b.Tube(0, seat * 0.35 + 1.5, 0, math.cos(a) * 14, seat * 0.35 + 1.5, math.sin(a) * 14, 1.4, GOLD, M.Metal)
+	end
+	b.Cyl(0, seat - 10.2, 0, 30, 2.4, GREY_DARK, M.Metal)
+	b.Cyl(0, seat - 8, 0, 44, 6, color, M.Leather)
+	b.Cyl(0, seat - 8.6, 0, 46, 1.4, darken(color, 0.3), M.Leather) -- passepoil
+	b.Egg(0, seat - 2.4, 0, 44, 4.8, 44, color, M.Leather)
+	b.Ball(0, seat - 0.2, 0, 3, darken(color, 0.25), M.Leather)
 	b.Top(1, 0, seat, 0, 36, 36)
 	b.Footprint(46, 46, seat)
 end
@@ -734,65 +819,109 @@ R.MushroomStool = function(b, ctx)
 	local seat = ctx.TopY(1, 85)
 	local cap = accent(b, 1, rgb(255, 110, 120))
 	local stem = lightOf(b, CREAM)
-	b.Cyl(0, 0, 0, 34, seat * 0.62, stem, M.SmoothPlastic)
-	b.Cyl(0, seat * 0.55, 0, 86, seat * 0.3, cap, M.SmoothPlastic)
-	b.Cyl(0, seat * 0.85 - 1, 0, 70, seat * 0.15 + 1, lighten(cap, 0.08), M.SmoothPlastic)
-	for index = 1, 6 do
-		local angle = index / 6 * math.pi * 2
-		b.Ball(math.cos(angle) * 30, seat * 0.72, math.sin(angle) * 30, 12, WHITE)
+	-- pied renflé, anneau (jupe), lamelles sous le chapeau, chapeau bombé à pois
+	b.Cyl(0, 0, 0, 40, seat * 0.12, darken(stem, 0.06), M.SmoothPlastic)
+	b.Egg(0, seat * 0.14, 0, 42, seat * 0.2, 42, stem, M.SmoothPlastic)
+	b.Cyl(0, seat * 0.1, 0, 32, seat * 0.5, stem, M.SmoothPlastic)
+	b.Cyl(0, seat * 0.42, 0, 38, 3, lighten(stem, 0.3), M.SmoothPlastic)
+	b.Cyl(0, seat * 0.44, 0, 76, seat * 0.12, darken(cap, 0.35), M.SmoothPlastic) -- lamelles
+	b.Cyl(0, seat * 0.56, 0, 86, seat * 0.16, cap, M.SmoothPlastic)
+	b.Egg(0, seat * 0.72, 0, 86, seat * 0.56, 86, cap, M.SmoothPlastic)
+	for index = 1, 7 do
+		local angle = index / 7 * math.pi * 2
+		local r = 30
+		b.EggR(CFrame.new(math.cos(angle) * r, seat * 0.915, math.sin(angle) * r) * CFrame.Angles(math.sin(angle) * 0.75, 0, -math.cos(angle) * 0.75), 13, 3, 11, WHITE, M.SmoothPlastic)
 	end
-	b.Ball(0, seat - 1, 0, 14, WHITE)
+	b.EggR(CFrame.new(0, seat - 0.6, 0), 14, 2, 14, WHITE, M.SmoothPlastic)
 	b.Top(1, 0, seat, 0, 50, 50)
 	b.Footprint(86, 86, seat)
 end
 R.FloorCushion = function(b, ctx)
 	local seat = ctx.TopY(1, 51)
 	local color = accent(b, 1, PINK)
-	b.Cyl(0, 0, 0, 90, seat * 0.8, color, M.Fabric)
-	b.Cyl(0, seat * 0.7, 0, 76, seat * 0.3, lighten(color, 0.12), M.Fabric)
-	b.Ball(0, seat - 2, 0, 10, darken(color, 0.2), M.Fabric)
+	-- pouf rond : flanc, dessus bombé, passepoils, capiton central, poignée
+	b.Cyl(0, 0, 0, 86, seat * 0.72, color, M.Fabric)
+	b.Egg(0, seat * 0.1, 0, 90, seat * 0.26, 90, darken(color, 0.04), M.Fabric)
+	b.Egg(0, seat * 0.72, 0, 86, seat * 0.56, 86, lighten(color, 0.08), M.Fabric)
+	b.Cyl(0, seat * 0.7, 0, 88, 1.6, darken(color, 0.25), M.Fabric)
+	b.Cyl(0, seat * 0.16, 0, 90, 1.6, darken(color, 0.25), M.Fabric)
+	b.Ball(0, seat - 1.6, 0, 7, darken(color, 0.25), M.Fabric)
+	for index = 0, 5 do
+		local a = index / 6 * math.pi * 2
+		b.Tube(0, seat - 2, 0, math.cos(a) * 24, seat - 4.5, math.sin(a) * 24, 1.2, darken(color, 0.12), M.Fabric)
+	end
+	b.Box(0, seat * 0.4, 43.6, 14, 4, 2, darken(color, 0.3), M.Fabric)
 	b.Top(1, 0, seat, 0, 60, 60)
 	b.Footprint(90, 90, seat)
 end
 R.Beanbag = function(b, _ctx)
 	local color = accent(b, 1, LILAC)
-	-- pouf poire : grosse goutte affaissée, creux d'assise, dossier relevé
+	-- pouf poire : grosse goutte affaissée, creux d'assise, dossier relevé,
+	-- coutures en relief, poignée sur le dessus
 	b.Egg(0, 24, 2, 92, 48, 86, color, M.Fabric)
 	b.EggR(CFrame.new(0, 50, -18) * CFrame.Angles(-0.35, 0, 0), 70, 50, 40, darken(color, 0.05), M.Fabric)
 	b.Egg(0, 44, 12, 56, 12, 46, lighten(color, 0.12), M.Fabric)
 	for _, side in ipairs({ -1, 1 }) do
 		b.Egg(side * 32, 30, 8, 26, 30, 50, darken(color, 0.03), M.Fabric)
+		b.EggR(CFrame.new(side * 22, 34, 8) * CFrame.Angles(0, 0, side * 0.6), 2, 40, 58, darken(color, 0.22), M.Fabric)
 	end
+	b.EggR(CFrame.new(0, 26, 2), 93, 3, 87, darken(color, 0.2), M.Fabric)
+	b.Egg(0, 5, 2, 80, 10, 74, darken(color, 0.1), M.Fabric)
+	b.Tube(-6, 73, -30, 6, 73, -30, 3, darken(color, 0.3), M.Fabric)
 	b.Ball(26, 20, 40, 5, lighten(color, 0.4), M.Fabric)
 	b.Top(1, 0, 50, 10, 50, 40)
 	b.Seat(0, 48, 10, 50, 40)
 	b.Footprint(92, 86, 76)
 end
+-- (v9.8) Canapé : pieds fuselés, socle rembourré au bord roulé, galettes
+-- d'assise passepoilées, coussins de dossier moelleux inclinés, accoudoirs
+-- roulés à plastron, coussins déco
 local function sofa(b: Builder, ctx: Ctx, seatDefault: number, width: number, cushions: number)
 	local seat = ctx.TopY(1, seatDefault)
 	local main = accent(b, 1, PINK)
 	local depth = 56
 	local wood = woodOf(b, WOOD_DARK)
+	local frame = darken(main, 0.08)
+	local pipe = darken(main, 0.28)
 	for _, sx in ipairs({ -1, 1 }) do
 		for _, sz in ipairs({ -1, 1 }) do
-			b.Cyl(sx * (width / 2 - 8), 0, sz * (depth / 2 - 8), 6, 7, wood, M.Wood)
+			House3DKit.Leg(b, sx * (width / 2 - 8), 0, sz * (depth / 2 - 8), 5.6, 7.4, wood, M.Wood, BRASS)
 		end
 	end
-	b.Box(0, 7, 0, width, seat - 16, depth, darken(main, 0.08), M.Fabric)
+	-- socle (sous les galettes) au bord avant roulé
+	b.Box(0, 7, -2, width - 4, seat - 17, depth - 8, frame, M.Fabric)
+	b.CylX(0, 7 + (seat - 17) / 2, depth / 2 - 6, seat - 17, width - 4, frame, M.Fabric)
+	-- galettes d'assise
 	local cw = (width - 20) / cushions
 	for index = 1, cushions do
 		local x = -width / 2 + 10 + (index - 0.5) * cw
-		b.Box(x, seat - 9, 4, cw - 1.5, 9, depth - 12, main, M.Fabric)
-		b.Box(x, seat, -depth / 2 + 7, cw - 2, 30, 12, main, M.Fabric)
+		House3DKit.SeatCushion(b, x, seat - 10, 3, cw - 1, 10, depth - 12, vary(main, index, 0.03), pipe)
 	end
-	b.Box(0, 7, -depth / 2 + 3, width, seat + 26, 6, darken(main, 0.12), M.Fabric)
+	-- dossier (structure) + boudin sur le dessus
+	b.Box(0, 7, -depth / 2 + 4, width - 2, seat + 19, 8, darken(main, 0.12), M.Fabric)
+	b.CylX(0, seat + 26, -depth / 2 + 4, 8, width - 2, darken(main, 0.1), M.Fabric)
+	-- coussins de dossier moelleux, inclinés
+	for index = 1, cushions do
+		local x = -width / 2 + 10 + (index - 0.5) * cw
+		House3DKit.PillowR(b, CFrame.new(x, seat + 12, -depth / 2 + 13) * CFrame.Angles(-0.2, 0, 0), cw - 2, 27, 11, vary(main, index + 5, 0.03), M.Fabric)
+	end
+	-- accoudoirs roulés à plastron passepoilé
 	for _, side in ipairs({ -1, 1 }) do
-		b.Box(side * (width / 2 - 5), 7, 0, 10, seat, depth, darken(main, 0.04), M.Fabric)
-		b.CylZ(side * (width / 2 - 5), seat + 7, 0, 12, depth, lighten(main, 0.06), M.Fabric)
+		local ax = side * (width / 2 - 5)
+		b.Box(ax, 7, 0, 10, seat - 1, depth - 2, darken(main, 0.04), M.Fabric)
+		b.CylZ(ax, seat + 5, 0, 12, depth - 2, lighten(main, 0.06), M.Fabric)
+		b.Box(ax, 8, depth / 2 - 1 + House3DKit.Gap(b, 0.8) / 2, 9, seat - 4, House3DKit.Gap(b, 0.8), lighten(main, 0.02), M.Fabric)
+		b.CylZ(ax, seat + 5, depth / 2 - 1 + House3DKit.Gap(b, 0.8) / 2, 13, House3DKit.Gap(b, 0.8), pipe, M.Fabric)
 	end
-	-- petit coussin
+	-- coussins déco (un de chaque côté, passepoilés)
 	local pillow = accent(b, 2, BUTTER)
-	b.BoxR(CFrame.new(-width / 2 + 22, seat + 8, -depth / 2 + 16) * CFrame.Angles(-0.3, 0.2, 0.1), 16, 16, 5, pillow, M.Fabric)
+	for _, side in ipairs({ -1, 1 }) do
+		if cushions > 1 or side < 0 then
+			local cf = CFrame.new(side * (width / 2 - 20), seat + 9, -depth / 2 + 19) * CFrame.Angles(-0.35, side * -0.25, side * -0.12)
+			House3DKit.PillowR(b, cf, 17, 17, 6, side < 0 and pillow or lighten(pillow, 0.35), M.Fabric)
+			b.Ball(side * (width / 2 - 20), seat + 9.4, -depth / 2 + 22.2, 2, darken(pillow, 0.3), M.Fabric)
+		end
+	end
 	b.Top(1, 0, seat, 4, width - 26, depth - 16)
 	b.Footprint(width, depth, seat + 30)
 end
@@ -806,11 +935,16 @@ R.EggChair = function(b, ctx)
 	local seat = ctx.TopY(1, 39)
 	local shell = lightOf(b, WHITE)
 	local pad = accent(b, 1, PINK)
-	b.Cyl(0, 0, 0, 44, 4, GREY_DARK, M.Metal)
-	b.Cyl(0, 4, 0, 6, seat - 14, GREY, M.Metal)
-	b.Ball(0, seat + 18, -6, 80, shell, M.SmoothPlastic)
+	-- pied étoile chromé, coquille brillante à liseré, coussin moelleux intérieur
+	b.Cyl(0, 0, 0, 46, 1.4, INK, M.Rubber)
+	b.Cyl(0, 1.4, 0, 44, 3, GREY_DARK, M.Metal).Reflectance = 0.3
+	b.Cyl(0, 4.4, 0, 6, seat - 14, CHROME_METAL, M.Metal).Reflectance = 0.35
+	local shellPart = b.Ball(0, seat + 18, -6, 80, shell, M.SmoothPlastic)
+	shellPart.Reflectance = 0.08
+	b.EggR(CFrame.new(0, seat + 18, 12) * CFrame.Angles(0.2, 0, 0), 76, 70, 18, darken(shell, 0.12), M.SmoothPlastic)
 	b.Ball(0, seat + 16, 10, 62, pad, M.Fabric)
-	b.Box(0, seat - 6, 12, 50, 6, 30, pad, M.Fabric)
+	House3DKit.SeatCushion(b, 0, seat - 6, 12, 50, 6, 30, pad, darken(pad, 0.25))
+	House3DKit.PillowR(b, CFrame.new(0, seat + 22, 14) * CFrame.Angles(-0.2, 0, 0), 30, 18, 7, lighten(pad, 0.2), M.Fabric)
 	b.Top(1, 0, seat, 14, 40, 26)
 	b.Footprint(80, 80, seat + 58)
 end
@@ -818,14 +952,29 @@ R.GardenBench = function(b, ctx)
 	local seat = ctx.TopY(1, 41)
 	local wood = woodOf(b, WOOD)
 	local metal = b.Map(rgb(90, 90, 110))
+	-- flancs en fonte (pied avant, montant arrière incliné, accoudoir à volute)
 	for _, side in ipairs({ -1, 1 }) do
-		b.Box(side * 44, 0, 0, 4, seat + 12, 36, metal, M.Metal)
+		local x = side * 44
+		b.Box(x, 0, 14, 4, seat - 3, 4, metal, M.Metal)
+		b.BoxR(CFrame.new(x, (seat + 34) / 2, -12) * CFrame.Angles(-0.15, 0, 0), 4, seat + 34, 4, metal, M.Metal)
+		b.Box(x, seat - 6, 0, 4, 3, 34, metal, M.Metal)
+		b.Box(x, seat + 12, 2, 4.6, 3, 26, metal, M.Metal)
+		b.Tube(x, seat - 3, 14, x, seat + 12, 14, 3, metal, M.Metal)
+		b.CylX(x, seat + 13.5, 15, 6, 5, metal, M.Metal)
+		b.Box(x, 0, 14, 6, 1.6, 6, darken(metal, 0.3), M.Metal)
+		b.Box(x, 0, -17, 6, 1.6, 6, darken(metal, 0.3), M.Metal)
 	end
 	for index = 0, 3 do
-		b.Box(0, seat - 3, -14 + index * 9.5, 88, 3, 8, wood, M.WoodPlanks)
+		b.Box(0, seat - 3, -14 + index * 9.5, 88, 3, 8, vary(wood, index, 0.08), M.WoodPlanks)
 	end
 	for index = 0, 2 do
-		b.BoxR(CFrame.new(0, seat + 8 + index * 9, -19 - index * 1.2) * CFrame.Angles(-0.15, 0, 0), 88, 7, 3, wood, M.WoodPlanks)
+		b.BoxR(CFrame.new(0, seat + 8 + index * 9, -19 - index * 1.2) * CFrame.Angles(-0.15, 0, 0), 88, 7, 3, vary(wood, index + 7, 0.08), M.WoodPlanks)
+	end
+	-- vis de fixation des lattes
+	for index = 0, 3 do
+		for _, side in ipairs({ -1, 1 }) do
+			b.Cyl(side * 40, seat - 0.2, -14 + index * 9.5, 1.2, 0.6, GREY_DARK, M.Metal)
+		end
 	end
 	b.Top(1, 0, seat, 0, 80, 30)
 	b.Footprint(92, 40, seat + 34)
@@ -833,29 +982,75 @@ end
 
 -- LITS ---------------------------------------------------------------------
 
+-- (v9.8) Oreiller posé à plat, relevé contre la tête de lit (x = vers le pied)
+local function bedPillow(b: Builder, x: number, y: number, z: number, lenX: number, widthZ: number, thick: number, color: Color3, lift: number)
+	House3DKit.PillowR(b, CFrame.new(x, y, z) * CFrame.Angles(0, 0, -lift) * CFrame.Angles(math.pi / 2, 0, 0), lenX, widthZ, thick, color, M.Fabric)
+end
+
+-- (v9.8) Lit : pieds tournés, cadre, matelas aux bords roulés passepoilé,
+-- tête de lit capitonnée entre deux montants à pommeaux, pied de lit,
+-- couette qui retombe (bords arrondis, ourlet, piqûres), revers du drap,
+-- plaid au pied, oreillers moelleux + coussin déco
 local function bed(b: Builder, ctx: Ctx, topDefault: number, width: number, depth: number)
 	local top = ctx.TopY(1, topDefault)
 	local wood = woodOf(b, WOOD_LIGHT)
 	local blanket = accent(b, 1, PINK)
 	local sheet = lightOf(b, WHITE)
 	local frameTop = top - 12
-	legs4(b, width - 2, depth - 2, frameTop, 6, darken(wood, 0.1), M.Wood)
-	b.Box(0, frameTop * 0.45, 0, width, frameTop * 0.55, depth, wood, M.Wood)
-	b.Box(0, frameTop, 0, width - 4, 12, depth - 4, sheet, M.Fabric)
-	-- tête de lit (gauche) et pied (droite)
-	b.Box(-width / 2 + 3, 0, 0, 6, top + 28, depth, wood, M.Wood)
-	b.CylZ(-width / 2 + 3, top + 28, 0, 10, depth, lighten(wood, 0.1), M.Wood)
-	b.Box(width / 2 - 3, 0, 0, 6, top + 8, depth, wood, M.Wood)
-	-- couverture (retombe sur les côtés) + revers
-	b.Box(width * 0.12, frameTop + 2, 0, width * 0.72, 11, depth, blanket, M.Fabric)
-	b.Box(width * 0.12, frameTop - 8, depth / 2 + 0.5, width * 0.72, 12, 1, darken(blanket, 0.05), M.Fabric)
-	b.Box(-width * 0.2, frameTop + 2.4, 0, 8, 11, depth + 0.2, lighten(blanket, 0.4), M.Fabric)
-	-- oreillers
+	local g = House3DKit.Gap(b, 0.8)
+	for _, sx in ipairs({ -1, 1 }) do
+		for _, sz in ipairs({ -1, 1 }) do
+			House3DKit.Leg(b, sx * (width / 2 - 5), 0, sz * (depth / 2 - 4), 5.6, frameTop * 0.45 + 0.5, darken(wood, 0.1), M.Wood, darken(wood, 0.45))
+		end
+	end
+	b.Box(0, frameTop * 0.45, 0, width - 8, frameTop * 0.55, depth, wood, M.Wood)
+	House3DKit.SeatCushion(b, 1, frameTop, 0, width - 14, 12, depth - 4, sheet, darken(sheet, 0.12))
+	-- tête de lit (gauche) : montants, panneau, capiton, boudin
+	local hx = -width / 2 + 3
+	local headColor = lighten(blanket, 0.25)
+	for _, sz in ipairs({ -1, 1 }) do
+		b.Box(hx, 0, sz * (depth / 2 - 3), 6, top + 27, 6, darken(wood, 0.05), M.Wood)
+		local finial = b.Ball(hx, top + 29, sz * (depth / 2 - 3), 6, GOLD, M.Metal)
+		finial.Reflectance = 0.25
+	end
+	b.Box(hx, frameTop * 0.45, 0, 5, top + 24 - frameTop * 0.45, depth - 12, wood, M.Wood)
+	House3DKit.PillowR(b, CFrame.new(hx + 4, top + 12, 0) * CFrame.Angles(0, math.pi / 2, 0), depth - 16, 22, 4, headColor, M.Fabric)
+	for _, bz in ipairs({ -0.25, 0, 0.25 }) do
+		for _, by in ipairs({ top + 7, top + 17 }) do
+			b.Ball(hx + 6.4, by, bz * (depth - 16), 1.8, darken(headColor, 0.25), M.Fabric)
+		end
+	end
+	b.CylZ(hx, top + 26, 0, 7, depth - 6, lighten(wood, 0.1), M.Wood)
+	-- pied de lit (droite)
+	b.Box(width / 2 - 3, 0, 0, 6, top + 6, depth, wood, M.Wood)
+	b.CylZ(width / 2 - 3, top + 6, 0, 7, depth + 1, lighten(wood, 0.1), M.Wood)
+	-- couette : bloc qui enveloppe le matelas, bords arrondis, ourlet, piqûres
+	local x0, x1 = -width * 0.26, width / 2 - 7
+	local len = x1 - x0
+	local xc = (x0 + x1) / 2
+	b.Box(xc, frameTop - 5, 0, len, top + 1.6 - (frameTop - 5), depth + 2 * g, blanket, M.Fabric)
+	for _, sz in ipairs({ -1, 1 }) do
+		b.CylX(xc, top + 0.2, sz * (depth / 2 + g - 1.2), 2.8, len, blanket, M.Fabric)
+		b.Box(xc, frameTop - 4.4, sz * (depth / 2 + g), len - 0.4, 2, g, darken(blanket, 0.2), M.Fabric)
+	end
+	for _, qx in ipairs({ 0.3, 0.62 }) do
+		b.Box(x0 + len * qx, top + 1.6, 0, 1, g, depth - 4, lighten(blanket, 0.25), M.Fabric)
+	end
+	-- revers du drap (rouleau blanc en tête de couette)
+	b.CylZ(x0, top + 1, 0, 5.2, depth + 2 * g + 1, sheet, M.Fabric)
+	-- plaid tricoté au pied
+	local throw = accent(b, 2, lighten(blanket, 0.45))
+	b.Box(x1 - 9, frameTop - 3, 0, 12, top + 1.6 + g - (frameTop - 3), depth + 4 * g, throw, M.Fabric)
+	for _, tx in ipairs({ -4, 0, 4 }) do
+		b.Box(x1 - 9 + tx, top + 1.6 + g, 0, 1, g, depth + 4 * g, darken(throw, 0.12), M.Fabric)
+	end
+	-- oreillers + coussin déco
 	local n = depth > 60 and 2 or 1
 	for index = 1, n do
 		local z = n == 1 and 0 or (index == 1 and -depth * 0.22 or depth * 0.22)
-		b.BoxR(CFrame.new(-width / 2 + 16, top + 4, z) * CFrame.Angles(0, 0, -0.35), 18, 7, depth / n - 8, sheet, M.Fabric)
+		bedPillow(b, -width / 2 + 16, top + 4.5, z, 18, depth / n - 8, 7, sheet, 0.4)
 	end
+	House3DKit.PillowR(b, CFrame.new(-width / 2 + 22, top + 7, 0) * CFrame.Angles(0, math.pi / 2, 0) * CFrame.Angles(-0.35, 0, 0), 14, 12, 4, accent(b, 2, BUTTER), M.Fabric)
 	b.Top(1, 0, top + 1, 0, width - 20, depth - 10)
 	b.Footprint(width, depth, top + 28)
 end
@@ -866,34 +1061,66 @@ R.CanopyBed = function(b, ctx)
 	bed(b, ctx, 36, 70, 60)
 	local wood = woodOf(b, WOOD_LIGHT)
 	local drape = accent(b, 2, PINK_SOFT)
+	-- colonnes tournées à bagues et pommeaux dorés
 	for _, sx in ipairs({ -1, 1 }) do
 		for _, sz in ipairs({ -1, 1 }) do
-			b.Cyl(sx * 34, 0, sz * 29, 4, 98, wood, M.Wood)
-			b.Ball(sx * 34, 99, sz * 29, 6, GOLD, M.Metal)
+			local px, pz = sx * 34, sz * 29
+			b.Box(px, 0, pz, 6, 8, 6, darken(wood, 0.08), M.Wood)
+			b.Cyl(px, 8, pz, 4, 86, wood, M.Wood)
+			for _, ry in ipairs({ 30, 60 }) do
+				b.Cyl(px, ry, pz, 5.4, 2, lighten(wood, 0.12), M.Wood)
+			end
+			local knobPart = b.Ball(px, 99, pz, 6, GOLD, M.Metal)
+			knobPart.Reflectance = 0.3
 		end
 	end
+	-- ciel de lit : cadre + tissu + lambrequins festonnés
 	b.Box(0, 94, 0, 72, 3, 62, drape, M.Fabric)
 	for _, sz in ipairs({ -1, 1 }) do
-		b.Box(0, 82, sz * 30, 72, 12, 1, drape, M.Fabric)
+		b.Box(0, 83, sz * 30, 72, 11, 1.2, drape, M.Fabric)
+		for index = 0, 5 do
+			b.EggR(CFrame.new(-30 + index * 12, 83, sz * 30), 12, 6, 1.2, drape, M.Fabric)
+		end
 	end
 	for _, sx in ipairs({ -1, 1 }) do
-		b.Box(sx * 34, 50, 29, 6, 44, 2, lighten(drape, 0.2), M.Fabric)
+		b.Box(sx * 35.4, 85, 0, 1.2, 9, 60, drape, M.Fabric)
+	end
+	-- rideaux plissés noués aux colonnes (devant et derrière)
+	for _, sx in ipairs({ -1, 1 }) do
+		for _, sz in ipairs({ -1, 1 }) do
+			for fold = 0, 2 do
+				local fx = sx * (34 - 4 - fold * 3.2)
+				b.Tube(fx, 94, sz * 30.6, sx * 32, 60, sz * 30.6, 3.2, lighten(drape, 0.08 * fold), M.Fabric)
+				b.Tube(sx * 32, 60, sz * 30.6, fx + sx * 1.5, 22, sz * 30.6, 3.4, lighten(drape, 0.08 * fold), M.Fabric)
+			end
+			b.Ball(sx * 32, 60, sz * 31.4, 4, accent(b, 1, PINK), M.Fabric)
+		end
 	end
 end
 R.CloudBed = function(b, ctx)
 	local top = ctx.TopY(1, 45)
 	local cloud = lightOf(b, WHITE)
 	local blanket = accent(b, 1, SKY)
+	-- nuage : grosses boules variées tout autour, matelas passepoilé, couette
+	-- matelassée semée d'étoiles, oreillers-nuages
 	for index = 0, 6 do
 		local x = -42 + index * 14
 		b.Ball(x, 16, 0, 34 + (index % 2) * 6, index % 2 == 0 and cloud or rgb(236, 240, 255))
+		b.Ball(x + 7, 12 + (index % 3) * 2, 20, 18 + (index % 2) * 4, vary(cloud, index, 0.04))
+		b.Ball(x - 5, 12 + (index % 2) * 3, -20, 18, vary(rgb(236, 240, 255), index, 0.03))
 	end
 	b.Box(0, 10, 0, 84, top - 22, 56, cloud, M.Fabric)
-	b.Box(0, top - 12, 0, 80, 11, 54, WHITE, M.Fabric)
-	b.Box(8, top - 10, 0, 60, 11, 55, blanket, M.Fabric)
+	House3DKit.SeatCushion(b, 0, top - 12, 0, 80, 11, 54, WHITE, rgb(210, 226, 255))
+	b.Box(8, top - 10, 0, 60, 11, 55 + 2 * House3DKit.Gap(b, 0.8), blanket, M.Fabric)
+	b.CylZ(-22, top, 0, 5, 56 + 2 * House3DKit.Gap(b, 0.8), WHITE, M.Fabric)
+	for index = 0, 4 do
+		b.EggR(CFrame.new(-12 + index * 10, top + 1, (index % 2 == 0) and -12 or 12), 5, 1.2, 5, BUTTER, M.SmoothPlastic)
+	end
 	b.Ball(-40, top + 6, 0, 28, cloud)
 	b.Ball(-30, top + 14, 0, 22, cloud)
 	b.Ball(-32, top + 3, 0, 16, WHITE, M.Fabric)
+	b.Ball(-44, top + 10, 14, 18, vary(cloud, 3, 0.04))
+	b.Ball(-44, top + 10, -14, 18, vary(cloud, 4, 0.04))
 	b.Top(1, 4, top, 0, 70, 50)
 	b.Footprint(96, 60, top + 20)
 end
@@ -902,24 +1129,41 @@ R.LoftBed = function(b, ctx)
 	local desk = ctx.TopY(2, 27)
 	local wood = woodOf(b, WOOD)
 	local blanket = accent(b, 1, LILAC)
+	local dark = darken(wood, 0.15)
+	-- montants, longerons, garde-corps à barreaux
 	for _, sx in ipairs({ -1, 1 }) do
 		for _, sz in ipairs({ -1, 1 }) do
 			b.Box(sx * 36, 0, sz * 22, 5, top + 14, 5, wood, M.Wood)
+			b.Ball(sx * 36, top + 15, sz * 22, 5.4, lighten(wood, 0.1), M.Wood)
 		end
 	end
 	b.Box(0, top - 12, 0, 76, 6, 48, wood, M.Wood)
-	b.Box(0, top - 6, 0, 72, 6, 44, WHITE, M.Fabric)
-	b.Box(6, top - 4, 0, 56, 5, 45, blanket, M.Fabric)
-	b.Box(-26, top - 1, 0, 14, 5, 30, WHITE, M.Fabric)
+	House3DKit.SeatCushion(b, 0, top - 6, 0, 70, 6, 44, WHITE, rgb(220, 214, 236))
+	b.Box(6, top - 4, 0, 56, 5, 45 + 2 * House3DKit.Gap(b, 0.8), blanket, M.Fabric)
+	b.CylZ(-22, top + 0.6, 0, 3.4, 45 + 2 * House3DKit.Gap(b, 0.8), WHITE, M.Fabric)
+	bedPillow(b, -26, top + 1.5, 0, 14, 30, 5, WHITE, 0.35)
+	for _, sz in ipairs({ -1, 1 }) do
+		b.Box(0, top + 9, sz * 22, 72, 3, 2.4, wood, M.Wood)
+		for index = -3, 3 do
+			b.Box(index * 10, top - 6, sz * 22, 1.8, 15, 1.8, dark, M.Wood)
+		end
+	end
 	b.Box(0, top + 4, 22, 76, 4, 2, wood, M.Wood)
-	-- bureau dessous
-	b.Box(-14, desk - 4, 0, 44, 4, 40, lighten(wood, 0.15), M.Wood)
-	-- échelle
+	-- guirlande lumineuse sur le garde-corps avant
+	for index = 0, 6 do
+		local bulb = b.Ball(-30 + index * 10, top + 8.4 - (index % 2) * 1.2, 23.6, 2.2, ({ rgb(255, 200, 120), rgb(255, 170, 200), rgb(190, 220, 255) })[index % 3 + 1])
+		b.Neon(bulb)
+	end
+	-- bureau dessous (plateau biseauté + petit tiroir)
+	House3DKit.Bevel(b, -14, desk - 4, 0, 44, 4, 40, 1.2, lighten(wood, 0.15), M.Wood)
+	b.Box(-14, desk - 9, 18, 20, 5, 3, lighten(wood, 0.05), M.Wood)
+	House3DKit.Handle(b, -14, desk - 6.5, 19.5, 7, false)
+	-- échelle (montants + barreaux ronds)
 	for _, x in ipairs({ 30, 42 }) do
-		b.Box(x, 0, 26, 3, top, 3, darken(wood, 0.15), M.Wood)
+		b.Box(x, 0, 26, 3, top, 3, dark, M.Wood)
 	end
 	for index = 1, 5 do
-		b.Box(36, index * top / 6, 26, 12, 2.5, 2.5, darken(wood, 0.15), M.Wood)
+		b.CylX(36, index * top / 6, 26, 2.6, 12, dark, M.Wood)
 	end
 	b.Top(1, 0, top, 0, 60, 40)
 	b.Top(2, -14, desk, 0, 40, 36)
@@ -927,8 +1171,18 @@ R.LoftBed = function(b, ctx)
 end
 R.PetBed = function(b, _ctx)
 	local color = accent(b, 1, PINK)
-	b.Cyl(0, 0, 0, 90, 22, color, M.Fabric)
-	b.Cyl(0, 16, 0, 70, 7, lighten(color, 0.4), M.Fabric)
+	-- panier rond : fond, boudin tout autour, coussin moelleux, empreinte de patte
+	b.Cyl(0, 0, 0, 86, 6, darken(color, 0.15), M.Fabric)
+	for index = 0, 11 do
+		local a = index / 12 * math.pi * 2
+		b.EggR(CFrame.new(math.cos(a) * 34, 12, math.sin(a) * 34) * CFrame.Angles(0, -a, 0), 16, 20, 22, vary(color, index, 0.04), M.Fabric)
+	end
+	b.Egg(0, 10, 0, 70, 12, 70, lighten(color, 0.4), M.Fabric)
+	local paw = lighten(color, 0.15)
+	b.EggR(CFrame.new(0, 15.6, 4), 12, 1.4, 10, paw, M.Fabric)
+	for index = -1, 1 do
+		b.EggR(CFrame.new(index * 7, 15.4, -5 + math.abs(index) * 2), 4.6, 1.4, 5, paw, M.Fabric)
+	end
 	b.Top(1, 0, 22, 0, 60, 60)
 	b.Footprint(90, 90, 22)
 end

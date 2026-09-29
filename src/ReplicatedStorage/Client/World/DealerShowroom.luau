@@ -549,7 +549,7 @@ function DealerShowroom.FullJobs(shop: any, parent: Instance, ctx: any): { () ->
 		if npcMod and type(npcMod.Build) == "function" then
 			local ok, npc = pcall(npcMod.Build, "salesperson", { Seed = 3 })
 			if ok and typeof(npc) == "Instance" and npc:IsA("Model") then
-				local cf = desk * CFrame.new(0.4, 0, 2.3) * CFrame.Angles(0, math.pi, 0)
+				local cf = desk * CFrame.new(0.4, 0, 2.3) -- (regarde -Z : vers les clients)
 				npc:PivotTo(cf)
 				npc.Parent = parent
 				table.insert(sellers, { Model = npc, CF = cf, Seed = 3 })

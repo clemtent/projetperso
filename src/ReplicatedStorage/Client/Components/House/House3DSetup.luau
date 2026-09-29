@@ -340,10 +340,10 @@ local function desk(b: Builder, ctx: any)
 				local inner = CFrame.new(slot.X + side * (slot.W / 2 + 1.4), y, monitorZ)
 				local wingCF = inner * CFrame.Angles(0, a, 0) * CFrame.new(side * wing / 2, 0, 0)
 				b.BoxR(wingCF * CFrame.new(0, slot.H / 2, 0), wing + 1.4, slot.H + 2.8, 1.6, frame, M.SmoothPlastic)
-				local w = b.Part("Part", wingCF * CFrame.new(0, slot.H / 2, 1.05) * CFrame.Angles(0, math.pi, 0), Vector3.new(wing, slot.H, 0.5), rgb(60, 110, 170), M.Neon, "ScreenWing")
+				-- (v9.8 : ailes en verre sombre, plus des dalles Neon cyan éblouissantes)
+				local w = b.Part("Part", wingCF * CFrame.new(0, slot.H / 2, 1.05) * CFrame.Angles(0, math.pi, 0), Vector3.new(wing, slot.H, 0.5), rgb(18, 22, 34), M.SmoothPlastic, "ScreenWing")
 				w.CastShadow = false
 				w:SetAttribute("ScreenIndex", index)
-				table.insert(b.Glows, w)
 			end
 		else
 			monitor(b, cf, slot.W, slot.H, kind, index, frame, not slot.Top, y - T - 1.4)

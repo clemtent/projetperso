@@ -743,17 +743,11 @@ local function setColor(player: Player, data: any, carId: any, colorId: any): (b
 	data.Cars.Colors[carId] = colorId
 	sendState(player)
 	publish(player)
-	-- voiture sortie et libre : repeinte tout de suite (on la refait au même endroit)
+	-- voiture sortie : repeinte tout de suite, même au volant (v9.8 : on ne
+	-- change que la couleur des pièces "Paint", rien ne bouge)
 	local car = cars[player]
-	if car and car.CarId == carId and not car.Driving then
-		local cf = car.Root.CFrame
-		local paint = Config.CarColorsById[colorId].Color
-		for _, d in ipairs(car.Model:GetDescendants()) do
-			if d:IsA("BasePart") and d:GetAttribute("Paint") then
-				d.Color = paint
-			end
-		end
-		car.Root.CFrame = cf
+	if car and car.CarId == carId then
+		CarModels.Repaint(car.Model, carId, colorId)
 	end
 	local paint = Config.CarColorsById[colorId]
 	return true, T(player, "🎨 %s applied", T(player, paint.Name))

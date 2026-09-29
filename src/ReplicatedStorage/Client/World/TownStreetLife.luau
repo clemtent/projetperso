@@ -679,7 +679,7 @@ local function buildTerrace(m: Model, F: CFrame, seed: number)
 		column(m, "TableLeg", F, x, 0, 0.1, 2.62, 0.16, GRAPHITE, M.Metal)
 		column(m, "TableTop", F, x, 0, 2.6, 2.72, 1.5, rgb(236, 232, 226), M.Marble, true)
 		for _, sz in ipairs({ -1, 1 }) do
-			local c = F * CFrame.new(x, 0, sz * 1.25) * CFrame.Angles(0, sz > 0 and math.pi or 0, 0)
+			local c = F * CFrame.new(x, 0, sz * 1.25) * CFrame.Angles(0, sz < 0 and math.pi or 0, 0)
 			box(m, "ChairSeat", c, -0.5, 0.5, 1.55, 1.7, -0.5, 0.5, rgb(160, 110, 70), M.Wood)
 			box(m, "ChairBack", c, -0.5, 0.5, 1.66, 2.9, 0.42, 0.55, rgb(160, 110, 70), M.Wood)
 			for _, lx in ipairs({ -0.42, 0.42 }) do

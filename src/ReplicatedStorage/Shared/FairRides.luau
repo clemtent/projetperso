@@ -387,7 +387,7 @@ FairRides.Stalls = {
 
 -- Coin gourmand près de l'arrivée (repère : WorldLayout.FoodCornerCFrame)
 FairRides.CornerStalls = {
-	{ Id = "CornerTruck", Pos = Vector3.new(-6, 0, 10), Yaw = 180, Foods = { "Taco", "PizzaSlice", "HotDog" }, Style = "Truck" },
+	{ Id = "CornerTruck", Pos = Vector3.new(-6, 0, 10), Yaw = 0, Foods = { "Taco", "PizzaSlice", "HotDog" }, Style = "Truck" },
 	{ Id = "CornerCrepe", Pos = Vector3.new(10, 0, -4), Yaw = 90, Foods = { "Crepe", "Churros" }, Style = "Churros" },
 	{ Id = "CornerIce", Pos = Vector3.new(-10, 0, -8), Yaw = -90, Foods = { "IceCream", "Milkshake", "Donut" }, Style = "IceCream" },
 }

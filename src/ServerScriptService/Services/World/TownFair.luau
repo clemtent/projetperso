@@ -376,7 +376,8 @@ local function buildBumper(parent: Instance, ride: Ride)
 		local wall = part(model, "BumperRail", Vector3.new(s[3], 1.9, s[4]), base * CFrame.new(s[1], 0.95, s[2]), rubber, M.Rubber, "solid")
 		wall.CustomPhysicalProperties = PhysicalProperties.new(1, 0.2, 0.7, 1, 100)
 	end
-	ride.Cars = {}
+	local cars: { any } = {}
+	ride.Cars = cars
 	for i = 1, FairRides.BUMPER_CARS do
 		local home = carHome(ride, i)
 		local body = part(model, "BumperBody", Vector3.new(3.4, 1.1, 4.6), home * CFrame.new(0, 0.6, 0), BUMPER_COLORS[(i - 1) % #BUMPER_COLORS + 1], M.SmoothPlastic, "solid")
@@ -434,7 +435,7 @@ local function buildBumper(parent: Instance, ride: Ride)
 		align.CFrame = body.CFrame.Rotation
 		align.Parent = body
 		local car = { Body = body, Seat = seat, Index = i, Busy = false }
-		table.insert(ride.Cars, car)
+		table.insert(cars, car)
 		ride.Seats[i] = seat :: any
 		watchSeat(ride, seat :: any, i)
 	end

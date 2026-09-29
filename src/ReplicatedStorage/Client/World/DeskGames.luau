@@ -191,6 +191,28 @@ local function segment(f: GuiObject, x0: number, y0: number, x1: number, y1: num
 	f.Rotation = math.deg(math.atan2(dy, dx))
 end
 
+-- Demi-plan : grand cadre tourné dont un bord suit la droite (x1,y1)-(x2,y2),
+-- du côté du point (tx, ty)
+local BIG = 4000
+local function halfPlane(f: GuiObject, x1: number, y1: number, x2: number, y2: number, tx: number, ty: number)
+	local dx, dy = x2 - x1, y2 - y1
+	local length = math.sqrt(dx * dx + dy * dy)
+	if length < 1e-3 then
+		f.Visible = false
+		return
+	end
+	f.Visible = true
+	local ux, uy = dx / length, dy / length
+	local nx, ny = -uy, ux
+	if (tx - x1) * nx + (ty - y1) * ny < 0 then
+		nx, ny = -nx, -ny
+	end
+	f.AnchorPoint = Vector2.new(0.5, 0.5)
+	f.Position = UDim2.fromOffset((x1 + x2) / 2 + nx * BIG / 2, (y1 + y2) / 2 + ny * BIG / 2)
+	f.Size = UDim2.fromOffset(length + BIG * 2, BIG)
+	f.Rotation = math.deg(math.atan2(dy, dx))
+end
+
 local function formatInt(value: number): string
 	local digits = tostring(math.floor(value))
 	local out = digits:reverse():gsub("(%d%d%d)", "%1 "):reverse()
@@ -261,36 +283,32 @@ local function buildView(gui: SurfaceGui, canvas: Vector2): any
 			table.insert(v.Skyline, { Frame = building, X = x, Layer = layer })
 		end
 	end
-	-- sol (talus + ballast en bandes) : trapèze des 3 voies + bas-côtés
-	local ground = frame(root, "Ground", rgb(122, 150, 96), 6)
-	place(ground, 0, HY, W, H - HY)
-	grad(ground, rgb(150, 176, 110), rgb(96, 128, 76), 90)
-	v.Bands = {}
-	local BANDS = 18
-	for index = 1, BANDS do
-		local band = frame(root, "Ballast", rgb(150, 134, 128), 7)
-		local z0 = FAR * ((index - 1) / BANDS) ^ 2 - 2.2
-		local z1 = FAR * (index / BANDS) ^ 2 - 2.2
-		v.Bands[index] = { Frame = band, Z0 = z0, Z1 = z1 }
+	-- sol : ballast (dessous), herbe de part et d'autre (demi-plans tournés,
+	-- découpés par un cadre non tourné : bords nets jusqu'à l'horizon)
+	local groundClip = frame(root, "GroundClip", rgb(150, 136, 128), 6)
+	place(groundClip, 0, HY, W, H - HY + 2)
+	groundClip.ClipsDescendants = true
+	grad(groundClip, rgb(170, 156, 146), rgb(120, 106, 100), 90)
+	v.GroundClip = groundClip
+	-- murets : un demi-plan rose (bord = pied du muret) puis l'herbe par-dessus
+	-- (bord = haut du muret) : entre les deux, la face du muret
+	v.Grass = {}
+	for _, side in ipairs({ -1, 1 }) do
+		local wallFill = frame(groundClip, "WallFill", WHITE, 7)
+		grad(wallFill, rgb(236, 126, 176), rgb(200, 96, 150), 90)
+		local grass = frame(groundClip, "Grass", WHITE, 8)
+		grad(grass, rgb(140, 190, 110), rgb(96, 150, 84), 90)
+		table.insert(v.Grass, { Frame = grass, Wall = wallFill, X = side * (LANE_W * 1.5 + 0.75), Side = side })
 	end
-	-- lits de voie (plus sombres) sous chaque voie
-	v.Beds = {}
-	for lane = -1, 1 do
-		for index = 1, 10 do
-			local bed = frame(root, "Bed", rgb(104, 92, 92), 8)
-			local z0 = FAR * ((index - 1) / 10) ^ 2 - 2.2
-			local z1 = FAR * (index / 10) ^ 2 - 2.2
-			table.insert(v.Beds, { Frame = bed, Lane = lane, Z0 = z0, Z1 = z1 })
-		end
-	end
-	-- traverses qui défilent
+	-- traverses (par voie) qui défilent
 	v.Sleepers = {}
 	for index = 1, SLEEPERS do
-		local sleeper = frame(root, "Sleeper", rgb(122, 84, 60), 9)
-		table.insert(v.Sleepers, sleeper)
-		local _ = index
+		for lane = -1, 1 do
+			local sleeper = frame(root, "Sleeper", rgb(128, 88, 62), 9)
+			table.insert(v.Sleepers, { Frame = sleeper, Lane = lane, Index = index })
+		end
 	end
-	-- rails (droites qui filent vers l'horizon) + murets de chaque côté
+	-- rails (droites qui filent vers l'horizon)
 	v.Rails = {}
 	for lane = -1, 1 do
 		for _, side in ipairs({ -1, 1 }) do
@@ -298,11 +316,11 @@ local function buildView(gui: SurfaceGui, canvas: Vector2): any
 			table.insert(v.Rails, { Frame = rail, X = lane * LANE_W + side * 0.55 })
 		end
 	end
+	-- margelle des murets
 	v.Walls = {}
 	for _, side in ipairs({ -1, 1 }) do
-		local wall = frame(root, "WallTop", rgb(255, 150, 196), 11)
-		local face = frame(root, "WallFace", rgb(236, 120, 170), 10)
-		table.insert(v.Walls, { Top = wall, Face = face, X = side * (LANE_W * 1.5 + 0.7) })
+		local top = frame(root, "WallTop", rgb(255, 206, 228), 13)
+		table.insert(v.Walls, { Top = top, X = side * (LANE_W * 1.5 + 0.75) })
 	end
 	-- trains (face avant + toit + flanc en bandes verticales)
 	v.Trains = {}
@@ -541,27 +559,25 @@ local function render(v: any, dt: number)
 		local px = building.X - v.CamX * (building.Layer == 1 and 6 or 12)
 		building.Frame.Position = UDim2.fromOffset(px, building.Frame.Position.Y.Offset)
 	end
-	-- ballast + lits de voie (bandes : trapèzes)
-	for _, band in ipairs(v.Bands) do
-		local xl, y0 = v.Project(-LANE_W * 1.5 - 0.7, 0, band.Z1)
-		local xr = v.Project(LANE_W * 1.5 + 0.7, 0, band.Z1)
-		local _, y1 = v.Project(0, 0, band.Z0)
-		place(band.Frame, xl, y0, xr - xl, y1 - y0 + 1)
-	end
-	for _, bed in ipairs(v.Beds) do
-		local xl, y0 = v.Project(bed.Lane * LANE_W - 0.9, 0, bed.Z1)
-		local xr = v.Project(bed.Lane * LANE_W + 0.9, 0, bed.Z1)
-		local _, y1 = v.Project(0, 0, bed.Z0)
-		place(bed.Frame, xl, y0, xr - xl, y1 - y0 + 1)
+	-- herbe (demi-plans, repère du cadre du sol)
+	for _, grass in ipairs(v.Grass) do
+		local towardX = grass.Side < 0 and -W or W * 2
+		local x0, y0 = v.Project(grass.X, 0, -2.6)
+		local x1, y1 = v.Project(grass.X, 0, FAR * 3)
+		halfPlane(grass.Wall, x0, y0 - v.HY, x1, y1 - v.HY, towardX, H * 0.5)
+		local gx0, gy0 = v.Project(grass.X, 0.9, -2.6)
+		local gx1, gy1 = v.Project(grass.X, 0.9, FAR * 3)
+		halfPlane(grass.Frame, gx0, gy0 - v.HY, gx1, gy1 - v.HY, towardX, -H)
 	end
 	-- traverses
 	local phase = distance % SLEEPER_GAP
-	for index, sleeper in ipairs(v.Sleepers) do
-		local z = (index - 1) * SLEEPER_GAP - phase - 1.6
-		local xl, y = v.Project(-LANE_W * 1.5 - 0.3, 0, z)
-		local xr, _, scale = v.Project(LANE_W * 1.5 + 0.3, 0, z)
-		place(sleeper, xl, y - scale * 0.12, xr - xl, math.max(1, scale * 0.16))
-		sleeper.BackgroundTransparency = math.clamp((z - 20) / 12, 0, 0.8)
+	for _, sleeper in ipairs(v.Sleepers) do
+		local z = (sleeper.Index - 1) * SLEEPER_GAP - phase - 1.6
+		local cx = sleeper.Lane * LANE_W
+		local xl, y = v.Project(cx - 0.95, 0, z)
+		local xr, _, scale = v.Project(cx + 0.95, 0, z)
+		place(sleeper.Frame, xl, y - scale * 0.1, xr - xl, math.max(1, scale * 0.14))
+		sleeper.Frame.BackgroundTransparency = math.clamp((z - 22) / 10, 0, 0.85)
 	end
 	-- rails et murets (suivent la caméra)
 	for _, rail in ipairs(v.Rails) do
@@ -570,12 +586,9 @@ local function render(v: any, dt: number)
 		segment(rail.Frame, x0, y0, x1, y1, math.max(1.5, W * 0.005))
 	end
 	for _, wall in ipairs(v.Walls) do
-		local x0, y0 = v.Project(wall.X, 0.9, -2.2)
+		local x0, y0 = v.Project(wall.X, 0.9, -2.6)
 		local x1, y1 = v.Project(wall.X, 0.9, FAR)
-		segment(wall.Top, x0, y0, x1, y1, math.max(2, W * 0.012))
-		local fx0, fy0 = v.Project(wall.X, 0.45, -2.2)
-		local fx1, fy1 = v.Project(wall.X, 0.45, FAR)
-		segment(wall.Face, fx0, fy0, fx1, fy1, math.max(3, W * 0.05))
+		segment(wall.Top, x0, y0, x1, y1, math.max(2, W * 0.008))
 	end
 	-- obstacles
 	local trains, bars, coins = 0, 0, 0
@@ -1081,6 +1094,11 @@ function DeskGames.State(): { [string]: any }
 		Inputs = #game_.Inputs,
 		ResultText = game_.ResultText,
 	}
+end
+
+-- (tests) état interne de la partie (simulation, file d'entrées)
+function DeskGames._Game(): any
+	return game_
 end
 
 -- (tests) avance le jeu sans RenderStepped

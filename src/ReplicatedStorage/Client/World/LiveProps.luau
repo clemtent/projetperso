@@ -2117,7 +2117,9 @@ function LiveProps.Attach(model: Model, itemId: string?, context: { [string]: an
 		local tint = LiveScreens.Tints[rec.Kind]
 		for _, wing in ipairs(rec.Wings) do
 			if tint then
-				wing.Color = tint
+				-- (v9.8 : bords de l'écran incurvé = verre sombre légèrement teinté)
+				wing.Color = tint:Lerp(Color3.new(0, 0, 0), 0.8)
+				wing.Material = Enum.Material.SmoothPlastic
 			end
 		end
 	end

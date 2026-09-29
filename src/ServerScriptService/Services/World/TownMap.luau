@@ -275,7 +275,7 @@ function TownMap.Build(plotCount: number): Town
 	-- (ordre = priorité des 16 vraies lumières : place, entrée, avenue)
 	local plaza = TownPlaza.Build(decor, geo, shops)
 	local entrance = TownEntrance.Build(decor, geo)
-	-- 🚗 concession auto : à droite de la place d'accueil (avant la nature :
+	-- 🚗 concession auto : hors de la porte, à gauche de la route d'arrivée (WorldLayout.DealershipCFrame) (avant la nature :
 	-- sa place est réservée)
 	TownShops.BuildDealership(shops, geo)
 	-- (v9.7, BUILDINGS97) 🛒 supermarché MégaDopa + parking, hors de la porte
@@ -301,6 +301,7 @@ function TownMap.Build(plotCount: number): Town
 	TownNature.Build(decor, geo)
 	-- (v9.7) aucun arbre du bois planté sur le parking / dans le magasin
 	pcall(TownMarket.ClearSite, decor, plotCount)
+	pcall(TownShops.ClearDealerSite, decor, plotCount) -- (v9.8, CARS98) pas d'arbres sur la concession
 
 	local plots: { PlotInfo } = {}
 	for index = 1, plotCount do

@@ -30,6 +30,20 @@
 	    douce allumée porte ouverte.
 	  - Invites "Conduire" : traduites, visibles seulement sur SA voiture.
 
+	v9.8 (CARS98) :
+	  - "🏎️ Mes voitures" REFAITE : grand aperçu 3D (ViewportFrame) de la
+	    voiture qui tourne lentement sur un podium (on la fait tourner au
+	    doigt / à la souris), nuancier INSTANTANÉ (on repeint le modèle, un
+	    seul envoi au serveur 0,6 s après le dernier clic), fiche avec étoiles
+	    (vitesse, accélération, maniabilité, confort), "🚗 Conduire" (choisit
+	    puis sort la voiture), "Choisir", "Acheter" pour les autres voitures,
+	    carrousel de miniatures 3D, infos du garage ; ordinateur + téléphone.
+	    Plus de reconstruction de la fenêtre 4 fois par seconde (le lag).
+	  - Conduite : caractère par modèle (CarModels.Handling), accélération
+	    qui s'essouffle, volant lissé, glisse / drift avec fumée douce aux
+	    roues arrière, champ de vision lissé.
+	  - Garages : changement de couleur = on repeint (pas de reconstruction).
+
 	API (TownClient) :
 	  CarClient.Start({ Toast = function(text) end? })  -- en entrant en ville
 	  CarClient.Stop()                                     -- en sortant (avant de rendre la caméra)
@@ -88,6 +102,7 @@ type Garage = {
 	Cars: Instance,
 	Light: Light?,
 	Key: string,
+	ShapeKey: string?,
 }
 
 local started = false
@@ -1600,9 +1615,26 @@ local function refreshGarage(g: Garage)
 	if key == g.Key then
 		return
 	end
-	g.Key = key
-	g.Cars:ClearAllChildren()
 	local list = parseCars(text)
+	-- (v9.8) seules les couleurs ont changé : on repeint, sans reconstruire
+	local shape = {}
+	for _, entry in ipairs(list) do
+		table.insert(shape, entry.Id)
+	end
+	local shapeKey = table.concat(shape, ",") .. "|" .. tostring(selected) .. "|" .. tostring(out)
+	if shapeKey == g.ShapeKey then
+		g.Key = key
+		for _, entry in ipairs(list) do
+			local model = g.Cars:FindFirstChild("Parked_" .. entry.Id)
+			if model then
+				CarModels.Repaint(model, entry.Id, entry.Color)
+			end
+		end
+		return
+	end
+	g.Key = key
+	g.ShapeKey = shapeKey
+	g.Cars:ClearAllChildren()
 	local ids = {}
 	for _, entry in ipairs(list) do
 		table.insert(ids, entry.Id)
