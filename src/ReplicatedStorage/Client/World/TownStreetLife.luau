@@ -460,7 +460,8 @@ local function buildTrafficLight(m: Model, F: CFrame, seed: number): any
 end
 
 local function buildManhole(m: Model, F: CFrame, _seed: number)
-	newPart(m, "Manhole", Vector3.new(0.1, 2.1, 2.1), F * CFrame.new(0, 0.01, 0) * UPRIGHT, rgb(70, 68, 72), M.DiamondPlate, "Cyl")
+	-- (dessus à +0,09 : au-dessus des pointillés (+0,05), sous les lignes de rive (+0,1))
+	newPart(m, "Manhole", Vector3.new(0.1, 2.1, 2.1), F * CFrame.new(0, 0.04, 0) * UPRIGHT, rgb(70, 68, 72), M.DiamondPlate, "Cyl")
 end
 
 local function buildDrain(m: Model, F: CFrame, _seed: number)
