@@ -1370,6 +1370,9 @@ Config.House = {
 		-- v9.5 🖥️ "Dopamine Setup" : les stimuli du clicker deviennent de vrais
 		-- objets de la maison (voir la fin de Items)
 		{ Id = "Setup", Name = "Dopamine Setup", Icon = "🖥️", Tint = Color3.fromRGB(222, 214, 255) },
+		-- v9.8 💎 Luxe : les objets de rêve (jacuzzi, piano, mur d'aquarium,
+		-- tunnel aquarium, trône d'or, dragon...) ; voir la fin de Items
+		{ Id = "Luxury", Name = "Luxury", Icon = "💎", Tint = Color3.fromRGB(255, 236, 200) },
 	},
 
 	Items = {
