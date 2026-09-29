@@ -324,8 +324,8 @@ local function outside(folder: Instance, geo: TownKit.Geo, gcf: CFrame)
 	TownKit.Lamp(model, (lot * CFrame.new(0, ROAD_Y, 6)).Position, 0, false, true)
 	geo.Reserve((loop * CFrame.new(0, 0, 0)).Position, 24)
 	-- (v9.8, CITY98) vie de la rue (client) : on attend le bus, lampadaires
-	-- le long de la route, poteau indicateur, grand panneau "bienvenue",
-	-- colline au moulin à vent derrière le rond-point
+	-- le long de la route, poteau indicateur, colline au moulin à vent
+	-- derrière le rond-point
 	local stopCF = gcf * CFrame.new(13, WALK_Y - 0.3, 30) * CFrame.Angles(0, math.rad(90), 0)
 	TownKit.LifeSpot("SitBench", stopCF * CFrame.new(0, 0.3, 0.9), 40)
 	TownKit.LifeSpot("Wait", stopCF * CFrame.new(-3.6, 0.3, -1.4) * CFrame.Angles(0, 0.3, 0), 41)
@@ -336,7 +336,6 @@ local function outside(folder: Instance, geo: TownKit.Geo, gcf: CFrame)
 		TownKit.LifeSpot("Lamppost", gcf * CFrame.new(-9.8, WorldLayout.GROUND_Y, z) * CFrame.Angles(0, math.rad(-90), 0), 52 + i)
 	end
 	TownKit.LifeSpot("Signpost", gcf * CFrame.new(-11.5, WorldLayout.GROUND_Y, len - 4), 60)
-	TownKit.LifeSpot("Billboard", gcf * CFrame.new(-30, WorldLayout.GROUND_Y, len + 6), 61)
 	TownKit.LifeSpot("Bin", gcf * CFrame.new(12.6, WALK_Y, 22), 62)
 	TownKit.LifeSpot("WindmillHill", gcf * CFrame.new(-24, WorldLayout.GROUND_Y, len + 68) * CFrame.Angles(0, math.rad(200), 0), 63)
 end

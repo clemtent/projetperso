@@ -116,6 +116,8 @@ end
 local function newSeat(parent: Instance, name: string, size: Vector3, cf: CFrame): Seat
 	local seat = part(parent, name, size, cf, Color3.fromRGB(255, 255, 255), M.SmoothPlastic, "deco", "Seat") :: Seat
 	invisible(seat)
+	-- (SEAT98 : SitAnimator joue les poses "manège" : bras levés, regard, pieds)
+	seat:SetAttribute("SitKind", "ride")
 	return seat
 end
 

@@ -306,6 +306,18 @@ function TownHud.Build(self: any)
 	visit.Activated:Connect(function()
 		cb.OpenVisit()
 	end)
+	-- v9.8 🎨 Graphismes / mode réaliste (REALISM98) : fenêtre en ville
+	local gfxButton = roundButton(topRight, "GraphicsButton", "⚙️", WHITE, 46, 3)
+	gfxButton.Activated:Connect(function()
+		local module = script.Parent:FindFirstChild("TownGraphics")
+		if module then
+			local ok, TownGraphics = pcall(require, module)
+			if ok and type(TownGraphics) == "table" and type(TownGraphics.Toggle) == "function" then
+				TownGraphics.Toggle()
+			end
+		end
+	end)
+	parts.GraphicsButton = gfxButton
 	parts.Home = home
 	parts.VisitButton = visit
 	parts.TopRight = topRight

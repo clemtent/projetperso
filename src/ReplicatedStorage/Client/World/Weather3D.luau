@@ -311,6 +311,8 @@ local puddles: { [string]: Puddle } = {}
 local puddlePool: { BasePart } = {}
 local heights: { [number]: number } = {}
 local heightCount = 0
+local RAYS_PER_STEP = 24
+local raysLeft = RAYS_PER_STEP
 local wetList: { WetRec } = {}
 local wetApplied = 0
 local wetCursor = 0
@@ -402,6 +404,11 @@ local function heightAt(x: number, z: number, camY: number): number
 		table.clear(heights)
 		heightCount = 0
 	end
+	-- (au plus RAYS_PER_STEP nouveaux lancers par passe : caméra qui file = sol supposé)
+	if raysLeft <= 0 then
+		return camY - BOX_DOWN
+	end
+	raysLeft -= 1
 	local hit = castDown((ix + 0.5) * CELL, (iz + 0.5) * CELL, camY + 80)
 	local y = hit and hit.Position.Y or (camY - BOX_DOWN)
 	heights[key] = y
@@ -1084,6 +1091,7 @@ function Weather3D.Step(dt: number)
 		local elapsed = stepClock
 		stepClock = 0
 		if state.Rain > 0.005 or shownDrops > 0 then
+			raysLeft = RAYS_PER_STEP
 			stepDrops(t, camCF, state.Rain, state.Storm)
 		end
 		if #splashes > 0 then

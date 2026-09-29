@@ -254,10 +254,10 @@ local function freeAt(room: Room, x: number, d: number): boolean
 	return isFree(room, i, j)
 end
 
--- Ligne droite libre (échantillons tous les 0,3 stud)
+-- Ligne droite libre (échantillons tous les 0,15 stud : aucun coin de meuble rogné)
 local function clearLine(room: Room, x0: number, d0: number, x1: number, d1: number): boolean
 	local length = math.sqrt((x1 - x0) ^ 2 + (d1 - d0) ^ 2)
-	local steps = math.max(1, math.ceil(length / 0.3))
+	local steps = math.max(1, math.ceil(length / 0.15))
 	for k = 0, steps do
 		local t = k / steps
 		if not freeAt(room, x0 + (x1 - x0) * t, d0 + (d1 - d0) * t) then
@@ -595,6 +595,21 @@ end
 -- Chemins du rez-de-chaussée vers dehors (pièces voisines, cage, porte)
 ----------------------------------------------------------------------
 
+-- Case libre du bord d'une pièce la plus proche de `d` dans la largeur d'un passage
+local function passableD(room: Room, x: number, d: number): number?
+	local half = (WorldLayout.PASS_W or 5) / 2 - 0.9
+	local best: number? = nil
+	for k = 0, math.floor(half / CELL) do
+		for _, sign in ipairs({ 1, -1 }) do
+			local dd = d + sign * k * CELL
+			if not best and math.abs(dd - d) <= half and freeAt(room, x, dd) then
+				best = dd
+			end
+		end
+	end
+	return best
+end
+
 -- Sortie de la pièce `slot` (rez-de-chaussée) jusqu'au jardin : points
 -- { x, y, d, Door? } depuis `home` ; nil si impossible
 local function exitRoute(pet: Pet, nav: any, back: boolean): { any }?
@@ -620,9 +635,14 @@ local function exitRoute(pet: Pet, nav: any, back: boolean): { any }?
 		local slot = (floor - 1) * columns + c
 		local room = roomOf(nav, house, slot)
 		local cx0, cx1 = WorldLayout.ColumnSpan(size, c)
-		-- sortie de cette pièce du côté de la cage
-		local exitX = step > 0 and (room.X1 - 0.2) or (room.X0 + 0.2)
-		local path = findPath(room, curX, curD, exitX, passD)
+		-- sortie de cette pièce du côté de la cage : case libre du bord, dans
+		-- la largeur du passage (une lampe peut en gêner le milieu)
+		local exitX = step > 0 and (room.X0 + (room.NX - 0.5) * CELL) or (room.X0 + 0.5 * CELL)
+		local exitD = passableD(room, exitX, passD)
+		if not exitD then
+			return nil
+		end
+		local path = findPath(room, curX, curD, exitX, exitD)
 		if not path then
 			return nil
 		end
@@ -631,8 +651,8 @@ local function exitRoute(pet: Pet, nav: any, back: boolean): { any }?
 		end
 		-- traverse le mur (passage)
 		local wallX = step > 0 and cx1 or cx0
-		add(wallX + step * 0.9, passD)
-		curX, curD = wallX + step * 0.9, passD
+		add(wallX + step * 0.9, exitD)
+		curX, curD = wallX + step * 0.9, exitD
 		local nextColumn = c + step
 		local reachedHall = (step > 0 and c == hallAfter) or (step < 0 and nextColumn == hallAfter)
 		if reachedHall or nextColumn < 1 or nextColumn > columns then
@@ -641,8 +661,12 @@ local function exitRoute(pet: Pet, nav: any, back: boolean): { any }?
 		c = nextColumn
 		-- pièce voisine : on entre juste après le mur
 		local nextRoom = roomOf(nav, house, (floor - 1) * columns + c)
-		local entryX = step > 0 and (nextRoom.X0 + 0.2) or (nextRoom.X1 - 0.2)
-		curX = entryX
+		local entryX = step > 0 and (nextRoom.X0 + 0.5 * CELL) or (nextRoom.X0 + (nextRoom.NX - 0.5) * CELL)
+		local entryD = passableD(nextRoom, entryX, curD)
+		if not entryD then
+			return nil
+		end
+		curX, curD = entryX, entryD
 		add(curX, curD)
 	end
 	-- cage d'escalier : couloir le long de l'escalier
@@ -1490,7 +1514,8 @@ end
 
 -- (tests) état interne
 function PetRoam.Debug(): any
-	return { Pets = pets, Active = active, Sample = sample, Plan = planCycle, Nav = navFor, Route = exitRoute, Visible = visibleAt, Refresh = refresh }
+	return { Pets = pets, Active = active, Sample = sample, Plan = planCycle, Nav = navFor, Route = exitRoute, Visible = visibleAt, Refresh = refresh,
+		FindPath = findPath, FreeAt = freeAt, RoomOf = roomOf }
 end
 
 return PetRoam

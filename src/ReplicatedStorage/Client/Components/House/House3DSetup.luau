@@ -1096,32 +1096,35 @@ R.SetupPress = function(b, _ctx)
 	local ANVIL = 22 -- dessus de l'enclume
 	-- plancher (tôle striée) + bande de danger au bord avant
 	b.Box(0, 0, 0, 100, 3, 60, rgb(82, 86, 98), M.DiamondPlate)
-	local strip = b.Box(0, 2.4, 27, 98, th(b, 1.6), 5, HAZARD_A, M.SmoothPlastic)
+	local strip = b.Box(0, 2.4, 26.5, 98, th(b, 1.6), 5, HAZARD_A, M.SmoothPlastic)
 	hazard(strip, Enum.NormalId.Top, 98, 5, 10)
 	-- lit (bâti bas) + enclume striée
-	tint(b.Box(PX, 2.4, PZ, 46, 16, 34, frame, M.Metal), "Frame")
+	tint(b.Box(PX, 2.4, PZ, 56, 16, 42, frame, M.Metal), "Frame")
 	b.Box(PX, 18, PZ, 34, ANVIL - 18, 28, rgb(120, 126, 142), M.DiamondPlate)
 	pivot(b, "Pivot_Anvil", PX, ANVIL, PZ)
-	-- montants
-	for _, side in ipairs({ -1, 1 }) do
-		tint(b.Box(PX + side * 27, 2.4, PZ, 10, 84, 22, frame, M.Metal), "Frame")
-		-- boulons sur les montants
-		for _, y in ipairs({ 14, 78 }) do
-			tint(b.Ball(PX + side * 27, y, PZ + 11 + t * 0.2, 2.6, tierStyle.Bolt, M.Metal), "Bolt")
+	-- presse à 4 colonnes chromées (le tapis passe entre elles) + écrous
+	for _, sx in ipairs({ -1, 1 }) do
+		for _, sz in ipairs({ -1, 1 }) do
+			local x, z = PX + sx * 24, PZ + sz * 15.5
+			tint(b.Cyl(x, 17.6, z, 6, 67, chrome, M.Metal), "Chrome")
+			tint(b.Cyl(x, 18.4, z, 9, 3, tierStyle.Bolt, M.Metal), "Bolt")
+			tint(b.Cyl(x, 80.6, z, 9, 3, tierStyle.Bolt, M.Metal), "Bolt")
 		end
 	end
 	-- traverse + bandeau de danger + manomètres
-	tint(b.Box(PX, 84, PZ, 72, 16, 26, frame, M.Metal), "Frame")
-	local band = b.Box(PX, 88, PZ + 13 + t * 0.3, 40, 7, t, HAZARD_A, M.SmoothPlastic)
-	hazard(band, Enum.NormalId.Back, 40, 7, 8) -- (face vers +z : "Back" une fois l'objet retourné)
-	for index, gx in ipairs({ PX - 27, PX + 27 }) do
-		local dz = PZ + 13
-		b.CylZ(gx, 92, dz - t * 0.15, 11, t, INK, M.Metal) -- boîtier
-		named(b.CylZ(gx, 92, dz + t * 0.6, 9, t, rgb(250, 248, 240), M.SmoothPlastic), "GaugeDial" .. index)
+	tint(b.Box(PX, 83.4, PZ, 60, 16, 40, frame, M.Metal), "Frame")
+	local band = b.Box(PX, 87.4, PZ + 20 + t * 0.3, 28, 7, t, HAZARD_A, M.SmoothPlastic)
+	hazard(band, Enum.NormalId.Back, 28, 7, 6) -- (face vers +z : "Back" une fois l'objet retourné)
+	for index, gx in ipairs({ PX - 21, PX + 21 }) do
+		local dz = PZ + 20
+		-- (couches à plus de 0,03 stud l'une de l'autre : boîtier, cadran, aiguille)
+		b.CylZ(gx, 91.4, dz + t * 0.1, 11, t, INK, M.Metal) -- boîtier (avant à +0,6 t)
+		local face = dz + t * 1.4
+		named(b.CylZ(gx, 91.4, face - t / 2, 9, t, rgb(250, 248, 240), M.SmoothPlastic), "GaugeDial" .. index)
 		-- zone rouge du cadran
-		b.BoxR(CFrame.new(gx + 2.4, 94.2, dz + t * 1.1 + th(b, 0.3) / 2 - 0.1) * CFrame.Angles(0, 0, -0.7), 2.6, 0.9, th(b, 0.3), RED, M.SmoothPlastic)
-		named(b.BoxR(CFrame.new(gx, 94, dz + t * 1.1 + th(b, 0.8)), 0.8, 4.6, th(b, 0.6), RED, M.SmoothPlastic), "Gauge" .. index)
-		b.CylZ(gx, 92, dz + t * 1.1 + th(b, 1.6), 1.6, th(b, 0.8), INK, M.Metal)
+		b.BoxR(CFrame.new(gx + 2.4, 93.6, face + th(b, 0.3) / 2 - 0.1) * CFrame.Angles(0, 0, -0.7), 2.6, 0.9, th(b, 0.3), RED, M.SmoothPlastic)
+		named(b.BoxR(CFrame.new(gx, 93.4, face + th(b, 0.8)), 0.8, 4.6, th(b, 0.6), RED, M.SmoothPlastic), "Gauge" .. index)
+		b.CylZ(gx, 91.4, face + th(b, 1.6), 1.6, th(b, 0.8), INK, M.Metal)
 	end
 	-- vérin hydraulique (sur la traverse) + gyrophare
 	tint(b.Cyl(PX, 99, PZ, 24, 18, dark, M.Metal), "FrameDark")
@@ -1134,53 +1137,53 @@ R.SetupPress = function(b, _ctx)
 	-- coulisseau (descend) : tige chromée longue (reste dans le vérin), bélier, guides
 	pivot(b, "Pivot_Ram", PX, 52, PZ)
 	tint(named(b.Cyl(PX, 62, PZ, 9, 51, chrome, M.Metal), "PressRam"), "Chrome")
-	local ram = named(b.Box(PX, 52, PZ, 46, 10, 24, dark, M.Metal), "PressRam")
+	local ram = named(b.Box(PX, 52, PZ, 44, 10, 23, dark, M.Metal), "PressRam")
 	tint(ram, "FrameDark")
-	local ramBand = named(b.Box(PX, 53.5, PZ + 12 + t * 0.3, 40, 7, t, HAZARD_A, M.SmoothPlastic), "PressRam")
-	hazard(ramBand, Enum.NormalId.Back, 40, 7, 8)
+	local ramBand = named(b.Box(PX, 53.5, PZ + 11.5 + t * 0.3, 38, 7, t, HAZARD_A, M.SmoothPlastic), "PressRam")
+	hazard(ramBand, Enum.NormalId.Back, 38, 7, 8)
 	-- pupitre (devant à droite) : gros bouton rouge, voyants, afficheur
-	local cx, cz = 38, 18
-	b.Box(cx, 2.4, cz, 5, 36, 5, CARBON, M.Metal)
-	b.Box(cx, 2.4, cz, 14, th(b, 1.6), 14, CARBON_LIGHT, M.Metal)
+	local cx, cz = 38, 15
+	b.Box(cx, 3.2, cz, 5, 36, 5, CARBON, M.Metal)
+	b.Box(cx, 2.4, cz, 14, th(b, 2), 14, CARBON_LIGHT, M.Metal)
 	local head = CFrame.new(cx, 42, cz) * CFrame.Angles(-0.55, 0, 0)
 	tint(b.BoxR(head, 24, 7, 16, tierStyle.AccentA, M.Metal), "AccentA")
 	local topFace = head * CFrame.new(0, 3.5, 0)
 	local button = b.Part("Part", topFace * CFrame.new(-4, 1.2, 1) * CFrame.Angles(0, 0, math.pi / 2), Vector3.new(2.4, 6.4, 6.4), RED, M.SmoothPlastic, "PressButton")
 	;(button :: Part).Shape = Enum.PartType.Cylinder
-	b.Part("Part", topFace * CFrame.new(-4, 0.4, 1) * CFrame.Angles(0, 0, math.pi / 2), Vector3.new(1.6, 8.4, 8.4), rgb(255, 214, 60), M.SmoothPlastic, "Collar").CastShadow = false
+	b.Part("Part", topFace * CFrame.new(-4, 0.1, 1) * CFrame.Angles(0, 0, math.pi / 2), Vector3.new(1.6, 8.4, 8.4), rgb(255, 214, 60), M.SmoothPlastic, "Collar").CastShadow = false
 	;(b.Parts[#b.Parts] :: Part).Shape = Enum.PartType.Cylinder
 	for index, color in ipairs({ MINT, YELLOW, RED }) do
 		neon(b, b.Part("Part", topFace * CFrame.new(3 + index * 2.6, 0.5, -4), Vector3.new(1.8, 1.4, 1.8), color, M.Neon, "Lamp" .. index), nil)
 	end
 	named(b.Part("Part", topFace * CFrame.new(6, 0.3, 2.6), Vector3.new(10, th(b, 1.2), 5), rgb(10, 22, 16), M.SmoothPlastic, "PressDisplay"), "PressDisplay")
 	-- tapis roulant (amène les objets de la droite vers l'enclume)
-	local beltX0, beltX1 = PX + 24, 50
+	local beltX0, beltX1 = PX + 29, 50
 	local beltMid, beltLen = (beltX0 + beltX1) / 2, beltX1 - beltX0
 	local beltTop = ANVIL
 	b.Box(beltMid, beltTop - 2.6, PZ, beltLen, 2.6 - th(b, 0.2, 0.004), 22, rgb(36, 36, 44), M.Rubber)
 	for _, side in ipairs({ -1, 1 }) do
 		tint(b.Box(beltMid, beltTop - 5, PZ + side * 12.4, beltLen + 4, 7, 2.4, tierStyle.AccentA, M.Metal), "AccentA")
-		b.Box(beltX0 + 4, 2.4, PZ + side * 9, 3, beltTop - 7.4, 3, CARBON, M.Metal)
-		b.Box(beltX1 - 3, 2.4, PZ + side * 9, 3, beltTop - 7.4, 3, CARBON, M.Metal)
+		b.Box(beltX0 + 4, 2.4, PZ + side * 9, 3, beltTop - 8, 3, CARBON, M.Metal)
+		b.Box(beltX1 - 3, 2.4, PZ + side * 9, 3, beltTop - 8, 3, CARBON, M.Metal)
 	end
-	b.CylZ(beltX1, beltTop - 1.6, PZ, 3.4, 23, CHROME, M.Metal)
-	b.CylZ(beltX0 + 0.5, beltTop - 1.6, PZ, 3.2, 23, CHROME, M.Metal)
+	b.CylZ(beltX1, beltTop - 1.6, PZ, 3.4, 24.6, CHROME, M.Metal)
+	b.CylZ(beltX0 + 0.5, beltTop - 1.6, PZ, 3.2, 24.6, CHROME, M.Metal)
 	for index = 0, 5 do
 		local x = beltX0 + 2 + index * (beltLen - 4) / 6
 		named(b.Box(x, beltTop - th(b, 1) * 0.6, PZ, 1.8, th(b, 1), 20, rgb(78, 78, 92), M.Rubber), "BeltSlat")
 	end
 	-- bac à galettes (à gauche) : les objets écrasés y tombent
-	local binX = -43
-	b.Box(binX, 2.4, PZ, 14, th(b, 1.4), 26, CARBON, M.Metal)
+	local binX = -44
+	b.Box(binX, 1.2, PZ, 9, th(b, 1.4) + 1.2, 24.6, CARBON, M.Metal)
 	for _, side in ipairs({ -1, 1 }) do
-		tint(b.Box(binX, 2.4, PZ + side * 12, 14, 14, 2, tierStyle.AccentB, M.Metal), "AccentB")
-		tint(b.Box(binX + side * 6, 2.4, PZ, 2, 14, 23, tierStyle.AccentB, M.Metal), "AccentB")
+		tint(b.Box(binX, 2.4, PZ + side * 12, 10.6, 14, 2, tierStyle.AccentB, M.Metal), "AccentB")
+		tint(b.Box(binX + side * 4.3, 2.4, PZ, 2, 14, 23, tierStyle.AccentB, M.Metal), "AccentB")
 	end
 	for index, color in ipairs({ YELLOW, RED, rgb(70, 170, 80), rgb(255, 150, 190) }) do
-		b.Cyl(binX + (index % 2) * 2 - 1, 2.2 + th(b, 1.4) + (index - 1) * 1.6, PZ + (index - 2.5) * 3, 9, 1.8, color, M.SmoothPlastic)
+		b.Cyl(binX + (index % 2) * 1.2 - 0.6, 2.2 + th(b, 1.4) + (index - 1) * 1.6, PZ + (index - 2.5) * 3, 7, 1.8, color, M.SmoothPlastic)
 	end
 	-- centrale hydraulique (au fond à droite) + flexibles jusqu'au vérin
-	local ux, uz = 34, -21
+	local ux, uz = 34, -22
 	tint(b.Round(ux, 2.4, uz, 22, 20, 14, 3, dark, M.Metal), "FrameDark")
 	tint(b.CylX(ux, 27, uz, 10, 16, chrome, M.Metal), "Chrome")
 	b.CylX(ux - 9.6, 27, uz, 6, 3, CARBON, M.Metal)
@@ -1193,10 +1196,16 @@ R.SetupPress = function(b, _ctx)
 		local _ = index
 	end
 	-- objets à écraser (un seul visible à la fois ; ils arrivent par le tapis)
+	-- (les variantes 2+ sont cachées : elles occupent la même place ; LiveProps
+	-- les montre une à une, transparence de base = attribut "BaseTransparency")
 	local function crushable(list: { BasePart }, variant: number)
 		for _, part in ipairs(list) do
 			part.Name = "Crushable"
 			part:SetAttribute("Variant", variant)
+			part:SetAttribute("BaseTransparency", part.Transparency)
+			if variant > 1 then
+				part.Transparency = 1
+			end
 		end
 	end
 	local y = ANVIL - 0.8 -- (posés dans l'enclume : aucune face collée)
@@ -1209,8 +1218,8 @@ R.SetupPress = function(b, _ctx)
 	-- 3 : pastèque
 	crushable({ b.Egg(PX, y + 11, PZ, 26, 21, 20, rgb(70, 170, 80), M.SmoothPlastic), b.Egg(PX, y + 11, PZ, 26.6, 10, 20.6, rgb(40, 120, 60), M.SmoothPlastic) }, 3)
 	-- 4 : gâteau (deux étages, glaçage, cerise)
-	crushable({ b.Cyl(PX, y, PZ, 24, 8, rgb(255, 170, 200), M.SmoothPlastic), b.Cyl(PX, y + 7.6, PZ, 18, 7, rgb(255, 236, 214), M.SmoothPlastic),
-		b.Cyl(PX, y + 14.2, PZ, 18.8, 1.8, WHITE, M.SmoothPlastic), b.Ball(PX, y + 17.2, PZ, 4.6, RED, M.SmoothPlastic) }, 4)
+	crushable({ b.Cyl(PX, y, PZ, 22, 8, rgb(255, 170, 200), M.SmoothPlastic), b.Cyl(PX, y + 7.6, PZ, 17, 7, rgb(255, 236, 214), M.SmoothPlastic),
+		b.Cyl(PX, y + 14.2, PZ, 17.8, 1.8, WHITE, M.SmoothPlastic), b.Ball(PX, y + 17.2, PZ, 4.6, RED, M.SmoothPlastic) }, 4)
 	-- 5 : paquet cadeau
 	crushable({ b.Box(PX, y, PZ, 18, 16, 18, rgb(120, 110, 255), M.SmoothPlastic), b.Box(PX, y - 0.3, PZ, 4, 16.8, 18.8, GOLD, M.SmoothPlastic),
 		b.Box(PX, y - 0.3, PZ, 18.8, 16.8, 4, GOLD, M.SmoothPlastic), b.Ball(PX - 2.4, y + 17.4, PZ, 4.4, GOLD, M.SmoothPlastic),

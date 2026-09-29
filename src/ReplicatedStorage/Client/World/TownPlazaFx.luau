@@ -20,8 +20,11 @@
 	  - guirlandes lumineuses entre les lampadaires, FANIONS colorés sur 4
 	    travées, ampoules sous la frise du kiosque (verre mat le jour, Neon
 	    la nuit : attribut "NightGlow", géré par TownAtmosphere) ;
-	  - 9 PIGEONS en 3 groupes : ils picorent, marchent, se retournent, et
-	    s'envolent quand l'avatar approche (puis se reposent plus loin).
+	  - (v9.8, CITY98) 20 PIGEONS réalistes en 4 groupes (module
+	    TownPigeons : picorent, marchent en hochant la tête, roucoulent,
+	    s'envolent devant l'avatar ou les passants, se perchent sur les
+	    lanternes et la margelle) et l'EAU animée de la fontaine (module
+	    TownFountainFx : jets en arc, rideaux, ronds, pièces, sculptures).
 	Tout est ancré, sans collision (sauf le plateau et le fût du manège,
 	localement), sans ombre pour les petites pièces, SANS son. Animation
 	par CFrame (workspace:BulkMoveTo), 30 fois par seconde au plus, et en
@@ -42,6 +45,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 -- (v9.8, FAIR98) pose du manège partagée avec le serveur (sièges où l'on monte)
 local FairRides = require(ReplicatedStorage.Shared.FairRides)
+local TownPigeons = require(script.Parent.TownPigeons) -- (v9.8, CITY98) pigeons 10x
+local TownFountainFx = require(script.Parent.TownFountainFx) -- (v9.8, CITY98) eau de la fontaine
 
 local TownPlazaFx = {}
 
@@ -53,7 +58,6 @@ local FAR_PLAZA = 260
 local FAR_CAROUSEL = 170
 local FAR_SMALL = 110
 -- (v9.8) vitesse du manège et des chevaux : FairRides (PLAZA_SPIN, CAROUSEL_BOB_*)
-local FLEE_R = 5.5 -- (studs) un avatar plus près : les pigeons s'envolent
 
 local M = Enum.Material
 local UP = Vector3.new(0, 1, 0)
@@ -499,159 +503,8 @@ local function buildBandstandLights(folder: Instance, F: CFrame, fascia: Vector2
 end
 
 ----------------------------------------------------------------------
--- Pigeons
+-- Pigeons (v9.8, CITY98) : module TownPigeons ; fontaine : TownFountainFx
 ----------------------------------------------------------------------
-
-local NECK = CFrame.new(0, 0.5, -0.1) -- pivot de la tête (picorer : jusqu'au sol)
-local NECK_INV = NECK:Inverse()
-local SHOULDERS = { CFrame.new(-0.26, 0.6, 0.05), CFrame.new(0.26, 0.6, 0.05) }
-local SHOULDERS_INV = { SHOULDERS[1]:Inverse(), SHOULDERS[2]:Inverse() }
-
-type Pigeon = {
-	Pos: Vector3,
-	Yaw: number,
-	Home: Vector3,
-	Mode: string,
-	Timer: number,
-	Clock: number,
-	Rng: Random,
-	From: Vector3,
-	To: Vector3,
-	Calm: number,
-	Parts: { BasePart },
-	Locals: { CFrame },
-	Kind: { number }, -- 0 corps, 1 tête, 2 aile gauche, 3 aile droite
-}
-
-local function buildPigeons(folder: Instance, homes: { Vector3 }): any
-	local model = Instance.new("Model")
-	model.Name = "Pigeons"
-	model.Parent = folder
-	local P = { List = {}, Parts = {}, Frames = {} }
-	local gray = Color3.fromRGB(150, 154, 170)
-	for h, home in ipairs(homes) do
-		for j = 1, 3 do
-			local rng = Random.new(h * 31 + j * 7)
-			local a = rng:NextNumber(0, math.pi * 2)
-			local pos = home + Vector3.new(math.cos(a), 0, math.sin(a)) * rng:NextNumber(0.8, 3.2)
-			local bird: Pigeon = {
-				Pos = pos,
-				Yaw = rng:NextNumber(0, math.pi * 2),
-				Home = home,
-				Mode = "idle",
-				Timer = rng:NextNumber(0.2, 1.5),
-				Clock = 0,
-				Rng = rng,
-				From = pos,
-				To = pos,
-				Calm = 0,
-				Parts = {},
-				Locals = {},
-				Kind = {},
-			}
-			local tint = (h + j) % 3 == 0 and Color3.fromRGB(196, 190, 196) or gray
-			local function add(name: string, size: Vector3, loc: CFrame, color: Color3, shape: Enum.PartType?, kind: number)
-				local p = newPart(model, name, size, CFrame.new(pos) * loc, color, M.SmoothPlastic, shape)
-				table.insert(bird.Parts, p)
-				table.insert(bird.Locals, loc)
-				table.insert(bird.Kind, kind)
-				table.insert(P.Parts, p)
-				table.insert(P.Frames, p.CFrame)
-			end
-			add("Body", Vector3.new(0.62, 0.62, 0.62), CFrame.new(0, 0.42, 0.05), tint, Enum.PartType.Ball, 0)
-			add("Breast", Vector3.new(0.5, 0.5, 0.5), CFrame.new(0, 0.5, -0.2), Color3.fromRGB(118, 142, 150), Enum.PartType.Ball, 0)
-			add("Tail", Vector3.new(0.26, 0.05, 0.42), CFrame.new(0, 0.42, 0.45) * CFrame.Angles(math.rad(15), 0, 0), Color3.fromRGB(92, 96, 116), nil, 0)
-			add("Head", Vector3.new(0.34, 0.34, 0.34), CFrame.new(0, 0.82, -0.33), Color3.fromRGB(106, 112, 138), Enum.PartType.Ball, 1)
-			add("Beak", Vector3.new(0.08, 0.08, 0.16), CFrame.new(0, 0.8, -0.53), Color3.fromRGB(70, 62, 66), nil, 1)
-			add("Wing", Vector3.new(0.08, 0.3, 0.5), CFrame.new(-0.3, 0.47, 0.1), Color3.fromRGB(122, 126, 146), nil, 2)
-			add("Wing", Vector3.new(0.08, 0.3, 0.5), CFrame.new(0.3, 0.47, 0.1), Color3.fromRGB(122, 126, 146), nil, 3)
-			table.insert(P.List, bird)
-		end
-	end
-	return P
-end
-
-local function stepPigeons(P: any, dt: number, focus: Vector3?)
-	local frames = P.Frames
-	local index = 0
-	for _, bird in ipairs(P.List) do
-		local rng = bird.Rng
-		bird.Timer -= dt
-		bird.Clock += dt
-		bird.Calm = math.max(0, bird.Calm - dt)
-		local lift, pitch, flap = 0, 0, 0
-		-- un avatar approche : envol (loin de lui), atterrissage plus loin
-		if focus and bird.Mode ~= "fly" and bird.Calm <= 0 then
-			local away = Vector3.new(bird.Pos.X - focus.X, 0, bird.Pos.Z - focus.Z)
-			if away.Magnitude < FLEE_R and math.abs(focus.Y - bird.Pos.Y) < 8 then
-				local dir = away.Magnitude > 0.05 and away.Unit or Vector3.new(1, 0, 0)
-				local target = bird.Pos + dir * rng:NextNumber(8, 12)
-				local fromHome = target - bird.Home
-				if fromHome.Magnitude > 9 then
-					target = bird.Home + fromHome.Unit * 9
-				end
-				bird.Mode, bird.Timer, bird.Clock = "fly", 1.6, 0
-				bird.From, bird.To = bird.Pos, Vector3.new(target.X, bird.Home.Y, target.Z)
-				local flat = bird.To - bird.From
-				if flat.Magnitude > 0.1 then
-					bird.Yaw = math.atan2(-flat.X, -flat.Z)
-				end
-			end
-		end
-		if bird.Mode == "fly" then
-			local t = math.clamp(bird.Clock / 1.6, 0, 1)
-			bird.Pos = bird.From:Lerp(bird.To, t)
-			lift = math.sin(t * math.pi) * 5
-			flap = math.sin(bird.Clock * 50) * 1.1
-			if t >= 1 then
-				bird.Mode, bird.Timer, bird.Calm = "idle", rng:NextNumber(1.5, 3), 2
-			end
-		elseif bird.Mode == "walk" then
-			local step = Vector3.new(-math.sin(bird.Yaw), 0, -math.cos(bird.Yaw)) * (1.1 * dt)
-			local nextPos = bird.Pos + step
-			if (nextPos - bird.Home).Magnitude > 5.5 then
-				local back = bird.Home - bird.Pos
-				bird.Yaw = math.atan2(-back.X, -back.Z)
-			else
-				bird.Pos = nextPos
-			end
-			pitch = math.sin(bird.Clock * 24) * 0.18
-			lift = math.abs(math.sin(bird.Clock * 12)) * 0.04
-		elseif bird.Mode == "peck" then
-			pitch = math.sin(math.clamp(bird.Clock / 0.4, 0, 1) * math.pi) * 1.5
-		end
-		if bird.Mode ~= "fly" and bird.Timer <= 0 then
-			local roll = rng:NextNumber()
-			bird.Clock = 0
-			if roll < 0.4 then
-				bird.Mode, bird.Timer = "peck", 0.4
-			elseif roll < 0.72 then
-				bird.Mode, bird.Timer = "walk", rng:NextNumber(0.5, 1.4)
-			elseif roll < 0.86 then
-				bird.Mode, bird.Timer = "idle", rng:NextNumber(0.3, 0.8)
-				bird.Yaw += rng:NextNumber(-1.4, 1.4)
-			else
-				bird.Mode, bird.Timer = "idle", rng:NextNumber(0.6, 1.8)
-			end
-		end
-		local root = CFrame.new(bird.Pos + Vector3.new(0, lift, 0)) * CFrame.Angles(0, bird.Yaw, 0)
-		local headCF = root * NECK * CFrame.Angles(-pitch, 0, 0) * NECK_INV
-		for i = 1, #bird.Parts do
-			index += 1
-			local kind = bird.Kind[i]
-			local loc = bird.Locals[i]
-			if kind == 1 then
-				frames[index] = headCF * loc
-			elseif kind == 2 or kind == 3 then
-				local sign = kind == 2 and 1 or -1
-				frames[index] = root * SHOULDERS[kind - 1] * CFrame.Angles(0, 0, sign * flap) * SHOULDERS_INV[kind - 1] * loc
-			else
-				frames[index] = root * loc
-			end
-		end
-	end
-	workspace:BulkMoveTo(P.Parts, frames, Enum.BulkMoveMode.FireCFrameChanged)
-end
 
 ----------------------------------------------------------------------
 -- Construction / boucle
@@ -703,14 +556,12 @@ local function build(): boolean
 	if bandCF and typeof(fascia) == "Vector2" then
 		buildBandstandLights(folder, bandCF, fascia)
 	end
-	local homes = {}
-	for i = 1, 3 do
-		local home = vec3Attr(plaza, "FxFlock" .. i)
-		if home then
-			table.insert(homes, home + Vector3.new(0, 0.12, 0))
-		end
+	-- (v9.8, CITY98) pigeons 10x (TownPigeons) + fontaine animée (TownFountainFx)
+	s.Pigeons = TownPigeons.Build(folder, plaza)
+	local fountainBase = vec3Attr(plaza, "FxFountainBase")
+	if fountainBase then
+		s.Fountain = TownFountainFx.Build(folder, fountainBase)
 	end
-	s.Pigeons = buildPigeons(folder, homes)
 	-- (sous DopamineTown : TownAtmosphere suit les ampoules "NightGlow")
 	folder.Parent = town
 	s.Built = true
@@ -777,7 +628,7 @@ function TownPlazaFx.Step(dt: number)
 	-- (la ville a été reconstruite : nos pièces sont parties avec elle)
 	if s.Built and (s.Folder == nil or s.Folder.Parent == nil) then
 		s.Built = false
-		s.Carousel, s.Balloons, s.Pigeons = nil, nil, nil
+		s.Carousel, s.Balloons, s.Pigeons, s.Fountain = nil, nil, nil, nil
 	end
 	if not s.Built then
 		-- (3 échecs de construction : on abandonne, sans bruit ni coût)
@@ -816,7 +667,10 @@ function TownPlazaFx.Step(dt: number)
 	if p and fromCenter < FAR_SMALL + 40 then
 		local character = LocalPlayer and LocalPlayer.Character
 		local root = character and character:FindFirstChild("HumanoidRootPart")
-		stepPigeons(p, elapsed, root and (root :: BasePart).Position or nil)
+		TownPigeons.Step(p, elapsed, root and (root :: BasePart).Position or nil)
+	end
+	if s.Fountain and fromCenter < FAR_SMALL + 30 then
+		TownFountainFx.Step(s.Fountain, serverNow())
 	end
 end
 

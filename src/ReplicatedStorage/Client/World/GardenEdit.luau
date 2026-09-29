@@ -910,10 +910,13 @@ end
 local function follow()
 	local g = state.Garden
 	local h = state.Holding
-	if not g or not h or not state.Pointer then
+	if not g or not h then
 		return
 	end
-	local x, d = pointerToLawn(g, state.Pointer :: Vector2)
+	local x, d = nil, nil
+	if state.Pointer then
+		x, d = pointerToLawn(g, state.Pointer :: Vector2)
+	end
 	if x and d then
 		-- (on garde l'écart entre le point cliqué et le centre de l'objet)
 		h.X = math.floor((x + (h.OffX or 0)) / GRID + 0.5) * GRID

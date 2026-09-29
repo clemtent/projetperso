@@ -865,7 +865,10 @@ function HouseBuilder.BuildRoom(self: House, slot: number)
 		if seatPart and seatPart:IsA("BasePart") then
 			local prompt = Instance.new("ProximityPrompt")
 			prompt.Name = "SitPrompt"
-			prompt.ActionText = Locale.T("Sit")
+			-- (v9.8 : sur un lit / un hamac -> "S'allonger" ; SEAT98 y joue la sieste)
+			local sitId = tostring(itemModel:GetAttribute("ItemId"))
+			local lying = string.find(sitId, "Bed", 1, true) ~= nil and sitId ~= "PetBed" or sitId == "Hammock"
+			prompt.ActionText = if lying then Locale.T("Lie down") else Locale.T("Sit")
 			local item = HouseCommon and HouseCommon.ItemsById[tostring(itemModel:GetAttribute("ItemId"))]
 			prompt.ObjectText = item and Locale.T(item.Name) or ""
 			prompt.MaxActivationDistance = 8

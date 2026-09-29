@@ -1424,7 +1424,22 @@ local function openSession(options: Options?): boolean
 end
 
 -- Fermeture : ne lève jamais d'erreur (chaque étape est protégée)
+-- v9.8 🪞 miroirs de l'aperçu (Reflections, REALISM98) : chargé à la demande
+local function reflections(): any
+	local ok, module = pcall(function()
+		local client = script.Parent.Parent.Parent
+		local world = client:FindFirstChild("World")
+		local found = world and world:FindFirstChild("Reflections")
+		return found and require(found :: ModuleScript) or nil
+	end)
+	return ok and module or nil
+end
+
 function House3D.Close()
+	local refl = reflections()
+	if refl and type(refl.Release) == "function" then
+		pcall(refl.Release, "House3D")
+	end
 	local ok, err = pcall(closeSession)
 	if not ok then
 		warn("[House3D] Fermeture : " .. tostring(err))
@@ -1440,6 +1455,12 @@ function House3D.Open(options: Options?): boolean
 		warn("[House3D] Ouverture : " .. tostring(result))
 		House3D.Close()
 		return false
+	end
+	if result == true then
+		local refl = reflections()
+		if refl and type(refl.Acquire) == "function" then
+			pcall(refl.Acquire, "House3D")
+		end
 	end
 	return result == true
 end

@@ -333,10 +333,10 @@ function DealerShowroom.FrontJobs(shop: any, parent: Instance, ctx: any): { () -
 		floor.Reflectance = 0.12
 		box(parent, "AisleRunner", B, -4.5, 4.5, 0.1, 0.15, 1.3, D - 11, GRAPHITE, M.Fabric)
 		for _, sx in ipairs({ -1, 1 }) do
-			box(parent, "AisleEdge", B, sx * 4.5 - 0.12, sx * 4.5 + 0.12, 0.1, 0.17, 1.3, D - 11, ACCENT, M.SmoothPlastic)
+			box(parent, "AisleEdge", B, sx * 4.5 - 0.12, sx * 4.5 + 0.12, 0.1, 0.19, 1.3, D - 11, ACCENT, M.SmoothPlastic)
 		end
 		-- mur du fond : paroi graphite + bandeau lumineux fin + grande enseigne
-		box(parent, "FeatureWall", B, -hw + 1.2, hw - 1.2, 0.1, H - 0.1, D - 1.35, D - 1.2, GRAPHITE, M.SmoothPlastic)
+		box(parent, "FeatureWall", B, -hw + 1.2, hw - 1.2, 0.1, H - 0.16, D - 1.35, D - 1.2, GRAPHITE, M.SmoothPlastic)
 		local strip = box(parent, "WallGlowStrip", B, -hw + 2, hw - 2, 7.6, 7.75, D - 1.45, D - 1.35, RING, M.Neon)
 		strip.Transparency = 0.2
 		sign(parent, "BackSign", Vector3.new(30, 4.2, 0.15), B * CFrame.new(0, 10.6, D - 1.45), GRAPHITE,
@@ -499,8 +499,8 @@ function DealerShowroom.FullJobs(shop: any, parent: Instance, ctx: any): { () ->
 				local chosen = slot
 				table.insert(jobs, function()
 					local tagCF = chosen.Tag
-					disc(parent, "StandPost", tagCF, 0, 0, 0, 3, 0.3, rgb(214, 218, 226), M.Metal)
-					disc(parent, "StandFoot", tagCF, 0, 0, 0, 0.12, 1.3, GRAPHITE, M.Metal)
+					disc(parent, "StandPost", tagCF, 0, 0.05, 0, 2.95, 0.3, rgb(214, 218, 226), M.Metal)
+					disc(parent, "StandFoot", tagCF, 0, 0.04, 0, 0.14, 1.3, GRAPHITE, M.Metal)
 					local h = CarModels.Handling(d.Entry.Id)
 					local lines = {
 						{ d.Entry.Icon .. " " .. Locale.T(d.Entry.Name), "white", 1.2 },
@@ -584,7 +584,7 @@ function DealerShowroom.FullJobs(shop: any, parent: Instance, ctx: any): { () ->
 			box(parent, "Sofa", cf, -3, 3, 0.16, 1.5, -0.9, 0.9, rgb(70, 74, 92), M.Fabric, true)
 			box(parent, "SofaBack", cf, -3, 3, 1.5, 2.9, 0.5, 0.9, rgb(70, 74, 92), M.Fabric)
 			for _, sx in ipairs({ -1, 1 }) do
-				box(parent, "SofaArm", cf, sx * 3 - 0.35, sx * 3 + 0.35, 1.5, 2.2, -0.9, 0.9, rgb(62, 66, 84), M.Fabric)
+				box(parent, "SofaArm", cf, sx * 3 - 0.35, sx * 3 + 0.35, 1.5, 2.2, -0.95, 0.84, rgb(62, 66, 84), M.Fabric)
 			end
 			for _, sx in ipairs({ -1.4, 1.4 }) do
 				box(parent, "Cushion", cf, sx - 0.5, sx + 0.5, 1.6, 2.5, 0.25, 0.45, ACCENT, M.Fabric)

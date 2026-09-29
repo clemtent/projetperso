@@ -856,7 +856,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 	-- ░ ligne de ceinture chromée ░
 	for _, sx in ipairs(if full then { -1, 1 } else {}) do
 		-- (v9.8) jonc chromé au pied des vitres (posé sur le rebord de caisse)
-		local tx0, tx1 = sx * (wc / 2 + 0.02), sx * (wc / 2 + 0.12)
+		local tx0, tx1 = sx * (wc / 2 + 0.05), sx * (wc / 2 + 0.15)
 		box(b, "BeltTrim", math.min(tx0, tx1), math.max(tx0, tx1), s.Belt - 0.02, s.Belt + 0.05, s.Ws + 0.05, if style == "Pickup" then s.Rw else s.Rw - 0.05, CHROME, M.Metal)
 	end
 
@@ -901,7 +901,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			local x0, x1 = sx * s.W * 0.18, sx * s.W * 0.45
 			if full then
 				-- boîtier sombre, glace, projecteur rond, feu de jour
-				box(b, "HeadlightHousing", math.min(x0, x1), math.max(x0, x1), lampY - 0.22, lampTop, hoodZ0 - 0.07, hoodZ0 + 0.1, HOUSING, M.SmoothPlastic)
+				box(b, "HeadlightHousing", math.min(x0, x1), math.max(x0, x1), lampY - 0.28, lampTop, hoodZ0 - 0.07, hoodZ0 + 0.1, HOUSING, M.SmoothPlastic)
 				-- (v9.8) bloc optique : réflecteur chromé, 2 projecteurs ronds, feu de
 				-- jour en bande, glace claire bombée par-dessus
 				local l0, l1 = sx * (s.W * 0.18 + 0.05), sx * (s.W * 0.45 - 0.05)
@@ -917,7 +917,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 				local cover = box(b, "HeadlightLens", math.min(c0, c1), math.max(c0, c1), lampY - 0.2, lampTop - 0.02, hoodZ0 - 0.2, hoodZ0 - 0.16, Color3.fromRGB(230, 240, 250), M.Glass)
 				cover.Transparency = 0.55
 				cover.Reflectance = 0.2
-				box(b, "Indicator", math.min(sx * s.W * 0.45, sx * s.W * 0.49), math.max(sx * s.W * 0.45, sx * s.W * 0.49), lampY - 0.2, lampY + 0.12, hoodZ0 - 0.08, hoodZ0 + 0.1, AMBER, M.SmoothPlastic)
+				box(b, "Indicator", math.min(sx * s.W * 0.45, sx * s.W * 0.49), math.max(sx * s.W * 0.45, sx * s.W * 0.49), lampY - 0.27, lampY + 0.12, hoodZ0 - 0.08, hoodZ0 + 0.1, AMBER, M.SmoothPlastic)
 			else
 				box(b, "Headlight", math.min(x0, x1), math.max(x0, x1), lampY - 0.2, lampTop, hoodZ0 - 0.08, hoodZ0 + 0.1, LAMP, M.Glass)
 			end

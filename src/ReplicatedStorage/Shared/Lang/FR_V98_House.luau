@@ -15,5 +15,6 @@ return {
 		["Turn on"] = "Allumer",
 		["🪟 Curtains"] = "🪟 Rideaux",
 		["💡 Lights"] = "💡 Lumière",
+		["Lie down"] = "S'allonger",
 	},
 }

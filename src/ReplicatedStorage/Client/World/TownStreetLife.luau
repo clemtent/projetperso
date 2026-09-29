@@ -644,14 +644,26 @@ local function buildBillboard(m: Model, F: CFrame, seed: number)
 		box(m, "BillLampArm", F, x - 0.08, x + 0.08, 17.3, 17.45, -1.9, 0.2, steel, M.Metal)
 		glow(box(m, "BillLamp", F, x - 0.45, x + 0.45, 17.0, 17.35, -2.3, -1.6, rgb(255, 236, 200), M.SmoothPlastic))
 	end
-	box(m, "BillBack", F, -8.2, 8.2, 9, 17.4, 0.35, 0.55, steel, M.Metal)
+	-- (panneau double face : une autre affiche au dos)
+	local back = box(m, "BillBack", F, -8.2, 8.2, 9, 17.4, 0.35, 0.55, steel, M.Metal)
+	local backFace = box(m, "BillFaceBack", F, -7.9, 7.9, 9.3, 17.1, 0.5, 0.67, WHITE, M.SmoothPlastic)
+	poster(backFace, Enum.NormalId.Back, ADS[(seed + 3) % #ADS + 1], 400)
+	local _ = back
 end
 
 -- Kiosque à journaux (vert, toit en dôme, comptoir, revues)
 local function buildKiosk(m: Model, F: CFrame, _seed: number)
 	box(m, "KioskBody", F, -2.4, 2.4, -0.05, 3.2, -1.6, 2, GREEN, M.Metal, true)
 	box(m, "KioskCounter", F, -2.1, 2.1, 3.15, 3.45, -1.95, -1.4, rgb(120, 86, 60), M.Wood)
-	box(m, "KioskInside", F, -2.1, 2.1, 3.4, 6.25, -1.55, 1.6, rgb(70, 60, 56), M.SmoothPlastic)
+	-- (fenêtre ouverte : on voit le marchand ; parois intérieures sombres)
+	box(m, "KioskBackWall", F, -2.3, 2.3, 3.15, 6.25, 1.5, 2.0, rgb(70, 60, 56), M.SmoothPlastic)
+	for _, sx in ipairs({ -1, 1 }) do
+		box(m, "KioskSideWall", F, sx < 0 and -2.4 or 2.05, sx < 0 and -2.05 or 2.4, 3.15, 6.25, -1.2, 1.55, GREEN, M.Metal)
+	end
+	box(m, "KioskShelf", F, -1.9, 1.9, 4.6, 4.75, 1.0, 1.5, rgb(120, 86, 60), M.Wood)
+	for i = 0, 5 do
+		box(m, "ShelfMagazine", F, -1.7 + i * 0.6, -1.25 + i * 0.6, 4.75, 5.4, 1.2, 1.35, ({ rgb(236, 72, 140), rgb(60, 110, 220), rgb(255, 200, 60) })[i % 3 + 1], M.SmoothPlastic)
+	end
 	for _, x in ipairs({ -2.35, 2.35 }) do
 		box(m, "KioskPost", F, x - 0.15, x + 0.15, 3.2, 6.4, -1.75, -1.45, GREEN, M.Metal)
 	end
@@ -716,8 +728,10 @@ local function buildStall(m: Model, F: CFrame, seed: number, flowers: boolean)
 		for i = 0, 5 do
 			local x = -2.1 + i * 0.84
 			column(m, "Bucket", F, x, -0.4, 2.4, 3.2, 0.7, rgb(170, 176, 186), M.Metal)
-			for j = 0, 1 do
-				ball(m, "Bouquet", F, x + (j - 0.5) * 0.28, 3.55 + j * 0.15, -0.4 + (j - 0.5) * 0.2, 0.6, FLOWERS[(i * 2 + j + seed) % #FLOWERS + 1], M.SmoothPlastic)
+			egg(m, "BouquetLeaves", F * CFrame.new(x, 3.35, -0.4), Vector3.new(0.72, 0.5, 0.72), rgb(90, 156, 84), M.Grass)
+			for j = 0, 2 do
+				local a = j / 3 * math.pi * 2 + i
+				ball(m, "Bouquet", F, x + math.cos(a) * 0.17, 3.62 + (j % 2) * 0.1, -0.4 + math.sin(a) * 0.17, 0.34, FLOWERS[(i * 3 + j + seed) % #FLOWERS + 1], M.SmoothPlastic)
 			end
 		end
 		box(m, "Greens", F, -2.4, 2.4, 2.4, 2.75, 0.3, 1.0, rgb(84, 150, 84), M.Grass)

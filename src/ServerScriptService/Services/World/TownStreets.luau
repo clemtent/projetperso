@@ -415,12 +415,24 @@ local function lifeBoulevard(geo: TownKit.Geo)
 				rowX = cx
 			end
 		end
-		-- passage piéton au milieu du côté (face à l'allée de la parcelle)
-		local zebra = not junction and (rowX == nil or math.abs(rowX :: number) > rowHalf + 10)
-		if zebra then
-			spot("Zebra", F * CFrame.new(0, ROAD_Y, 0), ROAD_W * 10)
-			spot("Beacon", F * CFrame.new(-7.2, WALK_Y, -hw - 1.1), k)
-			spot("Beacon", F * CFrame.new(7.2, WALK_Y, hw + 1.1) * CFrame.Angles(0, math.pi, 0), k + 1)
+		-- passage piéton au milieu du côté (face à l'allée de la parcelle, ou
+		-- décalé si une rangée de stationnement est là)
+		local zebraX: number? = nil
+		if not junction then
+			-- (côtés impairs : pas à +30, la bouche d'incendie y est)
+			for _, zx in ipairs(k % 2 == 1 and { 0, -30 } or { 0, -30, 30 }) do
+				if rowX == nil or math.abs(zx - (rowX :: number)) > rowHalf + 10 then
+					zebraX = zx
+					break
+				end
+			end
+		end
+		local zebra = zebraX ~= nil
+		local zx = zebraX or 0
+		if zebraX then
+			spot("Zebra", F * CFrame.new(zx, ROAD_Y, 0), ROAD_W * 10)
+			spot("Beacon", F * CFrame.new(zx - 7.2, WALK_Y, -hw - 1.1), k)
+			spot("Beacon", F * CFrame.new(zx + 7.2, WALK_Y, hw + 1.1) * CFrame.Angles(0, math.pi, 0), k + 1)
 		end
 		if rowX then
 			spot("ParkMeter", F * CFrame.new(rowX - rowHalf - 1.4, WALK_Y, -hw - 1.1), k)
@@ -435,7 +447,7 @@ local function lifeBoulevard(geo: TownKit.Geo)
 				free = false
 			elseif k % 2 == 1 and math.abs(x - (hx + 1.5)) < 5 then
 				free = false
-			elseif zebra and math.abs(x) < 9.5 then
+			elseif zebra and math.abs(x - zx) < 9.5 then
 				free = false
 			elseif rowX and math.abs(x - (rowX - rowHalf - 1.4)) < 3 then
 				free = false
@@ -455,7 +467,7 @@ local function lifeBoulevard(geo: TownKit.Geo)
 		-- plaques d'égout (milieu des voies) + avaloirs le long des bordures
 		for i = 1, 2 do
 			local mx = (hash(k, 40 + i) - 0.5) * half * 1.2
-			if not (junction and math.abs(mx) < jw + 6) and not (zebra and math.abs(mx) < 8) then
+			if not (junction and math.abs(mx) < jw + 6) and not (zebra and math.abs(mx - zx) < 8) then
 				spot("Manhole", F * CFrame.new(mx, ROAD_Y, (i == 1 and 1 or -1) * 4.6), k * 10 + i)
 			end
 			local dx = (i == 1 and -1 or 1) * half * (0.35 + hash(k, 44 + i) * 0.3)

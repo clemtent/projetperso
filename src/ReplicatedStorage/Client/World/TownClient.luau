@@ -435,7 +435,8 @@ local KEEP_GUIS: { [string]: boolean } = {
 	BubbleChat = true,
 	Chat = true,
 	Freecam = true,
-	DeskModeGui = true, -- v9.5 🖥️ barre "Se lever" du bureau (DeskMode)
+	DeskModeGui = true,
+	TownGraphicsGui = true, -- v9.8 🎨 fenêtre Graphismes en ville (TownGraphics, REALISM98) -- v9.5 🖥️ barre "Se lever" du bureau (DeskMode)
 	TownInventoryGui = true, -- v9.6 plateau inventaire 3D (FurnitureEdit, PLACE96)
 	TownShopGui = true, -- v9.6 catalogue des magasins (ShopUI, SHOPS96)
 	CarGui = true, -- v9.6 conduite (CarClient, GARAGE96)
@@ -1153,6 +1154,18 @@ local function enter(options: any)
 		end
 		TownAtmosphere.SetNight(ClientState.IsUserDarkMode())
 		TownAtmosphere.Apply(s)
+		-- v9.8 🌦️ pas de pluie dans une pièce (Weather3D, REALISM98)
+		local weather = optionalModule("Weather3D")
+		if weather and type(weather.SetIndoorProbe) == "function" then
+			weather.SetIndoorProbe(function(p: Vector3): boolean
+				for _, house in pairs(houses) do
+					if house:RoomAt(p) ~= nil then
+						return true
+					end
+				end
+				return false
+			end)
+		end
 		-- v9.6 🛍️ boutiques où l'on entre : intérieurs en flux (SHOPS96)
 		local shops = optionalModule("ShopInteriors")
 		if shops and type(shops.Start) == "function" then
@@ -1372,6 +1385,11 @@ local function teardown()
 	local greenery = optionalModule("TownGreenery")
 	if greenery and type(greenery.Stop) == "function" then
 		pcall(greenery.Stop)
+	end
+	-- v9.8 🎨 fenêtre Graphismes fermée (REALISM98)
+	local gfx = optionalModule("TownGraphics")
+	if gfx and type(gfx.Close) == "function" then
+		pcall(gfx.Close)
 	end
 	-- v9.8 🪑 poses rendues aux animations de Roblox, chaises remises (SEAT98)
 	local sitAnimator = optionalModule("SitAnimator")

@@ -1056,7 +1056,8 @@ BEHAVIOURS.Press = function(h: Handle)
 			local variant = tonumber(part:GetAttribute("Variant")) or 1
 			variants = math.max(variants, variant)
 			local offset = anvil.CFrame:ToObjectSpace(cf)
-			table.insert(crushables, { Part = part, Offset = offset, Size = part.Size, Axis = axis, Transparency = part.Transparency, Variant = variant })
+			local base = tonumber(part:GetAttribute("BaseTransparency")) or part.Transparency
+			table.insert(crushables, { Part = part, Offset = offset, Size = part.Size, Axis = axis, Transparency = base, Variant = variant })
 		end
 	end
 	-- trajets (studs, repère de l'enclume : +X = vers le tapis)
@@ -1077,7 +1078,7 @@ BEHAVIOURS.Press = function(h: Handle)
 	local beltSide = (#slats == 0 or (beltMin + beltMax) / 2 >= 0) and 1 or -1
 	local range = beltMax > beltMin and beltMax - beltMin or 0
 	local loadDX = #slats > 0 and (beltSide > 0 and beltMax + range * 0.1 or beltMin - range * 0.1) or 40 * k
-	local binDX = -33 * k * beltSide
+	local binDX = -34 * k * beltSide
 	local binDY = -16 * k
 	local slatGap = #slats > 1 and (beltMax - beltMin) / (#slats - 1) or 1
 	local slatShift = 0
@@ -1232,11 +1233,11 @@ BEHAVIOURS.Press = function(h: Handle)
 		end
 	end
 	-- pose de l'objet : écrasement `s` (1 = intact), décalage (repère de l'enclume)
-	local function placeItem(s: number, slide: Vector3)
+	local function placeItem(s: number, slide: Vector3, gMax: number?)
 		if not anvil then
 			return
 		end
-		local g = math.min(1.9, 1 / math.sqrt(math.max(0.15, s)))
+		local g = math.min(gMax or 1.9, 1 / math.sqrt(math.max(0.15, s)))
 		local base = anvil.CFrame * CFrame.new(slide)
 		for _, c in ipairs(crushables) do
 			if c.Variant == current then
@@ -1335,7 +1336,8 @@ BEHAVIOURS.Press = function(h: Handle)
 		elseif phase == "Eject" then
 			-- la galette glisse vers le bac, tombe et s'efface
 			local fall = math.max(0, t - 0.55) / 0.45
-			placeItem(0.15, Vector3.new(binDX * math.min(1, t / 0.7), binDY * fall * fall, 0))
+			-- (la galette se replie un peu pour passer entre les colonnes)
+			placeItem(0.15, Vector3.new(binDX * math.min(1, t / 0.7), binDY * fall * fall, 0), 1.9 - 0.8 * math.min(1, t / 0.25))
 			showVariant(current, math.clamp((t - 0.7) / 0.3, 0, 1))
 			moveBelt(dt * speed * math.abs(loadDX) / PRESS_DURATIONS.Load * 0.5)
 			setLamps(2)
@@ -1626,6 +1628,10 @@ local HALO_COLORS = { Live = rgb(220, 120, 255), DVD = rgb(90, 200, 255), News =
 BEHAVIOURS.TV = function(h: Handle)
 	local halo = findPart(h.Model, "Ambilight")
 	local rec = h.Screens[1]
+	-- (v9.8 : la télé s'allume sur le live du clicker ; le DVD est sur la chaîne suivante)
+	if rec and rec.Kind == "DVD" and h.Interactive then
+		rec.Kind = "Live"
+	end
 	if halo then
 		h.Step = function(_h, _dt)
 			local base = HALO_COLORS[rec and rec.Kind or "DVD"] or CYAN_SOFT

@@ -282,7 +282,7 @@ end
 local RUNNER_H = 200 -- hauteur "design" du coureur (le slot du clicker fait 190)
 local RUNNER_MARGIN = 6 -- liseré + cadre "téléphone" du stimulus, hors toile
 local LIVE_W, LIVE_H = 384, 268 -- slot L3 du clicker
-local DVD_W = 1280 -- l'écran "design" du clicker (logos de 150 x 80)
+local DVD_W = 900 -- (écran "design" plus petit que celui du clicker : logos de 150 x 80 bien visibles)
 local TICKER_H = 30 -- slot Ticker
 
 local SUPPORTED = { Runner = "Runner", Live = "LiveStream", DVD = "DVD", News = "NewsTicker" }
