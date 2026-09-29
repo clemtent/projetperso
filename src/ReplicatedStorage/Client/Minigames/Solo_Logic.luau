@@ -145,6 +145,19 @@ Logic.Games = {
 	},
 }
 
+-- v9.8 (DESK98) 🏃 "Desk Runner" (bureau gamer, simulation : Shared >
+-- DeskRunnerLogic ; rejoué par SoloGames). Pas dans GameOrder : jamais
+-- listé dans le panneau Arcade. Mêmes seuils que DeskRunnerLogic.Rules.
+Logic.Games.DeskRunner = {
+	Name = "Desk Runner",
+	Icon = "🏃",
+	MaxTicks = 18000,
+	Hidden = true,
+	Difficulties = {
+		Normal = { Thresholds = { 400, 1000, 2000 } },
+	},
+}
+
 -- Règles d'une difficulté (nil si inconnue : arguments "poubelle")
 function Logic.GetRules(gameId: any, difficulty: any): (any, any)
 	if type(gameId) ~= "string" or type(difficulty) ~= "string" then
@@ -196,7 +209,7 @@ function Logic.Stars(gameId: string, rules: any, metrics: any): (number, number)
 			return 1, 1
 		end
 		return 0, math.clamp(metrics.Progress or 0, 0, 1)
-	elseif gameId == "Simon" or gameId == "Snake" then
+	elseif gameId == "Simon" or gameId == "Snake" or gameId == "DeskRunner" then
 		return starsFromThresholds(metrics.Score or 0, rules.Thresholds)
 	elseif gameId == "WhackAMole" then
 		local max = math.max(1, metrics.Max or 1)

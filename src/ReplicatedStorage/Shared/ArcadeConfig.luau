@@ -193,6 +193,14 @@ for index, entry in ipairs(ArcadeConfig.Games) do
 		table.insert(ArcadeConfig.DuelGames, entry)
 	end
 end
+-- v9.8 (DESK98) 🎮 "Desk Runner" : course façon Subway jouée sur l'écran du
+-- bureau gamer de la maison (Client > World > DeskGames). Jeu solo CACHÉ :
+-- absent de Games / SoloGames (le panneau Arcade ne le liste pas), mêmes
+-- plafonds du jour et même échelle de récompenses que les autres jeux solo.
+ArcadeConfig.GamesById.DeskRunner = { Id = "DeskRunner", Kind = "Solo", Hidden = true, Name = "Desk Runner", Icon = "🏃", Tagline = "Runner",
+	Description = "Dodge the trains on your gaming desk",
+	Color = Color3.fromRGB(255, 120, 60), Accent = Color3.fromRGB(80, 160, 255),
+	Tickets = 3, RewardSeconds = 30, DailyRewarded = 12, Record = "High", RecordFormat = "Score", Order = 99 }
 ArcadeConfig.ShopById = {}
 for index, item in ipairs(ArcadeConfig.Shop) do
 	item.Order = index

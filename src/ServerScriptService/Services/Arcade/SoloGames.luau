@@ -677,10 +677,76 @@ function G2048.Finish(player, data, api, session, arg)
 end
 
 ----------------------------------------------------------------------
+-- 🏃 Desk Runner (v9.8, bureau gamer ; rejoué avec Shared > DeskRunnerLogic)
+--   start  -> { Seed, Tick }
+--   finish { Token, Inputs = { tick1, action1, tick2, action2, ... }, Ticks = pas joués }
+--   (même anti-triche que le Snake : rejeu serveur + durée minimale)
+----------------------------------------------------------------------
+
+local runnerLogic = nil
+local function deskRunnerLogic()
+	if runnerLogic == nil then
+		local ok, result = pcall(function()
+			local shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared", 10)
+			return require(shared:WaitForChild("DeskRunnerLogic", 10))
+		end)
+		runnerLogic = (ok and type(result) == "table") and result or false
+	end
+	return runnerLogic or nil
+end
+
+-- Tests hors Roblox : SoloGames._InjectRunner(module)
+function SoloGames._InjectRunner(module)
+	runnerLogic = module
+end
+
+local DeskRunner = {}
+
+function DeskRunner.Start(session, reply)
+	session.Seed = randomInt(1, 2147483646)
+	reply.Seed = session.Seed
+	local runner = deskRunnerLogic()
+	reply.Tick = runner and runner.TICK or (1 / 30)
+end
+
+function DeskRunner.Finish(player, data, api, session, arg)
+	local runner = deskRunnerLogic()
+	if not runner then
+		return false, T(api, player, "Something went wrong")
+	end
+	local maxTicks = session.GameRules.MaxTicks
+	local inputs = {}
+	if type(arg.Inputs) == "table" then
+		local last = 0
+		for k = 1, math.min(#arg.Inputs, 12000), 2 do
+			local tick = int(arg.Inputs[k], 1, maxTicks)
+			local action = int(arg.Inputs[k + 1], 1, 4)
+			if not tick or not action or tick <= last then
+				break -- journal abîmé : on garde le début
+			end
+			last = tick
+			table.insert(inputs, tick)
+			table.insert(inputs, action)
+		end
+	end
+	local ticks = int(arg.Ticks, 0, maxTicks) or 0
+	local score, _coins, _distance, played, minDuration = runner.Replay(session.Seed, inputs, ticks)
+	session.Moves += played
+	local elapsed = now(api) - session.Started
+	local stars = Logic.Stars("DeskRunner", session.Rules, { Score = score })
+	local metrics = { Stars = stars, Score = score, Played = played > 0 }
+	if elapsed < minDuration * 0.8 - 1 then
+		metrics.Rejected = "Too fast! This run can't be rewarded."
+	end
+	return true, conclude(player, data, api, session, metrics)
+end
+
+----------------------------------------------------------------------
 -- Routage
 ----------------------------------------------------------------------
 
 local HANDLERS = {
+	DeskRunner = DeskRunner,
 	Minesweeper = Minesweeper,
 	Memory = Memory,
 	Simon = Simon,

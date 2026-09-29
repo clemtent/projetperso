@@ -70,10 +70,12 @@ WorldLayout.SPAWN_INSIDE = 12 -- apparition : juste à l'intérieur de la porte
 WorldLayout.TOWN_MARGIN = 140 -- pré au-delà du fond des parcelles (murs invisibles) ; v9.8 : 80 -> 140 (MégaDopa agrandi)
 
 -- Porte d'entrée (dans la cage d'escalier) et passages entre pièces
-WorldLayout.DOOR_W = 5
-WorldLayout.DOOR_H = 8
-WorldLayout.PASS_W = 5 -- passage entre deux pièces / cage -> pièce (centré en profondeur)
-WorldLayout.PASS_H = 8.5
+-- (v9.8 HOUSE98 : "la tête touche" -> toutes les portes font au moins
+-- 6 x 9 studs : 6,5 x 9,5 ; la porte d'entrée devient une porte DOUBLE)
+WorldLayout.DOOR_W = 6.5
+WorldLayout.DOOR_H = 9.5
+WorldLayout.PASS_W = 6.5 -- passage entre deux pièces / cage -> pièce (centré en profondeur)
+WorldLayout.PASS_H = 9.5
 
 -- Escalier (v9.4, dans la cage) : une volée droite par étage (étage k -> k+1),
 -- au MILIEU de la cage (face à la porte d'entrée), couloirs de chaque côté.
@@ -89,8 +91,18 @@ WorldLayout.STAIR_STEPS = 13 -- = STORY / STAIR_RISE
 WorldLayout.STAIR_TREAD = 1.4
 WorldLayout.STAIR_D0 = 4
 WorldLayout.STAIR_D1 = 4 + 13 * 1.4 -- 22,2
-WorldLayout.HEADROOM = 7.5
-WorldLayout.STAIR_HOLE_D0 = 4 + (12 - 7.5) * 1.4 -- 10,3 (marche à 4,5 : 12 - 4,5 = 7,5 de hauteur libre)
+-- (v9.8 HOUSE98 : 7,5 -> 8,5 studs de hauteur libre : trémie plus longue)
+WorldLayout.HEADROOM = 8.5
+WorldLayout.STAIR_HOLE_D0 = 4 + (12 - 8.5) * 1.4 -- 8,9 (marche à 3,5 : 12 - 3,5 = 8,5 de hauteur libre)
+
+-- (v9.8 HOUSE98) Porte de DERRIÈRE (vers le jardin) : au rez-de-chaussée,
+-- dans le mur du fond de la cage, derrière l'escalier (couloir du fond
+-- STAIR_D1..DEPTH, toute la largeur de la cage), même taille que la porte
+-- d'entrée ; dehors : palier + BACK_STEPS marches + rampe invisible.
+WorldLayout.BACK_LANDING = 3 -- profondeur du palier (studs)
+WorldLayout.BACK_STEPS = 3 -- contremarches jusqu'à la pelouse
+WorldLayout.BACK_TREAD = 1.25 -- giron d'une marche
+WorldLayout.BACK_WALL_OUT = 0.3 -- le mur du fond déborde de 0,3 derrière les pièces
 
 export type SizeDef = { Floors: number, Columns: number, Width: number?, Exterior: string?, Id: string? }
 
@@ -216,6 +228,25 @@ end
 function WorldLayout.StairSpan(size: SizeDef?): (number, number)
 	local x = WorldLayout.DoorX(size)
 	return x - WorldLayout.STAIR_W / 2, x + WorldLayout.STAIR_W / 2
+end
+
+-- (v9.8 HOUSE98) Porte de derrière : x du milieu (repère local de la maison)
+-- = milieu de la cage, comme la porte d'entrée (même largeur DOOR_W)
+function WorldLayout.BackDoorX(size: SizeDef?): number
+	return WorldLayout.DoorX(size)
+end
+
+-- d de la face EXTÉRIEURE du mur du fond (seuil de la porte de derrière,
+-- au niveau du rez-de-chaussée FloorY(1))
+function WorldLayout.BackDoorD(size: SizeDef?): number
+	return WorldLayout.Dims(size).Depth + WorldLayout.BACK_WALL_OUT
+end
+
+-- d du pied des marches de derrière (sur la pelouse du jardin) : tout ce qui
+-- est entre BackDoorD et ça, sur x = BackDoorX ± (DOOR_W / 2 + 1), doit
+-- rester libre (palier, marches, rampe)
+function WorldLayout.BackStepsD(size: SizeDef?): number
+	return WorldLayout.BackDoorD(size) + WorldLayout.BACK_LANDING + WorldLayout.BACK_STEPS * WorldLayout.BACK_TREAD
 end
 
 -- Hauteur (au-dessus du sol de l'étage) du dessus de la rampe / des marches à

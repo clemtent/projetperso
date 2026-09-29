@@ -2759,6 +2759,154 @@ def run_sim():
     return proc.returncode
 
 
+# 🎮 DESK98 (v9.8) : "Desk Runner" jouable au bureau gamer. Simulation pure
+# (Shared/DeskRunnerLogic) rejouée par le serveur (Arcade/SoloGames, handler
+# caché "DeskRunner"), comme le Snake : même score client / serveur, partie
+# jamais injouable, étoiles, partie trop rapide refusée, récompense de l'arcade.
+DESK_RUNNER_TESTS = r"""
+do
+	local function load(src, name)
+		local fn, err = loadstring(src, "=" .. name)
+		assert(fn, err)
+		return fn()
+	end
+	local L = load(DESKRUNNER_SRC, "DeskRunnerLogic")
+	local Logic = load(SOLO_LOGIC_SRC, "Solo_Logic")
+	local ArcadeCfg = load(DR_ARCADE_SRC, "ArcadeConfig")
+	local Solo = load(SOLO_GAMES_SRC, "SoloGames")
+	Solo._Inject(Logic, ArcadeCfg)
+	Solo._InjectRunner(L)
+
+	-- joueur automatique : va vers la voie libre de trains le plus longtemps, saute / roule
+	local function trainFree(s, lane)
+		local best = 999
+		for _, o in ipairs(s.Obstacles) do
+			local rel = o.P - s.Distance
+			if o.Lane == lane and o.Kind == "Train" and rel + o.Len > -0.5 and rel < best then best = math.max(rel, -0.1) end
+		end
+		return best
+	end
+	local function near(s, lane, kind, horizon)
+		for _, o in ipairs(s.Obstacles) do
+			local rel = o.P - s.Distance
+			if o.Lane == lane and o.Kind == kind and rel > -0.3 and rel < horizon then return rel end
+		end
+		return nil
+	end
+	local function play(seed, maxTicks, lazy)
+		local s = L.New(seed)
+		local inputs = {}
+		while s.Alive and s.Tick < maxTicks do
+			local act = nil
+			if not lazy then
+				local cur = trainFree(s, s.Lane)
+				if cur < s.Speed * 0.6 then
+					local bestLane, bestV = s.Lane, cur
+					for _, l in ipairs({ -1, 0, 1 }) do
+						local ok = true
+						local step = l > s.Lane and 1 or -1
+						for m = s.Lane + step, l, step do if trainFree(s, m) < 1.5 then ok = false end end
+						local v = trainFree(s, l)
+						if ok and v > bestV then bestLane, bestV = l, v end
+					end
+					if bestLane < s.Lane then act = 1 elseif bestLane > s.Lane then act = 2 end
+				end
+				if not act then
+					if near(s, s.Lane, "Low", s.Speed * 0.12 + 0.6) and s.JumpTick < 0 then act = 3 end
+					if near(s, s.Lane, "High", s.Speed * 0.12 + 0.6) and s.RollTick <= 3 then act = 4 end
+				end
+			end
+			if act then
+				table.insert(inputs, s.Tick + 1)
+				table.insert(inputs, act)
+				L.Input(s, act)
+			end
+			L.Step(s)
+		end
+		return s, inputs
+	end
+
+	test("DeskRunner : simulation déterministe, rejeu identique, jamais injouable", function(check)
+		for seed = 1, 12 do
+			local s, inputs = play(seed * 104729, 3600, false)
+			check(s.Alive, "graine " .. seed .. " : le bot survit 2 min (" .. tostring(s.Crash) .. " au pas " .. s.Tick .. ")")
+			local score, coins, _, played = L.Replay(seed * 104729, inputs, s.Tick)
+			eq(check, score, s.Score, "rejeu : même score (graine " .. seed .. ")")
+			eq(check, coins, s.Coins, "rejeu : mêmes pièces")
+			eq(check, played, s.Tick, "rejeu : mêmes pas")
+			check(s.Coins > 10, "des pièces ramassées (" .. s.Coins .. ")")
+		end
+		local lazy = play(777, 3600, true)
+		check(not lazy.Alive and lazy.Tick < 3600, "sans rien faire : on finit par tomber")
+		-- journal truqué : action inconnue / pas dans le désordre -> ignorés
+		local score = L.Replay(5, { 10, 9, 5, 1, 3, 2 }, 30)
+		check(type(score) == "number" and score >= 0, "journal abîmé toléré")
+		eq(check, (L.Stars(0)), 0, "0 étoile à 0")
+		eq(check, (L.Stars(2500)), 3, "3 étoiles à 2500")
+		local st = Logic.Stars("DeskRunner", Logic.Games.DeskRunner.Difficulties.Normal, { Score = 1200 })
+		eq(check, st, 2, "Solo_Logic.Stars DeskRunner")
+		check(ArcadeCfg.GamesById.DeskRunner ~= nil and ArcadeCfg.GamesById.DeskRunner.Hidden == true, "ArcadeConfig : DeskRunner (caché)")
+		for _, entry in ipairs(ArcadeCfg.SoloGames) do check(entry.Id ~= "DeskRunner", "DeskRunner absent de la liste Solo (panneau)") end
+		for _, id in ipairs(Logic.GameOrder) do check(id ~= "DeskRunner", "DeskRunner absent de GameOrder") end
+	end)
+
+	test("DeskRunner : SoloGames (graine serveur, rejeu, durée minimale, récompense)", function(check)
+		local clock = 1000
+		local rewarded, plays = 0, 0
+		local api = {
+			Now = function() return clock end,
+			Config = ArcadeCfg,
+			RewardWin = function(_, gameId) rewarded += 1 return { Tickets = ArcadeCfg.GamesById[gameId].Tickets, Trophies = 1, Dopamine = 5, Capped = false } end,
+			CountPlay = function() plays += 1 end,
+			GrantTickets = function(_, n) return n end,
+			GrantDopamineSeconds = function(_, s) return s end,
+			T = function(_, text) return text end,
+		}
+		local player, data = {}, {}
+		local ok, reply = Solo.Handle(player, data, "solo:start", { Game = "DeskRunner", Difficulty = "Normal" }, api)
+		check(ok and type(reply) == "table" and type(reply.Seed) == "number" and reply.Token ~= nil, "solo:start -> graine + jeton")
+		if not ok then return end
+		local s, inputs = play(reply.Seed, 2400, false)
+		-- trop vite (80 s de jeu annoncées en 1 s) : refusé
+		clock += 1
+		local ok2, result = Solo.Handle(player, data, "solo:finish", { Token = reply.Token, Inputs = inputs, Ticks = s.Tick }, api)
+		check(ok2 and result.Rejected ~= nil and result.Tickets == 0, "partie trop rapide : refusée")
+		-- partie honnête : rejouée, récompensée
+		ok, reply = Solo.Handle(player, data, "solo:start", { Game = "DeskRunner", Difficulty = "Normal" }, api)
+		s, inputs = play(reply.Seed, 2400, false)
+		clock += s.Tick / 30 + 2
+		local ok3, result3 = Solo.Handle(player, data, "solo:finish", { Token = reply.Token, Inputs = inputs, Ticks = s.Tick }, api)
+		check(ok3 and result3.Rejected == nil, "partie honnête acceptée")
+		eq(check, result3.Score, s.Score, "score du serveur = score du client")
+		check(result3.Stars >= 1 and result3.Tickets > 0 and rewarded == 1, "récompense de l'arcade (étoiles " .. tostring(result3.Stars) .. ")")
+		check(data.Arcade.Solo.Best["DeskRunner:Normal"] == s.Score, "record gardé")
+		-- score annoncé ignoré : seul le rejeu compte
+		ok, reply = Solo.Handle(player, data, "solo:start", { Game = "DeskRunner", Difficulty = "Normal" }, api)
+		clock += 100
+		local ok4, result4 = Solo.Handle(player, data, "solo:finish", { Token = reply.Token, Inputs = {}, Ticks = 60, Score = 999999 }, api)
+		check(ok4 and result4.Score < 200 and result4.Stars == 0, "score inventé ignoré (" .. tostring(result4.Score) .. ")")
+	end)
+end
+"""
+
+
+def desk_runner_test():
+    """Tests DESK98 : DeskRunnerLogic + handler DeskRunner de SoloGames."""
+    sources = [
+        ("DESKRUNNER_SRC", os.path.join(SHARED, "DeskRunnerLogic.luau")),
+        ("SOLO_LOGIC_SRC", os.path.join(SRC, "ReplicatedStorage", "Client", "Minigames", "Solo_Logic.luau")),
+        ("DR_ARCADE_SRC", os.path.join(SHARED, "ArcadeConfig.luau")),
+        ("SOLO_GAMES_SRC", os.path.join(SRC, "ServerScriptService", "Services", "Arcade", "SoloGames.luau")),
+    ]
+    lines = []
+    for name, path in sources:
+        body = read(path)
+        if "]=====]" in body:
+            raise ValueError("délimiteur ]=====] interdit dans " + path)
+        lines.append("local %s = [=====[%s]=====]" % (name, body))
+    return "\n".join(lines) + "\n" + DESK_RUNNER_TESTS
+
+
 def main():
     if not os.path.exists(LUAU):
         print("FAIL : Luau CLI introuvable (%s)" % LUAU)
@@ -2766,7 +2914,8 @@ def main():
     if "--sim" in sys.argv:
         return run_sim()
     bundle = build_bundle(config_key_test() + "\n" + lang_test() + "\n" + house_art_test() + "\n" + arcade_shop_test() + "\n" + friend_mail_test()
-                          + "\n" + economy_test() + "\n" + world_layout_test() + "\n" + garden_snapshot_test() + "\n" + garage_test())
+                          + "\n" + economy_test() + "\n" + world_layout_test() + "\n" + garden_snapshot_test() + "\n" + garage_test()
+                          + "\n" + desk_runner_test())
     with tempfile.NamedTemporaryFile("w", suffix=".luau", delete=False, encoding="utf-8") as f:
         f.write(bundle)
         path = f.name
