@@ -107,7 +107,7 @@ CarModels.Specs = SPECS
 CarModels.Kinds = { "BubbleCar", "CityCar", "Hatchback", "Pickup", "SUV", "Van", "SportsCar", "Limo" }
 
 -- Couleurs fixes
-local GLASS = Color3.fromRGB(64, 88, 116)
+local GLASS = Color3.fromRGB(46, 60, 78) -- (v9.8) verre teinté
 local TRIM = Color3.fromRGB(44, 44, 54)
 local TYRE = Color3.fromRGB(32, 32, 38)
 local CHROME = Color3.fromRGB(214, 218, 226)
@@ -130,6 +130,12 @@ local REVERSE = Color3.fromRGB(236, 236, 240)
 local SEAT2 = Color3.fromRGB(88, 72, 82)
 local SCREEN = Color3.fromRGB(44, 70, 104)
 local GRAPHITE = Color3.fromRGB(52, 54, 62)
+-- (v9.8, CARS98) détails "10x plus réalistes"
+local SIDEWALL = Color3.fromRGB(50, 50, 56) -- flanc du pneu (un peu plus clair que la bande)
+local GAP = Color3.fromRGB(22, 22, 28) -- joints de carrosserie
+local HEADLINER = Color3.fromRGB(206, 202, 196) -- ciel de toit (intérieur)
+local CONSOLE = Color3.fromRGB(36, 36, 42)
+local GLASS_T = 0.38 -- transparence des vitres teintées
 
 local function kindOf(carId: string?): string
 	if type(carId) == "string" then
@@ -228,7 +234,7 @@ local function newPart(b: B, className: string, name: string, size: Vector3, cf:
 	p.Material = material
 	if b.Paint and color == b.Paint then
 		p:SetAttribute("Paint", true)
-		if b.Gloss and material == M.SmoothPlastic then
+		if b.Gloss and (material == M.SmoothPlastic or material == M.Plastic) then
 			p.Reflectance = b.Gloss
 		end
 	end
@@ -297,6 +303,31 @@ end
 local function cylY(b: B, name: string, x: number, y: number, z: number, height: number, diameter: number, color: Color3, material: Enum.Material?): BasePart
 	local m = math.min(b.S.X, b.S.Z)
 	local p = newPart(b, "Part", name, Vector3.new(height * b.S.Y, diameter * m, diameter * m), CFrame.new(P(b, x, y, z)) * CFrame.Angles(0, 0, PI / 2), color, material or M.SmoothPlastic)
+	;(p :: Part).Shape = Enum.PartType.Cylinder
+	return p
+end
+
+-- (v9.8) Ellipsoïde (SpecialMesh "Sphere" qui remplit la pièce) : formes
+-- arrondies (nez, toit en dôme, rétroviseurs, optiques). Taille = extents.
+local function ell(b: B, name: string, x: number, y: number, z: number, sx: number, sy: number, sz: number, color: Color3, material: Enum.Material?, rot: CFrame?, shadow: boolean?): BasePart
+	local cf = CFrame.new(P(b, x, y, z))
+	if rot then
+		cf *= rot
+	end
+	local p = newPart(b, "Part", name, Vector3.new(sx * b.S.X, sy * b.S.Y, sz * b.S.Z), cf, color, material or M.SmoothPlastic, shadow)
+	local mesh = Instance.new("SpecialMesh")
+	mesh.MeshType = Enum.MeshType.Sphere
+	mesh.Parent = p
+	return p
+end
+
+-- (v9.8) Tige (cylindre) entre deux points du repère local (arêtes arrondies)
+local function rod(b: B, name: string, a: Vector3, c: Vector3, diameter: number, color: Color3, material: Enum.Material?): BasePart
+	local pa, pc = P(b, a.X, a.Y, a.Z), P(b, c.X, c.Y, c.Z)
+	local len = (pc - pa).Magnitude
+	local m = math.min(b.S.X, b.S.Y)
+	local cf = CFrame.lookAt((pa + pc) / 2, pc) * CFrame.Angles(0, PI / 2, 0)
+	local p = newPart(b, "Part", name, Vector3.new(len, diameter * m, diameter * m), cf, color, material or M.SmoothPlastic)
 	;(p :: Part).Shape = Enum.PartType.Cylinder
 	return p
 end
