@@ -49,6 +49,26 @@ local Locale = require(ReplicatedStorage.Shared.Locale)
 
 local TownTraffic = {}
 
+-- (v9.8) réglage "Graphismes > Détail" (REALISM98) : portée d'animation et
+-- nombre de véhicules réduits en détail bas
+local okGQ, GraphicsQuality = pcall(require, ReplicatedStorage.Shared:FindFirstChild("GraphicsQuality") :: any)
+local function detailScale(): number
+	if okGQ and type(GraphicsQuality) == "table" and type(GraphicsQuality.DetailScale) == "function" then
+		local ok, value = pcall(GraphicsQuality.DetailScale)
+		if ok and type(value) == "number" then
+			return value
+		end
+	end
+	return 1
+end
+local function lowDetail(): boolean
+	if okGQ and type(GraphicsQuality) == "table" and type(GraphicsQuality.Get) == "function" then
+		local ok, q = pcall(GraphicsQuality.Get)
+		return ok and type(q) == "table" and q.Detail == "Low"
+	end
+	return false
+end
+
 TownTraffic.FOLDER_NAME = "TownTraffic"
 TownTraffic.MAX_MOVING = 10 -- (v9.8) 6 -> 10 (1 bus + 9 voitures)
 TownTraffic.RATE = 1 / 30 -- 30 Hz au plus
@@ -315,7 +335,7 @@ local function spawnTraffic()
 	if not p then
 		return
 	end
-	local n = TownTraffic.MAX_MOVING
+	local n = if lowDetail() then math.min(6, TownTraffic.MAX_MOVING) else TownTraffic.MAX_MOVING
 	local step = p.Length / n
 	-- le bus
 	local bus = VehicleModels.Bus({ Detail = "Light", T = Locale.T })
@@ -376,6 +396,7 @@ local function stepTraffic(dt: number, camPos: Vector3?)
 	end
 	local L = p.Length
 	local ideal = L / #vehicles
+	local range = TownTraffic.MOVE_RANGE * detailScale()
 	-- tri circulaire : véhicule suivant = plus petite avance positive
 	for _, v in ipairs(vehicles) do
 		local ahead = math.huge
@@ -472,7 +493,7 @@ local function stepTraffic(dt: number, camPos: Vector3?)
 			end
 		end
 		-- déplacement des pièces (seulement près de la caméra)
-		local near = camPos == nil or (cf.Position - camPos).Magnitude < TownTraffic.MOVE_RANGE
+		local near = camPos == nil or (cf.Position - camPos).Magnitude < range
 		if near and (v.Speed > 0.01 or not v.Placed) then
 			local pivot = frameAt(p, v.S)
 			local frames = v.Frames

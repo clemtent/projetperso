@@ -1607,7 +1607,14 @@ local function animateShops(position: Vector3, now: number)
 				if a.Model.Parent then
 					if a.Path and a.Length > 0 then
 						local p, dir = pathAt(a.Path, ((now + a.Offset) * a.Speed) % a.Length)
-						a.Model:PivotTo(CFrame.lookAt(p, p + Vector3.new(dir.X, 0, dir.Z)))
+						local cf = CFrame.lookAt(p, p + Vector3.new(dir.X, 0, dir.Z))
+						-- (racine placée directement : jamais de PivotTo répété)
+						local root = a.Model.PrimaryPart
+						if root then
+							root.CFrame = cf
+						else
+							a.Model:PivotTo(cf)
+						end
 					end
 					pcall(N.Animate, a.Model, a.Anim, now + a.Offset)
 				end

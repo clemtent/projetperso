@@ -1142,7 +1142,7 @@ R.SetupPress = function(b, _ctx)
 	local ramBand = named(b.Box(PX, 53.5, PZ + 11.5 + t * 0.3, 38, 7, t, HAZARD_A, M.SmoothPlastic), "PressRam")
 	hazard(ramBand, Enum.NormalId.Back, 38, 7, 8)
 	-- pupitre (devant à droite) : gros bouton rouge, voyants, afficheur
-	local cx, cz = 38, 15
+	local cx, cz = 43, 21
 	b.Box(cx, 3.2, cz, 5, 36, 5, CARBON, M.Metal)
 	b.Box(cx, 2.4, cz, 14, th(b, 2), 14, CARBON_LIGHT, M.Metal)
 	local head = CFrame.new(cx, 42, cz) * CFrame.Angles(-0.55, 0, 0)

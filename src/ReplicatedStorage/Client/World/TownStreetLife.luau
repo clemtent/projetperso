@@ -44,6 +44,17 @@ local RunService = game:GetService("RunService")
 
 local Locale = require(ReplicatedStorage.Shared.Locale)
 local NPCModels = require(ReplicatedStorage.Shared.NPCModels)
+-- (v9.8, REALISM98) réglage "Graphismes > Détail" : distances de flux x 0,65 / 1 / 1,35
+local okGQ, GraphicsQuality = pcall(require, ReplicatedStorage.Shared.GraphicsQuality)
+local function detailScale(): number
+	if okGQ and type(GraphicsQuality) == "table" and GraphicsQuality.DetailScale then
+		local ok, v = pcall(GraphicsQuality.DetailScale)
+		if ok and type(v) == "number" then
+			return v
+		end
+	end
+	return 1
+end
 
 local TownStreetLife = {}
 
@@ -1136,14 +1147,15 @@ function TownStreetLife.Step(position: Vector3)
 	end
 	local flat = Vector3.new(position.X, 0, position.Z)
 	local builds = 0
+	local k = detailScale()
 	for _, spot: Spot in ipairs(s.Spots) do
 		if not ANCHORS[spot.Kind] and BUILDERS[spot.Kind] then
 			local d = (Vector3.new(spot.Pos.X, 0, spot.Pos.Z) - flat).Magnitude
-			local inR, outR = BUILD_IN, BUILD_OUT
+			local inR, outR = BUILD_IN * k, BUILD_OUT * k
 			if FAR[spot.Kind] then
 				inR, outR = FAR_IN, FAR_OUT
 			elseif BIG[spot.Kind] then
-				inR, outR = BIG_IN, BIG_OUT
+				inR, outR = BIG_IN * k, BIG_OUT * k
 			end
 			if spot.Model then
 				if d > outR then
@@ -1172,6 +1184,22 @@ function TownStreetLife.Stop()
 	if s.Folder then
 		s.Folder:Destroy()
 	end
+end
+
+-- (tests / détecteur de z-fighting) construit TOUT d'un coup
+function TownStreetLife.BuildAll(): number
+	local s = state
+	if not s or not s.Loaded then
+		return 0
+	end
+	local n = 0
+	for _, spot: Spot in ipairs(s.Spots) do
+		if not spot.Model and not ANCHORS[spot.Kind] and BUILDERS[spot.Kind] then
+			buildSpot(spot, s.Folder)
+			n += 1
+		end
+	end
+	return n
 end
 
 -- Emplacements d'un type (TownPeople : bancs, terrasses, abribus…)

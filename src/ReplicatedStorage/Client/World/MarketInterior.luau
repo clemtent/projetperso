@@ -326,6 +326,8 @@ type Actor = {
 	Length: number?,
 	Speed: number?,
 	Cart: Model?,
+	CartParts: { BasePart }?,
+	CartOffsets: { CFrame }?,
 	Pos: Vector3,
 }
 
@@ -773,8 +775,20 @@ local function shopper(m: Market, parent: Instance, owner: string, seed: number,
 	a.Path = world
 	a.Length = length
 	a.Speed = speed
-	a.Cart = cart(parent, start * CFrame.new(0, 0, -2.3), pick({ BRAND, BRAND2, rgb(64, 180, 150) }, seed, 9), 2 + seed % 3)
-	partCount += countParts(a.Cart :: Model)
+	local c = cart(parent, start * CFrame.new(0, 0, -2.3), pick({ BRAND, BRAND2, rgb(64, 180, 150) }, seed, 9), 2 + seed % 3)
+	a.Cart = c
+	-- (pièces du chariot rangées par rapport à son pivot : placées exactement
+	-- à chaque image, jamais d'erreur qui s'accumule)
+	local parts, offsets = {}, {}
+	local pivot = start * CFrame.new(0, 0, -2.3)
+	for _, x in ipairs(c:GetDescendants()) do
+		if x:IsA("BasePart") then
+			table.insert(parts, x)
+			table.insert(offsets, pivot:ToObjectSpace(x.CFrame))
+		end
+	end
+	a.CartParts, a.CartOffsets = parts, offsets
+	partCount += #parts
 end
 
 ----------------------------------------------------------------------
@@ -3368,9 +3382,22 @@ local function animate(m: Market, position: Vector3, now: number)
 			local p, dir = pathAt(path, s)
 			if (p - position).Magnitude <= 60 then
 				local cf = CFrame.lookAt(p, p + Vector3.new(dir.X, 0, dir.Z))
-				a.Model:PivotTo(cf)
-				if a.Cart then
-					a.Cart:PivotTo(cf * CFrame.new(0, 0, -2.3))
+				-- (racine du personnage placée directement, puis la pose : exact,
+				-- jamais de PivotTo répété qui accumulerait des erreurs)
+				local root = a.Model.PrimaryPart
+				if root then
+					root.CFrame = cf
+				else
+					a.Model:PivotTo(cf)
+				end
+				local cartParts, offsets = a.CartParts, a.CartOffsets
+				if cartParts and offsets then
+					local ccf = cf * CFrame.new(0, 0, -2.3)
+					local frames = table.create(#cartParts)
+					for i, o in ipairs(offsets) do
+						frames[i] = ccf * o
+					end
+					workspace:BulkMoveTo(cartParts, frames, Enum.BulkMoveMode.FireCFrameChanged)
 				end
 				a.Pos = p
 				if N then

@@ -2661,65 +2661,141 @@ end
 R.DogHouse = function(b, _ctx)
 	local wall = accent(b, 1, rgb(255, 190, 150))
 	local roof = accent(b, 2, rgb(230, 90, 110))
-	b.Box(0, 0, 0, 80, 56, 64, wall, M.WoodPlanks)
-	b.Box(0, 0, 32, 30, 36, 1.2, rgb(60, 40, 50))
-	b.Wedge(-21, 56, 0, 42, 26, 70, roof, "Left", M.RoofShingles)
-	b.Wedge(21, 56, 0, 42, 26, 70, roof, "Right", M.RoofShingles)
-	b.Box(0, 40, 32.6, 26, 8, 1, lightOf(b, CREAM))
+	local g = House3DKit.Gap(b, 0.8)
+	-- niche : socle, bardage en lames, porte en arche (bordure), toit à
+	-- débords et faîtage, plaque au nom, gamelle devant
+	b.Box(0, 0, 0, 84, 4, 68, darken(wall, 0.3), M.Wood)
+	for index = 0, 6 do
+		b.Box(0, 4 + index * 7.4, 0, 80, 7.4, 64, vary(wall, index, 0.05), M.WoodPlanks)
+	end
+	b.Box(0, 4, 32, 30, 30, 1.2, rgb(50, 32, 40))
+	b.CylZ(0, 34, 32, 30, 1.2, rgb(50, 32, 40))
+	b.Box(-16, 4, 32 + g / 2, 3, 30, g, lighten(wall, 0.25), M.Wood)
+	b.Box(16, 4, 32 + g / 2, 3, 30, g, lighten(wall, 0.25), M.Wood)
+	b.Wedge(-21, 56, 0, 44, 26, 72, roof, "Left", M.RoofShingles)
+	b.Wedge(21, 56, 0, 44, 26, 72, roof, "Right", M.RoofShingles)
+	b.CylZ(0, 81, 0, 4, 74, darken(roof, 0.25), M.Wood)
+	b.Box(0, 40, 32 + g / 2, 24, 7, g, lightOf(b, CREAM), M.Wood)
+	House3DKit.Heart(b, 0, 43.5, 32 + g, 4, 0.6, accent(b, 3, PINK), M.SmoothPlastic)
+	b.Cyl(30, 0, 36, 14, 5, accent(b, 3, SKY), M.SmoothPlastic)
+	b.Cyl(30, 4, 36, 11, 1.2, rgb(160, 110, 70), M.Pebble)
 	b.Footprint(84, 70, 82)
 end
 R.ScratchingPost = function(b, _ctx)
 	local base = accent(b, 1, rgb(200, 170, 240))
-	b.Box(0, 0, 0, 70, 8, 60, base, M.Fabric)
+	-- griffoir : socle moquette, poteau en corde de sisal (spires), plateau,
+	-- balle au bout d'un ressort
+	b.Round(0, 0, 0, 70, 8, 60, 6, base, M.Fabric)
 	b.Cyl(0, 8, 0, 20, 70, rgb(222, 190, 140), M.Fabric)
-	b.Box(0, 78, 0, 50, 8, 44, base, M.Fabric)
+	for index = 0, 9 do
+		b.Cyl(0, 10 + index * 6.6, 0, 21, 1.6, rgb(200, 166, 116), M.Fabric)
+	end
+	b.Round(0, 78, 0, 50, 8, 44, 6, base, M.Fabric)
+	b.Egg(0, 86, 0, 44, 3, 38, lighten(base, 0.1), M.Fabric)
 	b.Cyl(20, 60, 10, 2, 16, INK)
-	b.Ball(20, 58, 10, 8, accent(b, 2, PINK))
+	b.Ball(20, 58, 10, 8, accent(b, 2, PINK), M.Fabric)
 	b.Top(1, 0, 86, 0, 44, 40)
 	b.Footprint(70, 60, 86)
 end
 R.CatTree = function(b, _ctx)
 	local base = accent(b, 1, rgb(200, 170, 240))
-	b.Box(0, 0, 0, 90, 8, 60, base, M.Fabric)
-	b.Cyl(-20, 8, 0, 14, 80, rgb(222, 190, 140), M.Fabric)
-	b.Cyl(24, 8, 0, 14, 40, rgb(222, 190, 140), M.Fabric)
-	b.Box(24, 48, 0, 40, 6, 36, base, M.Fabric)
-	b.Box(-20, 86, 0, 48, 6, 40, base, M.Fabric)
-	b.Box(-30, 8, 0, 30, 26, 36, lighten(base, 0.1), M.Fabric)
+	local sisal = rgb(222, 190, 140)
+	-- arbre à chat : socle, poteaux en sisal, plateformes moquettées, niche
+	-- avec entrée ronde, hamac, pompon
+	b.Round(0, 0, 0, 90, 8, 60, 6, base, M.Fabric)
+	b.Cyl(-20, 8, 0, 14, 80, sisal, M.Fabric)
+	b.Cyl(24, 8, 0, 14, 40, sisal, M.Fabric)
+	for index = 0, 5 do
+		b.Cyl(-20, 12 + index * 12, 0, 15, 1.2, darken(sisal, 0.12), M.Fabric)
+	end
+	b.Round(24, 48, 0, 40, 6, 36, 5, base, M.Fabric)
+	b.Round(-20, 86, 0, 48, 6, 40, 5, base, M.Fabric)
+	b.Round(-30, 8, 0, 30, 26, 36, 4, lighten(base, 0.1), M.Fabric)
+	b.CylZ(-30, 20, 18, 16, 1.2, darken(base, 0.45), M.Fabric)
+	b.Egg(24, 50, 0, 34, 6, 30, lighten(base, 0.2), M.Fabric)
+	b.Cyl(8, 60, 16, 1, 18, INK)
+	b.Ball(8, 58, 16, 6, accent(b, 2, PINK), M.Fabric)
 	b.Top(1, -20, 92, 0, 40, 34)
 	b.Footprint(90, 60, 92)
 end
 R.PetBowl = function(b, _ctx)
 	local color = accent(b, 1, PINK)
-	b.Cyl(0, 0, 0, 80, 26, color)
-	b.Cyl(0, 24, 0, 64, 3, rgb(190, 130, 90), M.Pebble)
+	-- gamelle en céramique : pied, flanc évasé, rebord, croquettes, os dessiné
+	b.Cyl(0, 0, 0, 64, 4, darken(color, 0.2), M.SmoothPlastic)
+	b.Cyl(0, 4, 0, 74, 14, color, M.SmoothPlastic)
+	b.Cyl(0, 18, 0, 80, 8, lighten(color, 0.1), M.SmoothPlastic)
+	b.Cyl(0, 24, 0, 64, 2, rgb(190, 130, 90), M.Pebble)
+	for index = 0, 9 do
+		local a = index * 2.4
+		b.Ball(math.cos(a) * (8 + index * 2), 26, math.sin(a) * (8 + index * 2), 6, vary(rgb(180, 120, 76), index, 0.12), M.SmoothPlastic)
+	end
+	b.Box(0, 10, 37, 18, 4, 1, WHITE, M.SmoothPlastic)
+	for _, sx in ipairs({ -1, 1 }) do
+		b.CylZ(sx * 9, 12, 37.2, 4, 1, WHITE, M.SmoothPlastic)
+		b.CylZ(sx * 9, 8, 37.2, 4, 1, WHITE, M.SmoothPlastic)
+	end
 	b.Footprint(80, 80, 28)
 end
 R.PetToys = function(b, _ctx)
-	b.Ball(-16, 14, 0, 28, accent(b, 1, PINK))
-	b.Ball(18, 10, 6, 20, accent(b, 2, BUTTER))
-	b.CylX(4, 5, -14, 10, 30, accent(b, 3, SKY))
+	-- panier à jouets : panier tressé, balle de tennis (couture), os, souris
+	local basket = rgb(214, 170, 110)
+	b.Box(0, 0, 0, 64, 14, 40, basket, M.Fabric)
+	for index = 0, 2 do
+		b.Box(0, 2 + index * 4.4, 0, 64.6, 1.4, 40.6, darken(basket, 0.15), M.Fabric)
+	end
+	b.Ball(-16, 16, 0, 22, accent(b, 1, rgb(210, 240, 90)), M.Fabric)
+	b.Tube(-26, 18, 4, -6, 18, 4, 1, WHITE, M.Fabric)
+	b.Ball(14, 16, 6, 16, accent(b, 2, BUTTER), M.Rubber)
+	b.CylX(4, 12, -12, 5, 26, WHITE, M.SmoothPlastic)
+	for _, sx in ipairs({ -1, 1 }) do
+		b.Ball(4 + sx * 13, 12, -14, 6, WHITE, M.SmoothPlastic)
+		b.Ball(4 + sx * 13, 12, -10, 6, WHITE, M.SmoothPlastic)
+	end
+	b.Egg(22, 16, -6, 14, 8, 8, GREY, M.Fabric)
+	b.Tube(29, 16, -6, 36, 14, -2, 1, PINK, M.Fabric)
 	b.Footprint(70, 50, 28)
 end
 R.Aquarium = function(b, ctx)
 	local top = ctx.TopY(1, 84)
 	local wood = woodOf(b, WOOD)
-	b.Box(0, 0, 0, 94, top * 0.35, 44, wood, M.Wood)
+	-- aquarium sur meuble : portes, cuve à bords noirs, eau, sable, rochers,
+	-- plantes ondulantes, poissons à nageoires, bulleur, rampe lumineuse
+	cabinet(b, 94, 44, top * 0.35, wood, lighten(wood, 0.12), 0, 2, 0)
 	local tankY = top * 0.35
 	local tankH = top - tankY - 2
 	local glass = b.Box(0, tankY, 0, 90, tankH, 40, GLASS, M.Glass)
 	glass.Transparency = 0.55
+	glass.Reflectance = 0.1
 	glass.CastShadow = false
+	for _, sx in ipairs({ -1, 1 }) do
+		b.Box(sx * 44.6, tankY, 0, 1.4, tankH, 41, INK, M.SmoothPlastic)
+	end
 	local water = b.Box(0, tankY + 2, 0, 86, tankH - 8, 36, rgb(130, 200, 250), M.Glass)
 	water.Transparency = 0.4
 	water.CastShadow = false
 	b.Box(0, tankY, 0, 86, 4, 36, rgb(240, 220, 180), M.Sand)
-	for index = 1, 3 do
-		local fish = b.Ball(-24 + index * 14, tankY + 12 + index * 5, (index % 2) * 10 - 5, 10, ({ rgb(255, 150, 60), PINK, BUTTER })[index])
-		fish.CastShadow = false
+	for index = 0, 2 do
+		b.Egg(-30 + index * 26, tankY + 5, -10 + index * 4, 12, 8, 10, rgb(170, 160, 180), M.Slate)
 	end
-	b.Box(-30, tankY + 4, -10, 4, 22, 4, LEAF_DARK)
+	for index = 0, 3 do
+		local px = -34 + index * 20
+		b.Tube(px, tankY + 3, -12, px + 3, tankY + 20 + index * 3, -13, 2.4, index % 2 == 0 and LEAF_DARK or LEAF)
+		b.Tube(px + 3, tankY + 20 + index * 3, -13, px - 1, tankY + 30 + index * 2, -12, 2, LEAF)
+	end
+	for index = 1, 3 do
+		local fc = ({ rgb(255, 150, 60), PINK, BUTTER })[index]
+		local fx, fy, fz = -24 + index * 14, tankY + 12 + index * 5, (index % 2) * 10 - 5
+		local fish = b.Egg(fx, fy, fz, 10, 6, 4, fc)
+		fish.CastShadow = false
+		b.Wedge(fx - 6, fy - 3, fz, 4, 6, 2, fc, "Left")
+	end
+	for index = 0, 3 do
+		local bubble = b.Ball(34, tankY + 8 + index * 8, 8, 2 + index * 0.4, WHITE, M.Glass)
+		bubble.Transparency = 0.4
+	end
 	b.Box(0, top - 2, 0, 94, 2, 44, darken(wood, 0.1), M.Wood)
+	local lamp = b.Box(0, top - 2.6, 0, 70, 0.6, 6, rgb(220, 240, 255))
+	b.Neon(lamp)
 	b.Light(water, rgb(160, 220, 255), 10, 0.6)
 	b.Top(1, 0, top, 0, 80, 36)
 	b.Footprint(94, 44, top)
@@ -2730,19 +2806,35 @@ end
 
 -- DÉCO / TABLE / JOUETS (petits objets) -------------------------------------
 
+-- (v9.8) Tasse / gobelet : corps céramique, lèvre, anse (ou paille + perles),
+-- boisson, soucoupe
 local function cup(straw: boolean)
 	return function(b: Builder, _ctx: Ctx)
 		local color = accent(b, 1, PINK)
-		b.Cyl(0, 0, 0, 50, 60, color)
-		b.Cyl(0, 58, 0, 44, 3, lightOf(b, rgb(255, 240, 230)))
+		local drink = lightOf(b, rgb(255, 240, 230))
 		if straw then
-			b.BoxR(CFrame.new(6, 72, 0) * CFrame.Angles(0, 0, -0.25), 5, 34, 5, accent(b, 2, SKY))
-			for index = 1, 3 do
-				b.Ball(-10 + index * 6, 8, (index % 2) * 6, 9, INK)
+			local glass = b.Cyl(0, 0, 0, 50, 62, rgb(230, 244, 255), M.Glass)
+			glass.Transparency = 0.45
+			b.Cyl(0, 1, 0, 46, 50, color, M.SmoothPlastic)
+			b.Cyl(0, 51, 0, 46, 2, drink, M.SmoothPlastic)
+			b.Egg(0, 62, 0, 50, 10, 50, rgb(236, 244, 255), M.Glass).Transparency = 0.5
+			b.BoxR(CFrame.new(6, 72, 0) * CFrame.Angles(0, 0, -0.25), 5, 38, 5, accent(b, 2, SKY))
+			for index = 1, 7 do
+				b.Ball(-14 + index * 4, 5 + (index % 2) * 3, ((index * 5) % 12) - 6, 7, INK)
 			end
+			b.Box(0, 24, 25.2, 20, 10, 0.6, WHITE, M.SmoothPlastic)
 		else
-			b.CylZ(30, 34, 0, 26, 5, color)
-			b.CylZ(30, 34, 0, 14, 6, lighten(color, 0.5))
+			b.Cyl(0, 0, 0, 56, 2, lighten(color, 0.3), M.SmoothPlastic)
+			b.Cyl(0, 2, 0, 44, 4, color, M.SmoothPlastic)
+			b.Cyl(0, 6, 0, 50, 54, color, M.SmoothPlastic)
+			b.Cyl(0, 58, 0, 52, 2, lighten(color, 0.25), M.SmoothPlastic)
+			b.Cyl(0, 56, 0, 44, 3, rgb(140, 90, 60), M.SmoothPlastic)
+			b.Egg(-6, 59, 4, 10, 4, 8, WHITE, M.SmoothPlastic)
+			b.Egg(6, 59, -4, 8, 4, 8, rgb(255, 214, 230), M.SmoothPlastic)
+			b.Tube(24, 48, 0, 34, 42, 0, 5, color, M.SmoothPlastic)
+			b.Tube(34, 42, 0, 34, 26, 0, 5, color, M.SmoothPlastic)
+			b.Tube(34, 26, 0, 24, 18, 0, 5, color, M.SmoothPlastic)
+			House3DKit.Heart(b, 0, 32, 25, 12, 0.8, lighten(color, 0.5), M.SmoothPlastic)
 		end
 		b.Footprint(62, 50, 64)
 	end
@@ -2753,22 +2845,40 @@ R.BubbleTea = cup(true)
 R.Lemonade = cup(true)
 local function bowl(b: Builder, _ctx: Ctx)
 	local color = accent(b, 2, lightOf(b, WHITE))
-	b.Cyl(0, 0, 0, 44, 8, darken(color, 0.1))
-	b.Cyl(0, 6, 0, 86, 30, color)
+	-- bol : pied, flanc évasé (gradins), liseré, contenu (fruits / légumes),
+	-- baguettes posées en travers
+	b.Cyl(0, 0, 0, 40, 4, darken(color, 0.12))
+	b.Cyl(0, 4, 0, 66, 10, color)
+	b.Cyl(0, 14, 0, 80, 12, color)
+	b.Cyl(0, 26, 0, 86, 8, color)
+	b.Cyl(0, 30, 0, 87, 2, accent(b, 3, rgb(120, 170, 230)))
 	local fill = accent(b, 1, rgb(255, 200, 140))
-	b.Cyl(0, 34, 0, 78, 4, fill)
+	b.Cyl(0, 32, 0, 78, 4, fill)
 	b.Ball(-14, 40, 4, 18, accent(b, 3, rgb(255, 150, 120)))
 	b.Ball(12, 40, -6, 16, accent(b, 4, LEAF))
+	b.Ball(2, 39, 14, 12, BUTTER)
+	b.EggR(CFrame.new(-2, 37, -14), 14, 5, 9, lighten(fill, 0.3))
+	b.Tube(-30, 44, 20, 34, 44, 6, 2.4, woodOf(b, WOOD), M.Wood)
+	b.Tube(-30, 44, 24, 34, 44, 11, 2.4, woodOf(b, WOOD), M.Wood)
 	b.Footprint(86, 86, 48)
 end
 R.RamenBowl = bowl
 R.SaladBowl = bowl
 R.FruitBowl = bowl
 local function plate(b: Builder, _ctx: Ctx)
-	b.Cyl(0, 0, 0, 96, 6, lightOf(b, WHITE))
+	local dish = lightOf(b, WHITE)
+	-- assiette à marli (bord relevé) et filet, 4 bouchées garnies
+	b.Cyl(0, 0, 0, 70, 2, darken(dish, 0.08))
+	b.Cyl(0, 2, 0, 96, 3, dish)
+	b.Cyl(0, 4.4, 0, 96, 1.6, lighten(dish, 0.3))
+	b.Cyl(0, 3.4, 0, 70, 1.4, darken(dish, 0.04))
 	for index = 0, 3 do
 		local angle = index / 4 * math.pi * 2
-		b.Box(math.cos(angle) * 20, 6, math.sin(angle) * 18, 24, 14, 20, accent(b, index % 3 + 1, rgb(255, 210, 160)))
+		local c = accent(b, index % 3 + 1, rgb(255, 210, 160))
+		local x, z = math.cos(angle) * 20, math.sin(angle) * 18
+		b.Round(x, 5, z, 24, 10, 20, 4, c, M.SmoothPlastic)
+		b.Egg(x, 15, z, 20, 5, 16, lighten(c, 0.25), M.SmoothPlastic)
+		b.Ball(x + 4, 17, z, 5, rgb(255, 90, 100), M.SmoothPlastic)
 	end
 	b.Footprint(96, 96, 20)
 end
@@ -2779,16 +2889,29 @@ local function cake(tiers: number)
 	return function(b: Builder, _ctx: Ctx)
 		local cream = lightOf(b, rgb(255, 248, 240))
 		local main = accent(b, 1, PINK)
-		b.Cyl(0, 0, 0, 90, 4, WHITE)
-		local y = 4
+		-- gâteau : présentoir à pied, étages (génoise), nappage qui coule,
+		-- perles de crème, fraise + feuille au sommet
+		b.Cyl(0, 0, 0, 40, 3, WHITE)
+		b.Cyl(0, 3, 0, 14, 3, WHITE)
+		b.Cyl(0, 6, 0, 90, 2, WHITE, M.SmoothPlastic).Reflectance = 0.1
+		local y = 8
 		for index = 1, tiers do
-			local d = 80 - (index - 1) * 22
-			local h = 44 / tiers + 6
+			local d = 78 - (index - 1) * 22
+			local h = 40 / tiers + 6
 			b.Cyl(0, y, 0, d, h, index % 2 == 1 and main or cream)
-			b.Cyl(0, y + h - 2, 0, d + 2, 4, cream)
+			b.Cyl(0, y + h - 3, 0, d + 2, 3, cream)
+			for drip = 0, 7 do
+				local a = drip / 8 * math.pi * 2 + index
+				b.Egg(math.cos(a) * (d / 2 + 0.6), y + h - 4 - (drip % 3) * 1.6, math.sin(a) * (d / 2 + 0.6), 4, 6 + (drip % 3) * 3, 4, cream)
+			end
+			for bead = 0, 9 do
+				local a = bead / 10 * math.pi * 2
+				b.Ball(math.cos(a) * (d / 2 - 3), y + h + 0.6, math.sin(a) * (d / 2 - 3), 4.4, WHITE)
+			end
 			y += h
 		end
-		b.Ball(0, y + 5, 0, 14, rgb(240, 60, 80))
+		b.Egg(0, y + 5, 0, 13, 15, 13, rgb(240, 60, 80))
+		b.Wedge(0, y + 11, 0, 6, 4, 6, LEAF, "Front")
 		b.Footprint(90, 90, y + 12)
 	end
 end
@@ -2799,49 +2922,94 @@ R.CupcakeStand = cake(3)
 R.Pudding = cake(1)
 R.MacaronTower = function(b, _ctx)
 	local colors = { accent(b, 1, PINK), accent(b, 2, MINT), accent(b, 3, LILAC), accent(b, 4, BUTTER) }
-	b.Cyl(0, 0, 0, 60, 4, GOLD, M.Metal)
+	-- pyramide de macarons : plateau doré, étages de macarons (coques + crème)
+	b.Cyl(0, 0, 0, 60, 4, GOLD, M.Metal).Reflectance = 0.3
 	for index = 0, 5 do
-		local d = 56 - index * 8
-		b.Cyl(0, 4 + index * 12, 0, d, 10, colors[index % 4 + 1])
+		local r = 24 - index * 4
+		local n = math.max(1, 8 - index)
+		local y = 4 + index * 12
+		b.Cyl(0, y, 0, r * 2, 10, lighten(colors[index % 4 + 1], 0.1))
+		for m = 0, n - 1 do
+			local a = m / n * math.pi * 2 + index * 0.3
+			local c = colors[(index + m) % 4 + 1]
+			local mx, mz = math.cos(a) * r, math.sin(a) * r
+			b.Egg(mx, y + 2.4, mz, 10, 4.6, 10, c)
+			b.Cyl(mx, y + 4, mz, 8.4, 2, WHITE)
+			b.Egg(mx, y + 7.4, mz, 10, 4.6, 10, c)
+		end
 	end
 	b.Footprint(60, 60, 80)
 end
 local function jar(b: Builder, _ctx: Ctx)
 	local color = accent(b, 1, rgb(255, 200, 120))
+	-- bocal : verre épais, contenu, couvercle vissé (stries), tissu vichy
+	-- noué, étiquette
 	local glass = b.Cyl(0, 0, 0, 70, 66, GLASS, M.Glass)
 	glass.Transparency = 0.45
+	glass.Reflectance = 0.15
 	b.Cyl(0, 2, 0, 62, 44, color)
-	b.Cyl(0, 66, 0, 74, 10, accent(b, 2, PINK))
-	b.Ball(0, 78, 0, 14, accent(b, 2, PINK))
+	b.Cyl(0, 62, 0, 64, 6, lighten(GLASS, 0.1), M.Glass).Transparency = 0.3
+	local lid = accent(b, 2, PINK)
+	b.Cyl(0, 66, 0, 74, 8, lid)
+	for index = 0, 2 do
+		b.Cyl(0, 67 + index * 2.4, 0, 75, 0.8, darken(lid, 0.15))
+	end
+	b.Egg(0, 76, 0, 60, 6, 60, lighten(lid, 0.4), M.Fabric)
+	b.Ball(0, 78, 0, 14, lid)
+	b.Box(0, 22, 35.4, 30, 18, 0.8, WHITE, M.SmoothPlastic)
 	b.Footprint(74, 74, 84)
 end
 R.CookieJar = jar
 R.HoneyPot = jar
 R.Teapot = function(b, _ctx)
 	local color = accent(b, 1, rgb(160, 220, 255))
+	-- théière : corps rond, pied, couvercle à bouton, bec en col-de-cygne,
+	-- anse en boucle, petits motifs
+	b.Cyl(0, 0, 0, 40, 6, darken(color, 0.1))
 	b.Ball(0, 34, 0, 64, color)
-	b.Cyl(0, 0, 0, 40, 8, darken(color, 0.1))
-	b.Cyl(0, 62, 0, 30, 6, lightOf(b, WHITE))
-	b.Ball(0, 70, 0, 10, accent(b, 2, PINK))
-	b.BoxR(CFrame.new(34, 40, 0) * CFrame.Angles(0, 0, -0.8), 8, 28, 8, color)
-	b.CylZ(-34, 36, 0, 24, 5, color)
+	b.Cyl(0, 62, 0, 32, 4, lightOf(b, WHITE))
+	b.Egg(0, 66, 0, 26, 8, 26, lightOf(b, WHITE))
+	b.Ball(0, 72, 0, 10, accent(b, 2, PINK))
+	b.Tube(28, 30, 0, 38, 44, 0, 8, color, M.SmoothPlastic)
+	b.Tube(38, 44, 0, 44, 54, 0, 5, color, M.SmoothPlastic)
+	b.Tube(-30, 50, 0, -42, 44, 0, 5, color, M.SmoothPlastic)
+	b.Tube(-42, 44, 0, -40, 26, 0, 5, color, M.SmoothPlastic)
+	b.Tube(-40, 26, 0, -30, 22, 0, 5, color, M.SmoothPlastic)
+	for index = 0, 4 do
+		local a = index / 5 * math.pi - math.pi / 2
+		House3DKit.Heart(b, math.sin(a) * 26, 34, math.cos(a) * 26 + 5, 7, 0.6, WHITE, M.SmoothPlastic)
+	end
 	b.Footprint(90, 64, 76)
 end
 R.TeaSet = R.Teapot
 R.Watermelon = function(b, _ctx)
+	-- pastèque : écorce rayée, part découpée (chair rouge, pépins)
 	b.Ball(0, 36, 0, 74, rgb(90, 180, 90))
-	for index = 0, 3 do
-		b.BoxR(CFrame.new(0, 36, 0) * CFrame.Angles(0, index * math.pi / 4, 0), 75, 70, 3, rgb(60, 140, 70))
+	for index = 0, 5 do
+		b.EggR(CFrame.new(0, 36, 0) * CFrame.Angles(0, index * math.pi / 6, 0), 75, 75, 5, rgb(60, 140, 70))
+	end
+	b.Wedge(24, 0, 30, 24, 22, 14, rgb(90, 180, 90), "Front")
+	b.Wedge(24, 1.6, 30.6, 21, 19, 12, rgb(255, 90, 100), "Front")
+	for index = 0, 2 do
+		b.Egg(20 + index * 4, 7 + index * 2, 34 + index, 2, 3, 1, INK)
 	end
 	b.Footprint(74, 74, 74)
 end
 local function boxThing(b: Builder, _ctx: Ctx)
 	local color = accent(b, 1, PINK)
-	b.Box(0, 0, 0, 84, 40, 60, color)
-	b.Box(0, 40, 0, 88, 8, 64, lighten(color, 0.2))
-	b.Box(0, 0, 0, 12, 49, 64.4, accent(b, 2, BUTTER))
-	b.Box(0, 0, 0, 88.4, 49, 12, accent(b, 2, BUTTER))
-	b.Ball(0, 52, 0, 14, accent(b, 2, BUTTER))
+	-- coffret : boîte, couvercle qui déborde, ruban croisé, gros nœud (boucles
+	-- et pans), étiquette
+	b.Round(0, 0, 0, 84, 40, 60, 3, color, M.SmoothPlastic)
+	b.Round(0, 40, 0, 88, 8, 64, 3, lighten(color, 0.2), M.SmoothPlastic)
+	local ribbon = accent(b, 2, BUTTER)
+	b.Box(0, 0, 0, 12, 49, 64.8, ribbon, M.Fabric)
+	b.Box(0, 0, 0, 88.8, 49, 12, ribbon, M.Fabric)
+	for _, side in ipairs({ -1, 1 }) do
+		b.EggR(CFrame.new(side * 9, 54, 0) * CFrame.Angles(0, 0, side * 0.4), 16, 9, 8, ribbon, M.Fabric)
+		b.BoxR(CFrame.new(side * 6, 49.6, 10) * CFrame.Angles(0, side * 0.5, 0), 4, 1, 16, ribbon, M.Fabric)
+	end
+	b.Ball(0, 53, 0, 8, darken(ribbon, 0.1), M.Fabric)
+	b.BoxR(CFrame.new(24, 36, 32.4) * CFrame.Angles(0, 0, 0.2), 12, 8, 0.8, WHITE, M.SmoothPlastic)
 	b.Top(1, 0, 48, 0, 70, 50)
 	b.Footprint(88, 64, 56)
 end
@@ -2852,35 +3020,57 @@ R.MusicBox = boxThing
 R.GiftPile = function(b, _ctx)
 	local colors = { accent(b, 1, PINK), accent(b, 2, SKY), accent(b, 3, MINT) }
 	local specs = { { -20, 0, 0, 50, 40 }, { 26, 0, 6, 36, 30 }, { -14, 40, 0, 32, 26 } }
+	-- pile de cadeaux : papiers (petits motifs), rubans croisés, nœuds à boucles
 	for index, spec in ipairs(specs) do
 		local x, y, z, s, h = spec[1], spec[2], spec[3], spec[4], spec[5]
-		b.Box(x, y, z, s, h, s * 0.9, colors[index])
-		b.Box(x, y, z, 6, h + 0.4, s * 0.9 + 0.4, BUTTER)
-		b.Ball(x, y + h + 3, z, 10, BUTTER)
+		local c = colors[index]
+		b.Box(x, y, z, s, h, s * 0.9, c)
+		b.Box(x, y + h - 3, z, s + 1, 3, s * 0.9 + 1, lighten(c, 0.15))
+		b.Box(x, y, z, 6, h + 0.4, s * 0.9 + 1.4, BUTTER, M.Fabric)
+		b.Box(x, y, z, s + 1.4, h + 0.4, 6, BUTTER, M.Fabric)
+		for _, side in ipairs({ -1, 1 }) do
+			b.EggR(CFrame.new(x + side * 6, y + h + 3, z) * CFrame.Angles(0, 0, side * 0.4), 10, 6, 5, BUTTER, M.Fabric)
+		end
+		b.Ball(x, y + h + 2, z, 5, darken(BUTTER, 0.1), M.Fabric)
+		for dot = 0, 2 do
+			b.CylZ(x - s * 0.3 + dot * s * 0.3, y + h * 0.3, z + s * 0.45 + 0.4, 3.4, 0.8, WHITE, M.SmoothPlastic)
+		end
 	end
 	b.Footprint(90, 50, 76)
 end
 R.BookStack = function(b, _ctx)
 	local colors = { accent(b, 1, PINK), accent(b, 2, SKY), accent(b, 3, MINT), accent(b, 4, BUTTER) }
+	-- pile de livres : couvertures (dos arrondis), tranches de pages, titres dorés
 	for index = 0, 4 do
-		b.BoxR(CFrame.new((index % 2) * 4 - 2, 5 + index * 11, 0) * CFrame.Angles(0, (index % 3 - 1) * 0.15, 0), 84, 10, 60, colors[index % 4 + 1])
-		b.Box((index % 2) * 4 - 2, index * 11 + 1, 30.1, 80, 8, 0.4, WHITE)
+		local cf = CFrame.new((index % 2) * 4 - 2, 5 + index * 11, 0) * CFrame.Angles(0, (index % 3 - 1) * 0.15, 0)
+		local c = colors[index % 4 + 1]
+		b.BoxR(cf, 84, 10, 60, c, M.SmoothPlastic)
+		b.BoxR(cf * CFrame.new(1.4, 0, 0), 82, 8.4, 60.6, rgb(250, 244, 226), M.SmoothPlastic)
+		b.BoxR(cf * CFrame.new(-42, 0, 0) * CFrame.Angles(0, math.pi / 2, 0) * CFrame.Angles(0, 0, math.pi / 2), 10, 60, 2, c, M.SmoothPlastic)
+		b.BoxR(cf * CFrame.new(-43.2, 0, 0), 0.6, 2, 30, GOLD, M.Metal)
 	end
 	b.Top(1, 0, 55, 0, 60, 50)
 	b.Footprint(84, 60, 56)
 end
 R.BlanketStack = function(b, _ctx)
 	local colors = { accent(b, 1, PINK), accent(b, 2, SKY), accent(b, 3, MINT), accent(b, 4, LILAC) }
+	-- pile de plaids pliés : pli arrondi, rayures, franges
 	for index = 0, 3 do
-		b.Box(0, index * 14, 0, 90 - index * 4, 14, 60, colors[index + 1], M.Fabric)
-		b.CylZ(-(90 - index * 4) / 2, index * 14 + 7, 0, 14, 60, colors[index + 1], M.Fabric)
+		local w = 90 - index * 4
+		local c = colors[index + 1]
+		b.Box(0, index * 14, 0, w, 14, 60, c, M.Fabric)
+		b.CylZ(-w / 2, index * 14 + 7, 0, 14, 60, c, M.Fabric)
+		b.Box(0, index * 14 + 5, 30.2, w - 8, 3, 0.6, lighten(c, 0.35), M.Fabric)
+		for f = 0, 5 do
+			b.Box(w / 2 + 1, index * 14 + 3 + (f % 2) * 6, -25 + f * 10, 2, 2, 2, lighten(c, 0.2), M.Fabric)
+		end
 	end
 	b.Top(1, 0, 56, 0, 70, 50)
 	b.Footprint(94, 60, 56)
 end
 local function pillow(b: Builder, _ctx: Ctx)
 	local color = accent(b, 1, PINK)
-	b.BoxR(CFrame.new(0, 34, 0) * CFrame.Angles(-0.2, 0, 0), 80, 64, 24, color, M.Fabric)
+	House3DKit.PillowR(b, CFrame.new(0, 34, 0) * CFrame.Angles(-0.2, 0, 0), 80, 64, 24, color, M.Fabric)
 	b.Ball(0, 36, 12, 18, lighten(color, 0.3), M.Fabric)
 	b.Footprint(80, 40, 70)
 end
@@ -2888,144 +3078,291 @@ R.HeartPillow = pillow
 R.MoonPillow = pillow
 local function orb(b: Builder, _ctx: Ctx)
 	local base = accent(b, 2, woodOf(b, WOOD))
-	b.Cyl(0, 0, 0, 60, 16, base)
+	-- globe : socle mouluré, sphère de verre, décor intérieur, neige / étincelles
+	b.Cyl(0, 0, 0, 60, 6, darken(base, 0.1))
+	b.Cyl(0, 6, 0, 52, 10, base)
+	b.Cyl(0, 14, 0, 44, 3, GOLD, M.Metal).Reflectance = 0.3
 	local ball = b.Ball(0, 46, 0, 64, accent(b, 1, rgb(190, 170, 255)), M.Glass)
-	ball.Transparency = 0.25
-	b.Ball(0, 40, 0, 26, WHITE)
+	ball.Transparency = 0.3
+	ball.Reflectance = 0.2
+	if b.Item and b.Item.Id == "SnowGlobe" then
+		-- bonhomme de neige sur un tapis de neige, flocons en suspension
+		b.Egg(0, 20, 0, 40, 6, 40, WHITE, M.SmoothPlastic)
+		b.Ball(0, 36, 0, 18, WHITE)
+		b.Ball(0, 48, 0, 12, WHITE)
+		b.Ball(0, 49, 5.6, 2, INK)
+		for index = 0, 7 do
+			local a = index * 2.3
+			b.Ball(math.cos(a) * 18, 40 + (index % 4) * 7, math.sin(a) * 18, 2.4, WHITE)
+		end
+	else
+		-- boule de cristal : volutes lumineuses au cœur
+		for index = 0, 4 do
+			local a = index * 1.26
+			local wisp = b.EggR(CFrame.new(math.cos(a) * 8, 42 + index * 2.4, math.sin(a) * 8) * CFrame.Angles(0, a, 0.6), 18, 5, 8, lighten(accent(b, 1, rgb(190, 170, 255)), 0.4))
+			b.Neon(wisp)
+		end
+		b.Light(ball, lighten(accent(b, 1, rgb(190, 170, 255)), 0.3), 10, 0.6)
+	end
 	b.Footprint(64, 64, 80)
 end
 R.SnowGlobe = orb
 R.CrystalBall = orb
 R.DeskGlobe = function(b, _ctx)
+	-- mappemonde : pied en bois tourné, méridien doré incliné, océans et continents
 	b.Cyl(0, 0, 0, 44, 6, woodOf(b, WOOD), M.Wood)
-	b.Cyl(0, 6, 0, 5, 20, GOLD, M.Metal)
-	b.Ball(0, 58, 0, 64, accent(b, 1, rgb(110, 180, 250)))
-	b.Ball(-10, 70, 16, 22, accent(b, 2, LEAF))
+	b.Egg(0, 6, 0, 30, 8, 30, woodOf(b, WOOD), M.Wood)
+	b.Cyl(0, 6, 0, 5, 20, GOLD, M.Metal).Reflectance = 0.3
+	local ocean = accent(b, 1, rgb(110, 180, 250))
+	b.Ball(0, 58, 0, 64, ocean)
+	local land = accent(b, 2, LEAF)
+	for index, spec in ipairs({ { -10, 70, 16, 22 }, { 12, 50, 20, 16 }, { -18, 46, 12, 14 }, { 20, 66, 8, 12 } }) do
+		local dir = Vector3.new(spec[1], spec[2] - 58, 24).Unit
+		local p = Vector3.new(0, 58, 0) + dir * 31
+		b.EggR(CFrame.lookAt(p, p + dir), spec[4], spec[3], 3, vary(land, index, 0.1))
+	end
+	b.BoxR(CFrame.new(0, 58, 0) * CFrame.Angles(0, 0, 0.4), 3, 76, 3, GOLD, M.Metal).Reflectance = 0.3
 	b.CylZ(0, 58, 0, 74, 3, GOLD, M.Metal)
 	b.Footprint(74, 64, 92)
 end
 R.GoldenTrophy = function(b, _ctx)
 	local gold = b.Map(GOLD)
-	b.Box(0, 0, 0, 44, 14, 36, woodOf(b, WOOD_DARK), M.Wood)
-	b.Cyl(0, 14, 0, 10, 24, gold, M.Metal)
-	b.Cyl(0, 36, 0, 50, 36, gold, M.Metal)
+	-- coupe : socle en bois à plaque, pied, nœud, coupe évasée, anses, étoile
+	House3DKit.Bevel(b, 0, 0, 0, 44, 14, 36, 1.4, woodOf(b, WOOD_DARK), M.Wood)
+	b.Box(0, 4, 18.2, 24, 6, 0.8, lighten(gold, 0.2), M.Metal)
+	b.Cyl(0, 14, 0, 18, 3, gold, M.Metal).Reflectance = 0.35
+	b.Cyl(0, 17, 0, 8, 12, gold, M.Metal).Reflectance = 0.35
+	b.Ball(0, 30, 0, 12, gold, M.Metal).Reflectance = 0.35
+	b.Cyl(0, 34, 0, 36, 8, gold, M.Metal).Reflectance = 0.35
+	b.Cyl(0, 42, 0, 46, 14, gold, M.Metal).Reflectance = 0.35
+	b.Cyl(0, 56, 0, 52, 4, lighten(gold, 0.15), M.Metal).Reflectance = 0.35
 	for _, side in ipairs({ -1, 1 }) do
-		b.CylZ(side * 28, 58, 0, 18, 4, gold, M.Metal)
+		b.Tube(side * 22, 56, 0, side * 32, 52, 0, 4, gold, M.Metal)
+		b.Tube(side * 32, 52, 0, side * 22, 40, 0, 4, gold, M.Metal)
 	end
+	House3DKit.StarSoft(b, 0, 46, 23.4, 6, 1, WHITE, M.Metal)
 	b.Footprint(66, 50, 74)
 end
 R.MantelClock = function(b, _ctx)
 	local wood = woodOf(b, WOOD)
-	b.Box(0, 0, 0, 80, 50, 34, wood, M.Wood)
+	-- pendule de cheminée : caisse en chapeau de gendarme, pieds, cadran
+	-- (index, aiguilles), lunette dorée, balancier derrière une vitre
+	for _, sx in ipairs({ -1, 1 }) do
+		b.Ball(sx * 34, 2, 12, 5, GOLD, M.Metal)
+	end
+	House3DKit.Bevel(b, 0, 2, 0, 80, 48, 34, 1.6, wood, M.Wood)
 	b.Ball(0, 50, 0, 40, wood, M.Wood)
-	b.CylZ(0, 42, 17, 40, 2, WHITE)
-	b.BoxR(CFrame.new(0, 48, 18.4) * CFrame.Angles(0, 0, 0.2), 2, 14, 0.6, INK)
-	b.BoxR(CFrame.new(3, 42, 18.4) * CFrame.Angles(0, 0, 1.3), 2, 10, 0.6, INK)
+	b.CylZ(0, 42, 17, 42, 2, GOLD, M.Metal).Reflectance = 0.3
+	b.CylZ(0, 42, 17.6, 38, 2, WHITE)
+	for index = 0, 11 do
+		local a = index / 12 * math.pi * 2
+		b.Box(math.sin(a) * 15, 42 + math.cos(a) * 15 - 0.8, 18.8, 1.2, index % 3 == 0 and 2.6 or 1.6, 0.6, INK)
+	end
+	b.BoxR(CFrame.new(0, 48, 19) * CFrame.Angles(0, 0, 0.2), 2, 14, 0.6, INK)
+	b.BoxR(CFrame.new(3, 42, 19.2) * CFrame.Angles(0, 0, 1.3), 2, 10, 0.6, INK)
+	b.Ball(0, 42, 19.4, 2.4, GOLD, M.Metal)
+	b.Box(0, 8, 17.2, 20, 12, 0.6, rgb(200, 220, 240), M.Glass).Transparency = 0.5
+	b.CylZ(0, 12, 16.6, 7, 1, GOLD, M.Metal)
 	b.Footprint(80, 40, 70)
 end
 R.Vase = function(b, _ctx)
 	local color = accent(b, 1, rgb(160, 200, 255))
-	b.Cyl(0, 0, 0, 40, 10, color)
+	-- vase en céramique (pied, panse, col, lèvre), frise, bouquet de fleurs
+	-- sur tiges avec feuilles
+	b.Cyl(0, 0, 0, 34, 4, darken(color, 0.15))
+	b.Cyl(0, 4, 0, 40, 8, color)
 	b.Ball(0, 30, 0, 54, color)
-	b.Cyl(0, 50, 0, 26, 24, color)
-	b.Cyl(0, 72, 0, 32, 4, lighten(color, 0.3))
+	b.Cyl(0, 30, 0, 55, 3, lighten(color, 0.4))
+	b.Cyl(0, 50, 0, 26, 20, color)
+	b.Cyl(0, 70, 0, 32, 4, lighten(color, 0.3))
+	local green = accent(b, 3, LEAF)
 	for index = 0, 2 do
-		b.Ball(-10 + index * 10, 82 + (index % 2) * 8, 0, 14, accent(b, 2, PINK))
+		local x = -10 + index * 10
+		local y = 82 + (index % 2) * 8
+		b.Tube(0, 70, 0, x, y - 4, 0, 1.6, darken(green, 0.2), M.SmoothPlastic)
+		flowerHead(b, x, y, 0, 14, accent(b, 2, PINK), BUTTER, 6)
+		House3DKit.Leaf(b, x * 0.5, 76, 0, 10, 4, index * 2 - 2, -0.3, green)
 	end
 	b.Footprint(56, 56, 96)
 end
 R.Fountain = function(b, _ctx)
 	local stone = lightOf(b, rgb(236, 236, 246))
+	-- fontaine en marbre : bassin à margelle, eau (reflet), colonne cannelée,
+	-- vasque, bouquet d'eau, filets qui retombent
 	b.Cyl(0, 0, 0, 96, 22, stone, M.Marble)
+	b.Cyl(0, 20, 0, 98, 3, lighten(stone, 0.2), M.Marble)
 	local water = b.Cyl(0, 18, 0, 86, 3, rgb(150, 210, 255), M.Glass)
 	water.Transparency = 0.2
+	water.Reflectance = 0.25
 	b.Cyl(0, 22, 0, 14, 40, stone, M.Marble)
+	for index = 0, 5 do
+		local a = index / 6 * math.pi * 2
+		b.Cyl(math.cos(a) * 6.4, 24, math.sin(a) * 6.4, 3, 34, darken(stone, 0.06), M.Marble)
+	end
 	b.Cyl(0, 58, 0, 50, 8, stone, M.Marble)
+	b.Cyl(0, 64, 0, 44, 2, rgb(150, 210, 255), M.Glass).Transparency = 0.2
 	b.Cyl(0, 66, 0, 10, 16, stone, M.Marble)
-	local spray = b.Ball(0, 86, 0, 16, rgb(190, 230, 255), M.Glass)
+	local spray = b.Egg(0, 86, 0, 16, 18, 16, rgb(190, 230, 255), M.Glass)
 	spray.Transparency = 0.3
+	for index = 0, 5 do
+		local a = index / 6 * math.pi * 2
+		local jet = b.Tube(math.cos(a) * 24, 62, math.sin(a) * 24, math.cos(a) * 34, 24, math.sin(a) * 34, 1.6, rgb(200, 235, 255), M.Glass)
+		jet.Transparency = 0.45
+	end
 	b.Footprint(96, 96, 94)
 end
 R.MoaiStatue = function(b, _ctx)
 	local stone = b.Map(rgb(170, 160, 170))
+	-- moaï : buste, tête allongée, arcades, long nez, lèvres, oreilles, pukao
 	b.Box(0, 0, 0, 50, 60, 40, stone, M.Slate)
 	b.Box(0, 50, 2, 40, 46, 36, stone, M.Slate)
 	b.Box(0, 80, 20.5, 30, 6, 2, darken(stone, 0.3))
+	b.Wedge(0, 56, 21, 10, 22, 6, darken(stone, 0.1), "Front", M.Slate)
 	b.Box(0, 56, 21, 10, 22, 4, darken(stone, 0.1), M.Slate)
+	b.Box(0, 52, 20.6, 18, 3, 2, darken(stone, 0.25), M.Slate)
+	for _, side in ipairs({ -1, 1 }) do
+		b.Box(side * 21, 56, 4, 3, 26, 10, darken(stone, 0.05), M.Slate)
+		b.Box(side * 16, 20, 20.4, 3, 30, 1, darken(stone, 0.2), M.Slate)
+	end
+	b.Cyl(0, 96, 2, 30, 8, rgb(190, 110, 90), M.Slate)
 	b.Footprint(50, 42, 96)
 end
 R.BeachBall = function(b, _ctx)
+	-- ballon de plage : quartiers colorés (bandes), pôle blanc, valve
 	b.Ball(0, 48, 0, 96, accent(b, 1, PINK))
 	b.Cyl(0, 40, 0, 97, 16, accent(b, 2, SKY))
 	b.Cyl(0, 58, 0, 91, 8, WHITE)
+	b.Cyl(0, 26, 0, 88, 6, accent(b, 3, BUTTER))
 	b.Ball(0, 90, 0, 20, WHITE)
+	b.Cyl(0, 94, 18, 4, 3, WHITE, M.SmoothPlastic)
 	b.Footprint(96, 96, 96)
 end
 R.GiantDice = function(b, _ctx)
-	b.BoxR(CFrame.new(0, 42, 0) * CFrame.Angles(0, 0.35, 0), 84, 84, 84, lightOf(b, WHITE))
-	for _, p in ipairs({ { -20, 62 }, { 20, 22 }, { 0, 42 } }) do
-		b.BoxR(CFrame.new(0, 0, 0) * CFrame.Angles(0, 0.35, 0) * CFrame.new(p[1], p[2], 42.2), 14, 14, 1, accent(b, 1, PINK))
+	-- gros dé en mousse : arêtes arrondies, points en creux sur 3 faces
+	local die = lightOf(b, WHITE)
+	local cf = CFrame.new(0, 42, 0) * CFrame.Angles(0, 0.35, 0)
+	b.BoxR(cf, 84, 76, 76, die)
+	b.BoxR(cf, 76, 84, 76, die)
+	b.BoxR(cf, 76, 76, 84, die)
+	local dot = accent(b, 1, PINK)
+	for _, p in ipairs({ { -20, 20 }, { 20, -20 }, { 0, 0 } }) do
+		b.BoxR(cf * CFrame.new(p[1], p[2], 42.2), 14, 14, 1, dot)
 	end
+	for _, p in ipairs({ { -20, -20 }, { 20, 20 } }) do
+		b.BoxR(cf * CFrame.new(42.2, p[1], p[2]) * CFrame.Angles(0, math.pi / 2, 0), 14, 14, 1, dot)
+	end
+	b.BoxR(cf * CFrame.new(0, 42.2, 0) * CFrame.Angles(math.pi / 2, 0, 0), 14, 14, 1, dot)
 	b.Footprint(100, 100, 84)
 end
 R.ToyDrum = function(b, _ctx)
 	local color = accent(b, 1, rgb(255, 110, 120))
+	-- tambour : fût, cercles blancs, peau, cordage en zigzag, baguettes croisées
 	b.Cyl(0, 0, 0, 90, 60, color)
 	b.Cyl(0, 58, 0, 92, 4, WHITE)
 	b.Cyl(0, 0, 0, 92, 4, WHITE)
-	for index = 0, 5 do
-		local angle = index / 6 * math.pi * 2
-		b.BoxR(CFrame.new(math.cos(angle) * 45, 30, math.sin(angle) * 45) * CFrame.Angles(0, -angle, 0.4), 2, 60, 2, GOLD)
+	b.Cyl(0, 61, 0, 86, 1, rgb(250, 240, 220), M.Fabric)
+	for index = 0, 9 do
+		local a0, a1 = index / 10 * math.pi * 2, (index + 0.5) / 10 * math.pi * 2
+		b.Tube(math.cos(a0) * 45.6, 56, math.sin(a0) * 45.6, math.cos(a1) * 45.6, 5, math.sin(a1) * 45.6, 1.6, GOLD, M.Fabric)
+		b.Tube(math.cos(a1) * 45.6, 5, math.sin(a1) * 45.6, math.cos(a0 + math.pi / 5) * 45.6, 56, math.sin(a0 + math.pi / 5) * 45.6, 1.6, GOLD, M.Fabric)
+	end
+	for _, side in ipairs({ -1, 1 }) do
+		b.Tube(side * 20, 63, -10, -side * 6, 70, 14, 2.4, woodOf(b, WOOD), M.Wood)
+		b.Ball(-side * 6, 70, 14, 5, WHITE)
 	end
 	b.Footprint(92, 92, 64)
 end
 R.BoardGame = function(b, _ctx)
+	-- jeu de société : boîte, plateau à cases colorées, pions, dé
 	b.Box(0, 0, 0, 96, 8, 70, accent(b, 1, PINK))
 	b.Box(0, 8, 0, 80, 0.5, 56, WHITE)
-	for index = 0, 3 do
-		b.Cyl(-24 + index * 16, 8.5, (index % 2) * 12, 8, 10, ({ PINK, SKY, MINT, BUTTER })[index + 1])
+	local cols = { PINK, SKY, MINT, BUTTER }
+	for index = 0, 11 do
+		local x = -36 + (index % 6) * 14.4
+		local z = index < 6 and -22 or 22
+		b.Box(x, 8.5, z, 12, 0.5, 10, cols[index % 4 + 1], M.SmoothPlastic)
 	end
+	for index = 0, 3 do
+		b.Cyl(-24 + index * 16, 8.5, (index % 2) * 12, 8, 7, cols[index + 1])
+		b.Ball(-24 + index * 16, 18, (index % 2) * 12, 7, cols[index + 1])
+	end
+	b.Box(24, 8.5, -6, 8, 8, 8, WHITE, M.SmoothPlastic)
 	b.Footprint(96, 70, 18)
 end
 R.ToyRobot = function(b, _ctx)
 	local metal = accent(b, 1, rgb(170, 200, 230))
+	-- robot en fer-blanc : jambes, torse à panneau (voyants, grille), bras à
+	-- pinces, tête à hublots, oreilles, antenne
 	for _, x in ipairs({ -12, 12 }) do
-		b.Box(x, 0, 0, 14, 26, 18, darken(metal, 0.15), M.Metal)
+		b.Box(x, 0, 0, 16, 5, 22, darken(metal, 0.3), M.Metal)
+		b.Box(x, 5, 0, 12, 21, 16, darken(metal, 0.15), M.Metal)
 	end
-	b.Box(0, 26, 0, 48, 34, 30, metal, M.Metal)
-	b.Box(0, 62, 0, 38, 28, 28, lighten(metal, 0.1), M.Metal)
+	b.Round(0, 26, 0, 48, 34, 30, 4, metal, M.Metal)
+	b.Box(0, 32, 15.4, 30, 20, 1, darken(metal, 0.25), M.Metal)
+	for index = 0, 2 do
+		local light = b.Ball(-8 + index * 8, 46, 16, 4, ({ rgb(255, 90, 110), BUTTER, MINT })[index + 1])
+		b.Neon(light)
+	end
+	for index = 0, 2 do
+		b.Box(0, 34 + index * 3, 16.2, 22, 1, 0.8, INK, M.Metal)
+	end
+	b.Round(0, 62, 0, 38, 28, 28, 4, lighten(metal, 0.1), M.Metal)
 	for _, side in ipairs({ -1, 1 }) do
-		local eye = b.Ball(side * 9, 76, 14, 8, rgb(120, 230, 255))
+		b.CylZ(side * 9, 76, 14, 10, 1.4, GOLD, M.Metal)
+		local eye = b.Ball(side * 9, 76, 14.6, 7, rgb(120, 230, 255))
 		b.Neon(eye)
 		b.Box(side * 30, 34, 0, 8, 24, 10, darken(metal, 0.1), M.Metal)
+		b.Ball(side * 30, 57, 0, 10, darken(metal, 0.2), M.Metal)
+		b.Wedge(side * 30, 28, 3, 6, 6, 4, GREY_DARK, "Front", M.Metal)
+		b.Wedge(side * 30, 28, -3, 6, 6, 4, GREY_DARK, "Back", M.Metal)
+		b.CylX(side * 20, 76, 0, 8, 3, GOLD, M.Metal)
 	end
+	b.Box(0, 67, 14.6, 14, 2, 0.8, INK, M.Metal)
 	b.Cyl(0, 90, 0, 2, 8, GREY)
 	b.Ball(0, 98, 0, 6, rgb(255, 80, 100))
 	b.Footprint(64, 30, 100)
 end
 R.NestingDolls = function(b, _ctx)
 	local colors = { accent(b, 1, rgb(255, 110, 120)), accent(b, 2, BUTTER), accent(b, 3, MINT) }
+	-- poupées gigognes : corps en poire, visage, foulard, fleurs peintes, joues
 	for index = 0, 2 do
 		local s = 1 - index * 0.25
 		local x = -28 + index * 30
-		b.Ball(x, 20 * s, 0, 40 * s, colors[index + 1])
-		b.Ball(x, 48 * s, 0, 30 * s, colors[index + 1])
-		b.Ball(x, 48 * s, 12 * s, 16 * s, rgb(255, 230, 210))
+		local c = colors[index + 1]
+		b.Egg(x, 20 * s, 0, 42 * s, 42 * s, 40 * s, c)
+		b.Ball(x, 48 * s, 0, 30 * s, c)
+		b.Egg(x, 48 * s, 11 * s, 18 * s, 16 * s, 8 * s, rgb(255, 230, 210))
+		for _, side in ipairs({ -1, 1 }) do
+			b.Ball(x + side * 4 * s, 49 * s, 15 * s, 2.4 * s, INK)
+			b.Ball(x + side * 6 * s, 45 * s, 14.4 * s, 3 * s, rgb(255, 150, 170))
+		end
+		b.EggR(CFrame.new(x, 22 * s, 19 * s), 18 * s, 20 * s, 3, lighten(c, 0.5))
+		b.Ball(x, 22 * s, 20.4 * s, 6 * s, darken(c, 0.2))
+		b.Cyl(x, 34 * s, 0, 36 * s, 2 * s, GOLD)
 	end
 	b.Footprint(90, 40, 64)
 end
 R.ToyRocket = function(b, _ctx)
 	local color = lightOf(b, WHITE)
+	local red = accent(b, 1, rgb(255, 90, 110))
+	-- fusée jouet : fuselage, bandes, hublot cerclé, ogive, ailerons, tuyère,
+	-- flamme en couches
 	b.Cyl(0, 10, 0, 34, 60, color)
-	b.Ball(0, 70, 0, 34, accent(b, 1, rgb(255, 90, 110)))
-	b.Cyl(0, 78, 0, 16, 12, accent(b, 1, rgb(255, 90, 110)))
-	b.CylZ(0, 50, 16, 14, 2, accent(b, 2, SKY))
+	b.Cyl(0, 20, 0, 34.6, 4, red)
+	b.Cyl(0, 58, 0, 34.6, 3, red)
+	b.Egg(0, 70, 0, 34, 30, 34, red)
+	b.Cyl(0, 82, 0, 10, 8, red)
+	b.CylZ(0, 46, 16, 16, 2, GREY, M.Metal).Reflectance = 0.3
+	b.CylZ(0, 46, 17, 12, 2, accent(b, 2, SKY), M.Glass)
 	for index = 0, 2 do
 		local angle = index / 3 * math.pi * 2
-		b.BoxR(CFrame.new(math.cos(angle) * 20, 16, math.sin(angle) * 20) * CFrame.Angles(0, -angle, 0), 16, 26, 3, accent(b, 1, rgb(255, 90, 110)))
+		b.BoxR(CFrame.new(math.cos(angle) * 20, 16, math.sin(angle) * 20) * CFrame.Angles(0, -angle, 0), 16, 26, 3, red)
 	end
-	local flame = b.Ball(0, 6, 0, 16, FIRE)
+	b.Cyl(0, 4, 0, 20, 6, GREY_DARK, M.Metal)
+	local flame = b.Egg(0, 2, 0, 16, 12, 16, FIRE)
 	b.Neon(flame)
+	local core = b.Egg(0, 1, 0, 8, 7, 8, BUTTER)
+	b.Neon(core)
 	b.Footprint(50, 50, 96)
 end
 

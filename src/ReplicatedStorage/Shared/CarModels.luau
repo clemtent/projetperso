@@ -897,11 +897,16 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			end
 		end
 	else
+		-- (bas du boîtier jamais au ras du dessous du capot : pas de z-fighting)
+		local housingY0 = lampY - 0.22
+		if math.abs(housingY0 - s.Low) < 0.04 then
+			housingY0 = s.Low - 0.05
+		end
 		for _, sx in ipairs({ -1, 1 }) do
 			local x0, x1 = sx * s.W * 0.18, sx * s.W * 0.45
 			if full then
 				-- boîtier sombre, glace, projecteur rond, feu de jour
-				box(b, "HeadlightHousing", math.min(x0, x1), math.max(x0, x1), lampY - 0.28, lampTop, hoodZ0 - 0.07, hoodZ0 + 0.1, HOUSING, M.SmoothPlastic)
+				box(b, "HeadlightHousing", math.min(x0, x1), math.max(x0, x1), housingY0, lampTop, hoodZ0 - 0.07, hoodZ0 + 0.1, HOUSING, M.SmoothPlastic)
 				-- (v9.8) bloc optique : réflecteur chromé, 2 projecteurs ronds, feu de
 				-- jour en bande, glace claire bombée par-dessus
 				local l0, l1 = sx * (s.W * 0.18 + 0.05), sx * (s.W * 0.45 - 0.05)
@@ -917,7 +922,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 				local cover = box(b, "HeadlightLens", math.min(c0, c1), math.max(c0, c1), lampY - 0.2, lampTop - 0.02, hoodZ0 - 0.2, hoodZ0 - 0.16, Color3.fromRGB(230, 240, 250), M.Glass)
 				cover.Transparency = 0.55
 				cover.Reflectance = 0.2
-				box(b, "Indicator", math.min(sx * s.W * 0.45, sx * s.W * 0.49), math.max(sx * s.W * 0.45, sx * s.W * 0.49), lampY - 0.27, lampY + 0.12, hoodZ0 - 0.08, hoodZ0 + 0.1, AMBER, M.SmoothPlastic)
+				box(b, "Indicator", math.min(sx * s.W * 0.45, sx * s.W * 0.49), math.max(sx * s.W * 0.45, sx * s.W * 0.49), housingY0 + 0.02, lampY + 0.12, hoodZ0 - 0.08, hoodZ0 + 0.1, AMBER, M.SmoothPlastic)
 			else
 				box(b, "Headlight", math.min(x0, x1), math.max(x0, x1), lampY - 0.2, lampTop, hoodZ0 - 0.08, hoodZ0 + 0.1, LAMP, M.Glass)
 			end

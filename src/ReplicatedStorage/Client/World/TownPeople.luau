@@ -35,6 +35,18 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local NPCModels = require(ReplicatedStorage.Shared.NPCModels)
+-- (v9.8, REALISM98) réglage "Graphismes > Détail" : distance x 0,65 / 1 / 1,35 ;
+-- "Low" : moitié moins de passants construits
+local okGQ, GraphicsQuality = pcall(require, ReplicatedStorage.Shared.GraphicsQuality)
+local function quality(): (number, boolean)
+	if okGQ and type(GraphicsQuality) == "table" and GraphicsQuality.Get then
+		local ok, q = pcall(GraphicsQuality.Get)
+		if ok and type(q) == "table" then
+			return tonumber(q.DetailScale) or 1, q.Detail == "Low"
+		end
+	end
+	return 1, false
+end
 
 local TownPeople = {}
 
@@ -648,13 +660,16 @@ function TownPeople.Step(position: Vector3)
 	s.Focus = position
 	local now = serverNow()
 	s.Now = now
+	local scale, low = quality()
+	local nearIn, nearOut = NEAR_IN * scale, NEAR_OUT * scale
+	local maxBuilt = low and math.floor(TownPeople.MAX_BUILT / 2) or TownPeople.MAX_BUILT
 	-- distances (tous les passants "existent" ; on ne construit que les plus proches)
 	local cands = {}
 	for _, a: Agent in ipairs(s.Agents) do
 		local p = agentCF(a, now).Position
 		a.Pos = p
 		local d = (Vector3.new(p.X - position.X, 0, p.Z - position.Z)).Magnitude
-		if d < NEAR_OUT then
+		if d < nearOut then
 			table.insert(cands, { A = a, D = d })
 		end
 	end
@@ -663,11 +678,11 @@ function TownPeople.Step(position: Vector3)
 	end)
 	local wanted: { [Agent]: boolean } = {}
 	for i, c in ipairs(cands) do
-		if i > TownPeople.MAX_BUILT then
+		if i > maxBuilt then
 			break
 		end
 		-- (hystérésis : un passant déjà construit reste jusqu'à NEAR_OUT)
-		if c.D < NEAR_IN or c.A.Model then
+		if c.D < nearIn or c.A.Model then
 			wanted[c.A] = true
 		end
 	end

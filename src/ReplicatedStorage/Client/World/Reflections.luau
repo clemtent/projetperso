@@ -45,7 +45,7 @@
 	   - écrans ("Screen" de House3DSetup / attribut Glossy) : voile de
 	     verre discret (dégradé en diagonale qui glisse avec l'angle de vue),
 	     10 écrans proches au plus ;
-	   - sols des pièces ("Floor" des RoomShell) : Reflectance légère
+	   - sols des pièces ("Floor" des RoomShell / Room_<n>) : Reflectance légère
 	     (bois 0,05, marbre / carrelage 0,1), remise à l'arrêt.
 
 	API :
@@ -273,7 +273,8 @@ local function consider(d: Instance)
 		screens[d] = true
 	elseif name == "Floor" then
 		local parent = d.Parent
-		if parent and parent.Name == "RoomShell" then
+		-- (coque "RoomShell" ; renommée "Room_<n>" par HouseBuilder en ville)
+		if parent and (parent.Name == "RoomShell" or string.match(parent.Name, "^Room_%d+$") ~= nil) then
 			floors[d] = true
 			floorsDirty = true -- (pièce construite pendant que les reflets sont actifs)
 		end
