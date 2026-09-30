@@ -586,10 +586,10 @@ step("Jukebox", function(self)
 	body.CastShadow = true
 	local arch = newPart(self, "JukeArch", Vector3.new(1.2, 2.4, 2.4), kf * CFrame.new(0, 2.1, 0) * CFrame.Angles(0, rad(90), 0), WALNUT, M.Wood, CYL)
 	arch.CastShadow = true
-	local window = newPart(self, "JukeWindow", Vector3.new(0.04, 1.9, 1.9), kf * CFrame.new(0, 2.15, -0.68) * CFrame.Angles(0, rad(90), 0), Color3.fromRGB(150, 200, 230), M.Glass, CYL)
+	local window = newPart(self, "JukeWindow", Vector3.new(0.04, 1.7, 1.7), kf * CFrame.new(0, 2.3, -0.68) * CFrame.Angles(0, rad(90), 0), Color3.fromRGB(150, 200, 230), M.Glass, CYL)
 	window.Transparency = 0.35
-	newPart(self, "JukeRecord", Vector3.new(0.03, 1.1, 1.1), kf * CFrame.new(0, 2.2, -0.615) * CFrame.Angles(0, rad(90), 0), EBONY, M.SmoothPlastic, CYL)
-	newPart(self, "JukeLabel", Vector3.new(0.02, 0.36, 0.36), kf * CFrame.new(0, 2.2, -0.645) * CFrame.Angles(0, rad(90), 0), PINK, M.SmoothPlastic, CYL)
+	newPart(self, "JukeRecord", Vector3.new(0.03, 1.0, 1.0), kf * CFrame.new(0, 2.3, -0.615) * CFrame.Angles(0, rad(90), 0), EBONY, M.SmoothPlastic, CYL)
+	newPart(self, "JukeLabel", Vector3.new(0.02, 0.34, 0.34), kf * CFrame.new(0, 2.3, -0.645) * CFrame.Angles(0, rad(90), 0), PINK, M.SmoothPlastic, CYL)
 	-- tube néon en arc autour de la vitre
 	local n = 9
 	for i = 0, n - 1 do
@@ -607,7 +607,7 @@ step("Jukebox", function(self)
 		glow(tube, LILAC)
 	end
 	-- panneau des choix (texte), grille du haut-parleur, fente à pièces
-	local panel = newPart(self, "JukePanel", Vector3.new(1.7, 0.5, 0.06), kf * CFrame.new(0, 1.55, -0.63) * CFrame.Angles(rad(-12), 0, 0), Color3.fromRGB(255, 244, 226), M.SmoothPlastic)
+	local panel = newPart(self, "JukePanel", Vector3.new(1.7, 0.5, 0.06), kf * CFrame.new(0, 1.05, -0.64) * CFrame.Angles(rad(-12), 0, 0), Color3.fromRGB(255, 244, 226), M.SmoothPlastic)
 	local g = surface(panel, Enum.NormalId.Front, 60, 0.4)
 	local bg = Instance.new("Frame")
 	bg.Size = UDim2.fromScale(1, 1)
@@ -617,8 +617,8 @@ step("Jukebox", function(self)
 	local l = label(bg, "Text", "🎵 [E] Songs  ·  📻 [F] Radio", UDim2.fromScale(0.04, 0.1), UDim2.fromScale(0.92, 0.8), Color3.fromRGB(120, 60, 90))
 	l:SetAttribute("LocText", "🎵 [E] Songs  ·  📻 [F] Radio")
 	self.H.JukeText = l
-	newPart(self, "JukeGrill", Vector3.new(1.8, 0.85, 0.05), kf * CFrame.new(0, 0.72, -0.62), Color3.fromRGB(200, 186, 160), M.DiamondPlate)
-	newPart(self, "JukeChrome", Vector3.new(2.3, 0.08, 0.08), kf * CFrame.new(0, 1.2, -0.62), CHROME, M.Metal)
+	newPart(self, "JukeGrill", Vector3.new(1.8, 0.55, 0.05), kf * CFrame.new(0, 0.45, -0.62), Color3.fromRGB(200, 186, 160), M.DiamondPlate)
+	newPart(self, "JukeChrome", Vector3.new(2.3, 0.08, 0.08), kf * CFrame.new(0, 1.38, -0.62), CHROME, M.Metal)
 	newPart(self, "JukeBase", Vector3.new(2.5, 0.14, 1.3), kf * CFrame.new(0, 0.04, 0), CHROME, M.Metal)
 	self.H.Emitters = self.H.Emitters or {}
 end)
