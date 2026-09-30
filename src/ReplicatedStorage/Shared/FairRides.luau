@@ -783,18 +783,6 @@ function FairRides.SolveAnnex(strictFree: (number, number) -> boolean, looseFree
 		end
 		return true, body
 	end
-	local function cost(def: AnnexDef, cf: CFrame): number
-		local door = cf * Vector3.new((def.Apron.X0 + def.Apron.X1) / 2, 0, def.Apron.Z0)
-		local best = math.huge
-		for _, g in ipairs(FairRides.GATES) do
-			best = math.min(best, (door - g).Magnitude)
-		end
-		-- (entrée tournée vers la fête : un peu préférée)
-		local toFair = -Vector3.new(door.X, 0, door.Z)
-		local look = cf.LookVector
-		local facing = if toFair.Magnitude > 1 then look:Dot(toFair.Unit) else 0
-		return best - facing * 6
-	end
 	-- candidats (grille de 4 studs, 4 orientations) triés par coût : on
 	-- s'arrête au PREMIER qui tient (rapide, ~10 000 candidats au plus)
 	local function search(def: AnnexDef): (CFrame?, Rect?)
@@ -803,13 +791,25 @@ function FairRides.SolveAnnex(strictFree: (number, number) -> boolean, looseFree
 		if ok then
 			return ideal, box
 		end
+		-- (coût calculé sans CFrame : rotations de 90° = échanges d'axes)
+		local dx, dz = (def.Apron.X0 + def.Apron.X1) / 2, def.Apron.Z0
 		local cands = {}
 		for gx = -150, 150, 4 do
 			for gz = -84, 44, 4 do
 				if math.abs(gx) > hw + 4 or gz < -hd - 4 then
-					for yaw = 0, 270, 90 do
-						local cf = CFrame.new(gx, 0, gz) * CFrame.Angles(0, math.rad(yaw), 0)
-						table.insert(cands, { CF = cf, Cost = cost(def, cf) })
+					for q = 0, 3 do
+						local c, s = ({ 1, 0, -1, 0 })[q + 1], ({ 0, 1, 0, -1 })[q + 1]
+						local px, pz = gx + dx * c + dz * s, gz - dx * s + dz * c
+						local best = math.huge
+						for _, g in ipairs(FairRides.GATES) do
+							local ex, ez = px - g.X, pz - g.Z
+							best = math.min(best, math.sqrt(ex * ex + ez * ez))
+						end
+						-- (entrée tournée vers la fête : un peu préférée)
+						local lx, lz = -s, -c
+						local m = math.sqrt(px * px + pz * pz)
+						local facing = if m > 1 then (lx * -px + lz * -pz) / m else 0
+						table.insert(cands, { X = gx, Z = gz, Q = q, Cost = best - facing * 6 })
 					end
 				end
 			end
@@ -817,10 +817,11 @@ function FairRides.SolveAnnex(strictFree: (number, number) -> boolean, looseFree
 		table.sort(cands, function(a, b)
 			return a.Cost < b.Cost
 		end)
-		for _, c in ipairs(cands) do
-			local fit, b = fits(def, c.CF)
+		for _, cand in ipairs(cands) do
+			local cf = CFrame.new(cand.X, 0, cand.Z) * CFrame.Angles(0, cand.Q * math.pi / 2, 0)
+			local fit, b = fits(def, cf)
 			if fit then
-				return c.CF, b
+				return cf, b
 			end
 		end
 		return nil, nil

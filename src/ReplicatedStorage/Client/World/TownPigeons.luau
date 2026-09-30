@@ -58,7 +58,7 @@ local PER_FLOCK = 5
 local BIRD_R = 0.46 -- (studs) demi-distance mini entre deux pigeons au sol
 local BODY_HALF = 0.21 -- demi-largeur d'un corps (vu du dessus)
 local CAPSULE_MARGIN = 0.06 -- espace gardé entre deux corps
-local LAND_GAP = 1.32 -- place d'atterrissage : libre quel que soit le cap (bec 0,5 + queue 0,72 + marge)
+local LAND_GAP = 1.7 -- place d'atterrissage : libre quel que soit le cap (bec 0,5 + queue 0,72 + 2 demi-largeurs + marge)
 local WALK_SPEED = 1.05
 local STEP_T = 0.3 -- (s) un pas (= un hochement de tête)
 local SCARE_R = 3.6 -- quelqu'un plus près : le groupe s'envole
