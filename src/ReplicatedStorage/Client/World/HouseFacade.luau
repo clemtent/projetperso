@@ -828,43 +828,43 @@ local function doorLeaves(ctx: Ctx, x: number, back: boolean, leafColor: Color3,
 		local fy0, fy1 = y0 + 0.04, y0 + lh
 		local lhh = fy1 - fy0
 		if style == "Glazed" then
-			add(box("DoorPanel", x0 + 0.45, x1 - 0.45, fy0 + 0.6, fy0 + lhh * 0.3, 0.05, 0.16, tint, M.Wood, { Shadow = false }))
-			add(box("DoorGlass", x0 + 0.5, x1 - 0.5, fy0 + lhh * 0.36, fy1 - 0.5, 0.05, 0.16, P.Glass, M.Glass, { T = 0.35, Shadow = false }))
+			add(box("DoorPanel", x0 + 0.45, x1 - 0.45, fy0 + 0.6, fy0 + lhh * 0.3, 0.05, 0.15, tint, M.Wood, { Shadow = false }))
+			add(box("DoorGlass", x0 + 0.5, x1 - 0.5, fy0 + lhh * 0.36, fy1 - 0.5, 0.05, 0.15, P.Glass, M.Glass, { T = 0.35, Shadow = false }))
 			for k = 1, 2 do
 				local y = fy0 + lhh * 0.36 + k * (fy1 - 0.5 - fy0 - lhh * 0.36) / 3
-				add(box("DoorMuntin", x0 + 0.5, x1 - 0.5, y - 0.07, y + 0.07, 0.02, 0.16, leafColor, M.Wood, { Shadow = false }))
+				add(box("DoorMuntin", x0 + 0.5, x1 - 0.5, y - 0.07, y + 0.07, 0.02, 0.12, leafColor, M.Wood, { Shadow = false }))
 			end
 		elseif style == "Rustic" then
 			for k = 1, 2 do
 				local px = x0 + k * (x1 - x0) / 3
-				add(box("DoorPlankJoint", px - 0.05, px + 0.05, fy0 + 0.2, fy1 - 0.2, 0.08, 0.16, shade, M.Wood, { Shadow = false }))
+				add(box("DoorPlankJoint", px - 0.05, px + 0.05, fy0 + 0.2, fy1 - 0.2, 0.08, 0.13, shade, M.Wood, { Shadow = false }))
 			end
 			for _, by in ipairs({ fy0 + lhh * 0.18, fy0 + lhh * 0.78 }) do
 				local sx0 = if sign > 0 then x0 + 0.08 else x0 + 0.5
 				local sx1 = if sign > 0 then x1 - 0.5 else x1 - 0.08
-				add(box("DoorStrap", sx0, sx1, by - 0.18, by + 0.18, 0.02, 0.16, HouseDetail.IRON, M.Metal, { Shadow = false }))
+				add(box("DoorStrap", sx0, sx1, by - 0.18, by + 0.18, 0.02, 0.12, HouseDetail.IRON, M.Metal, { Shadow = false }))
 			end
-			add(box("DoorPeep", x0 + 0.9, x1 - 0.9, fy0 + lhh * 0.62, fy0 + lhh * 0.72, 0.06, 0.16, P.Glass, M.Glass, { T = 0.3, Shadow = false }))
+			add(box("DoorPeep", x0 + 0.9, x1 - 0.9, fy0 + lhh * 0.62, fy0 + lhh * 0.72, 0.04, 0.14, P.Glass, M.Glass, { T = 0.3, Shadow = false }))
 		elseif style == "Modern" then
 			local gx0 = if sign > 0 then x0 + 0.5 else x1 - 0.85
-			add(box("DoorGlass", gx0, gx0 + 0.35, fy0 + 1, fy1 - 1, 0.06, 0.16, P.Glass, M.Glass, { T = 0.3, Shadow = false }))
+			add(box("DoorGlass", gx0, gx0 + 0.35, fy0 + 1, fy1 - 1, 0.06, 0.15, P.Glass, M.Glass, { T = 0.3, Shadow = false }))
 			add(box("DoorPullBar", knobX - 0.1, knobX + 0.1, fy0 + 2.2, fy0 + 6.8, -0.28, -0.08, Color3.fromRGB(206, 210, 216), M.Metal, { Shadow = false }))
 			for _, by in ipairs({ fy0 + 2.4, fy0 + 6.6 }) do
-				add(box("DoorPullFoot", knobX - 0.06, knobX + 0.06, by - 0.06, by + 0.06, -0.1, 0.16, Color3.fromRGB(206, 210, 216), M.Metal, { Shadow = false }))
+				add(box("DoorPullFoot", knobX - 0.06, knobX + 0.06, by - 0.06, by + 0.06, -0.1, 0.14, Color3.fromRGB(206, 210, 216), M.Metal, { Shadow = false }))
 			end
 		elseif style == "Grand" then
-			add(box("DoorPanel", x0 + 0.4, x1 - 0.4, fy0 + 0.6, fy0 + lhh * 0.28, 0.05, 0.16, tint, M.Wood, { Shadow = false }))
-			add(box("DoorPanel", x0 + 0.4, x1 - 0.4, fy0 + lhh * 0.34, fy0 + lhh * 0.6, 0.05, 0.16, tint, M.Wood, { Shadow = false }))
-			add(box("DoorGlass", x0 + 0.55, x1 - 0.55, fy0 + lhh * 0.66, fy1 - 0.45, 0.05, 0.16, P.Glass, M.Glass, { T = 0.35, Shadow = false }))
-			add(box("DoorCarving", x0 + 0.8, x1 - 0.8, fy0 + lhh * 0.44, fy0 + lhh * 0.5, 0.0, 0.16, brass, M.Metal, { Shadow = false }))
+			add(box("DoorPanel", x0 + 0.4, x1 - 0.4, fy0 + 0.6, fy0 + lhh * 0.28, 0.05, 0.15, tint, M.Wood, { Shadow = false }))
+			add(box("DoorPanel", x0 + 0.4, x1 - 0.4, fy0 + lhh * 0.34, fy0 + lhh * 0.6, 0.05, 0.15, tint, M.Wood, { Shadow = false }))
+			add(box("DoorGlass", x0 + 0.55, x1 - 0.55, fy0 + lhh * 0.66, fy1 - 0.45, 0.05, 0.15, P.Glass, M.Glass, { T = 0.35, Shadow = false }))
+			add(box("DoorCarving", x0 + 0.8, x1 - 0.8, fy0 + lhh * 0.44, fy0 + lhh * 0.5, 0.0, 0.12, brass, M.Metal, { Shadow = false }))
 		else
 			-- "Panel" : 3 panneaux en relief
-			add(box("DoorPanel", x0 + 0.45, x1 - 0.45, fy0 + 0.7, fy0 + lhh * 0.36, 0.05, 0.16, tint, M.Wood, { Shadow = false }))
-			add(box("DoorPanel", x0 + 0.45, x1 - 0.45, fy0 + lhh * 0.42, fy0 + lhh * 0.62, 0.05, 0.16, tint, M.Wood, { Shadow = false }))
-			add(box("DoorPanel", x0 + 0.45, x1 - 0.45, fy0 + lhh * 0.68, fy1 - 0.6, 0.05, 0.16, tint, M.Wood, { Shadow = false }))
+			add(box("DoorPanel", x0 + 0.45, x1 - 0.45, fy0 + 0.7, fy0 + lhh * 0.36, 0.05, 0.15, tint, M.Wood, { Shadow = false }))
+			add(box("DoorPanel", x0 + 0.45, x1 - 0.45, fy0 + lhh * 0.42, fy0 + lhh * 0.62, 0.05, 0.15, tint, M.Wood, { Shadow = false }))
+			add(box("DoorPanel", x0 + 0.45, x1 - 0.45, fy0 + lhh * 0.68, fy1 - 0.6, 0.05, 0.15, tint, M.Wood, { Shadow = false }))
 		end
 		if style ~= "Modern" then
-			add(box("DoorEscutcheon", knobX - 0.14, knobX + 0.14, y0 + 3.7, y0 + 4.6, 0.0, 0.16, brass, M.Metal, { Shadow = false }))
+			add(box("DoorEscutcheon", knobX - 0.14, knobX + 0.14, y0 + 3.7, y0 + 4.6, -0.01, 0.11, brass, M.Metal, { Shadow = false }))
 			-- poignée (boule qui traverse le battant : visible des deux côtés)
 			add(kit:Ball("DoorKnob", knobX, y0 + 4.1, D(0.35), 0.62, brass, M.Metal, { Shadow = false }))
 		end
@@ -1095,7 +1095,7 @@ local function backSide(ctx: Ctx, material: Enum.Material)
 	local px0, px1 = backX - W / 2 - 1.6, backX + W / 2 + 1.6
 	local stone = if ctx.Style == "Loft" then Color3.fromRGB(226, 216, 232) else P.Stone
 	kit:Box("BackPorch", px0, px1, 0, yDoor - 0.04, out, out + landing, stone, M.Limestone, { Solid = true })
-	kit:Box("BackPorchEdge", px0 - 0.1, px1 + 0.1, yDoor - 0.3, yDoor - 0.02, out + landing - 0.35, out + landing + 0.1, frame:Lerp(WHITE, 0.3), M.Limestone, { Shadow = false })
+	kit:Box("BackPorchEdge", px0 - 0.1, px1 + 0.1, yDoor - 0.3, yDoor - 0.09, out + landing - 0.35, out + landing + 0.1, frame:Lerp(WHITE, 0.3), M.Limestone, { Shadow = false })
 	local rise = yDoor / steps
 	for k = 1, steps - 1 do
 		local top = yDoor - k * rise
@@ -1271,7 +1271,7 @@ local function frontWindows(ctx: Ctx, list: { Opening }, frame: Color3, frameMat
 	for _, op in ipairs(list) do
 		local r = op.Rect
 		local x0, x1, y0, y1 = r[1], r[2], r[3], r[4]
-		local glass = kit:Box("Glass", x0, x1, y0, y1, 0.35, 0.5, P.Glass, M.Glass, { T = 0.72, Shadow = false })
+		local glass = kit:Box("Glass", x0, x1, y0, y1, 0.36, 0.5, P.Glass, M.Glass, { T = 0.72, Shadow = false })
 		glass.CastShadow = false
 		addGlow(ctx, op.Slot, windowGlow(glass, Enum.NormalId.Back)) -- (face côté rue)
 		local isHall = op.Slot == nil

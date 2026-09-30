@@ -571,7 +571,7 @@ local function landingGuard(kit: any, size: any, floor: number, floors: number, 
 		end
 	end
 	-- poteau au bout de la trémie
-	kit:Box("GuardPost", x - 0.25, x + 0.25, y, y + GUARD_H + 0.45, a - 0.25, a + 0.25, pal.Newel, pal.RailMat, { Solid = true, Shadow = false })
+	kit:Box("GuardPost", x - 0.25, x + 0.25, y, y + GUARD_H + 0.45, a - 0.3, a + 0.17, pal.Newel, pal.RailMat, { Solid = true, Shadow = false })
 	if not above then
 		-- dernier étage : garde-corps en travers, au bout de la trémie
 		kit:Box("GuardRail", run.S0 + 0.3, run.S1, y + GUARD_H, y + GUARD_H + 0.24, a - 0.17, a + 0.17, pal.Rail, pal.RailMat, { Solid = true, Shadow = false })
@@ -888,8 +888,8 @@ local function foyer(kit: any, size: any, pal: Palette)
 	if WorldLayout.Dims(size).Floors >= 2 then
 		if pal.Open then
 			local bd = run.D0 + 9
-			kit:CylX("BikeWheel", run.S0 + 2.1, y + 1.1, bd - 1.4, 2.2, 0.16, Color3.fromRGB(30, 30, 34), M.Rubber, { Shadow = false })
-			kit:CylX("BikeWheel", run.S0 + 2.1, y + 1.1, bd + 1.4, 2.2, 0.16, Color3.fromRGB(30, 30, 34), M.Rubber, { Shadow = false })
+			kit:CylX("BikeWheel", run.S0 + 2.1, y + 1.1, bd - 1.4, 2.2, 0.24, Color3.fromRGB(30, 30, 34), M.Rubber, { Shadow = false })
+			kit:CylX("BikeWheel", run.S0 + 2.1, y + 1.1, bd + 1.4, 2.2, 0.24, Color3.fromRGB(30, 30, 34), M.Rubber, { Shadow = false })
 			kit:Slab("BikeFrame", run.S0 + 2.1, { y + 2.3, bd - 1.3 }, { y + 2.3, bd + 1.2 }, 0.14, 0.14, Color3.fromRGB(236, 110, 90), M.Metal, { Shadow = false })
 			kit:Slab("BikeFrame", run.S0 + 2.1, { y + 2.3, bd - 0.4 }, { y + 1.1, bd + 1.4 }, 0.14, 0.14, Color3.fromRGB(236, 110, 90), M.Metal, { Shadow = false })
 			kit:Box("BikeSeat", run.S0 + 1.95, run.S0 + 2.25, y + 2.5, y + 2.65, bd - 0.9, bd - 0.2, Color3.fromRGB(30, 30, 34), M.Fabric, { Shadow = false })

@@ -803,7 +803,12 @@ local function roomFront(self: House, shell: Model, room: any, slot: number)
 	local trimEntry = Config.HouseTrimsById and Config.HouseTrimsById[tostring(room and room.Trim or "Cream")]
 	local trim = trimEntry and typeof(trimEntry.Color) == "Color3" and trimEntry.Color or CREAM
 	local top = yFloor + WorldLayout.WALL_H
-	kit:WallX("FrontWall", xMin, xMax, yFloor, top, T, T + 0.12, rects, paper, M.SmoothPlastic, { Solid = false, Shadow = false })
+	-- (trous 0,04 plus grands que ceux de la façade : tranches jamais confondues)
+	local holes = {}
+	for _, r in ipairs(rects) do
+		table.insert(holes, { r[1] - 0.04, r[2] + 0.04, r[3] - 0.04, r[4] + 0.04 })
+	end
+	kit:WallX("FrontWall", xMin, xMax, yFloor, top, T, T + 0.12, holes, paper, M.SmoothPlastic, { Solid = false, Shadow = false })
 	kit:Box("FrontSkirting", xMin, xMax, yFloor, yFloor + 0.7, T + 0.12, T + 0.32, trim, M.SmoothPlastic, { Shadow = false })
 	kit:Box("FrontCrown", xMin, xMax, top - 0.5, top, T + 0.12, T + 0.32, trim, M.SmoothPlastic, { Shadow = false })
 	-- (v9.6 anti-scintillement : dessus 0,04 au-dessus du bas de la fenêtre du mur)

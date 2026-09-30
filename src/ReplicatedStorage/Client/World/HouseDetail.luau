@@ -479,7 +479,15 @@ function HouseDetail.PatternBand(kit: any, info: RoofInfo, color: Color3, materi
 		return nil
 	end
 	local cx = (x0 + x1) / 2
-	return kit:Slab("RoofPatternBand", cx, { A[2] + 0.2, A[3] }, { D[2] + 0.2, D[3] }, x1 - x0, 0.1, color, material, { T = 1, Shadow = false })
+	-- (décollée de 0,3 perpendiculairement au pan : bien au-dessus des rangs de tuiles)
+	local dy, dd = D[2] - A[2], D[3] - A[3]
+	local len = math.sqrt(dy * dy + dd * dd)
+	local ny, nd = dd / len, -dy / len
+	if ny < 0 then
+		ny, nd = -ny, -nd
+	end
+	return kit:Slab("RoofPatternBand", cx, { A[2] + ny * 0.3, A[3] + nd * 0.3 }, { D[2] + ny * 0.3, D[3] + nd * 0.3 }, x1 - x0, 0.1, color, material,
+		{ T = 1, Shadow = false })
 end
 
 ----------------------------------------------------------------------
@@ -511,15 +519,15 @@ function HouseDetail.Window(kit: any, x0: number, x1: number, y0: number, y1: nu
 	local style = w.Style
 	local slim = style == "Modern"
 	local f = if slim then 0.2 elseif style == "Industrial" then 0.28 else 0.34
-	local fo = face - (if slim then 0.08 else 0.15) -- avant du cadre
+	local fo = face - (if slim then 0.1 else 0.15) -- avant du cadre
 	-- cadre (dormant) : déborde de 0,05 dans le trou, jamais coplanaire
-	kit:Box("WinFrame", x0 - f, x1 + f, y1 - 0.05, y1 + f, fo, 0.35, frame, fm)
-	kit:Box("WinFrame", x0 - f, x1 + f, y0 - f, y0 + 0.05, fo, 0.35, frame, fm)
-	kit:Box("WinFrame", x0 - f, x0 + 0.05, y0 + 0.05, y1 - 0.05, fo, 0.35, frame, fm)
-	kit:Box("WinFrame", x1 - 0.05, x1 + f, y0 + 0.05, y1 - 0.05, fo, 0.35, frame, fm)
+	kit:Box("WinFrame", x0 - f, x1 + f, y1 - 0.05, y1 + f, fo, 0.33, frame, fm)
+	kit:Box("WinFrame", x0 - f, x1 + f, y0 - f, y0 + 0.05, fo, 0.33, frame, fm)
+	kit:Box("WinFrame", x0 - f, x0 + 0.05, y0 + 0.05, y1 - 0.05, fo, 0.33, frame, fm)
+	kit:Box("WinFrame", x1 - 0.05, x1 + f, y0 + 0.05, y1 - 0.05, fo, 0.33, frame, fm)
 	local cx = (x0 + x1) / 2
 	local bar = if slim then 0.09 else 0.11
-	local md0, md1 = 0.2, 0.34
+	local md0, md1 = 0.18, 0.32
 	if style == "Colonial" then
 		-- petits bois : 3 x 3 carreaux
 		for k = 1, 2 do

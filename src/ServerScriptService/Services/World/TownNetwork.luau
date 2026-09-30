@@ -343,9 +343,18 @@ local function buildCityEdge(parent: Instance, e: Edge, boxes: { [string]: Box }
 		end
 	end
 	-- détails client (seulement les tronçons à plat : les emplacements ne
-	-- portent que le cap)
-	for i = 2, #road do
-		local a, b = road[i - 1], road[i]
+	-- portent que le cap) ; rien sur l'anneau d'un rond-point (il a ses propres
+	-- détails : pas de face confondue avec son asphalte)
+	local function ring(id: string): number
+		local node = graphNodes[id]
+		return (node and node.Kind == "Roundabout") and 22 or 0
+	end
+	local detail = road
+	if ring(e.A) > 0 or ring(e.B) > 0 then
+		detail = trimPolyline(pts, s0 + ring(e.A), s1 - ring(e.B))
+	end
+	for i = 2, #detail do
+		local a, b = detail[i - 1], detail[i]
 		if math.abs(a.Y - b.Y) < 0.01 then
 			local dx, dz, len = flatDir(a, b)
 			local F = alongFrame(a, dx, dz, a.Y - ROAD_Y)
@@ -429,7 +438,8 @@ local function buildBridges(parent: Instance, graph: WorldLayout.RoadGraph)
 					for _, side in ipairs({ -1, 1 }) do
 						-- (0,05 en retrait : aucune face confondue avec le chant du tablier)
 						local off = side * (deckW / 2 - 0.45)
-						slab(model, "Parapet", offsetPoint(a, dx, dz, off), offsetPoint(b, dx, dz, off), 0.8, 2.6, 2.6, C.Stone, M.Concrete, "solid")
+						-- (raccourci de 0,06 aux bouts : deux tronçons voisins ne partagent jamais une face)
+						slab(model, "Parapet", offsetPoint(a, dx, dz, off), offsetPoint(b, dx, dz, off), 0.8, 2.6, 2.6, C.Stone, M.Concrete, "solid", -0.06, -0.06)
 					end
 				end
 			end

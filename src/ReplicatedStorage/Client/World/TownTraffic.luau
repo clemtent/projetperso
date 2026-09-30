@@ -135,12 +135,16 @@ local BRAKE_ON = Color3.fromRGB(255, 58, 70)
 
 type Path = { Points: { Vector3 }, Cum: { number }, Length: number, Corners: { { S: number, Turn: number } }, Speeds: { number }? }
 -- (v10) circuit : une boucle du graphe routier + ses arêtes (clés "a|b") + ses véhicules
-type Circuit = { Id: string, Path: Path, Cruise: number, Keys: { [string]: boolean }, Blocked: boolean, Count: number, Kinds: { any }, Bus: boolean }
+type Pass = { Node: string, S0: number, S1: number }
+type Circuit = { Id: string, Path: Path, Cruise: number, Keys: { [string]: boolean }, Blocked: boolean, Count: number, Kinds: { any }, Bus: boolean, Passes: { Pass } }
 type DoorLeaf = { Index: number, Leaf: number, Door: number }
 type Vehicle = {
 	Path: Path, -- (v10) circuit suivi
 	Circuit: Circuit?,
 	Hidden: boolean,
+	YieldClock: number, -- (v10) temps passé à céder le passage
+	Pos: Vector3?, -- (v10) dernière position (suivi entre circuits)
+	Dir: Vector3?,
 	LightRig: any?, -- (v10, CARS10) CarModels.LightRig
 	LightKey: string?,
 	Model: Model,
@@ -214,6 +218,12 @@ end
 -- décalage de voie et une limitation par tronçon ; décalage à droite du sens
 -- (onglet aux sommets), virages arrondis (Bézier), pas de 8 studs au plus
 local LIMIT_AHEAD = { 40, 90, 150 }
+-- (v10) points balayés devant l'avant (studs) : cession du passage entre circuits
+-- (v10) carrefours réservés : [id du nœud] = { Owner = véhicule, Time = horloge }
+local reservations: { [string]: { Owner: any, Time: number } } = {}
+local reserveClock = 0
+local farFrames = 0
+local farTick = false
 
 local function pathFromLoop(pts: { any }, offsets: { number }, speeds: { number }): Path
 	local O = WorldLayout.Origin()
@@ -436,12 +446,37 @@ local function buildCircuits(count: number): { Circuit }
 	local list: { Circuit } = {}
 	local B, R = WorldLayout.DOWNTOWN_B, WorldLayout.BeltR(count)
 	local low = lowDetail()
+	local graphNodes = {}
+	for _, node in ipairs(WorldLayout.RoadGraph(count).NodeList) do
+		if node.Kind == "Junction" or node.Kind == "Roundabout" then
+			table.insert(graphNodes, node)
+		end
+	end
 	local function add(id: string, pts: { any }?, offs: { number }?, speeds: { number }?, keys: { [string]: boolean }?, cruise: number, n: number, kinds: { any }, bus: boolean?)
 		if not pts or not offs or not speeds or not keys then
 			return
 		end
 		local ok, p = pcall(pathFromLoop, pts, offs, speeds)
 		if ok and p and p.Length > 50 then
+			-- carrefours traversés (nœuds "Junction" / "Roundabout" à moins de 19 studs)
+			local passes: { Pass } = {}
+			local O = WorldLayout.Origin()
+			for _, node in ipairs(graphNodes) do
+				local c = Vector3.new(O.X + node.X, 0, O.Z + node.Z)
+				local inRun, s0 = false, 0
+				for i, q in ipairs(p.Points) do
+					local near = (Vector3.new(q.X, 0, q.Z) - c).Magnitude < 19
+					if near and not inRun then
+						inRun, s0 = true, p.Cum[i]
+					elseif not near and inRun then
+						inRun = false
+						table.insert(passes, { Node = node.Id, S0 = s0, S1 = p.Cum[i] })
+					end
+				end
+				if inRun then
+					table.insert(passes, { Node = node.Id, S0 = s0, S1 = p.Length })
+				end
+			end
 			table.insert(list, {
 				Id = id,
 				Path = p,
@@ -451,6 +486,7 @@ local function buildCircuits(count: number): { Circuit }
 				Count = if low then math.max(1, math.ceil(n / 2)) else n,
 				Kinds = kinds,
 				Bus = bus == true,
+				Passes = passes,
 			})
 		end
 	end
@@ -719,6 +755,9 @@ local function addVehicle(kind: string, color: Color3, stripe: boolean, s: numbe
 		Path = if circuit then circuit.Path else path :: Path,
 		Circuit = circuit,
 		Hidden = false,
+		YieldClock = 0,
+		Pos = nil,
+		Dir = nil,
 		LightRig = nil,
 		LightKey = nil,
 		Model = nil :: any,
@@ -770,7 +809,26 @@ local function spawnTraffic()
 		end
 		for i = first, n do
 			local entry = c.Kinds[(i + ci) % #c.Kinds + 1]
-			addVehicle(entry[1], entry[2], (i + ci) % 3 == 0, step * (i - 1 + 0.35), false, c)
+			-- (départ décalé si un véhicule d'un autre circuit est déjà là)
+			local s0 = step * (i - 1 + 0.35 + ci * 0.13)
+			for _ = 1, 20 do
+				local here = pointAt(c.Path, s0)
+				local clash = false
+				for _, o in ipairs(vehicles) do
+					if o.Path then
+						local q = pointAt(o.Path, o.S)
+						if (q - here).Magnitude < 24 then
+							clash = true
+							break
+						end
+					end
+				end
+				if not clash then
+					break
+				end
+				s0 += 27
+			end
+			addVehicle(entry[1], entry[2], (i + ci) % 3 == 0, s0, false, c)
 		end
 	end
 end
@@ -946,6 +1004,10 @@ local function stepTraffic(dt: number, camPos: Vector3?)
 	if #vehicles == 0 then
 		return
 	end
+	farFrames += 1
+	farTick = farFrames % 60 == 0
+	-- (v10) carrefours réservés : un véhicule à la fois dans chaque carrefour
+	reserveClock += dt
 	rebuiltThisFrame = false
 	local range = TownTraffic.MOVE_RANGE * detailScale()
 	for _, v in ipairs(vehicles) do
@@ -967,11 +1029,83 @@ local function stepTraffic(dt: number, camPos: Vector3?)
 				end
 			end
 		end
+		-- (v10) les AUTRES circuits (routes partagées) : le véhicule devant dans
+		-- notre voie, dans le même sens, est suivi comme sur notre circuit ;
+		-- après 6 s à céder le passage, on s'engage quand même (jamais de blocage).
+		local yielding = false
+		if v.Pos and v.Dir then
+			for _, o in ipairs(vehicles) do
+				if o ~= v and o.Path ~= p and not o.Hidden and o.Pos and o.Dir then
+					local op = o.Pos
+					if (op - v.Pos).Magnitude < 60 and math.abs(op.Y - v.Pos.Y) < 4 then
+						-- même voie, même sens, devant : on le suit (distance entre centres)
+						local vd = v.Dir :: Vector3
+						local rel = op - v.Pos
+						local along = rel.X * vd.X + rel.Z * vd.Z
+						local lateral = math.abs(rel.X * vd.Z - rel.Z * vd.X)
+						if along > 0 and lateral < v.HalfWidth + o.HalfWidth - 0.5 and (o.Dir.X * vd.X + o.Dir.Z * vd.Z) > 0.5 and along < ahead then
+							ahead = along
+							aheadHalf = o.HalfLen
+						end
+					end
+				end
+			end
+		end
+		-- (v10) CARREFOURS : on réserve le carrefour avant d'y entrer (38 studs
+		-- avant) ; s'il est pris par un autre véhicule (qui y est ou y arrive),
+		-- on s'arrête avant ; libéré une fois sorti. Réservation périmée après
+		-- 8 s (jamais de blocage).
+		local passes = v.Circuit and (v.Circuit :: Circuit).Passes
+		if passes and v.YieldClock < 6 then
+			for _, pass in ipairs(passes) do
+				local span = pass.S1 - pass.S0
+				local into = (v.S - pass.S0) % L -- (depuis l'entrée)
+				local inside = into < span + v.HalfLen
+				local toEntry = (pass.S0 - v.S) % L
+				local r = reservations[pass.Node]
+				local mineR = r ~= nil and r.Owner == v
+				if inside then
+					if not r or (r.Owner ~= v and reserveClock - r.Time > 8) then
+						reservations[pass.Node] = { Owner = v, Time = reserveClock }
+					end
+				elseif toEntry < 38 + v.HalfLen then
+					if r and not mineR and reserveClock - r.Time <= 8 and not r.Owner.Hidden then
+						yielding = true
+						local d = toEntry - 1
+						if d < ahead then
+							ahead = d
+							aheadHalf = 0
+						end
+					elseif not r or reserveClock - r.Time > 8 or r.Owner.Hidden then
+						reservations[pass.Node] = { Owner = v, Time = reserveClock }
+					end
+				elseif mineR then
+					-- sorti (ou très loin) : on libère
+					reservations[pass.Node] = nil
+				end
+			end
+		end
+		if yielding and v.Speed < 0.5 then
+			v.YieldClock += dt
+		elseif not yielding then
+			v.YieldClock = math.max(0, v.YieldClock - dt * 3)
+		end
+		if v.YieldClock >= 6 then
+			-- (on s'engage : 2 s sans céder, puis on recompte)
+			v.YieldClock += dt
+			if v.YieldClock > 8 then
+				v.YieldClock = 0
+			end
+		end
 		local gap = ahead - v.HalfLen - aheadHalf
 		-- vitesse voulue : s'espacer peu à peu (plus vite si le trou devant est grand)
 		local target = v.Cruise * (0.85 + 0.3 * math.clamp(gap / ideal, 0, 1))
 		if gap < 18 then
 			target = math.min(target, math.max(0, (gap - 5) / 13) * v.Cruise)
+		end
+		-- (v10) vitesse d'arrêt possible avant l'obstacle (7 studs/s², 3 de marge)
+		if gap < 80 then
+			target = math.min(target, math.sqrt(14 * math.max(0, gap - 3)))
 		end
 		-- (v10) limitation de la route (points du circuit)
 		local speeds = p.Speeds
@@ -1024,6 +1158,10 @@ local function stepTraffic(dt: number, camPos: Vector3?)
 		elseif free < 26 then
 			target = math.min(target, math.max(0, (free - 4) / 20) * v.Cruise)
 			urgent = free < 12
+		end
+		-- (v10) véhicule (autre circuit) qui s'insère juste devant : freinage franc
+		if gap < 4 and v.Speed > 2 then
+			urgent = true
 		end
 		-- passage piéton de l'entrée (circuit du boulevard)
 		local z = if p == path then zebra else nil
@@ -1149,6 +1287,8 @@ local function stepTraffic(dt: number, camPos: Vector3?)
 		end
 		-- roues : rotation + braquage ; caisse : tangage / roulis
 		local pivot = frameAt(p, v.S)
+		v.Pos = pivot.Position
+		v.Dir = pivot.LookVector
 		local heading = headingOf(pivot)
 		local yawRate = 0
 		if v.Heading then
@@ -1179,11 +1319,15 @@ local function stepTraffic(dt: number, camPos: Vector3?)
 			end
 		end
 		-- déplacement des pièces : chaque image près de la caméra, ~20 Hz plus loin
+		-- (v10) loin : posé quand même, ~1 fois / s (jamais laissé à l'origine
+		-- du monde, où plusieurs véhicules se superposeraient)
 		local near = camPos == nil or dist < range
-		if near then
+		v.Skip += 1
+		-- (tous les véhicules lointains sont reposés à la MÊME image : jamais
+		-- deux poses d'âges différents qui se chevauchent)
+		if near or not v.Placed or farTick then
 			local smooth = camPos == nil or dist < TownTraffic.SMOOTH_RANGE
-			v.Skip += 1
-			if smooth or v.Skip >= 3 or not v.Placed then
+			if not near or smooth or v.Skip >= 3 or not v.Placed then
 				v.Skip = 0
 				-- (petite vibration de la route, proportionnelle à la vitesse)
 				local noise = math.sin(os.clock() * 11 + v.S) * 0.012 * math.clamp(v.Speed / 20, 0, 1)
@@ -1510,6 +1654,7 @@ function TownTraffic.Stop()
 	table.clear(parked)
 	table.clear(vehicles)
 	table.clear(circuits)
+	table.clear(reservations)
 	table.clear(spots)
 	table.clear(blockers)
 	path = nil
