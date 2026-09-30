@@ -390,7 +390,7 @@ function HouseDetail.Roof(kit: any, x0: number, x1: number, d0: number, d1: numb
 		ye = y - ov * (spec.Rise / (depth / 2)) + 0.2
 	end
 	-- (l'égout ne descend jamais au niveau des fenêtres du dernier étage)
-	ye = math.max(ye, y - 1.1)
+	ye = math.max(ye, y - 0.6)
 	local _ = rise
 	local ox = if shape == "Gable" then ov * 0.8 else ov
 	local a0, a1 = x0 - ox, x1 + ox

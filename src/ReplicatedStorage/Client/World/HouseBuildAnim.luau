@@ -482,10 +482,17 @@ function HouseBuildAnim.Schedule(self: Anim, t: Track, late: boolean?)
 		end
 		t.From = final + axis * 9 + Vector3.new(0, 1.5, 0)
 	elseif t.Motion == "Fly" then
-		local lateral = g.CF.RightVector * ((hash(x, d + 3) - 0.5) * 14) + g.CF.LookVector * (6 + hash(d, x) * 8)
-		t.From = final + Vector3.new(0, 22 + hash(y, x) * 10, 0) + lateral
-		t.Spin = CFrame.Angles((hash(x, 1) - 0.5) * 0.9, (hash(d, 2) - 0.5) * 1.6, (hash(y, 3) - 0.5) * 0.9)
-		t.Arc = 6 + hash(x, y) * 5
+		-- (livrées d'en haut, un peu de côté, en tournant doucement : lisible, pas de pluie d'éclats)
+		local lateral = g.CF.RightVector * ((hash(x, d + 3) - 0.5) * 6) + g.CF.LookVector * (2 + hash(d, x) * 4)
+		t.From = final + Vector3.new(0, 16 + hash(y, x) * 6, 0) + lateral
+		t.Spin = CFrame.Angles((hash(x, 1) - 0.5) * 0.35, (hash(d, 2) - 0.5) * 0.7, (hash(y, 3) - 0.5) * 0.35)
+		t.Arc = 3 + hash(x, y) * 3
+		if math.max(t.Size.X, t.Size.Y, t.Size.Z) > 16 then
+			-- grands pans de toit : descendus bien droit (posés par la grue)
+			t.From = final + Vector3.new(0, 9 + hash(y, x) * 3, 0)
+			t.Spin = CFrame.identity
+			t.Arc = 0
+		end
 	elseif t.Motion == "Pop" then
 		local outward = final.Position - g.CF * Vector3.new(x, y, -g.Depth / 2)
 		outward = Vector3.new(outward.X, 0, outward.Z)

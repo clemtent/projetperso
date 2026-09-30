@@ -362,7 +362,7 @@ function RaceProps.BuildGantry(cf: CFrame, width: number, title: string, finish:
 		end
 	end
 	-- ligne au sol : damier (pièce invisible + SurfaceGui, 0,04 au-dessus de la chaussée)
-	local _, line = canvas(model, "Line", Vector3.new(width, 0.05, 2.4), cf * CFrame.new(0, 0.1, 0), Enum.NormalId.Top, 10)
+	local _, line = canvas(model, "Line", Vector3.new(width, 0.05, 2.4), cf * CFrame.new(0, 0.16, 0), Enum.NormalId.Top, 10)
 	checker(line, math.max(8, math.floor(width / 1.2)), 2, INK, WHITE)
 	return model, { Lights = lights }
 end
@@ -386,7 +386,7 @@ end
 -- Cases de la grille peintes au sol (une pièce invisible + SurfaceGui par case)
 function RaceProps.GridMarks(parent: Instance, cfs: { CFrame })
 	for k, cf in ipairs(cfs) do
-		local _, sg = canvas(parent, "GridBox", Vector3.new(6.4, 0.05, 11), cf * CFrame.new(0, 0.1, 0), Enum.NormalId.Top, 8)
+		local _, sg = canvas(parent, "GridBox", Vector3.new(6.4, 0.05, 11), cf * CFrame.new(0, 0.16, 0), Enum.NormalId.Top, 8)
 		local box = frame(sg, { Name = "Box", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1) })
 		frame(box, { Name = "Front", BackgroundColor3 = WHITE, Size = UDim2.new(1, 0, 0, 3) })
 		frame(box, { Name = "L", BackgroundColor3 = WHITE, Size = UDim2.new(0, 3, 0.35, 0) })
