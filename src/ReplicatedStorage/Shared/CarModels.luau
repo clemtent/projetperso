@@ -1556,8 +1556,8 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 					chordWedge(b, "ArchPanel", lo, hi, za, ya, zb, yb, paint, M.SmoothPlastic)
 				end
 				-- protections noires d'arches des tout-terrain
-				if full and offroad then
-					local lipT = if offroad then 0.32 else 0.12
+				if full then -- (v10) jonc d'aile couleur caisse sur les autres
+					local lipT = if offroad then 0.32 else 0.1
 					local lipOut = if offroad then 0.1 else 0.045
 					local lipCol = if offroad then TRIM else paint
 					local lipMat = if offroad then M.Plastic else M.SmoothPlastic
@@ -1566,6 +1566,11 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 					for k = 0, n - 1 do
 						local a = -PI / 2 + (k + 0.5) * PI / n
 						local ex0, ex1 = sx * (hw - 0.1), sx * (hw + lipOut)
+						-- (jonc couleur caisse : jamais au-dessus du flanc, sinon il dépasse sur l'aile)
+						local topY = r + (rr + lipT / 2) / math.cos(PI / (2 * n)) * math.max(math.abs(math.cos(a - PI / (2 * n))), math.abs(math.cos(a + PI / (2 * n))))
+						if not offroad and topY > g.flankTop(axle + math.sin(a) * rr) - 0.03 then
+							continue
+						end
 						boxRotX(b, "ArchLip", (ex0 + ex1) / 2, r + math.cos(a) * rr, axle + math.sin(a) * rr, math.abs(ex1 - ex0), lipT, 2 * rr * math.tan(PI / (2 * n)) + 0.02, a, lipCol, lipMat)
 					end
 				end
@@ -2261,7 +2266,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			for _, sx in ipairs({ -1, 1 }) do
 				local x0, x1 = sx * (hw - 0.06), sx * (hw + 0.1)
 				box(b, "SideSkirt", math.min(x0, x1), math.max(x0, x1), g.sill - 0.12, g.sill + 0.34, g.aF1 + 0.06, g.aR0 - 0.06, paint)
-				if full then
+				if full and not pickup then -- (le pick-up a déjà ses marchepieds)
 					local l0, l1 = sx * (hw - 0.02), sx * (hw + 0.14)
 					box(b, "SkirtLip", math.min(l0, l1), math.max(l0, l1), g.sill - 0.16, g.sill - 0.08, g.aF1 + 0.1, g.aR0 - 0.1, HOUSING, M.Plastic)
 				end

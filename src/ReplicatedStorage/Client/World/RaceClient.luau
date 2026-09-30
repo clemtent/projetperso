@@ -215,11 +215,13 @@ local function fillBoard()
 	bg.BackgroundColor3 = Color3.fromRGB(22, 20, 38)
 	bg.Size = UDim2.fromScale(1, 1)
 	bg.Parent = sg
-	local function text(parent: Instance, value: string, x: number, y: number, w: number, h: number, color: Color3, font: Enum.Font?, align: Enum.TextXAlignment?): TextLabel
+	-- (tailles fixes : toile de 32 px / stud, ~640 x 350 px)
+	local function text(parent: Instance, value: string, x: number, y: number, w: number, h: number, color: Color3, font: Enum.Font?, align: Enum.TextXAlignment?, size: number?): TextLabel
 		local l = Instance.new("TextLabel")
 		l.BackgroundTransparency = 1
 		l.Text = value
-		l.TextScaled = true
+		l.TextSize = size or 18
+		l.TextTruncate = Enum.TextTruncate.AtEnd
 		l.Font = font or Enum.Font.GothamBold
 		l.TextColor3 = color
 		l.TextXAlignment = align or Enum.TextXAlignment.Left
@@ -228,7 +230,7 @@ local function fillBoard()
 		l.Parent = parent
 		return l
 	end
-	text(bg, T("🏆 Best laps on this server"), 0.03, 0.02, 0.94, 0.12, Color3.fromRGB(255, 214, 90), Enum.Font.GothamBlack, Enum.TextXAlignment.Center)
+	text(bg, T("🏆 Best laps on this server"), 0.03, 0.02, 0.94, 0.12, Color3.fromRGB(255, 214, 90), Enum.Font.GothamBlack, Enum.TextXAlignment.Center, 30)
 	local list = (Config.Race and Config.Race.Routes) or {}
 	for k, def in ipairs(list) do
 		local col = (k - 1) % 2
@@ -245,17 +247,17 @@ local function fillBoard()
 		local corner = Instance.new("UICorner")
 		corner.CornerRadius = UDim.new(0, 12)
 		corner.Parent = card
-		text(card, def.Icon .. " " .. T(def.Name), 0.05, 0.03, 0.9, 0.24, Color3.fromRGB(255, 255, 255), Enum.Font.GothamBlack)
+		text(card, def.Icon .. " " .. T(def.Name), 0.05, 0.03, 0.9, 0.24, Color3.fromRGB(255, 255, 255), Enum.Font.GothamBlack, nil, 20)
 		local rows = board[def.Id] or {}
 		for i = 1, 3 do
 			local r = rows[i]
 			local medal = ({ "🥇", "🥈", "🥉" })[i]
 			local y = 0.3 + (i - 1) * 0.22
 			if r then
-				text(card, medal .. " " .. tostring(r.Name), 0.05, y, 0.58, 0.2, Color3.fromRGB(236, 226, 255))
-				text(card, RaceRules.FormatTime(r.Time), 0.62, y, 0.34, 0.2, Color3.fromRGB(130, 236, 190), Enum.Font.GothamBold, Enum.TextXAlignment.Right)
+				text(card, medal .. " " .. tostring(r.Name), 0.05, y, 0.58, 0.2, Color3.fromRGB(236, 226, 255), nil, nil, 17)
+				text(card, RaceRules.FormatTime(r.Time), 0.62, y, 0.34, 0.2, Color3.fromRGB(130, 236, 190), Enum.Font.GothamBold, Enum.TextXAlignment.Right, 17)
 			elseif i == 1 then
-				text(card, T("No record yet: be the first!"), 0.05, y, 0.9, 0.2, Color3.fromRGB(190, 176, 214), Enum.Font.Gotham)
+				text(card, T("No record yet: be the first!"), 0.05, y, 0.9, 0.2, Color3.fromRGB(190, 176, 214), Enum.Font.Gotham, nil, 15)
 			end
 		end
 	end

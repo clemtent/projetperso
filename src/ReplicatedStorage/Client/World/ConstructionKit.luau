@@ -245,7 +245,7 @@ function ConstructionKit.Crane(parent: Instance, baseCF: CFrame, opts: CraneOpts
 	local yellow, dark = C.Yellow, C.YellowDark
 	local w = 3 -- section du mât
 	if o.Lite then
-		P(model, "Footing", Vector3.new(7, 1.2, 7), baseCF * CFrame.new(0, 0.3, 0), C.Concrete, M.Concrete, { Solid = true })
+		P(model, "Footing", Vector3.new(7, 1.2, 7), baseCF * CFrame.new(0, 0.42, 0), C.Concrete, M.Concrete, { Solid = true })
 		P(model, "Mast", Vector3.new(w, H, w), baseCF * CFrame.new(0, H / 2, 0), yellow, M.Metal, { Solid = true, Alpha = 0.25 })
 	else
 		-- semelle béton + lests
@@ -467,7 +467,7 @@ function ConstructionKit.Excavator(parent: Instance, baseCF: CFrame): Rig
 	end
 	addU(ConstructionKit.CylY(upper, "SwingRing", 3.6, 0.5, swingCF * CFrame.new(0, 0.25, 0), dark, M.Metal))
 	addU(P(upper, "Deck", Vector3.new(7.4, 0.8, 8.6), swingCF * CFrame.new(0, 0.9, 0.8), yellow, M.Metal, { Solid = true }))
-	addU(P(upper, "EngineHood", Vector3.new(4.2, 2.3, 4.2), swingCF * CFrame.new(-1.5, 2.45, 2.2), yellow, M.Metal, { Solid = true }))
+	addU(P(upper, "EngineHood", Vector3.new(4.0, 2.3, 4.2), swingCF * CFrame.new(-1.5, 2.45, 2.2), yellow, M.Metal, { Solid = true }))
 	addU(P(upper, "Counterweight", Vector3.new(7.2, 2.2, 1.6), swingCF * CFrame.new(0, 2.2, 4.6), C.SteelDark, M.Metal, { Solid = true }))
 	addU(P(upper, "CounterweightRound", Vector3.new(7.2, 2.2, 2.2), swingCF * CFrame.new(0, 2.2, 5.1), C.SteelDark, M.Metal, { Shape = "Cyl" }))
 	addU(P(upper, "Grille", Vector3.new(2.6, 0.1, 2.4), swingCF * CFrame.new(-1.6, 3.62, 2.3), C.Rubber, M.DiamondPlate))
@@ -475,11 +475,11 @@ function ConstructionKit.Excavator(parent: Instance, baseCF: CFrame): Rig
 	-- cabine à gauche (vue du conducteur), vitrée
 	local cabCF = swingCF * CFrame.new(1.75, 3.9, -1.6)
 	rig.CabLocal = swingCF:ToObjectSpace(cabCF)
-	addU(P(upper, "CabBack", Vector3.new(3.1, 5.2, 0.3), cabCF * CFrame.new(0, 0, 1.55), yellow, M.Metal))
+	addU(P(upper, "CabBack", Vector3.new(3.0, 5.2, 0.3), cabCF * CFrame.new(0, 0, 1.55), yellow, M.Metal))
 	addU(P(upper, "CabRoof", Vector3.new(3.3, 0.3, 3.5), cabCF * CFrame.new(0, 2.7, 0), yellow, M.Metal))
 	for _, s in ipairs({ -1, 1 }) do
 		addU(P(upper, "CabPillar", Vector3.new(0.25, 5.2, 0.25), cabCF * CFrame.new(s * 1.45, 0, -1.6), yellow, M.Metal))
-		addU(P(upper, "CabSide", Vector3.new(0.12, 4.4, 2.9), cabCF * CFrame.new(s * 1.5, 0.2, 0), C.Glass, M.Glass, { Alpha = 0.4, Reflect = 0.1 }))
+		addU(P(upper, "CabSide", Vector3.new(0.1, 4.4, 2.9), cabCF * CFrame.new(s * 1.53, 0.2, 0), C.Glass, M.Glass, { Alpha = 0.4, Reflect = 0.1 }))
 	end
 	addU(P(upper, "CabFront", Vector3.new(2.7, 3.6, 0.12), cabCF * CFrame.new(0, 0.6, -1.6), C.Glass, M.Glass, { Alpha = 0.45, Reflect = 0.1 }))
 	addU(P(upper, "Seat", Vector3.new(1.4, 0.5, 1.3), cabCF * CFrame.new(0, -1.55, 0.3), C.Rubber, M.Fabric))
@@ -619,8 +619,9 @@ function ConstructionKit.Scaffold(parent: Instance, frame: CFrame, length: numbe
 		for k = 0, bays - 1, 2 do
 			table.insert(list, ConstructionKit.Rod(parent, "Brace", (frame * CFrame.new(k * step, y0 + 0.3, rows[2] - 0.2)).Position, (frame * CFrame.new((k + 1) * step, y1 - 0.5, rows[2] - 0.2)).Position, 0.2, tube, M.Metal, true, { Shadow = false }))
 		end
-		if o.Net then
-			table.insert(list, P(parent, "Net", Vector3.new(length, liftH - 0.4, 0.06), frame * CFrame.new(length / 2, (y0 + y1) / 2 + 0.2, rows[2] - 0.45), C.Orange, M.Fabric, { Alpha = 0.55, Shadow = false }))
+		if o.Net and lift == lifts then
+			-- filet de protection : dernier plancher seulement (on voit le mur monter dessous)
+			table.insert(list, P(parent, "Net", Vector3.new(length, liftH - 0.4, 0.06), frame * CFrame.new(length / 2, (y0 + y1) / 2 + 0.2, rows[2] - 0.45), C.Orange, M.Fabric, { Alpha = 0.68, Shadow = false }))
 		end
 	end
 	if o.Ladder ~= false then
@@ -630,7 +631,7 @@ function ConstructionKit.Scaffold(parent: Instance, frame: CFrame, length: numbe
 		for _, s in ipairs({ -0.55, 0.55 }) do
 			table.insert(list, P(parent, "LadderRail", Vector3.new(0.18, h + 1.5, 0.18), frame * CFrame.new(x + s, (h + 1.5) / 2, -2.7) * CFrame.Angles(math.rad(-12), 0, 0), C.Timber, M.Wood, { Shadow = false }))
 		end
-		table.insert(list, P(parent, "LadderRungs", Vector3.new(1.0, h + 1, 0.1), frame * CFrame.new(x, (h + 1) / 2, -2.7) * CFrame.Angles(math.rad(-12), 0, 0), C.TimberDark, M.WoodPlanks, { Alpha = 0.2, Shadow = false }))
+		table.insert(list, P(parent, "LadderRungs", Vector3.new(1.0, h + 1.5, 0.05), frame * CFrame.new(x, (h + 1.5) / 2, -2.7) * CFrame.Angles(math.rad(-12), 0, 0), C.TimberDark, M.WoodPlanks, { Alpha = 0.2, Shadow = false }))
 	end
 	return byLift
 end
@@ -660,7 +661,7 @@ function ConstructionKit.BrickPallet(parent: Instance, cf: CFrame, seed: number)
 	local color = C.Brick:Lerp(rgb(150, 70, 50), (seed % 5) / 8)
 	P(parent, "Bricks", Vector3.new(3.1, h, 3.1), top * CFrame.new(0, h / 2, 0), color, M.Brick, { Solid = true })
 	P(parent, "Wrap", Vector3.new(3.2, 0.3, 3.2), top * CFrame.new(0, h - 0.1, 0), rgb(230, 236, 240), M.Glass, { Alpha = 0.55, Shadow = false })
-	P(parent, "Strap", Vector3.new(3.18, h + 0.1, 0.12), top * CFrame.new(0, h / 2, 0.6), rgb(40, 80, 180), M.Plastic, { Shadow = false })
+	P(parent, "Strap", Vector3.new(3.18, h - 0.04, 0.12), top * CFrame.new(0, h / 2 - 0.02, 0.6), rgb(40, 80, 180), M.Plastic, { Shadow = false })
 end
 
 function ConstructionKit.TimberStack(parent: Instance, cf: CFrame, length: number)
@@ -774,7 +775,7 @@ function ConstructionKit.Office(parent: Instance, cf: CFrame, title: string)
 	P(parent, "OfficeRoof", Vector3.new(18.4, 0.4, 8.2), cf * CFrame.new(0, 8.0, 0), C.SteelDark, M.Metal)
 	P(parent, "OfficeSkirt", Vector3.new(17.6, 0.6, 7.4), cf * CFrame.new(0, 0.3, 0), C.SteelDark, M.Metal)
 	for _, x in ipairs({ -8.6, 8.6 }) do
-		P(parent, "OfficeCorner", Vector3.new(0.8, 7.6, 0.4), cf * CFrame.new(x, 4.2, -4.0), C.SteelDark, M.Metal)
+		P(parent, "OfficeCorner", Vector3.new(0.8, 7.6, 0.4), cf * CFrame.new(x * 1.006, 4.2, -4.0), C.SteelDark, M.Metal)
 	end
 	for _, x in ipairs({ -4.5, 4.5 }) do
 		P(parent, "OfficeWindow", Vector3.new(3.6, 2.6, 0.1), cf * CFrame.new(x, 5, -3.96), C.Glass, M.Glass, { Alpha = 0.3, Reflect = 0.15 })

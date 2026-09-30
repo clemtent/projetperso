@@ -874,6 +874,16 @@ end
 local function finish(race: Race)
 	race.Phase = "Results"
 	race.PhaseAt = now()
+	-- IA encore en route : temps estimé (distance restante à leur vitesse moyenne)
+	local t = now()
+	for _, r in ipairs(race.Racers) do
+		if r.IsAI and not r.Finished then
+			local elapsed = math.max(1, t - race.GoAt)
+			local avg = math.max(8, (r.D + 1) / elapsed)
+			r.Finished = true
+			r.FinishTime = elapsed + math.max(0, race.Route.RaceDistance - r.D) / avg
+		end
+	end
 	rank(race)
 	local humans = 0
 	for _, r in ipairs(race.Racers) do

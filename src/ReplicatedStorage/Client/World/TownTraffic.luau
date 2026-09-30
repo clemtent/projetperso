@@ -63,6 +63,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
 
 local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
 local CarModels = require(ReplicatedStorage.Shared.CarModels)
@@ -140,6 +141,8 @@ type Vehicle = {
 	Path: Path, -- (v10) circuit suivi
 	Circuit: Circuit?,
 	Hidden: boolean,
+	LightRig: any?, -- (v10, CARS10) CarModels.LightRig
+	LightKey: string?,
 	Model: Model,
 	Rig: any, -- CarModels.Rig
 	Kind: string,
@@ -210,6 +213,8 @@ end
 -- (v10) Trajectoire d'un circuit : polyligne fermée (repère ville), un
 -- décalage de voie et une limitation par tronçon ; décalage à droite du sens
 -- (onglet aux sommets), virages arrondis (Bézier), pas de 8 studs au plus
+local LIMIT_AHEAD = { 40, 90, 150 }
+
 local function pathFromLoop(pts: { any }, offsets: { number }, speeds: { number }): Path
 	local O = WorldLayout.Origin()
 	local n = #pts
@@ -666,6 +671,14 @@ local function buildVehicleModel(v: Vehicle, lod: number)
 	local rig = CarModels.WheelRig(model)
 	v.Rig = rig
 	v.Blinkers = blinkers
+	v.LightKey = nil
+	v.LightRig = nil
+	if type((CarModels :: any).LightRig) == "function" and type((CarModels :: any).SetLights) == "function" then
+		local okRig, lightRig = pcall((CarModels :: any).LightRig, model)
+		if okRig and type(lightRig) == "table" and (#lightRig.Brake + #lightRig.Blink + #lightRig.Head) > 0 then
+			v.LightRig = lightRig
+		end
+	end
 	v.Brakes = brakes
 	v.BlinkSide = 0
 	v.Braking = false
@@ -706,6 +719,8 @@ local function addVehicle(kind: string, color: Color3, stripe: boolean, s: numbe
 		Path = if circuit then circuit.Path else path :: Path,
 		Circuit = circuit,
 		Hidden = false,
+		LightRig = nil,
+		LightKey = nil,
 		Model = nil :: any,
 		Rig = nil,
 		Kind = kind,
@@ -975,6 +990,24 @@ local function stepTraffic(dt: number, camPos: Vector3?)
 			if limit then
 				target = math.min(target, limit)
 			end
+			-- (v10) on ralentit AVANT une route plus lente (sortie d'autoroute,
+			-- bretelle) : v <= sqrt(v_lim² + 2·a·d), a = 5 studs/s²
+			for _, d in ipairs(LIMIT_AHEAD) do
+				local sa = (v.S + d) % L
+				local a0, a1 = 1, #p.Cum
+				while a1 - a0 > 1 do
+					local mid = (a0 + a1) // 2
+					if p.Cum[mid] <= sa then
+						a0 = mid
+					else
+						a1 = mid
+					end
+				end
+				local la = speeds[a0]
+				if la then
+					target = math.min(target, math.sqrt(la * la + 10 * d))
+				end
+			end
 		end
 		local cf = frameAt(p, v.S)
 		-- personne devant ? (v10, PHYS10) portée selon la vitesse, freinage normal, urgence si trop près
@@ -1063,7 +1096,12 @@ local function stepTraffic(dt: number, camPos: Vector3?)
 		if target > v.Speed then
 			wantAccel = math.min((target - v.Speed) * 1.2, 2.5 + 3 * math.clamp(v.Speed / v.Cruise, 0, 1))
 		else
-			wantAccel = math.max((target - v.Speed) * 1.8, -(maxDecel or (if urgent then 26 else 9)))
+			-- (ImpactRules.BrakeTarget renvoie une décélération NÉGATIVE : on prend sa valeur absolue)
+			local decelMax = if maxDecel then math.abs(maxDecel) else (if urgent then 26 else 9)
+			if not urgent then
+				decelMax = math.min(decelMax, 9)
+			end
+			wantAccel = math.max((target - v.Speed) * 1.8, -decelMax)
 		end
 		local jerk = if urgent then 80 else 14
 		v.Accel += math.clamp(wantAccel - v.Accel, -jerk * dt, jerk * dt)
@@ -1091,6 +1129,16 @@ local function stepTraffic(dt: number, camPos: Vector3?)
 		end
 		local on = blink ~= 0 and (os.clock() * 2) % 1 < 0.55
 		local side = if on then blink else 0
+		-- (v10, CARS10) vrais feux du modèle : stop, clignotants, phares la nuit
+		if v.LightRig then
+			local clock = Lighting.ClockTime
+			local head = clock < 6.6 or clock > 18.2
+			local key = (if braking then "B" else "b") .. side .. (if head then "H" else "h")
+			if key ~= v.LightKey then
+				v.LightKey = key
+				pcall(CarModels.SetLights, v.LightRig, { Brake = braking, Blink = side, Head = head })
+			end
+		end
 		if side ~= v.BlinkSide then
 			v.BlinkSide = side
 			for _, sx in ipairs({ -1, 1 }) do

@@ -541,7 +541,7 @@ local function courtFountain(ctx: Ctx, x: number, d: number)
 	kit:CylY("FountainUpperShaft", x, 3.74, d, 0.8, 1.5, STONE, M.Limestone, { Shadow = false })
 	kit:CylY("FountainUpperBowl", x, 5.24, d, 2.8, 0.34, STONE, M.Limestone, { Shadow = false })
 	kit:CylY("FountainUpperWater", x, 5.58, d, 2.5, 0.08, WATER, M.SmoothPlastic, { T = 0.3, Shadow = false })
-	kit:CylY("FountainUpperSheet", x, 3.76, d, 2.85, 1.46, Color3.fromRGB(200, 232, 250), M.SmoothPlastic, { T = 0.86, Shadow = false })
+	kit:CylY("FountainUpperSheet", x, 3.8, d, 2.85, 1.4, Color3.fromRGB(200, 232, 250), M.SmoothPlastic, { T = 0.86, Shadow = false })
 	local spout = kit:Ball("FountainSpout", x, 5.85, d, 0.55, C.Pink, M.SmoothPlastic, { Shadow = false })
 	local emitter = Instance.new("ParticleEmitter")
 	emitter.Name = "FountainSpray"
@@ -914,7 +914,7 @@ local function porchCover(ctx: Ctx, kind: string, yTop: number, maxY: number, la
 		local y = math.min(yTop + 0.6, maxY - 0.6)
 		local steel = Color3.fromRGB(58, 60, 66)
 		if ctx.Spec.Arch == "Modern" then
-			kit:Box("Canopy", gx - 5.2, gx + 5.2, y, y + 0.6, -landingD - 0.4, -0.3, trim, M.SmoothPlastic, { Solid = true })
+			kit:Box("Canopy", gx - 5.2, gx + 5.2, y, y + 0.6, -landingD - 0.4, -1.12, trim, M.SmoothPlastic, { Solid = true })
 			local spot = kit:Box("CanopySpot", gx - 0.4, gx + 0.4, y - 0.05, y + 0.02, -2.2, -1.4, P.Lamp, M.Neon, { Shadow = false })
 			local _ = spot
 		else
@@ -1473,9 +1473,9 @@ local function sideGarage(ctx: Ctx)
 		Door = ctx.Trim:Lerp(WHITE, 0.5),
 	})
 	HouseDetail.Phase(ctx.Kit, "Garden")
-	ctx.G:Box("Driveway", x0 + 1.5, x1 - 1.5, -0.1, 0.1, -29.5, 1.1, Color3.fromRGB(196, 192, 188), M.Pavement, { Shadow = false })
+	ctx.G:Box("Driveway", x0 + 1.5, x1 - 1.5, -0.07, 0.1, -29.5, 1.1, Color3.fromRGB(196, 192, 188), M.Pavement, { Shadow = false })
 	for _, x in ipairs({ x0 + 1.2, x1 - 1.2 }) do
-		ctx.G:Box("DrivewayEdge", x - 0.3, x + 0.3, -0.1, 0.16, -29.5, 1.1, Color3.fromRGB(170, 166, 162), M.Concrete, { Shadow = false })
+		ctx.G:Box("DrivewayEdge", x - 0.3, x + 0.3, -0.05, 0.16, -29.5, 1.1, Color3.fromRGB(170, 166, 162), M.Concrete, { Shadow = false })
 	end
 end
 
@@ -1874,8 +1874,8 @@ STYLES.Loft = function(ctx)
 		label.TextStrokeTransparency = 0.3
 		label.Parent = sign
 	end
-	-- escalier de secours devant la travée de droite (décor)
-	if dims.Floors >= 2 then
+	-- escalier de secours devant la travée de droite (décor ; pas avec le garage attenant)
+	if dims.Floors >= 2 and not ctx.SideGarage then
 		local ly = WorldLayout.FloorY(dims.Floors)
 		local f0, f1 = gx + 4.9, ctx.Right + T + 7.5
 		if ctx.SideGarage then
@@ -2162,7 +2162,7 @@ STYLES.Mansion = function(ctx)
 	-- fronton central + horloge
 	HouseDetail.Phase(kit, "Roof")
 	local pedW, pedH = 34, 11
-	local pedY = ctx.Top + 1.3
+	local pedY = if info.Shape == "Flat" then info.Ridge + 0.03 else ctx.Top + 1.3
 	for _, s in ipairs({ -1, 1 }) do
 		kit:Part("Pediment", Vector3.new(1.2, pedH, pedW / 2), CFrame.new(ctx.DoorX + s * pedW / 4, pedY + pedH / 2, 0.9) * CFrame.Angles(0, -s * math.pi / 2, 0), TRIM,
 			M.Limestone, { Solid = true }, "WedgePart")
@@ -2195,7 +2195,7 @@ STYLES.Mansion = function(ctx)
 			kit:Box("TowerGlass", wx0, wx1, wy0, wy1, face - 0.35, face + 0.2, P.Glass, M.Glass, { Shadow = false })
 			kit:Box("TowerWinFrame", wx0 - 0.35, wx1 + 0.35, wy0 - 0.35, wy0, face - 0.45, face + 0.2, TRIM, M.Wood, { Shadow = false })
 			kit:Box("TowerSill", wx0 - 0.6, wx1 + 0.6, wy0 - 0.75, wy0 - 0.35, face - 0.85, face + 0.1, TRIM:Lerp(P.Stone, 0.3), M.Limestone, { Shadow = false })
-			kit:Box("TowerMullion", tx - 0.1, tx + 0.1, wy0, wy1, face - 0.42, face - 0.3, TRIM, M.Wood, { Shadow = false })
+			kit:Box("TowerMullion", tx - 0.1, tx + 0.1, wy0, wy1, face - 0.5, face - 0.36, TRIM, M.Wood, { Shadow = false })
 			kit:CylD("TowerArch", tx, wy1, face - 0.25, 3.6, 0.35, P.Glass, M.Glass, { Shadow = false })
 			kit:CylD("TowerArchRim", tx, wy1, face - 0.1, 4.3, 0.2, TRIM, M.Wood, { Shadow = false })
 		end
@@ -2236,7 +2236,7 @@ STYLES.Mansion = function(ctx)
 		for k = 1, steps - 1 do
 			local top = yDoor - k * stepRise
 			local a, b = x0 + s * (k - 1) * tread, x0 + s * k * tread
-			kit:Box("GrandStep", math.min(a, b), math.max(a, b), 0, top, -landD + 0.2, -0.3, P.Stone:Lerp(WHITE, (k % 2) * 0.15), M.Limestone, { Shadow = false })
+			kit:Box("GrandStep", math.min(a, b), math.max(a, b), 0, top, -landD + 0.2, -0.62, P.Stone:Lerp(WHITE, (k % 2) * 0.15), M.Limestone, { Shadow = false })
 		end
 		local run = (steps - 0.5) * tread
 		local xEnd = x0 + s * run
@@ -2278,7 +2278,7 @@ STYLES.Mansion = function(ctx)
 	end
 	local fenceRight = if ctx.Garage then GarageLayout.X0 else ctx.Right + T + 7
 	HouseDetail.Fence(ctx.G, ctx.Left - T - 7, fenceRight, FENCE_D, { Kind = spec.Fence, Gate0 = gx - 3.5, Gate1 = gx + 3.5 })
-	HouseDetail.Path(ctx.G, { { gx, -29.5 }, { gx, -19.2 } }, 4, spec.Path)
+	HouseDetail.Path(ctx.G, { { gx, -29.5 }, { gx, -21.4 } }, 4, spec.Path)
 	if spec.Mailbox ~= "Wall" then
 		HouseDetail.Mailbox(ctx.G, spec.Mailbox, gx - 6.2, FENCE_D - 1.8, spec.MailColor, spec.Num)
 	end
@@ -2455,7 +2455,7 @@ STYLES.Modern = function(ctx)
 	local yTopDoor = yDoor + WorldLayout.DOOR_H
 	frontDoor(ctx)
 	porchCover(ctx, spec.Porch, yTopDoor + 0.4, yTopDoor + 1.6, 3.2)
-	entranceLights(ctx, yDoor, -1.1, 1)
+	entranceLights(ctx, yDoor, -1.2, 1)
 	HouseDetail.Phase(kit, "Foundation")
 	local foot = porch(ctx, gx - 5, gx + 5, 3.2, 3, Color3.fromRGB(200, 198, 194), M.Concrete)
 	HouseDetail.Phase(kit, "Openings")

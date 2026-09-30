@@ -183,7 +183,7 @@ function ConstructionSite.BuildLite(self: Site)
 		box(self, folder, "Fence", x - 0.1, x + 0.1, 0.1, 6, self.ZF, self.ZB, C.Steel, M.Metal, { Alpha = 0.55, Shadow = false })
 	end
 	box(self, folder, "Fence", self.XL, self.XR, 0.1, 6, self.ZB - 0.1, self.ZB + 0.1, C.Steel, M.Metal, { Alpha = 0.55, Shadow = false })
-	box(self, folder, "Slab", -wf / 2 - 0.5, wf / 2 + 0.5, -0.3, ft, f - 0.5, b + 0.5, C.Concrete, M.Concrete)
+	box(self, folder, "Slab", -wf / 2 - 0.5, wf / 2 + 0.5, -0.36, ft, f - 0.5, b + 0.5, C.Concrete, M.Concrete)
 	box(self, folder, "Walls", -wf / 2, -wf * 0.05, ft, ft + 12, b - 1, b, C.Brick, M.Brick)
 	box(self, folder, "Walls", -wf / 2, -wf / 2 + 1, ft, ft + 12, f + 0.5, b - 1, C.Brick, M.Brick)
 	box(self, folder, "Upper", -wf / 2, wf / 2, ft + 12, ft + 13, f - 0.5, b + 0.5, C.ConcreteDark, M.Concrete)
@@ -206,7 +206,7 @@ function ConstructionSite.BuildFull(self: Site)
 	local xl, xr, zf, zb = self.XL, self.XR, self.ZF, self.ZB
 	-- === terrain ===
 	box(self, folder, "Dirt", xl, xr, -0.25, 0.1, zf, zb, C.Dirt, M.Ground, { Shadow = false, Solid = true })
-	box(self, folder, "Gravel", -7, 6, -0.02, 0.14, zf, f - 0.6, rgb(150, 142, 132), M.Pebble, { Shadow = false })
+	box(self, folder, "Gravel", -7, 6, -0.02, 0.14, zf + 0.3, f - 0.6, rgb(150, 142, 132), M.Pebble, { Shadow = false })
 	for _, x in ipairs({ -5.2, 4.2 }) do
 		box(self, folder, "TyreTrack", x - 0.9, x + 0.9, -0.02, 0.17, zf + 0.5, f - 1.5, C.DirtDark, M.Ground, { Shadow = false })
 	end
@@ -261,7 +261,7 @@ function ConstructionSite.BuildFull(self: Site)
 		local count = math.max(1, math.floor(length / 10.5 + 0.5))
 		local base = CFrame.lookAt(a, bpos)
 		P(folder, "FenceMesh", Vector3.new(0.08, 5.4, length), base * CFrame.new(0, 3.2, -length / 2), C.Steel, M.Metal, { Alpha = 0.62, Solid = true, Shadow = false })
-		for _, y in ipairs({ 0.55, 5.9 }) do
+		for _, y in ipairs({ 0.64, 5.9 }) do
 			P(folder, "FenceRail", Vector3.new(0.14, 0.14, length), base * CFrame.new(0, y, -length / 2), C.Steel, M.Metal, { Shadow = false })
 		end
 		for k = 0, count do
@@ -284,7 +284,7 @@ function ConstructionSite.BuildFull(self: Site)
 	end
 	-- === maison en cours ===
 	local bx0, bx1 = -wf / 2, wf / 2
-	box(self, folder, "Slab", bx0 - 0.5, bx1 + 0.5, -0.3, ft, f - 0.5, b + 0.5, C.Concrete, M.Concrete, { Solid = true })
+	box(self, folder, "Slab", bx0 - 0.5, bx1 + 0.5, -0.36, ft, f - 0.5, b + 0.5, C.Concrete, M.Concrete, { Solid = true })
 	local brick = C.Brick:Lerp(rgb(160, 74, 56), (seed % 4) / 6)
 	local wallTop = ft + 12
 	-- mur du fond (2 fenêtres)
@@ -509,7 +509,7 @@ local function newWorker(self: Site, kind: string, index: number, cf: CFrame, pr
 	elseif kind == "Carry" then
 		w.Box = {
 			P(self.Folder :: Model, "TileBox", Vector3.new(1.6, 1.0, 1.1), cf, rgb(196, 160, 110), M.Cardboard, { Shadow = false }),
-			P(self.Folder :: Model, "TileBoxTape", Vector3.new(1.62, 0.12, 1.12), cf, rgb(220, 200, 150), M.Plastic, { Shadow = false }),
+			P(self.Folder :: Model, "TileBoxTape", Vector3.new(1.66, 0.14, 1.16), cf, rgb(220, 200, 150), M.Plastic, { Shadow = false }),
 		}
 	elseif kind == "Trolley" then
 		w.Cart = Kit.Trolley(self.Folder :: Model, cf)
@@ -627,7 +627,7 @@ local function stepWorkers(self: Site, now: number)
 			local boxCF = if moving then cf * CFrame.new(0, 3.2, -1.15) else cf * CFrame.new(0, 0.6, -1.4)
 			for i, part in ipairs(w.Box) do
 				part.LocalTransparencyModifier = if visible then 0 else 1
-				part.CFrame = boxCF * CFrame.new(0, if i == 2 then 0.45 else 0, 0)
+				part.CFrame = boxCF * CFrame.new(0, if i == 2 then 0.46 else 0, 0)
 			end
 		elseif w.Kind == "Trolley" then
 			local cf, moving = shuttle(w.Path, t, 3.2, 2.2)

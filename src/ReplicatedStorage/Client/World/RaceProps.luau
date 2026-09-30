@@ -192,12 +192,13 @@ function RaceProps.BuildHQ(cf: CFrame, w: number, d: number): (Model, { [string]
 	part(model, "Pad", Vector3.new(W, 0.8, D), cf * CFrame.new(0, -0.1, 0), ASPHALT, M.Asphalt).CastShadow = false
 	part(model, "CurbFront", Vector3.new(W, 0.5, 0.6), cf * CFrame.new(0, 0.05, -D / 2 + 0.3), CONCRETE, M.Concrete)
 	-- marquages : places de stationnement + damier au sol (SurfaceGui sur pièces invisibles)
-	local _, marks = canvas(model, "Marks", Vector3.new(W - 2, 0.05, D - 2), cf * CFrame.new(0, 0.33, 0), Enum.NormalId.Top, 6)
+	-- (tourné d'un demi-tour : le texte se lit depuis la route)
+	local _, marks = canvas(model, "Marks", Vector3.new(W - 2, 0.05, D - 2), cf * CFrame.new(0, 0.33, 0) * CFrame.Angles(0, math.pi, 0), Enum.NormalId.Top, 6)
 	for k = 0, 5 do
 		frame(marks, { Name = "Bay", BackgroundColor3 = WHITE, BackgroundTransparency = 0.15, Size = UDim2.new(0, 3, 0.36, 0), Position = UDim2.new(0.5 + k * 0.075, 0, 0.06, 0) })
 	end
 	local strip = frame(marks, { Name = "Checker", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 18), Position = UDim2.new(0, 0, 1, -18) })
-	checker(strip, 60, 2, INK, WHITE)
+	checker(strip, 30, 1, INK, WHITE)
 	text(marks, { Name = "Paint", Text = "🏁 RACE HQ", TextColor3 = rgb(255, 214, 90), TextTransparency = 0.1, Size = UDim2.new(0.34, 0, 0.16, 0), Position = UDim2.new(0.06, 0, 0.1, 0), Rotation = 0 })
 
 	-- STAND (au fond, à gauche) : 3 box, auvent rayé, enseigne
@@ -327,7 +328,7 @@ function RaceProps.BuildGantry(cf: CFrame, width: number, title: string, finish:
 	end
 	-- banderole (les deux faces)
 	local bannerW = math.min(span - 4, 26)
-	local banner, bsg = canvas(model, "Banner", Vector3.new(bannerW, 2.6, 0.2), cf * CFrame.new(0, H - 3.8, 0), Enum.NormalId.Front, 28)
+	local banner, bsg = canvas(model, "Banner", Vector3.new(bannerW, 2.6, 0.2), cf * CFrame.new(0, H + 1.75, 0), Enum.NormalId.Front, 28)
 	banner.Transparency = 0
 	banner.Color = INK
 	local bg = frame(bsg, { Name = "Bg", BackgroundColor3 = if finish then WHITE else INK, Size = UDim2.fromScale(1, 1) })
@@ -343,9 +344,6 @@ function RaceProps.BuildGantry(cf: CFrame, width: number, title: string, finish:
 	local back = bsg:Clone()
 	back.Face = Enum.NormalId.Back
 	back.Parent = banner
-	for _, side in ipairs({ -1, 1 }) do
-		part(model, "BannerRope", Vector3.new(0.12, 1.6, 0.12), cf * CFrame.new(side * (bannerW / 2 - 0.6), H - 1.9, 0), INK, M.Fabric)
-	end
 	-- feux de départ : 5 blocs sous la poutre (face à la grille : +Z)
 	local lights = {}
 	if not finish then

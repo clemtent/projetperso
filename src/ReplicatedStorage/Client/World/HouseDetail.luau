@@ -286,7 +286,7 @@ function HouseDetail.Roof(kit: any, x0: number, x1: number, d0: number, d1: numb
 			local wallFace = if s < 0 then d0 else d1
 			local sa, sb = math.min(dIn, wallFace), math.max(dIn, wallFace)
 			if sb - sa > 0.2 then
-				kit:Box("Soffit", ax0 + 0.05, ax1 - 0.05, fy0, fy0 + 0.14, sa, sb, fascia:Lerp(WHITE, 0.3), M.SmoothPlastic, { Shadow = false })
+				kit:Box("Soffit", ax0 + 0.05, ax1 - 0.05, fy0 + 0.03, fy0 + 0.17, sa, sb, fascia:Lerp(WHITE, 0.3), M.SmoothPlastic, { Shadow = false })
 			end
 			local gd = de + s * 0.36
 			kit:CylX("Gutter", (ax0 + ax1) / 2, fy0 + 0.3, gd, 0.55, ax1 - ax0 + 0.2, gutterC, M.Metal, { Shadow = false })
@@ -558,16 +558,16 @@ function HouseDetail.Window(kit: any, x0: number, x1: number, y0: number, y1: nu
 		kit:Box("Sill", x0 - 0.65, x1 + 0.65, y0 - 0.62, y0 - f - 0.01, face - 0.8, fo + 0.02, sillC, sm, { Shadow = false })
 	end
 	-- linteau
-	local lintel = w.Lintel
+	local lintel = if w.Arch then nil else w.Lintel -- (cintrée : pas de linteau droit)
 	if lintel == "Stone" or lintel == "Brick" then
 		local lc = w.LintelColor or sillC
 		local lm = if lintel == "Brick" then M.Brick else M.Limestone
-		kit:Box("Lintel", x0 - 0.7, x1 + 0.7, y1 + f - 0.01, y1 + f + 0.75, face - 0.14, face + 0.02, lc, lm, { Shadow = false })
+		kit:Box("Lintel", x0 - 0.7, x1 + 0.7, y1 + f + 0.02, y1 + f + 0.75, face - 0.14, face + 0.02, lc, lm, { Shadow = false })
 		if lintel == "Stone" then
-			kit:Box("Keystone", cx - 0.42, cx + 0.42, y1 + f - 0.01, y1 + f + 1.05, face - 0.26, face - 0.1, lc:Lerp(WHITE, 0.15), lm, { Shadow = false })
+			kit:Box("Keystone", cx - 0.42, cx + 0.42, y1 + f + 0.02, y1 + f + 1.05, face - 0.26, face - 0.1, lc:Lerp(WHITE, 0.15), lm, { Shadow = false })
 		end
 	elseif lintel == "Band" then
-		kit:Box("Lintel", x0 - 0.5, x1 + 0.5, y1 + f - 0.01, y1 + f + 0.32, face - 0.2, face + 0.02, w.LintelColor or frame, M.SmoothPlastic, { Shadow = false })
+		kit:Box("Lintel", x0 - 0.5, x1 + 0.5, y1 + f + 0.02, y1 + f + 0.32, face - 0.2, face + 0.02, w.LintelColor or frame, M.SmoothPlastic, { Shadow = false })
 	end
 	if w.Arch then
 		w.Arch(x0, x1, y1)
@@ -840,7 +840,7 @@ function HouseDetail.Fence(kit: any, x0: number, x1: number, d: number, spec: Fe
 				end
 			end
 		end
-		for _, px in ipairs(if spec.NoGate then {} else { g0 - 0.7, g1 + 0.7 }) do
+		for _, px in ipairs(if spec.NoGate then {} else { g0 - 0.65, g1 + 0.65 }) do
 			kit:Box("GatePillar", px - 0.7, px + 0.7, 0, 4.4, d - 0.7, d + 0.7, Color3.fromRGB(226, 218, 206), M.Limestone, { Solid = true })
 			kit:Box("GatePillarCap", px - 0.9, px + 0.9, 4.4, 4.8, d - 0.9, d + 0.9, Color3.fromRGB(240, 234, 224), M.Limestone, { Shadow = false })
 			kit:Ball("GatePillarBall", px, 5.2, d, 0.8, Color3.fromRGB(240, 234, 224), M.Limestone, { Shadow = false })
@@ -859,7 +859,7 @@ function HouseDetail.Fence(kit: any, x0: number, x1: number, d: number, spec: Fe
 				kit:Box("FenceCoping", a - 0.1, b + 0.1, 2.1, 2.45, d - 0.7, d + 0.7, stone:Lerp(WHITE, 0.25), M.Limestone, { Shadow = false })
 			end
 		end
-		for _, px in ipairs(if spec.NoGate then {} else { g0 - 0.6, g1 + 0.6 }) do
+		for _, px in ipairs(if spec.NoGate then {} else { g0 - 0.55, g1 + 0.55 }) do
 			kit:Box("GatePillar", px - 0.6, px + 0.6, 0, 3, d - 0.7, d + 0.7, stone, M.Cobblestone, { Solid = true })
 			kit:Box("GatePillarCap", px - 0.75, px + 0.75, 3, 3.35, d - 0.85, d + 0.85, stone:Lerp(WHITE, 0.25), M.Limestone, { Shadow = false })
 		end
@@ -903,12 +903,13 @@ function HouseDetail.Path(kit: any, points: { { number } }, width: number, kind:
 		if len > 0.2 then
 			local ux, ud = dx / len, dd / len
 			if kind == "Stones" then
-				local n = math.max(1, math.floor(len / 1.9))
+				-- (pas japonais espacés : jamais deux dalles l'une sur l'autre ; hauteurs variées)
+				local n = math.max(1, math.floor(len / 2.6))
 				for j = 0, n - 1 do
 					local t = (j + 0.5) / n
-					local x = a[1] + dx * t + (if j % 2 == 0 then -0.35 else 0.35) * ud
-					local d = a[2] + dd * t - (if j % 2 == 0 then -0.35 else 0.35) * ux
-					kit:CylY("SteppingStone", x, -0.1, d, 1.9 + (j % 3) * 0.25, 0.26, color:Lerp(BLACK, (j % 3) * 0.05), M.Slate, { Shadow = false })
+					local x = a[1] + dx * t + (if j % 2 == 0 then -0.3 else 0.3) * ud
+					local d = a[2] + dd * t - (if j % 2 == 0 then -0.3 else 0.3) * ux
+					kit:CylY("SteppingStone", x, -0.1, d, 1.8 + (j % 3) * 0.18, 0.24 + ((j + k) % 4) * 0.035, color:Lerp(BLACK, (j % 3) * 0.05), M.Slate, { Shadow = false })
 				end
 			else
 				local mat = if kind == "Gravel" then M.Pebble elseif kind == "Brick" then M.Brick elseif kind == "Deck" then M.WoodPlanks else M.Pavement
@@ -919,7 +920,7 @@ function HouseDetail.Path(kit: any, points: { { number } }, width: number, kind:
 				-- bordures (pavés, briques, gravier)
 				if kind ~= "Deck" then
 					for _, s in ipairs({ -1, 1 }) do
-						kit:Part("PathEdge", Vector3.new(len, 0.2, 0.3), cf * CFrame.new(0, 0.02, s * (width / 2 + 0.1)), color:Lerp(BLACK, 0.15), M.Concrete, { Shadow = false })
+						kit:Part("PathEdge", Vector3.new(len, 0.2, 0.3), cf * CFrame.new(0, 0.07 - (y1 - 0.12) / 2, s * (width / 2 + 0.1)), color:Lerp(BLACK, 0.15), M.Concrete, { Shadow = false })
 					end
 				end
 			end
@@ -1064,7 +1065,7 @@ function HouseDetail.Balcony(kit: any, kind: string, x0: number, x1: number, y: 
 		kit:Box("BalconyGlass", x0 + 0.1, x1 - 0.1, y + 0.05, y + 3.3, d0 + 0.08, d0 + 0.2, GLASS, M.Glass, { T = 0.55, Shadow = false })
 		kit:Box("BalconyHandrail", x0 + 0.05, x1 - 0.05, y + 3.3, y + 3.45, d0 + 0.02, d0 + 0.26, Color3.fromRGB(200, 204, 210), M.Metal, { Shadow = false })
 		for _, sx in ipairs({ x0 + 0.1, x1 - 0.3 }) do
-			kit:Box("BalconyGlass", sx, sx + 0.2, y + 0.05, y + 3.3, d0 + 0.26, face - 0.06, GLASS, M.Glass, { T = 0.55, Shadow = false })
+			kit:Box("BalconyGlass", sx, sx + 0.2, y + 0.05, y + 3.3, d0 + 0.26, face - 0.1, GLASS, M.Glass, { T = 0.55, Shadow = false })
 		end
 		return
 	end

@@ -69,12 +69,11 @@ local RateLimiter = require(script.Parent.RateLimiter)
 -- (v10 HOUSE10) 🏡 extérieur (facultatif : les simulations de tests sans ce module continuent)
 local HouseOptions: any = nil
 do
-	local module = ReplicatedStorage.Shared:FindFirstChild("HouseOptions")
-	if module then
-		local ok, result = pcall(require, module)
-		if ok and type(result) == "table" then
-			HouseOptions = result
-		end
+	local ok, result = pcall(function()
+		return require(ReplicatedStorage.Shared.HouseOptions)
+	end)
+	if ok and type(result) == "table" then
+		HouseOptions = result
 	end
 end
 

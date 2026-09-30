@@ -224,20 +224,30 @@ local function syncSites()
 	end
 	local owners = occupied()
 	local owner = S.Owner
+	-- parcelles où une maison est DÉJÀ construite ici (jamais de chantier dessous)
+	local built: { [number]: boolean } = {}
+	for _, rec in pairs(S.Records) do
+		if rec.Plot and rec.House and rec.House.Alive ~= false then
+			built[rec.Plot] = true
+		end
+	end
 	local wanted: { [string]: Spot } = {}
 	for _, spot in ipairs((spotCache :: any).Spots) do
 		local keep = true
-		if spot.Plot then
+		if spot.Plot and built[spot.Plot] then
+			keep = false
+		elseif spot.Plot then
 			local userId = owners[spot.Plot]
 			if userId then
 				local rec = S.Records[userId]
 				-- occupée : chantier gardé tant que la maison n'est pas là, ou
 				-- pour le moment du propriétaire (pas encore joué)
 				keep = rec == nil or rec.Plot ~= spot.Plot
-				if owner and owner.Plot == spot.Plot and (owner.State == "Pending" or owner.State == "Moving") then
-					keep = true
-				end
 			end
+		end
+		-- sa maison pas encore construite (moment du propriétaire) : chantier gardé
+		if spot.Plot and owner and owner.Plot == spot.Plot and (owner.State == "Pending" or owner.State == "Moving") then
+			keep = true
 		end
 		if keep then
 			wanted[spot.Key] = spot
@@ -577,8 +587,8 @@ local function houseView(house: any): (CFrame, Vector3, number)
 	local midX = dims.Left + dims.Width / 2
 	local target = (cf * CFrame.new(midX, dims.Height * 0.4, -dims.Depth / 2)).Position
 	-- en hauteur, de 3/4 face (au-dessus des chantiers d'en face, ~25° vers le bas)
-	local dist = math.max(dims.Width * 0.6, dims.Height * 1.5, 50) + 8
-	local view = cf * CFrame.new(midX, dims.Height * 0.85 + 20, dist)
+	local dist = math.max(dims.Width * 0.78, dims.Height * 1.8, 55) + 10
+	local view = cf * CFrame.new(midX, dims.Height * 0.8 + 24, dist)
 	return view, target, dist
 end
 
@@ -596,10 +606,11 @@ end
 -- HUD de la ville masqué pendant le moment (opts.Hud : objet TownHud, facultatif)
 local function hudHidden(owner: any, hidden: boolean)
 	local hud = S.Opts and S.Opts.Hud
-	local root: any = hud and hud.Root
-	if typeof(root) ~= "Instance" then
+	local value: any = hud and hud.Root
+	if typeof(value) ~= "Instance" or not value:IsA("GuiObject") then
 		return
 	end
+	local root = value :: GuiObject
 	if hidden then
 		if owner.HudWas == nil then
 			owner.HudWas = root.Visible

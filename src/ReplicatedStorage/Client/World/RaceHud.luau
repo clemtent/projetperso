@@ -163,12 +163,9 @@ local function drawLine(holder: Frame, points: { { number } }, color: Color3, th
 			child:Destroy()
 		end
 	end
-	local size = holder.AbsoluteSize
-	local w = if size.X > 4 then size.X else holder.Size.X.Offset
-	local h = if size.Y > 4 then size.Y else holder.Size.Y.Offset
-	if w < 4 or h < 4 then
-		w, h = 140, 100
-	end
+	-- (tailles en pixels "design" : le support a une taille fixe en offset)
+	local w = math.max(4, holder.Size.X.Offset)
+	local h = math.max(4, holder.Size.Y.Offset)
 	local n = #points
 	local last = if closed then n else n - 1
 	for i = 1, last do
@@ -184,6 +181,14 @@ local function drawLine(holder: Frame, points: { { number } }, color: Color3, th
 			UIUtil.Corner(seg, UDim.new(1, 0))
 		end
 	end
+	-- départ : drapeau à damier
+	local start = holder:FindFirstChild("Start")
+	if not start then
+		start = label({ Name = "Start", Parent = holder, Text = "🏁", TextSize = 14, AnchorPoint = Vector2.new(0.5, 1), Size = UDim2.fromOffset(18, 18), ZIndex = z + 1 })
+	end
+	if points[1] then
+		start.Position = UDim2.fromOffset(points[1][1] * w + 5, points[1][2] * h)
+	end
 end
 RaceHud.DrawLine = drawLine
 
@@ -196,6 +201,7 @@ local function buildMenu(root: Frame)
 	UIUtil.SinkClicks(dim)
 	local panel = box({ Name = "Menu", Parent = dim, Color = PANEL, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.52),
 		Size = UDim2.fromOffset(800, 470), Radius = UDim.new(0, 22), Stroke = PINK, StrokeThickness = 3, ZIndex = 21 })
+	panel.BackgroundColor3 = WHITE
 	UIUtil.Gradient(panel, ColorSequence.new(PANEL2, PANEL), 90)
 	local band = box({ Name = "Band", Parent = panel, Transparency = 1, Size = UDim2.new(1, -44, 0, 10), Position = UDim2.fromOffset(22, 8), ZIndex = 22, Clip = true })
 	checker(band, 60, 2, 22)
@@ -228,13 +234,15 @@ local function buildCard(parent: Instance, order: number): { [string]: any }
 	local card = box({ Name = "Card" .. order, Parent = parent, Color = rgb(28, 22, 40), Radius = UDim.new(0, 16), Stroke = rgb(120, 90, 160), ZIndex = 23 })
 	card.LayoutOrder = order
 	local map = box({ Name = "Map", Parent = card, Color = rgb(52, 70, 60), Size = UDim2.new(1, -20, 0, 96), Position = UDim2.fromOffset(10, 10), Radius = UDim.new(0, 10), ZIndex = 24, Clip = true })
-	UIUtil.Gradient(map, ColorSequence.new(rgb(64, 90, 74), rgb(40, 56, 50)), 90)
-	local lineHolder = box({ Name = "Line", Parent = map, Transparency = 1, Size = UDim2.new(1, -20, 1, -16), Position = UDim2.fromOffset(10, 8), ZIndex = 25 })
+	map.BackgroundColor3 = WHITE
+	UIUtil.Gradient(map, ColorSequence.new(rgb(74, 108, 86), rgb(46, 66, 58)), 90)
+	local lineHolder = box({ Name = "Line", Parent = map, Transparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(80, 80),
+		Position = UDim2.fromScale(0.5, 0.5), ZIndex = 25 })
 	local icon = label({ Name = "Icon", Parent = card, Text = "", TextSize = 30, Size = UDim2.fromOffset(40, 36), Position = UDim2.fromOffset(8, 112), ZIndex = 24 })
 	local name = label({ Name = "Name", Parent = card, Text = "", TextSize = 18, Size = UDim2.new(1, -54, 0, 36), Position = UDim2.fromOffset(48, 112), XAlign = Enum.TextXAlignment.Left,
 		Scaled = true, ZIndex = 24 })
 	local info = label({ Name = "Info", Parent = card, Text = "", Font = Theme.Fonts.Body, TextSize = 14, Color = SOFT, Size = UDim2.new(1, -20, 0, 34), Position = UDim2.fromOffset(10, 148),
-		Wrap = true, XAlign = Enum.TextXAlignment.Left, YAlign = Enum.TextYAlignment.Top, ZIndex = 24 })
+		Wrap = true, Scaled = true, XAlign = Enum.TextXAlignment.Left, YAlign = Enum.TextYAlignment.Top, ZIndex = 24 })
 	local record = label({ Name = "Record", Parent = card, Text = "", Font = Theme.Fonts.Body, TextSize = 14, Color = GOLD, Size = UDim2.new(1, -20, 0, 20), Position = UDim2.fromOffset(10, 184),
 		XAlign = Enum.TextXAlignment.Left, Scaled = true, ZIndex = 24 })
 	local best = label({ Name = "Best", Parent = card, Text = "", Font = Theme.Fonts.Body, TextSize = 14, Color = MINT, Size = UDim2.new(1, -20, 0, 20), Position = UDim2.fromOffset(10, 204),
@@ -247,56 +255,56 @@ end
 
 local function buildRaceHud(root: Frame)
 	-- place / tour / chrono (en haut à gauche)
-	local panel = box({ Name = "RacePanel", Parent = root, Color = PANEL, Transparency = 0.12, Size = UDim2.fromOffset(250, 128), Position = UDim2.fromOffset(12, 62),
+	local panel = box({ Name = "RacePanel", Parent = root, Color = PANEL, Transparency = 0.12, Size = UDim2.fromOffset(250, 112), Position = UDim2.fromOffset(12, 108),
 		Radius = UDim.new(0, 18), Stroke = PINK, Visible = false, ZIndex = 5 })
-	local place = label({ Name = "Place", Parent = panel, Text = "1", Font = Theme.Fonts.Number, TextSize = 64, Size = UDim2.fromOffset(74, 70), Position = UDim2.fromOffset(10, 4), ZIndex = 6 })
+	local place = label({ Name = "Place", Parent = panel, Text = "1", Font = Theme.Fonts.Number, TextSize = 56, Size = UDim2.fromOffset(70, 60), Position = UDim2.fromOffset(8, 2), ZIndex = 6 })
 	UIUtil.Create("UIStroke", { Color = INK, Thickness = 2, Parent = place })
 	local count = label({ Name = "Count", Parent = panel, Text = "/4", Font = Theme.Fonts.Number, TextSize = 24, Color = SOFT, Size = UDim2.fromOffset(46, 30),
-		Position = UDim2.fromOffset(72, 38), XAlign = Enum.TextXAlignment.Left, ZIndex = 6 })
-	local lap = label({ Name = "Lap", Parent = panel, Text = "", TextSize = 18, Size = UDim2.fromOffset(120, 24), Position = UDim2.fromOffset(122, 10), XAlign = Enum.TextXAlignment.Left, ZIndex = 6 })
+		Position = UDim2.fromOffset(70, 30), XAlign = Enum.TextXAlignment.Left, ZIndex = 6 })
+	local lap = label({ Name = "Lap", Parent = panel, Text = "", TextSize = 18, Size = UDim2.fromOffset(120, 24), Position = UDim2.fromOffset(122, 6), XAlign = Enum.TextXAlignment.Left, ZIndex = 6 })
 	local time = label({ Name = "Time", Parent = panel, Text = "0:00.00", Font = Theme.Fonts.Number, TextSize = 26, Color = GOLD, Size = UDim2.fromOffset(124, 30),
-		Position = UDim2.fromOffset(120, 34), XAlign = Enum.TextXAlignment.Left, ZIndex = 6 })
+		Position = UDim2.fromOffset(120, 28), XAlign = Enum.TextXAlignment.Left, ZIndex = 6 })
 	local gap = label({ Name = "Gap", Parent = panel, Text = "", Font = Theme.Fonts.Body, TextSize = 15, Color = SOFT, Size = UDim2.new(1, -20, 0, 20),
-		Position = UDim2.fromOffset(12, 76), XAlign = Enum.TextXAlignment.Left, ZIndex = 6 })
+		Position = UDim2.fromOffset(12, 62), XAlign = Enum.TextXAlignment.Left, Scaled = true, ZIndex = 6 })
 	local bestLap = label({ Name = "BestLap", Parent = panel, Text = "", Font = Theme.Fonts.Body, TextSize = 15, Color = MINT, Size = UDim2.new(1, -20, 0, 20),
-		Position = UDim2.fromOffset(12, 98), XAlign = Enum.TextXAlignment.Left, ZIndex = 6 })
+		Position = UDim2.fromOffset(12, 84), XAlign = Enum.TextXAlignment.Left, ZIndex = 6 })
 	-- flèche vers la prochaine porte (en haut au milieu, sous le compteur)
-	local arrowBox = box({ Name = "Arrow", Parent = root, Color = PANEL, Transparency = 0.15, AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(150, 44),
+	local arrowBox = box({ Name = "Arrow", Parent = root, Color = PANEL, Transparency = 0.15, AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(230, 44),
 		Position = UDim2.new(0.5, 0, 0, 112), Radius = UDim.new(1, 0), Stroke = CYAN, Visible = false, ZIndex = 5 })
 	local dial = box({ Name = "Dial", Parent = arrowBox, Transparency = 1, Size = UDim2.fromOffset(40, 40), Position = UDim2.fromOffset(4, 2), ZIndex = 6 })
 	local needle = UIUtil.Icon("Up", { Size = 28, Color = CYAN, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), ZIndex = 7, Parent = dial })
 	local cpText = label({ Name = "Cp", Parent = arrowBox, Text = "", TextSize = 16, Size = UDim2.new(1, -52, 1, 0), Position = UDim2.fromOffset(48, 0), XAlign = Enum.TextXAlignment.Left, ZIndex = 6 })
 	-- mini-carte (en haut à droite)
-	local mini = box({ Name = "Minimap", Parent = root, Color = rgb(40, 56, 50), Transparency = 0.1, AnchorPoint = Vector2.new(1, 0), Size = UDim2.fromOffset(170, 170),
-		Position = UDim2.new(1, -12, 0, 62), Radius = UDim.new(0, 18), Stroke = WHITE, Visible = false, ZIndex = 5, Clip = true })
-	local miniLine = box({ Name = "Line", Parent = mini, Transparency = 1, Size = UDim2.new(1, -24, 1, -24), Position = UDim2.fromOffset(12, 12), ZIndex = 6 })
-	local miniDots = box({ Name = "Dots", Parent = mini, Transparency = 1, Size = UDim2.new(1, -24, 1, -24), Position = UDim2.fromOffset(12, 12), ZIndex = 8 })
+	local mini = box({ Name = "Minimap", Parent = root, Color = rgb(40, 56, 50), Transparency = 0.1, AnchorPoint = Vector2.new(1, 1), Size = UDim2.fromOffset(150, 150),
+		Position = UDim2.new(1, -12, 1, -12), Radius = UDim.new(0, 18), Stroke = WHITE, Visible = false, ZIndex = 5, Clip = true })
+	local miniLine = box({ Name = "Line", Parent = mini, Transparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(126, 126), Position = UDim2.fromScale(0.5, 0.5), ZIndex = 6 })
+	local miniDots = box({ Name = "Dots", Parent = mini, Transparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(126, 126), Position = UDim2.fromScale(0.5, 0.5), ZIndex = 8 })
 	-- boutons 🔄 (F) et 🏳️
 	local reset = button({ Name = "ResetCp", Parent = root, Text = "🔄 F", TextSize = 20, Color = rgb(70, 150, 220), Size = UDim2.fromOffset(84, 48),
-		AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -14, 1, -170), Visible = false, ZIndex = 6 })
+		AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -12, 1, -172), Visible = false, ZIndex = 6 })
 	reset.Activated:Connect(function()
 		if callbacks.Reset then
 			callbacks.Reset()
 		end
 	end)
 	local quit = button({ Name = "Quit", Parent = root, Text = "🏳️", TextSize = 22, Color = rgb(120, 100, 140), Size = UDim2.fromOffset(52, 48),
-		AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -106, 1, -170), Visible = false, ZIndex = 6 })
+		AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -104, 1, -172), Visible = false, ZIndex = 6 })
 	quit.Activated:Connect(function()
 		if callbacks.Leave then
 			callbacks.Leave()
 		end
 	end)
 	-- textes au centre
-	local big = label({ Name = "Countdown", Parent = root, Text = "", TextSize = 150, Font = Theme.Fonts.Number, AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.36), Size = UDim2.fromOffset(600, 170), ZIndex = 12 })
-	UIUtil.Create("UIStroke", { Color = INK, Thickness = 6, Parent = big })
+	local big = label({ Name = "Countdown", Parent = root, Text = "", TextSize = 130, Font = Theme.Fonts.Number, AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.36), Size = UDim2.fromOffset(620, 150), Scaled = true, ZIndex = 12 })
+	UIUtil.Create("UIStroke", { Name = "Stroke", Color = INK, Thickness = 5, Parent = big })
 	local bigScale = UIUtil.Create("UIScale", { Parent = big })
 	local wrong = box({ Name = "WrongWay", Parent = root, Color = RED, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 166), Size = UDim2.fromOffset(330, 50),
 		Radius = UDim.new(0, 14), Stroke = WHITE, Visible = false, ZIndex = 10 })
 	label({ Name = "T", Parent = wrong, Text = T("⛔ WRONG WAY"), TextSize = 28, ZIndex = 11 })
 	local flash = label({ Name = "Flash", Parent = root, Text = "", TextSize = 30, Color = CYAN, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromOffset(600, 44), ZIndex = 11 })
-	UIUtil.Create("UIStroke", { Color = INK, Thickness = 3, Parent = flash })
+	UIUtil.Create("UIStroke", { Name = "Stroke", Color = INK, Thickness = 3, Parent = flash })
 	-- salle d'attente
 	local lobby = box({ Name = "Lobby", Parent = root, Color = PANEL, Transparency = 0.08, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 112),
 		Size = UDim2.fromOffset(470, 54), Radius = UDim.new(1, 0), Stroke = GOLD, Visible = false, ZIndex = 6 })
@@ -351,6 +359,7 @@ local function buildResults(root: Frame)
 	UIUtil.SinkClicks(dim)
 	local card = box({ Name = "Results", Parent = dim, Color = PANEL, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.52), Size = UDim2.fromOffset(720, 480),
 		Radius = UDim.new(0, 24), Stroke = GOLD, StrokeThickness = 3, ZIndex = 31 })
+	card.BackgroundColor3 = WHITE
 	UIUtil.Gradient(card, ColorSequence.new(PANEL2, PANEL), 90)
 	local band = box({ Name = "Band", Parent = card, Transparency = 1, Size = UDim2.new(1, -48, 0, 12), Position = UDim2.fromOffset(24, 10), ZIndex = 32, Clip = true })
 	checker(band, 60, 2, 32)
@@ -407,19 +416,29 @@ local function layout()
 	parts.Scale.Scale = scale
 	parts.Root.Size = UDim2.fromOffset(size.X / scale, size.Y / scale)
 	-- téléphone : panneaux plus compacts, bouton 🏁 sous la colonne des voitures
-	parts.RacePanel.Position = if phone then UDim2.fromOffset(96, 56) else UDim2.fromOffset(12, 62)
+	parts.RacePanel.Position = if phone then UDim2.fromOffset(10, 96) else UDim2.fromOffset(12, 108)
 	parts.RaceButton.Position = if phone then UDim2.fromOffset(14, 316) else UDim2.new(0, 22, 0.5, 140)
 	parts.RaceTag.Visible = not phone
-	parts.Mini.Size = if phone then UDim2.fromOffset(130, 130) else UDim2.fromOffset(170, 170)
-	parts.Mini.Position = if phone then UDim2.new(1, -74, 0, 56) else UDim2.new(1, -12, 0, 62)
+	local mini = if phone then 116 else 150
+	parts.Mini.Size = UDim2.fromOffset(mini, mini)
+	parts.MiniLine.Size = UDim2.fromOffset(mini - 24, mini - 24)
+	parts.MiniDots.Size = UDim2.fromOffset(mini - 24, mini - 24)
+	if parts.MiniPoints then
+		drawLine(parts.MiniLine, parts.MiniPoints, WHITE, 4, 6, parts.MiniClosed)
+	end
 	parts.Arrow.Position = if phone then UDim2.new(0.5, 0, 0, 96) else UDim2.new(0.5, 0, 0, 112)
 	parts.Lobby.Position = parts.Arrow.Position
-	parts.Reset.Position = if phone then UDim2.new(1, -14, 1, -200) else UDim2.new(1, -14, 1, -170)
-	parts.Quit.Position = if phone then UDim2.new(1, -106, 1, -200) else UDim2.new(1, -106, 1, -170)
+	parts.Reset.Position = UDim2.new(1, -12, 1, -(mini + 22))
+	parts.Quit.Position = UDim2.new(1, -104, 1, -(mini + 22))
 	parts.Menu.Size = if phone then UDim2.fromOffset(800, 412) else UDim2.fromOffset(800, 470)
 	parts.CardGrid.CellSize = if phone then UDim2.fromOffset(183, 250) else UDim2.fromOffset(183, 306)
 	for _, c in ipairs(parts.CardList) do
 		c.Map.Size = if phone then UDim2.new(1, -20, 0, 60) else UDim2.new(1, -20, 0, 96)
+		local lineSize = if phone then 52 else 80
+		if c.Line.Size.X.Offset ~= lineSize then
+			c.Line.Size = UDim2.fromOffset(lineSize, lineSize)
+			c.PreviewKey = nil -- (redessiné à la prochaine mise à jour)
+		end
 		local top = if phone then 72 else 112
 		c.Icon.Position = UDim2.fromOffset(8, top)
 		c.Name.Position = UDim2.fromOffset(48, top)
@@ -584,13 +603,14 @@ function RaceHud.SetMinimap(points: { { number } }?, dots: { { any } }?, closed:
 		return
 	end
 	if points then
+		parts.MiniPoints = points
+		parts.MiniClosed = closed
 		drawLine(parts.MiniLine, points, WHITE, 4, 6, closed)
 	end
 	if dots then
 		local holder = parts.MiniDots
-		local size = holder.AbsoluteSize
-		local w = if size.X > 4 then size.X else 146
-		local h = if size.Y > 4 then size.Y else 146
+		local w = math.max(4, holder.Size.X.Offset)
+		local h = math.max(4, holder.Size.Y.Offset)
 		for k, d in ipairs(dots) do
 			local dot = parts.Dots[k]
 			if not dot then
@@ -618,6 +638,10 @@ function RaceHud.Countdown(text: string, color: Color3?)
 	big.Text = text
 	big.TextColor3 = color or WHITE
 	big.TextTransparency = 0
+	local bigStroke = big:FindFirstChild("Stroke") :: UIStroke?
+	if bigStroke then
+		bigStroke.Transparency = 0
+	end
 	if countdownTween then
 		countdownTween:Cancel()
 	end
@@ -628,8 +652,18 @@ function RaceHud.Countdown(text: string, color: Color3?)
 	if text ~= "" then
 		local stamp = text
 		task.delay(0.85, function()
-			if parts.Big and parts.Big.Text == stamp then
-				TweenService:Create(parts.Big, TweenInfo.new(0.25), { TextTransparency = 1 }):Play()
+			local b = parts.Big
+			if b and b.Text == stamp then
+				TweenService:Create(b, TweenInfo.new(0.25), { TextTransparency = 1 }):Play()
+				local st = b:FindFirstChild("Stroke")
+				if st then
+					TweenService:Create(st, TweenInfo.new(0.25), { Transparency = 1 }):Play()
+				end
+				task.delay(0.3, function()
+					if parts.Big == b and b.Text == stamp then
+						b.Text = ""
+					end
+				end)
 			end
 		end)
 	end
@@ -645,11 +679,25 @@ function RaceHud.Flash(text: string, color: Color3?)
 	f.Text = text
 	f.TextColor3 = color or CYAN
 	f.TextTransparency = 0
+	local fStroke = f:FindFirstChild("Stroke") :: UIStroke?
+	if fStroke then
+		fStroke.Transparency = 0
+	end
 	f.Position = UDim2.fromScale(0.5, 0.52)
 	TweenService:Create(f, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = UDim2.fromScale(0.5, 0.48) }):Play()
 	task.delay(1.3, function()
-		if flashToken == token and parts.Flash then
-			TweenService:Create(parts.Flash, TweenInfo.new(0.4), { TextTransparency = 1 }):Play()
+		local fl = parts.Flash
+		if flashToken == token and fl then
+			TweenService:Create(fl, TweenInfo.new(0.4), { TextTransparency = 1 }):Play()
+			local st = fl:FindFirstChild("Stroke")
+			if st then
+				TweenService:Create(st, TweenInfo.new(0.4), { Transparency = 1 }):Play()
+			end
+			task.delay(0.45, function()
+				if flashToken == token and parts.Flash == fl then
+					fl.Text = ""
+				end
+			end)
 		end
 	end)
 end

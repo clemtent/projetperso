@@ -54,6 +54,7 @@ DistrictTownhouse.FOOT = {
 	TwnSquare = Vector2.new(36, 36),
 	TwnBikes = Vector2.new(14, 5),
 	TwnBusStop = Vector2.new(10, 5),
+	TwnTerrace = Vector2.new(36, 20),
 }
 
 local function tree(m: Model, F: CFrame, x: number, z: number, h: number, seed: number, species: string)
@@ -67,6 +68,18 @@ local function building(m: Model, F: CFrame, W: number, D: number, H: number, wa
 	Box(m, "Parapet", F, -W / 2 - 0.2, W / 2 + 0.2, H + 0.8, H + 2, -D / 2 - 0.2, -D / 2 + 0.4, wall, mat)
 	Box(m, "RoofTop", F, -W / 2 + 0.2, W / 2 - 0.2, H + 0.7, H + 1.1, -D / 2 + 0.3, D / 2 - 0.1, rgb(90, 92, 100), M.Concrete)
 	Box(m, "Chimney", F, W / 2 - 3, W / 2 - 1.4, H - 0.5, H + 4.2, 1, 3, BRICK_D, M.Brick)
+	-- arrière et côtés : fenêtres simples (vues de loin et d'en haut)
+	for floor = 0, 2 do
+		local y0 = 1.6 + floor * 9 + (floor == 0 and 0.8 or 0)
+		local n = math.max(2, math.floor(W / 6))
+		for i = 0, n - 1 do
+			local x = -W / 2 + (i + 0.5) * W / n
+			Box(m, "BackWindow", F, x - 1.2, x + 1.2, y0 + 2, y0 + 6.4, D / 2, D / 2 + 0.08, GLASS, M.Glass)
+		end
+		for _, sx in ipairs({ -1, 1 }) do
+			Box(m, "SideWindow", F, sx > 0 and W / 2 or -W / 2 - 0.08, sx > 0 and W / 2 + 0.08 or -W / 2, y0 + 2, y0 + 6.4, -1.2, 1.2, GLASS, M.Glass)
+		end
+	end
 	-- étages : fenêtres à encadrement et appui, une sur deux avec jardinière
 	for floor = 1, 2 do
 		local y0 = 10 + (floor - 1) * 9
@@ -367,7 +380,84 @@ local function buildLamp(m: Model, F: CFrame, _seed: number)
 	end
 end
 
+----------------------------------------------------------------------
+-- 🏘️ Rangée de maisons de ville (décor, on n'y entre pas)
+----------------------------------------------------------------------
+
+-- 3 maisons étroites mitoyennes de 3 niveaux : perron à marches et rampe,
+-- porte peinte à imposte, bow-window au rez-de-chaussée, fenêtres à
+-- guillotine, corniche, toit en mansarde d'ardoise avec lucarnes, cheminées
+local TERRACE_COLORS = { rgb(170, 96, 72), rgb(226, 214, 190), rgb(120, 136, 150), rgb(190, 120, 96), rgb(236, 226, 206) }
+local DOOR_COLORS = { rgb(30, 60, 110), rgb(140, 30, 40), rgb(30, 90, 60), rgb(40, 40, 46), rgb(230, 180, 40) }
+
+local function buildTerrace(m: Model, F: CFrame, seed: number)
+	local HW, D, H = 11.6, 12, 25
+	for i = 0, 2 do
+		local x = (i - 1) * HW
+		local H0 = F * CFrame.new(x, 0, 1)
+		local wall = CityKit.Pick(TERRACE_COLORS, seed, i)
+		local brick = wall.R > wall.B * 1.3
+		Box(m, "HouseBody", H0, -HW / 2, HW / 2, 0, H, -D / 2, D / 2, wall, brick and M.Brick or M.Plaster, true)
+		Box(m, "Basement", H0, -HW / 2 - 0.05, HW / 2 + 0.05, 0, 2.4, -D / 2 - 0.1, D / 2, STONE, M.Concrete, true)
+		-- mansarde (pente avant) + lucarne
+		Wedge(m, "Mansard", Vector3.new(HW, 5, 3), H0 * CFrame.new(0, H + 2.5, -D / 2 + 1.5), rgb(70, 74, 86), M.Slate)
+		Box(m, "RoofFlat", H0, -HW / 2, HW / 2, H, H + 5, -D / 2 + 3, D / 2, rgb(80, 82, 92), M.Slate)
+		Box(m, "Dormer", H0, -1.4, 1.4, H + 1.2, H + 4.2, -D / 2 + 0.6, -D / 2 + 2.4, WHITE, M.Wood)
+		Box(m, "DormerGlass", H0, -1, 1, H + 1.6, H + 3.8, -D / 2 + 0.52, -D / 2 + 0.6, GLASS, M.Glass)
+		Box(m, "Cornice", H0, -HW / 2, HW / 2, H - 0.8, H, -D / 2 - 0.5, -D / 2, STONE, M.Concrete)
+		Box(m, "ChimneyStack", H0, HW / 2 - 1.4, HW / 2 + 0.2, H + 4, H + 7, 1, 3, BRICK_D, M.Brick)
+		-- perron + porte à imposte (à gauche) ; bow-window (à droite)
+		local dx = -HW / 2 + 2.6
+		for k = 0, 3 do
+			Box(m, "Stoop", H0, dx - 1.6, dx + 1.6, 0, 0.6 + k * 0.6, -D / 2 - 3.6 + k * 0.9, -D / 2, STONE, M.Concrete, true)
+		end
+		for _, sx in ipairs({ -1, 1 }) do
+			CityKit.Rod(m, "StoopRail", (H0 * CFrame.new(dx + sx * 1.6, 1.4, -D / 2 - 3.4)).Position, (H0 * CFrame.new(dx + sx * 1.6, 4.4, -D / 2 - 0.4)).Position, 0.12, IRON, M.Metal)
+		end
+		Box(m, "Door", H0, dx - 1.3, dx + 1.3, 2.4, 9.8, -D / 2 - 0.12, -D / 2, CityKit.Pick(DOOR_COLORS, seed, i + 7), M.Wood)
+		Glow(Box(m, "Fanlight", H0, dx - 1.3, dx + 1.3, 10.1, 11.1, -D / 2 - 0.12, -D / 2, WARM, M.Glass))
+		Box(m, "DoorKnob", H0, dx + 0.8, dx + 1, 5.8, 6, -D / 2 - 0.24, -D / 2 - 0.12, rgb(214, 176, 80), M.Metal)
+		local bx = HW / 2 - 3.6
+		Box(m, "BayBase", H0, bx - 2.6, bx + 2.6, 2.4, 3.8, -D / 2 - 1.6, -D / 2, STONE, M.Concrete, true)
+		Glow(Box(m, "BayGlass", H0, bx - 2.4, bx + 2.4, 3.8, 9.4, -D / 2 - 1.5, -D / 2 - 1.4, hash(seed, i) < 0.5 and WARM or GLASS, M.Glass))
+		Box(m, "BayMullion", H0, bx - 0.08, bx + 0.08, 3.8, 9.4, -D / 2 - 1.58, -D / 2 - 1.5, WHITE, M.Wood)
+		Box(m, "BayRoof", H0, bx - 2.7, bx + 2.7, 9.4, 10, -D / 2 - 1.7, -D / 2, rgb(70, 74, 86), M.Slate)
+		-- étages : 2 fenêtres à guillotine par niveau
+		for f = 0, 1 do
+			local y0 = 12.6 + f * 6
+			for _, wx in ipairs({ -2.6, 2.6 }) do
+				local lit = hash(seed, i * 10 + f * 3 + wx) < 0.3
+				local g = Box(m, "Sash", H0, wx - 1.2, wx + 1.2, y0, y0 + 4.2, -D / 2 - 0.08, -D / 2, lit and WARM or GLASS, M.Glass)
+				if lit then
+					Glow(g)
+				end
+				Box(m, "SashBar", H0, wx - 1.2, wx + 1.2, y0 + 2.05, y0 + 2.2, -D / 2 - 0.14, -D / 2 - 0.08, WHITE, M.Wood)
+				Box(m, "SashLintel", H0, wx - 1.5, wx + 1.5, y0 + 4.2, y0 + 4.7, -D / 2 - 0.2, -D / 2, STONE, M.Concrete)
+				Box(m, "SashSill", H0, wx - 1.5, wx + 1.5, y0 - 0.3, y0, -D / 2 - 0.35, -D / 2, STONE, M.Concrete)
+			end
+		end
+		-- fenêtres de l'arrière (côté cour)
+		for f = 0, 2 do
+			Box(m, "BackWindow", H0, -1.4, 1.4, 4 + f * 7, 8 + f * 7, D / 2, D / 2 + 0.08, GLASS, M.Glass)
+		end
+		-- poubelle et jardinière devant
+		if i ~= 1 then
+			Egg(m, "Planter", H0 * CFrame.new(bx, 0.5, -D / 2 - 3), Vector3.new(3, 1.2, 1.4), rgb(70, 130, 64), M.Grass)
+		end
+	end
+	-- murs pignons aux deux bouts : fenêtres étroites
+	for _, sx in ipairs({ -1, 1 }) do
+		local x = sx * HW * 1.5
+		for f = 0, 2 do
+			Box(m, "GableWindow", F * CFrame.new(x, 0, 1), sx > 0 and 0 or -0.08, sx > 0 and 0.08 or 0, 4 + f * 7, 8 + f * 7, -1.2, 1.2, GLASS, M.Glass)
+		end
+	end
+	local neighbour = CityKit.Npc(m, "elder", seed * 7 + 2, F * CFrame.new(-HW + 2.6, 0, -D / 2 - 3.8 + 1) * CFrame.Angles(0, math.pi, 0), "none", true)
+	CityKit.Idle(neighbour, "wave", 1.5)
+end
+
 DistrictTownhouse.BUILDERS = {
+	TwnTerrace = buildTerrace,
 	TwnTree = buildTree,
 	TwnCornerShop = buildCornerShop,
 	TwnCafe = buildCafe,
@@ -378,6 +468,11 @@ DistrictTownhouse.BUILDERS = {
 }
 DistrictTownhouse.BIG = { TwnCornerShop = true, TwnSquare = true }
 DistrictTownhouse.IMPOSTORS = {
+	TwnTerrace = function(m: Model, F: CFrame, seed: number)
+		for i = 0, 2 do
+			Box(m, "ImpHouse", F * CFrame.new((i - 1) * 11.6, 0, 1), -5.8, 5.8, 0, 30, -6, 6, CityKit.Pick(TERRACE_COLORS, seed, i), M.Plaster, true)
+		end
+	end,
 	TwnCornerShop = function(m: Model, F: CFrame)
 		Box(m, "ImpBlock", F * CFrame.new(0, 0, 3), -9, 9, 0, 30, -7, 7, BRICK, M.Brick, true)
 	end,

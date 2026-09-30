@@ -613,7 +613,7 @@ function HouseBuildAnim.BuildFx(self: Anim)
 	scaffold.Parent = fx
 	local byLift: { { BasePart } } = {}
 	for i, face in ipairs(faces) do
-		local lists = Kit.Scaffold(scaffold, face[1], face[2], { Lifts = lifts, LiftH = liftH, Bay = 8, Net = i == 1, Ladder = i == 1 })
+		local lists = Kit.Scaffold(scaffold, face[1], face[2], { Lifts = lifts, LiftH = liftH, Bay = 8, Net = false, Ladder = i == 1 })
 		for lift, list in ipairs(lists) do
 			byLift[lift] = byLift[lift] or {}
 			for _, p in ipairs(list) do

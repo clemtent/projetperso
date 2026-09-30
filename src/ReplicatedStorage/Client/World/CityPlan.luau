@@ -505,12 +505,12 @@ local THEME = {
 		Hedge = "CtgHedge",
 	},
 	Townhouse = {
-		Queue = { "TwnSquare", "TwnCafe", "TwnCornerShop", "ShopRow", "TwnBikes", "TwnBusStop", "BasketCourt" },
-		Fillers = { "PocketPark", "TwnCafe", "ParkingLot", "TwnSquare", "ShopRow", "BasketCourt", "TwnCornerShop", "Grove" },
+		Queue = { "TwnSquare", "TwnCafe", "TwnTerrace", "TwnCornerShop", "ShopRow", "TwnBikes", "TwnBusStop", "BasketCourt" },
+		Fillers = { "TwnTerrace", "PocketPark", "TwnTerrace", "TwnCafe", "ParkingLot", "TwnTerrace", "TwnSquare", "ShopRow", "TwnCornerShop", "TwnTerrace", "Grove" },
 	},
 	Loft = {
 		Queue = { "LftWarehouse", "LftFoodTrucks", "LftMural", "SkatePark", "LftContainers", "LftWarehouse" },
-		Fillers = { "LftWarehouse", "ParkingLot", "LftContainers", "BasketCourt", "LftMural", "LftWarehouse", "Grove" },
+		Fillers = { "LftWarehouse", "ParkingLot", "LftContainers", "LftWarehouse", "LftMural", "BasketCourt", "LftWarehouse", "Grove" },
 	},
 	Mansion = {
 		Queue = { "MnsFountain", "MnsViewpoint", "MnsTopiary", "MnsFountain", "MnsTopiary" },
@@ -519,7 +519,7 @@ local THEME = {
 	},
 	Mixed = {
 		Queue = { "PocketPark", "ShopRow", "SportsCorner", "BasketCourt", "CommunityGarden", "FootPitch" },
-		Fillers = { "PocketPark", "Grove", "ParkingLot", "Meadow", "BasketCourt", "ShopRow", "TwnSquare" },
+		Fillers = { "PocketPark", "TwnTerrace", "Grove", "ParkingLot", "TwnTerrace", "Meadow", "ShopRow", "TwnSquare", "LftContainers" },
 	},
 }
 
@@ -829,6 +829,38 @@ local function planFurniture(ctx: Ctx, out: { Spot })
 					s += 30
 				end
 			end
+		end
+	end
+	-- rues des quartiers : lampadaires du style du quartier, en quinconce
+	local okD, districts = pcall(WL.Districts, ctx.Count)
+	local LAMP_OF = { Cottage = "CtgLantern", Townhouse = "TwnLamp", Loft = "LftLamp", Mansion = "MnsLantern", Mixed = "TwnLamp" }
+	for ei, e in ipairs(graph.Edges) do
+		if okD and e.Kind == "Street" and (e.Sidewalk or 0) > 0 and e.Points and #e.Points >= 2 then
+			local pa, pb = e.Points[1], e.Points[#e.Points]
+			local mx, mz = (pa.X + pb.X) / 2, (pa.Z + pb.Z) / 2
+			local style = "Mixed"
+			for _, d in ipairs(districts) do
+				local R = d.Bounds
+				if math.abs(mx - R.X) <= R.W / 2 + 20 and math.abs(mz - R.Z) <= R.D / 2 + 20 then
+					style = d.Style
+				end
+			end
+			local list, len = pieces(e.Points, false, 1e9)
+			local jA = (degree[e.A] or 0) >= 3 and 30 or 8
+			local jB = (degree[e.B] or 0) >= 3 and 30 or 8
+			local k = 0
+			local s = jA
+			while s < len - jB do
+				local x, yy, z, dx, dz = WL.PointAlong(e.Points, s)
+				local rx, rz = -dz, dx
+				local side = k % 2 == 0 and 1 or -1
+				local off = e.Width / 2 + 1.1
+				local lx, lz = x + rx * side * off, z + rz * side * off
+				add(out, LAMP_OF[style] or "TwnLamp", cframe(lx, (yy - (WL.ROAD_Y or 0.5)) + walkY, lz, -rx * side, -rz * side), 9900 + ei * 41 + k, nil, nil, true)
+				k += 1
+				s += 40
+			end
+			local _ = list
 		end
 	end
 	-- feux tricolores : chaque bras d'un carrefour de la ceinture / des avenues

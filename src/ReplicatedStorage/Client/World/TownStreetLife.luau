@@ -1268,19 +1268,28 @@ end
 -- (v9.9, CITY99) Un arbre de la ville, construit DANS son modèle du serveur
 -- (mêmes pièces que Greenery.Tree côté serveur avant v9.9 : même rendu,
 -- même collision des troncs pour l'avatar local), sans les attributs
--- "TreeBase" (TownGreenery ne le prend pas pour un autre arbre)
+-- "TreeBase" (TownGreenery ne le prend pas pour un autre arbre).
+-- (v10, CITY10) la grande ville a des MILLIERS d'arbres (ceinture verte,
+-- campagne) : ils sont maintenant EN FLUX : arbre complet près de l'avatar
+-- (< 300 studs), silhouette (niveau 0, 3-5 pièces) jusqu'à 720, rien au-delà
 local TREES_PER_STEP = 14
-local function buildTree(t: any): number
+local TREE_NEAR_IN, TREE_NEAR_OUT = 300, 350
+local TREE_FAR_IN, TREE_FAR_OUT = 720, 780
+local function buildTree(t: any, far: boolean?): number
 	local m = t.Model
 	if not m.Parent then
 		return 0
 	end
+	local maxTier = far and 0 or (tonumber(m:GetAttribute("TreeTier")) or 0)
 	local ok, tree, n = pcall(function()
-		return Greenery.Tree(m, t.Base, tonumber(m:GetAttribute("TreeHeight")) or 12, tonumber(m:GetAttribute("TreeSeed")) or 1, m:GetAttribute("TreeSpecies") :: any, tonumber(m:GetAttribute("TreeTier")) or 0, 0, {
+		return Greenery.Tree(m, t.Base, tonumber(m:GetAttribute("TreeHeight")) or 12, tonumber(m:GetAttribute("TreeSeed")) or 1, m:GetAttribute("TreeSpecies") :: any, maxTier, 0, {
 			Lawn = m:GetAttribute("TreeLawn") == true,
-			Name = "TreeLocal",
+			Name = far and "TreeFar" or "TreeLocal",
 		})
 	end)
+	if t.Built then
+		t.Built:Destroy()
+	end
 	if not ok then
 		t.Built = false
 		return 0
@@ -1289,30 +1298,47 @@ local function buildTree(t: any): number
 		tree:SetAttribute(key, nil)
 	end
 	t.Built = tree
+	t.Far = far == true
 	return n
 end
 
-local function stepTrees(s: any, flat: Vector3)
+local function dropTree(t: any)
+	if t.Built then
+		t.Built:Destroy()
+	end
+	t.Built = nil
+	t.Far = nil
+end
+
+local function stepTrees(s: any, flat: Vector3, k: number?)
 	local list = s.Trees
-	if not list or s.TreesDone then
+	if not list then
 		return
 	end
-	-- les plus proches d'abord, TREES_PER_STEP par passe ; puis plus rien à faire
+	local scale = k or 1
+	-- les plus proches d'abord, TREES_PER_STEP par passe
 	local todo = {}
 	for _, t in ipairs(list) do
-		if t.Built == nil then
-			table.insert(todo, t)
+		if t.Built ~= false then
+			local d = (Vector3.new(t.Base.X, 0, t.Base.Z) - flat).Magnitude
+			if d < TREE_NEAR_IN * scale then
+				if t.Built == nil or t.Far then
+					table.insert(todo, { T = t, D = d, Far = false })
+				end
+			elseif d < TREE_FAR_IN * scale then
+				if t.Built == nil or (not t.Far and d > TREE_NEAR_OUT * scale) then
+					table.insert(todo, { T = t, D = d, Far = true })
+				end
+			elseif t.Built and d > TREE_FAR_OUT * scale then
+				dropTree(t)
+			end
 		end
 	end
-	if #todo == 0 then
-		s.TreesDone = true
-		return
-	end
 	table.sort(todo, function(a, b)
-		return (Vector3.new(a.Base.X, 0, a.Base.Z) - flat).Magnitude < (Vector3.new(b.Base.X, 0, b.Base.Z) - flat).Magnitude
+		return a.D < b.D
 	end)
 	for i = 1, math.min(TREES_PER_STEP, #todo) do
-		buildTree(todo[i])
+		buildTree(todo[i].T, todo[i].Far)
 	end
 end
 
@@ -1322,8 +1348,8 @@ local function clearTrees(s: any)
 			t.Built:Destroy()
 		end
 		t.Built = nil
+		t.Far = nil
 	end
-	s.TreesDone = false
 end
 
 local function focusPoint(): Vector3?
@@ -1385,8 +1411,8 @@ function TownStreetLife.Step(position: Vector3)
 		return
 	end
 	local flat = Vector3.new(position.X, 0, position.Z)
-	stepTrees(s, flat)
 	local k = detailScale()
+	stepTrees(s, flat, k)
 	-- (v9.9) les plus PROCHES d'abord : on ne voit jamais un trou au pied de
 	-- l'avatar pendant que le flux construit au loin
 	local todo = {}
@@ -1523,7 +1549,18 @@ function TownStreetLife.Debug(): any
 			end
 		end
 	end
-	return { Spots = s and #s.Spots or 0, Built = built, Parts = parts, Kinds = kinds, Created = partCount, City = s and s.CityCount or 0, Impostors = imps, ImpostorParts = impParts }
+	local trees, treeParts = 0, 0
+	for _, t in ipairs(s and s.Trees or {}) do
+		if t.Built then
+			trees += 1
+			for _, d in ipairs(t.Built:GetDescendants()) do
+				if d:IsA("BasePart") then
+					treeParts += 1
+				end
+			end
+		end
+	end
+	return { Spots = s and #s.Spots or 0, Built = built, Parts = parts, Kinds = kinds, Created = partCount, City = s and s.CityCount or 0, Impostors = imps, ImpostorParts = impParts, Trees = s and s.Trees and #s.Trees or 0, TreesBuilt = trees, TreeParts = treeParts }
 end
 
 return TownStreetLife
