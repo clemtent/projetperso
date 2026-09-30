@@ -1105,7 +1105,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 		-- ░ flancs verticaux découpés autour des roues ░
 		----------------------------------------------------------------
 		local fth = 0.16
-		local archN = if full then 4 else 2
+		local archN = if full then 4 else 3
 		for _, sx in ipairs({ -1, 1 }) do
 			local x0, x1 = sx * hw, sx * (hw - fth)
 			local lo, hi = math.min(x0, x1), math.max(x0, x1)
@@ -1227,7 +1227,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 		local valTop = g.sill + (if sports then 0.45 else 0.55)
 		-- jupe avant noire (contraste avec le bouclier peint)
 		box(b, "Valance", -nfx + 0.08, nfx - 0.08, g.sill - 0.05, valTop, zF - 0.06, zF + 0.1, TRIM, M.Plastic)
-		if full then
+		if full and style ~= "SUV" then
 			box(b, "SkidStrip", -nfx + 0.35, nfx - 0.35, g.sill + 0.05, g.sill + 0.13, zF - 0.1, zF - 0.02, GRAPHITE, M.Metal).Reflectance = 0.2
 		end
 		-- prise d'air centrale (grille + barre)
@@ -1293,8 +1293,17 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 				local hx0, hx1 = sx * (s.W * 0.18), sx * (nfx - 0.1)
 				local lo, hi = math.min(hx0, hx1), math.max(hx0, hx1)
 				-- cerclage chromé (dépasse de 0,05 autour du boîtier)
-				box(b, "HeadlightBezel", lo - 0.05, hi + 0.04, ly0 - 0.05, ly1 + 0.03, zF - 0.04, zF + 0.1, CHROME, M.Metal).Reflectance = 0.25
-				box(b, "HeadlightHousing", lo, hi, ly0, ly1, zF - 0.08, zF + 0.08, HOUSING)
+				-- (dessus du cerclage jamais au ras d'une arête du bouclier)
+				local bt = ly1 + 0.03
+				for _, yref in ipairs({ N0.by, N0.fy, N0.t, math.min(N0.by, N0.t) }) do
+					if math.abs(bt - yref) < 0.045 then
+						bt = yref - 0.05
+					end
+				end
+				bt = math.max(bt, ly1 - 0.02)
+				local ht = math.min(ly1, bt - 0.045) -- (dessus du boîtier ≥ 0,045 sous celui du cerclage)
+				box(b, "HeadlightBezel", lo - 0.05, hi + 0.04, ly0 - 0.05, bt, zF - 0.04, zF + 0.1, CHROME, M.Metal).Reflectance = 0.25
+				box(b, "HeadlightHousing", lo, hi, ly0, ht, zF - 0.08, zF + 0.08, HOUSING)
 				local width = hi - lo
 				local two = width >= 1.0
 				local pd = math.min(0.36, ly1 - ly0 - 0.22, if two then width * 0.3 else width * 0.5)

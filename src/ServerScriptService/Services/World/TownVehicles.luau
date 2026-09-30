@@ -87,9 +87,9 @@ function TownVehicles.ParkingRow(parent: Instance, rowCF: CFrame, bays: number, 
 	local x0 = -bays * L / 2
 	-- séparateurs (même blanc / matière que les autres lignes : jamais de z-fighting)
 	for i = 0, bays do
-		-- (v9.9) ligne fine, dessus à +0,13 : au-dessus des rustines d'enrobé et
-		-- des marquages de la chaussée (TownRoads / TownStreetLife)
-		part(model, "BayLine", Vector3.new(0.3, 0.06, depth), rowCF * CFrame.new(x0 + i * L, 0.1, -depth / 2 - 0.05), C.Line, M.SmoothPlastic, "deco")
+		-- (v9.9) ligne fine, dessus à +0,16 : au-dessus des rustines d'enrobé et
+		-- des marquages de la chaussée (TownRoads ; TownStreetLife : dessus à +0,12)
+		part(model, "BayLine", Vector3.new(0.3, 0.06, depth), rowCF * CFrame.new(x0 + i * L, 0.13, -depth / 2 - 0.05), C.Line, M.SmoothPlastic, "deco")
 	end
 	-- une place libre (réaliste), les autres occupées
 	local empty = math.floor(hash(seed, 7) * bays) % bays

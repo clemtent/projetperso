@@ -212,7 +212,7 @@ end
 
 -- Planche de skate (plateau à kicktails, 2 trucks, 4 roues) : `cf` =
 -- dessous des roues, planche le long de X
-local function skateboard(m: Model, name: string, color: Color3): { BasePart }
+local function skateboard(m: Model, name: string, color: Color3, at: CFrame): { BasePart }
 	local parts = {}
 	local function add(p: BasePart)
 		table.insert(parts, p)
@@ -249,10 +249,10 @@ local function buildSkatePark(m: Model, F: CFrame, seed: number)
 	box(m, "SkatePad", F, -W / 2, W / 2, -0.6, PAD_TOP, -D / 2, D / 2, CONCRETE, M.Concrete, true)
 	-- joints de dilatation (quadrillage 5 x 5)
 	for x = -W / 2 + 5, W / 2 - 5, 5 do
-		box(m, "PadJoint", P, x - 0.05, x + 0.05, -0.3, 0.02, -D / 2 + 0.2, D / 2 - 0.2, CONCRETE_D, M.Concrete)
+		box(m, "PadJoint", P, x - 0.05, x + 0.05, -0.3, 0.035, -D / 2 + 0.2, D / 2 - 0.2, CONCRETE_D, M.Concrete)
 	end
 	for z = -D / 2 + 5, D / 2 - 5, 5 do
-		box(m, "PadJoint", P, -W / 2 + 0.2, W / 2 - 0.2, -0.33, 0.045, z - 0.05, z + 0.05, CONCRETE_D, M.Concrete)
+		box(m, "PadJoint", P, -W / 2 + 0.2, W / 2 - 0.2, -0.33, 0.07, z - 0.05, z + 0.05, CONCRETE_D, M.Concrete)
 	end
 	-- 2 quarter-pipes (courbe circulaire en 7 dalles tangentes, lèvre en acier, plateforme, dos)
 	for _, sx in ipairs({ -1, 1 }) do
@@ -278,7 +278,7 @@ local function buildSkatePark(m: Model, F: CFrame, seed: number)
 		local lipX = QP_CX + QP_R * math.sin(QP_MAX)
 		local lipY = QP_R * (1 - math.cos(QP_MAX))
 		-- plateforme + coping + dos + montants
-		box(m, "Deck", P, sx > 0 and lipX or -lipX - 2.4, sx > 0 and lipX + 2.4 or -lipX, lipY - 0.4, lipY, -QP_W / 2, QP_W / 2, CONCRETE_D, M.Concrete, true)
+		box(m, "Deck", P, sx > 0 and lipX + 0.05 or -lipX - 2.4, sx > 0 and lipX + 2.4 or -lipX - 0.05, lipY - 0.4, lipY, -QP_W / 2 - 0.05, QP_W / 2 + 0.05, CONCRETE_D, M.Concrete, true)
 		rod(m, "Coping", (P * CFrame.new(sx * lipX, lipY - 0.05, -QP_W / 2)).Position, (P * CFrame.new(sx * lipX, lipY - 0.05, QP_W / 2)).Position, 0.3, STEEL, M.Metal)
 		box(m, "RampBack", P, sx > 0 and lipX + 2.4 or -lipX - 2.6, sx > 0 and lipX + 2.6 or -lipX - 2.4, -0.3, lipY, -QP_W / 2, QP_W / 2, rgb(150, 150, 150), M.Concrete, true)
 		-- garde-corps sur la plateforme
@@ -303,7 +303,7 @@ local function buildSkatePark(m: Model, F: CFrame, seed: number)
 	-- ledge en béton à arête d'acier (côté fond)
 	local ledge = P * CFrame.new(0, 0, 8.3)
 	box(m, "Ledge", ledge, -5, 5, -0.3, 1.1, -0.8, 0.8, CONCRETE_D, M.Concrete, true)
-	box(m, "LedgeEdge", ledge, -5.02, 5.02, 1.0, 1.12, -0.86, -0.7, STEEL, M.Metal)
+	box(m, "LedgeEdge", ledge, -5.04, 5.04, 1.0, 1.15, -0.86, -0.7, STEEL, M.Metal)
 	-- grillage sur les deux longs côtés (entrée au milieu du côté -Z)
 	for _, sz in ipairs({ -1, 1 }) do
 		for _, seg in ipairs(sz < 0 and { { -W / 2, -3 }, { 3, W / 2 } } or { { -W / 2, W / 2 } }) do
@@ -358,7 +358,10 @@ local function buildSkatePark(m: Model, F: CFrame, seed: number)
 	for i = 1, 2 do
 		local style = i == 1 and "kid" or "pedestrian"
 		local rider = npc(m, style, seed * 13 + i, P, "none", false)
-		local board = skateboard(m, "Board" .. i, colors[i])
+		local board = skateboard(m, "Board" .. i, colors[i], P * CFrame.new(0, 0, i * 3 - 4.5))
+		for k, part in ipairs(board) do
+			part.CFrame = P * CFrame.new(0, 0, i * 3 - 4.5) * BOARD_LOCAL[k]
+		end
 		addActor(rider, "Skater", { P = P, Board = board, Mode = i }, hash(seed, i) * 10)
 	end
 end
@@ -548,11 +551,12 @@ local function pingPong(m: Model, T: CFrame, playing: boolean, seed: number)
 	-- pied en béton + plateau (2,74 x 1,525 m -> 8,3 x 4,6 studs) + lignes + filet
 	box(m, "PPBase", T, -2.6, 2.6, -0.1, TABLE_TOP - 0.3, -0.4, 0.4, CONCRETE_D, M.Concrete, true)
 	box(m, "PPTop", T, -4.15, 4.15, TABLE_TOP - 0.3, TABLE_TOP, -2.3, 2.3, rgb(40, 110, 90), M.Concrete, true)
-	box(m, "PPEdge", T, -4.15, 4.15, TABLE_TOP - 0.02, TABLE_TOP + 0.02, -2.3, -2.2, WHITE, M.SmoothPlastic)
-	box(m, "PPEdge", T, -4.15, 4.15, TABLE_TOP - 0.02, TABLE_TOP + 0.02, 2.2, 2.3, WHITE, M.SmoothPlastic)
-	box(m, "PPCenter", T, -4.15, 4.15, TABLE_TOP - 0.02, TABLE_TOP + 0.02, -0.04, 0.04, WHITE, M.SmoothPlastic)
+	-- lignes blanches (dessus 0,03 au-dessus du plateau, en retrait des bords)
+	box(m, "PPEdge", T, -4.1, 4.1, TABLE_TOP - 0.02, TABLE_TOP + 0.03, -2.26, -2.16, WHITE, M.SmoothPlastic)
+	box(m, "PPEdge", T, -4.1, 4.1, TABLE_TOP - 0.02, TABLE_TOP + 0.03, 2.16, 2.26, WHITE, M.SmoothPlastic)
+	box(m, "PPCenter", T, -4.1, 4.1, TABLE_TOP - 0.02, TABLE_TOP + 0.03, -0.04, 0.04, WHITE, M.SmoothPlastic)
 	for _, sx in ipairs({ -1, 1 }) do
-		box(m, "PPEnd", T, sx * 4.15 - 0.05, sx * 4.15 + 0.05, TABLE_TOP - 0.02, TABLE_TOP + 0.025, -2.2, 2.2, WHITE, M.SmoothPlastic)
+		box(m, "PPEnd", T, sx * 4.07 - 0.05, sx * 4.07 + 0.05, TABLE_TOP - 0.02, TABLE_TOP + 0.06, -2.16, 2.16, WHITE, M.SmoothPlastic)
 	end
 	box(m, "PPNet", T, -0.04, 0.04, TABLE_TOP, TABLE_TOP + 0.5, -2.45, 2.45, STEEL, M.DiamondPlate)
 	box(m, "PPNetTop", T, -0.07, 0.07, TABLE_TOP + 0.48, TABLE_TOP + 0.56, -2.5, 2.5, WHITE, M.SmoothPlastic)

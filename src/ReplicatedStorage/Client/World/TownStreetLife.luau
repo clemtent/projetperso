@@ -421,12 +421,12 @@ local function buildZebra(m: Model, F: CFrame, seed: number)
 	local n = math.max(3, math.floor(span / 2 + 0.5))
 	for i = 0, n - 1 do
 		local z = -span / 2 + 0.55 + i * (span - 1.1) / math.max(1, n - 1)
-		newPart(m, "ZebraStripe", Vector3.new(len, 0.34, 1.1), F * CFrame.new(0, 0.09 - 0.17, z), WHITE, M.SmoothPlastic) -- (v9.9 : dessus à +0,09)
+		newPart(m, "ZebraStripe", Vector3.new(len, 0.4, 1.1), F * CFrame.new(0, 0.15 - 0.2, z), WHITE, M.SmoothPlastic) -- (v9.9 : dessus à +0,15)
 	end
 	-- dalles podotactiles sur les trottoirs (derrière les bordures)
 	for _, sz in ipairs({ -1, 1 }) do
 		local z0 = width / 2 + 0.9
-		newPart(m, "Tactile", Vector3.new(len - 1, 0.1, 0.8), F * CFrame.new(0, 0.5 + 0.01, sz * (z0 + 0.4)), rgb(236, 206, 90), M.DiamondPlate)
+		newPart(m, "Tactile", Vector3.new(len - 1, 0.3, 0.8), F * CFrame.new(0, 0.5 + 0.12 - 0.15, sz * (z0 + 0.4)), rgb(236, 206, 90), M.DiamondPlate) -- (v9.9 : +0,12 au-dessus du trottoir)
 	end
 end
 
@@ -469,12 +469,12 @@ end
 
 local function buildManhole(m: Model, F: CFrame, _seed: number)
 	-- (dessus à +0,09 : au-dessus des pointillés (+0,05), sous les lignes de rive (+0,1))
-	-- (v9.9 : dessus à +0,12, au-dessus de la peinture relevée)
-	newPart(m, "Manhole", Vector3.new(0.3, 2.1, 2.1), F * CFrame.new(0, 0.12 - 0.15, 0) * UPRIGHT, rgb(70, 68, 72), M.DiamondPlate, "Cyl")
+	-- (v9.9 : dessus à +0,16, au-dessus de la peinture relevée)
+	newPart(m, "Manhole", Vector3.new(0.36, 2.1, 2.1), F * CFrame.new(0, 0.16 - 0.18, 0) * UPRIGHT, rgb(70, 68, 72), M.DiamondPlate, "Cyl")
 end
 
 local function buildDrain(m: Model, F: CFrame, _seed: number)
-	box(m, "Drain", F, -0.8, 0.8, -0.2, 0.06, -0.25, 0.25, rgb(58, 56, 62), M.DiamondPlate) -- (v9.9 : sur le caniveau, dessus +0,06)
+	box(m, "Drain", F, -0.8, 0.8, -0.2, 0.07, -0.25, 0.25, rgb(58, 56, 62), M.DiamondPlate) -- (v9.9 : sur le caniveau, dessus +0,07)
 end
 
 -- Piste cyclable : bande verte (longueur `seed`) + pictogrammes vélo
@@ -934,11 +934,11 @@ end
 
 -- Marquage au sol (lignes de rive, pointillés, passages, lignes d'arrêt) :
 -- une pièce blanche à la taille donnée par le serveur (v9.8 : 0 pièce serveur)
--- (v9.9, CITY99) peinture relevée de 0,03 (dessus à +0,08 : au-dessus des
+-- (v9.9, CITY99) peinture relevée de 0,07 (dessus à +0,12 : au-dessus des
 -- ornières, rustines et fissures de TownRoads) et plus épaisse vers le bas
 local function buildPaint(m: Model, F: CFrame, _seed: number, spot: Spot?)
 	local size = spot and spot.Size or Vector3.new(1, 0.1, 1)
-	newPart(m, "Paint", Vector3.new(size.X, size.Y + 0.2, size.Z), F * CFrame.new(0, 0.03 - 0.1, 0), rgb(248, 248, 242), M.SmoothPlastic)
+	newPart(m, "Paint", Vector3.new(size.X, size.Y + 0.2, size.Z), F * CFrame.new(0, 0.07 - 0.1, 0), rgb(250, 250, 246), M.SmoothPlastic)
 end
 
 local BUILDERS: { [string]: (Model, CFrame, number, Spot?) -> any } = {

@@ -344,13 +344,14 @@ local function outside(folder: Instance, geo: TownKit.Geo, gcf: CFrame)
 	-- (v9.9, CITY99) route d'arrivée réaliste (client : TownRoads) : asphalte
 	-- vivant, caniveau + bordure du trottoir, dalles, rond-point détaillé
 	local along = gcf * CFrame.new(0, 0, len / 2 + 3) * CFrame.Angles(0, math.pi / 2, 0)
-	TownStreets.Chunks("RoadSurface", along, -len / 2 + 1, len / 2 - 1, ROAD_Y, 0, 2, 16, 7001)
+	-- (X local vers la porte : on s'arrête avant l'anneau du rond-point)
+	TownStreets.Chunks("RoadSurface", along, -len / 2 + 8, len / 2 - 1, ROAD_Y, 0, 2, 16, 7001)
 	local walkAlong = gcf * CFrame.new(0, 0, len / 2 + 5) * CFrame.Angles(0, math.pi / 2, 0)
-	TownStreets.Chunks("CurbLine", walkAlong, -(len - 4) / 2, (len - 4) / 2, ROAD_Y, 8, WALK_Y - ROAD_Y, 0, 7002)
-	TownStreets.Chunks("Pavers", walkAlong, -(len - 4) / 2 + 0.5, (len - 4) / 2 - 0.5, WALK_Y, 11, 0, 5.8, 7003)
+	-- (X local vers la porte : le caniveau s'arrête avant l'anneau du rond-point)
+	TownStreets.Chunks("CurbLine", walkAlong, -17, (len - 4) / 2, ROAD_Y, 8, WALK_Y - ROAD_Y, 0, 7002)
+	-- (pas de dalles sous la dalle de l'abribus : gcf z 24..36 = X local -6..6)
+	TownStreets.Chunks("Pavers", walkAlong, -(len - 4) / 2 + 0.5, (len - 4) / 2 - 0.5, WALK_Y, 11, 0, 5.8, 7003, { { -6.5, 6.5 } })
 	TownKit.LifeSpot("Roundabout", loop * CFrame.new(0, ROAD_Y + 0.03, 0), 7004, Vector3.new(8, 0, 20))
-	-- accès du parking à la route (bitume) + allée piétonne
-	TownKit.LifeSpot("Walkway", lot * CFrame.new(15 + 4.2, WorldLayout.GROUND_Y, 8), 7005, Vector3.new(8.6, 4, 8))
 	-- repères des lieux (poteaux indicateurs, client) : porte, MégaDopa,
 	-- concession, coin gourmand
 	TownKit.LifeSpot("Dest", CFrame.new(gcf.Position), 15)

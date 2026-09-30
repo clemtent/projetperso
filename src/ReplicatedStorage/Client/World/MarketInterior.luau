@@ -1696,7 +1696,7 @@ local function outsideJobs(m: Market, parent: Instance): { () -> () }
 		local B = cf * CFrame.new(0, 0, m.Size.Z + 2) * CFrame.Angles(0, math.pi, 0)
 		local ok, model = pcall(cm.Build, "Van", rgb(250, 250, 252), { Detail = "Mid", Scale = Vector3.new(1.1, 1.15, 1.2) })
 		if ok and typeof(model) == "Instance" and model:IsA("Model") then
-			model:PivotTo(B * CFrame.new(14, -0.6, -12))
+			model:PivotTo(B * CFrame.new(14, -0.6, -12.15)) -- (v9.9) 0,15 de plus : l'avant ne touche plus le quai
 			model.Parent = parent
 			partCount += countParts(model)
 		end

@@ -58,10 +58,20 @@ local GUTTER = rgb(190, 188, 184)
 local CURB = rgb(238, 236, 232)
 local JOINT = rgb(168, 162, 156)
 local WALK = rgb(216, 210, 204)
-local PAINT = rgb(248, 248, 242)
+local PAINT = rgb(250, 250, 246) -- (= TownKit.C.Line : mêmes lignes que les places de stationnement)
 local STEEL = rgb(170, 174, 182)
 local GRAPHITE = rgb(52, 54, 60)
 local WHITE = rgb(250, 250, 248)
+
+-- Hauteurs des dessus au-dessus de l'asphalte / du trottoir : 0,03 au moins
+-- entre deux niveaux qui peuvent se recouvrir (détecteur : < 0,02 = conflit)
+local H_WEAR = 0.03 -- ornières, caniveau
+local H_PATCH = 0.06 -- rustines
+local H_CRACK = 0.09 -- fissures, joints de rustine
+local H_PAINT = 0.12 -- peinture (= TownStreetLife.PAINT_TOP)
+local H_SLAB = 0.03 -- dalles d'une autre teinte (trottoir)
+local H_JOINT = 0.075 -- joints des dalles (trottoir)
+TownRoads.H_PAINT = H_PAINT
 
 local function hash(a: number, b: number): number
 	local x = math.sin(a * 12.9898 + b * 78.233) * 43758.5453
@@ -171,12 +181,13 @@ local function buildRoadSurface(m: Model, F: CFrame, seed: number, spot: any)
 		for _, dz in ipairs({ -2.1, 2.1 }) do
 			local z = zc + dz
 			if math.abs(z) + 0.65 < width / 2 - 1 then
-				flat(m, "Wear", F, 0, z, len, 1.3, 0.02, WORN, M.Asphalt)
+				flat(m, "Wear", F, 0, z, len, 1.3, H_WEAR, WORN, M.Asphalt)
 			end
 		end
 	end
 	-- rustines (1 tous les ~20 studs) : rectangles alignés sur la route
 	local nPatch = math.floor(len / 20 + hash(seed, 1))
+	local placed = {}
 	for i = 1, nPatch do
 		local lx = 3 + hash(seed, 10 + i) * 5
 		local lz = 1.8 + hash(seed, 20 + i) * 1.8
@@ -184,10 +195,21 @@ local function buildRoadSurface(m: Model, F: CFrame, seed: number, spot: any)
 		local zr = math.max(0, keep - lz / 2)
 		local z = (hash(seed, 40 + i) - 0.5) * 2 * zr
 		local fresh = hash(seed, 50 + i) < 0.5
-		flat(m, "Patch", F, x, z, lx, lz, 0.04, fresh and PATCH_NEW or PATCH_OLD, M.Asphalt)
+		-- (jamais deux rustines l'une sur l'autre)
+		local over = false
+		for _, q in ipairs(placed) do
+			if math.abs(q[1] - x) < (q[3] + lx) / 2 + 0.3 and math.abs(q[2] - z) < (q[4] + lz) / 2 + 0.3 then
+				over = true
+			end
+		end
+		if over then
+			continue
+		end
+		table.insert(placed, { x, z, lx, lz })
+		flat(m, "Patch", F, x, z, lx, lz, H_PATCH, fresh and PATCH_NEW or PATCH_OLD, M.Asphalt)
 		-- joint de la rustine (liseré de goudron sur deux côtés)
 		if hash(seed, 55 + i) < 0.6 then
-			flat(m, "PatchSeal", F, x, z - lz / 2, lx + 0.1, 0.12, 0.055, TAR, M.SmoothPlastic)
+			flat(m, "PatchSeal", F, x, z - lz / 2, lx + 0.1, 0.12, H_CRACK, TAR, M.SmoothPlastic)
 		end
 	end
 	-- fissures colmatées (lignes brisées de goudron)
@@ -202,7 +224,7 @@ local function buildRoadSurface(m: Model, F: CFrame, seed: number, spot: any)
 			local dir = Vector3.new(math.cos(yaw), 0, -math.sin(yaw))
 			local mid = Vector3.new(x, 0, z) + dir * (l / 2)
 			if math.abs(mid.Z) < keep and math.abs(mid.X) < len / 2 - 1 then
-				flat(m, "Crack", F, mid.X, mid.Z, l, 0.1, 0.055, TAR, M.SmoothPlastic, yaw)
+				flat(m, "Crack", F, mid.X, mid.Z, l, 0.1, H_CRACK, TAR, M.SmoothPlastic, yaw)
 			end
 			x, z = x + dir.X * l, z + dir.Z * l
 			yaw += (hash(seed * 7 + k, 110 + i) - 0.5) * 1.6
@@ -220,7 +242,7 @@ local function buildCurbLine(m: Model, F: CFrame, _seed: number, spot: any)
 	local size = spot and spot.Size or Vector3.new(30, 0.53, 0)
 	local len, h = size.X, size.Y
 	-- caniveau : bande de béton devant la bordure
-	flat(m, "Gutter", F, 0, -0.45, len, 0.9, 0.02, GUTTER, M.Concrete)
+	flat(m, "Gutter", F, 0, -0.45, len, 0.9, H_WEAR, GUTTER, M.Concrete)
 	-- nez arrondi de la bordure (cylindre couché, à moitié dans la bordure)
 	local nose = newPart(m, "CurbNose", Vector3.new(len, 0.26, 0.26), F * CFrame.new(0, h - 0.11, 0.03), CURB, M.Concrete, "Cyl")
 	nose.CastShadow = false
@@ -238,20 +260,28 @@ local function buildPavers(m: Model, F: CFrame, seed: number, spot: any)
 	local n = math.floor(len / step)
 	local x0 = -len / 2 + (len - n * step) / 2
 	for i = 0, n do
-		flat(m, "Joint", F, x0 + i * step, 0, 0.09, width, 0.035, JOINT, M.Concrete)
+		local x = x0 + i * step
+		if not underObstacle((F * CFrame.new(x, 0, 0)).Position, width / 2) then
+			flat(m, "Joint", F, x, 0, 0.09, width, H_JOINT, JOINT, M.Concrete)
+		end
 	end
-	-- joint longitudinal (dalles de 1,5 m sur 2 rangées)
+	-- joint longitudinal (dalles de 1,5 m sur 2 rangées), par morceaux libres
 	if width > 4 then
-		flat(m, "Joint", F, 0, 0, len, 0.09, 0.035, JOINT, M.Concrete)
+		for i = 0, n - 1 do
+			local x = x0 + (i + 0.5) * step
+			if not underObstacle((F * CFrame.new(x, 0, 0)).Position, step / 2) then
+				flat(m, "Joint", F, x, 0, step - 0.12, 0.09, H_JOINT, JOINT, M.Concrete)
+			end
+		end
 	end
 	-- quelques dalles d'une autre teinte (remplacées, plus neuves, tachées)
 	for i = 0, n - 1 do
 		local h = hash(seed, i)
-		if h < 0.2 then
+		if h < 0.2 and not underObstacle((F * CFrame.new(x0 + (i + 0.5) * step, 0, 0)).Position, step / 2 + width / 2) then
 			local tone = h < 0.1 and WALK:Lerp(WHITE, 0.35) or WALK:Lerp(GRAPHITE, 0.12)
 			local half = width > 4 and (hash(seed, i + 50) < 0.5 and -1 or 1) or 0
 			local lz = width > 4 and width / 2 - 0.1 or width - 0.1
-			flat(m, "Slab", F, x0 + (i + 0.5) * step, half * width / 4, step - 0.1, lz, 0.015, tone, M.Pavement)
+			flat(m, "Slab", F, x0 + (i + 0.5) * step, half * width / 4, step - 0.1, lz, H_SLAB, tone, M.Pavement)
 		end
 	end
 end
@@ -263,7 +293,7 @@ end
 -- Flèche peinte : `F` sur la chaussée, la flèche pointe vers -Z (sens de
 -- circulation). seed : 1 tout droit, 2 gauche, 3 droite, 4 tout droit +
 -- droite, 5 tout droit + gauche, 6 gauche + droite
-local ARROW_TOP = 0.08
+local ARROW_TOP = H_PAINT
 local PAINT_T = 0.3 -- (dessous à -0,07 : dans la chaussée)
 -- pointe de flèche : triangle isocèle, base au point (x, z), pointe vers
 -- la direction `yaw` (0 = -Z du repère)
@@ -348,7 +378,8 @@ local function buildRoundabout(m: Model, F: CFrame, seed: number, spot: any)
 		local mid = d * ((island + apron) / 2)
 		local chord = 2 * apron * math.sin(math.pi / n) + 0.05
 		local cf = F * CFrame.new(mid) * CFrame.Angles(0, a, 0)
-		newPart(m, "Apron", Vector3.new(chord, 0.3, apron - island), cf * CFrame.new(0, 0.12, 0), i % 2 == 0 and rgb(176, 150, 136) or rgb(160, 136, 124), M.Cobblestone)
+		-- (un pavé sur deux 0,03 plus haut : les recouvrements ne scintillent pas)
+		newPart(m, "Apron", Vector3.new(chord, 0.3, apron - island), cf * CFrame.new(0, 0.12 + (i % 2) * 0.03, 0), i % 2 == 0 and rgb(176, 150, 136) or rgb(160, 136, 124), M.Cobblestone)
 	end
 	-- balises de chevrons sur l'îlot, face aux entrées
 	for _, a in ipairs({ 0, math.pi, math.pi / 2, -math.pi / 2 }) do
@@ -380,6 +411,36 @@ end
 
 type Dest = { Id: number, Pos: Vector3 }
 local destinations: { Dest } = {}
+-- (dalles : pas de joints sous le mobilier ni sur les bandes podotactiles des passages piétons)
+local obstacles: { { any } } = {}
+local OBSTACLE_R = {
+	Zebra = -1, -- (rayon : demi-largeur de la route + 3)
+	BusShelter = 5.5,
+	Kiosk = 5,
+	Terrace = 7,
+	Morris = 2.4,
+	PhoneBooth = 2.4,
+	Vending = 2,
+	Bench = 3.4,
+	Planter = 3.4,
+	Recycle = 2.4,
+	TrafficLight = 1.6,
+	Beacon = 1.2,
+	StreetName = 1.2,
+	Direction = 1.2,
+	Bin = 1.3,
+	Mailbox = 1.2,
+	NewsBox = 1.2,
+	Bollards = 2.2,
+	ParkMeter = 1,
+	SpeedSign = 1,
+	DogStation = 1.2,
+	DrinkFountain = 1.4,
+	Lamppost = 1.2,
+	PlanterSmall = 1.4,
+	FlowerStall = 4,
+	BookStall = 4,
+}
 
 -- Lieux (seed du repère "Dest") : emoji + nom anglais (Locale -> français)
 TownRoads.PLACES = {
@@ -404,11 +465,29 @@ TownRoads.PLACES = {
 
 function TownRoads.SetDestinations(spots: { any })
 	table.clear(destinations)
+	table.clear(obstacles)
 	for _, s in ipairs(spots) do
 		if s.Kind == "Dest" then
 			table.insert(destinations, { Id = s.Seed, Pos = s.Pos })
 		end
+		local r = OBSTACLE_R[s.Kind]
+		if r then
+			if r < 0 then
+				r = (s.Seed or 100) / 20 + 3
+			end
+			table.insert(obstacles, { s.Pos, r })
+		end
 	end
+end
+
+local function underObstacle(p: Vector3, pad: number): boolean
+	for _, o in ipairs(obstacles) do
+		local q: Vector3 = o[1]
+		if Vector3.new(p.X - q.X, 0, p.Z - q.Z).Magnitude < o[2] + pad then
+			return true
+		end
+	end
+	return false
 end
 
 -- `F` au pied (dessus du sol), seed = sel du choix ; jusqu'à 4 lames vers
@@ -477,7 +556,9 @@ local function buildWalkway(m: Model, F: CFrame, seed: number, spot: any)
 	newPart(m, "WalkBed", Vector3.new(len, 0.4, width), F * CFrame.new(0, top - 0.2, 0), body, mat)
 	-- bordures (0,06 plus hautes)
 	for _, sz in ipairs({ -1, 1 }) do
-		newPart(m, "WalkEdge", Vector3.new(len + 0.02, 0.4, 0.3), F * CFrame.new(0, top + 0.06 - 0.2, sz * (width / 2 - 0.15)), style == 3 and rgb(120, 86, 58) or rgb(150, 146, 140), style == 3 and M.Wood or M.Concrete)
+		-- (bordure un peu plus courte que le lit et qui dépasse de 0,05 sur le
+		-- côté : aucune face confondue avec lui)
+		newPart(m, "WalkEdge", Vector3.new(len - 0.1, 0.4, 0.3), F * CFrame.new(0, top + 0.06 - 0.2, sz * (width / 2 - 0.1)), style == 3 and rgb(120, 86, 58) or rgb(150, 146, 140), style == 3 and M.Wood or M.Concrete)
 	end
 	if style ~= 3 and style ~= 4 then
 		-- joints tous les 3 studs
