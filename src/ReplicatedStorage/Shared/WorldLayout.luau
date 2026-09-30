@@ -770,8 +770,9 @@ local function allocation(count: number): { number }
 	return alloc
 end
 
--- Rectangle (centre x, z, largeur en x, profondeur en z) : repère ville
-export type Rect = { X: number, Z: number, W: number, D: number }
+-- Rectangle (centre x, z, largeur en x, profondeur en z) : repère ville ;
+-- Y (facultatif) : hauteur du sol (plateau de la colline des manoirs)
+export type Rect = { X: number, Z: number, W: number, D: number, Y: number? }
 -- Emplacement d'une parcelle (repère ville) : centre au sol, Look = vers sa rue
 export type PlotPlace = { Index: number, X: number, Y: number, Z: number, LookX: number, LookZ: number, Yaw: number, District: string, Slot: number, Street: number }
 export type Lot = { X: number, Y: number, Z: number, LookX: number, LookZ: number, Yaw: number, W: number, D: number, District: string }
@@ -786,6 +787,7 @@ export type District = {
 	Bounds: Rect, -- toute la case du quartier
 	Built: Rect, -- partie occupée (parcelles + rues)
 	Rise: number, -- y du plateau (manoirs), 0 ailleurs
+	Plateau: Rect?, -- (Rise > 0) le plateau surélevé (dessus à GROUND_Y + Rise)
 	Gated: boolean,
 	Capacity: number,
 	Plots: { number }, -- index globaux des parcelles
@@ -997,6 +999,43 @@ local function buildCity(count: number): any
 			for _, piece in ipairs(pieces) do
 				table.insert(cutFree, piece)
 			end
+		end
+		-- (colline des manoirs) plateau : du haut des rampes d'une avenue à
+		-- l'autre, autour des rangées ; les zones libres sont coupées à son bord
+		if rise > 0 then
+			local top = WorldLayout.GRID_HALF + 2 + WorldLayout.MANSION_RAMP - WorldLayout.GRID_HALF
+			local pv0, pv1 = math.max(v0, vMin - 8), math.min(v1, vMax + 8)
+			local plateau = rect(u0 + top, u1 - top, pv0, pv1)
+			plateau.Y = rise
+			entry.Plateau = plateau
+			local px0, px1 = plateau.X - plateau.W / 2, plateau.X + plateau.W / 2
+			local pz0, pz1 = plateau.Z - plateau.D / 2, plateau.Z + plateau.D / 2
+			local split: { Rect } = {}
+			for _, r in ipairs(cutFree) do
+				-- morceaux : dedans (Y = rise) / dehors (Y = 0), découpés en x puis en z
+				local xs = { r.X - r.W / 2, r.X + r.W / 2 }
+				for _, c in ipairs({ px0, px1 }) do
+					if c > xs[1] + 8 and c < xs[#xs] - 8 then
+						table.insert(xs, #xs, c)
+					end
+				end
+				table.sort(xs)
+				local zs = { r.Z - r.D / 2, r.Z + r.D / 2 }
+				for _, c in ipairs({ pz0, pz1 }) do
+					if c > zs[1] + 8 and c < zs[#zs] - 8 then
+						table.insert(zs, #zs, c)
+					end
+				end
+				table.sort(zs)
+				for a = 1, #xs - 1 do
+					for b = 1, #zs - 1 do
+						local cx, cz = (xs[a] + xs[a + 1]) / 2, (zs[b] + zs[b + 1]) / 2
+						local inside = cx > px0 and cx < px1 and cz > pz0 and cz < pz1
+						table.insert(split, { X = cx, Z = cz, W = xs[a + 1] - xs[a], D = zs[b + 1] - zs[b], Y = inside and rise or 0 })
+					end
+				end
+			end
+			cutFree = split
 		end
 		entry.Free = cutFree
 		table.insert(districts, entry)

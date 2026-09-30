@@ -1544,7 +1544,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			-- (v9.9) ligne de caractère : arête ombrée entre le flanc et l'épaule
 			rod(b, "Crease", V3(sx * hw, s.Low - 0.03, if sports then g.aF0 else zF + g.noseR), V3(sx * hw, s.Low - 0.03, zB - g.tailR), 0.07, paint:Lerp(Color3.new(0, 0, 0), 0.3))
 			-- bas de caisse (noir) entre les roues
-			if full then
+			if full and mod("Skirts") == "None" then
 				local r0x, r1x = sx * (hw - 0.1), sx * (hw + (if offroad then 0.1 else 0.035))
 				box(b, "Rocker", math.min(r0x, r1x), math.max(r0x, r1x), g.sill - 0.04, g.sill + (if offroad then 0.45 else 0.3), g.aF1 + 0.05, g.aR0 - 0.05, TRIM, M.Plastic)
 			end
@@ -1931,7 +1931,9 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			end
 			if full then
 				-- becquet arrière (queue de canard) + prises d'air latérales
-				wedge(b, "Ducktail", -hw + 0.8, hw - 0.8, s.Deck - 0.12, s.Deck + 0.08, zB - 1.3, zB - 0.4, true, paint)
+				if mod("Spoiler") == "Stock" then
+					wedge(b, "Ducktail", -hw + 0.8, hw - 0.8, s.Deck - 0.12, s.Deck + 0.08, zB - 1.3, zB - 0.4, true, paint)
+				end
 				for _, sx in ipairs({ -1, 1 }) do
 					local ix0, ix1 = sx * (hw - 0.08), sx * (hw + 0.05)
 					box(b, "SideIntake", math.min(ix0, ix1), math.max(ix0, ix1), g.sill + 0.6, s.Low - 0.35, s.R1, g.aR0 - 0.2, HOUSING)
@@ -2099,7 +2101,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			-- roue de secours ronde à l'arrière (housse couleur carrosserie)
 			cylZ(b, "SpareWheel", 0, s.Low + 0.2, zB + 0.25, 0.42, 1.5, TYRE, M.Rubber)
 			cylZ(b, "SpareCover", 0, s.Low + 0.2, zB + 0.48, 0.1, 1.2, WHITE:Lerp(paint, 0.3))
-		elseif style == "Hatch" then
+		elseif style == "Hatch" and mod("Spoiler") == "Stock" then
 			local Rr = sectionAt(st, s.R1)
 			box(b, "Spoiler", -Rr.e + 0.1, Rr.e - 0.1, Rr.t + Rr.c - 0.02, Rr.t + Rr.c + 0.1, s.R1 - 0.05, s.R1 + 0.5, GRAPHITE)
 		elseif style == "SUV" then
@@ -2180,6 +2182,123 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 					local cx0, cx1 = sx * (hw - 0.02), sx * (hw + 0.05)
 					box(b, "ChromeSill", math.min(cx0, cx1), math.max(cx0, cx1), g.sill + 0.32, g.sill + 0.4, g.aF1 + 0.1, g.aR0 - 0.1, CHROME, M.Metal)
 				end
+			end
+		end
+
+		----------------------------------------------------------------
+		-- ░ (v10, CARS10) KIT CARROSSERIE de l'atelier : lame avant, bas de
+		-- caisse, aileron, néon sous caisse (Mid : aileron, bas de caisse,
+		-- néon ; Full : tout) ░
+		----------------------------------------------------------------
+		local kitNfx = st[1].fx
+		local splitter = mod("Splitter")
+		if full and splitter ~= "None" then
+			local race = splitter == "Race"
+			local y0 = s.Clear - (if race then 0.06 else 0.02)
+			local sp = box(b, "Splitter", -kitNfx + (if race then 0.05 else 0.2), kitNfx - (if race then 0.05 else 0.2), y0, s.Clear + 0.04, zF - (if race then 0.42 else 0.22), zF + 0.3, HOUSING, M.SmoothPlastic)
+			sp.Reflectance = 0.1
+			if race then
+				-- dérives aux extrémités + ailettes (canards) sur les coins du bouclier
+				for _, sx in ipairs({ -1, 1 }) do
+					local x0, x1 = sx * (kitNfx - 0.05), sx * (kitNfx - 0.13)
+					box(b, "SplitterFin", math.min(x0, x1), math.max(x0, x1), s.Clear + 0.04, s.Clear + 0.3, zF - 0.4, zF - 0.02, HOUSING)
+					local cx0, cx1 = sx * (kitNfx - 0.1), sx * (kitNfx + 0.25)
+					wedge(b, "Canard", math.min(cx0, cx1), math.max(cx0, cx1), g.sill + 0.5, g.sill + 0.62, zF - 0.02, zF + 0.5, true, HOUSING)
+				end
+			end
+		end
+		local skirts = mod("Skirts") == "Sport"
+		if skirts then
+			for _, sx in ipairs({ -1, 1 }) do
+				local x0, x1 = sx * (hw - 0.06), sx * (hw + 0.1)
+				box(b, "SideSkirt", math.min(x0, x1), math.max(x0, x1), g.sill - 0.12, g.sill + 0.34, g.aF1 + 0.06, g.aR0 - 0.06, paint)
+				if full then
+					local l0, l1 = sx * (hw - 0.02), sx * (hw + 0.14)
+					box(b, "SkirtLip", math.min(l0, l1), math.max(l0, l1), g.sill - 0.16, g.sill - 0.08, g.aF1 + 0.1, g.aR0 - 0.1, HOUSING, M.Plastic)
+				end
+			end
+		end
+		-- aileron : sur l'arête du toit (2 volumes) ou sur le coffre (3 volumes)
+		local spoiler = mod("Spoiler")
+		if spoiler ~= "Stock" and spoiler ~= "None" and (full or spoiler == "Wing" or spoiler == "GT") then
+			local roofMount = twoBox
+			local carbon = Color3.fromRGB(30, 31, 36)
+			if roofMount then
+				local Rr = sectionAt(st, s.R1)
+				local yTop = Rr.t + Rr.c
+				local e = Rr.e
+				if spoiler == "Lip" then
+					wedge(b, "Spoiler", -e + 0.12, e - 0.12, yTop - 0.02, yTop + 0.12, s.R1 - 0.1, s.R1 + 0.5, false, paint)
+				elseif spoiler == "Duck" then
+					box(b, "Spoiler", -e + 0.08, e - 0.08, yTop - 0.02, yTop + 0.1, s.R1 - 0.2, s.R1 + 0.75, paint)
+					wedge(b, "Spoiler", -e + 0.08, e - 0.08, yTop - 0.3, yTop - 0.02, s.R1 + 0.25, s.R1 + 0.75, true, paint)
+					for _, sx in ipairs({ -1, 1 }) do
+						local f0, f1 = sx * (e - 0.08), sx * (e + 0.02)
+						box(b, "SpoilerFin", math.min(f0, f1), math.max(f0, f1), yTop - 0.3, yTop + 0.16, s.R1 - 0.1, s.R1 + 0.75, paint)
+					end
+				else
+					local gt = spoiler == "GT"
+					local lift = if gt then 0.5 else 0.28
+					local bladeCol = if gt then carbon else paint
+					for _, sx in ipairs({ -1, 1 }) do
+						local px = sx * (e - 0.45)
+						box(b, "WingPost", px - 0.05, px + 0.05, Rr.t + Rr.c * 0.4 - 0.02, yTop + lift, s.R1 - 0.1, s.R1 + 0.2, HOUSING)
+					end
+					local blade = box(b, "Wing", -e - (if gt then 0.1 else -0.05), e + (if gt then 0.1 else -0.05), yTop + lift, yTop + lift + 0.1, s.R1 - 0.25, s.R1 + (if gt then 0.75 else 0.55), bladeCol, if gt then M.Fabric else M.SmoothPlastic)
+					blade.CFrame = blade.CFrame * CFrame.Angles(math.rad(-6), 0, 0)
+					if gt and full then
+						for _, sx in ipairs({ -1, 1 }) do
+							local ex = sx * (e + 0.14)
+							box(b, "WingPlate", ex - 0.04, ex + 0.04, yTop + lift - 0.2, yTop + lift + 0.26, s.R1 - 0.35, s.R1 + 0.8, carbon, M.Fabric)
+						end
+					end
+				end
+			else
+				local deckZ = zB - 0.75
+				local Sd = sectionAt(st, deckZ)
+				local deckY = if pickup then s.Deck + 0.1 else topAt(Sd, 0)
+				local e = if pickup then hw - 0.3 else Sd.e
+				if spoiler == "Lip" then
+					wedge(b, "Spoiler", -e + 0.15, e - 0.15, deckY - 0.04, deckY + 0.12, zB - 0.75, zB - 0.25, true, paint)
+				elseif spoiler == "Duck" then
+					wedge(b, "Spoiler", -e + 0.1, e - 0.1, deckY - 0.08, deckY + 0.22, zB - 1.4, zB - 0.3, true, paint)
+				else
+					local gt = spoiler == "GT"
+					local lift = if gt then 0.95 else 0.6
+					local bladeCol = if gt then carbon else paint
+					local wz0, wz1 = zB - (if gt then 1.35 else 1.1), zB - 0.3
+					for _, sx in ipairs({ -1, 1 }) do
+						local px = sx * math.min(e - 0.3, hw * 0.55)
+						box(b, "WingPost", px - 0.06, px + 0.06, deckY - 0.06, deckY + lift, wz0 + 0.3, wz0 + 0.62, HOUSING)
+					end
+					local half = (if gt then hw - 0.15 else hw - 0.5)
+					local blade = box(b, "Wing", -half, half, deckY + lift, deckY + lift + 0.1, wz0, wz1, bladeCol, if gt then M.Fabric else M.SmoothPlastic)
+					blade.CFrame = blade.CFrame * CFrame.Angles(math.rad(-8), 0, 0)
+					if gt and full then
+						for _, sx in ipairs({ -1, 1 }) do
+							local ex = sx * (half + 0.05)
+							box(b, "WingPlate", ex - 0.04, ex + 0.04, deckY + lift - 0.25, deckY + lift + 0.3, wz0 - 0.1, wz1 + 0.05, carbon, M.Fabric)
+						end
+					end
+				end
+			end
+		end
+		-- néon doux sous la caisse (Neon translucide, AUCUNE lumière)
+		local glow = Config.CarModsById and Config.CarModsById.Glow and Config.CarModsById.Glow[mod("Glow")]
+		if glow and typeof(glow.Color) == "Color3" then
+			local gy0, gy1 = math.max(0.12, s.Clear - 0.12), math.max(0.18, s.Clear - 0.05)
+			local parts = {}
+			for _, sx in ipairs({ -1, 1 }) do
+				local x0, x1 = sx * (hw - 0.4), sx * (hw - 0.26)
+				table.insert(parts, box(b, "Underglow", math.min(x0, x1), math.max(x0, x1), gy0, gy1, g.aF1 + 0.1, g.aR0 - 0.1, glow.Color, M.Neon))
+			end
+			if full then
+				table.insert(parts, box(b, "Underglow", -kitNfx + 0.5, kitNfx - 0.5, gy0, gy1, zF + 0.5, zF + 0.64, glow.Color, M.Neon))
+				table.insert(parts, box(b, "Underglow", -st[#st].fx + 0.5, st[#st].fx - 0.5, gy0, gy1, zB - 0.64, zB - 0.5, glow.Color, M.Neon))
+			end
+			for _, q in ipairs(parts) do
+				q.Transparency = 0.3
+				q:SetAttribute("Glow", true)
 			end
 		end
 	end
