@@ -370,7 +370,7 @@ local function refreshMenu()
 	local secs = r.Seconds or { 120, 80, 55 }
 	RaceHud.SetMenu(true, cards, {
 		Sub = T("Win Dopamine: 🥇 %d s · 🥈 %d s · 🥉 %d s of production · rewarded today: %d/%d", secs[1], secs[2], secs[3], me.Rewarded or 0, me.Daily or 8),
-		Foot = if can then T("AI racers fill the grid. Pass every checkpoint in order, stay on the road. F = back to the last checkpoint.")
+		Foot = if can then T("AI racers fill the grid. Pass every checkpoint in order, stay on the road. F or 🔄 = back to the last checkpoint.")
 			else T("Sign up at the 🏁 Race HQ (on foot, E) or from your car."),
 	})
 end

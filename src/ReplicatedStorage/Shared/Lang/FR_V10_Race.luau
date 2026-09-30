@@ -50,7 +50,7 @@ return {
 		["⏱️ Your best: %s"] = "⏱️ Ton record : %s",
 		["✅ You are signed up!"] = "✅ Tu es inscrit !",
 		["Win Dopamine: 🥇 %d s · 🥈 %d s · 🥉 %d s of production · rewarded today: %d/%d"] = "Gagne de la Dopamine : 🥇 %d s · 🥈 %d s · 🥉 %d s de production · courses payées aujourd'hui : %d/%d",
-		["AI racers fill the grid. Pass every checkpoint in order, stay on the road. F = back to the last checkpoint."] = "Des pilotes IA complètent la grille. Passe toutes les portes dans l'ordre, reste sur la route. F = retour à la dernière porte.",
+		["AI racers fill the grid. Pass every checkpoint in order, stay on the road. F or 🔄 = back to the last checkpoint."] = "Des pilotes IA complètent la grille. Passe toutes les portes dans l'ordre, reste sur la route. F ou 🔄 = retour à la dernière porte.",
 		["Sign up at the 🏁 Race HQ (on foot, E) or from your car."] = "Inscris-toi au 🏁 QG des courses (à pied, E) ou depuis ta voiture.",
 		["🏁 Signed up: %s"] = "🏁 Inscrit : %s",
 		["%s %s · %d racers · start in %d s"] = "%s %s · %d pilote(s) · départ dans %d s",

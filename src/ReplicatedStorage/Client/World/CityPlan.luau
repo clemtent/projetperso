@@ -77,6 +77,76 @@ for _, kit in ipairs({ TownHighway, DistrictCottage, DistrictTownhouse, District
 	end
 end
 
+-- (budget de pièces, 50 joueurs, téléphone) rayon du détail complet des
+-- lieux denses (studs, x Graphismes > Détail) ; au-delà : leur imposteur
+CityPlan.NEAR = {
+	TwnTerrace = 120,
+	TwnCafe = 130,
+	TwnCornerShop = 140,
+	TwnSquare = 130,
+	ShopRow = 130,
+	LftWarehouse = 160,
+	LftContainers = 120,
+	LftMural = 130,
+	LftFoodTrucks = 140,
+	PocketPark = 130,
+	BasketCourt = 120,
+	FootPitch = 140,
+	Tennis = 130,
+	ParkingLot = 120,
+	CtgGreen = 130,
+	Orchard = 130,
+	Grove = 140,
+	Meadow = 110,
+	MnsFountain = 140,
+	SkatePark = 150,
+	CommunityGarden = 130,
+	SportsCorner = 130,
+}
+
+-- imposteurs "à plat" : le sol du lieu (couleur) + quelques volumes
+local rgb = Color3.fromRGB
+local PADS: { [string]: { Color: Color3, Mat: Enum.Material, Trees: number?, Block: Vector3? } } = {
+	TwnSquare = { Color = rgb(206, 200, 190), Mat = Enum.Material.Pavement, Trees = 4 },
+	PocketPark = { Color = rgb(108, 164, 86), Mat = Enum.Material.Grass, Trees = 4 },
+	BasketCourt = { Color = rgb(200, 90, 60), Mat = Enum.Material.Concrete },
+	FootPitch = { Color = rgb(70, 150, 70), Mat = Enum.Material.Grass },
+	Tennis = { Color = rgb(196, 110, 70), Mat = Enum.Material.Sand },
+	ParkingLot = { Color = rgb(84, 86, 94), Mat = Enum.Material.Asphalt },
+	CtgGreen = { Color = rgb(112, 168, 86), Mat = Enum.Material.Grass, Trees = 1 },
+	Meadow = { Color = rgb(122, 170, 90), Mat = Enum.Material.Grass },
+	MnsFountain = { Color = rgb(226, 218, 200), Mat = Enum.Material.Pebble, Block = Vector3.new(13, 2.4, 13) },
+	LftFoodTrucks = { Color = rgb(120, 120, 124), Mat = Enum.Material.Asphalt, Block = Vector3.new(10, 10, 6.4) },
+	LftContainers = { Color = rgb(40, 110, 170), Mat = Enum.Material.CorrodedMetal, Block = Vector3.new(24, 10.8, 5) },
+	LftMural = { Color = rgb(150, 76, 56), Mat = Enum.Material.Brick, Block = Vector3.new(26, 11, 1.4) },
+	SkatePark = { Color = rgb(196, 196, 192), Mat = Enum.Material.Concrete },
+	CommunityGarden = { Color = rgb(96, 70, 52), Mat = Enum.Material.Ground, Trees = 0 },
+	SportsCorner = { Color = rgb(208, 204, 196), Mat = Enum.Material.Concrete },
+}
+for kind, pad in pairs(PADS) do
+	if not CityPlan.IMPOSTORS[kind] then
+		CityPlan.IMPOSTORS[kind] = function(m: Model, F: CFrame, seed: number)
+			local foot = CityPlan.FOOT[kind] or Vector2.new(30, 30)
+			CityKit.Box(m, "ImpPad", F, -foot.X / 2 + 1, foot.X / 2 - 1, -0.1, 0.12, -foot.Y / 2 + 1, foot.Y / 2 - 1, pad.Color, pad.Mat)
+			if pad.Block then
+				local b = pad.Block
+				CityKit.Box(m, "ImpBlock", F, -b.X / 2, b.X / 2, 0.12, b.Y, -b.Z / 2, b.Z / 2, pad.Color:Lerp(Color3.new(1, 1, 1), 0.15), pad.Mat)
+			end
+			for i = 1, pad.Trees or 0 do
+				local a = i / math.max(1, pad.Trees or 1) * math.pi * 2 + 0.7
+				local r = math.min(foot.X, foot.Y) * 0.36
+				local x, z = math.cos(a) * r, math.sin(a) * r
+				if (pad.Trees or 0) == 1 then
+					x, z = 0, 0
+				end
+				local h = 13 + CityKit.Hash(seed, i) * 4
+				CityKit.Column(m, "ImpTrunk", F, x, z, 0.1, h * 0.45, 0.8, rgb(100, 72, 50), Enum.Material.Wood)
+				CityKit.Egg(m, "ImpCrown", F * CFrame.new(x, h * 0.68, z), Vector3.new(h * 0.5, h * 0.45, h * 0.5), rgb(84, 142, 70), Enum.Material.Grass)
+			end
+		end
+	end
+end
+
 ----------------------------------------------------------------------
 -- Outils
 ----------------------------------------------------------------------

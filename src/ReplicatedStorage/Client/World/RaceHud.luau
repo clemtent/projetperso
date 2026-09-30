@@ -357,7 +357,11 @@ end
 local function buildResults(root: Frame)
 	local dim = box({ Name = "ResultsDim", Parent = root, Color = rgb(0, 0, 0), Transparency = 0.4, Visible = false, ZIndex = 30, Clip = true })
 	UIUtil.SinkClicks(dim)
-	local card = box({ Name = "Results", Parent = dim, Color = PANEL, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.52), Size = UDim2.fromOffset(720, 480),
+	-- support (échelle téléphone) ; la carte "pop" à l'intérieur
+	local holder = box({ Name = "ResultsHolder", Parent = dim, Transparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.52),
+		Size = UDim2.fromOffset(720, 480), ZIndex = 31 })
+	parts.ResultsScale = UIUtil.Create("UIScale", { Parent = holder })
+	local card = box({ Name = "Results", Parent = holder, Color = PANEL, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(720, 480),
 		Radius = UDim.new(0, 24), Stroke = GOLD, StrokeThickness = 3, ZIndex = 31 })
 	card.BackgroundColor3 = WHITE
 	UIUtil.Gradient(card, ColorSequence.new(PANEL2, PANEL), 90)
@@ -416,7 +420,9 @@ local function layout()
 	parts.Scale.Scale = scale
 	parts.Root.Size = UDim2.fromOffset(size.X / scale, size.Y / scale)
 	-- téléphone : panneaux plus compacts, bouton 🏁 sous la colonne des voitures
-	parts.RacePanel.Position = if phone then UDim2.fromOffset(10, 96) else UDim2.fromOffset(12, 104)
+	-- (téléphone : à droite, sous les boutons du haut ; la colonne des voitures est à gauche)
+	parts.RacePanel.AnchorPoint = if phone then Vector2.new(1, 0) else Vector2.zero
+	parts.RacePanel.Position = if phone then UDim2.new(1, -74, 0, 50) else UDim2.fromOffset(12, 104)
 	parts.RaceButton.Position = if phone then UDim2.fromOffset(14, 316) else UDim2.new(0, 22, 0.5, 140)
 	parts.RaceTag.Visible = not phone
 	local mini = if phone then 116 else 150
@@ -448,7 +454,10 @@ local function layout()
 		c.Best.Position = UDim2.fromOffset(10, top + (if phone then 56 else 92))
 		c.Status.Position = UDim2.fromOffset(10, top + (if phone then 78 else 116))
 	end
-	parts.Results.Size = if phone then UDim2.fromOffset(720, 410) else UDim2.fromOffset(720, 480)
+	-- (téléphone : la carte des résultats est réduite d'un bloc)
+	if parts.ResultsScale then
+		parts.ResultsScale.Scale = if phone then 0.8 else 1
+	end
 end
 
 function RaceHud.Build(cb: { [string]: any })

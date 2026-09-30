@@ -439,6 +439,7 @@ local KEEP_GUIS: { [string]: boolean } = {
 	Freecam = true,
 	DeskModeGui = true, -- v9.5 🖥️ barre "Se lever" du bureau (DeskMode)
 	MusicStageGui = true, -- v9.9 🎵 panneau de jeu des instruments, choix des morceaux (MusicStage, MUSIC99)
+	HouseFacadeEditor = true, -- v10 🏠 éditeur 3D de l'extérieur de la maison (HOUSE10)
 	FairGui = true, -- v9.8 🍦 menu des stands, badge du boost, bouton Croquer (FairFx, FAIR98)
 	GardenEditGui = true, -- v9.8 🌷 mode édition du jardin (GardenEdit, GARDEN98)
 	TownGraphicsGui = true, -- v9.8 🎨 fenêtre Graphismes en ville (TownGraphics, REALISM98)
