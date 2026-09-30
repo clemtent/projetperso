@@ -386,7 +386,7 @@ end
 -- Cases de la grille peintes au sol (une pièce invisible + SurfaceGui par case)
 function RaceProps.GridMarks(parent: Instance, cfs: { CFrame })
 	for k, cf in ipairs(cfs) do
-		local _, sg = canvas(parent, "GridBox", Vector3.new(6.4, 0.05, 11), cf * CFrame.new(0, 0.16, 0), Enum.NormalId.Top, 8)
+		local _, sg = canvas(parent, "GridBox", Vector3.new(6.4, 0.05, 11), cf * CFrame.new(0, 0.21, 0), Enum.NormalId.Top, 8) -- (v10) au-dessus des marquages CITY10
 		local box = frame(sg, { Name = "Box", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1) })
 		frame(box, { Name = "Front", BackgroundColor3 = WHITE, Size = UDim2.new(1, 0, 0, 3) })
 		frame(box, { Name = "L", BackgroundColor3 = WHITE, Size = UDim2.new(0, 3, 0.35, 0) })

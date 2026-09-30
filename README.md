@@ -27,6 +27,36 @@ Les autres méthodes (Rojo, copie manuelle) sont décrites dans [`docs/INSTALLAT
 
 ---
 
+## 🆕 Nouveautés v10 : une grande ville jusqu'à 50 joueurs
+
+> ⚠️ Pour 50 joueurs par serveur : Roblox Studio → Paramètres du jeu → Places → **Max Players = 50**. La ville s'adapte toute seule (de 4 à 50 parcelles).
+
+- 🏙️ **Grande ville en quartiers**, qui grandit avec le nombre de joueurs.
+  - Centre-ville (place, mairie, magasins, fête foraine, lac) et entrée (MégaDopa, concession, coin gourmand).
+  - 🏡 Village des cottages : chapelle, boulangerie, mare aux canards.
+  - 🏘️ Rues de maisons de ville : café, épicerie, square.
+  - 🏭 Quartier des lofts : entrepôts, street art, food trucks, voie ferrée.
+  - 🏰 Colline des manoirs : sur un plateau, portails qui s'ouvrent, fontaines, belvédère.
+  - Un quartier mixte, un bois, un parc des sports et une gare routière.
+  - Tu arrives dans le quartier de ton style de maison.
+- 🛣️ **Autoroute** autour de la ville : 2×2 voies, 4 échangeurs avec ponts et bretelles, portiques, glissières, murs antibruit, aire de repos et belvédères.
+- 🚦 **Circulation** : 34 véhicules, sur l'autoroute aussi. Feux stop, clignotants, phares la nuit ; les voitures freinent pour les piétons.
+- 🏁 **Courses de rue** : 4 parcours (centre-ville, autoroute, quartiers, grand tour de nuit).
+  - Départ au QG près de l'entrée ou avec 🏁 en voiture ; pilotes PNJ pour compléter la grille ; feux 3-2-1-GO ; HUD avec position, tour, chrono et mini-carte ; podium.
+  - Dopamine selon ta place (8 courses récompensées par jour), meilleurs tours affichés.
+- 🏗️ **Chantiers vivants** sur les parcelles libres : grue, pelleteuse, ouvriers.
+  - Quand un joueur arrive, sa maison **se construit sous tes yeux** : fondations, murs, échafaudages, toit, fenêtres, jardin.
+- 🏠 **Maisons 10x plus réalistes** : vraies fenêtres avec volets, toits en tuiles ou ardoises, gouttières, porches, balcons, garage, clôtures.
+  - Nouveaux styles 🏔️ Chalet et 🏙️ Villa moderne.
+  - **Éditeur d'extérieur 3D** avec 20 options (couleurs, matériaux, toit, fenêtres, porte, porche, balcon, clôture, allée, boîte aux lettres, lumières, numéro). Il s'ouvre depuis 🏠 Ma maison › 🌷 Extérieur, ou avec E sur ta boîte aux lettres.
+- 🚗 **Atelier « Mes voitures »** :
+  - style : finitions, 22 peintures, toit bicolore, jantes, pneus, becquet, jupes, ailerons, teinte des vitres, néons, intérieur, plaque perso ;
+  - performances : moteur, pneus et suspension ;
+  - conduite plus rapide sur l'autoroute, drift contrôlable.
+- 💥 **Collisions réalistes** : plus rien ne se traverse (joueurs, voitures, PNJ).
+  - Une voiture rapide te **renverse** : tu voles, des étoiles tournent autour de ta tête, puis tu te relèves. Pas de mort.
+  - Les PNJ s'écartent.
+
 ## 🆕 Nouveautés v9.9: plus réaliste, et tout fonctionne
 
 - 🚗 **Voitures** plus réalistes :
