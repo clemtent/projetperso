@@ -62,6 +62,9 @@ end
 local TownStreetLife = {}
 
 TownStreetLife.FOLDER_NAME = "TownStreetLife"
+-- (v9.9, CITY99 -> NPC99) dessus des sièges du mobilier (TownPeople y pose
+-- les passants assis) : chaises de terrasse, tabourets des tables d'échecs
+TownStreetLife.SEAT_TOPS = { Terrace = 1.25, Chess = 1.45 }
 local BUILD_IN, BUILD_OUT = 190, 240
 local BIG_IN, BIG_OUT = 320, 380
 local FAR_IN, FAR_OUT = 2400, 2600

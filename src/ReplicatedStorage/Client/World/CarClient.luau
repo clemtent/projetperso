@@ -2044,6 +2044,8 @@ function CarClient.Debug(): any
 		SetPicker = setPicker,
 		Seated = onSeated,
 		Zones = shopZones,
+		Wheels = wheelAnims,
+		AnimateWheels = animateWheels,
 	}
 end
 
