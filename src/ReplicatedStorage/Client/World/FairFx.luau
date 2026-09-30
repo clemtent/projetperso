@@ -20,13 +20,20 @@
 	  - le MOUVEMENT : même pose que le serveur (Shared/FairRides, fonction
 	    de l'heure du serveur). Les sièges du serveur (invisibles) sont
 	    déplacés localement AVEC le décor : un avatar assis suit sa nacelle
-	    sans à-coup. Le manège où l'on est assis est animé à CHAQUE image
-	    (RenderStepped), les autres 30 fois / s, et rien au loin ;
+	    sans à-coup. (v9.9, FAIR99) TOUT se pose à CHAQUE image, avant la
+	    caméra (BindToRenderStep, voir frameStep : causes des saccades et
+	    correctif), horloge lissée (FairKit.Now) ; décor lointain 1 image
+	    sur 2 ou 3, derrière la caméra : rien (sauf les sièges occupés) ;
+	  - (v9.9) l'ANNEXE : 🎪 cirque et son spectacle (FairCircus), 🎢 grand
+	    huit, 🏴‍☠️ bateau pirate, 👻 train fantôme, 🤸 trampolines, 🪞 palais
+	    des glaces (FairAnnexFx), allées depuis les portes de la fête ;
+	    places lues dans l'attribut "BaseCF" des dossiers du serveur ;
 	  - la CONDUITE des autos tamponneuses (VehicleSeat : ZQSD / flèches /
 	    joystick ; courant coupé pendant l'embarquement) ;
 	  - la NOURRITURE : invites des stands -> menu (prix, boost, durée) ->
 	    achat (remote "Food") ; l'aliment en main : bouton "🍴 Croquer",
-	    bras qui porte l'aliment à la bouche (pour TOUS les mangeurs
+	    bras qui porte l'aliment à la bouche (v9.9 : vraie cinématique
+	    inverse R15 / R6, FairEat) (pour TOUS les mangeurs
 	    visibles, d'après l'attribut "BiteAt"), miettes ; badge du boost
 	    "🍦 x1,5 · 1:42" (ScreenGui "FairGui").
 	Tout est ancré (sauf les pièces soudées aux autos), sans son, lueurs
@@ -598,6 +605,18 @@ local function awning(model: Instance, cf: CFrame, w: number, depth: number, n: 
 	end
 end
 
+-- (v9.9) aliment exposé posé SUR le comptoir (les modèles ont leur repère
+-- au point de prise, au milieu : on remonte d'après le bas réel)
+local function standOn(m: Model, topY: number)
+	local ok, box, size = pcall(function()
+		return m:GetBoundingBox()
+	end)
+	if ok and box and size then
+		local bottom = box.Position.Y - size.Y / 2
+		m:PivotTo(m:GetPivot() + Vector3.new(0, topY + 0.02 - bottom, 0))
+	end
+end
+
 -- Stand classique : `cf` au sol, devant (-Z) vers les clients
 local function buildStall(folder: Instance, cf: CFrame, style: string, foods: { string }, seed: number): any
 	local th = STALL_THEME[style] or STALL_THEME.Churros
@@ -625,6 +644,7 @@ local function buildStall(folder: Instance, cf: CFrame, style: string, foods: { 
 		for i, id in ipairs(foods) do
 			local m = FoodModels.Build(id, cf * CFrame.new(-1.6 + (i - 1) * 2, 3.35, -2.4), 1.1)
 			if m then
+				standOn(m, (cf * CFrame.new(0, 2.925, 0)).Position.Y)
 				m.Parent = model
 				table.insert(displays, m)
 			end
@@ -653,6 +673,7 @@ local function buildStall(folder: Instance, cf: CFrame, style: string, foods: { 
 		local x = if #foods == 1 then 0 else -1.6 + (i - 1) * 3.2 / (#foods - 1)
 		local m = FoodModels.Build(id, cf * CFrame.new(x, 3.55, -0.45), 1.15)
 		if m then
+			standOn(m, (cf * CFrame.new(0, 3.125, 0)).Position.Y)
 			m.Parent = model
 		end
 	end

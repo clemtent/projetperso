@@ -170,7 +170,7 @@ end
 
 local function bucket(player: Player): { Msg: number, Notes: number, At: number, SongAt: number }
 	local b = state.Buckets[player]
-	local t = os.clock()
+	local t = now()
 	if not b then
 		b = { Msg = MSG_BURST, Notes = NOTE_BURST, At = t, SongAt = -math.huge }
 		state.Buckets[player] = b
@@ -303,7 +303,7 @@ local function onEvent(player: Player, kind: any, a: any, b: any)
 		if type(a) ~= "string" or not nearStage(player, STAGE_RANGE) then
 			return
 		end
-		local t = os.clock()
+		local t = now()
 		if t - bk.SongAt < SONG_COOLDOWN then
 			return
 		end
@@ -313,7 +313,7 @@ local function onEvent(player: Player, kind: any, a: any, b: any)
 		if type(a) ~= "number" or a ~= a or not nearStage(player, STAGE_RANGE) then
 			return
 		end
-		local t = os.clock()
+		local t = now()
 		if t - bk.SongAt < SONG_COOLDOWN then
 			return
 		end
@@ -523,7 +523,7 @@ function TownMusic.Build(parent: Instance, cf: CFrame): Folder
 			return
 		end
 		local bk = bucket(player)
-		local t = os.clock()
+		local t = now()
 		if t - bk.SongAt < SONG_COOLDOWN then
 			return
 		end

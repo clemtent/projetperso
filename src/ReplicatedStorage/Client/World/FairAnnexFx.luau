@@ -184,9 +184,9 @@ local function coasterCar(r: RideFx, g: number, lead: boolean)
 	end
 	Moving(r, g, "Back", Vector3.new(2.1, 1.25, 0.3), CFrame.new(0, 1.35, 1.35), body, M.SmoothPlastic)
 	-- 2 sièges baquets (coussin, dossier, appuie-tête) + barre de sécurité
-	for _, sx in ipairs({ -0.7, 0.7 }) do
-		Moving(r, g, "Cushion", Vector3.new(0.95, 0.22, 0.95), CFrame.new(sx, 0.95, 0.35), Color3.fromRGB(40, 40, 48), M.Fabric)
-		Moving(r, g, "SeatBack", Vector3.new(0.95, 1.1, 0.2), CFrame.new(sx, 1.5, 1.05) * CFrame.Angles(math.rad(-8), 0, 0), Color3.fromRGB(40, 40, 48), M.Fabric)
+	for _, sx in ipairs({ -0.66, 0.66 }) do
+		Moving(r, g, "Cushion", Vector3.new(0.8, 0.22, 0.95), CFrame.new(sx, 0.95, 0.35), Color3.fromRGB(40, 40, 48), M.Fabric)
+		Moving(r, g, "SeatBack", Vector3.new(0.8, 1.1, 0.2), CFrame.new(sx, 1.5, 1.05) * CFrame.Angles(math.rad(-8), 0, 0), Color3.fromRGB(40, 40, 48), M.Fabric)
 		Moving(r, g, "Headrest", Vector3.new(0.7, 0.45, 0.28), CFrame.new(sx, 2.25, 1.13), Color3.fromRGB(40, 40, 48), M.Fabric)
 		Moving(r, g, "LapBar", Vector3.new(0.85, 0.16, 0.16), CFrame.new(sx, 1.72, -0.35), C.Lemon, M.Metal, CYL)
 		Moving(r, g, "LapBarArm", Vector3.new(0.12, 0.7, 0.12), CFrame.new(sx, 1.4, -0.52) * CFrame.Angles(math.rad(-25), 0, 0), Color3.fromRGB(70, 72, 80), M.Metal)
@@ -219,7 +219,7 @@ local function coasterStation(r: RideFx)
 	for i = 0, 7 do
 		local x = -19.8 + (i + 0.5) * 17.6 / 8
 		for _, sz in ipairs({ -1, 1 }) do
-			local pane = Fixed(r, "Roof", Vector3.new(17.6 / 8 + 0.02, 0.2, 3.8), CFrame.new(x, 6.75, -6.45 + sz * 1.75) * CFrame.Angles(math.rad(sz * 14), 0, 0), if i % 2 == 0 then roofA else roofB, M.SmoothPlastic)
+			local pane = Fixed(r, "Roof", Vector3.new(17.6 / 8 + 0.02, 0.2, 3.8), CFrame.new(x, 6.75 + (i % 2) * 0.03, -6.45 + sz * 1.75) * CFrame.Angles(math.rad(sz * 14), 0, 0), if i % 2 == 0 then roofA else roofB, M.SmoothPlastic)
 			pane.CastShadow = true
 		end
 	end
@@ -370,7 +370,7 @@ local function ghostCar(r: RideFx, g: number, lead: boolean)
 	local trim = Color3.fromRGB(160, 230, 110)
 	Moving(r, g, "Base", Vector3.new(1.9, 0.35, 2.4), CFrame.new(0, 0.3, 0.1), Color3.fromRGB(40, 36, 50), M.Metal)
 	Moving(r, g, "Tub", Vector3.new(2, 0.9, 2.5), CFrame.new(0, 0.9, 0.1), body, M.SmoothPlastic)
-	Moving(r, g, "Rim", Vector3.new(2.1, 0.16, 2.6), CFrame.new(0, 1.38, 0.1), trim, M.SmoothPlastic)
+	Moving(r, g, "Rim", Vector3.new(2.1, 0.16, 2.5), CFrame.new(0, 1.38, 0.05), trim, M.SmoothPlastic)
 	Moving(r, g, "Back", Vector3.new(2, 1.2, 0.3), CFrame.new(0, 1.8, 1.25), body, M.SmoothPlastic)
 	for _, sx in ipairs({ -0.66, 0.66 }) do
 		Moving(r, g, "Cushion", Vector3.new(0.9, 0.2, 0.9), CFrame.new(sx, 1.05, 0.3), Color3.fromRGB(60, 30, 80), M.Fabric)
@@ -398,7 +398,7 @@ local function hauntedHouse(r: RideFx): any
 	Solid(Fixed(r, "Floor", Vector3.new(W, 0.2, D), CFrame.new(0, 0.1, 0), Color3.fromRGB(46, 42, 52), M.Slate))
 	for i = 0, 11 do
 		local x = -W / 2 + (i + 0.5) * W / 12
-		Solid(Fixed(r, "BackWall", Vector3.new(W / 12 + 0.02, H, 0.5), CFrame.new(x, H / 2, D / 2), if i % 2 == 0 then wall else wallDark, M.WoodPlanks))
+		Solid(Fixed(r, "BackWall", Vector3.new(W / 12 + 0.02, H, 0.5), CFrame.new(x, H / 2, D / 2 + (i % 2) * 0.04), if i % 2 == 0 then wall else wallDark, M.WoodPlanks))
 	end
 	for _, sx in ipairs({ -1, 1 }) do
 		Solid(Fixed(r, "SideWall", Vector3.new(0.5, H, D), CFrame.new(sx * W / 2, H / 2, 0), wall, M.WoodPlanks))
@@ -786,7 +786,7 @@ function FairAnnexFx.BuildMirrors(r: RideFx)
 			Fixed(r, "MirrorFrame", Vector3.new(0.2, 0.2, len / n), cf * CFrame.new(0, H - 0.3, z), frame, M.Metal)
 			Fixed(r, "MirrorFrame", Vector3.new(0.2, 0.3, len / n), cf * CFrame.new(0, 0.35, z), frame, M.Metal)
 		end
-		Fixed(r, "Post", Vector3.new(0.3, H, 0.3), CFrame.new(a + Vector3.new(0, H / 2, 0)), frame, M.Metal)
+		Fixed(r, "Post", Vector3.new(0.3, H - 0.2, 0.3), CFrame.new(a + Vector3.new(0, H / 2 + 0.1, 0)), frame, M.Metal)
 	end
 	-- murs extérieurs (entrée et sortie sur la façade -Z)
 	local x0, x1, z0, z1 = -W / 2, W / 2, -D / 2, D / 2
@@ -799,7 +799,7 @@ function FairAnnexFx.BuildMirrors(r: RideFx)
 	end
 	-- toit (verrière opaque) + frise à ampoules + fronton
 	Fixed(r, "Roof", Vector3.new(W + 1.2, 0.4, D + 1.2), CFrame.new(0, H + 0.2, 0), Color3.fromRGB(120, 70, 150), M.SmoothPlastic).CastShadow = true
-	Fixed(r, "Fascia", Vector3.new(W + 1.3, 1.2, 0.3), CFrame.new(0, H - 0.2, z0 - 0.7), Color3.fromRGB(150, 90, 190), M.SmoothPlastic)
+	Fixed(r, "Fascia", Vector3.new(W + 1.3, 1.2, 0.3), CFrame.new(0, H - 0.25, z0 - 0.7), Color3.fromRGB(150, 90, 190), M.SmoothPlastic)
 	FairKit.Bulbs(r.Model, r.Base * Vector3.new(-7.4, H - 0.2, z0 - 0.9), r.Base * Vector3.new(7.4, H - 0.2, z0 - 0.9), 15, 0.28, { C.Bulb, C.Pink, C.Sky })
 	local board = Fixed(r, "Board", Vector3.new(9, 1.8, 0.25), CFrame.new(0, H + 1.4, z0 - 0.6), Color3.fromRGB(150, 90, 190), M.SmoothPlastic)
 	FairKit.Sign(board, "🪞 " .. Locale.T("Hall of mirrors"), Color3.fromRGB(255, 240, 200), Color3.fromRGB(150, 90, 190))

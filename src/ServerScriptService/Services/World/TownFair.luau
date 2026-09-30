@@ -33,6 +33,12 @@
 	réglés par le client du conducteur (propriétaire réseau), comme
 	CarService ; rangée (ancrée) à sa place dès qu'elle est libre.
 	Budget : ~110 pièces serveur, 0 lumière (les lueurs sont côté client).
+	(v9.9, FAIR99) + l'ANNEXE (buildAnnex) : cirque (24 places sur les
+	gradins, invite "Voir le spectacle"), grand huit (4 wagons x 2),
+	bateau pirate (12 places), train fantôme (3 wagonnets x 2) : ~60 pièces
+	de plus ; trampolines et palais des glaces : rien au serveur (client).
+	Les sièges occupés ne bougent plus que 4 fois / s au serveur : chaque
+	client les pose lui-même à chaque image (FairFx) -> plus de saccades.
 
 	API (TownMap / TownPlaza) :
 	  TownFair.Build(decor, geo) -> Folder "Fair" (réserve la place AVANT la

@@ -2892,9 +2892,9 @@ R.CocoaMug = cup(false)
 -- d'étiquette tout autour, paille en papier, fraise piquée sur le col
 R.StrawberryMilk = function(b: Builder, _ctx: Ctx)
 	local g = House3DKit.Gap(b, 0.6)
-	local milk = rgb(255, 196, 214)
+	local milk = rgb(255, 160, 196)
 	local glass = b.Cyl(0, 0, 0, 40, 46, GLASS, M.Glass)
-	glass.Transparency = 0.4
+	glass.Transparency = 0.6
 	glass.Reflectance = 0.12
 	b.Cyl(0, 46, 0, 30, 8, GLASS, M.Glass).Transparency = 0.4
 	b.Cyl(0, 54, 0, 34, 4, lighten(GLASS, 0.2), M.Glass).Transparency = 0.3
@@ -2945,8 +2945,7 @@ R.Lemonade = function(b: Builder, _ctx: Ctx)
 	glass.Transparency = 0.5
 	glass.Reflectance = 0.12
 	b.Cyl(0, g, 0, 44, 5, lighten(GLASS, 0.1), M.Glass).Transparency = 0.2
-	local juice = b.Cyl(0, 5, 0, 42, 44, rgb(255, 236, 140), M.SmoothPlastic)
-	juice.Transparency = 0.12
+	b.Cyl(0, 5, 0, 42, 44, rgb(255, 222, 80), M.SmoothPlastic)
 	for index = 0, 2 do
 		local ice = b.BoxR(CFrame.new(-10 + index * 10, 46 + (index % 2) * 3, (index - 1) * 6) * CFrame.Angles(0.4 * index, 0.7 * index, 0.3), 12, 12, 12, rgb(236, 248, 255), M.Glass)
 		ice.Transparency = 0.35
@@ -3203,24 +3202,6 @@ R.Watermelon = function(b, _ctx)
 		b.Egg(20 + index * 4, 7 + index * 2, 34 + index, 2, 3, 1, INK)
 	end
 	b.Footprint(74, 74, 74)
-end
-local function boxThing(b: Builder, _ctx: Ctx)
-	local color = accent(b, 1, PINK)
-	-- coffret : boîte, couvercle qui déborde, ruban croisé, gros nœud (boucles
-	-- et pans), étiquette
-	b.Round(0, 0, 0, 84, 40, 60, 3, color, M.SmoothPlastic)
-	b.Round(0, 40, 0, 88, 8, 64, 3, lighten(color, 0.2), M.SmoothPlastic)
-	local ribbon = accent(b, 2, BUTTER)
-	b.Box(0, 0, 0, 12, 49, 64.8, ribbon, M.Fabric)
-	b.Box(0, 0, 0, 88.8, 49, 12, ribbon, M.Fabric)
-	for _, side in ipairs({ -1, 1 }) do
-		b.EggR(CFrame.new(side * 9, 54, 0) * CFrame.Angles(0, 0, side * 0.4), 16, 9, 8, ribbon, M.Fabric)
-		b.BoxR(CFrame.new(side * 6, 49.6, 10) * CFrame.Angles(0, side * 0.5, 0), 4, 1, 16, ribbon, M.Fabric)
-	end
-	b.Ball(0, 53, 0, 8, darken(ribbon, 0.1), M.Fabric)
-	b.BoxR(CFrame.new(24, 36, 32.4) * CFrame.Angles(0, 0, 0.2), 12, 8, 0.8, WHITE, M.SmoothPlastic)
-	b.Top(1, 0, 48, 0, 70, 50)
-	b.Footprint(88, 64, 56)
 end
 -- (v9.9 SCALE99) quatre VRAIS coffrets au lieu d'un même paquet-cadeau
 -- Coffret en bois ouvert (pieds dorés, liseré, couvercle relevé avec sa
@@ -3575,7 +3556,7 @@ R.GiantDice = function(b, _ctx)
 	b.BoxR(cf, 84, 76, 76, die)
 	b.BoxR(cf, 76, 84, 76, die)
 	b.BoxR(cf, 76, 76, 84, die)
-	local dot = accent(b, 1, rgb(40, 40, 52))
+	local dot = b.Map(rgb(52, 46, 62))
 	local layouts: { [number]: { { number } } } = {
 		[1] = { { 0, 0 } },
 		[2] = { { -20, 20 }, { 20, -20 } },

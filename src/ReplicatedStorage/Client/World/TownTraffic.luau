@@ -204,10 +204,10 @@ local function buildPath(count: number): Path
 		for j = 0, n - 1 do
 			table.insert(pts, startP:Lerp(pIn, j / n))
 		end
-		-- virage (courbe de Bézier, 12 points : courbure douce) ; sens (+1 gauche / -1 droite)
-		table.insert(cornerIdx, { I = #pts + 6, Turn = if dIn:Cross(dOut).Y > 0 then -1 else 1 })
-		for j = 0, 11 do
-			local t = j / 12
+		-- virage (courbe de Bézier, 16 points : courbure douce) ; sens (+1 gauche / -1 droite)
+		table.insert(cornerIdx, { I = #pts + 8, Turn = if dIn:Cross(dOut).Y > 0 then -1 else 1 })
+		for j = 0, 15 do
+			local t = j / 16
 			local u = 1 - t
 			table.insert(pts, pIn * (u * u) + c * (2 * u * t) + pOut * (t * t))
 		end
@@ -251,7 +251,9 @@ end
 -- de ±`look` studs (virages lissés)
 local function frameAt(p: Path, s: number, look: number?): CFrame
 	local d = look or 3
-	local pos = pointAt(p, s)
+	-- (v9.9) position filtrée sur ±2 studs : plus d'angles vifs entre les
+	-- points de la polyligne (trajectoire C1, sans à-coups de direction)
+	local pos = (pointAt(p, s - 2) + pointAt(p, s) * 2 + pointAt(p, s + 2)) / 4
 	local ahead = pointAt(p, s + d)
 	local back = pointAt(p, s - d)
 	local dir = ahead - back

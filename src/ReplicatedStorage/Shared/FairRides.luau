@@ -795,32 +795,35 @@ function FairRides.SolveAnnex(strictFree: (number, number) -> boolean, looseFree
 		local facing = if toFair.Magnitude > 1 then look:Dot(toFair.Unit) else 0
 		return best - facing * 6
 	end
+	-- candidats (grille de 4 studs, 4 orientations) triés par coût : on
+	-- s'arrête au PREMIER qui tient (rapide, ~10 000 candidats au plus)
 	local function search(def: AnnexDef): (CFrame?, Rect?)
-		local bestCF, bestBox, bestCost = nil, nil, math.huge
 		local ideal = CFrame.new(def.Pos) * CFrame.Angles(0, math.rad(def.Yaw), 0)
 		local ok, box = fits(def, ideal)
 		if ok then
 			return ideal, box
 		end
-		do
-			for gx = -150, 150, 4 do
-				for gz = -84, 44, 4 do
-					if math.abs(gx) > hw + 4 or gz < -hd - 4 then
-						for yaw = 0, 270, 90 do
-							local cf = CFrame.new(gx, 0, gz) * CFrame.Angles(0, math.rad(yaw), 0)
-							local c = cost(def, cf)
-							if c < bestCost then
-								local fit, b = fits(def, cf)
-								if fit then
-									bestCF, bestBox, bestCost = cf, b, c
-								end
-							end
-						end
+		local cands = {}
+		for gx = -150, 150, 4 do
+			for gz = -84, 44, 4 do
+				if math.abs(gx) > hw + 4 or gz < -hd - 4 then
+					for yaw = 0, 270, 90 do
+						local cf = CFrame.new(gx, 0, gz) * CFrame.Angles(0, math.rad(yaw), 0)
+						table.insert(cands, { CF = cf, Cost = cost(def, cf) })
 					end
 				end
 			end
 		end
-		return bestCF, bestBox
+		table.sort(cands, function(a, b)
+			return a.Cost < b.Cost
+		end)
+		for _, c in ipairs(cands) do
+			local fit, b = fits(def, c.CF)
+			if fit then
+				return c.CF, b
+			end
+		end
+		return nil, nil
 	end
 	for _, def in ipairs(FairRides.Annex) do
 		isFree = strictFree

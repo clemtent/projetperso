@@ -126,7 +126,7 @@ end
 RECIPES.Popcorn = function(add)
 	add("Handle", Vector3.new(0.62, 0.72, 0.5), CFrame.new(0, 0, 0), rgb(255, 252, 246), M.SmoothPlastic)
 	for _, x in ipairs({ -0.21, 0, 0.21 }) do
-		add("Stripe", Vector3.new(0.09, 0.73, 0.51), CFrame.new(x, 0, 0), rgb(214, 36, 50), M.SmoothPlastic)
+		add("Stripe", Vector3.new(0.09, 0.77, 0.55), CFrame.new(x, 0, 0), rgb(214, 36, 50), M.SmoothPlastic)
 	end
 	add("Rim", Vector3.new(0.68, 0.06, 0.56), CFrame.new(0, 0.37, 0), rgb(214, 36, 50), M.SmoothPlastic)
 	add("Label", Vector3.new(0.4, 0.2, 0.02), CFrame.new(0, 0.05, -0.26), rgb(255, 214, 60), M.SmoothPlastic)

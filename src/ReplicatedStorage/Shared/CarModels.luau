@@ -5,8 +5,7 @@
 	🚗 Les voitures de Dopamine Town, construites en pièces : utilisé par le
 	SERVEUR (voitures garées de la ville, TownKit.Car ; voiture qu'on conduit,
 	CarService) ET par le CLIENT (circulation, concession, garage du manoir,
-	fenêtre "Mes voitures"). Pur : que des Instances (seul RunService est lu
-	pour choisir le niveau de détail "Parked").
+	fenêtre "Mes voitures"). Pur : que des Instances, aucun service.
 
 	8 modèles :
 	  BubbleCar : petite citadine ronde kawaii (phares ronds chromés, toit blanc) ;
@@ -44,7 +43,8 @@
 	  "Full" (≤ ~400 pièces : sa voiture, concession, garage, aperçu),
 	  "Mid"  (≤ ~120 : circulation, voitures garées près de la caméra),
 	  "Low"  (≤ ~45 : loin / serveur),
-	  "Parked" = "Low" côté serveur (budget de la ville), "Mid" côté client.
+	  "Parked" = "Low" (ancien nom : voitures garées du serveur, budget de la
+	  ville ; TownTraffic les remplace par "Mid" près de la caméra).
 	ROUES ANIMABLES : chaque pièce d'une roue porte l'attribut "Wheel" (index
 	dans WheelPositions) et "Spin" = true si elle tourne avec la roue (l'étrier
 	ne fait que braquer). En "Full", 2 pivots invisibles par roue ("WheelSteer",
@@ -858,20 +858,11 @@ end
 -- Construction
 ----------------------------------------------------------------------
 
-local function isServer(): boolean
-	local ok, result = pcall(function()
-		return game:GetService("RunService"):IsServer()
-	end)
-	return ok and result == true
-end
-
 local function lodOf(detail: any): number
 	if detail == "Mid" then
 		return 2
-	elseif detail == "Low" then
+	elseif detail == "Low" or detail == "Parked" then
 		return 1
-	elseif detail == "Parked" then
-		return if isServer() then 1 else 2
 	end
 	return 3
 end

@@ -145,7 +145,7 @@ local function buildTent(r: RideFx)
 	end
 	-- marquise d'entrée : auvent sur 2 poteaux, enseigne à ampoules
 	for _, sx in ipairs({ -1, 1 }) do
-		Solid(Fixed(r, "MarqueePost", Vector3.new(0.4, 7.2, 0.4), CFrame.new(sx * 4.4, 3.6, -R - 3.4), C.Gold, M.Metal))
+		Solid(Fixed(r, "MarqueePost", Vector3.new(0.4, 6.9, 0.4), CFrame.new(sx * 4.4, 3.45, -R - 3.4), C.Gold, M.Metal))
 		Solid(Fixed(r, "Jamb", Vector3.new(0.5, wallH, 0.5), CFrame.new(sx * 4.75, wallH / 2, -R + 0.25), C.Gold, M.Metal))
 		-- rideaux relevés (drapés) de chaque côté de l'entrée
 		Fixed(r, "Drape", Vector3.new(1.4, 6, 0.3), CFrame.new(sx * 4.0, 3.9, -R + 0.1) * CFrame.Angles(0, 0, math.rad(sx * -8)), VELVET, M.Fabric)
@@ -153,7 +153,8 @@ local function buildTent(r: RideFx)
 	end
 	for i = 0, 5 do
 		local x = -4.6 + (i + 0.5) * 9.2 / 6
-		Fixed(r, "Marquee", Vector3.new(9.2 / 6 + 0.02, 0.2, 4.2), CFrame.new(x, 7.45, -R - 1.6) * CFrame.Angles(math.rad(-10), 0, 0), if i % 2 == 0 then RED else CANVAS, M.Fabric).CastShadow = true
+		-- (bandes alternées décalées de 0,03 : jamais coplanaires)
+		Fixed(r, "Marquee", Vector3.new(9.2 / 6 + 0.02, 0.2, 4.2), CFrame.new(x, 7.45 + (i % 2) * 0.03, -R - 1.6) * CFrame.Angles(math.rad(-10), 0, 0), if i % 2 == 0 then RED else CANVAS, M.Fabric).CastShadow = true
 	end
 	local board = Fixed(r, "Board", Vector3.new(9.5, 2.1, 0.3), CFrame.new(0, 9.1, -R - 3.3), Color3.fromRGB(150, 24, 40), M.SmoothPlastic)
 	FairKit.Sign(board, "🎪 " .. Locale.T("Circus"), Color3.fromRGB(255, 226, 120), Color3.fromRGB(150, 24, 40), Enum.Font.Fondamento)
@@ -205,7 +206,8 @@ local function buildInside(r: RideFx): { any }
 				local p = polar(a, rr, 0)
 				local look = CFrame.lookAt(p, Vector3.new(0, 0, 0))
 				-- (bloc du sol jusque sous l'assise : on monte dessus)
-				Solid(Fixed(r, "Riser", Vector3.new(chord * (1 + 0.1 * tier), y - 0.3, FairRides.CIRCUS_TIER_DR), look * CFrame.new(0, (y - 0.3) / 2, 0), if i % 2 == 0 then BENCH_BLUE else BENCH_BLUE:Lerp(C.White, 0.12), M.SmoothPlastic))
+				-- (une couleur par rang : les blocs voisins se recouvrent un peu)
+				Solid(Fixed(r, "Riser", Vector3.new(chord + 0.02, y - 0.3, FairRides.CIRCUS_TIER_DR), look * CFrame.new(0, (y - 0.3) / 2, 0), BENCH_BLUE:Lerp(C.White, 0.06 * tier), M.SmoothPlastic))
 				Fixed(r, "Plank", Vector3.new(chord, 0.3, 0.95), look * CFrame.new(0, y - 0.15, -0.35), C.Wood, M.WoodPlanks)
 			end
 		end

@@ -526,8 +526,9 @@ local function buildStatic(live: Live)
 	local r2 = STATIC_RADIUS * STATIC_RADIUS
 	local clipped = 0
 	for _, d in ipairs(scope:GetDescendants()) do
-		if d:IsA("BasePart") and d ~= live.Part and d.Transparency < 0.98 and d:GetAttribute("Mirror") ~= true
-			and d:GetAttribute("MirrorScreen") ~= true then
+		-- (v9.9 : ni voilages / vitres presque transparents, ni anneaux de tringle : budget)
+		if d:IsA("BasePart") and d ~= live.Part and d.Transparency < 0.6 and d:GetAttribute("Mirror") ~= true
+			and d:GetAttribute("MirrorScreen") ~= true and d.Name ~= "CurtainRing" then
 			local offset = d.Position - plane.Center
 			-- (grandes pièces : sol, plafond, murs -> distance au bord de la boîte)
 			local size = d.Size
