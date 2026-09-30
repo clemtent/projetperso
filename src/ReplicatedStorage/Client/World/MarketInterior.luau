@@ -2761,7 +2761,7 @@ local function cafeZone(m: Market, parent: Instance, jobs: { () -> () })
 		for i, index in ipairs({ 1, 8 }) do
 			local seat = cafeSeats[index]
 			if seat then
-				actor(m, parent, "Cafe", i == 2 and "elder" or "shopper", 60 + i * 3, seat, "sit", { Prop = i == 1 and "coffee" or "none" })
+				actor(m, parent, "Cafe", i == 2 and "elder" or "shopper", 60 + i * 3, seat, "sit", { Prop = i == 1 and "coffee" or "none", SitHeight = 1.9 - INLAY_TOP })
 			end
 		end
 		for i, t in ipairs(CAFE_TABLES) do

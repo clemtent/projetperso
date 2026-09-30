@@ -68,7 +68,7 @@ TownStreetLife.SEAT_TOPS = { Terrace = 1.25, Chess = 1.45 }
 local BUILD_IN, BUILD_OUT = 190, 240
 local BIG_IN, BIG_OUT = 320, 380
 local FAR_IN, FAR_OUT = 2400, 2600
-local BUILDS_PER_STEP = 6
+local BUILDS_PER_STEP = 12 -- (v9.9 : 6 -> 12, les tronçons de route sont petits)
 local ANIM_STEP = 1 / 20
 local ANIM_RANGE = 260
 
@@ -1271,8 +1271,10 @@ function TownStreetLife.Step(position: Vector3)
 	end
 	local flat = Vector3.new(position.X, 0, position.Z)
 	stepTrees(s, flat)
-	local builds = 0
 	local k = detailScale()
+	-- (v9.9) les plus PROCHES d'abord : on ne voit jamais un trou au pied de
+	-- l'avatar pendant que le flux construit au loin
+	local todo = {}
 	for _, spot: Spot in ipairs(s.Spots) do
 		if not ANCHORS[spot.Kind] and BUILDERS[spot.Kind] then
 			local d = (Vector3.new(spot.Pos.X, 0, spot.Pos.Z) - flat).Magnitude
@@ -1286,11 +1288,16 @@ function TownStreetLife.Step(position: Vector3)
 				if d > outR then
 					destroySpot(spot)
 				end
-			elseif d < inR and builds < BUILDS_PER_STEP then
-				builds += 1
-				buildSpot(spot, s.Folder)
+			elseif d < inR then
+				table.insert(todo, { Spot = spot, D = d })
 			end
 		end
+	end
+	table.sort(todo, function(a, b)
+		return a.D < b.D
+	end)
+	for i = 1, math.min(BUILDS_PER_STEP, #todo) do
+		buildSpot(todo[i].Spot, s.Folder)
 	end
 end
 
