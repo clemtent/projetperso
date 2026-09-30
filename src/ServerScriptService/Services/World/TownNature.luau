@@ -575,7 +575,8 @@ local function scatterTrees(folder: Instance, geo: TownKit.Geo, target: number)
 			break
 		end
 		local a = hash(i, 71) * math.pi * 2
-		local r = r0 + math.sqrt(hash(i, 72)) * (r1 - r0)
+		-- (v10 : centre-ville CARRÉ, les coins aussi : r jusqu'à r1 / cos 45°)
+		local r = r0 + math.sqrt(hash(i, 72)) * (r1 * 1.41 - r0)
 		local p = geo.Origin + Vector3.new(math.sin(a) * r, 0, math.cos(a) * r)
 		local size = 10 + hash(i, 73) * 8
 		if geo.IsFree(p, 4) then
@@ -594,48 +595,73 @@ local function scatterTrees(folder: Instance, geo: TownKit.Geo, target: number)
 	return placed
 end
 
--- Bois derrière les parcelles + arbres dans les coins entre deux parcelles
+-- (v10, LAYOUT10) Ceinture verte de la grande ville : arbres (construits
+-- côté client, 0 pièce serveur : TownKit.Tree) entre l'avenue de ceinture et
+-- l'autoroute, et dans la campagne au-delà de l'autoroute. Jamais sur une
+-- route, une parcelle, un lieu réservé ni dans les zones de quartier / nature
+-- (celles-là sont habillées par CITY10, côté client).
 local function belt(folder: Instance, geo: TownKit.Geo)
 	local model = TownKit.Model(folder, "Woods")
 	local O = geo.Origin
-	local m = geo.Slots
-	local back = geo.PlotR + WorldLayout.PLOT_D / 2
-	local perSlot = m >= 11 and 2 or (m >= 8 and 3 or 5) -- (v9.7 : arbres plus riches, un peu moins nombreux)
-	-- (v9.7) jamais dans l'emprise d'une parcelle (maison + jardin), marge de 6 studs
-	-- (v9.7) ni sur le supermarché et son parking (TownMarket, BUILDINGS97)
-	local okMarket, TownMarket = pcall(require, script.Parent:FindFirstChild("TownMarket"))
-	local marketCF = WorldLayout.MarketCFrame and WorldLayout.MarketCFrame(geo.Count) or nil
-	local function inPlot(p: Vector3): boolean
-		if okMarket and marketCF and type(TownMarket) == "table" and TownMarket.InZone and TownMarket.InZone(marketCF, p, 4) then
+	local count = geo.Count
+	local R = WorldLayout.BeltR(count)
+	local H = WorldLayout.HighwayR(count)
+	local town = WorldLayout.TownRadius(count)
+	local zones = WorldLayout.Facilities(count)
+	local function blocked(x: number, z: number, r: number): boolean
+		if WorldLayout.OnRoad(count, x, z, r + 3) or WorldLayout.OnPlot(count, x, z, r + 2) then
 			return true
 		end
-		for i = 1, geo.Count do
-			local rel = WorldLayout.PlotCFrame(i, geo.Count):PointToObjectSpace(p)
-			if math.abs(rel.X) < WorldLayout.PLOT_W / 2 + 6 and math.abs(rel.Z) < WorldLayout.PLOT_D / 2 + 6 then
+		for _, zone in ipairs(zones) do
+			if WorldLayout.InZone(zone, x, z, r) then
 				return true
 			end
 		end
 		return false
 	end
-	for k = 0, m - 1 do
-		for j = 1, perSlot do
-			local a = geo.SlotAngle(k) + (j - 0.5 - perSlot / 2) / perSlot * (math.pi * 2 / m) + (hash(k, j) - 0.5) * 0.05
-			local r = back + 10 + hash(j, k + 40) * (WorldLayout.TOWN_MARGIN - 22)
-			local p = O + Vector3.new(math.sin(a) * r, GROUND_Y, math.cos(a) * r)
-			-- (pas d'arbre sur la route d'arrivée derrière la porte)
-			local rel = p - O
-			if not (math.abs(rel.X) < 58 and rel.Z > 0 and rel.Z < geo.Gate + 110) and not inPlot(p) then
-				-- (v9.7 NATURE97) bois : sapins, chênes, peupliers, bouleaux
-				local h = hash(k, j + 20)
-				TownKit.Tree(model, p, 14 + hash(k, j + 9) * 10, k * 50 + j, h < 0.4 and "Fir" or (h < 0.65 and "Oak" or (h < 0.85 and "Poplar" or "Birch")), { Lawn = true })
+	local rings = {
+		{ In = R + WorldLayout.GRID_HALF + 10, Out = H - WorldLayout.HIGHWAY_W / 2 - 14, Target = 90, Salt = 0 },
+		{ In = H + WorldLayout.HIGHWAY_W / 2 + 18, Out = town - 40, Target = 70, Salt = 5000 },
+	}
+	local placed: { Vector3 } = {}
+	for _, ring in ipairs(rings) do
+		local n = 0
+		for i = 1, ring.Target * 6 do
+			if n >= ring.Target then
+				break
 			end
-		end
-		-- coin entre deux parcelles (sommet du boulevard), côté extérieur
-		local va = geo.SlotAngle(k) + geo.HalfAngle
-		local vr = (geo.Front + 16) / math.cos(geo.HalfAngle)
-		local corner = O + Vector3.new(math.sin(va) * vr, GROUND_Y, math.cos(va) * vr)
-		if not inPlot(corner) then
-			TownKit.Tree(model, corner, 13, k * 91, k % 2 == 0 and "Oak" or "Maple", { Lawn = true })
+			local salt = ring.Salt + i
+			-- point au hasard dans l'anneau carré : un côté, une position le long, une profondeur
+			local side = math.floor(hash(salt, 11) * 4) % 4
+			local along = (hash(salt, 12) * 2 - 1) * ring.Out
+			local depth = ring.In + hash(salt, 13) * (ring.Out - ring.In)
+			local x, z
+			if side == 0 then
+				x, z = along, depth
+			elseif side == 1 then
+				x, z = depth, along
+			elseif side == 2 then
+				x, z = along, -depth
+			else
+				x, z = -depth, along
+			end
+			local size = 13 + hash(salt, 14) * 9
+			local ok = not blocked(x, z, 6)
+			if ok then
+				for _, q in ipairs(placed) do
+					if (q.X - x) ^ 2 + (q.Z - z) ^ 2 < 14 * 14 then
+						ok = false
+						break
+					end
+				end
+			end
+			if ok then
+				local h = hash(salt, 15)
+				local kind = h < 0.35 and "Fir" or (h < 0.6 and "Oak" or (h < 0.8 and "Poplar" or (h < 0.92 and "Birch" or "Maple")))
+				TownKit.Tree(model, O + Vector3.new(x, GROUND_Y, z), size, salt, kind, { Lawn = true })
+				table.insert(placed, Vector3.new(x, 0, z))
+				n += 1
+			end
 		end
 	end
 end

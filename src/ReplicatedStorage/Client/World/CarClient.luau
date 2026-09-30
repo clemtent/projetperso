@@ -963,6 +963,23 @@ refreshPicker = function()
 			parts.GarageText.Text = Locale.T("🏎️ Build a 3-car garage next to your mansion")
 		end
 	end
+	-- (v10) onglets : 🚗 Voiture / 🎨 Style / 🏁 Perf (atelier)
+	local tab = picker.Tab
+	if parts.CarTab then
+		parts.CarTab.Visible = tab == "Car"
+		for id, button in pairs(parts.TabButtons) do
+			local on = id == tab
+			button.BackgroundColor3 = if on then PINK_DEEP else WHITE
+			button.TextColor3 = if on then WHITE else INK
+		end
+	end
+	if workshop then
+		workshop:SetVisible(tab ~= "Car")
+		if tab ~= "Car" and picker.Viewing ~= "" then
+			workshop.Tab = tab
+			workshop:SetCar(picker.Viewing)
+		end
+	end
 end
 
 -- Mise en page (ordinateur / téléphone) de la fenêtre
@@ -993,6 +1010,14 @@ local function layoutPicker()
 		parts.Choose.Size = UDim2.new(0.5, -18, 0, 36)
 		parts.GarageText.Parent.Position = UDim2.fromOffset(10, 184)
 		parts.GarageText.Parent.Size = UDim2.new(1, -20, 0, 70)
+		parts.TabBar.Size = UDim2.new(1, -20, 0, 26)
+		parts.TabBar.Position = UDim2.fromOffset(10, 5)
+		parts.WorkshopHost.Position = UDim2.fromOffset(8, 36)
+		parts.WorkshopHost.Size = UDim2.new(1, -16, 1, -42)
+		for _, button in pairs(parts.TabButtons) do
+			button.TextSize = 13
+		end
+		parts.Status.Position = UDim2.fromOffset(14, 34)
 		for _, thumb in pairs(picker.Thumbs) do
 			thumb.Card.Size = UDim2.fromOffset(104, 80)
 		end
@@ -1026,6 +1051,13 @@ local function layoutPicker()
 		parts.Choose.Size = UDim2.new(1, -28, 0, 38)
 		parts.GarageText.Parent.Position = UDim2.new(0, 10, 1, -86)
 		parts.GarageText.Parent.Size = UDim2.new(1, -20, 0, 76)
+		parts.TabBar.Size = UDim2.new(1, -20, 0, 32)
+		parts.TabBar.Position = UDim2.fromOffset(10, 6)
+		parts.WorkshopHost.Position = UDim2.fromOffset(10, 44)
+		parts.WorkshopHost.Size = UDim2.new(1, -20, 1, -52)
+		for _, button in pairs(parts.TabButtons) do
+			button.TextSize = 15
+		end
 		for _, thumb in pairs(picker.Thumbs) do
 			thumb.Card.Size = UDim2.fromOffset(128, 98)
 		end
@@ -1037,6 +1069,9 @@ local function layoutPicker()
 		if statLayout then
 			statLayout.Padding = UDim.new(0, 6)
 		end
+	end
+	if workshop then
+		workshop:Layout(phone)
 	end
 end
 
@@ -1072,6 +1107,10 @@ setPicker = function(open: boolean)
 		refreshPicker()
 	else
 		picker.Dragging = false
+		-- (v10) les essais non payés de l'atelier s'effacent à la fermeture
+		if workshop then
+			workshop:Reset()
+		end
 	end
 end
 
@@ -1721,7 +1760,18 @@ local function refreshGarage(g: Garage)
 	local text = owner and owner:GetAttribute("DopamineCars") or ""
 	local selected = owner and owner:GetAttribute("DopamineCar") or ""
 	local out = owner and owner:GetAttribute("DopamineCarOut") == true
-	local key = tostring(text) .. "|" .. tostring(selected) .. "|" .. tostring(out)
+	-- (v10) options de l'atelier : "carId>Kind=Id;.../carId2>..."
+	local modsText = owner and owner:GetAttribute("DopamineCarMods") or ""
+	local modsOf: { [string]: any } = {}
+	if type(modsText) == "string" then
+		for entry in string.gmatch(modsText, "[^/]+") do
+			local id, rest = string.match(entry, "^([%w_]+)>(.*)$")
+			if id then
+				modsOf[id] = CarModels.DecodeMods(rest)
+			end
+		end
+	end
+	local key = tostring(text) .. "|" .. tostring(selected) .. "|" .. tostring(out) .. "|" .. tostring(modsText)
 	if key == g.Key then
 		return
 	end
@@ -1731,7 +1781,7 @@ local function refreshGarage(g: Garage)
 	for _, entry in ipairs(list) do
 		table.insert(shape, entry.Id)
 	end
-	local shapeKey = table.concat(shape, ",") .. "|" .. tostring(selected) .. "|" .. tostring(out)
+	local shapeKey = table.concat(shape, ",") .. "|" .. tostring(selected) .. "|" .. tostring(out) .. "|" .. tostring(modsText)
 	if shapeKey == g.ShapeKey then
 		g.Key = key
 		for _, entry in ipairs(list) do
@@ -1755,7 +1805,7 @@ local function refreshGarage(g: Garage)
 		if bay and not (out and entry.Id == selected) then
 			-- (v9.9) mon garage : voitures détaillées ; celui des autres : "Mid"
 			local detail = if g.OwnerId == LocalPlayer.UserId then "Full" else "Mid"
-			local ok, model = pcall(CarModels.Build, entry.Id, entry.Color, { Detail = detail })
+			local ok, model = pcall(CarModels.Build, entry.Id, entry.Color, { Detail = detail, Mods = modsOf[entry.Id] })
 			if ok and model then
 				model.Name = "Parked_" .. entry.Id
 				model:PivotTo(GarageLayout.BayCFrame(g.HouseCF, bay))
@@ -2111,6 +2161,8 @@ function CarClient.Stop()
 	table.clear(picker.Thumbs)
 	table.clear(picker.Pending)
 	table.clear(picker.Local)
+	table.clear(picker.Keys)
+	workshop = nil
 	picker.Viewing = ""
 	picker.Dragging = false
 	if gui then
