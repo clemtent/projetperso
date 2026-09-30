@@ -47,8 +47,8 @@ local HouseConstruction = {}
 
 local LocalPlayer = Players.LocalPlayer
 
-local FULL_IN = 260 -- (studs, x DetailScale) chantier complet plus près que ça
-local FULL_OUT = 300
+local FULL_IN = 220 -- (studs, x DetailScale) chantier complet plus près que ça
+local FULL_OUT = 255
 local LITE_IN = 1300 -- silhouette (grue) plus près que ça
 local LITE_OUT = 1400
 local SYNC_EVERY = 0.5
@@ -530,7 +530,13 @@ local function startBuild(userId: number, house: any, plot: number?, force: bool
 		-- (maison déjà masquée : le moment du propriétaire)
 		prepared.Crane = crane
 		S.Anims[userId] = prepared
-		prepared:Play()
+		local ok, err = pcall(prepared.Play, prepared)
+		if not ok then
+			warn("[HouseConstruction] " .. tostring(err))
+			S.Anims[userId] = nil
+			prepared:Finish(true)
+			return nil
+		end
 		return prepared
 	end
 	local name = ""
@@ -549,7 +555,13 @@ local function startBuild(userId: number, house: any, plot: number?, force: bool
 		end,
 	})
 	S.Anims[userId] = anim
-	anim:Play()
+	local ok, err = pcall(anim.Play, anim)
+	if not ok then
+		warn("[HouseConstruction] " .. tostring(err))
+		S.Anims[userId] = nil
+		anim:Finish(true)
+		return nil
+	end
 	return anim
 end
 
@@ -862,13 +874,15 @@ local function stepMicro(dt: number)
 			end
 		end
 		local pos = camPos()
+		local me = localRoot()
+		local mine = if me then me.Position else pos
 		local keep = {}
 		for _, e in ipairs(S.Micro) do
 			local part: BasePart = e.Part
 			if part.Parent then
 				table.insert(keep, e)
 				local hinge = e.Hinge.Position
-				e.Near = (hinge - pos).Magnitude < MICRO_RANGE
+				e.Near = (hinge - pos).Magnitude < MICRO_RANGE or (hinge - mine).Magnitude < MICRO_RANGE
 				local want = 0
 				if e.Near and not constructing(part) then
 					for _, p in ipairs(microRoots) do
@@ -972,7 +986,14 @@ function HouseConstruction.Observe(userId: number, house: any, snapshot: any)
 	if userId == LocalPlayer.UserId and not ownerSeen then
 		-- ta maison : chantier jusqu'au moment "ta maison se construit"
 		local anim = HouseBuildAnim.new(house, { Parent = S.Folder, Seed = userId % 997 })
-		anim:Prepare()
+		local okPrep, errPrep = pcall(anim.Prepare, anim)
+		if not okPrep then
+			-- (jamais de maison cachée pour de bon)
+			warn("[HouseConstruction] " .. tostring(errPrep))
+			anim:Finish(true)
+			dropSite(plot)
+			return
+		end
 		S.Owner = { State = "Pending", House = house, Plot = plot, Anim = anim, Arrived = S.Owner ~= nil and S.Owner.Arrived or false }
 		return
 	end

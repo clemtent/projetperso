@@ -490,7 +490,7 @@ despike = function(points: { { number } }, closed: boolean): { { number } }
 			local lu, lv = math.sqrt(ux * ux + uz * uz), math.sqrt(vx * vx + vz * vz)
 			if lu > 1e-6 and lv > 1e-6 then
 				local cosT = (ux * vx + uz * vz) / (lu * lv)
-				if cosT < math.cos(math.rad(75)) and math.min(lu, lv) < 45 then
+				if cosT < math.cos(math.rad(115)) and math.min(lu, lv) < 30 then
 					table.remove(pts, i)
 					changed = true
 					last -= 1
@@ -697,15 +697,17 @@ local function viaPoints(routeId: string, g: Graph, count: number): ({ string },
 			return list, cityOnly, true
 		end
 	elseif routeId == "Highway" then
-		-- avenue d'entrée -> bretelle sud -> autoroute (ouest puis nord)
-		local list = fromAnchors({ "EntranceBoulevard", "RampSCity", "HighwayW", "HighwayN" })
+		-- rond-point de l'entrée -> avenue -> bretelle sud -> autoroute (ouest puis nord)
+		local list = fromAnchors({ "EntranceLoop", "RampSCity", "HighwayW", "HighwayN" })
+			or fromAnchors({ "EntranceBoulevard", "RampSCity", "HighwayW", "HighwayN" })
 		if list then
 			return list, highwayFirst, false
 		end
 	elseif routeId == "Night" then
-		-- grand tour : entrée -> autoroute sud-ouest -> sortie ouest -> rue du
-		-- quartier des chalets -> centre -> entrée
-		local list = fromAnchors({ "EntranceBoulevard", "RampSCity", "HighwayW", "RampWCity", "BeltW", "DowntownSW" })
+		-- grand tour : rue du marché -> avenue d'entrée -> autoroute sud-ouest
+		-- -> sortie ouest -> ceinture -> rue des chalets -> rue du marché
+		local list = fromAnchors({ "MarketStreetW", "RampSCity", "HighwayW", "RampWCity", "BeltW" })
+			or fromAnchors({ "EntranceBoulevard", "RampSCity", "HighwayW", "RampWCity", "BeltW", "DowntownSW" })
 		if list then
 			return list, mixed, true
 		end

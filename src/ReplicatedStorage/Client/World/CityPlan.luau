@@ -115,10 +115,14 @@ local function rectFree(ctx: Ctx, x: number, z: number, w: number, d: number, ax
 			return false
 		end
 	end
-	local r = math.sqrt(w * w + d * d) / 2
+	-- cercles déjà pris : distance du cercle au rectangle orienté
 	for _, t in ipairs(ctx.Taken) do
 		local dx, dz = t[1] - x, t[2] - z
-		if dx * dx + dz * dz < (r + t[3]) ^ 2 then
+		local la = dx * ax + dz * az
+		local ln = dx * nx + dz * nz
+		local ca = math.clamp(la, -w / 2, w / 2)
+		local cn = math.clamp(ln, -d / 2, d / 2)
+		if (la - ca) ^ 2 + (ln - cn) ^ 2 < t[3] * t[3] then
 			return false
 		end
 	end
@@ -218,7 +222,7 @@ local function packRect(ctx: Ctx, out: { Spot }, R: any, pack: Pack, y: number)
 			if rectFree(ctx, cx, cz, w + 2, d + 2, ax, az) then
 				local seed = math.floor(hash(pack.Seed, #out) * 100000)
 				add(out, kind, cframe(cx, y, cz, nx, nz), seed, nil, { Style = pack.Style }, true)
-				take(ctx, cx, cz, math.sqrt(w * w + d * d) / 2 * 0.9)
+				-- (pas de "take" : le rangement ne se chevauche jamais lui-même)
 				-- haie / mur le long du devant des champs et bosquets (1re rangée)
 				if pack.Hedge and rowStart <= 3 and (kind == "Orchard" or kind == "Meadow" or kind == "Grove") then
 					local hx, hz = fx - nx * 1.6 + ax * along, fz - nz * 1.6 + az * along
@@ -246,9 +250,13 @@ local HWY = {
 	ShR = 2,
 }
 
+-- rayon de l'autoroute pour le plan en cours (la ville grandit avec le
+-- nombre de parcelles : WorldLayout.HighwayR(count))
+local HR = 1110
+
 -- repère d'échangeur (même formule que WorldLayout) : t le long, n vers l'extérieur
 local function ixLocal(ix: any, x: number, z: number): (number, number)
-	local H = WL.HIGHWAY_R or 1110
+	local H = HR
 	local cx, cz = ix.NX * H, ix.NZ * H
 	local tx, tz = ix.NZ, -ix.NX
 	local dx, dz = x - cx, z - cz
@@ -256,7 +264,7 @@ local function ixLocal(ix: any, x: number, z: number): (number, number)
 end
 
 local function ixPoint(ix: any, t: number, n: number): (number, number)
-	local H = WL.HIGHWAY_R or 1110
+	local H = HR
 	return ix.NX * H + ix.NZ * t + ix.NX * n, ix.NZ * H - ix.NX * t + ix.NZ * n
 end
 
@@ -269,7 +277,7 @@ local IX_NAMES = {
 
 -- découpe une polyligne en tronçons de `maxLen` au plus
 -- -> { {A, B (Vector3 ville), S (abscisse du début), Turn (angle aux joints)} }
-local function pieces(points: { any }, closed: boolean, maxLen: number): { any }
+local function pieces(points: { any }, closed: boolean, maxLen: number): ({ any }, number)
 	local list = {}
 	local n = #points
 	local last = closed and n or n - 1
@@ -412,7 +420,9 @@ local function planHighway(ctx: Ctx, out: { Spot })
 				for j, p in ipairs(rl) do
 					local mid = (p.A + p.B) / 2
 					local _ix, _t, n = nearestIx(mid.X, mid.Z)
-					local data = { Oneway = true, Lanes = 1, Lane = 8, ShL = 1, ShR = 3, Deck = false, Par = j % 2, S = p.S }
+					-- (dalles des bretelles à +0,06 / +0,09 : peinture 0,06 plus haut
+					-- que celle de l'autoroute, jamais confondue au convergent)
+					local data = { Oneway = true, Lanes = 1, Lane = 8, ShL = 1, ShR = 3, Deck = false, Par = j % 2, S = p.S, PaintY = 0.06 }
 					data.Overlap = p.Turn > 0.01 and 6 * math.tan(p.Turn / 2) + 0.2 or 0
 					if math.abs(n) < half + 9 then
 						data.NoRail = true
@@ -447,28 +457,28 @@ local function planHighway(ctx: Ctx, out: { Spot })
 				end
 			end
 		end
-		-- ponts : piles, culées, corniche (tronçons en hauteur)
+		-- ponts : habillage du tablier du serveur (corniche, garde-corps
+		-- anti-jets, candélabres) et piles des rampes d'approche (le serveur
+		-- pose déjà la pile centrale et les 2 culées à n = ±36,4)
 		for ei, e in ipairs(graph.Edges) do
 			if e.Bridge and e.Points and #e.Points >= 2 then
 				local base = WL.ROAD_Y or 0.5
-				local bl = pieces(e.Points, false, 16)
+				local bl = pieces(e.Points, false, 26)
 				for j, p in ipairs(bl) do
-					local top = math.max(p.A.Y, p.B.Y)
 					local mid = (p.A + p.B) / 2
-					if mid.Y - base > 2.5 then
+					if mid.Y - base > 1.5 then
 						local _ix, _t, n = nearestIx(mid.X, mid.Z)
-						add(out, "BridgeSeg", segCF(p), 5000 + ei * 60 + j, Vector3.new(e.Width + 2 * (e.Sidewalk or 0), 0.5, (p.B - p.A).Magnitude), {
-							Elev = mid.Y - base,
-							Pier = (j % 2 == 0) and math.abs(n) > half + 3,
+						local elev = mid.Y - base
+						add(out, "BridgeSeg", segCF(p), 5000 + ei * 60 + j, Vector3.new(26, 1.2, (p.B - p.A).Magnitude), {
+							Elev = elev,
+							-- piles sous les rampes d'approche (hors culées)
+							Pier = math.abs(n) > 40 and elev > 3.5 and j % 2 == 0,
+							Lamp = j % 3 == 0,
 							Ground = WL.Origin().Y + GROUND,
 							Par = j % 2,
-							Top = top,
 						})
 					end
 				end
-				-- pile centrale (terre-plein, sous le pont) : sur l'axe de l'autoroute
-				local x, y, z, dx, dz = WL.PointAlong(e.Points, e.Length / 2)
-				add(out, "BridgePier", cframe(x, y, z, dx, dz), 5900 + ei, nil, { Ground = WL.Origin().Y + (WL.ROAD_Y or 0.5), Width = e.Width + 2 * (e.Sidewalk or 0) })
 			end
 		end
 	end
@@ -491,7 +501,7 @@ end
 local THEME = {
 	Cottage = {
 		Queue = { "CtgChapel", "CtgBakery", "CtgPond", "CtgGreen", "CtgWell", "CommunityGarden" },
-		Fillers = { "Orchard", "Meadow", "Grove", "CtgGreen", "Meadow", "CtgWell", "Orchard", "PocketPark" },
+		Fillers = { "Orchard", "Meadow", "Grove", "CtgGreen", "Meadow", "Orchard", "PocketPark", "Grove" },
 		Hedge = "CtgHedge",
 	},
 	Townhouse = {
@@ -503,22 +513,14 @@ local THEME = {
 		Fillers = { "LftWarehouse", "ParkingLot", "LftContainers", "BasketCourt", "LftMural", "LftWarehouse", "Grove" },
 	},
 	Mansion = {
-		Queue = { "MnsFountain", "MnsViewpoint", "MnsTopiary", "MnsFountain" },
-		Fillers = { "Grove", "MnsFountain", "Meadow", "Orchard", "Grove", "MnsTopiary", "PocketPark" },
+		Queue = { "MnsFountain", "MnsViewpoint", "MnsTopiary", "MnsFountain", "MnsTopiary" },
+		Fillers = { "Grove", "MnsFountain", "Meadow", "Orchard", "Grove", "PocketPark" },
 		Hedge = "MnsWall",
 	},
 	Mixed = {
 		Queue = { "PocketPark", "ShopRow", "SportsCorner", "BasketCourt", "CommunityGarden", "FootPitch" },
 		Fillers = { "PocketPark", "Grove", "ParkingLot", "Meadow", "BasketCourt", "ShopRow", "TwnSquare" },
 	},
-}
-
-local SIGN_NAME = {
-	Cottage = "🏡 Cottage Village",
-	Townhouse = "🏘️ Townhouse Streets",
-	Loft = "🏭 Loft District",
-	Mansion = "🏰 Mansion Hills",
-	Mixed = "🏙️ Mixed Quarter",
 }
 
 -- décor entre deux parcelles voisines d'une rangée (ou au bout de la rangée)
@@ -608,14 +610,14 @@ local function planDistricts(ctx: Ctx, out: { Spot })
 					for _, e in ipairs({ { st.X0, st.Z0, 1 }, { st.X1, st.Z1, -1 } }) do
 						-- juste à l'intérieur de la case, à droite de la rue en entrant
 						local inx, inz = ux * e[3], uz * e[3]
-						local rx, rz = -inz, inx -- droite en entrant (regard inx, inz) = (-inz, inx)?
-						rx, rz = inz * -1, inx
+						local rx, rz = -inz, inx -- droite en entrant (regard (inx, inz) x haut)
 						local sx = e[1] + inx * ((WL.GRID_HALF or 16) + 6) + rx * (sh + 2.5)
 						local sz = e[2] + inz * ((WL.GRID_HALF or 16) + 6) + rz * (sh + 2.5)
 						local okF, f = pcall(WL.IsFreeAt, ctx.Count, sx, sz, 2)
 						if not okF or f then
 							-- panneau face aux arrivants (regard vers l'avenue)
-							add(out, "DistrictSign", cframe(sx, y, sz, -inx, -inz), di * 100 + si * 2 + (e[3] > 0 and 0 or 1), nil, { Style = style, Text = SIGN_NAME[style] and Locale.T(string.sub(SIGN_NAME[style], (string.find(SIGN_NAME[style], " ") or 0) + 1)) and (string.sub(SIGN_NAME[style], 1, (string.find(SIGN_NAME[style], " ") or 1) - 1) .. " " .. Locale.T(string.sub(SIGN_NAME[style], (string.find(SIGN_NAME[style], " ") or 0) + 1))) or d.Name }, true)
+							take(ctx, sx, sz, 6)
+							add(out, "DistrictSign", cframe(sx, y, sz, -inx, -inz), di * 100 + si * 2 + (e[3] > 0 and 0 or 1), nil, { Style = style, Text = (d.Emoji or "") .. " " .. Locale.T(d.Name or style) }, true)
 						end
 					end
 				end
@@ -626,11 +628,11 @@ local function planDistricts(ctx: Ctx, out: { Spot })
 		for _, idx in ipairs(d.Plots or {}) do
 			local okP, p = pcall(WL.PlotPlaceData, idx, ctx.Count)
 			if okP and p then
-				table.insert(members, { X = p.X, Z = p.Z, LookX = p.LookX, LookZ = p.LookZ })
+				table.insert(members, { X = p.X, Z = p.Z, Y = p.Y or 0, LookX = p.LookX, LookZ = p.LookZ })
 			end
 		end
 		for _, lot in ipairs(d.Lots or {}) do
-			table.insert(members, { X = lot.X, Z = lot.Z, LookX = lot.LookX, LookZ = lot.LookZ })
+			table.insert(members, { X = lot.X, Z = lot.Z, Y = lot.Y or 0, LookX = lot.LookX, LookZ = lot.LookZ })
 		end
 		local seen = {}
 		for mi, p in ipairs(members) do
@@ -643,7 +645,7 @@ local function planDistricts(ctx: Ctx, out: { Spot })
 				local key = math.floor(gx + 0.5) .. "_" .. math.floor(gz + 0.5)
 				if not seen[key] then
 					seen[key] = true
-					gapItems(ctx, out, d, style, p.X, p.Z, p.LookX, p.LookZ, y, side, di * 1000 + mi * 2 + (side > 0 and 1 or 0))
+					gapItems(ctx, out, d, style, p.X, p.Z, p.LookX, p.LookZ, (p.Y or 0) + GROUND, side, di * 1000 + mi * 2 + (side > 0 and 1 or 0))
 				end
 			end
 		end
@@ -656,11 +658,12 @@ local function planDistricts(ctx: Ctx, out: { Spot })
 			return a.W * a.D > b.W * b.D
 		end)
 		for _, R in ipairs(rects) do
-			packRect(ctx, out, R, pack, y)
+			packRect(ctx, out, R, pack, (R.Y or 0) + GROUND)
 		end
 		-- lofts : voie ferrée le long du fond du plus grand rectangle libre
 		if style == "Loft" and rects[1] and rects[1].W > 120 then
 			local R = rects[1]
+			y = (R.Y or 0) + GROUND
 			local nx, nz = frontSide(ctx, R)
 			local ax, az = -nz, nx
 			local alongLen = math.abs(ax) > 0.5 and R.W or R.D
@@ -681,6 +684,63 @@ local function planDistricts(ctx: Ctx, out: { Spot })
 			if okRail and n >= 2 then
 				local cx, cz = bx + ax * (-alongLen / 2 + 5 + L), bz + az * (-alongLen / 2 + 5 + L)
 				add(out, "LftWagon", cframe(cx, y, cz, nx, nz), 7100, nil, nil, true)
+			end
+		end
+	end
+end
+
+----------------------------------------------------------------------
+-- 🛣️ Marquages des rues (hors autoroute, bretelles et boulevard du centre)
+----------------------------------------------------------------------
+
+local function planRoads(ctx: Ctx, out: { Spot })
+	local ok, graph = pcall(WL.RoadGraph, ctx.Count)
+	if not ok or type(graph) ~= "table" then
+		return
+	end
+	local degree: { [string]: number } = {}
+	for _, e in ipairs(graph.Edges) do
+		degree[e.A] = (degree[e.A] or 0) + 1
+		degree[e.B] = (degree[e.B] or 0) + 1
+	end
+	local B = (WL.DOWNTOWN_B or 250) + 1
+	local function inside(p: any): boolean
+		return math.abs(p.X) <= B and math.abs(p.Z) <= B
+	end
+	local clearJ = (WL.GRID_HALF or 16) + 9 -- au-delà du passage piéton (18,5..23,5)
+	for ei, e in ipairs(graph.Edges) do
+		if not e.Highway and not e.Ramp and e.Points and #e.Points >= 2 then
+			local pa, pb = e.Points[1], e.Points[#e.Points]
+			if not (inside(pa) and inside(pb)) then
+				local function clear(id: string): number
+					local node = graph.Nodes[id]
+					if not node then
+						return 0
+					end
+					if node.Kind == "Junction" or (degree[id] or 0) >= 3 then
+						return clearJ
+					elseif node.Kind == "Roundabout" then
+						return 4
+					end
+					return 0
+				end
+				local list, len = pieces(e.Points, false, 40)
+				local cA, cB = clear(e.A), clear(e.B)
+				local fast = e.Kind == "Belt" or e.Kind == "Connector" or e.Kind == "Outside"
+				for j, p in ipairs(list) do
+					add(out, "RoadMarks", segCF(p), 8000 + ei * 40 + j, Vector3.new(e.Width, 0.2, (p.B - p.A).Magnitude), {
+						Width = e.Width,
+						S = p.S,
+						Len = len,
+						ClearA = cA,
+						ClearB = cB,
+						StopA = cA >= clearJ,
+						StopB = cB >= clearJ,
+						OneWay = e.OneWay,
+						Dash = fast and 9 or 6,
+						Gap = fast and 15 or 8,
+					})
+				end
 			end
 		end
 	end
@@ -718,7 +778,7 @@ end
 -- Plan complet
 ----------------------------------------------------------------------
 
-local cache: { [number]: { Spot } } = {}
+local cache: { [string]: { Spot } } = {}
 
 -- taken : { {x, z, r} } (repère ville) déjà occupés (gros emplacements du serveur)
 function CityPlan.Build(count: number, taken: { { number } }?): { Spot }
@@ -726,14 +786,16 @@ function CityPlan.Build(count: number, taken: { { number } }?): { Spot }
 	if type(WL.PlotCount) == "function" then
 		n = WL.PlotCount(count)
 	end
-	if cache[n] and not taken then
-		return cache[n]
+	local key = n .. "_" .. (taken and #taken or 0)
+	if cache[key] then
+		return cache[key]
 	end
 	local ctx: Ctx = { Count = n, Taken = table.clone(taken or {}) }
 	local out: { Spot } = {}
 	if type(WL.Districts) ~= "function" or type(WL.CityCFrame) ~= "function" then
 		return out -- (ancienne ville en anneau : rien à habiller ici)
 	end
+	HR = type(WL.HighwayR) == "function" and WL.HighwayR(n) or (WL.HIGHWAY_R or 1110)
 	local okH, errH = pcall(planHighway, ctx, out)
 	if not okH then
 		warn("[CityPlan] autoroute : " .. tostring(errH))
@@ -746,7 +808,11 @@ function CityPlan.Build(count: number, taken: { { number } }?): { Spot }
 	if not okN then
 		warn("[CityPlan] nature : " .. tostring(errN))
 	end
-	cache[n] = out
+	local okR, errR = pcall(planRoads, ctx, out)
+	if not okR then
+		warn("[CityPlan] marquages : " .. tostring(errR))
+	end
+	cache[key] = out
 	return out
 end
 

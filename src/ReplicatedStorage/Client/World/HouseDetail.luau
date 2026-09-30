@@ -598,7 +598,7 @@ function HouseDetail.Shutters(kit: any, x0: number, x1: number, y0: number, y1: 
 		kit:Box("Shutter", a, b, y0, y1, d0, d1, color, M.Wood, { Shadow = false })
 		if kind == "Louvered" then
 			-- persiennes : cadre + lames (bandes en relief)
-			local n = math.clamp(math.floor(h / 1.1), 3, 7)
+			local n = math.clamp(math.floor(h / 1.6), 3, 4)
 			for k = 1, n do
 				local y = y0 + k * h / (n + 1)
 				kit:Box("Louver", a + 0.25, b - 0.25, y - 0.1, y + 0.1, d0 - 0.08, d0 + 0.05, rail, M.Wood, { Shadow = false })
@@ -616,9 +616,6 @@ function HouseDetail.Shutters(kit: any, x0: number, x1: number, y0: number, y1: 
 			HouseDetail.Rod(kit, "ShutterBrace", { a + 0.35, y0 + h * 0.18 + 0.2, d0 - 0.05 }, { b - 0.35, y1 - h * 0.18 - 0.2, d0 - 0.05 }, 0.34, 0.16, rail, M.Wood,
 				{ Shadow = false }, Vector3.new(0, 0, 1))
 		end
-		-- arrêt de volet (fer)
-		kit:Box("ShutterDog", if s < 0 then a - 0.1 else b - 0.05, if s < 0 then a + 0.05 else b + 0.1, y0 + h * 0.3, y0 + h * 0.3 + 0.35, d0 - 0.02, face + 0.02, IRON, M.Metal,
-			{ Shadow = false })
 	end
 end
 
@@ -626,12 +623,13 @@ end
 function HouseDetail.FlowerBox(kit: any, x0: number, x1: number, y: number, face: number, color: Color3)
 	kit:Box("FlowerBox", x0, x1, y - 0.95, y - 0.1, face - 1.35, face - 0.02, color, M.Wood, { Shadow = false })
 	kit:Box("FlowerSoil", x0 + 0.12, x1 - 0.12, y - 0.1, y + 0.05, face - 1.23, face - 0.14, Color3.fromRGB(96, 70, 52), M.Ground, { Shadow = false })
-	local count = math.clamp(math.floor((x1 - x0) / 1.1), 3, 8)
+	-- feuillage (un bourrelet) + quelques fleurs (budget de pièces)
+	kit:CylX("Foliage", (x0 + x1) / 2, y + 0.3, face - 0.7, 0.95, x1 - x0 - 0.3, Color3.fromRGB(96, 156, 88), M.Grass, { Shadow = false })
+	local count = math.clamp(math.floor((x1 - x0) / 1.5), 2, 4)
 	local blooms = { Color3.fromRGB(236, 96, 128), Color3.fromRGB(255, 214, 110), WHITE, Color3.fromRGB(186, 150, 236), Color3.fromRGB(255, 160, 120) }
 	for k = 1, count do
 		local fx = x0 + (k - 0.5) * (x1 - x0) / count
-		kit:Ball("Foliage", fx, y + 0.28, face - 0.72, 0.95, Color3.fromRGB(96, 156, 88), M.Grass, { Shadow = false })
-		kit:Ball("Bloom", fx + 0.15, y + 0.62 + (k % 2) * 0.12, face - 0.95, 0.5, blooms[k % #blooms + 1], M.SmoothPlastic, { Shadow = false })
+		kit:Ball("Bloom", fx + 0.15, y + 0.72 + (k % 2) * 0.12, face - 0.95, 0.62, blooms[k % #blooms + 1], M.SmoothPlastic, { Shadow = false })
 	end
 end
 
@@ -719,11 +717,11 @@ local function gateLeaf(kit: any, x0: number, x1: number, y0: number, y1: number
 	return leaf
 end
 
-export type FenceSpec = { Kind: string, Color: Color3?, Post: Color3?, Gate0: number, Gate1: number, Height: number?, NoGate: boolean? }
+export type FenceSpec = { Kind: string, Color: Color3?, Post: Color3?, Gate0: number, Gate1: number, Height: number?, NoGate: boolean?, Cheap: boolean? }
 
 -- Clôture le long de x (x0..x1) en d, avec un portillon FERMÉ entre Gate0 et Gate1
 function HouseDetail.Fence(kit: any, x0: number, x1: number, d: number, spec: FenceSpec)
-	local kind = spec.Kind
+	local kind: string = spec.Kind
 	if kind == "None" then
 		return
 	end
@@ -747,6 +745,27 @@ function HouseDetail.Fence(kit: any, x0: number, x1: number, d: number, spec: Fe
 		end
 		return list
 	end
+	-- version légère (côtés de la parcelle, LOD) : planches pleines + lisse + poteaux
+	local lite = spec.Cheap == true and not (kind == "Hedge" or kind == "Stone")
+	if lite then
+		local wood = spec.Color or (if kind == "Picket" then Color3.fromRGB(250, 250, 246) elseif kind == "Iron" then IRON else Color3.fromRGB(150, 110, 76))
+		for _, span in ipairs(spans) do
+			local a, b = span[1], span[2]
+			if b - a > 1 then
+				if kind == "Iron" or kind == "Rail" then
+					kit:Box("FenceRail", a, b, 1.1, 1.35, d - 0.12, d + 0.12, wood, if kind == "Iron" then M.Metal else M.Wood, { Solid = true, Shadow = false })
+					kit:Box("FenceRail", a, b, 2.5, 2.75, d - 0.12, d + 0.12, wood, if kind == "Iron" then M.Metal else M.Wood, { Shadow = false })
+				else
+					kit:Box("FenceBoard", a, b, 0.2, 2.5, d - 0.1, d + 0.1, wood, M.WoodPlanks, { Solid = true, Shadow = false })
+					kit:Box("FenceRail", a, b, 2.5, 2.8, d - 0.18, d + 0.18, wood:Lerp(BLACK, 0.06), M.Wood, { Shadow = false })
+				end
+				for _, x in ipairs(posts(a, b, 9)) do
+					kit:Box("FencePost", x - 0.3, x + 0.3, 0, 3.2, d - 0.3, d + 0.3, wood:Lerp(BLACK, 0.1), M.Wood, { Solid = true, Shadow = false })
+				end
+			end
+		end
+		return
+	end
 	if kind == "Picket" then
 		local white = spec.Color or Color3.fromRGB(250, 250, 246)
 		for _, span in ipairs(spans) do
@@ -754,11 +773,14 @@ function HouseDetail.Fence(kit: any, x0: number, x1: number, d: number, spec: Fe
 			if b - a > 1 then
 				kit:Box("FenceRail", a, b, 0.9, 1.15, d + 0.05, d + 0.25, white, M.Wood, { Solid = true, Shadow = false })
 				kit:Box("FenceRail", a, b, 2.1, 2.35, d + 0.05, d + 0.25, white, M.Wood, { Shadow = false })
-				local n = math.max(2, math.floor((b - a) / 0.95))
+				local n = math.max(2, math.floor((b - a) / 1.15))
 				for k = 0, n do
 					local x = a + 0.2 + k * (b - a - 0.4) / n
-					kit:Box("Picket", x - 0.22, x + 0.22, 0, 2.7, d - 0.08, d + 0.05, white, M.Wood, { Shadow = false })
-					kit:Part("PicketTip", Vector3.new(0.44, 0.44, 0.12), CFrame.new(x, 2.7, -(d - 0.015)) * CFrame.Angles(0, 0, math.rad(45)), white, M.Wood, { Shadow = false })
+					-- piquet taillé en pointe (coin)
+					kit:Box("Picket", x - 0.24, x + 0.24, 0, 2.55, d - 0.08, d + 0.05, white, M.Wood, { Shadow = false })
+					if k % 2 == 0 then
+						kit:Part("PicketTip", Vector3.new(0.34, 0.34, 0.12), CFrame.new(x, 2.55, -(d - 0.015)) * CFrame.Angles(0, 0, math.rad(45)), white, M.Wood, { Shadow = false })
+					end
 				end
 				for _, px in ipairs({ a, b }) do
 					kit:Box("FencePost", px - 0.3, px + 0.3, 0, 3.2, d - 0.18, d + 0.42, white, M.Wood, { Solid = true, Shadow = false })
@@ -775,7 +797,7 @@ function HouseDetail.Fence(kit: any, x0: number, x1: number, d: number, spec: Fe
 			local a, b = span[1], span[2]
 			if b - a > 1 then
 				kit:Box("Hedge", a, b, 0, 2.6, d - 0.7, d + 0.7, leaf, M.Grass, { Solid = true })
-				local n = math.max(1, math.floor((b - a) / 5))
+				local n = math.max(1, math.floor((b - a) / (if spec.Cheap then 12 else 5)))
 				for k = 0, n - 1 do
 					kit:CylX("HedgeTop", a + (k + 0.5) * (b - a) / n, 2.6, d, 1.4, (b - a) / n - 0.1, leaf:Lerp(WHITE, 0.05 + (k % 2) * 0.03), M.Grass, { Shadow = false })
 				end
@@ -809,11 +831,11 @@ function HouseDetail.Fence(kit: any, x0: number, x1: number, d: number, spec: Fe
 				kit:Box("FenceWall", a, b, 0, 1.1, d - 0.35, d + 0.35, Color3.fromRGB(214, 206, 196), M.Limestone, { Solid = true, Shadow = false })
 				kit:Box("FenceRail", a, b, 1.3, 1.45, d - 0.08, d + 0.08, iron, M.Metal, { Solid = true, Shadow = false })
 				kit:Box("FenceRail", a, b, 3.3, 3.45, d - 0.08, d + 0.08, iron, M.Metal, { Shadow = false })
-				local n = math.max(2, math.floor((b - a) / 1.4))
+				local n = math.max(2, math.floor((b - a) / 1.8))
 				for k = 0, n do
 					local x = a + 0.2 + k * (b - a - 0.4) / n
 					kit:Box("FenceBar", x - 0.07, x + 0.07, 1.1, 3.8, d - 0.07, d + 0.07, iron, M.Metal, { Shadow = false })
-					if k % 3 == 1 then
+					if k % 4 == 1 then
 						kit:Ball("FenceFinial", x, 3.95, d, 0.3, gold, M.Metal, { Shadow = false })
 					end
 				end
@@ -1052,7 +1074,7 @@ function HouseDetail.Balcony(kit: any, kind: string, x0: number, x1: number, y: 
 		kit:Box("BalconySlab", x0, x1, y - 0.5, y, d0, face - 0.02, wood:Lerp(BLACK, 0.1), M.WoodPlanks, { Solid = true })
 		kit:Box("BalconyRail", x0, x1, y + 3, y + 3.35, d0, d0 + 0.35, wood, M.Wood, { Shadow = false })
 		kit:Box("BalconyRail", x0, x1, y + 0.35, y + 0.6, d0 + 0.05, d0 + 0.3, wood, M.Wood, { Shadow = false })
-		local n = math.max(2, math.floor((x1 - x0) / 0.9))
+		local n = math.max(2, math.floor((x1 - x0) / 1.5))
 		for k = 0, n do
 			local x = x0 + 0.2 + k * (x1 - x0 - 0.4) / n
 			kit:Box("BalconyPlank", x - 0.26, x + 0.26, y + 0.6, y + 3, d0 + 0.1, d0 + 0.25, wood:Lerp(WHITE, (k % 2) * 0.06), M.Wood, { Shadow = false })
@@ -1065,7 +1087,7 @@ function HouseDetail.Balcony(kit: any, kind: string, x0: number, x1: number, y: 
 	if kind == "Stone" then
 		kit:Box("BalustradeBase", x0, x1, y - 0.1, y + 0.35, d0, face - 0.02, trim, M.Limestone, { Solid = true, Shadow = false })
 		kit:Box("Balustrade", x0, x1, y + 2.3, y + 2.7, d0 - 0.05, d0 + 0.75, trim, M.Limestone, { Shadow = false })
-		local n = math.max(2, math.floor((x1 - x0) / 1.25))
+		local n = math.max(2, math.floor((x1 - x0) / 2.1))
 		for k = 0, n do
 			local x = x0 + 0.35 + k * (x1 - x0 - 0.7) / n
 			kit:CylY("Baluster", x, y + 0.35, d0 + 0.35, 0.55, 1.95, trim, M.Limestone, { Shadow = false })
@@ -1083,11 +1105,6 @@ function HouseDetail.Balcony(kit: any, kind: string, x0: number, x1: number, y: 
 	for k = 0, n do
 		local x = x0 + 0.1 + k * (x1 - x0 - 0.2) / n
 		kit:Box("BalconyBar", x - 0.05, x + 0.05, y, y + 3, d0 + 0.04, d0 + 0.14, IRON, M.Metal, { Shadow = false })
-	end
-	-- volutes (cercles en fer)
-	for k = 1, math.max(1, math.floor((x1 - x0) / 3)) do
-		local x = x0 + k * (x1 - x0) / (math.max(1, math.floor((x1 - x0) / 3)) + 1)
-		kit:CylD("BalconyScroll", x, y + 1.7, d0 + 0.09, 1.1, 0.08, IRON, M.Metal, { Shadow = false })
 	end
 end
 

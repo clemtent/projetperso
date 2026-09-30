@@ -47,6 +47,11 @@ local NPCModels = require(ReplicatedStorage.Shared.NPCModels)
 local Greenery = require(ReplicatedStorage.Shared.Greenery) -- (v9.9, CITY99) arbres construits côté client
 local TownRoads = require(script.Parent.TownRoads) -- (v9.9, CITY99) routes, trottoirs, allées, poteaux indicateurs
 local TownDistricts = require(script.Parent.TownDistricts) -- (v9.9, CITY99) skatepark, jardins partagés, coin sport
+-- (v10, CITY10) la grande ville : quartiers, autoroute, parcs, marquages
+-- (plan calculé côté client depuis WorldLayout : CityPlan ; kits CityKit /
+-- TownHighway / District*) ; imposteurs de loin
+local okCity, CityPlan = pcall(require, script.Parent.CityPlan)
+local okKit, CityKit = pcall(require, script.Parent.CityKit)
 -- (v9.8, REALISM98) réglage "Graphismes > Détail" : distances de flux x 0,65 / 1 / 1,35
 local okGQ, GraphicsQuality = pcall(require, ReplicatedStorage.Shared.GraphicsQuality)
 local function detailScale(): number
@@ -67,6 +72,7 @@ TownStreetLife.FOLDER_NAME = "TownStreetLife"
 TownStreetLife.SEAT_TOPS = { Terrace = 1.25, Chess = 1.45 }
 local BUILD_IN, BUILD_OUT = 190, 240
 local BIG_IN, BIG_OUT = 320, 380
+local IMP_IN, IMP_OUT = 820, 900 -- (v10) imposteurs (silhouettes) des gros lieux
 local FAR_IN, FAR_OUT = 2400, 2600
 local BUILDS_PER_STEP = 12 -- (v9.9 : 6 -> 12, les tronçons de route sont petits)
 local ANIM_STEP = 1 / 20
@@ -111,6 +117,9 @@ type Spot = {
 	Size: Vector3?,
 	Model: Model?,
 	Anim: any?,
+	Data: any?, -- (v10, CITY10) paramètres du plan (CityPlan)
+	Snap: boolean?, -- (v10) recaler au sol (rayon) à la construction
+	Imp: Model?, -- (v10) imposteur construit
 }
 
 local state: any = nil
@@ -997,6 +1006,19 @@ end
 for kind in pairs(TownDistricts.BIG) do
 	BIG[kind] = true
 end
+-- (v10, CITY10) kits de la grande ville
+local IMPOSTORS: { [string]: (Model, CFrame, number, any) -> any } = {}
+if okCity and type(CityPlan) == "table" then
+	for kind, builder in pairs(CityPlan.BUILDERS) do
+		BUILDERS[kind] = builder
+	end
+	for kind in pairs(CityPlan.BIG) do
+		BIG[kind] = true
+	end
+	for kind, builder in pairs(CityPlan.IMPOSTORS) do
+		IMPOSTORS[kind] = builder
+	end
+end
 TownStreetLife.Kinds = BUILDERS
 
 ----------------------------------------------------------------------
@@ -1043,11 +1065,42 @@ local function serverNow(): number
 	return ok and type(t) == "number" and t or os.clock()
 end
 
+-- (v10) recale un emplacement du plan sur le sol réel (plateau des manoirs,
+-- trottoirs, rampes) : un rayon vertical sur les coques du serveur, une fois
+local function snapSpot(spot: Spot, parent: Instance)
+	if not spot.Snap then
+		return
+	end
+	spot.Snap = false
+	local town = parent.Parent
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	local ignore: { Instance } = { parent }
+	for _, plr in ipairs(game:GetService("Players"):GetPlayers()) do
+		if plr.Character then
+			table.insert(ignore, plr.Character)
+		end
+	end
+	params.FilterDescendantsInstances = ignore
+	local p = spot.CF.Position
+	local ok, hit = pcall(function()
+		return workspace:Raycast(p + Vector3.new(0, 30, 0), Vector3.new(0, -60, 0), params)
+	end)
+	if ok and hit and hit.Instance and (town == nil or hit.Instance:IsDescendantOf(town)) then
+		local dy = hit.Position.Y - p.Y
+		if math.abs(dy) > 0.01 and math.abs(dy) < 12 then
+			spot.CF = spot.CF + Vector3.new(0, dy, 0)
+			spot.Pos = spot.CF.Position
+		end
+	end
+end
+
 local function buildSpot(spot: Spot, parent: Instance)
 	local builder = BUILDERS[spot.Kind]
 	if not builder then
 		return
 	end
+	snapSpot(spot, parent)
 	local m = Instance.new("Model")
 	m.Name = spot.Kind
 	local ok, anim = pcall(builder, m, spot.CF, spot.Seed, spot)
@@ -1062,12 +1115,40 @@ local function buildSpot(spot: Spot, parent: Instance)
 	spot.Anim = anim
 end
 
+local function destroyImp(spot: Spot)
+	if spot.Imp then
+		spot.Imp:Destroy()
+	end
+	spot.Imp = nil
+end
+
 local function destroySpot(spot: Spot)
 	if spot.Model then
 		spot.Model:Destroy()
 	end
 	spot.Model = nil
 	spot.Anim = nil
+	destroyImp(spot)
+end
+
+-- (v10) imposteur : quelques pièces vues de loin (au-delà du flux détaillé)
+local function buildImp(spot: Spot, parent: Instance)
+	local builder = IMPOSTORS[spot.Kind]
+	if not builder then
+		return
+	end
+	snapSpot(spot, parent)
+	local m = Instance.new("Model")
+	m.Name = spot.Kind .. "_Far"
+	local ok, err = pcall(builder, m, spot.CF, spot.Seed, spot)
+	if not ok then
+		m:Destroy()
+		warn("[TownStreetLife] imposteur " .. spot.Kind .. " : " .. tostring(err))
+		IMPOSTORS[spot.Kind] = nil
+		return
+	end
+	m.Parent = parent
+	spot.Imp = m
 end
 
 ----------------------------------------------------------------------
@@ -1134,6 +1215,31 @@ local function load(s: any): boolean
 	end
 	s.Spots = parseSpots(data)
 	TownRoads.SetDestinations(s.Spots)
+	-- (v10, CITY10) plan de la grande ville (client) : ajouté aux emplacements
+	-- du serveur, en évitant les gros emplacements déjà publiés
+	if okCity and type(CityPlan) == "table" then
+		local okPlan, extra = pcall(function()
+			local origin = require(ReplicatedStorage.Shared.WorldLayout).Origin()
+			local taken = {}
+			for _, spot in ipairs(s.Spots) do
+				if BIG[spot.Kind] and spot.Kind ~= "Paint" and spot.Kind ~= "BikeLane" then
+					local r = spot.Size and math.max(spot.Size.X, spot.Size.Z) / 2 or 14
+					table.insert(taken, { spot.Pos.X - origin.X, spot.Pos.Z - origin.Z, math.min(r, 30) })
+				end
+			end
+			local count = tonumber(town:GetAttribute("PlotCount")) or 8
+			return CityPlan.Build(count, taken)
+		end)
+		if okPlan and type(extra) == "table" then
+			for _, spot in ipairs(extra) do
+				-- (copie : le plan en cache n'est jamais modifié)
+				table.insert(s.Spots, { Kind = spot.Kind, CF = spot.CF, Seed = spot.Seed, Pos = spot.Pos, Size = spot.Size, Data = spot.Data, Snap = spot.Snap })
+			end
+			s.CityCount = #extra
+		elseif not okPlan then
+			warn("[TownStreetLife] CityPlan : " .. tostring(extra))
+		end
+	end
 	-- (v9.9, CITY99) arbres de la ville : modèles VIDES posés par le serveur
 	-- (TownKit.Tree, attribut TreeClient) ; on les construit ici
 	s.Trees = {}
@@ -1237,6 +1343,10 @@ function TownStreetLife.Start()
 			s.WarnedD = true
 			warn("[TownStreetLife] TownDistricts : " .. tostring(errD))
 		end
+		-- (v10) acteurs des kits de la grande ville (portails, canards, serveurs...)
+		if okKit and type(CityKit) == "table" then
+			pcall(CityKit.Step, dt)
+		end
 		s.Acc += dt
 		if s.Acc < ANIM_STEP then
 			return
@@ -1275,6 +1385,7 @@ function TownStreetLife.Step(position: Vector3)
 	-- (v9.9) les plus PROCHES d'abord : on ne voit jamais un trou au pied de
 	-- l'avatar pendant que le flux construit au loin
 	local todo = {}
+	local impTodo = {}
 	for _, spot: Spot in ipairs(s.Spots) do
 		if not ANCHORS[spot.Kind] and BUILDERS[spot.Kind] then
 			local d = (Vector3.new(spot.Pos.X, 0, spot.Pos.Z) - flat).Magnitude
@@ -1291,6 +1402,20 @@ function TownStreetLife.Step(position: Vector3)
 			elseif d < inR then
 				table.insert(todo, { Spot = spot, D = d })
 			end
+			-- (v10) imposteur entre le rayon détaillé et IMP_IN (jamais les deux)
+			if IMPOSTORS[spot.Kind] then
+				if spot.Model then
+					if spot.Imp then
+						destroyImp(spot)
+					end
+				elseif d > IMP_OUT * k then
+					if spot.Imp then
+						destroyImp(spot)
+					end
+				elseif d < IMP_IN * k and d >= inR and not spot.Imp then
+					table.insert(impTodo, { Spot = spot, D = d })
+				end
+			end
 		end
 	end
 	table.sort(todo, function(a, b)
@@ -1298,6 +1423,12 @@ function TownStreetLife.Step(position: Vector3)
 	end)
 	for i = 1, math.min(BUILDS_PER_STEP, #todo) do
 		buildSpot(todo[i].Spot, s.Folder)
+	end
+	table.sort(impTodo, function(a, b)
+		return a.D < b.D
+	end)
+	for i = 1, math.min(BUILDS_PER_STEP * 2, #impTodo) do
+		buildImp(impTodo[i].Spot, s.Folder)
 	end
 end
 
@@ -1365,6 +1496,7 @@ end
 function TownStreetLife.Debug(): any
 	local s = state
 	local built, parts, kinds = 0, 0, {}
+	local imps, impParts = 0, 0
 	if s then
 		for _, spot: Spot in ipairs(s.Spots) do
 			kinds[spot.Kind] = (kinds[spot.Kind] or 0) + 1
@@ -1376,9 +1508,17 @@ function TownStreetLife.Debug(): any
 					end
 				end
 			end
+			if spot.Imp then
+				imps += 1
+				for _, d in ipairs(spot.Imp:GetDescendants()) do
+					if d:IsA("BasePart") then
+						impParts += 1
+					end
+				end
+			end
 		end
 	end
-	return { Spots = s and #s.Spots or 0, Built = built, Parts = parts, Kinds = kinds, Created = partCount }
+	return { Spots = s and #s.Spots or 0, Built = built, Parts = parts, Kinds = kinds, Created = partCount, City = s and s.CityCount or 0, Impostors = imps, ImpostorParts = impParts }
 end
 
 return TownStreetLife

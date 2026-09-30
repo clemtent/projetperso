@@ -134,7 +134,7 @@ local function dashes(m: Model, F: CFrame, x: number, L: number, s0: number, top
 end
 
 -- glissière de sécurité (lisse à double onde sur poteaux) côté `side`
-local function guardrail(m: Model, F: CFrame, x: number, L: number, side: number, top: number, s0: number)
+local function guardrail(m: Model, F: CFrame, x: number, L: number, side: number, top: number, s0: number, extra: number?)
 	local post = 6
 	local first = post - (s0 % post)
 	local s = first
@@ -146,9 +146,10 @@ local function guardrail(m: Model, F: CFrame, x: number, L: number, side: number
 	end
 	-- lisse : deux ondes (bandes) + creux
 	local xr = x - side * 0.5
-	Box(m, "RailWave", F, xr - 0.12, xr + 0.12, top + 1.95, top + 2.35, -L / 2, L / 2, GALVA, M.DiamondPlate, true)
-	Box(m, "RailWave", F, xr - 0.12, xr + 0.12, top + 1.45, top + 1.85, -L / 2, L / 2, GALVA, M.DiamondPlate, true)
-	Box(m, "RailTrough", F, xr - 0.05 + side * 0.05, xr + 0.05 + side * 0.05, top + 1.8, top + 2.0, -L / 2, L / 2, GALVA_D, M.Metal)
+	local R = L / 2 + (extra or 0)
+	Box(m, "RailWave", F, xr - 0.12, xr + 0.12, top + 1.95, top + 2.35, -R, R, GALVA, M.DiamondPlate, true)
+	Box(m, "RailWave", F, xr - 0.12, xr + 0.12, top + 1.45, top + 1.85, -R, R, GALVA, M.DiamondPlate, true)
+	Box(m, "RailTrough", F, xr - 0.05 + side * 0.05, xr + 0.05 + side * 0.05, top + 1.8, top + 2.0, -R, R, GALVA_D, M.Metal)
 end
 
 -- séparateur en béton "New Jersey" au milieu (x = 0) + écran anti-éblouissement
@@ -198,7 +199,7 @@ local function buildSeg(m: Model, F: CFrame, seed: number, spot: any)
 	local d = spot and spot.Data or {}
 	local p = prof(d)
 	local L = spot and spot.Size and spot.Size.Z or 40
-	local top = (d.Par == 1) and 0.03 or 0 -- tronçons voisins décalés (joints en biais)
+	local top = ((d.Par == 1) and 0.03 or 0) + (d.PaintY or 0) -- tronçons voisins décalés (joints en biais)
 	local s0 = d.S or 0 -- abscisse du début du tronçon le long du tracé
 	local W = TownHighway.Width(d)
 	local elev = (d.Elev or 0) > 3
@@ -213,8 +214,8 @@ local function buildSeg(m: Model, F: CFrame, seed: number, spot: any)
 		local x0, dir = cw[1], cw[2]
 		local inner = x0 + dir * p.ShL -- bord intérieur de la voie de gauche
 		local outer = inner + dir * p.Lanes * p.Lane
-		line(m, F, inner + dir * 0.35, -L / 2, L / 2, 0.5, top)
-		line(m, F, outer - dir * 0.35, -L / 2, L / 2, 0.7, top)
+		line(m, F, inner + dir * 0.35, -Lx / 2, Lx / 2, 0.5, top)
+		line(m, F, outer - dir * 0.35, -Lx / 2, Lx / 2, 0.7, top)
 		for k = 1, p.Lanes - 1 do
 			dashes(m, F, inner + dir * k * p.Lane, L, s0, top)
 		end
@@ -225,7 +226,7 @@ local function buildSeg(m: Model, F: CFrame, seed: number, spot: any)
 			Box(m, "ParapetCap", F, edge - dir * 1.35, edge + dir * 0.15, top + 3.2, top + 3.5, -Lx / 2, Lx / 2, CONCRETE_D, M.Concrete)
 			Box(m, "Cornice", F, edge, edge + dir * 0.6, top - 2.2, top + 0.4, -Lx / 2, Lx / 2, CONCRETE_D, M.Concrete)
 		elseif not d.NoRail then
-			guardrail(m, F, edge - dir * 1.0, L, dir, top, s0)
+			guardrail(m, F, edge - dir * 1.0, L, dir, top, s0, extra)
 			delineators(m, F, edge - dir * 0.2, L, top, s0, dir)
 		end
 	end
@@ -309,14 +310,18 @@ local function buildGantry(m: Model, F: CFrame, seed: number, spot: any)
 	-- panneaux (face vers les conducteurs qui arrivent : +Z local)
 	local signs = d.Signs or { { Text = Locale.T("City centre"), Arrow = "Up" } }
 	local count = math.min(#signs, 3)
-	local slot = (W - 4) / math.max(1, count)
+	-- zone des panneaux : au-dessus de la chaussée du sens concerné
+	local x0, x1 = -W / 2 + 2, W / 2 - 2
+	if d.Side == "Right" then
+		x0, x1 = 1.5, W / 2 - 1
+	elseif d.Side == "Left" then
+		x0, x1 = -W / 2 + 1, -1.5
+	end
+	local slot = (x1 - x0) / math.max(1, count)
 	for i = 1, count do
 		local s = signs[i]
-		local cx = W / 2 - 2 - (i - 0.5) * slot -- de droite à gauche
-		if count == 1 then
-			cx = d.Side == "Left" and -W / 4 or W / 4
-		end
-		local sw = math.min(slot - 1.5, 24)
+		local cx = x1 - (i - 0.5) * slot -- de droite à gauche
+		local sw = math.min(slot - 1.2, 24)
 		local color = s.Green and SIGN_GREEN or SIGN_BLUE
 		local panel = Box(m, "GantrySign", F, cx - sw / 2, cx + sw / 2, H - 0.2, H + 5.2, 0.95, 1.25, color, M.SmoothPlastic)
 		Box(m, "GantrySignRim", F, cx - sw / 2 - 0.15, cx + sw / 2 + 0.15, H - 0.35, H + 5.35, 1.25, 1.32, WHITE, M.SmoothPlastic)
@@ -366,9 +371,9 @@ local function buildExit(m: Model, F: CFrame, seed: number, spot: any)
 	for i = 0, 5 do
 		local z = 4 + i * 4
 		local w = math.max(0.8, 5 - i * 0.7)
-		-- (au-dessus des lignes des tronçons : 0,18 / 0,21, jamais confondus)
-		Part(m, "GoreChevron", Vector3.new(w, T_PAINT, 0.7), F * CFrame.new(-w * 0.38, 0.18 - T_PAINT / 2, z + w * 0.32) * CFrame.Angles(0, math.rad(40), 0), PAINT, M.SmoothPlastic)
-		Part(m, "GoreChevron", Vector3.new(w, T_PAINT, 0.7), F * CFrame.new(w * 0.38, 0.21 - T_PAINT / 2, z + w * 0.32) * CFrame.Angles(0, math.rad(-40), 0), PAINT, M.SmoothPlastic)
+		-- (au-dessus des lignes des tronçons et des bretelles : 0,24 / 0,27)
+		Part(m, "GoreChevron", Vector3.new(w, T_PAINT, 0.7), F * CFrame.new(-w * 0.38, 0.24 - T_PAINT / 2, z + w * 0.32) * CFrame.Angles(0, math.rad(40), 0), PAINT, M.SmoothPlastic)
+		Part(m, "GoreChevron", Vector3.new(w, T_PAINT, 0.7), F * CFrame.new(w * 0.38, 0.27 - T_PAINT / 2, z + w * 0.32) * CFrame.Angles(0, math.rad(-40), 0), PAINT, M.SmoothPlastic)
 	end
 	-- atténuateur de choc (bandes jaunes et noires)
 	local A = F * CFrame.new(0, 0, -1)
@@ -469,6 +474,99 @@ local function buildRest(m: Model, F: CFrame, seed: number, _spot: any)
 end
 
 ----------------------------------------------------------------------
+-- 🌉 Ponts (habillage du tablier du serveur) et marquages des rues
+----------------------------------------------------------------------
+
+-- tronçon de tablier (F au dessus du tablier, au milieu ; -Z le long) :
+-- le serveur pose la dalle (1,2 d'épaisseur, 26 de large), les parapets
+-- (0,8 x 2,6) et les appuis ; ici : corniche en béton clair sous le bord,
+-- garde-corps anti-jets (poteaux + grillage) sur les parapets, gouttes
+-- d'eau, candélabres, et piles sous les rampes d'approche
+local function buildBridge(m: Model, F: CFrame, seed: number, spot: any)
+	local d = spot and spot.Data or {}
+	local L = spot and spot.Size and spot.Size.Z or 20
+	local half = (spot and spot.Size and spot.Size.X or 26) / 2
+	local off = (d.Par == 1) and 0.02 or 0
+	for _, sx in ipairs({ -1, 1 }) do
+		-- corniche : bande claire à l'extérieur du tablier, plus bas que le dessus
+		Box(m, "Fascia", F, sx * (half + 0.04), sx * (half + 0.64), -1.9 - off, 0.5 + off, -L / 2, L / 2, rgb(214, 210, 200), M.Concrete)
+		Box(m, "FasciaDrip", F, sx * (half + 0.64), sx * (half + 0.8), -2.1 - off, -1.5 - off, -L / 2, L / 2, CONCRETE_D, M.Concrete)
+		-- garde-corps anti-jets au-dessus du parapet (2,6)
+		if (d.Elev or 0) > 3 then
+			local n = math.max(1, math.floor(L / 4))
+			for i = 0, n do
+				local z = -L / 2 + i * L / n
+				Box(m, "ScreenPost", F, sx * (half - 0.5) - 0.1, sx * (half - 0.5) + 0.1, 2.6, 6.2, z - 0.1, z + 0.1, GALVA_D, M.Metal)
+			end
+			local mesh = Box(m, "ScreenMesh", F, sx * (half - 0.5) - 0.03, sx * (half - 0.5) + 0.03, 2.7, 6.1, -L / 2, L / 2, GALVA, M.DiamondPlate, true)
+			mesh.Transparency = 0.6
+			Box(m, "ScreenTop", F, sx * (half - 0.5) - 0.08, sx * (half - 0.5) + 0.08, 6.1, 6.3, -L / 2, L / 2, GALVA_D, M.Metal)
+		end
+		if d.Lamp then
+			local P = F * CFrame.new(sx * (half - 1.6), 0, 0) * CFrame.Angles(0, sx > 0 and math.pi / 2 or -math.pi / 2, 0)
+			CityKit.StreetLamp(m, P, 12, GALVA_D)
+		end
+	end
+	-- pile sous une rampe d'approche (le sol est d.Ground, monde)
+	if d.Pier then
+		local groundDy = (d.Ground or (F.Position.Y - (d.Elev or 0))) - F.Position.Y
+		local capTop = -1.25
+		Box(m, "PierCap", F, -half + 2, half - 2, capTop - 1.6, capTop, -1.4, 1.4, CONCRETE_D, M.Concrete, true)
+		for _, x in ipairs({ -half * 0.5, half * 0.5 }) do
+			if capTop - 1.6 - groundDy > 0.5 then
+				Column(m, "PierShaft", F, x, 0, groundDy, capTop - 1.6, 2.4, CONCRETE, M.Concrete, true)
+				Box(m, "PierFooting", F, x - 2, x + 2, groundDy - 0.3, groundDy + 0.4, -2, 2, CONCRETE_D, M.Concrete, true)
+			end
+		end
+	end
+	local _ = seed
+end
+
+-- marquages d'un tronçon de rue (F au milieu, sur la chaussée ; -Z = sens
+-- +s de l'arête) : ligne médiane en tirets (double sens), lignes de rive,
+-- lignes d'arrêt avant les carrefours ; rien dans les carrefours
+local function buildRoadMarks(m: Model, F: CFrame, _seed: number, spot: any)
+	local d = spot and spot.Data or {}
+	local L = spot and spot.Size and spot.Size.Z or 40
+	local W = d.Width or 20
+	local S = d.S or 0 -- abscisse du début du tronçon
+	local a, b = d.ClearA or 0, (d.Len or L) - (d.ClearB or 0)
+	local s0, s1 = math.max(S, a), math.min(S + L, b)
+	local top = d.Top or 0
+	local function z(s: number): number
+		return L / 2 - (s - S)
+	end
+	if s1 - s0 > 0.5 then
+		-- lignes de rive (continues)
+		for _, sx in ipairs({ -1, 1 }) do
+			line(m, F, sx * (W / 2 - 0.9), z(s1), z(s0), 0.45, top)
+		end
+		if not d.OneWay then
+			local dash, gap = d.Dash or 6, d.Gap or 8
+			local period = dash + gap
+			local s = s0 - ((s0 - a) % period)
+			while s < s1 do
+				local p0, p1 = math.max(s, s0), math.min(s + dash, s1)
+				if p1 - p0 > 0.3 then
+					line(m, F, 0, z(p1), z(p0), 0.45, top)
+				end
+				s += period
+			end
+		end
+	end
+	-- lignes d'arrêt (sens +s : moitié droite, +X ; sens -s : moitié gauche)
+	-- (de x = 0,45 à W/2 - 1,25 : ne touche ni la médiane ni la rive)
+	local sw = W / 2 - 1.7
+	local sc = 0.45 + sw / 2
+	if d.StopB and b >= S and b <= S + L then
+		line(m, F, sc, z(b) + 0.5, z(b) + 1.3, sw, top)
+	end
+	if d.StopA and not d.OneWay and a >= S and a <= S + L then
+		line(m, F, -sc, z(a) - 1.3, z(a) - 0.5, sw, top)
+	end
+end
+
+----------------------------------------------------------------------
 -- Imposteurs (loin) : quelques pièces
 ----------------------------------------------------------------------
 
@@ -511,8 +609,10 @@ TownHighway.BUILDERS = {
 	HwyExit = buildExit,
 	HwySign = buildSign,
 	HwyRest = buildRest,
+	BridgeSeg = buildBridge,
+	RoadMarks = buildRoadMarks,
 }
-TownHighway.BIG = { HwySeg = true, HwyRamp = true, HwyGantry = true, HwyWall = true, HwyLamp = true, HwyRest = true }
+TownHighway.BIG = { HwySeg = true, HwyRamp = true, HwyGantry = true, HwyWall = true, HwyLamp = true, HwyRest = true, BridgeSeg = true }
 TownHighway.IMPOSTORS = {
 	HwySeg = impSeg,
 	HwyRamp = function(m: Model, F: CFrame, seed: number, spot: any)

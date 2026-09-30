@@ -219,7 +219,7 @@ function RaceProps.BuildHQ(cf: CFrame, w: number, d: number): (Model, { [string]
 	for k = 0, 2 do
 		local x = bx0 + 0.4 + (k + 0.5) * (bw - 0.8) / 3
 		local doorW = (bw - 0.8) / 3 - 1.2
-		part(model, "Shutter", Vector3.new(doorW, 1.4, 0.5), cf * CFrame.new(x, bh - 0.4, bz0 + 0.6), STEEL, M.CorrugatedMetal)
+		part(model, "Shutter", Vector3.new(doorW, 1.4, 0.5), cf * CFrame.new(x, bh - 0.4, bz0 + 0.6), STEEL, M.DiamondPlate)
 		part(model, "Bench", Vector3.new(doorW * 0.7, 2.4, 1.6), cf * CFrame.new(x, 1.5, D / 2 - 2.4), rgb(90, 96, 110), M.Metal)
 		part(model, "BenchTop", Vector3.new(doorW * 0.72, 0.2, 1.7), cf * CFrame.new(x, 2.8, D / 2 - 2.4), rgb(176, 120, 70), M.Wood)
 		part(model, "ToolBoard", Vector3.new(doorW * 0.7, 3, 0.2), cf * CFrame.new(x, 5.2, D / 2 - 1.4), rgb(64, 64, 76), M.SmoothPlastic)

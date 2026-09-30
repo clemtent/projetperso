@@ -37,7 +37,7 @@ local DistrictMansion = {}
 
 local M = CityKit.M
 local rgb = CityKit.rgb
-local Box, Part, Column, Wedge, Egg, Glow, Text = CityKit.Box, CityKit.Part, CityKit.Column, CityKit.Wedge, CityKit.Egg, CityKit.Glow, CityKit.Text
+local Box, Part, Column, Egg, Glow, Text = CityKit.Box, CityKit.Part, CityKit.Column, CityKit.Egg, CityKit.Glow, CityKit.Text
 local hash = CityKit.Hash
 
 local STONE = rgb(222, 212, 190)

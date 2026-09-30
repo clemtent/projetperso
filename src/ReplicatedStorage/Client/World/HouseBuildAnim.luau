@@ -129,9 +129,10 @@ local function localBox(g: any, part: BasePart): (Vector3, Vector3)
 	local rel = g.CF:ToObjectSpace(part.CFrame)
 	local s = part.Size / 2
 	local r = rel.Rotation
-	local ex = math.abs(r.XVector.X) * s.X + math.abs(r.YVector.X) * s.Y + math.abs(r.ZVector.X) * s.Z
-	local ey = math.abs(r.XVector.Y) * s.X + math.abs(r.YVector.Y) * s.Y + math.abs(r.ZVector.Y) * s.Z
-	local ez = math.abs(r.XVector.Z) * s.X + math.abs(r.YVector.Z) * s.Y + math.abs(r.ZVector.Z) * s.Z
+	local rx, ry, rz = r.RightVector, r.UpVector, r.LookVector
+	local ex = math.abs(rx.X) * s.X + math.abs(ry.X) * s.Y + math.abs(rz.X) * s.Z
+	local ey = math.abs(rx.Y) * s.X + math.abs(ry.Y) * s.Y + math.abs(rz.Y) * s.Z
+	local ez = math.abs(rx.Z) * s.X + math.abs(ry.Z) * s.Y + math.abs(rz.Z) * s.Z
 	-- (d = -z local)
 	return Vector3.new(rel.Position.X, rel.Position.Y, -rel.Position.Z), Vector3.new(ex, ey, ez)
 end

@@ -69,6 +69,21 @@
 	    s'ils sont fermés ; les fenêtres du hall brillent toute la nuit ;
 	  - rideaux réalistes jusqu'au sol (HouseToggles) ; touches : E pour les
 	    rideaux ET pour l'interrupteur (plus de G / Q).
+	(v10 HOUSE10) :
+	  - 🏡 extérieur PERSONNALISÉ (Shared/HouseOptions) : instantané .Ext ou
+	    attribut répliqué "HouseExt" du propriétaire (changé en direct :
+	    l'extérieur est reconstruit, les pièces aussi car leurs fenêtres
+	    suivent la façade : HouseFacade.WindowRects) ;
+	  - NIVEAUX DE DÉTAIL (50 maisons) choisis ici, dans StepDoor (appelé
+	    par TownClient pour chaque maison) : "Full" (extérieur complet, à
+	    moins de LOD_FULL x GraphicsQuality.DetailScale() de la caméra),
+	    "Mid" (HouseLod, jusqu'à LOD_MID x ...), "Far" (imposteur) ; marge
+	    anti-battement ; au plus UNE construction complète toutes les
+	    FULL_GAP secondes ; pièces / hall seulement en "Full" (BuildRoom
+	    repasse en "Full" tout de suite si besoin) ;
+	    house:HoldFull(true) (CONSTRUCT10 : animation de construction) force
+	    le complet tout de suite et bloque le LOD ; house:SetLod(niveau) ;
+	    house.Lod ; attribut "Lod" du modèle.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -84,6 +99,9 @@ local HouseKit = require(script.Parent.HouseKit)
 local HouseFacade = require(script.Parent.HouseFacade)
 local HouseStairs = require(script.Parent.HouseStairs)
 local HouseToggles = require(script.Parent.HouseToggles)
+local HouseOptions = require(ReplicatedStorage.Shared.HouseOptions) -- (v10 HOUSE10) 🏡 extérieur personnalisé
+local GraphicsQuality = require(ReplicatedStorage.Shared.GraphicsQuality)
+local HouseLod = require(script.Parent.HouseLod) -- (v10 HOUSE10) maisons lointaines
 
 local HouseFolder = script.Parent.Parent.Components.House
 
@@ -94,6 +112,14 @@ HouseBuilder.__index = HouseBuilder
 -- va disparaître (house, slot, model, entry, itemId)
 HouseBuilder.OnItemAttach = nil :: ((house: any, slot: number, model: Model, entry: any, itemId: string) -> ())?
 HouseBuilder.OnItemDetach = nil :: ((house: any, slot: number, model: Model, entry: any, itemId: string) -> ())?
+
+-- (v10) Niveaux de détail : distances de base (x GraphicsQuality.DetailScale())
+HouseBuilder.LOD_FULL = 250
+HouseBuilder.LOD_MID = 600
+local LOD_MARGIN = 25 -- (studs) marge anti-battement
+local LOD_INTERVAL = 0.3 -- (s) contrôle du LOD d'une maison
+local FULL_GAP = 0.2 -- (s) entre deux constructions complètes (toutes maisons)
+local lastFullBuild = -math.huge
 
 local NEAR = 62 -- (studs) une pièce plus proche que ça est meublée
 local FAR = 90 -- plus loin : on la vide
@@ -194,6 +220,12 @@ export type House = typeof(setmetatable({} :: {
 	GlowKey: string,
 	Style: string,
 	Chimneys: number,
+	ChimneysExpected: number?, -- (v10) cheminées voulues (option "Chimney")
+	Lod: string, -- (v10) "Full" | "Mid" | "Far"
+	Hold: boolean, -- (v10) HoldFull : pas de changement de LOD
+	LodAt: number,
+	ExtText: string, -- (v10) options d'extérieur appliquées (HouseOptions.Encode)
+	Spec: any?, -- (v10) look résolu de l'extérieur (HouseFacade.Resolve)
 	ExteriorParts: number,
 	ExteriorLights: number,
 	OnSeat: ((house: any, slot: number, model: Model, seatPart: BasePart) -> ())?,
@@ -249,8 +281,24 @@ local function roomSignature(room: any): string
 	return table.concat(parts, "|")
 end
 
+-- (v10 HOUSE10) Options d'extérieur : instantané (Ext) sinon attribut
+-- répliqué du propriétaire "HouseExt" (HouseService) ; (table, texte)
+local function extOf(snapshot: any): ({ [string]: any }, string)
+	if type(snapshot) == "table" and type(snapshot.Ext) == "table" then
+		local text = HouseOptions.Encode(snapshot.Ext)
+		return HouseOptions.Decode(text), text
+	end
+	local owner = type(snapshot) == "table" and Players:GetPlayerByUserId(tonumber(snapshot.UserId) or 0) or nil
+	local text = owner and owner:GetAttribute("HouseExt")
+	if type(text) ~= "string" then
+		text = ""
+	end
+	return HouseOptions.Decode(text), text :: string
+end
+
 local function exteriorKey(snapshot: any): string
-	local parts = { tostring(snapshot.Size), tostring(snapshot.Facade), tostring(snapshot.Roof), tostring(snapshot.RoofStyle), tostring(snapshot.Plot),
+	local _, extText = extOf(snapshot)
+	local parts = { extText, tostring(snapshot.Size), tostring(snapshot.Facade), tostring(snapshot.Roof), tostring(snapshot.RoofStyle), tostring(snapshot.Plot),
 		tostring(snapshot.DisplayName), tostring(snapshot.Garage) }
 	if type(snapshot.Garden) == "table" then
 		table.insert(parts, table.concat(snapshot.Garden, ","))
@@ -366,6 +414,12 @@ function HouseBuilder.new(snapshot: any, plotCF: CFrame, parent: Instance): Hous
 		GlowKey = "",
 		Style = "Cottage",
 		Chimneys = 0,
+		ChimneysExpected = nil,
+		Spec = nil,
+		Lod = "Full",
+		Hold = false,
+		LodAt = -math.huge,
+		ExtText = "",
 		ExteriorParts = 0,
 		ExteriorLights = 0,
 		OnSeat = nil,
@@ -377,9 +431,31 @@ function HouseBuilder.new(snapshot: any, plotCF: CFrame, parent: Instance): Hous
 	model:SetAttribute("StrayHouses", strays)
 	model:SetAttribute("StrayShells", 0)
 	model:SetAttribute("DuplicateItems", 0)
-	self:BuildExterior()
+	-- (v10) niveau de détail de départ (sa propre maison : toujours complète)
+	local level = if userId == (Players.LocalPlayer and Players.LocalPlayer.UserId) then "Full" else self:WantedLod()
+	if level == "Full" then
+		self:BuildExterior()
+	else
+		self:BuildLite(level)
+	end
 	model.Parent = parent
 	return self
+end
+
+-- Apparence de l'instantané (couleurs 2D, jardin, nom, options d'extérieur)
+local function looksOf(snapshot: any): HouseFacade.Looks
+	local style = lookEntry("RoofStyle", snapshot.RoofStyle)
+	return {
+		Wall = lookColor("Facade", snapshot.Facade),
+		Roof = lookColor("Roof", snapshot.Roof),
+		Pattern = style and tostring(style.Pattern) or "None",
+		Garden = type(snapshot.Garden) == "table" and snapshot.Garden or {},
+		Rooms = roomsBySlot(snapshot),
+		Name = tostring(snapshot.DisplayName or snapshot.Name or ""),
+		Garage = if type(snapshot.Garage) == "boolean" then snapshot.Garage else nil, -- v9.6 🏎️ garage du manoir (CarService)
+		Ext = (extOf(snapshot)), -- (v10 HOUSE10) 🏡 options d'extérieur
+		Plot = tonumber(snapshot.Plot),
+	}
 end
 
 function HouseBuilder.BuildExterior(self: House)
@@ -389,29 +465,34 @@ function HouseBuilder.BuildExterior(self: House)
 	local folder = self.Exterior
 	folder:ClearAllChildren()
 	self.ExteriorKey = exteriorKey(snapshot)
+	self.ExtText = select(2, extOf(snapshot))
+	self.Lod = "Full"
+	self.Model:SetAttribute("Lod", "Full")
+	lastFullBuild = os.clock()
 	self.Door = nil
 	self.DoorHinge = nil
 	self.DoorLock = nil
 	self.DoorOpen = false
 	local bySlot = roomsBySlot(snapshot)
-	local style = lookEntry("RoofStyle", snapshot.RoofStyle)
 	local kit = HouseKit.new(self.HouseCF, folder, 6)
-	local looks: HouseFacade.Looks = {
-		Wall = lookColor("Facade", snapshot.Facade),
-		Roof = lookColor("Roof", snapshot.Roof),
-		Pattern = style and tostring(style.Pattern) or "None",
-		Garden = type(snapshot.Garden) == "table" and snapshot.Garden or {},
-		Rooms = bySlot,
-		Name = tostring(snapshot.DisplayName or snapshot.Name or ""),
-		Garage = if type(snapshot.Garage) == "boolean" then snapshot.Garage else nil, -- v9.6 🏎️ garage du manoir (CarService)
-	}
+	local looks = looksOf(snapshot)
+	looks.Rooms = bySlot
+	local oldKey = self.Spec and self.Spec.Key
 	local okFacade, built = pcall(HouseFacade.Build, kit, size, looks)
 	if not okFacade then
 		warn("[World] Façade : " .. tostring(built))
 		built = { Fills = {}, Chimneys = 0, Style = WorldLayout.StyleOf(size) }
 	end
+	-- (v10) le look a changé (fenêtres de la façade) : les pièces construites sont refaites
+	if oldKey and built.Spec and built.Spec.Key ~= oldKey then
+		for slot in pairs(self.Rooms) do
+			self:DestroyRoom(slot)
+		end
+	end
 	-- (v9.9) coque du hall (sols, trémies, murs) ; son intérieur est en flux
+	kit.Stats.Phase = "Walls"
 	local okStairs, stairs = pcall(HouseStairs.BuildShell, kit, size)
+	kit.Stats.Phase = nil
 	if not okStairs then
 		warn("[World] Hall : " .. tostring(stairs))
 	end
@@ -427,6 +508,8 @@ function HouseBuilder.BuildExterior(self: House)
 	self.BackDoorOpen = false
 	self.Style = built.Style
 	self.Chimneys = built.Chimneys
+	self.ChimneysExpected = built.ChimneysExpected or built.Chimneys
+	self.Spec = built.Spec
 	self.ExteriorParts = kit.Stats.Count
 	self.ExteriorLights = kit.Stats.Lights
 	self.Model:SetAttribute("Style", built.Style)
@@ -452,6 +535,130 @@ function HouseBuilder.BuildExterior(self: House)
 		if backFill and state.State ~= "None" then
 			backFill.Transparency = 1
 		end
+	end
+end
+
+----------------------------------------------------------------------
+-- (v10 HOUSE10) Niveaux de détail
+----------------------------------------------------------------------
+
+-- Extérieur SIMPLIFIÉ ("Mid" / "Far") : pas de pièces, pas de hall, pas de porte
+function HouseBuilder.BuildLite(self: House, level: string)
+	local snapshot = self.Snapshot
+	for slot in pairs(self.Rooms) do
+		self:DestroyRoom(slot)
+	end
+	self:DestroyHall()
+	local folder = self.Exterior
+	folder:ClearAllChildren()
+	self.ExteriorKey = exteriorKey(snapshot)
+	self.ExtText = select(2, extOf(snapshot))
+	self.Lod = level
+	self.Model:SetAttribute("Lod", level)
+	self.Door = nil
+	self.DoorHinge = nil
+	self.DoorLock = nil
+	self.DoorOpen = false
+	self.Leaves = {}
+	self.BackLeaves = {}
+	self.BackDoorOpen = false
+	self.Ramps = {}
+	local kit = HouseKit.new(self.HouseCF, folder, 0)
+	local looks = looksOf(snapshot)
+	looks.Rooms = roomsBySlot(snapshot)
+	local ok, result = pcall(HouseLod.Build, kit, self.Size, looks, level)
+	if not ok then
+		warn("[World] LOD : " .. tostring(result))
+		result = { Glows = {}, Style = WorldLayout.StyleOf(self.Size), Arch = "Classic" }
+	end
+	self.Glows = result.Glows
+	self.GlowKey = ""
+	self.ExteriorParts = kit.Stats.Count
+	self.ExteriorLights = 0
+	self.Model:SetAttribute("ExteriorParts", kit.Stats.Count)
+	local dims = WorldLayout.Dims(self.Size)
+	local bySlot = roomsBySlot(snapshot)
+	for slot = 1, dims.Floors * dims.Columns do
+		local state = self.Rooms[slot]
+		if not state then
+			state = { Slot = slot, Data = bySlot[slot], Shell = nil, Items = {}, State = "None", Signature = roomSignature(bySlot[slot]), Fill = nil, BackFill = nil, Prompts = {},
+				Token = 0, Toggles = nil }
+			self.Rooms[slot] = state
+		end
+		state.Data = bySlot[slot]
+		state.Fill = nil
+		state.BackFill = nil
+	end
+end
+
+-- Distance (plan horizontal) de la caméra au centre de la maison
+local function cameraDistance(self: House): number
+	local camera = workspace.CurrentCamera
+	if not camera then
+		return 0
+	end
+	local dims = WorldLayout.Dims(self.Size)
+	local center = WorldLayout.ToWorld(self.HouseCF, 0, 10, dims.Depth / 2)
+	local offset = camera.CFrame.Position - center
+	return Vector3.new(offset.X, 0, offset.Z).Magnitude
+end
+
+-- Niveau voulu (avec la marge anti-battement autour du niveau actuel)
+function HouseBuilder.WantedLod(self: House): string
+	if self.Hold then
+		return "Full"
+	end
+	local scale = 1
+	local okScale, value = pcall(GraphicsQuality.DetailScale)
+	if okScale and type(value) == "number" and value > 0 then
+		scale = value
+	end
+	local distance = cameraDistance(self)
+	local full, mid = HouseBuilder.LOD_FULL * scale, HouseBuilder.LOD_MID * scale
+	local current = self.Lod
+	-- (on garde le niveau le plus détaillé tant qu'on n'est pas franchement au-delà)
+	if distance < full - (if current == "Full" then -LOD_MARGIN else LOD_MARGIN) then
+		return "Full"
+	end
+	if distance < mid - (if current ~= "Far" then -LOD_MARGIN else LOD_MARGIN) then
+		return "Mid"
+	end
+	return "Far"
+end
+
+function HouseBuilder.SetLod(self: House, level: string)
+	if not self.Alive or level == self.Lod then
+		return
+	end
+	if level == "Full" then
+		self:BuildExterior()
+	else
+		self:BuildLite(level)
+	end
+end
+
+-- Contrôle du LOD (StepDoor) ; force = sans attendre ni respecter FULL_GAP
+function HouseBuilder.StepLod(self: House, force: boolean?)
+	local now = os.clock()
+	if not force and now - self.LodAt < LOD_INTERVAL then
+		return
+	end
+	self.LodAt = now
+	local wanted = self:WantedLod()
+	if wanted == self.Lod then
+		return
+	end
+	if wanted == "Full" and not force and now - lastFullBuild < FULL_GAP then
+		return
+	end
+	self:SetLod(wanted)
+end
+
+-- (CONSTRUCT10) extérieur complet tout de suite et LOD bloqué tant que `on`
+function HouseBuilder.HoldFull(self: House, on: boolean)
+	self.Hold = on == true
+	if self.Hold and self.Lod ~= "Full" then
+		self:SetLod("Full")
 	end
 end
 
@@ -552,16 +759,19 @@ local function roomFront(self: House, shell: Model, room: any, slot: number)
 	local xMin, xMax, yFloor = WorldLayout.RoomInterior(size, slot)
 	local T = WorldLayout.WALL_T
 	local kit = HouseKit.new(self.HouseCF, shell, 1)
-	local rect = HouseFacade.WindowRect(size, column, floor)
+	-- (v10) 2 fenêtres par pièce (ou une baie) : mêmes trous que la façade
+	local rects = HouseFacade.WindowRects(size, column, floor, self.Spec)
 	local paper = wallpaperColor(room)
 	local trimEntry = Config.HouseTrimsById and Config.HouseTrimsById[tostring(room and room.Trim or "Cream")]
 	local trim = trimEntry and typeof(trimEntry.Color) == "Color3" and trimEntry.Color or CREAM
 	local top = yFloor + WorldLayout.WALL_H
-	kit:WallX("FrontWall", xMin, xMax, yFloor, top, T, T + 0.12, { rect }, paper, M.SmoothPlastic, { Solid = false, Shadow = false })
+	kit:WallX("FrontWall", xMin, xMax, yFloor, top, T, T + 0.12, rects, paper, M.SmoothPlastic, { Solid = false, Shadow = false })
 	kit:Box("FrontSkirting", xMin, xMax, yFloor, yFloor + 0.7, T + 0.12, T + 0.32, trim, M.SmoothPlastic, { Shadow = false })
 	kit:Box("FrontCrown", xMin, xMax, top - 0.5, top, T + 0.12, T + 0.32, trim, M.SmoothPlastic, { Shadow = false })
 	-- (v9.6 anti-scintillement : dessus 0,04 au-dessus du bas de la fenêtre du mur)
-	kit:Box("InnerSill", rect[1] - 0.5, rect[2] + 0.5, rect[3] - 0.3, rect[3] + 0.04, T, T + 0.7, trim, M.Wood, { Shadow = false })
+	for _, rect in ipairs(rects) do
+		kit:Box("InnerSill", rect[1] - 0.5, rect[2] + 0.5, rect[3] - 0.3, rect[3] + 0.04, T, T + 0.7, trim, M.Wood, { Shadow = false })
+	end
 	-- (v9.8) les rideaux (animés) sont posés par roomToggles
 	-- plafonnier : vraie lumière chaude
 	local cx = (xMin + xMax) / 2
@@ -666,14 +876,16 @@ local function roomToggles(self: House, shell: Model, room: any, slot: number, b
 		CurtainPrompts = {},
 		SwitchPrompt = nil,
 	}
-	-- 🪟 fenêtre de devant (sur la façade vue de dedans)
-	local rect = HouseFacade.WindowRect(size, column, floor)
+	-- 🪟 fenêtres de devant (sur la façade vue de dedans) ; (v10) une paire
+	-- de rideaux par fenêtre
 	local T = WorldLayout.WALL_T
-	local front = self.HouseCF * CFrame.new((rect[1] + rect[2]) / 2, (rect[3] + rect[4]) / 2, -(T + 0.12)) * CFrame.Angles(0, math.pi, 0)
 	-- (v9.9 : rideaux jusqu'au sol : ourlet 0,15 au-dessus du plancher)
 	local yFloor = WorldLayout.FloorY(floor)
-	table.insert(toggles.Curtains, HouseToggles.Curtains(shell, front, rect[2] - rect[1], rect[4] - rect[3], fabric, brass, curtainsOpen,
-		{ Drop = (rect[3] + rect[4]) / 2 - yFloor - 0.15 }))
+	for _, rect in ipairs(HouseFacade.WindowRects(size, column, floor, self.Spec)) do
+		local front = self.HouseCF * CFrame.new((rect[1] + rect[2]) / 2, (rect[3] + rect[4]) / 2, -(T + 0.12)) * CFrame.Angles(0, math.pi, 0)
+		table.insert(toggles.Curtains, HouseToggles.Curtains(shell, front, rect[2] - rect[1], rect[4] - rect[3], fabric, brass, curtainsOpen,
+			{ Drop = (rect[3] + rect[4]) / 2 - yFloor - 0.15 }))
+	end
 	-- 🪟 fenêtre du fond (côté jardin)
 	local b0, b1, b2, b3 = WorldLayout.BackWindowRect(size, Config.House.WallRatio)
 	local back = shell:GetPivot() * CFrame.new((b0 + b1) / 2, (b2 + b3) / 2, -WorldLayout.DEPTH / 2 + 0.06)
@@ -907,6 +1119,10 @@ end
 
 -- Construit la pièce (coque + objets) ; peut céder la main (appel dans une tâche)
 function HouseBuilder.BuildRoom(self: House, slot: number)
+	-- (v10) les pièces n'existent qu'avec l'extérieur complet
+	if self.Lod ~= "Full" and self.Alive then
+		self:SetLod("Full")
+	end
 	if slot == 0 then
 		self:BuildHall()
 		return
@@ -1072,6 +1288,9 @@ end
 -- Pièces à meubler / vider selon la distance à `focus` ; renvoie l'emplacement
 -- à construire en priorité (ou nil)
 function HouseBuilder.NextToBuild(self: House, focus: Vector3): (number?, number)
+	if self.Lod ~= "Full" then
+		return nil, math.huge
+	end
 	local best: number? = nil
 	local bestDistance = math.huge
 	-- (v9.9) le hall d'abord (on y entre par la porte) : "emplacement" 0
@@ -1103,6 +1322,26 @@ end
 
 -- Porte d'entrée : ouverte si quelqu'un d'autorisé est proche
 function HouseBuilder.StepDoor(self: House, open: boolean, locked: boolean)
+	-- (v10) niveau de détail + options d'extérieur changées par le propriétaire
+	self:StepLod()
+	local _, extText = extOf(self.Snapshot)
+	if extText ~= self.ExtText and self.Alive then
+		if self.Lod == "Full" then
+			self:BuildExterior()
+		else
+			self:BuildLite(self.Lod)
+		end
+	end
+	if self.Lod ~= "Full" then
+		local night = HouseBuilder.IsNight()
+		local _, _, key = ownerFlags(self)
+		local glowKey = tostring(night) .. "|" .. key
+		if glowKey ~= self.GlowKey then
+			self.GlowKey = glowKey
+			self:ApplyGlows(night)
+		end
+		return
+	end
 	local leaf = self.Door
 	local hinge = self.DoorHinge
 	if not leaf or not hinge then
@@ -1197,9 +1436,21 @@ function HouseBuilder.ApplyGlows(self: House, night: boolean)
 			end
 		end
 		for _, glow in ipairs(list) do
-			glow.Gui.Enabled = on
-			glow.Fill.BackgroundColor3 = color
-			glow.Fill.BackgroundTransparency = alpha
+			if glow.Gui and glow.Fill then
+				glow.Gui.Enabled = on
+				glow.Fill.BackgroundColor3 = color
+				glow.Fill.BackgroundTransparency = alpha
+			elseif glow.Part then
+				-- (v10 LOD) vitre simplifiée : teinte chaude douce (Neon sombre) la nuit
+				local part: BasePart = glow.Part
+				if on then
+					part.Color = color:Lerp(Color3.new(0, 0, 0), 0.25)
+					part.Material = M.Neon
+				else
+					part.Color = glow.Day or part.Color
+					part.Material = glow.DayMat or M.SmoothPlastic
+				end
+			end
 		end
 	end
 end
@@ -1283,7 +1534,11 @@ function HouseBuilder.Update(self: House, snapshot: any)
 		end
 	end
 	if sizeChanged or exteriorKey(snapshot) ~= self.ExteriorKey then
-		self:BuildExterior()
+		if self.Lod == "Full" then
+			self:BuildExterior()
+		else
+			self:BuildLite(self.Lod)
+		end
 	end
 end
 
@@ -1354,7 +1609,7 @@ function HouseBuilder.Audit(self: House): Audit
 			end
 		end
 	end
-	local expected = HouseFacade.Chimneys[self.Style] or 0
+	local expected = self.ChimneysExpected or HouseFacade.Chimneys[self.Style] or 0
 	return {
 		OK = extraShells == 0 and duplicates == 0 and missing == 0 and houses == 1 and self.Chimneys == expected,
 		Shells = count,

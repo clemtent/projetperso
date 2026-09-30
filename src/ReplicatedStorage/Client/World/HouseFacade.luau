@@ -112,7 +112,7 @@ local DEFAULT_WALL: { [string]: Color3 } = {
 	Loft = P.Brick,
 	Mansion = Color3.fromRGB(255, 232, 242),
 }
-local DEFAULT_ROOF: { [string]: Color3 } = {
+local _DEFAULT_ROOF: { [string]: Color3 } = {
 	Cottage = P.RoofPink,
 	Townhouse = P.Slate,
 	Loft = P.Slate,
@@ -227,7 +227,7 @@ local function material(name: string?, default: Enum.Material): Enum.Material
 	local ok, value = pcall(function()
 		return (Enum.Material :: any)[name]
 	end)
-	return if ok and typeof(value) == "EnumItem" then value else default
+	return if ok and typeof(value) == "EnumItem" then value :: any else default
 end
 
 -- Look d'origine de chaque style / architecture ("Auto" de chaque option)
@@ -936,8 +936,7 @@ local function porchCover(ctx: Ctx, kind: string, yTop: number, maxY: number, la
 		kit:Box("PorchBeam", gx - 5.2, gx + 5.2, y, y + 0.9, d0 - 0.8, -0.3, trim, M.Limestone, { Solid = true })
 		HouseDetail.GableX(kit, "PorchPediment", d0 - 0.6, d0 - 0.2, gx - 5.4, gx + 5.4, y + 0.9, y + 2.7, trim, M.Limestone, { Shadow = false })
 		for _, s in ipairs({ -1, 1 }) do
-			HouseDetail.Rod(kit, "PorchRoof", { gx + s * 5.6, y + 0.8, (d0 - 1 - 0.3) / 2 }, { gx, y + 2.9, (d0 - 1 - 0.3) / 2 }, -d0 + 0.3 + 0.9, 0.3, ctx.Roof, ctx.Spec.RoofMat,
-				{ Solid = true }, Vector3.new(0, 0, 1))
+			kit:SlabX("PorchRoof", (d0 - 1 - 0.3) / 2, { gx + s * 5.8, y + 0.75 }, { gx, y + 3.05 }, -d0 + 0.3 + 1, 0.35, ctx.Roof, ctx.Spec.RoofMat, { Solid = true })
 		end
 		return
 	end
@@ -956,8 +955,7 @@ local function porchCover(ctx: Ctx, kind: string, yTop: number, maxY: number, la
 			HouseDetail.GableX(kit, "PorchGable", d0 - 0.3, d0 - 0.1, gx - 5.6, gx + 5.6, y + 0.55, y + 3.2, ctx.Wall, ctx.WallMat, { Shadow = false })
 			for _, s in ipairs({ -1, 1 }) do
 				local mid = (d0 - 0.9 - 0.3) / 2
-				HouseDetail.Rod(kit, "PorchRoof", { gx + s * 6.2, y + 0.4, mid }, { gx, y + 3.4, mid }, -d0 + 0.3 + 1.2, 0.35, ctx.Roof, ctx.Spec.RoofMat, { Solid = true },
-					Vector3.new(0, 0, 1))
+				kit:SlabX("PorchRoof", mid, { gx + s * 6.4, y + 0.3 }, { gx, y + 3.55 }, -d0 + 0.3 + 1.2, 0.4, ctx.Roof, ctx.Spec.RoofMat, { Solid = true })
 			end
 		else
 			local n = 6
@@ -977,7 +975,7 @@ local function porchCover(ctx: Ctx, kind: string, yTop: number, maxY: number, la
 		local hood = ctx.Roof
 		for _, s in ipairs({ -1, 1 }) do
 			HouseDetail.Rod(kit, "HoodBracket", { gx + s * 3.9, y - 1.6, -0.35 }, { gx + s * 3.9, y, -1.9 }, 0.3, 0.3, C.WoodDark, M.Wood, { Shadow = false }, Vector3.new(1, 0, 0))
-			HouseDetail.Rod(kit, "HoodRoof", { gx + s * 4.6, y, -1.25 }, { gx, y + 1.5, -1.25 }, 2.3, 0.3, hood, ctx.Spec.RoofMat, { Shadow = true }, Vector3.new(0, 0, 1))
+			kit:SlabX("HoodRoof", -1.25, { gx + s * 4.7, y - 0.05 }, { gx, y + 1.62 }, 2.3, 0.3, hood, ctx.Spec.RoofMat, { Shadow = true })
 		end
 		HouseDetail.GableX(kit, "HoodGable", -0.6, -0.36, gx - 4.2, gx + 4.2, y, y + 1.3, ctx.Wall:Lerp(C.Pink, 0.1), M.Plaster, { Shadow = false })
 		return
@@ -1401,7 +1399,7 @@ local function gardenFront(ctx: Ctx, fence0: number, fence1: number, gateX: numb
 	HouseDetail.Path(ctx.G, pathPoints, pathW, spec.Path)
 	-- boîte aux lettres : côté rue, à gauche du portillon
 	if spec.Mailbox ~= "Wall" then
-		HouseDetail.Mailbox(ctx.G, spec.Mailbox, gateX - 4.4, FENCE_D - 1.6, spec.MailColor, spec.Num)
+		HouseDetail.Mailbox(ctx.G, spec.Mailbox, gateX - 5.6, FENCE_D - 1.4, spec.MailColor, spec.Num)
 	end
 end
 
@@ -1528,8 +1526,9 @@ STYLES.Cottage = function(ctx)
 		kit:Box("Beam", ctx.Left - T - 0.3, ctx.Right + T + 0.3, y - 0.3, y + 0.75, -0.66, -0.3, TIMBER, M.Wood, { Shadow = false })
 	end
 	kit:Box("Beam", ctx.Left - T - 0.3, ctx.Right + T + 0.3, WorldLayout.PLINTH - 0.1, WorldLayout.PLINTH + 0.5, -0.7, -0.3, TIMBER, M.Wood, { Shadow = false })
-	-- écharpes entre les fenêtres (panneaux pleins du milieu de chaque pièce)
-	for _, floor in ipairs({ 1 }) do
+	-- écharpes entre les fenêtres (panneaux pleins du milieu de chaque pièce ;
+	-- pas avec les volets, qui s'ouvrent à cet endroit)
+	for _, floor in ipairs(if spec.Shutters == "None" then { 1 } else {}) do
 		for column = 1, dims.Columns do
 			local rects = HouseFacade.WindowRects(ctx.Size, column, floor, spec)
 			if #rects == 2 then
@@ -2341,10 +2340,9 @@ STYLES.Chalet = function(ctx)
 		local rise = gw * 0.75
 		HouseDetail.GableX(kit, "CrossGable", -0.3, 0.7, gx - gw, gx + gw, yb, yb + rise, ctx.Wall, ctx.WallMat, { Solid = true, Shadow = true })
 		for _, s in ipairs({ -1, 1 }) do
-			HouseDetail.Rod(kit, "CrossRoof", { gx + s * (gw + 1.2), yb - 0.6, 3.2 }, { gx, yb + rise + 0.35, 3.2 }, 8.6, 0.55, ctx.Roof, spec.RoofMat, { Solid = true },
-				Vector3.new(0, 0, 1))
-			HouseDetail.Rod(kit, "CrossBarge", { gx + s * (gw + 1.2), yb - 0.75, -1.05 }, { gx, yb + rise + 0.2, -1.05 }, 0.9, 0.4, ctx.Trim, M.Wood, { Shadow = false },
-				Vector3.new(0, 0, 1))
+			local edge = gx + s * (gw + 1.2)
+			kit:SlabX("CrossRoof", 3.2, { edge, yb - 0.9 }, { gx, yb + rise + 0.35 }, 8.6, 0.55, ctx.Roof, spec.RoofMat, { Solid = true, Shadow = true })
+			kit:SlabX("CrossBarge", -1.05, { edge - s * 0.1, yb - 0.6 }, { gx, yb + rise + 0.65 }, 0.4, 0.9, ctx.Trim, M.Wood, { Shadow = false })
 		end
 		-- fenêtre ronde + balconnet du pignon
 		kit:CylD("GableWindowRing", gx, yb + rise * 0.42, -0.4, 3, 0.3, ctx.Trim, M.Wood, { Shadow = false })
@@ -2500,10 +2498,19 @@ local function plotBounds(ctx: Ctx)
 		for _, s in ipairs({ -1, 1 }) do
 			-- sous-kit tourné : son axe x suit la profondeur d de la maison
 			local sub = ctx.G:Sub(CFrame.new(s * PLOT_HALF, 0, 0) * CFrame.Angles(0, math.pi / 2, 0))
-			HouseDetail.Fence(sub, PLOT_FRONT, PLOT_BACK - 1.2, 0, { Kind = sideKind, Gate0 = 0, Gate1 = 0, NoGate = true })
+			HouseDetail.Fence(sub, PLOT_FRONT, PLOT_BACK - 1.2, 0, { Kind = sideKind, Gate0 = 0, Gate1 = 0, NoGate = true, Cheap = true })
 		end
 	end
-	HouseDetail.Fence(ctx.G, -PLOT_HALF + 0.4, PLOT_HALF - 0.4, PLOT_BACK, { Kind = "Hedge", Gate0 = 0, Gate1 = 0, NoGate = true })
+	HouseDetail.Fence(ctx.G, -PLOT_HALF + 0.4, PLOT_HALF - 0.4, PLOT_BACK, { Kind = "Hedge", Gate0 = 0, Gate1 = 0, NoGate = true, Cheap = true })
+	-- deux arbres aux coins avant de la parcelle (ceux du serveur, v9.7)
+	for _, s in ipairs({ -1, 1 }) do
+		local x = s * (PLOT_HALF - 5)
+		if ctx.Spec.Arch == "Chalet" then
+			pine(ctx, x, PLOT_FRONT - 0.5, 1.2)
+		elseif not (ctx.Garage and s > 0) and not (ctx.SideGarage and s > 0 and ctx.Right + 20 > x - 4) then
+			tree(ctx, x, PLOT_FRONT - 0.5, 1.15, nil)
+		end
+	end
 end
 
 ----------------------------------------------------------------------

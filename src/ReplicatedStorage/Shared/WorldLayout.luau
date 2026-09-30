@@ -879,7 +879,7 @@ local function buildCity(count: number): any
 		else
 			nearU, dirU = u1, -1
 		end
-		local K, gap = def.K, def.Gap
+		local gap = def.Gap
 		local pitch = W + gap
 		local margin = def.Margin
 		local units, kUsed = districtShape(def, n)
@@ -1058,14 +1058,14 @@ local function buildCity(count: number): any
 				local xs = { r.X - r.W / 2, r.X + r.W / 2 }
 				for _, c in ipairs({ px0, px1 }) do
 					if c > xs[1] + 8 and c < xs[#xs] - 8 then
-						table.insert(xs, #xs, c)
+						table.insert(xs, (#xs), c)
 					end
 				end
 				table.sort(xs)
 				local zs = { r.Z - r.D / 2, r.Z + r.D / 2 }
 				for _, c in ipairs({ pz0, pz1 }) do
 					if c > zs[1] + 8 and c < zs[#zs] - 8 then
-						table.insert(zs, #zs, c)
+						table.insert(zs, (#zs), c)
 					end
 				end
 				table.sort(zs)

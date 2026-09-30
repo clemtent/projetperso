@@ -46,7 +46,8 @@
 	  ImpactRules.QuietServerRagdoll(character)  (client : neutralise
 	      localement le ragdoll du serveur quand on se relève)
 	  ImpactRules.RigOf(character) -> rig (Motor6D par clé) | nil
-	  ImpactRules.GetUpPose(u, faceUp, pivotH) / StumblePose(t, lx, lz)
+	  ImpactRules.GetUpPose(u, faceUp, pivotH, rig?) / StumblePose(t, lx, lz)
+	      (avec le squelette : le corps reste posé sur le sol à chaque instant)
 	  ImpactRules.ApplyPose(rig, pose) / ClearPose(rig)
 	  ImpactRules.StartNpcReact(model, kind, dir) / NpcReact(model, pivot, now)
 ]]
@@ -540,9 +541,19 @@ local KEYS = {
 }
 ImpactRules.POSE_KEYS = KEYS
 
-export type Rig = { R6: boolean, Motors: { [string]: Motor6D }, Rot: { [string]: CFrame }, PivotH: number, Character: Model }
+export type Link = { Motor: Motor6D, Key: string?, Part0: BasePart, Part1: BasePart, C0: CFrame, C1Inv: CFrame, Half: Vector3 }
+export type Rig = {
+	R6: boolean,
+	Motors: { [string]: Motor6D },
+	Rot: { [string]: CFrame },
+	Chain: { Link },
+	StandY: number, -- centre du HRP au-dessus du sol, debout (d'après le squelette)
+	PivotH: number, -- pivot de la racine au-dessus du sol, debout
+	Character: Model,
+}
 
--- Moteurs du personnage par clé + hauteur du pivot de la racine au-dessus du sol (debout)
+-- Moteurs du personnage par clé + chaîne complète (HRP -> membres, pour poser
+-- le corps AU SOL quelle que soit la pose) + hauteurs debout
 function ImpactRules.RigOf(character: Model?): Rig?
 	if not character then
 		return nil
@@ -554,30 +565,75 @@ function ImpactRules.RigOf(character: Model?): Rig?
 	end
 	local r6 = humanoid.RigType == Enum.HumanoidRigType.R6
 	local byName: { [string]: Motor6D } = {}
+	local all: { Motor6D } = {}
 	for _, d in ipairs(character:GetDescendants()) do
-		if d:IsA("Motor6D") and not byName[d.Name] then
-			byName[d.Name] = d
+		if d:IsA("Motor6D") then
+			if not byName[d.Name] then
+				byName[d.Name] = d
+			end
+			table.insert(all, d)
 		end
 	end
 	local motors: { [string]: Motor6D } = {}
 	local rot: { [string]: CFrame } = {}
+	local keyOf: { [Motor6D]: string } = {}
 	for key, names in pairs(KEYS) do
 		local name = if r6 then names[2] else names[1]
 		local m = name ~= "" and byName[name] or nil
 		if m then
 			motors[key] = m
 			rot[key] = m.C0.Rotation
+			keyOf[m] = key
 		end
 	end
 	if not motors.Root then
 		return nil
 	end
-	-- hauteur du pivot de la racine : HRP debout (HipHeight + moitié du HRP ;
-	-- R6 : jambes de 2) + position du pivot dans le HRP
-	local standY = if r6 then 3 else humanoid.HipHeight + root.Size.Y / 2
-	local c0 = motors.Root.C0
-	local pivotH = standY + (if motors.Root.Part0 == root then c0.Position.Y else 0)
-	return { R6 = r6, Motors = motors, Rot = rot, PivotH = math.max(0.8, pivotH), Character = character }
+	-- chaîne depuis le HRP (ordre : parent avant enfant), pièces du corps seulement
+	local chain: { Link } = {}
+	local reached: { [BasePart]: boolean } = { [root :: BasePart] = true }
+	for _ = 1, 12 do
+		local grew = false
+		for _, m in ipairs(all) do
+			local p0, p1 = m.Part0, m.Part1
+			if p0 and p1 and reached[p0] and not reached[p1] and p1.Parent == character then
+				reached[p1] = true
+				grew = true
+				table.insert(chain, { Motor = m, Key = keyOf[m], Part0 = p0, Part1 = p1, C0 = m.C0, C1Inv = m.C1:Inverse(), Half = p1.Size / 2 })
+			end
+		end
+		if not grew then
+			break
+		end
+	end
+	local rig: Rig = { R6 = r6, Motors = motors, Rot = rot, Chain = chain, StandY = 3, PivotH = 2.6, Character = character }
+	-- hauteur debout : le point le plus bas du corps au repos touche le sol
+	local low = ImpactRules.LowestPoint(rig, nil)
+	rig.StandY = if low < -0.5 then -low else (if r6 then 3 else humanoid.HipHeight + root.Size.Y / 2)
+	rig.PivotH = math.max(0.8, rig.StandY + (if motors.Root.Part0 == root then motors.Root.C0.Position.Y else 0))
+	return rig
+end
+
+-- Point le plus bas du corps (repère du HRP, HRP à l'origine) pour une pose
+-- (nil = repos). Sert à garder le corps posé sur le sol.
+function ImpactRules.LowestPoint(rig: Rig, pose: { [string]: CFrame }?): number
+	local frames: { [BasePart]: CFrame } = {}
+	local lowest = math.huge
+	for _, link in ipairs(rig.Chain) do
+		local f0 = frames[link.Part0] or CFrame.identity
+		local t = CFrame.identity
+		if pose and link.Key and pose[link.Key] then
+			t = ImpactRules.ToTransform(rig.Rot[link.Key :: string], pose[link.Key :: string])
+		end
+		local f1 = f0 * link.C0 * t * link.C1Inv
+		frames[link.Part1] = f1
+		local h = link.Half
+		local y = f1.Position.Y - (math.abs(f1.RightVector.Y) * h.X + math.abs(f1.UpVector.Y) * h.Y + math.abs(f1.LookVector.Y) * h.Z)
+		if y < lowest then
+			lowest = y
+		end
+	end
+	return if lowest == math.huge then -3 else lowest
 end
 
 local rad = math.rad
@@ -637,7 +693,7 @@ end
 -- Pose "se relever" à l'avancement u (0 = allongé, 1 = debout) ; faceUp = sur
 -- le dos ; pivotH = hauteur du pivot de la racine debout. Rotations dans le
 -- repère du personnage (voir ApplyPose pour la conversion en Transform).
-function ImpactRules.GetUpPose(u: number, faceUp: boolean, pivotH: number): Pose
+function ImpactRules.GetUpPose(u: number, faceUp: boolean, pivotH: number, rig: Rig?): Pose
 	local keys = if faceUp then GETUP_BACK else GETUP_FRONT
 	local k = keyAt(keys, u)
 	-- hauteur en studs, interpolée entre les deux clés voisines
@@ -651,17 +707,25 @@ function ImpactRules.GetUpPose(u: number, faceUp: boolean, pivotH: number): Pose
 	local kk = smooth((math.clamp(u, 0, 1) - lo.u) / math.max(1e-6, hi.u - lo.u))
 	local h = heightOf(lo.h, pivotH) + (heightOf(hi.h, pivotH) - heightOf(lo.h, pivotH)) * kk
 	local pose: Pose = {}
-	pose.Root = CFrame.new(0, h - pivotH, 0) * CFrame.Angles(rad(k.root), 0, 0)
+	local rootRot = CFrame.Angles(rad(k.root), 0, 0)
+	pose.Root = CFrame.new(0, h - pivotH, 0) * rootRot
 	pose.Waist = CFrame.Angles(rad(k.waist), 0, 0)
 	pose.Neck = CFrame.Angles(rad(k.neck), 0, 0)
 	pose.LShoulder = CFrame.Angles(rad(k.sh), 0, rad(-k.abd))
 	pose.RShoulder = CFrame.Angles(rad(k.sh), 0, rad(k.abd))
 	pose.LElbow = CFrame.Angles(rad(k.elbow), 0, 0)
 	pose.RElbow = CFrame.Angles(rad(k.elbow), 0, 0)
-	pose.LHip = CFrame.Angles(rad(k.hip), 0, rad(-3))
-	pose.RHip = CFrame.Angles(rad(k.hip), 0, rad(3))
+	pose.LHip = CFrame.Angles(rad(k.hip), 0, rad(-3 * (1 - math.clamp(u, 0, 1))))
+	pose.RHip = CFrame.Angles(rad(k.hip), 0, rad(3 * (1 - math.clamp(u, 0, 1))))
 	pose.LKnee = CFrame.Angles(rad(-k.knee), 0, 0)
 	pose.RKnee = CFrame.Angles(rad(-k.knee), 0, 0)
+	if rig then
+		-- (squelette connu) le corps reste POSÉ sur le sol à chaque instant :
+		-- le point le plus bas touche le sol (quelle que soit la taille de l'avatar)
+		pose.Root = rootRot
+		local low = ImpactRules.LowestPoint(rig, pose)
+		pose.Root = CFrame.new(0, -(rig.StandY + low), 0) * rootRot
+	end
 	return pose
 end
 

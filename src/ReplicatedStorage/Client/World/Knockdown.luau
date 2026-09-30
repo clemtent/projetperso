@@ -384,7 +384,7 @@ local function beginGetUp()
 	me.Down = false
 	me.Anim = { Kind = "getup", T0 = os.clock(), FaceUp = faceUp, Lx = 0, Lz = 0, Rig = rig }
 	if rig then
-		ImpactRules.ApplyPose(rig, ImpactRules.GetUpPose(0, faceUp, rig.PivotH))
+		ImpactRules.ApplyPose(rig, ImpactRules.GetUpPose(0, faceUp, rig.PivotH, rig))
 	end
 	fire("up", faceUp)
 	log("getup " .. tostring(faceUp))
@@ -896,7 +896,7 @@ local function poseStep()
 			if age >= ImpactRules.GETUP_TIME then
 				endAnim()
 			else
-				ImpactRules.ApplyPose(anim.Rig, ImpactRules.GetUpPose(age / ImpactRules.GETUP_TIME, anim.FaceUp, anim.Rig.PivotH))
+				ImpactRules.ApplyPose(anim.Rig, ImpactRules.GetUpPose(age / ImpactRules.GETUP_TIME, anim.FaceUp, anim.Rig.PivotH, anim.Rig))
 			end
 		elseif anim.Kind == "stumble" then
 			if age >= ImpactRules.STUMBLE_TIME or me.Down then
@@ -921,7 +921,7 @@ local function poseStep()
 			others[character] = nil
 		elseif age >= 0 then
 			if a.Kind == "getup" then
-				ImpactRules.ApplyPose(rig, ImpactRules.GetUpPose(age / limit, a.FaceUp, rig.PivotH))
+				ImpactRules.ApplyPose(rig, ImpactRules.GetUpPose(age / limit, a.FaceUp, rig.PivotH, rig))
 			else
 				ImpactRules.ApplyPose(rig, ImpactRules.StumblePose(age, a.Lx, a.Lz))
 			end
