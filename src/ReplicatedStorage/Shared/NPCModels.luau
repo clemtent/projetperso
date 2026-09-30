@@ -110,7 +110,7 @@ local J = {
 }
 local THIGH_LEN = 1.1 -- (hanche -> genou)
 local KNEE_Y = 1.5 -- (genou -> sol, pied à plat)
-local HIP_OVER_SEAT = 0.26 -- (articulation de la hanche au-dessus du siège)
+local HIP_OVER_SEAT = 0.22 -- (articulation de la hanche au-dessus du siège)
 NPCModels.Joints = J
 
 -- Tête (centre du crâne) et visage
@@ -1023,6 +1023,10 @@ type Rig = {
 	Clock: number,
 	NoLook: boolean,
 	SitTop: number?,
+	Anim: string?,
+	From: any?, -- (pose au changement d'anim : fondu)
+	FadeAt: number,
+	Last: any?,
 }
 
 local function rigOf(model: Model): Rig?
@@ -1055,6 +1059,10 @@ local function rigOf(model: Model): Rig?
 		Clock = os.clock(),
 		NoLook = model:GetAttribute("NpcNoLook") == true,
 		SitTop = nil,
+		Anim = nil,
+		From = nil,
+		FadeAt = 0,
+		Last = nil,
 	}
 	for _, d in ipairs(model:GetChildren()) do
 		if d:IsA("BasePart") then
@@ -1366,6 +1374,28 @@ local function pose(anim: string, t: number, propKind: string?, seed: number, se
 	return P
 end
 
+-- Fondu entre deux poses (changement d'anim : marche -> arrêt, etc.)
+local FADE = 0.35
+local function lerpPose(a: any, b: any, k: number): any
+	local out = {}
+	for key, vb in pairs(b) do
+		local va = a[key]
+		if type(vb) == "number" and type(va) == "number" then
+			out[key] = va + (vb - va) * k
+		elseif typeof(vb) == "CFrame" then
+			out[key] = (typeof(va) == "CFrame" and va or CFrame.identity):Lerp(vb, k)
+		else
+			out[key] = vb
+		end
+	end
+	for key, va in pairs(a) do
+		if b[key] == nil and typeof(va) == "CFrame" then
+			out[key] = va:Lerp(CFrame.identity, k)
+		end
+	end
+	return out
+end
+
 -- Déplace un PNJ (pièce racine seulement ; Animate repose les autres)
 function NPCModels.Place(model: Model, cf: CFrame)
 	local root = model.PrimaryPart
@@ -1451,6 +1481,24 @@ function NPCModels.Animate(model: Model, anim: string, t: number, look: Vector3?
 	local clock = os.clock()
 	local dt = math.clamp(clock - rig.Clock, 0, 0.25)
 	rig.Clock = clock
+	-- fondu doux quand l'anim change (pas de saut de pose)
+	if rig.Anim ~= anim then
+		if rig.Anim ~= nil and rig.Last then
+			rig.From = rig.Last
+			rig.FadeAt = clock
+		end
+		rig.Anim = anim
+	end
+	if rig.From then
+		local k = (clock - rig.FadeAt) / FADE
+		if k >= 1 then
+			rig.From = nil
+		else
+			k = k * k * (3 - 2 * k)
+			P = lerpPose(rig.From, P, k) :: Pose
+		end
+	end
+	rig.Last = P
 
 	-- regard : vers `look`, sinon vers l'avatar local proche (≤ 14 studs, devant)
 	local wantYaw, wantPitch, wantW = 0, 0, 0

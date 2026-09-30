@@ -2615,11 +2615,24 @@ do
 			local h0, h1 = L.HallSpan(size)
 			check(L.SlotAt(size, (h0 + h1) / 2, L.FloorY(1) + 2, 10) == nil, size.Id .. " : la cage n'est pas une pièce")
 			check(not L.InsideHouse(size, 0, 3, -8, 0), size.Id .. " : le jardin n'est pas dans la maison")
-			-- porte d'entrée dans la cage, face à l'escalier
+			-- porte d'entrée dans la cage
 			local door = L.DoorX(size)
 			check(door - L.DOOR_W / 2 >= h0 and door + L.DOOR_W / 2 <= h1, size.Id .. " porte")
+			-- (v9.9 HOUSE99) escalier le long du mur de droite, couloir d'entrée libre à gauche
 			local s0, s1 = L.StairSpan(size)
-			check(s0 > h0 + 2.5 and s1 < h1 - 2.5, size.Id .. " escalier au milieu de la cage (couloirs de chaque côté)")
+			local c0, c1 = L.CorridorSpan(size)
+			check(s1 <= h1 and s1 > h1 - 0.5 and s1 - s0 >= 4, size.Id .. " escalier contre le mur de droite de la cage")
+			check(c1 - c0 >= 7 and c1 <= s0 + 1e-9, size.Id .. " couloir d'entrée libre (" .. (c1 - c0) .. ")")
+			local d0, d1, tread, rise = L.StairRun(size)
+			check(rise <= 1 and tread >= 0.9 and L.StairSlope(size) <= 40, size.Id .. " marches <= 1 stud, pente <= 40° (" .. L.StairSlope(size) .. ")")
+			check(math.abs(d0 + (L.STAIR_RISERS - 1) * tread - d1) < 1e-9, size.Id .. " volée complète")
+			-- passages de la cage : jamais derrière la volée
+			for sideName, span in pairs(L.HallPassages(size)) do
+				check(span[2] - span[1] >= 4.5, size.Id .. " passage " .. sideName)
+				if sideName == "Right" then
+					check(span[1] >= d1, size.Id .. " passage de droite derrière l'arrivée de la volée")
+				end
+			end
 			-- colonnes contiguës hors de la cage, sans chevauchement
 			for column = 1, size.Columns do
 				local c0, c1 = L.ColumnSpan(size, column)
@@ -2633,9 +2646,9 @@ do
 		end
 		-- (v9.4) escalier : pente <= 40°, hauteur libre >= 7 partout, haut au ras de l'étage
 		check(L.StairSlope() <= 40, "pente de l'escalier " .. L.StairSlope())
-		eq(check, L.STAIR_STEPS * L.STAIR_RISE, L.STORY, "13 marches = un étage")
+		check(math.abs(L.STAIR_STEPS * L.STAIR_RISE - L.STORY) < 1e-9, "18 marches = un étage")
 		check(math.abs(L.StairHeight(L.STAIR_D1) - L.STORY) < 1e-9, "haut de la rampe au ras de l'étage")
-		check(L.StairHeight(L.STAIR_D0) == 0, "bas de la rampe au sol")
+		check(math.abs(L.StairHeight(L.STAIR_D0 - L.STAIR_TREAD / 2)) < 1e-9, "bas de la rampe au sol")
 		local minHead = math.huge
 		for i = 0, 200 do
 			local d = L.STAIR_D0 + (L.STAIR_D1 - L.STAIR_D0) * i / 200

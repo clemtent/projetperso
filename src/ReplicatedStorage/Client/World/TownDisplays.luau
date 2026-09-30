@@ -42,8 +42,6 @@ local ClockKit = require(script.Parent.ClockKit)
 
 local TownDisplays = {}
 
-local rgb = Color3.fromRGB
-local M = Enum.Material
 local FOLDER_NAME = "TownDisplaysClient"
 local PAGE_TIME = 12
 local CLOCK_NEAR, CLOCK_FAR = 120, 400
@@ -73,24 +71,6 @@ local function hide(instance: Instance, property: string, value: any)
 			(instance :: any)[property] = value
 		end)
 	end
-end
-
-local function part(parent: Instance, name: string, size: Vector3, cf: CFrame, color: Color3, material: Enum.Material?): BasePart
-	local p = Instance.new("Part")
-	p.Name = name
-	p.Anchored = true
-	p.CanCollide = false
-	p.CanQuery = false
-	p.CanTouch = false
-	p.CastShadow = false
-	p.Size = size
-	p.CFrame = cf
-	p.Color = color
-	p.Material = material or M.SmoothPlastic
-	p.TopSurface = Enum.SurfaceType.Smooth
-	p.BottomSurface = Enum.SurfaceType.Smooth
-	p.Parent = parent
-	return p
 end
 
 ----------------------------------------------------------------------
@@ -254,33 +234,7 @@ local function dressHall(hall: Instance, parent: Instance)
 		})
 		boardPos = screen.Position
 		-- liseré chromé autour de l'écran + plaque « DOPA TV » (devant le cadre du serveur)
-		local cf = screen.CFrame
-		local w, h, d = screen.Size.X, screen.Size.Y, screen.Size.Z
-		local front = -d / 2 - 0.06
-		local lip = 0.22
-		local chrome = rgb(196, 200, 212)
-		part(parent, "BezelTop", Vector3.new(w + 2 * lip, lip, 0.12), cf * CFrame.new(0, h / 2 + lip / 2, front), chrome, M.Metal).Reflectance = 0.2
-		part(parent, "BezelBottom", Vector3.new(w + 2 * lip, lip, 0.12), cf * CFrame.new(0, -h / 2 - lip / 2, front), chrome, M.Metal).Reflectance = 0.2
-		part(parent, "BezelLeft", Vector3.new(lip, h, 0.12), cf * CFrame.new(-w / 2 - lip / 2, 0, front), chrome, M.Metal).Reflectance = 0.2
-		part(parent, "BezelRight", Vector3.new(lip, h, 0.12), cf * CFrame.new(w / 2 + lip / 2, 0, front), chrome, M.Metal).Reflectance = 0.2
-		local plate = part(parent, "TVPlate", Vector3.new(4.2, 0.5, 0.1), cf * CFrame.new(0, -h / 2 - lip - 0.28, front - 0.01), rgb(30, 28, 40), M.Metal)
-		local g = Instance.new("SurfaceGui")
-		g.Name = "Plate"
-		g.Face = Enum.NormalId.Front
-		g.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-		g.PixelsPerStud = 50
-		g.LightInfluence = 0.3
-		g.MaxDistance = 160
-		g.Parent = plate
-		local l = Instance.new("TextLabel")
-		l.BackgroundTransparency = 1
-		l.Size = UDim2.fromScale(0.9, 0.8)
-		l.Position = UDim2.fromScale(0.05, 0.1)
-		l.Font = Enum.Font.GothamBlack
-		l.TextScaled = true
-		l.Text = "📺 DOPA TV"
-		l.TextColor3 = rgb(236, 236, 246)
-		l.Parent = g
+		BoardKit.Frame(parent, screen, { Lip = 0.22, PlateH = 0.35 })
 		refreshBoard(os.clock())
 	end
 	-- HORLOGE de la tour

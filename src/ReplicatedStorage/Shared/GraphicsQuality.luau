@@ -17,6 +17,10 @@
 	  GfxShadows     "Auto" | "Low" | "High"
 	  GfxEffects     "Auto" | "On" | "Off"          (bloom, rayons, flou lointain)
 	  GfxDetail      "Auto" | "Low" | "Medium" | "High"
+	  GfxTime        "Auto" | "Day" | "Sunset" | "Night"   (v9.9 REALISM99 : heure du
+	                                                 jour en ville, pour CE joueur seulement ;
+	                                                 Auto = l'heure de la ville, voir
+	                                                 TownAtmosphere ; hors préréglages)
 	"Auto" = la valeur du préréglage (Mode réaliste ON ou OFF). Activer /
 	couper le Mode réaliste remet les réglages détaillés sur "Auto".
 
@@ -29,6 +33,7 @@
 	    Detail: "Low" | "Medium" | "High",
 	    DetailScale: number,   -- 0.65 / 1 / 1.35 : multiplie les distances de flux
 	    MaxMirrors: number,    -- miroirs "vivants" en même temps (0, 1 ou 2)
+	    TimeOfDay: "Auto" | "Day" | "Sunset" | "Night",
 	    Phone: boolean, LowEnd: boolean,
 	  }
 
@@ -63,8 +68,12 @@ GraphicsQuality.KEYS = {
 	GfxShadows = { "Auto", "Low", "High" },
 	GfxEffects = { "Auto", "On", "Off" },
 	GfxDetail = { "Auto", "Low", "Medium", "High" },
+	GfxTime = { "Auto", "Day", "Sunset", "Night" }, -- (v9.9) heure du jour, choix du joueur
 }
-GraphicsQuality.ORDER = { "GfxRealistic", "GfxReflections", "GfxWeather", "GfxRain", "GfxShadows", "GfxEffects", "GfxDetail" }
+GraphicsQuality.ORDER = { "GfxRealistic", "GfxReflections", "GfxWeather", "GfxRain", "GfxShadows", "GfxEffects", "GfxDetail", "GfxTime" }
+-- (v9.9) clés qui ne sont PAS des niveaux de qualité : le préréglage
+-- "Mode réaliste" ne les remet pas sur "Auto"
+GraphicsQuality.NOT_PRESET = { GfxTime = true }
 
 -- Préréglages : "Réaliste" (ordinateur) et "Standard" (= le rendu de la v9.7)
 local PRESET_REAL = {
@@ -119,6 +128,7 @@ export type Quality = {
 	Detail: string,
 	DetailScale: number,
 	MaxMirrors: number,
+	TimeOfDay: string,
 	Phone: boolean,
 	LowEnd: boolean,
 }
@@ -183,6 +193,7 @@ function GraphicsQuality.Resolve(saved: { [string]: any }?, device: Device?): Qu
 		Detail = detail,
 		DetailScale = DETAIL_SCALE[detail] or 1,
 		MaxMirrors = maxMirrors,
+		TimeOfDay = read("GfxTime"),
 		Phone = dev.Phone == true,
 		LowEnd = dev.LowEnd == true,
 	}

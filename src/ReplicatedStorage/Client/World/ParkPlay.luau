@@ -491,13 +491,11 @@ local function swingPose(seatCF: CFrame, angle: number, phase: number, env: numb
 	pose.Waist = Rx(4 + 12 * c)
 	pose.Neck = Rx(-6 - 6 * c)
 	-- mains sur les chaînes (gaine), un peu au-dessus des épaules
-	local S = ParkMotion.SWING
-	local _ = S
 	pose.RHand = (seatCF * CFrame.new(0.9, 2.55, 0.05)).Position
 	pose.LHand = (seatCF * CFrame.new(-0.9, 2.55, 0.05)).Position
 	pose.RPole = (seatCF.RightVector * 0.6 + seatCF.LookVector * -0.5 - seatCF.UpVector * 0.4)
 	pose.LPole = (seatCF.RightVector * -0.6 + seatCF.LookVector * -0.5 - seatCF.UpVector * 0.4)
-	local _a = angle
+	local _ = angle
 	return pose
 end
 
@@ -544,7 +542,9 @@ local function buildFence(park: Park)
 		for k = 0, n do
 			local p = a:Lerp(b, k / n)
 			local key = string.format("%.1f_%.1f", p.X, p.Z)
-			if not posts[key] then
+			-- (pas de poteau là où se dresse un pilier du portillon)
+			local atGate = math.abs(math.abs(p.X) - (gate + 0.3)) < 0.05 and math.abs(p.Z + hd) < 0.05
+			if not posts[key] and not atGate then
 				posts[key] = true
 				newPart(f, "FencePost", Vector3.new(0.36, 2.9, 0.36), g * CFrame.new(p + Vector3.new(0, 1.45, 0)), WHITE, M.Wood, nil, true)
 				ball(f, "PostCap", g * (p + Vector3.new(0, 3.0, 0)), 0.42, WHITE, M.SmoothPlastic)
@@ -556,18 +556,20 @@ local function buildFence(park: Park)
 			inward = -inward
 		end
 		for _, y in ipairs({ 0.75, 2.05 }) do
-			slab(f, "FenceRail", g * (a + inward * 0.26 + Vector3.new(0, y, 0)), g * (b + inward * 0.26 + Vector3.new(0, y, 0)), 0.14, 0.26, rgb(236, 236, 230), M.Wood)
+			slab(f, "FenceRail", g * (a + inward * 0.16 + Vector3.new(0, y, 0)), g * (b + inward * 0.16 + Vector3.new(0, y, 0)), 0.14, 0.26, rgb(236, 236, 230), M.Wood)
 		end
 		-- lattes à bout arrondi, régulières entre les poteaux
 		local count = math.floor(len / 1.3)
 		for k = 1, count do
 			local t = (k - 0.5) / count
 			local p = a:Lerp(b, t)
-			local edge = math.min(t * len, (1 - t) * len)
-			if edge > 0.45 then
+			-- (pas de latte dans un poteau)
+			local along = t * len
+			local spacing = len / n
+			local nearPost = math.abs(along - math.floor(along / spacing + 0.5) * spacing) < 0.45
+			if not nearPost then
 				local cf = g * CFrame.lookAt(p + Vector3.new(0, 1.3, 0), p + Vector3.new(0, 1.3, 0) + inward)
 				newPart(f, "Picket", Vector3.new(0.42, 2.3, 0.1), cf, WHITE, M.Wood)
-				newPart(f, "PicketTop", Vector3.new(0.1, 0.42, 0.42), cf * CFrame.new(0, 1.15, 0) * CFrame.Angles(0, math.pi / 2, 0), WHITE, M.Wood, CYL)
 			end
 		end
 		local _ = ri
@@ -603,25 +605,25 @@ local function buildGround(park: Park)
 		newPart(f, name, Vector3.new(w, 0.06, d), g * CFrame.new(cx, T + lift - 0.03, cz), color, M.Rubber)
 	end
 	local S = ParkMotion.SWING
-	mat("SwingMat", S.Center.X, S.Center.Z, 11.2, 9.6, rgb(70, 124, 190), 0.02)
+	mat("SwingMat", S.Center.X, S.Center.Z, 11.2, 9.6, rgb(70, 124, 190), 0.035)
 	local sd = ParkMotion.SEESAW
-	mat("SeesawMat", sd.Center.X, sd.Center.Z, 10.4, 3.6, rgb(120, 180, 90), 0.02)
+	mat("SeesawMat", sd.Center.X, sd.Center.Z, 10.4, 3.6, rgb(120, 180, 90), 0.035)
 	local sl = ParkMotion.SLIDE
-	mat("SlideMat", sl.Tower.X, sl.Tower.Z + 6.2, 5, 11.6, rgb(236, 170, 70), 0.02)
+	mat("SlideMat", sl.Tower.X, sl.Tower.Z + 6.2, 5, 11.6, rgb(236, 170, 70), 0.035)
 	local mg = ParkMotion.MERRY
-	disc(f, "MerryMat", g * CFrame.new(mg.Center), T + 0.02, mg.Radius + 2.1, 0.06, rgb(96, 170, 140), M.Rubber)
+	disc(f, "MerryMat", g * CFrame.new(mg.Center), T + 0.065, mg.Radius + 2.1, 0.06, rgb(96, 170, 140), M.Rubber)
 	for i = 1, #ParkMotion.SPRINGS do
-		disc(f, "SpringMat", g * ParkMotion.SpringBase(i), T + 0.02, 2.2, 0.06, rgb(186, 120, 200), M.Rubber)
+		disc(f, "SpringMat", g * ParkMotion.SpringBase(i), T + 0.035, 2.2, 0.06, rgb(186, 120, 200), M.Rubber)
 	end
 	local mk = ParkMotion.MONKEY
-	mat("MonkeyMat", (mk.X0 + mk.X1) / 2, mk.Z, mk.X1 - mk.X0 + 4, 4.2, rgb(214, 96, 96), 0.02)
+	mat("MonkeyMat", (mk.X0 + mk.X1) / 2, mk.Z, mk.X1 - mk.X0 + 4, 4.2, rgb(214, 96, 96), 0.035)
 	-- marelle peinte dans l'allée du portillon (1-2-3, 4|5, 6, 7|8, CIEL)
 	local cells = { { 0, -13.6 }, { 0, -12.3 }, { -0.62, -11.0 }, { 0.62, -11.0 }, { 0, -9.7 }, { -0.62, -8.4 }, { 0.62, -8.4 }, { 0, -7.1 } }
 	for i, c in ipairs(cells) do
 		local w = (c[1] ~= 0) and 1.12 or 1.2
-		newPart(f, "Hopscotch", Vector3.new(w, 0.04, 1.2), g * CFrame.new(c[1], T + 0.02, c[2]), i % 2 == 0 and rgb(255, 255, 255) or rgb(255, 214, 90), M.SmoothPlastic)
+		newPart(f, "Hopscotch", Vector3.new(w, 0.04, 1.2), g * CFrame.new(c[1], T + 0.035, c[2]), i % 2 == 0 and rgb(255, 255, 255) or rgb(255, 214, 90), M.SmoothPlastic)
 	end
-	disc(f, "HopSky", g * CFrame.new(0, 0, -5.9), T + 0.02, 0.8, 0.04, rgb(130, 200, 255), M.SmoothPlastic)
+	disc(f, "HopSky", g * CFrame.new(0, 0, -5.9), T + 0.09, 0.8, 0.04, rgb(130, 200, 255), M.SmoothPlastic)
 	f.Parent = park.Folder
 end
 
@@ -640,7 +642,7 @@ local function buildSwings(park: Park)
 		ball(f, "BeamCap", at(park, x + sx * 0.25, topY, c.Z), 0.56, GREEN_D, M.SmoothPlastic)
 		newPart(f, "Clamp", Vector3.new(0.7, 0.9, 0.9), g * CFrame.new(x, topY - 0.1, c.Z), GREEN_D, M.Metal, nil, true)
 		for _, sz in ipairs({ -1, 1 }) do
-			local foot = Vector3.new(x + sx * 0.45, S.PivotY - S.PivotY + ParkMotion.FLOOR_TOP, c.Z + sz * 2.7)
+			local foot = Vector3.new(x + sx * 0.45, ParkMotion.FLOOR_TOP, c.Z + sz * 2.7)
 			rod(f, "SwingLeg", at(park, x, topY - 0.2, c.Z + sz * 0.2), g * foot, 0.42, GREEN, M.Metal, true)
 			disc(f, "LegFoot", g * CFrame.new(foot), ParkMotion.FLOOR_TOP + 0.08, 0.36, 0.1, STEEL_D, M.Metal)
 		end
@@ -709,11 +711,11 @@ local function buildSlide(park: Park)
 	local panel = newPart(f, "SidePanel", Vector3.new(0.16, 2.3, S.Deck - 0.6), tower * CFrame.new(h + 0.02, deckTop + 1.25, 0), RED, M.SmoothPlastic, nil, true)
 	local wheelCF = tower * CFrame.new(h - 0.2, deckTop + 1.45, 0) * CFrame.Angles(0, 0, 0)
 	newPart(f, "WheelRim", Vector3.new(0.12, 1.3, 1.3), wheelCF, YELLOW, M.SmoothPlastic, CYL)
-	newPart(f, "WheelInner", Vector3.new(0.14, 0.9, 0.9), wheelCF * CFrame.new(-0.02, 0, 0), RED, M.SmoothPlastic, CYL)
+	newPart(f, "WheelInner", Vector3.new(0.1, 0.9, 0.9), wheelCF * CFrame.new(-0.035, 0, 0), RED, M.SmoothPlastic, CYL)
 	for k = 0, 2 do
-		newPart(f, "WheelSpoke", Vector3.new(0.1, 1.5, 0.12), wheelCF * CFrame.new(-0.06, 0, 0) * CFrame.Angles(rad(k * 60), 0, 0), YELLOW, M.SmoothPlastic)
+		newPart(f, "WheelSpoke", Vector3.new(0.06, 1.5, 0.12), wheelCF * CFrame.new(-0.14, 0, 0) * CFrame.Angles(rad(k * 60), 0, 0), YELLOW, M.SmoothPlastic)
 	end
-	ball(f, "WheelHub", (wheelCF * CFrame.new(-0.14, 0, 0)).Position, 0.34, BLUE, M.SmoothPlastic)
+	ball(f, "WheelHub", (wheelCF * CFrame.new(-0.18, 0, 0)).Position, 0.34, BLUE, M.SmoothPlastic)
 	local _ = panel
 	-- mains courantes (côté échelle : 2 poignées ; côté glissière : barre d'appui)
 	for _, sx in ipairs({ -1, 1 }) do
@@ -727,7 +729,7 @@ local function buildSlide(park: Park)
 	end
 	-- toit à deux pans + faîtière
 	for _, sz in ipairs({ -1, 1 }) do
-		newPart(f, "Roof", Vector3.new(S.Deck + 1.1, 0.16, 2.35), tower * CFrame.new(0, 9.05, sz * 1.02) * CFrame.Angles(sz * rad(-26), 0, 0), RED, M.SmoothPlastic, nil, true)
+		newPart(f, "Roof", Vector3.new(S.Deck + 1.1, 0.16, 2.35), tower * CFrame.new(0, 9.05, sz * 1.02) * CFrame.Angles(sz * rad(26), 0, 0), RED, M.SmoothPlastic, nil, true)
 	end
 	rod(f, "RoofRidge", (tower * CFrame.new(-S.Deck / 2 - 0.55, 9.6, 0)).Position, (tower * CFrame.new(S.Deck / 2 + 0.55, 9.6, 0)).Position, 0.24, YELLOW, M.SmoothPlastic)
 	-- échelle (-Z) inclinée : 2 montants + barreaux ronds
@@ -835,7 +837,7 @@ local function buildSeesaw(park: Park)
 		rod(f, "SeesawStand", at(park, c.X + 0.5, ParkMotion.FLOOR_TOP, c.Z + sz * 0.62), at(park, c.X, S.PivotY, c.Z + sz * 0.62), 0.24, GREEN, M.Metal, true)
 	end
 	rod(f, "SeesawAxle", at(park, c.X, S.PivotY, c.Z - 0.78), at(park, c.X, S.PivotY, c.Z + 0.78), 0.28, STEEL, M.Metal)
-	newPart(f, "SeesawPlate", Vector3.new(1.4, 0.1, 1.6), g * CFrame.new(c.X, ParkMotion.FLOOR_TOP + 0.05, c.Z), STEEL_D, M.Metal)
+	newPart(f, "SeesawPlate", Vector3.new(1.4, 0.1, 1.6), g * CFrame.new(c.X, ParkMotion.FLOOR_TOP + 0.04, c.Z), STEEL_D, M.Metal)
 	for _, sx in ipairs({ -1, 1 }) do
 		-- demi-pneu enterré sous chaque bout (amortisseur)
 		newPart(f, "Tyre", Vector3.new(0.7, 1.1, 1.1), g * CFrame.new(c.X + sx * (S.Half - 0.4), ParkMotion.FLOOR_TOP + 0.02, c.Z) * CFrame.Angles(0, math.pi / 2, 0), RUBBER_B, M.Rubber, CYL)
@@ -869,17 +871,17 @@ local function buildSprings(park: Park)
 		local base = g * ParkMotion.SpringBase(i)
 		local f = Instance.new("Model")
 		f.Name = "SpringBase" .. i
-		disc(f, "SpringPad", base, ParkMotion.SPRING.PivotY, 0.75, 0.25, STEEL_D, M.Metal)
+		disc(f, "SpringPad", base, ParkMotion.SPRING.PivotY, 0.75, 0.32, STEEL_D, M.Metal)
 		for k = 0, 3 do
 			local a = k * math.pi / 2 + math.pi / 4
 			ball(f, "Bolt", (base * CFrame.new(math.cos(a) * 0.55, ParkMotion.SPRING.PivotY + 0.02, math.sin(a) * 0.55)).Position, 0.12, STEEL, M.Metal)
 		end
 		f.Parent = park.Folder
-		-- ressort : 12 spires (pièces repositionnées à chaque image)
+		-- ressort : 5 spires en 20 segments (repositionnés à chaque image)
 		local coil = Instance.new("Model")
 		coil.Name = "Coil" .. i
 		local coilParts = {}
-		for k = 1, 12 do
+		for _ = 1, 20 do
 			table.insert(coilParts, newPart(coil, "Coil", Vector3.new(0.5, 0.13, 0.13), base, rgb(236, 90, 70), M.Metal, CYL))
 		end
 		coil.Parent = park.Folder
@@ -990,7 +992,7 @@ local function buildSandbox(park: Park)
 		local a = k * math.pi / 2
 		newPart(f, "Turret", Vector3.new(0.9, 0.5, 0.5), castle * CFrame.new(math.cos(a) * 0.95, 0.45, math.sin(a) * 0.95) * CFrame.Angles(0, 0, math.pi / 2), SAND:Lerp(SAND_D, 0.35), M.Sand, CYL)
 	end
-	ball(f, "Ball", (g * CFrame.new(5.5, ParkMotion.FLOOR_TOP + 0.62, -4.5)).Position, 1.2, rgb(255, 110, 140), M.SmoothPlastic)
+	ball(f, "Ball", (g * CFrame.new(7.6, ParkMotion.FLOOR_TOP + 0.62, 3.2)).Position, 1.2, rgb(255, 110, 140), M.SmoothPlastic)
 	f.Parent = park.Folder
 end
 
@@ -1145,12 +1147,12 @@ local function stepPiece(park: Park, piece: Piece, t: number)
 			local frames = {}
 			local n = #coil
 			for k = 1, n do
-				local u = (k - 0.5) / n
+				local u = (k - 1) / n
 				local ring = base:Lerp(top, u)
-				local a = u * 6 * TAU
+				local a = (k - 1) * TAU / 4
 				local p0 = ring * Vector3.new(math.cos(a) * 0.3, 0, math.sin(a) * 0.3)
-				local a1 = a + TAU / 2
-				local ring1 = base:Lerp(top, u + 0.5 / n)
+				local a1 = a + TAU / 4
+				local ring1 = base:Lerp(top, u + 1 / n)
 				local p1 = ring1 * Vector3.new(math.cos(a1) * 0.3, 0, math.sin(a1) * 0.3)
 				frames[k] = rodCF(p0, p1)
 			end
@@ -1189,7 +1191,8 @@ local function riderPose(park: Park, piece: Piece, slot: number, seat: BasePart,
 		p.Root = CFrame.Angles(0, 0, rad(-6 * math.clamp(w / ParkMotion.MERRY.Wmax, -1, 1)))
 		return p
 	elseif kind == "Spring" then
-		local p = handleBarPose(top, Vector3.new(0.45, 0.62, -1.05), 62, 72, 8)
+		local horse = (ParkMotion.SPRINGS[piece.Index] or ParkMotion.SPRINGS[1]).Kind == "Horse"
+		local p = handleBarPose(top, horse and Vector3.new(0.5, 0.45, -1.1) or Vector3.new(0.5, 0.5, -0.77), 62, 72, 8)
 		p.RHip = Rx(62) * CFrame.Angles(0, 0, rad(-22))
 		p.LHip = Rx(62) * CFrame.Angles(0, 0, rad(22))
 		return p
@@ -1326,10 +1329,11 @@ local function activityFrame(a: Activity, dt: number): (CFrame?, Vector3)
 		local bottom = tower * CFrame.new(0, floorY + HRP_STAND, footZ - 1.05)
 		local face = CFrame.Angles(0, math.pi, 0) -- (tourné vers +Z : vers l'échelle / la glissière)
 		if a.Phase == "approach" then
-			local u = smooth(a.T / 0.45)
 			local from = a.From or bottom
+			local dur = 0.3 + math.min(0.6, (from.Position - bottom.Position).Magnitude / 12)
+			local u = smooth(a.T / dur)
 			local cf = from:Lerp(bottom * face, u)
-			if a.T >= 0.45 then
+			if a.T >= dur then
 				a.Phase, a.T = "climb", 0
 			end
 			return cf, Vector3.zero
@@ -1342,7 +1346,7 @@ local function activityFrame(a: Activity, dt: number): (CFrame?, Vector3)
 			local frac = k - whole
 			local rise = (whole + smooth(frac * 1.4)) * 0.85
 			local y = floorY + HRP_STAND + math.min(rise, S.DeckTop + 0.1 - floorY)
-			local z = S.LadderZ - (S.DeckTop + HRP_STAND - 1.3 - y) * lean - 1.0
+			local z = S.LadderZ - (S.DeckTop - (y - 1.0)) * lean - 1.0
 			local cf = tower * CFrame.new(0, y, math.min(z, S.LadderZ - 0.9)) * face
 			if k >= rungs then
 				a.Phase, a.T = "over", 0
@@ -1357,11 +1361,12 @@ local function activityFrame(a: Activity, dt: number): (CFrame?, Vector3)
 				local u = smooth(a.T / 0.5)
 				if a.T >= 0.5 then
 					a.Phase, a.T = "walk", 0
+					a.From = topCF
 				end
 				local cf = from:Lerp(topCF, u)
 				return cf + Vector3.new(0, math.sin(u * math.pi) * 0.25, 0), Vector3.zero
 			end
-			local from = a.Total < 0.2 and (a.From or topCF) or topCF
+			local from = a.From or topCF
 			local u = smooth(a.T / 0.6)
 			if a.T >= 0.6 then
 				a.Phase, a.T = "sitdown", 0
@@ -1423,7 +1428,7 @@ local function activityFrame(a: Activity, dt: number): (CFrame?, Vector3)
 		elseif a.Phase == "up" then
 			-- 3 barreaux de l'échelle du bout, puis on attrape la 1re barre
 			local stand = g * CFrame.new(x0 - a.Dir * 0.9, ParkMotion.FLOOR_TOP + HRP_STAND, Mk.Z) * look
-			local grab = g * CFrame.new(first - a.Dir * 0.35, hang, Mk.Z) * look
+			local grab = g * CFrame.new(first, hang, Mk.Z) * look
 			local u = smooth(a.T / 1.1)
 			if a.T >= 1.1 then
 				a.Phase, a.T = "cross", 0
@@ -1440,7 +1445,7 @@ local function activityFrame(a: Activity, dt: number): (CFrame?, Vector3)
 			end
 			local whole = math.floor(k)
 			local frac = k - whole
-			local x = first + (whole + smooth(frac)) * spacing - a.Dir * 0.35 * (1 - math.abs(frac - 0.5) * 2) * 0
+			local x = first + (whole + smooth(frac)) * spacing
 			-- le corps balance d'avant en arrière à chaque prise
 			local swing = math.sin(k * math.pi) * rad(10)
 			local cf = g * CFrame.new(x, hang - 0.12 * math.sin(frac * math.pi), Mk.Z) * look * CFrame.Angles(swing, 0, 0)
@@ -1566,10 +1571,10 @@ local function activityPose(a: Activity, rig: Rig): Pose
 	elseif a.Kind == "Dig" then
 		-- à genoux (genou gauche au sol), la pelle creuse devant
 		local w = smooth(a.Total / 0.5)
-		pose.Root = CFrame.new(0, -1.25 * w, 0.1 * w)
-		pose.RHip = Rx(80 * w)
-		pose.RKnee = Rx(-85 * w)
-		pose.LHip = Rx(-8 * w)
+		pose.Root = CFrame.new(0, -0.8 * w, 0.1 * w)
+		pose.RHip = Rx(85 * w)
+		pose.RKnee = Rx(-95 * w)
+		pose.LHip = Rx(-5 * w)
 		pose.LKnee = Rx(-95 * w)
 		pose.LAnkle = Rx(40 * w)
 		local cyc = (a.Total % 1.2) / 1.2

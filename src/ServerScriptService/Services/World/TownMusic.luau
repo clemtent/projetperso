@@ -78,6 +78,7 @@ local state = {
 	Generation = 0,
 	Relayed = 0,
 	Dropped = 0,
+	Accepted = 0,
 }
 local remoteConnected = false
 local watching = false
@@ -294,6 +295,7 @@ local function onEvent(player: Player, kind: any, a: any, b: any)
 		end
 		local notes = cleanNotes(id, b, bk.Notes)
 		bk.Notes -= #notes / 3
+		state.Accepted += #notes / 3
 		if #notes > 0 then
 			relay(player, a, notes)
 		end
@@ -496,7 +498,7 @@ function TownMusic.Build(parent: Instance, cf: CFrame): Folder
 		host:SetAttribute("Player", 0)
 		host:SetAttribute("Loop", 0)
 		host:SetAttribute("LoopStart", 0)
-		local p = prompt(host, "MusicPrompt", "Play", st.Name, Enum.KeyCode.E, 9)
+		local p = prompt(host, "MusicPrompt", "Play", st.Name, Enum.KeyCode.E, 6.5)
 		p:SetAttribute("Instrument", id)
 		state.Anchors[id] = { Id = id, Part = host, Prompt = p }
 		table.insert(state.Connections, p.Triggered:Connect(function(player: Player)
@@ -559,6 +561,7 @@ function TownMusic.Debug(): any
 		Occupants = occupants,
 		Relayed = state.Relayed,
 		Dropped = state.Dropped,
+		Accepted = state.Accepted,
 		Claim = claim,
 		Release = release,
 		OnEvent = onEvent,

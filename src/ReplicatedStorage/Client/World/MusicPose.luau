@@ -156,7 +156,7 @@ function MusicPose.Rig(character: Model?): Rig?
 		Scale = scale,
 		Hands = hands,
 		Torso = (torso and torso:IsA("BasePart")) and torso or nil,
-		LegLen = r6 and 2 * scale or math.max(1, humanoid.HipHeight),
+		LegLen = r6 and 2 * scale or math.max(1, tonumber(humanoid.HipHeight) or 2),
 	}
 	rig.Arms.R = limbOf(joints, "RShoulder", "RElbow", "RWrist", r6, scale) :: any
 	rig.Arms.L = limbOf(joints, "LShoulder", "LElbow", "LWrist", r6, scale) :: any

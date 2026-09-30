@@ -199,8 +199,13 @@ local function makeTool(food: any): Tool?
 	tool.CanBeDropped = false
 	tool.RequiresHandle = true
 	tool.ToolTip = food.Icon .. " " .. food.Name
-	-- poignée au creux de la main, aliment debout (bras tendu : pose "outil")
-	tool.Grip = CFrame.new(0, -0.1, 0.05)
+	-- (v9.9, FAIR99) prise : aucune rotation -> l'aliment reste DEBOUT dans
+	-- la pose "outil" (R15 : RightGripAttachment ; R6 : RightGrip C0 =
+	-- (0, -1, 0) * Angles(-90°, 0, 0) : son +Y = l'avant du bras = le haut
+	-- quand le bras est tendu) ; le repère des modèles est le centre du
+	-- poing (FoodModels.GRIP). v9.8 : prise sous le cornet -> l'aliment
+	-- flottait au-dessus de la main et penchait avec le poignet.
+	tool.Grip = FoodModels.GRIP
 	tool:SetAttribute("FoodId", food.Id)
 	tool:SetAttribute("BitesLeft", food.Bites)
 	tool:SetAttribute("BiteAt", 0)

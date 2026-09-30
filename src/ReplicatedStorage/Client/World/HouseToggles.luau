@@ -4,10 +4,10 @@
 
 	🚶 Dopamine Town (v9.8, HOUSE98) : ce qui s'allume, s'éteint, s'ouvre et
 	se ferme dans une pièce de la maison 3D :
-	  - 🪟 RIDEAUX d'une fenêtre : tringle + embouts + 2 pans de 3 plis
-	    chacun ; ouverts = plis serrés de chaque côté de la fenêtre, fermés =
-	    les 2 pans se rejoignent au milieu ; animation : les plis glissent le
-	    long de la tringle (Size + CFrame, TweenService) ;
+	  - 🪟 RIDEAUX d'une fenêtre (v9.9 HOUSE99 : refaits) : tringle ronde à
+	    anneaux, voilages translucides + doubles rideaux jusqu'au sol en 5
+	    plis (alternés en relief et en teinte), drapés sur le côté par une
+	    embrasse quand ils sont ouverts ; animation douce (Sine, plis décalés) ;
 	  - 💡 INTERRUPTEUR mural : plaque + bascule qui pivote (haut = allumé) ;
 	  - groupe de LUMIÈRES d'une pièce (plafonnier + lampes posées) : fondu de
 	    la luminosité des vraies lumières, ampoules "Neon" qui s'éteignent
@@ -16,7 +16,8 @@
 	HouseBuilder pose les invites (ProximityPrompt) et sauvegarde l'état.
 
 	API :
-	  HouseToggles.Curtains(parent, cf, width, height, color, rodColor, open) -> Curtain
+	  HouseToggles.Curtains(parent, cf, width, height, color, rodColor, open, opts?) -> Curtain
+	      opts.Drop = distance du centre de la fenêtre à l'ourlet (rideaux jusqu'au sol)
 	      cf = centre de la fenêtre sur la face INTÉRIEURE du mur, RightVector
 	      le long de la fenêtre, LookVector = de la pièce VERS le mur
 	  curtain:Set(open, animate)
@@ -193,7 +194,7 @@ function HouseToggles.Curtains(parent: Instance, cf: CFrame, width: number, heig
 		local zPanel = rodOut + (if panel == 2 then 0.035 else 0) -- (pas de faces confondues au milieu)
 		for f = 1, F do
 			local z = zPanel + (if f % 2 == 0 then 0.11 else -0.02)
-			local color = if f % 2 == 0 then shade elseif f == F then light else base
+			local tone = if f % 2 == 0 then shade elseif f == F then light else base
 			-- fermés : tombés droits
 			local cx = outer - s * (f - 0.5) * closedW
 			local closedUp = segment(cx, top, cx, tieY, z, closedW, closedW)
@@ -205,7 +206,7 @@ function HouseToggles.Curtains(parent: Instance, cf: CFrame, width: number, heig
 			local openUp = segment(xTop, top, xTie, tieY, z, openTop, tieW)
 			local openLow = segment(xTie, tieY, xBot, bottom, z, tieW, botW)
 			for k, pair in ipairs({ { openUp, closedUp }, { openLow, closedLow } }) do
-				local part = decor(parent, "Curtain", pair[2].Size, pair[2].CFrame, color, M.Fabric)
+				local part = decor(parent, "Curtain", pair[2].Size, pair[2].CFrame, tone, M.Fabric)
 				table.insert(folds, part)
 				-- (le pli du bord mène le mouvement, les autres suivent)
 				add(part, pair[1], pair[2], (F - f) * 0.03 + (k - 1) * 0.02)

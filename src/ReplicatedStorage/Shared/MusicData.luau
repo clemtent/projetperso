@@ -69,7 +69,7 @@ end
 
 -- yaw 0 = regard vers -Z (le public) ; 90 = regard vers -X
 MusicData.STATIONS = {
-	Piano = { Id = "Piano", Name = "Grand piano", Icon = "🎹", Kind = "keys", Seated = true, Floor = 1.5, Spot = facing(-3.55, -0.35, 90), Prompt = Vector3.new(-4.2, 3.2, -0.35) },
+	Piano = { Id = "Piano", Name = "Grand piano", Icon = "🎹", Kind = "keys", Seated = true, Floor = 1.5, Spot = facing(-3.35, -0.35, 90), Prompt = Vector3.new(-3.5, 3.4, -0.35) },
 	Drums = { Id = "Drums", Name = "Drum kit", Icon = "🥁", Kind = "drums", Seated = true, Floor = 2.2, Spot = facing(0, 6.45, 0), Prompt = Vector3.new(0, 4.6, 4.6) },
 	Guitar = { Id = "Guitar", Name = "Electric guitar", Icon = "🎸", Kind = "strings", Seated = false, Floor = 1.5, Spot = facing(-1.6, -1.5, 0), Prompt = Vector3.new(-1.6, 3.6, -1.5) },
 	Bass = { Id = "Bass", Name = "Bass guitar", Icon = "🎸", Kind = "strings", Seated = false, Floor = 1.5, Spot = facing(4.3, 1.9, 0), Prompt = Vector3.new(4.3, 3.6, 1.9) },
@@ -656,13 +656,16 @@ function MusicData.Compile(song: Song): { Events: { Event }, Duration: number, B
 				local barStart = bar * barBeats
 				local last = bar == song.Bars - 1
 				local fill = (bar % 4 == 3) and not last
-				for piece, pattern in pairs(groove) do
+				for pieceKey, pattern in pairs(groove) do
+					local piece: string = pieceKey
+					local hatSoft = piece == "HatClosed"
+					local isKick = piece == "Kick"
 					for s = 1, steps do
 						local ch = string.sub(pattern, (s - 1) % #pattern + 1, (s - 1) % #pattern + 1)
 						local beat = barStart + (s - 1) * 0.25
 						local inFill = fill and s > steps - 4
-						if (ch == "x" or ch == "o") and not (inFill and piece ~= "Kick") and not last then
-							local v = (ch == "o" and 1 or 0.8) * vel * (piece == "HatClosed" and (s % 2 == 1 and 0.75 or 0.5) or 1)
+						if (ch == "x" or ch == "o") and not (inFill and not isKick) and not last then
+							local v = (ch == "o" and 1 or 0.8) * vel * (hatSoft and (s % 2 == 1 and 0.75 or 0.5) or 1)
 							add(beat, "Drums", MusicData.DRUM[piece], v, 0.2)
 						end
 					end
@@ -682,12 +685,13 @@ function MusicData.Compile(song: Song): { Events: { Event }, Duration: number, B
 				end
 			end
 		elseif kind == "DJ" then
+			local style: string = tostring(part.Style)
 			for bar = 0, song.Bars - 1 do
 				local barStart = bar * barBeats
-				if part.Style == "scratch" and bar % 4 == 3 then
+				if style == "scratch" and bar % 4 == 3 then
 					add(barStart + barBeats - 1, "DJ", 5, 0.8, 0.5)
 					add(barStart + barBeats - 0.5, "DJ", 5, 0.7, 0.5)
-				elseif part.Style == "vinyl" and bar % 8 == 7 then
+				elseif style == "vinyl" and bar % 8 == 7 then
 					add(barStart + barBeats - 1, "DJ", 7, 0.5, 1)
 				end
 			end

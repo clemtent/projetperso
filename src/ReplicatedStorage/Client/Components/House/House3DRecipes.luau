@@ -1901,9 +1901,10 @@ R.WallCalendar = function(b: Builder, _ctx: Ctx)
 	local stackMid = (1.2 + z + 0.6) / 2
 	-- spirale : 14 boucles de fil qui passent dans les trous du haut
 	local steel = rgb(176, 180, 190)
+	local ringD = (z + 0.6 - 1.2) + 3 -- (la boucle entoure tout le bloc de feuillets)
 	for index = 0, 13 do
 		local x = -31 + 3.6 + index * (62 - 7.2) / 13
-		b.CylX(x, 89.4, stackMid, 4.6, 0.9, steel, M.Metal)
+		b.CylX(x, 91 - ringD / 2 + 2.2, stackMid, ringD, 1.2, steel, M.Metal)
 	end
 	-- suspente en V et clou
 	for _, sx in ipairs({ -1, 1 }) do
@@ -3202,18 +3203,22 @@ R.MantelClock = function(b, _ctx)
 	end
 	House3DKit.Bevel(b, 0, 2, 0, 80, 48, 34, 1.6, wood, M.Wood)
 	b.Ball(0, 50, 0, 40, wood, M.Wood)
+	-- (v9.9 SCALE99) couches du cadran franchement espacées (lunette, cadran,
+	-- index, aiguilles à l'heure réelle, trotteuse, cache-axe)
+	-- (le dôme est une boule : sa boîte avance jusqu'à z = 20 -> le cadran
+	-- est posé devant, sur une lunette dorée qui sort de la caisse)
 	local g = House3DKit.Gap(b, 0.6)
-	b.CylZ(0, 42, 17, 42, 2, GOLD, M.Metal).Reflectance = 0.3
-	b.CylZ(0, 42, 17.5 + g / 2, 38, 1 + g, WHITE)
+	local F = 20.5 -- (faces du même côté toujours à >= g l'une de l'autre)
+	b.CylZ(0, 42, (17 + F + 0.5 * g) / 2, 42, F + 0.5 * g - 17, GOLD, M.Metal).Reflectance = 0.3
+	b.CylZ(0, 42, F + 0.75 * g, 38, 1.5 * g, WHITE)
 	for index = 0, 11 do
 		local a = index / 12 * math.pi * 2
-		b.Box(math.sin(a) * 15, 42 + math.cos(a) * 15 - 0.8, 18 + 1.5 * g, 1.2, index % 3 == 0 and 2.6 or 1.6, g, INK)
+		b.Box(math.sin(a) * 15, 42 + math.cos(a) * 15 - 0.8, F + 2.5 * g, 1.2, index % 3 == 0 and 2.6 or 1.6, g, INK)
 	end
-	-- (v9.9 SCALE99) aiguilles à l'heure réelle (House3DTime) + trotteuse
-	House3DTime.Hand(b, "H", 0, 42, 18 + 2.5 * g, 9, 2, 2.2, g, INK)
-	House3DTime.Hand(b, "M", 0, 42, 18 + 4 * g, 13.5, 2.5, 1.5, g, INK)
-	House3DTime.Hand(b, "S", 0, 42, 18 + 5.5 * g, 14.5, 4, 0.6, g, rgb(200, 50, 60))
-	b.Ball(0, 42, 18 + 7 * g, 2.4, GOLD, M.Metal)
+	House3DTime.Hand(b, "H", 0, 42, F + 3.5 * g, 9, 2, 2.2, g, INK)
+	House3DTime.Hand(b, "M", 0, 42, F + 5 * g, 13.5, 2.5, 1.5, g, INK)
+	House3DTime.Hand(b, "S", 0, 42, F + 6.5 * g, 14.5, 4, 0.6, g, rgb(200, 50, 60))
+	b.Ball(0, 42, F + 8 * g, math.max(2.4, 1.6 * g), GOLD, M.Metal)
 	b.CylZ(0, 12, 17 + g / 2, 7, g, GOLD, M.Metal)
 	b.Box(0, 8, 17 + 1.5 * g, 20, 12, g, rgb(200, 220, 240), M.Glass).Transparency = 0.5
 	b.Footprint(80, 40, 70)

@@ -416,7 +416,7 @@ local function thumbModel(thumb: Thumb)
 	if thumb.Model then
 		return
 	end
-	local ok, built = pcall(CarModels.Build, thumb.CarId, colorIdOf(thumb.CarId), { Detail = "Parked" })
+	local ok, built = pcall(CarModels.Build, thumb.CarId, colorIdOf(thumb.CarId), { Detail = "Mid" })
 	if ok and typeof(built) == "Instance" and built:IsA("Model") then
 		local model = built :: Model
 		model:PivotTo(CFrame.Angles(0, math.rad(-35), 0))
@@ -1659,7 +1659,9 @@ local function refreshGarage(g: Garage)
 	for _, entry in ipairs(list) do
 		local bay = bays[entry.Id]
 		if bay and not (out and entry.Id == selected) then
-			local ok, model = pcall(CarModels.Build, entry.Id, entry.Color, { Detail = "Parked" })
+			-- (v9.9) mon garage : voitures détaillées ; celui des autres : "Mid"
+			local detail = if g.OwnerId == LocalPlayer.UserId then "Full" else "Mid"
+			local ok, model = pcall(CarModels.Build, entry.Id, entry.Color, { Detail = detail })
 			if ok and model then
 				model.Name = "Parked_" .. entry.Id
 				model:PivotTo(GarageLayout.BayCFrame(g.HouseCF, bay))
@@ -1798,6 +1800,119 @@ local function animateDoors(dt: number)
 end
 
 ----------------------------------------------------------------------
+-- (v9.9, CARS99) Roues des voitures conduites : elles TOURNENT et BRAQUENT
+-- (la mienne et celles des autres joueurs). CarService relie les pivots
+-- "WheelSteer" / "WheelSpin" de CarModels par des Motor6D ; ici on règle
+-- leur Transform (local à chaque client, jamais répliqué) : rotation =
+-- vitesse / rayon, braquage = mon volant (ma voiture) ou déduit de la
+-- vitesse de lacet (atan(empattement × lacet / vitesse)) pour les autres.
+----------------------------------------------------------------------
+
+type WheelAnim = {
+	Root: BasePart,
+	Steer: { [number]: Motor6D },
+	Spin: { [number]: Motor6D },
+	Front: { [number]: boolean },
+	Angle: number,
+	SteerNow: number,
+	Radius: number,
+	Base: number,
+}
+local wheelAnims: { [Model]: WheelAnim | false } = {}
+local MAX_STEER = math.rad(30)
+local WHEEL_RANGE = 220
+
+local function wheelAnimOf(model: Model): WheelAnim?
+	local cached = wheelAnims[model]
+	if cached ~= nil then
+		return cached or nil
+	end
+	local root = model.PrimaryPart
+	if not root then
+		return nil
+	end
+	local steer: { [number]: Motor6D } = {}
+	local spin: { [number]: Motor6D } = {}
+	local front: { [number]: boolean } = {}
+	local found = false
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("Motor6D") and (d.Name == "WheelSteer" or d.Name == "WheelSpin") then
+			local p1 = d.Part1
+			local index = p1 and p1:GetAttribute("Wheel")
+			if type(index) == "number" then
+				found = true
+				if d.Name == "WheelSteer" then
+					steer[index] = d
+					front[index] = d.C0.Position.Z < 0
+				else
+					spin[index] = d
+				end
+			end
+		end
+	end
+	if not found then
+		-- (le modèle arrive peut-être en morceaux : on réessaiera)
+		return nil
+	end
+	local positions = CarModels.WheelPositions(tostring(model:GetAttribute("CarId") or ""))
+	local anim: WheelAnim = {
+		Root = root,
+		Steer = steer,
+		Spin = spin,
+		Front = front,
+		Angle = 0,
+		SteerNow = 0,
+		Radius = math.max(0.3, tonumber(model:GetAttribute("WheelRadius")) or 1),
+		Base = math.abs(positions[#positions].Z - positions[1].Z),
+	}
+	wheelAnims[model] = anim
+	return anim
+end
+
+local function animateWheels(dt: number)
+	local folder = carsFolder
+	if not folder or not folder.Parent then
+		return
+	end
+	local camera = workspace.CurrentCamera
+	local camPos = camera and camera.CFrame.Position
+	for _, model in ipairs(folder:GetChildren()) do
+		if model:IsA("Model") then
+			local a = wheelAnimOf(model)
+			if a and a.Root.Parent and (camPos == nil or (a.Root.Position - camPos).Magnitude < WHEEL_RANGE) then
+				local look = a.Root.CFrame.LookVector
+				local speed = a.Root.AssemblyLinearVelocity:Dot(look)
+				if math.abs(speed) < 0.05 then
+					speed = 0
+				end
+				a.Angle = (a.Angle + speed / a.Radius * dt) % (math.pi * 2)
+				local target = a.SteerNow
+				if driving and driving.Model == model then
+					target = -(tonumber(driving.Steer) or 0) * MAX_STEER
+				elseif math.abs(speed) > 1 then
+					local yaw = a.Root.AssemblyAngularVelocity.Y
+					target = math.clamp(math.atan(a.Base * yaw / speed), -MAX_STEER, MAX_STEER)
+				end
+				a.SteerNow += (target - a.SteerNow) * math.clamp(dt * 10, 0, 1)
+				local steerCF = CFrame.Angles(0, a.SteerNow, 0)
+				for index, motor in pairs(a.Steer) do
+					motor.Transform = if a.Front[index] then steerCF else CFrame.identity
+				end
+				local spinCF = CFrame.Angles(-a.Angle, 0, 0)
+				for _, motor in pairs(a.Spin) do
+					motor.Transform = spinCF
+				end
+			end
+		end
+	end
+	for model in pairs(wheelAnims) do
+		if not model.Parent then
+			wheelAnims[model] = nil
+		end
+	end
+end
+
+----------------------------------------------------------------------
 -- Cycle de vie
 ----------------------------------------------------------------------
 
@@ -1846,6 +1961,10 @@ function CarClient.Start(startOptions: any?)
 			end
 		end
 		animateDoors(dt)
+		local okW, errW = pcall(animateWheels, dt)
+		if not okW then
+			warn("[CarClient] Roues : " .. tostring(errW))
+		end
 		if pickerOpen then
 			local okP, errP = pcall(stepPreview, dt)
 			if not okP then
@@ -1887,6 +2006,7 @@ function CarClient.Stop()
 	table.clear(charConnections)
 	table.clear(garages)
 	table.clear(drivePrompts)
+	table.clear(wheelAnims)
 	carsFolder = nil
 	pickerOpen = false
 	-- (v9.8) aperçus 3D de "Mes voitures"

@@ -15,6 +15,9 @@
 	  - 🌗 Ombres : Basses / Hautes ;
 	  - 🌟 Effets (halo, rayons de soleil, flou lointain) : On / Off ;
 	  - 🏙️ Détail (distance d'affichage du décor de la ville) : Bas / Moyen / Élevé ;
+	  - (v9.9 REALISM99) 🕐 Heure du jour : Auto (l'heure de la ville) / Jour /
+	    Coucher de soleil / Nuit : pour ce joueur seulement (Lighting local,
+	    TownAtmosphere), gardée quand on bascule le Mode réaliste ;
 	  - ↺ "Tout en automatique".
 	Chaque choix s'applique TOUT DE SUITE (GraphicsQuality.SetLocal) puis
 	est sauvegardé côté serveur (SetSetting, 3 essais ; sinon retour en
@@ -271,7 +274,7 @@ function GraphicsControls.Build(parent: Instance, opts: { [string]: any }?): { R
 		local on = not GraphicsQuality.Get().Realistic
 		setKey("GfxRealistic", on and "On" or "Off")
 		for _, key in ipairs(GraphicsQuality.ORDER) do
-			if key ~= "GfxRealistic" then
+			if key ~= "GfxRealistic" and not GraphicsQuality.NOT_PRESET[key] then
 				setKey(key, "Auto")
 			end
 		end
@@ -298,37 +301,45 @@ function GraphicsControls.Build(parent: Instance, opts: { [string]: any }?): { R
 		table.insert(tabRows, { Row = row, Tabs = tabs, Key = key })
 	end
 
-	tabsRow("GfxReflections", "GfxReflectionsRow", base + 2, "🪞", Locale.T("Reflections"), Locale.T("Real mirrors, glossy screens and floors"), {
+	-- (v9.9) 🕐 heure du jour (juste après le Mode réaliste : bien visible)
+	tabsRow("GfxTime", "GfxTimeRow", base + 2, "🕐", Locale.T("Time of day"), Locale.T("Just for you · Auto = the town"), {
+		{ Id = "Auto", Text = Locale.T("Auto") },
+		{ Id = "Day", Text = Locale.T("Day") },
+		{ Id = "Sunset", Text = Locale.T("Dusk") },
+		{ Id = "Night", Text = Locale.T("Night") },
+	})
+
+	tabsRow("GfxReflections", "GfxReflectionsRow", base + 3, "🪞", Locale.T("Reflections"), Locale.T("Real mirrors, glossy screens and floors"), {
 		{ Id = "Off", Text = Locale.T("None") },
 		{ Id = "Mirrors", Text = Locale.T("Mirrors") },
 		{ Id = "All", Text = Locale.T("All") },
 	})
 
 	-- 🌦️ Météo + temps actuel en ville
-	local weatherRow = buildRow(parent, "GfxWeatherRow", base + 3, "🌦️", Locale.T("Weather in town"), accent)
+	local weatherRow = buildRow(parent, "GfxWeatherRow", base + 4, "🌦️", Locale.T("Weather in town"), accent)
 	rows.GfxWeather = weatherRow
 	toggles.GfxWeather = buildToggle(weatherRow.Frame, function()
 		setKey("GfxWeather", GraphicsQuality.Get().Weather and "Off" or "On")
 	end)
 
-	tabsRow("GfxRain", "GfxRainRow", base + 4, "🌧️", Locale.T("Rain"), Locale.T("How heavy the rain looks"), {
+	tabsRow("GfxRain", "GfxRainRow", base + 5, "🌧️", Locale.T("Rain"), Locale.T("How heavy the rain looks"), {
 		{ Id = "Low", Text = Locale.T("Light") },
 		{ Id = "Medium", Text = Locale.T("Moderate") },
 		{ Id = "High", Text = Locale.T("Heavy") },
 	})
-	tabsRow("GfxShadows", "GfxShadowsRow", base + 5, "🌗", Locale.T("Shadows"), Locale.T("Simple = smoother on small devices"), {
+	tabsRow("GfxShadows", "GfxShadowsRow", base + 6, "🌗", Locale.T("Shadows"), Locale.T("Simple = smoother on small devices"), {
 		{ Id = "Low", Text = Locale.T("Simple") },
 		{ Id = "High", Text = Locale.T("Detailed") },
 	})
 
-	local fxRow = buildRow(parent, "GfxEffectsRow", base + 6, "🌟", Locale.T("Light effects"), accent)
+	local fxRow = buildRow(parent, "GfxEffectsRow", base + 7, "🌟", Locale.T("Light effects"), accent)
 	fxRow.Subtitle.Text = Locale.T("Soft glow, sun rays, distant blur")
 	rows.GfxEffects = fxRow
 	toggles.GfxEffects = buildToggle(fxRow.Frame, function()
 		setKey("GfxEffects", GraphicsQuality.Get().Effects and "Off" or "On")
 	end)
 
-	tabsRow("GfxDetail", "GfxDetailRow", base + 7, "🏙️", Locale.T("Detail"), Locale.T("How far the town decor is shown"), {
+	tabsRow("GfxDetail", "GfxDetailRow", base + 8, "🏙️", Locale.T("Detail"), Locale.T("How far the town decor is shown"), {
 		{ Id = "Low", Text = Locale.T("Low") },
 		{ Id = "Medium", Text = Locale.T("Medium") },
 		{ Id = "High", Text = Locale.T("High") },
@@ -339,7 +350,7 @@ function GraphicsControls.Build(parent: Instance, opts: { [string]: any }?): { R
 		Name = "GfxFooter",
 		Size = UDim2.new(1, 0, 0, 46),
 		BackgroundTransparency = 1,
-		LayoutOrder = base + 8,
+		LayoutOrder = base + 9,
 		Parent = parent,
 	})
 	local reset = UIUtil.PillButton({
@@ -402,7 +413,7 @@ function GraphicsControls.Build(parent: Instance, opts: { [string]: any }?): { R
 		weatherRow.Subtitle.Text = q.Weather and (now ~= "" and now or Locale.T("Rain, storms and rainbows (same for everyone)"))
 			or Locale.T("Always sunny")
 		paintToggle(toggles.GfxEffects, q.Effects, animate)
-		local values = { GfxReflections = q.Reflections, GfxRain = q.Rain, GfxShadows = q.Shadows, GfxDetail = q.Detail }
+		local values = { GfxReflections = q.Reflections, GfxRain = q.Rain, GfxShadows = q.Shadows, GfxDetail = q.Detail, GfxTime = q.TimeOfDay }
 		for _, entry in ipairs(tabRows) do
 			local value = values[entry.Key]
 			if value and entry.Tabs.GetSelected() ~= value then

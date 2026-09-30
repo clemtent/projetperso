@@ -650,6 +650,58 @@ function BoardKit.Step(board: Board, now: number)
 	end
 end
 
+-- Cadre « téléviseur » autour d'une pièce écran (face avant = -Z) :
+-- liseré chromé (4 barres qui s'enfoncent dans le cadre du serveur derrière)
+-- + plaque « DOPA TV » sous l'écran ; renvoie les pièces
+function BoardKit.Frame(parent: Instance, screen: BasePart, opts: { [string]: any }?): { BasePart }
+	local o = opts or {}
+	local cf = screen.CFrame
+	local w, h, d = screen.Size.X, screen.Size.Y, screen.Size.Z
+	local lip = o.Lip or 0.22
+	local z0, z1 = -d / 2 - 0.1, -d / 2 + 0.4
+	local zc, depth = (z0 + z1) / 2, z1 - z0
+	local chrome = o.Color or rgb(196, 200, 212)
+	local parts = {}
+	local function bar(name: string, size: Vector3, at: CFrame, color: Color3, material: Enum.Material)
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Anchored = true
+		p.CanCollide = false
+		p.CanQuery = false
+		p.CanTouch = false
+		p.CastShadow = false
+		p.Size = size
+		p.CFrame = at
+		p.Color = color
+		p.Material = material
+		p.Reflectance = material == Enum.Material.Metal and 0.2 or 0
+		p.TopSurface = Enum.SurfaceType.Smooth
+		p.BottomSurface = Enum.SurfaceType.Smooth
+		p.Parent = parent
+		table.insert(parts, p)
+		return p
+	end
+	local g = 0.03 -- (jamais de face confondue avec les côtés de l'écran)
+	local full = w + 2 * (lip + g)
+	bar("BezelTop", Vector3.new(full, lip, depth), cf * CFrame.new(0, h / 2 + g + lip / 2, zc), chrome, Enum.Material.Metal)
+	bar("BezelBottom", Vector3.new(full, lip, depth), cf * CFrame.new(0, -h / 2 - g - lip / 2, zc), chrome, Enum.Material.Metal)
+	bar("BezelLeft", Vector3.new(lip, h + 2 * g, depth), cf * CFrame.new(-w / 2 - g - lip / 2, 0, zc), chrome, Enum.Material.Metal)
+	bar("BezelRight", Vector3.new(lip, h + 2 * g, depth), cf * CFrame.new(w / 2 + g + lip / 2, 0, zc), chrome, Enum.Material.Metal)
+	local ph = o.PlateH or 0.35
+	local plate = bar("TVPlate", Vector3.new(math.min(4.2, w * 0.3), ph, depth + 0.04), cf * CFrame.new(0, -h / 2 - g - lip - 0.02 - ph / 2, zc - 0.02), rgb(30, 28, 40), Enum.Material.Metal)
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "Plate"
+	gui.Face = Enum.NormalId.Front
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 50
+	gui.LightInfluence = 0.3
+	gui.MaxDistance = 160
+	gui.Parent = plate
+	local l = label(gui, "Text", o.Plate or "📺 DOPA TV", 0.05, 0.1, 0.9, 0.8, rgb(236, 236, 246), Enum.Font.GothamBlack)
+	l.ZIndex = 2
+	return parts
+end
+
 function BoardKit.Destroy(board: Board)
 	board.Gui:Destroy()
 end

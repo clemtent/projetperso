@@ -141,7 +141,7 @@ end
 
 -- Siège invisible `slot` du jeu `piece`, dessus en `topCF` (repère monde)
 local ACTIONS = {
-	Swing = { "Swing", "Swing" },
+	Swing = { "Swing", "Swing seat" },
 	Seesaw = { "Ride", "Seesaw" },
 	Merry = { "Ride", "Merry-go-round" },
 	Spring = { "Ride", "Spring rider" },
@@ -235,8 +235,8 @@ function TownPark.Build(model: Model, g: CFrame)
 	truss.CanQuery = false
 	truss.CastShadow = false
 	truss.Parent = slideModel
-	anchor(slideModel, "SlideLadder", tower * CFrame.new(0, 2.6, S.LadderZ - 1.2), "Slide", "Slide", "Slide", 7)
-	anchor(slideModel, "SlideTop", tower * CFrame.new(0, S.DeckTop + 2.2, 0.8), "Slide", "Slide", "SlideTop", 5)
+	anchor(slideModel, "SlideLadder", tower * CFrame.new(0, 2.6, S.LadderZ - 1.2), "Slide", "Slide tower", "Slide", 7)
+	anchor(slideModel, "SlideTop", tower * CFrame.new(0, S.DeckTop + 2.2, 0.8), "Slide", "Slide tower", "SlideTop", 5)
 
 	-- 🐒 barres de singe (invites aux deux bouts, côté sol)
 	local Mk = ParkMotion.MONKEY
@@ -276,13 +276,13 @@ function TownPark.Build(model: Model, g: CFrame)
 		addSeat(piece, 1, g * ParkMotion.SpringSeat(i, 0, 0), Vector3.new(1.1, 0.2, 1.2))
 	end
 	-- 🪑 bancs des parents (2 places par banc)
-	for b = 1, #ParkMotion.BENCHES do
-		local piece = newPiece(model, "ParkBench" .. b, "Bench")
-		piece.Model:SetAttribute("ParkIndex", b)
+	for bi = 1, #ParkMotion.BENCHES do
+		local piece = newPiece(model, "ParkBench" .. bi, "Bench")
+		piece.Model:SetAttribute("ParkIndex", bi)
 		for k = 1, #ParkMotion.BENCH.Places do
-			addSeat(piece, k, g * ParkMotion.BenchSeat(b, k), Vector3.new(2.1, 0.2, 1.5))
+			addSeat(piece, k, g * ParkMotion.BenchSeat(bi, k), Vector3.new(2.1, 0.2, 1.5))
 		end
-		part(piece.Model, "BenchBlock", Vector3.new(ParkMotion.BENCH.Length, ParkMotion.BENCH.SeatTop - 0.1, 1.5), g * ParkMotion.BenchFrame(b) * CFrame.new(0, (ParkMotion.BENCH.SeatTop - 0.1) / 2, 0.1), RUBBER, M.Wood, "ghost")
+		part(piece.Model, "BenchBlock", Vector3.new(ParkMotion.BENCH.Length, ParkMotion.BENCH.SeatTop - 0.1, 1.5), g * ParkMotion.BenchFrame(bi) * CFrame.new(0, (ParkMotion.BENCH.SeatTop - 0.1) / 2, 0.1), RUBBER, M.Wood, "ghost")
 	end
 end
 

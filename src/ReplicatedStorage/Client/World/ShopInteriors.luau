@@ -980,47 +980,139 @@ local function categoryCaption(id: string, fallback: string): string
 	return fallback
 end
 
+-- (v9.9, SHOPS99) COMPTOIR-CAISSE 20x : caisson à panneaux moulurés sur
+-- plinthe en retrait, plateau en marbre à nez arrondi, caisse tactile sur
+-- pied (écran côté vendeur·se, logo côté client), TPE, imprimante à tickets
+-- (le ticket sort), sacs en papier, bocal de bonbons, plante, chevalet
+-- « Merci ! », horloge murale à l'heure réelle ; un·e client·e au comptoir
+-- qui discute puis paie (animations alternées)
+local COUNTER_TOP = 2.95
 local function counter(shop: Shop, parent: Instance)
 	local t = shop.Theme
 	local F = shop.F
 	local D = shop.Size.Z
 	local z0, z1 = D - 4.6, D - 2.5
-	box(parent, "Counter", F, -4.4, 4.4, 0.1, 3.3, z0, z1, t.Shelf, t.ShelfMat, true)
-	box(parent, "CounterFront", F, -4.2, 4.2, 0.5, 3.0, z0 - GAP - 0.1, z0 - GAP, t.Accent, M.SmoothPlastic)
-	box(parent, "CounterTop", F, -4.7, 4.7, 3.3, 3.55, z0 - 0.3, z1 + 0.2, WHITE, M.Marble)
-	-- caisse enregistreuse
-	box(parent, "Register", F, 1.4, 3.2, 3.55, 4.4, z0 + 0.4, z0 + 1.6, rgb(70, 66, 90), M.SmoothPlastic)
-	local screen = box(parent, "RegisterScreen", F, 1.6, 3.0, 4.45, 5.35, z0 + 1.2, z0 + 1.35, rgb(40, 38, 56), M.SmoothPlastic)
-	screen.CFrame *= CFrame.Angles(math.rad(-12), 0, 0)
+	local ink = rgb(40, 40, 48)
+	box(parent, "Counter", F, -4.4, 4.4, 0.45, 2.8, z0, z1, t.Shelf, t.ShelfMat, true)
+	box(parent, "CounterPlinth", F, -4.25, 4.25, 0.1, 0.48, z0 + 0.15, z1 - 0.15, ink, M.SmoothPlastic)
+	for _, x in ipairs({ -2.85, 0, 2.85 }) do
+		-- panneaux moulurés (cadre + panneau central en retrait)
+		box(parent, "CounterPanel", F, x - 1.3, x + 1.3, 0.7, 2.55, z0 - 0.08, z0 + 0.02, t.Accent, M.SmoothPlastic)
+		box(parent, "CounterPanelInset", F, x - 1.05, x + 1.05, 0.95, 2.3, z0 - 0.12, z0 - 0.06, t.Accent:Lerp(WHITE, 0.25), M.SmoothPlastic)
+	end
+	local top = box(parent, "CounterTop", F, -4.65, 4.65, 2.8, COUNTER_TOP, z0 - 0.25, z1 + 0.15, rgb(246, 244, 240), M.Marble)
+	top.Reflectance = 0.05
+	local nose = newPart(parent, "CounterNose", Vector3.new(9.3, 0.2, 0.2), F * CFrame.new(0, 2.875, z0 - 0.25), rgb(246, 244, 240), M.Marble)
+	;(nose :: Part).Shape = Enum.PartType.Cylinder
+	-- caisse tactile sur pied (écran vers le·la vendeur·se, logo vers le client)
+	cylinder(parent, "PosFoot", F, 2.2, COUNTER_TOP - 0.02, z0 + 1.2, 0.08, 0.6, ink, M.Metal)
+	cylinder(parent, "PosStem", F, 2.2, COUNTER_TOP, z0 + 1.2, 0.55, 0.1, ink, M.Metal)
+	local P = F * CFrame.new(2.2, COUNTER_TOP + 0.95, z0 + 1.25) * CFrame.Angles(math.rad(-18), math.pi, 0)
+	local pos = newPart(parent, "PosTablet", Vector3.new(1.3, 0.85, 0.07), P, rgb(30, 30, 36), M.SmoothPlastic)
+	do
+		local g = Instance.new("SurfaceGui")
+		g.Name = "Screen"
+		g.Face = Enum.NormalId.Front
+		g.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		g.PixelsPerStud = 120
+		g.LightInfluence = 0.1
+		g.MaxDistance = 40
+		g.Parent = pos
+		local bg = Instance.new("Frame")
+		bg.Size = UDim2.fromScale(0.94, 0.9)
+		bg.Position = UDim2.fromScale(0.03, 0.05)
+		bg.BackgroundColor3 = rgb(246, 246, 252)
+		bg.BorderSizePixel = 0
+		bg.Parent = g
+		local head = Instance.new("Frame")
+		head.Size = UDim2.fromScale(1, 0.2)
+		head.BackgroundColor3 = t.Accent
+		head.BorderSizePixel = 0
+		head.Parent = bg
+		for r = 0, 2 do
+			for c = 0, 3 do
+				local tile = Instance.new("Frame")
+				tile.Position = UDim2.fromScale(0.04 + c * 0.24, 0.27 + r * 0.24)
+				tile.Size = UDim2.fromScale(0.2, 0.19)
+				tile.BackgroundColor3 = t.Accent:Lerp(WHITE, 0.2 + ((r + c) % 3) * 0.2)
+				tile.BorderSizePixel = 0
+				tile.Parent = bg
+				local tc = Instance.new("UICorner")
+				tc.CornerRadius = UDim.new(0.15, 0)
+				tc.Parent = tile
+			end
+		end
+		local logo = Instance.new("SurfaceGui")
+		logo.Name = "Logo"
+		logo.Face = Enum.NormalId.Back
+		logo.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		logo.PixelsPerStud = 60
+		logo.LightInfluence = 0.5
+		logo.MaxDistance = 40
+		logo.Parent = pos
+		local l = Instance.new("TextLabel")
+		l.BackgroundTransparency = 1
+		l.Size = UDim2.fromScale(0.8, 0.6)
+		l.Position = UDim2.fromScale(0.1, 0.2)
+		l.Font = Enum.Font.FredokaOne
+		l.TextScaled = true
+		l.Text = "🧠 Dopa Pay"
+		l.TextColor3 = rgb(200, 200, 214)
+		l.Parent = logo
+	end
+	-- TPE (vers le client) + imprimante à tickets
+	local T = F * CFrame.new(3.7, COUNTER_TOP + 0.2, z0 + 0.35) * CFrame.Angles(math.rad(25), 0, 0)
+	box(parent, "TPE", T, -0.18, 0.18, -0.22, 0.22, -0.07, 0.07, rgb(40, 40, 48), M.SmoothPlastic)
+	local tpe = box(parent, "TPEScreen", T, -0.14, 0.14, 0.02, 0.18, -0.1, -0.05, rgb(210, 236, 250), M.SmoothPlastic)
+	label(tpe, Enum.NormalId.Front, "💳", rgb(40, 40, 60), rgb(210, 236, 250), 160, 20)
+	box(parent, "TPEKeys", T, -0.14, 0.14, -0.19, -0.02, -0.095, -0.055, rgb(90, 90, 100), M.SmoothPlastic)
+	box(parent, "Printer", F, 0.6, 1.1, COUNTER_TOP - 0.02, COUNTER_TOP + 0.3, z0 + 1.3, z0 + 1.9, rgb(236, 236, 240), M.SmoothPlastic)
+	local paper = newPart(parent, "Receipt", Vector3.new(0.32, 0.5, 0.01), F * CFrame.new(0.85, COUNTER_TOP + 0.52, z0 + 1.32) * CFrame.Angles(math.rad(-15), 0, 0), WHITE, M.SmoothPlastic)
+	local _ = paper
+	-- sacs en papier (pile + un sac debout), bocal de bonbons, plante, chevalet
+	for k = 0, 2 do
+		box(parent, "PaperBag", F, -4.25, -3.05, COUNTER_TOP - 0.02 + k * 0.06, COUNTER_TOP + 0.04 + k * 0.06, z0 + 0.8, z0 + 1.6, k == 1 and t.Accent:Lerp(WHITE, 0.4) or rgb(206, 170, 126), M.Fabric)
+	end
+	box(parent, "ShoppingBag", F, -2.9, -2.1, COUNTER_TOP - 0.02, COUNTER_TOP + 1.0, z0 + 0.9, z0 + 1.35, t.Accent, M.Fabric)
+	box(parent, "BagHandle", F, -2.7, -2.3, COUNTER_TOP + 1.0, COUNTER_TOP + 1.3, z0 + 1.1, z0 + 1.15, t.Accent:Lerp(Color3.new(0, 0, 0), 0.3), M.Fabric)
+	local jar = cylinder(parent, "CandyJar", F, -1.3, COUNTER_TOP - 0.02, z0 + 0.45, 0.75, 0.62, rgb(230, 240, 250), M.Glass)
+	jar.Transparency = 0.55
+	for k = 0, 2 do
+		ball(parent, "Lollipop", F, -1.42 + k * 0.12, COUNTER_TOP + 0.22 + (k % 2) * 0.16, z0 + 0.45 + (k - 1) * 0.1, 0.24, ({ rgb(255, 110, 150), rgb(255, 214, 80), rgb(120, 200, 255) })[k + 1], M.SmoothPlastic)
+	end
+	cylinder(parent, "JarLid", F, -1.3, COUNTER_TOP + 0.72, z0 + 0.45, 0.1, 0.66, t.Accent, M.SmoothPlastic)
+	cylinder(parent, "PlantPot", F, 4.15, COUNTER_TOP - 0.02, z1 - 0.35, 0.5, 0.5, rgb(236, 226, 214), M.SmoothPlastic)
+	ball(parent, "PlantLeaves", F, 4.15, COUNTER_TOP + 0.75, z1 - 0.35, 0.8, rgb(84, 160, 96), M.Grass)
+	local tent = sign(parent, "ThankYou", Vector3.new(1.1, 0.5, 0.05), F * CFrame.new(-0.2, COUNTER_TOP + 0.24, z0 - 0.05) * CFrame.Angles(math.rad(-14), 0, 0), WHITE, Locale.T("Thank you! 😊"), t.Accent, 80)
+	local _ = tent
 	-- panneau "🛍️ Voir tout" (sur le comptoir)
-	sign(parent, "SeeAll", Vector3.new(3.2, 1.3, 0.12), F * CFrame.new(-2.7, 4.25, z0 + 0.8) * CFrame.Angles(math.rad(-10), 0, 0), WHITE, Locale.T("🛍️ See everything"), t.Accent, 60)
-	box(parent, "SignFoot", F, -3.3, -2.1, 3.55, 3.7, z0 + 0.6, z0 + 1.2, rgb(200, 196, 210), M.Metal)
-	-- vendeur·se derrière le comptoir : vrai personnage animé (NPCModels,
-	-- v9.8) ; repli : petit personnage en blocs
+	sign(parent, "SeeAll", Vector3.new(3.2, 1.3, 0.12), F * CFrame.new(-2.7, COUNTER_TOP + 1.15, z0 + 1.9) * CFrame.Angles(math.rad(-10), 0, 0), WHITE, Locale.T("🛍️ See everything"), t.Accent, 60)
+	box(parent, "SignFoot", F, -3.3, -2.1, COUNTER_TOP - 0.02, COUNTER_TOP + 0.5, z0 + 1.7, z0 + 2.05, rgb(200, 196, 210), M.Metal)
+	-- vendeur·se derrière le comptoir : vrai personnage animé (NPCModels)
 	local kz = D - 1.55
 	local style = (shop.Id == "Furniture" or shop.Id == "Setup") and "salesperson" or (shop.Id == "Kitchen" and "baker" or "cashier")
 	local seed = 0
 	for i = 1, #shop.Id do
 		seed += string.byte(shop.Id, i)
 	end
-	if shopActor(shop, parent, style, seed, F * CFrame.new(-0.2, 0.12, kz), style == "salesperson" and "type" or "idle", { Shirt = t.Keeper }) then
-		-- (le reste du personnage en blocs n'est pas construit)
-		kz = -1000
+	shopActor(shop, parent, style, seed, F * CFrame.new(-0.2, 0.12, kz), style == "salesperson" and "type" or "idle", { Shirt = t.Keeper })
+	local actors = (shop :: any).Actors
+	if actors and actors[#actors] then
+		-- (v9.9) le·la vendeur·se alterne : tape sur la caisse, discute
+		actors[#actors].Cycle = { "type", "talk", "idle" }
 	end
-	local skin = rgb(255, 216, 186)
-	if kz > 0 then
-	box(parent, "KeeperLegs", F, -0.55, 0.55, 0.1, 2.3, kz - 0.35, kz + 0.35, rgb(80, 78, 110), M.SmoothPlastic)
-	box(parent, "KeeperBody", F, -0.95, 0.95, 2.3, 4.4, kz - 0.45, kz + 0.45, t.Keeper, M.Fabric)
-	box(parent, "KeeperApron", F, -0.7, 0.7, 2.4, 3.9, kz - 0.5 - GAP, kz - 0.45 - GAP, WHITE, M.Fabric)
-	for _, sx in ipairs({ -1, 1 }) do
-		box(parent, "KeeperArm", F, sx * 0.95 + (sx > 0 and 0.05 or -0.5), sx * 0.95 + (sx > 0 and 0.5 or -0.05), 2.5, 4.3, kz - 0.3, kz + 0.3, t.Keeper, M.Fabric)
+	-- (v9.9) un·e client·e au comptoir (discute, puis paie par carte)
+	if shopActor(shop, parent, "shopper", seed + 91, F * CFrame.new(1.8, 0.12, z0 - 1.25) * CFrame.Angles(0, math.pi, 0), "talk", { Prop = "bag" }) then
+		local list = (shop :: any).Actors
+		list[#list].Cycle = { "talk", "idle", "type" }
 	end
-	ball(parent, "KeeperHead", F, 0, 5.15, kz, 1.55, skin, M.SmoothPlastic)
-	ball(parent, "KeeperHair", F, 0, 5.55, kz + 0.2, 1.5, rgb(120, 80, 60), M.SmoothPlastic)
-	for _, sx in ipairs({ -1, 1 }) do
-		ball(parent, "KeeperEye", F, sx * 0.3, 5.2, kz - 0.7, 0.2, INK, M.SmoothPlastic)
-	end
-	box(parent, "KeeperSmile", F, -0.18, 0.18, 4.83, 4.9, kz - 0.74, kz - 0.7, rgb(220, 90, 110), M.SmoothPlastic)
+	-- horloge murale à l'heure réelle au-dessus de l'enseigne du fond
+	local clocks = Clocks()
+	if clocks then
+		local ok, c = pcall(clocks.Build, parent, F * CFrame.new(0, shop.Size.Y - 1.1, D - 0.3), 1.3, { Style = "Wall", Numerals = "Arabic", Case = t.Accent:Lerp(Color3.new(0, 0, 0), 0.35), MaxDistance = 60, Name = "ShopClock" })
+		if ok and c then
+			(shop :: any).Clock = c
+		end
 	end
 	-- grande enseigne du fond
 	local shopDef = ShopUI.SHOPS[shop.Id]

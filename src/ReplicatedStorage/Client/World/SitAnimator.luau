@@ -44,6 +44,16 @@
 	    quelqu'un d'autre a déplacé la chaise entre-temps (mode édition,
 	    reconstruction de la pièce), on n'y touche plus.
 
+	v9.9 (REALISM99) :
+	  - ASSIS = plus aucune invite "S'asseoir" (maisons, bancs, parc,
+	    jardin, manèges) : portée des invites mise à 0 tant que
+	    Humanoid.SeatPart existe, remise en se levant (voir stepPrompts) ;
+	    convention pour les nouveaux sièges : nom SitPrompt / ParkPrompt /
+	    SeatPrompt / BenchPrompt / GardenSeatPrompt, ou attribut
+	    SitPrompt = true sur l'invite ;
+	  - (PARK99) sièges des jeux du parc (attribut ParkPose) : animés par
+	    ParkPlay seul, pas par ce module.
+
 	API (appelée par TownClient) :
 	  SitAnimator.Start()     à l'entrée en ville
 	  SitAnimator.Stop()      à la sortie (tout est remis)
@@ -54,6 +64,7 @@
 	      "desk", "stool", "sofa", "bed", "bench", "seat")
 	  SitAnimator.KindOf(model?, seat?) -> string
 	  SitAnimator.Debug() -> état interne (tests)
+	  SitAnimator.HiddenPrompts() -> { [ProximityPrompt]: portée d'origine } (tests)
 ]]
 
 local Players = game:GetService("Players")

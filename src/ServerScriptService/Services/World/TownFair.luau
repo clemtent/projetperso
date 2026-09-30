@@ -721,6 +721,12 @@ local function buildAnnex(folder: Instance, ridesFolder: Instance, geo: TownKit.
 				model.Parent = ridesFolder
 			else
 				local ride = makeRide(ridesFolder, def, base, base * CFrame.new(def.Exit))
+				if def.Kind == "Circus" then
+					-- (gradins : pose "banc" de SitAnimator, pas les bras levés du manège)
+					for _, seat in ipairs(ride.Seats) do
+						seat:SetAttribute("SitKind", "bench")
+					end
+				end
 				addGate(ride, ridesFolder, base * CFrame.new(def.Gate))
 				table.insert(rides, ride)
 			end

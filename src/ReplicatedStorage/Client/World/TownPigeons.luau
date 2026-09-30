@@ -51,8 +51,14 @@ local TownPigeons = {}
 local M = Enum.Material
 local rgb = Color3.fromRGB
 
+local capsuleGap: (a: any, b: any) -> (number, Vector3, Vector3)
+local bodyClear: (P: any, me: any, pos: Vector3, yaw: number) -> number
+
 local PER_FLOCK = 5
 local BIRD_R = 0.46 -- (studs) demi-distance mini entre deux pigeons au sol
+local BODY_HALF = 0.21 -- demi-largeur d'un corps (vu du dessus)
+local CAPSULE_MARGIN = 0.06 -- espace gardé entre deux corps
+local LAND_GAP = 1.32 -- place d'atterrissage : libre quel que soit le cap (bec 0,5 + queue 0,72 + marge)
 local WALK_SPEED = 1.05
 local STEP_T = 0.3 -- (s) un pas (= un hochement de tête)
 local SCARE_R = 3.6 -- quelqu'un plus près : le groupe s'envole
@@ -476,12 +482,12 @@ local function clearOf(P: any, me: any, p: Vector3, gap: number): boolean
 	return nearestTaken(P, me, p) >= gap
 end
 
-local function freeSpot(P: any, me: any, center: Vector3, radius: number, rng: Random): Vector3?
+local function freeSpot(P: any, me: any, center: Vector3, radius: number, rng: Random, gap: number?): Vector3?
 	for _ = 1, 14 do
 		local a = rng:NextNumber(0, math.pi * 2)
 		local r = math.sqrt(rng:NextNumber()) * radius
 		local p = center + Vector3.new(math.cos(a) * r, 0, math.sin(a) * r)
-		if clearOf(P, me, p, 2 * BIRD_R + 0.15) then
+		if clearOf(P, me, p, gap or (2 * BIRD_R + 0.15)) then
 			return p
 		end
 	end
@@ -551,7 +557,7 @@ local function flockTakeOff(P: any, flock: any, threat: Vector3?)
 				end
 			end
 			if not dest then
-				dest = freeSpot(P, bird, best, HOME_R - 0.5, rng) or (best + Vector3.new(rng:NextNumber(-3, 3), 0, rng:NextNumber(-3, 3)))
+				dest = freeSpot(P, bird, best, HOME_R - 0.5, rng, LAND_GAP) or (best + Vector3.new(rng:NextNumber(-3, 3), 0, rng:NextNumber(-3, 3)))
 			end
 			-- (réaction décalée : ils ne partent pas tous à la même image)
 			startFly(bird, tourPlan(P, bird, dest :: Vector3, (k - 1) * 0.16 + rng:NextNumber(0, 0.12)), dest :: Vector3, perched)
@@ -712,8 +718,8 @@ local function pose(P: any, bird: any, dt: number)
 				s = plan.Segs[plan.I]
 				-- début de la descente : la place visée est-elle toujours libre ?
 				-- (sinon une autre, tout près : jamais posé sur un voisin)
-				if s and s.Kind == "land" and not bird.WillPerch and plan.T < 0.05 and not clearOf(P, bird, s.P1, 2 * BIRD_R + 0.1) then
-					local spot = freeSpot(P, bird, s.P1, 2.5, bird.Rng)
+				if s and s.Kind == "land" and not bird.WillPerch and plan.T < 0.05 and not clearOf(P, bird, s.P1, LAND_GAP) then
+					local spot = freeSpot(P, bird, s.P1, 2.5, bird.Rng, LAND_GAP)
 					if spot then
 						s.P1 = spot
 						bird.Dest = spot
@@ -724,6 +730,26 @@ local function pose(P: any, bird: any, dt: number)
 				land(P, bird)
 				pose(P, bird, 0)
 				return
+			end
+			-- pendant la descente, la place visée est surveillée : prise entre-temps
+			-- (un voisin s'y est poussé) -> nouvelle trajectoire vers une place
+			-- libre, qui part de la position ET de la vitesse actuelles (sans saut)
+			if s.Kind == "land" and not bird.WillPerch and plan.T < s.Dur * 0.8 then
+				bird.Watch = (bird.Watch or 0) - dt
+				if bird.Watch <= 0 then
+					bird.Watch = 0.15
+					if not clearOf(P, bird, s.P1, LAND_GAP - 0.1) then
+						local spot = freeSpot(P, bird, s.P1, 2.5, bird.Rng, LAND_GAP) or freeSpot(P, bird, bird.Flock.Home, HOME_R + 1.5, bird.Rng, LAND_GAP)
+						if spot then
+							local p0, v0 = hermite(s, plan.T)
+							local ns = seg("land", p0, v0, spot, s.V1, math.max(0.9, s.Dur - plan.T))
+							plan.Segs[plan.I] = ns
+							plan.T = 0
+							s = ns
+							bird.Dest = spot
+						end
+					end
+				end
 			end
 			local pos, vel = hermite(s, plan.T)
 			bird.Pos = pos
@@ -791,6 +817,11 @@ local function pose(P: any, bird: any, dt: number)
 				-- (un voisin devant : on attend / on change de but, jamais l'un dans l'autre)
 				local dNext = nearestTaken(P, bird, nextPos)
 				local blocked = dNext < 2 * BIRD_R + 0.05 and dNext < nearestTaken(P, bird, bird.Pos)
+				if not blocked then
+					-- (le corps entier : bec et queue compris)
+					local cNext = bodyClear(P, bird, nextPos, bird.Yaw)
+					blocked = cNext < CAPSULE_MARGIN and cNext < bodyClear(P, bird, bird.Pos, bird.Yaw)
+				end
 				if blocked then
 					bird.Target = freeSpot(P, bird, bird.Flock.Home, HOME_R, rng)
 					if not bird.Target then
@@ -875,7 +906,16 @@ local function pose(P: any, bird: any, dt: number)
 	if mode ~= "fly" then
 		-- virage progressif vers le cap voulu (3,5 rad/s au plus)
 		local d = angleDiff(bird.YawTarget, bird.Yaw)
-		bird.Yaw += math.clamp(d, -3.5 * dt, 3.5 * dt)
+		local newYaw = bird.Yaw + math.clamp(d, -3.5 * dt, 3.5 * dt)
+		-- (on ne tourne pas sa queue dans un voisin)
+		if newYaw ~= bird.Yaw and not bird.Perched then
+			local cNew = bodyClear(P, bird, bird.Pos, newYaw)
+			if cNew >= CAPSULE_MARGIN or cNew >= bodyClear(P, bird, bird.Pos, bird.Yaw) then
+				bird.Yaw = newYaw
+			end
+		else
+			bird.Yaw = newYaw
+		end
 		bird.Bank = approach(bird.Bank, 0, 6, dt)
 	end
 	bird.Pitch = approach(bird.Pitch, pitch, center and 6 or 14, dt)
@@ -953,6 +993,65 @@ local function write(bird: any, frames: { CFrame })
 	end
 end
 
+-- Corps d'un pigeon vu du dessus : segment bec (0,5 devant) -> queue (0,72
+-- derrière), demi-largeur 0,21. Renvoie l'espace libre entre deux corps
+-- (négatif = ils se touchent) et les deux points les plus proches.
+local function segment(pos: Vector3, yaw: number): (Vector3, Vector3)
+	local f = Vector3.new(-math.sin(yaw), 0, -math.cos(yaw))
+	local p = Vector3.new(pos.X, 0, pos.Z)
+	return p + f * 0.5, p - f * 0.72
+end
+local function closestOn(a0: Vector3, a1: Vector3, p: Vector3): Vector3
+	local d = a1 - a0
+	local t = math.clamp((p - a0):Dot(d) / math.max(d:Dot(d), 1e-6), 0, 1)
+	return a0 + d * t
+end
+local function cross2(o: Vector3, p: Vector3, q: Vector3): number
+	return (p.X - o.X) * (q.Z - o.Z) - (p.Z - o.Z) * (q.X - o.X)
+end
+local function gapAt(apos: Vector3, ayaw: number, bpos: Vector3, byaw: number): (number, Vector3, Vector3)
+	local a0, a1 = segment(apos, ayaw)
+	local b0, b1 = segment(bpos, byaw)
+	-- (corps qui se croisent en X : distance nulle)
+	local d1, d2 = cross2(a0, a1, b0), cross2(a0, a1, b1)
+	local d3, d4 = cross2(b0, b1, a0), cross2(b0, b1, a1)
+	if d1 * d2 < 0 and d3 * d4 < 0 then
+		return -2 * BODY_HALF, Vector3.new(apos.X, 0, apos.Z), Vector3.new(bpos.X, 0, bpos.Z)
+	end
+	-- (distance segment-segment en 2D : minimum des 4 projections d'extrémités)
+	local best, pa, pb = math.huge, a0, b0
+	for _, c in ipairs({
+		{ a0, closestOn(b0, b1, a0) },
+		{ a1, closestOn(b0, b1, a1) },
+		{ closestOn(a0, a1, b0), b0 },
+		{ closestOn(a0, a1, b1), b1 },
+	}) do
+		local d = (c[1] - c[2]).Magnitude
+		if d < best then
+			best, pa, pb = d, c[1], c[2]
+		end
+	end
+	return best - 2 * BODY_HALF, pa, pb
+end
+capsuleGap = function(a: any, b: any): (number, Vector3, Vector3)
+	return gapAt(a.Pos, a.Yaw, b.Pos, b.Yaw)
+end
+
+-- Espace libre mini entre le corps de `me` (placé en pos, yaw) et les
+-- pigeons posés au même niveau (ou accroupis avant l'envol)
+bodyClear = function(P: any, me: any, pos: Vector3, yaw: number): number
+	local best = math.huge
+	for _, other in ipairs(P.List) do
+		if other ~= me and not other.Perched and (not other.Fly or other.Fly.T < 0) and math.abs(other.Pos.Y - pos.Y) < 1 then
+			local g = gapAt(pos, yaw, other.Pos, other.Yaw)
+			if g < best then
+				best = g
+			end
+		end
+	end
+	return best
+end
+
 function TownPigeons.Step(P: any, dt: number, avatar: Vector3?)
 	if not P then
 		return
@@ -1020,7 +1119,7 @@ function TownPigeons.Step(P: any, dt: number, avatar: Vector3?)
 		if bird.Mode == "perch" and bird.Timer <= 0 then
 			-- on redescend picorer près de son groupe
 			releasePerch(P, bird)
-			local spot = freeSpot(P, bird, bird.Flock.Home, HOME_R, bird.Rng) or bird.Flock.Home
+			local spot = freeSpot(P, bird, bird.Flock.Home, HOME_R, bird.Rng, LAND_GAP) or bird.Flock.Home
 			startFly(bird, hopPlan(bird.Pos, spot, 0.2), spot, false)
 		elseif bird.Mode ~= "fly" and bird.Mode ~= "perch" and bird.Timer <= 0 then
 			chooseGround(P, bird)
@@ -1045,6 +1144,15 @@ function TownPigeons.Step(P: any, dt: number, avatar: Vector3?)
 						a.Pos -= n * push
 						b.Pos += n * push
 					end
+					-- corps réels (bec -> bout de la queue, orientés) : jamais sécants
+					local clear, pa, pb = capsuleGap(a, b)
+					if clear < CAPSULE_MARGIN then
+						local sep = Vector3.new(pb.X - pa.X, 0, pb.Z - pa.Z)
+						local n = sep.Magnitude > 1e-3 and sep.Unit or Vector3.new(1, 0, 0)
+						local push = math.min((CAPSULE_MARGIN - clear) / 2 + 0.002, 4 * dt)
+						a.Pos -= n * push
+						b.Pos += n * push
+					end
 				end
 			end
 		end
@@ -1056,12 +1164,15 @@ function TownPigeons.Step(P: any, dt: number, avatar: Vector3?)
 	workspace:BulkMoveTo(P.Parts, frames, Enum.BulkMoveMode.FireCFrameChanged)
 end
 
--- Mesures (émulateur / tests) : écart mini entre deux pigeons au sol, modes
+-- Mesures (émulateur / tests) : écart mini entre deux pigeons au sol (centres
+-- et corps réels : MinClear < 0 = deux corps qui se touchent), modes
 function TownPigeons.Debug(P: any): any
 	if not P then
 		return {}
 	end
 	local minGap = math.huge
+	local minClear = math.huge
+	local clearInfo = ""
 	local info = ""
 	local modes = {}
 	for i, a in ipairs(P.List) do
@@ -1070,6 +1181,11 @@ function TownPigeons.Debug(P: any): any
 			local b = P.List[j]
 			if not a.Fly and not b.Fly and not a.Perched and not b.Perched and math.abs(a.Pos.Y - b.Pos.Y) < 1 then
 				local g = Vector3.new(a.Pos.X - b.Pos.X, 0, a.Pos.Z - b.Pos.Z).Magnitude
+				local cg = capsuleGap(a, b)
+				if cg < minClear then
+					minClear = cg
+					clearInfo = a.Mode .. "/" .. b.Mode .. " " .. a.Id .. "," .. b.Id .. string.format(" d=%.2f", g)
+				end
 				if g < minGap then
 					minGap = g
 					info = a.Mode .. "/" .. b.Mode .. " " .. a.Id .. "," .. b.Id
@@ -1077,7 +1193,7 @@ function TownPigeons.Debug(P: any): any
 			end
 		end
 	end
-	return { Birds = #P.List, Parts = #P.Parts, MinGap = minGap, MinPair = info, Modes = modes }
+	return { Birds = #P.List, Parts = #P.Parts, MinGap = minGap, MinClear = minClear, ClearPair = clearInfo, MinPair = info, Modes = modes }
 end
 
 return TownPigeons

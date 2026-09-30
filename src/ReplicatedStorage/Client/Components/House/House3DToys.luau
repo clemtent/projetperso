@@ -766,17 +766,21 @@ R.AlarmClock = function(b, _ctx)
 	end
 	b.Tube(-20, 80, -2, 20, 80, -2, 3, CHROME, M.Metal)
 	b.CylZ(0, 44, 0, 70, 30, body, M.SmoothPlastic)
-	b.CylZ(0, 44, 15.3, 56, 1, rgb(255, 250, 240), M.SmoothPlastic)
+	-- (v9.9 SCALE99) cadran en couches franchement espacées (g ≈ 0,035 stud) :
+	-- cadran, index, aiguilles à l'heure réelle, trotteuse, cache-axe (avant,
+	-- les couches trop fines grossissaient à l'anti-scintillement et
+	-- cachaient les aiguilles)
+	local g = House3DKit.Gap(b, 0.6)
+	local F = 15 -- (faces du même côté toujours à >= g l'une de l'autre)
+	b.CylZ(0, 44, F + 0.25 * g, 56, 1.5 * g, rgb(255, 250, 240), M.SmoothPlastic)
 	for index = 0, 11 do
 		local a = index / 12 * math.pi * 2
-		b.Box(math.sin(a) * 23, 44 + math.cos(a) * 23 - 1.5, 15.8, 2, 3, 0.6, INK)
+		b.Box(math.sin(a) * 23, 44 + math.cos(a) * 23 - 1.5, F + 2 * g, index % 3 == 0 and 2.6 or 1.8, index % 3 == 0 and 4 or 3, g, INK)
 	end
-	-- (v9.9 SCALE99) aiguilles à l'heure réelle + trotteuse rouge
-	local g = House3DKit.Gap(b, 0.6)
-	House3DTime.Hand(b, "H", 0, 44, 16.1 + g, 14, 3, 3, 0.6, INK)
-	House3DTime.Hand(b, "M", 0, 44, 16.7 + 2 * g, 21, 4, 2.2, 0.6, INK)
-	House3DTime.Hand(b, "S", 0, 44, 17.3 + 3 * g, 23, 6, 0.9, 0.5, rgb(220, 50, 60))
-	b.Ball(0, 44, 17.8 + 4 * g, 4, GOLD, M.Metal)
+	House3DTime.Hand(b, "H", 0, 44, F + 3 * g, 14, 3, 3, g, INK)
+	House3DTime.Hand(b, "M", 0, 44, F + 4.5 * g, 21, 4, 2.2, g, INK)
+	House3DTime.Hand(b, "S", 0, 44, F + 6 * g, 23, 6, 0.9, g, rgb(220, 50, 60))
+	b.Ball(0, 44, F + 7.6 * g, math.max(4, 1.6 * g), GOLD, M.Metal)
 	b.Footprint(76, 34, 92)
 end
 

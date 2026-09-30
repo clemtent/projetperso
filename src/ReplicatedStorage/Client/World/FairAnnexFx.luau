@@ -278,7 +278,8 @@ function FairAnnexFx.BuildPirate(r: RideFx)
 	local steps = math.ceil((deckY - 0.4) / 0.6)
 	for i = 1, steps do
 		local y = i * (deckY - 0.4) / steps
-		Solid(Fixed(r, "Stair", Vector3.new(2.6, 0.3, 0.8), CFrame.new(0, y - 0.15, -6.5 - (steps - i) * 0.75), Color3.fromRGB(160, 120, 86), M.WoodPlanks))
+		-- (marches pleines, posées au sol : un vrai escalier)
+		Solid(Fixed(r, "Stair", Vector3.new(2.6, y, 0.78), CFrame.new(0, y / 2, -6.5 - (steps - i) * 0.75), Color3.fromRGB(160, 120, 86), M.WoodPlanks))
 	end
 	Fixed(r, "DeckRail", Vector3.new(12, 0.14, 0.14), CFrame.new(0, deckY + 1.1, -6.4), C.Gold, M.Metal)
 	-- (groupe 1 : repère = milieu du pont de la coque, pend sous l'axe)

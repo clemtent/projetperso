@@ -615,7 +615,10 @@ function TownPlazaFx.Step(dt: number)
 			findCarouselSeats(rc, s.Plaza)
 		end
 		riding = ridingCarousel(rc)
-		if riding then
+		-- (v9.9, FAIR99) à CHAQUE image aussi pour ceux qui regardent (avant :
+		-- 30 fois / s -> manège et passagers saccadés vus du sol)
+		local focus0 = focusPoint()
+		if riding or (focus0 and (focus0 - rc.Base.Position).Magnitude < FAR_CAROUSEL) then
 			stepCarousel(rc, serverNow())
 		end
 	end
@@ -669,10 +672,6 @@ function TownPlazaFx.Step(dt: number)
 	local fromCenter = Vector3.new(focus.X - s.Center.X, 0, focus.Z - s.Center.Z).Magnitude
 	if fromCenter > FAR_PLAZA then
 		return
-	end
-	local c = s.Carousel
-	if c and not riding and (focus - c.Base.Position).Magnitude < FAR_CAROUSEL then
-		stepCarousel(c, serverNow())
 	end
 	local b = s.Balloons
 	if b and (focus - b.Tie).Magnitude < FAR_SMALL then

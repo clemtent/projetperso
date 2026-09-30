@@ -304,10 +304,18 @@ end
 
 -- Hauteur (au-dessus du sol de l'étage) de la rampe de collision à la
 -- profondeur d (v9.9 : ligne du MILIEU des marches, parallèle aux nez : pieds
--- à ± une demi-marche des girons ; 0 avant d0 - giron / 2, STORY à l'arrivée)
+-- à ± une demi-marche des girons ; 0 avant d0 - giron / 2 ; au milieu de la
+-- dernière marche, un bout plus raide rejoint le palier au ras, à d1)
 function WorldLayout.StairHeight(d: number, size: SizeDef?): number
-	local d0, _, tread, rise = WorldLayout.StairRun(size)
-	return math.clamp((d - d0 + tread / 2) / tread * rise, 0, WorldLayout.STORY)
+	local d0, d1, tread, rise = WorldLayout.StairRun(size)
+	local knee = d1 - tread / 2
+	local h
+	if d <= knee then
+		h = (d - d0 + tread / 2) / tread * rise
+	else
+		h = WorldLayout.STORY - rise + (d - knee) / (tread / 2) * rise
+	end
+	return math.clamp(h, 0, WorldLayout.STORY)
 end
 
 -- (v9.9) Hauteur du dessus du giron (nez de marche) sous d (0 avant la 1re marche)

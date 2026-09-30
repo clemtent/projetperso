@@ -187,7 +187,9 @@ end
 -- des jours qui commence le lundi, aujourd'hui en cœur (v9.9 SCALE99)
 local MONTHS_SHORT = { "JANV.", "FÉVR.", "MARS", "AVRIL", "MAI", "JUIN", "JUIL.", "AOÛT", "SEPT.", "OCT.", "NOV.", "DÉC." }
 local function today(): (number, number, number)
-	local ok, t = pcall(os.date, "*t")
+	local ok, t = pcall(function()
+		return os.date("*t")
+	end)
 	if ok and type(t) == "table" and tonumber(t.year) then
 		return tonumber(t.year) or 2026, tonumber(t.month) or 1, tonumber(t.day) or 1
 	end

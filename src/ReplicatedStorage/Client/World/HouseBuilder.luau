@@ -55,11 +55,26 @@
 	    "HouseCurtainsClosed", HouseService) ; l'interrupteur commande le
 	    plafonnier ET les lampes posées dans la pièce ;
 	  house:ToggleRoom(slot, "Lights" | "Curtains") ; house:BackDoorPosition()
+	(v9.9 HOUSE99) :
+	  - HALL / ESCALIER refaits (HouseStairs) : l'escalier longe le mur de
+	    droite, couloir d'entrée libre et meublé ; la COQUE du hall (sols,
+	    murs) est construite avec l'extérieur, l'INTÉRIEUR du hall (escalier,
+	    meubles, lampes) en flux comme une pièce : NextToBuild renvoie 0 pour
+	    le hall, BuildRoom(0) / DestroyRoom(0) (aucun changement pour TownClient) ;
+	  - manoir : le passage de la cage vers les pièces de DROITE est au fond
+	    (WorldLayout.PassageSpan) : la coque de la pièce est percée là ;
+	  - 💡 fenêtres qui BRILLENT la nuit, vues de dehors, quand la lumière de
+	    la pièce est allumée (état du propriétaire : pareil pour tout le
+	    monde), même si la pièce n'est pas construite ; teinte des rideaux
+	    s'ils sont fermés ; les fenêtres du hall brillent toute la nuit ;
+	  - rideaux réalistes jusqu'au sol (HouseToggles) ; touches : E pour les
+	    rideaux ET pour l'interrupteur (plus de G / Q).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
+local Lighting = game:GetService("Lighting")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
@@ -137,6 +152,9 @@ export type RoomToggles = {
 	SwitchPrompt: ProximityPrompt?,
 }
 
+-- (v9.9 HOUSE99) intérieur du hall (escalier, meubles, lampes), en flux
+export type HallState = { State: string, Model: Model?, Ramps: { BasePart }, Parts: number }
+
 export type Audit = {
 	OK: boolean,
 	Shells: number, -- coques dans Interiors
@@ -171,6 +189,9 @@ export type House = typeof(setmetatable({} :: {
 	BackDoorOpen: boolean,
 	FlagKey: string, -- (v9.8) attributs 💡 / 🪟 du propriétaire déjà appliqués
 	Ramps: { BasePart },
+	Hall: HallState, -- (v9.9) intérieur du hall en flux
+	Glows: { [number]: { any } }, -- (v9.9) lueurs de nuit des fenêtres (HouseFacade.Glow ; 0 = cage)
+	GlowKey: string,
 	Style: string,
 	Chimneys: number,
 	ExteriorParts: number,
@@ -340,6 +361,9 @@ function HouseBuilder.new(snapshot: any, plotCF: CFrame, parent: Instance): Hous
 		BackDoorOpen = false,
 		FlagKey = "",
 		Ramps = {},
+		Hall = { State = "None", Model = nil, Ramps = {}, Parts = 0 },
+		Glows = {},
+		GlowKey = "",
 		Style = "Cottage",
 		Chimneys = 0,
 		ExteriorParts = 0,
@@ -386,18 +410,15 @@ function HouseBuilder.BuildExterior(self: House)
 		warn("[World] Façade : " .. tostring(built))
 		built = { Fills = {}, Chimneys = 0, Style = WorldLayout.StyleOf(size) }
 	end
-	local accent = Color3.fromRGB(236, 72, 140)
-	local okStairs, stairs = pcall(HouseStairs.Build, kit, size, {
-		Wall = Color3.fromRGB(255, 244, 240),
-		Trim = CREAM,
-		Accent = accent,
-	})
-	if okStairs then
-		self.Ramps = stairs.Ramps
-	else
-		warn("[World] Escalier : " .. tostring(stairs))
-		self.Ramps = {}
+	-- (v9.9) coque du hall (sols, trémies, murs) ; son intérieur est en flux
+	local okStairs, stairs = pcall(HouseStairs.BuildShell, kit, size)
+	if not okStairs then
+		warn("[World] Hall : " .. tostring(stairs))
 	end
+	self:DestroyHall()
+	self.Ramps = {}
+	self.Glows = built.Glows or {}
+	self.GlowKey = ""
 	self.Door = built.Door
 	self.DoorHinge = built.Hinge
 	self.DoorLock = built.Lock
@@ -439,7 +460,7 @@ end
 ----------------------------------------------------------------------
 
 -- Coque de secours (si House3DScene n'est pas disponible) : sol, murs, plafond
-local function fallbackShell(room: any, size: any): Model
+local function fallbackShell(room: any, size: any, column: number): Model
 	local model = Instance.new("Model")
 	model.Name = "RoomShell"
 	local W, D, WH, T = WorldLayout.RoomWidth(size), WorldLayout.DEPTH, WorldLayout.WALL_H, WorldLayout.WALL_T
@@ -449,17 +470,78 @@ local function fallbackShell(room: any, size: any): Model
 	local floorPart = newPart(model, "Floor", Vector3.new(W + 2 * T, 1, D + 2 * T), CFrame.new(0, -0.5, 0), floorColor, nil, true)
 	model.PrimaryPart = floorPart
 	newPart(model, "WallBack", Vector3.new(W + 2 * T, WH, T), CFrame.new(0, WH / 2, -D / 2 - T / 2), wall, nil, true)
-	local pass, passH = WorldLayout.PASS_W, WorldLayout.PASS_H
-	for _, sx in ipairs({ -1, 1 }) do
-		local x = sx * (W / 2 + T / 2)
-		local seg = (D - pass) / 2
-		newPart(model, "WallSide", Vector3.new(T, WH, seg), CFrame.new(x, WH / 2, -D / 2 + seg / 2), wall, nil, true)
-		newPart(model, "WallSide", Vector3.new(T, WH, seg), CFrame.new(x, WH / 2, D / 2 - seg / 2), wall, nil, true)
-		newPart(model, "WallSide", Vector3.new(T, WH - passH, pass), CFrame.new(x, passH + (WH - passH) / 2, 0), wall, nil, true)
+	local passH = WorldLayout.PASS_H
+	local doors = WorldLayout.RoomDoors(size, column)
+	local mid = WorldLayout.WALL_T + D / 2
+	for _, side in ipairs({ "Left", "Right" }) do
+		local x = (if side == "Left" then -1 else 1) * (W / 2 + T / 2)
+		if table.find(doors, side) then
+			-- (v9.9) passage placé comme la cage l'attend (WorldLayout.PassageSpan) ; z = mid - d
+			local d0, d1 = WorldLayout.PassageSpan(size, column, side)
+			local z0, z1 = mid - d1, mid - d0
+			newPart(model, "WallSide", Vector3.new(T, WH, z0 + D / 2), CFrame.new(x, WH / 2, (-D / 2 + z0) / 2), wall, nil, true)
+			newPart(model, "WallSide", Vector3.new(T, WH, D / 2 - z1), CFrame.new(x, WH / 2, (z1 + D / 2) / 2), wall, nil, true)
+			newPart(model, "WallSide", Vector3.new(T, WH - passH, z1 - z0), CFrame.new(x, passH + (WH - passH) / 2, (z0 + z1) / 2), wall, nil, true)
+		else
+			newPart(model, "WallSide", Vector3.new(T, WH, D), CFrame.new(x, WH / 2, 0), wall, nil, true)
+		end
 	end
 	newPart(model, "Ceiling", Vector3.new(W + 2 * T, 0.6, D + 2 * T), CFrame.new(0, WH + 0.3, 0), CREAM, nil, true)
 	model.WorldPivot = CFrame.new()
 	return model
+end
+
+-- (v9.9 HOUSE99) Perce un passage dans le mur de côté PLEIN d'une coque
+-- House3DScene (repère de la coque : pivot au centre du dessus du sol, +Z
+-- vers l'avant) entre z0 et z1 : le mur, la plinthe et la corniche sont
+-- recoupés (copies : mêmes matières / couleurs), chambranle ajouté
+local function cutPassage(shell: Model, size: any, side: string, z0: number, z1: number)
+	local W, D = WorldLayout.RoomWidth(size), WorldLayout.DEPTH
+	local T = WorldLayout.WALL_T
+	local sx = if side == "Left" then -1 else 1
+	local pivot = shell:GetPivot()
+	local passH = WorldLayout.PASS_H
+	local trimColor = CREAM
+	local function relative(part: BasePart): CFrame
+		return pivot:ToObjectSpace(part.CFrame)
+	end
+	local function clonePiece(part: BasePart, zA: number, zB: number, yA: number?, yB: number?)
+		if zB - zA < 0.05 then
+			return
+		end
+		local rel = relative(part)
+		local y0 = yA or (rel.Y - part.Size.Y / 2)
+		local y1 = yB or (rel.Y + part.Size.Y / 2)
+		local copy = part:Clone()
+		copy.Size = Vector3.new(part.Size.X, y1 - y0, zB - zA)
+		copy.CFrame = pivot * CFrame.new(rel.X, (y0 + y1) / 2, (zA + zB) / 2)
+		copy.Parent = part.Parent
+	end
+	for _, child in ipairs(shell:GetChildren()) do
+		if child:IsA("BasePart") then
+			local rel = relative(child)
+			local alongZ = child.Size.Z > D * 0.9
+			if alongZ and child.Name == ("Wall" .. side) and math.abs(rel.X - sx * (W / 2 + T / 2)) < 0.1 then
+				clonePiece(child, -D / 2, z0)
+				clonePiece(child, z1, D / 2)
+				clonePiece(child, z0, z1, passH, rel.Y + child.Size.Y / 2)
+				child:Destroy()
+			elseif alongZ and (child.Name == "Skirting" or child.Name == "Crown") and math.abs(rel.X - sx * (W / 2 - 0.1)) < 0.12 then
+				trimColor = child.Color
+				if child.Name == "Skirting" then
+					clonePiece(child, -D / 2, z0)
+					clonePiece(child, z1, D / 2)
+					child:Destroy()
+				end
+			end
+		end
+	end
+	-- chambranle (comme House3DScene : 0,5 de large, 0,3 d'épaisseur, côté pièce)
+	local fx = sx * (W / 2 - 0.1)
+	for _, z in ipairs({ z0 - 0.25, z1 + 0.25 }) do
+		newPart(shell, "DoorFrame", Vector3.new(0.3, passH + 0.5, 0.5), pivot * CFrame.new(fx, (passH + 0.5) / 2, z), trimColor, M.Wood, false)
+	end
+	newPart(shell, "DoorFrame", Vector3.new(0.3, 0.5, z1 - z0 + 1), pivot * CFrame.new(fx, passH + 0.25, (z0 + z1) / 2), trimColor, M.Wood, false)
 end
 
 -- Mur avant INTÉRIEUR d'une pièce (la façade vue de dedans) : papier peint
@@ -588,13 +670,16 @@ local function roomToggles(self: House, shell: Model, room: any, slot: number, b
 	local rect = HouseFacade.WindowRect(size, column, floor)
 	local T = WorldLayout.WALL_T
 	local front = self.HouseCF * CFrame.new((rect[1] + rect[2]) / 2, (rect[3] + rect[4]) / 2, -(T + 0.12)) * CFrame.Angles(0, math.pi, 0)
-	table.insert(toggles.Curtains, HouseToggles.Curtains(shell, front, rect[2] - rect[1], rect[4] - rect[3], fabric, brass, curtainsOpen))
+	-- (v9.9 : rideaux jusqu'au sol : ourlet 0,15 au-dessus du plancher)
+	local yFloor = WorldLayout.FloorY(floor)
+	table.insert(toggles.Curtains, HouseToggles.Curtains(shell, front, rect[2] - rect[1], rect[4] - rect[3], fabric, brass, curtainsOpen,
+		{ Drop = (rect[3] + rect[4]) / 2 - yFloor - 0.15 }))
 	-- 🪟 fenêtre du fond (côté jardin)
 	local b0, b1, b2, b3 = WorldLayout.BackWindowRect(size, Config.House.WallRatio)
 	local back = shell:GetPivot() * CFrame.new((b0 + b1) / 2, (b2 + b3) / 2, -WorldLayout.DEPTH / 2 + 0.06)
-	table.insert(toggles.Curtains, HouseToggles.Curtains(shell, back, b1 - b0, b3 - b2, fabric, brass, curtainsOpen))
+	table.insert(toggles.Curtains, HouseToggles.Curtains(shell, back, b1 - b0, b3 - b2, fabric, brass, curtainsOpen, { Drop = (b2 + b3) / 2 - 0.15 }))
 	for _, curtain in ipairs(toggles.Curtains) do
-		local p = prompt(curtain.Anchor, curtainTexts(curtainsOpen), Locale.T("🪟 Curtains"), Enum.KeyCode.G, owner)
+		local p = prompt(curtain.Anchor, curtainTexts(curtainsOpen), Locale.T("🪟 Curtains"), Enum.KeyCode.E, owner)
 		p.Triggered:Connect(function()
 			self:ToggleRoom(slot, "Curtains")
 		end)
@@ -604,11 +689,13 @@ local function roomToggles(self: House, shell: Model, room: any, slot: number, b
 	local W = WorldLayout.RoomWidth(size)
 	local side = switchSide(size, column)
 	local sx = if side == "Right" then 1 else -1
-	local z = WorldLayout.PASS_W / 2 + 1.05
+	-- (v9.9 : à côté du passage, du côté de la façade, où qu'il soit : PassageSpan ; z = milieu - d)
+	local pd0 = WorldLayout.PassageSpan(size, column, side)
+	local z = WorldLayout.WALL_T + WorldLayout.DEPTH / 2 - pd0 + 1.05
 	local switchCF = shell:GetPivot() * CFrame.new(sx * W / 2, 4.3, z) * CFrame.Angles(0, -sx * math.pi / 2, 0)
 	local switch = HouseToggles.Switch(shell, switchCF, lightsOn)
 	toggles.Switch = switch
-	local sp = prompt(switch.Plate, switchTexts(lightsOn), Locale.T("💡 Lights"), Enum.KeyCode.Q, owner)
+	local sp = prompt(switch.Plate, switchTexts(lightsOn), Locale.T("💡 Lights"), Enum.KeyCode.E, owner)
 	sp.MaxActivationDistance = 8
 	sp.Triggered:Connect(function()
 		self:ToggleRoom(slot, "Lights")
@@ -696,7 +783,60 @@ local function detachItems(self: House, slot: number, state: RoomState)
 	end
 end
 
+----------------------------------------------------------------------
+-- (v9.9 HOUSE99) Intérieur du hall en flux (escalier, meubles, lampes)
+----------------------------------------------------------------------
+
+function HouseBuilder.DestroyHall(self: House)
+	local hall = self.Hall
+	if hall.Model then
+		hall.Model:Destroy()
+	end
+	hall.Model = nil
+	hall.State = "None"
+	hall.Ramps = {}
+	self.Ramps = {}
+end
+
+function HouseBuilder.BuildHall(self: House)
+	if not self.Alive then
+		return
+	end
+	self:DestroyHall()
+	local model = Instance.new("Model")
+	model.Name = "Hall"
+	local kit = HouseKit.new(self.HouseCF, model, 2)
+	local ok, result = pcall(HouseStairs.BuildInterior, kit, self.Size)
+	local hall = self.Hall
+	if ok then
+		hall.Ramps = result.Ramps
+		self.Ramps = result.Ramps
+	else
+		warn("[World] Escalier : " .. tostring(result))
+	end
+	hall.Parts = kit.Stats.Count
+	model:SetAttribute("Parts", kit.Stats.Count)
+	model.Parent = self.Model
+	hall.Model = model
+	hall.State = "Built"
+end
+
+-- Distance de `focus` au hall (boîte de la cage, tous les étages)
+local function hallDistance(self: House, focus: Vector3): number
+	local x, y, d = WorldLayout.ToLocal(self.HouseCF, focus)
+	local h0, h1 = WorldLayout.HallSpan(self.Size)
+	local dims = WorldLayout.Dims(self.Size)
+	local cx = math.clamp(x, h0, h1)
+	local cy = math.clamp(y, 0, dims.Height)
+	local cd = math.clamp(d, 0, dims.Depth)
+	return Vector3.new(x - cx, y - cy, d - cd).Magnitude
+end
+
 function HouseBuilder.DestroyRoom(self: House, slot: number)
+	if slot == 0 then
+		self:DestroyHall()
+		return
+	end
 	local state = self.Rooms[slot]
 	if not state then
 		return
@@ -766,6 +906,10 @@ end
 
 -- Construit la pièce (coque + objets) ; peut céder la main (appel dans une tâche)
 function HouseBuilder.BuildRoom(self: House, slot: number)
+	if slot == 0 then
+		self:BuildHall()
+		return
+	end
 	local state = self.Rooms[slot]
 	if not state or not self.Alive then
 		return
@@ -779,12 +923,24 @@ function HouseBuilder.BuildRoom(self: House, slot: number)
 	local _, column = WorldLayout.SlotCell(size, slot)
 	local roomData = room or { Id = "", Slot = slot, Placed = {} }
 	local shell: Model? = nil
+	-- (v9.9) passages hors du milieu (manoir : cage -> pièces de droite, au
+	-- fond) : la coque les construit pleins, on les perce ensuite
+	local shellDoors, moved = {}, {}
+	local mid = WorldLayout.WALL_T + WorldLayout.DEPTH / 2
+	for _, side in ipairs(WorldLayout.RoomDoors(size, column)) do
+		local d0, d1 = WorldLayout.PassageSpan(size, column, side)
+		if math.abs((d0 + d1) / 2 - mid) > 0.05 or math.abs((d1 - d0) - WorldLayout.PASS_W) > 0.05 then
+			table.insert(moved, { side, mid - d1, mid - d0 })
+		else
+			table.insert(shellDoors, side)
+		end
+	end
 	if Scene and type(Scene.BuildRoomShell) == "function" then
 		local ok, result = pcall(Scene.BuildRoomShell, roomData, size, {
 			Scale = WorldLayout.PX,
 			Depth = WorldLayout.DEPTH,
 			WallHeight = WorldLayout.WALL_H,
-			Doors = WorldLayout.RoomDoors(size, column),
+			Doors = shellDoors,
 			DoorWidth = WorldLayout.PASS_W,
 			DoorHeight = WorldLayout.PASS_H,
 			Front = false,
@@ -795,12 +951,18 @@ function HouseBuilder.BuildRoom(self: House, slot: number)
 		})
 		if ok and typeof(result) == "Instance" and result:IsA("Model") then
 			shell = result
+			for _, m in ipairs(moved) do
+				local okCut, err = pcall(cutPassage, result, size, m[1], m[2], m[3])
+				if not okCut then
+					warn("[World] Passage : " .. tostring(err))
+				end
+			end
 		elseif not ok then
 			warn("[World] BuildRoomShell : " .. tostring(result))
 		end
 	end
 	if not shell then
-		shell = fallbackShell(room, size)
+		shell = fallbackShell(room, size, column)
 	end
 	local s = shell :: Model
 	s.Name = "Room_" .. slot
@@ -911,6 +1073,14 @@ end
 function HouseBuilder.NextToBuild(self: House, focus: Vector3): (number?, number)
 	local best: number? = nil
 	local bestDistance = math.huge
+	-- (v9.9) le hall d'abord (on y entre par la porte) : "emplacement" 0
+	local hallD = hallDistance(self, focus)
+	if self.Hall.State == "None" and hallD < NEAR - 20 then
+		best = 0
+		bestDistance = hallD
+	elseif self.Hall.State ~= "None" and hallD > FAR - 20 then
+		self:DestroyHall()
+	end
 	for slot, state in pairs(self.Rooms) do
 		local x, y, d = WorldLayout.RoomCenter(self.Size, slot)
 		local distance = (WorldLayout.ToWorld(self.HouseCF, x, y + 4, d) - focus).Magnitude
@@ -965,6 +1135,13 @@ function HouseBuilder.StepDoor(self: House, open: boolean, locked: boolean)
 		self.FlagKey = key
 		self:ApplyRoomFlags(true)
 	end
+	-- (v9.9) fenêtres qui brillent la nuit (vues de dehors)
+	local night = HouseBuilder.IsNight()
+	local glowKey = tostring(night) .. "|" .. key
+	if glowKey ~= self.GlowKey then
+		self.GlowKey = glowKey
+		self:ApplyGlows(night)
+	end
 	local want = open and not locked
 	if want == self.DoorOpen then
 		return
@@ -982,6 +1159,47 @@ function HouseBuilder.StepDoor(self: House, open: boolean, locked: boolean)
 	end)
 	if not ok then
 		leaf.CFrame = target
+	end
+end
+
+-- (v9.9 HOUSE99) Nuit (même règle que les lanternes du jardin ; suit aussi
+-- le réglage "Heure du jour" : Lighting.ClockTime du client)
+function HouseBuilder.IsNight(): boolean
+	local clock = Lighting.ClockTime
+	return clock < 6.4 or clock > 17.6
+end
+
+local GLOW_WARM = Color3.fromRGB(255, 206, 140)
+
+-- (v9.9) Allume / éteint la lueur de nuit de chaque fenêtre : pièce qui
+-- existe + lumière allumée (attribut du propriétaire) ; rideaux fermés =
+-- lueur teintée par le tissu, un peu plus douce ; hall : toujours la nuit
+function HouseBuilder.ApplyGlows(self: House, night: boolean)
+	local off, closed = ownerFlags(self)
+	local bySlot = roomsBySlot(self.Snapshot)
+	for slot, list in pairs(self.Glows) do
+		local on, color, alpha = false, GLOW_WARM, 0.3
+		if slot == 0 then
+			on = night
+			alpha = 0.4
+		else
+			local room = bySlot[slot]
+			if room then
+				local id = tostring(room.Id)
+				on = night and not off[id]
+				if closed[id] then
+					local style = wallpaperOf(room)
+					local fabric = style and typeof(style.B) == "Color3" and style.B or Color3.fromRGB(255, 190, 214)
+					color = GLOW_WARM:Lerp(fabric, 0.55)
+					alpha = 0.42
+				end
+			end
+		end
+		for _, glow in ipairs(list) do
+			glow.Gui.Enabled = on
+			glow.Fill.BackgroundColor3 = color
+			glow.Fill.BackgroundTransparency = alpha
+		end
 	end
 end
 
@@ -1153,6 +1371,7 @@ end
 
 function HouseBuilder.Destroy(self: House)
 	self.Alive = false
+	self:DestroyHall()
 	for slot in pairs(self.Rooms) do
 		self:DestroyRoom(slot)
 	end

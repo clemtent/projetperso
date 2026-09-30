@@ -399,17 +399,22 @@ local function flight(kit: any, size: any, floor: number, pal: Palette, ramps: {
 	local wallIn = S1 - 0.2 -- face du limon de mur
 	local open = pal.Open
 
-	-- 1. Rampe de collision (invisible) : ligne du MILIEU des marches, de
-	-- (D0 - G/2, sol) à (D1 - G/2, étage du dessus), prolongée sous le sol ;
-	-- puis un petit plat au ras du palier jusqu'à l'arrivée
+	-- 1. Rampe de collision (invisible) : ligne du MILIEU des marches (parallèle
+	-- aux nez, = WorldLayout.StairHeight), de (D0 - G/2, sol) au milieu de la
+	-- dernière marche, prolongée sous le sol ; puis un bout plus raide qui
+	-- rejoint le palier AU RAS à l'arrivée (D1), et un petit plat jusqu'au plancher
 	local slope = R / G
 	local rx0, rx1 = stringIn + 0.05, wallIn - 0.05
 	local extra = 0.8
-	local rampPart = kit:Slab("StairRamp", (rx0 + rx1) / 2, { y0 - extra * slope, D0 - G / 2 - extra }, { y0 + STORY, D1 - G / 2 }, rx1 - rx0, 1, WHITE,
+	local knee = D1 - G / 2
+	local rampPart = kit:Slab("StairRamp", (rx0 + rx1) / 2, { y0 - extra * slope, D0 - G / 2 - extra }, { y0 + STORY - R, knee }, rx1 - rx0, 1, WHITE,
 		M.SmoothPlastic, { Solid = true, Query = true, T = 1, Shadow = false })
 	rampPart:SetAttribute("StairFloor", floor)
 	table.insert(ramps, rampPart)
-	local flat = kit:Box("StairRampTop", rx0, rx1, y0 + STORY - 0.6, y0 + STORY, D1 - G / 2 - 0.05, D1 + 0.12, WHITE, M.SmoothPlastic,
+	local rampEnd = kit:Slab("StairRamp", (rx0 + rx1) / 2, { y0 + STORY - R, knee }, { y0 + STORY, D1 }, rx1 - rx0, 0.6, WHITE, M.SmoothPlastic,
+		{ Solid = true, Query = true, T = 1, Shadow = false })
+	table.insert(ramps, rampEnd)
+	local flat = kit:Box("StairRampTop", rx0, rx1, y0 + STORY - 0.6, y0 + STORY, D1, D1 + 0.12, WHITE, M.SmoothPlastic,
 		{ Solid = true, Query = true, T = 1, Shadow = false })
 	table.insert(ramps, flat)
 	-- garde invisible côté vide (on ne tombe pas du côté du couloir) :
@@ -780,7 +785,7 @@ local function foyer(kit: any, size: any, pal: Palette)
 		local gx, gd = (c0 + c1) / 2, T + 5.2
 		kit:CylY("FoyerTableBase", gx, y + 0.08, gd, 1.4, 0.2, pal.Accent, M.Metal, { Solid = true, Shadow = false })
 		kit:CylY("FoyerTableLeg", gx, y + 0.28, gd, 0.45, 2.22, Color3.fromRGB(112, 50, 42), M.Wood, { Solid = true, Shadow = false })
-		kit:CylY("FoyerTableTop", gx, y + 2.5, gd, 2.8, 0.22, Color3.fromRGB(240, 234, 232), M.Marble, { Solid = true, Shadow = true })
+		kit:CylY("FoyerTableTop", gx, y + 2.5, gd, 2.4, 0.22, Color3.fromRGB(240, 234, 232), M.Marble, { Solid = true, Shadow = true })
 		kit:CylY("FoyerVase", gx, y + 2.72, gd, 0.8, 1.3, Color3.fromRGB(246, 244, 250), M.Glass, { Shadow = false })
 		local blooms = { Color3.fromRGB(255, 150, 190), WHITE, Color3.fromRGB(255, 214, 120), Color3.fromRGB(236, 72, 140), Color3.fromRGB(200, 170, 250) }
 		for k = 0, 6 do

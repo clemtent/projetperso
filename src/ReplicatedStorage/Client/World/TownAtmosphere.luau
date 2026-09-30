@@ -30,11 +30,22 @@
 	    nettes) ;
 	  - démarre / arrête Weather3D (pluie, flaques, sol mouillé) et les
 	    miroirs (Reflections.Acquire("Town") / Release).
+	v9.9 (REALISM99) 🕐 "Heure du jour" (Graphismes, clé GfxTime, pour CE
+	joueur seulement : Lighting est local) :
+	  - Auto : comme avant (nuit = réglage ⚙️ "Mode sombre"), mais le lent
+	    cycle du soleil suit l'heure du SERVEUR (même soleil pour tous) ;
+	  - Jour : plein jour fixe (12 h 50) ; Nuit : nuit étoilée ;
+	  - Coucher de soleil : 17 h 50, lumière dorée douce (table SUNSET :
+	    Brightness ≤ 1,3, pas d'éblouissement), brume orangée, lampadaires
+	    allumés ;
+	  - fondus doux (~2,5 s) entre les 4 ; la météo s'ajoute par-dessus ;
+	    tout est remis à la sortie (les clés de Lighting sont sauvegardées).
 	Travail : Step(dt) : Weather3D.Step, éclairage recalculé 2 fois / s
 	(5 fois / s pendant un fondu), l'éclair seul à chaque image.
 
 	API : TownAtmosphere.Apply(saved) / Restore(saved) / Step(dt) /
 	      SetNight(on) / IsNight() / Weather() -> état de Weather3D
+	      TimeMode() -> "Auto" | "Day" | "Sunset" | "Night" ; Dusk() -> 0..1
 	saved = { Lighting = {}, Effects = {}, Moved = {} } (table de TownClient)
 ]]
 
@@ -63,6 +74,8 @@ local TownAtmosphere = {}
 local CYCLE_PERIOD = 16 * 60 -- (s) aller-retour du soleil
 local DAY_CLOCK, DAY_SWING = 13.4, 3.2 -- 10,2 h .. 16,6 h
 local NIGHT_CLOCK = 21.3
+local NOON_CLOCK = 12.85 -- (v9.9) "Jour" : plein jour fixe
+local SUNSET_CLOCK = 17.85 -- (v9.9) "Coucher de soleil" : soleil bas, doré
 local FADE_TIME = 2.5
 
 -- Réglages de Lighting (jour / nuit) : mêmes clés dans les deux
@@ -96,6 +109,19 @@ local NIGHT: { [string]: any } = {
 	ExposureCompensation = -0.1, -- (+0.35)
 	ShadowSoftness = 0.35, -- (0.3)
 	FogColor = Color3.fromRGB(34, 38, 68),
+}
+-- (v9.9) coucher de soleil : chaud et DOUX (Brightness 1,25 < jour 1,8)
+local SUNSET: { [string]: any } = {
+	Brightness = 1.25,
+	Ambient = Color3.fromRGB(78, 62, 72),
+	OutdoorAmbient = Color3.fromRGB(138, 108, 110),
+	ColorShift_Top = Color3.fromRGB(72, 42, 20),
+	ColorShift_Bottom = Color3.fromRGB(0, 0, 0),
+	EnvironmentDiffuseScale = 0.4,
+	EnvironmentSpecularScale = 0.33,
+	ExposureCompensation = -0.1,
+	ShadowSoftness = 0.3,
+	FogColor = Color3.fromRGB(232, 176, 150),
 }
 -- (fixés une fois, sans fondu)
 local FIXED: { [string]: any } = {
@@ -141,8 +167,18 @@ local EFFECTS = {
 		Night = { FarIntensity = 0.16, FocusDistance = 60, InFocusRadius = 80, NearIntensity = 0 },
 	},
 }
+-- (v9.9) effets au coucher de soleil (mêmes clés que Day)
+local SUNSET_FX: { [string]: { [string]: any } } = {
+	Atmosphere = { Density = 0.3, Offset = 0.15, Color = Color3.fromRGB(236, 172, 142), Decay = Color3.fromRGB(138, 88, 112), Glare = 0.22, Haze = 1.0 },
+	ColorCorrection = { Saturation = 0.1, Contrast = 0.05, Brightness = -0.02, TintColor = Color3.fromRGB(255, 236, 218) },
+	Bloom = { Intensity = 0.22, Size = 20, Threshold = 1.7 },
+	SunRays = { Intensity = 0.05, Spread = 0.4 },
+	DepthOfField = { FarIntensity = 0.14, FocusDistance = 65, InFocusRadius = 85, NearIntensity = 0 },
+}
 TownAtmosphere.DAY = DAY
 TownAtmosphere.NIGHT = NIGHT
+TownAtmosphere.SUNSET = SUNSET
+TownAtmosphere.SUNSET_FX = SUNSET_FX
 TownAtmosphere.EFFECTS = EFFECTS
 local EFFECT_ORDER = { "Atmosphere", "ColorCorrection", "Bloom", "SunRays", "DepthOfField" }
 
@@ -169,6 +205,7 @@ local effects: { [string]: Instance } = {}
 local clouds: Clouds? = nil
 local night = false
 local mix = 0 -- 0 = jour, 1 = nuit (fondu)
+local dusk = 0 -- (v9.9) 0 = jour, 1 = coucher de soleil (fondu)
 local elapsed = 0
 local clockTimer = 0
 local mixTimer = 0
@@ -278,9 +315,49 @@ function TownAtmosphere.LampsOn(): boolean
 	return lampsOn
 end
 
--- Heure du soleil : cycle doux le jour, nuit fixe ; mélangée pendant le fondu
+-- (v9.9) réglage "Heure du jour" de ce joueur
+local function timeMode(): string
+	local ok, mode = pcall(function()
+		return GraphicsQuality.Get().TimeOfDay
+	end)
+	if ok and (mode == "Day" or mode == "Sunset" or mode == "Night") then
+		return mode
+	end
+	return "Auto"
+end
+
+-- Nuit voulue : réglage "Heure du jour", sinon "Mode sombre" (Auto)
+local function wantNight(): boolean
+	local mode = timeMode()
+	if mode == "Night" then
+		return true
+	elseif mode == "Day" or mode == "Sunset" then
+		return false
+	end
+	return night
+end
+
+-- Temps du cycle du soleil (Auto) : l'heure du serveur (même soleil pour tous)
+local function cycleTime(): number
+	local ok, t = pcall(function()
+		return workspace:GetServerTimeNow()
+	end)
+	if ok and type(t) == "number" then
+		return t
+	end
+	return elapsed
+end
+
+-- Heure du soleil : cycle doux le jour (Auto) ou midi fixe (Jour), coucher
+-- de soleil, nuit fixe ; mélangée pendant les fondus
 local function clockNow(): number
-	local day = DAY_CLOCK + DAY_SWING * math.sin(elapsed / CYCLE_PERIOD * math.pi * 2)
+	local day
+	if timeMode() == "Day" then
+		day = NOON_CLOCK
+	else
+		day = DAY_CLOCK + DAY_SWING * math.sin(cycleTime() / CYCLE_PERIOD * math.pi * 2)
+	end
+	day += (SUNSET_CLOCK - day) * smooth(dusk)
 	local m = smooth(mix)
 	return day + (NIGHT_CLOCK - day) * m
 end
@@ -301,9 +378,10 @@ local function applyMix()
 	-- couverture : 0 = ciel dégagé, 1 = tout gris
 	local k = smooth(math.clamp((w.Cloud - 0.35) / 0.6, 0, 1))
 	local r, s = w.Rain, w.Storm
+	local d = smooth(dusk)
 	local L: { [string]: any } = {}
 	for key, dayValue in pairs(DAY) do
-		L[key] = lerp(dayValue, NIGHT[key], m)
+		L[key] = lerp(lerp(dayValue, SUNSET[key], d), NIGHT[key], m)
 	end
 	L.Brightness *= 1 - 0.3 * k - 0.15 * s
 	L.OutdoorAmbient = (L.OutdoorAmbient :: Color3):Lerp(OVERCAST.OutdoorAmbient, 0.55 * k * (1 - m)):Lerp(STORM.OutdoorAmbient, 0.6 * s * (1 - m))
@@ -325,8 +403,9 @@ local function applyMix()
 		local instance = effects[name]
 		if instance then
 			local E: { [string]: any } = {}
+			local sunsetFx = SUNSET_FX[name] or spec.Day
 			for key, dayValue in pairs(spec.Day) do
-				E[key] = lerp(dayValue, (spec.Night :: any)[key], m)
+				E[key] = lerp(lerp(dayValue, sunsetFx[key], d), (spec.Night :: any)[key], m)
 			end
 			if name == "Atmosphere" then
 				E.Density += 0.14 * r + 0.05 * k
@@ -364,7 +443,8 @@ local function applyMix()
 	end
 	set(Lighting, "ClockTime", clockNow())
 	-- (orage : les lampadaires s'allument aussi le jour)
-	setLamps(m >= 0.5 or s > 0.55)
+	-- (v9.9 : et au coucher de soleil)
+	setLamps(m >= 0.5 or s > 0.55 or d >= 0.5)
 end
 
 -- (v9.8) éclair : seulement la ColorCorrection et les nuages, à chaque image
@@ -406,7 +486,8 @@ function TownAtmosphere.Apply(saved: any)
 	elapsed = 0
 	clockTimer = 0
 	mixTimer = 0
-	mix = night and 1 or 0
+	mix = wantNight() and 1 or 0
+	dusk = timeMode() == "Sunset" and 1 or 0
 	lampsOn = mix >= 0.5
 	-- 1) valeurs actuelles gardées (remise exacte)
 	for key in pairs(DAY) do
@@ -549,7 +630,15 @@ function TownAtmosphere.SetNight(on: boolean)
 end
 
 function TownAtmosphere.IsNight(): boolean
-	return night
+	return wantNight()
+end
+
+-- (v9.9) réglage "Heure du jour" et fondu du coucher de soleil (tests)
+function TownAtmosphere.TimeMode(): string
+	return timeMode()
+end
+function TownAtmosphere.Dusk(): number
+	return dusk
 end
 
 -- (tests) valeur du fondu jour -> nuit
@@ -580,8 +669,9 @@ function TownAtmosphere.Step(dt: number)
 			applyFlash(flash)
 		end
 	end
-	local target = night and 1 or 0
-	if mix ~= target then
+	local target = wantNight() and 1 or 0
+	local duskTarget = timeMode() == "Sunset" and 1 or 0
+	if mix ~= target or dusk ~= duskTarget then
 		mixTimer += dt
 		if mixTimer >= 0.2 then
 			local step = mixTimer / FADE_TIME
@@ -590,6 +680,11 @@ function TownAtmosphere.Step(dt: number)
 				mix = math.min(target, mix + step)
 			else
 				mix = math.max(target, mix - step)
+			end
+			if dusk < duskTarget then
+				dusk = math.min(duskTarget, dusk + step)
+			else
+				dusk = math.max(duskTarget, dusk - step)
 			end
 			applyMix()
 		end

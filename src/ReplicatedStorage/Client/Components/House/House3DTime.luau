@@ -53,7 +53,9 @@ local FAR = 90 -- (studs) au-delà : les aiguilles attendent que l'on s'approche
 type Date = { year: number, month: number, day: number, hour: number, min: number, sec: number }
 
 local function now(): Date
-	local ok, t = pcall(os.date, "*t")
+	local ok, t = pcall(function()
+		return os.date("*t")
+	end)
 	if ok and type(t) == "table" and tonumber(t.year) then
 		return {
 			year = tonumber(t.year) or 2026,
@@ -181,7 +183,14 @@ local function ensureRunning()
 	if connection or not RunService:IsClient() then
 		return
 	end
-	connection = RunService.Heartbeat:Connect(function()
+	local acc = 1
+	connection = RunService.Heartbeat:Connect(function(dt: number)
+		-- (5 fois par seconde suffit : la trotteuse avance d'un cran par seconde)
+		acc += dt
+		if acc < 0.2 then
+			return
+		end
+		acc = 0
 		local ok, err = pcall(step)
 		if not ok then
 			warn("[House3DTime] " .. tostring(err))
