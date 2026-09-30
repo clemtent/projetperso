@@ -109,7 +109,7 @@ local function buildChapel(m: Model, F: CFrame, seed: number)
 	Box(m, "YardWall", F, -14.4, 14.4, 0, 2.2, 21.4, 22, STONE_D, M.Cobblestone, true)
 	for _, sx in ipairs({ -1, 1 }) do
 		Box(m, "YardWall", F, sx * 3, sx * 14.4, 0, 2.2, -22, -21.4, STONE_D, M.Cobblestone, true)
-		Box(m, "GatePier", F, sx * 3 - 0.8, sx * 3 + 0.8, 0, 3.4, -22.3, -21.1, STONE, M.Cobblestone, true)
+		Box(m, "GatePier", F, sx * 3 - 0.8, sx * 3 + 0.8, -0.1, 3.4, -22.3, -21.1, STONE, M.Cobblestone, true)
 		CityKit.Ball(m, "GateBall", (F * CFrame.new(sx * 3, 3.75, -21.7)).Position, 0.8, STONE, M.Slate)
 	end
 	-- allée pavée jusqu'au portail
@@ -273,7 +273,7 @@ local function buildBakery(m: Model, F: CFrame, seed: number)
 	local sign = Box(m, "BakerySign", B, -W / 2 + 0.6, W / 2 - 0.6, 8.3, 8.95, -D / 2 - 0.5, -D / 2 - 0.44, rgb(40, 70, 60), M.Wood)
 	Text(sign, Enum.NormalId.Front, "🥖 " .. Locale.T("Village bakery"), rgb(250, 220, 150), nil, Enum.Font.Fantasy, 140)
 	-- enseigne potence
-	Box(m, "BracketArm", B, W / 2, W / 2 + 2.4, 10.6, 10.8, -D / 2 - 0.5, -D / 2 - 0.3, IRON, M.Metal)
+	Box(m, "BracketArm", B, W / 2, W / 2 + 2.4, 10.6, 10.8, -D / 2 - 0.56, -D / 2 - 0.36, IRON, M.Metal)
 	local hang = Part(m, "HangSign", Vector3.new(1.8, 1.8, 0.14), B * CFrame.new(W / 2 + 1.5, 9.5, -D / 2 - 0.4) * CFrame.Angles(0, math.pi / 2, 0), rgb(220, 190, 110), M.Wood)
 	Text(hang, Enum.NormalId.Front, "🥐", rgb(120, 70, 30), nil, Enum.Font.GothamBlack, 80)
 	-- fenêtres de l'étage : volets, jardinières
@@ -291,7 +291,7 @@ local function buildBakery(m: Model, F: CFrame, seed: number)
 	-- ardoise, banc, vélo à panier
 	local A = F * CFrame.new(-4, 0, -7.5)
 	CityKit.Beam(m, "Chalk", (A * CFrame.new(0, 0, -0.5)).Position, (A * CFrame.new(0, 3.2, 0)).Position, 2, 0.1, rgb(40, 44, 40), M.Slate)
-	CityKit.Beam(m, "ChalkBack", (A * CFrame.new(0, 0, 0.5)).Position, (A * CFrame.new(0, 3.2, 0.02)).Position, 2, 0.1, WOOD, M.Wood)
+	CityKit.Beam(m, "ChalkBack", (A * CFrame.new(0, 0, 0.5)).Position, (A * CFrame.new(0, 3.05, 0.04)).Position, 1.9, 0.1, WOOD, M.Wood)
 	local chalk = Part(m, "ChalkText", Vector3.new(1.8, 2.6, 0.02), CFrame.lookAt((A * CFrame.new(0, 1.7, -0.33)).Position, (A * CFrame.new(0, 1.9, -2)).Position), rgb(40, 44, 40), M.SmoothPlastic)
 	chalk.Transparency = 1
 	Text(chalk, Enum.NormalId.Front, Locale.T("Hot croissants!"), WHITE, nil, Enum.Font.IndieFlower, 40)

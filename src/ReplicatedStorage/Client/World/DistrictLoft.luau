@@ -261,7 +261,7 @@ local function buildWagon(m: Model, F: CFrame, seed: number)
 			Box(m, "WagonRib", F, x - 0.15, x + 0.15, 4, 4 + H, z - 0.1, z + 0.1, body:Lerp(Color3.new(0, 0, 0), 0.25), M.Metal)
 		end
 	end
-	Box(m, "SlideDoor", F, -3, 3, 4.4, 3.6 + H, -W / 2 - 0.04, -W / 2 + 0.06, body:Lerp(Color3.new(1, 1, 1), 0.1), M.CorrodedMetal)
+	Box(m, "SlideDoor", F, -2.8, 2.8, 4.4, 3.6 + H, -W / 2 - 0.04, -W / 2 + 0.06, body:Lerp(Color3.new(1, 1, 1), 0.1), M.CorrodedMetal)
 	-- tag sur la caisse
 	local gui = CityKit.Canvas(box, Enum.NormalId.Front, 160, 8)
 	CityKit.Blob(gui, 0.22, 0.5, 0.26, 0.6, CityKit.Pick(MURAL_COLORS, seed, 4), 0.5, -6)

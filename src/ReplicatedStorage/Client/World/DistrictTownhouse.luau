@@ -168,7 +168,7 @@ local function buildCornerShop(m: Model, F: CFrame, seed: number)
 	Box(m, "StallLegs", B, -W / 2 + 0.8, -W / 2 + 9.4, -0.1, 1.2, zf - 3.3, zf - 0.7, WOOD, M.Wood)
 	-- présentoir à journaux, glacière
 	local N = B * CFrame.new(8, 0, zf - 1.4)
-	Box(m, "NewsRack", N, -0.8, 0.8, 0, 4.2, -0.5, 0.5, IRON, M.Metal)
+	Box(m, "NewsRack", N, -0.8, 0.8, 0.04, 4.2, -0.5, 0.5, IRON, M.Metal)
 	for k = 0, 2 do
 		Box(m, "Paper", N, -0.7, 0.7, 1.4 + k * 1, 2.2 + k * 1, -0.62, -0.5, CityKit.Pick({ WHITE, rgb(250, 230, 200), rgb(220, 236, 250) }, seed, k), M.SmoothPlastic)
 	end

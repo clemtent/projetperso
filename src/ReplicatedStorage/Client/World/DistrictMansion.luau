@@ -63,7 +63,7 @@ DistrictMansion.FOOT = {
 
 local function pillar(m: Model, F: CFrame, x: number, z: number, h: number, big: boolean)
 	local s = big and 1.6 or 1.1
-	Box(m, "PillarBase", F, x - s - 0.3, x + s + 0.3, 0, 1.4, z - s - 0.3, z + s + 0.3, STONE_D, M.Slate, true)
+	Box(m, "PillarBase", F, x - s - 0.24, x + s + 0.24, 0, 1.4, z - s - 0.24, z + s + 0.24, STONE_D, M.Slate, true)
 	Box(m, "Pillar", F, x - s, x + s, 1.4, h, z - s, z + s, STONE, M.Cobblestone, true)
 	-- bossages (lits de pierre plus sombres)
 	for k = 1, 3 do
@@ -101,7 +101,7 @@ local function gateLeaf(m: Model, L: CFrame, w: number, h: number): { BasePart }
 		add(Part(m, "Spike", Vector3.new(0.24, 0.3, 0.24), L * CFrame.new(x, top + 0.15, 0), GOLD, M.Metal, "Ball"))
 	end
 	-- volute dorée au milieu
-	add(Part(m, "Scroll", Vector3.new(0.16, 1.6, 1.6), L * CFrame.new(w / 2, h * 0.3, 0) * CFrame.Angles(0, math.pi / 2, 0), GOLD, M.Metal, "Cyl"))
+	add(Part(m, "Scroll", Vector3.new(0.22, 1.6, 1.6), L * CFrame.new(w / 2, h * 0.3, 0) * CFrame.Angles(0, math.pi / 2, 0), GOLD, M.Metal, "Cyl"))
 	return parts
 end
 
@@ -216,11 +216,11 @@ local function buildWall(m: Model, F: CFrame, seed: number, spot: any)
 	local H = 5
 	Box(m, "StoneWall", F, -L / 2, L / 2, 0, H, -0.9, 0.9, STONE, M.Cobblestone, true)
 	Box(m, "WallCoping", F, -L / 2, L / 2, H, H + 0.5, -1.15, 1.15, STONE_D, M.Slate)
-	Box(m, "WallFooting", F, -L / 2, L / 2, 0, 0.8, -1.05, 1.05, STONE_D, M.Slate, true)
+	Box(m, "WallFooting", F, -L / 2 + 0.05, L / 2 - 0.05, -0.1, 0.8, -1.05, 1.05, STONE_D, M.Slate, true)
 	local n = math.max(1, math.floor(L / 12 + 0.5))
 	for i = 0, n do
 		local x = -L / 2 + i * L / n
-		x = math.clamp(x, -L / 2 + 1.2, L / 2 - 1.2)
+		x = math.clamp(x, -L / 2 + 1.25, L / 2 - 1.25)
 		Box(m, "WallPier", F, x - 1.2, x + 1.2, 0, H + 1.4, -1.3, 1.3, STONE, M.Cobblestone, true)
 		Box(m, "WallPierCap", F, x - 1.45, x + 1.45, H + 1.4, H + 1.8, -1.55, 1.55, STONE_D, M.Slate)
 		CityKit.Ball(m, "WallBall", (F * CFrame.new(x, H + 2.5, 0)).Position, 1.3, STONE, M.Marble)
