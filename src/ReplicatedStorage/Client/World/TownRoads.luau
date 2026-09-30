@@ -252,6 +252,9 @@ end
 -- Trottoirs en dalles
 ----------------------------------------------------------------------
 
+-- (défini plus bas, avec la liste du mobilier : pas de joints dessous)
+local underObstacle: (p: Vector3, pad: number) -> boolean
+
 -- `F` : dessus du trottoir, X le long ; size = (longueur, 0, largeur)
 local function buildPavers(m: Model, F: CFrame, seed: number, spot: any)
 	local size = spot and spot.Size or Vector3.new(30, 0, 5)
@@ -480,7 +483,7 @@ function TownRoads.SetDestinations(spots: { any })
 	end
 end
 
-local function underObstacle(p: Vector3, pad: number): boolean
+underObstacle = function(p: Vector3, pad: number): boolean
 	for _, o in ipairs(obstacles) do
 		local q: Vector3 = o[1]
 		if Vector3.new(p.X - q.X, 0, p.Z - q.Z).Magnitude < o[2] + pad then

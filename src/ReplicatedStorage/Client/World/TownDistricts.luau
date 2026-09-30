@@ -638,7 +638,8 @@ local function stepSkater(a: Actor, t: number)
 	if d.Mode == 1 then
 		-- aller-retour d'une rampe à l'autre : x(t) = A sin(ωt), la planche
 		-- suit la courbe (vitesse nulle en haut : demi-tour naturel)
-		local A = QP_CX + QP_R * math.sin(QP_MAX) - 0.35
+		-- (demi-tour à ~55° dans la courbe : le skateur ne se couche pas)
+		local A = QP_CX + QP_R * math.sin(math.rad(55))
 		local w = math.pi * 2 / 6.4
 		local x = A * math.sin(w * t)
 		local vx = A * w * math.cos(w * t)
