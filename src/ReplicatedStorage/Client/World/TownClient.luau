@@ -1253,6 +1253,14 @@ local function enter(options: any)
 				warn("[Town] MarketInterior.Start : " .. tostring(errM))
 			end
 		end
+		-- v9.9 🏛️ écran « Meilleurs joueurs du serveur » + horloges de la ville (SHOPS99)
+		local displays = optionalModule("TownDisplays")
+		if displays and type(displays.Start) == "function" then
+			local okD, errD = pcall(displays.Start)
+			if not okD then
+				warn("[Town] TownDisplays.Start : " .. tostring(errD))
+			end
+		end
 		-- v9.7 🎠 place centrale animée (TownPlazaFx, PLAZA97) : manège, ballons, pigeons…
 		local plazaFx = optionalModule("TownPlazaFx")
 		if plazaFx and type(plazaFx.Start) == "function" then
@@ -1460,6 +1468,10 @@ local function teardown()
 	local marketMod = optionalModule("MarketInterior")
 	if marketMod and type(marketMod.Stop) == "function" then
 		pcall(marketMod.Stop)
+	end
+	local displays = optionalModule("TownDisplays")
+	if displays and type(displays.Stop) == "function" then
+		pcall(displays.Stop)
 	end
 	-- (v9.7) place centrale : pièces locales (manège, ballons, pigeons…) détruites
 	local plazaFx = optionalModule("TownPlazaFx")
