@@ -289,7 +289,7 @@ local function buildArrow(m: Model, F: CFrame, seed: number)
 		local turn = (side < 0 and (kind == 2 or kind == 5 or kind == 6)) or (side > 0 and (kind == 3 or kind == 4 or kind == 6))
 		if turn then
 			-- branche oblique puis pointe vers le côté
-			flat(m, "ArrowBranch", F, side * 0.55, -0.35, 0.4, 1.5, ARROW_TOP, PAINT, side * math.rad(-40))
+			flat(m, "ArrowBranch", F, side * 0.55, -0.35, 0.4, 1.5, ARROW_TOP, PAINT, nil, side * math.rad(-40))
 			head(m, F, side * 1.2, -0.9, side * math.rad(-60))
 		end
 	end

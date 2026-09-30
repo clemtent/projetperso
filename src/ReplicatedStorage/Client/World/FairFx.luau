@@ -689,7 +689,7 @@ local function buildStall(folder: Instance, cf: CFrame, style: string, foods: { 
 	end
 	label.Text = "MENU\n" .. table.concat(icons, "\n")
 	newPart(model, "MenuLeg", Vector3.new(0.12, 2.2, 0.12), cf * CFrame.new(3.9, 1.1, -0.95), WOOD_DARK, M.Wood)
-	return { Model = model, VendorCF = cf * CFrame.new(0, 0, 1.55), Seed = seed }
+	return { Model = model, VendorCF = cf * CFrame.new(0, 0, 1.62), Seed = seed }
 end
 
 ----------------------------------------------------------------------
