@@ -98,7 +98,7 @@
 	    aileron, GT), vitres teintées, néon sous caisse (Neon doux, aucune
 	    lumière), sellerie. Mid garde les ailerons, bas de caisse, néon,
 	    couleurs ; Low la peinture.
-	  - Budgets mesurés : Full 390..500 pièces (options comprises), Mid
+	  - Budgets mesurés : Full 400..530 pièces (options comprises), Mid
 	    140..170, Low ~37.
 	API v10 (en plus) :
 	  CarModels.Stats(carIdOrKind, tuning?) -> Stats (TopSpeed studs/s, Accel,
@@ -1586,7 +1586,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			arch(s.AxleR)
 			piece(g.aR1, zB - g.tailR)
 			-- (v9.9) ligne de caractère : arête ombrée entre le flanc et l'épaule
-			rod(b, "Crease", V3(sx * hw, s.Low - 0.03, if sports then g.aF0 else zF + g.noseR), V3(sx * hw, s.Low - 0.03, zB - g.tailR), 0.07, paint:Lerp(Color3.new(0, 0, 0), 0.3))
+			rod(b, "Crease", V3(sx * hw, s.Low - 0.03, g.aF0), V3(sx * hw, s.Low - 0.03, zB - g.tailR), 0.07, paint:Lerp(Color3.new(0, 0, 0), 0.3))
 			-- bas de caisse (noir) entre les roues
 			if full and mod("Skirts") == "None" then
 				local r0x, r1x = sx * (hw - 0.1), sx * (hw + (if offroad then 0.1 else 0.035))

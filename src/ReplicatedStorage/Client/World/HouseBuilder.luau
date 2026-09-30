@@ -620,16 +620,25 @@ function HouseBuilder.BuildLite(self: House, level: string)
 	end
 end
 
--- Distance (plan horizontal) de la caméra au centre de la maison
+-- Distance (plan horizontal) du centre de la maison à la caméra OU au
+-- personnage local (le plus proche des deux : les pièces suivent le perso)
 local function cameraDistance(self: House): number
-	local camera = workspace.CurrentCamera
-	if not camera then
-		return 0
-	end
 	local dims = WorldLayout.Dims(self.Size)
 	local center = WorldLayout.ToWorld(self.HouseCF, 0, 10, dims.Depth / 2)
-	local offset = camera.CFrame.Position - center
-	return Vector3.new(offset.X, 0, offset.Z).Magnitude
+	local best = math.huge
+	local camera = workspace.CurrentCamera
+	if camera then
+		local offset = camera.CFrame.Position - center
+		best = Vector3.new(offset.X, 0, offset.Z).Magnitude
+	end
+	local me = Players.LocalPlayer
+	local character = me and me.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if root and root:IsA("BasePart") then
+		local offset = root.Position - center
+		best = math.min(best, Vector3.new(offset.X, 0, offset.Z).Magnitude)
+	end
+	return if best == math.huge then 0 else best
 end
 
 -- Niveau voulu (avec la marge anti-battement autour du niveau actuel)
@@ -1318,7 +1327,12 @@ end
 -- à construire en priorité (ou nil)
 function HouseBuilder.NextToBuild(self: House, focus: Vector3): (number?, number)
 	if self.Lod ~= "Full" then
-		return nil, math.huge
+		-- (v10) on s'approche assez pour meubler : extérieur complet tout de suite
+		if self.Alive and hallDistance(self, focus) < NEAR then
+			self:SetLod("Full")
+		else
+			return nil, math.huge
+		end
 	end
 	local best: number? = nil
 	local bestDistance = math.huge
