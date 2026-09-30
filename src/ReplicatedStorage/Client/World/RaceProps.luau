@@ -117,7 +117,7 @@ end
 -- porte une copie de la SurfaceGui sur SA face avant (0,02 devant le dos du
 -- panneau : lisible des deux côtés, sans z-fight)
 local function backSide(parent: Instance, base: BasePart, sg: SurfaceGui)
-	local p = part(parent, base.Name .. "Back", base.Size + Vector3.new(0, 0, 0.04), base.CFrame * CFrame.Angles(0, math.pi, 0), WHITE)
+	local p = part(parent, base.Name .. "Back", base.Size + Vector3.new(0, 0, 0.1), base.CFrame * CFrame.Angles(0, math.pi, 0), WHITE)
 	p.Transparency = 1
 	p.CastShadow = false
 	local copy = sg:Clone()
@@ -200,7 +200,7 @@ function RaceProps.BuildHQ(cf: CFrame, w: number, d: number): (Model, { [string]
 	local W, D = math.max(40, w - 2), math.max(30, d - 2)
 	-- dalle (dessus à +0,3) avec bordure
 	part(model, "Pad", Vector3.new(W, 0.8, D), cf * CFrame.new(0, -0.1, 0), ASPHALT, M.Asphalt).CastShadow = false
-	part(model, "CurbFront", Vector3.new(W, 0.5, 0.6), cf * CFrame.new(0, 0.05, -D / 2 + 0.3), CONCRETE, M.Concrete)
+	part(model, "CurbFront", Vector3.new(W + 0.1, 0.58, 0.6), cf * CFrame.new(0, 0.05, -D / 2 + 0.26), CONCRETE, M.Concrete)
 	-- marquages : places de stationnement + damier au sol (SurfaceGui sur pièces invisibles)
 	-- (tourné d'un demi-tour : le texte se lit depuis la route)
 	local _, marks = canvas(model, "Marks", Vector3.new(W - 2, 0.05, D - 2), cf * CFrame.new(0, 0.33, 0) * CFrame.Angles(0, math.pi, 0), Enum.NormalId.Top, 6)
@@ -225,7 +225,7 @@ function RaceProps.BuildHQ(cf: CFrame, w: number, d: number): (Model, { [string]
 	-- 3 box : piliers + rideaux levés + intérieur (établis, pneus)
 	for k = 0, 3 do
 		local x = bx0 + 0.4 + k * (bw - 0.8) / 3
-		part(model, "Pillar", Vector3.new(1, bh, 1), cf * CFrame.new(math.clamp(x, bx0 + 0.9, bx1 - 0.9), bh / 2 + 0.3, bz0 + 0.5), RED, M.SmoothPlastic)
+		part(model, "Pillar", Vector3.new(1, bh, 1), cf * CFrame.new(math.clamp(x, bx0 + 0.9, bx1 - 0.9), bh / 2 + 0.3, bz0 + 0.4), RED, M.SmoothPlastic)
 	end
 	for k = 0, 2 do
 		local x = bx0 + 0.4 + (k + 0.5) * (bw - 0.8) / 3
@@ -327,7 +327,7 @@ function RaceProps.BuildGantry(cf: CFrame, width: number, title: string, finish:
 		part(model, "PillarStripe", Vector3.new(1.46, 1.2, 1.46), cf * CFrame.new(x, 4.8, 0), YELLOW, M.SmoothPlastic)
 	end
 	-- poutre en treillis (2 membrures + diagonales)
-	local span = half * 2 + 1.4
+	local span = half * 2 + 1.1
 	part(model, "BeamTop", Vector3.new(span, 0.5, 1.2), cf * CFrame.new(0, H + 0.2, 0), STEEL, M.Metal)
 	part(model, "BeamLow", Vector3.new(span, 0.5, 1.2), cf * CFrame.new(0, H - 1.9, 0), STEEL, M.Metal)
 	local n = math.max(4, math.floor(span / 3))
@@ -362,7 +362,7 @@ function RaceProps.BuildGantry(cf: CFrame, width: number, title: string, finish:
 		end
 	end
 	-- ligne au sol : damier (pièce invisible + SurfaceGui, 0,04 au-dessus de la chaussée)
-	local _, line = canvas(model, "Line", Vector3.new(width, 0.05, 2.4), cf * CFrame.new(0, 0.04, 0), Enum.NormalId.Top, 10)
+	local _, line = canvas(model, "Line", Vector3.new(width, 0.05, 2.4), cf * CFrame.new(0, 0.1, 0), Enum.NormalId.Top, 10)
 	checker(line, math.max(8, math.floor(width / 1.2)), 2, INK, WHITE)
 	return model, { Lights = lights }
 end
@@ -386,7 +386,7 @@ end
 -- Cases de la grille peintes au sol (une pièce invisible + SurfaceGui par case)
 function RaceProps.GridMarks(parent: Instance, cfs: { CFrame })
 	for k, cf in ipairs(cfs) do
-		local _, sg = canvas(parent, "GridBox", Vector3.new(6.4, 0.05, 11), cf * CFrame.new(0, 0.04, 0), Enum.NormalId.Top, 8)
+		local _, sg = canvas(parent, "GridBox", Vector3.new(6.4, 0.05, 11), cf * CFrame.new(0, 0.1, 0), Enum.NormalId.Top, 8)
 		local box = frame(sg, { Name = "Box", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1) })
 		frame(box, { Name = "Front", BackgroundColor3 = WHITE, Size = UDim2.new(1, 0, 0, 3) })
 		frame(box, { Name = "L", BackgroundColor3 = WHITE, Size = UDim2.new(0, 3, 0.35, 0) })

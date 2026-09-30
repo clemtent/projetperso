@@ -284,7 +284,9 @@ function HouseDetail.Roof(kit: any, x0: number, x1: number, d0: number, d1: numb
 			local dIn = de - s * 0.3
 			kit:Box("Fascia", ax0, ax1, fy0, ye - 0.06, math.min(dOut, dIn), math.max(dOut, dIn), fascia, M.Wood, { Shadow = false })
 			local wallFace = if s < 0 then d0 else d1
-			local sa, sb = math.min(dIn, wallFace), math.max(dIn, wallFace)
+			-- (s'arrête 0,5 avant le nu du mur : jamais contre les cadres / colombages)
+			local soffitEnd = wallFace + s * 0.5
+			local sa, sb = math.min(dIn, soffitEnd), math.max(dIn, soffitEnd)
 			if sb - sa > 0.2 then
 				kit:Box("Soffit", ax0 + 0.05, ax1 - 0.05, fy0 + 0.03, fy0 + 0.17, sa, sb, fascia:Lerp(WHITE, 0.3), M.SmoothPlastic, { Shadow = false })
 			end
@@ -387,6 +389,8 @@ function HouseDetail.Roof(kit: any, x0: number, x1: number, d0: number, d1: numb
 		yr = y + spec.Rise
 		ye = y - ov * (spec.Rise / (depth / 2)) + 0.2
 	end
+	-- (l'égout ne descend jamais au niveau des fenêtres du dernier étage)
+	ye = math.max(ye, y - 1.1)
 	local _ = rise
 	local ox = if shape == "Gable" then ov * 0.8 else ov
 	local a0, a1 = x0 - ox, x1 + ox
@@ -841,7 +845,7 @@ function HouseDetail.Fence(kit: any, x0: number, x1: number, d: number, spec: Fe
 			end
 		end
 		for _, px in ipairs(if spec.NoGate then {} else { g0 - 0.65, g1 + 0.65 }) do
-			kit:Box("GatePillar", px - 0.7, px + 0.7, 0, 4.4, d - 0.7, d + 0.7, Color3.fromRGB(226, 218, 206), M.Limestone, { Solid = true })
+			kit:Box("GatePillar", px - 0.7, px + 0.7, -0.05, 4.4, d - 0.7, d + 0.7, Color3.fromRGB(226, 218, 206), M.Limestone, { Solid = true })
 			kit:Box("GatePillarCap", px - 0.9, px + 0.9, 4.4, 4.8, d - 0.9, d + 0.9, Color3.fromRGB(240, 234, 224), M.Limestone, { Shadow = false })
 			kit:Ball("GatePillarBall", px, 5.2, d, 0.8, Color3.fromRGB(240, 234, 224), M.Limestone, { Shadow = false })
 		end
@@ -860,7 +864,7 @@ function HouseDetail.Fence(kit: any, x0: number, x1: number, d: number, spec: Fe
 			end
 		end
 		for _, px in ipairs(if spec.NoGate then {} else { g0 - 0.55, g1 + 0.55 }) do
-			kit:Box("GatePillar", px - 0.6, px + 0.6, 0, 3, d - 0.7, d + 0.7, stone, M.Cobblestone, { Solid = true })
+			kit:Box("GatePillar", px - 0.6, px + 0.6, -0.05, 3, d - 0.78, d + 0.78, stone, M.Cobblestone, { Solid = true })
 			kit:Box("GatePillarCap", px - 0.75, px + 0.75, 3, 3.35, d - 0.85, d + 0.85, stone:Lerp(WHITE, 0.25), M.Limestone, { Shadow = false })
 		end
 		gateLeaf(kit, g0, g1, 0.25, 2.5, d, Color3.fromRGB(140, 100, 66), M.WoodPlanks, true, "Wood")

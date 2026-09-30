@@ -1473,9 +1473,9 @@ local function sideGarage(ctx: Ctx)
 		Door = ctx.Trim:Lerp(WHITE, 0.5),
 	})
 	HouseDetail.Phase(ctx.Kit, "Garden")
-	ctx.G:Box("Driveway", x0 + 1.5, x1 - 1.5, -0.07, 0.1, -29.5, 1.1, Color3.fromRGB(196, 192, 188), M.Pavement, { Shadow = false })
+	ctx.G:Box("Driveway", x0 + 1.5, x1 - 1.5, -0.07, 0.16, -29.5, 1.1, Color3.fromRGB(196, 192, 188), M.Pavement, { Shadow = false })
 	for _, x in ipairs({ x0 + 1.2, x1 - 1.2 }) do
-		ctx.G:Box("DrivewayEdge", x - 0.3, x + 0.3, -0.05, 0.16, -29.5, 1.1, Color3.fromRGB(170, 166, 162), M.Concrete, { Shadow = false })
+		ctx.G:Box("DrivewayEdge", x - 0.3, x + 0.3, -0.05, 0.22, -29.5, 1.1, Color3.fromRGB(170, 166, 162), M.Concrete, { Shadow = false })
 	end
 end
 
