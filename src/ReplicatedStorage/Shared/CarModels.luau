@@ -738,6 +738,11 @@ local function trapezoid(b: B, name: string, p1: Vector3, p2: Vector3, p3: Vecto
 	if w.Unit:Dot(ud) < 0.99966 then -- (v10 : ~1,5° de tolérance)
 		return false
 	end
+	-- (v10) quadrilatère vrillé (non plan) : pas un trapèze -> 2 triangles
+	local nrm = u:Cross(p4 - p1)
+	if nrm.Magnitude > 1e-4 and math.abs((p3 - p1):Dot(nrm.Unit)) > 0.03 then
+		return false
+	end
 	local s4 = (p4 - p1):Dot(ud)
 	local s3 = (p3 - p1):Dot(ud)
 	local hv = (p4 - p1) - ud * s4

@@ -255,7 +255,7 @@ end
 
 local function buildRaceHud(root: Frame)
 	-- place / tour / chrono (en haut à gauche)
-	local panel = box({ Name = "RacePanel", Parent = root, Color = PANEL, Transparency = 0.12, Size = UDim2.fromOffset(250, 112), Position = UDim2.fromOffset(12, 108),
+	local panel = box({ Name = "RacePanel", Parent = root, Color = PANEL, Transparency = 0.12, Size = UDim2.fromOffset(250, 100), Position = UDim2.fromOffset(12, 104),
 		Radius = UDim.new(0, 18), Stroke = PINK, Visible = false, ZIndex = 5 })
 	local place = label({ Name = "Place", Parent = panel, Text = "1", Font = Theme.Fonts.Number, TextSize = 56, Size = UDim2.fromOffset(70, 60), Position = UDim2.fromOffset(8, 2), ZIndex = 6 })
 	UIUtil.Create("UIStroke", { Color = INK, Thickness = 2, Parent = place })
@@ -265,9 +265,9 @@ local function buildRaceHud(root: Frame)
 	local time = label({ Name = "Time", Parent = panel, Text = "0:00.00", Font = Theme.Fonts.Number, TextSize = 26, Color = GOLD, Size = UDim2.fromOffset(124, 30),
 		Position = UDim2.fromOffset(120, 28), XAlign = Enum.TextXAlignment.Left, ZIndex = 6 })
 	local gap = label({ Name = "Gap", Parent = panel, Text = "", Font = Theme.Fonts.Body, TextSize = 15, Color = SOFT, Size = UDim2.new(1, -20, 0, 20),
-		Position = UDim2.fromOffset(12, 62), XAlign = Enum.TextXAlignment.Left, Scaled = true, ZIndex = 6 })
+		Position = UDim2.fromOffset(12, 58), XAlign = Enum.TextXAlignment.Left, Scaled = true, ZIndex = 6 })
 	local bestLap = label({ Name = "BestLap", Parent = panel, Text = "", Font = Theme.Fonts.Body, TextSize = 15, Color = MINT, Size = UDim2.new(1, -20, 0, 20),
-		Position = UDim2.fromOffset(12, 84), XAlign = Enum.TextXAlignment.Left, ZIndex = 6 })
+		Position = UDim2.fromOffset(12, 77), XAlign = Enum.TextXAlignment.Left, ZIndex = 6 })
 	-- flèche vers la prochaine porte (en haut au milieu, sous le compteur)
 	local arrowBox = box({ Name = "Arrow", Parent = root, Color = PANEL, Transparency = 0.15, AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(230, 44),
 		Position = UDim2.new(0.5, 0, 0, 112), Radius = UDim.new(1, 0), Stroke = CYAN, Visible = false, ZIndex = 5 })
@@ -416,7 +416,7 @@ local function layout()
 	parts.Scale.Scale = scale
 	parts.Root.Size = UDim2.fromOffset(size.X / scale, size.Y / scale)
 	-- téléphone : panneaux plus compacts, bouton 🏁 sous la colonne des voitures
-	parts.RacePanel.Position = if phone then UDim2.fromOffset(10, 96) else UDim2.fromOffset(12, 108)
+	parts.RacePanel.Position = if phone then UDim2.fromOffset(10, 96) else UDim2.fromOffset(12, 104)
 	parts.RaceButton.Position = if phone then UDim2.fromOffset(14, 316) else UDim2.new(0, 22, 0.5, 140)
 	parts.RaceTag.Visible = not phone
 	local mini = if phone then 116 else 150

@@ -1221,29 +1221,37 @@ local function load(s: any): boolean
 	s.Spots = parseSpots(data)
 	TownRoads.SetDestinations(s.Spots)
 	-- (v10, CITY10) plan de la grande ville (client) : ajouté aux emplacements
-	-- du serveur, en évitant les gros emplacements déjà publiés
+	-- du serveur, en évitant les gros emplacements déjà publiés. Calculé dans
+	-- un fil à part, étalé sur quelques images (pas d'à-coup à l'entrée) ;
+	-- le flux le prend dès qu'il est prêt
 	if okCity and type(CityPlan) == "table" then
-		local okPlan, extra = pcall(function()
-			local origin = require(ReplicatedStorage.Shared.WorldLayout).Origin()
-			local taken = {}
-			for _, spot in ipairs(s.Spots) do
-				if BIG[spot.Kind] and spot.Kind ~= "Paint" and spot.Kind ~= "BikeLane" then
-					local r = spot.Size and math.max(spot.Size.X, spot.Size.Z) / 2 or 14
-					table.insert(taken, { spot.Pos.X - origin.X, spot.Pos.Z - origin.Z, math.min(r, 30) })
-				end
+		local origin = require(ReplicatedStorage.Shared.WorldLayout).Origin()
+		local taken = {}
+		for _, spot in ipairs(s.Spots) do
+			if BIG[spot.Kind] and spot.Kind ~= "Paint" and spot.Kind ~= "BikeLane" then
+				local r = spot.Size and math.max(spot.Size.X, spot.Size.Z) / 2 or 14
+				table.insert(taken, { spot.Pos.X - origin.X, spot.Pos.Z - origin.Z, math.min(r, 30) })
 			end
-			local count = tonumber(town:GetAttribute("PlotCount")) or 8
-			return CityPlan.Build(count, taken)
-		end)
-		if okPlan and type(extra) == "table" then
-			for _, spot in ipairs(extra) do
-				-- (copie : le plan en cache n'est jamais modifié)
-				table.insert(s.Spots, { Kind = spot.Kind, CF = spot.CF, Seed = spot.Seed, Pos = spot.Pos, Size = spot.Size, Data = spot.Data, Snap = spot.Snap })
-			end
-			s.CityCount = #extra
-		elseif not okPlan then
-			warn("[TownStreetLife] CityPlan : " .. tostring(extra))
 		end
+		local count = tonumber(town:GetAttribute("PlotCount")) or 8
+		local mySpots = s.Spots
+		task.spawn(function()
+			local okPlan, extra = pcall(CityPlan.Build, count, taken, function()
+				task.wait()
+			end)
+			if okPlan and type(extra) == "table" then
+				if state ~= s or s.Spots ~= mySpots then
+					return -- (sorti de la ville / rechargé pendant le calcul)
+				end
+				for _, spot in ipairs(extra) do
+					-- (copie : le plan en cache n'est jamais modifié)
+					table.insert(s.Spots, { Kind = spot.Kind, CF = spot.CF, Seed = spot.Seed, Pos = spot.Pos, Size = spot.Size, Data = spot.Data, Snap = spot.Snap })
+				end
+				s.CityCount = #extra
+			elseif not okPlan then
+				warn("[TownStreetLife] CityPlan : " .. tostring(extra))
+			end
+		end)
 	end
 	-- (v9.9, CITY99) arbres de la ville : modèles VIDES posés par le serveur
 	-- (TownKit.Tree, attribut TreeClient) ; on les construit ici

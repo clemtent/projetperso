@@ -1050,6 +1050,7 @@ local function stepRace(race: Race, dt: number)
 end
 
 local snapClock = 0
+local snapRound = 0
 local function tick(dt: number)
 	for _, race in pairs(races) do
 		local ok, err = pcall(stepRace, race, dt)
@@ -1066,9 +1067,13 @@ local function tick(dt: number)
 				table.insert(active, snapshot(race))
 			end
 		end
+		-- coureurs : 5 fois / s ; spectateurs en ville : 2,5 fois / s (50 joueurs)
+		snapRound += 1
 		if #active > 0 then
 			for _, p in ipairs(townPlayers()) do
-				fire(p, "State", active)
+				if playerRace[p] ~= nil or snapRound % 2 == 0 then
+					fire(p, "State", active)
+				end
 			end
 		end
 		if lobbiesDirty then

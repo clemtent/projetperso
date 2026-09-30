@@ -101,9 +101,19 @@ end
 -- Emplacements libres : ni route, ni parcelle, ni lieu réservé, ni gros
 -- emplacement déjà pris (serveur ou plan) ; test du centre + 4 coins + 4
 -- milieux d'un rectangle (repère ville, orienté par `yaw`)
-type Ctx = { Count: number, Taken: { { number } } }
+type Ctx = { Count: number, Taken: { { number } }, Yield: (() -> ())?, Last: number }
+
+-- (calcul étalé sur plusieurs images quand on le peut : jamais plus de
+-- ~6 ms d'affilée ; `Yield` = task.wait côté TownStreetLife)
+local function tick(ctx: Ctx)
+	if ctx.Yield and os.clock() - ctx.Last > 0.006 then
+		ctx.Yield()
+		ctx.Last = os.clock()
+	end
+end
 
 local function rectFree(ctx: Ctx, x: number, z: number, w: number, d: number, ax: number, az: number): boolean
+	tick(ctx)
 	-- a = axe "largeur" (unitaire), n = axe "profondeur"
 	local nx, nz = -az, ax
 	local pts = { { 0, 0 }, { -0.5, -0.5 }, { 0.5, -0.5 }, { -0.5, 0.5 }, { 0.5, 0.5 }, { 0, -0.5 }, { 0, 0.5 }, { -0.5, 0 }, { 0.5, 0 } }
@@ -923,7 +933,7 @@ end
 local cache: { [string]: { Spot } } = {}
 
 -- taken : { {x, z, r} } (repère ville) déjà occupés (gros emplacements du serveur)
-function CityPlan.Build(count: number, taken: { { number } }?): { Spot }
+function CityPlan.Build(count: number, taken: { { number } }?, yieldFn: (() -> ())?): { Spot }
 	local n = count
 	if type(WL.PlotCount) == "function" then
 		n = WL.PlotCount(count)
@@ -932,7 +942,7 @@ function CityPlan.Build(count: number, taken: { { number } }?): { Spot }
 	if cache[key] then
 		return cache[key]
 	end
-	local ctx: Ctx = { Count = n, Taken = table.clone(taken or {}) }
+	local ctx: Ctx = { Count = n, Taken = table.clone(taken or {}), Yield = yieldFn, Last = os.clock() }
 	local out: { Spot } = {}
 	if type(WL.Districts) ~= "function" or type(WL.CityCFrame) ~= "function" then
 		return out -- (ancienne ville en anneau : rien à habiller ici)

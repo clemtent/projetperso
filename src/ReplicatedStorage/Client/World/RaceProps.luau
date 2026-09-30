@@ -113,6 +113,18 @@ local function text(parent: Instance, props: { [string]: any }): TextLabel
 	return t
 end
 
+-- Verso d'un panneau : pièce invisible un peu plus épaisse, retournée, qui
+-- porte une copie de la SurfaceGui sur SA face avant (0,02 devant le dos du
+-- panneau : lisible des deux côtés, sans z-fight)
+local function backSide(parent: Instance, base: BasePart, sg: SurfaceGui)
+	local p = part(parent, base.Name .. "Back", base.Size + Vector3.new(0, 0, 0.04), base.CFrame * CFrame.Angles(0, math.pi, 0), WHITE)
+	p.Transparency = 1
+	p.CastShadow = false
+	local copy = sg:Clone()
+	copy.Face = Enum.NormalId.Front
+	copy.Parent = p
+end
+
 -- Damier (cases n x m) dans une Frame
 local function checker(parent: Instance, cols: number, rows: number, a: Color3, b: Color3, z: number?)
 	for i = 0, cols - 1 do
@@ -138,9 +150,7 @@ local function flag(parent: Instance, base: CFrame, height: number)
 	cloth.Color = WHITE
 	cloth.Material = M.Fabric
 	checker(sg, 6, 4, INK, WHITE)
-	local back = sg:Clone()
-	back.Face = Enum.NormalId.Back
-	back.Parent = cloth
+	backSide(parent, cloth, sg)
 end
 
 local function tyreStack(parent: Instance, base: CFrame, count: number, color: Color3?)
@@ -341,9 +351,7 @@ function RaceProps.BuildGantry(cf: CFrame, width: number, title: string, finish:
 		checker(r, 3, 4, INK, WHITE, 2)
 		text(bg, { Name = "Title", Text = title, TextColor3 = rgb(255, 214, 90), Size = UDim2.fromScale(0.72, 0.8), Position = UDim2.fromScale(0.14, 0.1), ZIndex = 3 })
 	end
-	local back = bsg:Clone()
-	back.Face = Enum.NormalId.Back
-	back.Parent = banner
+	backSide(model, banner, bsg)
 	-- feux de départ : 5 blocs sous la poutre (face à la grille : +Z)
 	local lights = {}
 	if not finish then
