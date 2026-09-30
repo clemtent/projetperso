@@ -957,9 +957,10 @@ local function buildAnnexPaths(folder: Instance, F: CFrame, placed: { [string]: 
 				local a, b = path[i], path[i + 1]
 				local len = (b - a).Magnitude
 				if len > 0.2 then
-					-- (dessus à -0,075 sous le sol de la fête : sous les dalles, au-dessus du pré)
+					-- (dessus à -0,09 sous le sol de la fête : sous les dalles des
+					-- attractions (-0,01 à -0,06), au-dessus du pré (-0,15))
 					local mid = (a + b) / 2
-					newPart(model, "AnnexPath", Vector3.new(4, 0.08, len + 4), F * CFrame.lookAt(Vector3.new(mid.X, -0.115, mid.Z), Vector3.new(b.X, -0.115, b.Z)), gravel, M.Pavement)
+					newPart(model, "AnnexPath", Vector3.new(4, 0.08, len + 4), F * CFrame.lookAt(Vector3.new(mid.X, -0.13, mid.Z), Vector3.new(b.X, -0.13, b.Z)), gravel, M.Pavement)
 					local n = math.floor(len / 12)
 					for k = 1, n do
 						lamp += 1

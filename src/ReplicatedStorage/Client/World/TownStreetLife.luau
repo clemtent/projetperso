@@ -45,6 +45,7 @@ local RunService = game:GetService("RunService")
 local Locale = require(ReplicatedStorage.Shared.Locale)
 local NPCModels = require(ReplicatedStorage.Shared.NPCModels)
 local Greenery = require(ReplicatedStorage.Shared.Greenery) -- (v9.9, CITY99) arbres construits côté client
+local TownRoads = require(script.Parent.TownRoads) -- (v9.9, CITY99) routes, trottoirs, allées, poteaux indicateurs
 -- (v9.8, REALISM98) réglage "Graphismes > Détail" : distances de flux x 0,65 / 1 / 1,35
 local okGQ, GraphicsQuality = pcall(require, ReplicatedStorage.Shared.GraphicsQuality)
 local function detailScale(): number
@@ -96,7 +97,7 @@ local FLOWERS = {
 local BIG = { Paint = true, Billboard = true, WindmillHill = true, MarketSquare = true, Statue = true, Kiosk = true, BikeLane = true, BusShelter = true }
 local FAR = { Turbine = true }
 -- Emplacements qui ne sont PAS du mobilier (ancres des passants : TownPeople)
-local ANCHORS = { SitBench = true, Chat = true, Wait = true }
+local ANCHORS = { SitBench = true, Chat = true, Wait = true, Dest = true }
 
 type Spot = {
 	Kind: string,
@@ -416,7 +417,7 @@ local function buildZebra(m: Model, F: CFrame, seed: number)
 	local n = math.max(3, math.floor(span / 2 + 0.5))
 	for i = 0, n - 1 do
 		local z = -span / 2 + 0.55 + i * (span - 1.1) / math.max(1, n - 1)
-		newPart(m, "ZebraStripe", Vector3.new(len, 0.1, 1.1), F * CFrame.new(0, 0.01, z), WHITE, M.SmoothPlastic)
+		newPart(m, "ZebraStripe", Vector3.new(len, 0.34, 1.1), F * CFrame.new(0, 0.09 - 0.17, z), WHITE, M.SmoothPlastic) -- (v9.9 : dessus à +0,09)
 	end
 	-- dalles podotactiles sur les trottoirs (derrière les bordures)
 	for _, sz in ipairs({ -1, 1 }) do
@@ -464,25 +465,26 @@ end
 
 local function buildManhole(m: Model, F: CFrame, _seed: number)
 	-- (dessus à +0,09 : au-dessus des pointillés (+0,05), sous les lignes de rive (+0,1))
-	newPart(m, "Manhole", Vector3.new(0.1, 2.1, 2.1), F * CFrame.new(0, 0.04, 0) * UPRIGHT, rgb(70, 68, 72), M.DiamondPlate, "Cyl")
+	-- (v9.9 : dessus à +0,12, au-dessus de la peinture relevée)
+	newPart(m, "Manhole", Vector3.new(0.3, 2.1, 2.1), F * CFrame.new(0, 0.12 - 0.15, 0) * UPRIGHT, rgb(70, 68, 72), M.DiamondPlate, "Cyl")
 end
 
 local function buildDrain(m: Model, F: CFrame, _seed: number)
-	box(m, "Drain", F, -0.8, 0.8, -0.04, 0.05, -0.25, 0.25, rgb(58, 56, 62), M.DiamondPlate)
+	box(m, "Drain", F, -0.8, 0.8, -0.2, 0.06, -0.25, 0.25, rgb(58, 56, 62), M.DiamondPlate) -- (v9.9 : sur le caniveau, dessus +0,06)
 end
 
 -- Piste cyclable : bande verte (longueur `seed`) + pictogrammes vélo
 local function buildBikeLane(m: Model, F: CFrame, seed: number)
 	local len = seed
-	newPart(m, "BikeLane", Vector3.new(1.9, 0.1, len), F * CFrame.new(0, 0.01, 0), rgb(76, 150, 100), M.SmoothPlastic)
+	newPart(m, "BikeLane", Vector3.new(1.9, 0.36, len), F * CFrame.new(0, 0.1 - 0.18, 0), rgb(76, 150, 100), M.SmoothPlastic) -- (v9.9 : dessus à +0,10)
 	local n = math.max(1, math.floor(len / 28))
 	for i = 0, n - 1 do
 		local z = -len / 2 + (i + 0.5) * len / n
 		for _, dz in ipairs({ -0.55, 0.55 }) do
-			newPart(m, "BikeWheel", Vector3.new(0.05, 0.8, 0.8), F * CFrame.new(0, 0.08, z + dz) * UPRIGHT, WHITE, M.SmoothPlastic, "Cyl")
+			newPart(m, "BikeWheel", Vector3.new(0.2, 0.8, 0.8), F * CFrame.new(0, 0.055, z + dz) * UPRIGHT, WHITE, M.SmoothPlastic, "Cyl")
 		end
-		newPart(m, "BikeFrame", Vector3.new(0.14, 0.05, 1.1), F * CFrame.new(0, 0.095, z), WHITE, M.SmoothPlastic)
-		newPart(m, "BikeBar", Vector3.new(0.5, 0.05, 0.12), F * CFrame.new(0, 0.095, z - 0.45), WHITE, M.SmoothPlastic)
+		newPart(m, "BikeFrame", Vector3.new(0.14, 0.2, 1.1), F * CFrame.new(0, 0.055, z), WHITE, M.SmoothPlastic)
+		newPart(m, "BikeBar", Vector3.new(0.5, 0.2, 0.12), F * CFrame.new(0, 0.055, z - 0.45), WHITE, M.SmoothPlastic)
 	end
 end
 
@@ -928,9 +930,11 @@ end
 
 -- Marquage au sol (lignes de rive, pointillés, passages, lignes d'arrêt) :
 -- une pièce blanche à la taille donnée par le serveur (v9.8 : 0 pièce serveur)
+-- (v9.9, CITY99) peinture relevée de 0,03 (dessus à +0,08 : au-dessus des
+-- ornières, rustines et fissures de TownRoads) et plus épaisse vers le bas
 local function buildPaint(m: Model, F: CFrame, _seed: number, spot: Spot?)
 	local size = spot and spot.Size or Vector3.new(1, 0.1, 1)
-	newPart(m, "Paint", size, F, rgb(250, 250, 246), M.SmoothPlastic)
+	newPart(m, "Paint", Vector3.new(size.X, size.Y + 0.2, size.Z), F * CFrame.new(0, 0.03 - 0.1, 0), rgb(248, 248, 242), M.SmoothPlastic)
 end
 
 local BUILDERS: { [string]: (Model, CFrame, number, Spot?) -> any } = {
@@ -976,6 +980,13 @@ local BUILDERS: { [string]: (Model, CFrame, number, Spot?) -> any } = {
 	WindmillHill = buildWindmillHill,
 	Turbine = buildTurbine,
 }
+-- (v9.9, CITY99) routes réalistes, allées, poteaux indicateurs (TownRoads)
+for kind, builder in pairs(TownRoads.BUILDERS) do
+	BUILDERS[kind] = builder
+end
+for kind in pairs(TownRoads.BIG) do
+	BIG[kind] = true
+end
 TownStreetLife.Kinds = BUILDERS
 
 ----------------------------------------------------------------------
@@ -1112,6 +1123,7 @@ local function load(s: any): boolean
 		return false
 	end
 	s.Spots = parseSpots(data)
+	TownRoads.SetDestinations(s.Spots)
 	-- (v9.9, CITY99) arbres de la ville : modèles VIDES posés par le serveur
 	-- (TownKit.Tree, attribut TreeClient) ; on les construit ici
 	s.Trees = {}

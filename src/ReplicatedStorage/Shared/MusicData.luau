@@ -36,8 +36,8 @@ MusicData.DECK = { X0 = -10.2, X1 = 10.2, Z0 = -3.6, Z1 = 7.6 }
 MusicData.STEPS = { X = 3.6, Depth = 0.95, Rise = 0.5, Count = 2 }
 -- praticables (estrades) : batterie au fond au centre, DJ au fond à gauche (+X)
 MusicData.RISERS = {
-	Drums = { X0 = -3.2, X1 = 3.2, Z0 = 3.3, Z1 = 7.6, H = 0.7 },
-	DJ = { X0 = 5.8, X1 = 10.2, Z0 = 3.6, Z1 = 7.6, H = 0.5 },
+	Drums = { X0 = -3.2, X1 = 3.2, Z0 = 3.3, Z1 = 7.55, H = 0.7 },
+	DJ = { X0 = 5.8, X1 = 10.15, Z0 = 3.6, Z1 = 7.55, H = 0.5 },
 }
 MusicData.TRUSS_H = 13.4 -- dessous du grill (portique d'éclairage)
 MusicData.TRUSS_TOWERS = { Vector3.new(-11.2, 0, -3.2), Vector3.new(11.2, 0, -3.2), Vector3.new(-11.2, 0, 7.3), Vector3.new(11.2, 0, 7.3) }

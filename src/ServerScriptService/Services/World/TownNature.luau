@@ -662,8 +662,9 @@ local function inKeepOut(geo: TownKit.Geo, p: Vector3, r: number): boolean
 	return false
 end
 
-local function lifeParks(geo: TownKit.Geo, r0: number)
+local function lifeParks(geo: TownKit.Geo, r0: number): { any }
 	local O = geo.Origin
+	local placedList = {}
 	local wanted = {
 		{ Kind = "MarketSquare", R = 15, Count = 1 },
 		{ Kind = "Statue", R = 6, Count = 2 },
@@ -687,9 +688,167 @@ local function lifeParks(geo: TownKit.Geo, r0: number)
 				TownKit.LifeSpot(w.Kind, cf, salt)
 				geo.Reserve(p, w.R)
 				placed += 1
+				table.insert(placedList, { Pos = p, R = w.R, Name = w.Kind, Dest = w.Kind == "MarketSquare" and 16 or nil })
 			end
 		end
 	end
+	return placedList
+end
+
+----------------------------------------------------------------------
+-- (v9.9, CITY99) PLUS DE ZONE MORTE : nouveaux lieux dans les coins vides
+-- de l'anneau (construits côté client : TownDistricts, via TownStreetLife)
+-- et ALLÉES qui relient chaque lieu au réseau (trottoirs du boulevard,
+-- des rues, allées existantes) : on n'arrive plus nulle part par la pelouse.
+----------------------------------------------------------------------
+
+-- La place la plus VIDE de l'anneau intérieur pour un objet de rayon `r`
+-- (le plus loin possible de tout ce qui est déjà réservé)
+local function emptiest(geo: TownKit.Geo, r: number, r0: number): Vector3?
+	local O = geo.Origin
+	local best, bestScore = nil, -math.huge
+	local rMin, rMax = r0 + r, geo.Inner - r - 4
+	if rMax < rMin then
+		return nil
+	end
+	for deg = 0, 358, 2 do
+		local ang = math.rad(deg)
+		local d = rMin
+		while d <= rMax do
+			local p = O + Vector3.new(math.sin(ang) * d, 0, math.cos(ang) * d)
+			if geo.IsFree(p, r) and not inKeepOut(geo, p, r) then
+				local clear = 60
+				for _, z in ipairs(geo.Reserved) do
+					local dd = Vector3.new(p.X - z.P.X, 0, p.Z - z.P.Z).Magnitude - z.R - r
+					if dd < clear then
+						clear = dd
+					end
+				end
+				if clear > bestScore then
+					best, bestScore = p, clear
+				end
+			end
+			d += 4
+		end
+	end
+	return best
+end
+
+type Feature = { Pos: Vector3, R: number, Name: string, Dest: number?, Sign: boolean? }
+type Seg = { A: Vector3, B: Vector3 }
+
+-- Réseau piéton existant (segments au sol)
+local function networkSegments(geo: TownKit.Geo, footpaths: { Seg }): { Seg }
+	local segs: { Seg } = {}
+	local O = geo.Origin
+	local m = geo.Slots
+	-- trottoir intérieur du boulevard (polygone, au milieu du trottoir)
+	local rv = (geo.Inner + 1.5) / math.cos(geo.HalfAngle)
+	for k = 0, m - 1 do
+		local a1 = geo.SlotAngle(k) - geo.HalfAngle
+		local a2 = geo.SlotAngle(k) + geo.HalfAngle
+		table.insert(segs, { A = O + Vector3.new(math.sin(a1) * rv, 0, math.cos(a1) * rv), B = O + Vector3.new(math.sin(a2) * rv, 0, math.cos(a2) * rv) })
+	end
+	-- trottoirs extérieurs des rues radiales
+	for _, slot in ipairs(geo.Streets) do
+		local d = geo.Dir(geo.SlotAngle(slot))
+		local side = Vector3.new(d.Z, 0, -d.X)
+		local w = slot == 0 and 20 or 12
+		for _, sx in ipairs({ -1, 1 }) do
+			table.insert(segs, { A = O + d * geo.StreetStart + side * (sx * w), B = O + d * geo.Inner + side * (sx * w) })
+		end
+	end
+	for _, f in ipairs(footpaths) do
+		table.insert(segs, f)
+	end
+	return segs
+end
+
+local function closestOnSeg(a: Vector3, b: Vector3, p: Vector3): Vector3
+	local ab = Vector3.new(b.X - a.X, 0, b.Z - a.Z)
+	local t = ab.Magnitude > 1e-3 and math.clamp(Vector3.new(p.X - a.X, 0, p.Z - a.Z):Dot(ab) / ab:Dot(ab), 0, 1) or 0
+	return Vector3.new(a.X, 0, a.Z) + ab * t
+end
+
+-- Relie `f` au réseau par l'allée pavée la plus courte qui ne traverse rien
+-- (réserves des autres lieux, rues) ; renvoie le point d'arrivée ou nil
+local function connect(geo: TownKit.Geo, segs: { Seg }, f: Feature, seed: number): Vector3?
+	local p = Vector3.new(f.Pos.X, 0, f.Pos.Z)
+	local best: { Vector3 }? = nil
+	local bestLen = math.huge
+	for _, sgm in ipairs(segs) do
+		local q = closestOnSeg(sgm.A, sgm.B, p)
+		local dir = q - p
+		local len = dir.Magnitude
+		if len > f.R + 1 and len - f.R < bestLen and len - f.R < 130 then
+			local e = p + dir.Unit * (f.R - 0.5)
+			-- libre : aucune autre réserve traversée, ni rue (sauf aux deux bouts)
+			local ok = true
+			local total = (q - e).Magnitude
+			local t = 2
+			while t < total - 4 do
+				local x = e + (q - e).Unit * t
+				local wx = Vector3.new(x.X, geo.Origin.Y, x.Z)
+				if not geo.IsFree(wx, 1.2) then
+					-- (IsFree regarde aussi les réserves : on ignore celle du lieu lui-même)
+					local own = true
+					for _, z in ipairs(geo.Reserved) do
+						local dz = Vector3.new(x.X - z.P.X, 0, x.Z - z.P.Z).Magnitude
+						if dz < z.R + 1.2 and Vector3.new(z.P.X - p.X, 0, z.P.Z - p.Z).Magnitude > f.R + 1 then
+							own = false
+							break
+						end
+					end
+					local flatX = Vector3.new(x.X - geo.Origin.X, 0, x.Z - geo.Origin.Z)
+					local street = false
+					for _, slot in ipairs(geo.Streets) do
+						local d = geo.Dir(geo.SlotAngle(slot))
+						local along = flatX:Dot(d)
+						local sideD = math.abs(flatX.X * d.Z - flatX.Z * d.X)
+						if along > 0 and sideD < (slot == 0 and 22 or 14) then
+							street = true
+							break
+						end
+					end
+					if not own or street or flatX.Magnitude < WorldLayout.PLAZA_R + 26 or geo.PolyRadius(wx) > geo.Inner - 2 then
+						ok = false
+						break
+					end
+				end
+				t += 2
+			end
+			if ok then
+				best = { e, q }
+				bestLen = len - f.R
+			end
+		end
+	end
+	if not best then
+		return nil
+	end
+	local e, q = best[1], best[2]
+	local y = geo.Origin.Y + GROUND_Y
+	local total = (q - e).Magnitude
+	local n = math.max(1, math.ceil(total / 30))
+	for i = 0, n - 1 do
+		local a = e:Lerp(q, i / n)
+		local b = e:Lerp(q, (i + 1) / n)
+		local mid = (a + b) / 2
+		local cf = CFrame.lookAt(Vector3.new(mid.X, y, mid.Z), Vector3.new(b.X, y, b.Z)) * CFrame.Angles(0, math.pi / 2, 0)
+		TownKit.LifeSpot("Walkway", cf, seed * 10 + i, Vector3.new((b - a).Magnitude + 0.02, 2, 4.5))
+	end
+	for t = 0, total, 5 do
+		local x = e:Lerp(q, t / math.max(total, 1))
+		geo.Reserve(Vector3.new(x.X, geo.Origin.Y, x.Z), 3)
+	end
+	table.insert(segs, { A = e, B = q })
+	-- poteau indicateur au départ de l'allée (côté réseau)
+	if f.Sign then
+		local side = Vector3.new(-(q - e).Unit.Z, 0, (q - e).Unit.X)
+		local at = q - (q - e).Unit * 3 + side * 3.4
+		TownKit.LifeSpot("Direction", CFrame.new(Vector3.new(at.X, y, at.Z)), seed)
+	end
+	return q
 end
 
 ----------------------------------------------------------------------
@@ -737,12 +896,50 @@ function TownNature.Build(folder: Instance, geo: TownKit.Geo): number
 		{ (aL + math.pi * 2) / 2, r0 + 24 - 18 },
 		{ (math.pi + aL) / 2 + 0.06, r0 + 22 - 14 },
 	}
+	-- (v9.9, CITY99) lieux à relier au réseau par une allée + repères des
+	-- poteaux indicateurs
+	local features: { Feature } = {}
+	local function faceCenter(p: Vector3): CFrame
+		return CFrame.lookAt(p, Vector3.new(O.X, p.Y, O.Z))
+	end
 	playground(nature, geo, frame(aR * 0.42, r0 + 22))
-	picnic(nature, geo, frame(aR * 0.62, math.min(geo.Inner - 14, r0 + 50)), 3)
+	TownKit.LifeSpot("Dest", frame(aR * 0.42, r0 + 22), 5)
+	local picnicCF = frame(aR * 0.62, math.min(geo.Inner - 14, r0 + 50))
+	picnic(nature, geo, picnicCF, 3)
+	table.insert(features, { Pos = picnicCF.Position, R = 9, Name = "Picnic" })
 	market(nature, geo, frame((aL + math.pi * 2) / 2, r0 + 24))
-	flowerGarden(nature, geo, frame((math.pi + aL) / 2 + 0.06, r0 + 22))
+	TownKit.LifeSpot("Dest", frame((aL + math.pi * 2) / 2, r0 + 24), 16)
+	-- (v9.9, FAIR99 : la fête foraine réserve ses nouveaux manèges AVANT la
+	-- nature ; jardin fleuri et terrain de basket vont ailleurs si leur place
+	-- est prise)
+	local gardenCF = frame((math.pi + aL) / 2 + 0.06, r0 + 22)
+	local gardenMoved = false
+	if not geo.IsFree((gardenCF * CFrame.new(0, 0, 3)).Position, 16) then
+		local p = emptiest(geo, 16, r0)
+		if p then
+			gardenCF = faceCenter(p) * CFrame.new(0, 0, -3)
+			gardenMoved = true
+		else
+			gardenCF = nil :: any
+		end
+	end
+	if gardenCF then
+		flowerGarden(nature, geo, gardenCF)
+		TownKit.LifeSpot("Dest", gardenCF, 14)
+		if gardenMoved then
+			table.insert(features, { Pos = (gardenCF * CFrame.new(0, 0, 3)).Position, R = 16, Name = "FlowerGarden", Sign = true })
+		end
+	end
 	if depth > 70 then
-		court(nature, geo, frame((math.pi + aL) / 2 - 0.05, geo.Inner - 18))
+		local courtCF = frame((math.pi + aL) / 2 - 0.05, geo.Inner - 18)
+		if not geo.IsFree(courtCF.Position, 17) then
+			local p = emptiest(geo, 17, r0)
+			courtCF = p and faceCenter(p) or nil :: any
+		end
+		if courtCF then
+			court(nature, geo, courtCF)
+			table.insert(features, { Pos = courtCF.Position, R = 17, Name = "Court", Dest = 12 })
+		end
 	end
 	-- grandes villes : terrain de foot + champ de tulipes là où il y a de la place
 	if depth > 110 then
@@ -750,6 +947,7 @@ function TownNature.Build(folder: Instance, geo: TownKit.Geo): number
 			local p = geo.At(spot[1], spot[2])
 			if geo.IsFree(p, 26) then
 				soccer(nature, geo, frame(spot[1], spot[2]))
+				TownKit.LifeSpot("Dest", frame(spot[1], spot[2]), 12)
 				table.insert(anchors, { spot[1], spot[2] - 24 })
 				break
 			end
@@ -758,20 +956,28 @@ function TownNature.Build(folder: Instance, geo: TownKit.Geo): number
 			local p = geo.At(spot[1], spot[2])
 			if geo.IsFree(p, 22) then
 				tulips(nature, geo, frame(spot[1], spot[2]))
+				table.insert(features, { Pos = p, R = 14, Name = "Tulips" })
 				break
 			end
 		end
 	end
 	-- allées en gravier : de l'arrière des boutiques de la place vers chaque lieu
 	local paths = TownKit.Model(nature, "Footpaths")
+	local footSegs: { Seg } = {}
 	for i, anchor in ipairs(anchors) do
-		footpath(paths, geo, geo.At(anchor[1], r0 - 1), anchor[3] or geo.At(anchor[1], anchor[2]), i)
+		-- (v9.9 : pas d'allée vers l'ancienne place du jardin fleuri s'il a bougé)
+		if not (i == 4 and (gardenMoved or not gardenCF)) then
+			local a0, b0 = geo.At(anchor[1], r0 - 1), anchor[3] or geo.At(anchor[1], anchor[2])
+			footpath(paths, geo, a0, b0, i)
+			table.insert(footSegs, { A = Vector3.new(a0.X, 0, a0.Z), B = Vector3.new(b0.X, 0, b0.Z) })
+		end
 	end
 	-- (v9.7) kiosque du parc + massif fleuri et buissons au départ des allées
 	for _, spot in ipairs({ { aR * 0.86, r0 + 18 }, { lakeAngle - 0.3, r0 + 14 }, { aR * 0.2, r0 + 44 } }) do
 		local p = geo.At(spot[1], spot[2])
 		if geo.IsFree(p, 11) then
 			gazebo(nature, geo, frame(spot[1], spot[2]))
+			table.insert(features, { Pos = p, R = 8, Name = "Gazebo" })
 			break
 		end
 	end
@@ -789,7 +995,44 @@ function TownNature.Build(folder: Instance, geo: TownKit.Geo): number
 		end
 	end
 	-- (v9.8, CITY98) statues, petit marché, tables d'échecs (construits côté client)
-	lifeParks(geo, r0)
+	for _, f in ipairs(lifeParks(geo, r0)) do
+		table.insert(features, f)
+	end
+	-- (v9.9, CITY99) NOUVEAUX LIEUX dans les coins les plus vides : skatepark,
+	-- jardins partagés, coin ping-pong / pétanque / fitness (client : TownDistricts)
+	for i, d in ipairs({
+		{ Kind = "SkatePark", R = 17, Dest = 9 },
+		{ Kind = "CommunityGarden", R = 16, Dest = 10 },
+		{ Kind = "SportsCorner", R = 13, Dest = 17 },
+	}) do
+		local p = emptiest(geo, d.R, r0)
+		if p then
+			local cf = faceCenter(p + Vector3.new(0, GROUND_Y, 0))
+			TownKit.LifeSpot(d.Kind, cf, 900 + i)
+			geo.Reserve(p, d.R)
+			table.insert(features, { Pos = p, R = d.R, Name = d.Kind, Dest = d.Dest, Sign = true })
+		end
+	end
+	-- repères des lieux (poteaux indicateurs) : lac, fête foraine
+	TownKit.LifeSpot("Dest", CFrame.new(geo.At(lakeAngle, lakeDist)), 4)
+	local fairCF = WorldLayout.FairCFrame()
+	TownKit.LifeSpot("Dest", fairCF * CFrame.new(0, 0, -WorldLayout.FAIR_D / 2), 2)
+	-- ALLÉES : chaque lieu est relié au réseau (du plus proche au plus loin)
+	local segs = networkSegments(geo, footSegs)
+	table.sort(features, function(a, b)
+		return (a.Pos - O).Magnitude < (b.Pos - O).Magnitude
+	end)
+	local linked = 0
+	for i, f in ipairs(features) do
+		if f.Dest then
+			TownKit.LifeSpot("Dest", CFrame.new(f.Pos), f.Dest)
+		end
+		if connect(geo, segs, f, 950 + i) then
+			linked += 1
+		end
+	end
+	nature:SetAttribute("Linked", linked)
+	nature:SetAttribute("Features", #features)
 	local trees = scatterTrees(nature, geo, math.clamp(math.floor(depth * 0.28), 22, geo.Slots >= 11 and 46 or 36))
 	belt(nature, geo)
 	hills(nature, geo)

@@ -367,12 +367,13 @@ end)
 -- 4. Rideau de fond plissé + écran LED
 step("Backdrop", function(self)
 	local h = MusicData.TRUSS_H - 0.2
-	local z = 7.95
+	local z = 7.85
 	local n = self.Detail == "Low" and 8 or 17
 	local w = (D.X1 - D.X0) / n
 	for i = 0, n - 1 do
-		local depth = (i % 2 == 0) and 0.1 or 0.16
-		box(self, "Drape", Vector3.new(w + 0.02, h, depth), CFrame.new(D.X0 + (i + 0.5) * w, 0.02 + h / 2, z + depth / 2), (i % 2 == 0) and FABRIC or FABRIC2, M.Fabric)
+		local depth = (i % 2 == 0) and 0.1 or 0.2
+		local front = (i % 2 == 0) and z or z - 0.05
+		box(self, "Drape", Vector3.new(w + 0.02, h, depth), CFrame.new(D.X0 + (i + 0.5) * w, 0.02 + h / 2, front + depth / 2), (i % 2 == 0) and FABRIC or FABRIC2, M.Fabric)
 	end
 	-- écran LED 16:9 (12,8 x 7,2) dans un cadre
 	local sy = 6.9
@@ -455,7 +456,7 @@ step("PA", function(self)
 		newPart(self, "Sub", Vector3.new(2.2, 1.9, 1.9), base * CFrame.new(0, 0.95, 0), BLACK, M.Fabric).CastShadow = true
 		for k = -1, 1, 2 do
 			cylW(self, "Woofer", (base * CFrame.new(k * 0.52, 0.95, -0.95)).Position, base.LookVector, 0.06, 0.86, Color3.fromRGB(44, 44, 50), M.Rubber)
-			cylW(self, "Cone", (base * CFrame.new(k * 0.52, 0.95, -0.98)).Position, base.LookVector, 0.04, 0.62, Color3.fromRGB(58, 58, 64), M.SmoothPlastic)
+			cylW(self, "Cone", (base * CFrame.new(k * 0.52, 0.95, -0.99)).Position, base.LookVector, 0.04, 0.62, Color3.fromRGB(58, 58, 64), M.SmoothPlastic)
 			ballW(self, "DustCap", (base * CFrame.new(k * 0.52, 0.95, -0.99)).Position, 0.22, Color3.fromRGB(30, 30, 34), M.SmoothPlastic)
 		end
 		local top = base * CFrame.new(0, 1.9 + 1.2 + 0.01, 0.1)
@@ -501,7 +502,7 @@ step("Lights", function(self)
 		local aim = clampCF * CFrame.new(0, -0.55, 0) * CFrame.Angles(rad(-35), 0, 0)
 		newPart(self, "ParYoke", Vector3.new(0.72, 0.08, 0.1), clampCF * CFrame.new(0, -0.2, 0), STEEL, M.Metal)
 		cylW(self, "ParCan", aim.Position, -aim.UpVector, 0.85, 0.5, BLACK, M.Metal)
-		local lens = cylW(self, "ParLens", (aim * CFrame.new(0, -0.43, 0)).Position, -aim.UpVector, 0.03, 0.4, colors[i], M.Glass)
+		local lens = cylW(self, "ParLens", (aim * CFrame.new(0, -0.45, 0)).Position, -aim.UpVector, 0.03, 0.4, colors[i], M.Glass)
 		glow(lens, colors[i])
 		table.insert(pars, lens)
 	end
@@ -585,18 +586,18 @@ step("Jukebox", function(self)
 	body.CastShadow = true
 	local arch = newPart(self, "JukeArch", Vector3.new(1.2, 2.4, 2.4), kf * CFrame.new(0, 2.1, 0) * CFrame.Angles(0, rad(90), 0), WALNUT, M.Wood, CYL)
 	arch.CastShadow = true
-	local window = newPart(self, "JukeWindow", Vector3.new(0.04, 1.9, 1.9), kf * CFrame.new(0, 2.15, -0.66) * CFrame.Angles(0, rad(90), 0), Color3.fromRGB(150, 200, 230), M.Glass, CYL)
+	local window = newPart(self, "JukeWindow", Vector3.new(0.04, 1.9, 1.9), kf * CFrame.new(0, 2.15, -0.68) * CFrame.Angles(0, rad(90), 0), Color3.fromRGB(150, 200, 230), M.Glass, CYL)
 	window.Transparency = 0.35
 	newPart(self, "JukeRecord", Vector3.new(0.03, 1.1, 1.1), kf * CFrame.new(0, 2.2, -0.615) * CFrame.Angles(0, rad(90), 0), EBONY, M.SmoothPlastic, CYL)
-	newPart(self, "JukeLabel", Vector3.new(0.03, 0.36, 0.36), kf * CFrame.new(0, 2.2, -0.625) * CFrame.Angles(0, rad(90), 0), PINK, M.SmoothPlastic, CYL)
+	newPart(self, "JukeLabel", Vector3.new(0.02, 0.36, 0.36), kf * CFrame.new(0, 2.2, -0.645) * CFrame.Angles(0, rad(90), 0), PINK, M.SmoothPlastic, CYL)
 	-- tube néon en arc autour de la vitre
 	local n = 9
 	for i = 0, n - 1 do
 		local a0 = rad(180 * i / n)
 		local a1 = rad(180 * (i + 1) / n)
 		local r = 1.08
-		local p0 = (kf * CFrame.new(math.cos(a0) * r, 2.1 + math.sin(a0) * r, -0.66)).Position
-		local p1 = (kf * CFrame.new(math.cos(a1) * r, 2.1 + math.sin(a1) * r, -0.66)).Position
+		local p0 = (kf * CFrame.new(math.cos(a0) * r, 2.1 + math.sin(a0) * r, -0.69)).Position
+		local p1 = (kf * CFrame.new(math.cos(a1) * r, 2.1 + math.sin(a1) * r, -0.69)).Position
 		glow(rodW(self, "JukeNeon", p0, p1, 0.1, i % 2 == 0 and PINK or CYAN, M.SmoothPlastic), i % 2 == 0 and PINK or CYAN)
 	end
 	-- colonnes à bulles
@@ -618,7 +619,7 @@ step("Jukebox", function(self)
 	self.H.JukeText = l
 	newPart(self, "JukeGrill", Vector3.new(1.8, 0.85, 0.05), kf * CFrame.new(0, 0.72, -0.62), Color3.fromRGB(200, 186, 160), M.DiamondPlate)
 	newPart(self, "JukeChrome", Vector3.new(2.3, 0.08, 0.08), kf * CFrame.new(0, 1.2, -0.62), CHROME, M.Metal)
-	newPart(self, "JukeBase", Vector3.new(2.5, 0.14, 1.3), kf * CFrame.new(0, 0.07, 0), CHROME, M.Metal)
+	newPart(self, "JukeBase", Vector3.new(2.5, 0.14, 1.3), kf * CFrame.new(0, 0.04, 0), CHROME, M.Metal)
 	self.H.Emitters = self.H.Emitters or {}
 end)
 
@@ -724,7 +725,7 @@ step("PianoCase", function(self)
 	fillCase(self, pf, 2.55, 0.05, 0.955, SPRUCE, M.Wood, "Soundboard")
 	fillCase(self, pf, 2.63, 0.05, 0.84, GOLD, M.Metal, "Plate")
 	for _, h in ipairs({ { -0.9, -1.6 }, { 0.3, -2.2 }, { -0.5, -3.4 }, { -1.3, -4.3 } }) do
-		newPart(self, "PlateHole", Vector3.new(0.02, 0.36, 0.36), pf * CFrame.new(h[1], 2.66, h[2]) * CFrame.Angles(0, 0, rad(90)), Color3.fromRGB(150, 116, 60), M.Metal, CYL)
+		newPart(self, "PlateHole", Vector3.new(0.04, 0.36, 0.36), pf * CFrame.new(h[1], 2.66, h[2]) * CFrame.Angles(0, 0, rad(90)), Color3.fromRGB(150, 116, 60), M.Metal, CYL)
 	end
 	if self.Detail ~= "Low" then
 		local n = self.Detail == "High" and 20 or 12
@@ -794,7 +795,7 @@ step("PianoKeys", function(self)
 	local keys = {}
 	local top = MusicStageBuild.PIANO_KEY_TOP
 	-- lit du clavier, joues, barre de devant, pupitre et partition
-	newPart(self, "KeyBed", Vector3.new(KW, 0.12, 0.62), pf * CFrame.new(0, top - 0.15, -0.31), EBONY, M.SmoothPlastic)
+	newPart(self, "KeyBed", Vector3.new(KW, 0.16, 0.62), pf * CFrame.new(0, top - 0.17, -0.31), EBONY, M.SmoothPlastic)
 	newPart(self, "KeySlip", Vector3.new(KW + 0.02, 0.14, 0.05), pf * CFrame.new(0, top - 0.12, 0.03), LACQUER, M.SmoothPlastic)
 	for _, s in ipairs({ -1, 1 }) do
 		newPart(self, "Cheek", Vector3.new(0.38, 0.34, 0.66), pf * CFrame.new(s * (KW / 2 + 0.19), top - 0.03, -0.33), LACQUER, M.SmoothPlastic).Reflectance = 0.08
@@ -853,7 +854,7 @@ local function drum(self: any, name: string, c: Vector3, axis: Vector3, depth: n
 	table.insert(list, shell)
 	for _, s in ipairs({ -1, 1 }) do
 		table.insert(list, cylW(self, name .. "Hoop", c + a * s * (depth / 2 + 0.01), a, 0.07, dia + 0.06, CHROME, M.Metal))
-		table.insert(list, cylW(self, name .. "Head", c + a * s * (depth / 2 + 0.053), a, 0.012, dia - 0.02, HEAD, M.SmoothPlastic))
+		table.insert(list, cylW(self, name .. "Head", c + a * s * (depth / 2 + 0.07), a, 0.012, dia - 0.02, HEAD, M.SmoothPlastic))
 	end
 	if self.Detail ~= "Low" then
 		local up = math.abs(a.Y) > 0.9 and Vector3.new(1, 0, 0) or Vector3.new(0, 1, 0)
@@ -862,9 +863,9 @@ local function drum(self: any, name: string, c: Vector3, axis: Vector3, depth: n
 		for k = 0, lugs - 1 do
 			local ang = (k + 0.5) * math.pi * 2 / lugs
 			local dir = u * math.cos(ang) + v * math.sin(ang)
-			local p = c + dir * (dia / 2 + 0.035)
+			local p = c + dir * (dia / 2 + 0.025)
 			local cf = CFrame.fromMatrix(p, dir, a, dir:Cross(a))
-			table.insert(list, newPart(self, name .. "Lug", Vector3.new(0.07, math.min(depth * 0.5, 0.3), 0.1), cf, CHROME, M.Metal))
+			table.insert(list, newPart(self, name .. "Lug", Vector3.new(0.05, math.min(depth * 0.36, 0.26), 0.07), cf, CHROME, M.Metal))
 		end
 	end
 	return list
@@ -898,13 +899,13 @@ step("Drums", function(self)
 	local up = df:VectorToWorldSpace(Vector3.new(0, 1, 0))
 	local pieces: { [number]: any } = {}
 	-- tapis
-	newPart(self, "DrumRug", Vector3.new(5.2, 0.04, 4.0), df * CFrame.new(0.2, 0, 5.4), Color3.fromRGB(128, 44, 58), M.Fabric)
-	newPart(self, "DrumRugBorder", Vector3.new(4.8, 0.05, 3.6), df * CFrame.new(0.2, 0, 5.4), Color3.fromRGB(176, 120, 70), M.Fabric)
-	newPart(self, "DrumRugCenter", Vector3.new(4.4, 0.06, 3.2), df * CFrame.new(0.2, 0, 5.4), Color3.fromRGB(110, 36, 50), M.Fabric)
+	newPart(self, "DrumRug", Vector3.new(5.2, 0.04, 3.8), df * CFrame.new(0.2, 0, 5.4), Color3.fromRGB(128, 44, 58), M.Fabric)
+	newPart(self, "DrumRugBorder", Vector3.new(4.8, 0.09, 3.4), df * CFrame.new(0.2, 0, 5.4), Color3.fromRGB(176, 120, 70), M.Fabric)
+	newPart(self, "DrumRugCenter", Vector3.new(4.4, 0.14, 3.0), df * CFrame.new(0.2, 0, 5.4), Color3.fromRGB(110, 36, 50), M.Fabric)
 	-- grosse caisse (peau avant noire avec logo)
 	local kc = W(0.25, 0.86, 4.75)
 	local kick = drum(self, "Kick", kc, fwd, 1.2, 1.66, 8)
-	local front = cylW(self, "KickLogo", kc + fwd * 0.668, fwd, 0.012, 1.5, EBONY, M.SmoothPlastic)
+	local front = cylW(self, "KickLogo", kc + fwd * 0.7, fwd, 0.012, 1.5, EBONY, M.SmoothPlastic)
 	local g = surface(front, Enum.NormalId.Right, 60, 0.6)
 	local logo = Instance.new("Frame")
 	logo.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -1023,9 +1024,9 @@ local function stringed(self: any, bass: boolean, idleCF: CFrame): any
 	add("HornLower", Vector3.new(th, 0.26, 0.26), CFrame.new(0.56 * k, -0.28 * k, 0) * CFrame.Angles(0, rad(90), 0), bodyC, M.SmoothPlastic, CYL)
 	if bass then
 		-- dégradé "sunburst" : cœur ambré
-		add("Burst", Vector3.new(0.012, 0.7, 0.7), CFrame.new(-0.3 * k, 0, 0.074) * CFrame.Angles(0, rad(90), 0), Color3.fromRGB(206, 120, 44), M.SmoothPlastic, CYL)
+		add("Burst", Vector3.new(0.012, 0.7, 0.7), CFrame.new(-0.3 * k, 0, 0.085) * CFrame.Angles(0, rad(90), 0), Color3.fromRGB(206, 120, 44), M.SmoothPlastic, CYL)
 	end
-	add("Pickguard", Vector3.new(0.012, 0.66, 0.66), CFrame.new(0.02, -0.08, 0.079) * CFrame.Angles(0, rad(90), 0), bass and EBONY or WHITE, M.SmoothPlastic, CYL)
+	add("Pickguard", Vector3.new(0.012, 0.66, 0.66), CFrame.new(0.02, -0.08, bass and 0.105 or 0.095) * CFrame.Angles(0, rad(90), 0), bass and EBONY or WHITE, M.SmoothPlastic, CYL)
 	for i, x in ipairs(bass and { -0.05 } or { -0.12, 0.14 }) do
 		add("Pickup" .. i, Vector3.new(0.12, 0.34, 0.04), CFrame.new(x, 0, 0.1), EBONY, M.SmoothPlastic)
 	end
@@ -1236,7 +1237,7 @@ step("Synth", function(self)
 		newPart(self, "Wheel", Vector3.new(0.06, 0.3, 0.3), sf * CFrame.new(left + 0.28 + i * 0.12, keyTop - 0.02, 0.22), EBONY, M.Rubber, CYL)
 	end
 	-- écran, boutons, curseurs
-	local screen = newPart(self, "SynthScreen", Vector3.new(0.6, 0.02, 0.24), sf * CFrame.new(-0.2, keyTop + 0.1, -0.3), Color3.fromRGB(20, 60, 60), M.Glass)
+	local screen = newPart(self, "SynthScreen", Vector3.new(0.6, 0.04, 0.24), sf * CFrame.new(-0.2, keyTop + 0.115, -0.3), Color3.fromRGB(20, 60, 60), M.Glass)
 	local g = surface(screen, Enum.NormalId.Top, 100, 0)
 	local lcd = Instance.new("Frame")
 	lcd.Size = UDim2.fromScale(1, 1)
@@ -1328,8 +1329,8 @@ step("DJ", function(self)
 		local center = jf * CFrame.new(x - 0.08, top + 0.17, 0.02)
 		newPart(self, "Platter", Vector3.new(0.06, 0.9, 0.9), center * CFrame.Angles(0, 0, rad(90)), CHROME, M.Metal, CYL)
 		local record = newPart(self, "Record", Vector3.new(0.02, 0.86, 0.86), center * CFrame.new(0, 0.04, 0) * CFrame.Angles(0, 0, rad(90)), EBONY, M.SmoothPlastic, CYL)
-		local lab = newPart(self, "RecordLabel", Vector3.new(0.024, 0.3, 0.3), center * CFrame.new(0, 0.045, 0) * CFrame.Angles(0, 0, rad(90)), i == 1 and PINK or CYAN, M.SmoothPlastic, CYL)
-		local mark = newPart(self, "RecordMark", Vector3.new(0.1, 0.012, 0.04), center * CFrame.new(0.2, 0.058, 0), WHITE, M.SmoothPlastic)
+		local lab = newPart(self, "RecordLabel", Vector3.new(0.03, 0.3, 0.3), center * CFrame.new(0, 0.065, 0) * CFrame.Angles(0, 0, rad(90)), i == 1 and PINK or CYAN, M.SmoothPlastic, CYL)
+		local mark = newPart(self, "RecordMark", Vector3.new(0.1, 0.012, 0.04), center * CFrame.new(0.3, 0.062, 0), WHITE, M.SmoothPlastic)
 		rodW(self, "Tonearm", (jf * CFrame.new(x + 0.5, top + 0.24, -0.35)).Position, (jf * CFrame.new(x + 0.15, top + 0.24, 0.25)).Position, 0.035, CHROME, M.Metal)
 		newPart(self, "Cartridge", Vector3.new(0.08, 0.05, 0.12), jf * CFrame.new(x + 0.13, top + 0.23, 0.29), EBONY, M.SmoothPlastic)
 		table.insert(platters, { Parts = { record, lab, mark }, Center = center, CFs = { record.CFrame, lab.CFrame, mark.CFrame }, Angle = 0 })

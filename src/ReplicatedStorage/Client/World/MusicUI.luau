@@ -198,7 +198,7 @@ function MusicUI.Open(self: any, station: string, layout: any)
 	local panel = Instance.new("Frame")
 	panel.Name = "InstrumentPanel"
 	panel.AnchorPoint = Vector2.new(0.5, 1)
-	panel.Position = UDim2.new(0.5, 0, 1, -8)
+	panel.Position = UDim2.new(0.5, 0, 1, small and -6 or -24)
 	panel.Size = UDim2.fromOffset(width, height)
 	panel.BackgroundColor3 = CARD
 	panel.BackgroundTransparency = 0.04
@@ -462,7 +462,8 @@ function MusicUI.OpenPicker(self: any, state: any)
 	local list = Instance.new("ScrollingFrame")
 	list.Name = "Songs"
 	list.Position = UDim2.fromOffset(12, 74)
-	list.Size = UDim2.new(1, -24, 1, -74 - 112)
+	local bh = small and 32 or 42
+	list.Size = UDim2.new(1, -24, 1, -74 - (bh * 2 + 28))
 	list.BackgroundTransparency = 1
 	list.BorderSizePixel = 0
 	list.ScrollBarThickness = 6
@@ -509,11 +510,11 @@ function MusicUI.OpenPicker(self: any, state: any)
 	bottom.BackgroundTransparency = 1
 	bottom.AnchorPoint = Vector2.new(0, 1)
 	bottom.Position = UDim2.new(0, 12, 1, -10)
-	bottom.Size = UDim2.new(1, -24, 0, 100)
+	bottom.Size = UDim2.new(1, -24, 0, bh * 2 + 12)
 	bottom.ZIndex = 22
 	bottom.Parent = card
 	local chain = button(bottom, "Chain", "", Color3.fromRGB(150, 120, 220))
-	chain.Size = UDim2.new(0.5, -4, 0, 42)
+	chain.Size = UDim2.new(0.5, -4, 0, bh)
 	chain.ZIndex = 23
 	local function refreshChain()
 		chain.Text = (self.PickerState.Chain and "🔁 " or "➡️ ") .. (self.PickerState.Chain and T("Play all: on") or T("Play all: off"))
@@ -529,7 +530,7 @@ function MusicUI.OpenPicker(self: any, state: any)
 	end))
 	local stop = button(bottom, "Stop", T("⏹ Stop"), Color3.fromRGB(226, 90, 110))
 	stop.Position = UDim2.new(0.5, 4, 0, 0)
-	stop.Size = UDim2.new(0.5, -4, 0, 42)
+	stop.Size = UDim2.new(0.5, -4, 0, bh)
 	stop.ZIndex = 23
 	table.insert(self.Conns, stop.Activated:Connect(function()
 		self.Cb.StopSong()
@@ -539,8 +540,8 @@ function MusicUI.OpenPicker(self: any, state: any)
 	local radioOn = type(state.Radio) == "number" and state.Radio > 0
 	local track = radioOn and playlist[state.Radio] or nil
 	local radio = button(bottom, "Radio", "", radioOn and MINT or Color3.fromRGB(96, 150, 230))
-	radio.Position = UDim2.fromOffset(0, 50)
-	radio.Size = UDim2.new(1, 0, 0, 44)
+	radio.Position = UDim2.fromOffset(0, bh + 8)
+	radio.Size = UDim2.new(1, 0, 0, bh + 2)
 	radio.ZIndex = 23
 	radio.Text = radioOn and ("📻 " .. T("Stage radio: %s (tap: next)", tostring(track and track.Name or "?"))) or ("📻 " .. T("Stage radio: lo-fi on the speakers"))
 	table.insert(self.Conns, radio.Activated:Connect(function()
@@ -555,8 +556,8 @@ function MusicUI.OpenPicker(self: any, state: any)
 	if radioOn then
 		local off = button(bottom, "RadioOff", T("Off"), Color3.fromRGB(226, 90, 110))
 		off.AnchorPoint = Vector2.new(1, 0)
-		off.Position = UDim2.new(1, -6, 0, 56)
-		off.Size = UDim2.fromOffset(70, 32)
+		off.Position = UDim2.new(1, -6, 0, bh + 12)
+		off.Size = UDim2.fromOffset(70, bh - 8)
 		off.ZIndex = 24
 		table.insert(self.Conns, off.Activated:Connect(function()
 			self.Cb.Radio(0)

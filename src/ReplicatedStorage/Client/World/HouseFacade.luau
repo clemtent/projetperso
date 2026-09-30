@@ -345,8 +345,9 @@ end
 -- Lanterne murale (x, y = bas de la lanterne), vraie lumière si le budget le permet
 local function wallLantern(ctx: Ctx, x: number, y: number, withLight: boolean)
 	local kit = ctx.Kit
-	kit:Box("LanternPlate", x - 0.25, x + 0.25, y + 0.6, y + 1.6, -0.36, -0.3, C.Ink, M.Metal, { Shadow = false })
-	kit:Box("LanternArm", x - 0.07, x + 0.07, y + 1.25, y + 1.39, -0.72, -0.36, C.Ink, M.Metal, { Shadow = false })
+	-- (platine décollée de 0,02 des enduits de façade posés à -0,36 : pas de faces confondues)
+	kit:Box("LanternPlate", x - 0.25, x + 0.25, y + 0.6, y + 1.6, -0.44, -0.38, C.Ink, M.Metal, { Shadow = false })
+	kit:Box("LanternArm", x - 0.07, x + 0.07, y + 1.25, y + 1.39, -0.72, -0.44, C.Ink, M.Metal, { Shadow = false })
 	local bulb = lanternHead(kit, x, y, -1.0, 0.36)
 	if withLight then
 		kit:Light(bulb, Color3.fromRGB(255, 214, 150), 16, 0.8)
@@ -402,7 +403,7 @@ local function courtFountain(ctx: Ctx, x: number, d: number)
 	kit:CylY("FountainUpperShaft", x, 3.74, d, 0.8, 1.5, STONE, M.Limestone, { Shadow = false })
 	kit:CylY("FountainUpperBowl", x, 5.24, d, 2.8, 0.34, STONE, M.Limestone, { Shadow = false })
 	kit:CylY("FountainUpperWater", x, 5.58, d, 2.5, 0.08, WATER, M.SmoothPlastic, { T = 0.3, Shadow = false })
-	kit:CylY("FountainUpperSheet", x, 3.74, d, 2.85, 1.5, Color3.fromRGB(200, 232, 250), M.SmoothPlastic, { T = 0.86, Shadow = false })
+	kit:CylY("FountainUpperSheet", x, 3.76, d, 2.85, 1.46, Color3.fromRGB(200, 232, 250), M.SmoothPlastic, { T = 0.86, Shadow = false })
 	local spout = kit:Ball("FountainSpout", x, 5.85, d, 0.55, C.Pink, M.SmoothPlastic, { Shadow = false })
 	local emitter = Instance.new("ParticleEmitter")
 	emitter.Name = "FountainSpray"

@@ -290,10 +290,24 @@ function TownPigeons.Build(folder: Instance, plaza: Instance): any
 		for j = 1, PER_FLOCK do
 			local seed = h * 10 + j
 			local rng = Random.new(h * 31 + j * 7)
-			-- places de départ sur une petite grille décalée (jamais l'un dans l'autre)
-			local a = (j / PER_FLOCK) * math.pi * 2 + rng:NextNumber(-0.3, 0.3)
-			local r = 1.1 + (j % 2) * 1.2
-			local pos = home + Vector3.new(math.cos(a) * r, 0, math.sin(a) * r)
+			-- place de départ libre (LAND_GAP de tout autre pigeon, quel que soit le cap)
+			local pos = home
+			for try = 1, 40 do
+				local a = rng:NextNumber(0, math.pi * 2)
+				local r = math.sqrt(rng:NextNumber()) * (HOME_R + math.floor(try / 12))
+				local p = home + Vector3.new(math.cos(a) * r, 0, math.sin(a) * r)
+				local ok = true
+				for _, other in ipairs(P.List) do
+					if Vector3.new(other.Pos.X - p.X, 0, other.Pos.Z - p.Z).Magnitude < LAND_GAP then
+						ok = false
+						break
+					end
+				end
+				if ok then
+					pos = p
+					break
+				end
+			end
 			local yaw = rng:NextNumber(0, math.pi * 2)
 			local bird = {
 				Id = #P.List + 1,
@@ -454,9 +468,9 @@ end
 -- poser, où il marche
 local function nearestTaken(P: any, me: any, p: Vector3): number
 	local best = math.huge
-	local function consider(q: Vector3?)
+	local function consider(q: Vector3?, margin: number?)
 		if q and math.abs(q.Y - p.Y) < 1.5 then
-			local d = Vector3.new(q.X - p.X, 0, q.Z - p.Z).Magnitude
+			local d = Vector3.new(q.X - p.X, 0, q.Z - p.Z).Magnitude - (margin or 0)
 			if d < best then
 				best = d
 			end
@@ -465,7 +479,8 @@ local function nearestTaken(P: any, me: any, p: Vector3): number
 	for _, other in ipairs(P.List) do
 		if other ~= me then
 			if other.Fly then
-				consider(other.Dest)
+				-- (place d'atterrissage : cap inconnu -> on la garde plus large)
+				consider(other.Dest, LAND_GAP - 2 * BIRD_R)
 				if other.Fly.T < 0 then
 					consider(other.Pos)
 				end

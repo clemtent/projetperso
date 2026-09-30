@@ -200,7 +200,7 @@ function FairEat.Apply(rig: Rig, k: number, tool: Tool?)
 		if not m then
 			return nil
 		end
-		return { C0 = rig.Base[m] or m.C0, C1 = m.C1, X = m.Transform }
+		return { C0 = rig.Base[m] or m.C0, C1 = m.C1 or CFrame.identity, X = (m :: any).Transform or CFrame.identity }
 	end
 	local ok, rots = pcall(FairEat.Solve, {
 		R15 = rig.R15,

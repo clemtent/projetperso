@@ -266,7 +266,7 @@ function FairAnnexFx.BuildPirate(r: RideFx)
 		Fixed(r, "Hub", Vector3.new(0.8, 1.8, 1.8), CFrame.new(0, H, z) * CFrame.Angles(0, math.rad(90), 0), C.Gold, M.Metal, CYL)
 		FairKit.Beam(r.Model, "Tie", r.Base * Vector3.new(-6, 4.5, z), r.Base * Vector3.new(6, 4.5, z), 0.35, 0.35, frameC, M.Metal)
 	end
-	Fixed(r, "Axle", Vector3.new(8.6, 0.7, 0.7), CFrame.new(0, H, 0) * CFrame.Angles(0, math.rad(90), 0), C.SteelLight, M.Metal, CYL)
+	Fixed(r, "Axle", Vector3.new(8.4, 0.7, 0.7), CFrame.new(0, H, 0) * CFrame.Angles(0, math.rad(90), 0), C.SteelLight, M.Metal, CYL)
 	FairKit.Rod(r.Model, "FlagPole", r.Base * Vector3.new(0, H + 0.9, 3.9), r.Base * Vector3.new(0, H + 4.6, 3.9), 0.14, C.White)
 	local fs, fl = FairKit.Tri(r.Base * Vector3.new(0, H + 4.4, 3.9), r.Base:VectorToWorldSpace(Vector3.new(1, 0, 0)), -FairKit.UP, 2.2, 1.4, 0.06)
 	Part(r.Model, "Flag", fs, fl, Color3.fromRGB(30, 30, 36), M.Fabric, nil, "WedgePart")
@@ -333,7 +333,7 @@ function FairAnnexFx.BuildPirate(r: RideFx)
 	for _, x in ipairs({ -7.2, -4.4, 4.4, 7.2 }) do
 		local toward = if x < 0 then 1 else -1
 		local y = 1.25 + (math.abs(x) - 4.4) * 0.3
-		Moving(r, 1, "Riser", Vector3.new(1.4, y - 0.2, 4.4), CFrame.new(x, (y - 0.2) / 2 + 0.05, 0), hullDark, M.WoodPlanks)
+		Moving(r, 1, "Riser", Vector3.new(1.4, y - 0.2, 4.3), CFrame.new(x, (y - 0.2) / 2 + 0.05, 0), hullDark, M.WoodPlanks)
 		Moving(r, 1, "Bench", Vector3.new(1.2, 0.25, 4.2), CFrame.new(x, y - 0.08, 0), Color3.fromRGB(196, 60, 60), M.Fabric)
 		Moving(r, 1, "BenchBack", Vector3.new(0.25, 1.3, 4.2), CFrame.new(x - toward * 0.62, y + 0.6, 0), hull, M.WoodPlanks)
 		Moving(r, 1, "SafetyBar", Vector3.new(0.14, 0.14, 4), CFrame.new(x + toward * 0.75, y + 0.9, 0), C.Lemon, M.Metal, CYL)
@@ -401,7 +401,7 @@ local function hauntedHouse(r: RideFx): any
 		Solid(Fixed(r, "BackWall", Vector3.new(W / 12 + 0.02, H, 0.5), CFrame.new(x, H / 2, D / 2 + (i % 2) * 0.04), if i % 2 == 0 then wall else wallDark, M.WoodPlanks))
 	end
 	for _, sx in ipairs({ -1, 1 }) do
-		Solid(Fixed(r, "SideWall", Vector3.new(0.5, H, D), CFrame.new(sx * W / 2, H / 2, 0), wall, M.WoodPlanks))
+		Solid(Fixed(r, "SideWall", Vector3.new(0.5, H - 0.05, D), CFrame.new(sx * W / 2, (H - 0.05) / 2, 0), wall, M.WoodPlanks))
 	end
 	-- façade : 3 trumeaux autour des 2 portes (x ±8,3, largeur 3,4)
 	local doors = { 8.3, -8.3 }

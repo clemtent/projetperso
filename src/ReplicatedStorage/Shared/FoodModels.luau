@@ -252,7 +252,7 @@ RECIPES.HotDog = function(add)
 	local bunTop = rgb(196, 130, 66)
 	local sausage = rgb(176, 76, 52)
 	add("Handle", Vector3.new(1.2, 0.16, 0.5), CFrame.new(0.1, -0.1, 0), rgb(255, 252, 246), M.SmoothPlastic)
-	add("TrayCheck", Vector3.new(1.18, 0.02, 0.1), CFrame.new(0.1, -0.015, -0.2), rgb(226, 60, 70), M.SmoothPlastic)
+	add("TrayCheck", Vector3.new(1.18, 0.02, 0.1), CFrame.new(0.1, 0.0, -0.2), rgb(226, 60, 70), M.SmoothPlastic)
 	-- tronçons le long de X : Bite3 (gauche) .. Bite1 (bout droit)
 	local segs = { { "Bite3", -0.3 }, { "Bite2", 0.1 }, { "Bite1", 0.5 } }
 	for _, sg in ipairs(segs) do

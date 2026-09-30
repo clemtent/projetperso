@@ -22,6 +22,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
 local TownKit = require(script.Parent.TownKit)
 local TownVehicles = require(script.Parent.TownVehicles) -- (v9.7, VEHICLES97) bus, 2-roues
+local TownStreets = require(script.Parent.TownStreets) -- (v9.9, CITY99) tronçons des routes réalistes (client)
 
 local TownEntrance = {}
 
@@ -340,6 +341,22 @@ local function outside(folder: Instance, geo: TownKit.Geo, gcf: CFrame)
 	TownKit.LifeSpot("Signpost", gcf * CFrame.new(-11.5, WorldLayout.GROUND_Y, len - 4), 60)
 	TownKit.LifeSpot("Bin", gcf * CFrame.new(12.6, WALK_Y, 22), 62)
 	TownKit.LifeSpot("WindmillHill", gcf * CFrame.new(-24, WorldLayout.GROUND_Y, len + 68) * CFrame.Angles(0, math.rad(200), 0), 63)
+	-- (v9.9, CITY99) route d'arrivée réaliste (client : TownRoads) : asphalte
+	-- vivant, caniveau + bordure du trottoir, dalles, rond-point détaillé
+	local along = gcf * CFrame.new(0, 0, len / 2 + 3) * CFrame.Angles(0, math.pi / 2, 0)
+	TownStreets.Chunks("RoadSurface", along, -len / 2 + 1, len / 2 - 1, ROAD_Y, 0, 2, 16, 7001)
+	local walkAlong = gcf * CFrame.new(0, 0, len / 2 + 5) * CFrame.Angles(0, math.pi / 2, 0)
+	TownStreets.Chunks("CurbLine", walkAlong, -(len - 4) / 2, (len - 4) / 2, ROAD_Y, 8, WALK_Y - ROAD_Y, 0, 7002)
+	TownStreets.Chunks("Pavers", walkAlong, -(len - 4) / 2 + 0.5, (len - 4) / 2 - 0.5, WALK_Y, 11, 0, 5.8, 7003)
+	TownKit.LifeSpot("Roundabout", loop * CFrame.new(0, ROAD_Y + 0.03, 0), 7004, Vector3.new(8, 0, 20))
+	-- accès du parking à la route (bitume) + allée piétonne
+	TownKit.LifeSpot("Walkway", lot * CFrame.new(15 + 4.2, WorldLayout.GROUND_Y, 8), 7005, Vector3.new(8.6, 4, 8))
+	-- repères des lieux (poteaux indicateurs, client) : porte, MégaDopa,
+	-- concession, coin gourmand
+	TownKit.LifeSpot("Dest", CFrame.new(gcf.Position), 15)
+	TownKit.LifeSpot("Dest", WorldLayout.MarketCFrame(geo.Count), 6)
+	TownKit.LifeSpot("Dest", WorldLayout.DealershipCFrame(geo.Count), 7)
+	TownKit.LifeSpot("Dest", WorldLayout.FoodCornerCFrame(geo.Count), 8)
 end
 
 ----------------------------------------------------------------------

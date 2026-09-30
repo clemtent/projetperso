@@ -620,6 +620,7 @@ local function exitRoute(pet: Pet, nav: any, back: boolean): { any }?
 		return nil
 	end
 	local y1 = nav.Floor1
+	-- (v9.9) profondeur du passage : propre à chaque mur (manoir : passage du fond)
 	local passD = WorldLayout.WALL_T + WorldLayout.DEPTH / 2
 	local points: { any } = {}
 	local function add(x: number, d: number, y: number?, door: boolean?)
@@ -638,6 +639,8 @@ local function exitRoute(pet: Pet, nav: any, back: boolean): { any }?
 		-- sortie de cette pièce du côté de la cage : case libre du bord, dans
 		-- la largeur du passage (une lampe peut en gêner le milieu)
 		local exitX = step > 0 and (room.X0 + (room.NX - 0.5) * CELL) or (room.X0 + 0.5 * CELL)
+		local passA, passB = WorldLayout.PassageSpan(size, c, step > 0 and "Right" or "Left")
+		passD = (passA + passB) / 2
 		local exitD = passableD(room, exitX, passD)
 		if not exitD then
 			return nil
@@ -670,8 +673,8 @@ local function exitRoute(pet: Pet, nav: any, back: boolean): { any }?
 		add(curX, curD)
 	end
 	-- cage d'escalier : couloir le long de l'escalier
-	local stair0, stair1 = WorldLayout.StairSpan(size)
-	local corridorX = step > 0 and (nav.Hall0 + stair0) / 2 + 0.3 or (stair1 + nav.Hall1) / 2 - 0.3
+	-- (v9.9 HOUSE99) couloir libre le long de la cage, à l'écart de l'escalier, de la console et de la table
+	local corridorX = WorldLayout.CorridorX(size) + 1.6
 	add(corridorX, passD)
 	local doorX = nav.DoorX
 	if back and nav.BackX then

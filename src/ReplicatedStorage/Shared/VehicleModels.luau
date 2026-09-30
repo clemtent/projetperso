@@ -210,18 +210,19 @@ local function heavyWheel(k: K, index: number, x: number, y: number, z: number, 
 	end
 	local rimColor = rim or STEEL
 	if full then
-		layer("Sidewall", 0.02, 0.08, d - 0.14, Color3.fromRGB(44, 44, 50), M.Rubber)
-		layer("RimLip", 0.05, 0.1, d * 0.64, rimColor, M.Metal)
-		layer("RimDish", 0.03, 0.1, d * 0.52, Color3.fromRGB(150, 154, 162), M.Metal)
+		-- (couches espacées de ≥ 0,04 : aucun z-fighting)
+		layer("Sidewall", 0.04, 0.1, d - 0.14, Color3.fromRGB(44, 44, 50), M.Rubber)
+		layer("RimLip", 0.08, 0.1, d * 0.64, rimColor, M.Metal)
+		layer("RimDish", 0.12, 0.1, d * 0.5, Color3.fromRGB(150, 154, 162), M.Metal)
 		for i = 0, 7 do
 			local a = i / 8 * 2 * PI
 			local rr = d * 0.17
-			cylX(k, "LugNut", face + side * 0.06, y + math.cos(a) * rr, z + math.sin(a) * rr, 0.08, d * 0.045, CHROME, M.Metal)
+			cylX(k, "LugNut", face + side * 0.17, y + math.cos(a) * rr, z + math.sin(a) * rr, 0.08, d * 0.045, CHROME, M.Metal)
 		end
-		layer("Hub", 0.12, 0.12, d * 0.24, CHROME, M.Metal)
+		layer("Hub", 0.27, 0.12, d * 0.22, CHROME, M.Metal)
 	else
-		layer("Rim", 0.04, 0.1, d * 0.62, rimColor, M.Metal)
-		layer("Hub", 0.09, 0.08, d * 0.22, CHROME, M.Metal)
+		layer("Rim", 0.05, 0.1, d * 0.62, rimColor, M.Metal)
+		layer("Hub", 0.1, 0.08, d * 0.22, CHROME, M.Metal)
 	end
 	k.WheelTag = nil
 	k.Spin = nil
@@ -415,7 +416,7 @@ function VehicleModels.Bus(opts: any?): Model
 				k.Leaf = if leafIndex == 1 then -1 else 1
 				box(k, "DoorGlass", x0, x1, floorY + 0.9, winTop - 0.15, side[1], side[2], GLASS, M.Glass).Transparency = 0.3
 				box(k, "DoorKick", x0 - 0.02, x1 + 0.02, floorY, floorY + 0.9, side[1], side[2], TRIM, M.SmoothPlastic)
-				local sealZ = if leafIndex == 1 then side[2] - 0.07 else side[1] + 0.07
+				local sealZ = if leafIndex == 1 then side[2] else side[1]
 				box(k, "DoorSeal", x0 - 0.04, hw + 0.05, floorY + 0.03, winTop - 0.16, sealZ - 0.05, sealZ + 0.05, TRIM, M.Rubber)
 				k.Door = nil
 				k.Leaf = nil
@@ -483,19 +484,23 @@ function VehicleModels.Bus(opts: any?): Model
 		end
 		box(k, "RoofHatch", -1, 1, roofTop, roofTop + 0.18, -6.5, -4.7, Color3.fromRGB(210, 212, 222), M.SmoothPlastic)
 	end
-	-- phares (boîtier, glace, feu de jour), clignotants, logo, plaque
+	-- (v9.9) masque avant noir laqué sur toute la largeur (bus moderne) +
+	-- blocs optiques : boîtier, 2 modules ronds, bande LED, clignotant
+	box(k, "FrontMask", -hw + rc - 0.05, hw - rc + 0.05, 1.55, 2.75, zF - 0.08, zF + 0.3, TRIM, M.SmoothPlastic).Reflectance = 0.15
 	for _, sx in ipairs({ -1, 1 }) do
-		local x0, x1 = sx * (hw - rc - 0.15), sx * (hw - rc - 1.55)
-		box(k, "HeadlightHousing", math.min(x0, x1), math.max(x0, x1), 1.8, 2.55, zF - 0.1, zF + 0.3, TRIM, M.SmoothPlastic)
-		local l0, l1 = sx * (hw - rc - 0.25), sx * (hw - rc - 1.45)
-		box(k, "Headlight", math.min(l0, l1), math.max(l0, l1), 1.9, 2.45, zF - 0.14, zF + 0.2, LAMP, M.Glass)
+		local x0, x1 = sx * (hw - rc - 0.15), sx * (hw - rc - 1.75)
+		box(k, "HeadlightHousing", math.min(x0, x1), math.max(x0, x1), 1.7, 2.6, zF - 0.14, zF + 0.3, Color3.fromRGB(56, 58, 66), M.Metal)
+		for _, f in ipairs({ 0.3, 0.72 }) do
+			cylZ(k, "Headlight", sx * (hw - rc - 0.15 - 1.6 * f), 2.22, zF - 0.17, 0.08, 0.6, LAMP, M.Glass)
+		end
 		if full then
-			box(k, "HeadlightDRL", math.min(l0, l1), math.max(l0, l1), 1.66, 1.76, zF - 0.14, zF + 0.2, DRL, M.SmoothPlastic)
-			local i0, i1 = sx * (hw - rc + 0.05), sx * (hw - rc - 0.12)
-			box(k, "Indicator", math.min(i0, i1), math.max(i0, i1), 1.8, 2.55, zF - 0.06, zF + 0.3, AMBER, M.SmoothPlastic)
+			local l0, l1 = sx * (hw - rc - 0.25), sx * (hw - rc - 1.65)
+			box(k, "HeadlightDRL", math.min(l0, l1), math.max(l0, l1), 1.76, 1.86, zF - 0.19, zF + 0.2, DRL, M.SmoothPlastic)
+			local i0, i1 = sx * (hw - rc + 0.02), sx * (hw - rc - 0.12)
+			box(k, "Indicator", math.min(i0, i1), math.max(i0, i1), 1.75, 2.55, zF - 0.12, zF + 0.3, AMBER, M.SmoothPlastic)
 		end
 	end
-	local logo = box(k, "FrontLogo", -0.6, 0.6, 2.2, 3.05, zF - 0.04, zF + 0.02, body, M.SmoothPlastic)
+	local logo = box(k, "FrontLogo", -0.6, 0.6, 2.8, 3.2, zF - 0.04, zF + 0.02, body, M.SmoothPlastic)
 	sign(k, logo, Enum.NormalId.Front, 30, "🧠", PINK, nil, Enum.Font.GothamBlack, false)
 	box(k, "PlateFront", -1.1, 1.1, 0.9, 1.4, zF - 0.33, zF - 0.27, Color3.fromRGB(248, 248, 244), M.SmoothPlastic)
 	-- essuie-glaces (posés à 0,04 devant la vitre)
@@ -607,10 +612,19 @@ local function bikeWheel(k: K, y: number, z: number, d: number, rim: Color3, spo
 	if not light then
 		ring(k, "RimRing", 0, y, z, r - 0.19, 12, 0.08, 0.07, rim, M.Metal)
 	end
+	-- (v9.9) rayons croisés des deux côtés du moyeu (2 nappes décalées : on
+	-- voit la roue "à rayons" de près), valve
 	for i = 0, spokes - 1 do
-		boxRotX(k, "Spokes", 0, y, z, 0.03, 0.03, d - 0.36, i / spokes * PI, STEEL, M.Metal)
+		local a = i / spokes * PI
+		boxRotX(k, "Spokes", -0.03, y, z, 0.02, 0.025, d - 0.36, a, STEEL, M.Metal)
+		if not light then
+			boxRotX(k, "Spokes", 0.03, y, z, 0.02, 0.025, d - 0.36, a + PI / spokes / 2, STEEL, M.Metal)
+		end
 	end
 	cylX(k, "Hub", 0, y, z, 0.2, 0.18, STEEL, M.Metal)
+	if not light then
+		cylX(k, "HubFlange", 0, y, z, 0.12, 0.3, CHROME, M.Metal)
+	end
 end
 
 function VehicleModels.Bike(opts: any?): Model
@@ -652,8 +666,8 @@ function VehicleModels.Bike(opts: any?): Model
 	end
 	-- roues
 	local rimColor = if kind == "Sport" then TRIM else STEEL
-	bikeWheel(k, r, zR, d, rimColor, if light then 2 else 3, light)
-	bikeWheel(k, r, zFr, d, rimColor, if light then 2 else 3, light)
+	bikeWheel(k, r, zR, d, rimColor, if light then 2 else 6, light)
+	bikeWheel(k, r, zFr, d, rimColor, if light then 2 else 6, light)
 	-- selle + tige
 	local post = seatTop + Vector3.new(0, 0.35 * s, 0.03)
 	rod(k, "SeatPost", seatTop, post, 0.09, STEEL, M.Metal)
@@ -698,6 +712,19 @@ function VehicleModels.Bike(opts: any?): Model
 			rod(k, "RackStay", Vector3.new(sx * 0.22, r + 1.3, zR + 0.5), Vector3.new(sx * 0.14, r, zR), 0.05, STEEL, M.Metal)
 		end
 		box(k, "Basket", -0.42, 0.42, stem.Y - 0.55, stem.Y + 0.02, stem.Z - 0.95, stem.Z - 0.2, Color3.fromRGB(206, 164, 110), M.Wood)
+	end
+	if not light then
+		-- (v9.9) freins sur jante, câbles, phare, catadioptre, sonnette, béquille
+		for _, zw in ipairs({ zR, zFr }) do
+			for _, sx in ipairs({ -1, 1 }) do
+				box(k, "BrakePad", sx * 0.1 - 0.03, sx * 0.1 + 0.03, r + (d / 2 - 0.2), r + (d / 2 - 0.08), zw + (if zw > 0 then -0.2 else 0.2) - 0.06, zw + (if zw > 0 then -0.2 else 0.2) + 0.06, TRIM, M.Rubber)
+			end
+		end
+		rod(k, "BrakeCable", stem + Vector3.new(0.2, 0, barBack), headBot + Vector3.new(0.12, 0, -0.1), 0.03, TRIM, M.Rubber)
+		cylZ(k, "BikeLight", 0, headTop.Y - 0.25, headTop.Z - 0.22, 0.2, 0.22, LAMP, M.Glass)
+		box(k, "Reflector", -0.08, 0.08, seatTop.Y - 0.35, seatTop.Y - 0.2, seatTop.Z + 0.12, seatTop.Z + 0.16, TAIL, M.Glass)
+		cylX(k, "Bell", -barW * 0.6, stem.Y + 0.07, stem.Z + barBack, 0.12, 0.16, CHROME, M.Metal)
+		rod(k, "Kickstand", bb + Vector3.new(-0.18, -0.05, 0.25), Vector3.new(-0.55, 0.02, bb.Z + 0.75), 0.06, STEEL, M.Metal)
 	end
 	if kid then
 		-- petites roues stabilisatrices + fanion
@@ -753,6 +780,19 @@ function VehicleModels.Scooter(opts: any?): Model
 	cylX(k, "WheelR", 0, r, 1.65, 0.4, d, TYRE, M.Rubber)
 	cylX(k, "RimF", 0, r, -1.9, 0.44, d * 0.56, STEEL, M.Metal)
 	cylX(k, "RimR", 0, r, 1.65, 0.48, d * 0.56, STEEL, M.Metal)
+	if not light then
+		-- (v9.9) jantes à 5 branches des deux côtés, disque de frein, étrier
+		for _, w in ipairs({ { -1.9, 0.44 }, { 1.65, 0.48 } }) do
+			for _, sx in ipairs({ -1, 1 }) do
+				for i = 0, 4 do
+					local a = i / 5 * 2 * PI
+					boxRotX(k, "RimSpoke", sx * (w[2] / 2 + 0.02), r + math.cos(a) * d * 0.14, w[1] + math.sin(a) * d * 0.14, 0.04, 0.08, d * 0.26, a - PI / 2, TRIM, M.Metal)
+				end
+			end
+		end
+		cylX(k, "BrakeDisc", -0.28, r, -1.9, 0.05, d * 0.5, CHROME, M.Metal)
+		box(k, "Caliper", -0.36, -0.28, r + 0.15, r + 0.35, -1.75, -1.5, Color3.fromRGB(212, 40, 52), M.Metal)
+	end
 	-- garde-boue avant + fourche
 	slab(k, "FrontFender", 0, 0.5, r + 0.62, -2.35, r + 0.7, -1.5, 0.12, color, M.SmoothPlastic)
 	rod(k, "ForkLeg", Vector3.new(0.14, r, -1.9), Vector3.new(0.14, 2.2, -1.62), 0.12, TRIM, M.Metal)
@@ -885,7 +925,7 @@ local function truckBase(k: K, t: Truck, cabColor: Color3, full: boolean): (numb
 		local x0, x1 = sx * (hw - 0.02), sx * (hw - 0.12)
 		box(k, "CabGlass", math.min(x0, x1), math.max(x0, x1), belt, roof - 0.12, wsTop, cabEnd - 0.35, GLASS, M.Glass).Transparency = 0.35
 		rod(k, "PillarA", Vector3.new(sx * (hw - 0.2), belt, wsBase), Vector3.new(sx * (hw - 0.2), roof - 0.1, wsTop), 0.22, TRIM, M.SmoothPlastic)
-		local px0, px1 = sx * (hw + 0.01), sx * (hw - 0.14)
+		local px0, px1 = sx * (hw + 0.03), sx * (hw - 0.17)
 		box(k, "PillarB", math.min(px0, px1), math.max(px0, px1), belt, roof - 0.1, cabEnd - 0.45, cabEnd - 0.2, TRIM, M.SmoothPlastic)
 		box(k, "PillarB", math.min(px0, px1), math.max(px0, px1), belt, roof - 0.1, wsTop - 0.05, wsTop + 0.12, TRIM, M.SmoothPlastic)
 	end
@@ -943,7 +983,7 @@ local function truckBase(k: K, t: Truck, cabColor: Color3, full: boolean): (numb
 	-- ░ poste de conduite (vu par les vitres) ░
 	if full then
 		for _, sx in ipairs({ -1, 1 }) do
-			local x = sx * hw * 0.45
+			local x = sx * hw * 0.4
 			box(k, "CabSeat", x - 0.65, x + 0.65, belt - 0.95, belt - 0.6, cabEnd - 1.7, cabEnd - 0.55, Color3.fromRGB(60, 60, 70), M.Fabric)
 			slab(k, "CabSeatBack", x, 1.2, belt - 0.6, cabEnd - 0.5, roof - 0.9, cabEnd - 0.35, 0.3, Color3.fromRGB(60, 60, 70), M.Fabric)
 		end

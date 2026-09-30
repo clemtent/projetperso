@@ -179,10 +179,11 @@ function CarModels.Dimensions(carId: string?): Vector3
 	return Vector3.new(s.W, s.Roof, s.L)
 end
 
--- (v9.9) roues DANS les passages : face extérieure du pneu 0,1 en retrait du flanc
+-- (v9.9) roues DANS les passages : face extérieure du pneu 0,22 en retrait du
+-- flanc (la jante bombée et le cache-moyeu arrivent à l'aplomb de la caisse)
 function CarModels.WheelPositions(carId: string?): { Vector3 }
 	local s = SPECS[kindOf(carId)]
-	local x = s.W / 2 - s.TyreW / 2 - 0.1
+	local x = s.W / 2 - s.TyreW / 2 - 0.22
 	local out = {}
 	for _, z in ipairs({ s.AxleF, s.AxleR }) do
 		for _, sx in ipairs({ -1, 1 }) do
@@ -411,7 +412,7 @@ end
 
 -- Bande plate posée sur une surface (montants, joints) : de `a` à `c`, face
 -- vers `n` (normale extérieure), largeur `w`, épaisseur `t` (enfoncée de moitié)
-local function strip(b: B, name: string, a: Vector3, c: Vector3, n: Vector3, w: number, t: number, color: Color3, material: Enum.Material?): BasePart?
+local function strip(b: B, name: string, a: Vector3, c: Vector3, n: Vector3, w: number, t: number, color: Color3, material: Enum.Material?, lift: number?): BasePart?
 	local pa, pc = PV(b, a), PV(b, c)
 	local d = pc - pa
 	if d.Magnitude < 0.03 then
@@ -424,7 +425,7 @@ local function strip(b: B, name: string, a: Vector3, c: Vector3, n: Vector3, w: 
 	end
 	nn = nn.Unit
 	local x = nn:Cross(dir).Unit
-	return newPart(b, "Part", name, Vector3.new(w, t, d.Magnitude), CFrame.fromMatrix((pa + pc) / 2, x, nn, -dir), color, material or M.SmoothPlastic)
+	return newPart(b, "Part", name, Vector3.new(w, t, d.Magnitude), CFrame.fromMatrix((pa + pc) / 2 + nn * (lift or 0), x, nn, -dir), color, material or M.SmoothPlastic)
 end
 
 ----------------------------------------------------------------------
@@ -779,27 +780,27 @@ local function wheel(b: B, s: Spec, index: number, x: number, z: number, look: W
 		return cylX(b, name, face + side * (out - thick / 2), r, z, thick, diameter, color, material)
 	end
 	if lod <= 1 then
-		layer("Rim", 0.03, 0.1, D * 0.62, look.Rim, M.Metal)
+		layer("Rim", 0.05, 0.1, D * 0.62, look.Rim, M.Metal)
 		b.WheelTag = nil
 		b.Spin = nil
 		return
 	end
 	if lod == 2 then
-		layer("Rim", 0.04, 0.1, D * 0.62, look.Rim, M.Metal)
+		layer("Rim", 0.05, 0.1, D * 0.62, look.Rim, M.Metal)
 		-- une barre sombre à travers la jante : on voit la roue tourner
-		boxRotX(b, "Spoke", face + side * 0.06, r, z, 0.06, D * 0.12, D * 0.5, 0, look.Dish, M.Metal)
+		boxRotX(b, "Spoke", face + side * 0.08, r, z, 0.06, D * 0.12, D * 0.5, 0, look.Dish, M.Metal)
 		b.WheelTag = nil
 		b.Spin = nil
 		return
 	end
-	layer("Sidewall", 0.02, 0.08, D - 0.12, SIDEWALL, M.Rubber)
-	layer("RimLip", 0.05, 0.1, D * 0.66, look.Rim, M.Metal).Reflectance = 0.25
-	layer("RimDish", 0.07, 0.1, D * 0.58, look.Dish, M.Metal)
-	layer("BrakeDisc", 0.09, 0.1, D * 0.44, DISC, M.Metal)
+	layer("Sidewall", 0.04, 0.1, D - 0.12, SIDEWALL, M.Rubber)
+	layer("RimLip", 0.08, 0.1, D * 0.66, look.Rim, M.Metal).Reflectance = 0.25
+	layer("RimDish", 0.12, 0.1, D * 0.58, look.Dish, M.Metal)
+	layer("BrakeDisc", 0.16, 0.1, D * 0.44, DISC, M.Metal)
 	-- étrier (braque sans tourner)
 	b.Spin = false
 	local ca = math.rad(40)
-	boxRotX(b, "Caliper", face + side * 0.1, r + math.cos(ca) * D * 0.18, z + math.sin(ca) * D * 0.18, 0.05, D * 0.1, D * 0.2, ca, look.Caliper)
+	boxRotX(b, "Caliper", face + side * 0.175, r + math.cos(ca) * D * 0.18, z + math.sin(ca) * D * 0.18, 0.05, D * 0.1, D * 0.2, ca, look.Caliper)
 	b.Spin = true
 	-- rayons (de 0,08 D à 0,31 D : ils ne se touchent que sous le cache-moyeu)
 	local n = look.Spokes
@@ -808,10 +809,10 @@ local function wheel(b: B, s: Spec, index: number, x: number, z: number, look: W
 	for k = 0, n - 1 do
 		local a = k / n * 2 * PI
 		local rc = (r0 + r1) / 2
-		boxRotX(b, "Spoke", face + side * 0.13, r + math.cos(a) * rc, z + math.sin(a) * rc, 0.05, sw, r1 - r0, a - PI / 2, look.Rim, M.Metal)
+		boxRotX(b, "Spoke", face + side * 0.215, r + math.cos(a) * rc, z + math.sin(a) * rc, 0.05, sw, r1 - r0, a - PI / 2, look.Rim, M.Metal)
 	end
-	layer("HubCap", 0.18, 0.06, D * 0.18, look.Cap, M.Metal)
-	layer("HubLogo", 0.2, 0.04, D * 0.07, CAL_RED, M.SmoothPlastic)
+	layer("HubCap", 0.28, 0.08, D * 0.18, look.Cap, M.Metal)
+	layer("HubLogo", 0.32, 0.06, D * 0.07, CAL_RED, M.SmoothPlastic)
 	-- pivots invisibles (CarService : Motor6D ; CarClient : rotation / braquage)
 	b.Spin = false
 	local steer = box(b, "WheelSteer", x - 0.1, x + 0.1, r - 0.1, r + 0.1, z - 0.1, z + 0.1, WHITE, M.SmoothPlastic)
@@ -892,7 +893,7 @@ local function buildLow(b: B, s: Spec, g: Geo, paint: Color3, roofColor: Color3,
 	box(b, "Upper", -hw, hw, low, s.Belt, s.Ws, if style == "Pickup" then s.R1 else s.Rw, paint)
 	if style == "Pickup" then
 		box(b, "Bed", -hw, hw, low, s.Deck, s.R1, g.zB - 0.1, paint)
-		box(b, "BedFloor", -hw + 0.3, hw - 0.3, s.Deck - 0.05, s.Deck + 0.01, s.R1 + 0.3, g.zB - 0.4, TRIM)
+		box(b, "BedFloor", -hw + 0.3, hw - 0.3, s.Deck - 0.05, s.Deck + 0.05, s.R1 + 0.3, g.zB - 0.4, TRIM)
 	elseif g.zB - 0.1 - s.Rw > 0.1 then
 		box(b, "Deck", -hw, hw, low, s.Deck, s.Rw, g.zB - 0.1, paint)
 	end
@@ -1152,15 +1153,15 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 		-- passages de roue sombres (on ne voit pas dans la caisse)
 		for _, pos in ipairs(CarModels.WheelPositions(kind)) do
 			local sx = if pos.X > 0 then 1 else -1
-			cylX(b, "WheelWell", sx * (hw - 0.1 - s.TyreW - 0.13), r, pos.Z, 0.08, ra * 2 + 0.1, LINER)
+			cylX(b, "WheelWell", sx * (math.abs(pos.X) - s.TyreW / 2 - 0.13), r, pos.Z, 0.08, ra * 2 + 0.1, LINER)
 			if full then
 				-- toit du passage de roue (vu dans le jour au-dessus du pneu)
-				local wx0, wx1 = sx * math.max(hw - s.TyreW - 0.15, g.topE(pos.Z) + 0.12), sx * (hw - fth - 0.02)
+				local wx0, wx1 = sx * math.max(math.abs(pos.X) - s.TyreW / 2 - 0.1, g.topE(pos.Z) + 0.12), sx * (hw - fth - 0.05)
 				box(b, "WheelWell", math.min(wx0, wx1), math.max(wx0, wx1), r + ra + 0.05, r + ra + 0.13, pos.Z - ra * 0.75, pos.Z + ra * 0.75, LINER)
 			end
 		end
 		-- plancher (sous la voiture, entre les roues)
-		box(b, "Floor", -hw + s.TyreW + 0.35, hw - s.TyreW - 0.35, s.Clear, g.sill + 0.02, zF + 0.5, zB - 0.5, LINER)
+		box(b, "Floor", -hw + s.TyreW + 0.5, hw - s.TyreW - 0.5, s.Clear + 0.05, g.sill + 0.02, zF + 0.7, zB - 0.7, LINER)
 
 		----------------------------------------------------------------
 		-- ░ faces avant / arrière (bouclier) ░
@@ -1220,7 +1221,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			end
 		else
 			local ly0 = fy - (if sports then 0.36 else 0.55)
-			local ly1 = fy + math.max(0.02, math.min(0.22, (N0.by - fy) * 0.55))
+			local ly1 = fy + math.max(0.06, math.min(0.22, (N0.by - fy) * 0.55))
 			for _, sx in ipairs({ -1, 1 }) do
 				local hx0, hx1 = sx * (s.W * 0.19), sx * (nfx - 0.08)
 				local lo, hi = math.min(hx0, hx1), math.max(hx0, hx1)
@@ -1261,36 +1262,36 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 		if gw > 0 then
 			local frameCol = if offroad or style == "Limo" then CHROME else TRIM
 			box(b, "GrilleFrame", -gw, gw, gy0, gy1, zF - 0.03, zF + 0.1, frameCol, M.Metal)
-			box(b, "Grille", -gw + 0.08, gw - 0.08, gy0 + 0.07, gy1 - 0.07, zF - 0.05, zF + 0.05, HOUSING, M.DiamondPlate)
+			box(b, "Grille", -gw + 0.08, gw - 0.08, gy0 + 0.07, gy1 - 0.07, zF - 0.08, zF + 0.05, HOUSING, M.DiamondPlate)
 			if full then
 				if style == "Limo" then
 					for k = -3, 3 do
 						local x = k * gw / 4
-						box(b, "GrilleBar", x - 0.035, x + 0.035, gy0 + 0.07, gy1 - 0.07, zF - 0.08, zF - 0.02, CHROME, M.Metal)
+						box(b, "GrilleBar", x - 0.035, x + 0.035, gy0 + 0.07, gy1 - 0.07, zF - 0.12, zF - 0.02, CHROME, M.Metal)
 					end
 				else
 					for k = -1, 1, 2 do
 						local y = (gy0 + gy1) / 2 + k * (gy1 - gy0) * 0.2
-						box(b, "GrilleBar", -gw + 0.1, gw - 0.1, y - 0.035, y + 0.035, zF - 0.08, zF - 0.02, if offroad then CHROME else GRAPHITE, M.Metal)
+						box(b, "GrilleBar", -gw + 0.1, gw - 0.1, y - 0.035, y + 0.035, zF - 0.12, zF - 0.02, if offroad then CHROME else GRAPHITE, M.Metal)
 					end
 				end
-				cylZ(b, "Badge", 0, (gy0 + gy1) / 2, zF - 0.1, 0.05, 0.3, CHROME, M.Metal)
+				cylZ(b, "Badge", 0, (gy0 + gy1) / 2, zF - 0.14, 0.05, 0.3, CHROME, M.Metal)
 			end
 		elseif full then
 			cylZ(b, "Badge", 0, fy - 0.05, zF - 0.03, 0.05, 0.28, CHROME, M.Metal)
 		end
 		-- prise d'air basse + antibrouillards
-		local iw = if sports then s.W * 0.36 else s.W * 0.28
+		local iw = math.min(if sports then s.W * 0.36 else s.W * 0.28, nfx - 0.3)
 		local iy1 = g.sill + (if sports then 0.75 else 0.55)
-		box(b, "Intake", -iw, iw, g.sill + 0.18, iy1, zF - 0.02, zF + 0.1, TRIM, M.Plastic)
+		box(b, "Intake", -iw, iw, g.sill + 0.18, iy1, zF - 0.05, zF + 0.1, TRIM, M.Plastic)
 		if full then
-			box(b, "IntakeBar", -iw + 0.08, iw - 0.08, (g.sill + 0.18 + iy1) / 2 - 0.03, (g.sill + 0.18 + iy1) / 2 + 0.03, zF - 0.05, zF + 0.02, GRAPHITE, M.Metal)
+			box(b, "IntakeBar", -iw + 0.08, iw - 0.08, (g.sill + 0.18 + iy1) / 2 - 0.03, (g.sill + 0.18 + iy1) / 2 + 0.03, zF - 0.09, zF + 0.02, GRAPHITE, M.Metal)
 			if not round then
 				for _, sx in ipairs({ -1, 1 }) do
-					cylZ(b, "FogLight", sx * (iw + 0.35), g.sill + 0.36, zF - 0.02, 0.08, 0.3, LAMP, M.Glass)
+					cylZ(b, "FogLight", sx * math.min(iw + 0.35, nfx - 0.25), g.sill + (if iw + 0.35 > nfx - 0.25 then 0.8 else 0.36), zF - 0.03, 0.08, 0.3, LAMP, M.Glass)
 				end
 			end
-			plate(b, "PlateFront", zF - 0.07, g.sill + 0.42, -1, true, nil)
+			plate(b, "PlateFront", zF - 0.12, g.sill + 0.42, -1, true, nil)
 		end
 
 		----------------------------------------------------------------
@@ -1318,10 +1319,10 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			end
 		end
 		if full and (style == "City" or style == "Hatch" or style == "SUV" or style == "Limo") then
-			box(b, "TailLightBar", -s.W * 0.25, s.W * 0.25, tailTop - 0.14, tailTop - 0.08, zB - 0.02, zB + 0.04, TAIL_IN, M.Glass)
+			box(b, "TailLightBar", -s.W * 0.25, s.W * 0.25, tailTop - 0.14, tailTop - 0.08, zB - 0.02, zB + 0.07, TAIL_IN, M.Glass)
 			box(b, "TailBlack", -s.W * 0.25, s.W * 0.25, tailTop - 0.2, tailTop, zB - 0.05, zB + 0.02, HOUSING)
 		end
-		box(b, "Diffuser", -tfx + 0.25, tfx - 0.25, g.sill + 0.02, g.sill + 0.42, zB - 0.02, zB + 0.1, TRIM, M.Plastic)
+		box(b, "Diffuser", -tfx + 0.25, tfx - 0.25, g.sill + 0.06, g.sill + 0.42, zB - 0.02, zB + 0.1, TRIM, M.Plastic)
 		plate(b, "PlateRear", zB + 0.13, g.sill + 0.78, 1, full, options.Plate)
 		cylZ(b, "Exhaust", s.W * 0.3, g.sill + 0.2, zB + 0.1, 0.36, 0.3, CHROME, M.Metal)
 		if sports then
@@ -1356,11 +1357,11 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 				for _, pz in ipairs(pillars) do
 					local S = sectionAt(st, pz)
 					local a, c = V3(sx * S.bx, S.by, pz), V3(sx * S.e, S.t, pz)
-					strip(b, "PillarB", a, c, V3(sx, 0.3, 0), 0.32, 0.08, HOUSING)
+					strip(b, "PillarB", a, c, V3(sx, 0.3, 0), 0.32, 0.08, HOUSING, nil, 0.05)
 				end
 				-- montant C (vitre de custode des SUV / combis)
 				if twoBox and s.Rw - s.R1 > 0.2 then
-					strip(b, "PillarC", V3(sx * Rr.bx, Rr.by, s.R1 + 0.05), V3(sx * Rr.e, Rr.t, s.R1 + 0.05), V3(sx, 0.3, 0), 0.4, 0.08, HOUSING)
+					strip(b, "PillarC", V3(sx * Rr.bx, Rr.by, s.R1 + 0.05), V3(sx * Rr.e, Rr.t, s.R1 + 0.05), V3(sx, 0.3, 0), 0.4, 0.08, HOUSING, nil, 0.05)
 				end
 				if full then
 					-- gouttière (arête du toit) + jonc de ceinture
@@ -1433,7 +1434,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 				local ax0, ax1 = sx * (Aw.bx - 0.05), sx * (hw + 0.05)
 				box(b, "MirrorArm", math.min(ax0, ax1), math.max(ax0, ax1), my - 0.2, my - 0.08, mz - 0.08, mz + 0.08, HOUSING)
 				local gx0, gx1 = sx * (hw + 0.06), sx * (hw + 0.5)
-				box(b, "MirrorGlass", math.min(gx0, gx1), math.max(gx0, gx1), my - 0.15, my + 0.15, mz + 0.2, mz + 0.235, CHROME, M.Glass).Reflectance = 0.5
+				box(b, "MirrorGlass", math.min(gx0, gx1), math.max(gx0, gx1), my - 0.15, my + 0.15, mz + 0.2, mz + 0.28, CHROME, M.Glass).Reflectance = 0.5
 				local mi = ell(b, "MirrorBlinker", sx * (hw + 0.56), my - 0.06, mz - 0.02, 0.1, 0.1, 0.24, AMBER)
 				mi:SetAttribute("Side", sx)
 			end
@@ -1489,7 +1490,8 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			end
 			-- trappe à carburant (côté droit, au-dessus de la roue arrière)
 			local fz = math.min(g.aR0 - 0.45, s.Rw - 0.4)
-			cylX(b, "FuelCap", hw + 0.004, s.Low - 0.35, if pickup then g.aR1 + 0.5 else fz, 0.03, 0.42, paint:Lerp(GAP, 0.15))
+			local fsx = if sports then -1 else 1
+			cylX(b, "FuelCap", fsx * (hw + 0.004), s.Low - 0.35, if pickup or sports then g.aR1 + 0.5 else fz, 0.03, 0.42, paint:Lerp(GAP, 0.15))
 
 			-- ░ habitacle ░
 			local wc = hw - s.Tumble - 0.12
@@ -1534,7 +1536,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			cylZ(b, "WheelHub", seatX, by0 + 0.08, swZ + 0.08, 0.1, 0.32, GRAPHITE)
 			rod(b, "SteeringColumn", V3(seatX, by0 - 0.25, dashZ1 - 0.1), V3(seatX, by0 + 0.02, swZ + 0.1), 0.16, GRAPHITE)
 			if style ~= "Van" then
-				box(b, "Console", -0.32, 0.32, g.sill + 0.12, seatTop - 0.05, dashZ1 - 0.1, seatZ + 0.3, TRIM)
+				box(b, "Console", -0.32, 0.32, g.sill + 0.12, seatTop - 0.05, dashZ1 - 0.05, seatZ + 0.3, TRIM)
 				ell(b, "GearKnob", 0, seatTop + 0.18, seatZ - 0.8, 0.2, 0.24, 0.2, CHROME, M.Metal)
 			end
 			if not sports then
@@ -1596,13 +1598,13 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 				end
 			end
 			if full then
-				box(b, "SkidPlate", -s.W * 0.28, s.W * 0.28, s.Clear - 0.02, g.sill + 0.12, zF - 0.05, zF + 0.5, CHROME, M.Metal)
-				box(b, "SkidPlateR", -s.W * 0.25, s.W * 0.25, s.Clear - 0.02, g.sill + 0.12, zB - 0.5, zB + 0.05, CHROME, M.Metal)
+				box(b, "SkidPlate", -s.W * 0.28, s.W * 0.28, s.Clear - 0.06, g.sill + 0.12, zF - 0.05, zF + 0.5, CHROME, M.Metal)
+				box(b, "SkidPlateR", -s.W * 0.25, s.W * 0.25, s.Clear - 0.06, g.sill + 0.12, zB - 0.5, zB + 0.05, CHROME, M.Metal)
 			end
 		elseif pickup then
 			-- benne : plancher, parois intérieures, face avant, hayon ; paroi arrière de la cabine
 			local bz0, bz1 = s.R1 + 0.02, zB - 0.25
-			local bedY = s.Low - 0.25
+			local bedY = s.Low - 0.3
 			local ix = hw - 0.28
 			box(b, "BedFloor", -ix, ix, bedY - 0.1, bedY, bz0, bz1, GRAPHITE, M.DiamondPlate)
 			for _, sx in ipairs({ -1, 1 }) do

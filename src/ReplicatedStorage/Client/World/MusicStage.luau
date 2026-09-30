@@ -98,6 +98,7 @@ local LOW_RANGE: { [string]: { number } } = { Piano = { 24, 72 }, Synth = { 36, 
 -- Accords de la guitare (valeur = 1000 + index)
 local CHORDS = { "C", "G", "Am", "F", "D", "Em", "E", "Dm" }
 local CHORD_KEYS = { K.One, K.Two, K.Three, K.Four, K.Five, K.Six, K.Seven, K.Eight }
+local CHORDS_FR: { [string]: string } = { C = "Do", G = "Sol", Am = "Lam", F = "Fa", D = "Ré", Em = "Mim", E = "Mi", Dm = "Rém" }
 local SOLO = { 57, 60, 62, 64, 67, 69, 72, 74, 76 } -- pentatonique de La mineur
 local SOLO_KEYS = { K.A, K.S, K.D, K.F, K.G, K.H, K.J, K.K, K.L }
 local BASS_LOW = { 36, 38, 40, 41, 43, 45, 46, 47 }
@@ -386,7 +387,7 @@ local function layoutFor(id: string): any
 	elseif id == "Guitar" then
 		local row1, row2 = {}, {}
 		for i, name in ipairs(CHORDS) do
-			table.insert(row1, { Value = 1000 + i, Label = name, KeyCode = CHORD_KEYS[i], Color = i % 2 == 0 and PAD.Red or PAD.Pink })
+			table.insert(row1, { Value = 1000 + i, Label = Locale.IsFrench() and (CHORDS_FR[name] or name) or name, KeyCode = CHORD_KEYS[i], Color = i % 2 == 0 and PAD.Red or PAD.Pink })
 		end
 		for i, n in ipairs(SOLO) do
 			table.insert(row2, { Value = n, Label = MusicData.NoteName(n, Locale.IsFrench()), KeyCode = SOLO_KEYS[i], Color = PAD.Lilac })
@@ -1192,14 +1193,18 @@ local function stepProps()
 			end
 			local target = frame or inst.Idle
 			s.Worn[id] = frame
-			local parts, cfs = {}, {}
-			for k, p in ipairs(inst.Parts) do
-				parts[k] = p
-				cfs[k] = target * inst.Rel[k]
+			-- (au repos : replacé une seule fois, puis plus rien à faire)
+			if frame or not inst.AtIdle then
+				inst.AtIdle = frame == nil
+				local parts, cfs = {}, {}
+				for k, p in ipairs(inst.Parts) do
+					parts[k] = p
+					cfs[k] = target * inst.Rel[k]
+				end
+				pcall(function()
+					workspace:BulkMoveTo(parts, cfs, Enum.BulkMoveMode.FireCFrameChanged)
+				end)
 			end
-			pcall(function()
-				workspace:BulkMoveTo(parts, cfs, Enum.BulkMoveMode.FireCFrameChanged)
-			end)
 			-- sangle : du bas du corps à l'épaule gauche, puis à la corne
 			local strapA, strapB = inst.Straps[1], inst.Straps[2]
 			if frame and torso then
@@ -1229,7 +1234,7 @@ local function stepProps()
 			local to = from + dir.Unit * length
 			local cf = CFrame.lookAt((from + to) / 2, to) * CFrame.Angles(0, math.rad(90), 0)
 			part.CFrame = cf
-		else
+		elseif part.CFrame ~= rest then
 			part.CFrame = rest
 		end
 	end
@@ -1260,7 +1265,7 @@ local function stepProps()
 			local from = hand.Position
 			local dir = (tip - from)
 			mallet.Head.CFrame = CFrame.new(from + (dir.Magnitude > 0.05 and dir.Unit or hand.LookVector) * 1.1)
-		else
+		elseif mallet.Head.CFrame ~= s.Rest[mallet.Head] then
 			mallet.Head.CFrame = s.Rest[mallet.Head]
 		end
 	end

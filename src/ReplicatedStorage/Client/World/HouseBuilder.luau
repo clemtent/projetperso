@@ -677,7 +677,8 @@ local function roomToggles(self: House, shell: Model, room: any, slot: number, b
 	-- 🪟 fenêtre du fond (côté jardin)
 	local b0, b1, b2, b3 = WorldLayout.BackWindowRect(size, Config.House.WallRatio)
 	local back = shell:GetPivot() * CFrame.new((b0 + b1) / 2, (b2 + b3) / 2, -WorldLayout.DEPTH / 2 + 0.06)
-	table.insert(toggles.Curtains, HouseToggles.Curtains(shell, back, b1 - b0, b3 - b2, fabric, brass, curtainsOpen, { Drop = (b2 + b3) / 2 - 0.15 }))
+	-- (fenêtre du fond : rideaux jusque sous l'appui, pas au sol : les meubles de la 2D sont contre ce mur)
+	table.insert(toggles.Curtains, HouseToggles.Curtains(shell, back, b1 - b0, b3 - b2, fabric, brass, curtainsOpen))
 	for _, curtain in ipairs(toggles.Curtains) do
 		local p = prompt(curtain.Anchor, curtainTexts(curtainsOpen), Locale.T("🪟 Curtains"), Enum.KeyCode.E, owner)
 		p.Triggered:Connect(function()

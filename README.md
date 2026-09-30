@@ -36,8 +36,8 @@ Les autres méthodes (Rojo, copie manuelle) sont décrites dans [`docs/INSTALLAT
 - 🪑 **S'asseoir** : la chaise se tire puis se rapproche, et des animations d'attente varient selon le siège (étirement, jambes croisées, sieste 💤, allongé sur le lit).
 - 🏠 **Maison** :
   - portes plus grandes et porte double ;
-  - vraies fenêtres sur le jardin, rideaux animés (G) ;
-  - interrupteurs (Q) ;
+  - vraies fenêtres sur le jardin, rideaux animés (E) ;
+  - interrupteurs (E) ;
   - porte de derrière vers le jardin ;
   - plaque de nom toujours visible ;
   - petite plaque dorée à la place du panneau « Rez-de-chaussée ».

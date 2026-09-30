@@ -538,7 +538,7 @@ local function landingGuard(kit: any, size: any, floor: number, floors: number, 
 		return math.min(GUARD_H, nosing(run, d) + 0.35 - 1.4 - 0.08)
 	end
 	-- lisse basse (sur le plancher) + collision invisible
-	kit:Box("GuardBase", x - 0.15, x + 0.15, y - 0.03, y + 0.22, a, b, pal.Trim, M.Wood, { Solid = true, Shadow = false })
+	kit:Box("GuardBase", x - 0.13, x + 0.13, y - 0.03, y + 0.22, a, b, pal.Trim, M.Wood, { Solid = true, Shadow = false })
 	kit:Box("GuardWall", x - 0.15, x + 0.15, y, y + GUARD_H + 0.2, a, b, WHITE, M.SmoothPlastic, { Solid = true, Query = false, T = 1, Shadow = false })
 	-- main courante là où elle passe sous le limon du dessus
 	local railStart = a

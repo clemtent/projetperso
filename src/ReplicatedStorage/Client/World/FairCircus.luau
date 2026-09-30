@@ -89,7 +89,7 @@ local function buildTent(r: RideFx)
 			local wall = Solid(Fixed(r, "Canvas", Vector3.new(chord, wallH, 0.25), CFrame.lookAt(p, p + Vector3.new(p.X, 0, p.Z)), if i % 2 == 0 then RED else CANVAS, M.Fabric))
 			wall.CastShadow = true
 			-- ourlet au sol + lambrequin festonné (triangles) en haut
-			Fixed(r, "Hem", Vector3.new(chord, 0.4, 0.32), CFrame.lookAt(polar(a, R, 0.2), polar(a, R + 1, 0.2)), Color3.fromRGB(120, 30, 40), M.Fabric)
+			Fixed(r, "Hem", Vector3.new(chord + 0.06, 0.4, 0.32), CFrame.lookAt(polar(a, R, 0.2), polar(a, R + 1, 0.2)), Color3.fromRGB(120, 30, 40), M.Fabric)
 		end
 		local e = polar(a, R + 0.35, wallH + 0.25)
 		local size, cf = FairKit.Tri(e, -FairKit.UP, Vector3.new(math.cos(a), 0, -math.sin(a)), 1.1, 2 * (R + 0.35) * math.sin(math.pi / N) / 2, 0.1)
@@ -357,7 +357,7 @@ local function buildShow(r: RideFx, folder: Instance, booth: CFrame): any
 	end
 	show.Uni = {
 		Wheel = Part(model, "UniWheel", Vector3.new(0.22, 1.6, 1.6), r.Base, Color3.fromRGB(30, 30, 36), M.Rubber, CYL),
-		Hub = Part(model, "UniHub", Vector3.new(0.26, 0.5, 0.5), r.Base, C.SteelLight, M.Metal, CYL),
+		Hub = Part(model, "UniHub", Vector3.new(0.34, 0.5, 0.5), r.Base, C.SteelLight, M.Metal, CYL),
 		Post = Part(model, "UniPost", Vector3.new(0.14, 1.5, 0.14), r.Base, C.SteelLight, M.Metal),
 		Saddle = Part(model, "UniSaddle", Vector3.new(0.45, 0.2, 0.8), r.Base, RED, M.Leather),
 	}

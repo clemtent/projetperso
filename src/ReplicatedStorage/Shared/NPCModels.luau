@@ -448,15 +448,15 @@ local function head(ctx: Ctx, look: Look, seed: number)
 	end
 	local dark = hair:Lerp(INK, 0.12)
 	if hs == "buzz" then
-		add(ctx, G_HEAD, "Hair", Vector3.new(HEAD.X * 1.02, HEAD.Y * 0.9, HEAD.Z * 1.06), at(0, HY + 0.14, 0.07) * CFrame.Angles(math.rad(-15), 0, 0), hair, hairM, "Egg")
+		add(ctx, G_HEAD, "Hair", Vector3.new(HEAD.X * 1.09, HEAD.Y * 0.9, HEAD.Z * 1.06), at(0, HY + 0.14, 0.07) * CFrame.Angles(math.rad(-15), 0, 0), hair, hairM, "Egg")
 		return
 	end
 	-- calotte (inclinée : dégage le front) + nuque
 	-- (ovale 1,04 x 0,9 x 1,1 du crâne, remonté de 0,14, reculé de 0,08, incliné
 	-- de 15° : naissance des cheveux à ~0,23 au-dessus des yeux, tempes
 	-- dégagées au-dessus des sourcils ; cherché numériquement)
-	add(ctx, G_HEAD, "Hair", Vector3.new(HEAD.X * 1.04, HEAD.Y * 0.9, HEAD.Z * 1.1), at(0, HY + 0.14, 0.08) * CFrame.Angles(math.rad(-15), 0, 0), hair, hairM, "Egg")
-	add(ctx, G_HEAD, "HairBack", Vector3.new(0.7, 0.62, 0.42), at(0, HY - 0.02, 0.2), dark, hairM, "Egg")
+	add(ctx, G_HEAD, "Hair", Vector3.new(HEAD.X * 1.09, HEAD.Y * 0.9, HEAD.Z * 1.1), at(0, HY + 0.14, 0.08) * CFrame.Angles(math.rad(-15), 0, 0), hair, hairM, "Egg")
+	add(ctx, G_HEAD, "HairBack", Vector3.new(0.62, 0.62, 0.42), at(0, HY - 0.02, 0.2), dark, hairM, "Egg")
 	if hs == "short" then
 		add(ctx, G_HEAD, "Quiff", Vector3.new(0.56, 0.2, 0.34), at(0.03, HY + 0.4, -0.2) * CFrame.Angles(math.rad(-22), 0, 0), hair:Lerp(WHITE, 0.05), hairM, "Egg")
 	elseif hs == "part" then
@@ -484,7 +484,7 @@ local function head(ctx: Ctx, look: Look, seed: number)
 			add(ctx, G_HEAD, "Curl", Vector3.new(0.3, 0.3, 0.3), at(math.sin(a) * 0.3, HY + 0.3 + math.cos(a) * 0.1, 0.04 + math.abs(math.sin(a)) * 0.08 - (i % 2) * 0.1), i % 2 == 0 and hair or dark, hairM, "Ball")
 		end
 	elseif hs == "afro" then
-		add(ctx, G_HEAD, "Afro", Vector3.new(0.98, 0.86, 0.96), at(0, HY + 0.24, 0.09), dark, M.Fabric, "Egg")
+		add(ctx, G_HEAD, "Afro", Vector3.new(0.98, 0.86, 0.96), at(0, HY + 0.24, 0.13), dark, M.Fabric, "Egg")
 	end
 end
 
@@ -508,7 +508,7 @@ local function arm(ctx: Ctx, sx: number, sleeve: Color3, skin: Color3, longSleev
 	add(ctx, lo, "Elbow", Vector3.new(0.33, 0.33, 0.33), at(x, 3.32, 0.02), longSleeve and sleeve or skin, longSleeve and M.Fabric or M.SmoothPlastic, "Ball")
 	add(ctx, lo, "Forearm", Vector3.new(0.72, 0.3, 0.3), cylY(x, 2.97, 0.02), longSleeve and sleeve or skin, longSleeve and M.Fabric or M.SmoothPlastic, "Cyl")
 	if longSleeve then
-		add(ctx, lo, "Cuff", Vector3.new(0.12, 0.33, 0.33), cylY(x, 2.66, 0.02), cuff or sleeve:Lerp(INK, 0.1), M.Fabric, "Cyl")
+		add(ctx, lo, "Cuff", Vector3.new(0.12, 0.33, 0.33), cylY(x, 2.63, 0.02), cuff or sleeve:Lerp(INK, 0.1), M.Fabric, "Cyl")
 	end
 	-- main (paume face à la cuisse) : doigts un peu repliés, pouce devant
 	local hx = sx * 0.745
@@ -538,9 +538,9 @@ local function legs(ctx: Ctx, look: Look, pants: Color3, shorts: boolean, bareTh
 		add(ctx, sh, "Shin", Vector3.new(1.1, 0.38, 0.38), cylY(x, 0.93, 0.02), legC, legM, "Cyl")
 		add(ctx, sh, "Calf", Vector3.new(0.32, 0.6, 0.34), at(x, 1.14, 0.08), legC, legM, "Egg")
 		if not shorts then
-			add(ctx, sh, "Hem", Vector3.new(0.09, 0.43, 0.43), cylY(x, 0.43, 0.02), pants:Lerp(INK, 0.1), M.Fabric, "Cyl")
+			add(ctx, sh, "Hem", Vector3.new(0.09, 0.43, 0.43), cylY(x, 0.395, 0.02), pants:Lerp(INK, 0.1), M.Fabric, "Cyl")
 		else
-			add(ctx, sh, "Sock", Vector3.new(0.14, 0.4, 0.4), cylY(x, 0.42, 0.02), WHITE, M.Fabric, "Cyl")
+			add(ctx, sh, "Sock", Vector3.new(0.14, 0.4, 0.4), cylY(x, 0.41, 0.02), WHITE, M.Fabric, "Cyl")
 		end
 		-- pied (tourne à la cheville)
 		add(ctx, ft, "Shoe", Vector3.new(0.36, 0.26, 0.74), at(x, 0.2, -0.13), look.Shoe, M.SmoothPlastic)
@@ -608,11 +608,11 @@ local function torso(ctx: Ctx, look: Look, shirt: Color3, pants: Color3, skirt: 
 	if look.Belt and style ~= "baker" and not skirt then
 		-- ceinture tout autour (même "stade", un peu plus large) + boucle
 		local belt = rgb(56, 38, 28)
-		add(ctx, G_PELVIS, "Belt", Vector3.new(hipW - hipD, 0.1, hipD + 0.04), at(0, 2.88, 0), belt, M.Leather)
+		add(ctx, G_PELVIS, "Belt", Vector3.new(hipW - hipD, 0.1, hipD + 0.06), at(0, 2.86, 0), belt, M.Leather)
 		for _, sx in ipairs({ -1, 1 }) do
-			add(ctx, G_PELVIS, "BeltSide", Vector3.new(0.1, hipD + 0.04, hipD + 0.04), cylY(sx * (hipW - hipD) / 2, 2.88, 0), belt, M.Leather, "Cyl")
+			add(ctx, G_PELVIS, "BeltSide", Vector3.new(0.1, hipD + 0.06, hipD + 0.06), cylY(sx * (hipW - hipD) / 2, 2.86, 0), belt, M.Leather, "Cyl")
 		end
-		add(ctx, G_PELVIS, "Buckle", Vector3.new(0.14, 0.1, 0.03), at(0, 2.88, -hipD / 2 - 0.03), rgb(196, 182, 150), M.Metal)
+		add(ctx, G_PELVIS, "Buckle", Vector3.new(0.14, 0.1, 0.03), at(0, 2.86, -hipD / 2 - 0.045), rgb(196, 182, 150), M.Metal)
 	end
 	return skin
 end
@@ -677,7 +677,7 @@ local function prop(ctx: Ctx, kind: string, seed: number)
 	if kind == "bag" then
 		local c = pick({ rgb(236, 72, 140), rgb(250, 250, 248), rgb(120, 190, 90), rgb(90, 140, 230), rgb(206, 166, 118) }, seed, 30)
 		add(ctx, G_RLO, "Bag", Vector3.new(0.32, 0.84, 0.78), at(h.X + 0.12, h.Y - 0.72, 0), c, M.SmoothPlastic)
-		add(ctx, G_RLO, "BagFold", Vector3.new(0.34, 0.1, 0.8), at(h.X + 0.12, h.Y - 0.32, 0), c:Lerp(INK, 0.15), M.SmoothPlastic)
+		add(ctx, G_RLO, "BagFold", Vector3.new(0.38, 0.1, 0.84), at(h.X + 0.12, h.Y - 0.4, 0), c:Lerp(INK, 0.15), M.SmoothPlastic)
 		add(ctx, G_RLO, "BagHandle", Vector3.new(0.05, 0.36, 0.44), at(h.X + 0.1, h.Y - 0.1, 0), c:Lerp(INK, 0.35), M.SmoothPlastic)
 	elseif kind == "phone" then
 		add(ctx, G_RLO, "Phone", Vector3.new(0.06, 0.34, 0.18), at(h.X - 0.08, h.Y + 0.04, -0.12), rgb(28, 28, 34), M.SmoothPlastic)
@@ -694,7 +694,7 @@ local function prop(ctx: Ctx, kind: string, seed: number)
 		-- (main GAUCHE : la droite tape dessus)
 		local l = HAND_L
 		add(ctx, G_LLO, "Tablet", Vector3.new(0.06, 0.62, 0.86), at(l.X + 0.1, l.Y + 0.1, -0.3) * CFrame.Angles(0, 0, math.rad(8)), rgb(40, 40, 46), M.SmoothPlastic)
-		add(ctx, G_LLO, "TabletScreen", Vector3.new(0.02, 0.54, 0.76), at(l.X + 0.14, l.Y + 0.1, -0.3) * CFrame.Angles(0, 0, math.rad(8)), rgb(150, 210, 255), M.Glass)
+		add(ctx, G_LLO, "TabletScreen", Vector3.new(0.05, 0.54, 0.76), at(l.X + 0.145, l.Y + 0.1, -0.3) * CFrame.Angles(0, 0, math.rad(8)), rgb(150, 210, 255), M.Glass)
 	end
 end
 
@@ -757,9 +757,9 @@ function NPCModels.Build(style: string, opts: Opts?): Model
 					add(ctx, G_CHEST, "Button", Vector3.new(0.06, 0.06, 0.04), at(bx, 4.02 - i * 0.26, -0.3), rgb(200, 200, 196), M.SmoothPlastic, "Ball")
 				end
 			end
-			add(ctx, G_CHEST, "Apron", Vector3.new(0.9, 0.62, 0.04), at(0, 3.08, -0.265), rgb(232, 188, 128), M.Fabric)
+			add(ctx, G_CHEST, "Apron", Vector3.new(0.9, 0.62, 0.04), at(0, 3.08, -0.28), rgb(232, 188, 128), M.Fabric)
 			add(ctx, G_PELVIS, "ApronSkirt", Vector3.new(1.0, 1.1, 0.04), at(0, 2.3, -0.3), rgb(232, 188, 128), M.Fabric)
-			add(ctx, G_PELVIS, "ApronTie", Vector3.new(1.02, 0.07, 0.56), at(0, 2.86, 0), rgb(214, 170, 112), M.Fabric)
+			add(ctx, G_PELVIS, "ApronTie", Vector3.new(1.02, 0.07, 0.68), at(0, 2.86, 0), rgb(214, 170, 112), M.Fabric)
 			add(ctx, G_HEAD, "Toque", Vector3.new(0.5, 0.74, 0.74), cylY(0, HY + 0.52, 0.03), WHITE, M.Fabric, "Cyl")
 			add(ctx, G_HEAD, "ToquePuff", Vector3.new(0.92, 0.46, 0.92), at(0, HY + 0.82, 0.03), WHITE, M.Fabric, "Egg")
 			add(ctx, G_HEAD, "ToqueBand", Vector3.new(0.14, 0.77, 0.77), cylY(0, HY + 0.33, 0.03), rgb(236, 236, 232), M.Fabric, "Cyl")
@@ -826,13 +826,13 @@ function NPCModels.Build(style: string, opts: Opts?): Model
 		look.Shoe = rgb(96, 70, 44)
 		look.Sole = rgb(40, 34, 30)
 		look.HairStyle = "none" -- (le casque couvre les cheveux)
-		look.Collar = "shirt"
+		look.Collar = "crew"
 		look.Belt = true
 		table.insert(extras, function()
 			local vest = rgb(255, 146, 36)
-			add(ctx, G_CHEST, "Vest", Vector3.new(1.14, 1.2, 0.64), at(0, 3.62, 0), vest, M.Fabric)
+			add(ctx, G_CHEST, "Vest", Vector3.new(1.14, 1.14, 0.64), at(0, 3.59, 0), vest, M.Fabric)
 			for _, y in ipairs({ 3.3, 3.62 }) do
-				add(ctx, G_CHEST, "VestStripe", Vector3.new(1.16, 0.09, 0.66), at(0, y, 0), rgb(226, 230, 222), M.Glass)
+				add(ctx, G_CHEST, "VestStripe", Vector3.new(1.2, 0.09, 0.7), at(0, y, 0), rgb(226, 230, 222), M.Glass)
 			end
 			add(ctx, G_HEAD, "Helmet", Vector3.new(0.84, 0.54, 0.9), at(0, HY + 0.26, 0.02), rgb(255, 206, 36), M.SmoothPlastic, "Egg")
 			add(ctx, G_HEAD, "HelmetBrim", Vector3.new(0.05, 0.94, 1.02), cylY(0, HY + 0.1, 0.0), rgb(250, 200, 30), M.SmoothPlastic, "Cyl")
@@ -1460,7 +1460,32 @@ local function seatTopOf(model: Model, rig: Rig): number
 			local h = pivot:PointToObjectSpace(hit.Position).Y
 			if h > 0.6 * rig.S and h < 3.2 * rig.S then
 				top = h
+				return
 			end
+		end
+		-- (sièges décoratifs sans CanQuery : on cherche, une seule fois, la pièce
+		-- voisine sous le bassin dont le dessus est à hauteur d'assise)
+		local parent = model.Parent
+		if not parent then
+			return
+		end
+		local hip = pivot * CFrame.new(0, 0, 0.1 * rig.S)
+		local best = -1
+		for _, d in ipairs(parent:GetDescendants()) do
+			if d:IsA("BasePart") and not d:IsDescendantOf(model) then
+				local rel = d.CFrame:PointToObjectSpace(hip.Position)
+				local half = d.Size / 2
+				if math.abs(rel.X) <= half.X and math.abs(rel.Z) <= half.Z then
+					local topW = (d.CFrame * CFrame.new(0, half.Y, 0)).Position
+					local h = pivot:PointToObjectSpace(topW).Y
+					if h > 0.6 * rig.S and h < 2.8 * rig.S and h > best and d.CFrame.UpVector.Y > 0.9 then
+						best = h
+					end
+				end
+			end
+		end
+		if best > 0 then
+			top = best
 		end
 	end)
 	rig.SitTop = top

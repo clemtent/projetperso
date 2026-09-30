@@ -389,7 +389,7 @@ function MarketCheckout.Lane(m: any, parent: Instance, i: number)
 			end
 		end
 	end
-	local candySign = box(parent, "CandySign", L, -0.88, -0.78, 4.36, 5.1, 11.45, 12.75, BRAND, M.SmoothPlastic)
+	local candySign = box(parent, "CandySign", L, -0.84, -0.74, 4.36, 5.1, 11.45, 12.75, BRAND, M.SmoothPlastic)
 	label(candySign, Enum.NormalId.Right, Locale.T("🍬 Sweets"), WHITE, nil, 40, 50)
 	-- lampe de caisse numérotée + LED d'état (vert : ouverte, rouge : fermée)
 	cyl(parent, "LanePole", L, -0.62, 2.58, 11.15, 6.66, 0.14, inox, M.Metal)
@@ -824,6 +824,10 @@ function MarketCheckout.AnimateLane(belt: any, now: number)
 	for _, c in ipairs(belt.Customers) do
 		local cf, anim, alpha, carry = customerPose(belt, c.Slot, n, tau, cycle)
 		if math.abs(alpha - c.Alpha) > 0.04 or (alpha == 0) ~= (c.Alpha == 0) or (alpha == 1 and c.Alpha ~= 1) then
+			if N and type(N.SetSolid) == "function" and (alpha > 0.5) ~= (c.Alpha > 0.5) then
+				-- (capsule de collision NPC99 : jamais de client invisible qui bloque)
+				pcall(N.SetSolid, c.Actor.Model, alpha > 0.5)
+			end
 			c.Alpha = alpha
 			local t = 1 - alpha
 			for _, p in ipairs(c.Parts) do
@@ -835,9 +839,10 @@ function MarketCheckout.AnimateLane(belt: any, now: number)
 		end
 		if alpha > 0 and N then
 			local model = c.Actor.Model
-			local root = model.PrimaryPart
-			if root then
-				root.CFrame = cf
+			if type(N.Place) == "function" then
+				pcall(N.Place, model, cf)
+			elseif model.PrimaryPart then
+				model.PrimaryPart.CFrame = cf
 			else
 				model:PivotTo(cf)
 			end
