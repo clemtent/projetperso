@@ -52,6 +52,10 @@
 	  "setRoomState" { Room, LightsOn?, CurtainsOpen? }  (v9.8) 💡 interrupteur / 🪟 rideaux d'une pièce
 	  "setLook" { Kind, Id, Room?, On? }  applique une personnalisation possédée
 	    (Kind "Garden" : On = true / false pose / range la déco du jardin)
+	  "saveExterior" { [Kind] = Id, Num = n }  (v10 HOUSE10) 🏡 éditeur de
+	    l'extérieur : achète d'un coup les choix pas encore possédés
+	    (Shared/HouseOptions : prix, visites à l'océan) puis applique le tout ;
+	    data.House.Ext / OwnedExt ; attribut répliqué "HouseExt" du joueur
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -62,6 +66,7 @@ local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local Net = require(ReplicatedStorage.Shared.Net)
 local RateLimiter = require(script.Parent.RateLimiter)
+local HouseOptions = require(ReplicatedStorage.Shared.HouseOptions) -- (v10 HOUSE10) 🏡 extérieur
 
 local HouseService = {}
 
@@ -627,6 +632,10 @@ local function sanitizeHouse(data)
 	end
 	house.Rooms = rooms
 
+	-- (v10 HOUSE10) 🏡 extérieur personnalisé : choix connus et possédés
+	house.OwnedExt = HouseOptions.CleanOwned(house.OwnedExt)
+	house.Ext = HouseOptions.Sanitize(house.Ext, house.OwnedExt)
+
 	if not isValidNumber(data.Stats.HouseItemsBought) or data.Stats.HouseItemsBought < 0 then
 		data.Stats.HouseItemsBought = 0
 	end
@@ -678,6 +687,13 @@ function HouseService:DebugGrantAll(player: Player): boolean
 	for _, def in pairs(LOOK_KINDS) do
 		for _, entry in ipairs(def.List) do
 			house[def.Owned][entry.Id] = true
+		end
+	end
+	-- (v10 HOUSE10) tous les choix de l'extérieur
+	house.OwnedExt = type(house.OwnedExt) == "table" and house.OwnedExt or {}
+	for _, def in ipairs(HouseOptions.KINDS) do
+		for _, choice in ipairs(def.Choices) do
+			house.OwnedExt[HouseOptions.OwnedKey(def.Id, choice.Id)] = true
 		end
 	end
 	-- La plus grande maison, avec une pièce de chaque type (gratuit)
@@ -1240,6 +1256,71 @@ local function setRoomState(player: Player, data, argument: any): (boolean, stri
 	return true, ""
 end
 
+----------------------------------------------------------------------
+-- (v10 HOUSE10) 🏡 Extérieur personnalisé (Shared/HouseOptions)
+----------------------------------------------------------------------
+
+-- Attribut répliqué pour la ville (HouseBuilder le lit sur le propriétaire)
+local function publishExterior(player: Player, data)
+	local house = type(data) == "table" and data.House or nil
+	if type(house) ~= "table" then
+		return
+	end
+	pcall(function()
+		player:SetAttribute("HouseExt", HouseOptions.Encode(house.Ext))
+	end)
+end
+
+-- "saveExterior" { [Kind] = Id, Num = n } : tout ou rien (projet invalide,
+-- verrou des visites à l'océan ou pas assez de Dopamine = rien ne change)
+local function saveExterior(player: Player, data, argument: any): (boolean, string)
+	if type(argument) ~= "table" then
+		return false, T(player, "Invalid request")
+	end
+	local house = data.House
+	local owned = HouseOptions.CleanOwned(house.OwnedExt)
+	local design: { [string]: any } = {}
+	local count = 0
+	for key, value in pairs(argument) do
+		count += 1
+		if count > 64 or type(key) ~= "string" then
+			return false, T(player, "Invalid request")
+		end
+		if key == "Num" then
+			if value ~= nil and type(value) ~= "number" then
+				return false, T(player, "Invalid request")
+			end
+			design.Num = HouseOptions.ValidNumber(value)
+		else
+			local def = HouseOptions.ByKind[key]
+			if not def or type(value) ~= "string" or not def.ById[value] then
+				return false, T(player, "Unknown style")
+			end
+			design[key] = value
+		end
+	end
+	local rebirths = numberOr(data.Rebirths, 0)
+	local cost, toBuy, locked = HouseOptions.Quote(design, owned, rebirths)
+	if locked then
+		return false, T(player, "🔒 Unlocked after %d visits to the ocean", locked.Choice.Rebirths)
+	end
+	if not isValidNumber(cost) or cost < 0 or data.Dopamine < cost then
+		return false, T(player, "Not enough %s", Config.Game.CurrencyName)
+	end
+	data.Dopamine -= cost
+	for _, entry in ipairs(toBuy) do
+		owned[HouseOptions.OwnedKey(entry.Kind, entry.Choice.Id)] = true
+	end
+	house.OwnedExt = owned
+	house.Ext = HouseOptions.Sanitize(design, owned)
+	publishExterior(player, data)
+	services.GameService:SendState(player)
+	if cost > 0 then
+		return true, T(player, "🏡 New look for your house! (%s)", NumberFormatter.Format(cost))
+	end
+	return true, T(player, "🏡 New look for your house!")
+end
+
 local STRING_ACTIONS = { buyItem = true, buySize = true, setSize = true }
 
 local function onHouse(player: Player, action: any, argument: any)
@@ -1296,6 +1377,8 @@ local function onHouse(player: Player, action: any, argument: any)
 		return setLook(player, data, argument)
 	elseif action == "setRoomState" then
 		return setRoomState(player, data, argument)
+	elseif action == "saveExterior" then
+		return saveExterior(player, data, argument)
 	end
 	return false, T(player, "Invalid request")
 end
@@ -1307,6 +1390,7 @@ end
 function HouseService:PlayerReady(player: Player, data)
 	sanitizeHouse(data)
 	publishRoomStates(player, data) -- (v9.8 HOUSE98) 💡 / 🪟 pour la ville
+	publishExterior(player, data) -- (v10 HOUSE10) 🏡 extérieur pour la ville
 end
 
 function HouseService:Start()

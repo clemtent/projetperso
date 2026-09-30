@@ -2726,6 +2726,69 @@ for index, food in ipairs(Config.Food.Items) do
 end
 
 ----------------------------------------------------------------------
+-- 🏁 Courses de rue (v10, RACE10 ; RaceService / Shared/RaceRules /
+-- Shared/RaceRoutes / Client/World/RaceClient) : 2 à 8 coureurs, des
+-- pilotes IA complètent la grille jusqu'à MinGrid. Vitesses en studs/s.
+--   Récompenses : secondes de production (Formulas.ScaledReward) selon la
+--   place, x (1 + HumanBonus par adversaire humain, au plus MaxHumanBonus),
+--   x SoloFactor sans adversaire humain ; DailyRewarded courses payées par
+--   jour (ensuite : records et trophées seulement). Voir RaceRules.
+--   Anti-triche (serveur) : ordre des portes, temps minimal par tronçon,
+--   vitesse plausible, téléportation, être au volant de sa voiture.
+----------------------------------------------------------------------
+Config.Race = {
+	MaxRacers = 8,
+	MinGrid = 4, -- IA ajoutées jusqu'à 4 voitures sur la grille
+	LobbySeconds = 20, -- attente après la 1re inscription
+	LateJoinSeconds = 8, -- une inscription tardive laisse au moins 8 s
+	GridSeconds = 3, -- mise en place sur la grille avant le 3-2-1
+	CountdownSeconds = 3,
+	FinishGrace = 35, -- s laissées aux autres après le 1er humain arrivé
+	MaxSeconds = 480, -- durée max d'une course
+	JoinRange = 45, -- studs : distance max du point de rendez-vous (à pied)
+	ResetCooldown = 3, -- s entre deux "retour à la porte"
+	OffCarGrace = 5, -- s hors de sa voiture -> abandon
+	CheckpointSpacing = 170, -- studs entre deux portes
+	Rewards = {
+		Seconds = { 120, 80, 55 }, -- 1er, 2e, 3e (secondes de production)
+		FinishSeconds = 35, -- arrivé 4e ou plus
+		MinReward = 250,
+		HumanBonus = 0.1, -- +10 % par adversaire humain
+		MaxHumanBonus = 0.3,
+		SoloFactor = 0.75, -- seulement des IA en face
+		DailyRewarded = 8, -- courses récompensées par jour
+	},
+	Anti = {
+		SpeedMargin = 1.3, -- vitesse mesurée max = vitesse de pointe x 1,3 (+ AbsSlack)
+		AbsSlack = 8,
+		TeleportStuds = 70, -- saut instantané -> remis à la dernière porte
+		MaxStrikes = 3, -- au 3e saut : disqualifié
+		SegmentFactor = 1.15, -- tronçon plus rapide que longueur / (pointe x 1,15) : disqualifié
+	},
+	AI = {
+		LatAccel = 30, -- (studs/s²) virages
+		Brake = 38, -- (studs/s²) freinage anticipé
+		Skill = { 0.9, 0.93, 0.95, 0.97, 0.91, 0.94, 0.96 },
+		RubberBoost = 0.06, -- au plus +6 % derrière le 1er humain (jamais au-delà de sa vitesse de pointe)
+		RubberSlow = 0.1, -- au plus -10 % devant tous les humains
+		RubberRange = 500, -- (studs) écart pour l'effet maximal
+		FairFinish = 0.12, -- aucun élastique dans les derniers 12 % de la course
+		Names = { "Nina Turbo", "Max Vroom", "Lou Drift", "Sam Nitro", "Zoé Flash", "Téo Pistons", "Lina Rocket" },
+	},
+	Routes = {
+		{ Id = "City", Name = "City circuit", Icon = "🏙️", Laps = 2, Desc = "Two laps around downtown" },
+		{ Id = "Highway", Name = "Highway sprint", Icon = "🛣️", Laps = 1, Sprint = true, Desc = "Flat out on the highway" },
+		{ Id = "Districts", Name = "District loop", Icon = "🏘️", Laps = 1, Desc = "Through every district" },
+		{ Id = "Night", Name = "Night race", Icon = "🌙", Laps = 1, Night = true, Desc = "The grand tour, under the stars" },
+	},
+}
+Config.RaceRoutesById = {}
+for index, route in ipairs(Config.Race.Routes) do
+	route.Order = index
+	Config.RaceRoutesById[route.Id] = route
+end
+
+----------------------------------------------------------------------
 -- Index calculés automatiquement (ne pas modifier)
 ----------------------------------------------------------------------
 Config.UpgradesById = {}

@@ -366,6 +366,59 @@ function CarModels.PriceFor(carId: string, factor: number?): number
 	return math.floor(price / unit + 0.5) * unit
 end
 
+-- 🎨 (v10) Options visuelles d'une voiture (data.Cars.Mods[carId]) : on ne
+-- garde que les clés connues de Config.Cars.Mods avec un Id connu, et pas
+-- les valeurs d'origine (1re entrée). Tables compactes, sûres.
+function CarModels.CleanMods(mods: any): { [string]: string }
+	local out = {}
+	if type(mods) ~= "table" then
+		return out
+	end
+	local byKind = Config.CarModsById or {}
+	for kind, list in pairs(Config.Cars.Mods or {}) do
+		local id = mods[kind]
+		if type(id) == "string" and byKind[kind] and byKind[kind][id] and list[1] and list[1].Id ~= id then
+			out[kind] = id
+		end
+	end
+	return out
+end
+
+-- Valeur d'une option (Id ; l'origine si absente)
+function CarModels.ModOf(mods: any, kind: string): string
+	local id = type(mods) == "table" and mods[kind]
+	local byKind = Config.CarModsById and Config.CarModsById[kind]
+	if type(id) == "string" and byKind and byKind[id] then
+		return id
+	end
+	local list = Config.Cars.Mods and Config.Cars.Mods[kind]
+	return list and list[1] and list[1].Id or ""
+end
+
+-- Texte compact pour un attribut répliqué : "Rims=Mesh;Tint=Dark" (et retour)
+function CarModels.EncodeMods(mods: any): string
+	local clean = CarModels.CleanMods(mods)
+	local keys = {}
+	for kind in pairs(clean) do
+		table.insert(keys, kind)
+	end
+	table.sort(keys)
+	local parts = {}
+	for _, kind in ipairs(keys) do
+		table.insert(parts, kind .. "=" .. clean[kind])
+	end
+	return table.concat(parts, ";")
+end
+function CarModels.DecodeMods(text: any): { [string]: string }
+	local raw = {}
+	if type(text) == "string" then
+		for kind, id in string.gmatch(text, "(%w+)=(%w+)") do
+			raw[kind] = id
+		end
+	end
+	return CarModels.CleanMods(raw)
+end
+
 -- Repeint un modèle déjà construit (pièces marquées "Paint") : pour changer
 -- de couleur SANS reconstruire (fenêtre "Mes voitures", concession)
 function CarModels.Repaint(model: Instance, carId: string?, color: any?)

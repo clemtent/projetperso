@@ -77,6 +77,8 @@ type Car = {
 	LastUsed: number,
 	LastSafe: CFrame,
 	Generation: number,
+	Frozen: boolean, -- (v10) départ de course : ancrée pendant le compte à rebours
+	Loaner: boolean, -- (v10) voiture de prêt des courses (pas possédée)
 }
 
 local services: any = nil
@@ -135,7 +137,46 @@ function CarService.Sanitize(data: any)
 			end
 		end
 	end
-	data.Cars = { Owned = owned, Colors = colors, Selected = selected, Garage = raw.Garage == true }
+	-- (v10, CARS10) atelier : préparation, options, achats, plaques (par voiture possédée)
+	local tuning, mods, unlocked, plates = {}, {}, {}, {}
+	local maxPlate = tonumber(Config.Cars.PlateMaxLength) or 8
+	for id in pairs(owned) do
+		local t = type(raw.Tuning) == "table" and raw.Tuning[id]
+		if type(t) == "table" then
+			local clean = CarModels.CleanTuning(t)
+			if clean.Engine + clean.Tyres + clean.Suspension > 0 then
+				tuning[id] = clean
+			end
+		end
+		local m = type(raw.Mods) == "table" and raw.Mods[id]
+		if type(m) == "table" then
+			local clean = CarModels.CleanMods(m)
+			if next(clean) ~= nil then
+				mods[id] = clean
+			end
+		end
+		local u = type(raw.Unlocked) == "table" and raw.Unlocked[id]
+		if type(u) == "table" then
+			local set = {}
+			for key, value in pairs(u) do
+				local kind, entryId = nil, nil
+				if type(key) == "string" then
+					kind, entryId = string.match(key, "^(%w+):(%w+)$")
+				end
+				if value == true and kind and entryId and Config.CarModsById[kind] and Config.CarModsById[kind][entryId] then
+					set[key] = true
+				end
+			end
+			if next(set) ~= nil then
+				unlocked[id] = set
+			end
+		end
+		local plate = type(raw.Plates) == "table" and raw.Plates[id]
+		if type(plate) == "string" and plate ~= "" and #plate <= maxPlate * 4 then
+			plates[id] = plate
+		end
+	end
+	data.Cars = { Owned = owned, Colors = colors, Selected = selected, Garage = raw.Garage == true, Tuning = tuning, Mods = mods, Unlocked = unlocked, Plates = plates }
 end
 
 local function ownedList(data: any): { string }
@@ -556,10 +597,13 @@ local function onOccupant(car: Car)
 		car.LastUsed = os.clock()
 		-- (v9.7) le client cache l'invite "Conduire" tant que quelqu'un est au volant
 		car.Model:SetAttribute("Occupied", true)
-		car.Root.Anchored = false
-		pcall(function()
-			car.Root:SetNetworkOwner(car.Player)
-		end)
+		-- (v10) départ de course : reste ancrée tant que RACE10 la bloque
+		if not car.Frozen then
+			car.Root.Anchored = false
+			pcall(function()
+				car.Root:SetNetworkOwner(car.Player)
+			end)
+		end
 	else
 		car.Driving = false
 		car.LastUsed = os.clock()
@@ -592,46 +636,44 @@ local function plateText(player: Player): string
 	return string.format("DC %03d", player.UserId % 1000)
 end
 
-local function spawnCar(player: Player, data: any): (boolean, string)
-	local character, _, charRoot = characterOf(player)
-	if not character or not charRoot then
-		return false, T(player, "Walk around the town first")
+-- (v10, CARS10) plaque personnalisée (déjà filtrée à l'enregistrement) ou "DC 123"
+local function plateOf(player: Player, data: any, carId: string): string
+	local plates = data and data.Cars and data.Cars.Plates
+	local text = type(plates) == "table" and plates[carId]
+	if type(text) == "string" and text ~= "" then
+		return text
 	end
-	local carId = data.Cars.Selected
-	if carId == "" or not data.Cars.Owned[carId] then
-		return false, T(player, "🚗 Buy a car at the car dealership first!")
-	end
-	local zones = houses()
-	if forbidden(charRoot.Position, zones) then
-		return false, T(player, "🚫 Go outside to take your car")
-	end
+	return plateText(player)
+end
+
+-- Options de CarModels.Build pour la voiture d'un joueur (peinture, options, plaque)
+local function buildOptions(player: Player, data: any, carId: string): any
+	local mods = data and data.Cars and data.Cars.Mods
+	return { Detail = "Full", Plate = plateOf(player, data, carId), Mods = type(mods) == "table" and mods[carId] or nil }
+end
+
+-- Construit, équipe et enregistre la voiture d'un joueur à `target`
+-- (commun à "🚗 Ma voiture" et aux courses de RACE10)
+local function makeCar(player: Player, data: any, carId: string, target: CFrame, loaner: boolean, fromGarage: boolean): Car
 	despawn(player, true)
-	local model = CarModels.Build(carId, colorOf(data, carId), { Detail = "Full", Plate = plateText(player) })
+	local opts = if loaner then { Detail = "Full", Plate = "LOAN " .. tostring(player.UserId % 100) } else buildOptions(player, data, carId)
+	local model = CarModels.Build(carId, if loaner then nil else colorOf(data, carId), opts)
 	model.Name = "Car_" .. player.UserId
 	model:SetAttribute("OwnerId", player.UserId)
 	model:SetAttribute("OwnerName", player.DisplayName)
-	-- où ? dans son garage si on est devant, sinon à côté de soi
-	local target: CFrame? = nil
-	local houseCF = houseOf(player)
-	if houseCF and hasGarage(data) and (GarageLayout.Center(houseCF) - charRoot.Position).Magnitude < SPAWN_RANGE_GARAGE then
-		local bays = GarageLayout.Assign(ownedList(data), carId)
-		target = GarageLayout.BayCFrame(houseCF, bays[carId] or 2)
+	if fromGarage then
 		model:SetAttribute("FromGarage", true)
 	end
-	if not target then
-		local size = CarModels.Dimensions(carId)
-		local ignore: { Instance } = { character }
-		for _, other in pairs(cars) do
-			table.insert(ignore, other.Model)
-		end
-		for _, p in ipairs(Players:GetPlayers()) do
-			if p.Character then
-				table.insert(ignore, p.Character)
-			end
-		end
-		target = findSpot(charRoot.CFrame, size, ignore)
+	if loaner then
+		model:SetAttribute("Loaner", true)
 	end
-	model:PivotTo(target :: CFrame)
+	-- (v10) performances (RACE10 : plausibilité de la vitesse, affichage)
+	local stats = CarModels.Stats(carId, if loaner then nil else CarModels.TuningOf(data, carId))
+	model:SetAttribute("TopSpeed", stats.TopSpeed)
+	model:SetAttribute("Rating", stats.Rating)
+	model:SetAttribute("Class", stats.Class)
+	model:SetAttribute("Tuning", string.format("%d%d%d", stats.Tuning.Engine, stats.Tuning.Tyres, stats.Tuning.Suspension))
+	model:PivotTo(target)
 	local root, seat = rig(model, carId)
 	generation += 1
 	local car: Car = {
@@ -644,6 +686,8 @@ local function spawnCar(player: Player, data: any): (boolean, string)
 		LastUsed = os.clock(),
 		LastSafe = root.CFrame,
 		Generation = generation,
+		Frozen = false,
+		Loaner = loaner,
 	}
 	cars[player] = car
 	-- invite "Conduire" (le client la traduit et la cache aux autres joueurs)
@@ -676,6 +720,46 @@ local function spawnCar(player: Player, data: any): (boolean, string)
 	end
 	model.Parent = f
 	publish(player)
+	return car
+end
+
+local function spawnCar(player: Player, data: any): (boolean, string)
+	local character, _, charRoot = characterOf(player)
+	if not character or not charRoot then
+		return false, T(player, "Walk around the town first")
+	end
+	local carId = data.Cars.Selected
+	if carId == "" or not data.Cars.Owned[carId] then
+		return false, T(player, "🚗 Buy a car at the car dealership first!")
+	end
+	local zones = houses()
+	if forbidden(charRoot.Position, zones) then
+		return false, T(player, "🚫 Go outside to take your car")
+	end
+	despawn(player, true)
+	-- où ? dans son garage si on est devant, sinon à côté de soi
+	local target: CFrame? = nil
+	local fromGarage = false
+	local houseCF = houseOf(player)
+	if houseCF and hasGarage(data) and (GarageLayout.Center(houseCF) - charRoot.Position).Magnitude < SPAWN_RANGE_GARAGE then
+		local bays = GarageLayout.Assign(ownedList(data), carId)
+		target = GarageLayout.BayCFrame(houseCF, bays[carId] or 2)
+		fromGarage = true
+	end
+	if not target then
+		local size = CarModels.Dimensions(carId)
+		local ignore: { Instance } = { character }
+		for _, other in pairs(cars) do
+			table.insert(ignore, other.Model)
+		end
+		for _, p in ipairs(Players:GetPlayers()) do
+			if p.Character then
+				table.insert(ignore, p.Character)
+			end
+		end
+		target = findSpot(charRoot.CFrame, size, ignore)
+	end
+	local car = makeCar(player, data, carId, target :: CFrame, false, fromGarage)
 	sit(player, car)
 	local def = Config.CarsById[carId]
 	return true, T(player, "%s Let's drive! WASD / arrows, jump to get out", def and def.Icon or "🚗")
@@ -1010,6 +1094,101 @@ function CarService:GetStats(player: Player, carId: string?): any
 		return nil
 	end
 	return CarModels.Stats(id, CarModels.TuningOf(data, id))
+end
+
+----------------------------------------------------------------------
+-- 🏁 (v10, CARS10 -> RACE10) courses : placer / bloquer / rendre
+----------------------------------------------------------------------
+
+-- Met la voiture CHOISIE du joueur sur la grille (`cf` = pivot au sol, avant
+-- vers -Z), la fait apparaître si elle n'est pas sortie, et l'assoit au
+-- volant. Sans voiture : une "CityCar" de prêt (attribut "Loaner"), rendue
+-- par RaceRelease. -> (ok, message?)
+function CarService:RaceSpawn(player: Player, cf: CFrame): (boolean, string?)
+	if typeof(cf) ~= "CFrame" then
+		return false, "bad cframe"
+	end
+	local data = dataOf(player)
+	if type(data) ~= "table" then
+		return false, T(player, "Loading...")
+	end
+	local _, humanoid = characterOf(player)
+	if not humanoid then
+		return false, T(player, "Walk around the town first")
+	end
+	CarService.Sanitize(data)
+	local target = flatten(cf)
+	local selected = data.Cars.Selected
+	local owned = type(selected) == "string" and selected ~= "" and data.Cars.Owned[selected] == true
+	local carId = if owned then selected else "CityCar"
+	local car = cars[player]
+	local ok, err = pcall(function()
+		if car and car.Root.Parent and car.CarId == carId and car.Loaner == not owned then
+			-- déjà sortie : on la pose sur la grille (tout l'assemblage suit la Root)
+			local root = car.Root
+			local wasAnchored = root.Anchored
+			root.Anchored = true
+			root.AssemblyLinearVelocity = Vector3.zero
+			root.AssemblyAngularVelocity = Vector3.zero
+			car.Model:PivotTo(target)
+			car.LastSafe = root.CFrame
+			car.LastUsed = os.clock()
+			if not wasAnchored and not car.Frozen and car.Seat.Occupant ~= nil then
+				root.Anchored = false
+				pcall(function()
+					root:SetNetworkOwner(player)
+				end)
+			end
+		else
+			car = makeCar(player, data, carId, target, not owned, false)
+		end
+	end)
+	if not ok or not car then
+		warn("[CarService] RaceSpawn : " .. tostring(err))
+		return false, T(player, "Invalid request")
+	end
+	sit(player, car :: Car)
+	return true, nil
+end
+
+-- Fin de course : rend la voiture de prêt (la vraie voiture reste sortie)
+function CarService:RaceRelease(player: Player)
+	local car = cars[player]
+	if not car then
+		return
+	end
+	if car.Frozen then
+		CarService:SetFrozen(player, false)
+	end
+	if car.Loaner then
+		despawn(player, true)
+	end
+end
+
+-- Compte à rebours : voiture ancrée sur place (frozen = true), puis libérée
+-- (désancrée, propriété réseau rendue au conducteur)
+function CarService:SetFrozen(player: Player, frozen: boolean)
+	local car = cars[player]
+	if not car or not car.Root.Parent then
+		return
+	end
+	car.Frozen = frozen == true
+	pcall(function()
+		local root = car.Root
+		if car.Frozen then
+			root.AssemblyLinearVelocity = Vector3.zero
+			root.AssemblyAngularVelocity = Vector3.zero
+			root.Anchored = true
+			car.Model:SetAttribute("Frozen", true)
+		else
+			car.Model:SetAttribute("Frozen", nil)
+			car.LastSafe = root.CFrame
+			if car.Seat.Occupant ~= nil then
+				root.Anchored = false
+				root:SetNetworkOwner(player)
+			end
+		end
+	end)
 end
 
 return CarService
