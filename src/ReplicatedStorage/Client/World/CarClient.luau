@@ -44,6 +44,23 @@
 	    roues arrière, champ de vision lissé.
 	  - Garages : changement de couleur = on repeint (pas de reconstruction).
 
+	v10 (CARS10) :
+	  - "Mes voitures" : onglets 🚗 Voiture / 🎨 Style / 🏁 Perf ; l'atelier
+	    (CarWorkshop) montre chaque option TOUT DE SUITE sur l'aperçu 3D
+	    (essai gratuit), puis achat / application vérifiés par CarService ;
+	    préparation moteur / pneus / suspensions (CarModels.Stats).
+	  - Conduite : performances = CarModels.Stats (modèle + préparation lue
+	    sur l'attribut "Tuning" de la voiture) ; stable à haute vitesse
+	    (direction qui se durcit) ; drift progressif, survirage doux,
+	    contre-braquage qui rattrape ; champ de vision + petit "coup" à la
+	    réaccélération (subtil) ; voiture ancrée (compte à rebours d'une
+	    course) = vitesse 0, pas de bond au départ.
+	  - Feux de TOUTES les voitures des joueurs (locaux, CarModels.SetLights) :
+	    stop au freinage, recul, clignotants automatiques dans les virages
+	    lents, warnings pendant le compte à rebours, feux de jour au volant.
+	  - Garages : les voitures garées portent leurs options (attribut
+	    DopamineCarMods du propriétaire).
+
 	API (TownClient) :
 	  CarClient.Start({ Toast = function(text) end? })  -- en entrant en ville
 	  CarClient.Stop()                                     -- en sortant (avant de rendre la caméra)
@@ -68,6 +85,7 @@ local Net = require(ReplicatedStorage.Shared.Net)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local CarModels = require(ReplicatedStorage.Shared.CarModels)
 local GarageLayout = require(ReplicatedStorage.Shared.GarageLayout)
+local CarWorkshop = require(script.Parent.CarWorkshop)
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -85,11 +103,8 @@ local INK = Color3.fromRGB(92, 58, 96)
 local CARD = Color3.fromRGB(255, 250, 253)
 local WHITE = Color3.new(1, 1, 1)
 
--- Réglages de conduite
-local ACCEL = 24 -- studs/s² en accélérant
-local BRAKE = 60 -- studs/s² en freinant (touche contraire)
-local COAST = 14 -- studs/s² sans rien toucher
-local TURN_RATE = 1.9 -- rad/s au maximum (à vitesse moyenne)
+-- Réglages de conduite : (v10) accélération, freinage, direction... viennent
+-- de CarModels.Stats (modèle + préparation)
 local DOOR_TIME = 1.1 -- s pour ouvrir / fermer une porte de garage
 local BASE_FOV = 70
 
@@ -272,7 +287,16 @@ local picker: any = {
 	LastDrag = -math.huge,
 	OwnedKey = "",
 	Sending = false,
+	Keys = {}, -- (v10) [carId] = options + plaque du modèle d'aperçu (reconstruit si ça change)
+	Tab = "Car", -- (v10) onglet de la fiche : "Car" | "Style" | "Perf"
 }
+local workshop: any = nil -- (v10) atelier (CarWorkshop)
+local function needDopamine(missing: number)
+	pcall(function()
+		local NeedDopamine = require(Client.Components:WaitForChild("NeedDopamine", 2) :: any) :: any
+		NeedDopamine.Offer(missing)
+	end)
+end
 local requestSpawn: () -> () = function() end
 
 local STAT_ROWS = {
@@ -338,12 +362,36 @@ local function setButton(button: TextButton, text: string, color: Color3, visibl
 end
 
 -- ░ aperçu 3D ░
+-- (v10) options + plaque affichées sur l'aperçu (enregistrées + essais de l'atelier)
+local function previewMods(carId: string): any
+	if workshop then
+		return workshop:PreviewMods(carId)
+	end
+	local cars = carsData()
+	return type(cars.Mods) == "table" and cars.Mods[carId] or nil
+end
+local function previewPlate(carId: string): string
+	local text = workshop and workshop:PreviewPlate(carId)
+	if type(text) == "string" and text ~= "" then
+		return text
+	end
+	local cars = carsData()
+	local saved = type(cars.Plates) == "table" and cars.Plates[carId]
+	return if type(saved) == "string" and saved ~= "" then saved else string.format("DC %03d", LocalPlayer.UserId % 1000)
+end
+
 local function previewModel(carId: string): Model?
 	local model = picker.Models[carId]
-	if model then
+	local key = CarModels.EncodeMods(previewMods(carId))
+	if model and picker.Keys[carId] == key then
 		return model
 	end
-	local ok, built = pcall(CarModels.Build, carId, colorIdOf(carId), { Detail = "Full", Plate = "DOPA " .. tostring(LocalPlayer.UserId % 1000) })
+	if model then
+		model:Destroy()
+		picker.Models[carId] = nil
+	end
+	picker.Keys[carId] = key
+	local ok, built = pcall(CarModels.Build, carId, colorIdOf(carId), { Detail = "Full", Plate = previewPlate(carId), Mods = previewMods(carId) })
 	if not ok or typeof(built) ~= "Instance" or not built:IsA("Model") then
 		return nil
 	end
@@ -367,6 +415,13 @@ local function showPreview(carId: string)
 	local model = previewModel(carId)
 	if model then
 		CarModels.Repaint(model, carId, colorIdOf(carId))
+		-- plaque essayée : on change juste le texte (pas de reconstruction)
+		local plate = model:FindFirstChild("PlateRear")
+		local gui = plate and plate:FindFirstChild("PlateText")
+		local text = gui and gui:FindFirstChildOfClass("TextLabel")
+		if text then
+			text.Text = string.upper(string.sub(previewPlate(carId), 1, 8))
+		end
 		model.Parent = view
 	end
 end
@@ -416,7 +471,9 @@ local function thumbModel(thumb: Thumb)
 	if thumb.Model then
 		return
 	end
-	local ok, built = pcall(CarModels.Build, thumb.CarId, colorIdOf(thumb.CarId), { Detail = "Mid" })
+	local cars = carsData()
+	local saved = type(cars.Mods) == "table" and cars.Mods[thumb.CarId] or nil
+	local ok, built = pcall(CarModels.Build, thumb.CarId, colorIdOf(thumb.CarId), { Detail = "Mid", Mods = saved })
 	if ok and typeof(built) == "Instance" and built:IsA("Model") then
 		local model = built :: Model
 		model:PivotTo(CFrame.Angles(0, math.rad(-35), 0))
@@ -726,6 +783,57 @@ local function buildPicker(root: Frame)
 			end)
 		end
 	end)
+	-- ░ (v10, CARS10) onglets de la fiche : 🚗 Voiture / 🎨 Style / 🏁 Perf ░
+	local carTab = frame({ Name = "CarTab", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 22, Parent = info })
+	for _, child in ipairs({ status, stats, drive, choose, garageRow }) do
+		child.Parent = carTab
+	end
+	infoTitle.Visible = false
+	local tabBar = frame({ Name = "TabBar", BackgroundColor3 = Color3.fromRGB(250, 240, 247), Position = UDim2.fromOffset(10, 6), Size = UDim2.new(1, -20, 0, 32), ZIndex = 23, Parent = info })
+	UIUtil.Corner(tabBar, UDim.new(1, 0))
+	UIUtil.Create("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 4), Parent = tabBar })
+	UIUtil.Create("UIPadding", { PaddingLeft = UDim.new(0, 3), PaddingRight = UDim.new(0, 3), PaddingTop = UDim.new(0, 3), PaddingBottom = UDim.new(0, 3), Parent = tabBar })
+	local tabButtons = {}
+	for order, tab in ipairs({ { "Car", "🚗 Car" }, { "Style", "🎨 Style" }, { "Perf", "🏁 Perf" } }) do
+		local button = UIUtil.Create("TextButton", {
+			Name = "Tab_" .. tab[1],
+			AutoButtonColor = false,
+			BackgroundColor3 = WHITE,
+			Font = Theme.Fonts.Title,
+			Text = Locale.T(tab[2]),
+			TextColor3 = INK,
+			TextSize = 15,
+			Size = UDim2.new(1 / 3, -3, 1, 0),
+			LayoutOrder = order,
+			ZIndex = 24,
+			Parent = tabBar,
+		})
+		UIUtil.Corner(button, UDim.new(1, 0))
+		button.Activated:Connect(function()
+			picker.Tab = tab[1]
+			refreshPicker()
+		end)
+		tabButtons[tab[1]] = button
+	end
+	local wsHost = frame({ Name = "WorkshopHost", BackgroundTransparency = 1, Position = UDim2.fromOffset(10, 44), Size = UDim2.new(1, -20, 1, -52), ZIndex = 23, Parent = info })
+	workshop = CarWorkshop.new(wsHost, {
+		Invoke = invoke,
+		Toast = toast,
+		Owns = owns,
+		Data = function()
+			return ClientState.Data
+		end,
+		Changed = function(carId: string)
+			if carId == picker.Viewing and pickerOpen then
+				showPreview(carId)
+			end
+		end,
+		NeedDopamine = needDopamine,
+	})
+	parts.CarTab = carTab
+	parts.TabButtons = tabButtons
+	parts.TabBar = tabBar
+	parts.WorkshopHost = wsHost
 	-- ░ carrousel (toutes les voitures) ░
 	local carousel = UIUtil.Create("ScrollingFrame", {
 		Name = "Carousel",
@@ -869,6 +977,23 @@ refreshPicker = function()
 			parts.GarageText.Text = Locale.T("🏎️ Build a 3-car garage next to your mansion")
 		end
 	end
+	-- (v10) onglets : 🚗 Voiture / 🎨 Style / 🏁 Perf (atelier)
+	local tab = picker.Tab
+	if parts.CarTab then
+		parts.CarTab.Visible = tab == "Car"
+		for id, tabButton in pairs(parts.TabButtons) do
+			local on = id == tab
+			tabButton.BackgroundColor3 = if on then PINK_DEEP else WHITE
+			tabButton.TextColor3 = if on then WHITE else INK
+		end
+	end
+	if workshop then
+		workshop:SetVisible(tab ~= "Car")
+		if tab ~= "Car" and picker.Viewing ~= "" then
+			workshop.Tab = tab
+			workshop:SetCar(picker.Viewing)
+		end
+	end
 end
 
 -- Mise en page (ordinateur / téléphone) de la fenêtre
@@ -880,10 +1005,11 @@ local function layoutPicker()
 	if phone then
 		card.Size = UDim2.fromOffset(800, 410)
 		parts.Stage.Position = UDim2.fromOffset(12, 52)
-		parts.Stage.Size = UDim2.fromOffset(430, 226)
-		parts.PaintRow.Position = UDim2.fromOffset(12, 282)
-		parts.PaintRow.Size = UDim2.fromOffset(430, 30)
-		parts.SwatchLayout.CellSize = UDim2.fromOffset(24, 24)
+		-- (v10) 22 peintures : nuancier sur 2 rangées
+		parts.Stage.Size = UDim2.fromOffset(430, 198)
+		parts.PaintRow.Position = UDim2.fromOffset(12, 254)
+		parts.PaintRow.Size = UDim2.fromOffset(430, 60)
+		parts.SwatchLayout.CellSize = UDim2.fromOffset(22, 22)
 		parts.SwatchLayout.CellPadding = UDim2.fromOffset(3, 3)
 		parts.PaintName.Size = UDim2.new(0, 96, 1, 0)
 		parts.Swatches.Size = UDim2.new(1, -98, 1, 0)
@@ -899,6 +1025,14 @@ local function layoutPicker()
 		parts.Choose.Size = UDim2.new(0.5, -18, 0, 36)
 		parts.GarageText.Parent.Position = UDim2.fromOffset(10, 184)
 		parts.GarageText.Parent.Size = UDim2.new(1, -20, 0, 70)
+		parts.TabBar.Size = UDim2.new(1, -20, 0, 26)
+		parts.TabBar.Position = UDim2.fromOffset(10, 5)
+		parts.WorkshopHost.Position = UDim2.fromOffset(8, 36)
+		parts.WorkshopHost.Size = UDim2.new(1, -16, 1, -42)
+		for _, button in pairs(parts.TabButtons) do
+			button.TextSize = 13
+		end
+		parts.Status.Position = UDim2.fromOffset(14, 34)
 		for _, thumb in pairs(picker.Thumbs) do
 			thumb.Card.Size = UDim2.fromOffset(104, 80)
 		end
@@ -913,11 +1047,11 @@ local function layoutPicker()
 	else
 		card.Size = UDim2.fromOffset(960, 570)
 		parts.Stage.Position = UDim2.fromOffset(16, 56)
-		parts.Stage.Size = UDim2.fromOffset(580, 330)
-		parts.PaintRow.Position = UDim2.fromOffset(16, 394)
-		parts.PaintRow.Size = UDim2.fromOffset(580, 44)
-		parts.SwatchLayout.CellSize = UDim2.fromOffset(30, 30)
-		parts.SwatchLayout.CellPadding = UDim2.fromOffset(5, 5)
+		parts.Stage.Size = UDim2.fromOffset(580, 314)
+		parts.PaintRow.Position = UDim2.fromOffset(16, 376)
+		parts.PaintRow.Size = UDim2.fromOffset(580, 64)
+		parts.SwatchLayout.CellSize = UDim2.fromOffset(26, 26)
+		parts.SwatchLayout.CellPadding = UDim2.fromOffset(4, 4)
 		parts.PaintName.Size = UDim2.new(0, 146, 1, 0)
 		parts.Swatches.Size = UDim2.new(1, -150, 1, 0)
 		parts.Info.Position = UDim2.fromOffset(612, 56)
@@ -932,6 +1066,13 @@ local function layoutPicker()
 		parts.Choose.Size = UDim2.new(1, -28, 0, 38)
 		parts.GarageText.Parent.Position = UDim2.new(0, 10, 1, -86)
 		parts.GarageText.Parent.Size = UDim2.new(1, -20, 0, 76)
+		parts.TabBar.Size = UDim2.new(1, -20, 0, 32)
+		parts.TabBar.Position = UDim2.fromOffset(10, 6)
+		parts.WorkshopHost.Position = UDim2.fromOffset(10, 44)
+		parts.WorkshopHost.Size = UDim2.new(1, -20, 1, -52)
+		for _, button in pairs(parts.TabButtons) do
+			button.TextSize = 15
+		end
 		for _, thumb in pairs(picker.Thumbs) do
 			thumb.Card.Size = UDim2.fromOffset(128, 98)
 		end
@@ -943,6 +1084,9 @@ local function layoutPicker()
 		if statLayout then
 			statLayout.Padding = UDim.new(0, 6)
 		end
+	end
+	if workshop then
+		workshop:Layout(phone)
 	end
 end
 
@@ -978,6 +1122,10 @@ setPicker = function(open: boolean)
 		refreshPicker()
 	else
 		picker.Dragging = false
+		-- (v10) les essais non payés de l'atelier s'effacent à la fermeture
+		if workshop then
+			workshop:Reset()
+		end
 	end
 end
 
@@ -1240,6 +1388,16 @@ local function stopDriving()
 	refreshPrompts() -- (v9.7) l'invite "Conduire" revient une fois descendu
 end
 
+-- (v10) préparation lue sur le modèle (attribut "Tuning" = "ETS", posé par CarService)
+local function tuningOfModel(model: Instance): any
+	local text = model:GetAttribute("Tuning")
+	local e, t, s = 0, 0, 0
+	if type(text) == "string" and #text == 3 then
+		e, t, s = tonumber(string.sub(text, 1, 1)) or 0, tonumber(string.sub(text, 2, 2)) or 0, tonumber(string.sub(text, 3, 3)) or 0
+	end
+	return { Engine = e, Tyres = t, Suspension = s }
+end
+
 local function startDriving(seat: VehicleSeat)
 	local model = seat.Parent
 	if not model or not model:IsA("Model") then
@@ -1310,6 +1468,12 @@ local function startDriving(seat: VehicleSeat)
 		Slip = 0,
 		Smoke = smoke,
 		Handling = CarModels.Handling(carId),
+		Stats = CarModels.Stats(carId, tuningOfModel(model)),
+		TuningKey = tostring(model:GetAttribute("Tuning") or ""),
+		Drift = 0,
+		Kick = 0,
+		Throttle = 0,
+		Braking = false,
 		LastSafe = root.CFrame,
 		SafeClock = 0,
 		LightClock = 0,
@@ -1330,15 +1494,21 @@ local function startDriving(seat: VehicleSeat)
 end
 
 -- Un pas de conduite (dt en s) : exporté pour les tests (CarClient.Debug().Step)
--- (v9.8, CARS98) conduite plus douce et plus "voiture" :
---  - chaque modèle a son caractère (CarModels.Handling : vitesse max,
---    accélération, adhérence) ; accélération qui s'essouffle près de la
---    vitesse max ; direction lissée (le volant ne claque plus) ;
---  - GLISSE : la vitesse garde une part latérale qui ne se résorbe que
---    progressivement (adhérence) ; à fond en braquant fort, l'adhérence
---    baisse -> la voiture dérape (drift) avec un peu de fumée aux roues
---    arrière (particules locales, douces) ;
---  - caméra : champ de vision qui s'élargit avec la vitesse.
+-- (v9.8, CARS98) conduite douce, caractère par modèle, glisse, fumée, champ de vision.
+-- (v10, CARS10) :
+--  - performances = CarModels.Stats(modèle, préparation) : vitesse max
+--    (autoroute), accélération, freinage, adhérence, direction ;
+--  - STABLE à haute vitesse : la direction se durcit (Stability), le volant
+--    se lisse davantage, pas de louvoiement ;
+--  - DRIFT amusant mais contrôlable : il s'installe progressivement (volant
+--    à fond + vitesse + accélérateur), survirage doux, et le contre-braquage
+--    rattrape la voiture ;
+--  - feux STOP / recul (state local lu par animateLights), clignotants
+--    automatiques dans les virages lents ;
+--  - caméra : champ de vision qui s'élargit avec la vitesse + petit "coup"
+--    à la réaccélération (subtil) ;
+--  - voiture ancrée (compte à rebours d'une course, CarService:SetFrozen) :
+--    vitesse remise à 0, pas de bond au départ.
 local function step(dt: number)
 	local d = driving
 	if not d then
@@ -1350,6 +1520,13 @@ local function step(dt: number)
 		stopDriving()
 		return
 	end
+	-- performances (la préparation peut changer pendant qu'on roule)
+	local tuningKey = tostring(d.Model:GetAttribute("Tuning") or "")
+	if tuningKey ~= d.TuningKey then
+		d.TuningKey = tuningKey
+		d.Stats = CarModels.Stats(d.CarId, tuningOfModel(d.Model))
+	end
+	local st = d.Stats
 	local throttle = seat.ThrottleFloat
 	local steer = seat.SteerFloat
 	if math.abs(throttle) < 0.01 and math.abs(steer) < 0.01 then
@@ -1359,47 +1536,79 @@ local function step(dt: number)
 	end
 	throttle = math.clamp(throttle, -1, 1)
 	steer = math.clamp(steer, -1, 1)
-	local h = d.Handling
-	-- volant lissé (plus vite pour revenir au centre)
-	local steerRate = if math.abs(steer) < math.abs(d.Steer) then 7 else 4.5
-	d.Steer += math.clamp(steer - d.Steer, -steerRate * dt, steerRate * dt)
-	local maxSpeed = Config.Cars.MaxSpeed * h.Speed
+	d.Throttle = throttle
+	local maxSpeed = st.TopSpeed
 	local look = Vector3.new(-math.sin(d.Heading), 0, -math.cos(d.Heading))
 	local actual = root.AssemblyLinearVelocity:Dot(look)
+	-- départ de course : bloquée sur la grille
+	if root.Anchored then
+		d.Speed, d.Vel, d.Drift, d.Slip, d.Braking = 0, Vector3.zero, 0, 0, throttle < -0.05
+		if d.Drive then
+			d.Drive.PlaneVelocity = Vector2.new(0, 0)
+		end
+		if gui then
+			parts.Speed.Text = "0"
+			parts.Fill.Size = UDim2.fromScale(0, 1)
+		end
+		return
+	end
+	local ratio = math.clamp(math.abs(actual) / maxSpeed, 0, 1)
+	-- volant lissé (plus vite pour revenir au centre, plus doux à haute vitesse)
+	local steerRate = (if math.abs(steer) < math.abs(d.Steer) then 7 else 4.5) * (1 - 0.35 * ratio)
+	d.Steer += math.clamp(steer - d.Steer, -steerRate * dt, steerRate * dt)
 	-- vitesse visée
 	local target = 0
-	local rate = COAST
+	local rate = st.Coast
+	local braking = false
 	if throttle > 0.05 then
 		target = throttle * maxSpeed
 		local fade = 1 - 0.55 * math.clamp(math.max(actual, 0) / maxSpeed, 0, 1) ^ 2
-		rate = if actual < -1 then BRAKE else ACCEL * h.Accel * fade
+		if actual < -1 then
+			rate, braking = st.Brake, true
+		else
+			rate = st.Accel * fade
+		end
 	elseif throttle < -0.05 then
 		if actual > 1 then
 			target = 0
-			rate = BRAKE
+			rate, braking = st.Brake, true
 		else
-			target = throttle * Config.Cars.ReverseSpeed
-			rate = ACCEL * 0.7
+			target = throttle * st.Reverse
+			rate = st.Accel * 0.7
 		end
 	end
+	d.Braking = braking
 	-- on part de la vitesse RÉELLE (contre un mur, elle retombe)
 	local base = if math.abs(actual - d.Speed) > 6 then actual else d.Speed
 	local delta = math.clamp(target - base, -rate * dt, rate * dt)
-	local speed = math.clamp(base + delta, -Config.Cars.ReverseSpeed, maxSpeed)
+	local speed = math.clamp(base + delta, -st.Reverse, maxSpeed)
 	if math.abs(speed) < 0.05 and target == 0 then
 		speed = 0
 	end
+	-- petit "coup" de champ de vision quand on réaccélère fort
+	if throttle > 0.8 and delta > 0 and speed > maxSpeed * 0.3 then
+		d.Kick = math.min(1, d.Kick + dt * 2)
+	else
+		d.Kick = math.max(0, d.Kick - dt * 1.5)
+	end
 	d.Speed = speed
-	-- virage : proportionnel à la vitesse (pas de rotation à l'arrêt), plus doux à fond
-	local factor = math.clamp(math.abs(speed) / 12, 0, 1) * (1 - 0.4 * math.clamp(math.abs(speed) / maxSpeed, 0, 1))
+	-- DRIFT progressif : volant fort + vitesse + gaz
+	local want = math.clamp((math.abs(d.Steer) - 0.5) / 0.4, 0, 1) * math.clamp((math.abs(speed) / maxSpeed - 0.5) / 0.25, 0, 1) * (if throttle > 0.3 then 1 else 0.35)
+	d.Drift += (want - d.Drift) * math.clamp(dt * (if want > d.Drift then 2.5 else 4), 0, 1)
+	-- virage : proportionnel à la vitesse, plus dur à fond (stabilité), survirage en dérive
+	local factor = math.clamp(math.abs(speed) / 12, 0, 1) * (1 - (1 - st.Stability) * math.clamp(math.abs(speed) / maxSpeed, 0, 1))
 	local direction = if speed >= 0 then 1 else -1
-	d.Heading -= d.Steer * TURN_RATE * factor * direction * dt
+	d.Heading -= d.Steer * st.TurnRate * factor * direction * (1 + 0.35 * d.Drift) * dt
 	look = Vector3.new(-math.sin(d.Heading), 0, -math.cos(d.Heading))
 	local right = Vector3.new(-look.Z, 0, look.X)
 	-- glisse latérale : ce qui reste de l'ancienne vitesse sur le côté
-	local drifting = math.abs(d.Steer) > 0.6 and speed > maxSpeed * 0.62 and throttle > 0.3
-	local grip = (if drifting then 3 else 10) * h.Grip
-	local lateral = d.Vel:Dot(right) * math.exp(-grip * dt)
+	local lateral0 = d.Vel:Dot(right)
+	local grip = st.Grip + (st.DriftGrip - st.Grip) * d.Drift
+	-- contre-braquage (volant vers l'extérieur de la glisse) : rattrape vite
+	if math.abs(lateral0) > 2 and d.Steer * lateral0 > 0 then
+		grip *= 1.8
+	end
+	local lateral = lateral0 * math.exp(-grip * dt)
 	if math.abs(lateral) < 0.05 then
 		lateral = 0
 	end
@@ -1439,17 +1648,17 @@ local function step(dt: number)
 	for _, smoke in ipairs(d.Smoke) do
 		smoke.Enabled = d.Slip > 5
 	end
-	-- caméra : champ de vision un peu plus large en allant vite
+	-- caméra : champ de vision un peu plus large en allant vite (subtil)
 	local camera = workspace.CurrentCamera
 	if camera then
-		local want = BASE_FOV + 12 * math.clamp(math.abs(actual) / maxSpeed, 0, 1)
-		camera.FieldOfView += (want - camera.FieldOfView) * math.clamp(dt * 3, 0, 1)
+		local wantFov = BASE_FOV + 11 * ratio ^ 1.3 + 3 * d.Kick
+		camera.FieldOfView += (wantFov - camera.FieldOfView) * math.clamp(dt * 3, 0, 1)
 	end
 	-- HUD (compteur : 1 stud/s ≈ 1 km/h, arrondi)
 	if gui then
 		local shown = math.floor(math.abs(actual) + 0.5)
 		parts.Speed.Text = tostring(shown)
-		parts.Fill.Size = UDim2.fromScale(math.clamp(math.abs(actual) / maxSpeed, 0, 1), 1)
+		parts.Fill.Size = UDim2.fromScale(ratio, 1)
 	end
 	d.LightClock += dt
 	if d.LightClock > 1 then
@@ -1627,7 +1836,18 @@ local function refreshGarage(g: Garage)
 	local text = owner and owner:GetAttribute("DopamineCars") or ""
 	local selected = owner and owner:GetAttribute("DopamineCar") or ""
 	local out = owner and owner:GetAttribute("DopamineCarOut") == true
-	local key = tostring(text) .. "|" .. tostring(selected) .. "|" .. tostring(out)
+	-- (v10) options de l'atelier : "carId>Kind=Id;.../carId2>..."
+	local modsText = owner and owner:GetAttribute("DopamineCarMods") or ""
+	local modsOf: { [string]: any } = {}
+	if type(modsText) == "string" then
+		for entry in string.gmatch(modsText, "[^/]+") do
+			local id, rest = string.match(entry, "^([%w_]+)>(.*)$")
+			if id then
+				modsOf[id] = CarModels.DecodeMods(rest)
+			end
+		end
+	end
+	local key = tostring(text) .. "|" .. tostring(selected) .. "|" .. tostring(out) .. "|" .. tostring(modsText)
 	if key == g.Key then
 		return
 	end
@@ -1637,7 +1857,7 @@ local function refreshGarage(g: Garage)
 	for _, entry in ipairs(list) do
 		table.insert(shape, entry.Id)
 	end
-	local shapeKey = table.concat(shape, ",") .. "|" .. tostring(selected) .. "|" .. tostring(out)
+	local shapeKey = table.concat(shape, ",") .. "|" .. tostring(selected) .. "|" .. tostring(out) .. "|" .. tostring(modsText)
 	if shapeKey == g.ShapeKey then
 		g.Key = key
 		for _, entry in ipairs(list) do
@@ -1661,7 +1881,7 @@ local function refreshGarage(g: Garage)
 		if bay and not (out and entry.Id == selected) then
 			-- (v9.9) mon garage : voitures détaillées ; celui des autres : "Mid"
 			local detail = if g.OwnerId == LocalPlayer.UserId then "Full" else "Mid"
-			local ok, model = pcall(CarModels.Build, entry.Id, entry.Color, { Detail = detail })
+			local ok, model = pcall(CarModels.Build, entry.Id, entry.Color, { Detail = detail, Mods = modsOf[entry.Id] })
 			if ok and model then
 				model.Name = "Parked_" .. entry.Id
 				model:PivotTo(GarageLayout.BayCFrame(g.HouseCF, bay))
@@ -1913,6 +2133,79 @@ local function animateWheels(dt: number)
 end
 
 ----------------------------------------------------------------------
+-- 🚦 (v10, CARS10) FEUX des voitures des joueurs, vus par TOUS les clients
+-- (locaux, jamais répliqués, CarModels.LightRig / SetLights) :
+--  - STOP : ma voiture = je freine ; les autres = décélération mesurée,
+--    ou arrêtée avec quelqu'un au volant (pied sur le frein) ;
+--  - RECUL : marche arrière ;
+--  - CLIGNOTANTS automatiques dans les virages lents (roues braquées),
+--    feux de détresse pendant le compte à rebours d'une course ;
+--  - PHARES / feux de jour allumés dès que quelqu'un est au volant.
+-- 10 fois / s, seulement près de la caméra.
+----------------------------------------------------------------------
+
+type CarLights = { Rig: any, Root: BasePart, LastSpeed: number, BrakeHold: number }
+local carLights: { [Model]: CarLights | false } = {}
+local LIGHT_RANGE = 180
+
+local function animateLights(dt: number)
+	local folder = carsFolder
+	if not folder or not folder.Parent then
+		return
+	end
+	local camera = workspace.CurrentCamera
+	local camPos = camera and camera.CFrame.Position
+	local blinkOn = (os.clock() % 0.7) < 0.38
+	for _, model in ipairs(folder:GetChildren()) do
+		if model:IsA("Model") then
+			local entry = carLights[model]
+			if entry == nil then
+				local root = model.PrimaryPart
+				if root then
+					entry = { Rig = CarModels.LightRig(model), Root = root, LastSpeed = 0, BrakeHold = 0 }
+					carLights[model] = entry
+				end
+			end
+			if entry and entry.Root.Parent and (camPos == nil or (entry.Root.Position - camPos).Magnitude < LIGHT_RANGE) then
+				local root = entry.Root
+				local speed = root.AssemblyLinearVelocity:Dot(root.CFrame.LookVector)
+				local accel = (speed - entry.LastSpeed) / math.max(dt, 1e-3)
+				entry.LastSpeed = speed
+				local occupied = model:GetAttribute("Occupied") == true or (driving ~= nil and driving.Model == model)
+				local brake = false
+				if driving and driving.Model == model then
+					brake = driving.Braking == true or (math.abs(speed) < 0.5 and (driving.Throttle or 0) <= 0.05)
+				elseif occupied then
+					if (speed > 1 and accel < -9) or (speed < -1 and accel > 9) then
+						entry.BrakeHold = 0.4
+					end
+					entry.BrakeHold = math.max(0, entry.BrakeHold - dt)
+					brake = entry.BrakeHold > 0 or math.abs(speed) < 0.5
+				end
+				local blink = 0
+				local anim = wheelAnims[model]
+				if occupied and anim and math.abs(speed) > 1 and math.abs(speed) < 30 and math.abs(anim.SteerNow) > 0.3 then
+					blink = if anim.SteerNow > 0 then -1 else 1
+				end
+				local frozen = model:GetAttribute("Frozen") == true
+				CarModels.SetLights(entry.Rig, {
+					Brake = occupied and brake,
+					Reverse = occupied and speed < -0.5,
+					Blink = if blinkOn then blink else 0,
+					Hazard = frozen and blinkOn,
+					Head = occupied,
+				})
+			end
+		end
+	end
+	for model in pairs(carLights) do
+		if not model.Parent then
+			carLights[model] = nil
+		end
+	end
+end
+
+----------------------------------------------------------------------
 -- Cycle de vie
 ----------------------------------------------------------------------
 
@@ -1973,10 +2266,15 @@ function CarClient.Start(startOptions: any?)
 		end
 		targetClock += dt
 		if targetClock >= 0.1 then
+			local elapsed = targetClock
 			targetClock = 0
 			local ok, err = pcall(garageTargets)
 			if not ok then
 				warn("[CarClient] Garages : " .. tostring(err))
+			end
+			local okL, errL = pcall(animateLights, elapsed)
+			if not okL then
+				warn("[CarClient] Feux : " .. tostring(errL))
 			end
 		end
 		hudClock += dt
@@ -2007,6 +2305,7 @@ function CarClient.Stop()
 	table.clear(garages)
 	table.clear(drivePrompts)
 	table.clear(wheelAnims)
+	table.clear(carLights)
 	carsFolder = nil
 	pickerOpen = false
 	-- (v9.8) aperçus 3D de "Mes voitures"
@@ -2017,6 +2316,8 @@ function CarClient.Stop()
 	table.clear(picker.Thumbs)
 	table.clear(picker.Pending)
 	table.clear(picker.Local)
+	table.clear(picker.Keys)
+	workshop = nil
 	picker.Viewing = ""
 	picker.Dragging = false
 	if gui then
@@ -2046,6 +2347,11 @@ function CarClient.Debug(): any
 		Zones = shopZones,
 		Wheels = wheelAnims,
 		AnimateWheels = animateWheels,
+		Lights = carLights,
+		AnimateLights = animateLights,
+		Workshop = function()
+			return workshop
+		end,
 	}
 end
 

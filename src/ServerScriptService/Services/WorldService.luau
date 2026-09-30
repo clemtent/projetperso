@@ -4,7 +4,12 @@
 
 	🚶 Dopamine Town : mode "on se promène en 3D avec son avatar".
 	  - au démarrage : la ville (TownMap) avec une parcelle par joueur
-	    possible (WorldLayout.PlotCount(Players.MaxPlayers), 4..12) ;
+	    possible (WorldLayout.PlotCount(Players.MaxPlayers), 4..50) ;
+	    (v10, LAYOUT10) la parcelle est dans le QUARTIER du style de la maison
+	    (WorldLayout.PickPlot : chaumières, maisons de ville, lofts, manoirs ;
+	    sinon le quartier le plus proche qui a une place) ; après un
+	    changement de style, le joueur déménage au bon quartier à sa prochaine
+	    entrée en ville s'il y a une place libre ;
 	  - chaque joueur reçoit une parcelle à son arrivée (libérée à son
 	    départ : panneau remis à "✨ Free plot") ;
 	  - les MAISONS sont construites par les clients (HouseBuilder) à partir
@@ -154,6 +159,18 @@ local function sizeDefOf(data: any): any
 	local house = type(data) == "table" and data.House or nil
 	local id = type(house) == "table" and house.Size or nil
 	return Config.HouseSizesById[id] or Config.House.Sizes[1]
+end
+
+-- (v10, LAYOUT10) parcelle libre dans le quartier du style de la maison
+local function pickPlotFor(player: Player): number?
+	local current = town
+	if not current then
+		return nil
+	end
+	local style = WorldLayout.StyleOf(sizeDefOf(dataOf(player)))
+	return WorldLayout.PickPlot(#current.Plots, style, function(index: number): boolean
+		return current.Plots[index] ~= nil and plotOwners[index] == nil
+	end)
 end
 
 local function playerById(userId: any): Player?
@@ -555,6 +572,27 @@ local function enter(player: Player, argument: any): (boolean, any)
 	local state = stateOf(player)
 	if not RateLimiter.Check(player, "WorldEnter", 2) then
 		return false, T(player, "Slow down!")
+	end
+	-- (v10, LAYOUT10) style de maison changé : déménagement vers le bon
+	-- quartier (seulement à l'entrée en ville, s'il y a une place libre)
+	local current = town
+	if current and state.Plot and not state.InTown then
+		local count = #current.Plots
+		local style = WorldLayout.StyleOf(sizeDefOf(dataOf(player)))
+		local want = WorldLayout.DistrictForStyle(style)
+		local here = WorldLayout.PlotPlaceData(state.Plot, count)
+		if here and here.District ~= want then
+			local index = pickPlotFor(player)
+			local there = index and WorldLayout.PlotPlaceData(index, count)
+			if index and there and there.District == want then
+				local old = state.Plot :: number
+				plotOwners[old] = nil
+				plotOwners[index] = player
+				state.Plot = index
+				refreshSign(old)
+				refreshSign(index)
+			end
+		end
 	end
 	state.InTown = true
 	local target: Player? = nil
@@ -979,12 +1017,10 @@ function WorldService:PlayerReady(player: Player, data)
 	local state = stateOf(player)
 	local current = town
 	if current and not state.Plot then
-		for index = 1, #current.Plots do
-			if not plotOwners[index] then
-				plotOwners[index] = player
-				state.Plot = index
-				break
-			end
+		local index = pickPlotFor(player)
+		if index then
+			plotOwners[index] = player
+			state.Plot = index
 		end
 	end
 	if state.Plot then

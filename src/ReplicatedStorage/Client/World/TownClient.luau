@@ -119,6 +119,8 @@ local deskWired = false
 local plazaFxWarned = false -- (v9.7) une seule alerte si TownPlazaFx.Step échoue
 local fairFxWarned = false -- (v9.8) une seule alerte si FairFx.Step échoue
 local musicStageWarned = false -- (v9.9) une seule alerte si MusicStage.Step échoue
+local constructionWarned = false -- (v10) une seule alerte si HouseConstruction.Step échoue
+local raceClientWarned = false -- (v10) une seule alerte si RaceClient.Step échoue
 
 ----------------------------------------------------------------------
 -- Utilitaires
@@ -314,6 +316,11 @@ local function syncHouses()
 				if not ok then
 					warn("[Town] Maison " .. tostring(userId) .. " : " .. tostring(err))
 				end
+				-- v10 🏗️ nouveau style -> la maison se reconstruit sous nos yeux (CONSTRUCT10)
+				local construction = optionalModule("HouseConstruction")
+				if construction and type(construction.Observe) == "function" then
+					pcall(construction.Observe, userId, house, snapshot)
+				end
 				local garden = gardens[userId]
 				if garden then
 					pcall(garden.Update, garden, snapshot.DopamineGarden)
@@ -346,6 +353,11 @@ local function syncHouses()
 					result.OnSeat = onSeat
 					houses[nextId :: number] = result
 					createGarden(nextId :: number, result, snapshot, nextPlot, count)
+					-- v10 🏗️ joueur qui arrive : sa maison se construit (chantier -> maison) (CONSTRUCT10)
+					local construction = optionalModule("HouseConstruction")
+					if construction and type(construction.Observe) == "function" then
+						pcall(construction.Observe, nextId, result, snapshot)
+					end
 				else
 					warn("[Town] Maison " .. tostring(nextId) .. " : " .. tostring(result))
 					snapshots[nextId :: number] = nil
@@ -439,12 +451,15 @@ local KEEP_GUIS: { [string]: boolean } = {
 	Freecam = true,
 	DeskModeGui = true, -- v9.5 🖥️ barre "Se lever" du bureau (DeskMode)
 	MusicStageGui = true, -- v9.9 🎵 panneau de jeu des instruments, choix des morceaux (MusicStage, MUSIC99)
+	HouseFacadeEditor = true, -- v10 🏠 éditeur 3D de l'extérieur de la maison (HOUSE10)
+	RaceGui = true, -- v10 🏁 courses de rue : menu, HUD de course, résultats (RaceHud, RACE10)
 	FairGui = true, -- v9.8 🍦 menu des stands, badge du boost, bouton Croquer (FairFx, FAIR98)
 	GardenEditGui = true, -- v9.8 🌷 mode édition du jardin (GardenEdit, GARDEN98)
 	TownGraphicsGui = true, -- v9.8 🎨 fenêtre Graphismes en ville (TownGraphics, REALISM98)
 	TownInventoryGui = true, -- v9.6 plateau inventaire 3D (FurnitureEdit, PLACE96)
 	TownShopGui = true, -- v9.6 catalogue des magasins (ShopUI, SHOPS96)
 	CarGui = true, -- v9.6 conduite (CarClient, GARAGE96)
+	ConstructionGui = true, -- v10 🏗️ "Ta maison se construit…", ⏭ Passer, "Ta maison est prête !" (HouseConstruction, CONSTRUCT10)
 }
 local function keepGui(name: string): boolean
 	return KEEP_GUIS[name] == true or string.find(name, "Touch", 1, true) ~= nil or string.find(name, "Prompt", 1, true) ~= nil
@@ -903,6 +918,24 @@ local function step(dt: number)
 			warn("[Town] MusicStage.Step : " .. tostring(errMusic))
 		end
 	end
+	-- v10 🏁 courses de rue (RaceClient : IA lissées, feux synchronisés, HUD)
+	local raceClient = optionalModule("RaceClient")
+	if raceClient and type(raceClient.Step) == "function" then
+		local okRace, errRace = pcall(raceClient.Step, dt)
+		if not okRace and not raceClientWarned then
+			raceClientWarned = true
+			warn("[Town] RaceClient.Step : " .. tostring(errRace))
+		end
+	end
+	-- v10 🏗️ chantiers des parcelles libres + maisons qui se construisent (HouseConstruction, CONSTRUCT10)
+	local construction = optionalModule("HouseConstruction")
+	if construction and type(construction.Step) == "function" then
+		local okC, errC = pcall(construction.Step, dt)
+		if not okC and not constructionWarned then
+			constructionWarned = true
+			warn("[Town] HouseConstruction.Step : " .. tostring(errC))
+		end
+	end
 	if clocks.Loc >= LOC_EVERY then
 		clocks.Loc = 0
 		pcall(localizeTown)
@@ -1117,6 +1150,11 @@ local function playIntro(character: Model)
 				startGuide()
 				toast(Locale.T("🚶 Welcome to Dopamine Town!"), Color3.fromRGB(236, 72, 140))
 				toast(Locale.T("Your house: follow the 🧭 compass, or tap 🏠 Go home"))
+				-- v10 🏗️ moment "ta maison se construit" (CONSTRUCT10)
+				local construction = optionalModule("HouseConstruction")
+				if construction and type(construction.ArrivalDone) == "function" then
+					pcall(construction.ArrivalDone)
+				end
 			end
 		end,
 	})
@@ -1296,6 +1334,14 @@ local function enter(options: any)
 				warn("[Town] MusicStage.Start : " .. tostring(errMusic))
 			end
 		end
+		-- v10 🏁 courses de rue (RaceClient, RACE10) : QG, portiques, pilotes IA, HUD
+		local raceClient = optionalModule("RaceClient")
+		if raceClient and type(raceClient.Start) == "function" then
+			local okRace, errRace = pcall(raceClient.Start, { Toast = toast })
+			if not okRace then
+				warn("[Town] RaceClient.Start : " .. tostring(errRace))
+			end
+		end
 		-- v9.7 🌳 nature : détails de près (arbres, lac, aire de jeux) côté client (NATURE97)
 		local greenery = optionalModule("TownGreenery")
 		if greenery and type(greenery.Start) == "function" then
@@ -1322,10 +1368,36 @@ local function enter(options: any)
 				warn("[Town] SitAnimator.Start : " .. tostring(errSit))
 			end
 		end
+		-- v10 💥 se faire renverser, étoiles, se relever, sortir de voiture par la portière (PHYS10)
+		local knockdown = optionalModule("Knockdown")
+		if knockdown and type(knockdown.Start) == "function" then
+			local okKd, errKd = pcall(knockdown.Start, { Toast = toast })
+			if not okKd then
+				warn("[Town] Knockdown.Start : " .. tostring(errKd))
+			end
+		end
 		local folder = Instance.new("Folder")
 		folder.Name = HOUSES_FOLDER
 		folder.Parent = workspace
 		housesFolder = folder
+		-- v10 🏗️ chantiers + maisons qui se construisent (HouseConstruction, CONSTRUCT10)
+		local construction = optionalModule("HouseConstruction")
+		if construction and type(construction.Start) == "function" then
+			local okC, errC = pcall(construction.Start, {
+				Folder = folder,
+				Toast = toast,
+				Hud = hud,
+				GetSnapshots = function()
+					return snapshots
+				end,
+				GetHouses = function()
+					return houses
+				end,
+			})
+			if not okC then
+				warn("[Town] HouseConstruction.Start : " .. tostring(errC))
+			end
+		end
 		-- (les instantanés arrivent par l'événement "Houses" ; secours si besoin)
 		if next(snapshots) == nil then
 			local okList, list = invoke("houses", nil)
@@ -1399,6 +1471,11 @@ local function enter(options: any)
 			playIntro(character)
 		else
 			followCamera(character)
+			-- v10 🏗️ moment "ta maison se construit" (CONSTRUCT10)
+			local construction = optionalModule("HouseConstruction")
+			if construction and type(construction.ArrivalDone) == "function" then
+				pcall(construction.ArrivalDone)
+			end
 			if arrival then
 				startGuide()
 				toast(Locale.T("🚶 Welcome to Dopamine Town!"), Color3.fromRGB(236, 72, 140))
@@ -1446,6 +1523,11 @@ local function teardown()
 		if petRoam and type(petRoam.Stop) == "function" then
 			pcall(petRoam.Stop)
 		end
+		-- v10 🏗️ chantiers / constructions : tout rendu tout de suite, caméra comprise (CONSTRUCT10)
+		local construction = optionalModule("HouseConstruction")
+		if construction and type(construction.Stop) == "function" then
+			pcall(construction.Stop)
+		end
 	end
 	for userId in pairs(gardens) do
 		destroyGarden(userId)
@@ -1465,6 +1547,11 @@ local function teardown()
 	currentContext = nil
 	-- (DeskMode rend sa caméra AVANT qu'on remette la nôtre)
 	deskCall("Stop")
+	-- v10 🏁 courses : on quitte la salle / la course, décor et HUD retirés
+	local raceClient = optionalModule("RaceClient")
+	if raceClient and type(raceClient.Stop) == "function" then
+		pcall(raceClient.Stop)
+	end
 	-- v9.6 🚗 on descend de voiture, HUD retiré (avant de rendre la caméra)
 	local car = optionalModule("CarClient")
 	if car and type(car.Stop) == "function" then
@@ -1528,6 +1615,10 @@ local function teardown()
 	local sitAnimator = optionalModule("SitAnimator")
 	if sitAnimator and type(sitAnimator.Stop) == "function" then
 		pcall(sitAnimator.Stop)
+	end
+	local knockdown = optionalModule("Knockdown")
+	if knockdown and type(knockdown.Stop) == "function" then
+		pcall(knockdown.Stop)
 	end
 	hud:SetDeskMode(false)
 	local s = saved

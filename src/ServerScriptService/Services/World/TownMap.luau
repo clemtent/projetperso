@@ -53,6 +53,7 @@ local TownNature = require(script.Parent.TownNature)
 local TownShops = require(script.Parent.TownShops)
 local TownMarket = require(script.Parent.TownMarket) -- (v9.7) 🛒 supermarché
 local TownFair = require(script.Parent.TownFair) -- (v9.8, FAIR98) 🎡 fête foraine + 🍦 coin gourmand
+local TownNetwork = require(script.Parent.TownNetwork) -- (v10, LAYOUT10) routes de la grande ville, autoroute, ponts
 
 local TownMap = {}
 
@@ -106,6 +107,10 @@ local function buildPlot(parent: Instance, index: number, count: number): PlotIn
 	model.Name = "Plot_" .. index
 	model:SetAttribute("Index", index)
 	model:SetAttribute("OwnerId", 0)
+	-- (v10, LAYOUT10) quartier de la parcelle (WorldLayout.PlotDistrict)
+	local district = WorldLayout.PlotDistrict(index, count)
+	model:SetAttribute("District", district and district.Id or "Mixed")
+	model:SetAttribute("DistrictStyle", district and district.Style or "Mixed")
 	model.Parent = parent
 	local W, D = WorldLayout.PLOT_W, WorldLayout.PLOT_D
 	local g = WorldLayout.GROUND_Y
@@ -113,36 +118,11 @@ local function buildPlot(parent: Instance, index: number, count: number): PlotIn
 	local base = part(model, "Lawn", Vector3.new(W, 0.3, D), plotCF * CFrame.new(0, g - 0.1, 0), C.Lawn, M.Grass, "solid")
 	base:SetAttribute("PlotIndex", index)
 	-- bordure en pierre côté rue
-	part(model, "Edging", Vector3.new(W, 0.25, 0.6), plotCF * CFrame.new(0, g + 0.1, -D / 2 + 0.3), C.Stone, M.Granite, "deco")
-	-- clôtures blanches sur les côtés (planches + lisse + poteaux), haie au fond
-	local fence = Color3.fromRGB(255, 252, 246)
-	for _, sx in ipairs({ -1, 1 }) do
-		local x = sx * (W / 2 - 0.4)
-		local len = D - 6
-		local zc = 3
-		part(model, "Fence", Vector3.new(0.25, 2.4, len), plotCF * CFrame.new(x, g + 1.4, zc), fence, M.WoodPlanks, "prop")
-		part(model, "FenceRail", Vector3.new(0.4, 0.3, len), plotCF * CFrame.new(x, g + 2.75, zc), fence, M.Wood, "deco")
-		local posts = 3
-		for i = 0, posts do
-			local z = zc - len / 2 + i * len / posts
-			part(model, "FencePost", Vector3.new(0.6, 3.4, 0.6), plotCF * CFrame.new(x, g + 1.7, z), fence, M.Wood, "deco")
-		end
-	end
-	-- (v9.7 NATURE97) haie taillée au dessus arrondi
-	TownKit.Hedge(model, plotCF * CFrame.new(0, g, D / 2 - 1.35), W - 1.6, 2.6, 4.2, index)
-	-- deux arbres aux coins avant (hors de la zone des décorations de jardin) :
-	-- (v9.7 NATURE97) arbre fruitier / cerisier / bouleau selon la parcelle
-	for _, sx in ipairs({ -1, 1 }) do
-		local species = ({ "Fruit", "Cherry", "Birch", "Maple" })[(index + (sx > 0 and 1 or 0)) % 4 + 1]
-		TownKit.Tree(model, (plotCF * CFrame.new(sx * (W / 2 - 5), g, -D / 2 + 5)).Position, 13 + (index % 3), index * 7 + sx, species, { Lawn = true })
-	end
-	-- boîte aux lettres (à gauche du chemin vu de la rue)
-	local mailCF = plotCF * CFrame.new(-7, g, -D / 2 + 2.5)
-	part(model, "MailPost", Vector3.new(0.45, 3.4, 0.45), mailCF * CFrame.new(0, 1.7, 0), C.Wood, M.Wood, "prop")
-	part(model, "MailBox", Vector3.new(1.6, 1.2, 2.4), mailCF * CFrame.new(0, 3.9, 0), Color3.fromRGB(255, 140, 188), M.Metal, "deco")
-	local lid = part(model, "MailTop", Vector3.new(2.4, 1.6, 1.6), mailCF * CFrame.new(0, 4.5, 0) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(255, 140, 188), M.Metal, "deco")
-	;(lid :: Part).Shape = Enum.PartType.Cylinder
-	part(model, "MailFlag", Vector3.new(0.12, 1, 0.5), mailCF * CFrame.new(0.85, 4.6, 0.5), Color3.fromRGB(236, 60, 90), M.SmoothPlastic, "deco")
+	part(model, "Edging", Vector3.new(W, 0.25, 0.6), plotCF * CFrame.new(0, g + 0.1, -D / 2 + 0.36), C.Stone, M.Granite, "deco") -- (v10) 0,06 en retrait : plus de z-fight avec le bord de la pelouse
+	-- (v10, LAYOUT10) clôtures, haie, boîte aux lettres et arbres de la parcelle :
+	-- construits côté CLIENT par HOUSE10 (parcelle habitée, options de la
+	-- maison) et CONSTRUCT10 (chantier des parcelles libres). Le serveur garde
+	-- la pelouse, sa bordure et le panneau du propriétaire (budget 50 parcelles).
 	-- panneau du propriétaire (à droite du chemin, face à la rue)
 	local signCF = plotCF * CFrame.new(10, g, -D / 2 + 2.5)
 	for _, sx in ipairs({ -1, 1 }) do
@@ -298,6 +278,12 @@ function TownMap.Build(plotCount: number): Town
 		warn("[TownMap] coin gourmand : " .. tostring(errCorner))
 	end
 	TownStreets.Build(decor, geo)
+	-- (v10, LAYOUT10) la grande ville : avenues, ceinture, rues des quartiers,
+	-- autoroute, bretelles, ponts, plateau de la colline des manoirs
+	local okNet, errNet = pcall(TownNetwork.Build, decor, geo)
+	if not okNet then
+		warn("[TownMap] réseau routier : " .. tostring(errNet))
+	end
 	TownNature.Build(decor, geo)
 	-- (v9.7) aucun arbre du bois planté sur le parking / dans le magasin
 	pcall(TownMarket.ClearSite, decor, plotCount)
@@ -315,6 +301,9 @@ function TownMap.Build(plotCount: number): Town
 	folder:SetAttribute("PlazaCF", WorldLayout.PlazaCFrame())
 	folder:SetAttribute("GateCF", WorldLayout.GateCFrame(plotCount))
 	folder:SetAttribute("TownRadius", WorldLayout.TownRadius(plotCount))
+	folder:SetAttribute("CityVersion", 10) -- (v10, LAYOUT10) grande ville : quartiers, autoroute
+	folder:SetAttribute("HighwayR", WorldLayout.HighwayR(plotCount))
+	folder:SetAttribute("BeltR", WorldLayout.BeltR(plotCount))
 	folder:SetAttribute("Parts", TownKit.Stats.Parts)
 	folder:SetAttribute("Lights", TownKit.Stats.Lights)
 	folder:SetAttribute("Shops", #shops:GetChildren())

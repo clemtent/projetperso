@@ -767,6 +767,13 @@ end
 ----------------------------------------------------------------------
 -- Géométrie de la ville (repère : centre de la place = Origin, sol y = 0)
 ----------------------------------------------------------------------
+-- (v10 LAYOUT10) La grande ville : le centre-ville est le carré du
+-- boulevard (WorldLayout.DOWNTOWN_B) ; ses 4 côtés sont les 4
+-- "emplacements" (0 = entrée +Z, 1 = +X, 2 = -Z mairie, 3 = -X). IsFree ne
+-- répond que pour l'INTÉRIEUR du centre-ville (le décor des parcs) ;
+-- IsFreeCity pour toute la ville (routes, parcelles, lieux réservés de
+-- WorldLayout.Facilities + réservations). Districts / Graph : ceux de
+-- WorldLayout (quartiers, graphe routier).
 -- Emplacements 0..m-1 autour de la place (0 = entrée, +Z), boulevard
 -- polygonal (un côté droit par emplacement). Repère d'un côté (SideFrame) :
 -- x le long de la rue (vers la droite de qui regarde la place), -z vers le
@@ -795,6 +802,9 @@ export type Geo = {
 	PolyRadius: (p: Vector3) -> number,
 	Reserve: (p: Vector3, r: number) -> (),
 	IsFree: (p: Vector3, r: number) -> boolean,
+	IsFreeCity: (p: Vector3, r: number) -> boolean,
+	Districts: { any },
+	Graph: any,
 }
 
 function TownKit.Geo(count: number): Geo
@@ -844,6 +854,22 @@ function TownKit.Geo(count: number): Geo
 	end
 	function g.Reserve(p: Vector3, r: number)
 		table.insert(g.Reserved, { P = p, R = r })
+	end
+	g.Districts = WorldLayout.Districts(count)
+	g.Graph = WorldLayout.RoadGraph(count)
+	-- Place libre n'importe où en ville (hors centre-ville : voir IsFree)
+	function g.IsFreeCity(p: Vector3, r: number): boolean
+		local rel = p - O
+		if not WorldLayout.IsFreeAt(count, rel.X, rel.Z, r) then
+			return false
+		end
+		for _, z in ipairs(g.Reserved) do
+			local dz = Vector3.new(p.X - z.P.X, 0, p.Z - z.P.Z)
+			if dz.Magnitude < z.R + r then
+				return false
+			end
+		end
+		return true
 	end
 	-- Place libre pour un objet de rayon r (hors rues, boulevard, place, zones réservées)
 	function g.IsFree(p: Vector3, r: number): boolean

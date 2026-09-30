@@ -22,9 +22,9 @@
 	    réseau de la voiture (CarClient lit VehicleSeat.ThrottleFloat /
 	    SteerFloat : clavier ZQSD / WASD / flèches, joystick mobile, manette).
 	    Garée (personne au volant) = ancrée : elle ne bouge jamais.
-	  - Sécurité : groupes de collision (voitures <-> avatars : AUCUNE
-	    collision, donc ni mort ni projection ; voitures <-> voitures non
-	    plus) ; ronde 4 fois / s : voiture tombée, retournée, trop rapide,
+	  - Sécurité : groupes de collision (v10, PHYS10 : voitures <-> avatars
+	    et voitures <-> voitures = collision ; renversé façon dessin animé,
+	    jamais de mort : ImpactService) ; ronde 4 fois / s : voiture tombée, retournée, trop rapide,
 	    entrée dans une maison (WorldLayout.InsideHouse) ou une boutique
 	    (attributs InteriorCF / InteriorSize, sauf AllowCars) -> remise à sa
 	    dernière position sûre ; rangée au bout de Config.Cars.IdleDespawn s
@@ -36,11 +36,20 @@
 	    voiture sortie.
 
 	Données : data.Cars = { Owned = { [carId] = true }, Colors = { [carId] =
-	colorId }, Selected = carId | "", Garage = bool }.
+	colorId }, Selected = carId | "", Garage = bool,
+	(v10, CARS10) Tuning = { [carId] = { Engine, Tyres, Suspension } (0..3) },
+	Mods = { [carId] = { [Kind] = Id } } (Config.Cars.Mods, sans l'origine),
+	Unlocked = { [carId] = { ["Kind:Id"] = true } } (options achetées),
+	Plates = { [carId] = "TEXTE" } (filtré par TextService) }.
 	RemoteFunction "Car" (action, a, b) -> (succès, message, extra?) :
 	  "buy" carId -> extra = Dopamine manquante (nombre) si trop cher
 	  "setColor" carId, colorId | "select" carId | "buyGarage"
+	  (v10) "setMod" carId, "Kind:Id" | "tune" carId, partId | "plate" carId, texte
+	    (achat vérifié : prix = CarModels.PriceFor, verrous, extra = manque)
 	  "spawn" | "exit" | "despawn" | "honk" | "reset"
+	Attribut (v10) DopamineCarMods = "carId>Kind=Id;Kind=Id/carId2>..." (garages).
+	Courses (v10, RACE10) : CarService:RaceSpawn / RaceRelease / SetFrozen /
+	GetStats (voir en bas).
 	Tout est dans des pcall, chaque action a sa limite de fréquence.
 ]]
 
@@ -48,6 +57,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local PhysicsService = game:GetService("PhysicsService")
+local TextService = game:GetService("TextService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
@@ -77,6 +87,8 @@ type Car = {
 	LastUsed: number,
 	LastSafe: CFrame,
 	Generation: number,
+	Frozen: boolean, -- (v10) départ de course : ancrée pendant le compte à rebours
+	Loaner: boolean, -- (v10) voiture de prêt des courses (pas possédée)
 }
 
 local services: any = nil
@@ -135,7 +147,46 @@ function CarService.Sanitize(data: any)
 			end
 		end
 	end
-	data.Cars = { Owned = owned, Colors = colors, Selected = selected, Garage = raw.Garage == true }
+	-- (v10, CARS10) atelier : préparation, options, achats, plaques (par voiture possédée)
+	local tuning, mods, unlocked, plates = {}, {}, {}, {}
+	local maxPlate = tonumber(Config.Cars.PlateMaxLength) or 8
+	for id in pairs(owned) do
+		local t = type(raw.Tuning) == "table" and raw.Tuning[id]
+		if type(t) == "table" then
+			local clean = CarModels.CleanTuning(t)
+			if clean.Engine + clean.Tyres + clean.Suspension > 0 then
+				tuning[id] = clean
+			end
+		end
+		local m = type(raw.Mods) == "table" and raw.Mods[id]
+		if type(m) == "table" then
+			local clean = CarModels.CleanMods(m)
+			if next(clean) ~= nil then
+				mods[id] = clean
+			end
+		end
+		local u = type(raw.Unlocked) == "table" and raw.Unlocked[id]
+		if type(u) == "table" then
+			local set = {}
+			for key, value in pairs(u) do
+				local kind, entryId = nil, nil
+				if type(key) == "string" then
+					kind, entryId = string.match(key, "^(%w+):(%w+)$")
+				end
+				if value == true and kind and entryId and Config.CarModsById[kind] and Config.CarModsById[kind][entryId] then
+					set[key] = true
+				end
+			end
+			if next(set) ~= nil then
+				unlocked[id] = set
+			end
+		end
+		local plate = type(raw.Plates) == "table" and raw.Plates[id]
+		if type(plate) == "string" and plate ~= "" and #plate <= maxPlate * 4 then
+			plates[id] = plate
+		end
+	end
+	data.Cars = { Owned = owned, Colors = colors, Selected = selected, Garage = raw.Garage == true, Tuning = tuning, Mods = mods, Unlocked = unlocked, Plates = plates }
 end
 
 local function ownedList(data: any): { string }
@@ -176,10 +227,17 @@ local function publish(player: Player)
 		return
 	end
 	local parts = {}
+	local modParts = {}
 	for _, id in ipairs(ownedList(data)) do
 		table.insert(parts, id .. ":" .. colorOf(data, id))
+		-- (v10) options de chaque voiture (garages vus par les autres clients)
+		local encoded = CarModels.EncodeMods(data.Cars.Mods and data.Cars.Mods[id])
+		if encoded ~= "" then
+			table.insert(modParts, id .. ">" .. encoded)
+		end
 	end
 	pcall(function()
+		player:SetAttribute("DopamineCarMods", table.concat(modParts, "/"))
 		player:SetAttribute("DopamineCars", table.concat(parts, ","))
 		player:SetAttribute("DopamineCar", data.Cars and data.Cars.Selected or "")
 		player:SetAttribute("DopamineGarage", hasGarage(data))
@@ -266,7 +324,9 @@ end
 CarService.IsForbidden = forbidden
 
 ----------------------------------------------------------------------
--- Groupes de collision : voitures <-> avatars = jamais
+-- Groupes de collision (v10, PHYS10) : voitures <-> avatars = OUI, voitures
+-- <-> voitures = OUI (on ne traverse plus rien ; se faire renverser :
+-- ImpactService). Matrice complète : Shared/ImpactRules.MATRIX.
 ----------------------------------------------------------------------
 
 local function setupGroups()
@@ -277,13 +337,14 @@ local function setupGroups()
 		PhysicsService:RegisterCollisionGroup(CarService.WALKER_GROUP)
 	end)
 	pcall(function()
-		PhysicsService:CollisionGroupSetCollidable(CarService.CAR_GROUP, CarService.WALKER_GROUP, false)
-		PhysicsService:CollisionGroupSetCollidable(CarService.CAR_GROUP, CarService.CAR_GROUP, false)
+		PhysicsService:CollisionGroupSetCollidable(CarService.CAR_GROUP, CarService.WALKER_GROUP, true)
+		PhysicsService:CollisionGroupSetCollidable(CarService.CAR_GROUP, CarService.CAR_GROUP, true)
 	end)
 end
 
 local function tagWalker(part: Instance)
-	if part:IsA("BasePart") then
+	-- (v10) KeepGroup : boîtes du ragdoll (groupe "Ragdoll", ImpactRules)
+	if part:IsA("BasePart") and part:GetAttribute("KeepGroup") ~= true then
 		pcall(function()
 			part.CollisionGroup = CarService.WALKER_GROUP
 		end)
@@ -556,10 +617,13 @@ local function onOccupant(car: Car)
 		car.LastUsed = os.clock()
 		-- (v9.7) le client cache l'invite "Conduire" tant que quelqu'un est au volant
 		car.Model:SetAttribute("Occupied", true)
-		car.Root.Anchored = false
-		pcall(function()
-			car.Root:SetNetworkOwner(car.Player)
-		end)
+		-- (v10) départ de course : reste ancrée tant que RACE10 la bloque
+		if not car.Frozen then
+			car.Root.Anchored = false
+			pcall(function()
+				car.Root:SetNetworkOwner(car.Player)
+			end)
+		end
 	else
 		car.Driving = false
 		car.LastUsed = os.clock()
@@ -592,46 +656,44 @@ local function plateText(player: Player): string
 	return string.format("DC %03d", player.UserId % 1000)
 end
 
-local function spawnCar(player: Player, data: any): (boolean, string)
-	local character, _, charRoot = characterOf(player)
-	if not character or not charRoot then
-		return false, T(player, "Walk around the town first")
+-- (v10, CARS10) plaque personnalisée (déjà filtrée à l'enregistrement) ou "DC 123"
+local function plateOf(player: Player, data: any, carId: string): string
+	local plates = data and data.Cars and data.Cars.Plates
+	local text = type(plates) == "table" and plates[carId]
+	if type(text) == "string" and text ~= "" then
+		return text
 	end
-	local carId = data.Cars.Selected
-	if carId == "" or not data.Cars.Owned[carId] then
-		return false, T(player, "🚗 Buy a car at the car dealership first!")
-	end
-	local zones = houses()
-	if forbidden(charRoot.Position, zones) then
-		return false, T(player, "🚫 Go outside to take your car")
-	end
+	return plateText(player)
+end
+
+-- Options de CarModels.Build pour la voiture d'un joueur (peinture, options, plaque)
+local function buildOptions(player: Player, data: any, carId: string): any
+	local mods = data and data.Cars and data.Cars.Mods
+	return { Detail = "Full", Plate = plateOf(player, data, carId), Mods = type(mods) == "table" and mods[carId] or nil }
+end
+
+-- Construit, équipe et enregistre la voiture d'un joueur à `target`
+-- (commun à "🚗 Ma voiture" et aux courses de RACE10)
+local function makeCar(player: Player, data: any, carId: string, target: CFrame, loaner: boolean, fromGarage: boolean): Car
 	despawn(player, true)
-	local model = CarModels.Build(carId, colorOf(data, carId), { Detail = "Full", Plate = plateText(player) })
+	local opts = if loaner then { Detail = "Full", Plate = "LOAN " .. tostring(player.UserId % 100) } else buildOptions(player, data, carId)
+	local model = CarModels.Build(carId, if loaner then nil else colorOf(data, carId), opts)
 	model.Name = "Car_" .. player.UserId
 	model:SetAttribute("OwnerId", player.UserId)
 	model:SetAttribute("OwnerName", player.DisplayName)
-	-- où ? dans son garage si on est devant, sinon à côté de soi
-	local target: CFrame? = nil
-	local houseCF = houseOf(player)
-	if houseCF and hasGarage(data) and (GarageLayout.Center(houseCF) - charRoot.Position).Magnitude < SPAWN_RANGE_GARAGE then
-		local bays = GarageLayout.Assign(ownedList(data), carId)
-		target = GarageLayout.BayCFrame(houseCF, bays[carId] or 2)
+	if fromGarage then
 		model:SetAttribute("FromGarage", true)
 	end
-	if not target then
-		local size = CarModels.Dimensions(carId)
-		local ignore: { Instance } = { character }
-		for _, other in pairs(cars) do
-			table.insert(ignore, other.Model)
-		end
-		for _, p in ipairs(Players:GetPlayers()) do
-			if p.Character then
-				table.insert(ignore, p.Character)
-			end
-		end
-		target = findSpot(charRoot.CFrame, size, ignore)
+	if loaner then
+		model:SetAttribute("Loaner", true)
 	end
-	model:PivotTo(target :: CFrame)
+	-- (v10) performances (RACE10 : plausibilité de la vitesse, affichage)
+	local stats = CarModels.Stats(carId, if loaner then nil else CarModels.TuningOf(data, carId))
+	model:SetAttribute("TopSpeed", stats.TopSpeed)
+	model:SetAttribute("Rating", stats.Rating)
+	model:SetAttribute("Class", stats.Class)
+	model:SetAttribute("Tuning", string.format("%d%d%d", stats.Tuning.Engine, stats.Tuning.Tyres, stats.Tuning.Suspension))
+	model:PivotTo(target)
 	local root, seat = rig(model, carId)
 	generation += 1
 	local car: Car = {
@@ -644,6 +706,8 @@ local function spawnCar(player: Player, data: any): (boolean, string)
 		LastUsed = os.clock(),
 		LastSafe = root.CFrame,
 		Generation = generation,
+		Frozen = false,
+		Loaner = loaner,
 	}
 	cars[player] = car
 	-- invite "Conduire" (le client la traduit et la cache aux autres joueurs)
@@ -676,6 +740,40 @@ local function spawnCar(player: Player, data: any): (boolean, string)
 	end
 	model.Parent = f
 	publish(player)
+	return car
+end
+
+local function spawnCar(player: Player, data: any): (boolean, string)
+	local character, _, charRoot = characterOf(player)
+	if not character or not charRoot then
+		return false, T(player, "Walk around the town first")
+	end
+	local carId = data.Cars.Selected
+	if carId == "" or not data.Cars.Owned[carId] then
+		return false, T(player, "🚗 Buy a car at the car dealership first!")
+	end
+	local zones = houses()
+	if forbidden(charRoot.Position, zones) then
+		return false, T(player, "🚫 Go outside to take your car")
+	end
+	despawn(player, true)
+	-- où ? dans son garage si on est devant, sinon à côté de soi
+	local target: CFrame? = nil
+	local fromGarage = false
+	local houseCF = houseOf(player)
+	if houseCF and hasGarage(data) and (GarageLayout.Center(houseCF) - charRoot.Position).Magnitude < SPAWN_RANGE_GARAGE then
+		local bays = GarageLayout.Assign(ownedList(data), carId)
+		target = GarageLayout.BayCFrame(houseCF, bays[carId] or 2)
+		fromGarage = true
+	end
+	if not target then
+		local size = CarModels.Dimensions(carId)
+		-- (v10, PHYS10) les autres voitures et les autres joueurs COMPTENT
+		-- (on s'y cogne maintenant) : jamais d'apparition dans quelqu'un
+		local ignore: { Instance } = { character }
+		target = findSpot(charRoot.CFrame, size, ignore)
+	end
+	local car = makeCar(player, data, carId, target :: CFrame, false, fromGarage)
 	sit(player, car)
 	local def = Config.CarsById[carId]
 	return true, T(player, "%s Let's drive! WASD / arrows, jump to get out", def and def.Icon or "🚗")
@@ -816,10 +914,168 @@ local function select_(player: Player, data: any, carId: any): (boolean, string)
 end
 
 ----------------------------------------------------------------------
+-- 🔧 (v10, CARS10) Atelier : options visuelles, préparation, plaque
+----------------------------------------------------------------------
+
+local function isUnlocked(data: any, carId: string, kind: string, id: string): boolean
+	local list = Config.Cars.Mods[kind]
+	if list and list[1] and list[1].Id == id then
+		return true -- (l'origine est toujours gratuite)
+	end
+	local entry = Config.CarModsById[kind] and Config.CarModsById[kind][id]
+	if entry and (tonumber(entry.Price) or 0) <= 0 then
+		return true
+	end
+	local set = data.Cars.Unlocked[carId]
+	return type(set) == "table" and set[kind .. ":" .. id] == true
+end
+
+-- Paiement (Dopamine) -> (ok, message?, manque?)
+local function pay(player: Player, data: any, cost: number): (boolean, string?, number?)
+	if not isValidNumber(cost) or cost < 0 then
+		return false, T(player, "Invalid request"), nil
+	end
+	if cost <= 0 then
+		return true, nil, nil
+	end
+	if not isValidNumber(data.Dopamine) or data.Dopamine < cost then
+		local missing = math.max(0, cost - (isValidNumber(data.Dopamine) and data.Dopamine or 0))
+		return false, T(player, "Not enough %s", Config.Game.CurrencyName), missing
+	end
+	data.Dopamine -= cost
+	return true, nil, nil
+end
+
+-- Voiture sortie et garée : reconstruite sur place avec ses nouvelles options
+local function refreshOut(player: Player, data: any, carId: string)
+	local car = cars[player]
+	if car and car.CarId == carId and not car.Loaner and not car.Driving and car.Seat.Occupant == nil and car.Root.Parent then
+		local cf = flatten(car.Model:GetPivot())
+		pcall(makeCar, player, data, carId, cf, false, car.Model:GetAttribute("FromGarage") == true)
+	end
+end
+
+-- "setMod" carId, "Kind:Id" : applique une option (achetée une fois par voiture)
+local function setMod(player: Player, data: any, carId: any, pair: any): (boolean, string, number?)
+	if type(carId) ~= "string" or not data.Cars.Owned[carId] or type(pair) ~= "string" or #pair > 40 then
+		return false, T(player, "Invalid request")
+	end
+	local kind, id = string.match(pair, "^(%w+):(%w+)$")
+	local entry = kind and id and Config.CarModsById[kind] and Config.CarModsById[kind][id]
+	if not entry then
+		return false, T(player, "Invalid request")
+	end
+	local need = tonumber(entry.RequiresRebirths) or 0
+	if (tonumber(data.Rebirths) or 0) < need then
+		return false, T(player, "🔒 Unlocked after %d visits to the ocean", need)
+	end
+	local owned = isUnlocked(data, carId, kind :: string, id :: string)
+	if not owned then
+		local cost = CarModels.PriceFor(carId, entry.Price)
+		local ok, message, missing = pay(player, data, cost)
+		if not ok then
+			return false, message or "", missing
+		end
+		data.Cars.Unlocked[carId] = data.Cars.Unlocked[carId] or {}
+		data.Cars.Unlocked[carId][kind .. ":" .. id] = true
+	end
+	local mods = data.Cars.Mods[carId] or {}
+	mods[kind] = id
+	data.Cars.Mods[carId] = CarModels.CleanMods(mods)
+	sendState(player)
+	publish(player)
+	refreshOut(player, data, carId)
+	return true, T(player, "🔧 %s applied", T(player, entry.Name))
+end
+
+-- "tune" carId, "Engine" | "Tyres" | "Suspension" : niveau suivant
+local function tune(player: Player, data: any, carId: any, partId: any): (boolean, string, number?)
+	local part = type(partId) == "string" and Config.CarTuningById[partId] or nil
+	if type(carId) ~= "string" or not data.Cars.Owned[carId] or not part then
+		return false, T(player, "Invalid request")
+	end
+	local tuning = CarModels.TuningOf(data, carId)
+	local level = (tuning :: any)[part.Id] + 1
+	local maxLevel = tonumber(Config.Cars.Tuning.MaxLevel) or 3
+	if level > maxLevel then
+		return false, T(player, "Already at the max level")
+	end
+	local need = type(part.RequiresRebirths) == "table" and tonumber(part.RequiresRebirths[level]) or 0
+	if (tonumber(data.Rebirths) or 0) < need then
+		return false, T(player, "🔒 Unlocked after %d visits to the ocean", need)
+	end
+	local cost = CarModels.PriceFor(carId, type(part.Price) == "table" and part.Price[level] or 0)
+	local ok, message, missing = pay(player, data, cost)
+	if not ok then
+		return false, message or "", missing
+	end
+	;(tuning :: any)[part.Id] = level
+	data.Cars.Tuning[carId] = tuning
+	sendState(player)
+	-- voiture sortie : ses performances changent tout de suite (CarClient lit l'attribut)
+	local car = cars[player]
+	if car and car.CarId == carId and not car.Loaner then
+		local stats = CarModels.Stats(carId, tuning)
+		pcall(function()
+			car.Model:SetAttribute("TopSpeed", stats.TopSpeed)
+			car.Model:SetAttribute("Rating", stats.Rating)
+			car.Model:SetAttribute("Class", stats.Class)
+			car.Model:SetAttribute("Tuning", string.format("%d%d%d", tuning.Engine, tuning.Tyres, tuning.Suspension))
+		end)
+	end
+	return true, T(player, "%s %s level %d!", part.Icon, T(player, part.Name), level)
+end
+
+-- "plate" carId, texte : plaque personnalisée (A-Z, 0-9, espace ; filtrée)
+local function setPlate(player: Player, data: any, carId: any, text: any): (boolean, string, number?)
+	if type(carId) ~= "string" or not data.Cars.Owned[carId] or type(text) ~= "string" then
+		return false, T(player, "Invalid request")
+	end
+	local maxLength = tonumber(Config.Cars.PlateMaxLength) or 8
+	local clean = string.upper(text)
+	clean = string.gsub(clean, "[^A-Z0-9 ]", "")
+	clean = string.gsub(clean, "^%s+", "")
+	clean = string.gsub(clean, "%s+$", "")
+	clean = string.gsub(clean, "%s+", " ")
+	if #clean == 0 then
+		-- plaque d'origine (gratuit)
+		data.Cars.Plates[carId] = nil
+		sendState(player)
+		refreshOut(player, data, carId)
+		return true, T(player, "🔖 Original plate")
+	end
+	if #clean > maxLength then
+		return false, T(player, "%d characters max", maxLength)
+	end
+	local okFilter, filtered = pcall(function()
+		local result = TextService:FilterStringAsync(clean, player.UserId)
+		return result:GetNonChatStringForBroadcastAsync()
+	end)
+	if not okFilter or type(filtered) ~= "string" then
+		return false, T(player, "Network error, try again.")
+	end
+	if filtered ~= clean or string.find(filtered, "#", 1, true) then
+		return false, T(player, "🚫 This plate is not allowed")
+	end
+	if data.Cars.Plates[carId] == clean then
+		return true, ""
+	end
+	local cost = CarModels.PriceFor(carId, Config.Cars.PlatePrice)
+	local ok, message, missing = pay(player, data, cost)
+	if not ok then
+		return false, message or "", missing
+	end
+	data.Cars.Plates[carId] = clean
+	sendState(player)
+	refreshOut(player, data, carId)
+	return true, T(player, "🔖 Plate %s applied", clean)
+end
+
+----------------------------------------------------------------------
 -- Remote
 ----------------------------------------------------------------------
 
-local INTERVALS = { buy = 0.4, buyGarage = 0.4, setColor = 0.25, select = 0.25, exit = 0.3, despawn = 0.5, reset = 2 }
+local INTERVALS = { buy = 0.4, buyGarage = 0.4, setColor = 0.25, select = 0.25, exit = 0.3, despawn = 0.5, reset = 2, setMod = 0.2, tune = 0.4, plate = 2 }
 
 local function onCar(player: Player, action: any, a: any, b: any): (boolean, string, any?)
 	if type(action) ~= "string" or #action > 24 then
@@ -853,6 +1109,12 @@ local function onCar(player: Player, action: any, a: any, b: any): (boolean, str
 		return setColor(player, data, a, b)
 	elseif action == "select" then
 		return select_(player, data, a)
+	elseif action == "setMod" then
+		return setMod(player, data, a, b)
+	elseif action == "tune" then
+		return tune(player, data, a, b)
+	elseif action == "plate" then
+		return setPlate(player, data, a, b)
 	end
 	-- en ville seulement
 	local world = services.WorldService
@@ -995,6 +1257,116 @@ end
 function CarService:GetCar(player: Player): Model?
 	local car = cars[player]
 	return car and car.Model or nil
+end
+
+-- (v10, CARS10 -> RACE10) performances d'une voiture du joueur avec SA
+-- préparation (carId nil = voiture choisie ; nil si pas possédée)
+function CarService:GetStats(player: Player, carId: string?): any
+	local data = dataOf(player)
+	if type(data) ~= "table" then
+		return nil
+	end
+	CarService.Sanitize(data)
+	local id = if type(carId) == "string" then carId else data.Cars.Selected
+	if type(id) ~= "string" or not data.Cars.Owned[id] then
+		return nil
+	end
+	return CarModels.Stats(id, CarModels.TuningOf(data, id))
+end
+
+----------------------------------------------------------------------
+-- 🏁 (v10, CARS10 -> RACE10) courses : placer / bloquer / rendre
+----------------------------------------------------------------------
+
+-- Met la voiture CHOISIE du joueur sur la grille (`cf` = pivot au sol, avant
+-- vers -Z), la fait apparaître si elle n'est pas sortie, et l'assoit au
+-- volant. Sans voiture : une "CityCar" de prêt (attribut "Loaner"), rendue
+-- par RaceRelease. -> (ok, message?)
+function CarService:RaceSpawn(player: Player, cf: CFrame): (boolean, string?)
+	if typeof(cf) ~= "CFrame" then
+		return false, "bad cframe"
+	end
+	local data = dataOf(player)
+	if type(data) ~= "table" then
+		return false, T(player, "Loading...")
+	end
+	local _, humanoid = characterOf(player)
+	if not humanoid then
+		return false, T(player, "Walk around the town first")
+	end
+	CarService.Sanitize(data)
+	local target = flatten(cf)
+	local selected = data.Cars.Selected
+	local owned = type(selected) == "string" and selected ~= "" and data.Cars.Owned[selected] == true
+	local carId = if owned then selected else "CityCar"
+	local car = cars[player]
+	local ok, err = pcall(function()
+		if car and car.Root.Parent and car.CarId == carId and car.Loaner == not owned then
+			-- déjà sortie : on la pose sur la grille (tout l'assemblage suit la Root)
+			local root = car.Root
+			local wasAnchored = root.Anchored
+			root.Anchored = true
+			root.AssemblyLinearVelocity = Vector3.zero
+			root.AssemblyAngularVelocity = Vector3.zero
+			car.Model:PivotTo(target)
+			car.LastSafe = root.CFrame
+			car.LastUsed = os.clock()
+			if not wasAnchored and not car.Frozen and car.Seat.Occupant ~= nil then
+				root.Anchored = false
+				pcall(function()
+					root:SetNetworkOwner(player)
+				end)
+			end
+		else
+			car = makeCar(player, data, carId, target, not owned, false)
+		end
+	end)
+	if not ok or not car then
+		warn("[CarService] RaceSpawn : " .. tostring(err))
+		return false, T(player, "Invalid request")
+	end
+	sit(player, car :: Car)
+	return true, nil
+end
+
+-- Fin de course : rend la voiture de prêt (la vraie voiture reste sortie)
+function CarService:RaceRelease(player: Player)
+	local car = cars[player]
+	if not car then
+		return
+	end
+	if car.Frozen then
+		CarService:SetFrozen(player, false)
+	end
+	if car.Loaner then
+		despawn(player, true)
+	end
+end
+
+-- Compte à rebours : voiture ancrée sur place (frozen = true), puis libérée
+-- (désancrée, propriété réseau rendue au conducteur)
+function CarService:SetFrozen(player: Player, frozen: boolean)
+	local car = cars[player]
+	if not car or not car.Root.Parent then
+		return
+	end
+	car.Frozen = frozen == true
+	pcall(function()
+		local root = car.Root
+		if car.Frozen then
+			root.AssemblyLinearVelocity = Vector3.zero
+			root.AssemblyAngularVelocity = Vector3.zero
+			root.Anchored = true
+			car.Model:SetAttribute("Frozen", true)
+		else
+			car.Model:SetAttribute("Frozen", nil)
+			car.LastSafe = root.CFrame
+			if car.Seat.Occupant ~= nil then
+				root.Anchored = false
+				root:SetNetworkOwner(player)
+			end
+		end
+	end)
 end
 
 return CarService

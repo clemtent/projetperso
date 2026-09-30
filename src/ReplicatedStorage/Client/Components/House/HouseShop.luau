@@ -980,11 +980,39 @@ function HouseShop.new(parent: Frame, handlers: Handlers): Shop
 	UIUtil.Stroke(outsideBar, C.Mint, 1.5, 0.3)
 	local outsideHint = textLine(outsideBar, "Hint", {
 		Position = UDim2.fromOffset(10, 0),
-		Size = UDim2.new(1, -20, 1, 0),
+		Size = UDim2.new(1, -196, 1, 0),
 		TextColor3 = C.Ink,
 		TextSize = 13,
 		ZIndex = 33,
 	})
+	-- (v10 HOUSE10) 🏡 éditeur 3D de l'extérieur (façade, toit, fenêtres,
+	-- entrée, jardin) avec aperçu en direct
+	local facadeButton = UIUtil.Create("TextButton", {
+		Name = "FacadeEditor",
+		Text = Locale.T("🏡 Customise the outside (3D)"),
+		Font = Theme.Fonts.Title,
+		TextSize = 13,
+		TextColor3 = WHITE,
+		AutoButtonColor = true,
+		BackgroundColor3 = C.PinkDeep,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -3, 0.5, 0),
+		Size = UDim2.fromOffset(180, 26),
+		ZIndex = 34,
+		Parent = outsideBar,
+	})
+	UIUtil.Corner(facadeButton, 10)
+	facadeButton.Activated:Connect(function()
+		local module = script.Parent:FindFirstChild("HouseFacadeEditor")
+		if module and module:IsA("ModuleScript") then
+			local ok, editor = pcall(require, module)
+			if ok and type(editor) == "table" and type(editor.Open) == "function" then
+				editor.Open()
+			else
+				warn("[HouseShop] Éditeur de façade : " .. tostring(editor))
+			end
+		end
+	end)
 
 	local roomsList = scroller("RoomsList", 0)
 	UIUtil.Create("UIListLayout", {

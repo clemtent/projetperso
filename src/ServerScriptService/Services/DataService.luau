@@ -75,6 +75,11 @@ local TEMPLATE = {
 		Items = {},
 		Rooms = {},
 		NextRoom = 2,
+		-- (v10 HOUSE10) 🏡 extérieur personnalisé (Shared/HouseOptions) :
+		-- Ext = { [genre] = Id du choix, Num = numéro de la maison (0 = auto) },
+		-- OwnedExt = { ["Genre.Id"] = true } ; vide = le look d'origine du style
+		Ext = {},
+		OwnedExt = {},
 	},
 	Purchases = {}, -- PurchaseId (texte) des 50 derniers achats Robux traités (anti-doublon)
 	LastOnline = 0, -- os.time() de la dernière sauvegarde / sortie (0 = jamais)
@@ -88,9 +93,12 @@ local TEMPLATE = {
 	Town = { Open = "Everyone", Likes = 0, Visits = 0, LikeDay = 0, Liked = {}, LikesGiven = 0, LikedRewards = 0, RewardDay = 0 },
 	-- 🚗 Voitures (v9.6, CarService) : possédées, couleur de chacune (Id de
 	-- Config.Cars.Colors), voiture choisie ("" = aucune), 🏎️ garage du manoir
-	Cars = { Owned = {}, Colors = {}, Selected = "", Garage = false },
+	-- (v10 CARS10) + réglages de performance, pièces de tuning, options débloquées, plaques
+	Cars = { Owned = {}, Colors = {}, Selected = "", Garage = false, Tuning = {}, Mods = {}, Unlocked = {}, Plates = {} },
 	-- 🍦 (v9.8, FoodService) boost "nourriture" en cours (EndsAt = os.time() de fin)
 	Food = { Multiplier = 1, EndsAt = 0, Food = "" },
+	-- 🏁 (v10 RACE10) courses de rue : jour, gains du jour, courses, victoires, podiums, meilleurs tours
+	Race = { Day = 0, Rewarded = 0, Races = 0, Wins = 0, Podiums = 0, Best = {} },
 	Stats = {
 		TotalClicks = 0,
 		LifetimeDopamine = 0, -- Dopamine gagnée depuis toujours (classement)

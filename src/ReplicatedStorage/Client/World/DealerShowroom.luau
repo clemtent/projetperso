@@ -325,9 +325,11 @@ end
 local function buildCar(entry: any, detail: string, color: any?): Model?
 	local ok, model = pcall(CarModels.Build, entry.Id, color, { Detail = detail, Plate = "DOPAMINE" })
 	if ok and typeof(model) == "Instance" and model:IsA("Model") then
+		-- (v10, PHYS10) la boîte "Root" reste SOLIDE : on ne traverse plus
+		-- les voitures exposées ; tout le reste est du décor
 		for _, d in ipairs(model:GetDescendants()) do
 			if d:IsA("BasePart") then
-				d.CanCollide = false
+				d.CanCollide = d == model.PrimaryPart
 				d.CanQuery = false
 				d.CanTouch = false
 			end
@@ -560,13 +562,13 @@ function DealerShowroom.FullJobs(shop: any, parent: Instance, ctx: any): { () ->
 					local tagCF = chosen.Tag
 					disc(parent, "StandPost", tagCF, 0, 0.05, 0, 2.95, 0.3, rgb(214, 218, 226), M.Metal)
 					disc(parent, "StandFoot", tagCF, 0, 0.04, 0, 0.14, 1.3, GRAPHITE, M.Metal)
-					local h = CarModels.Handling(d.Entry.Id)
+					local h = CarModels.Stats(d.Entry.Id) -- (v10) performances : classe + vitesse max
 					local lines = {
 						{ d.Entry.Icon .. " " .. Locale.T(d.Entry.Name), "white", 1.2 },
 						{ "⚡ " .. Locale.T("Speed") .. "  " .. stars(h.Stars.Speed), "white", 0.7 },
 						{ "🏁 " .. Locale.T("Acceleration") .. "  " .. stars(h.Stars.Accel), "white", 0.7 },
 						{ "🌀 " .. Locale.T("Handling") .. "  " .. stars(h.Stars.Grip), "white", 0.7 },
-						{ "🛋️ " .. Locale.T("Comfort") .. "  " .. stars(h.Stars.Comfort), "white", 0.7 },
+						{ Locale.T("🏆 Class %s · %d km/h", h.Class, math.floor(h.TopSpeed + 0.5)), "white", 0.7 },
 					}
 					sign(parent, "StandScreen", Vector3.new(2.4, 1.9, 0.12), tagCF * CFrame.new(0, 3.35, 0) * CFrame.Angles(math.rad(-25), 0, 0), GRAPHITE, lines, 60, 40)
 					if ctx.AddTag then

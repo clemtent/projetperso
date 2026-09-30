@@ -119,18 +119,10 @@ local function buildBoulevard(folder: Instance, geo: TownKit.Geo)
 		local junction = isStreet(geo, k)
 		local jw = k == 0 and LANE_OUT or ST_HALF
 		local innerGaps = junction and { { -jw, jw } } or nil
-		-- chaussée (coins en onglet : longueur au bord extérieur)
-		local roadHalf = (A + hw) * tanH
-		strip(side, "Asphalt", F, -roadHalf, roadHalf, -hw, hw, ROAD_Y, 0.7, C.Asphalt, M.Asphalt, "solid")
-		-- trottoirs (surélevés) + bordures
-		local innerHalf = (A - hw) * tanH
-		strip(side, "Sidewalk", F, -innerHalf, innerHalf, -hw - WALK_W, -hw, WALK_Y, 1.3, C.Walk, M.Pavement, "solid", innerGaps)
-		-- (v9.6 z-fighting : la bordure avance de 0.05 vers la chaussée et dépasse
-		-- de 0.05 aux bouts : sa face n'est plus confondue avec celle du trottoir)
-		strip(side, "Curb", F, -innerHalf, innerHalf, -hw - 0.8, -hw + 0.05, WALK_Y + 0.03, 0.4, C.Curb, M.Concrete, "deco", innerGaps, 0.05)
-		local outerHalf = (A + hw + WALK_W) * tanH
-		strip(side, "Sidewalk", F, -outerHalf, outerHalf, hw, hw + WALK_W, WALK_Y, 1.3, C.Walk, M.Pavement, "solid")
-		strip(side, "Curb", F, -(A + hw + 0.8) * tanH, (A + hw + 0.8) * tanH, hw - 0.05, hw + 0.8, WALK_Y + 0.03, 0.4, C.Curb, M.Concrete, "deco")
+		-- (v10 LAYOUT10) chaussée, trottoirs et carrefours du boulevard : ceux
+		-- du réseau de la grande ville (TownNetwork, WorldLayout.RoadGraph :
+		-- les avenues, rues de quartier et la ceinture partent de ses côtés
+		-- et de ses coins) ; ici : marquages (client) et mobilier
 		-- lignes de rive
 		local edgeZ = hw - 1.1
 		strip(side, "EdgeLine", F, -(A + edgeZ) * tanH, (A + edgeZ) * tanH, edgeZ - 0.18, edgeZ + 0.18, ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "paint")
@@ -241,10 +233,11 @@ local function buildAvenue(folder: Instance, geo: TownKit.Geo)
 	for _, sx in ipairs({ -1, 1 }) do
 		radialBox(ave, "PromenadeCurb", R, s0 - 0.05, roadEdge + 0.05, sx * (PROM - 0.8), sx * (PROM + 0.05), WALK_Y + 0.03, 0.4, C.Curb, M.Concrete, "deco")
 		-- voie (sens unique) + ligne de rive
-		radialBox(ave, "Lane", R, s0, roadEdge + 0.5, sx * PROM, sx * LANE_OUT, ROAD_Y, 0.7, C.Asphalt, M.Asphalt, "solid")
+		-- (v10 : s'arrêtent au bord du carrefour du boulevard, TownNetwork)
+		radialBox(ave, "Lane", R, s0, roadEdge, sx * PROM, sx * LANE_OUT, ROAD_Y, 0.7, C.Asphalt, M.Asphalt, "solid")
 		-- trottoir extérieur + bordure
-		radialBox(ave, "Sidewalk", R, s0, geo.Inner + 0.5, sx * LANE_OUT, sx * AVE_OUT, WALK_Y, 1.3, C.Walk, M.Pavement, "solid")
-		radialBox(ave, "Curb", R, s0 - 0.05, geo.Inner + 0.55, sx * (LANE_OUT - 0.05), sx * (LANE_OUT + 0.8), WALK_Y + 0.03, 0.4, C.Curb, M.Concrete, "deco")
+		radialBox(ave, "Sidewalk", R, s0, geo.Inner, sx * LANE_OUT, sx * AVE_OUT, WALK_Y, 1.3, C.Walk, M.Pavement, "solid")
+		radialBox(ave, "Curb", R, s0 - 0.05, geo.Inner + 0.05, sx * (LANE_OUT - 0.05), sx * (LANE_OUT + 0.8), WALK_Y + 0.03, 0.4, C.Curb, M.Concrete, "deco")
 		-- ligne d'arrêt au bout de la voie + flèche
 		radialBox(ave, "StopLine", R, roadEdge - 2.4, roadEdge - 1.8, sx * (PROM + 0.4), sx * (LANE_OUT - 0.4), ROAD_Y + 0.05, 0.1, C.Line, M.SmoothPlastic, "paint")
 		-- bornes à l'entrée de la zone piétonne
@@ -298,10 +291,11 @@ local function buildSideStreet(folder: Instance, geo: TownKit.Geo, slot: number)
 	local s0 = geo.StreetStart
 	local roadEdge = geo.Road - ROAD_W / 2
 	radialBox(st, "PedestrianZone", R, plazaR - 2, s0, -ST_OUT, ST_OUT, WALK_Y - 0.03, 1.3, C.Paving, M.Cobblestone, "solid") -- (v9.8 : 0,03 sous la place)
-	radialBox(st, "Asphalt", R, s0, roadEdge + 0.5, -ST_HALF, ST_HALF, ROAD_Y, 0.7, C.Asphalt, M.Asphalt, "solid")
+	-- (v10 : jusqu'au bord du carrefour du boulevard, TownNetwork)
+	radialBox(st, "Asphalt", R, s0, roadEdge, -ST_HALF, ST_HALF, ROAD_Y, 0.7, C.Asphalt, M.Asphalt, "solid")
 	for _, sx in ipairs({ -1, 1 }) do
-		radialBox(st, "Sidewalk", R, s0, geo.Inner + 0.5, sx * ST_HALF, sx * ST_OUT, WALK_Y, 1.3, C.Walk, M.Pavement, "solid")
-		radialBox(st, "Curb", R, s0 - 0.05, geo.Inner + 0.55, sx * (ST_HALF - 0.05), sx * (ST_HALF + 0.8), WALK_Y + 0.03, 0.4, C.Curb, M.Concrete, "deco")
+		radialBox(st, "Sidewalk", R, s0, geo.Inner, sx * ST_HALF, sx * ST_OUT, WALK_Y, 1.3, C.Walk, M.Pavement, "solid")
+		radialBox(st, "Curb", R, s0 - 0.05, geo.Inner + 0.05, sx * (ST_HALF - 0.05), sx * (ST_HALF + 0.8), WALK_Y + 0.03, 0.4, C.Curb, M.Concrete, "deco")
 		for i = 0, 2 do
 			TownKit.Bollard(st, (R * CFrame.new(sx * (1.5 + i * 2.6), WALK_Y, -s0 + 0.8)).Position)
 		end
@@ -713,29 +707,6 @@ end
 
 local CURB_H = WALK_Y + 0.03 - ROAD_Y -- (hauteur de la bordure au-dessus de l'asphalte)
 
-local function roadsBoulevard(geo: TownKit.Geo)
-	local m = geo.Slots
-	local A = geo.Road
-	local tanH = math.tan(geo.HalfAngle)
-	local hw = ROAD_W / 2
-	for k = 0, m - 1 do
-		local F = geo.SideFrame(k, A)
-		local junction = isStreet(geo, k)
-		local jw = k == 0 and LANE_OUT or ST_HALF
-		local gaps = junction and { { -jw - 0.9, jw + 0.9 } } or nil
-		local innerHalf = (A - hw) * tanH
-		-- asphalte (sans les coins en onglet)
-		chunks("RoadSurface", F, -innerHalf + 2, innerHalf - 2, ROAD_Y, 0, 2, ROAD_W, k * 1000 + 1)
-		-- bordures : intérieure (chaussée vers +z : repère retourné) et extérieure
-		chunks("CurbLine", F, -innerHalf, innerHalf, ROAD_Y, -hw + 0.05, CURB_H, 0, k * 1000 + 2, gaps, true)
-		chunks("CurbLine", F, -(A + hw) * tanH, (A + hw) * tanH, ROAD_Y, hw - 0.05, CURB_H, 0, k * 1000 + 3)
-		-- dalles des trottoirs (sans la bordure)
-		local wIn = WALK_W - 0.85
-		chunks("Pavers", F, -(A - hw - WALK_W / 2) * tanH + 1, (A - hw - WALK_W / 2) * tanH - 1, WALK_Y, -hw - 0.85 - wIn / 2, 0, wIn, k * 1000 + 4, gaps)
-		chunks("Pavers", F, -(A + hw + WALK_W / 2) * tanH + 1, (A + hw + WALK_W / 2) * tanH - 1, WALK_Y, hw + 0.85 + wIn / 2, 0, wIn, k * 1000 + 5)
-	end
-end
-
 local function roadsAvenue(geo: TownKit.Geo)
 	local R = radialFrame(geo, 0)
 	local s0 = geo.StreetStart
@@ -808,8 +779,7 @@ function TownStreets.Build(folder: Instance, geo: TownKit.Geo)
 	lifeAvenue(geo)
 	lifeSideStreet(geo, geo.SideR, 2)
 	lifeSideStreet(geo, geo.SideL, 3)
-	-- (v9.9, CITY99) routes réalistes (client)
-	roadsBoulevard(geo)
+	-- (v9.9, CITY99) routes réalistes (client) ; (v10) le boulevard : TownNetwork
 	roadsAvenue(geo)
 	roadsSideStreet(geo, geo.SideR)
 	roadsSideStreet(geo, geo.SideL)

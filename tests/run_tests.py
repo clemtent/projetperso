@@ -2669,20 +2669,64 @@ do
 			check(b - a > 3 and d - c > 5 and c > 1 and d < L.WALL_H - 1 and a > -L.RoomWidth(size) / 2 + 0.5, size.Id .. " : vraie fenêtre du fond")
 		end
 		check(L.STAIR_D1 <= L.WALL_T + L.DEPTH - 2, "palier du haut")
-		for _, n in ipairs({ 4, 8, 12 }) do
-			local r = L.PlotRadius(n)
-			local x1, z1 = L.PlotPlace(1, n)
-			local x2, z2 = L.PlotPlace(2, n)
-			local frontR = r - L.PLOT_D / 2
-			-- coins avant de deux parcelles voisines : jamais l'un sur l'autre
-			local gap = 2 * frontR * math.sin(math.pi / n) - L.PLOT_W * math.cos(math.pi / n)
-			check(gap > 0, n .. " parcelles : coins avant séparés (" .. gap .. ")")
-			check(math.abs(math.sqrt(x1 * x1 + z1 * z1) - r) < 1e-6 and math.abs(math.sqrt(x2 * x2 + z2 * z2) - r) < 1e-6, "rayon")
-			check(L.RingRoadRadius(n) > L.PLAZA_R + 60, "route loin de la place")
+		-- (v10 LAYOUT10) la grande ville : quartiers, parcelles sans
+		-- chevauchement, une rue devant chaque parcelle, réseau connexe
+		for _, n in ipairs({ 4, 8, 12, 20, 30, 50 }) do
+			local total = 0
+			local boxes = {}
+			for _, d in ipairs(L.Districts(n)) do
+				total += #d.Plots
+				for _, i in ipairs(d.Plots) do
+					local p = L.PlotPlaceData(i, n)
+					check(p ~= nil and p.District == d.Id, n .. " : parcelle " .. i .. " dans son quartier")
+					local hw = math.abs(p.LookX) > 0.5 and L.PLOT_D / 2 or L.PLOT_W / 2
+					local hd = math.abs(p.LookX) > 0.5 and L.PLOT_W / 2 or L.PLOT_D / 2
+					table.insert(boxes, { p.X - hw, p.X + hw, p.Z - hd, p.Z + hd })
+					check(L.OnRoad(n, p.X + p.LookX * (L.PLOT_D / 2 + 7), p.Z + p.LookZ * (L.PLOT_D / 2 + 7), 0), n .. " : rue devant la parcelle " .. i)
+					check(not L.OnRoad(n, p.X, p.Z, L.PLOT_D / 2 - 1), n .. " : parcelle " .. i .. " hors des routes")
+				end
+			end
+			eq(check, total, n, n .. " parcelles placées")
+			for a = 1, #boxes do
+				for b = a + 1, #boxes do
+					local A, B = boxes[a], boxes[b]
+					check(not (A[1] < B[2] - 1e-6 and B[1] < A[2] - 1e-6 and A[3] < B[4] - 1e-6 and B[3] < A[4] - 1e-6), n .. " : parcelles " .. a .. "/" .. b .. " sans chevauchement")
+				end
+			end
+			-- réseau : chaque nœud atteignable depuis le boulevard (sens uniques respectés)
+			local g = L.RoadGraph(n)
+			local seen, stack = { n0_250 = true }, { "n0_250" }
+			while #stack > 0 do
+				local id = table.remove(stack)
+				for _, e in ipairs(g.Adjacent[id] or {}) do
+					local o = e.A == id and e.B or e.A
+					if not seen[o] then
+						seen[o] = true
+						table.insert(stack, o)
+					end
+				end
+			end
+			local missing = 0
+			for _, node in ipairs(g.NodeList) do
+				if not seen[node.Id] then
+					missing += 1
+				end
+			end
+			eq(check, missing, 0, n .. " : tous les carrefours atteignables")
+			check(#L.HighwayPath(n) >= 16, "autoroute")
 		end
-		eq(check, L.PlotCount(50), 12, "PlotCount max")
+		check(L.RingRoadRadius(8) > L.PLAZA_R + 60, "route loin de la place")
+		eq(check, L.PlotCount(50), 50, "PlotCount max (v10 : 50)")
+		eq(check, L.PlotCount(80), 50, "PlotCount borné à 50")
 		eq(check, L.PlotCount(1), 4, "PlotCount min")
 		eq(check, L.PlotCount(nil), 8, "PlotCount défaut")
+		-- choix d'une parcelle : quartier du style, sinon le plus proche
+		local taken = {}
+		local first = L.PickPlot(8, "Mansion", function(i) return not taken[i] end)
+		eq(check, first and L.PlotPlaceData(first, 8).District, "Mansion", "PickPlot : quartier des manoirs")
+		taken[first :: number] = true
+		local second = L.PickPlot(8, "Mansion", function(i) return not taken[i] end)
+		check(second ~= nil and second ~= first, "PickPlot : repli sur un autre quartier")
 	end)
 
 	test("WorldLayout : rotation R (sauvegarde)", function(check)
@@ -3225,6 +3269,222 @@ def desk_runner_test():
     return "\n".join(lines) + "\n" + DESK_RUNNER_TESTS
 
 
+# 🏁 RACE10 (v10) : courses de rue. Parcours sur le vrai graphe des rues
+# (Shared/RaceRoutes + WorldLayout) pour 1..50 parcelles, règles pures
+# (Shared/RaceRules : récompenses, plafond, anti-triche, IA, classement) et
+# rythme de l'économie avec un joueur qui gagne toutes ses courses payées.
+RACE_TESTS = r"""
+do
+	script.Parent.WorldLayout = "WorldLayout"
+	script.Parent.RaceRules = "RaceRules"
+	script.Parent.RaceRoutes = "RaceRoutes"
+	local RU = req("RaceRules")
+	local RR = req("RaceRoutes")
+	local WL = req("WorldLayout")
+	local Sim = req("EconomySim")
+
+	-- distance au bord de l'asphalte le plus proche (négatif = sur la chaussée)
+	local function asphalt(count, x, z)
+		local best = math.huge
+		for _, e in ipairs(WL.RoadGraph(count).Edges) do
+			local pts = e.Points
+			for i = 2, #pts do
+				local a, b = pts[i - 1], pts[i]
+				local dx, dz = b.X - a.X, b.Z - a.Z
+				local l2 = dx * dx + dz * dz
+				local t = if l2 > 0 then math.clamp(((x - a.X) * dx + (z - a.Z) * dz) / l2, 0, 1) else 0
+				local d = math.sqrt((a.X + dx * t - x) ^ 2 + (a.Z + dz * t - z) ^ 2) - e.Width / 2
+				if d < best then best = d end
+			end
+		end
+		return best
+	end
+
+	test("Courses v10 : Config.Race (parcours, récompenses, anti-triche, IA)", function(check)
+		local R = Config.Race
+		check(type(R) == "table" and #R.Routes >= 3 and #R.Routes <= 5, "3 à 5 parcours")
+		local ids = {}
+		for _, def in ipairs(R.Routes) do
+			check(not ids[def.Id], "parcours en double " .. tostring(def.Id))
+			ids[def.Id] = true
+			check(Config.RaceRoutesById[def.Id] == def, "RaceRoutesById " .. def.Id)
+			check(type(def.Name) == "string" and type(def.Icon) == "string" and type(def.Desc) == "string" and def.Laps >= 1, "textes / tours " .. def.Id)
+		end
+		check(R.MaxRacers == 8 and R.MinGrid >= 4, "2 à 8 coureurs, grille complétée jusqu'à 4")
+		local s = R.Rewards.Seconds
+		check(s[1] > s[2] and s[2] > s[3] and s[3] > R.Rewards.FinishSeconds and R.Rewards.FinishSeconds > 0, "1er > 2e > 3e > arrivé")
+		check(R.Rewards.DailyRewarded >= 3 and R.Rewards.DailyRewarded <= 15, "plafond quotidien raisonnable")
+		check(R.AI.RubberBoost <= 0.08 and R.AI.RubberSlow <= 0.15 and R.AI.FairFinish >= 0.1, "élastique léger")
+		for _, sk in ipairs(R.AI.Skill) do check(sk >= 0.85 and sk <= 1, "habileté IA " .. sk) end
+	end)
+
+	test("Courses v10 : parcours sur les vraies rues (1..50 parcelles : asphalte, portes, grille, pas de demi-tour)", function(check)
+		for _, count in ipairs({ 1, 4, 8, 12, 20, 30, 50 }) do
+			RR.ClearCache()
+			local routes = RR.All(count)
+			eq(check, #routes, #Config.Race.Routes, count .. " parcelles : tous les parcours")
+			for _, r in ipairs(routes) do
+				local tag = count .. "/" .. r.Id
+				check(not r.Fallback, tag .. " : graphe de LAYOUT10 (pas le secours)")
+				local L = r.Line
+				check(L.Total >= 1200 and L.Total <= 9000, tag .. " : longueur " .. math.floor(L.Total))
+				check(r.RaceDistance >= 2000 and r.RaceDistance <= 10000, tag .. " : distance de course " .. math.floor(r.RaceDistance))
+				-- trajectoire sur l'asphalte (1 stud de tolérance), virages sans demi-tour
+				local off, worstTurn = 0, 0
+				for i = 1, L.N, 2 do
+					if asphalt(count, L.X[i], L.Z[i]) > 1 then off += 1 end
+				end
+				for i = 1, L.N - 4, 2 do
+					local _, _, tx, tz = RU.PointAt(L, L.S[i])
+					local _, _, ux, uz = RU.PointAt(L, L.S[i] + 12)
+					worstTurn = math.max(worstTurn, math.deg(math.acos(math.clamp(tx * ux + tz * uz, -1, 1))))
+				end
+				eq(check, off, 0, tag .. " : points hors de la chaussée")
+				check(worstTurn < 100, tag .. " : demi-tour (" .. math.floor(worstTurn) .. "°)")
+				-- portes : dans l'ordre, espacées, la dernière = arrivée
+				local cps = r.Checkpoints
+				check(#cps >= 6, tag .. " : portes " .. #cps)
+				local last = 0
+				for k, cp in ipairs(cps) do
+					check(cp.D > last and cp.D - last <= 260, tag .. " : porte " .. k .. " (écart " .. math.floor(cp.D - last) .. ")")
+					check(cp.W >= 20, tag .. " : largeur de porte")
+					last = cp.D
+				end
+				check(cps[#cps].Finish and math.abs(cps[#cps].D - r.RaceDistance) < 0.01, tag .. " : arrivée")
+				-- grille : 8 places sur la chaussée, derrière la ligne, en ligne droite
+				eq(check, #r.Grid, 8, tag .. " : places de grille")
+				for k, g in ipairs(r.Grid) do
+					check(asphalt(count, g.X, g.Z) < -1.5, tag .. " : place " .. k .. " sur la chaussée")
+					check(g.Back > 0, tag .. " : place " .. k .. " derrière la ligne")
+				end
+				-- une IA "de série" boucle la course en un temps raisonnable
+				local prof = RU.SpeedProfile(L, 55)
+				local st, t = { D = -r.Grid[1].Back, V = 0 }, 0
+				while st.D < r.RaceDistance and t < 600 do
+					local s = if r.Closed then st.D % r.Total else r.StartS + st.D
+					RU.AIStep(st, 0.1, RU.ProfileAt(L, prof, s) * 0.93, 55, 25)
+					t += 0.1
+				end
+				check(t >= 30 and t <= 240, tag .. " : durée d'une course IA " .. math.floor(t) .. " s")
+			end
+			-- point de rendez-vous : zone RaceMeet, près d'une route
+			local mx, mz = RR.MeetPoint(count)
+			check(asphalt(count, mx, mz) < 60, count .. " : QG près d'une route")
+		end
+		RR.ClearCache()
+	end)
+
+	test("Courses v10 : lignes (projection, point, boucle) et profil de vitesse", function(check)
+		local L = RU.Line({ { 0, 0 }, { 100, 0 }, { 100, 100 }, { 0, 100 } }, true)
+		eq(check, L.Total, 400, "périmètre")
+		local x, z, tx, tz = RU.PointAt(L, 150)
+		check(math.abs(x - 100) < 1e-6 and math.abs(z - 50) < 1e-6 and tx == 0 and tz == 1, "PointAt")
+		local s, lat = RU.Project(L, 50, 3, nil, nil)
+		check(math.abs(s - 50) < 1e-6 and math.abs(lat - 3) < 1e-6, "Project (à droite = positif) " .. s .. " " .. lat)
+		local s2 = RU.Project(L, -2, 60, 390, 40)
+		check(math.abs(s2 - 340) < 1e-6, "Project avec fenêtre (boucle) " .. s2)
+		eq(check, RU.Wrap(L, 410), 10, "Wrap")
+		local R = RU.Resample(L, 4)
+		check(R.N == 100 and math.abs(R.Total - 400) < 1e-6, "Resample")
+		local F = RU.Resample(RU.Line(RU.Fillet({ { 0, 0 }, { 200, 0 }, { 200, 200 } }, false, 20, 2), false), 4)
+		local prof = RU.SpeedProfile(F, 60, 30, 38)
+		local vCorner = RU.ProfileAt(F, prof, 200)
+		check(vCorner < 30 and vCorner > 15, "virage (r 20) : ralentit " .. vCorner)
+		check(RU.ProfileAt(F, prof, 20) > 50, "ligne droite : pleine vitesse")
+		check(RU.ProfileAt(F, prof, 160) < 58, "freinage anticipé avant le virage")
+	end)
+
+	test("Courses v10 : récompenses (places, adversaires humains, plafond du jour), classement, données", function(check)
+		local stats = { PerSecond = 1000, ClickValue = 100 } -- production 1300/s
+		local a1 = RU.Reward(stats, 1, true, 1, 0)
+		local a2 = RU.Reward(stats, 2, true, 1, 0)
+		local a3 = RU.Reward(stats, 3, true, 1, 0)
+		local a4 = RU.Reward(stats, 4, true, 1, 0)
+		local dnf = RU.Reward(stats, 1, false, 1, 0)
+		check(a1 > a2 and a2 > a3 and a3 > a4 and a4 > 0 and dnf == 0, "1er > 2e > 3e > arrivé > abandon (0)")
+		eq(check, a1, math.floor(1300 * 120 * 1.1), "1er contre 1 humain : 120 s x 1,1")
+		check(RU.Reward(stats, 1, true, 0, 0) < a1, "seul contre des IA : moins")
+		check(RU.Reward(stats, 1, true, 7, 0) == math.floor(1300 * 120 * 1.3), "bonus humains plafonné (+30 %)")
+		local capped, _, isCapped = RU.Reward(stats, 1, true, 3, Config.Race.Rewards.DailyRewarded)
+		check(capped == 0 and isCapped, "plafond quotidien")
+		eq(check, (RU.Reward({ PerSecond = 0, ClickValue = 0 }, 3, true, 0, 0)), Config.Race.Rewards.MinReward, "minimum")
+		check(RU.Reward({ PerSecond = 0 / 0, ClickValue = 1 / 0 }, 1, true, 1, 0) >= Config.Race.Rewards.MinReward, "valeurs folles tolérées")
+		-- classement
+		local list = RU.Standings({
+			{ Key = "a", Finished = false, Progress = 900 },
+			{ Key = "b", Finished = true, FinishTime = 80 },
+			{ Key = "c", Dnf = true, Progress = 2000 },
+			{ Key = "d", Finished = true, FinishTime = 75 },
+			{ Key = "e", Finished = false, Progress = 1200 },
+		})
+		eq(check, list[1].Key .. list[2].Key .. list[3].Key .. list[4].Key .. list[5].Key, "dbeac", "classement")
+		eq(check, RU.FormatTime(62.345), "1:02.34", "FormatTime")
+		-- données sauvegardées
+		local today = RU.Today(86400 * 20000 + 5)
+		local d = RU.SanitizeData({ Day = today - 1, Rewarded = 8, Wins = 3.7, Best = { City = 61.2, Nope = 5, Night = -1 } }, today)
+		check(d.Day == today and d.Rewarded == 0, "nouveau jour : compteur remis à zéro")
+		check(d.Best.City == 61.2 and d.Best.Nope == nil and d.Best.Night == nil and d.Wins == 3, "records propres")
+		local e = RU.SanitizeData(nil, today)
+		check(e.Rewarded == 0 and next(e.Best) == nil, "vieille sauvegarde")
+	end)
+
+	test("Courses v10 : anti-triche (vitesse, saut, tronçon trop rapide) et élastique juste", function(check)
+		eq(check, RU.CheckMove(60, 1, 60), "ok", "pleine vitesse")
+		eq(check, RU.CheckMove(76, 1, 60), "ok", "marge (pente, bosses)")
+		eq(check, RU.CheckMove(110, 1, 60), "fast", "trop rapide")
+		eq(check, RU.CheckMove(150, 0.1, 60), "teleport", "saut")
+		eq(check, RU.CheckMove(9, 0.1, 76.7), "ok", "voiture la plus rapide, 10 fois / s")
+		local minT = RU.MinSegmentTime(170, 60)
+		check(minT > 2 and minT < 170 / 60, "tronçon : temps minimal " .. minT)
+		-- élastique : léger, coupé dans le final
+		local total = 4000
+		local boost = RU.RubberBand(1000, 1600, total)
+		local slow = RU.RubberBand(1600, 1000, total)
+		check(boost > 1 and boost <= 1 + Config.Race.AI.RubberBoost + 1e-9, "derrière : petit coup de pouce " .. boost)
+		check(slow < 1 and slow >= 1 - Config.Race.AI.RubberSlow - 1e-9, "devant : ralentit " .. slow)
+		eq(check, RU.RubberBand(3800, 3000, total), 1, "final : aucun élastique")
+		eq(check, RU.RubberBand(1000, nil, total), 1, "sans humain")
+		-- l'IA ne dépasse jamais sa vitesse de pointe
+		local st = { D = 0, V = 0 }
+		for _ = 1, 400 do RU.AIStep(st, 0.05, 200 * 1.06, 50, 30) end
+		check(st.V <= 50 + 1e-9, "IA bornée à sa vitesse de pointe")
+		-- un humain honnête à fond ne déclenche rien ; un tricheur si
+		local honest = RU.MinSegmentTime(170, 60) < 170 / 60
+		check(honest, "honnête : tronçon à pleine vitesse accepté")
+	end)
+
+	test("Courses v10 : gagner toutes ses courses payées ne casse pas le rythme des parties", function(check)
+		local mult = RU.MaxNetMultiplier(2)
+		check(mult <= 1.25, "gain net max (2 h de jeu par jour) " .. mult)
+		local active = Sim.RunMinutes(Sim.Run("Active", { MaxHours = 40, MaxRebirths = 5 }))
+		Config.GamePassesById.__RaceTest = { Id = "__RaceTest", Multiplier = mult }
+		local ok, result = pcall(Sim.Run, { Name = "Actif + courses gagnées", ClicksPerSecond = 6, ClickDuty = 0.75, Passes = { "__RaceTest" }, AutoClicks = 0 },
+			{ MaxHours = 40, MaxRebirths = 5 })
+		Config.GamePassesById.__RaceTest = nil
+		check(ok, tostring(result))
+		if not ok then return end
+		local runs = Sim.RunMinutes(result)
+		local parts = {}
+		for n = 1, 5 do table.insert(parts, "R" .. n .. "=" .. (runs[n] and tostring(math.floor(runs[n] + 0.5)) or "-")) end
+		print("    courses gagnées (x" .. string.format("%.3f", mult) .. " net), parties (min) : " .. table.concat(parts, " "))
+		for n = 1, 5 do
+			check(runs[n] ~= nil and active[n] ~= nil and runs[n] >= active[n] * 0.75, "R" .. n .. " : partie trop courte avec les courses")
+		end
+		check(runs[5] ~= nil and runs[1] ~= nil and runs[5] >= runs[1] * 1.3, "la courbe reste croissante")
+	end)
+end
+"""
+
+
+def race_test():
+    """Tests RACE10 : Shared/RaceRules + Shared/RaceRoutes (sur WorldLayout)."""
+    parts = []
+    for name in ("WorldLayout", "RaceRules", "RaceRoutes"):
+        body = read(os.path.join(SHARED, name + ".luau"))
+        parts.append('loaders["%s"] = function()\nlocal require = req\nlocal warn = function(...) print("WARN", ...) end\n%s\nend\n' % (name, body))
+    return "\n".join(parts) + RACE_TESTS
+
+
 def main():
     if not os.path.exists(LUAU):
         print("FAIL : Luau CLI introuvable (%s)" % LUAU)
@@ -3234,7 +3494,8 @@ def main():
     bundle = build_bundle(config_key_test() + "\n" + lang_test() + "\n" + house_art_test() + "\n" + arcade_shop_test() + "\n" + friend_mail_test()
                           + "\n" + economy_test() + "\n" + world_layout_test() + "\n" + garden_snapshot_test() + "\n" + garage_test()
                           + "\n" + desk_runner_test()
-                          + "\n" + food_test())
+                          + "\n" + food_test()
+                          + "\n" + race_test())
     with tempfile.NamedTemporaryFile("w", suffix=".luau", delete=False, encoding="utf-8") as f:
         f.write(bundle)
         path = f.name
