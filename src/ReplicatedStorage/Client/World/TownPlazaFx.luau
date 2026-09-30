@@ -445,7 +445,7 @@ local function wire(model: Instance, a: Vector3, b: Vector3, sag: number, color:
 	end
 end
 
-local function buildGarlands(folder: Instance, center: Vector3, lamps: Vector3)
+local function buildGarlands(folder: Instance, center: Vector3, lamps: Vector3, stage: CFrame?)
 	local model = Instance.new("Model")
 	model.Name = "Garlands"
 	model.Parent = folder
@@ -460,6 +460,10 @@ local function buildGarlands(folder: Instance, center: Vector3, lamps: Vector3)
 	local ink = Color3.fromRGB(60, 56, 72)
 	for i = 1, n do
 		local a, b = tops[i], tops[i % n + 1]
+		-- (v9.9, CITY99) pas de guirlande au-dessus / derrière la scène de musique
+		if stage and (Vector3.new((a.X + b.X) / 2, stage.Position.Y, (a.Z + b.Z) / 2) - stage.Position).Magnitude < 17 then
+			continue
+		end
 		-- guirlande lumineuse : fil qui pend + 7 ampoules
 		wire(model, a, b, 2.2, ink)
 		for k = 1, 7 do
@@ -511,6 +515,83 @@ end
 -- Construction / boucle
 ----------------------------------------------------------------------
 
+-- (v9.9, CITY99) PAVAGE réaliste de la place : joints de pavés en anneaux
+-- concentriques (tous les 6 studs, de r = 24 à 60) et 16 bandes de granit
+-- rayonnantes entre les pointes de la rose des vents ; jamais sous la scène,
+-- le manège, les massifs, étals, lampadaires (liste "FxKeepOut" du serveur).
+-- Dessus : bandes +0,105, joints +0,135 au-dessus du pavé (rose des vents
+-- +0,09, anneaux +0,06) : aucune face confondue.
+local function buildPaving(folder: Instance, center: Vector3, stage: CFrame?, carousel: CFrame?, keepText: any)
+	local model = Instance.new("Model")
+	model.Name = "Paving"
+	model.Parent = folder
+	local keep = {}
+	if type(keepText) == "string" then
+		for _, item in ipairs(string.split(keepText, ";")) do
+			local f = string.split(item, ",")
+			local x, z, r = tonumber(f[1]), tonumber(f[2]), tonumber(f[3])
+			if x and z and r then
+				table.insert(keep, { center.X + x, center.Z + z, r })
+			end
+		end
+	end
+	local function blocked(p: Vector3, pad: number): boolean
+		local rel = Vector3.new(p.X - center.X, 0, p.Z - center.Z)
+		if rel.Magnitude < 23 then
+			return true
+		end
+		if stage then
+			local lp = stage:PointToObjectSpace(Vector3.new(p.X, stage.Position.Y, p.Z))
+			if math.abs(lp.X) < 13.5 + pad and math.abs(lp.Z) < 9.5 + pad then
+				return true
+			end
+		end
+		if carousel and Vector3.new(p.X - carousel.Position.X, 0, p.Z - carousel.Position.Z).Magnitude < 13 + pad then
+			return true
+		end
+		for _, k in ipairs(keep) do
+			if Vector3.new(p.X - k[1], 0, p.Z - k[2]).Magnitude < k[3] + pad then
+				return true
+			end
+		end
+		return false
+	end
+	local jointColor = Color3.fromRGB(176, 162, 160)
+	local y0 = center.Y
+	-- anneaux de joints (cordes de 5 studs au plus)
+	for r = 24, 60, 6 do
+		local n = math.ceil(2 * math.pi * r / 5)
+		for i = 0, n - 1 do
+			local a0 = i / n * math.pi * 2
+			local a1 = (i + 1) / n * math.pi * 2
+			local p0 = center + Vector3.new(math.sin(a0) * r, 0, math.cos(a0) * r)
+			local p1 = center + Vector3.new(math.sin(a1) * r, 0, math.cos(a1) * r)
+			local mid = (p0 + p1) / 2
+			if not blocked(mid, 0.6) and not blocked(p0, 0.2) and not blocked(p1, 0.2) then
+				local len = (p1 - p0).Magnitude + 0.1
+				local cf = CFrame.lookAt(Vector3.new(mid.X, y0 + 0.135 - 0.15, mid.Z), Vector3.new(p1.X, y0 + 0.135 - 0.15, p1.Z))
+				newPart(model, "PavingJoint", Vector3.new(0.12, 0.3, len), cf, jointColor, M.Concrete)
+			end
+		end
+	end
+	-- bandes de granit rayonnantes (entre les pointes de la rose des vents)
+	local granite = Color3.fromRGB(196, 190, 196)
+	for k = 0, 15 do
+		local a = (k + 0.5) / 16 * math.pi * 2
+		local d = Vector3.new(math.sin(a), 0, math.cos(a))
+		-- morceaux de 6 studs (on saute ceux qui passent sous un obstacle)
+		for r = 23, 57, 6 do
+			local p0 = center + d * r
+			local p1 = center + d * (r + 6)
+			local mid = (p0 + p1) / 2
+			if not blocked(mid, 1) and not blocked(p0, 0.6) and not blocked(p1, 0.6) then
+				local cf = CFrame.lookAt(Vector3.new(mid.X, y0 + 0.105 - 0.15, mid.Z), Vector3.new(p1.X, y0 + 0.105 - 0.15, p1.Z))
+				newPart(model, "GraniteBand", Vector3.new(0.9, 0.3, 6.02), cf, granite, M.Granite)
+			end
+		end
+	end
+end
+
 local function findPlaza(): (Instance?, Instance?)
 	local town = workspace:FindFirstChild("DopamineTown")
 	local decor = town and town:FindFirstChild("Decor")
@@ -549,9 +630,12 @@ local function build(): boolean
 		s.Balloons = buildBalloons(folder, tie)
 	end
 	local lamps = vec3Attr(plaza, "FxLamps")
+	local stageCF = cfAttr(plaza, "FxStageCF")
 	if lamps then
-		buildGarlands(folder, s.Center, lamps)
+		buildGarlands(folder, s.Center, lamps, stageCF)
 	end
+	-- (v9.9, CITY99) pavage de la place : joints en cercles + bandes de granit
+	pcall(buildPaving, folder, s.Center, stageCF, carCF, plaza:GetAttribute("FxKeepOut"))
 	local bandCF = cfAttr(plaza, "FxBandstandCF")
 	local fascia = plaza:GetAttribute("FxBandstandFascia")
 	if bandCF and typeof(fascia) == "Vector2" then

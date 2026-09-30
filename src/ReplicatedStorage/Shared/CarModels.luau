@@ -1203,136 +1203,219 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 		box(b, "BumperLip", -tfx + 0.1, tfx - 0.1, s.Clear, g.sill + 0.06, zB - 0.6, zB - 0.06, TRIM, M.Plastic)
 
 		----------------------------------------------------------------
-		-- ░ avant : optiques, calandre, prise d'air, antibrouillards ░
+		-- ░ avant (v9.9 passe visuelle) : un VRAI visage, en couches
+		-- espacées de ≥ 0,04 (aucun z-fighting) : jupe noire + prise d'air
+		-- + antibrouillards cerclés + lame argent, plaque sur le bouclier,
+		-- calandre (cadre chromé, grille, barres, logo), blocs optiques
+		-- (cerclage chromé, boîtier noir, projecteurs, feu de jour en L,
+		-- glace claire, retour sur l'angle, répétiteur) ░
 		----------------------------------------------------------------
 		local fy = g.noseLow
 		local N0 = st[1]
+		local N1 = if st[2] and st[2].z < zF + g.noseR - 0.01 then st[2] else nil
 		local round = style == "Bubble" or style == "Van"
+		local valTop = g.sill + (if sports then 0.45 else 0.55)
+		-- jupe avant noire (contraste avec le bouclier peint)
+		box(b, "Valance", -nfx + 0.08, nfx - 0.08, g.sill, valTop, zF - 0.06, zF + 0.1, TRIM, M.Plastic)
+		if full then
+			box(b, "SkidStrip", -nfx + 0.35, nfx - 0.35, g.sill + 0.05, g.sill + 0.13, zF - 0.1, zF - 0.02, GRAPHITE, M.Metal).Reflectance = 0.2
+		end
+		-- prise d'air centrale (grille + barre)
+		local iw = math.min(if sports then s.W * 0.3 else s.W * 0.24, nfx - 0.8)
+		box(b, "Intake", -iw, iw, g.sill + 0.16, valTop - 0.08, zF - 0.1, zF + 0.05, HOUSING, M.DiamondPlate)
+		if full then
+			local iy = (g.sill + 0.16 + valTop - 0.08) / 2
+			box(b, "IntakeBar", -iw + 0.06, iw - 0.06, iy - 0.03, iy + 0.03, zF - 0.14, zF + 0.02, GRAPHITE, M.Metal)
+			-- antibrouillards dans les coins de la jupe (cerclage chromé)
+			for _, sx in ipairs({ -1, 1 }) do
+				local fx = sx * math.min(iw + 0.42, nfx - 0.35)
+				local fyL = (g.sill + valTop) / 2 + 0.02
+				cylZ(b, "FogRing", fx, fyL, zF - 0.07, 0.06, 0.34, CHROME, M.Metal)
+				cylZ(b, "FogLight", fx, fyL, zF - 0.11, 0.06, 0.22, LAMP, M.SmoothPlastic)
+			end
+		end
+		-- plaque avant, sur le bouclier peint
+		if full or lod == 2 then
+			plate(b, "PlateFront", zF - 0.05, math.min(valTop + 0.3, fy - 0.9), -1, full, nil)
+		end
 		if round then
-			-- phares ronds rétro (cerclage chromé)
+			-- phares ronds rétro (cerclage chromé, boîtier, lampe, point de feu de jour)
 			local d = if style == "Van" then 0.95 else 1.05
 			local ly = fy - 0.2
 			for _, sx in ipairs({ -1, 1 }) do
 				local x = sx * (nfx - 0.72)
 				cylZ(b, "HeadlightRim", x, ly, zF - 0.05, 0.14, d, CHROME, M.Metal)
-				cylZ(b, "Headlight", x, ly, zF - 0.1, 0.1, d - 0.2, LAMP, M.Glass)
+				cylZ(b, "Headlight", x, ly, zF - 0.13, 0.06, d - 0.2, LAMP, M.SmoothPlastic).Reflectance = 0.15
 				if full then
-					cylZ(b, "HeadlightDot", x, ly, zF - 0.17, 0.06, d * 0.3, DRL, M.SmoothPlastic)
-					cylZ(b, "Indicator", sx * (nfx - 0.2), ly - 0.55, zF - 0.04, 0.1, 0.3, AMBER, M.SmoothPlastic):SetAttribute("Side", sx)
+					cylZ(b, "HeadlightDot", x, ly, zF - 0.18, 0.06, d * 0.32, DRL, M.SmoothPlastic)
+					local lens = cylZ(b, "HeadlightLens", x, ly, zF - 0.23, 0.04, d - 0.14, LENS, M.Glass)
+					lens.Transparency = 0.7
+					lens.Reflectance = 0.3
+					cylZ(b, "Indicator", sx * (nfx - 0.2), ly - 0.62, zF - 0.04, 0.1, 0.3, AMBER, M.SmoothPlastic):SetAttribute("Side", sx)
 				end
+			end
+			-- pare-chocs chromé rétro (barre) + calandre "sourire"
+			if full then
+				cylX(b, "BumperBar", 0, valTop + 0.05, zF - 0.14, nfx * 2 - 0.3, 0.26, CHROME, M.Metal).Reflectance = 0.3
+				for _, sx in ipairs({ -1, 1 }) do
+					box(b, "BumperGuard", sx * 0.95 - 0.08, sx * 0.95 + 0.08, valTop - 0.2, valTop + 0.35, zF - 0.24, zF - 0.1, CHROME, M.Metal)
+				end
+			end
+			if style == "Van" then
+				-- grand logo rond sur la face avant blanche (bicolore)
+				local uy0 = ly + 0.45
+				if N0.t - 0.05 - uy0 > 0.12 then
+					box(b, "FrontUpper", -N0.e, N0.e, uy0, N0.t - 0.05, zF - 0.04, zF + 0.08, roofColor)
+				end
+				if full then
+					cylZ(b, "Badge", 0, ly, zF - 0.06, 0.06, 0.62, CHROME, M.Metal)
+					cylZ(b, "BadgeCore", 0, ly, zF - 0.1, 0.04, 0.4, roofColor, M.SmoothPlastic)
+				end
+			elseif full then
+				-- petite calandre chromée "sourire" + logo
+				box(b, "GrilleFrame", -0.7, 0.7, fy - 0.65, fy - 0.35, zF - 0.05, zF + 0.05, CHROME, M.Metal)
+				box(b, "Grille", -0.62, 0.62, fy - 0.6, fy - 0.4, zF - 0.09, zF + 0.04, HOUSING, M.DiamondPlate)
+				cylZ(b, "Badge", 0, fy - 0.15, zF - 0.05, 0.06, 0.3, CHROME, M.Metal)
 			end
 		else
-			local ly0 = fy - (if sports then 0.36 else 0.55)
-			local ly1 = fy + math.max(0.06, math.min(0.22, (N0.by - fy) * 0.55))
+			-- blocs optiques modernes
+			local ly0 = fy - (if sports then 0.38 else 0.58)
+			local ly1 = fy + math.max(0.06, math.min(0.2, (N0.by - fy) * 0.5))
 			for _, sx in ipairs({ -1, 1 }) do
-				local hx0, hx1 = sx * (s.W * 0.19), sx * (nfx - 0.08)
+				local hx0, hx1 = sx * (s.W * 0.18), sx * (nfx - 0.1)
 				local lo, hi = math.min(hx0, hx1), math.max(hx0, hx1)
-				box(b, "HeadlightHousing", lo, hi, ly0, ly1, zF - 0.04, zF + 0.1, HOUSING)
+				-- cerclage chromé (dépasse de 0,05 autour du boîtier)
+				box(b, "HeadlightBezel", lo - 0.05, hi + 0.04, ly0 - 0.05, ly1 + 0.03, zF - 0.03, zF + 0.1, CHROME, M.Metal).Reflectance = 0.25
+				box(b, "HeadlightHousing", lo, hi, ly0, ly1, zF - 0.07, zF + 0.08, HOUSING)
+				local pd = math.min(0.36, ly1 - ly0 - 0.18)
+				local py = (ly0 + ly1) / 2 + 0.04
 				if full then
-					box(b, "Reflector", lo + 0.06, hi - 0.06, ly0 + 0.06, ly1 - 0.05, zF - 0.07, zF - 0.02, CHROME, M.Metal)
-					local pd = math.min(0.34, ly1 - ly0 - 0.14)
-					local py = (ly0 + ly1) / 2 + 0.03
-					for _, f in ipairs({ 0.32, 0.68 }) do
-						cylZ(b, "Projector", lerp(hx0, hx1, f), py, zF - 0.1, 0.06, pd, LAMP, M.Glass)
+					for _, f in ipairs({ 0.3, 0.66 }) do
+						local px = lerp(hx0, hx1, f)
+						cylZ(b, "ProjectorRing", px, py, zF - 0.09, 0.04, pd + 0.1, CHROME, M.Metal)
+						cylZ(b, "Projector", px, py, zF - 0.13, 0.04, pd, LAMP, M.SmoothPlastic).Reflectance = 0.2
 					end
-					box(b, "HeadlightDRL", lo + 0.05, hi - 0.05, ly0 + 0.07, ly0 + 0.14, zF - 0.12, zF - 0.06, DRL)
-					local lens = box(b, "HeadlightLens", lo - 0.02, hi + 0.02, ly0 - 0.02, ly1 + 0.01, zF - 0.16, zF - 0.13, LENS, M.Glass)
-					lens.Transparency = 0.65
-					lens.Reflectance = 0.25
-					-- répétiteur orange sur l'angle
-					local ind = box(b, "Indicator", if sx > 0 then hi - 0.3 else lo, if sx > 0 then hi else lo + 0.3, ly0 - 0.14, ly0 - 0.02, zF - 0.08, zF + 0.05, AMBER)
+					-- feu de jour en L (bande basse + montant côté aile)
+					box(b, "HeadlightDRL", lo + 0.05, hi - 0.05, ly0 + 0.05, ly0 + 0.12, zF - 0.13, zF - 0.05, DRL)
+					local vx0, vx1 = if sx > 0 then hi - 0.11 else lo + 0.04, if sx > 0 then hi - 0.04 else lo + 0.11
+					box(b, "HeadlightDRL", vx0, vx1, ly0 + 0.12, ly1 - 0.05, zF - 0.13, zF - 0.05, DRL)
+					local lens = box(b, "HeadlightLens", lo - 0.02, hi + 0.02, ly0 - 0.02, ly1 + 0.01, zF - 0.2, zF - 0.17, LENS, M.Glass)
+					lens.Transparency = 0.7
+					lens.Reflectance = 0.3
+					-- répétiteur orange au coin bas extérieur
+					local ind = box(b, "Indicator", if sx > 0 then hi - 0.34 else lo + 0.12, if sx > 0 then hi - 0.12 else lo + 0.34, ly0 + 0.15, ly0 + 0.26, zF - 0.13, zF - 0.05, AMBER)
 					ind:SetAttribute("Side", sx)
-				else
-					box(b, "Headlight", lo + 0.05, hi - 0.05, ly0 + 0.05, ly1 - 0.03, zF - 0.08, zF - 0.02, LAMP, M.Glass)
-				end
-			end
-		end
-		-- calandre (par modèle) : cadre + grille + barres + logo
-		local gw = if offroad or style == "Limo" then s.W * 0.2 else s.W * 0.17
-		local gy0, gy1 = fy - 0.5, fy - 0.04
-		if style == "Limo" then
-			gy0, gy1 = fy - 0.62, fy + 0.1
-		elseif pickup then
-			gy0, gy1 = fy - 0.7, fy + 0.12
-		elseif style == "Bubble" then
-			gw, gy0, gy1 = s.W * 0.1, fy - 0.45, fy - 0.2
-		elseif sports then
-			gw = 0
-		elseif style == "Van" then
-			gw, gy0, gy1 = s.W * 0.12, fy - 0.9, fy - 0.72
-		end
-		if gw > 0 then
-			local frameCol = if offroad or style == "Limo" then CHROME else TRIM
-			box(b, "GrilleFrame", -gw, gw, gy0, gy1, zF - 0.03, zF + 0.1, frameCol, M.Metal)
-			box(b, "Grille", -gw + 0.08, gw - 0.08, gy0 + 0.07, gy1 - 0.07, zF - 0.08, zF + 0.05, HOUSING, M.DiamondPlate)
-			if full then
-				if style == "Limo" then
-					for k = -3, 3 do
-						local x = k * gw / 4
-						box(b, "GrilleBar", x - 0.035, x + 0.035, gy0 + 0.07, gy1 - 0.07, zF - 0.12, zF - 0.02, CHROME, M.Metal)
+					-- retour de l'optique sur l'angle arrondi
+					if N1 then
+						local a0 = V3(sx * (N0.fx + 0.02), (ly0 + ly1) / 2, zF + 0.02)
+						local c0 = V3(sx * (N1.fx - 0.02), (ly0 + ly1) / 2, N1.z - 0.02)
+						local dx, dz = N1.fx - N0.fx, N1.z - zF
+						strip(b, "HeadlightWrap", a0, c0, V3(sx * dz, 0, -dx), ly1 - ly0 - 0.04, 0.08, LENS, M.Glass, 0.04)
 					end
 				else
-					for k = -1, 1, 2 do
-						local y = (gy0 + gy1) / 2 + k * (gy1 - gy0) * 0.2
-						box(b, "GrilleBar", -gw + 0.1, gw - 0.1, y - 0.035, y + 0.035, zF - 0.12, zF - 0.02, if offroad then CHROME else GRAPHITE, M.Metal)
+					box(b, "Headlight", lo + 0.06, hi - 0.06, ly0 + 0.06, ly1 - 0.05, zF - 0.11, zF - 0.03, LAMP, M.SmoothPlastic)
+				end
+			end
+			-- calandre : cadre (chromé ou noir laqué), grille, barres, logo
+			local gw = if offroad or style == "Limo" then s.W * 0.19 else s.W * 0.17 - 0.08
+			local gy0, gy1 = fy - 0.62, fy - 0.03
+			if style == "Limo" then
+				gy0, gy1 = fy - 0.66, fy + 0.1
+			elseif pickup then
+				gy0, gy1 = fy - 0.72, fy + 0.12
+			elseif sports then
+				gw, gy0, gy1 = 0, 0, 0
+			end
+			if gw > 0 then
+				local frameCol = if offroad or style == "Limo" or style == "City" then CHROME else GRAPHITE
+				box(b, "GrilleFrame", -gw, gw, gy0, gy1, zF - 0.05, zF + 0.1, frameCol, M.Metal).Reflectance = 0.2
+				box(b, "Grille", -gw + 0.08, gw - 0.08, gy0 + 0.07, gy1 - 0.07, zF - 0.09, zF + 0.05, HOUSING, M.DiamondPlate)
+				if full then
+					if style == "Limo" then
+						for k = -4, 4 do
+							local x = k * gw / 5
+							box(b, "GrilleBar", x - 0.03, x + 0.03, gy0 + 0.07, gy1 - 0.07, zF - 0.13, zF - 0.03, CHROME, M.Metal)
+						end
+					else
+						for k = 1, 3 do
+							local y = gy0 + (gy1 - gy0) * k / 4
+							box(b, "GrilleBar", -gw + 0.1, gw - 0.1, y - 0.03, y + 0.03, zF - 0.13, zF - 0.03, if offroad or style == "City" then CHROME else GRAPHITE, M.Metal)
+						end
 					end
+					cylZ(b, "Badge", 0, (gy0 + gy1) / 2, zF - 0.16, 0.05, 0.36, CHROME, M.Metal)
+					cylZ(b, "BadgeCore", 0, (gy0 + gy1) / 2, zF - 0.2, 0.04, 0.22, Color3.fromRGB(40, 80, 190), M.SmoothPlastic)
 				end
-				cylZ(b, "Badge", 0, (gy0 + gy1) / 2, zF - 0.14, 0.05, 0.3, CHROME, M.Metal)
+			elseif full then
+				-- roadster : pas de calandre, logo sur le museau + grande bouche
+				cylZ(b, "Badge", 0, fy - 0.12, zF - 0.04, 0.05, 0.3, CHROME, M.Metal)
 			end
-		elseif full then
-			cylZ(b, "Badge", 0, fy - 0.05, zF - 0.03, 0.05, 0.28, CHROME, M.Metal)
 		end
-		-- prise d'air basse + antibrouillards
-		local iw = math.min(if sports then s.W * 0.36 else s.W * 0.28, nfx - 0.3)
-		local iy1 = g.sill + (if sports then 0.75 else 0.55)
-		box(b, "Intake", -iw, iw, g.sill + 0.18, iy1, zF - 0.05, zF + 0.1, TRIM, M.Plastic)
-		if full then
-			box(b, "IntakeBar", -iw + 0.08, iw - 0.08, (g.sill + 0.18 + iy1) / 2 - 0.03, (g.sill + 0.18 + iy1) / 2 + 0.03, zF - 0.09, zF + 0.02, GRAPHITE, M.Metal)
-			if not round then
-				for _, sx in ipairs({ -1, 1 }) do
-					cylZ(b, "FogLight", sx * math.min(iw + 0.35, nfx - 0.25), g.sill + (if iw + 0.35 > nfx - 0.25 then 0.8 else 0.36), zF - 0.03, 0.08, 0.3, LAMP, M.Glass)
-				end
-			end
-			plate(b, "PlateFront", zF - 0.12, g.sill + 0.42, -1, true, nil)
-		end
+		-- bas de caisse avant : Mid → phares simples déjà posés
 
 		----------------------------------------------------------------
-		-- ░ arrière : feux, bandeau, pare-chocs, diffuseur, échappement ░
+		-- ░ arrière : feux (cerclage, glace, barres intérieures, recul,
+		-- clignotant, retour sur l'angle), jupe noire + catadioptres,
+		-- échappements, plaque, jonc chromé, logo ░
 		----------------------------------------------------------------
 		local T0 = st[#st]
+		local T1 = if st[#st - 1] and st[#st - 1].z > zB - g.tailR + 0.01 then st[#st - 1] else nil
 		local tfy = T0.fy
-		local tailTop = math.min(tfy + math.max(0.05, (T0.by - tfy) * 0.6), T0.t - 0.05)
-		local tailBot = tfy - 0.58
+		local tailTop = math.min(tfy + math.max(0.05, (T0.by - tfy) * 0.6), T0.t - 0.08)
+		local tailBot = tfy - 0.62
 		if pickup then
 			tailBot, tailTop = s.Low - 0.3, s.Deck - 0.35
 		elseif style == "Van" then
-			tailBot, tailTop = tfy - 0.2, tfy + 0.5
+			tailBot, tailTop = tfy - 0.25, tfy + 0.55
 		end
+		local rValTop = g.sill + 0.5
 		for _, sx in ipairs({ -1, 1 }) do
-			local tx0, tx1 = sx * (if pickup then tfx - 0.55 else s.W * 0.2), sx * (tfx - 0.06)
+			local tx0, tx1 = sx * (if pickup then tfx - 0.6 else s.W * 0.2), sx * (tfx - 0.08)
 			local lo, hi = math.min(tx0, tx1), math.max(tx0, tx1)
-			box(b, "Taillight", lo, hi, tailBot, tailTop, zB - 0.1, zB + 0.05, TAIL, M.Glass)
 			if full then
-				box(b, "TailBar", lo + 0.06, hi - 0.06, tailTop - 0.16, tailTop - 0.08, zB + 0.03, zB + 0.08, TAIL_IN, M.SmoothPlastic)
-				local rv0, rv1 = if sx > 0 then lo + 0.06 else hi - 0.36, if sx > 0 then lo + 0.36 else hi - 0.06
-				box(b, "ReverseLight", rv0, rv1, tailBot + 0.06, tailBot + 0.2, zB + 0.03, zB + 0.08, REVERSE, M.Glass)
-				local ind = box(b, "RearIndicator", if sx > 0 then hi - 0.34 else lo + 0.06, if sx > 0 then hi - 0.06 else lo + 0.34, tailBot + 0.06, tailBot + 0.2, zB + 0.03, zB + 0.08, AMBER)
+				box(b, "TailBezel", lo - 0.05, hi + 0.04, tailBot - 0.05, tailTop + 0.04, zB - 0.1, zB + 0.03, HOUSING)
+			end
+			box(b, "Taillight", lo, hi, tailBot, tailTop, zB - 0.1, zB + 0.07, TAIL, M.SmoothPlastic)
+			if full then
+				-- barres lumineuses intérieures (en C) + recul + clignotant
+				box(b, "TailBar", lo + 0.07, hi - 0.07, tailTop - 0.17, tailTop - 0.1, zB + 0.03, zB + 0.11, TAIL_IN, M.SmoothPlastic)
+				local vx0, vx1 = if sx > 0 then hi - 0.14 else lo + 0.07, if sx > 0 then hi - 0.07 else lo + 0.14
+				box(b, "TailBar", vx0, vx1, tailBot + 0.28, tailTop - 0.17, zB + 0.03, zB + 0.11, TAIL_IN, M.SmoothPlastic)
+				local rv0, rv1 = if sx > 0 then lo + 0.07 else hi - 0.4, if sx > 0 then lo + 0.4 else hi - 0.07
+				box(b, "ReverseLight", rv0, rv1, tailBot + 0.06, tailBot + 0.22, zB + 0.03, zB + 0.11, REVERSE, M.SmoothPlastic)
+				local ind = box(b, "RearIndicator", if sx > 0 then hi - 0.38 else lo + 0.07, if sx > 0 then hi - 0.07 else lo + 0.38, tailBot + 0.06, tailBot + 0.22, zB + 0.03, zB + 0.11, AMBER)
 				ind:SetAttribute("Side", sx)
+				if T1 and not pickup then
+					local a0 = V3(sx * (T0.fx + 0.02), (tailBot + tailTop) / 2, zB - 0.02)
+					local c0 = V3(sx * (T1.fx - 0.02), (tailBot + tailTop) / 2, T1.z + 0.02)
+					local dx, dz = T1.fx - T0.fx, zB - T1.z
+					strip(b, "TailWrap", a0, c0, V3(sx * dz, 0, dx), math.max(0.2, tailTop - tailBot - 0.1), 0.08, TAIL, M.SmoothPlastic, 0.04)
+				end
+				-- catadioptre rouge au coin de la jupe
+				local cx0, cx1 = sx * (tfx - 0.45), sx * (tfx - 0.2)
+				box(b, "Reflector", math.min(cx0, cx1), math.max(cx0, cx1), g.sill + 0.15, g.sill + 0.27, zB + 0.04, zB + 0.1, TAIL, M.SmoothPlastic)
 			end
 		end
 		if full and (style == "City" or style == "Hatch" or style == "SUV" or style == "Limo") then
 			local bw = s.W * 0.2 - 0.03
-			box(b, "TailLightBar", -bw, bw, tailTop - 0.14, tailTop - 0.08, zB - 0.02, zB + 0.09, TAIL_IN, M.Glass)
+			box(b, "TailLightBar", -bw, bw, tailTop - 0.14, tailTop - 0.08, zB - 0.02, zB + 0.1, TAIL_IN, M.SmoothPlastic)
 			box(b, "TailBlack", -bw, bw, tailTop - 0.2, tailTop, zB - 0.05, zB + 0.045, HOUSING)
 		end
-		box(b, "Diffuser", -tfx + 0.25, tfx - 0.25, g.sill + 0.06, g.sill + 0.42, zB - 0.02, zB + 0.1, TRIM, M.Plastic)
-		plate(b, "PlateRear", zB + 0.13, g.sill + 0.78, 1, full, options.Plate)
-		cylZ(b, "Exhaust", s.W * 0.3, g.sill + 0.2, zB + 0.1, 0.36, 0.3, CHROME, M.Metal)
-		if sports then
-			cylZ(b, "Exhaust", -s.W * 0.3, g.sill + 0.2, zB + 0.1, 0.36, 0.3, CHROME, M.Metal)
+		-- jupe arrière noire (diffuseur) sur toute la largeur
+		box(b, "Diffuser", -tfx + 0.08, tfx - 0.08, g.sill, rValTop, zB - 0.06, zB + 0.02, TRIM, M.Plastic)
+		plate(b, "PlateRear", zB + 0.05, rValTop + 0.3, 1, full, options.Plate)
+		if full and not sports and not pickup then
+			-- jonc chromé au-dessus de la plaque
+			box(b, "TrunkChrome", -0.95, 0.95, rValTop + 0.6, rValTop + 0.66, zB - 0.02, zB + 0.05, CHROME, M.Metal)
+		end
+		local twin = sports or style == "Hatch" or style == "Limo"
+		for _, sx in ipairs(if twin then { -1, 1 } else { 1 }) do
+			cylZ(b, "Exhaust", sx * s.W * 0.3, g.sill + 0.18, zB + 0.12, 0.34, 0.28, CHROME, M.Metal).Reflectance = 0.3
+			if full then
+				cylZ(b, "ExhaustInner", sx * s.W * 0.3, g.sill + 0.18, zB + 0.26, 0.06, 0.18, HOUSING, M.SmoothPlastic)
+			end
 		end
 		if full then
-			cylZ(b, "BadgeRear", 0, math.min(tailTop + 0.1, T0.t - 0.12), zB + 0.03, 0.05, 0.26, CHROME, M.Metal)
+			cylZ(b, "BadgeRear", 0, math.min(tailTop + 0.12, T0.t - 0.14), zB + 0.03, 0.05, 0.26, CHROME, M.Metal)
 		end
 
 		----------------------------------------------------------------

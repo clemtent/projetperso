@@ -744,12 +744,12 @@ local function shopRing(folder: Instance, geo: TownKit.Geo, shopsFolder: Instanc
 			else
 				TownBuildings.Shop(folder, cf, item.Spec, used + 1)
 				used += 1
-				-- (v9.9, CITY99) terrasse de café devant une boutique de décor sur
-				-- deux (client : tables, chaises, parasols ; passants attablés),
-				-- jamais contre un lampadaire de la place
-				if used % 2 == 1 then
-					local tcf = cf * CFrame.new(0, 0, -7.5)
-					local clear = true
+				-- (v9.9, CITY99) terrasse de café devant les boutiques de décor
+				-- (client : tables, chaises, parasols ; passants attablés),
+				-- jamais contre un lampadaire de la place (décalée s'il le faut)
+				for _, dx in ipairs({ 0, -5, 5 }) do
+					local tcf = cf * CFrame.new(dx, 0, -7.5)
+					local clear = math.abs(dx) + 6 <= w / 2 + 2
 					for i = 0, 7 do
 						local la = (i + 0.5) / 8 * math.pi * 2
 						local lp = O + Vector3.new(math.sin(la), 0, math.cos(la)) * (R - 6)
@@ -759,6 +759,7 @@ local function shopRing(folder: Instance, geo: TownKit.Geo, shopsFolder: Instanc
 					end
 					if clear then
 						TownKit.LifeSpot("Terrace", tcf, 200 + used)
+						break
 					end
 				end
 			end
@@ -851,10 +852,33 @@ function TownPlaza.Build(folder: Instance, geo: TownKit.Geo, shopsFolder: Instan
 			-- (v9.7 NATURE97) vrai massif : bordure, terre, feuillage, bouquets
 			TownKit.FlowerBed(plaza, p + Vector3.new(0, 1, 0), 3.9, i)
 		else
-			TownKit.Column(plaza, "TreeBox", p, 2, 5, C.White, M.Concrete, "prop")
-			TownKit.Tree(plaza, p + Vector3.new(0, 2, 0), 12, i * 13, "Round", { Tier = 1 }) -- (v9.7 NATURE97)
+			-- (v9.9, CITY99) vrais PLATANES dans une grille d'arbre en fonte
+			-- (plus de bac blanc : un arbre de place pousse dans le pavé)
+			part(plaza, "TreeGrate", Vector3.new(4.6, 0.3, 4.6), CFrame.new(p + Vector3.new(0, 0.16 - 0.15, 0)) * CFrame.Angles(0, math.rad(deg), 0), Color3.fromRGB(58, 56, 62), M.DiamondPlate, "deco")
+			TownKit.Tree(plaza, p, 17 + (i % 3), i * 13, i == 4 and "Maple" or "Oak", { Tier = 1 })
 		end
 	end
+	-- (v9.9, CITY99) zones où le client ne pose pas de joints de pavés
+	-- (x, z relatifs au centre, rayon) : massifs, grilles, étals, jeux à la craie
+	local keep = {}
+	local function keepOut(p: Vector3, r: number)
+		table.insert(keep, string.format("%.1f,%.1f,%.1f", p.X - ground.X, p.Z - ground.Z, r))
+	end
+	for _, deg in ipairs({ 58, 110, 160, 194, 262, 302, 322 }) do
+		keepOut(spot(math.rad(deg), 48), 5.2)
+	end
+	keepOut(spot(math.rad(38), 34), 4.5)
+	keepOut(spot(math.rad(-38), 34), 5)
+	keepOut(spot(math.rad(104), 31), 4.5)
+	keepOut(spot(math.rad(292), 33), 4.5)
+	keepOut(spot(math.rad(16), 27), 6.5)
+	keepOut(spot(math.rad(170), 28), 5)
+	keepOut(spot(math.rad(12), 52), 1.5)
+	for i = 0, 7 do
+		local a = (i + 0.5) / 8 * math.pi * 2
+		keepOut(ground + Vector3.new(math.sin(a), 0, math.cos(a)) * lampR, 1.4)
+	end
+	plaza:SetAttribute("FxKeepOut", table.concat(keep, ";"))
 	-- (v9.9, CITY99) HORLOGE DE PLACE (colonne en fonte, deux cadrans :
 	-- vers la place et vers l'avenue ; aiguilles et chiffres : TownDisplays)
 	do
