@@ -118,6 +118,7 @@ local LOC_EVERY = 2
 local deskWired = false
 local plazaFxWarned = false -- (v9.7) une seule alerte si TownPlazaFx.Step échoue
 local fairFxWarned = false -- (v9.8) une seule alerte si FairFx.Step échoue
+local musicStageWarned = false -- (v9.9) une seule alerte si MusicStage.Step échoue
 
 ----------------------------------------------------------------------
 -- Utilitaires
@@ -437,6 +438,7 @@ local KEEP_GUIS: { [string]: boolean } = {
 	Chat = true,
 	Freecam = true,
 	DeskModeGui = true, -- v9.5 🖥️ barre "Se lever" du bureau (DeskMode)
+	MusicStageGui = true, -- v9.9 🎵 panneau de jeu des instruments, choix des morceaux (MusicStage, MUSIC99)
 	FairGui = true, -- v9.8 🍦 menu des stands, badge du boost, bouton Croquer (FairFx, FAIR98)
 	GardenEditGui = true, -- v9.8 🌷 mode édition du jardin (GardenEdit, GARDEN98)
 	TownGraphicsGui = true, -- v9.8 🎨 fenêtre Graphismes en ville (TownGraphics, REALISM98)
@@ -892,6 +894,15 @@ local function step(dt: number)
 			warn("[Town] FairFx.Step : " .. tostring(errFair))
 		end
 	end
+	-- v9.9 🎵 scène musicale (MusicStage : notes, morceaux, décor en flux)
+	local musicStage = optionalModule("MusicStage")
+	if musicStage and type(musicStage.Step) == "function" then
+		local okMusic, errMusic = pcall(musicStage.Step, dt)
+		if not okMusic and not musicStageWarned then
+			musicStageWarned = true
+			warn("[Town] MusicStage.Step : " .. tostring(errMusic))
+		end
+	end
 	if clocks.Loc >= LOC_EVERY then
 		clocks.Loc = 0
 		pcall(localizeTown)
@@ -1277,6 +1288,14 @@ local function enter(options: any)
 				warn("[Town] FairFx.Start : " .. tostring(errFair))
 			end
 		end
+		-- v9.9 🎵 scène musicale de la place (MusicStage, MUSIC99)
+		local musicStage = optionalModule("MusicStage")
+		if musicStage and type(musicStage.Start) == "function" then
+			local okMusic, errMusic = pcall(musicStage.Start, { Toast = toast })
+			if not okMusic then
+				warn("[Town] MusicStage.Start : " .. tostring(errMusic))
+			end
+		end
 		-- v9.7 🌳 nature : détails de près (arbres, lac, aire de jeux) côté client (NATURE97)
 		local greenery = optionalModule("TownGreenery")
 		if greenery and type(greenery.Start) == "function" then
@@ -1482,6 +1501,11 @@ local function teardown()
 	local fairFx = optionalModule("FairFx")
 	if fairFx and type(fairFx.Stop) == "function" then
 		pcall(fairFx.Stop)
+	end
+	-- v9.9 🎵 scène musicale : décor, sons, interface détruits ; déplacements rendus
+	local musicStage = optionalModule("MusicStage")
+	if musicStage and type(musicStage.Stop) == "function" then
+		pcall(musicStage.Stop)
 	end
 	-- v9.7 🌳 nature : détails de près détruits (NATURE97)
 	local greenery = optionalModule("TownGreenery")
