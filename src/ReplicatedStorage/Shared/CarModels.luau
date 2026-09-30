@@ -2322,6 +2322,99 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 end
 
 ----------------------------------------------------------------------
+-- 🚦 (v10) FEUX : stop, recul, clignotants, phares (côté CLIENT, local :
+-- CarClient pour les voitures des joueurs ; TownTraffic peut s'en servir).
+-- On passe les glaces en Neon (plus clair) quand le feu est allumé :
+-- aucune lumière, aucun son.
+----------------------------------------------------------------------
+export type LightEntry = { Part: BasePart, Color: Color3, Material: Enum.Material, Side: number }
+export type LightRig = {
+	Brake: { LightEntry },
+	Reverse: { LightEntry },
+	Blink: { LightEntry },
+	Head: { LightEntry },
+	State: { [string]: any },
+}
+
+local LIGHT_KIND: { [string]: string } = {
+	Taillight = "Brake",
+	TailWrap = "Brake",
+	TailBar = "Brake",
+	TailWrapBar = "Brake",
+	TailLightBar = "Brake",
+	BrakeLight3 = "Brake",
+	ReverseLight = "Reverse",
+	Indicator = "Blink",
+	RearIndicator = "Blink",
+	MirrorBlinker = "Blink",
+	HeadlightDRL = "Head",
+	HeadlightWrapDRL = "Head",
+	Projector = "Head",
+	Headlight = "Head",
+	HeadlightDot = "Head",
+	FogLight = "Head",
+}
+local LIGHT_ON: { [string]: Color3 } = {
+	Brake = Color3.fromRGB(255, 46, 64),
+	Reverse = Color3.fromRGB(255, 255, 255),
+	Blink = Color3.fromRGB(255, 170, 40),
+	Head = Color3.fromRGB(255, 250, 236),
+}
+
+function CarModels.LightRig(model: Instance): LightRig
+	local rig: LightRig = { Brake = {}, Reverse = {}, Blink = {}, Head = {}, State = {} }
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") then
+			local kind = LIGHT_KIND[d.Name]
+			if kind then
+				local side = tonumber(d:GetAttribute("Side")) or (if d.Position.X > 0 then 1 else -1)
+				table.insert((rig :: any)[kind], { Part = d, Color = d.Color, Material = d.Material, Side = side })
+			end
+		end
+	end
+	return rig
+end
+
+-- state = { Brake = bool, Reverse = bool, Blink = -1 | 0 | 1 (côté, déjà
+-- cadencé par l'appelant), Hazard = bool, Head = bool } ; ne touche une pièce
+-- que si son état change (bon marché, appelable 10 fois / s)
+function CarModels.SetLights(rig: LightRig, state: any)
+	local function apply(kind: string, list: { LightEntry }, wantFor: (LightEntry) -> boolean)
+		for _, e in ipairs(list) do
+			local on = wantFor(e)
+			local key = e.Part
+			if rig.State[key] ~= on then
+				rig.State[key] = on
+				if on then
+					e.Part.Material = Enum.Material.Neon
+					e.Part.Color = LIGHT_ON[kind]:Lerp(e.Color, 0.25)
+				else
+					e.Part.Material = e.Material
+					e.Part.Color = e.Color
+				end
+			end
+		end
+	end
+	local brake = state.Brake == true
+	local reverse = state.Reverse == true
+	local blink = tonumber(state.Blink) or 0
+	local hazard = state.Hazard == true
+	local head = state.Head == true
+	apply("Brake", rig.Brake, function()
+		return brake
+	end)
+	apply("Reverse", rig.Reverse, function()
+		return reverse
+	end)
+	apply("Blink", rig.Blink, function(e: LightEntry)
+		return hazard or (blink ~= 0 and e.Side == blink)
+	end)
+	apply("Head", rig.Head, function()
+		return head
+	end)
+end
+
+----------------------------------------------------------------------
 -- Animation des roues d'un modèle ANCRÉ (circulation, vitrines)
 ----------------------------------------------------------------------
 

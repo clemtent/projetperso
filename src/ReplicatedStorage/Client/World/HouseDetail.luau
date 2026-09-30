@@ -232,6 +232,7 @@ export type RoofSpec = {
 	Pipes: { number }?, -- x des descentes d'eau pluviale (devant ET derrière)
 	Parapet: boolean?, -- toit-terrasse : acrotère (sinon dalle en débord)
 	Thick: number?,
+	Eaves: boolean?, -- faux = pas de rives / gouttières (corniche du style)
 }
 
 export type RoofInfo = {
@@ -273,7 +274,7 @@ function HouseDetail.Roof(kit: any, x0: number, x1: number, d0: number, d1: numb
 	local courseColor = color:Lerp(BLACK, if spec.Kind == "Slate" then 0.18 else 0.14)
 	-- égout (avant / arrière) : planche de rive, sous-face, gouttière, descentes
 	local function eaves(ax0: number, ax1: number, ye: number, dFront: number, dBack: number)
-		if not detail then
+		if not detail or spec.Eaves == false then
 			return
 		end
 		local fy0 = ye - th - 0.55
@@ -718,7 +719,7 @@ local function gateLeaf(kit: any, x0: number, x1: number, y0: number, y1: number
 	return leaf
 end
 
-export type FenceSpec = { Kind: string, Color: Color3?, Post: Color3?, Gate0: number, Gate1: number, Height: number? }
+export type FenceSpec = { Kind: string, Color: Color3?, Post: Color3?, Gate0: number, Gate1: number, Height: number?, NoGate: boolean? }
 
 -- Clôture le long de x (x0..x1) en d, avec un portillon FERMÉ entre Gate0 et Gate1
 function HouseDetail.Fence(kit: any, x0: number, x1: number, d: number, spec: FenceSpec)
@@ -728,6 +729,16 @@ function HouseDetail.Fence(kit: any, x0: number, x1: number, d: number, spec: Fe
 	end
 	local g0, g1 = spec.Gate0, spec.Gate1
 	local spans = { { x0, g0 }, { g1, x1 } }
+	if spec.NoGate then
+		spans = { { x0, x1 } }
+	end
+	local realGate = gateLeaf
+	local function gateLeaf(...: any): any
+		if not spec.NoGate then
+			return realGate(...)
+		end
+		return nil
+	end
 	local function posts(a: number, b: number, every: number): { number }
 		local list = {}
 		local n = math.max(1, math.floor((b - a) / every + 0.5))
@@ -755,8 +766,7 @@ function HouseDetail.Fence(kit: any, x0: number, x1: number, d: number, spec: Fe
 				end
 			end
 		end
-		local leaf = gateLeaf(kit, g0 + 0.3, g1 - 0.3, 0.2, 2.5, d, white, M.Wood, true, "Picket")
-		local _ = leaf
+		gateLeaf(kit, g0 + 0.3, g1 - 0.3, 0.2, 2.5, d, white, M.Wood, true, "Picket")
 		return
 	end
 	if kind == "Hedge" then
@@ -809,7 +819,7 @@ function HouseDetail.Fence(kit: any, x0: number, x1: number, d: number, spec: Fe
 				end
 			end
 		end
-		for _, px in ipairs({ g0 - 0.7, g1 + 0.7 }) do
+		for _, px in ipairs(if spec.NoGate then {} else { g0 - 0.7, g1 + 0.7 }) do
 			kit:Box("GatePillar", px - 0.7, px + 0.7, 0, 4.4, d - 0.7, d + 0.7, Color3.fromRGB(226, 218, 206), M.Limestone, { Solid = true })
 			kit:Box("GatePillarCap", px - 0.9, px + 0.9, 4.4, 4.8, d - 0.9, d + 0.9, Color3.fromRGB(240, 234, 224), M.Limestone, { Shadow = false })
 			kit:Ball("GatePillarBall", px, 5.2, d, 0.8, Color3.fromRGB(240, 234, 224), M.Limestone, { Shadow = false })
@@ -828,7 +838,7 @@ function HouseDetail.Fence(kit: any, x0: number, x1: number, d: number, spec: Fe
 				kit:Box("FenceCoping", a - 0.1, b + 0.1, 2.1, 2.45, d - 0.7, d + 0.7, stone:Lerp(WHITE, 0.25), M.Limestone, { Shadow = false })
 			end
 		end
-		for _, px in ipairs({ g0 - 0.6, g1 + 0.6 }) do
+		for _, px in ipairs(if spec.NoGate then {} else { g0 - 0.6, g1 + 0.6 }) do
 			kit:Box("GatePillar", px - 0.6, px + 0.6, 0, 3, d - 0.7, d + 0.7, stone, M.Cobblestone, { Solid = true })
 			kit:Box("GatePillarCap", px - 0.75, px + 0.75, 3, 3.35, d - 0.85, d + 0.85, stone:Lerp(WHITE, 0.25), M.Limestone, { Shadow = false })
 		end
