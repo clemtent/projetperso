@@ -64,8 +64,8 @@ function HouseLod.Build(kit: any, size: any, looks: any, level: string): Result
 	local cottage = style == "Cottage" and arch == "Classic"
 
 	-- corps du bâtiment (+ soubassement)
-	kit:Box("LodBody", L, R, 0, top + 0.65, -0.3, depth + 0.3, wall, spec.WallMat, { Solid = true, Shadow = true })
-	kit:Box("LodPlinth", L - 0.3, R + 0.3, 0, WorldLayout.PLINTH, -0.6, depth + 0.6, Color3.fromRGB(200, 194, 188), M.Concrete, DECO)
+	kit:Box("LodBody", L, R, 0.05, top + 0.65, -0.3, depth + 0.3, wall, spec.WallMat, { Solid = true, Shadow = true })
+	kit:Box("LodPlinth", L - 0.3, R + 0.3, -0.05, WorldLayout.PLINTH, -0.6, depth + 0.6, Color3.fromRGB(200, 194, 188), M.Concrete, DECO)
 
 	if level == "Far" then
 		-- bandeaux de fenêtres (devant / derrière), un par étage
@@ -91,7 +91,7 @@ function HouseLod.Build(kit: any, size: any, looks: any, level: string): Result
 		if mansion then
 			for _, s in ipairs({ -1, 1 }) do
 				local tx = if s < 0 then L - 1 else R + 1
-				kit:CylY("LodTower", tx, 0, 0.5, 14, top + 3, wall, spec.WallMat, { Solid = true })
+				kit:CylY("LodTower", tx, -0.15, 0.5, 14, top + 3.15, wall, spec.WallMat, { Solid = true })
 				kit:Cone("LodTowerRoof", tx, top + 3.9, 0.5, 8.6, 12, 6, roof, spec.RoofMat)
 			end
 		end
@@ -134,14 +134,14 @@ function HouseLod.Build(kit: any, size: any, looks: any, level: string): Result
 	local roofX0, roofX1 = L, R
 	if cottage then
 		local annexTop = top + 3.2
-		kit:Box("LodAnnex", hall0, hall1 + T, top + 0.4, annexTop, -0.3, depth + 0.3, wall:Lerp(Color3.fromRGB(255, 126, 182), 0.1), spec.WallMat, { Solid = true })
+		kit:Box("LodAnnex", hall0, hall1 + T + 0.05, top + 0.4, annexTop, -0.35, depth + 0.35, wall:Lerp(Color3.fromRGB(255, 126, 182), 0.1), spec.WallMat, { Solid = true })
 		HouseDetail.GableX(kit, "LodAnnexGable", -0.3, depth + 0.3, hall0 - 0.9, hall1 + T + 0.9, annexTop, annexTop + 5.5, roof, spec.RoofMat, { Solid = true })
 		roofX1 = hall0 + 0.4
 	elseif style == "Townhouse" and arch == "Classic" then
 		roofX1 = hall0 + 0.4
-		kit:Box("LodCornice", L - 0.9, R + 0.9, top - 0.2, top + 1.1, -1.3, depth + 0.3, trim, M.Plaster, DECO)
+		kit:Box("LodCornice", L - 0.9, R + 0.9, top - 0.2, top + 1.1, -1.3, depth + 0.5, trim, M.Plaster, DECO)
 	elseif mansion then
-		kit:Box("LodCornice", L - 1, R + 1, top - 0.2, top + 1.3, -1.5, depth + 0.3, trim, M.Limestone, DECO)
+		kit:Box("LodCornice", L - 1, R + 1, top - 0.2, top + 1.3, -1.5, depth + 0.5, trim, M.Limestone, DECO)
 		HouseDetail.GableX(kit, "LodPediment", -0.3, 1.5, doorX - 17, doorX + 17, top + 1.3, top + 12.3, trim, M.Limestone, { Solid = true })
 		for _, s in ipairs({ -1, 1 }) do
 			local tx = if s < 0 then L - 1 else R + 1
@@ -155,7 +155,7 @@ function HouseLod.Build(kit: any, size: any, looks: any, level: string): Result
 			end
 		end
 	elseif arch == "Modern" then
-		kit:Box("LodCladding", hall0 - 0.4, hall1 + T + 0.4, WorldLayout.PLINTH, top + 2.4, -1.1, depth + 0.3, Color3.fromRGB(176, 124, 82), M.WoodPlanks, { Solid = true })
+		kit:Box("LodCladding", hall0 - 0.4, hall1 + T + 0.4, WorldLayout.PLINTH, top + 2.4, -1.1, depth + 0.45, Color3.fromRGB(176, 124, 82), M.WoodPlanks, { Solid = true })
 	elseif style == "Loft" and spec.RoofShape == "Flat" then
 		kit:Box("LodParapet", L, R, top + 0.65, top + 3.2, -0.3, depth + 0.3, wall, spec.WallMat, DECO)
 		kit:Box("LodCoping", L - 0.4, R + 0.4, top + 3.2, top + 3.7, -0.7, depth + 0.7, Color3.fromRGB(216, 212, 208), M.Concrete, DECO)
