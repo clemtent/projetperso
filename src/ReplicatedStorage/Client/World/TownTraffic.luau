@@ -678,7 +678,11 @@ local function stepTraffic(dt: number, camPos: Vector3?)
 			v.Braking = braking
 			for _, b in ipairs(v.Brakes) do
 				b.Color = if braking then BRAKE_ON else (b:GetAttribute("OffColor") or b.Color)
-				b.Material = if braking then Enum.Material.Neon else Enum.Material.Glass
+				local off = b:GetAttribute("OffMaterial")
+				local ok, mat = pcall(function()
+					return (Enum.Material :: any)[off]
+				end)
+				b.Material = if braking then Enum.Material.Neon elseif ok and mat then mat else Enum.Material.SmoothPlastic
 			end
 		end
 		local on = blink ~= 0 and (os.clock() * 2) % 1 < 0.55
