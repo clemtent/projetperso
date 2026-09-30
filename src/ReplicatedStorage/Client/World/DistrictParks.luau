@@ -677,7 +677,17 @@ local function buildDistrictSign(m: Model, F: CFrame, seed: number, spot: any)
 	end
 end
 
+-- arbre d'alignement sur l'accotement engazonné d'une avenue (paillis, tuteurs)
+local function buildVergeTree(m: Model, F: CFrame, seed: number)
+	Column(m, "Mulch", F, 0, 0, -0.1, 0.12, 3.4, rgb(110, 76, 52), M.Ground)
+	for _, sx in ipairs({ -1, 1 }) do
+		CityKit.Rod(m, "Stake", (F * CFrame.new(sx * 1, 0, 0)).Position, (F * CFrame.new(sx * 0.7, 4.2, 0)).Position, 0.16, rgb(170, 130, 90), M.Wood)
+	end
+	tree(m, F, 0, 0, 15 + hash(seed, 1) * 6, seed, CityKit.Pick({ "Oak", "Maple", "Poplar", "Birch", "Oak" }, seed, 2))
+end
+
 DistrictParks.BUILDERS = {
+	VergeTree = buildVergeTree,
 	PocketPark = buildPocketPark,
 	BasketCourt = buildBasketCourt,
 	FootPitch = buildFootPitch,
@@ -697,6 +707,11 @@ DistrictParks.BUILDERS = {
 DistrictParks.BIG = { FootPitch = true, Tennis = true, Stadium = true, ShopRow = true, BusStation = true, Lookout = true }
 -- imposteurs (loin) : silhouettes de quelques pièces
 DistrictParks.IMPOSTORS = {
+	VergeTree = function(m: Model, F: CFrame, seed: number)
+		local h = 15 + hash(seed, 1) * 6
+		Column(m, "ImpTrunk", F, 0, 0, 0, h * 0.45, 0.9, rgb(100, 72, 50), M.Wood)
+		Egg(m, "ImpCrown", F * CFrame.new(0, h * 0.68, 0), Vector3.new(h * 0.55, h * 0.5, h * 0.55), rgb(84, 142, 70), M.Grass)
+	end,
 	Grove = function(m: Model, F: CFrame, seed: number)
 		-- (de loin : une couronne + un tronc par arbre, 2 pièces)
 		local n = 4 + math.floor(hash(seed, 1) * 3)

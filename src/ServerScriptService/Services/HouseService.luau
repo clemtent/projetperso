@@ -66,7 +66,17 @@ local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local Net = require(ReplicatedStorage.Shared.Net)
 local RateLimiter = require(script.Parent.RateLimiter)
-local HouseOptions = require(ReplicatedStorage.Shared.HouseOptions) -- (v10 HOUSE10) 🏡 extérieur
+-- (v10 HOUSE10) 🏡 extérieur (facultatif : les simulations de tests sans ce module continuent)
+local HouseOptions: any = nil
+do
+	local module = ReplicatedStorage.Shared:FindFirstChild("HouseOptions")
+	if module then
+		local ok, result = pcall(require, module)
+		if ok and type(result) == "table" then
+			HouseOptions = result
+		end
+	end
+end
 
 local HouseService = {}
 
@@ -633,8 +643,10 @@ local function sanitizeHouse(data)
 	house.Rooms = rooms
 
 	-- (v10 HOUSE10) 🏡 extérieur personnalisé : choix connus et possédés
-	house.OwnedExt = HouseOptions.CleanOwned(house.OwnedExt)
-	house.Ext = HouseOptions.Sanitize(house.Ext, house.OwnedExt)
+	if HouseOptions then
+		house.OwnedExt = HouseOptions.CleanOwned(house.OwnedExt)
+		house.Ext = HouseOptions.Sanitize(house.Ext, house.OwnedExt)
+	end
 
 	if not isValidNumber(data.Stats.HouseItemsBought) or data.Stats.HouseItemsBought < 0 then
 		data.Stats.HouseItemsBought = 0
@@ -691,7 +703,7 @@ function HouseService:DebugGrantAll(player: Player): boolean
 	end
 	-- (v10 HOUSE10) tous les choix de l'extérieur
 	house.OwnedExt = type(house.OwnedExt) == "table" and house.OwnedExt or {}
-	for _, def in ipairs(HouseOptions.KINDS) do
+	for _, def in ipairs(if HouseOptions then HouseOptions.KINDS else {}) do
 		for _, choice in ipairs(def.Choices) do
 			house.OwnedExt[HouseOptions.OwnedKey(def.Id, choice.Id)] = true
 		end
@@ -1263,7 +1275,7 @@ end
 -- Attribut répliqué pour la ville (HouseBuilder le lit sur le propriétaire)
 local function publishExterior(player: Player, data)
 	local house = type(data) == "table" and data.House or nil
-	if type(house) ~= "table" then
+	if type(house) ~= "table" or not HouseOptions then
 		return
 	end
 	pcall(function()
@@ -1274,7 +1286,7 @@ end
 -- "saveExterior" { [Kind] = Id, Num = n } : tout ou rien (projet invalide,
 -- verrou des visites à l'océan ou pas assez de Dopamine = rien ne change)
 local function saveExterior(player: Player, data, argument: any): (boolean, string)
-	if type(argument) ~= "table" then
+	if type(argument) ~= "table" or not HouseOptions then
 		return false, T(player, "Invalid request")
 	end
 	local house = data.House

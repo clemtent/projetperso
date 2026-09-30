@@ -1667,7 +1667,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			end
 		end
 		if round then
-			plate(b, "PlateFront", zF - 0.05, math.max(valTop + 0.26, math.min(valTop + 0.3, fy - 0.9)), -1, full, nil)
+			plate(b, "PlateFront", zF - 0.05, valTop + 0.22, -1, full, nil)
 			-- phares ronds rétro (cerclage chromé, boîtier, lampe, point de feu de jour)
 			local d = if style == "Van" then 0.95 else 1.0
 			local ly = if style == "Van" then fy - 0.35 else fy - 0.3
@@ -1702,9 +1702,9 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 				end
 			elseif full then
 				-- petite calandre chromée "sourire" + logo
-				box(b, "GrilleFrame", -0.7, 0.7, fy - 0.72, fy - 0.44, zF - 0.05, zF + 0.05, CHROME, M.Metal)
-				box(b, "Grille", -0.62, 0.62, fy - 0.67, fy - 0.49, zF - 0.09, zF + 0.04, HOUSING, M.DiamondPlate)
-				cylZ(b, "Badge", 0, fy - 0.2, zF - 0.05, 0.06, 0.3, CHROME, M.Metal)
+				box(b, "GrilleFrame", -0.7, 0.7, fy - 0.36, fy - 0.12, zF - 0.05, zF + 0.05, CHROME, M.Metal)
+				box(b, "Grille", -0.62, 0.62, fy - 0.32, fy - 0.16, zF - 0.09, zF + 0.04, HOUSING, M.DiamondPlate)
+				cylZ(b, "Badge", 0, fy - 0.24, zF - 0.13, 0.06, 0.3, CHROME, M.Metal)
 			end
 		else
 			-- (v10) blocs optiques MODERNES : fins, hauts, étirés jusque dans

@@ -747,6 +747,116 @@ local function planRoads(ctx: Ctx, out: { Spot })
 end
 
 ----------------------------------------------------------------------
+-- 🏙️ Mobilier des avenues, de la ceinture et des routes extérieures
+-- (lampadaires en quinconce, arbres d'alignement sur l'accotement, bancs,
+-- poubelles, arrêts de bus, feux tricolores aux carrefours)
+----------------------------------------------------------------------
+
+local FURNISHED = { Avenue = true, Belt = true, Entrance = true, Connector = true, Outside = true }
+
+local function planFurniture(ctx: Ctx, out: { Spot })
+	local ok, graph = pcall(WL.RoadGraph, ctx.Count)
+	if not ok or type(graph) ~= "table" then
+		return
+	end
+	local degree: { [string]: number } = {}
+	for _, e in ipairs(graph.Edges) do
+		degree[e.A] = (degree[e.A] or 0) + 1
+		degree[e.B] = (degree[e.B] or 0) + 1
+	end
+	local B = (WL.DOWNTOWN_B or 250) + 1
+	local function inside(p: any): boolean
+		return math.abs(p.X) <= B and math.abs(p.Z) <= B
+	end
+	local function free(x: number, z: number, r: number): boolean
+		local okF, f = pcall(WL.IsFreeAt, ctx.Count, x, z, r)
+		return okF and f
+	end
+	local function onRoad(x: number, z: number, m: number): boolean
+		local okR, r = pcall(WL.OnRoad, ctx.Count, x, z, m)
+		return okR and r
+	end
+	local walkY = (WL.WALK_Y or 1)
+	for ei, e in ipairs(graph.Edges) do
+		local pa, pb = e.Points and e.Points[1], e.Points and e.Points[#e.Points]
+		if FURNISHED[e.Kind] and not e.Bridge and (e.Sidewalk or 0) > 0 and pa and pb and not (inside(pa) and inside(pb)) and #e.Points == 2 then
+			local dx, dz = pb.X - pa.X, pb.Z - pa.Z
+			local L = math.sqrt(dx * dx + dz * dz)
+			if L > 60 then
+				local ux, uz = dx / L, dz / L
+				local rx, rz = -uz, ux -- droite du sens A -> B
+				local half = e.Width / 2
+				local walk = e.Sidewalk
+				local jA = (degree[e.A] or 0) >= 3 and 30 or 8
+				local jB = (degree[e.B] or 0) >= 3 and 30 or 8
+				local y = (pa.Y - (WL.ROAD_Y or 0.5)) + walkY
+				-- lampadaires en quinconce (bord du trottoir côté chaussée, bras vers la route)
+				local k = 0
+				local s = jA
+				while s < L - jB do
+					local side = k % 2 == 0 and 1 or -1
+					local x = pa.X + ux * s + rx * side * (half + 1.1)
+					local z = pa.Z + uz * s + rz * side * (half + 1.1)
+					add(out, "Lamppost", cframe(x, y, z, -rx * side, -rz * side), 9000 + ei * 97 + k, nil, nil, true)
+					k += 1
+					s += 44
+				end
+				-- arbres d'alignement, bancs, poubelles, arrêt de bus sur l'accotement
+				local trees = e.Kind ~= "Outside"
+				k = 0
+				s = jA + 22
+				while s < L - jB - 6 do
+					for _, side in ipairs({ -1, 1 }) do
+						local off = half + walk + 3
+						local x = pa.X + ux * s + rx * side * off
+						local z = pa.Z + uz * s + rz * side * off
+						if free(x, z, 2.5) and not onRoad(x, z, 1) then
+							local kind = "VergeTree"
+							if k % 7 == 3 then
+								kind = "Bench"
+							elseif k % 7 == 5 then
+								kind = "Bin"
+							end
+							if k % 11 == 6 and free(x + rx * side * 2, z + rz * side * 2, 6) then
+								-- arrêt de bus : abri ouvert vers la chaussée
+								add(out, "TwnBusStop", cframe(x + rx * side * 1.5, WL.GROUND_Y or 0.4, z + rz * side * 1.5, -rx * side, -rz * side), 9500 + ei * 31 + k, nil, nil, true)
+							elseif kind ~= "VergeTree" or trees then
+								add(out, kind, cframe(x, WL.GROUND_Y or 0.4, z, -rx * side, -rz * side), 9700 + ei * 53 + k, nil, nil, true)
+							end
+						end
+						k += 1
+					end
+					s += 30
+				end
+			end
+		end
+	end
+	-- feux tricolores : chaque bras d'un carrefour de la ceinture / des avenues
+	for _, node in ipairs(graph.NodeList or {}) do
+		if (degree[node.Id] or 0) >= 3 and not inside(node) then
+			for _, e in ipairs(graph.Edges) do
+				if (e.A == node.Id or e.B == node.Id) and FURNISHED[e.Kind] and (e.Sidewalk or 0) > 0 and not e.Bridge and #e.Points >= 2 then
+					local from = e.A == node.Id and e.Points[1] or e.Points[#e.Points]
+					local to = e.A == node.Id and e.Points[2] or e.Points[#e.Points - 1]
+					local dx, dz = to.X - from.X, to.Z - from.Z
+					local len = math.sqrt(dx * dx + dz * dz)
+					if len > 60 then
+						local ux, uz = dx / len, dz / len -- du carrefour vers le bras
+						-- la circulation qui ARRIVE roule dans le sens -u ; sa droite = (uz, -ux)
+						local rx, rz = uz, -ux
+						local back = (WL.GRID_HALF or 16) + 10
+						local x = from.X + ux * back + rx * (e.Width / 2 + 0.9)
+						local z = from.Z + uz * back + rz * (e.Width / 2 + 0.9)
+						local seed = math.abs(ux) > 0.5 and 1 or 5
+						add(out, "TrafficLight", cframe(x, (from.Y - (WL.ROAD_Y or 0.5)) + walkY, z, ux, uz), seed, nil, nil, true)
+					end
+				end
+			end
+		end
+	end
+end
+
+----------------------------------------------------------------------
 -- 🌳 Cases nature
 ----------------------------------------------------------------------
 
@@ -811,6 +921,10 @@ function CityPlan.Build(count: number, taken: { { number } }?): { Spot }
 	local okR, errR = pcall(planRoads, ctx, out)
 	if not okR then
 		warn("[CityPlan] marquages : " .. tostring(errR))
+	end
+	local okF, errF = pcall(planFurniture, ctx, out)
+	if not okF then
+		warn("[CityPlan] mobilier : " .. tostring(errF))
 	end
 	cache[key] = out
 	return out
