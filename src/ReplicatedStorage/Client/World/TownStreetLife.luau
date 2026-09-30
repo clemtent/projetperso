@@ -1008,7 +1008,11 @@ for kind in pairs(TownDistricts.BIG) do
 end
 -- (v10, CITY10) kits de la grande ville
 local IMPOSTORS: { [string]: (Model, CFrame, number, any) -> any } = {}
+local NEAR_R: { [string]: number } = {} -- (v10) rayon réduit des lieux denses
 if okCity and type(CityPlan) == "table" then
+	for kind, r in pairs(CityPlan.NEAR or {}) do
+		NEAR_R[kind] = r
+	end
 	for kind, builder in pairs(CityPlan.BUILDERS) do
 		BUILDERS[kind] = builder
 	end
@@ -1431,6 +1435,8 @@ function TownStreetLife.Step(position: Vector3)
 			local inR, outR = BUILD_IN * k, BUILD_OUT * k
 			if FAR[spot.Kind] then
 				inR, outR = FAR_IN, FAR_OUT
+			elseif NEAR_R[spot.Kind] then
+				inR, outR = NEAR_R[spot.Kind] * k, (NEAR_R[spot.Kind] + 40) * k
 			elseif BIG[spot.Kind] then
 				inR, outR = BIG_IN * k, BIG_OUT * k
 			end
