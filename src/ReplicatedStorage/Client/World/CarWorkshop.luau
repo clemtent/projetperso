@@ -40,7 +40,6 @@ local CarModels = require(ReplicatedStorage.Shared.CarModels)
 local CarWorkshop = {}
 CarWorkshop.__index = CarWorkshop
 
-local PINK = Color3.fromRGB(255, 110, 170)
 local PINK_DEEP = Color3.fromRGB(236, 72, 140)
 local SKY = Color3.fromRGB(96, 170, 245)
 local MINT = Color3.fromRGB(80, 200, 160)

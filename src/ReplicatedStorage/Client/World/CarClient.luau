@@ -967,10 +967,10 @@ refreshPicker = function()
 	local tab = picker.Tab
 	if parts.CarTab then
 		parts.CarTab.Visible = tab == "Car"
-		for id, button in pairs(parts.TabButtons) do
+		for id, tabButton in pairs(parts.TabButtons) do
 			local on = id == tab
-			button.BackgroundColor3 = if on then PINK_DEEP else WHITE
-			button.TextColor3 = if on then WHITE else INK
+			tabButton.BackgroundColor3 = if on then PINK_DEEP else WHITE
+			tabButton.TextColor3 = if on then WHITE else INK
 		end
 	end
 	if workshop then

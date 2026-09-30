@@ -586,7 +586,9 @@ local npcWarned = false
 local function checkNpcs()
 	local camera = workspace.CurrentCamera
 	local center = camera and camera.CFrame.Position
-	if not center then
+	local _, _, myRoot = charParts()
+	local center2 = if myRoot then myRoot.Position else center
+	if not center or not center2 then
 		return
 	end
 	local now = os.clock()
@@ -594,7 +596,7 @@ local function checkNpcs()
 	for _, m in ipairs(moverList) do
 		local flat = Vector3.new(m.Vel.X, 0, m.Vel.Z)
 		local speed = flat.Magnitude
-		if m.Pos and speed >= Knockdown.NPC_MIN_SPEED and (m.Pos - center).Magnitude < 110 then
+		if m.Pos and speed >= Knockdown.NPC_MIN_SPEED and math.min((m.Pos - center).Magnitude, (m.Pos - center2).Magnitude) < 110 then
 			local cf, size = boxOf(m.Model)
 			if cf and size then
 				local u = flat.Unit

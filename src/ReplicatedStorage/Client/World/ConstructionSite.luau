@@ -120,10 +120,12 @@ function ConstructionSite.new(plotCF: CFrame, opts: any): Site
 		Wf = wf,
 		Front = front,
 		Back = front + WorldLayout.DEPTH + 2 * WorldLayout.WALL_T,
-		XL = -math.min(wf / 2 + 26, plotW / 2 - 8),
-		XR = math.min(wf / 2 + 16, plotW / 2 - 8),
-		ZF = -(plotD / 2 - 10),
-		ZB = plotD / 2 - 8,
+		-- clôture du chantier : tout le tour de la parcelle (v10 : plus de
+		-- clôture de parcelle côté serveur), 6 studs derrière le bord côté rue
+		XL = -(plotW / 2 - 3),
+		XR = plotW / 2 - 3,
+		ZF = -(plotD / 2 - 6),
+		ZB = plotD / 2 - 3,
 		Crane = nil,
 		Excavator = nil,
 		Drum = nil,

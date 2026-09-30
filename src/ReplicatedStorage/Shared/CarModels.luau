@@ -2315,6 +2315,9 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 	model:SetAttribute("SeatCF", CFrame.new(P(b, seatX, seatTop, seatZ)))
 	model:SetAttribute("Lod", lod)
 	model:SetAttribute("PartCount", b.Count)
+	-- (v10) finition (Repaint la garde) et options de l'atelier
+	model:SetAttribute("Finish", finish)
+	model:SetAttribute("Mods", CarModels.EncodeMods(mods))
 	return model
 end
 

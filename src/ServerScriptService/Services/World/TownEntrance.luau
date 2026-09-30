@@ -183,7 +183,10 @@ local function mapBoard(folder: Instance, cf: CFrame, geo: TownKit.Geo): MapBoar
 	local aspect = Instance.new("UIAspectRatioConstraint")
 	aspect.AspectRatio = 1
 	aspect.Parent = map
-	local world = geo.PlotR + WorldLayout.PLOT_D / 2 + 8
+	-- (v10, LAYOUT10) la GRANDE ville : autoroute, ceinture, avenues,
+	-- quartiers (couleurs), place ; parcelles numérotées
+	local count = geo.Count
+	local world = WorldLayout.HighwayR(count) + WorldLayout.HIGHWAY_W / 2 + 12
 	local function mapPos(x: number, z: number): UDim2
 		return UDim2.fromScale(0.5 + x / world / 2, 0.5 + z / world / 2)
 	end
@@ -200,27 +203,50 @@ local function mapBoard(folder: Instance, cf: CFrame, geo: TownKit.Geo): MapBoar
 		f.Parent = map
 		return f
 	end
-	-- boulevard (un trait par côté), avenue, rues, place
-	local m = geo.Slots
-	local sideLen = 2 * geo.Road * math.tan(geo.HalfAngle) + 8
-	for k = 0, m - 1 do
-		local a = geo.SlotAngle(k)
-		block("Road", math.sin(a) * geo.Road, math.cos(a) * geo.Road, sideLen, 20, -math.deg(a), Color3.fromRGB(120, 122, 136), 2)
+	-- quartiers (fond coloré)
+	local tint = {
+		Cottage = Color3.fromRGB(196, 232, 160),
+		Townhouse = Color3.fromRGB(250, 214, 190),
+		Loft = Color3.fromRGB(206, 196, 190),
+		Mansion = Color3.fromRGB(226, 206, 250),
+		Mixed = Color3.fromRGB(190, 222, 240),
+	}
+	for _, d in ipairs(WorldLayout.Districts(count)) do
+		local b = d.Bounds
+		local f = block("District_" .. d.Id, b.X, b.Z, b.W, b.D, 0, tint[d.Id] or Color3.fromRGB(210, 230, 200), 2)
+		local label = TownKit.Label(f, "Name", d.Emoji, 0.3, 0.3, 0.4, 0.4, C.Ink, Enum.Font.GothamBold, false)
+		label.ZIndex = 3
 	end
-	for _, slot in ipairs(geo.Streets) do
-		local a = geo.SlotAngle(slot)
-		local mid = (WorldLayout.PLAZA_R + geo.Road) / 2
-		block("Street", math.sin(a) * mid, math.cos(a) * mid, slot == 0 and 30 or 18, geo.Road - WorldLayout.PLAZA_R, -math.deg(a), Color3.fromRGB(150, 152, 166), 2)
+	-- autoroute + routes (un trait par arête droite du graphe)
+	local roadColor = Color3.fromRGB(120, 122, 136)
+	local hw = WorldLayout.HighwayPath(count)
+	for i = 1, #hw do
+		local a2, b2 = hw[i], hw[i % #hw + 1]
+		local dx, dz = b2.X - a2.X, b2.Z - a2.Z
+		local len = math.sqrt(dx * dx + dz * dz)
+		if len > 1 then
+			block("Highway", (a2.X + b2.X) / 2, (a2.Z + b2.Z) / 2, len + 20, 44, math.deg(math.atan2(dz, dx)), Color3.fromRGB(96, 98, 112), 3)
+		end
 	end
-	local plaza = block("Plaza", 0, 0, WorldLayout.PLAZA_R * 2, WorldLayout.PLAZA_R * 2, 0, Color3.fromRGB(255, 214, 226), 3)
+	for _, e in ipairs(WorldLayout.RoadGraph(count).Edges) do
+		if not e.Highway and e.Kind ~= "Roundabout" then
+			local a2, b2 = e.Points[1], e.Points[#e.Points]
+			local dx, dz = b2.X - a2.X, b2.Z - a2.Z
+			local len = math.sqrt(dx * dx + dz * dz)
+			if len > 1 then
+				block("Road", (a2.X + b2.X) / 2, (a2.Z + b2.Z) / 2, len + 16, e.Ramp and 12 or 22, math.deg(math.atan2(dz, dx)), roadColor, 3)
+			end
+		end
+	end
+	local plaza = block("Plaza", 0, 0, WorldLayout.PLAZA_R * 2, WorldLayout.PLAZA_R * 2, 0, Color3.fromRGB(255, 214, 226), 4)
 	TownKit.Corner(plaza, 999)
-	local fountainIcon = TownKit.Label(plaza, "Icon", "⛲", 0.2, 0.2, 0.6, 0.6, C.Ink, Enum.Font.GothamBold, false)
-	fountainIcon.ZIndex = 4
+	local fountainIcon = TownKit.Label(plaza, "Icon", "⛲", 0.1, 0.1, 0.8, 0.8, C.Ink, Enum.Font.GothamBold, false)
+	fountainIcon.ZIndex = 5
 	-- entrée : "vous êtes ici"
-	local here = block("Here", 0, geo.Gate - 12, 44, 44, 0, C.HotPink, 6)
+	local here = block("Here", 0, geo.Gate - 12, 70, 70, 0, C.HotPink, 7)
 	TownKit.Corner(here, 999)
 	TownKit.Stroke(here, C.White, 3)
-	-- parcelles : pastille numérotée + étiquette dans la légende
+	-- parcelles : pastille numérotée + étiquette dans la légende (colonnes)
 	local labels, markers = {}, {}
 	local legend = Instance.new("Frame")
 	legend.Name = "Legend"
@@ -228,22 +254,28 @@ local function mapBoard(folder: Instance, cf: CFrame, geo: TownKit.Geo): MapBoar
 	legend.Position = UDim2.fromScale(0.58, 0.13)
 	legend.Size = UDim2.fromScale(0.4, 0.84)
 	legend.Parent = body
-	local count = geo.Count
-	local rows = math.max(6, count + 1)
+	local perColumn = 13
+	local columns = math.max(1, math.ceil((count + 1) / perColumn))
+	local rows = math.max(6, math.min(perColumn, count + 1))
 	for i = 1, count do
-		local x, z, a = WorldLayout.PlotPlace(i, count)
-		local lot = block("Lot" .. i, x, z, WorldLayout.PLOT_W, WorldLayout.PLOT_D, -math.deg(a), Color3.fromRGB(126, 196, 112), 3)
+		local place = WorldLayout.PlotPlaceData(i, count)
+		local x, z = place and place.X or 0, place and place.Z or 0
+		local alongX = place ~= nil and math.abs(place.LookZ) > 0.5
+		local lot = block("Lot" .. i, x, z, alongX and WorldLayout.PLOT_W or WorldLayout.PLOT_D, alongX and WorldLayout.PLOT_D or WorldLayout.PLOT_W, 0, Color3.fromRGB(126, 196, 112), 5)
 		TownKit.Stroke(lot, Color3.fromRGB(255, 255, 255), 1)
-		local pin = block("Pin" .. i, x, z, 70, 70, 0, Color3.fromRGB(150, 150, 170), 5)
+		local pin = block("Pin" .. i, x, z, 90, 90, 0, Color3.fromRGB(150, 150, 170), 6)
 		TownKit.Corner(pin, 999)
 		local num = TownKit.Label(pin, "N", tostring(i), 0.1, 0.1, 0.8, 0.8, C.White, Enum.Font.GothamBlack, false)
-		num.ZIndex = 6
+		num.ZIndex = 7
 		markers[i] = pin
-		local row = TownKit.Label(legend, "Row" .. i, i .. ". ✨ Free plot", 0, (i - 1) / rows, 1, 0.9 / rows, C.Ink, Enum.Font.GothamBold, false)
+		local col = math.floor((i - 1) / perColumn)
+		local r = (i - 1) % perColumn
+		local row = TownKit.Label(legend, "Row" .. i, i .. ". ✨ Free plot", col / columns, r / rows, 1 / columns, 0.9 / rows, C.Ink, Enum.Font.GothamBold, false)
 		row.TextXAlignment = Enum.TextXAlignment.Left
 		labels[i] = row
 	end
-	local you = TownKit.Label(legend, "Here", "📍 You are here", 0, count / rows, 1, 0.9 / rows, C.HotPink, Enum.Font.GothamBlack, true)
+	local lastCol = math.floor(count / perColumn)
+	local you = TownKit.Label(legend, "Here", "📍 You are here", lastCol / columns, (count % perColumn) / rows, 1 / columns, 0.9 / rows, C.HotPink, Enum.Font.GothamBlack, true)
 	you.TextXAlignment = Enum.TextXAlignment.Left
 	return { Labels = labels, Markers = markers }
 end

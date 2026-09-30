@@ -55,6 +55,7 @@ local SYNC_EVERY = 0.5
 local ANIM_RANGE = 460 -- une maison plus loin que ça apparaît sans animation
 local OWNER_FALLBACK = 16 -- (s) sans ArrivalDone : moment du propriétaire au plus tard
 local MICRO_RANGE = 140
+local LOAD_WINDOW = 12 -- (s) sans ArrivalDone : fin du chargement au plus tard
 
 local GUI_NAME = "ConstructionGui"
 
@@ -928,16 +929,9 @@ function HouseConstruction.Start(opts: any)
 	folder.Name = "Construction"
 	folder.Parent = (S.Opts.Folder :: Instance?) or workspace
 	S.Folder = folder
-	-- joueurs déjà là : leurs maisons apparaissent sans animation
-	local snapshots = S.Opts.GetSnapshots and S.Opts.GetSnapshots()
-	if type(snapshots) == "table" then
-		for userId in pairs(snapshots) do
-			local id = tonumber(userId)
-			if id then
-				S.Known[id] = true
-			end
-		end
-	end
+	-- chargement : les maisons construites avant la fin de l'arrivée
+	-- (ArrivalDone, ou LOAD_WINDOW s) apparaissent sans animation
+	S.Loading = true
 	S.Known[LocalPlayer.UserId] = true
 	spotCache = nil
 	pcall(function()
@@ -982,7 +976,9 @@ function HouseConstruction.Observe(userId: number, house: any, snapshot: any)
 		S.Owner = { State = "Pending", House = house, Plot = plot, Anim = anim, Arrived = S.Owner ~= nil and S.Owner.Arrived or false }
 		return
 	end
-	if S.Known[userId] and not hadHouse then
+	if (S.Loading or S.Known[userId]) and not hadHouse then
+		-- (déjà là à notre arrivée : pas d'animation)
+		S.Known[userId] = true
 		dropSite(plot)
 		return
 	end
@@ -992,6 +988,7 @@ end
 
 -- Fin du survol d'arrivée (ou arrivée directe) : moment du propriétaire
 function HouseConstruction.ArrivalDone()
+	S.Loading = false
 	local owner = S.Owner
 	if owner then
 		owner.Arrived = true
@@ -1005,6 +1002,9 @@ function HouseConstruction.Step(dt: number)
 		return
 	end
 	local now = workspace:GetServerTimeNow()
+	if S.Loading and os.clock() - S.StartedAt > LOAD_WINDOW then
+		S.Loading = false
+	end
 	S.SyncClock += dt
 	if S.SyncClock >= SYNC_EVERY then
 		S.SyncClock = 0
