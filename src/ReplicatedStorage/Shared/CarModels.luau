@@ -1104,10 +1104,10 @@ local function wheel(b: B, s: Spec, index: number, x: number, z: number, look: W
 	layer("Sidewall", 0.04, 0.1, D - 0.12, SIDEWALL, M.Rubber)
 	-- flanc décoré
 	if tyre == "Whitewall" then
-		layer("Whitewall", 0.06, 0.04, D * 0.84, WHITEWALL, M.Rubber)
+		layer("Whitewall", 0.07, 0.04, D * 0.84, WHITEWALL, M.Rubber)
 	elseif tyre == "RedLine" then
-		layer("RedLine", 0.06, 0.04, D * 0.86, CAL_RED, M.Rubber)
-		layer("Sidewall", 0.07, 0.03, D * 0.81, SIDEWALL, M.Rubber)
+		-- liseré rouge fin juste autour de la jante
+		layer("RedLine", 0.075, 0.03, D * (rimK + 0.05), CAL_RED, M.Rubber)
 	elseif tyre == "OffRoad" then
 		-- pneu tout-terrain : pavés de la bande de roulement
 		for k = 0, 7 do
@@ -1143,8 +1143,8 @@ local function wheel(b: B, s: Spec, index: number, x: number, z: number, look: W
 	end
 	if design == "Retro" then
 		-- enjoliveur plein (rétro) : disque, jonc, moyeu
-		layer("Hubcap", 0.2, 0.06, D * (rimK - 0.1), look.Rim, M.Metal).Reflectance = 0.35
-		layer("HubcapRing", 0.25, 0.04, D * (rimK - 0.24), look.Dish, M.Metal)
+		layer("Hubcap", 0.26, 0.06, D * (rimK - 0.1), look.Rim, M.Metal).Reflectance = 0.35
+		layer("HubcapRing", 0.31, 0.04, D * (rimK - 0.24), look.Dish, M.Metal)
 	elseif design == "Mesh" then
 		for k = 0, 7 do
 			local a = k / 8 * 2 * PI
@@ -1180,7 +1180,7 @@ local function wheel(b: B, s: Spec, index: number, x: number, z: number, look: W
 			spoke(k / n * 2 * PI, D * 0.08, r1, if n >= 10 then D * 0.045 else D * 0.075, 0)
 		end
 	end
-	layer("HubCap", 0.3, 0.08, D * 0.18, look.Cap, M.Metal)
+	layer("HubCap", if design == "Retro" then 0.36 else 0.3, 0.08, D * 0.18, look.Cap, M.Metal)
 	-- pivots invisibles (CarService : Motor6D ; CarClient : rotation / braquage)
 	b.Spin = false
 	local steer = box(b, "WheelSteer", x - 0.1, x + 0.1, r - 0.1, r + 0.1, z - 0.1, z + 0.1, WHITE, M.SmoothPlastic)
@@ -1712,6 +1712,13 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			-- jour sur toute la largeur, glace claire, répétiteur ; pas de chrome
 			local lh = if sports then 0.34 elseif pickup then 0.6 elseif offroad then 0.52 elseif style == "Limo" then 0.46 else 0.42
 			local ly1 = fy + math.max(0.04, math.min(0.12, (N0.t - fy) * 0.5))
+			for _ = 1, 3 do
+				for _, yref in ipairs({ N0.fy, N0.by, N0.t, math.min(N0.by, N0.t) }) do
+					if math.abs(ly1 - yref) < 0.045 then
+						ly1 = yref - 0.05
+					end
+				end
+			end
 			local ly0 = ly1 - lh
 			local lw = if sports then s.W * 0.22 else s.W * 0.2
 			local xi = math.max(nfx - lw, 0.55)
@@ -1783,7 +1790,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			end
 			-- plaque sur le bouclier peint, entre la calandre et la prise d'air
 			local py = math.clamp((valTop + gy0) / 2, valTop + 0.25, math.max(valTop + 0.25, gy0 - 0.25))
-			plate(b, "PlateFront", zF - 0.05, py, -1, full, nil)
+			plate(b, "PlateFront", zF - 0.17, py, -1, full, nil)
 		end
 		-- bas de caisse avant : Mid → phares simples déjà posés
 
@@ -1796,6 +1803,14 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 		local T1 = if st[#st - 1] and st[#st - 1].z > zB - g.tailR + 0.01 then st[#st - 1] else nil
 		local tfy = T0.fy
 		local tailTop = math.min(tfy + math.max(0.05, (T0.by - tfy) * 0.6), T0.t - 0.08)
+		-- (v10) jamais à moins de 0,05 d'une arête du bouclier (pas de z-fight en Mid)
+		for _ = 1, 3 do
+			for _, yref in ipairs({ T0.fy, T0.by, T0.t, math.min(T0.by, T0.t) }) do
+				if math.abs(tailTop - yref) < 0.045 then
+					tailTop = yref - 0.05
+				end
+			end
+		end
 		-- (v10) feux fins et étirés (jusque dans l'angle arrondi)
 		local tailBot = tailTop - (if sports then 0.36 elseif style == "Bubble" then 0.52 else 0.44)
 		local tailIn = math.max(0.7, tfx - s.W * 0.2)
@@ -2051,7 +2066,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			local roofIn = s.Roof - 0.3
 			box(b, "Carpet", -wc, wc, g.sill + 0.02, g.sill + 0.12, s.Ws + 0.3, if pickup then s.R1 - 0.1 else s.Rw - 0.2, CARPET, M.Fabric)
 			local function seat(x: number, z: number, top: number, w: number, tall: boolean)
-				box(b, "SeatCushion", x - w, x + w, top - 0.35, top, z - 0.75, z + 0.45, seatCol, M.Fabric)
+				box(b, "SeatCushion", x - w, x + w, math.max(top - 0.35, g.sill + 0.16), top, z - 0.75, z + 0.45, seatCol, M.Fabric)
 				local backTop = math.min(top + 2.2, roofIn - 0.35)
 				slab(b, "SeatBack", x, w * 2, top - 0.05, z + 0.62, backTop, z + 0.95, 0.34, seatCol, M.Fabric)
 				if tall then
@@ -2089,7 +2104,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			cylZ(b, "WheelHub", seatX, by0 + 0.08, swZ + 0.08, 0.1, 0.32, GRAPHITE)
 			rod(b, "SteeringColumn", V3(seatX, by0 - 0.25, dashZ1 - 0.1), V3(seatX, by0 + 0.02, swZ + 0.1), 0.16, GRAPHITE)
 			if style ~= "Van" then
-				box(b, "Console", -0.32, 0.32, g.sill + 0.12, seatTop - 0.05, dashZ1 - 0.05, seatZ + 0.3, TRIM)
+				box(b, "Console", -0.32, 0.32, g.sill + 0.12, seatTop - 0.05, dashZ1 - 0.02, seatZ + 0.3, TRIM)
 				ell(b, "GearKnob", 0, seatTop + 0.18, seatZ - 0.8, 0.2, 0.24, 0.2, CHROME, M.Metal)
 			end
 			if not sports then

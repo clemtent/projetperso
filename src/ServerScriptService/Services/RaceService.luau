@@ -750,6 +750,7 @@ local function updateHuman(race: Race, racer: Racer, t: number)
 	if t >= racer.IgnoreUntil and last then
 		local jump = math.sqrt((x - last[2]) ^ 2 + (z - last[3]) ^ 2)
 		if RaceRules.CheckMove(jump, t - last[1], racer.Top) == "teleport" then
+			warn(string.format("[RaceService] %s : saut de %.0f studs en %.2f s (%.0f, %.0f) -> (%.0f, %.0f)", player.Name, jump, t - last[1], last[2], last[3], x, z))
 			racer.Strikes += 1
 			table.clear(samples)
 			if racer.Strikes >= (anti.MaxStrikes or 3) then
