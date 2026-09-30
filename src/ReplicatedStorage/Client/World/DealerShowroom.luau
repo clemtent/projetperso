@@ -23,6 +23,11 @@
 	Animations (une seule connexion Heartbeat, arrêtée quand plus rien n'est
 	construit) : plateau tournant (BulkMoveTo, 30 Hz, seulement à moins de
 	160 studs de la caméra), vendeur (≤ 60 studs).
+	v9.9 (CARS99) : voitures des podiums en "Mid" (~150 pièces) et en
+	"Full" (~400 : coque réaliste, habitacle, jantes détaillées) quand la
+	caméra s'en approche à moins de 45 studs (retour en "Mid" au-delà de 60,
+	un échange par passe de 0,5 s) ; la voiture du plateau tournant est
+	toujours "Full" ; les "offres du jour" en "Mid".
 	Lumières : 2 PointLight douces (Brightness ≤ 1) dedans, allumées par
 	ShopInteriors seulement quand on est dedans ; petites couronnes en Neon
 	fin (jamais de grande surface lumineuse). Aucun son.
@@ -52,6 +57,11 @@ DealerShowroom.TURN_SPEED = 0.35 -- rad/s (un tour en ~18 s)
 DealerShowroom.ANIM_RANGE = 160
 DealerShowroom.NPC_RANGE = 60
 DealerShowroom.FEATURED = "SportsCar" -- la plus belle voiture, sur le plateau tournant
+-- (v9.9, CARS99) niveau de détail des voitures des podiums : "Full" (~400
+-- pièces, coque réaliste, habitacle) quand la caméra est à moins de 45
+-- studs, "Mid" (~150) au-delà (échange avec hystérésis, 1 par passe)
+DealerShowroom.FULL_IN = 45
+DealerShowroom.FULL_OUT = 60
 
 ----------------------------------------------------------------------
 -- Pièces
@@ -191,8 +201,12 @@ end
 type Spinner = { Parts: { BasePart }, Offsets: { CFrame }, Frames: { CFrame }, Center: CFrame, Angle: number, Model: Instance }
 type Seller = { Model: Model, CF: CFrame, Seed: number }
 
+type LodCar = { Display: any, Entry: any, CF: CFrame, Parent: Instance, Detail: string }
+
 local spinners: { Spinner } = {}
 local sellers: { Seller } = {}
+local lodCars: { LodCar } = {}
+local lodClock = 0
 local connection: RBXScriptConnection? = nil
 local accum = 0
 local npcModule: any = nil
@@ -225,7 +239,14 @@ local function localPos(): Vector3?
 	return cameraPos()
 end
 
+local stepLods: (Vector3?) -> () = function(_cam: Vector3?) end
+
 local function stepAnimations(dt: number)
+	lodClock += dt
+	if lodClock >= 0.5 then
+		lodClock = 0
+		stepLods(cameraPos())
+	end
 	accum += dt
 	if accum < 1 / 30 then
 		return
@@ -259,7 +280,7 @@ local function stepAnimations(dt: number)
 			pcall(npc.Animate, s.Model, if near then "talk" else "type", os.clock() + s.Seed)
 		end
 	end
-	if #spinners == 0 and #sellers == 0 and connection then
+	if #spinners == 0 and #sellers == 0 and #lodCars == 0 and connection then
 		connection:Disconnect()
 		connection = nil
 	end
@@ -316,6 +337,42 @@ local function buildCar(entry: any, detail: string, color: any?): Model?
 	return nil
 end
 
+-- (v9.9) échange Mid <-> Full des voitures des podiums selon la caméra
+stepLods = function(cam: Vector3?)
+	local swapped = false
+	for i = #lodCars, 1, -1 do
+		local c = lodCars[i]
+		local model = c.Display.Model
+		if not model or not model.Parent or not c.Parent.Parent then
+			table.remove(lodCars, i)
+		elseif cam and not swapped then
+			local d = (cam - c.CF.Position).Magnitude
+			local want = c.Detail
+			if d < DealerShowroom.FULL_IN then
+				want = "Full"
+			elseif d > DealerShowroom.FULL_OUT then
+				want = "Mid"
+			end
+			if want ~= c.Detail then
+				local new = buildCar(c.Entry, want, nil)
+				if new then
+					new:PivotTo(c.CF)
+					new.Parent = c.Parent
+					c.Display.Model = new
+					c.Detail = want
+					model:Destroy()
+					swapped = true
+				end
+			end
+		end
+	end
+end
+
+local function trackLod(display: any, entry: any, cf: CFrame, parent: Instance, detail: string)
+	table.insert(lodCars, { Display = display, Entry = entry, CF = cf, Parent = parent, Detail = detail })
+	ensureLoop()
+end
+
 ----------------------------------------------------------------------
 -- Niveau 1 : habillage, couronnes, voitures, parvis + plateau tournant
 ----------------------------------------------------------------------
@@ -367,11 +424,13 @@ function DealerShowroom.FrontJobs(shop: any, parent: Instance, ctx: any): { () -
 			ring(parent, "PodiumTrim", slot.CF * CFrame.new(0, -0.17, 0), 6.55, 16, 0.12, 0.36, rgb(214, 218, 226), M.Metal)
 			local entry = entries[index]
 			if entry then
-				local model = buildCar(entry, "Full", nil)
+				local model = buildCar(entry, "Mid", nil)
 				if model then
 					model:PivotTo(slot.CF)
 					model.Parent = parent
-					table.insert(shop.Displays, { Entry = entry, Model = model, Labels = {}, Key = "Car:" .. entry.Id })
+					local display = { Entry = entry, Model = model, Labels = {}, Key = "Car:" .. entry.Id }
+					table.insert(shop.Displays, display)
+					trackLod(display, entry, slot.CF, parent, "Mid")
 					if ctx.Stats then
 						ctx.Stats.Items += 1
 					end
@@ -460,7 +519,7 @@ function DealerShowroom.FrontJobs(shop: any, parent: Instance, ctx: any): { () -
 		local picks = { entries[2], entries[3] }
 		for k, entry in ipairs(picks) do
 			if entry then
-				local model = buildCar(entry, "Parked", nil)
+				local model = buildCar(entry, "Mid", nil)
 				if model then
 					local x = 8 + k * 10
 					model:PivotTo(B * CFrame.new(x, ay, -14) * CFrame.Angles(0, math.rad(-28), 0))
@@ -641,6 +700,10 @@ function DealerShowroom.Debug(): any
 	return {
 		Spinners = spinners,
 		Sellers = sellers,
+		LodCars = lodCars,
+		StepLods = function(cam: Vector3?)
+			stepLods(cam)
+		end,
 		Step = stepAnimations,
 	}
 end

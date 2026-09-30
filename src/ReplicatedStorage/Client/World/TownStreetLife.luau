@@ -44,6 +44,7 @@ local RunService = game:GetService("RunService")
 
 local Locale = require(ReplicatedStorage.Shared.Locale)
 local NPCModels = require(ReplicatedStorage.Shared.NPCModels)
+local Greenery = require(ReplicatedStorage.Shared.Greenery) -- (v9.9, CITY99) arbres construits côté client
 -- (v9.8, REALISM98) réglage "Graphismes > Détail" : distances de flux x 0,65 / 1 / 1,35
 local okGQ, GraphicsQuality = pcall(require, ReplicatedStorage.Shared.GraphicsQuality)
 local function detailScale(): number
@@ -1111,6 +1112,17 @@ local function load(s: any): boolean
 		return false
 	end
 	s.Spots = parseSpots(data)
+	-- (v9.9, CITY99) arbres de la ville : modèles VIDES posés par le serveur
+	-- (TownKit.Tree, attribut TreeClient) ; on les construit ici
+	s.Trees = {}
+	for _, d in ipairs(town:GetDescendants()) do
+		if d:IsA("Model") and d:GetAttribute("TreeClient") == true then
+			local base = d:GetAttribute("TreeBase")
+			if typeof(base) == "Vector3" then
+				table.insert(s.Trees, { Model = d, Base = base, Built = nil })
+			end
+		end
+	end
 	local folder = Instance.new("Folder")
 	folder.Name = TownStreetLife.FOLDER_NAME
 	-- (sous DopamineTown : TownAtmosphere suit les verres "NightGlow")
@@ -1118,6 +1130,67 @@ local function load(s: any): boolean
 	s.Folder = folder
 	s.Loaded = true
 	return true
+end
+
+-- (v9.9, CITY99) Un arbre de la ville, construit DANS son modèle du serveur
+-- (mêmes pièces que Greenery.Tree côté serveur avant v9.9 : même rendu,
+-- même collision des troncs pour l'avatar local), sans les attributs
+-- "TreeBase" (TownGreenery ne le prend pas pour un autre arbre)
+local TREES_PER_STEP = 14
+local function buildTree(t: any): number
+	local m = t.Model
+	if not m.Parent then
+		return 0
+	end
+	local ok, tree, n = pcall(function()
+		return Greenery.Tree(m, t.Base, tonumber(m:GetAttribute("TreeHeight")) or 12, tonumber(m:GetAttribute("TreeSeed")) or 1, m:GetAttribute("TreeSpecies") :: any, tonumber(m:GetAttribute("TreeTier")) or 0, 0, {
+			Lawn = m:GetAttribute("TreeLawn") == true,
+			Name = "TreeLocal",
+		})
+	end)
+	if not ok then
+		t.Built = false
+		return 0
+	end
+	for _, key in ipairs({ "TreeBase", "TreeSpecies", "TreeHeight", "TreeSeed", "TreeTier", "TreeLawn" }) do
+		tree:SetAttribute(key, nil)
+	end
+	t.Built = tree
+	return n
+end
+
+local function stepTrees(s: any, flat: Vector3)
+	local list = s.Trees
+	if not list or s.TreesDone then
+		return
+	end
+	-- les plus proches d'abord, TREES_PER_STEP par passe ; puis plus rien à faire
+	local todo = {}
+	for _, t in ipairs(list) do
+		if t.Built == nil then
+			table.insert(todo, t)
+		end
+	end
+	if #todo == 0 then
+		s.TreesDone = true
+		return
+	end
+	table.sort(todo, function(a, b)
+		return (Vector3.new(a.Base.X, 0, a.Base.Z) - flat).Magnitude < (Vector3.new(b.Base.X, 0, b.Base.Z) - flat).Magnitude
+	end)
+	for i = 1, math.min(TREES_PER_STEP, #todo) do
+		buildTree(todo[i])
+	end
+end
+
+local function clearTrees(s: any)
+	for _, t in ipairs(s.Trees or {}) do
+		if t.Built then
+			t.Built:Destroy()
+		end
+		t.Built = nil
+	end
+	s.TreesDone = false
 end
 
 local function focusPoint(): Vector3?
@@ -1163,11 +1236,13 @@ function TownStreetLife.Step(position: Vector3)
 			for _, spot in ipairs(s.Spots) do
 				destroySpot(spot)
 			end
+			clearTrees(s)
 			pcall(load, s)
 		end
 		return
 	end
 	local flat = Vector3.new(position.X, 0, position.Z)
+	stepTrees(s, flat)
 	local builds = 0
 	local k = detailScale()
 	for _, spot: Spot in ipairs(s.Spots) do
@@ -1203,6 +1278,7 @@ function TownStreetLife.Stop()
 	for _, spot in ipairs(s.Spots) do
 		destroySpot(spot)
 	end
+	clearTrees(s)
 	if s.Folder then
 		s.Folder:Destroy()
 	end
@@ -1218,6 +1294,12 @@ function TownStreetLife.BuildAll(): number
 	for _, spot: Spot in ipairs(s.Spots) do
 		if not spot.Model and not ANCHORS[spot.Kind] and BUILDERS[spot.Kind] then
 			buildSpot(spot, s.Folder)
+			n += 1
+		end
+	end
+	for _, t in ipairs(s.Trees or {}) do
+		if t.Built == nil then
+			buildTree(t)
 			n += 1
 		end
 	end

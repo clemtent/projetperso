@@ -545,8 +545,8 @@ local function updateDoors(v: Vehicle)
 		return
 	end
 	local o = v.DoorOpen
-	local out = 0.32 * math.clamp(o / 0.35, 0, 1)
-	local slide = 1.35 * math.clamp((o - 0.35) / 0.65, 0, 1)
+	local out = 0.2 * math.clamp(o / 0.35, 0, 1)
+	local slide = 1.2 * math.clamp((o - 0.35) / 0.65, 0, 1)
 	for _, leaf in ipairs(v.Doors) do
 		v.DoorOffs[leaf.Index] = CFrame.new(out, 0, leaf.Leaf * slide)
 	end

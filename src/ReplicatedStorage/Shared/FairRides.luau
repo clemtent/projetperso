@@ -475,7 +475,7 @@ FairRides.CIRCUS_TIER_DR = 1.9
 FairRides.CIRCUS_TIER_DY = 1.25
 FairRides.CIRCUS_SEAT_Y0 = 1.35 -- dessus du 1er rang
 FairRides.CIRCUS_ARCS = { { 32, 140 }, { -140, -32 } } -- (degrés, 0 = fond +Z)
-FairRides.CIRCUS_PER_ARC = 4
+FairRides.CIRCUS_PER_ARC = 3 -- (18 places serveur : budget de pièces)
 FairRides.CIRCUS_SHOW = 64 -- (s) le spectacle tourne en boucle
 
 -- Emprise de chaque attraction (repère de l'attraction) : Body = le

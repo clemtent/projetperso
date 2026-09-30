@@ -1339,7 +1339,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			local Rr = sectionAt(st, s.R1)
 			for _, sx in ipairs({ -1, 1 }) do
 				-- montant A (arête pare-brise / vitre latérale)
-				rod(b, "PillarA", V3(sx * Aw.e, Aw.t, Aw.z), V3(sx * Ar.e, Ar.t, Ar.z), 0.2, if full then HOUSING else paint)
+				rod(b, "PillarA", V3(sx * Aw.e, Aw.t, Aw.z), V3(sx * Ar.e, Ar.t, Ar.z), if full then 0.2 else 0.16, HOUSING)
 				-- montant B (et C1 pour la limousine), noirs
 				local pillars: { number } = {}
 				if s.Doors == 4 or style == "Limo" then

@@ -636,7 +636,8 @@ function FairAnnexFx.BuildTrampolines(r: RideFx)
 	prompt.Triggered:Connect(function()
 		local character = LocalPlayer and LocalPlayer.Character
 		local root = character and character:FindFirstChild("HumanoidRootPart")
-		if not character or not root then
+		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+		if not character or not root or (humanoid and humanoid.SeatPart ~= nil) then
 			return
 		end
 		-- toile la moins occupée (personne au-dessus, de préférence)

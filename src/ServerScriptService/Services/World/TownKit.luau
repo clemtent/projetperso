@@ -344,11 +344,21 @@ local hash = TownKit.Hash
 -- ajoute le niveau 2 aux arbres proches. `opts.Lawn` : sur pelouse (pétales
 -- au sol permis).
 TownKit.SPECIES = Greenery.SPECIES
+-- v9.9 (CITY99, budget du serveur) : l'arbre n'est plus construit ici. Le
+-- serveur pose un Model VIDE (0 pièce) qui porte les attributs de l'arbre
+-- (TreeBase / TreeSpecies / TreeHeight / TreeSeed / TreeTier / TreeLawn,
+-- comme Greenery.Tree) + "TreeClient" = true ; chaque client construit le
+-- même arbre (Greenery.Tree : mêmes pièces, même hasard) à l'arrivée en
+-- ville (TownStreetLife, les plus proches d'abord) et TownGreenery ajoute
+-- toujours le niveau de détail de près. WorldPivot = pied de l'arbre (les
+-- ClearSite du supermarché / de la concession le lisent).
 function TownKit.Tree(parent: Instance, base: Vector3, height: number, seed: number, kind: any?, opts: { Tier: number?, Lawn: boolean? }?)
 	local o = opts or {}
 	local species = Greenery.Species(kind or 1, seed)
-	local model, n = Greenery.Tree(parent, base, height, seed, species, o.Tier or 0, 0, { Lawn = o.Lawn == true })
-	stats.Parts += n
+	local model = Greenery.Tree(parent, base, height, seed, species, -1, 0, { Lawn = o.Lawn == true })
+	model:SetAttribute("TreeTier", o.Tier or 0)
+	model:SetAttribute("TreeClient", true)
+	model.WorldPivot = CFrame.new(base)
 	return model
 end
 

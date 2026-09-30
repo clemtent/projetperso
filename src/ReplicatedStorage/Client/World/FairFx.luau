@@ -1050,6 +1050,16 @@ local function queueFair(s: any, fair: Instance)
 			table.insert(q, function()
 				local r = FairKit.NewRide(folder, def, base, FairKit.Now())
 				local kind = def.Kind
+				-- sol de terre battue sous l'attraction + son parvis (dessus à -0,01 x
+				-- rang : jamais coplanaire avec un voisin ni avec la fête)
+				do
+					local b, a = def.Body, def.Apron
+					local x0, x1 = math.min(b.X0, a.X0) - 1, math.max(b.X1, a.X1) + 1
+					local z0, z1 = math.min(b.Z0, a.Z0) - 1, b.Z1 + 1
+					local rank = table.find(FairRides.Annex, def) or 1
+					local pad = solid(newPart(r.Model, "AnnexGround", Vector3.new(x1 - x0, 0.3, z1 - z0), base * CFrame.new((x0 + x1) / 2, -0.15 - 0.01 * rank, (z0 + z1) / 2), Color3.fromRGB(226, 206, 170), M.Ground))
+					pad.CastShadow = false
+				end
 				if kind == "Coaster" then
 					FairAnnexFx.BuildCoaster(r)
 				elseif kind == "Pirate" then

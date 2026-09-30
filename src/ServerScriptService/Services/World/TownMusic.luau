@@ -304,7 +304,8 @@ local function onEvent(player: Player, kind: any, a: any, b: any)
 			return
 		end
 		local t = now()
-		if t - bk.SongAt < SONG_COOLDOWN then
+		-- (arrêter est toujours permis ; lancer : une demande par SONG_COOLDOWN)
+		if a ~= "" and t - bk.SongAt < SONG_COOLDOWN then
 			return
 		end
 		bk.SongAt = t
@@ -314,7 +315,7 @@ local function onEvent(player: Player, kind: any, a: any, b: any)
 			return
 		end
 		local t = now()
-		if t - bk.SongAt < SONG_COOLDOWN then
+		if a ~= 0 and t - bk.SongAt < SONG_COOLDOWN then
 			return
 		end
 		bk.SongAt = t

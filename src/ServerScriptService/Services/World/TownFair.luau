@@ -700,13 +700,11 @@ local function buildAnnex(folder: Instance, ridesFolder: Instance, geo: TownKit.
 		if place then
 			count += 1
 			local base = F * place.CF
-			-- sol (terre battue, comme la fête) sous le corps + le parvis
+			-- (le sol de terre battue est posé par chaque client : FairFx ; ici
+			-- seulement la réserve, pour que rien ne pousse dessus)
 			local b, a = def.Body, def.Apron
 			local x0, x1 = math.min(b.X0, a.X0) - 1, math.max(b.X1, a.X1) + 1
 			local z0, z1 = math.min(b.Z0, a.Z0) - 1, b.Z1 + 1
-			local ground = part(annex, "AnnexGround", Vector3.new(x1 - x0, 0.3, z1 - z0), base * CFrame.new((x0 + x1) / 2, -0.15 - 0.01 * count, (z0 + z1) / 2), Color3.fromRGB(226, 206, 170), M.Ground, "solid")
-			ground.CastShadow = false
-			ground:SetAttribute("AnnexId", def.Id)
 			local center = base * Vector3.new((x0 + x1) / 2, 0, (z0 + z1) / 2)
 			geo.Reserve(center, math.sqrt((x1 - x0) ^ 2 + (z1 - z0) ^ 2) / 2 + 2)
 			-- allée depuis la porte de la fête la plus proche (réservée : pas d'arbre dessus)

@@ -326,7 +326,7 @@ local function buildShow(r: RideFx, folder: Instance, booth: CFrame): any
 	end
 	-- spectateurs assis (quelques-uns, sur des places qui ne sont pas des sièges du serveur)
 	show.Fans = {}
-	local fanSeats = { { 1, 46 }, { 2, 118 }, { 0, -60 }, { 2, -104 }, { 1, 90 }, { 0, 132 } }
+	local fanSeats = { { 1, 68 }, { 2, 104 }, { 0, -68 }, { 2, -104 }, { 1, 136 }, { 0, -38 } } -- (entre les places du serveur)
 	-- (qualité "Détail" basse : 2 spectateurs seulement ; GraphicsQuality)
 	local detail = 1
 	pcall(function()

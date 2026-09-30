@@ -1176,8 +1176,8 @@ local function counter(shop: Shop, parent: Instance)
 	for k = 0, 2 do
 		box(parent, "PaperBag", F, -4.25, -3.05, COUNTER_TOP - 0.02 + k * 0.06, COUNTER_TOP + 0.05 + k * 0.06, z0 + 0.8, z0 + 1.6, k == 1 and t.Accent:Lerp(WHITE, 0.4) or rgb(206, 170, 126), M.Fabric)
 	end
-	box(parent, "ShoppingBag", F, -2.9, -2.1, COUNTER_TOP - 0.02, COUNTER_TOP + 1.0, z0 + 0.9, z0 + 1.35, t.Accent, M.Fabric)
-	box(parent, "BagHandle", F, -2.7, -2.3, COUNTER_TOP + 1.0, COUNTER_TOP + 1.3, z0 + 1.1, z0 + 1.15, t.Accent:Lerp(Color3.new(0, 0, 0), 0.3), M.Fabric)
+	box(parent, "ShoppingBag", F, -0.5, 0.3, COUNTER_TOP - 0.02, COUNTER_TOP + 1.0, z0 + 1.2, z0 + 1.65, t.Accent, M.Fabric)
+	box(parent, "BagHandle", F, -0.3, 0.1, COUNTER_TOP + 0.97, COUNTER_TOP + 1.3, z0 + 1.4, z0 + 1.45, t.Accent:Lerp(Color3.new(0, 0, 0), 0.3), M.Fabric)
 	local jar = cylinder(parent, "CandyJar", F, -1.3, COUNTER_TOP - 0.02, z0 + 0.45, 0.75, 0.62, rgb(230, 240, 250), M.Glass)
 	jar.Transparency = 0.55
 	for k = 0, 2 do

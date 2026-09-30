@@ -55,11 +55,10 @@ RECIPES.IceCream = function(add)
 	add("Cone2", Vector3.new(0.26, 0.46, 0.46), CFrame.new(0, 0.3, 0) * UPRIGHT, waffle, M.Fabric, CYL)
 	add("Bite3", Vector3.new(0.18, 0.56, 0.56), CFrame.new(0, 0.52, 0) * UPRIGHT, waffle, M.Fabric, CYL)
 	add("Bite3", Vector3.new(0.1, 0.62, 0.62), CFrame.new(0, 0.64, 0) * UPRIGHT, waffleDark, M.Fabric, CYL)
-	-- quadrillage de la gaufrette (fines bandes en biais)
-	for i, a in ipairs({ 0, 90, 180, 270 }) do
-		local rot = CFrame.Angles(0, math.rad(a + 20), 0)
-		add(if i % 2 == 0 then "Cone2" else "Handle", Vector3.new(0.03, 0.9, 0.05), rot * CFrame.new(0, 0.05, -0.215) * CFrame.Angles(math.rad(-9), 0, math.rad(18)), waffleDark, M.Fabric)
-	end
+	-- relief de la gaufrette : fins anneaux plus foncés
+	add("ConeRing", Vector3.new(0.04, 0.37, 0.37), CFrame.new(0, 0.1, 0) * UPRIGHT, waffleDark, M.Fabric, CYL)
+	add("Cone2", Vector3.new(0.04, 0.47, 0.47), CFrame.new(0, 0.34, 0) * UPRIGHT, waffleDark, M.Fabric, CYL)
+	add("ConeTip", Vector3.new(0.04, 0.24, 0.24), CFrame.new(0, -0.2, 0) * UPRIGHT, waffleDark, M.Fabric, CYL)
 	-- boule du bas (fraise) + collerette qui coule
 	local straw = rgb(255, 170, 196)
 	add("Bite2", Vector3.new(0.7, 0.62, 0.7), CFrame.new(0, 0.9, 0), straw, M.SmoothPlastic, BALL)

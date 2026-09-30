@@ -158,14 +158,17 @@ function FairEat.Rig(character: Model): Rig?
 	end
 	local upperArm = character:FindFirstChild("RightUpperArm")
 	if upperArm then
-		local torso = character:FindFirstChild("UpperTorso")
+		local s = motor(upperArm, "RightShoulder")
+		local torso = character:FindFirstChild("UpperTorso") or (s and s.Part0)
 		local lower = character:FindFirstChild("RightLowerArm")
 		local hand = character:FindFirstChild("RightHand")
-		local s = motor(upperArm, "RightShoulder")
 		local e = motor(lower, "RightElbow")
 		local w = motor(hand, "RightWrist")
-		if torso and torso:IsA("BasePart") and hand and hand:IsA("BasePart") and s then
-			local rig: Rig = { Character = character, R15 = e ~= nil and w ~= nil, Torso = torso, Head = head, Shoulder = s, Elbow = e, Wrist = w, Hand = hand, Base = {} }
+		local full = e ~= nil and w ~= nil and hand ~= nil and hand:IsA("BasePart")
+		-- (rig incomplet / personnalisé : l'épaule seule, comme un R6)
+		local grip = if full then hand else upperArm
+		if torso and torso:IsA("BasePart") and grip and grip:IsA("BasePart") and s then
+			local rig: Rig = { Character = character, R15 = full, Torso = torso, Head = head, Shoulder = s, Elbow = if full then e else nil, Wrist = if full then w else nil, Hand = grip, Base = {} }
 			for _, m in ipairs({ s, e, w } :: { Motor6D? }) do
 				if m then
 					rig.Base[m] = m.C0
