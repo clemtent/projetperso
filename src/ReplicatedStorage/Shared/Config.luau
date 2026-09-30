@@ -2508,7 +2508,7 @@ Config.House = {
 -- seule après IdleDespawn secondes sans conducteur.
 ----------------------------------------------------------------------
 Config.Cars = {
-	MaxSpeed = 50, -- studs/s en marche avant
+	MaxSpeed = 56, -- studs/s en marche avant (v10 : 50 -> 56, autoroute ; x CarModels.Stats)
 	ReverseSpeed = 18, -- studs/s en marche arrière
 	IdleDespawn = 60, -- s sans conducteur -> la voiture rentre au garage
 	SpawnCooldown = 4, -- s entre deux "🚗 Ma voiture"
@@ -2544,7 +2544,131 @@ Config.Cars = {
 		{ Id = "Pearl", Name = "Pearl white", Color = Color3.fromRGB(246, 244, 240) },
 		{ Id = "Silver", Name = "Silver", Color = Color3.fromRGB(176, 182, 192) },
 		{ Id = "Midnight", Name = "Midnight black", Color = Color3.fromRGB(38, 38, 48) },
+		-- (v10, CARS10) teintes en plus
+		{ Id = "Coral", Name = "Coral", Color = Color3.fromRGB(255, 118, 104) },
+		{ Id = "Burgundy", Name = "Burgundy", Color = Color3.fromRGB(122, 26, 44) },
+		{ Id = "Lemon", Name = "Lemon", Color = Color3.fromRGB(240, 236, 110) },
+		{ Id = "Olive", Name = "Olive", Color = Color3.fromRGB(110, 118, 70) },
+		{ Id = "Teal", Name = "Teal", Color = Color3.fromRGB(34, 150, 156) },
+		{ Id = "Navy", Name = "Navy blue", Color = Color3.fromRGB(28, 40, 88) },
+		{ Id = "Violet", Name = "Violet", Color = Color3.fromRGB(116, 64, 176) },
+		{ Id = "Sand", Name = "Sand beige", Color = Color3.fromRGB(214, 196, 160) },
+		{ Id = "Gunmetal", Name = "Gunmetal grey", Color = Color3.fromRGB(84, 88, 98) },
+		{ Id = "Copper", Name = "Copper", Color = Color3.fromRGB(184, 104, 64) },
 	},
+	----------------------------------------------------------------
+	-- 🔧 (v10, CARS10) Préparation et personnalisation ("🔧 Garage tuning"
+	-- dans "Mes voitures") : tout est acheté PAR VOITURE, payé en Dopamine
+	-- UNE fois (on peut ensuite revenir gratuitement à une option déjà
+	-- achetée), vérifié par CarService (data.Cars.Mods / Unlocked / Tuning).
+	-- Prix = Price x prix de la voiture (au moins MinPrice) ; la 1re entrée
+	-- de chaque liste est gratuite (l'origine). RequiresRebirths = verrou.
+	--   Tuning : 3 niveaux par pièce ; effets dans CarModels.Stats (courses).
+	--   Mods   : options visuelles (CarModels.Build les applique).
+	----------------------------------------------------------------
+	MinPrice = 20000,
+	PlatePrice = 0.01, -- plaque personnalisée (texte filtré par TextService)
+	PlateMaxLength = 8,
+	Tuning = {
+		MaxLevel = 3,
+		Parts = {
+			{ Id = "Engine", Name = "Engine", Icon = "🔧", Desc = "Top speed and acceleration", Price = { 0.08, 0.2, 0.45 }, RequiresRebirths = { 0, 1, 2 } },
+			{ Id = "Tyres", Name = "Tyres", Icon = "🛞", Desc = "Grip and braking", Price = { 0.05, 0.14, 0.32 }, RequiresRebirths = { 0, 1, 2 } },
+			{ Id = "Suspension", Name = "Suspension", Icon = "🌀", Desc = "Steering, stability and drift control", Price = { 0.05, 0.14, 0.32 }, RequiresRebirths = { 0, 1, 2 } },
+		},
+	},
+	Mods = {
+		-- finition de la peinture
+		Finish = {
+			{ Id = "Gloss", Name = "Gloss", Price = 0 },
+			{ Id = "Metallic", Name = "Metallic", Price = 0.03 },
+			{ Id = "Matte", Name = "Matte", Price = 0.04 },
+			{ Id = "Pearl", Name = "Pearl", Price = 0.06, RequiresRebirths = 2 },
+		},
+		-- toit bicolore ("Auto" = celui du modèle, "Body" = couleur de caisse,
+		-- sinon une teinte de Colors : même Id)
+		Roof = {
+			{ Id = "Auto", Name = "Original", Price = 0 },
+			{ Id = "Body", Name = "Body colour", Price = 0.01 },
+			{ Id = "Midnight", Name = "Gloss black", Price = 0.02 },
+			{ Id = "Pearl", Name = "White", Price = 0.02 },
+			{ Id = "Silver", Name = "Silver", Price = 0.02 },
+			{ Id = "Bubblegum", Name = "Bubblegum pink", Price = 0.02 },
+			{ Id = "Carbon", Name = "Carbon fibre", Price = 0.05, RequiresRebirths = 1 },
+		},
+		-- jantes (dessin)
+		Rims = {
+			{ Id = "Stock", Name = "Original", Price = 0 },
+			{ Id = "Sport", Name = "Sport 5-spoke", Price = 0.03 },
+			{ Id = "Mesh", Name = "Mesh", Price = 0.04 },
+			{ Id = "Split", Name = "Split 6-spoke", Price = 0.04 },
+			{ Id = "Turbine", Name = "Turbine", Price = 0.05, RequiresRebirths = 1 },
+			{ Id = "DeepDish", Name = "Deep dish", Price = 0.05, RequiresRebirths = 1 },
+			{ Id = "Retro", Name = "Retro hubcap", Price = 0.03 },
+			{ Id = "Star", Name = "Star 3-spoke", Price = 0.06, RequiresRebirths = 2 },
+		},
+		RimColor = {
+			{ Id = "Auto", Name = "Original", Price = 0 },
+			{ Id = "Chrome", Name = "Chrome", Price = 0.01, Color = Color3.fromRGB(214, 218, 226) },
+			{ Id = "Black", Name = "Gloss black", Price = 0.01, Color = Color3.fromRGB(30, 31, 36) },
+			{ Id = "White", Name = "White", Price = 0.01, Color = Color3.fromRGB(246, 246, 248) },
+			{ Id = "Gold", Name = "Gold", Price = 0.02, Color = Color3.fromRGB(214, 172, 80) },
+			{ Id = "Bronze", Name = "Bronze", Price = 0.02, Color = Color3.fromRGB(150, 104, 62) },
+			{ Id = "Red", Name = "Red", Price = 0.02, Color = Color3.fromRGB(206, 40, 52) },
+			{ Id = "Pink", Name = "Pink", Price = 0.02, Color = Color3.fromRGB(255, 120, 180) },
+			{ Id = "Body", Name = "Body colour", Price = 0.02 },
+		},
+		Tyre = {
+			{ Id = "Road", Name = "Road", Price = 0 },
+			{ Id = "LowProfile", Name = "Low profile", Price = 0.02 },
+			{ Id = "Whitewall", Name = "Whitewall", Price = 0.02 },
+			{ Id = "RedLine", Name = "Red line", Price = 0.02 },
+			{ Id = "OffRoad", Name = "All-terrain", Price = 0.03 },
+		},
+		Splitter = {
+			{ Id = "None", Name = "Original", Price = 0 },
+			{ Id = "Lip", Name = "Front lip", Price = 0.02 },
+			{ Id = "Race", Name = "Race splitter", Price = 0.04, RequiresRebirths = 1 },
+		},
+		Skirts = {
+			{ Id = "None", Name = "Original", Price = 0 },
+			{ Id = "Sport", Name = "Side skirts", Price = 0.03 },
+		},
+		Spoiler = {
+			{ Id = "Stock", Name = "Original", Price = 0 },
+			{ Id = "None", Name = "No spoiler", Price = 0 },
+			{ Id = "Lip", Name = "Lip spoiler", Price = 0.02 },
+			{ Id = "Duck", Name = "Ducktail", Price = 0.03 },
+			{ Id = "Wing", Name = "Rear wing", Price = 0.05, RequiresRebirths = 1 },
+			{ Id = "GT", Name = "GT wing", Price = 0.08, RequiresRebirths = 3 },
+		},
+		Tint = {
+			{ Id = "Clear", Name = "Original", Price = 0 },
+			{ Id = "Light", Name = "Light tint", Price = 0.01 },
+			{ Id = "Dark", Name = "Dark tint", Price = 0.02 },
+			{ Id = "Limo", Name = "Limo black", Price = 0.03 },
+		},
+		-- néon doux sous la caisse (Neon translucide, aucune lumière)
+		Glow = {
+			{ Id = "None", Name = "None", Price = 0 },
+			{ Id = "Pink", Name = "Pink glow", Price = 0.05, Color = Color3.fromRGB(255, 110, 190) },
+			{ Id = "Cyan", Name = "Cyan glow", Price = 0.05, Color = Color3.fromRGB(80, 220, 255) },
+			{ Id = "Violet", Name = "Violet glow", Price = 0.05, Color = Color3.fromRGB(170, 110, 255) },
+			{ Id = "Mint", Name = "Mint glow", Price = 0.05, Color = Color3.fromRGB(100, 240, 180) },
+			{ Id = "Amber", Name = "Amber glow", Price = 0.05, Color = Color3.fromRGB(255, 180, 70) },
+			{ Id = "White", Name = "White glow", Price = 0.06, Color = Color3.fromRGB(240, 244, 255), RequiresRebirths = 1 },
+		},
+		Interior = {
+			{ Id = "Charcoal", Name = "Charcoal", Price = 0, Color = Color3.fromRGB(58, 52, 58) },
+			{ Id = "Cream", Name = "Cream leather", Price = 0.02, Color = Color3.fromRGB(226, 212, 186) },
+			{ Id = "Tan", Name = "Tan leather", Price = 0.02, Color = Color3.fromRGB(170, 112, 70) },
+			{ Id = "Red", Name = "Racing red", Price = 0.02, Color = Color3.fromRGB(164, 32, 44) },
+			{ Id = "Pink", Name = "Candy pink", Price = 0.02, Color = Color3.fromRGB(236, 130, 176) },
+			{ Id = "Blue", Name = "Ocean blue", Price = 0.02, Color = Color3.fromRGB(46, 84, 150) },
+		},
+	},
+	-- ordre des rubriques dans l'atelier (Mods)
+	ModKinds = { "Finish", "Roof", "Rims", "RimColor", "Tyre", "Splitter", "Skirts", "Spoiler", "Tint", "Glow", "Interior" },
 }
 
 ----------------------------------------------------------------------
@@ -2824,6 +2948,22 @@ Config.CarColorsById = {}
 for index, paint in ipairs(Config.Cars.Colors) do
 	paint.Order = index
 	Config.CarColorsById[paint.Id] = paint
+end
+-- (v10, CARS10) options de l'atelier : [kind][id] = entrée ; pièces de préparation
+Config.CarModsById = {}
+for kind, list in pairs(Config.Cars.Mods) do
+	local byId = {}
+	for index, entry in ipairs(list) do
+		entry.Order = index
+		entry.Kind = kind
+		byId[entry.Id] = entry
+	end
+	Config.CarModsById[kind] = byId
+end
+Config.CarTuningById = {}
+for index, part in ipairs(Config.Cars.Tuning.Parts) do
+	part.Order = index
+	Config.CarTuningById[part.Id] = part
 end
 
 return Config

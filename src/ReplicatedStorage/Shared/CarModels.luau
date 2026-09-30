@@ -237,6 +237,135 @@ function CarModels.Handling(carId: string?): Handling
 	}
 end
 
+----------------------------------------------------------------------
+-- 🏁 (v10, CARS10) PERFORMANCES + PRÉPARATION (lu par CarClient pour la
+-- conduite et par RACE10 pour les courses : IA, validation serveur)
+----------------------------------------------------------------------
+export type Tuning = { Engine: number, Tyres: number, Suspension: number }
+export type Stats = {
+	CarId: string,
+	Kind: string,
+	Tuning: Tuning,
+	TopSpeed: number, -- studs/s (marche avant, à fond, sur le plat)
+	Reverse: number, -- studs/s
+	Accel: number, -- studs/s² au démarrage (s'essouffle vers TopSpeed)
+	Brake: number, -- studs/s² en freinant
+	Coast: number, -- studs/s² sans rien toucher
+	Grip: number, -- adhérence latérale (1/s : vitesse de résorption de la glisse)
+	DriftGrip: number, -- adhérence en dérapage (1/s)
+	TurnRate: number, -- rad/s max (à vitesse moyenne)
+	Stability: number, -- 0..1 : part du virage gardée à pleine vitesse
+	Comfort: number, -- 1..5
+	ZeroToTop: number, -- s de 0 à 95 % de TopSpeed (simulation du même modèle que CarClient)
+	Rating: number, -- indice de performance 100..999 (appariement, IA)
+	Class: string, -- "D" | "C" | "B" | "A" | "S"
+	Stars: { Speed: number, Accel: number, Grip: number, Comfort: number },
+}
+
+local BASE_ACCEL, BASE_BRAKE, BASE_COAST, BASE_TURN = 24, 60, 14, 1.9
+
+local function kindOfPublic(carId: string?): string
+	return kindOf(carId)
+end
+
+-- Préparation propre (niveaux entiers 0..MaxLevel)
+function CarModels.CleanTuning(tuning: any): Tuning
+	local maxLevel = (Config.Cars.Tuning and Config.Cars.Tuning.MaxLevel) or 3
+	local out = { Engine = 0, Tyres = 0, Suspension = 0 }
+	if type(tuning) == "table" then
+		for key in pairs(out) do
+			local v = tonumber(tuning[key])
+			if v and v == v then
+				out[key] = math.clamp(math.floor(v), 0, maxLevel)
+			end
+		end
+	end
+	return out :: Tuning
+end
+
+-- Préparation d'une voiture dans les données d'un joueur (data.Cars.Tuning)
+function CarModels.TuningOf(data: any, carId: string): Tuning
+	local cars = type(data) == "table" and data.Cars
+	local all = type(cars) == "table" and cars.Tuning
+	return CarModels.CleanTuning(type(all) == "table" and all[carId] or nil)
+end
+
+-- Temps de 0 à 95 % de la vitesse max avec le modèle d'accélération de
+-- CarClient (accélération x (1 - 0,55 (v / vmax)²))
+local function zeroToTop(top: number, accel: number): number
+	local v, t = 0, 0
+	local dt = 1 / 30
+	while v < top * 0.95 and t < 60 do
+		v += accel * (1 - 0.55 * (v / top) ^ 2) * dt
+		t += dt
+	end
+	return t
+end
+
+-- Performances d'une voiture (carId ou Kind) avec sa préparation.
+-- Déterministe, pur, identique serveur / client.
+function CarModels.Stats(carId: string?, tuning: any?): Stats
+	local kind = kindOfPublic(carId)
+	local h = HANDLING[kind] or HANDLING.CityCar
+	local t = CarModels.CleanTuning(tuning)
+	local maxSpeed = tonumber(Config.Cars.MaxSpeed) or 50
+	local top = maxSpeed * h[1] * (1 + 0.06 * t.Engine)
+	local accel = BASE_ACCEL * h[2] * (1 + 0.12 * t.Engine)
+	local brake = BASE_BRAKE * (0.9 + 0.1 * h[3]) * (1 + 0.1 * t.Tyres)
+	local grip = 10 * h[3] * (1 + 0.08 * t.Tyres + 0.03 * t.Suspension)
+	local driftGrip = 3 * h[3] * (1 + 0.1 * t.Suspension + 0.04 * t.Tyres)
+	local turn = BASE_TURN * (0.92 + 0.08 * h[3]) * (1 + 0.05 * t.Suspension)
+	local stability = math.clamp(0.6 + 0.05 * t.Suspension + 0.03 * t.Tyres, 0, 0.9)
+	local z = zeroToTop(top, accel)
+	-- indice : vitesse 45 %, accélération 30 %, tenue 25 % (100..999)
+	local speedN = top / (maxSpeed * 1.35)
+	local accelN = accel / (BASE_ACCEL * 1.9)
+	local gripN = (grip / 10 + turn / BASE_TURN) / 2 / 1.5
+	local rating = math.clamp(math.floor(100 + 900 * (0.45 * speedN + 0.3 * accelN + 0.25 * gripN) ^ 1.6 + 0.5), 100, 999)
+	local class = if rating >= 750 then "S" elseif rating >= 600 then "A" elseif rating >= 490 then "B" elseif rating >= 400 then "C" else "D"
+	local function stars(v: number): number
+		return math.clamp(math.floor(v + 0.5), 1, 5)
+	end
+	return {
+		CarId = type(carId) == "string" and carId or kind,
+		Kind = kind,
+		Tuning = t,
+		TopSpeed = top,
+		Reverse = tonumber(Config.Cars.ReverseSpeed) or 18,
+		Accel = accel,
+		Brake = brake,
+		Coast = BASE_COAST,
+		Grip = grip,
+		DriftGrip = driftGrip,
+		TurnRate = turn,
+		Stability = stability,
+		Comfort = h[4],
+		ZeroToTop = z,
+		Rating = rating,
+		Class = class,
+		Stars = {
+			Speed = stars((top / maxSpeed - 0.7) / 0.1),
+			Accel = stars((accel / BASE_ACCEL - 0.7) / 0.13),
+			Grip = stars((grip / 10 - 0.7) / 0.1),
+			Comfort = stars(h[4]),
+		},
+	} :: Stats
+end
+
+-- Prix d'une option / d'un niveau pour une voiture (Price x prix de la
+-- voiture, au moins MinPrice, arrondi à 2 chiffres significatifs ; 0 = gratuit)
+function CarModels.PriceFor(carId: string, factor: number?): number
+	local f = tonumber(factor) or 0
+	if f <= 0 then
+		return 0
+	end
+	local car = Config.CarsById and Config.CarsById[carId]
+	local base = car and tonumber(car.Cost) or 1e6
+	local price = math.max(tonumber(Config.Cars.MinPrice) or 0, base * f)
+	local unit = 10 ^ math.max(0, math.floor(math.log10(price)) - 1)
+	return math.floor(price / unit + 0.5) * unit
+end
+
 -- Repeint un modèle déjà construit (pièces marquées "Paint") : pour changer
 -- de couleur SANS reconstruire (fenêtre "Mes voitures", concession)
 function CarModels.Repaint(model: Instance, carId: string?, color: any?)

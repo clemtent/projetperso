@@ -997,4 +997,19 @@ function CarService:GetCar(player: Player): Model?
 	return car and car.Model or nil
 end
 
+-- (v10, CARS10 -> RACE10) performances d'une voiture du joueur avec SA
+-- préparation (carId nil = voiture choisie ; nil si pas possédée)
+function CarService:GetStats(player: Player, carId: string?): any
+	local data = dataOf(player)
+	if type(data) ~= "table" then
+		return nil
+	end
+	CarService.Sanitize(data)
+	local id = if type(carId) == "string" then carId else data.Cars.Selected
+	if type(id) ~= "string" or not data.Cars.Owned[id] then
+		return nil
+	end
+	return CarModels.Stats(id, CarModels.TuningOf(data, id))
+end
+
 return CarService
