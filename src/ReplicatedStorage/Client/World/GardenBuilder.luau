@@ -41,6 +41,12 @@
 	    studs) et reconstruit en s'approchant (8 objets par pas).
 	    Mode édition (GardenEdit) : SetEditing / Preview / MakeGhost /
 	    ApplyLocal / KeyOf / PlaceCF / ToLocal.
+	  - v9.9 (PARK99) 🪑 ON S'ASSOIT pour de vrai sur le banc, la table de
+	    pique-nique, la balancelle et les bancs du kiosque : invite
+	    "S'asseoir" (E, tout le monde) -> SitAnimator (s'avancer, s'asseoir,
+	    attentes du banc) -> action "sit" du serveur (WorldService, Garden =
+	    true : point dans la parcelle). La balancelle se balance (pendule
+	    doux, même tirage pour tous : heure d'assise du siège).
 	Performance : pièces ancrées, sans collision sauf les bords des bacs ;
 	fleurs reconstruites seulement quand leur stade change (au plus 2
 	parterres par image) ; animations à 20 Hz, en pause au-delà de ~110
@@ -64,6 +70,7 @@
 	      PrimaryPart "Root", attributs FlowerId / Stage / TopHeight.
 ]]
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
@@ -616,6 +623,7 @@ export type Garden = typeof(setmetatable({} :: {
 	Destroyed: boolean,
 	EditLayout: any?,
 	FlowersNear: boolean?,
+	Swings: { [any]: any }?, -- (v9.9 PARK99) balancelles construites
 }, GardenBuilder))
 
 -- Distances (studs) de la caméra au centre de la parcelle
@@ -1175,6 +1183,208 @@ function GardenBuilder._destroyItem(self: Garden, key: string)
 	item.Model:Destroy()
 end
 
+----------------------------------------------------------------------
+-- 🪑 v9.9 (PARK99) : s'asseoir dans le jardin
+----------------------------------------------------------------------
+-- Places assises des objets de jardin (repère du kit : x, dessus de
+-- l'assise y, d ; (fx, fd) = direction du regard). Hauteurs SCALE99 : 1,45.
+local SEAT_SPOTS: { [string]: { { number } } } = {
+	GardenBench = { { -1.2, 1.45, -0.12, 0, -1 }, { 1.2, 1.45, -0.12, 0, -1 } },
+	PicnicTable = { { -1.3, 1.45, -2.04, 0, 1 }, { 1.3, 1.45, -2.04, 0, 1 }, { -1.3, 1.45, 2.04, 0, -1 }, { 1.3, 1.45, 2.04, 0, -1 } },
+	GardenSwing = { { -0.75, 1.5, 0, 0, -1 }, { 0.75, 1.5, 0, 0, -1 } },
+}
+do
+	-- kiosque : 3 bancs sur l'arc du fond, face au centre (voir HouseGarden)
+	local spots = {}
+	for k = 1, 3 do
+		local a = (k + 1) / 8 * math.pi * 2
+		local x, dd = math.cos(a) * 3.6, math.sin(a) * 3.6
+		table.insert(spots, { x, 0.68 + 1.45, dd, -math.cos(a), -math.sin(a) })
+	end
+	SEAT_SPOTS.Gazebo = spots
+end
+local SWING_PIVOT_Y = 5.3 -- (balancelle : axe des cordes, repère du kit)
+local SWING_OMEGA = math.sqrt(9.81 * 3.06 / (5.3 - 1.5)) -- pendule de ~3,8 studs
+local SWING_AMP = math.rad(8)
+
+local sitAnimatorModule: any = nil
+local function sitAnimator(): any
+	if sitAnimatorModule == nil then
+		local ok, result = pcall(function()
+			return require(script.Parent:FindFirstChild("SitAnimator") :: any)
+		end)
+		sitAnimatorModule = (ok and type(result) == "table") and result or false
+	end
+	return sitAnimatorModule or nil
+end
+
+-- Propriétaire du jardin (attribut de la maison qui nous contient)
+function GardenBuilder._ownerId(self: Garden): number?
+	local node: Instance? = self.Model.Parent
+	for _ = 1, 4 do
+		if not node then
+			return nil
+		end
+		local id = node:GetAttribute("OwnerId")
+		if type(id) == "number" then
+			return id
+		end
+		node = node.Parent
+	end
+	return nil
+end
+
+function GardenBuilder._sit(self: Garden, model: Model, seatPart: BasePart)
+	if self.Editing or self.Destroyed then
+		return
+	end
+	local owner = self:_ownerId()
+	if not owner then
+		return
+	end
+	local function sit(cf: CFrame, kind: string?)
+		task.spawn(function()
+			pcall(function()
+				Net.Function("World"):InvokeServer("sit", { Owner = owner, Garden = true, CFrame = cf, Kind = kind or "bench" })
+			end)
+		end)
+	end
+	local anim = sitAnimator()
+	if anim and type(anim.Approach) == "function" then
+		if pcall(anim.Approach, model, seatPart, sit) then
+			return
+		end
+	end
+	sit(seatPart.CFrame * CFrame.new(0, seatPart.Size.Y / 2, 0), "bench")
+end
+
+-- Places assises (invisibles) + invites "S'asseoir" d'un objet de jardin
+function GardenBuilder._addSeats(self: Garden, item: any, id: string, cf: CFrame)
+	local spots = SEAT_SPOTS[id]
+	if not spots then
+		return
+	end
+	item.SeatPrompts = {}
+	item.SeatParts = {}
+	local name = id
+	for _, piece in ipairs(Config.Garden and Config.Garden.Pieces or {}) do
+		if piece.Id == id then
+			name = piece.Name
+		end
+	end
+	for i, spot in ipairs(spots) do
+		local top = cf * Vector3.new(spot[1], spot[2], -spot[3])
+		local look = cf:VectorToWorldSpace(Vector3.new(spot[4], 0, -spot[5]))
+		local seatPart = newPart(item.Model, "GardenSeat", Vector3.new(1.6, 0.2, 1.3), CFrame.lookAt(top - Vector3.new(0, 0.1, 0), top - Vector3.new(0, 0.1, 0) + look), WHITE, M.SmoothPlastic)
+		seatPart.Transparency = 1
+		seatPart.CastShadow = false
+		seatPart:SetAttribute("SitKind", "bench")
+		seatPart:SetAttribute("SeatIndex", i)
+		local prompt = Instance.new("ProximityPrompt")
+		prompt.Name = "GardenSeatPrompt"
+		prompt.ActionText = Locale.T("Sit")
+		prompt.ObjectText = Locale.T(name)
+		prompt.KeyboardKeyCode = Enum.KeyCode.E
+		prompt.HoldDuration = 0
+		prompt.MaxActivationDistance = 7
+		prompt.RequiresLineOfSight = false
+		prompt.Enabled = not self.Editing
+		prompt.Parent = seatPart
+		table.insert(self.Connections, prompt.Triggered:Connect(function()
+			self:_sit(item.Model, seatPart)
+		end))
+		table.insert(item.SeatPrompts, prompt)
+		table.insert(item.SeatParts, seatPart)
+	end
+	if id == "GardenSwing" then
+		-- pièces qui se balancent : assise, coussins, dossier, cordes
+		local swing = { Item = item, Pivot = cf * CFrame.new(0, SWING_PIVOT_Y, 0), Parts = {}, Rest = {}, Frames = {}, Amp = 0, Phase = 0, Seats = {} }
+		for _, d in ipairs(item.Model:GetDescendants()) do
+			if d:IsA("BasePart") and string.sub(d.Name, 1, 5) == "Swing" and d.Name ~= "SwingLeg" and d.Name ~= "SwingBrace" and d.Name ~= "SwingBeam" then
+				table.insert(swing.Parts, d)
+				table.insert(swing.Rest, d.CFrame)
+				table.insert(swing.Frames, d.CFrame)
+			end
+		end
+		for _, seatPart in ipairs(item.SeatParts) do
+			table.insert(swing.Parts, seatPart)
+			table.insert(swing.Rest, seatPart.CFrame)
+			table.insert(swing.Frames, seatPart.CFrame)
+		end
+		local swings = self.Swings or {}
+		swings[item] = swing
+		self.Swings = swings
+	end
+end
+
+-- Balancelle : quelqu'un est assis dessus (siège du serveur tout près d'une
+-- place) -> elle se balance doucement ; le siège du serveur suit (localement)
+function GardenBuilder._stepSwings(self: Garden, dt: number)
+	local t = rawServerNow()
+	local camera = workspace.CurrentCamera
+	local swings = self.Swings
+	if not swings then
+		return
+	end
+	for item, swing in pairs(swings) do
+		if not item.Model.Parent or self.Items[item.Key] ~= item then
+			swings[item] = nil
+		elseif not camera or (camera.CFrame.Position - swing.Pivot.Position).Magnitude < 140 then
+			-- sièges du serveur sur nos places
+			local riders = {}
+			local sitAt: number? = nil
+			for _, player in ipairs(Players:GetPlayers()) do
+				local character = player.Character
+				local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+				local seat = humanoid and humanoid.SeatPart
+				if seat and string.sub(seat.Name, 1, 9) == "TownSeat_" then
+					local rest = swing.Seats[seat] or seat.CFrame
+					for _, seatPart in ipairs(item.SeatParts) do
+						if (rest.Position - (seatPart.CFrame * CFrame.new(0, 0.1, 0)).Position).Magnitude < 1.6 or swing.Seats[seat] then
+							swing.Seats[seat] = rest
+							riders[seat] = true
+							local at = tonumber(seat:GetAttribute("SitAt"))
+							if at and (not sitAt or at < sitAt) then
+								sitAt = at
+							end
+							break
+						end
+					end
+				end
+			end
+			for seat in pairs(swing.Seats) do
+				if not riders[seat] then
+					swing.Seats[seat] = nil
+				end
+			end
+			local angle
+			if sitAt then
+				local since = math.max(0, t - sitAt)
+				swing.Amp = SWING_AMP * (1 - math.exp(-since / 1.6))
+				swing.Phase = SWING_OMEGA * since
+				angle = swing.Amp * math.sin(swing.Phase)
+			else
+				swing.Amp *= math.exp(-dt / 1.4)
+				swing.Phase += SWING_OMEGA * dt
+				angle = swing.Amp * math.sin(swing.Phase)
+			end
+			if math.abs(angle) > 1e-4 or swing.Moved then
+				swing.Moved = math.abs(angle) > 1e-4
+				local turn = swing.Pivot * CFrame.Angles(angle, 0, 0) * swing.Pivot:Inverse()
+				for i, rest in ipairs(swing.Rest) do
+					swing.Frames[i] = turn * rest
+				end
+				workspace:BulkMoveTo(swing.Parts, swing.Frames, Enum.BulkMoveMode.FireCFrameChanged)
+				for seat, rest in pairs(swing.Seats) do
+					if seat.Parent then
+						seat.CFrame = turn * rest
+					end
+				end
+			end
+		end
+	end
+end
+
 -- Construit jusqu'à `budget` objets en attente
 function GardenBuilder._buildPending(self: Garden, budget: number)
 	local built = 0
@@ -1221,6 +1431,7 @@ function GardenBuilder._buildItem(self: Garden, entry: any)
 	elseif kind == "P" then
 		local kit = HouseKit.new(cf, model, 0)
 		HouseGarden.BuildPiece(kit, id :: string, n)
+		self:_addSeats(item, id :: string, cf)
 	elseif kind == "F" then
 		if id == "Sign" then
 			self:_buildSign(model, cf * TURN)
@@ -1352,6 +1563,12 @@ function GardenBuilder.SetEditing(self: Garden, on: boolean)
 	for _, bed in ipairs(self.Beds) do
 		if bed.Click then
 			bed.Click.MaxActivationDistance = self.Editing and 0 or 26
+		end
+	end
+	-- (v9.9 PARK99) pas d'invite "S'asseoir" pendant l'édition
+	for _, item in pairs(self.Items) do
+		for _, prompt in ipairs(item.SeatPrompts or {}) do
+			prompt.Enabled = not self.Editing
 		end
 	end
 	self:_refreshStages(false)
@@ -1586,6 +1803,9 @@ end
 function GardenBuilder._heartbeat(self: Garden, dt: number)
 	if self.Destroyed then
 		return
+	end
+	if self.Swings and next(self.Swings) then
+		self:_stepSwings(dt)
 	end
 	self.Clock += dt
 	if self.Clock < STEP then

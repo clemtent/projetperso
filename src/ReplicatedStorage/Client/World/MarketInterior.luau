@@ -74,13 +74,14 @@ local TweenService = game:GetService("TweenService")
 
 local Client = script.Parent.Parent
 local ClientState = require(Client.ClientState)
-local UIUtil = require(Client.UIUtil)
 local Config = require(ReplicatedStorage.Shared.Config)
 local Locale = require(ReplicatedStorage.Shared.Locale)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
 local HouseCommon = require(Client.Components.House.HouseCommon)
 local ShopUI = require(script.Parent.ShopUI)
+local BoardKit = require(script.Parent.BoardKit)
+local ClockKit = require(script.Parent.ClockKit)
 
 local MarketInterior = {}
 
@@ -329,21 +330,40 @@ type Actor = {
 	CartParts: { BasePart }?,
 	CartOffsets: { CFrame }?,
 	Pos: Vector3,
+	Custom: boolean?, -- (v9.9) animé par sa caisse, pas par la boucle générale
 }
 
--- Caisse animée : lattes du tapis, articles, scanner
+-- Groupe de pièces déplacées d'un bloc (articles, carrousel, panier)
+type Group = { Parts: { BasePart }, Offsets: { CFrame }, Shown: boolean }
+
+-- Client de la file d'une caisse (v9.9)
+type Customer = { Actor: Actor, Slot: number, Basket: Group, Parts: { BasePart }, Alpha: number, Owner: string }
+
+-- Caisse animée (v9.9) : tapis, articles, scanner, carrousel, écrans, personnages
 type Belt = {
 	Owner: string,
-	F: CFrame, -- repère de la caisse (x = centre du tapis)
+	F: CFrame, -- repère de la caisse (x = centre du tapis, axes du magasin)
+	Index: number,
 	Slats: { BasePart },
-	Items: { BasePart },
+	Items: { Group },
+	Rest: CFrame,
 	Scanner: BasePart,
+	Lasers: { BasePart },
 	Beep: BillboardGui,
-	Z0: number,
-	Z1: number,
+	Carousel: Group,
+	CarouselCF: CFrame,
+	Bags: { BasePart },
+	Pole: TextLabel?,
+	Screen: TextLabel?,
+	Terminal: TextLabel?,
+	Paper: BasePart?,
+	PaperCF: CFrame?,
 	Pos: Vector3,
 	Offset: number,
 	Flash: number,
+	Cashier: Actor?,
+	Customers: { Customer },
+	Last: { [string]: any },
 }
 
 type Spinner = { Part: BasePart, Base: CFrame, Owner: string, Offset: number, Pos: Vector3 }
@@ -357,18 +377,15 @@ type RobuxDisplay = {
 	Owner: string,
 }
 
+-- Écran de classement (v9.9 : dessiné par BoardKit, façon régie télé)
 type Board = {
 	Kind: string, -- "Dopamine" | "Rebirths" | "Server"
+	Kit: any, -- BoardKit.Board
 	Gui: SurfaceGui,
-	Title: TextLabel,
-	Scope: TextLabel,
-	Live: Frame,
-	Podium: { any },
-	Rows: { any },
-	Footer: TextLabel,
-	Bar: Frame,
-	Empty: TextLabel,
 	Owner: string,
+	Pos: Vector3,
+	LastScope: string?,
+	LastRefresh: number,
 }
 
 type Builder = { Name: string, Folder: Folder?, Jobs: { () -> () }?, Index: number, Built: boolean }
@@ -401,6 +418,9 @@ type Market = {
 	Actors: { Actor },
 	Belts: { Belt },
 	Spinners: { Spinner },
+	Kiosks: { any }, -- (v9.9) caisses automatiques animées
+	Clocks: { any }, -- (v9.9) horloges { Clock, Owner }
+	Dates: { any }, -- (v9.9) médaillons de date { Refresh, Owner }
 	Robux: { RobuxDisplay },
 	Boards: { Board },
 	TVs: { UIGradient },
@@ -440,9 +460,8 @@ local GHALF = 1.3 -- demi-profondeur d'une gondole
 local LEVELS = { 0.42, 1.98, 3.54, 5.1 } -- dessus des tablettes
 local CLEAR = 1.4 -- hauteur libre au-dessus d'une tablette
 local GTOP = 6.6 -- haut des montants
-local LANES = { 13, 18.5, 24, 29.5, 35, 40.5 } -- caisses (x du tapis)
-local LZ0, LZ1 = 3, 11 -- caisses (z)
-local OPEN_LANES = 4 -- (caisses 5 et 6 fermées : moins de personnages)
+local LANES = { 13.5, 20.3, 27.1, 33.9, 40.7 } -- caisses (x du tapis) ; v9.9 : 5 caisses plus larges
+local OPEN_LANES = 4 -- (la caisse 5 est fermée)
 
 -- Faces de gondole : { gondole, côté (-1 ouest / +1 est), contenu }
 -- contenu : générique ("Cereal"...) ou catégories de la maison ("Real:Kitchen")
@@ -1207,8 +1226,6 @@ end
 -- 🏆 Écrans de classement (Dopamine / Renaissances / serveur en direct)
 ----------------------------------------------------------------------
 
-local MEDALS = { "🥇", "🥈", "🥉" }
-local PODIUM_COLORS = { rgb(255, 204, 64), rgb(206, 214, 226), rgb(214, 150, 96) }
 
 local function num(value: any, default: number): number
 	local n = tonumber(value)
@@ -1306,187 +1323,30 @@ local function ordinal(rank: number): string
 	return tostring(rank) .. suffix
 end
 
--- Avatar rond (photo Roblox, ou initiale)
-local function avatarFrame(parent: Instance, x: number, y: number, size: number, zIndex: number): (Frame, ImageLabel, TextLabel)
-	local frame = Instance.new("Frame")
-	frame.Name = "Avatar"
-	frame.AnchorPoint = Vector2.new(0.5, 0.5)
-	frame.Position = UDim2.fromScale(x, y)
-	frame.Size = UDim2.fromScale(size, size)
-	frame.BackgroundColor3 = rgb(70, 60, 110)
-	frame.ZIndex = zIndex
-	frame.Parent = parent
-	local aspect = Instance.new("UIAspectRatioConstraint")
-	aspect.AspectRatio = 1
-	aspect.DominantAxis = Enum.DominantAxis.Height
-	aspect.Parent = frame
-	corner(frame, 1)
-	local initial = text(frame, "Initial", "", 0.15, 0.15, 0.7, 0.7, WHITE, Enum.Font.FredokaOne)
-	initial.ZIndex = zIndex + 1
-	local image = Instance.new("ImageLabel")
-	image.Name = "Image"
-	image.BackgroundTransparency = 1
-	image.Size = UDim2.fromScale(1, 1)
-	image.Image = ""
-	image.ZIndex = zIndex + 2
-	image.Parent = frame
-	corner(image, 1)
-	return frame, image, initial
-end
-
-local function setAvatar(image: ImageLabel, initial: TextLabel, userId: number, name: string)
-	local url = userId > 0 and UIUtil.HeadshotUrl(userId, 150) or ""
-	if image.Image ~= url then
-		image.Image = url
-	end
-	initial.Text = string.upper(string.sub(name, 1, 1))
-end
-
 local BOARD_TITLES = {
 	Dopamine = "🏆 Top Dopamine",
 	Rebirths = "♻️ Top Rebirths",
 	Server = "🏠 Live on this server",
 }
 
--- Écran de classement sur la face avant d'une pièce
+-- Écran de classement sur la face avant d'une pièce (v9.9 : BoardKit)
 local function buildBoard(m: Market, screen: BasePart, kind: string, owner: string, pps: number, face: Enum.NormalId?): Board
-	local gui = Instance.new("SurfaceGui")
-	gui.Name = "Leaderboard"
-	gui.Face = face or Enum.NormalId.Front
-	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	gui.PixelsPerStud = pps
-	gui.LightInfluence = 0
-	gui.Brightness = 1
-	gui.MaxDistance = 320
-	gui.ClipsDescendants = true
-	gui.Parent = screen
-	local root = Instance.new("Frame")
-	root.Name = "Root"
-	root.Size = UDim2.fromScale(1, 1)
-	root.BackgroundColor3 = WHITE
-	root.BorderSizePixel = 0
-	root.Parent = gui
-	local grad = Instance.new("UIGradient")
-	grad.Color = ColorSequence.new(rgb(44, 26, 86), rgb(22, 18, 48))
-	grad.Rotation = 90
-	grad.Parent = root
-	-- bandeau du haut : titre, portée (🌍 / 🏠), « ● EN DIRECT »
-	local head = Instance.new("Frame")
-	head.Name = "Head"
-	head.Size = UDim2.fromScale(1, 0.17)
-	head.BackgroundColor3 = WHITE
-	head.BorderSizePixel = 0
-	head.Parent = root
-	local hg = Instance.new("UIGradient")
-	hg.Color = kind == "Rebirths" and ColorSequence.new(rgb(70, 170, 230), rgb(120, 90, 200)) or ColorSequence.new(BRAND, BRAND2)
-	hg.Parent = head
-	local title = text(head, "Title", Locale.T(BOARD_TITLES[kind] or kind), 0.025, 0.12, 0.58, 0.76, WHITE, Enum.Font.FredokaOne, Enum.TextXAlignment.Left)
-	local scopeChip = Instance.new("Frame")
-	scopeChip.Name = "ScopeChip"
-	scopeChip.Position = UDim2.fromScale(0.6, 0.18)
-	scopeChip.Size = UDim2.fromScale(0.2, 0.64)
-	scopeChip.BackgroundColor3 = rgb(255, 255, 255)
-	scopeChip.BackgroundTransparency = 0.78
-	scopeChip.Parent = head
-	corner(scopeChip, 0.5)
-	local scope = text(scopeChip, "Scope", "", 0.06, 0.12, 0.88, 0.76, WHITE, Enum.Font.GothamBold)
-	local liveChip = Instance.new("Frame")
-	liveChip.Name = "LiveChip"
-	liveChip.Position = UDim2.fromScale(0.815, 0.18)
-	liveChip.Size = UDim2.fromScale(0.165, 0.64)
-	liveChip.BackgroundColor3 = rgb(236, 60, 80)
-	liveChip.Parent = head
-	corner(liveChip, 0.5)
-	local dot = Instance.new("Frame")
-	dot.Name = "Dot"
-	dot.AnchorPoint = Vector2.new(0.5, 0.5)
-	dot.Position = UDim2.fromScale(0.14, 0.5)
-	dot.Size = UDim2.fromScale(0.12, 0.42)
-	dot.BackgroundColor3 = WHITE
-	dot.Parent = liveChip
-	local da = Instance.new("UIAspectRatioConstraint")
-	da.AspectRatio = 1
-	da.Parent = dot
-	corner(dot, 1)
-	text(liveChip, "Live", Locale.T("LIVE"), 0.26, 0.14, 0.68, 0.72, WHITE, Enum.Font.GothamBlack)
-	-- podium (1er au centre, plus haut)
-	local podium = {}
-	local spots = { { 0.195, 0.2, 0.155, 0.66 }, { 0.03, 0.3, 0.155, 0.56 }, { 0.36, 0.34, 0.155, 0.52 } }
-	for rank = 1, 3 do
-		local s = spots[rank]
-		local card = Instance.new("Frame")
-		card.Name = "Podium" .. rank
-		card.Position = UDim2.fromScale(s[1], s[2])
-		card.Size = UDim2.fromScale(s[3], s[4])
-		card.BackgroundColor3 = rgb(255, 255, 255)
-		card.BackgroundTransparency = 0.9
-		card.Parent = root
-		corner(card, 0.12)
-		local stroke = Instance.new("UIStroke")
-		stroke.Color = PODIUM_COLORS[rank]
-		stroke.Thickness = 3
-		stroke.Parent = card
-		local medal = text(card, "Medal", MEDALS[rank], 0.25, 0.01, 0.5, 0.17, WHITE, Enum.Font.GothamBold)
-		local _, image, initial = avatarFrame(card, 0.5, 0.37, 0.36, 3)
-		local name = text(card, "Name", "", 0.04, 0.57, 0.92, 0.14, WHITE, Enum.Font.GothamBold)
-		local value = text(card, "Value", "", 0.04, 0.72, 0.92, 0.12, PODIUM_COLORS[rank], Enum.Font.FredokaOne)
-		local base = Instance.new("Frame")
-		base.Name = "Step"
-		base.Position = UDim2.fromScale(0, 0.87)
-		base.Size = UDim2.fromScale(1, 0.13)
-		base.BackgroundColor3 = PODIUM_COLORS[rank]
-		base.Parent = card
-		corner(base, 0.3)
-		text(base, "Rank", tostring(rank), 0.3, 0.05, 0.4, 0.9, rgb(60, 40, 20), Enum.Font.FredokaOne)
-		table.insert(podium, { Card = card, Image = image, Initial = initial, Name = name, Value = value, Medal = medal })
-	end
-	-- rangs 4 à 10
-	local rows = {}
-	for i = 1, 7 do
-		local y = 0.205 + (i - 1) * 0.092
-		local row = Instance.new("Frame")
-		row.Name = "Row" .. (i + 3)
-		row.Position = UDim2.fromScale(0.53, y)
-		row.Size = UDim2.fromScale(0.45, 0.082)
-		row.BackgroundColor3 = WHITE
-		row.BackgroundTransparency = i % 2 == 0 and 0.94 or 0.88
-		row.Parent = root
-		corner(row, 0.3)
-		local rank = text(row, "Rank", tostring(i + 3), 0.01, 0.1, 0.1, 0.8, rgb(200, 190, 240), Enum.Font.FredokaOne)
-		local _, image, initial = avatarFrame(row, 0.165, 0.5, 0.8, 3)
-		local name = text(row, "Name", "", 0.24, 0.12, 0.44, 0.76, WHITE, Enum.Font.GothamBold, Enum.TextXAlignment.Left)
-		local value = text(row, "Value", "", 0.68, 0.14, 0.3, 0.72, rgb(255, 214, 120), Enum.Font.FredokaOne, Enum.TextXAlignment.Right)
-		table.insert(rows, { Frame = row, Rank = rank, Image = image, Initial = initial, Name = name, Value = value })
-	end
-	-- pied : ta place + barre d'alternance des pages
-	local footer = text(root, "Footer", "", 0.03, 0.875, 0.94, 0.085, rgb(255, 236, 160), Enum.Font.GothamBold)
-	local barBack = Instance.new("Frame")
-	barBack.Name = "PageBar"
-	barBack.Position = UDim2.fromScale(0, 0.975)
-	barBack.Size = UDim2.fromScale(1, 0.025)
-	barBack.BackgroundColor3 = rgb(60, 50, 100)
-	barBack.BorderSizePixel = 0
-	barBack.Parent = root
-	local bar = Instance.new("Frame")
-	bar.Name = "Fill"
-	bar.Size = UDim2.fromScale(0, 1)
-	bar.BackgroundColor3 = BRAND
-	bar.BorderSizePixel = 0
-	bar.Parent = barBack
-	local empty = text(root, "Empty", Locale.T("Loading the leaderboard…"), 0.1, 0.42, 0.8, 0.12, WHITE, Enum.Font.GothamBold)
-	local board: Board = {
-		Kind = kind,
-		Gui = gui,
-		Title = title,
-		Scope = scope,
-		Live = dot,
-		Podium = podium,
-		Rows = rows,
-		Footer = footer,
-		Bar = bar,
-		Empty = empty,
-		Owner = owner,
-	}
+	local kit = BoardKit.Build(screen, {
+		Face = face or Enum.NormalId.Front,
+		PPS = pps,
+		MaxDistance = 320,
+		Title = BOARD_TITLES[kind] or kind,
+		Theme = kind,
+		Rows = 6,
+		HeroCaption = "⭐ Best player on the server",
+		Ticker = {
+			"🧠 MegaDopa: everything for your home",
+			"🏆 Climb the leaderboard: click, buy, rebirth!",
+			"💎 Robux Shop inside",
+			"☕ Café & food court",
+		},
+	})
+	local board: Board = { Kind = kind, Kit = kit, Gui = kit.Gui, Owner = owner, Pos = screen.Position, LastScope = nil, LastRefresh = -10 }
 	table.insert(m.Boards, board)
 	boardsDirty = true
 	return board
@@ -1509,47 +1369,37 @@ end
 local function refreshBoard(board: Board, now: number)
 	local scope = boardScope(board, now)
 	local valueKind = board.Kind == "Rebirths" and "Rebirths" or "Dopamine"
-	local rows = boardEntries(valueKind, scope)
-	board.Scope.Text = scope == "World" and ("🌍 " .. Locale.T("World")) or ("🏠 " .. Locale.T("This server"))
-	board.Empty.Visible = #rows == 0
+	local entries = boardEntries(valueKind, scope)
 	local me = Players.LocalPlayer.UserId
-	for rank = 1, 3 do
-		local slot = board.Podium[rank]
-		local r = rows[rank]
-		slot.Card.Visible = r ~= nil
-		if r then
-			setAvatar(slot.Image, slot.Initial, r.UserId, r.Name)
-			slot.Name.Text = (r.UserId == me and "⭐ " or "") .. r.Name
-			slot.Value.Text = valueText(valueKind, r.Value)
-		end
-	end
-	for i, slot in ipairs(board.Rows) do
-		local r = rows[i + 3]
-		slot.Frame.Visible = r ~= nil
-		if r then
-			slot.Rank.Text = tostring(r.Rank)
-			setAvatar(slot.Image, slot.Initial, r.UserId, r.Name)
-			slot.Name.Text = r.Name
-			slot.Value.Text = valueText(valueKind, r.Value)
-			local mine = r.UserId == me
-			slot.Frame.BackgroundColor3 = mine and BRAND or WHITE
-			slot.Frame.BackgroundTransparency = mine and 0.35 or (i % 2 == 0 and 0.94 or 0.88)
-		end
-	end
-	-- ta place (même hors du top 10)
+	local rows = {}
 	local mine: Row? = nil
-	for _, r in ipairs(rows) do
+	for _, r in ipairs(entries) do
+		table.insert(rows, { UserId = r.UserId, Name = r.Name, Value = r.Value, ValueText = valueText(valueKind, r.Value), Rank = r.Rank, Mine = r.UserId == me })
 		if r.UserId == me then
 			mine = r
 		end
 	end
+	-- ta place (même hors du top 10)
 	local dopamine, lifetime, rebirths = myStats()
 	local myValue = valueKind == "Rebirths" and rebirths or (scope == "World" and lifetime or dopamine)
+	local footer
 	if mine then
-		board.Footer.Text = Locale.T("You: %s · %s", ordinal(mine.Rank), valueText(valueKind, mine.Value))
+		footer = Locale.T("You: %s · %s", ordinal(mine.Rank), valueText(valueKind, mine.Value))
 	else
-		board.Footer.Text = Locale.T("You: not in the top yet · %s", valueText(valueKind, myValue))
+		footer = Locale.T("You: not in the top yet · %s", valueText(valueKind, myValue))
 	end
+	local caption
+	if scope == "World" then
+		caption = valueKind == "Rebirths" and Locale.T("♻️ World rebirth champion") or Locale.T("🌍 World champion")
+	else
+		caption = Locale.T("⭐ Best player on the server")
+	end
+	BoardKit.SetData(board.Kit, {
+		Rows = rows,
+		Scope = scope == "World" and ("🌍 " .. Locale.T("World")) or ("🏠 " .. Locale.T("This server")),
+		Footer = footer,
+		HeroCaption = caption,
+	})
 end
 
 ----------------------------------------------------------------------
@@ -1565,6 +1415,169 @@ local LOT_Y = -0.5
 local STALLS, STALL_W = 15, 6.4 -- places par rangée (6,4 de large : même les SUV y tiennent)
 local ROW_A = { -46, -35.5 }
 local ROW_B = { -28, -17.5 }
+
+----------------------------------------------------------------------
+-- v9.9 (SHOPS99) : magasin ÉCLAIRÉ vu de dehors + horloges
+----------------------------------------------------------------------
+
+-- (un seul local de plus : le module est proche de la limite de 200 registres)
+local V99: any = { Timers = { Clock = 0, Date = 0 } }
+
+-- Surface « lumineuse » (SurfaceGui peu sensible à la lumière : visible
+-- éclairée la nuit, sans vraie lumière ni Neon) sur une face d'une pièce
+function V99.glowFace(p: BasePart, face: Enum.NormalId, top: Color3, bottom: Color3, influence: number, maxDistance: number, pps: number?): SurfaceGui
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "Glow"
+	gui.Face = face
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = pps or 4
+	gui.LightInfluence = influence
+	gui.Brightness = 1
+	gui.MaxDistance = maxDistance
+	gui.Parent = p
+	local f = Instance.new("Frame")
+	f.Name = "Wash"
+	f.Size = UDim2.fromScale(1, 1)
+	f.BorderSizePixel = 0
+	f.BackgroundColor3 = WHITE
+	f.Parent = gui
+	local g = Instance.new("UIGradient")
+	g.Color = ColorSequence.new(top, bottom)
+	g.Rotation = 90
+	g.Parent = f
+	return gui
+end
+
+-- Plafonniers (toujours là dès 260 studs : le magasin est éclairé de loin),
+-- sols / murs « éclairés » et silhouettes des gondoles (dossier Night, retiré
+-- quand l'intérieur complet est construit : il a ses vraies lumières)
+function V99.nightShell(m: Market, parent: Instance)
+	local F = m.F
+	local hw, H, D = m.Size.X / 2, m.Size.Y, m.Size.Z
+	for _, x in ipairs({ -36, -18, 0, 18, 36 }) do
+		for _, z in ipairs({ 10, 24, 38, 54 }) do
+			box(parent, "LampHanger", F, x - 0.05, x + 0.05, H - 2.3, H - 0.8, z - 0.05, z + 0.05, DARKSTEEL, M.Metal)
+			local panel = box(parent, "LampPanel", F, x - 3, x + 3, H - 2.6, H - 2.3, z - 0.6, z + 0.6, rgb(236, 236, 240), M.Metal)
+			V99.glowFace(panel, Enum.NormalId.Bottom, rgb(255, 252, 244), rgb(255, 244, 222), 0, 420, 6)
+		end
+	end
+	local night = Instance.new("Folder")
+	night.Name = "Night"
+	night.Parent = parent
+	;(m :: any).Night = night
+	;(m :: any).NightParent = parent
+	local floorGlow = box(night, "FloorGlow", F, -hw + 0.3, hw - 0.3, 0.02, 0.05, 0.3, D - 0.3, WHITE, M.SmoothPlastic)
+	floorGlow.Transparency = 1
+	V99.glowFace(floorGlow, Enum.NormalId.Top, rgb(236, 234, 230), rgb(214, 212, 210), 0.25, 400, 1)
+	local back = box(night, "WallGlow", F, -hw + 0.4, hw - 0.4, 0.2, 12.2, D - 0.08, D - 0.06, WHITE, M.SmoothPlastic)
+	back.Transparency = 1
+	V99.glowFace(back, Enum.NormalId.Front, rgb(250, 236, 244), rgb(236, 232, 240), 0.25, 400, 2)
+	for _, sx in ipairs({ -1, 1 }) do
+		local side = box(night, "WallGlow", F * CFrame.new(sx * (hw - 0.07), 0, D / 2) * (sx < 0 and FACE_PX or FACE_NX), -D / 2 + 0.4, D / 2 - 0.4, 0.2, 12.2, -0.01, 0.01, WHITE, M.SmoothPlastic)
+		side.Transparency = 1
+		V99.glowFace(side, Enum.NormalId.Front, rgb(250, 240, 246), rgb(236, 232, 240), 0.25, 400, 2)
+	end
+	-- silhouettes des gondoles (produits « éclairés » en bandes de couleur)
+	for g, x in ipairs(GONDOLA_X) do
+		local body = box(night, "GondolaShape", F, x - GHALF + 0.05, x + GHALF - 0.05, 0.05, GTOP, GZ0 + 0.1, GZ1 - 0.1, rgb(236, 236, 240), M.SmoothPlastic)
+		for _, face in ipairs({ Enum.NormalId.Left, Enum.NormalId.Right }) do
+			local gui = Instance.new("SurfaceGui")
+			gui.Name = "Stock"
+			gui.Face = face
+			gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+			gui.PixelsPerStud = 3
+			gui.LightInfluence = 0.3
+			gui.MaxDistance = 400
+			gui.Parent = body
+			for k = 1, 4 do
+				local band = Instance.new("Frame")
+				band.BorderSizePixel = 0
+				band.Position = UDim2.fromScale(0.02, 1 - (LEVELS[k] + 1.2) / GTOP)
+				band.Size = UDim2.fromScale(0.96, 1.05 / GTOP)
+				band.BackgroundColor3 = pick(PALETTE, g * 7 + k, face == Enum.NormalId.Left and 91 or 97)
+				band.Parent = gui
+				local grad = Instance.new("UIGradient")
+				grad.Color = ColorSequence.new({
+					ColorSequenceKeypoint.new(0, WHITE),
+					ColorSequenceKeypoint.new(0.3, rgb(220, 220, 220)),
+					ColorSequenceKeypoint.new(0.6, WHITE),
+					ColorSequenceKeypoint.new(1, rgb(210, 210, 210)),
+				})
+				grad.Parent = band
+			end
+		end
+	end
+end
+
+-- Horloges du magasin : murale sur le pilier gauche de la tour, médaillon
+-- « date du jour » sur le pilier droit (dehors) ; horloge de gare au-dessus
+-- des caisses (dedans)
+function V99.addClock(m: Market, parent: Instance, owner: string, frame: CFrame, diameter: number, opts: { [string]: any })
+	local ok, clock = pcall(ClockKit.Build, parent, frame, diameter, opts)
+	if ok and clock then
+		table.insert((m :: any).Clocks, { Clock = clock, Owner = owner })
+		partCount += countParts(clock.Model)
+	end
+end
+
+V99.MONTHS_FR = { "janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre" }
+V99.MONTHS_EN = { "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" }
+V99.DAYS_FR = { "dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi" }
+V99.DAYS_EN = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" }
+
+function V99.dateParts(): (string, string, string)
+	local ok, now = pcall(function()
+		return workspace:GetServerTimeNow()
+	end)
+	local t = os.date("*t", math.floor(ok and type(now) == "number" and now > 1e8 and now or os.time())) :: any
+	local fr = Locale.IsFrench()
+	local day = (fr and V99.DAYS_FR or V99.DAYS_EN)[tonumber(t.wday) or 1] or ""
+	local month = (fr and V99.MONTHS_FR or V99.MONTHS_EN)[tonumber(t.month) or 1] or ""
+	return string.upper(day), tostring(t.day), string.upper(month)
+end
+
+function V99.facadeClocks(m: Market, parent: Instance)
+	local cf = m.MCF
+	-- horloge murale (boîtier laqué, verre) sur le pilier gauche
+	V99.addClock(m, parent, "outside", cf * CFrame.new(-19, 23.2, -1.6 - 0.36), 3.2, { Style = "Wall", Numerals = "Arabic", Brand = "MegaDopa", Case = rgb(40, 38, 52), CaseMaterial = M.Metal, MaxDistance = 400, Name = "MarketClock" })
+	-- médaillon « date du jour » sur le pilier droit (même boîtier)
+	local P = cf * CFrame.new(19, 23.2, -1.6 - 0.36)
+	local case = newPart(parent, "DateCase", Vector3.new(0.38, 3.52, 3.52), P * CFrame.new(0, 0, 0.19) * CFrame.Angles(0, math.rad(90), 0), rgb(40, 38, 52), M.Metal)
+	;(case :: Part).Shape = Enum.PartType.Cylinder
+	local carrier = newPart(parent, "DateDial", Vector3.new(3.14, 3.14, 0.02), P * CFrame.new(0, 0, -0.03), WHITE, M.SmoothPlastic)
+	carrier.Transparency = 1
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "Date"
+	gui.Face = Enum.NormalId.Front
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 100
+	gui.LightInfluence = 0.35
+	gui.MaxDistance = 400
+	gui.Parent = carrier
+	local disc = Instance.new("Frame")
+	disc.Size = UDim2.fromScale(1, 1)
+	disc.BackgroundColor3 = rgb(250, 244, 226)
+	disc.BorderSizePixel = 0
+	disc.Parent = gui
+	corner(disc, 0.5)
+	local top = Instance.new("Frame")
+	top.Position = UDim2.fromScale(0.15, 0.16)
+	top.Size = UDim2.fromScale(0.7, 0.2)
+	top.BackgroundColor3 = BRAND
+	top.BorderSizePixel = 0
+	top.Parent = disc
+	corner(top, 0.3)
+	local wday = text(top, "Day", "", 0.05, 0.1, 0.9, 0.8, WHITE, Enum.Font.GothamBlack)
+	local num = text(disc, "Number", "", 0.2, 0.36, 0.6, 0.34, rgb(40, 36, 52), Enum.Font.GothamBlack)
+	local month = text(disc, "Month", "", 0.2, 0.7, 0.6, 0.12, rgb(120, 90, 200), Enum.Font.GothamBold)
+	local function refresh()
+		local d, n, mo = V99.dateParts()
+		wday.Text, num.Text, month.Text = d, n, mo
+	end
+	refresh()
+	table.insert((m :: any).Dates, { Refresh = refresh, Owner = "outside" })
+	partCount += 2
+end
 
 local function outsideJobs(m: Market, parent: Instance): { () -> () }
 	local jobs: { () -> () } = {}
@@ -1625,7 +1638,7 @@ local function outsideJobs(m: Market, parent: Instance): { () -> () }
 			local x = -48 + (i - 0.5) * STALL_W
 			local z = row == "A" and (ROW_A[1] + ROW_A[2]) / 2 or (ROW_B[1] + ROW_B[2]) / 2
 			local rot = row == "A" and CFrame.new() or CFrame.Angles(0, math.pi, 0)
-			local ok, model = pcall(cm.Build, CAR_KINDS[index], CAR_COLORS[index], { Detail = "Parked" })
+			local ok, model = pcall(cm.Build, CAR_KINDS[index], CAR_COLORS[index], { Detail = "Mid" })
 			if ok and typeof(model) == "Instance" and model:IsA("Model") then
 				model:PivotTo(cf * CFrame.new(x, LOT_Y, z) * rot)
 				model.Parent = parent
@@ -1681,12 +1694,19 @@ local function outsideJobs(m: Market, parent: Instance): { () -> () }
 			return
 		end
 		local B = cf * CFrame.new(0, 0, m.Size.Z + 2) * CFrame.Angles(0, math.pi, 0)
-		local ok, model = pcall(cm.Build, "Van", rgb(250, 250, 252), { Detail = "Parked", Scale = Vector3.new(1.1, 1.15, 1.2) })
+		local ok, model = pcall(cm.Build, "Van", rgb(250, 250, 252), { Detail = "Mid", Scale = Vector3.new(1.1, 1.15, 1.2) })
 		if ok and typeof(model) == "Instance" and model:IsA("Model") then
-			model:PivotTo(B * CFrame.new(14, -0.6, -12))
+			model:PivotTo(B * CFrame.new(14, -0.6, -12.15)) -- (v9.9) 0,15 de plus : l'avant ne touche plus le quai
 			model.Parent = parent
 			partCount += countParts(model)
 		end
+	end)
+	-- (v9.9) plafonniers, intérieur « éclairé » vu de dehors, horloges de la façade
+	table.insert(jobs, function()
+		V99.nightShell(m, parent)
+	end)
+	table.insert(jobs, function()
+		V99.facadeClocks(m, parent)
 	end)
 	-- 🏆 écrans de classement de la façade (pièces du serveur, contenu ici)
 	table.insert(jobs, function()
@@ -1694,6 +1714,11 @@ local function outsideJobs(m: Market, parent: Instance): { () -> () }
 			local kind = child:GetAttribute("Board")
 			if child:IsA("BasePart") and child.Name == "LeaderScreen" and type(kind) == "string" then
 				buildBoard(m, child, kind, "outside", 40)
+				-- (v9.9) vrai cadre de téléviseur : liseré chromé + plaque
+				for _, p in ipairs(BoardKit.Frame(parent, child, { Lip = 0.2, PlateH = 0.34 })) do
+					local _ = p
+					partCount += 1
+				end
 			end
 		end
 	end)
@@ -1741,13 +1766,14 @@ local function shell(m: Market, parent: Instance)
 	for _, x in ipairs({ -30, 30 }) do
 		cylZ(parent, "Duct", F, x, H - 1.9, 1, D - 1, 1.4, rgb(200, 204, 214), M.Metal)
 	end
-	-- rampes d'éclairage (plafonniers blancs mats) : 8 SurfaceLights douces
+	-- rampes d'éclairage : les plafonniers (lumineux) sont au niveau 1 (vus
+	-- de dehors, v9.9) ; ici, 8 SurfaceLights douces sur des supports invisibles
 	local lit = 0
 	for _, x in ipairs({ -36, -18, 0, 18, 36 }) do
 		for _, z in ipairs({ 10, 24, 38, 54 }) do
-			box(parent, "LampHanger", F, x - 0.05, x + 0.05, H - 2.3, H - 0.8, z - 0.05, z + 0.05, DARKSTEEL, M.Metal)
-			local panel = box(parent, "LampPanel", F, x - 3, x + 3, H - 2.6, H - 2.3, z - 0.6, z + 0.6, rgb(250, 250, 246), M.SmoothPlastic)
 			if (z == 10 or z == 38) and x ~= 0 and lit < 8 then
+				local panel = box(parent, "LightAnchor", F, x - 2.9, x + 2.9, H - 2.75, H - 2.7, z - 0.5, z + 0.5, WHITE, M.SmoothPlastic)
+				panel.Transparency = 1
 				lit += 1
 				local sl = Instance.new("SurfaceLight")
 				sl.Name = "MarketLight"
@@ -2184,138 +2210,40 @@ end
 
 -- Caisses : 6 caisses tenues (tapis animé) + 4 caisses automatiques ;
 -- invites « Passer en caisse »
-local function checkoutPrompt(m: Market, parent: Instance, at: CFrame)
-	local anchor = newPart(parent, "CheckoutPoint", Vector3.new(1, 1, 1), at, WHITE, M.SmoothPlastic)
-	anchor.Transparency = 1
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = "CheckoutPrompt"
-	prompt.ActionText = Locale.T("🛒 Checkout")
-	prompt.ObjectText = Locale.T("🛒 MegaDopa")
-	prompt.KeyboardKeyCode = Enum.KeyCode.E
-	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = 7
-	prompt.RequiresLineOfSight = false
-	prompt.Parent = anchor
-	local pos = anchor.Position
-	table.insert(m.Checkouts, pos)
-	prompt.Triggered:Connect(function()
-		ShopUI.OpenShop("Market", { Anchor = pos })
-	end)
+----------------------------------------------------------------------
+-- 🛒 CAISSES (v9.9, SHOPS99) : module MarketCheckout (5 vraies caisses,
+-- 4 caisses automatiques, file de clients, animations)
+----------------------------------------------------------------------
+
+local function Checkout(): any
+	if not V99.Checkout then
+		V99.Checkout = require(script.Parent.MarketCheckout)
+		V99.Checkout.Init({
+			box = box,
+			cyl = cyl,
+			cylX = cylX,
+			newPart = newPart,
+			label = label,
+			text = text,
+			corner = corner,
+			printLabel = printLabel,
+			pick = pick,
+			hash = hash,
+			actor = actor,
+			hangingSign = hangingSign,
+			NPC = NPC,
+			PALETTE = PALETTE,
+			FLOOR_TOP = FLOOR_TOP,
+			LANES = LANES,
+			OPEN_LANES = OPEN_LANES,
+			AddParts = function(n: number)
+				partCount += n
+			end,
+		})
+	end
+	return V99.Checkout
 end
 
-local BELT_Z0, BELT_Z1 = 6.8, 10.85 -- tapis (z)
-local SCAN_Z = 5.9 -- scanner (z)
-local BELT_TOP = 3.1
-
-local function checkoutLane(m: Market, parent: Instance, i: number)
-	local F = m.F
-	local x = LANES[i]
-	local z0, z1 = LZ0, LZ1
-	-- meuble de caisse + bande de couleur + plan de travail
-	box(parent, "Checkout", F, x - 0.9, x + 0.9, FLOOR_TOP, 3, z0, z1, rgb(246, 246, 250), M.SmoothPlastic, true)
-	box(parent, "CheckoutStripe", F, x + 0.9, x + 0.95, 1.2, 1.8, z0 + 0.2, z1 - 0.2, BRAND, M.SmoothPlastic)
-	box(parent, "CheckoutKick", F, x + 0.9, x + 0.95, FLOOR_TOP, 0.4, z0 + 0.1, z1 - 0.1, rgb(96, 100, 116), M.Metal)
-	-- tapis roulant (lattes et articles animés) + rouleau au bout
-	box(parent, "Belt", F, x - 0.72, x + 0.72, 3, BELT_TOP, BELT_Z0, BELT_Z1, rgb(34, 34, 40), M.Rubber)
-	cylX(parent, "BeltRoller", F, x - 0.74, x + 0.74, 3.05, BELT_Z1, 0.22, rgb(150, 150, 164), M.Metal)
-	for _, sx in ipairs({ -1, 1 }) do
-		box(parent, "BeltGuide", F, x + sx * 0.8 - 0.05, x + sx * 0.8 + 0.05, 3, 3.3, BELT_Z0, BELT_Z1, STEEL, M.Metal)
-	end
-	local slats = {}
-	for k = 0, 3 do
-		local zz = BELT_Z0 + 0.3 + k * 1
-		table.insert(slats, box(parent, "BeltSlat", F, x - 0.68, x + 0.68, 3.125, 3.15, zz - 0.07, zz + 0.07, rgb(70, 70, 80), M.Rubber))
-	end
-	local items = {}
-	for k = 0, 2 do
-		local c = pick(PALETTE, i * 5 + k, 41)
-		local h = 0.45 + (k % 2) * 0.3
-		local item = box(parent, "Groceries", F, x - 0.3, x + 0.3, 3.16, 3.16 + h, 9 - k, 9.6 - k, c, M.SmoothPlastic)
-		table.insert(items, item)
-	end
-	box(parent, "Divider", F, x - 0.6, x + 0.6, 3.3, 3.5, 10.4, 10.6, BRAND2, M.SmoothPlastic)
-	-- scanner (vitre qui s'éclaire en rouge au passage d'un article)
-	local scanner = box(parent, "Scanner", F, x - 0.6, x + 0.6, 3.03, 3.09, SCAN_Z - 0.5, SCAN_Z + 0.5, rgb(60, 20, 26), M.Glass)
-	box(parent, "ScannerTower", F, x - 0.7, x - 0.35, 3, 4.1, SCAN_Z - 0.3, SCAN_Z + 0.3, rgb(40, 40, 50), M.SmoothPlastic)
-	local beep = Instance.new("BillboardGui")
-	beep.Name = "Beep"
-	beep.Size = UDim2.fromScale(2.2, 0.9)
-	beep.StudsOffsetWorldSpace = Vector3.new(0, 2, 0)
-	beep.MaxDistance = 40
-	beep.LightInfluence = 0
-	beep.Enabled = false
-	beep.Parent = scanner
-	local bt = text(beep, "Text", "BIP ! ✓", 0, 0, 1, 1, rgb(255, 80, 90), Enum.Font.FredokaOne)
-	local st = Instance.new("UIStroke")
-	st.Color = WHITE
-	st.Thickness = 2
-	st.Parent = bt
-	-- zone d'ensachage, caisse enregistreuse (écran vers le caissier), terminal
-	box(parent, "BagArea", F, x - 0.8, x + 0.8, 3, 3.08, z0 + 0.05, SCAN_Z - 0.6, rgb(214, 216, 224), M.Metal)
-	box(parent, "Register", F, x - 0.85, x - 0.25, 3, 3.6, z0 + 0.25, z0 + 1.45, rgb(70, 66, 90), M.SmoothPlastic)
-	local screen = box(parent, "RegisterScreen", F, x - 0.95, x - 0.85, 3.7, 4.6, z0 + 0.35, z0 + 1.35, rgb(40, 38, 56), M.SmoothPlastic)
-	screen.CFrame *= CFrame.Angles(0, 0, math.rad(12))
-	box(parent, "ScreenStalk", F, x - 0.62, x - 0.48, 3.6, 3.75, z0 + 0.8, z0 + 0.9, DARKSTEEL, M.Metal)
-	box(parent, "CardPost", F, x + 0.95, x + 1.05, 3, 4, SCAN_Z - 0.05, SCAN_Z + 0.05, DARKSTEEL, M.Metal)
-	box(parent, "CardTerminal", F, x + 0.8, x + 1.2, 4, 4.7, SCAN_Z - 0.2, SCAN_Z + 0.2, rgb(40, 40, 50), M.SmoothPlastic)
-	-- présentoir à bonbons en bout de caisse (côté client)
-	box(parent, "CandyRack", F, x + 0.97, x + 1.5, FLOOR_TOP, 4.2, z1 - 1.2, z1 - 0.1, rgb(250, 226, 236), M.SmoothPlastic, true)
-	for k = 0, 2 do
-		box(parent, "CandyRow", F, x + 1.5, x + 1.58, 1.2 + k * 1, 1.9 + k * 1, z1 - 1.1, z1 - 0.2, pick(PALETTE, i + k, 43), M.SmoothPlastic)
-	end
-	-- lampe numérotée au bout de la caisse
-	box(parent, "LanePole", F, x - 0.08, x + 0.08, 3, 8.4, z1 - 0.5, z1 - 0.34, STEEL, M.Metal)
-	local lamp = box(parent, "LaneLight", F, x - 0.6, x + 0.6, 8.4, 9.6, z1 - 0.62, z1 - 0.22, i > OPEN_LANES and rgb(236, 110, 110) or rgb(120, 220, 150), M.SmoothPlastic)
-	for _, face in ipairs({ Enum.NormalId.Front, Enum.NormalId.Back }) do
-		label(lamp, face, tostring(i), WHITE, nil, 40, 90)
-	end
-	checkoutPrompt(m, parent, F * CFrame.new(x + 1.9, 3.6, SCAN_Z - 0.4))
-	if i > OPEN_LANES then
-		-- caisse fermée : chaînette + panneau, pas d'articles sur le tapis
-		for _, p in ipairs(slats) do
-			p:Destroy()
-			partCount -= 1
-		end
-		for _, p in ipairs(items) do
-			p:Destroy()
-			partCount -= 1
-		end
-		local closed = box(parent, "ClosedSign", F, x - 0.55, x + 0.55, 3.1, 3.9, z1 - 0.9, z1 - 0.84, rgb(236, 72, 90), M.SmoothPlastic)
-		for _, face in ipairs({ Enum.NormalId.Front, Enum.NormalId.Back }) do
-			label(closed, face, Locale.T("🔒 Closed"), WHITE, nil, 40, 40)
-		end
-		return
-	end
-	table.insert(m.Belts, {
-		Owner = "full",
-		F = F * CFrame.new(x, 0, 0),
-		Slats = slats,
-		Items = items,
-		Scanner = scanner,
-		Beep = beep,
-		Z0 = BELT_Z0,
-		Z1 = BELT_Z1,
-		Pos = (F * CFrame.new(x, 3, 7)).Position,
-		Offset = i * 1.7,
-		Flash = 0,
-	})
-end
-
-local function selfCheckout(m: Market, parent: Instance)
-	local F = m.F
-	for i = 0, 3 do
-		local z = 3 + i * 3.5
-		local x = 48.4
-		box(parent, "SelfBase", F, x - 1, x + 1.2, FLOOR_TOP, 3, z - 0.8, z + 0.8, rgb(246, 246, 250), M.SmoothPlastic, true)
-		box(parent, "SelfScanner", F, x - 0.8, x + 0.6, 3.03, 3.1, z - 0.6, z + 0.6, rgb(40, 40, 50), M.Glass)
-		box(parent, "SelfPost", F, x + 0.7, x + 0.9, 3, 5, z - 0.1, z + 0.1, STEEL, M.Metal)
-		local screen = box(parent, "SelfScreen", F, x + 0.45, x + 0.57, 4.4, 5.6, z - 0.8, z + 0.8, rgb(80, 150, 230), M.SmoothPlastic)
-		label(screen, Enum.NormalId.Left, Locale.T("📷 Scan your items"), WHITE, rgb(80, 150, 230), 30, 40)
-		box(parent, "BagStand", F, x - 0.9, x + 1.1, FLOOR_TOP, 2.6, z + 0.85, z + 1.5, rgb(214, 216, 224), M.Metal)
-		checkoutPrompt(m, parent, F * CFrame.new(x - 1.8, 3.6, z))
-	end
-	hangingSign(m, parent, 47, 8.4, 9, Locale.T("🤖 Self-checkout"), BRAND2, true)
-end
 
 -- Entrée : portiques, chariots, paniers, tapis, palette promo, écran « en direct »
 local function entrance(m: Market, parent: Instance)
@@ -2691,16 +2619,6 @@ local function backLeftZone(m: Market, parent: Instance, jobs: { () -> () })
 	end)
 end
 
-local function checkoutZone(m: Market, parent: Instance, jobs: { () -> () })
-	for i, x in ipairs(LANES) do
-		if i > OPEN_LANES then
-			break
-		end
-		table.insert(jobs, function()
-			actor(m, parent, "Checkout", "cashier", 10 + i * 7, m.F * CFrame.new(x - 1.6, FLOOR_TOP, SCAN_Z) * FACE_PX, "scan")
-		end)
-	end
-end
 
 local function entranceZone(m: Market, parent: Instance, jobs: { () -> () })
 	table.insert(jobs, function()
@@ -2843,7 +2761,7 @@ local function cafeZone(m: Market, parent: Instance, jobs: { () -> () })
 		for i, index in ipairs({ 1, 8 }) do
 			local seat = cafeSeats[index]
 			if seat then
-				actor(m, parent, "Cafe", i == 2 and "elder" or "shopper", 60 + i * 3, seat, "sit", { Prop = i == 1 and "coffee" or "none" })
+				actor(m, parent, "Cafe", i == 2 and "elder" or "shopper", 60 + i * 3, seat, "sit", { Prop = i == 1 and "coffee" or "none", SitHeight = 1.9 - INLAY_TOP })
 			end
 		end
 		for i, t in ipairs(CAFE_TABLES) do
@@ -2934,7 +2852,9 @@ ZONE_SPECS = {
 	{ "Home6", GONDOLA_X[6], 32, homeZone(6), { "Face11", "Face12" } },
 	{ "Home7", GONDOLA_X[7], 32, homeZone(7), { "Face13", "Face14" } },
 	{ "Produce", -45, 32, produceZone, { "Produce" } },
-	{ "Checkout", 27, 8, checkoutZone, {} },
+	{ "Checkout", 27, 8, function(m: Market, parent: Instance, jobs: { () -> () })
+		Checkout().Zone(m, parent, jobs)
+	end, {} },
 	{ "Entrance", 0, 5, entranceZone, {} },
 	{ "Robux", -41, 7, robuxZone, {} },
 	{ "Cafe", -21, 7, cafeZone, {} },
@@ -2975,11 +2895,18 @@ local function fullJobs(m: Market, parent: Instance): { () -> () }
 	end)
 	for i = 1, #LANES do
 		table.insert(jobs, function()
-			checkoutLane(m, parent, i)
+			Checkout().Lane(m, parent, i)
 		end)
 	end
 	table.insert(jobs, function()
-		selfCheckout(m, parent)
+		Checkout().SelfCheckout(m, parent)
+	end)
+	table.insert(jobs, function()
+		-- (v9.9) horloge de gare à deux faces au-dessus des caisses
+		local H = m.Size.Y
+		local at = m.F * CFrame.new(30.5, 10.4, 9.25)
+		V99.addClock(m, parent, "full", at, 2.4, { Style = "Station", Numerals = "Arabic", Brand = "MegaDopa", MaxDistance = 160, Name = "StationClock" })
+		box(parent, "ClockRod", at, -0.05, 0.05, 1.9, H - 10.4 - 0.4, 0.14, 0.24, DARKSTEEL, M.Metal)
 	end)
 	table.insert(jobs, function()
 		entrance(m, parent)
@@ -3058,6 +2985,21 @@ local function purge(m: Market, owner: string)
 	m.Displays = keep(m.Displays)
 	m.Actors = keep(m.Actors)
 	m.Belts = keep(m.Belts)
+	for _, belt in ipairs(m.Belts) do
+		if belt.Cashier and belt.Cashier.Owner == owner then
+			belt.Cashier = nil
+		end
+		belt.Customers = keep(belt.Customers)
+	end
+	local mm: any = m
+	mm.Kiosks = keep(mm.Kiosks)
+	mm.Clocks = keep(mm.Clocks)
+	mm.Dates = keep(mm.Dates)
+	for _, k in ipairs(mm.Kiosks) do
+		if k.Customer and k.Customer.Owner == owner then
+			k.Customer = nil
+		end
+	end
 	m.Spinners = keep(m.Spinners)
 	m.Robux = keep(m.Robux)
 	m.Boards = keep(m.Boards, function(b: Board)
@@ -3113,6 +3055,10 @@ local function destroyFull(m: Market)
 		table.clear(m.TVs)
 		table.clear(cafeSeats)
 		m.LightsOn = false
+		local mm: any = m
+		if mm.Night and mm.NightParent and mm.NightParent.Parent then
+			mm.Night.Parent = mm.NightParent
+		end
 		stats.Destroyed += 1
 		recount()
 	end
@@ -3121,6 +3067,11 @@ end
 local function destroyOutside(m: Market)
 	if m.Outside.Folder then
 		purge(m, "outside")
+		local mm: any = m
+		if mm.Night then
+			mm.Night:Destroy()
+		end
+		mm.Night, mm.NightParent = nil, nil
 		stopBuilder(m.Outside)
 		stats.Destroyed += 1
 		recount()
@@ -3281,7 +3232,9 @@ local function decide(m: Market, position: Vector3)
 			return flatDistance(position, zoneCenter(m, a)) < flatDistance(position, zoneCenter(m, b))
 		end)
 	end
-	local on = inside(m, position)
+	-- (v9.9) vraies lumières allumées dès qu'on s'approche (≤ 20 studs du
+	-- bâtiment), pas seulement une fois dedans : le magasin est éclairé avant d'entrer
+	local on = m.Full.Folder ~= nil and (inside(m, position) or dIn <= 20)
 	if on ~= m.LightsOn then
 		m.LightsOn = on
 		for _, light in ipairs(m.Lights) do
@@ -3322,6 +3275,12 @@ local function runJobs(m: Market): boolean
 				if b == m.Full then
 					for _, light in ipairs(m.Lights) do
 						light.Enabled = m.LightsOn
+					end
+					-- (v9.9) l'intérieur complet a ses vraies lumières : la « lueur
+					-- vue de dehors » (sols, murs, silhouettes) se retire
+					local night = (m :: any).Night
+					if night then
+						night.Parent = nil
 					end
 				else
 					for _, zone in ipairs(m.Zones) do
@@ -3379,7 +3338,10 @@ local function animate(m: Market, position: Vector3, now: number)
 	local count = 0
 	for _, a in ipairs(m.Actors) do
 		local path = a.Path
-		if path and a.Length and a.Speed then
+		if a.Custom then
+			-- (caisses : animés par animateLane / animateKiosk)
+			continue
+		elseif path and a.Length and a.Speed then
 			local s = ((now + a.Offset) * a.Speed) % a.Length
 			local p, dir = pathAt(path, s)
 			if (p - position).Magnitude <= 60 then
@@ -3413,34 +3375,15 @@ local function animate(m: Market, position: Vector3, now: number)
 		end
 	end
 	stats.Animated = count
-	-- caisses : lattes du tapis, articles qui avancent, BIP au scanner
+	-- caisses (v9.9) : tapis, articles, scanner, carrousel, écrans, file de clients
 	for _, belt in ipairs(m.Belts) do
-		if (belt.Pos - position).Magnitude <= 50 then
-			local span = belt.Z1 - belt.Z0 - 0.4
-			for k, slat in ipairs(belt.Slats) do
-				local z = belt.Z1 - 0.2 - ((now * 0.9 + (k - 1) * span / #belt.Slats) % span)
-				slat.CFrame = belt.F * CFrame.new(0, 3.1375, z)
-			end
-			for k, item in ipairs(belt.Items) do
-				local s = (now + belt.Offset + (k - 1) * 2.2) % 6.6
-				local h = item.Size.Y
-				local z, visible = 10.3, true
-				if s < 4 then
-					z = 10.3 - s * (10.3 - 6.9) / 4
-				elseif s < 5 then
-					z = 6.9 - (s - 4) * (6.9 - 4.2)
-					if s < 4.45 and s >= 4.2 then
-						belt.Flash = now
-					end
-				else
-					visible = false
-				end
-				item.Transparency = visible and 0 or 1
-				item.CFrame = belt.F * CFrame.new(0, 3.16 + h / 2, z)
-			end
-			local on = now - belt.Flash < 0.3
-			belt.Scanner.Color = on and rgb(255, 60, 70) or rgb(60, 20, 26)
-			belt.Beep.Enabled = on
+		if (belt.Pos - position).Magnitude <= 55 then
+			Checkout().AnimateLane(belt, now)
+		end
+	end
+	for _, k in ipairs((m :: any).Kiosks) do
+		if (k.Pos - position).Magnitude <= 45 then
+			Checkout().AnimateKiosk(k, now)
 		end
 	end
 	for _, s in ipairs(m.Spinners) do
@@ -3453,18 +3396,23 @@ local function animate(m: Market, position: Vector3, now: number)
 	end
 end
 
--- Écrans de classement : point « en direct », barre de page, contenu
-local function stepBoards(m: Market, now: number)
+-- Écrans de classement (v9.9) : animations à 30 i/s de près (≤ 160 studs),
+-- 2 i/s plus loin ; contenu relu toutes les 2 s ou au changement de page
+local function stepBoards(m: Market, now: number, position: Vector3?)
 	for _, board in ipairs(m.Boards) do
 		if board.Gui.Parent then
-			board.Live.BackgroundTransparency = 0.5 + math.sin(now * 5) * 0.5
-			board.Bar.Size = UDim2.fromScale((now % PAGE_TIME) / PAGE_TIME, 1)
-			local scope = boardScope(board, now)
+			local d = position and (board.Pos - position).Magnitude or 0
 			local b: any = board
-			if boardsDirty or b.LastScope ~= scope or now - (b.LastRefresh or 0) > 2 then
-				b.LastScope = scope
-				b.LastRefresh = now
-				pcall(refreshBoard, board, now)
+			if d <= 160 or now - (b.LastStep or 0) >= 0.5 then
+				b.LastStep = now
+				local scope = boardScope(board, now)
+				if boardsDirty or board.LastScope ~= scope or now - board.LastRefresh > 2 then
+					board.LastScope = scope
+					board.LastRefresh = now
+					pcall(refreshBoard, board, now)
+				end
+				BoardKit.SetProgress(board.Kit, (now % PAGE_TIME) / PAGE_TIME)
+				BoardKit.Step(board.Kit, now)
 			end
 		end
 	end
@@ -3504,9 +3452,28 @@ local function heartbeat(dt: number)
 		end
 	end
 	boardClock += dt
-	if boardClock >= 0.5 then
+	if boardClock >= 1 / 30 then
 		boardClock = 0
-		stepBoards(m, now)
+		local position = localPosition()
+		stepBoards(m, now, position)
+		-- (v9.9) horloges : 30 i/s de près, 4 i/s plus loin ; date chaque minute
+		V99.Timers.Clock += 1 / 30
+		for _, c in ipairs((m :: any).Clocks) do
+			local d = position and (c.Clock.Pos - position).Magnitude or 0
+			if d <= 120 or V99.Timers.Clock >= 0.25 then
+				ClockKit.Update(c.Clock)
+			end
+		end
+		if V99.Timers.Clock >= 0.25 then
+			V99.Timers.Clock = 0
+		end
+		V99.Timers.Date += 1 / 30
+		if V99.Timers.Date >= 30 then
+			V99.Timers.Date = 0
+			for _, dte in ipairs((m :: any).Dates) do
+				pcall(dte.Refresh)
+			end
+		end
 	end
 	clock += dt
 	if clock < STEP_EVERY then
@@ -3564,6 +3531,9 @@ local function discover(): Market?
 		Actors = {},
 		Belts = {},
 		Spinners = {},
+		Kiosks = {},
+		Clocks = {},
+		Dates = {},
 		Robux = {},
 		Boards = {},
 		TVs = {},
@@ -3694,7 +3664,7 @@ function MarketInterior.Debug(): any
 		Animate = function(position: Vector3, now: number)
 			if market then
 				animate(market, position, now)
-				stepBoards(market, now)
+				stepBoards(market, now, position)
 			end
 		end,
 		Buy = function(index: number)

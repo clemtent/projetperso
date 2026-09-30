@@ -20,13 +20,20 @@
 	  - le MOUVEMENT : même pose que le serveur (Shared/FairRides, fonction
 	    de l'heure du serveur). Les sièges du serveur (invisibles) sont
 	    déplacés localement AVEC le décor : un avatar assis suit sa nacelle
-	    sans à-coup. Le manège où l'on est assis est animé à CHAQUE image
-	    (RenderStepped), les autres 30 fois / s, et rien au loin ;
+	    sans à-coup. (v9.9, FAIR99) TOUT se pose à CHAQUE image, avant la
+	    caméra (BindToRenderStep, voir frameStep : causes des saccades et
+	    correctif), horloge lissée (FairKit.Now) ; décor lointain 1 image
+	    sur 2 ou 3, derrière la caméra : rien (sauf les sièges occupés) ;
+	  - (v9.9) l'ANNEXE : 🎪 cirque et son spectacle (FairCircus), 🎢 grand
+	    huit, 🏴‍☠️ bateau pirate, 👻 train fantôme, 🤸 trampolines, 🪞 palais
+	    des glaces (FairAnnexFx), allées depuis les portes de la fête ;
+	    places lues dans l'attribut "BaseCF" des dossiers du serveur ;
 	  - la CONDUITE des autos tamponneuses (VehicleSeat : ZQSD / flèches /
 	    joystick ; courant coupé pendant l'embarquement) ;
 	  - la NOURRITURE : invites des stands -> menu (prix, boost, durée) ->
 	    achat (remote "Food") ; l'aliment en main : bouton "🍴 Croquer",
-	    bras qui porte l'aliment à la bouche (pour TOUS les mangeurs
+	    bras qui porte l'aliment à la bouche (v9.9 : vraie cinématique
+	    inverse R15 / R6, FairEat) (pour TOUS les mangeurs
 	    visibles, d'après l'attribut "BiteAt"), miettes ; badge du boost
 	    "🍦 x1,5 · 1:42" (ScreenGui "FairGui").
 	Tout est ancré (sauf les pièces soudées aux autos), sans son, lueurs
@@ -57,6 +64,10 @@ local Net = require(ReplicatedStorage.Shared.Net)
 local FairRides = require(ReplicatedStorage.Shared.FairRides)
 local FoodRules = require(ReplicatedStorage.Shared.FoodRules)
 local FoodModels = require(ReplicatedStorage.Shared.FoodModels)
+local FairKit = require(script.Parent.FairKit)
+local FairAnnexFx = require(script.Parent.FairAnnexFx)
+local FairCircus = require(script.Parent.FairCircus)
+local FairEat = require(script.Parent.FairEat)
 
 local FairFx = {}
 
@@ -101,200 +112,26 @@ local state: any = nil
 -- Fabrique de pièces (locales)
 ----------------------------------------------------------------------
 
-local function newPart(parent: Instance, name: string, size: Vector3, cf: CFrame, color: Color3, material: Enum.Material?, shape: Enum.PartType?, className: string?): BasePart
-	local p = Instance.new((className or "Part") :: any) :: BasePart
-	p.Name = name
-	p.Anchored = true
-	p.CanCollide = false
-	p.CanQuery = false
-	p.CanTouch = false
-	p.CastShadow = false
-	p.Size = size
-	p.CFrame = cf
-	p.Color = color
-	p.Material = material or M.SmoothPlastic
-	p.TopSurface = Enum.SurfaceType.Smooth
-	p.BottomSurface = Enum.SurfaceType.Smooth
-	if shape then
-		(p :: Part).Shape = shape
-	end
-	p.Parent = parent
-	return p
-end
-
--- Pièce sur laquelle on marche / contre laquelle on bute (localement)
-local function solid(p: BasePart): BasePart
-	p.CanCollide = true
-	p.CastShadow = true
-	return p
-end
-
--- Ampoule : mate le jour, Neon la nuit (TownAtmosphere, attribut NightGlow)
-local function glow(p: BasePart): BasePart
-	p:SetAttribute("NightGlow", true)
-	return p
-end
-
-local function rodCF(a: Vector3, b: Vector3): CFrame
-	return CFrame.lookAt((a + b) / 2, b) * CFrame.Angles(0, math.rad(90), 0)
-end
-
-local function rod(parent: Instance, name: string, a: Vector3, b: Vector3, d: number, color: Color3, material: Enum.Material?): BasePart
-	return newPart(parent, name, Vector3.new((b - a).Magnitude, d, d), rodCF(a, b), color, material or M.Metal, CYL)
-end
-
-local function beamCF(a: Vector3, b: Vector3): CFrame
-	local dir = b - a
-	if math.abs(dir.Unit.Y) > 0.98 then
-		return CFrame.new((a + b) / 2) * CFrame.Angles(math.rad(90), 0, 0)
-	end
-	return CFrame.lookAt((a + b) / 2, b)
-end
-
-local function beam(parent: Instance, name: string, a: Vector3, b: Vector3, w: number, h: number, color: Color3, material: Enum.Material?): BasePart
-	return newPart(parent, name, Vector3.new(w, h, (b - a).Magnitude), beamCF(a, b), color, material or M.Metal)
-end
-
--- Triangle rectangle (WedgePart) : angle droit en p0, côtés le long de u (l1) et v (l2)
-local function triCF(p0: Vector3, u: Vector3, v: Vector3, l1: number, l2: number, t: number): (Vector3, CFrame)
-	local Z = -v
-	local X = u:Cross(Z)
-	return Vector3.new(t, l1, l2), CFrame.fromMatrix(p0 + u * (l1 / 2) + v * (l2 / 2), X, u, Z)
-end
-
--- Panneau (SurfaceGui sur la face avant d'une pièce) avec un texte
+-- (v9.9 : fabrique commune, FairKit)
+local newPart = FairKit.Part
+local solid = FairKit.Solid
+local glow = FairKit.Glow
+local rod = FairKit.Rod
+local beam = FairKit.Beam
+local triCF = FairKit.Tri
 local function sign(p: BasePart, text: string, textColor: Color3, bg: Color3?, font: Enum.Font?): TextLabel
-	local gui = Instance.new("SurfaceGui")
-	gui.Name = "Sign"
-	gui.Face = Enum.NormalId.Front
-	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	gui.PixelsPerStud = 40
-	gui.LightInfluence = 0.5
-	gui.MaxDistance = 260
-	gui.Parent = p
-	local frame = Instance.new("Frame")
-	frame.Size = UDim2.fromScale(1, 1)
-	frame.BackgroundColor3 = bg or WHITE
-	frame.BackgroundTransparency = bg and 0 or 1
-	frame.BorderSizePixel = 0
-	frame.Parent = gui
-	local label = Instance.new("TextLabel")
-	label.Name = "Text"
-	label.BackgroundTransparency = 1
-	label.Position = UDim2.fromScale(0.04, 0.1)
-	label.Size = UDim2.fromScale(0.92, 0.8)
-	label.Font = font or Enum.Font.FredokaOne
-	label.Text = text
-	label.TextColor3 = textColor
-	label.TextScaled = true
-	label.Parent = frame
-	return label
+	return FairKit.Sign(p, text, textColor, bg, font)
 end
 
 ----------------------------------------------------------------------
--- Manèges : pièces MOBILES rangées par groupe (FairRides.Pose)
+-- Manèges : pièces MOBILES rangées par groupe (FairRides.Pose, FairKit)
 ----------------------------------------------------------------------
 
-type RideFx = {
-	Def: any,
-	Base: CFrame,
-	Model: Model,
-	Parts: { BasePart },
-	Locals: { CFrame },
-	Group: { number },
-	Frames: { CFrame },
-	Groups: { CFrame },
-	Seats: { BasePart },
-	SeatIndex: { number },
-	SeatFrames: { CFrame },
-	SeatCheck: number,
-	Extra: any,
-}
+type RideFx = FairKit.RideFx
 
-local function newRide(folder: Instance, def: any, F: CFrame): RideFx
-	local model = Instance.new("Model")
-	model.Name = def.Id
-	model.Parent = folder
-	local r: RideFx = {
-		Def = def,
-		Base = FairRides.RideBase(F, def),
-		Model = model,
-		Parts = {},
-		Locals = {},
-		Group = {},
-		Frames = {},
-		Groups = {},
-		Seats = {},
-		SeatIndex = {},
-		SeatFrames = {},
-		SeatCheck = 0,
-		Extra = nil,
-	}
-	FairRides.Pose(def, workspace:GetServerTimeNow(), r.Groups)
-	return r
-end
-
--- Pièce fixe du manège (repère de la Base)
-local function fixed(r: RideFx, name: string, size: Vector3, loc: CFrame, color: Color3, material: Enum.Material?, shape: Enum.PartType?, className: string?): BasePart
-	return newPart(r.Model, name, size, r.Base * loc, color, material, shape, className)
-end
-
--- Pièce qui suit le groupe `g` (loc = repère du groupe)
-local function moving(r: RideFx, g: number, name: string, size: Vector3, loc: CFrame, color: Color3, material: Enum.Material?, shape: Enum.PartType?, className: string?): BasePart
-	local world = r.Base * (r.Groups[g] or CFrame.identity) * loc
-	local p = newPart(r.Model, name, size, world, color, material, shape, className)
-	table.insert(r.Parts, p)
-	table.insert(r.Locals, loc)
-	table.insert(r.Group, g)
-	table.insert(r.Frames, world)
-	return p
-end
-
--- Sièges du serveur (Fair > Rides > <Id> > RideSeat)
-local function findSeats(r: RideFx, fairFolder: Instance)
-	table.clear(r.Seats)
-	table.clear(r.SeatIndex)
-	table.clear(r.SeatFrames)
-	local rides = fairFolder:FindFirstChild("Rides")
-	local folder = rides and rides:FindFirstChild(r.Def.Id)
-	if not folder then
-		return
-	end
-	for _, d in ipairs(folder:GetChildren()) do
-		local index = d:GetAttribute("SeatIndex")
-		if d:IsA("Seat") and type(index) == "number" then
-			table.insert(r.Seats, d)
-			table.insert(r.SeatIndex, index)
-		end
-	end
-end
-
-local function stepRide(r: RideFx, t: number)
-	local kind = r.Def.Kind
-	if kind == "Bumper" then
-		return
-	end
-	local groups = r.Groups
-	FairRides.Pose(r.Def, t, groups)
-	local frames, locals, group, base = r.Frames, r.Locals, r.Group, r.Base
-	for i = 1, #frames do
-		frames[i] = base * groups[group[i]] * locals[i]
-	end
-	if #frames > 0 then
-		workspace:BulkMoveTo(r.Parts, frames, Enum.BulkMoveMode.FireCFrameChanged)
-	end
-	local seats = r.Seats
-	if #seats > 0 then
-		local seatFrames, idx = r.SeatFrames, r.SeatIndex
-		for i = 1, #seats do
-			seatFrames[i] = base * FairRides.SeatLocal(kind, idx[i], groups)
-		end
-		workspace:BulkMoveTo(seats, seatFrames, Enum.BulkMoveMode.FireCFrameChanged)
-	end
-	if r.Extra and r.Extra.Step then
-		r.Extra.Step(t)
-	end
-end
+local fixed = FairKit.Fixed
+local moving = FairKit.Moving
+local findSeats = FairKit.FindSeats
 
 ----------------------------------------------------------------------
 -- 🎡 Grande roue
@@ -311,8 +148,10 @@ local function buildFerris(r: RideFx)
 		local top = Vector3.new(0, hub, sz * 3.4)
 		for _, sx in ipairs({ -1, 1 }) do
 			local foot = Vector3.new(sx * 12.5, 0, sz * 6.2)
-			local leg = beam(r.Model, "Leg", r.Base * foot, r.Base * top, 0.7, 0.7, frame, M.Metal)
-			leg.CastShadow = true
+			-- (v9.9) jambe en TREILLIS (2 membrures + croisillons), comme les vraies
+			local legDir = (top - foot).Unit
+			local side = legDir:Cross(Vector3.new(0, 0, 1))
+			FairKit.Truss(r.Model, "Leg", r.Base * foot, r.Base * top, r.Base:VectorToWorldSpace(if side.Magnitude > 0.1 then side.Unit else Vector3.new(1, 0, 0)), 0.95, 0.32, frame, 9)
 			solid(fixed(r, "Foot", Vector3.new(1.8, 0.5, 1.8), CFrame.new(foot + Vector3.new(0, 0.25, 0)), STEEL, M.Concrete))
 		end
 		beam(r.Model, "Brace", r.Base * Vector3.new(-7.2, 8.8, sz * 5.1), r.Base * Vector3.new(7.2, 8.8, sz * 5.1), 0.45, 0.45, frame, M.Metal)
@@ -347,6 +186,19 @@ local function buildFerris(r: RideFx)
 			moving(r, 1, "Spoke", Vector3.new(0.22, 0.22, R), CFrame.lookAt(mid, tip, Vector3.new(0, 0, 1)), frame, M.Metal)
 		end
 	end
+	-- (v9.9) entretoises entre les 2 jantes + rayons croisés (roue plus rigide, plus vraie)
+	for k = 0, N - 1 do
+		local a = (k + 0.5) / N * TAU
+		local p = Vector3.new(math.sin(a) * (R + 0.3), -math.cos(a) * (R + 0.3), 0)
+		moving(r, 1, "RimTie", Vector3.new(4.4, 0.22, 0.22), CFrame.new(p) * CFrame.Angles(0, math.rad(90), 0), frame, M.Metal, CYL)
+		for _, z in ipairs({ -2.2, 2.2 }) do
+			local a0 = k / N * TAU
+			local tip = Vector3.new(math.sin(a) * R * 0.52, -math.cos(a) * R * 0.52, z)
+			local tip2 = Vector3.new(math.sin(a0 + TAU / N) * R, -math.cos(a0 + TAU / N) * R, z)
+			local mid = (tip + tip2) / 2
+			moving(r, 1, "Brace", Vector3.new(0.14, 0.14, (tip2 - tip).Magnitude), CFrame.lookAt(mid, tip2, Vector3.new(0, 0, 1)), frame, M.Metal)
+		end
+	end
 	-- axes des nacelles (entre les deux jantes)
 	for k = 0, N - 1 do
 		local a = k / N * TAU
@@ -376,6 +228,13 @@ local function buildFerris(r: RideFx)
 			moving(r, g, "Panel", Vector3.new(4.5, 1.2, 0.14), CFrame.new(0, -drop + 0.9, z), color, M.SmoothPlastic)
 		end
 		moving(r, g, "Under", Vector3.new(3.4, 0.5, 2.4), CFrame.new(0, -drop - 0.15, 0), color, M.SmoothPlastic, BALL)
+		-- (v9.9) vitres latérales teintées, main courante dorée, numéro
+		for _, z in ipairs({ -1.62, 1.62 }) do
+			local glass = moving(r, g, "Window", Vector3.new(4.3, 1.5, 0.06), CFrame.new(0, -drop + 2.3, z), Color3.fromRGB(190, 220, 240), M.Glass)
+			glass.Transparency = 0.6
+			moving(r, g, "Handrail", Vector3.new(4.4, 0.12, 0.12), CFrame.new(0, -drop + 1.55, z * 0.97), GOLD, M.Metal, CYL)
+		end
+		glow(moving(r, g, "CabinLamp", Vector3.new(0.4, 0.2, 0.4), CFrame.new(0, -1.95, 0), BULB, M.SmoothPlastic, BALL))
 	end
 end
 
@@ -689,13 +548,12 @@ end
 -- Guérite de chaque manège : panneau + état ("Départ dans 5 s")
 ----------------------------------------------------------------------
 
-local function buildBooth(folder: Instance, F: CFrame, def: any): TextLabel
+local function buildBoothAt(folder: Instance, gate: CFrame, rideCenter: Vector3, def: any): TextLabel
 	local model = Instance.new("Model")
 	model.Name = "Booth_" .. def.Id
 	model.Parent = folder
 	-- la borne regarde vers le manège ; le panneau vers l'allée
-	local gate = F * CFrame.new(def.Gate)
-	local toRide = (F * def.Pos) - gate.Position
+	local toRide = rideCenter - gate.Position
 	local face = CFrame.lookAt(gate.Position, gate.Position - Vector3.new(toRide.X, 0, toRide.Z))
 	solid(newPart(model, "Post", Vector3.new(0.5, 4.6, 0.5), face * CFrame.new(-1.4, 2.3, 0), WHITE, M.Metal))
 	solid(newPart(model, "Post", Vector3.new(0.5, 4.6, 0.5), face * CFrame.new(1.4, 2.3, 0), WHITE, M.Metal))
@@ -722,6 +580,10 @@ local function buildBooth(folder: Instance, F: CFrame, def: any): TextLabel
 	return status
 end
 
+local function buildBooth(folder: Instance, F: CFrame, def: any): TextLabel
+	return buildBoothAt(folder, F * CFrame.new(def.Gate), F * def.Pos, def)
+end
+
 ----------------------------------------------------------------------
 -- Stands de nourriture (décor ; la borne "Commander" est au serveur)
 ----------------------------------------------------------------------
@@ -740,6 +602,18 @@ local function awning(model: Instance, cf: CFrame, w: number, depth: number, n: 
 	for i = 0, n - 1 do
 		local x = -w / 2 + (i + 0.5) * w / n
 		newPart(model, "Awning", Vector3.new(w / n, 0.14 + (i % 2) * 0.06, depth), cf * slope * CFrame.new(x, 0, -depth / 2), i % 2 == 0 and a or b, M.Fabric).CastShadow = true
+	end
+end
+
+-- (v9.9) aliment exposé posé SUR le comptoir (les modèles ont leur repère
+-- au point de prise, au milieu : on remonte d'après le bas réel)
+local function standOn(m: Model, topY: number)
+	local ok, box, size = pcall(function()
+		return m:GetBoundingBox()
+	end)
+	if ok and box and size then
+		local bottom = box.Position.Y - size.Y / 2
+		m:PivotTo(m:GetPivot() + Vector3.new(0, topY + 0.02 - bottom, 0))
 	end
 end
 
@@ -770,6 +644,7 @@ local function buildStall(folder: Instance, cf: CFrame, style: string, foods: { 
 		for i, id in ipairs(foods) do
 			local m = FoodModels.Build(id, cf * CFrame.new(-1.6 + (i - 1) * 2, 3.35, -2.4), 1.1)
 			if m then
+				standOn(m, (cf * CFrame.new(0, 2.925, 0)).Position.Y)
 				m.Parent = model
 				table.insert(displays, m)
 			end
@@ -798,6 +673,7 @@ local function buildStall(folder: Instance, cf: CFrame, style: string, foods: { 
 		local x = if #foods == 1 then 0 else -1.6 + (i - 1) * 3.2 / (#foods - 1)
 		local m = FoodModels.Build(id, cf * CFrame.new(x, 3.55, -0.45), 1.15)
 		if m then
+			standOn(m, (cf * CFrame.new(0, 3.125, 0)).Position.Y)
 			m.Parent = model
 		end
 	end
@@ -813,7 +689,7 @@ local function buildStall(folder: Instance, cf: CFrame, style: string, foods: { 
 	end
 	label.Text = "MENU\n" .. table.concat(icons, "\n")
 	newPart(model, "MenuLeg", Vector3.new(0.12, 2.2, 0.12), cf * CFrame.new(3.9, 1.1, -0.95), WOOD_DARK, M.Wood)
-	return { Model = model, VendorCF = cf * CFrame.new(0, 0, 1.55), Seed = seed }
+	return { Model = model, VendorCF = cf * CFrame.new(0, 0, 1.62), Seed = seed }
 end
 
 ----------------------------------------------------------------------
@@ -1056,6 +932,50 @@ end
 -- Construction en FLUX (un morceau par image)
 ----------------------------------------------------------------------
 
+-- (v9.9) Allées de l'annexe : de la porte de la fête la plus proche au
+-- parvis de chaque attraction (même tracé que les réserves du serveur :
+-- FairRides.AnnexPath), gravier + lanternes
+local function buildAnnexPaths(folder: Instance, F: CFrame, placed: { [string]: CFrame })
+	local model = Instance.new("Model")
+	model.Name = "AnnexPaths"
+	model.Parent = folder
+	local Finv = F:Inverse()
+	local boxes = { { X0 = -FairRides.FAIR_HALF_W - 1, X1 = FairRides.FAIR_HALF_W + 1, Z0 = -FairRides.FAIR_HALF_D - 1, Z1 = FairRides.FAIR_HALF_D + 1 } }
+	for _, def in ipairs(FairRides.Annex) do
+		local base = placed[def.Id]
+		if base then
+			table.insert(boxes, FairRides.AnnexBox(def, Finv * base))
+		end
+	end
+	local gravel = Color3.fromRGB(222, 212, 196)
+	local lamp = 0
+	for _, def in ipairs(FairRides.Annex) do
+		local base = placed[def.Id]
+		if base then
+			local path = FairRides.AnnexPath(def, Finv * base, boxes)
+			for i = 1, #path - 1 do
+				local a, b = path[i], path[i + 1]
+				local len = (b - a).Magnitude
+				if len > 0.2 then
+					-- (dessus à -0,09 sous le sol de la fête : sous les dalles des
+					-- attractions (-0,01 à -0,06), au-dessus du pré (-0,15))
+					local mid = (a + b) / 2
+					newPart(model, "AnnexPath", Vector3.new(4, 0.08, len + 4), F * CFrame.lookAt(Vector3.new(mid.X, -0.13, mid.Z), Vector3.new(b.X, -0.13, b.Z)), gravel, M.Pavement)
+					local n = math.floor(len / 12)
+					for k = 1, n do
+						lamp += 1
+						local p = a:Lerp(b, k / (n + 1))
+						local side = (b - a).Unit:Cross(UP) * 2.6
+						local foot = F * (p + side)
+						solid(newPart(model, "LampPost", Vector3.new(0.25, 4.2, 0.25), CFrame.new(foot + Vector3.new(0, 2.1, 0)), Color3.fromRGB(60, 60, 70), M.Metal))
+						glow(newPart(model, "Lantern", Vector3.new(0.6, 0.8, 0.6), CFrame.new(foot + Vector3.new(0, 4.5, 0)), BULB, M.SmoothPlastic, BALL))
+					end
+				end
+			end
+		end
+	end
+end
+
 local function queueFair(s: any, fair: Instance)
 	local F = fair:GetAttribute("FairCF")
 	if typeof(F) ~= "CFrame" then
@@ -1077,7 +997,8 @@ local function queueFair(s: any, fair: Instance)
 	end)
 	for _, def in ipairs(FairRides.Rides) do
 		table.insert(q, function()
-			local r = newRide(folder, def, F)
+			local r = FairKit.NewRide(folder, def, FairRides.RideBase(F, def), FairKit.Now())
+			r.Radius = if def.Kind == "Ferris" then 22 elseif def.Kind == "Bumper" then 22 else 16
 			if def.Kind == "Ferris" then
 				buildFerris(r)
 			elseif def.Kind == "Carousel" then
@@ -1109,6 +1030,59 @@ local function queueFair(s: any, fair: Instance)
 	table.insert(q, function()
 		fx.Ducks = buildDucks(folder, F)
 	end)
+	-- (v9.9) 🎪 annexe : cirque, grand huit, bateau, train fantôme,
+	-- trampolines, palais des glaces (places écrites par le serveur)
+	local ridesSrc = fair:FindFirstChild("Rides")
+	local placed: { [string]: CFrame } = {}
+	for _, def in ipairs(FairRides.Annex) do
+		local src = ridesSrc and ridesSrc:FindFirstChild(def.Id)
+		local base = src and src:GetAttribute("BaseCF")
+		if typeof(base) == "CFrame" then
+			placed[def.Id] = base
+		end
+	end
+	fx.Annex = placed
+	table.insert(q, function()
+		buildAnnexPaths(folder, F, placed)
+	end)
+	for _, def in ipairs(FairRides.Annex) do
+		local base = placed[def.Id]
+		if base then
+			table.insert(q, function()
+				local r = FairKit.NewRide(folder, def, base, FairKit.Now())
+				local kind = def.Kind
+				-- sol de terre battue sous l'attraction + son parvis (dessus à -0,01 x
+				-- rang : jamais coplanaire avec un voisin ni avec la fête)
+				do
+					local b, a = def.Body, def.Apron
+					local x0, x1 = math.min(b.X0, a.X0) - 1, math.max(b.X1, a.X1) + 1
+					local z0, z1 = math.min(b.Z0, a.Z0) - 1, b.Z1 + 1
+					local rank = table.find(FairRides.Annex, def) or 1
+					local pad = solid(newPart(r.Model, "AnnexGround", Vector3.new(x1 - x0, 0.3, z1 - z0), base * CFrame.new((x0 + x1) / 2, -0.15 - 0.01 * rank, (z0 + z1) / 2), Color3.fromRGB(226, 206, 170), M.Ground))
+					pad.CastShadow = false
+				end
+				if kind == "Coaster" then
+					FairAnnexFx.BuildCoaster(r)
+				elseif kind == "Pirate" then
+					FairAnnexFx.BuildPirate(r)
+				elseif kind == "Ghost" then
+					FairAnnexFx.BuildGhost(r)
+				elseif kind == "Trampolines" then
+					FairAnnexFx.BuildTrampolines(r)
+					fx.Trampolines = r
+				elseif kind == "Mirrors" then
+					FairAnnexFx.BuildMirrors(r)
+				elseif kind == "Circus" then
+					FairCircus.Build(r, folder)
+				end
+				findSeats(r, fair)
+				table.insert(fx.Rides, r)
+				if kind == "Coaster" or kind == "Pirate" or kind == "Ghost" then
+					fx.Boards[def.Id] = buildBoothAt(folder, base * CFrame.new(def.Gate), base.Position, def)
+				end
+			end)
+		end
+	end
 	-- opérateurs des manèges (debout près des guérites)
 	table.insert(q, function()
 		for i, def in ipairs(FairRides.Rides) do
@@ -1682,32 +1656,9 @@ end
 -- mangeurs visibles, d'après l'attribut "BiteAt" de l'outil)
 ----------------------------------------------------------------------
 
-local BITE_UP, BITE_HOLD, BITE_DOWN = 0.18, 0.22, 0.24
-
-local function shoulderOf(character: Model): (Motor6D?, boolean)
-	local upper = character:FindFirstChild("RightUpperArm")
-	local m = upper and upper:FindFirstChild("RightShoulder")
-	if m and m:IsA("Motor6D") then
-		return m, true
-	end
-	local torso = character:FindFirstChild("Torso")
-	local m6 = torso and torso:FindFirstChild("Right Shoulder")
-	if m6 and m6:IsA("Motor6D") then
-		return m6, false
-	end
-	return nil, false
-end
-
--- Rotation du bras (en plus de la pose "outil" : bras tendu devant)
-local function armOffset(r15: boolean, k: number): CFrame
-	if r15 then
-		-- bras (tendu devant, pose "outil") relevé de 35° puis ramené de 45°
-		-- vers le milieu : la main arrive devant la bouche
-		return CFrame.Angles(0, math.rad(45) * k, 0) * CFrame.Angles(math.rad(35) * k, 0, 0)
-	end
-	-- R6 : l'épaule tourne autour de son axe Z (lever le bras vers l'avant)
-	return CFrame.Angles(0, 0, math.rad(35) * k)
-end
+-- (v9.9) geste plus lent et naturel : monter 0,32 s, croquer 0,3 s (petit
+-- mouvement de mastication), redescendre 0,38 s ; IK R15 / R6 : FairEat
+local BITE_UP, BITE_HOLD, BITE_DOWN = 0.32, 0.3, 0.38
 
 local function crumbs(tool: Tool, food: any)
 	local handle = tool:FindFirstChild("Handle")
@@ -1750,14 +1701,17 @@ local function watchTool(s: any, character: Model, tool: Tool)
 		end
 		entry.Last = at
 		crumbs(tool, entry.Food)
-		local motor, r15 = shoulderOf(character)
-		if motor then
-			local anim = s.Arms[motor]
-			if not anim then
-				anim = { Motor = motor, Base = motor.C0, R15 = r15, T = 0 }
-				s.Arms[motor] = anim
+		local anim = s.Arms[character]
+		if not anim then
+			local rig = FairEat.Rig(character)
+			if rig then
+				anim = { Rig = rig, T = 0, Tool = tool }
+				s.Arms[character] = anim
 			end
+		end
+		if anim then
 			anim.T = 0
+			anim.Tool = tool
 		end
 		-- dernière bouchée (le mien) : petite fête
 		if character == (LocalPlayer and LocalPlayer.Character) and (tool:GetAttribute("BitesLeft") or 1) <= 0 and entry.Food then
@@ -1769,37 +1723,36 @@ local function watchTool(s: any, character: Model, tool: Tool)
 end
 
 local function stepArms(s: any, dt: number)
-	for motor, anim in pairs(s.Arms) do
+	for character, anim in pairs(s.Arms) do
 		anim.T += dt
 		local t = anim.T
 		local k
 		if t < BITE_UP then
 			k = t / BITE_UP
 		elseif t < BITE_UP + BITE_HOLD then
-			k = 1
+			-- (mastication : la main recule à peine, 2 fois)
+			k = 1 - 0.06 * math.abs(math.sin((t - BITE_UP) / BITE_HOLD * math.pi * 2))
 		elseif t < BITE_UP + BITE_HOLD + BITE_DOWN then
 			k = 1 - (t - BITE_UP - BITE_HOLD) / BITE_DOWN
 		else
 			k = 0
 		end
-		k = k * k * (3 - 2 * k)
-		if motor.Parent then
-			motor.C0 = anim.Base * armOffset(anim.R15, k)
-		end
-		if k <= 0 and t > BITE_UP then
-			if motor.Parent then
-				motor.C0 = anim.Base
-			end
-			s.Arms[motor] = nil
+		local rig = anim.Rig
+		if not character.Parent or not rig.Shoulder.Parent then
+			s.Arms[character] = nil
+		elseif k <= 0 and t > BITE_UP then
+			FairEat.Restore(rig)
+			s.Arms[character] = nil
+		else
+			local tool = anim.Tool
+			FairEat.Apply(rig, k, if tool and tool.Parent == character then tool else nil)
 		end
 	end
 end
 
 local function restoreArms(s: any)
-	for motor, anim in pairs(s.Arms) do
-		if motor.Parent then
-			motor.C0 = anim.Base
-		end
+	for _, anim in pairs(s.Arms) do
+		pcall(FairEat.Restore, anim.Rig)
 	end
 	table.clear(s.Arms)
 end
@@ -1971,39 +1924,95 @@ local function mySeat(): BasePart?
 	return humanoid and humanoid.SeatPart or nil
 end
 
--- Manège où l'avatar local est assis (animé à chaque image)
-local function ridingFx(s: any): RideFx?
-	local seat = mySeat()
-	local fx = s.Fair
-	if not seat or not fx then
-		return nil
-	end
-	local rideId = seat:GetAttribute("RideId")
-	if type(rideId) ~= "string" then
-		return nil
-	end
-	for _, r in ipairs(fx.Rides) do
-		if r.Def.Id == rideId then
-			return r
+-- (v9.9, FAIR99) ANTI-SACCADES. Causes trouvées (v9.8) :
+--  1) les manèges où l'on n'est PAS assis bougeaient 30 fois / s (15 au-delà
+--     de 90 studs) dans Heartbeat -> à 60 i/s, une image sur deux figée ;
+--  2) le serveur déplaçait les sièges occupés 10 fois / s : ces valeurs
+--     répliquées (en retard de la latence) s'affichaient sur les images où le
+--     client ne réécrivait pas le siège -> les AUTRES passagers reculaient
+--     puis sautaient en avant (jusqu'à ~1,8 stud sur les chaises volantes) ;
+--  3) le manège où l'on est assis bougeait dans un RenderStepped:Connect,
+--     sans ordre garanti avec la caméra -> caméra en retard d'une image
+--     selon les images ;
+--  4) workspace:GetServerTimeNow() est recalé par petits sauts.
+-- Correctif : UNE fonction liée au rendu AVANT la caméra
+-- (BindToRenderStep, priorité Camera - 1) qui, à CHAQUE image, pose les
+-- manèges proches (décor + sièges) et TOUS les sièges occupés de la fête
+-- (quel que soit l'éloignement), avec une horloge lissée (FairKit.Now) ;
+-- les manèges lointains (décor seul) : une image sur 2 ou 3.
+local NEAR_R = 170 -- (studs, bord du manège -> caméra) décor posé à chaque image
+local MID_R = 300 -- ... une image sur 2 ; au-delà, une sur 3 (jusqu'à ANIM_R + marge)
+local RENDER_NAME = "DopamineFairRides"
+
+local function occupied(r: RideFx): boolean
+	for _, seat in ipairs(r.Seats) do
+		if (seat :: any).Occupant ~= nil then
+			return true
 		end
 	end
-	return nil
+	return false
 end
 
-local function renderStep(dt: number)
+local function frameStep(dt: number)
 	local s = state
 	if not s then
 		return
 	end
 	local ok, err = pcall(function()
-		local r = ridingFx(s)
-		if r then
-			stepRide(r, workspace:GetServerTimeNow())
-			s.RidingId = r.Def.Id
-		else
-			s.RidingId = nil
+		local t = FairKit.Now()
+		s.RenderFrame = (s.RenderFrame or 0) + 1
+		local frame = s.RenderFrame
+		local camera = workspace.CurrentCamera
+		local camPos = if camera then camera.CFrame.Position else Vector3.zero
+		local camLook = if camera then camera.CFrame.LookVector else Vector3.new(0, 0, -1)
+		local fx = s.Fair
+		local riding = mySeat()
+		s.RidingId = nil
+		local moved = 0
+		if fx then
+			for _, r in ipairs(fx.Rides) do
+				local toRide = r.Base.Position - camPos
+				local edge = toRide.Magnitude - r.Radius
+				-- (derrière la caméra : décor inutile, sauf tout près)
+				local visible = edge < 25 or toRide.Unit:Dot(camLook) > -0.35
+				local busy = occupied(r)
+				if busy and riding and table.find(r.Seats, riding) then
+					s.RidingId = r.Def.Id
+				end
+				local decor
+				if not visible then
+					decor = false
+				elseif edge < NEAR_R then
+					decor = true
+				elseif edge < MID_R then
+					decor = frame % 2 == 0
+				else
+					decor = frame % 3 == 0
+				end
+				if decor or busy then
+					FairKit.StepRide(r, t, decor)
+					if decor then
+						moved += #r.Parts
+					end
+				end
+			end
+			if fx.Ducks and (fx.Ducks.Center.Position - camPos).Magnitude < 90 then
+				fx.Ducks.Step(t)
+			end
+			-- 🤸 rebonds sur les trampolines (avatar local)
+			local tr = fx.Trampolines
+			if tr then
+				local character = LocalPlayer and LocalPlayer.Character
+				local root = character and character:FindFirstChild("HumanoidRootPart")
+				local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+				if root and root:IsA("BasePart") and (root.Position - tr.Base.Position).Magnitude < 16 then
+					FairAnnexFx.StepTrampolines(tr, humanoid ~= nil and humanoid.Jump)
+				end
+			end
 		end
-		local seat = mySeat()
+		s.Moved = moved
+		-- autos tamponneuses (conduite) + bras des mangeurs
+		local seat = riding
 		if seat and seat:IsA("VehicleSeat") and seat.Name == "BumperSeat" then
 			driveBumper(s, seat, math.min(dt, 0.1))
 		elseif s.Drive then
@@ -2092,10 +2101,24 @@ function FairFx.Start(options: any?)
 		Conns = {},
 	}
 	local s = state
-	table.insert(s.Conns, RunService.RenderStepped:Connect(renderStep))
+	-- (v9.9) à chaque image, AVANT la caméra (voir frameStep)
+	pcall(function()
+		RunService:UnbindFromRenderStep(RENDER_NAME)
+	end)
+	RunService:BindToRenderStep(RENDER_NAME, Enum.RenderPriority.Camera.Value - 1, frameStep)
 	table.insert(s.Conns, ProximityPromptService.PromptTriggered:Connect(function(prompt, player)
 		if player ~= LocalPlayer then
 			return
+		end
+		-- (v9.9) grand huit / train fantôme / bateau en marche : on attend la gare
+		local rideId = prompt:GetAttribute("RideId")
+		local rdef = type(rideId) == "string" and FairRides.ById[rideId] or nil
+		if rdef and (rdef.Kind == "Coaster" or rdef.Kind == "Ghost" or rdef.Kind == "Pirate") then
+			local phase, left = FairRides.Phase(rdef, workspace:GetServerTimeNow())
+			if phase ~= "load" or left < 0.8 then
+				local wait = if phase == "load" then left + FairRides.Period(rdef.Cycle) - rdef.Cycle.Load else left
+				toast("⏳ " .. Locale.T("Next departure in %s s", tostring(math.max(1, math.ceil(wait)))), SKY)
+			end
 		end
 		local stall = prompt:GetAttribute("FoodStall")
 		local foods = prompt:GetAttribute("Foods")
@@ -2164,20 +2187,8 @@ function FairFx.Step(dt: number)
 			if not fx.Built then
 				stepBuild(fx)
 			end
+			-- (manèges, canards : frameStep, à chaque image ; ici les vendeurs)
 			if dist < ANIM_R then
-				-- (manèges loin de l'avatar : 15 fois / s suffisent)
-				s.Frame += 1
-				for _, r in ipairs(fx.Rides) do
-					if r.Def.Id ~= s.RidingId then
-						local far = (r.Base.Position - focus).Magnitude > 90
-						if not far or s.Frame % 2 == 0 then
-							stepRide(r, t)
-						end
-					end
-				end
-				if fx.Ducks then
-					fx.Ducks.Step(t)
-				end
 				stepVendors(fx.Vendors, focus, t)
 			end
 		end
@@ -2241,6 +2252,9 @@ function FairFx.Stop()
 	if not s then
 		return
 	end
+	pcall(function()
+		RunService:UnbindFromRenderStep(RENDER_NAME)
+	end)
 	for _, c in ipairs(s.Conns) do
 		c:Disconnect()
 	end
@@ -2262,7 +2276,7 @@ function FairFx.Stop()
 end
 
 function FairFx.Debug(): any
-	return { State = state, StepRide = stepRide }
+	return { State = state, StepRide = FairKit.StepRide, FrameStep = frameStep }
 end
 
 return FairFx

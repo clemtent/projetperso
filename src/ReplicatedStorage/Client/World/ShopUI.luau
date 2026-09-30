@@ -694,7 +694,7 @@ buildGui = function(): any
 				vp.LightColor = Color3.fromRGB(255, 250, 240)
 				vp.LightDirection = Vector3.new(-1, -1.4, -0.6)
 				if cm and type(cm.Build) == "function" then
-					local model = cm.Build(entry.Id, nil, { Detail = "Parked" })
+					local model = cm.Build(entry.Id, nil, { Detail = "Mid" })
 					local camera = Instance.new("Camera")
 					camera.FieldOfView = 30
 					local size = typeof(model:GetAttribute("Length")) == "number" and model:GetAttribute("Length") or 12

@@ -17,10 +17,26 @@
 	DÉTERMINISTE : la position de chacun ne dépend que de l'heure du serveur
 	(workspace:GetServerTimeNow) et de sa graine -> tous les joueurs voient
 	les mêmes passants aux mêmes endroits. Les personnages (NPCModels) ne
-	sont construits que près de l'avatar : 20 au plus (les plus proches, à
-	moins de 150 studs), 2 constructions par passe ; ancrés, SANS collision
-	(ils ne gênent jamais les joueurs), animés par CFrame (BulkMoveTo) :
-	30 Hz près de l'avatar, 10 Hz plus loin. Aucune lumière, aucun son.
+	sont construits que près de l'avatar : 18 au plus (les plus proches, à
+	moins de 150 studs), 2 constructions par passe ; ancrés, animés par
+	CFrame (BulkMoveTo) : 30 Hz près de l'avatar, 10 Hz plus loin. Aucune
+	lumière, aucun son.
+
+	v9.9 (NPC99) — plus personne ne passe à travers personne :
+	  - chacun tient VRAIMENT sa droite (v9.8 : les deux sens de marche
+	    partageaient la même file et se traversaient de face) ;
+	  - évitement local : un passant qui voit quelqu'un devant lui (autre
+	    passant, personne arrêtée, joueur) s'écarte doucement sur le côté ;
+	    si la place manque (joueur planté au milieu), il S'ARRÊTE, attend en
+	    regardant le joueur, puis repart et rattrape son retard en marchant
+	    un peu plus vite (tous les joueurs comptent : chaque client voit à
+	    peu près la même chose) ;
+	  - chaque PNJ a une capsule de collision (NPCModels.SetSolid) : le
+	    joueur ne peut plus le traverser ;
+	  - bancs : les places des passants assis viennent de NPCSeats (même
+	    calcul que le serveur, NPCSeatGuard, qui assoit le joueur à côté) ;
+	    hauteur exacte du siège (StreetLife > NpcBenches, sinon détectée) ;
+	  - la tête se tourne vers le joueur proche (NPCModels.Animate).
 
 	API (TownClient, via optionalModule) :
 	  TownPeople.Start()                  à l'entrée en ville
@@ -35,6 +51,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local NPCModels = require(ReplicatedStorage.Shared.NPCModels)
+local NPCSeats = require(ReplicatedStorage.Shared.NPCSeats)
+local Players = game:GetService("Players")
 -- (v9.8, REALISM98) réglage "Graphismes > Détail" : distance x 0,65 / 1 / 1,35 ;
 -- "Low" : moitié moins de passants construits
 local okGQ, GraphicsQuality = pcall(require, ReplicatedStorage.Shared.GraphicsQuality)
@@ -51,7 +69,7 @@ end
 local TownPeople = {}
 
 TownPeople.FOLDER_NAME = "TownPeople"
-TownPeople.MAX_BUILT = 20
+TownPeople.MAX_BUILT = 18
 local NEAR_IN, NEAR_OUT = 150, 175
 local BUILDS_PER_STEP = 2
 local FAST_RANGE = 90 -- (studs) animés à 30 Hz en deçà, 10 Hz au-delà
@@ -81,6 +99,13 @@ type Agent = {
 	Leash: BasePart?,
 	Pos: Vector3,
 	Clock: number,
+	SitTop: number?, -- (assis) dessus du siège au-dessus du pivot
+	Avoid: number, -- (marcheurs) écart latéral d'évitement (lissé)
+	Delay: number, -- (s) retard accumulé en attendant
+	Waiting: boolean,
+	LastNow: number,
+	Heading: Vector3?,
+	Mate: any?, -- (compagnon de marche)
 }
 
 local state: any = nil
@@ -150,9 +175,11 @@ end
 local UP = Vector3.new(0, 1, 0)
 
 -- Repère d'un marcheur au temps `now` (pieds au sol, regard dans le sens de la marche)
-local function walkerCF(a: Agent, now: number): CFrame
+-- Point du chemin + avant / droite (sol) d'un marcheur au temps `now`
+-- (v9.9 : moins son retard d'attente `Delay`)
+local function walkerFrame(a: Agent, now: number): (Vector3, Vector3, Vector3)
 	local path = a.Path :: Path
-	local s = a.Offset + a.Dir * a.Speed * now + a.Along
+	local s = a.Offset + a.Dir * a.Speed * (now - (a.Delay or 0)) + a.Along
 	local p = sample(path, s)
 	local ahead = sample(path, s + a.Dir * 1.2)
 	local behind = sample(path, s - a.Dir * 1.2)
@@ -162,9 +189,100 @@ local function walkerCF(a: Agent, now: number): CFrame
 		fwd = Vector3.new(0, 0, -1)
 	end
 	fwd = fwd.Unit
-	local right = fwd:Cross(UP)
-	local pos = p + right * a.Lateral
-	return CFrame.lookAt(pos, pos + fwd)
+	return p, fwd, fwd:Cross(UP)
+end
+
+local function walkerCF(a: Agent, now: number): CFrame
+	local p, fwd, right = walkerFrame(a, now)
+	local pos = p + right * (a.Lateral + (a.Avoid or 0))
+	local heading = a.Heading or fwd
+	return CFrame.lookAt(pos, pos + heading)
+end
+
+----------------------------------------------------------------------
+-- (v9.9) Évitement : s'écarter, attendre, rattraper
+----------------------------------------------------------------------
+
+type Obstacle = { Pos: Vector3, Agent: Agent?, Player: boolean }
+
+local MAX_SIDE = 2.4 -- (studs) écart maximal au milieu du chemin
+local CLEAR_NPC = 1.8 -- (studs) distance latérale pour croiser un passant
+local CLEAR_PLAYER = 2.3 -- … un joueur
+local LOOK_AHEAD = 5.5
+local CATCH_UP = 0.2 -- (x vitesse) en plus pour rattraper le retard
+
+local function steer(a: Agent, now: number, dt: number, obstacles: { Obstacle })
+	local p, fwd, right = walkerFrame(a, now)
+	local lat = a.Lateral + a.Avoid
+	local pos = p + right * lat
+	local lo, hi = -MAX_SIDE - a.Lateral, MAX_SIDE - a.Lateral
+	local want = 0
+	local nearest = math.huge
+	local blocked = false
+	for _, o in ipairs(obstacles) do
+		if o.Agent ~= a and (o.Agent == nil or o.Agent ~= a.Mate) then
+			local rel = o.Pos - pos
+			rel = Vector3.new(rel.X, 0, rel.Z)
+			local fd = rel:Dot(fwd)
+			local ld = rel:Dot(right)
+			local clear = o.Player and CLEAR_PLAYER or CLEAR_NPC
+			-- (aussi un peu derrière : on ne se rabat pas en le dépassant)
+			if fd > -1.6 and fd < LOOK_AHEAD and math.abs(ld) < clear + 0.5 then
+				local total = a.Avoid
+				if math.abs(ld) < clear then
+					local toRight = ld + clear -- (on passe à sa gauche… il finit à notre gauche)
+					local toLeft = ld - clear
+					local first, second = toRight, toLeft
+					-- (le plus court ; à égalité on garde sa droite)
+					if math.abs(toLeft) + 0.3 < math.abs(toRight) then
+						first, second = toLeft, toRight
+					end
+					total = a.Avoid + first
+					if total < lo or total > hi then
+						total = a.Avoid + second
+						if total < lo or total > hi then
+							total = math.clamp(a.Avoid + first, lo, hi)
+							-- plus de place : on s'arrête devant lui
+							if fd > 0 and fd < (o.Player and 2.8 or 2.1) then
+								blocked = true
+							end
+						end
+					end
+				end
+				if math.abs(fd) < nearest then
+					nearest = math.abs(fd)
+					want = total
+				end
+			end
+		end
+	end
+	local k = math.min(1, dt * 2.2)
+	local before = a.Avoid
+	a.Avoid += (want - a.Avoid) * k
+	local mate = a.Mate
+	if mate and mate.Model and mate.Waiting then
+		blocked = true
+	end
+	a.Waiting = blocked
+	if blocked then
+		a.Delay += dt
+	elseif a.Delay > 0 then
+		a.Delay = math.max(0, a.Delay - dt * CATCH_UP)
+	end
+	if mate and mate.Model then
+		local d = math.max(a.Delay, mate.Delay)
+		a.Delay, mate.Delay = d, d
+	end
+	-- direction du regard : vers où l'on va vraiment (écart latéral compris)
+	local side = dt > 0 and (a.Avoid - before) / dt or 0
+	local speed = blocked and 0.01 or a.Speed
+	local dir = fwd * speed + right * math.clamp(side, -2, 2)
+	if dir.Magnitude > 0.05 then
+		local h = a.Heading or fwd
+		local target = dir.Unit
+		local blend = h:Lerp(target, math.min(1, dt * 5))
+		a.Heading = blend.Magnitude > 0.01 and blend.Unit or target
+	end
 end
 
 ----------------------------------------------------------------------
@@ -269,12 +387,41 @@ end
 -- Nombre de marcheurs par chemin (selon sa longueur) + styles tirés au sort
 local WALK_STYLES = { "pedestrian", "pedestrian", "shopper", "pedestrian", "elder", "kid", "jogger", "worker", "shopper", "pedestrian" }
 local PROPS = { "none", "phone", "coffee", "none", "bag", "none" }
-local SIT_STYLES = { "elder", "pedestrian", "shopper", "pedestrian", "elder" }
+
+-- (v9.9) dessus des sièges du mobilier client (TownStreetLife.SEAT_TOPS s'il
+-- existe ; sinon les valeurs v9.8 : chaise de terrasse 1,7, tabouret 1,9)
+local function seatTops(): { Terrace: number, Chess: number }
+	local tops = { Terrace = 1.7, Chess = 1.9 }
+	local module = script.Parent:FindFirstChild("TownStreetLife")
+	if module and module:IsA("ModuleScript") then
+		local ok, tsl = pcall(require, module)
+		local t = if ok and type(tsl) == "table" then (tsl :: any).SEAT_TOPS else nil
+		if type(t) == "table" then
+			tops.Terrace = tonumber(t.Terrace) or tops.Terrace
+			tops.Chess = tonumber(t.Chess) or tops.Chess
+		end
+	end
+	return tops
+end
+
+-- Dessus du banc à `pos` (publié par le serveur : NpcBenches) ; nil = détecté
+local function benchTop(s: any, pos: Vector3): number?
+	for _, b in ipairs(s.Benches or {}) do
+		if (b.Pos - pos).Magnitude < 0.6 then
+			return b.Top
+		end
+	end
+	return nil
+end
 
 local function addAgent(s: any, a: any)
 	a.Id = #s.Agents + 1
 	a.Pos = Vector3.zero
 	a.Clock = 0
+	a.Avoid = 0
+	a.Delay = 0
+	a.Waiting = false
+	a.LastNow = 0
 	a.Phase = a.Phase or hash(a.Seed, 5) * 10
 	table.insert(s.Agents, a)
 end
@@ -298,7 +445,8 @@ local function populate(s: any)
 				prop = "none"
 			end
 			local offset = (i - 1 + hash(seed, 6) * 0.6) / n * path.Length
-			local lateral = (0.55 + hash(seed, 7) * 0.35) * dir
+			-- (v9.9) tenir SA droite : `right` suit déjà le sens de marche
+			local lateral = 0.55 + hash(seed, 7) * 0.35
 			local dog = (style == "pedestrian" or style == "elder") and hash(seed, 8) < 0.22
 			addAgent(s, {
 				Kind = "walk",
@@ -325,46 +473,40 @@ local function populate(s: any)
 					Speed = speed,
 					Dir = dir,
 					Offset = offset,
-					Lateral = lateral + dir * 1.35,
+					Lateral = lateral + 1.35,
 					Along = -0.3 * dir,
 					Anim = "walk",
 					Dog = false,
 				})
+				-- (v9.9) les deux compagnons ne s'évitent pas et s'attendent
+				local mate = s.Agents[#s.Agents]
+				local lead = s.Agents[#s.Agents - 1]
+				mate.Mate, lead.Mate = lead, mate
 			end
 		end
 	end
-	-- assis sur les bancs (un banc sur deux environ)
+	-- assis sur les bancs : places de NPCSeats (le serveur assoit le joueur
+	-- sur une place LIBRE, à côté)
 	for _, spot in ipairs(s.Anchors.SitBench or {}) do
-		local h = hash(spot.Seed, 21)
-		if h < 0.5 then
-			local side = h < 0.25 and -1 or 1
-			local style = SIT_STYLES[math.floor(hash(spot.Seed, 22) * #SIT_STYLES) + 1]
+		local plan = NPCSeats.BenchPlan(spot.Seed)
+		for _, n in ipairs(plan.Npcs) do
 			addAgent(s, {
 				Kind = "static",
-				Style = style,
-				Seed = spot.Seed * 7 + 3,
-				Prop = ({ "none", "phone", "coffee", "none" })[math.floor(hash(spot.Seed, 23) * 4) + 1],
-				CF = spot.CF * CFrame.new(side * 1.1, 0, 0.3),
+				Style = n.Style,
+				Seed = n.Seed,
+				Prop = n.Prop,
+				CF = spot.CF * CFrame.new(NPCSeats.BENCH_SLOTS[n.Slot], 0, NPCSeats.SLOT_Z),
 				Anim = "sit",
+				SitTop = benchTop(s, spot.CF.Position),
 			})
-			-- (parfois deux sur le même banc)
-			if hash(spot.Seed, 24) < 0.3 then
-				addAgent(s, {
-					Kind = "static",
-					Style = SIT_STYLES[math.floor(hash(spot.Seed, 25) * #SIT_STYLES) + 1],
-					Seed = spot.Seed * 7 + 4,
-					Prop = "none",
-					CF = spot.CF * CFrame.new(-side * 1.2, 0, 0.3),
-					Anim = "sit",
-				})
-			end
 		end
 	end
-	-- terrasses : 3 clients assis (les chaises sont 0,2 plus basses que NPCModels.SitHeight)
+	-- terrasses : 3 clients assis (hauteur des chaises : TownStreetLife)
+	local tops = seatTops()
 	for _, spot in ipairs(s.Anchors.Terrace or {}) do
 		for k, c in ipairs({ { -3.2, -1 }, { 0, 1 }, { 3.2, -1 }, { 3.2, 1 } }) do
 			if k <= 3 or hash(spot.Seed, 30) < 0.5 then
-				local chair = spot.CF * CFrame.new(c[1], -0.2, c[2] * 1.25) * CFrame.Angles(0, c[2] < 0 and math.pi or 0, 0)
+				local chair = spot.CF * CFrame.new(c[1], 0, c[2] * 1.25) * CFrame.Angles(0, c[2] < 0 and math.pi or 0, 0)
 				addAgent(s, {
 					Kind = "static",
 					Style = k % 2 == 0 and "shopper" or "pedestrian",
@@ -372,6 +514,7 @@ local function populate(s: any)
 					Prop = k == 2 and "coffee" or "none",
 					CF = chair * CFrame.new(0, 0, 0.15),
 					Anim = "sit",
+					SitTop = tops.Terrace,
 				})
 			end
 		end
@@ -380,7 +523,7 @@ local function populate(s: any)
 	for _, spot in ipairs(s.Anchors.ChessTables or {}) do
 		for _, sz in ipairs({ -1, 1 }) do
 			local stool = spot.CF * CFrame.new(-3, 0, sz * 2.3) * CFrame.Angles(0, sz < 0 and math.pi or 0, 0)
-			addAgent(s, { Kind = "static", Style = "elder", Seed = spot.Seed * 5 + sz, Prop = "none", CF = stool * CFrame.new(0, 0, 0.1), Anim = "sit" })
+			addAgent(s, { Kind = "static", Style = "elder", Seed = spot.Seed * 5 + sz, Prop = "none", CF = stool * CFrame.new(0, 0, 0.1), Anim = "sit", SitTop = tops.Chess })
 		end
 	end
 	-- discussions à deux
@@ -437,7 +580,7 @@ end
 local function buildAgent(s: any, a: Agent)
 	local style = a.Style
 	-- (les marchands en tablier : NPCModels "baker" = tablier + toque ; au marché on garde la toque)
-	local m = NPCModels.Build(style, { Seed = a.Seed, Prop = a.Prop or "none" })
+	local m = NPCModels.Build(style, { Seed = a.Seed, Prop = a.Prop or "none", SitHeight = a.SitTop })
 	m.Name = "Person"
 	NPCModels.Place(m, agentCF(a, s.Now))
 	m.Parent = s.Folder
@@ -477,10 +620,17 @@ local function destroyAgent(a: Agent)
 	;(a :: any).DogRig = nil
 end
 
-local function animateAgent(a: Agent, now: number)
+local function animateAgent(a: Agent, now: number, obstacles: { Obstacle }?)
 	local m = a.Model
 	if not m then
 		return
+	end
+	if a.Kind == "walk" then
+		local dt = a.LastNow > 0 and math.clamp(now - a.LastNow, 0, 0.25) or 0
+		a.LastNow = now
+		if obstacles then
+			steer(a, now, dt, obstacles)
+		end
 	end
 	local cf = agentCF(a, now)
 	a.Pos = cf.Position
@@ -489,8 +639,15 @@ local function animateAgent(a: Agent, now: number)
 	NPCModels.Place(m, cf)
 	local t = now + a.Phase
 	if a.Kind == "walk" then
-		-- (cadence proportionnelle à la vitesse : ~4 studs / s = pas normal)
-		NPCModels.Animate(m, "walk", t * (a.Speed / 4))
+		-- (cadence proportionnelle à la vitesse : ~4 studs / s = pas normal ;
+		-- plus rapide quand on rattrape son retard ; arrêté = au repos)
+		local sc = tonumber(m:GetAttribute("NpcScale")) or 1
+		local rate = a.Speed / (4 * sc) * (a.Delay > 0 and not a.Waiting and (1 + CATCH_UP) or 1)
+		if a.Waiting then
+			NPCModels.Animate(m, "idle", t)
+		else
+			NPCModels.Animate(m, "walk", (now - a.Delay) * rate + a.Phase)
+		end
 		local rig = (a :: any).DogRig
 		if rig then
 			-- le chien trotte un peu devant, côté bordure
@@ -500,12 +657,13 @@ local function animateAgent(a: Agent, now: number)
 				Dir = a.Dir,
 				Speed = a.Speed,
 				Along = a.Dir * 2.4,
-				Lateral = a.Lateral - a.Dir * 1.0,
+				Lateral = a.Lateral + a.Avoid - 1.0, -- (à gauche : la laisse est dans la main gauche)
+				Delay = a.Delay,
 			} :: any, now)
-			animateDog(rig, dogCF, t, true)
+			animateDog(rig, dogCF, t, not a.Waiting)
 			local leash = a.Leash
 			if leash then
-				local hand = (cf * CFrame.new(-0.9, 2.1, -0.35)).Position
+				local hand = (cf * CFrame.new(-0.8, 2.25, -0.2)).Position
 				local collar = (dogCF * CFrame.new(0, 1.78, -0.92)).Position
 				local mid = (hand + collar) / 2
 				local len = (collar - hand).Magnitude
@@ -522,6 +680,23 @@ end
 -- Chargement
 ----------------------------------------------------------------------
 
+-- (v9.9) obstacles : les personnes construites + les avatars de TOUS les joueurs
+local function obstaclesOf(s: any): { Obstacle }
+	local obstacles: { Obstacle } = {}
+	for _, a: Agent in ipairs(s.Built or {}) do
+		table.insert(obstacles, { Pos = a.Pos, Agent = a, Player = false })
+	end
+	for _, player in ipairs(Players:GetPlayers()) do
+		local character = player.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		if root and root:IsA("BasePart") then
+			table.insert(obstacles, { Pos = root.Position, Agent = nil, Player = true })
+		end
+	end
+	s.Obstacles = obstacles
+	return obstacles
+end
+
 local ANCHOR_KINDS = { "SitBench", "Terrace", "ChessTables", "Chat", "Wait", "Kiosk", "FlowerStall", "BookStall", "MarketSquare" }
 
 local function load(s: any): boolean
@@ -535,8 +710,20 @@ local function load(s: any): boolean
 	for _, kind in ipairs(ANCHOR_KINDS) do
 		anchors[kind] = {}
 	end
+	local benches = {}
 	for _, child in ipairs(data:GetChildren()) do
-		if child.Name == "Path" then
+		if child.Name == "NpcBenches" then
+			local text = child:GetAttribute("Data")
+			if type(text) == "string" then
+				for _, line in ipairs(string.split(text, "\n")) do
+					local f = string.split(line, ";")
+					local x, y, z, top = tonumber(f[1]), tonumber(f[2]), tonumber(f[3]), tonumber(f[4])
+					if x and y and z and top then
+						table.insert(benches, { Pos = Vector3.new(x, y, z), Top = top })
+					end
+				end
+			end
+		elseif child.Name == "Path" then
 			local pts = child:GetAttribute("Points")
 			local name = child:GetAttribute("Name")
 			if type(pts) == "string" and type(name) == "string" then
@@ -587,6 +774,7 @@ local function load(s: any): boolean
 	end
 	s.Paths = paths
 	s.Anchors = anchors
+	s.Benches = benches
 	s.Agents = {}
 	populate(s)
 	local folder = Instance.new("Folder")
@@ -627,10 +815,11 @@ function TownPeople.Start()
 		s.Now = now
 		local focus = s.Focus
 		local ok, err = pcall(function()
+			local obstacles = obstaclesOf(s)
 			for _, a: Agent in ipairs(s.Built) do
 				local near = focus == nil or (a.Pos - focus).Magnitude < FAST_RANGE
 				if near or slow then
-					animateAgent(a, now)
+					animateAgent(a, now, obstacles)
 				end
 			end
 		end)
@@ -720,8 +909,9 @@ function TownPeople.Frame(_dt: number?, position: Vector3?, at: number?)
 		s.Focus = position
 	end
 	local now = at or serverNow()
+	local obstacles = obstaclesOf(s)
 	for _, a: Agent in ipairs(s.Built) do
-		animateAgent(a, now)
+		animateAgent(a, now, obstacles)
 	end
 end
 
@@ -753,6 +943,16 @@ function TownPeople.Stop()
 	if s.Folder then
 		s.Folder:Destroy()
 	end
+end
+
+-- (tests / rendus) les personnes construites : position, état d'attente
+function TownPeople.Agents(): { any }
+	local out = {}
+	local s = state
+	for _, a: Agent in ipairs(s and s.Built or {}) do
+		table.insert(out, { Id = a.Id, Kind = a.Kind, Pos = a.Pos, Waiting = a.Waiting, Delay = a.Delay, Avoid = a.Avoid, Lateral = a.Lateral, Model = a.Model, Anim = a.Anim, Style = a.Style, Seed = a.Seed })
+	end
+	return out
 end
 
 function TownPeople.Debug(): any

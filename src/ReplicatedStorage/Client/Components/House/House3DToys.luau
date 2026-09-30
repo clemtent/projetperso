@@ -14,6 +14,8 @@
 ]]
 
 local House3DKit = require(script.Parent.House3DKit)
+-- (v9.9 SCALE99) aiguilles à l'heure réelle
+local House3DTime = require(script.Parent.House3DTime)
 
 type Builder = House3DKit.Builder
 
@@ -67,15 +69,32 @@ end
 ----------------------------------------------------------------------
 
 R.YoYo = function(b, _ctx)
+	-- (v9.9 SCALE99) vrai yo-yo : deux moitiés bombées (bord arrondi, flasque
+	-- intérieure, capuchon central transparent + étoile), axe métallique
+	-- dans l'entrefer, ficelle enroulée, brin qui monte et boucle pour le doigt
 	local color = vivid(b, 1, rgb(255, 110, 150))
-	b.CylZ(0, 40, -8, 70, 12, color, M.SmoothPlastic)
-	b.CylZ(0, 40, 8, 70, 12, color, M.SmoothPlastic)
-	b.CylZ(0, 40, 0, 20, 6, CHROME, M.Metal)
-	for _, z in ipairs({ -14.5, 14.5 }) do
-		b.CylZ(0, 40, z, 44, 1, lighten(color, 0.4), M.SmoothPlastic)
-		House3DKit.Star(b, 0, 40, z > 0 and 15 or -16, 12, 1, WHITE, M.SmoothPlastic)
+	local g = House3DKit.Gap(b, 0.6)
+	local cy = 36
+	for _, side in ipairs({ -1, 1 }) do
+		b.CylZ(0, cy, side * 9, 64, 11, color, M.SmoothPlastic)
+		-- bord arrondi (anneau un peu plus large, plus sombre) et flasque bombée
+		b.CylZ(0, cy, side * 9, 70, 6, darken(color, 0.12), M.SmoothPlastic)
+		b.EggR(CFrame.new(0, cy, side * 14.5), 56, 56, 6, lighten(color, 0.08), M.SmoothPlastic)
+		-- capuchon central transparent et son étoile
+		local cap = b.CylZ(0, cy, side * (17.5 + g), 26, 2, rgb(236, 246, 255), M.Glass)
+		cap.Transparency = 0.35
+		House3DKit.Star(b, 0, cy, side > 0 and 17 + 2 * g or -(18 + 2 * g), 9, 1, WHITE, M.SmoothPlastic)
 	end
-	House3DKit.Path(b, { { 0, 40, 0 }, { 10, 70, 0 }, { 4, 90, 0 } }, 1.2, WHITE, M.Fabric)
+	-- entrefer : axe + ficelle enroulée
+	b.CylZ(0, cy, 0, 10, 8, CHROME, M.Metal)
+	b.CylZ(0, cy, 0, 24, 5, rgb(250, 248, 240), M.Fabric)
+	-- brin : part du bas de la bobine, monte, boucle du doigt en haut
+	local path = { { 11, cy, 0 }, { 14, cy + 20, 0 }, { 12, cy + 40, 0 }, { 8, cy + 54, 0 } }
+	for index = 0, 8 do
+		local a = index / 8 * math.pi * 2
+		table.insert(path, { 8 + math.sin(a) * 5, cy + 60 - math.cos(a) * 6, math.cos(a) * 1.5 })
+	end
+	House3DKit.Path(b, path, 1.4, rgb(250, 248, 240), M.Fabric)
 	b.Footprint(70, 30, 80)
 end
 
@@ -708,9 +727,22 @@ local function vr(pro: boolean)
 		else
 			visor.Reflectance = 0.3
 		end
-		b.Egg(0, 30, -18, 76, 10, 20, pro and CARBON or rgb(220, 220, 236), M.Fabric)
-		for _, side in ipairs({ -1, 1 }) do
-			b.Tube(side * 38, 30, 0, side * 36, 30, -22, 5, pro and CARBON or rgb(220, 220, 236), M.Fabric)
+		-- (v9.9 SCALE99) casque complet : mousse de visage à l'arrière, sangle
+		-- élastique qui fait le tour (et le dessus de la tête), capteurs devant
+		local strap = pro and CARBON or rgb(220, 220, 236)
+		local g = House3DKit.Gap(b, 0.6)
+		b.Round(0, 16, -18 - g, 64, 26, 6, 6, rgb(60, 58, 70), M.Fabric)
+		local loop = {}
+		for index = 0, 12 do
+			local a = index / 12 * math.pi
+			table.insert(loop, { math.cos(a) * 38, 30, -18 - math.sin(a) * 30 })
+		end
+		House3DKit.Path(b, loop, 5, strap, M.Fabric)
+		House3DKit.Path(b, { { 0, 46, -10 }, { 0, 52, -26 }, { 0, 34, -46 } }, 4, strap, M.Fabric)
+		for _, x in ipairs({ -26, 26 }) do
+			for _, y in ipairs({ 20, 38 }) do
+				b.CylZ(x, y, 18.2 + g, 4, g, rgb(20, 20, 26), M.Glass)
+			end
 		end
 		b.Footprint(80, 44, 52)
 	end
@@ -764,14 +796,21 @@ R.AlarmClock = function(b, _ctx)
 	end
 	b.Tube(-20, 80, -2, 20, 80, -2, 3, CHROME, M.Metal)
 	b.CylZ(0, 44, 0, 70, 30, body, M.SmoothPlastic)
-	b.CylZ(0, 44, 15.3, 56, 1, rgb(255, 250, 240), M.SmoothPlastic)
+	-- (v9.9 SCALE99) cadran en couches franchement espacées (g ≈ 0,035 stud) :
+	-- cadran, index, aiguilles à l'heure réelle, trotteuse, cache-axe (avant,
+	-- les couches trop fines grossissaient à l'anti-scintillement et
+	-- cachaient les aiguilles)
+	local g = House3DKit.Gap(b, 0.6)
+	local F = 15 -- (faces du même côté toujours à >= g l'une de l'autre)
+	b.CylZ(0, 44, F + 0.25 * g, 56, 1.5 * g, rgb(255, 250, 240), M.SmoothPlastic)
 	for index = 0, 11 do
 		local a = index / 12 * math.pi * 2
-		b.Box(math.sin(a) * 23, 44 + math.cos(a) * 23 - 1.5, 15.8, 2, 3, 0.6, INK)
+		b.Box(math.sin(a) * 23, 44 + math.cos(a) * 23 - 1.5, F + 2 * g, index % 3 == 0 and 2.6 or 1.8, index % 3 == 0 and 4 or 3, g, INK)
 	end
-	b.BoxR(CFrame.new(0, 52, 16.4), 2.5, 16, 0.6, INK)
-	b.BoxR(CFrame.new(5, 41, 16.6) * CFrame.Angles(0, 0, -2.2), 2.5, 12, 0.6, INK)
-	b.Ball(0, 44, 16.8, 4, GOLD, M.Metal)
+	House3DTime.Hand(b, "H", 0, 44, F + 3 * g, 14, 3, 3, g, INK)
+	House3DTime.Hand(b, "M", 0, 44, F + 4.5 * g, 21, 4, 2.2, g, INK)
+	House3DTime.Hand(b, "S", 0, 44, F + 6 * g, 23, 6, 0.9, g, rgb(220, 50, 60))
+	b.Ball(0, 44, F + 7.6 * g, math.max(4, 1.6 * g), GOLD, M.Metal)
 	b.Footprint(76, 34, 92)
 end
 

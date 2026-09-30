@@ -346,16 +346,67 @@ local function rig(model: Model, carId: string): (BasePart, VehicleSeat)
 	local root = model.PrimaryPart :: BasePart
 	local pivot = model:GetPivot()
 	local noFriction = PhysicalProperties.new(0.7, 0, 0, 100, 100)
+	-- (v9.9, CARS99) roues animables : pivots "WheelSteer" (braquage) et
+	-- "WheelSpin" (rotation) reliés par des Motor6D ; chaque client règle
+	-- leur Transform (CarClient). Les autres pièces des roues sont soudées à
+	-- leur pivot, le reste de la carrosserie à la boîte Root.
+	local steers: { [number]: BasePart } = {}
+	local spins: { [number]: BasePart } = {}
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") and type(d:GetAttribute("Wheel")) == "number" then
+			if d.Name == "WheelSteer" then
+				steers[d:GetAttribute("Wheel") :: number] = d
+			elseif d.Name == "WheelSpin" then
+				spins[d:GetAttribute("Wheel") :: number] = d
+			end
+		end
+	end
+	for index, steer in pairs(steers) do
+		local spin = spins[index]
+		if spin then
+			local m1 = Instance.new("Motor6D")
+			m1.Name = "WheelSteer"
+			m1.Part0 = root
+			m1.Part1 = steer
+			m1.C0 = root.CFrame:ToObjectSpace(steer.CFrame)
+			m1.Parent = steer
+			local m2 = Instance.new("Motor6D")
+			m2.Name = "WheelSpin"
+			m2.Part0 = steer
+			m2.Part1 = spin
+			m2.C0 = steer.CFrame:ToObjectSpace(spin.CFrame)
+			m2.Parent = spin
+		end
+	end
 	for _, d in ipairs(model:GetDescendants()) do
 		if d:IsA("BasePart") and d ~= root then
 			d.Massless = true
 			d.CanCollide = false
 			d.CanTouch = false
 			d.CanQuery = false
-			local weld = Instance.new("WeldConstraint")
-			weld.Part0 = root
-			weld.Part1 = d
-			weld.Parent = d
+			local wheelIndex = d:GetAttribute("Wheel")
+			local hub: BasePart? = nil
+			if type(wheelIndex) == "number" and steers[wheelIndex] and spins[wheelIndex] then
+				hub = if d:GetAttribute("Spin") then spins[wheelIndex] else steers[wheelIndex]
+			end
+			if d.Name == "WheelSteer" or d.Name == "WheelSpin" then
+				if not (hub and spins[wheelIndex :: number]) then
+					local weld = Instance.new("WeldConstraint")
+					weld.Part0 = root
+					weld.Part1 = d
+					weld.Parent = d
+				end
+			elseif hub and hub ~= d then
+				local weld = Instance.new("WeldConstraint")
+				weld.Part0 = hub
+				weld.Part1 = d
+				weld.Parent = d
+			else
+				local weld = Instance.new("WeldConstraint")
+				weld.Part0 = root
+				weld.Part1 = d
+				weld.Parent = d
+			end
 			d.Anchored = false
 		end
 	end

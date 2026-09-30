@@ -44,6 +44,9 @@ local RunService = game:GetService("RunService")
 
 local Locale = require(ReplicatedStorage.Shared.Locale)
 local NPCModels = require(ReplicatedStorage.Shared.NPCModels)
+local Greenery = require(ReplicatedStorage.Shared.Greenery) -- (v9.9, CITY99) arbres construits côté client
+local TownRoads = require(script.Parent.TownRoads) -- (v9.9, CITY99) routes, trottoirs, allées, poteaux indicateurs
+local TownDistricts = require(script.Parent.TownDistricts) -- (v9.9, CITY99) skatepark, jardins partagés, coin sport
 -- (v9.8, REALISM98) réglage "Graphismes > Détail" : distances de flux x 0,65 / 1 / 1,35
 local okGQ, GraphicsQuality = pcall(require, ReplicatedStorage.Shared.GraphicsQuality)
 local function detailScale(): number
@@ -59,10 +62,13 @@ end
 local TownStreetLife = {}
 
 TownStreetLife.FOLDER_NAME = "TownStreetLife"
+-- (v9.9, CITY99 -> NPC99) dessus des sièges du mobilier (TownPeople y pose
+-- les passants assis) : chaises de terrasse, tabourets des tables d'échecs
+TownStreetLife.SEAT_TOPS = { Terrace = 1.25, Chess = 1.45 }
 local BUILD_IN, BUILD_OUT = 190, 240
 local BIG_IN, BIG_OUT = 320, 380
 local FAR_IN, FAR_OUT = 2400, 2600
-local BUILDS_PER_STEP = 6
+local BUILDS_PER_STEP = 12 -- (v9.9 : 6 -> 12, les tronçons de route sont petits)
 local ANIM_STEP = 1 / 20
 local ANIM_RANGE = 260
 
@@ -95,7 +101,7 @@ local FLOWERS = {
 local BIG = { Paint = true, Billboard = true, WindmillHill = true, MarketSquare = true, Statue = true, Kiosk = true, BikeLane = true, BusShelter = true }
 local FAR = { Turbine = true }
 -- Emplacements qui ne sont PAS du mobilier (ancres des passants : TownPeople)
-local ANCHORS = { SitBench = true, Chat = true, Wait = true }
+local ANCHORS = { SitBench = true, Chat = true, Wait = true, Dest = true }
 
 type Spot = {
 	Kind: string,
@@ -254,15 +260,16 @@ local function buildBench(m: Model, F: CFrame, _seed: number)
 	local iron = rgb(58, 54, 66)
 	for _, sx in ipairs({ -1, 1 }) do
 		local x = sx * 2.58
-		box(m, "BenchLeg", F, x - 0.1, x + 0.1, -0.05, 1.8, -0.75, -0.55, iron, M.Metal)
-		box(m, "BenchLeg", F, x - 0.1, x + 0.1, -0.05, 3.0, 0.55, 0.75, iron, M.Metal)
-		box(m, "BenchArm", F, x - 0.14, x + 0.14, 2.3, 2.44, -0.85, 0.7, iron, M.Metal)
-		box(m, "BenchArmPost", F, x - 0.1, x + 0.1, 1.8, 2.3, -0.75, -0.55, iron, M.Metal)
+		-- (v9.9 CITY99, échelle SCALE99 : assise à 1,45 = ~45 cm, comme TownKit.BENCH)
+		box(m, "BenchLeg", F, x - 0.1, x + 0.1, -0.05, 1.35, -0.75, -0.55, iron, M.Metal)
+		box(m, "BenchLeg", F, x - 0.1, x + 0.1, -0.05, 2.75, 0.55, 0.75, iron, M.Metal)
+		box(m, "BenchArm", F, x - 0.14, x + 0.14, 2.05, 2.19, -0.85, 0.7, iron, M.Metal)
+		box(m, "BenchArmPost", F, x - 0.1, x + 0.1, 1.35, 2.05, -0.75, -0.55, iron, M.Metal)
 	end
-	box(m, "BenchSeat", F, -2.45, 2.45, 1.72, 1.9, -0.8, -0.05, WOOD, M.Wood, true)
-	box(m, "BenchSeat", F, -2.45, 2.45, 1.72, 1.9, 0.05, 0.62, WOOD, M.Wood, true)
-	box(m, "BenchBack", F, -2.45, 2.45, 2.2, 2.6, 0.62, 0.78, WOOD, M.Wood)
-	box(m, "BenchBack", F, -2.45, 2.45, 2.75, 3.1, 0.66, 0.82, WOOD, M.Wood)
+	box(m, "BenchSeat", F, -2.45, 2.45, 1.27, 1.45, -0.8, -0.05, WOOD, M.Wood, true)
+	box(m, "BenchSeat", F, -2.45, 2.45, 1.27, 1.45, 0.05, 0.62, WOOD, M.Wood, true)
+	box(m, "BenchBack", F, -2.45, 2.45, 1.8, 2.2, 0.62, 0.78, WOOD, M.Wood)
+	box(m, "BenchBack", F, -2.45, 2.45, 2.35, 2.7, 0.66, 0.82, WOOD, M.Wood)
 end
 
 -- Jardinière longue (bac béton, arbustes, fleurs)
@@ -414,12 +421,12 @@ local function buildZebra(m: Model, F: CFrame, seed: number)
 	local n = math.max(3, math.floor(span / 2 + 0.5))
 	for i = 0, n - 1 do
 		local z = -span / 2 + 0.55 + i * (span - 1.1) / math.max(1, n - 1)
-		newPart(m, "ZebraStripe", Vector3.new(len, 0.1, 1.1), F * CFrame.new(0, 0.01, z), WHITE, M.SmoothPlastic)
+		newPart(m, "ZebraStripe", Vector3.new(len, 0.4, 1.1), F * CFrame.new(0, 0.15 - 0.2, z), WHITE, M.SmoothPlastic) -- (v9.9 : dessus à +0,15)
 	end
 	-- dalles podotactiles sur les trottoirs (derrière les bordures)
 	for _, sz in ipairs({ -1, 1 }) do
 		local z0 = width / 2 + 0.9
-		newPart(m, "Tactile", Vector3.new(len - 1, 0.1, 0.8), F * CFrame.new(0, 0.5 + 0.01, sz * (z0 + 0.4)), rgb(236, 206, 90), M.DiamondPlate)
+		newPart(m, "Tactile", Vector3.new(len - 1, 0.3, 0.8), F * CFrame.new(0, 0.5 + 0.12 - 0.15, sz * (z0 + 0.4)), rgb(236, 206, 90), M.DiamondPlate) -- (v9.9 : +0,12 au-dessus du trottoir)
 	end
 end
 
@@ -462,25 +469,26 @@ end
 
 local function buildManhole(m: Model, F: CFrame, _seed: number)
 	-- (dessus à +0,09 : au-dessus des pointillés (+0,05), sous les lignes de rive (+0,1))
-	newPart(m, "Manhole", Vector3.new(0.1, 2.1, 2.1), F * CFrame.new(0, 0.04, 0) * UPRIGHT, rgb(70, 68, 72), M.DiamondPlate, "Cyl")
+	-- (v9.9 : dessus à +0,16, au-dessus de la peinture relevée)
+	newPart(m, "Manhole", Vector3.new(0.36, 2.1, 2.1), F * CFrame.new(0, 0.16 - 0.18, 0) * UPRIGHT, rgb(70, 68, 72), M.DiamondPlate, "Cyl")
 end
 
 local function buildDrain(m: Model, F: CFrame, _seed: number)
-	box(m, "Drain", F, -0.8, 0.8, -0.04, 0.05, -0.25, 0.25, rgb(58, 56, 62), M.DiamondPlate)
+	box(m, "Drain", F, -0.8, 0.8, -0.2, 0.07, -0.25, 0.25, rgb(58, 56, 62), M.DiamondPlate) -- (v9.9 : sur le caniveau, dessus +0,07)
 end
 
 -- Piste cyclable : bande verte (longueur `seed`) + pictogrammes vélo
 local function buildBikeLane(m: Model, F: CFrame, seed: number)
 	local len = seed
-	newPart(m, "BikeLane", Vector3.new(1.9, 0.1, len), F * CFrame.new(0, 0.01, 0), rgb(76, 150, 100), M.SmoothPlastic)
+	newPart(m, "BikeLane", Vector3.new(1.9, 0.36, len), F * CFrame.new(0, 0.1 - 0.18, 0), rgb(76, 150, 100), M.SmoothPlastic) -- (v9.9 : dessus à +0,10)
 	local n = math.max(1, math.floor(len / 28))
 	for i = 0, n - 1 do
 		local z = -len / 2 + (i + 0.5) * len / n
 		for _, dz in ipairs({ -0.55, 0.55 }) do
-			newPart(m, "BikeWheel", Vector3.new(0.05, 0.8, 0.8), F * CFrame.new(0, 0.08, z + dz) * UPRIGHT, WHITE, M.SmoothPlastic, "Cyl")
+			newPart(m, "BikeWheel", Vector3.new(0.2, 0.8, 0.8), F * CFrame.new(0, 0.055, z + dz) * UPRIGHT, WHITE, M.SmoothPlastic, "Cyl")
 		end
-		newPart(m, "BikeFrame", Vector3.new(0.14, 0.05, 1.1), F * CFrame.new(0, 0.095, z), WHITE, M.SmoothPlastic)
-		newPart(m, "BikeBar", Vector3.new(0.5, 0.05, 0.12), F * CFrame.new(0, 0.095, z - 0.45), WHITE, M.SmoothPlastic)
+		newPart(m, "BikeFrame", Vector3.new(0.14, 0.2, 1.1), F * CFrame.new(0, 0.055, z), WHITE, M.SmoothPlastic)
+		newPart(m, "BikeBar", Vector3.new(0.5, 0.2, 0.12), F * CFrame.new(0, 0.055, z - 0.45), WHITE, M.SmoothPlastic)
 	end
 end
 
@@ -612,9 +620,9 @@ local function buildBusShelter(m: Model, F: CFrame, seed: number)
 	poster(adFace, Enum.NormalId.Left, ADS[seed % #ADS + 1], 90)
 	local _ = adBox
 	-- banc
-	box(m, "ShelterBench", F, -2.8, 2.6, 1.65, 1.9, 0.6, 1.5, WOOD, M.Wood, true)
+	box(m, "ShelterBench", F, -2.8, 2.6, 1.2, 1.45, 0.6, 1.5, WOOD, M.Wood, true)
 	for _, x in ipairs({ -2.2, 2.0 }) do
-		box(m, "ShelterBenchLeg", F, x - 0.1, x + 0.1, -0.05, 1.7, 1.2, 1.5, frame, M.Metal)
+		box(m, "ShelterBenchLeg", F, x - 0.1, x + 0.1, -0.05, 1.25, 1.2, 1.5, frame, M.Metal)
 	end
 	-- nom de l'arrêt sur le bandeau du toit
 	local strip = box(m, "ShelterName", F, -3.0, 3.0, 7.0, 7.62, -1.35, -1.25, WHITE, M.SmoothPlastic)
@@ -702,14 +710,15 @@ local function buildTerrace(m: Model, F: CFrame, seed: number)
 	for i = -1, 1 do
 		local x = i * 3.2
 		column(m, "TableFoot", F, x, 0, -0.05, 0.12, 0.9, GRAPHITE, M.Metal)
-		column(m, "TableLeg", F, x, 0, 0.1, 2.62, 0.16, GRAPHITE, M.Metal)
-		column(m, "TableTop", F, x, 0, 2.6, 2.72, 1.5, rgb(236, 232, 226), M.Marble, true)
+		-- (v9.9 CITY99, échelle : plateau à 2,3 = ~75 cm, chaises à 1,25 = SitHeight - 0,2 de TownPeople)
+		column(m, "TableLeg", F, x, 0, 0.1, 2.2, 0.16, GRAPHITE, M.Metal)
+		column(m, "TableTop", F, x, 0, 2.18, 2.3, 1.5, rgb(236, 232, 226), M.Marble, true)
 		for _, sz in ipairs({ -1, 1 }) do
 			local c = F * CFrame.new(x, 0, sz * 1.25) * CFrame.Angles(0, sz < 0 and math.pi or 0, 0)
-			box(m, "ChairSeat", c, -0.5, 0.5, 1.55, 1.7, -0.5, 0.5, rgb(160, 110, 70), M.Wood)
-			box(m, "ChairBack", c, -0.5, 0.5, 1.66, 2.9, 0.42, 0.55, rgb(160, 110, 70), M.Wood)
+			box(m, "ChairSeat", c, -0.5, 0.5, 1.1, 1.25, -0.5, 0.5, rgb(160, 110, 70), M.Wood)
+			box(m, "ChairBack", c, -0.5, 0.5, 1.21, 2.6, 0.42, 0.55, rgb(160, 110, 70), M.Wood)
 			for _, lx in ipairs({ -0.42, 0.42 }) do
-				box(m, "ChairFrame", c, lx - 0.05, lx + 0.05, -0.05, 1.58, -0.44, 0.44, GRAPHITE, M.Metal)
+				box(m, "ChairFrame", c, lx - 0.05, lx + 0.05, -0.05, 1.13, -0.44, 0.44, GRAPHITE, M.Metal)
 			end
 		end
 		if i ~= 0 then
@@ -764,9 +773,10 @@ end
 local function buildChessTables(m: Model, F: CFrame, _seed: number)
 	for _, x in ipairs({ -3, 3 }) do
 		local T = F * CFrame.new(x, 0, 0)
-		column(m, "ChessFoot", T, 0, 0, -0.05, 2.55, 1.0, CONCRETE, M.Concrete, true)
-		box(m, "ChessTop", T, -1.4, 1.4, 2.5, 2.8, -1.4, 1.4, rgb(220, 214, 206), M.Marble, true)
-		local board = box(m, "ChessBoard", T, -0.9, 0.9, 2.78, 2.84, -0.9, 0.9, WHITE, M.SmoothPlastic)
+		-- (v9.9 CITY99, échelle : plateau à 2,3, tabourets à 1,45 = NPCModels.SitHeight)
+		column(m, "ChessFoot", T, 0, 0, -0.05, 2.05, 1.0, CONCRETE, M.Concrete, true)
+		box(m, "ChessTop", T, -1.4, 1.4, 2.0, 2.3, -1.4, 1.4, rgb(220, 214, 206), M.Marble, true)
+		local board = box(m, "ChessBoard", T, -0.9, 0.9, 2.28, 2.34, -0.9, 0.9, WHITE, M.SmoothPlastic)
 		local gui = Instance.new("SurfaceGui")
 		gui.Face = Enum.NormalId.Top
 		gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
@@ -787,11 +797,11 @@ local function buildChessTables(m: Model, F: CFrame, _seed: number)
 			end
 		end
 		for _, sz in ipairs({ -1, 1 }) do
-			column(m, "ChessStool", T, 0, sz * 2.3, -0.05, 1.9, 1.1, CONCRETE, M.Concrete, true)
+			column(m, "ChessStool", T, 0, sz * 2.3, -0.05, 1.45, 1.1, CONCRETE, M.Concrete, true)
 		end
 		-- quelques pièces
 		for k = 0, 3 do
-			column(m, "ChessPiece", T, -0.6 + k * 0.4, (k % 2 == 0 and -0.5 or 0.55), 2.82, 3.2, 0.2, k % 2 == 0 and WHITE or INK, M.SmoothPlastic)
+			column(m, "ChessPiece", T, -0.6 + k * 0.4, (k % 2 == 0 and -0.5 or 0.55), 2.32, 2.7, 0.2, k % 2 == 0 and WHITE or INK, M.SmoothPlastic)
 		end
 	end
 end
@@ -924,9 +934,11 @@ end
 
 -- Marquage au sol (lignes de rive, pointillés, passages, lignes d'arrêt) :
 -- une pièce blanche à la taille donnée par le serveur (v9.8 : 0 pièce serveur)
+-- (v9.9, CITY99) peinture relevée de 0,07 (dessus à +0,12 : au-dessus des
+-- ornières, rustines et fissures de TownRoads) et plus épaisse vers le bas
 local function buildPaint(m: Model, F: CFrame, _seed: number, spot: Spot?)
 	local size = spot and spot.Size or Vector3.new(1, 0.1, 1)
-	newPart(m, "Paint", size, F, rgb(250, 250, 246), M.SmoothPlastic)
+	newPart(m, "Paint", Vector3.new(size.X, size.Y + 0.2, size.Z), F * CFrame.new(0, 0.07 - 0.1, 0), rgb(250, 250, 246), M.SmoothPlastic)
 end
 
 local BUILDERS: { [string]: (Model, CFrame, number, Spot?) -> any } = {
@@ -972,6 +984,19 @@ local BUILDERS: { [string]: (Model, CFrame, number, Spot?) -> any } = {
 	WindmillHill = buildWindmillHill,
 	Turbine = buildTurbine,
 }
+-- (v9.9, CITY99) routes réalistes, allées, poteaux indicateurs (TownRoads)
+for kind, builder in pairs(TownRoads.BUILDERS) do
+	BUILDERS[kind] = builder
+end
+for kind in pairs(TownRoads.BIG) do
+	BIG[kind] = true
+end
+for kind, builder in pairs(TownDistricts.BUILDERS) do
+	BUILDERS[kind] = builder
+end
+for kind in pairs(TownDistricts.BIG) do
+	BIG[kind] = true
+end
 TownStreetLife.Kinds = BUILDERS
 
 ----------------------------------------------------------------------
@@ -1108,6 +1133,18 @@ local function load(s: any): boolean
 		return false
 	end
 	s.Spots = parseSpots(data)
+	TownRoads.SetDestinations(s.Spots)
+	-- (v9.9, CITY99) arbres de la ville : modèles VIDES posés par le serveur
+	-- (TownKit.Tree, attribut TreeClient) ; on les construit ici
+	s.Trees = {}
+	for _, d in ipairs(town:GetDescendants()) do
+		if d:IsA("Model") and d:GetAttribute("TreeClient") == true then
+			local base = d:GetAttribute("TreeBase")
+			if typeof(base) == "Vector3" then
+				table.insert(s.Trees, { Model = d, Base = base, Built = nil })
+			end
+		end
+	end
 	local folder = Instance.new("Folder")
 	folder.Name = TownStreetLife.FOLDER_NAME
 	-- (sous DopamineTown : TownAtmosphere suit les verres "NightGlow")
@@ -1115,6 +1152,67 @@ local function load(s: any): boolean
 	s.Folder = folder
 	s.Loaded = true
 	return true
+end
+
+-- (v9.9, CITY99) Un arbre de la ville, construit DANS son modèle du serveur
+-- (mêmes pièces que Greenery.Tree côté serveur avant v9.9 : même rendu,
+-- même collision des troncs pour l'avatar local), sans les attributs
+-- "TreeBase" (TownGreenery ne le prend pas pour un autre arbre)
+local TREES_PER_STEP = 14
+local function buildTree(t: any): number
+	local m = t.Model
+	if not m.Parent then
+		return 0
+	end
+	local ok, tree, n = pcall(function()
+		return Greenery.Tree(m, t.Base, tonumber(m:GetAttribute("TreeHeight")) or 12, tonumber(m:GetAttribute("TreeSeed")) or 1, m:GetAttribute("TreeSpecies") :: any, tonumber(m:GetAttribute("TreeTier")) or 0, 0, {
+			Lawn = m:GetAttribute("TreeLawn") == true,
+			Name = "TreeLocal",
+		})
+	end)
+	if not ok then
+		t.Built = false
+		return 0
+	end
+	for _, key in ipairs({ "TreeBase", "TreeSpecies", "TreeHeight", "TreeSeed", "TreeTier", "TreeLawn" }) do
+		tree:SetAttribute(key, nil)
+	end
+	t.Built = tree
+	return n
+end
+
+local function stepTrees(s: any, flat: Vector3)
+	local list = s.Trees
+	if not list or s.TreesDone then
+		return
+	end
+	-- les plus proches d'abord, TREES_PER_STEP par passe ; puis plus rien à faire
+	local todo = {}
+	for _, t in ipairs(list) do
+		if t.Built == nil then
+			table.insert(todo, t)
+		end
+	end
+	if #todo == 0 then
+		s.TreesDone = true
+		return
+	end
+	table.sort(todo, function(a, b)
+		return (Vector3.new(a.Base.X, 0, a.Base.Z) - flat).Magnitude < (Vector3.new(b.Base.X, 0, b.Base.Z) - flat).Magnitude
+	end)
+	for i = 1, math.min(TREES_PER_STEP, #todo) do
+		buildTree(todo[i])
+	end
+end
+
+local function clearTrees(s: any)
+	for _, t in ipairs(s.Trees or {}) do
+		if t.Built then
+			t.Built:Destroy()
+		end
+		t.Built = nil
+	end
+	s.TreesDone = false
 end
 
 local function focusPoint(): Vector3?
@@ -1132,6 +1230,12 @@ function TownStreetLife.Start()
 		local s = state
 		if not s or not s.Loaded then
 			return
+		end
+		-- (v9.9) personnages des nouveaux lieux : à chaque image, près de la caméra
+		local okD, errD = pcall(TownDistricts.Step, dt)
+		if not okD and not s.WarnedD then
+			s.WarnedD = true
+			warn("[TownStreetLife] TownDistricts : " .. tostring(errD))
 		end
 		s.Acc += dt
 		if s.Acc < ANIM_STEP then
@@ -1160,13 +1264,17 @@ function TownStreetLife.Step(position: Vector3)
 			for _, spot in ipairs(s.Spots) do
 				destroySpot(spot)
 			end
+			clearTrees(s)
 			pcall(load, s)
 		end
 		return
 	end
 	local flat = Vector3.new(position.X, 0, position.Z)
-	local builds = 0
+	stepTrees(s, flat)
 	local k = detailScale()
+	-- (v9.9) les plus PROCHES d'abord : on ne voit jamais un trou au pied de
+	-- l'avatar pendant que le flux construit au loin
+	local todo = {}
 	for _, spot: Spot in ipairs(s.Spots) do
 		if not ANCHORS[spot.Kind] and BUILDERS[spot.Kind] then
 			local d = (Vector3.new(spot.Pos.X, 0, spot.Pos.Z) - flat).Magnitude
@@ -1180,11 +1288,16 @@ function TownStreetLife.Step(position: Vector3)
 				if d > outR then
 					destroySpot(spot)
 				end
-			elseif d < inR and builds < BUILDS_PER_STEP then
-				builds += 1
-				buildSpot(spot, s.Folder)
+			elseif d < inR then
+				table.insert(todo, { Spot = spot, D = d })
 			end
 		end
+	end
+	table.sort(todo, function(a, b)
+		return a.D < b.D
+	end)
+	for i = 1, math.min(BUILDS_PER_STEP, #todo) do
+		buildSpot(todo[i].Spot, s.Folder)
 	end
 end
 
@@ -1200,6 +1313,7 @@ function TownStreetLife.Stop()
 	for _, spot in ipairs(s.Spots) do
 		destroySpot(spot)
 	end
+	clearTrees(s)
 	if s.Folder then
 		s.Folder:Destroy()
 	end
@@ -1215,6 +1329,12 @@ function TownStreetLife.BuildAll(): number
 	for _, spot: Spot in ipairs(s.Spots) do
 		if not spot.Model and not ANCHORS[spot.Kind] and BUILDERS[spot.Kind] then
 			buildSpot(spot, s.Folder)
+			n += 1
+		end
+	end
+	for _, t in ipairs(s.Trees or {}) do
+		if t.Built == nil then
+			buildTree(t)
 			n += 1
 		end
 	end

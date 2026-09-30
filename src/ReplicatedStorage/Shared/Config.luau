@@ -744,6 +744,63 @@ Config.Music = {
 }
 
 ----------------------------------------------------------------------
+-- 🎵 Instruments de la SCÈNE MUSICALE de la place (v9.9, MUSIC99).
+--   Chaque note joue un Sound "rééchantillonné" : sa hauteur vient de
+--   PlaybackSpeed = 2^((note - BaseNote) / 12) (un demi-ton = x1,0595 ;
+--   notes MIDI : Do central C4 = 60, La 440 Hz = A4 = 69). Par défaut, des
+--   sons INTÉGRÉS à Roblox ("rbxasset://sounds/...", présents dans toutes
+--   les installations) : tous les instruments mélodiques partagent le même
+--   échantillon et la même BaseNote -> ils restent accordés entre eux.
+--   Pour de VRAIS sons d'instruments :
+--     Studio > Boîte à outils (Toolbox) > Audio, ou le Creator Store ;
+--     cherche "piano note C4", "electric guitar note", "bass note",
+--     "xylophone", "synth", "kick", "snare", "hi hat", "crash"... ; filtre par
+--     créateur "Roblox" (sons sous licence, gratuits, utilisables dans tous
+--     les jeux) ; écoute ; clic droit > "Copier l'ID de l'élément" ; colle
+--     "rbxassetid://ID" dans SampleId ; mets dans BaseNote la note que joue
+--     l'échantillon (souvent écrite dans son nom, ex. "C4" = 60) ; pour un
+--     vrai échantillon, MinSpeed = 0.25 et MaxSpeed = 4 conviennent.
+--   Garde "" pour couper un instrument. Volume : 0..1 (multiplié par le
+--   volume des effets du joueur, ⚙️). Decay : (s) le son s'éteint en fondu.
+--   Layers : { demi-tons, volume } joués ensemble (timbre plus riche).
+--   MinSpeed / MaxSpeed : hors de ces vitesses, la note est jouée une
+--   octave plus haut / plus bas (même nom de note : l'harmonie reste juste).
+--   Batterie / DJ : chaque pièce = une liste de couches
+--   { SampleId, Speed, Volume, Decay?, Delay? }.
+----------------------------------------------------------------------
+Config.Instruments = {
+	Volume = 0.8, -- volume général de la scène
+	RollOffMin = 14, -- (studs) son 3D : plein volume jusqu'ici…
+	RollOffMax = 120, -- …silence au-delà (on n'entend la scène que de près)
+	-- 📻 radio lofi (Config.Music.Playlist) sur les enceintes de la scène
+	Radio = { Volume = 0.65, RollOffMin = 18, RollOffMax = 110 },
+	Piano = { SampleId = "rbxasset://sounds/electronicpingshort.wav", BaseNote = 76, Volume = 0.7, Decay = 1.6, MinSpeed = 0.33, MaxSpeed = 3, Layers = { { 0, 1 }, { 12, 0.16 } } },
+	Synth = { SampleId = "rbxasset://sounds/electronicpingshort.wav", BaseNote = 76, Volume = 0.55, Decay = 1.1, MinSpeed = 0.33, MaxSpeed = 3, Layers = { { 0, 1 }, { -12, 0.45 }, { 7, 0.12 } } },
+	Xylophone = { SampleId = "rbxasset://sounds/electronicpingshort.wav", BaseNote = 76, Volume = 0.6, Decay = 0.55, MinSpeed = 0.4, MaxSpeed = 3.2, Layers = { { 0, 1 }, { 24, 0.12 } } },
+	Guitar = { SampleId = "rbxasset://sounds/electronicpingshort.wav", BaseNote = 76, Volume = 0.5, Decay = 1.2, MinSpeed = 0.3, MaxSpeed = 2.6, Layers = { { 0, 1 } }, Distortion = 0.35 },
+	Bass = { SampleId = "rbxasset://sounds/electronicpingshort.wav", BaseNote = 76, Volume = 0.8, Decay = 0.9, MinSpeed = 0.2, MaxSpeed = 1.2, Layers = { { 0, 1 }, { 12, 0.2 } } },
+	Drums = {
+		Volume = 0.75,
+		Kick = { { "rbxasset://sounds/clickfast.wav", 0.28, 1, 0.35 }, { "rbxasset://sounds/electronicpingshort.wav", 0.14, 0.5, 0.3 } },
+		Snare = { { "rbxasset://sounds/swoosh.wav", 3.2, 0.55, 0.22 }, { "rbxasset://sounds/clickfast.wav", 0.9, 0.6, 0.15 } },
+		HatClosed = { { "rbxasset://sounds/swoosh.wav", 7, 0.22, 0.07 } },
+		HatOpen = { { "rbxasset://sounds/swoosh.wav", 5, 0.26, 0.4 } },
+		TomHigh = { { "rbxasset://sounds/electronicpingshort.wav", 0.42, 0.75, 0.35 }, { "rbxasset://sounds/clickfast.wav", 0.6, 0.4, 0.1 } },
+		TomMid = { { "rbxasset://sounds/electronicpingshort.wav", 0.34, 0.8, 0.4 }, { "rbxasset://sounds/clickfast.wav", 0.5, 0.4, 0.1 } },
+		TomFloor = { { "rbxasset://sounds/electronicpingshort.wav", 0.26, 0.85, 0.5 }, { "rbxasset://sounds/clickfast.wav", 0.4, 0.45, 0.12 } },
+		Crash = { { "rbxasset://sounds/swoosh.wav", 1.6, 0.45, 1.4 } },
+		Ride = { { "rbxasset://sounds/electronicpingshort.wav", 2.4, 0.22, 0.6 }, { "rbxasset://sounds/swoosh.wav", 5, 0.12, 0.3 } },
+	},
+	DJ = {
+		Volume = 0.8,
+		Scratch = { { "rbxasset://sounds/swoosh.wav", 2.3, 0.5, 0.18 }, { "rbxasset://sounds/swoosh.wav", 1.4, 0.45, 0.22, 0.14 } },
+		Horn = { { "rbxasset://sounds/electronicpingshort.wav", 1, 0.5, 0.2 }, { "rbxasset://sounds/electronicpingshort.wav", 1.26, 0.4, 0.2 }, { "rbxasset://sounds/electronicpingshort.wav", 1, 0.5, 0.2, 0.16 }, { "rbxasset://sounds/electronicpingshort.wav", 1.26, 0.4, 0.3, 0.16 } },
+		Riser = { { "rbxasset://sounds/swoosh.wav", 0.55, 0.5, 1.6 }, { "rbxasset://sounds/electronicpingshort.wav", 0.5, 0.3, 0.3, 0.4 }, { "rbxasset://sounds/electronicpingshort.wav", 0.75, 0.3, 0.3, 0.8 }, { "rbxasset://sounds/electronicpingshort.wav", 1, 0.35, 0.4, 1.2 } },
+		Drop = { { "rbxasset://sounds/clickfast.wav", 0.2, 1, 0.6 }, { "rbxasset://sounds/electronicpingshort.wav", 0.12, 0.7, 0.9 }, { "rbxasset://sounds/swoosh.wav", 0.8, 0.4, 1.2 } },
+	},
+}
+
+----------------------------------------------------------------------
 -- Sons de clic au choix (⚙️ Paramètres). Le choix est sauvegardé.
 ----------------------------------------------------------------------
 Config.ClickSounds = {

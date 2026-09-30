@@ -318,6 +318,11 @@ function TownMap.Build(plotCount: number): Town
 	folder:SetAttribute("Parts", TownKit.Stats.Parts)
 	folder:SetAttribute("Lights", TownKit.Stats.Lights)
 	folder:SetAttribute("Shops", #shops:GetChildren())
+	-- (v9.9, NPC99) places des bancs occupées par des passants : le joueur s'assoit à côté
+	local okSeatGuard, NPCSeatGuard = pcall(require, script.Parent.NPCSeatGuard)
+	if okSeatGuard then
+		pcall(NPCSeatGuard.Apply, folder)
+	end
 	folder.Parent = workspace
 
 	boards = { Plots = plots, Screen = plaza.Screen, Map = entrance.Map }

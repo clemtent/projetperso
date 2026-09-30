@@ -24,7 +24,8 @@
 	API :
 	  House3DKit.Paint(item, entry, night) -> Painted   (dessin 2D hors écran + palette)
 	  House3DKit.Palette(painted) -> { Color3 }
-	  House3DKit.Builder(parent, origin, k, mirror, map, palette) -> Builder
+	  House3DKit.Builder(parent, origin, k, mirror, map, palette, stretch?) -> Builder
+	    (v9.9 SCALE99 : stretch = élargissement horizontal x/z, voir House3DScale)
 	  House3DKit.Triangle / Heart / Star / StarSoft / HeartPoints / StarPoints / Path / Frame (formes)
 	  House3DKit.NewPart(className, name, size, cframe, color, material?, transparency?) -> BasePart
 	  House3DKit.Surface(part, face, canvasSize, lightInfluence) -> SurfaceGui
@@ -80,6 +81,7 @@ export type Top = { X: number, Y: number, Z: number, W: number, D: number }
 
 export type Builder = {
 	K: number,
+	Stretch: number, -- (v9.9 SCALE99) élargissement horizontal (1 = aucun)
 	Mirror: boolean,
 	Parts: { BasePart },
 	Locals: { CFrame },
@@ -209,10 +211,73 @@ local WEDGE_YAW: { [string]: number } = {
 	Left = math.pi / 2,
 }
 
+-- (v9.9 SCALE99) Élargissement horizontal d'une pièce (unités) : la position
+-- et les axes de la pièce passent par diag(s, 1, s). Chaque côté prend la
+-- longueur de son axe transformé ; l'axe le plus long garde sa direction
+-- exacte (tube, pied, planche), puis Gram-Schmidt. Rotations autour de la
+-- verticale : exactes ; pièces inclinées : très proche (s <= 1,5).
+local function stretchPart(cframe: CFrame, size: Vector3, s: number): (CFrame, Vector3)
+	local x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22 = cframe:GetComponents()
+	local axes = {
+		Vector3.new(r00 * s, r10, r20 * s),
+		Vector3.new(r01 * s, r11, r21 * s),
+		Vector3.new(r02 * s, r12, r22 * s),
+	}
+	local lengths = { axes[1].Magnitude, axes[2].Magnitude, axes[3].Magnitude }
+	local sizes = { size.X * lengths[1], size.Y * lengths[2], size.Z * lengths[3] }
+	-- ordre : le plus long d'abord
+	local p = 1
+	for i = 2, 3 do
+		if sizes[i] > sizes[p] + 1e-6 then
+			p = i
+		end
+	end
+	local q = p % 3 + 1
+	local other = q % 3 + 1
+	if other ~= p and sizes[other] > sizes[q] + 1e-6 then
+		q = other
+	end
+	local r = 6 - p - q
+	local units: { Vector3 } = { Vector3.zero, Vector3.zero, Vector3.zero }
+	units[p] = axes[p] / math.max(1e-6, lengths[p])
+	local projected = axes[q] - units[p] * axes[q]:Dot(units[p])
+	if projected.Magnitude < 1e-4 then
+		return CFrame.new(x * s, y, z * s) * cframe.Rotation, Vector3.new(sizes[1], sizes[2], sizes[3])
+	end
+	units[q] = projected.Unit
+	-- (repère direct : X = Y x Z, Y = Z x X, Z = X x Y)
+	if (p == 1 and q == 2) or (p == 2 and q == 3) or (p == 3 and q == 1) then
+		units[r] = units[p]:Cross(units[q])
+	else
+		units[r] = units[q]:Cross(units[p])
+	end
+	local cf = CFrame.fromMatrix(Vector3.new(x * s, y, z * s), units[1], units[2], units[3])
+	return cf, Vector3.new(sizes[1], sizes[2], sizes[3])
+end
+
+-- (v9.9) Boule / cylindre élargis : ils restent ronds (diamètre moyen)
+local function roundAgain(part: BasePart, ball: boolean)
+	local size = part.Size
+	if ball then
+		local d = (size.X + size.Y + size.Z) / 3
+		part.Size = Vector3.new(d, d, d)
+	else
+		local d = (size.Y + size.Z) / 2
+		part.Size = Vector3.new(size.X, d, d)
+	end
+end
+
 -- Constructeur d'un objet : pièces en unités, dans le repère `origin`
-function House3DKit.Builder(parent: Instance, origin: CFrame, k: number, mirror: boolean, map: ((Color3) -> Color3)?, palette: { Color3 }?): Builder
+function House3DKit.Builder(parent: Instance, origin: CFrame, k: number, mirror: boolean, map: ((Color3) -> Color3)?, palette: { Color3 }?, stretch: number?): Builder
 	local b = {} :: Builder
-	b.K = k
+	-- (v9.9 SCALE99) `stretch` = élargissement horizontal (x, z) en plus de k ;
+	-- b.K = la plus petite des deux échelles (épaisseurs minimales des recettes)
+	local wide = math.clamp(tonumber(stretch) or 1, 0.5, 2)
+	if math.abs(wide - 1) < 0.001 then
+		wide = 1
+	end
+	b.K = k * math.min(1, wide)
+	b.Stretch = wide
 	b.Mirror = mirror
 	b.Parts = {}
 	b.Locals = {}
@@ -234,11 +299,19 @@ function House3DKit.Builder(parent: Instance, origin: CFrame, k: number, mirror:
 	end
 
 	b.Part = function(className: string, cframe: CFrame, size: Vector3, color: Color3, material: Enum.Material?, name: string?): BasePart
-		local localCF = CFrame.new(cframe.X * k, cframe.Y * k, cframe.Z * k) * cframe.Rotation
+		local localCF, partSize
+		if wide ~= 1 then
+			localCF, partSize = stretchPart(cframe, size, wide)
+			localCF = CFrame.new(localCF.X * k, localCF.Y * k, localCF.Z * k) * localCF.Rotation
+			partSize *= k
+		else
+			localCF = CFrame.new(cframe.X * k, cframe.Y * k, cframe.Z * k) * cframe.Rotation
+			partSize = size * k
+		end
 		if mirror then
 			localCF = mirrorCFrame(localCF)
 		end
-		local part = House3DKit.NewPart(className, name or "Piece", size * k, origin * localCF, color, material)
+		local part = House3DKit.NewPart(className, name or "Piece", partSize, origin * localCF, color, material)
 		part.Parent = parent
 		table.insert(b.Parts, part)
 		table.insert(b.Locals, localCF)
@@ -253,24 +326,36 @@ function House3DKit.Builder(parent: Instance, origin: CFrame, k: number, mirror:
 	b.Ball = function(x: number, y: number, z: number, diameter: number, color: Color3, material: Enum.Material?): BasePart
 		local part = b.Part("Part", CFrame.new(x, y, z), Vector3.new(diameter, diameter, diameter), color, material, "Boule")
 		;(part :: Part).Shape = Enum.PartType.Ball
+		if wide ~= 1 then
+			roundAgain(part, true)
+		end
 		return part
 	end
 	-- Cylindre debout (y = bas)
 	b.Cyl = function(x: number, y: number, z: number, diameter: number, height: number, color: Color3, material: Enum.Material?): BasePart
 		local part = b.Part("Part", CFrame.new(x, y + height / 2, z) * CFrame.Angles(0, 0, math.pi / 2), Vector3.new(height, diameter, diameter), color, material, "Cylindre")
 		;(part :: Part).Shape = Enum.PartType.Cylinder
+		if wide ~= 1 then
+			roundAgain(part, false)
+		end
 		return part
 	end
 	-- Cylindre couché gauche-droite (centre)
 	b.CylX = function(x: number, y: number, z: number, diameter: number, length: number, color: Color3, material: Enum.Material?): BasePart
 		local part = b.Part("Part", CFrame.new(x, y, z), Vector3.new(length, diameter, diameter), color, material, "Cylindre")
 		;(part :: Part).Shape = Enum.PartType.Cylinder
+		if wide ~= 1 then
+			roundAgain(part, false)
+		end
 		return part
 	end
 	-- Cylindre couché avant-arrière (centre)
 	b.CylZ = function(x: number, y: number, z: number, diameter: number, length: number, color: Color3, material: Enum.Material?): BasePart
 		local part = b.Part("Part", CFrame.new(x, y, z) * CFrame.Angles(0, math.pi / 2, 0), Vector3.new(length, diameter, diameter), color, material, "Cylindre")
 		;(part :: Part).Shape = Enum.PartType.Cylinder
+		if wide ~= 1 then
+			roundAgain(part, false)
+		end
 		return part
 	end
 	-- Coin en pente (y = bas) ; `facing` = où regarde la pente
@@ -306,6 +391,9 @@ function House3DKit.Builder(parent: Instance, origin: CFrame, k: number, mirror:
 		local cf = CFrame.lookAt((a + c) / 2, (a + c) / 2 + direction, up) * CFrame.Angles(0, math.pi / 2, 0)
 		local part = b.Part("Part", cf, Vector3.new(length, diameter, diameter), color, material, "Tube")
 		;(part :: Part).Shape = Enum.PartType.Cylinder
+		if wide ~= 1 then
+			roundAgain(part, false)
+		end
 		return part
 	end
 	-- Bloc aux arêtes verticales arrondies (y = bas) : 2 blocs + 4 cylindres
@@ -750,6 +838,9 @@ function House3DKit.PillowR(b: Builder, cframe: CFrame, w: number, h: number, d:
 	for _, sy in ipairs({ -1, 1 }) do
 		local roll = b.Part("Part", cframe * CFrame.new(0, sy * (h - r) / 2, 0), Vector3.new(w, r, r), color, mat, "Cylindre")
 		;(roll :: Part).Shape = Enum.PartType.Cylinder
+		if b.Stretch ~= 1 then
+			roundAgain(roll, false)
+		end
 	end
 	b.EggR(cframe, w * 0.92, h * 0.86, math.max(d, r * 1.3), color, mat)
 	return core

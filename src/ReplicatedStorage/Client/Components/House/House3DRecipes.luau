@@ -41,6 +41,10 @@
 
 local HouseSurfaces = require(script.Parent.HouseSurfaces)
 local House3DKit = require(script.Parent.House3DKit)
+-- (v9.9 SCALE99) proportions réelles à côté de l'avatar
+local House3DScale = require(script.Parent.House3DScale)
+-- (v9.9 SCALE99) aiguilles à l'heure réelle, page du calendrier du jour
+local House3DTime = require(script.Parent.House3DTime)
 
 type Builder = House3DKit.Builder
 
@@ -1872,7 +1876,44 @@ local function plaque(kind: string)
 end
 R.FramedPicture = plaque("Frame")
 R.MapPoster = plaque("Poster")
-R.WallCalendar = plaque("Calendar")
+-- (v9.9 SCALE99) 📅 vrai calendrier mural : carton de fond, 3 feuillets
+-- (on voit l'épaisseur du bloc en bas), reliure spirale en fil d'acier qui
+-- traverse les trous, suspente en V sur un clou ; la page du dessus montre
+-- le mois EN COURS (photo du mois, grille, aujourd'hui entouré : House3DTime)
+R.WallCalendar = function(b: Builder, _ctx: Ctx)
+	local g = House3DKit.Gap(b, 0.6)
+	local board = rgb(186, 160, 128)
+	-- carton de fond
+	b.Box(0, 1.6, 0.6, 67, 90.6, 1.2, board, M.SmoothPlastic)
+	-- feuillets du dessous (de plus en plus bas et clairs vers l'avant)
+	local z = 1.2
+	local sheets = { { 2.2, 62.8, rgb(236, 232, 224) }, { 2.9, 62.5, rgb(244, 241, 234) } }
+	for _, sheet in ipairs(sheets) do
+		z += g
+		b.Box(0, sheet[1], z + 0.3, sheet[2], 91 - sheet[1], 0.6, sheet[3], M.SmoothPlastic)
+		z += 0.6
+	end
+	z += g
+	local front = b.Box(0, 3.6, z + 0.3, 62, 87.4, 0.6, rgb(252, 251, 247), M.SmoothPlastic)
+	front.Name = "CalendarSheet"
+	front.CastShadow = false
+	House3DTime.CalendarPage(front, Enum.NormalId.Back)
+	local stackMid = (1.2 + z + 0.6) / 2
+	-- spirale : 14 boucles de fil qui passent dans les trous du haut
+	local steel = rgb(176, 180, 190)
+	local ringD = (z + 0.6 - 1.2) + 3 -- (la boucle entoure tout le bloc de feuillets)
+	for index = 0, 13 do
+		local x = -31 + 3.6 + index * (62 - 7.2) / 13
+		b.CylX(x, 91 - ringD / 2 + 2.2, stackMid, ringD, 1.2, steel, M.Metal)
+	end
+	-- suspente en V et clou
+	for _, sx in ipairs({ -1, 1 }) do
+		b.Tube(sx * 7, 91.2, stackMid, 0, 97, 0.9, 0.9, steel, M.Metal)
+	end
+	b.CylZ(0, 97, 1.4, 1.6, 2.8, rgb(90, 90, 98), M.Metal)
+	b.CylZ(0, 97, 2.9, 3, 0.6, rgb(120, 120, 128), M.Metal)
+	b.Footprint(70, 6, 100)
+end
 
 -- ÉLECTRONIQUE -----------------------------------------------------------
 
@@ -2845,9 +2886,84 @@ local function cup(straw: boolean)
 	end
 end
 R.CocoaMug = cup(false)
-R.StrawberryMilk = cup(true)
-R.BubbleTea = cup(true)
-R.Lemonade = cup(true)
+-- (v9.9 SCALE99) objets du quotidien "complets" : trois vraies boissons
+-- différentes au lieu d'un même gobelet à étiquette plate
+-- Lait fraise : bouteille de verre (col, lèvre), lait rose, bande
+-- d'étiquette tout autour, paille en papier, fraise piquée sur le col
+R.StrawberryMilk = function(b: Builder, _ctx: Ctx)
+	local g = House3DKit.Gap(b, 0.6)
+	local milk = rgb(255, 160, 196)
+	local glass = b.Cyl(0, 0, 0, 40, 46, GLASS, M.Glass)
+	glass.Transparency = 0.6
+	glass.Reflectance = 0.12
+	b.Cyl(0, 46, 0, 30, 8, GLASS, M.Glass).Transparency = 0.4
+	b.Cyl(0, 54, 0, 34, 4, lighten(GLASS, 0.2), M.Glass).Transparency = 0.3
+	b.Cyl(0, 1.5, 0, 36, 42, milk, M.SmoothPlastic)
+	b.Cyl(0, 46, 0, 26, 7, milk, M.SmoothPlastic)
+	-- étiquette : bande blanche + cœur fraise
+	b.Cyl(0, 14, 0, 40 + 2 * g, 14, WHITE, M.SmoothPlastic)
+	House3DKit.Heart(b, 0, 21, 20 + 2 * g, 8, 0.8, rgb(230, 70, 100), M.SmoothPlastic)
+	-- paille en papier rayée (2 tons) et fraise
+	local straw = accent(b, 2, rgb(255, 120, 160))
+	b.Tube(2, 20, 0, 9, 50, 0, 4, straw, M.SmoothPlastic)
+	b.Tube(9, 50, 0, 13, 76, 0, 4, WHITE, M.SmoothPlastic)
+	b.Egg(-13, 60, 6, 11, 13, 11, rgb(226, 50, 70), M.SmoothPlastic)
+	for index = 0, 2 do
+		local a = index / 3 * math.pi * 2
+		b.EggR(CFrame.new(-13 + math.cos(a) * 3, 67, 6 + math.sin(a) * 3) * CFrame.Angles(0, a, 0.6), 7, 2, 3, LEAF_DARK, M.SmoothPlastic)
+	end
+	for index = 0, 3 do
+		b.Ball(-13 + (index % 2) * 4 - 2, 57 + index * 2, 11.2, 1.4, rgb(255, 230, 150), M.SmoothPlastic)
+	end
+	b.Footprint(62, 50, 64)
+end
+-- Thé aux perles : gobelet plastique (thé au lait), perles de tapioca au
+-- fond, opercule bombé, grosse paille oblique, bande-logo tout autour
+R.BubbleTea = function(b: Builder, _ctx: Ctx)
+	local g = House3DKit.Gap(b, 0.6)
+	local tea = rgb(214, 172, 132)
+	local cupPart = b.Cyl(0, 0, 0, 50, 58, rgb(236, 246, 255), M.Glass)
+	cupPart.Transparency = 0.45
+	b.Cyl(0, 1, 0, 46, 48, tea, M.SmoothPlastic)
+	for index = 1, 12 do
+		local a = index * 2.4
+		b.Ball(math.cos(a) * (8 + index % 3 * 5), 5 + (index % 3) * 4, math.sin(a) * (8 + index % 3 * 5), 7, rgb(50, 32, 30), M.SmoothPlastic)
+	end
+	b.Cyl(0, 58, 0, 52, 3, rgb(236, 246, 255), M.Glass).Transparency = 0.3
+	b.Egg(0, 61, 0, 50, 12, 50, rgb(236, 246, 255), M.Glass).Transparency = 0.5
+	local band = accent(b, 1, PINK)
+	b.Cyl(0, 20, 0, 50 + 2 * g, 14, band, M.SmoothPlastic)
+	House3DKit.Heart(b, 0, 27, 25 + 2 * g, 8, 0.8, WHITE, M.SmoothPlastic)
+	b.Tube(-4, 8, 0, 10, 92, 0, 7, accent(b, 2, SKY), M.SmoothPlastic)
+	b.Footprint(62, 50, 64)
+end
+-- Citronnade : grand verre (fond épais), citronnade trouble, glaçons,
+-- rondelle de citron sur le bord, feuille de menthe, paille rayée
+R.Lemonade = function(b: Builder, _ctx: Ctx)
+	local g = House3DKit.Gap(b, 0.6)
+	local glass = b.Cyl(0, 0, 0, 46, 62, GLASS, M.Glass)
+	glass.Transparency = 0.5
+	glass.Reflectance = 0.12
+	b.Cyl(0, g, 0, 44, 5, lighten(GLASS, 0.1), M.Glass).Transparency = 0.2
+	b.Cyl(0, 5, 0, 42, 44, rgb(255, 222, 80), M.SmoothPlastic)
+	for index = 0, 2 do
+		local ice = b.BoxR(CFrame.new(-10 + index * 10, 46 + (index % 2) * 3, (index - 1) * 6) * CFrame.Angles(0.4 * index, 0.7 * index, 0.3), 12, 12, 12, rgb(236, 248, 255), M.Glass)
+		ice.Transparency = 0.35
+	end
+	-- rondelle de citron fendue, posée à cheval sur le bord
+	b.CylZ(20, 62, 0, 22, 3, rgb(250, 214, 60), M.SmoothPlastic)
+	b.CylZ(20, 62, 0, 19, 3 + 2 * g, rgb(255, 246, 170), M.SmoothPlastic)
+	for index = 0, 3 do
+		b.BoxR(CFrame.new(20, 62, 0) * CFrame.Angles(0, 0, index * math.pi / 4), 16, 0.8, 3 + 4 * g, rgb(255, 255, 236), M.SmoothPlastic)
+	end
+	House3DKit.Leaf(b, -8, 56, 6, 12, 6, 0.6, -0.3, rgb(80, 170, 90))
+	b.Tube(-6, 20, -4, -16, 88, -6, 4, WHITE, M.SmoothPlastic)
+	for index = 0, 3 do
+		local t = 0.35 + index * 0.17
+		b.Tube(-6 - 10 * t, 20 + 68 * t, -4 - 2 * t, -6 - 10 * (t + 0.06), 20 + 68 * (t + 0.06), -4 - 2 * (t + 0.06), 4.4, rgb(240, 80, 90), M.SmoothPlastic)
+	end
+	b.Footprint(62, 50, 64)
+end
 local function bowl(b: Builder, _ctx: Ctx)
 	local color = accent(b, 2, lightOf(b, WHITE))
 	-- bol : pied, flanc évasé (gradins), liseré, contenu (fruits / légumes),
@@ -2968,8 +3084,58 @@ local function jar(b: Builder, _ctx: Ctx)
 	b.Box(0, 22, 35.4, 30, 18, 0.8, WHITE, M.SmoothPlastic)
 	b.Footprint(74, 74, 84)
 end
-R.CookieJar = jar
-R.HoneyPot = jar
+-- (v9.9 SCALE99) bocal à cookies : on voit les cookies (piles, pépites)
+R.CookieJar = function(b: Builder, ctx: Ctx)
+	jar(b, ctx)
+	-- le contenu uni du bocal (2e pièce) devient des piles de cookies
+	local fill = b.Parts[2]
+	if fill then
+		table.remove(b.Parts, 2)
+		table.remove(b.Locals, 2)
+		fill:Destroy()
+	end
+	local dough = rgb(206, 150, 90)
+	for stack, spot in ipairs({ { -14, -8 }, { 12, -10 }, { 0, 12 } }) do
+		for layer = 0, 3 do
+			local y = 3 + layer * 9.5
+			local tilt = ((stack + layer) % 3 - 1) * 0.12
+			b.EggR(CFrame.new(spot[1], y + 3, spot[2]) * CFrame.Angles(tilt, stack, tilt * 0.5), 26, 7, 26, vary(dough, stack * 7 + layer, 0.06), M.SmoothPlastic)
+			b.Ball(spot[1] + 5, y + 6.2, spot[2] + 4, 4, rgb(70, 40, 30), M.SmoothPlastic)
+			b.Ball(spot[1] - 6, y + 6, spot[2] - 2, 3.4, rgb(70, 40, 30), M.SmoothPlastic)
+		end
+	end
+end
+-- (v9.9 SCALE99) pot à miel en céramique : panse ronde, col, couvercle
+-- échancré, cuillère à miel en bois, coulures, petite abeille
+R.HoneyPot = function(b: Builder, _ctx: Ctx)
+	local pot = accent(b, 1, rgb(250, 190, 70))
+	local honey = rgb(236, 160, 30)
+	b.Cyl(0, 0, 0, 40, 5, darken(pot, 0.15))
+	b.Ball(0, 32, 0, 68, pot)
+	b.Cyl(0, 30, 0, 69, 6, darken(pot, 0.12))
+	b.Cyl(0, 58, 0, 40, 8, pot)
+	b.Cyl(0, 66, 0, 46, 4, lighten(pot, 0.15))
+	b.Egg(0, 71, 0, 44, 10, 44, lighten(pot, 0.1))
+	b.Ball(0, 77, 0, 9, darken(pot, 0.2))
+	-- coulures de miel sur le col et la panse
+	for index = 0, 4 do
+		local a = index / 5 * math.pi * 2 + 0.4
+		local r = 22
+		b.EggR(CFrame.new(math.cos(a) * r, 60 - (index % 3) * 4, math.sin(a) * r) * CFrame.Angles(0, -a, 0), 5, 12 + (index % 3) * 5, 4, honey, M.Glass)
+	end
+	-- cuillère à miel (tige + tête à rainures) qui sort par l'échancrure
+	local wood = woodOf(b, WOOD)
+	b.Tube(10, 60, 4, 26, 96, 8, 4, wood, M.Wood)
+	b.Ball(26, 97, 8, 6, darken(wood, 0.1), M.Wood)
+	-- petite abeille posée sur la panse
+	local bx, by, bz = -18, 44, 28
+	b.Egg(bx, by, bz, 12, 8, 8, rgb(255, 214, 60), M.SmoothPlastic)
+	for index = -1, 1, 2 do
+		b.CylX(bx + index * 2.5, by, bz, 8.4, 1.4, INK, M.SmoothPlastic)
+		b.EggR(CFrame.new(bx + index * 2, by + 5, bz - 1) * CFrame.Angles(0, 0, index * 0.5), 7, 2, 5, rgb(236, 246, 255), M.Glass).Transparency = 0.3
+	end
+	b.Footprint(74, 74, 84)
+end
 R.Teapot = function(b, _ctx)
 	local color = accent(b, 1, rgb(160, 220, 255))
 	-- théière : corps rond, pied, couvercle à bouton, bec en col-de-cygne,
@@ -2990,7 +3156,40 @@ R.Teapot = function(b, _ctx)
 	end
 	b.Footprint(90, 64, 76)
 end
-R.TeaSet = R.Teapot
+-- (v9.9 SCALE99) service à thé : plateau, petite théière, deux tasses sur
+-- leurs soucoupes (thé dedans), sucrier, cuillère
+R.TeaSet = function(b: Builder, _ctx: Ctx)
+	local g = House3DKit.Gap(b, 0.6)
+	local color = accent(b, 1, rgb(160, 220, 255))
+	local china = lightOf(b, WHITE)
+	b.Round(0, 0, 0, 90, 3, 62, 8, woodOf(b, WOOD), M.Wood)
+	b.Round(0, 3, 0, 84, 1 + g, 56, 6, lighten(woodOf(b, WOOD), 0.12), M.Wood)
+	-- théière
+	local tx, tz = -20, -6
+	b.Cyl(tx, 4 + g, tz, 22, 3, darken(color, 0.1))
+	b.Ball(tx, 21, tz, 34, color)
+	b.Cyl(tx, 36, tz, 18, 2, china)
+	b.Ball(tx, 40, tz, 6, accent(b, 2, PINK))
+	b.Tube(tx + 15, 18, tz, tx + 22, 28, tz, 5, color, M.SmoothPlastic)
+	b.Tube(tx + 22, 28, tz, tx + 25, 33, tz, 3, color, M.SmoothPlastic)
+	b.Tube(tx - 15, 30, tz, tx - 22, 24, tz, 3.4, color, M.SmoothPlastic)
+	b.Tube(tx - 22, 24, tz, tx - 16, 12, tz, 3.4, color, M.SmoothPlastic)
+	-- tasses + soucoupes
+	for _, spot in ipairs({ { 14, 14 }, { 32, -12 } }) do
+		local x, z = spot[1], spot[2]
+		b.Cyl(x, 4 + g, z, 20, 1.6, china)
+		b.Cyl(x, 5.6 + g, z, 9, 1.4, darken(china, 0.04))
+		b.Cyl(x, 7 + g, z, 14, 10, china)
+		b.Cyl(x, 15 + g, z, 12, 2 + g, rgb(180, 110, 50))
+		b.Tube(x + 7, 15, z, x + 10, 12, z, 2, china, M.SmoothPlastic)
+		b.Tube(x + 10, 12, z, x + 7, 9, z, 2, china, M.SmoothPlastic)
+	end
+	-- sucrier + cuillère
+	b.Cyl(4, 4 + g, -16, 14, 10, color)
+	b.Egg(4, 14 + g, -16, 14, 5, 14, china)
+	b.Tube(-2, 5 + g, 20, 12, 5 + g, 26, 1.4, rgb(214, 218, 230), M.Metal)
+	b.Footprint(90, 64, 76)
+end
 R.Watermelon = function(b, _ctx)
 	-- pastèque : écorce rayée, part découpée (chair rouge, pépins)
 	b.Ball(0, 36, 0, 74, rgb(90, 180, 90))
@@ -3004,28 +3203,123 @@ R.Watermelon = function(b, _ctx)
 	end
 	b.Footprint(74, 74, 74)
 end
-local function boxThing(b: Builder, _ctx: Ctx)
-	local color = accent(b, 1, PINK)
-	-- coffret : boîte, couvercle qui déborde, ruban croisé, gros nœud (boucles
-	-- et pans), étiquette
-	b.Round(0, 0, 0, 84, 40, 60, 3, color, M.SmoothPlastic)
-	b.Round(0, 40, 0, 88, 8, 64, 3, lighten(color, 0.2), M.SmoothPlastic)
-	local ribbon = accent(b, 2, BUTTER)
-	b.Box(0, 0, 0, 12, 49, 64.8, ribbon, M.Fabric)
-	b.Box(0, 0, 0, 88.8, 49, 12, ribbon, M.Fabric)
-	for _, side in ipairs({ -1, 1 }) do
-		b.EggR(CFrame.new(side * 9, 54, 0) * CFrame.Angles(0, 0, side * 0.4), 16, 9, 8, ribbon, M.Fabric)
-		b.BoxR(CFrame.new(side * 6, 49.6, 10) * CFrame.Angles(0, side * 0.5, 0), 4, 1, 16, ribbon, M.Fabric)
+-- (v9.9 SCALE99) quatre VRAIS coffrets au lieu d'un même paquet-cadeau
+-- Coffret en bois ouvert (pieds dorés, liseré, couvercle relevé avec sa
+-- glace, intérieur en velours) : renvoie la hauteur du velours
+local function openBox(b: Builder, wood: Color3, velvet: Color3): number
+	local g = House3DKit.Gap(b, 0.6)
+	for _, sx in ipairs({ -1, 1 }) do
+		for _, sz in ipairs({ -1, 1 }) do
+			b.Ball(sx * 36, 2.5, sz * 24, 6, GOLD, M.Metal)
+		end
 	end
-	b.Ball(0, 53, 0, 8, darken(ribbon, 0.1), M.Fabric)
-	b.BoxR(CFrame.new(24, 36, 32.4) * CFrame.Angles(0, 0, 0.2), 12, 8, 0.8, WHITE, M.SmoothPlastic)
+	b.Round(0, 4, 0, 84, 34, 60, 3, wood, M.Wood)
+	b.Box(0, 12, 0, 84 + 2 * g, 3, 60 + 2 * g, GOLD, M.Metal)
+	-- intérieur : velours en creux (bord du coffret tout autour)
+	b.Box(0, 38 - 5, 0, 76, 5 + g, 52, velvet, M.Fabric)
+	-- couvercle ouvert (charnière à l'arrière), glace à l'intérieur
+	local hinge = CFrame.new(0, 38, -30) * CFrame.Angles(-math.rad(105), 0, 0)
+	b.BoxR(hinge * CFrame.new(0, 3, 32), 86, 6, 64, wood, M.Wood)
+	local mirror = b.BoxR(hinge * CFrame.new(0, -g, 32), 70, g, 48, rgb(214, 228, 238), M.Glass)
+	mirror.Reflectance = 0.45
+	b.BoxR(hinge * CFrame.new(0, 6 + g, 32), 60, g, 40, lighten(wood, 0.15), M.Wood)
+	return 38 + g
+end
+R.JewelryBox = function(b: Builder, _ctx: Ctx)
+	local velvetTop = openBox(b, woodOf(b, rgb(160, 96, 70)), accent(b, 1, rgb(200, 40, 80)))
+	-- bagues dans les fentes (anneau doré debout + pierre), collier de perles
+	for index, spec in ipairs({ { -24, rgb(120, 200, 255) }, { -12, rgb(255, 90, 120) }, { 0, rgb(120, 230, 160) } }) do
+		b.CylZ(spec[1], velvetTop + 3, 12, 8, 1.6, GOLD, M.Metal)
+		b.Ball(spec[1], velvetTop + 7.5, 12, 3.4 + index * 0.3, spec[2], M.Glass)
+	end
+	local pearls = {}
+	for index = 0, 9 do
+		local t = index / 9
+		table.insert(pearls, { 10 + t * 26, velvetTop + 1.5 + math.sin(t * math.pi) * 1, -14 + math.sin(t * math.pi * 1.4) * 18 })
+	end
+	for _, pearl in ipairs(pearls) do
+		b.Ball(pearl[1], pearl[2], pearl[3], 3.6, rgb(250, 246, 240), M.SmoothPlastic)
+	end
+	-- petit tiroir devant, bouton doré
+	local g = House3DKit.Gap(b, 0.6)
+	b.Box(0, 18, 30, 50, 12, 2 * g, darken(woodOf(b, rgb(160, 96, 70)), 0.15), M.Wood)
+	b.Ball(0, 24, 30 + g + 1.5, 4, GOLD, M.Metal)
 	b.Top(1, 0, 48, 0, 70, 50)
 	b.Footprint(88, 64, 56)
 end
-R.BentoBox = boxThing
-R.DonutBox = boxThing
-R.JewelryBox = boxThing
-R.MusicBox = boxThing
+R.MusicBox = function(b: Builder, _ctx: Ctx)
+	local wood = woodOf(b, rgb(190, 130, 90))
+	local velvetTop = openBox(b, wood, accent(b, 1, rgb(90, 60, 150)))
+	-- danseuse sur son plateau tournant
+	local tutu = accent(b, 2, PINK)
+	b.Cyl(0, velvetTop, 4, 16, 3, GOLD, M.Metal)
+	b.Tube(-1.5, velvetTop + 3, 4, -1.5, velvetTop + 16, 4, 2, rgb(255, 220, 210), M.SmoothPlastic)
+	b.Tube(1.5, velvetTop + 3, 4, 3, velvetTop + 16, 4, 2, rgb(255, 220, 210), M.SmoothPlastic)
+	b.Egg(0, velvetTop + 17, 4, 20, 5, 20, tutu, M.Fabric)
+	b.Egg(0, velvetTop + 22, 4, 6, 10, 5, tutu, M.SmoothPlastic)
+	b.Ball(0, velvetTop + 30, 4, 6, rgb(255, 220, 210), M.SmoothPlastic)
+	b.Ball(0, velvetTop + 33, 3, 3.4, rgb(120, 80, 60), M.SmoothPlastic)
+	b.Tube(-2, velvetTop + 25, 4, -7, velvetTop + 33, 4, 1.4, rgb(255, 220, 210), M.SmoothPlastic)
+	b.Tube(2, velvetTop + 25, 4, 7, velvetTop + 33, 4, 1.4, rgb(255, 220, 210), M.SmoothPlastic)
+	-- clé de remontage sur le côté
+	b.CylX(44, 22, 0, 3, 8, GOLD, M.Metal)
+	b.BoxR(CFrame.new(49, 22, 0), 2, 12, 6, GOLD, M.Metal)
+	b.Top(1, 0, 48, 0, 70, 50)
+	b.Footprint(88, 64, 56)
+end
+-- Boîte de pâtisserie : carton, couvercle ouvert en arrière, 6 beignets
+-- glacés (pâte, glaçage, trou, vermicelles)
+R.DonutBox = function(b: Builder, _ctx: Ctx)
+	local g = House3DKit.Gap(b, 0.6)
+	local card = lightOf(b, rgb(255, 236, 240))
+	b.Box(0, 0, 0, 88, 3, 64, card, M.SmoothPlastic)
+	for _, side in ipairs({ -1, 1 }) do
+		b.Box(side * 43, 3, 0, 2, 16, 64, card, M.SmoothPlastic)
+		b.Box(0, 3, side * 31, 84, 16, 2, card, M.SmoothPlastic)
+	end
+	local hinge = CFrame.new(0, 19, -32) * CFrame.Angles(-math.rad(115), 0, 0)
+	b.BoxR(hinge * CFrame.new(0, 1, 32), 88, 2, 64, card, M.SmoothPlastic)
+	b.BoxR(hinge * CFrame.new(0, 2 + g, 32), 40, g, 22, accent(b, 1, PINK), M.SmoothPlastic)
+	local icings = { rgb(255, 140, 190), rgb(120, 70, 50), WHITE, rgb(255, 214, 90), rgb(160, 120, 230), rgb(255, 140, 190) }
+	for index = 0, 5 do
+		local x = -27 + (index % 3) * 27
+		local z = index < 3 and -14 or 14
+		local icing = icings[index + 1]
+		b.Cyl(x, 3, z, 24, 8, rgb(222, 170, 110), M.SmoothPlastic)
+		b.Cyl(x, 11, z, 21, 2, icing, M.SmoothPlastic)
+		b.Cyl(x, 11, z, 7, 2 + g, rgb(150, 100, 60), M.SmoothPlastic)
+		if index % 2 == 0 then
+			for k = 0, 2 do
+				local a = k * 2.1 + index
+				b.BoxR(CFrame.new(x + math.cos(a) * 7, 13 + g, z + math.sin(a) * 7) * CFrame.Angles(0, a, 0), 3, 0.8, 1, ({ SKY, BUTTER, MINT })[k + 1], M.SmoothPlastic)
+			end
+		end
+	end
+	b.Top(1, 0, 48, 0, 70, 50)
+	b.Footprint(88, 64, 56)
+end
+-- Bento en laque : deux étages (noir / rouge), couvercle, élastique, et
+-- baguettes posées dessus dans leur étui
+R.BentoBox = function(b: Builder, _ctx: Ctx)
+	local g = House3DKit.Gap(b, 0.6)
+	local lacquer = rgb(40, 30, 34)
+	local red = accent(b, 1, rgb(190, 40, 50))
+	b.Round(0, 0, 0, 82, 18, 58, 5, lacquer, M.SmoothPlastic)
+	b.Round(0, 18 + g, 0, 82, 16, 58, 5, red, M.SmoothPlastic)
+	b.Round(0, 34 + 2 * g, 0, 86, 10, 62, 6, lacquer, M.SmoothPlastic)
+	-- liserés dorés entre les étages
+	b.Box(0, 17, 0, 70, 2 + 2 * g, 58 + 2 * g, GOLD, M.Metal)
+	-- élastique en travers
+	local band = accent(b, 2, rgb(240, 200, 90))
+	b.Box(0, 0, 0, 10, 44 + 3 * g, 62 + 2 * g, band, M.Fabric)
+	-- baguettes dans leur étui, posées sur le couvercle
+	b.Box(6, 44 + 3 * g, 0, 64, 4, 9, rgb(250, 240, 226), M.Fabric)
+	for _, z in ipairs({ -2, 2 }) do
+		b.Tube(-26, 48 + 3 * g + 1.2, z, 38, 48 + 3 * g + 1.2, z * 0.6, 2.4, rgb(150, 40, 50), M.Wood)
+	end
+	b.Top(1, 0, 48, 0, 70, 50)
+	b.Footprint(88, 64, 56)
+end
 R.GiftPile = function(b, _ctx)
 	local colors = { accent(b, 1, PINK), accent(b, 2, SKY), accent(b, 3, MINT) }
 	local specs = { { -20, 0, 0, 50, 40 }, { 26, 0, 6, 36, 30 }, { -14, 40, 0, 32, 26 } }
@@ -3162,16 +3456,22 @@ R.MantelClock = function(b, _ctx)
 	end
 	House3DKit.Bevel(b, 0, 2, 0, 80, 48, 34, 1.6, wood, M.Wood)
 	b.Ball(0, 50, 0, 40, wood, M.Wood)
+	-- (v9.9 SCALE99) couches du cadran franchement espacées (lunette, cadran,
+	-- index, aiguilles à l'heure réelle, trotteuse, cache-axe)
+	-- (le dôme est une boule : sa boîte avance jusqu'à z = 20 -> le cadran
+	-- est posé devant, sur une lunette dorée qui sort de la caisse)
 	local g = House3DKit.Gap(b, 0.6)
-	b.CylZ(0, 42, 17, 42, 2, GOLD, M.Metal).Reflectance = 0.3
-	b.CylZ(0, 42, 17.5 + g / 2, 38, 1 + g, WHITE)
+	local F = 20.5 -- (faces du même côté toujours à >= g l'une de l'autre)
+	b.CylZ(0, 42, (17 + F + 0.5 * g) / 2, 42, F + 0.5 * g - 17, GOLD, M.Metal).Reflectance = 0.3
+	b.CylZ(0, 42, F + 0.75 * g, 38, 1.5 * g, WHITE)
 	for index = 0, 11 do
 		local a = index / 12 * math.pi * 2
-		b.Box(math.sin(a) * 15, 42 + math.cos(a) * 15 - 0.8, 18 + 1.5 * g, 1.2, index % 3 == 0 and 2.6 or 1.6, g, INK)
+		b.Box(math.sin(a) * 15, 42 + math.cos(a) * 15 - 0.8, F + 2.5 * g, 1.2, index % 3 == 0 and 2.6 or 1.6, g, INK)
 	end
-	b.BoxR(CFrame.new(0, 48, 18 + 1.5 * g) * CFrame.Angles(0, 0, 0.2), 2, 14, g, INK)
-	b.BoxR(CFrame.new(3, 42, 18 + 2.5 * g) * CFrame.Angles(0, 0, 1.3), 2, 10, g, INK)
-	b.Ball(0, 42, 18 + 3 * g, 2.4, GOLD, M.Metal)
+	House3DTime.Hand(b, "H", 0, 42, F + 3.5 * g, 9, 2, 2.2, g, INK)
+	House3DTime.Hand(b, "M", 0, 42, F + 5 * g, 13.5, 2.5, 1.5, g, INK)
+	House3DTime.Hand(b, "S", 0, 42, F + 6.5 * g, 14.5, 4, 0.6, g, rgb(200, 50, 60))
+	b.Ball(0, 42, F + 8 * g, math.max(2.4, 1.6 * g), GOLD, M.Metal)
 	b.CylZ(0, 12, 17 + g / 2, 7, g, GOLD, M.Metal)
 	b.Box(0, 8, 17 + 1.5 * g, 20, 12, g, rgb(200, 220, 240), M.Glass).Transparency = 0.5
 	b.Footprint(80, 40, 70)
@@ -3249,20 +3549,34 @@ R.BeachBall = function(b, _ctx)
 	b.Footprint(96, 96, 96)
 end
 R.GiantDice = function(b, _ctx)
-	-- gros dé en mousse : arêtes arrondies, points en creux sur 3 faces
+	-- gros dé en mousse : arêtes arrondies, points ronds en léger creux sur
+	-- les 6 faces (faces opposées = 7 : 1/6, 2/5, 3/4)
 	local die = lightOf(b, WHITE)
 	local cf = CFrame.new(0, 42, 0) * CFrame.Angles(0, 0.35, 0)
 	b.BoxR(cf, 84, 76, 76, die)
 	b.BoxR(cf, 76, 84, 76, die)
 	b.BoxR(cf, 76, 76, 84, die)
-	local dot = accent(b, 1, PINK)
-	for _, p in ipairs({ { -20, 20 }, { 20, -20 }, { 0, 0 } }) do
-		b.BoxR(cf * CFrame.new(p[1], p[2], 42.2), 14, 14, 1, dot)
+	local dot = b.Map(rgb(52, 46, 62))
+	local layouts: { [number]: { { number } } } = {
+		[1] = { { 0, 0 } },
+		[2] = { { -20, 20 }, { 20, -20 } },
+		[3] = { { -20, 20 }, { 0, 0 }, { 20, -20 } },
+		[4] = { { -20, 20 }, { 20, 20 }, { -20, -20 }, { 20, -20 } },
+		[5] = { { -20, 20 }, { 20, 20 }, { 0, 0 }, { -20, -20 }, { 20, -20 } },
+		[6] = { { -20, 22 }, { 20, 22 }, { -20, 0 }, { 20, 0 }, { -20, -22 }, { 20, -22 } },
+	}
+	-- (face, rotation qui amène +Z sur cette face)
+	local faces = {
+		{ 3, CFrame.identity }, { 4, CFrame.Angles(0, math.pi, 0) },
+		{ 2, CFrame.Angles(0, math.pi / 2, 0) }, { 5, CFrame.Angles(0, -math.pi / 2, 0) },
+		{ 1, CFrame.Angles(-math.pi / 2, 0, 0) }, { 6, CFrame.Angles(math.pi / 2, 0, 0) },
+	}
+	for _, face in ipairs(faces) do
+		for _, p in ipairs(layouts[face[1]]) do
+			b.Part("Part", cf * face[2] * CFrame.new(p[1], p[2], 42.1) * CFrame.Angles(0, math.pi / 2, 0), Vector3.new(1.4, 14, 14), dot, M.SmoothPlastic, "Point")
+			;((b.Parts[#b.Parts]) :: Part).Shape = Enum.PartType.Cylinder
+		end
 	end
-	for _, p in ipairs({ { -20, -20 }, { 20, 20 } }) do
-		b.BoxR(cf * CFrame.new(42.2, p[1], p[2]) * CFrame.Angles(0, math.pi / 2, 0), 14, 14, 1, dot)
-	end
-	b.BoxR(cf * CFrame.new(0, 42.2, 0) * CFrame.Angles(math.pi / 2, 0, 0), 14, 14, 1, dot)
 	b.Footprint(100, 100, 84)
 end
 R.ToyDrum = function(b, _ctx)
@@ -4584,7 +4898,12 @@ function House3DRecipes.Make(item: any, entry: any?, k: number, parent: Instance
 	local mirror = type(entry) == "table" and entry.F == true
 	local tintId = type(entry) == "table" and entry.C or nil
 	local mapper = tintMapper(item.Id, tintId)
-	local b = House3DKit.Builder(parent, origin, k, mirror, mapper, House3DRecipes.PaletteOf(item))
+	-- (v9.9 SCALE99) f = facteur uniforme, wide = élargissement horizontal
+	-- (House3DScale) ; K (renvoyé) = k * f ; dessus / assise / empreinte
+	-- sont rendus dans ces unités-là (x, z, largeur, profondeur x wide)
+	local f, wide = House3DScale.Of(item)
+	k *= f
+	local b = House3DKit.Builder(parent, origin, k, mirror, mapper, House3DRecipes.PaletteOf(item), wide)
 	b.Item = item
 	-- dessin 2D (tableaux, affiches) : peint seulement si la recette le demande
 	b.PaintFn = function(): House3DKit.Painted?
@@ -4604,7 +4923,7 @@ function House3DRecipes.Make(item: any, entry: any?, k: number, parent: Instance
 		for _, p in ipairs(b.Parts) do
 			p:Destroy()
 		end
-		b = House3DKit.Builder(parent, origin, k, mirror, mapper, House3DRecipes.PaletteOf(item))
+		b = House3DKit.Builder(parent, origin, k, mirror, mapper, House3DRecipes.PaletteOf(item), wide)
 		b.Item = item
 		pcall(fallback, b, ctx)
 	end
@@ -4632,15 +4951,29 @@ function House3DRecipes.Make(item: any, entry: any?, k: number, parent: Instance
 			end
 		end
 	end
+	-- (v9.9 SCALE99) objet élargi : x, z, largeur, profondeur des dessus et de
+	-- l'assise passent à l'échelle horizontale (les appelants font `* K`)
+	local tops = b.Tops
+	local seatAt = b.SeatAt
+	if wide ~= 1 then
+		local wideTops: { [number]: House3DKit.Top } = {}
+		for index, t in pairs(tops) do
+			wideTops[index] = { X = t.X * wide, Y = t.Y, Z = t.Z * wide, W = t.W * wide, D = t.D * wide }
+		end
+		tops = wideTops
+		if seatAt then
+			seatAt = { X = seatAt.X * wide, Y = seatAt.Y, Z = seatAt.Z * wide, W = seatAt.W * wide, D = seatAt.D * wide }
+		end
+	end
 	return {
 		Item = item,
 		K = k,
-		FW = b.Width * k,
-		FD = math.max(0.2, b.Depth * k),
+		FW = b.Width * k * wide,
+		FD = math.max(0.2, b.Depth * k * wide),
 		H = b.Height * k,
-		Tops = b.Tops,
+		Tops = tops,
 		Info = info,
-		SeatAt = b.SeatAt,
+		SeatAt = seatAt,
 		Lights = b.Lights,
 		Glows = b.Glows,
 		Parts = b.Parts,
@@ -4680,6 +5013,9 @@ function House3DRecipes.BuildModel(itemId: string, entry: any?, options: BuildOp
 	-- (le devant de l'objet regarde -Z : demi-tour autour de Y)
 	local turn = CFrame.Angles(0, math.pi, 0)
 	local data = House3DRecipes.Make(item, entry, k, model, turn, opts.Trim)
+	-- (v9.9 SCALE99) échelle réelle de l'objet (House3DScale) : dessus, assise,
+	-- boîte de collision et attributs en studs avec CE k-là
+	k = data.K
 	local wall = item.Placement == "Wall"
 	local query = opts.Query ~= false
 	for _, p in ipairs(data.Parts) do
@@ -4708,7 +5044,10 @@ function House3DRecipes.BuildModel(itemId: string, entry: any?, options: BuildOp
 	local collide = opts.Collide ~= false
 	-- (v9.8) le tunnel-aquarium est une arche sous laquelle on passe : pas de bloc plein
 	local walkUnder = itemId == "AquariumTunnel"
-	if collide and not wall and not walkUnder and not data.Info.Flat and height >= 1.5 and math.max(fw, fd) >= 1.8 then
+	-- (v9.9 SCALE99) les chaises et tabourets, plus larges maintenant, restent
+	-- sans bloc (comme avant) : on se glisse entre eux autour d'une table
+	local smallSeat = HouseSurfaces.IsSeat(itemId) and math.max(fw, fd) < 2.5
+	if collide and not wall and not walkUnder and not smallSeat and not data.Info.Flat and height >= 1.5 and math.max(fw, fd) >= 1.8 then
 		local top = data.Tops[1]
 		local solidH = height
 		if data.SeatAt then

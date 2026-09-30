@@ -590,6 +590,8 @@ local function lifeAvenue(geo: TownKit.Geo)
 	end
 	-- panneaux des noms de rue au croisement avec le boulevard
 	spot("StreetName", R * CFrame.new(LANE_OUT + 4.4, WALK_Y, -(geo.Inner - 1.6)), 1)
+	-- (v9.9, CITY99) poteau indicateur au carrefour (vers tous les lieux)
+	spot("Direction", R * CFrame.new(-(LANE_OUT + 3.2), WALK_Y, -(geo.Inner - 5)), 330)
 	-- chemins : la promenade (de la porte à la place) et la boucle des trottoirs
 	local function at(x: number, s: number): Vector3
 		return (R * CFrame.new(x, WALK_Y, -s)).Position
@@ -612,6 +614,7 @@ local function lifeSideStreet(geo: TownKit.Geo, slot: number, name: number)
 	spot("TrafficLight", R * CFrame.new(-ST_HALF - 1.1, WALK_Y, -(zs + 3.9)), 4)
 	spot("Zebra", R * CFrame.new(0, ROAD_Y, -ringS) * CFrame.Angles(0, math.pi / 2, 0), math.floor(2 * ST_HALF * 10))
 	spot("StreetName", R * CFrame.new(-(ST_OUT - 0.9), WALK_Y, -(geo.Inner - 1.6)), name)
+	spot("Direction", R * CFrame.new(ST_OUT - 1.6, WALK_Y, -(geo.Inner - 5)), 330 + slot) -- (v9.9, CITY99)
 	-- mobilier entre les arbres (côté immeubles) : poubelles, bornes, boîte aux lettres
 	local n = math.clamp(math.floor(length / 20), 1, 7)
 	for i = 0, n - 1 do
@@ -656,6 +659,139 @@ local function lifeSideStreet(geo: TownKit.Geo, slot: number, name: number)
 	}, true)
 end
 
+----------------------------------------------------------------------
+-- (v9.9, CITY99) ROUTES "100x" : emplacements pour le client (TownRoads,
+-- via TownStreetLife ; 0 pièce serveur), par tronçons de 40 studs au plus :
+--   RoadSurface (ornières, rustines, fissures), CurbLine (caniveau + nez
+--   de bordure arrondi), Pavers (dalles des trottoirs), Arrow / RoadWord /
+--   GiveWay (marquages aux carrefours), Direction (poteaux indicateurs).
+----------------------------------------------------------------------
+
+local CHUNK = 40
+
+-- Intervalles [x0, x1] privés des trous `gaps`
+local function cut(x0: number, x1: number, gaps: { { number } }?): { { number } }
+	local ranges = { { x0, x1 } }
+	for _, gap in ipairs(gaps or {}) do
+		local nextRanges = {}
+		for _, r in ipairs(ranges) do
+			if gap[2] <= r[1] or gap[1] >= r[2] then
+				table.insert(nextRanges, r)
+			else
+				if gap[1] > r[1] then
+					table.insert(nextRanges, { r[1], gap[1] })
+				end
+				if gap[2] < r[2] then
+					table.insert(nextRanges, { gap[2], r[2] })
+				end
+			end
+		end
+		ranges = nextRanges
+	end
+	return ranges
+end
+
+-- Bande le long de x (repère `F`), découpée en tronçons : un emplacement
+-- `kind` par tronçon, au point (xc, y, z), taille (longueur, sy, sz) ;
+-- `turn` : repère retourné (180°) pour les bordures côté intérieur
+local function chunks(kind: string, F: CFrame, x0: number, x1: number, y: number, z: number, sy: number, sz: number, seed: number, gaps: { { number } }?, turn: boolean?)
+	for _, r in ipairs(cut(x0, x1, gaps)) do
+		local len = r[2] - r[1]
+		if len > 1 then
+			local n = math.max(1, math.ceil(len / CHUNK))
+			for i = 0, n - 1 do
+				local a = r[1] + i * len / n
+				local cf = F * CFrame.new(a + len / n / 2, y, z)
+				if turn then
+					cf = cf * CFrame.Angles(0, math.pi, 0)
+				end
+				TownKit.LifeSpot(kind, cf, seed + i * 7, Vector3.new(len / n, sy, sz))
+			end
+		end
+	end
+end
+
+local CURB_H = WALK_Y + 0.03 - ROAD_Y -- (hauteur de la bordure au-dessus de l'asphalte)
+
+local function roadsBoulevard(geo: TownKit.Geo)
+	local m = geo.Slots
+	local A = geo.Road
+	local tanH = math.tan(geo.HalfAngle)
+	local hw = ROAD_W / 2
+	for k = 0, m - 1 do
+		local F = geo.SideFrame(k, A)
+		local junction = isStreet(geo, k)
+		local jw = k == 0 and LANE_OUT or ST_HALF
+		local gaps = junction and { { -jw - 0.9, jw + 0.9 } } or nil
+		local innerHalf = (A - hw) * tanH
+		-- asphalte (sans les coins en onglet)
+		chunks("RoadSurface", F, -innerHalf + 2, innerHalf - 2, ROAD_Y, 0, 2, ROAD_W, k * 1000 + 1)
+		-- bordures : intérieure (chaussée vers +z : repère retourné) et extérieure
+		chunks("CurbLine", F, -innerHalf, innerHalf, ROAD_Y, -hw + 0.05, CURB_H, 0, k * 1000 + 2, gaps, true)
+		chunks("CurbLine", F, -(A + hw) * tanH, (A + hw) * tanH, ROAD_Y, hw - 0.05, CURB_H, 0, k * 1000 + 3)
+		-- dalles des trottoirs (sans la bordure)
+		local wIn = WALK_W - 0.85
+		chunks("Pavers", F, -(A - hw - WALK_W / 2) * tanH + 1, (A - hw - WALK_W / 2) * tanH - 1, WALK_Y, -hw - 0.85 - wIn / 2, 0, wIn, k * 1000 + 4, gaps)
+		chunks("Pavers", F, -(A + hw + WALK_W / 2) * tanH + 1, (A + hw + WALK_W / 2) * tanH - 1, WALK_Y, hw + 0.85 + wIn / 2, 0, wIn, k * 1000 + 5)
+	end
+end
+
+local function roadsAvenue(geo: TownKit.Geo)
+	local R = radialFrame(geo, 0)
+	local s0 = geo.StreetStart
+	local roadEdge = geo.Road - ROAD_W / 2
+	-- repère "le long de l'avenue" : X = vers l'extérieur, Z = R.X
+	local function along(x: number, s: number, y: number): CFrame
+		return R * CFrame.new(x, y, -s) * CFrame.Angles(0, math.pi / 2, 0)
+	end
+	local L = roadEdge - s0
+	local F0 = along(0, s0 + L / 2, 0)
+	for _, sx in ipairs({ -1, 1 }) do
+		local laneC = sx * (PROM + LANE_OUT) / 2
+		chunks("RoadSurface", along(laneC, s0, 0), 1, L - 1, ROAD_Y, 0, 1, LANE_OUT - PROM, sx * 11 + 5000)
+		-- bordures : promenade (chaussée vers +sx) et trottoir (chaussée vers -sx)
+		-- (repère "along" : Z = R.X ; la bordure regarde la chaussée par son -Z
+		-- local : on retourne le repère quand la chaussée est du côté +R.X)
+		chunks("CurbLine", along(sx * (PROM + 0.05), s0, 0), 0.5, L, ROAD_Y, 0, CURB_H, 0, 5100 + sx, nil, sx > 0)
+		chunks("CurbLine", along(sx * (LANE_OUT - 0.05), s0, 0), 0.5, geo.Inner - s0, ROAD_Y, 0, CURB_H, 0, 5200 + sx, nil, sx < 0)
+		-- (0,3 de marge côté façades : les socles des immeubles avancent un peu)
+		local wS = WALK_W - 0.85 - 0.3
+		chunks("Pavers", along(sx * (LANE_OUT + 0.85 + wS / 2), s0, 0), 0.5, geo.Inner - s0 - 0.5, WALK_Y, 0, 0, wS, 5300 + sx)
+	end
+	local _ = F0
+	-- flèches : voie montante (+x, vers la porte) : gauche / droite avant la
+	-- ligne d'arrêt ; voie descendante (-x, vers la place) : tout droit
+	TownKit.LifeSpot("Arrow", R * CFrame.new((PROM + LANE_OUT) / 2 - 1, ROAD_Y, -(roadEdge - 10)), 6)
+	TownKit.LifeSpot("Arrow", R * CFrame.new(-(PROM + LANE_OUT) / 2 + 1, ROAD_Y, -(roadEdge - 42)) * CFrame.Angles(0, math.pi, 0), 1)
+	TownKit.LifeSpot("RoadWord", R * CFrame.new(-(PROM + LANE_OUT) / 2 + 1, ROAD_Y, -(s0 + 14)) * CFrame.Angles(0, math.pi, 0), 3)
+end
+
+local function roadsSideStreet(geo: TownKit.Geo, slot: number)
+	local R = radialFrame(geo, slot)
+	local s0 = geo.StreetStart
+	local roadEdge = geo.Road - ROAD_W / 2
+	local function along(x: number, s: number): CFrame
+		return R * CFrame.new(x, 0, -s) * CFrame.Angles(0, math.pi / 2, 0)
+	end
+	local L = roadEdge - s0
+	chunks("RoadSurface", along(0, s0), 1, L - 1, ROAD_Y, 0, 2, 2 * ST_HALF, slot * 1000 + 6000)
+	for _, sx in ipairs({ -1, 1 }) do
+		chunks("CurbLine", along(sx * (ST_HALF - 0.05), s0), 0.5, geo.Inner - s0, ROAD_Y, 0, CURB_H, 0, slot * 1000 + 6100 + sx, nil, sx < 0)
+		local wS = ST_WALK - 0.85 - 0.3
+		chunks("Pavers", along(sx * (ST_HALF + 0.85 + wS / 2), s0), 0.5, geo.Inner - s0 - 0.5, WALK_Y, 0, 0, wS, slot * 1000 + 6200 + sx)
+	end
+	-- carrefour avec le boulevard : STOP + flèches gauche / droite (voie
+	-- sortante, +x), ZONE 30 à l'entrée de la zone piétonne (voie entrante)
+	local zs = geo.Inner - 6
+	TownKit.LifeSpot("RoadWord", R * CFrame.new(ST_HALF / 2, ROAD_Y, -(zs - 7)), 1)
+	TownKit.LifeSpot("Arrow", R * CFrame.new(ST_HALF / 2, ROAD_Y, -(zs - 14)), 6)
+	TownKit.LifeSpot("RoadWord", R * CFrame.new(-ST_HALF / 2, ROAD_Y, -(s0 + 12)) * CFrame.Angles(0, math.pi, 0), 3)
+	TownKit.LifeSpot("Arrow", R * CFrame.new(-ST_HALF / 2, ROAD_Y, -(s0 + 22)) * CFrame.Angles(0, math.pi, 0), 1)
+end
+
+-- (v9.9, CITY99) pour TownEntrance / TownNature : même découpage en tronçons
+TownStreets.Chunks = chunks
+
 function TownStreets.Build(folder: Instance, geo: TownKit.Geo)
 	local streets = Instance.new("Folder")
 	streets.Name = "Streets"
@@ -672,6 +808,11 @@ function TownStreets.Build(folder: Instance, geo: TownKit.Geo)
 	lifeAvenue(geo)
 	lifeSideStreet(geo, geo.SideR, 2)
 	lifeSideStreet(geo, geo.SideL, 3)
+	-- (v9.9, CITY99) routes réalistes (client)
+	roadsBoulevard(geo)
+	roadsAvenue(geo)
+	roadsSideStreet(geo, geo.SideR)
+	roadsSideStreet(geo, geo.SideL)
 end
 
 return TownStreets

@@ -78,13 +78,14 @@ function HouseGarden.Bike(kit: any, x: number, d: number, color: Color3)
 end
 
 -- Banc de jardin (v9.6, refait comme le banc de la ville) : 3 lattes
--- d'assise à 1,9 stud, dossier de 2 lattes incliné de 12° vers l'ARRIÈRE
+-- d'assise à 1,45 stud (v9.9 PARK99 : échelle de l'avatar, SCALE99 ; v9.6 :
+-- 1,9 = genoux au menton), dossier de 2 lattes incliné de 12° vers l'ARRIÈRE
 -- (+d, côté maison), 2 flasques en fonte avec accoudoirs ; on le regarde
 -- depuis la rue (-d). (v9.4 : dossier flottant, pieds qui traversaient
 -- l'assise.) Seule l'assise bloque (une seule grosse pièce invisible).
 function HouseGarden.Bench(kit: any, x: number, d: number, color: Color3)
 	local iron = Color3.fromRGB(86, 70, 110)
-	local H = 1.9
+	local H = 1.45
 	-- collision : un seul bloc invisible (rien de petit pour trébucher)
 	local block = kit:Box("BenchBlock", x - 2.6, x + 2.6, 0, H, d - 0.7, d + 0.5, color, M.Wood, SOLID)
 	block.Transparency = 1
@@ -715,25 +716,26 @@ end
 
 PIECES.PicnicTable = function(kit, variant)
 	local wood = ({ Color3.fromRGB(166, 116, 74), WOOD_W })[(variant - 1) % 2 + 1]
-	-- plateau (5 planches) et bancs (2 planches de chaque côté)
+	-- plateau (5 planches) et bancs (2 planches de chaque côté) ; v9.9 (PARK99,
+	-- échelle SCALE99) : plateau à 2,3 (2,66), bancs à 1,45 (1,64)
 	for k = 0, 4 do
 		local d0 = -1.3 + k * 0.53
-		kit:Box("TableBoard", -2.6, 2.6, 2.5, 2.66, d0, d0 + 0.49, wood:Lerp(WHITE, (k % 2) * 0.05), M.WoodPlanks, if k == 2 then SOLID else DECO)
+		kit:Box("TableBoard", -2.6, 2.6, 2.14, 2.3, d0, d0 + 0.49, wood:Lerp(WHITE, (k % 2) * 0.05), M.WoodPlanks, if k == 2 then SOLID else DECO)
 	end
 	for _, side in ipairs({ -1, 1 }) do
 		for k = 0, 1 do
 			local d0 = side * 2.05 - 0.45 + k * 0.46
-			kit:Box("BenchBoard", -2.6, 2.6, 1.5, 1.64, d0, d0 + 0.42, wood, M.WoodPlanks, DECO)
+			kit:Box("BenchBoard", -2.6, 2.6, 1.31, 1.45, d0, d0 + 0.42, wood, M.WoodPlanks, DECO)
 		end
 	end
 	-- pieds en A + traverses
 	for _, sx in ipairs({ -1.9, 1.9 }) do
 		for _, side in ipairs({ -1, 1 }) do
-			rod(kit, "TableLeg", Vector3.new(sx, 0, side * 1.95), Vector3.new(sx, 2.5, side * 0.35), 0.24, wood:Lerp(IRON, 0.15), M.Wood)
+			rod(kit, "TableLeg", Vector3.new(sx, 0, side * 1.95), Vector3.new(sx, 2.14, side * 0.35), 0.24, wood:Lerp(IRON, 0.15), M.Wood)
 		end
-		kit:Box("TableBrace", sx - 0.12, sx + 0.12, 1.36, 1.5, -2.4, 2.4, wood:Lerp(IRON, 0.15), M.Wood, DECO)
+		kit:Box("TableBrace", sx - 0.12, sx + 0.12, 1.17, 1.31, -2.4, 2.4, wood:Lerp(IRON, 0.15), M.Wood, DECO)
 	end
-	local block = kit:Box("TableBlock", -2.6, 2.6, 0, 1.5, -2.4, 2.4, wood, M.Wood, SOLID)
+	local block = kit:Box("TableBlock", -2.6, 2.6, 0, 1.31, -2.4, 2.4, wood, M.Wood, SOLID)
 	block.Transparency = 1
 	block.CastShadow = false
 end
@@ -803,15 +805,17 @@ PIECES.GardenSwing = function(kit, variant)
 		kit:Box("SwingBrace", sx - 0.1, sx + 0.1, 1.6, 1.8, -1.1, 1.1, wood, M.Wood, DECO)
 	end
 	kit:Box("SwingBeam", -2.9, 2.9, 5.3, 5.62, -0.16, 0.16, wood, M.Wood, DECO)
-	-- balancelle (assise + dossier + coussins) suspendue par 4 cordes
+	-- balancelle (assise + dossier + coussins) suspendue par 4 cordes ; v9.9
+	-- (PARK99, SCALE99) : coussin à 1,5 (1,98) ; GardenBuilder la fait se
+	-- balancer quand quelqu'un s'y assoit (pièces "Swing*" autour de la poutre)
 	local cushion = ({ Color3.fromRGB(230, 120, 120), Color3.fromRGB(120, 170, 210), Color3.fromRGB(240, 220, 150) })[(variant - 1) % 3 + 1]
-	kit:Box("SwingSeat", -1.6, 1.6, 1.6, 1.78, -0.55, 0.55, wood, M.WoodPlanks, DECO)
-	kit:Box("SwingCushion", -1.5, 1.5, 1.78, 1.98, -0.48, 0.48, cushion, M.Fabric, DECO)
-	kit:Part("SwingBack", Vector3.new(3.2, 1.1, 0.14), L(0, 2.35, 0.62) * CFrame.Angles(-math.rad(12), 0, 0), wood, M.WoodPlanks, DECO)
-	kit:Part("SwingBackCushion", Vector3.new(3.0, 0.9, 0.16), L(0, 2.4, 0.46) * CFrame.Angles(-math.rad(12), 0, 0), cushion:Lerp(WHITE, 0.1), M.Fabric, DECO)
+	kit:Box("SwingSeat", -1.6, 1.6, 1.12, 1.3, -0.55, 0.55, wood, M.WoodPlanks, DECO)
+	kit:Box("SwingCushion", -1.5, 1.5, 1.3, 1.5, -0.48, 0.48, cushion, M.Fabric, DECO)
+	kit:Part("SwingBack", Vector3.new(3.2, 1.1, 0.14), L(0, 1.87, 0.62) * CFrame.Angles(-math.rad(12), 0, 0), wood, M.WoodPlanks, DECO)
+	kit:Part("SwingBackCushion", Vector3.new(3.0, 0.9, 0.16), L(0, 1.92, 0.46) * CFrame.Angles(-math.rad(12), 0, 0), cushion:Lerp(WHITE, 0.1), M.Fabric, DECO)
 	for _, sx in ipairs({ -1.5, 1.5 }) do
 		for _, sd in ipairs({ -0.45, 0.45 }) do
-			rod(kit, "SwingRope", Vector3.new(sx, 5.3, 0), Vector3.new(sx, 1.78, sd), 0.06, Color3.fromRGB(200, 180, 140), M.Fabric)
+			rod(kit, "SwingRope", Vector3.new(sx, 5.3, 0), Vector3.new(sx, 1.3, sd), 0.06, Color3.fromRGB(200, 180, 140), M.Fabric)
 		end
 	end
 end
@@ -872,7 +876,9 @@ PIECES.Gazebo = function(kit, _variant)
 	for k = 1, 3 do
 		local a = (k + 1) / sides * math.pi * 2
 		local x, dd = math.cos(a) * (r - 1.1), math.sin(a) * (r - 1.1)
-		kit:Part("GazeboSeat", Vector3.new(2.6, 0.16, 0.8), along(x, 1.9, dd, -math.sin(a), math.cos(a)), Color3.fromRGB(176, 136, 96), M.WoodPlanks, DECO)
+		-- (v9.9 PARK99 : assise à 1,45 au-dessus du plancher, sur un pied)
+		kit:Part("GazeboSeat", Vector3.new(2.6, 0.16, 0.8), along(x, 2.05, dd, -math.sin(a), math.cos(a)), Color3.fromRGB(176, 136, 96), M.WoodPlanks, DECO)
+		kit:Part("GazeboSeatLeg", Vector3.new(1.8, 1.28, 0.5), along(x, 1.33, dd, -math.sin(a), math.cos(a)) * CFrame.new(0, 0, 0.05), PAINT, M.Wood, DECO)
 	end
 end
 

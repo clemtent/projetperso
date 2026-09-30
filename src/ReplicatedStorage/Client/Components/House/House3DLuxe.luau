@@ -23,6 +23,8 @@
 ]]
 
 local House3DKit = require(script.Parent.House3DKit)
+-- (v9.9 SCALE99) aiguilles à l'heure réelle
+local House3DTime = require(script.Parent.House3DTime)
 
 type Builder = House3DKit.Builder
 
@@ -540,8 +542,12 @@ R.GrandfatherClock = function(b, _ctx)
 	b.Box(0, 96, 0, 52, 4, depth + 4, WALNUT_DARK, M.Wood)
 	b.CylZ(0, 82, depth / 2 + 1.6, 22, 1.4, rgb(210, 180, 110), M.Metal)
 	b.CylZ(0, 82, depth / 2 + 2.2, 19, 1.4, rgb(250, 244, 226), M.SmoothPlastic)
-	b.BoxR(CFrame.new(0, 85, depth / 2 + 3.1) * CFrame.Angles(0, 0, 0), 1, 7, 0.4, rgb(40, 36, 40), M.SmoothPlastic)
-	b.BoxR(CFrame.new(2.4, 81, depth / 2 + 3.3) * CFrame.Angles(0, 0, 1.1), 1, 6, 0.4, rgb(40, 36, 40), M.SmoothPlastic)
+	-- (v9.9 SCALE99) aiguilles à l'heure réelle + trotteuse + cache-axe
+	local g = House3DKit.Gap(b, 0.4)
+	House3DTime.Hand(b, "H", 0, 82, depth / 2 + 2.9 + 0.4 + g, 5, 1.2, 1.2, 0.4, rgb(40, 36, 40))
+	House3DTime.Hand(b, "M", 0, 82, depth / 2 + 3.3 + 0.4 + 2 * g, 7.5, 1.5, 0.8, 0.4, rgb(40, 36, 40))
+	House3DTime.Hand(b, "S", 0, 82, depth / 2 + 3.7 + 0.4 + 3 * g, 8, 2.2, 0.4, 0.3, rgb(190, 50, 50))
+	b.CylZ(0, 82, depth / 2 + 4.4 + 0.4 + 4 * g, 1.4, 0.5, rgb(210, 180, 110), M.Metal)
 	for k = 0, 11 do
 		local a = k / 12 * math.pi * 2
 		b.Box(math.sin(a) * 8, 82 + math.cos(a) * 8 - 0.6, depth / 2 + 3.1, 1.2, 1.2, 0.4, rgb(60, 50, 50), M.SmoothPlastic)

@@ -22,6 +22,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
 local TownKit = require(script.Parent.TownKit)
 local TownVehicles = require(script.Parent.TownVehicles) -- (v9.7, VEHICLES97) bus, 2-roues
+local TownStreets = require(script.Parent.TownStreets) -- (v9.9, CITY99) tronçons des routes réalistes (client)
 
 local TownEntrance = {}
 
@@ -340,6 +341,23 @@ local function outside(folder: Instance, geo: TownKit.Geo, gcf: CFrame)
 	TownKit.LifeSpot("Signpost", gcf * CFrame.new(-11.5, WorldLayout.GROUND_Y, len - 4), 60)
 	TownKit.LifeSpot("Bin", gcf * CFrame.new(12.6, WALK_Y, 22), 62)
 	TownKit.LifeSpot("WindmillHill", gcf * CFrame.new(-24, WorldLayout.GROUND_Y, len + 68) * CFrame.Angles(0, math.rad(200), 0), 63)
+	-- (v9.9, CITY99) route d'arrivée réaliste (client : TownRoads) : asphalte
+	-- vivant, caniveau + bordure du trottoir, dalles, rond-point détaillé
+	local along = gcf * CFrame.new(0, 0, len / 2 + 3) * CFrame.Angles(0, math.pi / 2, 0)
+	-- (X local vers la porte : on s'arrête avant l'anneau du rond-point)
+	TownStreets.Chunks("RoadSurface", along, -len / 2 + 8, len / 2 - 1, ROAD_Y, 0, 2, 16, 7001)
+	local walkAlong = gcf * CFrame.new(0, 0, len / 2 + 5) * CFrame.Angles(0, math.pi / 2, 0)
+	-- (X local vers la porte : le caniveau s'arrête avant l'anneau du rond-point)
+	TownStreets.Chunks("CurbLine", walkAlong, -17, (len - 4) / 2, ROAD_Y, 8, WALK_Y - ROAD_Y, 0, 7002)
+	-- (pas de dalles sous la dalle de l'abribus : gcf z 24..36 = X local -6..6)
+	TownStreets.Chunks("Pavers", walkAlong, -(len - 4) / 2 + 0.5, (len - 4) / 2 - 0.5, WALK_Y, 11, 0, 5.8, 7003, { { -6.5, 6.5 } })
+	TownKit.LifeSpot("Roundabout", loop * CFrame.new(0, ROAD_Y + 0.03, 0), 7004, Vector3.new(8, 0, 20))
+	-- repères des lieux (poteaux indicateurs, client) : porte, MégaDopa,
+	-- concession, coin gourmand
+	TownKit.LifeSpot("Dest", CFrame.new(gcf.Position), 15)
+	TownKit.LifeSpot("Dest", WorldLayout.MarketCFrame(geo.Count), 6)
+	TownKit.LifeSpot("Dest", WorldLayout.DealershipCFrame(geo.Count), 7)
+	TownKit.LifeSpot("Dest", WorldLayout.FoodCornerCFrame(geo.Count), 8)
 end
 
 ----------------------------------------------------------------------
@@ -364,7 +382,15 @@ function TownEntrance.Build(folder: Instance, geo: TownKit.Geo): EntranceResult
 		part(entrance, "Border", Vector3.new(1.1, 0.2, depth + 3.9), CFrame.new(center + Vector3.new(sx * (PLAZA_HALF - 0.6), 0.04, 0)), C.StoneDark, M.Granite, "deco")
 		-- haies le long des bords + arbres en bacs aux coins
 		-- (v9.7 NATURE97) haie taillée au dessus arrondi
-		TownKit.Hedge(entrance, CFrame.new(center + Vector3.new(sx * (PLAZA_HALF - 2.4), 0, -3)) * CFrame.Angles(0, math.pi / 2, 0), depth - 14, 2.4, 3.2, 20 + sx)
+		if sx > 0 then
+			-- (v9.9, CITY99) haie ouverte vers le 🍦 coin gourmand (passage de 7 studs)
+			local z0, z1 = -3 - (depth - 14) / 2, -3 + (depth - 14) / 2
+			local gap0, gap1 = -5.5, 1.5
+			TownKit.Hedge(entrance, CFrame.new(center + Vector3.new(sx * (PLAZA_HALF - 2.4), 0, (z0 + gap0) / 2)) * CFrame.Angles(0, math.pi / 2, 0), gap0 - z0, 2.4, 3.2, 20 + sx)
+			TownKit.Hedge(entrance, CFrame.new(center + Vector3.new(sx * (PLAZA_HALF - 2.4), 0, (gap1 + z1) / 2)) * CFrame.Angles(0, math.pi / 2, 0), z1 - gap1, 2.4, 3.2, 23 + sx)
+		else
+			TownKit.Hedge(entrance, CFrame.new(center + Vector3.new(sx * (PLAZA_HALF - 2.4), 0, -3)) * CFrame.Angles(0, math.pi / 2, 0), depth - 14, 2.4, 3.2, 20 + sx)
+		end
 		for _, dz in ipairs({ -depth / 2 + 6, depth / 2 - 10 }) do
 			local p = center + Vector3.new(sx * (PLAZA_HALF - 8), 0, dz)
 			part(entrance, "TreeBox", Vector3.new(4.4, 1.8, 4.4), CFrame.new(p + Vector3.new(0, 0.9, 0)), C.White, M.Concrete, "prop")
@@ -425,6 +451,23 @@ function TownEntrance.Build(folder: Instance, geo: TownKit.Geo): EntranceResult
 	TownKit.LifeSpot("DrinkFountain", CFrame.lookAt(center + Vector3.new(-9, 0, -22), center + Vector3.new(0, 0, -22)), 4)
 	TownKit.LifeSpot("Chat", CFrame.new(center + Vector3.new(9, 0, -8)) * CFrame.Angles(0, 2.4, 0), 7)
 	TownKit.LifeSpot("Chat", CFrame.new(center + Vector3.new(-8, 0, 6)) * CFrame.Angles(0, -0.8, 0), 8)
+	-- (v9.9, CITY99) poteau indicateur à l'arrivée (vers tous les lieux de la ville)
+	TownKit.LifeSpot("Direction", CFrame.new(center + Vector3.new(-12, 0, 12)), 320)
+	-- (v9.9, CITY99) allées pavées vers le 🍦 coin gourmand : depuis la place
+	-- d'accueil (par le passage dans la haie) et depuis le trottoir du boulevard
+	local food = WorldLayout.FoodCornerCFrame(geo.Count)
+	local foodX0 = food.Position.X - WorldLayout.FOOD_W / 2
+	local y = geo.Origin.Y + WorldLayout.GROUND_Y
+	local gz = center.Z - 2
+	local x0 = center.X + PLAZA_HALF
+	if foodX0 > x0 + 1 then
+		TownKit.LifeSpot("Walkway", CFrame.new((x0 + foodX0) / 2 + 0.1, y, gz), 330, Vector3.new(foodX0 - x0 + 0.4, 1, 5))
+	end
+	local foodZ0 = food.Position.Z - WorldLayout.FOOD_D / 2
+	local walkZ = geo.Origin.Z + geo.Front
+	if foodZ0 > walkZ + 1 then
+		TownKit.LifeSpot("Walkway", CFrame.new(food.Position.X, y, (walkZ + foodZ0) / 2) * CFrame.Angles(0, math.pi / 2, 0), 331, Vector3.new(foodZ0 - walkZ + 0.4, 1, 5))
+	end
 	-- dehors
 	outside(entrance, geo, gcf)
 	return { Map = map, Spawn = spawn }

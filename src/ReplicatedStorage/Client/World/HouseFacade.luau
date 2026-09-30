@@ -126,6 +126,7 @@ export type Built = {
 	Leaves: { Leaf }?, -- (v9.8) porte d'entrée DOUBLE (2 battants)
 	BackLeaves: { Leaf }?, -- (v9.8) porte de derrière (jardin)
 	BackFills: { [number]: BasePart }?, -- (v9.8) "rideau" des fenêtres du fond tant que la pièce n'est pas construite
+	Glows: { [number]: { Glow } }?, -- (v9.9) lueurs de nuit par emplacement (0 = cage)
 }
 
 type Ctx = {
@@ -164,6 +165,52 @@ local function curtainColor(room: any): Color3
 	return typeof(color) == "Color3" and color or Color3.fromRGB(255, 190, 214)
 end
 
+-- (v9.9 HOUSE99) Lueur de nuit d'une fenêtre, vue de DEHORS seulement : une
+-- SurfaceGui (une seule face : invisible de l'intérieur) sur la vitre, sans
+-- influence de la lumière (elle "brille") ; HouseBuilder l'allume la nuit
+-- quand la lumière de la pièce est allumée (état sauvegardé du propriétaire :
+-- la même pour tout le monde), teintée par les rideaux s'ils sont fermés.
+export type Glow = { Gui: SurfaceGui, Fill: Frame }
+local function windowGlow(part: BasePart, face: Enum.NormalId): Glow
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "NightGlow"
+	gui.Face = face
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.FixedSize
+	gui.CanvasSize = Vector2.new(64, 64)
+	gui.LightInfluence = 0
+	gui.MaxDistance = 600
+	gui.Enabled = false
+	gui.Parent = part
+	local fill = Instance.new("Frame")
+	fill.Name = "Glow"
+	fill.BorderSizePixel = 0
+	fill.Size = UDim2.fromScale(1, 1)
+	fill.BackgroundColor3 = Color3.fromRGB(255, 206, 140)
+	fill.BackgroundTransparency = 0.3
+	fill.Parent = gui
+	-- plus lumineux en haut (plafonnier), plus doux en bas
+	local grad = Instance.new("UIGradient")
+	grad.Rotation = 90
+	grad.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.05), NumberSequenceKeypoint.new(0.55, 0.3), NumberSequenceKeypoint.new(1, 0.55) })
+	grad.Parent = fill
+	return { Gui = gui, Fill = fill }
+end
+
+local function addGlow(ctx: Ctx, slot: number?, glow: Glow)
+	local glows = ctx.Built.Glows
+	if not glows then
+		glows = {}
+		ctx.Built.Glows = glows
+	end
+	local key = slot or 0 -- 0 = fenêtres de la cage (toujours allumées la nuit)
+	local list = glows[key]
+	if not list then
+		list = {}
+		glows[key] = list
+	end
+	table.insert(list, glow)
+end
+
 -- Fenêtre d'une pièce (trou déjà percé dans le mur) : vitre, cadre, appui,
 -- "lueur" de la pièce ; `kind` = "Cross" | "Grid" | "Tall"
 local function roomWindow(ctx: Ctx, slot: number?, x0: number, x1: number, y0: number, y1: number, frame: Color3, kind: string)
@@ -171,6 +218,7 @@ local function roomWindow(ctx: Ctx, slot: number?, x0: number, x1: number, y0: n
 	-- (v9.8 : 0,62 -> 0,72, on voit mieux au travers)
 	local glass = kit:Box("Glass", x0, x1, y0, y1, 0.35, 0.5, P.Glass, M.Glass, { T = 0.72, Shadow = false })
 	glass.CastShadow = false
+	addGlow(ctx, slot, windowGlow(glass, Enum.NormalId.Back)) -- (face côté rue)
 	local f = if kind == "Grid" then 0.3 else 0.35
 	-- (v9.6 : le cadre déborde de 0,05 dans le trou -> jamais coplanaire avec les bords du mur)
 	kit:Box("WinFrame", x0 - f, x1 + f, y1 - 0.05, y1 + f, -0.45, 0.35, frame, M.Wood)
@@ -271,14 +319,38 @@ local function archTop(ctx: Ctx, x0: number, x1: number, y1: number, frame: Colo
 	end
 end
 
+-- (v9.9 HOUSE99) Tête de lanterne réaliste (au lieu d'un gros bloc Neon qui
+-- éblouissait) : socle, 4 montants, verre dépoli ambré, petite ampoule
+-- chaude, chapeau à pans + bouton. (x, y = bas du socle, d = centre) ;
+-- renvoie l'ampoule (pour la vraie lumière). `half` = demi-largeur.
+local function lanternHead(kit: any, x: number, y: number, d: number, half: number): BasePart
+	local metal = C.Ink
+	local h = half * 3.1
+	kit:Box("LanternBase", x - half - 0.08, x + half + 0.08, y, y + 0.14, d - half - 0.08, d + half + 0.08, metal, M.Metal, { Shadow = false })
+	for _, sx in ipairs({ -1, 1 }) do
+		for _, sd in ipairs({ -1, 1 }) do
+			kit:Box("LanternPost", x + sx * half - 0.05, x + sx * half + 0.05, y + 0.14, y + h, d + sd * half - 0.05, d + sd * half + 0.05, metal, M.Metal,
+				{ Shadow = false })
+		end
+	end
+	kit:Box("LanternGlass", x - half + 0.05, x + half - 0.05, y + 0.14, y + h, d - half + 0.05, d + half - 0.05, Color3.fromRGB(255, 236, 196), M.Glass,
+		{ T = 0.4, Shadow = false })
+	local bulb = kit:Ball("LanternBulb", x, y + h * 0.5, d, half * 0.7, Color3.fromRGB(255, 214, 150), M.Neon, { Shadow = false })
+	kit:Box("LanternRoof", x - half - 0.15, x + half + 0.15, y + h, y + h + 0.16, d - half - 0.15, d + half + 0.15, metal, M.Metal, { Shadow = false })
+	kit:Box("LanternRoofTop", x - half * 0.55, x + half * 0.55, y + h + 0.16, y + h + 0.34, d - half * 0.55, d + half * 0.55, metal, M.Metal, { Shadow = false })
+	kit:Ball("LanternFinial", x, y + h + 0.46, d, 0.24, P.Gold, M.Metal, { Shadow = false })
+	return bulb
+end
+
 -- Lanterne murale (x, y = bas de la lanterne), vraie lumière si le budget le permet
 local function wallLantern(ctx: Ctx, x: number, y: number, withLight: boolean)
 	local kit = ctx.Kit
-	kit:Box("LanternArm", x - 0.1, x + 0.1, y + 1.3, y + 1.5, -1, -0.3, C.Ink, M.Metal, { Shadow = false })
-	kit:Box("LanternCap", x - 0.45, x + 0.45, y + 1.3, y + 1.6, -1.45, -0.55, C.Ink, M.Metal, { Shadow = false })
-	local glass = kit:Box("Lantern", x - 0.35, x + 0.35, y, y + 1.3, -1.35, -0.65, P.Lamp, M.Neon, { Shadow = false })
+	-- (platine décollée de 0,02 des enduits de façade posés à -0,36 : pas de faces confondues)
+	kit:Box("LanternPlate", x - 0.25, x + 0.25, y + 0.6, y + 1.6, -0.44, -0.38, C.Ink, M.Metal, { Shadow = false })
+	kit:Box("LanternArm", x - 0.07, x + 0.07, y + 1.25, y + 1.39, -0.72, -0.44, C.Ink, M.Metal, { Shadow = false })
+	local bulb = lanternHead(kit, x, y, -1.0, 0.36)
 	if withLight then
-		kit:Light(glass, Color3.fromRGB(255, 214, 150), 16, 0.9)
+		kit:Light(bulb, Color3.fromRGB(255, 214, 150), 16, 0.8)
 	end
 end
 
@@ -286,12 +358,65 @@ end
 local function postLantern(ctx: Ctx, x: number, d: number, y0: number, height: number, withLight: boolean, onKit: any?)
 	local kit = onKit or ctx.Kit
 	kit:CylY("LampPost", x, y0, d, 0.35, height, C.Ink, M.Metal, { Solid = true, Shadow = false })
-	kit:Box("LampCap", x - 0.55, x + 0.55, y0 + height + 1.3, y0 + height + 1.6, d - 0.55, d + 0.55, C.Ink, M.Metal, { Shadow = false })
-	local glass = kit:Box("LampGlass", x - 0.42, x + 0.42, y0 + height, y0 + height + 1.3, d - 0.42, d + 0.42, P.Lamp, M.Neon, { Shadow = false })
-	kit:Ball("LampTop", x, y0 + height + 1.85, d, 0.4, P.Gold, M.Metal, { Shadow = false })
+	local bulb = lanternHead(kit, x, y0 + height, d, 0.42)
 	if withLight then
-		kit:Light(glass, Color3.fromRGB(255, 214, 150), 18, 1)
+		kit:Light(bulb, Color3.fromRGB(255, 214, 150), 18, 0.85)
 	end
+end
+
+-- (v9.9 HOUSE99) Fontaine de la cour d'honneur du manoir ("les trucs fontaine
+-- de l'entrée sont cassés" : l'ancienne était un empilement de cylindres, l'eau
+-- DÉPASSAIT du bassin, un gros jet blanc) : bassin octogonal en pierre
+-- (8 murets + margelle), eau sous la margelle, fût mouluré, 2 vasques avec
+-- nappes d'eau translucides qui retombent, jet fin qui pétille, pièces au
+-- fond ; parvis rond pavé autour (le chemin fait le tour).
+local function courtFountain(ctx: Ctx, x: number, d: number)
+	local kit = ctx.G
+	local STONE = Color3.fromRGB(236, 230, 226)
+	local WATER = Color3.fromRGB(120, 190, 225)
+	kit:CylY("FountainPlaza", x, -0.06, d, 15, 0.13, P.Pave:Lerp(P.Stone, 0.4), M.Pavement, { Shadow = false })
+	local apothem, wallT, wallH = 4.6, 0.6, 1.5
+	local sideLen = 2 * apothem * math.tan(math.pi / 8) + 0.02
+	for k = 0, 7 do
+		local a = k / 8 * math.pi * 2
+		local cf = CFrame.new(x, 0, -d) * CFrame.Angles(0, a, 0)
+		kit:Part("FountainWall", Vector3.new(sideLen, wallH, wallT), cf * CFrame.new(0, wallH / 2, apothem - wallT / 2), STONE, M.Limestone, { Solid = true })
+		kit:Part("FountainCoping", Vector3.new(sideLen + 0.34, 0.26, wallT + 0.36), cf * CFrame.new(0, wallH + 0.13, apothem - wallT / 2), STONE:Lerp(WHITE, 0.3),
+			M.Limestone, { Shadow = false })
+	end
+	-- eau du bassin (sous la margelle) + fond + pièces
+	kit:CylY("FountainFloor", x, 0.05, d, 2 * (apothem - wallT) + 0.1, 0.25, Color3.fromRGB(96, 150, 170), M.Slate, { Shadow = false })
+	local basinWater = kit:CylY("FountainWater", x, 0.3, d, 2 * (apothem - wallT) + 0.08, 0.9, WATER, M.SmoothPlastic, { T = 0.35, Shadow = false })
+	basinWater.Reflectance = 0.2
+	for k = 0, 4 do
+		local a = k * 1.7 + 0.4
+		kit:CylY("FountainCoin", x + math.cos(a) * (1.8 + k * 0.35), 0.3, d + math.sin(a) * (1.8 + k * 0.35), 0.3, 0.04, P.Gold, M.Metal, { Shadow = false })
+	end
+	-- fût mouluré + vasque basse (eau dedans) + nappe qui retombe
+	kit:CylY("FountainPlinth", x, 0.3, d, 2.2, 0.6, STONE, M.Limestone, { Shadow = false })
+	kit:CylY("FountainShaft", x, 0.9, d, 1.3, 2.2, STONE, M.Limestone, { Solid = true, Shadow = false })
+	kit:CylY("FountainCollar", x, 2.9, d, 1.7, 0.3, STONE:Lerp(WHITE, 0.3), M.Limestone, { Shadow = false })
+	kit:CylY("FountainBowl", x, 3.2, d, 5.2, 0.4, STONE, M.Limestone, { Shadow = false })
+	kit:CylY("FountainBowlWater", x, 3.6, d, 4.7, 0.1, WATER, M.SmoothPlastic, { T = 0.3, Shadow = false })
+	kit:CylY("FountainSheet", x, 1.2, d, 5.25, 2.0, Color3.fromRGB(200, 232, 250), M.SmoothPlastic, { T = 0.84, Shadow = false })
+	-- vasque haute + sa nappe + jet
+	kit:CylY("FountainUpperShaft", x, 3.74, d, 0.8, 1.5, STONE, M.Limestone, { Shadow = false })
+	kit:CylY("FountainUpperBowl", x, 5.24, d, 2.8, 0.34, STONE, M.Limestone, { Shadow = false })
+	kit:CylY("FountainUpperWater", x, 5.58, d, 2.5, 0.08, WATER, M.SmoothPlastic, { T = 0.3, Shadow = false })
+	kit:CylY("FountainUpperSheet", x, 3.76, d, 2.85, 1.46, Color3.fromRGB(200, 232, 250), M.SmoothPlastic, { T = 0.86, Shadow = false })
+	local spout = kit:Ball("FountainSpout", x, 5.85, d, 0.55, C.Pink, M.SmoothPlastic, { Shadow = false })
+	local emitter = Instance.new("ParticleEmitter")
+	emitter.Name = "FountainSpray"
+	emitter.Color = ColorSequence.new(Color3.fromRGB(235, 248, 255), Color3.fromRGB(170, 215, 245))
+	emitter.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.16), NumberSequenceKeypoint.new(1, 0.06) })
+	emitter.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.25), NumberSequenceKeypoint.new(1, 1) })
+	emitter.Lifetime = NumberRange.new(0.55, 0.75)
+	emitter.Speed = NumberRange.new(7, 8)
+	emitter.SpreadAngle = Vector2.new(6, 6)
+	emitter.Acceleration = Vector3.new(0, -24, 0)
+	emitter.Rate = 36
+	emitter.LightInfluence = 1
+	emitter.Parent = spout
 end
 
 local function bush(ctx: Ctx, x: number, d: number, w: number, h: number, color: Color3)
@@ -793,6 +918,7 @@ local function backSide(ctx: Ctx, material: Enum.Material)
 			-- vitre (vraie, transparente) dans l'épaisseur du mur de la façade
 			local glass = kit:Box("BackGlass", x0, x1, wy0, wy1, depth + 0.05, depth + 0.13, P.Glass, M.Glass, { T = 0.72, Shadow = false })
 			glass.CastShadow = false
+			addGlow(ctx, slot, windowGlow(glass, Enum.NormalId.Front)) -- (face côté jardin)
 			-- cadre extérieur (déborde de 0,1 dans le trou) : linteau, 2 montants,
 			-- appui (bas du cadre, qui avance), imposte (budget : 6 pièces par fenêtre)
 			local f = 0.38
@@ -1792,7 +1918,7 @@ STYLES.Mansion = function(ctx)
 	local court0, court1 = gx - landW / 2 - steps * tread - 3, gx + landW / 2 + steps * tread + 3
 	ctx.G:Box("Forecourt", court0, court1, -0.1, 0.1, -9, -landD, P.Pave, M.Pavement, { Shadow = false })
 	path(ctx, { { gx, -29.5 }, { gx, -18 } }, 4, P.Pave, M.Pavement)
-	HouseGarden.Fountain(ctx.G, gx, -13.5)
+	courtFountain(ctx, gx, -13.5) -- (v9.9 : fontaine refaite)
 	for _, s in ipairs({ -1, 1 }) do
 		local x1 = if s < 0 then ctx.Left - T - 1 + 7.5 else court1 + 1
 		local x2 = if s < 0 then court0 - 1 else ctx.Right + T + 1 - 7.5

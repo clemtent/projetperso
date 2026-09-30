@@ -730,7 +730,8 @@ local function sit(player: Player, argument: any): (boolean, any)
 	local owner = playerById(argument.Owner)
 	local slot = tonumber(argument.Slot)
 	local current = town
-	if not owner or not states[owner].Plot or not slot or not current then
+	local gardenSeat = argument.Garden == true -- v9.9 🌷 (PARK99) siège du jardin (construit côté client)
+	if not owner or not states[owner].Plot or (not slot and not gardenSeat) or not current then
 		return false, T(player, "Invalid request")
 	end
 	if not canEnter(player, owner, false) then
@@ -745,13 +746,22 @@ local function sit(player: Player, argument: any): (boolean, any)
 	if position.X ~= position.X or position.Y ~= position.Y or position.Z ~= position.Z then
 		return false, T(player, "Invalid request")
 	end
-	-- le siège est bien dans cette pièce de cette maison, et à portée
-	local size = sizeDefOf(dataOf(owner))
-	local houseCF = current.Plots[states[owner].Plot :: number].HouseCFrame
-	local x, y, d = WorldLayout.ToLocal(houseCF, position)
-	local xMin, xMax, yFloor, dMin, dMax = WorldLayout.RoomInterior(size, math.floor(slot))
-	if x < xMin - 0.5 or x > xMax + 0.5 or d < dMin - 0.5 or d > dMax + 0.5 or y < yFloor - 0.5 or y > yFloor + 7 then
-		return false, T(player, "Invalid request")
+	-- le siège est bien dans cette pièce de cette maison (ou, v9.9 PARK99, dans le
+	-- jardin de la parcelle du propriétaire, au ras de la pelouse), et à portée
+	if gardenSeat then
+		local plotCF = current.Plots[states[owner].Plot :: number].CFrame
+		local lp = plotCF:PointToObjectSpace(position)
+		if math.abs(lp.X) > WorldLayout.PLOT_W / 2 + 1 or math.abs(lp.Z) > WorldLayout.PLOT_D / 2 + 1 or lp.Y < -1 or lp.Y > 6 then
+			return false, T(player, "Invalid request")
+		end
+	else
+		local size = sizeDefOf(dataOf(owner))
+		local houseCF = current.Plots[states[owner].Plot :: number].HouseCFrame
+		local x, y, d = WorldLayout.ToLocal(houseCF, position)
+		local xMin, xMax, yFloor, dMin, dMax = WorldLayout.RoomInterior(size, math.floor(slot :: number))
+		if x < xMin - 0.5 or x > xMax + 0.5 or d < dMin - 0.5 or d > dMax + 0.5 or y < yFloor - 0.5 or y > yFloor + 7 then
+			return false, T(player, "Invalid request")
+		end
 	end
 	if (root.Position - position).Magnitude > SIT_RANGE then
 		return false, T(player, "Get closer to sit down")

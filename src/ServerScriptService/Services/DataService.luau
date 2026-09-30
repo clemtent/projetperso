@@ -45,7 +45,7 @@ local TEMPLATE = {
 	-- l'appareil et le Mode réaliste ; valeurs validées par SetSetting)
 	Settings = { Sound = true, Music = true, Effects = true, ClickSound = "Default", Language = "Auto", DarkMode = false,
 		MusicTrack = "Shuffle", GfxRealistic = "Auto", GfxReflections = "Auto", GfxWeather = "Auto", GfxRain = "Auto",
-		GfxShadows = "Auto", GfxEffects = "Auto", GfxDetail = "Auto" },
+		GfxShadows = "Auto", GfxEffects = "Auto", GfxDetail = "Auto", GfxTime = "Auto" }, -- (v9.9 GfxTime : heure du jour en ville)
 	Cosmetics = {
 		Owned = {}, -- [cosmeticId] = true
 		Equipped = { Hat = "", Skin = "" }, -- "" = rien d'équipé

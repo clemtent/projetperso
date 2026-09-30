@@ -14,8 +14,8 @@
 	  - LAC ("NearDetail" = "Lake") : nénuphars (quelques-uns fleuris),
 	    canards et cygnes qui glissent doucement sur l'eau, roseaux et
 	    touffes d'herbe en plus sur la rive ;
-	  - AIRE DE JEUX ("NearDetail" = "Playground") : jouets du bac à sable
-	    (seau, pelle, château), ballon.
+	  - AIRE DE JEUX ("NearDetail" = "Playground") : v9.9 (PARK99) toute
+	    l'aire de jeux réaliste et animée (ParkPlay).
 	Tout est ancré, sans collision ni requête, sans ombre pour les petites
 	pièces. Construction étalée (quelques arbres par pas), destruction au-delà
 	d'une marge (hystérésis) ; seuls les oiseaux bougent (≤ 15 Hz, CFrame),
@@ -240,7 +240,20 @@ local function buildLake(d: Detail, parent: Model)
 	d.Birds = birds
 end
 
+-- (v9.9, PARK99) toute l'aire de jeux réaliste QUI MARCHE : ParkPlay
+-- (décor, balançoires / tape-cul / tourniquet / jeux à ressort animés,
+-- toboggan, barres de singe, bac à sable). Sans ParkPlay : les jouets du
+-- bac à sable d'avant (v9.7).
+local okPark, ParkPlay = pcall(require, script.Parent:FindFirstChild("ParkPlay") :: any)
+
 local function buildPlayground(d: Detail, parent: Model)
+	if okPark and type(ParkPlay) == "table" and type(ParkPlay.Build) == "function" then
+		local ok, err = pcall(ParkPlay.Build, d.CF, parent, d.Model)
+		if ok then
+			return
+		end
+		warn("[TownGreenery] ParkPlay : " .. tostring(err))
+	end
 	local g = d.CF
 	-- bac à sable (centré en (-8, -7.5), sable dessus à 0,55)
 	local box = g * CFrame.new(-8, 0.55, -7.5)
