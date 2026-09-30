@@ -938,7 +938,7 @@ local function truckBase(k: K, t: Truck, cabColor: Color3, full: boolean): (numb
 	-- ░ face avant : calandre, optiques, pare-chocs ░
 	local gy0, gy1 = low + 0.75, hoodF - 0.15
 	box(k, "GrilleFrame", -hw * 0.44, hw * 0.44, gy0, gy1, zF - 0.03, zF + 0.2, CHROME, M.Metal)
-	box(k, "Grille", -hw * 0.44 + 0.1, hw * 0.44 - 0.1, gy0 + 0.08, gy1 - 0.08, zF - 0.05, zF + 0.12, TRIM, M.DiamondPlate)
+	box(k, "Grille", -hw * 0.44 + 0.1, hw * 0.44 - 0.1, gy0 + 0.08, gy1 - 0.08, zF - 0.09, zF + 0.12, TRIM, M.DiamondPlate) -- (v10 : 0,06 devant le cadre, plus de z-fight)
 	if full then
 		for j = 1, 3 do
 			local y = gy0 + j * (gy1 - gy0) / 4

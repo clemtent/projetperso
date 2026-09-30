@@ -556,7 +556,6 @@ function HouseDetail.Window(kit: any, x0: number, x1: number, y0: number, y1: nu
 		kit:Box("Sill", x0 - 0.3, x1 + 0.3, y0 - 0.34, y0 - f + 0.01, face - 0.55, fo + 0.02, sillC, M.Metal, { Shadow = false })
 	else
 		kit:Box("Sill", x0 - 0.65, x1 + 0.65, y0 - 0.62, y0 - f - 0.01, face - 0.8, fo + 0.02, sillC, sm, { Shadow = false })
-		kit:Box("SillDrip", x0 - 0.5, x1 + 0.5, y0 - 0.8, y0 - 0.62, face - 0.6, face + 0.02, sillC:Lerp(BLACK, 0.08), sm, { Shadow = false })
 	end
 	-- linteau
 	local lintel = w.Lintel
@@ -812,7 +811,7 @@ function HouseDetail.Fence(kit: any, x0: number, x1: number, d: number, spec: Fe
 		for _, span in ipairs(spans) do
 			local a, b = span[1], span[2]
 			if b - a > 1 then
-				for _, x in ipairs(posts(a, b, 3.6)) do
+				for _, x in ipairs(posts(a, b, 4.5)) do
 					kit:CylY("FencePost", x, 0, d, 0.55, 3, wood:Lerp(BLACK, 0.1), M.Wood, { Solid = true, Shadow = false })
 				end
 				kit:CylX("FenceRail", (a + b) / 2, 1.2, d - 0.1, 0.36, b - a, wood, M.Wood, { Solid = true, Shadow = false })
@@ -1074,7 +1073,7 @@ function HouseDetail.Balcony(kit: any, kind: string, x0: number, x1: number, y: 
 		kit:Box("BalconySlab", x0, x1, y - 0.5, y, d0, face - 0.02, wood:Lerp(BLACK, 0.1), M.WoodPlanks, { Solid = true })
 		kit:Box("BalconyRail", x0, x1, y + 3, y + 3.35, d0, d0 + 0.35, wood, M.Wood, { Shadow = false })
 		kit:Box("BalconyRail", x0, x1, y + 0.35, y + 0.6, d0 + 0.05, d0 + 0.3, wood, M.Wood, { Shadow = false })
-		local n = math.max(2, math.floor((x1 - x0) / 1.5))
+		local n = math.max(2, math.floor((x1 - x0) / 2))
 		for k = 0, n do
 			local x = x0 + 0.2 + k * (x1 - x0 - 0.4) / n
 			kit:Box("BalconyPlank", x - 0.26, x + 0.26, y + 0.6, y + 3, d0 + 0.1, d0 + 0.25, wood:Lerp(WHITE, (k % 2) * 0.06), M.Wood, { Shadow = false })

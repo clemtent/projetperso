@@ -154,7 +154,7 @@ end
 
 -- séparateur en béton "New Jersey" au milieu (x = 0) + écran anti-éblouissement
 local function jersey(m: Model, F: CFrame, L: number, top: number, glare: boolean)
-	Box(m, "JerseyFoot", F, -1.3, 1.3, top, top + 0.9, -L / 2, L / 2, CONCRETE, M.Concrete, true)
+	Box(m, "JerseyFoot", F, -1.3, 1.3, top - 0.3, top + 0.9, -L / 2, L / 2, CONCRETE, M.Concrete, true)
 	-- (coin : face verticale du coin côté intérieur, pente vers l'extérieur)
 	Wedge(m, "JerseySlope", Vector3.new(L, 1.1, 0.8), F * CFrame.new(-0.9, top + 1.45, 0) * CFrame.Angles(0, math.pi / 2, 0), CONCRETE, M.Concrete, true)
 	Wedge(m, "JerseySlope", Vector3.new(L, 1.1, 0.8), F * CFrame.new(0.9, top + 1.45, 0) * CFrame.Angles(0, -math.pi / 2, 0), CONCRETE, M.Concrete, true)
@@ -324,7 +324,7 @@ local function buildGantry(m: Model, F: CFrame, seed: number, spot: any)
 		local sw = math.min(slot - 1.2, 24)
 		local color = s.Green and SIGN_GREEN or SIGN_BLUE
 		local panel = Box(m, "GantrySign", F, cx - sw / 2, cx + sw / 2, H - 0.2, H + 5.2, 0.95, 1.25, color, M.SmoothPlastic)
-		Box(m, "GantrySignRim", F, cx - sw / 2 - 0.15, cx + sw / 2 + 0.15, H - 0.35, H + 5.35, 1.25, 1.32, WHITE, M.SmoothPlastic)
+		Box(m, "GantrySignRim", F, cx - sw / 2 - 0.15, cx + sw / 2 + 0.15, H - 0.35, H + 5.35, 0.85, 0.95, WHITE, M.SmoothPlastic)
 		Text(panel, Enum.NormalId.Back, (ARROWS[s.Arrow or "Up"] or "↑") .. "  " .. tostring(s.Text), WHITE, nil, Enum.Font.GothamBold, 420, 14)
 		Glow(Box(m, "GantrySignLamp", F, cx - sw / 2 + 0.5, cx + sw / 2 - 0.5, H + 5.35, H + 5.6, 1.6, 2.1, rgb(220, 226, 236), M.Metal))
 	end

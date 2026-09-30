@@ -597,10 +597,13 @@ end
 local function pine(ctx: Ctx, x: number, d: number, s: number)
 	local kit = ctx.G
 	kit:CylY("Trunk", x, 0, d, 0.8 * s, 3 * s, P.Trunk, M.Wood, { Solid = true })
-	for k = 0, 3 do
-		local r = (3.6 - k * 0.75) * s
-		kit:Cone("PineTier", x, (2.2 + k * 2.3) * s, d, r, 3.6 * s, 6, Color3.fromRGB(58, 104, 70):Lerp(Color3.fromRGB(86, 136, 90), k * 0.2), M.Grass)
+	-- (budget : étages en disques épais au lieu de cônes à 12 coins)
+	for k = 0, 4 do
+		local r = (3.8 - k * 0.72) * s
+		kit:CylY("PineTier", x, (2.2 + k * 1.9) * s, d, 2 * r, 1.7 * s, Color3.fromRGB(58, 104, 70):Lerp(Color3.fromRGB(86, 136, 90), k * 0.15), M.Grass,
+			{ Shadow = k == 0 })
 	end
+	kit:Ball("PineTop", x, (2.4 + 5 * 1.9) * s, d, 1.3 * s, Color3.fromRGB(86, 136, 90), M.Grass, { Shadow = false })
 end
 
 -- Cœur plat (face à la rue) : carré tourné + 2 disques ; (x, y) = centre
@@ -2133,7 +2136,7 @@ STYLES.Mansion = function(ctx)
 	-- corniche + modillons + liseré doré
 	kit:Box("Cornice", ctx.Left - T - 1, ctx.Right + T + 1, ctx.Top - 0.2, ctx.Top + 1.3, -1.5, 0, TRIM, M.Limestone)
 	kit:Box("CorniceGold", ctx.Left - T - 0.7, ctx.Right + T + 0.7, ctx.Top + 0.6, ctx.Top + 0.8, -1.55, -1.5, P.Gold, M.Metal, { Shadow = false })
-	local modCount = math.floor((ctx.Right - ctx.Left) / 4)
+	local modCount = math.floor((ctx.Right - ctx.Left) / 7)
 	for k = 0, modCount do
 		local x = ctx.Left + k * (ctx.Right - ctx.Left) / modCount
 		kit:Box("Modillion", x - 0.35, x + 0.35, ctx.Top - 0.9, ctx.Top - 0.2, -1.1, -0.3, TRIM, M.Limestone, { Shadow = false })

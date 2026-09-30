@@ -374,8 +374,8 @@ local function loopFrom(count: number, waypoints: { string }, laneOverride: numb
 			if off ~= 0 and #ep >= 2 then
 				local shiftedEp = {}
 				for i = 1, #ep do
-					local a = ep[math.max(1, i - 1)]
-					local b = ep[math.min(#ep, i + 1)]
+					local pa = ep[math.max(1, i - 1)]
+					local pb = ep[math.min(#ep, i + 1)]
 					local c = ep[i]
 					local function nrm(p0: any, p1: any): (number, number)
 						local dx, dz = p1.X - p0.X, p1.Z - p0.Z
@@ -385,15 +385,15 @@ local function loopFrom(count: number, waypoints: { string }, laneOverride: numb
 						end
 						return -dz / len, dx / len
 					end
-					local n1x, n1z = nrm(a, c)
-					local n2x, n2z = nrm(c, b)
+					local n1x, n1z = nrm(pa, c)
+					local n2x, n2z = nrm(c, pb)
 					if i == 1 then
 						n1x, n1z = n2x, n2z
 					elseif i == #ep then
 						n2x, n2z = n1x, n1z
 					end
-					local k = 1 / math.max(0.3, 1 + n1x * n2x + n1z * n2z)
-					shiftedEp[i] = { X = c.X + (n1x + n2x) * off * k, Y = c.Y, Z = c.Z + (n1z + n2z) * off * k }
+					local miter = 1 / math.max(0.3, 1 + n1x * n2x + n1z * n2z)
+					shiftedEp[i] = { X = c.X + (n1x + n2x) * off * miter, Y = c.Y, Z = c.Z + (n1z + n2z) * off * miter }
 				end
 				ep = shiftedEp
 			end
@@ -505,6 +505,16 @@ local function buildCircuits(count: number): { Circuit }
 				{ "Hatchback", Color3.fromRGB(34, 110, 76) }, { "BubbleCar", Color3.fromRGB(255, 150, 196) },
 			})
 		end
+	end
+	-- 4b. l'arrivée : rond-point du dépose-minute (derrière la porte), route de
+	-- l'entrée, ceinture, avenue est, rue du marché (jamais de demi-tour)
+	do
+		local cz = WorldLayout.GateDistance(count) + WorldLayout.ARRIVAL_LOOP
+		local rr = WorldLayout.ARRIVAL_LOOP_R
+		local mz = WorldLayout.MARKET_STREET_Z
+		local wp = { nodeId(0, cz - rr), nodeId(0, R), nodeId(B, R), nodeId(B, mz), nodeId(0, mz) }
+		local pts, offs, speeds, keys = loopFrom(count, wp)
+		add("Arrival", pts, offs, speeds, keys, 24, 3, TRAFFIC)
 	end
 	-- 5. une boucle par quartier (ses rues + les avenues autour)
 	for _, d in ipairs(WorldLayout.Districts(count)) do

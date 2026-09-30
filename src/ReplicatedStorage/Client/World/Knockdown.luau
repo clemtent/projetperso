@@ -1075,6 +1075,7 @@ function Knockdown.Debug(): any
 		StepGrace = stepGrace,
 		ExitSpot = exitSpot,
 		StepStars = stepStars,
+		StarsOn = starsOn,
 		Disabled = function()
 			return disabled
 		end,

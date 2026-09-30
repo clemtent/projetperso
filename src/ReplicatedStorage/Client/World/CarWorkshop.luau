@@ -268,7 +268,7 @@ function CarWorkshop.new(parent: GuiObject, api: any)
 	classBadge.BackgroundTransparency = 0
 	classBadge.BackgroundColor3 = CLASS_COLORS.B
 	UIUtil.Corner(classBadge, 12)
-	local rating = label({ Name = "Rating", Text = "", TextSize = 13, XAlign = Enum.TextXAlignment.Center, Size = UDim2.fromOffset(62, 20), Position = UDim2.fromOffset(4, 66), Parent = head })
+	local rating = label({ Name = "Rating", Text = "", TextSize = 11, XAlign = Enum.TextXAlignment.Center, Size = UDim2.fromOffset(70, 20), Position = UDim2.fromOffset(0, 66), Parent = head })
 	local readout = frame({ Name = "Readout", BackgroundTransparency = 1, Position = UDim2.fromOffset(72, 6), Size = UDim2.new(1, -80, 1, -12), Parent = head })
 	UIUtil.Create("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder, Parent = readout })
 	self.Class = classBadge
@@ -284,8 +284,8 @@ function CarWorkshop.new(parent: GuiObject, api: any)
 		local row = frame({ Name = "Tune_" .. part.Id, BackgroundColor3 = WHITE, Size = UDim2.new(1, 0, 0, 58), LayoutOrder = order, Parent = rows })
 		UIUtil.Corner(row, 12)
 		UIUtil.Stroke(row, LINE, 1.5)
-		label({ Name = "Name", Text = part.Icon .. " " .. Locale.T(part.Name), TextSize = 16, Size = UDim2.new(0.55, -10, 0, 24), Position = UDim2.fromOffset(10, 4), Parent = row })
-		label({ Name = "Desc", Text = Locale.T(part.Desc), TextSize = 12, Font = Theme.Fonts.Body, Size = UDim2.new(0.55, -10, 0, 16), Position = UDim2.fromOffset(10, 28), Parent = row })
+		label({ Name = "Name", Text = part.Icon .. " " .. Locale.T(part.Name), TextSize = 16, Size = UDim2.new(0.52, -12, 0, 24), Position = UDim2.fromOffset(10, 4), Parent = row })
+		label({ Name = "Desc", Text = Locale.T(part.Desc), TextSize = 11, Font = Theme.Fonts.Body, Size = UDim2.new(0.52, -12, 0, 16), Position = UDim2.fromOffset(10, 28), Parent = row })
 		local pips = frame({ Name = "Pips", BackgroundTransparency = 1, Size = UDim2.fromOffset(84, 8), Position = UDim2.fromOffset(10, 46), Parent = row })
 		UIUtil.Create("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder, Parent = pips })
 		for k = 1, Config.Cars.Tuning.MaxLevel do
@@ -296,7 +296,7 @@ function CarWorkshop.new(parent: GuiObject, api: any)
 		button.AutomaticSize = Enum.AutomaticSize.None
 		button.AnchorPoint = Vector2.new(1, 0.5)
 		button.Position = UDim2.new(1, -8, 0.5, 0)
-		button.Size = UDim2.new(0.45, -8, 0, 38)
+		button.Size = UDim2.new(0.48, -8, 0, 38)
 		button.Activated:Connect(function()
 			self:Upgrade(part.Id)
 		end)
@@ -683,7 +683,7 @@ function CarWorkshop:Layout(phone: boolean)
 				(desc :: GuiObject).Visible = not phone
 			end
 			r.Pips.Position = UDim2.fromOffset(10, if phone then 30 else 46)
-			r.Button.Size = UDim2.new(0.5, -8, 0, if phone then 32 else 38)
+			r.Button.Size = UDim2.new(0.48, -8, 0, if phone then 32 else 38)
 			r.Button.TextSize = if phone then 12 else 14
 		end
 	end

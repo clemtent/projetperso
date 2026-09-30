@@ -374,7 +374,7 @@ function ConstructionSite.BuildFull(self: Site)
 	Kit.BrickPallet(folder, self:At(mx + 2.2, 0.1, zf + 6.5), seed + 3)
 	Kit.TimberStack(folder, self:At(mx, 0.1, f - 3), 10)
 	Kit.SteelBeams(folder, self:At(mx, 0.1, f + 9), 12)
-	Kit.Pile(folder, self:At(mx - 0.5, 0.1, zf + 14), 6, 2.4, C.Sand, M.Sand)
+	Kit.Pile(folder, self:At(xr - 5, 0.1, b + 8), 6, 2.4, C.Sand, M.Sand)
 	Kit.CementBags(folder, self:At(mx + 0.5, 0.1, b - 3))
 	local drum, drumCF = Kit.Mixer(folder, self:At(mx, 0.1, b + 3.5) * CFrame.Angles(0, math.rad(90), 0))
 	self.Drum, self.DrumCF = drum, drumCF
@@ -390,7 +390,7 @@ function ConstructionSite.BuildFull(self: Site)
 	-- chemins des ouvriers
 	self.Paths = {
 		Carry = { self:At(mx - 1.8, 0.1, zf + 9.5), self:At(bx1 - 5, 0.1, f - 3.2) },
-		Trolley = { self:At(mx + 1, 0.1, zf + 16), self:At(mx + 1, 0.1, b - 6.5) },
+		Trolley = { self:At(mx + 8, 0.1, zf + 16), self:At(mx + 8, 0.1, b - 6.5) },
 	}
 	folder.Parent = self.Parent
 	self.Folder = folder

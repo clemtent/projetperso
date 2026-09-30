@@ -200,7 +200,8 @@ local function boxOf(node: Node, arms: { Arm }): Box
 	local noWalk = false
 	local build = false
 	for _, arm in ipairs(arms) do
-		if arm.Edge.Kind ~= "Downtown" then
+		-- (nœuds de l'autoroute : seulement des bretelles -> pas de carré)
+		if arm.Edge.Kind ~= "Downtown" and not arm.Special then
 			build = true
 		end
 		if arm.Special then
@@ -392,12 +393,12 @@ local function polylineSlabs(parent: Instance, name: string, pts: { WorldLayout.
 	return count
 end
 
-local function buildHighway(parent: Instance, graph: WorldLayout.RoadGraph)
+local function buildHighway(parent: Instance, graph: WorldLayout.RoadGraph, count: number)
 	local model = TownKit.Model(parent, "Highway")
 	-- l'anneau complet (une seule polyligne fermée, parité continue)
-	local hw = WorldLayout.HighwayPath()
+	local hw = WorldLayout.HighwayPath(count)
 	-- (départ au milieu du côté sud, dans une ligne droite : aucun virage au raccord)
-	local startP = { X = 0, Y = ROAD_Y, Z = WorldLayout.HIGHWAY_R }
+	local startP = { X = 0, Y = ROAD_Y, Z = WorldLayout.HighwayR(count) }
 	local ordered: { WorldLayout.RoadPoint } = { startP }
 	for i = 1, #hw do
 		table.insert(ordered, hw[i])
@@ -426,7 +427,8 @@ local function buildBridges(parent: Instance, graph: WorldLayout.RoadGraph)
 				if math.min(a.Y, b.Y) > ROAD_Y + 1.5 then
 					local dx, dz = flatDir(a, b)
 					for _, side in ipairs({ -1, 1 }) do
-						local off = side * (deckW / 2 - 0.4)
+						-- (0,05 en retrait : aucune face confondue avec le chant du tablier)
+						local off = side * (deckW / 2 - 0.45)
 						slab(model, "Parapet", offsetPoint(a, dx, dz, off), offsetPoint(b, dx, dz, off), 0.8, 2.6, 2.6, C.Stone, M.Concrete, "solid")
 					end
 				end
@@ -450,9 +452,9 @@ local function buildBridges(parent: Instance, graph: WorldLayout.RoadGraph)
 end
 
 -- Ronds-points au bout des routes extérieures (asphalte + îlot)
-local function buildRoundabouts(parent: Instance)
+local function buildRoundabouts(parent: Instance, count: number)
 	for _, ix in ipairs(WorldLayout.INTERCHANGES) do
-		local H = WorldLayout.HIGHWAY_R + WorldLayout.OUTSIDE_END
+		local H = WorldLayout.HighwayR(count) + WorldLayout.OUTSIDE_END
 		local p = WorldLayout.CityPoint(ix.NX * H, 0, ix.NZ * H)
 		local model = TownKit.Model(parent, "Roundabout")
 		-- (Disc : `center` = milieu du DESSUS)
@@ -522,9 +524,9 @@ function TownNetwork.Build(folder: Instance, geo: TownKit.Geo): Folder
 			buildCityEdge(roads, e, boxes, arms, 9000 + i)
 		end
 	end
-	buildHighway(root, graph)
+	buildHighway(root, graph, count)
 	buildBridges(root, graph)
-	buildRoundabouts(root)
+	buildRoundabouts(root, count)
 	-- passages piétons (client)
 	for i, cr in ipairs(graph.Crossings) do
 		local c, s = math.cos(cr.Yaw), math.sin(cr.Yaw)

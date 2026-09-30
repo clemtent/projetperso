@@ -388,7 +388,7 @@ local function buildPond(m: Model, F: CFrame, seed: number)
 		local speed = 0.12 + d * 0.03
 		local parts = { body, head, bill }
 		local frames = { CFrame.new(), CFrame.new(), CFrame.new() }
-		CityKit.Actor(duck, F.Position, function(t: number)
+		local function swim(t: number)
 			local a = t * speed + d * 2.1
 			local x, z = math.cos(a) * RX * r, math.sin(a) * RZ * r
 			local dx, dz = -math.sin(a) * RX * r, math.cos(a) * RZ * r
@@ -400,7 +400,10 @@ local function buildPond(m: Model, F: CFrame, seed: number)
 			frames[2] = C * CFrame.new(0, 0.45 - dip * 0.55, -0.62 - dip * 0.2)
 			frames[3] = C * CFrame.new(0, 0.42 - dip * 0.55, -0.9 - dip * 0.2)
 			workspace:BulkMoveTo(parts, frames, Enum.BulkMoveMode.FireCFrameChanged)
-		end, seed)
+		end
+		-- (posés tout de suite sur l'eau, même si la caméra est encore loin)
+		swim(os.clock() + seed)
+		CityKit.Actor(duck, F.Position, swim, seed)
 	end
 end
 

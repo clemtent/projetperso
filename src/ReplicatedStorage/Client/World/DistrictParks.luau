@@ -175,7 +175,7 @@ local function buildBasketCourt(m: Model, F: CFrame, seed: number)
 	Box(m, "CourtInner", F, -W / 2 + 1.2, W / 2 - 1.2, 0.2, 0.24, -D / 2 + 1.2, D / 2 - 1.2, rgb(200, 90, 60), M.Concrete)
 	Box(m, "Midline", F, -0.12, 0.12, 0.24, 0.3, -D / 2 + 1.2, D / 2 - 1.2, WHITE, M.SmoothPlastic)
 	Column(m, "CenterCircle", F, 0, 0, 0.24, 0.28, 6, WHITE, M.SmoothPlastic)
-	Column(m, "CenterDot", F, 0, 0, 0.28, 0.32, 5.5, rgb(200, 90, 60), M.SmoothPlastic)
+	Column(m, "CenterDot", F, 0, 0, 0.28, 0.35, 5.5, rgb(200, 90, 60), M.SmoothPlastic)
 	for _, sx in ipairs({ -1, 1 }) do
 		Box(m, "Key", F, sx * (W / 2 - 1.2), sx * (W / 2 - 7.2), 0.24, 0.28, -2.6, 2.6, rgb(70, 110, 150), M.SmoothPlastic)
 		hoop(m, F * CFrame.new(sx * (W / 2 + 0.4), 0.2, 0) * CFrame.Angles(0, sx > 0 and math.pi / 2 or -math.pi / 2, 0))
@@ -234,8 +234,9 @@ local function buildFootPitch(m: Model, F: CFrame, seed: number)
 	for _, sz in ipairs({ -1, 1 }) do
 		Box(m, "Line", F, -W / 2 + 2, W / 2 - 2, 0.19, 0.24, sz * (D / 2 - 2) - 0.15, sz * (D / 2 - 2) + 0.15, WHITE, M.SmoothPlastic)
 	end
-	Column(m, "CenterCircle", F, 0, 0, 0.19, 0.22, 8, WHITE, M.SmoothPlastic)
-	Column(m, "CenterInner", F, 0, 0, 0.22, 0.25, 7.4, rgb(70, 150, 70), M.Grass)
+	-- (rond central au-dessus de la ligne médiane : 0,28 / 0,31, jamais confondus)
+	Column(m, "CenterCircle", F, 0, 0, 0.19, 0.28, 8, WHITE, M.SmoothPlastic)
+	Column(m, "CenterInner", F, 0, 0, 0.28, 0.31, 7.4, rgb(70, 150, 70), M.Grass)
 	for _, sx in ipairs({ -1, 1 }) do
 		goal(m, F * CFrame.new(sx * (W / 2 - 2), 0.16, 0) * CFrame.Angles(0, sx > 0 and -math.pi / 2 or math.pi / 2, 0))
 	end
@@ -692,16 +693,21 @@ DistrictParks.BUILDERS = {
 	Lookout = buildLookout,
 	DistrictSign = buildDistrictSign,
 }
-DistrictParks.BIG = { PocketPark = true, FootPitch = true, Tennis = true, Stadium = true, Grove = true, Orchard = true, ShopRow = true, BusStation = true, Cabin = true, Lookout = true }
+-- (bosquets, vergers, cabanes : rayon normal ; leurs imposteurs prennent le relais)
+DistrictParks.BIG = { FootPitch = true, Tennis = true, Stadium = true, ShopRow = true, BusStation = true, Lookout = true }
 -- imposteurs (loin) : silhouettes de quelques pièces
 DistrictParks.IMPOSTORS = {
 	Grove = function(m: Model, F: CFrame, seed: number)
+		-- (de loin : une couronne + un tronc par arbre, 2 pièces)
 		local n = 4 + math.floor(hash(seed, 1) * 3)
 		for i = 0, n - 1 do
 			local a = i / n * math.pi * 2 + hash(seed, i) * 0.8
 			local r = 5 + hash(seed, i + 10) * 9
-			local sp = CityKit.Pick({ "Oak", "Fir", "Birch", "Maple", "Fir", "Poplar" }, seed, i)
-			tree(m, F, math.cos(a) * r, math.sin(a) * r, 14 + hash(seed, i + 20) * 10, seed * 7 + i, sp, 0)
+			local h = 14 + hash(seed, i + 20) * 10
+			local x, z = math.cos(a) * r, math.sin(a) * r
+			local fir = CityKit.Pick({ "Oak", "Fir", "Birch", "Maple", "Fir", "Poplar" }, seed, i) == "Fir"
+			Column(m, "ImpTrunk", F, x, z, 0, h * 0.45, 1, rgb(100, 72, 50), M.Wood)
+			Egg(m, "ImpCrown", F * CFrame.new(x, h * (fir and 0.55 or 0.68), z), fir and Vector3.new(h * 0.35, h * 0.8, h * 0.35) or Vector3.new(h * 0.6, h * 0.5, h * 0.6), fir and rgb(40, 90, 60) or rgb(80, 140, 70):Lerp(rgb(120, 150, 70), hash(seed, i + 3)), M.Grass)
 		end
 	end,
 	Stadium = function(m: Model, F: CFrame)
@@ -714,7 +720,7 @@ DistrictParks.IMPOSTORS = {
 	Orchard = function(m: Model, F: CFrame, seed: number)
 		for i = 0, 3 do
 			for j = 0, 2 do
-				tree(m, F, -15 + i * 10, -11 + j * 11, 9 + hash(seed, i * 3 + j) * 2, seed * 3 + i * 7 + j, "Fruit", 0)
+				Egg(m, "ImpCrown", F * CFrame.new(-15 + i * 10, 6.5, -11 + j * 11), Vector3.new(7, 5.5, 7), rgb(90, 150, 70):Lerp(rgb(120, 160, 70), hash(seed, i * 3 + j)), M.Grass)
 			end
 		end
 	end,

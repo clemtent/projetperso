@@ -99,6 +99,7 @@ return {
 		["✅ On your car"] = "✅ Sur ta voiture",
 		["🔓 Bought"] = "🔓 Achetée",
 		["Rating %d"] = "Indice %d",
+		["🏆 Class %s · %d km/h"] = "🏆 Classe %s · %d km/h",
 		["⚡ Top speed: %d km/h"] = "⚡ Vitesse max : %d km/h",
 		["🏁 0 to top speed: %.1f s"] = "🏁 0 à la vitesse max : %.1f s",
 		["🌀 Grip: %d%%"] = "🌀 Adhérence : %d %%",

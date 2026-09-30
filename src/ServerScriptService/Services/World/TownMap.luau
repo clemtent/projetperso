@@ -302,7 +302,8 @@ function TownMap.Build(plotCount: number): Town
 	folder:SetAttribute("GateCF", WorldLayout.GateCFrame(plotCount))
 	folder:SetAttribute("TownRadius", WorldLayout.TownRadius(plotCount))
 	folder:SetAttribute("CityVersion", 10) -- (v10, LAYOUT10) grande ville : quartiers, autoroute
-	folder:SetAttribute("HighwayR", WorldLayout.HIGHWAY_R)
+	folder:SetAttribute("HighwayR", WorldLayout.HighwayR(plotCount))
+	folder:SetAttribute("BeltR", WorldLayout.BeltR(plotCount))
 	folder:SetAttribute("Parts", TownKit.Stats.Parts)
 	folder:SetAttribute("Lights", TownKit.Stats.Lights)
 	folder:SetAttribute("Shops", #shops:GetChildren())

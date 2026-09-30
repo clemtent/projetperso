@@ -877,6 +877,9 @@ function HouseBuildAnim.Activate(self: Anim, t: Track)
 		t.State = "Fly"
 		table.insert(self.Active, t)
 	else
+		-- (taille lue au décollage : une pièce arrivée en cours de route a pu
+		-- être retaillée après son ajout)
+		t.Size = t.Part.Size
 		t.State = "Fly"
 		table.insert(self.Active, t)
 		-- étincelles (une par paquet de fenêtres)

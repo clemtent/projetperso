@@ -644,7 +644,7 @@ end
 -- bas : WorldLayout.CityPoint / CityCFrame / PlotCFrame...
 --
 -- Plan : un QUADRILLAGE 3 x 3 de cases, séparées par des avenues (axes
--- x, z = ±DOWNTOWN_B et ±BELT_R) :
+-- x, z = ±DOWNTOWN_B et ±BeltR(count)) :
 --   - case du milieu : le CENTRE-VILLE (place, mairie, boutiques, fête
 --     foraine, lac et parc) dans le boulevard carré (±DOWNTOWN_B) ;
 --   - case sud (0, +1) : l'ENTRÉE (porte, coin gourmand, MégaDopa,
@@ -654,8 +654,8 @@ end
 --     ville à l'est, lofts au sud-est, manoirs sur la colline au nord,
 --     quartier mixte au sud-ouest ;
 --   - cases nord-ouest / nord-est : bois des collines et parc des sports ;
---   - tout autour, au-delà de l'avenue de ceinture (±BELT_R), l'AUTOROUTE
---     (anneau carré aux coins arrondis, ±HIGHWAY_R, 2 x 2 voies) avec 4
+--   - tout autour, au-delà de l'avenue de ceinture (±BeltR), l'AUTOROUTE
+--     (anneau carré aux coins arrondis, ±HighwayR(count), 2 x 2 voies) avec 4
 --     échangeurs en losange (la route locale passe SUR l'autoroute par un
 --     pont) ; celui du sud prolonge l'avenue d'entrée.
 -- Chaque quartier : des rues de quartier (STREET_W) qui relient les deux
@@ -1235,7 +1235,11 @@ end
 
 -- Rayon des murs invisibles (bord du pré) : au-delà des bouts des échangeurs
 function WorldLayout.TownRadius(count: number?): number
-	return WorldLayout.HighwayR(count) + WorldLayout.OUTSIDE_END + 120
+	local H = WorldLayout.HighwayR(count)
+	-- (les murs sont un CERCLE : les virages de l'autoroute, aux coins, doivent
+	-- rester dedans, bord extérieur de la chaussée compris)
+	local corner = (H - WorldLayout.HIGHWAY_CORNER) * math.sqrt(2) + WorldLayout.HIGHWAY_CORNER + WorldLayout.HIGHWAY_W / 2 + 80
+	return math.max(H + WorldLayout.OUTSIDE_END + 120, corner)
 end
 
 -- Parcelle `index` : centre (x, z) en repère ville et angle (radians) de sa
@@ -1593,6 +1597,8 @@ local function buildGraph(count: number): RoadGraph
 			local a = q * math.pi / 2
 			ids[q + 1] = node(math.sin(a) * rr, cz + math.cos(a) * rr, y0, "Roundabout")
 		end
+		-- (le bout de la route de l'entrée est un nœud du rond-point)
+		nodes[ids[1]].Kind = "Roundabout"
 		for q = 1, 4 do
 			local a0 = (q - 1) * math.pi / 2
 			local pts = {}

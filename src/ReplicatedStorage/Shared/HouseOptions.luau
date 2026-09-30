@@ -188,7 +188,8 @@ local KINDS: { any } = {
 		c("Industrial", "Steel factory", "▩", 1e6, 1),
 	} },
 	{ Id = "Shutters", Name = "Shutters", Icon = "🚪", Group = "Windows", Choices = {
-		c("None", "No shutters", "🚫", 0),
+		c("Auto", "Style shutters", "🏠", 0),
+		c("None", "No shutters", "🚫", 3000),
 		c("Louvered", "Louvered shutters", "▤", 40000),
 		c("Panel", "Panel shutters", "▯", 60000),
 		c("Board", "Z-board shutters", "Ｚ", 90000),

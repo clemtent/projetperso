@@ -72,7 +72,7 @@ TownStreetLife.FOLDER_NAME = "TownStreetLife"
 TownStreetLife.SEAT_TOPS = { Terrace = 1.25, Chess = 1.45 }
 local BUILD_IN, BUILD_OUT = 190, 240
 local BIG_IN, BIG_OUT = 320, 380
-local IMP_IN, IMP_OUT = 820, 900 -- (v10) imposteurs (silhouettes) des gros lieux
+local IMP_IN, IMP_OUT = 640, 720 -- (v10) imposteurs (silhouettes) des gros lieux
 local FAR_IN, FAR_OUT = 2400, 2600
 local BUILDS_PER_STEP = 12 -- (v9.9 : 6 -> 12, les tronçons de route sont petits)
 local ANIM_STEP = 1 / 20
@@ -1112,6 +1112,11 @@ local function buildSpot(spot: Spot, parent: Instance)
 	end
 	m.Parent = parent
 	spot.Model = m
+	-- (v10) le détail remplace l'imposteur dans la même passe (jamais les deux)
+	if spot.Imp then
+		spot.Imp:Destroy()
+		spot.Imp = nil
+	end
 	spot.Anim = anim
 end
 

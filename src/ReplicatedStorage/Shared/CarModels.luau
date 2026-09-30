@@ -80,6 +80,40 @@
 	  CarModels.PoseRig(rig, pivot, spin, steer, bob?) -> (parts, frames) : pose
 	    complète (à passer à workspace:BulkMoveTo) ; bob = CFrame de caisse
 	    (tangage / roulis / pompage de la suspension).
+
+	v10 (CARS10) "10x plus réalistes et personnalisables" :
+	  - SILHOUETTES : proportions réelles (plus basses, roues plus grandes,
+	    jour de roue serré), nez et poupe ARRONDIS de profil (le capot plonge
+	    en quart de cercle, le coffre retombe), coins arrondis vus de dessus,
+	    capot / toit / vitres BOMBÉS (deux pans qui se rejoignent au milieu),
+	    épaules arrondies, ceinture qui monte vers l'arrière ; phares modernes
+	    fins et étirés dans l'angle (sourcil de feu de jour, projecteurs, sans
+	    chrome), calandre entre les phares, bouclier avec grande prise d'air,
+	    feux arrière fins étirés dans l'angle (même soin devant / derrière).
+	  - ATELIER (opts.Mods = { [Kind] = Id } de Config.Cars.Mods) : finition
+	    (brillant / métallisé / mat / nacré), toit bicolore (dont carbone),
+	    8 jantes (Mesh, Split, Turbine, Deep dish, Retro, Star, Sport...),
+	    couleur des jantes, pneus (taille basse, flanc blanc, liseré rouge,
+	    tout-terrain), lame avant, bas de caisse, ailerons (lèvre, canard,
+	    aileron, GT), vitres teintées, néon sous caisse (Neon doux, aucune
+	    lumière), sellerie. Mid garde les ailerons, bas de caisse, néon,
+	    couleurs ; Low la peinture.
+	  - Budgets mesurés : Full 390..500 pièces (options comprises), Mid
+	    140..170, Low ~37.
+	API v10 (en plus) :
+	  CarModels.Stats(carIdOrKind, tuning?) -> Stats (TopSpeed studs/s, Accel,
+	    Brake, Coast, Grip, DriftGrip, TurnRate, Stability, Comfort, ZeroToTop,
+	    Rating 100..999, Class "D".."S", Stars) : conduite (CarClient) et
+	    courses (RACE10). tuning = { Engine, Tyres, Suspension } (0..3).
+	  CarModels.CleanTuning(t) / TuningOf(data, carId)
+	  CarModels.PriceFor(carId, factor) -> prix en Dopamine (Config.Cars.MinPrice)
+	  CarModels.CleanMods(mods) / ModOf(mods, kind) / EncodeMods(mods) -> "K=Id;..."
+	    / DecodeMods(text)
+	  CarModels.LightRig(model) -> rig ; CarModels.SetLights(rig, { Brake, Reverse,
+	    Blink = -1|0|1, Hazard, Head }) : feux stop / recul / clignotants /
+	    phares en Neon (côté client, local ; Blink / Hazard = état allumé du
+	    moment, l'appelant fait la cadence).
+	  Attributs en plus : Finish, Mods (texte encodé).
 ]]
 
 local Config = require(script.Parent.Config)

@@ -52,7 +52,7 @@ local FULL_OUT = 255
 local LITE_IN = 1300 -- silhouette (grue) plus près que ça
 local LITE_OUT = 1400
 local SYNC_EVERY = 0.5
-local ANIM_RANGE = 460 -- une maison plus loin que ça apparaît sans animation
+local ANIM_RANGE = 340 -- (studs) une maison plus loin que ça apparaît sans animation
 local OWNER_FALLBACK = 16 -- (s) sans ArrivalDone : moment du propriétaire au plus tard
 local MICRO_RANGE = 140
 local LOAD_WINDOW = 12 -- (s) sans ArrivalDone : fin du chargement au plus tard
@@ -112,6 +112,8 @@ local S: any = {
 	DS = 1,
 }
 local ownerSeen = false -- (1re entrée de la session : le moment du propriétaire)
+local ownerPlot: number? = nil -- (parcelle et taille de sa maison au dernier moment : un
+local ownerSize: any = nil -- déménagement / nouveau style relance le moment)
 
 local function camera(): Camera?
 	return workspace.CurrentCamera
@@ -573,9 +575,10 @@ local function houseView(house: any): (CFrame, Vector3, number)
 	local dims = WorldLayout.Dims(house.Size)
 	local cf: CFrame = house.HouseCF
 	local midX = dims.Left + dims.Width / 2
-	local target = (cf * CFrame.new(midX, dims.Height * 0.42, -dims.Depth / 2)).Position
-	local dist = math.max(dims.Width * 0.72, dims.Height * 1.7, 58) + 12
-	local view = cf * CFrame.new(midX, dims.Height * 0.5 + 12, dist)
+	local target = (cf * CFrame.new(midX, dims.Height * 0.4, -dims.Depth / 2)).Position
+	-- en hauteur, de 3/4 face (au-dessus des chantiers d'en face, ~25° vers le bas)
+	local dist = math.max(dims.Width * 0.6, dims.Height * 1.5, 50) + 8
+	local view = cf * CFrame.new(midX, dims.Height * 0.85 + 20, dist)
 	return view, target, dist
 end
 
@@ -588,6 +591,24 @@ local function orbitCF(owner: any, k: number): CFrame
 	local pos = target + rotated * (1 - 0.08 * math.sin(k * math.pi))
 	local _ = dist
 	return CFrame.lookAt(pos, target)
+end
+
+-- HUD de la ville masqué pendant le moment (opts.Hud : objet TownHud, facultatif)
+local function hudHidden(owner: any, hidden: boolean)
+	local hud = S.Opts and S.Opts.Hud
+	local root: any = hud and hud.Root
+	if typeof(root) ~= "Instance" then
+		return
+	end
+	if hidden then
+		if owner.HudWas == nil then
+			owner.HudWas = root.Visible
+			root.Visible = false
+		end
+	elseif owner.HudWas ~= nil then
+		root.Visible = owner.HudWas
+		owner.HudWas = nil
+	end
 end
 
 local function endOwnerMoment(skipped: boolean)
@@ -626,6 +647,7 @@ local function endOwnerMoment(skipped: boolean)
 				end
 			end
 			owner.State = "Done"
+			hudHidden(owner, false)
 			if gui then
 				tween(gui.Top, 0.4, { Position = UDim2.new(0, 0, -0.1, 0) })
 				tween(gui.Bottom, 0.4, { Position = UDim2.new(0, 0, 1.02, 0) })
@@ -675,8 +697,8 @@ local function startOwnerMoment()
 	end
 	local cam = camera()
 	if not cam then
-		owner.Anim:Play()
 		owner.State = "Building"
+		owner.Anim = startBuild(LocalPlayer.UserId, house, owner.Plot, true, owner.Anim) or owner.Anim
 		return
 	end
 	owner.State = "Moving"
@@ -684,6 +706,7 @@ local function startOwnerMoment()
 	owner.Subject = cam.CameraSubject
 	owner.FOV = cam.FieldOfView
 	local gui = makeGui()
+	hudHidden(owner, true)
 	if gui then
 		tween(gui.Top, 0.5, { Position = UDim2.new(0, 0, 0, 0) })
 		tween(gui.Bottom, 0.5, { Position = UDim2.new(0, 0, 1 - 0.085, 0) })
@@ -712,8 +735,8 @@ local function startOwnerMoment()
 	if far and gui then
 		tween(gui.Fade, 0.35, { BackgroundTransparency = 0 })
 		task.delay(0.37, function()
-			if S.Owner ~= owner then
-				return
+			if S.Owner ~= owner or (owner :: any).State ~= "Moving" then
+				return -- (passé ou quitté pendant le fondu)
 			end
 			cam.CFrame = first
 			tween(gui.Fade, 0.45, { BackgroundTransparency = 1 })
@@ -973,7 +996,10 @@ function HouseConstruction.Observe(userId: number, house: any, snapshot: any)
 			if owner and owner.House == house and owner.State == "Pending" then
 				owner.Anim:Finish(true)
 				owner.Anim = HouseBuildAnim.new(house, { Parent = S.Folder, Seed = userId % 997 })
-				owner.Anim:Prepare()
+				if not pcall(owner.Anim.Prepare, owner.Anim) then
+					owner.Anim:Finish(true)
+				end
+				ownerSize = house.Size
 			elseif not (owner and owner.House == house and owner.State ~= "Done") then
 				startBuild(userId, house, plot)
 			end
@@ -983,7 +1009,16 @@ function HouseConstruction.Observe(userId: number, house: any, snapshot: any)
 	local hadHouse = rec ~= nil
 	S.Records[userId] = { House = house, Size = house.Size, Plot = plot }
 	pcall(watchMicro, house.Model)
-	if userId == LocalPlayer.UserId and not ownerSeen then
+	local mine = userId == LocalPlayer.UserId
+	if mine and ownerSeen and (plot ~= ownerPlot or house.Size ~= ownerSize) then
+		-- (nouveau style / nouveau quartier depuis la dernière fois : on la
+		-- reconstruit, avec le moment caméra)
+		ownerSeen = false
+	end
+	if mine then
+		ownerPlot, ownerSize = plot, house.Size
+	end
+	if mine and not ownerSeen then
 		-- ta maison : chantier jusqu'au moment "ta maison se construit"
 		local anim = HouseBuildAnim.new(house, { Parent = S.Folder, Seed = userId % 997 })
 		local okPrep, errPrep = pcall(anim.Prepare, anim)
@@ -1121,6 +1156,7 @@ function HouseConstruction.Stop()
 				end
 			end
 		end
+		hudHidden(owner, false)
 	end
 	S.Owner = nil
 	destroyGui()

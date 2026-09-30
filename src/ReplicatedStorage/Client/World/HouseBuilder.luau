@@ -483,6 +483,31 @@ function HouseBuilder.BuildExterior(self: House)
 		warn("[World] Façade : " .. tostring(built))
 		built = { Fills = {}, Chimneys = 0, Style = WorldLayout.StyleOf(size) }
 	end
+	-- (v10) 📫 boîte aux lettres de SA maison : "Personnaliser" (E) ouvre l'éditeur 3D
+	local me = Players.LocalPlayer
+	if me and me.UserId == self.UserId then
+		local box = folder:FindFirstChild("MailBox", true)
+		if box and box:IsA("BasePart") then
+			local p = Instance.new("ProximityPrompt")
+			p.Name = "CustomisePrompt"
+			p.ActionText = Locale.T("Customise")
+			p.ObjectText = Locale.T("🏡 My house")
+			p.KeyboardKeyCode = Enum.KeyCode.E
+			p.MaxActivationDistance = 9
+			p.RequiresLineOfSight = false
+			p.HoldDuration = 0
+			p.Parent = box
+			p.Triggered:Connect(function()
+				local module = HouseFolder:FindFirstChild("HouseFacadeEditor")
+				if module and module:IsA("ModuleScript") then
+					local okEditor, editor = pcall(require, module)
+					if okEditor and type(editor) == "table" then
+						pcall(editor.Open, { Plot = tonumber(self.Snapshot.Plot) })
+					end
+				end
+			end)
+		end
+	end
 	-- (v10) le look a changé (fenêtres de la façade) : les pièces construites sont refaites
 	if oldKey and built.Spec and built.Spec.Key ~= oldKey then
 		for slot in pairs(self.Rooms) do
@@ -566,6 +591,10 @@ function HouseBuilder.BuildLite(self: House, level: string)
 	local kit = HouseKit.new(self.HouseCF, folder, 0)
 	local looks = looksOf(snapshot)
 	looks.Rooms = roomsBySlot(snapshot)
+	local okSpec, spec = pcall(HouseFacade.Resolve, self.Size, looks)
+	if okSpec then
+		self.Spec = spec
+	end
 	local ok, result = pcall(HouseLod.Build, kit, self.Size, looks, level)
 	if not ok then
 		warn("[World] LOD : " .. tostring(result))

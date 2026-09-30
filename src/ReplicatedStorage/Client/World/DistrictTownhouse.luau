@@ -220,8 +220,8 @@ local function buildCafe(m: Model, F: CFrame, seed: number)
 			local R = T * CFrame.Angles(0, k * math.pi / 2, 0)
 			Wedge(m, "Parasol", Vector3.new(3.4, 1, 1.9), R * CFrame.new(0, 7.9 + k * 0.03, -0.95), color, M.Fabric)
 		end
-		-- un client assis (une table sur deux : deux clients)
-		for k = 0, (i == 1 and 1 or 0) do
+		-- des clients assis (table du milieu : deux clients, la 3e libre)
+		for k = 0, (i == 1 and 1 or (i == 0 and 0 or -1)) do
 			local seat = T * CFrame.Angles(0, k * math.pi, 0) * CFrame.new(0, 0, 1.6)
 			local p = CityKit.Npc(m, CityKit.Pick({ "pedestrian", "shopper", "elder" }, seed, i * 3 + k), seed * 11 + i * 3 + k, seat * CFrame.new(0, 0.1, 0.1), k == 0 and "coffee" or "phone", false)
 			if p then
@@ -376,7 +376,7 @@ DistrictTownhouse.BUILDERS = {
 	TwnBusStop = buildBusStop,
 	TwnLamp = buildLamp,
 }
-DistrictTownhouse.BIG = { TwnCornerShop = true, TwnCafe = true, TwnSquare = true }
+DistrictTownhouse.BIG = { TwnCornerShop = true, TwnSquare = true }
 DistrictTownhouse.IMPOSTORS = {
 	TwnCornerShop = function(m: Model, F: CFrame)
 		Box(m, "ImpBlock", F * CFrame.new(0, 0, 3), -9, 9, 0, 30, -7, 7, BRICK, M.Brick, true)

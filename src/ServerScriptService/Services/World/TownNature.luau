@@ -523,12 +523,15 @@ local function hills(folder: Instance, geo: TownKit.Geo)
 	local model = TownKit.Model(folder, "Hills")
 	local O = geo.Origin
 	-- (grandes boules très enterrées : on ne voit qu'un dôme doux de 25 à 55 studs)
+	-- (v10, LAYOUT10 : la grande ville va jusqu'à ~1580 studs ; collines et
+	-- montagnes bornées pour rester sur le pré, qui s'arrête à 2048)
+	local town = math.min(geo.Town, 1520)
 	local n = 18
 	for i = 1, n do
 		local a = (i + hash(i, 61) * 0.6) / n * math.pi * 2
 		local d = 380 + hash(i, 63) * 260
 		local rise = 25 + hash(i, 65) * 30
-		local dist = geo.Town + 60 + math.sqrt(d * rise) * 0.9 + hash(i, 62) * 60
+		local dist = town + 60 + math.sqrt(d * rise) * 0.9 + hash(i, 62) * 60
 		local p = O + Vector3.new(math.sin(a) * dist, GROUND_Y - d / 2 + rise, math.cos(a) * dist)
 		local tone = C.Grass:Lerp(Color3.fromRGB(106, 176, 98), hash(i, 64))
 		TownKit.Ball(model, "Hill", p, d, tone, M.Grass, "deco")
@@ -541,7 +544,7 @@ local function hills(folder: Instance, geo: TownKit.Geo)
 	-- montagnes enneigées (pyramides approchées) dans le dos de l'entrée
 	for i = 1, 5 do
 		local a = math.pi + (i - 3) * 0.36 + (hash(i, 65) - 0.5) * 0.1
-		local dist = geo.Town + 360 + hash(i, 66) * 80
+		local dist = math.min(geo.Town, 1460) + 360 + hash(i, 66) * 80
 		local h = 90 + hash(i, 67) * 80
 		local w = h * 1.5
 		local base = O + Vector3.new(math.sin(a) * dist, GROUND_Y - 5, math.cos(a) * dist)
@@ -1097,7 +1100,7 @@ function TownNature.Build(folder: Instance, geo: TownKit.Geo): number
 	local trees = scatterTrees(nature, geo, math.clamp(math.floor(depth * 0.28), 22, geo.Slots >= 11 and 46 or 36))
 	belt(nature, geo)
 	hills(nature, geo)
-	TownBuildings.Skyline(nature, O, math.rad(125), math.rad(235), geo.Town + 320, 20)
+	TownBuildings.Skyline(nature, O, math.rad(125), math.rad(235), math.min(geo.Town, 1520) + 320, 20) -- (v10 : borné au pré)
 	-- (v9.8, CITY98) publie les emplacements du mobilier client + chemins des passants
 	TownKit.PublishLife(folder.Parent or folder)
 	return trees

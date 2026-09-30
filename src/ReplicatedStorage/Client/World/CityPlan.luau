@@ -576,7 +576,7 @@ local function gapItems(ctx: Ctx, out: { Spot }, d: any, style: string, px: numb
 				add(out, "MnsFountain", cframe(cx, y, cz, lx, lz), seed, nil, nil, true)
 			end
 			local bx, bz = gx - lx * (D / 2 - 8), gz - lz * (D / 2 - 8)
-			add(out, "MnsCypress", cframe(bx, y, bz, lz, -lx), seed + 3, Vector3.new(gap - 16, 15, 3), nil, true)
+			add(out, "MnsCypress", cframe(bx, y, bz, lx, lz), seed + 3, Vector3.new(gap - 16, 15, 3), nil, true)
 		end
 		add(out, "MnsLantern", cframe(fx, y, fz, lx, lz), seed + 5, nil, nil, true)
 	end

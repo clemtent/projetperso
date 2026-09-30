@@ -236,21 +236,33 @@ function CityKit.Idle(model: Model?, anim: string, phase: number)
 	end
 end
 
+-- Budget : au plus MAX_PER_FRAME acteurs par image ; au-delà de HALF_R
+-- studs, une image sur deux (le mouvement reste fluide de loin)
+local MAX_PER_FRAME = 48
+local HALF_R = 70
+local frame = 0
+
 function CityKit.Step(dt: number)
 	if #actors == 0 then
 		return
 	end
+	frame += 1
 	local camera = workspace.CurrentCamera
 	local eye = camera and camera.CFrame.Position
 	local now = os.clock()
+	local done = 0
 	for i = #actors, 1, -1 do
 		local a = actors[i]
 		if not a.Model.Parent then
 			table.remove(actors, i)
-		elseif not eye or (a.Pos - eye).Magnitude < CityKit.ANIM_R then
-			local ok = pcall(a.Fn, now + a.Phase, dt)
-			if not ok then
-				table.remove(actors, i)
+		else
+			local dist = eye and (a.Pos - eye).Magnitude or 0
+			if dist < CityKit.ANIM_R and done < MAX_PER_FRAME and (dist < HALF_R or (frame + i) % 2 == 0) then
+				done += 1
+				local ok = pcall(a.Fn, now + a.Phase, dt * (dist < HALF_R and 1 or 2))
+				if not ok then
+					table.remove(actors, i)
+				end
 			end
 		end
 	end

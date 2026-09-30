@@ -44,6 +44,23 @@
 	    roues arrière, champ de vision lissé.
 	  - Garages : changement de couleur = on repeint (pas de reconstruction).
 
+	v10 (CARS10) :
+	  - "Mes voitures" : onglets 🚗 Voiture / 🎨 Style / 🏁 Perf ; l'atelier
+	    (CarWorkshop) montre chaque option TOUT DE SUITE sur l'aperçu 3D
+	    (essai gratuit), puis achat / application vérifiés par CarService ;
+	    préparation moteur / pneus / suspensions (CarModels.Stats).
+	  - Conduite : performances = CarModels.Stats (modèle + préparation lue
+	    sur l'attribut "Tuning" de la voiture) ; stable à haute vitesse
+	    (direction qui se durcit) ; drift progressif, survirage doux,
+	    contre-braquage qui rattrape ; champ de vision + petit "coup" à la
+	    réaccélération (subtil) ; voiture ancrée (compte à rebours d'une
+	    course) = vitesse 0, pas de bond au départ.
+	  - Feux de TOUTES les voitures des joueurs (locaux, CarModels.SetLights) :
+	    stop au freinage, recul, clignotants automatiques dans les virages
+	    lents, warnings pendant le compte à rebours, feux de jour au volant.
+	  - Garages : les voitures garées portent leurs options (attribut
+	    DopamineCarMods du propriétaire).
+
 	API (TownClient) :
 	  CarClient.Start({ Toast = function(text) end? })  -- en entrant en ville
 	  CarClient.Stop()                                     -- en sortant (avant de rendre la caméra)
@@ -988,10 +1005,11 @@ local function layoutPicker()
 	if phone then
 		card.Size = UDim2.fromOffset(800, 410)
 		parts.Stage.Position = UDim2.fromOffset(12, 52)
-		parts.Stage.Size = UDim2.fromOffset(430, 226)
-		parts.PaintRow.Position = UDim2.fromOffset(12, 282)
-		parts.PaintRow.Size = UDim2.fromOffset(430, 30)
-		parts.SwatchLayout.CellSize = UDim2.fromOffset(24, 24)
+		-- (v10) 22 peintures : nuancier sur 2 rangées
+		parts.Stage.Size = UDim2.fromOffset(430, 198)
+		parts.PaintRow.Position = UDim2.fromOffset(12, 254)
+		parts.PaintRow.Size = UDim2.fromOffset(430, 60)
+		parts.SwatchLayout.CellSize = UDim2.fromOffset(22, 22)
 		parts.SwatchLayout.CellPadding = UDim2.fromOffset(3, 3)
 		parts.PaintName.Size = UDim2.new(0, 96, 1, 0)
 		parts.Swatches.Size = UDim2.new(1, -98, 1, 0)
@@ -1029,11 +1047,11 @@ local function layoutPicker()
 	else
 		card.Size = UDim2.fromOffset(960, 570)
 		parts.Stage.Position = UDim2.fromOffset(16, 56)
-		parts.Stage.Size = UDim2.fromOffset(580, 330)
-		parts.PaintRow.Position = UDim2.fromOffset(16, 394)
-		parts.PaintRow.Size = UDim2.fromOffset(580, 44)
-		parts.SwatchLayout.CellSize = UDim2.fromOffset(30, 30)
-		parts.SwatchLayout.CellPadding = UDim2.fromOffset(5, 5)
+		parts.Stage.Size = UDim2.fromOffset(580, 314)
+		parts.PaintRow.Position = UDim2.fromOffset(16, 376)
+		parts.PaintRow.Size = UDim2.fromOffset(580, 64)
+		parts.SwatchLayout.CellSize = UDim2.fromOffset(26, 26)
+		parts.SwatchLayout.CellPadding = UDim2.fromOffset(4, 4)
 		parts.PaintName.Size = UDim2.new(0, 146, 1, 0)
 		parts.Swatches.Size = UDim2.new(1, -150, 1, 0)
 		parts.Info.Position = UDim2.fromOffset(612, 56)
