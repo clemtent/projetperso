@@ -62,12 +62,20 @@ local ACTION = "DopamineStageKeys"
 local UP = Vector3.new(0, 1, 0)
 local TAU = math.pi * 2
 
+local state: any = nil
+
 local function T(text: string, ...): string
 	return Locale.T(text, ...)
 end
 
 local function serverNow(): number
 	return workspace:GetServerTimeNow()
+end
+
+-- Horloge locale de la scène (somme des dt de Step : suit les images)
+local function clockNow(): number
+	local s = state
+	return s and s.Clock or 0
 end
 
 local function smooth(x: number): number
@@ -106,7 +114,6 @@ local PAD = {
 	Pink = Color3.fromRGB(236, 110, 170),
 }
 
-local state: any = nil
 
 ----------------------------------------------------------------------
 -- Outils
@@ -242,7 +249,7 @@ local function pressKey(s: any, keys: any, n: number, depth: number)
 		return
 	end
 	key.Part.CFrame = key.CF * CFrame.new(0, -depth, 0.02) * CFrame.Angles(math.rad(-2.5), 0, 0)
-	s.Pressed[key.Part] = { CF = key.CF, Until = os.clock() + 0.16 }
+	s.Pressed[key.Part] = { CF = key.CF, Until = clockNow() + 0.16 }
 end
 
 local function energize(s: any, inst: string, vel: number, n: number?)
@@ -254,7 +261,7 @@ local function energize(s: any, inst: string, vel: number, n: number?)
 		local add = vel * math.max(0, 1 - d / 5)
 		s.Energy[i] = math.min(1, (s.Energy[i] or 0) + add * 0.7)
 	end
-	s.LastHit = os.clock()
+	s.LastHit = clockNow()
 end
 
 ----------------------------------------------------------------------
@@ -295,7 +302,7 @@ local function hit(inst: string, n: number, vel: number, via: string?)
 		-- (boucles du DJ : seules les platines réagissent)
 		local hs = handState(s, via)
 		if inst == "Drums" and n == MusicData.DRUM.Snare then
-			hs.R.HitT = os.clock()
+			hs.R.HitT = clockNow()
 		end
 		return
 	end
@@ -303,7 +310,7 @@ local function hit(inst: string, n: number, vel: number, via: string?)
 		return
 	end
 	local hs = handState(s, kind)
-	local now = os.clock()
+	local now = clockNow()
 	if inst == "Piano" or inst == "Synth" or inst == "Xylophone" then
 		local keys = H.Keys[inst]
 		pressKey(s, keys, n, inst == "Xylophone" and 0.02 or 0.04)
@@ -432,7 +439,7 @@ local function queue(n: number, vel: number)
 	if not s or not s.Playing then
 		return
 	end
-	local now = os.clock()
+	local now = clockNow()
 	if #s.Out == 0 then
 		s.OutStart = now
 	end
@@ -449,7 +456,7 @@ local function flush(force: boolean?)
 	if not s or #s.Out == 0 then
 		return
 	end
-	if not force and os.clock() - s.OutStart < MusicData.SEND_EVERY then
+	if not force and clockNow() - s.OutStart < MusicData.SEND_EVERY then
 		return
 	end
 	local id = s.Playing
@@ -465,7 +472,7 @@ local function playLocal(value: number, vel: number)
 		return
 	end
 	local id = s.Playing
-	s.LastInput = os.clock()
+	s.LastInput = clockNow()
 	if id == "DJ" then
 		if value <= MusicData.DJ_LOOPS then
 			local current = anchorOf("DJ")
@@ -480,7 +487,7 @@ local function playLocal(value: number, vel: number)
 	end
 	if id == "Guitar" and value > 1000 then
 		local name = CHORDS[value - 1000]
-		local now = os.clock()
+		local now = clockNow()
 		local down = not (s.LastChord == value and now - (s.LastChordT or 0) < 0.4 and s.LastDown)
 		s.LastChord, s.LastChordT, s.LastDown = value, now, down
 		local root = MusicData.Root(name, 40) or 48
@@ -825,7 +832,7 @@ end
 ----------------------------------------------------------------------
 
 local function musicActive(s: any): boolean
-	return s.Song ~= nil or (s.Radio ~= nil) or (s.LoopId or 0) > 0 or os.clock() - (s.LastHit or -math.huge) < 2
+	return s.Song ~= nil or (s.Radio ~= nil) or (s.LoopId or 0) > 0 or clockNow() - (s.LastHit or -math.huge) < 2
 end
 
 local function stepVisuals(s: any, dt: number, now: number)
@@ -833,7 +840,7 @@ local function stepVisuals(s: any, dt: number, now: number)
 	if not H then
 		return
 	end
-	local clock = os.clock()
+	local clock = clockNow()
 	-- touches relâchées
 	for part, info in pairs(s.Pressed) do
 		if clock >= info.Until then
@@ -1117,7 +1124,7 @@ local function stepPoses(dt: number)
 	if not s or not s.Folder or not s.Build then
 		return
 	end
-	local clock = os.clock()
+	local clock = clockNow()
 	local me = rootOf(LocalPlayer)
 	local seen = {}
 	for _, id in ipairs(MusicData.ORDER) do

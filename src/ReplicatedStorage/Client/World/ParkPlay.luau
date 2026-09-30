@@ -150,10 +150,10 @@ local function slab(parent: Instance, name: string, a: Vector3, b: Vector3, w: n
 	return newPart(parent, name, Vector3.new(w, h, dir.Magnitude), CFrame.lookAt((a + b) / 2, b, up), color, material, nil, shadow)
 end
 
-local function label(p: BasePart, text: string, color: Color3, bg: Color3)
+local function label(p: BasePart, text: string, color: Color3, bg: Color3, face: Enum.NormalId?)
 	local gui = Instance.new("SurfaceGui")
 	gui.Name = "ParkSign"
-	gui.Face = Enum.NormalId.Front
+	gui.Face = face or Enum.NormalId.Front
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	gui.PixelsPerStud = 40
 	gui.LightInfluence = 0.6
@@ -582,7 +582,9 @@ local function buildFence(park: Park)
 		rod(f, "ArchPost", g * (p + Vector3.new(0, 3.6, 0)), g * (p + Vector3.new(0, 6.4, 0)), 0.22, BLUE, M.Metal)
 	end
 	local board = newPart(f, "GateSign", Vector3.new(gate * 2 + 1.2, 1.3, 0.2), g * CFrame.new(0, 6.1, -hd) * CFrame.Angles(0, math.pi, 0), YELLOW, M.SmoothPlastic, nil, true)
-	label(board, "🛝 " .. Locale.T("Playground"), rgb(120, 60, 40), rgb(255, 232, 150))
+	-- (lisible des deux côtés : en arrivant de la place et depuis l'aire)
+	label(board, "🛝 " .. Locale.T("Playground"), rgb(120, 60, 40), rgb(255, 232, 150), Enum.NormalId.Front)
+	label(board, "🛝 " .. Locale.T("Playground"), rgb(120, 60, 40), rgb(255, 232, 150), Enum.NormalId.Back)
 	-- battant ouvert vers l'extérieur (3 lattes + traverses)
 	local hinge = g * CFrame.new(-gate - 0.3, 0, -hd) * CFrame.Angles(0, rad(-100), 0)
 	for k = 0, 2 do

@@ -246,7 +246,7 @@ local function buildInside(r: RideFx): { any }
 		local from = Vector3.new(sx * 8, 14.1, -2.5)
 		local to = Vector3.new(sx * 1.2, 0.2, 0)
 		local head = Fixed(r, "Projector", Vector3.new(0.9, 0.9, 1.4), CFrame.lookAt(from, to), Color3.fromRGB(40, 40, 46), M.Metal)
-		Glow(Fixed(r, "Lens", Vector3.new(0.7, 0.7, 0.1), CFrame.lookAt(from, to) * CFrame.new(0, 0, -0.72), C.Bulb, M.SmoothPlastic, BALL))
+		Glow(Fixed(r, "Lens", Vector3.new(0.1, 0.7, 0.7), CFrame.lookAt(from, to) * CFrame.new(0, 0, -0.72) * CFrame.Angles(0, math.rad(90), 0), C.Bulb, M.SmoothPlastic, CYL))
 		local beam = Fixed(r, "LightBeam", Vector3.new((to - from).Magnitude - 1, 2.2, 2.2), CFrame.lookAt((from + to) / 2, to) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(255, 244, 210), M.SmoothPlastic, CYL)
 		beam.Transparency = 0.93
 		local spot = Instance.new("SpotLight")
@@ -408,13 +408,6 @@ local function stepShow(r: RideFx, show: any, t: number, near: boolean)
 		m:PivotTo(B * cf)
 		if near then
 			pcall(N.Animate, m, anim, t + seed)
-			if show.Debug then
-				local pp = m.PrimaryPart or m:FindFirstChildWhichIsA("BasePart")
-				local x = pp and pp.Position.X or 0
-				if x ~= x and not show.NaN then
-					show.NaN = m.Name .. ":" .. anim .. ":" .. tostring(cf.Position)
-				end
-			end
 		end
 	end
 	-- 🤹 jongleur (0-22 s)

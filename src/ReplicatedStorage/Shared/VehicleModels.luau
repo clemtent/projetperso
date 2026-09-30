@@ -818,48 +818,171 @@ end
 
 type Truck = { L: number, W: number, CabL: number, BoxH: number, WheelD: number }
 
--- Cabine + châssis + roues d'un petit camion (avant vers -Z) ; renvoie le
--- début (z) de la caisse arrière
-local function truckBase(k: K, t: Truck, cabColor: Color3, full: boolean): number
+-- (v9.9, CARS99) Cabine avancée réaliste + châssis + roues d'un petit
+-- camion (avant vers -Z) : coins avant arrondis, capot court, pare-brise
+-- encadré, vitres latérales, toit aux bords roulés, passage de roue avant
+-- en ARC, calandre, optiques, pare-chocs, rétroviseurs de camion, portes,
+-- marchepied ; à l'arrière : longerons, garde-boue noirs, barres
+-- anti-encastrement ; roues marquées "Wheel" / "Spin".
+-- Renvoie le début (z) de la caisse et la hauteur de son plancher.
+local function truckBase(k: K, t: Truck, cabColor: Color3, full: boolean): (number, number)
 	local hw = t.W / 2
 	local zF, zB = -t.L / 2, t.L / 2
-	local r = t.WheelD / 2
-	local low, belt, roof = 0.9, 3.2, 5.6
+	local D = t.WheelD
+	local r = D / 2
+	local ra = r + 0.28
+	local low, belt, roof = 0.85, 3.35, 5.7
+	local hoodF = belt - 0.5
 	local cabEnd = zF + t.CabL
-	box(k, "Chassis", -hw + 0.6, hw - 0.6, 0.7, 1.3, zF + 0.6, zB - 0.4, TRIM, M.SmoothPlastic)
-	-- cabine : bas, capot court, pare-brise, toit
-	box(k, "CabLow", -hw, hw, low, belt, zF + 1.1, cabEnd, cabColor, M.SmoothPlastic, true)
-	box(k, "CabFront", -hw, hw, low, low + 1.3, zF + 0.1, zF + 1.1, cabColor, M.SmoothPlastic, true)
-	wedge(k, "CabNose", -hw, hw, low + 1.3, belt, zF + 0.1, zF + 1.1, true, cabColor, M.SmoothPlastic)
-	box(k, "Grille", -hw + 0.6, hw - 0.6, low + 0.15, low + 0.7, zF + 0.02, zF + 0.2, TRIM, M.Metal)
-	local ws = slab(k, "Windshield", 0, t.W - 0.4, belt, zF + 1.15, roof - 0.1, zF + 2.0, 0.12, GLASS, M.Glass)
-	ws.Transparency = 0.3
-	box(k, "CabGlass", -hw + 0.1, hw - 0.1, belt, roof - 0.1, zF + 2.0, cabEnd - 0.2, GLASS, M.Glass).Transparency = 0.35
-	box(k, "CabRoof", -hw + 0.05, hw - 0.05, roof - 0.1, roof + 0.25, zF + 1.8, cabEnd, cabColor, M.SmoothPlastic, true)
+	local axF, axR = zF + 2.75, zB - 2.7
+	local tw = 0.9
+	local rc = 0.6
+	local archTop = r + ra
+	local boxY = archTop + 0.15
+	local wsBase, wsTop = zF + 1.25, zF + 2.15
+	-- châssis : 2 longerons
 	for _, sx in ipairs({ -1, 1 }) do
-		box(k, "CabPillar", sx * (hw - 0.02) - 0.08, sx * (hw - 0.02) + 0.08, belt, roof - 0.1, cabEnd - 0.35, cabEnd - 0.2, TRIM, M.SmoothPlastic)
-		local x0, x1 = sx * (hw - 0.05), sx * (hw + 0.4)
-		box(k, "Mirror", math.min(x0, x1), math.max(x0, x1), belt + 0.3, belt + 0.95, zF + 1.4, zF + 1.62, TRIM, M.SmoothPlastic)
-		local h0, h1 = sx * hw * 0.42, sx * hw * 0.86
-		box(k, "Headlight", math.min(h0, h1), math.max(h0, h1), low + 0.78, low + 1.2, zF + 0.02, zF + 0.2, LAMP, M.Glass)
-		local t0, t1 = sx * (hw - 0.15), sx * (hw - 0.65)
-		box(k, "Taillight", math.min(t0, t1), math.max(t0, t1), 1.45, 2.3, zB - 0.02, zB + 0.12, TAIL, M.Glass)
+		local x0, x1 = sx * (hw - 1.9), sx * (hw - 1.45)
+		box(k, "ChassisRail", math.min(x0, x1), math.max(x0, x1), 0.95, 1.55, cabEnd - 0.5, zB - 0.25, TRIM, M.Metal)
 	end
-	box(k, "Bumper", -hw - 0.05, hw + 0.05, 0.6, 1.2, zF - 0.1, zF + 0.5, TRIM, M.SmoothPlastic)
-	box(k, "RearBumper", -hw + 0.1, hw - 0.1, 0.6, 1.1, zB - 0.3, zB + 0.1, TRIM, M.SmoothPlastic)
-	-- roues (avant sous la cabine, arrière sous la caisse)
-	for _, z in ipairs({ zF + 2.1, zB - 2.3 }) do
-		for _, sx in ipairs({ -1, 1 }) do
-			cylX(k, "WheelArch", sx * (hw - 0.01), r + 0.1, z, 0.1, t.WheelD + 0.5, TRIM, M.SmoothPlastic)
-			local x = sx * (hw - 0.3)
-			cylX(k, "Tyre", x, r, z, 0.8, t.WheelD, TYRE, M.Rubber, true)
-			cylX(k, "Rim", x + sx * 0.36, r, z, 0.16, t.WheelD * 0.6, STEEL, M.Metal)
-			if full then
-				cylX(k, "Hub", x + sx * 0.48, r, z, 0.12, t.WheelD * 0.22, CHROME, M.Metal)
+	-- ░ cabine : coins arrondis, face avant, capot court ░
+	for _, sx in ipairs({ -1, 1 }) do
+		cylY(k, "CabCorner", sx * (hw - rc), low, hoodF, zF + rc + 0.05, rc * 2, cabColor, M.SmoothPlastic, true)
+	end
+	box(k, "CabFront", -hw + rc, hw - rc, low, hoodF, zF + 0.05, zF + rc + 0.05, cabColor, M.SmoothPlastic, true)
+	wedge(k, "CabNose", -hw + 0.05, hw - 0.05, hoodF, belt, zF + 0.05, wsBase, true, cabColor, M.SmoothPlastic)
+	box(k, "CabUpperLow", -hw, hw, archTop, belt, zF + rc + 0.05, cabEnd, cabColor, M.SmoothPlastic, true)
+	-- bas de cabine découpé autour de la roue avant
+	box(k, "CabCore", -hw + tw + 0.35, hw - tw - 0.35, low, archTop, zF + rc + 0.05, cabEnd, cabColor, M.SmoothPlastic)
+	for _, sx in ipairs({ -1, 1 }) do
+		local xo, xi = sx * hw, sx * (hw - 0.25)
+		local lo, hi = math.min(xo, xi), math.max(xo, xi)
+		if axF - ra - (zF + rc + 0.05) > 0.05 then
+			box(k, "CabSide", lo, hi, low, archTop, zF + rc + 0.05, axF - ra, cabColor, M.SmoothPlastic)
+		end
+		archPanel(k, "CabArch", xo, xi, axF, r, ra, archTop, if full then 4 else 3, cabColor, M.SmoothPlastic)
+		box(k, "CabSide", lo, hi, low, archTop, axF + ra, cabEnd, cabColor, M.SmoothPlastic)
+		-- passage de roue sombre (toit + fond)
+		local wx0, wx1 = sx * (hw - tw - 0.35), sx * (hw - 0.25)
+		box(k, "WheelWell", math.min(wx0, wx1), math.max(wx0, wx1), archTop - 0.1, archTop - 0.02, axF - ra + 0.1, axF + ra - 0.1, TRIM, M.SmoothPlastic)
+		cylX(k, "WheelWell", sx * (hw - tw - 0.3), r, axF, 0.08, ra * 2, TRIM, M.SmoothPlastic)
+		-- lèvre noire autour de l'arche
+		if full then
+			for i = 0, 3 do
+				local a = -PI / 2 + (i + 0.5) * PI / 4
+				local rr = ra + 0.08
+				local lx0, lx1 = sx * (hw - 0.1), sx * (hw + 0.05)
+				boxRotX(k, "ArchLip", (lx0 + lx1) / 2, r + math.cos(a) * rr, axF + math.sin(a) * rr, math.abs(lx1 - lx0), 0.16, 2 * rr * math.tan(PI / 8) + 0.03, a, TRIM, M.Rubber)
 			end
 		end
 	end
-	return cabEnd
+	-- ░ pare-brise encadré, vitres, montants, toit arrondi ░
+	slab(k, "WindshieldFrame", 0, t.W - 0.4, belt - 0.02, wsBase - 0.05, roof - 0.05, wsTop + 0.02, 0.1, TRIM, M.SmoothPlastic)
+	local ws = slab(k, "Windshield", 0, t.W - 0.7, belt + 0.05, wsBase - 0.08, roof - 0.15, wsTop - 0.04, 0.06, GLASS, M.Glass)
+	ws.Transparency = 0.35
+	ws.Reflectance = 0.15
+	for _, sx in ipairs({ -1, 1 }) do
+		local x0, x1 = sx * (hw - 0.02), sx * (hw - 0.12)
+		box(k, "CabGlass", math.min(x0, x1), math.max(x0, x1), belt, roof - 0.12, wsTop, cabEnd - 0.35, GLASS, M.Glass).Transparency = 0.35
+		rod(k, "PillarA", Vector3.new(sx * (hw - 0.2), belt, wsBase), Vector3.new(sx * (hw - 0.2), roof - 0.1, wsTop), 0.22, TRIM, M.SmoothPlastic)
+		local px0, px1 = sx * (hw + 0.01), sx * (hw - 0.14)
+		box(k, "PillarB", math.min(px0, px1), math.max(px0, px1), belt, roof - 0.1, cabEnd - 0.45, cabEnd - 0.2, TRIM, M.SmoothPlastic)
+		box(k, "PillarB", math.min(px0, px1), math.max(px0, px1), belt, roof - 0.1, wsTop - 0.05, wsTop + 0.12, TRIM, M.SmoothPlastic)
+	end
+	box(k, "CabBack", -hw, hw, belt, roof - 0.1, cabEnd - 0.2, cabEnd, cabColor, M.SmoothPlastic)
+	box(k, "CabRoof", -hw + 0.3, hw - 0.3, roof - 0.12, roof + 0.2, wsTop - 0.05, cabEnd, cabColor, M.SmoothPlastic, true)
+	for _, sx in ipairs({ -1, 1 }) do
+		cylZ(k, "RoofEdge", sx * (hw - 0.3), roof + 0.02, (wsTop - 0.05 + cabEnd) / 2, cabEnd - wsTop + 0.05, 0.36, cabColor, M.SmoothPlastic)
+	end
+	cylX(k, "RoofNose", 0, roof + 0.02, wsTop - 0.05, t.W - 0.6, 0.36, cabColor, M.SmoothPlastic)
+	-- ░ face avant : calandre, optiques, pare-chocs ░
+	local gy0, gy1 = low + 0.75, hoodF - 0.15
+	box(k, "GrilleFrame", -hw * 0.44, hw * 0.44, gy0, gy1, zF - 0.03, zF + 0.2, CHROME, M.Metal)
+	box(k, "Grille", -hw * 0.44 + 0.1, hw * 0.44 - 0.1, gy0 + 0.08, gy1 - 0.08, zF - 0.05, zF + 0.12, TRIM, M.DiamondPlate)
+	if full then
+		for j = 1, 3 do
+			local y = gy0 + j * (gy1 - gy0) / 4
+			box(k, "GrilleBar", -hw * 0.44 + 0.12, hw * 0.44 - 0.12, y - 0.04, y + 0.04, zF - 0.08, zF - 0.02, CHROME, M.Metal)
+		end
+		cylZ(k, "Badge", 0, (gy0 + gy1) / 2, zF - 0.1, 0.06, 0.45, CHROME, M.Metal)
+	end
+	for _, sx in ipairs({ -1, 1 }) do
+		local h0, h1 = sx * (hw * 0.5), sx * (hw - rc * 0.4)
+		local lo, hi = math.min(h0, h1), math.max(h0, h1)
+		box(k, "HeadlightHousing", lo, hi, gy0 + 0.05, gy1, zF - 0.04, zF + 0.15, TRIM, M.SmoothPlastic)
+		box(k, "Headlight", lo + 0.06, hi - 0.06, gy0 + 0.25, gy1 - 0.06, zF - 0.07, zF - 0.01, LAMP, M.Glass)
+		if full then
+			box(k, "HeadlightDRL", lo + 0.06, hi - 0.06, gy0 + 0.1, gy0 + 0.18, zF - 0.08, zF - 0.02, DRL, M.SmoothPlastic)
+			local i0, i1 = sx * (hw - rc * 0.4), sx * (hw - 0.02)
+			box(k, "Indicator", math.min(i0, i1), math.max(i0, i1), gy0 + 0.25, gy1 - 0.06, zF + 0.1, zF + 0.35, AMBER, M.SmoothPlastic):SetAttribute("Side", sx)
+		end
+	end
+	box(k, "Bumper", -hw - 0.05, hw + 0.05, 0.55, low + 0.6, zF - 0.15, zF + 0.55, TRIM, M.Plastic)
+	box(k, "PlateFront", -1.0, 1.0, 0.75, 1.25, zF - 0.2, zF - 0.14, Color3.fromRGB(248, 248, 244), M.SmoothPlastic)
+	if full then
+		for _, sx in ipairs({ -1, 1 }) do
+			cylZ(k, "FogLight", sx * (hw - 0.75), 1.0, zF - 0.16, 0.06, 0.34, LAMP, M.Glass)
+		end
+	end
+	-- ░ rétroviseurs de camion, portes, marchepied ░
+	for _, sx in ipairs({ -1, 1 }) do
+		local base = Vector3.new(sx * (hw - 0.05), belt + 0.4, wsBase + 0.1)
+		local tip = Vector3.new(sx * (hw + 0.55), belt + 0.7, wsBase - 0.2)
+		rod(k, "MirrorArm", base, tip, 0.1, TRIM, M.Metal)
+		box(k, "Mirror", tip.X - 0.16, tip.X + 0.16, belt + 0.35, belt + 1.45, tip.Z - 0.12, tip.Z + 0.12, TRIM, M.SmoothPlastic)
+		if full then
+			box(k, "MirrorGlass", tip.X - 0.12, tip.X + 0.12, belt + 0.42, belt + 1.38, tip.Z + 0.12, tip.Z + 0.15, CHROME, M.Glass)
+			local sx0, sx1 = sx * (hw + 0.012), sx * (hw - 0.02)
+			box(k, "DoorSeam", math.min(sx0, sx1), math.max(sx0, sx1), archTop + 0.05, belt, axF + ra + 0.15, axF + ra + 0.2, Color3.fromRGB(22, 22, 28), M.SmoothPlastic)
+			local hx0, hx1 = sx * (hw - 0.02), sx * (hw + 0.07)
+			box(k, "Handle", math.min(hx0, hx1), math.max(hx0, hx1), belt - 0.45, belt - 0.32, cabEnd - 1.1, cabEnd - 0.6, TRIM, M.SmoothPlastic)
+			local st0, st1 = sx * (hw - 0.6), sx * (hw + 0.1)
+			box(k, "CabStep", math.min(st0, st1), math.max(st0, st1), low - 0.25, low - 0.1, axF + ra + 0.15, cabEnd - 0.1, TRIM, M.DiamondPlate)
+		end
+	end
+	-- ░ poste de conduite (vu par les vitres) ░
+	if full then
+		for _, sx in ipairs({ -1, 1 }) do
+			local x = sx * hw * 0.45
+			box(k, "CabSeat", x - 0.65, x + 0.65, belt - 0.95, belt - 0.6, cabEnd - 1.7, cabEnd - 0.55, Color3.fromRGB(60, 60, 70), M.Fabric)
+			slab(k, "CabSeatBack", x, 1.2, belt - 0.6, cabEnd - 0.5, roof - 0.9, cabEnd - 0.35, 0.3, Color3.fromRGB(60, 60, 70), M.Fabric)
+		end
+		box(k, "CabDash", -hw + 0.3, hw - 0.3, belt - 0.5, belt + 0.1, wsBase + 0.15, wsBase + 0.9, Color3.fromRGB(50, 50, 60), M.SmoothPlastic)
+		local sw = newPart(k, "Part", "SteeringWheel", Vector3.new(0.1, 1.1, 1.1), CFrame.new(-hw * 0.45, belt + 0.4, wsBase + 1.4) * CFrame.Angles(math.rad(-30), 0, 0) * CFrame.Angles(0, PI / 2, 0), TRIM, M.SmoothPlastic)
+		;(sw :: Part).Shape = Enum.PartType.Cylinder
+	end
+	-- ░ arrière : garde-boue noirs, barres anti-encastrement, feux, pare-chocs ░
+	for _, sx in ipairs({ -1, 1 }) do
+		local x0, x1 = sx * (hw - tw - 0.25), sx * (hw + 0.02)
+		local n = if full then 4 else 2
+		for i = 0, n - 1 do
+			local a = -PI / 2 + (i + 0.5) * PI / n
+			local rr = ra - 0.05
+			boxRotX(k, "Mudguard", (x0 + x1) / 2, r + math.cos(a) * rr, axR + math.sin(a) * rr, math.abs(x1 - x0), 0.1, 2 * rr * math.tan(PI / (2 * n)) + 0.03, a, TRIM, M.Plastic)
+		end
+		if full then
+			local g0, g1 = sx * (hw - 0.25), sx * (hw - 0.1)
+			for _, y in ipairs({ 1.15, 1.75 }) do
+				box(k, "SideGuard", math.min(g0, g1), math.max(g0, g1), y - 0.08, y + 0.08, axF + ra + 1.4, axR - ra - 0.25, STEEL, M.Metal)
+			end
+		end
+		local t0, t1 = sx * (hw - 0.15), sx * (hw - 0.75)
+		box(k, "Taillight", math.min(t0, t1), math.max(t0, t1), boxY + 0.25, boxY + 1.05, zB - 0.02, zB + 0.1, TAIL, M.Glass)
+		if full then
+			box(k, "RearIndicator", math.min(t0, t1), math.max(t0, t1), boxY + 1.08, boxY + 1.35, zB - 0.02, zB + 0.1, AMBER, M.SmoothPlastic):SetAttribute("Side", sx)
+		end
+	end
+	box(k, "RearBumper", -hw + 0.3, hw - 0.3, 0.75, 1.2, zB - 0.4, zB - 0.1, STEEL, M.Metal)
+	box(k, "PlateRear", -0.9, 0.9, 1.25, 1.7, zB - 0.26, zB - 0.2, Color3.fromRGB(248, 248, 244), M.SmoothPlastic)
+	-- ░ roues ░
+	local index = 0
+	for _, z in ipairs({ axF, axR }) do
+		for _, sx in ipairs({ -1, 1 }) do
+			index += 1
+			heavyWheel(k, index, sx * (hw - tw / 2 - 0.08), r, z, sx, D, tw, full, nil)
+		end
+	end
+	return cabEnd, boxY
 end
 
 function VehicleModels.DeliveryVan(opts: any?): Model
@@ -870,9 +993,10 @@ function VehicleModels.DeliveryVan(opts: any?): Model
 	local t: Truck = { L = 17, W = 6.6, CabL = 4.4, BoxH = 8.2, WheelD = 2.5 }
 	local hw = t.W / 2
 	local zB = t.L / 2
-	local cabEnd = truckBase(k, t, color, full)
-	-- caisse (fourgon) + bande + logo
-	local cargo = box(k, "CargoBox", -hw, hw, 1.3, t.BoxH, cabEnd, zB, WHITE, M.SmoothPlastic, true)
+	local cabEnd, boxY = truckBase(k, t, color, full)
+	-- caisse (fourgon, posée sur le châssis) + bande + logo
+	local cargo = box(k, "CargoBox", -hw, hw, boxY, t.BoxH, cabEnd, zB, WHITE, M.SmoothPlastic, true)
+	box(k, "CargoFloor", -hw + 0.05, hw - 0.05, boxY - 0.2, boxY, cabEnd + 0.05, zB - 0.02, Color3.fromRGB(70, 70, 80), M.Metal)
 	for _, sx in ipairs({ -1, 1 }) do
 		local x0, x1 = sx * (hw + 0.02), sx * (hw + 0.07)
 		box(k, "CargoStripe", math.min(x0, x1), math.max(x0, x1), 3.0, 3.7, cabEnd + 0.3, zB - 0.3, color, M.SmoothPlastic)
@@ -899,13 +1023,13 @@ function VehicleModels.DeliveryVan(opts: any?): Model
 	-- portes arrière (2 battants + poignées)
 	for _, sx in ipairs({ -1, 1 }) do
 		local x0, x1 = sx * 0.04, sx * (hw - 0.05)
-		box(k, "RearDoor", math.min(x0, x1), math.max(x0, x1), 1.45, t.BoxH - 0.15, zB, zB + 0.06, Color3.fromRGB(236, 236, 240), M.SmoothPlastic)
+		box(k, "RearDoor", math.min(x0, x1), math.max(x0, x1), boxY + 0.15, t.BoxH - 0.15, zB, zB + 0.06, Color3.fromRGB(236, 236, 240), M.SmoothPlastic)
 		if full then
 			box(k, "DoorHandle", sx * 0.25 - 0.06, sx * 0.25 + 0.06, 3.8, 4.8, zB + 0.06, zB + 0.12, TRIM, M.Metal)
 		end
 	end
 	-- déflecteur au-dessus de la cabine
-	wedge(k, "Deflector", -hw + 0.1, hw - 0.1, 5.85, t.BoxH - 0.2, cabEnd - 2.0, cabEnd, true, color, M.SmoothPlastic)
+	wedge(k, "Deflector", -hw + 0.3, hw - 0.3, 5.92, t.BoxH - 0.2, cabEnd - 2.0, cabEnd, true, color, M.SmoothPlastic)
 	return finish(k, "DeliveryVan", -hw - 0.5, hw + 0.5, 0.6, t.BoxH, -t.L / 2 - 0.1, zB + 0.12, o.Solid == true)
 end
 
@@ -917,11 +1041,11 @@ function VehicleModels.FoodTruck(opts: any?): Model
 	local t: Truck = { L = 16, W = 6.4, CabL = 4.2, BoxH = 7.8, WheelD = 2.4 }
 	local hw = t.W / 2
 	local zB = t.L / 2
-	local cabEnd = truckBase(k, t, color, full)
+	local cabEnd, boxY = truckBase(k, t, color, full)
 	-- caisse avec passe-plat côté droit (+X) : bas, haut, montants
-	local h0, h1 = 3.4, 6.2 -- ouverture du passe-plat
+	local h0, h1 = math.max(3.4, boxY + 0.5), 6.2 -- ouverture du passe-plat
 	local w0, w1 = cabEnd + 1.0, zB - 1.0
-	box(k, "BoxLow", -hw, hw, 1.3, h0, cabEnd, zB, color, M.SmoothPlastic, true)
+	box(k, "BoxLow", -hw, hw, boxY, h0, cabEnd, zB, color, M.SmoothPlastic, true)
 	box(k, "BoxTop", -hw, hw, h1, t.BoxH, cabEnd, zB, color, M.SmoothPlastic, true)
 	-- (niche de cuisine de 1,8 de profondeur derrière le passe-plat)
 	box(k, "BoxLeft", -hw, hw - 1.8, h0, h1, cabEnd, zB, color, M.SmoothPlastic)

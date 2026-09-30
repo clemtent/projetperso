@@ -173,10 +173,12 @@ local function coasterCar(r: RideFx, g: number, lead: boolean)
 		Moving(r, g, "Stripe", Vector3.new(0.05, 0.14, 2.5), CFrame.new(sx * 1.2, 1.0, 0.12), C.White, M.SmoothPlastic)
 	end
 	if lead then
-		Moving(r, g, "Nose", Vector3.new(2.1, 1.0, 1.4), CFrame.new(0, 0.95, -1.35), body, M.SmoothPlastic, BALL)
-		Moving(r, g, "Eye", Vector3.new(0.34, 0.34, 0.2), CFrame.new(-0.45, 1.25, -1.98), C.White, M.SmoothPlastic, BALL)
-		Moving(r, g, "Eye", Vector3.new(0.34, 0.34, 0.2), CFrame.new(0.45, 1.25, -1.98), C.White, M.SmoothPlastic, BALL)
-		Glow(Moving(r, g, "Lamp", Vector3.new(0.3, 0.3, 0.14), CFrame.new(0, 0.85, -2.03), C.Bulb, M.SmoothPlastic, BALL))
+		-- (une Ball Roblox est toujours ronde : nez arrondi = cylindre couché)
+		Moving(r, g, "Nose", Vector3.new(2.05, 1.0, 1.0), CFrame.new(0, 0.95, -1.3), body, M.SmoothPlastic, CYL)
+		Moving(r, g, "NoseCap", Vector3.new(2.05, 0.5, 0.35), CFrame.new(0, 0.7, -1.62), body, M.SmoothPlastic)
+		Moving(r, g, "Eye", Vector3.new(0.1, 0.34, 0.34), CFrame.new(-0.45, 1.2, -1.78) * CFrame.Angles(0, math.rad(90), 0), C.White, M.SmoothPlastic, CYL)
+		Moving(r, g, "Eye", Vector3.new(0.1, 0.34, 0.34), CFrame.new(0.45, 1.2, -1.78) * CFrame.Angles(0, math.rad(90), 0), C.White, M.SmoothPlastic, CYL)
+		Glow(Moving(r, g, "Lamp", Vector3.new(0.08, 0.3, 0.3), CFrame.new(0, 0.75, -1.81) * CFrame.Angles(0, math.rad(90), 0), C.Bulb, M.SmoothPlastic, CYL))
 	else
 		Moving(r, g, "Front", Vector3.new(2.1, 0.8, 0.3), CFrame.new(0, 1.05, -1.2), body, M.SmoothPlastic)
 	end
@@ -185,7 +187,7 @@ local function coasterCar(r: RideFx, g: number, lead: boolean)
 	for _, sx in ipairs({ -0.7, 0.7 }) do
 		Moving(r, g, "Cushion", Vector3.new(0.95, 0.22, 0.95), CFrame.new(sx, 0.95, 0.35), Color3.fromRGB(40, 40, 48), M.Fabric)
 		Moving(r, g, "SeatBack", Vector3.new(0.95, 1.1, 0.2), CFrame.new(sx, 1.5, 1.05) * CFrame.Angles(math.rad(-8), 0, 0), Color3.fromRGB(40, 40, 48), M.Fabric)
-		Moving(r, g, "Headrest", Vector3.new(0.7, 0.45, 0.28), CFrame.new(sx, 2.25, 1.13), Color3.fromRGB(40, 40, 48), M.Fabric, BALL)
+		Moving(r, g, "Headrest", Vector3.new(0.7, 0.45, 0.28), CFrame.new(sx, 2.25, 1.13), Color3.fromRGB(40, 40, 48), M.Fabric)
 		Moving(r, g, "LapBar", Vector3.new(0.85, 0.16, 0.16), CFrame.new(sx, 1.72, -0.35), C.Lemon, M.Metal, CYL)
 		Moving(r, g, "LapBarArm", Vector3.new(0.12, 0.7, 0.12), CFrame.new(sx, 1.4, -0.52) * CFrame.Angles(math.rad(-25), 0, 0), Color3.fromRGB(70, 72, 80), M.Metal)
 	end
@@ -324,8 +326,8 @@ function FairAnnexFx.BuildPirate(r: RideFx)
 				Moving(r, 1, "Porthole", Vector3.new(0.08, 0.6, 0.6), CFrame.new(i * 2.1, 0.45, sz * 2.74) * CFrame.Angles(0, math.rad(90), 0), C.Gold, M.Metal, CYL)
 			end
 		end
-		Moving(r, 1, "Emblem", Vector3.new(1.3, 1.3, 0.1), CFrame.new(0, 0.2, sz * 2.8), Color3.fromRGB(30, 30, 36), M.SmoothPlastic, BALL)
-		Moving(r, 1, "EmblemSkull", Vector3.new(0.6, 0.6, 0.08), CFrame.new(0, 0.25, sz * 2.86), C.White, M.SmoothPlastic, BALL)
+		Moving(r, 1, "Emblem", Vector3.new(0.1, 1.3, 1.3), CFrame.new(0, 0.2, sz * 2.8) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(30, 30, 36), M.SmoothPlastic, CYL)
+		Moving(r, 1, "EmblemSkull", Vector3.new(0.08, 0.6, 0.6), CFrame.new(0, 0.25, sz * 2.86) * CFrame.Angles(0, math.rad(90), 0), C.White, M.SmoothPlastic, CYL)
 	end
 	-- 4 rangées de bancs (face au milieu), dossiers, barres
 	for _, x in ipairs({ -7.2, -4.4, 4.4, 7.2 }) do
@@ -380,7 +382,7 @@ local function ghostCar(r: RideFx, g: number, lead: boolean)
 		for _, sx in ipairs({ -1, 1 }) do
 			Moving(r, g, "BatEar", Vector3.new(0.3, 0.6, 0.2), CFrame.new(sx * 0.4, 2.0, -1.35) * CFrame.Angles(0, 0, math.rad(sx * -15)), Color3.fromRGB(50, 40, 66), M.SmoothPlastic)
 			Moving(r, g, "BatWing", Vector3.new(1.4, 0.8, 0.1), CFrame.new(sx * 1.3, 1.25, -1.1) * CFrame.Angles(0, math.rad(sx * 25), math.rad(sx * 18)), Color3.fromRGB(50, 40, 66), M.SmoothPlastic)
-			Glow(Moving(r, g, "BatEye", Vector3.new(0.22, 0.22, 0.1), CFrame.new(sx * 0.28, 1.5, -1.84), Color3.fromRGB(255, 220, 90), M.SmoothPlastic, BALL))
+			Glow(Moving(r, g, "BatEye", Vector3.new(0.22, 0.16, 0.06), CFrame.new(sx * 0.28, 1.5, -1.84), Color3.fromRGB(255, 220, 90), M.SmoothPlastic))
 		end
 	end
 end
@@ -417,11 +419,12 @@ local function hauntedHouse(r: RideFx): any
 		local pane = Fixed(r, "Roof", Vector3.new(W + 1.6, 0.4, D / 2 + 1.4), CFrame.new(0, H + 2.1, sz * (D / 4 + 0.2)) * CFrame.Angles(math.rad(sz * 26), 0, math.rad(2)), roof, M.Slate)
 		pane.CastShadow = true
 	end
+	-- pignons (triangles : le plus haut au milieu, jusqu'aux égouts devant / derrière)
 	for _, sx in ipairs({ -1, 1 }) do
-		local size, cf = FairKit.Tri(r.Base * Vector3.new(sx * (W / 2), H, -D / 2 + 0.3), FairKit.UP, r.Base:VectorToWorldSpace(Vector3.new(0, 0, 1)), 4.3, D / 2 - 0.3, 0.4)
-		Part(r.Model, "Gable", size, cf, wallDark, M.WoodPlanks, nil, "WedgePart")
-		local size2, cf2 = FairKit.Tri(r.Base * Vector3.new(sx * (W / 2), H, D / 2 - 0.3), FairKit.UP, r.Base:VectorToWorldSpace(Vector3.new(0, 0, -1)), 4.3, D / 2 - 0.3, 0.4)
-		Part(r.Model, "Gable", size2, cf2, wallDark, M.WoodPlanks, nil, "WedgePart")
+		for _, sz in ipairs({ -1, 1 }) do
+			local size, cf = FairKit.Tri(r.Base * Vector3.new(sx * (W / 2), H, 0), FairKit.UP, r.Base:VectorToWorldSpace(Vector3.new(0, 0, sz)), 3.9, D / 2, 0.4)
+			Part(r.Model, "Gable", size, cf, wallDark, M.WoodPlanks, nil, "WedgePart")
+		end
 	end
 	Fixed(r, "Tower", Vector3.new(3.6, 7, 3.6), CFrame.new(-7, H + 3, 3) * CFrame.Angles(0, 0, math.rad(-3)), wallDark, M.WoodPlanks)
 	Fixed(r, "TowerRoof", Vector3.new(4.4, 4.4, 4.4), CFrame.new(-7.2, H + 7.6, 3), roof, M.Slate, BALL).Size = Vector3.new(4.6, 3.2, 4.6)
@@ -431,7 +434,7 @@ local function hauntedHouse(r: RideFx): any
 		Fixed(r, "Window", Vector3.new(2.4, 2.2, 0.1), CFrame.new(x, 6.2, -D / 2 - 0.3), Color3.fromRGB(24, 20, 30), M.SmoothPlastic)
 		Fixed(r, "Shutter", Vector3.new(1.1, 2.4, 0.12), CFrame.new(x - 1.8, 6.1, -D / 2 - 0.36) * CFrame.Angles(0, 0, math.rad(12)), Color3.fromRGB(110, 150, 90), M.Wood)
 		for _, ex in ipairs({ -0.35, 0.35 }) do
-			Glow(Fixed(r, "Eye", Vector3.new(0.3, 0.22, 0.08), CFrame.new(x + ex, 6.3, -D / 2 - 0.38), Color3.fromRGB(255, 236, 120), M.SmoothPlastic, BALL))
+			Glow(Fixed(r, "Eye", Vector3.new(0.3, 0.18, 0.06), CFrame.new(x + ex, 6.3, -D / 2 - 0.38), Color3.fromRGB(255, 236, 120), M.SmoothPlastic))
 		end
 	end
 	-- enseigne + citrouilles + pierres tombales devant
@@ -469,7 +472,7 @@ local function hauntedHouse(r: RideFx): any
 		body.Transparency = 0.18
 		local eyes = {}
 		for _, ex in ipairs({ -0.3, 0.3 }) do
-			table.insert(eyes, Part(r.Model, "GhostEye", Vector3.new(0.26, 0.36, 0.1), r.Base * CFrame.new(p + Vector3.new(ex, 0.3, -0.68)), Color3.fromRGB(30, 30, 40), M.SmoothPlastic, BALL))
+			table.insert(eyes, Part(r.Model, "GhostEye", Vector3.new(0.24, 0.34, 0.06), r.Base * CFrame.new(p + Vector3.new(ex, 0.3, -0.68)), Color3.fromRGB(30, 30, 40), M.SmoothPlastic))
 		end
 		table.insert(ghosts, { Body = body, Eyes = eyes, Home = p, Phase = i * 1.7 })
 	end
@@ -803,8 +806,11 @@ function FairAnnexFx.BuildMirrors(r: RideFx)
 	-- miroirs déformants à l'entrée (bombés : sphères écrasées + cadre)
 	for _, sx in ipairs({ -1, 1 }) do
 		local base = CFrame.new(sx * 6, 0, z0 - 1.6) * CFrame.Angles(0, math.rad(sx * 20), 0)
-		local m = Fixed(r, "FunMirror", Vector3.new(2.6, 4.6, 0.5), base * CFrame.new(0, 2.6, 0), glass, M.SmoothPlastic, BALL)
-		m.Reflectance = 0.75
+		-- (miroir ovale : 2 disques qui se recouvrent ; une Ball serait ronde et minuscule)
+		for k, y in ipairs({ 1.85, 3.25 }) do
+			local m = Fixed(r, "FunMirror", Vector3.new(0.2 + k * 0.02, 2.5, 2.5), base * CFrame.new(0, y, -0.02 * k) * CFrame.Angles(0, math.rad(90), 0), glass, M.SmoothPlastic, CYL)
+			m.Reflectance = 0.75
+		end
 		Fixed(r, "FunFrame", Vector3.new(0.3, 4.2, 0.3), base * CFrame.new(-1.35, 2.3, 0.1), frame, M.Metal)
 		Fixed(r, "FunFrame", Vector3.new(0.3, 4.2, 0.3), base * CFrame.new(1.35, 2.3, 0.1), frame, M.Metal)
 		Fixed(r, "FunFoot", Vector3.new(2.8, 0.3, 1), base * CFrame.new(0, 0.15, 0.1), frame, M.Metal)

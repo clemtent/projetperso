@@ -340,6 +340,9 @@ local function shellFloor(kit: any, size: any, floor: number, pal: Palette)
 		kit:Box("HallSlab", r[1], r[2], y - WorldLayout.SLAB, y - 0.2, r[3], r[4], CEILING, M.SmoothPlastic, { Solid = true, Shadow = false })
 		kit:Box("HallFloor", r[1], r[2], y - 0.2, y, r[3], r[4], pal.Upper, pal.UpperMat, { Solid = true, Shadow = false })
 	end
+	-- bandeau du mur le long de la trémie (entre les peaux de deux étages : on
+	-- voyait le plancher de la pièce voisine par la fente)
+	kit:Box("HoleFascia", h1 - SKIN, h1, y - WorldLayout.SLAB, y, run.Hole0, run.D1 + 0.12, pal.Wall, pal.WallMat, { Shadow = false })
 end
 
 -- Murs intérieurs de la cage (peau : enduit + lambris), passages vers les pièces
@@ -908,11 +911,14 @@ local function ceilingLamp(kit: any, size: any, floor: number, pal: Palette, wit
 		-- lustre : rosace, tige, anneau doré, 6 bougies à ampoule, pampilles
 		kit:CylY("ChandelierRose", x, y - 0.2, d, 1.4, 0.2, pal.Trim, M.SmoothPlastic, { Shadow = false })
 		kit:Box("ChandelierRod", x - 0.07, x + 0.07, y - 2.4, y - 0.2, d - 0.07, d + 0.07, pal.Accent, M.Metal, { Shadow = false })
-		kit:CylY("ChandelierRing", x, y - 2.7, d, 3.2, 0.2, pal.Accent, M.Metal, { Shadow = false })
 		kit:Ball("ChandelierHub", x, y - 2.75, d, 0.7, pal.Accent, M.Metal, { Shadow = false })
 		for k = 0, 5 do
 			local a = k / 6 * math.pi * 2
 			local bx, bd = x + math.cos(a) * 1.5, d + math.sin(a) * 1.5
+			-- bras fin du moyeu à la bougie (plus de disque plein vu d'en dessous)
+			kit:Part("ChandelierArm", Vector3.new(1.5, 0.1, 0.1), CFrame.new(x + math.cos(a) * 0.75, y - 2.72, -(d + math.sin(a) * 0.75)) * CFrame.Angles(0, a, 0),
+				pal.Accent, M.Metal, { Shadow = false })
+			kit:CylY("ChandelierCup", bx, y - 2.75, bd, 0.42, 0.12, pal.Accent, M.Metal, { Shadow = false })
 			kit:CylY("ChandelierCandle", bx, y - 2.55, bd, 0.2, 0.45, WHITE, M.SmoothPlastic, { Shadow = false })
 			local flame = kit:Ball("ChandelierBulb", bx, y - 1.95, bd, 0.28, Color3.fromRGB(255, 232, 186), M.Neon, { Shadow = false })
 			if k == 0 then

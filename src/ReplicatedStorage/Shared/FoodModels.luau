@@ -63,7 +63,8 @@ RECIPES.IceCream = function(add)
 	-- boule du bas (fraise) + collerette qui coule
 	local straw = rgb(255, 170, 196)
 	add("Bite2", Vector3.new(0.7, 0.62, 0.7), CFrame.new(0, 0.9, 0), straw, M.SmoothPlastic, BALL)
-	add("Bite2", Vector3.new(0.76, 0.2, 0.76), CFrame.new(0, 0.7, 0), straw:Lerp(rgb(255, 255, 255), 0.1), M.SmoothPlastic, BALL)
+	-- (une Ball Roblox reste ronde : collerette = disque)
+	add("Bite2", Vector3.new(0.12, 0.74, 0.74), CFrame.new(0, 0.7, 0) * UPRIGHT, straw:Lerp(rgb(255, 255, 255), 0.1), M.SmoothPlastic, CYL)
 	for i = 0, 2 do
 		local a = math.rad(i * 130 + 25)
 		add("Bite2", Vector3.new(0.14, 0.24, 0.14), CFrame.new(math.sin(a) * 0.3, 0.6, math.cos(a) * 0.3), straw, M.SmoothPlastic, BALL)
@@ -71,7 +72,7 @@ RECIPES.IceCream = function(add)
 	-- boule du haut (pistache) + vermicelles + cerise
 	local pist = rgb(176, 222, 160)
 	add("Bite1", Vector3.new(0.6, 0.54, 0.6), CFrame.new(0.02, 1.36, 0), pist, M.SmoothPlastic, BALL)
-	add("Bite1", Vector3.new(0.64, 0.16, 0.64), CFrame.new(0.02, 1.18, 0), pist:Lerp(rgb(255, 255, 255), 0.1), M.SmoothPlastic, BALL)
+	add("Bite1", Vector3.new(0.1, 0.62, 0.62), CFrame.new(0.02, 1.16, 0) * UPRIGHT, pist:Lerp(rgb(255, 255, 255), 0.1), M.SmoothPlastic, CYL)
 	local sprinkle = { rgb(236, 72, 120), rgb(80, 170, 255), rgb(255, 214, 60), rgb(255, 255, 255) }
 	for i = 0, 6 do
 		local a = math.rad(i * 51)
@@ -230,12 +231,13 @@ RECIPES.Milkshake = function(add)
 	add("CupTop", Vector3.new(0.34, 0.56, 0.56), CFrame.new(0, 0.5, 0) * UPRIGHT, rgb(255, 186, 212), M.SmoothPlastic, CYL)
 	add("Logo", Vector3.new(0.3, 0.22, 0.02), CFrame.new(0, 0.1, -0.255), rgb(255, 255, 255), M.SmoothPlastic)
 	add("LogoHeart", Vector3.new(0.12, 0.12, 0.02), CFrame.new(0, 0.1, -0.265), rgb(236, 72, 140), M.SmoothPlastic, BALL)
-	local lid = add("Lid", Vector3.new(0.6, 0.36, 0.6), CFrame.new(0, 0.72, 0), rgb(240, 248, 255), M.Glass, BALL)
-	lid.Transparency = 0.55
+	local lid = add("Lid", Vector3.new(0.3, 0.6, 0.6), CFrame.new(0, 0.82, 0) * UPRIGHT, rgb(240, 248, 255), M.Glass, CYL)
+	lid.Transparency = 0.6
+	-- chantilly en spirale (disques de plus en plus petits + pointe)
 	local cream = rgb(255, 252, 246)
-	add("Bite3", Vector3.new(0.5, 0.2, 0.5), CFrame.new(0, 0.75, 0), cream, M.SmoothPlastic, BALL)
-	add("Bite2", Vector3.new(0.38, 0.18, 0.38), CFrame.new(0.01, 0.87, 0), cream, M.SmoothPlastic, BALL)
-	add("Bite1", Vector3.new(0.24, 0.16, 0.24), CFrame.new(0, 0.97, 0.01), cream, M.SmoothPlastic, BALL)
+	add("Bite3", Vector3.new(0.14, 0.5, 0.5), CFrame.new(0, 0.74, 0) * UPRIGHT, cream, M.SmoothPlastic, CYL)
+	add("Bite2", Vector3.new(0.14, 0.38, 0.38), CFrame.new(0.01, 0.86, 0) * UPRIGHT, cream, M.SmoothPlastic, CYL)
+	add("Bite1", Vector3.new(0.12, 0.26, 0.26), CFrame.new(0, 0.97, 0.01) * UPRIGHT, cream, M.SmoothPlastic, CYL)
 	add("Bite1", Vector3.new(0.15, 0.15, 0.15), CFrame.new(0.02, 1.08, 0), rgb(200, 24, 44), M.SmoothPlastic, BALL)
 	-- paille rayée (2 couleurs, inclinée)
 	local straw = CFrame.new(0.12, 1.02, 0.06) * CFrame.Angles(math.rad(12), 0, math.rad(-14))
@@ -257,8 +259,9 @@ RECIPES.HotDog = function(add)
 	for _, sg in ipairs(segs) do
 		local name, x = sg[1], sg[2]
 		for _, sz in ipairs({ -1, 1 }) do
-			add(name, Vector3.new(0.42, 0.3, 0.2), CFrame.new(x, 0.1, sz * 0.13), bun, M.SmoothPlastic, BALL)
-			add(name, Vector3.new(0.4, 0.12, 0.16), CFrame.new(x, 0.2, sz * 0.15), bunTop, M.SmoothPlastic, BALL)
+			-- (moitiés de pain bombées : cylindres couchés le long de X)
+			add(name, Vector3.new(0.42, 0.28, 0.28), CFrame.new(x, 0.1, sz * 0.12), bun, M.SmoothPlastic, CYL)
+			add(name, Vector3.new(0.4, 0.04, 0.16), CFrame.new(x, 0.25, sz * 0.13), bunTop, M.SmoothPlastic)
 		end
 		add(name, Vector3.new(0.42, 0.15, 0.15), CFrame.new(x, 0.2, 0), sausage, M.SmoothPlastic, CYL)
 		add(name, Vector3.new(0.1, 0.03, 0.06), CFrame.new(x - 0.1, 0.285, 0) * CFrame.Angles(0, math.rad(40), 0), rgb(255, 204, 40), M.SmoothPlastic)
@@ -279,8 +282,8 @@ RECIPES.CandyApple = function(add)
 	local b1 = add("Bite1", Vector3.new(0.62, 0.52, 0.62), CFrame.new(0, 0.86, 0), rgb(214, 26, 48), M.SmoothPlastic, BALL)
 	b1.Reflectance = 0.18
 	add("Bite2", Vector3.new(0.08, 0.72, 0.72), CFrame.new(0, 0.36, 0) * UPRIGHT, rgb(170, 12, 30), M.SmoothPlastic, CYL)
-	add("Bite1", Vector3.new(0.18, 0.05, 0.1), CFrame.new(0.1, 1.12, 0.02) * CFrame.Angles(0, 0.4, math.rad(25)), rgb(96, 170, 70), M.SmoothPlastic, BALL)
-	add("Bite1", Vector3.new(0.14, 0.14, 0.05), CFrame.new(-0.12, 0.92, -0.28), rgb(255, 220, 220), M.SmoothPlastic, BALL).Transparency = 0.3
+	add("Bite1", Vector3.new(0.18, 0.04, 0.1), CFrame.new(0.1, 1.12, 0.02) * CFrame.Angles(0, 0.4, math.rad(25)), rgb(96, 170, 70), M.SmoothPlastic)
+	add("Bite1", Vector3.new(0.12, 0.12, 0.03), CFrame.new(-0.12, 0.92, -0.29) * CFrame.Angles(0.3, 0.4, 0), rgb(255, 230, 230), M.SmoothPlastic).Transparency = 0.3
 end
 
 -- Beignet (vertical, tenu par le bas) : anneau de pâte (12 boules), glaçage

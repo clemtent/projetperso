@@ -722,6 +722,98 @@ end
 -- Habillage (niveau 1) et mobilier (niveau 2)
 ----------------------------------------------------------------------
 
+-- (v9.9, SHOPS99) BOUTIQUE ÉCLAIRÉE VUE DE DEHORS, de jour comme de nuit,
+-- dès 150 studs (niveau 1) : plafonniers LED « lumineux » (SurfaceGui peu
+-- sensible à la lumière : aucune vraie lumière, aucun Neon), murs et sol
+-- doucement « éclairés », silhouettes des étagères pleines (retirées quand
+-- l'intérieur complet est là), flaque de lumière chaude sur le trottoir la nuit
+local function glow(p: BasePart, face: Enum.NormalId, color: Color3, transparency: number, influence: number, pps: number?): SurfaceGui
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "Glow"
+	gui.Face = face
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = pps or 4
+	gui.LightInfluence = influence
+	gui.MaxDistance = FRONT_DROP
+	gui.Parent = p
+	local f = Instance.new("Frame")
+	f.Name = "Wash"
+	f.Size = UDim2.fromScale(1, 1)
+	f.BorderSizePixel = 0
+	f.BackgroundColor3 = color
+	f.BackgroundTransparency = transparency
+	f.Parent = gui
+	return gui
+end
+
+local function litShell(shop: Shop, parent: Instance)
+	local t = shop.Theme
+	local F = shop.F
+	local H, D = shop.Size.Y, shop.Size.Z
+	local s: any = shop
+	-- murs et sol : lumière douce (le matériau reste visible dessous)
+	for _, p in ipairs(parent:GetChildren()) do
+		if p:IsA("BasePart") then
+			if p.Name == "BackLining" then
+				glow(p, Enum.NormalId.Front, t.Wall:Lerp(t.Lamp, 0.4), 0.3, 0.35)
+			elseif p.Name == "WallLining" then
+				local rel = F:PointToObjectSpace(p.Position)
+				glow(p, rel.X < 0 and Enum.NormalId.Right or Enum.NormalId.Left, t.Wall:Lerp(t.Lamp, 0.4), 0.3, 0.35)
+			elseif p.Name == "FloorFinish" then
+				glow(p, Enum.NormalId.Top, t.Floor:Lerp(t.Lamp, 0.3), 0.55, 0.45, 2)
+			end
+		end
+	end
+	-- 4 plafonniers LED encastrés (dalles lumineuses)
+	for _, spot in ipairs({ { -6.5, 5 }, { 6.5, 5 }, { -6.5, 15 }, { 6.5, 15 } }) do
+		local x, z = spot[1], math.min(spot[2], D - 5)
+		local panel = box(parent, "LedPanel", F, x - 1.8, x + 1.8, H - 0.25, H - 0.08, z - 0.55, z + 0.55, rgb(230, 230, 236), M.Metal)
+		glow(panel, Enum.NormalId.Bottom, t.Lamp:Lerp(WHITE, 0.5), 0, 0, 20)
+	end
+	-- silhouettes des étagères pleines (dossier Night, retiré au niveau complet)
+	local night = Instance.new("Folder")
+	night.Name = "Night"
+	night.Parent = parent
+	s.Night, s.NightParent = night, parent
+	local plan = shop.Plan
+	for i, unit in ipairs(plan and plan.ShelfUnits or {}) do
+		local hl = unit.L / 2
+		local body = box(night, "ShelfShape", unit.CF, -hl + 0.05, hl - 0.05, 0.15, unit.H - 0.05, 0.1, unit.Dp - 0.3, t.Shelf, t.ShelfMat)
+		local gui = glow(body, Enum.NormalId.Front, WHITE, 1, 0.3, 6)
+		for k, y in ipairs(unit.Levels) do
+			local band = Instance.new("Frame")
+			band.BorderSizePixel = 0
+			band.Position = UDim2.fromScale(0.03, 1 - (y + 1.6) / unit.H)
+			band.Size = UDim2.fromScale(0.94, 1.5 / unit.H)
+			band.BackgroundColor3 = t.Accent:Lerp(({ rgb(255, 214, 120), rgb(150, 200, 255), rgb(255, 150, 180) })[(i + k) % 3 + 1], 0.55)
+			band.Parent = gui
+		end
+	end
+	-- flaque de lumière chaude sur le trottoir devant la vitrine (nuit seulement)
+	local spill = box(parent, "LightSpill", shop.DoorCF, -12.4, 12.4, 0.02, 0.04, -4.8, -0.9, WHITE, M.SmoothPlastic)
+	spill.Transparency = 1
+	local sg = Instance.new("SurfaceGui")
+	sg.Name = "Spill"
+	sg.Face = Enum.NormalId.Top
+	sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	sg.PixelsPerStud = 4
+	sg.LightInfluence = 0
+	sg.MaxDistance = FRONT_DROP
+	sg.Enabled = false
+	sg.Parent = spill
+	local wash = Instance.new("Frame")
+	wash.Size = UDim2.fromScale(1, 1)
+	wash.BorderSizePixel = 0
+	wash.BackgroundColor3 = t.Lamp
+	wash.BackgroundTransparency = 0.72
+	wash.Parent = sg
+	local grad = Instance.new("UIGradient")
+	grad.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(0.6, 0.6), NumberSequenceKeypoint.new(1, 1) })
+	grad.Rotation = 90
+	grad.Parent = wash
+	s.Spill = sg
+end
+
 -- Sol, murs, lambris, plafond (tout à GAP des murs du serveur)
 local function lining(shop: Shop, parent: Instance)
 	local t = shop.Theme
@@ -743,6 +835,9 @@ local function lining(shop: Shop, parent: Instance)
 	if shop.Kind == "Items" then
 		-- façade (côté intérieur) : bandeau au-dessus de la porte et des vitrines
 		box(parent, "FrontLining", F, -12.5, 12.5, 9.1, top, inset, inset + 0.1, t.Wall, M.SmoothPlastic)
+	end
+	if shop.Kind == "Items" then
+		pcall(litShell, shop, parent)
 	end
 end
 
@@ -980,6 +1075,15 @@ local function categoryCaption(id: string, fallback: string): string
 	return fallback
 end
 
+-- (v9.9) horloges (ClockKit, paresseux)
+local clockKit: any = nil
+local function Clocks(): any?
+	if clockKit == nil then
+		clockKit = optional(script.Parent, "ClockKit") or false
+	end
+	return clockKit or nil
+end
+
 -- (v9.9, SHOPS99) COMPTOIR-CAISSE 20x : caisson à panneaux moulurés sur
 -- plinthe en retrait, plateau en marbre à nez arrondi, caisse tactile sur
 -- pied (écran côté vendeur·se, logo côté client), TPE, imprimante à tickets
@@ -1063,15 +1167,14 @@ local function counter(shop: Shop, parent: Instance)
 	-- TPE (vers le client) + imprimante à tickets
 	local T = F * CFrame.new(3.7, COUNTER_TOP + 0.2, z0 + 0.35) * CFrame.Angles(math.rad(25), 0, 0)
 	box(parent, "TPE", T, -0.18, 0.18, -0.22, 0.22, -0.07, 0.07, rgb(40, 40, 48), M.SmoothPlastic)
-	local tpe = box(parent, "TPEScreen", T, -0.14, 0.14, 0.02, 0.18, -0.1, -0.05, rgb(210, 236, 250), M.SmoothPlastic)
-	label(tpe, Enum.NormalId.Front, "💳", rgb(40, 40, 60), rgb(210, 236, 250), 160, 20)
+	sign(parent, "TPEScreen", Vector3.new(0.28, 0.16, 0.05), T * CFrame.new(0, 0.1, -0.075), rgb(210, 236, 250), "💳", rgb(40, 40, 60), 160)
 	box(parent, "TPEKeys", T, -0.14, 0.14, -0.19, -0.02, -0.095, -0.055, rgb(90, 90, 100), M.SmoothPlastic)
 	box(parent, "Printer", F, 0.6, 1.1, COUNTER_TOP - 0.02, COUNTER_TOP + 0.3, z0 + 1.3, z0 + 1.9, rgb(236, 236, 240), M.SmoothPlastic)
 	local paper = newPart(parent, "Receipt", Vector3.new(0.32, 0.5, 0.01), F * CFrame.new(0.85, COUNTER_TOP + 0.52, z0 + 1.32) * CFrame.Angles(math.rad(-15), 0, 0), WHITE, M.SmoothPlastic)
 	local _ = paper
 	-- sacs en papier (pile + un sac debout), bocal de bonbons, plante, chevalet
 	for k = 0, 2 do
-		box(parent, "PaperBag", F, -4.25, -3.05, COUNTER_TOP - 0.02 + k * 0.06, COUNTER_TOP + 0.04 + k * 0.06, z0 + 0.8, z0 + 1.6, k == 1 and t.Accent:Lerp(WHITE, 0.4) or rgb(206, 170, 126), M.Fabric)
+		box(parent, "PaperBag", F, -4.25, -3.05, COUNTER_TOP - 0.02 + k * 0.06, COUNTER_TOP + 0.05 + k * 0.06, z0 + 0.8, z0 + 1.6, k == 1 and t.Accent:Lerp(WHITE, 0.4) or rgb(206, 170, 126), M.Fabric)
 	end
 	box(parent, "ShoppingBag", F, -2.9, -2.1, COUNTER_TOP - 0.02, COUNTER_TOP + 1.0, z0 + 0.9, z0 + 1.35, t.Accent, M.Fabric)
 	box(parent, "BagHandle", F, -2.7, -2.3, COUNTER_TOP + 1.0, COUNTER_TOP + 1.3, z0 + 1.1, z0 + 1.15, t.Accent:Lerp(Color3.new(0, 0, 0), 0.3), M.Fabric)
@@ -1109,7 +1212,7 @@ local function counter(shop: Shop, parent: Instance)
 	-- horloge murale à l'heure réelle au-dessus de l'enseigne du fond
 	local clocks = Clocks()
 	if clocks then
-		local ok, c = pcall(clocks.Build, parent, F * CFrame.new(0, shop.Size.Y - 1.1, D - 0.3), 1.3, { Style = "Wall", Numerals = "Arabic", Case = t.Accent:Lerp(Color3.new(0, 0, 0), 0.35), MaxDistance = 60, Name = "ShopClock" })
+		local ok, c = pcall(clocks.Build, parent, F * CFrame.new(0, shop.Size.Y - 0.95, D - 0.3), 1.3, { Style = "Wall", Numerals = "Arabic", Case = t.Accent:Lerp(Color3.new(0, 0, 0), 0.35), MaxDistance = 60, Name = "ShopClock" })
 		if ok and c then
 			(shop :: any).Clock = c
 		end
@@ -1464,7 +1567,15 @@ local function downgrade(shop: Shop, level: number)
 				table.clear(shop.Lights)
 				shop.LightsOn = false
 				shop.Counter = nil
-				;(shop :: any).Actors = nil
+				local s: any = shop
+				s.Actors = nil
+				s.Clock = nil
+				if s.Night and s.NightParent and s.NightParent.Parent then
+					s.Night.Parent = s.NightParent
+				end
+			elseif tier == 1 then
+				local s: any = shop
+				s.Night, s.NightParent, s.Spill = nil, nil, nil
 			end
 			f:Destroy()
 			shop.Tiers[tier] = nil
@@ -1603,18 +1714,38 @@ local function decide(position: Vector3)
 		local extra: any = wantFull[index]
 		extra.Target = 1
 	end
+	-- (v9.9) vraies lumières : allumées dès qu'on approche de la vitrine
+	-- (≤ 32 studs) ou qu'on est dedans, pour les 2 boutiques les plus proches
+	local near = {}
 	for _, shop in ipairs(shops) do
 		local target = (shop :: any).Target
 		if shop.Level > target or shop.Building > target then
 			downgrade(shop, target)
 		end
-		-- lumières : seulement quand on est dedans
-		local on = inside(shop, position)
+		local d = flatDistance(position, shop.DoorCF.Position)
+		if shop.Level >= 2 and (inside(shop, position) or d <= 32) then
+			table.insert(near, shop)
+		end
+	end
+	table.sort(near, function(a, b)
+		return flatDistance(position, a.DoorCF.Position) < flatDistance(position, b.DoorCF.Position)
+	end)
+	local night = false
+	pcall(function()
+		local ct = game:GetService("Lighting").ClockTime
+		night = ct < 6.4 or ct > 17.8
+	end)
+	for _, shop in ipairs(shops) do
+		local on = table.find(near, shop) ~= nil and (table.find(near, shop) :: number) <= 2
 		if on ~= shop.LightsOn then
 			shop.LightsOn = on
 			for _, light in ipairs(shop.Lights) do
 				light.Enabled = on
 			end
+		end
+		local spill = (shop :: any).Spill
+		if spill and spill.Parent and spill.Enabled ~= night then
+			spill.Enabled = night
 		end
 	end
 	-- prochaine construction : la boutique la plus proche qui en a besoin
@@ -1661,6 +1792,11 @@ local function runJobs()
 				shop.Jobs = nil
 				shop.Level = shop.Building
 				shop.Building = 0
+				-- (v9.9) l'intérieur complet remplace les silhouettes « vues de dehors »
+				local night = (shop :: any).Night
+				if night and shop.Level >= 2 then
+					night.Parent = nil
+				end
 				stats.Built += 1
 				dirty = true
 			end
@@ -1709,8 +1845,18 @@ local function animateShops(position: Vector3, now: number)
 							a.Model:PivotTo(cf)
 						end
 					end
-					pcall(N.Animate, a.Model, a.Anim, now + a.Offset)
+					local anim = a.Anim
+					if a.Cycle then
+						-- (v9.9) anims alternées toutes les 5 s (vendeur·se, client·e au comptoir)
+						anim = a.Cycle[math.floor((now + a.Offset) / 5) % #a.Cycle + 1]
+					end
+					pcall(N.Animate, a.Model, anim, now + a.Offset)
 				end
+			end
+			-- (v9.9) horloge murale
+			local c = (shop :: any).Clock
+			if c and Clocks() then
+				pcall(clockKit.Update, c)
 			end
 		end
 	end
