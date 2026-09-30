@@ -776,8 +776,26 @@ local function connect(geo: TownKit.Geo, segs: { Seg }, f: Feature, seed: number
 	local p = Vector3.new(f.Pos.X, 0, f.Pos.Z)
 	local best: { Vector3 }? = nil
 	local bestLen = math.huge
+	-- (le point le plus proche de chaque segment, puis des points décalés
+	-- le long du segment : une allée en biais contourne un obstacle)
+	local cands = {}
 	for _, sgm in ipairs(segs) do
-		local q = closestOnSeg(sgm.A, sgm.B, p)
+		local q0 = closestOnSeg(sgm.A, sgm.B, p)
+		local a0 = Vector3.new(sgm.A.X, 0, sgm.A.Z)
+		local ab = Vector3.new(sgm.B.X - sgm.A.X, 0, sgm.B.Z - sgm.A.Z)
+		local L = ab.Magnitude
+		table.insert(cands, q0)
+		if L > 1 then
+			local t0 = (q0 - a0).Magnitude
+			for _, dt in ipairs({ -8, 8, -16, 16, -26, 26 }) do
+				local t = t0 + dt
+				if t > 0 and t < L then
+					table.insert(cands, a0 + ab.Unit * t)
+				end
+			end
+		end
+	end
+	for _, q in ipairs(cands) do
 		local dir = q - p
 		local len = dir.Magnitude
 		if len > f.R + 1 and len - f.R < bestLen and len - f.R < 130 then
@@ -943,13 +961,26 @@ function TownNature.Build(folder: Instance, geo: TownKit.Geo): number
 	end
 	-- grandes villes : terrain de foot + champ de tulipes là où il y a de la place
 	if depth > 110 then
+		local soccerDone = false
 		for _, spot in ipairs({ { (aL + math.pi * 2) / 2 + 0.04, geo.Inner - 34 }, { aR * 0.55, geo.Inner - 34 }, { (aR + math.pi) / 2, geo.Inner - 30 } }) do
 			local p = geo.At(spot[1], spot[2])
 			if geo.IsFree(p, 26) then
 				soccer(nature, geo, frame(spot[1], spot[2]))
 				TownKit.LifeSpot("Dest", frame(spot[1], spot[2]), 12)
 				table.insert(anchors, { spot[1], spot[2] - 24 })
+				soccerDone = true
 				break
+			end
+		end
+		-- (v9.9, CITY99) places prévues prises (nouveaux manèges de la fête) :
+		-- le terrain de foot va dans le coin le plus vide, relié par une allée
+		if not soccerDone then
+			local p = emptiest(geo, 26, r0)
+			if p then
+				local cf = faceCenter(p + Vector3.new(0, 0, 0))
+				soccer(nature, geo, cf)
+				TownKit.LifeSpot("Dest", cf, 12)
+				table.insert(features, { Pos = p, R = 23, Name = "Soccer", Sign = true })
 			end
 		end
 		for _, spot in ipairs({ { aR * 0.3, geo.Inner - 30 }, { (math.pi + aL) / 2 - 0.1, mid + 10 }, { (aL + math.pi * 2) / 2 - 0.12, mid + 16 } }) do
@@ -1023,15 +1054,19 @@ function TownNature.Build(folder: Instance, geo: TownKit.Geo): number
 		return (a.Pos - O).Magnitude < (b.Pos - O).Magnitude
 	end)
 	local linked = 0
+	local unlinked = {}
 	for i, f in ipairs(features) do
 		if f.Dest then
 			TownKit.LifeSpot("Dest", CFrame.new(f.Pos), f.Dest)
 		end
 		if connect(geo, segs, f, 950 + i) then
 			linked += 1
+		else
+			table.insert(unlinked, f.Name)
 		end
 	end
 	nature:SetAttribute("Linked", linked)
+	nature:SetAttribute("Unlinked", table.concat(unlinked, ","))
 	nature:SetAttribute("Features", #features)
 	local trees = scatterTrees(nature, geo, math.clamp(math.floor(depth * 0.28), 22, geo.Slots >= 11 and 46 or 36))
 	belt(nature, geo)

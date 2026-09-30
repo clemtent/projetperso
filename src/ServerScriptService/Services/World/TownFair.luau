@@ -726,6 +726,8 @@ local function buildAnnex(folder: Instance, ridesFolder: Instance, geo: TownKit.
 			else
 				local ride = makeRide(ridesFolder, def, base, base * CFrame.new(def.Exit))
 				if def.Kind == "Circus" then
+					-- (v9.9) les panneaux directionnels de la ville indiquent le cirque (🎪 = 3)
+					pcall(TownKit.LifeSpot, "Dest", base, 3)
 					-- (gradins : pose "banc" de SitAnimator, pas les bras levés du manège)
 					for _, seat in ipairs(ride.Seats) do
 						seat:SetAttribute("SitKind", "bench")

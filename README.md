@@ -27,6 +27,52 @@ Les autres méthodes (Rojo, copie manuelle) sont décrites dans [`docs/INSTALLAT
 
 ---
 
+## 🆕 Nouveautés v9.9: plus réaliste, et tout fonctionne
+
+- 🚗 **Voitures** plus réalistes :
+  - phares à contour chromé, calandres, pare-chocs, feux arrière détaillés, chromes, toits bicolores ;
+  - roues qui tournent et braquent, suspension ;
+  - circulation fluide ;
+  - bus qui s'abaisse et ouvre ses portes ;
+  - niveau de détail selon la distance.
+- 🧑 **PNJ** :
+  - vraies proportions, visage qui cligne des yeux, 10 coiffures, tenues de métier ;
+  - marche naturelle ;
+  - solides : on ne se traverse plus ;
+  - ils s'écartent pour passer ;
+  - si un PNJ est assis sur un banc, on s'assoit à côté.
+- 🛒 **Caisses** : tapis qui défile, scanner, terminal de carte, ticket, file de clients animée, caisses automatiques.
+- 📺 **Écrans « Meilleur joueur du serveur »** façon TV, avec couronne, photos et classement animé.
+- 🕐 **Horloges** à la vraie heure partout, en ville et dans la maison.
+- 🏬 **Magasins** éclairés vus de dehors.
+- 🏠 **Maisons** :
+  - vrai hall d'entrée, escalier le long du mur avec rampe et palier à chaque étage (manoir compris) ;
+  - fontaine et lanternes du manoir refaites ;
+  - fenêtres allumées la nuit visibles par tous ;
+  - vrais rideaux ;
+  - toutes les actions avec E / F.
+- 📏 **Objets à la bonne taille** par rapport au perso : chaises, tables, lits, armoires, portes.
+- 🧸 **Objets du quotidien** refaits : yoyo, boissons, coffrets, service à thé…
+- 📅 **Calendrier** avec la date du jour entourée.
+- 🎡 **Fête foraine** :
+  - manèges sans saccades ;
+  - **cirque** avec spectacle ;
+  - **montagnes russes**, bateau pirate, train fantôme, trampolines, labyrinthe de miroirs.
+- 🍦 **Nourriture** tenue droite dans la main, avec une vraie bouchée.
+- 🛝 **Aire de jeux qui fonctionne** : balançoires, toboggan, bascule, tourniquet, jeux à ressort, barres de singe, bac à sable.
+- 🌷 **Jardin** : on s'assoit sur le banc, la table de pique-nique, la balançoire et le kiosque.
+- 🛣️ **Routes** : bitume, trottoirs, marquages, STOP, panneaux de direction ; chemins vers chaque lieu.
+- 🏙️ **Nouveaux lieux** : skate-park, jardins partagés, coin sport. Place centrale refaite.
+- 🐦 **Pigeons** réalistes.
+- 🎵 **Scène musicale** sur la place :
+  - piano, batterie, guitare, basse, xylophone, synthé et DJ jouables à plusieurs ;
+  - 8 morceaux en lecture auto ;
+  - juke-box.
+  - Pour de vrais sons d'instruments, colle des IDs dans `Config.Instruments`.
+- 🪞 **Miroirs** corrigés.
+- ☀️ **Heure du jour** au choix dans ⚙️ : Auto / Jour / Coucher / Nuit.
+- 🪑 Le bouton « S'asseoir » est caché quand on est déjà assis.
+
 ## 🆕 Nouveautés v9.8 — tout en réel, plus vivant et plus réaliste
 
 - 🖥️ **Bureau gamer jouable** : assis au bureau, l'écran principal lance un vrai petit jeu de course façon Subway Surfers (Desk Runner). Les écrans voisins affichent les vrais écrans du clicker (live, DVD, news).

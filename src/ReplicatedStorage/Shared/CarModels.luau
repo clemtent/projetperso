@@ -900,7 +900,7 @@ local function buildLow(b: B, s: Spec, g: Geo, paint: Color3, roofColor: Color3,
 	local gw = hw - s.Inset
 	if style == "Sports" then
 		wedge(b, "Windshield", -gw, gw, s.Belt, s.Roof, s.Ws + 0.05, s.R0, true, GLASS, M.Glass)
-		box(b, "Cockpit", -hw + 0.4, hw - 0.4, low, s.Belt - 0.02, s.R0, s.R1, TRIM)
+		box(b, "Cockpit", -hw + 0.4, hw - 0.4, low, s.Belt + 0.04, s.R0, s.R1, TRIM) -- (v9.9) dessus 0,04 au-dessus de la caisse : plus de z-fight
 	else
 		wedge(b, "Windshield", -gw, gw, s.Belt, s.Roof - 0.12, s.Ws + 0.05, s.R0, true, GLASS, M.Glass)
 		box(b, "SideGlass", -gw, gw, s.Belt, s.Roof - 0.12, s.R0, s.R1, GLASS, M.Glass)

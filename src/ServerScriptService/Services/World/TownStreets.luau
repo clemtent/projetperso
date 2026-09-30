@@ -754,7 +754,8 @@ local function roadsAvenue(geo: TownKit.Geo)
 		-- local : on retourne le repère quand la chaussée est du côté +R.X)
 		chunks("CurbLine", along(sx * (PROM + 0.05), s0, 0), 0.5, L, ROAD_Y, 0, CURB_H, 0, 5100 + sx, nil, sx > 0)
 		chunks("CurbLine", along(sx * (LANE_OUT - 0.05), s0, 0), 0.5, geo.Inner - s0, ROAD_Y, 0, CURB_H, 0, 5200 + sx, nil, sx < 0)
-		local wS = WALK_W - 0.85
+		-- (0,3 de marge côté façades : les socles des immeubles avancent un peu)
+		local wS = WALK_W - 0.85 - 0.3
 		chunks("Pavers", along(sx * (LANE_OUT + 0.85 + wS / 2), s0, 0), 0.5, geo.Inner - s0 - 0.5, WALK_Y, 0, 0, wS, 5300 + sx)
 	end
 	local _ = F0
@@ -776,7 +777,7 @@ local function roadsSideStreet(geo: TownKit.Geo, slot: number)
 	chunks("RoadSurface", along(0, s0), 1, L - 1, ROAD_Y, 0, 2, 2 * ST_HALF, slot * 1000 + 6000)
 	for _, sx in ipairs({ -1, 1 }) do
 		chunks("CurbLine", along(sx * (ST_HALF - 0.05), s0), 0.5, geo.Inner - s0, ROAD_Y, 0, CURB_H, 0, slot * 1000 + 6100 + sx, nil, sx < 0)
-		local wS = ST_WALK - 0.85
+		local wS = ST_WALK - 0.85 - 0.3
 		chunks("Pavers", along(sx * (ST_HALF + 0.85 + wS / 2), s0), 0.5, geo.Inner - s0 - 0.5, WALK_Y, 0, 0, wS, slot * 1000 + 6200 + sx)
 	end
 	-- carrefour avec le boulevard : STOP + flèches gauche / droite (voie
