@@ -1638,7 +1638,7 @@ local function outsideJobs(m: Market, parent: Instance): { () -> () }
 			local x = -48 + (i - 0.5) * STALL_W
 			local z = row == "A" and (ROW_A[1] + ROW_A[2]) / 2 or (ROW_B[1] + ROW_B[2]) / 2
 			local rot = row == "A" and CFrame.new() or CFrame.Angles(0, math.pi, 0)
-			local ok, model = pcall(cm.Build, CAR_KINDS[index], CAR_COLORS[index], { Detail = "Parked" })
+			local ok, model = pcall(cm.Build, CAR_KINDS[index], CAR_COLORS[index], { Detail = "Mid" })
 			if ok and typeof(model) == "Instance" and model:IsA("Model") then
 				model:PivotTo(cf * CFrame.new(x, LOT_Y, z) * rot)
 				model.Parent = parent
@@ -1694,7 +1694,7 @@ local function outsideJobs(m: Market, parent: Instance): { () -> () }
 			return
 		end
 		local B = cf * CFrame.new(0, 0, m.Size.Z + 2) * CFrame.Angles(0, math.pi, 0)
-		local ok, model = pcall(cm.Build, "Van", rgb(250, 250, 252), { Detail = "Parked", Scale = Vector3.new(1.1, 1.15, 1.2) })
+		local ok, model = pcall(cm.Build, "Van", rgb(250, 250, 252), { Detail = "Mid", Scale = Vector3.new(1.1, 1.15, 1.2) })
 		if ok and typeof(model) == "Instance" and model:IsA("Model") then
 			model:PivotTo(B * CFrame.new(14, -0.6, -12))
 			model.Parent = parent

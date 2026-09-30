@@ -248,8 +248,8 @@ local function perches(plaza: Instance): { Vector3 }
 			local d = Vector3.new(math.sin(a), 0, math.cos(a))
 			local along = Vector3.new(d.Z, 0, -d.X)
 			for _, z in ipairs({ -1.9, 1.9 }) do
-				-- (dessus du chapeau de la lanterne)
-				table.insert(list, center + d * r + along * z + Vector3.new(0, top + 0.5, 0))
+				-- (dessus du chapeau de la lanterne : 10,5 + 0,35 + 0,15 = sommet - 0,5)
+				table.insert(list, center + d * r + along * z + Vector3.new(0, top - 0.5, 0))
 			end
 		end
 	end

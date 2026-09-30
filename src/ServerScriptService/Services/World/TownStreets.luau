@@ -590,6 +590,8 @@ local function lifeAvenue(geo: TownKit.Geo)
 	end
 	-- panneaux des noms de rue au croisement avec le boulevard
 	spot("StreetName", R * CFrame.new(LANE_OUT + 4.4, WALK_Y, -(geo.Inner - 1.6)), 1)
+	-- (v9.9, CITY99) poteau indicateur au carrefour (vers tous les lieux)
+	spot("Direction", R * CFrame.new(-(LANE_OUT + 3.2), WALK_Y, -(geo.Inner - 5)), 330)
 	-- chemins : la promenade (de la porte à la place) et la boucle des trottoirs
 	local function at(x: number, s: number): Vector3
 		return (R * CFrame.new(x, WALK_Y, -s)).Position
@@ -612,6 +614,7 @@ local function lifeSideStreet(geo: TownKit.Geo, slot: number, name: number)
 	spot("TrafficLight", R * CFrame.new(-ST_HALF - 1.1, WALK_Y, -(zs + 3.9)), 4)
 	spot("Zebra", R * CFrame.new(0, ROAD_Y, -ringS) * CFrame.Angles(0, math.pi / 2, 0), math.floor(2 * ST_HALF * 10))
 	spot("StreetName", R * CFrame.new(-(ST_OUT - 0.9), WALK_Y, -(geo.Inner - 1.6)), name)
+	spot("Direction", R * CFrame.new(ST_OUT - 1.6, WALK_Y, -(geo.Inner - 5)), 330 + slot) -- (v9.9, CITY99)
 	-- mobilier entre les arbres (côté immeubles) : poubelles, bornes, boîte aux lettres
 	local n = math.clamp(math.floor(length / 20), 1, 7)
 	for i = 0, n - 1 do
@@ -758,7 +761,7 @@ local function roadsAvenue(geo: TownKit.Geo)
 	-- flèches : voie montante (+x, vers la porte) : gauche / droite avant la
 	-- ligne d'arrêt ; voie descendante (-x, vers la place) : tout droit
 	TownKit.LifeSpot("Arrow", R * CFrame.new((PROM + LANE_OUT) / 2 - 1, ROAD_Y, -(roadEdge - 10)), 6)
-	TownKit.LifeSpot("Arrow", R * CFrame.new(-(PROM + LANE_OUT) / 2 + 1, ROAD_Y, -(roadEdge - 30)) * CFrame.Angles(0, math.pi, 0), 1)
+	TownKit.LifeSpot("Arrow", R * CFrame.new(-(PROM + LANE_OUT) / 2 + 1, ROAD_Y, -(roadEdge - 42)) * CFrame.Angles(0, math.pi, 0), 1)
 	TownKit.LifeSpot("RoadWord", R * CFrame.new(-(PROM + LANE_OUT) / 2 + 1, ROAD_Y, -(s0 + 14)) * CFrame.Angles(0, math.pi, 0), 3)
 end
 

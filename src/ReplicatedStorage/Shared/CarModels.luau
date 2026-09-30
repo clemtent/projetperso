@@ -1626,8 +1626,14 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			box(b, "BedFront", -ix, ix, bedY, s.Deck, bz0, bz0 + 0.12, paint)
 			box(b, "Tailgate", -ix, ix, bedY, s.Deck - 0.04, bz1, zB - 0.1, paint)
 			local cw = hw - s.Inset
-			box(b, "CabBack", -cw, cw, s.Deck, s.Roof - 0.12, s.R1 - 0.02, s.R1 + 0.1, paint)
-			box(b, "CabGlass", -cw + 0.45, cw - 0.45, s.Deck + 0.35, s.Roof - 0.45, s.R1 + 0.1, s.R1 + 0.14, GLASS, M.Glass)
+			-- paroi arrière de la cabine = cadre autour de la lunette (on voit l'habitacle)
+			local gx, cy0, cy1 = cw - 0.45, s.Deck + 0.35, s.Roof - 0.45
+			box(b, "CabBack", -cw, cw, s.Deck, cy0, s.R1 - 0.02, s.R1 + 0.1, paint)
+			box(b, "CabBack", -cw, cw, cy1, s.Roof - 0.12, s.R1 - 0.02, s.R1 + 0.1, paint)
+			for _, sx in ipairs({ -1, 1 }) do
+				box(b, "CabBack", math.min(sx * gx, sx * cw), math.max(sx * gx, sx * cw), cy0, cy1, s.R1 - 0.02, s.R1 + 0.1, paint)
+			end
+			box(b, "CabGlass", -gx - 0.05, gx + 0.05, cy0 - 0.05, cy1 + 0.05, s.R1 + 0.02, s.R1 + 0.06, GLASS, M.Glass)
 			if full then
 				for k = -2, 2 do
 					box(b, "BedRib", k * 0.9 - 0.08, k * 0.9 + 0.08, bedY, bedY + 0.06, bz0 + 0.3, bz1 - 0.3, CHROME, M.Metal)

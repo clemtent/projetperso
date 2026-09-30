@@ -442,6 +442,8 @@ function TownEntrance.Build(folder: Instance, geo: TownKit.Geo): EntranceResult
 	TownKit.LifeSpot("DrinkFountain", CFrame.lookAt(center + Vector3.new(-9, 0, -22), center + Vector3.new(0, 0, -22)), 4)
 	TownKit.LifeSpot("Chat", CFrame.new(center + Vector3.new(9, 0, -8)) * CFrame.Angles(0, 2.4, 0), 7)
 	TownKit.LifeSpot("Chat", CFrame.new(center + Vector3.new(-8, 0, 6)) * CFrame.Angles(0, -0.8, 0), 8)
+	-- (v9.9, CITY99) poteau indicateur à l'arrivée (vers tous les lieux de la ville)
+	TownKit.LifeSpot("Direction", CFrame.new(center + Vector3.new(-12, 0, 12)), 320)
 	-- dehors
 	outside(entrance, geo, gcf)
 	return { Map = map, Spawn = spawn }

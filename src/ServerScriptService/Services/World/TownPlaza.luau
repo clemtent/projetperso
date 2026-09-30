@@ -50,6 +50,11 @@ local TownKit = require(script.Parent.TownKit)
 local TownBuildings = require(script.Parent.TownBuildings)
 local TownShops = require(script.Parent.TownShops)
 local TownFair = require(script.Parent.TownFair) -- (v9.8, FAIR98) manège où l'on monte, bornes des stands
+-- (v9.9, CITY99) 🎸 scène de musique (MUSIC99) à la place de l'ancien kiosque
+local okMusic, TownMusic = pcall(function()
+	local mod = script.Parent:FindFirstChild("TownMusic")
+	return mod and require(mod) :: any or nil
+end)
 
 local TownPlaza = {}
 
@@ -361,75 +366,8 @@ end
 -- Kiosque, manège, ballons, guirlandes
 ----------------------------------------------------------------------
 
--- (v9.7) Kiosque à musique OCTOGONAL. `F` au sol, au centre ; l'avant
--- (-Z) regarde le centre de la place : marches et entrée devant.
---   socle plein (4 bandes croisées = octogone), plancher en bois, 2
---   marches, 8 colonnes aux angles, garde-corps (main courante solide +
---   lisse basse + 3 balustres par côté), frise, plafond, toit en pyramide
---   à 8 pans bicolores (tuiles), épi de faîtage, 3 pupitres + grosse caisse.
---   Les guirlandes d'ampoules sous la frise : client (TownPlazaFx).
-local BAND_A = 7.4 -- apothème du socle
-local BAND_FASCIA = 8.3 -- apothème de la face extérieure de la frise
-local BAND_FASCIA_Y = 10.2 -- bas de la frise
-local function bandstand(folder: Instance, F: CFrame)
-	local model = TownKit.Model(folder, "Bandstand")
-	local cream = Color3.fromRGB(246, 238, 228)
-	local white = Color3.fromRGB(252, 250, 246)
-	local a = BAND_A
-	local s = 2 * a * math.tan(math.pi / 8)
-	-- socle (même couleur, lisse : les bandes qui se recouvrent ne scintillent pas)
-	for j = 0, 3 do
-		part(model, "Plinth", Vector3.new(s, 2, 2 * a), F * CFrame.Angles(0, j * math.pi / 4, 0) * CFrame.new(0, 1, 0), cream, M.SmoothPlastic, "solid")
-	end
-	TownKit.Disc(model, "Deck", (F * CFrame.new(0, 2.2, 0)).Position, a - 0.35, 0.25, C.WoodLight, M.WoodPlanks, "solid")
-	part(model, "Step", Vector3.new(5, 1.47, 1.3), F * CFrame.new(0, 0.735, -(a + 0.65)), cream, M.SmoothPlastic, "solid")
-	part(model, "Step", Vector3.new(5, 0.73, 1.3), F * CFrame.new(0, 0.365, -(a + 1.95)), cream, M.SmoothPlastic, "solid")
-	-- colonnes aux 8 angles (sur le socle, autour du plancher)
-	local vr = a / math.cos(math.pi / 8) - 0.55
-	local posts = {}
-	for k = 0, 7 do
-		local p = F.Position + dirIn(F, (k + 0.5) / 8 * math.pi * 2) * vr
-		posts[k] = p
-		TownKit.Column(model, "Post", p + Vector3.new(0, 2, 0), 8.3, 0.5, white, M.SmoothPlastic, "prop")
-	end
-	-- garde-corps sur 7 côtés (le côté 0 = l'entrée, devant les marches)
-	for k = 1, 7 do
-		local p0, p1 = posts[k - 1], posts[k]
-		TownKit.Beam(model, "Rail", p0 + Vector3.new(0, 4.7, 0), p1 + Vector3.new(0, 4.7, 0), 0.22, 0.2, white, M.SmoothPlastic, "prop")
-		TownKit.Beam(model, "RailLow", p0 + Vector3.new(0, 2.55, 0), p1 + Vector3.new(0, 2.55, 0), 0.18, 0.16, white, M.SmoothPlastic, "deco")
-		for q = 1, 3 do
-			local p = p0:Lerp(p1, q / 4)
-			part(model, "Baluster", Vector3.new(0.16, 2.05, 0.16), CFrame.new(p + Vector3.new(0, 3.625, 0)), white, M.SmoothPlastic, "deco")
-		end
-	end
-	-- frise + plafond
-	local fl = 2 * BAND_FASCIA * math.tan(math.pi / 8) + 0.1
-	for k = 0, 7 do
-		local d = dirIn(F, k / 8 * math.pi * 2)
-		local p = F.Position + d * (BAND_FASCIA - 0.1) + Vector3.new(0, BAND_FASCIA_Y + 0.4, 0)
-		part(model, "Fascia", Vector3.new(fl, 0.8, 0.2), CFrame.lookAt(p, p + d), white, M.SmoothPlastic, "decoS")
-	end
-	local ceiling = TownKit.Disc(model, "Ceiling", (F * CFrame.new(0, BAND_FASCIA_Y + 0.2, 0)).Position, BAND_FASCIA - 0.2, 0.2, white, M.SmoothPlastic, "decoS")
-	-- toit : pyramide à 8 pans (lilas / crème), débord de 0,35
-	pyramid(model, "Roof", F, 8, BAND_FASCIA + 0.35, BAND_FASCIA_Y + 0.8, 15.4, 0.3, { Color3.fromRGB(176, 136, 224), Color3.fromRGB(250, 230, 238) }, M.RoofShingles, "decoS")
-	local top = F * CFrame.new(0, 15.4, 0)
-	TownKit.Column(model, "FinialBase", (top * CFrame.new(0, -0.5, 0)).Position, 0.9, 0.9, white, M.SmoothPlastic, "deco")
-	TownKit.Ball(model, "Finial", (top * CFrame.new(0, 0.75, 0)).Position, 1.1, C.Yellow, M.Metal, "deco")
-	TownKit.Rod(model, "Spike", (top * CFrame.new(0, 1.2, 0)).Position, (top * CFrame.new(0, 2.6, 0)).Position, 0.16, C.Yellow, M.Metal, "deco")
-	-- 3 pupitres (tournés vers les musiciens) + grosse caisse
-	for _, x in ipairs({ -2.2, 0, 2.2 }) do
-		local z = -0.8 - math.abs(x) * 0.25
-		TownKit.Rod(model, "StandPole", (F * CFrame.new(x, 2.2, z)).Position, (F * CFrame.new(x, 4.35, z)).Position, 0.1, C.Metal, M.Metal, "deco")
-		part(model, "StandDesk", Vector3.new(1.1, 0.8, 0.06), F * CFrame.new(x, 4.6, z) * CFrame.Angles(math.rad(-25), 0, 0), C.Metal, M.Metal, "deco")
-	end
-	local drumCF = F * CFrame.new(2.9, 3.3, 2.2) * CFrame.Angles(0, math.rad(90), 0)
-	local shell = part(model, "BassDrum", Vector3.new(0.9, 2.2, 2.2), drumCF, Color3.fromRGB(226, 84, 118), M.SmoothPlastic, "deco")
-	;(shell :: Part).Shape = Enum.PartType.Cylinder
-	local head = part(model, "DrumHead", Vector3.new(1, 2, 2), drumCF, C.Cream, M.SmoothPlastic, "deco")
-	;(head :: Part).Shape = Enum.PartType.Cylinder
-	-- lumière douce sous le plafond (la nuit)
-	TownKit.Light(ceiling, Color3.fromRGB(255, 214, 170), 16, 0.8)
-end
+-- (v9.9, CITY99) le kiosque à musique octogonal (v9.7) est remplacé par la
+-- scène de musique de MUSIC99 (TownMusic.Build, appelé par TownPlaza.Build).
 
 -- (v9.7) MANÈGE : ici seulement ce qui NE tourne PAS (socle à deux
 -- marches, guérite à tickets, lumière douce). Le plateau, les chevaux, les
@@ -806,6 +744,23 @@ local function shopRing(folder: Instance, geo: TownKit.Geo, shopsFolder: Instanc
 			else
 				TownBuildings.Shop(folder, cf, item.Spec, used + 1)
 				used += 1
+				-- (v9.9, CITY99) terrasse de café devant une boutique de décor sur
+				-- deux (client : tables, chaises, parasols ; passants attablés),
+				-- jamais contre un lampadaire de la place
+				if used % 2 == 1 then
+					local tcf = cf * CFrame.new(0, 0, -7.5)
+					local clear = true
+					for i = 0, 7 do
+						local la = (i + 0.5) / 8 * math.pi * 2
+						local lp = O + Vector3.new(math.sin(la), 0, math.cos(la)) * (R - 6)
+						if Vector3.new(tcf.Position.X - lp.X, 0, tcf.Position.Z - lp.Z).Magnitude < 8.5 then
+							clear = false
+						end
+					end
+					if clear then
+						TownKit.LifeSpot("Terrace", tcf, 200 + used)
+					end
+				end
 			end
 			a += item.Width
 		end
@@ -852,9 +807,17 @@ function TownPlaza.Build(folder: Instance, geo: TownKit.Geo, shopsFolder: Instan
 	local function spot(angle: number, dist: number): Vector3
 		return ground + Vector3.new(math.sin(angle) * dist, 0, math.cos(angle) * dist)
 	end
-	local bandF = CFrame.lookAt(spot(math.rad(225), 41), ground)
-	pad(plaza, bandF.Position, 11.5)
-	bandstand(plaza, bandF)
+	-- (v9.9, CITY99) le kiosque laisse la place à la SCÈNE DE MUSIQUE
+	-- (MUSIC99, TownMusic) : empreinte 24 x 16 centrée à 42 studs, à 225°,
+	-- LookVector = devant de la scène (vers la fontaine et le public)
+	local stageCF = CFrame.lookAt(spot(math.rad(225), 42), ground)
+	plaza:SetAttribute("FxStageCF", stageCF)
+	if okMusic and type(TownMusic) == "table" and type(TownMusic.Build) == "function" then
+		local okStage, errStage = pcall(TownMusic.Build, plaza, stageCF)
+		if not okStage then
+			warn("[TownPlaza] scène de musique : " .. tostring(errStage))
+		end
+	end
 	local carF = CFrame.lookAt(spot(math.rad(135), 41), ground)
 	pad(plaza, carF.Position, 12)
 	local carouselCF = carousel(plaza, carF)
@@ -871,8 +834,6 @@ function TownPlaza.Build(folder: Instance, geo: TownKit.Geo, shopsFolder: Instan
 	plaza:SetAttribute("FxCenter", ground)
 	plaza:SetAttribute("FxCarouselCF", carouselCF)
 	plaza:SetAttribute("FxBalloonTie", tie)
-	plaza:SetAttribute("FxBandstandCF", bandF)
-	plaza:SetAttribute("FxBandstandFascia", Vector2.new(BAND_FASCIA, BAND_FASCIA_Y))
 	plaza:SetAttribute("FxLamps", Vector3.new(lampR, PLAZA_LAMP_TOP, 8))
 	plaza:SetAttribute("FxFlock1", spot(math.rad(8), 23))
 	plaza:SetAttribute("FxFlock2", spot(math.rad(292), 27))
@@ -880,9 +841,10 @@ function TownPlaza.Build(folder: Instance, geo: TownKit.Geo, shopsFolder: Instan
 	-- (v9.8, CITY98) fontaine animée (eau, jets, pièces : TownFountainFx) et
 	-- pigeons 10x (TownPigeons) : repères pour le client
 	plaza:SetAttribute("FxFountainBase", ground + Vector3.new(0, 0.15, 0))
-	plaza:SetAttribute("FxFlock4", spot(math.rad(200), 30))
+	plaza:SetAttribute("FxFlock4", spot(math.rad(56), 27)) -- (v9.9 : loin de la scène)
 	-- parterres fleuris + arbres en bacs
-	for i, deg in ipairs({ 58, 110, 160, 200, 250, 302, 322 }) do
+	-- (v9.9 : 200 -> 194 et 250 -> 262 : rien à moins de 13 studs de la scène)
+	for i, deg in ipairs({ 58, 110, 160, 194, 262, 302, 322 }) do
 		local p = spot(math.rad(deg), 48)
 		if i % 2 == 1 then
 			TownKit.Column(plaza, "BedRim", p, 1.4, 9, C.Stone, M.Concrete, "prop")
@@ -893,6 +855,31 @@ function TownPlaza.Build(folder: Instance, geo: TownKit.Geo, shopsFolder: Instan
 			TownKit.Tree(plaza, p + Vector3.new(0, 2, 0), 12, i * 13, "Round", { Tier = 1 }) -- (v9.7 NATURE97)
 		end
 	end
+	-- (v9.9, CITY99) HORLOGE DE PLACE (colonne en fonte, deux cadrans :
+	-- vers la place et vers l'avenue ; aiguilles et chiffres : TownDisplays)
+	do
+		local base = spot(math.rad(12), 52)
+		local face = CFrame.lookAt(base, ground) -- (-Z : vers la fontaine)
+		local iron = Color3.fromRGB(34, 64, 52)
+		TownKit.Column(plaza, "ClockPlinth", base, 1.2, 1.6, Color3.fromRGB(150, 146, 140), M.Granite, "prop")
+		TownKit.Column(plaza, "ClockPole", base + Vector3.new(0, 1.2, 0), 8.4, 0.55, iron, M.Metal, "prop")
+		part(plaza, "ClockCase", Vector3.new(2.9, 2.9, 1.1), face * CFrame.new(0, 11.1, 0), iron, M.Metal, "deco")
+		for _, back in ipairs({ false, true }) do
+			local dial = part(plaza, "ClockFace", Vector3.new(2.6, 2.6, 0.12), face * (back and CFrame.Angles(0, math.pi, 0) or CFrame.identity) * CFrame.new(0, 11.1, -0.6), C.Cream, M.SmoothPlastic, "deco")
+			dial:SetAttribute("TownClock", "Street")
+		end
+		TownKit.Ball(plaza, "ClockFinial", base + Vector3.new(0, 13.1, 0), 0.6, C.Yellow, M.Metal, "deco")
+	end
+	-- (v9.9, CITY99) repère "place" et poteaux indicateurs à chaque sortie
+	TownKit.LifeSpot("Dest", CFrame.new(ground), 1)
+	for _, slot in ipairs(geo.Streets) do
+		local a = geo.SlotAngle(slot)
+		local d = Vector3.new(math.sin(a), 0, math.cos(a))
+		local side = Vector3.new(-d.Z, 0, d.X)
+		local halfW = slot == 0 and 21 or 13
+		TownKit.LifeSpot("Direction", CFrame.new(ground + d * (R + 9) - side * (halfW - 3)), 300 + slot)
+	end
+	TownKit.LifeSpot("Direction", CFrame.new(spot(math.rad(152), 55)), 310)
 	-- mairie (au fond) + écran des meilleurs joueurs
 	local hallP = ground + Vector3.new(0, 0, -(R + 4))
 	local hallCF = CFrame.lookAt(hallP, ground)

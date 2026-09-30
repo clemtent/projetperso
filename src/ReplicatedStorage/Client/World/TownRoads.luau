@@ -281,18 +281,23 @@ end
 local function buildArrow(m: Model, F: CFrame, seed: number)
 	local kind = seed % 10
 	local straight = kind == 1 or kind == 4 or kind == 5
-	-- fût
-	flat(m, "ArrowShaft", F, 0, 1.2, 0.4, 3.6, ARROW_TOP, PAINT)
+	-- fût (de +3 à -0,2), puis tout droit jusqu'à la pointe
+	flat(m, "ArrowShaft", F, 0, 1.4, 0.4, 3.2, ARROW_TOP, PAINT)
 	if straight then
-		flat(m, "ArrowShaft", F, 0, -1.3, 0.4, 1.6, ARROW_TOP, PAINT)
-		head(m, F, 0, -2.1, 0)
+		flat(m, "ArrowShaft", F, 0, -1.1, 0.4, 1.8, ARROW_TOP, PAINT)
+		head(m, F, 0, -2.0, 0)
 	end
 	for _, side in ipairs({ -1, 1 }) do
 		local turn = (side < 0 and (kind == 2 or kind == 5 or kind == 6)) or (side > 0 and (kind == 3 or kind == 4 or kind == 6))
 		if turn then
-			-- branche oblique puis pointe vers le côté
-			flat(m, "ArrowBranch", F, side * 0.55, -0.35, 0.4, 1.5, ARROW_TOP, PAINT, nil, side * math.rad(-40))
-			head(m, F, side * 1.2, -0.9, side * math.rad(-60))
+			-- branche à 45° qui part du haut du fût, pointe dans son axe
+			local bd = Vector3.new(side * 0.7071, 0, -0.7071)
+			local b0 = Vector3.new(0, 0, -0.1)
+			local mid = b0 + bd * 0.75
+			local b1 = b0 + bd * 1.5
+			local yaw = -side * math.rad(45)
+			flat(m, "ArrowBranch", F, mid.X, mid.Z, 0.4, 1.7, ARROW_TOP, PAINT, nil, yaw)
+			head(m, F, b1.X, b1.Z, yaw)
 		end
 	end
 end
