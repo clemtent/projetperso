@@ -942,9 +942,9 @@ local function truckBase(k: K, t: Truck, cabColor: Color3, full: boolean): (numb
 	if full then
 		for j = 1, 3 do
 			local y = gy0 + j * (gy1 - gy0) / 4
-			box(k, "GrilleBar", -hw * 0.44 + 0.12, hw * 0.44 - 0.12, y - 0.04, y + 0.04, zF - 0.08, zF - 0.02, CHROME, M.Metal)
+			box(k, "GrilleBar", -hw * 0.44 + 0.12, hw * 0.44 - 0.12, y - 0.04, y + 0.04, zF - 0.15, zF - 0.1, CHROME, M.Metal)
 		end
-		cylZ(k, "Badge", 0, (gy0 + gy1) / 2, zF - 0.1, 0.06, 0.45, CHROME, M.Metal)
+		cylZ(k, "Badge", 0, (gy0 + gy1) / 2, zF - 0.19, 0.06, 0.45, CHROME, M.Metal)
 	end
 	for _, sx in ipairs({ -1, 1 }) do
 		local h0, h1 = sx * (hw * 0.5), sx * (hw - rc * 0.4)
