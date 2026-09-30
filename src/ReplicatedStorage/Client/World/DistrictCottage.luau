@@ -101,7 +101,7 @@ local function buildChapel(m: Model, F: CFrame, seed: number)
 	local NW, NL, WH = 16, 24, 13 -- nef : largeur, longueur, hauteur des murs
 	local N = F * CFrame.new(0, 0, 6) -- nef derrière le clocher
 	-- enclos : pelouse, muret bas, portillon
-	Box(m, "YardLawn", F, -15, 15, -0.2, 0.08, -22, 22, LAWN, M.Grass)
+	Box(m, "YardLawn", F, -14.9, 14.9, -0.25, 0.08, -21.9, 21.9, LAWN, M.Grass)
 	for _, sx in ipairs({ -1, 1 }) do
 		Box(m, "YardWall", F, sx * 15 - 0.6, sx * 15 + 0.6, 0, 2.2, -22, 22, STONE_D, M.Cobblestone, true)
 		Box(m, "YardWallCap", F, sx * 15 - 0.75, sx * 15 + 0.75, 2.2, 2.5, -22.1, 22.1, STONE, M.Slate)

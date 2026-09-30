@@ -78,11 +78,11 @@ local function buildWarehouse(m: Model, F: CFrame, seed: number)
 	local W, D, H = 36, 26, 18
 	local B = F * CFrame.new(0, 0, 3)
 	Box(m, "Hall", B, -W / 2, W / 2, 0, H, -D / 2, D / 2, BRICK, M.Brick, true)
-	Box(m, "Plinth", B, -W / 2 - 0.2, W / 2 + 0.2, 0, 1.4, -D / 2 - 0.2, D / 2 + 0.2, CONCRETE, M.Concrete, true)
+	Box(m, "Plinth", B, -W / 2 - 0.2, W / 2 + 0.2, -0.2, 1.4, -D / 2 - 0.2, D / 2 + 0.2, CONCRETE, M.Concrete, true)
 	-- pilastres en brique plus sombre
 	for i = 0, 4 do
 		local x = -W / 2 + i * W / 4
-		Box(m, "Pilaster", B, x - 0.8, x + 0.8, 1.4, H + 0.6, -D / 2 - 0.5, -D / 2, BRICK_D, M.Brick)
+		Box(m, "Pilaster", B, x - 0.8, x + 0.8, 1.4, H + 0.3, -D / 2 - 0.5, -D / 2, BRICK_D, M.Brick)
 	end
 	Box(m, "Coping", B, -W / 2 - 0.4, W / 2 + 0.4, H, H + 0.6, -D / 2 - 0.4, D / 2 + 0.4, CONCRETE, M.Concrete)
 	-- sheds : 4 dents (pente + verrière verticale face au nord)
@@ -261,7 +261,7 @@ local function buildWagon(m: Model, F: CFrame, seed: number)
 			Box(m, "WagonRib", F, x - 0.15, x + 0.15, 4, 4 + H, z - 0.1, z + 0.1, body:Lerp(Color3.new(0, 0, 0), 0.25), M.Metal)
 		end
 	end
-	Box(m, "SlideDoor", F, -3, 3, 4.4, 3.6 + H, -W / 2 + 0.02, -W / 2 + 0.1, body:Lerp(Color3.new(1, 1, 1), 0.1), M.CorrodedMetal)
+	Box(m, "SlideDoor", F, -3, 3, 4.4, 3.6 + H, -W / 2 - 0.04, -W / 2 + 0.06, body:Lerp(Color3.new(1, 1, 1), 0.1), M.CorrodedMetal)
 	-- tag sur la caisse
 	local gui = CityKit.Canvas(box, Enum.NormalId.Front, 160, 8)
 	CityKit.Blob(gui, 0.22, 0.5, 0.26, 0.6, CityKit.Pick(MURAL_COLORS, seed, 4), 0.5, -6)
@@ -297,12 +297,12 @@ local function foodTruck(m: Model, T: CFrame, color: Color3, label: string, seed
 		end
 	end
 	Box(m, "Hatch", T, -3, 5, 4.6, 8.2, -3.24, -3.2, rgb(30, 30, 34), M.SmoothPlastic)
-	Glow(Box(m, "HatchInside", T, -2.8, 4.8, 4.8, 8, -3.2, -3.16, WARM, M.SmoothPlastic))
+	Glow(Box(m, "HatchInside", T, -2.8, 4.8, 4.8, 8, -3.28, -3.24, WARM, M.SmoothPlastic))
 	Box(m, "Counter", T, -3.2, 5.2, 4.3, 4.6, -4.4, -3.2, rgb(200, 200, 206), M.Metal)
 	Box(m, "HatchFlap", T, -3.2, 5.2, 8.2, 8.4, -5.4, -3.2, color:Lerp(Color3.new(0, 0, 0), 0.15), M.SmoothPlastic)
 	local sign = Box(m, "TruckSign", T, -3.5, 5.5, 8.6, 9.8, -3.3, -3.2, WHITE, M.SmoothPlastic)
 	Text(sign, Enum.NormalId.Front, label, color, nil, Enum.Font.FredokaOne, 120)
-	local chef = CityKit.Npc(m, "baker", seed, T * CFrame.new(1, 1.6, -1.6) * CFrame.Angles(0, math.pi, 0), "none", false)
+	local chef = CityKit.Npc(m, "baker", seed, T * CFrame.new(1, 1.65, -1.6) * CFrame.Angles(0, math.pi, 0), "none", false)
 	CityKit.Idle(chef, "scan", hash(seed, 1) * 7)
 end
 

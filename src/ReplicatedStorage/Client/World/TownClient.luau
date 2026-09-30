@@ -119,6 +119,7 @@ local deskWired = false
 local plazaFxWarned = false -- (v9.7) une seule alerte si TownPlazaFx.Step échoue
 local fairFxWarned = false -- (v9.8) une seule alerte si FairFx.Step échoue
 local musicStageWarned = false -- (v9.9) une seule alerte si MusicStage.Step échoue
+local constructionWarned = false -- (v10) une seule alerte si HouseConstruction.Step échoue
 local raceClientWarned = false -- (v10) une seule alerte si RaceClient.Step échoue
 
 ----------------------------------------------------------------------
@@ -315,6 +316,11 @@ local function syncHouses()
 				if not ok then
 					warn("[Town] Maison " .. tostring(userId) .. " : " .. tostring(err))
 				end
+				-- v10 🏗️ nouveau style -> la maison se reconstruit sous nos yeux (CONSTRUCT10)
+				local construction = optionalModule("HouseConstruction")
+				if construction and type(construction.Observe) == "function" then
+					pcall(construction.Observe, userId, house, snapshot)
+				end
 				local garden = gardens[userId]
 				if garden then
 					pcall(garden.Update, garden, snapshot.DopamineGarden)
@@ -347,6 +353,11 @@ local function syncHouses()
 					result.OnSeat = onSeat
 					houses[nextId :: number] = result
 					createGarden(nextId :: number, result, snapshot, nextPlot, count)
+					-- v10 🏗️ joueur qui arrive : sa maison se construit (chantier -> maison) (CONSTRUCT10)
+					local construction = optionalModule("HouseConstruction")
+					if construction and type(construction.Observe) == "function" then
+						pcall(construction.Observe, nextId, result, snapshot)
+					end
 				else
 					warn("[Town] Maison " .. tostring(nextId) .. " : " .. tostring(result))
 					snapshots[nextId :: number] = nil
@@ -448,6 +459,7 @@ local KEEP_GUIS: { [string]: boolean } = {
 	TownInventoryGui = true, -- v9.6 plateau inventaire 3D (FurnitureEdit, PLACE96)
 	TownShopGui = true, -- v9.6 catalogue des magasins (ShopUI, SHOPS96)
 	CarGui = true, -- v9.6 conduite (CarClient, GARAGE96)
+	ConstructionGui = true, -- v10 🏗️ "Ta maison se construit…", ⏭ Passer, "Ta maison est prête !" (HouseConstruction, CONSTRUCT10)
 }
 local function keepGui(name: string): boolean
 	return KEEP_GUIS[name] == true or string.find(name, "Touch", 1, true) ~= nil or string.find(name, "Prompt", 1, true) ~= nil
@@ -915,6 +927,15 @@ local function step(dt: number)
 			warn("[Town] RaceClient.Step : " .. tostring(errRace))
 		end
 	end
+	-- v10 🏗️ chantiers des parcelles libres + maisons qui se construisent (HouseConstruction, CONSTRUCT10)
+	local construction = optionalModule("HouseConstruction")
+	if construction and type(construction.Step) == "function" then
+		local okC, errC = pcall(construction.Step, dt)
+		if not okC and not constructionWarned then
+			constructionWarned = true
+			warn("[Town] HouseConstruction.Step : " .. tostring(errC))
+		end
+	end
 	if clocks.Loc >= LOC_EVERY then
 		clocks.Loc = 0
 		pcall(localizeTown)
@@ -1129,6 +1150,11 @@ local function playIntro(character: Model)
 				startGuide()
 				toast(Locale.T("🚶 Welcome to Dopamine Town!"), Color3.fromRGB(236, 72, 140))
 				toast(Locale.T("Your house: follow the 🧭 compass, or tap 🏠 Go home"))
+				-- v10 🏗️ moment "ta maison se construit" (CONSTRUCT10)
+				local construction = optionalModule("HouseConstruction")
+				if construction and type(construction.ArrivalDone) == "function" then
+					pcall(construction.ArrivalDone)
+				end
 			end
 		end,
 	})
@@ -1354,6 +1380,24 @@ local function enter(options: any)
 		folder.Name = HOUSES_FOLDER
 		folder.Parent = workspace
 		housesFolder = folder
+		-- v10 🏗️ chantiers + maisons qui se construisent (HouseConstruction, CONSTRUCT10)
+		local construction = optionalModule("HouseConstruction")
+		if construction and type(construction.Start) == "function" then
+			local okC, errC = pcall(construction.Start, {
+				Folder = folder,
+				Toast = toast,
+				Hud = hud,
+				GetSnapshots = function()
+					return snapshots
+				end,
+				GetHouses = function()
+					return houses
+				end,
+			})
+			if not okC then
+				warn("[Town] HouseConstruction.Start : " .. tostring(errC))
+			end
+		end
 		-- (les instantanés arrivent par l'événement "Houses" ; secours si besoin)
 		if next(snapshots) == nil then
 			local okList, list = invoke("houses", nil)
@@ -1427,6 +1471,11 @@ local function enter(options: any)
 			playIntro(character)
 		else
 			followCamera(character)
+			-- v10 🏗️ moment "ta maison se construit" (CONSTRUCT10)
+			local construction = optionalModule("HouseConstruction")
+			if construction and type(construction.ArrivalDone) == "function" then
+				pcall(construction.ArrivalDone)
+			end
 			if arrival then
 				startGuide()
 				toast(Locale.T("🚶 Welcome to Dopamine Town!"), Color3.fromRGB(236, 72, 140))
@@ -1473,6 +1522,11 @@ local function teardown()
 		local petRoam = optionalModule("PetRoam")
 		if petRoam and type(petRoam.Stop) == "function" then
 			pcall(petRoam.Stop)
+		end
+		-- v10 🏗️ chantiers / constructions : tout rendu tout de suite, caméra comprise (CONSTRUCT10)
+		local construction = optionalModule("HouseConstruction")
+		if construction and type(construction.Stop) == "function" then
+			pcall(construction.Stop)
 		end
 	end
 	for userId in pairs(gardens) do

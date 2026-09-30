@@ -513,7 +513,7 @@ local function buildCommunityGarden(m: Model, F: CFrame, seed: number)
 	for i = 0, 1 do
 		local C = F * CFrame.new(-11 + i * 2.4, 0, -6.5)
 		box(m, "Compost", C, -1, 1, 0, 1.6, -1, 1, WOOD_D, M.WoodPlanks, true)
-		box(m, "CompostTop", C, -0.92, 0.92, 0, 1.45, -0.92, 0.92, SOIL, M.Ground)
+		box(m, "CompostTop", C, -0.92, 0.92, 0.05, 1.66, -0.92, 0.92, SOIL, M.Ground)
 	end
 	column(m, "RainBarrel", F, 5.6, 8.6, 0, 2.6, 1.8, rgb(40, 90, 150), M.Plastic, true)
 	column(m, "BarrelTap", F, 5.6, 7.6, 0.6, 0.8, 0.2, STEEL, M.Metal)

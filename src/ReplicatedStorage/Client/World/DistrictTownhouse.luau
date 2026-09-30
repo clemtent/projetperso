@@ -145,7 +145,7 @@ local function buildCornerShop(m: Model, F: CFrame, seed: number)
 	local sign = Box(m, "ShopSign", B, -W / 2 + 0.4, W / 2 - 0.4, 8.4, 9.9, zf - 0.6, zf - 0.4, GREEN_SHOP, M.Wood)
 	Text(sign, Enum.NormalId.Front, "🍎 " .. Locale.T("Corner grocery"), rgb(250, 220, 140), nil, Enum.Font.Fantasy, 150)
 	-- store banne déroulé (lambrequin)
-	Wedge(m, "Awning", Vector3.new(W, 1.4, 3.6), B * CFrame.new(0, 8.9, zf - 2.2), rgb(40, 120, 80), M.Fabric)
+	Wedge(m, "Awning", Vector3.new(W, 1.4, 3.6), B * CFrame.new(0, 8.9, zf - 2.25), rgb(40, 120, 80), M.Fabric)
 	for i = 0, 8 do
 		local x = -W / 2 + (i + 0.5) * W / 9
 		Box(m, "AwningStripe", B, x - 0.5, x + 0.5, 8.24, 8.3, zf - 4.02, zf - 3.96, WHITE, M.Fabric)
@@ -165,14 +165,14 @@ local function buildCornerShop(m: Model, F: CFrame, seed: number)
 			end
 		end
 	end
-	Box(m, "StallLegs", B, -W / 2 + 0.6, -W / 2 + 9.6, 0, 1.2, zf - 3.4, zf - 0.6, WOOD, M.Wood)
+	Box(m, "StallLegs", B, -W / 2 + 0.8, -W / 2 + 9.4, -0.1, 1.2, zf - 3.3, zf - 0.7, WOOD, M.Wood)
 	-- présentoir à journaux, glacière
 	local N = B * CFrame.new(8, 0, zf - 1.4)
 	Box(m, "NewsRack", N, -0.8, 0.8, 0, 4.2, -0.5, 0.5, IRON, M.Metal)
 	for k = 0, 2 do
 		Box(m, "Paper", N, -0.7, 0.7, 1.4 + k * 1, 2.2 + k * 1, -0.62, -0.5, CityKit.Pick({ WHITE, rgb(250, 230, 200), rgb(220, 236, 250) }, seed, k), M.SmoothPlastic)
 	end
-	local ice = Box(m, "IceChest", B, W / 2 - 4.4, W / 2 - 0.8, 0, 3, zf - 2.4, zf - 0.6, WHITE, M.SmoothPlastic, true)
+	local ice = Box(m, "IceChest", B, W / 2 - 4.4, W / 2 - 0.8, 0.02, 3, zf - 2.4, zf - 0.6, WHITE, M.SmoothPlastic, true)
 	Text(ice, Enum.NormalId.Front, "🍦 " .. Locale.T("Ice creams"), rgb(40, 120, 200), nil, Enum.Font.GothamBlack, 60)
 	-- l'épicier
 	local grocer = CityKit.Npc(m, "salesperson", seed * 3 + 5, B * CFrame.new(1, 0, zf - 1.6) * CFrame.Angles(0, math.pi, 0), "none", true)
@@ -203,10 +203,10 @@ local function buildCafe(m: Model, F: CFrame, seed: number)
 	Glow(Box(m, "CafeGlass", B, -W / 2 + 0.8, W / 2 - 5, 1.2, 7.2, zf - 0.42, zf - 0.35, WARM, M.Glass))
 	Box(m, "CafeDoor", B, W / 2 - 4.2, W / 2 - 0.8, 0, 7.8, zf - 0.42, zf - 0.35, rgb(90, 20, 30), M.Wood)
 	Glow(Box(m, "CafeDoorGlass", B, W / 2 - 3.8, W / 2 - 1.2, 3.2, 7.3, zf - 0.48, zf - 0.42, WARM, M.Glass))
-	local sign = Box(m, "CafeSign", B, -W / 2 + 0.3, W / 2 - 0.3, 8.6, 10, zf - 0.55, zf - 0.35, rgb(120, 30, 40), M.Wood)
+	local sign = Box(m, "CafeSign", B, -W / 2 + 0.3, W / 2 - 0.3, 8.6, 9.85, zf - 0.55, zf - 0.35, rgb(120, 30, 40), M.Wood)
 	Text(sign, Enum.NormalId.Front, "☕ " .. Locale.T("Café du Coin"), rgb(250, 226, 160), nil, Enum.Font.Fantasy, 150)
 	-- comptoir visible derrière la vitrine
-	Box(m, "Counter", B, -W / 2 + 1, -1, 0, 3.6, zf + 1, zf + 2.2, WOOD, M.Wood)
+	Box(m, "Counter", B, -W / 2 + 1, -1, 0.05, 3.6, zf + 1, zf + 2.2, WOOD, M.Wood)
 	Box(m, "Espresso", B, -4, -2, 3.6, 5, zf + 1.2, zf + 2, rgb(190, 192, 200), M.Metal)
 	-- terrasse : plancher, jardinières, 3 tables, parasols
 	Box(m, "Deck", F, -W / 2, W / 2, 0.02, 0.3, -12, -0.4, rgb(170, 130, 96), M.WoodPlanks, true)
@@ -248,7 +248,7 @@ local function buildCafe(m: Model, F: CFrame, seed: number)
 	if waiter then
 		local tray = Column(m, "Tray", F, 0, 0, 0, 0.1, 1.4, rgb(200, 200, 208), M.Metal)
 		local path = { Vector3.new(W / 2 - 2.5, 0.3, -1.5), Vector3.new(4, 0.3, -9.6), Vector3.new(-3, 0.3, -9.8), Vector3.new(-6.5, 0.3, -3.2) }
-		CityKit.Actor(waiter, F.Position, function(t: number)
+		local function serve(t: number)
 			local total = 16
 			local u = (t % total) / total * #path
 			local i = math.floor(u)
@@ -261,7 +261,9 @@ local function buildCafe(m: Model, F: CFrame, seed: number)
 			waiter:PivotTo(cf)
 			CityKit.Animate(waiter, walk < 1 and "walk" or "talk", t)
 			tray.CFrame = cf * CFrame.new(0.9, 4.1, -0.9) * CityKit.UPRIGHT
-		end, seed)
+		end
+		serve(os.clock() + seed) -- (plateau déjà dans sa main, même de loin)
+		CityKit.Actor(waiter, F.Position, serve, seed)
 	end
 	local _ = sitters
 end
@@ -398,7 +400,7 @@ local function buildTerrace(m: Model, F: CFrame, seed: number)
 		local wall = CityKit.Pick(TERRACE_COLORS, seed, i)
 		local brick = wall.R > wall.B * 1.3
 		Box(m, "HouseBody", H0, -HW / 2, HW / 2, 0, H, -D / 2, D / 2, wall, brick and M.Brick or M.Plaster, true)
-		Box(m, "Basement", H0, -HW / 2 - 0.05, HW / 2 + 0.05, 0, 2.4, -D / 2 - 0.1, D / 2, STONE, M.Concrete, true)
+		Box(m, "Basement", H0, -HW / 2 - 0.05, HW / 2 + 0.05, -0.2, 2.4, -D / 2 - 0.1, D / 2 + 0.1, STONE, M.Concrete, true)
 		-- mansarde (pente avant) + lucarne
 		Wedge(m, "Mansard", Vector3.new(HW, 5, 3), H0 * CFrame.new(0, H + 2.5, -D / 2 + 1.5), rgb(70, 74, 86), M.Slate)
 		Box(m, "RoofFlat", H0, -HW / 2, HW / 2, H, H + 5, -D / 2 + 3, D / 2, rgb(80, 82, 92), M.Slate)

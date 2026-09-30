@@ -149,7 +149,7 @@ local function guardrail(m: Model, F: CFrame, x: number, L: number, side: number
 	local R = L / 2 + (extra or 0)
 	Box(m, "RailWave", F, xr - 0.12, xr + 0.12, top + 1.95, top + 2.35, -R, R, GALVA, M.DiamondPlate, true)
 	Box(m, "RailWave", F, xr - 0.12, xr + 0.12, top + 1.45, top + 1.85, -R, R, GALVA, M.DiamondPlate, true)
-	Box(m, "RailTrough", F, xr - 0.05 + side * 0.05, xr + 0.05 + side * 0.05, top + 1.8, top + 2.0, -R, R, GALVA_D, M.Metal)
+	Box(m, "RailTrough", F, xr + side * 0.05 - 0.04, xr + side * 0.05 + 0.04, top + 1.8, top + 2.0, -R, R, GALVA_D, M.Metal)
 end
 
 -- séparateur en béton "New Jersey" au milieu (x = 0) + écran anti-éblouissement
@@ -177,8 +177,8 @@ local function delineators(m: Model, F: CFrame, x: number, L: number, top: numbe
 	while s < L - 0.3 do
 		local z = L / 2 - s
 		Box(m, "Delineator", F, x - 0.25, x + 0.25, top, top + 3.4, z - 0.15, z + 0.15, WHITE, M.SmoothPlastic)
-		Box(m, "DelineatorBand", F, x - 0.27, x + 0.27, top + 2.4, top + 2.9, z - 0.17, z + 0.17, GRAPHITE, M.SmoothPlastic)
-		Glow(Box(m, "Reflector", F, x - 0.1, x + 0.1, top + 2.5, top + 2.8, z + side * 0.17, z + side * 0.2, rgb(255, 140, 40), M.SmoothPlastic))
+		Box(m, "DelineatorBand", F, x - 0.3, x + 0.3, top + 2.4, top + 2.9, z - 0.2, z + 0.2, GRAPHITE, M.SmoothPlastic)
+		Glow(Box(m, "Reflector", F, x - 0.1, x + 0.1, top + 2.5, top + 2.8, z + side * 0.2, z + side * 0.24, rgb(255, 140, 40), M.SmoothPlastic))
 		s += every
 	end
 end

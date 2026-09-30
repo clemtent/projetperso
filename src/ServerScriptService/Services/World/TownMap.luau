@@ -118,7 +118,7 @@ local function buildPlot(parent: Instance, index: number, count: number): PlotIn
 	local base = part(model, "Lawn", Vector3.new(W, 0.3, D), plotCF * CFrame.new(0, g - 0.1, 0), C.Lawn, M.Grass, "solid")
 	base:SetAttribute("PlotIndex", index)
 	-- bordure en pierre côté rue
-	part(model, "Edging", Vector3.new(W, 0.25, 0.6), plotCF * CFrame.new(0, g + 0.1, -D / 2 + 0.3), C.Stone, M.Granite, "deco")
+	part(model, "Edging", Vector3.new(W, 0.25, 0.6), plotCF * CFrame.new(0, g + 0.1, -D / 2 + 0.36), C.Stone, M.Granite, "deco") -- (v10) 0,06 en retrait : plus de z-fight avec le bord de la pelouse
 	-- (v10, LAYOUT10) clôtures, haie, boîte aux lettres et arbres de la parcelle :
 	-- construits côté CLIENT par HOUSE10 (parcelle habitée, options de la
 	-- maison) et CONSTRUCT10 (chantier des parcelles libres). Le serveur garde

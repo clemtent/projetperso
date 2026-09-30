@@ -97,6 +97,8 @@ local TEMPLATE = {
 	Cars = { Owned = {}, Colors = {}, Selected = "", Garage = false, Tuning = {}, Mods = {}, Unlocked = {}, Plates = {} },
 	-- 🍦 (v9.8, FoodService) boost "nourriture" en cours (EndsAt = os.time() de fin)
 	Food = { Multiplier = 1, EndsAt = 0, Food = "" },
+	-- 🏁 (v10 RACE10) courses de rue : jour, gains du jour, courses, victoires, podiums, meilleurs tours
+	Race = { Day = 0, Rewarded = 0, Races = 0, Wins = 0, Podiums = 0, Best = {} },
 	Stats = {
 		TotalClicks = 0,
 		LifetimeDopamine = 0, -- Dopamine gagnée depuis toujours (classement)

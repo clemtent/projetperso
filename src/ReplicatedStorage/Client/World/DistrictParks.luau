@@ -83,7 +83,7 @@ local function tree(m: Model, F: CFrame, x: number, z: number, h: number, seed: 
 end
 
 local function lawn(m: Model, F: CFrame, w: number, d: number, color: Color3?)
-	Box(m, "Lawn", F, -w / 2, w / 2, -0.2, 0.06, -d / 2, d / 2, color or LAWN, M.Grass)
+	Box(m, "Lawn", F, -w / 2, w / 2, -0.25, 0.06, -d / 2, d / 2, color or LAWN, M.Grass)
 end
 
 ----------------------------------------------------------------------
@@ -180,10 +180,10 @@ local function buildBasketCourt(m: Model, F: CFrame, seed: number)
 		Box(m, "Key", F, sx * (W / 2 - 1.2), sx * (W / 2 - 7.2), 0.24, 0.28, -2.6, 2.6, rgb(70, 110, 150), M.SmoothPlastic)
 		hoop(m, F * CFrame.new(sx * (W / 2 + 0.4), 0.2, 0) * CFrame.Angles(0, sx > 0 and math.pi / 2 or -math.pi / 2, 0))
 	end
-	fence(m, F * CFrame.new(0, 0.2, 0), W + 1, D + 1, 9)
+	fence(m, F * CFrame.new(0, 0.2, 0), W + 3, D + 1, 9)
 	-- 2 joueurs, ballon qui rebondit entre eux
-	local a = CityKit.Npc(m, "jogger", seed * 3 + 1, F * CFrame.new(-4, 0.2, 1) * CFrame.Angles(0, -math.pi / 2, 0), "none", true)
-	local b = CityKit.Npc(m, "kid", seed * 3 + 2, F * CFrame.new(4, 0.2, -1) * CFrame.Angles(0, math.pi / 2, 0), "none", true)
+	local a = CityKit.Npc(m, "jogger", seed * 3 + 1, F * CFrame.new(-4, 0.24, 1) * CFrame.Angles(0, -math.pi / 2, 0), "none", true)
+	local b = CityKit.Npc(m, "kid", seed * 3 + 2, F * CFrame.new(4, 0.24, -1) * CFrame.Angles(0, math.pi / 2, 0), "none", true)
 	local ball = Part(m, "Basketball", Vector3.new(0.9, 0.9, 0.9), F * CFrame.new(0, 1, 0), rgb(230, 110, 40), M.SmoothPlastic, "Ball")
 	CityKit.Actor(m, F.Position, function(t: number)
 		local cycle = (t * 0.5) % 2
@@ -550,7 +550,7 @@ local function buildParkingLot(m: Model, F: CFrame, seed: number)
 		end
 	end
 	for _, sz in ipairs({ -1, 1 }) do
-		Box(m, "Kerb", F, -W / 2, W / 2, 0, 0.7, sz * (D / 2) - 0.4, sz * (D / 2) + 0.4, rgb(200, 198, 192), M.Concrete, true)
+		Box(m, "Kerb", F, -W / 2 + 0.1, W / 2 - 0.1, 0, 0.7, sz * (D / 2) - 0.4, sz * (D / 2) + 0.4, rgb(200, 198, 192), M.Concrete, true)
 	end
 	local colors = { rgb(200, 40, 50), rgb(40, 90, 170), rgb(230, 230, 230), rgb(40, 40, 46), rgb(90, 150, 90), rgb(240, 190, 60) }
 	for i = 0, 7 do
