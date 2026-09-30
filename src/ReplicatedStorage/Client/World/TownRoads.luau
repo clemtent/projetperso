@@ -273,8 +273,10 @@ local function head(m: Model, F: CFrame, x: number, z: number, yaw: number)
 	local dir = (F * CFrame.Angles(0, yaw, 0)).LookVector
 	dir = Vector3.new(dir.X, 0, dir.Z).Unit
 	local side = Vector3.new(-dir.Z, 0, dir.X)
-	tri(m, "ArrowHead", base, dir, side, 1.5, 0.75, PAINT_T, PAINT)
-	tri(m, "ArrowHead", base, dir, -side, 1.5, 0.75, PAINT_T, PAINT)
+	-- (côtés dans cet ordre : l'épaisseur du coin pointe vers le bas, comme
+	-- la rose des vents de la place)
+	tri(m, "ArrowHead", base, side, dir, 0.75, 1.5, PAINT_T, PAINT)
+	tri(m, "ArrowHead", base, -side, dir, 0.75, 1.5, PAINT_T, PAINT)
 end
 local function buildArrow(m: Model, F: CFrame, seed: number)
 	local kind = seed % 10
@@ -305,8 +307,8 @@ local function buildGiveWay(m: Model, F: CFrame, seed: number)
 	for i = 0, n - 1 do
 		local x = (i - (n - 1) / 2) * pitch
 		local base = (F * CFrame.new(x, ARROW_TOP - PAINT_T / 2, -0.45)).Position
-		tri(m, "Tooth", base, dir, side, 0.9, 0.5, PAINT_T, PAINT)
-		tri(m, "Tooth", base, dir, -side, 0.9, 0.5, PAINT_T, PAINT)
+		tri(m, "Tooth", base, side, dir, 0.5, 0.9, PAINT_T, PAINT)
+		tri(m, "Tooth", base, -side, dir, 0.5, 0.9, PAINT_T, PAINT)
 	end
 end
 
@@ -314,7 +316,9 @@ end
 local WORDS = { "STOP", "BUS", "ZONE 30", "SLOW" }
 local function buildRoadWord(m: Model, F: CFrame, seed: number)
 	local word = WORDS[seed] or WORDS[1]
-	local host = newPart(m, "RoadWord", Vector3.new(4.6, 0.05, 2.4), F * CFrame.new(0, ARROW_TOP + 0.005, 0) * CFrame.Angles(0, math.pi, 0), PAINT, M.SmoothPlastic)
+	-- (face Top : le haut du texte est vers +Z du support, donc vers le
+	-- conducteur qui arrive de +Z ... qui le lit à l'endroit en avançant)
+	local host = newPart(m, "RoadWord", Vector3.new(4.6, 0.05, 2.4), F * CFrame.new(0, ARROW_TOP + 0.005, 0), PAINT, M.SmoothPlastic)
 	host.Transparency = 1
 	local label = surfaceText(host, Enum.NormalId.Top, Locale.T(word), PAINT, nil, Enum.Font.GothamBlack, 120)
 	label.TextStrokeTransparency = 1
