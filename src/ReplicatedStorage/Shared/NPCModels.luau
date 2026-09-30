@@ -484,7 +484,7 @@ local function head(ctx: Ctx, look: Look, seed: number)
 			add(ctx, G_HEAD, "Curl", Vector3.new(0.3, 0.3, 0.3), at(math.sin(a) * 0.3, HY + 0.3 + math.cos(a) * 0.1, 0.04 + math.abs(math.sin(a)) * 0.08 - (i % 2) * 0.1), i % 2 == 0 and hair or dark, hairM, "Ball")
 		end
 	elseif hs == "afro" then
-		add(ctx, G_HEAD, "Afro", Vector3.new(0.98, 0.86, 0.96), at(0, HY + 0.24, 0.13), dark, M.Fabric, "Egg")
+		add(ctx, G_HEAD, "Afro", Vector3.new(0.98, 0.86, 0.96), at(0, HY + 0.24, 0.16), dark, M.Fabric, "Egg")
 	end
 end
 

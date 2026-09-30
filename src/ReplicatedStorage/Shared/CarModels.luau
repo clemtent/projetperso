@@ -1156,8 +1156,10 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			cylX(b, "WheelWell", sx * (math.abs(pos.X) - s.TyreW / 2 - 0.13), r, pos.Z, 0.08, ra * 2 + 0.1, LINER)
 			if full then
 				-- toit du passage de roue (vu dans le jour au-dessus du pneu)
-				local wx0, wx1 = sx * math.max(math.abs(pos.X) - s.TyreW / 2 - 0.1, g.topE(pos.Z) + 0.12), sx * (hw - fth - 0.08)
-				box(b, "WheelWell", math.min(wx0, wx1), math.max(wx0, wx1), r + ra + 0.05, r + ra + 0.13, pos.Z - ra * 0.75, pos.Z + ra * 0.75, LINER)
+				local inner, outer = math.max(math.abs(pos.X) - s.TyreW / 2 - 0.1, g.topE(pos.Z) + 0.12), hw - fth - 0.08
+				if outer - inner > 0.1 then
+					box(b, "WheelWell", sx * inner, sx * outer, r + ra + 0.05, r + ra + 0.13, pos.Z - ra * 0.75, pos.Z + ra * 0.75, LINER)
+				end
 			end
 		end
 		-- plancher (sous la voiture, entre les roues)
@@ -1319,8 +1321,9 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			end
 		end
 		if full and (style == "City" or style == "Hatch" or style == "SUV" or style == "Limo") then
-			box(b, "TailLightBar", -s.W * 0.25, s.W * 0.25, tailTop - 0.14, tailTop - 0.08, zB - 0.02, zB + 0.09, TAIL_IN, M.Glass)
-			box(b, "TailBlack", -s.W * 0.25, s.W * 0.25, tailTop - 0.2, tailTop, zB - 0.05, zB + 0.045, HOUSING)
+			local bw = s.W * 0.2 - 0.03
+			box(b, "TailLightBar", -bw, bw, tailTop - 0.14, tailTop - 0.08, zB - 0.02, zB + 0.09, TAIL_IN, M.Glass)
+			box(b, "TailBlack", -bw, bw, tailTop - 0.2, tailTop, zB - 0.05, zB + 0.045, HOUSING)
 		end
 		box(b, "Diffuser", -tfx + 0.25, tfx - 0.25, g.sill + 0.06, g.sill + 0.42, zB - 0.02, zB + 0.1, TRIM, M.Plastic)
 		plate(b, "PlateRear", zB + 0.13, g.sill + 0.78, 1, full, options.Plate)
@@ -1357,11 +1360,18 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 				for _, pz in ipairs(pillars) do
 					local S = sectionAt(st, pz)
 					local a, c = V3(sx * S.bx, S.by, pz), V3(sx * S.e, S.t, pz)
-					strip(b, "PillarB", a, c, V3(sx, 0.3, 0), 0.32, 0.08, HOUSING, nil, 0.05)
+					-- (combi : larges montants blancs, bicolore)
+					local van = style == "Van"
+					strip(b, "PillarB", a, c, V3(sx, 0.3, 0), if van then 0.6 else 0.32, 0.08, if van then roofColor else HOUSING, nil, 0.05)
 				end
 				-- montant C (vitre de custode des SUV / combis)
 				if twoBox and s.Rw - s.R1 > 0.2 then
 					strip(b, "PillarC", V3(sx * Rr.bx, Rr.by, s.R1 + 0.05), V3(sx * Rr.e, Rr.t, s.R1 + 0.05), V3(sx, 0.3, 0), 0.4, 0.08, HOUSING, nil, 0.05)
+				end
+				if style == "Van" then
+					-- montant de custode blanc à l'arrière du combi
+					local Sd = sectionAt(st, s.R1 - 0.45)
+					strip(b, "PillarD", V3(sx * Sd.bx, Sd.by, Sd.z), V3(sx * Sd.e, Sd.t, Sd.z), V3(sx, 0.3, 0), 0.8, 0.08, roofColor, nil, 0.05)
 				end
 				if full then
 					-- gouttière (arête du toit) + jonc de ceinture
@@ -1631,14 +1641,9 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 				end
 			end
 		elseif style == "Van" then
-			-- face en V (couleur carrosserie sur l'avant blanc), galerie + planche de surf
+			-- gros logo rond, galerie + planche de surf
 			if full then
 				local vy = fy + 0.15
-				for _, sx in ipairs({ -1, 1 }) do
-					local a = V3(0, vy - 0.55, zF - 0.02)
-					local c = V3(sx * 1.25, vy + 0.25, zF - 0.02)
-					strip(b, "VanV", a, c, V3(0, 0, -1), 0.22, 0.05, CHROME, M.Metal)
-				end
 				cylZ(b, "Badge", 0, vy - 0.55, zF - 0.05, 0.06, 0.7, CHROME, M.Metal)
 				local Rr = sectionAt(st, s.R0 + 1)
 				for _, z in ipairs({ s.R0 + 1.4, s.R1 - 1.4 }) do
