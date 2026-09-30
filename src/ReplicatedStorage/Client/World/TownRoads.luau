@@ -390,6 +390,7 @@ TownRoads.PLACES = {
 	[14] = { "🌷", "Flower garden" },
 	[15] = { "🏰", "Town gate" },
 	[16] = { "🧺", "Market" },
+	[17] = { "🏓", "Sports corner" },
 }
 
 function TownRoads.SetDestinations(spots: { any })

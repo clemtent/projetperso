@@ -252,7 +252,7 @@ local function buildSkatePark(m: Model, F: CFrame, seed: number)
 		box(m, "PadJoint", P, x - 0.05, x + 0.05, -0.3, 0.02, -D / 2 + 0.2, D / 2 - 0.2, CONCRETE_D, M.Concrete)
 	end
 	for z = -D / 2 + 5, D / 2 - 5, 5 do
-		box(m, "PadJoint", P, -W / 2 + 0.2, W / 2 - 0.2, -0.33, 0.04, z - 0.05, z + 0.05, CONCRETE_D, M.Concrete)
+		box(m, "PadJoint", P, -W / 2 + 0.2, W / 2 - 0.2, -0.33, 0.045, z - 0.05, z + 0.05, CONCRETE_D, M.Concrete)
 	end
 	-- 2 quarter-pipes (courbe circulaire en 7 dalles tangentes, lèvre en acier, plateforme, dos)
 	for _, sx in ipairs({ -1, 1 }) do
@@ -267,6 +267,12 @@ local function buildSkatePark(m: Model, F: CFrame, seed: number)
 			-- dalle : dessus sur la corde, épaisseur 0,5 vers l'intérieur de la courbe
 			local cf = P * CFrame.new(sx * mid.X, mid.Y, 0) * CFrame.Angles(0, 0, sx * slope) * CFrame.new(0, -0.25, 0)
 			newPart(m, "RampSlab", Vector3.new(len + 0.12, 0.5, QP_W), cf, CONCRETE, M.Concrete, nil, true)
+			-- massif en béton sous la dalle (marches cachées sous la courbe)
+			local under = prev.Y - 0.45
+			if under > 0.05 then
+				local x0, x1 = prev.X, pt.X
+				box(m, "RampFill", P, sx > 0 and x0 or -x1, sx > 0 and x1 or -x0, -0.3, under, -QP_W / 2 + 0.05, QP_W / 2 - 0.05, CONCRETE_D, M.Concrete)
+			end
 			prev = pt
 		end
 		local lipX = QP_CX + QP_R * math.sin(QP_MAX)
@@ -275,9 +281,6 @@ local function buildSkatePark(m: Model, F: CFrame, seed: number)
 		box(m, "Deck", P, sx > 0 and lipX or -lipX - 2.4, sx > 0 and lipX + 2.4 or -lipX, lipY - 0.4, lipY, -QP_W / 2, QP_W / 2, CONCRETE_D, M.Concrete, true)
 		rod(m, "Coping", (P * CFrame.new(sx * lipX, lipY - 0.05, -QP_W / 2)).Position, (P * CFrame.new(sx * lipX, lipY - 0.05, QP_W / 2)).Position, 0.3, STEEL, M.Metal)
 		box(m, "RampBack", P, sx > 0 and lipX + 2.4 or -lipX - 2.6, sx > 0 and lipX + 2.6 or -lipX - 2.4, -0.3, lipY, -QP_W / 2, QP_W / 2, rgb(150, 150, 150), M.Concrete, true)
-		for _, z in ipairs({ -QP_W / 2 + 0.3, QP_W / 2 - 0.3 }) do
-			box(m, "RampSide", P, sx > 0 and QP_CX + 1.2 or -lipX - 0.1, sx > 0 and lipX + 0.1 or -QP_CX - 1.2, -0.3, lipY * 0.55, z - 0.15, z + 0.15, rgb(140, 142, 146), M.Concrete, true)
-		end
 		-- garde-corps sur la plateforme
 		for _, z in ipairs({ -QP_W / 2 + 0.2, QP_W / 2 - 0.2 }) do
 			column(m, "RailPost", P, sx * (lipX + 2.3), z, lipY, lipY + 3.2, 0.18, GRAPHITE, M.Metal)
@@ -662,7 +665,7 @@ local function stepSkater(a: Actor, t: number)
 	workspace:BulkMoveTo(d.Board, frames, Enum.BulkMoveMode.FireCFrameChanged)
 	-- le skateur : de profil sur la planche (regarde vers +Z de la planche),
 	-- pieds sur le plateau, un peu fléchi
-	local riderCF = boardCF * CFrame.new(0, 0.37, 0) * CFrame.Angles(0, math.rad(-90), 0)
+	local riderCF = boardCF * CFrame.new(0, 0.37, 0)
 	NPCModels.Place(a.Model, riderCF)
 	NPCModels.Animate(a.Model, "idle", t)
 end

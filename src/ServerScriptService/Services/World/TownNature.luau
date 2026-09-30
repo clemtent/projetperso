@@ -1001,9 +1001,9 @@ function TownNature.Build(folder: Instance, geo: TownKit.Geo): number
 	-- (v9.9, CITY99) NOUVEAUX LIEUX dans les coins les plus vides : skatepark,
 	-- jardins partagés, coin ping-pong / pétanque / fitness (client : TownDistricts)
 	for i, d in ipairs({
-		{ Kind = "SkatePark", R = 17, Dest = 9 },
-		{ Kind = "CommunityGarden", R = 16, Dest = 10 },
-		{ Kind = "SportsCorner", R = 13, Dest = 17 },
+		{ Kind = "SkatePark", R = 19, Dest = 9 },
+		{ Kind = "CommunityGarden", R = 17, Dest = 10 },
+		{ Kind = "SportsCorner", R = 15, Dest = 17 },
 	}) do
 		local p = emptiest(geo, d.R, r0)
 		if p then

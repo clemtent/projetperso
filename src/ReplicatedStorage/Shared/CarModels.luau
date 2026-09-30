@@ -1156,7 +1156,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			cylX(b, "WheelWell", sx * (math.abs(pos.X) - s.TyreW / 2 - 0.13), r, pos.Z, 0.08, ra * 2 + 0.1, LINER)
 			if full then
 				-- toit du passage de roue (vu dans le jour au-dessus du pneu)
-				local wx0, wx1 = sx * math.max(math.abs(pos.X) - s.TyreW / 2 - 0.1, g.topE(pos.Z) + 0.12), sx * (hw - fth - 0.05)
+				local wx0, wx1 = sx * math.max(math.abs(pos.X) - s.TyreW / 2 - 0.1, g.topE(pos.Z) + 0.12), sx * (hw - fth - 0.08)
 				box(b, "WheelWell", math.min(wx0, wx1), math.max(wx0, wx1), r + ra + 0.05, r + ra + 0.13, pos.Z - ra * 0.75, pos.Z + ra * 0.75, LINER)
 			end
 		end
@@ -1215,7 +1215,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 				cylZ(b, "HeadlightRim", x, ly, zF - 0.05, 0.14, d, CHROME, M.Metal)
 				cylZ(b, "Headlight", x, ly, zF - 0.1, 0.1, d - 0.2, LAMP, M.Glass)
 				if full then
-					cylZ(b, "HeadlightDot", x, ly, zF - 0.14, 0.06, d * 0.3, DRL, M.SmoothPlastic)
+					cylZ(b, "HeadlightDot", x, ly, zF - 0.17, 0.06, d * 0.3, DRL, M.SmoothPlastic)
 					cylZ(b, "Indicator", sx * (nfx - 0.2), ly - 0.55, zF - 0.04, 0.1, 0.3, AMBER, M.SmoothPlastic):SetAttribute("Side", sx)
 				end
 			end
@@ -1319,8 +1319,8 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			end
 		end
 		if full and (style == "City" or style == "Hatch" or style == "SUV" or style == "Limo") then
-			box(b, "TailLightBar", -s.W * 0.25, s.W * 0.25, tailTop - 0.14, tailTop - 0.08, zB - 0.02, zB + 0.07, TAIL_IN, M.Glass)
-			box(b, "TailBlack", -s.W * 0.25, s.W * 0.25, tailTop - 0.2, tailTop, zB - 0.05, zB + 0.02, HOUSING)
+			box(b, "TailLightBar", -s.W * 0.25, s.W * 0.25, tailTop - 0.14, tailTop - 0.08, zB - 0.02, zB + 0.09, TAIL_IN, M.Glass)
+			box(b, "TailBlack", -s.W * 0.25, s.W * 0.25, tailTop - 0.2, tailTop, zB - 0.05, zB + 0.045, HOUSING)
 		end
 		box(b, "Diffuser", -tfx + 0.25, tfx - 0.25, g.sill + 0.06, g.sill + 0.42, zB - 0.02, zB + 0.1, TRIM, M.Plastic)
 		plate(b, "PlateRear", zB + 0.13, g.sill + 0.78, 1, full, options.Plate)
@@ -1416,8 +1416,8 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 				-- becquet arrière (queue de canard) + prises d'air latérales
 				wedge(b, "Ducktail", -hw + 0.8, hw - 0.8, s.Deck - 0.12, s.Deck + 0.08, zB - 1.3, zB - 0.4, true, paint)
 				for _, sx in ipairs({ -1, 1 }) do
-					local ix0, ix1 = sx * (hw - 0.08), sx * (hw + 0.02)
-					box(b, "SideIntake", math.min(ix0, ix1), math.max(ix0, ix1), g.sill + 0.6, s.Low - 0.35, g.aR0 - 1.4, g.aR0 - 0.2, HOUSING)
+					local ix0, ix1 = sx * (hw - 0.08), sx * (hw + 0.05)
+					box(b, "SideIntake", math.min(ix0, ix1), math.max(ix0, ix1), g.sill + 0.6, s.Low - 0.35, s.R1, g.aR0 - 0.2, HOUSING)
 				end
 			end
 		end
@@ -1467,7 +1467,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 				seams = { s.Ws + 0.2, bz, rz }
 				handles = { bz - 0.4, rz - 0.4 }
 			else
-				local bz = s.R0 + (s.R1 - s.R0) * (if sports then 0.95 else 0.68)
+				local bz = if sports then s.R1 - 0.35 else s.R0 + (s.R1 - s.R0) * 0.68
 				seams = { s.Ws + (if sports then 0.5 else 0.2), bz }
 				handles = { bz - 0.45 }
 			end

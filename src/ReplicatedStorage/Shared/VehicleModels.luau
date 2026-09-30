@@ -993,7 +993,7 @@ local function truckBase(k: K, t: Truck, cabColor: Color3, full: boolean): (numb
 	end
 	-- ░ arrière : garde-boue noirs, barres anti-encastrement, feux, pare-chocs ░
 	for _, sx in ipairs({ -1, 1 }) do
-		local x0, x1 = sx * (hw - tw - 0.25), sx * (hw + 0.02)
+		local x0, x1 = sx * (hw - tw - 0.25), sx * (hw + 0.06)
 		local n = if full then 4 else 2
 		for i = 0, n - 1 do
 			local a = -PI / 2 + (i + 0.5) * PI / n

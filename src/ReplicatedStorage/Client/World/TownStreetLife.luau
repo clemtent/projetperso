@@ -46,6 +46,7 @@ local Locale = require(ReplicatedStorage.Shared.Locale)
 local NPCModels = require(ReplicatedStorage.Shared.NPCModels)
 local Greenery = require(ReplicatedStorage.Shared.Greenery) -- (v9.9, CITY99) arbres construits côté client
 local TownRoads = require(script.Parent.TownRoads) -- (v9.9, CITY99) routes, trottoirs, allées, poteaux indicateurs
+local TownDistricts = require(script.Parent.TownDistricts) -- (v9.9, CITY99) skatepark, jardins partagés, coin sport
 -- (v9.8, REALISM98) réglage "Graphismes > Détail" : distances de flux x 0,65 / 1 / 1,35
 local okGQ, GraphicsQuality = pcall(require, ReplicatedStorage.Shared.GraphicsQuality)
 local function detailScale(): number
@@ -987,6 +988,12 @@ end
 for kind in pairs(TownRoads.BIG) do
 	BIG[kind] = true
 end
+for kind, builder in pairs(TownDistricts.BUILDERS) do
+	BUILDERS[kind] = builder
+end
+for kind in pairs(TownDistricts.BIG) do
+	BIG[kind] = true
+end
 TownStreetLife.Kinds = BUILDERS
 
 ----------------------------------------------------------------------
@@ -1220,6 +1227,12 @@ function TownStreetLife.Start()
 		local s = state
 		if not s or not s.Loaded then
 			return
+		end
+		-- (v9.9) personnages des nouveaux lieux : à chaque image, près de la caméra
+		local okD, errD = pcall(TownDistricts.Step, dt)
+		if not okD and not s.WarnedD then
+			s.WarnedD = true
+			warn("[TownStreetLife] TownDistricts : " .. tostring(errD))
 		end
 		s.Acc += dt
 		if s.Acc < ANIM_STEP then
