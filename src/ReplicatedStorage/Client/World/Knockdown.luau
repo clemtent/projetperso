@@ -582,6 +582,7 @@ end
 
 -- PNJ devant une voiture rapide : saut de côté, ou bousculade s'il est trop tard
 local npcOverlap: OverlapParams? = nil
+local npcWarned = false
 local function checkNpcs()
 	local camera = workspace.CurrentCamera
 	local center = camera and camera.CFrame.Position
@@ -939,7 +940,12 @@ local function heartbeat(dt: number)
 	checkTraffic()
 	if npcClock >= Knockdown.NPC_INTERVAL then
 		npcClock = 0
-		checkNpcs()
+		-- (réactions des PNJ : jamais bloquantes pour le reste)
+		local okNpc, errNpc = pcall(checkNpcs)
+		if not okNpc and not npcWarned then
+			npcWarned = true
+			warn("[Knockdown] PNJ : " .. tostring(errNpc))
+		end
 	end
 	stepGrace()
 	stepStars(t)

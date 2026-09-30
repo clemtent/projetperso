@@ -202,7 +202,6 @@ function ConstructionSite.BuildFull(self: Site)
 	local wf, f, b = self.Wf, self.Front, self.Back
 	local ft = self.FloorTop
 	local xl, xr, zf, zb = self.XL, self.XR, self.ZF, self.ZB
-	local ground = self.Ground
 	-- === terrain ===
 	box(self, folder, "Dirt", xl, xr, -0.25, 0.1, zf, zb, C.Dirt, M.Ground, { Shadow = false, Solid = true })
 	box(self, folder, "Gravel", -7, 6, -0.02, 0.14, zf, f - 0.6, rgb(150, 142, 132), M.Pebble, { Shadow = false })

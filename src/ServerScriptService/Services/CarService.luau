@@ -36,11 +36,20 @@
 	    voiture sortie.
 
 	Données : data.Cars = { Owned = { [carId] = true }, Colors = { [carId] =
-	colorId }, Selected = carId | "", Garage = bool }.
+	colorId }, Selected = carId | "", Garage = bool,
+	(v10, CARS10) Tuning = { [carId] = { Engine, Tyres, Suspension } (0..3) },
+	Mods = { [carId] = { [Kind] = Id } } (Config.Cars.Mods, sans l'origine),
+	Unlocked = { [carId] = { ["Kind:Id"] = true } } (options achetées),
+	Plates = { [carId] = "TEXTE" } (filtré par TextService) }.
 	RemoteFunction "Car" (action, a, b) -> (succès, message, extra?) :
 	  "buy" carId -> extra = Dopamine manquante (nombre) si trop cher
 	  "setColor" carId, colorId | "select" carId | "buyGarage"
+	  (v10) "setMod" carId, "Kind:Id" | "tune" carId, partId | "plate" carId, texte
+	    (achat vérifié : prix = CarModels.PriceFor, verrous, extra = manque)
 	  "spawn" | "exit" | "despawn" | "honk" | "reset"
+	Attribut (v10) DopamineCarMods = "carId>Kind=Id;Kind=Id/carId2>..." (garages).
+	Courses (v10, RACE10) : CarService:RaceSpawn / RaceRelease / SetFrozen /
+	GetStats (voir en bas).
 	Tout est dans des pcall, chaque action a sa limite de fréquence.
 ]]
 
@@ -48,6 +57,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local PhysicsService = game:GetService("PhysicsService")
+local TextService = game:GetService("TextService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
@@ -217,10 +227,17 @@ local function publish(player: Player)
 		return
 	end
 	local parts = {}
+	local modParts = {}
 	for _, id in ipairs(ownedList(data)) do
 		table.insert(parts, id .. ":" .. colorOf(data, id))
+		-- (v10) options de chaque voiture (garages vus par les autres clients)
+		local encoded = CarModels.EncodeMods(data.Cars.Mods and data.Cars.Mods[id])
+		if encoded ~= "" then
+			table.insert(modParts, id .. ">" .. encoded)
+		end
 	end
 	pcall(function()
+		player:SetAttribute("DopamineCarMods", table.concat(modParts, "/"))
 		player:SetAttribute("DopamineCars", table.concat(parts, ","))
 		player:SetAttribute("DopamineCar", data.Cars and data.Cars.Selected or "")
 		player:SetAttribute("DopamineGarage", hasGarage(data))
@@ -897,10 +914,168 @@ local function select_(player: Player, data: any, carId: any): (boolean, string)
 end
 
 ----------------------------------------------------------------------
+-- 🔧 (v10, CARS10) Atelier : options visuelles, préparation, plaque
+----------------------------------------------------------------------
+
+local function isUnlocked(data: any, carId: string, kind: string, id: string): boolean
+	local list = Config.Cars.Mods[kind]
+	if list and list[1] and list[1].Id == id then
+		return true -- (l'origine est toujours gratuite)
+	end
+	local entry = Config.CarModsById[kind] and Config.CarModsById[kind][id]
+	if entry and (tonumber(entry.Price) or 0) <= 0 then
+		return true
+	end
+	local set = data.Cars.Unlocked[carId]
+	return type(set) == "table" and set[kind .. ":" .. id] == true
+end
+
+-- Paiement (Dopamine) -> (ok, message?, manque?)
+local function pay(player: Player, data: any, cost: number): (boolean, string?, number?)
+	if not isValidNumber(cost) or cost < 0 then
+		return false, T(player, "Invalid request"), nil
+	end
+	if cost <= 0 then
+		return true, nil, nil
+	end
+	if not isValidNumber(data.Dopamine) or data.Dopamine < cost then
+		local missing = math.max(0, cost - (isValidNumber(data.Dopamine) and data.Dopamine or 0))
+		return false, T(player, "Not enough %s", Config.Game.CurrencyName), missing
+	end
+	data.Dopamine -= cost
+	return true, nil, nil
+end
+
+-- Voiture sortie et garée : reconstruite sur place avec ses nouvelles options
+local function refreshOut(player: Player, data: any, carId: string)
+	local car = cars[player]
+	if car and car.CarId == carId and not car.Loaner and not car.Driving and car.Seat.Occupant == nil and car.Root.Parent then
+		local cf = flatten(car.Model:GetPivot())
+		pcall(makeCar, player, data, carId, cf, false, car.Model:GetAttribute("FromGarage") == true)
+	end
+end
+
+-- "setMod" carId, "Kind:Id" : applique une option (achetée une fois par voiture)
+local function setMod(player: Player, data: any, carId: any, pair: any): (boolean, string, number?)
+	if type(carId) ~= "string" or not data.Cars.Owned[carId] or type(pair) ~= "string" or #pair > 40 then
+		return false, T(player, "Invalid request")
+	end
+	local kind, id = string.match(pair, "^(%w+):(%w+)$")
+	local entry = kind and id and Config.CarModsById[kind] and Config.CarModsById[kind][id]
+	if not entry then
+		return false, T(player, "Invalid request")
+	end
+	local need = tonumber(entry.RequiresRebirths) or 0
+	if (tonumber(data.Rebirths) or 0) < need then
+		return false, T(player, "🔒 Unlocked after %d visits to the ocean", need)
+	end
+	local owned = isUnlocked(data, carId, kind :: string, id :: string)
+	if not owned then
+		local cost = CarModels.PriceFor(carId, entry.Price)
+		local ok, message, missing = pay(player, data, cost)
+		if not ok then
+			return false, message or "", missing
+		end
+		data.Cars.Unlocked[carId] = data.Cars.Unlocked[carId] or {}
+		data.Cars.Unlocked[carId][kind .. ":" .. id] = true
+	end
+	local mods = data.Cars.Mods[carId] or {}
+	mods[kind] = id
+	data.Cars.Mods[carId] = CarModels.CleanMods(mods)
+	sendState(player)
+	publish(player)
+	refreshOut(player, data, carId)
+	return true, T(player, "🔧 %s applied", T(player, entry.Name))
+end
+
+-- "tune" carId, "Engine" | "Tyres" | "Suspension" : niveau suivant
+local function tune(player: Player, data: any, carId: any, partId: any): (boolean, string, number?)
+	local part = type(partId) == "string" and Config.CarTuningById[partId] or nil
+	if type(carId) ~= "string" or not data.Cars.Owned[carId] or not part then
+		return false, T(player, "Invalid request")
+	end
+	local tuning = CarModels.TuningOf(data, carId)
+	local level = (tuning :: any)[part.Id] + 1
+	local maxLevel = tonumber(Config.Cars.Tuning.MaxLevel) or 3
+	if level > maxLevel then
+		return false, T(player, "Already at the max level")
+	end
+	local need = type(part.RequiresRebirths) == "table" and tonumber(part.RequiresRebirths[level]) or 0
+	if (tonumber(data.Rebirths) or 0) < need then
+		return false, T(player, "🔒 Unlocked after %d visits to the ocean", need)
+	end
+	local cost = CarModels.PriceFor(carId, type(part.Price) == "table" and part.Price[level] or 0)
+	local ok, message, missing = pay(player, data, cost)
+	if not ok then
+		return false, message or "", missing
+	end
+	;(tuning :: any)[part.Id] = level
+	data.Cars.Tuning[carId] = tuning
+	sendState(player)
+	-- voiture sortie : ses performances changent tout de suite (CarClient lit l'attribut)
+	local car = cars[player]
+	if car and car.CarId == carId and not car.Loaner then
+		local stats = CarModels.Stats(carId, tuning)
+		pcall(function()
+			car.Model:SetAttribute("TopSpeed", stats.TopSpeed)
+			car.Model:SetAttribute("Rating", stats.Rating)
+			car.Model:SetAttribute("Class", stats.Class)
+			car.Model:SetAttribute("Tuning", string.format("%d%d%d", tuning.Engine, tuning.Tyres, tuning.Suspension))
+		end)
+	end
+	return true, T(player, "%s %s level %d!", part.Icon, T(player, part.Name), level)
+end
+
+-- "plate" carId, texte : plaque personnalisée (A-Z, 0-9, espace ; filtrée)
+local function setPlate(player: Player, data: any, carId: any, text: any): (boolean, string, number?)
+	if type(carId) ~= "string" or not data.Cars.Owned[carId] or type(text) ~= "string" then
+		return false, T(player, "Invalid request")
+	end
+	local maxLength = tonumber(Config.Cars.PlateMaxLength) or 8
+	local clean = string.upper(text)
+	clean = string.gsub(clean, "[^A-Z0-9 ]", "")
+	clean = string.gsub(clean, "^%s+", "")
+	clean = string.gsub(clean, "%s+$", "")
+	clean = string.gsub(clean, "%s+", " ")
+	if #clean == 0 then
+		-- plaque d'origine (gratuit)
+		data.Cars.Plates[carId] = nil
+		sendState(player)
+		refreshOut(player, data, carId)
+		return true, T(player, "🔖 Original plate")
+	end
+	if #clean > maxLength then
+		return false, T(player, "%d characters max", maxLength)
+	end
+	local okFilter, filtered = pcall(function()
+		local result = TextService:FilterStringAsync(clean, player.UserId)
+		return result:GetNonChatStringForBroadcastAsync()
+	end)
+	if not okFilter or type(filtered) ~= "string" then
+		return false, T(player, "Network error, try again.")
+	end
+	if filtered ~= clean or string.find(filtered, "#", 1, true) then
+		return false, T(player, "🚫 This plate is not allowed")
+	end
+	if data.Cars.Plates[carId] == clean then
+		return true, ""
+	end
+	local cost = CarModels.PriceFor(carId, Config.Cars.PlatePrice)
+	local ok, message, missing = pay(player, data, cost)
+	if not ok then
+		return false, message or "", missing
+	end
+	data.Cars.Plates[carId] = clean
+	sendState(player)
+	refreshOut(player, data, carId)
+	return true, T(player, "🔖 Plate %s applied", clean)
+end
+
+----------------------------------------------------------------------
 -- Remote
 ----------------------------------------------------------------------
 
-local INTERVALS = { buy = 0.4, buyGarage = 0.4, setColor = 0.25, select = 0.25, exit = 0.3, despawn = 0.5, reset = 2 }
+local INTERVALS = { buy = 0.4, buyGarage = 0.4, setColor = 0.25, select = 0.25, exit = 0.3, despawn = 0.5, reset = 2, setMod = 0.2, tune = 0.4, plate = 2 }
 
 local function onCar(player: Player, action: any, a: any, b: any): (boolean, string, any?)
 	if type(action) ~= "string" or #action > 24 then
@@ -934,6 +1109,12 @@ local function onCar(player: Player, action: any, a: any, b: any): (boolean, str
 		return setColor(player, data, a, b)
 	elseif action == "select" then
 		return select_(player, data, a)
+	elseif action == "setMod" then
+		return setMod(player, data, a, b)
+	elseif action == "tune" then
+		return tune(player, data, a, b)
+	elseif action == "plate" then
+		return setPlate(player, data, a, b)
 	end
 	-- en ville seulement
 	local world = services.WorldService

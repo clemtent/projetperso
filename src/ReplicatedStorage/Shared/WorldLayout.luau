@@ -666,7 +666,8 @@ end
 -- sont des chantiers ("Lots"), le reste de la case est libre ("Free").
 
 WorldLayout.DOWNTOWN_B = 250 -- axe du boulevard carré du centre-ville
-WorldLayout.BELT_R = 860 -- axe de l'avenue de ceinture (carré)
+WorldLayout.BELT_R = 860 -- axe de l'avenue de ceinture (carré) : AU PLUS (voir BeltR(count))
+WorldLayout.BELT_MIN = 640 -- ... au moins (la case de l'entrée : MégaDopa, rendez-vous des courses)
 WorldLayout.GRID_AXES = { -860, -250, 250, 860 } -- axes des avenues (x comme z)
 WorldLayout.GRID_HALF = 16 -- demi-emprise d'une avenue (chaussée ROAD_W / 2 + trottoir WALK_W)
 WorldLayout.STREET_W = 16 -- chaussée d'une rue de quartier (2 voies)
@@ -676,7 +677,8 @@ WorldLayout.PLOT_GAP = 12 -- entre deux parcelles voisines d'une rangée
 WorldLayout.MANSION_GAP = 64 -- entre deux manoirs (murs de pierre, cyprès)
 WorldLayout.MANSION_RISE = 5 -- (studs) la colline des manoirs : plateau surélevé
 WorldLayout.MANSION_RAMP = 26 -- longueur des rampes d'accès au plateau
-WorldLayout.HIGHWAY_R = 1110 -- axe de l'autoroute
+WorldLayout.HIGHWAY_R = 1110 -- axe de l'autoroute AU PLUS (voir HighwayR(count) = BeltR + HIGHWAY_GAP)
+WorldLayout.HIGHWAY_GAP = 250 -- de l'axe de la ceinture à l'axe de l'autoroute
 WorldLayout.HIGHWAY_W = 58 -- emprise des chaussées : 2 x (2 voies de 11 + BAU) + terre-plein central
 WorldLayout.HIGHWAY_MEDIAN = 8 -- terre-plein central (largeur)
 WorldLayout.HIGHWAY_LANES = { 10.5, 21.5 } -- décalage des voies depuis l'axe (à droite du sens de circulation)
@@ -713,20 +715,21 @@ export type DistrictDef = {
 	Weight: number,
 	K: number,
 	Gap: number,
+	Margin: number, -- (studs) du bord de la case côté centre-ville à la 1re parcelle
 	Rise: number,
 	Gated: boolean,
 }
 WorldLayout.DISTRICT_DEFS = {
-	{ Id = "Cottage", Name = "Cottage Village", Emoji = "🏡", Styles = { "Cottage" }, Cell = { -1, 0 }, Axis = "X", Cap = 12, Weight = 3.0, K = 3, Gap = 12, Rise = 0, Gated = false },
-	{ Id = "Townhouse", Name = "Townhouse Streets", Emoji = "🏘️", Styles = { "Townhouse" }, Cell = { 1, 0 }, Axis = "X", Cap = 12, Weight = 2.6, K = 3, Gap = 12, Rise = 0, Gated = false },
-	{ Id = "Loft", Name = "Loft District", Emoji = "🏭", Styles = { "Loft" }, Cell = { 1, 1 }, Axis = "X", Cap = 12, Weight = 2.2, K = 3, Gap = 12, Rise = 0, Gated = false },
-	{ Id = "Mansion", Name = "Mansion Hills", Emoji = "🏰", Styles = { "Mansion" }, Cell = { 0, -1 }, Axis = "Z", Cap = 8, Weight = 1.7, K = 2, Gap = 64, Rise = 5, Gated = true },
-	{ Id = "Mixed", Name = "Mixed Quarter", Emoji = "🏙️", Styles = {}, Cell = { -1, 1 }, Axis = "X", Cap = 12, Weight = 1.5, K = 3, Gap = 12, Rise = 0, Gated = false },
+	{ Id = "Cottage", Name = "Cottage Village", Emoji = "🏡", Styles = { "Cottage" }, Cell = { -1, 0 }, Axis = "X", Cap = 12, Weight = 3.0, K = 3, Gap = 12, Margin = 13, Rise = 0, Gated = false },
+	{ Id = "Townhouse", Name = "Townhouse Streets", Emoji = "🏘️", Styles = { "Townhouse" }, Cell = { 1, 0 }, Axis = "X", Cap = 12, Weight = 2.6, K = 3, Gap = 12, Margin = 13, Rise = 0, Gated = false },
+	{ Id = "Loft", Name = "Loft District", Emoji = "🏭", Styles = { "Loft" }, Cell = { 1, 1 }, Axis = "X", Cap = 12, Weight = 2.2, K = 3, Gap = 12, Margin = 13, Rise = 0, Gated = false },
+	{ Id = "Mansion", Name = "Mansion Hills", Emoji = "🏰", Styles = { "Mansion" }, Cell = { 0, -1 }, Axis = "Z", Cap = 8, Weight = 1.7, K = 2, Gap = 64, Margin = 40, Rise = 5, Gated = true },
+	{ Id = "Mixed", Name = "Mixed Quarter", Emoji = "🏙️", Styles = {}, Cell = { -1, 1 }, Axis = "X", Cap = 12, Weight = 1.5, K = 3, Gap = 12, Margin = 13, Rise = 0, Gated = false },
 } :: { DistrictDef }
 
 -- (bornes d'une case du quadrillage, sans les emprises des avenues)
-local function cellRect(i: number, j: number): (number, number, number, number)
-	local B, R, h = WorldLayout.DOWNTOWN_B, WorldLayout.BELT_R, WorldLayout.GRID_HALF
+local function cellRect(i: number, j: number, beltR: number?): (number, number, number, number)
+	local B, R, h = WorldLayout.DOWNTOWN_B, beltR or WorldLayout.BELT_R, WorldLayout.GRID_HALF
 	local function span(k: number): (number, number)
 		if k < 0 then
 			return -R + h, -B - h
@@ -768,6 +771,47 @@ local function allocation(count: number): { number }
 	end
 	allocCache[count] = alloc
 	return alloc
+end
+
+-- Forme d'un quartier de `n` parcelles : rangées dos à dos (1 ou 2 rues),
+-- colonnes utilisées (les plus proches du centre-ville d'abord)
+local function districtShape(def: DistrictDef, n: number): (number, number)
+	-- (2 rues dès 5 parcelles : la ville reste compacte, les colonnes
+	-- s'ajoutent ensuite)
+	local units = n > 4 and 2 or 1
+	local kUsed = math.max(1, math.min(def.K, math.ceil(math.max(n, 1) / (units * 2))))
+	return units, kUsed
+end
+
+-- (v10) La ville GRANDIT avec le nombre de joueurs : l'avenue de ceinture
+-- (et l'autoroute, HIGHWAY_GAP plus loin) est juste assez loin pour les
+-- colonnes de parcelles utilisées ; BELT_MIN..BELT_R
+local beltCache: { [number]: number } = {}
+function WorldLayout.BeltR(count: number?): number
+	local n = WorldLayout.PlotCount(count)
+	local cached = beltCache[n]
+	if cached then
+		return cached
+	end
+	local alloc = allocation(n)
+	local B, h = WorldLayout.DOWNTOWN_B, WorldLayout.GRID_HALF
+	local need = WorldLayout.BELT_MIN
+	for d, def in ipairs(WorldLayout.DISTRICT_DEFS) do
+		local units, kUsed = districtShape(def, alloc[d])
+		local span = def.Margin + kUsed * WorldLayout.PLOT_W + (kUsed - 1) * def.Gap + def.Margin
+		need = math.max(need, B + h + span + h)
+		local vIdx = def.Axis == "X" and def.Cell[2] or def.Cell[1]
+		if vIdx ~= 0 then
+			need = math.max(need, B + h + units * WorldLayout.UNIT_D + 40 + h)
+		end
+	end
+	local r = math.min(WorldLayout.BELT_R, math.ceil(need / 10) * 10)
+	beltCache[n] = r
+	return r
+end
+
+function WorldLayout.HighwayR(count: number?): number
+	return WorldLayout.BeltR(count) + WorldLayout.HIGHWAY_GAP
 end
 
 -- Rectangle (centre x, z, largeur en x, profondeur en z) : repère ville ;
@@ -812,13 +856,14 @@ local function buildCity(count: number): any
 		return cached
 	end
 	local alloc = allocation(count)
+	local beltR = WorldLayout.BeltR(count)
 	local districts: { District } = {}
 	local plots: { PlotPlace } = {}
 	local W, D = WorldLayout.PLOT_W, WorldLayout.PLOT_D
 	local SH = WorldLayout.STREET_HALF
 	for d, def in ipairs(WorldLayout.DISTRICT_DEFS) do
 		local n = alloc[d]
-		local x0, x1, z0, z1 = cellRect(def.Cell[1], def.Cell[2])
+		local x0, x1, z0, z1 = cellRect(def.Cell[1], def.Cell[2], beltR)
 		-- u = le long des rues, v = en travers
 		local alongX = def.Axis == "X"
 		local u0, u1, v0, v1
@@ -836,11 +881,8 @@ local function buildCity(count: number): any
 		end
 		local K, gap = def.K, def.Gap
 		local pitch = W + gap
-		local rowLen = K * W + (K - 1) * gap
-		local margin = ((u1 - u0) - rowLen) / 2
-		local units = n > 2 * K and 2 or 1
-		local rows = units * 2
-		local kUsed = math.max(1, math.min(K, math.ceil(math.max(n, 1) / rows)))
+		local margin = def.Margin
+		local units, kUsed = districtShape(def, n)
 		local vc = (v0 + v1) / 2
 		local streetsV: { number } = {}
 		if units == 1 then
@@ -1111,7 +1153,7 @@ end
 local function districtCenter(id: string): (number, number)
 	for _, def in ipairs(WorldLayout.DISTRICT_DEFS) do
 		if def.Id == id then
-			local x0, x1, z0, z1 = cellRect(def.Cell[1], def.Cell[2])
+			local x0, x1, z0, z1 = cellRect(def.Cell[1], def.Cell[2], WorldLayout.BELT_R)
 			return (x0 + x1) / 2, (z0 + z1) / 2
 		end
 	end
@@ -1192,8 +1234,8 @@ function WorldLayout.GateDistance(count: number?): number
 end
 
 -- Rayon des murs invisibles (bord du pré) : au-delà des bouts des échangeurs
-function WorldLayout.TownRadius(_count: number?): number
-	return WorldLayout.HIGHWAY_R + WorldLayout.OUTSIDE_END + 120
+function WorldLayout.TownRadius(count: number?): number
+	return WorldLayout.HighwayR(count) + WorldLayout.OUTSIDE_END + 120
 end
 
 -- Parcelle `index` : centre (x, z) en repère ville et angle (radians) de sa
@@ -1276,28 +1318,29 @@ local INTERCHANGES = {
 }
 WorldLayout.INTERCHANGES = INTERCHANGES
 
-local function ixFrame(ix: any): (number, number, number, number, number, number)
-	local H = WorldLayout.HIGHWAY_R
+local function ixFrame(ix: any, H: number): (number, number, number, number, number, number)
 	local nx, nz = ix.NX, ix.NZ
 	local tx, tz = nz, -nx
 	return nx * H, nz * H, nx, nz, tx, tz
 end
 
 -- Point de l'échangeur (t, n) -> repère ville
-local function ixPoint(ix: any, t: number, n: number, y: number?): RoadPoint
-	local cx, cz, nx, nz, tx, tz = ixFrame(ix)
+local function ixPoint(ix: any, H: number, t: number, n: number, y: number?): RoadPoint
+	local cx, cz, nx, nz, tx, tz = ixFrame(ix, H)
 	return { X = cx + tx * t + nx * n, Y = y or WorldLayout.ROAD_Y, Z = cz + tz * t + nz * n }
 end
 
 -- Axe de l'autoroute : anneau carré aux coins arrondis, dans le sens de la
 -- chaussée EXTÉRIEURE (S : +X, E : -Z, N : -X, O : +Z), points tous les ~40
 -- studs dans les virages. `closed` : le dernier point rejoint le premier.
-local highwayCache: { RoadPoint }? = nil
-function WorldLayout.HighwayPath(_count: number?): { RoadPoint }
-	if highwayCache then
-		return highwayCache
+local highwayCache: { [number]: { RoadPoint } } = {}
+function WorldLayout.HighwayPath(count: number?): { RoadPoint }
+	local key = WorldLayout.PlotCount(count)
+	local cachedPath = highwayCache[key]
+	if cachedPath then
+		return cachedPath
 	end
-	local H, Rc = WorldLayout.HIGHWAY_R, WorldLayout.HIGHWAY_CORNER
+	local H, Rc = WorldLayout.HighwayR(key), WorldLayout.HIGHWAY_CORNER
 	local y = WorldLayout.ROAD_Y
 	local pts: { RoadPoint } = {}
 	-- 4 coins (centre du virage), en partant du côté sud vers l'est
@@ -1316,7 +1359,7 @@ function WorldLayout.HighwayPath(_count: number?): { RoadPoint }
 			table.insert(pts, { X = c.cx + math.sin(a) * Rc, Y = y, Z = c.cz + math.cos(a) * Rc })
 		end
 	end
-	highwayCache = pts
+	highwayCache[key] = pts
 	return pts
 end
 
@@ -1427,7 +1470,8 @@ local function buildGraph(count: number): RoadGraph
 		table.insert(lines, l)
 		return l
 	end
-	local B, R = WorldLayout.DOWNTOWN_B, WorldLayout.BELT_R
+	local B, R = WorldLayout.DOWNTOWN_B, WorldLayout.BeltR(count)
+	local H = WorldLayout.HighwayR(count)
 	local avenueOpts = { Width = WorldLayout.ROAD_W, Lanes = 1, Speed = WorldLayout.SPEED.Avenue, Sidewalk = WorldLayout.WALK_W }
 	local beltOpts = { Width = WorldLayout.ROAD_W, Lanes = 1, Speed = WorldLayout.SPEED.Belt, Sidewalk = WorldLayout.WALK_W }
 	local downtownOpts = { Width = WorldLayout.ROAD_W, Lanes = 1, Speed = WorldLayout.SPEED.Downtown, Sidewalk = WorldLayout.WALK_W }
@@ -1593,7 +1637,6 @@ local function buildGraph(count: number): RoadGraph
 	-- départs / arrivées des bretelles
 	local hw = WorldLayout.HighwayPath(count)
 	local T = WorldLayout.RAMP_T
-	local H = WorldLayout.HIGHWAY_R
 	local hwOpts = {
 		Width = WorldLayout.HIGHWAY_W,
 		Lanes = 2,
@@ -1606,7 +1649,7 @@ local function buildGraph(count: number): RoadGraph
 	local cutPoints: { RoadPoint } = {}
 	for _, ix in ipairs(INTERCHANGES) do
 		for _, t in ipairs({ -T, T }) do
-			table.insert(cutPoints, ixPoint(ix, t, 0))
+			table.insert(cutPoints, ixPoint(ix, H, t, 0))
 		end
 	end
 	-- polyligne fermée + points de coupe insérés à leur place
@@ -1664,10 +1707,10 @@ local function buildGraph(count: number): RoadGraph
 	local rampOpts = { Width = WorldLayout.RAMP_W, Lanes = 1, OneWay = true, Speed = WorldLayout.SPEED.Ramp, Ramp = true, Sidewalk = 0, LaneOffsets = { 0 } }
 	for _, ix in ipairs(INTERCHANGES) do
 		local beltN = -(H - R) -- n de la ceinture
-		local pBelt = ixPoint(ix, 0, beltN)
-		local pCity = ixPoint(ix, 0, -J)
-		local pOut = ixPoint(ix, 0, J)
-		local pEnd = ixPoint(ix, 0, outEnd)
+		local pBelt = ixPoint(ix, H, 0, beltN)
+		local pCity = ixPoint(ix, H, 0, -J)
+		local pOut = ixPoint(ix, H, 0, J)
+		local pEnd = ixPoint(ix, H, 0, outEnd)
 		local nBelt = node(pBelt.X, pBelt.Z, y0, "Junction")
 		local nCity = node(pCity.X, pCity.Z, y0, "Junction")
 		local nOut = node(pOut.X, pOut.Z, y0, "Junction")
@@ -1677,7 +1720,7 @@ local function buildGraph(count: number): RoadGraph
 		-- pont : profil en long (points tous les 15 studs)
 		local bridgePts: { RoadPoint } = {}
 		for _, n in ipairs(WorldLayout.BridgeStations()) do
-			table.insert(bridgePts, ixPoint(ix, 0, n, WorldLayout.BridgeProfile(n)))
+			table.insert(bridgePts, ixPoint(ix, H, 0, n, WorldLayout.BridgeProfile(n)))
 		end
 		addEdge(nCity, nOut, "Connector", { Width = WorldLayout.ROAD_W, Lanes = 1, Speed = WorldLayout.SPEED.Avenue, Sidewalk = 3, Bridge = true, Points = bridgePts })
 		addEdge(nOut, nEnd, "Outside", { Width = WorldLayout.ROAD_W, Lanes = 1, Speed = WorldLayout.SPEED.Avenue, Sidewalk = WorldLayout.WALK_W })
@@ -1686,7 +1729,7 @@ local function buildGraph(count: number): RoadGraph
 		local ringIds = {}
 		for q = 0, 3 do
 			local a = q * math.pi / 2
-			local p = ixPoint(ix, math.sin(a) * rr, outEnd + math.cos(a) * rr)
+			local p = ixPoint(ix, H, math.sin(a) * rr, outEnd + math.cos(a) * rr)
 			ringIds[q + 1] = node(p.X, p.Z, y0, "Roundabout")
 		end
 		for q = 1, 4 do
@@ -1694,7 +1737,7 @@ local function buildGraph(count: number): RoadGraph
 			local pts = {}
 			for s = 0, 4 do
 				local a = a0 + s / 4 * math.pi / 2
-				table.insert(pts, ixPoint(ix, math.sin(a) * rr, outEnd + math.cos(a) * rr))
+				table.insert(pts, ixPoint(ix, H, math.sin(a) * rr, outEnd + math.cos(a) * rr))
 			end
 			addEdge(ringIds[q], ringIds[q % 4 + 1], "Roundabout", { Width = 12, Lanes = 1, OneWay = true, Speed = 20, Sidewalk = 0, LaneOffsets = { 0 }, Points = pts })
 		end
@@ -1713,13 +1756,13 @@ local function buildGraph(count: number): RoadGraph
 			end
 		end
 		-- bretelles (chaussée côté ville = sens -t, chaussée extérieure = sens +t)
-		local hwIn = node(ixPoint(ix, T, 0).X, ixPoint(ix, T, 0).Z, y0, "Highway") -- +T
-		local hwOut = node(ixPoint(ix, -T, 0).X, ixPoint(ix, -T, 0).Z, y0, "Highway") -- -T
+		local hwIn = node(ixPoint(ix, H, T, 0).X, ixPoint(ix, H, T, 0).Z, y0, "Highway") -- +T
+		local hwOut = node(ixPoint(ix, H, -T, 0).X, ixPoint(ix, H, -T, 0).Z, y0, "Highway") -- -T
 		local edgeN = WorldLayout.HIGHWAY_W / 2
 		local function rampPts(list: { { number } }): { RoadPoint }
 			local out = {}
 			for _, tn in ipairs(list) do
-				table.insert(out, ixPoint(ix, tn[1], tn[2]))
+				table.insert(out, ixPoint(ix, H, tn[1], tn[2]))
 			end
 			return out
 		end
@@ -1886,7 +1929,8 @@ end
 
 -- Nœuds nommés utiles aux courses (RACE10) : carrefours remarquables
 function WorldLayout.RaceAnchors(count: number): { [string]: string }
-	local B, R = WorldLayout.DOWNTOWN_B, WorldLayout.BELT_R
+	local B, R = WorldLayout.DOWNTOWN_B, WorldLayout.BeltR(count)
+	local H = WorldLayout.HighwayR(count)
 	local out: { [string]: string } = {}
 	local g = WorldLayout.RoadGraph(count)
 	local function id(x: number, z: number): string
@@ -1906,9 +1950,9 @@ function WorldLayout.RaceAnchors(count: number): { [string]: string }
 		end
 	end
 	for _, ix in ipairs(INTERCHANGES) do
-		local pc = ixPoint(ix, 0, -WorldLayout.RAMP_JUNCTION)
-		local po = ixPoint(ix, 0, WorldLayout.RAMP_JUNCTION)
-		local ph = ixPoint(ix, WorldLayout.RAMP_T, 0)
+		local pc = ixPoint(ix, H, 0, -WorldLayout.RAMP_JUNCTION)
+		local po = ixPoint(ix, H, 0, WorldLayout.RAMP_JUNCTION)
+		local ph = ixPoint(ix, H, WorldLayout.RAMP_T, 0)
 		out["Ramp" .. ix.Id .. "City"] = id(pc.X, pc.Z)
 		out["Ramp" .. ix.Id .. "Out"] = id(po.X, po.Z)
 		out["Highway" .. ix.Id] = id(ph.X, ph.Z)
@@ -1938,7 +1982,7 @@ function WorldLayout.Facilities(count: number): { Zone }
 	if cached then
 		return cached
 	end
-	local B, R, H = WorldLayout.DOWNTOWN_B, WorldLayout.BELT_R, WorldLayout.HIGHWAY_R
+	local B, R, H = WorldLayout.DOWNTOWN_B, WorldLayout.BeltR(n), WorldLayout.HighwayR(n)
 	local gate = WorldLayout.GateDistance(n)
 	local front = WorldLayout.PlotFrontRadius(n)
 	local zones: { Zone } = {}
@@ -1960,12 +2004,15 @@ function WorldLayout.Facilities(count: number): { Zone }
 	add("RaceMeet", "Race meeting point", "Facility", -(WorldLayout.GRID_HALF + 4 + WorldLayout.RACE_MEET_W / 2), WorldLayout.RACE_MEET_Z, WorldLayout.RACE_MEET_D, WorldLayout.RACE_MEET_W, -math.pi / 2)
 	-- case sud, au-delà du rendez-vous des courses : gare routière / parc relais (libre pour CITY10)
 	local s0, s1 = gate + 20 + WorldLayout.MARKET_W + 16, R - WorldLayout.GRID_HALF - 4
-	add("SouthPark", "South park", "Nature", 0, (math.max(s0, WorldLayout.RACE_MEET_Z + WorldLayout.RACE_MEET_D / 2 + 8) + s1) / 2 + 0, 2 * (B - WorldLayout.GRID_HALF - 4), s1 - math.max(s0, WorldLayout.RACE_MEET_Z + WorldLayout.RACE_MEET_D / 2 + 8))
+	local sp0 = math.max(s0, WorldLayout.RACE_MEET_Z + WorldLayout.RACE_MEET_D / 2 + 8)
+	if s1 - sp0 >= 30 then
+		add("SouthPark", "South park", "Nature", 0, (sp0 + s1) / 2, 2 * (B - WorldLayout.GRID_HALF - 4), s1 - sp0)
+	end
 	-- cases nord-ouest / nord-est : bois des collines, parc des sports
 	do
-		local x0, x1, z0, z1 = cellRect(-1, -1)
+		local x0, x1, z0, z1 = cellRect(-1, -1, R)
 		add("HillWoods", "Hill woods", "Nature", (x0 + x1) / 2, (z0 + z1) / 2, x1 - x0, z1 - z0)
-		x0, x1, z0, z1 = cellRect(1, -1)
+		x0, x1, z0, z1 = cellRect(1, -1, R)
 		add("SportsPark", "Sports park", "Nature", (x0 + x1) / 2, (z0 + z1) / 2, x1 - x0, z1 - z0)
 	end
 	for _, d in ipairs(WorldLayout.Districts(n)) do
@@ -1973,7 +2020,7 @@ function WorldLayout.Facilities(count: number): { Zone }
 	end
 	-- échangeurs : aire de repos au sud, belvédères ailleurs (au bout de la route extérieure)
 	for _, ix in ipairs(INTERCHANGES) do
-		local p = ixPoint(ix, 0, WorldLayout.OUTSIDE_END)
+		local p = ixPoint(ix, H, 0, WorldLayout.OUTSIDE_END)
 		local yaw = yawOf(-ix.NX, -ix.NZ)
 		add("Interchange_" .. ix.Id, "Interchange", "Highway", ix.NX * H, ix.NZ * H, (ix.NX ~= 0) and 2 * WorldLayout.RAMP_JUNCTION + 40 or 2 * WorldLayout.RAMP_T + 40, (ix.NX ~= 0) and 2 * WorldLayout.RAMP_T + 40 or 2 * WorldLayout.RAMP_JUNCTION + 40)
 		add(ix.Id == "S" and "RestArea" or ("Lookout_" .. ix.Id), ix.Id == "S" and "Rest area" or "Lookout", "Highway", p.X + ix.NX * 40, p.Z + ix.NZ * 40, 70, 50, yaw)

@@ -68,6 +68,7 @@ local Net = require(ReplicatedStorage.Shared.Net)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local CarModels = require(ReplicatedStorage.Shared.CarModels)
 local GarageLayout = require(ReplicatedStorage.Shared.GarageLayout)
+local CarWorkshop = require(script.Parent.CarWorkshop)
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -272,7 +273,16 @@ local picker: any = {
 	LastDrag = -math.huge,
 	OwnedKey = "",
 	Sending = false,
+	Keys = {}, -- (v10) [carId] = options + plaque du modèle d'aperçu (reconstruit si ça change)
+	Tab = "Car", -- (v10) onglet de la fiche : "Car" | "Style" | "Perf"
 }
+local workshop: any = nil -- (v10) atelier (CarWorkshop)
+local function needDopamine(missing: number)
+	pcall(function()
+		local NeedDopamine = require(Client.Components:WaitForChild("NeedDopamine", 2) :: any) :: any
+		NeedDopamine.Offer(missing)
+	end)
+end
 local requestSpawn: () -> () = function() end
 
 local STAT_ROWS = {
@@ -338,12 +348,36 @@ local function setButton(button: TextButton, text: string, color: Color3, visibl
 end
 
 -- ░ aperçu 3D ░
+-- (v10) options + plaque affichées sur l'aperçu (enregistrées + essais de l'atelier)
+local function previewMods(carId: string): any
+	if workshop then
+		return workshop:PreviewMods(carId)
+	end
+	local cars = carsData()
+	return type(cars.Mods) == "table" and cars.Mods[carId] or nil
+end
+local function previewPlate(carId: string): string
+	local text = workshop and workshop:PreviewPlate(carId)
+	if type(text) == "string" and text ~= "" then
+		return text
+	end
+	local cars = carsData()
+	local saved = type(cars.Plates) == "table" and cars.Plates[carId]
+	return if type(saved) == "string" and saved ~= "" then saved else string.format("DC %03d", LocalPlayer.UserId % 1000)
+end
+
 local function previewModel(carId: string): Model?
 	local model = picker.Models[carId]
-	if model then
+	local key = CarModels.EncodeMods(previewMods(carId))
+	if model and picker.Keys[carId] == key then
 		return model
 	end
-	local ok, built = pcall(CarModels.Build, carId, colorIdOf(carId), { Detail = "Full", Plate = "DOPA " .. tostring(LocalPlayer.UserId % 1000) })
+	if model then
+		model:Destroy()
+		picker.Models[carId] = nil
+	end
+	picker.Keys[carId] = key
+	local ok, built = pcall(CarModels.Build, carId, colorIdOf(carId), { Detail = "Full", Plate = previewPlate(carId), Mods = previewMods(carId) })
 	if not ok or typeof(built) ~= "Instance" or not built:IsA("Model") then
 		return nil
 	end
@@ -367,6 +401,13 @@ local function showPreview(carId: string)
 	local model = previewModel(carId)
 	if model then
 		CarModels.Repaint(model, carId, colorIdOf(carId))
+		-- plaque essayée : on change juste le texte (pas de reconstruction)
+		local plate = model:FindFirstChild("PlateRear")
+		local gui = plate and plate:FindFirstChild("PlateText")
+		local text = gui and gui:FindFirstChildOfClass("TextLabel")
+		if text then
+			text.Text = string.upper(string.sub(previewPlate(carId), 1, 8))
+		end
 		model.Parent = view
 	end
 end
@@ -416,7 +457,9 @@ local function thumbModel(thumb: Thumb)
 	if thumb.Model then
 		return
 	end
-	local ok, built = pcall(CarModels.Build, thumb.CarId, colorIdOf(thumb.CarId), { Detail = "Mid" })
+	local cars = carsData()
+	local saved = type(cars.Mods) == "table" and cars.Mods[thumb.CarId] or nil
+	local ok, built = pcall(CarModels.Build, thumb.CarId, colorIdOf(thumb.CarId), { Detail = "Mid", Mods = saved })
 	if ok and typeof(built) == "Instance" and built:IsA("Model") then
 		local model = built :: Model
 		model:PivotTo(CFrame.Angles(0, math.rad(-35), 0))
@@ -726,6 +769,57 @@ local function buildPicker(root: Frame)
 			end)
 		end
 	end)
+	-- ░ (v10, CARS10) onglets de la fiche : 🚗 Voiture / 🎨 Style / 🏁 Perf ░
+	local carTab = frame({ Name = "CarTab", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 22, Parent = info })
+	for _, child in ipairs({ status, stats, drive, choose, garageRow }) do
+		child.Parent = carTab
+	end
+	infoTitle.Visible = false
+	local tabBar = frame({ Name = "TabBar", BackgroundColor3 = Color3.fromRGB(250, 240, 247), Position = UDim2.fromOffset(10, 6), Size = UDim2.new(1, -20, 0, 32), ZIndex = 23, Parent = info })
+	UIUtil.Corner(tabBar, UDim.new(1, 0))
+	UIUtil.Create("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 4), Parent = tabBar })
+	UIUtil.Create("UIPadding", { PaddingLeft = UDim.new(0, 3), PaddingRight = UDim.new(0, 3), PaddingTop = UDim.new(0, 3), PaddingBottom = UDim.new(0, 3), Parent = tabBar })
+	local tabButtons = {}
+	for order, tab in ipairs({ { "Car", "🚗 Car" }, { "Style", "🎨 Style" }, { "Perf", "🏁 Perf" } }) do
+		local button = UIUtil.Create("TextButton", {
+			Name = "Tab_" .. tab[1],
+			AutoButtonColor = false,
+			BackgroundColor3 = WHITE,
+			Font = Theme.Fonts.Title,
+			Text = Locale.T(tab[2]),
+			TextColor3 = INK,
+			TextSize = 15,
+			Size = UDim2.new(1 / 3, -3, 1, 0),
+			LayoutOrder = order,
+			ZIndex = 24,
+			Parent = tabBar,
+		})
+		UIUtil.Corner(button, UDim.new(1, 0))
+		button.Activated:Connect(function()
+			picker.Tab = tab[1]
+			refreshPicker()
+		end)
+		tabButtons[tab[1]] = button
+	end
+	local wsHost = frame({ Name = "WorkshopHost", BackgroundTransparency = 1, Position = UDim2.fromOffset(10, 44), Size = UDim2.new(1, -20, 1, -52), ZIndex = 23, Parent = info })
+	workshop = CarWorkshop.new(wsHost, {
+		Invoke = invoke,
+		Toast = toast,
+		Owns = owns,
+		Data = function()
+			return ClientState.Data
+		end,
+		Changed = function(carId: string)
+			if carId == picker.Viewing and pickerOpen then
+				showPreview(carId)
+			end
+		end,
+		NeedDopamine = needDopamine,
+	})
+	parts.CarTab = carTab
+	parts.TabButtons = tabButtons
+	parts.TabBar = tabBar
+	parts.WorkshopHost = wsHost
 	-- ░ carrousel (toutes les voitures) ░
 	local carousel = UIUtil.Create("ScrollingFrame", {
 		Name = "Carousel",

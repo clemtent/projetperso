@@ -44,6 +44,8 @@
 	           ("Joined", { Route, RaceId }) | ("Left", { Route })
 	           ("State", instantané) (5 fois / s aux joueurs en ville près d'une course)
 	           ("Result", { Route, RaceId, Rows, Mine }) | ("Toast", texte) | ("Reset", { D })
+	           ("Grid", { Route, RaceId, GoAt, Slot }) | ("Finished", { Route, Time })
+	           ("Me", { Rewarded, Daily, Best, Wins, Races, Podiums })
 ]]
 
 local Players = game:GetService("Players")
@@ -191,7 +193,18 @@ local function toast(player: Player, text: string)
 	fire(player, "Toast", text)
 end
 
-local function raceData(player: Player): any?
+local raceData: (player: Player) -> any
+
+-- Ses chiffres (menu : courses payées aujourd'hui, records, victoires)
+local function pushMe(player: Player)
+	local rd = raceData(player)
+	if rd then
+		local daily = (Config.Race and Config.Race.Rewards and Config.Race.Rewards.DailyRewarded) or 8
+		fire(player, "Me", { Rewarded = rd.Rewarded, Daily = daily, Best = rd.Best, Wins = rd.Wins, Races = rd.Races, Podiums = rd.Podiums })
+	end
+end
+
+raceData = function(player: Player): any?
 	local data = dataOf(player)
 	if type(data) ~= "table" then
 		return nil
@@ -934,6 +947,7 @@ local function finish(race: Race)
 		local m = mine[player] or { Place = racer.Place, Reward = 0 }
 		if player.Parent then
 			fire(player, "Result", { Route = race.RouteId, RaceId = race.Id, Rows = rows, Mine = m, Humans = humans })
+			pushMe(player)
 			if m.Reward and m.Reward > 0 then
 				toast(player, T(player, "🏁 +%s Dopamine!", NumberFormatter.Format(m.Reward)))
 			elseif m.Capped then
@@ -1129,6 +1143,7 @@ local function onEvent(player: Player, kind: any, arg: any)
 	elseif kind == "sync" then
 		pushLobbies(player)
 		pushBoard(player)
+		pushMe(player)
 		local race = playerRace[player]
 		if race then
 			fire(player, "Joined", { Route = race.RouteId, RaceId = race.Id, EndsAt = race.LobbyEnds })

@@ -53,6 +53,7 @@ local TownNature = require(script.Parent.TownNature)
 local TownShops = require(script.Parent.TownShops)
 local TownMarket = require(script.Parent.TownMarket) -- (v9.7) 🛒 supermarché
 local TownFair = require(script.Parent.TownFair) -- (v9.8, FAIR98) 🎡 fête foraine + 🍦 coin gourmand
+local TownNetwork = require(script.Parent.TownNetwork) -- (v10, LAYOUT10) routes de la grande ville, autoroute, ponts
 
 local TownMap = {}
 
@@ -106,6 +107,10 @@ local function buildPlot(parent: Instance, index: number, count: number): PlotIn
 	model.Name = "Plot_" .. index
 	model:SetAttribute("Index", index)
 	model:SetAttribute("OwnerId", 0)
+	-- (v10, LAYOUT10) quartier de la parcelle (WorldLayout.PlotDistrict)
+	local district = WorldLayout.PlotDistrict(index, count)
+	model:SetAttribute("District", district and district.Id or "Mixed")
+	model:SetAttribute("DistrictStyle", district and district.Style or "Mixed")
 	model.Parent = parent
 	local W, D = WorldLayout.PLOT_W, WorldLayout.PLOT_D
 	local g = WorldLayout.GROUND_Y
@@ -298,6 +303,12 @@ function TownMap.Build(plotCount: number): Town
 		warn("[TownMap] coin gourmand : " .. tostring(errCorner))
 	end
 	TownStreets.Build(decor, geo)
+	-- (v10, LAYOUT10) la grande ville : avenues, ceinture, rues des quartiers,
+	-- autoroute, bretelles, ponts, plateau de la colline des manoirs
+	local okNet, errNet = pcall(TownNetwork.Build, decor, geo)
+	if not okNet then
+		warn("[TownMap] réseau routier : " .. tostring(errNet))
+	end
 	TownNature.Build(decor, geo)
 	-- (v9.7) aucun arbre du bois planté sur le parking / dans le magasin
 	pcall(TownMarket.ClearSite, decor, plotCount)
@@ -315,6 +326,8 @@ function TownMap.Build(plotCount: number): Town
 	folder:SetAttribute("PlazaCF", WorldLayout.PlazaCFrame())
 	folder:SetAttribute("GateCF", WorldLayout.GateCFrame(plotCount))
 	folder:SetAttribute("TownRadius", WorldLayout.TownRadius(plotCount))
+	folder:SetAttribute("CityVersion", 10) -- (v10, LAYOUT10) grande ville : quartiers, autoroute
+	folder:SetAttribute("HighwayR", WorldLayout.HIGHWAY_R)
 	folder:SetAttribute("Parts", TownKit.Stats.Parts)
 	folder:SetAttribute("Lights", TownKit.Stats.Lights)
 	folder:SetAttribute("Shops", #shops:GetChildren())

@@ -1337,19 +1337,19 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 	local seatCol = interior and interior.Color or SEAT
 	local seatCol2 = seatCol:Lerp(Color3.new(1, 1, 1), 0.12)
 	-- jantes par modèle
-	local look: WheelLook = { Rim = CHROME, Dish = GRAPHITE, Cap = CHROME, Caliper = CAL_DARK, Spokes = 5 }
+	local look: WheelLook = { Rim = CHROME, Dish = GRAPHITE, Cap = CHROME, Caliper = CAL_DARK, Spokes = 5, Design = "Stock", Tyre = "Road" }
 	if style == "Bubble" then
-		look = { Rim = WHITE, Dish = Color3.fromRGB(200, 202, 210), Cap = CHROME, Caliper = CAL_DARK, Spokes = 8 }
+		look = { Rim = WHITE, Dish = Color3.fromRGB(200, 202, 210), Cap = CHROME, Caliper = CAL_DARK, Spokes = 8, Design = "Stock", Tyre = "Road" }
 	elseif sports then
-		look = { Rim = GRAPHITE, Dish = HOUSING, Cap = CHROME, Caliper = CAL_RED, Spokes = 10 }
+		look = { Rim = GRAPHITE, Dish = HOUSING, Cap = CHROME, Caliper = CAL_RED, Spokes = 10, Design = "Stock", Tyre = "Road" }
 	elseif style == "Limo" then
-		look = { Rim = CHROME, Dish = GRAPHITE, Cap = GRAPHITE, Caliper = CAL_DARK, Spokes = 10 }
+		look = { Rim = CHROME, Dish = GRAPHITE, Cap = GRAPHITE, Caliper = CAL_DARK, Spokes = 10, Design = "Stock", Tyre = "Road" }
 	elseif offroad then
-		look = { Rim = Color3.fromRGB(190, 194, 202), Dish = GRAPHITE, Cap = GRAPHITE, Caliper = CAL_DARK, Spokes = 6 }
+		look = { Rim = Color3.fromRGB(190, 194, 202), Dish = GRAPHITE, Cap = GRAPHITE, Caliper = CAL_DARK, Spokes = 6, Design = "Stock", Tyre = "Road" }
 	elseif style == "Van" then
-		look = { Rim = WHITE, Dish = Color3.fromRGB(190, 192, 200), Cap = CHROME, Caliper = CAL_DARK, Spokes = 5 }
+		look = { Rim = WHITE, Dish = Color3.fromRGB(190, 192, 200), Cap = CHROME, Caliper = CAL_DARK, Spokes = 5, Design = "Stock", Tyre = "Road" }
 	elseif style == "Hatch" then
-		look = { Rim = CHROME, Dish = HOUSING, Cap = GRAPHITE, Caliper = CAL_RED, Spokes = 5 }
+		look = { Rim = CHROME, Dish = HOUSING, Cap = GRAPHITE, Caliper = CAL_RED, Spokes = 5, Design = "Stock", Tyre = "Road" }
 	end
 	-- (v10) jantes, couleur des jantes, pneus de l'atelier
 	look.Design = mod("Rims")
@@ -2230,12 +2230,9 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 				if spoiler == "Lip" then
 					wedge(b, "Spoiler", -e + 0.12, e - 0.12, yTop - 0.02, yTop + 0.12, s.R1 - 0.1, s.R1 + 0.5, false, paint)
 				elseif spoiler == "Duck" then
-					box(b, "Spoiler", -e + 0.08, e - 0.08, yTop - 0.02, yTop + 0.1, s.R1 - 0.2, s.R1 + 0.75, paint)
-					wedge(b, "Spoiler", -e + 0.08, e - 0.08, yTop - 0.3, yTop - 0.02, s.R1 + 0.25, s.R1 + 0.75, true, paint)
-					for _, sx in ipairs({ -1, 1 }) do
-						local f0, f1 = sx * (e - 0.08), sx * (e + 0.02)
-						box(b, "SpoilerFin", math.min(f0, f1), math.max(f0, f1), yTop - 0.3, yTop + 0.16, s.R1 - 0.1, s.R1 + 0.75, paint)
-					end
+					-- grand becquet de pavillon (dessus plat + dessous en biseau)
+					box(b, "Spoiler", -e + 0.08, e - 0.08, yTop - 0.02, yTop + 0.08, s.R1 - 0.15, s.R1 + 0.6, paint)
+					wedge(b, "Spoiler", -e + 0.08, e - 0.08, yTop - 0.22, yTop - 0.02, s.R1 + 0.2, s.R1 + 0.6, true, paint)
 				else
 					local gt = spoiler == "GT"
 					local lift = if gt then 0.5 else 0.28
@@ -2289,7 +2286,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			local gy0, gy1 = math.max(0.12, s.Clear - 0.12), math.max(0.18, s.Clear - 0.05)
 			local parts = {}
 			for _, sx in ipairs({ -1, 1 }) do
-				local x0, x1 = sx * (hw - 0.4), sx * (hw - 0.26)
+				local x0, x1 = sx * (hw - 0.3), sx * (hw - 0.16)
 				table.insert(parts, box(b, "Underglow", math.min(x0, x1), math.max(x0, x1), gy0, gy1, g.aF1 + 0.1, g.aR0 - 0.1, glow.Color, M.Neon))
 			end
 			if full then

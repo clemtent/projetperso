@@ -440,9 +440,9 @@ local function chain(g: Graph, via: { string }, closed: boolean, baseCost: CostF
 				-- décalage à droite du sens de marche (droite = (-tz, tx))
 				local shifted = {}
 				for i, p in ipairs(seq) do
-					local a = seq[math.max(1, i - 1)]
-					local b = seq[math.min(#seq, i + 1)]
-					local dx, dz = b[1] - a[1], b[2] - a[2]
+					local pa = seq[math.max(1, i - 1)]
+					local pb = seq[math.min(#seq, i + 1)]
+					local dx, dz = pb[1] - pa[1], pb[2] - pa[2]
 					local len = math.sqrt(dx * dx + dz * dz)
 					if len > 1e-6 then
 						dx, dz = dx / len, dz / len

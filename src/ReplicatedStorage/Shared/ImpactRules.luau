@@ -760,19 +760,26 @@ function ImpactRules.BrakeLookahead(speed: number): number
 end
 
 -- `free` = distance libre (pare-chocs -> piéton, studs). Renvoie (vitesse
--- visée, décélération maximale permise, urgence). Loin : on ralentit en
--- douceur jusqu'à s'arrêter STOP_MARGIN avant ; trop près pour le freinage
--- normal : freinage d'URGENCE (qui ne suffit pas si on saute devant la
--- voiture au dernier moment : c'est voulu, on se fait renverser).
-function ImpactRules.BrakeTarget(free: number, speed: number, cruise: number): (number, number, boolean)
-	local room = math.max(0, free - ImpactRules.STOP_MARGIN)
-	local comfort = math.sqrt(2 * ImpactRules.BRAKE_COMFORT * room)
-	local target = math.min(cruise, comfort)
+-- visée, accélération voulue | nil, urgence). La décélération demandée est
+-- celle qui arrête la voiture STOP_MARGIN avant le piéton (v² / 2d) : en
+-- douceur quand on le voit de loin ; freinage d'URGENCE (borné à
+-- BRAKE_EMERGENCY) quand il surgit tout près, ce qui ne suffit pas s'il saute
+-- devant la voiture au dernier moment (voulu : on se fait renverser).
+-- accélération nil = rien à faire pour lui (la conduite normale décide).
+function ImpactRules.BrakeTarget(free: number, speed: number, cruise: number): (number, number?, boolean)
+	local room = free - ImpactRules.STOP_MARGIN
+	local v = math.max(0, speed)
 	if room <= 0.05 then
-		target = 0
+		return 0, -ImpactRules.BRAKE_EMERGENCY, v > 0.5
 	end
-	local urgent = speed > comfort * 1.08 + 0.5
-	return target, if urgent then ImpactRules.BRAKE_EMERGENCY else ImpactRules.BRAKE_COMFORT, urgent
+	local need = v * v / (2 * room)
+	local target = math.min(cruise, math.sqrt(2 * ImpactRules.BRAKE_COMFORT * room))
+	if need < ImpactRules.BRAKE_COMFORT * 0.3 then
+		-- (encore loin : on ne fait que plafonner la vitesse)
+		return target, nil, false
+	end
+	local urgent = need > ImpactRules.BRAKE_COMFORT
+	return target, -math.min(need * 1.1, ImpactRules.BRAKE_EMERGENCY), urgent
 end
 
 ----------------------------------------------------------------------

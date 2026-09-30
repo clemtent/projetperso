@@ -325,9 +325,11 @@ end
 local function buildCar(entry: any, detail: string, color: any?): Model?
 	local ok, model = pcall(CarModels.Build, entry.Id, color, { Detail = detail, Plate = "DOPAMINE" })
 	if ok and typeof(model) == "Instance" and model:IsA("Model") then
+		-- (v10, PHYS10) la boîte "Root" reste SOLIDE : on ne traverse plus
+		-- les voitures exposées ; tout le reste est du décor
 		for _, d in ipairs(model:GetDescendants()) do
 			if d:IsA("BasePart") then
-				d.CanCollide = false
+				d.CanCollide = d == model.PrimaryPart
 				d.CanQuery = false
 				d.CanTouch = false
 			end

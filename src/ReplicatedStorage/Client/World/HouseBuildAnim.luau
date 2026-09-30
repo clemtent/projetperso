@@ -263,6 +263,8 @@ function HouseBuildAnim.new(house: any, opts: any?): Anim
 		OnDone = o.OnDone,
 		Seed = tonumber(o.Seed) or 1,
 		Tracks = {} :: { Track },
+		LateQueue = {} :: { Track },
+		Label = o.Label,
 		ByPart = {} :: { [BasePart]: Track },
 		Loose = {} :: { { Instance: Instance, Prop: string, Value: any, Set: any } },
 		Prepared = false,
@@ -347,16 +349,12 @@ function HouseBuildAnim.Track(self: Anim, part: BasePart, late: boolean)
 		end
 	end
 	self.ByPart[part] = t
-	table.insert(self.Tracks, t)
 	if self.Playing then
+		-- (pendant la frise : file à part, jamais de tri de toute la liste)
 		self:Schedule(t, true)
-		table.sort(self.Tracks, function(a, b)
-			return a.Start < b.Start
-		end)
-		self.Next = 1
-		while self.Next <= #self.Tracks and self.Tracks[self.Next].State ~= "Wait" do
-			self.Next += 1
-		end
+		table.insert(self.LateQueue, t)
+	else
+		table.insert(self.Tracks, t)
 	end
 end
 
@@ -578,6 +576,28 @@ function HouseBuildAnim.BuildFx(self: Anim)
 	self.SparkAnchor, self.Spark = sparkAnchor, spark
 	local _, confetti = emitter(fx, "Confetti", Vector3.new(width * 0.7, 1, g.Depth * 0.7), cf * CFrame.new((g.Left + g.Right) / 2, g.Height + 4, -g.Depth / 2), "Confetti")
 	self.Confetti = confetti
+	-- (les autres joueurs) "🏗️ La maison de X se construit !"
+	if type(self.Label) == "string" and confetti.Parent then
+		local bb = Instance.new("BillboardGui")
+		bb.Name = "BuildLabel"
+		bb.Size = UDim2.fromScale(26, 4)
+		bb.StudsOffset = Vector3.new(0, 6, 0)
+		bb.MaxDistance = 320
+		bb.LightInfluence = 0
+		local label = Instance.new("TextLabel")
+		label.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+		label.BackgroundTransparency = 0.15
+		label.Size = UDim2.fromScale(1, 1)
+		label.TextScaled = true
+		label.Font = Enum.Font.FredokaOne
+		label.TextColor3 = Color3.fromRGB(236, 72, 140)
+		label.Text = self.Label
+		label.Parent = bb
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0.4, 0)
+		corner.Parent = label
+		bb.Parent = confetti.Parent
+	end
 	-- échafaudage : façade + 2 côtés, un plancher par étage
 	local lifts = math.max(1, g.Floors)
 	local liftH = WorldLayout.STORY
@@ -840,6 +860,37 @@ local function landed(self: Anim, t: Track)
 	t.State = if t.State == "Drop" then "Drop" else "Done"
 end
 
+-- Une pièce décolle
+function HouseBuildAnim.Activate(self: Anim, t: Track)
+	if t.State ~= "Wait" then
+		return
+	end
+	if not t.Part.Parent then
+		t.State = "Done"
+		restoreEffects(t.Effects)
+	elseif (t.Part.CFrame.Position - t.Final.Position).Magnitude > 1e-3 then
+		-- déplacée par quelqu'un d'autre (porte…) : simple fondu, sans la bouger
+		t.Final = t.Part.CFrame
+		t.Motion = "Fade"
+		t.Grow = false
+		t.State = "Fly"
+		table.insert(self.Active, t)
+	else
+		t.State = "Fly"
+		table.insert(self.Active, t)
+		-- étincelles (une par paquet de fenêtres)
+		if t.Phase == "Openings" and self.Spark and self.SparkAnchor then
+			local p = t.Final.Position
+			local key = math.floor(p.X / 7) .. ":" .. math.floor(p.Y / 7) .. ":" .. math.floor(p.Z / 7)
+			if not self.Bursts[key] then
+				self.Bursts[key] = true
+				self.SparkAnchor.CFrame = t.Final
+				burst(self.Spark, 8)
+			end
+		end
+	end
+end
+
 function HouseBuildAnim.Step(self: Anim, dt: number)
 	if self.Done or not self.Playing then
 		return
@@ -857,30 +908,18 @@ function HouseBuildAnim.Step(self: Anim, dt: number)
 	while self.Next <= #tracks and tracks[self.Next].Start <= now do
 		local t = tracks[self.Next]
 		self.Next += 1
-		if t.State == "Wait" then
-			if not t.Part.Parent then
-				t.State = "Done"
-			elseif (t.Part.CFrame.Position - t.Final.Position).Magnitude > 1e-3 then
-				-- déplacée par quelqu'un d'autre (porte…) : simple fondu, sans la bouger
-				t.Final = t.Part.CFrame
-				t.Motion = "Fade"
-				t.Grow = false
-				t.State = "Fly"
-				table.insert(self.Active, t)
+		self:Activate(t)
+	end
+	if #self.LateQueue > 0 then
+		local waiting = {}
+		for _, t in ipairs(self.LateQueue) do
+			if t.Start <= now then
+				self:Activate(t)
 			else
-				t.State = "Fly"
-				table.insert(self.Active, t)
-				-- étincelles (une par paquet de fenêtres) / poussière
-				if t.Phase == "Openings" and self.Spark and self.SparkAnchor then
-					local key = math.floor(t.Final.Position.X / 7) .. ":" .. math.floor(t.Final.Position.Y / 7) .. ":" .. math.floor(t.Final.Position.Z / 7)
-					if not self.Bursts[key] then
-						self.Bursts[key] = true
-						self.SparkAnchor.CFrame = t.Final
-						burst(self.Spark, 8)
-					end
-				end
+				table.insert(waiting, t)
 			end
 		end
+		self.LateQueue = waiting
 	end
 	-- vols en cours
 	local moving, frames = {}, {}
@@ -941,6 +980,10 @@ function HouseBuildAnim.Finish(self: Anim, skipped: boolean?)
 		self.Conn:Disconnect()
 		self.Conn = nil
 	end
+	for _, t in ipairs(self.LateQueue) do
+		table.insert(self.Tracks, t)
+	end
+	self.LateQueue = {}
 	for _, t in ipairs(self.Tracks) do
 		if t.State ~= "Done" and t.State ~= "Drop" then
 			if t.State == "Wait" and t.Part.Parent and (t.Part.CFrame.Position - t.Final.Position).Magnitude > 1e-3 then
