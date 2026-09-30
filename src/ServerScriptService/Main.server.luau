@@ -44,6 +44,7 @@ local ORDER = {
 	"CarService", -- 🚗 voitures + garage du manoir (v9.6 ; après WorldService : conduite en ville seulement)
 	"ImpactService", -- 💥 v10 collisions réalistes, se faire renverser (après CarService / WorldService)
 	"FoodService", -- 🍦 nourriture de la ville + boost (v9.8 ; après CarService, avant QuestService)
+	"RaceService", -- 🏁 courses de rue (v10 ; après CarService : RaceSpawn / SetFrozen / RaceRelease)
 	"QuestService",
 	"AchievementService",
 	"DailyRewardService",

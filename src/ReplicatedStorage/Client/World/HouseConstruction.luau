@@ -363,10 +363,10 @@ local function makeGui(): any
 	local bottom = frame("BarBottom", { BackgroundColor3 = Color3.new(0, 0, 0), Size = UDim2.new(1, 0, 0.085, 0), Position = UDim2.new(0, 0, 1.02, 0), ZIndex = 10 })
 	-- légende + barre de progression (au-dessus de la bande du bas)
 	local caption = frame("Caption", { BackgroundColor3 = Color3.fromRGB(255, 255, 255), BackgroundTransparency = 0.12, AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 0.9, -6), Size = UDim2.new(0.62, 0, 0, 74), ZIndex = 20, Visible = false })
+		Position = UDim2.new(0.5, 0, 0.9, -6), Size = UDim2.new(0.62, 0, 0.16, 0), ZIndex = 20, Visible = false })
 	local limit = Instance.new("UISizeConstraint")
-	limit.MaxSize = Vector2.new(560, 96)
-	limit.MinSize = Vector2.new(240, 60)
+	limit.MaxSize = Vector2.new(560, 90)
+	limit.MinSize = Vector2.new(220, 50)
 	limit.Parent = caption
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0, 16)
@@ -426,10 +426,10 @@ local function makeGui(): any
 	skip.Parent = screen
 	-- carte "Ta maison est prête !"
 	local card = frame("Ready", { BackgroundColor3 = Color3.fromRGB(255, 255, 255), BackgroundTransparency = 0.05, AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.42), Size = UDim2.new(0.7, 0, 0, 150), ZIndex = 40, Visible = false })
+		Position = UDim2.fromScale(0.5, 0.42), Size = UDim2.new(0.7, 0, 0.3, 0), ZIndex = 40, Visible = false })
 	local cardLimit = Instance.new("UISizeConstraint")
 	cardLimit.MaxSize = Vector2.new(620, 170)
-	cardLimit.MinSize = Vector2.new(260, 110)
+	cardLimit.MinSize = Vector2.new(240, 90)
 	cardLimit.Parent = card
 	local cardCorner = Instance.new("UICorner")
 	cardCorner.CornerRadius = UDim.new(0, 24)
