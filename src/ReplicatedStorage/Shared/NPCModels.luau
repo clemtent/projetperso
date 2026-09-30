@@ -1497,12 +1497,26 @@ function NPCModels.Animate(model: Model, anim: string, t: number, look: Vector3?
 	if not rig then
 		return
 	end
+	-- (v10, PHYS10) réaction à une voiture : saut de côté / bousculade (décalage du corps entier)
+	local react: CFrame? = nil
+	local reactSolid = true
+	if model:GetAttribute("NpcReactT") ~= nil then
+		local okR, IR = pcall(require, script.Parent:FindFirstChild("ImpactRules") :: any)
+		if okR and type(IR) == "table" then
+			local okN, off, solidR, animR = pcall(IR.NpcReact, model, rig.Root.CFrame, os.clock())
+			if okN and off then
+				react = off
+				reactSolid = solidR ~= false
+				anim = animR or anim
+			end
+		end
+	end
 	local s = rig.S
 	local seated = model:GetAttribute("NpcSeated") == true
 	local sitting = anim == "sit" or seated
 	local seatTop = sitting and seatTopOf(model, rig) or NPCModels.SitHeight
 	local P = pose(anim, t, rig.Prop, rig.Seed, seated, seatTop, s)
-	local pivot = rig.Root.CFrame
+	local pivot = if react then rig.Root.CFrame * react else rig.Root.CFrame
 	local clock = os.clock()
 	local dt = math.clamp(clock - rig.Clock, 0, 0.25)
 	rig.Clock = clock
@@ -1615,7 +1629,7 @@ function NPCModels.Animate(model: Model, anim: string, t: number, look: Vector3?
 				-- (hystérésis : on redevient solide une fois bien sorti)
 				inside = d < r + (rig.ColSolid and 0.35 or 1.1) and rel.Y > -3 and rel.Y < COL_HEIGHT * s + 3
 			end
-			local solid = not inside
+			local solid = not inside and reactSolid
 			if solid ~= rig.ColSolid then
 				rig.ColSolid = solid
 				col.CanCollide = solid

@@ -1322,6 +1322,14 @@ local function enter(options: any)
 				warn("[Town] SitAnimator.Start : " .. tostring(errSit))
 			end
 		end
+		-- v10 💥 se faire renverser, étoiles, se relever, sortir de voiture par la portière (PHYS10)
+		local knockdown = optionalModule("Knockdown")
+		if knockdown and type(knockdown.Start) == "function" then
+			local okKd, errKd = pcall(knockdown.Start, { Toast = toast })
+			if not okKd then
+				warn("[Town] Knockdown.Start : " .. tostring(errKd))
+			end
+		end
 		local folder = Instance.new("Folder")
 		folder.Name = HOUSES_FOLDER
 		folder.Parent = workspace
@@ -1528,6 +1536,10 @@ local function teardown()
 	local sitAnimator = optionalModule("SitAnimator")
 	if sitAnimator and type(sitAnimator.Stop) == "function" then
 		pcall(sitAnimator.Stop)
+	end
+	local knockdown = optionalModule("Knockdown")
+	if knockdown and type(knockdown.Stop) == "function" then
+		pcall(knockdown.Stop)
 	end
 	hud:SetDeskMode(false)
 	local s = saved

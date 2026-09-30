@@ -22,9 +22,9 @@
 	    réseau de la voiture (CarClient lit VehicleSeat.ThrottleFloat /
 	    SteerFloat : clavier ZQSD / WASD / flèches, joystick mobile, manette).
 	    Garée (personne au volant) = ancrée : elle ne bouge jamais.
-	  - Sécurité : groupes de collision (voitures <-> avatars : AUCUNE
-	    collision, donc ni mort ni projection ; voitures <-> voitures non
-	    plus) ; ronde 4 fois / s : voiture tombée, retournée, trop rapide,
+	  - Sécurité : groupes de collision (v10, PHYS10 : voitures <-> avatars
+	    et voitures <-> voitures = collision ; renversé façon dessin animé,
+	    jamais de mort : ImpactService) ; ronde 4 fois / s : voiture tombée, retournée, trop rapide,
 	    entrée dans une maison (WorldLayout.InsideHouse) ou une boutique
 	    (attributs InteriorCF / InteriorSize, sauf AllowCars) -> remise à sa
 	    dernière position sûre ; rangée au bout de Config.Cars.IdleDespawn s
@@ -307,7 +307,9 @@ end
 CarService.IsForbidden = forbidden
 
 ----------------------------------------------------------------------
--- Groupes de collision : voitures <-> avatars = jamais
+-- Groupes de collision (v10, PHYS10) : voitures <-> avatars = OUI, voitures
+-- <-> voitures = OUI (on ne traverse plus rien ; se faire renverser :
+-- ImpactService). Matrice complète : Shared/ImpactRules.MATRIX.
 ----------------------------------------------------------------------
 
 local function setupGroups()
@@ -318,13 +320,14 @@ local function setupGroups()
 		PhysicsService:RegisterCollisionGroup(CarService.WALKER_GROUP)
 	end)
 	pcall(function()
-		PhysicsService:CollisionGroupSetCollidable(CarService.CAR_GROUP, CarService.WALKER_GROUP, false)
-		PhysicsService:CollisionGroupSetCollidable(CarService.CAR_GROUP, CarService.CAR_GROUP, false)
+		PhysicsService:CollisionGroupSetCollidable(CarService.CAR_GROUP, CarService.WALKER_GROUP, true)
+		PhysicsService:CollisionGroupSetCollidable(CarService.CAR_GROUP, CarService.CAR_GROUP, true)
 	end)
 end
 
 local function tagWalker(part: Instance)
-	if part:IsA("BasePart") then
+	-- (v10) KeepGroup : boîtes du ragdoll (groupe "Ragdoll", ImpactRules)
+	if part:IsA("BasePart") and part:GetAttribute("KeepGroup") ~= true then
 		pcall(function()
 			part.CollisionGroup = CarService.WALKER_GROUP
 		end)
@@ -748,15 +751,9 @@ local function spawnCar(player: Player, data: any): (boolean, string)
 	end
 	if not target then
 		local size = CarModels.Dimensions(carId)
+		-- (v10, PHYS10) les autres voitures et les autres joueurs COMPTENT
+		-- (on s'y cogne maintenant) : jamais d'apparition dans quelqu'un
 		local ignore: { Instance } = { character }
-		for _, other in pairs(cars) do
-			table.insert(ignore, other.Model)
-		end
-		for _, p in ipairs(Players:GetPlayers()) do
-			if p.Character then
-				table.insert(ignore, p.Character)
-			end
-		end
 		target = findSpot(charRoot.CFrame, size, ignore)
 	end
 	local car = makeCar(player, data, carId, target :: CFrame, false, fromGarage)

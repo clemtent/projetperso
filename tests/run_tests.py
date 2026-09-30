@@ -2669,20 +2669,64 @@ do
 			check(b - a > 3 and d - c > 5 and c > 1 and d < L.WALL_H - 1 and a > -L.RoomWidth(size) / 2 + 0.5, size.Id .. " : vraie fenêtre du fond")
 		end
 		check(L.STAIR_D1 <= L.WALL_T + L.DEPTH - 2, "palier du haut")
-		for _, n in ipairs({ 4, 8, 12 }) do
-			local r = L.PlotRadius(n)
-			local x1, z1 = L.PlotPlace(1, n)
-			local x2, z2 = L.PlotPlace(2, n)
-			local frontR = r - L.PLOT_D / 2
-			-- coins avant de deux parcelles voisines : jamais l'un sur l'autre
-			local gap = 2 * frontR * math.sin(math.pi / n) - L.PLOT_W * math.cos(math.pi / n)
-			check(gap > 0, n .. " parcelles : coins avant séparés (" .. gap .. ")")
-			check(math.abs(math.sqrt(x1 * x1 + z1 * z1) - r) < 1e-6 and math.abs(math.sqrt(x2 * x2 + z2 * z2) - r) < 1e-6, "rayon")
-			check(L.RingRoadRadius(n) > L.PLAZA_R + 60, "route loin de la place")
+		-- (v10 LAYOUT10) la grande ville : quartiers, parcelles sans
+		-- chevauchement, une rue devant chaque parcelle, réseau connexe
+		for _, n in ipairs({ 4, 8, 12, 20, 30, 50 }) do
+			local total = 0
+			local boxes = {}
+			for _, d in ipairs(L.Districts(n)) do
+				total += #d.Plots
+				for _, i in ipairs(d.Plots) do
+					local p = L.PlotPlaceData(i, n)
+					check(p ~= nil and p.District == d.Id, n .. " : parcelle " .. i .. " dans son quartier")
+					local hw = math.abs(p.LookX) > 0.5 and L.PLOT_D / 2 or L.PLOT_W / 2
+					local hd = math.abs(p.LookX) > 0.5 and L.PLOT_W / 2 or L.PLOT_D / 2
+					table.insert(boxes, { p.X - hw, p.X + hw, p.Z - hd, p.Z + hd })
+					check(L.OnRoad(n, p.X + p.LookX * (L.PLOT_D / 2 + 7), p.Z + p.LookZ * (L.PLOT_D / 2 + 7), 0), n .. " : rue devant la parcelle " .. i)
+					check(not L.OnRoad(n, p.X, p.Z, L.PLOT_D / 2 - 1), n .. " : parcelle " .. i .. " hors des routes")
+				end
+			end
+			eq(check, total, n, n .. " parcelles placées")
+			for a = 1, #boxes do
+				for b = a + 1, #boxes do
+					local A, B = boxes[a], boxes[b]
+					check(not (A[1] < B[2] - 1e-6 and B[1] < A[2] - 1e-6 and A[3] < B[4] - 1e-6 and B[3] < A[4] - 1e-6), n .. " : parcelles " .. a .. "/" .. b .. " sans chevauchement")
+				end
+			end
+			-- réseau : chaque nœud atteignable depuis le boulevard (sens uniques respectés)
+			local g = L.RoadGraph(n)
+			local seen, stack = { n0_250 = true }, { "n0_250" }
+			while #stack > 0 do
+				local id = table.remove(stack)
+				for _, e in ipairs(g.Adjacent[id] or {}) do
+					local o = e.A == id and e.B or e.A
+					if not seen[o] then
+						seen[o] = true
+						table.insert(stack, o)
+					end
+				end
+			end
+			local missing = 0
+			for _, node in ipairs(g.NodeList) do
+				if not seen[node.Id] then
+					missing += 1
+				end
+			end
+			eq(check, missing, 0, n .. " : tous les carrefours atteignables")
+			check(#L.HighwayPath(n) >= 16, "autoroute")
 		end
-		eq(check, L.PlotCount(50), 12, "PlotCount max")
+		check(L.RingRoadRadius(8) > L.PLAZA_R + 60, "route loin de la place")
+		eq(check, L.PlotCount(50), 50, "PlotCount max (v10 : 50)")
+		eq(check, L.PlotCount(80), 50, "PlotCount borné à 50")
 		eq(check, L.PlotCount(1), 4, "PlotCount min")
 		eq(check, L.PlotCount(nil), 8, "PlotCount défaut")
+		-- choix d'une parcelle : quartier du style, sinon le plus proche
+		local taken = {}
+		local first = L.PickPlot(8, "Mansion", function(i) return not taken[i] end)
+		eq(check, first and L.PlotPlaceData(first, 8).District, "Mansion", "PickPlot : quartier des manoirs")
+		taken[first :: number] = true
+		local second = L.PickPlot(8, "Mansion", function(i) return not taken[i] end)
+		check(second ~= nil and second ~= first, "PickPlot : repli sur un autre quartier")
 	end)
 
 	test("WorldLayout : rotation R (sauvegarde)", function(check)

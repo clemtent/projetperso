@@ -56,10 +56,11 @@ RaceRoutes.STRAIGHT_BEFORE = 120 -- ligne droite demandée avant le départ
 RaceRoutes.SPRINT_GRID = 70 -- sprint : la grille occupe les 70 premiers studs
 
 export type Node = { Id: string, X: number, Z: number, Y: number }
-export type Edge = { A: string, B: string, Len: number, Points: { { number } }, Highway: boolean, Ramp: boolean, Width: number, Speed: number }
+export type Edge = { A: string, B: string, Len: number, Points: { { number } }, Highway: boolean, Ramp: boolean, Width: number, Speed: number, Off: number, EffWidth: number }
 export type Graph = { Nodes: { [string]: Node }, Edges: { Edge }, Adj: { [string]: { { To: string, Edge: Edge, Fwd: boolean } } }, Fallback: boolean }
 
 local cache: { [number]: { Graph: Graph?, Routes: { [string]: any } } } = {}
+local despike: (points: { { number } }, closed: boolean) -> { { number } }
 
 local function finite(v: any, d: number): number
 	return RaceRules.Finite(v, d)
@@ -151,8 +152,21 @@ local function addEdge(g: Graph, a: string, b: string, pts: { { number } }?, inf
 	for i = 2, #points do
 		len += math.sqrt((points[i][1] - points[i - 1][1]) ^ 2 + (points[i][2] - points[i - 1][2]) ^ 2)
 	end
-	local lanes = finite(info and info.Lanes, 2)
+	local lanes = finite(info and info.Lanes, 1)
 	local width = finite(info and (info.Width or info.RoadWidth), math.max(12, lanes * 8))
+	-- (autoroute : axe = terre-plein central) on court sur SA chaussée, à
+	-- droite de l'axe : décalage = milieu des voies, largeur = les voies
+	local off, effW = 0, width
+	local offsets = info and info.LaneOffsets
+	if lanes >= 2 and type(offsets) == "table" and #offsets >= 2 then
+		local lo, hi = math.huge, -math.huge
+		for _, o in ipairs(offsets) do
+			local v = finite(o, 0)
+			lo, hi = math.min(lo, v), math.max(hi, v)
+		end
+		off = (lo + hi) / 2
+		effW = (hi - lo) + 11
+	end
 	local edge: Edge = {
 		A = a,
 		B = b,
@@ -162,6 +176,8 @@ local function addEdge(g: Graph, a: string, b: string, pts: { { number } }?, inf
 		Ramp = info ~= nil and (info.Ramp == true or info.Kind == "Ramp"),
 		Width = width,
 		Speed = finite(info and (info.Speed or info.SpeedLimit), 40),
+		Off = off,
+		EffWidth = effW,
 	}
 	table.insert(g.Edges, edge)
 	g.Adj[a] = g.Adj[a] or {}
@@ -408,16 +424,35 @@ local function chain(g: Graph, via: { string }, closed: boolean, baseCost: CostF
 			local key = edgeKey(e.A, e.B)
 			used[key] = (used[key] or 0) + 1
 			keys[key] = true
-			minWidth = math.min(minWidth, e.Width)
+			minWidth = math.min(minWidth, e.EffWidth)
 			local pts = e.Points
+			local seq = {}
 			if step.Fwd then
 				for i = 1, #pts do
-					table.insert(points, pts[i])
+					table.insert(seq, pts[i])
 				end
 			else
 				for i = #pts, 1, -1 do
-					table.insert(points, pts[i])
+					table.insert(seq, pts[i])
 				end
+			end
+			if e.Off ~= 0 then
+				-- décalage à droite du sens de marche (droite = (-tz, tx))
+				local shifted = {}
+				for i, p in ipairs(seq) do
+					local a = seq[math.max(1, i - 1)]
+					local b = seq[math.min(#seq, i + 1)]
+					local dx, dz = b[1] - a[1], b[2] - a[2]
+					local len = math.sqrt(dx * dx + dz * dz)
+					if len > 1e-6 then
+						dx, dz = dx / len, dz / len
+					end
+					table.insert(shifted, { p[1] - dz * e.Off, p[2] + dx * e.Off, p[3] })
+				end
+				seq = shifted
+			end
+			for _, p in ipairs(seq) do
+				table.insert(points, p)
 			end
 		end
 	end
@@ -434,6 +469,41 @@ local function chain(g: Graph, via: { string }, closed: boolean, baseCost: CostF
 		end
 	end
 	return clean, keys, minWidth
+end
+
+-- Retire les "pointes" : un point où la ligne repart presque en arrière sur
+-- un segment court (raccord bretelle -> chaussée décalée de l'autoroute)
+despike = function(points: { { number } }, closed: boolean): { { number } }
+	local pts = table.clone(points)
+	for _ = 1, 40 do
+		local changed = false
+		local n = #pts
+		local i = if closed then 1 else 2
+		local last = if closed then n else n - 1
+		while i <= last and #pts >= 4 do
+			n = #pts
+			local a = pts[if i == 1 then n else i - 1]
+			local p = pts[i]
+			local c = pts[if i == n then 1 else i + 1]
+			local ux, uz = p[1] - a[1], p[2] - a[2]
+			local vx, vz = c[1] - p[1], c[2] - p[2]
+			local lu, lv = math.sqrt(ux * ux + uz * uz), math.sqrt(vx * vx + vz * vz)
+			if lu > 1e-6 and lv > 1e-6 then
+				local cosT = (ux * vx + uz * vz) / (lu * lv)
+				if cosT < math.cos(math.rad(75)) and math.min(lu, lv) < 45 then
+					table.remove(pts, i)
+					changed = true
+					last -= 1
+					continue
+				end
+			end
+			i += 1
+		end
+		if not changed then
+			break
+		end
+	end
+	return pts
 end
 
 -- Angle (radians) entre les caps à s0 et s1 (le long de la ligne)
@@ -465,7 +535,7 @@ end
 local function withCheckpoints(route: any)
 	local line: RaceRules.Line = route.Line
 	local spacing = (Config.Race and Config.Race.CheckpointSpacing) or 170
-	local gateW = math.max(route.Width, 14) + 8
+	local gateW = math.max(route.Width, 20) + 8
 	local cps = {}
 	local function gateAt(s: number, d: number, finish: boolean?)
 		local x, z, tx, tz = RaceRules.PointAt(line, s)
@@ -533,6 +603,9 @@ local function boundsCenter(b: any): (number?, number?, number?, number?)
 			return (x0 + x1) / 2, (z0 + z1) / 2, math.abs(x1 - x0), math.abs(z1 - z0)
 		end
 	end
+	if type(b.X) == "number" and type(b.Z) == "number" and type(b.W) == "number" and type(b.D) == "number" then
+		return b.X, b.Z, b.W, b.D
+	end
 	if type(b.X0) == "number" and type(b.X1) == "number" and type(b.Z0) == "number" and type(b.Z1) == "number" then
 		return (b.X0 + b.X1) / 2, (b.Z0 + b.Z1) / 2, math.abs(b.X1 - b.X0), math.abs(b.Z1 - b.Z0)
 	end
@@ -594,6 +667,97 @@ local function viaPoints(routeId: string, g: Graph, count: number): ({ string },
 		end
 	end
 	local via: { string } = {}
+	-- (v10, LAYOUT10) repères nommés des courses : WorldLayout.RaceAnchors
+	local anchors: { [string]: string } = {}
+	local fnA = (WorldLayout :: any).RaceAnchors
+	if type(fnA) == "function" and not g.Fallback then
+		local ok, list = pcall(fnA, count)
+		if ok and type(list) == "table" then
+			for name, id in pairs(list) do
+				if g.Nodes[tostring(id)] then
+					anchors[name] = tostring(id)
+				end
+			end
+		end
+	end
+	local function fromAnchors(names: { string }): { string }?
+		local out = {}
+		for _, name in ipairs(names) do
+			local id = anchors[name]
+			if not id then
+				return nil
+			end
+			table.insert(out, id)
+		end
+		return out
+	end
+	if routeId == "City" then
+		local list = fromAnchors({ "DowntownSE", "DowntownSW", "DowntownNW", "DowntownNE" })
+		if list then
+			return list, cityOnly, true
+		end
+	elseif routeId == "Highway" then
+		-- avenue d'entrée -> bretelle sud -> autoroute (ouest puis nord)
+		local list = fromAnchors({ "EntranceBoulevard", "RampSCity", "HighwayW", "HighwayN" })
+		if list then
+			return list, highwayFirst, false
+		end
+	elseif routeId == "Night" then
+		-- grand tour : entrée -> autoroute sud-ouest -> sortie ouest -> rue du
+		-- quartier des chalets -> centre -> entrée
+		local list = fromAnchors({ "EntranceBoulevard", "RampSCity", "HighwayW", "RampWCity", "BeltW", "DowntownSW" })
+		if list then
+			return list, mixed, true
+		end
+	elseif routeId == "Districts" then
+		-- la rue principale de chaque quartier (sauf les quartiers fermés),
+		-- dans l'ordre des angles, chaque rue prise d'un bout à l'autre
+		local ds = {}
+		for _, d in ipairs(districtList(count)) do
+			local st = type(d.Streets) == "table" and d.Streets[1] or nil
+			if isResidential(d) and d.Gated ~= true and type(st) == "table" and type(st.X0) == "number" then
+				local cx, cz = boundsCenter(d.Bounds)
+				if cx and cz then
+					table.insert(ds, { St = st, A = math.atan2(cx, cz) })
+				end
+			end
+		end
+		table.sort(ds, function(a, b)
+			return a.A < b.A
+		end)
+		if #ds >= 3 then
+			local lastX, lastZ = 0, 0
+			for i, d in ipairs(ds) do
+				local st = d.St
+				local a = nearestNode(g, st.X0, st.Z0, isCity)
+				local b = nearestNode(g, st.X1, st.Z1, isCity)
+				if a and b and a ~= b then
+					local na, nb = g.Nodes[a], g.Nodes[b]
+					local da = (na.X - lastX) ^ 2 + (na.Z - lastZ) ^ 2
+					local db = (nb.X - lastX) ^ 2 + (nb.Z - lastZ) ^ 2
+					if i == 1 then
+						-- 1re rue : du bout le plus proche du centre vers l'extérieur
+						da, db = na.X ^ 2 + na.Z ^ 2, nb.X ^ 2 + nb.Z ^ 2
+					end
+					if db < da then
+						a, b, na, nb = b, a, nb, na
+					end
+					if via[#via] ~= a then
+						table.insert(via, a)
+					end
+					table.insert(via, b)
+					lastX, lastZ = nb.X, nb.Z
+				end
+			end
+			if #via >= 4 then
+				if via[#via] == via[1] then
+					table.remove(via)
+				end
+				return via, cityOnly, true
+			end
+			via = {}
+		end
+	end
 	local function addVia(x: number, z: number, filter: ((Node) -> boolean)?)
 		local id = nearestNode(g, x, z, filter)
 		if id and via[#via] ~= id and via[1] ~= id then
@@ -703,8 +867,9 @@ local function buildRoute(routeId: string, count: number): any?
 		end
 	end
 	local width = if minWidth < math.huge then minWidth else 16
-	local isHighway = routeId == "Highway"
-	local radius = if isHighway then 80 else math.clamp(width * 0.9, 12, 22)
+	points = despike(points, closed)
+	-- (les virages de l'autoroute sont déjà des arcs dans le graphe)
+	local radius = math.clamp(width * 0.9, 12, 22)
 	local filleted = RaceRules.Fillet(points, closed, radius, 3)
 	local line = RaceRules.Resample(RaceRules.Line(filleted, closed), RaceRoutes.STEP)
 	if line.Total < 300 then
@@ -789,8 +954,9 @@ function RaceRoutes.MeetPoint(count: number): (number, number, number)
 	local W: any = WorldLayout
 	local zone = nil
 	if type(W.Facility) == "function" then
-		local ok, z = pcall(W.Facility, "RaceMeet", count)
-		if ok and z ~= nil then
+		-- (v10, LAYOUT10) WorldLayout.Facility(count, id) -> Zone { X, Z, W, D, Yaw, Y }
+		local ok, z = pcall(W.Facility, count, "RaceMeet")
+		if ok and type(z) == "table" then
 			zone = z
 		end
 	end
@@ -817,7 +983,7 @@ function RaceRoutes.MeetPoint(count: number): (number, number, number)
 		end
 		local x, z = readPoint(zone.Center or zone.Position or zone)
 		if x and z then
-			return x, z, finite(zone.Heading or zone.Angle, 0)
+			return x, z, finite(zone.Yaw or zone.Heading or zone.Angle, 0)
 		end
 	end
 	-- secours : devant la porte, côté gauche de l'avenue (regard vers l'avenue)

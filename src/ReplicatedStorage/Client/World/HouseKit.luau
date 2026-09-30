@@ -42,7 +42,10 @@ export type Opts = {
 	Shape: Enum.PartType?,
 }
 
-export type Stats = { Count: number, Lights: number, MaxLights: number }
+-- (v10 HOUSE10) Phase = phase de construction ("Foundation" | "Walls" | "Roof" |
+-- "Openings" | "Garden") notée en attribut BuildPhase sur chaque pièce créée
+-- (animation de construction de CONSTRUCT10)
+export type Stats = { Count: number, Lights: number, MaxLights: number, Phase: string? }
 
 export type Kit = typeof(setmetatable({} :: {
 	CF: CFrame,
@@ -110,6 +113,10 @@ function HouseKit.Part(self: Kit, name: string, size: Vector3, localCF: CFrame, 
 	p.CastShadow = shadow
 	if o.Shape and p:IsA("Part") then
 		(p :: Part).Shape = o.Shape
+	end
+	local phase = self.Stats.Phase
+	if phase then
+		p:SetAttribute("BuildPhase", phase)
 	end
 	p.Parent = self.Folder
 	self.Stats.Count += 1

@@ -689,7 +689,15 @@ WorldLayout.RAMP_T = 380 -- distance (le long de l'autoroute) du départ / de l'
 WorldLayout.RAMP_W = 12 -- chaussée d'une bretelle (1 voie + accotements)
 WorldLayout.OUTSIDE_END = 250 -- bout de la route au-delà du pont (rond-point / aire)
 -- Vitesses (studs / s) : rue de quartier, avenue, ceinture, autoroute, bretelle
-WorldLayout.SPEED = { Street = 30, Avenue = 40, Belt = 48, Highway = 85, Ramp = 45, Downtown = 32 }
+WorldLayout.SPEED = { Street = 30, Avenue = 40, Belt = 48, Highway = 65, Ramp = 42, Downtown = 32 }
+-- (v10) Case de l'entrée : la porte reste PIÉTONNE (place d'accueil) ; les
+-- voitures arrivent par la route de l'entrée (x = 0) qui part du rond-point
+-- du dépose-minute (derrière la porte, TownEntrance) vers la ceinture et
+-- l'échangeur sud, et par la rue du marché (z = MARKET_STREET_Z) qui relie
+-- les deux avenues x = ±DOWNTOWN_B au sud de MégaDopa et de la concession.
+WorldLayout.ARRIVAL_LOOP = 66 -- centre du rond-point : porte + 66 (sur l'axe)
+WorldLayout.ARRIVAL_LOOP_R = 14 -- rayon de la trajectoire des voitures dans le rond-point
+WorldLayout.MARKET_STREET_Z = 480
 
 -- Quartiers résidentiels (ordre = ordre des parcelles ; Cell = case du
 -- quadrillage ; Axis = sens des rues ; Cap = parcelles au plus ; Weight =
@@ -1175,7 +1183,7 @@ end
 --   sens A -> B) ; voie k à droite du sens de circulation, décalage
 --   LaneOffsets[k] depuis l'axe ; Sidewalk = largeur des trottoirs (0 = aucun).
 -- Kind : "Downtown" | "Avenue" | "Belt" | "Street" | "Entrance" |
---   "Connector" | "Highway" | "Ramp" | "Outside".
+--   "Connector" | "Highway" | "Ramp" | "Outside" | "Roundabout".
 export type RoadNode = { Id: string, X: number, Y: number, Z: number, Kind: string }
 export type RoadPoint = { X: number, Y: number, Z: number }
 export type RoadEdge = {
@@ -1295,6 +1303,25 @@ function WorldLayout.BridgeProfile(n: number): number
 	return base + top * (0.5 + 0.5 * math.cos(f * math.pi))
 end
 
+-- Stations (n, le long de la route depuis l'axe de l'autoroute) du profil
+-- d'un pont : bouts au sol (±RAMP_JUNCTION), rampes en BRIDGE_RAMP_STEPS
+-- tronçons, tablier plat. Le serveur (tablier) et le graphe (Points) se
+-- servent des MÊMES stations : les voitures roulent sur le tablier.
+WorldLayout.BRIDGE_RAMP_STEPS = 6
+function WorldLayout.BridgeStations(): { number }
+	local J, half, ramp = WorldLayout.RAMP_JUNCTION, WorldLayout.BRIDGE_HALF, WorldLayout.BRIDGE_RAMP
+	local k = WorldLayout.BRIDGE_RAMP_STEPS
+	local out = { -J }
+	for i = 0, k do
+		table.insert(out, -(half + ramp) + ramp * i / k)
+	end
+	for i = 0, k do
+		table.insert(out, half + ramp * i / k)
+	end
+	table.insert(out, J)
+	return out
+end
+
 local function buildGraph(count: number): RoadGraph
 	local cachedGraph = graphCache[count]
 	if cachedGraph then
@@ -1378,7 +1405,12 @@ local function buildGraph(count: number): RoadGraph
 	-- l'entrée jusqu'à la ceinture ; rues latérales ±X de la place au boulevard
 	local street0 = WorldLayout.PLAZA_R + 30
 	line(0, street0, 0, B, "Downtown", { Width = WorldLayout.AVENUE_W, Lanes = 1, Speed = WorldLayout.SPEED.Downtown, Sidewalk = WorldLayout.WALK_W })
-	line(0, B, 0, R, "Entrance", avenueOpts)
+	-- route de l'entrée : du rond-point du dépose-minute à la ceinture
+	local loopZ = WorldLayout.GateDistance(count) + WorldLayout.ARRIVAL_LOOP
+	local loopR = WorldLayout.ARRIVAL_LOOP_R
+	line(0, loopZ + loopR, 0, R, "Entrance", avenueOpts)
+	-- rue du marché (au sud de MégaDopa et de la concession)
+	line(-B, WorldLayout.MARKET_STREET_Z, B, WorldLayout.MARKET_STREET_Z, "Avenue", avenueOpts)
 	line(street0, 0, B, 0, "Downtown", downtownOpts)
 	line(-street0, 0, -B, 0, "Downtown", downtownOpts)
 	-- rues des quartiers
@@ -1467,6 +1499,25 @@ local function buildGraph(count: number): RoadGraph
 				prev = id
 				prevT = t
 			end
+		end
+	end
+	-- rond-point du dépose-minute (derrière la porte) : 4 nœuds, sens unique
+	do
+		local cz = WorldLayout.GateDistance(count) + WorldLayout.ARRIVAL_LOOP
+		local rr = WorldLayout.ARRIVAL_LOOP_R
+		local ids = {}
+		for q = 0, 3 do
+			local a = q * math.pi / 2
+			ids[q + 1] = node(math.sin(a) * rr, cz + math.cos(a) * rr, y0, "Roundabout")
+		end
+		for q = 1, 4 do
+			local a0 = (q - 1) * math.pi / 2
+			local pts = {}
+			for s2 = 0, 4 do
+				local a = a0 + s2 / 4 * math.pi / 2
+				table.insert(pts, { X = math.sin(a) * rr, Y = y0, Z = cz + math.cos(a) * rr })
+			end
+			addEdge(ids[q], ids[q % 4 + 1], "Roundabout", { Width = 10, Lanes = 1, OneWay = true, Speed = 16, Sidewalk = 0, LaneOffsets = { 0 }, Points = pts })
 		end
 	end
 	-- passages piétons : sur chaque bras de chaque carrefour avec trottoirs
@@ -1586,9 +1637,7 @@ local function buildGraph(count: number): RoadGraph
 		addEdge(nBelt, nCity, connectorKind, { Width = WorldLayout.ROAD_W, Lanes = 1, Speed = WorldLayout.SPEED.Avenue, Sidewalk = WorldLayout.WALK_W })
 		-- pont : profil en long (points tous les 15 studs)
 		local bridgePts: { RoadPoint } = {}
-		local steps = math.floor(2 * J / 15)
-		for s = 0, steps do
-			local n = -J + 2 * J * s / steps
+		for _, n in ipairs(WorldLayout.BridgeStations()) do
 			table.insert(bridgePts, ixPoint(ix, 0, n, WorldLayout.BridgeProfile(n)))
 		end
 		addEdge(nCity, nOut, "Connector", { Width = WorldLayout.ROAD_W, Lanes = 1, Speed = WorldLayout.SPEED.Avenue, Sidewalk = 3, Bridge = true, Points = bridgePts })
@@ -1608,7 +1657,7 @@ local function buildGraph(count: number): RoadGraph
 				local a = a0 + s / 4 * math.pi / 2
 				table.insert(pts, ixPoint(ix, math.sin(a) * rr, outEnd + math.cos(a) * rr))
 			end
-			addEdge(ringIds[q], ringIds[q % 4 + 1], "Outside", { Width = 12, Lanes = 1, OneWay = true, Speed = 20, Sidewalk = 0, LaneOffsets = { 0 }, Points = pts })
+			addEdge(ringIds[q], ringIds[q % 4 + 1], "Roundabout", { Width = 12, Lanes = 1, OneWay = true, Speed = 20, Sidewalk = 0, LaneOffsets = { 0 }, Points = pts })
 		end
 		-- le bout de la route rejoint le rond-point (côté ville du cercle : q = 3 -> angle pi)
 		-- (nEnd est au centre : on remplace l'arête nOut -> nEnd par nOut -> bas du cercle)
@@ -1809,6 +1858,8 @@ function WorldLayout.RaceAnchors(count: number): { [string]: string }
 		BeltSE = { R, R }, BeltSW = { -R, R }, BeltNE = { R, -R }, BeltNW = { -R, -R },
 		BeltS = { 0, R }, BeltN = { 0, -R }, BeltE = { R, 0 }, BeltW = { -R, 0 },
 		EntranceBoulevard = { 0, B },
+		EntranceLoop = { 0, WorldLayout.GateDistance(count) + WorldLayout.ARRIVAL_LOOP + WorldLayout.ARRIVAL_LOOP_R },
+		MarketStreetW = { -B, WorldLayout.MARKET_STREET_Z }, MarketStreetE = { B, WorldLayout.MARKET_STREET_Z },
 	}) do
 		local key = id(p[1], p[2])
 		if g.Nodes[key] then
