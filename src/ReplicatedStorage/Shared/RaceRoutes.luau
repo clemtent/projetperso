@@ -22,6 +22,15 @@
 	départ ; sprint : le dernier point).
 	Sans graphe (avant LAYOUT10), un graphe de secours est tiré de l'ancien
 	boulevard circulaire + avenue : les courses marchent quand même.
+	(v11, RACE11) 3 parcours en plus :
+	  Belt      🏎️ Grand Prix de la ceinture (le grand carré de l'avenue de ceinture) ;
+	  Loft      🏭 circuit des entrepôts (3 tours serrés : rue des lofts + ceinture) ;
+	  Endurance 🌀 la boucle complète de l'autoroute.
+	Les lignes de départ de deux parcours sont écartées d'au moins 90 studs
+	(portiques jamais superposés). Grille à l'échelle des voitures v11
+	(Config.Race.Grid). Chaque parcours a un temps de référence (Par) et ses
+	MÉDAILLES (or / argent / bronze), et la liste de ses VIRAGES (panneaux
+	à chevrons côté client).
 
 	API :
 	  RaceRoutes.Get(routeId, count) -> Route?     (cache)
@@ -37,7 +46,8 @@
 	  tour / la ligne), StartS (sprint : ligne de départ), RaceDistance,
 	  Width, Checkpoints = { { D, S, X, Z, TX, TZ, W, Finish? } } (D = distance
 	  de course), Grid = { { X, Z, TX, TZ } }, EdgeKeys = { ["a|b"] = true },
-	  Nodes = { id } }
+	  Nodes = { id }, (v11) Par, Medals = { Gold, Silver, Bronze },
+	  Corners = { { S, Turn, Angle } }, PerLap (portes par tour) }
 ]]
 
 local Config = require(script.Parent.Config)
@@ -49,11 +59,14 @@ local RaceRoutes = {}
 RaceRoutes.ACTIVE_ATTRIBUTE = "DopamineRaceRoutes" -- (Workspace) ids des parcours en course, séparés par des virgules
 RaceRoutes.STEP = 4 -- pas de la trajectoire (studs)
 RaceRoutes.GRID_SLOTS = 8
-RaceRoutes.GRID_ROW = 13 -- studs entre deux rangées de la grille
-RaceRoutes.GRID_FIRST = 9 -- 1re rangée derrière la ligne
-RaceRoutes.GRID_SIDE = 4.2 -- décalage latéral des deux colonnes
-RaceRoutes.STRAIGHT_BEFORE = 120 -- ligne droite demandée avant le départ
-RaceRoutes.SPRINT_GRID = 70 -- sprint : la grille occupe les 70 premiers studs
+-- (v11) grille à l'échelle des voitures (Config.Race.Grid)
+local gridCfg = (Config.Race and (Config.Race :: any).Grid) or {}
+RaceRoutes.GRID_ROW = gridCfg.Row or 21 -- studs entre deux voitures d'une même colonne
+RaceRoutes.GRID_FIRST = gridCfg.First or 11 -- 1re place derrière la ligne
+RaceRoutes.GRID_SIDE = gridCfg.Side or 5.2 -- décalage latéral des deux colonnes
+RaceRoutes.STRAIGHT_BEFORE = 140 -- ligne droite demandée avant le départ
+RaceRoutes.SPRINT_GRID = 95 -- sprint : la grille occupe les 95 premiers studs
+RaceRoutes.START_GAP = 90 -- (v11) écart minimal entre deux lignes de départ
 
 export type Node = { Id: string, X: number, Z: number, Y: number }
 export type Edge = { A: string, B: string, Len: number, Points: { { number } }, Highway: boolean, Ramp: boolean, Width: number, Speed: number, Off: number, EffWidth: number }
@@ -61,6 +74,9 @@ export type Graph = { Nodes: { [string]: Node }, Edges: { Edge }, Adj: { [string
 
 local cache: { [number]: { Graph: Graph?, Routes: { [string]: any } } } = {}
 local despike: (points: { { number } }, closed: boolean) -> { { number } }
+local otherStarts: (routeId: string, count: number) -> { { number } }
+local withMedals: (route: any) -> ()
+local withCorners: (route: any) -> ()
 
 local function finite(v: any, d: number): number
 	return RaceRules.Finite(v, d)
@@ -543,6 +559,7 @@ local function withCheckpoints(route: any)
 	end
 	if route.Closed then
 		local per = math.max(2, math.floor(line.Total / spacing + 0.5))
+		route.PerLap = per
 		for lap = 0, route.Laps - 1 do
 			for k = 1, per do
 				local s = line.Total * k / per
@@ -554,6 +571,7 @@ local function withCheckpoints(route: any)
 	else
 		local length = line.Total - route.StartS
 		local per = math.max(2, math.floor(length / spacing + 0.5))
+		route.PerLap = per
 		for k = 1, per do
 			local d = length * k / per
 			gateAt(route.StartS + d, d, k == per)
@@ -711,6 +729,45 @@ local function viaPoints(routeId: string, g: Graph, count: number): ({ string },
 		if list then
 			return list, mixed, true
 		end
+	elseif routeId == "Belt" then
+		-- (v11) Grand Prix de la ceinture : les 4 coins de l'avenue de ceinture
+		local list = fromAnchors({ "BeltSE", "BeltSW", "BeltNW", "BeltNE" })
+		if list then
+			return list, cityOnly, true
+		end
+	elseif routeId == "Endurance" then
+		-- (v11) la boucle complète de l'autoroute (rien d'autre)
+		local list = fromAnchors({ "HighwayS", "HighwayE", "HighwayN", "HighwayW" })
+		if list then
+			return list, function(e: Edge): number
+				if e.Highway then
+					return e.Len
+				end
+				return math.huge
+			end, true
+		end
+	elseif routeId == "Loft" then
+		-- (v11) circuit des entrepôts : la 1re rue du quartier des lofts, la
+		-- ceinture, puis l'avenue qui longe le centre
+		local corner = anchors.BeltSE
+		for _, d in ipairs(districtList(count)) do
+			local st = type(d.Streets) == "table" and d.Streets[1] or nil
+			if string.lower(tostring(d.Id)) == "loft" and type(st) == "table" and type(st.X0) == "number" and corner then
+				local a = nearestNode(g, st.X0, st.Z0, isCity)
+				local b = nearestNode(g, st.X1, st.Z1, isCity)
+				if a and b and a ~= b then
+					local na, nb = g.Nodes[a], g.Nodes[b]
+					if na.X ^ 2 + na.Z ^ 2 > nb.X ^ 2 + nb.Z ^ 2 then
+						a, b, na, nb = b, a, nb, na
+					end
+					local nc = g.Nodes[corner]
+					local dId = nearestNode(g, na.X, nc.Z, isCity)
+					if dId and dId ~= a and dId ~= corner and corner ~= b then
+						return { a, b, corner, dId }, cityOnly, true
+					end
+				end
+			end
+		end
 	elseif routeId == "Districts" then
 		-- la rue principale de chaque quartier (sauf les quartiers fermés),
 		-- dans l'ordre des angles, chaque rue prise d'un bout à l'autre
@@ -838,13 +895,90 @@ local function viaPoints(routeId: string, g: Graph, count: number): ({ string },
 		addVia(0, maxZ, isCity)
 		addVia(minX, 0, isCity)
 		return via, cityOnly, false
-	else -- Night : grand tour (autoroute permise)
+	elseif routeId == "Belt" or routeId == "Loft" then
+		-- secours : grand carré de la ville (80 % / 45 % de l'étendue)
+		local f = if routeId == "Belt" then 0.4 else 0.22
+		for _, c in ipairs({ { 1, 1 }, { -1, 1 }, { -1, -1 }, { 1, -1 } }) do
+			addVia(c[1] * (maxX - minX) * f, c[2] * (maxZ - minZ) * f, isCity)
+		end
+		return via, cityOnly, true
+	else -- Night / Endurance : grand tour (autoroute permise)
 		addVia(0, minZ - 1e4)
 		addVia(maxX + 1e4, 0)
 		addVia(0, maxZ + 1e4)
 		addVia(minX - 1e4, 0)
 		return via, if hasHighway then mixed else cityOnly, true
 	end
+end
+
+-- (v11) lignes de départ / d'arrivée des parcours qui précèdent `routeId`
+-- (ordre de Config.Race.Routes) : { { x, z } }
+otherStarts = function(routeId: string, count: number): { { number } }
+	local out = {}
+	for _, def in ipairs((Config.Race and Config.Race.Routes) or {}) do
+		if def.Id == routeId then
+			break
+		end
+		local r = RaceRoutes.Get(def.Id, count)
+		if r then
+			local x, z = RaceRules.PointAt(r.Line, r.StartS)
+			table.insert(out, { x, z })
+			if not r.Closed then
+				local fx, fz = RaceRules.PointAt(r.Line, r.Line.Total)
+				table.insert(out, { fx, fz })
+			end
+		end
+	end
+	return out
+end
+
+-- (v11) temps de référence (pilote parfait) et médailles
+withMedals = function(route: any)
+	local par = (Config.Race and (Config.Race :: any).Par) or {}
+	local top = par.TopSpeed or 66
+	local profile = RaceRules.SpeedProfile(route.Line, top)
+	local function sOf(d: number): number
+		if route.Closed then
+			return d % route.Total
+		end
+		return route.StartS + d
+	end
+	local t = RaceRules.SimTime(route.Line, profile, sOf, -route.Grid[1].Back, route.RaceDistance, top, par.Accel or 30, 1)
+	route.Par = math.floor(t * 10 + 0.5) / 10
+	route.Medals = RaceRules.Medals(route.Par)
+end
+
+-- (v11) virages marqués (panneaux à chevrons) : { { S, Turn (+1 gauche, -1
+-- droite), Angle (rad) } } aux sommets des virages de plus de 35° sur 50 studs
+withCorners = function(route: any)
+	local line: RaceRules.Line = route.Line
+	local samples = {}
+	local s = 0
+	while s < line.Total do
+		local _, _, tx0, tz0 = RaceRules.PointAt(line, s - 25)
+		local _, _, tx1, tz1 = RaceRules.PointAt(line, s + 25)
+		local cross = tx0 * tz1 - tz0 * tx1
+		local ang = math.acos(math.clamp(tx0 * tx1 + tz0 * tz1, -1, 1))
+		table.insert(samples, { s, ang, cross })
+		s += 6
+	end
+	local corners = {}
+	local n = #samples
+	for i = 1, n do
+		local a = samples[i]
+		local prev = samples[if i > 1 then i - 1 else n]
+		local nxt = samples[if i < n then i + 1 else 1]
+		if a[2] >= math.rad(35) and a[2] >= prev[2] and a[2] > nxt[2] then
+			local last = corners[#corners]
+			if not last or a[1] - last.S > 60 then
+				if route.Closed or (a[1] > route.StartS + 30 and a[1] < line.Total - 20) then
+					-- (droite = (-tz, tx) ; cross > 0 = virage vers la droite)
+					table.insert(corners, { S = a[1], Turn = if a[3] > 0 then -1 else 1, Angle = a[2] })
+				end
+			end
+		end
+	end
+	route.Corners = corners
 end
 
 local function buildRoute(routeId: string, count: number): any?
@@ -890,6 +1024,8 @@ local function buildRoute(routeId: string, count: number): any?
 	if closed then
 		-- départ : sur une ligne droite, le plus près du point de rendez-vous
 		local mx, mz = RaceRoutes.MeetPoint(count)
+		-- (v11) lignes des parcours précédents (portiques jamais superposés)
+		local taken = otherStarts(routeId, count)
 		local bestS, bestScore = 0, math.huge
 		local s = 0
 		while s < line.Total do
@@ -897,6 +1033,11 @@ local function buildRoute(routeId: string, count: number): any?
 			if change < math.rad(7) then
 				local x, z = RaceRules.PointAt(line, s)
 				local score = (x - mx) ^ 2 + (z - mz) ^ 2
+				for _, q in ipairs(taken) do
+					if (x - q[1]) ^ 2 + (z - q[2]) ^ 2 < RaceRoutes.START_GAP ^ 2 then
+						score = math.huge
+					end
+				end
 				if score < bestScore then
 					bestS, bestScore = s, score
 				end
@@ -916,6 +1057,8 @@ local function buildRoute(routeId: string, count: number): any?
 	end
 	withCheckpoints(route)
 	withGrid(route)
+	withMedals(route)
+	withCorners(route)
 	return route
 end
 
