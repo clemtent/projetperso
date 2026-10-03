@@ -218,12 +218,18 @@ end
 -- décalage de voie et une limitation par tronçon ; décalage à droite du sens
 -- (onglet aux sommets), virages arrondis (Bézier), pas de 8 studs au plus
 local LIMIT_AHEAD = { 40, 90, 150 }
--- (v10) points balayés devant l'avant (studs) : cession du passage entre circuits
--- (v10) carrefours réservés : [id du nœud] = { Owner = véhicule, Time = horloge }
-local reservations: { [string]: { Owner: any, Time: number } } = {}
-local reserveClock = 0
+-- (v11, CARS11) horloge de la simulation (priorités aux carrefours)
+local simClock = 0
 local farFrames = 0
 local farTick = false
+-- (v11) statistiques (émulateur) : dépannages d'urgence "fantôme"
+local ghostCount = 0
+-- (v11, TRAIN11) passages à niveau : [i] = fermé ?
+local railClosed: { [number]: boolean } = {}
+local railClock = 0
+local trainLine: any = nil
+local CROSS_D = 7.2 -- (v11) trajectoires plus proches que ça dans un carrefour : conflit
+local JUNCTION_R = 19
 
 local function pathFromLoop(pts: { any }, offsets: { number }, speeds: { number }): Path
 	local O = WorldLayout.Origin()

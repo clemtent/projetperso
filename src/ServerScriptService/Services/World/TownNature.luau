@@ -19,6 +19,8 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
+-- (v11, TRAIN11) emprise de la ligne de ceinture : voie, gares, planques (Shared/TrainLine)
+local okTrainLine, TrainLine = pcall(require, ReplicatedStorage.Shared.TrainLine)
 local TownKit = require(script.Parent.TownKit)
 local TownBuildings = require(script.Parent.TownBuildings)
 local TownVehicles = require(script.Parent.TownVehicles) -- (v9.7, VEHICLES97) food truck
@@ -612,6 +614,9 @@ local function belt(folder: Instance, geo: TownKit.Geo)
 	local town = WorldLayout.TownRadius(count)
 	local zones = WorldLayout.Facilities(count)
 	local function blocked(x: number, z: number, r: number): boolean
+		if okTrainLine and type(TrainLine) == "table" and TrainLine.Near(count, x, z, r + 2) then
+			return true
+		end
 		if WorldLayout.OnRoad(count, x, z, r + 3) or WorldLayout.OnPlot(count, x, z, r + 2) then
 			return true
 		end
