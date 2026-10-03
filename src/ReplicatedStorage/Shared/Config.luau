@@ -2832,6 +2832,94 @@ for index, route in ipairs(Config.Race.Routes) do
 end
 
 ----------------------------------------------------------------------
+-- 🏦 (v11, BANK11) Banque Dopamine, 💎 DIAMANTS et CASSES (cartoon, sans
+-- armes). Règles pures : Shared/Diamonds (monnaie, coffre, change, boutique
+-- de luxe) et Shared/HeistRules (récompenses, plafonds, mini-jeux) ;
+-- serveur : BankService + HeistKit (aussi utilisé par le train).
+--   - Les 💎 se gagnent aux casses (banque, convoi du train), sont gardés
+--     pour toujours (jamais remis à zéro par l'océan) et s'échangent contre
+--     des objets de LUXE (Luxury) ou un peu de Dopamine (Exchange, plafonné).
+--   - Poche (Wallet) / coffre (Vault) : le coffre rapporte des intérêts
+--     (Vault.*) à réclamer une fois par jour au guichet.
+--   - Récompense en Dopamine d'un casse = secondes de production (comme les
+--     courses), x bonus d'équipe, x part du butin livrée ; plafond par jour.
+----------------------------------------------------------------------
+Config.Bank = {
+	Diamonds = {
+		DailyCap = 80, -- 💎 max gagnés par jour aux casses (intérêts à part)
+		MaxBalance = 1000000, -- garde-fou (poche + coffre)
+		HistorySize = 30, -- lignes de l'historique gardées
+	},
+	Vault = {
+		InterestRate = 0.02, -- +2 % du coffre par jour...
+		MinForInterest = 10, -- ... dès 10 💎 au coffre (au moins 1 💎)
+		InterestMax = 10, -- ... au plus 10 💎 par jour
+		MaxMove = 100000, -- dépôt / retrait max par opération
+	},
+	Exchange = {
+		SecondsPerDiamond = 30, -- 1 💎 = 30 s de production en Dopamine
+		DailyMax = 15, -- 💎 échangeables par jour
+		MinPerDiamond = 500, -- Dopamine minimale pour 1 💎
+	},
+	Heist = {
+		LobbySeconds = 30, -- attente de l'équipe (le chef peut lancer avant)
+		MaxCrew = 4,
+		BagCapacity = 3, -- piles de butin par sac
+		CarrySlow = 0.85, -- vitesse de marche avec un sac sur le dos
+		MinFill = 0.2, -- part minimale du butin livrée pour être payé
+		CrewBonus = 0.1, -- +10 % par coéquipier...
+		MaxCrewBonus = 0.3, -- ... au plus +30 %
+		Range = 5, -- (studs) marge des vérifications de distance
+		MaxSpeed = 150, -- (studs/s) au-delà : téléportation -> le sac tombe
+		HackLength = 5, -- symboles du code à recopier
+		HackMinSeconds = 3, -- temps minimal pour pirater
+		DrillSeconds = 22, -- durée du perçage (hors blocages)
+		DrillJams = 2, -- blocages à débloquer (E) pendant le perçage
+		CrowbarTaps = 12, -- coups de pied-de-biche pour forcer une porte
+		CrowbarMinInterval = 0.08,
+		GrabSeconds = 1.5, -- (s) maintenir E sur une pile de butin
+		Kinds = {
+			-- Seconds : secondes de production (sac plein, seul) ; Diamonds = { min, max } (part vide -> pleine) ;
+			-- Daily : casses payés par jour ; Cooldown / FailCooldown : (s) entre deux casses du serveur ;
+			-- Duration : (s) chrono après le déclenchement de l'alarme
+			Bank = { Name = "Bank heist", Icon = "🏦", Seconds = 120, Diamonds = { 8, 20 }, Daily = 3, Cooldown = 600, FailCooldown = 300, Duration = 210 },
+			Train = { Name = "Diamond convoy", Icon = "🚂", Seconds = 90, Diamonds = { 5, 14 }, Daily = 4, Cooldown = 1200, FailCooldown = 600, Duration = 210 },
+		},
+	},
+	-- 💎 Boutique de luxe. Kind : "Wear" (porté en ville, vu de tous ; Slot =
+	-- Head | Face | Neck | Wrist | Back | Aura), "Title" (titre au-dessus de la
+	-- tête), "Paint" (peinture de voiture : atelier CarWorkshop / CarService
+	-- via BankService:OwnsLuxury), "Furniture" (objet de maison : ajouté à
+	-- data.House.Items). Price en 💎 ; NeedHeists = casses réussis requis.
+	Luxury = {
+		{ Id = "GoldWatch", Name = "Gold watch", Icon = "⌚", Kind = "Wear", Slot = "Wrist", Price = 30, Desc = "A heavy gold watch that sparkles" },
+		{ Id = "GoldChain", Name = "Gold chain", Icon = "📿", Kind = "Wear", Slot = "Neck", Price = 35, Desc = "A thick 24-carat chain" },
+		{ Id = "GoldShades", Name = "Gold sunglasses", Icon = "🕶️", Kind = "Wear", Slot = "Face", Price = 40, Desc = "Gold frames, mirror lenses" },
+		{ Id = "DiamondMonocle", Name = "Diamond monocle", Icon = "🧐", Kind = "Wear", Slot = "Face", Price = 55, Desc = "Very distinguished" },
+		{ Id = "MogulHat", Name = "Tycoon top hat", Icon = "🎩", Kind = "Wear", Slot = "Head", Price = 70, Desc = "Black silk with a diamond band" },
+		{ Id = "VelvetCape", Name = "Royal velvet cape", Icon = "🦸", Kind = "Wear", Slot = "Back", Price = 80, Desc = "Crimson velvet with ermine trim" },
+		{ Id = "DiamondNecklace", Name = "Diamond necklace", Icon = "💎", Kind = "Wear", Slot = "Neck", Price = 90, Desc = "A river of diamonds" },
+		{ Id = "DiamondCrown", Name = "Diamond crown", Icon = "👑", Kind = "Wear", Slot = "Head", Price = 150, Desc = "Gold, velvet and twelve diamonds" },
+		{ Id = "SparkleAura", Name = "Diamond sparkle aura", Icon = "✨", Kind = "Wear", Slot = "Aura", Price = 160, Desc = "Tiny diamonds swirl around you" },
+		{ Id = "CrystalWings", Name = "Crystal wings", Icon = "🪽", Kind = "Wear", Slot = "Back", Price = 220, Desc = "Shimmering wings that flap softly" },
+		{ Id = "GoldenAura", Name = "Golden halo aura", Icon = "🌟", Kind = "Wear", Slot = "Aura", Price = 260, Desc = "A golden ring of light at your feet" },
+		{ Id = "TitleDealer", Name = "Title: Diamond dealer", Icon = "💎", Kind = "Title", Slot = "Title", Price = 25, Title = "💎 Diamond dealer", Desc = "Shown above your head in town" },
+		{ Id = "TitleBanker", Name = "Title: Banker", Icon = "🏦", Kind = "Title", Slot = "Title", Price = 25, Title = "🏦 Banker", Desc = "Shown above your head in town" },
+		{ Id = "TitleMastermind", Name = "Title: Mastermind", Icon = "🕶️", Kind = "Title", Slot = "Title", Price = 40, NeedHeists = 3, Title = "🕶️ Mastermind", Desc = "After 3 successful heists" },
+		{ Id = "TitleTycoon", Name = "Title: Tycoon", Icon = "👑", Kind = "Title", Slot = "Title", Price = 300, Title = "👑 Tycoon", Desc = "The richest title in town" },
+		{ Id = "PaintDiamond", Name = "Diamond pearl paint", Icon = "🤍", Kind = "Paint", Price = 60, Color = Color3.fromRGB(236, 244, 255), Desc = "Pearly white with diamond flakes" },
+		{ Id = "PaintGold", Name = "24-carat gold paint", Icon = "🟡", Kind = "Paint", Price = 90, Color = Color3.fromRGB(232, 180, 52), Desc = "Real gold leaf look" },
+		{ Id = "PaintChrome", Name = "Mirror chrome paint", Icon = "🪩", Kind = "Paint", Price = 120, Color = Color3.fromRGB(206, 214, 226), Desc = "Like a mirror on wheels" },
+		{ Id = "PaintStarry", Name = "Starry black paint", Icon = "🌌", Kind = "Paint", Price = 150, Color = Color3.fromRGB(22, 20, 40), Desc = "Deep black with gold stars" },
+	},
+}
+Config.BankLuxuryById = {}
+for index, item in ipairs(Config.Bank.Luxury) do
+	item.Order = index
+	Config.BankLuxuryById[item.Id] = item
+end
+
+----------------------------------------------------------------------
 -- Index calculés automatiquement (ne pas modifier)
 ----------------------------------------------------------------------
 Config.UpgradesById = {}
