@@ -16,6 +16,16 @@
 	    adversaires humains, plafond quotidien), données sauvegardées ;
 	  - contrôles anti-triche (vitesse plausible, saut, temps minimal d'un
 	    tronçon).
+	(v11, RACE11) en plus :
+	  - XP et RANGS (Bronze -> Diamant, 3 divisions) : RaceRules.XpFor,
+	    RaceRules.Rank ; MÉDAILLES par parcours (temps de référence simulé) :
+	    RaceRules.SimTime, RaceRules.Medals, RaceRules.MedalFor ;
+	  - FANTÔME du meilleur tour : temps de passage { T, D } (relatifs au début
+	    du tour), RaceRules.GhostAt / CleanGhost ;
+	  - NITRO : jauge (dérapage mesuré par le serveur + aspiration) :
+	    RaceRules.SlipAngle / DriftRate / Draft / NitroGain ;
+	  - données v11 : Xp, History (dernières courses), Routes (stats par
+	    parcours), Ghost, DriftBest, Overtakes, Distance.
 
 	Ligne : { X = { number }, Z = { number }, Y = { number }?, S = { number },
 	          N = number, Total = number, Closed = boolean }
@@ -494,17 +504,23 @@ function RaceRules.Today(now: number): number
 	return math.floor(finite(now, 0) / 86400)
 end
 
--- data.Race propre : { Day, Rewarded, Races, Wins, Podiums, Best = { [routeId] = s } }
+-- data.Race propre : { Day, Rewarded, Races, Wins, Podiums, Best = { [routeId] = s },
+-- (v11) Xp, History = { { R, P, N, T, L, C, X, M, At } }, Routes = { [routeId] =
+-- { R, W, P, T (meilleur temps de course), C (voiture du record), M (meilleure
+-- médaille) } }, Ghost = { [routeId] = ghost }, DriftBest, Overtakes, Distance }
 function RaceRules.SanitizeData(raw: any, today: number): any
 	local src = if type(raw) == "table" then raw else {}
 	local function count(v: any): number
 		return math.max(0, math.floor(finite(v, 0)))
 	end
+	local function validRoute(id: any): boolean
+		return type(id) == "string" and Config.RaceRoutesById ~= nil and Config.RaceRoutesById[id] ~= nil
+	end
 	local best = {}
 	if type(src.Best) == "table" then
 		for id, value in pairs(src.Best) do
 			local t = finite(value, -1)
-			if type(id) == "string" and Config.RaceRoutesById and Config.RaceRoutesById[id] and t >= 3 and t < 3600 then
+			if validRoute(id) and t >= 3 and t < 3600 then
 				best[id] = t
 			end
 		end
@@ -515,6 +531,51 @@ function RaceRules.SanitizeData(raw: any, today: number): any
 		day = today
 		rewarded = 0
 	end
+	-- historique
+	local history = {}
+	if type(src.History) == "table" then
+		for _, h in ipairs(src.History) do
+			if type(h) == "table" and validRoute(h.R) and #history < (cfg().HistorySize or 20) then
+				local t = finite(h.T, -1)
+				table.insert(history, {
+					R = h.R,
+					P = math.clamp(count(h.P), 0, 8),
+					N = math.clamp(count(h.N), 1, 8),
+					T = if t > 0 and t < 3600 then math.floor(t * 100 + 0.5) / 100 else nil,
+					L = if finite(h.L, -1) > 0 then math.floor(finite(h.L, 0) * 100 + 0.5) / 100 else nil,
+					C = if type(h.C) == "string" and #h.C <= 40 then h.C else nil,
+					X = count(h.X),
+					M = math.clamp(count(h.M), 0, 3),
+					At = count(h.At),
+				})
+			end
+		end
+	end
+	-- stats par parcours
+	local routes = {}
+	if type(src.Routes) == "table" then
+		for id, r in pairs(src.Routes) do
+			if validRoute(id) and type(r) == "table" then
+				local t = finite(r.T, -1)
+				routes[id] = {
+					R = count(r.R),
+					W = count(r.W),
+					P = count(r.P),
+					T = if t >= 3 and t < 3600 then t else nil,
+					C = if type(r.C) == "string" and #r.C <= 40 then r.C else nil,
+					M = math.clamp(count(r.M), 0, 3),
+				}
+			end
+		end
+	end
+	local ghosts = {}
+	if type(src.Ghost) == "table" then
+		for id, g in pairs(src.Ghost) do
+			if validRoute(id) then
+				ghosts[id] = RaceRules.CleanGhost(g)
+			end
+		end
+	end
 	return {
 		Day = day,
 		Rewarded = rewarded,
@@ -522,6 +583,13 @@ function RaceRules.SanitizeData(raw: any, today: number): any
 		Wins = count(src.Wins),
 		Podiums = count(src.Podiums),
 		Best = best,
+		Xp = count(src.Xp),
+		History = history,
+		Routes = routes,
+		Ghost = ghosts,
+		DriftBest = count(src.DriftBest),
+		Overtakes = count(src.Overtakes),
+		Distance = count(src.Distance),
 	}
 end
 
@@ -549,6 +617,259 @@ end
 function RaceRules.MinSegmentTime(length: number, top: number): number
 	local anti = cfg().Anti or {}
 	return math.max(0, finite(length, 0)) / math.max(1, finite(top, 60) * (anti.SegmentFactor or 1.15))
+end
+
+----------------------------------------------------------------------
+-- (v11, RACE11) Médailles : temps de référence d'un pilote parfait
+----------------------------------------------------------------------
+
+-- Temps (s) pour parcourir `distance` studs de course depuis d0 (négatif =
+-- derrière la ligne) en suivant le profil de vitesse. sOf(d) -> s sur la ligne.
+function RaceRules.SimTime(line: Line, profile: { number }, sOf: (number) -> number, d0: number, distance: number, top: number, accel: number, skill: number?): number
+	local st = { D = d0, V = 0 }
+	local t = 0
+	local k = skill or 1
+	local dt = 0.1
+	while st.D < distance and t < 1800 do
+		RaceRules.AIStep(st, dt, RaceRules.ProfileAt(line, profile, sOf(st.D)) * k, top, accel)
+		t += dt
+	end
+	return t
+end
+
+-- par (s) -> { Gold, Silver, Bronze } (s, arrondis au 1/10)
+function RaceRules.Medals(par: number): { Gold: number, Silver: number, Bronze: number }
+	local m = cfg().Medals or {}
+	local p = math.max(1, finite(par, 60))
+	local function r(f: number): number
+		return math.floor(p * f * 10 + 0.5) / 10
+	end
+	return { Gold = r(m.Gold or 1.06), Silver = r(m.Silver or 1.18), Bronze = r(m.Bronze or 1.35) }
+end
+
+-- 1 = or, 2 = argent, 3 = bronze, 0 = aucune
+function RaceRules.MedalFor(time: number?, medals: any): number
+	local t = finite(time, math.huge)
+	if type(medals) ~= "table" or t <= 0 or t == math.huge then
+		return 0
+	end
+	if t <= finite(medals.Gold, -1) then
+		return 1
+	elseif t <= finite(medals.Silver, -1) then
+		return 2
+	elseif t <= finite(medals.Bronze, -1) then
+		return 3
+	end
+	return 0
+end
+RaceRules.MEDAL_ICONS = { "🥇", "🥈", "🥉" }
+
+----------------------------------------------------------------------
+-- (v11) XP et rangs (cosmétiques)
+----------------------------------------------------------------------
+
+-- info = { Place, Finished, Humans (adversaires humains), Medal (0..3),
+--          Record (bool), Overtakes, Dnf }
+function RaceRules.XpFor(info: any): number
+	local x = cfg().Xp or {}
+	if type(info) ~= "table" then
+		return 0
+	end
+	if not info.Finished then
+		return if info.Dnf then (x.Dnf or 8) else 0
+	end
+	local xp = x.Finish or 40
+	local place = math.floor(finite(info.Place, 99))
+	local bonus = (x.Place or { 60, 40, 25 })[place]
+	if bonus then
+		xp += bonus
+	end
+	xp += math.min(x.MaxHuman or 30, (x.PerHuman or 10) * math.max(0, math.floor(finite(info.Humans, 0))))
+	local medal = math.floor(finite(info.Medal, 0))
+	if medal >= 1 and medal <= 3 then
+		xp += (x.Medal or { 30, 20, 10 })[medal] or 0
+	end
+	if info.Record == true then
+		xp += x.Record or 20
+	end
+	xp += (x.Overtake or 3) * math.clamp(math.floor(finite(info.Overtakes, 0)), 0, x.MaxOvertakes or 8)
+	return xp
+end
+
+-- Rang d'un total d'XP -> { Index, Id, Name, Icon, Color (Color3), Division
+-- (3, 2, 1 ; 0 au sommet), Label ("Silver II"), Min, Next (XP du palier
+-- suivant ou nil), Progress (0..1) }
+function RaceRules.Rank(xp: number?): any
+	local ranks = cfg().Ranks or { { Id = "Bronze", Name = "Bronze", Icon = "🥉", Min = 0, Color = { 214, 140, 82 } } }
+	local v = math.max(0, finite(xp, 0))
+	local index = 1
+	for i, r in ipairs(ranks) do
+		if v >= (r.Min or 0) then
+			index = i
+		end
+	end
+	local r = ranks[index]
+	local nextTier = ranks[index + 1]
+	local c = r.Color or { 255, 255, 255 }
+	local color = Color3.fromRGB(c[1] or 255, c[2] or 255, c[3] or 255)
+	local roman = { "I", "II", "III" }
+	if not nextTier then
+		-- sommet : une étoile tous les 2000 XP au-delà du palier
+		local stars = math.floor((v - (r.Min or 0)) / 2000)
+		local base = r.Min + stars * 2000
+		return {
+			Index = index, Id = r.Id, Name = r.Name, Icon = r.Icon, Color = color, Division = 0, Stars = stars,
+			Label = r.Name, Min = base, Next = base + 2000, Progress = math.clamp((v - base) / 2000, 0, 1), Xp = v,
+		}
+	end
+	local span = (nextTier.Min - r.Min) / 3
+	local step = math.clamp(math.floor((v - r.Min) / span), 0, 2) -- 0 = III, 2 = I
+	local lo = r.Min + step * span
+	local hi = lo + span
+	local division = 3 - step
+	return {
+		Index = index, Id = r.Id, Name = r.Name, Icon = r.Icon, Color = color, Division = division, Stars = 0,
+		Label = r.Name .. " " .. roman[division], Min = math.floor(lo + 0.5), Next = math.floor(hi + 0.5),
+		Progress = math.clamp((v - lo) / math.max(1, hi - lo), 0, 1), Xp = v,
+	}
+end
+
+----------------------------------------------------------------------
+-- (v11) Fantôme du meilleur tour : temps de passage relatifs au tour
+----------------------------------------------------------------------
+
+-- ghost = { T = { t1.. }, D = { d1.. }, Time, Car } (t, d croissants ; le
+-- dernier point = fin du tour). -> distance (relative au tour) au temps tau
+function RaceRules.GhostAt(ghost: any, tau: number): number
+	if type(ghost) ~= "table" or type(ghost.T) ~= "table" or type(ghost.D) ~= "table" then
+		return 0
+	end
+	local T, D = ghost.T, ghost.D
+	local n = math.min(#T, #D)
+	if n == 0 or tau <= 0 then
+		return 0
+	end
+	local t0, d0 = 0, 0
+	for i = 1, n do
+		local t1, d1 = T[i], D[i]
+		if tau <= t1 then
+			local f = (tau - t0) / math.max(1e-6, t1 - t0)
+			return d0 + (d1 - d0) * math.clamp(f, 0, 1)
+		end
+		t0, d0 = t1, d1
+	end
+	return D[n]
+end
+
+-- Temps du fantôme quand il atteint la distance d (relative au tour), nil au-delà
+function RaceRules.GhostTimeAt(ghost: any, d: number): number?
+	if type(ghost) ~= "table" or type(ghost.T) ~= "table" or type(ghost.D) ~= "table" then
+		return nil
+	end
+	local T, D = ghost.T, ghost.D
+	local t0, d0 = 0, 0
+	for i = 1, math.min(#T, #D) do
+		if d <= D[i] + 1e-6 then
+			local f = (d - d0) / math.max(1e-6, D[i] - d0)
+			return t0 + (T[i] - t0) * math.clamp(f, 0, 1)
+		end
+		t0, d0 = T[i], D[i]
+	end
+	return nil
+end
+
+-- Fantôme propre (sauvegarde) ou nil
+function RaceRules.CleanGhost(raw: any): any?
+	if type(raw) ~= "table" or type(raw.T) ~= "table" or type(raw.D) ~= "table" then
+		return nil
+	end
+	local T, D = {}, {}
+	local lastT, lastD = 0, 0
+	for i = 1, math.min(#raw.T, #raw.D, 80) do
+		local t, d = finite(raw.T[i], -1), finite(raw.D[i], -1)
+		if t <= lastT or d <= lastD or t > 3600 or d > 20000 then
+			return nil
+		end
+		table.insert(T, math.floor(t * 100 + 0.5) / 100)
+		table.insert(D, math.floor(d * 10 + 0.5) / 10)
+		lastT, lastD = t, d
+	end
+	if #T < 2 then
+		return nil
+	end
+	local car = if type(raw.Car) == "string" and #raw.Car <= 40 then raw.Car else "CityCar"
+	return { T = T, D = D, Time = T[#T], Car = car }
+end
+
+----------------------------------------------------------------------
+-- (v11) Nitro : dérapage et aspiration (mesurés par le serveur)
+----------------------------------------------------------------------
+
+-- Angle de glisse (degrés, 0..180) entre le cap de la voiture et sa vitesse
+function RaceRules.SlipAngle(lookX: number, lookZ: number, vx: number, vz: number): number
+	local lv = math.sqrt(lookX * lookX + lookZ * lookZ)
+	local vv = math.sqrt(vx * vx + vz * vz)
+	if lv < 1e-6 or vv < 1e-6 then
+		return 0
+	end
+	local c = math.clamp((lookX * vx + lookZ * vz) / (lv * vv), -1, 1)
+	return math.deg(math.acos(c))
+end
+
+-- Points de dérapage par seconde (angle en degrés, vitesse en studs/s)
+function RaceRules.DriftRate(angle: number, speed: number): number
+	local d = cfg().Drift or {}
+	local a = finite(angle, 0)
+	local v = finite(speed, 0)
+	if v < (d.MinSpeed or 22) or a < (d.MinAngle or 9) or a > (d.MaxAngle or 65) then
+		return 0
+	end
+	return v * math.sin(math.rad(a)) * 2.2
+end
+
+-- Aspiration : `gap` studs derrière une voiture (même file à ±3,5 studs) ?
+function RaceRules.InDraft(gap: number, lateral: number): boolean
+	return gap >= 8 and gap <= 30 and math.abs(lateral) <= 3.5
+end
+
+-- Jauge de nitro : (charges, jauge 0..1) + points de dérapage + secondes d'aspiration
+function RaceRules.NitroGain(charges: number, gauge: number, driftPoints: number, draftSeconds: number): (number, number)
+	local n = cfg().Nitro or {}
+	local max = n.Max or 3
+	local c = math.clamp(math.floor(finite(charges, 0)), 0, max)
+	local g = math.max(0, finite(gauge, 0)) + math.max(0, finite(driftPoints, 0)) / (n.DriftPoints or 1400)
+		+ math.max(0, finite(draftSeconds, 0)) / (n.DraftSeconds or 7)
+	while g >= 1 and c < max do
+		g -= 1
+		c += 1
+	end
+	if c >= max then
+		g = math.min(g, 0.999)
+	end
+	return c, g
+end
+
+-- Multiplicateur de vitesse de pointe pendant un boost
+function RaceRules.BoostFactor(): number
+	local n = cfg().Nitro or {}
+	return 1 + (n.Boost or 0.18)
+end
+
+----------------------------------------------------------------------
+-- (v11) Historique
+----------------------------------------------------------------------
+
+-- Ajoute une course en tête de l'historique (borné)
+function RaceRules.PushHistory(rd: any, entry: any)
+	if type(rd) ~= "table" then
+		return
+	end
+	rd.History = if type(rd.History) == "table" then rd.History else {}
+	table.insert(rd.History, 1, entry)
+	local size = cfg().HistorySize or 20
+	while #rd.History > size do
+		table.remove(rd.History)
+	end
 end
 
 return RaceRules

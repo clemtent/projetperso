@@ -744,13 +744,26 @@ Config.Music = {
 }
 
 ----------------------------------------------------------------------
--- 🎵 Instruments de la SCÈNE MUSICALE de la place (v9.9, MUSIC99).
---   Chaque note joue un Sound "rééchantillonné" : sa hauteur vient de
---   PlaybackSpeed = 2^((note - BaseNote) / 12) (un demi-ton = x1,0595 ;
---   notes MIDI : Do central C4 = 60, La 440 Hz = A4 = 69). Par défaut, des
---   sons INTÉGRÉS à Roblox ("rbxasset://sounds/...", présents dans toutes
---   les installations) : tous les instruments mélodiques partagent le même
---   échantillon et la même BaseNote -> ils restent accordés entre eux.
+-- 🎵 Instruments de la SCÈNE MUSICALE de la place (v9.9 MUSIC99, v11 MUSIC11).
+--   (v11) CHAQUE INSTRUMENT A SON PROPRE TIMBRE. Avant, tous les
+--   instruments mélodiques jouaient le MÊME échantillon à la même hauteur
+--   avec de légers effets : tout sonnait comme "le piano". Maintenant,
+--   chaque instrument = un mélange de couches + sa propre chaîne d'effets
+--   Roblox (MusicSynth) :
+--     🎹 piano : fondamentale + harmoniques + petit "marteau", réverbération
+--        de salle, les notes graves durent plus longtemps ;
+--     🎸 guitare : saturation forte + "baffle" (aigus coupés) + médiator ;
+--     🎸 basse : très grave + octave + attaque au doigt, compresseur ;
+--     🎶 xylophone : lame de bois (harmonique à la douzième), très court ;
+--     🎛️ synthé : 2 oscillateurs désaccordés + chorus, flanger, trémolo, écho,
+--        notes tenues (impulsions répétées) ;
+--     🥁 batterie : grosse caisse "808" (hauteur qui CHUTE), caisse claire
+--        en bruit + corps, charleston très aigu filtré, cymbales longues,
+--        toms qui "tombent" ; 🎧 DJ : scratch, corne, montée, drop.
+--   Hauteur : PlaybackSpeed = 2^((note - BaseNote) / 12) (un demi-ton =
+--   x1,0595 ; notes MIDI : Do central C4 = 60, La 440 Hz = A4 = 69).
+--   Sons par défaut : UNIQUEMENT des sons INTÉGRÉS à Roblox
+--   ("rbxasset://sounds/...", livrés avec chaque installation ; voir Samples).
 --   Pour de VRAIS sons d'instruments :
 --     Studio > Boîte à outils (Toolbox) > Audio, ou le Creator Store ;
 --     cherche "piano note C4", "electric guitar note", "bass note",
@@ -759,44 +772,72 @@ Config.Music = {
 --     les jeux) ; écoute ; clic droit > "Copier l'ID de l'élément" ; colle
 --     "rbxassetid://ID" dans SampleId ; mets dans BaseNote la note que joue
 --     l'échantillon (souvent écrite dans son nom, ex. "C4" = 60) ; pour un
---     vrai échantillon, MinSpeed = 0.25 et MaxSpeed = 4 conviennent.
+--     vrai échantillon, mets aussi Layers = { { 0, 1 } } et Attack = {} (le
+--     son est déjà riche), MinSpeed = 0.25 et MaxSpeed = 4.
+--   SampleId : un nom de Samples ("Ping"…) ou un identifiant complet.
 --   Garde "" pour couper un instrument. Volume : 0..1 (multiplié par le
 --   volume des effets du joueur, ⚙️). Decay : (s) le son s'éteint en fondu.
---   Layers : { demi-tons, volume } joués ensemble (timbre plus riche).
+--   Layers : { demi-tons, volume, centièmes de demi-ton?, x Decay? } joués
+--     ensemble (désaccord léger = son plus large).
+--   Attack : bruits d'attaque sans hauteur { Sample, vitesse, volume, Decay }.
+--   Pulse (synthé) : la note est rejouée Count fois toutes les Every s
+--     (Fade = volume gardé à chaque fois) : son "tenu".
 --   MinSpeed / MaxSpeed : hors de ces vitesses, la note est jouée une
 --   octave plus haut / plus bas (même nom de note : l'harmonie reste juste).
 --   Batterie / DJ : chaque pièce = une liste de couches
---   { SampleId, Speed, Volume, Decay?, Delay? }.
+--   { Sample, vitesse, volume, Decay, Delay?, VitesseFinale?, DuréeGlissé? }
+--   (VitesseFinale : la hauteur glisse vers elle = grosse caisse, toms).
 ----------------------------------------------------------------------
 Config.Instruments = {
 	Volume = 0.8, -- volume général de la scène
-	RollOffMin = 14, -- (studs) son 3D : plein volume jusqu'ici…
-	RollOffMax = 120, -- …silence au-delà (on n'entend la scène que de près)
+	RollOffMin = 16, -- (studs) son 3D : plein volume jusqu'ici…
+	RollOffMax = 140, -- …silence au-delà (on n'entend la scène que de près)
 	-- 📻 radio lofi (Config.Music.Playlist) sur les enceintes de la scène
-	Radio = { Volume = 0.65, RollOffMin = 18, RollOffMax = 110 },
-	Piano = { SampleId = "rbxasset://sounds/electronicpingshort.wav", BaseNote = 76, Volume = 0.7, Decay = 1.6, MinSpeed = 0.33, MaxSpeed = 3, Layers = { { 0, 1 }, { 12, 0.16 } } },
-	Synth = { SampleId = "rbxasset://sounds/electronicpingshort.wav", BaseNote = 76, Volume = 0.55, Decay = 1.1, MinSpeed = 0.33, MaxSpeed = 3, Layers = { { 0, 1 }, { -12, 0.45 }, { 7, 0.12 } } },
-	Xylophone = { SampleId = "rbxasset://sounds/electronicpingshort.wav", BaseNote = 76, Volume = 0.6, Decay = 0.55, MinSpeed = 0.4, MaxSpeed = 3.2, Layers = { { 0, 1 }, { 24, 0.12 } } },
-	Guitar = { SampleId = "rbxasset://sounds/electronicpingshort.wav", BaseNote = 76, Volume = 0.5, Decay = 1.2, MinSpeed = 0.3, MaxSpeed = 2.6, Layers = { { 0, 1 } }, Distortion = 0.35 },
-	Bass = { SampleId = "rbxasset://sounds/electronicpingshort.wav", BaseNote = 76, Volume = 0.8, Decay = 0.9, MinSpeed = 0.2, MaxSpeed = 1.2, Layers = { { 0, 1 }, { 12, 0.2 } } },
+	Radio = { Volume = 0.65, RollOffMin = 18, RollOffMax = 120 },
+	-- sons intégrés à Roblox (dossier "content/sounds" de chaque installation)
+	Samples = {
+		Ping = "rbxasset://sounds/electronicpingshort.wav", -- note pure (oscillateur)
+		Click = "rbxasset://sounds/clickfast.wav", -- clic sec (attaques)
+		Swoosh = "rbxasset://sounds/swoosh.wav", -- souffle (bruit : caisse claire, cymbales)
+		Button = "rbxasset://sounds/button.wav", -- petit "toc" (lames de bois)
+		Thud = "rbxasset://sounds/action_jump_land.mp3", -- choc sourd (grosse caisse)
+		Splash = "rbxasset://sounds/impact_water.mp3", -- éclaboussure (bruit : crash, timbre)
+		Wind = "rbxasset://sounds/action_falling.mp3", -- vent (bruit aigu : charleston)
+	},
+	Piano = { SampleId = "Ping", BaseNote = 76, Volume = 0.62, Decay = 2.4, MinSpeed = 0.2, MaxSpeed = 3.2, KeyTrack = true,
+		Layers = { { 0, 1 }, { 12, 0.2, 3 }, { 19, 0.05, -4, 0.5 } },
+		Attack = { { "Click", 1.9, 0.09, 0.05 } } },
+	Guitar = { SampleId = "Ping", BaseNote = 76, Volume = 0.42, Decay = 1.5, MinSpeed = 0.2, MaxSpeed = 2.6, Distortion = 0.72,
+		Layers = { { 0, 1 }, { 0, 0.6, 11 }, { -12, 0.4, -6 } },
+		Attack = { { "Click", 2.6, 0.1, 0.04 } } },
+	Bass = { SampleId = "Ping", BaseNote = 76, Volume = 0.8, Decay = 1.1, MinSpeed = 0.09, MaxSpeed = 1.2,
+		Layers = { { 0, 1 }, { 12, 0.45 } },
+		Attack = { { "Click", 0.75, 0.22, 0.06 } } },
+	Xylophone = { SampleId = "Ping", BaseNote = 76, Volume = 0.6, Decay = 0.5, MinSpeed = 0.3, MaxSpeed = 3.6,
+		Layers = { { 0, 1 }, { 19, 0.3, 0, 0.45 }, { 24, 0.08, 0, 0.3 } },
+		Attack = { { "Click", 1.5, 0.26, 0.05 }, { "Button", 1.2, 0.12, 0.05 } } },
+	Synth = { SampleId = "Ping", BaseNote = 76, Volume = 0.42, Decay = 1.3, MinSpeed = 0.2, MaxSpeed = 3,
+		Layers = { { 0, 0.75, -9 }, { 0, 0.75, 9 }, { -12, 0.5 }, { 12, 0.12, 5 }, { 7, 0.07 } },
+		Attack = {},
+		Pulse = { Every = 0.17, Count = 4, Fade = 0.62 } },
 	Drums = {
-		Volume = 0.75,
-		Kick = { { "rbxasset://sounds/clickfast.wav", 0.28, 1, 0.35 }, { "rbxasset://sounds/electronicpingshort.wav", 0.14, 0.5, 0.3 } },
-		Snare = { { "rbxasset://sounds/swoosh.wav", 3.2, 0.55, 0.22 }, { "rbxasset://sounds/clickfast.wav", 0.9, 0.6, 0.15 } },
-		HatClosed = { { "rbxasset://sounds/swoosh.wav", 7, 0.22, 0.07 } },
-		HatOpen = { { "rbxasset://sounds/swoosh.wav", 5, 0.26, 0.4 } },
-		TomHigh = { { "rbxasset://sounds/electronicpingshort.wav", 0.42, 0.75, 0.35 }, { "rbxasset://sounds/clickfast.wav", 0.6, 0.4, 0.1 } },
-		TomMid = { { "rbxasset://sounds/electronicpingshort.wav", 0.34, 0.8, 0.4 }, { "rbxasset://sounds/clickfast.wav", 0.5, 0.4, 0.1 } },
-		TomFloor = { { "rbxasset://sounds/electronicpingshort.wav", 0.26, 0.85, 0.5 }, { "rbxasset://sounds/clickfast.wav", 0.4, 0.45, 0.12 } },
-		Crash = { { "rbxasset://sounds/swoosh.wav", 1.6, 0.45, 1.4 } },
-		Ride = { { "rbxasset://sounds/electronicpingshort.wav", 2.4, 0.22, 0.6 }, { "rbxasset://sounds/swoosh.wav", 5, 0.12, 0.3 } },
+		Volume = 0.8,
+		Kick = { { "Ping", 0.2, 1, 0.45, 0, 0.075, 0.09 }, { "Click", 0.55, 0.5, 0.05 }, { "Thud", 0.9, 0.45, 0.3 } },
+		Snare = { { "Swoosh", 3.4, 0.55, 0.2 }, { "Splash", 2.6, 0.32, 0.18 }, { "Ping", 0.34, 0.45, 0.12, 0, 0.27, 0.05 }, { "Click", 1.3, 0.45, 0.04 } },
+		HatClosed = { { "Swoosh", 8, 0.3, 0.05 }, { "Wind", 6, 0.22, 0.05 }, { "Click", 4, 0.08, 0.02 } },
+		HatOpen = { { "Swoosh", 6.5, 0.3, 0.42 }, { "Wind", 5, 0.22, 0.4 } },
+		TomHigh = { { "Ping", 0.37, 0.8, 0.42, 0, 0.3, 0.12 }, { "Click", 0.8, 0.35, 0.04 }, { "Splash", 1.4, 0.1, 0.12 } },
+		TomMid = { { "Ping", 0.29, 0.85, 0.5, 0, 0.235, 0.14 }, { "Click", 0.7, 0.35, 0.04 }, { "Splash", 1.2, 0.1, 0.14 } },
+		TomFloor = { { "Ping", 0.22, 0.9, 0.62, 0, 0.175, 0.16 }, { "Click", 0.6, 0.38, 0.05 }, { "Splash", 1.0, 0.1, 0.16 } },
+		Crash = { { "Swoosh", 2.4, 0.48, 1.7 }, { "Splash", 1.7, 0.4, 1.6 }, { "Wind", 3, 0.22, 1.4 }, { "Ping", 4.3, 0.05, 0.8 } },
+		Ride = { { "Ping", 3.05, 0.16, 0.9 }, { "Ping", 4.41, 0.09, 0.7 }, { "Swoosh", 7, 0.12, 0.25 }, { "Click", 3.5, 0.1, 0.03 } },
 	},
 	DJ = {
 		Volume = 0.8,
-		Scratch = { { "rbxasset://sounds/swoosh.wav", 2.3, 0.5, 0.18 }, { "rbxasset://sounds/swoosh.wav", 1.4, 0.45, 0.22, 0.14 } },
-		Horn = { { "rbxasset://sounds/electronicpingshort.wav", 1, 0.5, 0.2 }, { "rbxasset://sounds/electronicpingshort.wav", 1.26, 0.4, 0.2 }, { "rbxasset://sounds/electronicpingshort.wav", 1, 0.5, 0.2, 0.16 }, { "rbxasset://sounds/electronicpingshort.wav", 1.26, 0.4, 0.3, 0.16 } },
-		Riser = { { "rbxasset://sounds/swoosh.wav", 0.55, 0.5, 1.6 }, { "rbxasset://sounds/electronicpingshort.wav", 0.5, 0.3, 0.3, 0.4 }, { "rbxasset://sounds/electronicpingshort.wav", 0.75, 0.3, 0.3, 0.8 }, { "rbxasset://sounds/electronicpingshort.wav", 1, 0.35, 0.4, 1.2 } },
-		Drop = { { "rbxasset://sounds/clickfast.wav", 0.2, 1, 0.6 }, { "rbxasset://sounds/electronicpingshort.wav", 0.12, 0.7, 0.9 }, { "rbxasset://sounds/swoosh.wav", 0.8, 0.4, 1.2 } },
+		Scratch = { { "Swoosh", 3, 0.5, 0.16, 0, 0.9, 0.14 }, { "Swoosh", 0.9, 0.45, 0.2, 0.15, 2.6, 0.16 }, { "Click", 1.6, 0.2, 0.03 } },
+		Horn = { { "Ping", 1, 0.45, 0.22 }, { "Ping", 1.26, 0.35, 0.22 }, { "Ping", 1, 0.45, 0.22, 0.17 }, { "Ping", 1.26, 0.35, 0.22, 0.17 }, { "Ping", 1, 0.5, 0.5, 0.34 }, { "Ping", 1.26, 0.4, 0.5, 0.34 } },
+		Riser = { { "Swoosh", 0.4, 0.5, 1.8, 0, 2.6, 1.7 }, { "Wind", 0.8, 0.35, 1.8, 0, 3.5, 1.7 }, { "Ping", 0.5, 0.18, 1.8, 0, 2, 1.7 } },
+		Drop = { { "Ping", 0.16, 1, 1.1, 0, 0.04, 0.7 }, { "Thud", 0.7, 0.6, 0.6 }, { "Splash", 0.7, 0.4, 1.2 }, { "Click", 0.3, 0.6, 0.08 } },
 	},
 }
 
