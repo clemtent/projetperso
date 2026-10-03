@@ -1538,6 +1538,9 @@ local function step(dt: number)
 	steer = math.clamp(steer, -1, 1)
 	d.Throttle = throttle
 	local maxSpeed = st.TopSpeed
+	-- (v11, RACE11) nitro de course : RaceClient pose l'attribut LOCAL "RaceBoost" (1..1.25) sur SA voiture
+	local raceBoost = math.clamp(tonumber(d.Model:GetAttribute("RaceBoost")) or 1, 1, 1.25)
+	maxSpeed *= raceBoost
 	local look = Vector3.new(-math.sin(d.Heading), 0, -math.cos(d.Heading))
 	local actual = root.AssemblyLinearVelocity:Dot(look)
 	-- départ de course : bloquée sur la grille
@@ -1566,7 +1569,7 @@ local function step(dt: number)
 		if actual < -1 then
 			rate, braking = st.Brake, true
 		else
-			rate = st.Accel * fade
+			rate = st.Accel * fade * raceBoost
 		end
 	elseif throttle < -0.05 then
 		if actual > 1 then

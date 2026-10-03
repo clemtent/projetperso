@@ -2000,7 +2000,8 @@ function WorldLayout.Facilities(count: number): { Zone }
 	add("Plaza", "Main square", "Downtown", 0, 0, 2 * (WorldLayout.PLAZA_R + 30), 2 * (WorldLayout.PLAZA_R + 30))
 	add("TownHall", "Town hall", "Downtown", 0, -(WorldLayout.PLAZA_R + 16), 60, 30)
 	add("Fair", "Fun fair", "Facility", 0, -(WorldLayout.FAIR_NEAR + WorldLayout.FAIR_D / 2), WorldLayout.FAIR_W, WorldLayout.FAIR_D)
-	add("MusicStage", "Music stage", "Downtown", math.sin(math.rad(225)) * 42, math.cos(math.rad(225)) * 42, 24, 16)
+	add("MusicStage", "Music stage", "Downtown", math.sin(math.rad(225)) * 42, math.cos(math.rad(225)) * 42, 32, 22) -- (v11 MUSIC11) scène agrandie
+	add("MusicCrowd", "Concert audience", "Downtown", math.sin(math.rad(225)) * 22, math.cos(math.rad(225)) * 22, 30, 16, math.rad(225)) -- (v11 MUSIC11) public du concert
 	add("FoodCorner", "Food corner", "Facility", 70, front + 9 + WorldLayout.FOOD_D / 2, WorldLayout.FOOD_W, WorldLayout.FOOD_D)
 	add("Gate", "Town gate", "Facility", 0, gate, 64, 24)
 	add("Market", "MégaDopa", "Facility", WorldLayout.MARKET_X + WorldLayout.MARKET_D / 2, gate + 20 + WorldLayout.MARKET_W / 2, WorldLayout.MARKET_D, WorldLayout.MARKET_W)

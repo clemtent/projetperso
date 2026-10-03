@@ -2726,22 +2726,27 @@ for index, food in ipairs(Config.Food.Items) do
 end
 
 ----------------------------------------------------------------------
--- 🏁 Courses de rue (v10, RACE10 ; RaceService / Shared/RaceRules /
--- Shared/RaceRoutes / Client/World/RaceClient) : 2 à 8 coureurs, des
--- pilotes IA complètent la grille jusqu'à MinGrid. Vitesses en studs/s.
+-- 🏁 Courses de rue (v10 RACE10, v11 RACE11 ; RaceService / Shared/RaceRules /
+-- Shared/RaceRoutes / Client/World/RaceClient + RaceHud + RaceMenu) : 2 à 8
+-- coureurs, des pilotes IA complètent la grille jusqu'à MinGrid. Vitesses en
+-- studs/s.
 --   Récompenses : secondes de production (Formulas.ScaledReward) selon la
 --   place, x (1 + HumanBonus par adversaire humain, au plus MaxHumanBonus),
 --   x SoloFactor sans adversaire humain ; DailyRewarded courses payées par
---   jour (ensuite : records et trophées seulement). Voir RaceRules.
+--   jour (ensuite : records, XP et trophées seulement). Voir RaceRules.
 --   Anti-triche (serveur) : ordre des portes, temps minimal par tronçon,
---   vitesse plausible, téléportation, être au volant de sa voiture.
+--   vitesse plausible (nitro comprise), téléportation, être au volant.
+--   (v11) Nitro : charges données par le serveur (1 au départ, + dérapages et
+--   aspiration), boost court de la vitesse de pointe ; XP et rangs (Bronze ->
+--   Diamant, cosmétiques) ; médailles par parcours (temps de référence) ;
+--   fantôme de ton meilleur tour ; historique des courses.
 ----------------------------------------------------------------------
 Config.Race = {
 	MaxRacers = 8,
 	MinGrid = 4, -- IA ajoutées jusqu'à 4 voitures sur la grille
 	LobbySeconds = 20, -- attente après la 1re inscription
 	LateJoinSeconds = 8, -- une inscription tardive laisse au moins 8 s
-	GridSeconds = 3, -- mise en place sur la grille avant le 3-2-1
+	GridSeconds = 3.5, -- mise en place sur la grille avant le 3-2-1 (caméra de présentation)
 	CountdownSeconds = 3,
 	FinishGrace = 35, -- s laissées aux autres après le 1er humain arrivé
 	MaxSeconds = 480, -- durée max d'une course
@@ -2749,6 +2754,8 @@ Config.Race = {
 	ResetCooldown = 3, -- s entre deux "retour à la porte"
 	OffCarGrace = 5, -- s hors de sa voiture -> abandon
 	CheckpointSpacing = 170, -- studs entre deux portes
+	-- (v11) grille de départ (studs) : voitures à l'échelle Roblox (CARS11)
+	Grid = { First = 11, Row = 21, Side = 5.2 },
 	Rewards = {
 		Seconds = { 120, 80, 55 }, -- 1er, 2e, 3e (secondes de production)
 		FinishSeconds = 35, -- arrivé 4e ou plus
@@ -2765,6 +2772,36 @@ Config.Race = {
 		MaxStrikes = 3, -- au 3e saut : disqualifié
 		SegmentFactor = 1.15, -- tronçon plus rapide que longueur / (pointe x 1,15) : disqualifié
 	},
+	-- (v11) nitro : +Boost de vitesse de pointe pendant Seconds ; charges : Start
+	-- au départ, au plus Max ; la jauge se remplit en dérapant (DriftPoints
+	-- points = 1 charge) et dans l'aspiration d'une voiture (DraftSeconds s = 1 charge)
+	Nitro = { Start = 1, Max = 3, Boost = 0.18, Seconds = 2.6, DriftPoints = 1400, DraftSeconds = 7 },
+	-- (v11) dérapage mesuré par le serveur : angle de glisse (degrés) et vitesse minimale
+	Drift = { MinAngle = 9, MaxAngle = 65, MinSpeed = 22 },
+	-- (v11) XP de course (rang cosmétique, sans effet sur l'économie)
+	Xp = {
+		Finish = 40, -- arrivé
+		Place = { 60, 40, 25 }, -- bonus 1er / 2e / 3e
+		PerHuman = 10, -- par adversaire humain
+		MaxHuman = 30,
+		Medal = { 30, 20, 10 }, -- or / argent / bronze
+		Record = 20, -- nouveau record personnel
+		Dnf = 8, -- abandon (participation)
+		Overtake = 3, -- par dépassement (au plus MaxOvertakes)
+		MaxOvertakes = 8,
+	},
+	-- (v11) rangs : 3 divisions (III -> I) par palier, Diamant au sommet
+	Ranks = {
+		{ Id = "Bronze", Name = "Bronze", Icon = "🥉", Min = 0, Color = { 214, 140, 82 } },
+		{ Id = "Silver", Name = "Silver", Icon = "🥈", Min = 600, Color = { 200, 210, 226 } },
+		{ Id = "Gold", Name = "Gold", Icon = "🥇", Min = 1800, Color = { 255, 204, 60 } },
+		{ Id = "Platinum", Name = "Platinum", Icon = "💠", Min = 4000, Color = { 120, 230, 220 } },
+		{ Id = "Diamond", Name = "Diamond", Icon = "💎", Min = 8000, Color = { 140, 200, 255 } },
+	},
+	-- (v11) médailles : temps de référence (pilote parfait, Par.TopSpeed) x facteur
+	Medals = { Gold = 1.06, Silver = 1.18, Bronze = 1.35 },
+	Par = { TopSpeed = 66, Accel = 30 },
+	HistorySize = 20, -- dernières courses gardées (stats, graphe)
 	AI = {
 		LatAccel = 30, -- (studs/s²) virages
 		Brake = 38, -- (studs/s²) freinage anticipé
@@ -2773,13 +2810,19 @@ Config.Race = {
 		RubberSlow = 0.1, -- au plus -10 % devant tous les humains
 		RubberRange = 500, -- (studs) écart pour l'effet maximal
 		FairFinish = 0.12, -- aucun élastique dans les derniers 12 % de la course
+		Draft = 0.04, -- (v11) aspiration : +4 % derrière une voiture (8..30 studs)
+		Launch = { 0.15, 0.45 }, -- (v11) temps de réaction au départ (s)
 		Names = { "Nina Turbo", "Max Vroom", "Lou Drift", "Sam Nitro", "Zoé Flash", "Téo Pistons", "Lina Rocket" },
 	},
 	Routes = {
-		{ Id = "City", Name = "City circuit", Icon = "🏙️", Laps = 2, Desc = "Two laps around downtown" },
-		{ Id = "Highway", Name = "Highway sprint", Icon = "🛣️", Laps = 1, Sprint = true, Desc = "Flat out on the highway" },
-		{ Id = "Districts", Name = "District loop", Icon = "🏘️", Laps = 1, Desc = "Through every district" },
-		{ Id = "Night", Name = "Night race", Icon = "🌙", Laps = 1, Night = true, Desc = "The grand tour, under the stars" },
+		{ Id = "City", Name = "City circuit", Icon = "🏙️", Laps = 2, Desc = "Two laps around downtown", Color = { 255, 214, 90 } },
+		{ Id = "Highway", Name = "Highway sprint", Icon = "🛣️", Laps = 1, Sprint = true, Desc = "Flat out on the highway", Color = { 90, 210, 255 } },
+		{ Id = "Districts", Name = "District loop", Icon = "🏘️", Laps = 1, Desc = "Through every district", Color = { 120, 236, 150 } },
+		{ Id = "Night", Name = "Night race", Icon = "🌙", Laps = 1, Night = true, Desc = "The grand tour, under the stars", Color = { 196, 140, 255 } },
+		-- (v11, RACE11)
+		{ Id = "Belt", Name = "Ring road Grand Prix", Icon = "🏎️", Laps = 1, Desc = "One fast lap of the ring avenue", Color = { 255, 120, 90 } },
+		{ Id = "Loft", Name = "Warehouse circuit", Icon = "🏭", Laps = 3, Desc = "Three tight laps among the lofts", Color = { 255, 150, 210 } },
+		{ Id = "Endurance", Name = "Highway endurance", Icon = "🌀", Laps = 1, Desc = "The whole highway loop, nitro ready", Color = { 110, 240, 230 } },
 	},
 }
 Config.RaceRoutesById = {}
