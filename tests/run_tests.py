@@ -3302,7 +3302,7 @@ do
 
 	test("Courses v10 : Config.Race (parcours, récompenses, anti-triche, IA)", function(check)
 		local R = Config.Race
-		check(type(R) == "table" and #R.Routes >= 3 and #R.Routes <= 5, "3 à 5 parcours")
+		check(type(R) == "table" and #R.Routes >= 3 and #R.Routes <= 8, "3 à 8 parcours (v11 : 7)")
 		local ids = {}
 		for _, def in ipairs(R.Routes) do
 			check(not ids[def.Id], "parcours en double " .. tostring(def.Id))
@@ -3327,7 +3327,7 @@ do
 				local tag = count .. "/" .. r.Id
 				check(not r.Fallback, tag .. " : graphe de LAYOUT10 (pas le secours)")
 				local L = r.Line
-				check(L.Total >= 1200 and L.Total <= 9000, tag .. " : longueur " .. math.floor(L.Total))
+				check(L.Total >= (if r.Laps >= 3 then 1000 else 1200) and L.Total <= 9000, tag .. " : longueur " .. math.floor(L.Total))
 				check(r.RaceDistance >= 2000 and r.RaceDistance <= 10000, tag .. " : distance de course " .. math.floor(r.RaceDistance))
 				-- trajectoire sur l'asphalte (1 stud de tolérance), virages sans demi-tour
 				local off, worstTurn = 0, 0
@@ -3471,6 +3471,113 @@ do
 			check(runs[n] ~= nil and active[n] ~= nil and runs[n] >= active[n] * 0.75, "R" .. n .. " : partie trop courte avec les courses")
 		end
 		check(runs[5] ~= nil and runs[1] ~= nil and runs[5] >= runs[1] * 1.3, "la courbe reste croissante")
+	end)
+
+	-- 🏁 RACE11 (v11) : nouveaux parcours, médailles, virages, XP / rangs,
+	-- fantôme, nitro, historique
+	test("Courses v11 : 7 parcours, départs séparés, médailles et virages (1..50 parcelles)", function(check)
+		for _, count in ipairs({ 1, 8, 20, 50 }) do
+			RR.ClearCache()
+			local routes = RR.All(count)
+			local starts = {}
+			for _, r in ipairs(routes) do
+				local tag = count .. "/" .. r.Id
+				local x, z = RU.PointAt(r.Line, r.StartS)
+				for _, q in ipairs(starts) do
+					check(math.sqrt((x - q[1]) ^ 2 + (z - q[2]) ^ 2) >= 89, tag .. " : départ trop près de " .. q[3])
+				end
+				table.insert(starts, { x, z, r.Id })
+				if not r.Closed then
+					local fx, fz = RU.PointAt(r.Line, r.Line.Total)
+					table.insert(starts, { fx, fz, r.Id .. "/arrivée" })
+				end
+				check(type(r.Par) == "number" and r.Par > 20 and r.Par < 300, tag .. " : temps de référence " .. tostring(r.Par))
+				local m = r.Medals
+				check(m.Gold > r.Par and m.Silver > m.Gold and m.Bronze > m.Silver, tag .. " : médailles ordonnées")
+				check(type(r.Corners) == "table" and r.PerLap >= 2, tag .. " : virages / portes par tour")
+				for _, c in ipairs(r.Corners) do
+					check(c.Turn == 1 or c.Turn == -1, tag .. " : sens d'un virage")
+				end
+			end
+			check(RR.Get("Belt", count) ~= nil and RR.Get("Loft", count) ~= nil and RR.Get("Endurance", count) ~= nil, count .. " : nouveaux parcours")
+			check(RR.Get("Loft", count).Laps == 3 and RR.Get("Endurance", count).Closed, count .. " : tours")
+		end
+		RR.ClearCache()
+		-- médaille d'un temps
+		local med = RU.Medals(100)
+		eq(check, RU.MedalFor(100, med), 1, "or")
+		eq(check, RU.MedalFor(110, med), 2, "argent")
+		eq(check, RU.MedalFor(130, med), 3, "bronze")
+		eq(check, RU.MedalFor(200, med), 0, "rien")
+		eq(check, RU.MedalFor(nil, med), 0, "pas de temps")
+	end)
+
+	test("Courses v11 : XP et rangs (Bronze III -> Diamant), sans effet sur l'économie", function(check)
+		local x1 = RU.XpFor({ Place = 1, Finished = true, Humans = 2, Medal = 1, Record = true, Overtakes = 4 })
+		local x4 = RU.XpFor({ Place = 4, Finished = true, Humans = 0, Medal = 0 })
+		local xd = RU.XpFor({ Finished = false, Dnf = true })
+		check(x1 > x4 and x4 > xd and xd > 0, "1er > 4e > abandon " .. x1 .. " " .. x4 .. " " .. xd)
+		eq(check, RU.XpFor({ Finished = false }), 0, "rien sans avoir couru")
+		check(RU.XpFor({ Place = 1, Finished = true, Overtakes = 1e6 }) <= 40 + 60 + Config.Race.Xp.Overtake * Config.Race.Xp.MaxOvertakes, "dépassements plafonnés")
+		local r0 = RU.Rank(0)
+		check(r0.Id == "Bronze" and r0.Division == 3 and r0.Label == "Bronze III" and r0.Progress == 0, "départ : Bronze III")
+		local prev = -1
+		local lastIndex = 1
+		for xp = 0, 12000, 50 do
+			local r = RU.Rank(xp)
+			local score = r.Index * 10 + (4 - (if r.Division == 0 then 4 else r.Division))
+			check(score >= prev, "rang croissant à " .. xp)
+			check(r.Progress >= 0 and r.Progress <= 1 and xp >= r.Min and (r.Next == nil or xp < r.Next), "progression à " .. xp)
+			prev = score
+			lastIndex = r.Index
+		end
+		eq(check, lastIndex, #Config.Race.Ranks, "sommet atteint")
+		eq(check, RU.Rank(Config.Race.Ranks[#Config.Race.Ranks].Min).Id, "Diamond", "Diamant")
+		check(RU.Rank(0 / 0).Id == "Bronze" and RU.Rank(-5).Id == "Bronze", "valeurs folles")
+		check(typeOf(r0.Color) == "Color3", "couleur du rang")
+	end)
+
+	test("Courses v11 : fantôme du meilleur tour, nitro (dérapage, aspiration), historique, données", function(check)
+		local g = RU.CleanGhost({ T = { 10, 20, 30 }, D = { 200, 380, 600 }, Car = "SportsCar" })
+		check(g ~= nil and g.Time == 30 and g.Car == "SportsCar", "fantôme propre")
+		eq(check, RU.GhostAt(g, 5), 100, "fantôme à 5 s")
+		eq(check, RU.GhostAt(g, 25), 490, "fantôme à 25 s")
+		eq(check, RU.GhostAt(g, 99), 600, "fantôme au bout")
+		eq(check, RU.GhostTimeAt(g, 290), 15, "temps du fantôme à 290 studs")
+		check(RU.GhostTimeAt(g, 700) == nil, "au-delà du tour")
+		check(RU.CleanGhost({ T = { 10, 5 }, D = { 1, 2 } }) == nil and RU.CleanGhost({ T = { 1 }, D = { 1 } }) == nil and RU.CleanGhost("x") == nil, "fantômes invalides refusés")
+		-- dérapage
+		check(math.abs(RU.SlipAngle(0, -1, 0, -10) - 0) < 1e-6 and math.abs(RU.SlipAngle(0, -1, 10, 0) - 90) < 1e-6, "angle de glisse")
+		eq(check, RU.DriftRate(5, 50), 0, "pas de dérapage sous l'angle min")
+		eq(check, RU.DriftRate(30, 10), 0, "pas de dérapage à l'arrêt")
+		check(RU.DriftRate(30, 50) > 0, "dérapage")
+		check(RU.InDraft(15, 1) and not RU.InDraft(4, 0) and not RU.InDraft(15, 6), "aspiration")
+		local N = Config.Race.Nitro
+		local c, ga = RU.NitroGain(1, 0.5, N.DriftPoints * 0.6, 0)
+		check(c == 2 and math.abs(ga - 0.1) < 1e-6, "jauge -> charge " .. c .. " " .. ga)
+		local cm, gm = RU.NitroGain(N.Max, 0, 1e9, 1e9)
+		check(cm == N.Max and gm < 1, "charges plafonnées")
+		check(RU.BoostFactor() > 1 and RU.BoostFactor() <= 1.25, "boost raisonnable")
+		-- l'anti-triche tolère le boost (vitesse x boost) mais pas plus
+		local top = 60
+		eq(check, RU.CheckMove(top * RU.BoostFactor(), 1, top * RU.BoostFactor()), "ok", "boost accepté")
+		eq(check, RU.CheckMove(top * 1.9, 1, top * RU.BoostFactor()), "fast", "au-delà du boost")
+		-- historique borné + données v11
+		local rd = RU.SanitizeData(nil, 5)
+		for k = 1, 30 do RU.PushHistory(rd, { R = "City", P = (k % 4) + 1, N = 4, T = 60 + k, X = 50 }) end
+		eq(check, #rd.History, Config.Race.HistorySize, "historique borné")
+		eq(check, rd.History[1].T, 90, "plus récent en tête")
+		rd.Ghost.City = g
+		rd.Ghost.Nope = g
+		rd.Routes.City = { R = 3, W = 1, P = 2, T = 70.5, C = "SportsCar", M = 2 }
+		rd.Routes.Bad = { R = 1 }
+		rd.Xp = 123.7
+		local d2 = RU.SanitizeData(rd, 5)
+		check(d2.Ghost.City ~= nil and d2.Ghost.Nope == nil, "fantômes par parcours valides")
+		check(d2.Routes.City.W == 1 and d2.Routes.City.T == 70.5 and d2.Routes.Bad == nil, "stats par parcours")
+		check(d2.Xp == 123 and #d2.History == Config.Race.HistorySize, "XP / historique gardés")
+		local old = RU.SanitizeData({ Day = 5, Rewarded = 2, Races = 4, Wins = 1, Podiums = 2, Best = { City = 70 } }, 5)
+		check(old.Xp == 0 and #old.History == 0 and next(old.Routes) == nil and old.Best.City == 70, "vieille sauvegarde v10")
 	end)
 end
 """
