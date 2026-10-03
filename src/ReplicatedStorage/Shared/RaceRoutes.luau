@@ -61,11 +61,11 @@ RaceRoutes.STEP = 4 -- pas de la trajectoire (studs)
 RaceRoutes.GRID_SLOTS = 8
 -- (v11) grille à l'échelle des voitures (Config.Race.Grid)
 local gridCfg = (Config.Race and (Config.Race :: any).Grid) or {}
-RaceRoutes.GRID_ROW = gridCfg.Row or 21 -- studs entre deux voitures d'une même colonne
-RaceRoutes.GRID_FIRST = gridCfg.First or 11 -- 1re place derrière la ligne
+RaceRoutes.GRID_ROW = gridCfg.Row or 24 -- studs entre deux voitures d'une même colonne
+RaceRoutes.GRID_FIRST = gridCfg.First or 13 -- 1re place derrière la ligne
 RaceRoutes.GRID_SIDE = gridCfg.Side or 5.2 -- décalage latéral des deux colonnes
 RaceRoutes.STRAIGHT_BEFORE = 140 -- ligne droite demandée avant le départ
-RaceRoutes.SPRINT_GRID = 95 -- sprint : la grille occupe les 95 premiers studs
+RaceRoutes.SPRINT_GRID = 112 -- sprint : la grille occupe les 112 premiers studs
 RaceRoutes.START_GAP = 90 -- (v11) écart minimal entre deux lignes de départ
 
 export type Node = { Id: string, X: number, Z: number, Y: number }

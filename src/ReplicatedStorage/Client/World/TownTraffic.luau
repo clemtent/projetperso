@@ -135,14 +135,39 @@ local BRAKE_ON = Color3.fromRGB(255, 58, 70)
 
 type Path = { Points: { Vector3 }, Cum: { number }, Length: number, Corners: { { S: number, Turn: number } }, Speeds: { number }? }
 -- (v10) circuit : une boucle du graphe routier + ses arêtes (clés "a|b") + ses véhicules
-type Pass = { Node: string, S0: number, S1: number }
-type Circuit = { Id: string, Path: Path, Cruise: number, Keys: { [string]: boolean }, Blocked: boolean, Count: number, Kinds: { any }, Bus: boolean, Passes: { Pass } }
+-- (v11) passage dans un carrefour : abscisses d'entrée / sortie, rang (limitation
+-- de la route d'arrivée : la route principale a la priorité), conflits avec les
+-- autres passages du même carrefour ("cross" = trajectoires qui se coupent,
+-- "merge" = même voie de sortie)
+type Pass = { Node: string, S0: number, S1: number, Id: number, Rank: number, Conf: { [number]: string } }
+type Rail = { S: number, I: number, Stop: number }
+type Circuit = { Id: string, Path: Path, Cruise: number, Keys: { [string]: boolean }, Blocked: boolean, Count: number, Kinds: { any }, Bus: boolean, Passes: { Pass }, Rails: { Rail } }
 type DoorLeaf = { Index: number, Leaf: number, Door: number }
 type Vehicle = {
 	Path: Path, -- (v10) circuit suivi
 	Circuit: Circuit?,
 	Hidden: boolean,
-	YieldClock: number, -- (v10) temps passé à céder le passage
+	YieldClock: number, -- (v10) temps passé à céder le passage (v11 : attente au carrefour)
+	Index: number, -- (v11) ordre fixe (départage des priorités)
+	Corr: { Vector3 }, -- (v11) couloir de la trajectoire devant (centre -> portée)
+	CorrStep: number,
+	Hits: { any }, -- (v11) véhicules dans le couloir : { o, écart }
+	Lead: number, -- (v11) écart au véhicule devant (pare-chocs à pare-chocs)
+	LeadSpeed: number,
+	JPass: Pass?, -- (v11) carrefour abordé
+	JTo: number,
+	JArrive: number,
+	JReady: boolean,
+	JCommit: boolean,
+	JWait: number,
+	Inside: { Pass },
+	StuckT: number, -- (v11) arrêt sans raison valable (secours "fantôme" après 9 s)
+	GhostT: number,
+	ZebraWait: number,
+	ZebraIgnore: boolean,
+	Why: string, -- (v11) raison de l'arrêt / du ralentissement (tests)
+	Driver: Model?, -- (v11) conducteur PNJ (NPCModels.Driver)
+	DriverT: number,
 	Pos: Vector3?, -- (v10) dernière position (suivi entre circuits)
 	Dir: Vector3?,
 	LightRig: any?, -- (v10, CARS10) CarModels.LightRig

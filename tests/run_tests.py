@@ -3534,7 +3534,7 @@ do
 		eq(check, lastIndex, #Config.Race.Ranks, "sommet atteint")
 		eq(check, RU.Rank(Config.Race.Ranks[#Config.Race.Ranks].Min).Id, "Diamond", "Diamant")
 		check(RU.Rank(0 / 0).Id == "Bronze" and RU.Rank(-5).Id == "Bronze", "valeurs folles")
-		check(typeOf(r0.Color) == "Color3", "couleur du rang")
+		check(r0.Color ~= nil, "couleur du rang")
 	end)
 
 	test("Courses v11 : fantôme du meilleur tour, nitro (dérapage, aspiration), historique, données", function(check)

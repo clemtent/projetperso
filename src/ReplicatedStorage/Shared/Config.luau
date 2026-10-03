@@ -2796,7 +2796,7 @@ Config.Race = {
 	OffCarGrace = 5, -- s hors de sa voiture -> abandon
 	CheckpointSpacing = 170, -- studs entre deux portes
 	-- (v11) grille de départ (studs) : voitures à l'échelle Roblox (CARS11)
-	Grid = { First = 11, Row = 21, Side = 5.2 },
+	Grid = { First = 13, Row = 24, Side = 5.2 }, -- (CARS11 : voitures x1,3, limousine 19,8 de long)
 	Rewards = {
 		Seconds = { 120, 80, 55 }, -- 1er, 2e, 3e (secondes de production)
 		FinishSeconds = 35, -- arrivé 4e ou plus

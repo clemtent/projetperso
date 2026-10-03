@@ -89,6 +89,7 @@ export type Chain = {
 	Reach: number?, -- hauteur (au-dessus du poing) du point amené aux lèvres (1,3)
 	Lean: number?, -- (rad) aliment penché vers le visage à la bouche (30°)
 	Stand: number?, -- (studs) ce point reste à `Stand` devant la bouche (0,22)
+	Side: number?, -- part du côté droit dans la direction lèvres -> poing (0,32)
 }
 
 local function part1(p0: CFrame, j: Joint, c0: CFrame?): CFrame
@@ -227,9 +228,14 @@ function FairEat.Solve(ch: Chain): { [string]: CFrame }
 	local stand = ch.Stand or 0.22
 	local mouth = FairEat.Mouth(ch.Head, ch.HeadSize)
 	local look, up = ch.Head.LookVector, ch.Head.UpVector
+	local right = ch.Torso.RightVector
 	local lips = mouth + look * stand
-	-- le poing sous la bouche, devant : le point visé (penché de `lean`) touche les lèvres
-	local target = lips + look * (reach * math.sin(lean)) - up * (reach * math.cos(lean))
+	-- le poing sous la bouche, devant et un peu à droite (côté de l'épaule :
+	-- un bras de ~1,8 stud n'atteint pas le milieu du visage sinon) ; le
+	-- point visé (penché de `lean` vers le visage) touche les lèvres
+	local side = ch.Side or 0.32
+	local dir = (look * math.sin(lean) - up * math.cos(lean) + right * side).Unit
+	local target = lips + dir * reach
 	if ch.R15 and ch.Elbow and ch.Wrist then
 		local pole = ch.Torso.RightVector * 0.8 - Vector3.new(0, 1, 0) - ch.Torso.LookVector * 0.2
 		return solveArm(ch, target, pole, function(gripPos)
