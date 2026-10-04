@@ -4,7 +4,7 @@
 
 	🏛️ Dopamine Town (v11, CITY11) : l'INTÉRIEUR COMPLET de la mairie, où
 	l'on ENTRE, construit côté client (0 pièce serveur) quand l'avatar /
-	la caméra approche (≤ 160 studs, détruit au-delà de 210) :
+	la caméra approche (≤ 120 studs, détruit au-delà de 165) :
 	  - le volume plein du serveur ("Body") est masqué LOCALEMENT et
 	    remplacé par une coque creuse identique vue de dehors (même pierre,
 	    mêmes fenêtres : on voit enfin dedans) ; restauré quand on s'éloigne ;
@@ -59,7 +59,7 @@ local GOLD = rgb(214, 180, 92)
 local RED = rgb(170, 30, 46)
 local GLASS = rgb(196, 226, 240)
 
-local BUILD_IN, BUILD_OUT = 160, 210
+local BUILD_IN, BUILD_OUT = 120, 165
 local JOB_BUDGET = 0.004
 local SEAT_H = 1.85
 local COUNTER_H = 3.3
@@ -173,9 +173,7 @@ local function chair(m: Instance, C: CFrame, color: Color3)
 	Box(m, "ChairSeat", C, -1.1, 1.1, SEAT_H - 0.18, SEAT_H, -1.0, 1.0, color, M.Fabric, true)
 	Box(m, "ChairBack", C, -1.1, 1.1, SEAT_H, 4.2, 0.82, 1.0, color, M.Fabric)
 	for _, sx in ipairs({ -0.95, 0.95 }) do
-		for _, sz in ipairs({ -0.85, 0.85 }) do
-			Box(m, "ChairLeg", C, sx - 0.08, sx + 0.08, 0, SEAT_H - 0.18, sz - 0.08, sz + 0.08, INK, M.Metal)
-		end
+		Box(m, "ChairSide", C, sx - 0.07, sx + 0.07, 0, SEAT_H - 0.18, -0.9, 0.9, INK, M.Metal)
 	end
 end
 
@@ -447,11 +445,11 @@ local function jobsFor(st: State, m: Model): { () -> () }
 		-- masquer localement le volume plein du serveur + la porte et les cadres de fenêtres
 		for _, p in ipairs(hall:GetChildren()) do
 			if p:IsA("BasePart") and (p.Name == "Body" or p.Name == "PortalDoor" or p.Name == "WinFrame") then
-				table.insert(st.Hidden, { Part = p, Mod = p.LocalTransparencyModifier, Collide = p.CanCollide })
+				table.insert(st.Hidden, { Part = p, Mod = tonumber(p.LocalTransparencyModifier) or 0, Collide = p.CanCollide == true })
 				p.LocalTransparencyModifier = 1
 				p.CanCollide = false
 			elseif p:IsA("BasePart") and p.Name == "WinGlass" then
-				table.insert(st.Hidden, { Part = p, Mod = p.LocalTransparencyModifier, Collide = p.CanCollide })
+				table.insert(st.Hidden, { Part = p, Mod = tonumber(p.LocalTransparencyModifier) or 0, Collide = p.CanCollide == true })
 				p.LocalTransparencyModifier = 0.55
 			end
 		end
@@ -688,7 +686,7 @@ local function jobsFor(st: State, m: Model): { () -> () }
 				local P = T * CFrame.Angles(0, a, 0) * CFrame.new(0, 0, -r)
 				Box(m, "CouncilDesk", P, -1.2, 1.2, 0, TABLE_H, 0.0, 0.8, WOOD, M.Wood, true)
 				chair(m, P * CFrame.new(0, 0, -1.4) * CFrame.Angles(0, math.pi, 0), rgb(30, 60, 110))
-				if row == 0 and k ~= 0 and k % 2 == 0 or (row == 1 and k == 0) then
+				if row == 0 and (k == -2 or k == 2) then
 					npc(m, ({ "pedestrian", "salesperson", "elder", "shopper" })[(k + row) % 4 + 1], 960 + row * 5 + k, P * CFrame.new(0, 0, -1.4) * CFrame.Angles(0, math.pi, 0), "sit", "none", SEAT_H)
 				end
 			end

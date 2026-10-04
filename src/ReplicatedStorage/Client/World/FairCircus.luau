@@ -56,7 +56,7 @@ local TAU = FairKit.TAU
 local Part, Solid, Glow = FairKit.Part, FairKit.Solid, FairKit.Glow
 local Fixed = FairKit.Fixed
 local ANG = CFrame.Angles
-local sin, cos, abs, max, min = math.sin, math.cos, math.abs, math.max, math.min
+local sin, cos, abs, max = math.sin, math.cos, math.abs, math.max
 
 type RideFx = FairKit.RideFx
 
@@ -79,14 +79,19 @@ local WALL_H = 11
 local FLOOR = FairRides.CIRCUS_FLOOR or 0.14
 local RING = FairRides.CIRCUS_RING
 local APEX = 33
-local POLE_X, POLE_TOP = 10.4, 25.4
+-- 4 mâts autour de la piste (entre la bordure et la barrière, hors du plan
+-- des trapèzes z = 0) : treillis du gréement à y 22 entre eux
+local POLE_X, POLE_Z, POLE_TOP = 9.8, 6.0, 25.4
 local RIG_Y = 22
 local TRAP_L = 6
-local BAR_A, BAR_B = -4.2, 8.55 -- x des pivots des trapèzes (voltigeur / porteur)
-local TRAP_AMP = math.rad(40)
+local BAR_A, BAR_B = -4.2, 4.11 -- x des pivots des trapèzes (voltigeur / porteur)
+local TRAP_AMP = math.rad(32) -- amplitude du voltigeur
+local CATCH_AMP = math.rad(20) -- amplitude du porteur (même fréquence, en opposition)
 local TRAP_W = math.sqrt(30 / TRAP_L) -- (rad/s) pendule : g ≈ 30 studs/s²
+local REACH = 6.0 -- (pieds -> mains, bras tendus au-dessus de la tête)
+local KNEE_REACH = 4.6 -- (genoux -> mains, porteur pendu par les genoux)
 local NET_Y = 3.0
-local PLATFORM_Y = 11
+local PLATFORM_X, PLATFORM_Y = -10.4, 11.6 -- dessus de la plate-forme du voltigeur
 local WIRE_Y, WIRE_Z, WIRE_X = 12, -5, 9.6
 local BACKSTAGE = Vector3.new(0, FLOOR, 22)
 local SHOW_T = FairRides.CIRCUS_SHOW
@@ -526,35 +531,49 @@ local function buildInside(r: RideFx): any
 	Solid(Fixed(r, "Balcony", Vector3.new(13, 0.6, 4.4), CFrame.new(0, 9.9, bz + 1.4), PLANK, M.WoodPlanks))
 	Fixed(r, "BalconyFront", Vector3.new(13, 1.6, 0.25), CFrame.new(0, 11.0, bz - 0.75), RED, M.Fabric)
 	FairKit.Bulbs(r.Model, r.Base * Vector3.new(-6.2, 11.9, bz - 0.95), r.Base * Vector3.new(6.2, 11.9, bz - 0.95), 12, 0.26, { C.Bulb, Color3.fromRGB(255, 190, 120) })
-	-- MÂTS ROYAUX (bandes en spirale) + plates-formes, échelles de corde
+	-- 4 MÂTS (bandes rouges), treillis, plate-forme et échelle du voltigeur,
+	-- échelle du porteur, plates-formes du funambule
 	for _, sx in ipairs({ -1, 1 }) do
-		local x = sx * POLE_X
-		Solid(Fixed(r, "KingPole", Vector3.new(POLE_TOP, 0.9, 0.9), CFrame.new(x, POLE_TOP / 2, 0) * VERTICAL, C.White, M.Metal, CYL)).CastShadow = true
-		for k = 0, 9 do
-			Fixed(r, "PoleBand", Vector3.new(0.6, 0.98, 0.98), CFrame.new(x, 1.2 + k * 2.4, 0) * VERTICAL, RED, M.Metal, CYL)
+		for _, sz in ipairs({ -1, 1 }) do
+			local x, z = sx * POLE_X, sz * POLE_Z
+			Solid(Fixed(r, "KingPole", Vector3.new(POLE_TOP, 0.9, 0.9), CFrame.new(x, POLE_TOP / 2, z) * VERTICAL, C.White, M.Metal, CYL)).CastShadow = true
+			for k = 0, 9 do
+				Fixed(r, "PoleBand", Vector3.new(0.6, 0.98, 0.98), CFrame.new(x, 1.2 + k * 2.4, z) * VERTICAL, RED, M.Metal, CYL)
+			end
+			Fixed(r, "PoleFoot", Vector3.new(0.3, 2.2, 2.2), CFrame.new(x, FLOOR + 0.15, z) * VERTICAL, C.Steel, M.Metal, CYL)
+			Fixed(r, "PoleTop", Vector3.new(0.8, 0.8, 0.8), CFrame.new(x, POLE_TOP + 0.3, z), GOLD, M.Metal, BALL)
 		end
-		Fixed(r, "PoleFoot", Vector3.new(0.3, 2.4, 2.4), CFrame.new(x, FLOOR + 0.15, 0) * VERTICAL, C.Steel, M.Metal, CYL)
-		-- plate-forme des trapézistes (y 11) côté piste
-		local px = x - sx * 1.5
-		Solid(Fixed(r, "Platform", Vector3.new(2.2, 0.3, 2.2), CFrame.new(px, PLATFORM_Y, 0), C.Steel, M.DiamondPlate))
-		rod(r, "PlatformRail", Vector3.new(px - 1.1, PLATFORM_Y + 2.2, 1.1), Vector3.new(px + 1.1, PLATFORM_Y + 2.2, 1.1), 0.1, GOLD, M.Metal)
-		rod(r, "PlatformRail", Vector3.new(px - 1.1, PLATFORM_Y + 2.2, -1.1), Vector3.new(px + 1.1, PLATFORM_Y + 2.2, -1.1), 0.1, GOLD, M.Metal)
-		-- échelle de corde (2 montants + barreaux)
-		for _, sz in ipairs({ -0.45, 0.45 }) do
-			rod(r, "LadderRope", Vector3.new(px, FLOOR, 1.3 + sz), Vector3.new(px, PLATFORM_Y, 1.3 + sz), 0.08, ROPE_C, M.Fabric)
-		end
-		for k = 1, 10 do
-			local y = FLOOR + k * (PLATFORM_Y - FLOOR) / 11
-			rod(r, "LadderRung", Vector3.new(px, y, 0.85), Vector3.new(px, y, 1.75), 0.1, PLANK, M.Wood)
-		end
-		-- plate-forme du funambule (y 12, z -5) sur un bras du mât
-		Solid(Fixed(r, "WirePlatform", Vector3.new(1.8, 0.3, 1.8), CFrame.new(sx * (WIRE_X + 0.6), WIRE_Y - 0.15, WIRE_Z), C.Steel, M.DiamondPlate))
-		FairKit.Beam(r.Model, "WireArm", r.Base * Vector3.new(x, WIRE_Y - 0.4, 0), r.Base * Vector3.new(sx * (WIRE_X + 0.6), WIRE_Y - 0.4, WIRE_Z), 0.3, 0.3, C.Steel)
+		FairKit.Truss(r.Model, "Rig", r.Base * Vector3.new(-POLE_X, RIG_Y, sx * POLE_Z), r.Base * Vector3.new(POLE_X, RIG_Y, sx * POLE_Z), r.Base:VectorToWorldSpace(Vector3.new(0, 1, 0)), 0.9, 0.18, Color3.fromRGB(60, 60, 70), 12)
+		-- plates-formes du funambule (bras du mât avant)
+		Solid(Fixed(r, "WirePlatform", Vector3.new(1.8, 0.3, 1.8), CFrame.new(sx * (WIRE_X + 0.7), WIRE_Y - 0.15, WIRE_Z), C.Steel, M.DiamondPlate))
+		FairKit.Beam(r.Model, "WireArm", r.Base * Vector3.new(sx * POLE_X, WIRE_Y - 0.45, -POLE_Z), r.Base * Vector3.new(sx * (WIRE_X + 0.7), WIRE_Y - 0.45, WIRE_Z), 0.3, 0.3, C.Steel)
 	end
+	-- traverses des trapèzes (le long de z) + crochets
+	for _, x in ipairs({ BAR_A, BAR_B }) do
+		FairKit.Beam(r.Model, "RigCross", r.Base * Vector3.new(x, RIG_Y, -POLE_Z), r.Base * Vector3.new(x, RIG_Y, POLE_Z), 0.5, 0.5, Color3.fromRGB(60, 60, 70))
+	end
+	-- plate-forme du voltigeur (sur une traverse entre les 2 mâts de gauche) + échelle
+	FairKit.Beam(r.Model, "PlatformBeam", r.Base * Vector3.new(-POLE_X, PLATFORM_Y - 0.45, -POLE_Z), r.Base * Vector3.new(-POLE_X, PLATFORM_Y - 0.45, POLE_Z), 0.4, 0.4, C.Steel)
+	Solid(Fixed(r, "Platform", Vector3.new(2.0, 0.3, 2.4), CFrame.new(PLATFORM_X, PLATFORM_Y - 0.15, 0), C.Steel, M.DiamondPlate))
+	for _, sz in ipairs({ -1.2, 1.2 }) do
+		rod(r, "PlatformRail", Vector3.new(PLATFORM_X - 1, PLATFORM_Y + 2.4, sz), Vector3.new(PLATFORM_X + 0.6, PLATFORM_Y + 2.4, sz), 0.1, GOLD, M.Metal)
+		rod(r, "PlatformRailPost", Vector3.new(PLATFORM_X - 1, PLATFORM_Y, sz), Vector3.new(PLATFORM_X - 1, PLATFORM_Y + 2.4, sz), 0.1, GOLD, M.Metal)
+	end
+	local function ladder(x: number, z: number, y1: number)
+		for _, dz in ipairs({ -0.45, 0.45 }) do
+			rod(r, "LadderRope", Vector3.new(x, FLOOR, z + dz), Vector3.new(x, y1, z + dz), 0.08, ROPE_C, M.Fabric)
+		end
+		local n = math.floor((y1 - FLOOR) / 1.0)
+		for k = 1, n - 1 do
+			local y = FLOOR + k * (y1 - FLOOR) / n
+			rod(r, "LadderRung", Vector3.new(x, y, z - 0.45), Vector3.new(x, y, z + 0.45), 0.1, PLANK, M.Wood)
+		end
+	end
+	ladder(PLATFORM_X, 1.8, PLATFORM_Y)
+	ladder(BAR_B + 1.6, 1.9, RIG_Y - 0.3)
 	-- fil de funambule
 	rod(r, "HighWire", Vector3.new(-WIRE_X, WIRE_Y, WIRE_Z), Vector3.new(WIRE_X, WIRE_Y, WIRE_Z), 0.08, Color3.fromRGB(200, 200, 210), M.Metal)
 	-- treillis du gréement entre les mâts (y 22) + filet de sécurité
-	FairKit.Truss(r.Model, "Rig", r.Base * Vector3.new(-POLE_X, RIG_Y, 0), r.Base * Vector3.new(POLE_X, RIG_Y, 0), r.Base:VectorToWorldSpace(Vector3.new(0, 0, 1)), 1.0, 0.2, Color3.fromRGB(60, 60, 70), 12)
 	local net = Fixed(r, "Net", Vector3.new(17, 0.08, 7.2), CFrame.new(0, NET_Y, 0), Color3.fromRGB(28, 28, 34), M.Fabric)
 	net.Transparency = 0.55
 	for _, sx in ipairs({ -1, 1 }) do
@@ -782,7 +801,7 @@ local function buildShow(r: RideFx, folder: Instance, booth: CFrame): any
 			Bar = Part(model, "TrapezeBar", Vector3.new(1.6, 0.16, 0.16), r.Base, C.SteelLight, M.Metal, CYL),
 			Sign = if i == 1 then 1 else -1,
 		})
-		Fixed(r, "TrapezeHook", Vector3.new(0.5, 0.5, 1.8), CFrame.new(x, RIG_Y - 0.4, 0), C.Steel, M.Metal)
+		Fixed(r, "TrapezeHook", Vector3.new(0.5, 0.4, 1.8), CFrame.new(x, RIG_Y - 0.45, 0), C.Steel, M.Metal)
 	end
 	show.Pole = Part(model, "BalancePole", Vector3.new(8, 0.14, 0.14), r.Base, Color3.fromRGB(230, 230, 236), M.Metal, CYL)
 	show.Confetti = {}
@@ -792,10 +811,6 @@ local function buildShow(r: RideFx, folder: Instance, booth: CFrame): any
 	return show
 end
 
--- angle des trapèzes à l'heure (s depuis le début du numéro)
-local function trapAngle(tt: number): number
-	return TRAP_AMP * sin(TRAP_W * tt - math.pi / 2)
-end
 local function dir(theta: number): Vector3
 	return Vector3.new(sin(theta), -cos(theta), 0)
 end
@@ -983,24 +998,28 @@ local function stepShow(r: RideFx, show: any, t: number, near: boolean, fx: any)
 			focus = hoopC
 		end
 	end
-	-- 🤸 TRAPÈZE VOLANT : pendules physiques, lâcher, vol, rattrapé, filet
+	-- 🤸 TRAPÈZE VOLANT : 2 pendules (même fréquence, en opposition) ; le
+	-- voltigeur lâche sa barre au plus haut, vole (salto) jusqu'aux mains du
+	-- porteur pendu par les genoux, se balance avec lui, puis tombe dans le
+	-- filet qui se creuse et rebondit
 	do
 		local a0, a1 = ACT.Trapeze[1], ACT.Trapeze[2]
 		local swing0 = a0 + 4 -- départ du balancement
 		local tt = u - swing0
-		local thA = if u >= swing0 then trapAngle(tt) else -TRAP_AMP
-		local thB = -thA
+		local ph = if u >= swing0 then sin(TRAP_W * tt - math.pi / 2) else -1
+		local thA = TRAP_AMP * ph
+		local thB = -CATCH_AMP * ph
 		local T = 2 * math.pi / TRAP_W
-		local tRelease = 1.5 * T -- θA au maximum vers le porteur
+		local tRelease = 1.5 * T -- θA au plus haut côté porteur (θB au plus haut côté voltigeur)
 		local tFly = 0.53
-		local tDrop = tRelease + tFly + 2 * T - T / 2 -- θB au maximum côté voltigeur
-		local pivA = Vector3.new(BAR_A, RIG_Y, 0)
-		local pivB = Vector3.new(BAR_B, RIG_Y, 0)
+		local tDrop = tRelease + 2 * T -- de nouveau au plus haut côté voltigeur
+		local pivA = Vector3.new(BAR_A, RIG_Y - 0.6, 0)
+		local pivB = Vector3.new(BAR_B, RIG_Y - 0.6, 0)
 		local active = u >= a0 - 2 and u < a1 + 2
 		for i, bar in ipairs(show.Bars) do
 			local th = if i == 1 then thA else thB
 			if not active then
-				th = if i == 1 then -TRAP_AMP * 0.3 else TRAP_AMP * 0.3
+				th = 0
 			end
 			local piv = if i == 1 then pivA else pivB
 			local pivot = CFrame.new(piv) * ANG(0, 0, th)
@@ -1010,77 +1029,76 @@ local function stepShow(r: RideFx, show: any, t: number, near: boolean, fx: any)
 			put(bar.Bar, pivot * CFrame.new(0, -TRAP_L, 0) * ANG(0, math.rad(90), 0))
 		end
 		local flyer, catcher = show.Flyer, show.Catcher
+		-- repère "debout, face +X" et "tête en bas, face -X"
+		local FACE_X = ANG(0, -math.pi / 2, 0)
+		local UPSIDE = CFrame.fromMatrix(Vector3.zero, Vector3.new(0, 0, 1), Vector3.new(0, -1, 0))
 		if active then
-			-- porteur : monte à l'échelle de droite, puis pendu par les genoux
-			local climbR = math.clamp((u - (a0 - 1)) / 3, 0, 1)
+			-- porteur : monte à l'échelle (à côté de sa barre), puis pendu par les genoux
+			local climbR = math.clamp((u - (a0 - 1.5)) / 3.5, 0, 1)
 			if u < a0 + 2.2 then
-				local ladder = Vector3.new(POLE_X - 1.5, FLOOR + climbR * (PLATFORM_Y - FLOOR - 0.2), 1.6)
-				place(catcher, CFrame.lookAt(ladder, ladder + Vector3.new(0, 0, -1)), "c11_climb", t)
+				local lad = Vector3.new(BAR_B + 1.6, FLOOR + climbR * (RIG_Y - TRAP_L - 3.5 - FLOOR), 2.6)
+				place(catcher, CFrame.lookAt(lad, lad + Vector3.new(0, 0, -1)), "c11_climb", t)
 			else
-				-- (corps retourné : pieds en haut, crochets des genoux sur la barre)
-				local knees = pivB + dir(thB) * (TRAP_L + 0.1)
-				local hang = CFrame.new(knees) * ANG(0, 0, thB) * ANG(math.pi, 0, 0) * CFrame.new(0, -1.5, 0)
+				local knees = pivB + dir(thB) * (TRAP_L + 0.05)
+				local hang = CFrame.new(knees) * ANG(0, 0, thB) * UPSIDE * CFrame.new(0, -1.5, 0)
 				place(catcher, hang, "c11_catch", t + 7)
 			end
-			-- voltigeur
-			local catcherHands = pivB + dir(thB) * (TRAP_L + 5.6)
-			if u < swing0 - 0.8 then
-				local climbF = math.clamp((u - (a0 - 1.5)) / 3.2, 0, 1)
-				local ladder = Vector3.new(-POLE_X + 1.5, FLOOR + climbF * (PLATFORM_Y - FLOOR - 0.2), 1.6)
-				if climbF >= 1 then
-					ladder = Vector3.new(-POLE_X + 1.5, PLATFORM_Y + 0.15, 0)
+			local catcherHands = pivB + dir(thB) * (TRAP_L + KNEE_REACH)
+			if u < swing0 - 0.4 then
+				-- voltigeur : monte à l'échelle puis attend sur la plate-forme, la barre en main
+				local climbF = math.clamp((u - (a0 - 2)) / 3.2, 0, 1)
+				if climbF < 1 then
+					local lad = Vector3.new(PLATFORM_X, FLOOR + climbF * (PLATFORM_Y - FLOOR), 2.7)
+					place(flyer, CFrame.lookAt(lad, lad + Vector3.new(0, 0, -1)), "c11_climb", t)
+				else
+					local hands = pivA + dir(-TRAP_AMP) * TRAP_L
+					place(flyer, CFrame.new(hands) * ANG(0, 0, -TRAP_AMP) * CFrame.new(0, -REACH, 0) * FACE_X, "c11_hang", t)
 				end
-				place(flyer, CFrame.lookAt(ladder, ladder + Vector3.new(if climbF >= 1 then 1 else 0, 0, if climbF >= 1 then 0 else -1)), if climbF >= 1 then "c11_hang" else "c11_climb", t)
 			elseif tt < tRelease then
-				-- pendu à la barre A (mains sur la barre, corps dans l'axe des cordes)
 				local hands = pivA + dir(thA) * TRAP_L
-				local body = CFrame.new(hands) * ANG(0, 0, thA) * CFrame.new(0, -6.9, 0) * ANG(0, -math.pi / 2, 0)
-				place(flyer, body, "c11_hang", t)
+				place(flyer, CFrame.new(hands) * ANG(0, 0, thA) * CFrame.new(0, -REACH, 0) * FACE_X, "c11_hang", t)
 				focus = hands
 			elseif tt < tRelease + tFly then
-				-- VOL : des mains (barre A) aux mains du porteur
+				-- VOL avec salto : des mains (barre A) aux mains du porteur
 				local w = (tt - tRelease) / tFly
 				local from = pivA + dir(TRAP_AMP) * TRAP_L
-				local to = pivB + dir(-TRAP_AMP) * (TRAP_L + 5.6)
-				local hands = from:Lerp(to, w) + Vector3.new(0, 1.2 * 4 * w * (1 - w), 0)
-				local spin = ANG(0, 0, -w * math.pi * 2) -- (salto)
-				place(flyer, CFrame.new(hands) * spin * CFrame.new(0, -3.4, 0) * ANG(0, -math.pi / 2, 0) * CFrame.new(0, -3.5, 0) * CFrame.new(0, 3.5, 0), "c11_hang", t)
+				local to = pivB + dir(-CATCH_AMP) * (TRAP_L + KNEE_REACH)
+				local hands = from:Lerp(to, w) + Vector3.new(0, 1.4 * 4 * w * (1 - w), 0)
+				place(flyer, CFrame.new(hands) * ANG(0, 0, -w * TAU) * CFrame.new(0, -REACH, 0) * FACE_X, "c11_hang", t)
 				focus = hands
 			elseif tt < tDrop then
-				-- tenu par le porteur (mains dans les mains)
-				local body = CFrame.new(catcherHands) * ANG(0, 0, thB) * CFrame.new(0, -6.9, 0) * ANG(0, -math.pi / 2, 0)
-				place(flyer, body, "c11_hang", t)
+				place(flyer, CFrame.new(catcherHands) * ANG(0, 0, thB) * CFrame.new(0, -REACH, 0) * FACE_X, "c11_hang", t)
 				focus = catcherHands
 			else
-				-- lâché : tombe dans le filet, rebondit, descend et salue
+				-- lâché : tombe dans le filet, rebondit, saute au sol et salue
 				local d = tt - tDrop
-				local start = pivB + dir(-TRAP_AMP) * (TRAP_L + 5.6 + 6.9)
+				local start = pivB + dir(-CATCH_AMP) * (TRAP_L + KNEE_REACH + REACH)
 				local landX = start.X
+				local fall = math.sqrt(2 * max(0.1, start.Y - NET_Y) / 30)
 				local pos
 				local anim, at = "c11_hang", t
-				if d < 0.6 then
-					pos = Vector3.new(landX, start.Y - 30 * d * d / 2, 0)
-					if pos.Y < NET_Y then
-						pos = Vector3.new(landX, NET_Y, 0)
-					end
-				elseif d < 2.0 then
-					local b = d - 0.6
+				if d < fall then
+					pos = Vector3.new(landX, max(NET_Y, start.Y - 30 * d * d / 2), 0)
+				elseif d < fall + 1.4 then
+					local b = d - fall
 					pos = Vector3.new(landX, NET_Y + abs(sin(b * math.pi * 1.4)) * 2.2 * (1 - b / 1.4), 0)
 					anim = "cheer"
-				elseif d < 3.6 then
-					local w = (d - 2.0) / 1.6
-					local edge = Vector3.new(-9.2, FLOOR, 0)
+				elseif d < fall + 3.0 then
+					local w = (d - fall - 1.4) / 1.6
+					local edge = Vector3.new(-9.0, FLOOR, -1.5)
 					pos = Vector3.new(landX, NET_Y, 0):Lerp(edge, smooth(w)) + Vector3.new(0, 1.5 * 4 * w * (1 - w), 0)
 					anim = "walk"
 				else
-					pos = Vector3.new(-9.2, FLOOR, -1)
-					anim, at = "c11_bow", math.clamp((d - 3.6) / 1.5, 0, 1)
+					pos = Vector3.new(-9.0, FLOOR, -1.5)
+					anim, at = "c11_bow", math.clamp((d - fall - 3.0) / 1.5, 0, 1)
 				end
 				place(flyer, CFrame.lookAt(pos, pos + Vector3.new(0, 0, -1)), anim, at)
-				-- le filet se creuse au rebond
-				if fx and fx.Net and d < 2.4 then
-					local sag = if d < 0.6 then 0 else bell(math.clamp((d - 0.6) / 1.4, 0, 1), 0, 0.5) * 0.9
+				-- le filet se creuse sous le rebond
+				if fx and fx.Net and d >= fall and d < fall + 1.6 then
+					local sag = bell(d - fall, 0, 0.8) * 0.9
 					put(fx.Net, CFrame.new(0, NET_Y - sag, 0))
+				elseif fx and fx.Net then
+					put(fx.Net, CFrame.new(0, NET_Y, 0))
 				end
 				focus = pos + Vector3.new(0, 2, 0)
 			end
@@ -1170,16 +1188,13 @@ local function stepShow(r: RideFx, show: any, t: number, near: boolean, fx: any)
 		for i, q in ipairs(show.Queue) do
 			pcall(NPC.Animate, q, i == 1 and "talk" or "idle", t + i)
 		end
-		-- vendeur : aller-retour dans l'allée devant la barrière (r 11)
+		-- vendeur : aller-retour dans l'allée, côté entrée (entre la bordure et la barrière)
 		if show.Vendor then
-			local s = (t * 0.07) % 2
-			local w = if s < 1 then s else 2 - s
-			local a = math.rad(-140 + 280 * smooth(w))
-			if abs(math.deg(a)) < 22 then
-				a = math.rad(22) * (if a < 0 then -1 else 1)
-			end
-			local p = polar(a, 10.9, FLOOR)
-			local tangent = Vector3.new(cos(a), 0, -sin(a)) * (if s < 1 then 1 else -1)
+			local s0 = (t * 0.09) % 2
+			local w = if s0 < 1 then s0 else 2 - s0
+			local a = math.rad(-162 + 64 * smooth(w))
+			local p = polar(a, 10.6, FLOOR)
+			local tangent = Vector3.new(cos(a), 0, -sin(a)) * (if s0 < 1 then 1 else -1)
 			place(show.Vendor, CFrame.lookAt(p, p + tangent), "walk", t * 0.8)
 			local hand = ParkKit.Hand(show.Vendor, "R")
 			local root = show.Vendor.PrimaryPart

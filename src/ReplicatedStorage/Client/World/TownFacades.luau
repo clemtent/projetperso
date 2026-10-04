@@ -53,7 +53,7 @@ local WHITE = Color3.new(1, 1, 1)
 
 local FOLDER_NAME = "TownFacadeDetail"
 local BUILD_RANGE, DROP_RANGE = 200, 260
-local INTERIOR_RANGE, INTERIOR_DROP = 100, 135 -- (v11) aménagement + PNJ des commerces
+local INTERIOR_RANGE, INTERIOR_DROP = 85, 120 -- (v11) aménagement + PNJ des commerces
 -- v9.8 🎨 Graphismes > Détail (REALISM98) : distances de flux ×0,65 / ×1 / ×1,35
 local okGQ, GraphicsQuality = pcall(require, game:GetService("ReplicatedStorage").Shared.GraphicsQuality)
 local function detailScale(): number

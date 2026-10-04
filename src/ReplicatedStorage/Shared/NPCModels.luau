@@ -709,8 +709,10 @@ local function legs(ctx: Ctx, look: Look, pants: Color3, shorts: boolean, bareTh
 		-- (v11) chaussure ARRONDIE (fini les "pavés" de la capture 32) : tige
 		-- ovale, bout rond, semelle en "stade" (bloc + bout + talon ronds)
 		add(ctx, ft, "Shoe", Vector3.new(0.36, 0.3, 0.76), at(x, 0.21, -0.15), look.Shoe, M.SmoothPlastic, "Egg")
-		add(ctx, ft, "ToeCap", Vector3.new(0.33, 0.21, 0.36), at(x, 0.165, -0.43), look.Shoe:Lerp(INK, 0.06), M.SmoothPlastic, "Egg")
-		add(ctx, ft, "Heel", Vector3.new(0.3, 0.25, 0.3), at(x, 0.2, 0.11), look.Shoe:Lerp(INK, 0.08), M.SmoothPlastic, "Egg")
+		-- (boîtes englobantes à ≥ 0,04 de celles de la tige : pas de z-fight,
+		-- même à l'échelle des enfants)
+		add(ctx, ft, "ToeCap", Vector3.new(0.28, 0.21, 0.36), at(x, 0.205, -0.43), look.Shoe:Lerp(INK, 0.06), M.SmoothPlastic, "Egg")
+		add(ctx, ft, "Heel", Vector3.new(0.28, 0.22, 0.3), at(x, 0.21, 0.125), look.Shoe:Lerp(INK, 0.08), M.SmoothPlastic, "Egg")
 		add(ctx, ft, "Sole", Vector3.new(0.37, 0.075, 0.5), at(x, 0.045, -0.17), look.Sole, M.Rubber)
 		add(ctx, ft, "SoleToe", Vector3.new(0.075, 0.37, 0.37), cylY(x, 0.045, -0.42), look.Sole, M.Rubber, "Cyl")
 		add(ctx, ft, "SoleHeel", Vector3.new(0.075, 0.34, 0.34), cylY(x, 0.045, 0.08), look.Sole, M.Rubber, "Cyl")
@@ -912,7 +914,7 @@ local function prop(ctx: Ctx, kind: string, seed: number)
 		local c = pick({ rgb(236, 72, 140), rgb(250, 250, 248), rgb(120, 190, 90), rgb(90, 140, 230), rgb(206, 166, 118) }, seed, 30)
 		local N = n0(sx)
 		handProp(ctx, sx, "Bag", Vector3.new(0.78, 0.84, 0.3), 0.98, 0, -0.1, B0, U0, c, M.SmoothPlastic)
-		handProp(ctx, sx, "BagFold", Vector3.new(0.86, 0.1, 0.38), 0.62, 0, -0.1, B0, U0, c:Lerp(INK, 0.15), M.SmoothPlastic)
+		handProp(ctx, sx, "BagFold", Vector3.new(0.9, 0.1, 0.42), 0.56, 0, -0.1, B0, U0, c:Lerp(INK, 0.15), M.SmoothPlastic)
 		for _, bb in ipairs({ -1, 1 }) do
 			local top = handPt(sx, 0.57, bb * 0.22, -0.1)
 			local g = handPt(sx, 0.31, bb * 0.03, 0.06)
@@ -926,10 +928,10 @@ local function prop(ctx: Ctx, kind: string, seed: number)
 		-- smartphone (×1,3) : coque, écran lumineux bord à bord, objectifs ;
 		-- couché dans la paume, écran vers le visage (N), haut vers le pouce
 		local case = pick({ rgb(28, 28, 34), rgb(220, 220, 226), rgb(236, 120, 150), rgb(60, 90, 160), rgb(200, 170, 120) }, seed, 31)
-		local body = handProp(ctx, sx, "Phone", Vector3.new(0.27, 0.54, 0.05), 0.2, 0.03, 0.084, U0, B0, case, M.SmoothPlastic)
+		local body = handProp(ctx, sx, "Phone", Vector3.new(0.27, 0.54, 0.03), 0.2, 0.03, 0.074, U0, B0, case, M.SmoothPlastic)
 		body.CastShadow = false
 		-- (Z du repère = U x B = +X : l'écran (côté N = -X, main droite) est la face Front)
-		local scr = handProp(ctx, sx, "PhoneScreen", Vector3.new(0.245, 0.51, 0.03), 0.2, 0.03, 0.118, U0, B0, rgb(10, 10, 14), M.SmoothPlastic)
+		local scr = handProp(ctx, sx, "PhoneScreen", Vector3.new(0.245, 0.51, 0.05), 0.2, 0.03, 0.104, U0, B0, rgb(10, 10, 14), M.SmoothPlastic)
 		phoneScreen(scr, sx > 0 and Enum.NormalId.Front or Enum.NormalId.Back, seed)
 	elseif kind == "coffee" then
 		-- gobelet tenu à pleine main (axe vers le pouce = vertical quand l'avant-bras est à plat)
@@ -947,7 +949,7 @@ local function prop(ctx: Ctx, kind: string, seed: number)
 		local l = -1
 		local N = n0(l)
 		handProp(ctx, l, "Tablet", Vector3.new(0.86, 0.66, 0.06), 0.24, 0.0, 0.085, B0, U0, rgb(40, 40, 46), M.SmoothPlastic)
-		local scr = handProp(ctx, l, "TabletScreen", Vector3.new(0.78, 0.58, 0.03), 0.24, 0.0, 0.125, B0, U0, rgb(150, 210, 255), M.SmoothPlastic)
+		local scr = handProp(ctx, l, "TabletScreen", Vector3.new(0.78, 0.58, 0.05), 0.24, 0.0, 0.13, B0, U0, rgb(150, 210, 255), M.SmoothPlastic)
 		-- (X = B, Y = U -> Z = B x U = -X : N = +X pour la main gauche = face Front)
 		local gui = Instance.new("SurfaceGui")
 		gui.Name = "ScreenGui"
@@ -1602,7 +1604,7 @@ local PHONE_IK = (function()
 	local n = (eye - pc).Unit
 	local f = Vector3.new(0, 0, -1)
 	local b = (f - n * f:Dot(n)).Unit
-	return { Frame = "chest", Pos = pc, N = n, B = b, Off = Vector3.new(0.2, 0.03, 0.084), Pole = Vector3.new(0.9, -1, 0.25) }
+	return { Frame = "chest", Pos = pc, N = n, B = b, Off = Vector3.new(0.2, 0.03, 0.09), Pole = Vector3.new(0.9, -1, 0.25) }
 end)()
 
 -- (v11) animations ajoutées par d'autres modules (NPCModels.AddAnim)

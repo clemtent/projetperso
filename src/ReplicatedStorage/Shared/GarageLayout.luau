@@ -13,21 +13,24 @@
 	jardin de derrière est le Jardin de Dopamine 3D : le garage est donc une
 	AILE DANS LA COUR DE DEVANT, côté droit (vu de la rue), devant la 4e
 	colonne de pièces, sans toucher la tour de droite :
-	  x 46..76, d -23,5..-6 (3 places côte à côte, portes vers la rue),
-	  allée pavée jusqu'au bord de la rue (d -23,5..-30).
+	  x 43,5..76, d -28,5..-6 (3 places côte à côte, portes vers la rue),
+	  allée pavée jusqu'au bord de la rue (d -28,5..-30).
+	v11 (CARS11) : voitures ×1,3 (CarModels.SCALE) -> garage plus profond
+	(20,9 utiles : la limousine 19,8 y tient), portes 9 × 8,2, murs 10,8 ;
+	places 10,6 de large (voiture la plus large : 7,8).
 ]]
 
 local GarageLayout = {}
 
-GarageLayout.X0 = 46
+GarageLayout.X0 = 43.5 -- (v11 : 46 -> 43,5 : places de 10,6 pour les voitures ×1,3)
 GarageLayout.X1 = 76
-GarageLayout.D0 = -23.5 -- façade du garage (portes, côté rue)
+GarageLayout.D0 = -28.5 -- façade du garage (portes, côté rue) (v11 : -23,5 -> -28,5)
 GarageLayout.D1 = -6 -- mur du fond (devant la maison)
 GarageLayout.WALL = 0.8
 GarageLayout.FLOOR = 0.7 -- dessus de la dalle (pelouse de la parcelle ≈ 0,45)
-GarageLayout.HEIGHT = 10 -- haut des murs (au-dessus de y = 0)
-GarageLayout.DOOR_W = 7.6
-GarageLayout.DOOR_H = 7.4
+GarageLayout.HEIGHT = 10.8 -- haut des murs (au-dessus de y = 0)
+GarageLayout.DOOR_W = 9.4 -- (v11 : 7,6 -> 9,4 ; voiture la plus large 7,8 ; encadrements voisins séparés)
+GarageLayout.DOOR_H = 8.2 -- (v11 : 7,4 -> 8,2 ; voiture la plus haute 7,8)
 GarageLayout.BAYS = 3
 GarageLayout.STREET_D = -30 -- bord de la parcelle côté rue (WorldLayout.GARDEN_D)
 GarageLayout.OPEN_RANGE = 26 -- la porte s'ouvre quand SA voiture arrive à moins de...
@@ -54,7 +57,7 @@ function GarageLayout.BayD(): number
 	return (GarageLayout.D0 + GarageLayout.WALL + GarageLayout.D1 - GarageLayout.WALL) / 2
 end
 
--- Profondeur utile (d) : la plus longue voiture (limousine 15,2) y tient
+-- Profondeur utile (d) : la plus longue voiture (limousine 19,8 à l'échelle 1,3) y tient
 function GarageLayout.InnerDepth(): number
 	return (GarageLayout.D1 - GarageLayout.WALL) - (GarageLayout.D0 + GarageLayout.WALL)
 end

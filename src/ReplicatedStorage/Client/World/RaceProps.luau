@@ -30,7 +30,8 @@
 	API :
 	  RaceProps.BuildHQ(cf, w, d) -> (Model, parts : { Prompt, Board, BoardGui,
 	    Screen, Deco, Turntable = { Base: BasePart, Center: CFrame }, Pilots })
-	  RaceProps.BuildGantry(cf, width, title, finish?) -> (Model, { Lights, Screen, Marshal })
+	  RaceProps.BuildGantry(cf, width, title, finish?, opts?) -> (Model, { Lights, Screens, MarshalCF, Barriers (Model non parenté) })
+	  RaceProps.AddMarshal(model, cf, seed) -> info { Model, Npc, Flag, ... } (commissaire, pendant une course)
 	  RaceProps.SetLights(lights, stage)   stage : 0 éteint, 1..5 rouges allumés, 6 = verts (GO)
 	  RaceProps.SetScreen(screen, big, small?, color?)  écran LED du portique
 	  RaceProps.BuildArch(cf, width, index) -> Model
@@ -218,13 +219,19 @@ end
 
 -- Muret de course (bloc en béton à bandes rouges / blanches), pied au sol
 local function barrier(parent: Instance, cf: CFrame, length: number, k: number)
-	part(parent, "Barrier", Vector3.new(1.2, 2.2, length), cf * CFrame.new(0, 1.1, 0), if k % 2 == 0 then RED else WHITE, M.SmoothPlastic)
-	part(parent, "BarrierFoot", Vector3.new(1.8, 0.5, length - 0.02), cf * CFrame.new(0, 0.25, 0), CONCRETE, M.Concrete).CastShadow = false
+	-- (le bloc repose SUR son pied : aucune face commune ; pied 0,15 plus court à chaque bout)
+	part(parent, "Barrier", Vector3.new(1.2, 1.7, length), cf * CFrame.new(0, 0.62 + 0.85, 0), if k % 2 == 0 then RED else WHITE, M.SmoothPlastic)
+	part(parent, "BarrierFoot", Vector3.new(1.8, 0.5, length - 0.3), cf * CFrame.new(0, 0.37, 0), CONCRETE, M.Concrete).CastShadow = false
 end
 
 -- Commissaire de piste (NPCModels, si dispo) + son grand drapeau à damier
-local function marshal(parent: Instance, cf: CFrame, seed: number): any
+local function marshal(model: Instance, cf: CFrame, seed: number): any
 	local info: { [string]: any } = {}
+	-- (sous-modèle : RaceClient l'ajoute pendant une course et le retire ensuite)
+	local parent = Instance.new("Model")
+	parent.Name = "Marshal"
+	parent.Parent = model
+	info.Model = parent
 	local ok, NPCModels = pcall(function()
 		return require(game:GetService("ReplicatedStorage").Shared.NPCModels) :: any
 	end)
@@ -252,6 +259,9 @@ local function marshal(parent: Instance, cf: CFrame, seed: number): any
 	info.Cf = cf
 	return info
 end
+
+-- Commissaire + drapeau (pendant une course) -> info (info.Model à détruire ensuite)
+RaceProps.AddMarshal = marshal
 
 -- Drapeau qui flotte (léger balancement) : info = résultat de marshal()
 function RaceProps.WaveFlag(info: any, t: number)
@@ -370,8 +380,8 @@ function RaceProps.BuildHQ(cf: CFrame, w: number, d: number): (Model, { [string]
 	local boardCf = cf * CFrame.new(hw * 0.52, 0, hd - 2.2)
 	local bW, bH = math.min(26, W * 0.42), 12.5
 	for _, sx in ipairs({ -1, 1 }) do
-		part(model, "BoardPost", Vector3.new(1, 8.2, 1), boardCf * CFrame.new(sx * (bW / 2 - 2), 4.4, 0.7), STEEL, M.Metal)
-		part(model, "BoardFoot", Vector3.new(2.2, 0.6, 2.2), boardCf * CFrame.new(sx * (bW / 2 - 2), 0.6, 0.7), CONCRETE, M.Concrete)
+		part(model, "BoardPost", Vector3.new(1, 8.2, 1), boardCf * CFrame.new(sx * (bW / 2 - 2), 4.4, 1.25), STEEL, M.Metal)
+		part(model, "BoardFoot", Vector3.new(2.2, 0.6, 2.2), boardCf * CFrame.new(sx * (bW / 2 - 2), 0.6, 1.25), CONCRETE, M.Concrete)
 	end
 	part(model, "BoardFrame", Vector3.new(bW + 1, bH + 1, 0.8), boardCf * CFrame.new(0, 8 + bH / 2, 0.6), INK, M.SmoothPlastic)
 	part(model, "BoardCap", Vector3.new(bW + 1.4, 0.4, 1.4), boardCf * CFrame.new(0, 8.7 + bH, 0.6), RED, M.SmoothPlastic)
@@ -511,6 +521,7 @@ function RaceProps.BuildGantry(cf: CFrame, width: number, title: string, finish:
 	local lights = {}
 	local screenInfo = nil
 	local marshalInfo = nil
+	local barriersModel: Model? = nil
 	if not finish then
 		-- feux de départ : 5 blocs sous la poutre (face à la grille : +Z)
 		for k = 1, 5 do
@@ -534,30 +545,36 @@ function RaceProps.BuildGantry(cf: CFrame, width: number, title: string, finish:
 		end
 		screenInfo = screens
 		-- ligne de départ : damier + "START" + cases de grille (+Z = derrière la ligne)
-		local _, line = canvas(model, "Line", Vector3.new(width, 0.05, 2.6), cf * CFrame.new(0, 0.16, 0), Enum.NormalId.Top, 10)
+		-- (marquages au-dessus de ceux de la ville : 0,2)
+		local _, line = canvas(model, "Line", Vector3.new(width, 0.05, 2.6), cf * CFrame.new(0, 0.2, 0), Enum.NormalId.Top, 10)
 		checker(line, math.max(8, math.floor(width / 1.3)), 2, INK, WHITE)
-		local _, startTxt = canvas(model, "StartText", Vector3.new(math.min(width - 2, 14), 0.05, 3.2), cf * CFrame.new(0, 0.16, 4.4), Enum.NormalId.Top, 10)
+		-- "START" peint juste après la ligne (lu par les pilotes sur la grille)
+		local _, startTxt = canvas(model, "StartText", Vector3.new(math.min(width - 2, 14), 0.05, 3.2), cf * CFrame.new(0, 0.2, -4.6), Enum.NormalId.Top, 10)
 		text(startTxt, { Name = "T", Text = "START", TextColor3 = WHITE, TextTransparency = 0.12, Size = UDim2.fromScale(1, 1) })
 		-- murets rouge / blanc le long de la grille (hors chaussée, sur le bord)
+		-- (dans un sous-modèle : RaceClient ne les sort que pendant une course)
 		local gridLen = tonumber(o.GridLength) or 100
 		local edge = width / 2 + 2.6
 		local seg = 6
+		local barriers = Instance.new("Model")
+		barriers.Name = "Barriers"
 		for _, side in ipairs({ -1, 1 }) do
 			local k = 0
 			local z = 6
 			while z + seg <= gridLen do
-				barrier(model, cf * CFrame.new(side * edge, 0.1, z + seg / 2), seg - 0.15, k)
+				barrier(barriers, cf * CFrame.new(side * edge, 0.1, z + seg / 2), seg - 0.15, k)
 				k += 1
 				z += seg
 			end
 		end
-		-- commissaire de piste au bord de la ligne (côté droit)
-		marshalInfo = marshal(model, cf * CFrame.new(edge + 2.8, 0.1, -3) * CFrame.Angles(0, math.rad(-90), 0), #title * 7)
+		barriersModel = barriers
+		-- commissaire de piste au bord de la ligne (côté droit) : RaceProps.AddMarshal(model, MarshalCF, seed)
+		marshalInfo = cf * CFrame.new(edge + 2.8, 0.1, -3) * CFrame.Angles(0, math.rad(-90), 0)
 	else
-		local _, line = canvas(model, "Line", Vector3.new(width, 0.05, 3.2), cf * CFrame.new(0, 0.16, 0), Enum.NormalId.Top, 10)
+		local _, line = canvas(model, "Line", Vector3.new(width, 0.05, 3.2), cf * CFrame.new(0, 0.2, 0), Enum.NormalId.Top, 10)
 		checker(line, math.max(8, math.floor(width / 1.3)), 2, INK, WHITE)
 	end
-	return model, { Lights = lights, Screens = screenInfo, Marshal = marshalInfo }
+	return model, { Lights = lights, Screens = screenInfo, MarshalCF = marshalInfo, Barriers = barriersModel }
 end
 
 -- stage : 0 éteint, 1..5 = blocs rouges allumés, 6 = tous verts (GO)
@@ -612,7 +629,7 @@ function RaceProps.BuildArch(cf: CFrame, width: number, index: number): Model
 	local tubeD = 2.2
 	-- piliers
 	for _, side in ipairs({ -1, 1 }) do
-		local p = part(model, "Leg", Vector3.new(rise, tubeD, tubeD), cf * CFrame.new(side * r, rise / 2, 0) * CFrame.Angles(0, 0, math.rad(90)), PINK, M.SmoothPlastic, "Cyl")
+		local p = part(model, "Leg", Vector3.new(rise - 0.6, tubeD, tubeD), cf * CFrame.new(side * r, 0.6 + (rise - 0.6) / 2, 0) * CFrame.Angles(0, 0, math.rad(90)), PINK, M.SmoothPlastic, "Cyl")
 		p:SetAttribute("BaseColor", p.Color)
 		part(model, "Foot", Vector3.new(3.2, 0.6, 3.2), cf * CFrame.new(side * r, 0.3, 0), INK, M.Rubber)
 		-- panneau à chevrons sur chaque pied (sens de la course)

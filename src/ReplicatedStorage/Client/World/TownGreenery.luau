@@ -32,6 +32,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Greenery = require(ReplicatedStorage.Shared.Greenery)
+-- (v11, PARK11) pigeons dans toute la ville (colonies en flux près de l'avatar)
+local okPigeons, TownPigeons = pcall(require, script.Parent:FindFirstChild("TownPigeons") :: any)
 
 local TownGreenery = {}
 
@@ -400,7 +402,17 @@ local function moveBirds(dt: number)
 	end
 end
 
+local function avatarPos(): Vector3?
+	local player = game:GetService("Players").LocalPlayer
+	local character = player and player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	return root and root:IsA("BasePart") and root.Position or nil
+end
+
 local function heartbeat(dt: number)
+	if okPigeons and type(TownPigeons) == "table" and TownPigeons.CityStep then
+		pcall(TownPigeons.CityStep, dt, avatarPos())
+	end
 	birdClock += dt
 	if birdClock >= 1 / BIRD_HZ then
 		moveBirds(birdClock)
@@ -457,6 +469,9 @@ function TownGreenery.Step(position: Vector3?)
 			buildDetail(d)
 		end
 	end
+	if okPigeons and type(TownPigeons) == "table" and TownPigeons.CityStream then
+		pcall(TownPigeons.CityStream, pos, k)
+	end
 	table.sort(want, function(a, b)
 		return a[2] < b[2]
 	end)
@@ -480,6 +495,9 @@ function TownGreenery.Start()
 	folder = f
 	rescan = 0
 	discover()
+	if okPigeons and type(TownPigeons) == "table" and TownPigeons.CityStart then
+		pcall(TownPigeons.CityStart, f)
+	end
 	table.insert(conns, RunService.Heartbeat:Connect(heartbeat))
 end
 
@@ -490,6 +508,9 @@ function TownGreenery.Stop()
 	started = false
 	for _, c in ipairs(conns) do
 		c:Disconnect()
+	end
+	if okPigeons and type(TownPigeons) == "table" and TownPigeons.CityStop then
+		pcall(TownPigeons.CityStop)
 	end
 	table.clear(conns)
 	for _, t in ipairs(trees) do
@@ -525,7 +546,8 @@ function TownGreenery.Debug()
 	for _, d in ipairs(details) do
 		birds += d.Birds and #d.Birds or 0
 	end
-	return { Trees = #trees, NearTrees = builtTrees, Details = #details, Parts = parts, Birds = birds, Steps = clock }
+	local pigeons = okPigeons and type(TownPigeons) == "table" and TownPigeons.CityDebug and TownPigeons.CityDebug() or nil
+	return { Trees = #trees, NearTrees = builtTrees, Details = #details, Parts = parts, Birds = birds, Steps = clock, Pigeons = pigeons }
 end
 
 return TownGreenery

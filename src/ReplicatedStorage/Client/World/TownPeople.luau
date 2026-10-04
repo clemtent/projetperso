@@ -257,8 +257,8 @@ local FOOT: { [string]: { number } } = {
 	Recycle = { 3.0, 1.3 },
 	Mailbox = { 1.1, 1.1 },
 	NewsBox = { 1.2, 1.2 },
-	ParkMeter = { 0.6, 0.6 },
-	TrafficLight = { 0.8, 0.8 },
+	ParkMeter = { 0.45, 0.45 },
+	TrafficLight = { 0.7, 0.7 },
 	PhoneBooth = { 3.0, 3.0 },
 	Planter = { 3.4, 1.7 },
 	PlanterSmall = { 1.6, 1.6 },
@@ -593,6 +593,29 @@ local CLEAR_DOG = 1.2
 local CATCH_UP = 0.2 -- (x vitesse) en plus pour rattraper le retard
 local LAT_SPEED = 1.8 -- (studs / s) vitesse latérale max.
 
+-- demi-tour (un joueur planté en travers depuis longtemps) : même point,
+-- même côté du trottoir, sens inverse ; le compagnon suit
+local function turnAround(a: Agent, now: number)
+	local function flip(b: Agent)
+		local sNow = walkerS(b, now)
+		local lat = b.Lateral + b.Avoid
+		b.Dir = -b.Dir
+		b.Along = -b.Along
+		local sNew = walkerS(b, now)
+		b.Offset += sNow - sNew
+		b.Avoid = -lat - b.Lateral
+		b.WaitT = 0
+		b.Waiting = false
+		if b.Heading then
+			b.Heading = -(b.Heading :: Vector3)
+		end
+	end
+	flip(a)
+	if a.Mate then
+		flip(a.Mate)
+	end
+end
+
 -- intervalles libres de [-BAND, BAND] (liste plate) privés de `blocked` (fusionné)
 local function freeOf(blocked: { number }): { number }
 	local out = {}
@@ -758,6 +781,10 @@ local function steer(s: any, a: Agent, now: number, dt: number, obstacles: { Obs
 	end
 	a.Slow = slow
 	a.Waiting = slow < 0.05
+	if a.Waiting and blocker and blocker.Player and a.WaitT > 7 then
+		turnAround(a, now)
+		return
+	end
 	if a.Waiting then
 		a.WaitT += dt
 	else
@@ -1217,7 +1244,7 @@ end
 local function plazaRing(s: any, plaza: CFrame): { Vector3 }
 	local N = 72
 	local need = BODY_PAD + 0.9
-	local R0, R1, DR = 9, 62, 0.5
+	local R0, R1, DR = 9, 68, 0.5
 	local nr = math.floor((R1 - R0) / DR) + 1
 	local okR: { { boolean } } = table.create(N)
 	for i = 1, N do

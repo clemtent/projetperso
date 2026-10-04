@@ -433,6 +433,9 @@ local function pageLuxury(page: Frame)
 end
 
 local KIND_ICON = { Deposit = "🔒", Withdraw = "💎", Interest = "📈", Exchange = "💱", Buy = "🛍️", Spend = "🛍️", Bank = "🏦", Train = "🚂", Ocean = "🌊", Race = "🏁" }
+-- (textes propres à la banque : pas de clé partagée avec d'autres traductions)
+local KIND_TEXT = { Deposit = "Deposit to the vault", Withdraw = "Withdrawal from the vault", Interest = "Vault interest", Exchange = "Diamond exchange",
+	Spend = "Spent", Bank = "Bank heist", Train = "Diamond convoy", Ocean = "Ocean visit bonus", Race = "Race bonus", Admin = "Gift" }
 
 local function ago(t: number): string
 	local d = math.max(0, os.time() - (tonumber(t) or 0))
@@ -471,7 +474,7 @@ local function pageHistory(page: Frame)
 		local row = box({ Name = "Row", Parent = scroll, Color = (i % 2 == 0) and NAVY3 or rgb(34, 44, 76), Size = UDim2.new(1, -12, 0, 40), Radius = UDim.new(0, 10), ZIndex = 13 })
 		row.LayoutOrder = i
 		label({ Name = "Icon", Parent = row, Text = KIND_ICON[h.K] or "💎", TextSize = 20, Size = UDim2.fromOffset(36, 40), Position = UDim2.fromOffset(4, 0), ZIndex = 14 })
-		local what = T(h.K or "")
+		local what = T(KIND_TEXT[h.K] or "Bonus diamonds")
 		if h.K == "Buy" and Config.BankLuxuryById[h.N] then
 			what = T("Bought: %s", T(Config.BankLuxuryById[h.N].Name))
 		elseif h.K == "Exchange" and h.N ~= "" then

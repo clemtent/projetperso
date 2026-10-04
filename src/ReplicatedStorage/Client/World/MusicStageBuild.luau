@@ -1068,7 +1068,7 @@ local function stringed(self: any, bass: boolean, idleCF: CFrame): any
 		-- dégradé "sunburst" : cœur ambré
 		add("Burst", Vector3.new(0.012, 0.7, 0.7), CFrame.new(-0.3 * k, 0, 0.085) * CFrame.Angles(0, rad(90), 0), Color3.fromRGB(206, 120, 44), M.SmoothPlastic, CYL)
 	end
-	add("Pickguard", Vector3.new(0.012, 0.66, 0.66), CFrame.new(0.02, -0.08, bass and 0.105 or 0.095) * CFrame.Angles(0, rad(90), 0), bass and EBONY or WHITE, M.SmoothPlastic, CYL)
+	add("Pickguard", Vector3.new(0.012, 0.66, 0.66), CFrame.new(0.02, -0.08, bass and 0.118 or 0.095) * CFrame.Angles(0, rad(90), 0), bass and EBONY or WHITE, M.SmoothPlastic, CYL)
 	for i, x in ipairs(bass and { -0.05 } or { -0.12, 0.14 }) do
 		add("Pickup" .. i, Vector3.new(0.12, 0.34, 0.04), CFrame.new(x, 0, 0.1), EBONY, M.SmoothPlastic)
 	end
@@ -1499,7 +1499,7 @@ step("Wings", function(self)
 	for i, spec in ipairs({ { -13.2, 7.6 }, { -12.6, 5.9 }, { 12.9, 7.4 }, { 13.4, 1.0 } }) do
 		local size = i % 2 == 0 and Vector3.new(1.6, 1.2, 1.2) or Vector3.new(2.2, 1.6, 1.4)
 		box(self, "FlightCase", size, CFrame.new(spec[1], TOP + size.Y / 2, spec[2]) * CFrame.Angles(0, rad(8 * i), 0), Color3.fromRGB(30, 30, 34), M.Plastic)
-		box(self, "FlightCaseEdge", size + Vector3.new(0.06, -size.Y + 0.08, 0.06), CFrame.new(spec[1], TOP + size.Y - 0.04, spec[2]) * CFrame.Angles(0, rad(8 * i), 0), CHROME, M.Metal)
+		box(self, "FlightCaseEdge", size + Vector3.new(0.06, -size.Y + 0.08, 0.06), CFrame.new(spec[1], TOP + size.Y + 0.04, spec[2]) * CFrame.Angles(0, rad(8 * i), 0), CHROME, M.Metal)
 	end
 end)
 
@@ -1535,7 +1535,7 @@ step("Crowd", function(self)
 	box(self, "FloorBase", Vector3.new(C.X1 - C.X0, 0.1, C.Z1 - C.Z0), CFrame.new((C.X0 + C.X1) / 2, G - 0.01, (C.Z0 + C.Z1) / 2), Color3.fromRGB(14, 12, 18), M.SmoothPlastic)
 	self.H.DanceFloor = tiles
 	-- barrières de sécurité devant la scène (passage libre devant les marches)
-	local bz = MusicData.DECK.Z0 - 3.4
+	local bz = MusicData.DECK.Z0 - 3.3
 	for _, side in ipairs({ -1, 1 }) do
 		local xa, xb = side * (MusicData.STEPS.X + 1.4), side * (MusicData.DECK.X1 - 0.6)
 		local n = math.max(1, math.floor(math.abs(xb - xa) / 2.6 + 0.5))
@@ -1546,8 +1546,8 @@ step("Crowd", function(self)
 			local panel = box(self, "BarrierPanel", Vector3.new(len, 2.6, 0.08), CFrame.new(xm, G + 1.5, bz), Color3.fromRGB(120, 124, 136), M.DiamondPlate)
 			panel.CanCollide = true
 			box(self, "BarrierTop", Vector3.new(len + 0.06, 0.16, 0.3), CFrame.new(xm, G + 3.5 - 0.08, bz), ALU, M.Metal)
-			box(self, "BarrierFoot", Vector3.new(len, 0.1, 1.6), CFrame.new(xm, G + 0.05, bz + 0.6), STEEL, M.DiamondPlate)
-			box(self, "BarrierLeg", Vector3.new(0.12, 3.3, 0.12), CFrame.new(x0 + side * 0.05, G + 1.65, bz), ALU, M.Metal)
+			box(self, "BarrierFoot", Vector3.new(len, 0.1, 1.6), CFrame.new(xm, G + 0.03, bz - 0.6), STEEL, M.DiamondPlate)
+			box(self, "BarrierLeg", Vector3.new(0.18, 3.3, 0.2), CFrame.new(x0 + side * 0.05, G + 1.65, bz), ALU, M.Metal)
 		end
 	end
 	-- tours d'éclairage de la fosse (avec projecteurs tournés vers la scène)
@@ -1573,8 +1573,8 @@ step("Crowd", function(self)
 		fr.Parent = sg
 		label(fr, "T", "🎤\nL\nI\nV\nE", UDim2.fromScale(0.1, 0.04), UDim2.fromScale(0.8, 0.92), WHITE)
 	end
-	-- marquage au sol "DANCE FLOOR" (devant la piste, côté fontaine)
-	local sign = box(self, "FloorSign", Vector3.new(8, 0.04, 1.4), CFrame.new(0, G + 0.005, C.Z0 - 1.2), Color3.fromRGB(30, 26, 40), M.SmoothPlastic)
+	-- marquage au sol "DANCE FLOOR" (entre la piste et les barrières)
+	local sign = box(self, "FloorSign", Vector3.new(8, 0.04, 1.4), CFrame.new(0, G + 0.005, C.Z1 + 1.1), Color3.fromRGB(30, 26, 40), M.SmoothPlastic)
 	local sg = surface(sign, Enum.NormalId.Top, 30, 0.6)
 	local fr = Instance.new("Frame")
 	fr.Size = UDim2.fromScale(1, 1)

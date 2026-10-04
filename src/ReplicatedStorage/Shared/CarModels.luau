@@ -2173,6 +2173,15 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			-- colonne : du moyeu vers la planche de bord
 			local hubW = wheelCF * CFrame.new(0, 0, 0.12 * m)
 			local colEnd = P(b, seatX, by0 - 0.3, dashZ1 - 0.1)
+			if (colEnd - hubW.Position).Magnitude > 1.7 * m then
+				-- (colonne courte : elle entre dans le bloc de commandes sous la planche)
+				colEnd = hubW.Position + (colEnd - hubW.Position).Unit * 1.7 * m
+				-- bloc de commandes (combiné d'instruments) prolongeant la planche jusqu'à la colonne
+				local cz = colEnd.Z / b.S.Z
+				if cz > dashZ1 + 0.05 then
+					box(b, "SteeringPod", seatX - 0.55, seatX + 0.55, by0 - 0.5, math.min(by0 - 0.04, colEnd.Y / b.S.Y + 0.22), dashZ1 - 0.02, cz + 0.1, TRIM)
+				end
+			end
 			local colLen = (colEnd - hubW.Position).Magnitude
 			if colLen > 0.05 then
 				newPart(b, "Part", "SteeringColumn", Vector3.new(0.16 * m, 0.16 * m, colLen), CFrame.lookAt((hubW.Position + colEnd) / 2, colEnd), GRAPHITE, M.SmoothPlastic)

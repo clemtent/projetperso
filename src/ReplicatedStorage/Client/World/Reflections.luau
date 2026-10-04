@@ -659,6 +659,49 @@ local function secondLargest(size: Vector3): number
 	return b
 end
 
+-- Couleur VUE d'une surface : la pièce + son papier peint / motif de sol en
+-- SurfaceGui (cadres colorés : moyenne pondérée par la surface couverte)
+local function surfaceColor(part: BasePart): Color3
+	local base = part.Color
+	local r, g, b, weight, area = 0, 0, 0, 0, 0
+	local seen = 0
+	for _, gui in ipairs(part:GetChildren()) do
+		if gui:IsA("SurfaceGui") and gui.Enabled then
+			local cw, ch = gui.CanvasSize.X, gui.CanvasSize.Y
+			if gui.SizingMode == Enum.SurfaceGuiSizingMode.PixelsPerStud then
+				cw, ch = part.Size.X * gui.PixelsPerStud, part.Size.Y * gui.PixelsPerStud
+			end
+			cw, ch = math.max(cw, 1), math.max(ch, 1)
+			area += cw * ch
+			for _, d in ipairs(gui:GetDescendants()) do
+				seen += 1
+				if seen > 400 then
+					break
+				end
+				if d:IsA("Frame") and d.Visible and d.BackgroundTransparency < 0.95 then
+					local size = d.Size
+					local w = math.clamp(size.X.Scale * cw + size.X.Offset, 0, cw)
+					local h = math.clamp(size.Y.Scale * ch + size.Y.Offset, 0, ch)
+					local k = w * h * (1 - d.BackgroundTransparency)
+					local c = d.BackgroundColor3
+					r += c.R * k
+					g += c.G * k
+					b += c.B * k
+					weight += k
+				end
+			end
+		end
+	end
+	if weight <= 0 or area <= 0 then
+		return base
+	end
+	-- (le reste de la toile laisse voir la pièce)
+	local rest = math.max(0, area - weight)
+	local total = weight + rest
+	return Color3.new((r + base.R * rest) / total, (g + base.G * rest) / total, (b + base.B * rest) / total)
+end
+Reflections.SurfaceColor = surfaceColor
+
 local function measureRoom(part: BasePart, cp: Plane): Room
 	local origin = cp.Center + cp.N * 0.4
 	local exclude: { Instance } = {}
@@ -706,7 +749,7 @@ local function measureRoom(part: BasePart, cp: Plane): Room
 	end
 	local function colorOf(hit: RaycastResult?, default: Color3): Color3
 		if hit and hit.Instance:IsA("BasePart") and not hit.Instance:IsA("Terrain") then
-			return (hit.Instance :: BasePart).Color
+			return surfaceColor(hit.Instance :: BasePart)
 		end
 		if hit and hit.Instance:IsA("Terrain") then
 			return Color3.fromRGB(110, 150, 90)

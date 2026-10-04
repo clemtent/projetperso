@@ -593,10 +593,12 @@ local function layout()
 	parts.Scale.Scale = scale
 	parts.Root.Size = UDim2.fromOffset(size.X / scale, size.Y / scale)
 	-- téléphone : tour des temps à droite sous les boutons du haut (la colonne des voitures est à gauche)
-	parts.Tower.AnchorPoint = if phone then Vector2.new(1, 0) else Vector2.zero
-	-- (ordinateur : à droite de la colonne des boutons de la voiture, sous la pastille de distance)
-	parts.Tower.Position = if phone then UDim2.new(1, -74, 0, 50) else UDim2.fromOffset(104, 150)
-	parts.PlaceFx.Position = if phone then UDim2.new(1, -330, 0, 54) else UDim2.fromOffset(348, 154)
+	-- (à droite de la colonne des boutons de la voiture, sous la pastille de distance ;
+	-- téléphone : plus étroit, 5 lignes autour de moi)
+	parts.Tower.AnchorPoint = Vector2.zero
+	parts.Tower.Position = if phone then UDim2.fromOffset(108, 86) else UDim2.fromOffset(104, 150)
+	parts.TowerW = if phone then 204 else 236
+	parts.PlaceFx.Position = if phone then UDim2.fromOffset(318, 88) else UDim2.fromOffset(348, 154)
 	parts.RaceButton.Position = if phone then UDim2.fromOffset(14, 316) else UDim2.new(0, 22, 0.5, 140)
 	parts.RaceTag.Visible = not phone
 	local mini = if phone then 112 else 150
@@ -748,7 +750,7 @@ local function setTower(i: { [string]: any })
 	parts.TowerFoot.Text = foot
 	parts.TowerFoot.Position = UDim2.fromOffset(10, 68 + shown * 24)
 	parts.TowerHolder.Size = UDim2.new(1, -12, 0, shown * 24)
-	parts.Tower.Size = UDim2.fromOffset(236, 68 + shown * 24 + (if foot ~= "" then 40 else 4))
+	parts.Tower.Size = UDim2.fromOffset(parts.TowerW or 236, 68 + shown * 24 + (if foot ~= "" then 40 else 4))
 end
 
 local function setNitro(n: { [string]: any }?)

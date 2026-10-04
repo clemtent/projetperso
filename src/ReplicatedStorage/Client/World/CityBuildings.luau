@@ -259,12 +259,34 @@ local function pierced(c: Ctx, holes: { { any } }, color: Color3, mat: Enum.Mate
 	end
 end
 
-local function furnish(c: Ctx)
-	local ok, err = pcall(CityInteriors.Furnish, c.M, c.F * CFrame.new(0, FLOOR, c.FZ), c.W - 0.1, c.D - 0.05, c.G - FLOOR, c.Kind, c.Seed, { DoorX = c.DoorX, MaxNpc = 3 })
+-- aménagement + PNJ : construits PARESSEUSEMENT, quand la caméra passe à
+-- moins de FURNISH_R studs (budget de pièces : de loin, la coque suffit)
+local FURNISH_R = 85
+local function furnishNow(c: Ctx)
+	local ok, err = pcall(CityInteriors.Furnish, c.M, c.F * CFrame.new(0, FLOOR, c.FZ), c.W - 0.1, c.D - 0.05, c.G - FLOOR, c.Kind, c.Seed, { DoorX = c.DoorX, MaxNpc = 2 })
 	if not ok then
 		warn("[CityBuildings] intérieur : " .. tostring(err))
 	end
 end
+local function furnish(c: Ctx, fn: (() -> ())?)
+	local done = false
+	local centre = c.F.Position
+	CityKit.Actor(c.M, centre, function()
+		if done then
+			return
+		end
+		local camera = workspace.CurrentCamera
+		if camera and (camera.CFrame.Position - centre).Magnitude < FURNISH_R then
+			done = true
+			if fn then
+				fn()
+			else
+				furnishNow(c)
+			end
+		end
+	end, 0)
+end
+CityBuildings.FURNISH_R = FURNISH_R
 
 ----------------------------------------------------------------------
 -- Étages, faces, toits
@@ -685,7 +707,9 @@ local function church(c: Ctx)
 		Box(c.M, "DoorLeaf", Hn, sx < 0 and 0 or -2.3, sx < 0 and 2.3 or 0, FLOOR, 9.9, -0.1, 0.1, rgb(110, 70, 46), M.Wood)
 	end
 	c.DoorX = 0
-	pcall(CityInteriors.Furnish, c.M, c.F * CFrame.new(0, FLOOR, fz), W - 0.1, hd - fz - 0.05, G - FLOOR, "Church", c.Seed, { DoorX = 0, MaxNpc = 2 })
+	furnish(c, function()
+		pcall(CityInteriors.Furnish, c.M, c.F * CFrame.new(0, FLOOR, fz), W - 0.1, hd - fz - 0.05, G - FLOOR, "Church", c.Seed, { DoorX = 0, MaxNpc = 1 })
+	end)
 	CityInteriors.Lamps(c.M, c.F * CFrame.new(0, FLOOR, fz), W - 1, hd - fz - 0.5, G - FLOOR, "Church")
 	local _ = nave
 end

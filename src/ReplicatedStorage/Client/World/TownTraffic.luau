@@ -2275,7 +2275,8 @@ function TownTraffic.Start(_options: any?)
 	local O = WorldLayout.Origin()
 	local side0 = CFrame.lookAt(O + Vector3.new(0, WorldLayout.ROAD_Y, A), O + Vector3.new(0, WorldLayout.ROAD_Y, A - 1))
 	zebra = { CF = side0, S = nearestS(p, (side0 * CFrame.new(0, 0, WorldLayout.ROAD_W / 4)).Position) }
-	busStopS = nearestS(p, (side0 * CFrame.new(26, 0, WorldLayout.ROAD_W / 4)).Position)
+	-- (v11) arrêts 50 studs après le carrefour : le bus arrêté ne bloque plus le carrefour
+	busStopS = nearestS(p, (side0 * CFrame.new(50, 0, WorldLayout.ROAD_W / 4)).Position)
 	-- 2 autres arrêts : aux carrefours des rues latérales (1/4 et 3/4 du tour)
 	table.clear(sideStops)
 	local m = WorldLayout.PlotSlots(count)
@@ -2285,7 +2286,7 @@ function TownTraffic.Start(_options: any?)
 		local dirv = Vector3.new(math.sin(a), 0, math.cos(a))
 		local at = O + dirv * (A + WorldLayout.ROAD_W / 4)
 		local tangent = Vector3.new(dirv.Z, 0, -dirv.X)
-		table.insert(sideStops, nearestS(p, at + tangent * 22))
+		table.insert(sideStops, nearestS(p, at + tangent * 50))
 	end
 	spawnTraffic()
 	readSpots()

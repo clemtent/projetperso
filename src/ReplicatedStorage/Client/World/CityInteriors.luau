@@ -239,9 +239,7 @@ local function tableSet(m: Instance, F: CFrame, x: number, z: number, n: number,
 		-- chaise tournée vers la table (+Z local de C)
 		Box(m, "ChairSeat", C, -1.15, 1.15, SEAT_H - 0.18, SEAT_H, -1.0, 1.0, chair, M.Wood)
 		for _, sx in ipairs({ -1, 1 }) do
-			for _, sz in ipairs({ -1, 1 }) do
-				Box(m, "ChairLeg", C, sx * 1.0 - 0.09, sx * 1.0 + 0.09, 0, SEAT_H - 0.18, sz * 0.85 - 0.09, sz * 0.85 + 0.09, INK, M.Metal)
-			end
+			Box(m, "ChairSide", C, sx * 1.0 - 0.07, sx * 1.0 + 0.07, 0, SEAT_H - 0.18, -0.9, 0.9, INK, M.Metal)
 		end
 		Box(m, "ChairBack", C, -1.1, 1.1, SEAT_H, 4.2, -1.0, -0.82, chair, M.Wood)
 	end

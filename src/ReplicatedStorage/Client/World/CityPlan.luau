@@ -340,6 +340,11 @@ local function packRect(ctx: Ctx, out: { Spot }, R: any, pack: Pack, y: number)
 			end
 			return nil, nil
 		end
+		-- (seulement en 1re rangée : la façade donne sur la rue, jamais sur
+		-- le dos d'un autre bâtiment)
+		if rowStart > 3 then
+			return nil, nil
+		end
 		local allowed = CityBuildings.FOR_STYLE[pack.Style] or {}
 		local best, bestN, bestI, bestF = nil, math.huge, math.huge, nil
 		for i, typ in ipairs(allowed) do

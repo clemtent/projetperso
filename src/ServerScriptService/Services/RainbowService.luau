@@ -7,9 +7,9 @@
 	  - L'horloge de la météo est partagée (Shared/RainbowGold : mêmes
 	    épisodes que Weather3D chez tous les clients). Quand un arc-en-ciel
 	    "s'ouvre" (RainbowGold.Event(t).Open), le serveur choisit la place du
-	    pot : la 1re place candidate (RainbowGold.Candidates / Order) dont le
-	    sol est plat, au bon niveau, pas de l'eau, rien de bâti au-dessus
-	    (5 lancers de rayon), et la publie :
+	    pot : la 1re place candidate (RainbowGold.Candidates / Order : sur un
+	    trottoir) dont le sol est plat, au bon niveau, pas de l'eau, rien de
+	    bâti au-dessus (5 lancers de rayon), et la publie :
 	      workspace PotOfGoldId = n° de l'arc-en-ciel (-1 = aucun),
 	      PotOfGoldPos (Vector3, au sol), PotOfGoldWinners, PotOfGoldMax,
 	      PotOfGoldFirst (nom du 1er gagnant).
@@ -122,7 +122,7 @@ local function probe(base: Vector3, exclude: { Instance }): Vector3?
 	params.FilterDescendantsInstances = exclude
 	params.IgnoreWater = false
 	local center: Vector3? = nil
-	local offsets = { Vector3.zero, Vector3.new(6, 0, 0), Vector3.new(-6, 0, 0), Vector3.new(0, 0, 6), Vector3.new(0, 0, -6) }
+	local offsets = { Vector3.zero, Vector3.new(2.5, 0, 0), Vector3.new(-2.5, 0, 0), Vector3.new(0, 0, 2.5), Vector3.new(0, 0, -2.5) }
 	for i, off in ipairs(offsets) do
 		local ok, hit = pcall(function()
 			return workspace:Raycast(base + off + Vector3.new(0, 220, 0), Vector3.new(0, -400, 0), params)

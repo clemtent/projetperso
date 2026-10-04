@@ -101,7 +101,7 @@ MusicSynth.CHAINS = {
 	Guitar = {
 		Curve = 1.25,
 		{ "EqualizerSoundEffect", { LowGain = -4, MidGain = 4, HighGain = 2, Priority = 6 } },
-		{ "DistortionSoundEffect", { Level = 0.72, Priority = 5 } },
+		{ "DistortionSoundEffect", { Level = 0.6, Priority = 5 } },
 		{ "EqualizerSoundEffect", { LowGain = 1, MidGain = 3, HighGain = -12, Priority = 4 } }, -- (baffle 4x12)
 		{ "ChorusSoundEffect", { Depth = 0.15, Mix = 0.25, Rate = 0.8, Priority = 3 } },
 		{ "ReverbSoundEffect", { DecayTime = 1.2, Density = 0.7, Diffusion = 0.7, WetLevel = -14, DryLevel = 0, Priority = 1 } },

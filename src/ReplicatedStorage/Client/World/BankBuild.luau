@@ -455,10 +455,12 @@ local function shell(b: any, out: any)
 	local frieze = b:Box("Entablature", -27.5, 27.5, FLOOR + 19.6, eTop, -BankLayout.PORTICO, -FRONT, STONE, M.Limestone, true)
 	local _ = frieze
 	b:Box("Architrave", -27.7, 27.7, FLOOR + 19.6, FLOOR + 20.4, -BankLayout.PORTICO - 0.2, -BankLayout.PORTICO, STONE_DARK, M.Limestone)
-	local sign = b:Sign("BankName", -18, 18, FLOOR + 20.6, FLOOR + 22.6, -BankLayout.PORTICO - 0.12, -BankLayout.PORTICO - 0.02)
-	local name = label(sign, Enum.NormalId.Front, T("DOPAMINE BANK"), GOLD, nil, Enum.Font.Garamond, 420, 20)
-	name.TextStrokeTransparency = 0.6
-	name.TextStrokeColor3 = BRONZE
+	-- frise : lettres dorées sur un bandeau de bronze sombre (lisible à l'ombre)
+	b:Box("FriezeBand", -23, 23, FLOOR + 20.55, FLOOR + 22.85, -BankLayout.PORTICO - 0.1, -BankLayout.PORTICO, rgb(70, 52, 36), M.Metal)
+	local sign = b:Sign("BankName", -22.6, 22.6, FLOOR + 20.6, FLOOR + 22.8, -BankLayout.PORTICO - 0.22, -BankLayout.PORTICO - 0.12)
+	local name = label(sign, Enum.NormalId.Front, T("DOPAMINE BANK"), rgb(255, 214, 110), nil, Enum.Font.Garamond, 520, 22)
+	name.TextStrokeTransparency = 0.4
+	name.TextStrokeColor3 = rgb(60, 40, 20)
 	b:Box("PorticoCornice", -28.4, 28.4, eTop, eTop + 0.9, -BankLayout.PORTICO - 0.9, -FRONT, STONE_DARK, M.Limestone, true)
 	-- fronton (2 coins) + corniche rampante + médaillon 💎
 	local pH, pBase = 7, eTop + 0.9
@@ -650,7 +652,8 @@ local function hall(b: any, out: any)
 	b:Group("Ticket")
 	b:Box("TicketPost", -7.6, -6.4, FLOOR, FLOOR + 3.6, -10.6, -9.4, IRON, M.Metal, true)
 	local tk = b:Box("TicketHead", -8.1, -5.9, FLOOR + 3.6, FLOOR + 5.4, -10.9, -9.1, rgb(36, 52, 112), M.SmoothPlastic)
-	label(tk, Enum.NormalId.Front, "🎫", WHITE, nil, nil, 50, 30)
+	local tl = label(tk, Enum.NormalId.Front, "🎫 " .. T("Take a ticket"), WHITE, rgb(36, 52, 112), Enum.Font.GothamBold, 50, 30)
+	tl.TextWrapped = true
 	b:Box("TicketSlip", -7.3, -6.7, FLOOR + 3.9, FLOOR + 4.0, -11.2, -10.9, WHITE, M.SmoothPlastic)
 	-- file d'attente : poteaux dorés + cordons de velours
 	b:Group("Queue")
@@ -757,7 +760,7 @@ local function counters(b: any, out: any)
 	end
 	-- les 4 guichets : numéro, lampe verte, sonnette, terminal, porte-stylo
 	for i = 1, BankLayout.COUNTERS do
-		local x = (i - (BankLayout.COUNTERS + 1) / 2) * 8.5
+		local x = ((BankLayout.COUNTERS + 1) / 2 - i) * 8.5 -- (guichet 1 à gauche vu du hall = +X)
 		local num = b:Sign("CounterNumber", x - 1.6, x + 1.6, FLOOR + 9.75, FLOOR + 10.65, gz - 0.62, gz - 0.52)
 		label(num, Enum.NormalId.Front, T("Counter %d", i), GOLD, nil, Enum.Font.Garamond, 90, 40)
 		CityKit.Glow(b:Box("CounterLamp", x + 2.4, x + 3.2, FLOOR + 9.9, FLOOR + 10.5, gz - 0.75, gz - 0.55, GREEN_LAMP, M.Neon))
@@ -780,7 +783,7 @@ local function counters(b: any, out: any)
 	b:Group("Staff")
 	b:Box("Parquet", -HW + 1, HW - 1, FLOOR, FLOOR + 0.03, cz1, VW, rgb(150, 104, 66), M.WoodPlanks)
 	for i = 1, BankLayout.COUNTERS do
-		local x = (i - (BankLayout.COUNTERS + 1) / 2) * 8.5
+		local x = ((BankLayout.COUNTERS + 1) / 2 - i) * 8.5 -- (guichet 1 à gauche vu du hall = +X)
 		-- bureau debout derrière le guichetier (devant le rail de la porte ronde)
 		b:Box("BackDesk", x - 2.4, x + 2.4, FLOOR, FLOOR + 3.3, 8.0, 9.5, MAHOGANY_LIGHT, M.Wood, true)
 		b:Box("Monitor", x - 1.0, x + 1.0, FLOOR + 3.7, FLOOR + 5.1, 8.95, 9.1, IRON, M.SmoothPlastic)
@@ -1078,15 +1081,24 @@ local function alley(b: any, out: any)
 	for k = 0, 2 do
 		b:Box("Crate", HW + 1.2 + (k % 2) * 2.2, HW + 3.2 + (k % 2) * 2.2, 0.6 + math.floor(k / 2) * 2, 2.6 + math.floor(k / 2) * 2, 13.4, 15.4, rgb(176, 136, 84), M.WoodPlanks, true)
 	end
-	-- PLAN DU CASSE : chevalet + tableau (rendez-vous de l'équipe)
+	-- MUR DE BRIQUES de la ruelle (côté extérieur), entrée par le parvis
+	local brick = rgb(150, 78, 58)
+	b:Box("AlleyWall", ALLEY - 0.8, ALLEY, 0.6, 6.2, -BankLayout.PORTICO + 2, BACK + 2, brick, M.Brick, true)
+	b:Box("AlleyWallCap", ALLEY - 0.95, ALLEY + 0.15, 6.2, 6.5, -BankLayout.PORTICO + 2, BACK + 2, STONE_DARK, M.Limestone)
+	b:Box("AlleyPier", ALLEY - 1.1, ALLEY + 0.2, 0.6, 7.4, -BankLayout.PORTICO + 1.4, -BankLayout.PORTICO + 2.6, brick, M.Brick, true)
+	b:Box("AlleyPierCap", ALLEY - 1.25, ALLEY + 0.35, 7.4, 7.7, -BankLayout.PORTICO + 1.25, -BankLayout.PORTICO + 2.75, STONE_DARK, M.Limestone)
+	-- applique (lampe de ruelle) + tuyau
+	CityKit.Glow(b:Box("AlleyLamp", ALLEY - 1.5, ALLEY - 0.8, 5.0, 5.6, 4, 4.8, rgb(255, 230, 176), M.SmoothPlastic))
+	b:Box("AlleyLampArm", ALLEY - 1.6, ALLEY - 0.8, 5.6, 5.8, 4.2, 4.6, IRON, M.Metal)
+	-- PLAN DU CASSE : grand plan bleu fixé au mur de briques (rendez-vous de l'équipe)
 	local lo = L.Lobby -- (32.3, 0.6, -14)
 	b:Group("HeistBoard")
-	local bx = ALLEY - 0.9
-	b:Box("EaselLeg", bx - 0.2, bx, 0.6, 7.4, lo.Z - 2.6, lo.Z - 2.3, rgb(120, 86, 50), M.Wood, true)
-	b:Box("EaselLeg", bx - 0.2, bx, 0.6, 7.4, lo.Z + 2.3, lo.Z + 2.6, rgb(120, 86, 50), M.Wood, true)
-	b:Box("EaselShelf", bx - 0.7, bx, 2.9, 3.1, lo.Z - 2.6, lo.Z + 2.6, rgb(120, 86, 50), M.Wood)
-	local board = b:Box("Blueprint", bx - 0.32, bx - 0.2, 3.1, 7.0, lo.Z - 2.5, lo.Z + 2.5, rgb(26, 70, 140), M.SmoothPlastic)
+	local bx = ALLEY - 0.8
+	b:Box("BoardFrame", bx - 0.2, bx, 1.6, 6.0, lo.Z - 3.2, lo.Z + 3.2, rgb(120, 86, 50), M.Wood, true)
+	local board = b:Box("Blueprint", bx - 0.3, bx - 0.2, 1.8, 5.8, lo.Z - 3.0, lo.Z + 3.0, rgb(26, 70, 140), M.SmoothPlastic)
 	out.Board = CityKit.Canvas(board, Enum.NormalId.Left, 80, 40)
+	b:Box("BoardLight", bx - 0.9, bx - 0.2, 6.0, 6.3, lo.Z - 1.4, lo.Z + 1.4, IRON, M.Metal)
+	b:Box("BoardShelf", bx - 0.7, bx - 0.2, 1.4, 1.6, lo.Z - 3.0, lo.Z + 3.0, rgb(120, 86, 50), M.Wood)
 	-- caisses-sièges + boîte à outils + lampe de chantier
 	b:Box("ToolBox", bx - 1.8, bx - 0.6, 0.6, 1.4, lo.Z + 3.0, lo.Z + 4.4, rgb(210, 40, 40), M.Metal, true)
 	b:Box("ToolBoxHandle", bx - 1.3, bx - 1.1, 1.4, 1.7, lo.Z + 3.2, lo.Z + 4.2, IRON, M.Metal)
@@ -1134,7 +1146,7 @@ end
 local function people(b: any, out: any)
 	local g = b:Group("People")
 	for i = 1, BankLayout.COUNTERS do
-		local x = (i - (BankLayout.COUNTERS + 1) / 2) * 8.5
+		local x = ((BankLayout.COUNTERS + 1) / 2 - i) * 8.5 -- (guichet 1 à gauche vu du hall = +X)
 		local m = npc(g, "cashier", 300 + i, b.F * CFrame.new(x, FLOOR, BankLayout.COUNTER + 2.2), ({ rgb(36, 52, 112), WHITE, rgb(60, 60, 70), rgb(120, 30, 50) })[i])
 		if m then
 			table.insert(out.Npcs, { Model = m, Anim = (i % 2 == 0) and "type" or "talk", Phase = i * 1.3 })

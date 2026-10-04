@@ -39,16 +39,17 @@ MusicData.DECK = { X0 = -14.6, X1 = 14.6, Z0 = -4.6, Z1 = 9.8 }
 MusicData.STEPS = { X = 5, Depth = 1.0, Rise = 0.5, Count = 2 }
 -- praticables (estrades) : batterie au fond au centre, DJ au fond à gauche (+X)
 MusicData.RISERS = {
-	Drums = { X0 = -3.3, X1 = 3.3, Z0 = 3.0, Z1 = 8.9, H = 0.7 },
+	Drums = { X0 = -3.3, X1 = 3.3, Z0 = 2.6, Z1 = 8.9, H = 0.7 },
 	DJ = { X0 = 5.8, X1 = 10.8, Z0 = 3.6, Z1 = 8.9, H = 0.5 },
 }
 MusicData.TRUSS_H = 16 -- dessous du grill (portique d'éclairage)
 MusicData.TRUSS_TOWERS = { Vector3.new(-15.3, 0, -4.2), Vector3.new(15.3, 0, -4.2), Vector3.new(-15.3, 0, 9.5), Vector3.new(15.3, 0, 9.5) }
 MusicData.TOWER_SIZE = 1.1
 MusicData.PA = { Vector3.new(-13.2, 0, -5.9), Vector3.new(13.2, 0, -5.9) } -- enceintes au sol (devant)
-MusicData.JUKEBOX = CFrame.new(10.6, 0, -8.7) -- 🎛️ pupitre "musique" au sol (pour tous)
+MusicData.JUKEBOX = CFrame.new(10.6, 0, -10.2) -- 🎛️ pupitre "musique" au sol (pour tous)
 -- fosse du public (devant la scène, repère de la scène) : piste de danse LED
-MusicData.CROWD = { X0 = -12, X1 = 12, Z0 = -26.5, Z1 = -12.5 }
+-- (z ≥ -21,6 : les 6 bancs de la fontaine, à 19 studs du centre, restent libres)
+MusicData.CROWD = { X0 = -12, X1 = 12, Z0 = -21.6, Z1 = -12.5 }
 -- (v11, SCALE11) piano et batterie à l'échelle Roblox (x1,3 / x1,25) :
 -- banquette et tabouret à 1,85–1,9 au-dessus de leur plancher
 MusicData.PIANO_SCALE = 1.3

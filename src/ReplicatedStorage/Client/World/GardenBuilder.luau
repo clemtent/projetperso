@@ -1187,11 +1187,13 @@ end
 -- 🪑 v9.9 (PARK99) : s'asseoir dans le jardin
 ----------------------------------------------------------------------
 -- Places assises des objets de jardin (repère du kit : x, dessus de
--- l'assise y, d ; (fx, fd) = direction du regard). Hauteurs SCALE99 : 1,45.
+-- l'assise y, d ; (fx, fd) = direction du regard). v11 (PARK11, SCALE11) :
+-- dessus des assises à 1,85, siège centré sur la profondeur de l'assise
+-- (banc : lattes de d - 1,15 à d + 0,85 -> centre -0,15), 2,6 par place.
 local SEAT_SPOTS: { [string]: { { number } } } = {
-	GardenBench = { { -1.2, 1.45, -0.12, 0, -1 }, { 1.2, 1.45, -0.12, 0, -1 } },
-	PicnicTable = { { -1.3, 1.45, -2.04, 0, 1 }, { 1.3, 1.45, -2.04, 0, 1 }, { -1.3, 1.45, 2.04, 0, -1 }, { 1.3, 1.45, 2.04, 0, -1 } },
-	GardenSwing = { { -0.75, 1.5, 0, 0, -1 }, { 0.75, 1.5, 0, 0, -1 } },
+	GardenBench = { { -1.4, 1.85, -0.15, 0, -1 }, { 1.4, 1.85, -0.15, 0, -1 } },
+	PicnicTable = { { -1.3, 1.85, -2.04, 0, 1 }, { 1.3, 1.85, -2.04, 0, 1 }, { -1.3, 1.85, 2.04, 0, -1 }, { 1.3, 1.85, 2.04, 0, -1 } },
+	GardenSwing = { { -0.75, 1.85, 0, 0, -1 }, { 0.75, 1.85, 0, 0, -1 } },
 }
 do
 	-- kiosque : 3 bancs sur l'arc du fond, face au centre (voir HouseGarden)
@@ -1199,12 +1201,12 @@ do
 	for k = 1, 3 do
 		local a = (k + 1) / 8 * math.pi * 2
 		local x, dd = math.cos(a) * 3.6, math.sin(a) * 3.6
-		table.insert(spots, { x, 0.68 + 1.45, dd, -math.cos(a), -math.sin(a) })
+		table.insert(spots, { x, 0.68 + 1.85, dd, -math.cos(a), -math.sin(a) })
 	end
 	SEAT_SPOTS.Gazebo = spots
 end
-local SWING_PIVOT_Y = 5.3 -- (balancelle : axe des cordes, repère du kit)
-local SWING_OMEGA = math.sqrt(9.81 * 3.06 / (5.3 - 1.5)) -- pendule de ~3,8 studs
+local SWING_PIVOT_Y = 6.6 -- (balancelle : axe des cordes, repère du kit ; v11 SCALE11)
+local SWING_OMEGA = math.sqrt(9.81 * 3.06 / (6.6 - 1.85)) -- pendule de ~4,75 studs
 local SWING_AMP = math.rad(8)
 
 local sitAnimatorModule: any = nil

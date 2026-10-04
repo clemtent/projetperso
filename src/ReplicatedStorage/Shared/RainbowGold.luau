@@ -20,8 +20,8 @@
 	   (Id = n° de l'épisode, StartAt / EndAt, Open = le pot peut être
 	   atteint). Environ 3 arcs-en-ciel par heure, ~2 à 4 min chacun.
 	3) Le pot d'or : le PIED de l'arc touche le sol en ville, à un endroit
-	   accessible (parcs, bois, centre-ville hors routes / parcelles,
-	   belvédères et aire de repos au-delà de l'autoroute) :
+	   accessible : sur un TROTTOIR (avenues, ceinture, centre, rues des
+	   quartiers ; jamais dans un bâtiment) :
 	   RainbowGold.Candidates(count) = liste de places (repère ville),
 	   RainbowGold.Order(id, n) = ordre d'essai (le serveur prend la 1re
 	   place libre : sol plat au bon niveau, pas d'eau, pas de toit).
@@ -74,8 +74,7 @@ RainbowGold.CONFIG = {
 	JumpSpeed = 320, -- (studs / s) au-delà : saut / téléportation (voitures ≤ 90)
 	JumpHold = 4, -- (s) pas de gain juste après un saut
 	Tries = 30, -- places essayées par arc-en-ciel
-	Spacing = 44, -- (studs) grille des places candidates
-	Clearance = 9, -- (studs) place libre autour du pot
+	Spacing = 70, -- (studs) entre deux places candidates le long d'un trottoir
 	ArcRadius = 300, -- (studs) rayon de l'arc (rendu client)
 }
 local CFG = RainbowGold.CONFIG
@@ -220,6 +219,15 @@ export type Spot = { X: number, Z: number, Y: number, Zone: string }
 
 local spotCache: { [number]: { Spot } } = {}
 
+--[[
+	Places candidates : sur les TROTTOIRS de toute la ville (avenues, ceinture,
+	boulevard du centre, rues des quartiers ; pas l'autoroute, ni les
+	bretelles, ni les ponts) : toujours accessibles à pied, jamais dans un
+	bâtiment (les bâtiments du client ne sont pas connus du serveur, le
+	trottoir est le seul sol garanti libre). Tous les Spacing studs, des
+	deux côtés, loin des carrefours (passages piétons), hors des lieux
+	bâtis du centre (mairie, scène, fête foraine...).
+]]
 function RainbowGold.Candidates(count: number?): { Spot }
 	local n = WorldLayout.PlotCount(count or 8)
 	local cached = spotCache[n]
@@ -228,37 +236,53 @@ function RainbowGold.Candidates(count: number?): { Spot }
 	end
 	local list: { Spot } = {}
 	local step = CFG.Spacing
-	local clear = CFG.Clearance
+	local graph = WorldLayout.RoadGraph(n)
 	local zones = WorldLayout.Facilities(n)
-	-- lieux bâtis du centre (mairie, scène, public...) : jamais le pot dessus
 	local function busy(x: number, z: number): boolean
-		for _, other in ipairs(zones) do
-			if other.Kind == "Downtown" and other.Id ~= "Downtown" and other.Id ~= "Plaza" and WorldLayout.InZone(other, x, z, clear) then
+		for _, zone in ipairs(zones) do
+			local blocked = zone.Kind == "Facility" or (zone.Kind == "Downtown" and zone.Id ~= "Downtown" and zone.Id ~= "Plaza")
+			if blocked and WorldLayout.InZone(zone, x, z, 4) then
+				return true
+			end
+		end
+		return math.sqrt(x * x + z * z) < WorldLayout.PLAZA_R + 6
+	end
+	local function onCarriageway(x: number, z: number): boolean
+		for _, e in ipairs(graph.Edges) do
+			if WorldLayout.EdgeDistance(e, x, z) < e.Width / 2 + 1 then
 				return true
 			end
 		end
 		return false
 	end
-	for _, zone in ipairs(zones) do
-		if zone.Kind == "Nature" or zone.Id == "Downtown" then
-			-- grille alignée sur la zone (repère local tourné de Yaw)
-			local c, s = math.cos(zone.Yaw), math.sin(zone.Yaw)
-			local nx = math.floor((zone.W / 2 - clear) / step)
-			local nz = math.floor((zone.D / 2 - clear) / step)
-			for i = -nx, nx do
-				for j = -nz, nz do
-					local lx, lz = i * step, j * step
-					local x = zone.X + lx * c + lz * s
-					local z = zone.Z - lx * s + lz * c
-					if WorldLayout.IsFreeAt(n, x, z, clear) and not busy(x, z) then
-						table.insert(list, { X = x, Z = z, Y = zone.Y or 0, Zone = zone.Id })
+	local function nearNode(x: number, z: number): boolean
+		for _, node in ipairs(graph.NodeList) do
+			local dx, dz = node.X - x, node.Z - z
+			if dx * dx + dz * dz < 30 * 30 then
+				return true
+			end
+		end
+		return false
+	end
+	for _, e in ipairs(graph.Edges) do
+		if (e.Sidewalk or 0) >= 3 and not e.Highway and not e.Ramp and not e.Bridge and #e.Points >= 2 then
+			local length = e.Length or 0
+			local half = e.Width / 2 + e.Sidewalk / 2
+			local s0 = 30
+			while s0 <= length - 30 do
+				local x, y, z, dx, dz = WorldLayout.PointAlong(e.Points, s0)
+				local m = math.sqrt(dx * dx + dz * dz)
+				if m > 1e-6 then
+					local nx, nz = -dz / m, dx / m
+					for _, side in ipairs({ 1, -1 }) do
+						local px, pz = x + nx * half * side, z + nz * half * side
+						if not onCarriageway(px, pz) and not WorldLayout.OnPlot(n, px, pz, 0) and not busy(px, pz) and not nearNode(px, pz)
+							and math.max(math.abs(px), math.abs(pz)) < WorldLayout.TownRadius(n) - 30 then
+							table.insert(list, { X = px, Z = pz, Y = y, Zone = e.Kind })
+						end
 					end
 				end
-			end
-		elseif zone.Id == "RestArea" or string.sub(zone.Id, 1, 8) == "Lookout_" then
-			-- au-delà de l'autoroute : une belle balade (en voiture)
-			if not WorldLayout.OnRoad(n, zone.X, zone.Z, 2) then
-				table.insert(list, { X = zone.X, Z = zone.Z, Y = zone.Y or 0, Zone = zone.Id })
+				s0 += step
 			end
 		end
 	end

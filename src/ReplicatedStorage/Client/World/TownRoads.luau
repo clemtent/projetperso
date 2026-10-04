@@ -623,10 +623,6 @@ local function buildDirection(m: Model, F: CFrame, seed: number)
 			newPart(m, "DirClamp", Vector3.new(BLADE_H + 0.12, 0.6, 0.6), R * UPRIGHT, pole, M.Metal, "Cyl")
 			-- lame : de l'axe du poteau (z = 0) jusqu'à -BLADE_LEN
 			local blade = newPart(m, "DirBlade", Vector3.new(BLADE_T, BLADE_H, BLADE_LEN), R * CFrame.new(0, 0, -BLADE_LEN / 2), color, M.SmoothPlastic)
-			-- bordure claire (dessus / dessous, un peu plus épaisse : aucune face confondue)
-			for _, sy in ipairs({ -1, 1 }) do
-				newPart(m, "DirEdge", Vector3.new(BLADE_T + 0.04, 0.08, BLADE_LEN - 0.32), R * CFrame.new(0, sy * (BLADE_H / 2 - 0.02), -BLADE_LEN / 2 - 0.16), rgb(246, 244, 236), M.SmoothPlastic)
-			end
 			-- pointe : moitié haute + moitié basse, collées au bout de la lame
 			local zt = -BLADE_LEN - BLADE_TIP / 2
 			wedge(m, "DirTip", Vector3.new(BLADE_T, BLADE_H / 2, BLADE_TIP), R * CFrame.new(0, BLADE_H / 4, zt), color, M.SmoothPlastic)
@@ -643,6 +639,17 @@ local function buildDirection(m: Model, F: CFrame, seed: number)
 				gui.LightInfluence = 0.65
 				gui.MaxDistance = 90
 				gui.Parent = blade
+				-- bordure claire (liseré dessiné : aucune pièce en plus)
+				local edge = Instance.new("Frame")
+				edge.Name = "Edge"
+				edge.BackgroundTransparency = 1
+				edge.Position = UDim2.fromScale(face == Enum.NormalId.Right and 0.45 / BLADE_LEN or 0.01, 0.06)
+				edge.Size = UDim2.fromScale(1 - 0.45 / BLADE_LEN - 0.01, 0.88)
+				edge.Parent = gui
+				local stroke = Instance.new("UIStroke")
+				stroke.Color = rgb(246, 244, 236)
+				stroke.Thickness = 3
+				stroke.Parent = edge
 				-- (face Right : on lit vers la pointe ; face Left : vers le poteau)
 				local towardTip = face == Enum.NormalId.Right
 				local pad = 0.45 / BLADE_LEN

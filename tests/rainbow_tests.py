@@ -70,25 +70,33 @@ do
 		check(RG.Hash(5) >= 0 and RG.Hash(5) < 1 and RG.Hash(5) == RG.Hash(5), "hachage stable")
 	end)
 
-	test("Arc-en-ciel v11 : places du pot (accessibles, hors routes / parcelles / lieux bâtis)", function(check)
+	test("Arc-en-ciel v11 : places du pot (sur les trottoirs, hors chaussée / parcelles / lieux bâtis)", function(check)
 		for _, count in ipairs({ 1, 8, 20, 50 }) do
 			local spots = RG.Candidates(count)
-			check(#spots >= 40, count .. " parcelles : au moins 40 places (" .. #spots .. ")")
-			local zones = {}
+			check(#spots >= 80, count .. " parcelles : au moins 80 places (" .. #spots .. ")")
+			local kinds = {}
 			local R = WL.TownRadius(count)
+			local graph = WL.RoadGraph(count)
 			for _, s in ipairs(spots) do
-				zones[s.Zone] = true
+				kinds[s.Zone] = true
 				check(math.max(math.abs(s.X), math.abs(s.Z)) < R - 20, "dans la ville " .. s.Zone)
-				check(not WL.OnRoad(count, s.X, s.Z, 0), "pas sur une route " .. s.Zone .. " " .. s.X .. "," .. s.Z)
+				-- sur un trottoir : hors de toute chaussée, à moins d'un trottoir d'une route
+				local onWalk, onLane = false, false
+				for _, e in ipairs(graph.Edges) do
+					local d = WL.EdgeDistance(e, s.X, s.Z)
+					if d < e.Width / 2 + 0.5 then onLane = true end
+					if not e.Highway and (e.Sidewalk or 0) > 0 and d >= e.Width / 2 and d <= e.Width / 2 + e.Sidewalk then onWalk = true end
+				end
+				check(onWalk and not onLane, "sur un trottoir, pas sur la chaussée " .. s.Zone .. " " .. math.floor(s.X) .. "," .. math.floor(s.Z))
 				check(not WL.OnPlot(count, s.X, s.Z, 0), "pas sur une parcelle " .. s.Zone)
-				for _, id in ipairs({ "TownHall", "MusicStage", "Fair", "Gate", "Market", "FoodCorner" }) do
+				for _, id in ipairs({ "TownHall", "MusicStage", "Fair", "Gate", "Market", "FoodCorner", "Dealership", "RaceMeet" }) do
 					local z = WL.Facility(count, id)
 					check(not z or not WL.InZone(z, s.X, s.Z, 0), "pas dans " .. id)
 				end
 				check(math.sqrt(s.X * s.X + s.Z * s.Z) > WL.PLAZA_R, "pas au milieu de la place")
+				check(type(s.Y) == "number" and s.Y == s.Y and math.abs(s.Y) < 20, "hauteur")
 			end
-			check(zones.HillWoods and zones.SportsPark and zones.Downtown, count .. " parcelles : bois, parc des sports, centre-ville")
-			check(zones.RestArea or zones.Lookout_E or zones.Lookout_N or zones.Lookout_W, "au moins un belvédère / aire de repos")
+			check(kinds.Street and (kinds.Avenue or kinds.Belt) and kinds.Downtown, count .. " parcelles : rues, avenues, centre")
 			check(RG.Candidates(count) == spots, "cache")
 			-- ordre d'essai : déterministe, distinct, dans la liste
 			for id = 1, 200 do

@@ -65,8 +65,8 @@ function BankLayout.LocalPoints(): { [string]: any }
 	local counters = {}
 	local n = BankLayout.COUNTERS
 	for i = 1, n do
-		-- guichets 1..4 de gauche à droite vus du hall ; espacés de 8 studs
-		local x = (i - (n + 1) / 2) * 8.5
+		-- guichets 1..4 de gauche à droite vus du hall (+X à gauche) ; espacés de 8,5 studs
+		local x = ((n + 1) / 2 - i) * 8.5
 		table.insert(counters, Vector3.new(x, F, BankLayout.COUNTER - 2.2))
 	end
 	local piles = {}

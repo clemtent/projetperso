@@ -16,6 +16,9 @@
 ]]
 
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Locale = require(ReplicatedStorage.Shared.Locale)
 
 local LuxuryWear = {}
 
@@ -350,7 +353,7 @@ local function titleGui(character: Model, text: string): BillboardGui?
 	l.TextScaled = true
 	l.Font = Enum.Font.GothamBold
 	l.TextColor3 = GOLD
-	l.Text = text
+	l.Text = Locale.T(text)
 	l.Parent = bg
 	bb.Parent = head
 	return bb

@@ -698,7 +698,8 @@ local function buildGantry(route: any): any
 	end
 	RaceProps.SetLights(info.Lights, 0)
 	RaceProps.SetScreen(info.Screens, "🏁", nil, GOLD)
-	return { Model = model, Lights = info.Lights, Screens = info.Screens, Marshal = info.Marshal, Finish = finishModel, Stage = -1, Pos = cf.Position }
+	return { Model = model, Lights = info.Lights, Screens = info.Screens, MarshalCF = info.MarshalCF, Marshal = nil, Barriers = info.Barriers, Finish = finishModel,
+		Stage = -1, Pos = cf.Position, Seed = #route.Id * 37 }
 end
 
 local function stream()
@@ -740,6 +741,9 @@ local function stream()
 				g.Model:Destroy()
 				if g.Finish then
 					g.Finish:Destroy()
+				end
+				if g.Barriers then
+					g.Barriers:Destroy()
 				end
 				gantries[def.Id] = nil
 			end
@@ -1129,7 +1133,7 @@ local function gridCamera(): CFrame?
 	local M = RaceRoutes.GridCFrame(route, cs.Slot or 1)
 	local keys = {
 		{ G * Vector3.new(14, 24, -48), G * Vector3.new(0, 1, 42) },
-		{ M * Vector3.new(15, 4.5, -20), M * Vector3.new(0, 2.5, 0) },
+		{ M * Vector3.new(17, 6, -28), M * Vector3.new(0, 2.5, 2) },
 		{ M * Vector3.new(0, 7.5, 21), M * Vector3.new(0, 2.5, -22) },
 	}
 	local a, b, w
@@ -2113,6 +2117,13 @@ function RaceClient.Step(dt: number)
 					stage = 7
 				end
 			end
+			-- murets le long de la grille : seulement pendant la course (pas d'obstacle fantôme sinon)
+			if g.Barriers then
+				local want = if stage > 0 and stage < 7 or phase == "Racing" then g.Model else nil
+				if g.Barriers.Parent ~= want then
+					g.Barriers.Parent = want
+				end
+			end
 			if g.Stage ~= stage then
 				g.Stage = stage
 				RaceProps.SetLights(g.Lights, if stage == 7 then 0 else stage)
@@ -2141,10 +2152,30 @@ function RaceClient.Step(dt: number)
 			dropView(id)
 		end
 	end
+	-- murets rangés quand aucune course n'a lieu sur le parcours ; commissaire
+	-- (NPC + drapeau) seulement pendant une course, de près
+	for id, g in pairs(gantries) do
+		if g.Barriers and g.Barriers.Parent and not views[id] then
+			g.Barriers.Parent = nil
+		end
+		local near = p ~= nil and (g.Pos - p).Magnitude < RaceClient.FX_RANGE
+		local wantMarshal = views[id] ~= nil and near and g.MarshalCF ~= nil
+		if wantMarshal and not g.Marshal then
+			local ok, info = pcall(RaceProps.AddMarshal, g.Model, g.MarshalCF, g.Seed or 7)
+			if ok then
+				g.Marshal = info
+			end
+		elseif not wantMarshal and g.Marshal then
+			if g.Marshal.Model then
+				g.Marshal.Model:Destroy()
+			end
+			g.Marshal = nil
+		end
+	end
 	-- commissaires (drapeau qui flotte, de près)
 	if p then
 		for _, g in pairs(gantries) do
-			if g.Marshal and (g.Pos - p).Magnitude < RaceClient.FX_RANGE then
+			if g.Marshal then
 				RaceProps.WaveFlag(g.Marshal, clockT)
 			end
 		end
@@ -2206,6 +2237,9 @@ function RaceClient.Stop()
 		g.Model:Destroy()
 		if g.Finish then
 			g.Finish:Destroy()
+		end
+		if g.Barriers then
+			g.Barriers:Destroy()
 		end
 	end
 	table.clear(gantries)

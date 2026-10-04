@@ -868,7 +868,7 @@ Config.Instruments = {
 	Piano = { SampleId = "Ping", BaseNote = 76, Volume = 0.62, Decay = 2.4, MinSpeed = 0.2, MaxSpeed = 3.2, KeyTrack = true,
 		Layers = { { 0, 1 }, { 12, 0.2, 3 }, { 19, 0.05, -4, 0.5 } },
 		Attack = { { "Click", 1.9, 0.09, 0.05 } } },
-	Guitar = { SampleId = "Ping", BaseNote = 76, Volume = 0.42, Decay = 1.5, MinSpeed = 0.2, MaxSpeed = 2.6, Distortion = 0.72,
+	Guitar = { SampleId = "Ping", BaseNote = 76, Volume = 0.42, Decay = 1.5, MinSpeed = 0.2, MaxSpeed = 2.6, Distortion = 0.6,
 		Layers = { { 0, 1 }, { 0, 0.6, 11 }, { -12, 0.4, -6 } },
 		Attack = { { "Click", 2.6, 0.1, 0.04 } } },
 	Bass = { SampleId = "Ping", BaseNote = 76, Volume = 0.8, Decay = 1.1, MinSpeed = 0.09, MaxSpeed = 1.2,

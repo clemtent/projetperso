@@ -446,7 +446,7 @@ local function buildHud()
 		end })
 		b.LayoutOrder = i
 	end
-	button({ Name = "HackClear", Parent = laptop, Text = "⌫ " .. T("Clear"), Color = rgb(70, 74, 88), TextColor = WHITE, Size = UDim2.fromOffset(130, 40), Position = UDim2.new(0, 14, 1, -52), TextSize = 15, ZIndex = 22, OnClick = function()
+	button({ Name = "HackClear", Parent = laptop, Text = "⌫ " .. T("Erase"), Color = rgb(70, 74, 88), TextColor = WHITE, Size = UDim2.fromOffset(130, 40), Position = UDim2.new(0, 14, 1, -52), TextSize = 15, ZIndex = 22, OnClick = function()
 		if hack then
 			table.clear(hack.Entered)
 			hack.Dirty = true
@@ -472,7 +472,7 @@ local function buildHud()
 	ui.ResDop = label({ Name = "Dopamine", Parent = res, Text = "", TextSize = 26, Color = rgb(255, 120, 180), Size = UDim2.new(1, -20, 0, 34), Position = UDim2.fromOffset(10, 100), ZIndex = 31, Scaled = true })
 	ui.ResDia = label({ Name = "Diamonds", Parent = res, Text = "", TextSize = 26, Color = rgb(150, 230, 255), Size = UDim2.new(1, -20, 0, 34), Position = UDim2.fromOffset(10, 138), ZIndex = 31, Scaled = true })
 	ui.ResNote = label({ Name = "Note", Parent = res, Text = "", TextSize = 14, Color = SOFT, Font = Theme.Fonts.Body, Wrap = true, Size = UDim2.new(1, -20, 0, 36), Position = UDim2.fromOffset(10, 176), ZIndex = 31 })
-	button({ Name = "ResultOk", Parent = res, Text = T("Great!"), Color = GOLD, Size = UDim2.fromOffset(140, 36), AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -12), ZIndex = 32, OnClick = function()
+	button({ Name = "ResultOk", Parent = res, Text = T("Awesome!"), Color = GOLD, Size = UDim2.fromOffset(140, 36), AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -12), ZIndex = 32, OnClick = function()
 		res.Visible = false
 	end })
 
