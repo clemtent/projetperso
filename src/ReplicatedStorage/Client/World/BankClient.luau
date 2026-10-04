@@ -61,6 +61,7 @@ local planPrompt: ProximityPrompt? = nil
 local streamClock = 0
 local screenClock = 0
 local nearClock = 0
+local pollClock = 0
 local remoteFn: RemoteFunction? = nil
 local nextHeistAt = 0
 local heistView = { Staff = 0, Vault = 0, StaffGoal = 0, VaultGoal = 0 }
@@ -534,6 +535,12 @@ function BankClient.Step(dt: number)
 			text = "⏳ " .. T("Next bank heist in %s", HeistRules.Clock(left))
 		end
 		BankUI.SetNextHeist(text)
+	end
+	-- fenêtre ouverte : soldes rafraîchis (Dopamine qui monte, cours du diamant)
+	pollClock += dt
+	if pollClock >= 4 and BankUI.IsOpen() then
+		pollClock = 0
+		task.spawn(ask, "state", nil)
 	end
 	nearClock += dt
 	if nearClock >= 0.4 then

@@ -43,7 +43,6 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
-local Net = require(ReplicatedStorage.Shared.Net)
 local Locale = require(ReplicatedStorage.Shared.Locale)
 local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
 local TrainLine = require(ReplicatedStorage.Shared.TrainLine)
@@ -151,11 +150,21 @@ local function mmss(sec: number): string
 	return string.format("%d:%02d", sec // 60, sec % 60)
 end
 
+-- RemoteEvent "TrainEvent" : jamais d'attente bloquante (TownClient démarre quoi qu'il arrive)
+local function trainRemote(): RemoteEvent?
+	local folder = ReplicatedStorage:FindFirstChild("Remotes")
+	local r = folder and folder:FindFirstChild("TrainEvent")
+	return if r and r:IsA("RemoteEvent") then r else nil
+end
+
 local function fire(kind: string, ...)
 	local args = table.pack(...)
-	pcall(function()
-		Net.Event("TrainEvent"):FireServer(kind, table.unpack(args, 1, args.n))
-	end)
+	local r = trainRemote()
+	if r then
+		pcall(function()
+			r:FireServer(kind, table.unpack(args, 1, args.n))
+		end)
+	end
 end
 
 local function character(): (Model?, Humanoid?, BasePart?)
@@ -890,9 +899,16 @@ function TrainClient.Start(options: any?)
 			end
 		end,
 	})
-	table.insert(s.Conns, Net.Event("TrainEvent").OnClientEvent:Connect(function(kind, payload)
-		pcall(onEvent, kind, payload)
-	end))
+	task.spawn(function()
+		local folder = ReplicatedStorage:WaitForChild("Remotes", 10)
+		local r = folder and folder:WaitForChild("TrainEvent", 10)
+		if r and r:IsA("RemoteEvent") and s.Started then
+			table.insert(s.Conns, r.OnClientEvent:Connect(function(kind, payload)
+				pcall(onEvent, kind, payload)
+			end))
+			fire("sync")
+		end
+	end)
 	-- avatar assis dans un train (après un respawn / une reconnexion)
 	local _, hum = character()
 	if hum and hum.SeatPart and hum.SeatPart:GetAttribute("TrainIndex") then

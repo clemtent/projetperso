@@ -23,7 +23,7 @@
 	  StreetTrees.SPECIES : { string }
 	  StreetTrees.Pick(seed) -> espèce
 	  StreetTrees.Build(parent, base: Vector3, height, seed, species?, opts?) -> (Model, parts)
-	      opts = { Pit = bool (fosse + grille), Guard = bool (corset), Name = string? }
+	      opts = { Pit = bool (fosse + grille), Guard = bool (corset), Lawn = bool (pétales au sol), Name = string? }
 ]]
 
 local CityKit = require(script.Parent.CityKit)
@@ -152,7 +152,7 @@ function StreetTrees.Build(parent: Instance, base: Vector3, height: number, seed
 			local s = width * (0.42 + hash(seed, k + 40) * 0.12)
 			clump(m, rot * CFrame.new(math.cos(a) * r, y, math.sin(a) * r), Vector3.new(s, s * (tall / width) * 1.1, s), C(k))
 		end
-		if sp == "Cherry" and o.Pit ~= true then
+		if sp == "Cherry" and o.Lawn == true then
 			-- pétales au sol
 			for k = 0, 2 do
 				local a = k * 2.2 + hash(seed, k + 60)

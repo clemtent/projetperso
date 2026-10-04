@@ -153,7 +153,7 @@ function CityInteriors.Shell(m: Instance, F: CFrame, w: number, d: number, h: nu
 		Box(m, "InWall", F, math.min(a, b), math.max(a, b), 0, h, 0.4, d - t - 0.02, info.Wall, M.SmoothPlastic, true)
 	end
 	-- plafond + plinthes
-	Box(m, "InCeiling", F, -hw + 0.02, hw - 0.02, h - 0.3, h - 0.04, 0.02, d - 0.02, rgb(246, 244, 240), M.SmoothPlastic)
+	Box(m, "InCeiling", F, -hw + 0.02 + t, hw - 0.02 - t, h - 0.3, h - 0.04, 0.02, d - t - 0.02, rgb(246, 244, 240), M.SmoothPlastic)
 	Box(m, "InSkirting", F, -hw + 0.4, hw - 0.4, 0, 0.45, d - t - 0.1, d - t - 0.02, info.Wall:Lerp(INK, 0.35), M.Wood)
 	CityInteriors.Lamps(m, F, w, d, h, kind)
 end
@@ -342,9 +342,16 @@ local function sideShelves(c: Ctx, z0: number, z1: number, colors: { Color3 }?, 
 	end
 	for _, sx in ipairs({ -1, 1 }) do
 		local S = sideFrame(c, sx)
+		-- (le battant de la porte, rabattu contre ce mur, prend les 5 premiers studs)
+		local zz0 = z0
+		if math.abs(c.DoorX - sx * c.W / 2) < 8 then
+			zz0 = math.max(z0, 5.4)
+		end
 		-- x local du repère latéral : sx = -1 -> x = z ; sx = 1 -> x = -z
-		local a, b = sx < 0 and z0 or -z1, sx < 0 and z1 or -z0
-		shelf(c.M, S, a, b, c.Seed + sx * 5, colors, frame)
+		local a, b = sx < 0 and zz0 or -z1, sx < 0 and z1 or -zz0
+		if b - a >= 2.5 then
+			shelf(c.M, S, a, b, c.Seed + sx * 5, colors, frame)
+		end
 	end
 end
 

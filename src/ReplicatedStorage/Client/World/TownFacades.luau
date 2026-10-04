@@ -325,19 +325,19 @@ local function shopFront(b: Building, parent: Instance, F: CFrame)
 			local g = box(parent, "ShopGlass", F, a, c, 2.4, top, -0.72, -0.64, GLASS_SHOP, M.Glass, true)
 			g.Transparency = 0.72
 			g.Reflectance = 0.12
-			box(parent, "GlassBar", F, a, c, top - 1.6, top - 1.45, -0.78, -0.62, dark, M.Wood)
+			box(parent, "GlassBar", F, a, c, top - 1.6, top - 1.45, -0.8, -0.6, dark, M.Wood)
 			-- pièce derrière la vitrine : rebord intérieur (z 0..0,4)
 			box(parent, "InnerSill", F, a, c, base, 2.4, 0.06, 0.4, info.Wall, M.SmoothPlastic, true)
 		end
 	end
 	-- linteau intérieur (au-dessus de la vitrine, jusqu'au plafond)
-	box(parent, "InnerHeader", F, -hw + 0.02, hw - 0.02, top, G - 0.3, 0.06, 0.4, info.Wall, M.SmoothPlastic)
+	box(parent, "InnerHeader", F, -hw + 0.06, hw - 0.06, top, G - 0.3, 0.06, 0.4, info.Wall, M.SmoothPlastic)
 	for _, sx in ipairs({ -1, 1 }) do
-		box(parent, "InnerJamb", F, sx < 0 and -hw + 0.02 or gx1, sx < 0 and gx0 or hw - 0.02, base, top, 0.06, 0.4, info.Wall, M.SmoothPlastic, true)
+		box(parent, "InnerJamb", F, sx < 0 and -hw + 0.06 or gx1, sx < 0 and gx0 or hw - 0.06, base, top, 0.06, 0.4, info.Wall, M.SmoothPlastic, true)
 	end
 	-- montants de porte ; porte vitrée OUVERTE vers l'intérieur (charnière côté pilier)
 	for _, x in ipairs({ dx0, dx1 }) do
-		box(parent, "DoorPost", F, x - 0.25, x + 0.25, base, top, -0.9, 0.4, dark, M.Wood, true)
+		box(parent, "DoorPost", F, x - 0.25, x + 0.25, base + 0.03, top, -0.9, 0.4, dark, M.Wood, true)
 	end
 	local hingeX = doorRight and dx1 - 0.25 or dx0 + 0.25
 	local H = F * CFrame.new(hingeX, 0, 0.45) * CFrame.Angles(0, (doorRight and -1 or 1) * math.rad(-95), 0)
@@ -352,7 +352,7 @@ local function shopFront(b: Building, parent: Instance, F: CFrame)
 	box(parent, "DoorHead", F, dx0 + 0.25, dx1 - 0.25, top - 0.05, top + 0.3, -0.6, -0.1, dark, M.Wood)
 	-- pancarte "Ouvert" accrochée à la vitrine, près de la porte
 	local px = doorRight and dx0 - 1.4 or dx1 + 1.4
-	local plaque = box(parent, "OpenSign", F, px - 0.8, px + 0.8, 5.0, 5.9, -0.8, -0.76, WHITE, M.SmoothPlastic)
+	local plaque = box(parent, "OpenSign", F, px - 0.8, px + 0.8, 5.0, 5.9, -0.87, -0.83, WHITE, M.SmoothPlastic)
 	signText(plaque, Locale.T("Open ✨"), rgb(40, 150, 80), 60, PLAQUE_DISTANCE, Enum.Font.GothamBold)
 	-- store banne DÉPLOYÉ (toile inclinée + lambrequin)
 	local stripe = hash(seed, 29) < 0.5 and accent:Lerp(WHITE, 0.35) or rgb(246, 240, 230)
@@ -695,7 +695,7 @@ local function backSide(b: Building, parent: Instance)
 	box(parent, "BackLamp", R, dx + 2, dx + 2.5, 6.6, 7.4, -0.5, -0.03, rgb(250, 236, 200), M.Glass)
 	flatWindow(parent, R, w * 0.25, 3.6, 7.4, 3.2, trim, b.Seed + 77)
 	-- jardinet : bac de fleurs + buissons le long du mur (dans l'emprise du socle)
-	box(parent, "Planter", R, w * 0.25 - 2.4, w * 0.25 + 2.4, -0.6, 1.9, -0.9, -0.1, rgb(176, 124, 84), M.WoodPlanks)
+	box(parent, "Planter", R, w * 0.25 - 2.4, w * 0.25 + 2.4, -0.55, 1.9, -0.9, -0.1, rgb(176, 124, 84), M.WoodPlanks)
 	for k = -1, 1 do
 		ball(parent, "Shrub", R, w * 0.25 + k * 1.5, 2.2, -0.5, 1.3, k == 0 and FLOWERS[(b.Seed % #FLOWERS) + 1] or rgb(104, 172, 96), M.Grass)
 	end
@@ -820,12 +820,12 @@ local function decorOpenFront(b: Building, parent: Instance)
 	end
 	box(parent, "FrontLintel", F, -doorW / 2, doorW / 2, 8.2, fy1, z0, z1, frame, M.Wood)
 	-- revers intérieur de la façade (z 0,06 .. 0,4) autour des ouvertures
-	box(parent, "InnerHeader", F, -hw + 0.02, hw - 0.02, y1, G - 0.3, 0.06, 0.4, info.Wall, M.SmoothPlastic)
+	box(parent, "InnerHeader", F, -hw + 0.06, hw - 0.06, y1, G - 0.3, 0.06, 0.4, info.Wall, M.SmoothPlastic)
 	for _, sx in ipairs({ -1, 1 }) do
-		local a, c = sx < 0 and -hw + 0.02 or doorW / 2, sx < 0 and -doorW / 2 or hw - 0.02
+		local a, c = sx < 0 and -hw + 0.06 or doorW / 2, sx < 0 and -doorW / 2 or hw - 0.06
 		box(parent, "InnerSill", F, a, c, fy0, y0, 0.06, 0.4, info.Wall, M.SmoothPlastic, true)
 		local ex0, ex1 = sx * (wx - ww / 2), sx * (wx + ww / 2)
-		local o0, o1 = sx < 0 and -hw + 0.02 or math.max(ex0, ex1), sx < 0 and math.min(ex0, ex1) or hw - 0.02
+		local o0, o1 = sx < 0 and -hw + 0.06 or math.max(ex0, ex1), sx < 0 and math.min(ex0, ex1) or hw - 0.06
 		box(parent, "InnerJamb", F, o0, o1, y0, y1, 0.06, 0.4, info.Wall, M.SmoothPlastic, true)
 		local i0, i1 = sx < 0 and math.max(ex0, ex1) or doorW / 2, sx < 0 and -doorW / 2 or math.min(ex0, ex1)
 		box(parent, "InnerJamb", F, i0, i1, y0, y1, 0.06, 0.4, info.Wall, M.SmoothPlastic, true)

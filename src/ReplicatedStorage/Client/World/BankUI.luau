@@ -514,7 +514,9 @@ refresh = function()
 		return
 	end
 	local s = state or {}
-	parts.ChipValue.Text = NumberFormatter.Format(tonumber(s.Wallet) or 0)
+	local w = tonumber(s.Wallet) or 0
+	-- (diamants : nombre entier jusqu'à 99 999, puis format court)
+	parts.ChipValue.Text = if w < 100000 then tostring(math.floor(w)) else NumberFormatter.Format(w)
 	parts.Dopamine.Text = fmt(tonumber(s.Dopamine) or 0)
 	parts.Wallet.Text = tostring(tonumber(s.Wallet) or 0)
 	parts.Vault.Text = tostring(tonumber(s.Vault) or 0)

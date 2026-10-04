@@ -437,7 +437,12 @@ local function onInvoke(player: Player, action: any, arg: any): (boolean, any, a
 		warn("[BankService] " .. action .. " : " .. tostring(success))
 		return false, T(player, "Invalid request"), stateOf(player)
 	end
-	return success, message, stateOf(player)
+	local st = stateOf(player)
+	-- (aussi poussé : la pastille 💎 et les autres écrans se mettent à jour)
+	if success and action ~= "state" and st then
+		fire(player, "State", st)
+	end
+	return success, message, st
 end
 
 ----------------------------------------------------------------------

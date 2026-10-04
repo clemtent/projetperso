@@ -123,6 +123,7 @@ type Spot = {
 	Snap: boolean?, -- (v10) recaler au sol (rayon) à la construction
 	Imp: Model?, -- (v10) imposteur construit
 	Nudged: boolean?, -- (v11) recalé une fois (trottoir jamais pincé)
+	Home: Vector3?, -- (v11) position publiée avant recalage
 }
 
 local state: any = nil
@@ -376,7 +377,7 @@ local function buildPhoneBooth(m: Model, F0: CFrame, seed: number)
 		g.Transparency = 0.6
 		g.Reflectance = 0.15
 		for _, y in ipairs({ 1.5, 3.4, 6.6 }) do
-			box(m, "BoothRail", S, -hw + 0.26, hw - 0.26, y - 0.07, y + 0.07, z0 - 0.04, z1 + 0.04, lacquer, M.SmoothPlastic)
+			box(m, "BoothRail", S, -hw + 0.26, hw - 0.26, y - 0.07, y + 0.07, z0 - 0.06, z1 + 0.06, lacquer, M.SmoothPlastic)
 		end
 		if i == 2 then
 			-- affiche dans le soubassement gauche (côté rue)
@@ -1281,6 +1282,7 @@ local function nudgeSpot(spot: Spot)
 	for _, dx in ipairs({ 1.5, -1.5, 3, -3, 4.5, -4.5 }) do
 		local cf = spot.CF * CFrame.new(dx, 0, 0)
 		if not blocked(cf) then
+			spot.Home = home
 			spot.CF = cf
 			spot.Pos = cf.Position
 			return

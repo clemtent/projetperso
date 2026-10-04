@@ -224,12 +224,12 @@ local function pierced(c: Ctx, holes: { { any } }, color: Color3, mat: Enum.Mate
 		local x0, x1, y0, y1, kind = h[1] :: number, h[2] :: number, h[3] :: number, h[4] :: number, h[5] :: string
 		-- encadrement (4 baguettes devant le mur)
 		local t = c.Trim
-		Box(c.M, "Frame", c.F, x0 - 0.25, x1 + 0.25, y1, y1 + 0.3, z0 - 0.12, z0 + 0.02, t, M.SmoothPlastic)
+		Box(c.M, "Frame", c.F, x0 - 0.25, x1 + 0.25, y1, y1 + 0.3, z0 - 0.12, z0 - 0.01, t, M.SmoothPlastic)
 		for _, x in ipairs({ x0 - 0.25, x1 }) do
-			Box(c.M, "Frame", c.F, x, x + 0.25, math.max(0, y0 - (kind == "glass" and 0.3 or 0)), y1, z0 - 0.12, z0 + 0.02, t, M.SmoothPlastic)
+			Box(c.M, "Frame", c.F, x, x + 0.25, math.max(0, y0 - (kind == "glass" and 0.3 or 0)), y1, z0 - 0.12, z0 - 0.01, t, M.SmoothPlastic)
 		end
 		if kind == "glass" then
-			Box(c.M, "Frame", c.F, x0, x1, y0 - 0.3, y0, z0 - 0.12, z0 + 0.02, t, M.SmoothPlastic)
+			Box(c.M, "Frame", c.F, x0, x1, y0 - 0.3, y0, z0 - 0.12, z0 - 0.01, t, M.SmoothPlastic)
 			local g = Box(c.M, "ShopGlass", c.F, x0, x1, y0, y1, z0 + 0.15, z0 + 0.25, GLASS, M.Glass, true)
 			g.Transparency = 0.7
 			g.Reflectance = 0.1
@@ -244,7 +244,7 @@ local function pierced(c: Ctx, holes: { { any } }, color: Color3, mat: Enum.Mate
 				local leaf = (x1 - x0) / 2 - 0.05
 				local Hn = c.F * CFrame.new(hx, 0, z1 + 0.1) * CFrame.Angles(0, sx < 0 and math.rad(-100) or math.rad(100), 0)
 				Box(c.M, "DoorLeaf", Hn, sx < 0 and 0 or -leaf, sx < 0 and leaf or 0, FLOOR, y1 - 0.1, -0.08, 0.08, c.Trim:Lerp(INK, 0.3), M.Wood)
-				local dg = Box(c.M, "DoorGlass", Hn, sx < 0 and 0.3 or -leaf + 0.3, sx < 0 and leaf - 0.3 or -0.3, FLOOR + 2.2, y1 - 0.7, -0.1, -0.08, GLASS, M.Glass)
+				local dg = Box(c.M, "DoorGlass", Hn, sx < 0 and 0.3 or -leaf + 0.3, sx < 0 and leaf - 0.3 or -0.3, FLOOR + 2.2, y1 - 0.7, -0.13, -0.09, GLASS, M.Glass)
 				dg.Transparency = 0.5
 			end
 			-- seuil
@@ -541,11 +541,12 @@ EXTRAS.Post = function(c)
 	Box(c.M, "YellowBand", c.F, -c.W / 2 - 0.1, c.W / 2 + 0.1, c.G + 0.5, c.G + 1.1, c.FZ - 0.12, c.FZ, rgb(250, 196, 30), M.SmoothPlastic)
 	local x = c.DoorX > 0 and -c.W / 4 or c.W / 4
 	Box(c.M, "MailboxBody", c.F, x - 0.8, x + 0.8, 3.0, 5.2, c.FZ - 1.0, c.FZ, rgb(250, 196, 30), M.Metal, true)
-	Box(c.M, "MailboxSlot", c.F, x - 0.5, x + 0.5, 4.6, 4.75, c.FZ - 1.02, c.FZ - 0.98, INK, M.SmoothPlastic)
+	Box(c.M, "MailboxSlot", c.F, x - 0.5, x + 0.5, 4.6, 4.75, c.FZ - 1.05, c.FZ - 0.97, INK, M.SmoothPlastic)
 	Column(c.M, "MailboxPost", c.F, x, c.FZ - 0.5, 0, 3.0, 0.35, IRON, M.Metal)
 end
 EXTRAS.Gym = function(c)
-	local t = Box(c.M, "GymSign", c.F, -6, 6, c.H - 4, c.H - 0.6, c.FZ - 0.3, c.FZ - 0.05, INK, M.SmoothPlastic)
+	-- (enseigne sur le toit, posée sur la corniche : ne masque aucune fenêtre)
+	local t = Box(c.M, "GymSign", c.F, -6, 6, c.H + 0.7, c.H + 4.2, c.FZ - 0.2, c.FZ + 0.15, INK, M.SmoothPlastic)
 	Glow(t)
 	Text(t, Enum.NormalId.Front, "💪 " .. Locale.T("GYM"), rgb(255, 140, 60), INK, Enum.Font.GothamBlack, 160, 24)
 end

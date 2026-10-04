@@ -423,7 +423,7 @@ local function buildHud()
 	end })
 
 	-- MINI-JEU : PIRATAGE (ordinateur portable)
-	local laptop = box({ Name = "HackLaptop", Parent = root, Color = rgb(44, 48, 60), Size = UDim2.fromOffset(470, 330), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.55), Radius = UDim.new(0, 18), Stroke = rgb(120, 126, 140), Visible = false, ZIndex = 20 })
+	local laptop = box({ Name = "HackLaptop", Parent = root, Color = rgb(44, 48, 60), Size = UDim2.fromOffset(470, 330), AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -16), Radius = UDim.new(0, 18), Stroke = rgb(120, 126, 140), Visible = false, ZIndex = 20 })
 	laptop.Active = true
 	pcall(UIUtil.SinkClicks, laptop)
 	ui.Laptop = laptop
@@ -489,7 +489,8 @@ local function buildHud()
 		-- téléphone : panneau un peu plus haut, mini-jeux réduits pour tenir
 		panel.Position = UDim2.new(0.5, 0, 0, if phone then 92 else 118)
 		local rh = size.Y / scale
-		local k = math.min(1, (rh - 20) / 360)
+		-- (l'ordinateur tient sous le panneau du casse)
+		local k = math.min(1, (rh - (if phone then 92 else 118) - 150) / 330)
 		for _, f in ipairs({ laptop }) do
 			local s = f:FindFirstChildOfClass("UIScale") or UIUtil.Create("UIScale", { Parent = f })
 			s.Scale = k
@@ -624,35 +625,63 @@ local function clearDropped()
 	table.clear(droppedMarks)
 end
 
--- Van "Planque" (cartoon) à la livraison
+-- Van "Planque" (cartoon) à la livraison : camionnette violette aux portes
+-- arrière ouvertes (caisses, sacs), enseigne sur le toit, plots autour
 local function hideoutVan(parent: Instance, pos: Vector3)
-	local cf = CFrame.new(pos) * CFrame.new(-5, 0, 0)
-	local body = rgb(40, 44, 54)
-	part(parent, "VanBody", Vector3.new(6.4, 5.4, 12), cf * CFrame.new(0, 3.3, 0), body, M.Metal)
-	part(parent, "VanCab", Vector3.new(6.2, 2.4, 3.2), cf * CFrame.new(0, 5.2, -4.6), rgb(150, 200, 230), M.Glass).Transparency = 0.3
-	for _, x in ipairs({ -2.9, 2.9 }) do
-		for _, z in ipairs({ -3.8, 3.8 }) do
-			part(parent, "VanWheel", Vector3.new(0.9, 2.2, 2.2), cf * CFrame.new(x, 1.1, z), rgb(30, 30, 34), M.SmoothPlastic, "Cyl")
+	local cf = CFrame.new(pos) * CFrame.new(-7, 0, 0)
+	local body = rgb(96, 78, 150)
+	local dark = rgb(40, 36, 52)
+	part(parent, "VanBody", Vector3.new(6.6, 5.6, 12.4), cf * CFrame.new(0, 3.6, 0.6), body, M.SmoothPlastic)
+	part(parent, "VanStripe", Vector3.new(6.7, 0.6, 12.5), cf * CFrame.new(0, 3.0, 0.6), WHITE, M.SmoothPlastic)
+	part(parent, "VanHood", Vector3.new(6.4, 3.2, 3.4), cf * CFrame.new(0, 2.4, -7.2), body, M.SmoothPlastic)
+	part(parent, "VanBumper", Vector3.new(6.8, 0.8, 0.6), cf * CFrame.new(0, 1.2, -9.0), dark, M.Metal)
+	local wind = part(parent, "VanWindscreen", Vector3.new(6.0, 2.4, 0.2), cf * CFrame.new(0, 5.0, -5.6) * CFrame.Angles(math.rad(-18), 0, 0), rgb(160, 210, 240), M.Glass)
+	wind.Transparency = 0.25
+	for _, x in ipairs({ -2.4, 2.4 }) do
+		part(parent, "VanLight", Vector3.new(1.0, 0.7, 0.2), cf * CFrame.new(x, 2.8, -8.95), rgb(255, 244, 200), M.Neon)
+		part(parent, "VanTail", Vector3.new(0.8, 1.2, 0.2), cf * CFrame.new(x * 1.2, 3.2, 6.85), rgb(220, 40, 50), M.Neon)
+		local side = part(parent, "VanSideWindow", Vector3.new(0.2, 1.6, 2.6), cf * CFrame.new(x * 1.38, 5.0, -3.8), rgb(160, 210, 240), M.Glass)
+		side.Transparency = 0.25
+	end
+	for _, x in ipairs({ -3.0, 3.0 }) do
+		for _, z in ipairs({ -6.2, 4.0 }) do
+			part(parent, "VanWheel", Vector3.new(0.9, 2.4, 2.4), cf * CFrame.new(x, 1.2, z), rgb(30, 30, 34), M.SmoothPlastic, "Cyl")
+			part(parent, "VanHub", Vector3.new(0.95, 1.1, 1.1), cf * CFrame.new(x, 1.2, z), rgb(200, 204, 210), M.Metal, "Cyl")
 		end
 	end
-	local sign = part(parent, "VanSign", Vector3.new(0.1, 1.6, 6), cf * CFrame.new(3.26, 3.8, 0), WHITE)
-	sign.Transparency = 1
-	local sg = Instance.new("SurfaceGui")
-	sg.Face = Enum.NormalId.Right
-	sg.CanvasSize = Vector2.new(300, 80)
-	sg.LightInfluence = 0.5
-	sg.Parent = sign
-	local l = Instance.new("TextLabel")
-	l.BackgroundTransparency = 1
-	l.Size = UDim2.fromScale(1, 1)
-	l.TextScaled = true
-	l.Font = Theme.Fonts.Title
-	l.TextColor3 = GOLD
-	l.Text = "🕶️ " .. T("Hideout")
-	l.Parent = sg
-	-- portes arrière ouvertes + caisses
-	part(parent, "VanDoor", Vector3.new(0.2, 4.8, 3), cf * CFrame.new(-3.1, 3.3, 7.4) * CFrame.Angles(0, math.rad(-70), 0), body, M.Metal)
-	part(parent, "VanDoor", Vector3.new(0.2, 4.8, 3), cf * CFrame.new(3.1, 3.3, 7.4) * CFrame.Angles(0, math.rad(70), 0), body, M.Metal)
+	-- enseigne "Planque" sur le toit
+	part(parent, "SignPost", Vector3.new(0.3, 1.4, 0.3), cf * CFrame.new(0, 7.1, 0.6), dark, M.Metal)
+	local sign = part(parent, "VanSign", Vector3.new(6.0, 1.8, 0.3), cf * CFrame.new(0, 8.6, 0.6) * CFrame.Angles(0, math.pi / 2, 0), dark, M.SmoothPlastic)
+	for _, face in ipairs({ Enum.NormalId.Front, Enum.NormalId.Back }) do
+		local sg = Instance.new("SurfaceGui")
+		sg.Face = face
+		sg.CanvasSize = Vector2.new(300, 90)
+		sg.LightInfluence = 0
+		sg.Parent = sign
+		local l = Instance.new("TextLabel")
+		l.BackgroundTransparency = 1
+		l.Size = UDim2.fromScale(1, 1)
+		l.TextScaled = true
+		l.Font = Theme.Fonts.Title
+		l.TextColor3 = GOLD
+		l.Text = "🕶️ " .. T("Hideout")
+		l.Parent = sg
+	end
+	-- portes arrière ouvertes + caisses et sacs de butin dedans
+	part(parent, "VanDoor", Vector3.new(0.2, 5.0, 3.1), cf * CFrame.new(-4.4, 3.6, 7.6) * CFrame.Angles(0, math.rad(-80), 0), body, M.SmoothPlastic)
+	part(parent, "VanDoor", Vector3.new(0.2, 5.0, 3.1), cf * CFrame.new(4.4, 3.6, 7.6) * CFrame.Angles(0, math.rad(80), 0), body, M.SmoothPlastic)
+	part(parent, "VanInside", Vector3.new(6.0, 5.0, 0.2), cf * CFrame.new(0, 3.6, 6.82), dark, M.SmoothPlastic)
+	part(parent, "VanCrate", Vector3.new(2.2, 1.8, 1.6), cf * CFrame.new(-1.6, 2.0, 7.4), rgb(176, 136, 84), M.WoodPlanks)
+	local sack = part(parent, "VanSack", Vector3.new(1.8, 1.6, 1.6), cf * CFrame.new(1.4, 1.9, 7.6), SACK, M.Fabric, "Ball")
+	local _ = sack
+	-- plots de signalisation
+	for k = 0, 3 do
+		local a = k * math.pi / 2 + 0.4
+		local p = cf * CFrame.new(math.cos(a) * 9, 0, 1 + math.sin(a) * 9)
+		part(parent, "Cone", Vector3.new(1.4, 0.2, 1.4), p * CFrame.new(0, 0.1, 0), rgb(240, 120, 40), M.SmoothPlastic)
+		part(parent, "ConeBody", Vector3.new(1.6, 0.8, 0.8), p * CFrame.new(0, 1.0, 0) * CFrame.Angles(0, 0, math.pi / 2), rgb(255, 140, 50), M.SmoothPlastic, "Cyl")
+		part(parent, "ConeStripe", Vector3.new(0.3, 0.84, 0.84), p * CFrame.new(0, 1.1, 0) * CFrame.Angles(0, 0, math.pi / 2), WHITE, M.SmoothPlastic, "Cyl")
+	end
 end
 
 local function syncTarget()

@@ -279,7 +279,7 @@ local railClosed: { [number]: boolean } = {}
 local railClock = 0
 local trainLine: any = nil
 local CROSS_D = 8.5 -- (v11) trajectoires plus proches que ça dans un carrefour : conflit
-local JUNCTION_R = 19
+local JUNCTION_R = 19 -- (v11) rayon de la zone du carrefour (entrée exacte, interpolée)
 
 local function pathFromLoop(pts: { any }, offsets: { number }, speeds: { number }): Path
 	local O = WorldLayout.Origin()
@@ -529,13 +529,32 @@ local function buildCircuits(count: number): { Circuit }
 				local c = Vector3.new(O.X + node.X, 0, O.Z + node.Z)
 				local inRun, s0 = false, 0
 				local runs: { Pass } = {}
+				-- (v11) entrée / sortie EXACTES (interpolées sur le cercle de rayon
+				-- JUNCTION_R) : avec des points espacés de 8 studs (ou un virage
+				-- arrondi), le 1er point dans le cercle pouvait être à 10 studs du
+				-- centre -> une voiture arrêtée "à la ligne" mordait sur la voie croisée
+				local function dist(q: Vector3): number
+					return (Vector3.new(q.X, 0, q.Z) - c).Magnitude
+				end
+				local function crossing(i: number): number
+					local n = #p.Points
+					local a = p.Points[(i - 2) % n + 1]
+					local b = p.Points[i]
+					local da, db = dist(a), dist(b)
+					local sa = if i == 1 then p.Cum[i] - (p.Length - p.Cum[n]) else p.Cum[i - 1]
+					if math.abs(da - db) < 1e-6 then
+						return p.Cum[i]
+					end
+					local t = math.clamp((da - JUNCTION_R) / (da - db), 0, 1)
+					return sa + (p.Cum[i] - sa) * t
+				end
 				for i, q in ipairs(p.Points) do
-					local near = (Vector3.new(q.X, 0, q.Z) - c).Magnitude < JUNCTION_R and math.abs(q.Y - (O.Y + node.Y)) < 6
+					local near = dist(q) < JUNCTION_R and math.abs(q.Y - (O.Y + node.Y)) < 6
 					if near and not inRun then
-						inRun, s0 = true, p.Cum[i]
+						inRun, s0 = true, math.max(0, crossing(i))
 					elseif not near and inRun then
 						inRun = false
-						table.insert(runs, { Node = node.Id, S0 = s0, S1 = p.Cum[i], Id = 0, Rank = 0, Conf = {} })
+						table.insert(runs, { Node = node.Id, S0 = s0, S1 = crossing(i), Id = 0, Rank = 0, Conf = {} })
 					end
 				end
 				if inRun then
@@ -1544,7 +1563,9 @@ local function prepareFrame(dt: number)
 			continue
 		end
 		local L = v.Path.Length
-		local approach = math.max(26, v.Speed * v.Speed / 14 + 10)
+		-- (v11) horizon : assez loin pour être vu comme prétendant par ceux qui
+		-- attendent à la ligne (~7 s de route), et pour pouvoir s'arrêter
+		local approach = math.max(26, v.Speed * v.Speed / 14 + 10, v.Speed * 7)
 		local best: Pass? = nil
 		local bestTo = math.huge
 		for _, pass in ipairs(c.Passes) do
@@ -1642,7 +1663,8 @@ local function junctionBlocked(v: Vehicle): boolean
 		local o = e.V
 		-- (un arrivant arrêté pour une autre raison — arrêt de bus, train, file —
 		-- n'est pas un prétendant : seul compte celui qui roule ou qui attend le carrefour)
-		if o ~= v and conf[e.P.Id] and o.JReady and (o.Speed > 1 or o.Why == "junction") and o.JArrive < window and hasPriority(o, v) then
+		-- (un arrivant ENGAGÉ — il ne peut plus s'arrêter — compte toujours)
+		if o ~= v and conf[e.P.Id] and (o.JCommit or (o.JReady and (o.Speed > 1 or o.Why == "junction"))) and o.JArrive < window and hasPriority(o, v) then
 			v.BlockBy = o
 			return true
 		end

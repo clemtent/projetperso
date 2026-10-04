@@ -255,6 +255,13 @@ function CarModels.PaintEntry(id: any): any?
 	if byId[id] then
 		return byId[id]
 	end
+	-- (v11) couleur PERSONNALISÉE de l'atelier : "#RRGGBB" (gratuite)
+	if #id == 7 and string.match(id, "^#%x%x%x%x%x%x$") then
+		local r, g, b = tonumber(string.sub(id, 2, 3), 16), tonumber(string.sub(id, 4, 5), 16), tonumber(string.sub(id, 6, 7), 16)
+		if r and g and b then
+			return { Id = id, Name = "Custom colour", Color = Color3.fromRGB(r, g, b), Custom = true }
+		end
+	end
 	if luxuryPaints == nil then
 		local map = {}
 		local bank = (Config :: any).Bank
@@ -266,6 +273,14 @@ function CarModels.PaintEntry(id: any): any?
 		luxuryPaints = map
 	end
 	return (luxuryPaints :: any)[id]
+end
+
+-- (v11) id d'une couleur personnalisée ("#RRGGBB")
+function CarModels.CustomPaintId(color: Color3): string
+	local function hex(v: number): string
+		return string.format("%02X", math.clamp(math.floor(v * 255 + 0.5), 0, 255))
+	end
+	return "#" .. hex(color.R) .. hex(color.G) .. hex(color.B)
 end
 
 -- (v11) peintures de luxe, dans l'ordre de la boutique

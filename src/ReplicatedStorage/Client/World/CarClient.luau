@@ -314,6 +314,118 @@ local STAT_ROWS = {
 	{ "Comfort", "🛋️ Comfort" },
 }
 
+-- (v11, CARS11) peintures de luxe possédées (état "State" de la banque)
+local luxuryOwned: { [string]: boolean } = {}
+local tryPaintRef: ((string) -> ())? = nil
+local customPanel: Frame? = nil
+
+-- Sélecteur de couleur personnalisée : 3 curseurs (teinte, saturation,
+-- luminosité) + aperçu ; chaque mouvement repeint l'aperçu 3D ; "Appliquer"
+local function openCustomPaint(card: Instance)
+	if customPanel then
+		customPanel.Visible = not customPanel.Visible
+		return
+	end
+	local hsv = { 0.92, 0.55, 0.95 }
+	local panel = UIUtil.Create("Frame", { Name = "CustomPaint", BackgroundColor3 = Color3.new(1, 1, 1), Size = UDim2.fromOffset(300, 176),
+		AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 16, 1, -120), ZIndex = 40, Parent = card }) :: Frame
+	UIUtil.Corner(panel, 16)
+	UIUtil.Stroke(panel, Color3.fromRGB(236, 72, 140), 2)
+	local title = UIUtil.Create("TextLabel", { BackgroundTransparency = 1, Text = Locale.T("🎨 Custom colour"), Font = Theme.Fonts.Title, TextSize = 17,
+		TextColor3 = Color3.fromRGB(92, 58, 96), TextXAlignment = Enum.TextXAlignment.Left, Size = UDim2.new(1, -60, 0, 26), Position = UDim2.fromOffset(12, 6), ZIndex = 41, Parent = panel })
+	local _ = title
+	local swatch = UIUtil.Create("Frame", { Name = "Preview", Size = UDim2.fromOffset(40, 40), Position = UDim2.new(1, -52, 0, 8), ZIndex = 41, Parent = panel })
+	UIUtil.Corner(swatch, UDim.new(1, 0))
+	UIUtil.Stroke(swatch, Color3.fromRGB(210, 200, 214), 1.5)
+	local function current(): Color3
+		return Color3.fromHSV(hsv[1], hsv[2], hsv[3])
+	end
+	local bars = {}
+	local function refresh(preview: boolean)
+		local c = current()
+		swatch.BackgroundColor3 = c
+		for i, bar in ipairs(bars) do
+			bar.Knob.Position = UDim2.new(hsv[i], 0, 0.5, 0)
+			if i == 2 then
+				bar.Gradient.Color = ColorSequence.new(Color3.fromHSV(hsv[1], 0, hsv[3]), Color3.fromHSV(hsv[1], 1, hsv[3]))
+			elseif i == 3 then
+				bar.Gradient.Color = ColorSequence.new(Color3.new(0, 0, 0), Color3.fromHSV(hsv[1], hsv[2], 1))
+			end
+		end
+		if preview then
+			local carId = picker.Viewing
+			local model = carId ~= "" and picker.Models[carId] or nil
+			if model then
+				CarModels.Repaint(model, carId, CarModels.CustomPaintId(c))
+			end
+		end
+	end
+	for i = 1, 3 do
+		local bar = UIUtil.Create("TextButton", { Name = "Bar" .. i, Text = "", AutoButtonColor = false, BackgroundColor3 = Color3.new(1, 1, 1),
+			Size = UDim2.new(1, -24, 0, 18), Position = UDim2.fromOffset(12, 50 + (i - 1) * 30), ZIndex = 41, Parent = panel }) :: TextButton
+		UIUtil.Corner(bar, UDim.new(1, 0))
+		local gradient = Instance.new("UIGradient")
+		if i == 1 then
+			local keys = {}
+			for k = 0, 6 do
+				table.insert(keys, ColorSequenceKeypoint.new(k / 6, Color3.fromHSV((k / 6) % 1, 1, 1)))
+			end
+			gradient.Color = ColorSequence.new(keys)
+		end
+		gradient.Parent = bar
+		local knob = UIUtil.Create("Frame", { Name = "Knob", BackgroundColor3 = Color3.new(1, 1, 1), Size = UDim2.fromOffset(16, 24), AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 42, Parent = bar })
+		UIUtil.Corner(knob, 6)
+		UIUtil.Stroke(knob, Color3.fromRGB(92, 58, 96), 2)
+		local dragging = false
+		local function setFrom(x: number)
+			hsv[i] = math.clamp((x - bar.AbsolutePosition.X) / math.max(1, bar.AbsoluteSize.X), 0, 1)
+			refresh(true)
+		end
+		bar.InputBegan:Connect(function(input: InputObject)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				dragging = true
+				setFrom(input.Position.X)
+			end
+		end)
+		track(UserInputService.InputChanged:Connect(function(input: InputObject)
+			if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+				setFrom(input.Position.X)
+			end
+		end))
+		track(UserInputService.InputEnded:Connect(function(input: InputObject)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				dragging = false
+			end
+		end))
+		bars[i] = { Knob = knob, Gradient = gradient }
+	end
+	local apply = UIUtil.PillButton({ Name = "ApplyCustom", Text = Locale.T("Apply"), Color = Color3.fromRGB(236, 72, 140), Height = 32, TextSize = 15, ZIndex = 41, Parent = panel })
+	apply.AutomaticSize = Enum.AutomaticSize.None
+	apply.Size = UDim2.new(0.5, -18, 0, 32)
+	apply.Position = UDim2.new(0, 12, 1, -40)
+	apply.Activated:Connect(function()
+		if tryPaintRef then
+			tryPaintRef(CarModels.CustomPaintId(current()))
+		end
+		panel.Visible = false
+	end)
+	local close = UIUtil.PillButton({ Name = "CloseCustom", Text = Locale.T("Close"), Color = Color3.fromRGB(170, 140, 245), Height = 32, TextSize = 15, ZIndex = 41, Parent = panel })
+	close.AutomaticSize = Enum.AutomaticSize.None
+	close.Size = UDim2.new(0.5, -18, 0, 32)
+	close.Position = UDim2.new(0.5, 6, 1, -40)
+	close.Activated:Connect(function()
+		panel.Visible = false
+		-- (on revient à la peinture choisie avant)
+		local carId = picker.Viewing
+		local model = carId ~= "" and picker.Models[carId] or nil
+		if model and tryPaintRef then
+			CarModels.Repaint(model, carId, picker.Local[carId] or picker.Pending[carId] or (Config.CarsById[carId] and Config.CarsById[carId].DefaultColor))
+		end
+	end)
+	customPanel = panel
+	refresh(false)
+end
+
 local function colorIdOf(carId: string): string
 	local pending = picker.Pending[carId] or picker.Local[carId]
 	if pending then
@@ -321,7 +433,7 @@ local function colorIdOf(carId: string): string
 	end
 	local cars = carsData()
 	local id = cars.Colors and cars.Colors[carId]
-	if type(id) == "string" and Config.CarColorsById[id] then
+	if type(id) == "string" and CarModels.PaintEntry(id) then
 		return id
 	end
 	local def = Config.CarsById[carId]
@@ -673,37 +785,71 @@ local function buildPicker(root: Frame)
 	local paintName = label({ Name = "PaintName", Text = "", Color = INK, TextSize = 15, Font = Theme.Fonts.Body, Size = UDim2.new(0, 146, 1, 0), AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, 0, 0, 0), XAlign = Enum.TextXAlignment.Right, Wrap = true, ZIndex = 23, Parent = paintRow })
 	local swatchButtons = {}
-	for k, paint in ipairs(Config.Cars.Colors) do
+	-- (v11, CARS11) nuancier : 22 couleurs gratuites + peintures de luxe 💎 de la
+	-- banque (verrou tant qu'elles ne sont pas achetées) + couleur PERSONNALISÉE
+	local paintList = table.clone(Config.Cars.Colors)
+	for _, lux in ipairs(CarModels.LuxuryPaints()) do
+		table.insert(paintList, lux)
+	end
+	-- essai de peinture (aperçu + miniature), envoyé au serveur si possible
+	local function tryPaint(paintId: string)
+		local carId = picker.Viewing
+		if carId == "" then
+			return
+		end
+		picker.Local[carId] = paintId
+		local model = picker.Models[carId]
+		if model then
+			CarModels.Repaint(model, carId, paintId)
+		end
+		local thumb = picker.Thumbs[carId]
+		if thumb and thumb.Model then
+			CarModels.Repaint(thumb.Model, carId, paintId)
+		end
+		local entry = CarModels.PaintEntry(paintId)
+		if entry and entry.Luxury and not luxuryOwned[paintId] then
+			toast(Locale.T("💎 Buy it at the bank's luxury boutique"))
+		elseif owns(carId) then
+			picker.Pending[carId] = paintId
+			picker.PendingClock = os.clock()
+		end
+		refreshPicker()
+	end
+	tryPaintRef = tryPaint
+	for k, paint in ipairs(paintList) do
 		local dot = UIUtil.Create("TextButton", { Name = "Paint_" .. paint.Id, Text = "", AutoButtonColor = false, BackgroundColor3 = paint.Color,
 			LayoutOrder = k, ZIndex = 24, Parent = swatches })
+		if paint.Luxury then
+			-- badge 💎 + verrou
+			local badge = label({ Name = "Diamond", Text = "💎", TextSize = 12, Size = UDim2.fromScale(0.62, 0.62), Position = UDim2.fromScale(0.55, -0.12), XAlign = Enum.TextXAlignment.Center, ZIndex = 26, Parent = dot })
+			badge.TextScaled = true
+			local lock = label({ Name = "Lock", Text = "🔒", TextSize = 12, Size = UDim2.fromScale(0.6, 0.6), Position = UDim2.fromScale(0.2, 0.2), XAlign = Enum.TextXAlignment.Center, ZIndex = 26, Parent = dot })
+			lock.TextScaled = true
+			dot:SetAttribute("Luxury", true)
+			swatchButtons[paint.Id] = { Button = dot, Stroke = nil :: any, Lock = lock }
+		end
 		UIUtil.Corner(dot, UDim.new(1, 0))
 		local stroke = UIUtil.Stroke(dot, Color3.fromRGB(210, 200, 214), 1.5)
 		-- reflet (petit point clair) : la pastille a l'air vernie
 		local shine = frame({ Name = "Shine", BackgroundColor3 = WHITE, BackgroundTransparency = 0.55, Size = UDim2.fromScale(0.3, 0.3), Position = UDim2.fromScale(0.2, 0.16), ZIndex = 25, Parent = dot })
 		UIUtil.Corner(shine, UDim.new(1, 0))
-		swatchButtons[paint.Id] = { Button = dot, Stroke = stroke }
+		local prev = swatchButtons[paint.Id]
+		swatchButtons[paint.Id] = { Button = dot, Stroke = stroke, Lock = prev and prev.Lock or nil }
 		dot.Activated:Connect(function()
-			local carId = picker.Viewing
-			if carId == "" then
-				return
-			end
 			-- tout de suite à l'écran (aperçu + miniature), serveur plus tard
-			picker.Local[carId] = paint.Id
-			local model = picker.Models[carId]
-			if model then
-				CarModels.Repaint(model, carId, paint.Id)
-			end
-			local thumb = picker.Thumbs[carId]
-			if thumb and thumb.Model then
-				CarModels.Repaint(thumb.Model, carId, paint.Id)
-			end
-			if owns(carId) then
-				picker.Pending[carId] = paint.Id
-				picker.PendingClock = os.clock()
-			end
-			refreshPicker()
+			tryPaint(paint.Id)
 		end)
 	end
+	-- pastille "couleur personnalisée" (ouvre le sélecteur teinte / saturation / luminosité)
+	local customDot = UIUtil.Create("TextButton", { Name = "PaintCustom", Text = "🎨", TextScaled = true, AutoButtonColor = false, BackgroundColor3 = WHITE,
+		LayoutOrder = #paintList + 1, ZIndex = 24, Parent = swatches })
+	UIUtil.Corner(customDot, UDim.new(1, 0))
+	local customStroke = UIUtil.Stroke(customDot, Color3.fromRGB(210, 200, 214), 1.5)
+	customDot.Activated:Connect(function()
+		openCustomPaint(card)
+	end)
+	parts.CustomDot = customDot
+	parts.CustomStroke = customStroke
 	-- ░ fiche (à droite) ░
 	local info = frame({ Name = "Info", BackgroundColor3 = WHITE, Position = UDim2.fromOffset(612, 56), Size = UDim2.fromOffset(332, 382), ZIndex = 22, Parent = card })
 	UIUtil.Corner(info, 18)
@@ -963,8 +1109,22 @@ refreshPicker = function()
 			sw.Stroke.Color = if id == current then PINK_DEEP else Color3.fromRGB(210, 200, 214)
 			sw.Stroke.Thickness = if id == current then 3.5 else 1.5
 		end
-		local paint = Config.CarColorsById[current]
-		parts.PaintName.Text = "🎨 " .. Locale.T(paint and paint.Name or current) .. (if owned then "" else "\n" .. Locale.T("(preview)"))
+		local paint = CarModels.PaintEntry(current)
+		local lockedPaint = paint ~= nil and paint.Luxury == true and not luxuryOwned[current]
+		parts.PaintName.Text = (if paint and paint.Luxury then "💎 " else "🎨 ") .. Locale.T(paint and paint.Name or current)
+			.. (if not owned or lockedPaint then "\n" .. Locale.T("(preview)") else "")
+		-- peintures de luxe : verrou tant qu'elles ne sont pas achetées à la banque
+		for id, sw in pairs(parts.SwatchButtons) do
+			if sw.Lock then
+				sw.Lock.Visible = not luxuryOwned[id]
+			end
+		end
+		if parts.CustomDot then
+			local custom = paint and paint.Custom and paint.Color or nil
+			parts.CustomDot.BackgroundColor3 = custom or Color3.fromRGB(255, 255, 255)
+			parts.CustomStroke.Color = if custom then PINK_DEEP else Color3.fromRGB(210, 200, 214)
+			parts.CustomStroke.Thickness = if custom then 3.5 else 1.5
+		end
 	end
 	-- garage
 	local garage = Config.House.Garage
@@ -2263,6 +2423,26 @@ function CarClient.Start(startOptions: any?)
 			watchCarsFolder(child)
 		end
 	end))
+	-- (v11, CARS11) peintures de luxe possédées : état de la banque ("State")
+	task.spawn(function()
+		local remotes = ReplicatedStorage:WaitForChild("Remotes", 30)
+		local ev = remotes and remotes:WaitForChild("BankEvent", 30)
+		if started and ev and ev:IsA("RemoteEvent") then
+			track(ev.OnClientEvent:Connect(function(kind: any, payload: any)
+				if kind == "State" and type(payload) == "table" and type(payload.Owned) == "table" then
+					table.clear(luxuryOwned)
+					for id, value in pairs(payload.Owned) do
+						if value == true and type(id) == "string" then
+							luxuryOwned[id] = true
+						end
+					end
+					if pickerOpen then
+						refreshPicker()
+					end
+				end
+			end))
+		end
+	end)
 	-- (v11, CARS11) pose de conduite (mains sur le volant, regard en marche arrière)
 	if DriverPose then
 		pcall(DriverPose.Start, function(model: Model): number
@@ -2353,6 +2533,8 @@ function CarClient.Stop()
 		gui:Destroy()
 		gui = nil
 	end
+	customPanel = nil
+	tryPaintRef = nil
 	table.clear(parts)
 end
 

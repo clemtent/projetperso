@@ -49,7 +49,6 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
-local Net = require(ReplicatedStorage.Shared.Net)
 local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
 local TrainLine = require(ReplicatedStorage.Shared.TrainLine)
 local RateLimiter = require(script.Parent.RateLimiter)
@@ -121,10 +120,33 @@ local function inTown(player: Player): boolean
 	return false
 end
 
+-- RemoteEvent "TrainEvent" (créé par Net.Setup ; recréé ici s'il manque :
+-- jamais d'attente infinie qui bloquerait le démarrage des autres services)
+local remoteEvent: RemoteEvent? = nil
+local function trainRemote(): RemoteEvent?
+	if remoteEvent and remoteEvent.Parent then
+		return remoteEvent
+	end
+	local folder = ReplicatedStorage:FindFirstChild("Remotes")
+	if not folder then
+		return nil
+	end
+	local r = folder:FindFirstChild("TrainEvent")
+	if not r then
+		local created = Instance.new("RemoteEvent")
+		created.Name = "TrainEvent"
+		created.Parent = folder
+		r = created
+	end
+	remoteEvent = if r and r:IsA("RemoteEvent") then r else nil
+	return remoteEvent
+end
+
 local function fire(player: Player, kind: string, payload: any)
-	pcall(function()
-		Net.Event("TrainEvent"):FireClient(player, kind, payload)
-	end)
+	local r = trainRemote()
+	if r then
+		pcall(r.FireClient, r, player, kind, payload)
+	end
 end
 
 local function fireTown(kind: string, payload: any)
@@ -697,12 +719,17 @@ function TrainService:Start()
 	end
 	-- (les clients n'annoncent le convoi que si le braquage existe)
 	setAttr("HeistKit", heistKit ~= nil)
-	table.insert(connections, Net.Event("TrainEvent").OnServerEvent:Connect(function(player, kind, a, b, c)
-		local ok, err = pcall(onEvent, player, kind, a, b, c)
-		if not ok then
-			warn("[TrainService] " .. tostring(kind) .. " : " .. tostring(err))
-		end
-	end))
+	local r = trainRemote()
+	if r then
+		table.insert(connections, r.OnServerEvent:Connect(function(player, kind, a, b, c)
+			local ok, err = pcall(onEvent, player, kind, a, b, c)
+			if not ok then
+				warn("[TrainService] " .. tostring(kind) .. " : " .. tostring(err))
+			end
+		end))
+	else
+		warn("[TrainService] pas de dossier Remotes : train sans montée ni annonces")
+	end
 	local accSeat, accHit, accHeist = 0, 0, 0
 	table.insert(connections, RunService.Heartbeat:Connect(function(dt)
 		accSeat += dt

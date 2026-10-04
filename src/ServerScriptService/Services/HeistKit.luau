@@ -619,7 +619,8 @@ finish = function(heist: any, reason: string)
 			Reason = reason,
 			Fill = fill,
 			Delivered = heist.Delivered,
-			Total = heist.TotalLoot,
+			-- (butin possible : sacs de l'équipe, au plus les piles du casse)
+			Total = math.min(heist.TotalLoot, math.max(1, heist.CrewAtStart or crew) * (H().BagCapacity or 3)),
 			Crew = crew,
 			Dopamine = dop,
 			Diamonds = dia,

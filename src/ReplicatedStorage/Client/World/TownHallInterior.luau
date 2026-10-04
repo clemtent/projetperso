@@ -443,6 +443,9 @@ local function jobsFor(st: State, m: Model): { () -> () }
 				table.insert(st.Hidden, { Part = p, Mod = tonumber(p.LocalTransparencyModifier) or 0, Collide = p.CanCollide == true })
 				p.LocalTransparencyModifier = 1
 				p.CanCollide = false
+			elseif p:IsA("BasePart") and p.Name == "WinBar" then
+				table.insert(st.Hidden, { Part = p, Mod = tonumber(p.LocalTransparencyModifier) or 0, Collide = p.CanCollide == true })
+				p.LocalTransparencyModifier = 1
 			elseif p:IsA("BasePart") and p.Name == "WinGlass" then
 				table.insert(st.Hidden, { Part = p, Mod = tonumber(p.LocalTransparencyModifier) or 0, Collide = p.CanCollide == true })
 				p.LocalTransparencyModifier = 0.55
@@ -462,6 +465,7 @@ local function jobsFor(st: State, m: Model): { () -> () }
 					Box(m, "WinRing", R, -2.1, 2.1, -3.6, -3.2, -0.22, 0.04, WHITE, M.SmoothPlastic)
 					Box(m, "WinRing", R, -2.1, -1.7, -3.2, 3.2, -0.22, 0.04, WHITE, M.SmoothPlastic)
 					Box(m, "WinRing", R, 1.7, 2.1, -3.2, 3.2, -0.22, 0.04, WHITE, M.SmoothPlastic)
+					Box(m, "WinMullion", R, -0.12, 0.12, -3.2, 3.2, -0.42, -0.34, WHITE, M.SmoothPlastic)
 				end
 			end
 		end
