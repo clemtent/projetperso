@@ -1128,7 +1128,7 @@ local function gridCamera(): CFrame?
 	local G = RaceRoutes.CFrameAtD(route, 0)
 	local M = RaceRoutes.GridCFrame(route, cs.Slot or 1)
 	local keys = {
-		{ G * Vector3.new(16, 15, -34), G * Vector3.new(0, 2, 40) },
+		{ G * Vector3.new(14, 24, -48), G * Vector3.new(0, 1, 42) },
 		{ M * Vector3.new(15, 4.5, -20), M * Vector3.new(0, 2.5, 0) },
 		{ M * Vector3.new(0, 7.5, 21), M * Vector3.new(0, 2.5, -22) },
 	}

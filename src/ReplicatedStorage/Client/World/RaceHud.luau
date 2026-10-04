@@ -239,7 +239,7 @@ end
 ----------------------------------------------------------------------
 
 local function buildTower(root: Frame)
-	local tower = box({ Name = "Tower", Parent = root, Color = PANEL, Transparency = 0.1, Size = UDim2.fromOffset(236, 120), Position = UDim2.fromOffset(12, 104),
+	local tower = box({ Name = "Tower", Parent = root, Color = PANEL, Transparency = 0.1, Size = UDim2.fromOffset(236, 120), Position = UDim2.fromOffset(104, 150),
 		Radius = UDim.new(0, 16), Stroke = PINK, Visible = false, ZIndex = 5, Clip = true })
 	-- en-tête : place / tour / chrono
 	local head = box({ Name = "Head", Parent = tower, Color = INK, Transparency = 0.15, Size = UDim2.new(1, 0, 0, 62), ZIndex = 6 })
@@ -290,8 +290,8 @@ local function buildNitro(root: Frame)
 	local bar = box({ Name = "Bar", Parent = holder, Color = rgb(30, 30, 46), Size = UDim2.fromOffset(66, 10), Position = UDim2.fromOffset(10, 34), Radius = UDim.new(1, 0), ZIndex = 6, Clip = true })
 	local fill = box({ Name = "Fill", Parent = bar, Color = NITRO, Size = UDim2.fromScale(0, 1), Radius = UDim.new(1, 0), ZIndex = 7 })
 	UIUtil.Gradient(fill, ColorSequence.new(rgb(120, 230, 255), rgb(80, 120, 255)), 0)
-	local hint = label({ Name = "Hint", Parent = holder, Text = T("charge: drift / draft"), Font = Theme.Fonts.Body, TextSize = 11, Color = SOFT, Size = UDim2.fromOffset(90, 14),
-		Position = UDim2.fromOffset(6, 47), Scaled = true, ZIndex = 6 })
+	local hint = label({ Name = "Hint", Parent = holder, Text = T("charge: drift / draft"), Font = Theme.Fonts.Body, TextSize = 11, Color = SOFT, Size = UDim2.fromOffset(78, 14),
+		Position = UDim2.fromOffset(4, 47), Scaled = true, ZIndex = 6 })
 	local btn = button({ Name = "NitroBtn", Parent = holder, Text = "🔥 NITRO", TextSize = 17, Color = rgb(40, 90, 200), StrokeColor = CYAN, Size = UDim2.fromOffset(110, 50),
 		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0), ZIndex = 7 })
 	local key = label({ Name = "Key", Parent = btn, Text = "Shift", Font = Theme.Fonts.Body, TextSize = 11, Color = SOFT, AnchorPoint = Vector2.new(0.5, 1),
@@ -454,7 +454,7 @@ end
 -- Construction : résultats
 ----------------------------------------------------------------------
 
-local RES_W, RES_H = 900, 540
+local RES_W, RES_H = 900, 480
 
 local function buildResults(root: Frame)
 	local dim = box({ Name = "ResultsDim", Parent = root, Color = rgb(0, 0, 0), Transparency = 0.4, Visible = false, ZIndex = 30, Clip = true })
@@ -497,7 +497,7 @@ local function buildResults(root: Frame)
 	for _, h in ipairs({ { T("Pilot"), 46, 180, Enum.TextXAlignment.Left }, { T("Time"), 230, 80, Enum.TextXAlignment.Right }, { T("Gap"), 312, 64, Enum.TextXAlignment.Right },
 		{ T("Best lap"), 378, 66, Enum.TextXAlignment.Right } }) do
 		label({ Name = "H", Parent = hdr, Text = h[1], Font = Theme.Fonts.Body, TextSize = 13, Color = SOFT, Size = UDim2.fromOffset(h[3], 22), Position = UDim2.fromOffset(h[2], 0),
-			XAlign = h[4], ZIndex = 34 })
+			XAlign = h[4], Scaled = true, ZIndex = 34 })
 	end
 	local resRows = {}
 	for k = 1, 8 do
@@ -535,7 +535,7 @@ local function buildResults(root: Frame)
 		ZIndex = 33, Clip = true })
 	local xpFill = box({ Name = "Fill", Parent = xpBar, Color = PINK, Size = UDim2.fromScale(0, 1), Radius = UDim.new(1, 0), ZIndex = 34 })
 	UIUtil.Gradient(xpFill, ColorSequence.new(PINK, GOLD), 0)
-	local stamp = label({ Name = "Stamp", Parent = card, Text = "", TextSize = 30, Color = RED, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(RES_W - 130, 360),
+	local stamp = label({ Name = "Stamp", Parent = card, Text = "", TextSize = 30, Color = RED, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(RES_W / 2 + 10, 324),
 		Size = UDim2.fromOffset(250, 46), Visible = false, ZIndex = 40 })
 	UIUtil.Create("UIStroke", { Color = WHITE, Thickness = 3, Parent = stamp })
 	stamp.Rotation = -8
@@ -594,8 +594,9 @@ local function layout()
 	parts.Root.Size = UDim2.fromOffset(size.X / scale, size.Y / scale)
 	-- téléphone : tour des temps à droite sous les boutons du haut (la colonne des voitures est à gauche)
 	parts.Tower.AnchorPoint = if phone then Vector2.new(1, 0) else Vector2.zero
-	parts.Tower.Position = if phone then UDim2.new(1, -74, 0, 50) else UDim2.fromOffset(12, 104)
-	parts.PlaceFx.Position = if phone then UDim2.new(1, -330, 0, 54) else UDim2.fromOffset(256, 108)
+	-- (ordinateur : à droite de la colonne des boutons de la voiture, sous la pastille de distance)
+	parts.Tower.Position = if phone then UDim2.new(1, -74, 0, 50) else UDim2.fromOffset(104, 150)
+	parts.PlaceFx.Position = if phone then UDim2.new(1, -330, 0, 54) else UDim2.fromOffset(348, 154)
 	parts.RaceButton.Position = if phone then UDim2.fromOffset(14, 316) else UDim2.new(0, 22, 0.5, 140)
 	parts.RaceTag.Visible = not phone
 	local mini = if phone then 112 else 150

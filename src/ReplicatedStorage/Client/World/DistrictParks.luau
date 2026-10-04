@@ -167,6 +167,9 @@ local function buildPocketPark(m: Model, F: CFrame, seed: number)
 		end
 		local jack = Part(m, "Jack", Vector3.new(0.25, 0.25, 0.25), G * CFrame.new(8, 0.27, 0.5), rgb(250, 200, 40), M.Wood, "Ball")
 		local _ = jack
+		if okScenes and type(ParkScenes) == "table" then
+			ParkScenes.EnsureAnims()
+		end
 		local players = {}
 		for k = 1, 3 do
 			local npc = CityKit.Npc(m, k == 2 and "pedestrian" or "elder", seed * 7 + k, G * CFrame.new(-9 + (k - 2) * 1.8, 0.14, (k - 2) * 1.6) * CFrame.Angles(0, -math.pi / 2, 0), "none", true)

@@ -466,17 +466,22 @@ FairRides.GHOST_CARS = 3
 FairRides.GHOST_GAP = 3.1
 FairRides.GHOST_SPEED = 4.2
 
--- 🎪 Cirque : chapiteau r 18, piste r 6,5, gradins (3 rangs) en 2 tribunes
-FairRides.CIRCUS_R = 18
-FairRides.CIRCUS_RING = 6.5
-FairRides.CIRCUS_TIERS = 3
-FairRides.CIRCUS_TIER_R0 = 10.4 -- rayon du 1er rang de sièges
-FairRides.CIRCUS_TIER_DR = 1.9
-FairRides.CIRCUS_TIER_DY = 1.25
-FairRides.CIRCUS_SEAT_Y0 = 1.35 -- dessus du 1er rang
-FairRides.CIRCUS_ARCS = { { 32, 140 }, { -140, -32 } } -- (degrés, 0 = fond +Z)
-FairRides.CIRCUS_PER_ARC = 3 -- (18 places serveur : budget de pièces)
-FairRides.CIRCUS_SHOW = 64 -- (s) le spectacle tourne en boucle
+-- 🎪 Cirque (v11, PARK11 : "20x mieux et plus grand", échelle SCALE11) :
+-- chapiteau r 30, piste r 9, gradins de 5 rangs en 2 tribunes. Rang k :
+-- marchepied à 0,14 + k x 1,9 (sol de sciure à 0,14), planche d'assise
+-- dont le DESSUS est 1,85 au-dessus de ce marchepied (centre de la planche
+-- à CIRCUS_TIER_R0 + k x CIRCUS_TIER_DR du centre)
+FairRides.CIRCUS_R = 30
+FairRides.CIRCUS_RING = 9
+FairRides.CIRCUS_TIERS = 5
+FairRides.CIRCUS_FLOOR = 0.14 -- dessus de la sciure
+FairRides.CIRCUS_TIER_R0 = 14.4 -- rayon du centre de l'assise du 1er rang
+FairRides.CIRCUS_TIER_DR = 2.8 -- profondeur d'un rang
+FairRides.CIRCUS_TIER_DY = 1.9 -- hauteur d'un rang
+FairRides.CIRCUS_SEAT_Y0 = 0.14 + 1.85 -- dessus de l'assise du 1er rang
+FairRides.CIRCUS_ARCS = { { 30, 146 }, { -146, -30 } } -- (degrés, 0 = fond +Z ; entrée du public à 180)
+FairRides.CIRCUS_PER_ARC = 4 -- (40 places serveur)
+FairRides.CIRCUS_SHOW = 96 -- (s) le spectacle tourne en boucle
 
 -- Emprise de chaque attraction (repère de l'attraction) : Body = le
 -- bâtiment / le manège, Apron = le parvis devant l'entrée (doit rester libre)
@@ -498,9 +503,9 @@ export type AnnexDef = {
 
 FairRides.Annex = {
 	{ Id = "Circus", Kind = "Circus", Name = "Circus", Icon = "🎪", Cycle = { Load = 0, Ramp = 0, Run = 1 }, Speed = 0,
-		Gate = Vector3.new(4.2, 0, -20.6), Exit = Vector3.new(-4.5, 0, -23.5),
-		Body = { X0 = -20, X1 = 20, Z0 = -21, Z1 = 20 }, Apron = { X0 = -9, X1 = 9, Z0 = -28, Z1 = -21 },
-		Pos = Vector3.new(94, 0, -8), Yaw = 90 },
+		Gate = Vector3.new(6.8, 0, -36.4), Exit = Vector3.new(-6.8, 0, -38.5),
+		Body = { X0 = -33, X1 = 33, Z0 = -37, Z1 = 33 }, Apron = { X0 = -12, X1 = 12, Z0 = -45, Z1 = -37 },
+		Pos = Vector3.new(112, 0, -14), Yaw = 90 },
 	{ Id = "Coaster", Kind = "Coaster", Name = "Roller coaster", Icon = "🎢", Cycle = { Load = 14, Ramp = 0, Run = 30 }, Speed = 0,
 		Gate = Vector3.new(-14.6, 0, -11.2), Exit = Vector3.new(-5, 0, -12.8),
 		Body = { X0 = -27.5, X1 = 27.5, Z0 = -9.5, Z1 = 8 }, Apron = { X0 = -20, X1 = -2, Z0 = -15, Z1 = -9.5 },
@@ -681,8 +686,9 @@ function FairRides.AnnexSeats(kind: string): { SeatSpec }
 				local n = FairRides.CIRCUS_PER_ARC
 				for i = 0, n - 1 do
 					local a = math.rad(arc[1] + (arc[2] - arc[1]) * (i + 0.5) / n)
-					local p = Vector3.new(math.sin(a) * r, y, math.cos(a) * r)
-					table.insert(list, { Group = 1, Local = CFrame.lookAt(p, Vector3.new(0, y, 0)), Size = Vector3.new(1.3, 0.16, 1.1) })
+					-- (SCALE11 : DESSUS du siège = dessus de la planche -> centre 0,08 plus bas)
+					local p = Vector3.new(math.sin(a) * r, y - 0.08, math.cos(a) * r)
+					table.insert(list, { Group = 1, Local = CFrame.lookAt(p, Vector3.new(0, y - 0.08, 0)), Size = Vector3.new(1.6, 0.16, 1.1) })
 				end
 			end
 		end

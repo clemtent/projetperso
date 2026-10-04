@@ -64,7 +64,10 @@ local MusicData = require(ReplicatedStorage.Shared.MusicData)
 local MusicSynth = {}
 MusicSynth.__index = MusicSynth
 
+-- voix par (émetteur, chaîne, échantillon) : beaucoup pour l'oscillateur
+-- (accords + mélodie qui résonnent), peu pour les bruits d'attaque
 local VOICES = 8
+local VOICES_TONAL = 20
 local MIN_VOLUME = 0.004
 -- (budget : au-delà de ~110 sons lancés par seconde, on ne garde que la
 -- couche principale de chaque note : accords grattés, morceaux chargés)
@@ -384,7 +387,7 @@ type Voice = {
 
 function MusicSynth.new()
 	local self = setmetatable({
-		Pools = {} :: { [Instance]: { [string]: { List: { Voice }, Next: number } } },
+		Pools = {} :: { [Instance]: { [string]: { List: { Voice }, Next: number, Size: number? } } },
 		Groups = {} :: { [string]: SoundGroup },
 		Active = {} :: { Voice },
 		Clock = 0,
@@ -443,7 +446,11 @@ local function voiceFor(self: any, emitter: Instance, sampleId: string, chain: s
 	local key = chain .. "|" .. sampleId
 	local pool = byEmitter[key]
 	if not pool then
-		pool = { List = {}, Next = 1 }
+		local size = VOICES
+		if sampleId == sample("Ping") then
+			size = VOICES_TONAL
+		end
+		pool = { List = {}, Next = 1, Size = size }
 		byEmitter[key] = pool
 	end
 	local voice = pool.List[pool.Next]
@@ -464,7 +471,7 @@ local function voiceFor(self: any, emitter: Instance, sampleId: string, chain: s
 		voice = { Sound = sound, Start = 0, Decay = 1, V0 = 0, Busy = false, Curve = 2, From = 1, To = nil, SweepT = 0 }
 		pool.List[pool.Next] = voice
 	end
-	pool.Next = pool.Next % VOICES + 1
+	pool.Next = pool.Next % (pool.Size or VOICES) + 1
 	return voice
 end
 

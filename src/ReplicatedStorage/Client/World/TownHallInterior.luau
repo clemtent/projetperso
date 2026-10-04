@@ -671,7 +671,6 @@ local function jobsFor(st: State, m: Model): { () -> () }
 			npc(m, ({ "cashier", "salesperson", "worker" })[k + 1], 940 + k, B * CFrame.new(x, FLOOR, zc + 3.0), k == 1 and "type" or "scan")
 		end
 		npc(m, "shopper", 944, B * CFrame.new(22.9, FLOOR, zc - 2.0) * CFrame.Angles(0, math.pi, 0), "talk", "bag")
-		npc(m, "kid", 945, B * CFrame.new(24.6, FLOOR, zc - 3.0) * CFrame.Angles(0, math.rad(200), 0), "idle", "none")
 		-- SALLE DU CONSEIL : tribune contre le mur est, hémicycle de pupitres
 		local cx, cz = xi - 1.5, (PARTITION + zb0) / 2 + 0.2
 		local T = B * CFrame.new(cx, FLOOR, cz) * CFrame.Angles(0, math.pi / 2, 0)
@@ -689,7 +688,7 @@ local function jobsFor(st: State, m: Model): { () -> () }
 				local P = T * CFrame.Angles(0, a, 0) * CFrame.new(0, 0, -r)
 				Box(m, "CouncilDesk", P, -1.2, 1.2, 0, TABLE_H, 0.0, 0.8, WOOD, M.Wood, true)
 				chair(m, P * CFrame.new(0, 0, -1.4) * CFrame.Angles(0, math.pi, 0), rgb(30, 60, 110))
-				if (k + row) % 2 == 0 then
+				if row == 0 and k ~= 0 and k % 2 == 0 or (row == 1 and k == 0) then
 					npc(m, ({ "pedestrian", "salesperson", "elder", "shopper" })[(k + row) % 4 + 1], 960 + row * 5 + k, P * CFrame.new(0, 0, -1.4) * CFrame.Angles(0, math.pi, 0), "sit", "none", SEAT_H)
 				end
 			end
@@ -705,8 +704,8 @@ local function jobsFor(st: State, m: Model): { () -> () }
 				local z = 4 + j * 9
 				desk(m, B * CFrame.new(x, MEZZ, z), 4, rgb(230, 230, 232), true)
 				chair(m, B * CFrame.new(x, MEZZ, z + 2.2), rgb(60, 64, 76))
-				if (i + j) % 2 == 0 then
-					npc(m, (i == 0) and "salesperson" or "worker", 970 + i * 2 + j, B * CFrame.new(x, MEZZ, z + 2.2), "type", "none", SEAT_H)
+				if i == 1 and j == 0 then
+					npc(m, "salesperson", 970 + i * 2 + j, B * CFrame.new(x, MEZZ, z + 2.2), "type", "none", SEAT_H)
 				end
 			end
 		end
@@ -725,7 +724,6 @@ local function jobsFor(st: State, m: Model): { () -> () }
 				end
 			end
 		end
-		npc(m, "elder", 980, B * CFrame.new(16, MEZZ, 6) * CFrame.Angles(0, -math.pi / 2, 0), "scan", "tablet")
 		lampGlobe(m, B, -22, 29, 13, 1.6)
 		lampGlobe(m, B, 22, 29, 13, 1.6)
 	end)

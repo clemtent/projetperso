@@ -175,10 +175,13 @@ local function button(parent: Instance, name: string, label: string, color: Colo
 	return b
 end
 
+-- (écran tactile sans clavier : les badges de touches sont masqués)
+local hideKeys = false
+
 -- Badge de touche du clavier (petite pastille)
 local function keyBadge(parent: GuiObject, kc: Enum.KeyCode?, pos: UDim2, anchor: Vector2?, dark: boolean?): TextLabel?
 	local label = keyLabel(kc)
-	if label == "" then
+	if label == "" or hideKeys then
 		return nil
 	end
 	local b = Instance.new("TextLabel")
@@ -345,6 +348,7 @@ function MusicUI.Open(self: any, station: string, layout: any)
 	local skin = SKIN[station] or SKIN.Drums
 	local small = phone(self)
 	self.Small = small
+	hideKeys = small and UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 	local screenSize = self.Screen.AbsoluteSize
 	local width = math.clamp(screenSize.X - (small and 10 or 24), 300, 1080)
 	local height = small and math.clamp(screenSize.Y * 0.56, 190, 300) or ((layout.Kind == "drums" or layout.Kind == "guitar") and 350 or (layout.Kind == "dj" and 320 or 300))
@@ -415,7 +419,7 @@ function MusicUI.Open(self: any, station: string, layout: any)
 	elseif layout.Kind == "dj" then
 		self:BuildDJ(body, layout)
 	end
-	if not small then
+	if not small and not hideKeys then
 		local hint = text(panel, "Hint", T("Keyboard keys play too · Space = stand up"), UDim2.new(0, 0, 1, -20), UDim2.new(1, 0, 0, 16), MUTED, Enum.Font.GothamBold, 14)
 		hint.TextTransparency = 0.2
 	end
@@ -896,7 +900,7 @@ function MusicUI.BuildNeck(self: any, body: Frame, layout: any, station: string)
 		dot.Text = ""
 		dot.AnchorPoint = Vector2.new(0.5, 0.5)
 		dot.Position = UDim2.new(midX(note.Fret), 0, y, 0)
-		dot.Size = UDim2.fromOffset(math.floor(d * 1.25), d)
+		dot.Size = UDim2.fromOffset(math.floor(d * (hideKeys and 2.2 or 1.25)), d)
 		dot.BackgroundColor3 = note.Color or (bass and Color3.fromRGB(110, 160, 255) or Color3.fromRGB(190, 110, 255))
 		dot.BorderSizePixel = 0
 		dot.ZIndex = 6
@@ -906,11 +910,13 @@ function MusicUI.BuildNeck(self: any, body: Frame, layout: any, station: string)
 		local scale = Instance.new("UIScale")
 		scale.Name = "HitScale"
 		scale.Parent = dot
-		local lab = text(dot, "Note", note.Label, UDim2.fromScale(0.05, 0.04), UDim2.fromScale(0.9, 0.5), WHITE, Enum.Font.GothamBold, 14)
+		local lab = text(dot, "Note", note.Label, UDim2.fromScale(0.05, hideKeys and 0.12 or 0.04), UDim2.fromScale(0.9, hideKeys and 0.76 or 0.5), WHITE, Enum.Font.GothamBold, 14)
 		lab.ZIndex = 8
-		local kb = keyLabel(note.KeyCode)
-		local klab = text(dot, "Key", kb, UDim2.fromScale(0.05, 0.52), UDim2.fromScale(0.9, 0.42), Color3.fromRGB(255, 236, 250), Enum.Font.GothamBlack, 13)
-		klab.ZIndex = 8
+		if not hideKeys then
+			local kb = keyLabel(note.KeyCode)
+			local klab = text(dot, "Key", kb, UDim2.fromScale(0.05, 0.52), UDim2.fromScale(0.9, 0.42), Color3.fromRGB(255, 236, 250), Enum.Font.GothamBlack, 13)
+			klab.ZIndex = 8
+		end
 		local entry = { Frame = dot, Kind = "drum", Base = dot.BackgroundColor3, Scale = scale, String = note.String }
 		register(self, note.Value, entry)
 		onPress(self.PanelConns, dot, function()
@@ -1305,26 +1311,27 @@ function MusicUI.OpenPicker(self: any, state: any)
 	local sub = text(card, "Sub", T("Everyone near the stage hears it. The instruments play by themselves!"), UDim2.fromOffset(18, small and 36 or 44), UDim2.new(1, -80, 0, 14), MUTED, Enum.Font.GothamBold, 14)
 	sub.TextXAlignment = Enum.TextXAlignment.Left
 	sub.ZIndex = 22
+	sub.Visible = not small
 	local close = UIUtil.CloseButton({ Name = "ClosePicker", Size = 36, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 12), ZIndex = 23 })
 	close.Parent = card
 	onClick(conns, close, function()
 		self:ClosePicker()
 	end)
 	-- barre "EN COURS"
-	local nowY = small and 56 or 66
-	local nowH = small and 58 or 74
+	local nowY = small and 42 or 66
+	local nowH = small and 46 or 74
 	local now = frame(card, "NowBar", UDim2.fromOffset(12, nowY), UDim2.new(1, -24, 0, nowH), Color3.fromRGB(14, 12, 20), 22)
 	corner(now, 14)
 	UIUtil.Stroke(now, Color3.fromRGB(90, 70, 110), 1, 0.2)
 	self.NowBar = now
 	-- corps : genres + pochettes (+ file d'attente à droite sur grand écran)
-	local bodyY = nowY + nowH + 8
+	local bodyY = nowY + nowH + (small and 4 or 8)
 	local queueW = small and 0 or 220
-	local radioH = small and 34 or 40
+	local radioH = small and 28 or 40
 	local chips = Instance.new("ScrollingFrame")
 	chips.Name = "Genres"
 	chips.Position = UDim2.fromOffset(12, bodyY)
-	chips.Size = UDim2.new(1, -24 - queueW - (queueW > 0 and 8 or 0), 0, small and 30 or 34)
+	chips.Size = UDim2.new(1, -24 - queueW - (queueW > 0 and 8 or 0), 0, small and 28 or 34)
 	chips.BackgroundTransparency = 1
 	chips.BorderSizePixel = 0
 	chips.ScrollBarThickness = 0
@@ -1338,7 +1345,7 @@ function MusicUI.OpenPicker(self: any, state: any)
 	chipLayout.Padding = UDim.new(0, 6)
 	chipLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	chipLayout.Parent = chips
-	local gridY = bodyY + (small and 36 or 42)
+	local gridY = bodyY + (small and 32 or 42)
 	local grid = Instance.new("ScrollingFrame")
 	grid.Name = "Songs"
 	grid.Position = UDim2.fromOffset(12, gridY)
@@ -1352,7 +1359,7 @@ function MusicUI.OpenPicker(self: any, state: any)
 	grid.ZIndex = 22
 	grid.Parent = card
 	local gridLayout = Instance.new("UIGridLayout")
-	local cardW = small and 104 or 128
+	local cardW = small and 92 or 128
 	gridLayout.CellSize = UDim2.fromOffset(cardW, math.floor(cardW * 1.42))
 	gridLayout.CellPadding = UDim2.fromOffset(8, 8)
 	gridLayout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -1537,7 +1544,7 @@ function MusicUI.UpdatePicker(self: any, state: any)
 		local nowH = now.AbsoluteSize.Y > 0 and now.AbsoluteSize.Y or (small and 58 or 74)
 		local idx = state.SongId and MusicData.SONG_INDEX[state.SongId]
 		local song = idx and MusicData.SONGS[idx]
-		local bw = small and 38 or 46
+		local bw = small and 34 or 46
 		if song then
 			local cv = cover(now, song, UDim2.fromOffset(nowH - 12, nowH - 12), 23)
 			cv.Position = UDim2.fromOffset(6, 6)

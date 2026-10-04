@@ -536,7 +536,7 @@ function RaceProps.BuildGantry(cf: CFrame, width: number, title: string, finish:
 		-- ligne de départ : damier + "START" + cases de grille (+Z = derrière la ligne)
 		local _, line = canvas(model, "Line", Vector3.new(width, 0.05, 2.6), cf * CFrame.new(0, 0.16, 0), Enum.NormalId.Top, 10)
 		checker(line, math.max(8, math.floor(width / 1.3)), 2, INK, WHITE)
-		local _, startTxt = canvas(model, "StartText", Vector3.new(math.min(width - 2, 14), 0.05, 3.2), cf * CFrame.new(0, 0.16, 4.4) * CFrame.Angles(0, math.pi, 0), Enum.NormalId.Top, 10)
+		local _, startTxt = canvas(model, "StartText", Vector3.new(math.min(width - 2, 14), 0.05, 3.2), cf * CFrame.new(0, 0.16, 4.4), Enum.NormalId.Top, 10)
 		text(startTxt, { Name = "T", Text = "START", TextColor3 = WHITE, TextTransparency = 0.12, Size = UDim2.fromScale(1, 1) })
 		-- murets rouge / blanc le long de la grille (hors chaussée, sur le bord)
 		local gridLen = tonumber(o.GridLength) or 100

@@ -855,7 +855,7 @@ local function passCheckpoints(race: Race, racer: Racer, t: number)
 		table.insert(racer.LapSplits.T, lapT)
 		table.insert(racer.LapSplits.D, lapD)
 		local player = racer.Player
-		local lapEnd = (race.Route.Closed and (cp.S < 1 or cp.Finish)) or (not race.Route.Closed and cp.Finish)
+		local lapEnd = cp.LapEnd == true or cp.Finish == true
 		if player and not lapEnd then
 			local ghost = ghostOf(player, race.RouteId)
 			local gt = ghost and RaceRules.GhostTimeAt(ghost, lapD)
@@ -1108,7 +1108,7 @@ local function updateAI(race: Race, racer: Racer, t: number, dt: number, leadD: 
 			racer.LastCpD = cp.D
 			local frac = if racer.D > before then (cp.D - before) / (racer.D - before) else 1
 			local at = t - dt + dt * math.clamp(frac, 0, 1)
-			if route.Closed and (cp.S < 1 or cp.Finish) then
+			if route.Closed and (cp.LapEnd or cp.Finish) then
 				local lap = at - racer.LapStart
 				if lap > 3 then
 					racer.LastLap = lap

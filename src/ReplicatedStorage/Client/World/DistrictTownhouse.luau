@@ -111,20 +111,15 @@ end
 ----------------------------------------------------------------------
 
 local function buildTree(m: Model, F: CFrame, seed: number)
-	-- grille de pied d'arbre (4 quarts) + cadre, corset en fer
-	Box(m, "PitFrame", F, -1.8, 1.8, -0.1, 0.06, -1.8, 1.8, IRON, M.Metal)
-	for _, sx in ipairs({ -1, 1 }) do
-		for _, sz in ipairs({ -1, 1 }) do
-			Box(m, "PitGrate", F, sx * 0.2, sx * 1.6, 0.06, 0.1, sz * 0.2, sz * 1.6, rgb(60, 62, 70), M.DiamondPlate)
+	-- (v11, CITY11) arbre d'alignement de ville (StreetTrees) : fosse en
+	-- fonte + grille, corset ; une espèce par rangée de parcelles
+	local okST, StreetTrees = pcall(require, script.Parent.StreetTrees)
+	if okST and type(StreetTrees) == "table" then
+		local okB = pcall(StreetTrees.Build, m, F.Position, 15 + hash(seed, 1) * 5, seed, StreetTrees.Pick(math.floor(seed / 7) * 7 + 3), { Pit = true, Guard = true })
+		if okB then
+			return
 		end
 	end
-	for k = 0, 3 do
-		local a = k * math.pi / 2 + math.pi / 4
-		local base = (F * CFrame.new(math.cos(a) * 1.4, 0.1, math.sin(a) * 1.4)).Position
-		local top = (F * CFrame.new(math.cos(a) * 0.9, 5, math.sin(a) * 0.9)).Position
-		CityKit.Rod(m, "GuardBar", base, top, 0.12, IRON, M.Metal)
-	end
-	Column(m, "GuardRing", F, 0, 0, 4.2, 4.35, 2.1, IRON, M.Metal)
 	tree(m, F, 0, 0, 15 + hash(seed, 1) * 5, seed, hash(seed, 2) < 0.5 and "Maple" or "Oak")
 end
 

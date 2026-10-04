@@ -106,7 +106,7 @@ CityBuildings.ORDER = {
 -- un seul exemplaire de chaque lieu public, les commerces se déclinent
 CityBuildings.CAP = {
 	Library = 1, School = 1, Police = 1, Fire = 1, Clinic = 1, Post = 1, Gym = 1, Hotel = 1, Museum = 1, Church = 1,
-	Cinema = 1, Garage = 2, Office = 3, Pharmacy = 2, Bakery = 2, Cafe = 3, Restaurant = 3, Apartments = 99, Shop = 99,
+	Cinema = 1, Garage = 2, Office = 3, Pharmacy = 2, Bakery = 2, Cafe = 3, Restaurant = 3, Apartments = 6, Shop = 10,
 }
 CityBuildings.FOR_STYLE = {
 	Townhouse = { "Pharmacy", "Bakery", "Library", "School", "Police", "Clinic", "Post", "Hotel", "Museum", "Church", "Cinema", "Cafe", "Restaurant", "Shop", "Apartments" },

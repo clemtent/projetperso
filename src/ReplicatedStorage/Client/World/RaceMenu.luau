@@ -45,7 +45,7 @@ local label = RaceHud.Label
 local box = RaceHud.Box
 local button = RaceHud.Button
 
-local W, H = 940, 560
+local W, H = 940, 530
 
 local parts: { [string]: any } = {}
 local callbacks: { [string]: any } = {}
@@ -102,7 +102,7 @@ end
 local function buildFrame(root: Frame)
 	local dim = box({ Name = "MenuDim", Parent = root, Color = rgb(0, 0, 0), Transparency = 0.45, Visible = false, ZIndex = 20 })
 	UIUtil.SinkClicks(dim)
-	local holder = box({ Name = "MenuHolder", Parent = dim, Transparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.53),
+	local holder = box({ Name = "MenuHolder", Parent = dim, Transparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.52),
 		Size = UDim2.fromOffset(W, H), ZIndex = 21 })
 	local scale = UIUtil.Create("UIScale", { Parent = holder })
 	local panel = box({ Name = "Menu", Parent = holder, Color = C.WHITE, Size = UDim2.fromScale(1, 1), Radius = UDim.new(0, 22), Stroke = C.PINK, StrokeThickness = 3, ZIndex = 21, Clip = true })
@@ -376,7 +376,7 @@ function RaceMenu.Layout()
 		return
 	end
 	local rw, rh = root.Size.X.Offset, root.Size.Y.Offset
-	local s = math.min(1, (rw - 16) / W, (rh - 70) / H)
+	local s = math.min(1, (rw - 16) / W, (rh - 40) / H)
 	parts.Scale.Scale = math.max(0.5, s)
 end
 

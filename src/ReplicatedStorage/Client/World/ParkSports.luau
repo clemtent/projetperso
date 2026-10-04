@@ -107,6 +107,7 @@ local ANIMS = {}
 ANIMS.p11_run = {
 	Fallback = "walk",
 	Fn = function(P: any, t: number, _seed: number)
+		P.RHand, P.LHand = "fist", "fist"
 		local w = t * TAU * 1.45
 		local sl, sr = runLegs(P, w, 0.62)
 		P.Lean = 0.16
@@ -123,6 +124,7 @@ ANIMS.p11_run = {
 ANIMS.p11_jog = {
 	Fallback = "walk",
 	Fn = function(P: any, t: number, _seed: number)
+		P.RHand, P.LHand = "fist", "fist"
 		local w = t * TAU * 1.25
 		local sl, sr = runLegs(P, w, 0.4)
 		P.Lean = 0.1
@@ -139,6 +141,7 @@ ANIMS.p11_jog = {
 ANIMS.p11_ready = {
 	Fallback = "idle",
 	Fn = function(P: any, t: number, _seed: number)
+		P.RHand, P.LHand = "relax", "relax"
 		local hop = abs(sin(t * TAU * 1.1))
 		P.LTh, P.RTh = 0.42, 0.42
 		P.LKnee, P.RKnee = 0.75 + hop * 0.12, 0.75 + hop * 0.12
@@ -157,6 +160,7 @@ ANIMS.p11_ready = {
 ANIMS.p11_dribble = {
 	Fallback = "walk",
 	Fn = function(P: any, t: number, _seed: number)
+		P.RHand, P.LHand = "flat", "relax"
 		local w = t * TAU * 1.1
 		runLegs(P, w, 0.3)
 		local b = abs(sin(t * math.pi * 2)) -- (1 = ballon dans la main)
@@ -175,6 +179,7 @@ ANIMS.p11_dribble = {
 ANIMS.p11_shoot = {
 	Fallback = "cheer",
 	Fn = function(P: any, t: number, _seed: number)
+		P.RHand, P.LHand = "flat", "flat"
 		local u = clamp01(t)
 		local crouch = bell(u, 0, 0.32) + bell(u, 0.82, 1) * 0.6
 		local up = smooth((u - 0.15) / 0.3) -- bras qui montent
@@ -197,6 +202,7 @@ ANIMS.p11_shoot = {
 ANIMS.p11_hold = {
 	Fallback = "idle",
 	Fn = function(P: any, t: number, _seed: number)
+		P.RHand, P.LHand = "flat", "flat"
 		P.LUp = ANG(0.45, 0, -0.32)
 		P.RUp = ANG(0.45, 0, 0.32)
 		P.LLo, P.RLo = 1.55, 1.55
@@ -211,6 +217,7 @@ ANIMS.p11_hold = {
 ANIMS.p11_pass = {
 	Fallback = "wave",
 	Fn = function(P: any, t: number, _seed: number)
+		P.RHand, P.LHand = "flat", "flat"
 		local u = clamp01(t)
 		local ext = bell(u, 0.2, 1)
 		P.LUp = ANG(0.6 + ext * 0.7, 0, -0.25 + ext * 0.15)
@@ -226,6 +233,7 @@ ANIMS.p11_pass = {
 ANIMS.p11_defend = {
 	Fallback = "idle",
 	Fn = function(P: any, t: number, _seed: number)
+		P.RHand, P.LHand = "flat", "flat"
 		local s = sin(t * TAU * 1.6)
 		P.LTh, P.RTh = 0.45 + s * 0.08, 0.45 - s * 0.08
 		P.LKnee, P.RKnee = 0.9, 0.9
@@ -245,6 +253,7 @@ ANIMS.p11_defend = {
 ANIMS.p11_forehand = {
 	Fallback = "wave",
 	Fn = function(P: any, t: number, _seed: number)
+		P.RHand, P.LHand = "grip", "relax"
 		local u = clamp01(t)
 		local back = bell(u, 0, 0.45)
 		local swing = smooth((u - 0.3) / 0.35)
@@ -266,6 +275,7 @@ ANIMS.p11_forehand = {
 ANIMS.p11_backhand = {
 	Fallback = "wave",
 	Fn = function(P: any, t: number, _seed: number)
+		P.RHand, P.LHand = "grip", "grip"
 		local u = clamp01(t)
 		local back = bell(u, 0, 0.45)
 		local swing = smooth((u - 0.3) / 0.35)
@@ -287,6 +297,7 @@ ANIMS.p11_backhand = {
 ANIMS.p11_serve = {
 	Fallback = "cheer",
 	Fn = function(P: any, t: number, _seed: number)
+		P.RHand, P.LHand = "grip", "flat"
 		local u = clamp01(t)
 		local toss = smooth(u / 0.3)
 		local arm = smooth((u - 0.2) / 0.3)
@@ -328,6 +339,7 @@ ANIMS.p11_kick = {
 ANIMS.p11_dive = {
 	Fallback = "cheer",
 	Fn = function(P: any, t: number, _seed: number)
+		P.RHand, P.LHand = "flat", "flat"
 		local u = clamp01(t)
 		local s = bell(u, 0, 1)
 		P.LUp = ANG(0.3, 0, -2.6 * s)
@@ -344,6 +356,7 @@ ANIMS.p11_dive = {
 ANIMS.p11_paddle = {
 	Fallback = "wave",
 	Fn = function(P: any, t: number, _seed: number)
+		P.RHand, P.LHand = "grip", "relax"
 		local u = clamp01(t)
 		local back = bell(u, 0, 0.5)
 		local swing = smooth((u - 0.35) / 0.3)
@@ -1071,32 +1084,35 @@ function ParkSports.Football(m: Instance, F: CFrame, seed: number, opts: any?): 
 	local W, D = o.W or 46, o.D or 28
 	local Y = 0.16
 	local green = rgb(72, 152, 72)
-	Box(m, "Turf", F, -W / 2 - 1, W / 2 + 1, -0.1, Y, -D / 2 - 1, D / 2 + 1, green, M.Grass, true)
-	for i = 0, 7 do
-		if i % 2 == 0 then
-			local x0 = -W / 2 + i * W / 8
-			local s = Box(m, "TurfStripe", F, x0, x0 + W / 8, Y, Y + 0.02, -D / 2, D / 2, rgb(86, 168, 82), M.Grass)
-			s.CastShadow = false
+	local netBack: BasePart? = nil
+	if not o.Bare then
+		Box(m, "Turf", F, -W / 2 - 1, W / 2 + 1, -0.1, Y, -D / 2 - 1, D / 2 + 1, green, M.Grass, true)
+		for i = 0, 7 do
+			if i % 2 == 0 then
+				local x0 = -W / 2 + i * W / 8
+				local s = Box(m, "TurfStripe", F, x0, x0 + W / 8, Y, Y + 0.02, -D / 2, D / 2, rgb(86, 168, 82), M.Grass)
+				s.CastShadow = false
+			end
 		end
-	end
-	local ly = Y + 0.02
-	line(m, F, -W / 2 + 1, W / 2 - 1, -D / 2 + 1, -D / 2 + 1.2, ly)
-	line(m, F, -W / 2 + 1, W / 2 - 1, D / 2 - 1.2, D / 2 - 1, ly)
-	line(m, F, -W / 2 + 1, -W / 2 + 1.2, -D / 2 + 1.2, D / 2 - 1.2, ly)
-	line(m, F, W / 2 - 1.2, W / 2 - 1, -D / 2 + 1.2, D / 2 - 1.2, ly)
-	line(m, F, -0.1, 0.1, -D / 2 + 1.2, D / 2 - 1.2, ly)
-	paintArc(m, F, 0, 0, 4.6, 0, TAU, ly, 18)
-	for _, sx in ipairs({ -1, 1 }) do
-		-- surface de réparation
-		line(m, F, sx * (W / 2 - 1.2) - (sx > 0 and 7 or 0), sx * (W / 2 - 1.2) + (sx < 0 and 7 or 0), -7, -6.8, ly)
-		line(m, F, sx * (W / 2 - 1.2) - (sx > 0 and 7 or 0), sx * (W / 2 - 1.2) + (sx < 0 and 7 or 0), 6.8, 7, ly)
-		line(m, F, sx * (W / 2 - 8.2) - 0.1, sx * (W / 2 - 8.2) + 0.1, -7, 7, ly)
-	end
-	local GP = F * CFrame.new(W / 2 - 1.1, Y, 0) * ANG(0, -math.pi / 2, 0)
-	local netBack = goal(m, GP)
-	goal(m, F * CFrame.new(-W / 2 + 1.1, Y, 0) * ANG(0, math.pi / 2, 0))
-	if o.Fence ~= false then
-		fence(m, F * CFrame.new(0, Y - 0.2, 0), W + 4, D + 4, 8, rgb(40, 90, 60))
+		local ly = Y + 0.02
+		line(m, F, -W / 2 + 1, W / 2 - 1, -D / 2 + 1, -D / 2 + 1.2, ly)
+		line(m, F, -W / 2 + 1, W / 2 - 1, D / 2 - 1.2, D / 2 - 1, ly)
+		line(m, F, -W / 2 + 1, -W / 2 + 1.2, -D / 2 + 1.2, D / 2 - 1.2, ly)
+		line(m, F, W / 2 - 1.2, W / 2 - 1, -D / 2 + 1.2, D / 2 - 1.2, ly)
+		line(m, F, -0.1, 0.1, -D / 2 + 1.2, D / 2 - 1.2, ly)
+		paintArc(m, F, 0, 0, 4.6, 0, TAU, ly, 18)
+		for _, sx in ipairs({ -1, 1 }) do
+			-- surface de réparation
+			line(m, F, sx * (W / 2 - 1.2) - (sx > 0 and 7 or 0), sx * (W / 2 - 1.2) + (sx < 0 and 7 or 0), -7, -6.8, ly)
+			line(m, F, sx * (W / 2 - 1.2) - (sx > 0 and 7 or 0), sx * (W / 2 - 1.2) + (sx < 0 and 7 or 0), 6.8, 7, ly)
+			line(m, F, sx * (W / 2 - 8.2) - 0.1, sx * (W / 2 - 8.2) + 0.1, -7, 7, ly)
+		end
+		local GP = F * CFrame.new(W / 2 - 1.1, Y, 0) * ANG(0, -math.pi / 2, 0)
+		netBack = goal(m, GP)
+		goal(m, F * CFrame.new(-W / 2 + 1.1, Y, 0) * ANG(0, math.pi / 2, 0))
+		if o.Fence ~= false then
+			fence(m, F * CFrame.new(0, Y - 0.2, 0), W + 4, D + 4, 8, rgb(40, 90, 60))
+		end
 	end
 	-- 3 joueurs en triangle (attaque vers +X) + gardien
 	local tri = {
@@ -1220,7 +1236,7 @@ local function stepFootball(G: any, t: number, dt: number)
 			keeper.Tilt = nil
 			pose(FP, keeper, goalX - 1.6, v >= 2.4 and 0 or kz, math.pi / 2, v > 2.2 and not scored and "p11_pass" or "p11_ready", v > 2.2 and clamp01((v - 2.2) / 1.0) or t, dt)
 		end
-		if scored then
+		if scored and G.Net then
 			local bulge = bell(clamp01((v - 0.95) / 0.8), 0, 1)
 			G.Net.Size = Vector3.new(7.2, 6.4, 0.06 + bulge * 0.02)
 			G.Net.Transparency = 0.6 - bulge * 0.15

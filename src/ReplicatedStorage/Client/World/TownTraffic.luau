@@ -166,6 +166,7 @@ type Vehicle = {
 	Hits: { any }, -- (v11) véhicules dans le couloir : { o, écart }
 	HitAge: number, -- (v11) âge du couloir (recalculé 1 image sur 2 près, 1 sur 4 loin)
 	Far: boolean,
+	FarDt: number,
 	Excused: boolean, -- (v11) arrêt justifié (train, personne, bus...) : la file derrière aussi
 	LeadV: any?,
 	BlockBy: any?, -- (v11) véhicule à qui l'on cède (tests)
@@ -903,6 +904,7 @@ local function addVehicle(kind: string, color: Color3, stripe: boolean, s: numbe
 		Hits = {},
 		HitAge = 0,
 		Far = false,
+		FarDt = 0,
 		Excused = false,
 		LeadV = nil,
 		Lead = math.huge,
@@ -1314,11 +1316,11 @@ local function setupRails(count: number)
 	end
 end
 
-local function refreshRails(count: number)
+local function refreshRails(count: number, at: number?)
 	if not trainLine then
 		return
 	end
-	local now = workspace:GetServerTimeNow()
+	local now = at or workspace:GetServerTimeNow()
 	local seen: { [number]: boolean } = {}
 	for _, c in ipairs(circuits) do
 		for _, r in ipairs(c.Rails) do
@@ -1341,8 +1343,41 @@ local function buildCorridor(v: Vehicle)
 	local n = math.clamp(math.ceil(reach / 5), 6, 34)
 	local step = reach / n
 	local pts = v.Corr
+	-- (parcours séquentiel de la polyligne : une seule recherche dichotomique)
+	local cum, P = p.Cum, p.Points
+	local np = #cum
+	local L = p.Length
+	local s0 = v.S % L
+	local lo, hi = 1, np
+	while hi - lo > 1 do
+		local mid = (lo + hi) // 2
+		if cum[mid] <= s0 then
+			lo = mid
+		else
+			hi = mid
+		end
+	end
+	if s0 >= cum[np] then
+		lo = np
+	end
+	local base = 0
 	for k = 0, n do
-		pts[k + 1] = pointAt(p, v.S + k * step)
+		local sk = s0 + k * step
+		while true do
+			local nextCum = (if lo < np then cum[lo + 1] else L) + base
+			if sk < nextCum then
+				break
+			end
+			lo += 1
+			if lo > np then
+				lo = 1
+				base += L
+			end
+		end
+		local segStart = cum[lo] + base
+		local segEnd = (if lo == np then L else cum[lo + 1]) + base
+		local t = (sk - segStart) / math.max(1e-6, segEnd - segStart)
+		pts[k + 1] = P[lo]:Lerp(P[lo % np + 1], math.clamp(t, 0, 1))
 	end
 	for k = #pts, n + 2, -1 do
 		pts[k] = nil
@@ -1615,7 +1650,7 @@ local function junctionBlocked(v: Vehicle): boolean
 	return false
 end
 
-local function stepTraffic(dt: number, camPos: Vector3?)
+local function stepTraffic(frameDt: number, camPos: Vector3?)
 	if #vehicles == 0 then
 		return
 	end
@@ -1623,34 +1658,47 @@ local function stepTraffic(dt: number, camPos: Vector3?)
 	farTick = farFrames % 60 == 0
 	rebuiltThisFrame = false
 	local range = TownTraffic.MOVE_RANGE * detailScale()
-	prepareFrame(dt)
+	prepareFrame(frameDt)
 	for _, v in ipairs(vehicles) do
 		local p = v.Path
 		if v.Hidden or not p then
 			continue
 		end
+		-- (v11) loin de la caméra (> MOVE_RANGE) : décision 1 image sur 3 (dt cumulé)
+		if v.Far and v.Placed and v.GhostT <= 0 and (farFrames + v.Index) % 3 ~= 0 then
+			v.FarDt += frameDt
+			continue
+		end
+		local dt = frameDt + v.FarDt
+		v.FarDt = 0
 		local L = p.Length
 		local ideal = L / math.max(1, if v.Circuit then (v.Circuit :: Circuit).Count else #vehicles)
 		local why = ""
 		-- véhicule suivant (même circuit) = plus petite avance positive
 		local ahead = math.huge
 		local aheadHalf = 0
+		local aheadV: Vehicle? = nil
 		for _, o in ipairs(vehicles) do
 			if o ~= v and o.Path == p and not o.Hidden then
 				local gap = (o.S - v.S) % L
 				if gap < ahead then
 					ahead = gap
 					aheadHalf = o.HalfLen
+					aheadV = o
 				end
 			end
 		end
 		local gap = ahead - v.HalfLen - aheadHalf
+		local gapV = aheadV
 		local ghost = v.GhostT > 0
 		if ghost then
 			v.GhostT -= dt
-		elseif v.Lead < gap then
-			-- (v11) véhicule (de n'importe quel circuit) dans notre couloir
+		end
+		-- (v11) véhicule (de n'importe quel circuit) dans notre couloir ; en
+		-- secours "fantôme", seuls ceux arrêtés pour une raison valable comptent
+		if v.Lead < gap and (not ghost or (v.LeadV and v.LeadV.Excused)) then
 			gap = v.Lead
+			gapV = v.LeadV
 		end
 		-- vitesse voulue : s'espacer peu à peu (plus vite si le trou devant est grand)
 		local target = v.Cruise * (0.85 + 0.3 * math.clamp(gap / ideal, 0, 1))
@@ -1667,8 +1715,7 @@ local function stepTraffic(dt: number, camPos: Vector3?)
 		if leaderBound then
 			why = "leader"
 			-- (file d'attente derrière un arrêt justifié : justifiée aussi)
-			local lv = v.LeadV
-			if lv and lv.Excused and gap == v.Lead then
+			if gapV and gapV.Excused then
 				leaderExcused = true
 			end
 			excused = leaderExcused

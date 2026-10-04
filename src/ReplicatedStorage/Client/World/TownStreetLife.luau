@@ -53,6 +53,7 @@ local TownDistricts = require(script.Parent.TownDistricts) -- (v9.9, CITY99) ska
 -- TownHighway / District*) ; imposteurs de loin
 local okCity, CityPlan = pcall(require, script.Parent.CityPlan)
 local okKit, CityKit = pcall(require, script.Parent.CityKit)
+local okST, StreetTrees = pcall(require, script.Parent.StreetTrees) -- (v11, CITY11) arbres d'alignement
 -- (v9.8, REALISM98) réglage "Graphismes > Détail" : distances de flux x 0,65 / 1 / 1,35
 local okGQ, GraphicsQuality = pcall(require, ReplicatedStorage.Shared.GraphicsQuality)
 local function detailScale(): number
@@ -1401,11 +1402,26 @@ local function load(s: any): boolean
 	-- (v9.9, CITY99) arbres de la ville : modèles VIDES posés par le serveur
 	-- (TownKit.Tree, attribut TreeClient) ; on les construit ici
 	s.Trees = {}
+	-- (v11, CITY11) grilles de pied d'arbre du serveur : l'arbre posé dessus
+	-- est un arbre D'ALIGNEMENT (espèce de ville, StreetTrees)
+	local grates = {}
+	for _, d in ipairs(town:GetDescendants()) do
+		if d:IsA("BasePart") and d.Name == "TreeGrate" then
+			table.insert(grates, d.Position)
+		end
+	end
 	for _, d in ipairs(town:GetDescendants()) do
 		if d:IsA("Model") and d:GetAttribute("TreeClient") == true then
 			local base = d:GetAttribute("TreeBase")
 			if typeof(base) == "Vector3" then
-				table.insert(s.Trees, { Model = d, Base = base, Built = nil })
+				local street = false
+				for _, g in ipairs(grates) do
+					if math.abs(g.X - base.X) < 1 and math.abs(g.Z - base.Z) < 1 and math.abs(g.Y - base.Y) < 2 then
+						street = true
+						break
+					end
+				end
+				table.insert(s.Trees, { Model = d, Base = base, Built = nil, Street = street })
 			end
 		end
 	end
@@ -1434,6 +1450,23 @@ local function buildTree(t: any, far: boolean?): number
 		return 0
 	end
 	local maxTier = far and 0 or (tonumber(m:GetAttribute("TreeTier")) or 0)
+	if t.Street and not far and okST and type(StreetTrees) == "table" then
+		-- (v11) arbre d'alignement : espèce de ville commune à la rue
+		-- (graine du serveur : rue * 31 + rang), corset pour les jeunes
+		local seed = tonumber(m:GetAttribute("TreeSeed")) or 1
+		local h = tonumber(m:GetAttribute("TreeHeight")) or 12
+		local okS, tree2, n2 = pcall(StreetTrees.Build, m, t.Base, h + 2, seed, StreetTrees.Pick(math.floor(seed / 31) * 31 + 7), { Guard = h < 14, Name = "TreeLocal" })
+		if t.Built then
+			t.Built:Destroy()
+		end
+		if okS then
+			t.Built = tree2
+			t.Far = false
+			return n2
+		end
+		t.Built = false
+		return 0
+	end
 	local ok, tree, n = pcall(function()
 		return Greenery.Tree(m, t.Base, tonumber(m:GetAttribute("TreeHeight")) or 12, tonumber(m:GetAttribute("TreeSeed")) or 1, m:GetAttribute("TreeSpecies") :: any, maxTier, 0, {
 			Lawn = m:GetAttribute("TreeLawn") == true,

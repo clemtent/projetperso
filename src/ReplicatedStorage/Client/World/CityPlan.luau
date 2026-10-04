@@ -346,9 +346,7 @@ local function packRect(ctx: Ctx, out: { Spot }, R: any, pack: Pack, y: number)
 			local key = "Bld" .. typ
 			local f = CityPlan.FOOT[key]
 			local cap = CityBuildings.CAP[typ] or 1
-			if cap < 99 then
-				cap += math.floor(planCount / 25) -- (la ville grandit : un de plus à 25 et 50 parcelles)
-			end
+			cap += math.floor(planCount / 25) -- (la ville grandit : un de plus à 25 et 50 parcelles)
 			if f and (buildingUse[typ] or 0) < cap and fits(key, f.X, f.Y) then
 				local n = buildingUse[typ] or 0
 				-- (départage déterministe propre au quartier)

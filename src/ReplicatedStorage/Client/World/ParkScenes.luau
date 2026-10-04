@@ -86,6 +86,7 @@ local ANIMS = {}
 ANIMS.p11_read = {
 	Fallback = "sit",
 	Fn = function(P: any, t: number, _seed: number)
+		P.RHand, P.LHand = "grip", "grip"
 		local turn = max(0, sin(t * 0.35)) ^ 12
 		P.LUp = ANG(0.75, 0, -0.18 - turn * 0.2)
 		P.RUp = ANG(0.75, 0, 0.18 + turn * 0.3)
@@ -101,6 +102,7 @@ ANIMS.p11_read = {
 ANIMS.p11_feed = {
 	Fallback = "sit",
 	Fn = function(P: any, t: number, _seed: number)
+		P.RHand, P.LHand = "grip", "cup"
 		local c = (t * 0.45) % 1
 		local toss = smooth((c - 0.55) / 0.15) * (1 - smooth((c - 0.8) / 0.2))
 		P.LUp = ANG(0.55, 0, -0.1)
@@ -132,6 +134,7 @@ ANIMS.p11_doze = {
 ANIMS.p11_eat = {
 	Fallback = "sit",
 	Fn = function(P: any, t: number, _seed: number)
+		P.RHand, P.LHand = "grip", "relax"
 		local c = (t * 0.3) % 1
 		local bite = smooth(c / 0.2) * (1 - smooth((c - 0.35) / 0.25))
 		P.RUp = ANG(0.35 + bite * 0.55, 0.25, 0.1)
@@ -147,6 +150,7 @@ ANIMS.p11_eat = {
 ANIMS.p11_throw = {
 	Fallback = "wave",
 	Fn = function(P: any, t: number, _seed: number)
+		P.RHand, P.LHand = "grip", "relax"
 		local u = math.clamp(t, 0, 1)
 		local cock = smooth(u / 0.4)
 		local fling = smooth((u - 0.4) / 0.2)
@@ -166,6 +170,7 @@ ANIMS.p11_throw = {
 ANIMS.p11_trumpet = {
 	Fallback = "idle",
 	Fn = function(P: any, t: number, _seed: number)
+		P.RHand, P.LHand = "grip", "grip"
 		local b = sin(t * 4) * 0.04
 		P.RUp = ANG(1.25 + b, 0, 0.15)
 		P.RLo = 1.85
@@ -180,6 +185,7 @@ ANIMS.p11_trumpet = {
 ANIMS.p11_drum = {
 	Fallback = "clap",
 	Fn = function(P: any, t: number, _seed: number)
+		P.RHand, P.LHand = "grip", "grip"
 		local l = abs(sin(t * 6))
 		local r = abs(sin(t * 6 + 1.6))
 		P.LUp = ANG(0.55 + l * 0.25, 0, -0.25)
@@ -194,6 +200,7 @@ ANIMS.p11_drum = {
 ANIMS.p11_pullup = {
 	Fallback = "cheer",
 	Fn = function(P: any, t: number, _seed: number)
+		P.RHand, P.LHand = "grip", "grip"
 		local c = (sin(t * 2.2) + 1) / 2
 		P.LUp = ANG(0.2, 0, -2.75 + c * 0.6)
 		P.RUp = ANG(0.2, 0, 2.75 - c * 0.6)
@@ -218,9 +225,47 @@ ANIMS.p11_stretch = {
 	end,
 }
 
+-- pétanque : accroupi, lancer de la boule par en dessous (t = phase 0..1)
+ANIMS.p11_boules = {
+	Fallback = "wave",
+	Fn = function(P: any, t: number, _seed: number)
+		local u = math.clamp(t, 0, 1)
+		local crouch = math.sin(math.min(1, u * 1.2) * math.pi) * 0.8 + 0.2
+		local swing = smooth((u - 0.3) / 0.35)
+		P.LTh, P.RTh = 0.6 * crouch, 0.15 * crouch
+		P.LKnee, P.RKnee = 1.1 * crouch, 0.6 * crouch
+		P.LFoot = -0.4 * crouch
+		P.Lean = 0.45 * crouch
+		P.RUp = ANG(-0.7 + swing * 1.6, 0, 0.1)
+		P.RLo = 0.25
+		P.RHand = swing > 0.6 and "flat" or "grip"
+		P.LUp = ANG(0.3, 0, -0.35)
+		P.LLo = 0.6
+		P.HeadPitch = -0.15
+		P.LookW = 0
+	end,
+}
+-- réfléchir (assis, main au menton), puis avancer une pièce
+ANIMS.p11_ponder = {
+	Fallback = "sit",
+	Fn = function(P: any, t: number, _seed: number)
+		local c = (t * 0.12) % 1
+		local move = math.sin(math.clamp((c - 0.85) / 0.15, 0, 1) * math.pi)
+		P.LUp = ANG(0.6, 0, -0.1)
+		P.LLo = 2.1 - move * 0.3
+		P.LHand = "fist"
+		P.RUp = ANG(0.35 + move * 0.5, 0, 0.15)
+		P.RLo = 1.1 - move * 0.4
+		P.RHand = move > 0.2 and "grip" or "relax"
+		P.Lean = 0.25
+		P.HeadPitch = 0.35
+		P.LookW = 0
+	end,
+}
+
 ParkScenes.ANIMS = ANIMS
 local ready = false
-local function ensureAnims()
+local function ensureAnims(): ()
 	if not ready then
 		ready = true
 		ParkKit.RegisterAnims(ANIMS)
@@ -943,6 +988,8 @@ local function buildFitness(m: Model, F: CFrame, seed: number): any
 	end, seed)
 	return {}
 end
+
+ParkScenes.EnsureAnims = ensureAnims
 
 ParkScenes.BUILDERS = {
 	RoseGarden = buildRoseGarden,

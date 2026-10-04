@@ -1035,9 +1035,8 @@ function TrainModels.Station(parent: Instance, count: number, st: any, detail: b
 	local p0 = Vector3.new(O.X + st.X, O.Y, O.Z + st.Z)
 	local look = Vector3.new(-math.sin(st.Yaw), 0, -math.cos(st.Yaw))
 	local G = CFrame.lookAt(p0, p0 + look)
-	local R = TrainLine.Path(count).R
 	local off = function(o: number): number
-		return o - (R + TrainLine.OFF_OUT) -- décalage -> x local (négatif = intérieur)
+		return o - TrainLine.OFF_OUT -- décalage (depuis l'axe de la ceinture) -> x local (négatif = intérieur)
 	end
 	local half = TrainLine.PLATFORM_LEN / 2
 	local PY = TrainLine.PLATFORM_Y

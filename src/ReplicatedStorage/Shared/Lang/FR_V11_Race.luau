@@ -48,7 +48,7 @@ return {
 		["🏎️ Drivers on this server"] = "🏎️ Pilotes du serveur",
 		["No driver yet: race to appear here!"] = "Aucun pilote pour l'instant : cours pour apparaître ici !",
 		-- course
-		["charge: drift / draft"] = "recharge : dérapage / aspiration",
+		["charge: drift / draft"] = "dérapage · aspiration",
 		["Lead"] = "En tête",
 		["Last lap: %s"] = "Dernier tour : %s",
 		["Lap"] = "Tour",

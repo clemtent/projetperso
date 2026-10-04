@@ -73,6 +73,19 @@ end
 -- Données propres
 ----------------------------------------------------------------------
 
+-- Recopie `clean` DANS `raw` (même table : les références gardées par les
+-- services restent valides) ; raw absent / pas une table -> clean
+function Diamonds.Into(raw: any, clean: { [string]: any }): any
+	if type(raw) ~= "table" then
+		return clean
+	end
+	table.clear(raw)
+	for k, v in pairs(clean) do
+		raw[k] = v
+	end
+	return raw
+end
+
 function Diamonds.Sanitize(raw: any, today: number): any
 	local src = if type(raw) == "table" then raw else {}
 	local maxBalance = (cfg().Diamonds and cfg().Diamonds.MaxBalance) or 1e6
@@ -115,7 +128,7 @@ function Diamonds.Sanitize(raw: any, today: number): any
 	if day ~= today then
 		day, dayEarned, exchanged = today, 0, 0
 	end
-	return {
+	return Diamonds.Into(raw, {
 		Wallet = math.min(count(src.Wallet), maxBalance),
 		Vault = math.min(count(src.Vault), maxBalance),
 		Earned = count(src.Earned),
@@ -127,7 +140,7 @@ function Diamonds.Sanitize(raw: any, today: number): any
 		History = history,
 		Owned = owned,
 		Equipped = equipped,
-	}
+	})
 end
 
 function Diamonds.SanitizeHeist(raw: any, today: number): any
@@ -137,14 +150,14 @@ function Diamonds.SanitizeHeist(raw: any, today: number): any
 	if day ~= today then
 		day, bank, train = today, 0, 0
 	end
-	return {
+	return Diamonds.Into(raw, {
 		Day = day,
 		Bank = bank,
 		Train = train,
 		Done = count(src.Done),
 		Success = count(src.Success),
 		Best = count(src.Best),
-	}
+	})
 end
 
 -- Ajoute une ligne d'historique (en tête) ; garde HistorySize lignes

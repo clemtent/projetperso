@@ -45,7 +45,7 @@
 	Route = { Id, Def, Closed, Laps, Line (trajectoire, pas de 4), Total (un
 	  tour / la ligne), StartS (sprint : ligne de départ), RaceDistance,
 	  Width, Checkpoints = { { D, S, X, Z, TX, TZ, W, Finish? } } (D = distance
-	  de course), Grid = { { X, Z, TX, TZ } }, EdgeKeys = { ["a|b"] = true },
+	  de course ; LapEnd = fin d'un tour), Grid = { { X, Z, TX, TZ } }, EdgeKeys = { ["a|b"] = true },
 	  Nodes = { id }, (v11) Par, Medals = { Gold, Silver, Bronze },
 	  Corners = { { S, Turn, Angle } }, PerLap (portes par tour) }
 ]]
@@ -553,19 +553,20 @@ local function withCheckpoints(route: any)
 	local spacing = (Config.Race and Config.Race.CheckpointSpacing) or 170
 	local gateW = math.max(route.Width, 20) + 8
 	local cps = {}
-	local function gateAt(s: number, d: number, finish: boolean?)
+	local function gateAt(s: number, d: number, finish: boolean?, lapEnd: boolean?)
 		local x, z, tx, tz = RaceRules.PointAt(line, s)
-		table.insert(cps, { D = d, S = s, X = x, Z = z, TX = tx, TZ = tz, W = gateW, Finish = finish == true })
+		table.insert(cps, { D = d, S = s, X = x, Z = z, TX = tx, TZ = tz, W = gateW, Finish = finish == true, LapEnd = lapEnd == true })
 	end
 	if route.Closed then
 		local per = math.max(2, math.floor(line.Total / spacing + 0.5))
 		route.PerLap = per
 		for lap = 0, route.Laps - 1 do
 			for k = 1, per do
-				local s = line.Total * k / per
-				local d = lap * line.Total + s
+				-- (v11) la dernière porte d'un tour = la ligne (S = 0 exactement, LapEnd)
+				local s = if k == per then 0 else line.Total * k / per
+				local d = if k == per then (lap + 1) * line.Total else lap * line.Total + s
 				local isLast = k == per and lap == route.Laps - 1
-				gateAt(s % line.Total, d, isLast)
+				gateAt(s, d, isLast, k == per)
 			end
 		end
 	else
@@ -574,7 +575,7 @@ local function withCheckpoints(route: any)
 		route.PerLap = per
 		for k = 1, per do
 			local d = length * k / per
-			gateAt(route.StartS + d, d, k == per)
+			gateAt(route.StartS + d, d, k == per, k == per)
 		end
 	end
 	route.Checkpoints = cps
