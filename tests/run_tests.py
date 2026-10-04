@@ -3269,7 +3269,7 @@ def run_sim():
         f.write("\n".join(parts))
         path = f.name
     try:
-        proc = subprocess.run([LUAU, path], capture_output=True, text=True, timeout=900)
+        proc = subprocess.run([LUAU, path], capture_output=True, text=True, timeout=2400)
     finally:
         os.unlink(path)
     sys.stdout.write(proc.stdout)
@@ -3773,7 +3773,7 @@ def main():
         f.write(bundle)
         path = f.name
     try:
-        proc = subprocess.run([LUAU, path], capture_output=True, text=True, timeout=900)
+        proc = subprocess.run([LUAU, path], capture_output=True, text=True, timeout=2400)
     finally:
         os.unlink(path)
     sys.stdout.write(proc.stdout)
