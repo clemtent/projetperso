@@ -42,6 +42,7 @@ local DistrictTownhouse = require(script.Parent.DistrictTownhouse)
 local DistrictLoft = require(script.Parent.DistrictLoft)
 local DistrictMansion = require(script.Parent.DistrictMansion)
 local DistrictParks = require(script.Parent.DistrictParks)
+local CityBuildings = require(script.Parent.CityBuildings) -- (v11, CITY11) catalogue de bâtiments variés
 
 local CityPlan = {}
 
@@ -62,7 +63,7 @@ CityPlan.FOOT = {
 	SportsCorner = Vector2.new(30, 24),
 	HwyRest = Vector2.new(50, 36),
 }
-for _, kit in ipairs({ TownHighway, DistrictCottage, DistrictTownhouse, DistrictLoft, DistrictMansion, DistrictParks } :: { any }) do
+for _, kit in ipairs({ TownHighway, DistrictCottage, DistrictTownhouse, DistrictLoft, DistrictMansion, DistrictParks, CityBuildings } :: { any }) do
 	for k, f in pairs(kit.BUILDERS) do
 		CityPlan.BUILDERS[k] = f
 	end
@@ -103,6 +104,9 @@ CityPlan.NEAR = {
 	CommunityGarden = 130,
 	SportsCorner = 130,
 }
+for k, r in pairs(CityBuildings.NEAR) do
+	CityPlan.NEAR[k] = r
+end
 
 -- imposteurs "à plat" : le sol du lieu (couleur) + quelques volumes
 local rgb = Color3.fromRGB
@@ -308,6 +312,8 @@ end
 type Pack = { Queue: { string }, Fillers: { string }, Style: string, Seed: number, Hedge: string? }
 
 local GAP = 7
+-- (v11) nombre de bâtiments de chaque type déjà placés (plan en cours)
+local buildingUse: { [string]: number } = {}
 
 local function packRect(ctx: Ctx, out: { Spot }, R: any, pack: Pack, y: number)
 	local nx, nz = frontSide(ctx, R)
@@ -323,26 +329,59 @@ local function packRect(ctx: Ctx, out: { Spot }, R: any, pack: Pack, y: number)
 	local function fits(kind: string, w: number, d: number): boolean
 		return cursor + w <= alongLen / 2 - 3 and rowStart + d <= depthLen - 3
 	end
+	-- (v11, CITY11) "BLD" : le bâtiment du catalogue le MOINS utilisé de la
+	-- ville (permis dans ce quartier) qui tient ici — jamais deux fois le
+	-- même tant qu'il en reste d'autres
+	local function resolve(k: string): (string?, Vector2?)
+		if k ~= "BLD" then
+			local f = CityPlan.FOOT[k]
+			if f and fits(k, f.X, f.Y) then
+				return k, f
+			end
+			return nil, nil
+		end
+		local allowed = CityBuildings.FOR_STYLE[pack.Style] or {}
+		local best, bestN, bestI, bestF = nil, math.huge, math.huge, nil
+		for i, typ in ipairs(allowed) do
+			local key = "Bld" .. typ
+			local f = CityPlan.FOOT[key]
+			local cap = CityBuildings.CAP[typ] or 1
+			if cap < 99 then
+				cap += math.floor(planCount / 25) -- (la ville grandit : un de plus à 25 et 50 parcelles)
+			end
+			if f and (buildingUse[typ] or 0) < cap and fits(key, f.X, f.Y) then
+				local n = buildingUse[typ] or 0
+				-- (départage déterministe propre au quartier)
+				local order = (i * 7 + pack.Seed) % #allowed
+				if n < bestN or (n == bestN and order < bestI) then
+					best, bestN, bestI, bestF = key, n, order, f
+				end
+			end
+		end
+		return best, bestF
+	end
 	while guard < 400 do
 		guard += 1
 		-- prochain type : lieux de la file, puis remplissage (tourne)
 		local kind: string?
 		local fromQueue = false
+		local queueToken: string? = nil
 		for i, k in ipairs(pack.Queue) do
-			local f = CityPlan.FOOT[k]
-			if f and fits(k, f.X, f.Y) then
-				kind = k
+			local r = resolve(k)
+			if r then
+				kind = r
 				table.remove(pack.Queue, i)
 				fromQueue = true
+				queueToken = k
 				break
 			end
 		end
 		if not kind then
 			for tries = 0, #pack.Fillers - 1 do
 				local k = pack.Fillers[1 + (fillIndex + tries) % #pack.Fillers]
-				local f = CityPlan.FOOT[k]
-				if f and fits(k, f.X, f.Y) then
-					kind = k
+				local r = resolve(k)
+				if r then
+					kind = r
 					fillIndex += tries + 1
 					break
 				end
@@ -375,6 +414,10 @@ local function packRect(ctx: Ctx, out: { Spot }, R: any, pack: Pack, y: number)
 			if rectFree(ctx, cx, cz, w + 2, d + 2, ax, az) then
 				local seed = math.floor(hash(pack.Seed, #out) * 100000)
 				add(out, kind, cframe(cx, y, cz, nx, nz), seed, nil, { Style = pack.Style }, true)
+				if string.sub(kind, 1, 3) == "Bld" then
+					local typ = string.sub(kind, 4)
+					buildingUse[typ] = (buildingUse[typ] or 0) + 1
+				end
 				-- (pas de "take" : le rangement ne se chevauche jamais lui-même)
 				-- haie / mur le long du devant des champs et bosquets (1re rangée)
 				if pack.Hedge and rowStart <= 3 and (kind == "Orchard" or kind == "Meadow" or kind == "Grove") then
@@ -384,7 +427,7 @@ local function packRect(ctx: Ctx, out: { Spot }, R: any, pack: Pack, y: number)
 				rowDepth = math.max(rowDepth, d)
 			elseif fromQueue then
 				-- (lieu refusé ici : on le garde pour la suite)
-				table.insert(pack.Queue, kind)
+				table.insert(pack.Queue, queueToken or kind)
 			end
 			cursor += w + GAP
 		end
@@ -653,17 +696,19 @@ end
 
 local THEME = {
 	Cottage = {
-		Queue = { "CtgChapel", "CtgBakery", "CtgPond", "CtgGreen", "CtgWell", "CommunityGarden" },
+		Queue = { "CtgChapel", "CtgBakery", "BLD", "CtgPond", "CtgGreen", "CtgWell", "BLD", "CommunityGarden" },
 		Fillers = { "Orchard", "Meadow", "Grove", "CtgGreen", "Meadow", "Orchard", "PocketPark", "Grove" },
 		Hedge = "CtgHedge",
 	},
 	Townhouse = {
-		Queue = { "TwnSquare", "TwnCafe", "TwnTerrace", "TwnCornerShop", "ShopRow", "TwnBikes", "TwnBusStop", "BasketCourt" },
-		Fillers = { "TwnTerrace", "PocketPark", "TwnTerrace", "TwnCafe", "ParkingLot", "TwnTerrace", "TwnSquare", "ShopRow", "TwnCornerShop", "TwnTerrace", "Grove" },
+		-- (v11, CITY11) bâtiments du catalogue ("BLD", tous différents) au lieu
+		-- des mêmes café / épicerie / rangée de boutiques répétés
+		Queue = { "TwnSquare", "BLD", "TwnCafe", "BLD", "TwnCornerShop", "BLD", "TwnBikes", "BLD", "TwnBusStop", "BLD", "BasketCourt", "BLD" },
+		Fillers = { "BLD", "PocketPark", "BLD", "TwnTerrace", "BLD", "ParkingLot", "BLD", "TwnSquare", "BLD", "Grove" },
 	},
 	Loft = {
-		Queue = { "LftWarehouse", "LftFoodTrucks", "LftMural", "SkatePark", "LftContainers", "LftWarehouse" },
-		Fillers = { "LftWarehouse", "ParkingLot", "LftContainers", "LftWarehouse", "LftMural", "BasketCourt", "LftWarehouse", "Grove" },
+		Queue = { "LftWarehouse", "BLD", "LftFoodTrucks", "BLD", "LftMural", "SkatePark", "BLD", "LftContainers", "BLD" },
+		Fillers = { "BLD", "ParkingLot", "BLD", "LftContainers", "BLD", "LftMural", "BasketCourt", "BLD", "Grove" },
 	},
 	Mansion = {
 		Queue = { "MnsFountain", "MnsViewpoint", "MnsTopiary", "MnsFountain", "MnsTopiary" },
@@ -671,8 +716,8 @@ local THEME = {
 		Hedge = "MnsWall",
 	},
 	Mixed = {
-		Queue = { "PocketPark", "ShopRow", "SportsCorner", "BasketCourt", "CommunityGarden", "FootPitch" },
-		Fillers = { "PocketPark", "TwnTerrace", "Grove", "ParkingLot", "TwnTerrace", "Meadow", "ShopRow", "TwnSquare", "LftContainers" },
+		Queue = { "PocketPark", "BLD", "SportsCorner", "BLD", "BasketCourt", "BLD", "CommunityGarden", "BLD", "FootPitch" },
+		Fillers = { "BLD", "PocketPark", "BLD", "Grove", "ParkingLot", "BLD", "Meadow", "BLD", "TwnSquare" },
 	},
 }
 
@@ -1092,6 +1137,7 @@ function CityPlan.Build(count: number, taken: { { number } }?, yieldFn: (() -> (
 	end
 	HR = type(WL.HighwayR) == "function" and WL.HighwayR(n) or (WL.HIGHWAY_R or 1110)
 	planCount = n
+	table.clear(buildingUse)
 	local okH, errH = pcall(planHighway, ctx, out)
 	if not okH then
 		warn("[CityPlan] autoroute : " .. tostring(errH))

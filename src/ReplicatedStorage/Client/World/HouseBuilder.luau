@@ -1550,6 +1550,16 @@ function HouseBuilder.BuildRoom(self: House, slot: number)
 		if okFront and typeof(lamp) == "Instance" then lamp :: Light else nil)
 	if okToggles then
 		state.Toggles = toggles
+		-- (v11) invites des lampes + "tout" : dans state.Prompts (FurnitureEdit
+		-- les coupe pendant l'édition, comme les invites "S'asseoir")
+		for _, l in ipairs(toggles.Lamps) do
+			if l.Prompt then
+				table.insert(state.Prompts, l.Prompt)
+			end
+		end
+		if toggles.AllPrompt then
+			table.insert(state.Prompts, toggles.AllPrompt)
+		end
 	else
 		warn("[World] Rideaux / interrupteur : " .. tostring(toggles))
 	end

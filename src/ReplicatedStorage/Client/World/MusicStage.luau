@@ -386,15 +386,15 @@ local function layoutFor(id: string): any
 		return {
 			Kind = "drums",
 			Pads = {
-				{ Name = "Crash", Value = D.Crash, Label = T("Crash"), KeyCode = K.Q, X = 0.2, Y = 0.24, R = 0.21, Type = "cymbal" },
-				{ Name = "HiHat", Value = D.HatClosed, Label = T("Hi-hat"), KeyCode = K.S, X = 0.08, Y = 0.6, R = 0.16, Type = "hat" },
-				{ Name = "HiHatOpen", Value = D.HatOpen, Label = T("Open hi-hat"), KeyCode = K.A, X = 0.09, Y = 0.92, R = 0.07, Type = "pill" },
-				{ Name = "Snare", Value = D.Snare, Label = T("Snare"), KeyCode = K.D, X = 0.27, Y = 0.66, R = 0.155, Type = "drum", Shell = Color3.fromRGB(190, 192, 204) },
-				{ Name = "Tom1", Value = D.TomHigh, Label = T("Tom 1"), KeyCode = K.W, X = 0.4, Y = 0.3, R = 0.13, Type = "drum" },
-				{ Name = "Tom2", Value = D.TomMid, Label = T("Tom 2"), KeyCode = K.E, X = 0.58, Y = 0.3, R = 0.14, Type = "drum" },
-				{ Name = "Kick", Value = D.Kick, Label = T("Bass drum"), KeyCode = K.X, X = 0.49, Y = 0.72, R = 0.25, Type = "kick" },
-				{ Name = "FloorTom", Value = D.TomFloor, Label = T("Floor tom"), KeyCode = K.F, X = 0.72, Y = 0.68, R = 0.17, Type = "drum" },
-				{ Name = "Ride", Value = D.Ride, Label = T("Ride"), KeyCode = K.R, X = 0.87, Y = 0.32, R = 0.23, Type = "cymbal" },
+				{ Name = "Crash", Value = D.Crash, Label = T("Crash"), KeyCode = K.Q, X = 0.2, Y = 0.27, R = 0.26, Type = "cymbal" },
+				{ Name = "HiHat", Value = D.HatClosed, Label = T("Hi-hat"), KeyCode = K.S, X = 0.075, Y = 0.6, R = 0.2, Type = "hat" },
+				{ Name = "HiHatOpen", Value = D.HatOpen, Label = T("Open hi-hat"), KeyCode = K.A, X = 0.085, Y = 0.92, R = 0.09, Type = "pill" },
+				{ Name = "Snare", Value = D.Snare, Label = T("Snare"), KeyCode = K.D, X = 0.275, Y = 0.68, R = 0.19, Type = "drum", Shell = Color3.fromRGB(190, 192, 204) },
+				{ Name = "Tom1", Value = D.TomHigh, Label = T("Tom 1"), KeyCode = K.W, X = 0.4, Y = 0.28, R = 0.16, Type = "drum" },
+				{ Name = "Tom2", Value = D.TomMid, Label = T("Tom 2"), KeyCode = K.E, X = 0.585, Y = 0.28, R = 0.17, Type = "drum" },
+				{ Name = "Kick", Value = D.Kick, Label = T("Bass drum"), KeyCode = K.X, X = 0.49, Y = 0.72, R = 0.28, Type = "kick" },
+				{ Name = "FloorTom", Value = D.TomFloor, Label = T("Floor tom"), KeyCode = K.F, X = 0.72, Y = 0.7, R = 0.21, Type = "drum" },
+				{ Name = "Ride", Value = D.Ride, Label = T("Ride"), KeyCode = K.R, X = 0.88, Y = 0.3, R = 0.27, Type = "cymbal" },
 			},
 		}
 	elseif id == "Guitar" then

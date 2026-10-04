@@ -2438,6 +2438,8 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 	model:SetAttribute("Height", s.Roof * scale.Y)
 	model:SetAttribute("WheelRadius", s.WheelD / 2 * math.min(scale.Y, scale.Z))
 	model:SetAttribute("SeatCF", CFrame.new(P(b, seatX, seatTop, seatZ)))
+	-- (v11) hauteur du coussin au-dessus du plancher (NPCModels.Driver : Floor)
+	model:SetAttribute("SeatFloor", math.max(0.6, (seatTop - (g.sill + 0.02)) * scale.Y))
 	model:SetAttribute("Lod", lod)
 	model:SetAttribute("PartCount", b.Count)
 	-- (v10) finition (Repaint la garde) et options de l'atelier
@@ -2646,9 +2648,9 @@ end
 -- (rad, roues avant), `bob` = CFrame de caisse (suspension). Renvoie les
 -- listes à passer à workspace:BulkMoveTo.
 -- (v11) angle du VOLANT (rad, + = à gauche) pour un braquage des roues avant
--- (rad, + = à gauche comme CFrame.Angles(0, a, 0)) : ×2,5, borné à ±2,2
+-- (rad, + = à gauche comme CFrame.Angles(0, a, 0)) : ×4, borné à ±2,2
 function CarModels.SteeringWheelAngle(roadSteer: number): number
-	return math.clamp(roadSteer * 2.5 * 2.2 / 0.95, -2.2, 2.2)
+	return math.clamp(roadSteer * 4, -2.2, 2.2)
 end
 
 function CarModels.PoseRig(rig: Rig, pivot: CFrame, spin: number, steer: number, bob: CFrame?): ({ BasePart }, { CFrame })

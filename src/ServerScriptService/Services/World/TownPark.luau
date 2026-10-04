@@ -282,9 +282,9 @@ function TownPark.Build(model: Model, g: CFrame)
 		local piece = newPiece(model, "ParkBench" .. bi, "Bench")
 		piece.Model:SetAttribute("ParkIndex", bi)
 		for k = 1, #ParkMotion.BENCH.Places do
-			addSeat(piece, k, g * ParkMotion.BenchSeat(bi, k), Vector3.new(2.1, 0.2, 1.5))
+			addSeat(piece, k, g * ParkMotion.BenchSeat(bi, k), Vector3.new(2.2, 0.2, 1.9))
 		end
-		part(piece.Model, "BenchBlock", Vector3.new(ParkMotion.BENCH.Length, ParkMotion.BENCH.SeatTop - 0.1, 1.5), g * ParkMotion.BenchFrame(bi) * CFrame.new(0, (ParkMotion.BENCH.SeatTop - 0.1) / 2, 0.1), RUBBER, M.Wood, "ghost")
+		part(piece.Model, "BenchBlock", Vector3.new(ParkMotion.BENCH.Length, ParkMotion.BENCH.SeatTop - 0.1, 2.0), g * ParkMotion.BenchFrame(bi) * CFrame.new(0, (ParkMotion.BENCH.SeatTop - 0.1) / 2, -0.15), RUBBER, M.Wood, "ghost")
 	end
 end
 

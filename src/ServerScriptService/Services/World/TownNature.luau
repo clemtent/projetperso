@@ -948,8 +948,10 @@ function TownNature.Build(folder: Instance, geo: TownKit.Geo): number
 				local along = (flatB - flatA).Unit
 				local side = Vector3.new(-along.Z, 0, along.X)
 				for _, sgn in ipairs({ 1, -1 }) do
-					local spot = flatA:Lerp(flatB, 0.5) + side * sgn * 8.5
-					if geo.IsFree(spot, 6) then
+					-- (l'allée réserve ~8 studs autour d'elle : on regarde 3 points
+					-- du banc, hors de cette réserve)
+					local spot = flatA:Lerp(flatB, 0.5) + side * sgn * 10.5
+					if geo.IsFree(spot, 2.6) and geo.IsFree(spot + along * 6, 2.6) and geo.IsFree(spot - along * 6, 2.6) then
 						parkScene(nature, geo, "BenchRow", CFrame.lookAt(spot, spot - side * sgn), 6, 520 + i)
 						break
 					end
@@ -958,13 +960,22 @@ function TownNature.Build(folder: Instance, geo: TownKit.Geo): number
 		end
 	end
 	-- (v9.7) kiosque du parc + massif fleuri et buissons au départ des allées
+	local bandstandDone = false
 	for _, spot in ipairs({ { aR * 0.86, r0 + 18 }, { lakeAngle - 0.3, r0 + 14 }, { aR * 0.2, r0 + 44 } }) do
 		local p = geo.At(spot[1], spot[2])
 		if geo.IsFree(p, 16) then
+			bandstandDone = true
 			-- (v11, PARK11) le kiosque devient un vrai KIOSQUE À MUSIQUE (client)
 			parkScene(nature, geo, "Bandstand", frame(spot[1], spot[2]), 16, 505)
 			table.insert(features, { Pos = p, R = 12, Name = "Gazebo" })
 			break
+		end
+	end
+	if not bandstandDone then
+		local p = emptiest(geo, 16, r0)
+		if p then
+			parkScene(nature, geo, "Bandstand", faceCenter(p), 16, 505)
+			table.insert(features, { Pos = p, R = 12, Name = "Gazebo", Sign = true })
 		end
 	end
 	-- (v11, PARK11) NOUVEAUX LIEUX du parc, chacun dans le coin le plus vide :

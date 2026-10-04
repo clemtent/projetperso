@@ -27,6 +27,7 @@
 	  CityBuildings.TYPES : { [type]: Spec }   CityBuildings.ORDER : { type }
 	  CityBuildings.BUILDERS / FOOT / BIG / IMPOSTORS : clés "Bld<Type>"
 	  CityBuildings.FOR_STYLE : { [districtStyle]: { type } }
+	  CityBuildings.CAP : { [type]: number } (exemplaires au plus dans la ville)
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -73,7 +74,6 @@ type Spec = {
 
 local PASTEL = { rgb(255, 214, 214), rgb(214, 236, 222), rgb(255, 236, 190), rgb(222, 214, 248), rgb(200, 226, 246), rgb(255, 222, 196), rgb(236, 230, 220) }
 local BRICKS = { rgb(170, 88, 68), rgb(150, 96, 80), rgb(196, 128, 96), rgb(128, 74, 66) }
-local MODERN = { rgb(236, 238, 242), rgb(74, 78, 92), rgb(200, 204, 212), rgb(96, 104, 122) }
 
 CityBuildings.TYPES = {
 	Pharmacy = { W = 20, D = 18, Floors = { 2, 3 }, Walls = { WHITE, rgb(236, 244, 240) }, Mat = M.Plaster, Trim = rgb(40, 150, 90), Roof = "Flat", Front = "Shop", Kind = "Pharmacy" },
@@ -101,6 +101,12 @@ CityBuildings.TYPES = {
 CityBuildings.ORDER = {
 	"Library", "Pharmacy", "School", "Cafe", "Police", "Bakery", "Fire", "Shop", "Clinic", "Post", "Hotel", "Restaurant",
 	"Museum", "Gym", "Church", "Cinema", "Apartments", "Garage", "Office", "Shop", "Apartments",
+}
+-- nombre maximal dans la ville (8 parcelles ; +1 à 25 et à 50 parcelles) :
+-- un seul exemplaire de chaque lieu public, les commerces se déclinent
+CityBuildings.CAP = {
+	Library = 1, School = 1, Police = 1, Fire = 1, Clinic = 1, Post = 1, Gym = 1, Hotel = 1, Museum = 1, Church = 1,
+	Cinema = 1, Garage = 2, Office = 3, Pharmacy = 2, Bakery = 2, Cafe = 3, Restaurant = 3, Apartments = 99, Shop = 99,
 }
 CityBuildings.FOR_STYLE = {
 	Townhouse = { "Pharmacy", "Bakery", "Library", "School", "Police", "Clinic", "Post", "Hotel", "Museum", "Church", "Cinema", "Cafe", "Restaurant", "Shop", "Apartments" },

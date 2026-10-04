@@ -79,6 +79,14 @@ end
 
 local TownTraffic = {}
 
+-- (v11, CARS11) conducteurs PNJ (NPC11 : NPCModels.Driver), facultatif
+local okNPC, NPCModels = pcall(function()
+	return require(ReplicatedStorage.Shared:FindFirstChild("NPCModels") :: any)
+end)
+if not okNPC or type(NPCModels) ~= "table" or type(NPCModels.Driver) ~= "function" or type(NPCModels.Build) ~= "function" then
+	NPCModels = nil
+end
+
 -- (v9.8) réglage "Graphismes > Détail" (REALISM98) : portée d'animation et
 -- nombre de véhicules réduits en détail bas
 local okGQ, GraphicsQuality = pcall(require, ReplicatedStorage.Shared:FindFirstChild("GraphicsQuality") :: any)
@@ -115,6 +123,10 @@ TownTraffic.BUS_STOP_TIME = 6
 TownTraffic.SIDE_STOP_TIME = 4.5 -- arrêts aux carrefours des rues latérales
 TownTraffic.BLINK_AHEAD = 34 -- clignotant allumé à moins de 34 studs d'un virage
 TownTraffic.MAX_STEER = math.rad(32)
+TownTraffic.MAX_DRIVERS = 8 -- (v11) conducteurs PNJ construits à la fois (~100 pièces chacun)
+TownTraffic.DRIVER_RANGE = 110 -- (v11) conducteur visible plus près que ça (voitures "Mid" + bus)
+local DRIVER_STYLES = { "pedestrian", "shopper", "worker", "elder", "salesperson", "cashier", "baker" }
+local driverCount = 0
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -176,6 +188,10 @@ type Vehicle = {
 	Why: string, -- (v11) raison de l'arrêt / du ralentissement (tests)
 	Driver: Model?, -- (v11) conducteur PNJ (NPCModels.Driver)
 	DriverT: number,
+	SeatLocal: CFrame?, -- (v11) dessus du coussin du conducteur (repère du pivot)
+	WheelLocal: CFrame?, -- (v11) volant (repère du pivot ; avant = loin du conducteur, haut = midi)
+	WheelR: number,
+	SeatFloor: number,
 	Pos: Vector3?, -- (v10) dernière position (suivi entre circuits)
 	Dir: Vector3?,
 	LightRig: any?, -- (v10, CARS10) CarModels.LightRig
@@ -804,8 +820,74 @@ local function buildVehicleModel(v: Vehicle, lod: number)
 	model.Parent = folder
 	v.Model = model
 	v.Placed = false
+	-- (v11) poste de conduite (pour le conducteur PNJ)
+	v.SeatLocal, v.WheelLocal = nil, nil
+	if v.IsBus then
+		local seatPart = model:FindFirstChild("DriverSeat", true)
+		local wheelPart = model:FindFirstChild("SteeringWheel", true)
+		if seatPart and seatPart:IsA("BasePart") then
+			local top = seatPart.Position + Vector3.new(0, seatPart.Size.Y / 2, 0)
+			v.SeatLocal = model:GetPivot():ToObjectSpace(CFrame.lookAt(top, top - Vector3.zAxis))
+			v.SeatFloor = 1.45
+			if wheelPart and wheelPart:IsA("BasePart") then
+				local wl = model:GetPivot():ToObjectSpace(wheelPart.CFrame)
+				local n = wl.RightVector -- (disque : axe = X de la pièce)
+				local away = if n.Z > 0 then -n else n -- (vers l'avant)
+				local u = -Vector3.zAxis + Vector3.yAxis
+				local up = u - away * u:Dot(away)
+				if up.Magnitude > 1e-3 then
+					v.WheelLocal = CFrame.lookAt(wl.Position, wl.Position + away, up.Unit)
+					v.WheelR = math.max(wheelPart.Size.Y, wheelPart.Size.Z) / 2
+				end
+			end
+		end
+	else
+		local seatCF = model:GetAttribute("SeatCF")
+		local wheelCF = model:GetAttribute("WheelCF")
+		if typeof(seatCF) == "CFrame" and typeof(wheelCF) == "CFrame" then
+			v.SeatLocal = seatCF
+			v.WheelLocal = wheelCF
+			v.WheelR = tonumber(model:GetAttribute("WheelRimR")) or 0.62
+			v.SeatFloor = tonumber(model:GetAttribute("SeatFloor")) or 1.2
+		end
+	end
+	if v.Driver then
+		if v.SeatLocal then
+			v.Driver.Parent = model
+		else
+			v.Driver:Destroy()
+			v.Driver = nil
+			driverCount -= 1
+		end
+	end
 	if old and old ~= model then
 		old:Destroy()
+	end
+end
+
+-- (v11) conducteur PNJ : construit près de la caméra, détruit loin
+local function setDriver(v: Vehicle, want: boolean)
+	if want and not v.Driver and NPCModels and v.SeatLocal and driverCount < TownTraffic.MAX_DRIVERS then
+		local ok, npc = pcall(NPCModels.Build, DRIVER_STYLES[(v.Index * 3) % #DRIVER_STYLES + 1], { Seed = v.Index * 17 + 3, Solid = false, Look = false, Name = "Driver" })
+		if ok and typeof(npc) == "Instance" and npc:IsA("Model") then
+			for _, d in ipairs(npc:GetDescendants()) do
+				if d:IsA("BasePart") then
+					d.Anchored = true
+					d.CanCollide = false
+					d.CanQuery = false
+					d.CanTouch = false
+					d.CastShadow = false
+				end
+			end
+			npc.Parent = v.Model
+			v.Driver = npc
+			v.DriverT = v.Index * 1.7
+			driverCount += 1
+		end
+	elseif not want and v.Driver then
+		v.Driver:Destroy()
+		v.Driver = nil
+		driverCount -= 1
 	end
 end
 
@@ -842,6 +924,10 @@ local function addVehicle(kind: string, color: Color3, stripe: boolean, s: numbe
 		Why = "",
 		Driver = nil,
 		DriverT = 0,
+		SeatLocal = nil,
+		WheelLocal = nil,
+		WheelR = 0.62,
+		SeatFloor = 1.2,
 		Pos = nil,
 		Dir = nil,
 		LightRig = nil,
@@ -1035,10 +1121,15 @@ local function poseVehicle(v: Vehicle, pivot: CFrame)
 	local body = pivot * bob
 	local offs = v.DoorOffs
 	local i = 0
+	-- (v11) volant qui tourne avec les roues
+	local sIdx, wcf = rig.SteerIdx, rig.WheelCF
+	local wheelAngle = CarModels.SteeringWheelAngle(v.Steer)
+	local turned = if sIdx and wcf then body * wcf * CFrame.Angles(0, 0, wheelAngle) else nil
 	for k, off in ipairs(rig.BodyOff) do
 		i += 1
 		local door = offs[k]
-		frames[i] = if door then body * door * off else body * off
+		local w = if sIdx and turned then sIdx[k] else nil
+		frames[i] = if w and turned then turned * w elseif door then body * door * off else body * off
 	end
 	local spinCF = CFrame.Angles(-v.Spin, 0, 0)
 	local steerCF = CFrame.Angles(0, v.Steer, 0)
@@ -1056,6 +1147,17 @@ local function poseVehicle(v: Vehicle, pivot: CFrame)
 		end
 	end
 	workspace:BulkMoveTo(rig.Parts, frames, Enum.BulkMoveMode.FireCFrameChanged)
+	-- (v11) conducteur PNJ : assis, mains sur le volant qui tourne
+	local npc = v.Driver
+	if npc and NPCModels and v.SeatLocal then
+		local wl = v.WheelLocal
+		pcall(NPCModels.Driver, npc, body * (v.SeatLocal :: CFrame), wheelAngle, {
+			Wheel = if wl then body * wl else nil,
+			WheelRadius = v.WheelR,
+			Floor = v.SeatFloor,
+			T = os.clock() + v.DriverT,
+		})
+	end
 end
 
 -- Portes du bus : 0 fermées -> 0,35 battants sortis -> 1 glissés
@@ -1876,6 +1978,14 @@ local function stepTraffic(dt: number, camPos: Vector3?)
 				buildVehicleModel(v, want)
 			end
 		end
+		-- (v11) conducteur PNJ des voitures proches ("Mid") et du bus
+		local wantDriver = NPCModels ~= nil and (v.Lod >= 2 or v.IsBus) and dist < TownTraffic.DRIVER_RANGE * detailScale()
+		if wantDriver ~= (v.Driver ~= nil) and (not wantDriver or not rebuiltThisFrame) then
+			if wantDriver then
+				rebuiltThisFrame = true
+			end
+			setDriver(v, wantDriver)
+		end
 		-- déplacement des pièces : chaque image près de la caméra, ~20 Hz plus loin
 		-- (v10) loin : posé quand même, ~1 fois / s (jamais laissé à l'origine
 		-- du monde, où plusieurs véhicules se superposeraient)
@@ -1985,10 +2095,13 @@ local function readParked()
 						break
 					end
 				end
+				-- (v11) attributs à l'échelle du monde : on retire CarModels.SCALE
+				-- (Build le réapplique)
+				local k = tonumber((CarModels :: any).SCALE) or 1
 				local scale = Vector3.new(
-					(tonumber(d:GetAttribute("Width")) or spec.W) / spec.W,
-					(tonumber(d:GetAttribute("Height")) or spec.Roof) / spec.Roof,
-					(tonumber(d:GetAttribute("Length")) or spec.L) / spec.L
+					(tonumber(d:GetAttribute("Width")) or spec.W * k) / (spec.W * k),
+					(tonumber(d:GetAttribute("Height")) or spec.Roof * k) / (spec.Roof * k),
+					(tonumber(d:GetAttribute("Length")) or spec.L * k) / (spec.L * k)
 				)
 				table.insert(parked, { Server = d, Local = nil, Kind = kind, Color = color, Scale = scale })
 			end
@@ -2229,6 +2342,7 @@ function TownTraffic.Stop()
 	table.clear(circuits)
 	table.clear(railClosed)
 	ghostCount = 0
+	driverCount = 0
 	table.clear(spots)
 	table.clear(blockers)
 	path = nil

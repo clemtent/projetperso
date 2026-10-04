@@ -204,35 +204,37 @@ end
 local IRON = Color3.fromRGB(44, 48, 52)
 local WOOD = Color3.fromRGB(158, 110, 70)
 
--- Banc de parc : dessus de l'assise à SEAT (1,85), profondeur 2,1, dossier
--- jusqu'à 3,8 ; F = milieu du banc AU SOL, -Z = devant (où l'on regarde).
--- Pieds en fonte moulée, lattes de bois arrondies, accoudoirs.
--- Renvoie le repère de l'assise (dessus, milieu) pour y asseoir un PNJ.
+-- Banc de parc (spec commune CITY11 / NPC11) : dessus des lattes à SEAT
+-- (1,85), profondeur 2,0 (devant -1,15, derrière 0,85 : centre z -0,15),
+-- accoudoirs vers 2,6, dossier jusqu'à 3,8 ; F = milieu du banc AU SOL,
+-- -Z = devant (où l'on regarde). Pieds en fonte, lattes de bois (solides).
+-- Renvoie le repère de l'assise (dessus, centre de la profondeur).
+ParkKit.SEAT_Z = -0.15
 function ParkKit.Bench(m: Instance, F: CFrame, len: number?, wood: Color3?, iron: Color3?): CFrame
-	local L = len or 5.6
+	local L = math.max(5.6, len or 5.6)
 	local c = iron or IRON
 	local w = wood or WOOD
 	local S = ParkKit.SEAT
 	for _, x in ipairs({ -L / 2 + 0.35, L / 2 - 0.35 }) do
-		-- pied en "S" : jambe avant, jambe arrière, traverse, accoudoir
-		ParkKit.Box(m, "BenchFoot", F, x - 0.13, x + 0.13, 0, 0.18, -1.05, 1.0, c, M.Metal, true)
-		ParkKit.Rod(m, "BenchLegF", (F * CFrame.new(x, 0.1, -0.85)).Position, (F * CFrame.new(x, S - 0.2, -0.75)).Position, 0.24, c, M.Metal)
-		ParkKit.Rod(m, "BenchLegB", (F * CFrame.new(x, 0.1, 0.85)).Position, (F * CFrame.new(x, ParkKit.BACK - 0.1, 1.0)).Position, 0.22, c, M.Metal)
-		ParkKit.Box(m, "BenchRail", F, x - 0.1, x + 0.1, S - 0.36, S - 0.16, -0.95, 0.9, c, M.Metal)
-		ParkKit.Rod(m, "BenchArmPost", (F * CFrame.new(x, S - 0.2, -0.8)).Position, (F * CFrame.new(x, S + 0.8, -0.85)).Position, 0.16, c, M.Metal)
-		ParkKit.Box(m, "BenchArm", F, x - 0.14, x + 0.14, S + 0.74, S + 0.88, -1.0, 0.75, c, M.Metal)
+		-- pied : patin, jambe avant, jambe arrière (qui porte le dossier), traverse, accoudoir
+		ParkKit.Box(m, "BenchFoot", F, x - 0.13, x + 0.13, 0, 0.18, -1.15, 0.95, c, M.Metal, true)
+		ParkKit.Rod(m, "BenchLegF", (F * CFrame.new(x, 0.1, -0.95)).Position, (F * CFrame.new(x, S - 0.2, -0.85)).Position, 0.24, c, M.Metal)
+		ParkKit.Rod(m, "BenchLegB", (F * CFrame.new(x, 0.1, 0.75)).Position, (F * CFrame.new(x, ParkKit.BACK - 0.1, 0.95)).Position, 0.22, c, M.Metal)
+		ParkKit.Box(m, "BenchRail", F, x - 0.1, x + 0.1, S - 0.36, S - 0.16, -1.05, 0.8, c, M.Metal)
+		ParkKit.Rod(m, "BenchArmPost", (F * CFrame.new(x, S - 0.2, -0.9)).Position, (F * CFrame.new(x, S + 0.72, -0.95)).Position, 0.16, c, M.Metal)
+		ParkKit.Box(m, "BenchArm", F, x - 0.14, x + 0.14, S + 0.68, S + 0.82, -1.1, 0.7, c, M.Metal)
 	end
-	-- 5 lattes d'assise (dessus exact à S) + 3 lattes de dossier inclinées
+	-- 5 lattes d'assise (dessus exact à S, de -1,15 à 0,85) + 3 lattes de dossier
 	for i = 0, 4 do
-		local z0 = -1.05 + i * 0.42
-		ParkKit.Box(m, "BenchSlat", F, -L / 2, L / 2, S - 0.16, S, z0, z0 + 0.36, w:Lerp(Color3.new(0, 0, 0), (i % 2) * 0.05), M.Wood, i == 2)
+		local z0 = -1.15 + i * 0.41
+		ParkKit.Box(m, "BenchSlat", F, -L / 2, L / 2, S - 0.16, S, z0, z0 + 0.36, w:Lerp(Color3.new(0, 0, 0), (i % 2) * 0.05), M.Wood, true)
 	end
 	for i = 0, 2 do
-		local y = S + 0.55 + i * 0.5
-		local z = 0.9 + i * 0.06
+		local y = S + 0.65 + i * 0.5
+		local z = 0.92 + i * 0.06
 		ParkKit.Part(m, "BenchBack", Vector3.new(L, 0.36, 0.14), F * CFrame.new(0, y, z) * CFrame.Angles(math.rad(-10), 0, 0), w, M.Wood)
 	end
-	return F * CFrame.new(0, S, -0.1)
+	return F * CFrame.new(0, S, ParkKit.SEAT_Z)
 end
 
 -- Poubelle de parc (corbeille ajourée sur poteau + couvercle)

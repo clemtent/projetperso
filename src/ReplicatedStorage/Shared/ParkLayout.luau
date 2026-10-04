@@ -26,8 +26,8 @@ local ParkLayout = {}
 ParkLayout.SEAT = 1.85 -- dessus de l'assise (SCALE11)
 ParkLayout.TABLE = 3.1
 ParkLayout.BENCH_LEN = 5.6 -- 2 places de 2,6 (+ accoudoirs)
-ParkLayout.PLACES = { -1.35, 1.35 } -- places sur un banc (x local)
-ParkLayout.CUSHION_Z = 0 -- centre de la profondeur des lattes
+ParkLayout.PLACES = { -1.4, 1.4 } -- places sur un banc (x local ; NPCSeats : ±1,4)
+ParkLayout.CUSHION_Z = -0.15 -- centre de la profondeur des lattes (devant -1,15, derrière 0,85)
 
 local TAU = math.pi * 2
 

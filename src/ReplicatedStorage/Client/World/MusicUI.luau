@@ -347,7 +347,7 @@ function MusicUI.Open(self: any, station: string, layout: any)
 	self.Small = small
 	local screenSize = self.Screen.AbsoluteSize
 	local width = math.clamp(screenSize.X - (small and 10 or 24), 300, 1080)
-	local height = small and math.clamp(screenSize.Y * 0.56, 190, 300) or (layout.Kind == "drums" and 330 or (layout.Kind == "dj" and 320 or 300))
+	local height = small and math.clamp(screenSize.Y * 0.56, 190, 300) or ((layout.Kind == "drums" or layout.Kind == "guitar") and 350 or (layout.Kind == "dj" and 320 or 300))
 	local panel = frame(self.Screen, "InstrumentPanel", UDim2.new(0.5, 0, 1, small and -4 or -22), UDim2.fromOffset(width, height), skin.Bg)
 	panel.AnchorPoint = Vector2.new(0.5, 1)
 	corner(panel, small and 14 or 20)
@@ -667,10 +667,13 @@ function MusicUI.BuildXylophone(self: any, body: Frame, layout: any)
 			local nail = frame(k, "Nail", UDim2.new(0.5, -3, yy, -3), UDim2.fromOffset(6, 6), Color3.fromRGB(220, 220, 228), k.ZIndex + 1)
 			round(nail)
 		end
-		local name = MusicData.NoteName(n, Locale.IsFrench())
-		local lab = text(k, "Note", n % 12 == 0 and name or string.gsub(name, "%-?%d+$", ""), UDim2.new(0, 0, 0.32, 0), UDim2.new(1, 0, 0.2, 0), Color3.fromRGB(50, 30, 40), Enum.Font.GothamBold, 13)
-		lab.ZIndex = k.ZIndex + 1
-		keyBadge(k, layout.Keys and layout.Keys[n], UDim2.new(0.5, 0, 0.74, 0), nil, true)
+		if not isSharp then
+			-- (dièses : lames trop courtes, seulement la touche du clavier)
+			local name = MusicData.NoteName(n, Locale.IsFrench())
+			local lab = text(k, "Note", n % 12 == 0 and name or string.gsub(name, "%-?%d+$", ""), UDim2.new(0, 0, 0.32, 0), UDim2.new(1, 0, 0.2, 0), Color3.fromRGB(50, 30, 40), Enum.Font.GothamBold, 13)
+			lab.ZIndex = k.ZIndex + 1
+		end
+		keyBadge(k, layout.Keys and layout.Keys[n], UDim2.new(0.5, 0, isSharp and 0.72 or 0.74, 0), nil, true)
 		local entry = { Frame = k, Kind = "bar", Base = color, Pos = k.Position }
 		register(self, n, entry)
 		onPress(self.PanelConns, k, function(input)
@@ -808,7 +811,7 @@ function MusicUI.BuildNeck(self: any, body: Frame, layout: any, station: string)
 	local neckY = 0
 	-- accords (guitare)
 	if not bass then
-		local row = frame(body, "Chords", UDim2.new(), UDim2.new(1, 0, 0.3, -4), Color3.new(0, 0, 0))
+		local row = frame(body, "Chords", UDim2.new(), UDim2.new(1, 0, 0.24, -4), Color3.new(0, 0, 0))
 		row.BackgroundTransparency = 1
 		local n = #layout.Chords
 		for i, c in ipairs(layout.Chords) do
@@ -833,7 +836,7 @@ function MusicUI.BuildNeck(self: any, body: Frame, layout: any, station: string)
 				self.Cb.Note(c.Value, 0.85)
 			end)
 		end
-		neckY = 0.32
+		neckY = 0.26
 	end
 	-- manche
 	local neck = frame(body, "Neck", UDim2.new(0, 0, neckY, 0), UDim2.new(1, 0, 1 - neckY, 0), Color3.fromRGB(72, 40, 28))
@@ -882,8 +885,9 @@ function MusicUI.BuildNeck(self: any, body: Frame, layout: any, station: string)
 		gradient(str, Color3.fromRGB(250, 240, 210), Color3.fromRGB(150, 140, 110), 90)
 		table.insert(self.Strings, { Frame = str, Y = y, Thick = thick, T0 = -math.huge, Amp = 0 })
 	end
-	-- notes (sur leurs cases)
-	local d = small and 28 or 38
+	-- notes (sur leurs cases) : pastilles à la taille de l'écart entre cordes
+	local neckH = neck.AbsoluteSize.Y > 0 and neck.AbsoluteSize.Y or (small and 120 or 190)
+	local d = math.floor(math.clamp(neckH / strings * 0.94, 18, small and 30 or 40))
 	for _, note in ipairs(layout.Notes) do
 		local y = (note.String - 0.5) / strings
 		local dot = Instance.new("TextButton")

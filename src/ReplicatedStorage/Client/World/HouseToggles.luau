@@ -219,12 +219,12 @@ function HouseToggles.Curtains(parent: Instance, cf: CFrame, width: number, heig
 	end
 	local rod = decor(parent, "CurtainRod", Vector3.new(rodLength, 0.16, 0.16), at(0, rodY, rodOut), rodColor, M.Metal, Enum.PartType.Cylinder)
 	rod.Reflectance = 0.12
-	decor(parent, "SheerRod", Vector3.new(w + 1.9, 0.08, 0.08), at(0, sheerRodY, sheerOut), rodColor:Lerp(Color3.new(1, 1, 1), 0.3), M.Metal, Enum.PartType.Cylinder)
+	decor(parent, "SheerRod", Vector3.new(w + 2.3, 0.08, 0.08), at(0, sheerRodY, sheerOut), rodColor:Lerp(Color3.new(1, 1, 1), 0.3), M.Metal, Enum.PartType.Cylinder)
 	for _, s in ipairs({ -1, 1 }) do
 		decor(parent, "CurtainFinial", Vector3.new(0.38, 0.38, 0.38), at(s * (rodLength / 2 + 0.12), rodY, rodOut), rodColor, M.Metal, Enum.PartType.Ball)
 		-- support (du mur aux deux tringles)
 		decor(parent, "CurtainBracket", Vector3.new(0.12, 0.14, rodOut + 0.05), at(s * (rodLength / 2 - 0.45), rodY + 0.04, rodOut / 2), rodColor, M.Metal)
-		decor(parent, "SheerBracket", Vector3.new(0.1, 0.1, sheerOut + 0.04), at(s * (w / 2 + 0.85), sheerRodY + 0.03, sheerOut / 2), rodColor, M.Metal)
+		decor(parent, "SheerBracket", Vector3.new(0.1, 0.1, sheerOut + 0.04), at(s * (w / 2 + 1.0), sheerRodY + 0.03, sheerOut / 2), rodColor, M.Metal)
 	end
 	local parts: { BasePart } = {}
 	local openGoals, closedGoals = {}, {}
@@ -300,7 +300,7 @@ function HouseToggles.Curtains(parent: Instance, cf: CFrame, width: number, heig
 		local band = decor(parent, "CurtainTieBack", Vector3.new(stackTie + 0.3, 0.26, depth), at(tieCenter, tieY, zPanel), base:Lerp(rodColor, 0.5), M.Fabric)
 		add(band, { CFrame = band.CFrame, Size = band.Size, T = 0 }, { CFrame = band.CFrame, Size = band.Size, T = 1 }, 0)
 		-- voilage : plis fins, translucides, jusqu'à l'appui ; suit en retard
-		local sOuter = s * (w / 2 + 0.6)
+		local sOuter = s * (w / 2 + 0.85) -- (ouvert : le tas de voilage dégage la vitre)
 		local sInner = -s * 0.06
 		local sSpan = math.abs(sOuter - sInner)
 		local sp = sSpan / SHEER_FOLDS
