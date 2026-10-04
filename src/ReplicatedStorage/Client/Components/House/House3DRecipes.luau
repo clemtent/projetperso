@@ -946,13 +946,17 @@ R.EggChair = function(b, ctx)
 	b.Cyl(0, 0, 0, 46, 1.4, INK, M.Rubber)
 	b.Cyl(0, 1.4, 0, 44, 3, GREY_DARK, M.Metal).Reflectance = 0.3
 	b.Cyl(0, 4.4, 0, 6, seat - 14, CHROME_METAL, M.Metal).Reflectance = 0.35
-	local shellPart = b.Ball(0, seat + 18, -6, 80, shell, M.SmoothPlastic)
+	-- (v11 SCALE11) coquille = demi-œuf DERRIÈRE l'assise (avant : une boule
+	-- pleine de 80 qui englobait l'assise, l'avatar disparaissait dedans) ;
+	-- face intérieure plus sombre + garniture rose devant la coquille
+	local shellPart = b.EggR(CFrame.new(0, seat + 20, -14), 80, 86, 46, shell, M.SmoothPlastic)
 	shellPart.Reflectance = 0.08
-	b.EggR(CFrame.new(0, seat + 18, 12) * CFrame.Angles(0.2, 0, 0), 76, 70, 18, darken(shell, 0.12), M.SmoothPlastic)
-	b.Ball(0, seat + 16, 10, 62, pad, M.Fabric)
-	House3DKit.SeatCushion(b, 0, seat - 6, 12, 50, 6, 30, pad, darken(pad, 0.25))
-	House3DKit.PillowR(b, CFrame.new(0, seat + 22, 14) * CFrame.Angles(-0.2, 0, 0), 30, 18, 7, lighten(pad, 0.2), M.Fabric)
-	b.Top(1, 0, seat, 14, 40, 26)
+	b.EggR(CFrame.new(0, seat + 20, 0) * CFrame.Angles(0.12, 0, 0), 74, 78, 10, darken(shell, 0.12), M.SmoothPlastic)
+	b.EggR(CFrame.new(0, seat + 20, 3) * CFrame.Angles(0.12, 0, 0), 60, 64, 8, pad, M.Fabric)
+	b.EggR(CFrame.new(0, seat - 9, 6), 64, 16, 40, darken(shell, 0.05), M.SmoothPlastic)
+	House3DKit.SeatCushion(b, 0, seat - 6, 16, 50, 6, 30, pad, darken(pad, 0.25))
+	House3DKit.PillowR(b, CFrame.new(0, seat + 14, 7) * CFrame.Angles(-0.2, 0, 0), 30, 16, 6, lighten(pad, 0.2), M.Fabric)
+	b.Top(1, 0, seat, 16, 40, 26)
 	b.Footprint(80, 80, seat + 58)
 end
 R.GardenBench = function(b, ctx)
@@ -4069,7 +4073,8 @@ R.GamerBeanbag = function(b, _ctx)
 	b.Neon(seam)
 	b.Tube(-6, 74, -22, 6, 74, -22, 3, darken(color, 0.3), M.Fabric)
 	House3DKit.StarSoft(b, 0, 42, 11, 6, 1, NEON_PINK, M.SmoothPlastic)
-	b.Top(1, 0, 58, 8, 50, 40)
+	-- (v11 SCALE11) assise SUR la poire (sa surface est à ~63-66 ici ; 58 = enfoncé dedans)
+	b.Top(1, 0, 65, 8, 50, 40)
 	b.Footprint(90, 90, 70)
 end
 R.LockerCabinet = function(b, ctx)
@@ -4891,6 +4896,18 @@ local SITTABLE: { [string]: boolean } = {
 	RaceCarBed = true, PetBed = true, KotatsuTable = false,
 }
 
+-- (v11 SCALE11) places assises corrigées (recettes d'autres modules) : la
+-- place déclarée était DANS le corps de l'objet (nounours : au milieu du
+-- ventre ; cheval à bascule : sous la selle). Unités de la recette, devant +z ;
+-- false = plus de place assise (peluches : l'avatar passait au travers).
+local SEAT_FIX: { [string]: any } = {
+	TeddyBear = false,
+	BigBear = false,
+	PandaPlush = false,
+	-- sur la selle (dessus de la selle : 48 + 12 + 3)
+	RockingHorse = { X = -2, Y = 62.5, Z = 0, W = 20, D = 16 },
+}
+
 -- Construit les pièces d'un objet dans `parent`, au repère `origin` (x à
 -- droite, y en haut depuis le sol, +z = le devant de l'objet)
 function House3DRecipes.Make(item: any, entry: any?, k: number, parent: Instance, origin: CFrame, trim: Color3?): ItemData
@@ -4926,6 +4943,12 @@ function House3DRecipes.Make(item: any, entry: any?, k: number, parent: Instance
 		b = House3DKit.Builder(parent, origin, k, mirror, mapper, House3DRecipes.PaletteOf(item), wide)
 		b.Item = item
 		pcall(fallback, b, ctx)
+	end
+	local fix = SEAT_FIX[tostring(item.Id)]
+	if fix == false then
+		b.SeatAt = nil
+	elseif type(fix) == "table" and b.SeatAt then
+		b.SeatAt = { X = mirror and -fix.X or fix.X, Y = fix.Y, Z = fix.Z, W = fix.W, D = fix.D }
 	end
 	-- place assise par défaut (sièges, lits, canapés) : le premier dessus
 	if not b.SeatAt and (SITTABLE[item.Id] or HouseSurfaces.IsSeat(item.Id) or HouseSurfaces.IsBed(item.Id)) then
@@ -5046,7 +5069,10 @@ function House3DRecipes.BuildModel(itemId: string, entry: any?, options: BuildOp
 	local walkUnder = itemId == "AquariumTunnel"
 	-- (v9.9 SCALE99) les chaises et tabourets, plus larges maintenant, restent
 	-- sans bloc (comme avant) : on se glisse entre eux autour d'une table
-	local smallSeat = HouseSurfaces.IsSeat(itemId) and math.max(fw, fd) < 2.5
+	-- (v11 SCALE11 : échelle Roblox, une chaise fait jusqu'à 3,4 studs ; un
+	-- bloc plein sous l'assise gênait l'approche de SitAnimator -> seuil 3,6 ;
+	-- canapés, fauteuils et bancs gardent leur bloc)
+	local smallSeat = HouseSurfaces.IsSeat(itemId) and math.max(fw, fd) < 3.6
 	if collide and not wall and not walkUnder and not smallSeat and not data.Info.Flat and height >= 1.5 and math.max(fw, fd) >= 1.8 then
 		local top = data.Tops[1]
 		local solidH = height
@@ -5061,11 +5087,13 @@ function House3DRecipes.BuildModel(itemId: string, entry: any?, options: BuildOp
 		hitbox.CastShadow = false
 		hitbox.Parent = model
 	end
-	-- Place assise
+	-- Place assise (v11 SCALE11 : le DESSUS de la SeatPart est pile le dessus
+	-- visuel du coussin, Y * k ; avant, il était 0,2 stud plus haut et
+	-- l'avatar flottait au-dessus de l'assise)
 	local seat = data.SeatAt
 	if seat then
 		local seatPart = House3DKit.NewPart("Part", "SeatPart", Vector3.new(math.max(0.3, seat.W * k), 0.2, math.max(0.3, seat.D * k)),
-			turn * CFrame.new(seat.X * k, seat.Y * k + 0.1, seat.Z * k) * turn, WHITE, nil, 1)
+			turn * CFrame.new(seat.X * k, seat.Y * k - 0.1, seat.Z * k) * turn, WHITE, nil, 1)
 		seatPart.CastShadow = false
 		seatPart.CanQuery = query
 		seatPart.Parent = model

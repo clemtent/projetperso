@@ -12,9 +12,8 @@
 	x 84..156, z 502..568 (marches comprises).
 
 	Repère LOCAL de la banque (origine = centre du bâtiment, au sol, y = 0 ;
-	-Z = devant / la rue ; +X = droite quand on regarde la façade depuis la rue...
-	attention : vu de la rue on regarde vers +Z, donc +X local est à GAUCHE du
-	passant). Plancher du hall : y = FLOOR.
+	-Z = devant / la rue ; vu de la rue on regarde vers +Z, donc +X local est
+	à GAUCHE du passant). Plancher du hall : y = FLOOR.
 	  - façade (colonnes) z = -FRONT ; marches de z = -FRONT à -STEPS_END ;
 	  - hall z -FRONT..COUNTER ; guichets en z = COUNTER ; espace du personnel
 	    COUNTER..VAULT_WALL ; porte du coffre au centre de VAULT_WALL ;
@@ -86,16 +85,16 @@ function BankLayout.LocalPoints(): { [string]: any }
 		ATMs = {
 			Vector3.new(-17, F, -BankLayout.FRONT - 1.4),
 			Vector3.new(17, F, -BankLayout.FRONT - 1.4),
-			Vector3.new(-27, F, -8),
-			Vector3.new(-27, F, -2),
+			Vector3.new(-26.2, F, -1.2),
+			Vector3.new(-26.2, F, 2.6),
 		},
 		Luxury = Vector3.new(-20, F, -13), -- comptoir du bijoutier (boutique de luxe)
-		Deposit = Vector3.new(24, F, -4), -- salle des coffres individuels (mur +X du hall)
+		Deposit = Vector3.new(24, F, -10), -- salle des coffres individuels (mur +X du hall)
 		Rates = Vector3.new(0, F, -6), -- panneau du cours du diamant
 		Lobby = Vector3.new(32.3, 0.6, -14), -- plan du casse (ruelle de service)
-		Hack = Vector3.new(30.3, 0.6, BankLayout.STAFF_DOOR_Z - 5), -- boîtier d'alarme (dehors, ruelle)
+		Hack = Vector3.new(30.8, 0.6, -2.5), -- boîtier d'alarme (dehors, ruelle, au pied du quai)
 		StaffDoor = Vector3.new(BankLayout.HALF_W, F, BankLayout.STAFF_DOOR_Z),
-		Drill = Vector3.new(0, F, BankLayout.VAULT_WALL - 2.5), -- devant la porte ronde du coffre
+		Drill = Vector3.new(0, F, BankLayout.VAULT_WALL - 4), -- devant la porte ronde du coffre
 		Piles = piles,
 	}
 end

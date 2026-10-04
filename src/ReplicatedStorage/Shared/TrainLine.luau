@@ -67,8 +67,10 @@
 	  TrainLine.Heist(count, t) -> { Active, Start, End, Station, Cycle,
 	      AnnounceAt } (long arrêt en cours, sinon le prochain)
 	  TrainLine.SeatsLocal(kind) -> { {X, Y, Z, Yaw} } (repère de la voiture :
-	      origine au dessus du rail au centre, -Z = avant, +X = droite =
-	      EXTÉRIEUR de la boucle, -X = côté quai)
+	      origine sur le dessus du rail au centre, -Z = avant, +X = droite =
+	      EXTÉRIEUR de la boucle, -X = côté quai ; Y = dessus du coussin)
+	  TrainLine.NextStop(count, t, trainIndex, station) -> (arrivée, départ)
+	      prochain passage du train à cette gare (en gare : arrivée <= t)
 	  TrainLine.VaultLocal() -> positions locales du braquage (porte,
 	      boîtier, coffre, sacs)
 	  TrainLine.ToWorld(count, t, trainIndex, carIndex, lx, ly, lz) -> (x, y, z)
@@ -93,17 +95,18 @@ TrainLine.CORRIDOR = 12 -- demi-largeur de l'emprise à laisser libre
 TrainLine.GAUGE = 5 -- entre les axes des deux rails
 TrainLine.RAIL_Y = 1.15 -- dessus du rail (repère : Origin().Y)
 TrainLine.FLOOR_Y = 4.15 -- plancher des voitures
+TrainLine.FLOOR_L = TrainLine.FLOOR_Y - TrainLine.RAIL_Y -- (3) plancher dans le repère local des voitures
 TrainLine.PLATFORM_Y = 4.15 -- dessus du quai = plancher des voitures (de plain-pied, SCALE11)
 TrainLine.CAR_W = 11 -- largeur des voitures
-TrainLine.CAR_H = 12.5 -- hauteur (au-dessus du rail)
+TrainLine.CAR_H = 13 -- hauteur (au-dessus du rail)
 TrainLine.GAP = 2 -- entre deux voitures (soufflets)
 
 TrainLine.STATION_ALONG = 260 -- centre des gares : après le passage à niveau
 TrainLine.PLATFORM_LEN = 190
 TrainLine.PLATFORM_IN = 50 -- quai : du décalage 50...
 TrainLine.PLATFORM_OUT = 64 -- ... à 64 (bord du quai : axe - CAR_W / 2 - 0,5)
-TrainLine.BUILDING_IN = 20 -- bâtiment voyageurs : décalage 20..48, longueur 90
-TrainLine.BUILDING_OUT = 48
+TrainLine.BUILDING_IN = 18 -- bâtiment voyageurs : décalage 18..44 (au niveau du trottoir), longueur 90
+TrainLine.BUILDING_OUT = 44 -- (44..50 : marches jusqu'au quai)
 TrainLine.BUILDING_LEN = 90
 TrainLine.STATION_IN = 16 -- emprise d'une gare : du bord du trottoir (16) au bord du quai
 
@@ -398,19 +401,17 @@ function TrainLine.Crossings(count: number?): { any }
 	end
 	local list = {}
 	local R = path.R
-	local graph = WorldLayout.RoadGraph(path.Count)
 	for k, side in ipairs(SIDES) do
 		local off = R + TrainLine.OFF_MID
 		local x, z = side.NX * off, side.NZ * off
 		-- arête de la route coupée (la plus proche du centre du passage)
 		local edgeKey: string? = nil
 		local width = 20
-		local okNear, edge = pcall(WorldLayout.NearestRoad, path.Count, x, z)
-		if okNear and type(edge) == "table" then
+		local edge: any = (WorldLayout.NearestRoad(path.Count, x, z))
+		if type(edge) == "table" then
 			edgeKey = tostring(edge.A) .. "|" .. tostring(edge.B)
 			width = finite(edge.Width, 20)
 		end
-		local _ = graph
 		table.insert(list, {
 			Index = k,
 			Id = "X" .. k,
@@ -693,6 +694,7 @@ export type TrainState = {
 	Next: number,
 	DepartAt: number?,
 	ArriveAt: number?,
+	StopAt: number?,
 	Cycle: number,
 	Heist: boolean,
 }
@@ -706,7 +708,7 @@ local function expressState(path: Path, t: number): TrainState
 	local tau = t - t0
 	if tau < TrainLine.HOLD then
 		return { Train = 1, S = stopS(path, H), V = 0, Phase = "Hold", Station = H, Next = H % 4 + 1,
-			DepartAt = t0 + TrainLine.HOLD, ArriveAt = nil, Cycle = cycle, Heist = true }
+			DepartAt = t0 + TrainLine.HOLD, ArriveAt = nil, StopAt = t0, Cycle = cycle, Heist = true }
 	end
 	local plan = getPlan(path, H)
 	local rel = tau - TrainLine.HOLD
@@ -726,12 +728,12 @@ local function expressState(path: Path, t: number): TrainState
 		local D = legDistance(path, from, to)
 		local d, v = TrainLine.RunDistance(D, within)
 		return { Train = 1, S = (stopS(path, from) + d) % path.Length, V = v, Phase = "Run", Station = from, Next = to,
-			DepartAt = t0 + TrainLine.HOLD + plan.Start[k], ArriveAt = t0 + TrainLine.HOLD + plan.Start[k] + run, Cycle = cycle, Heist = false }
+			DepartAt = t0 + TrainLine.HOLD + plan.Start[k], ArriveAt = t0 + TrainLine.HOLD + plan.Start[k] + run, StopAt = nil, Cycle = cycle, Heist = false }
 	end
 	-- arrêt en gare "to" (le dernier arrêt du cycle mène au long arrêt suivant)
 	local departAt = if k < plan.Legs then t0 + TrainLine.HOLD + plan.Start[k + 1] else t0 + C + TrainLine.HOLD
 	return { Train = 1, S = stopS(path, to), V = 0, Phase = "Dwell", Station = to, Next = to % 4 + 1,
-		DepartAt = departAt, ArriveAt = nil, Cycle = cycle, Heist = false }
+		DepartAt = departAt, ArriveAt = nil, StopAt = t0 + TrainLine.HOLD + plan.Start[k] + run, Cycle = cycle, Heist = false }
 end
 
 -- État d'un train (1 = convoi, 2 = navette : une demi-boucle plus loin)
@@ -751,11 +753,45 @@ function TrainLine.State(count: number?, t: number, trainIndex: number?): TrainS
 			Next = (st.Next + 1) % 4 + 1,
 			DepartAt = st.DepartAt,
 			ArriveAt = st.ArriveAt,
+			StopAt = st.StopAt,
 			Cycle = st.Cycle,
 			Heist = false,
 		}
 	end
 	return st
+end
+
+-- Arrêts du convoi pendant le cycle c : { {Station, Arrive, Depart} }
+local function cycleStops(path: Path, c: number): { any }
+	local C = TrainLine.CYCLE
+	local t0 = c * C
+	local H = TrainLine.HeistStation(c)
+	local plan = getPlan(path, H)
+	local list = { { Station = H, Arrive = t0, Depart = t0 + TrainLine.HOLD } }
+	for k = 1, plan.Legs - 1 do
+		local from = (H - 1 + k - 1) % 4 + 1
+		local to = from % 4 + 1
+		-- (le dernier trajet arrive au long arrêt du cycle suivant)
+		table.insert(list, { Station = to, Arrive = t0 + TrainLine.HOLD + plan.Start[k] + plan.Run[k], Depart = t0 + TrainLine.HOLD + plan.Start[k + 1] })
+	end
+	return list
+end
+
+-- Prochain passage d'un train à une gare : (arrivée, départ). En gare : arrivée <= t.
+function TrainLine.NextStop(count: number?, t: number, trainIndex: number, station: number): (number, number)
+	local path = getPath(count)
+	t = finite(t, 0)
+	local shift = if (trainIndex or 1) == 2 then 2 else 0
+	local c = math.floor(t / TrainLine.CYCLE)
+	for cc = c, c + 2 do
+		for _, stop in ipairs(cycleStops(path, cc)) do
+			local st = (stop.Station - 1 + shift) % 4 + 1
+			if st == station and stop.Depart > t then
+				return stop.Arrive, stop.Depart
+			end
+		end
+	end
+	return t + TrainLine.CYCLE, t + TrainLine.CYCLE + TrainLine.DWELL_MIN
 end
 
 -- Poses de toutes les voitures d'un train
@@ -854,7 +890,7 @@ function TrainLine.SeatsLocal(kind: string): { any }
 			-- rangées 1 et 3 regardent vers l'arrière (+Z), 2 et 4 vers l'avant (-Z) : vis-à-vis
 			local yaw = if r % 2 == 1 then math.pi else 0
 			for _, x in ipairs(TrainLine.SEAT_X) do
-				table.insert(list, { X = x, Y = TrainLine.FLOOR_Y + TrainLine.SEAT_TOP, Z = z, Yaw = yaw })
+				table.insert(list, { X = x, Y = TrainLine.FLOOR_L + TrainLine.SEAT_TOP, Z = z, Yaw = yaw })
 			end
 		end
 	end
@@ -862,10 +898,10 @@ function TrainLine.SeatsLocal(kind: string): { any }
 	return list
 end
 
--- Places du braquage dans le wagon blindé (repère local)
+-- Places du braquage dans le wagon blindé (repère local : Y depuis le dessus du rail)
 function TrainLine.VaultLocal(): any
 	local half = TrainLine.CAR_W / 2
-	local F = TrainLine.FLOOR_Y
+	local F = TrainLine.FLOOR_L
 	return {
 		Door = { X = -half - 0.6, Y = F + 4, Z = 0 }, -- porte blindée, côté quai
 		Panel = { X = -half - 0.6, Y = F + 4.5, Z = -11 }, -- boîtier électronique
@@ -894,6 +930,47 @@ function TrainLine.VaultCarIndex(): number
 		end
 	end
 	return #TrainLine.Trains[1].Cars
+end
+
+-- Sièges occupés par des PNJ (mêmes chez tout le monde ; jamais proposés aux joueurs)
+function TrainLine.NpcSeats(trainIndex: number, carIndex: number): { [number]: boolean }
+	local set = {}
+	local n = #TrainLine.SeatsLocal("Coach")
+	local seed = trainIndex * 7 + carIndex * 13
+	for k = 1, 3 do
+		set[((seed * (k + 3) + k * 5) % n) + 1] = true
+	end
+	return set
+end
+
+----------------------------------------------------------------------
+-- CFrame (jeu seulement : serveur / client)
+----------------------------------------------------------------------
+
+-- Repère d'une voiture : origine sur le dessus du rail au centre, LookVector = sens de marche
+function TrainLine.CarFrame(count: number?, headS: number, offset: number, len: number): CFrame
+	local x, z, dx, dz = TrainLine.CarPoseAt(count, headS, offset, len)
+	local p = WorldLayout.CityPoint(x, TrainLine.RAIL_Y, z)
+	return CFrame.lookAt(p, p + Vector3.new(dx, 0, dz))
+end
+
+-- Repères de toutes les voitures d'un train à l'instant t
+function TrainLine.CarFrames(count: number?, t: number, trainIndex: number): ({ CFrame }, any)
+	local st = TrainLine.State(count, t, trainIndex)
+	local list = {}
+	for i, car in ipairs((TrainLine.Consist(trainIndex))) do
+		list[i] = TrainLine.CarFrame(count, st.S, car.Offset, car.Len)
+	end
+	return list, st
+end
+
+-- Repère local d'un siège (dessus de l'assise, regard = sens du siège)
+function TrainLine.SeatCFrame(index: number): CFrame
+	local seat = TrainLine.SeatsLocal("Coach")[index]
+	if not seat then
+		return CFrame.new()
+	end
+	return CFrame.new(seat.X, seat.Y, seat.Z) * CFrame.Angles(0, seat.Yaw, 0)
 end
 
 TrainLine.YawOf = yawOf

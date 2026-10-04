@@ -258,6 +258,36 @@ Config.Upgrades = {
 	{ Id = "Multiverse", Name = "Multiverse", Icon = "🪐", Description = "Infinite you's, infinite clicks. Earnings x%s",
 		Cost = 1.5e11, MaxLevel = 1, Effect = "Multiplier", Feature = "Multiverse", Value = 3, RequiresRebirths = 8,
 		Color = Color3.fromRGB(200, 120, 255) },
+	-- (v11, ECON11) 🌊 Fin de partie : une nouveauté toutes les 2 à 5 visites
+	-- jusqu'à la 40e (l'encart « x nouveautés après l'océan » montre toujours
+	-- le prochain objectif). Pas de Feature : rien à afficher, juste des gains.
+	{ Id = "WhaleSong", Name = "Whale Song", Icon = "🐋", Description = "Deep, slow, powerful. Earnings x%s",
+		Cost = 4e11, MaxLevel = 1, Effect = "Multiplier", Value = 2, RequiresRebirths = 10,
+		Color = Color3.fromRGB(60, 110, 190) },
+	{ Id = "PrivateIsland", Name = "Private Island", Icon = "🏝️", Description = "Your own island, your own rules. +%s Dopamine/s",
+		Cost = 3e11, CostGrowth = 1.7, MaxLevel = 10, Effect = "PerSecond", Value = 4e7, RequiresRebirths = 12,
+		Color = Color3.fromRGB(70, 200, 170) },
+	{ Id = "SirenCall", Name = "Siren Call", Icon = "🧜", Description = "Irresistible. Clicks x%s",
+		Cost = 1e12, MaxLevel = 1, Effect = "ClickMultiplier", Value = 3, RequiresRebirths = 15,
+		Color = Color3.fromRGB(80, 210, 200) },
+	{ Id = "Volcano", Name = "Underwater Volcano", Icon = "🌋", Description = "Pure geothermal Dopamine. +%s Dopamine/s",
+		Cost = 1.2e12, CostGrowth = 1.7, MaxLevel = 10, Effect = "PerSecond", Value = 1.5e8, RequiresRebirths = 18,
+		Color = Color3.fromRGB(230, 90, 40) },
+	{ Id = "Trident", Name = "Golden Trident", Icon = "🔱", Description = "Ruler of the seven seas. Earnings x%s",
+		Cost = 2e12, MaxLevel = 1, Effect = "Multiplier", Value = 2, RequiresRebirths = 20,
+		Color = Color3.fromRGB(240, 190, 50) },
+	{ Id = "SeaDragon", Name = "Sea Dragon", Icon = "🐉", Description = "An ancient friend from the deep. Earnings x%s",
+		Cost = 3e12, MaxLevel = 1, Effect = "Multiplier", Value = 2, RequiresRebirths = 25,
+		Color = Color3.fromRGB(40, 170, 120) },
+	{ Id = "BluePlanet", Name = "Blue Planet", Icon = "🌍", Description = "The whole ocean is on your side. Earnings x%s",
+		Cost = 4e12, MaxLevel = 1, Effect = "Multiplier", Value = 2, RequiresRebirths = 30,
+		Color = Color3.fromRGB(40, 120, 230) },
+	{ Id = "MidnightSun", Name = "Midnight Sun", Icon = "🌅", Description = "It never sets. Earnings x%s",
+		Cost = 5e12, MaxLevel = 1, Effect = "Multiplier", Value = 2, RequiresRebirths = 35,
+		Color = Color3.fromRGB(255, 150, 60) },
+	{ Id = "Nirvana", Name = "Nirvana", Icon = "🪷", Description = "Perfect calm. Everything flows. Earnings x%s",
+		Cost = 6e12, MaxLevel = 1, Effect = "Multiplier", Value = 2.5, RequiresRebirths = 40,
+		Color = Color3.fromRGB(240, 130, 190) },
 	{ Id = "Ocean", Name = "Go to the Ocean", Icon = "🌊", Description = "Let it all go and breathe. Start over with x%s earnings forever (your 🏠 house is kept)",
 		Cost = 0, MaxLevel = nil, Effect = "Detox", Feature = nil,
 		Color = Color3.fromRGB(0, 140, 200) },
@@ -276,6 +306,25 @@ Config.Upgrades = {
 --     après 2, x10,6 après 3, x21 après 5, x42 après 8)
 --   Multiplicateur permanent : +MultiplierPerRebirth par visite (x
 --     MultiplierDecay à chaque visite suivante : 1 = linéaire)
+--
+-- (v11, ECON11) « À partir de la 20e visite les chiffres sont beaucoup trop
+-- grands (Sx) et c'est beaucoup trop long » : avant, le prix de l'océan
+-- prenait x3,5 x (1 + r)^1,55 à chaque visite (1,1 Sx à la 20e) alors que le
+-- multiplicateur ne gagnait que +0,5 ; une fois toutes les cartes achetées
+-- il ne restait qu'à attendre : R14 = 8 h, R16 = 68 h, R18 = 860 h de jeu.
+-- Les visites 1 à 10 ne changent PAS. Ensuite (r > LateFrom visites) :
+--   prix de l'océan            x LateCostGrowth par visite (1,6 Qa à la 11e,
+--                                6,4 Qa à la 20e, ~100 Qa à la 40e)
+--   prix des améliorations      x LatePriceGrowth par visite
+--   multiplicateur permanent   x LateMultiplierGrowth par visite (x6 après
+--                                10 visites, ~x24 après 20, ~x400 après 40)
+-- + de nouvelles cartes tous les 2 à 5 visites (RequiresRebirths 10 à 40)
+-- et des 💎 diamants à chaque visite à partir de la 10e (Diamonds).
+-- Parties simulées (joueur actif, sans Robux) : R11 à R40 entre 1 h 30 et
+-- 2 h 40, de plus en plus courtes (on se sent plus fort) ; R40 en ~80 h de
+-- jeu actif au lieu de jamais. Tout dépend seulement de data.Rebirths :
+-- aucune sauvegarde à migrer, et prix / multiplicateur n'est jamais pire
+-- qu'avant (testé) : personne ne perd rien.
 ----------------------------------------------------------------------
 Config.Rebirth = {
 	BaseCost = 5e8, -- prix de la 1re visite à l'océan
@@ -285,6 +334,14 @@ Config.Rebirth = {
 	PricePower = 1.7, -- ... x(1 + r)^1,7 : les améliorations coûtent plus cher à chaque visite
 	MultiplierPerRebirth = 0.5, -- +50 % de gains permanents par visite
 	MultiplierDecay = 1, -- (1 = toujours +50 %)
+	-- (v11) Fin de partie : après LateFrom visites, tout grandit en proportion
+	LateFrom = 10,
+	LateCostGrowth = 1.15, -- océan : x1,15 par visite (avant : ~x4,4)
+	LatePriceGrowth = 1.13, -- améliorations : x1,13 par visite
+	LateMultiplierGrowth = 1.15, -- gains permanents : x1,15 par visite (= +15 %, avant +0,5 sur x6 = +8 %)
+	-- 💎 Diamants offerts à chaque visite à partir de la From-ième (BankService) :
+	-- Base + 1 par PerVisits visites de plus, au plus Max
+	Diamonds = { From = 10, Base = 10, PerVisits = 2, Max = 30 },
 }
 
 ----------------------------------------------------------------------
@@ -817,9 +874,9 @@ Config.Instruments = {
 		Layers = { { 0, 1 }, { 19, 0.3, 0, 0.45 }, { 24, 0.08, 0, 0.3 } },
 		Attack = { { "Click", 1.5, 0.26, 0.05 }, { "Button", 1.2, 0.12, 0.05 } } },
 	Synth = { SampleId = "Ping", BaseNote = 76, Volume = 0.42, Decay = 1.3, MinSpeed = 0.2, MaxSpeed = 3,
-		Layers = { { 0, 0.75, -9 }, { 0, 0.75, 9 }, { -12, 0.5 }, { 12, 0.12, 5 }, { 7, 0.07 } },
+		Layers = { { 0, 0.75, -9 }, { 0, 0.75, 9 }, { -12, 0.5 }, { 12, 0.12, 5 } },
 		Attack = {},
-		Pulse = { Every = 0.17, Count = 4, Fade = 0.62 } },
+		Pulse = { Every = 0.17, Count = 3, Fade = 0.62 } },
 	Drums = {
 		Volume = 0.8,
 		Kick = { { "Ping", 0.2, 1, 0.45, 0, 0.075, 0.09 }, { "Click", 0.55, 0.5, 0.05 }, { "Thud", 0.9, 0.45, 0.3 } },

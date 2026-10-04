@@ -624,10 +624,11 @@ end
 -- permanent. On garde : succès, stats, cosmétiques, cadeau, réglages,
 -- coffres, temps d'écran, quêtes, la maison 🏠 (data.House n'est pas
 -- touchée) et les améliorations "Permanent".
-function GameService:Detox(player: Player)
+-- Renvoie le nombre de 💎 reçus avec cette visite (v11 ; 0 sinon)
+function GameService:Detox(player: Player): number
 	local data = services.DataService:GetData(player)
 	if not data or not sessions[player] then
-		return
+		return 0
 	end
 
 	local kept = {}
@@ -653,11 +654,26 @@ function GameService:Detox(player: Player)
 	-- Nouvelles quêtes adaptées à la production (redevenue petite) après la détox
 	services.QuestService:Regenerate(player)
 
+	-- (v11, ECON11) 💎 Diamants offerts à partir de la 10e visite
+	-- (Formulas.GetOceanDiamonds ; BankService s'il existe, hors plafond des casses)
+	local diamonds = 0
+	local wanted = Formulas.GetOceanDiamonds(data.Rebirths)
+	local bank = services.BankService
+	if wanted > 0 and bank and type(bank.GrantDiamonds) == "function" then
+		local ok, granted = pcall(bank.GrantDiamonds, bank, player, wanted, "Ocean")
+		if ok then
+			diamonds = math.max(0, math.floor(tonumber(granted) or 0))
+		else
+			warn("[GameService] Diamants de l'océan non donnés à " .. player.Name .. " :", granted)
+		end
+	end
+
 	local multiplier = Formulas.GetRebirthMultiplier(data.Rebirths)
 	self:Notify(player, {
 		Type = "Detox",
 		Rebirths = data.Rebirths,
 		Multiplier = multiplier,
+		Diamonds = diamonds, -- (v11) 💎 reçus avec cette visite (0 avant la 10e)
 	})
 	local displayName, rebirths = player.DisplayName, tostring(data.Rebirths)
 	self:NotifyAll(function(lang)
@@ -672,6 +688,7 @@ function GameService:Detox(player: Player)
 	task.spawn(function()
 		services.DataService:SaveAsync(player, true)
 	end)
+	return diamonds
 end
 
 -- Appelé après un changement d'améliorations fait "à la main" (commandes de test)
@@ -810,8 +827,11 @@ local function onBuyUpgrade(player: Player, upgradeId: any)
 		if not RateLimiter.Check(player, "Detox", 2) then
 			return false, GameService:T(player, "Slow down!")
 		end
-		GameService:Detox(player)
+		local diamonds = GameService:Detox(player)
 		local multiplier = NumberFormatter.Multiplier(Formulas.GetRebirthMultiplier(data.Rebirths))
+		if type(diamonds) == "number" and diamonds > 0 then
+			return true, GameService:T(player, "🌊 Breathe... Permanent earnings %s  ·  +%s 💎", multiplier, tostring(diamonds))
+		end
 		return true, GameService:T(player, "🌊 Breathe... Permanent earnings %s", multiplier)
 	end
 

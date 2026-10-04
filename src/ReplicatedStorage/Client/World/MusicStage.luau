@@ -105,6 +105,11 @@ local BASS_LOW = { 36, 38, 40, 41, 43, 45, 46, 47 }
 local BASS_HIGH = { 48, 50, 52, 53, 55, 57, 58, 60 }
 local BASS_LOW_KEYS = { K.A, K.S, K.D, K.F, K.G, K.H, K.J, K.K }
 local BASS_HIGH_KEYS = { K.Q, K.W, K.E, K.R, K.T, K.Y, K.U, K.I }
+-- (v11) notes du solo sur le manche : { corde (1 = Mi aigu), case } (gamme
+-- pentatonique de La mineur, position en case 5)
+local SOLO_POS = { { 6, 5 }, { 6, 8 }, { 5, 5 }, { 5, 7 }, { 4, 5 }, { 4, 7 }, { 3, 5 }, { 3, 7 }, { 2, 5 } }
+-- (v11) 8 boucles du DJ : première rangée du clavier
+local DJ_LOOP_KEYS = { K.Q, K.W, K.E, K.R, K.T, K.Y, K.U, K.I }
 
 local PAD = {
 	Red = Color3.fromRGB(236, 96, 120),
@@ -279,7 +284,7 @@ local function handState(s: any, inst: string): any
 end
 
 -- Un coup sur un instrument : son + visuel + mains du musicien
-local function hit(inst: string, n: number, vel: number, via: string?)
+local function hit(inst: string, n: number, vel: number, via: string?, dur: number?)
 	local s = state
 	if not s then
 		return
@@ -293,11 +298,11 @@ local function hit(inst: string, n: number, vel: number, via: string?)
 	elseif inst == "DJ" then
 		s.Synth:Pad(n, vel, emitter)
 	else
-		s.Synth:Note(inst, n, vel, emitter)
+		s.Synth:Note(inst, n, vel, emitter, dur)
 	end
 	energize(s, inst, vel, (inst ~= "Drums" and inst ~= "DJ") and n or nil)
 	if s.Playing == (via or inst) and s.UI then
-		s.UI:Flash(n)
+		s.UI:Flash(n, vel)
 	end
 	if via then
 		-- (boucles du DJ : seules les platines réagissent)
@@ -347,7 +352,7 @@ local function hit(inst: string, n: number, vel: number, via: string?)
 		end
 		hs.Note = n
 	elseif inst == "DJ" then
-		if n == 5 then
+		if n == MusicData.DJ_FX.Scratch then
 			hs.ScratchT = now
 			s.Scratch = { T = now }
 		else
@@ -363,6 +368,7 @@ end
 local function layoutFor(id: string): any
 	local s = state
 	local st = MusicData.STATIONS[id]
+	local fr = Locale.IsFrench()
 	if st.Kind == "keys" then
 		local low = s.Octave[id] or DEFAULT_LOW[id] or 48
 		local keys = {}
@@ -375,41 +381,52 @@ local function layoutFor(id: string): any
 		end
 		return { Kind = "keys", Low = low, Count = KEY_SPAN, Keys = keys }
 	elseif id == "Drums" then
+		-- (v11) le kit vu du dessus : chaque pièce à sa vraie place
 		local D = MusicData.DRUM
 		return {
-			Kind = "pads",
-			Rows = {
-				{ { Value = D.Crash, Label = "💥 " .. T("Crash"), KeyCode = K.Q, Color = PAD.Gold }, { Value = D.TomHigh, Label = T("Tom 1"), KeyCode = K.W, Color = PAD.Blue }, { Value = D.TomMid, Label = T("Tom 2"), KeyCode = K.E, Color = PAD.Blue }, { Value = D.Ride, Label = "🔔 " .. T("Ride"), KeyCode = K.R, Color = PAD.Gold } },
-				{ { Value = D.HatOpen, Label = T("Open hi-hat"), KeyCode = K.A, Color = PAD.Gold }, { Value = D.HatClosed, Label = T("Hi-hat"), KeyCode = K.S, Color = PAD.Gold }, { Value = D.Snare, Label = "🥁 " .. T("Snare"), KeyCode = K.D, Color = PAD.Red }, { Value = D.TomFloor, Label = T("Floor tom"), KeyCode = K.F, Color = PAD.Blue } },
-				{ { Value = D.Kick, Label = "🦶 " .. T("Bass drum"), KeyCode = K.X, Color = PAD.Lilac, Wide = 4 } },
+			Kind = "drums",
+			Pads = {
+				{ Name = "Crash", Value = D.Crash, Label = T("Crash"), KeyCode = K.Q, X = 0.2, Y = 0.24, R = 0.21, Type = "cymbal" },
+				{ Name = "HiHat", Value = D.HatClosed, Label = T("Hi-hat"), KeyCode = K.S, X = 0.08, Y = 0.6, R = 0.16, Type = "hat" },
+				{ Name = "HiHatOpen", Value = D.HatOpen, Label = T("Open hi-hat"), KeyCode = K.A, X = 0.09, Y = 0.92, R = 0.07, Type = "pill" },
+				{ Name = "Snare", Value = D.Snare, Label = T("Snare"), KeyCode = K.D, X = 0.27, Y = 0.66, R = 0.155, Type = "drum", Shell = Color3.fromRGB(190, 192, 204) },
+				{ Name = "Tom1", Value = D.TomHigh, Label = T("Tom 1"), KeyCode = K.W, X = 0.4, Y = 0.3, R = 0.13, Type = "drum" },
+				{ Name = "Tom2", Value = D.TomMid, Label = T("Tom 2"), KeyCode = K.E, X = 0.58, Y = 0.3, R = 0.14, Type = "drum" },
+				{ Name = "Kick", Value = D.Kick, Label = T("Bass drum"), KeyCode = K.X, X = 0.49, Y = 0.72, R = 0.25, Type = "kick" },
+				{ Name = "FloorTom", Value = D.TomFloor, Label = T("Floor tom"), KeyCode = K.F, X = 0.72, Y = 0.68, R = 0.17, Type = "drum" },
+				{ Name = "Ride", Value = D.Ride, Label = T("Ride"), KeyCode = K.R, X = 0.87, Y = 0.32, R = 0.23, Type = "cymbal" },
 			},
 		}
 	elseif id == "Guitar" then
-		local row1, row2 = {}, {}
+		local chords, notes = {}, {}
 		for i, name in ipairs(CHORDS) do
-			table.insert(row1, { Value = 1000 + i, Label = Locale.IsFrench() and (CHORDS_FR[name] or name) or name, KeyCode = CHORD_KEYS[i], Color = i % 2 == 0 and PAD.Red or PAD.Pink })
+			table.insert(chords, { Value = 1000 + i, Label = fr and (CHORDS_FR[name] or name) or name, KeyCode = CHORD_KEYS[i] })
 		end
 		for i, n in ipairs(SOLO) do
-			table.insert(row2, { Value = n, Label = MusicData.NoteName(n, Locale.IsFrench()), KeyCode = SOLO_KEYS[i], Color = PAD.Lilac })
+			local pos = SOLO_POS[i]
+			table.insert(notes, { Value = n, Label = MusicData.NoteName(n, fr), KeyCode = SOLO_KEYS[i], String = pos[1], Fret = pos[2] })
 		end
-		return { Kind = "pads", Rows = { row1, row2 } }
+		return { Kind = "guitar", Chords = chords, Notes = notes }
 	elseif id == "Bass" then
-		local row1, row2 = {}, {}
+		local notes = {}
 		for i, n in ipairs(BASS_HIGH) do
-			table.insert(row1, { Value = n, Label = MusicData.NoteName(n, Locale.IsFrench()), KeyCode = BASS_HIGH_KEYS[i], Color = PAD.Blue })
+			table.insert(notes, { Value = n, Label = MusicData.NoteName(n, fr), KeyCode = BASS_HIGH_KEYS[i], String = 1, Fret = n - 43, Color = Color3.fromRGB(110, 160, 255) })
 		end
 		for i, n in ipairs(BASS_LOW) do
-			table.insert(row2, { Value = n, Label = MusicData.NoteName(n, Locale.IsFrench()), KeyCode = BASS_LOW_KEYS[i], Color = PAD.Lilac })
+			table.insert(notes, { Value = n, Label = MusicData.NoteName(n, fr), KeyCode = BASS_LOW_KEYS[i], String = 3, Fret = n - 33, Color = Color3.fromRGB(160, 110, 255) })
 		end
-		return { Kind = "pads", Rows = { row1, row2 } }
+		return { Kind = "bass", Notes = notes }
 	else -- DJ
-		return {
-			Kind = "pads",
-			Rows = {
-				{ { Value = 1, Label = "🥁 " .. T("Beat"), KeyCode = K.Q, Color = PAD.Blue }, { Value = 2, Label = "🏠 " .. T("House"), KeyCode = K.W, Color = PAD.Blue }, { Value = 3, Label = "🎤 " .. T("Hip-hop"), KeyCode = K.E, Color = PAD.Blue }, { Value = 4, Label = "☕ " .. T("Lo-fi"), KeyCode = K.R, Color = PAD.Blue } },
-				{ { Value = 5, Label = "💿 " .. T("Scratch"), KeyCode = K.A, Color = PAD.Pink }, { Value = 6, Label = "📯 " .. T("Horn"), KeyCode = K.S, Color = PAD.Gold }, { Value = 7, Label = "🌊 " .. T("Riser"), KeyCode = K.D, Color = PAD.Mint }, { Value = 8, Label = "💥 " .. T("Drop"), KeyCode = K.F, Color = PAD.Red } },
-			},
-		}
+		local loops, fx = {}, {}
+		for i = 1, MusicData.DJ_LOOPS do
+			table.insert(loops, { Value = i, Label = T(MusicData.LOOP_NAMES[i]), Icon = MusicData.LOOP_ICONS[i], KeyCode = DJ_LOOP_KEYS[i], Color = Color3.fromHSV((i - 1) / 8, 0.65, 0.9) })
+		end
+		local F = MusicData.DJ_FX
+		table.insert(fx, { Value = F.Scratch, Label = "💿 " .. T("Scratch"), KeyCode = K.A, Color = PAD.Pink })
+		table.insert(fx, { Value = F.Horn, Label = "📯 " .. T("Horn"), KeyCode = K.S, Color = PAD.Gold })
+		table.insert(fx, { Value = F.Riser, Label = "🌊 " .. T("Riser"), KeyCode = K.D, Color = PAD.Mint })
+		table.insert(fx, { Value = F.Drop, Label = "💥 " .. T("Drop"), KeyCode = K.F, Color = PAD.Red })
+		return { Kind = "dj", Loops = loops, Fx = fx }
 	end
 end
 
@@ -420,14 +437,19 @@ local function keyMap(layout: any): { [Enum.KeyCode]: number }
 			map[kc] = n
 		end
 	else
-		for _, row in ipairs(layout.Rows) do
-			for _, pad in ipairs(row) do
+		local function add(list: any)
+			for _, pad in ipairs(list or {}) do
 				if pad.KeyCode then
 					map[pad.KeyCode] = pad.Value
 				end
 			end
 		end
-		if state and state.Playing == "Drums" then
+		add(layout.Pads)
+		add(layout.Chords)
+		add(layout.Notes)
+		add(layout.Loops)
+		add(layout.Fx)
+		if layout.Kind == "drums" then
 			map[K.C] = MusicData.DRUM.Kick
 			map[K.V] = MusicData.DRUM.Kick
 		end
@@ -525,6 +547,7 @@ local function refreshOctave()
 	end
 	local low = s.Octave[id] or DEFAULT_LOW[id]
 	s.UI:SetOctaveText(MusicData.NoteName(low, Locale.IsFrench()) .. " – " .. MusicData.NoteName(low + KEY_SPAN - 1, Locale.IsFrench()))
+	s.UI:SetOctaveRange(low, KEY_SPAN)
 end
 
 local exitLocal: (sendLeave: boolean) -> ()
@@ -637,12 +660,41 @@ exitLocal = function(sendLeave: boolean)
 	end
 end
 
+-- État de la discothèque (attributs du dossier, partagés par le serveur)
+local function pickerState(): any
+	local s = state
+	local folder = s and s.Folder
+	if not folder then
+		return {}
+	end
+	local queue = {}
+	local raw = folder:GetAttribute("Queue")
+	if type(raw) == "string" then
+		for id in string.gmatch(raw, "[^,]+") do
+			if MusicData.SONG_INDEX[id] then
+				table.insert(queue, id)
+			end
+		end
+	end
+	local id = folder:GetAttribute("SongId")
+	local start = folder:GetAttribute("SongStart")
+	local mode = folder:GetAttribute("SongMode")
+	local st: any = { SongId = (type(id) == "string" and id ~= "") and id or nil, Radio = folder:GetAttribute("Radio"), Chain = s.Chain or mode == "all", Queue = queue }
+	if st.SongId and type(start) == "number" then
+		local total = MusicData.Duration(st.SongId)
+		local elapsed = math.clamp(serverNow() - start, 0, total)
+		st.Elapsed, st.Total = elapsed, total
+		st.Progress = total > 0 and elapsed / total or 0
+	end
+	return st
+end
+
 local function openPicker()
 	local s = state
 	if not s or not s.Folder then
 		return
 	end
-	s.UI:OpenPicker({ SongId = s.Folder:GetAttribute("SongId"), Radio = s.Folder:GetAttribute("Radio"), Chain = s.Chain })
+	s.UI:OpenPicker(pickerState())
 end
 
 ----------------------------------------------------------------------
@@ -724,11 +776,11 @@ local function stepSong(s: any, now: number)
 		if at >= now - 0.25 then
 			local delay = math.max(0, at - now)
 			if delay < 0.01 then
-				hit(ev.I, ev.N, ev.V)
+				hit(ev.I, ev.N, ev.V, nil, ev.D)
 			else
 				task.delay(delay, function()
 					if state == s then
-						hit(ev.I, ev.N, ev.V)
+						hit(ev.I, ev.N, ev.V, nil, ev.D)
 					end
 				end)
 			end
@@ -768,7 +820,7 @@ local function stepLoop(s: any, now: number)
 			if at > cursor and at <= horizon then
 				task.delay(math.max(0, at - now), function()
 					if state == s then
-						hit(ev.I, ev.N, ev.V, "DJ")
+						hit(ev.I, ev.N, ev.V, "DJ", ev.D)
 					end
 				end)
 			end
@@ -897,7 +949,7 @@ local function stepVisuals(s: any, dt: number, now: number)
 		local age = hs and (clock - hs.KickT) or 99
 		local swing = age < 0.25 and math.sin(math.clamp(age / 0.25, 0, 1) * math.pi) or 0
 		local strike = age < 0.25 and (1 - age / 0.25) or 0
-		beater.Part.CFrame = beater.Pivot * CFrame.Angles(math.rad(-25 + 30 * strike - 5 * swing), 0, 0) * CFrame.new(0, 0.4, 0)
+		beater.Part.CFrame = beater.Pivot * CFrame.Angles(math.rad(-25 + 30 * strike - 5 * swing), 0, 0) * CFrame.new(0, 0.4 * MusicData.KIT_SCALE, 0)
 	end
 	-- platines du DJ
 	local dj = H.DJ
@@ -975,6 +1027,54 @@ local function stepVisuals(s: any, dt: number, now: number)
 		end
 		screen.Progress.Size = UDim2.fromScale(0.88 * progress, 0.02)
 		screen.Grad.Rotation = (screen.Grad.Rotation + dt * (musicActive(s) and 12 or 3)) % 360
+	end
+	-- (v11) écrans latéraux : même titre, égaliseur
+	local energyAvg = 0
+	for i = 1, 24 do
+		energyAvg += s.Energy[i] or 0
+	end
+	energyAvg = math.clamp(energyAvg / 10, 0, 1)
+	for _, side in ipairs(H.SideScreens or {}) do
+		local song = s.Song
+		local icon = song and song.Data.Icon or (s.Radio and "📻" or "🎵")
+		local title = song and T(song.Data.Name) or "DOPAMINE LIVE"
+		if side.Icon.Text ~= icon then
+			side.Icon.Text = icon
+		end
+		if side.Title.Text ~= title then
+			side.Title.Text = title
+		end
+		for i, b in ipairs(side.Bars) do
+			local e = s.Energy[math.clamp(i * 3, 1, 24)] or 0
+			b.Size = UDim2.fromScale(1 / #side.Bars - 0.02, 0.08 + 0.92 * e)
+		end
+	end
+	-- (v11) piste de danse LED : vague de couleurs au rythme (15 fois / s)
+	local floor = H.DanceFloor
+	if floor then
+		s.FloorT = (s.FloorT or 0) + dt
+		if s.FloorT >= 1 / 15 then
+			s.FloorT = 0
+			local active = musicActive(s)
+			local beat = s.Song and s.Song.Data.BeatSec or 0.5
+			local phase = clock / beat
+			for _, tile in ipairs(floor) do
+				local p = tile.Part
+				if p.Parent then
+					local c: Color3
+					if active then
+						local d = math.sqrt((tile.U - 0.5) ^ 2 + (tile.V - 0.5) ^ 2)
+						local wave = 0.5 + 0.5 * math.cos((d * 6 - phase) * math.pi)
+						local hue = (clock * 0.05 + tile.U * 0.35 + tile.V * 0.2 + ((tile.I + tile.J) % 2) * 0.08) % 1
+						c = Color3.fromHSV(hue, 0.75, 0.25 + 0.6 * wave * (0.45 + 0.55 * energyAvg))
+					else
+						local breathe = 0.5 + 0.5 * math.sin(clock * 0.8 + tile.U * 3)
+						c = Color3.fromHSV(0.8, 0.45, 0.16 + 0.08 * breathe)
+					end
+					p.Color = c
+				end
+			end
+		end
 	end
 	for i = 1, 24 do
 		s.Energy[i] = (s.Energy[i] or 0) * math.exp(-dt * 5)
@@ -1062,8 +1162,9 @@ local function poseSpec(s: any, id: string, rig: any, clock: number): any
 		spec.Lean = id == "Piano" and 12 or 8
 		if id == "Piano" then
 			local pf = H.Frames.Piano
-			spec.Seat = s.StageCF.Y + MusicData.DECK_TOP + 1.46
-			spec.Feet = { R = (pf * CFrame.new(0.3, 0.3, -0.25)).Position, L = (pf * CFrame.new(-0.35, 0.3, -0.1)).Position }
+			local k = MusicData.PIANO_SCALE
+			spec.Seat = s.StageCF.Y + MusicData.DECK_TOP + MusicData.PIANO_SEAT
+			spec.Feet = { R = (pf * CFrame.new(0.3 * k, 0.3, -0.25 * k)).Position, L = (pf * CFrame.new(-0.35 * k, 0.3, -0.1 * k)).Position }
 		end
 	elseif id == "Xylophone" then
 		local keys = H.Keys.Xylophone
@@ -1080,10 +1181,15 @@ local function poseSpec(s: any, id: string, rig: any, clock: number): any
 		local hover = -toward * 0.85 + UP * 0.25
 		spec.L = handPoint(hs.L, hover, UP * 0.55, clock, snare and snare.Hit or spot.Position)
 		spec.R = handPoint(hs.R, hover, UP * 0.55, clock, hat and hat.Hit or spot.Position)
-		spec.Seat = s.StageCF.Y + MusicData.DECK_TOP + MusicData.RISERS.Drums.H + 1.5
+		spec.Seat = s.StageCF.Y + MusicData.DECK_TOP + MusicData.RISERS.Drums.H + MusicData.THRONE_SEAT
 		local kickAge = clock - hs.KickT
 		local lift = kickAge < 0.2 and 0.28 * math.sin(math.clamp(kickAge / 0.2, 0, 1) * math.pi) or 0
-		spec.Feet = { R = (df * CFrame.new(0.25, 0.32 + lift, 5.9)).Position, L = (df * CFrame.new(-0.9, 0.32, 5.85)).Position }
+		local pivot = H.KitPivot or df
+		local kit = H.KitPivot and MusicData.KIT_SCALE or 1
+		-- (pédales agrandies avec le kit ; pieds posés à plat sur le praticable)
+		local rf = MusicData.ScalePoint(pivot, kit, (df * CFrame.new(0.25, 0.32, 5.9)).Position)
+		local lf = MusicData.ScalePoint(pivot, kit, (df * CFrame.new(-0.9, 0.32, 5.85)).Position)
+		spec.Feet = { R = Vector3.new(rf.X, df.Y + 0.32 + lift, rf.Z), L = Vector3.new(lf.X, df.Y + 0.32, lf.Z) }
 		spec.Lean = 8
 	elseif id == "Guitar" or id == "Bass" then
 		local inst = id == "Guitar" and H.Guitar or H.Bass
@@ -1393,6 +1499,17 @@ function MusicStage.Start(options: any?)
 		end,
 		Chain = function(on: boolean)
 			s.Chain = on
+			-- (le morceau en cours enchaîne aussi : mode "all" côté serveur)
+			fire("chain", on)
+		end,
+		Queue = function(id: string)
+			fire("queue", "add", id)
+		end,
+		Unqueue = function(index: number)
+			fire("queue", "remove", index)
+		end,
+		Skip = function()
+			fire("skip")
 		end,
 		Octave = function(delta: number)
 			local id = s.Playing
@@ -1519,7 +1636,14 @@ function MusicStage.Step(dt: number)
 	end
 	-- pastille "en cours" (près de la scène)
 	if s.UI then
-		s.UI:Step()
+		s.UI:Step(dt)
+		if s.UI:IsPickerOpen() then
+			s.PickerT = (s.PickerT or 0) + dt
+			if s.PickerT > 0.25 then
+				s.PickerT = 0
+				s.UI:UpdatePicker(pickerState())
+			end
+		end
 		local song = s.Song
 		if dist < 80 and song then
 			local elapsed = math.max(0, now - song.Start)

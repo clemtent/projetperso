@@ -185,6 +185,26 @@ local function label(parent: Instance, name: string, text: string, pos: UDim2, s
 	return l
 end
 
+-- (v11) Agrandit un groupe autour d'un pivot (piano x1,3, batterie x1,25 :
+-- échelle Roblox) : positions ET tailles multipliées par k
+local function scaleGroup(group: Instance?, pivot: CFrame, k: number)
+	if not group then
+		return
+	end
+	for _, d in ipairs(group:GetDescendants()) do
+		if d:IsA("BasePart") then
+			local rel = pivot:ToObjectSpace(d.CFrame)
+			d.Size = d.Size * k
+			d.CFrame = pivot * CFrame.new(rel.Position * k) * (rel - rel.Position)
+		end
+	end
+end
+
+local function scaleCF(pivot: CFrame, k: number, cf: CFrame): CFrame
+	local rel = pivot:ToObjectSpace(cf)
+	return pivot * CFrame.new(rel.Position * k) * (rel - rel.Position)
+end
+
 ----------------------------------------------------------------------
 -- Portique (treillis aluminium)
 ----------------------------------------------------------------------
@@ -281,17 +301,17 @@ step("Deck", function(self)
 		end
 	end
 	-- câbles noirs au sol (des instruments vers le boîtier de scène au fond)
-	local snake = Vector3.new(-9.2, TOP, 7.0)
+	local snake = Vector3.new(-9.2, TOP, 8.4)
 	box(self, "SnakeBox", Vector3.new(0.9, 0.5, 0.6), CFrame.new(snake.X, TOP + 0.22, snake.Z), BLACK, M.Metal)
 	if self.Detail ~= "Low" then
 		for _, p in ipairs({ Vector3.new(-1.6, TOP, -2.2), Vector3.new(4.0, TOP, -2.0), Vector3.new(-0.2, TOP, -2.0), Vector3.new(4.3, TOP, 2.6), Vector3.new(-2.9, TOP, -3.0) }) do
-			local mid = Vector3.new(p.X, TOP, 6.6)
+			local mid = Vector3.new(p.X, TOP, 8.0)
 			rodW(self, "Cable", self.CF:PointToWorldSpace(p + Vector3.new(0, 0.02, 0)), self.CF:PointToWorldSpace(mid + Vector3.new(0, 0.02, 0)), 0.07, BLACK, M.Rubber)
 			rodW(self, "Cable", self.CF:PointToWorldSpace(mid + Vector3.new(0, 0.02, 0)), self.CF:PointToWorldSpace(snake + Vector3.new(0.3, 0.02, -0.2)), 0.07, BLACK, M.Rubber)
 		end
 	end
 	-- petites lampes de rampe (lueur la nuit)
-	for _, xf in ipairs({ -9.4, -6.2, 6.2, 9.4 }) do
+	for _, xf in ipairs({ D.X0 + 1, D.X0 + 4.6, -6.6, 6.6, D.X1 - 4.6, D.X1 - 1 }) do
 		do
 			local x = xf
 			box(self, "FootlightBody", Vector3.new(0.5, 0.26, 0.34), CFrame.new(x, TOP + 0.13, D.Z0 + 0.4) * CFrame.Angles(rad(20), 0, 0), BLACK, M.Metal)
@@ -327,17 +347,21 @@ step("Grid", function(self)
 	truss(self, Vector3.new(T[1].X, y, T[1].Z + half), Vector3.new(T[3].X, y, T[3].Z - half), w, faces, s)
 	truss(self, Vector3.new(T[2].X, y, T[2].Z + half), Vector3.new(T[4].X, y, T[4].Z - half), w, faces, s)
 	-- toit à deux pans (membrane grise), bordures
-	local roofY = MusicData.TRUSS_H + 0.95
-	local rise = 1.45
+	-- (v11 : dimensions tirées des tours)
+	local roofY = MusicData.TRUSS_H + 1.0
+	local rise = 1.9
 	local roofC = Color3.fromRGB(64, 64, 72)
-	newPart(self, "RoofFront", Vector3.new(24, rise, 6), self.CF * CFrame.new(0, roofY + rise / 2, -1), roofC, M.Fabric, nil, "WedgePart")
-	newPart(self, "RoofBack", Vector3.new(24, rise, 6), self.CF * CFrame.new(0, roofY + rise / 2, 5) * CFrame.Angles(0, math.pi, 0), roofC, M.Fabric, nil, "WedgePart")
-	box(self, "RoofRidge", Vector3.new(24.2, 0.16, 0.36), CFrame.new(0, roofY + rise + 0.02, 2), Color3.fromRGB(210, 210, 216), M.Metal)
-	box(self, "FasciaFront", Vector3.new(24.2, 0.3, 0.12), CFrame.new(0, roofY + 0.1, -4.07), PINK, M.SmoothPlastic)
-	box(self, "FasciaBack", Vector3.new(24.2, 0.3, 0.12), CFrame.new(0, roofY + 0.1, 8.07), PINK, M.SmoothPlastic)
-	box(self, "RoofUnder", Vector3.new(23.6, 0.1, 11.6), CFrame.new(0, roofY - 0.04, 2), Color3.fromRGB(34, 34, 40), M.Fabric)
+	local roofW = (T[2].X - T[1].X) + 1.8
+	local z0, z1 = T[1].Z - 0.9, T[3].Z + 0.9
+	local zm, half = (z0 + z1) / 2, (z1 - z0) / 2
+	newPart(self, "RoofFront", Vector3.new(roofW, rise, half), self.CF * CFrame.new(0, roofY + rise / 2, z0 + half / 2), roofC, M.Fabric, nil, "WedgePart")
+	newPart(self, "RoofBack", Vector3.new(roofW, rise, half), self.CF * CFrame.new(0, roofY + rise / 2, z1 - half / 2) * CFrame.Angles(0, math.pi, 0), roofC, M.Fabric, nil, "WedgePart")
+	box(self, "RoofRidge", Vector3.new(roofW + 0.2, 0.16, 0.36), CFrame.new(0, roofY + rise + 0.02, zm), Color3.fromRGB(210, 210, 216), M.Metal)
+	box(self, "FasciaFront", Vector3.new(roofW + 0.2, 0.36, 0.12), CFrame.new(0, roofY + 0.1, z0 - 0.07), PINK, M.SmoothPlastic)
+	box(self, "FasciaBack", Vector3.new(roofW + 0.2, 0.36, 0.12), CFrame.new(0, roofY + 0.1, z1 + 0.07), PINK, M.SmoothPlastic)
+	box(self, "RoofUnder", Vector3.new(roofW - 0.4, 0.1, z1 - z0 - 0.4), CFrame.new(0, roofY - 0.04, zm), Color3.fromRGB(34, 34, 40), M.Fabric)
 	-- bandeau "DOPAMINE LIVE" sous le grill avant
-	local banner = box(self, "Banner", Vector3.new(15, 1.3, 0.08), CFrame.new(0, MusicData.TRUSS_H - 0.72, T[1].Z - 0.5), BLACK, M.Fabric)
+	local banner = box(self, "Banner", Vector3.new(16, 1.7, 0.08), CFrame.new(0, MusicData.TRUSS_H - 0.92, T[1].Z - 0.6), BLACK, M.Fabric)
 	local g = surface(banner, Enum.NormalId.Front, 40, 0.4)
 	local bg = Instance.new("Frame")
 	bg.Size = UDim2.fromScale(1, 1)
@@ -348,12 +372,12 @@ step("Grid", function(self)
 	grad.Color = ColorSequence.new(Color3.fromRGB(60, 20, 70), Color3.fromRGB(20, 30, 70))
 	grad.Parent = bg
 	label(bg, "Title", "🎵 DOPAMINE LIVE 🎵", UDim2.fromScale(0.05, 0.1), UDim2.fromScale(0.9, 0.8), Color3.fromRGB(255, 220, 240))
-	for _, x in ipairs({ -6.5, 6.5 }) do
-		rodW(self, "BannerTie", self.CF:PointToWorldSpace(Vector3.new(x, MusicData.TRUSS_H - 0.08, T[1].Z - 0.5)), self.CF:PointToWorldSpace(Vector3.new(x, MusicData.TRUSS_H + 0.05, T[1].Z)), 0.05, BLACK)
+	for _, x in ipairs({ -7, 7 }) do
+		rodW(self, "BannerTie", self.CF:PointToWorldSpace(Vector3.new(x, MusicData.TRUSS_H - 0.08, T[1].Z - 0.6)), self.CF:PointToWorldSpace(Vector3.new(x, MusicData.TRUSS_H + 0.05, T[1].Z)), 0.05, BLACK)
 	end
 	-- bannières verticales sur les tours de devant
 	for i, p in ipairs({ T[1], T[2] }) do
-		local side = box(self, "TowerBanner", Vector3.new(1.3, 5.2, 0.06), CFrame.new(p.X, 8.2, p.Z - 0.55), HOT, M.Fabric)
+		local side = box(self, "TowerBanner", Vector3.new(1.5, 6.4, 0.06), CFrame.new(p.X, 9.4, p.Z - 0.66), HOT, M.Fabric)
 		local sg = surface(side, Enum.NormalId.Front, 40, 0.5)
 		local fr = Instance.new("Frame")
 		fr.Size = UDim2.fromScale(1, 1)
@@ -367,7 +391,7 @@ end)
 -- 4. Rideau de fond plissé + écran LED
 step("Backdrop", function(self)
 	local h = MusicData.TRUSS_H - 0.2
-	local z = 7.85
+	local z = D.Z1 + 0.25
 	local n = self.Detail == "Low" and 8 or 17
 	local w = (D.X1 - D.X0) / n
 	for i = 0, n - 1 do
@@ -375,12 +399,13 @@ step("Backdrop", function(self)
 		local front = (i % 2 == 0) and z or z - 0.05
 		box(self, "Drape", Vector3.new(w + 0.02, h, depth), CFrame.new(D.X0 + (i + 0.5) * w, 0.02 + h / 2, front + depth / 2), (i % 2 == 0) and FABRIC or FABRIC2, M.Fabric)
 	end
-	-- écran LED 16:9 (12,8 x 7,2) dans un cadre
-	local sy = 6.9
-	box(self, "ScreenFrame", Vector3.new(13.3, 7.7, 0.3), CFrame.new(0, sy, 7.72), BLACK, M.Metal)
-	local panel = box(self, "Screen", Vector3.new(12.8, 7.2, 0.05), CFrame.new(0, sy, 7.55), Color3.fromRGB(6, 6, 10), M.Glass)
-	for _, x in ipairs({ -5.6, 5.6 }) do
-		rodW(self, "ScreenHang", self.CF:PointToWorldSpace(Vector3.new(x, sy + 3.85, 7.72)), self.CF:PointToWorldSpace(Vector3.new(x, MusicData.TRUSS_H + 0.1, 7.3)), 0.06, STEEL, M.Metal)
+	-- écran LED 16:9 (16 x 9) dans un cadre
+	local sy = 8.6
+	local zf = D.Z1 + 0.12
+	box(self, "ScreenFrame", Vector3.new(16.5, 9.5, 0.3), CFrame.new(0, sy, zf), BLACK, M.Metal)
+	local panel = box(self, "Screen", Vector3.new(16, 9, 0.05), CFrame.new(0, sy, zf - 0.17), Color3.fromRGB(6, 6, 10), M.Glass)
+	for _, x in ipairs({ -7, 7 }) do
+		rodW(self, "ScreenHang", self.CF:PointToWorldSpace(Vector3.new(x, sy + 4.75, zf)), self.CF:PointToWorldSpace(Vector3.new(x, MusicData.TRUSS_H + 0.1, MusicData.TRUSS_TOWERS[3].Z)), 0.06, STEEL, M.Metal)
 	end
 	local g = surface(panel, Enum.NormalId.Front, 40, 0)
 	local bg = Instance.new("Frame")
@@ -468,7 +493,7 @@ step("PA", function(self)
 		logo.Name = "Logo"
 	end
 	-- line arrays accrochés au grill avant (courbe en J)
-	for _, x in ipairs({ -9.6, 9.6 }) do
+	for _, x in ipairs({ -13.6, 13.6 }) do
 		local zc = MusicData.TRUSS_TOWERS[1].Z
 		local hang = self.CF * CFrame.new(x, MusicData.TRUSS_H - 0.35, zc - 0.15)
 		newPart(self, "ArrayFrame", Vector3.new(1.9, 0.14, 1.1), hang, STEEL, M.Metal)
@@ -476,8 +501,8 @@ step("PA", function(self)
 			rodW(self, "ArrayChain", (hang * CFrame.new(k * 0.8, 0, 0)).Position, (self.CF * CFrame.new(x + k * 0.8, MusicData.TRUSS_H, zc)).Position, 0.05, STEEL, M.Metal)
 		end
 		local cf = hang * CFrame.new(0, -0.1, 0)
-		for k = 1, 4 do
-			local tilt = rad(2 + 3.5 * k)
+		for k = 1, 6 do
+			local tilt = rad(2 + 2.6 * k)
 			cf = cf * CFrame.Angles(tilt * 0.5, 0, 0) * CFrame.new(0, -0.3, 0)
 			local cab = cf * CFrame.new(0, 0, 0.02)
 			newPart(self, "ArrayBox", Vector3.new(1.9, 0.55, 1.05), cab, BLACK, M.Fabric)
@@ -486,7 +511,7 @@ step("PA", function(self)
 		end
 	end
 	-- émetteur de la radio (centre, en hauteur)
-	local radio = newPart(self, "RadioEmitter", Vector3.new(0.4, 0.4, 0.4), self.CF * CFrame.new(0, 9, -3.4), WHITE)
+	local radio = newPart(self, "RadioEmitter", Vector3.new(0.4, 0.4, 0.4), self.CF * CFrame.new(0, 9, -4.4), WHITE)
 	radio.Transparency = 1
 	self.H.Radio = radio
 end)
@@ -496,7 +521,7 @@ step("Lights", function(self)
 	local T = MusicData.TRUSS_TOWERS
 	local pars = {}
 	local colors = { PINK, CYAN, Color3.fromRGB(255, 214, 120), LILAC, Color3.fromRGB(255, 214, 120), CYAN }
-	for i, x in ipairs({ -8, -5, -2, 2, 5, 8 }) do
+	for i, x in ipairs({ -11, -6.6, -2.2, 2.2, 6.6, 11 }) do
 		local clampCF = self.CF * CFrame.new(x, MusicData.TRUSS_H - 0.08, T[1].Z)
 		newPart(self, "ParClamp", Vector3.new(0.18, 0.3, 0.3), clampCF, STEEL, M.Metal)
 		local aim = clampCF * CFrame.new(0, -0.55, 0) * CFrame.Angles(rad(-35), 0, 0)
@@ -508,7 +533,7 @@ step("Lights", function(self)
 	end
 	self.H.Pars = pars
 	local heads = {}
-	for i, x in ipairs({ -7.5, -2.5, 2.5, 7.5 }) do
+	for i, x in ipairs({ -10.5, -3.5, 3.5, 10.5 }) do
 		local baseCF = self.CF * CFrame.new(x, MusicData.TRUSS_H - 0.1, T[3].Z - 0.2)
 		newPart(self, "HeadBase", Vector3.new(0.7, 0.3, 0.7), baseCF, BLACK, M.Metal)
 		local yoke = newPart(self, "HeadYoke", Vector3.new(0.78, 0.1, 0.24), baseCF * CFrame.new(0, -0.22, 0), BLACK, M.Metal)
@@ -570,7 +595,7 @@ end
 step("Monitors", function(self)
 	for _, x in ipairs({ -2.9, 1.3, 8.0 }) do
 		-- retour "wedge" : la pente regarde les musiciens (+Z)
-		local cf = self.CF * CFrame.new(x, TOP + 0.4, -3.1) * CFrame.Angles(0, math.pi, 0)
+		local cf = self.CF * CFrame.new(x, TOP + 0.4, -3.6) * CFrame.Angles(0, math.pi, 0)
 		newPart(self, "Wedge", Vector3.new(1.4, 0.8, 0.8), cf, BLACK, M.Fabric, nil, "WedgePart")
 		newPart(self, "WedgeGrill", Vector3.new(1.2, 0.04, 0.72), cf * CFrame.new(0, 0.025, -0.025) * CFrame.Angles(-math.atan2(0.8, 0.8), 0, 0), Color3.fromRGB(44, 44, 50), M.DiamondPlate)
 	end
@@ -698,9 +723,8 @@ end
 step("PianoCase", function(self)
 	-- repère du piano : origine au sol sous le bord des touches, -Z = vers la
 	-- queue (le pianiste regarde -Z), +X = aigus (vers le public)
-	local st = MusicData.STATIONS.Piano
-	local spot = st.Spot.Position
-	local pf = self.CF * CFrame.new(spot.X - 1.2, TOP, spot.Z) * CFrame.Angles(0, rad(90), 0)
+	local pfp = MusicData.PIANO_FRAME
+	local pf = self.CF * CFrame.new(pfp.X, TOP, pfp.Z) * CFrame.Angles(0, rad(90), 0)
 	self.H.Frames.Piano = pf
 	local refl = self.Detail == "High" and 0.12 or 0.06
 	-- éclisse (bord vertical de la caisse)
@@ -838,6 +862,14 @@ step("PianoKeys", function(self)
 	local block = newPart(self, "Block", Vector3.new(4.4, 1.3, 5.0), pf * CFrame.new(0, 2.5, -3.1), WHITE)
 	block.Transparency = 1
 	block.CanCollide = true
+	-- (v11) piano à l'échelle Roblox : x1,3 autour du bord du clavier
+	local k = MusicData.PIANO_SCALE
+	scaleGroup(self.Model:FindFirstChild("PianoCase"), pf, k)
+	scaleGroup(self.Group, pf, k)
+	for _, key in pairs(keys) do
+		key.CF = key.Part.CFrame
+		key.Top = MusicData.ScalePoint(pf, k, key.Top)
+	end
 end)
 
 ----------------------------------------------------------------------
@@ -926,7 +958,6 @@ step("Drums", function(self)
 	newPart(self, "KickPedal", Vector3.new(0.34, 0.06, 0.9), df * CFrame.new(0.25, 0.1, 5.85) * CFrame.Angles(rad(8), 0, 0), CHROME, M.Metal)
 	local beaterPivot = df * CFrame.new(0.25, 0.3, 5.45)
 	local beater = newPart(self, "Beater", Vector3.new(0.06, 0.8, 0.06), beaterPivot * CFrame.Angles(rad(-25), 0, 0) * CFrame.new(0, 0.4, 0), CHROME, M.Metal)
-	self.H.Beater = { Part = beater, Pivot = beaterPivot }
 	-- caisse claire (sur son pied), toms, tom basse
 	local snareC = W(-0.72, 1.72, 5.55)
 	local tiltToDrummer = (up * math.cos(rad(8)) - fwd * math.sin(rad(8))).Unit
@@ -966,14 +997,6 @@ step("Drums", function(self)
 	local rideN = (up * math.cos(rad(12)) - fwd * math.sin(rad(12))).Unit
 	local rideC = W(1.75, 3.2, 4.7)
 	pieces[MusicData.DRUM.Ride] = { Parts = cymbal(self, "Ride", rideC, rideN, 1.5, W(2.2, 0, 4.4)), Hit = rideC + df:VectorToWorldSpace(Vector3.new(-0.3, 0, 0.45)), Kind = "cymbal", Axis = rideN }
-	for _, piece in pairs(pieces) do
-		local cfs = {}
-		for i, p in ipairs(piece.Parts) do
-			cfs[i] = p.CFrame
-		end
-		piece.CFs = cfs
-		piece.Center = piece.Parts[1].Position
-	end
 	-- tabouret
 	local seatC = W(0, 1.35, 6.45)
 	newPart(self, "ThroneSeat", Vector3.new(0.3, 1.1, 1.1), CFrame.new(seatC) * df.Rotation * CFrame.Angles(0, 0, rad(90)), BLACK, M.Leather, CYL)
@@ -989,12 +1012,31 @@ step("Drums", function(self)
 		local b = a + df:VectorToWorldSpace(Vector3.new(0.9, 0, -0.4 + 0.1 * s))
 		sticks[s > 0 and "R" or "L"] = rodW(self, "Stick", a, b, 0.05, Color3.fromRGB(226, 196, 140), M.Wood)
 	end
+	-- (v11) batterie à l'échelle Roblox : x1,25 autour du centre du tapis
+	local kit = MusicData.KIT_SCALE
+	local kp = MusicData.KIT_PIVOT
+	local pivot = df * CFrame.new(kp.X, kp.Y, kp.Z)
+	scaleGroup(self.Group, pivot, kit)
+	for _, piece in pairs(pieces) do
+		piece.Hit = MusicData.ScalePoint(pivot, kit, piece.Hit)
+	end
+	beaterPivot = scaleCF(pivot, kit, beaterPivot)
+	self.H.Beater = { Part = beater, Pivot = beaterPivot }
+	self.H.KitPivot = pivot
+	for _, piece in pairs(pieces) do
+		local cfs = {}
+		for i, p in ipairs(piece.Parts) do
+			cfs[i] = p.CFrame
+		end
+		piece.CFs = cfs
+		piece.Center = piece.Parts[1].Position
+	end
 	self.H.Sticks = sticks
 	self.H.Drums = pieces
 	local emitter = newPart(self, "DrumsEmitter", Vector3.new(0.3, 0.3, 0.3), df * CFrame.new(0, 2.5, 5), WHITE)
 	emitter.Transparency = 1
 	self.H.Emitters.Drums = emitter
-	local block = newPart(self, "Block", Vector3.new(4.2, 2.6, 2.2), df * CFrame.new(0.1, 1.3, 4.5), WHITE)
+	local block = newPart(self, "Block", Vector3.new(5.2, 3.2, 2.6), df * CFrame.new(0.15, 1.6, 4.35), WHITE)
 	block.Transparency = 1
 	block.CanCollide = true
 end)
@@ -1386,6 +1428,161 @@ step("DJ", function(self)
 	local block = newPart(self, "Block", Vector3.new(4.4, 3.0, 1.3), jf * CFrame.new(0, 1.5, 0), WHITE)
 	block.Transparency = 1
 	block.CanCollide = true
+end)
+
+----------------------------------------------------------------------
+-- (v11) Ailes : écrans latéraux, nez de scène lumineux
+----------------------------------------------------------------------
+
+local function ledScreen(self: any, name: string, part: BasePart, face: Enum.NormalId, bars: number): any
+	local g = surface(part, face, 30, 0)
+	local bg = Instance.new("Frame")
+	bg.Name = "Bg"
+	bg.Size = UDim2.fromScale(1, 1)
+	bg.BackgroundColor3 = Color3.fromRGB(12, 8, 26)
+	bg.BorderSizePixel = 0
+	bg.Parent = g
+	local grad = Instance.new("UIGradient")
+	grad.Color = ColorSequence.new(Color3.fromRGB(80, 20, 90), Color3.fromRGB(10, 40, 90))
+	grad.Rotation = 90
+	grad.Parent = bg
+	local icon = label(bg, "Icon", "🎵", UDim2.fromScale(0.1, 0.08), UDim2.fromScale(0.8, 0.34), WHITE)
+	local title = label(bg, "Title", "DOPAMINE LIVE", UDim2.fromScale(0.06, 0.44), UDim2.fromScale(0.88, 0.12), WHITE)
+	local holder = Instance.new("Frame")
+	holder.BackgroundTransparency = 1
+	holder.Position = UDim2.fromScale(0.08, 0.62)
+	holder.Size = UDim2.fromScale(0.84, 0.3)
+	holder.Parent = bg
+	local list = {}
+	for i = 1, bars do
+		local b = Instance.new("Frame")
+		b.AnchorPoint = Vector2.new(0, 1)
+		b.Position = UDim2.fromScale((i - 1) / bars + 0.01, 1)
+		b.Size = UDim2.fromScale(1 / bars - 0.02, 0.1)
+		b.BorderSizePixel = 0
+		b.BackgroundColor3 = Color3.fromHSV(0.85 - 0.5 * (i - 1) / bars, 0.6, 1)
+		b.Parent = holder
+		list[i] = b
+	end
+	local _ = name
+	return { Icon = icon, Title = title, Bars = list }
+end
+
+step("Wings", function(self)
+	local T = MusicData.TRUSS_TOWERS
+	-- écrans "géants" de chaque côté (portrait), suspendus au grill avant
+	local sides = {}
+	for _, x in ipairs({ -10.3, 10.3 }) do
+		local y = 11
+		box(self, "SideScreenFrame", Vector3.new(4.4, 7.4, 0.24), CFrame.new(x, y, T[1].Z - 0.35), BLACK, M.Metal)
+		local panel = box(self, "SideScreen", Vector3.new(4, 7, 0.05), CFrame.new(x, y, T[1].Z - 0.5), Color3.fromRGB(6, 6, 10), M.Glass)
+		for _, dx in ipairs({ -1.6, 1.6 }) do
+			rodW(self, "SideScreenHang", self.CF:PointToWorldSpace(Vector3.new(x + dx, y + 3.7, T[1].Z - 0.35)), self.CF:PointToWorldSpace(Vector3.new(x + dx, MusicData.TRUSS_H, T[1].Z)), 0.05, STEEL, M.Metal)
+		end
+		table.insert(sides, ledScreen(self, "Side", panel, Enum.NormalId.Front, 8))
+	end
+	self.H.SideScreens = sides
+	-- nez de scène : bandeau lumineux sous le bord avant
+	local lip = box(self, "StageLip", Vector3.new(D.X1 - D.X0 - 0.4, 0.12, 0.05), CFrame.new(0, TOP - 0.2, D.Z0 - 0.13), PINK, M.SmoothPlastic)
+	glow(lip, PINK)
+	-- garde-corps à l'arrière et sur les côtés du plancher (on ne tombe pas)
+	if self.Detail ~= "Low" then
+		for _, x in ipairs({ D.X0 + 0.15, D.X1 - 0.15 }) do
+			for _, z in ipairs({ -3.6, 0.6, 4.8, 9.0 }) do
+				box(self, "RailPost", Vector3.new(0.14, 3.5, 0.14), CFrame.new(x, TOP + 1.75, z), STEEL, M.Metal)
+			end
+			box(self, "RailTop", Vector3.new(0.12, 0.12, 12.8), CFrame.new(x, TOP + 3.5, 2.7), ALU, M.Metal)
+			box(self, "RailMid", Vector3.new(0.08, 0.08, 12.8), CFrame.new(x, TOP + 1.8, 2.7), ALU, M.Metal)
+		end
+	end
+	-- caisses de matériel ("flight cases") en coulisses
+	for i, spec in ipairs({ { -13.2, 7.6 }, { -12.6, 5.9 }, { 12.9, 7.4 }, { 13.4, 1.0 } }) do
+		local size = i % 2 == 0 and Vector3.new(1.6, 1.2, 1.2) or Vector3.new(2.2, 1.6, 1.4)
+		box(self, "FlightCase", size, CFrame.new(spec[1], TOP + size.Y / 2, spec[2]) * CFrame.Angles(0, rad(8 * i), 0), Color3.fromRGB(30, 30, 34), M.Plastic)
+		box(self, "FlightCaseEdge", size + Vector3.new(0.06, -size.Y + 0.08, 0.06), CFrame.new(spec[1], TOP + size.Y - 0.04, spec[2]) * CFrame.Angles(0, rad(8 * i), 0), CHROME, M.Metal)
+	end
+end)
+
+----------------------------------------------------------------------
+-- (v11) La FOSSE du public : piste de danse LED, barrières, tours d'éclairage
+----------------------------------------------------------------------
+
+step("Crowd", function(self)
+	local C = MusicData.CROWD
+	local G = MusicData.GROUND
+	local tile = self.Detail == "Low" and 4 or 2
+	local nx = math.floor((C.X1 - C.X0) / tile + 0.5)
+	local nz = math.floor((C.Z1 - C.Z0) / tile + 0.5)
+	local tw = (C.X1 - C.X0) / nx
+	local td = (C.Z1 - C.Z0) / nz
+	-- cadre alu de la piste (posé sur le pavé, légèrement enfoncé)
+	local frameC = Color3.fromRGB(150, 154, 166)
+	box(self, "FloorEdge", Vector3.new(C.X1 - C.X0 + 0.6, 0.2, 0.3), CFrame.new((C.X0 + C.X1) / 2, G + 0.06, C.Z0 - 0.15), frameC, M.DiamondPlate)
+	box(self, "FloorEdge", Vector3.new(C.X1 - C.X0 + 0.6, 0.2, 0.3), CFrame.new((C.X0 + C.X1) / 2, G + 0.06, C.Z1 + 0.15), frameC, M.DiamondPlate)
+	box(self, "FloorEdge", Vector3.new(0.3, 0.2, C.Z1 - C.Z0), CFrame.new(C.X0 - 0.15, G + 0.06, (C.Z0 + C.Z1) / 2), frameC, M.DiamondPlate)
+	box(self, "FloorEdge", Vector3.new(0.3, 0.2, C.Z1 - C.Z0), CFrame.new(C.X1 + 0.15, G + 0.06, (C.Z0 + C.Z1) / 2), frameC, M.DiamondPlate)
+	local tiles = {}
+	for i = 0, nx - 1 do
+		for j = 0, nz - 1 do
+			local x = C.X0 + (i + 0.5) * tw
+			local z = C.Z0 + (j + 0.5) * td
+			local p = box(self, "DanceTile", Vector3.new(tw - 0.12, 0.14, td - 0.12), CFrame.new(x, G + 0.03, z), Color3.fromRGB(40, 30, 60), M.Glass)
+			p.Reflectance = 0.1
+			table.insert(tiles, { Part = p, I = i, J = j, U = (i + 0.5) / nx, V = (j + 0.5) / nz })
+		end
+	end
+	-- joints noirs entre les dalles
+	box(self, "FloorBase", Vector3.new(C.X1 - C.X0, 0.1, C.Z1 - C.Z0), CFrame.new((C.X0 + C.X1) / 2, G - 0.01, (C.Z0 + C.Z1) / 2), Color3.fromRGB(14, 12, 18), M.SmoothPlastic)
+	self.H.DanceFloor = tiles
+	-- barrières de sécurité devant la scène (passage libre devant les marches)
+	local bz = MusicData.DECK.Z0 - 3.4
+	for _, side in ipairs({ -1, 1 }) do
+		local xa, xb = side * (MusicData.STEPS.X + 1.4), side * (MusicData.DECK.X1 - 0.6)
+		local n = math.max(1, math.floor(math.abs(xb - xa) / 2.6 + 0.5))
+		for k = 0, n - 1 do
+			local x0 = xa + (xb - xa) * k / n
+			local x1 = xa + (xb - xa) * (k + 1) / n
+			local xm, len = (x0 + x1) / 2, math.abs(x1 - x0) - 0.1
+			local panel = box(self, "BarrierPanel", Vector3.new(len, 2.6, 0.08), CFrame.new(xm, G + 1.5, bz), Color3.fromRGB(120, 124, 136), M.DiamondPlate)
+			panel.CanCollide = true
+			box(self, "BarrierTop", Vector3.new(len + 0.06, 0.16, 0.3), CFrame.new(xm, G + 3.5 - 0.08, bz), ALU, M.Metal)
+			box(self, "BarrierFoot", Vector3.new(len, 0.1, 1.6), CFrame.new(xm, G + 0.05, bz + 0.6), STEEL, M.DiamondPlate)
+			box(self, "BarrierLeg", Vector3.new(0.12, 3.3, 0.12), CFrame.new(x0 + side * 0.05, G + 1.65, bz), ALU, M.Metal)
+		end
+	end
+	-- tours d'éclairage de la fosse (avec projecteurs tournés vers la scène)
+	local towers = {}
+	for _, x in ipairs({ C.X0 - 1.6, C.X1 + 1.6 }) do
+		local z = C.Z1 + 0.5
+		truss(self, Vector3.new(x, G + 0.1, z), Vector3.new(x, 11, z), 0.8, self.Detail == "Low" and { 1, 3 } or { 1, 2, 3, 4 }, 1.8)
+		box(self, "TowerFoot", Vector3.new(1.6, 0.12, 1.6), CFrame.new(x, G + 0.04, z), STEEL, M.DiamondPlate)
+		local aim = CFrame.lookAt(self.CF:PointToWorldSpace(Vector3.new(x, 10.6, z)), self.CF:PointToWorldSpace(Vector3.new(0, 4, 2)))
+		for k = -1, 1, 2 do
+			local can = newPart(self, "FollowSpot", Vector3.new(0.7, 0.7, 1.6), aim * CFrame.new(k * 0.5, 0, -0.4), BLACK, M.Metal)
+			local lens = newPart(self, "FollowSpotLens", Vector3.new(0.04, 0.56, 0.56), aim * CFrame.new(k * 0.5, 0, -1.22) * CFrame.Angles(0, rad(90), 0), Color3.fromRGB(255, 236, 200), M.Glass, CYL)
+			glow(lens, Color3.fromRGB(255, 236, 200))
+			table.insert(towers, can)
+		end
+		-- bannière verticale
+		local flag = box(self, "CrowdBanner", Vector3.new(1.4, 5, 0.06), CFrame.new(x, 6.2, z - 0.5), PINK, M.Fabric)
+		local sg = surface(flag, Enum.NormalId.Front, 30, 0.5)
+		local fr = Instance.new("Frame")
+		fr.Size = UDim2.fromScale(1, 1)
+		fr.BackgroundColor3 = PINK
+		fr.BorderSizePixel = 0
+		fr.Parent = sg
+		label(fr, "T", "🎤\nL\nI\nV\nE", UDim2.fromScale(0.1, 0.04), UDim2.fromScale(0.8, 0.92), WHITE)
+	end
+	-- marquage au sol "DANCE FLOOR" (devant la piste, côté fontaine)
+	local sign = box(self, "FloorSign", Vector3.new(8, 0.04, 1.4), CFrame.new(0, G + 0.005, C.Z0 - 1.2), Color3.fromRGB(30, 26, 40), M.SmoothPlastic)
+	local sg = surface(sign, Enum.NormalId.Top, 30, 0.6)
+	local fr = Instance.new("Frame")
+	fr.Size = UDim2.fromScale(1, 1)
+	fr.BackgroundColor3 = Color3.fromRGB(30, 26, 40)
+	fr.BorderSizePixel = 0
+	fr.Parent = sg
+	local l = label(fr, "T", "🪩 DANCE FLOOR 🪩", UDim2.fromScale(0.04, 0.1), UDim2.fromScale(0.92, 0.8), PINK)
+	l.Rotation = 180
 end)
 
 ----------------------------------------------------------------------

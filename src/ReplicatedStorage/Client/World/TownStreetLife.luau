@@ -39,6 +39,7 @@
 	  TownStreetLife.Debug() -> table
 ]]
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
@@ -330,26 +331,164 @@ local function buildBollards(m: Model, F: CFrame, _seed: number)
 	end
 end
 
--- Cabine téléphonique vitrée
-local function buildPhoneBooth(m: Model, F: CFrame, _seed: number)
-	local frame = rgb(60, 70, 90)
-	box(m, "BoothBase", F, -1.25, 1.25, -0.05, 0.2, -1.25, 1.25, GRAPHITE, M.Concrete)
-	for _, x in ipairs({ -1.2, 1.2 }) do
-		for _, z in ipairs({ -1.2, 1.2 }) do
-			box(m, "BoothPost", F, x - 0.1, x + 0.1, 0.15, 7.25, z - 0.1, z + 0.1, frame, M.Metal, true)
+-- Cabine téléphonique (v11, CITY11, refaite "20x") : vraie CABINE à
+-- l'échelle Roblox (porte 2,9 x 8,3 : on y entre), 4 montants laqués,
+-- vitrages à traverses, soubassements pleins, toit débordant avec CAISSON
+-- LUMINEUX "TÉLÉPHONE" sur les 4 faces (verre "NightGlow" : allumé la
+-- nuit), plafonnier, sol en caoutchouc ; au fond : publiphone (boîtier
+-- inox, écran, clavier, fente à carte, combiné sur son crochet et cordon
+-- spiralé), tablette et ANNUAIRE sur sa chaîne ; affiche sur le côté ;
+-- PORTE vitrée à charnière (poignée-barre) qui S'OUVRE quand l'avatar
+-- approche et se referme après. Avant (porte) = -Z local ; centrée 0,4
+-- vers l'arrière du trottoir (côté pelouse).
+local BOOTH_W, BOOTH_H = 3.6, 9.3
+local function buildPhoneBooth(m: Model, F0: CFrame, seed: number)
+	local F = F0 * CFrame.new(0, 0, 0.4)
+	local hw = BOOTH_W / 2
+	local lacquer = ({ rgb(196, 36, 44), rgb(34, 66, 120), rgb(36, 92, 74) })[seed % 3 + 1]
+	local dark = lacquer:Lerp(INK, 0.45)
+	local steel = rgb(196, 200, 206)
+	-- socle + sol caoutchouc
+	box(m, "BoothPlinth", F, -hw - 0.15, hw + 0.15, -0.05, 0.22, -hw - 0.15, hw + 0.15, rgb(150, 148, 144), M.Concrete, true)
+	box(m, "BoothFloor", F, -hw + 0.2, hw - 0.2, 0.2, 0.27, -hw + 0.2, hw - 0.2, rgb(48, 50, 56), M.Rubber)
+	-- montants d'angle
+	for _, x in ipairs({ -hw + 0.13, hw - 0.13 }) do
+		for _, z in ipairs({ -hw + 0.13, hw - 0.13 }) do
+			box(m, "BoothPost", F, x - 0.13, x + 0.13, 0.22, BOOTH_H - 0.8, z - 0.13, z + 0.13, lacquer, M.SmoothPlastic, true)
 		end
 	end
-	box(m, "BoothRoof", F, -1.4, 1.4, 7.2, 7.6, -1.4, 1.4, frame, M.Metal)
-	local sign = box(m, "BoothSign", F, -1.05, 1.05, 6.6, 7.0, -1.36, -1.26, WHITE, M.SmoothPlastic)
-	surfaceText(sign, Enum.NormalId.Front, "📞 " .. Locale.T("Phone"), rgb(40, 70, 150), WHITE, nil, 60)
-	for _, sx in ipairs({ -1, 1 }) do
-		local g = box(m, "BoothGlass", F, sx * 1.2 - 0.05, sx * 1.2 + 0.05, 0.9, 6.5, -1.05, 1.05, GLASS, M.Glass, true)
-		g.Transparency = 0.55
+	-- trois côtés : soubassement plein, vitrage, traverses
+	local sides = {
+		{ "Back", CFrame.identity },
+		{ "Left", CFrame.Angles(0, math.pi / 2, 0) },
+		{ "Right", CFrame.Angles(0, -math.pi / 2, 0) },
+	}
+	for i, sd in ipairs(sides) do
+		-- repère du côté : face extérieure vers +Z local (le fond est à +Z)
+		local S = F * (sd[2] :: CFrame)
+		local z0, z1 = hw - 0.2, hw - 0.08
+		box(m, "BoothPanel", S, -hw + 0.26, hw - 0.26, 0.22, 1.5, z0 - 0.02, z1 + 0.02, dark, M.SmoothPlastic, true)
+		local g = box(m, "BoothGlass", S, -hw + 0.26, hw - 0.26, 1.5, BOOTH_H - 0.8, z0, z1, GLASS, M.Glass, true)
+		g.Transparency = 0.6
+		g.Reflectance = 0.15
+		for _, y in ipairs({ 1.5, 3.4, 6.6 }) do
+			box(m, "BoothRail", S, -hw + 0.26, hw - 0.26, y - 0.07, y + 0.07, z0 - 0.04, z1 + 0.04, lacquer, M.SmoothPlastic)
+		end
+		if i == 2 then
+			-- affiche dans le soubassement gauche (côté rue)
+			local ad = box(m, "BoothAd", S, -hw + 0.5, hw - 0.5, 0.35, 1.38, z1 + 0.025, z1 + 0.04, WHITE, M.SmoothPlastic)
+			surfaceText(ad, Enum.NormalId.Back, "📱 " .. Locale.T("Call a friend!"), lacquer, WHITE, Enum.Font.FredokaOne, 40)
+		end
 	end
-	local back = box(m, "BoothGlass", F, -1.05, 1.05, 0.9, 6.5, 1.15, 1.25, GLASS, M.Glass, true)
-	back.Transparency = 0.55
-	box(m, "Phone", F, -0.45, 0.45, 3.4, 4.8, 0.85, 1.12, GRAPHITE, M.Metal)
-	box(m, "PhoneHandset", F, -0.4, -0.15, 3.9, 4.6, 0.75, 0.85, INK, M.SmoothPlastic)
+	-- toit : chapeau débordant + caisson lumineux "TÉLÉPHONE"
+	box(m, "BoothHeader", F, -hw - 0.02, hw + 0.02, BOOTH_H - 0.8, BOOTH_H - 0.05, -hw - 0.02, hw + 0.02, lacquer, M.SmoothPlastic)
+	local caption = "📞 " .. string.upper(Locale.T("Telephone"))
+	for k = 0, 3 do
+		local R = F * CFrame.Angles(0, k * math.pi / 2, 0)
+		local sign = glow(box(m, "BoothSign", R, -hw + 0.3, hw - 0.3, BOOTH_H - 0.68, BOOTH_H - 0.17, -hw - 0.09, -hw - 0.03, rgb(250, 248, 236), M.SmoothPlastic))
+		surfaceText(sign, Enum.NormalId.Front, caption, dark, rgb(250, 248, 236), Enum.Font.GothamBlack, 80)
+	end
+	box(m, "BoothRoof", F, -hw - 0.3, hw + 0.3, BOOTH_H - 0.05, BOOTH_H + 0.25, -hw - 0.3, hw + 0.3, dark, M.Metal)
+	box(m, "BoothRoofTop", F, -hw + 0.1, hw - 0.1, BOOTH_H + 0.25, BOOTH_H + 0.45, -hw + 0.1, hw - 0.1, lacquer, M.SmoothPlastic)
+	glow(box(m, "BoothLamp", F, -0.6, 0.6, BOOTH_H - 0.9, BOOTH_H - 0.84, -0.6, 0.6, rgb(255, 240, 210), M.SmoothPlastic))
+	-- publiphone au fond (face -Z vers l'intérieur)
+	local zb = hw - 0.2
+	box(m, "PhoneBack", F, -0.75, 0.75, 3.3, 6.4, zb - 0.08, zb - 0.02, steel, M.Metal)
+	box(m, "PhoneBody", F, -0.62, 0.62, 3.6, 6.1, zb - 0.5, zb - 0.08, rgb(150, 156, 166), M.Metal)
+	local screen = glow(box(m, "PhoneScreen", F, -0.42, 0.42, 5.35, 5.85, zb - 0.53, zb - 0.5, rgb(170, 220, 190), M.SmoothPlastic))
+	surfaceText(screen, Enum.NormalId.Front, Locale.T("INSERT CARD"), rgb(30, 70, 50), rgb(170, 220, 190), Enum.Font.Code, 25)
+	local pad = box(m, "PhoneKeypad", F, -0.36, 0.36, 4.2, 5.15, zb - 0.53, zb - 0.5, rgb(64, 68, 78), M.SmoothPlastic)
+	do
+		local gui = Instance.new("SurfaceGui")
+		gui.Face = Enum.NormalId.Front
+		gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		gui.PixelsPerStud = 60
+		gui.MaxDistance = 25
+		gui.LightInfluence = 0.7
+		gui.Parent = pad
+		local keys = { "1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#" }
+		for i, key in ipairs(keys) do
+			local col, row = (i - 1) % 3, math.floor((i - 1) / 3)
+			local b = Instance.new("TextLabel")
+			b.BackgroundColor3 = rgb(222, 226, 232)
+			b.BorderSizePixel = 0
+			b.Position = UDim2.fromScale(0.06 + col * 0.31, 0.04 + row * 0.24)
+			b.Size = UDim2.fromScale(0.26, 0.2)
+			b.TextScaled = true
+			b.Font = Enum.Font.GothamBold
+			b.TextColor3 = rgb(40, 44, 52)
+			b.Text = key
+			b.Parent = gui
+			local c = Instance.new("UICorner")
+			c.CornerRadius = UDim.new(0.3, 0)
+			c.Parent = b
+		end
+	end
+	box(m, "PhoneSlot", F, -0.3, 0.3, 3.85, 3.95, zb - 0.56, zb - 0.5, INK, M.SmoothPlastic)
+	-- combiné sur son crochet (côté gauche) + cordon spiralé
+	box(m, "PhoneHook", F, -0.92, -0.62, 5.4, 5.55, zb - 0.45, zb - 0.2, steel, M.Metal)
+	box(m, "Handset", F, -1.02, -0.74, 4.3, 5.75, zb - 0.62, zb - 0.32, INK, M.SmoothPlastic)
+	for _, y in ipairs({ 4.25, 5.8 }) do
+		ball(m, "HandsetCup", F, -0.88, y, zb - 0.47, 0.42, INK, M.SmoothPlastic)
+	end
+	for k = 0, 3 do
+		local y = 4.0 - k * 0.28
+		newPart(m, "PhoneCord", Vector3.new(0.12, 0.2, 0.2), F * CFrame.new(-0.84 + k * 0.05, y, zb - 0.4) * UPRIGHT, INK, M.SmoothPlastic, "Cyl")
+	end
+	-- tablette + annuaire (sur sa chaîne)
+	box(m, "PhoneShelf", F, -0.95, 0.95, 3.0, 3.12, zb - 1.0, zb - 0.02, steel, M.Metal)
+	local book = box(m, "Directory", F, -0.2, 0.75, 3.12, 3.42, zb - 0.95, zb - 0.3, rgb(250, 214, 60), M.SmoothPlastic)
+	surfaceText(book, Enum.NormalId.Top, Locale.T("DIRECTORY"), rgb(60, 50, 30), rgb(250, 214, 60), Enum.Font.GothamBlack, 25)
+	box(m, "DirectoryChain", F, 0.6, 0.66, 3.12, 3.7, zb - 0.12, zb - 0.06, steel, M.Metal)
+	-- PORTE à charnière (montant gauche), poignée-barre ; s'ouvre vers l'extérieur
+	local hinge = F * CFrame.new(-hw + 0.26, 0, -hw + 0.14)
+	local door = {}
+	local function dpart(p: BasePart)
+		table.insert(door, { p, hinge:ToObjectSpace(p.CFrame) })
+	end
+	local dz0, dz1 = -0.06, 0.06
+	local dw = BOOTH_W - 0.52
+	dpart(box(m, "DoorFrame", hinge, 0, 0.14, 0.32, BOOTH_H - 0.85, dz0, dz1, lacquer, M.SmoothPlastic))
+	dpart(box(m, "DoorFrame", hinge, dw - 0.14, dw, 0.32, BOOTH_H - 0.85, dz0, dz1, lacquer, M.SmoothPlastic))
+	for _, y in ipairs({ 0.32, 3.4, BOOTH_H - 0.99 }) do
+		dpart(box(m, "DoorRail", hinge, 0.14, dw - 0.14, y, y + 0.14, dz0, dz1, lacquer, M.SmoothPlastic))
+	end
+	local dg = box(m, "DoorGlass", hinge, 0.14, dw - 0.14, 0.46, BOOTH_H - 0.99, -0.03, 0.03, GLASS, M.Glass)
+	dg.Transparency = 0.6
+	dpart(dg)
+	dpart(box(m, "DoorPull", hinge, dw - 0.45, dw - 0.33, 3.0, 5.4, -0.22, -0.1, steel, M.Metal))
+	dpart(box(m, "DoorPullFoot", hinge, dw - 0.45, dw - 0.33, 4.15, 4.25, -0.13, -0.06, steel, M.Metal))
+	if okKit and type(CityKit) == "table" then
+		local angle = 0
+		local parts, frames = {}, {}
+		for i, d in ipairs(door) do
+			parts[i] = d[1]
+		end
+		local front = (F * CFrame.new(0, 0, -hw - 1.5)).Position
+		CityKit.Actor(m, F.Position, function(_t: number, dt: number)
+			local character = Players.LocalPlayer.Character
+			local root = character and character:FindFirstChild("HumanoidRootPart")
+			local want = 0
+			if root and root:IsA("BasePart") then
+				local p = root.Position
+				local dFront = Vector3.new(p.X - front.X, 0, p.Z - front.Z).Magnitude
+				local dIn = Vector3.new(p.X - F.Position.X, 0, p.Z - F.Position.Z).Magnitude
+				if dFront < 4.5 or dIn < hw then
+					want = math.rad(95)
+				end
+			end
+			local new = angle + math.clamp(want - angle, -dt * 3.2, dt * 3.2)
+			if math.abs(new - angle) < 1e-4 then
+				return
+			end
+			angle = new
+			local rot = hinge * CFrame.Angles(0, angle, 0)
+			for i, d in ipairs(door) do
+				frames[i] = rot * d[2]
+			end
+			workspace:BulkMoveTo(parts, frames, Enum.BulkMoveMode.FireCFrameChanged)
+		end, seed)
+	end
 end
 
 -- Distributeur de boissons (vitrine à canettes)

@@ -164,7 +164,76 @@ local function cframe(x: number, y: number, z: number, lx: number, lz: number): 
 	return WL.CityCFrame(x, z, yawOf(lx, lz), y)
 end
 
+----------------------------------------------------------------------
+-- (v11, CITY11) EMPRISES RÉSERVÉES aux autres lots : rien de ce plan n'y
+-- est posé (bâtiments, mobilier, arbres, décor) — sauf la chaussée.
+--   - BANK11 : la banque (sud de la rue du marché, en face de MégaDopa) ;
+--   - MUSIC11 : secteur de la scène de la place (195°..255°, r 12..56) ;
+--   - TRAIN11 : voie (±12), gares, planques, passages à niveau
+--     (TrainLine.Near, pur, chargé sans erreur s'il manque).
+----------------------------------------------------------------------
+local okTrain, TrainLine = pcall(function(): any
+	return require((ReplicatedStorage.Shared :: any).TrainLine)
+end)
+CityPlan.RESERVED = {
+	-- rectangles (repère ville) : X, Z (centre), W (le long de x), D (le long de z)
+	Rects = {
+		{ Id = "Bank", X = 120, Z = 535, W = 72, D = 66 },
+	},
+	-- secteurs de la place : angle (degrés, d = (sin a, cos a)), rayons
+	Sectors = {
+		{ Id = "MusicStage", A0 = 195, A1 = 255, R0 = 12, R1 = 56 },
+	},
+}
+-- types posés SUR la chaussée (jamais refusés : la voie la croise à niveau)
+local ROADWAY = { HwySeg = true, HwyRamp = true, BridgeSeg = true, RoadMarks = true }
+local planCount = 8
+
+-- vrai si le disque (x, z, r) touche une emprise réservée
+function CityPlan.Reserved(count: number, x: number, z: number, r: number): boolean
+	for _, R in ipairs(CityPlan.RESERVED.Rects) do
+		if math.abs(x - R.X) <= R.W / 2 + r and math.abs(z - R.Z) <= R.D / 2 + r then
+			return true
+		end
+	end
+	local dist = math.sqrt(x * x + z * z)
+	if dist > 1 then
+		local a = math.deg(math.atan2(x, z)) % 360
+		for _, S in ipairs(CityPlan.RESERVED.Sectors) do
+			if dist + r >= S.R0 and dist - r <= S.R1 then
+				-- (marge angulaire du rayon r à cette distance)
+				local pad = math.deg(math.asin(math.clamp(r / dist, 0, 1)))
+				if a >= S.A0 - pad and a <= S.A1 + pad then
+					return true
+				end
+			end
+		end
+	end
+	if okTrain and type(TrainLine) == "table" and type(TrainLine.Near) == "function" then
+		local ok, near = pcall(TrainLine.Near, count, x, z, r)
+		if ok and near == true then
+			return true
+		end
+	end
+	return false
+end
+
 local function add(out: { Spot }, kind: string, cf: CFrame, seed: number, size: Vector3?, data: any?, snap: boolean?)
+	if not ROADWAY[kind] then
+		-- rayon d'emprise : pied du lieu, taille donnée, ou petit mobilier
+		local foot = CityPlan.FOOT[kind]
+		local r = 2
+		if foot then
+			r = math.max(foot.X, foot.Y) / 2
+		elseif size then
+			r = math.max(size.X, size.Z) / 2
+		end
+		local o = WL.Origin()
+		local p = cf.Position
+		if CityPlan.Reserved(planCount, p.X - o.X, p.Z - o.Z, r) then
+			return
+		end
+	end
 	table.insert(out, { Kind = kind, CF = cf, Seed = seed, Pos = cf.Position, Size = size, Data = data, Snap = snap })
 end
 
@@ -194,6 +263,10 @@ local function rectFree(ctx: Ctx, x: number, z: number, w: number, d: number, ax
 		if ok and not free then
 			return false
 		end
+	end
+	-- (v11, CITY11) emprises réservées (banque, scène, train)
+	if CityPlan.Reserved(ctx.Count, x, z, math.sqrt(w * w + d * d) / 2) then
+		return false
 	end
 	-- cercles déjà pris : distance du cercle au rectangle orienté
 	for _, t in ipairs(ctx.Taken) do
@@ -1018,6 +1091,7 @@ function CityPlan.Build(count: number, taken: { { number } }?, yieldFn: (() -> (
 		return out -- (ancienne ville en anneau : rien à habiller ici)
 	end
 	HR = type(WL.HighwayR) == "function" and WL.HighwayR(n) or (WL.HIGHWAY_R or 1110)
+	planCount = n
 	local okH, errH = pcall(planHighway, ctx, out)
 	if not okH then
 		warn("[CityPlan] autoroute : " .. tostring(errH))

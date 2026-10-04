@@ -33,34 +33,86 @@ end
 -- déjà fait `rebirths`. BaseCost x CostGrowth^r x (1 + r)^CostPower : la
 -- partie polynomiale rend chaque visite nettement plus longue que la
 -- précédente (le multiplicateur gagné ne suffit jamais à la rattraper).
+local function earlyRebirthCost(r: number): number
+	local settings = Config.Rebirth
+	return settings.BaseCost * (settings.CostGrowth ^ r) * ((1 + r) ^ (settings.CostPower or 0))
+end
+
+-- (v11) Nombre de visites après lequel la "fin de partie" commence
+-- (Config.Rebirth.LateFrom ; nil = jamais : ancienne économie)
+local function lateFrom(): number
+	local late = tonumber(Config.Rebirth.LateFrom)
+	return late and math.max(1, math.floor(late)) or math.huge
+end
+
+-- (v11) Au-delà de LateFrom visites, le prix ne grandit plus que de
+-- LateCostGrowth par visite (avant : x3,5 x (1 + r)^1,55 -> Sx à la 20e)
 function Formulas.GetRebirthCost(rebirths: number): number
 	local settings = Config.Rebirth
 	local r = cleanRebirths(rebirths)
-	return settings.BaseCost * (settings.CostGrowth ^ r) * ((1 + r) ^ (settings.CostPower or 0))
+	local late = lateFrom()
+	if r < late then
+		return earlyRebirthCost(r)
+	end
+	-- prix de la visite n°late (r = late - 1) x LateCostGrowth^(visites de plus)
+	return earlyRebirthCost(late - 1) * ((settings.LateCostGrowth or settings.CostGrowth) ^ (r - late + 1))
 end
 
 -- Multiplicateur permanent des visites : +MultiplierPerRebirth par visite,
 -- de moins en moins (x MultiplierDecay à chaque visite suivante)
+-- (v11) Après LateFrom visites : x LateMultiplierGrowth par visite (toujours
+-- au moins autant que l'ancien +0,5 par visite : personne ne perd rien)
 function Formulas.GetRebirthMultiplier(rebirths: number): number
 	local settings = Config.Rebirth
 	local r = cleanRebirths(rebirths)
+	local late = lateFrom()
 	local decay = settings.MultiplierDecay or 1
 	local bonus = 0
 	local step = settings.MultiplierPerRebirth
-	for _ = 1, r do
+	for _ = 1, math.min(r, late) do
 		bonus += step
 		step *= decay
 	end
-	return 1 + bonus
+	if r <= late then
+		return 1 + bonus
+	end
+	-- (la croissance tardive ne descend jamais sous l'ancien pas linéaire)
+	local growth = settings.LateMultiplierGrowth or 1
+	local value = 1 + bonus
+	for _ = late + 1, r do
+		value = math.max(value * growth, value + step)
+		step *= decay
+	end
+	return value
 end
 
 -- Les améliorations (non permanentes) coûtent PriceGrowth^r x (1 + r)^PricePower
 -- fois plus après r visites à l'océan : chaque partie coûte plus cher que la
 -- précédente (surtout au début, puis de moins en moins vite)
+-- (v11) Après LateFrom visites : x LatePriceGrowth par visite, toujours moins
+-- vite que le multiplicateur (prix / gains jamais pire qu'avant)
 function Formulas.GetUpgradePriceScale(rebirths: number?): number
 	local settings = Config.Rebirth
 	local r = cleanRebirths(rebirths)
-	return (settings.PriceGrowth or 1) ^ r * (1 + r) ^ (settings.PricePower or 0)
+	local late = lateFrom()
+	local early = math.min(r, late)
+	local scale = (settings.PriceGrowth or 1) ^ early * (1 + early) ^ (settings.PricePower or 0)
+	if r > late then
+		scale *= (settings.LatePriceGrowth or 1) ^ (r - late)
+	end
+	return scale
+end
+
+-- (v11) 💎 Diamants offerts par la visite à l'océan n°`rebirths` (0 avant
+-- Config.Rebirth.Diamonds.From) : Base + 1 toutes les PerVisits visites, au plus Max
+function Formulas.GetOceanDiamonds(rebirths: number?): number
+	local settings = Config.Rebirth.Diamonds
+	local r = cleanRebirths(rebirths)
+	if type(settings) ~= "table" or r < (settings.From or math.huge) then
+		return 0
+	end
+	local extra = math.floor((r - settings.From) / math.max(1, settings.PerVisits or 1))
+	return math.clamp(math.floor((settings.Base or 0) + extra), 0, settings.Max or 0)
 end
 
 -- Prix du PROCHAIN niveau (level = niveau actuel)

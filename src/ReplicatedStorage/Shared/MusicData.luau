@@ -28,22 +28,40 @@ local MusicData = {}
 -- 1. Plan de la scène (studs, repère local de la scène)
 ----------------------------------------------------------------------
 
-MusicData.FOOTPRINT = Vector3.new(24, 16, 16) -- (X, hauteur max, Z)
+-- (v11 MUSIC11) une vraie scène de concert : 32 x 22 (avant : 24 x 16),
+-- portique de 16 de haut, ailes, écrans latéraux ; devant, la FOSSE du
+-- public (zone "MusicCrowd" de WorldLayout : 30 x 16, piste de danse LED).
+MusicData.FOOTPRINT = Vector3.new(32, 19, 22) -- (X, hauteur max, Z)
 MusicData.GROUND = 0.06 -- dessus du pavé de la place (au-dessus de l'origine)
 MusicData.DECK_TOP = 1.5 -- plancher de la scène
-MusicData.DECK = { X0 = -10.2, X1 = 10.2, Z0 = -3.6, Z1 = 7.6 }
+MusicData.DECK = { X0 = -14.6, X1 = 14.6, Z0 = -4.6, Z1 = 9.8 }
 -- marches du devant (2 marches de 0,5 : une marche Roblox monte sans sauter)
-MusicData.STEPS = { X = 3.6, Depth = 0.95, Rise = 0.5, Count = 2 }
+MusicData.STEPS = { X = 5, Depth = 1.0, Rise = 0.5, Count = 2 }
 -- praticables (estrades) : batterie au fond au centre, DJ au fond à gauche (+X)
 MusicData.RISERS = {
-	Drums = { X0 = -3.2, X1 = 3.2, Z0 = 3.3, Z1 = 7.55, H = 0.7 },
-	DJ = { X0 = 5.8, X1 = 10.15, Z0 = 3.6, Z1 = 7.55, H = 0.5 },
+	Drums = { X0 = -3.3, X1 = 3.3, Z0 = 3.0, Z1 = 8.9, H = 0.7 },
+	DJ = { X0 = 5.8, X1 = 10.8, Z0 = 3.6, Z1 = 8.9, H = 0.5 },
 }
-MusicData.TRUSS_H = 13.4 -- dessous du grill (portique d'éclairage)
-MusicData.TRUSS_TOWERS = { Vector3.new(-11.2, 0, -3.2), Vector3.new(11.2, 0, -3.2), Vector3.new(-11.2, 0, 7.3), Vector3.new(11.2, 0, 7.3) }
-MusicData.TOWER_SIZE = 0.9
-MusicData.PA = { Vector3.new(-10.6, 0, -5.4), Vector3.new(10.6, 0, -5.4) } -- enceintes au sol (devant)
-MusicData.JUKEBOX = CFrame.new(6.8, 0, -6.3) -- 🎛️ pupitre "musique" au sol (pour tous)
+MusicData.TRUSS_H = 16 -- dessous du grill (portique d'éclairage)
+MusicData.TRUSS_TOWERS = { Vector3.new(-15.3, 0, -4.2), Vector3.new(15.3, 0, -4.2), Vector3.new(-15.3, 0, 9.5), Vector3.new(15.3, 0, 9.5) }
+MusicData.TOWER_SIZE = 1.1
+MusicData.PA = { Vector3.new(-13.2, 0, -5.9), Vector3.new(13.2, 0, -5.9) } -- enceintes au sol (devant)
+MusicData.JUKEBOX = CFrame.new(10.6, 0, -8.7) -- 🎛️ pupitre "musique" au sol (pour tous)
+-- fosse du public (devant la scène, repère de la scène) : piste de danse LED
+MusicData.CROWD = { X0 = -12, X1 = 12, Z0 = -26.5, Z1 = -12.5 }
+-- (v11, SCALE11) piano et batterie à l'échelle Roblox (x1,3 / x1,25) :
+-- banquette et tabouret à 1,85–1,9 au-dessus de leur plancher
+MusicData.PIANO_SCALE = 1.3
+MusicData.PIANO_FRAME = Vector3.new(-4.55, 0, -0.35) -- (repère du piano : bord des touches, au plancher)
+MusicData.PIANO_SEAT = 1.46 * 1.3 -- dessus de la banquette (au-dessus du plancher)
+MusicData.KIT_SCALE = 1.25
+MusicData.KIT_PIVOT = Vector3.new(0.2, 0, 5.4) -- (centre du tapis, sur le praticable)
+MusicData.THRONE_SEAT = 1.5 * 1.25 -- dessus du tabouret (au-dessus du praticable)
+
+-- Point agrandi autour d'un pivot (piano, batterie) : pivot * (local x k)
+function MusicData.ScalePoint(pivot: CFrame, k: number, p: Vector3): Vector3
+	return pivot * (pivot:PointToObjectSpace(p) * k)
+end
 
 -- Ordre des instruments (index = numéro envoyé sur le réseau)
 MusicData.ORDER = { "Piano", "Drums", "Guitar", "Bass", "Xylophone", "Synth", "DJ" }
@@ -69,8 +87,8 @@ end
 
 -- yaw 0 = regard vers -Z (le public) ; 90 = regard vers -X
 MusicData.STATIONS = {
-	Piano = { Id = "Piano", Name = "Grand piano", Icon = "🎹", Kind = "keys", Seated = true, Floor = 1.5, Spot = facing(-3.35, -0.35, 90), Prompt = Vector3.new(-3.5, 3.4, -0.35) },
-	Drums = { Id = "Drums", Name = "Drum kit", Icon = "🥁", Kind = "drums", Seated = true, Floor = 2.2, Spot = facing(0, 6.45, 0), Prompt = Vector3.new(0, 4.6, 4.6) },
+	Piano = { Id = "Piano", Name = "Grand piano", Icon = "🎹", Kind = "keys", Seated = true, Floor = 1.5, Spot = facing(-4.55 + 1.2 * 1.3, -0.35, 90), Prompt = Vector3.new(-3.2, 3.8, -0.35) },
+	Drums = { Id = "Drums", Name = "Drum kit", Icon = "🥁", Kind = "drums", Seated = true, Floor = 2.2, Spot = facing(0.2 - 0.2 * 1.25, 5.4 + 1.05 * 1.25, 0), Prompt = Vector3.new(0, 5.0, 4.6) },
 	Guitar = { Id = "Guitar", Name = "Electric guitar", Icon = "🎸", Kind = "strings", Seated = false, Floor = 1.5, Spot = facing(-1.6, -1.5, 0), Prompt = Vector3.new(-1.6, 3.6, -1.5) },
 	Bass = { Id = "Bass", Name = "Bass guitar", Icon = "🎸", Kind = "strings", Seated = false, Floor = 1.5, Spot = facing(4.3, 1.9, 0), Prompt = Vector3.new(4.3, 3.6, 1.9) },
 	Xylophone = { Id = "Xylophone", Name = "Xylophone", Icon = "🎶", Kind = "keys", Seated = false, Floor = 1.5, Spot = facing(8.0, -0.7, 0), Prompt = Vector3.new(8.0, 3.8, -1.7) },
@@ -94,8 +112,10 @@ for i, id in ipairs(MusicData.DRUMS) do
 	MusicData.DRUM[id] = i
 end
 -- pads du DJ : 1..4 = boucles (bascule), 5..8 = effets
-MusicData.DJ_PADS = { "LoopBeat", "LoopHouse", "LoopHipHop", "LoopLofi", "Scratch", "Horn", "Riser", "Drop" }
-MusicData.DJ_LOOPS = 4
+-- (v11) 8 boucles (rock, house, hip-hop, lofi, trap, reggae, disco, techno)
+MusicData.DJ_PADS = { "LoopRock", "LoopHouse", "LoopHipHop", "LoopLofi", "LoopTrap", "LoopReggae", "LoopDisco", "LoopTechno", "Scratch", "Horn", "Riser", "Drop" }
+MusicData.DJ_LOOPS = 8
+MusicData.DJ_FX = { Scratch = 9, Horn = 10, Riser = 11, Drop = 12 }
 
 -- Limites réseau (le serveur les applique aussi)
 MusicData.NOTE_MIN = 24
@@ -202,12 +222,24 @@ function MusicData.Root(name: string, low: number): number?
 end
 
 ----------------------------------------------------------------------
--- 4. Morceaux
+-- 4. Morceaux (v11 MUSIC11 : catalogue dans Shared/MusicSongs)
 --   Suites de jetons séparés par des espaces ("|" = barre de mesure,
 --   ignorée) : "E4" (1 temps), "E4:1.5", "r:2" (silence) ; accords : "Am",
---   "G7:2" (sans durée = une mesure entière).
---   Parties : Lead (mélodie), Harmony (accords : style), Bass (style),
---   Drums (style), Echo (canon : même mélodie décalée), DJ (style).
+--   "G7:2" (sans durée = une mesure entière). "$A" = la phrase A du morceau
+--   (Phrases = { A = "…" }), répétable.
+--   Un morceau a une FORME (v11) : Sections = { I = { Chords, Bars,
+--   Energy }, V = …, C = …, B = …, O = … } et Form = "I V C V C B C O"
+--   (intro, couplet, refrain, pont, fin) ; chaque partie joue dans les
+--   sections listées par In (ex. In = "VC"). Sans Form : une seule
+--   section (ancien format : Bars + Chords en boucle).
+--   Parties : Lead (mélodie : Notes = texte, ou { [section] = texte }),
+--   Riff (motif en DEGRÉS de l'accord en cours : "1 3 5 8 5 3" ; ' = octave
+--   au-dessus, , = au-dessous : il suit les accords), Harmony (accords :
+--   style), Bass (style), Drums (style + breaks automatiques en fin de
+--   section, crash au début des sections), Echo (canon : même mélodie
+--   décalée), DJ (scratch, vinyl, riser, drop, horn).
+--   Swing (0..0,33) : croches "ternaires" (jazz, lofi) ; Transpose : demi-tons.
+--   Un accord final (End) termine les morceaux qui ont une forme.
 ----------------------------------------------------------------------
 
 export type Event = { T: number, I: string, N: number, V: number, D: number }
@@ -216,201 +248,38 @@ export type Song = {
 	Name: string,
 	Icon: string,
 	Author: string,
+	Genre: string?,
 	Bpm: number,
 	Beats: number, -- temps par mesure
-	Bars: number,
-	Chords: string,
+	Bars: number?,
+	Chords: string?,
 	Parts: { any },
+	Sections: { [string]: any }?,
+	Form: string?,
 }
 
-MusicData.SONGS = {
-	{
-		Id = "OdeToJoy",
-		Name = "Ode to Joy",
-		Icon = "🎼",
-		Author = "Beethoven",
-		Bpm = 126,
-		Beats = 4,
-		Bars = 16,
-		Chords = "C | G | C | G | C | G | C | G:2 C:2 | G:2 C:2 | G:2 C:2 | G:2 Am:2 | D:2 G:2 | C | G | C | G:2 C:2",
-		Parts = {
-			{
-				Kind = "Lead",
-				I = "Piano",
-				Octave = 1,
-				Notes = "E4 E4 F4 G4 | G4 F4 E4 D4 | C4 C4 D4 E4 | E4:1.5 D4:0.5 D4:2 | E4 E4 F4 G4 | G4 F4 E4 D4 | C4 C4 D4 E4 | D4:1.5 C4:0.5 C4:2"
-					.. " | D4 D4 E4 C4 | D4 E4:0.5 F4:0.5 E4 C4 | D4 E4:0.5 F4:0.5 E4 D4 | C4 D4 G3:2 | E4 E4 F4 G4 | G4 F4 E4 D4 | C4 C4 D4 E4 | D4:1.5 C4:0.5 C4:2",
-			},
-			{ Kind = "Lead", I = "Xylophone", Octave = 2, FromBar = 13, Vel = 0.55, Notes = "r:48 E4 E4 F4 G4 | G4 F4 E4 D4 | C4 C4 D4 E4 | D4:1.5 C4:0.5 C4:2" },
-			{ Kind = "Harmony", I = "Guitar", Style = "strum" },
-			{ Kind = "Harmony", I = "Synth", Style = "pad", FromBar = 9, Vel = 0.35 },
-			{ Kind = "Bass", I = "Bass", Style = "root" },
-			{ Kind = "Drums", Style = "pop" },
-		},
-	},
-	{
-		Id = "FrereJacques",
-		Name = "Brother John (round)",
-		Icon = "🔔",
-		Author = "Traditional",
-		Bpm = 116,
-		Beats = 4,
-		Bars = 20,
-		Chords = "C",
-		Parts = {
-			{ Kind = "Lead", I = "Piano", Octave = 1, Repeat = 2, Notes = "C4 D4 E4 C4 | C4 D4 E4 C4 | E4 F4 G4:2 | E4 F4 G4:2 | G4:0.5 A4:0.5 G4:0.5 F4:0.5 E4 C4 | G4:0.5 A4:0.5 G4:0.5 F4:0.5 E4 C4 | C4 G3 C4:2 | C4 G3 C4:2" },
-			{ Kind = "Echo", I = "Xylophone", Of = 1, Delay = 8, Octave = 1, Vel = 0.8 },
-			{ Kind = "Echo", I = "Synth", Of = 1, Delay = 16, Octave = 0, Vel = 0.7 },
-			{ Kind = "Bass", I = "Bass", Style = "root" },
-			{ Kind = "Drums", Style = "brush" },
-		},
-	},
-	{
-		Id = "ClairDeLune",
-		Name = "By the Light of the Moon",
-		Icon = "🌙",
-		Author = "Traditional (France)",
-		Bpm = 100,
-		Beats = 4,
-		Bars = 16,
-		Chords = "C | C:2 G:2 | C:2 G:2 | C | C | C:2 G:2 | C:2 G:2 | C | G | Dm | G:2 D:2 | G | C | C:2 G:2 | C:2 G:2 | C",
-		Parts = {
-			{
-				Kind = "Lead",
-				I = "Xylophone",
-				Octave = 1,
-				Notes = "C4 C4 C4 D4 | E4:2 D4:2 | C4 E4 D4 D4 | C4:4 | C4 C4 C4 D4 | E4:2 D4:2 | C4 E4 D4 D4 | C4:4"
-					.. " | D4 D4 D4 D4 | A3:2 A3:2 | D4 C4 B3 A3 | G3:4 | C4 C4 C4 D4 | E4:2 D4:2 | C4 E4 D4 D4 | C4:4",
-			},
-			{ Kind = "Harmony", I = "Piano", Style = "arp", Vel = 0.5 },
-			{ Kind = "Bass", I = "Bass", Style = "whole" },
-			{ Kind = "Drums", Style = "brush" },
-		},
-	},
-	{
-		Id = "Twinkle",
-		Name = "Twinkle Twinkle",
-		Icon = "⭐",
-		Author = "Traditional",
-		Bpm = 108,
-		Beats = 4,
-		Bars = 12,
-		Chords = "C | F:2 C:2 | F:2 C:2 | G:2 C:2 | C:2 F:2 | C:2 G:2 | C:2 F:2 | C:2 G:2 | C | F:2 C:2 | F:2 C:2 | G:2 C:2",
-		Parts = {
-			{
-				Kind = "Lead",
-				I = "Synth",
-				Octave = 1,
-				Notes = "C4 C4 G4 G4 | A4 A4 G4:2 | F4 F4 E4 E4 | D4 D4 C4:2 | G4 G4 F4 F4 | E4 E4 D4:2 | G4 G4 F4 F4 | E4 E4 D4:2"
-					.. " | C4 C4 G4 G4 | A4 A4 G4:2 | F4 F4 E4 E4 | D4 D4 C4:2",
-			},
-			{ Kind = "Lead", I = "Xylophone", Octave = 2, Vel = 0.5, Notes = "r:32 C4 C4 G4 G4 | A4 A4 G4:2 | F4 F4 E4 E4 | D4 D4 C4:2" },
-			{ Kind = "Harmony", I = "Piano", Style = "block", Vel = 0.55 },
-			{ Kind = "Harmony", I = "Guitar", Style = "strum", FromBar = 5, Vel = 0.5 },
-			{ Kind = "Bass", I = "Bass", Style = "root" },
-			{ Kind = "Drums", Style = "pop" },
-		},
-	},
-	{
-		Id = "Canon",
-		Name = "Canon in C",
-		Icon = "🎻",
-		Author = "Pachelbel",
-		Bpm = 72,
-		Beats = 4,
-		Bars = 13,
-		Chords = "C:2 G:2 | Am:2 Em:2 | F:2 C:2 | F:2 G:2 | C:2 G:2 | Am:2 Em:2 | F:2 C:2 | F:2 G:2 | C:2 G:2 | Am:2 Em:2 | F:2 C:2 | F:2 G:2 | C",
-		Parts = {
-			{
-				Kind = "Lead",
-				I = "Piano",
-				Octave = 0,
-				Notes = "E5:2 D5:2 | C5:2 B4:2 | A4:2 G4:2 | A4:2 B4:2 | C5 E5 D5 B4 | C5 E5 B4 G4 | A4 C5 G4 E4 | F4 A4 B4 D5"
-					.. " | C5:0.5 D5:0.5 E5:0.5 C5:0.5 B4:0.5 C5:0.5 D5:0.5 B4:0.5 | A4:0.5 B4:0.5 C5:0.5 A4:0.5 G4:0.5 A4:0.5 B4:0.5 G4:0.5"
-					.. " | F4:0.5 G4:0.5 A4:0.5 F4:0.5 E4:0.5 F4:0.5 G4:0.5 E4:0.5 | F4:0.5 G4:0.5 A4:0.5 B4:0.5 C5:0.5 D5:0.5 E5:0.5 G5:0.5 | C5:4",
-			},
-			{ Kind = "Lead", I = "Xylophone", Octave = 1, Vel = 0.45, Notes = "r:32 E5:2 D5:2 | C5:2 B4:2 | A4:2 G4:2 | A4:2 B4:2 | C5:4" },
-			{ Kind = "Harmony", I = "Synth", Style = "pad", Vel = 0.4 },
-			{ Kind = "Harmony", I = "Piano", Style = "arp", FromBar = 5, Vel = 0.35 },
-			{ Kind = "Bass", I = "Bass", Style = "half" },
-			{ Kind = "Drums", Style = "none" },
-		},
-	},
-	{
-		Id = "FurElise",
-		Name = "Für Elise",
-		Icon = "💌",
-		Author = "Beethoven",
-		Bpm = 66,
-		Beats = 1.5,
-		Bars = 18,
-		Chords = "r:1.5 | r | Am | E | Am | r | Am | E | Am | r | r | Am | E | Am | r | Am | E | Am",
-		Parts = {
-			{
-				Kind = "Lead",
-				I = "Piano",
-				Octave = 0,
-				Repeat = 2,
-				Notes = "r:1 E5:0.25 D#5:0.25 | E5:0.25 D#5:0.25 E5:0.25 B4:0.25 D5:0.25 C5:0.25 | A4:0.5 r:0.25 C4:0.25 E4:0.25 A4:0.25"
-					.. " | B4:0.5 r:0.25 E4:0.25 G#4:0.25 B4:0.25 | C5:0.5 r:0.25 E4:0.25 E5:0.25 D#5:0.25"
-					.. " | E5:0.25 D#5:0.25 E5:0.25 B4:0.25 D5:0.25 C5:0.25 | A4:0.5 r:0.25 C4:0.25 E4:0.25 A4:0.25"
-					.. " | B4:0.5 r:0.25 E4:0.25 C5:0.25 B4:0.25 | A4:1.5",
-			},
-			{ Kind = "Harmony", I = "Piano", Style = "broken", Vel = 0.45 },
-			{ Kind = "Drums", Style = "none" },
-		},
-	},
-	{
-		Id = "DopamineGroove",
-		Name = "Dopamine Groove",
-		Icon = "🧠",
-		Author = "Dopamine Town band",
-		Bpm = 116,
-		Beats = 4,
-		Bars = 16,
-		Chords = "Am7 | D7 | Fmaj7 | E7",
-		Parts = {
-			{
-				Kind = "Lead",
-				I = "Synth",
-				Octave = 0,
-				Notes = "r:16 r:0.5 A4:0.5 C5:0.5 E5:0.5 G5 E5 | F#5:0.5 E5:0.5 D5:0.5 C5:0.5 A4:2 | r:0.5 A4:0.5 C5:0.5 F5:0.5 E5 C5 | B4:0.5 C5:0.5 D5:0.5 B4:0.5 G#4:2"
-					.. " | r:0.5 A4:0.5 C5:0.5 E5:0.5 A5 G5 | F#5:0.5 A5:0.5 F#5:0.5 D5:0.5 E5:2 | r:0.5 F5:0.5 E5:0.5 C5:0.5 A4 C5 | B4 G#4 E4 r",
-			},
-			{ Kind = "Harmony", I = "Guitar", Style = "stabs", Vel = 0.6 },
-			{ Kind = "Harmony", I = "Xylophone", Style = "arp", FromBar = 13, Octave = 1, Vel = 0.45 },
-			{ Kind = "Harmony", I = "Piano", Style = "block", FromBar = 5, ToBar = 12, Vel = 0.35 },
-			{ Kind = "Bass", I = "Bass", Style = "octave" },
-			{ Kind = "Drums", Style = "disco" },
-			{ Kind = "DJ", Style = "scratch" },
-		},
-	},
-	{
-		Id = "LofiEvening",
-		Name = "Evening Lo-fi",
-		Icon = "☕",
-		Author = "Dopamine Town band",
-		Bpm = 82,
-		Beats = 4,
-		Bars = 16,
-		Chords = "Dm7 | G7 | Cmaj7 | Am7",
-		Parts = {
-			{
-				Kind = "Lead",
-				I = "Xylophone",
-				Octave = 0,
-				Vel = 0.75,
-				Notes = "r:16 r F5:0.5 E5:0.5 D5 A4 | B4:1.5 C5:0.5 D5 G4 | r E5:0.5 D5:0.5 C5 G4 | A4:2 C5 E5"
-					.. " | F5 E5:0.5 D5:0.5 C5 A4 | B4 D5 F5 E5 | E5:1.5 D5:0.5 C5 B4 | A4:3 r"
-					.. " | r F5:0.5 E5:0.5 D5 A4 | B4:1.5 C5:0.5 D5 G4 | r E5:0.5 D5:0.5 C5 G4 | A4:4",
-			},
-			{ Kind = "Harmony", I = "Piano", Style = "lofi", Vel = 0.5 },
-			{ Kind = "Bass", I = "Bass", Style = "root" },
-			{ Kind = "Drums", Style = "boom" },
-			{ Kind = "DJ", Style = "vinyl" },
-		},
-	},
-} :: { any }
+-- Genres (filtres de l'interface ; couleurs des pochettes : RGB)
+MusicData.GENRES = {
+	{ Id = "Pop", Name = "Pop", Icon = "🎤", A = { 255, 110, 170 }, B = { 255, 196, 120 } },
+	{ Id = "Rock", Name = "Rock", Icon = "🎸", A = { 200, 40, 50 }, B = { 40, 30, 40 } },
+	{ Id = "Electro", Name = "Electro", Icon = "⚡", A = { 40, 220, 255 }, B = { 120, 40, 220 } },
+	{ Id = "HipHop", Name = "Hip-hop", Icon = "🎧", A = { 250, 200, 40 }, B = { 30, 30, 36 } },
+	{ Id = "Lofi", Name = "Lo-fi", Icon = "☕", A = { 170, 140, 220 }, B = { 255, 190, 160 } },
+	{ Id = "Reggae", Name = "Reggae", Icon = "🌴", A = { 40, 170, 70 }, B = { 250, 210, 40 } },
+	{ Id = "Disco", Name = "Disco", Icon = "🪩", A = { 230, 60, 200 }, B = { 255, 220, 90 } },
+	{ Id = "Jazz", Name = "Jazz", Icon = "🎷", A = { 30, 60, 120 }, B = { 210, 160, 80 } },
+	{ Id = "Chiptune", Name = "Chiptune", Icon = "👾", A = { 60, 230, 120 }, B = { 30, 40, 90 } },
+	{ Id = "Ballad", Name = "Ballad", Icon = "🌙", A = { 90, 110, 200 }, B = { 240, 200, 230 } },
+	{ Id = "Funk", Name = "Funk", Icon = "🕺", A = { 255, 130, 30 }, B = { 120, 30, 140 } },
+	{ Id = "World", Name = "World", Icon = "🌎", A = { 240, 90, 60 }, B = { 250, 200, 80 } },
+	{ Id = "Classical", Name = "Classical", Icon = "🎻", A = { 140, 90, 50 }, B = { 245, 230, 200 } },
+}
+MusicData.GENRE_INDEX = {} :: { [string]: any }
+for _, g in ipairs(MusicData.GENRES) do
+	MusicData.GENRE_INDEX[g.Id] = g
+end
+
+MusicData.SONGS = require(script.Parent:WaitForChild("MusicSongs")) :: { any }
 
 MusicData.SONG_INDEX = {} :: { [string]: number }
 for i, song in ipairs(MusicData.SONGS) do
@@ -418,16 +287,55 @@ for i, song in ipairs(MusicData.SONGS) do
 end
 
 -- Batterie : 16 doubles-croches par mesure de 4 temps (12 pour 3 temps)
--- "x" = coup, "o" = coup accentué, "." = rien
+-- "o" = coup accentué, "x" = coup, "g" = note fantôme (très douce),
+-- "r" = roulement (2 triples-croches), "." = rien
 local GROOVES: { [string]: { [string]: string } } = {
 	pop = { Kick = "x.....x.x.......", Snare = "....x.......x...", HatClosed = "x.x.x.x.x.x.x.x." },
+	pop2 = { Kick = "x.....x.x.x.....", Snare = "....o.......o...", HatClosed = "x.x.x.x.x.x.x...", HatOpen = "..............x." },
 	rock = { Kick = "x.......x.x.....", Snare = "....o.......o...", HatClosed = "x.x.x.x.x.x.x.x." },
+	rock2 = { Kick = "x.x.....x.x.....", Snare = "....o.......o...", Ride = "x.x.x.x.x.x.x.x." },
 	disco = { Kick = "x...x...x...x...", Snare = "....x.......x...", HatClosed = "x...x...x...x...", HatOpen = "..x...x...x...x." },
-	boom = { Kick = "x.......x.x.....", Snare = "....x.......x..x", HatClosed = "x.x.x.xxx.x.x.x." },
-	brush = { Kick = "x.......x.......", Snare = "....x.......x...", Ride = "x..xx..xx..xx..x" },
-	house = { Kick = "x...x...x...x...", HatOpen = "..x...x...x...x.", Snare = "....x.......x..." },
+	house = { Kick = "x...x...x...x...", Snare = "....x.......x...", HatClosed = ".g.g.g.g.g.g.g.g", HatOpen = "..x...x...x...x." },
+	techno = { Kick = "x...x...x...x...", Snare = "....x.......x...", HatClosed = "..x...x...x...x.", Ride = "g.g.g.g.g.g.g.g." },
+	boom = { Kick = "x.......x.x.....", Snare = "....x.......x..g", HatClosed = "x.x.x.xxx.x.x.x." },
 	hiphop = { Kick = "x......xx.x.....", Snare = "....x.......x...", HatClosed = "x.x.x.x.x.x.x.xx" },
+	trap = { Kick = "x......x..x.....", Snare = "........o.......", HatClosed = "x.x.x.xrx.x.xrrr" },
+	lofi = { Kick = "x......x..x.....", Snare = "....x.......x...", HatClosed = "x.g.x.g.x.g.x.gx" },
+	reggae = { Kick = "........x.......", Snare = "........x.......", HatClosed = "g.x.g.x.g.x.g.x." },
+	funk = { Kick = "x..x..x...x..x..", Snare = "....o..g.g..o..g", HatClosed = "xgxgxgxgxgxgxgxg" },
+	jazz = { Ride = "x...x..xx...x..x", HatClosed = "....x.......x...", Kick = "g.......g.......", Snare = "......g.......g." },
+	bossa = { Kick = "x..xx..xx..xx..x", Snare = "x..x..x...x..x..", HatClosed = "g.g.g.g.g.g.g.g." },
+	chip = { Kick = "x.......x.x.....", Snare = "....x.......x...", HatClosed = "x.x.x.x.x.x.x.x." },
+	ballad = { Kick = "x.........x.....", Snare = "........x.......", HatClosed = "g.g.g.g.g.g.g.g." },
+	halftime = { Kick = "x.....x...x.....", Snare = "........o.......", HatClosed = "x.x.x.x.x.x.x.x." },
+	intro = { Kick = "x...............", HatClosed = "x.x.x.x.x.x.x.x." },
+	build = { Kick = "x...x...x...x...", Snare = "x.x.x.x.x.x.xxxx" },
+	march = { Kick = "x.......x.......", Snare = "x.xgx.x.x.xgx.x." },
+	country = { Kick = "x.......x.......", Snare = "g.g.o.g.g.g.o.g.", HatClosed = "........" },
+	latin = { Kick = "x...x...x...x...", Snare = "..x...x...x..x..", HatClosed = "gggggggggggggggg", TomHigh = "......x.......x.", TomMid = "...........x...." },
+	brush = { Kick = "x.......x.......", Snare = "....x.......x...", Ride = "x..xx..xx..xx..x" },
+	waltz = { Kick = "x...........", HatClosed = "....x...x...", Snare = "....g...g..." },
+	waltz2 = { Kick = "x...........", Snare = "....x...x...", Ride = "x...x...x..." },
 }
+
+-- Breaks (fins de section) : Steps dernières doubles-croches remplacées
+local FILLS: { [string]: { Steps: number, [string]: any } } = {
+	toms = { Steps = 4, TomHigh = "............xx..", TomMid = "..............x.", TomFloor = "...............x" },
+	rock = { Steps = 8, Snare = "........oxox....", TomHigh = "............xx..", TomMid = "..............x.", TomFloor = "...............o" },
+	snare = { Steps = 4, Snare = "............xxxo" },
+	disco = { Steps = 4, Snare = "............xxxx", HatOpen = "..............x." },
+	trap = { Steps = 4, HatClosed = "............rrrr", Snare = "...............o" },
+	jazz = { Steps = 4, Snare = "............g.gx", TomFloor = "...............x" },
+	soft = { Steps = 2, TomMid = "..............g.", TomFloor = "...............x" },
+	build = { Steps = 16, Snare = "x.x.x.x.xxxxrrrr" },
+}
+local GROOVE_FILL: { [string]: string } = {
+	rock = "rock", rock2 = "rock", pop = "toms", pop2 = "rock", disco = "disco", house = "disco", techno = "snare",
+	boom = "snare", hiphop = "snare", trap = "trap", lofi = "soft", reggae = "toms", funk = "snare", jazz = "jazz",
+	bossa = "soft", chip = "snare", ballad = "soft", halftime = "toms", march = "snare", country = "snare",
+	latin = "toms", brush = "jazz", waltz = "soft", waltz2 = "soft", intro = "soft", build = "build",
+}
+MusicData.GROOVES = GROOVES
 
 local function tokens(text: string): { string }
 	local list = {}
@@ -437,6 +345,28 @@ local function tokens(text: string): { string }
 		end
 	end
 	return list
+end
+
+-- "$A" -> phrase A du morceau (récursion limitée)
+local function expand(text: string, phrases: { [string]: string }?): string
+	if not phrases or not string.find(text, "%$") then
+		return text
+	end
+	for _ = 1, 3 do
+		local changed = false
+		text = string.gsub(text, "%$(%w+)", function(name: string)
+			local p = phrases[name]
+			if p then
+				changed = true
+				return " " .. p .. " "
+			end
+			return ""
+		end)
+		if not changed then
+			break
+		end
+	end
+	return text
 end
 
 -- "E4:1.5" -> ("E4", 1.5) ; durée par défaut `default`
@@ -449,10 +379,10 @@ local function split(token: string, default: number): (string, number)
 end
 
 -- Mélodie -> { { beat, note|nil, beats } }
-function MusicData.ParseNotes(text: string): { { number } }
+function MusicData.ParseNotes(text: string, phrases: { [string]: string }?): { { number } }
 	local out = {}
 	local beat = 0
-	for _, token in ipairs(tokens(text)) do
+	for _, token in ipairs(tokens(expand(text, phrases))) do
 		local head, dur = split(token, 1)
 		local n = head ~= "r" and MusicData.Note(head) or nil
 		if n then
@@ -461,6 +391,30 @@ function MusicData.ParseNotes(text: string): { { number } }
 		beat += dur
 	end
 	return out
+end
+
+-- Durée (temps) d'un texte de notes (silences compris)
+function MusicData.TextBeats(text: string, phrases: { [string]: string }?): number
+	local beat = 0
+	for _, token in ipairs(tokens(expand(text, phrases))) do
+		local _, dur = split(token, 1)
+		beat += dur
+	end
+	return beat
+end
+
+-- Riff -> { { beat, degré (texte), beats } }
+local function parseRiff(text: string, phrases: { [string]: string }?): { any }
+	local out = {}
+	local beat = 0
+	for _, token in ipairs(tokens(expand(text, phrases))) do
+		local head, dur = split(token, 0.5)
+		if head ~= "r" then
+			table.insert(out, { beat, head, dur })
+		end
+		beat += dur
+	end
+	return out, beat
 end
 
 -- Accords -> { { beat, name|"r", beats } } ; sans durée = une mesure
@@ -480,77 +434,281 @@ local function melodyLength(list: { { number } }): number
 	return last and (last[1] + last[3]) or 0
 end
 
+-- Degré de riff ("1", "3", "5", "7", "8", "2", "4", "6", "9", "b7"… + ' ou ,)
+-- -> note MIDI, sur l'accord `name` (+ transposition), autour de `center`
+local DEGREE: { [string]: number } = { ["2"] = 2, ["4"] = 5, ["6"] = 9, ["8"] = 12, ["9"] = 14, b3 = 3, b7 = 10, ["#4"] = 6, b6 = 8 }
+function MusicData.Degree(token: string, name: string, center: number, transpose: number?): number?
+	local pc, intervals = MusicData.Chord(name)
+	if not pc or not intervals then
+		return nil
+	end
+	local up = 0
+	local core = string.gsub(token, "'", function()
+		up += 12
+		return ""
+	end)
+	core = string.gsub(core, ",", function()
+		up -= 12
+		return ""
+	end)
+	local iv: number?
+	if core == "1" then
+		iv = 0
+	elseif core == "3" then
+		iv = intervals[2] or 4
+	elseif core == "5" then
+		iv = intervals[3] or 7
+	elseif core == "7" then
+		iv = intervals[4] or ((intervals[2] == 3) and 10 or 11)
+	else
+		iv = DEGREE[core]
+	end
+	if not iv then
+		return nil
+	end
+	local root = (pc + (transpose or 0)) % 12
+	-- (fondamentale la plus proche de `center` par en dessous)
+	local base = root + 12 * math.floor((center - root) / 12)
+	return base + iv + up
+end
+
+type Section = { L: string, Bar0: number, Bars: number, Beat0: number, Beat1: number, Energy: number }
+
+-- Normalise la forme : liste des sections (dans l'ordre), accords absolus
+local function timeline(song: any): ({ Section }, { any }, number)
+	local barBeats = song.Beats or 4
+	local sections: { Section } = {}
+	local chords: { any } = {}
+	local beat = 0
+	local function addSection(letter: string, chordText: string, bars: number, energy: number)
+		local list = MusicData.ParseChords(chordText, barBeats)
+		local cycle = 0
+		for _, c in ipairs(list) do
+			cycle = math.max(cycle, c[1] + c[3])
+		end
+		local total = bars * barBeats
+		local index = #sections + 1
+		if cycle > 0 then
+			local offset = 0
+			while offset < total - 1e-6 do
+				for _, c in ipairs(list) do
+					if offset + c[1] < total - 1e-6 then
+						table.insert(chords, { beat + offset + c[1], c[2], math.min(c[3], total - offset - c[1]), index })
+					end
+				end
+				offset += cycle
+			end
+		end
+		table.insert(sections, { L = letter, Bar0 = math.floor(beat / barBeats + 0.5), Bars = bars, Beat0 = beat, Beat1 = beat + total, Energy = energy })
+		beat += total
+	end
+	if type(song.Form) == "string" and type(song.Sections) == "table" then
+		for _, letter in ipairs(tokens(song.Form)) do
+			local sec = song.Sections[letter]
+			if sec then
+				local list = MusicData.ParseChords(sec.Chords or "C", barBeats)
+				local cycle = 0
+				for _, c in ipairs(list) do
+					cycle = math.max(cycle, c[1] + c[3])
+				end
+				local bars = sec.Bars or math.max(1, math.ceil(cycle / barBeats - 1e-6))
+				addSection(letter, sec.Chords or "C", bars, sec.Energy or 1)
+			end
+		end
+		if song.End ~= false then
+			addSection("END", type(song.End) == "string" and song.End or "C", 1, 1)
+		end
+	else
+		addSection("A", song.Chords or "C", song.Bars or 8, 1)
+	end
+	return sections, chords, beat
+end
+
 -- Compile un morceau en événements triés (T en secondes)
-function MusicData.Compile(song: Song): { Events: { Event }, Duration: number, BeatSec: number }
-	local beatSec = 60 / song.Bpm
-	local barBeats = song.Beats
-	local totalBeats = song.Bars * barBeats
+function MusicData.Compile(song: Song): { Events: { Event }, Duration: number, BeatSec: number, Sections: { Section } }
+	local s: any = song
+	local beatSec = 60 / s.Bpm
+	local barBeats = s.Beats or 4
+	local sections, chords, totalBeats = timeline(s)
+	local transpose = tonumber(s.Transpose) or 0
+	local swing = math.clamp(tonumber(s.Swing) or 0, 0, 0.33)
+	local phrases = s.Phrases
+	local hasForm = type(s.Form) == "string"
 	local events: { Event } = {}
+	local function sectionAt(beat: number): (number, Section?)
+		for i, sec in ipairs(sections) do
+			if beat >= sec.Beat0 - 1e-6 and beat < sec.Beat1 - 1e-6 then
+				return i, sec
+			end
+		end
+		return 0, nil
+	end
 	local function add(beat: number, inst: string, n: number, v: number, dur: number)
 		if beat < -1e-6 or beat >= totalBeats - 1e-6 then
 			return
 		end
-		table.insert(events, { T = beat * beatSec, I = inst, N = n, V = math.clamp(v, 0.05, 1), D = math.max(0.05, dur * beatSec) })
-	end
-	-- accords (en boucle sur tout le morceau)
-	local chordList = MusicData.ParseChords(song.Chords, barBeats)
-	local cycle = 0
-	for _, c in ipairs(chordList) do
-		cycle = math.max(cycle, c[1] + c[3])
-	end
-	local chords: { any } = {}
-	if cycle > 0 then
-		local offset = 0
-		while offset < totalBeats do
-			for _, c in ipairs(chordList) do
-				if offset + c[1] < totalBeats then
-					table.insert(chords, { offset + c[1], c[2], c[3] })
-				end
+		local _, sec = sectionAt(beat)
+		local energy = sec and sec.Energy or 1
+		if swing > 0 then
+			-- (croches ternaires : le contretemps arrive plus tard)
+			local frac = beat % 1
+			if math.abs(frac - 0.5) < 1e-3 then
+				beat += swing * 0.5
+			elseif math.abs(frac - 0.75) < 1e-3 then
+				beat += swing * 0.25
 			end
-			offset += cycle
 		end
+		if inst ~= "Drums" and inst ~= "DJ" then
+			n += transpose
+		end
+		table.insert(events, { T = beat * beatSec, I = inst, N = n, V = math.clamp(v * energy, 0.05, 1), D = math.max(0.05, dur * beatSec) })
 	end
-	local function inBars(part: any, beat: number): boolean
+	local function chordAt(beat: number): string?
+		local found = nil
+		for _, c in ipairs(chords) do
+			if c[1] <= beat + 1e-6 then
+				found = c[2]
+			else
+				break
+			end
+		end
+		return found
+	end
+	local function inPart(part: any, beat: number): boolean
+		local index, sec = sectionAt(beat)
+		if not sec or index == 0 then
+			return false
+		end
 		local bar = math.floor(beat / barBeats + 1e-6) + 1
-		return bar >= (part.FromBar or 1) and bar <= (part.ToBar or song.Bars)
+		if bar < (part.FromBar or 1) or bar > (part.ToBar or math.huge) then
+			return false
+		end
+		if sec.L == "END" then
+			return part.Kind == "Harmony" or part.Kind == "Bass"
+		end
+		if type(part.In) == "string" then
+			return string.find(part.In, sec.L, 1, true) ~= nil
+		end
+		return true
+	end
+	-- dernière section (avant la fin) où une partie joue : pour l'accord final
+	local function activeInSection(part: any, sec: Section): boolean
+		if type(part.In) == "string" then
+			return string.find(part.In, sec.L, 1, true) ~= nil
+		end
+		return true
+	end
+	local lastSection = sections[#sections]
+	if lastSection and lastSection.L == "END" then
+		lastSection = sections[#sections - 1]
 	end
 	local melodies: { [number]: { { number } } } = {}
-	for index, part in ipairs(song.Parts) do
+	for index, part in ipairs(s.Parts) do
 		local kind = part.Kind
 		local vel = part.Vel or 0.85
-		if kind == "Lead" then
-			local list = MusicData.ParseNotes(part.Notes)
-			local len = melodyLength(list)
+		local octave = 12 * (part.Octave or 0)
+		if kind == "Lead" or kind == "Riff" then
 			local full = {}
-			for r = 0, (part.Repeat or 1) - 1 do
-				for _, e in ipairs(list) do
-					table.insert(full, { e[1] + r * len, e[2], e[3] })
+			local function place(text: string, start: number, stop: number, loop: boolean)
+				if kind == "Lead" then
+					local list = MusicData.ParseNotes(text, phrases)
+					local len = math.max(MusicData.TextBeats(text, phrases), melodyLength(list))
+					if len <= 0 then
+						return
+					end
+					local offset = 0
+					repeat
+						for _, e in ipairs(list) do
+							local b = start + offset + e[1]
+							if b < stop - 1e-6 then
+								table.insert(full, { b, e[2], e[3] })
+							end
+						end
+						offset += len
+					until not loop or start + offset >= stop - 1e-6
+				else
+					local list, len = parseRiff(text, phrases)
+					if len <= 0 then
+						return
+					end
+					local center = part.Center or 64
+					local offset = 0
+					repeat
+						for _, e in ipairs(list) do
+							local b = start + offset + e[1]
+							local name = b < stop - 1e-6 and chordAt(b) or nil
+							if name and name ~= "r" then
+								local n = MusicData.Degree(e[2], name, center, 0)
+								if n then
+									table.insert(full, { b, n, e[3] })
+								end
+							end
+						end
+						offset += len
+					until start + offset >= stop - 1e-6
+				end
+			end
+			if hasForm then
+				for _, sec in ipairs(sections) do
+					if sec.L ~= "END" and activeInSection(part, sec) then
+						local text = part.Notes or part.Pattern
+						if type(text) == "table" then
+							text = text[sec.L]
+						end
+						if type(text) == "string" then
+							place(text, sec.Beat0, sec.Beat1, true)
+						end
+					end
+				end
+			else
+				local text = part.Notes or part.Pattern or ""
+				if kind == "Lead" then
+					local list = MusicData.ParseNotes(text, phrases)
+					local len = melodyLength(list)
+					for r = 0, (part.Repeat or 1) - 1 do
+						for _, e in ipairs(list) do
+							table.insert(full, { e[1] + r * len, e[2], e[3] })
+						end
+					end
+				else
+					place(text, 0, totalBeats, true)
 				end
 			end
 			melodies[index] = full
 			for _, e in ipairs(full) do
-				if inBars(part, e[1]) then
+				if inPart(part, e[1]) then
 					-- (petite respiration : accents sur les temps forts)
-					local accent = (e[1] % barBeats) < 1e-6 and 1 or 0.88
-					add(e[1], part.I, e[2] + 12 * (part.Octave or 0), vel * accent, e[3])
+					local accent = (e[1] % barBeats) < 1e-6 and 1 or ((e[1] % 1) < 1e-6 and 0.9 or 0.8)
+					local n = e[2] + octave
+					add(e[1], part.I, n, vel * accent, e[3])
 				end
 			end
 		elseif kind == "Echo" then
 			local source = melodies[part.Of]
 			for _, e in ipairs(source or {}) do
 				local beat = e[1] + (part.Delay or 0)
-				if inBars(part, beat) then
-					add(beat, part.I, e[2] + 12 * (part.Octave or 0), vel, e[3])
+				if inPart(part, beat) then
+					add(beat, part.I, e[2] + octave, vel, e[3])
 				end
 			end
 		elseif kind == "Harmony" then
 			local style = part.Style
-			local octave = 12 * (part.Octave or 0)
 			for _, c in ipairs(chords) do
 				local start, name, dur = c[1], c[2], c[3]
-				if name ~= "r" and inBars(part, start) then
-					local notes = MusicData.ChordNotes(name, 62 + octave)
-					if style == "block" then
+				local sec = sections[c[4]]
+				if name ~= "r" and inPart(part, start) and not (sec.L == "END" and lastSection and not activeInSection(part, lastSection)) then
+					local pc0 = MusicData.Chord(name)
+					local center = 62 + octave
+					local notes = MusicData.ChordNotes(name, center)
+					local st = sec.L == "END" and "end" or style
+					if st == "end" then
+						for k, n in ipairs(notes) do
+							add(start + (k - 1) * 0.04, part.I, n, vel, barBeats)
+						end
+						if pc0 then
+							add(start, part.I, MusicData.Root(name, center - 18) or notes[1] - 12, vel * 0.8, barBeats)
+						end
+					elseif st == "block" then
 						local step = math.min(2, dur)
 						local b = 0
 						while b < dur - 1e-6 do
@@ -559,23 +717,39 @@ function MusicData.Compile(song: Song): { Events: { Event }, Duration: number, B
 							end
 							b += step
 						end
-					elseif style == "pad" then
+					elseif st == "pad" then
 						for _, n in ipairs(notes) do
 							add(start, part.I, n, vel, dur)
 						end
-					elseif style == "arp" then
+					elseif st == "arp" or st == "chip" or st == "ballad" then
 						local seq = table.clone(notes)
-						table.insert(seq, notes[1] + 12)
-						for i = #notes - 1, 2, -1 do
-							table.insert(seq, notes[i])
+						local stepLen = st == "chip" and 0.25 or 0.5
+						if st == "ballad" then
+							-- (main gauche large : basse, quinte, octave, dixième…)
+							local root = MusicData.Root(name, center - 18) or notes[1] - 12
+							seq = { root, root + 7, root + 12, notes[2] or root + 16, root + 19, notes[2] or root + 16, root + 12, root + 7 }
+						else
+							table.insert(seq, notes[1] + 12)
+							for i = #notes - 1, 2, -1 do
+								table.insert(seq, notes[i])
+							end
 						end
 						local b, i = 0, 0
 						while b < dur - 1e-6 do
-							add(start + b, part.I, seq[i % #seq + 1], vel * (i % 2 == 0 and 1 or 0.8), 0.5)
+							add(start + b, part.I, seq[i % #seq + 1], vel * (i % 2 == 0 and 1 or 0.8), stepLen * (st == "ballad" and 2 or 1))
+							b += stepLen
+							i += 1
+						end
+					elseif st == "alberti" then
+						-- (classique : grave, aigu, médium, aigu)
+						local seq = { notes[1], notes[3] or notes[1] + 7, notes[2] or notes[1] + 4, notes[3] or notes[1] + 7 }
+						local b, i = 0, 0
+						while b < dur - 1e-6 do
+							add(start + b, part.I, seq[i % 4 + 1] - 12, vel * (i % 4 == 0 and 1 or 0.75), 0.5)
 							b += 0.5
 							i += 1
 						end
-					elseif style == "strum" then
+					elseif st == "strum" then
 						-- rythme "Bas, Bas-Haut, Haut-Bas-Haut" (croches) ; guitare : 5 cordes
 						local root = MusicData.Root(name, 40) or 48
 						local voicing = { root }
@@ -595,15 +769,47 @@ function MusicData.Compile(song: Song): { Events: { Event }, Duration: number, B
 								end
 							end
 						end
-					elseif style == "stabs" then
+					elseif st == "power" then
+						-- (rock : quinte + octave, croches étouffées)
+						local root = MusicData.Root(name, 40) or 40
+						local b = 0
+						while b < dur - 1e-6 do
+							local accent = (b % 2) < 1e-6 and 1 or 0.7
+							for _, n in ipairs({ root, root + 7, root + 12 }) do
+								add(start + b, part.I, n, vel * accent, 0.4)
+							end
+							b += 0.5
+						end
+					elseif st == "stabs" or st == "skank" then
+						-- (contretemps : disco / reggae)
 						local b = 0.5
+						local len = st == "skank" and 0.2 or 0.25
 						while b < dur - 1e-6 do
 							for _, n in ipairs(notes) do
-								add(start + b, part.I, n, vel, 0.25)
+								add(start + b, part.I, n, vel, len)
 							end
 							b += 1
 						end
-					elseif style == "lofi" then
+					elseif st == "comp" then
+						-- (jazz : accords à 4 sons, poussés sur le "et" de 2 et sur 4)
+						local four = MusicData.ChordNotes(name, center - 2)
+						for _, b in ipairs({ 1.5, 3 }) do
+							if b < dur - 1e-6 then
+								for k, n in ipairs(four) do
+									add(start + b + (k - 1) * 0.02, part.I, n, vel * (b == 3 and 0.75 or 1), 0.6)
+								end
+							end
+						end
+					elseif st == "pulse" then
+						-- (électro : croches régulières, accord serré)
+						local b = 0
+						while b < dur - 1e-6 do
+							for _, n in ipairs(notes) do
+								add(start + b, part.I, n, vel * ((b % 1) < 1e-6 and 1 or 0.7), 0.4)
+							end
+							b += 0.5
+						end
+					elseif st == "lofi" then
 						-- accord égrené (main un peu en retard), rejoué au 3e temps
 						for k, n in ipairs(notes) do
 							add(start + (k - 1) * 0.06, part.I, n, vel, 2)
@@ -611,7 +817,18 @@ function MusicData.Compile(song: Song): { Events: { Event }, Duration: number, B
 								add(start + 2.5 + (k - 1) * 0.05, part.I, n, vel * 0.7, 1.4)
 							end
 						end
-					elseif style == "broken" then
+					elseif st == "waltz" then
+						-- (oum-pa-pa : basse au 1er temps, accord aux 2e et 3e)
+						local root = MusicData.Root(name, 43) or 43
+						add(start, part.I, root, vel, 1)
+						for _, b in ipairs({ 1, 2 }) do
+							if b < dur - 1e-6 then
+								for _, n in ipairs(notes) do
+									add(start + b, part.I, n, vel * 0.7, 0.6)
+								end
+							end
+						end
+					elseif st == "broken" then
 						-- main gauche de "Lettre à Élise" : fondamentale grave, quinte, octave
 						local root = MusicData.Root(name, 45) or 45
 						add(start, part.I, root, vel, 0.25)
@@ -621,11 +838,16 @@ function MusicData.Compile(song: Song): { Events: { Event }, Duration: number, B
 				end
 			end
 		elseif kind == "Bass" then
-			for _, c in ipairs(chords) do
+			for ci, c in ipairs(chords) do
 				local start, name, dur = c[1], c[2], c[3]
 				local root = name ~= "r" and MusicData.Root(name, 36) or nil
-				if root and inBars(part, start) then
-					local style = part.Style
+				local sec = sections[c[4]]
+				if root and inPart(part, start) and not (sec.L == "END" and lastSection and not activeInSection(part, lastSection)) then
+					local _, iv = MusicData.Chord(name)
+					local third = iv and iv[2] or 4
+					local style = sec.L == "END" and "whole" or part.Style
+					local nextChord = chords[ci + 1]
+					local nextRoot = nextChord and nextChord[2] ~= "r" and MusicData.Root(nextChord[2], 36) or root
 					if style == "whole" then
 						add(start, part.I, root, vel, dur)
 					elseif style == "half" then
@@ -640,6 +862,69 @@ function MusicData.Compile(song: Song): { Events: { Event }, Duration: number, B
 							b += 0.5
 							i += 1
 						end
+					elseif style == "eighth" then
+						local b = 0
+						while b < dur - 1e-6 do
+							add(start + b, part.I, root, vel * ((b % 1) < 1e-6 and 1 or 0.75), 0.4)
+							b += 0.5
+						end
+					elseif style == "walk" then
+						-- (jazz : noires qui marchent vers l'accord suivant)
+						local steps = { root, root + third, root + 7 }
+						local b, i = 0, 0
+						while b < dur - 1e-6 do
+							local n = steps[i % 3 + 1]
+							if b >= dur - 1 - 1e-6 then
+								-- (approche chromatique de la prochaine fondamentale)
+								local target = nextRoot or root
+								n = target + ((target > root) and -1 or 1)
+							end
+							add(start + b, part.I, n, vel * (i % 2 == 0 and 1 or 0.8), 0.9)
+							b += 1
+							i += 1
+						end
+					elseif style == "reggae" then
+						add(start, part.I, root, vel, 1.4)
+						if dur >= 3 then
+							add(start + 1.5, part.I, root + 7, vel * 0.8, 0.5)
+							add(start + 2, part.I, root + 12, vel * 0.85, 0.9)
+							add(start + 3, part.I, root + third, vel * 0.75, 0.9)
+						end
+					elseif style == "funk" then
+						local pattern = { { 0, 0, 1 }, { 0.75, 12, 0.7 }, { 1.5, 0, 0.8 }, { 2.5, 10, 0.8 }, { 3, 7, 0.9 }, { 3.5, 12, 0.7 } }
+						for _, p in ipairs(pattern) do
+							if p[1] < dur - 1e-6 then
+								add(start + p[1], part.I, root + p[2], vel * p[3], 0.3)
+							end
+						end
+					elseif style == "808" then
+						-- (hip-hop / trap : notes longues, rebond à l'octave)
+						add(start, part.I, root, vel, math.min(1.5, dur))
+						if dur >= 3 then
+							add(start + 1.75, part.I, root, vel * 0.85, 1)
+							add(start + 3, part.I, root + 12, vel * 0.7, 0.5)
+							add(start + 3.5, part.I, root, vel * 0.8, 0.5)
+						end
+					elseif style == "synth" then
+						-- (synthwave : croches, octave sur les contretemps)
+						local b, i = 0, 0
+						while b < dur - 1e-6 do
+							add(start + b, part.I, root + ((i % 4 == 3) and 12 or 0), vel * (i % 2 == 0 and 1 or 0.7), 0.35)
+							b += 0.5
+							i += 1
+						end
+					elseif style == "bossa" then
+						add(start, part.I, root, vel, 1.4)
+						add(start + 1.5, part.I, root + 7, vel * 0.8, 0.5)
+						if dur >= 3 then
+							add(start + 2, part.I, root + 7, vel * 0.85, 1.4)
+							add(start + 3.5, part.I, root, vel * 0.75, 0.5)
+						end
+					elseif style == "country" then
+						add(start, part.I, root, vel, 0.9)
+						if dur >= 3 then
+							add(start + 2, part.I, root + 7, vel * 0.85, 0.9)
+						end
 					else -- "root" : fondamentale au 1er temps, quinte au 3e
 						add(start, part.I, root, vel, math.min(dur, 1.5))
 						if dur >= 3 then
@@ -651,48 +936,102 @@ function MusicData.Compile(song: Song): { Events: { Event }, Duration: number, B
 			end
 		elseif kind == "Drums" and part.Style ~= "none" then
 			local groove = GROOVES[part.Style] or GROOVES.pop
+			local fillDef = FILLS[part.Fill or GROOVE_FILL[part.Style] or "toms"] or FILLS.toms
 			local steps = math.floor(barBeats * 4 + 0.5)
-			for bar = 0, song.Bars - 1 do
-				local barStart = bar * barBeats
-				local last = bar == song.Bars - 1
-				local fill = (bar % 4 == 3) and not last
-				for pieceKey, pattern in pairs(groove) do
-					local piece: string = pieceKey
-					local hatSoft = piece == "HatClosed"
-					local isKick = piece == "Kick"
-					for s = 1, steps do
-						local ch = string.sub(pattern, (s - 1) % #pattern + 1, (s - 1) % #pattern + 1)
-						local beat = barStart + (s - 1) * 0.25
-						local inFill = fill and s > steps - 4
-						if (ch == "x" or ch == "o") and not (inFill and not isKick) and not last then
-							local v = (ch == "o" and 1 or 0.8) * vel * (hatSoft and (s % 2 == 1 and 0.75 or 0.5) or 1)
-							add(beat, "Drums", MusicData.DRUM[piece], v, 0.2)
+			for si, sec in ipairs(sections) do
+				local active = sec.L ~= "END" and activeInSection(part, sec)
+				if active then
+					for k = 0, sec.Bars - 1 do
+						local barStart = sec.Beat0 + k * barBeats
+						local bar = math.floor(barStart / barBeats + 1e-6) + 1
+						if bar >= (part.FromBar or 1) and bar <= (part.ToBar or math.huge) then
+							local lastOfSection = k == sec.Bars - 1
+							local nextSec = sections[si + 1]
+							local fill = false
+							if lastOfSection and nextSec and part.Fills ~= false then
+								fill = true
+							elseif not hasForm and (bar % 4 == 0) and bar < (part.ToBar or math.huge) and k < sec.Bars - 1 then
+								fill = true
+							elseif hasForm and (k % 8 == 7) and part.Fills ~= false then
+								fill = true
+							end
+							local songEnd = not hasForm and k == sec.Bars - 1
+							local fillFrom = fill and (steps - math.min(steps, fillDef.Steps)) or steps
+							for pieceKey, pattern in pairs(groove) do
+								local piece: string = pieceKey
+								local isKick = piece == "Kick"
+								for st = 1, steps do
+									local ch = string.sub(pattern, (st - 1) % #pattern + 1, (st - 1) % #pattern + 1)
+									if ch ~= "." and ch ~= "" and not songEnd and (isKick or st <= fillFrom) then
+										local beat = barStart + (st - 1) * 0.25
+										local v = (ch == "o" and 1 or (ch == "g" and 0.4 or 0.8)) * vel
+										if piece == "HatClosed" and ch ~= "g" then
+											v *= (st % 2 == 1) and 0.8 or 0.55
+										end
+										add(beat, "Drums", MusicData.DRUM[piece], v, 0.2)
+										if ch == "r" then
+											add(beat + 0.125, "Drums", MusicData.DRUM[piece], v * 0.8, 0.1)
+										end
+									end
+								end
+							end
+							if fill then
+								for pieceKey, pattern in pairs(fillDef) do
+									if type(pattern) == "string" then
+										for st = fillFrom + 1, steps do
+											local ch = string.sub(pattern, st, st)
+											if ch ~= "." and ch ~= "" then
+												local beat = barStart + (st - 1) * 0.25
+												local v = (ch == "o" and 1 or (ch == "g" and 0.45 or 0.82)) * vel
+												add(beat, "Drums", MusicData.DRUM[pieceKey], v, 0.2)
+												if ch == "r" then
+													add(beat + 0.125, "Drums", MusicData.DRUM[pieceKey], v * 0.8, 0.1)
+												end
+											end
+										end
+									end
+								end
+							end
+							-- crash : début de section (sauf la toute première mesure) et toutes les 8 mesures
+							if (k == 0 and si > 1) or (k > 0 and k % 8 == 0) or (not hasForm and bar % 4 == 1 and bar > 1) then
+								add(barStart, "Drums", MusicData.DRUM.Crash, vel * 0.85, 1)
+							end
+							if songEnd then
+								add(barStart, "Drums", MusicData.DRUM.Crash, vel, 2)
+								add(barStart, "Drums", MusicData.DRUM.Kick, vel, 0.5)
+							end
 						end
 					end
 				end
-				if fill then
-					-- roulement de toms sur le dernier temps
-					for k, piece in ipairs({ "TomHigh", "TomHigh", "TomMid", "TomFloor" }) do
-						add(barStart + barBeats - 1 + (k - 1) * 0.25, "Drums", MusicData.DRUM[piece], vel * (0.7 + 0.08 * k), 0.2)
-					end
-				end
-				if bar % 4 == 0 then
-					add(barStart, "Drums", MusicData.DRUM.Crash, vel * 0.8, 1)
-				end
-				if last then
-					add(barStart, "Drums", MusicData.DRUM.Crash, vel, 2)
-					add(barStart, "Drums", MusicData.DRUM.Kick, vel, 0.5)
-				end
+			end
+			-- accord final : crash + grosse caisse
+			local final = sections[#sections]
+			if hasForm and final and final.L == "END" and lastSection and activeInSection(part, lastSection) then
+				add(final.Beat0, "Drums", MusicData.DRUM.Crash, vel, 2)
+				add(final.Beat0, "Drums", MusicData.DRUM.Kick, vel, 0.5)
 			end
 		elseif kind == "DJ" then
 			local style: string = tostring(part.Style)
-			for bar = 0, song.Bars - 1 do
-				local barStart = bar * barBeats
-				if style == "scratch" and bar % 4 == 3 then
-					add(barStart + barBeats - 1, "DJ", 5, 0.8, 0.5)
-					add(barStart + barBeats - 0.5, "DJ", 5, 0.7, 0.5)
-				elseif style == "vinyl" and bar % 8 == 7 then
-					add(barStart + barBeats - 1, "DJ", 7, 0.5, 1)
+			local fx = MusicData.DJ_FX
+			for si, sec in ipairs(sections) do
+				if sec.L ~= "END" and (hasForm and activeInSection(part, sec) or (not hasForm and inPart(part, sec.Beat0))) then
+					for k = 0, sec.Bars - 1 do
+						local barStart = sec.Beat0 + k * barBeats
+						if style == "scratch" and k % 4 == 3 then
+							add(barStart + barBeats - 1, "DJ", fx.Scratch, 0.8, 0.5)
+							add(barStart + barBeats - 0.5, "DJ", fx.Scratch, 0.7, 0.5)
+						elseif style == "vinyl" and k % 8 == 7 then
+							add(barStart + barBeats - 1, "DJ", fx.Riser, 0.5, 1)
+						end
+					end
+					if style == "riser" then
+						-- (montée sur la dernière mesure de la section)
+						add(sec.Beat1 - barBeats, "DJ", fx.Riser, 0.8, barBeats)
+					elseif style == "drop" then
+						add(sec.Beat0, "DJ", fx.Drop, 0.9, 2)
+					elseif style == "horn" and si > 1 then
+						add(sec.Beat0, "DJ", fx.Horn, 0.8, 1)
+					end
 				end
 			end
 		end
@@ -701,9 +1040,12 @@ function MusicData.Compile(song: Song): { Events: { Event }, Duration: number, B
 		if a.T ~= b.T then
 			return a.T < b.T
 		end
-		return a.I < b.I
+		if a.I ~= b.I then
+			return a.I < b.I
+		end
+		return a.N < b.N
 	end)
-	return { Events = events, Duration = totalBeats * beatSec, BeatSec = beatSec }
+	return { Events = events, Duration = totalBeats * beatSec, BeatSec = beatSec, Sections = sections }
 end
 
 local compiled: { [string]: any } = {}
@@ -719,11 +1061,13 @@ function MusicData.Song(id: string): any
 		return nil
 	end
 	local song = MusicData.SONGS[index]
-	local result = MusicData.Compile(song)
+	local result: any = MusicData.Compile(song)
 	result.Id = song.Id
 	result.Name = song.Name
 	result.Icon = song.Icon
 	result.Author = song.Author
+	result.Genre = song.Genre
+	result.Bpm = song.Bpm
 	compiled[id] = result
 	return result
 end
@@ -734,6 +1078,22 @@ function MusicData.Duration(id: string): number
 	return song and song.Duration or 0
 end
 
+-- Instruments joués par un morceau (pour les pochettes : 🎹🥁🎸…)
+function MusicData.SongInstruments(id: string): { string }
+	local song = MusicData.Song(id)
+	local seen, list = {}, {}
+	for _, ev in ipairs(song and song.Events or {}) do
+		if not seen[ev.I] then
+			seen[ev.I] = true
+			table.insert(list, ev.I)
+		end
+	end
+	table.sort(list, function(a, b)
+		return (MusicData.INDEX[a] or 99) < (MusicData.INDEX[b] or 99)
+	end)
+	return list
+end
+
 ----------------------------------------------------------------------
 -- 5. Boucles du DJ (1 mesure à 120 BPM = 2 s, calées sur l'heure du serveur)
 ----------------------------------------------------------------------
@@ -741,16 +1101,22 @@ end
 MusicData.LOOP_BPM = 120
 MusicData.LOOP_BAR = 4 * 60 / MusicData.LOOP_BPM
 
-local LOOPS: { { Groove: string, Bass: { number } } } = {
+local LOOPS: { { Groove: string, Bass: { number }, Chord: string?, Stab: string? } } = {
 	{ Groove = "rock", Bass = { 45, 0, 45, 0, 0, 0, 48, 0, 45, 0, 45, 0, 43, 0, 43, 0 } },
-	{ Groove = "house", Bass = { 0, 0, 45, 0, 0, 0, 45, 0, 0, 0, 48, 0, 0, 0, 47, 0 } },
+	{ Groove = "house", Bass = { 0, 0, 45, 0, 0, 0, 45, 0, 0, 0, 48, 0, 0, 0, 47, 0 }, Chord = "Am7", Stab = "..x...x...x...x." },
 	{ Groove = "hiphop", Bass = { 45, 0, 0, 0, 0, 0, 0, 45, 45, 0, 43, 0, 0, 0, 0, 0 } },
-	{ Groove = "boom", Bass = { 50, 0, 0, 0, 0, 0, 0, 0, 43, 0, 0, 0, 0, 0, 45, 0 } },
+	{ Groove = "lofi", Bass = { 50, 0, 0, 0, 0, 0, 0, 0, 43, 0, 0, 0, 0, 0, 45, 0 }, Chord = "Dm7", Stab = "x.........x....." },
+	{ Groove = "trap", Bass = { 41, 0, 0, 0, 0, 0, 0, 41, 0, 0, 41, 0, 0, 0, 0, 0 } },
+	{ Groove = "reggae", Bass = { 43, 0, 0, 0, 0, 0, 50, 0, 55, 0, 0, 0, 47, 0, 0, 0 }, Chord = "G", Stab = "....x.......x..." },
+	{ Groove = "disco", Bass = { 45, 0, 57, 0, 45, 0, 57, 0, 43, 0, 55, 0, 43, 0, 55, 0 }, Chord = "Am7", Stab = "..x.......x....." },
+	{ Groove = "techno", Bass = { 0, 0, 45, 45, 0, 0, 45, 45, 0, 0, 45, 45, 0, 0, 45, 48 }, Chord = "Am", Stab = "...x.....x....x." },
 }
+MusicData.LOOP_NAMES = { "Rock", "House", "Hip-hop", "Lo-fi", "Trap", "Reggae", "Disco", "Techno" }
+MusicData.LOOP_ICONS = { "🤘", "🏠", "🎤", "☕", "🔥", "🌴", "🪩", "⚡" }
 
 local loopCache: { [number]: { Event } } = {}
 
--- Événements d'une boucle (T dans [0, LOOP_BAR[) : batterie + basse
+-- Événements d'une boucle (T dans [0, LOOP_BAR[) : batterie + basse (+ accords)
 function MusicData.Loop(index: number): { Event }
 	local cached = loopCache[index]
 	if cached then
@@ -763,14 +1129,27 @@ function MusicData.Loop(index: number): { Event }
 		for piece, pattern in pairs(GROOVES[def.Groove] or {}) do
 			for s = 1, 16 do
 				local ch = string.sub(pattern, s, s)
-				if ch == "x" or ch == "o" then
-					table.insert(events, { T = (s - 1) * step, I = "Drums", N = MusicData.DRUM[piece], V = ch == "o" and 0.95 or 0.75, D = 0.2 })
+				if ch ~= "." and ch ~= "" then
+					local v = ch == "o" and 0.95 or (ch == "g" and 0.4 or 0.75)
+					table.insert(events, { T = (s - 1) * step, I = "Drums", N = MusicData.DRUM[piece], V = v, D = 0.2 })
+					if ch == "r" then
+						table.insert(events, { T = (s - 0.5) * step, I = "Drums", N = MusicData.DRUM[piece], V = v * 0.8, D = 0.1 })
+					end
 				end
 			end
 		end
 		for s, n in ipairs(def.Bass) do
 			if n > 0 then
 				table.insert(events, { T = (s - 1) * step, I = "Bass", N = n, V = 0.8, D = step * 2 })
+			end
+		end
+		if def.Chord and def.Stab then
+			for s = 1, 16 do
+				if string.sub(def.Stab, s, s) == "x" then
+					for _, n in ipairs(MusicData.ChordNotes(def.Chord, 64)) do
+						table.insert(events, { T = (s - 1) * step, I = "Synth", N = n, V = 0.45, D = step * 1.5 })
+					end
+				end
 			end
 		end
 		table.sort(events, function(a, b)

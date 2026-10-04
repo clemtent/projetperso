@@ -30,7 +30,11 @@
 	         ("notes", instIndex, { n, v, dt… }) : notes jouées (triplets)
 	         ("song", songId | "", "one" | "all") : lancer / arrêter un morceau
 	         ("radio", piste 0..N)               : radio lofi (0 = coupée)
-	         ("loop", 0..4)                      : boucle du DJ (0 = coupée)
+	         ("loop", 0..8)                      : boucle du DJ (0 = coupée)
+	         ("queue", "add", songId)            : (v11) file d'attente (+1)
+	         ("queue", "remove", index)          : (v11) retirer de la file
+	         ("skip")                            : (v11) morceau suivant
+	         ("chain", on)                       : (v11) enchaîner (mode "all")
 	  S -> C ("open", instId)  : tu joues de cet instrument (au joueur)
 	         ("close", instId) : ton instrument est libéré
 	         ("busy", instId)  : quelqu'un en joue déjà
@@ -62,6 +66,8 @@ local WATCH_EVERY = 0.5 -- (s) vérification des musiciens / fin du morceau
 local STAGE_RANGE = 70 -- (studs) pour lancer un morceau / la radio
 local SONG_LEAD = 0.8 -- (s) le morceau démarre un peu après la demande (tous en même temps)
 local SONG_COOLDOWN = 1.2 -- (s) entre deux demandes d'un même joueur
+local QUEUE_MAX = 12 -- (v11) morceaux dans la file d'attente (attribut "Queue")
+local QUEUE_COOLDOWN = 0.35
 -- seaux de jetons (anti-spam) : messages et notes par seconde
 local MSG_RATE, MSG_BURST = 18, 24
 local NOTE_RATE, NOTE_BURST = 40, 64
@@ -73,7 +79,7 @@ local state = {
 	StageCF = CFrame.identity,
 	Anchors = {} :: { [string]: Anchor },
 	Occupant = {} :: { [Player]: string },
-	Buckets = {} :: { [Player]: { Msg: number, Notes: number, At: number, SongAt: number } },
+	Buckets = {} :: { [Player]: any },
 	Connections = {} :: { RBXScriptConnection },
 	Generation = 0,
 	Relayed = 0,
@@ -168,7 +174,7 @@ end
 -- Anti-spam (seau de jetons)
 ----------------------------------------------------------------------
 
-local function bucket(player: Player): { Msg: number, Notes: number, At: number, SongAt: number }
+local function bucket(player: Player): any
 	local b = state.Buckets[player]
 	local t = now()
 	if not b then
@@ -247,6 +253,52 @@ local function setSong(id: string, mode: string)
 	folder:SetAttribute("SongId", id)
 end
 
+-- (v11) file d'attente : attribut "Queue" = "id1,id2,…" (lu par tous les clients)
+local function getQueue(): { string }
+	local folder = state.Folder
+	local list = {}
+	local raw = folder and folder:GetAttribute("Queue")
+	if type(raw) == "string" then
+		for id in string.gmatch(raw, "[^,]+") do
+			if MusicData.SONG_INDEX[id] then
+				table.insert(list, id)
+			end
+		end
+	end
+	return list
+end
+
+local function setQueue(list: { string })
+	local folder = state.Folder
+	if folder then
+		folder:SetAttribute("Queue", table.concat(list, ","))
+	end
+end
+
+-- Morceau suivant : la file d'attente d'abord, puis (mode "all") le
+-- catalogue dans l'ordre ; sinon, silence
+local function advance()
+	local folder = state.Folder
+	if not folder then
+		return
+	end
+	local queue = getQueue()
+	local mode = folder:GetAttribute("SongMode")
+	if #queue > 0 then
+		local nextId = table.remove(queue, 1)
+		setQueue(queue)
+		setSong(nextId, mode == "all" and "all" or "one")
+	elseif mode == "all" then
+		local id = folder:GetAttribute("SongId")
+		local index = type(id) == "string" and MusicData.SONG_INDEX[id] or 0
+		local nextSong = MusicData.SONGS[index % #MusicData.SONGS + 1]
+		setSong(nextSong.Id, "all")
+	else
+		folder:SetAttribute("SongId", "")
+		folder:SetAttribute("SongMode", "")
+	end
+end
+
 local function playlistCount(): number
 	local list = Config.Music and Config.Music.Playlist
 	return type(list) == "table" and #list or 0
@@ -320,6 +372,53 @@ local function onEvent(player: Player, kind: any, a: any, b: any)
 		end
 		bk.SongAt = t
 		setRadio(math.floor(a))
+	elseif kind == "queue" then
+		if not nearStage(player, STAGE_RANGE) then
+			return
+		end
+		local t = now()
+		if t - (bk.QueueAt or -math.huge) < QUEUE_COOLDOWN then
+			return
+		end
+		bk.QueueAt = t
+		local queue = getQueue()
+		if a == "add" and type(b) == "string" and MusicData.SONG_INDEX[b] then
+			local current = state.Folder:GetAttribute("SongId")
+			if type(current) ~= "string" or current == "" then
+				-- (rien ne joue : il démarre tout de suite)
+				setSong(b, "one")
+			elseif #queue < QUEUE_MAX then
+				table.insert(queue, b)
+				setQueue(queue)
+			end
+		elseif a == "remove" and type(b) == "number" and b == b then
+			local index = math.floor(b)
+			if index >= 1 and index <= #queue then
+				table.remove(queue, index)
+				setQueue(queue)
+			end
+		end
+	elseif kind == "skip" then
+		if not nearStage(player, STAGE_RANGE) then
+			return
+		end
+		local t = now()
+		if t - bk.SongAt < SONG_COOLDOWN then
+			return
+		end
+		bk.SongAt = t
+		local current = state.Folder:GetAttribute("SongId")
+		if type(current) == "string" and current ~= "" then
+			advance()
+		end
+	elseif kind == "chain" then
+		if not nearStage(player, STAGE_RANGE) then
+			return
+		end
+		local current = state.Folder:GetAttribute("SongId")
+		if type(current) == "string" and current ~= "" then
+			state.Folder:SetAttribute("SongMode", a == true and "all" or "one")
+		end
 	elseif kind == "loop" then
 		if state.Occupant[player] ~= "DJ" or type(a) ~= "number" or a ~= a then
 			return
@@ -356,15 +455,7 @@ local function watchStep()
 		if type(id) == "string" and id ~= "" and type(start) == "number" then
 			local duration = MusicData.Duration(id)
 			if now() > start + duration + 0.6 then
-				if folder:GetAttribute("SongMode") == "all" then
-					local index = MusicData.SONG_INDEX[id] or 0
-					local nextSong = MusicData.SONGS[index % #MusicData.SONGS + 1]
-					folder:SetAttribute("SongStart", now() + 1.2)
-					folder:SetAttribute("SongId", nextSong.Id)
-				else
-					folder:SetAttribute("SongId", "")
-					folder:SetAttribute("SongMode", "")
-				end
+				advance()
 			end
 		end
 	end
@@ -459,6 +550,7 @@ function TownMusic.Build(parent: Instance, cf: CFrame): Folder
 	folder:SetAttribute("SongMode", "")
 	folder:SetAttribute("Radio", 0)
 	folder:SetAttribute("RadioStart", 0)
+	folder:SetAttribute("Queue", "")
 
 	local D = MusicData.DECK
 	local top = MusicData.DECK_TOP

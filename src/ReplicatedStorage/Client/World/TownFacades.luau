@@ -43,6 +43,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Locale = require(ReplicatedStorage.Shared.Locale)
+local CityInteriors = require(script.Parent.CityInteriors) -- (v11, CITY11) intérieurs des commerces
 
 local TownFacades = {}
 
@@ -52,6 +53,7 @@ local WHITE = Color3.new(1, 1, 1)
 
 local FOLDER_NAME = "TownFacadeDetail"
 local BUILD_RANGE, DROP_RANGE = 200, 260
+local INTERIOR_RANGE, INTERIOR_DROP = 100, 135 -- (v11) aménagement + PNJ des commerces
 -- v9.8 🎨 Graphismes > Détail (REALISM98) : distances de flux ×0,65 / ×1 / ×1,35
 local okGQ, GraphicsQuality = pcall(require, game:GetService("ReplicatedStorage").Shared.GraphicsQuality)
 local function detailScale(): number
@@ -64,7 +66,6 @@ local PLAQUE_DISTANCE = 30
 
 local GLASS = rgb(74, 96, 124)
 local GLASS_SHOP = rgb(96, 110, 128)
-local INTERIOR = rgb(150, 128, 118) -- (boutique éteinte, mais on voit le fond : pas un trou noir)
 local IRON = rgb(40, 42, 52)
 
 ----------------------------------------------------------------------
@@ -148,11 +149,6 @@ end
 -- Données
 ----------------------------------------------------------------------
 
--- Enseignes des boutiques fermées (clés anglaises, traduites)
-local SHOP_NAMES = {
-	"💐 Florist", "📖 Bookshop", "🥖 Bakery", "💊 Pharmacy", "✂️ Hair Salon", "🍫 Chocolatier", "🧀 Cheese Shop", "✏️ Stationery",
-	"👓 Optician", "🚲 Bike Repair", "🍵 Tea Room", "🧺 Laundromat", "🎩 Hat Shop", "🍯 Fine Grocery", "🧶 Haberdashery", "🕰️ Watchmaker",
-}
 -- Réclames peintes sur les pignons
 local MURALS = { "🥤 Dopamine Soda", "🍬 Candy Pop since 1998", "🧠 Think happy!", "☕ Mochi Café, 2nd street" }
 local FLOWERS = { rgb(255, 110, 160), rgb(255, 214, 96), rgb(186, 140, 255), rgb(255, 150, 110), rgb(255, 255, 255) }
@@ -183,6 +179,12 @@ type Building = {
 	JobIndex: number,
 	Built: boolean,
 	Parts: number,
+	-- (v11, CITY11) commerce ouvert : métier, porte, pièce, volume creusé, intérieur
+	Kind: string?,
+	DoorX: number?,
+	Room: { F: CFrame, W: number, D: number, H: number }?,
+	Carve: { Part: BasePart, Size: Vector3, CF: CFrame, Hidden: { BasePart } }?,
+	Interior: Model?,
 }
 
 local started = false
@@ -191,7 +193,7 @@ local folder: Folder? = nil
 local conns: { RBXScriptConnection } = {}
 local clock = 0
 local focus: Vector3? = nil
-local stats = { Built = 0, Destroyed = 0, Parts = 0 }
+local stats: { [string]: number } = { Built = 0, Destroyed = 0, Parts = 0, InteriorParts = 0 }
 
 ----------------------------------------------------------------------
 -- Fenêtres (repère F : face de la coque à z = 0, dehors vers -Z)
@@ -277,74 +279,90 @@ end
 -- Rez-de-chaussée
 ----------------------------------------------------------------------
 
--- Boutique fermée : devanture en bois peint, vitrine sombre, store roulé,
--- porte vitrée et pancarte "Fermé"
+-- (v11, CITY11) BOUTIQUE OUVERTE : le métier (CityInteriors) est tiré de
+-- la graine, deux voisins n'ont jamais le même ; vitrine claire, porte
+-- grande ouverte (4,4 de large), enseigne du métier, pancarte "Ouvert",
+-- store banne DÉPLOYÉ ; derrière, la vraie pièce (TownFacades creuse le
+-- volume du serveur localement : carveGround) et son aménagement.
+local function shopKind(b: Building): string
+	local list = CityInteriors.STREET_SHOPS
+	return list[(b.Seed * 7 + 3) % #list + 1]
+end
+
+local FLOOR_UP = 1.25 -- sol de la boutique (dessus du socle 1,2 + 0,05)
+
 local function shopFront(b: Building, parent: Instance, F: CFrame)
 	local w, G = b.W, b.GroundH
 	local hw = w / 2
 	local accent = b.Accent
 	local dark = accent:Lerp(Color3.new(0, 0, 0), 0.35)
 	local seed = b.Seed
+	local kind = b.Kind or shopKind(b)
+	local info = CityInteriors.Info(kind)
 	local doorRight = hash(seed, 21) < 0.5
-	local dx = (doorRight and 1 or -1) * (hw - 3.6)
-	local dw = 2.8
-	local base = 0 -- (pied des piliers : sur le trottoir, devant le socle)
+	local dw = 4.4
+	local dx = (doorRight and 1 or -1) * (hw - 1.1 - 0.5 - dw / 2)
+	b.DoorX = dx
+	local base = 0
 	local top = G - 2.6 -- haut de la vitrine (bas du bandeau)
-	-- piliers + bandeau d'enseigne
 	for _, sx in ipairs({ -1, 1 }) do
 		box(parent, "Pilaster", F, sx < 0 and -hw or hw - 1.1, sx < 0 and -hw + 1.1 or hw, base, G - 0.3, -1.0, 0, accent, M.Wood)
 		box(parent, "PilasterCap", F, sx < 0 and -hw - 0.05 or hw - 1.25, sx < 0 and -hw + 1.25 or hw + 0.05, G - 3.05, G - 2.75, -1.12, -1.0, dark, M.Wood)
 	end
-	local fascia = box(parent, "Fascia", F, -hw + 0.15, hw - 0.15, G - 2.6, G - 0.35, -1.25, 0, accent, M.Wood)
-	local name = SHOP_NAMES[math.floor(hash(seed, 23) * #SHOP_NAMES) + 1]
-	-- enseigne : planche claire posée sur le bandeau
+	box(parent, "Fascia", F, -hw + 0.15, hw - 0.15, G - 2.6, G - 0.35, -1.25, 0, accent, M.Wood)
+	-- enseigne du métier (planche claire) + lettrage
 	local board = box(parent, "SignBoard", F, -hw + 2.2, hw - 2.2, G - 2.35, G - 0.6, -1.33, -1.25, rgb(252, 246, 232), M.Wood)
-	signText(board, Locale.T(name), dark, 28, SIGN_DISTANCE)
-	local _ = fascia
-	-- allège + vitrine (sombre : boutique éteinte) + fond
+	signText(board, info.Emoji .. " " .. Locale.T(info.Name), info.Sign, 28, SIGN_DISTANCE)
+	-- allège + vitrine claire (on voit l'intérieur)
 	local gx0, gx1 = -hw + 1.1, hw - 1.1
 	local dx0, dx1 = dx - dw / 2 - 0.25, dx + dw / 2 + 0.25
-	box(parent, "Stallriser", F, gx0, dx0, base, 2.4, -0.85, 0, dark, M.Wood)
-	box(parent, "Stallriser", F, dx1, gx1, base, 2.4, -0.85, 0, dark, M.Wood)
-	box(parent, "ShopInside", F, gx0, gx1, 2.4, top, -0.09, -0.03, INTERIOR, M.SmoothPlastic)
-	for _, seg in ipairs({ { gx0, dx0 }, { dx1, gx1 } }) do
+	for _, seg in ipairs({ { gx0, dx0 - 0.25 }, { dx1 + 0.25, gx1 } }) do
 		local a, c = seg[1], seg[2]
+		if c - a > 0.3 then
+			box(parent, "Stallriser", F, a, c, base, 2.4, -0.85, 0, dark, M.Wood, true)
+		end
 		if c - a > 0.8 then
-			local g = box(parent, "ShopGlass", F, a, c, 2.4, top, -0.72, -0.64, GLASS_SHOP, M.Glass)
-			g.Transparency = 0.55
-			g.Reflectance = 0.2
-			-- stores intérieurs à demi baissés (fermé)
-			box(parent, "ShopBlind", F, a + 0.1, c - 0.1, top - (top - 2.4) * (0.35 + hash(seed, 25 + a) * 0.2), top, -0.6, -0.54, rgb(238, 226, 210), M.Fabric)
-			-- tablette de vitrine + 3 petits objets
-			box(parent, "DisplayShelf", F, a + 0.1, c - 0.1, 2.4, 2.65, -0.52, -0.12, rgb(236, 226, 214), M.Wood)
-			local n = math.max(1, math.floor((c - a) / 2.4))
-			for k = 1, math.min(3, n) do
-				local x = a + (k - 0.5) * (c - a) / math.min(3, n)
-				local color = FLOWERS[(math.floor(hash(seed + k, 27) * #FLOWERS) + k) % #FLOWERS + 1]
-				if k % 2 == 1 then
-					box(parent, "GiftBox", F, x - 0.45, x + 0.45, 2.65, 3.45, -0.46, -0.16, color, M.SmoothPlastic)
-				else
-					local jar = newPart(parent, "Jar", Vector3.new(1.1, 0.5, 0.5), F * CFrame.new(x, 3.2, -0.31) * CFrame.Angles(0, 0, math.rad(90)), color:Lerp(WHITE, 0.3), M.Glass)
-					;(jar :: Part).Shape = Enum.PartType.Cylinder
-				end
-			end
+			local g = box(parent, "ShopGlass", F, a, c, 2.4, top, -0.72, -0.64, GLASS_SHOP, M.Glass, true)
+			g.Transparency = 0.72
+			g.Reflectance = 0.12
+			box(parent, "GlassBar", F, a, c, top - 1.6, top - 1.45, -0.78, -0.62, dark, M.Wood)
+			-- pièce derrière la vitrine : rebord intérieur (z 0..0,4)
+			box(parent, "InnerSill", F, a, c, base, 2.4, 0.06, 0.4, info.Wall, M.SmoothPlastic, true)
 		end
 	end
-	-- montants de la porte, porte vitrée, imposte, poignée, pancarte
-	for _, x in ipairs({ dx0, dx1 }) do
-		box(parent, "DoorPost", F, x - 0.25, x + 0.25, base, top, -0.9, 0, dark, M.Wood)
+	-- linteau intérieur (au-dessus de la vitrine, jusqu'au plafond)
+	box(parent, "InnerHeader", F, -hw + 0.02, hw - 0.02, top, G - 0.3, 0.06, 0.4, info.Wall, M.SmoothPlastic)
+	for _, sx in ipairs({ -1, 1 }) do
+		box(parent, "InnerJamb", F, sx < 0 and -hw + 0.02 or gx1, sx < 0 and gx0 or hw - 0.02, base, top, 0.06, 0.4, info.Wall, M.SmoothPlastic, true)
 	end
-	box(parent, "DoorLeaf", F, dx - dw / 2, dx + dw / 2, 1.2, 6.3, -0.32, -0.12, accent, M.Wood)
-	local dg = box(parent, "DoorGlass", F, dx - dw / 2 + 0.4, dx + dw / 2 - 0.4, 3.4, 5.9, -0.38, -0.33, GLASS_SHOP, M.Glass)
-	dg.Reflectance = 0.2
-	box(parent, "DoorHead", F, dx0 + 0.25, dx1 - 0.25, 6.3, 6.6, -0.6, -0.1, dark, M.Wood)
-	local tg = box(parent, "Transom", F, dx - dw / 2, dx + dw / 2, 6.6, top, -0.4, -0.3, GLASS_SHOP, M.Glass)
-	tg.Transparency = 0.3
-	box(parent, "Handle", F, dx + (doorRight and -1 or 1) * (dw / 2 - 0.4) - 0.07, dx + (doorRight and -1 or 1) * (dw / 2 - 0.4) + 0.07, 3.2, 4.2, -0.5, -0.38, rgb(214, 180, 90), M.Metal)
-	local plaque = box(parent, "ClosedSign", F, dx - 0.8, dx + 0.8, 4.5, 5.4, -0.44, -0.39, WHITE, M.SmoothPlastic)
-	signText(plaque, Locale.T("Closed for now 😴"), rgb(200, 70, 100), 60, PLAQUE_DISTANCE, Enum.Font.GothamBold)
-	-- store banne ROULÉ sous l'enseigne (boutique fermée)
-	rodX(parent, "RolledAwning", F, -hw + 1.3, hw - 1.3, G - 2.95, -1.55, 0.7, hash(seed, 29) < 0.5 and accent:Lerp(WHITE, 0.35) or rgb(246, 240, 230), M.Fabric)
+	-- montants de porte ; porte vitrée OUVERTE vers l'intérieur (charnière côté pilier)
+	for _, x in ipairs({ dx0, dx1 }) do
+		box(parent, "DoorPost", F, x - 0.25, x + 0.25, base, top, -0.9, 0.4, dark, M.Wood, true)
+	end
+	local hingeX = doorRight and dx1 - 0.25 or dx0 + 0.25
+	local H = F * CFrame.new(hingeX, 0, 0.45) * CFrame.Angles(0, (doorRight and -1 or 1) * math.rad(-95), 0)
+	local s = doorRight and -1 or 1
+	local leaf = dw - 0.1
+	box(parent, "DoorLeaf", H, s > 0 and 0 or -leaf, s > 0 and 0.18 or -leaf + 0.18, FLOOR_UP, top - 0.1, -0.08, 0.08, accent, M.Wood)
+	box(parent, "DoorLeaf", H, s > 0 and leaf - 0.18 or -0.18, s > 0 and leaf or 0, FLOOR_UP, top - 0.1, -0.08, 0.08, accent, M.Wood)
+	box(parent, "DoorLeaf", H, s > 0 and 0.18 or -leaf + 0.18, s > 0 and leaf - 0.18 or -0.18, FLOOR_UP, FLOOR_UP + 0.9, -0.08, 0.08, accent, M.Wood)
+	box(parent, "DoorLeaf", H, s > 0 and 0.18 or -leaf + 0.18, s > 0 and leaf - 0.18 or -0.18, top - 0.3, top - 0.1, -0.08, 0.08, accent, M.Wood)
+	local dg = box(parent, "DoorGlass", H, s > 0 and 0.18 or -leaf + 0.18, s > 0 and leaf - 0.18 or -0.18, FLOOR_UP + 0.9, top - 0.3, -0.04, 0.04, GLASS_SHOP, M.Glass)
+	dg.Transparency = 0.6
+	box(parent, "DoorHead", F, dx0 + 0.25, dx1 - 0.25, top - 0.05, top + 0.3, -0.6, -0.1, dark, M.Wood)
+	-- pancarte "Ouvert" accrochée à la vitrine, près de la porte
+	local px = doorRight and dx0 - 1.4 or dx1 + 1.4
+	local plaque = box(parent, "OpenSign", F, px - 0.8, px + 0.8, 5.0, 5.9, -0.8, -0.76, WHITE, M.SmoothPlastic)
+	signText(plaque, Locale.T("Open ✨"), rgb(40, 150, 80), 60, PLAQUE_DISTANCE, Enum.Font.GothamBold)
+	-- store banne DÉPLOYÉ (toile inclinée + lambrequin)
+	local stripe = hash(seed, 29) < 0.5 and accent:Lerp(WHITE, 0.35) or rgb(246, 240, 230)
+	local n = math.max(4, math.floor((w - 2.6) / 2.4))
+	local sw = (w - 2.6) / n
+	for i = 1, n do
+		local x = -hw + 1.3 + (i - 0.5) * sw
+		newPart(parent, "Awning", Vector3.new(sw, 0.12, 3.4), F * CFrame.new(x, G - 3.4, -2.75) * CFrame.Angles(math.rad(20), 0, 0), i % 2 == 0 and stripe or accent, M.Fabric)
+	end
+	box(parent, "AwningValance", F, -hw + 1.3, hw - 1.3, G - 4.65, G - 4.15, -4.4, -4.3, accent, M.Fabric)
 	-- marche devant la porte (sur le trottoir, devant le socle)
 	box(parent, "Step", F, dx - dw / 2 - 0.4, dx + dw / 2 + 0.4, 0, 0.6, -1.6, -0.62, rgb(206, 200, 194), M.Concrete, true)
 end
@@ -768,6 +786,59 @@ local function hallExtras(b: Building, parent: Instance)
 	end
 end
 
+-- (v11, CITY11) boutique de la place OUVERTE : on masque localement la
+-- devanture pleine du serveur (Shopfront, Interior, Door, DoorGlass, Knob),
+-- on garde ses vitrines, et on pose un cadre (piliers, allège, linteau) +
+-- la pièce derrière ; porte 3,4 x 7 ouverte (battant rabattu à l'intérieur)
+local DECOR_KIND = {
+	Cafe = "Cafe", IceCream = "IceCream", Arcade = "Arcade", Bakery = "Bakery", Flowers = "Florist", Boba = "Boba", Books = "Books",
+	Toys = "Toys", Cinema = "Cinema", Pizza = "Pizza", Music = "Music", Candy = "Candy", Gym = "Gym",
+}
+local function decorOpenFront(b: Building, parent: Instance)
+	local F = b.CF
+	local w, G = b.W, b.GroundH
+	local hw = w / 2
+	local frame = b.Accent:Lerp(Color3.new(0, 0, 0), 0.35)
+	local info = CityInteriors.Info(b.Kind or "Cafe")
+	local doorW = 3.4
+	local ww = (w - 1.6 - doorW) / 2 - 1.2
+	local wx = doorW / 2 + 0.6 + ww / 2
+	local y0, y1 = 2.2, 8.0 -- vitrines du serveur
+	local fy0, fy1 = 1.2, 1.2 + G - 2.4
+	local x0, x1 = -hw + 0.8, hw - 0.8
+	local z0, z1 = -0.32, 0.0 -- (devanture masquée : -0,35..0,05)
+	-- allège sous les vitrines, linteau, piliers (mêmes plans que la devanture masquée)
+	for _, sx in ipairs({ -1, 1 }) do
+		local a, c = sx < 0 and x0 or doorW / 2, sx < 0 and -doorW / 2 or x1
+		box(parent, "FrontSill", F, a, c, fy0, y0, z0, z1, frame, M.Wood, true)
+		box(parent, "FrontLintel", F, a, c, y1, fy1, z0, z1, frame, M.Wood)
+		local ex0, ex1 = sx * (wx - ww / 2), sx * (wx + ww / 2)
+		local outer0, outer1 = sx < 0 and x0 or math.max(ex0, ex1), sx < 0 and math.min(ex0, ex1) or x1
+		box(parent, "FrontPier", F, outer0, outer1, y0, y1, z0, z1, frame, M.Wood, true)
+		local in0, in1 = sx < 0 and math.max(ex0, ex1) or doorW / 2, sx < 0 and -doorW / 2 or math.min(ex0, ex1)
+		box(parent, "FrontPier", F, in0, in1, y0, y1, z0, z1, frame, M.Wood, true)
+	end
+	box(parent, "FrontLintel", F, -doorW / 2, doorW / 2, 8.2, fy1, z0, z1, frame, M.Wood)
+	-- revers intérieur de la façade (z 0,06 .. 0,4) autour des ouvertures
+	box(parent, "InnerHeader", F, -hw + 0.02, hw - 0.02, y1, G - 0.3, 0.06, 0.4, info.Wall, M.SmoothPlastic)
+	for _, sx in ipairs({ -1, 1 }) do
+		local a, c = sx < 0 and -hw + 0.02 or doorW / 2, sx < 0 and -doorW / 2 or hw - 0.02
+		box(parent, "InnerSill", F, a, c, fy0, y0, 0.06, 0.4, info.Wall, M.SmoothPlastic, true)
+		local ex0, ex1 = sx * (wx - ww / 2), sx * (wx + ww / 2)
+		local o0, o1 = sx < 0 and -hw + 0.02 or math.max(ex0, ex1), sx < 0 and math.min(ex0, ex1) or hw - 0.02
+		box(parent, "InnerJamb", F, o0, o1, y0, y1, 0.06, 0.4, info.Wall, M.SmoothPlastic, true)
+		local i0, i1 = sx < 0 and math.max(ex0, ex1) or doorW / 2, sx < 0 and -doorW / 2 or math.min(ex0, ex1)
+		box(parent, "InnerJamb", F, i0, i1, y0, y1, 0.06, 0.4, info.Wall, M.SmoothPlastic, true)
+	end
+	-- battant de porte rabattu contre le piédroit (à l'intérieur)
+	local H = F * CFrame.new(doorW / 2, 0, 0.5) * CFrame.Angles(0, math.rad(95), 0)
+	box(parent, "DoorLeaf", H, -doorW + 0.1, 0, FLOOR_UP, 8.1, -0.08, 0.08, b.Accent, M.Wood)
+	-- pancarte "Ouvert"
+	local plaque = box(parent, "OpenSign", F, -0.8, 0.8, 8.35, 8.75, -0.42, -0.38, WHITE, M.SmoothPlastic)
+	signText(plaque, Locale.T("Open ✨"), rgb(40, 150, 80), 60, PLAQUE_DISTANCE, Enum.Font.GothamBold)
+	b.DoorX = 0
+end
+
 local function decorShopExtras(b: Building, parent: Instance)
 	backSide(b, parent)
 	for _, sx in ipairs({ -1, 1 }) do
@@ -780,9 +851,73 @@ local function decorShopExtras(b: Building, parent: Instance)
 			end
 		end
 	end
-	-- pancarte "Fermé" sur la porte vitrée (porte au milieu de la devanture)
-	local plaque = box(parent, "ClosedSign", b.CF, -0.8, 0.8, 5, 5.8, -0.73, -0.67, WHITE, M.SmoothPlastic)
-	signText(plaque, Locale.T("Closed for now 😴"), rgb(200, 70, 100), 60, PLAQUE_DISTANCE, Enum.Font.GothamBold)
+end
+
+----------------------------------------------------------------------
+-- (v11, CITY11) rez-de-chaussée creusé LOCALEMENT : la coque du serveur
+-- ("Body") est raccourcie (elle commence au plafond du rez-de-chaussée) ;
+-- restaurée à l'identique quand le détail est détruit. Les pièces pleines
+-- du serveur à masquer (devanture de la place) le sont par
+-- LocalTransparencyModifier + collision coupée, puis rétablies.
+----------------------------------------------------------------------
+
+local function carveGround(b: Building, hideNames: { string }?)
+	if b.Carve then
+		return
+	end
+	local body = b.Model:FindFirstChild("Body")
+	if not body or not body:IsA("BasePart") then
+		return
+	end
+	local G = b.GroundH
+	local hidden = {}
+	if hideNames then
+		for _, p in ipairs(b.Model:GetChildren()) do
+			if p:IsA("BasePart") and table.find(hideNames, p.Name) then
+				table.insert(hidden, p)
+			end
+		end
+	end
+	b.Carve = { Part = body, Size = body.Size, CF = body.CFrame, Hidden = hidden }
+	local h = b.Height - G
+	if h > 1 then
+		body.Size = Vector3.new(body.Size.X, h, body.Size.Z)
+		body.CFrame = b.CF * CFrame.new(0, G + h / 2, b.D / 2)
+	end
+	for _, p in ipairs(hidden) do
+		p.LocalTransparencyModifier = 1
+		p:SetAttribute("CityCollide", p.CanCollide)
+		p.CanCollide = false
+	end
+end
+
+local function restoreGround(b: Building)
+	local c = b.Carve
+	if not c then
+		return
+	end
+	b.Carve = nil
+	if c.Part.Parent then
+		c.Part.Size = c.Size
+		c.Part.CFrame = c.CF
+	end
+	for _, p in ipairs(c.Hidden) do
+		if p.Parent then
+			p.LocalTransparencyModifier = 0
+			local was = p:GetAttribute("CityCollide")
+			p.CanCollide = was == true
+			p:SetAttribute("CityCollide", nil)
+		end
+	end
+end
+
+-- pièce (sol, murs, plafond, suspensions) du commerce ouvert
+local function openRoom(b: Building, parent: Instance)
+	local kind = b.Kind or "Grocery"
+	local h = b.GroundH - FLOOR_UP
+	local Fin = b.CF * CFrame.new(0, FLOOR_UP, 0)
+	b.Room = { F = Fin, W = b.W, D = b.D, H = h }
+	CityInteriors.Shell(parent, Fin, b.W, b.D, h, kind)
 end
 
 ----------------------------------------------------------------------
@@ -798,6 +933,16 @@ local function jobsFor(b: Building, parent: Model): { () -> () }
 		end)
 		return jobs
 	elseif b.Style == "DecorShop" then
+		-- (v11, CITY11) boutique de la place ouverte : on y entre
+		local spec = string.match(b.Model.Name, "^Shop_(.+)$") or ""
+		b.Kind = DECOR_KIND[spec] or CityInteriors.ForShop(spec)
+		table.insert(jobs, function()
+			carveGround(b, { "Shopfront", "Interior", "Door", "DoorGlass", "Knob" })
+			openRoom(b, parent)
+		end)
+		table.insert(jobs, function()
+			decorOpenFront(b, parent)
+		end)
 		table.insert(jobs, function()
 			decorShopExtras(b, parent)
 		end)
@@ -810,6 +955,10 @@ local function jobsFor(b: Building, parent: Model): { () -> () }
 		if style == "Modern" and r < 0.5 then
 			lobbyFront(b, parent, F)
 		elseif r < 0.68 then
+			-- (v11, CITY11) commerce OUVERT : rez-de-chaussée creusé + pièce
+			b.Kind = shopKind(b)
+			carveGround(b)
+			openRoom(b, parent)
 			shopFront(b, parent, F)
 		else
 			local mat = style == "Brick" and M.Brick or (style == "Haussmann" and M.Limestone or (style == "Modern" and M.Concrete or M.Plaster))
@@ -842,7 +991,15 @@ local function setFar(b: Building, hidden: boolean)
 	end
 end
 
+local function destroyInterior(b: Building)
+	if b.Interior then
+		b.Interior:Destroy()
+		b.Interior = nil
+	end
+end
+
 local function destroyDetail(b: Building)
+	destroyInterior(b)
 	if b.Detail_ then
 		b.Detail_:Destroy()
 		b.Detail_ = nil
@@ -850,7 +1007,34 @@ local function destroyDetail(b: Building)
 	end
 	b.Jobs = nil
 	b.Built = false
+	b.Room = nil
+	restoreGround(b)
 	setFar(b, false)
+end
+
+-- (v11, CITY11) aménagement + PNJ du commerce : seulement de près
+local function buildInterior(b: Building)
+	local room = b.Room
+	if not room or b.Interior or not folder then
+		return
+	end
+	local m = Instance.new("Model")
+	m.Name = "Interior_" .. tostring(b.Kind)
+	m.Parent = folder
+	b.Interior = m
+	local before = count
+	local ok, err = pcall(CityInteriors.Furnish, m, room.F, room.W, room.D, room.H, b.Kind or "Grocery", b.Seed, { DoorX = b.DoorX or 0, MaxNpc = 2 })
+	if not ok then
+		warn("[TownFacades] intérieur : " .. tostring(err))
+	end
+	local n = 0
+	for _, d in ipairs(m:GetDescendants()) do
+		if d:IsA("BasePart") then
+			n += 1
+		end
+	end
+	stats.InteriorParts = (stats.InteriorParts or 0) + n
+	local _ = before
 end
 
 ----------------------------------------------------------------------
@@ -877,6 +1061,22 @@ local function decide(position: Vector3)
 		if (b.Built or b.Jobs) and dist > DROP_RANGE * k then
 			destroyDetail(b)
 		end
+	end
+	-- (v11) intérieurs des commerces : construits de près, détruits plus loin
+	local nearestRoom: Building? = nil
+	local nearestD = math.huge
+	for _, b in ipairs(buildings) do
+		if b.Room then
+			local dist = flat(position, b.Center)
+			if b.Interior and dist > INTERIOR_DROP * k then
+				destroyInterior(b)
+			elseif not b.Interior and b.Built and dist <= INTERIOR_RANGE * k and dist < nearestD then
+				nearestRoom, nearestD = b, dist
+			end
+		end
+	end
+	if nearestRoom then
+		buildInterior(nearestRoom)
 	end
 	-- un chantier à la fois : l'immeuble le plus proche qui en a besoin
 	for _, b in ipairs(buildings) do

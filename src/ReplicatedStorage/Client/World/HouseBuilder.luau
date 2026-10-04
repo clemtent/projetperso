@@ -84,6 +84,22 @@
 	    house:HoldFull(true) (CONSTRUCT10 : animation de construction) force
 	    le complet tout de suite et bloque le LOD ; house:SetLod(niveau) ;
 	    house.Lod ; attribut "Lod" du modèle.
+	(v11 HOUSE11) 🪟 UN RIDEAU PAR FENÊTRE et 💡 UN INTERRUPTEUR PAR LUMIÈRE
+	(Shared/HouseSwitches) :
+	  - chaque fenêtre ("F1", "F2" côté rue, "B" côté jardin) a son invite E
+	    et son état sauvegardé ; plis en accordéon réalistes (HouseToggles) ;
+	  - le plafonnier ("C") : interrupteur mural (E) à UNE BASCULE PAR
+	    LUMIÈRE (plafonnier + 3 lampes) ; F sur l'interrupteur = toutes les
+	    lumières de la pièce ; chaque lampe posée ("ItemId#n") a SA propre
+	    invite E sur la lampe ;
+	  - hall : interrupteur double à l'entrée (plafonnier + lampe de la
+	    console ; F = tout le hall), un interrupteur par palier, invite sur la
+	    lampe de la console ;
+	  - lueurs de nuit vues de dehors : fenêtre par fenêtre (rideau fermé =
+	    teinte du tissu), plafonnier = franche, lampes seules = douce ;
+	  house:ToggleRoom(slot, "Window" | "Light", clé) ou
+	  house:ToggleRoom(slot, "AllLights" | "AllCurtains") (slot 0 = hall) ;
+	  house.Hall.Toggles ; state.Toggles.Windows / .Lamps.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -1187,7 +1203,7 @@ local function hallToggles(self: House, model: Model, lamps: { any }): RoomToggl
 	for floor = 2, 6 do
 		local entry = byKey["C" .. floor]
 		if entry then
-			local cf = self.HouseCF * CFrame.new(c0, WorldLayout.FloorY(floor) + 4.3, -d) * CFrame.Angles(0, -math.pi / 2, 0)
+			local cf = self.HouseCF * CFrame.new(c0, WorldLayout.FloorY(floor) + 4.3, -d) * CFrame.Angles(0, math.pi / 2, 0)
 			local switch = HouseToggles.Switch(model, cf, true, 1)
 			local p = prompt(switch.Plate, switchTexts(true), entry.Label, Enum.KeyCode.E, owner)
 			p.MaxActivationDistance = 8
@@ -1259,6 +1275,7 @@ function HouseBuilder.DestroyHall(self: House)
 	hall.Model = nil
 	hall.State = "None"
 	hall.Ramps = {}
+	hall.Toggles = nil
 	self.Ramps = {}
 end
 
@@ -1269,12 +1286,20 @@ function HouseBuilder.BuildHall(self: House)
 	self:DestroyHall()
 	local model = Instance.new("Model")
 	model.Name = "Hall"
-	local kit = HouseKit.new(self.HouseCF, model, 2)
+	-- (v11 : 3 vraies lumières : plafonniers du rez-de-chaussée et du 1er + lampe de la console)
+	local kit = HouseKit.new(self.HouseCF, model, 3)
 	local ok, result = pcall(HouseStairs.BuildInterior, kit, self.Size)
 	local hall = self.Hall
 	if ok then
 		hall.Ramps = result.Ramps
 		self.Ramps = result.Ramps
+		-- (v11 HOUSE11) 💡 un interrupteur par lampe du hall
+		local okT, toggles = pcall(hallToggles, self, model, result.Lamps or {})
+		if okT then
+			hall.Toggles = toggles
+		else
+			warn("[World] Interrupteurs du hall : " .. tostring(toggles))
+		end
 	else
 		warn("[World] Escalier : " .. tostring(result))
 	end
@@ -1667,40 +1692,92 @@ end
 
 local GLOW_WARM = Color3.fromRGB(255, 206, 140)
 
--- (v9.9) Allume / éteint la lueur de nuit de chaque fenêtre : pièce qui
--- existe + lumière allumée (attribut du propriétaire) ; rideaux fermés =
--- lueur teintée par le tissu, un peu plus douce ; hall : toujours la nuit
+-- (v11) Clé de la fenêtre d'une lueur ("F1", "F2" côté rue, "B" côté
+-- jardin) : face de la SurfaceGui + position de la vitre (gardée dans la lueur)
+local function glowKey(self: House, slot: number, glow: any): string?
+	if glow.Key ~= nil then
+		return if glow.Key == "" then nil else glow.Key
+	end
+	local key = ""
+	local gui = glow.Gui
+	local glass = gui and gui.Parent
+	if gui and glass and glass:IsA("BasePart") then
+		if gui.Face == Enum.NormalId.Front then
+			key = "B"
+		else
+			local floor, column = WorldLayout.SlotCell(self.Size, slot)
+			local x = WorldLayout.ToLocal(self.HouseCF, glass.Position)
+			local best = math.huge
+			for index, rect in ipairs(HouseFacade.WindowRects(self.Size, column, floor, self.Spec)) do
+				local gap = math.abs((rect[1] + rect[2]) / 2 - x)
+				if gap < best then
+					best = gap
+					key = "F" .. index
+				end
+			end
+		end
+	end
+	glow.Key = key
+	return if key == "" then nil else key
+end
+
+-- (v9.9, v11) Allume / éteint la lueur de nuit de chaque fenêtre (vue de
+-- dehors) : pièce qui existe + au moins une lumière allumée (plafonnier :
+-- lueur franche ; seulement des lampes : plus douce) ; rideau de CETTE
+-- fenêtre fermé = lueur teintée par le tissu ; hall : si une de ses lampes brille
 function HouseBuilder.ApplyGlows(self: House, night: boolean)
 	local off, closed = ownerFlags(self)
 	local bySlot = roomsBySlot(self.Snapshot)
 	for slot, list in pairs(self.Glows) do
 		local on, color, alpha = false, GLOW_WARM, 0.3
+		local roomId, fabric = "", GLOW_WARM
 		if slot == 0 then
-			on = night
+			local anyOn = false
+			for _, key in ipairs(HouseSwitches.HallKeys(WorldLayout.Dims(self.Size).Floors)) do
+				anyOn = anyOn or wanted(self, off, HouseSwitches.HALL_ID, "L", key)
+			end
+			on = night and anyOn
 			alpha = 0.4
 		else
 			local room = bySlot[slot]
 			if room then
-				local id = tostring(room.Id)
-				on = night and not off[id]
-				if closed[id] then
-					local style = wallpaperOf(room)
-					local fabric = style and typeof(style.B) == "Color3" and style.B or Color3.fromRGB(255, 190, 214)
-					color = GLOW_WARM:Lerp(fabric, 0.55)
-					alpha = 0.42
+				roomId = tostring(room.Id)
+				local ceilingOn = wanted(self, off, roomId, "L", HouseSwitches.CEILING)
+				local lampOn = false
+				for _, key in ipairs(HouseSwitches.LightKeys(room.Placed)) do
+					if key ~= HouseSwitches.CEILING then
+						lampOn = lampOn or wanted(self, off, roomId, "L", key)
+					end
 				end
+				on = night and (ceilingOn or lampOn)
+				alpha = if ceilingOn then 0.3 else 0.5
+				local style = wallpaperOf(room)
+				fabric = style and typeof(style.B) == "Color3" and style.B or Color3.fromRGB(255, 190, 214)
 			end
 		end
 		for _, glow in ipairs(list) do
+			local key = if slot ~= 0 and roomId ~= "" then glowKey(self, slot, glow) else nil
+			local shut = false
+			if key then
+				shut = not wanted(self, closed, roomId, "W", key)
+			elseif slot ~= 0 and roomId ~= "" then
+				-- (vitre simplifiée du LOD : toute la pièce) fermée si toutes ses fenêtres le sont
+				shut = true
+				for _, k in ipairs(HouseSwitches.WINDOW_KEYS) do
+					shut = shut and not wanted(self, closed, roomId, "W", k)
+				end
+			end
+			local c = if shut then GLOW_WARM:Lerp(fabric, 0.55) else color
+			local a = if shut then math.min(0.6, alpha + 0.12) else alpha
 			if glow.Gui and glow.Fill then
 				glow.Gui.Enabled = on
-				glow.Fill.BackgroundColor3 = color
-				glow.Fill.BackgroundTransparency = alpha
+				glow.Fill.BackgroundColor3 = c
+				glow.Fill.BackgroundTransparency = a
 			elseif glow.Part then
 				-- (v10 LOD) vitre simplifiée : teinte chaude douce (Neon sombre) la nuit
 				local part: BasePart = glow.Part
 				if on then
-					part.Color = color:Lerp(Color3.new(0, 0, 0), 0.25)
+					part.Color = c:Lerp(Color3.new(0, 0, 0), 0.25)
 					part.Material = M.Neon
 				else
 					part.Color = glow.Day or part.Color
@@ -1716,45 +1793,99 @@ function HouseBuilder.BackDoorPosition(self: House): Vector3
 	return WorldLayout.ToWorld(self.HouseCF, WorldLayout.BackDoorX(self.Size), WorldLayout.FloorY(1) + 2, WorldLayout.BackDoorD(self.Size) - 0.4)
 end
 
--- (v9.8) Applique les attributs 💡 / 🪟 du propriétaire à toutes les pièces construites
+-- (v9.8, v11) Applique les attributs 💡 / 🪟 du propriétaire à toutes les
+-- pièces construites et au hall (lumière par lumière, fenêtre par fenêtre)
 function HouseBuilder.ApplyRoomFlags(self: House, animate: boolean)
 	local off, closed, key = ownerFlags(self)
 	self.FlagKey = key
 	for _, state in pairs(self.Rooms) do
 		if state.Toggles and state.Data then
-			local id = tostring(state.Data.Id)
-			applyToggles(state, not off[id], not closed[id], animate)
+			applyToggles(self, state.Toggles, tostring(state.Data.Id), off, closed, animate)
 		end
+	end
+	if self.Hall.Toggles then
+		applyToggles(self, self.Hall.Toggles, HouseSwitches.HALL_ID, off, closed, animate)
 	end
 end
 
--- (v9.8) Le propriétaire bascule les rideaux ou les lumières d'une pièce :
--- animation tout de suite, puis sauvegarde (en cas de refus : retour à
--- l'état du serveur)
-function HouseBuilder.ToggleRoom(self: House, slot: number, what: string): boolean
-	local state = self.Rooms[slot]
-	local t = state and state.Toggles
-	if not state or not t or not state.Data or not localIsOwner(self) then
-		return false
-	end
-	local lightsOn, curtainsOpen = t.LightsOn, t.CurtainsOpen
-	local argument: { [string]: any } = { Room = tostring(state.Data.Id) }
-	if what == "Lights" then
-		lightsOn = not lightsOn
-		argument.LightsOn = lightsOn
-	elseif what == "Curtains" then
-		curtainsOpen = not curtainsOpen
-		argument.CurtainsOpen = curtainsOpen
+-- (v9.8, v11) Le propriétaire bascule UNE fenêtre ("Window", clé), UNE
+-- lumière ("Light", clé), ou toute la pièce ("AllLights" / "AllCurtains" ;
+-- anciens noms "Lights" / "Curtains") ; slot 0 = le hall. Animation tout de
+-- suite (clic "en cours" gardé dans Pending), puis sauvegarde ; en cas de
+-- refus : retour à l'état du serveur.
+function HouseBuilder.ToggleRoom(self: House, slot: number, what: string, key: string?): boolean
+	local toggles: RoomToggles?, roomId: string
+	if slot == 0 then
+		toggles, roomId = self.Hall.Toggles, HouseSwitches.HALL_ID
 	else
+		local state = self.Rooms[slot]
+		toggles = state and state.Toggles
+		roomId = state and state.Data and tostring(state.Data.Id) or ""
+	end
+	if not toggles or roomId == "" or not localIsOwner(self) then
 		return false
 	end
-	applyToggles(state, lightsOn, curtainsOpen, true)
+	local t = toggles :: RoomToggles
+	local argument: { [string]: any } = { Room = roomId }
+	local changes: { { string } } = {} -- { genre, clé }
+	local value = false
+	if what == "Window" and key then
+		for _, win in ipairs(t.Windows) do
+			if win.Key == key then
+				value = not win.Open
+				argument.Window, argument.Open = key, value
+				table.insert(changes, { "W", key })
+			end
+		end
+	elseif what == "Light" and key then
+		for _, lamp in ipairs(t.Lamps) do
+			if lamp.Key == key then
+				value = not lamp.On
+				argument.Light, argument.On = key, value
+				table.insert(changes, { "L", key })
+			end
+		end
+	elseif what == "AllLights" or what == "Lights" then
+		value = not t.LightsOn -- (au moins une allumée -> tout éteindre)
+		argument.LightsOn = value
+		for _, lamp in ipairs(t.Lamps) do
+			table.insert(changes, { "L", lamp.Key })
+		end
+	elseif (what == "AllCurtains" or what == "Curtains") and slot ~= 0 then
+		value = not t.CurtainsOpen
+		argument.CurtainsOpen = value
+		for _, win in ipairs(t.Windows) do
+			table.insert(changes, { "W", win.Key })
+		end
+	end
+	if #changes == 0 then
+		return false
+	end
+	local marks: { string } = {}
+	for _, change in ipairs(changes) do
+		local mark = roomId .. ":" .. change[1] .. ":" .. change[2]
+		self.Pending[mark] = value
+		table.insert(marks, mark)
+	end
+	local off, closed = ownerFlags(self)
+	applyToggles(self, t, roomId, off, closed, true)
+	self.GlowKey = "" -- (lueurs de nuit recalculées au prochain StepDoor)
 	task.spawn(function()
 		local ok, success = pcall(function()
 			return Net.Function("House"):InvokeServer("setRoomState", argument)
 		end)
-		if not (ok and success == true) and self.Alive then
+		for _, mark in ipairs(marks) do
+			if self.Pending[mark] == value then
+				self.Pending[mark] = nil
+			end
+		end
+		if self.Alive then
+			-- (succès : l'attribut du serveur dit déjà la même chose ; refus : retour)
 			self:ApplyRoomFlags(true)
+			self.GlowKey = ""
+			if not (ok and success == true) then
+				warn("[World] Interrupteur / rideau refusé : " .. tostring(success))
+			end
 		end
 	end)
 	return true

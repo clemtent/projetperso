@@ -66,6 +66,11 @@ MusicSynth.__index = MusicSynth
 
 local VOICES = 8
 local MIN_VOLUME = 0.004
+-- (budget : au-delà de ~110 sons lancés par seconde, on ne garde que la
+-- couche principale de chaque note : accords grattés, morceaux chargés)
+local BUDGET_RATE = 110
+local BUDGET_MAX = 40
+local BUDGET_LOW = 12
 
 export type Layer = {
 	Sample: string, -- identifiant complet (rbxasset://…)
@@ -385,6 +390,8 @@ function MusicSynth.new()
 		Clock = 0,
 		Played = 0,
 		ByChain = {} :: { [string]: number },
+		Budget = 40, -- (sons lancés : seau de jetons, BUDGET_RATE / s)
+		Chord = {} :: { [string]: { T: number, N: number } },
 		Volume = 1,
 		VolumeAt = -math.huge,
 	}, MusicSynth)
@@ -513,15 +520,33 @@ local function fire(self: any, emitter: Instance?, layer: Layer, gain: number)
 	end
 end
 
+-- Couches gardées : toutes, sauf si le budget est bas ou si la note fait
+-- partie d'un accord (à partir de la 4e note jouée au même instant, seules
+-- les 2 premières couches : un accord gratté reste clair et léger)
+local function playLayers(self: any, emitter: Instance?, layers: { Layer }, m: number, light: boolean)
+	for i, layer in ipairs(layers) do
+		if i == 1 or (not light and self.Budget >= BUDGET_LOW) or (light and i == 2 and self.Budget >= BUDGET_LOW) then
+			if self.Budget >= 1 or i == 1 then
+				self.Budget -= 1
+				fire(self, emitter, layer, m)
+			end
+		end
+	end
+end
+
 -- Note d'un instrument mélodique (dur : durée prévue en s, si connue)
 function MusicSynth.Note(self: any, inst: string, note: number, vel: number, emitter: Instance?, dur: number?)
 	local m = master(self)
 	if m <= 0 then
 		return
 	end
-	for _, layer in ipairs(MusicSynth.NoteLayers(inst, note, vel, dur)) do
-		fire(self, emitter, layer, m)
+	local chord = self.Chord[inst]
+	if not chord or self.Clock - chord.T > 0.06 then
+		chord = { T = self.Clock, N = 0 }
+		self.Chord[inst] = chord
 	end
+	chord.N += 1
+	playLayers(self, emitter, MusicSynth.NoteLayers(inst, note, vel, dur), m, chord.N > 3)
 end
 
 function MusicSynth.Drum(self: any, piece: number, vel: number, emitter: Instance?)
@@ -529,9 +554,7 @@ function MusicSynth.Drum(self: any, piece: number, vel: number, emitter: Instanc
 	if m <= 0 then
 		return
 	end
-	for _, layer in ipairs(MusicSynth.HitLayers("Drums", piece, vel)) do
-		fire(self, emitter, layer, m)
-	end
+	playLayers(self, emitter, MusicSynth.HitLayers("Drums", piece, vel), m, false)
 end
 
 function MusicSynth.Pad(self: any, pad: number, vel: number, emitter: Instance?)
@@ -539,14 +562,13 @@ function MusicSynth.Pad(self: any, pad: number, vel: number, emitter: Instance?)
 	if m <= 0 then
 		return
 	end
-	for _, layer in ipairs(MusicSynth.HitLayers("DJ", pad, vel)) do
-		fire(self, emitter, layer, m)
-	end
+	playLayers(self, emitter, MusicSynth.HitLayers("DJ", pad, vel), m, false)
 end
 
 -- Enveloppes (fondu de sortie) + glissés de hauteur de chaque voix
 function MusicSynth.Step(self: any, dt: number)
 	self.Clock += dt
+	self.Budget = math.min(BUDGET_MAX, self.Budget + dt * BUDGET_RATE)
 	local keep = {}
 	for _, voice in ipairs(self.Active) do
 		local age = self.Clock - voice.Start

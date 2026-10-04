@@ -31,10 +31,11 @@
 	  - la CONDUITE des autos tamponneuses (VehicleSeat : ZQSD / flèches /
 	    joystick ; courant coupé pendant l'embarquement) ;
 	  - la NOURRITURE : invites des stands -> menu (prix, boost, durée) ->
-	    achat (remote "Food") ; l'aliment en main : bouton "🍴 Croquer",
-	    bras qui porte l'aliment à la bouche (v9.9 : vraie cinématique
-	    inverse R15 / R6, FairEat) (pour TOUS les mangeurs
-	    visibles, d'après l'attribut "BiteAt"), miettes ; badge du boost
+	    achat (remote "Food") ; l'aliment en main : bouton "🍴 Croquer" ;
+	    (v11, ITEMS11) tenue DEBOUT dans le poing quelle que soit
+	    l'animation + gestes lécher / croquer / siroter, aliment qui fond,
+	    marques de dents, miettes : FoodHold (pour TOUS les mangeurs
+	    visibles, d'après les attributs de l'outil) ; badge du boost
 	    "🍦 x1,5 · 1:42" (ScreenGui "FairGui").
 	Tout est ancré (sauf les pièces soudées aux autos), sans son, lueurs
 	douces (attribut "NightGlow" : TownAtmosphere, la nuit seulement), 0
@@ -67,7 +68,8 @@ local FoodModels = require(ReplicatedStorage.Shared.FoodModels)
 local FairKit = require(script.Parent.FairKit)
 local FairAnnexFx = require(script.Parent.FairAnnexFx)
 local FairCircus = require(script.Parent.FairCircus)
-local FairEat = require(script.Parent.FairEat)
+-- (v11 ITEMS11) tenue + manger (FairEat dedans) : Client/World/FoodHold
+local FoodHold = require(script.Parent.FoodHold)
 
 local FairFx = {}
 
@@ -1656,36 +1658,11 @@ end
 -- mangeurs visibles, d'après l'attribut "BiteAt" de l'outil)
 ----------------------------------------------------------------------
 
--- (v9.9) geste plus lent et naturel : monter 0,32 s, croquer 0,3 s (petit
--- mouvement de mastication), redescendre 0,38 s ; IK R15 / R6 : FairEat
-local BITE_UP, BITE_HOLD, BITE_DOWN = 0.32, 0.3, 0.38
-
-local function crumbs(tool: Tool, food: any)
-	local handle = tool:FindFirstChild("Handle")
-	if not handle or not handle:IsA("BasePart") then
-		return
-	end
-	local emitter = handle:FindFirstChild("FairCrumbs") :: ParticleEmitter?
-	if not emitter then
-		local e = Instance.new("ParticleEmitter")
-		e.Name = "FairCrumbs"
-		e.Rate = 0
-		e.Lifetime = NumberRange.new(0.4, 0.8)
-		e.Speed = NumberRange.new(3, 6)
-		e.SpreadAngle = Vector2.new(70, 70)
-		e.Acceleration = Vector3.new(0, -32, 0)
-		e.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.14), NumberSequenceKeypoint.new(1, 0.05) })
-		e.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0.4) })
-		e.Color = ColorSequence.new(food and food.Crumb or Color3.fromRGB(236, 196, 120))
-		e.LightEmission = 0
-		e.EmissionDirection = Enum.NormalId.Top
-		e.Parent = handle
-		emitter = e
-	end
-	if emitter then
-		emitter:Emit(10)
-	end
-end
+-- (v11, ITEMS11) la TENUE (aliment debout dans le poing, quelle que soit
+-- l'animation) et le GESTE (lécher / croquer / siroter, la copie de
+-- l'aliment qui fond, les marques de dents, les miettes) : FoodHold, pour
+-- TOUS les mangeurs visibles, d'après les attributs de l'outil. Ici : le
+-- suivi des outils et la petite fête de la dernière bouchée.
 
 local function watchTool(s: any, character: Model, tool: Tool)
 	if s.Tools[tool] then
@@ -1695,24 +1672,13 @@ local function watchTool(s: any, character: Model, tool: Tool)
 	s.Tools[tool] = entry
 	-- (signal + relevé à 10 Hz dans scanEaters : jamais de bouchée manquée)
 	entry.Check = function()
+		pcall(FoodHold.Track, character, tool)
 		local at = tool:GetAttribute("BiteAt")
 		if type(at) ~= "number" or at == entry.Last then
 			return
 		end
 		entry.Last = at
-		crumbs(tool, entry.Food)
-		local anim = s.Arms[character]
-		if not anim then
-			local rig = FairEat.Rig(character)
-			if rig then
-				anim = { Rig = rig, T = 0, Tool = tool }
-				s.Arms[character] = anim
-			end
-		end
-		if anim then
-			anim.T = 0
-			anim.Tool = tool
-		end
+		pcall(FoodHold.Bite, character, tool)
 		-- dernière bouchée (le mien) : petite fête
 		if character == (LocalPlayer and LocalPlayer.Character) and (tool:GetAttribute("BitesLeft") or 1) <= 0 and entry.Food then
 			local food = entry.Food
@@ -1720,41 +1686,6 @@ local function watchTool(s: any, character: Model, tool: Tool)
 		end
 	end
 	entry.Conn = tool:GetAttributeChangedSignal("BiteAt"):Connect(entry.Check)
-end
-
-local function stepArms(s: any, dt: number)
-	for character, anim in pairs(s.Arms) do
-		anim.T += dt
-		local t = anim.T
-		local k
-		if t < BITE_UP then
-			k = t / BITE_UP
-		elseif t < BITE_UP + BITE_HOLD then
-			-- (mastication : la main recule à peine, 2 fois)
-			k = 1 - 0.06 * math.abs(math.sin((t - BITE_UP) / BITE_HOLD * math.pi * 2))
-		elseif t < BITE_UP + BITE_HOLD + BITE_DOWN then
-			k = 1 - (t - BITE_UP - BITE_HOLD) / BITE_DOWN
-		else
-			k = 0
-		end
-		local rig = anim.Rig
-		if not character.Parent or not rig.Shoulder.Parent then
-			s.Arms[character] = nil
-		elseif k <= 0 and t > BITE_UP then
-			FairEat.Restore(rig)
-			s.Arms[character] = nil
-		else
-			local tool = anim.Tool
-			FairEat.Apply(rig, k, if tool and tool.Parent == character then tool else nil)
-		end
-	end
-end
-
-local function restoreArms(s: any)
-	for _, anim in pairs(s.Arms) do
-		pcall(FairEat.Restore, anim.Rig)
-	end
-	table.clear(s.Arms)
 end
 
 -- 10 fois / s : outils "DopamineFood" tenus par les avatars proches
@@ -2018,9 +1949,7 @@ local function frameStep(dt: number)
 		elseif s.Drive then
 			s.Drive = nil
 		end
-		if next(s.Arms) ~= nil then
-			stepArms(s, math.min(dt, 0.1))
-		end
+		FoodHold.Step(math.min(dt, 0.1))
 	end)
 	if not ok and not s.RenderWarned then
 		s.RenderWarned = true
@@ -2090,7 +2019,6 @@ function FairFx.Start(options: any?)
 		Fair = nil,
 		Corner = nil,
 		Tools = {},
-		Arms = {},
 		PromptCache = {},
 		PromptAge = 0,
 		Busy = false,
@@ -2263,7 +2191,7 @@ function FairFx.Stop()
 			entry.Conn:Disconnect()
 		end
 	end
-	restoreArms(s)
+	pcall(FoodHold.Stop)
 	undressCars(s.Fair)
 	destroyFair(s)
 	destroyCorner(s)

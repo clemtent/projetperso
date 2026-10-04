@@ -2,9 +2,9 @@
 	RaceService (ModuleScript)
 	Emplacement : ServerScriptService > Services > RaceService
 
-	🏁 Courses de rue de Dopamine Town (v10, RACE10). Tout est décidé ICI
-	(le client n'annonce jamais ni porte, ni temps, ni place) :
-	  - 4 parcours (Config.Race.Routes, géométrie : Shared/RaceRoutes, sur le
+	🏁 Courses de rue de Dopamine Town (v10 RACE10, v11 RACE11). Tout est
+	décidé ICI (le client n'annonce jamais ni porte, ni temps, ni place) :
+	  - 7 parcours (Config.Race.Routes, géométrie : Shared/RaceRoutes, sur le
 	    graphe des rues de LAYOUT10) ; une course à la fois par parcours ;
 	  - INSCRIPTION ("join") au QG des courses (à pied, touche E, à moins de
 	    Config.Race.JoinRange studs) ou au volant de sa voiture (bouton 🏁
@@ -13,39 +13,57 @@
 	    complètent la grille jusqu'à MinGrid voitures ;
 	  - GRILLE : chaque humain est posé à sa place au volant de SA voiture
 	    choisie (CarService:RaceSpawn ; sans voiture : une citadine prêtée),
-	    voitures GELÉES (CarService:SetFrozen) pendant le 3-2-1 (heure du
-	    serveur : les feux sont synchronisés chez tout le monde), puis GO ;
+	    voitures GELÉES (CarService:SetFrozen) pendant la présentation et le
+	    3-2-1 (heure du serveur : feux et caméra synchronisés), puis GO ;
 	  - COURSE (10 fois / s) : position de chaque voiture projetée sur la
 	    trajectoire -> distance parcourue, portes dans l'ORDRE (largeur de la
-	    porte vérifiée), tours, meilleur tour ; ANTI-TRICHE : vitesse
-	    plausible sur ~1 s (vitesse de pointe de SA voiture x 1,3), saut
-	    instantané -> remis à la dernière porte (3e fois : disqualifié),
-	    tronçon plus rapide que possible -> disqualifié (pas de récompense),
-	    hors de sa voiture plus de OffCarGrace s -> abandon ;
+	    porte vérifiée), tours, meilleur tour, TEMPS DE PASSAGE (écart avec le
+	    fantôme de ton meilleur tour, envoyé à chaque porte) ; ANTI-TRICHE :
+	    vitesse plausible sur ~1 s (vitesse de pointe de SA voiture x 1,3,
+	    nitro comprise pendant un boost), saut instantané -> remis à la
+	    dernière porte (3e fois : disqualifié), tronçon plus rapide que
+	    possible -> disqualifié (pas de récompense), hors de sa voiture plus
+	    de OffCarGrace s -> abandon ;
+	  - (v11) NITRO : charges données par le serveur (Config.Race.Nitro.Start
+	    au départ) ; la jauge se remplit en DÉRAPANT (angle de glisse mesuré
+	    ici d'après la position et le cap de la voiture) et dans l'ASPIRATION
+	    d'une autre voiture ; "nitro" -> boost de BoostFactor pendant Seconds
+	    (le client règle l'attribut local RaceBoost lu par CarClient) ;
 	  - PILOTES IA simulés ici (profil de vitesse de la trajectoire,
 	    habileté 0,90..0,97, voitures d'un niveau proche de celui des
 	    humains, élastique léger et JAMAIS au-delà de leur vitesse de pointe,
-	    coupé dans les 12 % finaux ; ils changent de file pour doubler un
-	    humain au lieu de le traverser). Les clients les dessinent (RaceClient)
-	    d'après les instantanés (5 fois / s) ;
+	    coupé dans les 12 % finaux). (v11) Temps de réaction au départ,
+	    aspiration, DÉPASSEMENTS (choix du côté le plus libre, file tenue
+	    pendant le dépassement, retour sur la trajectoire ensuite), nitro
+	    dans les lignes droites. Les clients les dessinent (RaceClient, avec
+	    un pilote NPCModels.Driver) d'après les instantanés (5 fois / s) ;
 	  - ARRIVÉE / RÉSULTATS : classement, RÉCOMPENSE en Dopamine (secondes
 	    de production selon la place, adversaires humains, plafond
-	    quotidien : RaceRules.Reward), records par parcours (data.Race.Best
-	    + tableau du serveur, affiché au QG), voiture prêtée rendue.
+	    quotidien : RaceRules.Reward, inchangé), (v11) XP + rang, MÉDAILLE
+	    du parcours (1re médaille d'or d'un parcours : 💎 1 diamant si la
+	    banque existe, BankService:GrantDiamonds), records personnels, stats
+	    par parcours, HISTORIQUE, FANTÔME du meilleur tour (temps de passage),
+	    records du serveur (tableau du QG) et classement des pilotes (XP).
+	  - SPECTATEURS ("watch") : instantanés 5 fois / s.
 	  - Circulation : l'attribut "DopamineRaceRoutes" de Workspace liste les
 	    parcours en course (TownTraffic évite leurs rues : RaceRoutes.BlockedEdgeKeys).
 	Tout est dans des pcall ; chaque demande a sa limite de fréquence.
 
-	Données : data.Race = { Day, Rewarded, Races, Wins, Podiums, Best = { [routeId] = s } }.
+	Données : data.Race (RaceRules.SanitizeData) = { Day, Rewarded, Races,
+	  Wins, Podiums, Best, Xp, History, Routes, Ghost, DriftBest, Overtakes, Distance }.
 	RemoteEvent "RaceEvent" :
-	  C -> S : ("join", routeId) | ("leave") | ("reset") | ("sync")
+	  C -> S : ("join", routeId) | ("leave") | ("reset") | ("sync") | ("nitro")
+	           | ("watch", routeId | nil)
 	  S -> C : ("Lobbies", { [routeId] = { Phase, Count, Names, EndsAt } })
 	           ("Board", { [routeId] = { { Name, UserId, Time, CarId } } })
+	           ("Pilots", { { Name, UserId, Xp, Wins, Races } })
 	           ("Joined", { Route, RaceId }) | ("Left", { Route })
-	           ("State", instantané) (5 fois / s aux joueurs en ville près d'une course)
-	           ("Result", { Route, RaceId, Rows, Mine }) | ("Toast", texte) | ("Reset", { D })
+	           ("State", instantanés) (5 fois / s aux coureurs / spectateurs, 2,5 aux autres)
+	           ("Result", { Route, RaceId, Rows, Mine, Humans }) | ("Toast", texte) | ("Reset", { D })
 	           ("Grid", { Route, RaceId, GoAt, Slot }) | ("Finished", { Route, Time })
-	           ("Me", { Rewarded, Daily, Best, Wins, Races, Podiums })
+	           ("Split", { Index, Time, Delta? }) | ("Lap", { Lap, Time, Best, Delta? })
+	           ("Nitro", { Until, Charges })
+	           ("Me", { Rewarded, Daily, Best, Wins, Races, Podiums, Xp, History, Routes, Ghost, ... })
 ]]
 
 local Players = game:GetService("Players")
@@ -65,9 +83,10 @@ local RaceService = {}
 
 local TICK = 0.1
 local SNAPSHOT_EVERY = 0.2
-local RESULTS_HOLD = 9 -- s d'affichage des résultats avant de rouvrir le parcours
+local RESULTS_HOLD = 12 -- s d'affichage des résultats avant de rouvrir le parcours
 local PROJECT_WINDOW = 220
 local BOARD_SIZE = 8
+local PILOTS_SIZE = 10
 
 type Racer = {
 	Key: string,
@@ -96,14 +115,31 @@ type Racer = {
 	Samples: { { number } }, -- { t, x, z }
 	SegStart: number,
 	LapStart: number,
+	LapStartD: number,
+	LapSplits: { T: { number }, D: { number } },
+	LastLap: number?,
 	BestLap: number?,
+	BestLapSplits: any?,
 	OffCarSince: number?,
 	IgnoreUntil: number,
 	LastReset: number,
+	-- (v11) nitro, dérapage, aspiration, dépassements
+	Nitro: number,
+	Gauge: number,
+	BoostUntil: number,
+	SegBoost: boolean,
+	Drift: number,
+	DriftCombo: number,
+	DraftT: number,
+	Overtakes: number,
+	PrevPlace: number,
+	PlaceSince: number,
 	-- IA
 	Skill: number,
 	Lane: number,
 	LaneGoal: number,
+	PassTimer: number,
+	Launch: number,
 	Profile: { number }?,
 	Place: number,
 }
@@ -126,10 +162,12 @@ type Race = {
 local services: any = nil
 local races: { [string]: Race } = {}
 local playerRace: { [Player]: Race } = {}
+local watchers: { [Player]: string } = {}
 local board: { [string]: { { Name: string, UserId: number, Time: number, CarId: string } } } = {}
 local raceCounter = 0
 local lobbiesDirty = true
 local boardDirty = true
+local pilotsDirty = true
 local profiles: { [string]: { number } } = {}
 
 ----------------------------------------------------------------------
@@ -193,14 +231,32 @@ local function toast(player: Player, text: string)
 	fire(player, "Toast", text)
 end
 
+local function cfgRace(): any
+	return Config.Race or {}
+end
+
 local raceData: (player: Player) -> any
 
--- Ses chiffres (menu : courses payées aujourd'hui, records, victoires)
+-- Ses chiffres (menu, page de stats, fantômes)
 local function pushMe(player: Player)
 	local rd = raceData(player)
 	if rd then
-		local daily = (Config.Race and Config.Race.Rewards and Config.Race.Rewards.DailyRewarded) or 8
-		fire(player, "Me", { Rewarded = rd.Rewarded, Daily = daily, Best = rd.Best, Wins = rd.Wins, Races = rd.Races, Podiums = rd.Podiums })
+		local daily = (cfgRace().Rewards or {}).DailyRewarded or 8
+		fire(player, "Me", {
+			Rewarded = rd.Rewarded,
+			Daily = daily,
+			Best = rd.Best,
+			Wins = rd.Wins,
+			Races = rd.Races,
+			Podiums = rd.Podiums,
+			Xp = rd.Xp,
+			History = rd.History,
+			Routes = rd.Routes,
+			Ghost = rd.Ghost,
+			DriftBest = rd.DriftBest,
+			Overtakes = rd.Overtakes,
+			Distance = rd.Distance,
+		})
 	end
 end
 
@@ -273,8 +329,16 @@ local function lineS(race: Race, d: number): number
 	return route.StartS + d
 end
 
+-- (v11) vitesse de pointe tolérée à l'instant t (boost de nitro compris, +1 s de marge)
+local function topAt(racer: Racer, t: number): number
+	if t < racer.BoostUntil + 1 then
+		return racer.Top * RaceRules.BoostFactor()
+	end
+	return racer.Top
+end
+
 ----------------------------------------------------------------------
--- Tableau des records (serveur) + salles d'attente
+-- Tableau des records (serveur), pilotes, salles d'attente
 ----------------------------------------------------------------------
 
 local function recordBest(routeId: string, player: Player, time: number, carId: string)
@@ -299,6 +363,28 @@ local function recordBest(routeId: string, player: Player, time: number, carId: 
 	boardDirty = true
 end
 
+-- Pilotes présents classés par XP (tableau du QG, page "Classement")
+local function pilotsPayload(): any
+	local list = {}
+	for _, p in ipairs(Players:GetPlayers()) do
+		local data = dataOf(p)
+		local rd = type(data) == "table" and type(data.Race) == "table" and data.Race or nil
+		if rd and ((rd.Xp or 0) > 0 or (rd.Races or 0) > 0) then
+			table.insert(list, { Name = p.DisplayName, UserId = p.UserId, Xp = rd.Xp or 0, Wins = rd.Wins or 0, Races = rd.Races or 0 })
+		end
+	end
+	table.sort(list, function(a, b)
+		if a.Xp ~= b.Xp then
+			return a.Xp > b.Xp
+		end
+		return a.UserId < b.UserId
+	end)
+	while #list > PILOTS_SIZE do
+		table.remove(list)
+	end
+	return list
+end
+
 local function lobbiesPayload(): any
 	local out = {}
 	for id, race in pairs(races) do
@@ -308,7 +394,7 @@ local function lobbiesPayload(): any
 				table.insert(names, r.Name)
 			end
 		end
-		out[id] = { Phase = race.Phase, Count = #names, Names = names, EndsAt = race.LobbyEnds, RaceId = race.Id }
+		out[id] = { Phase = race.Phase, Count = #names, Names = names, EndsAt = race.LobbyEnds, RaceId = race.Id, GoAt = race.GoAt }
 	end
 	return out
 end
@@ -334,6 +420,17 @@ local function pushBoard(target: Player?)
 	end
 end
 
+local function pushPilots(target: Player?)
+	local payload = pilotsPayload()
+	if target then
+		fire(target, "Pilots", payload)
+		return
+	end
+	for _, p in ipairs(townPlayers()) do
+		fire(p, "Pilots", payload)
+	end
+end
+
 local function setActiveAttribute()
 	local ids = {}
 	for id, race in pairs(races) do
@@ -351,6 +448,10 @@ end
 -- Instantané (clients)
 ----------------------------------------------------------------------
 
+local function round1(v: number): number
+	return math.floor(v * 10 + 0.5) / 10
+end
+
 local function snapshot(race: Race): any
 	local rows = {}
 	for _, r in ipairs(race.Racers) do
@@ -361,15 +462,24 @@ local function snapshot(race: Race): any
 			AI = r.IsAI,
 			C = r.CarId,
 			Col = r.Color,
-			D = math.floor(r.D * 10) / 10,
-			V = math.floor(r.V * 10) / 10,
-			L = math.floor((if r.IsAI then r.Lane else r.Lat) * 10) / 10,
+			D = round1(r.D),
+			V = round1(r.V),
+			L = round1(if r.IsAI then r.Lane else r.Lat),
 			Nx = r.Next,
 			Pl = r.Place,
 			F = r.Finished,
 			T = r.FinishTime,
 			X = r.Dnf,
 			B = r.BestLap,
+			-- (v11)
+			LL = r.LastLap,
+			LS = r.LapStart,
+			LD = round1(r.LapStartD),
+			Ni = r.Nitro,
+			Ga = math.floor(r.Gauge * 100) / 100,
+			Bo = if r.BoostUntil > race.GoAt then r.BoostUntil else nil,
+			Dr = math.floor(r.Drift),
+			Ov = r.Overtakes,
 		})
 	end
 	return {
@@ -400,7 +510,7 @@ local function newRace(routeId: string): Race?
 		Phase = "Lobby",
 		Racers = {},
 		ByPlayer = {},
-		LobbyEnds = now() + ((Config.Race and Config.Race.LobbySeconds) or 20),
+		LobbyEnds = now() + (cfgRace().LobbySeconds or 20),
 		GoAt = 0,
 		FirstFinish = nil,
 		EndsAt = 0,
@@ -439,13 +549,29 @@ local function newRacer(player: Player?, index: number): Racer
 		Samples = {},
 		SegStart = 0,
 		LapStart = 0,
+		LapStartD = 0,
+		LapSplits = { T = {}, D = {} },
+		LastLap = nil,
 		BestLap = nil,
+		BestLapSplits = nil,
 		OffCarSince = nil,
 		IgnoreUntil = 0,
 		LastReset = 0,
+		Nitro = (cfgRace().Nitro or {}).Start or 1,
+		Gauge = 0,
+		BoostUntil = 0,
+		SegBoost = false,
+		Drift = 0,
+		DriftCombo = 0,
+		DraftT = 0,
+		Overtakes = 0,
+		PrevPlace = index,
+		PlaceSince = 0,
 		Skill = 1,
 		Lane = 0,
 		LaneGoal = 0,
+		PassTimer = 0,
+		Launch = 0,
 		Profile = nil,
 		Place = index,
 	}
@@ -492,7 +618,7 @@ local function join(player: Player, routeId: any): (boolean, string?)
 	if hrp and hrp:IsA("BasePart") then
 		local meet = RaceRoutes.MeetCFrame(plotCount()).Position
 		local flat = Vector3.new(hrp.Position.X - meet.X, 0, hrp.Position.Z - meet.Z)
-		near = flat.Magnitude <= ((Config.Race and Config.Race.JoinRange) or 45)
+		near = flat.Magnitude <= (cfgRace().JoinRange or 45)
 	end
 	if not near and not (driving and root) then
 		return false, T(player, "Join at the race meeting point, or from your car 🏁")
@@ -513,14 +639,15 @@ local function join(player: Player, routeId: any): (boolean, string?)
 			humans += 1
 		end
 	end
-	if humans >= ((Config.Race and Config.Race.MaxRacers) or 8) then
+	if humans >= (cfgRace().MaxRacers or 8) then
 		return false, T(player, "This race is full")
 	end
 	local racer = newRacer(player, humans + 1)
 	table.insert(race.Racers, racer)
 	race.ByPlayer[player] = racer
 	playerRace[player] = race
-	local late = now() + ((Config.Race and Config.Race.LateJoinSeconds) or 8)
+	watchers[player] = nil
+	local late = now() + (cfgRace().LateJoinSeconds or 8)
 	if race.LobbyEnds < late then
 		race.LobbyEnds = late
 	end
@@ -531,9 +658,9 @@ end
 
 -- Pilotes IA : voitures d'un niveau proche de celui des humains
 local function addAI(race: Race)
-	local cfgRace = Config.Race or {}
-	local ai = cfgRace.AI or {}
-	local want = (cfgRace.MinGrid or 4) - #race.Racers
+	local cfg = cfgRace()
+	local ai = cfg.AI or {}
+	local want = (cfg.MinGrid or 4) - #race.Racers
 	if want <= 0 then
 		return
 	end
@@ -554,6 +681,7 @@ local function addAI(race: Race)
 	local colors = (Config.Cars and Config.Cars.Colors) or {}
 	local names = ai.Names or { "Nina" }
 	local skills = ai.Skill or { 0.93 }
+	local launch = ai.Launch or { 0.15, 0.45 }
 	local seed = race.Id * 7 + #race.Route.Line.X
 	for k = 1, want do
 		local index = #race.Racers + 1
@@ -562,12 +690,15 @@ local function addAI(race: Race)
 		local kind = pick and pick.Kind or "CityCar"
 		local stats = CarModels.Stats(kind, nil)
 		racer.CarId = kind
-		racer.Color = colors[((seed + k * 5) % math.max(1, #colors)) + 1] and colors[((seed + k * 5) % math.max(1, #colors)) + 1].Id or ""
+		local color = colors[((seed + k * 5) % math.max(1, #colors)) + 1]
+		racer.Color = color and color.Id or ""
 		racer.Name = "🤖 " .. names[((seed + k) % #names) + 1]
 		racer.Top = stats.TopSpeed
 		racer.Accel = stats.Accel
 		racer.Rating = stats.Rating
 		racer.Skill = skills[((seed + k * 3) % #skills) + 1]
+		-- temps de réaction au départ (déterministe)
+		racer.Launch = launch[1] + (launch[2] - launch[1]) * (((seed * 13 + k * 29) % 100) / 100)
 		table.insert(race.Racers, racer)
 	end
 end
@@ -634,11 +765,13 @@ local function startGrid(race: Race)
 			racer.D = -g.Back
 			racer.S = lineS(race, racer.D)
 		end
+		racer.PrevPlace = racer.Slot
+		racer.Place = racer.Slot
 	end
 	setActiveAttribute()
-	local cfgRace = Config.Race or {}
-	race.GoAt = now() + (cfgRace.GridSeconds or 3) + (cfgRace.CountdownSeconds or 3)
-	race.EndsAt = race.GoAt + (cfgRace.MaxSeconds or 480)
+	local cfg = cfgRace()
+	race.GoAt = now() + (cfg.GridSeconds or 3) + (cfg.CountdownSeconds or 3)
+	race.EndsAt = race.GoAt + (cfg.MaxSeconds or 480)
 	for player in pairs(race.ByPlayer) do
 		fire(player, "Grid", { Route = race.RouteId, RaceId = race.Id, GoAt = race.GoAt, Slot = race.ByPlayer[player].Slot })
 	end
@@ -649,8 +782,6 @@ local function go(race: Race)
 	race.PhaseAt = now()
 	local cs = services and services.CarService
 	for player, racer in pairs(race.ByPlayer) do
-		racer.SegStart = race.GoAt
-		racer.LapStart = race.GoAt
 		racer.IgnoreUntil = race.GoAt + 0.5
 		table.clear(racer.Samples)
 		if cs and type(cs.SetFrozen) == "function" then
@@ -660,6 +791,8 @@ local function go(race: Race)
 	for _, racer in ipairs(race.Racers) do
 		racer.SegStart = race.GoAt
 		racer.LapStart = race.GoAt
+		racer.LapStartD = 0
+		racer.PlaceSince = race.GoAt
 	end
 	lobbiesDirty = true
 end
@@ -680,7 +813,18 @@ local function dnf(race: Race, racer: Racer, reason: string)
 	end
 end
 
--- Porte franchie (dans l'ordre) : temps minimal du tronçon, tour, arrivée
+local function ghostOf(player: Player?, routeId: string): any?
+	if not player then
+		return nil
+	end
+	local data = dataOf(player)
+	local rd = type(data) == "table" and type(data.Race) == "table" and data.Race or nil
+	local g = rd and type(rd.Ghost) == "table" and rd.Ghost[routeId] or nil
+	return if type(g) == "table" then g else nil
+end
+
+-- Porte franchie (dans l'ordre) : temps minimal du tronçon, temps de
+-- passage (fantôme), tour, arrivée
 local function passCheckpoints(race: Race, racer: Racer, t: number)
 	local cps = race.Route.Checkpoints
 	while racer.Next <= #cps do
@@ -693,19 +837,52 @@ local function passCheckpoints(race: Race, racer: Racer, t: number)
 			break
 		end
 		local seg = cp.D - racer.LastCpD
-		if not racer.IsAI and t - racer.SegStart < RaceRules.MinSegmentTime(seg, racer.Top) then
-			racer.Suspicious = true
+		if not racer.IsAI then
+			-- (v11) le boost de nitro est permis : tronçon jugé à la vitesse boostée
+			local top = if racer.SegBoost or t < racer.BoostUntil + 1 then racer.Top * RaceRules.BoostFactor() else racer.Top
+			if t - racer.SegStart < RaceRules.MinSegmentTime(seg, top) then
+				racer.Suspicious = true
+			end
 		end
 		racer.LastCpD = cp.D
 		racer.SegStart = t
+		racer.SegBoost = t < racer.BoostUntil
+		local index = racer.Next
 		racer.Next += 1
-		-- tour bouclé (boucle : la porte de la ligne de départ)
-		if race.Route.Closed and (cp.S < 1 or cp.Finish) then
+		-- temps de passage dans le tour (fantôme)
+		local lapT = t - racer.LapStart
+		local lapD = cp.D - racer.LapStartD
+		table.insert(racer.LapSplits.T, lapT)
+		table.insert(racer.LapSplits.D, lapD)
+		local player = racer.Player
+		local lapEnd = (race.Route.Closed and (cp.S < 1 or cp.Finish)) or (not race.Route.Closed and cp.Finish)
+		if player and not lapEnd then
+			local ghost = ghostOf(player, race.RouteId)
+			local gt = ghost and RaceRules.GhostTimeAt(ghost, lapD)
+			fire(player, "Split", { Index = index, Time = t - race.GoAt, Lap = lapT, Delta = if gt then lapT - gt else nil })
+		end
+		if lapEnd then
 			local lap = t - racer.LapStart
-			racer.LapStart = t
-			if lap > 3 and (racer.BestLap == nil or lap < (racer.BestLap :: number)) then
-				racer.BestLap = lap
+			local valid = lap > 3
+			local ghost = player and ghostOf(player, race.RouteId)
+			if valid then
+				racer.LastLap = lap
+				if racer.BestLap == nil or lap < (racer.BestLap :: number) then
+					racer.BestLap = lap
+					racer.BestLapSplits = { T = table.clone(racer.LapSplits.T), D = table.clone(racer.LapSplits.D) }
+				end
 			end
+			if player then
+				fire(player, "Lap", {
+					Lap = math.floor(cp.D / race.Route.Total + 0.5),
+					Time = lap,
+					Best = racer.BestLap,
+					Delta = if ghost and ghost.Time then lap - ghost.Time else nil,
+				})
+			end
+			racer.LapStart = t
+			racer.LapStartD = cp.D
+			racer.LapSplits = { T = {}, D = {} }
 		end
 		if cp.Finish then
 			racer.Finished = true
@@ -716,7 +893,6 @@ local function passCheckpoints(race: Race, racer: Racer, t: number)
 			if not racer.IsAI and race.FirstFinish == nil then
 				race.FirstFinish = t
 			end
-			local player = racer.Player
 			if player then
 				fire(player, "Finished", { Route = race.RouteId, Time = racer.FinishTime })
 			end
@@ -725,7 +901,25 @@ local function passCheckpoints(race: Race, racer: Racer, t: number)
 	end
 end
 
-local function updateHuman(race: Race, racer: Racer, t: number)
+-- (v11) aspiration : y a-t-il une voiture 8..30 studs devant, dans la même file ?
+local function drafting(race: Race, racer: Racer): boolean
+	local myLat = if racer.IsAI then racer.Lane else racer.Lat
+	for _, other in ipairs(race.Racers) do
+		if other ~= racer and not other.Dnf and not other.Finished then
+			local lat = if other.IsAI then other.Lane else other.Lat
+			if RaceRules.InDraft(other.D - racer.D, lat - myLat) then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+local function gainNitro(racer: Racer, driftPoints: number, draftSeconds: number)
+	racer.Nitro, racer.Gauge = RaceRules.NitroGain(racer.Nitro, racer.Gauge, driftPoints, draftSeconds)
+end
+
+local function updateHuman(race: Race, racer: Racer, t: number, dt: number)
 	local player = racer.Player :: Player
 	if not player.Parent or not inTown(player) then
 		dnf(race, racer, "You left the race")
@@ -734,7 +928,7 @@ local function updateHuman(race: Race, racer: Racer, t: number)
 	local _, root, driving = carOf(player)
 	if not driving or not root then
 		racer.OffCarSince = racer.OffCarSince or t
-		if t - (racer.OffCarSince :: number) > ((Config.Race and Config.Race.OffCarGrace) or 5) then
+		if t - (racer.OffCarSince :: number) > (cfgRace().OffCarGrace or 5) then
 			dnf(race, racer, "You left your car: race over")
 		end
 		racer.V = 0
@@ -743,13 +937,14 @@ local function updateHuman(race: Race, racer: Racer, t: number)
 	racer.OffCarSince = nil
 	local origin = WorldLayout.Origin()
 	local x, z = root.Position.X - origin.X, root.Position.Z - origin.Z
-	local anti = (Config.Race and Config.Race.Anti) or {}
+	local anti = cfgRace().Anti or {}
+	local top = topAt(racer, t)
 	-- saut / vitesse (fenêtre d'~1 s)
 	local samples = racer.Samples
 	local last = samples[#samples]
 	if t >= racer.IgnoreUntil and last then
 		local jump = math.sqrt((x - last[2]) ^ 2 + (z - last[3]) ^ 2)
-		if RaceRules.CheckMove(jump, t - last[1], racer.Top) == "teleport" then
+		if RaceRules.CheckMove(jump, t - last[1], top) == "teleport" then
 			warn(string.format("[RaceService] %s : saut de %.0f studs en %.2f s (%.0f, %.0f) -> (%.0f, %.0f)", player.Name, jump, t - last[1], last[2], last[3], x, z))
 			racer.Strikes += 1
 			table.clear(samples)
@@ -766,8 +961,27 @@ local function updateHuman(race: Race, racer: Racer, t: number)
 			racer.D = racer.LastCpD - 6
 			racer.S = lineS(race, racer.D)
 			racer.IgnoreUntil = t + 1
+			racer.DriftCombo = 0
 			toast(player, T(player, "Back to the last checkpoint"))
 			return
+		end
+	end
+	-- (v11) dérapage : angle entre le cap de la voiture et son déplacement récent
+	if last and t >= racer.IgnoreUntil then
+		local sdt = t - last[1]
+		if sdt > 0.05 and sdt < 0.5 then
+			local vx, vz = (x - last[2]) / sdt, (z - last[3]) / sdt
+			local speed = math.sqrt(vx * vx + vz * vz)
+			local look = root.CFrame.LookVector
+			local angle = RaceRules.SlipAngle(look.X, look.Z, vx, vz)
+			local rate = RaceRules.DriftRate(angle, speed)
+			if rate > 0 then
+				racer.DriftCombo += rate * sdt
+				racer.Drift += rate * sdt
+				gainNitro(racer, rate * sdt, 0)
+			else
+				racer.DriftCombo = 0
+			end
 		end
 	end
 	table.insert(samples, { t, x, z })
@@ -779,7 +993,7 @@ local function updateHuman(race: Race, racer: Racer, t: number)
 	if span >= 0.5 and t >= racer.IgnoreUntil then
 		local dist = math.sqrt((x - first[2]) ^ 2 + (z - first[3]) ^ 2)
 		racer.V = dist / span
-		if RaceRules.CheckMove(dist, span, racer.Top) == "fast" then
+		if RaceRules.CheckMove(dist, span, top) == "fast" then
 			racer.Suspicious = true
 		end
 	end
@@ -803,38 +1017,86 @@ local function updateHuman(race: Race, racer: Racer, t: number)
 		racer.D = s - route.StartS
 	end
 	racer.S = s
+	-- (v11) aspiration
+	if racer.V > 20 and drafting(race, racer) then
+		racer.DraftT += dt
+		gainNitro(racer, 0, dt)
+	end
 	passCheckpoints(race, racer, t)
 end
 
 local function updateAI(race: Race, racer: Racer, t: number, dt: number, leadD: number?)
 	local route = race.Route
+	local ai = cfgRace().AI or {}
+	if t < race.GoAt + racer.Launch then
+		return -- temps de réaction au départ
+	end
 	local profile = racer.Profile or profileFor(race, racer.Top)
 	racer.Profile = profile
 	local s = lineS(race, racer.D)
-	local target = RaceRules.ProfileAt(route.Line, profile, s) * racer.Skill * RaceRules.RubberBand(racer.D, leadD, route.RaceDistance)
-	-- un humain juste devant dans la même file : on change de file (ou on suit)
-	local halfRoad = math.max(4, route.Width / 2 - 3)
-	local blocked = false
+	local profV = RaceRules.ProfileAt(route.Line, profile, s)
+	local target = profV * racer.Skill * RaceRules.RubberBand(racer.D, leadD, route.RaceDistance)
+	local top = racer.Top
+	-- (v11) nitro de l'IA : dans une ligne droite, derrière le 1er humain
+	if racer.Nitro > 0 and t >= racer.BoostUntil and profV >= racer.Top * 0.97 and leadD ~= nil and racer.D < (leadD :: number)
+		and racer.D > route.RaceDistance * 0.15 and racer.D < route.RaceDistance * (1 - (ai.FairFinish or 0.12)) then
+		racer.Nitro -= 1
+		racer.BoostUntil = t + ((cfgRace().Nitro or {}).Seconds or 2.6)
+	end
+	if t < racer.BoostUntil then
+		top = racer.Top * RaceRules.BoostFactor()
+		if profV >= racer.Top * 0.97 then
+			-- (le boost ne sert qu'en ligne droite : les virages gardent leur vitesse)
+			target = math.max(target, top)
+		end
+	end
+	-- (v11) aspiration : petit gain de vitesse
+	local inDraft = drafting(race, racer)
+	if inDraft then
+		target *= 1 + (ai.Draft or 0.04)
+		racer.DraftT += dt
+		gainNitro(racer, 0, dt)
+	end
+	-- (v11) DÉPASSEMENTS : une voiture plus lente devant dans ma file -> je
+	-- choisis le côté le plus libre et je tiens ma file le temps de passer
+	local halfRoad = math.max(4, route.Width / 2 - 3.2)
+	local blocker: Racer? = nil
+	local blockGap = math.huge
 	for _, other in ipairs(race.Racers) do
 		if other ~= racer and not other.Dnf and not other.Finished then
 			local gap = other.D - racer.D
-			if gap > 0 and gap < 24 and math.abs((if other.IsAI then other.Lane else other.Lat) - racer.Lane) < 4.6 then
-				blocked = true
-				local otherLat = if other.IsAI then other.Lane else other.Lat
-				racer.LaneGoal = math.clamp(if otherLat > 0 then otherLat - 6 else otherLat + 6, -halfRoad, halfRoad)
-				if gap < 12 then
-					target = math.min(target, other.V)
-				end
+			local otherLat = if other.IsAI then other.Lane else other.Lat
+			if gap > 0 and gap < 30 and math.abs(otherLat - racer.Lane) < 5.6 and gap < blockGap then
+				blocker, blockGap = other, gap
 			end
 		end
 	end
-	if not blocked and math.abs(racer.LaneGoal) > 0.1 and t - race.GoAt > 4 then
-		-- retour doux vers la trajectoire
-		racer.LaneGoal *= 0.98
+	if blocker then
+		local b = blocker :: Racer
+		local otherLat = if b.IsAI then b.Lane else b.Lat
+		-- place à gauche / à droite de la voiture devant (bornée à la chaussée)
+		local roomLeft = (otherLat + halfRoad)
+		local roomRight = (halfRoad - otherLat)
+		local wantSide = if roomRight >= roomLeft then 1 else -1
+		if racer.PassTimer > 0 and racer.LaneGoal ~= 0 then
+			wantSide = if racer.LaneGoal > otherLat then 1 else -1
+		end
+		racer.LaneGoal = math.clamp(otherLat + wantSide * 6.4, -halfRoad, halfRoad)
+		racer.PassTimer = 2.5
+		if math.abs(racer.LaneGoal - otherLat) < 5.6 or blockGap < 12 and math.abs(racer.Lane - otherLat) < 4.6 then
+			-- pas la place (ou pas encore décalé) : on suit
+			target = math.min(target, b.V + (if blockGap > 16 then 2 else -1))
+		end
+	else
+		racer.PassTimer = math.max(0, racer.PassTimer - dt)
+		if racer.PassTimer <= 0 and math.abs(racer.LaneGoal) > 0.1 and t - race.GoAt > 4 then
+			-- retour doux vers la trajectoire
+			racer.LaneGoal *= 0.97
+		end
 	end
-	racer.Lane += math.clamp(racer.LaneGoal - racer.Lane, -3 * dt, 3 * dt)
+	racer.Lane += math.clamp(racer.LaneGoal - racer.Lane, -3.6 * dt, 3.6 * dt)
 	local before = racer.D
-	RaceRules.AIStep(racer :: any, dt, target, racer.Top, racer.Accel, (Config.Race and Config.Race.AI and Config.Race.AI.Brake) or 38)
+	RaceRules.AIStep(racer :: any, dt, target, top, racer.Accel, ai.Brake or 38)
 	racer.Lat = racer.Lane
 	racer.S = lineS(race, racer.D)
 	-- portes (l'IA reste sur sa trajectoire : largeur toujours bonne)
@@ -844,18 +1106,33 @@ local function updateAI(race: Race, racer: Racer, t: number, dt: number, leadD: 
 			local cp = cps[racer.Next]
 			racer.Next += 1
 			racer.LastCpD = cp.D
+			local frac = if racer.D > before then (cp.D - before) / (racer.D - before) else 1
+			local at = t - dt + dt * math.clamp(frac, 0, 1)
+			if route.Closed and (cp.S < 1 or cp.Finish) then
+				local lap = at - racer.LapStart
+				if lap > 3 then
+					racer.LastLap = lap
+					if racer.BestLap == nil or lap < (racer.BestLap :: number) then
+						racer.BestLap = lap
+					end
+				end
+				racer.LapStart = at
+				racer.LapStartD = cp.D
+			end
 			if cp.Finish then
 				racer.Finished = true
 				-- instant exact du franchissement (interpolé)
-				local frac = if racer.D > before then (cp.D - before) / (racer.D - before) else 1
-				racer.FinishTime = (t - dt + dt * math.clamp(frac, 0, 1)) - race.GoAt
+				racer.FinishTime = at - race.GoAt
+				if not route.Closed then
+					racer.BestLap = racer.FinishTime
+				end
 				break
 			end
 		end
 	end
 end
 
-local function rank(race: Race)
+local function rank(race: Race, t: number)
 	local rows = {}
 	for _, r in ipairs(race.Racers) do
 		local cps = race.Route.Checkpoints
@@ -863,13 +1140,41 @@ local function rank(race: Race)
 		table.insert(rows, { Key = r.Key, Racer = r, Finished = r.Finished, FinishTime = r.FinishTime, Progress = math.min(r.D, cap + 0.5), Dnf = r.Dnf })
 	end
 	for place, row in ipairs(RaceRules.Standings(rows)) do
-		row.Racer.Place = place
+		local r = row.Racer
+		r.Place = place
+		-- (v11) dépassements (humains) : place gagnée et gardée 1,5 s, après les 3 premières s
+		if race.Phase == "Racing" and place ~= r.PrevPlace then
+			if place < r.PrevPlace and t - race.GoAt > 3 and not r.Finished then
+				if t - r.PlaceSince > 0.3 then
+					r.Overtakes += r.PrevPlace - place
+				end
+			end
+			r.PrevPlace = place
+			r.PlaceSince = t
+		end
 	end
 end
 
 ----------------------------------------------------------------------
--- Fin de course : classement, récompenses, records
+-- Fin de course : classement, récompenses, XP, records, fantômes
 ----------------------------------------------------------------------
+
+local function grantGoldDiamond(player: Player, rd: any, routeId: string): boolean
+	local stat = rd.Routes[routeId]
+	if not stat or stat.G then
+		return false
+	end
+	local bank = services and services.BankService
+	if not bank or type(bank.GrantDiamonds) ~= "function" then
+		return false
+	end
+	local ok, granted = pcall(bank.GrantDiamonds, bank, player, 1, "Race", true)
+	if ok and granted ~= false then
+		stat.G = true
+		return true
+	end
+	return false
+end
 
 local function finish(race: Race)
 	race.Phase = "Results"
@@ -884,7 +1189,7 @@ local function finish(race: Race)
 			r.FinishTime = elapsed + math.max(0, race.Route.RaceDistance - r.D) / avg
 		end
 	end
-	rank(race)
+	rank(race, t)
 	local humans = 0
 	for _, r in ipairs(race.Racers) do
 		if not r.IsAI then
@@ -896,13 +1201,16 @@ local function finish(race: Race)
 	table.sort(ordered, function(a, b)
 		return a.Place < b.Place
 	end)
+	local winnerTime = ordered[1] and ordered[1].FinishTime
 	local cs = services and services.CarService
 	local mine: { [Player]: any } = {}
+	local medals = race.Route.Medals
 	for _, r in ipairs(ordered) do
 		local reward, seconds, capped = 0, 0, false
 		local player = r.Player
 		if player and player.Parent then
 			local rd = raceData(player)
+			local m: any = { Place = r.Place, Reward = 0 }
 			if rd then
 				if not r.Suspicious then
 					local stats = services and services.GameService and services.GameService:GetStats(player)
@@ -913,28 +1221,105 @@ local function finish(race: Race)
 					rd.Rewarded += 1
 				end
 				rd.Races += 1
-				if r.Finished and not r.Suspicious then
+				local valid = r.Finished and not r.Suspicious
+				local stat = rd.Routes[race.RouteId] or { R = 0, W = 0, P = 0, M = 0 }
+				rd.Routes[race.RouteId] = stat
+				stat.R += 1
+				local medal = if valid then RaceRules.MedalFor(r.FinishTime, medals) else 0
+				local prevBestRace = stat.T
+				local newPB = false
+				local newBestLap = false
+				local oldLap = rd.Best[race.RouteId]
+				if valid then
 					if r.Place == 1 then
 						rd.Wins += 1
+						stat.W += 1
 					end
 					if r.Place <= 3 then
 						rd.Podiums += 1
+						stat.P += 1
+					end
+					if r.FinishTime and (stat.T == nil or r.FinishTime < stat.T) then
+						stat.T = r.FinishTime
+						stat.C = r.CarId
+						newPB = prevBestRace ~= nil
+					end
+					if medal > 0 and (stat.M == 0 or medal < stat.M) then
+						stat.M = medal
 					end
 					local best = r.BestLap
 					if best and best > 3 then
-						local old = rd.Best[race.RouteId]
-						if old == nil or best < old then
+						if oldLap == nil or best < oldLap then
 							rd.Best[race.RouteId] = best
+							newBestLap = oldLap ~= nil
+							-- fantôme : temps de passage du meilleur tour
+							local splits = r.BestLapSplits
+							if splits then
+								local ghost = RaceRules.CleanGhost({ T = splits.T, D = splits.D, Car = r.CarId })
+								if ghost then
+									rd.Ghost[race.RouteId] = ghost
+								end
+							end
 						end
 						recordBest(race.RouteId, player, best, r.CarId)
 					end
 				end
+				-- XP (cosmétique)
+				local xpBefore = rd.Xp
+				local xp = RaceRules.XpFor({
+					Place = r.Place,
+					Finished = valid,
+					Dnf = r.Dnf or (r.Finished and r.Suspicious),
+					Humans = humans - 1,
+					Medal = medal,
+					Record = newPB or newBestLap,
+					Overtakes = r.Overtakes,
+				})
+				rd.Xp += xp
+				rd.DriftBest = math.max(rd.DriftBest, math.floor(r.Drift))
+				rd.Overtakes += r.Overtakes
+				rd.Distance += math.floor(math.clamp(r.D, 0, race.Route.RaceDistance))
+				RaceRules.PushHistory(rd, {
+					R = race.RouteId,
+					P = if valid then r.Place else 0,
+					N = #race.Racers,
+					T = if valid then r.FinishTime else nil,
+					L = r.BestLap,
+					C = r.CarId,
+					X = xp,
+					M = medal,
+					At = os.time(),
+				})
+				local diamond = medal == 1 and grantGoldDiamond(player, rd, race.RouteId)
 				if services and services.GameService then
 					services.GameService:MarkDirty(player)
 				end
+				pilotsDirty = true
+				m = {
+					Place = r.Place,
+					Reward = reward,
+					Seconds = seconds,
+					Capped = capped,
+					Suspicious = r.Suspicious,
+					Left = math.max(0, ((cfgRace().Rewards or {}).DailyRewarded or 8) - rd.Rewarded),
+					Time = r.FinishTime,
+					Finished = valid,
+					BestLap = r.BestLap,
+					Medal = medal,
+					Medals = medals,
+					Par = race.Route.Par,
+					Xp = xp,
+					XpBefore = xpBefore,
+					XpAfter = rd.Xp,
+					PB = newPB,
+					PrevBest = prevBestRace,
+					BestLapPB = newBestLap,
+					Drift = math.floor(r.Drift),
+					Overtakes = r.Overtakes,
+					Diamond = diamond == true,
+				}
 			end
-			mine[player] = { Place = r.Place, Reward = reward, Seconds = seconds, Capped = capped, Suspicious = r.Suspicious,
-				Left = math.max(0, ((Config.Race and Config.Race.Rewards and Config.Race.Rewards.DailyRewarded) or 8) - (rd and rd.Rewarded or 0)) }
+			mine[player] = m
 		end
 		table.insert(rows, {
 			Place = r.Place,
@@ -944,10 +1329,13 @@ local function finish(race: Race)
 			CarId = r.CarId,
 			Color = r.Color,
 			Time = r.FinishTime,
+			Gap = if r.Finished and r.FinishTime and winnerTime and r.Place > 1 then r.FinishTime - winnerTime else nil,
 			BestLap = r.BestLap,
 			Finished = r.Finished,
 			Dnf = r.Dnf,
+			Drift = math.floor(r.Drift),
 			Reward = if player then (mine[player] and mine[player].Reward or 0) else 0,
+			Xp = if player and mine[player] then mine[player].Xp else nil,
 		})
 	end
 	race.Results = rows
@@ -964,6 +1352,9 @@ local function finish(race: Race)
 			elseif m.Capped then
 				toast(player, T(player, "Daily race rewards reached: records still count!"))
 			end
+			if m.Diamond then
+				toast(player, T(player, "💎 First gold medal on this route: +1 diamond!"))
+			end
 		end
 		playerRace[player] = nil
 	end
@@ -978,7 +1369,7 @@ end
 
 local function stepRace(race: Race, dt: number)
 	local t = now()
-	local cfgRace = Config.Race or {}
+	local cfg = cfgRace()
 	if race.Phase == "Lobby" then
 		-- humains partis
 		for _, r in ipairs(table.clone(race.Racers)) do
@@ -992,11 +1383,11 @@ local function stepRace(race: Race, dt: number)
 			lobbiesDirty = true
 			return
 		end
-		if t >= race.LobbyEnds or #race.Racers >= (cfgRace.MaxRacers or 8) then
+		if t >= race.LobbyEnds or #race.Racers >= (cfg.MaxRacers or 8) then
 			startGrid(race)
 		end
 	elseif race.Phase == "Grid" then
-		if t >= race.GoAt - (cfgRace.CountdownSeconds or 3) then
+		if t >= race.GoAt - (cfg.CountdownSeconds or 3) then
 			race.Phase = "Countdown"
 			race.PhaseAt = t
 		end
@@ -1008,7 +1399,7 @@ local function stepRace(race: Race, dt: number)
 		local leadD: number? = nil
 		for _, r in ipairs(race.Racers) do
 			if not r.IsAI and not r.Dnf and not r.Finished then
-				updateHuman(race, r, t)
+				updateHuman(race, r, t, dt)
 			end
 		end
 		for _, r in ipairs(race.Racers) do
@@ -1024,7 +1415,7 @@ local function stepRace(race: Race, dt: number)
 				updateAI(race, r, t, dt, leadD)
 			end
 		end
-		rank(race)
+		rank(race, t)
 		-- fin : tous les humains arrivés / abandonnés, délai après le 1er, durée max
 		local running = false
 		for _, r in ipairs(race.Racers) do
@@ -1032,7 +1423,7 @@ local function stepRace(race: Race, dt: number)
 				running = true
 			end
 		end
-		local graceOver = race.FirstFinish ~= nil and t - (race.FirstFinish :: number) > (cfgRace.FinishGrace or 35)
+		local graceOver = race.FirstFinish ~= nil and t - (race.FirstFinish :: number) > (cfg.FinishGrace or 35)
 		if not running or graceOver or t >= race.EndsAt then
 			for _, r in ipairs(race.Racers) do
 				if not r.Finished and not r.Dnf and not r.IsAI then
@@ -1051,6 +1442,7 @@ end
 
 local snapClock = 0
 local snapRound = 0
+local pilotsClock = 0
 local function tick(dt: number)
 	for _, race in pairs(races) do
 		local ok, err = pcall(stepRace, race, dt)
@@ -1067,11 +1459,11 @@ local function tick(dt: number)
 				table.insert(active, snapshot(race))
 			end
 		end
-		-- coureurs : 5 fois / s ; spectateurs en ville : 2,5 fois / s (50 joueurs)
+		-- coureurs + spectateurs : 5 fois / s ; autres joueurs en ville : 2,5 fois / s (50 joueurs)
 		snapRound += 1
 		if #active > 0 then
 			for _, p in ipairs(townPlayers()) do
-				if playerRace[p] ~= nil or snapRound % 2 == 0 then
+				if playerRace[p] ~= nil or watchers[p] ~= nil or snapRound % 2 == 0 then
 					fire(p, "State", active)
 				end
 			end
@@ -1084,6 +1476,12 @@ local function tick(dt: number)
 			boardDirty = false
 			pushBoard()
 		end
+	end
+	pilotsClock += dt
+	if pilotsDirty and pilotsClock >= 2 then
+		pilotsClock = 0
+		pilotsDirty = false
+		pushPilots()
 	end
 end
 
@@ -1121,7 +1519,7 @@ local function resetToCheckpoint(player: Player)
 		return
 	end
 	local t = now()
-	if t - racer.LastReset < ((Config.Race and Config.Race.ResetCooldown) or 3) then
+	if t - racer.LastReset < (cfgRace().ResetCooldown or 3) then
 		return
 	end
 	racer.LastReset = t
@@ -1134,17 +1532,35 @@ local function resetToCheckpoint(player: Player)
 			racer.S = lineS(race, d)
 			racer.Lat = 0
 			racer.IgnoreUntil = t + 1
+			racer.DriftCombo = 0
 			table.clear(racer.Samples)
 			fire(player, "Reset", { D = d })
 		end
 	end
 end
 
+-- (v11) nitro : une charge -> boost (validé ici)
+local function useNitro(player: Player)
+	local race = playerRace[player]
+	local racer = race and race.ByPlayer[player]
+	if not race or not racer or race.Phase ~= "Racing" or racer.Finished or racer.Dnf then
+		return
+	end
+	local t = now()
+	if racer.Nitro <= 0 or t < racer.BoostUntil or t < race.GoAt + 0.5 then
+		return
+	end
+	racer.Nitro -= 1
+	racer.BoostUntil = t + ((cfgRace().Nitro or {}).Seconds or 2.6)
+	racer.SegBoost = true
+	fire(player, "Nitro", { Until = racer.BoostUntil, Charges = racer.Nitro })
+end
+
 local function onEvent(player: Player, kind: any, arg: any)
 	if type(kind) ~= "string" then
 		return
 	end
-	if not RateLimiter.Check(player, "Race_" .. kind, if kind == "sync" then 1 else 0.4) then
+	if not RateLimiter.Check(player, "Race_" .. kind, if kind == "sync" then 1 elseif kind == "nitro" then 0.25 else 0.4) then
 		return
 	end
 	if kind == "join" then
@@ -1156,9 +1572,18 @@ local function onEvent(player: Player, kind: any, arg: any)
 		leave(player)
 	elseif kind == "reset" then
 		resetToCheckpoint(player)
+	elseif kind == "nitro" then
+		useNitro(player)
+	elseif kind == "watch" then
+		if type(arg) == "string" and Config.RaceRoutesById[arg] and playerRace[player] == nil then
+			watchers[player] = arg
+		else
+			watchers[player] = nil
+		end
 	elseif kind == "sync" then
 		pushLobbies(player)
 		pushBoard(player)
+		pushPilots(player)
 		pushMe(player)
 		local race = playerRace[player]
 		if race then
@@ -1207,8 +1632,10 @@ function RaceService:PlayerReady(player: Player, data)
 	data.Race = RaceRules.SanitizeData(data.Race, RaceRules.Today(os.time()))
 	-- ses records (sauvegardés) rejoignent le tableau du serveur
 	for routeId, best in pairs(data.Race.Best) do
-		recordBest(routeId, player, best, "")
+		local stat = data.Race.Routes[routeId]
+		recordBest(routeId, player, best, stat and stat.C or "")
 	end
+	pilotsDirty = true
 end
 
 function RaceService:PlayerRemoving(player: Player)
@@ -1218,6 +1645,8 @@ function RaceService:PlayerRemoving(player: Player)
 		removeRacer(race, player)
 	end
 	playerRace[player] = nil
+	watchers[player] = nil
+	pilotsDirty = true
 end
 
 -- (tests / autres services) la course d'un joueur (id du parcours) ou nil
@@ -1235,6 +1664,9 @@ function RaceService:Debug(): any
 		Join = join,
 		Leave = leave,
 		Reset = resetToCheckpoint,
+		Nitro = useNitro,
+		Watchers = watchers,
+		Pilots = pilotsPayload,
 		Now = now,
 	}
 end

@@ -564,6 +564,7 @@ function RaceRules.SanitizeData(raw: any, today: number): any
 					T = if t >= 3 and t < 3600 then t else nil,
 					C = if type(r.C) == "string" and #r.C <= 40 then r.C else nil,
 					M = math.clamp(count(r.M), 0, 3),
+					G = r.G == true or nil, -- (💎 de la 1re médaille d'or déjà donné)
 				}
 			end
 		end
