@@ -185,11 +185,12 @@ end
 
 local function bistroChair(m: Model, T: CFrame, a: number)
 	local C = T * CFrame.Angles(0, a, 0) * CFrame.new(0, 0, 1.6)
-	Box(m, "ChairSeat", C, -0.6, 0.6, 1.3, 1.45, -0.6, 0.6, rgb(180, 60, 50), M.Fabric)
-	Box(m, "ChairBack", C, -0.6, 0.6, 1.45, 2.8, 0.5, 0.62, rgb(180, 60, 50), M.Fabric)
-	for _, sx in ipairs({ -0.5, 0.5 }) do
-		for _, sz in ipairs({ -0.5, 0.5 }) do
-			Column(m, "ChairLeg", C, sx, sz, 0, 1.3, 0.1, IRON, M.Metal)
+	-- (v11, SCALE11 : échelle Roblox) assise à 1,85, dossier à 4,1
+	Box(m, "ChairSeat", C, -0.75, 0.75, 1.7, 1.85, -0.7, 0.7, rgb(180, 60, 50), M.Fabric)
+	Box(m, "ChairBack", C, -0.75, 0.75, 1.85, 4.1, 0.58, 0.72, rgb(180, 60, 50), M.Fabric)
+	for _, sx in ipairs({ -0.62, 0.62 }) do
+		for _, sz in ipairs({ -0.58, 0.58 }) do
+			Column(m, "ChairLeg", C, sx, sz, 0, 1.7, 0.1, IRON, M.Metal)
 		end
 	end
 end
@@ -220,14 +221,14 @@ local function buildCafe(m: Model, F: CFrame, seed: number)
 	for i = 0, 2 do
 		local T = F * CFrame.new(-5.4 + i * 5.4, 0.3, -6.4 + (i % 2) * 1.2)
 		Column(m, "TableFoot", T, 0, 0, 0, 0.12, 1.4, IRON, M.Metal)
-		Column(m, "TableLeg", T, 0, 0, 0.12, 2.3, 0.16, IRON, M.Metal)
-		Column(m, "TableTop", T, 0, 0, 2.3, 2.42, 2.4, WHITE, M.Marble)
-		Column(m, "Cup", T, 0.4, 0.2, 2.42, 2.82, 0.36, WHITE, M.SmoothPlastic)
+		Column(m, "TableLeg", T, 0, 0, 0.12, 2.98, 0.2, IRON, M.Metal)
+		Column(m, "TableTop", T, 0, 0, 2.98, 3.1, 2.4, WHITE, M.Marble)
+		Column(m, "Cup", T, 0.4, 0.2, 3.1, 3.5, 0.36, WHITE, M.SmoothPlastic)
 		for k = 0, 1 do
 			bistroChair(m, T, k * math.pi)
 		end
 		-- parasol
-		Column(m, "ParasolPole", T, 0, 0, 2.42, 8.2, 0.14, WOOD, M.Wood)
+		Column(m, "ParasolPole", T, 0, 0, 3.1, 8.2, 0.14, WOOD, M.Wood)
 		local color = i % 2 == 0 and rgb(200, 50, 60) or rgb(250, 244, 230)
 		for k = 0, 3 do
 			local R = T * CFrame.Angles(0, k * math.pi / 2, 0)
@@ -358,7 +359,7 @@ local function buildBusStop(m: Model, F: CFrame, seed: number)
 	local ad = Box(m, "ShelterAd", F, 2.2, 4.6, 1.2, 7.2, 1.4, 1.9, WHITE, M.SmoothPlastic)
 	Glow(ad)
 	Text(ad, Enum.NormalId.Front, "🧠 " .. Locale.T("Dopamine Clicker"), rgb(230, 60, 140), rgb(255, 240, 250), Enum.Font.FredokaOne, 60)
-	Box(m, "ShelterBench", F, -3.8, 1.6, 1.3, 1.5, 1.2, 2, WOOD, M.Wood)
+	Box(m, "ShelterBench", F, -3.8, 1.6, 1.65, 1.85, 0.2, 2, WOOD, M.Wood) -- (v11, SCALE11 : 1,85 x 1,8)
 	local pole = Column(m, "StopPole", F, -6, -1.2, 0, 9.6, 0.24, rgb(60, 64, 72), M.Metal, true)
 	local _ = pole
 	local plate = Box(m, "StopPlate", F, -6.9, -5.1, 8, 9.8, -1.3, -1.1, rgb(250, 200, 40), M.SmoothPlastic)

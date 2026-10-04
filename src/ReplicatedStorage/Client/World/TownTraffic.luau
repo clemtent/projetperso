@@ -156,6 +156,7 @@ type Vehicle = {
 	Far: boolean,
 	Excused: boolean, -- (v11) arrêt justifié (train, personne, bus...) : la file derrière aussi
 	LeadV: any?,
+	BlockBy: any?, -- (v11) véhicule à qui l'on cède (tests)
 	Lead: number, -- (v11) écart au véhicule devant (pare-chocs à pare-chocs)
 	LeadSpeed: number,
 	JPass: Pass?, -- (v11) carrefour abordé
@@ -1491,7 +1492,7 @@ local function junctionBlocked(v: Vehicle): boolean
 	for _, e in ipairs(nodeOcc[P.Node] or {}) do
 		local o = e.V
 		if o ~= v and conf[e.P.Id] == "cross" then
-			-- (sauf s'il est déjà derrière nous dans le carrefour)
+			v.BlockBy = o
 			return true
 		end
 	end
@@ -1503,6 +1504,7 @@ local function junctionBlocked(v: Vehicle): boolean
 	for _, e in ipairs(nodeApp[P.Node] or {}) do
 		local o = e.V
 		if o ~= v and conf[e.P.Id] and o.JReady and o.JArrive < window and hasPriority(o, v) then
+			v.BlockBy = o
 			return true
 		end
 	end

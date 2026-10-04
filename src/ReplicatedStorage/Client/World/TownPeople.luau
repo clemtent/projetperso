@@ -242,7 +242,7 @@ end
 
 -- Rectangle au sol (repère : axe X = (AX, AZ), axe Z = (-AZ, AX)) ;
 -- Kind : 1 = solide, 2 = bordure (souple), 3 = lieu réservé (concert)
-type Rect = { CX: number, CZ: number, AX: number, AZ: number, HX: number, HZ: number, Kind: number }
+type Rect = { CX: number, CZ: number, AX: number, AZ: number, HX: number, HZ: number, Kind: number, Src: string? }
 
 local BAND = 2.6 -- (studs) écart latéral max. de part et d'autre du chemin
 local BODY_PAD = 0.72 -- (studs) demi-largeur d'épaules + marge
@@ -469,7 +469,9 @@ local function collectObstacles(s: any, town: Instance, data: Instance, count: n
 					local cf = CFrame.new(x, y, z) * CFrame.Angles(0, yaw, 0)
 					local foot = FOOT[kind]
 					if foot then
-						addRect(s, rectFromCF(cf, foot[1], foot[2], 1))
+						local r = rectFromCF(cf, foot[1], foot[2], 1)
+						r.Src = kind
+						addRect(s, r)
 					elseif kind == "CurbLine" and f[7] then
 						local c = string.split(f[7], ",")
 						local len = tonumber(c[1])
@@ -528,7 +530,9 @@ local function collectObstacles(s: any, town: Instance, data: Instance, count: n
 					end
 				end
 				if top > pathY + 0.45 and bottom < pathY + 4.5 then
-					addRect(s, rectFromCF(cf, half.X * 2, half.Z * 2, 1))
+					local r = rectFromCF(cf, half.X * 2, half.Z * 2, 1)
+					r.Src = (d.Parent and d.Parent.Name or "?") .. "/" .. d.Name
+					addRect(s, r)
 					ny += 1
 				end
 			end
@@ -1118,12 +1122,10 @@ end
 local function obstaclesOf(s: any): { Obstacle }
 	local obstacles: { Obstacle } = {}
 	for _, a: Agent in ipairs(s.Built or {}) do
-		local pos = a.Pos
-		if a.Kind == "static" and a.Anim == "sit" and a.CF then
-			-- (assis : les jambes avancent)
-			pos = ((a.CF :: CFrame) * CFrame.new(0, 0, -0.6)).Position
+		-- (les personnes immobiles sont déjà dans les couloirs : obstacles fixes)
+		if a.Kind == "walk" then
+			table.insert(obstacles, { Pos = a.Pos, Agent = a, Player = false })
 		end
-		table.insert(obstacles, { Pos = pos, Agent = a, Player = false })
 		if a.DogPos then
 			table.insert(obstacles, { Pos = a.DogPos, Agent = a, Player = false, Dog = true })
 		end
@@ -1278,6 +1280,21 @@ local function load(s: any): boolean
 		s.Rects, s.Grid, s.Stuck, s.Computed = {}, {}, 0, 0
 	end
 	populate(s)
+	-- les personnes immobiles (assises, qui discutent, marchands) sont aussi
+	-- des obstacles fixes : les couloirs les contournent dès le départ
+	for _, a: Agent in ipairs(s.Agents) do
+		if a.Kind == "static" and a.CF then
+			local cf = a.CF :: CFrame
+			local r
+			if a.Anim == "sit" then
+				r = rectFromCF(cf * CFrame.new(0, 0, -0.5), 1.4, 2.2, 1)
+			else
+				r = rectFromCF(cf, 1.3, 1.3, 1)
+			end
+			r.Src = "npc:" .. a.Style
+			addRect(s, r)
+		end
+	end
 	local folder = Instance.new("Folder")
 	folder.Name = TownPeople.FOLDER_NAME
 	folder.Parent = workspace
@@ -1507,13 +1524,13 @@ end
 
 -- (tests) distance (XZ) de `pos` au plus proche obstacle fixe solide ou réservé
 -- (négative = dedans), et sa sorte
-function TownPeople.Probe(pos: Vector3): (number, number)
+function TownPeople.Probe(pos: Vector3): (number, number, string?)
 	local s = state
 	if not s or not s.Grid then
-		return math.huge, 0
+		return math.huge, 0, nil
 	end
 	local key = math.floor(pos.X / CELL) * 100003 + math.floor(pos.Z / CELL)
-	local best, kind = math.huge, 0
+	local best, kind, src = math.huge, 0, nil
 	for _, idx in ipairs(s.Grid[key] or {}) do
 		local r: Rect = s.Rects[idx]
 		if r.Kind ~= 2 then
@@ -1527,11 +1544,11 @@ function TownPeople.Probe(pos: Vector3): (number, number)
 				d = math.max(lx, lz)
 			end
 			if d < best then
-				best, kind = d, r.Kind
+				best, kind, src = d, r.Kind, (r.Src or "zone") .. string.format(" %.1fx%.1f", r.HX * 2, r.HZ * 2)
 			end
 		end
 	end
-	return best, kind
+	return best, kind, src
 end
 
 function TownPeople.Debug(): any

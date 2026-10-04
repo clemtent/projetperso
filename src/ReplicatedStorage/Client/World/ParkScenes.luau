@@ -31,8 +31,12 @@
 	      ParkScenes.FOOT[kind] = Vector2 (emprise)
 ]]
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
 local ParkKit = require(script.Parent.ParkKit)
 local FountainKit = require(script.Parent.FountainKit)
+local ParkLayout = require(ReplicatedStorage.Shared.ParkLayout)
+local Locale = require(ReplicatedStorage.Shared.Locale)
 local okCK, CityKit = pcall(require, script.Parent.CityKit)
 
 local ParkScenes = {}
@@ -59,6 +63,7 @@ ParkScenes.FOOT = {
 	Picnic = Vector2.new(26, 18),
 	PicnicTables = Vector2.new(28, 16),
 	BenchRow = Vector2.new(20, 6),
+	FountainSquare = Vector2.new(48, 48),
 	Fitness = Vector2.new(20, 14),
 }
 
@@ -306,6 +311,20 @@ function ParkScenes.Sitter(m: Instance, seatCF: CFrame, groundY: number, seed: n
 	return npc
 end
 
+-- Bancs d'une scène (plan partagé ParkLayout : le serveur a posé un Seat
+-- sur chaque place libre) + PNJ sur les places marquées
+local function benchesFor(m: Instance, F: CFrame, kind: string, seed: number)
+	for _, b in ipairs(ParkLayout.Benches(kind, seed)) do
+		ParkKit.Bench(m, F * b.CF, b.Len)
+	end
+	for i, st in ipairs(ParkLayout.Seats(kind, seed)) do
+		if st.Npc and st.Bench < 100 then
+			ParkScenes.Sitter(m, F * st.CF, F.Position.Y, seed * 13 + i, st.Activity)
+		end
+	end
+end
+ParkScenes.BenchesFor = benchesFor
+
 ----------------------------------------------------------------------
 -- 🏃 Joggeurs sur une boucle (points au sol, fermée)
 ----------------------------------------------------------------------
@@ -401,12 +420,21 @@ local function roseArch(m: Instance, F: CFrame, w: number, seed: number)
 		local p0 = F * Vector3.new(-cos(a0) * w / 2, H - 1.2 + sin(a0) * 1.6, 0)
 		local p1 = F * Vector3.new(-cos(a1) * w / 2, H - 1.2 + sin(a1) * 1.6, 0)
 		Rod(m, "ArchBow", p0, p1, 0.24, IRON, M.Metal)
-		local c = pick(ROSES, seed, k)
-		Egg(m, "ArchRoses", CFrame.new((p0 + p1) / 2), Vector3.new(1.5, 1.1, 1.4), rgb(62, 118, 58):Lerp(c, 0.45), M.Grass)
+		local mid = (p0 + p1) / 2
+		Egg(m, "ArchLeaves", CFrame.new(mid) * ANG(hash(seed, k) * 3, k, 0), Vector3.new(1.1, 0.8, 1.0), rgb(58, 112, 54):Lerp(rgb(86, 140, 64), hash(seed, k + 2)), M.Grass)
+		for j = 0, 1 do
+			local c = pick(ROSES, seed, k * 2 + j)
+			local off = Vector3.new(hash(seed, k * 3 + j) - 0.5, 0.35 - j * 0.6, (j - 0.5) * 0.9)
+			ParkKit.Ball(m, "ArchRose", mid + off, 0.4, c, M.SmoothPlastic)
+		end
 	end
 	for _, sx in ipairs({ -1, 1 }) do
-		for k = 0, 3 do
-			Egg(m, "ArchClimb", F * CFrame.new(sx * w / 2, 1 + k * 1.9, 0), Vector3.new(1.0, 1.6, 1.0), rgb(62, 118, 58):Lerp(pick(ROSES, seed, k + 5), (k % 2) * 0.5), M.Grass)
+		for k = 0, 4 do
+			local p = F * CFrame.new(sx * w / 2 + (hash(seed, k + sx) - 0.5) * 0.3, 0.8 + k * 1.55, (hash(seed, k + 7) - 0.5) * 0.4)
+			Egg(m, "ArchClimb", p, Vector3.new(0.9, 1.3, 0.9), rgb(58, 112, 54):Lerp(rgb(86, 140, 64), hash(seed, k + 9)), M.Grass)
+			if k % 2 == 1 then
+				ParkKit.Ball(m, "ArchRose", (p * CFrame.new(0.35 * sx, 0.2, -0.35)).Position, 0.38, pick(ROSES, seed, k + 5), M.SmoothPlastic)
+			end
 		end
 	end
 end
@@ -454,18 +482,8 @@ local function buildRoseGarden(m: Model, F: CFrame, seed: number): any
 	for k = 0, 3 do
 		roseArch(m, F * ANG(0, k * math.pi / 2, 0) * CFrame.new(0, 0, -S + 1), 6, seed + k)
 	end
-	-- 4 bancs face à la fontaine (sur le tour), 2 occupés
-	local sitters = 0
-	for k = 0, 3 do
-		local a = (k + 0.5) / 4 * TAU
-		local p = F * CFrame.new(cos(a) * 12.2, 0, sin(a) * 12.2)
-		local B = CFrame.lookAt(p.Position, F.Position) -- (-Z vers la fontaine)
-		local seat = ParkKit.Bench(m, B, 5.6)
-		if hash(seed, k + 40) < 0.6 and sitters < 3 then
-			sitters += 1
-			ParkScenes.Sitter(m, seat * CFrame.new(hash(seed, k) < 0.5 and -1.3 or 1.3, 0, 0), F.Position.Y, seed * 5 + k)
-		end
-	end
+	-- 4 bancs face à la fontaine (sur le tour), PNJ ou places libres
+	benchesFor(m, F, "RoseGarden", seed)
 	actor(m, F.Position, function(t: number)
 		FountainKit.Step(fx, t)
 	end, seed)
@@ -510,7 +528,7 @@ local function buildDogPark(m: Model, F: CFrame, seed: number): any
 	fenceSide(Vector3.new(-W / 2, 0, D / 2), Vector3.new(-W / 2, 0, -D / 2), false)
 	-- sas d'entrée (2e portillon) + panneau
 	local sign = Box(m, "DogSign", F, -2, 2, 4.2, 5.6, -D / 2 - 0.25, -D / 2 - 0.1, rgb(250, 244, 230), M.SmoothPlastic)
-	ParkKit.Text(sign, Enum.NormalId.Front, "🐕 Parc à chiens", rgb(60, 40, 30), nil, Enum.Font.FredokaOne)
+	ParkKit.Text(sign, Enum.NormalId.Front, "🐕 " .. Locale.T("Dog park"), rgb(60, 40, 30), nil, Enum.Font.FredokaOne)
 	for _, sx in ipairs({ -1, 1 }) do
 		Column(m, "SignPost", F, sx * 1.8, -D / 2 - 0.18, 0, 5.6, 0.25, wood, M.Wood)
 	end
@@ -539,8 +557,7 @@ local function buildDogPark(m: Model, F: CFrame, seed: number): any
 	Column(m, "DogBowl", F, -14, 11.2, 0.1, 0.5, 1.4, rgb(180, 184, 190), M.Metal)
 	local water = Column(m, "DogBowlWater", F, -14, 11.2, 0.3, 0.45, 1.15, rgb(150, 206, 232), M.Glass)
 	water.Transparency = 0.3
-	local seatL = ParkKit.Bench(m, F * CFrame.new(-10, 0, 12.4) * ANG(0, 0, 0), 5.6)
-	ParkScenes.Sitter(m, seatL * CFrame.new(-1.3, 0, 0), F.Position.Y, seed * 7 + 1, pick({ "phone", "chat", "read" }, seed, 2))
+	benchesFor(m, F, "DogPark", seed)
 	-- maîtres qui lancent la balle + chiens
 	local NPC = ParkKit.NPC()
 	local owners = {}
@@ -750,13 +767,7 @@ local function buildBandstand(m: Model, F: CFrame, seed: number): any
 		table.insert(band, { Npc = npc, Role = r[1], Inst = inst })
 	end
 	-- bancs du public devant
-	for k = -1, 1, 2 do
-		local B = F * CFrame.new(k * 4.2, 0, -R - 8) * ANG(0, math.pi, 0)
-		local seat = ParkKit.Bench(m, B, 5.6)
-		if hash(seed, k + 3) < 0.7 then
-			ParkScenes.Sitter(m, seat * CFrame.new(k * 1.2, 0, 0), F.Position.Y, seed * 31 + k + 2, pick({ "chat", "read", "eat" }, seed, k + 5))
-		end
-	end
+	benchesFor(m, F, "Bandstand", seed)
 	actor(m, F.Position, function(t: number)
 		for i, b in ipairs(band) do
 			if b.Npc then
@@ -848,9 +859,13 @@ end
 
 local function buildPicnicTables(m: Model, F: CFrame, seed: number): any
 	ensureAnims()
-	for k = 0, 2 do
-		local T = F * CFrame.new(-9 + k * 9, 0, (k % 2) * 3 - 1.5) * ANG(0, (hash(seed, k) - 0.5) * 0.5, 0)
-		ParkScenes.PicnicTable(m, T, seed + k, hash(seed, k + 3) < 0.6 and 2 or 0)
+	for k, T in ipairs(ParkLayout.Tables("PicnicTables", seed)) do
+		ParkScenes.PicnicTable(m, F * T, seed + k, 0)
+	end
+	for i, st in ipairs(ParkLayout.Seats("PicnicTables", seed)) do
+		if st.Npc then
+			ParkScenes.Sitter(m, F * st.CF, F.Position.Y, seed * 17 + i, st.Activity)
+		end
 	end
 	return {}
 end
@@ -858,15 +873,37 @@ end
 -- Rangée de bancs le long d'une allée (2 bancs, poubelle, lampadaire)
 local function buildBenchRow(m: Model, F: CFrame, seed: number): any
 	ensureAnims()
-	for k = -1, 1, 2 do
-		local seat = ParkKit.Bench(m, F * CFrame.new(k * 4, 0, 0), 5.6)
-		if hash(seed, k + 2) < 0.65 then
-			ParkScenes.Sitter(m, seat * CFrame.new(hash(seed, k) < 0.5 and -1.3 or 1.3, 0, 0), F.Position.Y, seed * 3 + k)
-		end
-	end
+	benchesFor(m, F, "BenchRow", seed)
 	ParkKit.Bin(m, F * CFrame.new(0, 0, 0.6))
 	ParkKit.Lamp(m, F * CFrame.new(8.5, 0, 0.8))
 	return {}
+end
+
+-- ⛲ PLACE DE LA FONTAINE (Ø 44) : grande fontaine à vasques, dallage en
+-- cercles, 8 bancs tournés vers l'eau, lampadaires, joggeurs autour
+local function buildFountainSquare(m: Model, F: CFrame, seed: number): any
+	ensureAnims()
+	local paving = rgb(214, 204, 188)
+	Column(m, "SquarePaving", F, 0, 0, -0.1, 0.06, 40, paving, M.Pavement)
+	Ring(m, "SquareBand", F, 15.2, 1.2, 0.06, 0.09, 32, rgb(150, 140, 130), M.Granite)
+	Ring(m, "SquareEdge", F, 19.6, 0.8, 0.06, 0.2, 40, rgb(170, 160, 150), M.Granite)
+	local fx = FountainKit.Build(m, F, "Tiered", seed)
+	benchesFor(m, F, "FountainSquare", seed)
+	for k = 0, 3 do
+		local a = k / 4 * TAU
+		ParkKit.Lamp(m, F * CFrame.new(math.cos(a) * 18.4, 0.06, math.sin(a) * 18.4))
+	end
+	-- joggeurs sur l'anneau extérieur
+	local loop = {}
+	for k = 0, 15 do
+		local a = k / 16 * TAU
+		table.insert(loop, (F * CFrame.new(math.cos(a) * 22.5, 0, math.sin(a) * 22.5)).Position)
+	end
+	ParkScenes.JogLoop(m, loop, seed, 2)
+	actor(m, F.Position, function(t: number)
+		FountainKit.Step(fx, t)
+	end, seed)
+	return { Fountain = fx }
 end
 
 -- 🏋️ Agrès (barre de traction, barres parallèles, banc incliné) + sportifs
@@ -917,6 +954,7 @@ ParkScenes.BUILDERS = {
 	Picnic = buildPicnic,
 	PicnicTables = buildPicnicTables,
 	BenchRow = buildBenchRow,
+	FountainSquare = buildFountainSquare,
 	Fitness = buildFitness,
 }
 

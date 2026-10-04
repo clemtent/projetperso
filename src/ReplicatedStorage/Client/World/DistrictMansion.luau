@@ -342,9 +342,10 @@ local function buildFountain(m: Model, F: CFrame, seed: number)
 	for k = 0, 3 do
 		local a = k * math.pi / 2
 		local S = F * CFrame.new(math.cos(a) * 9.6, 0.16, math.sin(a) * 9.6) * CFrame.Angles(0, -a - math.pi / 2, 0)
-		Box(m, "StoneBench", S, -2.4, 2.4, 1.2, 1.5, -0.7, 0.7, STONE, M.Marble, true)
-		for _, x in ipairs({ -1.8, 1.8 }) do
-			Box(m, "BenchFoot", S, x - 0.3, x + 0.3, 0, 1.2, -0.6, 0.6, STONE_D, M.Slate)
+		-- (v11, SCALE11 : échelle Roblox) assise à 1,85, profondeur 2,0
+		Box(m, "StoneBench", S, -2.8, 2.8, 1.55, 1.85, -1.0, 1.0, STONE, M.Marble, true)
+		for _, x in ipairs({ -2.1, 2.1 }) do
+			Box(m, "BenchFoot", S, x - 0.3, x + 0.3, 0, 1.55, -0.85, 0.85, STONE_D, M.Slate)
 		end
 	end
 	-- deux promeneurs

@@ -1616,7 +1616,7 @@ R.AquariumWall = function(b, _ctx)
 	end
 	-- eau + fond + sable
 	b.Box(0, 18, -depth / 2 + 2, 90, 76, 2, WATER_DEEP, M.SmoothPlastic)
-	local water = glass(b.Box(0, 18, 0, 90, 76, depth - 4, b.Map(WATER), M.Glass), 0.55)
+	local water = glass(b.Box(0, 18, 0, 90, 76, depth - 4, b.Map(WATER), M.Glass), 0.7)
 	b.Box(0, 18, 0, 89, 6, depth - 5, rgb(236, 214, 160), M.Sand)
 	-- coraux, algues, rochers
 	for index, s in ipairs({ { -32, rgb(255, 110, 120) }, { -14, rgb(255, 170, 80) }, { 16, rgb(200, 110, 230) }, { 34, rgb(255, 130, 160) } }) do
@@ -1839,7 +1839,7 @@ R.AquariumTunnel = function(b, _ctx)
 		local x, y = math.cos(a) * r, 3 + math.sin(a) * r
 		local cf = CFrame.new(x, y, 0) * CFrame.Angles(0, 0, a)
 		local width = 2 * r * math.sin(math.pi / segments / 2) * 2 + 0.6
-		glass(b.BoxR(cf, band, width, depth - 4, b.Map(WATER), M.Glass), 0.45)
+		glass(b.BoxR(cf, band, width, depth - 4, b.Map(WATER), M.Glass), 0.66)
 		for _, sz in ipairs({ -1, 1 }) do
 			b.BoxR(CFrame.new(x, y, sz * (depth / 2 - 1)) * CFrame.Angles(0, 0, a), band + 2, width, 2, frame, M.Metal)
 		end

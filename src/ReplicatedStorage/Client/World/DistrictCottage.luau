@@ -436,12 +436,13 @@ local function buildGreen(m: Model, F: CFrame, seed: number)
 	end
 	-- table de pique-nique
 	local T = F * CFrame.new(9, 0.05, -8) * CFrame.Angles(0, 0.4, 0)
-	Box(m, "PicnicTop", T, -3, 3, 2.2, 2.5, -1.2, 1.2, WOOD, M.WoodPlanks, true)
-	for _, z in ipairs({ -2.1, 2.1 }) do
-		Box(m, "PicnicSeat", T, -3, 3, 1.3, 1.55, z - 0.5, z + 0.5, WOOD, M.WoodPlanks, true)
+	-- (v11, SCALE11 : échelle Roblox) plateau à 3,1, bancs à 1,85
+	Box(m, "PicnicTop", T, -3, 3, 2.8, 3.1, -1.2, 1.2, WOOD, M.WoodPlanks, true)
+	for _, z in ipairs({ -2.5, 2.5 }) do
+		Box(m, "PicnicSeat", T, -3, 3, 1.6, 1.85, z - 0.55, z + 0.55, WOOD, M.WoodPlanks, true)
 	end
 	for _, x in ipairs({ -2.3, 2.3 }) do
-		Box(m, "PicnicLeg", T, x - 0.18, x + 0.18, 0, 2.2, -2.4, 2.4, WOOD_D, M.Wood)
+		Box(m, "PicnicLeg", T, x - 0.18, x + 0.18, 0, 2.8, -2.9, 2.9, WOOD_D, M.Wood)
 	end
 	-- parterre rond de fleurs
 	for i = 0, 9 do

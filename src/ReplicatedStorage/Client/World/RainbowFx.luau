@@ -613,8 +613,8 @@ end
 local function onWin()
 	local player = Players.LocalPlayer
 	local value = player and player:GetAttribute("PotOfGoldWin")
-	if type(value) ~= "string" or value == lastWin then
-		return
+	if type(value) ~= "string" or value == lastWin or current.Id == -1 or pot == nil then
+		return -- (pot pas encore affiché : on relira l'attribut à la prochaine passe)
 	end
 	lastWin = value
 	local id, _place, amount = string.match(value, "^(%-?%d+)|(%d+)|(%d+)$")
@@ -685,6 +685,10 @@ function RainbowFx.Step(dt: number, t: number, camPos: Vector3, night: boolean)
 	end
 	stepCoins(dt)
 	geomClock += dt
+	-- (gain : aussi relu ici, au cas où le signal d'attribut arrive avant l'arc)
+	if geomClock >= GEOM_EVERY then
+		pcall(onWin)
+	end
 	if geomClock < GEOM_EVERY then
 		return
 	end

@@ -649,9 +649,10 @@ local function natureSites(geo: TownKit.Geo): { { P: Vector3, R: number, Lake: b
 		local mid = r0 + depth / 2
 		local lakeR = math.min(math.clamp(depth / 2 - 12, 20, 42) * 1.15, depth / 2 - 18)
 		table.insert(sites, { P = geo.At((aR + math.pi) / 2 + 0.05, mid + 4), R = lakeR + 9, Lake = true })
-		table.insert(sites, { P = geo.At((math.pi + aL) / 2 + 0.06, r0 + 25), R = 16, Lake = false })
+		-- (v11, PARK11) roseraie (r0 + 26, R 23) et terrain de basket (Inner - 22, R 21)
+		table.insert(sites, { P = geo.At((math.pi + aL) / 2 + 0.06, r0 + 26), R = 23, Lake = false })
 		if depth > 70 then
-			table.insert(sites, { P = geo.At((math.pi + aL) / 2 - 0.05, geo.Inner - 18), R = 17, Lake = false })
+			table.insert(sites, { P = geo.At((math.pi + aL) / 2 - 0.05, geo.Inner - 22), R = 21, Lake = false })
 		end
 	end)
 	return if ok then sites else {}

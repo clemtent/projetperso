@@ -2816,14 +2816,15 @@ R.Aquarium = function(b, ctx)
 	local tankY = top * 0.35
 	local tankH = top - tankY - 2
 	local glass = b.Box(0, tankY, 0, 90, tankH, 40, GLASS, M.Glass)
-	glass.Transparency = 0.55
+	-- (v11 : verre et eau plus clairs : on voit les poissons nager)
+	glass.Transparency = 0.78
 	glass.Reflectance = 0.1
 	glass.CastShadow = false
 	for _, sx in ipairs({ -1, 1 }) do
 		b.Box(sx * (44.3 + House3DKit.Gap(b, 0.8) / 2), tankY, 0, 1.4 + House3DKit.Gap(b, 0.8), tankH, 40 + 2 * House3DKit.Gap(b, 0.8), INK, M.SmoothPlastic)
 	end
-	local water = b.Box(0, tankY + 2, 0, 86, tankH - 8, 36, rgb(130, 200, 250), M.Glass)
-	water.Transparency = 0.4
+	local water = b.Box(0, tankY + 2, 0, 86, tankH - 8, 36, rgb(150, 214, 250), M.Glass)
+	water.Transparency = 0.72
 	water.CastShadow = false
 	b.Box(0, tankY, 0, 84, 4, 34, rgb(240, 220, 180), M.Sand)
 	for index = 0, 2 do
@@ -2866,10 +2867,10 @@ end
 R.MiniAquarium = function(b, _ctx)
 	b.Cyl(0, 0, 0, 50, 6, rgb(200, 170, 250))
 	local bowl = b.Ball(0, 40, 0, 80, GLASS, M.Glass)
-	bowl.Transparency = 0.6
+	bowl.Transparency = 0.8
 	bowl.CastShadow = false
-	local water = b.Egg(0, 36, 0, 70, 54, 70, rgb(150, 210, 255), M.Glass)
-	water.Transparency = 0.45
+	local water = b.Egg(0, 36, 0, 70, 54, 70, rgb(160, 216, 255), M.Glass)
+	water.Transparency = 0.7
 	water.CastShadow = false
 	b.Egg(0, 10, 0, 52, 8, 52, rgb(250, 230, 180), M.Sand)
 	b.EggR(CFrame.new(-16, 22, -8) * CFrame.Angles(0, 0, 0.12), 4, 20, 4, rgb(90, 200, 120), M.SmoothPlastic)
@@ -4434,14 +4435,14 @@ R.SharkTank = function(b, _ctx)
 	-- rochers et coraux, requins (nageoires, queue), bulles, rampe lumineuse
 	b.Box(0, 0, 0, 96, 26, 46, CARBON, M.SmoothPlastic)
 	local glass = b.Box(0, 26, 0, 94, 66, 44, GLASS, M.Glass)
-	glass.Transparency = 0.55
+	glass.Transparency = 0.78
 	glass.Reflectance = 0.1
 	glass.CastShadow = false
 	for _, sx in ipairs({ -1, 1 }) do
 		b.Box(sx * (46.4 + g / 2), 26, 0, 1.2 + g, 66, 44 + 2 * g, INK, M.Metal)
 	end
-	local water = b.Box(0, 28, 0, 90, 56, 40, rgb(60, 140, 220), M.Glass)
-	water.Transparency = 0.45
+	local water = b.Box(0, 28, 0, 90, 56, 40, rgb(80, 156, 226), M.Glass)
+	water.Transparency = 0.66
 	water.CastShadow = false
 	b.Box(0, 26, 0, 90, 4, 36, rgb(240, 220, 180), M.Sand)
 	for index = 0, 3 do

@@ -272,7 +272,9 @@ function MusicPose.Solve(rig: Rig, spec: any, w: number)
 		local standParent = part1CF(rig.Root.CFrame, rootJ, IDENTITY)
 		local hipY = hip and (standParent * hip.C0).Position.Y or (rig.Root.Position.Y - rig.LegLen * 0.5)
 		local want = spec.Seat + (rig.R6 and 0.5 or 0.36) * rig.Scale
-		local drop = math.clamp(hipY - want, 0, 3.2)
+		-- (v11 : bancs à l'échelle Roblox, 1,85–1,9 : le bassin peut aussi
+		-- MONTER au-dessus de la hauteur debout pour se poser SUR le banc)
+		local drop = math.clamp(hipY - want, -1, 3.2)
 		target.Root = addT(rootJ, CFrame.new(0, -drop, 0))
 	end
 	-- 2. buste / tête

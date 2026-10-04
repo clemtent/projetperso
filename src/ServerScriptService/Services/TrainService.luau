@@ -566,7 +566,7 @@ local function openHeist(info: any)
 		if ok and h then
 			heist.Handle = h
 			pcall(function()
-				h:Open("🚂💎 The diamond convoy stops at " .. st.Name .. " in 2 min! Gather on the platform")
+				h:Open("🚂💎 The diamond convoy is coming! Gather on the station platform")
 			end)
 		else
 			warn("[TrainService] HeistKit.Create : " .. tostring(h))

@@ -481,7 +481,7 @@ end
 -- Registre (miroirs, écrans, sols) : DescendantAdded filtré par nom
 ----------------------------------------------------------------------
 
-type CharCopy = { Model: Model, Version: number, Pairs: { { Src: BasePart, Dst: BasePart, Base: number } }, Built: number }
+type CharCopy = { Model: Model, Version: number, Count: number, Pairs: { { Src: BasePart, Dst: BasePart, Base: number } }, Built: number }
 
 type StripObj = {
 	Spec: Strip,
@@ -537,6 +537,7 @@ local glossOn = false
 local floorsDirty = false
 local charVersion: { [Model]: number } = {}
 local charConns: { [Model]: { RBXScriptConnection } } = {}
+local lastCount = 0
 
 -- SurfaceGui dans le PlayerGui (Adornee = la toile) ; jamais remise à zéro
 -- à la réapparition du personnage (ResetOnSpawn = false)
@@ -842,7 +843,7 @@ end
 local function buildCopy(source: Model, world: WorldModel, plane: Plane): CharCopy
 	local model = Instance.new("Model")
 	model.Name = "Reflet"
-	local copy: CharCopy = { Model = model, Version = charVersion[source] or 1, Pairs = {}, Built = os.clock() }
+	local copy: CharCopy = { Model = model, Version = charVersion[source] or 1, Count = #source:GetDescendants(), Pairs = {}, Built = os.clock() }
 	pcall(function()
 		local hum = Instance.new("Humanoid")
 		hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
@@ -1305,13 +1306,22 @@ local function updateChars(disp: Display)
 		watchCharacter(source)
 	end
 	local now = os.clock()
+	-- (filet de sécurité si un DescendantAdded manque : nombre de descendants, 2 fois / s)
+	local counts: { [Model]: number } = {}
+	if now - lastCount > 0.5 then
+		lastCount = now
+		for _, source in ipairs(sources) do
+			counts[source] = #source:GetDescendants()
+		end
+	end
 	for _, s in ipairs(disp.Strips) do
 		-- copies périmées / en trop
 		for source, copy in pairs(s.Chars) do
 			if not want[source] or source.Parent == nil then
 				copy.Model:Destroy()
 				s.Chars[source] = nil
-			elseif copy.Version ~= (charVersion[source] or 1) and now - copy.Built > 0.3 then
+			elseif now - copy.Built > 0.3 and (copy.Version ~= (charVersion[source] or 1) or (counts[source] ~= nil and counts[source] ~= copy.Count)) then
+				-- (accessoire / outil ajouté ou retiré : copie refaite)
 				copy.Model:Destroy()
 				s.Chars[source] = nil
 			end

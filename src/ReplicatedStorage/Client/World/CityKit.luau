@@ -307,19 +307,23 @@ function CityKit.Lantern(m: Instance, F: CFrame, h: number?, color: Color3?)
 	CityKit.Ball(m, "LanternFinial", (F * CFrame.new(0, H + 0.5, 0)).Position, 0.24, c, M.Metal)
 end
 
--- Banc de parc (lattes bois, pieds fonte) ; siège à 1,4 (échelle avatar)
+-- Banc de parc (lattes bois, pieds fonte) ; (v11, SCALE11 : échelle Roblox)
+-- assise à 1,85 (CityKit.BENCH_TOP), profondeur 2,0, dossier jusqu'à 3,8 ;
+-- au moins 5,6 de long (2 places)
+CityKit.BENCH_TOP = 1.85
 function CityKit.Bench(m: Instance, F: CFrame, len: number?)
-	local L = len or 5
+	local L = math.max(5.6, len or 5.6)
 	local wood = Color3.fromRGB(150, 104, 66)
+	local top = CityKit.BENCH_TOP
 	for _, x in ipairs({ -L / 2 + 0.4, L / 2 - 0.4 }) do
-		CityKit.Box(m, "BenchLeg", F, x - 0.12, x + 0.12, 0, 1.3, -0.7, 0.7, IRON, M.Metal, true)
-		CityKit.Box(m, "BenchArm", F, x - 0.12, x + 0.12, 2.0, 2.12, -0.75, 0.55, IRON, M.Metal)
+		CityKit.Box(m, "BenchLeg", F, x - 0.12, x + 0.12, 0, top - 0.15, -0.95, 0.85, IRON, M.Metal, true)
+		CityKit.Box(m, "BenchArm", F, x - 0.12, x + 0.12, top + 0.7, top + 0.82, -1.0, 0.75, IRON, M.Metal)
+	end
+	for i = 0, 3 do
+		CityKit.Box(m, "BenchSlat", F, -L / 2, L / 2, top - 0.15, top, -1.15 + i * 0.5, -0.75 + i * 0.5, wood, M.Wood, i == 1 or i == 2)
 	end
 	for i = 0, 2 do
-		CityKit.Box(m, "BenchSlat", F, -L / 2, L / 2, 1.3, 1.44, -0.62 + i * 0.44, -0.3 + i * 0.44, wood, M.Wood, i == 1)
-	end
-	for i = 0, 1 do
-		CityKit.Box(m, "BenchBack", F, -L / 2, L / 2, 1.8 + i * 0.5, 2.1 + i * 0.5, 0.62 + i * 0.1, 0.76 + i * 0.1, wood, M.Wood)
+		CityKit.Box(m, "BenchBack", F, -L / 2, L / 2, top + 0.35 + i * 0.55, top + 0.75 + i * 0.55, 0.85 + i * 0.06, 0.99 + i * 0.06, wood, M.Wood)
 	end
 end
 

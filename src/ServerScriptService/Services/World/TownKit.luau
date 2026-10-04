@@ -484,17 +484,17 @@ end
 --     tout (budget de la ville) ;
 --   - 3 lattes d'assise + 2 lattes de dossier en bois, dossier incliné de
 --     12° vers l'ARRIÈRE (+Z) ; (v9.4 : incliné vers l'avant, flottant) ;
---   - assise à 1.9 stud (R15) ; le Seat (invisible) est une seule pièce
+--   - assise à 1,85 stud (v11, SCALE11) ; le Seat (invisible) est une seule pièce
 --     dont le DESSUS = le dessus des lattes et la face avant (-Z) regarde à
 --     l'opposé du dossier -> le personnage s'assoit face à l'avant, le dos
 --     contre le dossier ;
 --   - seul le Seat a CanTouch ; tout est ancré ; lattes / accoudoirs sans
 --     collision (pas de petites pièces qui font trébucher).
 TownKit.BENCH = {
-	Length = 5.4, -- lattes (x)
-	SeatTop = 1.45, -- dessus de l'assise (y) ; v9.9 (CITY99, échelle SCALE99) : 1,9 -> 1,45 (~45 cm, assise réelle)
-	SeatFront = -0.85, -- bord avant de l'assise (z)
-	SeatBack = 0.75, -- bord arrière de l'assise (z)
+	Length = 5.6, -- lattes (x) ; (v11, CITY11 / SCALE11) 2,6 par place
+	SeatTop = 1.85, -- dessus de l'assise (y) ; v11 (SCALE11, échelle Roblox) : 1,45 -> 1,85
+	SeatFront = -1.15, -- bord avant de l'assise (z) ; (v11) profondeur 2,0
+	SeatBack = 0.85, -- bord arrière de l'assise (z)
 	Tilt = 12, -- (°) dossier incliné vers l'arrière
 }
 function TownKit.Bench(parent: Instance, cf: CFrame)
@@ -509,9 +509,11 @@ function TownKit.Bench(parent: Instance, cf: CFrame)
 	-- contre le dossier, les cuisses sur les lattes avant)
 	local zFront, zBack = B.SeatFront, B.SeatBack
 	local seatDepth = zBack - zFront
-	local seat = part(model, "Seat", Vector3.new(L, 1, seatDepth - 0.25), cf * CFrame.new(0, H - 0.5, (zFront + 0.25 + zBack) / 2), wood, M.Wood, "solid", "Seat")
+	-- (v11, règle SCALE11) Seat mince (0,2) : dessus = dessus des lattes,
+	-- CENTRÉ sur l'assise, sans collision (les lattes portent l'avatar)
+	local seat = part(model, "Seat", Vector3.new(L, 0.2, seatDepth), cf * CFrame.new(0, H - 0.1, (zFront + zBack) / 2), wood, M.Wood, "solid", "Seat")
 	seat.Transparency = 1
-	seat.CanCollide = true
+	seat.CanCollide = false
 	seat.CanQuery = true
 	seat.CanTouch = true -- (un Seat s'active au contact : SEULE pièce touchable)
 	seat.CastShadow = false
@@ -519,26 +521,26 @@ function TownKit.Bench(parent: Instance, cf: CFrame)
 	local slatW = (seatDepth - 2 * 0.08) / 3
 	for i = 0, 2 do
 		local z = zFront + slatW / 2 + i * (slatW + 0.08)
-		part(model, "SeatSlat", Vector3.new(L, SLAT_T, slatW), cf * CFrame.new(0, H - SLAT_T / 2, z), wood, M.Wood, "deco").CastShadow = true
+		part(model, "SeatSlat", Vector3.new(L, SLAT_T, slatW), cf * CFrame.new(0, H - SLAT_T / 2, z), wood, M.Wood, "prop").CastShadow = true
 	end
 	-- dossier : 2 lattes sur un repère incliné (pivot au bord arrière de l'assise)
 	local tilt = CFrame.Angles(math.rad(B.Tilt), 0, 0) -- (+X : le haut part vers +Z)
 	local pivot = cf * CFrame.new(0, H + 0.05, zBack - 0.05) * tilt
-	for i, y in ipairs({ 0.55, 1.2 }) do
+	for i, y in ipairs({ 0.5, 1.1, 1.7 }) do -- (v11 : 3 lattes, dossier ~3,8)
 		local slat = part(model, "BackSlat", Vector3.new(L, 0.5, 0.14), pivot * CFrame.new(0, y, 0.07), wood, M.Wood, "prop")
 		slat.CastShadow = true
 		slat.Name = "BackSlat" .. i
 	end
 	-- 2 flasques en fonte, JUSTE à l'extérieur des lattes
 	local fx = L / 2 + 0.13
-	local armY = H + 0.72
+	local armY = H + 0.75
 	for _, sx in ipairs({ -1, 1 }) do
 		local x = sx * fx
 		-- pied avant (du sol jusqu'à l'accoudoir)
 		part(model, "FrontLeg", Vector3.new(0.22, armY, 0.22), cf * CFrame.new(x, armY / 2, zFront + 0.2), iron, M.Metal, "prop")
 		-- pied arrière (du sol à l'assise), puis montant du dossier (incliné)
 		part(model, "RearLeg", Vector3.new(0.22, H, 0.22), cf * CFrame.new(x, H / 2, zBack - 0.12), iron, M.Metal, "prop")
-		part(model, "BackPost", Vector3.new(0.22, 1.75, 0.2), pivot * CFrame.new(x, 0.755, -0.02), iron, M.Metal, "deco")
+		part(model, "BackPost", Vector3.new(0.22, 2.3, 0.2), pivot * CFrame.new(x, 1.03, -0.02), iron, M.Metal, "deco")
 		-- accoudoir
 		part(model, "ArmRest", Vector3.new(0.3, 0.14, seatDepth + 0.1), cf * CFrame.new(x, armY + 0.07, (zFront + zBack) / 2 - 0.08), iron, M.Metal, "deco")
 	end
