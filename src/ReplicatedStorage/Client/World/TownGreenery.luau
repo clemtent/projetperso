@@ -300,7 +300,28 @@ local function isScene(kind: string): boolean
 	return okScenes and type(ParkScenes) == "table" and ParkScenes.BUILDERS[kind] ~= nil
 end
 
+-- invites "S'asseoir" du serveur (textes anglais : LocAction / LocObject)
+local okLocale, Locale = pcall(require, ReplicatedStorage.Shared.Locale)
+local function translatePrompts(root: Instance)
+	if not okLocale or type(Locale) ~= "table" then
+		return
+	end
+	for _, p in ipairs(root:GetDescendants()) do
+		if p:IsA("ProximityPrompt") and p.Name == "ParkPrompt" and p:GetAttribute("Translated") ~= true then
+			local action, object = p:GetAttribute("LocAction"), p:GetAttribute("LocObject")
+			if type(action) == "string" then
+				p.ActionText = Locale.T(action)
+			end
+			if type(object) == "string" then
+				p.ObjectText = Locale.T(object)
+			end
+			p:SetAttribute("Translated", true)
+		end
+	end
+end
+
 local function buildScene(d: Detail, parent: Model)
+	pcall(translatePrompts, d.Model)
 	local seed = d.Seed or 1
 	if SPORTS[d.Kind] then
 		if not okSports or type(ParkSports) ~= "table" then
@@ -468,8 +489,8 @@ function TownGreenery.Step(position: Vector3?)
 			d.Near:Destroy()
 			d.Near = nil
 			d.Birds = nil
-		elseif not d.Near and dd < dIn * k and d.Model.Parent and built < 2 then
-			-- (2 lieux au plus par pas : pas d'à-coup en arrivant au parc)
+		elseif not d.Near and dd < dIn * k and d.Model.Parent and built < 1 then
+			-- (1 lieu au plus par pas : pas d'à-coup en arrivant au parc)
 			built += 1
 			buildDetail(d)
 		end
