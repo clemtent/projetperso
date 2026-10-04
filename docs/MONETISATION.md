@@ -11,6 +11,7 @@ La **💎 Boutique Robux** est prête : il suffit de coller tes IDs dans `Replic
 | 🤖 Auto-clic | Game Pass | `GamePasses > AutoClick > GamePassId` | 5 clics/s automatiques |
 | 👑 VIP | Game Pass | `GamePasses > VIP > GamePassId` | +25 % de gains + thèmes Premium (Bonbon, Synthwave) |
 | 💧💦🌊 Packs de Dopamine | Developer Product | `Products > PackS / PackM / PackL > ProductId` | 10 min / 1 h / 8 h de production |
+| 📅🗓️👑 Doses longues | Developer Product | `Products > Pack5d / Pack10d / Pack100d > ProductId` | 5 j / 10 j / 100 j de production (s'adapte à la progression du joueur) |
 | ⏱️🔥 Boosts | Developer Product | `Products > Boost2 / Boost5 > ProductId` | x2 pendant 15 min / x5 pendant 10 min |
 | 🎉 Rush pour tous | Developer Product | `Products > ServerRush > ProductId` | Dopamine Rush pour tout le serveur |
 | 🎟️ Packs de tickets | Developer Product | `Products > Tickets5 … Tickets100 > ProductId` | 5 / 10 / 25 / 50 / 100 tickets d'arcade (déjà configurés, voir plus bas) |

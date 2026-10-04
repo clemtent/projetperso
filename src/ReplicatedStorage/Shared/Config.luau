@@ -1000,6 +1000,13 @@ Config.Monetization = {
 			ProductId = 3714590426, PriceHint = 99, Kind = "Dopamine", Seconds = 3600, Minimum = 50000 },
 		{ Id = "PackL", Name = "Overdose", Icon = "🌊", Description = "8 hours of production",
 			ProductId = 3714590833, PriceHint = 399, Kind = "Dopamine", Seconds = 28800, Minimum = 500000 },
+		-- (v11) longues doses : X jours de TA production actuelle (s'adapte à ta progression)
+		{ Id = "Pack5d", Name = "5-day Dose", Icon = "📅", Description = "5 days of production",
+			ProductId = 3716343001, PriceHint = 499, Kind = "Dopamine", Seconds = 432000, Minimum = 7500000 },
+		{ Id = "Pack10d", Name = "10-day Dose", Icon = "🗓️", Description = "10 days of production",
+			ProductId = 3716343158, PriceHint = 899, Kind = "Dopamine", Seconds = 864000, Minimum = 15000000, Tag = "⭐ POPULAR" },
+		{ Id = "Pack100d", Name = "100-day Dose", Icon = "👑", Description = "100 days of production",
+			ProductId = 3716343248, PriceHint = 4999, Kind = "Dopamine", Seconds = 8640000, Minimum = 150000000, Tag = "👑 MEGA DOSE" },
 		{ Id = "Boost2", Name = "Boost x2", Icon = "⏱️", Description = "Earnings x2 for 15 minutes",
 			ProductId = 3714591469, PriceHint = 49, Kind = "Boost", Multiplier = 2, Duration = 900 },
 		{ Id = "Boost5", Name = "Boost x5", Icon = "🔥", Description = "Earnings x5 for 10 minutes",
