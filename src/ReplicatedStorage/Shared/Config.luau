@@ -419,9 +419,13 @@ Config.AchievementBadges = {
 	Earn1T = 3794921256154986, -- 🪐 Cerveau cosmique
 	Buy10 = 3720175929508517, -- 🛒 Shopping
 	Buy50 = 1330939500123022, -- 🛍️ Accro aux achats
+	Bounce100 = 872002465215387, -- 📀 Ça rebondit
+	Bounce5K = 295593655258841, -- 😵 Hypnotisé
+	Corner1 = 2132567314526137, -- 📐 LE COIN !!!
+	Combo1 = 3758831362323960, -- ⚡ Combo max !
+	Bubble100 = 4421549333806553, -- 🔘 Pop pop pop
 	-- À venir (mets l'ID quand le badge est créé ; 0 = pas de badge Roblox)
-	Bounce100 = 0, Bounce5K = 0,
-	Corner1 = 0, Combo1 = 0, Bubble100 = 0, Bubble1K = 0, Golden1 = 0, Golden10 = 0,
+	Bubble1K = 0, Golden1 = 0, Golden10 = 0,
 	Lightning5 = 0, Notif10 = 0, Email10 = 0, Press25 = 0, Slot25 = 0, SlotWin10 = 0,
 	Garden25 = 0, Arcade10 = 0, Chest1 = 0, Chest10 = 0, Cosmetic1 = 0, Cosmetic5 = 0, Quests5 = 0,
 	Daily3 = 0, Play1h = 0, Play10h = 0, Rebirth1 = 0, Rebirth5 = 0,
