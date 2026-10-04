@@ -209,7 +209,13 @@ local function watchSeat(rec: SeatRec)
 		local previous = rec.Rider
 		if occupant then
 			rec.Rider = occupant
-			local player = Players:GetPlayerFromCharacter(occupant.Parent)
+			local player: Player? = nil
+			for _, p in ipairs(Players:GetPlayers()) do
+				if p.Character == occupant.Parent then
+					player = p
+					break
+				end
+			end
 			rec.Player = player
 			if player then
 				riderOf[player] = rec
@@ -508,8 +514,10 @@ local function heistEvent(_h: any, kind: any, payload: any)
 	elseif kind == "Bag" then
 		heist.Grabbed = true
 	elseif kind == "Finished" then
-		heist.Phase = "Done"
-		setAttr("HeistPhase", "Done")
+		if heist.Phase ~= "Cancelled" then
+			heist.Phase = "Done"
+			setAttr("HeistPhase", "Done")
+		end
 		setAttr("Alarm", false)
 		if type(payload) == "table" and payload.Success then
 			setAttr("VaultStep", "grab")

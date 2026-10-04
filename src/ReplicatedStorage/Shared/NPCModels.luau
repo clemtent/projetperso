@@ -227,6 +227,7 @@ export type Opts = {
 	SitHeight: number?,
 	Solid: boolean?,
 	Look: boolean?,
+	Lite: boolean?,
 }
 
 type Ctx = {
@@ -234,6 +235,7 @@ type Ctx = {
 	S: number, -- échelle du corps
 	HS: number, -- échelle en plus pour la tête (enfants : tête plus grosse)
 	Count: number,
+	Lite: boolean?, -- (v11) PNJ "léger" (≤ ~45 pièces) : moufles, chaussures simples
 }
 
 -- Pièce dans le groupe `g` : `cf` et `size` dans le repère de repos (échelle
@@ -402,7 +404,7 @@ local function head(ctx: Ctx, look: Look, seed: number)
 	end
 	add(ctx, G_HEAD, "Jaw", jawS, CFrame.new(jawC), skin, M.SmoothPlastic, "Egg")
 	-- oreilles
-	for _, sx in ipairs({ -1, 1 }) do
+	for _, sx in ipairs(ctx.Lite and {} or { -1, 1 }) do
 		add(ctx, G_HEAD, "Ear", Vector3.new(0.08, 0.2, 0.15), at(sx * 0.33, HY - 0.02, 0.03) * CFrame.Angles(0, sx * -0.3, 0), skin:Lerp(rgb(200, 120, 110), 0.08), M.SmoothPlastic, "Egg")
 	end
 	-- nez (arête + bout)
@@ -414,7 +416,9 @@ local function head(ctx: Ctx, look: Look, seed: number)
 		e.Transparency = 1
 		eyeGui(e, look.Iris, lash, female, sx)
 		-- paupière : cachée DANS le crâne ; au clignement elle avance devant l'œil
-		add(ctx, G_LID, "Lid", Vector3.new(0.17, 0.12, 0.03), onSkull(sx * 0.125, HY + 0.015, -0.045), skin:Lerp(INK, 0.04), M.SmoothPlastic, "Egg")
+		if not ctx.Lite then
+			add(ctx, G_LID, "Lid", Vector3.new(0.17, 0.12, 0.03), onSkull(sx * 0.125, HY + 0.015, -0.045), skin:Lerp(INK, 0.04), M.SmoothPlastic, "Egg")
+		end
 		local browColor = look.HairStyle == "bald" and GREYS[1]:Lerp(INK, 0.3) or hair:Lerp(INK, 0.25)
 		-- (v11) sourcil arrondi, plus fin (arqué chez les femmes)
 		add(ctx, G_HEAD, "Brow", Vector3.new(0.17, female and 0.026 or 0.036, 0.04), onSkull(sx * 0.13, HY + 0.115, 0.0) * CFrame.Angles(0, 0, sx * (female and -0.16 or -0.07)), browColor, M.SmoothPlastic, "Egg")
@@ -436,7 +440,7 @@ local function head(ctx: Ctx, look: Look, seed: number)
 	elseif look.Beard == "mustache" then
 		add(ctx, G_HEAD, "Mustache", Vector3.new(0.24, 0.06, 0.05), onJaw(0, HY - 0.195, 0.01), bc, M.SmoothPlastic)
 	end
-	if look.Glasses then
+	if look.Glasses and not ctx.Lite then
 		local frameC = pick({ rgb(40, 34, 34), rgb(120, 80, 50), rgb(180, 170, 160) }, seed, 73)
 		for _, sx in ipairs({ -1, 1 }) do
 			local lens = add(ctx, G_HEAD, "Glasses", Vector3.new(0.02, 0.15, 0.2), onSkull(sx * 0.125, HY + 0.005, 0.05) * CFrame.Angles(0, math.rad(90), 0), rgb(210, 226, 236), M.Glass, "Cyl")
@@ -488,7 +492,7 @@ local function head(ctx: Ctx, look: Look, seed: number)
 			add(ctx, G_HEAD, "Tie", Vector3.new(0.14, 0.09, 0.14), at(0, HY + 0.22, 0.43), pick({ rgb(236, 72, 140), rgb(90, 140, 230), rgb(250, 250, 250), rgb(40, 40, 44) }, seed, 22), M.SmoothPlastic, "Egg")
 		end
 	elseif hs == "curly" then
-		for i = 0, 5 do
+		for i = 0, (ctx.Lite and 2 or 5) do
 			local a = (i / 5 - 0.5) * 2.6
 			add(ctx, G_HEAD, "Curl", Vector3.new(0.3, 0.3, 0.3), at(math.sin(a) * 0.3, HY + 0.3 + math.cos(a) * 0.1, 0.04 + math.abs(math.sin(a)) * 0.08 - (i % 2) * 0.1), i % 2 == 0 and hair or dark, hairM, "Ball")
 		end
@@ -624,6 +628,22 @@ end
 local HAND_M0 = handFrame(U0, B0)
 local HAND_M0_INV = HAND_M0:Inverse()
 
+-- (v11) Moufle (PNJ Lite, 2 pièces) : paume + doigts joints, pouce ; la pose
+-- des doigts est ignorée, le poignet tourne quand même
+local function mitten(ctx: Ctx, sx: number, skin: Color3)
+	local lo = sx < 0 and G_LLO or G_RLO
+	local palm = add(ctx, lo, "Palm", Vector3.new(0.25, 0.44, 0.11), CFrame.fromMatrix(handPt(sx, 0.2, 0, 0.01), B0, U0), skin, M.SmoothPlastic)
+	palm:SetAttribute("NpcHand", sx)
+	palm:SetAttribute("NpcFinger", 0)
+	local v = HANDS.relax
+	local d = (U0 * v.T[1] + B0 * v.T[2] + n0(sx) * v.T[3]).Unit
+	local base = handPt(sx, THUMB_BASE.X, THUMB_BASE.Y, THUMB_BASE.Z)
+	local th = add(ctx, lo, "Thumb", Vector3.new(0.09, 0.24, 0.09), segCF(base + d * 0.11, d), skin, M.SmoothPlastic, "Egg")
+	th.CastShadow = false
+	th:SetAttribute("NpcHand", sx)
+	th:SetAttribute("NpcFinger", -1)
+end
+
 -- Main complète (12 pièces) dans le groupe de l'avant-bras (attribut NpcG,
 -- compatible avec les modules qui lisent les groupes) + attributs de la
 -- main (NpcHand = côté, NpcFinger, NpcSeg) pour l'animation des doigts
@@ -669,15 +689,23 @@ local function arm(ctx: Ctx, sx: number, sleeve: Color3, skin: Color3, longSleev
 	if not longSleeve and not bare then
 		-- manche courte : ourlet un peu plus large
 		add(ctx, up, "Sleeve", Vector3.new(0.4, 0.42, 0.42), cylY(sx * 0.72, 3.9, 0.01), sleeve, CLOTH, "Cyl")
+	end
+	if not longSleeve and not bare and not ctx.Lite then
 		add(ctx, up, "SleeveHem", Vector3.new(0.05, 0.43, 0.43), cylY(sx * 0.72, 3.72, 0.01), sleeve:Lerp(INK, 0.12), CLOTH, "Cyl")
 	end
-	add(ctx, lo, "Elbow", Vector3.new(0.33, 0.33, 0.33), at(x, 3.32, 0.02), longSleeve and sleeve or skin, longSleeve and CLOTH or M.SmoothPlastic, "Ball")
+	if not ctx.Lite then
+		add(ctx, lo, "Elbow", Vector3.new(0.33, 0.33, 0.33), at(x, 3.32, 0.02), longSleeve and sleeve or skin, longSleeve and CLOTH or M.SmoothPlastic, "Ball")
+	end
 	add(ctx, lo, "Forearm", Vector3.new(0.72, 0.3, 0.3), cylY(x, 2.97, 0.02), longSleeve and sleeve or skin, longSleeve and CLOTH or M.SmoothPlastic, "Cyl")
-	if longSleeve then
+	if longSleeve and not ctx.Lite then
 		add(ctx, lo, "Cuff", Vector3.new(0.12, 0.33, 0.33), cylY(x, 2.63, 0.02), cuff or sleeve:Lerp(INK, 0.1), CLOTH, "Cyl")
 	end
-	-- (v11) main articulée : paume, jointures, doigts, pouce
-	hand(ctx, sx, skin, handPoseName)
+	-- (v11) main articulée : paume, jointures, doigts, pouce (moufle en Lite)
+	if ctx.Lite then
+		mitten(ctx, sx, skin)
+	else
+		hand(ctx, sx, skin, handPoseName)
+	end
 end
 
 -- Jambes : cuisse, genou, tibia, mollet, ourlet ; pied : chaussure, bout
@@ -692,13 +720,19 @@ local function legs(ctx: Ctx, look: Look, pants: Color3, shorts: boolean, bareTh
 		local thighC = bareThigh and skin or pants
 		local thighM = bareThigh and M.SmoothPlastic or CLOTH
 		add(ctx, th, "Thigh", Vector3.new(1.2, 0.5, 0.5), cylY(x, 2.02, 0), thighC, thighM, "Cyl")
-		if shorts and not bareThigh then
+		if shorts and not bareThigh and not ctx.Lite then
 			add(ctx, th, "ShortsHem", Vector3.new(0.1, 0.54, 0.54), cylY(x, 1.66, 0), pants:Lerp(INK, 0.12), CLOTH, "Cyl")
 		end
 		local legC = shorts and skin or pants
 		local legM = shorts and M.SmoothPlastic or CLOTH
 		add(ctx, sh, "Knee", Vector3.new(0.42, 0.42, 0.42), at(x, 1.5, 0), (shorts or bareThigh) and skin or pants, (shorts or bareThigh) and M.SmoothPlastic or CLOTH, "Ball")
 		add(ctx, sh, "Shin", Vector3.new(1.1, 0.38, 0.38), cylY(x, 0.93, 0.02), legC, legM, "Cyl")
+		if ctx.Lite then
+			-- (Lite) chaussure simple : tige ovale + semelle
+			add(ctx, ft, "Shoe", Vector3.new(0.36, 0.3, 0.76), at(x, 0.21, -0.15), look.Shoe, M.SmoothPlastic, "Egg")
+			add(ctx, ft, "Sole", Vector3.new(0.37, 0.075, 0.86), at(x, 0.045, -0.17), look.Sole, M.Rubber)
+			continue
+		end
 		add(ctx, sh, "Calf", Vector3.new(0.32, 0.6, 0.34), at(x, 1.14, 0.08), legC, legM, "Egg")
 		if not shorts then
 			add(ctx, sh, "Hem", Vector3.new(0.09, 0.43, 0.43), cylY(x, 0.395, 0.02), pants:Lerp(INK, 0.1), CLOTH, "Cyl")
@@ -726,25 +760,33 @@ local function torso(ctx: Ctx, look: Look, shirt: Color3, pants: Color3, skirt: 
 	local female = look.Female
 	-- sections en "stade" (bloc + 2 cylindres debout) : torse arrondi, sans
 	-- arêtes vives ni bosses ovales qui dépassent
-	local function stadium(g: number, name: string, width: number, depth: number, y0: number, y1: number, color: Color3, z: number?)
+	local function stadium(g: number, name: string, width: number, depth: number, y0: number, y1: number, color: Color3, z: number?, simple: boolean?)
 		local h = y1 - y0
 		local y = (y0 + y1) / 2
 		local zz = z or 0
+		if simple then
+			-- (Lite) un seul bloc
+			add(ctx, g, name, Vector3.new(width - 0.06, h, depth), at(0, y, zz), color, CLOTH)
+			return
+		end
 		add(ctx, g, name, Vector3.new(width - depth, h, depth), at(0, y, zz), color, CLOTH)
 		for _, sx in ipairs({ -1, 1 }) do
 			add(ctx, g, name .. "Side", Vector3.new(h, depth, depth), cylY(sx * (width - depth) / 2, y, zz), color, CLOTH, "Cyl")
 		end
 	end
 	stadium(G_CHEST, "Chest", female and 1.06 or 1.16, female and 0.5 or 0.52, 3.36, 4.2, shirt)
+	local lite = ctx.Lite == true
 	-- ligne des épaules (arrondie)
-	add(ctx, G_CHEST, "Shoulders", Vector3.new(1.0, 0.44, 0.44), at(0, 4.14, 0.0), shirt, CLOTH, "Cyl")
-	if female then
+	if not lite then
+		add(ctx, G_CHEST, "Shoulders", Vector3.new(1.0, 0.44, 0.44), at(0, 4.14, 0.0), shirt, CLOTH, "Cyl")
+	end
+	if female and not lite then
 		add(ctx, G_CHEST, "Bust", Vector3.new(0.5, 0.32, 0.32), at(0, 3.9, -0.12), shirt, CLOTH, "Cyl")
 	end
-	stadium(G_CHEST, "Belly", female and 0.9 or 1.02, female and 0.46 or 0.48, 2.9, 3.4, shirt)
+	stadium(G_CHEST, "Belly", female and 0.9 or 1.02, female and 0.46 or 0.48, 2.9, 3.4, shirt, nil, lite)
 	add(ctx, G_CHEST, "Neck", Vector3.new(0.36, 0.3, 0.3), cylY(0, 4.44, 0.03), skin, M.SmoothPlastic, "Cyl")
 	-- col
-	local col = look.Collar
+	local col = lite and "none" or look.Collar
 	if col == "crew" then
 		add(ctx, G_CHEST, "Collar", Vector3.new(0.07, 0.4, 0.4), cylY(0, 4.36, 0.03), shirt:Lerp(INK, 0.1), CLOTH, "Cyl")
 	elseif col == "v" then
@@ -767,7 +809,11 @@ local function torso(ctx: Ctx, look: Look, shirt: Color3, pants: Color3, skirt: 
 	-- bassin + fessiers (ou jupe)
 	local hipW = female and 1.08 or 1.0
 	local hipD = female and 0.54 or 0.52
-	stadium(G_PELVIS, "Pelvis", hipW, hipD, 2.46, 2.94, pants)
+	stadium(G_PELVIS, "Pelvis", hipW, hipD, 2.46, 2.94, pants, nil, lite)
+	if lite and not skirt then
+		-- (Lite) ni fessiers ni ceinture détaillés
+		return skin
+	end
 	if skirt then
 		-- jupe en corolle (s'arrête au-dessus du genou)
 		add(ctx, G_PELVIS, "Skirt", Vector3.new(1.18, 1.1, 0.82), at(0, 2.32, 0.01), pants, CLOTH, "Egg")
@@ -978,6 +1024,13 @@ end
 -- Build
 ----------------------------------------------------------------------
 
+-- (v11) petit détail de tenue : omis pour un PNJ Lite
+local function detail(ctx: Ctx, g: number, name: string, size: Vector3, cf: CFrame, color: Color3, material: Enum.Material?, shape: string?)
+	if not ctx.Lite then
+		add(ctx, g, name, size, cf, color, material, shape)
+	end
+end
+
 function NPCModels.Build(style: string, opts: Opts?): Model
 	local o: Opts = opts or {}
 	if not table.find(NPCModels.Styles, style) then
@@ -995,7 +1048,8 @@ function NPCModels.Build(style: string, opts: Opts?): Model
 		-- tailles variées : 0,94 à 1,05
 		scale = 0.94 + hash(seed, 41) * 0.11
 	end
-	local ctx: Ctx = { Model = model, S = scale, HS = hs, Count = 0 }
+	local lite = o.Lite == true
+	local ctx: Ctx = { Model = model, S = scale, HS = hs, Count = 0, Lite = lite }
 	local look = baseLook(style, seed, o)
 	local shirt, pants = look.Shirt, look.Pants
 	local sleeve = shirt
@@ -1015,7 +1069,7 @@ function NPCModels.Build(style: string, opts: Opts?): Model
 		table.insert(extras, function()
 			-- badge + cordon + visière
 			add(ctx, G_CHEST, "Badge", Vector3.new(0.26, 0.16, 0.03), at(0.27, 3.86, -0.3), WHITE, M.SmoothPlastic)
-			add(ctx, G_CHEST, "BadgeStripe", Vector3.new(0.26, 0.04, 0.03), at(0.27, 3.92, -0.315), shirt, M.SmoothPlastic)
+			detail(ctx, G_CHEST, "BadgeStripe", Vector3.new(0.26, 0.04, 0.03), at(0.27, 3.92, -0.315), shirt, M.SmoothPlastic)
 			add(ctx, G_HEAD, "Visor", Vector3.new(0.8, 0.12, 0.88), at(0, HY + 0.25, 0.02), shirt, M.SmoothPlastic, "Egg")
 			add(ctx, G_HEAD, "VisorBrim", Vector3.new(0.56, 0.04, 0.34), at(0, HY + 0.24, -0.46) * CFrame.Angles(math.rad(10), 0, 0), shirt:Lerp(INK, 0.15), M.SmoothPlastic)
 		end)
@@ -1034,15 +1088,15 @@ function NPCModels.Build(style: string, opts: Opts?): Model
 			add(ctx, G_CHEST, "Collar", Vector3.new(0.12, 0.42, 0.42), cylY(0, 4.34, 0.03), rgb(236, 236, 232), CLOTH, "Cyl")
 			for i = 0, 2 do
 				for _, bx in ipairs({ -0.2, 0.2 }) do
-					add(ctx, G_CHEST, "Button", Vector3.new(0.06, 0.06, 0.04), at(bx, 4.02 - i * 0.26, -0.3), rgb(200, 200, 196), M.SmoothPlastic, "Ball")
+					detail(ctx, G_CHEST, "Button", Vector3.new(0.06, 0.06, 0.04), at(bx, 4.02 - i * 0.26, -0.3), rgb(200, 200, 196), M.SmoothPlastic, "Ball")
 				end
 			end
 			add(ctx, G_CHEST, "Apron", Vector3.new(0.9, 0.62, 0.04), at(0, 3.08, -0.28), rgb(232, 188, 128), CLOTH)
 			add(ctx, G_PELVIS, "ApronSkirt", Vector3.new(1.0, 1.1, 0.04), at(0, 2.3, -0.3), rgb(232, 188, 128), CLOTH)
-			add(ctx, G_PELVIS, "ApronTie", Vector3.new(1.02, 0.07, 0.68), at(0, 2.86, 0), rgb(214, 170, 112), CLOTH)
+			detail(ctx, G_PELVIS, "ApronTie", Vector3.new(1.02, 0.07, 0.68), at(0, 2.86, 0), rgb(214, 170, 112), CLOTH)
 			add(ctx, G_HEAD, "Toque", Vector3.new(0.5, 0.74, 0.74), cylY(0, HY + 0.52, 0.03), WHITE, CLOTH, "Cyl")
 			add(ctx, G_HEAD, "ToquePuff", Vector3.new(0.92, 0.46, 0.92), at(0, HY + 0.82, 0.03), WHITE, CLOTH, "Egg")
-			add(ctx, G_HEAD, "ToqueBand", Vector3.new(0.14, 0.77, 0.77), cylY(0, HY + 0.33, 0.03), rgb(236, 236, 232), CLOTH, "Cyl")
+			detail(ctx, G_HEAD, "ToqueBand", Vector3.new(0.14, 0.77, 0.77), cylY(0, HY + 0.33, 0.03), rgb(236, 236, 232), CLOTH, "Cyl")
 		end)
 	elseif style == "salesperson" then
 		local jacket = o.Shirt or pick({ rgb(36, 44, 70), rgb(40, 40, 44), rgb(90, 90, 100), rgb(64, 50, 44) }, seed, 51)
@@ -1057,13 +1111,13 @@ function NPCModels.Build(style: string, opts: Opts?): Model
 			local tieC = pick({ rgb(180, 36, 56), rgb(220, 70, 130), rgb(50, 96, 180), rgb(30, 30, 34) }, seed, 52)
 			add(ctx, G_CHEST, "ShirtFront", Vector3.new(0.3, 0.5, 0.04), at(0, 4.04, -0.285), WHITE, CLOTH)
 			add(ctx, G_CHEST, "Tie", Vector3.new(0.1, 0.52, 0.03), at(0, 3.98, -0.31), tieC, CLOTH)
-			add(ctx, G_CHEST, "TieKnot", Vector3.new(0.12, 0.09, 0.05), at(0, 4.25, -0.3), tieC:Lerp(INK, 0.2), CLOTH)
+			detail(ctx, G_CHEST, "TieKnot", Vector3.new(0.12, 0.09, 0.05), at(0, 4.25, -0.3), tieC:Lerp(INK, 0.2), CLOTH)
 			for _, sx in ipairs({ -1, 1 }) do
-				add(ctx, G_CHEST, "Lapel", Vector3.new(0.12, 0.62, 0.04), at(sx * 0.19, 4.0, -0.305) * CFrame.Angles(0, 0, sx * 0.34), jacket:Lerp(INK, 0.25), CLOTH)
-				add(ctx, G_CHEST, "ShirtCollar", Vector3.new(0.14, 0.06, 0.2), at(sx * 0.1, 4.33, -0.15) * CFrame.Angles(math.rad(-22), sx * 0.4, sx * -0.3), WHITE, CLOTH)
+				detail(ctx, G_CHEST, "Lapel", Vector3.new(0.12, 0.62, 0.04), at(sx * 0.19, 4.0, -0.305) * CFrame.Angles(0, 0, sx * 0.34), jacket:Lerp(INK, 0.25), CLOTH)
+				detail(ctx, G_CHEST, "ShirtCollar", Vector3.new(0.14, 0.06, 0.2), at(sx * 0.1, 4.33, -0.15) * CFrame.Angles(math.rad(-22), sx * 0.4, sx * -0.3), WHITE, CLOTH)
 			end
-			add(ctx, G_CHEST, "Pocket", Vector3.new(0.18, 0.08, 0.04), at(-0.33, 3.95, -0.285), WHITE, M.SmoothPlastic)
-			add(ctx, G_CHEST, "JacketButton", Vector3.new(0.06, 0.06, 0.04), at(0, 3.3, -0.26), rgb(30, 30, 30), M.SmoothPlastic, "Ball")
+			detail(ctx, G_CHEST, "Pocket", Vector3.new(0.18, 0.08, 0.04), at(-0.33, 3.95, -0.285), WHITE, M.SmoothPlastic)
+			detail(ctx, G_CHEST, "JacketButton", Vector3.new(0.06, 0.06, 0.04), at(0, 3.3, -0.26), rgb(30, 30, 30), M.SmoothPlastic, "Ball")
 		end)
 		look.Shoe = rgb(36, 26, 24)
 		look.Sole = rgb(26, 22, 22)
@@ -1088,9 +1142,9 @@ function NPCModels.Build(style: string, opts: Opts?): Model
 		propKind = propKind or (hash(seed, 56) < 0.5 and "cane" or nil)
 		table.insert(extras, function()
 			-- gilet boutonné (cardigan)
-			add(ctx, G_CHEST, "Placket", Vector3.new(0.1, 1.05, 0.03), at(0, 3.55, -0.3), shirt:Lerp(INK, 0.12), CLOTH)
+			detail(ctx, G_CHEST, "Placket", Vector3.new(0.1, 1.05, 0.03), at(0, 3.55, -0.3), shirt:Lerp(INK, 0.12), CLOTH)
 			for i = 0, 3 do
-				add(ctx, G_CHEST, "Button", Vector3.new(0.06, 0.06, 0.04), at(0, 3.95 - i * 0.28, -0.32), rgb(226, 216, 196), M.SmoothPlastic, "Ball")
+				detail(ctx, G_CHEST, "Button", Vector3.new(0.06, 0.06, 0.04), at(0, 3.95 - i * 0.28, -0.32), rgb(226, 216, 196), M.SmoothPlastic, "Ball")
 			end
 			if not look.Female and hash(seed, 58) < 0.5 then
 				-- casquette plate
@@ -1116,7 +1170,7 @@ function NPCModels.Build(style: string, opts: Opts?): Model
 			end
 			add(ctx, G_HEAD, "Helmet", Vector3.new(0.84, 0.54, 0.9), at(0, HY + 0.26, 0.02), rgb(255, 206, 36), M.SmoothPlastic, "Egg")
 			add(ctx, G_HEAD, "HelmetBrim", Vector3.new(0.05, 0.94, 1.02), cylY(0, HY + 0.1, 0.0), rgb(250, 200, 30), M.SmoothPlastic, "Cyl")
-			add(ctx, G_HEAD, "HelmetRidge", Vector3.new(0.12, 0.08, 0.8), at(0, HY + 0.52, 0.02), rgb(240, 192, 30), M.SmoothPlastic, "Egg")
+			detail(ctx, G_HEAD, "HelmetRidge", Vector3.new(0.12, 0.08, 0.8), at(0, HY + 0.52, 0.02), rgb(240, 192, 30), M.SmoothPlastic, "Egg")
 			add(ctx, G_PELVIS, "ToolPouch", Vector3.new(0.14, 0.4, 0.34), at(0.56, 2.64, 0.02), rgb(110, 76, 44), M.Leather)
 		end)
 	elseif style == "kid" then
@@ -1130,9 +1184,9 @@ function NPCModels.Build(style: string, opts: Opts?): Model
 				-- cartable
 				local c = pick({ rgb(255, 120, 160), rgb(90, 160, 240), rgb(255, 200, 60), rgb(120, 200, 120) }, seed, 60)
 				add(ctx, G_CHEST, "Backpack", Vector3.new(0.86, 0.96, 0.36), at(0, 3.6, 0.47), c, CLOTH)
-				add(ctx, G_CHEST, "BackpackPocket", Vector3.new(0.6, 0.4, 0.12), at(0, 3.32, 0.7), c:Lerp(WHITE, 0.3), CLOTH)
+				detail(ctx, G_CHEST, "BackpackPocket", Vector3.new(0.6, 0.4, 0.12), at(0, 3.32, 0.7), c:Lerp(WHITE, 0.3), CLOTH)
 				for _, sx in ipairs({ -1, 1 }) do
-					add(ctx, G_CHEST, "Strap", Vector3.new(0.12, 0.9, 0.05), at(sx * 0.3, 3.8, -0.305), c:Lerp(INK, 0.2), CLOTH)
+					detail(ctx, G_CHEST, "Strap", Vector3.new(0.12, 0.9, 0.05), at(sx * 0.3, 3.8, -0.305), c:Lerp(INK, 0.2), CLOTH)
 				end
 			end
 		end)
@@ -1149,9 +1203,9 @@ function NPCModels.Build(style: string, opts: Opts?): Model
 				add(ctx, G_CHEST, "Tee", Vector3.new(0.34, 1.26, 0.04), at(0, 3.62, -0.265), tee, CLOTH)
 				add(ctx, G_CHEST, "TeeCollar", Vector3.new(0.07, 0.4, 0.4), cylY(0, 4.36, 0.03), tee:Lerp(INK, 0.1), CLOTH, "Cyl")
 				for _, sx in ipairs({ -1, 1 }) do
-					add(ctx, G_CHEST, "JacketLapel", Vector3.new(0.1, 0.56, 0.04), at(sx * 0.21, 3.98, -0.285) * CFrame.Angles(0, 0, sx * 0.28), jacket:Lerp(INK, 0.18), CLOTH)
-					add(ctx, G_CHEST, "JacketEdge", Vector3.new(0.05, 0.8, 0.04), at(sx * 0.19, 3.25, -0.265), jacket:Lerp(INK, 0.12), CLOTH)
-					add(ctx, G_CHEST, "JacketPocket", Vector3.new(0.2, 0.04, 0.04), at(sx * 0.36, 3.12, -0.255), jacket:Lerp(INK, 0.22), CLOTH)
+					detail(ctx, G_CHEST, "JacketLapel", Vector3.new(0.1, 0.56, 0.04), at(sx * 0.21, 3.98, -0.285) * CFrame.Angles(0, 0, sx * 0.28), jacket:Lerp(INK, 0.18), CLOTH)
+					detail(ctx, G_CHEST, "JacketEdge", Vector3.new(0.05, 0.8, 0.04), at(sx * 0.19, 3.25, -0.265), jacket:Lerp(INK, 0.12), CLOTH)
+					detail(ctx, G_CHEST, "JacketPocket", Vector3.new(0.2, 0.04, 0.04), at(sx * 0.36, 3.12, -0.255), jacket:Lerp(INK, 0.22), CLOTH)
 				end
 			end)
 		elseif look.Female and hash(seed, 63) < 0.4 then
@@ -1159,7 +1213,7 @@ function NPCModels.Build(style: string, opts: Opts?): Model
 			local sc = pick({ rgb(200, 60, 80), rgb(236, 200, 120), rgb(120, 160, 210) }, seed, 64)
 			table.insert(extras, function()
 				add(ctx, G_CHEST, "Scarf", Vector3.new(0.16, 0.5, 0.5), cylY(0, 4.34, 0.03), sc, KNIT, "Cyl")
-				add(ctx, G_CHEST, "ScarfEnd", Vector3.new(0.16, 0.56, 0.05), at(0.14, 3.98, -0.31), sc:Lerp(INK, 0.1), KNIT)
+				detail(ctx, G_CHEST, "ScarfEnd", Vector3.new(0.16, 0.56, 0.05), at(0.14, 3.98, -0.31), sc:Lerp(INK, 0.1), KNIT)
 			end)
 		end
 	end

@@ -136,6 +136,7 @@ type Agent = {
 	DogLat: number, -- (chien) écart latéral lissé
 	DogPos: Vector3?,
 	Clock2: number?, -- (dernière image de la cadence de marche)
+	SelfWait: boolean?, -- (bloqué par quelqu'un / quelque chose devant soi)
 }
 
 local state: any = nil
@@ -776,7 +777,10 @@ local function steer(s: any, a: Agent, now: number, dt: number, obstacles: { Obs
 			slow = 0
 		end
 	end
-	if mate and mate.Model and mate.Waiting then
+	-- (on attend son compagnon s'il est bloqué par AUTRE chose que nous :
+	-- jamais d'attente mutuelle)
+	a.SelfWait = blocker ~= nil and slow < 0.05
+	if mate and mate.Model and mate.SelfWait then
 		slow = 0
 	end
 	a.Slow = slow
