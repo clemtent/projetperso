@@ -174,6 +174,7 @@ return {
 		["Memorise the code…"] = "Mémorise le code…",
 		["Type the code: %d/%d"] = "Tape le code : %d/%d",
 		["Crew %d/%d · the heist starts in %s"] = "Équipe %d/%d · le casse démarre dans %s",
+		["Crew %d/%d · get ready, the heist starts soon!"] = "Équipe %d/%d · prépare-toi, le casse va commencer !",
 		["bag %d/%d"] = "sac %d/%d",
 		["delivered %d/%d"] = "livré %d/%d",
 		["Step %d/%d: %s"] = "Étape %d/%d : %s",

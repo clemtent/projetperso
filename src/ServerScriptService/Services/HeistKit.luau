@@ -311,6 +311,7 @@ local function summary(heist: any): any
 		Done = done,
 		Taken = taken,
 		Jammed = heist.Jammed,
+		ManualStart = heist.Def.ManualStart ~= false,
 		Success = heist.Success,
 	}
 end
@@ -348,6 +349,7 @@ local function stateFor(heist: any): any
 		Dropped = dropped,
 		Crew = crewList(heist),
 		MaxCrew = heist.MaxCrew,
+		ManualStart = heist.Def.ManualStart ~= false,
 		Leader = heist.Leader and heist.Leader.UserId or 0,
 		LobbyEndsAt = heist.LobbyEndsAt,
 		EndsAt = heist.EndsAt,
@@ -749,7 +751,8 @@ local function act(player: Player, action: string, heist: any?, arg: any): (bool
 		if not heist.Leader then
 			heist.Leader = player
 		end
-		if not heist.LobbyEndsAt then
+		-- (compte à rebours seulement si le casse démarre tout seul à la fin)
+		if not heist.LobbyEndsAt and heist.Def.AutoStart ~= false then
 			heist.LobbyEndsAt = t + (tonumber(heist.Def.LobbySeconds) or H().LobbySeconds or 30)
 		end
 		listDirty = true

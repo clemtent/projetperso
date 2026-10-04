@@ -398,7 +398,7 @@ local function buildPhoneBooth(m: Model, F0: CFrame, seed: number)
 	glow(box(m, "BoothLamp", F, -0.6, 0.6, BOOTH_H - 0.9, BOOTH_H - 0.84, -0.6, 0.6, rgb(255, 240, 210), M.SmoothPlastic))
 	-- publiphone au fond (face -Z vers l'intérieur)
 	local zb = hw - 0.2
-	box(m, "PhoneBack", F, -0.75, 0.75, 3.3, 6.4, zb - 0.08, zb - 0.02, steel, M.Metal)
+	box(m, "PhoneBack", F, -0.75, 0.75, 3.3, 6.4, zb - 0.1, zb - 0.03, steel, M.Metal)
 	box(m, "PhoneBody", F, -0.62, 0.62, 3.6, 6.1, zb - 0.5, zb - 0.08, rgb(150, 156, 166), M.Metal)
 	local screen = glow(box(m, "PhoneScreen", F, -0.42, 0.42, 5.35, 5.85, zb - 0.53, zb - 0.5, rgb(170, 220, 190), M.SmoothPlastic))
 	surfaceText(screen, Enum.NormalId.Front, Locale.T("INSERT CARD"), rgb(30, 70, 50), rgb(170, 220, 190), Enum.Font.Code, 25)

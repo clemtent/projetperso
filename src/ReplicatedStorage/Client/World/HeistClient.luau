@@ -428,7 +428,7 @@ local function buildHud()
 	pcall(UIUtil.SinkClicks, laptop)
 	ui.Laptop = laptop
 	local screenF = box({ Name = "Screen", Parent = laptop, Color = rgb(10, 22, 18), Size = UDim2.new(1, -28, 1, -72), Position = UDim2.fromOffset(14, 14), Radius = UDim.new(0, 10), ZIndex = 21 })
-	label({ Name = "Prompt", Parent = screenF, Text = "> " .. T("HACK THE ALARM BOX"), TextSize = 16, Color = MINT, Font = Enum.Font.Code, XAlign = Enum.TextXAlignment.Left, Size = UDim2.new(1, -20, 0, 22), Position = UDim2.fromOffset(10, 8), ZIndex = 22 })
+	ui.HackTitle = label({ Name = "Prompt", Parent = screenF, Text = "> " .. T("HACK THE ALARM BOX"), TextSize = 16, Color = MINT, Font = Enum.Font.Code, XAlign = Enum.TextXAlignment.Left, Size = UDim2.new(1, -20, 0, 22), Position = UDim2.fromOffset(10, 8), ZIndex = 22 })
 	ui.HackInfo = label({ Name = "Info", Parent = screenF, Text = "", TextSize = 15, Color = SOFT, Font = Enum.Font.Code, XAlign = Enum.TextXAlignment.Left, Size = UDim2.new(1, -20, 0, 20), Position = UDim2.fromOffset(10, 30), ZIndex = 22 })
 	local codeRow = box({ Name = "Code", Parent = screenF, Transparency = 1, Size = UDim2.new(1, -20, 0, 56), Position = UDim2.fromOffset(10, 58), ZIndex = 22 })
 	UIUtil.Create("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), HorizontalAlignment = Enum.HorizontalAlignment.Center, Parent = codeRow })
@@ -481,16 +481,16 @@ local function buildHud()
 		if size.X < 10 or size.Y < 10 then
 			return
 		end
-		local scale = math.clamp(math.min(size.X / 1100, size.Y / 620), 0.45, 1.3)
-		ui.Scale.Scale = scale
-		root.Size = UDim2.fromOffset(size.X / scale, size.Y / scale)
 		local touch = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
 		local phone = touch and math.min(size.X, size.Y) < 500
-		-- téléphone : panneau un peu plus haut, mini-jeux réduits pour tenir
-		panel.Position = UDim2.new(0.5, 0, 0, if phone then 92 else 118)
+		-- téléphone : un peu plus grand (lisible), panneau juste sous le compteur
+		local scale = if phone then math.clamp(math.min(size.X / 900, size.Y / 520), 0.45, 1.3) else math.clamp(math.min(size.X / 1100, size.Y / 620), 0.45, 1.3)
+		ui.Scale.Scale = scale
+		root.Size = UDim2.fromOffset(size.X / scale, size.Y / scale)
+		panel.Position = UDim2.new(0.5, 0, 0, if phone then 84 else 118)
 		local rh = size.Y / scale
 		-- (l'ordinateur tient sous le panneau du casse)
-		local k = math.min(1, (rh - (if phone then 92 else 118) - 150) / 330)
+		local k = math.min(1, (rh - (if phone then 84 else 118) - 150) / 330)
 		for _, f in ipairs({ laptop }) do
 			local s = f:FindFirstChildOfClass("UIScale") or UIUtil.Create("UIScale", { Parent = f })
 			s.Scale = k
@@ -545,6 +545,10 @@ local function startHack(code: { number }, show: number)
 	hack.ShowUntil = os.clock() + (show or 2.6)
 	hack.Show = show or 2.6
 	hack.Sending = false
+	-- titre = consigne de l'étape (banque : boîtier d'alarme ; train : boîtier de sécurité)
+	if ui.HackTitle and mine and mine.Step and type(mine.Step.Label) == "string" then
+		ui.HackTitle.Text = "> " .. string.upper(T(mine.Step.Label))
+	end
 	ui.Laptop.Visible = true
 	drawHack()
 end
@@ -845,7 +849,7 @@ local function syncLobbies()
 			mark.Tag.Text = string.format("%s %s · %d/%d", s.Icon or "🕶️", T(s.Name or "Heist"), s.Crew or 0, s.MaxCrew or 4)
 			if me then
 				mark.Prompt.ActionText = T("Start the heist")
-				mark.Prompt.Enabled = (mine.Leader == Players.LocalPlayer.UserId)
+				mark.Prompt.Enabled = (mine.Leader == Players.LocalPlayer.UserId) and s.ManualStart ~= false
 			else
 				mark.Prompt.ActionText = T("Join the crew")
 				mark.Prompt.Enabled = not busy
@@ -890,12 +894,17 @@ local function stepHud(dt: number)
 	ui.Crew.Text = "👥 " .. table.concat(names, " · ")
 	ui.Title.Text = string.format("%s %s", st.Icon or "🕶️", T(st.Name or "Heist"))
 	if st.State == "Lobby" then
-		local left = math.max(0, (st.LobbyEndsAt or t) - t)
-		ui.Step.Text = T("Crew %d/%d · the heist starts in %s", #(st.Crew or {}), st.MaxCrew or 4, HeistRules.Clock(left))
-		ui.Timer.Text = HeistRules.Clock(left)
+		if st.LobbyEndsAt then
+			local left = math.max(0, st.LobbyEndsAt - t)
+			ui.Step.Text = T("Crew %d/%d · the heist starts in %s", #(st.Crew or {}), st.MaxCrew or 4, HeistRules.Clock(left))
+			ui.Timer.Text = HeistRules.Clock(left)
+		else
+			ui.Step.Text = T("Crew %d/%d · get ready, the heist starts soon!", #(st.Crew or {}), st.MaxCrew or 4)
+			ui.Timer.Text = ""
+		end
 		ui.Timer.TextColor3 = WHITE
 		ui.BarFill.Size = UDim2.new(0, 0, 1, 0)
-		ui.StartBtn.Visible = st.Leader == me
+		ui.StartBtn.Visible = st.Leader == me and st.ManualStart ~= false
 		ui.EscapeBtn.Visible = false
 		ui.UnjamBtn.Visible = false
 		ui.Vignette.BackgroundTransparency = 1

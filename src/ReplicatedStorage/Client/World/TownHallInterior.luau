@@ -602,7 +602,7 @@ local function jobsFor(st: State, m: Model): { () -> () }
 			end
 		end
 		npc(m, "elder", 921, B * CFrame.new(-25.8, FLOOR, 4) * CFrame.Angles(0, math.pi, 0), "sit", nil, SEAT_H)
-		local screen = sign(m, B * CFrame.new(0, 0, PARTITION - 0.2), -28, -21, FLOOR + 6.4, FLOOR + 9.2, 0, "🎟️ N° 42  →  " .. Locale.T("Desk") .. " 2", rgb(120, 255, 160), INK)
+		local screen = sign(m, B * CFrame.new(0, 0, PARTITION - 0.2), -28, -21, FLOOR + 5.0, FLOOR + 7.6, 0, "🎟️ N° 42  →  " .. Locale.T("Desk") .. " 2", rgb(120, 255, 160), INK)
 		CityKit.Glow(screen)
 		-- distributeur de tickets près de l'entrée
 		local T = B * CFrame.new(-15.2, FLOOR, 2.4)
@@ -637,7 +637,7 @@ local function jobsFor(st: State, m: Model): { () -> () }
 		Box(m, "Bookcase", S, 16.5, 24.5, 0, 9.5, -1.4, 0, WOOD_D, M.Wood, true)
 		for k = 0, 4 do
 			local y = 1.2 + k * 1.75
-			Box(m, "BookRow", S, 16.9, 24.1, y, y + 1.3, -1.3, -0.1, ({ rgb(140, 40, 40), rgb(40, 70, 130), rgb(40, 110, 70), rgb(200, 160, 60), rgb(110, 60, 120) })[k + 1], M.SmoothPlastic)
+			Box(m, "BookRow", S, 16.9, 24.1, y, y + 1.2, -1.3, -0.1, ({ rgb(140, 40, 40), rgb(40, 70, 130), rgb(40, 110, 70), rgb(200, 160, 60), rgb(110, 60, 120) })[k + 1], M.SmoothPlastic)
 		end
 		local P = B * CFrame.new(-22, FLOOR, zb0)
 		Box(m, "PortraitFrame", P, -2, 2, 4.6, 10, -0.25, 0, GOLD, M.Metal)

@@ -343,9 +343,9 @@ local function shopFront(b: Building, parent: Instance, F: CFrame)
 	local H = F * CFrame.new(hingeX, 0, 0.45) * CFrame.Angles(0, (doorRight and -1 or 1) * math.rad(-95), 0)
 	local s = doorRight and -1 or 1
 	local leaf = dw - 0.1
-	box(parent, "DoorLeaf", H, s > 0 and 0 or -leaf, s > 0 and 0.18 or -leaf + 0.18, FLOOR_UP, top - 0.1, -0.08, 0.08, accent, M.Wood)
-	box(parent, "DoorLeaf", H, s > 0 and leaf - 0.18 or -0.18, s > 0 and leaf or 0, FLOOR_UP, top - 0.1, -0.08, 0.08, accent, M.Wood)
-	box(parent, "DoorLeaf", H, s > 0 and 0.18 or -leaf + 0.18, s > 0 and leaf - 0.18 or -0.18, FLOOR_UP, FLOOR_UP + 0.9, -0.08, 0.08, accent, M.Wood)
+	box(parent, "DoorLeaf", H, s > 0 and 0 or -leaf, s > 0 and 0.18 or -leaf + 0.18, FLOOR_UP + 0.03, top - 0.1, -0.08, 0.08, accent, M.Wood)
+	box(parent, "DoorLeaf", H, s > 0 and leaf - 0.18 or -0.18, s > 0 and leaf or 0, FLOOR_UP + 0.03, top - 0.1, -0.08, 0.08, accent, M.Wood)
+	box(parent, "DoorLeaf", H, s > 0 and 0.18 or -leaf + 0.18, s > 0 and leaf - 0.18 or -0.18, FLOOR_UP + 0.03, FLOOR_UP + 0.9, -0.08, 0.08, accent, M.Wood)
 	box(parent, "DoorLeaf", H, s > 0 and 0.18 or -leaf + 0.18, s > 0 and leaf - 0.18 or -0.18, top - 0.3, top - 0.1, -0.08, 0.08, accent, M.Wood)
 	local dg = box(parent, "DoorGlass", H, s > 0 and 0.18 or -leaf + 0.18, s > 0 and leaf - 0.18 or -0.18, FLOOR_UP + 0.9, top - 0.3, -0.04, 0.04, GLASS_SHOP, M.Glass)
 	dg.Transparency = 0.6
@@ -772,7 +772,7 @@ local function hallExtras(b: Building, parent: Instance)
 	box(parent, "BackSteps", R, -4.4, 4.4, -0.6, 0.8, -2.6, -0.41, rgb(214, 208, 202), M.Marble, true)
 	box(parent, "BackSteps", R, -4.4, 4.4, 0.8, 1.52, -1.5, -0.41, rgb(222, 216, 210), M.Marble, true)
 	for _, sx in ipairs({ -1, 1 }) do
-		box(parent, "Planter", R, sx * 8 - 1.6, sx * 8 + 1.6, -0.6, 1.4, -1.8, -0.2, trim, M.Marble)
+		box(parent, "Planter", R, sx * 8 - 1.6, sx * 8 + 1.6, -0.56, 1.4, -1.8, -0.2, trim, M.Marble)
 		ball(parent, "Shrub", R, sx * 8, 2.1, -1, 2, rgb(96, 164, 96), M.Grass)
 	end
 	-- côtés : 2 rangées de 2 fenêtres
@@ -832,7 +832,7 @@ local function decorOpenFront(b: Building, parent: Instance)
 	end
 	-- battant de porte rabattu contre le piédroit (à l'intérieur)
 	local H = F * CFrame.new(doorW / 2, 0, 0.5) * CFrame.Angles(0, math.rad(95), 0)
-	box(parent, "DoorLeaf", H, -doorW + 0.1, 0, FLOOR_UP, 8.1, -0.08, 0.08, b.Accent, M.Wood)
+	box(parent, "DoorLeaf", H, -doorW + 0.1, 0, FLOOR_UP + 0.03, 8.1, -0.08, 0.08, b.Accent, M.Wood)
 	-- pancarte "Ouvert"
 	local plaque = box(parent, "OpenSign", F, -0.8, 0.8, 8.35, 8.75, -0.42, -0.38, WHITE, M.SmoothPlastic)
 	signText(plaque, Locale.T("Open ✨"), rgb(40, 150, 80), 60, PLAQUE_DISTANCE, Enum.Font.GothamBold)

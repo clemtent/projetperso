@@ -214,7 +214,7 @@ local function shelf(m: Instance, S: CFrame, x0: number, x1: number, seed: numbe
 			for k = 0, seg - 1 do
 				local a = x0 + 0.25 + k * (x1 - x0 - 0.5) / seg
 				local b = a + (x1 - x0 - 0.5) / seg - 0.15
-				local hh = 0.7 + Hash(seed + k, i) * 0.6
+				local hh = math.min(0.7 + Hash(seed + k, i) * 0.6, 5.0 / math.max(1, n - 1) - 0.3)
 				local color = list[1 + math.floor(Hash(seed * 3 + k, i + 7) * #list) % #list]
 				Box(m, "Goods", S, a, b, y, y + hh, -1.0, -0.3, color, M.SmoothPlastic)
 			end

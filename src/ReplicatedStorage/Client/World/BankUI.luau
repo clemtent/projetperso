@@ -572,13 +572,17 @@ local function layout()
 	end
 	local touch = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
 	phone = touch and math.min(size.X, size.Y) < 500
-	local scale = math.clamp(math.min(size.X / 1100, size.Y / 620), 0.45, 1.3)
+	-- (téléphone : interface un peu plus grande, lisible au doigt)
+	local scale = if phone then math.clamp(math.min(size.X / 900, size.Y / 520), 0.45, 1.3) else math.clamp(math.min(size.X / 1100, size.Y / 620), 0.45, 1.3)
 	parts.Scale.Scale = scale
 	parts.Root.Size = UDim2.fromOffset(size.X / scale, size.Y / scale)
 	-- fenêtre : tient dans l'écran (téléphone : presque plein écran)
 	local rw, rh = size.X / scale, size.Y / scale
 	parts.WindowScale.Scale = math.min(1, (rw - 16) / 860, (rh - 16) / 500)
-	parts.ChipScale.Scale = if phone then 1.1 else 1
+	parts.ChipScale.Scale = 1
+	-- pastille : sous la boussole sur ordinateur ; en haut, à droite de
+	-- "Clicker" sur téléphone (la colonne de gauche y est pleine)
+	parts.Chip.Position = if phone then UDim2.fromOffset(196, 8) else UDim2.fromOffset(10, 112)
 end
 
 ----------------------------------------------------------------------

@@ -899,16 +899,24 @@ function TrainClient.Start(options: any?)
 			end
 		end,
 	})
-	task.spawn(function()
-		local folder = ReplicatedStorage:WaitForChild("Remotes", 10)
-		local r = folder and folder:WaitForChild("TrainEvent", 10)
-		if r and r:IsA("RemoteEvent") and s.Started then
-			table.insert(s.Conns, r.OnClientEvent:Connect(function(kind, payload)
-				pcall(onEvent, kind, payload)
-			end))
-			fire("sync")
-		end
-	end)
+	local function listen(r: RemoteEvent)
+		table.insert(s.Conns, r.OnClientEvent:Connect(function(kind, payload)
+			pcall(onEvent, kind, payload)
+		end))
+		fire("sync")
+	end
+	local now0 = trainRemote()
+	if now0 then
+		listen(now0)
+	else
+		task.spawn(function()
+			local folder = ReplicatedStorage:WaitForChild("Remotes", 10)
+			local r = folder and folder:WaitForChild("TrainEvent", 10)
+			if r and r:IsA("RemoteEvent") and s.Started then
+				listen(r :: RemoteEvent)
+			end
+		end)
+	end
 	-- avatar assis dans un train (après un respawn / une reconnexion)
 	local _, hum = character()
 	if hum and hum.SeatPart and hum.SeatPart:GetAttribute("TrainIndex") then
@@ -926,7 +934,6 @@ function TrainClient.Start(options: any?)
 			warn("[TrainClient] " .. tostring(err))
 		end
 	end)
-	fire("sync")
 end
 
 function TrainClient.Step(dt: number)

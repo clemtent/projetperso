@@ -479,13 +479,13 @@ EXTRAS.Library = function(c)
 		Column(c.M, "Column", c.F, x, z, 0.3, c.G - 0.4, 1.4, c.Trim, M.Marble, true)
 		Box(c.M, "Capital", c.F, x - 1, x + 1, c.G - 0.4, c.G, z - 1, z + 1, c.Trim, M.Marble)
 	end
-	Box(c.M, "Entablature", c.F, -9.5, 9.5, c.G, c.G + 1.8, z - 1.3, c.FZ, c.Trim, M.Marble)
+	Box(c.M, "Entablature", c.F, -9.5, 9.5, c.G - 0.03, c.G + 1.8, z - 1.3, c.FZ - 0.02, c.Trim, M.Marble)
 	-- fronton : deux coins (triangle dans le plan de la façade), le haut au milieu
 	local pz = (z - 1.3 + c.FZ) / 2
 	local pd = c.FZ - (z - 1.3)
 	Wedge(c.M, "Pediment", Vector3.new(pd, 4.5, 9.5), c.F * CFrame.new(-4.75, c.G + 1.8 + 2.25, pz) * CFrame.Angles(0, math.pi / 2, 0), c.Trim, M.Marble)
 	Wedge(c.M, "Pediment", Vector3.new(pd, 4.5, 9.5), c.F * CFrame.new(4.75, c.G + 1.8 + 2.25, pz) * CFrame.Angles(0, -math.pi / 2, 0), c.Trim, M.Marble)
-	Box(c.M, "Podium", c.F, -9.8, 9.8, -0.1, 0.3, z - 1.6, c.FZ, STONE, M.Marble, true)
+	Box(c.M, "Podium", c.F, -9.8, 9.8, -0.1, 0.27, z - 1.6, c.FZ, STONE, M.Marble, true)
 	for _, x in ipairs({ -11.5, 11.5 }) do
 		CityKit.Lantern(c.M, c.F * CFrame.new(x, 0, c.FZ - 2.5), 9)
 	end
@@ -546,7 +546,7 @@ EXTRAS.Post = function(c)
 end
 EXTRAS.Gym = function(c)
 	-- (enseigne sur le toit, posée sur la corniche : ne masque aucune fenêtre)
-	local t = Box(c.M, "GymSign", c.F, -6, 6, c.H + 0.7, c.H + 4.2, c.FZ - 0.2, c.FZ + 0.15, INK, M.SmoothPlastic)
+	local t = Box(c.M, "GymSign", c.F, -6, 6, c.H + 0.7, c.H + 4.2, c.FZ - 0.4, c.FZ - 0.25, INK, M.SmoothPlastic)
 	Glow(t)
 	Text(t, Enum.NormalId.Front, "💪 " .. Locale.T("GYM"), rgb(255, 140, 60), INK, Enum.Font.GothamBlack, 160, 24)
 end
@@ -580,8 +580,8 @@ EXTRAS.Museum = function(c)
 		local x = -12.5 + i * 5
 		Column(c.M, "Column", c.F, x, z, 0.4, c.G - 0.5, 1.5, c.Trim, M.Marble, true)
 	end
-	Box(c.M, "Entablature", c.F, -14.2, 14.2, c.G - 0.5, c.G + 1.6, z - 1.2, c.FZ, c.Trim, M.Marble)
-	Box(c.M, "Stylobate", c.F, -14.5, 14.5, -0.1, 0.4, z - 1.6, c.FZ, STONE, M.Marble, true)
+	Box(c.M, "Entablature", c.F, -14.2, 14.2, c.G - 0.5, c.G + 1.6, z - 1.2, c.FZ - 0.02, c.Trim, M.Marble)
+	Box(c.M, "Stylobate", c.F, -14.5, 14.5, -0.1, 0.27, z - 1.6, c.FZ, STONE, M.Marble, true)
 	for _, x in ipairs({ -9, 9 }) do
 		local b = Box(c.M, "Banner", c.F, x - 1.2, x + 1.2, 3, 9.5, z + 0.9, z + 1.0, x < 0 and rgb(150, 30, 46) or rgb(30, 60, 120), M.Fabric)
 		Text(b, Enum.NormalId.Front, x < 0 and "🦖" or "🖼️", WHITE, nil, Enum.Font.GothamBlack, 100, 12)
@@ -608,7 +608,7 @@ EXTRAS.Garage = function(c)
 	for k = 0, 3 do
 		Part(c.M, "Tire", Vector3.new(0.9, 2.6, 2.6), c.F * CFrame.new(c.W / 2 - 2, 0.5 + k * 0.92, c.FZ - 2.2) * CityKit.UPRIGHT, INK, M.Rubber, "Cyl")
 	end
-	Box(c.M, "OilSign", c.F, -c.W / 2 + 1, -c.W / 2 + 3.4, 3, 5.4, c.FZ - 0.1, c.FZ - 0.02, rgb(230, 120, 30), M.Metal)
+	Box(c.M, "OilSign", c.F, -c.W / 2 + 1, -c.W / 2 + 3.4, 3, 5.4, c.FZ - 0.2, c.FZ - 0.15, rgb(230, 120, 30), M.Metal)
 end
 EXTRAS.Cafe = function(c)
 	-- deux tables de terrasse contre la façade
@@ -808,7 +808,9 @@ for typ, spec in pairs(CityBuildings.TYPES) do
 	CityBuildings.IMPOSTORS[key] = function(m: Model, F: CFrame, seed: number)
 		impostor(typ, m, F, seed)
 	end
-	CityBuildings.FOOT[key] = Vector2.new(spec.W + (typ == "Library" and 0 or 0), spec.D + ((typ == "Library" or typ == "Museum" or typ == "Clinic" or typ == "Hotel" or typ == "Cinema") and 6 or 2))
+	-- (emprise centrée : marges devant pour les portiques / marquises / marches)
+	local big = typ == "Library" or typ == "Museum" or typ == "Clinic" or typ == "Hotel" or typ == "Cinema"
+	CityBuildings.FOOT[key] = Vector2.new(spec.W + 2, spec.D + (big and 12 or 8))
 	CityBuildings.BIG[key] = true
 	CityBuildings.NEAR[key] = 150
 end

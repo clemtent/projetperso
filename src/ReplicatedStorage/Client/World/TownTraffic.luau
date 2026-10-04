@@ -1649,7 +1649,18 @@ local function junctionBlocked(v: Vehicle): boolean
 	local conf = P.Conf
 	for _, e in ipairs(nodeOcc[P.Node] or {}) do
 		local o = e.V
-		if o ~= v and conf[e.P.Id] == "cross" then
+		-- (croisement OU même voie de sortie : on attend qu'il ait quitté le
+		-- carrefour ; ensuite le couloir gère la distance derrière lui)
+		if o ~= v and conf[e.P.Id] ~= nil then
+			v.BlockBy = o
+			return true
+		end
+	end
+	-- (v11) un véhicule qui a DÉJÀ le droit d'entrer (à la ligne, pas encore
+	-- dedans) sur une trajectoire qui coupe la nôtre : il passe d'abord
+	for _, e in ipairs(nodeApp[P.Node] or {}) do
+		local o = e.V
+		if o ~= v and o.JGrant == e.P and conf[e.P.Id] == "cross" and o.JTo < 4 then
 			v.BlockBy = o
 			return true
 		end
