@@ -55,7 +55,7 @@ function ParkLayout.Benches(kind: string, seed: number): { { CF: CFrame, Len: nu
 	if kind == "RoseGarden" then
 		for k = 0, 3 do
 			local a = (k + 0.5) / 4 * TAU
-			table.insert(list, { CF = facing(math.cos(a) * 12.2, math.sin(a) * 12.2, 0, 0), Len = L })
+			table.insert(list, { CF = facing(math.cos(a) * 8.3, math.sin(a) * 8.3, 0, 0), Len = L })
 		end
 	elseif kind == "FountainSquare" then
 		for k = 0, 7 do

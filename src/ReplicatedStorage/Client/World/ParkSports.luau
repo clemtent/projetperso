@@ -418,7 +418,7 @@ local function giveRacket(m: Instance, p: Player, color: Color3, handle: number,
 	head.CastShadow = false
 	table.insert(p.Items, { Part = head, Off = CFrame.new(0, -handle - d / 2 + 0.15, -0.05) * ANG(0, math.rad(90), 0) })
 	if strings then
-		local mesh = Part(m, "RacketStrings", Vector3.new(0.11, d - 0.16, d - 0.16), CFrame.new(), WHITE, M.Fabric, "Cyl")
+		local mesh = Part(m, "RacketStrings", Vector3.new(0.16, d - 0.16, d - 0.16), CFrame.new(), WHITE, M.Fabric, "Cyl")
 		mesh.Transparency = 0.45
 		mesh.CastShadow = false
 		table.insert(p.Items, { Part = mesh, Off = CFrame.new(0, -handle - d / 2 + 0.15, -0.05) * ANG(0, math.rad(90), 0) })
@@ -554,7 +554,7 @@ local function hoop(m: Instance, H: CFrame, color: Color3): (Vector3, { BasePart
 		local a0, a1 = k / 12 * TAU, (k + 1) / 12 * TAU
 		Rod(m, "Rim", (H * CFrame.new(rimC + Vector3.new(cos(a0) * RIM_R, 0, sin(a0) * RIM_R))).Position, (H * CFrame.new(rimC + Vector3.new(cos(a1) * RIM_R, 0, sin(a1) * RIM_R))).Position, 0.09, rgb(236, 100, 30), M.Metal)
 	end
-	Box(m, "RimMount", H, -0.2, 0.2, RIM_Y - 0.25, RIM_Y + 0.05, -2.84, -2.55, rgb(236, 100, 30), M.Metal)
+	Box(m, "RimMount", H, -0.2, 0.2, RIM_Y - 0.25, RIM_Y + 0.05, -2.84, -2.6, rgb(236, 100, 30), M.Metal)
 	-- filet : 8 cordons en cône (ils tremblent quand le ballon passe)
 	local net = {}
 	for k = 0, 7 do
@@ -617,7 +617,7 @@ function ParkSports.Basketball(m: Instance, F: CFrame, seed: number, opts: any?)
 	Box(m, "CourtBase", F, -W / 2 - 2, W / 2 + 2, -0.1, Y - 0.04, -D / 2 - 2, D / 2 + 2, outer, M.Concrete, true)
 	Box(m, "CourtPlay", F, -W / 2, W / 2, Y - 0.04, Y, -D / 2, D / 2, floor, M.Concrete)
 	-- lignes : contour, médiane, rond central, raquettes, lignes à 3 points
-	local ly = Y
+	local ly = Y + 0.045 -- (au-dessus de la raquette peinte : jamais confondus)
 	line(m, F, -W / 2, W / 2, -D / 2, -D / 2 + 0.2, ly)
 	line(m, F, -W / 2, W / 2, D / 2 - 0.2, D / 2, ly)
 	line(m, F, -W / 2, -W / 2 + 0.2, -D / 2 + 0.2, D / 2 - 0.2, ly)
@@ -626,10 +626,10 @@ function ParkSports.Basketball(m: Instance, F: CFrame, seed: number, opts: any?)
 	paintArc(m, F, 0, 0, 3.6, 0, TAU, ly, 16)
 	local HX = W / 2 - 1.2 -- pied du poteau ... cercle à HX - 3,6
 	for _, sx in ipairs({ -1, 1 }) do
-		local key = Box(m, "Key", F, sx * (W / 2 - 0.2), sx * (W / 2 - 9), ly, ly + 0.02, -2.9, 2.9, outer, M.SmoothPlastic)
+		local key = Box(m, "Key", F, sx * (W / 2 - 0.2), sx * (W / 2 - 9), Y, Y + 0.035, -2.9, 2.9, outer, M.SmoothPlastic)
 		key.CastShadow = false
-		line(m, F, sx * (W / 2 - 9) - 0.1, sx * (W / 2 - 9) + 0.1, -2.9, 2.9, ly + 0.01)
-		paintArc(m, F, sx * (W / 2 - 9), 0, 2.9, sx > 0 and math.pi / 2 or -math.pi / 2, sx > 0 and math.pi * 1.5 or math.pi / 2, ly + 0.01, 8)
+		line(m, F, sx * (W / 2 - 9) - 0.1, sx * (W / 2 - 9) + 0.1, -2.9, 2.9, ly)
+		paintArc(m, F, sx * (W / 2 - 9), 0, 2.9, sx > 0 and math.pi / 2 or -math.pi / 2, sx > 0 and math.pi * 1.5 or math.pi / 2, ly, 8)
 		-- ligne à 3 points : arc autour du cercle + 2 droites jusqu'à la ligne de fond
 		local rx, r3 = sx * (W / 2 - 3.8), math.min(8.5, D / 2 - 0.6)
 		local half = math.asin(math.min(0.999, (D / 2 - 0.6) / r3))
@@ -1090,11 +1090,11 @@ function ParkSports.Football(m: Instance, F: CFrame, seed: number, opts: any?): 
 		for i = 0, 7 do
 			if i % 2 == 0 then
 				local x0 = -W / 2 + i * W / 8
-				local s = Box(m, "TurfStripe", F, x0, x0 + W / 8, Y, Y + 0.02, -D / 2, D / 2, rgb(86, 168, 82), M.Grass)
+				local s = Box(m, "TurfStripe", F, x0, x0 + W / 8, Y, Y + 0.035, -D / 2, D / 2, rgb(86, 168, 82), M.Grass)
 				s.CastShadow = false
 			end
 		end
-		local ly = Y + 0.02
+		local ly = Y + 0.05
 		line(m, F, -W / 2 + 1, W / 2 - 1, -D / 2 + 1, -D / 2 + 1.2, ly)
 		line(m, F, -W / 2 + 1, W / 2 - 1, D / 2 - 1.2, D / 2 - 1, ly)
 		line(m, F, -W / 2 + 1, -W / 2 + 1.2, -D / 2 + 1.2, D / 2 - 1.2, ly)

@@ -311,7 +311,7 @@ local function buildTent(r: RideFx): CFrame
 			local p = polar(a, R, WALL_H / 2)
 			local wall = Solid(Fixed(r, "Canvas", Vector3.new(chord, WALL_H, 0.25), CFrame.lookAt(p, p + Vector3.new(p.X, 0, p.Z)), stripe, M.Fabric))
 			wall.CastShadow = true
-			Fixed(r, "Hem", Vector3.new(chord + 0.06, 0.5, 0.34), CFrame.lookAt(polar(a, R, 0.25), polar(a, R + 1, 0.25)), RED_D, M.Fabric)
+			Fixed(r, "Hem", Vector3.new(chord + 0.06, 0.5, 0.34), CFrame.lookAt(polar(a, R, 0.29), polar(a, R + 1, 0.29)), RED_D, M.Fabric)
 			-- couture verticale entre deux lés
 			local seam = polar(a + math.pi / N, R + 0.14, WALL_H / 2)
 			Fixed(r, "Seam", Vector3.new(0.12, WALL_H, 0.06), CFrame.lookAt(seam, seam + Vector3.new(seam.X, 0, seam.Z)), CANVAS:Lerp(RED, 0.5), M.Fabric)
@@ -368,7 +368,7 @@ local function buildTent(r: RideFx): CFrame
 	local pw = 7
 	for _, sx in ipairs({ -1, 1 }) do
 		for _, z in ipairs({ pz0 - 0.6, (pz0 + pz1) / 2, pz1 }) do
-			Solid(Fixed(r, "PorchColumn", Vector3.new(8.6, 0.6, 0.6), CFrame.new(sx * pw, 4.3, z) * VERTICAL, GOLD, M.Metal, CYL))
+			Solid(Fixed(r, "PorchColumn", Vector3.new(8.3, 0.6, 0.6), CFrame.new(sx * pw, 4.75, z) * VERTICAL, GOLD, M.Metal, CYL))
 			Fixed(r, "PorchBase", Vector3.new(0.6, 1.1, 1.1), CFrame.new(sx * pw, 0.3, z) * VERTICAL, RED_D, M.Metal, CYL)
 			Fixed(r, "PorchCap", Vector3.new(0.4, 1.0, 1.0), CFrame.new(sx * pw, 8.7, z) * VERTICAL, GOLD, M.Metal, CYL)
 		end
@@ -379,7 +379,7 @@ local function buildTent(r: RideFx): CFrame
 			local a = Vector3.new(sx * (pw + 0.6), 8.9, (z0 + z1) / 2)
 			local b = Vector3.new(0, 11.6, (z0 + z1) / 2)
 			local len = (b - a).Magnitude
-			Fixed(r, "PorchRoof", Vector3.new(len + 0.2, 0.2, abs(z1 - z0) + 0.02), CFrame.lookAt((a + b) / 2, b) * ANG(0, math.rad(90), 0) * CFrame.new(0, (k % 2) * 0.02, 0), if k % 2 == 0 then RED else CANVAS, M.Fabric).CastShadow = true
+			Fixed(r, "PorchRoof", Vector3.new(len + 0.2, 0.2, abs(z1 - z0) + 0.02), CFrame.lookAt((a + b) / 2, b) * ANG(0, math.rad(90), 0) * CFrame.new(0, (k % 2) * 0.04, 0), if k % 2 == 0 then RED else CANVAS, M.Fabric).CastShadow = true
 		end
 		-- rideaux de velours relevés
 		Fixed(r, "Drape", Vector3.new(1.8, 8.2, 0.35), CFrame.new(sx * 5.4, 4.6, pz0 - 0.3) * ANG(0, 0, math.rad(sx * -7)), VELVET, M.Fabric)
@@ -399,7 +399,7 @@ local function buildTent(r: RideFx): CFrame
 	local booth = CFrame.new(11.5, 0, -R - 6.5) * ANG(0, math.rad(-25), 0)
 	Solid(Fixed(r, "Booth", Vector3.new(4.2, 5.4, 3.4), booth * CFrame.new(0, 2.7, 0.5), CANVAS, M.WoodPlanks))
 	for i = 0, 4 do
-		Fixed(r, "BoothStripe", Vector3.new(0.4, 5.4, 3.46), booth * CFrame.new(-1.68 + i * 0.84, 2.7, 0.5), RED, M.WoodPlanks)
+		Fixed(r, "BoothStripe", Vector3.new(0.4, 5.34, 3.46), booth * CFrame.new(-1.68 + i * 0.84, 2.7, 0.5), RED, M.WoodPlanks)
 	end
 	local glass = Fixed(r, "BoothGlass", Vector3.new(3, 1.7, 0.08), booth * CFrame.new(0, 3.5, -1.24), Color3.fromRGB(180, 210, 230), M.Glass)
 	glass.Transparency = 0.45
@@ -440,7 +440,8 @@ local function seatTop(tier: number): number
 end
 
 local function buildInside(r: RideFx): any
-	Solid(Fixed(r, "Sawdust", Vector3.new(FLOOR, 2 * R - 0.6, 2 * R - 0.6), CFrame.new(0, FLOOR / 2, 0) * VERTICAL, SAWDUST, M.Sand, CYL))
+	-- (dessous à -0,03 : aucune face confondue avec les pieds des gradins, posés à 0)
+	Solid(Fixed(r, "Sawdust", Vector3.new(FLOOR + 0.03, 2 * R - 0.6, 2 * R - 0.6), CFrame.new(0, (FLOOR - 0.03) / 2, 0) * VERTICAL, SAWDUST, M.Sand, CYL))
 	-- PISTE : tapis rouge + étoile dorée + bordure rembourrée (32 segments)
 	Fixed(r, "RingMat", Vector3.new(0.06, 2 * RING - 0.8, 2 * RING - 0.8), CFrame.new(0, FLOOR + 0.03, 0) * VERTICAL, Color3.fromRGB(176, 36, 48), M.Fabric, CYL)
 	Fixed(r, "RingMatEdge", Vector3.new(0.05, 2 * RING - 2.2, 2 * RING - 2.2), CFrame.new(0, FLOOR + 0.07, 0) * VERTICAL, Color3.fromRGB(196, 46, 58), M.Fabric, CYL)
@@ -528,7 +529,7 @@ local function buildInside(r: RideFx): any
 		Solid(Fixed(r, "ArchPost", Vector3.new(0.8, 9.3, 0.8), CFrame.new(sx * 6.0, 4.65, bz - 0.4), GOLD, M.Metal))
 		Fixed(r, "ArchStar", Vector3.new(0.2, 1.4, 1.4), CFrame.new(sx * 6.0, 10.2, bz - 0.85) * ANG(0, math.rad(90), 0), GOLD, M.Metal, CYL)
 	end
-	Solid(Fixed(r, "Balcony", Vector3.new(13, 0.6, 4.4), CFrame.new(0, 9.9, bz + 1.4), PLANK, M.WoodPlanks))
+	Solid(Fixed(r, "Balcony", Vector3.new(13, 0.6, 4.4), CFrame.new(0, 9.9, bz + 1.5), PLANK, M.WoodPlanks))
 	Fixed(r, "BalconyFront", Vector3.new(13, 1.6, 0.25), CFrame.new(0, 11.0, bz - 0.75), RED, M.Fabric)
 	FairKit.Bulbs(r.Model, r.Base * Vector3.new(-6.2, 11.9, bz - 0.95), r.Base * Vector3.new(6.2, 11.9, bz - 0.95), 12, 0.26, { C.Bulb, Color3.fromRGB(255, 190, 120) })
 	-- 4 MÂTS (bandes rouges), treillis, plate-forme et échelle du voltigeur,

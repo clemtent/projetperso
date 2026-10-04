@@ -98,12 +98,18 @@ end
 
 -- Ronds dans l'eau en `p` (surface), rayon max r
 local function addRipples(W: Water, p: Vector3, r: number, phase: number, count: number?)
+	-- (chaque rond à sa hauteur : 4 niveaux espacés de 0,03, jamais deux faces
+	-- confondues ; l'écume au-dessus)
+	local wAny: any = W
 	for k = 0, (count or 2) - 1 do
-		local ring = waterPart(W.Parent, "Ripple", Vector3.new(0.04, 0.4, 0.4), CFrame.new(p) * ParkKit.UPRIGHT, FOAM, 0.4, "Cyl")
-		table.insert(W.Ripples, { Part = ring, P = p, R = r, Phase = phase + k / (count or 2) })
+		wAny.RippleN = (wAny.RippleN or 0) + 1
+		local lift = 0.03 + (wAny.RippleN % 4) * 0.03
+		local q = p + Vector3.new(0, lift, 0)
+		local ring = waterPart(W.Parent, "Ripple", Vector3.new(0.02, 0.4, 0.4), CFrame.new(q) * ParkKit.UPRIGHT, FOAM, 0.4, "Cyl")
+		table.insert(W.Ripples, { Part = ring, P = q, R = r, Phase = phase + k / (count or 2) })
 	end
 	-- (écume au point d'impact)
-	local foam = waterPart(W.Parent, "Foam", Vector3.new(0.05, r * 0.55, r * 0.55), CFrame.new(p + Vector3.new(0, 0.01, 0)) * ParkKit.UPRIGHT, FOAM, 0.35, "Cyl")
+	local foam = waterPart(W.Parent, "Foam", Vector3.new(0.03, r * 0.55, r * 0.55), CFrame.new(p + Vector3.new(0, 0.19, 0)) * ParkKit.UPRIGHT, FOAM, 0.35, "Cyl")
 	table.insert(W.Sparkles, { Part = foam, Base = 0.3, Amp = 0.15, Speed = 9 + phase * 3, Phase = phase * 7 })
 end
 
@@ -173,7 +179,7 @@ function FountainKit.Sheet(W: Water, F: CFrame, r0: number, y0: number, r1: numb
 	local sh = { F = F, R0 = r0, Y0 = y0, R1 = r1, Drop = drop, R2 = r2, Y1 = y1, Panels = panels, Streaks = streaks }
 	table.insert(W.Sheets, sh)
 	-- couronne d'écume au pied du voile + quelques ronds
-	local foamRing = Ring(W.Parent, "SheetFoam", F, r2 + 0.15, 0.7, y1 - 0.02, y1 + 0.05, math.min(count, 16), FOAM, M.Glass)
+	local foamRing = Ring(W.Parent, "SheetFoam", F, r2 + 0.15, 0.7, y1 + 0.24, y1 + 0.3, math.min(count, 16), FOAM, M.Glass)
 	for _, p in ipairs(foamRing) do
 		p.Transparency = 0.3
 		p.CastShadow = false
@@ -227,7 +233,7 @@ function FountainKit.Surface(W: Water, F: CFrame, x: number, z: number, top: num
 	for k = 1, sparkles or 0 do
 		local a = hash(k, r * 3.1) * TAU
 		local rr = math.sqrt(hash(k, r + 0.7)) * r * 0.85
-		local sp = Part(W.Parent, "Glint", Vector3.new(0.02, 0.35, 0.35), F * CFrame.new(x + math.cos(a) * rr, top + 0.005, z + math.sin(a) * rr) * ParkKit.UPRIGHT, Color3.new(1, 1, 1), M.Neon, "Cyl")
+		local sp = Part(W.Parent, "Glint", Vector3.new(0.02, 0.35, 0.35), F * CFrame.new(x + math.cos(a) * rr, top + 0.045, z + math.sin(a) * rr) * ParkKit.UPRIGHT, Color3.new(1, 1, 1), M.Neon, "Cyl")
 		sp.CastShadow = false
 		table.insert(W.Sparkles, { Part = sp, Base = 0.6, Amp = 0.45, Speed = 2.5 + hash(k, 2) * 3, Phase = k * 1.7, Glint = true })
 	end
@@ -239,7 +245,7 @@ function FountainKit.Glints(W: Water, center: Vector3, top: number, r: number, c
 	for k = 1, count do
 		local a = hash(k, r * 3.1) * TAU
 		local rr = math.sqrt(hash(k, r + 0.7)) * r * 0.9
-		local sp = Part(W.Parent, "Glint", Vector3.new(0.02, 0.35, 0.35), CFrame.new(center.X + math.cos(a) * rr, top + 0.005, center.Z + math.sin(a) * rr) * ParkKit.UPRIGHT, Color3.new(1, 1, 1), M.Neon, "Cyl")
+		local sp = Part(W.Parent, "Glint", Vector3.new(0.02, 0.35, 0.35), CFrame.new(center.X + math.cos(a) * rr, top + 0.045, center.Z + math.sin(a) * rr) * ParkKit.UPRIGHT, Color3.new(1, 1, 1), M.Neon, "Cyl")
 		sp.CastShadow = false
 		table.insert(W.Sparkles, { Part = sp, Base = 0.6, Amp = 0.45, Speed = 2.5 + hash(k, 2) * 3, Phase = k * 1.7, Glint = true })
 	end
@@ -330,7 +336,7 @@ local function stepRipples(W: Water, t: number)
 	for _, r in ipairs(W.Ripples) do
 		local u = (t * 0.8 + r.Phase) % 1
 		local d = 0.3 + u * r.R * 2
-		r.Part.Size = Vector3.new(0.04, d, d)
+		r.Part.Size = Vector3.new(0.02, d, d)
 		r.Part.CFrame = CFrame.new(r.P) * ParkKit.UPRIGHT
 		r.Part.Transparency = 0.35 + 0.65 * u
 	end
@@ -379,7 +385,7 @@ local function roundBasin(m: Instance, F: CFrame, R: number, waterY: number, see
 	-- mur (épaisseur 1,0) + plinthe + bandeau
 	Ring(m, "BasinWall", F, R - 0.5, 1.0, 0.32, 1.6, sides, c, M.Limestone, true)
 	Ring(m, "BasinPlinth", F, R - 0.4, 1.3, 0.32, 0.62, sides, STONE_D, M.Limestone)
-	Ring(m, "BasinBand", F, R - 0.42, 1.12, 1.05, 1.18, sides, STONE_L, M.Limestone)
+	Ring(m, "BasinBand", F, R - 0.43, 1.0, 1.05, 1.18, sides, STONE_L, M.Limestone)
 	-- margelle débordante (dessus = assise SCALE11)
 	Ring(m, "BasinCoping", F, R - 0.55, 1.5, 1.6, ParkKit.SEAT, sides, STONE_L, M.Limestone, true)
 	-- fond (mosaïque) + frise de carreaux
@@ -524,7 +530,7 @@ local function buildJets(m: Model, F: CFrame, seed: number): Water
 	for i = -1, 1 do
 		for k = -1, 1 do
 			local p = (F * CFrame.new(i * 3.6, WY, k * 3.6)).Position
-			Column(m, "Nozzle", F, i * 3.6, k * 3.6, 0.35, WY + 0.06, 0.7, rgb(200, 204, 210), M.Metal)
+			Column(m, "Nozzle", F, i * 3.6, k * 3.6, 0.35, WY + 0.3, 0.7, rgb(200, 204, 210), M.Metal)
 			local wave = ((i + 1) + (k + 1)) * 0.11 + (i == 0 and k == 0 and 0.5 or 0)
 			FountainKit.Plume(W, p, (i == 0 and k == 0) and 8 or 5.5, 0.34, nil, nil, wave)
 		end

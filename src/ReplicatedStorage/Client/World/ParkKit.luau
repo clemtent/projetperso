@@ -136,9 +136,9 @@ function ParkKit.Ring(parent: Instance, name: string, F: CFrame, r: number, w: n
 	local len = 2 * (r + w / 2) * math.tan(span / 2) + 0.02
 	for i = 0, n - 1 do
 		local a = from + (i + 0.5) * span
-		-- (un pan sur deux 0,004 plus haut et plus bas : les coins qui se
+		-- (un pan sur deux 0,025 plus haut et plus bas : les coins qui se
 		-- recouvrent n'ont jamais de face confondue)
-		local e = (i % 2) * 0.004
+		local e = (i % 2) * 0.025
 		local p = F * CFrame.Angles(0, -a, 0) * CFrame.new(r, (y0 + y1) / 2, 0)
 		table.insert(out, ParkKit.Part(parent, name, Vector3.new(w, y1 - y0 + 2 * e, len), p, color, material, nil, solid))
 	end

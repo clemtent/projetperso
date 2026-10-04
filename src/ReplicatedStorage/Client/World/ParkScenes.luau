@@ -492,12 +492,12 @@ local function buildRoseGarden(m: Model, F: CFrame, seed: number): any
 	gravel(m, F, -S, S, -2.5, 2.5)
 	gravel(m, F, -2.5, 2.5, -S, -2.5)
 	gravel(m, F, -2.5, 2.5, 2.5, S)
-	Ring(m, "GardenRing", F, 9.5, 4, -0.1, 0.07, 24, GRAVEL, M.Pebble)
+	Ring(m, "GardenRing", F, 8.2, 2.6, -0.14, 0.1, 24, GRAVEL, M.Pebble)
 	-- 4 parterres (quarts) : bordure de buis, rosiers, motif central
 	for qx = -1, 1, 2 do
 		for qz = -1, 1, 2 do
-			local Q = F * CFrame.new(qx * 11.25, 0, qz * 11.25)
-			local half = 6.2
+			local Q = F * CFrame.new(qx * 12.8, 0, qz * 12.8)
+			local half = 5.4
 			boxHedge(m, Q, -half, half, -half)
 			boxHedge(m, Q, -half, half, half)
 			boxHedge(m, Q * ANG(0, math.pi / 2, 0), -half + 1.1, half - 1.1, -half)
@@ -509,7 +509,7 @@ local function buildRoseGarden(m: Model, F: CFrame, seed: number): any
 				for iz = -1, 1 do
 					if not (ix == 0 and iz == 0) then
 						k += 1
-						roseBush(m, Q, ix * 3.4, iz * 3.4, seed * 11 + qx * 7 + qz * 3 + k, 2.2 + hash(seed, k) * 0.6)
+						roseBush(m, Q, ix * 2.9, iz * 2.9, seed * 11 + qx * 7 + qz * 3 + k, 2.2 + hash(seed, k) * 0.6)
 					end
 				end
 			end
@@ -734,10 +734,10 @@ local function buildBandstand(m: Model, F: CFrame, seed: number): any
 	Ring(m, "BandBase", F, R - 0.6, 1.2, 0, floorY - 0.3, 8, STONE, M.Limestone, true)
 	Column(m, "BandFill", F, 0, 0, 0, floorY - 0.3, (R - 1) * 2, STONE, M.Limestone, true)
 	Ring(m, "BandCornice", F, R - 0.4, 1.6, floorY - 0.3, floorY, 8, rgb(236, 230, 218), M.Limestone, true)
-	local floor = Column(m, "BandFloor", F, 0, 0, floorY - 0.32, floorY + 0.02, (R - 0.5) * 2, rgb(170, 120, 80), M.WoodPlanks, true)
+	local floor = Column(m, "BandFloor", F, 0, 0, floorY - 0.32, floorY + 0.06, (R - 0.5) * 2, rgb(170, 120, 80), M.WoodPlanks, true)
 	floor.CastShadow = true
 	for i = 0, 3 do
-		local y = (i + 1) * floorY / 4
+		local y = (i + 1) * (floorY - 0.06) / 4
 		Box(m, "BandStep", F, -2.6, 2.6, 0, y, -R - 3.2 + i * 0.85, -R + 0.4, STONE, M.Limestone, true)
 	end
 	-- colonnes de fonte (8), lambrequins, garde-corps
@@ -834,13 +834,13 @@ end
 
 local function blanket(m: Instance, B: CFrame, seed: number)
 	local colors = pick({ { rgb(214, 50, 60), WHITE }, { rgb(60, 110, 200), WHITE }, { rgb(80, 160, 90), rgb(250, 240, 210) } }, seed, 1)
-	Box(m, "Blanket", B, -2.8, 2.8, 0, 0.08, -2.2, 2.2, colors[2], M.Fabric)
+	Box(m, "Blanket", B, -2.8, 2.8, 0.02, 0.08, -2.2, 2.2, colors[2], M.Fabric)
 	for i = 0, 3 do
 		local x = -2.8 + i * 1.4 + 0.35
-		local stripe = Box(m, "BlanketCheck", B, x, x + 0.7, 0.08, 0.1, -2.2, 2.2, colors[1], M.Fabric)
+		local stripe = Box(m, "BlanketCheck", B, x, x + 0.7, 0.08, 0.11, -2.18, 2.18, colors[1], M.Fabric)
 		stripe.Transparency = 0.15
 		local z = -2.2 + i * 1.1 + 0.27
-		local s2 = Box(m, "BlanketCheck", B, -2.8, 2.8, 0.1, 0.12, z, z + 0.55, colors[1], M.Fabric)
+		local s2 = Box(m, "BlanketCheck", B, -2.78, 2.78, 0.14, 0.16, z, z + 0.55, colors[1], M.Fabric)
 		s2.Transparency = 0.35
 	end
 	-- panier en osier, assiettes, bouteille, fruits
