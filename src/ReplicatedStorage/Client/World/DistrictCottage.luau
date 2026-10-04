@@ -266,7 +266,7 @@ local function buildBakery(m: Model, F: CFrame, seed: number)
 	-- store rayé (lambrequins)
 	for i = 0, 7 do
 		local x0 = -W / 2 + i * W / 8
-		Wedge(m, "Awning", Vector3.new(W / 8, 1.6, 3.2), B * CFrame.new(x0 + W / 16, 8.2, -D / 2 - 1.6), i % 2 == 0 and rgb(200, 50, 60) or WHITE, M.Fabric)
+		Wedge(m, "Awning", Vector3.new(W / 8, 1.6, 3.2), B * CFrame.new(x0 + W / 16, 8.25, -D / 2 - 1.62), i % 2 == 0 and rgb(200, 50, 60) or WHITE, M.Fabric)
 		Box(m, "Valance", B, x0, x0 + W / 8, 6.9, 7.4, -D / 2 - 3.25, -D / 2 - 3.15, i % 2 == 0 and rgb(200, 50, 60) or WHITE, M.Fabric)
 	end
 	-- enseigne
