@@ -528,6 +528,8 @@ local function lampsNear(here: Vector3, r: number): { { any } }
 	return out
 end
 
+TownRoads.LampsNear = lampsNear -- (v11) TownStreetLife : trottoirs jamais pincés
+
 -- distance (plan) d'un point au segment [a, b]
 local function segDist(p: Vector3, a: Vector3, b: Vector3): number
 	local ab = Vector3.new(b.X - a.X, 0, b.Z - a.Z)

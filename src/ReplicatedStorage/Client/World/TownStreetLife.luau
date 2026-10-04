@@ -122,6 +122,7 @@ type Spot = {
 	Data: any?, -- (v10, CITY10) paramètres du plan (CityPlan)
 	Snap: boolean?, -- (v10) recaler au sol (rayon) à la construction
 	Imp: Model?, -- (v10) imposteur construit
+	Nudged: boolean?, -- (v11) recalé une fois (trottoir jamais pincé)
 }
 
 local state: any = nil
@@ -1241,12 +1242,53 @@ local function snapSpot(spot: Spot, parent: Instance)
 	end
 end
 
+-- (v11, CITY11) trottoirs jamais PINCÉS : un petit mobilier de bordure qui
+-- laisserait moins de 2,5 studs de passage avec un lampadaire / un autre
+-- mobilier glisse le long du trottoir (axe X local), une fois, de façon
+-- déterministe (mêmes données serveur : même résultat sur tous les clients)
+local NUDGE = { ParkMeter = 0.3, Bin = 0.8, NewsBox = 0.7, Mailbox = 0.6, SpeedSign = 0.2, DogStation = 0.5, Recycle = 1.2, Vending = 1.1 }
+local PASSAGE = 2.5
+local function nudgeSpot(spot: Spot)
+	local r0 = NUDGE[spot.Kind]
+	if not r0 or spot.Nudged then
+		return
+	end
+	spot.Nudged = true
+	local okL, near = pcall(TownRoads.LampsNear, spot.Pos, 6)
+	if not okL or type(near) ~= "table" then
+		return
+	end
+	local function blocked(p: Vector3): boolean
+		for _, o in ipairs(near) do
+			local q: Vector3 = o[1]
+			local d = Vector3.new(q.X - p.X, 0, q.Z - p.Z).Magnitude
+			-- (soi-même : même position)
+			if d > 0.05 and d < r0 + o[2] + PASSAGE then
+				return true
+			end
+		end
+		return false
+	end
+	if not blocked(spot.Pos) then
+		return
+	end
+	for _, dx in ipairs({ 1.5, -1.5, 3, -3, 4.5, -4.5 }) do
+		local cf = spot.CF * CFrame.new(dx, 0, 0)
+		if not blocked(cf.Position) then
+			spot.CF = cf
+			spot.Pos = cf.Position
+			return
+		end
+	end
+end
+
 local function buildSpot(spot: Spot, parent: Instance)
 	local builder = BUILDERS[spot.Kind]
 	if not builder then
 		return
 	end
 	snapSpot(spot, parent)
+	pcall(nudgeSpot, spot)
 	local m = Instance.new("Model")
 	m.Name = spot.Kind
 	local ok, anim = pcall(builder, m, spot.CF, spot.Seed, spot)

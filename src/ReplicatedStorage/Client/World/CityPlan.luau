@@ -188,6 +188,12 @@ CityPlan.RESERVED = {
 	Sectors = {
 		{ Id = "MusicStage", A0 = 195, A1 = 255, R0 = 12, R1 = 56 },
 	},
+	-- couloirs à dégager (le mobilier qui y tombe glisse le long de x hors
+	-- du couloir) : axe de la porte de la banque, du trottoir de la rue du
+	-- marché jusqu'aux marches (BANK11)
+	Corridors = {
+		{ Id = "BankDoor", X0 = 109, X1 = 131, Z0 = 466, Z1 = 503 },
+	},
 }
 -- types posés SUR la chaussée (jamais refusés : la voie la croise à niveau)
 local ROADWAY = { HwySeg = true, HwyRamp = true, BridgeSeg = true, RoadMarks = true }
@@ -234,6 +240,14 @@ local function add(out: { Spot }, kind: string, cf: CFrame, seed: number, size: 
 		end
 		local o = WL.Origin()
 		local p = cf.Position
+		for _, K in ipairs(CityPlan.RESERVED.Corridors) do
+			local cx, cz = p.X - o.X, p.Z - o.Z
+			if cx > K.X0 - r and cx < K.X1 + r and cz > K.Z0 and cz < K.Z1 then
+				local shift = cx < (K.X0 + K.X1) / 2 and (K.X0 - r - 1 - cx) or (K.X1 + r + 1 - cx)
+				cf = cf + Vector3.new(shift, 0, 0)
+				p = cf.Position
+			end
+		end
 		if CityPlan.Reserved(planCount, p.X - o.X, p.Z - o.Z, r) then
 			return
 		end

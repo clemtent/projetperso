@@ -103,6 +103,8 @@ local TEMPLATE = {
 	Diamonds = { Wallet = 0, Vault = 0, Earned = 0, Spent = 0, Day = 0, DayEarned = 0, Exchanged = 0, InterestDay = 0, History = {}, Owned = {}, Equipped = {} },
 	-- 🕶️ (v11 BANK11) casses : jour, casses payés aujourd'hui (banque / train), faits, réussis, meilleur butin (%)
 	Heist = { Day = 0, Bank = 0, Train = 0, Done = 0, Success = 0, Best = 0 },
+	-- 🌈 (v11 REALISM11) pot d'or : jour, pots payés aujourd'hui, total, premières places, dernier arc-en-ciel récompensé
+	Rainbow = { Day = 0, Rewarded = 0, Pots = 0, Firsts = 0, LastId = -1 },
 	Stats = {
 		TotalClicks = 0,
 		LifetimeDopamine = 0, -- Dopamine gagnée depuis toujours (classement)

@@ -486,8 +486,8 @@ local function shell(b: any, out: any)
 			b:Box("DoorPanel", x - (sx > 0 and 0.5 or -0.35), x + (sx > 0 and -0.35 or 0.5), y - 1.4, y + 1.4, -FRONT + 1.6, -FRONT + 5.2, GOLD_DEEP, M.Metal)
 		end
 	end
-	b:Box("DoorTransom", -5, 5, FLOOR + 14, FLOOR + 14.3, -FRONT, -FRONT + 1, GOLD, M.Metal)
-	b:Box("Threshold", -5, 5, FLOOR, FLOOR + 0.06, -FRONT - 0.3, -FRONT + 1.2, GOLD_DEEP, M.Metal)
+	b:Box("DoorTransom", -5, 5, FLOOR + 13.7, FLOOR + 14, -FRONT - 0.1, -FRONT + 1.1, GOLD, M.Metal)
+	b:Box("Threshold", -5, 5, FLOOR, FLOOR + 0.12, -FRONT - 0.3, -FRONT + 1.2, GOLD_DEEP, M.Metal)
 	-- enseigne dorée au-dessus de la porte
 	local over = b:Sign("DoorSign", -4.6, 4.6, FLOOR + 15, FLOOR + 16.6, -FRONT - 0.12, -FRONT - 0.02)
 	label(over, Enum.NormalId.Front, T("Open every day"), GOLD, nil, Enum.Font.Garamond, 140, 30)
@@ -531,11 +531,12 @@ local function atm(b: any, out: any, cf: CFrame, index: number)
 	table.insert(out.Screens, l2)
 	-- clavier incliné, fente à carte, ticket
 	created += 1
-	CityKit.Part(g, "AtmKeypad", Vector3.new(1.6, 0.12, 0.9), b.F * cf * CFrame.new(0, 3.3, -0.35) * CFrame.Angles(math.rad(-25), 0, 0), rgb(140, 146, 156), M.Metal)
+	local padCF = b.F * cf * CFrame.new(0, 3.3, -0.35) * CFrame.Angles(math.rad(-25), 0, 0)
+	CityKit.Part(g, "AtmKeypad", Vector3.new(1.6, 0.12, 0.9), padCF, rgb(140, 146, 156), M.Metal)
 	for r = 0, 2 do
 		for c = 0, 2 do
 			created += 1
-			CityKit.Part(g, "AtmKey", Vector3.new(0.34, 0.06, 0.18), b.F * cf * CFrame.new(-0.45 + c * 0.45, 3.37, -0.62 + r * 0.24) * CFrame.Angles(math.rad(-25), 0, 0), rgb(220, 224, 230), M.SmoothPlastic)
+			CityKit.Part(g, "AtmKey", Vector3.new(0.34, 0.06, 0.18), padCF * CFrame.new(-0.45 + c * 0.45, 0.09, -0.26 + r * 0.26), rgb(220, 224, 230), M.SmoothPlastic)
 		end
 	end
 	P("AtmSlot", 0.95, 1.4, 3.05, 3.15, -0.12, 0, IRON, M.SmoothPlastic)
@@ -566,7 +567,7 @@ local function hall(b: any, out: any)
 	-- rosace dorée devant les guichets (sur le tapis)
 	b:Part("Rosette", Vector3.new(0.04, 5.4, 5.4), CFrame.new(0, FLOOR + 0.11, -6.5) * CFrame.Angles(0, 0, math.pi / 2), GOLD, M.Metal, "Cyl")
 	b:Part("RosetteIn", Vector3.new(0.04, 3.6, 3.6), CFrame.new(0, FLOOR + 0.14, -6.5) * CFrame.Angles(0, 0, math.pi / 2), MARBLE_DARK, M.Marble, "Cyl")
-	local rose = b:Sign("RosetteSign", -1.4, 1.4, FLOOR + 0.16, FLOOR + 0.18, -7.9, -5.1)
+	local rose = b:Sign("RosetteSign", -1.4, 1.4, FLOOR + 0.2, FLOOR + 0.22, -7.9, -5.1)
 	label(rose, Enum.NormalId.Top, "💎", WHITE, nil, Enum.Font.GothamBlack, 80, 30)
 	-- plinthes dorées + lambris
 	b:Group("HallWalls")
@@ -574,14 +575,7 @@ local function hall(b: any, out: any)
 	b:Box("Wainscot", HW - 1.25, HW - 1, FLOOR, FLOOR + 4.5, -FRONT + 1, -0.5, MAHOGANY, M.Wood)
 	b:Box("WainscotCap", -HW + 1, -HW + 1.45, FLOOR + 4.5, FLOOR + 4.8, -FRONT + 1, 4, GOLD, M.Metal)
 	b:Box("WainscotCap", HW - 1.45, HW - 1, FLOOR + 4.5, FLOOR + 4.8, -FRONT + 1, -0.5, GOLD, M.Metal)
-	-- pilastres sur les murs latéraux
-	for _, z in ipairs({ -18, -8, 2 }) do
-		for _, sx in ipairs({ -1, 1 }) do
-			local xa = sx > 0 and HW - 1.6 or -HW + 1
-			b:Box("Pilaster", xa, xa + 0.6, FLOOR + 4.8, ROOF - 1.5, z - 0.9, z + 0.9, MARBLE, M.Marble)
-			b:Box("PilasterCap", xa - 0.1, xa + 0.7, ROOF - 1.5, ROOF - 0.8, z - 1.1, z + 1.1, GOLD, M.Metal)
-		end
-	end
+	-- (pas de pilastres sur les murs latéraux : boutique de luxe, coffres et distributeurs y sont adossés)
 	-- corniche intérieure + caissons du plafond
 	b:Box("CrownMould", -HW + 1, HW - 1, ROOF - 0.8, ROOF, -FRONT + 1, -FRONT + 1.8, GOLD_DEEP, M.Metal)
 	b:Box("CrownMould", -HW + 1, -HW + 1.8, ROOF - 0.8, ROOF, -FRONT + 1.8, VW, GOLD_DEEP, M.Metal)
@@ -634,7 +628,7 @@ local function hall(b: any, out: any)
 	end
 	-- grande horloge sur le mur du coffre (au-dessus de la porte ronde)
 	if okClock and type(ClockKit) == "table" then
-		local ok, clock = pcall(ClockKit.Build, b.M, b.F * CFrame.new(0, FLOOR + 17.6, VW - 0.06) * CFrame.Angles(0, math.pi, 0), 4.4, { Style = "Wall", Numerals = "Roman", Brand = "💎", MaxDistance = 140, Name = "BankClock" })
+		local ok, clock = pcall(ClockKit.Build, b.M, b.F * CFrame.new(0, FLOOR + 17.6, VW - 0.5), 4.4, { Style = "Wall", Numerals = "Roman", Brand = "💎", MaxDistance = 140, Name = "BankClock" })
 		if ok and clock then
 			out.Clock = clock
 		end
@@ -650,11 +644,11 @@ local function hall(b: any, out: any)
 	out.Queue = CityKit.Canvas(queue, Enum.NormalId.Front, 140, 22)
 	-- distributeur de tickets
 	b:Group("Ticket")
-	b:Box("TicketPost", -7.6, -6.4, FLOOR, FLOOR + 3.6, -10.6, -9.4, IRON, M.Metal, true)
-	local tk = b:Box("TicketHead", -8.1, -5.9, FLOOR + 3.6, FLOOR + 5.4, -10.9, -9.1, rgb(36, 52, 112), M.SmoothPlastic)
+	b:Box("TicketPost", -6.6, -5.4, FLOOR, FLOOR + 3.6, -8.2, -7.0, IRON, M.Metal, true)
+	local tk = b:Box("TicketHead", -7.1, -4.9, FLOOR + 3.6, FLOOR + 5.4, -8.5, -6.7, rgb(36, 52, 112), M.SmoothPlastic)
 	local tl = label(tk, Enum.NormalId.Front, "🎫 " .. T("Take a ticket"), WHITE, rgb(36, 52, 112), Enum.Font.GothamBold, 50, 30)
 	tl.TextWrapped = true
-	b:Box("TicketSlip", -7.3, -6.7, FLOOR + 3.9, FLOOR + 4.0, -11.2, -10.9, WHITE, M.SmoothPlastic)
+	b:Box("TicketSlip", -6.3, -5.7, FLOOR + 3.9, FLOOR + 4.0, -8.8, -8.5, WHITE, M.SmoothPlastic)
 	-- file d'attente : poteaux dorés + cordons de velours
 	b:Group("Queue")
 	local posts = {}
@@ -767,7 +761,7 @@ local function counters(b: any, out: any)
 		b:Col("Bell", x - 2.2, cz0 + 0.2, FLOOR + 3.3, FLOOR + 3.5, 0.55, GOLD, M.Metal)
 		b:Ball("BellTop", x - 2.2, FLOOR + 3.55, cz0 + 0.2, 0.36, GOLD, M.Metal)
 		b:Box("CardTerminal", x + 1.6, x + 2.4, FLOOR + 3.3, FLOOR + 3.6, cz0 - 0.1, cz0 + 0.7, IRON, M.SmoothPlastic)
-		b:Box("TerminalScreen", x + 1.75, x + 2.25, FLOOR + 3.6, FLOOR + 3.62, cz0 + 0.05, cz0 + 0.4, rgb(80, 210, 160), M.Neon)
+		b:Box("TerminalScreen", x + 1.75, x + 2.25, FLOOR + 3.6, FLOOR + 3.66, cz0 + 0.05, cz0 + 0.4, rgb(80, 210, 160), M.Neon)
 		b:Col("PenHolder", x + 0.8, cz0 + 0.1, FLOOR + 3.3, FLOOR + 3.7, 0.4, GOLD, M.Metal)
 		b:Part("Pen", Vector3.new(0.08, 0.9, 0.08), CFrame.new(x + 0.8, FLOOR + 3.95, cz0 + 0.1) * CFrame.Angles(0, 0, math.rad(12)), INK, M.SmoothPlastic)
 		-- tiroir à billets, côté personnel
@@ -823,7 +817,7 @@ local function vault(b: any, out: any)
 		b:Part("VaultRing", Vector3.new(2.7, 1.3, 0.35), CFrame.new(math.cos(a) * ringR, DOOR_C + math.sin(a) * ringR, VW - 0.225) * CFrame.Angles(0, 0, a + math.pi / 2), STEEL, M.Metal)
 	end
 	-- rail au sol sur lequel la porte roule (vers +X)
-	b:Box("VaultRail", -8, 25.5, FLOOR, FLOOR + 0.05, VW - 2.15, VW - 0.45, STEEL_DARK, M.DiamondPlate)
+	b:Box("VaultRail", -8, 25.5, FLOOR, FLOOR + 0.08, VW - 2.15, VW - 0.45, STEEL_DARK, M.DiamondPlate)
 	b:Box("VaultRailStop", 25.5, 26.2, FLOOR, FLOOR + 1.0, VW - 2.15, VW - 0.45, rgb(230, 190, 40), M.Metal)
 	-- LA PORTE (roule le long du mur pendant un casse)
 	local door = b:Group("VaultDoor")
@@ -855,8 +849,8 @@ local function vault(b: any, out: any)
 			table.insert(spokes, tip)
 		end
 	end
-	local plate = add(b:Box("VaultPlate", -1.8, 1.8, DOOR_C - 5.4, DOOR_C - 4.4, dz - 0.99, dz - 0.95, GOLD, M.Metal))
-	local plateSign = add(b:Sign("VaultPlateSign", -1.7, 1.7, DOOR_C - 5.35, DOOR_C - 4.45, dz - 1.04, dz - 1.0))
+	local plate = add(b:Box("VaultPlate", -1.8, 1.8, DOOR_C - 5.4, DOOR_C - 4.4, dz - 1.08, dz - 1.03, GOLD, M.Metal))
+	local plateSign = add(b:Sign("VaultPlateSign", -1.7, 1.7, DOOR_C - 5.35, DOOR_C - 4.45, dz - 1.14, dz - 1.1))
 	label(plateSign, Enum.NormalId.Front, "💎 " .. T("VAULT"), INK, nil, Enum.Font.Garamond, 60, 40)
 	local _ = plate
 	-- roule de 16,6 studs vers +X (dégage toute l'ouverture)
@@ -919,7 +913,7 @@ local function vault(b: any, out: any)
 				local x = p.X - 0.7 + (k % 2) * 1.4
 				local y = FLOOR + 0.9 + math.floor(k / 2) * 0.62
 				b:Box("CashBundle", x - 0.65, x + 0.65, y - 0.3, y + 0.3, p.Z - 1.0, p.Z + 1.0, CASH, M.SmoothPlastic)
-				b:Box("CashBand", x - 0.67, x + 0.67, y - 0.32, y + 0.32, p.Z - 0.15, p.Z + 0.15, GOLD, M.SmoothPlastic)
+				b:Box("CashBand", x - 0.7, x + 0.7, y - 0.34, y + 0.34, p.Z - 0.15, p.Z + 0.15, GOLD, M.SmoothPlastic)
 			end
 		end
 		out.Piles[i] = g
@@ -1052,7 +1046,7 @@ local function alley(b: any, out: any)
 	local ds = b:Sign("StaffDoorSign", HW - 0.33, HW - 0.29, FLOOR + 5.8, FLOOR + 6.8, sz - 1.2, sz + 1.2)
 	label(ds, Enum.NormalId.Right, T("Staff only"), WHITE, VELVET, Enum.Font.GothamBold, 60, 30)
 	out.StaffDoor = makeDoor(b.F, CFrame.new(HW - 0.55, FLOOR, sz + 2.25), { leaf, bar, ds }, math.rad(-95))
-	b:Box("StaffDoorFrame", HW - 0.1, HW + 0.2, FLOOR + 8.5, FLOOR + 9.0, sz - 2.6, sz + 2.6, STEEL, M.Metal)
+	b:Box("StaffDoorFrame", HW, HW + 0.3, FLOOR + 8.5, FLOOR + 9.0, sz - 2.6, sz + 2.6, STEEL, M.Metal)
 	-- auvent + lampe
 	b:Box("Awning", HW + 0.2, HW + 3.4, FLOOR + 9.6, FLOOR + 9.9, sz - 3, sz + 3, rgb(36, 52, 112), M.Metal)
 	CityKit.Glow(b:Box("DockLamp", HW + 0.2, HW + 0.8, FLOOR + 9.0, FLOOR + 9.5, sz - 0.4, sz + 0.4, rgb(255, 236, 190), M.SmoothPlastic))
