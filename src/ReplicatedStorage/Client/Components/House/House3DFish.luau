@@ -163,7 +163,9 @@ function House3DFish.Fish(b: any, species: string, x: number, y: number, z: numb
 	-- caudale en V (2 lobes) ; voiles : 2 lobes de plus, transparents
 	local tc = sp.TailColor or sp.Fin
 	local tl = sp.Tail * L
-	local tailX = -0.5 * L - tl * 0.32
+	local tailX = -0.46 * L - tl * 0.3
+	-- pédoncule : relie l'arrière du corps à la queue (pas de trou)
+	egg(rear, "FishPeduncle", CFrame.new(-0.45 * L, 0, 0), 0.16 * L, H * 0.32, T * 0.5, sp.Body:Lerp(BLACK, 0.06))
 	local upper = if sp.Shark then 1.25 else 1
 	egg(tail, "FishTail", CFrame.new(tailX, tl * 0.28 * upper, 0) * CFrame.Angles(0, 0, 0.62), tl * 0.75, tl * 0.32 * upper, 0.03 * L, tc, sp.FinAlpha)
 	egg(tail, "FishTail", CFrame.new(tailX, -tl * 0.28, 0) * CFrame.Angles(0, 0, -0.62), tl * 0.75, tl * 0.32, 0.03 * L, tc, sp.FinAlpha)

@@ -406,11 +406,11 @@ local function head(ctx: Ctx, look: Look, seed: number)
 		add(ctx, G_HEAD, "Ear", Vector3.new(0.08, 0.2, 0.15), at(sx * 0.33, HY - 0.02, 0.03) * CFrame.Angles(0, sx * -0.3, 0), skin:Lerp(rgb(200, 120, 110), 0.08), M.SmoothPlastic, "Egg")
 	end
 	-- nez (arête + bout)
-	add(ctx, G_HEAD, "Nose", Vector3.new(0.1, 0.2, 0.12), onSkull(0, HY - 0.08, 0.0) * CFrame.Angles(math.rad(-10), 0, 0), skin:Lerp(rgb(210, 130, 110), 0.1), M.SmoothPlastic, "Egg")
+	add(ctx, G_HEAD, "Nose", Vector3.new(0.095, 0.19, 0.115), onSkull(0, HY - 0.08, 0.0) * CFrame.Angles(math.rad(-10), 0, 0), skin:Lerp(rgb(210, 130, 110), 0.1), M.SmoothPlastic, "Egg")
 	-- yeux (plaques dessinées) + paupières (clignent) + sourcils
 	local lash = look.HairStyle == "bald" and INK or hair:Lerp(INK, 0.6)
 	for _, sx in ipairs({ -1, 1 }) do
-		local e = add(ctx, G_HEAD, "Eye", Vector3.new(0.15, 0.1, 0.01), onSkull(sx * 0.125, HY + 0.01, 0.006), WHITE, M.SmoothPlastic)
+		local e = add(ctx, G_HEAD, "Eye", Vector3.new(0.16, 0.11, 0.01), onSkull(sx * 0.127, HY + 0.01, 0.006), WHITE, M.SmoothPlastic)
 		e.Transparency = 1
 		eyeGui(e, look.Iris, lash, female, sx)
 		-- paupière : cachée DANS le crâne ; au clignement elle avance devant l'œil
@@ -1680,7 +1680,7 @@ local function pose(anim: string, t: number, propKind: string?, seed: number, se
 
 		if anim == "sit" then
 			-- adossé, mains posées à plat sur les cuisses (paumes vers le bas)
-			P.Lean = -0.08
+			P.Lean = -0.15
 			P.LUp = ANG(0.28, 0, 0.1)
 			P.RUp = ANG(0.28, 0, -0.1)
 			P.LLo, P.RLo = 0.78, 0.78

@@ -1317,7 +1317,7 @@ local function updateChars(disp: Display)
 	for _, s in ipairs(disp.Strips) do
 		-- copies périmées / en trop
 		for source, copy in pairs(s.Chars) do
-			if not want[source] or source.Parent == nil then
+			if not want[source] or not source:IsDescendantOf(workspace) then
 				copy.Model:Destroy()
 				s.Chars[source] = nil
 			elseif now - copy.Built > 0.3 and (copy.Version ~= (charVersion[source] or 1) or (counts[source] ~= nil and counts[source] ~= copy.Count)) then
@@ -1421,7 +1421,7 @@ end
 
 -- Le miroir est-il visible (devant, à l'écran, pas derrière un mur) ?
 local function visibleScore(part: BasePart, cam: Camera, range: number): number
-	if part.Parent == nil then
+	if not part:IsDescendantOf(workspace) then
 		return -1
 	end
 	local plane = Reflections.PlaneOf(part)
@@ -1482,7 +1482,7 @@ local function selectMirrors(cam: Camera)
 	local q = GraphicsQuality.Get()
 	local want: { { Part: BasePart, Score: number } } = {}
 	for part in pairs(mirrors) do
-		if part.Parent == nil then
+		if not part:IsDescendantOf(workspace) then
 			mirrors[part] = nil
 		else
 			local score = visibleScore(part, cam, math.max(LIVE_RANGE, STATIC_RANGE))
@@ -1548,7 +1548,7 @@ local FLOOR_GLOSS: { [Enum.Material]: number } = {
 local function setFloors(on: boolean)
 	if on then
 		for part in pairs(floors) do
-			if part.Parent == nil then
+			if not part:IsDescendantOf(workspace) then
 				floors[part] = nil
 			else
 				local gloss = FLOOR_GLOSS[part.Material]
@@ -1634,7 +1634,7 @@ local function stepGloss(cam: Camera)
 	local camPos = camCF.Position
 	local near: { { Part: BasePart, Dist: number } } = {}
 	for part in pairs(screens) do
-		if part.Parent == nil then
+		if not part:IsDescendantOf(workspace) then
 			screens[part] = nil
 			removeSheen(part)
 		else
@@ -1700,7 +1700,7 @@ local function step(dt: number)
 	frameClock = 0
 	local camCF = cam.CFrame
 	for _, disp in pairs(displays) do
-		if disp.Part.Parent == nil then
+		if not disp.Part:IsDescendantOf(workspace) then
 			destroyDisplay(disp)
 		else
 			local ok, err = pcall(updateDisplay, disp, camCF)

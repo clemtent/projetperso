@@ -3,7 +3,7 @@
 	Emplacement : ReplicatedStorage > Client > World > ParkScenes
 
 	🌳 Dopamine Town (v11, PARK11) : les SCÈNES VIVANTES des parcs, côté
-	CLIENT (en flux, animées près de la caméra par CityKit.Actor) :
+	CLIENT (en flux, animées près de la caméra par ParkKit.Actor) :
 	  - 🪑 PNJ sur les BANCS, posés naturellement (assis pour de vrai : pieds
 	    au sol, mains...) et qui FONT quelque chose : lire le journal (pages
 	    qui tournent), téléphone, nourrir les pigeons (miettes lancées), deux
@@ -37,7 +37,6 @@ local ParkKit = require(script.Parent.ParkKit)
 local FountainKit = require(script.Parent.FountainKit)
 local ParkLayout = require(ReplicatedStorage.Shared.ParkLayout)
 local Locale = require(ReplicatedStorage.Shared.Locale)
-local okCK, CityKit = pcall(require, script.Parent.CityKit)
 
 local ParkScenes = {}
 
@@ -73,9 +72,7 @@ local function smooth(u: number): number
 end
 
 local function actor(m: Instance, pos: Vector3, fn: (t: number, dt: number) -> (), seed: number)
-	if okCK and type(CityKit) == "table" and CityKit.Actor then
-		CityKit.Actor(m, pos, fn, hash(seed, 17) * 30)
-	end
+	ParkKit.Actor(m, pos, fn, hash(seed, 17) * 30)
 end
 
 ----------------------------------------------------------------------

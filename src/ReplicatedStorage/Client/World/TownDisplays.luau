@@ -39,6 +39,7 @@ local Locale = require(game:GetService("ReplicatedStorage").Shared.Locale)
 local NumberFormatter = require(game:GetService("ReplicatedStorage").Shared.NumberFormatter)
 local BoardKit = require(script.Parent.BoardKit)
 local ClockKit = require(script.Parent.ClockKit)
+local okHall, TownHallInterior = pcall(require, script.Parent.TownHallInterior) -- (v11, CITY11) intérieur de la mairie
 
 local TownDisplays = {}
 
@@ -59,7 +60,7 @@ local hidden: { Hidden } = {}
 local hallDone = false
 local seen: { [Instance]: boolean } = {}
 local clockTimer, boardTimer, dataTimer, discoverTimer = 0, 0, 0, 0
-local stats = { Clocks = 0, Board = false, Page = "", Refreshes = 0 }
+local stats: any = { Clocks = 0, Board = false, Page = "", Refreshes = 0 }
 
 local function hide(instance: Instance, property: string, value: any)
 	local ok, old = pcall(function()
@@ -296,6 +297,10 @@ local function discover()
 			if not ok then
 				warn("[TownDisplays] mairie : " .. tostring(err))
 			end
+			-- (v11, CITY11) intérieur complet de la mairie (en flux, voir TownHallInterior)
+			if okHall and type(TownHallInterior) == "table" and hall:IsA("Model") then
+				pcall(TownHallInterior.Attach, hall, f, { Players = playerRows, Houses = houseRows })
+			end
 		end
 	end
 	for _, d in ipairs(town:GetDescendants()) do
@@ -332,6 +337,14 @@ local function heartbeat(dt: number)
 	if discoverTimer >= 5 and not hallDone then
 		discoverTimer = 0
 		discover()
+	end
+	-- (v11, CITY11) intérieur de la mairie
+	if okHall and type(TownHallInterior) == "table" then
+		local okStep, errStep = pcall(TownHallInterior.Step, position, dt)
+		if not okStep and not stats.HallWarned then
+			stats.HallWarned = true
+			warn("[TownDisplays] intérieur de la mairie : " .. tostring(errStep))
+		end
 	end
 	-- aiguilles
 	clockTimer += dt
@@ -411,6 +424,9 @@ function TownDisplays.Stop()
 		c:Disconnect()
 	end
 	conns = {}
+	if okHall and type(TownHallInterior) == "table" then
+		pcall(TownHallInterior.Detach)
+	end
 	if board then
 		pcall(BoardKit.Destroy, board)
 	end

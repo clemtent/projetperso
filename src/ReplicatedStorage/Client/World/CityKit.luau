@@ -188,6 +188,47 @@ function CityKit.Blob(gui: Instance, x: number, y: number, w: number, h: number,
 	return f
 end
 
+-- (v11, CITY11) Mur percé : rectangle (x0..x1, y0..y1) dans l'épaisseur
+-- z0..z1 du repère F, moins les ouvertures { {x0, x1, y0, y1} } ; découpé
+-- en bandes horizontales (aucune pièce ne se chevauche)
+function CityKit.WallWithHoles(m: Instance, name: string, F: CFrame, x0: number, x1: number, y0: number, y1: number, z0: number, z1: number, holes: { { number } }, color: Color3, mat: Enum.Material, solid: boolean?)
+	local ys = { y0, y1 }
+	for _, h in ipairs(holes) do
+		table.insert(ys, math.clamp(h[3], y0, y1))
+		table.insert(ys, math.clamp(h[4], y0, y1))
+	end
+	table.sort(ys)
+	local uniq = {}
+	for _, y in ipairs(ys) do
+		if #uniq == 0 or y - uniq[#uniq] > 1e-3 then
+			table.insert(uniq, y)
+		end
+	end
+	for i = 1, #uniq - 1 do
+		local a, b = uniq[i], uniq[i + 1]
+		local mid = (a + b) / 2
+		local cuts = {}
+		for _, h in ipairs(holes) do
+			if h[3] < mid and h[4] > mid then
+				table.insert(cuts, { math.max(h[1], x0), math.min(h[2], x1) })
+			end
+		end
+		table.sort(cuts, function(p, q)
+			return p[1] < q[1]
+		end)
+		local x = x0
+		for _, c in ipairs(cuts) do
+			if c[1] - x > 0.02 then
+				CityKit.Box(m, name, F, x, c[1], a, b, z0, z1, color, mat, solid ~= false)
+			end
+			x = math.max(x, c[2])
+		end
+		if x1 - x > 0.02 then
+			CityKit.Box(m, name, F, x, x1, a, b, z0, z1, color, mat, solid ~= false)
+		end
+	end
+end
+
 ----------------------------------------------------------------------
 -- Personnages (NPCModels) et acteurs animés
 ----------------------------------------------------------------------

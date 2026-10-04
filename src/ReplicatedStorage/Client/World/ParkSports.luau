@@ -5,7 +5,7 @@
 	🏀🎾⚽🏓 Dopamine Town (v11, PARK11) : des terrains où les PNJ JOUENT
 	VRAIMENT ("le basket / le tennis joués avec des animations").
 	Chaque terrain est construit côté CLIENT (en flux) avec son jeu animé à
-	chaque image près de la caméra (CityKit.Actor, ≤ 150 studs) :
+	chaque image près de la caméra (ParkKit.Actor, ≤ 150 studs) :
 	  - 🏀 BASKET (shoot-around à 3) : un joueur DRIBBLE (le ballon rebondit
 	    entre la main et le sol, au rythme du bras), s'arrête, saute et TIRE
 	    (ballon en cloche jusqu'au cercle : panier qui fait trembler le filet,
@@ -38,7 +38,6 @@
 ]]
 
 local ParkKit = require(script.Parent.ParkKit)
-local okCK, CityKit = pcall(require, script.Parent.CityKit)
 
 local ParkSports = {}
 
@@ -453,9 +452,7 @@ local function handPos(F: CFrame, p: Player, fallback: Vector3): Vector3
 end
 
 local function register(m: Instance, F: CFrame, fn: (t: number, dt: number) -> (), seed: number)
-	if okCK and type(CityKit) == "table" and CityKit.Actor then
-		CityKit.Actor(m, F.Position, fn, hash(seed, 9) * 40)
-	end
+	ParkKit.Actor(m, F.Position, fn, hash(seed, 9) * 40)
 end
 
 -- point d'une cloche de a à b (flèche h au-dessus de la corde)

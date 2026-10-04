@@ -162,7 +162,15 @@ local SPECS: { [string]: Spec } = {
 	SportsCar = { L = 12.8, W = 5.9, WheelD = 2.15, TyreW = 1.1, Clear = 0.32, Low = 2.35, Belt = 2.7, Roof = 3.65, AxleF = -3.9, AxleR = 3.75, Ws = -1.35, R0 = -0.25, R1 = 1.8, Rw = 2.3, Inset = 0.5, HoodF = 1.95, HoodR = 2.45, Deck = 2.65, BeltRise = 0.1, Tumble = 0.3, NoseR = 1.2, TailR = 1.2, NoseLow = 1.65, Doors = 2, Style = "Sports" },
 	Limo = { L = 15.2, W = 5.7, WheelD = 2.25, TyreW = 0.92, Clear = 0.45, Low = 2.5, Belt = 3.05, Roof = 4.6, AxleF = -4.95, AxleR = 4.85, Ws = -3.5, R0 = -1.0, R1 = 3.5, Rw = 5.0, Inset = 0.78, HoodF = 2.5, HoodR = 2.9, Deck = 3.15, BeltRise = 0, Tumble = 0.32, NoseR = 0.9, TailR = 1.0, NoseLow = 2.2, Doors = 4, Style = "Limo" },
 }
-CarModels.Specs = SPECS
+CarModels.Specs = SPECS -- (dimensions "modèle" : multiplier par CarModels.SCALE pour le monde)
+
+-- (v11, CARS11) ÉCHELLE ROBLOX : "je suis trop grand quand je conduis". Un
+-- avatar R15 assis sur un Seat a la tête à siège + 3,7 : les voitures (toutes :
+-- joueurs, circulation, garées, concession, IA de course) sont construites
+-- ×1,3 (CarModels.Build l'applique toujours ; option Scale = facteur EN PLUS).
+-- Dimensions, WheelPositions et attributs (Length, Width, Height, SeatCF,
+-- WheelRadius) sont donnés à l'échelle du monde.
+CarModels.SCALE = 1.3
 CarModels.Kinds = { "BubbleCar", "CityCar", "Hatchback", "Pickup", "SUV", "Van", "SportsCar", "Limo" }
 
 -- Couleurs fixes
@@ -209,12 +217,12 @@ end
 
 function CarModels.Dimensions(carId: string?): Vector3
 	local s = SPECS[kindOf(carId)]
-	return Vector3.new(s.W, s.Roof, s.L)
+	return Vector3.new(s.W, s.Roof, s.L) * CarModels.SCALE
 end
 
 -- (v9.9) roues DANS les passages : face extérieure du pneu 0,22 en retrait du
 -- flanc (la jante bombée et le cache-moyeu arrivent à l'aplomb de la caisse)
-function CarModels.WheelPositions(carId: string?): { Vector3 }
+local function wheelPositionsRaw(carId: string?): { Vector3 }
 	local s = SPECS[kindOf(carId)]
 	local x = s.W / 2 - s.TyreW / 2 - 0.22
 	local out = {}
@@ -222,6 +230,15 @@ function CarModels.WheelPositions(carId: string?): { Vector3 }
 		for _, sx in ipairs({ -1, 1 }) do
 			table.insert(out, Vector3.new(sx * x, s.WheelD / 2, z))
 		end
+	end
+	return out
+end
+
+-- (v11) positions des roues À L'ÉCHELLE DU MONDE (repère du pivot)
+function CarModels.WheelPositions(carId: string?): { Vector3 }
+	local out = wheelPositionsRaw(carId)
+	for i, p in ipairs(out) do
+		out[i] = p * CarModels.SCALE
 	end
 	return out
 end
@@ -554,6 +571,15 @@ local function newPart(b: B, className: string, name: string, size: Vector3, cf:
 		p.Color = b.GlassColor
 		p.Transparency = b.GlassT
 		p.Reflectance = if b.Lod >= 3 then 0.2 else 0.12
+		if b.Lod <= 1 then
+			-- (v11, CARS11) version "Low" (de loin, voitures garées du serveur) : un
+			-- habitacle VIDE derrière du verre transparent laissait voir la route à
+			-- travers la cabine ("des trucs invisibles" sur les camionnettes / pick-up) :
+			-- verre teinté presque opaque, comme une vitre vue de loin
+			p.Color = b.GlassColor:Lerp(Color3.fromRGB(18, 22, 30), 0.45)
+			p.Transparency = math.min(b.GlassT, 0.08)
+			p.Reflectance = 0.18
+		end
 	end
 	if b.WheelTag then
 		p:SetAttribute("Wheel", b.WheelTag)
@@ -1279,6 +1305,14 @@ local function buildLow(b: B, s: Spec, g: Geo, paint: Color3, roofColor: Color3,
 		wedge(b, "Windshield", -gw, gw, s.Belt, s.Roof - 0.12, s.Ws + 0.05, s.R0, true, GLASS, M.Glass)
 		box(b, "SideGlass", -gw, gw, s.Belt, s.Roof - 0.12, s.R0, s.R1, GLASS, M.Glass)
 		box(b, "Roof", -gw + 0.05, gw - 0.05, s.Roof - 0.12, s.Roof, s.R0 - 0.05, s.R1 + 0.05, roofColor)
+		-- (v11) montants de portes (B, et C pour les longues cabines) : la cabine
+		-- se lit comme une vraie cabine, plus comme une boîte de verre
+		local span = s.R1 - s.R0
+		local posts = if span > 7 then { 0.34, 0.67 } elseif span > 3.2 then { 0.5 } else {}
+		for _, f in ipairs(posts) do
+			local z = s.R0 + span * f
+			box(b, "Pillar", -gw - 0.06, gw + 0.06, s.Belt, s.Roof - 0.1, z - 0.22, z + 0.22, roofColor)
+		end
 		if s.Rw - s.R1 > 0.1 then
 			wedge(b, "RearGlass", -gw, gw, s.Belt, s.Roof - 0.12, s.R1, s.Rw, false, GLASS, M.Glass)
 		else
@@ -1309,6 +1343,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 	elseif type(options.Scale) == "number" and options.Scale > 0 then
 		scale = Vector3.new(options.Scale, options.Scale, options.Scale)
 	end
+	scale *= CarModels.SCALE -- (v11) échelle Roblox
 	local model = Instance.new("Model")
 	model.Name = "Car_" .. kind
 	-- (v10, CARS10) options de l'atelier (Config.Cars.Mods ; inconnues ignorées)
@@ -1419,7 +1454,9 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 	root.PivotOffset = CFrame.new(0, -((rootBottom + rootTop) / 2) * scale.Y, 0)
 
 	-- siège du conducteur
-	local seatTop = math.min(s.Roof - 3.65, s.Clear + 1.85)
+	-- (v11) coussin assez haut pour les jambes, et ≥ 3,85 studs (monde) sous le
+	-- pavillon intérieur : l'avatar assis (tête à siège + 3,7) tient dedans
+	local seatTop = math.min(s.Roof - 0.14 - 3.85 / CarModels.SCALE, s.Clear + 1.4)
 	local seatZ = s.R0 + (s.R1 - s.R0) * 0.42
 	if style == "Van" then
 		seatTop = 2.35
@@ -1427,7 +1464,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 	elseif pickup then
 		seatZ = s.R0 + 1.35
 	elseif sports then
-		seatTop = s.Clear + 0.6
+		seatTop = s.Clear + 0.45
 		seatZ = s.R1 - 0.95
 	elseif style == "Limo" then
 		seatZ = s.R0 + 1.45
@@ -2360,7 +2397,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 	end
 
 	-- ░ roues ░
-	for index, pos in ipairs(CarModels.WheelPositions(kind)) do
+	for index, pos in ipairs(wheelPositionsRaw(kind)) do
 		wheel(b, s, index, pos.X, pos.Z, look)
 	end
 

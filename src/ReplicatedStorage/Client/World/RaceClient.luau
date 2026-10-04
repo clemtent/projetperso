@@ -105,6 +105,9 @@ type AICar = {
 	Color: string,
 	Seed: number,
 	Pivot: CFrame?,
+	WheelPos: Vector3?, -- (repère du pivot) centre du volant de la voiture
+	WheelIdx: { number }, -- index du volant / moyeu dans rig.Parts
+	WheelOff: { CFrame },
 }
 
 type RaceView = {
@@ -799,6 +802,9 @@ local function destroyAI(ai: AICar)
 	ai.Model = nil
 	ai.Rig = nil
 	ai.Driver = nil
+	ai.WheelPos = nil
+	table.clear(ai.WheelIdx)
+	table.clear(ai.WheelOff)
 	ai.Lod = 0
 	table.clear(ai.Extra)
 	table.clear(ai.ExtraOff)
@@ -832,6 +838,18 @@ local function buildAI(ai: AICar, lod: number)
 		local okRig, rig = pcall(CarModels.WheelRig, model)
 		if okRig then
 			ai.Rig = rig
+			-- volant de la voiture : il tourne avec les mains du pilote
+			local pivot0 = model:GetPivot()
+			for i, part in ipairs(rig.Parts) do
+				if part.Name == "SteeringWheel" or part.Name == "WheelHub" then
+					local off = pivot0:ToObjectSpace(part.CFrame)
+					if part.Name == "SteeringWheel" then
+						ai.WheelPos = off.Position
+					end
+					table.insert(ai.WheelIdx, i)
+					table.insert(ai.WheelOff, off)
+				end
+			end
 		end
 		-- pilote : NPCModels.Driver (NPC11, mains sur le volant) sinon assis figé
 		local style = DRIVER_STYLES[(ai.Seed % #DRIVER_STYLES) + 1]
@@ -905,6 +923,14 @@ local function poseAI(route: any, ai: AICar, dt: number)
 	local moved = false
 	if ai.Rig then
 		local okPose, bparts, frames = pcall(CarModels.PoseRig, ai.Rig, pivot, ai.Spin, ai.Steer, nil)
+		if okPose and ai.WheelPos then
+			-- volant tourné autour de l'axe avant-arrière de la voiture (+ = gauche)
+			local center = CFrame.new(ai.WheelPos :: Vector3)
+			local spin = center * CFrame.Angles(0, 0, ai.Wheel) * center:Inverse()
+			for k, idx in ipairs(ai.WheelIdx) do
+				frames[idx] = pivot * spin * ai.WheelOff[k]
+			end
+		end
 		if okPose then
 			if #ai.Extra > 0 then
 				local allParts = table.clone(bparts)
@@ -927,7 +953,10 @@ local function poseAI(route: any, ai: AICar, dt: number)
 	if ai.Driver then
 		local fn = (NPCModels :: any).Driver
 		if type(fn) == "function" then
-			pcall(fn, ai.Driver, pivot * ai.SeatCF, ai.Wheel, { T = clockT + ai.Seed * 0.13 })
+			pcall(fn, ai.Driver, pivot * ai.SeatCF, ai.Wheel, {
+				T = clockT + ai.Seed * 0.13,
+				Wheel = if ai.WheelPos then pivot * CFrame.new(ai.WheelPos :: Vector3) else nil,
+			})
 		end
 	end
 end
@@ -967,6 +996,9 @@ local function stepAI(view: RaceView, dt: number, p: Vector3?)
 					Color = tostring(row.Col or ""),
 					Seed = #tostring(row.K) * 131 + (snap.Id or 1) * 17 + (tonumber(string.match(tostring(row.K), "%d+")) or 0) * 7,
 					Pivot = nil,
+					WheelPos = nil,
+					WheelIdx = {},
+					WheelOff = {},
 				}
 				view.Ai[row.K] = ai
 			end

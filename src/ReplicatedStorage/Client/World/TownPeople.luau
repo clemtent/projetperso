@@ -486,6 +486,10 @@ local function collectObstacles(s: any, town: Instance, data: Instance, count: n
 	-- 2) pièces SOLIDES du serveur près des chemins (lampadaires, bancs,
 	-- bouches à incendie, murs, fontaine…)
 	local function nearPaths(p: Vector3, ext: number): boolean
+		local pc: Vector3? = s.PlazaC
+		if pc and math.abs(p.Y - pc.Y) < 12 and Vector3.new(p.X - pc.X, 0, p.Z - pc.Z).Magnitude < 72 + ext then
+			return true
+		end
 		for _, path: Path in ipairs(s.Paths) do
 			if math.abs(p.Y - path.Y) < 12 then
 				local pts = path.Points
@@ -618,6 +622,7 @@ local function steer(s: any, a: Agent, now: number, dt: number, obstacles: { Obs
 	local near = {} -- (bloquent tout de suite : devant, tout près)
 	local blocker: Obstacle? = nil
 	local blockerFd = math.huge
+	local blockerLd = 0
 	local mate = a.Mate
 	for _, o in ipairs(obstacles) do
 		local ag = o.Agent
@@ -626,7 +631,7 @@ local function steer(s: any, a: Agent, now: number, dt: number, obstacles: { Obs
 			rel = Vector3.new(rel.X, 0, rel.Z)
 			local fd = rel:Dot(fwd)
 			local ld = rel:Dot(right)
-			local clear = o.Player and CLEAR_PLAYER or (o.Dog and CLEAR_DOG or CLEAR_NPC)
+			local clear = o.Player and (CLEAR_PLAYER - math.min(0.7, a.WaitT * 0.25)) or (o.Dog and CLEAR_DOG or CLEAR_NPC)
 			-- (vitesse de rapprochement : un passant d'en face compte plus loin)
 			local closing = 0
 			if ag and ag.Kind == "walk" and ag.Heading then
@@ -645,7 +650,7 @@ local function steer(s: any, a: Agent, now: number, dt: number, obstacles: { Obs
 				if fd > 0 and fd < (o.Player and 2.6 or 2.0) and math.abs(ld) < clear * squeeze then
 					local yields = not (ag and ag.Waiting and ag.Id < a.Id)
 					if yields and fd < blockerFd then
-						blocker, blockerFd = o, fd
+						blocker, blockerFd, blockerLd = o, fd, ld
 					end
 					table.insert(near, lo)
 					table.insert(near, hi)
@@ -682,6 +687,22 @@ local function steer(s: any, a: Agent, now: number, dt: number, obstacles: { Obs
 			if cost < bestCost then
 				bestCost = cost
 				target = math.clamp(q + (math.clamp(pref, lo, hi) - q) * 0.3, lo, hi)
+			end
+		end
+	end
+	-- face à face sans place (passant d'en face, joueur) : celui qui cède se
+	-- range contre le bord libre opposé, l'autre passe
+	if blocker then
+		local ag = blocker.Agent
+		local sameDir = ag and ag.Kind == "walk" and ag.Heading and (ag.Heading :: Vector3):Dot(fwd) > 0.5
+		if not sameDir then
+			local bl = lat + blockerLd
+			for i = 1, #staticFree, 2 do
+				local lo, hi = staticFree[i], staticFree[i + 1]
+				if lat >= lo - 0.3 and lat <= hi + 0.3 then
+					target = if bl > lat then lo + 0.05 else hi - 0.05
+					break
+				end
 			end
 		end
 	end
@@ -1143,45 +1164,56 @@ end
 
 local ANCHOR_KINDS = { "SitBench", "Terrace", "ChessTables", "Chat", "Wait", "Kiosk", "FlowerStall", "BookStall", "MarketSquare" }
 
--- (v11) tour de la place : contourne la scène et le public du concert
-local function plazaRing(s: any, plaza: CFrame, count: number): { Vector3 }
-	local zones = {}
-	if okWL and type(WorldLayout) == "table" and WorldLayout.Facilities then
-		local okF, list = pcall(WorldLayout.Facilities, count)
-		if okF and type(list) == "table" then
-			for _, z in ipairs(list) do
-				if z.Id == "MusicStage" or z.Id == "MusicCrowd" then
-					table.insert(zones, z)
-				end
+-- distance (XZ) au plus proche obstacle fixe (hors bordures), négative dedans
+local function clearance(s: any, pos: Vector3): (number, number, string?)
+	local key = math.floor(pos.X / CELL) * 100003 + math.floor(pos.Z / CELL)
+	local best, kind, src = math.huge, 0, nil
+	for _, idx in ipairs(s.Grid[key] or {}) do
+		local r: Rect = s.Rects[idx]
+		if r.Kind ~= 2 then
+			local rx, rz = pos.X - r.CX, pos.Z - r.CZ
+			local lx = math.abs(rx * r.AX + rz * r.AZ) - r.HX
+			local lz = math.abs(-rx * r.AZ + rz * r.AX) - r.HZ
+			local d
+			if lx > 0 or lz > 0 then
+				d = math.sqrt(math.max(lx, 0) ^ 2 + math.max(lz, 0) ^ 2)
+			else
+				d = math.max(lx, lz)
+			end
+			if d < best then
+				best, kind, src = d, r.Kind, (r.Src or "zone") .. string.format(" %.1fx%.1f", r.HX * 2, r.HZ * 2)
 			end
 		end
 	end
-	local origin = (okWL and WorldLayout.Origin) and WorldLayout.Origin() or Vector3.zero
-	local N = 48
+	return best, kind, src
+end
+
+-- (v11) tour de la place : rayon choisi pour chaque direction afin de
+-- contourner les obstacles fixes (massifs de fleurs, manège, scène et
+-- public du concert…), puis lissé
+local function plazaRing(s: any, plaza: CFrame): { Vector3 }
+	local N = 72
+	local need = BODY_PAD + 0.9
 	local radii = table.create(N, 26)
 	for i = 1, N do
 		local ang = (i - 1) / N * math.pi * 2
-		for r = 26, 60, 1 do
+		local r = 26
+		while r <= 62 do
 			local p = plaza.Position + Vector3.new(math.sin(ang) * r, 0, math.cos(ang) * r)
-			local inside = false
-			for _, z in ipairs(zones) do
-				if WorldLayout.InZone(z, p.X - origin.X, p.Z - origin.Z, 3.5) then
-					inside = true
-				end
-			end
-			radii[i] = r
-			if not inside then
+			if clearance(s, p) > need then
 				break
 			end
+			r += 0.5
 		end
+		radii[i] = math.min(r, 62)
 	end
-	-- (lissage : on s'écarte progressivement autour du détour)
+	-- (lissage : on s'écarte progressivement autour d'un détour)
 	local smooth = table.create(N, 26)
 	for i = 1, N do
 		local best = radii[i]
-		for k = -3, 3 do
+		for k = -4, 4 do
 			local j = (i - 1 + k) % N + 1
-			best = math.max(best, radii[j] - math.abs(k) * 4)
+			best = math.max(best, radii[j] - math.abs(k) * 2.6)
 		end
 		smooth[i] = best
 	end
@@ -1259,17 +1291,8 @@ local function load(s: any): boolean
 		end)
 	end
 	s.Zones = {}
-	-- le petit tour de la place (autour de la fontaine, en évitant le concert)
 	local plaza = town:GetAttribute("PlazaCF")
-	if typeof(plaza) == "CFrame" then
-		local ok, ring = pcall(plazaRing, s, plaza, count)
-		if ok then
-			local path = makePath("PlazaRing", ring, true)
-			if path then
-				table.insert(paths, path)
-			end
-		end
-	end
+	s.PlazaC = if typeof(plaza) == "CFrame" then plaza.Position else nil
 	s.Paths = paths
 	s.Anchors = anchors
 	s.Benches = benches
@@ -1278,6 +1301,19 @@ local function load(s: any): boolean
 	if not okO then
 		warn("[TownPeople] obstacles : " .. tostring(errO))
 		s.Rects, s.Grid, s.Stuck, s.Computed = {}, {}, 0, 0
+	end
+	-- le petit tour de la place (autour de la fontaine, en contournant
+	-- massifs, manège et concert)
+	if typeof(plaza) == "CFrame" then
+		local ok, ring = pcall(plazaRing, s, plaza)
+		if ok then
+			local path = makePath("PlazaRing", ring, true)
+			if path then
+				table.insert(paths, path)
+			end
+		else
+			warn("[TownPeople] tour de la place : " .. tostring(ring))
+		end
 	end
 	populate(s)
 	-- les personnes immobiles (assises, qui discutent, marchands) sont aussi
@@ -1529,26 +1565,7 @@ function TownPeople.Probe(pos: Vector3): (number, number, string?)
 	if not s or not s.Grid then
 		return math.huge, 0, nil
 	end
-	local key = math.floor(pos.X / CELL) * 100003 + math.floor(pos.Z / CELL)
-	local best, kind, src = math.huge, 0, nil
-	for _, idx in ipairs(s.Grid[key] or {}) do
-		local r: Rect = s.Rects[idx]
-		if r.Kind ~= 2 then
-			local rx, rz = pos.X - r.CX, pos.Z - r.CZ
-			local lx = math.abs(rx * r.AX + rz * r.AZ) - r.HX
-			local lz = math.abs(-rx * r.AZ + rz * r.AX) - r.HZ
-			local d
-			if lx > 0 or lz > 0 then
-				d = math.sqrt(math.max(lx, 0) ^ 2 + math.max(lz, 0) ^ 2)
-			else
-				d = math.max(lx, lz)
-			end
-			if d < best then
-				best, kind, src = d, r.Kind, (r.Src or "zone") .. string.format(" %.1fx%.1f", r.HX * 2, r.HZ * 2)
-			end
-		end
-	end
-	return best, kind, src
+	return clearance(s, pos)
 end
 
 function TownPeople.Debug(): any

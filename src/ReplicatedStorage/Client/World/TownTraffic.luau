@@ -1503,7 +1503,9 @@ local function junctionBlocked(v: Vehicle): boolean
 	local window = simClock + math.max(2.5, clear)
 	for _, e in ipairs(nodeApp[P.Node] or {}) do
 		local o = e.V
-		if o ~= v and conf[e.P.Id] and o.JReady and o.JArrive < window and hasPriority(o, v) then
+		-- (un arrivant arrêté pour une autre raison — arrêt de bus, train, file —
+		-- n'est pas un prétendant : seul compte celui qui roule ou qui attend le carrefour)
+		if o ~= v and conf[e.P.Id] and o.JReady and (o.Speed > 1 or o.Why == "junction") and o.JArrive < window and hasPriority(o, v) then
 			v.BlockBy = o
 			return true
 		end
@@ -1558,13 +1560,16 @@ local function stepTraffic(dt: number, camPos: Vector3?)
 			target = math.min(target, math.sqrt(14 * math.max(0, gap - 3)))
 		end
 		local excused = false
-		if target < 0.5 then
+		local leaderBound = target < 0.5
+		local leaderExcused = false
+		if leaderBound then
 			why = "leader"
 			-- (file d'attente derrière un arrêt justifié : justifiée aussi)
 			local lv = v.LeadV
 			if lv and lv.Excused and gap == v.Lead then
-				excused = true
+				leaderExcused = true
 			end
+			excused = leaderExcused
 		end
 		-- (v11) lignes d'arrêt : carrefour, passage à niveau, passage piéton
 		local stopAt = math.huge
@@ -1634,6 +1639,11 @@ local function stepTraffic(dt: number, camPos: Vector3?)
 					end
 				end
 			end
+		end
+		-- (le véhicule devant est plus près que la ligne : c'est lui qui nous arrête)
+		if leaderBound and gap - 5 <= stopAt then
+			why = "leader"
+			excused = leaderExcused
 		end
 		local lineUrgent = false
 		if stopAt < math.huge then

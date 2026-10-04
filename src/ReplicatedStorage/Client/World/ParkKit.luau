@@ -262,6 +262,92 @@ function ParkKit.Lamp(m: Instance, F: CFrame, h: number?, color: Color3?)
 end
 
 ----------------------------------------------------------------------
+-- ACTEURS : fn(t, dt) appelée à chaque image quand la caméra est proche
+-- (< ANIM_R x Graphismes > Détail ; une image sur deux au-delà de HALF_R),
+-- avec un BUDGET de temps par image et un tour de rôle (personne n'est
+-- jamais oublié, même avec beaucoup de scènes). Retirés tout seuls quand
+-- leur modèle quitte le monde (flux). Une seule connexion Heartbeat.
+----------------------------------------------------------------------
+
+ParkKit.ANIM_R = 150
+local HALF_R = 70
+local BUDGET = 0.003 -- (s) par image
+type Actor = { Model: Instance, Fn: (t: number, dt: number) -> (), Phase: number, Pos: Vector3, Last: number }
+local actors: { Actor } = {}
+local cursor = 0
+local frameNo = 0
+local conn: RBXScriptConnection? = nil
+
+local okGQ, GraphicsQuality = pcall(function()
+	return require(game:GetService("ReplicatedStorage").Shared.GraphicsQuality) :: any
+end)
+local function detailScale(): number
+	if okGQ and type(GraphicsQuality) == "table" and type(GraphicsQuality.DetailScale) == "function" then
+		local ok, v = pcall(GraphicsQuality.DetailScale)
+		if ok and type(v) == "number" then
+			return v
+		end
+	end
+	return 1
+end
+
+function ParkKit.Step(dt: number)
+	local n = #actors
+	if n == 0 then
+		return
+	end
+	frameNo += 1
+	local camera = workspace.CurrentCamera
+	local eye = camera and camera.CFrame.Position
+	local now = os.clock()
+	local r = ParkKit.ANIM_R * detailScale()
+	-- (nettoyage des acteurs dont le modèle a quitté le monde)
+	for i = n, 1, -1 do
+		if not actors[i].Model.Parent then
+			table.remove(actors, i)
+		end
+	end
+	n = #actors
+	local start = os.clock()
+	for k = 1, n do
+		if os.clock() - start > BUDGET then
+			break
+		end
+		cursor = cursor % n + 1
+		local a = actors[cursor]
+		local dist = eye and (a.Pos - eye).Magnitude or 0
+		if dist < r and (dist < HALF_R or (frameNo + cursor) % 2 == 0) then
+			local step = a.Last > 0 and math.min(0.25, now - a.Last) or dt
+			a.Last = now
+			local ok = pcall(a.Fn, now + a.Phase, step)
+			if not ok then
+				a.Model = Instance.new("Folder") -- (désactivé : retiré au prochain tour)
+			end
+		end
+		local _ = k
+	end
+end
+
+function ParkKit.Actor(model: Instance?, pos: Vector3, fn: (t: number, dt: number) -> (), phase: number?)
+	if not model then
+		return
+	end
+	table.insert(actors, { Model = model, Fn = fn, Phase = phase or 0, Pos = pos, Last = 0 })
+	if not conn then
+		local RunService = game:GetService("RunService")
+		if RunService:IsClient() then
+			conn = RunService.Heartbeat:Connect(function(dt: number)
+				ParkKit.Step(dt)
+			end)
+		end
+	end
+end
+
+function ParkKit.ActorCount(): number
+	return #actors
+end
+
+----------------------------------------------------------------------
 -- PNJ (NPCModels, chargé paresseusement) et animations propres aux parcs
 ----------------------------------------------------------------------
 

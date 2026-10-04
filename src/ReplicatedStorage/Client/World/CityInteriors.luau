@@ -27,6 +27,7 @@
 	  CityInteriors.Info(kind) -> { Emoji, Name, Sign: Color3, Wall: Color3 }
 	  CityInteriors.Shell(m, F, w, d, h, kind, opts?)   sol, murs latéraux /
 	      du fond et plafond (solides) ; opts.Floor = false : pas de dalle
+	  CityInteriors.Lamps(m, F, w, d, h, kind)        suspensions seules
 	  CityInteriors.Furnish(m, F, w, d, h, kind, seed, opts?) -> nombre de PNJ
 	      opts = { DoorX = x de la porte (allée libre), NoNpc = bool,
 	               MaxNpc = n }
@@ -154,7 +155,13 @@ function CityInteriors.Shell(m: Instance, F: CFrame, w: number, d: number, h: nu
 	-- plafond + plinthes
 	Box(m, "InCeiling", F, -hw + 0.02, hw - 0.02, h - 0.3, h - 0.04, 0.02, d - 0.02, rgb(246, 244, 240), M.SmoothPlastic)
 	Box(m, "InSkirting", F, -hw + 0.4, hw - 0.4, 0, 0.45, d - t - 0.1, d - t - 0.02, info.Wall:Lerp(INK, 0.35), M.Wood)
-	-- suspensions (verre "NightGlow" : allumé la nuit)
+	CityInteriors.Lamps(m, F, w, d, h, kind)
+end
+
+-- suspensions (verre "NightGlow" : allumé la nuit) sous un plafond à h
+function CityInteriors.Lamps(m: Instance, F: CFrame, w: number, d: number, h: number, kind: string)
+	local info = CityInteriors.Info(kind)
+	local hw = w / 2
 	local n = math.max(1, math.floor(w / 9))
 	for i = 1, n do
 		local x = -hw + (i - 0.5) * w / n
