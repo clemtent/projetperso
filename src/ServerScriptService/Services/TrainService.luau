@@ -62,6 +62,8 @@ TrainService.HIT_RATE = 0.1 -- (s) piétons sur la voie
 TrainService.HEIST_RATE = 0.5 -- (s) horaire du braquage
 TrainService.BOARD_RANGE = 14 -- (studs) d'une porte : monter
 TrainService.SIT_RANGE = 10 -- (studs) d'une place : s'asseoir (depuis l'intérieur)
+TrainService.START_DELAY = 10 -- (s) après l'arrêt du convoi : départ du casse
+TrainService.START_MIN_LEFT = 75 -- (s) plus de départ s'il reste moins que ça avant le départ du convoi
 
 type SeatRec = {
 	Seat: Seat,
@@ -82,7 +84,6 @@ local connections: { RBXScriptConnection } = {}
 local plotCount = 8
 local heistKit: any = nil
 local heist: any = nil -- { Cycle, Handle, Station, Start, End, Started, Grabbed, Phase }
-local lastStep = ""
 
 ----------------------------------------------------------------------
 -- Outils
@@ -479,6 +480,9 @@ local function vaultPoint(lx: number, ly: number, lz: number, t: number): Vector
 	return v3(x, y, z)
 end
 
+-- Ordre des étapes (HeistKit annonce le DÉBUT de chaque étape : "Step" { Index, Id })
+local STEP_ORDER = { "crowbar", "hack", "drill", "grab", "escape" }
+
 local function heistEvent(_h: any, kind: any, payload: any)
 	if not heist then
 		return
@@ -487,28 +491,29 @@ local function heistEvent(_h: any, kind: any, payload: any)
 		heist.Phase = "Running"
 		setAttr("HeistPhase", "Running")
 	elseif kind == "Step" then
-		local id = type(payload) == "table" and (payload.Id or payload.Step or payload.Done) or payload
-		if type(id) == "string" then
-			lastStep = id
-			setAttr("VaultStep", id)
-			if id == "grab" then
+		-- début de l'étape k = l'étape k - 1 est réussie (volet, boîtier, coffre, sacs)
+		local id = type(payload) == "table" and payload.Id or nil
+		local k = if type(id) == "string" then table.find(STEP_ORDER, id) else nil
+		if k then
+			local done = STEP_ORDER[k - 1] or ""
+			setAttr("VaultStep", done)
+			if id == "escape" then
 				heist.Grabbed = true
+				heist.Phase = "Escape"
+				setAttr("HeistPhase", "Escape")
 			end
 		end
 	elseif kind == "Alarm" then
 		setAttr("Alarm", true)
 	elseif kind == "Bag" then
 		heist.Grabbed = true
-		if lastStep ~= "grab" and lastStep ~= "drill" then
-			setAttr("VaultStep", "drill")
-		end
-	elseif kind == "Delivered" then
-		heist.Phase = "Escape"
-		setAttr("HeistPhase", "Escape")
 	elseif kind == "Finished" then
 		heist.Phase = "Done"
 		setAttr("HeistPhase", "Done")
 		setAttr("Alarm", false)
+		if type(payload) == "table" and payload.Success then
+			setAttr("VaultStep", "grab")
+		end
 	end
 end
 
@@ -540,14 +545,13 @@ local function openHeist(info: any)
 			Position = vaultPoint(V.Door.X - 1.5, fy + 3, V.Door.Z, at) },
 		{ Id = "hack", Kind = "Hack", Label = "Hack the security box", Radius = 9,
 			Position = vaultPoint(V.Panel.X - 1.5, fy + 3, V.Panel.Z, at) },
-		{ Id = "drill", Kind = "Drill", Label = "Drill the safe", Radius = 10, Seconds = 20,
+		{ Id = "drill", Kind = "Drill", Label = "Drill the safe", Radius = 10, Seconds = 20, Alarm = true,
 			Position = vaultPoint(V.Safe.X, fy + 3, V.Safe.Z, at) },
 		{ Id = "grab", Kind = "Grab", Label = "Fill the bags with diamonds", Radius = 7, Seconds = 1.5, Spots = grabSpots },
 		{ Id = "escape", Kind = "Escape", Label = "Bring the loot to the hideout", Radius = 14,
 			Drops = { v3(hide.X, WorldLayout.GROUND_Y + 3, hide.Z) } },
 	}
-	heist = { Cycle = info.Cycle, Station = info.Station, Start = info.Start, End = info.End, Started = false, Grabbed = false, Phase = "Announce", Handle = nil }
-	lastStep = ""
+	heist = { Cycle = info.Cycle, Station = info.Station, Start = info.Start, End = info.End, Started = false, Arrived = false, Grabbed = false, Phase = "Announce", Handle = nil }
 	setAttr("HeistCycle", info.Cycle)
 	setAttr("HeistStation", info.Station)
 	setAttr("HeistPhase", "Announce")
@@ -557,7 +561,11 @@ local function openHeist(info: any)
 		local ok, h = pcall(heistKit.Create, {
 			Kind = "Train",
 			Name = "Diamond convoy",
+			Icon = "🚂",
 			Lobby = { Position = lobby, Radius = 22 },
+			-- (le casse démarre quand le convoi est à quai : TrainService, pas le chef)
+			AutoStart = false,
+			ManualStart = false,
 			Duration = TrainLine.HOLD + 150,
 			MaxCrew = 4,
 			Steps = stepsDef,
@@ -588,29 +596,35 @@ local function stepHeist()
 		return
 	end
 	local h = heist.Handle
-	if not heist.Started and t >= heist.Start then
-		heist.Started = true
+	-- convoi à quai : on prévient tout le monde
+	if not heist.Arrived and t >= heist.Start then
+		heist.Arrived = true
 		heist.Phase = "Lobby"
-		if h then
-			local ok, err = pcall(function()
-				h:Start()
-			end)
-			if not ok then
-				warn("[TrainService] heist:Start : " .. tostring(err))
-			end
-		end
+		setAttr("HeistPhase", "Lobby")
 		fireTown("Heist", { Cycle = heist.Cycle, Station = heist.Station, Start = heist.Start, End = heist.End, Phase = "Hold" })
 	end
-	-- le convoi repart : sans sacs remplis, le casse est raté
-	if heist.Started and t >= heist.End and not heist.Grabbed and heist.Phase ~= "Cancelled" and heist.Phase ~= "Done" then
+	-- départ du casse : START_DELAY s après l'arrêt (le temps de monter sur le quai),
+	-- puis dès qu'une équipe est là, tant qu'il reste assez de temps
+	if h and not heist.Started and t >= heist.Start + TrainService.START_DELAY and t < heist.End - TrainService.START_MIN_LEFT then
+		local okS, started = pcall(function()
+			return h.State == "Lobby" and (h.CrewCount or 0) >= 1 and h:Start()
+		end)
+		if okS and started then
+			heist.Started = true
+		elseif not okS then
+			warn("[TrainService] heist:Start : " .. tostring(started))
+		end
+	end
+	-- le convoi repart : sans sacs remplis (étape "escape" pas commencée), le casse est raté
+	if t >= heist.End and not heist.Grabbed and heist.Phase ~= "Cancelled" and heist.Phase ~= "Done" then
 		heist.Phase = "Cancelled"
 		setAttr("HeistPhase", "Cancelled")
 		setAttr("Alarm", false)
 		if h then
 			pcall(function()
-				local state = h.State
-				if state ~= "Done" and state ~= "Escape" then
-					h:Cancel("The convoy left the station!")
+				if h.State == "Lobby" or h.State == "Running" then
+					local first = h.Order and h.Order[1]
+					h:Cancel(if first then T(first, "The convoy left the station!") else "The convoy left the station!")
 				end
 			end)
 		end

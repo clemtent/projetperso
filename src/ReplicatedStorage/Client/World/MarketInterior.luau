@@ -1406,13 +1406,15 @@ end
 -- Niveau 1 : dehors (parking, chariots, camion, vitrines, écrans)
 ----------------------------------------------------------------------
 
-local CAR_KINDS = { "CityCar", "Hatchback", "SUV", "BubbleCar", "Van", "Hatchback", "Pickup", "CityCar", "Hatchback", "SUV" }
+local CAR_KINDS = { "CityCar", "Hatchback", "SUV", "BubbleCar", "CityCar", "Hatchback", "SUV", "CityCar", "Hatchback", "SUV" }
 local CAR_COLORS = {
 	rgb(255, 150, 190), rgb(130, 200, 255), rgb(255, 236, 150), rgb(170, 230, 190), rgb(250, 250, 250),
 	rgb(236, 72, 90), rgb(200, 170, 250), rgb(60, 64, 80), rgb(236, 96, 110), rgb(96, 170, 120),
 }
 local LOT_Y = -0.5
-local STALLS, STALL_W = 15, 6.4 -- places par rangée (6,4 de large : même les SUV y tiennent)
+-- (v11, CARS11) voitures ×1,3 (CarModels.SCALE : 6,6 à 7,5 de large) : 11 places
+-- de 8,7 au lieu de 15 de 6,4 (même largeur totale de 96 studs)
+local STALLS, STALL_W = 11, 96 / 11
 local ROW_A = { -46, -35.5 }
 local ROW_B = { -28, -17.5 }
 
@@ -1627,7 +1629,8 @@ local function outsideJobs(m: Market, parent: Instance): { () -> () }
 		end
 	end)
 	-- voitures garées (rangée A : nez vers la route ; rangée B : nez vers le magasin)
-	local spots = { { "A", 3 }, { "A", 9 }, { "A", 13 }, { "B", 2 }, { "B", 6 }, { "B", 12 } }
+	-- (v11 : places libres sous les abris à chariots ; voitures ≤ 16,6 de long)
+	local spots = { { "A", 2 }, { "A", 5 }, { "A", 8 }, { "B", 4 }, { "B", 7 }, { "B", 10 } }
 	for index, spot in ipairs(spots) do
 		table.insert(jobs, function()
 			local cm = sharedModule("CarModels")
@@ -1694,7 +1697,9 @@ local function outsideJobs(m: Market, parent: Instance): { () -> () }
 			return
 		end
 		local B = cf * CFrame.new(0, 0, m.Size.Z + 2) * CFrame.Angles(0, math.pi, 0)
-		local ok, model = pcall(cm.Build, "Van", rgb(250, 250, 252), { Detail = "Mid", Scale = Vector3.new(1.1, 1.15, 1.2) })
+		-- (v11 : même taille qu'avant malgré CarModels.SCALE ×1,3 — le quai n'a pas bougé)
+		local k = tonumber(cm.SCALE) or 1
+		local ok, model = pcall(cm.Build, "Van", rgb(250, 250, 252), { Detail = "Mid", Scale = Vector3.new(1.1, 1.15, 1.2) / k })
 		if ok and typeof(model) == "Instance" and model:IsA("Model") then
 			model:PivotTo(B * CFrame.new(14, -0.6, -12.15)) -- (v9.9) 0,15 de plus : l'avant ne touche plus le quai
 			model.Parent = parent

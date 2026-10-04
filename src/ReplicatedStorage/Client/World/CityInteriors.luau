@@ -286,7 +286,7 @@ end
 ----------------------------------------------------------------------
 
 local function npc(m: Instance, style: string, seed: number, cf: CFrame, anim: string, prop: string?): Model?
-	local model = CityKit.Npc(m, style, seed, cf, prop)
+	local model = CityKit.Npc(m, style, seed, cf, prop, false, true)
 	if model then
 		if anim == "sit" then
 			pcall(function()

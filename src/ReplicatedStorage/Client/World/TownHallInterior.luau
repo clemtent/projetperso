@@ -156,7 +156,7 @@ local function wallWithHoles(m: Instance, name: string, F: CFrame, x0: number, x
 end
 
 local function npc(m: Instance, style: string, seed: number, cf: CFrame, anim: string, prop: string?, sitH: number?): Model?
-	local model = CityKit.Npc(m, style, seed, cf, prop)
+	local model = CityKit.Npc(m, style, seed, cf, prop, false, true)
 	if model then
 		stats.Npcs += 1
 		if sitH then
@@ -198,21 +198,16 @@ local function statue(m: Instance, P: CFrame, seed: number, title: string)
 	Box(m, "StatuePlinthCap", P, -1.8, 1.8, 3.4, 3.7, -1.8, 1.8, MARBLE, M.Marble)
 	local plate = Box(m, "StatuePlate", P, -1.1, 1.1, 1.6, 2.6, -1.66, -1.6, GOLD, M.Metal)
 	CityKit.Text(plate, Enum.NormalId.Front, title, INK, GOLD, Enum.Font.Garamond, 30, 30)
-	local fig = CityKit.Npc(m, seed % 2 == 0 and "elder" or "salesperson", seed, P * CFrame.new(0, 3.7, 0), "none")
-	if fig then
-		CityKit.Animate(fig, "wave", 0.6)
-		for _, d in ipairs(fig:GetDescendants()) do
-			if d:IsA("BasePart") then
-				d.Color = rgb(226, 222, 214)
-				d.Material = M.Marble
-			elseif d:IsA("Decal") or d:IsA("SurfaceGui") then
-				d:Destroy()
-			end
-		end
-		pcall(function()
-			fig:ScaleTo(1.25)
-		end)
-	end
+	-- figure en marbre stylisée (quelques pièces : budget), bras levé
+	local mar = rgb(226, 222, 214)
+	local T = P * CFrame.new(0, 3.7, 0) * CFrame.Angles(0, (seed % 2 == 0) and 0.3 or -0.3, 0)
+	CityKit.Egg(m, "StatueRobe", T * CFrame.new(0, 2.2, 0), Vector3.new(2.4, 4.4, 1.8), mar, M.Marble)
+	CityKit.Egg(m, "StatueChest", T * CFrame.new(0, 4.6, 0), Vector3.new(2.2, 2.0, 1.4), mar, M.Marble)
+	CityKit.Ball(m, "StatueHead", (T * CFrame.new(0, 6.3, 0)).Position, 1.5, mar, M.Marble)
+	CityKit.Rod(m, "StatueArm", (T * CFrame.new(0.9, 5.0, 0)).Position, (T * CFrame.new(1.8, 7.4, -0.4)).Position, 0.5, mar, M.Marble)
+	CityKit.Rod(m, "StatueArm", (T * CFrame.new(-0.9, 5.0, 0)).Position, (T * CFrame.new(-1.3, 3.2, -0.3)).Position, 0.5, mar, M.Marble)
+	CityKit.Egg(m, "StatueBook", T * CFrame.new(-1.35, 3.0, -0.45), Vector3.new(0.9, 1.1, 0.3), mar, M.Marble)
+	local _ = seed
 end
 
 local function lampGlobe(m: Instance, B: CFrame, x: number, y: number, z: number, size: number)
@@ -603,7 +598,6 @@ local function jobsFor(st: State, m: Model): { () -> () }
 			end
 		end
 		npc(m, "elder", 921, B * CFrame.new(-25.8, FLOOR, 4) * CFrame.Angles(0, math.pi, 0), "sit", nil, SEAT_H)
-		npc(m, "pedestrian", 922, B * CFrame.new(-23.2, FLOOR, 7.4) * CFrame.Angles(0, math.pi, 0), "sit", "phone", SEAT_H)
 		local screen = sign(m, B * CFrame.new(0, 0, PARTITION - 0.2), -28, -21, FLOOR + 6.4, FLOOR + 9.2, 0, "🎟️ N° 42  →  " .. Locale.T("Desk") .. " 2", rgb(120, 255, 160), INK)
 		CityKit.Glow(screen)
 		-- distributeur de tickets près de l'entrée
@@ -628,9 +622,7 @@ local function jobsFor(st: State, m: Model): { () -> () }
 		-- deux chaises de visiteurs + un visiteur assis
 		for k, x in ipairs({ -1.6, 1.6 }) do
 			chair(m, O * CFrame.new(x, 0, -3.0) * CFrame.Angles(0, math.pi, 0), rgb(150, 110, 70))
-			if k == 1 then
-				npc(m, "shopper", 932, O * CFrame.new(x, 0, -3.0) * CFrame.Angles(0, math.pi, 0), "sit", "none", SEAT_H)
-			end
+			local _ = k
 		end
 		-- drapeaux, bibliothèque, portrait
 		for k, x in ipairs({ -4.4, 4.4 }) do
@@ -666,9 +658,10 @@ local function jobsFor(st: State, m: Model): { () -> () }
 			local x = 17.9 + k * 5
 			Box(m, "GuichetPost", B, x + 2.4, x + 2.6, FLOOR + COUNTER_H, FLOOR + 8.4, zc + 0.75, zc + 0.9, GOLD, M.Metal)
 			sign(m, B * CFrame.new(0, 0, zc + 0.7), x - 2.1, x + 2.1, FLOOR + 8.6, FLOOR + 9.6, 0, (k + 1) .. " · " .. Locale.T(names[k + 1]), WHITE, rgb(30, 60, 110))
-			npc(m, ({ "cashier", "salesperson", "worker" })[k + 1], 940 + k, B * CFrame.new(x, FLOOR, zc + 3.0), k == 1 and "type" or "scan")
+			if k ~= 1 then
+				npc(m, ({ "cashier", "salesperson", "worker" })[k + 1], 940 + k, B * CFrame.new(x, FLOOR, zc + 3.0), k == 2 and "type" or "scan")
+			end
 		end
-		npc(m, "shopper", 944, B * CFrame.new(22.9, FLOOR, zc - 2.0) * CFrame.Angles(0, math.pi, 0), "talk", "bag")
 		-- SALLE DU CONSEIL : tribune contre le mur est, hémicycle de pupitres
 		local cx, cz = xi - 1.5, (PARTITION + zb0) / 2 + 0.2
 		local T = B * CFrame.new(cx, FLOOR, cz) * CFrame.Angles(0, math.pi / 2, 0)
@@ -686,7 +679,7 @@ local function jobsFor(st: State, m: Model): { () -> () }
 				local P = T * CFrame.Angles(0, a, 0) * CFrame.new(0, 0, -r)
 				Box(m, "CouncilDesk", P, -1.2, 1.2, 0, TABLE_H, 0.0, 0.8, WOOD, M.Wood, true)
 				chair(m, P * CFrame.new(0, 0, -1.4) * CFrame.Angles(0, math.pi, 0), rgb(30, 60, 110))
-				if row == 0 and (k == -2 or k == 2) then
+				if row == 0 and k == 2 then
 					npc(m, ({ "pedestrian", "salesperson", "elder", "shopper" })[(k + row) % 4 + 1], 960 + row * 5 + k, P * CFrame.new(0, 0, -1.4) * CFrame.Angles(0, math.pi, 0), "sit", "none", SEAT_H)
 				end
 			end

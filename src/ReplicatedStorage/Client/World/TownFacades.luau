@@ -1029,7 +1029,7 @@ local function buildInterior(b: Building)
 	m.Parent = folder
 	b.Interior = m
 	local before = count
-	local ok, err = pcall(CityInteriors.Furnish, m, room.F, room.W, room.D, room.H, b.Kind or "Grocery", b.Seed, { DoorX = b.DoorX or 0, MaxNpc = 2 })
+	local ok, err = pcall(CityInteriors.Furnish, m, room.F, room.W, room.D, room.H, b.Kind or "Grocery", b.Seed, { DoorX = b.DoorX or 0, MaxNpc = 1 })
 	if not ok then
 		warn("[TownFacades] intérieur : " .. tostring(err))
 	end

@@ -235,12 +235,18 @@ end
 
 -- Personnage posé (pivot = entre les pieds, regard -Z) ; `solid` : capsule
 -- de collision locale (NPCModels) ; nil si NPCModels est absent
-function CityKit.Npc(m: Instance, style: string, seed: number, cf: CFrame, prop: string?, solid: boolean?): Model?
+-- (v11) `lite` : personnage d'arrière-plan (intérieurs) — option Lite de
+-- NPCModels (moins de pièces) si elle existe, ignorée sinon
+function CityKit.Npc(m: Instance, style: string, seed: number, cf: CFrame, prop: string?, solid: boolean?, lite: boolean?): Model?
 	if not okNpc or type(NPCModels) ~= "table" then
 		return nil
 	end
+	local opts: any = { Seed = seed, Prop = prop or "none", Solid = solid == true }
+	if lite then
+		opts.Lite = true
+	end
 	local ok, model = pcall(function()
-		return NPCModels.Build(style, { Seed = seed, Prop = prop or "none", Solid = solid == true })
+		return NPCModels.Build(style, opts)
 	end)
 	if not ok or not model then
 		return nil

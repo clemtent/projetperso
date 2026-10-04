@@ -29,8 +29,10 @@
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
 
 local CarModels = require(ReplicatedStorage.Shared.CarModels)
+local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
 local VehicleModels = require(ReplicatedStorage.Shared.VehicleModels)
 local TownKit = require(script.Parent.TownKit)
 
@@ -41,12 +43,14 @@ local C = TownKit.C
 local part = TownKit.Part
 local hash = TownKit.Hash
 
-TownVehicles.BAY_LENGTH = 13
-TownVehicles.BAY_DEPTH = 6.2
-TownVehicles.CURB_GAP = 0.5
+-- (v11, CARS11) voitures ×1,3 (CarModels.SCALE) : places de 17,5 x 7,8
+TownVehicles.BAY_LENGTH = 17.5
+TownVehicles.BAY_DEPTH = 7.8
+TownVehicles.CURB_GAP = 0.3
 
--- Modèles garés (≤ 13 studs : tiennent dans une place) et teintes réalistes
-TownVehicles.PARKED_KINDS = { "CityCar", "Hatchback", "SUV", "BubbleCar", "CityCar", "Hatchback", "Pickup", "SportsCar", "Van" }
+-- Modèles garés (≤ 16,6 de long, ≤ 7,5 de large : tiennent dans une place et
+-- laissent passer une voiture dans les rues de 16) et teintes réalistes
+TownVehicles.PARKED_KINDS = { "CityCar", "Hatchback", "SUV", "BubbleCar", "CityCar", "Hatchback", "BubbleCar", "CityCar", "SUV" }
 TownVehicles.PARKED_COLORS = {
 	Color3.fromRGB(246, 244, 240), -- blanc nacré
 	Color3.fromRGB(176, 182, 192), -- gris argent
@@ -81,8 +85,31 @@ end
 -- Places de stationnement marquées + voitures garées
 ----------------------------------------------------------------------
 
+-- (v11, CARS11) La rangée est-elle SUR une route de la circulation (avenues,
+-- boulevard, ceinture...) ? Une voiture garée y occuperait la voie : la
+-- circulation la traverserait. Les rues intérieures du centre-ville
+-- (arêtes "Downtown") n'ont pas de circulation : on y stationne.
+function TownVehicles.OnTrafficRoad(rowCF: CFrame): boolean
+	local town = workspace:FindFirstChild("DopamineTown")
+	local count = town and town:GetAttribute("PlotCount")
+	if type(count) ~= "number" then
+		count = WorldLayout.PlotCount(Players.MaxPlayers)
+	end
+	local p = (rowCF * CFrame.new(0, 0, -TownVehicles.BAY_DEPTH / 2)).Position - WorldLayout.Origin()
+	local ok, edge, _x, _y, _z, dist = pcall(WorldLayout.NearestRoad, count, p.X, p.Z, function(e: any): boolean
+		return e.Kind ~= "Downtown" and not e.Highway and not e.Ramp
+	end)
+	return ok and edge ~= nil and dist < (edge :: any).Width / 2 + 1
+end
+
 function TownVehicles.ParkingRow(parent: Instance, rowCF: CFrame, bays: number, seed: number, serverCars: number): Model
 	local model = TownKit.Model(parent, "Parking")
+	if TownVehicles.OnTrafficRoad(rowCF) then
+		-- (sur une voie de circulation : ni places ni voitures)
+		model:SetAttribute("Bays", 0)
+		model:SetAttribute("SkippedTraffic", true)
+		return model
+	end
 	local L, depth = TownVehicles.BAY_LENGTH, TownVehicles.BAY_DEPTH
 	local x0 = -bays * L / 2
 	-- séparateurs (même blanc / matière que les autres lignes : jamais de z-fighting)
