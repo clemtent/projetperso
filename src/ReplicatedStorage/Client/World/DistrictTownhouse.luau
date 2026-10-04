@@ -324,7 +324,7 @@ end
 
 local function buildBikes(m: Model, F: CFrame, seed: number)
 	local kiosk = Box(m, "BikeKiosk", F, -6.6, -5.4, 0, 5.6, -0.6, 0.6, rgb(60, 140, 200), M.SmoothPlastic, true)
-	Glow(Box(m, "BikeScreen", F, -6.64, -5.4, 3.4, 4.8, -0.4, 0.4, rgb(200, 236, 255), M.Glass))
+	Glow(Box(m, "BikeScreen", F, -6.64, -5.6, 3.4, 4.8, -0.4, 0.4, rgb(200, 236, 255), M.Glass))
 	Text(kiosk, Enum.NormalId.Front, "🚲", WHITE, nil, Enum.Font.GothamBlack, 60)
 	Box(m, "DockRail", F, -5, 6, 0, 0.3, -0.3, 0.3, rgb(90, 94, 100), M.Metal, true)
 	for i = 0, 4 do
