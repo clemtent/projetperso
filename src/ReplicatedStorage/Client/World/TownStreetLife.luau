@@ -1258,23 +1258,29 @@ local function nudgeSpot(spot: Spot)
 	if not okL or type(near) ~= "table" then
 		return
 	end
-	local function blocked(p: Vector3): boolean
+	-- pincement : un obstacle EN FACE (même abscisse le long du trottoir, à
+	-- moins de r + r' + 2,5 en travers) ; un voisin dans l'alignement ne gêne pas
+	local home = spot.Pos
+	local function blocked(cf: CFrame): boolean
 		for _, o in ipairs(near) do
 			local q: Vector3 = o[1]
-			local d = Vector3.new(q.X - p.X, 0, q.Z - p.Z).Magnitude
-			-- (soi-même : même position)
-			if d > 0.05 and d < r0 + o[2] + PASSAGE then
+			if Vector3.new(q.X - home.X, 0, q.Z - home.Z).Magnitude < 0.05 then
+				continue -- (soi-même)
+			end
+			local rel = cf:PointToObjectSpace(q)
+			local along, across = math.abs(rel.X), math.abs(rel.Z)
+			if along < r0 + o[2] + 0.3 and across < r0 + o[2] + PASSAGE then
 				return true
 			end
 		end
 		return false
 	end
-	if not blocked(spot.Pos) then
+	if not blocked(spot.CF) then
 		return
 	end
 	for _, dx in ipairs({ 1.5, -1.5, 3, -3, 4.5, -4.5 }) do
 		local cf = spot.CF * CFrame.new(dx, 0, 0)
-		if not blocked(cf.Position) then
+		if not blocked(cf) then
 			spot.CF = cf
 			spot.Pos = cf.Position
 			return
