@@ -1370,7 +1370,7 @@ local function buildLow(b: B, s: Spec, g: Geo, paint: Color3, roofColor: Color3,
 		if s.Rw - s.R1 > 0.1 then
 			wedge(b, "RearGlass", -gw, gw, s.Belt, s.Roof - 0.12, s.R1, s.Rw, false, GLASS, M.Glass)
 		else
-			box(b, "RearWall", -gw, gw, s.Belt, s.Roof - 0.12, s.R1 - 0.02, s.R1 + 0.1, paint)
+			box(b, "RearWall", -gw + 0.04, gw - 0.04, s.Belt, s.Roof - 0.12, s.R1 - 0.02, s.R1 + 0.1, paint)
 		end
 	end
 	-- phares, feux, calandre, plaque, rétroviseurs
@@ -1922,10 +1922,13 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 		end
 		local rValTop = g.sill + 0.5
 		for _, sx in ipairs({ -1, 1 }) do
-			local tx0, tx1 = sx * (if pickup then tfx - 0.6 elseif style == "Van" then s.W * 0.2 else tailIn), sx * (tfx - 0.04)
+			-- (v11 : ×1,3 -> bord extérieur du feu 0,06 et du cadre 0,03 en retrait
+			-- du flanc : aucune face confondue avec la caisse ni entre eux)
+			local tx0, tx1 = sx * (if pickup then tfx - 0.6 elseif style == "Van" then s.W * 0.2 else tailIn), sx * (tfx - 0.06)
 			local lo, hi = math.min(tx0, tx1), math.max(tx0, tx1)
 			if full then
-				box(b, "TailBezel", lo - 0.05, hi + 0.04, tailBot - 0.05, tailTop + 0.04, zB - 0.1, zB + 0.03, HOUSING)
+				local bx0, bx1 = tx0 - sx * 0.05, sx * (tfx - 0.03)
+				box(b, "TailBezel", math.min(bx0, bx1), math.max(bx0, bx1), tailBot - 0.05, tailTop + 0.04, zB - 0.1, zB + 0.03, HOUSING)
 			end
 			box(b, "Taillight", lo, hi, tailBot, tailTop, zB - 0.1, zB + 0.07, TAIL, M.SmoothPlastic)
 			if full then
@@ -1937,7 +1940,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 				end
 				local rv0, rv1 = if sx > 0 then lo + 0.07 else hi - 0.4, if sx > 0 then lo + 0.4 else hi - 0.07
 				box(b, "ReverseLight", rv0, rv1, tailBot + 0.06, tailBot + 0.22, zB + 0.03, zB + 0.11, REVERSE, M.SmoothPlastic)
-				local ind = box(b, "RearIndicator", if sx > 0 then hi - 0.38 else lo + 0.07, if sx > 0 then hi - 0.07 else lo + 0.38, tailBot + 0.06, tailBot + 0.22, zB + 0.03, zB + 0.11, AMBER)
+				local ind = box(b, "RearIndicator", if sx > 0 then hi - 0.38 else lo + 0.07, if sx > 0 then hi - 0.07 else lo + 0.38, tailBot + 0.06, tailBot + 0.22, zB + 0.03, zB + 0.13, AMBER)
 				ind:SetAttribute("Side", sx)
 				local wTop = math.min(tailTop, tfy - 0.04)
 				if T1 and not pickup and wTop - tailBot > 0.2 then
@@ -2144,7 +2147,8 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 				for _, z in ipairs(seams) do
 					local y0 = math.max(g.sill + 0.25, archY(z) + 0.05)
 					local S = sectionAt(st, z)
-					local x0, x1 = sx * (hw - 0.02), sx * (hw + 0.012)
+					-- (v11 : ×1,3 -> surfaces plus grandes : joint 0,025 au-dessus du flanc, jamais coplanaire)
+					local x0, x1 = sx * (hw - 0.02), sx * (hw + 0.025)
 					if S.fy - y0 > 0.1 then
 						box(b, "DoorSeam", math.min(x0, x1), math.max(x0, x1), y0, S.fy - 0.02, z - 0.022, z + 0.022, GAP)
 					end
@@ -2188,7 +2192,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			end
 			if style == "Van" then
 				-- coin salon du combi : banquette + petite table
-				box(b, "VanBench", -wc + 0.1, wc - 0.1, seatTop - 0.35, seatTop, s.R1 - 2.6, s.R1 - 1.3, seatCol2, M.Fabric)
+				box(b, "VanBench", -wc + 0.1, wc - 0.1, seatTop - 0.3, seatTop, s.R1 - 2.6, s.R1 - 1.3, seatCol2, M.Fabric)
 				slab(b, "VanBenchBack", 0, wc * 2 - 0.2, seatTop, s.R1 - 1.25, seatTop + 1.9, s.R1 - 0.95, 0.3, seatCol2, M.Fabric)
 				box(b, "VanTable", -1.0, 1.0, seatTop + 0.6, seatTop + 0.72, s.R1 - 4.4, s.R1 - 3.2, Color3.fromRGB(196, 160, 120), M.Wood)
 			end
