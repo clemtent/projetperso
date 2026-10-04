@@ -3757,6 +3757,20 @@ def rainbow_test():
     return rainbow_tests.rainbow_test(read, SHARED)
 
 
+def bank_test():
+    """Tests BANK11 (v11) : 💎 diamants, banque, casses (tests/bank_tests.py)."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import bank_tests
+    return bank_tests.bank_test(read, SHARED)
+
+
+def train_test():
+    """Tests TRAIN11 (v11) : 🚂 ligne de ceinture, horaire, passages à niveau (tests/train_tests.py)."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import train_tests
+    return train_tests.train_test(read, SHARED)
+
+
 def main():
     if not os.path.exists(LUAU):
         print("FAIL : Luau CLI introuvable (%s)" % LUAU)
@@ -3768,7 +3782,9 @@ def main():
                           + "\n" + desk_runner_test()
                           + "\n" + food_test()
                           + "\n" + race_test()
-                          + "\n" + rainbow_test())
+                          + "\n" + rainbow_test()
+                          + "\n" + bank_test()
+                          + "\n" + train_test())
     with tempfile.NamedTemporaryFile("w", suffix=".luau", delete=False, encoding="utf-8") as f:
         f.write(bundle)
         path = f.name

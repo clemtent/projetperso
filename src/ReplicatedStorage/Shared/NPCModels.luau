@@ -931,7 +931,7 @@ local function prop(ctx: Ctx, kind: string, seed: number)
 		local body = handProp(ctx, sx, "Phone", Vector3.new(0.27, 0.54, 0.03), 0.2, 0.03, 0.074, U0, B0, case, M.SmoothPlastic)
 		body.CastShadow = false
 		-- (Z du repère = U x B = +X : l'écran (côté N = -X, main droite) est la face Front)
-		local scr = handProp(ctx, sx, "PhoneScreen", Vector3.new(0.245, 0.51, 0.05), 0.2, 0.03, 0.104, U0, B0, rgb(10, 10, 14), M.SmoothPlastic)
+		local scr = handProp(ctx, sx, "PhoneScreen", Vector3.new(0.245, 0.51, 0.04), 0.2, 0.03, 0.114, U0, B0, rgb(10, 10, 14), M.SmoothPlastic)
 		phoneScreen(scr, sx > 0 and Enum.NormalId.Front or Enum.NormalId.Back, seed)
 	elseif kind == "coffee" then
 		-- gobelet tenu à pleine main (axe vers le pouce = vertical quand l'avant-bras est à plat)

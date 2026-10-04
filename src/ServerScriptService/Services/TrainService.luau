@@ -39,7 +39,7 @@
 	           ("leave") | ("sync")
 	  S -> C : ("Toast", texte) | ("Heist", { Cycle, Station, Start, End, Phase })
 	           ("Rider", { Train, Car, Seat } | false)
-	Attributs de Workspace > DopamineTrain : PlotCount, HeistCycle,
+	Attributs de Workspace > DopamineTrain : PlotCount, HeistKit (bool), HeistCycle,
 	  HeistStation, HeistPhase ("Announce" | "Lobby" | "Running" | "Escape" |
 	  "Done" | "Cancelled" | ""), VaultStep (dernière étape réussie : "" |
 	  "crowbar" | "hack" | "drill" | "grab"), Alarm (bool).
@@ -673,6 +673,8 @@ function TrainService:Start()
 	if not okSeats then
 		warn("[TrainService] sièges : " .. tostring(errSeats))
 	end
+	-- (les clients n'annoncent le convoi que si le braquage existe)
+	setAttr("HeistKit", heistKit ~= nil)
 	table.insert(connections, Net.Event("TrainEvent").OnServerEvent:Connect(function(player, kind, a, b, c)
 		local ok, err = pcall(onEvent, player, kind, a, b, c)
 		if not ok then

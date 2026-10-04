@@ -131,7 +131,7 @@ function TrainHud.Build(cb: any)
 	gui = screen
 
 	-- CARTE DE GARE (à gauche, au milieu de l'écran)
-	local card = frame(screen, "StationCard", UDim2.fromOffset(330, 236), UDim2.new(0, 14, 0.5, -30), PANEL, 0.08)
+	local card = frame(screen, "StationCard", UDim2.fromOffset(330, 236), UDim2.new(0, 14, 0.42, 0), PANEL, 0.08)
 	card.AnchorPoint = Vector2.new(0, 0.5)
 	card.Visible = false
 	corner(card, 14)

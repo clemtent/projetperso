@@ -177,7 +177,7 @@ local function frames(shop: any): Frames
 	}
 end
 
-function DealerShowroom.Slots(shop: any): { { CF: CFrame, Tag: CFrame } }
+function DealerShowroom.Slots(shop: any): { { CF: CFrame, Tag: CFrame, Radius: number } }
 	local list = {}
 	local B = shop.DoorCF
 	for index = 1, tonumber(shop.Model:GetAttribute("ShowroomSlots")) or 8 do
@@ -187,8 +187,11 @@ function DealerShowroom.Slots(shop: any): { { CF: CFrame, Tag: CFrame } }
 			-- pupitre côté allée centrale, devant la voiture
 			local p = B:PointToObjectSpace(cf.Position)
 			local toAisle = if p.X < 0 then 1 else -1
-			local tag = B * CFrame.new(p.X + toAisle * 6.8, 0, p.Z - 5.4) * CFrame.Angles(0, if toAisle > 0 then math.rad(-30) else math.rad(30), 0)
-			table.insert(list, { CF = cf, Tag = tag })
+			-- (v11, CARS11) voitures ×1,3 : le pupitre est posé AU-DELÀ de la plus
+			-- grande voiture tournée de 22° (demi-encombrement en x ≈ 7,2)
+			local tag = B * CFrame.new(p.X + toAisle * 8.6, 0, p.Z - 5.4) * CFrame.Angles(0, if toAisle > 0 then math.rad(-30) else math.rad(30), 0)
+			local radius = if podium and podium:IsA("BasePart") then math.max(podium.Size.Y, podium.Size.Z) / 2 else 6.5
+			table.insert(list, { CF = cf, Tag = tag, Radius = radius })
 		end
 	end
 	return list
@@ -420,10 +423,12 @@ function DealerShowroom.FrontJobs(shop: any, parent: Instance, ctx: any): { () -
 		table.insert(jobs, function()
 			local p = B:PointToObjectSpace(slot.CF.Position)
 			local center = B * CFrame.new(p.X, H - 0.45, p.Z)
-			ring(parent, "LightRing", center, 5.2, 10, 0.3, 0.14, RING, M.Neon)
-			ring(parent, "LightRingFrame", center * CFrame.new(0, 0.18, 0), 5.2, 10, 0.5, 0.2, GRAPHITE, M.Metal)
+			-- (v11) couronne et bord du podium à la taille du podium du serveur
+			local podR = tonumber(slot.Radius) or 6.5
+			ring(parent, "LightRing", center, podR * 0.8, 12, 0.3, 0.14, RING, M.Neon)
+			ring(parent, "LightRingFrame", center * CFrame.new(0, 0.18, 0), podR * 0.8, 12, 0.5, 0.2, GRAPHITE, M.Metal)
 			-- podium : bord chromé + plaque de nom côté allée
-			ring(parent, "PodiumTrim", slot.CF * CFrame.new(0, -0.17, 0), 6.55, 16, 0.12, 0.36, rgb(214, 218, 226), M.Metal)
+			ring(parent, "PodiumTrim", slot.CF * CFrame.new(0, -0.17, 0), podR + 0.05, 18, 0.12, 0.36, rgb(214, 218, 226), M.Metal)
 			local entry = entries[index]
 			if entry then
 				local model = buildCar(entry, "Mid", nil)

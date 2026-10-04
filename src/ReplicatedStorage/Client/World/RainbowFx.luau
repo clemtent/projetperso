@@ -168,9 +168,10 @@ local function opacityCurve(opacity: number, fadeFar: boolean, near: boolean): N
 	local t = 1 - opacity
 	if near then
 		-- jambe du pot : pleine jusqu'au sol (on la voit plonger dans le pot)
+		-- (plus légère tout en bas : on voit le pot dans la colonne de couleurs)
 		return NumberSequence.new({
-			NumberSequenceKeypoint.new(0, math.min(1, t + 0.04)),
-			NumberSequenceKeypoint.new(0.08, t),
+			NumberSequenceKeypoint.new(0, math.min(1, t + (1 - t) * 0.45)),
+			NumberSequenceKeypoint.new(0.05, t),
 			NumberSequenceKeypoint.new(1, t),
 		})
 	end

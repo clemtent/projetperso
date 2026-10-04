@@ -228,7 +228,9 @@ local function buildSeg(m: Model, F: CFrame, seed: number, spot: any)
 		elseif not d.NoRail then
 			-- (v11, CARS11) bretelles : lisse NON allongée aux joints en biais (dans
 			-- un virage serré, le bout allongé côté intérieur traversait la voie)
-			guardrail(m, F, edge - dir * 1.0, L, dir, top, s0, if p.Oneway then 0 else extra)
+			-- (et posée sur l'accotement, 0,6 au-delà du bord : les tronçons droits
+			-- d'une bretelle qui tourne ne pincent plus la voie)
+			guardrail(m, F, if p.Oneway then edge + dir * 0.6 else edge - dir * 1.0, L, dir, top, s0, if p.Oneway then 0 else extra)
 			delineators(m, F, edge - dir * 0.2, L, top, s0, dir)
 		end
 	end

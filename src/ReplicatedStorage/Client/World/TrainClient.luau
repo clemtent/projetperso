@@ -741,7 +741,8 @@ local function updateHud(t: number, p: Vector3?)
 	end
 	-- bandeau du convoi
 	local h = TrainLine.Heist(s.Count, t)
-	local hasKit = (serverFolder() ~= nil)
+	local sfK = serverFolder()
+	local hasKit = sfK ~= nil and sfK:GetAttribute("HeistKit") == true
 	if hasKit and t >= h.AnnounceAt and t < h.End then
 		local st = TrainLine.Stations(s.Count)[h.Station]
 		local dist = if p then math.floor(math.sqrt((st.X - p.X) ^ 2 + (st.Z - p.Z) ^ 2)) else 0
@@ -796,10 +797,9 @@ local function updateScreens(t: number)
 			local lines = {}
 			for ti in ipairs(TrainLine.Trains) do
 				local arrive, depart = TrainLine.NextStop(s.Count, t, ti, k)
-				local when = if arrive <= t then T("AT PLATFORM") .. " " .. mmss(depart - t) else mmss(arrive - t)
-				local name = string.upper(trainName(ti))
-				table.insert(lines, string.format("%-18s %s", string.sub(name, 1, 18), when))
-				table.insert(lines, "  → " .. stationName(k % 4 + 1))
+				local when = if arrive <= t then T("AT PLATFORM") .. " · " .. mmss(depart - t) else mmss(arrive - t)
+				table.insert(lines, (if ti == 1 then "🚂 " else "🚆 ") .. string.upper(trainName(ti)))
+				table.insert(lines, "   → " .. stationName(k % 4 + 1) .. "   " .. when)
 			end
 			local text = table.concat(lines, "\n")
 			for _, l in ipairs(rec.Boards) do

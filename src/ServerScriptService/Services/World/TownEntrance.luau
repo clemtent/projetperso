@@ -346,16 +346,15 @@ local function outside(folder: Instance, geo: TownKit.Geo, gcf: CFrame)
 	-- parking (côté gauche en arrivant de la ville)
 	local lot = gcf * CFrame.new(-31, 0, 26)
 	part(model, "Parking", Vector3.new(30, 0.7, 34), lot * CFrame.new(0, ROAD_Y - 0.35, 0), C.AsphaltDark, M.Asphalt, "solid")
-	for i = 0, 5 do
-		part(model, "Bay", Vector3.new(0.3, 0.1, 11), lot * CFrame.new(-15 + i * 6, ROAD_Y + 0.05, -9), C.Line, M.SmoothPlastic, "deco")
+	-- (v11, CARS11) voitures ×1,3 (jusqu'à 7,8 de large, 16,9 de long) : 3 places
+	-- de 9,5 x 17 au lieu de 5 de 6 x 11 (plus aucune voiture l'une dans l'autre)
+	for i = 0, 3 do
+		part(model, "Bay", Vector3.new(0.3, 0.1, 17), lot * CFrame.new(-14.25 + i * 9.5, ROAD_Y + 0.05, -7), C.Line, M.SmoothPlastic, "deco")
 	end
-	local colors = { Color3.fromRGB(130, 200, 255), Color3.fromRGB(255, 236, 150), Color3.fromRGB(250, 250, 250), Color3.fromRGB(200, 170, 250) }
-	for i, bay in ipairs({ 0, 1, 4 }) do
-		TownKit.Car(model, lot * CFrame.new(-12 + bay * 6, ROAD_Y, -9) * CFrame.Angles(0, math.pi, 0), colors[i], ({ "CityCar", "BubbleCar", "Hatchback" })[i], {}) -- (v9.6) CarModels
-	end
-	-- (v9.7, VEHICLES97) 2 places de plus occupées (voitures construites côté client)
-	TownKit.VehicleSpot(model, "Car", lot * CFrame.new(-12 + 2 * 6, ROAD_Y, -9) * CFrame.Angles(0, math.pi, 0), { CarId = "CityCar", Color = Color3.fromRGB(220, 44, 64), Stripe = true })
-	TownKit.VehicleSpot(model, "Car", lot * CFrame.new(-12 + 3 * 6, ROAD_Y, -9) * CFrame.Angles(0, math.pi, 0), { CarId = "BubbleCar", Color = Color3.fromRGB(128, 222, 190) })
+	TownKit.Car(model, lot * CFrame.new(-9.5, ROAD_Y, -7) * CFrame.Angles(0, math.pi, 0), Color3.fromRGB(130, 200, 255), "CityCar", {}) -- (v9.6) CarModels
+	TownKit.Car(model, lot * CFrame.new(9.5, ROAD_Y, -7) * CFrame.Angles(0, math.pi, 0), Color3.fromRGB(200, 170, 250), "Hatchback", {})
+	-- (v9.7, VEHICLES97) une place de plus occupée (voiture construite côté client)
+	TownKit.VehicleSpot(model, "Car", lot * CFrame.new(0, ROAD_Y, -7) * CFrame.Angles(0, math.pi, 0), { CarId = "BubbleCar", Color = Color3.fromRGB(128, 222, 190) })
 	TownKit.Lamp(model, (lot * CFrame.new(0, ROAD_Y, 6)).Position, 0, false, true)
 	geo.Reserve((loop * CFrame.new(0, 0, 0)).Position, 24)
 	-- (v9.8, CITY98) vie de la rue (client) : on attend le bus, lampadaires
