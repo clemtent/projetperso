@@ -1796,7 +1796,7 @@ function TownStreetLife.Debug(): any
 			end
 		end
 	end
-	return { Spots = s and #s.Spots or 0, Built = built, Parts = parts, Kinds = kinds, Created = partCount, City = s and s.CityCount or 0, Impostors = imps, ImpostorParts = impParts, Trees = s and s.Trees and #s.Trees or 0, TreesBuilt = trees, TreeParts = treeParts }
+	return { List = s and s.Spots or {}, Spots = s and #s.Spots or 0, Built = built, Parts = parts, Kinds = kinds, Created = partCount, City = s and s.CityCount or 0, Impostors = imps, ImpostorParts = impParts, Trees = s and s.Trees and #s.Trees or 0, TreesBuilt = trees, TreeParts = treeParts }
 end
 
 return TownStreetLife

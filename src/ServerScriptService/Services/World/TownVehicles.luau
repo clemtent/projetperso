@@ -96,10 +96,14 @@ function TownVehicles.OnTrafficRoad(rowCF: CFrame): boolean
 		count = WorldLayout.PlotCount(Players.MaxPlayers)
 	end
 	local p = (rowCF * CFrame.new(0, 0, -TownVehicles.BAY_DEPTH / 2)).Position - WorldLayout.Origin()
-	local ok, edge, _x, _y, _z, dist = pcall(WorldLayout.NearestRoad, count, p.X, p.Z, function(e: any): boolean
-		return e.Kind ~= "Downtown" and not e.Highway and not e.Ramp
+	local onRoad = false
+	pcall(function()
+		local edge: any, _x, _y, _z, dist = WorldLayout.NearestRoad(count :: number, p.X, p.Z, function(e: any): boolean
+			return e.Kind ~= "Downtown" and not e.Highway and not e.Ramp
+		end)
+		onRoad = edge ~= nil and dist < edge.Width / 2 + 1
 	end)
-	return ok and edge ~= nil and dist < (edge :: any).Width / 2 + 1
+	return onRoad
 end
 
 function TownVehicles.ParkingRow(parent: Instance, rowCF: CFrame, bays: number, seed: number, serverCars: number): Model

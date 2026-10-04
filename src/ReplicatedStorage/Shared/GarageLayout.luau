@@ -13,23 +13,23 @@
 	jardin de derrière est le Jardin de Dopamine 3D : le garage est donc une
 	AILE DANS LA COUR DE DEVANT, côté droit (vu de la rue), devant la 4e
 	colonne de pièces, sans toucher la tour de droite :
-	  x 43,5..76, d -25,9..-3 (3 places côte à côte, portes vers la rue),
-	  allée pavée jusqu'au bord de la rue (d -25,9..-30).
+	  x 41..74, d -25,95..-3,4 (3 places côte à côte, portes vers la rue),
+	  allée pavée jusqu'au bord de la rue (d -25,95..-30).
 	v11 (CARS11) : voitures ×1,3 (CarModels.SCALE) -> garage plus profond
-	(21,3 utiles : la limousine 19,8 y tient), portes 9,2 × 8,3, murs 10,8 ;
-	places 10,3 de large (voiture la plus large : 7,8).
+	(20,95 utiles : la limousine 19,8 y tient), portes 9,3 × 8,3, murs 10,8 ;
+	places 10,5 de large (voiture la plus large : 7,8).
 ]]
 
 local GarageLayout = {}
 
-GarageLayout.X0 = 43.5 -- (v11 : 46 -> 43,5 : places de 10,6 pour les voitures ×1,3)
-GarageLayout.X1 = 76
-GarageLayout.D0 = -25.9 -- façade du garage (portes, côté rue) (v11 : -23,5 -> -25,9)
-GarageLayout.D1 = -3 -- mur du fond (devant la maison) (v11 : -6 -> -3)
+GarageLayout.X0 = 41 -- (v11 : 46 -> 41 : places de 10,5 pour les voitures ×1,3)
+GarageLayout.X1 = 74 -- (v11 : 76 -> 74 : la tour de droite reste dégagée)
+GarageLayout.D0 = -25.95 -- façade du garage (portes, côté rue) (v11 : -23,5 -> -25,95 ; allée ≥ 4)
+GarageLayout.D1 = -3.4 -- mur du fond (devant la maison) (v11 : -6 -> -3,4)
 GarageLayout.WALL = 0.8
 GarageLayout.FLOOR = 0.7 -- dessus de la dalle (pelouse de la parcelle ≈ 0,45)
 GarageLayout.HEIGHT = 10.8 -- haut des murs (au-dessus de y = 0)
-GarageLayout.DOOR_W = 9.2 -- (v11 : 7,6 -> 9,2 ; voiture la plus large 7,8 ; encadrements voisins séparés)
+GarageLayout.DOOR_W = 9.3 -- (v11 : 7,6 -> 9,3 ; voiture la plus large 7,8 ; encadrements voisins séparés)
 GarageLayout.DOOR_H = 8.3 -- (v11 : 7,4 -> 8,3 ; voiture la plus haute 7,8)
 GarageLayout.BAYS = 3
 GarageLayout.STREET_D = -30 -- bord de la parcelle côté rue (WorldLayout.GARDEN_D)

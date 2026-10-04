@@ -515,7 +515,7 @@ local function lampsNear(here: Vector3, r: number): { { any } }
 	local out = {}
 	for _, q in ipairs(serverLamps :: { Vector3 }) do
 		if Vector3.new(q.X - here.X, 0, q.Z - here.Z).Magnitude < r then
-			table.insert(out, { q, 0.45 })
+			table.insert(out, { q, 0.65 }) -- (pied du lampadaire : 1,3)
 		end
 	end
 	for _, o in ipairs(obstacles) do
