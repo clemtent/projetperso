@@ -189,7 +189,7 @@ function HouseLod.Build(kit: any, size: any, looks: any, level: string): Result
 	-- garage attenant
 	if style ~= "Mansion" and spec.Garage ~= "None" then
 		local x0 = dims.Left + dims.Width + T + 0.05
-		kit:Box("LodGarage", x0, x0 + 17, 0, 11, 1.2, 21, wall, spec.WallMat, { Solid = true })
+		kit:Box("LodGarage", x0, x0 + 17, 0, 11, 1.2, 23.8, wall, spec.WallMat, { Solid = true }) -- (v11 HOUSE11 : = HouseFacade.GARAGE_D1)
 		kit:Box("LodGarageDoor", x0 + 2, x0 + 14, 0.25, 8.2, 1.05, 1.2, trim:Lerp(WHITE, 0.5), M.SmoothPlastic, DECO)
 	end
 	-- jardin : clôture de devant, côtés, haie du fond, 2 arbres

@@ -10,8 +10,9 @@
 	     "S'asseoir" -> la chaise glisse en arrière (~1 stud, moins si un mur
 	     est derrière), l'avatar s'avance devant l'assise (Humanoid:MoveTo,
 	     court, avec délai max), puis on demande le siège au serveur
-	     ("sit", inchangé). Une fois assis, la chaise (et le siège du serveur,
-	     localement) revient doucement vers la table avec l'avatar dessus.
+	     ("sit", inchangé). La chaise revient doucement vers la table pendant
+	     que l'avatar s'assoit, l'avatar dessus (v11 : seule la chaise
+	     visuelle bouge, le corps est posé sur son assise — snapToSeat).
 	     En se levant : la chaise recule puis se range toute seule.
 	     Bureau gamer : seule la chaise bouge (pièces autour de l'assise).
 	  2. Transitions douces : en s'asseyant, le corps part de là où il était
@@ -54,6 +55,19 @@
 	  - (PARK99) sièges des jeux du parc (attribut ParkPose) : animés par
 	    ParkPlay seul, pas par ce module.
 
+	v11 (SCALE11) — capture 34, "assis, l'avatar flotte À CÔTÉ de la chaise" :
+	  - cause : le glissé de chaise déplaçait LOCALEMENT le Seat ancré du
+	    serveur (l'avatar y est soudé) ; avatar et chaise finissaient décalés
+	    de la distance tirée (~1,1 stud), plus 0,3 stud trop haut (SeatPart
+	    au-dessus du coussin + demi-épaisseur du Seat) ;
+	  - correctif : le Seat du serveur n'est plus jamais déplacé ; son DESSUS
+	    = dessus visuel du coussin (Approach envoie le centre, SEAT_HALF plus
+	    bas, à la place rangée de la chaise) ; chaque image, le bassin est
+	    POSÉ sur l'assise visible (dessous des cuisses sur le coussin, bassin
+	    vers le dossier ; R15/R6, toutes échelles d'avatar) ; jambes assises
+	    (tibias pendants) ; transition plus vive (0,55 s + on se cale 0,35 s) ;
+	    première animation d'attente après 4 à 7 s.
+
 	API (appelée par TownClient) :
 	  SitAnimator.Start()     à l'entrée en ville
 	  SitAnimator.Stop()      à la sortie (tout est remis)
@@ -80,18 +94,22 @@ local SitAnimator = {}
 ----------------------------------------------------------------------
 
 local PULL: { [string]: number } = { chair = 1.1, desk = 1.2, stool = 0.6 } -- (studs) chaise tirée
-local PULL_TIME = 0.35 -- (s) la chaise recule
-local SIT_TIME = 0.6 -- (s) descente sur le siège
-local TUCK_DELAY = 0.5 -- (s) après l'assise, la chaise revient…
-local TUCK_TIME = 0.55 -- …en tant de temps
+local PULL_TIME = 0.3 -- (s) la chaise recule
+local SIT_TIME = 0.55 -- (s) se tourner + descendre sur le siège
+local SETTLE_TIME = 0.35 -- (s) puis on se cale (petit rebond du bassin, buste qui se pose)
+local TUCK_DELAY = 0 -- (s) dès la demande d'assise, la chaise revient…
+local TUCK_TIME = 0.45 -- …en tant de temps (le corps descend dessus en même temps)
+local SEAT_HALF = 0.1 -- (studs) demi-épaisseur du Seat du serveur (WorldService : 0,2)
+local SNAP_MAX_Y = 0.7 -- (studs) correction verticale max du bassin vers l'assise visible
+local SNAP_MAX_XZ = 1.8 -- (studs) correction horizontale max
 local STAND_TIME = 0.4 -- (s) fondu de la pose assise vers la pose debout
 local STAND_OUT = 0.3 -- (s) en se levant, la chaise recule…
 local STAND_BACK = 0.55 -- …attend…
 local STAND_IN = 0.45 -- …et se range
 local APPROACH_MAX = 1.6 -- (s) au plus pour s'avancer devant la chaise
 local SEAT_WAIT = 3 -- (s) le serveur n'a pas assis l'avatar : on range la chaise
-local FIRST_IDLE = { 8, 15 } -- (s) première animation d'attente
-local IDLE_GAP = { 5, 10 } -- (s) entre deux animations
+local FIRST_IDLE = { 4, 7 } -- (s) première animation d'attente (v11 : on ne reste plus "sans rien faire")
+local IDLE_GAP = { 4, 8 } -- (s) entre deux animations
 local REMOTE_RADIUS = 60 -- (studs) autres joueurs animés…
 local REMOTE_MAX = 6 -- …au plus
 local SCAN_INTERVAL = 0.35 -- (s) recherche des autres joueurs assis / émotes
@@ -313,8 +331,6 @@ type Chair = {
 	Steps: { Step },
 	StepT: number,
 	Hold: boolean, -- gardée tirée (on attend l'assise)
-	Seat: BasePart?, -- siège du serveur déplacé avec la chaise (localement)
-	SeatOrigin: CFrame?,
 }
 
 local chairs: { [BasePart]: Chair } = {}
@@ -399,18 +415,8 @@ local function setOffset(chair: Chair, offset: number): boolean
 			part.CFrame = cframes[i]
 		end
 	end
-	local seat = chair.Seat
-	local seatOrigin = chair.SeatOrigin
-	if seat and seatOrigin then
-		if seat.Parent then
-			pcall(function()
-				seat.CFrame = seatOrigin + chair.Dir * offset
-			end)
-		else
-			chair.Seat = nil
-			chair.SeatOrigin = nil
-		end
-	end
+	-- (v11 SCALE11) le Seat du serveur n'est plus jamais déplacé ici : l'avatar
+	-- (soudé dessus) et la chaise se retrouvaient décalés (capture 34)
 	chair.Offset = offset
 	return true
 end
@@ -446,8 +452,6 @@ local function chairFor(model: Model?, seatPart: BasePart?, kind: string): Chair
 		Steps = {},
 		StepT = 0,
 		Hold = false,
-		Seat = nil,
-		SeatOrigin = nil,
 	}
 	chairs[seatPart] = chair
 	return chair
@@ -595,6 +599,7 @@ type Rig = {
 	Arms: { [string]: Limb },
 	Legs: { [string]: Limb },
 	Torso: BasePart?,
+	Thigh: number, -- (v11) épaisseur de la cuisse (dessous des cuisses = hanche - Thigh / 2)
 }
 
 local function limbOf(joints: { [string]: Joint }, a: string, b: string, c: string?, r6: boolean, scale: number): Limb?
@@ -652,7 +657,12 @@ local function rigOf(character: Model, humanoid: Humanoid): Rig?
 		Arms = {},
 		Legs = {},
 		Torso = (torso and torso:IsA("BasePart")) and torso or nil,
+		Thigh = scale,
 	}
+	local thigh = character:FindFirstChild(r6 and "Right Leg" or "RightUpperLeg")
+	if thigh and thigh:IsA("BasePart") then
+		rig.Thigh = math.clamp(thigh.Size.Z, 0.3, 2.5)
+	end
 	rig.Arms.R = limbOf(joints, "RShoulder", "RElbow", "RWrist", r6, scale) :: any
 	rig.Arms.L = limbOf(joints, "LShoulder", "LElbow", "LWrist", r6, scale) :: any
 	rig.Legs.R = limbOf(joints, "RHip", "RKnee", "RAnkle", r6, scale) :: any
@@ -1207,9 +1217,117 @@ local function bedInfo(anim: Anim)
 	return info
 end
 
+----------------------------------------------------------------------
+-- (v11 SCALE11) 🪑 Le bassin POSÉ sur l'assise VISIBLE
+-- Capture 34 : l'avatar "assis" flottait DEVANT la chaise. Cause : l'ancien
+-- glissé de chaise déplaçait LOCALEMENT le Seat ancré du serveur (et donc,
+-- dans Roblox, l'avatar soudé dessus) ; selon l'ordre d'arrivée de la
+-- soudure / du SeatPart et le contrôle "quelqu'un d'autre a bougé la
+-- chaise" (setOffset), l'avatar et la chaise finissaient décalés de la
+-- distance tirée (~1,1 stud) — l'avatar devant, la chaise derrière. En plus
+-- la SeatPart était 0,2 stud AU-DESSUS du coussin (+0,1 de Seat) : on
+-- flottait aussi en hauteur.
+-- Maintenant :
+--   - le Seat du serveur n'est JAMAIS déplacé (posé une fois, dessus = dessus
+--     visuel du coussin) ; seule la chaise (visuelle) glisse ;
+--   - chaque image, on calcule où sont les hanches (HumanoidRootPart réel +
+--     articulations) et on décale le bassin (Root.Transform) pour que le
+--     dessous des cuisses soit PILE sur le dessus visible de l'assise, le
+--     bassin vers le dossier : quelle que soit la soudure de Roblox, la
+--     taille de l'avatar (échelles), R15 ou R6, et même pendant que la
+--     chaise se range (le corps suit la chaise) ;
+--   - jambes : cuisses à plat, tibias pendants, pieds détendus (R15).
+----------------------------------------------------------------------
+
+local SNAP_KINDS: { [string]: boolean } = { chair = true, desk = true, stool = true, sofa = true, bench = true, seat = true }
+local LEG_KINDS: { [string]: { number } } = {
+	-- { hanche (°), genou (°), cheville (°), écart (°) }
+	chair = { 88, -84, -12, 3 },
+	desk = { 88, -84, -12, 3 },
+	bench = { 88, -82, -14, 4 },
+	sofa = { 86, -80, -14, 5 },
+	stool = { 85, -104, -8, 4 },
+}
+
+-- Repère du DESSUS de l'assise visible (centre ; LookVector = devant) + taille
+local function seatRef(anim: Anim): (CFrame?, Vector3?)
+	local seat: BasePart = anim.Seat
+	local part: BasePart? = anim.SeatPart
+	if part and part.Parent then
+		local cf = part.CFrame * CFrame.new(0, part.Size.Y / 2, 0)
+		-- (la place visible est bien celle de ce siège : chaise tirée comprise)
+		if seat and (cf.Position - seat.Position).Magnitude <= 2.6 then
+			return cf, part.Size
+		end
+	end
+	if seat and seat.Parent then
+		return seat.CFrame * CFrame.new(0, seat.Size.Y / 2, 0), seat.Size
+	end
+	return nil, nil
+end
+
+-- Hanches (milieu) dans le monde pour une transformation `t` du bassin
+local function hipsWorld(rig: Rig, t: CFrame): Vector3?
+	local rootJ, hipR, hipL = rig.Joints.Root, rig.Joints.RHip, rig.Joints.LHip
+	if not rootJ or not hipR or not hipL then
+		return nil
+	end
+	local body = rig.Root.CFrame * rootJ.C0 * t * rootJ.Motor.C1:Inverse()
+	return ((body * hipR.C0).Position + (body * hipL.C0).Position) / 2
+end
+
+-- Cible des hanches : dessous des cuisses sur le dessus de l'assise, bassin
+-- reculé vers le dossier (repère du dessus de l'assise : +Z = vers l'arrière).
+-- En largeur, on garde la place choisie par la soudure (banc partagé avec un
+-- PNJ : NPCSeatGuard décale la soudure vers la place libre), sans déborder.
+local function snapTarget(rig: Rig, ref: CFrame, size: Vector3, hips: Vector3): Vector3
+	local back = math.clamp(size.Z / 2 - rig.Thigh * 0.55, 0, 0.6)
+	local side = math.max(0, size.X / 2 - 0.6 * rig.Scale)
+	local x = math.clamp(ref:PointToObjectSpace(hips).X, -side, side)
+	return (ref * CFrame.new(x, rig.Thigh / 2, back)).Position
+end
+
+local function snapToSeat(pose: Pose, anim: Anim, w: number)
+	if w <= 0.001 or not SNAP_KINDS[anim.Kind] then
+		return
+	end
+	local rig: Rig = pose.Rig
+	local ref, size = seatRef(anim)
+	local hips = hipsWorld(rig, pose.Work.Root or IDENTITY)
+	if not ref or not size or not hips then
+		return
+	end
+	local delta = rig.Root.CFrame:VectorToObjectSpace(snapTarget(rig, ref, size, hips) - hips)
+	local dy = math.clamp(delta.Y, -SNAP_MAX_Y, SNAP_MAX_Y)
+	local flat = Vector3.new(delta.X, 0, delta.Z)
+	if flat.Magnitude > SNAP_MAX_XZ then
+		flat = Vector3.zero -- (trop loin : ce n'est pas cette assise-là, on ne touche qu'à la hauteur)
+	end
+	anim.SnapDelta = Vector3.new(flat.X, dy, flat.Z)
+	add(pose, "Root", CFrame.new(flat.X, dy, flat.Z), w)
+end
+
+-- Jambes assises (R15) : cuisses à plat, tibias pendants, pieds détendus
+local function seatedLegs(pose: Pose, anim: Anim, w: number)
+	local legs = LEG_KINDS[anim.Kind]
+	if not legs or pose.Rig.R6 or w <= 0.001 then
+		return
+	end
+	local hip, knee, ankle, splay = rad(legs[1]), rad(legs[2]), rad(legs[3]), rad(legs[4])
+	abs(pose, "RHip", CFrame.Angles(hip, 0, splay), w)
+	abs(pose, "LHip", CFrame.Angles(hip, 0, -splay), w)
+	abs(pose, "RKnee", CFrame.Angles(knee, 0, 0), w)
+	abs(pose, "LKnee", CFrame.Angles(knee, 0, 0), w)
+	abs(pose, "RAnkle", CFrame.Angles(ankle, 0, 0), w)
+	abs(pose, "LAnkle", CFrame.Angles(ankle, 0, 0), w)
+end
+
 -- Pose de base selon le siège (lit : assis dans le lit, jambes allongées ;
--- bureau vu des autres : mains sur le clavier)
+-- bureau vu des autres : mains sur le clavier ; v11 : bassin posé sur
+-- l'assise visible + jambes assises)
 local function applyKindBase(pose: Pose, anim: Anim, w: number, t: number)
+	snapToSeat(pose, anim, w)
+	seatedLegs(pose, anim, w)
 	if anim.Kind == "bed" then
 		local bed = anim.Bed
 		if bed then
@@ -1326,24 +1444,16 @@ local function beginSit(character: Model, humanoid: Humanoid, seat: BasePart, is
 		anim.StandCF = standCF
 	end
 	anims[character] = anim
-	-- 🪑 chaise : glisse vers la table avec l'avatar (siège du serveur déplacé localement)
+	-- 🪑 chaise (v11 SCALE11) : SEULE la chaise (visuelle) glisse, jamais le
+	-- Seat du serveur ; encore tirée -> elle se range (le corps la suit : il
+	-- est posé sur l'assise visible, voir snapToSeat)
 	local chair: Chair? = info and info.Chair or nil
-	if not chair and seatPart and PULL[kind] and model then
-		chair = chairFor(model, seatPart, kind)
-		if chair and chair.Offset == 0 and #chair.Steps == 0 then
-			local pull = freePull(chair, seatPart, PULL[kind], { model, character })
-			if pull > 0.15 then
-				setOffset(chair, pull)
-			end
-		end
+	if not chair and seatPart then
+		chair = chairs[seatPart]
 	end
 	if chair and chairs[chair.Key] == chair then
 		chair.Hold = false
-		table.clear(chair.Steps)
-		chair.Seat = seat
-		chair.SeatOrigin = seat.CFrame
-		if chair.Offset > 0 then
-			setOffset(chair, chair.Offset)
+		if chair.Offset > 0 and #chair.Steps == 0 then
 			chairTo(chair, 0, TUCK_TIME, TUCK_DELAY)
 		end
 	end
@@ -1369,8 +1479,6 @@ local function beginStand(anim: Anim)
 	if model and seatPart and PULL[anim.Kind] and seatPart.Parent then
 		local chair = chairFor(model, seatPart, anim.Kind)
 		if chair then
-			chair.Seat = nil
-			chair.SeatOrigin = nil
 			table.clear(chair.Steps)
 			local pull = freePull(chair, seatPart, PULL[anim.Kind] * 0.7, { model, anim.Character })
 			if pull > 0.15 then
@@ -1536,6 +1644,13 @@ local function stepAnim(anim: Anim, dt: number): boolean
 	end
 	local w = anim.Pause
 	applyKindBase(pose, anim, w, t)
+	-- (v11) on se cale : petit rebond du bassin, le buste se pose
+	if anim.Phase == "seated" and anim.PhaseT < SETTLE_TIME and SNAP_KINDS[anim.Kind] then
+		local u = anim.PhaseT / SETTLE_TIME
+		local bump = math.sin(math.pi * u) * (1 - u)
+		add(pose, "Root", CFrame.new(0, -0.09 * bump * rig.Scale, 0), w)
+		add(pose, "Waist", CFrame.Angles(rad(-7 * bump), 0, 0), w)
+	end
 	-- respiration
 	add(pose, "Waist", CFrame.Angles(rad(0.9 * wave(t, 4.1)), 0, 0), w)
 	-- animation d'attente (même tirage chez tout le monde)
@@ -1843,7 +1958,16 @@ end
 
 -- Invite "S'asseoir" : tirer la chaise, s'avancer, puis sit(cf, kind)
 function SitAnimator.Approach(model: Model?, seatPart: BasePart, sit: (cf: CFrame, kind: string) -> ())
-	local cf = seatPart.CFrame * CFrame.new(0, seatPart.Size.Y / 2, 0)
+	-- (v11 SCALE11) centre du Seat du serveur : son DESSUS (centre + SEAT_HALF)
+	-- = dessus visuel du coussin (dessus de la SeatPart), à la place RANGÉE de
+	-- la chaise (même si elle glisse encore)
+	local cf = seatPart.CFrame * CFrame.new(0, seatPart.Size.Y / 2 - SEAT_HALF, 0)
+	do
+		local moving = chairs[seatPart]
+		if moving and moving.Offset ~= 0 then
+			cf = cf - moving.Dir * moving.Offset
+		end
+	end
 	local kind = SitAnimator.KindOf(model, seatPart)
 	local character, humanoid, root = localCharacter()
 	if not started or failed or not character or not humanoid or not root or humanoid.SeatPart ~= nil or not model then
@@ -1905,7 +2029,7 @@ function SitAnimator.Approach(model: Model?, seatPart: BasePart, sit: (cf: CFram
 					break
 				end
 				local flatPos = Vector3.new(root.Position.X, 0, root.Position.Z)
-				if (flatPos - Vector3.new(target.X, 0, target.Z)).Magnitude < 0.8 then
+				if (flatPos - Vector3.new(target.X, 0, target.Z)).Magnitude < 1.0 then
 					break
 				end
 				task.wait(0.05)
@@ -1922,6 +2046,12 @@ function SitAnimator.Approach(model: Model?, seatPart: BasePart, sit: (cf: CFram
 				chairTo(chair, 0, TUCK_TIME, 0)
 			end
 			return
+		end
+		-- (v11) la chaise se range PENDANT que l'avatar s'assoit (pas après)
+		if chair and chairs[chair.Key] == chair then
+			chair.Hold = false
+			table.clear(chair.Steps)
+			chairTo(chair, 0, TUCK_TIME, TUCK_DELAY)
 		end
 		sit(cf, kind)
 		-- le serveur a refusé (trop loin…) : on range la chaise

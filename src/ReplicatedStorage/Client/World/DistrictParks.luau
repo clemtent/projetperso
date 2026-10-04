@@ -41,6 +41,11 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Locale = require(ReplicatedStorage.Shared.Locale)
 local Greenery = require(ReplicatedStorage.Shared.Greenery)
 local CityKit = require(script.Parent.CityKit)
+-- (v11, PARK11) jeux où les PNJ jouent vraiment, fontaines, scènes vivantes
+local okSports, ParkSports = pcall(require, script.Parent:FindFirstChild("ParkSports") :: any)
+local okScenes, ParkScenes = pcall(require, script.Parent:FindFirstChild("ParkScenes") :: any)
+local okFountain, FountainKit = pcall(require, script.Parent:FindFirstChild("FountainKit") :: any)
+local okPK, ParkKit = pcall(require, script.Parent:FindFirstChild("ParkKit") :: any)
 
 local DistrictParks = {}
 
@@ -90,45 +95,186 @@ end
 -- Square, sports
 ----------------------------------------------------------------------
 
-local function buildPocketPark(m: Model, F: CFrame, seed: number)
-	local S = 42
+-- (v11, PARK11) "trop de la même chose" : 6 SQUARES DIFFÉRENTS selon la
+-- graine (fontaine, jardin fleuri, pétanque, tables d'échecs, pique-nique,
+-- agrès), tous avec allée, arbres, bancs, lampadaires et des PNJ qui vivent
+local POCKET_KINDS = { "Fountain", "Garden", "Petanque", "Chess", "Picnic", "Fitness" }
+
+local function pocketFrame(m: Model, F: CFrame, seed: number, S: number, loop: boolean)
 	lawn(m, F, S, S)
-	-- allée en boucle (8 dalles en anneau) + entrée côté rue
-	local n = 12
-	for i = 0, n - 1 do
-		local a0, a1 = i / n * math.pi * 2, (i + 1) / n * math.pi * 2
-		local r = 12
-		local p0 = Vector3.new(math.cos(a0) * r, 0, math.sin(a0) * r)
-		local p1 = Vector3.new(math.cos(a1) * r, 0, math.sin(a1) * r)
-		local mid = (p0 + p1) / 2
-		local len = (p1 - p0).Magnitude + 1.2
-		Part(m, "Path", Vector3.new(3.4, 0.12, len), F * CFrame.lookAt(mid + Vector3.new(0, 0.1 + (i % 2) * 0.03, 0), p1 + Vector3.new(0, 0.1 + (i % 2) * 0.03, 0)), PATH, M.Pavement)
+	if loop then
+		local n = 12
+		for i = 0, n - 1 do
+			local a0, a1 = i / n * math.pi * 2, (i + 1) / n * math.pi * 2
+			local r = 12
+			local p0 = Vector3.new(math.cos(a0) * r, 0, math.sin(a0) * r)
+			local p1 = Vector3.new(math.cos(a1) * r, 0, math.sin(a1) * r)
+			local mid = (p0 + p1) / 2
+			local len = (p1 - p0).Magnitude + 1.2
+			Part(m, "Path", Vector3.new(3.4, 0.12, len), F * CFrame.lookAt(mid + Vector3.new(0, 0.1 + (i % 2) * 0.03, 0), p1 + Vector3.new(0, 0.1 + (i % 2) * 0.03, 0)), PATH, M.Pavement)
+		end
 	end
-	Box(m, "PathIn", F, -1.7, 1.7, 0.06, 0.2, -S / 2, -13.4, PATH, M.Pavement)
-	-- massif central + arbres + bancs
-	Column(m, "BedRing", F, 0, 0, 0, 0.7, 9, rgb(190, 184, 176), M.Concrete)
-	Column(m, "BedSoil", F, 0, 0, 0.7, 0.8, 8.2, rgb(96, 70, 52), M.Ground)
-	for k = 0, 11 do
-		local a = k / 12 * math.pi * 2
-		Egg(m, "Bloom", F * CFrame.new(math.cos(a) * 2.8, 1.2, math.sin(a) * 2.8), Vector3.new(1.1, 0.8, 1.1), CityKit.Pick(FLOWERS, seed, k), M.SmoothPlastic)
-	end
-	tree(m, F * CFrame.new(0, 0.8, 0), 0, 0, 11, seed + 1, "Cherry")
+	Box(m, "PathIn", F, -1.7, 1.7, 0.06, 0.2, -S / 2, loop and -13.4 or -6, PATH, M.Pavement)
+	-- 4 arbres d'essences variées aux coins, 2 lampadaires
 	for k = 0, 3 do
 		local a = k * math.pi / 2 + math.pi / 4
 		tree(m, F, math.cos(a) * 18, math.sin(a) * 18, 14 + hash(seed, k) * 5, seed + k * 7, CityKit.Pick(SPECIES, seed, k))
-		local b = k * math.pi / 2
-		if k ~= 3 then
-			CityKit.Bench(m, F * CFrame.new(math.cos(b) * 15, 0.06, math.sin(b) * 15) * CFrame.Angles(0, -b + math.pi / 2, 0), 4.6)
-		end
+	end
+	for _, k in ipairs({ 0, 2 }) do
+		local a = k * math.pi / 2 + math.pi / 4
 		CityKit.StreetLamp(m, F * CFrame.new(math.cos(a) * 12.5, 0.06, math.sin(a) * 12.5) * CFrame.Angles(0, -a - math.pi / 2, 0), 10)
 	end
-	-- fontaine à boire, poubelle
-	Column(m, "DrinkFountain", F, 4, -15, 0, 3.2, 0.8, rgb(40, 80, 60), M.Metal, true)
-	Egg(m, "DrinkBowl", F * CFrame.new(4, 3.3, -15), Vector3.new(1.6, 0.5, 1.6), rgb(40, 80, 60), M.Metal)
-	CityKit.Bin(m, F * CFrame.new(-4, 0.06, -15))
-	-- promeneurs
-	local p1 = CityKit.Npc(m, "elder", seed * 3 + 1, F * CFrame.new(15, 0.06 + 0.05, 0.1) * CFrame.Angles(0, math.pi / 2, 0), "none", false)
-	CityKit.Idle(p1, "sit", 1)
+	CityKit.Bin(m, F * CFrame.new(-4, 0.06, -S / 2 + 4))
+end
+
+-- banc + éventuel PNJ assis (ParkScenes) ; F du banc au sol, -Z devant
+local function pocketBench(m: Model, B: CFrame, seed: number, sit: boolean)
+	if okPK and type(ParkKit) == "table" then
+		local seat = ParkKit.Bench(m, B, 5.6)
+		if sit and okScenes and type(ParkScenes) == "table" then
+			ParkScenes.Sitter(m, seat * CFrame.new(hash(seed, 1) < 0.5 and -1.4 or 1.4, 0, 0), B.Position.Y, seed)
+		end
+	else
+		CityKit.Bench(m, B, 5.6)
+	end
+end
+
+local function buildPocketPark(m: Model, F: CFrame, seed: number)
+	local S = 42
+	local kind = POCKET_KINDS[1 + math.floor(hash(seed, 77) * #POCKET_KINDS) % #POCKET_KINDS]
+	m:SetAttribute("PocketKind", kind)
+	if kind == "Fountain" and okFountain and type(FountainKit) == "table" then
+		pocketFrame(m, F, seed, S, true)
+		local fx = FountainKit.Build(m, F * CFrame.new(0, 0.06, 0), "Basin", seed)
+		for k = 0, 2 do
+			local b = k * math.pi / 2
+			local p = F * CFrame.new(math.cos(b) * 15, 0.06, math.sin(b) * 15)
+			pocketBench(m, CFrame.lookAt(p.Position, (F * CFrame.new(0, 0.06, 0)).Position), seed * 3 + k, hash(seed, k + 30) < 0.6)
+		end
+		CityKit.Actor(m, F.Position, function(t: number)
+			FountainKit.Step(fx, t)
+		end, seed)
+	elseif kind == "Petanque" then
+		pocketFrame(m, F, seed, S, false)
+		-- terrain de pétanque (gravier, bordures bois) + 3 joueurs âgés
+		local G = F * CFrame.new(0, 0.06, 2)
+		Box(m, "BoulesGround", G, -12, 12, -0.06, 0.14, -5, 5, rgb(214, 196, 160), M.Pebble)
+		for _, sz in ipairs({ -1, 1 }) do
+			Box(m, "BoulesEdge", G, -12.3, 12.3, -0.06, 0.45, sz * 5.15 - 0.15, sz * 5.15 + 0.15, WOOD, M.Wood, true)
+		end
+		for _, sx in ipairs({ -1, 1 }) do
+			Box(m, "BoulesEdge", G, sx * 12.15 - 0.15, sx * 12.15 + 0.15, -0.06, 0.45, -5, 5, WOOD, M.Wood, true)
+		end
+		local jack = Part(m, "Jack", Vector3.new(0.25, 0.25, 0.25), G * CFrame.new(8, 0.27, 0.5), rgb(250, 200, 40), M.Wood, "Ball")
+		local _ = jack
+		if okScenes and type(ParkScenes) == "table" then
+			ParkScenes.EnsureAnims()
+		end
+		local players = {}
+		for k = 1, 3 do
+			local npc = CityKit.Npc(m, k == 2 and "pedestrian" or "elder", seed * 7 + k, G * CFrame.new(-9 + (k - 2) * 1.8, 0.14, (k - 2) * 1.6) * CFrame.Angles(0, -math.pi / 2, 0), "none", true)
+			table.insert(players, npc)
+		end
+		local boules = {}
+		for k = 1, 4 do
+			table.insert(boules, Part(m, "Boule", Vector3.new(0.5, 0.5, 0.5), G * CFrame.new(7 + k * 0.4, 0.39, -1 + k * 0.5), rgb(160, 164, 170), M.Metal, "Ball"))
+		end
+		CityKit.Actor(m, F.Position, function(t: number)
+			local period = 5
+			local turn = math.floor(t / period)
+			local c = t - turn * period
+			local who = turn % 3 + 1
+			for k, npc in ipairs(players) do
+				if npc then
+					if k == who and okPK and type(ParkKit) == "table" then
+						ParkKit.Animate(npc, "p11_boules", math.clamp(c / 1.6, 0, 1))
+					else
+						CityKit.Animate(npc, k == (who % 3) + 1 and "talk" or "idle", t + k)
+					end
+				end
+			end
+			-- la boule lancée : cloche puis roule et s'arrête près du cochonnet
+			local b = boules[turn % #boules + 1]
+			local from = G * Vector3.new(-9 + (who - 2) * 1.8 + 0.8, 1.2, (who - 2) * 1.6)
+			local land = G * Vector3.new(4.5 + hash(turn, 2) * 1.5, 0.39, (hash(turn, 3) - 0.5) * 2.4)
+			local stop = G * Vector3.new(7.4 + hash(turn, 4) * 1.4, 0.39, 0.5 + (hash(turn, 5) - 0.5) * 2)
+			if c < 0.9 then
+				b.CFrame = CFrame.new(from)
+			elseif c < 1.8 then
+				local u = (c - 0.9) / 0.9
+				b.CFrame = CFrame.new(from:Lerp(land, u) + Vector3.new(0, 4 * 1.6 * u * (1 - u), 0))
+			else
+				local u = math.clamp((c - 1.8) / 1.4, 0, 1)
+				local e = 1 - (1 - u) ^ 2
+				b.CFrame = CFrame.new(land:Lerp(stop, e)) * CFrame.Angles(0, 0, -e * 6)
+			end
+		end, seed)
+		pocketBench(m, F * CFrame.new(0, 0.06, -9.5) * CFrame.Angles(0, math.pi, 0), seed * 5, true)
+	elseif kind == "Chess" then
+		pocketFrame(m, F, seed, S, true)
+		-- 3 tables d'échecs en pierre, damier, joueurs assis sur des tabourets
+		for k = 0, 2 do
+			local a = k / 3 * math.pi * 2 + 0.4
+			local T = F * CFrame.new(math.cos(a) * 6.5, 0.06, math.sin(a) * 6.5) * CFrame.Angles(0, -a, 0)
+			Column(m, "ChessFoot", T, 0, 0, 0, 2.8, 1.0, rgb(170, 166, 160), M.Granite, true)
+			Box(m, "ChessTop", T, -1.6, 1.6, 2.8, 3.1, -1.6, 1.6, rgb(190, 186, 178), M.Granite, true)
+			for i = 0, 3 do
+				for j = 0, 3 do
+					if (i + j) % 2 == 0 then
+						local sq = Box(m, "ChessSq", T, -1.2 + i * 0.6, -0.6 + i * 0.6, 3.1, 3.12, -1.2 + j * 0.6, -0.6 + j * 0.6, rgb(60, 56, 54), M.SmoothPlastic)
+						sq.CastShadow = false
+					end
+				end
+			end
+			for p = 0, 5 do
+				Column(m, "ChessPiece", T, -1.0 + (p % 3) * 0.9, (p < 3 and -0.9 or 0.9), 3.12, 3.55, 0.28, p < 3 and WHITE or rgb(30, 30, 34), M.SmoothPlastic)
+			end
+			for _, sx in ipairs({ -1, 1 }) do
+				local seat = T * CFrame.new(sx * 3.2, 0, 0)
+				Column(m, "ChessStool", seat, 0, 0, 0, 1.85, 1.2, rgb(170, 166, 160), M.Granite, true)
+				if hash(seed, k * 2 + sx) < 0.8 and okScenes and type(ParkScenes) == "table" then
+					local top = CFrame.lookAt((seat * CFrame.new(0, 1.85, 0)).Position, (T * CFrame.new(0, 1.85, 0)).Position)
+					local npc = ParkScenes.Sitter(m, top, F.Position.Y, seed * 11 + k * 2 + (sx > 0 and 1 or 0), "chat")
+					if npc then
+						CityKit.Actor(npc, top.Position, function(t: number)
+							ParkKit.Animate(npc, "p11_ponder", t + k * 3 + sx)
+						end, seed + k)
+					end
+				end
+			end
+		end
+	elseif kind == "Picnic" and okScenes and type(ParkScenes) == "table" then
+		pocketFrame(m, F, seed, S, false)
+		ParkScenes.BUILDERS.Picnic(m, F * CFrame.new(0, 0.06, 2), seed)
+		pocketBench(m, F * CFrame.new(-12, 0.06, -8) * CFrame.Angles(0, math.pi / 4, 0), seed * 3, false)
+	elseif kind == "Fitness" and okScenes and type(ParkScenes) == "table" then
+		pocketFrame(m, F, seed, S, false)
+		ParkScenes.BUILDERS.Fitness(m, F * CFrame.new(0, 0.06, 3), seed)
+		pocketBench(m, F * CFrame.new(10, 0.06, -10) * CFrame.Angles(0, math.pi, 0), seed * 3, true)
+	else
+		-- jardin fleuri (massif central, cerisier) : la version d'origine, bancs occupés
+		pocketFrame(m, F, seed, S, true)
+		Column(m, "BedRing", F, 0, 0, 0, 0.7, 9, rgb(190, 184, 176), M.Concrete)
+		Column(m, "BedSoil", F, 0, 0, 0.7, 0.8, 8.2, rgb(96, 70, 52), M.Ground)
+		for k = 0, 11 do
+			local a = k / 12 * math.pi * 2
+			Egg(m, "Bloom", F * CFrame.new(math.cos(a) * 2.8, 1.2, math.sin(a) * 2.8), Vector3.new(1.1, 0.8, 1.1), CityKit.Pick(FLOWERS, seed, k), M.SmoothPlastic)
+		end
+		tree(m, F * CFrame.new(0, 0.8, 0), 0, 0, 11, seed + 1, "Cherry")
+		for k = 0, 2 do
+			local b = k * math.pi / 2
+			local p = F * CFrame.new(math.cos(b) * 15, 0.06, math.sin(b) * 15)
+			pocketBench(m, CFrame.lookAt(p.Position, (F * CFrame.new(0, 0.06, 0)).Position), seed * 3 + k, hash(seed, k + 30) < 0.55)
+		end
+		-- fontaine à boire (Wallace)
+		if okFountain and type(FountainKit) == "table" then
+			local fx = FountainKit.Build(m, F * CFrame.new(5, 0.06, -15.5), "Wallace", seed)
+			CityKit.Actor(m, F.Position, function(t: number)
+				FountainKit.Step(fx, t)
+			end, seed + 1)
+		end
+	end
+	-- un promeneur
 	local p2 = CityKit.Npc(m, "jogger", seed * 3 + 2, F * CFrame.new(-8, 0.2, -9) * CFrame.Angles(0, 2.4, 0), "none", true)
 	CityKit.Idle(p2, "idle", 3)
 end
@@ -169,36 +315,28 @@ local function hoop(m: Model, F: CFrame)
 	net.Transparency = 0.5
 end
 
+local COURT_PALETTES = {
+	{ Floor = rgb(196, 92, 60), Outer = rgb(60, 104, 150), Hoop = rgb(36, 64, 120) },
+	{ Floor = rgb(60, 120, 170), Outer = rgb(40, 70, 110), Hoop = rgb(200, 60, 50) },
+	{ Floor = rgb(90, 150, 90), Outer = rgb(60, 100, 70), Hoop = rgb(40, 40, 46) },
+	{ Floor = rgb(150, 90, 160), Outer = rgb(60, 60, 70), Hoop = rgb(240, 180, 40) },
+	{ Floor = rgb(206, 150, 90), Outer = rgb(120, 120, 126), Hoop = rgb(30, 90, 150) },
+}
+
 local function buildBasketCourt(m: Model, F: CFrame, seed: number)
+	local pal = COURT_PALETTES[1 + math.floor(hash(seed, 61) * #COURT_PALETTES) % #COURT_PALETTES]
+	if okSports and type(ParkSports) == "table" then
+		-- (v11, PARK11) les PNJ JOUENT : dribble, tir, rebond (ParkSports)
+		ParkSports.Basketball(m, F, seed, { W = 28, D = 17, Floor = pal.Floor, Outer = pal.Outer, Hoop = pal.Hoop })
+		return
+	end
 	local W, D = 32, 20
-	Box(m, "Court", F, -W / 2, W / 2, -0.1, 0.2, -D / 2, D / 2, rgb(70, 110, 150), M.Concrete, true)
-	Box(m, "CourtInner", F, -W / 2 + 1.2, W / 2 - 1.2, 0.2, 0.24, -D / 2 + 1.2, D / 2 - 1.2, rgb(200, 90, 60), M.Concrete)
-	Box(m, "Midline", F, -0.12, 0.12, 0.24, 0.3, -D / 2 + 1.2, D / 2 - 1.2, WHITE, M.SmoothPlastic)
-	Column(m, "CenterCircle", F, 0, 0, 0.24, 0.28, 6, WHITE, M.SmoothPlastic)
-	Column(m, "CenterDot", F, 0, 0, 0.28, 0.35, 5.5, rgb(200, 90, 60), M.SmoothPlastic)
+	Box(m, "Court", F, -W / 2, W / 2, -0.1, 0.2, -D / 2, D / 2, pal.Outer, M.Concrete, true)
+	Box(m, "CourtInner", F, -W / 2 + 1.2, W / 2 - 1.2, 0.2, 0.24, -D / 2 + 1.2, D / 2 - 1.2, pal.Floor, M.Concrete)
 	for _, sx in ipairs({ -1, 1 }) do
-		Box(m, "Key", F, sx * (W / 2 - 1.2), sx * (W / 2 - 7.2), 0.24, 0.28, -2.6, 2.6, rgb(70, 110, 150), M.SmoothPlastic)
 		hoop(m, F * CFrame.new(sx * (W / 2 + 0.4), 0.2, 0) * CFrame.Angles(0, sx > 0 and math.pi / 2 or -math.pi / 2, 0))
 	end
 	fence(m, F * CFrame.new(0, 0.2, 0), W + 3, D + 1, 9)
-	-- 2 joueurs, ballon qui rebondit entre eux
-	local a = CityKit.Npc(m, "jogger", seed * 3 + 1, F * CFrame.new(-4, 0.24, 1) * CFrame.Angles(0, -math.pi / 2, 0), "none", true)
-	local b = CityKit.Npc(m, "kid", seed * 3 + 2, F * CFrame.new(4, 0.24, -1) * CFrame.Angles(0, math.pi / 2, 0), "none", true)
-	local ball = Part(m, "Basketball", Vector3.new(0.9, 0.9, 0.9), F * CFrame.new(0, 1, 0), rgb(230, 110, 40), M.SmoothPlastic, "Ball")
-	CityKit.Actor(m, F.Position, function(t: number)
-		local cycle = (t * 0.5) % 2
-		local dir = cycle < 1 and 1 or -1
-		local u = cycle % 1
-		local x = -3.4 * dir + 6.8 * dir * u
-		local bounce = math.abs(math.sin(u * math.pi * 3)) * 2.6
-		ball.CFrame = F * CFrame.new(x, 0.65 + bounce, (dir > 0 and 1 or -1) * (0.5 - u))
-		if a then
-			CityKit.Animate(a, dir > 0 and u < 0.2 and "wave" or "idle", t)
-		end
-		if b then
-			CityKit.Animate(b, dir < 0 and u < 0.2 and "wave" or "idle", t + 1)
-		end
-	end, seed)
 end
 
 local function goal(m: Model, G: CFrame)
@@ -217,79 +355,41 @@ local function goal(m: Model, G: CFrame)
 end
 
 local function buildFootPitch(m: Model, F: CFrame, seed: number)
+	if okSports and type(ParkSports) == "table" then
+		-- (v11, PARK11) passes, tir, plongeon du gardien (ParkSports)
+		ParkSports.Football(m, F, seed, { W = 46, D = 28 })
+		-- projecteurs (éteints de jour)
+		for _, sx in ipairs({ -1, 1 }) do
+			local x = sx * (46 / 2 + 2.6)
+			Column(m, "FloodPole", F, x, -28 / 2 - 2.6, 0, 20, 0.6, STEEL, M.Metal, true)
+			Box(m, "FloodHead", F, x - 1.4, x + 1.4, 19.4, 21, -28 / 2 - 3.2, -28 / 2 - 2.0, IRON, M.Metal)
+			Glow(Box(m, "FloodLens", F, x - 1.2, x + 1.2, 19.6, 20.8, -28 / 2 - 2.0, -28 / 2 - 1.94, rgb(236, 240, 250), M.Glass))
+		end
+		return
+	end
 	local W, D = 48, 30
 	Box(m, "Turf", F, -W / 2, W / 2, -0.1, 0.16, -D / 2, D / 2, rgb(70, 150, 70), M.Grass, true)
-	for i = 0, 5 do
-		if i % 2 == 0 then
-			local x = -W / 2 + 2 + i * (W - 4) / 6
-			Box(m, "TurfStripe", F, x, x + (W - 4) / 6, 0.16, 0.19, -D / 2 + 2, D / 2 - 2, rgb(84, 168, 80), M.Grass)
-		end
-	end
-	local function lineZ(x: number)
-		Box(m, "Line", F, x - 0.15, x + 0.15, 0.19, 0.24, -D / 2 + 2, D / 2 - 2, WHITE, M.SmoothPlastic)
-	end
-	lineZ(-W / 2 + 2)
-	lineZ(W / 2 - 2)
-	lineZ(0)
-	for _, sz in ipairs({ -1, 1 }) do
-		Box(m, "Line", F, -W / 2 + 2, W / 2 - 2, 0.19, 0.24, sz * (D / 2 - 2) - 0.15, sz * (D / 2 - 2) + 0.15, WHITE, M.SmoothPlastic)
-	end
-	-- (rond central au-dessus de la ligne médiane : 0,28 / 0,31, jamais confondus)
-	Column(m, "CenterCircle", F, 0, 0, 0.19, 0.28, 8, WHITE, M.SmoothPlastic)
-	Column(m, "CenterInner", F, 0, 0, 0.28, 0.31, 7.4, rgb(70, 150, 70), M.Grass)
 	for _, sx in ipairs({ -1, 1 }) do
 		goal(m, F * CFrame.new(sx * (W / 2 - 2), 0.16, 0) * CFrame.Angles(0, sx > 0 and -math.pi / 2 or math.pi / 2, 0))
 	end
 	fence(m, F * CFrame.new(0, 0.16, 0), W + 1, D + 1, 8)
-	-- projecteurs (éteints de jour, lentilles "NightGlow")
-	for _, sx in ipairs({ -1, 1 }) do
-		local x = sx * (W / 2 + 2)
-		Column(m, "FloodPole", F, x, -D / 2 - 2, 0, 20, 0.6, STEEL, M.Metal, true)
-		Box(m, "FloodHead", F, x - 1.4, x + 1.4, 19.4, 21, -D / 2 - 2.6, -D / 2 - 1.4, IRON, M.Metal)
-		Glow(Box(m, "FloodLens", F, x - 1.2, x + 1.2, 19.6, 20.8, -D / 2 - 1.4, -D / 2 - 1.34, rgb(236, 240, 250), M.Glass))
-	end
-	-- un gardien, un tireur, un ballon
-	local keeper = CityKit.Npc(m, "kid", seed * 5 + 1, F * CFrame.new(W / 2 - 4, 0.16, 0) * CFrame.Angles(0, math.pi / 2, 0), "none", true)
-	CityKit.Idle(keeper, "idle", 1)
-	local striker = CityKit.Npc(m, "jogger", seed * 5 + 2, F * CFrame.new(W / 2 - 14, 0.16, 2) * CFrame.Angles(0, -math.pi / 2, 0), "none", true)
-	local ball = Part(m, "Football", Vector3.new(0.9, 0.9, 0.9), F * CFrame.new(W / 2 - 12.8, 0.6, 2), WHITE, M.SmoothPlastic, "Ball")
-	CityKit.Actor(m, F.Position, function(t: number)
-		local u = (t * 0.35) % 1
-		local x = W / 2 - 12.8 + u * 8.4
-		ball.CFrame = F * CFrame.new(x, 0.61 + math.sin(u * math.pi) * 2.2, 2 - u * 1.6)
-		if striker then
-			CityKit.Animate(striker, u < 0.15 and "wave" or "idle", t)
-		end
-	end, seed)
 end
 
 local function buildTennis(m: Model, F: CFrame, seed: number)
 	local W, D = 44, 38
-	Box(m, "TennisBase", F, -W / 2, W / 2, -0.1, 0.18, -D / 2, D / 2, rgb(70, 120, 90), M.Concrete, true)
-	for i, sz in ipairs({ -1, 1 }) do
-		local C = F * CFrame.new(0, 0.18, sz * D / 4)
-		local clay = i == 1
-		Box(m, "Court", C, -18, 18, 0, 0.04, -8, 8, clay and rgb(196, 110, 70) or rgb(60, 110, 170), clay and M.Sand or M.Concrete)
-		for _, z in ipairs({ -8, 8, -6.2, 6.2 }) do
-			Box(m, "TLine", C, -18, 18, 0.04, 0.08, z - 0.1, z + 0.1, WHITE, M.SmoothPlastic)
-		end
-		for _, x in ipairs({ -18, 18, -10, 10 }) do
-			Box(m, "TLine", C, x - 0.1, x + 0.1, 0.04, 0.08, -8, 8, WHITE, M.SmoothPlastic)
-		end
-		Box(m, "TLine", C, -10, 10, 0.04, 0.08, -0.1, 0.1, WHITE, M.SmoothPlastic)
-		-- filet
-		for _, z in ipairs({ -8.6, 8.6 }) do
-			Column(m, "NetPost", C, 0, z, 0, 3.4, 0.24, IRON, M.Metal)
-		end
-		local net = Box(m, "TennisNet", C, -0.03, 0.03, 0.2, 3, -8.6, 8.6, rgb(30, 30, 34), M.Fabric)
-		net.Transparency = 0.45
-		Box(m, "NetTape", C, -0.06, 0.06, 3, 3.24, -8.6, 8.6, WHITE, M.Fabric)
+	if okSports and type(ParkSports) == "table" then
+		-- (v11, PARK11) 2 courts (surfaces différentes) où l'on échange pour
+		-- de vrai (ParkSports), un seul grillage autour des deux
+		local surfaces = { "clay", "hard", "grass" }
+		local s1 = surfaces[1 + math.floor(hash(seed, 3) * 3) % 3]
+		local s2 = surfaces[1 + (math.floor(hash(seed, 3) * 3) + 1) % 3]
+		ParkSports.Tennis(m, F * CFrame.new(0, 0, -D / 4), seed, { L = 34, W = 13, Surface = s1, Fence = false })
+		ParkSports.Tennis(m, F * CFrame.new(0, 0, D / 4), seed + 1, { L = 34, W = 13, Surface = s2, Fence = false })
+		fence(m, F * CFrame.new(0, 0.18, 0), W, D, 10)
+		return
 	end
+	Box(m, "TennisBase", F, -W / 2, W / 2, -0.1, 0.18, -D / 2, D / 2, rgb(70, 120, 90), M.Concrete, true)
 	fence(m, F * CFrame.new(0, 0.18, 0), W, D, 10)
-	local p = CityKit.Npc(m, "jogger", seed * 3 + 1, F * CFrame.new(-14, 0.22, -D / 4) * CFrame.Angles(0, -math.pi / 2, 0), "none", true)
-	CityKit.Idle(p, "wave", 0.5)
-	local q = CityKit.Npc(m, "pedestrian", seed * 3 + 2, F * CFrame.new(14, 0.22, -D / 4 + 2) * CFrame.Angles(0, math.pi / 2, 0), "none", true)
-	CityKit.Idle(q, "wave", 2.1)
 end
 
 local function buildStadium(m: Model, F: CFrame, seed: number)
@@ -337,10 +437,29 @@ local function buildStadium(m: Model, F: CFrame, seed: number)
 	end
 	local sign = Box(m, "StadiumSign", S, -18, 18, 16.8, 20, 10.4, 11, rgb(40, 110, 200), M.SmoothPlastic)
 	Text(sign, Enum.NormalId.Front, "🏟️ " .. Locale.T("Dopamine Stadium"), WHITE, nil, Enum.Font.GothamBlack, 400)
-	-- quelques supporters
+	-- quelques supporters (applaudissent, se lèvent)
 	for k = 0, 5 do
 		local fan = CityKit.Npc(m, CityKit.Pick({ "pedestrian", "kid", "shopper", "jogger" }, seed, k), seed * 41 + k, S * CFrame.new(-20 + k * 7, 1.2 + (k % 3 + 1) * 1.4, -3.6 + (k % 3 + 1) * 1.8 + 0.4) * CFrame.Angles(0, math.pi, 0), "none", false)
-		CityKit.Idle(fan, k % 2 == 0 and "wave" or "sit", k * 0.9)
+		CityKit.Idle(fan, k % 3 == 0 and "cheer" or "clap", k * 0.9)
+	end
+	-- (v11, PARK11) un match d'entraînement sur la pelouse + des coureurs
+	-- sur la piste (vraie foulée)
+	if okSports and type(ParkSports) == "table" then
+		ParkSports.Football(m, F * CFrame.new(0, 0.26 - 0.16, 0), seed, { W = 80, D = 52, Bare = true })
+	end
+	if okScenes and type(ParkScenes) == "table" then
+		local loop = {}
+		local R = TD / 2 - 5
+		local half = TW / 2 - TD / 2
+		for k = 0, 9 do
+			local a = -math.pi / 2 + k / 9 * math.pi
+			table.insert(loop, (F * CFrame.new(half + math.cos(a) * R, 0.2, math.sin(a) * R)).Position)
+		end
+		for k = 0, 9 do
+			local a = math.pi / 2 + k / 9 * math.pi
+			table.insert(loop, (F * CFrame.new(-half + math.cos(a) * R, 0.2, math.sin(a) * R)).Position)
+		end
+		ParkScenes.JogLoop(m, loop, seed, 4)
 	end
 	-- tableau d'affichage (côté -X)
 	local B = F * CFrame.new(-TW / 2 - 6, 0, 0) * CFrame.Angles(0, -math.pi / 2, 0)

@@ -232,6 +232,19 @@ local function runCommand(player: Player, command: string, argument: string, sec
 			return false, T(player, "Loading...")
 		end
 		return true, T(player, "🏠 Everything in the house shop unlocked!")
+	elseif command == "diamonds" then -- (v11 BANK11) 💎 de test
+		if not services.BankService then
+			return false, T(player, "Loading...")
+		end
+		local amount = math.clamp(math.floor(tonumber(argument) or 100), 1, 100000)
+		local given = services.BankService:GrantDiamonds(player, amount, "Admin")
+		return true, "+" .. tostring(given) .. " 💎"
+	elseif command == "heist" then -- (v11 BANK11) ouvre tout de suite le casse de la banque
+		if not services.BankService or type(services.BankService.OpenHeistNow) ~= "function" then
+			return false, T(player, "Loading...")
+		end
+		services.BankService:OpenHeistNow()
+		return true, "🕶️ Heist"
 	elseif command == "help" or command == "aide" then
 		return true, helpText(player)
 	end

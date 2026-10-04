@@ -22,21 +22,31 @@
 	CFrame (BulkMoveTo) : 30 Hz près de l'avatar, 10 Hz plus loin. Aucune
 	lumière, aucun son.
 
-	v9.9 (NPC99) — plus personne ne passe à travers personne :
-	  - chacun tient VRAIMENT sa droite (v9.8 : les deux sens de marche
-	    partageaient la même file et se traversaient de face) ;
-	  - évitement local : un passant qui voit quelqu'un devant lui (autre
-	    passant, personne arrêtée, joueur) s'écarte doucement sur le côté ;
-	    si la place manque (joueur planté au milieu), il S'ARRÊTE, attend en
-	    regardant le joueur, puis repart et rattrape son retard en marchant
-	    un peu plus vite (tous les joueurs comptent : chaque client voit à
-	    peu près la même chose) ;
-	  - chaque PNJ a une capsule de collision (NPCModels.SetSolid) : le
-	    joueur ne peut plus le traverser ;
-	  - bancs : les places des passants assis viennent de NPCSeats (même
-	    calcul que le serveur, NPCSeatGuard, qui assoit le joueur à côté) ;
-	    hauteur exacte du siège (StreetLife > NpcBenches, sinon détectée) ;
-	  - la tête se tourne vers le joueur proche (NPCModels.Animate).
+	v9.9 (NPC99) : chacun tient sa droite, évitement local, capsule de
+	collision, places exactes sur les bancs (NPCSeats), regard vers le joueur.
+
+	v11 (NPC11) — "ils se cognent, ils traversent les objets, la laisse flotte" :
+	  - COULOIRS LIBRES : au chargement, tout ce qui gêne le long des chemins
+	    est relevé UNE fois : mobilier publié (poubelles, bancs, bornes,
+	    horodateurs, feux, cabines, jardinières, kiosques, abribus…),
+	    pièces SOLIDES du serveur (lampadaires, bancs, bouches à incendie,
+	    murs, fontaines…), bordures de trottoir, scène et public du concert
+	    (WorldLayout.Facilities "MusicStage" / "MusicCrowd"). Pour chaque
+	    stud de chemin on garde les intervalles latéraux BLOQUÉS (calcul
+	    paresseux, par tronçons de 32 studs, seulement là où quelqu'un marche
+	    près de l'avatar) ;
+	  - ÉVITEMENT : chaque marcheur cherche, sur ~1 s devant lui, le point
+	    latéral LIBRE le plus proche de sa droite (obstacles fixes + autres
+	    passants + chiens + avatars) et s'y décale en douceur (≤ 1,8 stud/s) ;
+	    derrière quelqu'un de plus lent sans place pour doubler, il RALENTIT
+	    à sa vitesse (au lieu de s'arrêter net) ; face à face sans place, le
+	    plus "jeune" (Id) laisse passer l'autre (jamais de blocage mutuel) ;
+	  - les compagnons de marche passent en FILE INDIENNE quand c'est étroit ;
+	  - le tour de la place contourne la scène et le public du concert ;
+	  - CHIENS NPCModels (8 races, trot articulé) ; la laisse part du POING
+	    (NPCModels.HandPoint) jusqu'au collier (NPCModels.DogCollar), en
+	    chaînette souple (8 segments, flèche selon le mou) : elle ne flotte
+	    plus jamais ; le chien trotte du côté libre, renifle à l'arrêt.
 
 	API (TownClient, via optionalModule) :
 	  TownPeople.Start()                  à l'entrée en ville
@@ -45,14 +55,17 @@
 	  TownPeople.Positions() -> { Vector3 } passants construits (TownTraffic :
 	                                      les voitures s'arrêtent devant eux)
 	  TownPeople.Debug() -> table
+	  (tests) TownPeople.Frame(dt?, position?, at?), TownPeople.Agents(),
+	          TownPeople.Lanes() -> statistiques des couloirs
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
 
 local NPCModels = require(ReplicatedStorage.Shared.NPCModels)
 local NPCSeats = require(ReplicatedStorage.Shared.NPCSeats)
-local Players = game:GetService("Players")
+local okWL, WorldLayout = pcall(require, ReplicatedStorage.Shared.WorldLayout)
 -- (v9.8, REALISM98) réglage "Graphismes > Détail" : distance x 0,65 / 1 / 1,35 ;
 -- "Low" : moitié moins de passants construits
 local okGQ, GraphicsQuality = pcall(require, ReplicatedStorage.Shared.GraphicsQuality)
@@ -77,7 +90,17 @@ local FAST_STEP, SLOW_STEP = 1 / 30, 1 / 10
 
 local rgb = Color3.fromRGB
 
-type Path = { Name: string, Points: { Vector3 }, Cum: { number }, Length: number, Loop: boolean }
+type Path = {
+	Name: string,
+	Points: { Vector3 },
+	Cum: { number },
+	Length: number,
+	Loop: boolean,
+	-- (v11) couloir : intervalles latéraux bloqués par échantillon (1 stud)
+	Blk: { [number]: { number } },
+	Done: { [number]: boolean },
+	Y: number,
+}
 type Agent = {
 	Id: number,
 	Kind: string, -- "walk" | "static"
@@ -96,16 +119,24 @@ type Agent = {
 	Dog: boolean,
 	Model: Model?,
 	DogModel: Model?,
-	Leash: BasePart?,
+	Leash: { BasePart }?,
 	Pos: Vector3,
 	Clock: number,
 	SitTop: number?, -- (assis) dessus du siège au-dessus du pivot
 	Avoid: number, -- (marcheurs) écart latéral d'évitement (lissé)
-	Delay: number, -- (s) retard accumulé en attendant
+	Delay: number, -- (s) retard accumulé en attendant / en ralentissant
 	Waiting: boolean,
 	LastNow: number,
 	Heading: Vector3?,
 	Mate: any?, -- (compagnon de marche)
+	Lead: boolean?, -- (le compagnon "devant" d'un couple)
+	Behind: number, -- (0..1) compagnon passé derrière (file indienne)
+	Slow: number, -- (0..1) vitesse relative courante (ralenti derrière quelqu'un)
+	WaitT: number, -- (s) depuis quand il attend
+	DogLat: number, -- (chien) écart latéral lissé
+	DogPos: Vector3?,
+	Clock2: number?, -- (dernière image de la cadence de marche)
+	SelfWait: boolean?, -- (bloqué par quelqu'un / quelque chose devant soi)
 }
 
 local state: any = nil
@@ -147,13 +178,17 @@ local function makePath(name: string, pts: { Vector3 }, loop: boolean): Path?
 		table.insert(list, pts[1])
 	end
 	local cum = { 0 }
+	local y = 0
 	for i = 2, #list do
 		cum[i] = cum[i - 1] + (list[i] - list[i - 1]).Magnitude
 	end
-	return { Name = name, Points = list, Cum = cum, Length = cum[#cum], Loop = loop }
+	for _, p in ipairs(pts) do
+		y += p.Y
+	end
+	return { Name = name, Points = list, Cum = cum, Length = cum[#cum], Loop = loop, Blk = {}, Done = {}, Y = y / #pts }
 end
 
--- Point du chemin à l'abscisse `s` (bouclé) : position + direction lissée
+-- Point du chemin à l'abscisse `s` (bouclé)
 local function sample(path: Path, s: number): Vector3
 	local L = path.Length
 	s = s % L
@@ -174,12 +209,15 @@ end
 
 local UP = Vector3.new(0, 1, 0)
 
--- Repère d'un marcheur au temps `now` (pieds au sol, regard dans le sens de la marche)
+-- abscisse courante d'un marcheur (moins son retard `Delay`)
+local function walkerS(a: Agent, now: number): number
+	return a.Offset + a.Dir * a.Speed * (now - (a.Delay or 0)) + a.Along + a.Dir * (a.Behind or 0) * -1.6
+end
+
 -- Point du chemin + avant / droite (sol) d'un marcheur au temps `now`
--- (v9.9 : moins son retard d'attente `Delay`)
-local function walkerFrame(a: Agent, now: number): (Vector3, Vector3, Vector3)
+local function walkerFrame(a: Agent, now: number): (Vector3, Vector3, Vector3, number)
 	local path = a.Path :: Path
-	local s = a.Offset + a.Dir * a.Speed * (now - (a.Delay or 0)) + a.Along
+	local s = walkerS(a, now)
 	local p = sample(path, s)
 	local ahead = sample(path, s + a.Dir * 1.2)
 	local behind = sample(path, s - a.Dir * 1.2)
@@ -189,7 +227,7 @@ local function walkerFrame(a: Agent, now: number): (Vector3, Vector3, Vector3)
 		fwd = Vector3.new(0, 0, -1)
 	end
 	fwd = fwd.Unit
-	return p, fwd, fwd:Cross(UP)
+	return p, fwd, fwd:Cross(UP), s
 end
 
 local function walkerCF(a: Agent, now: number): CFrame
@@ -200,184 +238,604 @@ local function walkerCF(a: Agent, now: number): CFrame
 end
 
 ----------------------------------------------------------------------
--- (v9.9) Évitement : s'écarter, attendre, rattraper
+-- (v11) Obstacles fixes et couloirs libres
 ----------------------------------------------------------------------
 
-type Obstacle = { Pos: Vector3, Agent: Agent?, Player: boolean }
+-- Rectangle au sol (repère : axe X = (AX, AZ), axe Z = (-AZ, AX)) ;
+-- Kind : 1 = solide, 2 = bordure (souple), 3 = lieu réservé (concert)
+type Rect = { CX: number, CZ: number, AX: number, AZ: number, HX: number, HZ: number, Kind: number, Src: string? }
 
-local MAX_SIDE = 2.4 -- (studs) écart maximal au milieu du chemin
-local CLEAR_NPC = 1.8 -- (studs) distance latérale pour croiser un passant
-local CLEAR_PLAYER = 2.3 -- … un joueur
-local LOOK_AHEAD = 5.5
-local CATCH_UP = 0.2 -- (x vitesse) en plus pour rattraper le retard
+local BAND = 2.6 -- (studs) écart latéral max. de part et d'autre du chemin
+local BODY_PAD = 0.72 -- (studs) demi-largeur d'épaules + marge
+local SAMPLE = 1.0 -- (studs) pas des échantillons du couloir
+local BLOCK = 32 -- (échantillons) calculés par tronçons
+local CELL = 16
 
-local function steer(a: Agent, now: number, dt: number, obstacles: { Obstacle })
-	local p, fwd, right = walkerFrame(a, now)
-	local lat = a.Lateral + a.Avoid
-	local pos = p + right * lat
-	local lo, hi = -MAX_SIDE - a.Lateral, MAX_SIDE - a.Lateral
-	local want = 0
-	local nearest = math.huge
-	local blocked = false
-	for _, o in ipairs(obstacles) do
-		if o.Agent ~= a and (o.Agent == nil or o.Agent ~= a.Mate) then
-			local rel = o.Pos - pos
-			rel = Vector3.new(rel.X, 0, rel.Z)
-			local fd = rel:Dot(fwd)
-			local ld = rel:Dot(right)
-			local clear = o.Player and CLEAR_PLAYER or CLEAR_NPC
-			-- (aussi un peu derrière : on ne se rabat pas en le dépassant)
-			if fd > -1.6 and fd < LOOK_AHEAD and math.abs(ld) < clear + 0.5 then
-				local total = a.Avoid
-				if math.abs(ld) < clear then
-					local toRight = ld + clear -- (on passe à sa gauche… il finit à notre gauche)
-					local toLeft = ld - clear
-					local first, second = toRight, toLeft
-					-- (le plus court ; à égalité on garde sa droite)
-					if math.abs(toLeft) + 0.3 < math.abs(toRight) then
-						first, second = toLeft, toRight
-					end
-					total = a.Avoid + first
-					if total < lo or total > hi then
-						total = a.Avoid + second
-						if total < lo or total > hi then
-							total = math.clamp(a.Avoid + first, lo, hi)
-							-- plus de place : on s'arrête devant lui
-							if fd > 0 and fd < (o.Player and 2.8 or 2.1) then
-								blocked = true
-							end
-						end
+-- Emprises (largeur X, profondeur Z, en studs) du mobilier publié
+-- (StreetLife) ; un peu généreuses (mobilier agrandi en v11)
+local FOOT: { [string]: { number } } = {
+	Bin = { 1.2, 1.2 },
+	Recycle = { 3.0, 1.3 },
+	Mailbox = { 1.1, 1.1 },
+	NewsBox = { 1.2, 1.2 },
+	ParkMeter = { 0.45, 0.45 },
+	TrafficLight = { 0.7, 0.7 },
+	PhoneBooth = { 3.0, 3.0 },
+	Planter = { 3.4, 1.7 },
+	PlanterSmall = { 1.6, 1.6 },
+	Vending = { 2.2, 1.5 },
+	DogStation = { 1.0, 1.0 },
+	SpeedSign = { 0.6, 0.6 },
+	Direction = { 0.8, 0.8 },
+	StreetName = { 0.5, 0.5 },
+	Banner = { 0.5, 0.5 },
+	Beacon = { 0.8, 0.8 },
+	Bollards = { 3.0, 0.6 },
+	Morris = { 2.6, 2.6 },
+	Kiosk = { 7, 5 },
+	BusShelter = { 8, 3.2 },
+	DrinkFountain = { 1.2, 1.2 },
+	FlowerStall = { 5, 3 },
+	BookStall = { 5, 3 },
+	Statue = { 3.6, 3.6 },
+	Lamppost = { 0.8, 0.8 },
+	ChessTables = { 9, 7 },
+	Terrace = { 10, 6 },
+	Bench = { 6.2, 2.4 },
+	SitBench = { 6.2, 2.4 },
+	Hydrant = { 0.8, 0.8 },
+	Signpost = { 0.8, 0.8 },
+}
+
+local function addRect(s: any, r: Rect)
+	table.insert(s.Rects, r)
+	local idx = #s.Rects
+	local rad = math.sqrt(r.HX * r.HX + r.HZ * r.HZ) + BAND + BODY_PAD
+	for cx = math.floor((r.CX - rad) / CELL), math.floor((r.CX + rad) / CELL) do
+		for cz = math.floor((r.CZ - rad) / CELL), math.floor((r.CZ + rad) / CELL) do
+			local key = cx * 100003 + cz
+			local list = s.Grid[key]
+			if not list then
+				list = {}
+				s.Grid[key] = list
+			end
+			table.insert(list, idx)
+		end
+	end
+end
+
+local function rectFromCF(cf: CFrame, w: number, d: number, kind: number): Rect
+	local rv = cf.RightVector
+	local flat = Vector3.new(rv.X, 0, rv.Z)
+	if flat.Magnitude < 1e-3 then
+		flat = Vector3.new(1, 0, 0)
+	end
+	flat = flat.Unit
+	local p = cf.Position
+	return { CX = p.X, CZ = p.Z, AX = flat.X, AZ = flat.Z, HX = w / 2, HZ = d / 2, Kind = kind }
+end
+
+-- intervalle de t tel que (px, pz) + (dx, dz) t soit dans le rectangle
+-- agrandi de `pad`
+local function rayRect(px: number, pz: number, dx: number, dz: number, r: Rect, pad: number): (number?, number?)
+	local rx, rz = px - r.CX, pz - r.CZ
+	local lx = rx * r.AX + rz * r.AZ
+	local lz = -rx * r.AZ + rz * r.AX
+	local ux = dx * r.AX + dz * r.AZ
+	local uz = -dx * r.AZ + dz * r.AX
+	local t0, t1 = -math.huge, math.huge
+	local hx, hz = r.HX + pad, r.HZ + pad
+	if math.abs(ux) < 1e-6 then
+		if math.abs(lx) > hx then
+			return nil, nil
+		end
+	else
+		local a, b = (-hx - lx) / ux, (hx - lx) / ux
+		if a > b then
+			a, b = b, a
+		end
+		t0, t1 = math.max(t0, a), math.min(t1, b)
+	end
+	if math.abs(uz) < 1e-6 then
+		if math.abs(lz) > hz then
+			return nil, nil
+		end
+	else
+		local a, b = (-hz - lz) / uz, (hz - lz) / uz
+		if a > b then
+			a, b = b, a
+		end
+		t0, t1 = math.max(t0, a), math.min(t1, b)
+	end
+	if t0 > t1 then
+		return nil, nil
+	end
+	return t0, t1
+end
+
+-- fusion d'intervalles (liste plate lo, hi, lo, hi…) bornée à [-BAND, BAND]
+local function merge(list: { number }): { number }
+	local n = #list // 2
+	if n == 0 then
+		return {}
+	end
+	local pairs_ = table.create(n)
+	for i = 1, n do
+		pairs_[i] = { list[i * 2 - 1], list[i * 2] }
+	end
+	table.sort(pairs_, function(a, b)
+		return a[1] < b[1]
+	end)
+	local out = {}
+	local lo, hi = pairs_[1][1], pairs_[1][2]
+	for i = 2, n do
+		local p = pairs_[i]
+		if p[1] <= hi + 0.05 then
+			hi = math.max(hi, p[2])
+		else
+			table.insert(out, lo)
+			table.insert(out, hi)
+			lo, hi = p[1], p[2]
+		end
+	end
+	table.insert(out, lo)
+	table.insert(out, hi)
+	return out
+end
+
+-- le couloir est-il entièrement bloqué ?
+local function fullyBlocked(m: { number }): boolean
+	for i = 1, #m, 2 do
+		if m[i] <= -BAND + 0.3 and m[i + 1] >= BAND - 0.3 then
+			return true
+		end
+	end
+	return false
+end
+
+-- Intervalles bloqués à l'échantillon i d'un chemin (repère du chemin :
+-- droite = sens croissant x UP)
+local function computeSample(s: any, path: Path, i: number): { number }
+	local sPos = (i - 1) * SAMPLE
+	local p = sample(path, sPos)
+	local f = sample(path, sPos + 0.6) - sample(path, sPos - 0.6)
+	f = Vector3.new(f.X, 0, f.Z)
+	if f.Magnitude < 1e-3 then
+		return {}
+	end
+	f = f.Unit
+	local r = f:Cross(UP)
+	local key = math.floor(p.X / CELL) * 100003 + math.floor(p.Z / CELL)
+	local cands = s.Grid[key]
+	if not cands then
+		return {}
+	end
+	local srcs = {}
+	local pad = BODY_PAD
+	local function collect(maxKind: number): { number }
+		local list = {}
+		table.clear(srcs)
+		for _, idx in ipairs(cands) do
+			local rect: Rect = s.Rects[idx]
+			if rect.Kind <= maxKind or rect.Kind == 3 then
+				for _, o in ipairs({ -0.45, 0, 0.45 }) do
+					local q = p + f * o
+					local t0, t1 = rayRect(q.X, q.Z, r.X, r.Z, rect, pad)
+					if t0 and t1 and t1 > -BAND and t0 < BAND then
+						table.insert(list, math.max(t0, -BAND - 0.5))
+						table.insert(list, math.min(t1, BAND + 0.5))
+						srcs[rect.Src or "zone"] = string.format("%.1f..%.1f", t0, t1)
 					end
 				end
-				if math.abs(fd) < nearest then
-					nearest = math.abs(fd)
-					want = total
+			end
+		end
+		return merge(list)
+	end
+	local m = collect(2)
+	if fullyBlocked(m) then
+		-- (passage étroit : on se faufile, épaules rentrées)
+		pad = 0.48
+		m = collect(2)
+	end
+	if fullyBlocked(m) then
+		-- (passage piéton : la bordure coupe le chemin) sans les bordures
+		pad = BODY_PAD
+		m = collect(1)
+		if fullyBlocked(m) then
+			pad = 0.48
+			m = collect(1)
+		end
+		if fullyBlocked(m) then
+			-- (rien ne passe : on ignore tout pour ne jamais rester planté)
+			s.Stuck += 1
+			if #s.StuckInfo < 40 then
+				local parts = {}
+				for k, v in pairs(srcs) do
+					table.insert(parts, k .. "[" .. v .. "]")
+				end
+				table.insert(s.StuckInfo, path.Name .. "@" .. math.floor(sPos) .. " " .. table.concat(parts, " "))
+			end
+			m = {}
+		end
+	end
+	return m
+end
+
+local function blockedAt(s: any, path: Path, sPos: number): { number }
+	local n = math.max(1, math.floor(path.Length / SAMPLE))
+	local i = math.floor((sPos % path.Length) / SAMPLE + 0.5) % n + 1
+	local b = (i - 1) // BLOCK
+	if not path.Done[b] then
+		path.Done[b] = true
+		for j = b * BLOCK + 1, math.min(n, (b + 1) * BLOCK) do
+			path.Blk[j] = computeSample(s, path, j)
+		end
+		s.Computed += 1
+	end
+	return path.Blk[i] or {}
+end
+
+-- Relevé des obstacles fixes (une fois, au chargement)
+local function collectObstacles(s: any, town: Instance, data: Instance, count: number)
+	s.Rects, s.Grid, s.Stuck, s.Computed = {}, {}, 0, 0
+	s.StuckInfo = {}
+	local ny = 0
+	-- 1) mobilier publié (+ bordures de trottoir)
+	for _, cell in ipairs(data:GetChildren()) do
+		local text = cell:GetAttribute("Data")
+		if cell.Name ~= "NpcBenches" and type(text) == "string" then
+			for _, line in ipairs(string.split(text, "\n")) do
+				local f = string.split(line, ";")
+				local kind = f[1]
+				local x, y, z, yaw = tonumber(f[2]), tonumber(f[3]), tonumber(f[4]), tonumber(f[5])
+				if kind and x and y and z and yaw then
+					local cf = CFrame.new(x, y, z) * CFrame.Angles(0, yaw, 0)
+					local foot = FOOT[kind]
+					if foot then
+						local r = rectFromCF(cf, foot[1], foot[2], 1)
+						r.Src = kind
+						addRect(s, r)
+					elseif kind == "CurbLine" and f[7] then
+						local c = string.split(f[7], ",")
+						local len = tonumber(c[1])
+						if len then
+							addRect(s, rectFromCF(cf, len, 0.3, 2))
+						end
+					end
 				end
 			end
 		end
 	end
-	local k = math.min(1, dt * 2.2)
-	local before = a.Avoid
-	a.Avoid += (want - a.Avoid) * k
-	local mate = a.Mate
-	if mate and mate.Model and mate.Waiting then
-		blocked = true
+	-- 2) pièces SOLIDES du serveur près des chemins (lampadaires, bancs,
+	-- bouches à incendie, murs, fontaine…)
+	local function nearPaths(p: Vector3, ext: number): boolean
+		local pc: Vector3? = s.PlazaC
+		if pc and math.abs(p.Y - pc.Y) < 12 and Vector3.new(p.X - pc.X, 0, p.Z - pc.Z).Magnitude < 72 + ext then
+			return true
+		end
+		for _, path: Path in ipairs(s.Paths) do
+			if math.abs(p.Y - path.Y) < 12 then
+				local pts = path.Points
+				for i = 2, #pts do
+					local a, b = pts[i - 1], pts[i]
+					local ab = Vector3.new(b.X - a.X, 0, b.Z - a.Z)
+					local ap = Vector3.new(p.X - a.X, 0, p.Z - a.Z)
+					local t = math.clamp(ap:Dot(ab) / math.max(ab:Dot(ab), 1e-6), 0, 1)
+					if (ap - ab * t).Magnitude < BAND + BODY_PAD + ext + 1 then
+						return true
+					end
+				end
+			end
+		end
+		return false
 	end
-	a.Waiting = blocked
-	if blocked then
-		a.Delay += dt
+	for _, d in ipairs(town:GetDescendants()) do
+		if d:IsA("BasePart") and d.CanCollide and not d:IsA("Terrain") then
+			local cf, size = d.CFrame, d.Size
+			local up = cf.UpVector
+			local half
+			if math.abs(up.Y) > 0.95 then
+				half = Vector3.new(size.X / 2, size.Y / 2, size.Z / 2)
+			else
+				-- (pièce penchée : boîte englobante)
+				local corners = size / 2
+				local ex = math.abs(cf.RightVector.X) * corners.X + math.abs(cf.UpVector.X) * corners.Y + math.abs(cf.LookVector.X) * corners.Z
+				local ey = math.abs(cf.RightVector.Y) * corners.X + math.abs(cf.UpVector.Y) * corners.Y + math.abs(cf.LookVector.Y) * corners.Z
+				local ez = math.abs(cf.RightVector.Z) * corners.X + math.abs(cf.UpVector.Z) * corners.Y + math.abs(cf.LookVector.Z) * corners.Z
+				half = Vector3.new(ex, ey, ez)
+				cf = CFrame.new(cf.Position)
+			end
+			local p = cf.Position
+			local top, bottom = p.Y + half.Y, p.Y - half.Y
+			local ext = math.sqrt(half.X * half.X + half.Z * half.Z)
+			if ext < 120 and nearPaths(p, ext) then
+				-- (hauteur : entre les genoux et la tête au-dessus du chemin le plus proche)
+				local pathY = s.Paths[1] and s.Paths[1].Y or p.Y
+				for _, path: Path in ipairs(s.Paths) do
+					if math.abs(path.Y - p.Y) < math.abs(pathY - p.Y) then
+						pathY = path.Y
+					end
+				end
+				if top > pathY + 0.45 and bottom < pathY + 4.5 then
+					local r = rectFromCF(cf, half.X * 2, half.Z * 2, 1)
+					r.Src = (d.Parent and d.Parent.Name or "?") .. "/" .. d.Name
+					addRect(s, r)
+					ny += 1
+				end
+			end
+		end
+	end
+	-- 3) scène et public du concert (lieux réservés de la place)
+	if okWL and type(WorldLayout) == "table" and WorldLayout.Facilities then
+		local okF, zones = pcall(WorldLayout.Facilities, count)
+		if okF and type(zones) == "table" then
+			local o = WorldLayout.Origin()
+			for _, z in ipairs(zones) do
+				if z.Id == "MusicStage" or z.Id == "MusicCrowd" then
+					local c, sn = math.cos(z.Yaw), math.sin(z.Yaw)
+					addRect(s, { CX = o.X + z.X, CZ = o.Z + z.Z, AX = c, AZ = -sn, HX = z.W / 2 + 1, HZ = z.D / 2 + 1, Kind = 3 })
+					table.insert(s.Zones, z)
+				end
+			end
+		end
+	end
+	s.SolidParts = ny
+end
+
+----------------------------------------------------------------------
+-- Évitement : couloir libre, ralentir, céder le passage
+----------------------------------------------------------------------
+
+type Obstacle = { Pos: Vector3, Agent: Agent?, Player: boolean, Dog: boolean? }
+
+local CLEAR_NPC = 1.7 -- (studs) distance latérale pour croiser un passant
+local CLEAR_PLAYER = 2.2 -- … un joueur
+local CLEAR_DOG = 1.2
+local CATCH_UP = 0.2 -- (x vitesse) en plus pour rattraper le retard
+local LAT_SPEED = 1.8 -- (studs / s) vitesse latérale max.
+
+-- demi-tour (un joueur planté en travers depuis longtemps) : même point,
+-- même côté du trottoir, sens inverse ; le compagnon suit
+local function turnAround(a: Agent, now: number)
+	local function flip(b: Agent)
+		local sNow = walkerS(b, now)
+		local lat = b.Lateral + b.Avoid
+		b.Dir = -b.Dir
+		b.Along = -b.Along
+		local sNew = walkerS(b, now)
+		b.Offset += sNow - sNew
+		b.Avoid = -lat - b.Lateral
+		b.WaitT = 0
+		b.Waiting = false
+		if b.Heading then
+			b.Heading = -(b.Heading :: Vector3)
+		end
+	end
+	flip(a)
+	if a.Mate then
+		flip(a.Mate)
+	end
+end
+
+-- intervalles libres de [-BAND, BAND] (liste plate) privés de `blocked` (fusionné)
+local function freeOf(blocked: { number }): { number }
+	local out = {}
+	local cur = -BAND
+	for i = 1, #blocked, 2 do
+		local lo, hi = blocked[i], blocked[i + 1]
+		if hi > cur then
+			if lo > cur then
+				table.insert(out, cur)
+				table.insert(out, math.min(lo, BAND))
+			end
+			cur = math.max(cur, hi)
+		end
+		if cur >= BAND then
+			break
+		end
+	end
+	if cur < BAND then
+		table.insert(out, cur)
+		table.insert(out, BAND)
+	end
+	return out
+end
+
+local function steer(s: any, a: Agent, now: number, dt: number, obstacles: { Obstacle })
+	local path = a.Path :: Path
+	local p, fwd, right, sNow = walkerFrame(a, now)
+	local lat = a.Lateral + a.Avoid
+	local pos = p + right * lat
+	local look = 1.4 + a.Speed * 0.9
+	local blocked = {}
+	-- obstacles fixes sur ~1 s devant (repère du chemin -> repère du marcheur)
+	local step = 0
+	while step <= look + 0.01 do
+		local m = blockedAt(s, path, sNow + a.Dir * (step - 0.6))
+		for i = 1, #m, 2 do
+			if a.Dir > 0 then
+				table.insert(blocked, m[i])
+				table.insert(blocked, m[i + 1])
+			else
+				table.insert(blocked, -m[i + 1])
+				table.insert(blocked, -m[i])
+			end
+		end
+		step += SAMPLE
+	end
+	local staticFree = freeOf(merge(blocked))
+	-- obstacles mobiles
+	local near = {} -- (bloquent tout de suite : devant, tout près)
+	local blocker: Obstacle? = nil
+	local blockerFd = math.huge
+	local blockerLd = 0
+	local mate = a.Mate
+	for _, o in ipairs(obstacles) do
+		local ag = o.Agent
+		if ag ~= a and (ag == nil or ag ~= mate) and not (o.Dog and ag == a) then
+			local rel = o.Pos - pos
+			rel = Vector3.new(rel.X, 0, rel.Z)
+			local fd = rel:Dot(fwd)
+			local ld = rel:Dot(right)
+			local clear = o.Player and (CLEAR_PLAYER - math.min(0.7, a.WaitT * 0.25)) or (o.Dog and CLEAR_DOG or CLEAR_NPC)
+			-- (vitesse de rapprochement : un passant d'en face compte plus loin)
+			local closing = 0
+			if ag and ag.Kind == "walk" and ag.Heading then
+				closing = math.max(0, -(ag.Heading :: Vector3):Dot(fwd)) * ag.Speed
+			end
+			local far = look + closing * 0.9
+			if fd > -1.2 and fd < far and math.abs(ld) < BAND + clear + 1 then
+				-- céder le passage : face à face, le plus petit Id attend, l'autre passe au plus juste
+				local squeeze = 1
+				if ag and ag.Waiting and ag.Id < a.Id then
+					squeeze = 0.8
+				end
+				local lo, hi = lat + ld - clear * squeeze, lat + ld + clear * squeeze
+				table.insert(blocked, lo)
+				table.insert(blocked, hi)
+				if fd > 0 and fd < (o.Player and 2.6 or 2.0) and math.abs(ld) < clear * squeeze then
+					local yields = not (ag and ag.Waiting and ag.Id < a.Id)
+					if yields and fd < blockerFd then
+						blocker, blockerFd, blockerLd = o, fd, ld
+					end
+					table.insert(near, lo)
+					table.insert(near, hi)
+				end
+			end
+		end
+	end
+	local free = freeOf(merge(blocked))
+	if #free == 0 then
+		free = staticFree -- (au pire : seulement les obstacles fixes)
+	end
+	-- point visé : le plus proche de sa droite dans l'intervalle où l'on est,
+	-- sinon l'intervalle libre le plus proche
+	local pref = a.Lateral
+	if mate and not a.Lead and mate.Model then
+		pref = mate.Lateral + mate.Avoid + (a.Lateral - mate.Lateral)
+	end
+	local target = lat
+	local bestCost = math.huge
+	local inside = false
+	for i = 1, #free, 2 do
+		local lo, hi = free[i], free[i + 1]
+		if lat >= lo - 0.05 and lat <= hi + 0.05 then
+			inside = true
+			target = math.clamp(pref, lo, hi)
+			break
+		end
+	end
+	if not inside then
+		for i = 1, #free, 2 do
+			local lo, hi = free[i], free[i + 1]
+			local q = math.clamp(lat, lo, hi)
+			local cost = math.abs(q - lat) + 0.3 * math.abs(math.clamp(pref, lo, hi) - pref)
+			if cost < bestCost then
+				bestCost = cost
+				target = math.clamp(q + (math.clamp(pref, lo, hi) - q) * 0.3, lo, hi)
+			end
+		end
+	end
+	-- face à face sans place (passant d'en face, joueur) : celui qui cède se
+	-- range contre le bord libre opposé, l'autre passe
+	if blocker then
+		local ag = blocker.Agent
+		local sameDir = ag and ag.Kind == "walk" and ag.Heading and (ag.Heading :: Vector3):Dot(fwd) > 0.5
+		if not sameDir then
+			local bl = lat + blockerLd
+			for i = 1, #staticFree, 2 do
+				local lo, hi = staticFree[i], staticFree[i + 1]
+				if lat >= lo - 0.3 and lat <= hi + 0.3 then
+					target = if bl > lat then lo + 0.05 else hi - 0.05
+					break
+				end
+			end
+		end
+	end
+	-- compagnon : file indienne s'il n'y a pas la place à côté
+	if mate and not a.Lead and mate.Model then
+		local single = math.abs(target - pref) > 0.8
+		local want = single and 1 or 0
+		a.Behind += (want - a.Behind) * math.min(1, dt * 1.5)
+		if a.Behind > 0.5 then
+			target = mate.Lateral + mate.Avoid
+		end
+	end
+	local before = a.Avoid
+	local want = target - a.Lateral
+	local d = want - a.Avoid
+	local maxStep = LAT_SPEED * dt
+	a.Avoid += math.clamp(d * math.min(1, dt * 3), -maxStep, maxStep)
+	-- bloqué (quelqu'un juste devant, pas encore de place sur le côté) :
+	-- derrière un marcheur dans le même sens on prend SA vitesse, sinon on attend
+	local slow = 1
+	if blocker then
+		local ag = blocker.Agent
+		if ag and ag.Kind == "walk" and ag.Heading and (ag.Heading :: Vector3):Dot(fwd) > 0.5 then
+			slow = math.clamp((ag.Speed * (ag.Slow or 1)) / math.max(a.Speed, 0.1), 0, 1) * math.clamp((blockerFd - 1.1) / 0.9, 0, 1)
+		else
+			slow = 0
+		end
+	end
+	-- (on attend son compagnon s'il est bloqué par AUTRE chose que nous :
+	-- jamais d'attente mutuelle)
+	a.SelfWait = blocker ~= nil and slow < 0.05
+	if mate and mate.Model and mate.SelfWait then
+		slow = 0
+	end
+	a.Slow = slow
+	a.Waiting = slow < 0.05
+	if a.Waiting and blocker and blocker.Player and a.WaitT > 7 then
+		turnAround(a, now)
+		return
+	end
+	if a.Waiting then
+		a.WaitT += dt
+	else
+		a.WaitT = 0
+	end
+	-- retard : ce qu'on n'a pas avancé ; rattrapé ensuite en marchant un peu plus vite
+	if slow < 1 then
+		a.Delay += dt * (1 - slow)
 	elseif a.Delay > 0 then
 		a.Delay = math.max(0, a.Delay - dt * CATCH_UP)
 	end
 	if mate and mate.Model then
-		local d = math.max(a.Delay, mate.Delay)
-		a.Delay, mate.Delay = d, d
+		local dd = math.max(a.Delay, mate.Delay)
+		a.Delay, mate.Delay = dd, dd
 	end
 	-- direction du regard : vers où l'on va vraiment (écart latéral compris)
 	local side = dt > 0 and (a.Avoid - before) / dt or 0
-	local speed = blocked and 0.01 or a.Speed
+	local speed = a.Waiting and 0.01 or a.Speed * math.max(slow, 0.2)
 	local dir = fwd * speed + right * math.clamp(side, -2, 2)
 	if dir.Magnitude > 0.05 then
 		local h = a.Heading or fwd
-		local target = dir.Unit
-		local blend = h:Lerp(target, math.min(1, dt * 5))
-		a.Heading = blend.Magnitude > 0.01 and blend.Unit or target
+		local tgt = dir.Unit
+		local blend = h:Lerp(tgt, math.min(1, dt * 5))
+		a.Heading = blend.Magnitude > 0.01 and blend.Unit or tgt
 	end
-end
-
-----------------------------------------------------------------------
--- Chien (13 pièces, ancré) : trot, queue qui remue
-----------------------------------------------------------------------
-
-local DOG_COLORS = { rgb(214, 170, 110), rgb(60, 50, 46), rgb(240, 236, 228), rgb(160, 100, 60), rgb(120, 110, 104) }
-
-local function dogPart(m: Model, name: string, size: Vector3, cf: CFrame, color: Color3, shape: string?): BasePart
-	local p = Instance.new("Part")
-	p.Name = name
-	p.Anchored = true
-	p.CanCollide = false
-	p.CanQuery = false
-	p.CanTouch = false
-	p.CastShadow = false
-	p.Size = size
-	p.CFrame = cf
-	p.Color = color
-	p.Material = Enum.Material.SmoothPlastic
-	if shape == "Egg" then
-		local mesh = Instance.new("SpecialMesh")
-		mesh.MeshType = Enum.MeshType.Sphere
-		mesh.Parent = p
-	elseif shape == "Ball" then
-		p.Shape = Enum.PartType.Ball
-	end
-	p.Parent = m
-	return p
-end
-
-type Dog = { Model: Model, Parts: { BasePart }, Locals: { CFrame }, Kinds: { number }, Frames: { CFrame } }
-
-local function buildDog(seed: number): Dog
-	local m = Instance.new("Model")
-	m.Name = "Dog"
-	local fur = DOG_COLORS[seed % #DOG_COLORS + 1]
-	local dark = fur:Lerp(Color3.new(0, 0, 0), 0.35)
-	local d: Dog = { Model = m, Parts = {}, Locals = {}, Kinds = {}, Frames = {} }
-	-- kinds : 0 corps, 1 tête, 2 queue, 3..6 pattes (AvG, AvD, ArG, ArD)
-	local function add(name: string, size: Vector3, loc: CFrame, color: Color3, kind: number, shape: string?)
-		local p = dogPart(m, name, size, loc, color, shape)
-		table.insert(d.Parts, p)
-		table.insert(d.Locals, loc)
-		table.insert(d.Kinds, kind)
-		table.insert(d.Frames, loc)
-	end
-	add("DogBody", Vector3.new(0.9, 0.85, 1.9), CFrame.new(0, 1.35, 0), fur, 0, "Egg")
-	add("DogChest", Vector3.new(0.8, 0.8, 0.8), CFrame.new(0, 1.45, -0.7), fur:Lerp(Color3.new(1, 1, 1), 0.2), 0, "Egg")
-	add("DogCollar", Vector3.new(0.62, 0.16, 0.5), CFrame.new(0, 1.75, -0.92), rgb(220, 50, 70), 0)
-	add("DogHead", Vector3.new(0.7, 0.72, 0.8), CFrame.new(0, 2.05, -1.2), fur, 1, "Egg")
-	add("DogSnout", Vector3.new(0.4, 0.34, 0.5), CFrame.new(0, 1.92, -1.62), fur:Lerp(Color3.new(1, 1, 1), 0.15), 1, "Egg")
-	add("DogNose", Vector3.new(0.16, 0.14, 0.12), CFrame.new(0, 2.0, -1.88), rgb(30, 26, 28), 1, "Egg")
-	for _, sx in ipairs({ -1, 1 }) do
-		add("DogEar", Vector3.new(0.14, 0.45, 0.3), CFrame.new(sx * 0.3, 2.25, -1.08) * CFrame.Angles(0, 0, sx * 0.35), dark, 1, "Egg")
-		add("DogEye", Vector3.new(0.1, 0.1, 0.06), CFrame.new(sx * 0.17, 2.18, -1.55), rgb(30, 26, 28), 1, "Egg")
-	end
-	add("DogTail", Vector3.new(0.14, 0.14, 0.8), CFrame.new(0, 1.75, 1.15) * CFrame.Angles(math.rad(35), 0, 0), fur, 2)
-	local legs = { { -0.26, -0.6 }, { 0.26, -0.6 }, { -0.26, 0.6 }, { 0.26, 0.6 } }
-	for i, l in ipairs(legs) do
-		add("DogLeg", Vector3.new(0.22, 1.05, 0.24), CFrame.new(l[1], 0.55, l[2]), i <= 2 and fur or dark, 2 + i)
-	end
-	return d
-end
-
-local DOG_HIP_Y = 1.05
-local NECK = CFrame.new(0, 1.75, -0.95)
-local NECK_INV = NECK:Inverse()
-local TAIL = CFrame.new(0, 1.6, 0.8)
-local TAIL_INV = TAIL:Inverse()
-
-local function animateDog(d: Dog, cf: CFrame, t: number, moving: boolean)
-	local w = t * math.pi * 2 * 2.1
-	local bob = moving and math.abs(math.sin(w)) * 0.06 or 0
-	local root = cf * CFrame.new(0, bob, 0)
-	local head = root * NECK * CFrame.Angles(math.sin(t * 1.3) * 0.08, math.sin(t * 0.7) * 0.3, 0) * NECK_INV
-	local tail = root * TAIL * CFrame.Angles(0, math.sin(t * 9) * 0.5, 0) * TAIL_INV
-	for i = 1, #d.Parts do
-		local k = d.Kinds[i]
-		local loc = d.Locals[i]
-		if k == 1 then
-			d.Frames[i] = head * loc
-		elseif k == 2 then
-			d.Frames[i] = tail * loc
-		elseif k >= 3 then
-			-- trot : diagonales en phase (AvG + ArD, AvD + ArG)
-			local phase = (k == 3 or k == 6) and 0 or math.pi
-			local a = moving and math.sin(w + phase) * 0.55 or 0
-			local hip = CFrame.new(loc.X, DOG_HIP_Y, loc.Z)
-			d.Frames[i] = root * hip * CFrame.Angles(a, 0, 0) * hip:Inverse() * loc
-		else
-			d.Frames[i] = root * loc
+	-- chien : du côté libre (gauche, sinon droite, sinon devant)
+	if a.Dog then
+		local dogS = sNow + a.Dir * 2.4
+		local m = blockedAt(s, path, dogS)
+		local function freeAt(l: number): boolean
+			local lp = a.Dir > 0 and l or -l
+			for i = 1, #m, 2 do
+				if lp > m[i] + 0.25 and lp < m[i + 1] - 0.25 then
+					return false
+				end
+			end
+			return math.abs(l) < BAND
 		end
+		local here = a.Lateral + a.Avoid
+		local dl = 0
+		if freeAt(here - 1.0) then
+			dl = -1.0
+		elseif freeAt(here + 1.0) then
+			dl = 1.0
+		end
+		a.DogLat += (dl - a.DogLat) * math.min(1, dt * 1.6)
 	end
-	workspace:BulkMoveTo(d.Parts, d.Frames, Enum.BulkMoveMode.FireCFrameChanged)
 end
 
 ----------------------------------------------------------------------
@@ -388,10 +846,9 @@ end
 local WALK_STYLES = { "pedestrian", "pedestrian", "shopper", "pedestrian", "elder", "kid", "jogger", "worker", "shopper", "pedestrian" }
 local PROPS = { "none", "phone", "coffee", "none", "bag", "none" }
 
--- (v9.9) dessus des sièges du mobilier client (TownStreetLife.SEAT_TOPS s'il
--- existe ; sinon les valeurs v9.8 : chaise de terrasse 1,7, tabouret 1,9)
+-- dessus des sièges du mobilier client (TownStreetLife.SEAT_TOPS s'il existe)
 local function seatTops(): { Terrace: number, Chess: number }
-	local tops = { Terrace = 1.7, Chess = 1.9 }
+	local tops = { Terrace = 1.85, Chess = 1.85 }
 	local module = script.Parent:FindFirstChild("TownStreetLife")
 	if module and module:IsA("ModuleScript") then
 		local ok, tsl = pcall(require, module)
@@ -422,6 +879,10 @@ local function addAgent(s: any, a: any)
 	a.Delay = 0
 	a.Waiting = false
 	a.LastNow = 0
+	a.Behind = 0
+	a.Slow = 1
+	a.WaitT = 0
+	a.DogLat = -1
 	a.Phase = a.Phase or hash(a.Seed, 5) * 10
 	table.insert(s.Agents, a)
 end
@@ -445,14 +906,14 @@ local function populate(s: any)
 				prop = "none"
 			end
 			local offset = (i - 1 + hash(seed, 6) * 0.6) / n * path.Length
-			-- (v9.9) tenir SA droite : `right` suit déjà le sens de marche
+			-- tenir SA droite : `right` suit déjà le sens de marche
 			local lateral = 0.55 + hash(seed, 7) * 0.35
 			local dog = (style == "pedestrian" or style == "elder") and hash(seed, 8) < 0.22
 			addAgent(s, {
 				Kind = "walk",
 				Style = style,
 				Seed = seed,
-				Prop = dog and "none" or prop,
+				Prop = dog and "leash" or prop,
 				Path = path,
 				Speed = speed,
 				Dir = dir,
@@ -461,6 +922,7 @@ local function populate(s: any)
 				Along = 0,
 				Anim = "walk",
 				Dog = dog,
+				Lead = true,
 			})
 			-- (parfois un compagnon qui marche à côté : on discute en marchant)
 			if not dog and style ~= "jogger" and hash(seed, 9) < 0.25 then
@@ -473,12 +935,13 @@ local function populate(s: any)
 					Speed = speed,
 					Dir = dir,
 					Offset = offset,
-					Lateral = lateral + 1.35,
+					Lateral = lateral - 1.35,
 					Along = -0.3 * dir,
 					Anim = "walk",
 					Dog = false,
+					Lead = false,
 				})
-				-- (v9.9) les deux compagnons ne s'évitent pas et s'attendent
+				-- (les deux compagnons ne s'évitent pas et s'attendent)
 				local mate = s.Agents[#s.Agents]
 				local lead = s.Agents[#s.Agents - 1]
 				mate.Mate, lead.Mate = lead, mate
@@ -511,7 +974,7 @@ local function populate(s: any)
 					Kind = "static",
 					Style = k % 2 == 0 and "shopper" or "pedestrian",
 					Seed = spot.Seed * 11 + k,
-					Prop = k == 2 and "coffee" or "none",
+					Prop = k == 2 and "coffee" or (k == 3 and "phone" or "none"),
 					CF = chair * CFrame.new(0, 0, 0.15),
 					Anim = "sit",
 					SitTop = tops.Terrace,
@@ -577,31 +1040,55 @@ local function agentCF(a: Agent, now: number): CFrame
 	return a.CF :: CFrame
 end
 
+-- chien : un peu devant, du côté libre (DogLat), qui flâne un peu
+local function dogCF(a: Agent, now: number): CFrame
+	local wander = math.sin(now * 0.31 + a.Seed) * 0.35
+	local fake = {
+		Path = a.Path,
+		Offset = a.Offset,
+		Dir = a.Dir,
+		Speed = a.Speed,
+		Along = a.Dir * (2.3 + math.sin(now * 0.23 + a.Seed) * 0.3),
+		Lateral = a.Lateral + a.Avoid + a.DogLat + wander * 0.4,
+		Delay = a.Delay,
+		Behind = 0,
+		Avoid = 0,
+		Heading = a.Heading,
+	}
+	return walkerCF(fake :: any, now)
+end
+
+local LEASH_SEGS = 8
+local LEASH_LEN = 3.9
+
 local function buildAgent(s: any, a: Agent)
 	local style = a.Style
-	-- (les marchands en tablier : NPCModels "baker" = tablier + toque ; au marché on garde la toque)
 	local m = NPCModels.Build(style, { Seed = a.Seed, Prop = a.Prop or "none", SitHeight = a.SitTop })
 	m.Name = "Person"
 	NPCModels.Place(m, agentCF(a, s.Now))
 	m.Parent = s.Folder
 	a.Model = m
 	if a.Dog then
-		local d = buildDog(a.Seed)
-		d.Model.Parent = s.Folder
-		a.DogModel = d.Model
-		;(a :: any).DogRig = d
-		local leash = Instance.new("Part")
-		leash.Name = "Leash"
-		leash.Anchored = true
-		leash.CanCollide = false
-		leash.CanQuery = false
-		leash.CanTouch = false
-		leash.CastShadow = false
-		leash.Shape = Enum.PartType.Cylinder
-		leash.Size = Vector3.new(1, 0.08, 0.08)
-		leash.Color = rgb(220, 50, 70)
-		leash.Material = Enum.Material.SmoothPlastic
-		leash.Parent = s.Folder
+		local d = NPCModels.BuildDog(a.Seed)
+		d.Parent = s.Folder
+		a.DogModel = d
+		local leash = {}
+		local color = rgb(220, 50, 70)
+		for i = 1, LEASH_SEGS do
+			local seg = Instance.new("Part")
+			seg.Name = "Leash"
+			seg.Anchored = true
+			seg.CanCollide = false
+			seg.CanQuery = false
+			seg.CanTouch = false
+			seg.CastShadow = false
+			seg.Shape = Enum.PartType.Cylinder
+			seg.Size = Vector3.new(0.5, 0.07, 0.07)
+			seg.Color = color
+			seg.Material = Enum.Material.SmoothPlastic
+			seg.Parent = s.Folder
+			leash[i] = seg
+		end
 		a.Leash = leash
 	end
 end
@@ -614,13 +1101,48 @@ local function destroyAgent(a: Agent)
 		a.DogModel:Destroy()
 	end
 	if a.Leash then
-		a.Leash:Destroy()
+		for _, p in ipairs(a.Leash) do
+			p:Destroy()
+		end
 	end
 	a.Model, a.DogModel, a.Leash = nil, nil, nil
-	;(a :: any).DogRig = nil
 end
 
-local function animateAgent(a: Agent, now: number, obstacles: { Obstacle }?)
+-- Laisse : chaînette souple du poing au collier (parabole : flèche selon le
+-- mou, jamais sous le sol)
+local leashFrames: { CFrame } = {}
+local function drawLeash(a: Agent, hand: Vector3, collar: Vector3)
+	local leash = a.Leash
+	if not leash then
+		return
+	end
+	local D = (collar - hand).Magnitude
+	local sag = 0
+	if D < LEASH_LEN then
+		sag = math.sqrt(3 * D * (LEASH_LEN - D) / 8)
+	end
+	local lowest = math.min(hand.Y, collar.Y) - 0.15
+	local floorY = a.Pos.Y + 0.15
+	sag = math.min(sag, 1.6, math.max(0, lowest - floorY + 0.5))
+	local prev = hand
+	for i = 1, LEASH_SEGS do
+		local t = i / LEASH_SEGS
+		local q = hand:Lerp(collar, t) - Vector3.new(0, 4 * sag * t * (1 - t), 0)
+		local mid = (prev + q) / 2
+		local len = (q - prev).Magnitude
+		local seg = leash[i]
+		seg.Size = Vector3.new(len + 0.03, 0.07, 0.07)
+		if len > 1e-3 then
+			leashFrames[i] = CFrame.lookAt(mid, q) * CFrame.Angles(0, math.pi / 2, 0)
+		else
+			leashFrames[i] = CFrame.new(mid)
+		end
+		prev = q
+	end
+	workspace:BulkMoveTo(leash, leashFrames, Enum.BulkMoveMode.FireCFrameChanged)
+end
+
+local function animateAgent(s: any, a: Agent, now: number, obstacles: { Obstacle }?)
 	local m = a.Model
 	if not m then
 		return
@@ -629,46 +1151,36 @@ local function animateAgent(a: Agent, now: number, obstacles: { Obstacle }?)
 		local dt = a.LastNow > 0 and math.clamp(now - a.LastNow, 0, 0.25) or 0
 		a.LastNow = now
 		if obstacles then
-			steer(a, now, dt, obstacles)
+			steer(s, a, now, dt, obstacles)
 		end
 	end
 	local cf = agentCF(a, now)
 	a.Pos = cf.Position
-	-- (NPCModels.Place : seule la racine bouge, Animate repose le reste ;
-	-- jamais de PivotTo répété -> pas d'erreurs d'arrondi accumulées)
+	-- (NPCModels.Place : seule la racine bouge, Animate repose le reste)
 	NPCModels.Place(m, cf)
 	local t = now + a.Phase
 	if a.Kind == "walk" then
 		-- (cadence proportionnelle à la vitesse : ~4 studs / s = pas normal ;
-		-- plus rapide quand on rattrape son retard ; arrêté = au repos)
+		-- plus rapide quand on rattrape son retard ; ralenti ; arrêté = au repos)
 		local sc = tonumber(m:GetAttribute("NpcScale")) or 1
-		local rate = a.Speed / (4 * sc) * (a.Delay > 0 and not a.Waiting and (1 + CATCH_UP) or 1)
+		local slow = a.Slow or 1
+		local rate = a.Speed * slow / (4 * sc) * (a.Delay > 0 and slow >= 1 and (1 + CATCH_UP) or 1)
 		if a.Waiting then
 			NPCModels.Animate(m, "idle", t)
 		else
-			NPCModels.Animate(m, "walk", (now - a.Delay) * rate + a.Phase)
+			a.Clock += rate * math.clamp(now - (a.Clock2 or now), 0, 0.25)
+			NPCModels.Animate(m, "walk", a.Clock + a.Phase)
 		end
-		local rig = (a :: any).DogRig
-		if rig then
-			-- le chien trotte un peu devant, côté bordure
-			local dogCF = walkerCF({
-				Path = a.Path,
-				Offset = a.Offset,
-				Dir = a.Dir,
-				Speed = a.Speed,
-				Along = a.Dir * 2.4,
-				Lateral = a.Lateral + a.Avoid - 1.0, -- (à gauche : la laisse est dans la main gauche)
-				Delay = a.Delay,
-			} :: any, now)
-			animateDog(rig, dogCF, t, not a.Waiting)
-			local leash = a.Leash
-			if leash then
-				local hand = (cf * CFrame.new(-0.8, 2.25, -0.2)).Position
-				local collar = (dogCF * CFrame.new(0, 1.78, -0.92)).Position
-				local mid = (hand + collar) / 2
-				local len = (collar - hand).Magnitude
-				leash.Size = Vector3.new(len, 0.08, 0.08)
-				leash.CFrame = CFrame.lookAt(mid, collar) * CFrame.Angles(0, math.pi / 2, 0)
+		a.Clock2 = now
+		local dog = a.DogModel
+		if dog then
+			local dcf = dogCF(a, now)
+			a.DogPos = dcf.Position
+			NPCModels.AnimateDog(dog, dcf, t, a.Waiting and 0 or a.Speed * slow)
+			local hand = NPCModels.HandPoint(m, -1)
+			local collar = NPCModels.DogCollar(dog)
+			if hand and collar then
+				drawLeash(a, hand, collar)
 			end
 		end
 	else
@@ -680,11 +1192,17 @@ end
 -- Chargement
 ----------------------------------------------------------------------
 
--- (v9.9) obstacles : les personnes construites + les avatars de TOUS les joueurs
+-- obstacles : les personnes construites (+ leurs chiens) + les avatars de TOUS les joueurs
 local function obstaclesOf(s: any): { Obstacle }
 	local obstacles: { Obstacle } = {}
 	for _, a: Agent in ipairs(s.Built or {}) do
-		table.insert(obstacles, { Pos = a.Pos, Agent = a, Player = false })
+		-- (les personnes immobiles sont déjà dans les couloirs : obstacles fixes)
+		if a.Kind == "walk" then
+			table.insert(obstacles, { Pos = a.Pos, Agent = a, Player = false })
+		end
+		if a.DogPos then
+			table.insert(obstacles, { Pos = a.DogPos, Agent = a, Player = false, Dog = true })
+		end
 	end
 	for _, player in ipairs(Players:GetPlayers()) do
 		local character = player.Character
@@ -699,11 +1217,109 @@ end
 
 local ANCHOR_KINDS = { "SitBench", "Terrace", "ChessTables", "Chat", "Wait", "Kiosk", "FlowerStall", "BookStall", "MarketSquare" }
 
+-- distance (XZ) au plus proche obstacle fixe (hors bordures), négative dedans
+local function clearance(s: any, pos: Vector3): (number, number, string?)
+	local key = math.floor(pos.X / CELL) * 100003 + math.floor(pos.Z / CELL)
+	local best, kind, src = math.huge, 0, nil
+	for _, idx in ipairs(s.Grid[key] or {}) do
+		local r: Rect = s.Rects[idx]
+		if r.Kind ~= 2 then
+			local rx, rz = pos.X - r.CX, pos.Z - r.CZ
+			local lx = math.abs(rx * r.AX + rz * r.AZ) - r.HX
+			local lz = math.abs(-rx * r.AZ + rz * r.AX) - r.HZ
+			local d
+			if lx > 0 or lz > 0 then
+				d = math.sqrt(math.max(lx, 0) ^ 2 + math.max(lz, 0) ^ 2)
+			else
+				d = math.max(lx, lz)
+			end
+			if d < best then
+				best, kind, src = d, r.Kind, (r.Src or "zone") .. string.format(" %.1fx%.1f", r.HX * 2, r.HZ * 2)
+			end
+		end
+	end
+	return best, kind, src
+end
+
+-- (v11) tour de la place : pour chaque direction, un rayon LIBRE (loin des
+-- massifs de fleurs, du manège, de la scène et du public du concert…),
+-- choisi pour rester proche de 26 et varier en douceur (Viterbi sur deux
+-- tours : la boucle se referme sans saut)
+local function plazaRing(s: any, plaza: CFrame): { Vector3 }
+	local N = 72
+	local need = BODY_PAD + 0.9
+	local R0, R1, DR = 9, 68, 0.5
+	local nr = math.floor((R1 - R0) / DR) + 1
+	local okR: { { boolean } } = table.create(N)
+	for i = 1, N do
+		local ang = (i - 1) / N * math.pi * 2
+		local row = table.create(nr, false)
+		for k = 1, nr do
+			local r = R0 + (k - 1) * DR
+			local p = plaza.Position + Vector3.new(math.sin(ang) * r, 0, math.cos(ang) * r)
+			row[k] = clearance(s, p) > need
+		end
+		okR[i] = row
+	end
+	local BIG = 1e9
+	local cost = table.create(nr, 0)
+	local back: { { number } } = {}
+	for k = 1, nr do
+		cost[k] = 0
+	end
+	for step = 1, 2 * N do
+		local i = (step - 1) % N + 1
+		local row = okR[i]
+		local nc = table.create(nr, BIG)
+		local bk = table.create(nr, 1)
+		for k = 1, nr do
+			local r = R0 + (k - 1) * DR
+			local base = (row[k] and 0 or 400) + math.abs(r - 26) * 0.15
+			local best, arg = BIG, k
+			for k2 = math.max(1, k - 4), math.min(nr, k + 4) do
+				local c = cost[k2] + ((k - k2) * DR) ^ 2 * 0.35
+				if c < best then
+					best, arg = c, k2
+				end
+			end
+			nc[k] = best + base
+			bk[k] = arg
+		end
+		cost = nc
+		back[step] = bk
+	end
+	-- remontée : on garde le second tour
+	local k = 1
+	for kk = 2, nr do
+		if cost[kk] < cost[k] then
+			k = kk
+		end
+	end
+	local radii = table.create(N, 26)
+	for step = 2 * N, N + 1, -1 do
+		radii[(step - 1) % N + 1] = R0 + (k - 1) * DR
+		k = back[step][k]
+	end
+	local ring = {}
+	local detour = 0
+	for i = 1, N do
+		local ang = (i - 1) / N * math.pi * 2
+		detour = math.max(detour, math.abs(radii[i] - 26))
+		table.insert(ring, plaza.Position + Vector3.new(math.sin(ang) * radii[i], 0.08, math.cos(ang) * radii[i]))
+	end
+	s.PlazaDetour = detour
+	return ring
+end
+
 local function load(s: any): boolean
 	local town = workspace:FindFirstChild("DopamineTown")
 	local data = town and town:FindFirstChild("StreetLife")
 	if not town or not data then
 		return false
+	end
+	local count = town:GetAttribute("PlotCount")
+	if type(count) ~= "number" then
+		count = (okWL and WorldLayout.PlotCount) and WorldLayout.PlotCount(Players.MaxPlayers) or 8
 	end
 	local paths: { Path } = {}
 	local anchors: { [string]: { { CF: CFrame, Seed: number } } } = {}
@@ -759,24 +1375,47 @@ local function load(s: any): boolean
 			return pa.Z < pb.Z
 		end)
 	end
-	-- le petit tour de la place (autour de la fontaine)
+	s.Zones = {}
 	local plaza = town:GetAttribute("PlazaCF")
-	if typeof(plaza) == "CFrame" then
-		local ring = {}
-		for i = 0, 23 do
-			local ang = i / 24 * math.pi * 2
-			table.insert(ring, plaza.Position + Vector3.new(math.sin(ang) * 26, 0.08, math.cos(ang) * 26))
-		end
-		local path = makePath("PlazaRing", ring, true)
-		if path then
-			table.insert(paths, path)
-		end
-	end
+	s.PlazaC = if typeof(plaza) == "CFrame" then plaza.Position else nil
 	s.Paths = paths
 	s.Anchors = anchors
 	s.Benches = benches
 	s.Agents = {}
+	local okO, errO = pcall(collectObstacles, s, town, data, count)
+	if not okO then
+		warn("[TownPeople] obstacles : " .. tostring(errO))
+		s.Rects, s.Grid, s.Stuck, s.Computed = {}, {}, 0, 0
+	end
+	-- le petit tour de la place (autour de la fontaine, en contournant
+	-- massifs, manège et concert)
+	if typeof(plaza) == "CFrame" then
+		local ok, ring = pcall(plazaRing, s, plaza)
+		if ok then
+			local path = makePath("PlazaRing", ring, true)
+			if path then
+				table.insert(paths, path)
+			end
+		else
+			warn("[TownPeople] tour de la place : " .. tostring(ring))
+		end
+	end
 	populate(s)
+	-- les personnes immobiles (assises, qui discutent, marchands) sont aussi
+	-- des obstacles fixes : les couloirs les contournent dès le départ
+	for _, a: Agent in ipairs(s.Agents) do
+		if a.Kind == "static" and a.CF then
+			local cf = a.CF :: CFrame
+			local r
+			if a.Anim == "sit" then
+				r = rectFromCF(cf * CFrame.new(0, 0, -0.5), 1.4, 2.2, 1)
+			else
+				r = rectFromCF(cf, 1.3, 1.3, 1)
+			end
+			r.Src = "npc:" .. a.Style
+			addRect(s, r)
+		end
+	end
 	local folder = Instance.new("Folder")
 	folder.Name = TownPeople.FOLDER_NAME
 	folder.Parent = workspace
@@ -793,7 +1432,7 @@ function TownPeople.Start()
 	if state then
 		return
 	end
-	state = { Agents = {}, Paths = {}, Anchors = {}, Loaded = false, Retry = 0, Now = serverNow(), AccFast = 0, AccSlow = 0, Focus = nil }
+	state = { Agents = {}, Paths = {}, Anchors = {}, Loaded = false, Retry = 0, Now = serverNow(), AccFast = 0, AccSlow = 0, Focus = nil, Rects = {}, Grid = {}, Stuck = 0, Computed = 0, Zones = {} }
 	pcall(load, state)
 	state.Conn = RunService.Heartbeat:Connect(function(dt: number)
 		local s = state
@@ -819,7 +1458,7 @@ function TownPeople.Start()
 			for _, a: Agent in ipairs(s.Built) do
 				local near = focus == nil or (a.Pos - focus).Magnitude < FAST_RANGE
 				if near or slow then
-					animateAgent(a, now, obstacles)
+					animateAgent(s, a, now, obstacles)
 				end
 			end
 		end)
@@ -853,8 +1492,10 @@ function TownPeople.Step(position: Vector3)
 	-- distances (tous les passants "existent" ; on ne construit que les plus proches)
 	local cands = {}
 	for _, a: Agent in ipairs(s.Agents) do
-		local p = agentCF(a, now).Position
-		a.Pos = p
+		local p = a.Model and a.Pos or agentCF(a, now).Position
+		if not a.Model then
+			a.Pos = p
+		end
 		local d = (Vector3.new(p.X - position.X, 0, p.Z - position.Z)).Magnitude
 		if d < nearOut then
 			table.insert(cands, { A = a, D = d })
@@ -873,12 +1514,19 @@ function TownPeople.Step(position: Vector3)
 			wanted[c.A] = true
 		end
 	end
+	-- (un couple se construit / se détruit ensemble)
+	for a in pairs(table.clone(wanted)) do
+		if a.Mate then
+			wanted[a.Mate] = true
+		end
+	end
 	local built = {}
 	for _, a: Agent in ipairs(s.Built) do
 		if wanted[a] then
 			table.insert(built, a)
 		else
 			destroyAgent(a)
+			a.Avoid, a.Behind, a.Slow, a.DogPos = 0, 0, 1, nil
 		end
 	end
 	local builds = 0
@@ -889,7 +1537,8 @@ function TownPeople.Step(position: Vector3)
 			local ok, err = pcall(buildAgent, s, a)
 			if ok then
 				table.insert(built, a)
-				animateAgent(a, now)
+				a.LastNow = 0
+				animateAgent(s, a, now, obstaclesOf(s))
 			else
 				warn("[TownPeople] " .. tostring(err))
 				destroyAgent(a)
@@ -909,9 +1558,10 @@ function TownPeople.Frame(_dt: number?, position: Vector3?, at: number?)
 		s.Focus = position
 	end
 	local now = at or serverNow()
+	s.Now = now
 	local obstacles = obstaclesOf(s)
 	for _, a: Agent in ipairs(s.Built) do
-		animateAgent(a, now, obstacles)
+		animateAgent(s, a, now, obstacles)
 	end
 end
 
@@ -922,6 +1572,9 @@ function TownPeople.Positions(): { Vector3 }
 		for _, a: Agent in ipairs(s.Built) do
 			if a.Kind == "walk" then
 				table.insert(out, a.Pos)
+				if a.DogPos then
+					table.insert(out, a.DogPos)
+				end
 			end
 		end
 	end
@@ -950,9 +1603,54 @@ function TownPeople.Agents(): { any }
 	local out = {}
 	local s = state
 	for _, a: Agent in ipairs(s and s.Built or {}) do
-		table.insert(out, { Id = a.Id, Kind = a.Kind, Pos = a.Pos, Waiting = a.Waiting, Delay = a.Delay, Avoid = a.Avoid, Lateral = a.Lateral, Model = a.Model, Anim = a.Anim, Style = a.Style, Seed = a.Seed })
+		table.insert(out, {
+			Id = a.Id,
+			Kind = a.Kind,
+			Pos = a.Pos,
+			Waiting = a.Waiting,
+			Delay = a.Delay,
+			Avoid = a.Avoid,
+			Lateral = a.Lateral,
+			Model = a.Model,
+			Anim = a.Anim,
+			Style = a.Style,
+			Seed = a.Seed,
+			Dog = a.DogModel,
+			DogPos = a.DogPos,
+			Leash = a.Leash,
+			Path = a.Path and (a.Path :: Path).Name or nil,
+			Slow = a.Slow,
+			Mate = a.Mate and a.Mate.Id or nil,
+		})
 	end
 	return out
+end
+
+-- (tests) couloir : intervalles bloqués d'un chemin à l'abscisse s (repère du chemin)
+function TownPeople.Lanes(pathName: string?, sPos: number?): any
+	local s = state
+	if not s then
+		return nil
+	end
+	if pathName then
+		for _, p: Path in ipairs(s.Paths) do
+			if p.Name == pathName then
+				return blockedAt(s, p, sPos or 0)
+			end
+		end
+		return nil
+	end
+	return { Rects = #s.Rects, SolidParts = s.SolidParts, Computed = s.Computed, Stuck = s.Stuck, Zones = #s.Zones, PlazaDetour = s.PlazaDetour, StuckInfo = s.StuckInfo }
+end
+
+-- (tests) distance (XZ) de `pos` au plus proche obstacle fixe solide ou réservé
+-- (négative = dedans), et sa sorte
+function TownPeople.Probe(pos: Vector3): (number, number, string?)
+	local s = state
+	if not s or not s.Grid then
+		return math.huge, 0, nil
+	end
+	return clearance(s, pos)
 end
 
 function TownPeople.Debug(): any
@@ -972,12 +1670,18 @@ function TownPeople.Debug(): any
 		if a.Model then
 			parts += NPCModels.PartCount(a.Model)
 		end
+		if a.DogModel then
+			parts += NPCModels.PartCount(a.DogModel)
+		end
+		if a.Leash then
+			parts += #a.Leash
+		end
 	end
 	local names = {}
 	for _, p: Path in ipairs(s.Paths) do
 		table.insert(names, p.Name .. "=" .. math.floor(p.Length))
 	end
-	return { Agents = #s.Agents, Walkers = walkers, Statics = statics, Built = s.Built and #s.Built or 0, Parts = parts, Paths = table.concat(names, " ") }
+	return { Agents = #s.Agents, Walkers = walkers, Statics = statics, Built = s.Built and #s.Built or 0, Parts = parts, Paths = table.concat(names, " "), Rects = #(s.Rects or {}), Stuck = s.Stuck }
 end
 
 return TownPeople

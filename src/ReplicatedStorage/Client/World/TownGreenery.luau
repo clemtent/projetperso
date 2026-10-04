@@ -15,7 +15,12 @@
 	    canards et cygnes qui glissent doucement sur l'eau, roseaux et
 	    touffes d'herbe en plus sur la rive ;
 	  - AIRE DE JEUX ("NearDetail" = "Playground") : v9.9 (PARK99) toute
-	    l'aire de jeux réaliste et animée (ParkPlay).
+	    l'aire de jeux réaliste et animée (ParkPlay) ;
+	  - v11 (PARK11) LIEUX DU PARC ("NearDetail" = Basketball, Football,
+	    Tennis, PingPong, RoseGarden, Bandstand, FountainSquare, DogPark,
+	    Picnic, PicnicTables, Fitness, BenchRow) : ParkSports / ParkScenes ;
+	  - v11 (PARK11) PIGEONS DANS TOUTE LA VILLE : colonies en flux près de
+	    l'avatar (TownPigeons.CityStream / CityStep).
 	Tout est ancré, sans collision ni requête, sans ombre pour les petites
 	pièces. Construction étalée (quelques arbres par pas), destruction au-delà
 	d'une marge (hystérésis) ; seuls les oiseaux bougent (≤ 15 Hz, CFrame),
@@ -32,6 +37,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Greenery = require(ReplicatedStorage.Shared.Greenery)
+-- (v11, PARK11) pigeons dans toute la ville (colonies en flux près de l'avatar)
+local okPigeons, TownPigeons = pcall(require, script.Parent:FindFirstChild("TownPigeons") :: any)
 
 local TownGreenery = {}
 
@@ -52,7 +59,7 @@ local BUILDS_PER_STEP = 5
 local BIRD_HZ = 15
 
 type Tree = { Model: Model, Base: Vector3, Near: Model? }
-type Detail = { Model: Model, Kind: string, CF: CFrame, R: number, Near: Model?, Birds: { any }? }
+type Detail = { Model: Model, Kind: string, CF: CFrame, R: number, Near: Model?, Birds: { any }?, Seed: number? }
 
 local started = false
 local folder: Folder? = nil
@@ -275,6 +282,64 @@ local function buildPlayground(d: Detail, parent: Model)
 end
 
 ----------------------------------------------------------------------
+-- (v11, PARK11) LIEUX DU PARC : terrains où les PNJ jouent (ParkSports),
+-- scènes vivantes (ParkScenes : roseraie, kiosque, place de la fontaine,
+-- parc à chiens, pique-niques, agrès, bancs occupés). Rayon de flux plus
+-- court que le lac (PNJ : ~100 pièces chacun).
+----------------------------------------------------------------------
+
+local okSports, ParkSports = pcall(require, script.Parent:FindFirstChild("ParkSports") :: any)
+local okScenes, ParkScenes = pcall(require, script.Parent:FindFirstChild("ParkScenes") :: any)
+local SCENE_IN, SCENE_OUT = 175, 215
+local SPORTS = { Basketball = true, Football = true, Tennis = true, PingPong = true }
+
+local function isScene(kind: string): boolean
+	if SPORTS[kind] then
+		return true
+	end
+	return okScenes and type(ParkScenes) == "table" and ParkScenes.BUILDERS[kind] ~= nil
+end
+
+-- invites "S'asseoir" du serveur (textes anglais : LocAction / LocObject)
+local okLocale, Locale = pcall(require, ReplicatedStorage.Shared.Locale)
+local function translatePrompts(root: Instance)
+	if not okLocale or type(Locale) ~= "table" then
+		return
+	end
+	for _, p in ipairs(root:GetDescendants()) do
+		if p:IsA("ProximityPrompt") and p.Name == "ParkPrompt" and p:GetAttribute("Translated") ~= true then
+			local action, object = p:GetAttribute("LocAction"), p:GetAttribute("LocObject")
+			if type(action) == "string" then
+				p.ActionText = Locale.T(action)
+			end
+			if type(object) == "string" then
+				p.ObjectText = Locale.T(object)
+			end
+			p:SetAttribute("Translated", true)
+		end
+	end
+end
+
+local function buildScene(d: Detail, parent: Model)
+	pcall(translatePrompts, d.Model)
+	local seed = d.Seed or 1
+	if SPORTS[d.Kind] then
+		if not okSports or type(ParkSports) ~= "table" then
+			return
+		end
+		if d.Kind == "PingPong" then
+			-- (deux tables côte à côte)
+			ParkSports.PingPong(parent, d.CF * CFrame.new(-8, 0, 0), seed)
+			ParkSports.PingPong(parent, d.CF * CFrame.new(8, 0, 0), seed + 1)
+		else
+			ParkSports[d.Kind](parent, d.CF, seed)
+		end
+	elseif okScenes and type(ParkScenes) == "table" and ParkScenes.BUILDERS[d.Kind] then
+		ParkScenes.BUILDERS[d.Kind](parent, d.CF, seed)
+	end
+end
+
+----------------------------------------------------------------------
 -- Flux
 ----------------------------------------------------------------------
 
@@ -294,7 +359,7 @@ local function discover()
 				local kind = d:GetAttribute("NearDetail")
 				local cf = d:GetAttribute("DetailCF")
 				if type(kind) == "string" and typeof(cf) == "CFrame" then
-					table.insert(details, { Model = d, Kind = kind, CF = cf, R = tonumber(d:GetAttribute("DetailR")) or 20 })
+					table.insert(details, { Model = d, Kind = kind, CF = cf, R = tonumber(d:GetAttribute("DetailR")) or 20, Seed = tonumber(d:GetAttribute("DetailSeed")) })
 				end
 			end
 		end
@@ -331,6 +396,11 @@ local function buildDetail(d: Detail)
 		buildLake(d, m)
 	elseif d.Kind == "Playground" then
 		buildPlayground(d, m)
+	elseif isScene(d.Kind) then
+		local ok, err = pcall(buildScene, d, m)
+		if not ok then
+			warn("[TownGreenery] " .. d.Kind .. " : " .. tostring(err))
+		end
 	end
 	m.Parent = folder
 	d.Near = m
@@ -358,7 +428,17 @@ local function moveBirds(dt: number)
 	end
 end
 
+local function avatarPos(): Vector3?
+	local player = game:GetService("Players").LocalPlayer
+	local character = player and player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	return root and root:IsA("BasePart") and root.Position or nil
+end
+
 local function heartbeat(dt: number)
+	if okPigeons and type(TownPigeons) == "table" and TownPigeons.CityStep then
+		pcall(TownPigeons.CityStep, dt, avatarPos())
+	end
 	birdClock += dt
 	if birdClock >= 1 / BIRD_HZ then
 		moveBirds(birdClock)
@@ -400,15 +480,23 @@ function TownGreenery.Step(position: Vector3?)
 			end
 		end
 	end
+	local built = 0
 	for _, d in ipairs(details) do
 		local dd = dist(d.CF.Position)
-		if d.Near and dd > DETAIL_OUT * k then
+		local scene = isScene(d.Kind)
+		local dIn, dOut = scene and SCENE_IN or DETAIL_IN, scene and SCENE_OUT or DETAIL_OUT
+		if d.Near and dd > dOut * k then
 			d.Near:Destroy()
 			d.Near = nil
 			d.Birds = nil
-		elseif not d.Near and dd < DETAIL_IN * k and d.Model.Parent then
+		elseif not d.Near and dd < dIn * k and d.Model.Parent and built < 1 then
+			-- (1 lieu au plus par pas : pas d'à-coup en arrivant au parc)
+			built += 1
 			buildDetail(d)
 		end
+	end
+	if okPigeons and type(TownPigeons) == "table" and TownPigeons.CityStream then
+		pcall(TownPigeons.CityStream, pos, k)
 	end
 	table.sort(want, function(a, b)
 		return a[2] < b[2]
@@ -433,6 +521,9 @@ function TownGreenery.Start()
 	folder = f
 	rescan = 0
 	discover()
+	if okPigeons and type(TownPigeons) == "table" and TownPigeons.CityStart then
+		pcall(TownPigeons.CityStart, f)
+	end
 	table.insert(conns, RunService.Heartbeat:Connect(heartbeat))
 end
 
@@ -443,6 +534,9 @@ function TownGreenery.Stop()
 	started = false
 	for _, c in ipairs(conns) do
 		c:Disconnect()
+	end
+	if okPigeons and type(TownPigeons) == "table" and TownPigeons.CityStop then
+		pcall(TownPigeons.CityStop)
 	end
 	table.clear(conns)
 	for _, t in ipairs(trees) do
@@ -478,7 +572,8 @@ function TownGreenery.Debug()
 	for _, d in ipairs(details) do
 		birds += d.Birds and #d.Birds or 0
 	end
-	return { Trees = #trees, NearTrees = builtTrees, Details = #details, Parts = parts, Birds = birds, Steps = clock }
+	local pigeons = okPigeons and type(TownPigeons) == "table" and TownPigeons.CityDebug and TownPigeons.CityDebug() or nil
+	return { Trees = #trees, NearTrees = builtTrees, Details = #details, Parts = parts, Birds = birds, Steps = clock, Pigeons = pigeons }
 end
 
 return TownGreenery

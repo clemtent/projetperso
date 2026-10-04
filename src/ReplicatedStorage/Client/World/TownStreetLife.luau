@@ -39,6 +39,7 @@
 	  TownStreetLife.Debug() -> table
 ]]
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
@@ -52,6 +53,7 @@ local TownDistricts = require(script.Parent.TownDistricts) -- (v9.9, CITY99) ska
 -- TownHighway / District*) ; imposteurs de loin
 local okCity, CityPlan = pcall(require, script.Parent.CityPlan)
 local okKit, CityKit = pcall(require, script.Parent.CityKit)
+local okST, StreetTrees = pcall(require, script.Parent.StreetTrees) -- (v11, CITY11) arbres d'alignement
 -- (v9.8, REALISM98) réglage "Graphismes > Détail" : distances de flux x 0,65 / 1 / 1,35
 local okGQ, GraphicsQuality = pcall(require, ReplicatedStorage.Shared.GraphicsQuality)
 local function detailScale(): number
@@ -69,7 +71,7 @@ local TownStreetLife = {}
 TownStreetLife.FOLDER_NAME = "TownStreetLife"
 -- (v9.9, CITY99 -> NPC99) dessus des sièges du mobilier (TownPeople y pose
 -- les passants assis) : chaises de terrasse, tabourets des tables d'échecs
-TownStreetLife.SEAT_TOPS = { Terrace = 1.25, Chess = 1.45 }
+TownStreetLife.SEAT_TOPS = { Terrace = 1.85, Chess = 1.85, Bench = 1.85 } -- (v11, SCALE11 : échelle Roblox)
 local BUILD_IN, BUILD_OUT = 190, 240
 local BIG_IN, BIG_OUT = 320, 380
 local IMP_IN, IMP_OUT = 640, 720 -- (v10) imposteurs (silhouettes) des gros lieux
@@ -120,6 +122,8 @@ type Spot = {
 	Data: any?, -- (v10, CITY10) paramètres du plan (CityPlan)
 	Snap: boolean?, -- (v10) recaler au sol (rayon) à la construction
 	Imp: Model?, -- (v10) imposteur construit
+	Nudged: boolean?, -- (v11) recalé une fois (trottoir jamais pincé)
+	Home: Vector3?, -- (v11) position publiée avant recalage
 }
 
 local state: any = nil
@@ -267,18 +271,20 @@ end
 -- Banc de rue (lattes bois, flasques en fonte) ; avant = -Z
 local function buildBench(m: Model, F: CFrame, _seed: number)
 	local iron = rgb(58, 54, 66)
+	-- (v11, SCALE11 : échelle Roblox) assise à 1,85, profondeur 2,0, 2,8 par
+	-- place (5,6), dossier jusqu'à 3,8 ; mêmes repères que TownKit.BENCH
 	for _, sx in ipairs({ -1, 1 }) do
-		local x = sx * 2.58
-		-- (v9.9 CITY99, échelle SCALE99 : assise à 1,45 = ~45 cm, comme TownKit.BENCH)
-		box(m, "BenchLeg", F, x - 0.1, x + 0.1, -0.05, 1.35, -0.75, -0.55, iron, M.Metal)
-		box(m, "BenchLeg", F, x - 0.1, x + 0.1, -0.05, 2.75, 0.55, 0.75, iron, M.Metal)
-		box(m, "BenchArm", F, x - 0.14, x + 0.14, 2.05, 2.19, -0.85, 0.7, iron, M.Metal)
-		box(m, "BenchArmPost", F, x - 0.1, x + 0.1, 1.35, 2.05, -0.75, -0.55, iron, M.Metal)
+		local x = sx * 2.93
+		box(m, "BenchLeg", F, x - 0.1, x + 0.1, -0.05, 1.75, -1.05, -0.85, iron, M.Metal)
+		box(m, "BenchLeg", F, x - 0.1, x + 0.1, -0.05, 3.85, 0.65, 0.85, iron, M.Metal)
+		box(m, "BenchArm", F, x - 0.14, x + 0.14, 2.55, 2.69, -1.2, 0.8, iron, M.Metal)
+		box(m, "BenchArmPost", F, x - 0.1, x + 0.1, 1.75, 2.55, -1.05, -0.85, iron, M.Metal)
 	end
-	box(m, "BenchSeat", F, -2.45, 2.45, 1.27, 1.45, -0.8, -0.05, WOOD, M.Wood, true)
-	box(m, "BenchSeat", F, -2.45, 2.45, 1.27, 1.45, 0.05, 0.62, WOOD, M.Wood, true)
-	box(m, "BenchBack", F, -2.45, 2.45, 1.8, 2.2, 0.62, 0.78, WOOD, M.Wood)
-	box(m, "BenchBack", F, -2.45, 2.45, 2.35, 2.7, 0.66, 0.82, WOOD, M.Wood)
+	box(m, "BenchSeat", F, -2.8, 2.8, 1.67, 1.85, -1.15, -0.2, WOOD, M.Wood, true)
+	box(m, "BenchSeat", F, -2.8, 2.8, 1.67, 1.85, -0.1, 0.65, WOOD, M.Wood, true)
+	for i, y in ipairs({ 2.2, 2.75, 3.3 }) do
+		box(m, "BenchBack", F, -2.8, 2.8, y, y + 0.42, 0.62 + i * 0.04, 0.78 + i * 0.04, WOOD, M.Wood)
+	end
 end
 
 -- Jardinière longue (bac béton, arbustes, fleurs)
@@ -330,26 +336,164 @@ local function buildBollards(m: Model, F: CFrame, _seed: number)
 	end
 end
 
--- Cabine téléphonique vitrée
-local function buildPhoneBooth(m: Model, F: CFrame, _seed: number)
-	local frame = rgb(60, 70, 90)
-	box(m, "BoothBase", F, -1.25, 1.25, -0.05, 0.2, -1.25, 1.25, GRAPHITE, M.Concrete)
-	for _, x in ipairs({ -1.2, 1.2 }) do
-		for _, z in ipairs({ -1.2, 1.2 }) do
-			box(m, "BoothPost", F, x - 0.1, x + 0.1, 0.15, 7.25, z - 0.1, z + 0.1, frame, M.Metal, true)
+-- Cabine téléphonique (v11, CITY11, refaite "20x") : vraie CABINE à
+-- l'échelle Roblox (porte 2,9 x 8,3 : on y entre), 4 montants laqués,
+-- vitrages à traverses, soubassements pleins, toit débordant avec CAISSON
+-- LUMINEUX "TÉLÉPHONE" sur les 4 faces (verre "NightGlow" : allumé la
+-- nuit), plafonnier, sol en caoutchouc ; au fond : publiphone (boîtier
+-- inox, écran, clavier, fente à carte, combiné sur son crochet et cordon
+-- spiralé), tablette et ANNUAIRE sur sa chaîne ; affiche sur le côté ;
+-- PORTE vitrée à charnière (poignée-barre) qui S'OUVRE quand l'avatar
+-- approche et se referme après. Avant (porte) = -Z local ; centrée 0,4
+-- vers l'arrière du trottoir (côté pelouse).
+local BOOTH_W, BOOTH_H = 3.6, 9.3
+local function buildPhoneBooth(m: Model, F0: CFrame, seed: number)
+	local F = F0 * CFrame.new(0, 0, 0.4)
+	local hw = BOOTH_W / 2
+	local lacquer = ({ rgb(196, 36, 44), rgb(34, 66, 120), rgb(36, 92, 74) })[seed % 3 + 1]
+	local dark = lacquer:Lerp(INK, 0.45)
+	local steel = rgb(196, 200, 206)
+	-- socle + sol caoutchouc
+	box(m, "BoothPlinth", F, -hw - 0.15, hw + 0.15, -0.05, 0.22, -hw - 0.15, hw + 0.15, rgb(150, 148, 144), M.Concrete, true)
+	box(m, "BoothFloor", F, -hw + 0.2, hw - 0.2, 0.2, 0.27, -hw + 0.2, hw - 0.2, rgb(48, 50, 56), M.Rubber)
+	-- montants d'angle
+	for _, x in ipairs({ -hw + 0.13, hw - 0.13 }) do
+		for _, z in ipairs({ -hw + 0.13, hw - 0.13 }) do
+			box(m, "BoothPost", F, x - 0.13, x + 0.13, 0.22, BOOTH_H - 0.8, z - 0.13, z + 0.13, lacquer, M.SmoothPlastic, true)
 		end
 	end
-	box(m, "BoothRoof", F, -1.4, 1.4, 7.2, 7.6, -1.4, 1.4, frame, M.Metal)
-	local sign = box(m, "BoothSign", F, -1.05, 1.05, 6.6, 7.0, -1.36, -1.26, WHITE, M.SmoothPlastic)
-	surfaceText(sign, Enum.NormalId.Front, "📞 " .. Locale.T("Phone"), rgb(40, 70, 150), WHITE, nil, 60)
-	for _, sx in ipairs({ -1, 1 }) do
-		local g = box(m, "BoothGlass", F, sx * 1.2 - 0.05, sx * 1.2 + 0.05, 0.9, 6.5, -1.05, 1.05, GLASS, M.Glass, true)
-		g.Transparency = 0.55
+	-- trois côtés : soubassement plein, vitrage, traverses
+	local sides = {
+		{ "Back", CFrame.identity },
+		{ "Left", CFrame.Angles(0, math.pi / 2, 0) },
+		{ "Right", CFrame.Angles(0, -math.pi / 2, 0) },
+	}
+	for i, sd in ipairs(sides) do
+		-- repère du côté : face extérieure vers +Z local (le fond est à +Z)
+		local S = F * (sd[2] :: CFrame)
+		local z0, z1 = hw - 0.2, hw - 0.08
+		box(m, "BoothPanel", S, -hw + 0.26, hw - 0.26, 0.22, 1.5, z0 - 0.02, z1 + 0.02, dark, M.SmoothPlastic, true)
+		local g = box(m, "BoothGlass", S, -hw + 0.26, hw - 0.26, 1.5, BOOTH_H - 0.8, z0, z1, GLASS, M.Glass, true)
+		g.Transparency = 0.6
+		g.Reflectance = 0.15
+		for _, y in ipairs({ 1.5, 3.4, 6.6 }) do
+			box(m, "BoothRail", S, -hw + 0.26, hw - 0.26, y - 0.07, y + 0.07, z0 - 0.06, z1 + 0.06, lacquer, M.SmoothPlastic)
+		end
+		if i == 2 then
+			-- affiche dans le soubassement gauche (côté rue)
+			local ad = box(m, "BoothAd", S, -hw + 0.5, hw - 0.5, 0.35, 1.38, z1 + 0.025, z1 + 0.04, WHITE, M.SmoothPlastic)
+			surfaceText(ad, Enum.NormalId.Back, "📱 " .. Locale.T("Call a friend!"), lacquer, WHITE, Enum.Font.FredokaOne, 40)
+		end
 	end
-	local back = box(m, "BoothGlass", F, -1.05, 1.05, 0.9, 6.5, 1.15, 1.25, GLASS, M.Glass, true)
-	back.Transparency = 0.55
-	box(m, "Phone", F, -0.45, 0.45, 3.4, 4.8, 0.85, 1.12, GRAPHITE, M.Metal)
-	box(m, "PhoneHandset", F, -0.4, -0.15, 3.9, 4.6, 0.75, 0.85, INK, M.SmoothPlastic)
+	-- toit : chapeau débordant + caisson lumineux "TÉLÉPHONE"
+	box(m, "BoothHeader", F, -hw - 0.02, hw + 0.02, BOOTH_H - 0.8, BOOTH_H - 0.05, -hw - 0.02, hw + 0.02, lacquer, M.SmoothPlastic)
+	local caption = "📞 " .. string.upper(Locale.T("Telephone"))
+	for k = 0, 3 do
+		local R = F * CFrame.Angles(0, k * math.pi / 2, 0)
+		local sign = glow(box(m, "BoothSign", R, -hw + 0.3, hw - 0.3, BOOTH_H - 0.68, BOOTH_H - 0.17, -hw - 0.09, -hw - 0.03, rgb(250, 248, 236), M.SmoothPlastic))
+		surfaceText(sign, Enum.NormalId.Front, caption, dark, rgb(250, 248, 236), Enum.Font.GothamBlack, 80)
+	end
+	box(m, "BoothRoof", F, -hw - 0.3, hw + 0.3, BOOTH_H - 0.05, BOOTH_H + 0.25, -hw - 0.3, hw + 0.3, dark, M.Metal)
+	box(m, "BoothRoofTop", F, -hw + 0.1, hw - 0.1, BOOTH_H + 0.25, BOOTH_H + 0.45, -hw + 0.1, hw - 0.1, lacquer, M.SmoothPlastic)
+	glow(box(m, "BoothLamp", F, -0.6, 0.6, BOOTH_H - 0.9, BOOTH_H - 0.84, -0.6, 0.6, rgb(255, 240, 210), M.SmoothPlastic))
+	-- publiphone au fond (face -Z vers l'intérieur)
+	local zb = hw - 0.2
+	box(m, "PhoneBack", F, -0.75, 0.75, 3.3, 6.4, zb - 0.1, zb - 0.03, steel, M.Metal)
+	box(m, "PhoneBody", F, -0.62, 0.62, 3.6, 6.1, zb - 0.5, zb - 0.08, rgb(150, 156, 166), M.Metal)
+	local screen = glow(box(m, "PhoneScreen", F, -0.42, 0.42, 5.35, 5.85, zb - 0.53, zb - 0.5, rgb(170, 220, 190), M.SmoothPlastic))
+	surfaceText(screen, Enum.NormalId.Front, Locale.T("INSERT CARD"), rgb(30, 70, 50), rgb(170, 220, 190), Enum.Font.Code, 25)
+	local pad = box(m, "PhoneKeypad", F, -0.36, 0.36, 4.2, 5.15, zb - 0.53, zb - 0.5, rgb(64, 68, 78), M.SmoothPlastic)
+	do
+		local gui = Instance.new("SurfaceGui")
+		gui.Face = Enum.NormalId.Front
+		gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		gui.PixelsPerStud = 60
+		gui.MaxDistance = 25
+		gui.LightInfluence = 0.7
+		gui.Parent = pad
+		local keys = { "1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#" }
+		for i, key in ipairs(keys) do
+			local col, row = (i - 1) % 3, math.floor((i - 1) / 3)
+			local b = Instance.new("TextLabel")
+			b.BackgroundColor3 = rgb(222, 226, 232)
+			b.BorderSizePixel = 0
+			b.Position = UDim2.fromScale(0.06 + col * 0.31, 0.04 + row * 0.24)
+			b.Size = UDim2.fromScale(0.26, 0.2)
+			b.TextScaled = true
+			b.Font = Enum.Font.GothamBold
+			b.TextColor3 = rgb(40, 44, 52)
+			b.Text = key
+			b.Parent = gui
+			local c = Instance.new("UICorner")
+			c.CornerRadius = UDim.new(0.3, 0)
+			c.Parent = b
+		end
+	end
+	box(m, "PhoneSlot", F, -0.3, 0.3, 3.85, 3.95, zb - 0.56, zb - 0.5, INK, M.SmoothPlastic)
+	-- combiné sur son crochet (côté gauche) + cordon spiralé
+	box(m, "PhoneHook", F, -0.92, -0.62, 5.4, 5.55, zb - 0.45, zb - 0.2, steel, M.Metal)
+	box(m, "Handset", F, -1.02, -0.74, 4.3, 5.75, zb - 0.62, zb - 0.32, INK, M.SmoothPlastic)
+	for _, y in ipairs({ 4.25, 5.8 }) do
+		ball(m, "HandsetCup", F, -0.88, y, zb - 0.47, 0.42, INK, M.SmoothPlastic)
+	end
+	for k = 0, 3 do
+		local y = 4.0 - k * 0.28
+		newPart(m, "PhoneCord", Vector3.new(0.12, 0.2, 0.2), F * CFrame.new(-0.84 + k * 0.05, y, zb - 0.4) * UPRIGHT, INK, M.SmoothPlastic, "Cyl")
+	end
+	-- tablette + annuaire (sur sa chaîne)
+	box(m, "PhoneShelf", F, -0.95, 0.95, 3.0, 3.12, zb - 1.0, zb - 0.02, steel, M.Metal)
+	local book = box(m, "Directory", F, -0.2, 0.75, 3.12, 3.42, zb - 0.95, zb - 0.3, rgb(250, 214, 60), M.SmoothPlastic)
+	surfaceText(book, Enum.NormalId.Top, Locale.T("DIRECTORY"), rgb(60, 50, 30), rgb(250, 214, 60), Enum.Font.GothamBlack, 25)
+	box(m, "DirectoryChain", F, 0.6, 0.66, 3.12, 3.7, zb - 0.12, zb - 0.06, steel, M.Metal)
+	-- PORTE à charnière (montant gauche), poignée-barre ; s'ouvre vers l'extérieur
+	local hinge = F * CFrame.new(-hw + 0.26, 0, -hw + 0.14)
+	local door = {}
+	local function dpart(p: BasePart)
+		table.insert(door, { p, hinge:ToObjectSpace(p.CFrame) })
+	end
+	local dz0, dz1 = -0.06, 0.06
+	local dw = BOOTH_W - 0.52
+	dpart(box(m, "DoorFrame", hinge, 0, 0.14, 0.32, BOOTH_H - 0.85, dz0, dz1, lacquer, M.SmoothPlastic))
+	dpart(box(m, "DoorFrame", hinge, dw - 0.14, dw, 0.32, BOOTH_H - 0.85, dz0, dz1, lacquer, M.SmoothPlastic))
+	for _, y in ipairs({ 0.32, 3.4, BOOTH_H - 0.99 }) do
+		dpart(box(m, "DoorRail", hinge, 0.14, dw - 0.14, y, y + 0.14, dz0, dz1, lacquer, M.SmoothPlastic))
+	end
+	local dg = box(m, "DoorGlass", hinge, 0.14, dw - 0.14, 0.46, BOOTH_H - 0.99, -0.03, 0.03, GLASS, M.Glass)
+	dg.Transparency = 0.6
+	dpart(dg)
+	dpart(box(m, "DoorPull", hinge, dw - 0.45, dw - 0.33, 3.0, 5.4, -0.22, -0.1, steel, M.Metal))
+	dpart(box(m, "DoorPullFoot", hinge, dw - 0.45, dw - 0.33, 4.15, 4.25, -0.13, -0.06, steel, M.Metal))
+	if okKit and type(CityKit) == "table" then
+		local angle = 0
+		local parts, frames = {}, {}
+		for i, d in ipairs(door) do
+			parts[i] = d[1]
+		end
+		local front = (F * CFrame.new(0, 0, -hw - 1.5)).Position
+		CityKit.Actor(m, F.Position, function(_t: number, dt: number)
+			local character = Players.LocalPlayer.Character
+			local root = character and character:FindFirstChild("HumanoidRootPart")
+			local want = 0
+			if root and root:IsA("BasePart") then
+				local p = root.Position
+				local dFront = Vector3.new(p.X - front.X, 0, p.Z - front.Z).Magnitude
+				local dIn = Vector3.new(p.X - F.Position.X, 0, p.Z - F.Position.Z).Magnitude
+				if dFront < 4.5 or dIn < hw then
+					want = math.rad(95)
+				end
+			end
+			local new = angle + math.clamp(want - angle, -dt * 3.2, dt * 3.2)
+			if math.abs(new - angle) < 1e-4 then
+				return
+			end
+			angle = new
+			local rot = hinge * CFrame.Angles(0, angle, 0)
+			for i, d in ipairs(door) do
+				frames[i] = rot * d[2]
+			end
+			workspace:BulkMoveTo(parts, frames, Enum.BulkMoveMode.FireCFrameChanged)
+		end, seed)
+	end
 end
 
 -- Distributeur de boissons (vitrine à canettes)
@@ -717,17 +861,17 @@ end
 local function buildTerrace(m: Model, F: CFrame, seed: number)
 	local parasol = hash(seed, 5) < 0.5 and rgb(200, 50, 60) or rgb(40, 120, 110)
 	for i = -1, 1 do
-		local x = i * 3.2
-		column(m, "TableFoot", F, x, 0, -0.05, 0.12, 0.9, GRAPHITE, M.Metal)
-		-- (v9.9 CITY99, échelle : plateau à 2,3 = ~75 cm, chaises à 1,25 = SitHeight - 0,2 de TownPeople)
-		column(m, "TableLeg", F, x, 0, 0.1, 2.2, 0.16, GRAPHITE, M.Metal)
-		column(m, "TableTop", F, x, 0, 2.18, 2.3, 1.5, rgb(236, 232, 226), M.Marble, true)
+		local x = i * 3.4
+		column(m, "TableFoot", F, x, 0, -0.05, 0.12, 1.1, GRAPHITE, M.Metal)
+		-- (v11, SCALE11 : échelle Roblox) plateau à 3,1, chaises à 1,85 (= SEAT_TOPS.Terrace)
+		column(m, "TableLeg", F, x, 0, 0.1, 2.98, 0.2, GRAPHITE, M.Metal)
+		column(m, "TableTop", F, x, 0, 2.98, 3.1, 1.9, rgb(236, 232, 226), M.Marble, true)
 		for _, sz in ipairs({ -1, 1 }) do
-			local c = F * CFrame.new(x, 0, sz * 1.25) * CFrame.Angles(0, sz < 0 and math.pi or 0, 0)
-			box(m, "ChairSeat", c, -0.5, 0.5, 1.1, 1.25, -0.5, 0.5, rgb(160, 110, 70), M.Wood)
-			box(m, "ChairBack", c, -0.5, 0.5, 1.21, 2.6, 0.42, 0.55, rgb(160, 110, 70), M.Wood)
-			for _, lx in ipairs({ -0.42, 0.42 }) do
-				box(m, "ChairFrame", c, lx - 0.05, lx + 0.05, -0.05, 1.13, -0.44, 0.44, GRAPHITE, M.Metal)
+			local c = F * CFrame.new(x, 0, sz * 1.6) * CFrame.Angles(0, sz < 0 and math.pi or 0, 0)
+			box(m, "ChairSeat", c, -0.75, 0.75, 1.68, 1.85, -0.7, 0.7, rgb(160, 110, 70), M.Wood)
+			box(m, "ChairBack", c, -0.75, 0.75, 1.81, 4.1, 0.6, 0.74, rgb(160, 110, 70), M.Wood)
+			for _, lx in ipairs({ -0.62, 0.62 }) do
+				box(m, "ChairFrame", c, lx - 0.05, lx + 0.05, -0.05, 1.7, -0.62, 0.62, GRAPHITE, M.Metal)
 			end
 		end
 		if i ~= 0 then
@@ -782,10 +926,10 @@ end
 local function buildChessTables(m: Model, F: CFrame, _seed: number)
 	for _, x in ipairs({ -3, 3 }) do
 		local T = F * CFrame.new(x, 0, 0)
-		-- (v9.9 CITY99, échelle : plateau à 2,3, tabourets à 1,45 = NPCModels.SitHeight)
-		column(m, "ChessFoot", T, 0, 0, -0.05, 2.05, 1.0, CONCRETE, M.Concrete, true)
-		box(m, "ChessTop", T, -1.4, 1.4, 2.0, 2.3, -1.4, 1.4, rgb(220, 214, 206), M.Marble, true)
-		local board = box(m, "ChessBoard", T, -0.9, 0.9, 2.28, 2.34, -0.9, 0.9, WHITE, M.SmoothPlastic)
+		-- (v11, SCALE11 : échelle Roblox) plateau à 3,1, tabourets à 1,85 (= SEAT_TOPS.Chess)
+		column(m, "ChessFoot", T, 0, 0, -0.05, 2.85, 1.0, CONCRETE, M.Concrete, true)
+		box(m, "ChessTop", T, -1.4, 1.4, 2.8, 3.1, -1.4, 1.4, rgb(220, 214, 206), M.Marble, true)
+		local board = box(m, "ChessBoard", T, -0.9, 0.9, 3.08, 3.14, -0.9, 0.9, WHITE, M.SmoothPlastic)
 		local gui = Instance.new("SurfaceGui")
 		gui.Face = Enum.NormalId.Top
 		gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
@@ -806,11 +950,11 @@ local function buildChessTables(m: Model, F: CFrame, _seed: number)
 			end
 		end
 		for _, sz in ipairs({ -1, 1 }) do
-			column(m, "ChessStool", T, 0, sz * 2.3, -0.05, 1.45, 1.1, CONCRETE, M.Concrete, true)
+			column(m, "ChessStool", T, 0, sz * 2.4, -0.05, 1.85, 1.2, CONCRETE, M.Concrete, true)
 		end
 		-- quelques pièces
 		for k = 0, 3 do
-			column(m, "ChessPiece", T, -0.6 + k * 0.4, (k % 2 == 0 and -0.5 or 0.55), 2.32, 2.7, 0.2, k % 2 == 0 and WHITE or INK, M.SmoothPlastic)
+			column(m, "ChessPiece", T, -0.6 + k * 0.4, (k % 2 == 0 and -0.5 or 0.55), 3.12, 3.5, 0.2, k % 2 == 0 and WHITE or INK, M.SmoothPlastic)
 		end
 	end
 end
@@ -1099,12 +1243,60 @@ local function snapSpot(spot: Spot, parent: Instance)
 	end
 end
 
+-- (v11, CITY11) trottoirs jamais PINCÉS : un petit mobilier de bordure qui
+-- laisserait moins de 2,5 studs de passage avec un lampadaire / un autre
+-- mobilier glisse le long du trottoir (axe X local), une fois, de façon
+-- déterministe (mêmes données serveur : même résultat sur tous les clients)
+local NUDGE = { ParkMeter = 0.3, Bin = 0.8, NewsBox = 0.7, Mailbox = 0.6, SpeedSign = 0.2, DogStation = 0.5, Recycle = 1.2, Vending = 1.1 }
+local PASSAGE = 2.5
+local function nudgeSpot(spot: Spot)
+	local r0 = NUDGE[spot.Kind]
+	if not r0 or spot.Nudged then
+		return
+	end
+	spot.Nudged = true
+	local okL, near = pcall(TownRoads.LampsNear, spot.Pos, 6)
+	if not okL or type(near) ~= "table" then
+		return
+	end
+	-- pincement : un obstacle EN FACE (même abscisse le long du trottoir, à
+	-- moins de r + r' + 2,5 en travers) ; un voisin dans l'alignement ne gêne pas
+	local home = spot.Pos
+	local function blocked(cf: CFrame): boolean
+		for _, o in ipairs(near) do
+			local q: Vector3 = o[1]
+			if Vector3.new(q.X - home.X, 0, q.Z - home.Z).Magnitude < 0.05 then
+				continue -- (soi-même)
+			end
+			local rel = cf:PointToObjectSpace(q)
+			local along, across = math.abs(rel.X), math.abs(rel.Z)
+			if along < r0 + o[2] + 0.3 and across < r0 + o[2] + PASSAGE then
+				return true
+			end
+		end
+		return false
+	end
+	if not blocked(spot.CF) then
+		return
+	end
+	for _, dx in ipairs({ 1.5, -1.5, 3, -3, 4.5, -4.5 }) do
+		local cf = spot.CF * CFrame.new(dx, 0, 0)
+		if not blocked(cf) then
+			spot.Home = home
+			spot.CF = cf
+			spot.Pos = cf.Position
+			return
+		end
+	end
+end
+
 local function buildSpot(spot: Spot, parent: Instance)
 	local builder = BUILDERS[spot.Kind]
 	if not builder then
 		return
 	end
 	snapSpot(spot, parent)
+	pcall(nudgeSpot, spot)
 	local m = Instance.new("Model")
 	m.Name = spot.Kind
 	local ok, anim = pcall(builder, m, spot.CF, spot.Seed, spot)
@@ -1260,11 +1452,26 @@ local function load(s: any): boolean
 	-- (v9.9, CITY99) arbres de la ville : modèles VIDES posés par le serveur
 	-- (TownKit.Tree, attribut TreeClient) ; on les construit ici
 	s.Trees = {}
+	-- (v11, CITY11) grilles de pied d'arbre du serveur : l'arbre posé dessus
+	-- est un arbre D'ALIGNEMENT (espèce de ville, StreetTrees)
+	local grates = {}
+	for _, d in ipairs(town:GetDescendants()) do
+		if d:IsA("BasePart") and d.Name == "TreeGrate" then
+			table.insert(grates, d.Position)
+		end
+	end
 	for _, d in ipairs(town:GetDescendants()) do
 		if d:IsA("Model") and d:GetAttribute("TreeClient") == true then
 			local base = d:GetAttribute("TreeBase")
 			if typeof(base) == "Vector3" then
-				table.insert(s.Trees, { Model = d, Base = base, Built = nil })
+				local street = false
+				for _, g in ipairs(grates) do
+					if math.abs(g.X - base.X) < 1 and math.abs(g.Z - base.Z) < 1 and math.abs(g.Y - base.Y) < 2 then
+						street = true
+						break
+					end
+				end
+				table.insert(s.Trees, { Model = d, Base = base, Built = nil, Street = street })
 			end
 		end
 	end
@@ -1293,6 +1500,23 @@ local function buildTree(t: any, far: boolean?): number
 		return 0
 	end
 	local maxTier = far and 0 or (tonumber(m:GetAttribute("TreeTier")) or 0)
+	if t.Street and not far and okST and type(StreetTrees) == "table" then
+		-- (v11) arbre d'alignement : espèce de ville commune à la rue
+		-- (graine du serveur : rue * 31 + rang), corset pour les jeunes
+		local seed = tonumber(m:GetAttribute("TreeSeed")) or 1
+		local h = tonumber(m:GetAttribute("TreeHeight")) or 12
+		local okS, tree2, n2 = pcall(StreetTrees.Build, m, t.Base, h + 2, seed, StreetTrees.Pick(math.floor(seed / 31) * 31 + 7), { Guard = h < 14, Name = "TreeLocal" })
+		if t.Built then
+			t.Built:Destroy()
+		end
+		if okS then
+			t.Built = tree2
+			t.Far = false
+			return n2
+		end
+		t.Built = false
+		return 0
+	end
 	local ok, tree, n = pcall(function()
 		return Greenery.Tree(m, t.Base, tonumber(m:GetAttribute("TreeHeight")) or 12, tonumber(m:GetAttribute("TreeSeed")) or 1, m:GetAttribute("TreeSpecies") :: any, maxTier, 0, {
 			Lawn = m:GetAttribute("TreeLawn") == true,
@@ -1574,7 +1798,7 @@ function TownStreetLife.Debug(): any
 			end
 		end
 	end
-	return { Spots = s and #s.Spots or 0, Built = built, Parts = parts, Kinds = kinds, Created = partCount, City = s and s.CityCount or 0, Impostors = imps, ImpostorParts = impParts, Trees = s and s.Trees and #s.Trees or 0, TreesBuilt = trees, TreeParts = treeParts }
+	return { List = s and s.Spots or {}, Spots = s and #s.Spots or 0, Built = built, Parts = parts, Kinds = kinds, Created = partCount, City = s and s.CityCount or 0, Impostors = imps, ImpostorParts = impParts, Trees = s and s.Trees and #s.Trees or 0, TreesBuilt = trees, TreeParts = treeParts }
 end
 
 return TownStreetLife

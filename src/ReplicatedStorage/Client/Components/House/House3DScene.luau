@@ -1216,7 +1216,10 @@ function House3DScene.BuildRoomShell(roomData: any, sizeDef: any?, options: Shel
 	if opts.Ceiling == true then
 		-- (v9.6 : dessous 0,04 plus bas que le dessous du plancher de l'étage :
 		-- plus de faces confondues avec lui, ni avec la dalle de la façade)
-		shellPart(model, "Ceiling", Vector3.new(W + 2 * T, 0.56, D + 2 * T), CFrame.new(0, WH + 0.24, 0), trim:Lerp(WHITE, 0.5), M.SmoothPlastic, true)
+		-- (v11 SCALE11 : côtés rentrés de 0,06 dans l'épaisseur des murs : ses
+		-- faces de côté étaient dans le plan des faces extérieures des murs et
+		-- du plancher de la pièce du dessus -> scintillement)
+		shellPart(model, "Ceiling", Vector3.new(W + 2 * T - 0.12, 0.56, D + 2 * T - 0.12), CFrame.new(0, WH + 0.24, 0), trim:Lerp(WHITE, 0.5), M.SmoothPlastic, true)
 	end
 	-- Papier peint (décoration) sur le mur du fond
 	if patterns and backWindow then

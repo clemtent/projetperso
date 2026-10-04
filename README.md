@@ -27,6 +27,57 @@ Les autres méthodes (Rojo, copie manuelle) sont décrites dans [`docs/INSTALLAT
 
 ---
 
+## 🆕 Nouveautés v11 : banque, train, diamants et une ville bien plus réaliste
+
+- 💎 **Diamants**, une nouvelle monnaie.
+  - Ils se gagnent à l'océan (à partir de la renaissance 10), aux casses, aux courses (1ʳᵉ médaille d'or de chaque circuit) et avec les intérêts du coffre.
+  - Ils s'échangent contre de la Dopamine ou des objets de luxe (19 objets, de 25 à 300 💎) : objets portés, titres, peintures de voiture.
+- 🏦 **Banque Dopamine** avec guichets, distributeurs, coffre et bijoutier. Une pastille 💎 est toujours visible.
+  - Dépôt et retrait, 2 % d'intérêts par jour, change (15 💎 par jour).
+- 🕶️ **Casses façon dessin animé** (sans armes), en équipe :
+  - Banque : forcer la porte, pirater, percer le coffre, prendre les sacs, fuir jusqu'à la planque. 3 casses payés par jour.
+  - Train : le convoi de diamants s'arrête toutes les 20 min dans une gare. 4 casses payés par jour.
+- 🚂 **Train de la ville** : une ligne de ceinture avec 4 gares, 2 trains et des passages à niveau.
+  - Tu montes, tu t'assois et tu descends où tu veux.
+- 🎵 **Musique** :
+  - Chaque instrument a son propre son : piano, guitare, basse, synthé, xylophone, batterie.
+  - Les panneaux ressemblent aux vrais instruments.
+  - 43 morceaux (31 compositions originales, 12 libres de droits) et une file d'attente partagée.
+  - 8 boucles DJ, et une scène agrandie avec écrans LED et piste de danse.
+- 🧍 **PNJ réalistes** :
+  - Mains à doigts articulés, téléphone à écran lumineux.
+  - Ils s'évitent et contournent les objets.
+  - 8 races de chiens, avec une vraie laisse.
+- 🍦 **Manger pour de vrai** : la nourriture est tenue bien droite. On lèche la glace, on boit le milkshake à la paille, on croque le reste.
+- 🐠 **Poissons d'aquarium** qui nagent : 8 espèces, avec des bancs de néons.
+- 🚗 **Voitures** :
+  - Agrandies ×1,3, avec un volant qui tourne et des conducteurs PNJ.
+  - Ton avatar tient le volant et regarde derrière quand tu recules.
+  - La circulation ne reste plus coincée.
+  - L'autoroute est accessible : plus de barrage sur les bretelles.
+  - Sélecteur de couleur libre et peintures de luxe.
+- 🏁 **Courses** :
+  - 7 circuits avec temps de médaille.
+  - Rivaux avec pilotes, nitro (Shift ou N), fantôme de ton meilleur tour.
+  - Menu de stats complet et rangs de Bronze à Diamant.
+- 🏙️ **Ville** :
+  - 19 types de bâtiments différents, avec des intérieurs meublés.
+  - Mairie complète : grand hall, escalier double, bureau du maire, salle du conseil.
+  - Nouveaux panneaux de direction, vraies cabines téléphoniques, 6 espèces d'arbres de rue.
+- 🌳 **Parc** :
+  - PNJ qui jouent au basket, au tennis, au foot et au ping-pong.
+  - PNJ sur les bancs, nouvelles fontaines, pigeons partout dans la ville.
+  - Cirque géant : 40 places et un spectacle complet.
+- 🏠 **Maison** :
+  - Rideaux fenêtre par fenêtre.
+  - Un interrupteur par lumière.
+  - Le hall du manoir est dégagé.
+- 🪑 **Échelle Roblox** : meubles, chaises, tables, lits et portes agrandis. L'avatar s'assoit sur le coussin au lieu de flotter.
+- 🪞 **Miroirs** refaits, 🌈 **arc-en-ciel** refait, avec un 🍀 **pot d'or** à son pied pour les 3 premiers arrivés.
+- 🔁 **Renaissances** : à partir de la renaissance 10, les nombres restent lisibles et chaque renaissance va plus vite (de 157 à 89 min).
+- 🛒 **Nouveaux packs Robux** : 5, 10 et 100 jours de Dopamine, calculés selon ta production actuelle.
+- 🏅 **5 nouveaux badges** : Ça rebondit, Hypnotisé, LE COIN !!!, Combo max !, Pop pop pop.
+
 ## 🆕 Nouveautés v10 : une grande ville jusqu'à 50 joueurs
 
 > ⚠️ Pour 50 joueurs par serveur : Roblox Studio → Paramètres du jeu → Places → **Max Players = 50**. La ville s'adapte toute seule (de 4 à 50 parcelles).

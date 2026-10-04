@@ -63,7 +63,33 @@ Sim.Targets = {
 	PurchasesIn5Min = 8, -- au moins 8 achats pendant les 5 premières minutes
 	MinTotalHours = 16, -- R10 jamais avant 16 h de jeu actif (des jours de jeu)
 	RobuxMinRatio = 0.25, -- avec x2 + VIP + auto-clic, une partie dure au moins 25 % de la partie sans Robux
+	-- (v11, ECON11) Fin de partie : avant, R14 = 8 h, R16 = 68 h, R18 = 860 h (prix de
+	-- l'océan x4,4 par visite, Sx à la 20e). Maintenant chaque partie R11..R40 dure
+	-- entre LateRunMinutes[1] et [2] min, jamais plus de 3 % de plus que la précédente
+	-- (on se sent de plus en plus fort), et R40 arrive entre LateTotalHours[1] et [2] h.
+	LateRebirths = 40,
+	LateRunMinutes = { 80, 165 },
+	LateTotalHours = { 60, 100 },
+	-- Pire cas "tout le reste" (BANK11 / RACE11, en secondes de production par jour,
+	-- pour un joueur qui ne joue que ExtrasDayHours h) : casses 1386 s + échange de
+	-- diamants 450 s + courses 8 x 120 s = 960 s (x1,39 pour 2 h de jeu par jour : le
+	-- pire cas, tout gagné tous les jours). Chaque partie >= ExtrasMinRatio x actif
+	-- (même barre que la nourriture sans arrêt).
+	ExtrasSecondsPerDay = 1386 + 450 + 960,
+	ExtrasDayHours = 2,
+	ExtrasMinRatio = 0.7,
 }
+
+-- (v11) Résultats déjà simulés (le simulateur est déterministe : la partie n
+-- d'une simulation jusqu'à R40 est la même que celle d'une simulation jusqu'à R10)
+local cache = {}
+function Sim.Cached(name: string, maxRebirths: number, maxHours: number)
+	local key = name .. "/" .. maxRebirths .. "/" .. maxHours
+	if not cache[key] then
+		cache[key] = Sim.Run(name, { MaxRebirths = maxRebirths, MaxHours = maxHours })
+	end
+	return cache[key]
+end
 
 ----------------------------------------------------------------------
 -- Comportement du joueur
@@ -403,6 +429,7 @@ function Sim.Run(profileOrName, options)
 		RebirthDay = {}, -- [n] = jour (profil "sessions")
 		Samples = {},
 		Purchases = {}, -- achats des 10 premières minutes
+		FirstBuy = {}, -- (v11) [Id] = { T, Rebirths } : 1er achat de chaque amélioration
 		Log = {},
 		ReachedMax = false,
 	}
@@ -624,6 +651,9 @@ function Sim.Run(profileOrName, options)
 				data.Upgrades[u.Id] = level + 1
 				data.Stats.UpgradesBought += 1
 				logPurchase("Upgrade", u.Id .. " " .. (level + 1), best.Cost)
+				if not result.FirstBuy[u.Id] then
+					result.FirstBuy[u.Id] = { T = t, Rebirths = data.Rebirths } -- (v11) 1er achat de chaque carte
+				end
 				if level == 0 then
 					onFeatureBought(u)
 				end
@@ -837,22 +867,34 @@ end
 function Sim.Report(result)
 	print("==== " .. result.Profile .. " ====")
 	local runs = Sim.RunMinutes(result)
-	local line1, line2, line3 = { "Rn     " }, { "cumul  " }, { "partie " }
-	for n = 1, 10 do
-		table.insert(line1, string.format("%6s", "R" .. n))
-		table.insert(line2, string.format("%6s", result.RebirthAt[n] and minutes(result.RebirthAt[n]) or "-"))
-		table.insert(line3, string.format("%6s", runs[n] and tostring(math.floor(runs[n] + 0.5)) or "-"))
-	end
-	print(table.concat(line1, ""))
-	print(table.concat(line2, "") .. "   (minutes de jeu actif)")
-	print(table.concat(line3, ""))
-	if next(result.RebirthDay) then
-		local days = { "jour   " }
-		for n = 1, 10 do
-			table.insert(days, string.format("%6s", result.RebirthDay[n] and tostring(result.RebirthDay[n]) or "-"))
+	-- (v11) par lignes de 10 visites, jusqu'à la dernière simulée
+	local lastRow = math.max(10, math.ceil(result.Rebirths / 10) * 10)
+	for first = 1, lastRow, 10 do
+		local line1, line2, line3 = { "Rn     " }, { "cumul  " }, { "partie " }
+		for n = first, first + 9 do
+			table.insert(line1, string.format("%6s", "R" .. n))
+			table.insert(line2, string.format("%6s", result.RebirthAt[n] and minutes(result.RebirthAt[n]) or "-"))
+			table.insert(line3, string.format("%6s", runs[n] and tostring(math.floor(runs[n] + 0.5)) or "-"))
 		end
-		print(table.concat(days, ""))
+		print(table.concat(line1, ""))
+		print(table.concat(line2, "") .. "   (minutes de jeu actif)")
+		print(table.concat(line3, ""))
+		if next(result.RebirthDay) then
+			local days = { "jour   " }
+			for n = first, first + 9 do
+				table.insert(days, string.format("%6s", result.RebirthDay[n] and tostring(result.RebirthDay[n]) or "-"))
+			end
+			print(table.concat(days, ""))
+		end
 	end
+	-- (v11) prix de l'océan et multiplicateur aux visites clés : des chiffres lisibles
+	local keys = {}
+	for _, n in ipairs({ 1, 5, 10, 11, 15, 20, 25, 30, 35, 40 }) do
+		if n <= math.max(result.Rebirths, 1) then
+			table.insert(keys, string.format("R%d %s (x%s)", n, N.Format(Formulas.GetRebirthCost(n - 1)), N.Format(Formulas.GetRebirthMultiplier(n))))
+		end
+	end
+	print("prix de l'océan (multiplicateur après) : " .. table.concat(keys, " | "))
 	print(string.format("fin : %s de jeu, %d visites", N.Time(result.EndT), result.Rebirths))
 	print("Achats des 10 premières minutes :")
 	local parts = {}
@@ -862,7 +904,7 @@ function Sim.Report(result)
 	print("  " .. table.concat(parts, " | "))
 	print("  t       R  gains/s     P        clics%  bonus%  xRenais  xAmél  xClic  xSuccès xCosm  xMaison confort")
 	for _, s in ipairs(result.Samples) do
-		if s.T % 1800 < 600 or s.T <= 1200 then
+		if (s.T % 1800 < 600 and (s.T < 72000 or s.T % 7200 < 600)) or s.T <= 1200 then -- (v11) toutes les 2 h après 20 h
 			print(string.format("  %-7s %-2d %-9s %-9s %5.0f%% %6.0f%%  x%-6s x%-5s x%-5s x%-6s x%-5s x%-6s %d",
 				N.Time(s.T), s.Rebirths, N.Format(s.Income), N.Format(s.P),
 				100 * s.Clicks / math.max(1e-9, s.Clicks + s.Passive + s.Bonus),
@@ -883,7 +925,7 @@ function Sim.Main(args)
 		table.insert(names, args.profile or "Active")
 	end
 	for _, name in ipairs(names) do
-		local result = Sim.Run(name, { MaxHours = 80 })
+		local result = Sim.Run(name, { MaxHours = 200, MaxRebirths = args.rebirths or Sim.Targets.LateRebirths })
 		Sim.Report(result)
 	end
 end

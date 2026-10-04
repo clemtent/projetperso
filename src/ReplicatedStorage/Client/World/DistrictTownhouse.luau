@@ -111,20 +111,15 @@ end
 ----------------------------------------------------------------------
 
 local function buildTree(m: Model, F: CFrame, seed: number)
-	-- grille de pied d'arbre (4 quarts) + cadre, corset en fer
-	Box(m, "PitFrame", F, -1.8, 1.8, -0.1, 0.06, -1.8, 1.8, IRON, M.Metal)
-	for _, sx in ipairs({ -1, 1 }) do
-		for _, sz in ipairs({ -1, 1 }) do
-			Box(m, "PitGrate", F, sx * 0.2, sx * 1.6, 0.06, 0.1, sz * 0.2, sz * 1.6, rgb(60, 62, 70), M.DiamondPlate)
+	-- (v11, CITY11) arbre d'alignement de ville (StreetTrees) : fosse en
+	-- fonte + grille, corset ; une espèce par rangée de parcelles
+	local okST, StreetTrees = pcall(require, script.Parent.StreetTrees)
+	if okST and type(StreetTrees) == "table" then
+		local okB = pcall(StreetTrees.Build, m, F.Position, 15 + hash(seed, 1) * 5, seed, StreetTrees.Pick(math.floor(seed / 7) * 7 + 3), { Pit = true, Guard = true })
+		if okB then
+			return
 		end
 	end
-	for k = 0, 3 do
-		local a = k * math.pi / 2 + math.pi / 4
-		local base = (F * CFrame.new(math.cos(a) * 1.4, 0.1, math.sin(a) * 1.4)).Position
-		local top = (F * CFrame.new(math.cos(a) * 0.9, 5, math.sin(a) * 0.9)).Position
-		CityKit.Rod(m, "GuardBar", base, top, 0.12, IRON, M.Metal)
-	end
-	Column(m, "GuardRing", F, 0, 0, 4.2, 4.35, 2.1, IRON, M.Metal)
 	tree(m, F, 0, 0, 15 + hash(seed, 1) * 5, seed, hash(seed, 2) < 0.5 and "Maple" or "Oak")
 end
 
@@ -185,11 +180,12 @@ end
 
 local function bistroChair(m: Model, T: CFrame, a: number)
 	local C = T * CFrame.Angles(0, a, 0) * CFrame.new(0, 0, 1.6)
-	Box(m, "ChairSeat", C, -0.6, 0.6, 1.3, 1.45, -0.6, 0.6, rgb(180, 60, 50), M.Fabric)
-	Box(m, "ChairBack", C, -0.6, 0.6, 1.45, 2.8, 0.5, 0.62, rgb(180, 60, 50), M.Fabric)
-	for _, sx in ipairs({ -0.5, 0.5 }) do
-		for _, sz in ipairs({ -0.5, 0.5 }) do
-			Column(m, "ChairLeg", C, sx, sz, 0, 1.3, 0.1, IRON, M.Metal)
+	-- (v11, SCALE11 : échelle Roblox) assise à 1,85, dossier à 4,1
+	Box(m, "ChairSeat", C, -0.75, 0.75, 1.7, 1.85, -0.7, 0.7, rgb(180, 60, 50), M.Fabric)
+	Box(m, "ChairBack", C, -0.75, 0.75, 1.85, 4.1, 0.58, 0.72, rgb(180, 60, 50), M.Fabric)
+	for _, sx in ipairs({ -0.62, 0.62 }) do
+		for _, sz in ipairs({ -0.58, 0.58 }) do
+			Column(m, "ChairLeg", C, sx, sz, 0, 1.7, 0.1, IRON, M.Metal)
 		end
 	end
 end
@@ -220,14 +216,14 @@ local function buildCafe(m: Model, F: CFrame, seed: number)
 	for i = 0, 2 do
 		local T = F * CFrame.new(-5.4 + i * 5.4, 0.3, -6.4 + (i % 2) * 1.2)
 		Column(m, "TableFoot", T, 0, 0, 0, 0.12, 1.4, IRON, M.Metal)
-		Column(m, "TableLeg", T, 0, 0, 0.12, 2.3, 0.16, IRON, M.Metal)
-		Column(m, "TableTop", T, 0, 0, 2.3, 2.42, 2.4, WHITE, M.Marble)
-		Column(m, "Cup", T, 0.4, 0.2, 2.42, 2.82, 0.36, WHITE, M.SmoothPlastic)
+		Column(m, "TableLeg", T, 0, 0, 0.12, 2.98, 0.2, IRON, M.Metal)
+		Column(m, "TableTop", T, 0, 0, 2.98, 3.1, 2.4, WHITE, M.Marble)
+		Column(m, "Cup", T, 0.4, 0.2, 3.1, 3.5, 0.36, WHITE, M.SmoothPlastic)
 		for k = 0, 1 do
 			bistroChair(m, T, k * math.pi)
 		end
 		-- parasol
-		Column(m, "ParasolPole", T, 0, 0, 2.42, 8.2, 0.14, WOOD, M.Wood)
+		Column(m, "ParasolPole", T, 0, 0, 3.1, 8.2, 0.14, WOOD, M.Wood)
 		local color = i % 2 == 0 and rgb(200, 50, 60) or rgb(250, 244, 230)
 		for k = 0, 3 do
 			local R = T * CFrame.Angles(0, k * math.pi / 2, 0)
@@ -328,7 +324,7 @@ end
 
 local function buildBikes(m: Model, F: CFrame, seed: number)
 	local kiosk = Box(m, "BikeKiosk", F, -6.6, -5.4, 0, 5.6, -0.6, 0.6, rgb(60, 140, 200), M.SmoothPlastic, true)
-	Glow(Box(m, "BikeScreen", F, -6.64, -5.4, 3.4, 4.8, -0.4, 0.4, rgb(200, 236, 255), M.Glass))
+	Glow(Box(m, "BikeScreen", F, -6.64, -5.6, 3.4, 4.8, -0.4, 0.4, rgb(200, 236, 255), M.Glass))
 	Text(kiosk, Enum.NormalId.Front, "🚲", WHITE, nil, Enum.Font.GothamBlack, 60)
 	Box(m, "DockRail", F, -5, 6, 0, 0.3, -0.3, 0.3, rgb(90, 94, 100), M.Metal, true)
 	for i = 0, 4 do
@@ -358,7 +354,7 @@ local function buildBusStop(m: Model, F: CFrame, seed: number)
 	local ad = Box(m, "ShelterAd", F, 2.2, 4.6, 1.2, 7.2, 1.4, 1.9, WHITE, M.SmoothPlastic)
 	Glow(ad)
 	Text(ad, Enum.NormalId.Front, "🧠 " .. Locale.T("Dopamine Clicker"), rgb(230, 60, 140), rgb(255, 240, 250), Enum.Font.FredokaOne, 60)
-	Box(m, "ShelterBench", F, -3.8, 1.6, 1.3, 1.5, 1.2, 2, WOOD, M.Wood)
+	Box(m, "ShelterBench", F, -3.8, 1.6, 1.65, 1.85, 0.2, 2, WOOD, M.Wood) -- (v11, SCALE11 : 1,85 x 1,8)
 	local pole = Column(m, "StopPole", F, -6, -1.2, 0, 9.6, 0.24, rgb(60, 64, 72), M.Metal, true)
 	local _ = pole
 	local plate = Box(m, "StopPlate", F, -6.9, -5.1, 8, 9.8, -1.3, -1.1, rgb(250, 200, 40), M.SmoothPlastic)

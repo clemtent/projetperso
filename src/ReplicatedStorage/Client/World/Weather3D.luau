@@ -24,7 +24,10 @@
 	  - Orage : ciel plus sombre (TownAtmosphere), éclairs DOUX : bref
 	    voile (TownAtmosphere : ColorCorrection +0,07 au plus, jamais de
 	    "flash bang") + parfois un éclair lointain dessiné (pas de Neon).
-	  - Éclaircie : arc-en-ciel discret à l'opposé du soleil (le jour).
+	  - Éclaircie : (v11) VRAI arc-en-ciel ancré dans la ville, dont le pied
+	    touche le sol sur le 🍀 POT D'OR (RainbowFx + Shared/RainbowGold :
+	    l'horloge des épisodes y est partagée avec le serveur, qui récompense
+	    les premiers joueurs arrivés au pot : RainbowService).
 	  - Pas de pluie à l'intérieur : quand la caméra est dans une maison /
 	    boutique (boîtes intérieures InteriorCF / InteriorSize des boutiques,
 	    sinon plafond + murs autour par lancers de rayons, ou la sonde
@@ -33,7 +36,7 @@
 	    fixe, rien d'affiché), intensité de la pluie (Low / Medium / High),
 	    Reflets "All" = sol mouillé et flaques plus brillants.
 	Budget : ≤ 240 gouttes (High), 36 éclaboussures, 16 flaques, 8 morceaux
-	d'éclair, arc-en-ciel 120 pièces seulement pendant l'éclaircie. Travail
+	d'éclair, arc-en-ciel (v11) 46 Beams + pot (13 pièces) pendant l'éclaircie. Travail
 	par image : gouttes + éclaboussures (30 Hz max, BulkMoveTo) ; le reste
 	2 à 4 fois / s.
 
@@ -54,14 +57,27 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GraphicsQuality = require(ReplicatedStorage.Shared.GraphicsQuality)
+local RainbowGold = require(ReplicatedStorage.Shared.RainbowGold)
+
+-- (v11) 🌈 arc-en-ciel + 🍀 pot d'or : module du même dossier (pcall : la météo marche sans lui)
+local RainbowFx: any = nil
+do
+	local module = script.Parent:FindFirstChild("RainbowFx")
+	if module and module:IsA("ModuleScript") then
+		local ok, result = pcall(require, module)
+		if ok and type(result) == "table" then
+			RainbowFx = result
+		else
+			warn("[Weather3D] RainbowFx : " .. tostring(result))
+		end
+	end
+end
 
 local Weather3D = {}
 
-local EPISODE = 600 -- (s) un épisode de météo
+local EPISODE = RainbowGold.EPISODE -- (s) un épisode de météo (600)
 Weather3D.EPISODE = EPISODE
-local KINDS = { "Clear", "Cloudy", "Showers", "Rain", "Storm" }
-local WEIGHTS = { 0.30, 0.22, 0.22, 0.16, 0.10 }
-Weather3D.KINDS = KINDS
+Weather3D.KINDS = RainbowGold.KINDS
 
 -- Gouttes
 local DROPS_BASE = 160 -- (Medium ; x0,5 Low ; x1,5 High)
@@ -88,13 +104,6 @@ local DROP_COLOR = Color3.fromRGB(206, 218, 234)
 local SPLASH_COLOR = Color3.fromRGB(214, 226, 240)
 local PUDDLE_COLOR = Color3.fromRGB(62, 72, 86)
 local BOLT_COLOR = Color3.fromRGB(222, 230, 255)
-local RAINBOW = {
-	Color3.fromRGB(255, 96, 96),
-	Color3.fromRGB(255, 196, 92),
-	Color3.fromRGB(124, 222, 124),
-	Color3.fromRGB(96, 152, 255),
-	Color3.fromRGB(172, 112, 232),
-}
 
 -- Sols "durs" qui se mouillent (routes, trottoirs, pavés, dalles)
 local HARD: { [Enum.Material]: boolean } = {
@@ -114,28 +123,11 @@ local HARD: { [Enum.Material]: boolean } = {
 Weather3D.HARD = HARD
 
 ----------------------------------------------------------------------
--- Hasard déterministe (entiers 32 bits exacts : pas de math.sin / random)
+-- Hasard déterministe (v11 : dans Shared/RainbowGold, partagé avec le SERVEUR
+-- qui place le pot d'or au pied de l'arc-en-ciel : mêmes épisodes partout)
 ----------------------------------------------------------------------
 
-local TWO32 = 4294967296
-
--- (a * b) mod 2^32, exact en double (moitiés de 16 bits)
-local function mul32(a: number, b: number): number
-	local aHi = math.floor(a / 65536)
-	local aLo = a % 65536
-	return ((aHi * b % 65536) * 65536 + aLo * b) % TWO32
-end
-
--- Hachage d'un entier (peut être négatif ou grand) -> [0, 1)
-local function hash01(n: number): number
-	local h = math.floor(n) % TWO32
-	h = bit32.bxor(h, bit32.rshift(h, 16))
-	h = mul32(h, 0x45D9F3B)
-	h = bit32.bxor(h, bit32.rshift(h, 16))
-	h = mul32(h, 0x45D9F3B)
-	h = bit32.bxor(h, bit32.rshift(h, 16))
-	return h / TWO32
-end
+local hash01 = RainbowGold.Hash
 Weather3D.Hash = hash01
 
 ----------------------------------------------------------------------
@@ -170,40 +162,22 @@ local function profile(kind: string, p: number): Sample
 	elseif kind == "Showers" then
 		local cloud = 0.34 + 0.5 * plateau(p, 0.04, 0.24, 0.62, 0.86)
 		local rain = 0.2 * plateau(p, 0.22, 0.3, 0.6, 0.66) + 0.26 * plateau(p, 0.3, 0.38, 0.52, 0.6)
-		return { Cloud = cloud, Rain = rain, Storm = 0, Rainbow = plateau(p, 0.64, 0.7, 0.84, 0.92) }
+		return { Cloud = cloud, Rain = rain, Storm = 0, Rainbow = RainbowGold.Amount(kind, p) }
 	elseif kind == "Rain" then
 		local cloud = 0.34 + 0.58 * plateau(p, 0.04, 0.2, 0.72, 0.9)
 		local rain = 0.3 * plateau(p, 0.2, 0.27, 0.74, 0.8) + 0.55 * plateau(p, 0.27, 0.38, 0.66, 0.74)
-		return { Cloud = cloud, Rain = rain, Storm = 0, Rainbow = plateau(p, 0.78, 0.83, 0.92, 0.98) }
+		return { Cloud = cloud, Rain = rain, Storm = 0, Rainbow = RainbowGold.Amount(kind, p) }
 	elseif kind == "Storm" then
 		local cloud = 0.34 + 0.63 * plateau(p, 0.04, 0.18, 0.74, 0.9)
 		local rain = 0.45 * plateau(p, 0.18, 0.26, 0.76, 0.82) + 0.55 * plateau(p, 0.26, 0.36, 0.64, 0.74)
 		local storm = plateau(p, 0.3, 0.4, 0.6, 0.68)
-		return { Cloud = cloud, Rain = rain, Storm = storm, Rainbow = plateau(p, 0.8, 0.85, 0.93, 0.99) }
+		return { Cloud = cloud, Rain = rain, Storm = storm, Rainbow = RainbowGold.Amount(kind, p) }
 	end
 	return { Cloud = 0.3 + wobble, Rain = 0, Storm = 0, Rainbow = 0 }
 end
 
--- Tirage brut d'un épisode (sans la règle "pas deux orages")
-local function rawKind(index: number): string
-	local r = hash01(index * 7 + 1013)
-	local acc = 0
-	for i, w in ipairs(WEIGHTS) do
-		acc += w
-		if r < acc then
-			return KINDS[i]
-		end
-	end
-	return KINDS[1]
-end
-
-function Weather3D.KindOf(index: number): string
-	local kind = rawKind(index)
-	if kind == "Storm" and rawKind(index - 1) == "Storm" then
-		return "Rain"
-	end
-	return kind
-end
+-- Tirage d'un épisode (jamais deux orages de suite) : Shared/RainbowGold
+Weather3D.KindOf = RainbowGold.KindOf
 
 local function blended(t: number): (string, number, Sample)
 	local index = math.floor(t / EPISODE)
@@ -326,9 +300,8 @@ local wetCursor = 0
 local wetTarget = 0
 local bolt: { BasePart } = {}
 local boltSlot: number? = nil
-local rainbowParts: { BasePart } = {}
-local rainbowShown = 0
 local indoorProbe: ((Vector3) -> boolean)? = nil
+local rainbowWarned = false
 local shopBoxes: { { CF: CFrame, Size: Vector3 } } = {}
 local forcedTime: number? = nil
 local stepClock = 0
@@ -796,91 +769,16 @@ local function stepBolt(t: number, flash: number, slot: number?, camPos: Vector3
 	end
 end
 
-local function sunDirection(): Vector3
-	local ok, dir = pcall(function()
-		return game:GetService("Lighting"):GetSunDirection()
-	end)
-	if ok and typeof(dir) == "Vector3" and dir.Magnitude > 0.1 then
-		return dir.Unit
-	end
-	return Vector3.new(0.45, 0.6, 0.66).Unit
-end
-
-local function clearRainbow()
-	for _, part in ipairs(rainbowParts) do
-		part:Destroy()
-	end
-	table.clear(rainbowParts)
-	rainbowShown = 0
-end
-
-local RB_DIST, RB_SEGMENTS = 700, 24
-local function stepRainbow(amount: number, camPos: Vector3)
-	local night = options.IsNight and options.IsNight() == true
-	if amount < 0.03 or night or indoor or not GraphicsQuality.Get().Weather then
-		if #rainbowParts > 0 then
-			clearRainbow()
-		end
+-- (v11) arc-en-ciel : RainbowFx (arc ancré au pot d'or, Beams lisses)
+local function stepRainbow(dt: number, t: number, camPos: Vector3)
+	if not RainbowFx then
 		return
 	end
-	-- à l'opposé du soleil ; centre au plus 20° sous l'horizon (arc visible)
-	local sun = sunDirection()
-	local flat = Vector3.new(-sun.X, 0, -sun.Z)
-	if flat.Magnitude < 0.05 then
-		flat = Vector3.new(0, 0, 1)
-	end
-	flat = flat.Unit
-	local depress = math.rad(math.min(20, math.deg(math.asin(math.clamp(sun.Y, -1, 1)))))
-	local dir = (flat * math.cos(depress) - Vector3.new(0, math.sin(depress), 0)).Unit
-	local center = camPos + dir * RB_DIST
-	local e1 = Vector3.new(0, 1, 0):Cross(dir).Unit
-	local e2 = dir:Cross(e1).Unit
-	if e2.Y < 0 then
-		e2 = -e2
-	end
-	if #rainbowParts == 0 and folder then
-		for band = 1, #RAINBOW do
-			for seg = 1, RB_SEGMENTS do
-				local part = newPart("Rainbow", Vector3.new(1, 1, 1), RAINBOW[band], 1)
-				part.CFrame = parkAt(4, (band - 1) * RB_SEGMENTS + seg)
-				part:SetAttribute("Band", band)
-				part:SetAttribute("Seg", seg)
-				part.Parent = folder
-				table.insert(rainbowParts, part)
-			end
-		end
-	end
-	local parts, cframes = {}, {}
-	local outer = RB_DIST * math.tan(math.rad(42))
-	local bandW = RB_DIST * math.tan(math.rad(0.45))
-	for _, part in ipairs(rainbowParts) do
-		local band = part:GetAttribute("Band") :: number
-		local seg = part:GetAttribute("Seg") :: number
-		local r = outer - (band - 0.5) * bandW
-		local a0 = (seg - 1) / RB_SEGMENTS * math.pi
-		local a1 = seg / RB_SEGMENTS * math.pi
-		local am = (a0 + a1) / 2
-		local radial = e1 * math.cos(am) + e2 * math.sin(am)
-		local tangent = -e1 * math.sin(am) + e2 * math.cos(am)
-		-- (bandes décalées de 0,8 stud en profondeur, largeur exacte : jamais deux
-		-- faces de couleurs différentes dans le même plan)
-		local pos = center + radial * r + dir * ((band - 1) * 0.8)
-		local length = r * (a1 - a0) * 1.04
-		if part.Size.Y ~= length then
-			part.Size = Vector3.new(bandW, length, 0.6)
-		end
-		table.insert(parts, part)
-		table.insert(cframes, CFrame.fromMatrix(pos, radial, tangent))
-	end
-	pcall(function()
-		workspace:BulkMoveTo(parts, cframes, Enum.BulkMoveMode.FireCFrameChanged)
-	end)
-	local transparency = 1 - 0.4 * smooth(amount)
-	if math.abs(transparency - rainbowShown) > 0.01 then
-		rainbowShown = transparency
-		for _, part in ipairs(rainbowParts) do
-			part.Transparency = transparency
-		end
+	local night = options.IsNight and options.IsNight() == true
+	local ok, err = pcall(RainbowFx.Step, dt, t, camPos, night)
+	if not ok and not rainbowWarned then
+		rainbowWarned = true
+		warn("[Weather3D] RainbowFx.Step : " .. tostring(err))
 	end
 end
 
@@ -1006,6 +904,10 @@ function Weather3D.Start(opts: any?)
 	f.Name = "DopamineWeather"
 	f.Parent = workspace
 	folder = f
+	rainbowWarned = false
+	if RainbowFx then
+		pcall(RainbowFx.Start, f, { IsNight = options.IsNight })
+	end
 	stepClock, slowClock, puddleClock, indoorClock, shopClock = 0, 1e9, 1e9, 1e9, 0
 	indoor = false
 	collectWet()
@@ -1029,7 +931,9 @@ function Weather3D.Stop()
 		qualityConn = nil
 	end
 	restoreWet()
-	clearRainbow()
+	if RainbowFx then
+		pcall(RainbowFx.Stop)
+	end
 	local f = folder
 	folder = nil
 	if f then
@@ -1120,13 +1024,14 @@ function Weather3D.Step(dt: number)
 			stepSplashes(elapsed)
 		end
 	end
-	-- flaques + arc-en-ciel (2 fois / s)
+	-- (v11) arc-en-ciel + pot d'or : chaque image (pièces qui volent), géométrie 10 fois / s
+	stepRainbow(dt, t, camCF.Position)
+	-- flaques (2 fois / s)
 	puddleClock += dt
 	if puddleClock >= 0.5 then
 		puddleClock = 0
 		stepPuddles(camCF.Position, q.Weather and state.Puddles or 0)
 		rippleOnPuddles(state.Rain)
-		stepRainbow(state.Rainbow, camCF.Position)
 	end
 end
 
@@ -1136,7 +1041,12 @@ function Weather3D.Counts(): { [string]: number }
 	for _ in pairs(puddles) do
 		p += 1
 	end
-	return { Drops = shownDrops, Splashes = #splashes, Puddles = p, Wet = #wetList, Rainbow = #rainbowParts, Bolt = boltSlot and #bolt or 0 }
+	local beams = 0
+	if RainbowFx then
+		local ok, st = pcall(RainbowFx.State)
+		beams = ok and st.Beams or 0
+	end
+	return { Drops = shownDrops, Splashes = #splashes, Puddles = p, Wet = #wetList, Rainbow = beams, Bolt = boltSlot and #bolt or 0 }
 end
 
 return Weather3D

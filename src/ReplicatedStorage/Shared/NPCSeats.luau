@@ -9,13 +9,18 @@
 	    soit placé sur la place LIBRE, à côté du PNJ (jamais "dedans"), et
 	    pour désactiver un banc déjà plein.
 
-	Un banc (TownKit.Bench, 5,4 de long) = 2 places, à x = ±1,3 (repère du
-	banc : avant = -Z, dossier = +Z). Le pivot d'un PNJ assis est au sol,
-	sous le bassin, à z = SLOT_Z.
+	Un banc (TownKit.Bench, 5,6 de long en v11) = 2 places, à x = ±1,4
+	(repère du banc : avant = -Z, dossier = +Z). Le pivot d'un PNJ assis est
+	au sol, sous le bassin, à z = SLOT_Z (v11 : assise de -1,15 à +0,85, profonde
+	de 2,0 ; bassin à -0,2 : les cuisses (1,1) reposent sur les lattes et le
+	GENOU dépasse juste du bord avant (-1,3), les tibias pendent sans
+	traverser la latte avant ; le buste s'adosse en arrière). La HAUTEUR de
+	l'assise n'est jamais supposée : le serveur la mesure sur le Seat
+	(NpcBenches).
 
 	API :
-	  NPCSeats.BENCH_SLOTS = { -1.3, 1.3 }
-	  NPCSeats.SLOT_Z = 0.3
+	  NPCSeats.BENCH_SLOTS = { -1.4, 1.4 }
+	  NPCSeats.SLOT_Z = -0.2
 	  NPCSeats.BenchPlan(seed) -> { Occupied = {bool, bool}, Mask = "10",
 	      Npcs = { { Slot, Style, Seed, Prop } } }
 	  NPCSeats.FreeSlots(seed) -> { number } (indices des places libres)
@@ -23,8 +28,8 @@
 
 local NPCSeats = {}
 
-NPCSeats.BENCH_SLOTS = { -1.3, 1.3 }
-NPCSeats.SLOT_Z = 0.3
+NPCSeats.BENCH_SLOTS = { -1.4, 1.4 } -- (v11 : banc de 5,6 = 2 places de 2,8)
+NPCSeats.SLOT_Z = -0.2
 
 local SIT_STYLES = { "elder", "pedestrian", "shopper", "pedestrian", "elder" }
 local PROPS = { "none", "phone", "coffee", "none" }

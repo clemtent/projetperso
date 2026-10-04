@@ -79,6 +79,14 @@ end
 
 local TownTraffic = {}
 
+-- (v11, CARS11) conducteurs PNJ (NPC11 : NPCModels.Driver), facultatif
+local okNPC, NPCModels = pcall(function()
+	return require(ReplicatedStorage.Shared:FindFirstChild("NPCModels") :: any)
+end)
+if not okNPC or type(NPCModels) ~= "table" or type(NPCModels.Driver) ~= "function" or type(NPCModels.Build) ~= "function" then
+	NPCModels = nil
+end
+
 -- (v9.8) réglage "Graphismes > Détail" (REALISM98) : portée d'animation et
 -- nombre de véhicules réduits en détail bas
 local okGQ, GraphicsQuality = pcall(require, ReplicatedStorage.Shared:FindFirstChild("GraphicsQuality") :: any)
@@ -115,6 +123,10 @@ TownTraffic.BUS_STOP_TIME = 6
 TownTraffic.SIDE_STOP_TIME = 4.5 -- arrêts aux carrefours des rues latérales
 TownTraffic.BLINK_AHEAD = 34 -- clignotant allumé à moins de 34 studs d'un virage
 TownTraffic.MAX_STEER = math.rad(32)
+TownTraffic.MAX_DRIVERS = 8 -- (v11) conducteurs PNJ construits à la fois (~100 pièces chacun)
+TownTraffic.DRIVER_RANGE = 110 -- (v11) conducteur visible plus près que ça (voitures "Mid" + bus)
+local DRIVER_STYLES = { "pedestrian", "shopper", "worker", "elder", "salesperson", "cashier", "baker" }
+local driverCount = 0
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -135,14 +147,52 @@ local BRAKE_ON = Color3.fromRGB(255, 58, 70)
 
 type Path = { Points: { Vector3 }, Cum: { number }, Length: number, Corners: { { S: number, Turn: number } }, Speeds: { number }? }
 -- (v10) circuit : une boucle du graphe routier + ses arêtes (clés "a|b") + ses véhicules
-type Pass = { Node: string, S0: number, S1: number }
-type Circuit = { Id: string, Path: Path, Cruise: number, Keys: { [string]: boolean }, Blocked: boolean, Count: number, Kinds: { any }, Bus: boolean, Passes: { Pass } }
+-- (v11) passage dans un carrefour : abscisses d'entrée / sortie, rang (limitation
+-- de la route d'arrivée : la route principale a la priorité), conflits avec les
+-- autres passages du même carrefour ("cross" = trajectoires qui se coupent,
+-- "merge" = même voie de sortie)
+type Pass = { Node: string, S0: number, S1: number, Id: number, Rank: number, Conf: { [number]: string } }
+type Rail = { S: number, I: number, Stop: number }
+type Circuit = { Id: string, Path: Path, Cruise: number, Keys: { [string]: boolean }, Blocked: boolean, Count: number, Kinds: { any }, Bus: boolean, Passes: { Pass }, Rails: { Rail } }
 type DoorLeaf = { Index: number, Leaf: number, Door: number }
 type Vehicle = {
 	Path: Path, -- (v10) circuit suivi
 	Circuit: Circuit?,
 	Hidden: boolean,
-	YieldClock: number, -- (v10) temps passé à céder le passage
+	YieldClock: number, -- (v10) temps passé à céder le passage (v11 : attente au carrefour)
+	Index: number, -- (v11) ordre fixe (départage des priorités)
+	Corr: { Vector3 }, -- (v11) couloir de la trajectoire devant (centre -> portée)
+	CorrStep: number,
+	Hits: { any }, -- (v11) véhicules dans le couloir : { o, écart }
+	HitAge: number, -- (v11) âge du couloir (recalculé 1 image sur 2 près, 1 sur 4 loin)
+	Far: boolean,
+	FarDt: number,
+	Excused: boolean, -- (v11) arrêt justifié (train, personne, bus...) : la file derrière aussi
+	LeadV: any?,
+	BlockBy: any?, -- (v11) véhicule à qui l'on cède (tests)
+	Lead: number, -- (v11) écart au véhicule devant (pare-chocs à pare-chocs)
+	LeadSpeed: number,
+	JPass: Pass?, -- (v11) carrefour abordé
+	JLast: Pass?,
+	JCommitPass: Pass?, -- (v11) carrefour où l'on s'est engagé (plus d'arrêt possible)
+	JGrant: Pass?, -- (v11) carrefour où l'on a eu le droit d'entrer
+	JTo: number,
+	JArrive: number,
+	JReady: boolean,
+	JCommit: boolean,
+	JWait: number,
+	Inside: { Pass },
+	StuckT: number, -- (v11) arrêt sans raison valable (secours "fantôme" après 9 s)
+	GhostT: number,
+	ZebraWait: number,
+	ZebraIgnore: boolean,
+	Why: string, -- (v11) raison de l'arrêt / du ralentissement (tests)
+	Driver: Model?, -- (v11) conducteur PNJ (NPCModels.Driver)
+	DriverT: number,
+	SeatLocal: CFrame?, -- (v11) dessus du coussin du conducteur (repère du pivot)
+	WheelLocal: CFrame?, -- (v11) volant (repère du pivot ; avant = loin du conducteur, haut = midi)
+	WheelR: number,
+	SeatFloor: number,
 	Pos: Vector3?, -- (v10) dernière position (suivi entre circuits)
 	Dir: Vector3?,
 	LightRig: any?, -- (v10, CARS10) CarModels.LightRig
@@ -218,12 +268,18 @@ end
 -- décalage de voie et une limitation par tronçon ; décalage à droite du sens
 -- (onglet aux sommets), virages arrondis (Bézier), pas de 8 studs au plus
 local LIMIT_AHEAD = { 40, 90, 150 }
--- (v10) points balayés devant l'avant (studs) : cession du passage entre circuits
--- (v10) carrefours réservés : [id du nœud] = { Owner = véhicule, Time = horloge }
-local reservations: { [string]: { Owner: any, Time: number } } = {}
-local reserveClock = 0
+-- (v11, CARS11) horloge de la simulation (priorités aux carrefours)
+local simClock = 0
 local farFrames = 0
 local farTick = false
+-- (v11) statistiques (émulateur) : dépannages d'urgence "fantôme"
+local ghostCount = 0
+-- (v11, TRAIN11) passages à niveau : [i] = fermé ?
+local railClosed: { [number]: boolean } = {}
+local railClock = 0
+local trainLine: any = nil
+local CROSS_D = 8.5 -- (v11) trajectoires plus proches que ça dans un carrefour : conflit
+local JUNCTION_R = 19 -- (v11) rayon de la zone du carrefour (entrée exacte, interpolée)
 
 local function pathFromLoop(pts: { any }, offsets: { number }, speeds: { number }): Path
 	local O = WorldLayout.Origin()
@@ -447,8 +503,16 @@ local function buildCircuits(count: number): { Circuit }
 	local B, R = WorldLayout.DOWNTOWN_B, WorldLayout.BeltR(count)
 	local low = lowDetail()
 	local graphNodes = {}
-	for _, node in ipairs(WorldLayout.RoadGraph(count).NodeList) do
-		if node.Kind == "Junction" or node.Kind == "Roundabout" then
+	-- (v11) carrefours = nœuds "Junction" / "Roundabout" + tout nœud où se
+	-- rejoignent 3 routes ou plus (bretelles qui rejoignent l'autoroute)
+	local graph0 = WorldLayout.RoadGraph(count)
+	local degree: { [string]: number } = {}
+	for _, e in ipairs(graph0.Edges) do
+		degree[e.A] = (degree[e.A] or 0) + 1
+		degree[e.B] = (degree[e.B] or 0) + 1
+	end
+	for _, node in ipairs(graph0.NodeList) do
+		if node.Kind == "Junction" or node.Kind == "Roundabout" or (degree[node.Id] or 0) >= 3 then
 			table.insert(graphNodes, node)
 		end
 	end
@@ -464,17 +528,47 @@ local function buildCircuits(count: number): { Circuit }
 			for _, node in ipairs(graphNodes) do
 				local c = Vector3.new(O.X + node.X, 0, O.Z + node.Z)
 				local inRun, s0 = false, 0
+				local runs: { Pass } = {}
+				-- (v11) entrée / sortie EXACTES (interpolées sur le cercle de rayon
+				-- JUNCTION_R) : avec des points espacés de 8 studs (ou un virage
+				-- arrondi), le 1er point dans le cercle pouvait être à 10 studs du
+				-- centre -> une voiture arrêtée "à la ligne" mordait sur la voie croisée
+				local function dist(q: Vector3): number
+					return (Vector3.new(q.X, 0, q.Z) - c).Magnitude
+				end
+				local function crossing(i: number): number
+					local n = #p.Points
+					local a = p.Points[(i - 2) % n + 1]
+					local b = p.Points[i]
+					local da, db = dist(a), dist(b)
+					local sa = if i == 1 then p.Cum[i] - (p.Length - p.Cum[n]) else p.Cum[i - 1]
+					if math.abs(da - db) < 1e-6 then
+						return p.Cum[i]
+					end
+					local t = math.clamp((da - JUNCTION_R) / (da - db), 0, 1)
+					return sa + (p.Cum[i] - sa) * t
+				end
 				for i, q in ipairs(p.Points) do
-					local near = (Vector3.new(q.X, 0, q.Z) - c).Magnitude < 19
+					local near = dist(q) < JUNCTION_R and math.abs(q.Y - (O.Y + node.Y)) < 6
 					if near and not inRun then
-						inRun, s0 = true, p.Cum[i]
+						inRun, s0 = true, math.max(0, crossing(i))
 					elseif not near and inRun then
 						inRun = false
-						table.insert(passes, { Node = node.Id, S0 = s0, S1 = p.Cum[i] })
+						table.insert(runs, { Node = node.Id, S0 = s0, S1 = crossing(i), Id = 0, Rank = 0, Conf = {} })
 					end
 				end
 				if inRun then
-					table.insert(passes, { Node = node.Id, S0 = s0, S1 = p.Length })
+					-- (v11) passage à cheval sur le début de la boucle : fusionné
+					local first = runs[1]
+					if first and first.S0 == 0 then
+						first.S0 = s0
+						first.S1 += p.Length
+					else
+						table.insert(runs, { Node = node.Id, S0 = s0, S1 = p.Length, Id = 0, Rank = 0, Conf = {} })
+					end
+				end
+				for _, r in ipairs(runs) do
+					table.insert(passes, r)
 				end
 			end
 			table.insert(list, {
@@ -487,6 +581,7 @@ local function buildCircuits(count: number): { Circuit }
 				Kinds = kinds,
 				Bus = bus == true,
 				Passes = passes,
+				Rails = {},
 			})
 		end
 	end
@@ -745,8 +840,74 @@ local function buildVehicleModel(v: Vehicle, lod: number)
 	model.Parent = folder
 	v.Model = model
 	v.Placed = false
+	-- (v11) poste de conduite (pour le conducteur PNJ)
+	v.SeatLocal, v.WheelLocal = nil, nil
+	if v.IsBus then
+		local seatPart = model:FindFirstChild("DriverSeat", true)
+		local wheelPart = model:FindFirstChild("SteeringWheel", true)
+		if seatPart and seatPart:IsA("BasePart") then
+			local top = seatPart.Position + Vector3.new(0, seatPart.Size.Y / 2, 0)
+			v.SeatLocal = model:GetPivot():ToObjectSpace(CFrame.lookAt(top, top - Vector3.zAxis))
+			v.SeatFloor = 1.45
+			if wheelPart and wheelPart:IsA("BasePart") then
+				local wl = model:GetPivot():ToObjectSpace(wheelPart.CFrame)
+				local n = wl.RightVector -- (disque : axe = X de la pièce)
+				local away = if n.Z > 0 then -n else n -- (vers l'avant)
+				local u = -Vector3.zAxis + Vector3.yAxis
+				local up = u - away * u:Dot(away)
+				if up.Magnitude > 1e-3 then
+					v.WheelLocal = CFrame.lookAt(wl.Position, wl.Position + away, up.Unit)
+					v.WheelR = math.max(wheelPart.Size.Y, wheelPart.Size.Z) / 2
+				end
+			end
+		end
+	else
+		local seatCF = model:GetAttribute("SeatCF")
+		local wheelCF = model:GetAttribute("WheelCF")
+		if typeof(seatCF) == "CFrame" and typeof(wheelCF) == "CFrame" then
+			v.SeatLocal = seatCF
+			v.WheelLocal = wheelCF
+			v.WheelR = tonumber(model:GetAttribute("WheelRimR")) or 0.62
+			v.SeatFloor = tonumber(model:GetAttribute("SeatFloor")) or 1.2
+		end
+	end
+	if v.Driver then
+		if v.SeatLocal then
+			v.Driver.Parent = model
+		else
+			v.Driver:Destroy()
+			v.Driver = nil
+			driverCount -= 1
+		end
+	end
 	if old and old ~= model then
 		old:Destroy()
+	end
+end
+
+-- (v11) conducteur PNJ : construit près de la caméra, détruit loin
+local function setDriver(v: Vehicle, want: boolean)
+	if want and not v.Driver and NPCModels and v.SeatLocal and driverCount < TownTraffic.MAX_DRIVERS then
+		local ok, npc = pcall(NPCModels.Build, DRIVER_STYLES[(v.Index * 3) % #DRIVER_STYLES + 1], { Seed = v.Index * 17 + 3, Solid = false, Look = false, Name = "Driver" })
+		if ok and typeof(npc) == "Instance" and npc:IsA("Model") then
+			for _, d in ipairs(npc:GetDescendants()) do
+				if d:IsA("BasePart") then
+					d.Anchored = true
+					d.CanCollide = false
+					d.CanQuery = false
+					d.CanTouch = false
+					d.CastShadow = false
+				end
+			end
+			npc.Parent = v.Model
+			v.Driver = npc
+			v.DriverT = v.Index * 1.7
+			driverCount += 1
+		end
+	elseif not want and v.Driver then
+		v.Driver:Destroy()
+		v.Driver = nil
+		driverCount -= 1
 	end
 end
 
@@ -756,6 +917,38 @@ local function addVehicle(kind: string, color: Color3, stripe: boolean, s: numbe
 		Circuit = circuit,
 		Hidden = false,
 		YieldClock = 0,
+		Index = #vehicles + 1,
+		Corr = {},
+		CorrStep = 5,
+		Hits = {},
+		HitAge = 0,
+		Far = false,
+		FarDt = 0,
+		Excused = false,
+		LeadV = nil,
+		Lead = math.huge,
+		LeadSpeed = 0,
+		JPass = nil,
+		JLast = nil,
+		JCommitPass = nil,
+		JGrant = nil,
+		JTo = math.huge,
+		JArrive = 0,
+		JReady = true,
+		JCommit = false,
+		JWait = 0,
+		Inside = {},
+		StuckT = 0,
+		GhostT = 0,
+		ZebraWait = 0,
+		ZebraIgnore = false,
+		Why = "",
+		Driver = nil,
+		DriverT = 0,
+		SeatLocal = nil,
+		WheelLocal = nil,
+		WheelR = 0.62,
+		SeatFloor = 1.2,
 		Pos = nil,
 		Dir = nil,
 		LightRig = nil,
@@ -928,25 +1121,11 @@ local function zebraBusy(): boolean
 	end
 	for _, pos in ipairs(blockers) do
 		local rel = z.CF:PointToObjectSpace(pos)
-		if math.abs(rel.X) < 9 and math.abs(rel.Z) < 13 and math.abs(rel.Y) < 10 then
+		if math.abs(rel.X) < 5 and math.abs(rel.Z) < WorldLayout.ROAD_W / 2 + 0.5 and math.abs(rel.Y) < 10 then
 			return true
 		end
 	end
 	return false
-end
-
--- Distance libre devant un véhicule (personnages dans sa voie)
-local function clearAhead(v: Vehicle, cf: CFrame, reach: number?): number
-	local best = math.huge
-	local limit = reach or 28
-	for _, pos in ipairs(blockers) do
-		local rel = cf:PointToObjectSpace(pos)
-		local along = -rel.Z - v.HalfLen
-		if along > -v.HalfLen and along < limit and math.abs(rel.X) < v.HalfWidth + 2.5 and math.abs(rel.Y) < 10 then
-			best = math.min(best, math.max(0, along))
-		end
-	end
-	return best
 end
 
 -- Pose complète : caisse (suspension, génuflexion du bus, portes) + roues
@@ -963,10 +1142,15 @@ local function poseVehicle(v: Vehicle, pivot: CFrame)
 	local body = pivot * bob
 	local offs = v.DoorOffs
 	local i = 0
+	-- (v11) volant qui tourne avec les roues
+	local sIdx, wcf = rig.SteerIdx, rig.WheelCF
+	local wheelAngle = CarModels.SteeringWheelAngle(v.Steer)
+	local turned = if sIdx and wcf then body * wcf * CFrame.Angles(0, 0, wheelAngle) else nil
 	for k, off in ipairs(rig.BodyOff) do
 		i += 1
 		local door = offs[k]
-		frames[i] = if door then body * door * off else body * off
+		local w = if sIdx and turned then sIdx[k] else nil
+		frames[i] = if w and turned then turned * w elseif door then body * door * off else body * off
 	end
 	local spinCF = CFrame.Angles(-v.Spin, 0, 0)
 	local steerCF = CFrame.Angles(0, v.Steer, 0)
@@ -984,6 +1168,17 @@ local function poseVehicle(v: Vehicle, pivot: CFrame)
 		end
 	end
 	workspace:BulkMoveTo(rig.Parts, frames, Enum.BulkMoveMode.FireCFrameChanged)
+	-- (v11) conducteur PNJ : assis, mains sur le volant qui tourne
+	local npc = v.Driver
+	if npc and NPCModels and v.SeatLocal then
+		local wl = v.WheelLocal
+		pcall(NPCModels.Driver, npc, body * (v.SeatLocal :: CFrame), wheelAngle, {
+			Wheel = if wl then body * wl else nil,
+			WheelRadius = v.WheelR,
+			Floor = v.SeatFloor,
+			T = os.clock() + v.DriverT,
+		})
+	end
 end
 
 -- Portes du bus : 0 fermées -> 0,35 battants sortis -> 1 glissés
@@ -1000,104 +1195,544 @@ local function updateDoors(v: Vehicle)
 	end
 end
 
-local function stepTraffic(dt: number, camPos: Vector3?)
+-- (v11, CARS11) limitation de vitesse de la trajectoire à l'abscisse s
+local function limitAt(p: Path, s: number): number?
+	local speeds = p.Speeds
+	if not speeds then
+		return nil
+	end
+	local L = p.Length
+	local sm = s % L
+	local lo, hi = 1, #p.Cum
+	while hi - lo > 1 do
+		local mid = (lo + hi) // 2
+		if p.Cum[mid] <= sm then
+			lo = mid
+		else
+			hi = mid
+		end
+	end
+	return speeds[lo]
+end
+
+-- (v11, CARS11) CONFLITS des carrefours, calculés une fois au départ : deux
+-- passages d'un même carrefour sont en conflit si leurs trajectoires se coupent
+-- ("cross" : plus proches que CROSS_D) ou s'ils sortent sur la même voie
+-- ("merge") ; deux passages qui ARRIVENT par la même voie ne sont jamais en
+-- conflit (on se suit : c'est le couloir qui gère les distances).
+local function computeConflicts(list: { Circuit })
+	local byNode: { [string]: { { P: Pass, Pts: { Vector3 } } } } = {}
+	local nextId = 0
+	for _, c in ipairs(list) do
+		local p = c.Path
+		for _, pass in ipairs(c.Passes) do
+			nextId += 1
+			pass.Id = nextId
+			pass.Rank = limitAt(p, pass.S0 - 6) or c.Cruise
+			table.clear(pass.Conf)
+			local pts = {}
+			local span = pass.S1 - pass.S0
+			local n = math.max(2, math.ceil(span / 2))
+			for k = 0, n do
+				table.insert(pts, pointAt(p, pass.S0 + span * k / n))
+			end
+			local group = byNode[pass.Node]
+			if not group then
+				group = {}
+				byNode[pass.Node] = group
+			end
+			table.insert(group, { P = pass, Pts = pts })
+		end
+	end
+	local function flatDir(a: Vector3, b: Vector3): Vector3
+		local d = Vector3.new(b.X - a.X, 0, b.Z - a.Z)
+		return if d.Magnitude > 1e-3 then d.Unit else Vector3.zero
+	end
+	for _, group in pairs(byNode) do
+		for i = 1, #group do
+			for j = i + 1, #group do
+				local A, B = group[i], group[j]
+				local a, b = A.Pts, B.Pts
+				local kind: string? = nil
+				local sameIn = (a[1] - b[1]).Magnitude < 2.5 and flatDir(a[1], a[2]):Dot(flatDir(b[1], b[2])) > 0.9
+				local sameOut = (a[#a] - b[#b]).Magnitude < 2.5 and flatDir(a[#a - 1], a[#a]):Dot(flatDir(b[#b - 1], b[#b])) > 0.9
+				if sameIn then
+					kind = nil
+				elseif sameOut then
+					kind = "merge"
+				else
+					local best = math.huge
+					for _, q in ipairs(a) do
+						for _, r in ipairs(b) do
+							local d = (q - r).Magnitude
+							if d < best then
+								best = d
+							end
+						end
+					end
+					if best < CROSS_D then
+						kind = "cross"
+					end
+				end
+				if kind then
+					A.P.Conf[B.P.Id] = kind
+					B.P.Conf[A.P.Id] = kind
+				end
+			end
+		end
+	end
+end
+
+-- (v11, TRAIN11) passages à niveau : abscisse de chaque circuit au centre du
+-- passage (le train : Shared/TrainLine, facultatif)
+local function setupRails(count: number)
+	for _, c in ipairs(circuits) do
+		table.clear(c.Rails)
+	end
+	if not trainLine then
+		local mod = ReplicatedStorage.Shared:FindFirstChild("TrainLine")
+		if not (mod and mod:IsA("ModuleScript")) then
+			return
+		end
+		local ok, res = pcall(require, mod)
+		if not ok or type(res) ~= "table" or type(res.Crossings) ~= "function" or type(res.CrossingClosed) ~= "function" then
+			trainLine = false
+			return
+		end
+		trainLine = res
+	end
+	local ok, list = pcall(trainLine.Crossings, count)
+	if not ok or type(list) ~= "table" then
+		return
+	end
+	local O = WorldLayout.Origin()
+	for i, x in ipairs(list) do
+		if type(x) == "table" and type(x.X) == "number" and type(x.Z) == "number" then
+			local stop = tonumber(x.StopDist) or 15
+			for _, c in ipairs(circuits) do
+				local p = c.Path
+				local inRun, best, bestS = false, math.huge, 0
+				local function flush()
+					if inRun then
+						table.insert(c.Rails, { S = bestS, I = i, Stop = stop })
+					end
+					inRun, best = false, math.huge
+				end
+				for k, q in ipairs(p.Points) do
+					local d = math.sqrt((q.X - O.X - x.X) ^ 2 + (q.Z - O.Z - x.Z) ^ 2)
+					if d < 12 and math.abs(q.Y - O.Y) < 5 then
+						inRun = true
+						if d < best then
+							best, bestS = d, p.Cum[k]
+						end
+					else
+						flush()
+					end
+				end
+				flush()
+			end
+		end
+	end
+end
+
+local function refreshRails(count: number, at: number?)
+	if not trainLine then
+		return
+	end
+	local now = at or workspace:GetServerTimeNow()
+	local seen: { [number]: boolean } = {}
+	for _, c in ipairs(circuits) do
+		for _, r in ipairs(c.Rails) do
+			if not seen[r.I] then
+				seen[r.I] = true
+				local ok, closed = pcall(trainLine.CrossingClosed, count, r.I, now)
+				railClosed[r.I] = ok and closed == true
+			end
+		end
+	end
+end
+
+-- (v11, CARS11) COULOIR : points de la trajectoire devant le véhicule (de son
+-- centre jusqu'à la portée de freinage) ; sert à voir les véhicules ET les
+-- personnes réellement sur notre chemin, virages compris.
+local function buildCorridor(v: Vehicle)
+	local p = v.Path
+	local people = if ImpactRules then ImpactRules.BrakeLookahead(v.Speed) else 28
+	local reach = math.clamp(math.max(v.Speed * v.Speed / 14 + 2 * v.HalfLen + 14, people + v.HalfLen), 34, 170)
+	local n = math.clamp(math.ceil(reach / 5), 6, 34)
+	local step = reach / n
+	local pts = v.Corr
+	-- (parcours séquentiel de la polyligne : une seule recherche dichotomique)
+	local cum, P = p.Cum, p.Points
+	local np = #cum
+	local L = p.Length
+	local s0 = v.S % L
+	local lo, hi = 1, np
+	while hi - lo > 1 do
+		local mid = (lo + hi) // 2
+		if cum[mid] <= s0 then
+			lo = mid
+		else
+			hi = mid
+		end
+	end
+	if s0 >= cum[np] then
+		lo = np
+	end
+	local base = 0
+	for k = 0, n do
+		local sk = s0 + k * step
+		while true do
+			local nextCum = (if lo < np then cum[lo + 1] else L) + base
+			if sk < nextCum then
+				break
+			end
+			lo += 1
+			if lo > np then
+				lo = 1
+				base += L
+			end
+		end
+		local segStart = cum[lo] + base
+		local segEnd = (if lo == np then L else cum[lo + 1]) + base
+		local t = (sk - segStart) / math.max(1e-6, segEnd - segStart)
+		pts[k + 1] = P[lo]:Lerp(P[lo % np + 1], math.clamp(t, 0, 1))
+	end
+	for k = #pts, n + 2, -1 do
+		pts[k] = nil
+	end
+	v.CorrStep = step
+end
+
+-- Obstacle (centre `pos`, demi-largeur / demi-longueur, direction) dans le
+-- couloir de `v` ? -> écart pare-chocs avant -> obstacle (studs), ou nil
+local function corridorHit(v: Vehicle, pos: Vector3, halfW: number, halfL: number, dir: Vector3?, margin: number): number?
+	local pts = v.Corr
+	local step = v.CorrStep
+	for k = 1, #pts - 1 do
+		local a, b = pts[k], pts[k + 1]
+		if math.abs(pos.Y - a.Y) < 5 then
+			local abx, abz = b.X - a.X, b.Z - a.Z
+			local len2 = abx * abx + abz * abz
+			if len2 > 1e-6 then
+				local raw = ((pos.X - a.X) * abx + (pos.Z - a.Z) * abz) / len2
+				if k > 1 or raw >= 0 then
+					local t = math.clamp(raw, 0, 1)
+					local cx, cz = a.X + abx * t, a.Z + abz * t
+					local lat = math.sqrt((pos.X - cx) ^ 2 + (pos.Z - cz) ^ 2)
+					local ext, alongExt = halfW, halfW
+					if dir then
+						local len = math.sqrt(len2)
+						local ux, uz = abx / len, abz / len
+						local dot = math.abs(dir.X * ux + dir.Z * uz)
+						local cr = math.abs(dir.X * uz - dir.Z * ux)
+						ext = cr * halfL + dot * halfW
+						alongExt = dot * halfL + cr * halfW
+					end
+					if lat < v.HalfWidth + ext + margin then
+						return (k - 1) * step + t * math.sqrt(len2) - v.HalfLen - alongExt
+					end
+				end
+			end
+		end
+	end
+	return nil
+end
+
+-- (v11) priorité au carrefour : a passe avant b ?
+local function hasPriority(a: Vehicle, b: Vehicle): boolean
+	local ka = if a.JCommit or a.JWait > 8 then 0 else 1
+	local kb = if b.JCommit or b.JWait > 8 then 0 else 1
+	if ka ~= kb then
+		return ka < kb
+	end
+	local ra = if a.JPass then (a.JPass :: Pass).Rank else 0
+	local rb = if b.JPass then (b.JPass :: Pass).Rank else 0
+	if math.abs(ra - rb) > 1 then
+		return ra > rb
+	end
+	if math.abs(a.JArrive - b.JArrive) > 0.25 then
+		return a.JArrive < b.JArrive
+	end
+	return a.Index < b.Index
+end
+
+local nodeOcc: { [string]: { any } } = {}
+local nodeApp: { [string]: { any } } = {}
+
+-- (v11, CARS11) PRÉPARATION d'une image : couloirs, véhicules sur notre
+-- chemin, carrefours (occupants / arrivants) -> décisions sans blocage :
+--  - SUIVI : le véhicule devant dans notre couloir (même circuit ou non) ; si
+--    deux véhicules se voient l'un l'autre (insertion, croisement), un seul
+--    cède (le plus loin du contact ; à égalité, l'ordre fixe) ;
+--  - CARREFOURS : on n'entre que si aucun occupant n'a une trajectoire qui
+--    coupe la nôtre, et qu'aucun arrivant prioritaire (route principale, puis
+--    premier arrivé, puis ordre fixe : un ordre TOTAL, donc jamais d'attente
+--    circulaire) n'arrive avant qu'on ait dégagé ; on ne s'engage pas si la
+--    sortie est bouchée (on ne bloque pas le carrefour) ; qui ne peut plus
+--    s'arrêter est prioritaire ; après 8 s d'attente, on devient prioritaire.
+local function prepareFrame(dt: number)
+	simClock += dt
+	table.clear(nodeOcc)
+	table.clear(nodeApp)
+	-- (couloirs recalculés en alternance : 1 image sur 2 près de la caméra, 1 sur 4 loin)
+	local fresh: { [Vehicle]: boolean } = {}
+	for _, v in ipairs(vehicles) do
+		if not v.Hidden and v.Path then
+			if not v.Pos then
+				local cf = frameAt(v.Path, v.S)
+				v.Pos, v.Dir = cf.Position, cf.LookVector
+			end
+			local every = if v.Far then 4 else 2
+			if #v.Corr == 0 or (farFrames + v.Index) % every == 0 then
+				buildCorridor(v)
+				fresh[v] = true
+				v.HitAge = 0
+			else
+				v.HitAge += dt
+			end
+		end
+	end
+	-- véhicules dans le couloir
+	for _, v in ipairs(vehicles) do
+		if not fresh[v] then
+			if v.Hidden then
+				table.clear(v.Hits)
+			end
+			continue
+		end
+		local hits = v.Hits
+		table.clear(hits)
+		if v.Hidden or not v.Path or not v.Pos then
+			continue
+		end
+		local reach = (#v.Corr - 1) * v.CorrStep + 12
+		local vp = v.Pos :: Vector3
+		for _, o in ipairs(vehicles) do
+			if o ~= v and not o.Hidden and o.Pos and o.Dir then
+				local d = o.Pos - vp
+				if math.abs(d.X) < reach and math.abs(d.Z) < reach and math.abs(d.Y) < 6 then
+					local gap = corridorHit(v, o.Pos, o.HalfWidth, o.HalfLen, o.Dir, -0.4)
+					if gap then
+						table.insert(hits, { O = o, Gap = gap })
+					end
+				end
+			end
+		end
+	end
+	for _, v in ipairs(vehicles) do
+		v.Lead = math.huge
+		v.LeadSpeed = 0
+		v.LeadV = nil
+		if v.Hidden or not v.Path then
+			continue
+		end
+		for _, h in ipairs(v.Hits) do
+			local o = h.O
+			-- l'autre nous voit aussi ? (insertion / croisement) : un seul cède
+			local mutual: number? = nil
+			for _, h2 in ipairs(o.Hits) do
+				if h2.O == v then
+					mutual = h2.Gap
+					break
+				end
+			end
+			local ignore = false
+			if mutual then
+				if h.Gap < mutual - 0.5 or (math.abs(h.Gap - mutual) <= 0.5 and v.Index < o.Index) then
+					ignore = true
+				end
+			end
+			-- (écart vieilli : on suppose l'obstacle immobile depuis le calcul)
+			local g = h.Gap - v.Speed * v.HitAge
+			if not ignore and not o.Hidden and g < v.Lead then
+				v.Lead = g
+				v.LeadSpeed = o.Speed
+				v.LeadV = o
+			end
+		end
+	end
+	-- carrefours : occupants et arrivants
+	for _, v in ipairs(vehicles) do
+		table.clear(v.Inside)
+		v.JPass = nil
+		v.JTo = math.huge
+		v.JCommit = false
+		local c = v.Circuit
+		if v.Hidden or not c then
+			continue
+		end
+		local L = v.Path.Length
+		-- (v11) horizon : assez loin pour être vu comme prétendant par ceux qui
+		-- attendent à la ligne (~7 s de route), et pour pouvoir s'arrêter
+		local approach = math.max(26, v.Speed * v.Speed / 14 + 10, v.Speed * 7)
+		local best: Pass? = nil
+		local bestTo = math.huge
+		for _, pass in ipairs(c.Passes) do
+			local span = pass.S1 - pass.S0
+			local frontInto = (v.S + v.HalfLen - pass.S0) % L
+			local over = frontInto < span + 2 * v.HalfLen
+			if over and frontInto < 4 and v.JGrant ~= pass and v.JCommitPass ~= pass then
+				-- (arrêté un peu après la ligne sans en avoir le droit : on attend encore)
+				if -frontInto < bestTo then
+					best, bestTo = pass, -frontInto
+				end
+			elseif over then
+				table.insert(v.Inside, pass)
+				local occ = nodeOcc[pass.Node]
+				if not occ then
+					occ = {}
+					nodeOcc[pass.Node] = occ
+				end
+				table.insert(occ, { V = v, P = pass })
+			else
+				local toEntry = L - frontInto
+				if toEntry < approach and toEntry < bestTo then
+					best, bestTo = pass, toEntry
+				end
+			end
+		end
+		if best ~= v.JLast then
+			v.JLast = best
+			v.JArrive = 0
+		end
+		if v.JCommitPass ~= best then
+			v.JCommitPass = nil
+		end
+		if v.JGrant and v.JGrant ~= best and not table.find(v.Inside, v.JGrant) then
+			v.JGrant = nil
+		end
+		if best then
+			v.JPass = best
+			v.JTo = bestTo
+			-- heure d'arrivée prévue (figée quand on attend à la ligne)
+			if v.Speed > 0.5 then
+				v.JArrive = simClock + bestTo / v.Speed
+			elseif v.JArrive <= 0 or bestTo > 4 then
+				v.JArrive = simClock + bestTo / 0.5
+			end
+			-- (engagé : décidé dans stepTraffic, seulement quand on avait la priorité)
+			v.JCommit = v.JCommitPass == best
+			-- sortie bouchée ? (on ne s'engage pas dans le carrefour)
+			local span = best.S1 - best.S0
+			v.JReady = not (v.Lead < bestTo + span + 2 * v.HalfLen + 3 and v.LeadSpeed < 3)
+			-- (passage à niveau fermé juste après le carrefour : pas prêt non plus)
+			if v.JReady and trainLine and not v.JCommit then
+				for _, r in ipairs(c.Rails) do
+					if railClosed[r.I] then
+						local toLine = (r.S - v.S) % L - v.HalfLen - r.Stop
+						if toLine > bestTo - 1 and toLine < bestTo + span + 2 * v.HalfLen + 3 then
+							v.JReady = false
+						end
+					end
+				end
+			end
+			local app = nodeApp[best.Node]
+			if not app then
+				app = {}
+				nodeApp[best.Node] = app
+			end
+			table.insert(app, { V = v, P = best })
+		else
+			v.JArrive = 0
+			v.JReady = true
+		end
+	end
+end
+
+-- (v11) faut-il attendre à l'entrée du carrefour abordé ?
+local function junctionBlocked(v: Vehicle): boolean
+	local P = v.JPass
+	if not P or v.JCommit or v.GhostT > 0 then
+		return false
+	end
+	local conf = P.Conf
+	for _, e in ipairs(nodeOcc[P.Node] or {}) do
+		local o = e.V
+		-- (croisement OU même voie de sortie : on attend qu'il ait quitté le
+		-- carrefour ; ensuite le couloir gère la distance derrière lui)
+		if o ~= v and conf[e.P.Id] ~= nil then
+			v.BlockBy = o
+			return true
+		end
+	end
+	-- (v11) un véhicule qui a DÉJÀ le droit d'entrer (à la ligne, pas encore
+	-- dedans) sur une trajectoire qui coupe la nôtre : il passe d'abord
+	for _, e in ipairs(nodeApp[P.Node] or {}) do
+		local o = e.V
+		if o ~= v and o.JGrant == e.P and conf[e.P.Id] == "cross" and o.JTo < 4 then
+			v.BlockBy = o
+			return true
+		end
+	end
+	-- temps qu'il nous faut pour dégager le carrefour
+	local span = P.S1 - P.S0
+	local need = v.JTo + span + 2 * v.HalfLen
+	local clear = if v.Speed > 6 then need / v.Speed else math.sqrt(2 * need / 2.5)
+	local window = simClock + math.max(2.5, clear)
+	for _, e in ipairs(nodeApp[P.Node] or {}) do
+		local o = e.V
+		-- (un arrivant arrêté pour une autre raison — arrêt de bus, train, file —
+		-- n'est pas un prétendant : seul compte celui qui roule ou qui attend le carrefour)
+		-- (un arrivant ENGAGÉ — il ne peut plus s'arrêter — compte toujours)
+		if o ~= v and conf[e.P.Id] and (o.JCommit or (o.JReady and (o.Speed > 1 or o.Why == "junction"))) and o.JArrive < window and hasPriority(o, v) then
+			v.BlockBy = o
+			return true
+		end
+	end
+	return false
+end
+
+local function stepTraffic(frameDt: number, camPos: Vector3?)
 	if #vehicles == 0 then
 		return
 	end
 	farFrames += 1
 	farTick = farFrames % 60 == 0
-	-- (v10) carrefours réservés : un véhicule à la fois dans chaque carrefour
-	reserveClock += dt
 	rebuiltThisFrame = false
 	local range = TownTraffic.MOVE_RANGE * detailScale()
+	prepareFrame(frameDt)
 	for _, v in ipairs(vehicles) do
 		local p = v.Path
 		if v.Hidden or not p then
 			continue
 		end
+		-- (v11) loin de la caméra (> MOVE_RANGE) : décision 1 image sur 3 (dt cumulé)
+		if v.Far and v.Placed and v.GhostT <= 0 and (farFrames + v.Index) % 3 ~= 0 then
+			v.FarDt += frameDt
+			continue
+		end
+		local dt = frameDt + v.FarDt
+		v.FarDt = 0
 		local L = p.Length
 		local ideal = L / math.max(1, if v.Circuit then (v.Circuit :: Circuit).Count else #vehicles)
+		local why = ""
 		-- véhicule suivant (même circuit) = plus petite avance positive
 		local ahead = math.huge
 		local aheadHalf = 0
+		local aheadV: Vehicle? = nil
 		for _, o in ipairs(vehicles) do
-			if o ~= v and o.Path == p then
+			if o ~= v and o.Path == p and not o.Hidden then
 				local gap = (o.S - v.S) % L
 				if gap < ahead then
 					ahead = gap
 					aheadHalf = o.HalfLen
+					aheadV = o
 				end
-			end
-		end
-		-- (v10) les AUTRES circuits (routes partagées) : le véhicule devant dans
-		-- notre voie, dans le même sens, est suivi comme sur notre circuit ;
-		-- après 6 s à céder le passage, on s'engage quand même (jamais de blocage).
-		local yielding = false
-		if v.Pos and v.Dir then
-			for _, o in ipairs(vehicles) do
-				if o ~= v and o.Path ~= p and not o.Hidden and o.Pos and o.Dir then
-					local op = o.Pos
-					if (op - v.Pos).Magnitude < 60 and math.abs(op.Y - v.Pos.Y) < 4 then
-						-- même voie, même sens, devant : on le suit (distance entre centres)
-						local vd = v.Dir :: Vector3
-						local rel = op - v.Pos
-						local along = rel.X * vd.X + rel.Z * vd.Z
-						local lateral = math.abs(rel.X * vd.Z - rel.Z * vd.X)
-						if along > 0 and lateral < v.HalfWidth + o.HalfWidth - 0.5 and (o.Dir.X * vd.X + o.Dir.Z * vd.Z) > 0.5 and along < ahead then
-							ahead = along
-							aheadHalf = o.HalfLen
-						end
-					end
-				end
-			end
-		end
-		-- (v10) CARREFOURS : on réserve le carrefour avant d'y entrer (38 studs
-		-- avant) ; s'il est pris par un autre véhicule (qui y est ou y arrive),
-		-- on s'arrête avant ; libéré une fois sorti. Réservation périmée après
-		-- 8 s (jamais de blocage).
-		local passes = v.Circuit and (v.Circuit :: Circuit).Passes
-		if passes and v.YieldClock < 6 then
-			for _, pass in ipairs(passes) do
-				local span = pass.S1 - pass.S0
-				local into = (v.S - pass.S0) % L -- (depuis l'entrée)
-				local inside = into < span + v.HalfLen
-				local toEntry = (pass.S0 - v.S) % L
-				local r = reservations[pass.Node]
-				local mineR = r ~= nil and r.Owner == v
-				if inside then
-					if not r or (r.Owner ~= v and reserveClock - r.Time > 8) then
-						reservations[pass.Node] = { Owner = v, Time = reserveClock }
-					end
-				elseif toEntry < 38 + v.HalfLen then
-					if r and not mineR and reserveClock - r.Time <= 8 and not r.Owner.Hidden then
-						yielding = true
-						local d = toEntry - 1
-						if d < ahead then
-							ahead = d
-							aheadHalf = 0
-						end
-					elseif not r or reserveClock - r.Time > 8 or r.Owner.Hidden then
-						reservations[pass.Node] = { Owner = v, Time = reserveClock }
-					end
-				elseif mineR then
-					-- sorti (ou très loin) : on libère
-					reservations[pass.Node] = nil
-				end
-			end
-		end
-		if yielding and v.Speed < 0.5 then
-			v.YieldClock += dt
-		elseif not yielding then
-			v.YieldClock = math.max(0, v.YieldClock - dt * 3)
-		end
-		if v.YieldClock >= 6 then
-			-- (on s'engage : 2 s sans céder, puis on recompte)
-			v.YieldClock += dt
-			if v.YieldClock > 8 then
-				v.YieldClock = 0
 			end
 		end
 		local gap = ahead - v.HalfLen - aheadHalf
+		local gapV = aheadV
+		local ghost = v.GhostT > 0
+		if ghost then
+			v.GhostT -= dt
+		end
+		-- (v11) véhicule (de n'importe quel circuit) dans notre couloir ; en
+		-- secours "fantôme", seuls ceux arrêtés pour une raison valable comptent
+		if v.Lead < gap and (not ghost or (v.LeadV and v.LeadV.Excused)) then
+			gap = v.Lead
+			gapV = v.LeadV
+		end
 		-- vitesse voulue : s'espacer peu à peu (plus vite si le trou devant est grand)
 		local target = v.Cruise * (0.85 + 0.3 * math.clamp(gap / ideal, 0, 1))
 		if gap < 18 then
@@ -1107,69 +1742,153 @@ local function stepTraffic(dt: number, camPos: Vector3?)
 		if gap < 80 then
 			target = math.min(target, math.sqrt(14 * math.max(0, gap - 3)))
 		end
+		local excused = false
+		local leaderBound = target < 0.5
+		local leaderExcused = false
+		if leaderBound then
+			why = "leader"
+			-- (file d'attente derrière un arrêt justifié : justifiée aussi)
+			if gapV and gapV.Excused then
+				leaderExcused = true
+			end
+			excused = leaderExcused
+		end
+		-- (v11) lignes d'arrêt : carrefour, passage à niveau, passage piéton
+		local stopAt = math.huge
+		local jp = v.JPass
+		local railInBox = false
+		local circuit = v.Circuit
+		if circuit and trainLine then
+			for _, r in ipairs(circuit.Rails) do
+				if railClosed[r.I] then
+					local toLine = (r.S - v.S) % L - v.HalfLen - r.Stop
+					if toLine > -0.75 and toLine < 160 and toLine < stopAt then
+						stopAt = math.max(0, toLine)
+						why = "train"
+						excused = true
+						-- (ligne d'arrêt DANS le carrefour qu'on aborde : on attend avant lui)
+						if jp and not v.JCommit and toLine > v.JTo - 1 and toLine < v.JTo + (jp.S1 - jp.S0) + 2 * v.HalfLen + 3 then
+							railInBox = true
+							stopAt = math.max(0, v.JTo - 1)
+						end
+					end
+				end
+			end
+		end
+		if jp and not railInBox then
+			if junctionBlocked(v) then
+				if v.JTo - 1 < stopAt then
+					stopAt = v.JTo - 1
+					why = "junction"
+					excused = false
+				end
+			elseif not v.JReady and not v.JCommit and not ghost then
+				if v.JTo - 1 < stopAt then
+					stopAt = v.JTo - 1
+					why = "box"
+					excused = false
+				end
+			else
+				if not v.JCommit and v.Speed > 2 and v.JTo < v.Speed * v.Speed / 18 + 1 then
+					-- (on avait la priorité et on ne peut plus s'arrêter : engagé)
+					v.JCommitPass = jp
+				end
+				if v.JTo < 3 then
+					v.JGrant = jp -- (on a le droit d'entrer)
+				end
+			end
+		end
+		-- passage piéton de l'entrée (circuit du boulevard) : on attend les
+		-- personnes SUR le passage (au plus 6 s : ensuite seules celles dans
+		-- notre voie nous arrêtent, voir plus bas)
+		local z = if p == path then zebra else nil
+		if z then
+			local toZebra = (z.S - v.S) % L - v.HalfLen - 9
+			if toZebra > 60 then
+				v.ZebraIgnore = false
+				v.ZebraWait = 0
+			end
+			if toZebra > -2 and toZebra < 22 and not v.ZebraIgnore and zebraBusy() then
+				if toZebra < stopAt then
+					stopAt = math.max(0, toZebra)
+					why = "zebra"
+					excused = true
+				end
+				if v.Speed < 0.5 then
+					v.ZebraWait += dt
+					if v.ZebraWait > 6 then
+						v.ZebraIgnore = true
+					end
+				end
+			end
+		end
+		-- (le véhicule devant est plus près que la ligne : c'est lui qui nous arrête)
+		if leaderBound and gap - 5 <= stopAt then
+			why = "leader"
+			excused = leaderExcused
+		end
+		local lineUrgent = false
+		if stopAt < math.huge then
+			target = math.min(target, if stopAt < 0.4 then 0 else math.sqrt(2 * 6 * math.max(0, stopAt - 0.4)))
+			-- (arrêt tardif : freinage franc plutôt que de franchir la ligne)
+			lineUrgent = v.Speed > 1 and v.Speed * v.Speed / (2 * math.max(0.5, stopAt)) > 7
+		end
 		-- (v10) limitation de la route (points du circuit)
 		local speeds = p.Speeds
 		if speeds then
-			local lo, hi = 1, #p.Cum
-			local sm = v.S % L
-			while hi - lo > 1 do
-				local mid = (lo + hi) // 2
-				if p.Cum[mid] <= sm then
-					lo = mid
-				else
-					hi = mid
-				end
-			end
-			local limit = speeds[lo]
+			local limit = limitAt(p, v.S)
 			if limit then
 				target = math.min(target, limit)
 			end
 			-- (v10) on ralentit AVANT une route plus lente (sortie d'autoroute,
 			-- bretelle) : v <= sqrt(v_lim² + 2·a·d), a = 5 studs/s²
 			for _, d in ipairs(LIMIT_AHEAD) do
-				local sa = (v.S + d) % L
-				local a0, a1 = 1, #p.Cum
-				while a1 - a0 > 1 do
-					local mid = (a0 + a1) // 2
-					if p.Cum[mid] <= sa then
-						a0 = mid
-					else
-						a1 = mid
-					end
-				end
-				local la = speeds[a0]
+				local la = limitAt(p, v.S + d)
 				if la then
 					target = math.min(target, math.sqrt(la * la + 10 * d))
 				end
 			end
 		end
 		local cf = frameAt(p, v.S)
-		-- personne devant ? (v10, PHYS10) portée selon la vitesse, freinage normal, urgence si trop près
+		-- personne devant ? (v10, PHYS10) portée selon la vitesse, freinage
+		-- normal, urgence si trop près ; (v11) dans le COULOIR (virages compris)
 		local reach = if ImpactRules then ImpactRules.BrakeLookahead(v.Speed) else 28
-		local free = clearAhead(v, cf, reach)
+		local free = math.huge
+		local vp = v.Pos or cf.Position
+		for _, pos in ipairs(blockers) do
+			local d = pos - vp
+			if math.abs(d.X) < reach + v.HalfLen + 4 and math.abs(d.Z) < reach + v.HalfLen + 4 and math.abs(d.Y) < 10 then
+				local g = corridorHit(v, pos, 1.1, 1.1, nil, 0.4)
+				if g and g < free then
+					free = math.max(0, g)
+				end
+			end
+		end
 		local urgent = false
 		local maxDecel: number? = nil
 		if ImpactRules then
 			if free < reach then
 				local tgt, decel, urg = ImpactRules.BrakeTarget(free, v.Speed, v.Cruise)
-				target = math.min(target, tgt)
+				if tgt < target then
+					target = tgt
+					if tgt < 0.5 then
+						why = "person"
+						excused = true
+					end
+				end
 				urgent, maxDecel = urg, decel
 			end
 		elseif free < 26 then
 			target = math.min(target, math.max(0, (free - 4) / 20) * v.Cruise)
 			urgent = free < 12
-		end
-		-- (v10) véhicule (autre circuit) qui s'insère juste devant : freinage franc
-		if gap < 4 and v.Speed > 2 then
-			urgent = true
-		end
-		-- passage piéton de l'entrée (circuit du boulevard)
-		local z = if p == path then zebra else nil
-		if z then
-			local toZebra = (z.S - v.S) % L - v.HalfLen - 9
-			if toZebra > -2 and toZebra < 22 and zebraBusy() then
-				target = math.min(target, math.max(0, toZebra - 1) / 21 * v.Cruise)
+			if target < 0.5 then
+				why = "person"
+				excused = true
 			end
+		end
+		-- (v10) véhicule qui s'insère juste devant : freinage franc
+		if (gap < 4 and v.Speed > 2) or lineUrgent then
+			urgent = true
 		end
 		-- ralentir dans les virages (la courbure se lit sur ±8 studs)
 		local h0 = headingOf(frameAt(p, v.S - 4, 4))
@@ -1177,6 +1896,27 @@ local function stepTraffic(dt: number, camPos: Vector3?)
 		local dh = (h1 - h0 + math.pi) % (2 * math.pi) - math.pi
 		local curvature = dh / 8
 		target = math.min(target, v.Cruise * (1 - math.clamp(math.abs(curvature) * 6, 0, 0.35)))
+		-- (v11) temps d'arrêt : au carrefour (priorité après 8 s), sans raison
+		-- valable (secours "fantôme" après 9 s : on traverse l'obstacle 3 s)
+		if v.Speed < 0.5 then
+			if why == "junction" or why == "box" then
+				v.JWait += dt
+			end
+			if not excused and not v.IsBus then
+				v.StuckT += dt
+				if v.StuckT > 9 and v.GhostT <= 0 then
+					v.GhostT = 3
+					v.StuckT = 0
+					ghostCount += 1
+				end
+			end
+		elseif v.Speed > 2 then
+			v.JWait = 0
+			v.StuckT = 0
+		end
+		v.Why = why
+		v.Excused = excused or (v.IsBus and (v.StopClock > 0 or v.Kneel > 0.05 or v.DoorOpen > 0.01))
+		v.YieldClock = v.JWait
 		-- arrêts de bus (une fois par tour à chaque arrêt : entrée + carrefours)
 		if v.IsBus and p == path then
 			if v.StopClock > 0 then
@@ -1318,10 +2058,19 @@ local function stepTraffic(dt: number, camPos: Vector3?)
 				buildVehicleModel(v, want)
 			end
 		end
+		-- (v11) conducteur PNJ des voitures proches ("Mid") et du bus
+		local wantDriver = NPCModels ~= nil and (v.Lod >= 2 or v.IsBus) and dist < TownTraffic.DRIVER_RANGE * detailScale()
+		if wantDriver ~= (v.Driver ~= nil) and (not wantDriver or not rebuiltThisFrame) then
+			if wantDriver then
+				rebuiltThisFrame = true
+			end
+			setDriver(v, wantDriver)
+		end
 		-- déplacement des pièces : chaque image près de la caméra, ~20 Hz plus loin
 		-- (v10) loin : posé quand même, ~1 fois / s (jamais laissé à l'origine
 		-- du monde, où plusieurs véhicules se superposeraient)
 		local near = camPos == nil or dist < range
+		v.Far = not near
 		v.Skip += 1
 		-- (tous les véhicules lointains sont reposés à la MÊME image : jamais
 		-- deux poses d'âges différents qui se chevauchent)
@@ -1426,10 +2175,13 @@ local function readParked()
 						break
 					end
 				end
+				-- (v11) attributs à l'échelle du monde : on retire CarModels.SCALE
+				-- (Build le réapplique)
+				local k = tonumber((CarModels :: any).SCALE) or 1
 				local scale = Vector3.new(
-					(tonumber(d:GetAttribute("Width")) or spec.W) / spec.W,
-					(tonumber(d:GetAttribute("Height")) or spec.Roof) / spec.Roof,
-					(tonumber(d:GetAttribute("Length")) or spec.L) / spec.L
+					(tonumber(d:GetAttribute("Width")) or spec.W * k) / (spec.W * k),
+					(tonumber(d:GetAttribute("Height")) or spec.Roof * k) / (spec.Roof * k),
+					(tonumber(d:GetAttribute("Length")) or spec.L * k) / (spec.L * k)
 				)
 				table.insert(parked, { Server = d, Local = nil, Kind = kind, Color = color, Scale = scale })
 			end
@@ -1539,6 +2291,12 @@ function TownTraffic.Start(_options: any?)
 	local count = plotCount(town)
 	-- (v10) circuits du graphe routier ; le 1er = boulevard du centre-ville
 	circuits = buildCircuits(count)
+	-- (v11) conflits des carrefours + passages à niveau du train
+	local okC, errC = pcall(computeConflicts, circuits)
+	if not okC then
+		warn("[TownTraffic] " .. tostring(errC))
+	end
+	pcall(setupRails, count)
 	local p = circuits[1] and circuits[1].Id == "Downtown" and circuits[1].Path or nil
 	if not p then
 		warn("[TownTraffic] circuit du boulevard introuvable")
@@ -1550,7 +2308,8 @@ function TownTraffic.Start(_options: any?)
 	local O = WorldLayout.Origin()
 	local side0 = CFrame.lookAt(O + Vector3.new(0, WorldLayout.ROAD_Y, A), O + Vector3.new(0, WorldLayout.ROAD_Y, A - 1))
 	zebra = { CF = side0, S = nearestS(p, (side0 * CFrame.new(0, 0, WorldLayout.ROAD_W / 4)).Position) }
-	busStopS = nearestS(p, (side0 * CFrame.new(26, 0, WorldLayout.ROAD_W / 4)).Position)
+	-- (v11) arrêts 50 studs après le carrefour : le bus arrêté ne bloque plus le carrefour
+	busStopS = nearestS(p, (side0 * CFrame.new(50, 0, WorldLayout.ROAD_W / 4)).Position)
 	-- 2 autres arrêts : aux carrefours des rues latérales (1/4 et 3/4 du tour)
 	table.clear(sideStops)
 	local m = WorldLayout.PlotSlots(count)
@@ -1560,7 +2319,7 @@ function TownTraffic.Start(_options: any?)
 		local dirv = Vector3.new(math.sin(a), 0, math.cos(a))
 		local at = O + dirv * (A + WorldLayout.ROAD_W / 4)
 		local tangent = Vector3.new(dirv.Z, 0, -dirv.X)
-		table.insert(sideStops, nearestS(p, at + tangent * 22))
+		table.insert(sideStops, nearestS(p, at + tangent * 50))
 	end
 	spawnTraffic()
 	readSpots()
@@ -1589,6 +2348,14 @@ function TownTraffic.Start(_options: any?)
 		if sensorClock >= 0.1 then
 			sensorClock = 0
 			refreshBlockers()
+		end
+		railClock += dt
+		if railClock >= 0.25 then
+			railClock = 0
+			if trainLine == nil then
+				pcall(setupRails, count)
+			end
+			pcall(refreshRails, count)
 		end
 		raceClock += dt
 		if raceClock >= 1 then
@@ -1654,7 +2421,9 @@ function TownTraffic.Stop()
 	table.clear(parked)
 	table.clear(vehicles)
 	table.clear(circuits)
-	table.clear(reservations)
+	table.clear(railClosed)
+	ghostCount = 0
+	driverCount = 0
 	table.clear(spots)
 	table.clear(blockers)
 	path = nil
@@ -1692,6 +2461,11 @@ function TownTraffic.Debug(): any
 			return busStopS
 		end,
 		StepTraffic = stepTraffic,
+		GhostCount = function(): number
+			return ghostCount
+		end,
+		RailClosed = railClosed,
+		RefreshRails = refreshRails,
 		StepSpots = stepSpots,
 		Blockers = blockers,
 		RefreshBlockers = refreshBlockers,

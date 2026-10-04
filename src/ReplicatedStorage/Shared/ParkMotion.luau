@@ -52,8 +52,8 @@ ParkMotion.GATE = 2.4 -- demi-largeur du portillon (côté -Z)
 -- Balançoires : portique le long de X, on se balance le long de Z
 ParkMotion.SWING = {
 	Center = Vector3.new(11, 0, -7),
-	PivotY = 7.75, -- axe des crochets (sous la poutre)
-	SeatTop = 1.5, -- dessus de l'assise au repos (SCALE99 : ~1,4-1,5)
+	PivotY = 8.6, -- axe des crochets (sous la poutre) (v11 SCALE11 : portique plus haut)
+	SeatTop = 1.85, -- dessus de l'assise au repos (v11 SCALE11 : 1,85)
 	Xs = { -2.7, 0, 2.7 }, -- 3 places (2 sangles + 1 siège bébé)
 	Amax = rad(34),
 	Rise = 3.2, -- (s) on prend de l'élan…
@@ -130,9 +130,9 @@ ParkMotion.SAND = { Center = Vector3.new(-13.5, 0, -10.5), Inner = 6.4 }
 -- Bancs des parents (2 places chacun)
 ParkMotion.BENCHES = {
 	{ Pos = Vector3.new(15.9, 0, -1), Face = Vector3.new(-1, 0, 0) },
-	{ Pos = Vector3.new(-17.4, 0, -4.3), Face = Vector3.new(1, 0, 0) },
+	{ Pos = Vector3.new(-17.4, 0, -3.8), Face = Vector3.new(1, 0, 0) },
 }
-ParkMotion.BENCH = { SeatTop = 1.45, Length = 4.8, Places = { -1.2, 1.2 } }
+ParkMotion.BENCH = { SeatTop = 1.85, Length = 5.6, Places = { -1.4, 1.4 } } -- (v11 SCALE11)
 
 ----------------------------------------------------------------------
 -- Enveloppe (0 -> 1 en montant, 1 -> 0 en descendant), continue
@@ -292,7 +292,8 @@ function ParkMotion.BenchFrame(b: number): CFrame
 end
 
 function ParkMotion.BenchSeat(b: number, k: number): CFrame
-	return ParkMotion.BenchFrame(b) * CFrame.new(ParkMotion.BENCH.Places[k] or 0, ParkMotion.BENCH.SeatTop, -0.05)
+	-- (v11 SCALE11 : dessus des lattes, centré sur la profondeur : z -0,15)
+	return ParkMotion.BenchFrame(b) * CFrame.new(ParkMotion.BENCH.Places[k] or 0, ParkMotion.BENCH.SeatTop, -0.15)
 end
 
 ----------------------------------------------------------------------

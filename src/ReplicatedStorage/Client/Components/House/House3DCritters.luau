@@ -18,6 +18,8 @@
 ]]
 
 local House3DKit = require(script.Parent.House3DKit)
+-- (v11 ITEMS11) poissons vivants (bocal du poisson rouge)
+local House3DFish = require(script.Parent.House3DFish)
 
 type Builder = House3DKit.Builder
 
@@ -709,18 +711,25 @@ R.Goldfish = function(b, _ctx)
 	local fish = vivid(b, 1, rgb(255, 140, 50))
 	b.Cyl(0, 0, 0, 56, 6, rgb(200, 170, 250), M.SmoothPlastic)
 	local bowl = b.Ball(0, 42, 0, 78, GLASS, M.Glass)
-	bowl.Transparency = 0.7
+	bowl.Transparency = 0.8
 	bowl.CastShadow = false
-	local water = b.Egg(0, 36, 0, 70, 50, 70, rgb(140, 205, 255), M.Glass)
-	water.Transparency = 0.45
+	local water = b.Egg(0, 36, 0, 70, 50, 70, rgb(160, 214, 255), M.Glass)
+	water.Transparency = 0.68
 	water.CastShadow = false
 	b.Egg(0, 10, 0, 50, 8, 50, rgb(250, 230, 180), M.Sand)
 	b.EggR(CFrame.new(-14, 22, -6) * CFrame.Angles(0, 0, 0.1), 4, 18, 4, rgb(90, 200, 120), M.SmoothPlastic)
-	b.Egg(4, 42, 4, 26, 18, 12, fish, M.SmoothPlastic)
-	b.EggR(CFrame.new(-12, 42, 4) * CFrame.Angles(0, 0, 0.6), 12, 14, 3, lighten(fish, 0.2), M.SmoothPlastic)
-	b.Ball(12, 45, 10, 4, INK, M.SmoothPlastic)
-	b.Ball(20, 52, 8, 4, WHITE, M.Glass)
-	b.Ball(24, 60, 6, 3, WHITE, M.Glass)
+	-- (v11) un vrai poisson rouge (double queue voilée) qui tourne dans le
+	-- bocal, monte, descend, fait du sur-place ; bulles
+	local goldfish = House3DFish.Fish(b, "Goldfish", 4, 42, 4, 24, 1)
+	-- (teinte de la palette de l'objet sur le corps, comme avant)
+	goldfish.Body.Color = fish
+	local bubbles = {}
+	for index = 0, 2 do
+		local bubble = b.Ball(18, 20 + index * 12, 8, 3 + index * 0.5, WHITE, M.Glass)
+		bubble.Transparency = 0.4
+		table.insert(bubbles, bubble)
+	end
+	House3DFish.Tank(b, water, { goldfish }, { Kind = "Bowl", Bubbles = bubbles, Bubbler = Vector3.new(18, 16, 8), RefCenter = Vector3.new(0, 36, 0), RefSize = Vector3.new(70, 50, 70) })
 	b.Footprint(80, 80, 82)
 end
 

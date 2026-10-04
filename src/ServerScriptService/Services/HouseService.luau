@@ -50,6 +50,9 @@
 	  "saveLayout" { Rooms = { [roomId] = { { I, X, Y, S, Z, F?, C? }, ... } } }  (ou { Room, Placed })
 	  "buyLook" { Kind, Id, Room? }  achète (et applique) une personnalisation
 	  "setRoomState" { Room, LightsOn?, CurtainsOpen? }  (v9.8) 💡 interrupteur / 🪟 rideaux d'une pièce
+	    (v11 HOUSE11) UNE lumière / UNE fenêtre : { Room, Light = clé, On }
+	    ou { Room, Window = clé, Open } (Room = "Hall" : lampes du hall) ;
+	    LightsOn / CurtainsOpen seuls = toute la pièce (Shared/HouseSwitches)
 	  "setLook" { Kind, Id, Room?, On? }  applique une personnalisation possédée
 	    (Kind "Garden" : On = true / false pose / range la déco du jardin)
 	  "saveExterior" { [Kind] = Id, Num = n }  (v10 HOUSE10) 🏡 éditeur de
@@ -66,6 +69,7 @@ local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
 local NumberFormatter = require(ReplicatedStorage.Shared.NumberFormatter)
 local Net = require(ReplicatedStorage.Shared.Net)
 local RateLimiter = require(script.Parent.RateLimiter)
+local HouseSwitches = require(ReplicatedStorage.Shared.HouseSwitches)
 -- (v10 HOUSE10) 🏡 extérieur (facultatif : les simulations de tests sans ce module continuent)
 local HouseOptions: any = nil
 do
@@ -458,6 +462,31 @@ local function cleanPlaced(list, owned, used, maxItems: number, rebirths: number
 	return placed
 end
 
+local publishRoomStates: (player: Player, data: any) -> () -- (v11 HOUSE11, plus bas)
+
+-- (v11 HOUSE11) 💡 / 🪟 d'une pièce relus d'une sauvegarde : listes de clés
+-- valides (lumières qui existent encore, fenêtres connues) ; nil si vide
+local function roomSwitches(raw, placed): ({ string }?, { string }?)
+	local lightSet = {}
+	for _, key in ipairs(HouseSwitches.LightKeys(placed)) do
+		lightSet[key] = true
+	end
+	local off, shut
+	if raw.LightsOff == true and raw.Off == nil then
+		off = HouseSwitches.LightKeys(placed)
+	else
+		off = HouseSwitches.CleanList(raw.Off, function(key: string): boolean
+			return lightSet[key] == true
+		end)
+	end
+	if raw.CurtainsClosed == true and raw.Shut == nil then
+		shut = table.clone(HouseSwitches.WINDOW_KEYS)
+	else
+		shut = HouseSwitches.CleanList(raw.Shut, HouseSwitches.IsWindowKey)
+	end
+	return (if #off > 0 then off else nil), (if #shut > 0 then shut else nil)
+end
+
 -- Corrige une sauvegarde abîmée ou devenue incohérente avec la config
 -- (et transforme l'ancienne maison à une pièce en maison à pièces)
 local function sanitizeHouse(data)
@@ -599,9 +628,11 @@ local function sanitizeHouse(data)
 				end
 				room.Custom = next(custom) ~= nil and custom or nil
 			end
-			-- (v9.8 HOUSE98) 💡 lumières éteintes / 🪟 rideaux fermés (absent = allumées / ouverts)
-			room.LightsOff = raw.LightsOff == true or nil
-			room.CurtainsClosed = raw.CurtainsClosed == true or nil
+			-- (v11 HOUSE11) 💡 lumières éteintes / 🪟 rideaux fermés, UNE PAR UNE
+			-- (Shared/HouseSwitches) ; absent = allumées / ouverts. Anciennes
+			-- sauvegardes (v9.8 : LightsOff / CurtainsClosed = toute la pièce)
+			-- converties : toutes les lumières / toutes les fenêtres.
+			room.Off, room.Shut = roomSwitches(raw, room.Placed)
 			if id then
 				ids[id] = true
 				local number = tonumber(string.match(id, "^R(%d+)$"))
@@ -624,6 +655,11 @@ local function sanitizeHouse(data)
 		house.NextRoom = highest + 1
 	end
 	house.NextRoom = math.floor(house.NextRoom)
+	-- (v11 HOUSE11) 💡 lampes du hall éteintes (Shared/HouseSwitches.HallKeys)
+	local hallOff = HouseSwitches.CleanList(house.HallOff, function(key: string): boolean
+		return HouseSwitches.IsHallKey(key)
+	end)
+	house.HallOff = if #hallOff > 0 then hallOff else nil
 	for _, room in ipairs(rooms) do
 		if room.Id == "" then
 			room.Id = "R" .. tostring(house.NextRoom)
@@ -1095,7 +1131,10 @@ local function saveLayout(player: Player, data, argument: any): (boolean, string
 
 	for room, placed in pairs(updates) do
 		room.Placed = placed
+		-- (v11 HOUSE11) 💡 lampes rangées : leurs clés "éteinte" disparaissent
+		room.Off = roomSwitches({ Off = room.Off }, placed)
 	end
+	publishRoomStates(player, data)
 	updateComfortStat(data)
 	services.GameService:SendState(player)
 	return true, T(player, "🏠 Layout saved")
@@ -1209,59 +1248,123 @@ local function setLook(player: Player, data, argument: any): (boolean, string)
 end
 
 ----------------------------------------------------------------------
--- (v9.8 HOUSE98) 💡 Interrupteur et 🪟 rideaux de chaque pièce (maison 3D)
--- Données : room.LightsOff = true (lumières éteintes) / room.CurtainsClosed
--- = true (rideaux fermés) ; absent = allumées / ouverts (anciennes
--- sauvegardes). Copie répliquée pour la ville (tous les clients voient la
--- même maison) : attributs du joueur "HouseLightsOff" / "HouseCurtainsClosed"
--- = Id des pièces concernées séparés par des virgules ("R1,R4").
+-- (v9.8 HOUSE98, v11 HOUSE11) 💡 Interrupteurs et 🪟 rideaux de la maison 3D,
+-- LUMIÈRE PAR LUMIÈRE et FENÊTRE PAR FENÊTRE (Shared/HouseSwitches).
+-- Données : room.Off = { clé } (lumières éteintes : "C" plafonnier,
+-- "ItemId#n" lampe posée), room.Shut = { clé } (rideaux fermés : "F1",
+-- "F2", "B") ; house.HallOff = { clé } (hall : "C1".., "K") ; absent =
+-- allumé / ouvert. Copie répliquée pour la ville (tout le monde voit la même
+-- maison) : attributs du joueur "HouseLightsOff" / "HouseCurtainsClosed"
+-- ("R1:C,R1:FloorLamp#1,Hall:K" / "R1:F1,R4:B").
 ----------------------------------------------------------------------
-local TOGGLE_INTERVAL = 0.25 -- secondes entre deux clics d'interrupteur / de rideaux
+local TOGGLE_INTERVAL = 0.25 -- secondes entre deux clics sur LA MÊME lumière / fenêtre
+local TOGGLE_ANY_INTERVAL = 0.06 -- secondes entre deux clics quelconques (anti-spam)
 
-local function publishRoomStates(player: Player, data)
+publishRoomStates = function(player: Player, data)
 	local house = type(data) == "table" and data.House or nil
 	if type(house) ~= "table" or type(house.Rooms) ~= "table" then
 		return
 	end
-	local off, closed = {}, {}
+	local off, shut = {}, {}
 	for _, room in ipairs(house.Rooms) do
 		if type(room) == "table" and type(room.Id) == "string" then
-			if room.LightsOff == true then
-				table.insert(off, room.Id)
+			if type(room.Off) == "table" and #room.Off > 0 then
+				table.insert(off, { Id = room.Id, Keys = room.Off })
 			end
-			if room.CurtainsClosed == true then
-				table.insert(closed, room.Id)
+			if type(room.Shut) == "table" and #room.Shut > 0 then
+				table.insert(shut, { Id = room.Id, Keys = room.Shut })
 			end
 		end
 	end
+	if type(house.HallOff) == "table" and #house.HallOff > 0 then
+		table.insert(off, { Id = HouseSwitches.HALL_ID, Keys = house.HallOff })
+	end
 	pcall(function()
-		player:SetAttribute("HouseLightsOff", table.concat(off, ","))
-		player:SetAttribute("HouseCurtainsClosed", table.concat(closed, ","))
+		player:SetAttribute("HouseLightsOff", HouseSwitches.Encode(off))
+		player:SetAttribute("HouseCurtainsClosed", HouseSwitches.Encode(shut))
 	end)
 end
 
--- "setRoomState" { Room = id, LightsOn = bool? , CurtainsOpen = bool? }
+-- Ajoute / retire `key` d'une liste de clés ; renvoie la liste (nil si vide)
+local function setKey(list: any, key: string, present: boolean): { string }?
+	local out = HouseSwitches.CleanList(list)
+	local index = table.find(out, key)
+	if present and not index and #out < HouseSwitches.MAX_KEYS then
+		table.insert(out, key)
+	elseif not present and index then
+		table.remove(out, index)
+	end
+	return if #out > 0 then out else nil
+end
+
+-- "setRoomState" :
+--   { Room, Light = clé, On = bool }      une lumière (Room = "Hall" : le hall)
+--   { Room, Window = clé, Open = bool }   une fenêtre
+--   { Room, LightsOn = bool }             toutes les lumières de la pièce
+--   { Room, CurtainsOpen = bool }         toutes les fenêtres de la pièce
 local function setRoomState(player: Player, data, argument: any): (boolean, string)
 	if type(argument) ~= "table" then
 		return false, T(player, "Invalid request")
 	end
-	-- (limite séparée pour l'interrupteur et pour les rideaux)
-	if not RateLimiter.Check(player, if argument.LightsOn ~= nil then "HouseToggleL" else "HouseToggleC", TOGGLE_INTERVAL) then
+	local light, window = argument.Light, argument.Window
+	local lights, curtains = argument.LightsOn, argument.CurtainsOpen
+	local target = if type(light) == "string" then "L:" .. light elseif type(window) == "string" then "W:" .. window
+		elseif lights ~= nil then "L:*" else "W:*"
+	local roomId = argument.Room
+	if type(roomId) ~= "string" or #roomId > MAX_ROOM_ID_LENGTH or #target > HouseSwitches.MAX_KEY_LENGTH + 2 then
+		return false, T(player, "Invalid request")
+	end
+	-- (limite par lumière / fenêtre : on peut en basculer plusieurs à la suite)
+	if not RateLimiter.Check(player, "HouseToggle", TOGGLE_ANY_INTERVAL)
+		or not RateLimiter.Check(player, "HouseToggle:" .. roomId .. ":" .. target, TOGGLE_INTERVAL) then
 		return false, T(player, "Slow down!")
 	end
-	local room = findRoom(data.House, argument.Room)
+	local house = data.House
+	-- 💡 hall : seulement ses lumières
+	if roomId == HouseSwitches.HALL_ID then
+		local on = if light ~= nil then argument.On else lights
+		if type(on) ~= "boolean" then
+			return false, T(player, "Invalid request")
+		end
+		local floors = tonumber(Formulas.GetHouseSize(data).Floors) or 3
+		if type(light) == "string" then
+			if not HouseSwitches.IsHallKey(light, floors) then
+				return false, T(player, "Invalid request")
+			end
+			house.HallOff = setKey(house.HallOff, light, not on)
+		elseif light == nil and window == nil then
+			house.HallOff = if on then nil else HouseSwitches.HallKeys(floors)
+		else
+			return false, T(player, "Invalid request")
+		end
+		publishRoomStates(player, data)
+		return true, ""
+	end
+	local room = findRoom(house, roomId)
 	if not room then
 		return false, T(player, "Invalid request")
 	end
-	local lights, curtains = argument.LightsOn, argument.CurtainsOpen
-	if (lights ~= nil and type(lights) ~= "boolean") or (curtains ~= nil and type(curtains) ~= "boolean") or (lights == nil and curtains == nil) then
-		return false, T(player, "Invalid request")
-	end
-	if lights ~= nil then
-		room.LightsOff = lights == false or nil
-	end
-	if curtains ~= nil then
-		room.CurtainsClosed = curtains == false or nil
+	if type(light) == "string" then
+		if type(argument.On) ~= "boolean" or not table.find(HouseSwitches.LightKeys(room.Placed), light) then
+			return false, T(player, "Invalid request")
+		end
+		room.Off = setKey(room.Off, light, not argument.On)
+	elseif type(window) == "string" then
+		if type(argument.Open) ~= "boolean" or not HouseSwitches.IsWindowKey(window) then
+			return false, T(player, "Invalid request")
+		end
+		room.Shut = setKey(room.Shut, window, not argument.Open)
+	else
+		if (lights ~= nil and type(lights) ~= "boolean") or (curtains ~= nil and type(curtains) ~= "boolean") or (lights == nil and curtains == nil)
+			or light ~= nil or window ~= nil then
+			return false, T(player, "Invalid request")
+		end
+		if lights ~= nil then
+			room.Off = if lights then nil else HouseSwitches.LightKeys(room.Placed)
+		end
+		if curtains ~= nil then
+			room.Shut = if curtains then nil else table.clone(HouseSwitches.WINDOW_KEYS)
+		end
 	end
 	publishRoomStates(player, data)
 	return true, ""

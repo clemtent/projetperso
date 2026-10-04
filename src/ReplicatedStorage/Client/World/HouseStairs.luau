@@ -31,6 +31,11 @@
 	  - sols par style : tomettes (chaumière), damier noir et blanc (maison de
 	    ville), béton ciré (loft), marbre à cabochons (manoir) ; parquet aux
 	    étages ; murs enduit + lambris ; hauteur libre >= 8,5 partout.
+	(v11 HOUSE11) plus RIEN au milieu du couloir du manoir (l'ancien guéridon
+	+ bouquet est devenu une console de marbre contre le mur de gauche,
+	vérifié numériquement pour chaque style) ; tailles "Roblox" (SCALE11) :
+	console 3,1, banc 1,85, main courante 3,2, garde-corps 3,5 ; la lampe de
+	la console a une vraie lumière douce.
 	Coût : la COQUE (sols, trémies, murs : toujours là, avec l'extérieur) est
 	séparée de l'INTÉRIEUR (escalier, garde-corps, meubles, lampes) qui est
 	construit en flux comme les pièces (HouseBuilder : seulement quand on est
@@ -38,7 +43,10 @@
 
 	API :
 	  HouseStairs.BuildShell(kit, size) -> { Parts }
-	  HouseStairs.BuildInterior(kit, size) -> { Ramps: { BasePart }, Parts, Lights }
+	  HouseStairs.BuildInterior(kit, size) -> { Ramps: { BasePart }, Parts, Lights, Lamps }
+	    (v11) Lamps = { { Key = "C1".."Cn" | "K", Glows, Lights, Host } } : chaque
+	    lampe du hall (plafonnier de chaque étage, lampe de la console) pour
+	    ses propres interrupteurs (HouseBuilder)
 	  HouseStairs.Build(kit, size, colors?) -> { Ramps, Holes, Parts }  (les deux)
 	  HouseStairs.Palette(size) -> Palette (couleurs du hall par style)
 ]]
@@ -56,8 +64,10 @@ local BLACK = Color3.new(0, 0, 0)
 local BRASS = Color3.fromRGB(214, 172, 96)
 local CEILING = Color3.fromRGB(255, 250, 244)
 local SKIN = WorldLayout.HALL_SKIN
-local RAIL_H = 2.9 -- hauteur de la main courante au-dessus du nez des marches
-local GUARD_H = 3.1 -- garde-corps des paliers
+local RAIL_H = 3.2 -- hauteur de la main courante au-dessus du nez des marches (v11 SCALE11 : 3,2)
+local GUARD_H = 3.5 -- garde-corps des paliers (v11 SCALE11 : >= 3,5)
+local CONSOLE_TOP = 3.1 -- (v11) dessus de la console de l'entrée (tables 3,0 à 3,2)
+local BENCH_SEAT = 1.85 -- (v11) assise du banc de l'entrée
 
 export type Palette = {
 	Style: string,
@@ -204,7 +214,9 @@ end
 
 export type Colors = { Wall: Color3, Trim: Color3, Accent: Color3 }
 export type Result = { Ramps: { BasePart }, Holes: { { number } }, Parts: number }
-export type InteriorResult = { Ramps: { BasePart }, Parts: number, Lights: number }
+-- (v11 HOUSE11) une lampe du hall : clé (Shared/HouseSwitches.HallKeys), ampoules, vraies lumières, pièce de l'invite
+export type HallLamp = { Key: string, Glows: { BasePart }, Lights: { Light }, Host: BasePart? }
+export type InteriorResult = { Ramps: { BasePart }, Parts: number, Lights: number, Lamps: { HallLamp } }
 
 local function floorName(floor: number): string
 	if floor <= 1 then
@@ -758,7 +770,7 @@ local function underStair(kit: any, size: any, pal: Palette)
 end
 
 -- Hall d'entrée meublé (rez-de-chaussée)
-local function foyer(kit: any, size: any, pal: Palette)
+local function foyer(kit: any, size: any, pal: Palette, lamps: { [string]: any })
 	local run = runOf(size)
 	local y = WorldLayout.FloorY(1)
 	local T = WorldLayout.WALL_T
@@ -783,22 +795,58 @@ local function foyer(kit: any, size: any, pal: Palette)
 	local backX = WorldLayout.BackDoorX(size)
 	kit:Box("BackDoorMat", backX - 2, backX + 2, y, y + 0.05, dBack - 1.9, dBack - 0.2, Color3.fromRGB(150, 112, 78), M.Fabric, { Shadow = false })
 
+	-- (v11 HOUSE11 : "une grande table avec un pot de fleurs au MILIEU du
+	-- passage" -> plus RIEN au milieu du couloir : la console, la lampe et
+	-- le bouquet sont CONTRE LE MUR DE GAUCHE, pour tous les styles ; le
+	-- manoir a une console de marbre aux pieds dorés et un grand bouquet)
+	-- console contre le mur de gauche (dessus à 3,1) + tiroir + tablette basse
+	local k0, k1 = T + 1.6, math.min(T + 6.4, pass0 - 1.1)
+	local kx0, kx1 = c0 + 0.32, c0 + 1.55
+	local topY = y + CONSOLE_TOP
+	local topColor = if mansion then Color3.fromRGB(240, 234, 232) else wood
+	local topMat = if mansion then M.Marble else woodMat
+	local legColor = if mansion then pal.Accent else wood
+	local legMat = if mansion then M.Metal else woodMat
+	kit:Box("ConsoleTop", kx0, kx1 + 0.08, topY - 0.16, topY, k0 - 0.08, k1 + 0.08, topColor, topMat, { Solid = true, Shadow = true })
+	kit:Box("ConsoleApron", kx0 + 0.08, kx1 - 0.02, topY - 0.62, topY - 0.16, k0 + 0.1, k1 - 0.1, wood, woodMat, { Solid = true, Shadow = false })
 	if mansion then
-		-- grand vestibule : guéridon rond + grand bouquet, au milieu du couloir
-		local gx, gd = (c0 + c1) / 2, T + 5.2
-		kit:CylY("FoyerTableBase", gx, y + 0.08, gd, 1.4, 0.2, pal.Accent, M.Metal, { Solid = true, Shadow = false })
-		kit:CylY("FoyerTableLeg", gx, y + 0.28, gd, 0.45, 2.22, Color3.fromRGB(112, 50, 42), M.Wood, { Solid = true, Shadow = false })
-		kit:CylY("FoyerTableTop", gx, y + 2.5, gd, 2.4, 0.22, Color3.fromRGB(240, 234, 232), M.Marble, { Solid = true, Shadow = true })
-		kit:CylY("FoyerVase", gx, y + 2.72, gd, 0.8, 1.3, Color3.fromRGB(246, 244, 250), M.Glass, { Shadow = false })
+		-- bandeau doré sous le plateau de marbre
+		kit:Box("ConsoleGilt", kx1 - 0.02, kx1 + 0.03, topY - 0.3, topY - 0.22, k0 + 0.1, k1 - 0.1, pal.Accent, M.Metal, { Shadow = false })
+	end
+	kit:Box("ConsoleDrawer", kx1 - 0.02, kx1 + 0.02, topY - 0.56, topY - 0.36, k0 + 0.5, k1 - 0.5, wood:Lerp(WHITE, 0.08), woodMat, { Shadow = false })
+	for _, d in ipairs({ (k0 * 2 + k1) / 3, (k0 + k1 * 2) / 3 }) do
+		kit:Ball("ConsoleKnob", kx1 + 0.06, topY - 0.46, d, 0.14, pal.Accent, M.Metal, { Shadow = false })
+	end
+	for _, lx in ipairs({ kx0 + 0.2, kx1 - 0.2 }) do
+		for _, ld in ipairs({ k0 + 0.2, k1 - 0.2 }) do
+			kit:Box("ConsoleLeg", lx - 0.09, lx + 0.09, y, topY - 0.62, ld - 0.09, ld + 0.09, legColor, legMat, { Solid = true, Shadow = false })
+		end
+	end
+	kit:Box("ConsoleShelf", kx0 + 0.1, kx1 - 0.1, y + 0.55, y + 0.67, k0 + 0.12, k1 - 0.12, wood, woodMat, { Shadow = false })
+	-- sur la console : lampe (pied, abat-jour, ampoule), bouquet, vide-poche
+	local lx, ld = (kx0 + kx1) / 2, k0 + 0.8
+	kit:CylY("ConsoleLampBase", lx, topY, ld, 0.55, 0.12, pal.Accent, M.Metal, { Shadow = false })
+	kit:CylY("ConsoleLampStem", lx, topY + 0.12, ld, 0.12, 1.2, pal.Accent, M.Metal, { Shadow = false })
+	local shade = kit:CylY("ConsoleLampShade", lx, topY + 1.2, ld, 0.95, 0.8, Color3.fromRGB(255, 244, 226), M.Fabric, { Shadow = false })
+	local lampBulb = kit:Ball("ConsoleLampBulb", lx, topY + 1.3, ld, 0.3, Color3.fromRGB(255, 226, 170), M.Neon, { Shadow = false })
+	-- petit bouton du pied de lampe (on l'allume / l'éteint elle-même)
+	kit:Box("ConsoleLampButton", lx + 0.24, lx + 0.34, topY + 0.04, topY + 0.16, ld - 0.05, ld + 0.05, Color3.fromRGB(250, 246, 240), M.SmoothPlastic, { Shadow = false })
+	local lampLight = kit:Light(lampBulb, Color3.fromRGB(255, 222, 170), 9, 0.45)
+	lamps.K = { Key = "K", Glows = { lampBulb }, Lights = if lampLight then { lampLight } else {}, Host = shade }
+	local vd = k1 - 0.8
+	if mansion then
+		-- grand bouquet (vase de cristal, fleurs, feuillage) au bout de la console
+		local gx, gd = c0 + 1.05, k1 - 1.0
+		kit:CylY("FoyerVase", gx, topY, gd, 0.8, 1.3, Color3.fromRGB(246, 244, 250), M.Glass, { Shadow = false })
 		local blooms = { Color3.fromRGB(255, 150, 190), WHITE, Color3.fromRGB(255, 214, 120), Color3.fromRGB(236, 72, 140), Color3.fromRGB(200, 170, 250) }
 		for k = 0, 6 do
 			local a = k / 7 * math.pi * 2
-			local r = if k == 0 then 0 else 0.55
-			kit:Ball("FoyerBloom", gx + math.cos(a) * r, y + 4.35 + (k % 2) * 0.25 - (if k == 0 then -0.3 else 0), gd + math.sin(a) * r, 0.62,
+			local r = if k == 0 then 0 else 0.45
+			kit:Ball("FoyerBloom", gx + math.cos(a) * r, topY + 1.85 + (k % 2) * 0.25 + (if k == 0 then 0.3 else 0), gd + math.sin(a) * r, 0.62,
 				blooms[k % #blooms + 1], M.SmoothPlastic, { Shadow = false })
 		end
-		kit:Ball("FoyerLeaves", gx, y + 4.1, gd, 1.6, Color3.fromRGB(86, 150, 90), M.Grass, { Shadow = false })
-		-- deux grandes urnes de part et d'autre du passage de gauche
+		kit:Ball("FoyerLeaves", gx, topY + 1.6, gd, 1.5, Color3.fromRGB(86, 150, 90), M.Grass, { Shadow = false })
+		-- deux grandes urnes de part et d'autre du passage de gauche (contre le mur)
 		if left then
 			for _, d in ipairs({ left[1] - 1.1, left[2] + 1.1 }) do
 				kit:CylY("Urn", c0 + 0.9, y, d, 1.1, 2.6, Color3.fromRGB(246, 242, 250), M.Marble, { Solid = true, Shadow = false })
@@ -806,46 +854,32 @@ local function foyer(kit: any, size: any, pal: Palette)
 			end
 		end
 	else
-		-- console contre le mur de gauche (2,7 de haut) + tiroir + tablette basse
-		local k0, k1 = T + 1.6, math.min(T + 6.4, pass0 - 1.1)
-		local kx0, kx1 = c0 + 0.32, c0 + 1.55
-		local topY = y + 2.7
-		kit:Box("ConsoleTop", kx0, kx1 + 0.08, topY - 0.16, topY, k0 - 0.08, k1 + 0.08, wood, woodMat, { Solid = true, Shadow = true })
-		kit:Box("ConsoleApron", kx0 + 0.08, kx1 - 0.02, topY - 0.62, topY - 0.16, k0 + 0.1, k1 - 0.1, wood, woodMat, { Solid = true, Shadow = false })
-		kit:Box("ConsoleDrawer", kx1 - 0.02, kx1 + 0.02, topY - 0.56, topY - 0.22, k0 + 0.5, k1 - 0.5, wood:Lerp(WHITE, 0.08), woodMat, { Shadow = false })
-		for _, d in ipairs({ (k0 * 2 + k1) / 3, (k0 + k1 * 2) / 3 }) do
-			kit:Ball("ConsoleKnob", kx1 + 0.06, topY - 0.39, d, 0.14, pal.Accent, M.Metal, { Shadow = false })
-		end
-		for _, lx in ipairs({ kx0 + 0.2, kx1 - 0.2 }) do
-			for _, ld in ipairs({ k0 + 0.2, k1 - 0.2 }) do
-				kit:Box("ConsoleLeg", lx - 0.09, lx + 0.09, y, topY - 0.62, ld - 0.09, ld + 0.09, wood, woodMat, { Solid = true, Shadow = false })
-			end
-		end
-		kit:Box("ConsoleShelf", kx0 + 0.1, kx1 - 0.1, y + 0.55, y + 0.67, k0 + 0.12, k1 - 0.12, wood, woodMat, { Shadow = false })
-		-- sur la console : lampe (pied, abat-jour, ampoule), bouquet, vide-poche
-		local ld = k0 + 0.8
-		kit:CylY("ConsoleLampBase", (kx0 + kx1) / 2, topY, ld, 0.55, 0.12, pal.Accent, M.Metal, { Shadow = false })
-		kit:CylY("ConsoleLampStem", (kx0 + kx1) / 2, topY + 0.12, ld, 0.12, 1.2, pal.Accent, M.Metal, { Shadow = false })
-		kit:CylY("ConsoleLampShade", (kx0 + kx1) / 2, topY + 1.2, ld, 0.95, 0.8, Color3.fromRGB(255, 244, 226), M.Fabric, { Shadow = false })
-		kit:Ball("ConsoleLampBulb", (kx0 + kx1) / 2, topY + 1.3, ld, 0.3, Color3.fromRGB(255, 226, 170), M.Neon, { Shadow = false })
-		local vd = k1 - 0.8
-		kit:CylY("ConsoleVase", (kx0 + kx1) / 2, topY, vd, 0.5, 0.9, Color3.fromRGB(120, 170, 200), M.Glass, { Shadow = false })
+		kit:CylY("ConsoleVase", lx, topY, vd, 0.5, 0.9, Color3.fromRGB(120, 170, 200), M.Glass, { Shadow = false })
 		for k, c in ipairs({ Color3.fromRGB(255, 150, 190), Color3.fromRGB(255, 226, 130), WHITE }) do
-			kit:Ball("ConsoleBloom", (kx0 + kx1) / 2 + (k - 2) * 0.22, topY + 1.1 + (k % 2) * 0.18, vd + (k - 2) * 0.12, 0.34, c, M.SmoothPlastic, { Shadow = false })
+			kit:Ball("ConsoleBloom", lx + (k - 2) * 0.22, topY + 1.1 + (k % 2) * 0.18, vd + (k - 2) * 0.12, 0.34, c, M.SmoothPlastic, { Shadow = false })
 		end
-		kit:CylY("KeyBowl", (kx0 + kx1) / 2, topY, (k0 + k1) / 2, 0.7, 0.16, Color3.fromRGB(236, 220, 200), M.SmoothPlastic, { Shadow = false })
-		-- grand miroir au-dessus (cadre + verre réfléchissant statique)
-		local m0, m1 = k0 + 0.5, k1 - 0.5
-		local my0, my1 = topY + 1.4, topY + 5.2
-		kit:Box("HallMirrorFrame", c0, c0 + 0.14, my0, my1, m0, m1, pal.Accent, M.Metal, { Shadow = false })
-		local glass = kit:Box("HallMirror", c0 + 0.14, c0 + 0.18, my0 + 0.22, my1 - 0.22, m0 + 0.22, m1 - 0.22, Color3.fromRGB(206, 218, 228), M.Glass,
-			{ Shadow = false })
-		glass.Reflectance = 0.35
 	end
+	kit:CylY("KeyBowl", lx, topY, (k0 + k1) / 2, 0.7, 0.16, Color3.fromRGB(236, 220, 200), M.SmoothPlastic, { Shadow = false })
+	-- grand miroir au-dessus (cadre + verre réfléchissant statique)
+	local m0, m1 = k0 + 0.5, k1 - 0.5
+	local my0, my1 = topY + 1.4, topY + 5.2
+	kit:Box("HallMirrorFrame", c0, c0 + 0.14, my0, my1, m0, m1, pal.Accent, M.Metal, { Shadow = false })
+	local glass = kit:Box("HallMirror", c0 + 0.14, c0 + 0.18, my0 + 0.22, my1 - 0.22, m0 + 0.22, m1 - 0.22, Color3.fromRGB(206, 218, 228), M.Glass,
+		{ Shadow = false })
+	glass.Reflectance = 0.35
 
-	-- porte-manteau (coin avant droit, devant la 1re marche, hors du battant)
+	-- porte-manteau : (v11) plus devant la 1re marche (il gênait l'accès à
+	-- l'escalier) -> coin arrière droit, après l'arrivée de la volée, hors du
+	-- battant de la porte de derrière ; maison sans étage : coin avant droit ;
+	-- manoir : pas de porte-manteau (son passage de droite est au fond)
+	local floors = WorldLayout.Dims(size).Floors
 	local cx, cd = h1 - SKIN - 1.05, T + 1.35
-	if cd + 0.7 < run.D0 - 0.7 then
+	local coatOK = floors < 2 and cd + 0.7 < run.D0 - 0.7
+	if floors >= 2 and not mansion then
+		cd = dBack - 1.3
+		coatOK = cd - 0.7 > run.D1 + 0.3 and WorldLayout.BackDoorX(size) + WorldLayout.DOOR_W / 2 + 0.4 < cx - 0.65
+	end
+	if coatOK then
 		kit:CylY("CoatStandBase", cx, y, cd, 1.3, 0.14, wood, woodMat, { Solid = true, Shadow = false })
 		kit:CylY("CoatStandPole", cx, y + 0.14, cd, 0.22, 5.6, wood, woodMat, { Solid = true, Shadow = false })
 		kit:Ball("CoatStandTop", cx, y + 5.85, cd, 0.36, wood, woodMat, { Shadow = false })
@@ -871,13 +905,18 @@ local function foyer(kit: any, size: any, pal: Palette)
 	if b1 - b0 > 2.5 and mansion then
 		painting(kit, c0, y + 3.9, y + 8.4, b0, b1, pal.Accent, 2)
 	elseif b1 - b0 > 2.5 then
-		kit:Box("HallBench", c0 + 0.32, c0 + 1.7, y, y + 1.2, b0, b1, wood, woodMat, { Solid = true, Shadow = true })
-		kit:Box("HallBenchCushion", c0 + 0.4, c0 + 1.62, y + 1.2, y + 1.45, b0 + 0.1, b1 - 0.1, if pal.Runner then pal.Runner:Lerp(WHITE, 0.45) else Color3.fromRGB(236, 214, 190),
+		-- (v11) banc ouvert : plateau + 2 joues (assise à 1,85) ; chaussures dessous, visibles
+		kit:Box("HallBench", c0 + 0.32, c0 + 2.2, y + BENCH_SEAT - 0.5, y + BENCH_SEAT - 0.25, b0, b1, wood, woodMat, { Solid = true, Shadow = true })
+		for _, e in ipairs({ { b0, b0 + 0.3 }, { b1 - 0.3, b1 } }) do
+			kit:Box("HallBenchSide", c0 + 0.36, c0 + 2.16, y, y + BENCH_SEAT - 0.5, e[1], e[2], wood, woodMat, { Solid = true, Shadow = false })
+		end
+		kit:Box("HallBenchShelf", c0 + 0.4, c0 + 2.1, y + 0.45, y + 0.57, b0 + 0.3, b1 - 0.3, wood, woodMat, { Shadow = false })
+		kit:Box("HallBenchCushion", c0 + 0.4, c0 + 2.12, y + BENCH_SEAT - 0.25, y + BENCH_SEAT, b0 + 0.1, b1 - 0.1, if pal.Runner then pal.Runner:Lerp(WHITE, 0.45) else Color3.fromRGB(236, 214, 190),
 			M.Fabric, { Shadow = false })
 		-- deux paires de chaussures sous le banc
 		for k = 0, 1 do
 			local sd = b0 + 0.8 + k * 1.6
-			kit:Box("Shoe", c0 + 0.8, c0 + 1.55, y, y + 0.3, sd - 0.2, sd + 0.2, if k == 0 then Color3.fromRGB(236, 110, 140) else Color3.fromRGB(80, 70, 76), M.Fabric,
+			kit:Box("Shoe", c0 + 0.8, c0 + 1.55, y + 0.57, y + 0.87, sd - 0.2, sd + 0.2, if k == 0 then Color3.fromRGB(236, 110, 140) else Color3.fromRGB(80, 70, 76), M.Fabric,
 				{ Shadow = false })
 		end
 		painting(kit, c0, y + 4.2, y + 7.6, b0 + 0.2, b1 - 0.2, wood, 1)
@@ -900,13 +939,14 @@ local function foyer(kit: any, size: any, pal: Palette)
 end
 
 -- Lampe de plafond d'un étage (lanterne / lustre / plafonnier)
-local function ceilingLamp(kit: any, size: any, floor: number, pal: Palette, withLight: boolean)
+local function ceilingLamp(kit: any, size: any, floor: number, pal: Palette, withLight: boolean): HallLamp
 	local c0, c1 = WorldLayout.CorridorSpan(size)
 	local y = WorldLayout.FloorY(floor) + WorldLayout.WALL_H
 	local x = (c0 + c1) / 2
 	local d = if floor == 1 then WorldLayout.WALL_T + 5.4 else WorldLayout.WALL_T + WorldLayout.DEPTH / 2
 	local warm = Color3.fromRGB(255, 226, 180)
 	local bulb: BasePart
+	local glows: { BasePart } = {}
 	if pal.Style == "Mansion" and floor == 1 then
 		-- lustre : rosace, tige, anneau doré, 6 bougies à ampoule, pampilles
 		kit:CylY("ChandelierRose", x, y - 0.2, d, 1.4, 0.2, pal.Trim, M.SmoothPlastic, { Shadow = false })
@@ -921,6 +961,7 @@ local function ceilingLamp(kit: any, size: any, floor: number, pal: Palette, wit
 			kit:CylY("ChandelierCup", bx, y - 2.75, bd, 0.42, 0.12, pal.Accent, M.Metal, { Shadow = false })
 			kit:CylY("ChandelierCandle", bx, y - 2.55, bd, 0.2, 0.45, WHITE, M.SmoothPlastic, { Shadow = false })
 			local flame = kit:Ball("ChandelierBulb", bx, y - 1.95, bd, 0.28, Color3.fromRGB(255, 232, 186), M.Neon, { Shadow = false })
+			table.insert(glows, flame)
 			if k == 0 then
 				bulb = flame
 			end
@@ -941,9 +982,11 @@ local function ceilingLamp(kit: any, size: any, floor: number, pal: Palette, wit
 		kit:CylY("CeilingRose", x, y - 0.15, d, 1.3, 0.15, pal.Trim, M.SmoothPlastic, { Shadow = false })
 		bulb = kit:Ball("LandingLamp", x, y - 0.35, d, 1.1, Color3.fromRGB(255, 240, 214), M.SmoothPlastic, { Shadow = false })
 	end
-	if withLight then
-		kit:Light(bulb, Color3.fromRGB(255, 222, 176), 20, 0.8)
+	if #glows == 0 then
+		table.insert(glows, bulb)
 	end
+	local light = if withLight then kit:Light(bulb, Color3.fromRGB(255, 222, 176), 20, 0.8) else nil
+	return { Key = "C" .. floor, Glows = glows, Lights = if light then { light } else {}, Host = bulb }
 end
 
 function HouseStairs.BuildInterior(kit: any, size: any): InteriorResult
@@ -951,6 +994,7 @@ function HouseStairs.BuildInterior(kit: any, size: any): InteriorResult
 	local floors = dims.Floors
 	local pal = HouseStairs.Palette(size)
 	local ramps: { BasePart } = {}
+	local lampList: { HallLamp } = {} -- (v11) lampes du hall, une par une
 	local before = kit.Stats.Count
 	local c0 = WorldLayout.CorridorSpan(size)
 	local passages = WorldLayout.HallPassages(size)
@@ -970,7 +1014,7 @@ function HouseStairs.BuildInterior(kit: any, size: any): InteriorResult
 			local p0 = (if left then left[2] else T + 12) + 0.8
 			plaque(kit, size, floor, c0, p0, p0 + 2.6)
 		end
-		ceilingLamp(kit, size, floor, pal, floor <= 2)
+		table.insert(lampList, ceilingLamp(kit, size, floor, pal, floor <= 2))
 		if floor >= 2 then
 			-- palier : tableau (mur de gauche, devant) + plante (coin du fond) + tapis
 			painting(kit, c0, WorldLayout.FloorY(floor) + 4.2, WorldLayout.FloorY(floor) + 7.4, T + 1.6, T + 5.6, if pal.Style == "Mansion" then pal.Accent else pal.Rail,
@@ -983,8 +1027,12 @@ function HouseStairs.BuildInterior(kit: any, size: any): InteriorResult
 				{ Shadow = false })
 		end
 	end
-	foyer(kit, size, pal)
-	return { Ramps = ramps, Parts = kit.Stats.Count - before, Lights = kit.Stats.Lights }
+	local named: { [string]: HallLamp } = {}
+	foyer(kit, size, pal, named)
+	if named.K then
+		table.insert(lampList, named.K)
+	end
+	return { Ramps = ramps, Parts = kit.Stats.Count - before, Lights = kit.Stats.Lights, Lamps = lampList }
 end
 
 -- (compat) coque + intérieur dans le même kit

@@ -89,3 +89,29 @@ Les Game Passes restent très intéressants (environ 3x plus rapide avec x2 + VI
 - avec x2 + VIP + auto-clic : chaque partie plus rapide que sans Robux, mais au moins 25 % de sa durée, et la courbe reste croissante.
 
 Après un changement de prix, `python3 tests/run_tests.py --sim` affiche le nouveau tableau.
+
+## v11 : fin de partie (visites 11 à 40)
+
+Retour du joueur : « à partir de la 20e renaissance les chiffres sont beaucoup trop grands (Sx) et c'est beaucoup trop long ».
+
+Mesure (simulateur, joueur actif sans Robux) : le prix de l'océan prenait x3,5 x (1 + r)^1,55 à chaque visite (1,1 Sx à la 20e) alors que le multiplicateur ne gagnait que +0,5. Une fois toutes les cartes achetées, il ne restait qu'à attendre : R13 = 4 h, R14 = 8 h, R15 = 21 h, R16 = 68 h, R17 = 240 h, R18 = 860 h.
+
+**Les visites 1 à 10 ne changent pas.** Ensuite (`Config.Rebirth.LateFrom = 10`) :
+- prix de l'océan x1,15 par visite (`LateCostGrowth`) : 1,6 Qa à la 11e, 5,7 Qa à la 20e, 93 Qa à la 40e (avant : 1,1 Sx à la 20e) ;
+- prix des améliorations x1,13 par visite (`LatePriceGrowth`) ;
+- multiplicateur permanent x1,15 par visite (`LateMultiplierGrowth`, +15 % au lieu de +8 %) : x6 après 10 visites, x24 après 20, x98 après 30, x397 après 40 ;
+- 9 nouvelles cartes de fin de partie, une toutes les 2 à 5 visites (🐋 Chant des baleines 10, 🏝️ Île privée 12, 🧜 Chant des sirènes 15, 🌋 Volcan sous-marin 18, 🔱 Trident d'or 20, 🐉 Dragon des mers 25, 🌍 Planète bleue 30, 🌅 Soleil de minuit 35, 🪷 Nirvana 40) : l'encart « x nouveautés après l'océan » montre toujours le prochain objectif, et chacune s'achète pendant la partie où elle apparaît ;
+- 💎 diamants à chaque visite à partir de la 10e (`Config.Rebirth.Diamonds` : 10, +1 toutes les 2 visites, au plus 30), donnés par `BankService:GrantDiamonds(player, n, "Ocean")` s'il existe.
+
+| Visite | R10 | R11 | R14 | R17 | R20 | R23 | R26 | R29 | R32 | R35 | R38 | R40 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Durée de la partie, **avant** (min) | 158 | 164 | 472 | 14 374 | jamais | | | | | | | |
+| Durée de la partie, **après** (min) | 158 | 157 | 144 | 136 | 127 | 120 | 114 | 108 | 103 | 97 | 92 | 89 |
+
+R40 arrive après ~77 h de jeu actif (avant : jamais ; la 18e visite demandait 1 224 h). Avec x2 + VIP + auto-clic : parties de 55 à 28 min, R40 en 26 h.
+
+**Sauvegardes** : tout dépend seulement de `data.Rebirths`, rien à migrer. Pour chaque visite, le multiplicateur est au moins l'ancien, le prix de l'océan au plus l'ancien, et le rapport prix des améliorations / gains jamais pire (testé jusqu'à 120 visites) : personne ne perd rien. Un joueur déjà à 20 visites voit simplement l'océan suivant passer de 4,3 Sx à 6,5 Qa.
+
+**Pire cas des autres gains** (casses 1 386 s + échange de diamants 450 s + courses 960 s de production par jour, pour 2 h de jeu par jour = x1,39) : chaque partie dure au moins 70 % de celle du joueur actif (environ 72 à 76 % mesurés).
+
+`NumberFormatter.Long(1.39e15, "fr")` donne « 1,39 billiard » (« 1.39 quadrillion » en anglais), pour les infobulles.

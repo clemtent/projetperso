@@ -45,6 +45,8 @@ local House3DKit = require(script.Parent.House3DKit)
 local House3DScale = require(script.Parent.House3DScale)
 -- (v9.9 SCALE99) aiguilles à l'heure réelle, page du calendrier du jour
 local House3DTime = require(script.Parent.House3DTime)
+-- (v11 ITEMS11) poissons vivants des aquariums
+local House3DFish = require(script.Parent.House3DFish)
 
 type Builder = House3DKit.Builder
 
@@ -946,13 +948,17 @@ R.EggChair = function(b, ctx)
 	b.Cyl(0, 0, 0, 46, 1.4, INK, M.Rubber)
 	b.Cyl(0, 1.4, 0, 44, 3, GREY_DARK, M.Metal).Reflectance = 0.3
 	b.Cyl(0, 4.4, 0, 6, seat - 14, CHROME_METAL, M.Metal).Reflectance = 0.35
-	local shellPart = b.Ball(0, seat + 18, -6, 80, shell, M.SmoothPlastic)
+	-- (v11 SCALE11) coquille = demi-œuf DERRIÈRE l'assise (avant : une boule
+	-- pleine de 80 qui englobait l'assise, l'avatar disparaissait dedans) ;
+	-- face intérieure plus sombre + garniture rose devant la coquille
+	local shellPart = b.EggR(CFrame.new(0, seat + 20, -14), 80, 86, 46, shell, M.SmoothPlastic)
 	shellPart.Reflectance = 0.08
-	b.EggR(CFrame.new(0, seat + 18, 12) * CFrame.Angles(0.2, 0, 0), 76, 70, 18, darken(shell, 0.12), M.SmoothPlastic)
-	b.Ball(0, seat + 16, 10, 62, pad, M.Fabric)
-	House3DKit.SeatCushion(b, 0, seat - 6, 12, 50, 6, 30, pad, darken(pad, 0.25))
-	House3DKit.PillowR(b, CFrame.new(0, seat + 22, 14) * CFrame.Angles(-0.2, 0, 0), 30, 18, 7, lighten(pad, 0.2), M.Fabric)
-	b.Top(1, 0, seat, 14, 40, 26)
+	b.EggR(CFrame.new(0, seat + 20, 0) * CFrame.Angles(0.12, 0, 0), 74, 78, 10, darken(shell, 0.12), M.SmoothPlastic)
+	b.EggR(CFrame.new(0, seat + 20, 3) * CFrame.Angles(0.12, 0, 0), 60, 64, 8, pad, M.Fabric)
+	b.EggR(CFrame.new(0, seat - 9, 6), 64, 16, 40, darken(shell, 0.05), M.SmoothPlastic)
+	House3DKit.SeatCushion(b, 0, seat - 6, 16, 50, 6, 30, pad, darken(pad, 0.25))
+	House3DKit.PillowR(b, CFrame.new(0, seat + 14, 7) * CFrame.Angles(-0.2, 0, 0), 30, 16, 6, lighten(pad, 0.2), M.Fabric)
+	b.Top(1, 0, seat, 16, 40, 26)
 	b.Footprint(80, 80, seat + 58)
 end
 R.GardenBench = function(b, ctx)
@@ -2810,14 +2816,15 @@ R.Aquarium = function(b, ctx)
 	local tankY = top * 0.35
 	local tankH = top - tankY - 2
 	local glass = b.Box(0, tankY, 0, 90, tankH, 40, GLASS, M.Glass)
-	glass.Transparency = 0.55
+	-- (v11 : verre et eau plus clairs : on voit les poissons nager)
+	glass.Transparency = 0.78
 	glass.Reflectance = 0.1
 	glass.CastShadow = false
 	for _, sx in ipairs({ -1, 1 }) do
 		b.Box(sx * (44.3 + House3DKit.Gap(b, 0.8) / 2), tankY, 0, 1.4 + House3DKit.Gap(b, 0.8), tankH, 40 + 2 * House3DKit.Gap(b, 0.8), INK, M.SmoothPlastic)
 	end
-	local water = b.Box(0, tankY + 2, 0, 86, tankH - 8, 36, rgb(130, 200, 250), M.Glass)
-	water.Transparency = 0.4
+	local water = b.Box(0, tankY + 2, 0, 86, tankH - 8, 36, rgb(150, 214, 250), M.Glass)
+	water.Transparency = 0.72
 	water.CastShadow = false
 	b.Box(0, tankY, 0, 84, 4, 34, rgb(240, 220, 180), M.Sand)
 	for index = 0, 2 do
@@ -2828,17 +2835,26 @@ R.Aquarium = function(b, ctx)
 		b.Tube(px, tankY + 3, -12, px + 3, tankY + 20 + index * 3, -13, 2.4, index % 2 == 0 and LEAF_DARK or LEAF)
 		b.Tube(px + 3, tankY + 20 + index * 3, -13, px - 1, tankY + 30 + index * 2, -12, 2, LEAF)
 	end
-	for index = 1, 3 do
-		local fc = ({ rgb(255, 150, 60), PINK, BUTTER })[index]
-		local fx, fy, fz = -24 + index * 14, tankY + 12 + index * 5, (index % 2) * 10 - 5
-		local fish = b.Egg(fx, fy, fz, 10, 6, 4, fc)
-		fish.CastShadow = false
-		b.Wedge(fx - 6, fy - 3, fz, 4, 6, 2, fc, "Left")
+	-- (v11) aquarium d'eau douce vivant : poisson rouge, scalaire, guppy,
+	-- banc de néons ; bulles du bulleur
+	local fishes = {
+		House3DFish.Fish(b, "Goldfish", -20, tankY + 18, 4, 11, 1),
+		House3DFish.Fish(b, "Angel", 6, tankY + 24, -4, 10, -1),
+		House3DFish.Fish(b, "Guppy", 20, tankY + 14, 6, 7, 1),
+	}
+	for k = 0, 2 do
+		local f = House3DFish.Fish(b, "Neon", -6 + k * 4, tankY + 30 - k * 2, 2 + k * 3, 5, -1)
+		f.School = 1
+		table.insert(fishes, f)
 	end
+	local bubbles = {}
 	for index = 0, 3 do
 		local bubble = b.Ball(34, tankY + 8 + index * 8, 8, 2 + index * 0.4, WHITE, M.Glass)
 		bubble.Transparency = 0.4
+		table.insert(bubbles, bubble)
 	end
+	House3DFish.Tank(b, water, fishes, { Kind = "Box", Floor = 0.3, Bubbles = bubbles, Bubbler = Vector3.new(34, tankY + 6, 8),
+		RefCenter = Vector3.new(0, tankY + 2 + (tankH - 8) / 2, 0), RefSize = Vector3.new(86, tankH - 8, 36) })
 	b.Box(0, top - 2, 0, 94, 2, 44, darken(wood, 0.1), M.Wood)
 	local lamp = b.Box(0, top - 2.6, 0, 70, 0.6, 6, rgb(220, 240, 255))
 	b.Neon(lamp)
@@ -2846,8 +2862,28 @@ R.Aquarium = function(b, ctx)
 	b.Top(1, 0, top, 0, 80, 36)
 	b.Footprint(94, 44, top)
 end
+-- (v11) petit aquarium rond sur son socle : bocal, eau, sable, plante,
+-- 2 petits poissons VIVANTS (guppy, néon), bulles
 R.MiniAquarium = function(b, _ctx)
-	critter("Fish")(b, _ctx)
+	b.Cyl(0, 0, 0, 50, 6, rgb(200, 170, 250))
+	local bowl = b.Ball(0, 40, 0, 80, GLASS, M.Glass)
+	bowl.Transparency = 0.8
+	bowl.CastShadow = false
+	local water = b.Egg(0, 36, 0, 70, 54, 70, rgb(160, 216, 255), M.Glass)
+	water.Transparency = 0.7
+	water.CastShadow = false
+	b.Egg(0, 10, 0, 52, 8, 52, rgb(250, 230, 180), M.Sand)
+	b.EggR(CFrame.new(-16, 22, -8) * CFrame.Angles(0, 0, 0.12), 4, 20, 4, rgb(90, 200, 120), M.SmoothPlastic)
+	b.EggR(CFrame.new(-12, 20, -10) * CFrame.Angles(0, 0, -0.2), 3, 14, 3, rgb(70, 170, 100), M.SmoothPlastic)
+	local fishes = { House3DFish.Fish(b, "Guppy", 6, 40, 4, 14, 1), House3DFish.Fish(b, "Neon", -8, 30, -6, 12, -1) }
+	local bubbles = {}
+	for index = 0, 2 do
+		local bubble = b.Ball(14, 20 + index * 12, 10, 3 + index * 0.6, WHITE, M.Glass)
+		bubble.Transparency = 0.4
+		table.insert(bubbles, bubble)
+	end
+	House3DFish.Tank(b, water, fishes, { Kind = "Bowl", Bubbles = bubbles, Bubbler = Vector3.new(14, 18, 10), RefCenter = Vector3.new(0, 36, 0), RefSize = Vector3.new(70, 54, 70) })
+	b.Footprint(80, 80, 82)
 end
 
 -- DÉCO / TABLE / JOUETS (petits objets) -------------------------------------
@@ -4069,7 +4105,8 @@ R.GamerBeanbag = function(b, _ctx)
 	b.Neon(seam)
 	b.Tube(-6, 74, -22, 6, 74, -22, 3, darken(color, 0.3), M.Fabric)
 	House3DKit.StarSoft(b, 0, 42, 11, 6, 1, NEON_PINK, M.SmoothPlastic)
-	b.Top(1, 0, 58, 8, 50, 40)
+	-- (v11 SCALE11) assise SUR la poire (sa surface est à ~63-66 ici ; 58 = enfoncé dedans)
+	b.Top(1, 0, 65, 8, 50, 40)
 	b.Footprint(90, 90, 70)
 end
 R.LockerCabinet = function(b, ctx)
@@ -4398,31 +4435,33 @@ R.SharkTank = function(b, _ctx)
 	-- rochers et coraux, requins (nageoires, queue), bulles, rampe lumineuse
 	b.Box(0, 0, 0, 96, 26, 46, CARBON, M.SmoothPlastic)
 	local glass = b.Box(0, 26, 0, 94, 66, 44, GLASS, M.Glass)
-	glass.Transparency = 0.55
+	glass.Transparency = 0.78
 	glass.Reflectance = 0.1
 	glass.CastShadow = false
 	for _, sx in ipairs({ -1, 1 }) do
 		b.Box(sx * (46.4 + g / 2), 26, 0, 1.2 + g, 66, 44 + 2 * g, INK, M.Metal)
 	end
-	local water = b.Box(0, 28, 0, 90, 56, 40, rgb(60, 140, 220), M.Glass)
-	water.Transparency = 0.45
+	local water = b.Box(0, 28, 0, 90, 56, 40, rgb(80, 156, 226), M.Glass)
+	water.Transparency = 0.66
 	water.CastShadow = false
 	b.Box(0, 26, 0, 90, 4, 36, rgb(240, 220, 180), M.Sand)
 	for index = 0, 3 do
 		b.Egg(-34 + index * 22, 32, -12, 14, 10, 12, ({ rgb(170, 160, 180), rgb(255, 120, 130), rgb(255, 170, 90), rgb(160, 150, 170) })[index + 1], M.Slate)
 	end
-	for index, spec in ipairs({ { -18, 56, -6 }, { 18, 42, 8 } }) do
-		local cf = CFrame.new(spec[1], spec[2], spec[3]) * CFrame.Angles(0, index * 0.4, 0)
-		local shark = b.EggR(cf, 28, 10, 10, rgb(130, 150, 190), M.SmoothPlastic)
-		shark.CastShadow = false
-		b.EggR(cf * CFrame.new(2, -2, 0), 20, 5, 8, rgb(230, 236, 246), M.SmoothPlastic)
-		b.Wedge(spec[1], spec[2] + 4, spec[3], 6, 8, 3, rgb(130, 150, 190), "Front")
-		b.BoxR(cf * CFrame.new(-15, 0, 0) * CFrame.Angles(0, 0, 0.4), 3, 12, 2, rgb(120, 140, 180), M.SmoothPlastic)
-	end
+	-- (v11) 2 requins qui patrouillent (corps, ventre blanc, aileron,
+	-- queue en croissant qui bat) + un petit chirurgien ; bulles
+	local fishes = {
+		House3DFish.Fish(b, "Shark", -18, 56, -6, 30, 1),
+		House3DFish.Fish(b, "Shark", 18, 42, 8, 26, -1),
+		House3DFish.Fish(b, "Tang", 0, 60, 4, 9, 1),
+	}
+	local bubbles = {}
 	for index = 0, 3 do
 		local bubble = b.Ball(36, 34 + index * 11, 10, 2.4 + index * 0.4, WHITE, M.Glass)
 		bubble.Transparency = 0.4
+		table.insert(bubbles, bubble)
 	end
+	House3DFish.Tank(b, water, fishes, { Kind = "Box", Floor = 0.22, Bubbles = bubbles, Bubbler = Vector3.new(36, 30, 10), RefCenter = Vector3.new(0, 56, 0), RefSize = Vector3.new(90, 56, 40) })
 	b.Box(0, 92, 0, 98, 4, 48, CARBON, M.SmoothPlastic)
 	local lamp = b.Box(0, 91.4, 0, 80, 0.6, 8, rgb(210, 236, 255))
 	b.Neon(lamp)
@@ -4891,6 +4930,18 @@ local SITTABLE: { [string]: boolean } = {
 	RaceCarBed = true, PetBed = true, KotatsuTable = false,
 }
 
+-- (v11 SCALE11) places assises corrigées (recettes d'autres modules) : la
+-- place déclarée était DANS le corps de l'objet (nounours : au milieu du
+-- ventre ; cheval à bascule : sous la selle). Unités de la recette, devant +z ;
+-- false = plus de place assise (peluches : l'avatar passait au travers).
+local SEAT_FIX: { [string]: any } = {
+	TeddyBear = false,
+	BigBear = false,
+	PandaPlush = false,
+	-- sur la selle (dessus de la selle : 48 + 12 + 3)
+	RockingHorse = { X = -2, Y = 62.5, Z = 0, W = 20, D = 16 },
+}
+
 -- Construit les pièces d'un objet dans `parent`, au repère `origin` (x à
 -- droite, y en haut depuis le sol, +z = le devant de l'objet)
 function House3DRecipes.Make(item: any, entry: any?, k: number, parent: Instance, origin: CFrame, trim: Color3?): ItemData
@@ -4926,6 +4977,12 @@ function House3DRecipes.Make(item: any, entry: any?, k: number, parent: Instance
 		b = House3DKit.Builder(parent, origin, k, mirror, mapper, House3DRecipes.PaletteOf(item), wide)
 		b.Item = item
 		pcall(fallback, b, ctx)
+	end
+	local fix = SEAT_FIX[tostring(item.Id)]
+	if fix == false then
+		b.SeatAt = nil
+	elseif type(fix) == "table" and b.SeatAt then
+		b.SeatAt = { X = mirror and -fix.X or fix.X, Y = fix.Y, Z = fix.Z, W = fix.W, D = fix.D }
 	end
 	-- place assise par défaut (sièges, lits, canapés) : le premier dessus
 	if not b.SeatAt and (SITTABLE[item.Id] or HouseSurfaces.IsSeat(item.Id) or HouseSurfaces.IsBed(item.Id)) then
@@ -5046,7 +5103,10 @@ function House3DRecipes.BuildModel(itemId: string, entry: any?, options: BuildOp
 	local walkUnder = itemId == "AquariumTunnel"
 	-- (v9.9 SCALE99) les chaises et tabourets, plus larges maintenant, restent
 	-- sans bloc (comme avant) : on se glisse entre eux autour d'une table
-	local smallSeat = HouseSurfaces.IsSeat(itemId) and math.max(fw, fd) < 2.5
+	-- (v11 SCALE11 : échelle Roblox, une chaise fait jusqu'à 3,4 studs ; un
+	-- bloc plein sous l'assise gênait l'approche de SitAnimator -> seuil 3,6 ;
+	-- canapés, fauteuils et bancs gardent leur bloc)
+	local smallSeat = HouseSurfaces.IsSeat(itemId) and math.max(fw, fd) < 3.6
 	if collide and not wall and not walkUnder and not smallSeat and not data.Info.Flat and height >= 1.5 and math.max(fw, fd) >= 1.8 then
 		local top = data.Tops[1]
 		local solidH = height
@@ -5061,11 +5121,13 @@ function House3DRecipes.BuildModel(itemId: string, entry: any?, options: BuildOp
 		hitbox.CastShadow = false
 		hitbox.Parent = model
 	end
-	-- Place assise
+	-- Place assise (v11 SCALE11 : le DESSUS de la SeatPart est pile le dessus
+	-- visuel du coussin, Y * k ; avant, il était 0,2 stud plus haut et
+	-- l'avatar flottait au-dessus de l'assise)
 	local seat = data.SeatAt
 	if seat then
 		local seatPart = House3DKit.NewPart("Part", "SeatPart", Vector3.new(math.max(0.3, seat.W * k), 0.2, math.max(0.3, seat.D * k)),
-			turn * CFrame.new(seat.X * k, seat.Y * k + 0.1, seat.Z * k) * turn, WHITE, nil, 1)
+			turn * CFrame.new(seat.X * k, seat.Y * k - 0.1, seat.Z * k) * turn, WHITE, nil, 1)
 		seatPart.CastShadow = false
 		seatPart.CanQuery = query
 		seatPart.Parent = model

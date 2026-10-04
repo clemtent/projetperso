@@ -76,7 +76,7 @@ Clic droit sur le parent → **Insert Object** → **Folder**, puis renomme-le.
 
 `StarterPlayer > StarterPlayerScripts` existe déjà. **Ne crée pas** `ReplicatedStorage > Remotes` : le serveur le crée tout seul.
 
-### 2. Puis chaque script (liste complète, 381 fichiers)
+### 2. Puis chaque script (liste complète, 425 fichiers)
 
 Crée l'objet du bon type à l'emplacement indiqué, renomme-le **exactement**, ouvre-le et colle **tout** le contenu du fichier.
 
@@ -118,6 +118,7 @@ Crée l'objet du bon type à l'emplacement indiqué, renomme-le **exactement**, 
 | `ReplicatedStorage > Client > Components > House > GardenArt > Garden` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/GardenArt/Garden.luau` |
 | `ReplicatedStorage > Client > Components > House > House3D` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/House3D.luau` |
 | `ReplicatedStorage > Client > Components > House > House3DCritters` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/House3DCritters.luau` |
+| `ReplicatedStorage > Client > Components > House > House3DFish` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/House3DFish.luau` |
 | `ReplicatedStorage > Client > Components > House > House3DFloor` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/House3DFloor.luau` |
 | `ReplicatedStorage > Client > Components > House > House3DKit` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/House3DKit.luau` |
 | `ReplicatedStorage > Client > Components > House > House3DLayout` | ModuleScript | `src/ReplicatedStorage/Client/Components/House/House3DLayout.luau` |
@@ -242,9 +243,14 @@ Crée l'objet du bon type à l'emplacement indiqué, renomme-le **exactement**, 
 | `ReplicatedStorage > Client > StimulusManager` | ModuleScript | `src/ReplicatedStorage/Client/StimulusManager.luau` |
 | `ReplicatedStorage > Client > Theme` | ModuleScript | `src/ReplicatedStorage/Client/Theme.luau` |
 | `ReplicatedStorage > Client > UIUtil` | ModuleScript | `src/ReplicatedStorage/Client/UIUtil.luau` |
+| `ReplicatedStorage > Client > World > BankBuild` | ModuleScript | `src/ReplicatedStorage/Client/World/BankBuild.luau` |
+| `ReplicatedStorage > Client > World > BankClient` | ModuleScript | `src/ReplicatedStorage/Client/World/BankClient.luau` |
+| `ReplicatedStorage > Client > World > BankUI` | ModuleScript | `src/ReplicatedStorage/Client/World/BankUI.luau` |
 | `ReplicatedStorage > Client > World > BoardKit` | ModuleScript | `src/ReplicatedStorage/Client/World/BoardKit.luau` |
 | `ReplicatedStorage > Client > World > CarClient` | ModuleScript | `src/ReplicatedStorage/Client/World/CarClient.luau` |
 | `ReplicatedStorage > Client > World > CarWorkshop` | ModuleScript | `src/ReplicatedStorage/Client/World/CarWorkshop.luau` |
+| `ReplicatedStorage > Client > World > CityBuildings` | ModuleScript | `src/ReplicatedStorage/Client/World/CityBuildings.luau` |
+| `ReplicatedStorage > Client > World > CityInteriors` | ModuleScript | `src/ReplicatedStorage/Client/World/CityInteriors.luau` |
 | `ReplicatedStorage > Client > World > CityKit` | ModuleScript | `src/ReplicatedStorage/Client/World/CityKit.luau` |
 | `ReplicatedStorage > Client > World > CityPlan` | ModuleScript | `src/ReplicatedStorage/Client/World/CityPlan.luau` |
 | `ReplicatedStorage > Client > World > ClockKit` | ModuleScript | `src/ReplicatedStorage/Client/World/ClockKit.luau` |
@@ -258,14 +264,18 @@ Crée l'objet du bon type à l'emplacement indiqué, renomme-le **exactement**, 
 | `ReplicatedStorage > Client > World > DistrictMansion` | ModuleScript | `src/ReplicatedStorage/Client/World/DistrictMansion.luau` |
 | `ReplicatedStorage > Client > World > DistrictParks` | ModuleScript | `src/ReplicatedStorage/Client/World/DistrictParks.luau` |
 | `ReplicatedStorage > Client > World > DistrictTownhouse` | ModuleScript | `src/ReplicatedStorage/Client/World/DistrictTownhouse.luau` |
+| `ReplicatedStorage > Client > World > DriverPose` | ModuleScript | `src/ReplicatedStorage/Client/World/DriverPose.luau` |
 | `ReplicatedStorage > Client > World > FairAnnexFx` | ModuleScript | `src/ReplicatedStorage/Client/World/FairAnnexFx.luau` |
 | `ReplicatedStorage > Client > World > FairCircus` | ModuleScript | `src/ReplicatedStorage/Client/World/FairCircus.luau` |
 | `ReplicatedStorage > Client > World > FairEat` | ModuleScript | `src/ReplicatedStorage/Client/World/FairEat.luau` |
 | `ReplicatedStorage > Client > World > FairFx` | ModuleScript | `src/ReplicatedStorage/Client/World/FairFx.luau` |
 | `ReplicatedStorage > Client > World > FairKit` | ModuleScript | `src/ReplicatedStorage/Client/World/FairKit.luau` |
+| `ReplicatedStorage > Client > World > FoodHold` | ModuleScript | `src/ReplicatedStorage/Client/World/FoodHold.luau` |
+| `ReplicatedStorage > Client > World > FountainKit` | ModuleScript | `src/ReplicatedStorage/Client/World/FountainKit.luau` |
 | `ReplicatedStorage > Client > World > FurnitureEdit` | ModuleScript | `src/ReplicatedStorage/Client/World/FurnitureEdit.luau` |
 | `ReplicatedStorage > Client > World > GardenBuilder` | ModuleScript | `src/ReplicatedStorage/Client/World/GardenBuilder.luau` |
 | `ReplicatedStorage > Client > World > GardenEdit` | ModuleScript | `src/ReplicatedStorage/Client/World/GardenEdit.luau` |
+| `ReplicatedStorage > Client > World > HeistClient` | ModuleScript | `src/ReplicatedStorage/Client/World/HeistClient.luau` |
 | `ReplicatedStorage > Client > World > HouseBuildAnim` | ModuleScript | `src/ReplicatedStorage/Client/World/HouseBuildAnim.luau` |
 | `ReplicatedStorage > Client > World > HouseBuilder` | ModuleScript | `src/ReplicatedStorage/Client/World/HouseBuilder.luau` |
 | `ReplicatedStorage > Client > World > HouseConstruction` | ModuleScript | `src/ReplicatedStorage/Client/World/HouseConstruction.luau` |
@@ -279,6 +289,7 @@ Crée l'objet du bon type à l'emplacement indiqué, renomme-le **exactement**, 
 | `ReplicatedStorage > Client > World > Knockdown` | ModuleScript | `src/ReplicatedStorage/Client/World/Knockdown.luau` |
 | `ReplicatedStorage > Client > World > LiveProps` | ModuleScript | `src/ReplicatedStorage/Client/World/LiveProps.luau` |
 | `ReplicatedStorage > Client > World > LiveScreens` | ModuleScript | `src/ReplicatedStorage/Client/World/LiveScreens.luau` |
+| `ReplicatedStorage > Client > World > LuxuryWear` | ModuleScript | `src/ReplicatedStorage/Client/World/LuxuryWear.luau` |
 | `ReplicatedStorage > Client > World > MarketCheckout` | ModuleScript | `src/ReplicatedStorage/Client/World/MarketCheckout.luau` |
 | `ReplicatedStorage > Client > World > MarketInterior` | ModuleScript | `src/ReplicatedStorage/Client/World/MarketInterior.luau` |
 | `ReplicatedStorage > Client > World > MusicPose` | ModuleScript | `src/ReplicatedStorage/Client/World/MusicPose.luau` |
@@ -286,16 +297,22 @@ Crée l'objet du bon type à l'emplacement indiqué, renomme-le **exactement**, 
 | `ReplicatedStorage > Client > World > MusicStageBuild` | ModuleScript | `src/ReplicatedStorage/Client/World/MusicStageBuild.luau` |
 | `ReplicatedStorage > Client > World > MusicSynth` | ModuleScript | `src/ReplicatedStorage/Client/World/MusicSynth.luau` |
 | `ReplicatedStorage > Client > World > MusicUI` | ModuleScript | `src/ReplicatedStorage/Client/World/MusicUI.luau` |
+| `ReplicatedStorage > Client > World > ParkKit` | ModuleScript | `src/ReplicatedStorage/Client/World/ParkKit.luau` |
 | `ReplicatedStorage > Client > World > ParkPlay` | ModuleScript | `src/ReplicatedStorage/Client/World/ParkPlay.luau` |
+| `ReplicatedStorage > Client > World > ParkScenes` | ModuleScript | `src/ReplicatedStorage/Client/World/ParkScenes.luau` |
+| `ReplicatedStorage > Client > World > ParkSports` | ModuleScript | `src/ReplicatedStorage/Client/World/ParkSports.luau` |
 | `ReplicatedStorage > Client > World > PetRoam` | ModuleScript | `src/ReplicatedStorage/Client/World/PetRoam.luau` |
 | `ReplicatedStorage > Client > World > RaceClient` | ModuleScript | `src/ReplicatedStorage/Client/World/RaceClient.luau` |
 | `ReplicatedStorage > Client > World > RaceHud` | ModuleScript | `src/ReplicatedStorage/Client/World/RaceHud.luau` |
+| `ReplicatedStorage > Client > World > RaceMenu` | ModuleScript | `src/ReplicatedStorage/Client/World/RaceMenu.luau` |
 | `ReplicatedStorage > Client > World > RaceProps` | ModuleScript | `src/ReplicatedStorage/Client/World/RaceProps.luau` |
+| `ReplicatedStorage > Client > World > RainbowFx` | ModuleScript | `src/ReplicatedStorage/Client/World/RainbowFx.luau` |
 | `ReplicatedStorage > Client > World > Reflections` | ModuleScript | `src/ReplicatedStorage/Client/World/Reflections.luau` |
 | `ReplicatedStorage > Client > World > ShopInteriors` | ModuleScript | `src/ReplicatedStorage/Client/World/ShopInteriors.luau` |
 | `ReplicatedStorage > Client > World > ShopUI` | ModuleScript | `src/ReplicatedStorage/Client/World/ShopUI.luau` |
 | `ReplicatedStorage > Client > World > SitAnimator` | ModuleScript | `src/ReplicatedStorage/Client/World/SitAnimator.luau` |
 | `ReplicatedStorage > Client > World > StimulusScreen` | ModuleScript | `src/ReplicatedStorage/Client/World/StimulusScreen.luau` |
+| `ReplicatedStorage > Client > World > StreetTrees` | ModuleScript | `src/ReplicatedStorage/Client/World/StreetTrees.luau` |
 | `ReplicatedStorage > Client > World > TownArrival` | ModuleScript | `src/ReplicatedStorage/Client/World/TownArrival.luau` |
 | `ReplicatedStorage > Client > World > TownAtmosphere` | ModuleScript | `src/ReplicatedStorage/Client/World/TownAtmosphere.luau` |
 | `ReplicatedStorage > Client > World > TownClient` | ModuleScript | `src/ReplicatedStorage/Client/World/TownClient.luau` |
@@ -306,6 +323,7 @@ Crée l'objet du bon type à l'emplacement indiqué, renomme-le **exactement**, 
 | `ReplicatedStorage > Client > World > TownFountainFx` | ModuleScript | `src/ReplicatedStorage/Client/World/TownFountainFx.luau` |
 | `ReplicatedStorage > Client > World > TownGraphics` | ModuleScript | `src/ReplicatedStorage/Client/World/TownGraphics.luau` |
 | `ReplicatedStorage > Client > World > TownGreenery` | ModuleScript | `src/ReplicatedStorage/Client/World/TownGreenery.luau` |
+| `ReplicatedStorage > Client > World > TownHallInterior` | ModuleScript | `src/ReplicatedStorage/Client/World/TownHallInterior.luau` |
 | `ReplicatedStorage > Client > World > TownHighway` | ModuleScript | `src/ReplicatedStorage/Client/World/TownHighway.luau` |
 | `ReplicatedStorage > Client > World > TownHud` | ModuleScript | `src/ReplicatedStorage/Client/World/TownHud.luau` |
 | `ReplicatedStorage > Client > World > TownPeople` | ModuleScript | `src/ReplicatedStorage/Client/World/TownPeople.luau` |
@@ -314,14 +332,19 @@ Crée l'objet du bon type à l'emplacement indiqué, renomme-le **exactement**, 
 | `ReplicatedStorage > Client > World > TownRoads` | ModuleScript | `src/ReplicatedStorage/Client/World/TownRoads.luau` |
 | `ReplicatedStorage > Client > World > TownStreetLife` | ModuleScript | `src/ReplicatedStorage/Client/World/TownStreetLife.luau` |
 | `ReplicatedStorage > Client > World > TownTraffic` | ModuleScript | `src/ReplicatedStorage/Client/World/TownTraffic.luau` |
+| `ReplicatedStorage > Client > World > TrainClient` | ModuleScript | `src/ReplicatedStorage/Client/World/TrainClient.luau` |
+| `ReplicatedStorage > Client > World > TrainHud` | ModuleScript | `src/ReplicatedStorage/Client/World/TrainHud.luau` |
+| `ReplicatedStorage > Client > World > TrainModels` | ModuleScript | `src/ReplicatedStorage/Client/World/TrainModels.luau` |
 | `ReplicatedStorage > Client > World > Weather3D` | ModuleScript | `src/ReplicatedStorage/Client/World/Weather3D.luau` |
 | `ReplicatedStorage > Client > World > WorldLink` | ModuleScript | `src/ReplicatedStorage/Client/World/WorldLink.luau` |
 | `ReplicatedStorage > Shared > ArcadeConfig` | ModuleScript | `src/ReplicatedStorage/Shared/ArcadeConfig.luau` |
+| `ReplicatedStorage > Shared > BankLayout` | ModuleScript | `src/ReplicatedStorage/Shared/BankLayout.luau` |
 | `ReplicatedStorage > Shared > CarModels` | ModuleScript | `src/ReplicatedStorage/Shared/CarModels.luau` |
 | `ReplicatedStorage > Shared > ChatTopics` | ModuleScript | `src/ReplicatedStorage/Shared/ChatTopics.luau` |
 | `ReplicatedStorage > Shared > Config` | ModuleScript | `src/ReplicatedStorage/Shared/Config.luau` |
 | `ReplicatedStorage > Shared > DVDMath` | ModuleScript | `src/ReplicatedStorage/Shared/DVDMath.luau` |
 | `ReplicatedStorage > Shared > DeskRunnerLogic` | ModuleScript | `src/ReplicatedStorage/Shared/DeskRunnerLogic.luau` |
+| `ReplicatedStorage > Shared > Diamonds` | ModuleScript | `src/ReplicatedStorage/Shared/Diamonds.luau` |
 | `ReplicatedStorage > Shared > FairRides` | ModuleScript | `src/ReplicatedStorage/Shared/FairRides.luau` |
 | `ReplicatedStorage > Shared > FairTrack` | ModuleScript | `src/ReplicatedStorage/Shared/FairTrack.luau` |
 | `ReplicatedStorage > Shared > FoodModels` | ModuleScript | `src/ReplicatedStorage/Shared/FoodModels.luau` |
@@ -332,7 +355,9 @@ Crée l'objet du bon type à l'emplacement indiqué, renomme-le **exactement**, 
 | `ReplicatedStorage > Shared > GardenSnapshot` | ModuleScript | `src/ReplicatedStorage/Shared/GardenSnapshot.luau` |
 | `ReplicatedStorage > Shared > GraphicsQuality` | ModuleScript | `src/ReplicatedStorage/Shared/GraphicsQuality.luau` |
 | `ReplicatedStorage > Shared > Greenery` | ModuleScript | `src/ReplicatedStorage/Shared/Greenery.luau` |
+| `ReplicatedStorage > Shared > HeistRules` | ModuleScript | `src/ReplicatedStorage/Shared/HeistRules.luau` |
 | `ReplicatedStorage > Shared > HouseOptions` | ModuleScript | `src/ReplicatedStorage/Shared/HouseOptions.luau` |
+| `ReplicatedStorage > Shared > HouseSwitches` | ModuleScript | `src/ReplicatedStorage/Shared/HouseSwitches.luau` |
 | `ReplicatedStorage > Shared > ImpactRules` | ModuleScript | `src/ReplicatedStorage/Shared/ImpactRules.luau` |
 | `ReplicatedStorage > Shared > Lang > FR_Config` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_Config.luau` |
 | `ReplicatedStorage > Shared > Lang > FR_House` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_House.luau` |
@@ -351,6 +376,17 @@ Crée l'objet du bon type à l'emplacement indiqué, renomme-le **exactement**, 
 | `ReplicatedStorage > Shared > Lang > FR_V10_Layout10` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V10_Layout10.luau` |
 | `ReplicatedStorage > Shared > Lang > FR_V10_Phys` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V10_Phys.luau` |
 | `ReplicatedStorage > Shared > Lang > FR_V10_Race` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V10_Race.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V11_Bank` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V11_Bank.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V11_Cars11` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V11_Cars11.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V11_City` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V11_City.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V11_ECON11` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V11_ECON11.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V11_House11` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V11_House11.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V11_Music` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V11_Music.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V11_PARK11` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V11_PARK11.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V11_Packs` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V11_Packs.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V11_Race` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V11_Race.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V11_Realism` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V11_Realism.luau` |
+| `ReplicatedStorage > Shared > Lang > FR_V11_Train` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V11_Train.luau` |
 | `ReplicatedStorage > Shared > Lang > FR_V8_Arcade` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V8_Arcade.luau` |
 | `ReplicatedStorage > Shared > Lang > FR_V8_House` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V8_House.luau` |
 | `ReplicatedStorage > Shared > Lang > FR_V8_LiveLofi` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/FR_V8_LiveLofi.luau` |
@@ -409,19 +445,24 @@ Crée l'objet du bon type à l'emplacement indiqué, renomme-le **exactement**, 
 | `ReplicatedStorage > Shared > Lang > README` | ModuleScript | `src/ReplicatedStorage/Shared/Lang/README.luau` |
 | `ReplicatedStorage > Shared > Locale` | ModuleScript | `src/ReplicatedStorage/Shared/Locale.luau` |
 | `ReplicatedStorage > Shared > MusicData` | ModuleScript | `src/ReplicatedStorage/Shared/MusicData.luau` |
+| `ReplicatedStorage > Shared > MusicSongs` | ModuleScript | `src/ReplicatedStorage/Shared/MusicSongs.luau` |
 | `ReplicatedStorage > Shared > NPCModels` | ModuleScript | `src/ReplicatedStorage/Shared/NPCModels.luau` |
 | `ReplicatedStorage > Shared > NPCSeats` | ModuleScript | `src/ReplicatedStorage/Shared/NPCSeats.luau` |
 | `ReplicatedStorage > Shared > Net` | ModuleScript | `src/ReplicatedStorage/Shared/Net.luau` |
 | `ReplicatedStorage > Shared > NumberFormatter` | ModuleScript | `src/ReplicatedStorage/Shared/NumberFormatter.luau` |
+| `ReplicatedStorage > Shared > ParkLayout` | ModuleScript | `src/ReplicatedStorage/Shared/ParkLayout.luau` |
 | `ReplicatedStorage > Shared > ParkMotion` | ModuleScript | `src/ReplicatedStorage/Shared/ParkMotion.luau` |
 | `ReplicatedStorage > Shared > RaceRoutes` | ModuleScript | `src/ReplicatedStorage/Shared/RaceRoutes.luau` |
 | `ReplicatedStorage > Shared > RaceRules` | ModuleScript | `src/ReplicatedStorage/Shared/RaceRules.luau` |
+| `ReplicatedStorage > Shared > RainbowGold` | ModuleScript | `src/ReplicatedStorage/Shared/RainbowGold.luau` |
 | `ReplicatedStorage > Shared > Signal` | ModuleScript | `src/ReplicatedStorage/Shared/Signal.luau` |
+| `ReplicatedStorage > Shared > TrainLine` | ModuleScript | `src/ReplicatedStorage/Shared/TrainLine.luau` |
 | `ReplicatedStorage > Shared > VehicleModels` | ModuleScript | `src/ReplicatedStorage/Shared/VehicleModels.luau` |
 | `ReplicatedStorage > Shared > WorldLayout` | ModuleScript | `src/ReplicatedStorage/Shared/WorldLayout.luau` |
 | `ServerScriptService > Main` | Script | `src/ServerScriptService/Main.server.luau` |
 | `ServerScriptService > Services > AchievementService` | ModuleScript | `src/ServerScriptService/Services/AchievementService.luau` |
 | `ServerScriptService > Services > Arcade > SoloGames` | ModuleScript | `src/ServerScriptService/Services/Arcade/SoloGames.luau` |
+| `ServerScriptService > Services > BankService` | ModuleScript | `src/ServerScriptService/Services/BankService.luau` |
 | `ServerScriptService > Services > CarService` | ModuleScript | `src/ServerScriptService/Services/CarService.luau` |
 | `ServerScriptService > Services > CasinoService` | ModuleScript | `src/ServerScriptService/Services/CasinoService.luau` |
 | `ServerScriptService > Services > ChatService` | ModuleScript | `src/ServerScriptService/Services/ChatService.luau` |
@@ -435,6 +476,7 @@ Crée l'objet du bon type à l'emplacement indiqué, renomme-le **exactement**, 
 | `ServerScriptService > Services > FriendMailService` | ModuleScript | `src/ServerScriptService/Services/FriendMailService.luau` |
 | `ServerScriptService > Services > GameService` | ModuleScript | `src/ServerScriptService/Services/GameService.luau` |
 | `ServerScriptService > Services > GardenService` | ModuleScript | `src/ServerScriptService/Services/GardenService.luau` |
+| `ServerScriptService > Services > HeistKit` | ModuleScript | `src/ServerScriptService/Services/HeistKit.luau` |
 | `ServerScriptService > Services > HouseService` | ModuleScript | `src/ServerScriptService/Services/HouseService.luau` |
 | `ServerScriptService > Services > ImpactService` | ModuleScript | `src/ServerScriptService/Services/ImpactService.luau` |
 | `ServerScriptService > Services > InteractService` | ModuleScript | `src/ServerScriptService/Services/InteractService.luau` |
@@ -444,8 +486,10 @@ Crée l'objet du bon type à l'emplacement indiqué, renomme-le **exactement**, 
 | `ServerScriptService > Services > MonetizationService` | ModuleScript | `src/ServerScriptService/Services/MonetizationService.luau` |
 | `ServerScriptService > Services > QuestService` | ModuleScript | `src/ServerScriptService/Services/QuestService.luau` |
 | `ServerScriptService > Services > RaceService` | ModuleScript | `src/ServerScriptService/Services/RaceService.luau` |
+| `ServerScriptService > Services > RainbowService` | ModuleScript | `src/ServerScriptService/Services/RainbowService.luau` |
 | `ServerScriptService > Services > RateLimiter` | ModuleScript | `src/ServerScriptService/Services/RateLimiter.luau` |
 | `ServerScriptService > Services > ThemeService` | ModuleScript | `src/ServerScriptService/Services/ThemeService.luau` |
+| `ServerScriptService > Services > TrainService` | ModuleScript | `src/ServerScriptService/Services/TrainService.luau` |
 | `ServerScriptService > Services > World > NPCSeatGuard` | ModuleScript | `src/ServerScriptService/Services/World/NPCSeatGuard.luau` |
 | `ServerScriptService > Services > World > TownBuildings` | ModuleScript | `src/ServerScriptService/Services/World/TownBuildings.luau` |
 | `ServerScriptService > Services > World > TownEntrance` | ModuleScript | `src/ServerScriptService/Services/World/TownEntrance.luau` |
@@ -501,6 +545,9 @@ C → S = le client **demande**, le serveur valide tout. S → C = le serveur **
 | `Impact` | S <-> C (kind, ...) : 💥 renversé / titube / relevé (ImpactService + Knockdown, v10 PHYS10) |
 | `RaceEvent` | C <-> S (kind, ...) : 🏁 courses de rue (inscription, instantanés, résultats) (RaceService, v10) |
 | `MusicEvent` | C <-> S (kind, ...) : 🎵 scène musicale de la place (notes relayées aux voisins, morceaux, radio) (TownMusic, v9.9) |
+| `BankEvent` | S -> C (kind, payload) : 🏦 banque (état du compte 💎, toasts, prochain casse) (BankService, v11 BANK11) |
+| `HeistEvent` | S -> C (kind, payload) : 🕶️ casses (liste, état de l'équipe, résultat) (HeistKit : banque + train, v11) |
+| `TrainEvent` | C <-> S (kind, ...) : 🚂 train de la ville (monter, s'asseoir, descendre, convoi de diamants) (TrainService, v11 TRAIN11) |
 
 ### RemoteFunctions (C → S, avec réponse)
 
@@ -521,6 +568,8 @@ C → S = le client **demande**, le serveur valide tout. S → C = le serveur **
 | `World` | C -> S (action, argument) -> (succès, résultat \| message) : 🚶 Dopamine Town (entrer, visiter, s'asseoir, j'aime) (WorldService) |
 | `Car` | C -> S (action, a, b) -> (succès, message, extra?) : 🚗 voitures (acheter, couleur, choisir, garage, conduire, klaxon) (CarService) |
 | `Food` | C -> S ("buy", foodId, stallId \| "bite") -> (succès, message, manquant?) : 🍦 nourriture de Dopamine Town (FoodService, v9.8) |
+| `Bank` | C -> S (action, arg) -> (succès, message, état) : 🏦 banque (dépôt, retrait, intérêts, change, boutique de luxe, porter) (BankService, v11) |
+| `Heist` | C -> S (action, heistId, arg) -> (succès, message, extra) : 🕶️ casses (rejoindre, lancer, pirater, percer, butin, planque) (HeistKit, v11) |
 | `DebugCommand` | C -> S (commande, argument) -> (succès, message) : UNIQUEMENT dans Studio |
 
 ---

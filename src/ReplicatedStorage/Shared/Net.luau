@@ -40,6 +40,9 @@ Net.Events = {
 	"Impact", -- S <-> C (kind, ...) : 💥 renversé / titube / relevé (ImpactService + Knockdown, v10 PHYS10)
 	"RaceEvent", -- C <-> S (kind, ...) : 🏁 courses de rue (inscription, instantanés, résultats) (RaceService, v10)
 	"MusicEvent", -- C <-> S (kind, ...) : 🎵 scène musicale de la place (notes relayées aux voisins, morceaux, radio) (TownMusic, v9.9)
+	"BankEvent", -- S -> C (kind, payload) : 🏦 banque (état du compte 💎, toasts, prochain casse) (BankService, v11 BANK11)
+	"HeistEvent", -- S -> C (kind, payload) : 🕶️ casses (liste, état de l'équipe, résultat) (HeistKit : banque + train, v11)
+	"TrainEvent", -- C <-> S (kind, ...) : 🚂 train de la ville (monter, s'asseoir, descendre, convoi de diamants) (TrainService, v11 TRAIN11)
 }
 
 Net.Functions = {
@@ -58,6 +61,8 @@ Net.Functions = {
 	"World", -- C -> S (action, argument) -> (succès, résultat | message) : 🚶 Dopamine Town (entrer, visiter, s'asseoir, j'aime) (WorldService)
 	"Car", -- C -> S (action, a, b) -> (succès, message, extra?) : 🚗 voitures (acheter, couleur, choisir, garage, conduire, klaxon) (CarService)
 	"Food", -- C -> S ("buy", foodId, stallId | "bite") -> (succès, message, manquant?) : 🍦 nourriture de Dopamine Town (FoodService, v9.8)
+	"Bank", -- C -> S (action, arg) -> (succès, message, état) : 🏦 banque (dépôt, retrait, intérêts, change, boutique de luxe, porter) (BankService, v11)
+	"Heist", -- C -> S (action, heistId, arg) -> (succès, message, extra) : 🕶️ casses (rejoindre, lancer, pirater, percer, butin, planque) (HeistKit, v11)
 	"DebugCommand", -- C -> S (commande, argument) -> (succès, message) : UNIQUEMENT dans Studio
 }
 

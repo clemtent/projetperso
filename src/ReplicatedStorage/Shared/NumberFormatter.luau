@@ -60,6 +60,48 @@ function NumberFormatter.Format(value: number, decimals: number?): string
 	return sign .. trimZeros(string.format("%." .. tostring(decimals) .. "f", scaled)) .. SUFFIXES[tier + 1]
 end
 
+-- (v11, ECON11) Nom en toutes lettres des grands nombres, pour les infobulles :
+-- Long(1.39e15) -> "1.39 quadrillion", Long(1.39e15, "fr") -> "1,39 billiard"
+-- (échelle longue française : million, milliard, billion, billiard...).
+-- Au-delà des noms connus : même texte que Format.
+local LONG_EN = { "thousand", "million", "billion", "trillion", "quadrillion", "quintillion", "sextillion",
+	"septillion", "octillion", "nonillion", "decillion" }
+local LONG_FR = { "mille", "million", "milliard", "billion", "billiard", "trillion", "trilliard",
+	"quadrillion", "quadrilliard", "quintillion", "quintilliard" }
+
+function NumberFormatter.Long(value: number, lang: string?): string
+	if value ~= value or value == math.huge or value == -math.huge then
+		return NumberFormatter.Format(value)
+	end
+	local french = lang == "fr"
+	local sign = value < 0 and "-" or ""
+	value = math.abs(value)
+	if value < 1000 then
+		return sign .. tostring(math.floor(value))
+	end
+	local tier = math.floor(math.log10(value) / 3)
+	if value / (10 ^ (tier * 3)) >= 1000 then
+		tier += 1
+	elseif value / (10 ^ (tier * 3)) < 1 then
+		tier -= 1
+	end
+	local names = french and LONG_FR or LONG_EN
+	local name = names[tier]
+	if not name then
+		return sign .. NumberFormatter.Format(value)
+	end
+	local scaled = math.floor(value / (10 ^ (tier * 3)) * 100 + 1e-6) / 100
+	local text = trimZeros(string.format("%.2f", scaled))
+	if french then
+		text = string.gsub(text, "%.", ",")
+		-- pluriel (sauf "mille", invariable)
+		if scaled >= 2 and tier > 1 then
+			name ..= "s"
+		end
+	end
+	return sign .. text .. " " .. name
+end
+
 -- Format avec séparateurs de milliers (ex. 1 234 567), pour les petits nombres
 function NumberFormatter.WithSpaces(value: number): string
 	local text = tostring(math.floor(value))

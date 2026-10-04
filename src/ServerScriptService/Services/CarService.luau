@@ -134,7 +134,7 @@ function CarService.Sanitize(data: any)
 	end
 	if type(raw.Colors) == "table" then
 		for id, colorId in pairs(raw.Colors) do
-			if owned[id] and type(colorId) == "string" and Config.CarColorsById[colorId] then
+			if owned[id] and type(colorId) == "string" and CarModels.PaintEntry(colorId) then
 				colors[id] = colorId
 			end
 		end
@@ -203,7 +203,7 @@ end
 local function colorOf(data: any, carId: string): string
 	local colors = data and data.Cars and data.Cars.Colors
 	local colorId = colors and colors[carId]
-	if type(colorId) == "string" and Config.CarColorsById[colorId] then
+	if type(colorId) == "string" and CarModels.PaintEntry(colorId) then
 		return colorId
 	end
 	local car = Config.CarsById[carId]
@@ -439,6 +439,31 @@ local function rig(model: Model, carId: string): (BasePart, VehicleSeat)
 			m2.Parent = spin
 		end
 	end
+	-- (v11, CARS11) VOLANT qui tourne : moyeu invisible relié à la caisse par un
+	-- Motor6D "SteerWheelMotor" (chaque client règle son Transform), les pièces du
+	-- volant (attribut SteerWheel) lui sont soudées
+	local steerHub: BasePart? = nil
+	local wheelCF = model:GetAttribute("WheelCF")
+	if typeof(wheelCF) == "CFrame" then
+		local hub = Instance.new("Part")
+		hub.Name = "SteerHub"
+		hub.Size = Vector3.new(0.2, 0.2, 0.2)
+		hub.Transparency = 1
+		hub.CanCollide = false
+		hub.CanTouch = false
+		hub.CanQuery = false
+		hub.Massless = true
+		hub.CastShadow = false
+		hub.CFrame = pivot * wheelCF
+		hub.Parent = model
+		local motor = Instance.new("Motor6D")
+		motor.Name = "SteerWheelMotor"
+		motor.Part0 = root
+		motor.Part1 = hub
+		motor.C0 = root.CFrame:ToObjectSpace(hub.CFrame)
+		motor.Parent = hub
+		steerHub = hub
+	end
 	for _, d in ipairs(model:GetDescendants()) do
 		if d:IsA("BasePart") and d ~= root then
 			d.Massless = true
@@ -450,7 +475,14 @@ local function rig(model: Model, carId: string): (BasePart, VehicleSeat)
 			if type(wheelIndex) == "number" and steers[wheelIndex] and spins[wheelIndex] then
 				hub = if d:GetAttribute("Spin") then spins[wheelIndex] else steers[wheelIndex]
 			end
-			if d.Name == "WheelSteer" or d.Name == "WheelSpin" then
+			if d == steerHub then
+				-- (relié par son Motor6D)
+			elseif steerHub and d:GetAttribute("SteerWheel") then
+				local weld = Instance.new("WeldConstraint")
+				weld.Part0 = steerHub
+				weld.Part1 = d
+				weld.Parent = d
+			elseif d.Name == "WheelSteer" or d.Name == "WheelSpin" then
 				if not (hub and spins[wheelIndex :: number]) then
 					local weld = Instance.new("WeldConstraint")
 					weld.Part0 = root
@@ -501,8 +533,9 @@ local function rig(model: Model, carId: string): (BasePart, VehicleSeat)
 	local seatCF = model:GetAttribute("SeatCF")
 	local seat = Instance.new("VehicleSeat")
 	seat.Name = "DriverSeat"
-	seat.Size = Vector3.new(1.6, 0.3, 1.6)
-	seat.CFrame = pivot * (typeof(seatCF) == "CFrame" and seatCF or CFrame.new(0, 2, 0)) * CFrame.new(0, -0.15, 0)
+	-- (v11, SCALE11) dessus du Seat = dessus du coussin visible, centré
+	seat.Size = Vector3.new(2, 0.2, 2)
+	seat.CFrame = pivot * (typeof(seatCF) == "CFrame" and seatCF or CFrame.new(0, 2, 0)) * CFrame.new(0, -0.1, 0)
 	seat.Transparency = 1
 	seat.CanCollide = false
 	seat.CanTouch = false
@@ -886,8 +919,21 @@ local function buyGarage(player: Player, data: any): (boolean, string, number?)
 end
 
 local function setColor(player: Player, data: any, carId: any, colorId: any): (boolean, string)
-	if type(carId) ~= "string" or not data.Cars.Owned[carId] or type(colorId) ~= "string" or not Config.CarColorsById[colorId] then
+	local paintEntry = CarModels.PaintEntry(colorId)
+	if type(carId) ~= "string" or not data.Cars.Owned[carId] or type(colorId) ~= "string" or not paintEntry then
 		return false, T(player, "Invalid request")
+	end
+	-- (v11, CARS11) peinture de luxe 💎 : achetée à la boutique de luxe de la banque
+	if paintEntry.Luxury then
+		local bank = services and services.BankService
+		local owned = false
+		if bank and type(bank.OwnsLuxury) == "function" then
+			local ok, result = pcall(bank.OwnsLuxury, bank, player, colorId)
+			owned = ok and result == true
+		end
+		if not owned then
+			return false, T(player, "💎 Buy it at the bank's luxury boutique")
+		end
 	end
 	data.Cars.Colors[carId] = colorId
 	sendState(player)
@@ -898,8 +944,7 @@ local function setColor(player: Player, data: any, carId: any, colorId: any): (b
 	if car and car.CarId == carId then
 		CarModels.Repaint(car.Model, carId, colorId)
 	end
-	local paint = Config.CarColorsById[colorId]
-	return true, T(player, "🎨 %s applied", T(player, paint.Name))
+	return true, T(player, "🎨 %s applied", T(player, paintEntry.Name))
 end
 
 local function select_(player: Player, data: any, carId: any): (boolean, string)

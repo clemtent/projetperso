@@ -258,6 +258,36 @@ Config.Upgrades = {
 	{ Id = "Multiverse", Name = "Multiverse", Icon = "🪐", Description = "Infinite you's, infinite clicks. Earnings x%s",
 		Cost = 1.5e11, MaxLevel = 1, Effect = "Multiplier", Feature = "Multiverse", Value = 3, RequiresRebirths = 8,
 		Color = Color3.fromRGB(200, 120, 255) },
+	-- (v11, ECON11) 🌊 Fin de partie : une nouveauté toutes les 2 à 5 visites
+	-- jusqu'à la 40e (l'encart « x nouveautés après l'océan » montre toujours
+	-- le prochain objectif). Pas de Feature : rien à afficher, juste des gains.
+	{ Id = "WhaleSong", Name = "Whale Song", Icon = "🐋", Description = "Deep, slow, powerful. Earnings x%s",
+		Cost = 4e11, MaxLevel = 1, Effect = "Multiplier", Value = 2, RequiresRebirths = 10,
+		Color = Color3.fromRGB(60, 110, 190) },
+	{ Id = "PrivateIsland", Name = "Private Island", Icon = "🏝️", Description = "Your own island, your own rules. +%s Dopamine/s",
+		Cost = 3e11, CostGrowth = 1.7, MaxLevel = 10, Effect = "PerSecond", Value = 4e7, RequiresRebirths = 12,
+		Color = Color3.fromRGB(70, 200, 170) },
+	{ Id = "SirenCall", Name = "Siren Call", Icon = "🧜", Description = "Irresistible. Clicks x%s",
+		Cost = 1e12, MaxLevel = 1, Effect = "ClickMultiplier", Value = 3, RequiresRebirths = 15,
+		Color = Color3.fromRGB(80, 210, 200) },
+	{ Id = "Volcano", Name = "Underwater Volcano", Icon = "🌋", Description = "Pure geothermal Dopamine. +%s Dopamine/s",
+		Cost = 1.2e12, CostGrowth = 1.7, MaxLevel = 10, Effect = "PerSecond", Value = 1.5e8, RequiresRebirths = 18,
+		Color = Color3.fromRGB(230, 90, 40) },
+	{ Id = "Trident", Name = "Golden Trident", Icon = "🔱", Description = "Ruler of the seven seas. Earnings x%s",
+		Cost = 2e12, MaxLevel = 1, Effect = "Multiplier", Value = 2, RequiresRebirths = 20,
+		Color = Color3.fromRGB(240, 190, 50) },
+	{ Id = "SeaDragon", Name = "Sea Dragon", Icon = "🐉", Description = "An ancient friend from the deep. Earnings x%s",
+		Cost = 3e12, MaxLevel = 1, Effect = "Multiplier", Value = 2, RequiresRebirths = 25,
+		Color = Color3.fromRGB(40, 170, 120) },
+	{ Id = "BluePlanet", Name = "Blue Planet", Icon = "🌍", Description = "The whole ocean is on your side. Earnings x%s",
+		Cost = 4e12, MaxLevel = 1, Effect = "Multiplier", Value = 2, RequiresRebirths = 30,
+		Color = Color3.fromRGB(40, 120, 230) },
+	{ Id = "MidnightSun", Name = "Midnight Sun", Icon = "🌅", Description = "It never sets. Earnings x%s",
+		Cost = 5e12, MaxLevel = 1, Effect = "Multiplier", Value = 2, RequiresRebirths = 35,
+		Color = Color3.fromRGB(255, 150, 60) },
+	{ Id = "Nirvana", Name = "Nirvana", Icon = "🪷", Description = "Perfect calm. Everything flows. Earnings x%s",
+		Cost = 6e12, MaxLevel = 1, Effect = "Multiplier", Value = 2.5, RequiresRebirths = 40,
+		Color = Color3.fromRGB(240, 130, 190) },
 	{ Id = "Ocean", Name = "Go to the Ocean", Icon = "🌊", Description = "Let it all go and breathe. Start over with x%s earnings forever (your 🏠 house is kept)",
 		Cost = 0, MaxLevel = nil, Effect = "Detox", Feature = nil,
 		Color = Color3.fromRGB(0, 140, 200) },
@@ -276,6 +306,25 @@ Config.Upgrades = {
 --     après 2, x10,6 après 3, x21 après 5, x42 après 8)
 --   Multiplicateur permanent : +MultiplierPerRebirth par visite (x
 --     MultiplierDecay à chaque visite suivante : 1 = linéaire)
+--
+-- (v11, ECON11) « À partir de la 20e visite les chiffres sont beaucoup trop
+-- grands (Sx) et c'est beaucoup trop long » : avant, le prix de l'océan
+-- prenait x3,5 x (1 + r)^1,55 à chaque visite (1,1 Sx à la 20e) alors que le
+-- multiplicateur ne gagnait que +0,5 ; une fois toutes les cartes achetées
+-- il ne restait qu'à attendre : R14 = 8 h, R16 = 68 h, R18 = 860 h de jeu.
+-- Les visites 1 à 10 ne changent PAS. Ensuite (r > LateFrom visites) :
+--   prix de l'océan            x LateCostGrowth par visite (1,6 Qa à la 11e,
+--                                6,4 Qa à la 20e, ~100 Qa à la 40e)
+--   prix des améliorations      x LatePriceGrowth par visite
+--   multiplicateur permanent   x LateMultiplierGrowth par visite (x6 après
+--                                10 visites, ~x24 après 20, ~x400 après 40)
+-- + de nouvelles cartes tous les 2 à 5 visites (RequiresRebirths 10 à 40)
+-- et des 💎 diamants à chaque visite à partir de la 10e (Diamonds).
+-- Parties simulées (joueur actif, sans Robux) : R11 à R40 entre 1 h 30 et
+-- 2 h 40, de plus en plus courtes (on se sent plus fort) ; R40 en ~80 h de
+-- jeu actif au lieu de jamais. Tout dépend seulement de data.Rebirths :
+-- aucune sauvegarde à migrer, et prix / multiplicateur n'est jamais pire
+-- qu'avant (testé) : personne ne perd rien.
 ----------------------------------------------------------------------
 Config.Rebirth = {
 	BaseCost = 5e8, -- prix de la 1re visite à l'océan
@@ -285,6 +334,14 @@ Config.Rebirth = {
 	PricePower = 1.7, -- ... x(1 + r)^1,7 : les améliorations coûtent plus cher à chaque visite
 	MultiplierPerRebirth = 0.5, -- +50 % de gains permanents par visite
 	MultiplierDecay = 1, -- (1 = toujours +50 %)
+	-- (v11) Fin de partie : après LateFrom visites, tout grandit en proportion
+	LateFrom = 10,
+	LateCostGrowth = 1.15, -- océan : x1,15 par visite (avant : ~x4,4)
+	LatePriceGrowth = 1.13, -- améliorations : x1,13 par visite
+	LateMultiplierGrowth = 1.15, -- gains permanents : x1,15 par visite (= +15 %, avant +0,5 sur x6 = +8 %)
+	-- 💎 Diamants offerts à chaque visite à partir de la From-ième (BankService) :
+	-- Base + 1 par PerVisits visites de plus, au plus Max
+	Diamonds = { From = 10, Base = 10, PerVisits = 2, Max = 30 },
 }
 
 ----------------------------------------------------------------------
@@ -362,9 +419,13 @@ Config.AchievementBadges = {
 	Earn1T = 3794921256154986, -- 🪐 Cerveau cosmique
 	Buy10 = 3720175929508517, -- 🛒 Shopping
 	Buy50 = 1330939500123022, -- 🛍️ Accro aux achats
+	Bounce100 = 872002465215387, -- 📀 Ça rebondit
+	Bounce5K = 295593655258841, -- 😵 Hypnotisé
+	Corner1 = 2132567314526137, -- 📐 LE COIN !!!
+	Combo1 = 3758831362323960, -- ⚡ Combo max !
+	Bubble100 = 4421549333806553, -- 🔘 Pop pop pop
 	-- À venir (mets l'ID quand le badge est créé ; 0 = pas de badge Roblox)
-	Bounce100 = 0, Bounce5K = 0,
-	Corner1 = 0, Combo1 = 0, Bubble100 = 0, Bubble1K = 0, Golden1 = 0, Golden10 = 0,
+	Bubble1K = 0, Golden1 = 0, Golden10 = 0,
 	Lightning5 = 0, Notif10 = 0, Email10 = 0, Press25 = 0, Slot25 = 0, SlotWin10 = 0,
 	Garden25 = 0, Arcade10 = 0, Chest1 = 0, Chest10 = 0, Cosmetic1 = 0, Cosmetic5 = 0, Quests5 = 0,
 	Daily3 = 0, Play1h = 0, Play10h = 0, Rebirth1 = 0, Rebirth5 = 0,
@@ -564,12 +625,12 @@ Config.Garden = {
 		{ Id = "BirdHouse", Name = "Birdhouse", Icon = "🐦", Cost = 35000, W = 1.5, D = 1.5, Max = 6 },
 		{ Id = "HangingBasket", Name = "Hanging basket", Icon = "🧺", Cost = 40000, W = 1.8, D = 1.8, Max = 8 },
 		{ Id = "RoundFlowerBed", Name = "Round flower bed", Icon = "🌺", Cost = 45000, W = 5.8, D = 5.8, Max = 6 },
-		{ Id = "GardenBench", Name = "Wooden garden bench", Icon = "🪑", Cost = 60000, W = 5.6, D = 2.4, Max = 6 },
+		{ Id = "GardenBench", Name = "Wooden garden bench", Icon = "🪑", Cost = 60000, W = 6.0, D = 2.6, Max = 6 },
 		{ Id = "VegetablePatch", Name = "Vegetable patch", Icon = "🥕", Cost = 80000, W = 6.4, D = 3.8, Max = 6 },
 		{ Id = "PicnicTable", Name = "Picnic table", Icon = "🧺", Cost = 150000, W = 5.4, D = 5, Max = 4 },
 		{ Id = "Sundial", Name = "Sundial", Icon = "☀️", Cost = 250000, W = 2.4, D = 2.4, Max = 3 },
 		{ Id = "RoseArbor", Name = "Rose arbor", Icon = "🌸", Cost = 1.5e6, RequiresRebirths = 1, W = 5.4, D = 2.4, Max = 4 },
-		{ Id = "GardenSwing", Name = "Garden swing", Icon = "🌼", Cost = 4e6, RequiresRebirths = 1, W = 5.8, D = 3.4, Max = 2 },
+		{ Id = "GardenSwing", Name = "Garden swing", Icon = "🌼", Cost = 4e6, RequiresRebirths = 1, W = 5.8, D = 3.8, Max = 2 },
 		{ Id = "StoneStatue", Name = "Stone angel statue", Icon = "🗿", Cost = 2e7, RequiresRebirths = 2, W = 3, D = 3, Max = 3 },
 		{ Id = "Gazebo", Name = "White gazebo", Icon = "🛖", Cost = 8e7, RequiresRebirths = 3, W = 10.5, D = 10.5, Max = 1 },
 		{ Id = "TieredFountain", Name = "Tiered fountain", Icon = "⛲", Cost = 3e8, RequiresRebirths = 3, W = 9.2, D = 9.2, Max = 2 },
@@ -744,13 +805,26 @@ Config.Music = {
 }
 
 ----------------------------------------------------------------------
--- 🎵 Instruments de la SCÈNE MUSICALE de la place (v9.9, MUSIC99).
---   Chaque note joue un Sound "rééchantillonné" : sa hauteur vient de
---   PlaybackSpeed = 2^((note - BaseNote) / 12) (un demi-ton = x1,0595 ;
---   notes MIDI : Do central C4 = 60, La 440 Hz = A4 = 69). Par défaut, des
---   sons INTÉGRÉS à Roblox ("rbxasset://sounds/...", présents dans toutes
---   les installations) : tous les instruments mélodiques partagent le même
---   échantillon et la même BaseNote -> ils restent accordés entre eux.
+-- 🎵 Instruments de la SCÈNE MUSICALE de la place (v9.9 MUSIC99, v11 MUSIC11).
+--   (v11) CHAQUE INSTRUMENT A SON PROPRE TIMBRE. Avant, tous les
+--   instruments mélodiques jouaient le MÊME échantillon à la même hauteur
+--   avec de légers effets : tout sonnait comme "le piano". Maintenant,
+--   chaque instrument = un mélange de couches + sa propre chaîne d'effets
+--   Roblox (MusicSynth) :
+--     🎹 piano : fondamentale + harmoniques + petit "marteau", réverbération
+--        de salle, les notes graves durent plus longtemps ;
+--     🎸 guitare : saturation forte + "baffle" (aigus coupés) + médiator ;
+--     🎸 basse : très grave + octave + attaque au doigt, compresseur ;
+--     🎶 xylophone : lame de bois (harmonique à la douzième), très court ;
+--     🎛️ synthé : 2 oscillateurs désaccordés + chorus, flanger, trémolo, écho,
+--        notes tenues (impulsions répétées) ;
+--     🥁 batterie : grosse caisse "808" (hauteur qui CHUTE), caisse claire
+--        en bruit + corps, charleston très aigu filtré, cymbales longues,
+--        toms qui "tombent" ; 🎧 DJ : scratch, corne, montée, drop.
+--   Hauteur : PlaybackSpeed = 2^((note - BaseNote) / 12) (un demi-ton =
+--   x1,0595 ; notes MIDI : Do central C4 = 60, La 440 Hz = A4 = 69).
+--   Sons par défaut : UNIQUEMENT des sons INTÉGRÉS à Roblox
+--   ("rbxasset://sounds/...", livrés avec chaque installation ; voir Samples).
 --   Pour de VRAIS sons d'instruments :
 --     Studio > Boîte à outils (Toolbox) > Audio, ou le Creator Store ;
 --     cherche "piano note C4", "electric guitar note", "bass note",
@@ -759,44 +833,72 @@ Config.Music = {
 --     les jeux) ; écoute ; clic droit > "Copier l'ID de l'élément" ; colle
 --     "rbxassetid://ID" dans SampleId ; mets dans BaseNote la note que joue
 --     l'échantillon (souvent écrite dans son nom, ex. "C4" = 60) ; pour un
---     vrai échantillon, MinSpeed = 0.25 et MaxSpeed = 4 conviennent.
+--     vrai échantillon, mets aussi Layers = { { 0, 1 } } et Attack = {} (le
+--     son est déjà riche), MinSpeed = 0.25 et MaxSpeed = 4.
+--   SampleId : un nom de Samples ("Ping"…) ou un identifiant complet.
 --   Garde "" pour couper un instrument. Volume : 0..1 (multiplié par le
 --   volume des effets du joueur, ⚙️). Decay : (s) le son s'éteint en fondu.
---   Layers : { demi-tons, volume } joués ensemble (timbre plus riche).
+--   Layers : { demi-tons, volume, centièmes de demi-ton?, x Decay? } joués
+--     ensemble (désaccord léger = son plus large).
+--   Attack : bruits d'attaque sans hauteur { Sample, vitesse, volume, Decay }.
+--   Pulse (synthé) : la note est rejouée Count fois toutes les Every s
+--     (Fade = volume gardé à chaque fois) : son "tenu".
 --   MinSpeed / MaxSpeed : hors de ces vitesses, la note est jouée une
 --   octave plus haut / plus bas (même nom de note : l'harmonie reste juste).
 --   Batterie / DJ : chaque pièce = une liste de couches
---   { SampleId, Speed, Volume, Decay?, Delay? }.
+--   { Sample, vitesse, volume, Decay, Delay?, VitesseFinale?, DuréeGlissé? }
+--   (VitesseFinale : la hauteur glisse vers elle = grosse caisse, toms).
 ----------------------------------------------------------------------
 Config.Instruments = {
 	Volume = 0.8, -- volume général de la scène
-	RollOffMin = 14, -- (studs) son 3D : plein volume jusqu'ici…
-	RollOffMax = 120, -- …silence au-delà (on n'entend la scène que de près)
+	RollOffMin = 16, -- (studs) son 3D : plein volume jusqu'ici…
+	RollOffMax = 140, -- …silence au-delà (on n'entend la scène que de près)
 	-- 📻 radio lofi (Config.Music.Playlist) sur les enceintes de la scène
-	Radio = { Volume = 0.65, RollOffMin = 18, RollOffMax = 110 },
-	Piano = { SampleId = "rbxasset://sounds/electronicpingshort.wav", BaseNote = 76, Volume = 0.7, Decay = 1.6, MinSpeed = 0.33, MaxSpeed = 3, Layers = { { 0, 1 }, { 12, 0.16 } } },
-	Synth = { SampleId = "rbxasset://sounds/electronicpingshort.wav", BaseNote = 76, Volume = 0.55, Decay = 1.1, MinSpeed = 0.33, MaxSpeed = 3, Layers = { { 0, 1 }, { -12, 0.45 }, { 7, 0.12 } } },
-	Xylophone = { SampleId = "rbxasset://sounds/electronicpingshort.wav", BaseNote = 76, Volume = 0.6, Decay = 0.55, MinSpeed = 0.4, MaxSpeed = 3.2, Layers = { { 0, 1 }, { 24, 0.12 } } },
-	Guitar = { SampleId = "rbxasset://sounds/electronicpingshort.wav", BaseNote = 76, Volume = 0.5, Decay = 1.2, MinSpeed = 0.3, MaxSpeed = 2.6, Layers = { { 0, 1 } }, Distortion = 0.35 },
-	Bass = { SampleId = "rbxasset://sounds/electronicpingshort.wav", BaseNote = 76, Volume = 0.8, Decay = 0.9, MinSpeed = 0.2, MaxSpeed = 1.2, Layers = { { 0, 1 }, { 12, 0.2 } } },
+	Radio = { Volume = 0.65, RollOffMin = 18, RollOffMax = 120 },
+	-- sons intégrés à Roblox (dossier "content/sounds" de chaque installation)
+	Samples = {
+		Ping = "rbxasset://sounds/electronicpingshort.wav", -- note pure (oscillateur)
+		Click = "rbxasset://sounds/clickfast.wav", -- clic sec (attaques)
+		Swoosh = "rbxasset://sounds/swoosh.wav", -- souffle (bruit : caisse claire, cymbales)
+		Button = "rbxasset://sounds/button.wav", -- petit "toc" (lames de bois)
+		Thud = "rbxasset://sounds/action_jump_land.mp3", -- choc sourd (grosse caisse)
+		Splash = "rbxasset://sounds/impact_water.mp3", -- éclaboussure (bruit : crash, timbre)
+		Wind = "rbxasset://sounds/action_falling.mp3", -- vent (bruit aigu : charleston)
+	},
+	Piano = { SampleId = "Ping", BaseNote = 76, Volume = 0.62, Decay = 2.4, MinSpeed = 0.2, MaxSpeed = 3.2, KeyTrack = true,
+		Layers = { { 0, 1 }, { 12, 0.2, 3 }, { 19, 0.05, -4, 0.5 } },
+		Attack = { { "Click", 1.9, 0.09, 0.05 } } },
+	Guitar = { SampleId = "Ping", BaseNote = 76, Volume = 0.42, Decay = 1.5, MinSpeed = 0.2, MaxSpeed = 2.6, Distortion = 0.6,
+		Layers = { { 0, 1 }, { 0, 0.6, 11 }, { -12, 0.4, -6 } },
+		Attack = { { "Click", 2.6, 0.1, 0.04 } } },
+	Bass = { SampleId = "Ping", BaseNote = 76, Volume = 0.8, Decay = 1.1, MinSpeed = 0.09, MaxSpeed = 1.2,
+		Layers = { { 0, 1 }, { 12, 0.45 } },
+		Attack = { { "Click", 0.75, 0.22, 0.06 } } },
+	Xylophone = { SampleId = "Ping", BaseNote = 76, Volume = 0.6, Decay = 0.5, MinSpeed = 0.3, MaxSpeed = 3.6,
+		Layers = { { 0, 1 }, { 19, 0.3, 0, 0.45 }, { 24, 0.08, 0, 0.3 } },
+		Attack = { { "Click", 1.5, 0.26, 0.05 }, { "Button", 1.2, 0.12, 0.05 } } },
+	Synth = { SampleId = "Ping", BaseNote = 76, Volume = 0.42, Decay = 1.3, MinSpeed = 0.2, MaxSpeed = 3,
+		Layers = { { 0, 0.75, -9 }, { 0, 0.75, 9 }, { -12, 0.5 }, { 12, 0.12, 5 } },
+		Attack = {},
+		Pulse = { Every = 0.17, Count = 3, Fade = 0.62 } },
 	Drums = {
-		Volume = 0.75,
-		Kick = { { "rbxasset://sounds/clickfast.wav", 0.28, 1, 0.35 }, { "rbxasset://sounds/electronicpingshort.wav", 0.14, 0.5, 0.3 } },
-		Snare = { { "rbxasset://sounds/swoosh.wav", 3.2, 0.55, 0.22 }, { "rbxasset://sounds/clickfast.wav", 0.9, 0.6, 0.15 } },
-		HatClosed = { { "rbxasset://sounds/swoosh.wav", 7, 0.22, 0.07 } },
-		HatOpen = { { "rbxasset://sounds/swoosh.wav", 5, 0.26, 0.4 } },
-		TomHigh = { { "rbxasset://sounds/electronicpingshort.wav", 0.42, 0.75, 0.35 }, { "rbxasset://sounds/clickfast.wav", 0.6, 0.4, 0.1 } },
-		TomMid = { { "rbxasset://sounds/electronicpingshort.wav", 0.34, 0.8, 0.4 }, { "rbxasset://sounds/clickfast.wav", 0.5, 0.4, 0.1 } },
-		TomFloor = { { "rbxasset://sounds/electronicpingshort.wav", 0.26, 0.85, 0.5 }, { "rbxasset://sounds/clickfast.wav", 0.4, 0.45, 0.12 } },
-		Crash = { { "rbxasset://sounds/swoosh.wav", 1.6, 0.45, 1.4 } },
-		Ride = { { "rbxasset://sounds/electronicpingshort.wav", 2.4, 0.22, 0.6 }, { "rbxasset://sounds/swoosh.wav", 5, 0.12, 0.3 } },
+		Volume = 0.8,
+		Kick = { { "Ping", 0.2, 1, 0.45, 0, 0.075, 0.09 }, { "Click", 0.55, 0.5, 0.05 }, { "Thud", 0.9, 0.45, 0.3 } },
+		Snare = { { "Swoosh", 3.4, 0.55, 0.2 }, { "Splash", 2.6, 0.32, 0.18 }, { "Ping", 0.34, 0.45, 0.12, 0, 0.27, 0.05 }, { "Click", 1.3, 0.45, 0.04 } },
+		HatClosed = { { "Swoosh", 8, 0.3, 0.05 }, { "Wind", 6, 0.22, 0.05 }, { "Click", 4, 0.08, 0.02 } },
+		HatOpen = { { "Swoosh", 6.5, 0.3, 0.42 }, { "Wind", 5, 0.22, 0.4 } },
+		TomHigh = { { "Ping", 0.37, 0.8, 0.42, 0, 0.3, 0.12 }, { "Click", 0.8, 0.35, 0.04 }, { "Splash", 1.4, 0.1, 0.12 } },
+		TomMid = { { "Ping", 0.29, 0.85, 0.5, 0, 0.235, 0.14 }, { "Click", 0.7, 0.35, 0.04 }, { "Splash", 1.2, 0.1, 0.14 } },
+		TomFloor = { { "Ping", 0.22, 0.9, 0.62, 0, 0.175, 0.16 }, { "Click", 0.6, 0.38, 0.05 }, { "Splash", 1.0, 0.1, 0.16 } },
+		Crash = { { "Swoosh", 2.4, 0.48, 1.7 }, { "Splash", 1.7, 0.4, 1.6 }, { "Wind", 3, 0.22, 1.4 }, { "Ping", 4.3, 0.05, 0.8 } },
+		Ride = { { "Ping", 3.05, 0.16, 0.9 }, { "Ping", 4.41, 0.09, 0.7 }, { "Swoosh", 7, 0.12, 0.25 }, { "Click", 3.5, 0.1, 0.03 } },
 	},
 	DJ = {
 		Volume = 0.8,
-		Scratch = { { "rbxasset://sounds/swoosh.wav", 2.3, 0.5, 0.18 }, { "rbxasset://sounds/swoosh.wav", 1.4, 0.45, 0.22, 0.14 } },
-		Horn = { { "rbxasset://sounds/electronicpingshort.wav", 1, 0.5, 0.2 }, { "rbxasset://sounds/electronicpingshort.wav", 1.26, 0.4, 0.2 }, { "rbxasset://sounds/electronicpingshort.wav", 1, 0.5, 0.2, 0.16 }, { "rbxasset://sounds/electronicpingshort.wav", 1.26, 0.4, 0.3, 0.16 } },
-		Riser = { { "rbxasset://sounds/swoosh.wav", 0.55, 0.5, 1.6 }, { "rbxasset://sounds/electronicpingshort.wav", 0.5, 0.3, 0.3, 0.4 }, { "rbxasset://sounds/electronicpingshort.wav", 0.75, 0.3, 0.3, 0.8 }, { "rbxasset://sounds/electronicpingshort.wav", 1, 0.35, 0.4, 1.2 } },
-		Drop = { { "rbxasset://sounds/clickfast.wav", 0.2, 1, 0.6 }, { "rbxasset://sounds/electronicpingshort.wav", 0.12, 0.7, 0.9 }, { "rbxasset://sounds/swoosh.wav", 0.8, 0.4, 1.2 } },
+		Scratch = { { "Swoosh", 3, 0.5, 0.16, 0, 0.9, 0.14 }, { "Swoosh", 0.9, 0.45, 0.2, 0.15, 2.6, 0.16 }, { "Click", 1.6, 0.2, 0.03 } },
+		Horn = { { "Ping", 1, 0.45, 0.22 }, { "Ping", 1.26, 0.35, 0.22 }, { "Ping", 1, 0.45, 0.22, 0.17 }, { "Ping", 1.26, 0.35, 0.22, 0.17 }, { "Ping", 1, 0.5, 0.5, 0.34 }, { "Ping", 1.26, 0.4, 0.5, 0.34 } },
+		Riser = { { "Swoosh", 0.4, 0.5, 1.8, 0, 2.6, 1.7 }, { "Wind", 0.8, 0.35, 1.8, 0, 3.5, 1.7 }, { "Ping", 0.5, 0.18, 1.8, 0, 2, 1.7 } },
+		Drop = { { "Ping", 0.16, 1, 1.1, 0, 0.04, 0.7 }, { "Thud", 0.7, 0.6, 0.6 }, { "Splash", 0.7, 0.4, 1.2 }, { "Click", 0.3, 0.6, 0.08 } },
 	},
 }
 
@@ -902,6 +1004,13 @@ Config.Monetization = {
 			ProductId = 3714590426, PriceHint = 99, Kind = "Dopamine", Seconds = 3600, Minimum = 50000 },
 		{ Id = "PackL", Name = "Overdose", Icon = "🌊", Description = "8 hours of production",
 			ProductId = 3714590833, PriceHint = 399, Kind = "Dopamine", Seconds = 28800, Minimum = 500000 },
+		-- (v11) longues doses : X jours de TA production actuelle (s'adapte à ta progression)
+		{ Id = "Pack5d", Name = "5-day Dose", Icon = "📅", Description = "5 days of production",
+			ProductId = 3716343001, PriceHint = 499, Kind = "Dopamine", Seconds = 432000, Minimum = 7500000 },
+		{ Id = "Pack10d", Name = "10-day Dose", Icon = "🗓️", Description = "10 days of production",
+			ProductId = 3716343158, PriceHint = 899, Kind = "Dopamine", Seconds = 864000, Minimum = 15000000, Tag = "⭐ POPULAR" },
+		{ Id = "Pack100d", Name = "100-day Dose", Icon = "👑", Description = "100 days of production",
+			ProductId = 3716343248, PriceHint = 4999, Kind = "Dopamine", Seconds = 8640000, Minimum = 150000000, Tag = "👑 MEGA DOSE" },
 		{ Id = "Boost2", Name = "Boost x2", Icon = "⏱️", Description = "Earnings x2 for 15 minutes",
 			ProductId = 3714591469, PriceHint = 49, Kind = "Boost", Multiplier = 2, Duration = 900 },
 		{ Id = "Boost5", Name = "Boost x5", Icon = "🔥", Description = "Earnings x5 for 10 minutes",
@@ -2726,22 +2835,27 @@ for index, food in ipairs(Config.Food.Items) do
 end
 
 ----------------------------------------------------------------------
--- 🏁 Courses de rue (v10, RACE10 ; RaceService / Shared/RaceRules /
--- Shared/RaceRoutes / Client/World/RaceClient) : 2 à 8 coureurs, des
--- pilotes IA complètent la grille jusqu'à MinGrid. Vitesses en studs/s.
+-- 🏁 Courses de rue (v10 RACE10, v11 RACE11 ; RaceService / Shared/RaceRules /
+-- Shared/RaceRoutes / Client/World/RaceClient + RaceHud + RaceMenu) : 2 à 8
+-- coureurs, des pilotes IA complètent la grille jusqu'à MinGrid. Vitesses en
+-- studs/s.
 --   Récompenses : secondes de production (Formulas.ScaledReward) selon la
 --   place, x (1 + HumanBonus par adversaire humain, au plus MaxHumanBonus),
 --   x SoloFactor sans adversaire humain ; DailyRewarded courses payées par
---   jour (ensuite : records et trophées seulement). Voir RaceRules.
+--   jour (ensuite : records, XP et trophées seulement). Voir RaceRules.
 --   Anti-triche (serveur) : ordre des portes, temps minimal par tronçon,
---   vitesse plausible, téléportation, être au volant de sa voiture.
+--   vitesse plausible (nitro comprise), téléportation, être au volant.
+--   (v11) Nitro : charges données par le serveur (1 au départ, + dérapages et
+--   aspiration), boost court de la vitesse de pointe ; XP et rangs (Bronze ->
+--   Diamant, cosmétiques) ; médailles par parcours (temps de référence) ;
+--   fantôme de ton meilleur tour ; historique des courses.
 ----------------------------------------------------------------------
 Config.Race = {
 	MaxRacers = 8,
 	MinGrid = 4, -- IA ajoutées jusqu'à 4 voitures sur la grille
 	LobbySeconds = 20, -- attente après la 1re inscription
 	LateJoinSeconds = 8, -- une inscription tardive laisse au moins 8 s
-	GridSeconds = 3, -- mise en place sur la grille avant le 3-2-1
+	GridSeconds = 3.5, -- mise en place sur la grille avant le 3-2-1 (caméra de présentation)
 	CountdownSeconds = 3,
 	FinishGrace = 35, -- s laissées aux autres après le 1er humain arrivé
 	MaxSeconds = 480, -- durée max d'une course
@@ -2749,6 +2863,8 @@ Config.Race = {
 	ResetCooldown = 3, -- s entre deux "retour à la porte"
 	OffCarGrace = 5, -- s hors de sa voiture -> abandon
 	CheckpointSpacing = 170, -- studs entre deux portes
+	-- (v11) grille de départ (studs) : voitures à l'échelle Roblox (CARS11)
+	Grid = { First = 13, Row = 24, Side = 5.2 }, -- (CARS11 : voitures x1,3, limousine 19,8 de long)
 	Rewards = {
 		Seconds = { 120, 80, 55 }, -- 1er, 2e, 3e (secondes de production)
 		FinishSeconds = 35, -- arrivé 4e ou plus
@@ -2765,6 +2881,36 @@ Config.Race = {
 		MaxStrikes = 3, -- au 3e saut : disqualifié
 		SegmentFactor = 1.15, -- tronçon plus rapide que longueur / (pointe x 1,15) : disqualifié
 	},
+	-- (v11) nitro : +Boost de vitesse de pointe pendant Seconds ; charges : Start
+	-- au départ, au plus Max ; la jauge se remplit en dérapant (DriftPoints
+	-- points = 1 charge) et dans l'aspiration d'une voiture (DraftSeconds s = 1 charge)
+	Nitro = { Start = 1, Max = 3, Boost = 0.18, Seconds = 2.6, DriftPoints = 1000, DraftSeconds = 7 },
+	-- (v11) dérapage mesuré par le serveur : angle de glisse (degrés) et vitesse minimale
+	Drift = { MinAngle = 9, MaxAngle = 65, MinSpeed = 22 },
+	-- (v11) XP de course (rang cosmétique, sans effet sur l'économie)
+	Xp = {
+		Finish = 40, -- arrivé
+		Place = { 60, 40, 25 }, -- bonus 1er / 2e / 3e
+		PerHuman = 10, -- par adversaire humain
+		MaxHuman = 30,
+		Medal = { 30, 20, 10 }, -- or / argent / bronze
+		Record = 20, -- nouveau record personnel
+		Dnf = 8, -- abandon (participation)
+		Overtake = 3, -- par dépassement (au plus MaxOvertakes)
+		MaxOvertakes = 8,
+	},
+	-- (v11) rangs : 3 divisions (III -> I) par palier, Diamant au sommet
+	Ranks = {
+		{ Id = "Bronze", Name = "Bronze", Icon = "🥉", Min = 0, Color = { 214, 140, 82 } },
+		{ Id = "Silver", Name = "Silver", Icon = "🥈", Min = 600, Color = { 200, 210, 226 } },
+		{ Id = "Gold", Name = "Gold", Icon = "🥇", Min = 1800, Color = { 255, 204, 60 } },
+		{ Id = "Platinum", Name = "Platinum", Icon = "💠", Min = 4000, Color = { 120, 230, 220 } },
+		{ Id = "Diamond", Name = "Diamond", Icon = "💎", Min = 8000, Color = { 140, 200, 255 } },
+	},
+	-- (v11) médailles : temps de référence (pilote parfait, Par.TopSpeed) x facteur
+	Medals = { Gold = 1.06, Silver = 1.18, Bronze = 1.35 },
+	Par = { TopSpeed = 66, Accel = 30 },
+	HistorySize = 20, -- dernières courses gardées (stats, graphe)
 	AI = {
 		LatAccel = 30, -- (studs/s²) virages
 		Brake = 38, -- (studs/s²) freinage anticipé
@@ -2773,19 +2919,113 @@ Config.Race = {
 		RubberSlow = 0.1, -- au plus -10 % devant tous les humains
 		RubberRange = 500, -- (studs) écart pour l'effet maximal
 		FairFinish = 0.12, -- aucun élastique dans les derniers 12 % de la course
+		Draft = 0.04, -- (v11) aspiration : +4 % derrière une voiture (8..30 studs)
+		Launch = { 0.15, 0.45 }, -- (v11) temps de réaction au départ (s)
 		Names = { "Nina Turbo", "Max Vroom", "Lou Drift", "Sam Nitro", "Zoé Flash", "Téo Pistons", "Lina Rocket" },
 	},
 	Routes = {
-		{ Id = "City", Name = "City circuit", Icon = "🏙️", Laps = 2, Desc = "Two laps around downtown" },
-		{ Id = "Highway", Name = "Highway sprint", Icon = "🛣️", Laps = 1, Sprint = true, Desc = "Flat out on the highway" },
-		{ Id = "Districts", Name = "District loop", Icon = "🏘️", Laps = 1, Desc = "Through every district" },
-		{ Id = "Night", Name = "Night race", Icon = "🌙", Laps = 1, Night = true, Desc = "The grand tour, under the stars" },
+		{ Id = "City", Name = "City circuit", Icon = "🏙️", Laps = 2, Desc = "Two laps around downtown", Color = { 255, 214, 90 } },
+		{ Id = "Highway", Name = "Highway sprint", Icon = "🛣️", Laps = 1, Sprint = true, Desc = "Flat out on the highway", Color = { 90, 210, 255 } },
+		{ Id = "Districts", Name = "District loop", Icon = "🏘️", Laps = 1, Desc = "Through every district", Color = { 120, 236, 150 } },
+		{ Id = "Night", Name = "Night race", Icon = "🌙", Laps = 1, Night = true, Desc = "The grand tour, under the stars", Color = { 196, 140, 255 } },
+		-- (v11, RACE11)
+		{ Id = "Belt", Name = "Ring road Grand Prix", Icon = "🏎️", Laps = 1, Desc = "One fast lap of the ring avenue", Color = { 255, 120, 90 } },
+		{ Id = "Loft", Name = "Warehouse circuit", Icon = "🏭", Laps = 3, Desc = "Three tight laps among the lofts", Color = { 255, 150, 210 } },
+		{ Id = "Endurance", Name = "Highway endurance", Icon = "🌀", Laps = 1, Desc = "The whole highway loop, nitro ready", Color = { 110, 240, 230 } },
 	},
 }
 Config.RaceRoutesById = {}
 for index, route in ipairs(Config.Race.Routes) do
 	route.Order = index
 	Config.RaceRoutesById[route.Id] = route
+end
+
+----------------------------------------------------------------------
+-- 🏦 (v11, BANK11) Banque Dopamine, 💎 DIAMANTS et CASSES (cartoon, sans
+-- armes). Règles pures : Shared/Diamonds (monnaie, coffre, change, boutique
+-- de luxe) et Shared/HeistRules (récompenses, plafonds, mini-jeux) ;
+-- serveur : BankService + HeistKit (aussi utilisé par le train).
+--   - Les 💎 se gagnent aux casses (banque, convoi du train), sont gardés
+--     pour toujours (jamais remis à zéro par l'océan) et s'échangent contre
+--     des objets de LUXE (Luxury) ou un peu de Dopamine (Exchange, plafonné).
+--   - Poche (Wallet) / coffre (Vault) : le coffre rapporte des intérêts
+--     (Vault.*) à réclamer une fois par jour au guichet.
+--   - Récompense en Dopamine d'un casse = secondes de production (comme les
+--     courses), x bonus d'équipe, x part du butin livrée ; plafond par jour.
+----------------------------------------------------------------------
+Config.Bank = {
+	Diamonds = {
+		DailyCap = 80, -- 💎 max gagnés par jour aux casses (intérêts à part)
+		MaxBalance = 1000000, -- garde-fou (poche + coffre)
+		HistorySize = 30, -- lignes de l'historique gardées
+	},
+	Vault = {
+		InterestRate = 0.02, -- +2 % du coffre par jour...
+		MinForInterest = 10, -- ... dès 10 💎 au coffre (au moins 1 💎)
+		InterestMax = 10, -- ... au plus 10 💎 par jour
+		MaxMove = 100000, -- dépôt / retrait max par opération
+	},
+	Exchange = {
+		SecondsPerDiamond = 30, -- 1 💎 = 30 s de production en Dopamine
+		DailyMax = 15, -- 💎 échangeables par jour
+		MinPerDiamond = 500, -- Dopamine minimale pour 1 💎
+	},
+	Heist = {
+		LobbySeconds = 30, -- attente de l'équipe (le chef peut lancer avant)
+		MaxCrew = 4,
+		BagCapacity = 3, -- piles de butin par sac
+		CarrySlow = 0.85, -- vitesse de marche avec un sac sur le dos
+		MinFill = 0.2, -- part minimale du butin livrée pour être payé
+		CrewBonus = 0.1, -- +10 % par coéquipier...
+		MaxCrewBonus = 0.3, -- ... au plus +30 %
+		Range = 5, -- (studs) marge des vérifications de distance
+		MaxSpeed = 150, -- (studs/s) au-delà : téléportation -> le sac tombe
+		HackLength = 5, -- symboles du code à recopier
+		HackMinSeconds = 3, -- temps minimal pour pirater
+		DrillSeconds = 22, -- durée du perçage (hors blocages)
+		DrillJams = 2, -- blocages à débloquer (E) pendant le perçage
+		CrowbarTaps = 12, -- coups de pied-de-biche pour forcer une porte
+		CrowbarMinInterval = 0.08,
+		GrabSeconds = 1.5, -- (s) maintenir E sur une pile de butin
+		Kinds = {
+			-- Seconds : secondes de production (sac plein, seul) ; Diamonds = { min, max } (part vide -> pleine) ;
+			-- Daily : casses payés par jour ; Cooldown / FailCooldown : (s) entre deux casses du serveur ;
+			-- Duration : (s) chrono après le déclenchement de l'alarme
+			Bank = { Name = "Bank heist", Icon = "🏦", Seconds = 120, Diamonds = { 8, 20 }, Daily = 3, Cooldown = 600, FailCooldown = 300, Duration = 210 },
+			Train = { Name = "Diamond convoy", Icon = "🚂", Seconds = 90, Diamonds = { 5, 14 }, Daily = 4, Cooldown = 1200, FailCooldown = 600, Duration = 210 },
+		},
+	},
+	-- 💎 Boutique de luxe. Kind : "Wear" (porté en ville, vu de tous ; Slot =
+	-- Head | Face | Neck | Wrist | Back | Aura), "Title" (titre au-dessus de la
+	-- tête), "Paint" (peinture de voiture : atelier CarWorkshop / CarService
+	-- via BankService:OwnsLuxury), "Furniture" (objet de maison : ajouté à
+	-- data.House.Items). Price en 💎 ; NeedHeists = casses réussis requis.
+	Luxury = {
+		{ Id = "GoldWatch", Name = "Gold watch", Icon = "⌚", Kind = "Wear", Slot = "Wrist", Price = 30, Desc = "A heavy gold watch that sparkles" },
+		{ Id = "GoldChain", Name = "Gold chain", Icon = "📿", Kind = "Wear", Slot = "Neck", Price = 35, Desc = "A thick 24-carat chain" },
+		{ Id = "GoldShades", Name = "Gold sunglasses", Icon = "🕶️", Kind = "Wear", Slot = "Face", Price = 40, Desc = "Gold frames, mirror lenses" },
+		{ Id = "DiamondMonocle", Name = "Diamond monocle", Icon = "🧐", Kind = "Wear", Slot = "Face", Price = 55, Desc = "Very distinguished" },
+		{ Id = "MogulHat", Name = "Tycoon top hat", Icon = "🎩", Kind = "Wear", Slot = "Head", Price = 70, Desc = "Black silk with a diamond band" },
+		{ Id = "VelvetCape", Name = "Royal velvet cape", Icon = "🦸", Kind = "Wear", Slot = "Back", Price = 80, Desc = "Crimson velvet with ermine trim" },
+		{ Id = "DiamondNecklace", Name = "Diamond necklace", Icon = "💎", Kind = "Wear", Slot = "Neck", Price = 90, Desc = "A river of diamonds" },
+		{ Id = "DiamondCrown", Name = "Diamond crown", Icon = "👑", Kind = "Wear", Slot = "Head", Price = 150, Desc = "Gold, velvet and twelve diamonds" },
+		{ Id = "SparkleAura", Name = "Diamond sparkle aura", Icon = "✨", Kind = "Wear", Slot = "Aura", Price = 160, Desc = "Tiny diamonds swirl around you" },
+		{ Id = "CrystalWings", Name = "Crystal wings", Icon = "🪽", Kind = "Wear", Slot = "Back", Price = 220, Desc = "Shimmering wings that flap softly" },
+		{ Id = "GoldenAura", Name = "Golden halo aura", Icon = "🌟", Kind = "Wear", Slot = "Aura", Price = 260, Desc = "A golden ring of light at your feet" },
+		{ Id = "TitleDealer", Name = "Title: Diamond dealer", Icon = "💎", Kind = "Title", Slot = "Title", Price = 25, Title = "💎 Diamond dealer", Desc = "Shown above your head in town" },
+		{ Id = "TitleBanker", Name = "Title: Banker", Icon = "🏦", Kind = "Title", Slot = "Title", Price = 25, Title = "🏦 Banker", Desc = "Shown above your head in town" },
+		{ Id = "TitleMastermind", Name = "Title: Mastermind", Icon = "🕶️", Kind = "Title", Slot = "Title", Price = 40, NeedHeists = 3, Title = "🕶️ Mastermind", Desc = "After 3 successful heists" },
+		{ Id = "TitleTycoon", Name = "Title: Tycoon", Icon = "👑", Kind = "Title", Slot = "Title", Price = 300, Title = "👑 Tycoon", Desc = "The richest title in town" },
+		{ Id = "PaintDiamond", Name = "Diamond pearl paint", Icon = "🤍", Kind = "Paint", Price = 60, Color = Color3.fromRGB(236, 244, 255), Desc = "Pearly white with diamond flakes" },
+		{ Id = "PaintGold", Name = "24-carat gold paint", Icon = "🟡", Kind = "Paint", Price = 90, Color = Color3.fromRGB(232, 180, 52), Desc = "Real gold leaf look" },
+		{ Id = "PaintChrome", Name = "Mirror chrome paint", Icon = "🪩", Kind = "Paint", Price = 120, Color = Color3.fromRGB(206, 214, 226), Desc = "Like a mirror on wheels" },
+		{ Id = "PaintStarry", Name = "Starry black paint", Icon = "🌌", Kind = "Paint", Price = 150, Color = Color3.fromRGB(22, 20, 40), Desc = "Deep black with gold stars" },
+	},
+}
+Config.BankLuxuryById = {}
+for index, item in ipairs(Config.Bank.Luxury) do
+	item.Order = index
+	Config.BankLuxuryById[item.Id] = item
 end
 
 ----------------------------------------------------------------------

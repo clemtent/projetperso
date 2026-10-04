@@ -30,12 +30,14 @@
 	API (TownNature.playground) :
 	  TownPark.Build(model, g)   g = centre de l'aire au sol, -Z vers la place
 	  TownPark.BenchPrompts(folder)
+	  TownPark.ScenePlaces(model, F, kind, seed) -> nombre de Seats (v11)
 ]]
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local ParkMotion = require(ReplicatedStorage.Shared.ParkMotion)
+local ParkLayout = require(ReplicatedStorage.Shared.ParkLayout) -- (v11, PARK11) places assises des scènes de parc
 local TownKit = require(script.Parent.TownKit)
 
 local TownPark = {}
@@ -280,10 +282,34 @@ function TownPark.Build(model: Model, g: CFrame)
 		local piece = newPiece(model, "ParkBench" .. bi, "Bench")
 		piece.Model:SetAttribute("ParkIndex", bi)
 		for k = 1, #ParkMotion.BENCH.Places do
-			addSeat(piece, k, g * ParkMotion.BenchSeat(bi, k), Vector3.new(2.1, 0.2, 1.5))
+			addSeat(piece, k, g * ParkMotion.BenchSeat(bi, k), Vector3.new(2.2, 0.2, 1.9))
 		end
-		part(piece.Model, "BenchBlock", Vector3.new(ParkMotion.BENCH.Length, ParkMotion.BENCH.SeatTop - 0.1, 1.5), g * ParkMotion.BenchFrame(bi) * CFrame.new(0, (ParkMotion.BENCH.SeatTop - 0.1) / 2, 0.1), RUBBER, M.Wood, "ghost")
+		part(piece.Model, "BenchBlock", Vector3.new(ParkMotion.BENCH.Length, ParkMotion.BENCH.SeatTop - 0.1, 2.0), g * ParkMotion.BenchFrame(bi) * CFrame.new(0, (ParkMotion.BENCH.SeatTop - 0.1) / 2, -0.15), RUBBER, M.Wood, "ghost")
 	end
+end
+
+----------------------------------------------------------------------
+-- (v11, PARK11) Places LIBRES des scènes de parc construites côté client
+-- (roseraie, kiosque, place de la fontaine, bancs le long des allées,
+-- tables de pique-nique...) : un Seat invisible par place (plan partagé
+-- ParkLayout ; les places des PNJ n'en ont pas). Dessus du Seat = dessus
+-- des lattes (SCALE11 : 1,85), centré sur l'assise, regard = LookVector.
+----------------------------------------------------------------------
+
+function TownPark.ScenePlaces(model: Model, F: CFrame, kind: string, seed: number): number
+	local places = ParkLayout.Seats(kind, seed)
+	if #places == 0 then
+		return 0
+	end
+	local piece = newPiece(model, "SceneSeats", "Bench")
+	local n = 0
+	for _, st in ipairs(places) do
+		if not st.Npc then
+			n += 1
+			addSeat(piece, n, F * st.CF, Vector3.new(2.2, 0.2, 1.9))
+		end
+	end
+	return n
 end
 
 ----------------------------------------------------------------------

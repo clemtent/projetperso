@@ -14,11 +14,22 @@
 	    puis des arbres semés sans jamais toucher les rues ni les zones ;
 	  - une ceinture de bois derrière les parcelles, des collines, des
 	    montagnes enneigées et une ville lointaine (TownBuildings.Skyline).
+	v11 (PARK11) — le PARC CENTRAL refait ("trop de choses sans rapport ou
+	trop de la même") : des lieux cohérents construits côté CLIENT (ParkSports
+	/ ParkScenes via TownGreenery, attribut NearDetail) : terrain de basket,
+	terrain de foot, court de tennis, ping-pong où les PNJ JOUENT ; roseraie
+	à la française avec fontaine ; kiosque à musique et son orchestre ; place
+	de la grande fontaine ; parc à chiens ; tables de pique-nique et
+	pique-nique dans l'herbe ; agrès ; bancs occupés le long des allées. Le
+	serveur ne garde que la réserve, un imposteur plat pour les terrains et
+	les Seats des places libres (TownPark.ScenePlaces).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
+-- (v11, TRAIN11) emprise de la ligne de ceinture : voie, gares, planques (Shared/TrainLine)
+local okTrainLine, TrainLine = pcall(require, ReplicatedStorage.Shared.TrainLine)
 local TownKit = require(script.Parent.TownKit)
 local TownBuildings = require(script.Parent.TownBuildings)
 local TownVehicles = require(script.Parent.TownVehicles) -- (v9.7, VEHICLES97) food truck
@@ -275,6 +286,40 @@ end
 
 local TownPark = require(script.Parent.TownPark)
 
+----------------------------------------------------------------------
+-- (v11, PARK11) LIEUX DU PARC construits côté CLIENT (ParkScenes /
+-- ParkSports, via TownGreenery : attribut NearDetail = le type) : terrains
+-- où les PNJ jouent vraiment, roseraie, kiosque, place de la fontaine, parc
+-- à chiens, pique-niques, agrès, bancs le long des allées. Le serveur ne
+-- pose que la réserve (rien ne pousse dessus), un "imposteur" plat pour les
+-- terrains (vus de loin) et les Seats des places libres (TownPark.ScenePlaces :
+-- on s'assoit pour de vrai, E).
+----------------------------------------------------------------------
+
+local SCENE_PADS: { [string]: { Size: Vector2, Color: Color3, Mat: Enum.Material } } = {
+	Basketball = { Size = Vector2.new(32, 20), Color = Color3.fromRGB(196, 92, 60), Mat = M.Concrete },
+	Football = { Size = Vector2.new(46, 28), Color = Color3.fromRGB(72, 152, 72), Mat = M.Grass },
+	Tennis = { Size = Vector2.new(42, 20), Color = Color3.fromRGB(180, 98, 62), Mat = M.Sand },
+}
+
+local function parkScene(folder: Instance, geo: TownKit.Geo, kind: string, cf: CFrame, R: number, seed: number): Model
+	local model = TownKit.Model(folder, "Park" .. kind)
+	local g = cf * CFrame.new(0, GROUND_Y, 0)
+	model:SetAttribute("NearDetail", kind)
+	model:SetAttribute("DetailCF", g)
+	model:SetAttribute("DetailR", R)
+	model:SetAttribute("DetailSeed", seed)
+	local pad = SCENE_PADS[kind]
+	if pad then
+		-- (dessus à +0,02 : sous le sol de jeu du client, qui commence à -0,1)
+		local p = part(model, "ScenePad", Vector3.new(pad.Size.X, 0.1, pad.Size.Y), g * CFrame.new(0, -0.03, 0), pad.Color, pad.Mat, "deco")
+		p.CastShadow = false
+	end
+	pcall(TownPark.ScenePlaces, model, g, kind, seed)
+	geo.Reserve(cf.Position, R)
+	return model
+end
+
 local function playground(folder: Instance, geo: TownKit.Geo, cf: CFrame)
 	local model = TownKit.Model(folder, "Playground")
 	local g = cf * CFrame.new(0, GROUND_Y, 0)
@@ -288,53 +333,6 @@ local function playground(folder: Instance, geo: TownKit.Geo, cf: CFrame)
 	geo.Reserve(cf.Position, 23)
 	-- (après toute la nature : invite "S'asseoir" sur les bancs du parc)
 	task.defer(TownPark.BenchPrompts, folder)
-end
-
-local function picnic(folder: Instance, geo: TownKit.Geo, cf: CFrame, count: number)
-	local model = TownKit.Model(folder, "Picnic")
-	for i = 1, count do
-		local t = cf * CFrame.new((i - (count + 1) / 2) * 9, GROUND_Y, (i % 2) * 3) * CFrame.Angles(0, math.rad(i * 25), 0)
-		part(model, "TableTop", Vector3.new(6, 0.35, 2.6), t * CFrame.new(0, 2.6, 0), C.WoodLight, M.WoodPlanks, "solid")
-		part(model, "Cloth", Vector3.new(3, 0.05, 2.7), t * CFrame.new(0, 2.8, 0), i % 2 == 0 and C.Pink or C.Sky, M.Fabric, "deco")
-		for _, z in ipairs({ -2, 2 }) do
-			part(model, "BenchPlank", Vector3.new(6, 0.3, 1), t * CFrame.new(0, 1.5, z), C.WoodLight, M.WoodPlanks, "solid")
-		end
-		for _, x in ipairs({ -2.4, 2.4 }) do
-			part(model, "Legs", Vector3.new(0.4, 2.5, 4.6), t * CFrame.new(x, 1.25, 0), C.Wood, M.Wood, "prop")
-		end
-		geo.Reserve(t.Position, 5)
-	end
-	-- (v9.7) chariot à glaces sous son parasol, à côté des tables
-	local cart = cf * CFrame.new((count + 1) / 2 * 9 + 4, GROUND_Y, -2) * CFrame.Angles(0, math.rad(-20), 0)
-	part(model, "CartBody", Vector3.new(4.4, 2.2, 2.2), cart * CFrame.new(0, 1.9, 0), Color3.fromRGB(255, 236, 244), M.SmoothPlastic, "prop")
-	part(model, "CartStripe", Vector3.new(4.5, 0.5, 2.3), cart * CFrame.new(0, 2.2, 0), C.Pink, M.SmoothPlastic, "deco")
-	for _, x in ipairs({ -1.4, 1.4 }) do
-		local wheel = part(model, "CartWheel", Vector3.new(0.3, 1.6, 1.6), cart * CFrame.new(x, 0.8, 1.2) * CFrame.Angles(0, math.rad(90), 0), C.Metal, M.Rubber, "deco")
-		;(wheel :: Part).Shape = Enum.PartType.Cylinder
-	end
-	TownKit.Column(model, "CartPole", (cart * CFrame.new(0, 3, 0)).Position, 4.2, 0.2, C.White, M.Metal, "deco")
-	TownKit.Egg(model, "Parasol", cart * CFrame.new(0, 7.2, 0), Vector3.new(6.4, 1.6, 6.4), C.Mint, M.Fabric, "decoS")
-	TownKit.Ball(model, "Scoop", (cart * CFrame.new(-1, 3.4, 0)).Position, 0.9, C.Pink, M.SmoothPlastic, "deco")
-	TownKit.Ball(model, "Scoop", (cart * CFrame.new(0.2, 3.4, 0.1)).Position, 0.9, C.Lemon, M.SmoothPlastic, "deco")
-	geo.Reserve(cart.Position, 5)
-end
-
--- Kiosque (gloriette) : plancher, 6 colonnes, dôme, épi de faîtage
-local function gazebo(folder: Instance, geo: TownKit.Geo, cf: CFrame)
-	local model = TownKit.Model(folder, "Gazebo")
-	local g = cf * CFrame.new(0, GROUND_Y, 0)
-	TownKit.Disc(model, "GazeboFloor", (g * CFrame.new(0, 0.5, 0)).Position, 6.2, 0.6, C.Stone, M.Marble, "solid")
-	TownKit.Disc(model, "GazeboStep", (g * CFrame.new(0, 0.25, 0)).Position, 7, 0.3, C.StoneDark, M.Marble, "solid")
-	for k = 0, 5 do
-		local a = k * math.pi / 3 + math.pi / 6
-		TownKit.Column(model, "GazeboPost", (g * CFrame.new(math.cos(a) * 5.4, 0.5, math.sin(a) * 5.4)).Position, 6.6, 0.5, C.White, M.Wood, "prop")
-	end
-	-- (dôme en lentille : dessous à 6,1 au centre, au-dessus des têtes)
-	TownKit.Egg(model, "GazeboRoof", g * CFrame.new(0, 7.6, 0), Vector3.new(14.4, 3, 14.4), Color3.fromRGB(150, 196, 180), M.SmoothPlastic, "decoS")
-	TownKit.Egg(model, "GazeboCrown", g * CFrame.new(0, 8.9, 0), Vector3.new(5, 1.4, 5), Color3.fromRGB(236, 246, 240), M.SmoothPlastic, "deco")
-	TownKit.Ball(model, "GazeboFinial", (g * CFrame.new(0, 9.9, 0)).Position, 0.9, C.Yellow, M.Metal, "deco")
-	TownKit.Bench(model, g * CFrame.new(0, 0.5, 2.6) * CFrame.Angles(0, math.pi, 0))
-	geo.Reserve(cf.Position, 11)
 end
 
 ----------------------------------------------------------------------
@@ -367,67 +365,6 @@ local function market(folder: Instance, geo: TownKit.Geo, cf: CFrame)
 	local truck = cf * CFrame.new(0, GROUND_Y + 0.15, 9) * CFrame.Angles(0, math.rad(90), 0)
 	TownVehicles.FoodTruck(model, truck, Color3.fromRGB(255, 214, 120))
 	geo.Reserve(cf.Position, 19)
-end
-
-----------------------------------------------------------------------
--- Jardin fleuri (pergola) + terrain de basket
-----------------------------------------------------------------------
-
-local function flowerGarden(folder: Instance, geo: TownKit.Geo, cf: CFrame)
-	local model = TownKit.Model(folder, "FlowerGarden")
-	-- (v9.7) planches de terre + vraies touffes de fleurs (ovales en bouquets)
-	for i = 0, 4 do
-		local row = cf * CFrame.new(0, GROUND_Y, -9 + i * 4.4)
-		part(model, "Soil", Vector3.new(20, 0.6, 2.4), row * CFrame.new(0, 0.3, 0), Color3.fromRGB(120, 86, 64), M.Ground, "prop")
-		-- feuillage de la planche, puis des bouquets ronds qui dépassent
-		TownKit.Egg(model, "Leaves", row * CFrame.new(0, 0.75, 0), Vector3.new(19.4, 1.1, 2.12), Color3.fromRGB(92, 156, 80), M.Grass, "deco")
-		for k = 0, 3 do
-			local color = TownKit.FLOWERS[(i + (k % 2) * 2) % #TownKit.FLOWERS + 1]
-			TownKit.Egg(model, "Flowers", row * CFrame.new(-7.2 + k * 4.8 + (hash(i, k + 120) - 0.5) * 0.8, 1.25 + hash(i, k + 126) * 0.15, (hash(i, k + 123) - 0.5) * 0.4), Vector3.new(3.4, 0.95, 1.7), color, M.SmoothPlastic, "deco")
-		end
-	end
-	-- pergola couverte de glycine
-	local p = cf * CFrame.new(0, GROUND_Y, 16)
-	for _, x in ipairs({ -4, 4 }) do
-		for _, z in ipairs({ -3, 3 }) do
-			part(model, "PergolaPost", Vector3.new(0.7, 8, 0.7), p * CFrame.new(x, 4, z), C.White, M.Wood, "prop")
-		end
-	end
-	for i = 0, 4 do
-		part(model, "PergolaBeam", Vector3.new(10, 0.4, 0.5), p * CFrame.new(0, 8.2, -3 + i * 1.5), C.White, M.Wood, "deco")
-	end
-	local lilac = Color3.fromRGB(200, 150, 230)
-	TownKit.Egg(model, "Vine", p * CFrame.new(-2, 8.9, 0), Vector3.new(6.3, 1.4, 7.4), Color3.fromRGB(120, 176, 96), M.Grass, "deco")
-	TownKit.Egg(model, "Vine", p * CFrame.new(2.4, 8.8, 0.5), Vector3.new(5.6, 1.3, 6.6), lilac, M.Grass, "deco")
-	for k = 0, 3 do
-		local x = -3.3 + k * 2.2
-		TownKit.Egg(model, "Wisteria", p * CFrame.new(x, 7.4, (k % 2 == 0) and -2.6 or 2.6), Vector3.new(0.9, 2.2, 0.9), lilac:Lerp(C.White, (k % 2) * 0.25), M.SmoothPlastic, "deco")
-	end
-	TownKit.Bench(model, p * CFrame.new(0, 0, 1.2))
-	geo.Reserve((cf * CFrame.new(0, 0, 3)).Position, 16)
-end
-
-local function court(folder: Instance, geo: TownKit.Geo, cf: CFrame)
-	local model = TownKit.Model(folder, "Court")
-	part(model, "Floor", Vector3.new(30, 0.5, 17), cf * CFrame.new(0, GROUND_Y + 0.1, 0), Color3.fromRGB(120, 150, 214), M.Rubber, "solid")
-	part(model, "Paint", Vector3.new(26, 0.1, 13), cf * CFrame.new(0, GROUND_Y + 0.38, 0), Color3.fromRGB(236, 150, 120), M.Rubber, "deco")
-	part(model, "MidLine", Vector3.new(0.3, 0.12, 13), cf * CFrame.new(0, GROUND_Y + 0.4, 0), C.White, M.SmoothPlastic, "deco")
-	-- (v9.6 z-fighting : dessus à +0.49, au-dessus de la peinture (+0.43) et de la ligne (+0.46))
-	TownKit.Disc(model, "Circle", (cf * CFrame.new(0, GROUND_Y + 0.49, 0)).Position, 2.4, 0.1, C.White, M.SmoothPlastic, "deco")
-	for _, sx in ipairs({ -1, 1 }) do
-		local hoop = cf * CFrame.new(sx * 13.8, GROUND_Y, 0)
-		part(model, "HoopPole", Vector3.new(0.5, 10, 0.5), hoop * CFrame.new(sx * 1, 5, 0), C.Metal, M.Metal, "prop")
-		part(model, "Backboard", Vector3.new(0.2, 3.4, 5), hoop * CFrame.new(sx * 0.6, 10, 0), C.White, M.Glass, "deco")
-		local ring = part(model, "Rim", Vector3.new(0.2, 1.8, 1.8), hoop * CFrame.new(-sx * 0.4, 8.8, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(255, 120, 60), M.Metal, "deco")
-		;(ring :: Part).Shape = Enum.PartType.Cylinder
-	end
-	-- grillage (deux longs côtés)
-	for _, sz in ipairs({ -1, 1 }) do
-		local fence = part(model, "Fence", Vector3.new(30, 5, 0.2), cf * CFrame.new(0, GROUND_Y + 2.5, sz * 8.6), C.MetalLight, M.DiamondPlate, "prop")
-		fence.Transparency = 0.55
-	end
-	TownKit.Ball(model, "Ball", (cf * CFrame.new(3, GROUND_Y + 1.2, 2)).Position, 1.6, Color3.fromRGB(240, 130, 60), M.Rubber, "deco")
-	geo.Reserve(cf.Position, 17)
 end
 
 ----------------------------------------------------------------------
@@ -468,33 +405,6 @@ local function footpath(folder: Instance, geo: TownKit.Geo, a: Vector3, b: Vecto
 	for t = 0, len, 9 do
 		geo.Reserve(flatA:Lerp(flatB, t / len), 4 + math.abs(amp))
 	end
-end
-
-local function soccer(folder: Instance, geo: TownKit.Geo, cf: CFrame)
-	local model = TownKit.Model(folder, "SoccerField")
-	local L, W = 44, 28
-	part(model, "Pitch", Vector3.new(W, 0.2, L), cf * CFrame.new(0, GROUND_Y + 0.02, 0), Color3.fromRGB(110, 190, 100), M.Grass, "deco")
-	for i = -2, 2, 2 do
-		part(model, "Stripe", Vector3.new(W - 2, 0.2, L / 7), cf * CFrame.new(0, GROUND_Y + 0.05, i * L / 7), Color3.fromRGB(130, 206, 116), M.Grass, "deco")
-	end
-	local line = C.White
-	for _, sx in ipairs({ -1, 1 }) do
-		part(model, "Touchline", Vector3.new(0.4, 0.2, L - 2), cf * CFrame.new(sx * (W / 2 - 1), GROUND_Y + 0.08, 0), line, M.SmoothPlastic, "deco")
-		part(model, "GoalLine", Vector3.new(W - 2, 0.2, 0.4), cf * CFrame.new(0, GROUND_Y + 0.08, sx * (L / 2 - 1)), line, M.SmoothPlastic, "deco")
-		-- but : poteaux, barre, filet
-		local goal = cf * CFrame.new(0, GROUND_Y, sx * (L / 2 - 0.6))
-		for _, gx in ipairs({ -3.5, 3.5 }) do
-			part(model, "Post", Vector3.new(0.3, 4, 0.3), goal * CFrame.new(gx, 2, 0), line, M.Metal, "prop")
-		end
-		part(model, "Bar", Vector3.new(7.3, 0.3, 0.3), goal * CFrame.new(0, 4, 0), line, M.Metal, "deco")
-		local net = part(model, "Net", Vector3.new(7, 3.8, 2), goal * CFrame.new(0, 2, sx * 1.1), line, M.Fabric, "deco")
-		net.Transparency = 0.6
-	end
-	part(model, "MidLine", Vector3.new(W - 2, 0.2, 0.4), cf * CFrame.new(0, GROUND_Y + 0.08, 0), line, M.SmoothPlastic, "deco")
-	TownKit.Disc(model, "CenterRing", (cf * CFrame.new(0, GROUND_Y + 0.1, 0)).Position, 4.2, 0.1, line, M.SmoothPlastic, "deco")
-	TownKit.Disc(model, "CenterIn", (cf * CFrame.new(0, GROUND_Y + 0.12, 0)).Position, 3.8, 0.1, Color3.fromRGB(110, 190, 100), M.Grass, "deco")
-	TownKit.Ball(model, "Ball", (cf * CFrame.new(2, GROUND_Y + 0.9, 3)).Position, 1.4, C.White, M.SmoothPlastic, "deco")
-	geo.Reserve(cf.Position, 27)
 end
 
 local function tulips(folder: Instance, geo: TownKit.Geo, cf: CFrame)
@@ -612,6 +522,9 @@ local function belt(folder: Instance, geo: TownKit.Geo)
 	local town = WorldLayout.TownRadius(count)
 	local zones = WorldLayout.Facilities(count)
 	local function blocked(x: number, z: number, r: number): boolean
+		if okTrainLine and type(TrainLine) == "table" and TrainLine.Near(count, x, z, r + 2) then
+			return true
+		end
 		if WorldLayout.OnRoad(count, x, z, r + 3) or WorldLayout.OnPlot(count, x, z, r + 2) then
 			return true
 		end
@@ -946,46 +859,53 @@ function TownNature.Build(folder: Instance, geo: TownKit.Geo): number
 	-- (v9.9, CITY99) lieux à relier au réseau par une allée + repères des
 	-- poteaux indicateurs
 	local features: { Feature } = {}
+	local unplacedScenes: { string } = {}
 	local function faceCenter(p: Vector3): CFrame
 		return CFrame.lookAt(p, Vector3.new(O.X, p.Y, O.Z))
 	end
 	playground(nature, geo, frame(aR * 0.42, r0 + 22))
 	TownKit.LifeSpot("Dest", frame(aR * 0.42, r0 + 22), 5)
 	local picnicCF = frame(aR * 0.62, math.min(geo.Inner - 14, r0 + 50))
-	picnic(nature, geo, picnicCF, 3)
-	table.insert(features, { Pos = picnicCF.Position, R = 9, Name = "Picnic" })
+	-- (v11, PARK11) tables de pique-nique à l'échelle (client) + places assises
+	if geo.IsFree(picnicCF.Position, 14) then
+		parkScene(nature, geo, "PicnicTables", picnicCF, 14, 501)
+		table.insert(features, { Pos = picnicCF.Position, R = 14, Name = "Picnic" })
+	end
 	market(nature, geo, frame((aL + math.pi * 2) / 2, r0 + 24))
 	TownKit.LifeSpot("Dest", frame((aL + math.pi * 2) / 2, r0 + 24), 16)
 	-- (v9.9, FAIR99 : la fête foraine réserve ses nouveaux manèges AVANT la
 	-- nature ; jardin fleuri et terrain de basket vont ailleurs si leur place
 	-- est prise)
-	local gardenCF = frame((math.pi + aL) / 2 + 0.06, r0 + 22)
+	-- (v11, PARK11) le jardin fleuri devient une ROSERAIE à la française
+	-- (parterres, arches, fontaine au centre, bancs) construite côté client
+	local gardenCF = frame((math.pi + aL) / 2 + 0.06, r0 + 26)
 	local gardenMoved = false
-	if not geo.IsFree((gardenCF * CFrame.new(0, 0, 3)).Position, 16) then
-		local p = emptiest(geo, 16, r0)
+	if not geo.IsFree(gardenCF.Position, 23) then
+		local p = emptiest(geo, 23, r0)
 		if p then
-			gardenCF = faceCenter(p) * CFrame.new(0, 0, -3)
+			gardenCF = faceCenter(p)
 			gardenMoved = true
 		else
 			gardenCF = nil :: any
 		end
 	end
 	if gardenCF then
-		flowerGarden(nature, geo, gardenCF)
+		parkScene(nature, geo, "RoseGarden", gardenCF, 23, 502)
 		TownKit.LifeSpot("Dest", gardenCF, 14)
 		if gardenMoved then
-			table.insert(features, { Pos = (gardenCF * CFrame.new(0, 0, 3)).Position, R = 16, Name = "FlowerGarden", Sign = true })
+			table.insert(features, { Pos = gardenCF.Position, R = 23, Name = "FlowerGarden", Sign = true })
 		end
 	end
 	if depth > 70 then
-		local courtCF = frame((math.pi + aL) / 2 - 0.05, geo.Inner - 18)
-		if not geo.IsFree(courtCF.Position, 17) then
-			local p = emptiest(geo, 17, r0)
+		local courtCF = frame((math.pi + aL) / 2 - 0.05, geo.Inner - 22)
+		if not geo.IsFree(courtCF.Position, 21) then
+			local p = emptiest(geo, 21, r0)
 			courtCF = p and faceCenter(p) or nil :: any
 		end
 		if courtCF then
-			court(nature, geo, courtCF)
-			table.insert(features, { Pos = courtCF.Position, R = 17, Name = "Court", Dest = 12 })
+			-- (v11, PARK11) terrain de basket où l'on JOUE (ParkSports, client)
+			parkScene(nature, geo, "Basketball", courtCF, 21, 503)
+			table.insert(features, { Pos = courtCF.Position, R = 21, Name = "Court", Dest = 12 })
 		end
 	end
 	-- grandes villes : terrain de foot + champ de tulipes là où il y a de la place
@@ -993,8 +913,8 @@ function TownNature.Build(folder: Instance, geo: TownKit.Geo): number
 		local soccerDone = false
 		for _, spot in ipairs({ { (aL + math.pi * 2) / 2 + 0.04, geo.Inner - 34 }, { aR * 0.55, geo.Inner - 34 }, { (aR + math.pi) / 2, geo.Inner - 30 } }) do
 			local p = geo.At(spot[1], spot[2])
-			if geo.IsFree(p, 26) then
-				soccer(nature, geo, frame(spot[1], spot[2]))
+			if geo.IsFree(p, 29) then
+				parkScene(nature, geo, "Football", frame(spot[1], spot[2]), 29, 504)
 				TownKit.LifeSpot("Dest", frame(spot[1], spot[2]), 12)
 				table.insert(anchors, { spot[1], spot[2] - 24 })
 				soccerDone = true
@@ -1004,10 +924,10 @@ function TownNature.Build(folder: Instance, geo: TownKit.Geo): number
 		-- (v9.9, CITY99) places prévues prises (nouveaux manèges de la fête) :
 		-- le terrain de foot va dans le coin le plus vide, relié par une allée
 		if not soccerDone then
-			local p = emptiest(geo, 26, r0)
+			local p = emptiest(geo, 29, r0)
 			if p then
 				local cf = faceCenter(p + Vector3.new(0, 0, 0))
-				soccer(nature, geo, cf)
+				parkScene(nature, geo, "Football", cf, 29, 504)
 				TownKit.LifeSpot("Dest", cf, 12)
 				table.insert(features, { Pos = p, R = 23, Name = "Soccer", Sign = true })
 			end
@@ -1030,15 +950,60 @@ function TownNature.Build(folder: Instance, geo: TownKit.Geo): number
 			local a0, b0 = geo.At(anchor[1], r0 - 1), anchor[3] or geo.At(anchor[1], anchor[2])
 			footpath(paths, geo, a0, b0, i)
 			table.insert(footSegs, { A = Vector3.new(a0.X, 0, a0.Z), B = Vector3.new(b0.X, 0, b0.Z) })
+			-- (v11, PARK11) bancs (PNJ assis, places libres), lampadaire, poubelle
+			-- au bord de l'allée, tournés vers elle
+			local flatA, flatB = Vector3.new(a0.X, a0.Y, a0.Z), Vector3.new(b0.X, a0.Y, b0.Z)
+			if (flatB - flatA).Magnitude > 30 then
+				local along = (flatB - flatA).Unit
+				local side = Vector3.new(-along.Z, 0, along.X)
+				for _, sgn in ipairs({ 1, -1 }) do
+					-- (l'allée réserve ~8 studs autour d'elle : on regarde 3 points
+					-- du banc, hors de cette réserve)
+					local spot = flatA:Lerp(flatB, 0.5) + side * sgn * 10.5
+					if geo.IsFree(spot, 2.6) and geo.IsFree(spot + along * 6, 2.6) and geo.IsFree(spot - along * 6, 2.6) then
+						parkScene(nature, geo, "BenchRow", CFrame.lookAt(spot, spot - side * sgn), 6, 520 + i)
+						break
+					end
+				end
+			end
 		end
 	end
 	-- (v9.7) kiosque du parc + massif fleuri et buissons au départ des allées
+	local bandstandDone = false
 	for _, spot in ipairs({ { aR * 0.86, r0 + 18 }, { lakeAngle - 0.3, r0 + 14 }, { aR * 0.2, r0 + 44 } }) do
 		local p = geo.At(spot[1], spot[2])
-		if geo.IsFree(p, 11) then
-			gazebo(nature, geo, frame(spot[1], spot[2]))
-			table.insert(features, { Pos = p, R = 8, Name = "Gazebo" })
+		if geo.IsFree(p, 16) then
+			bandstandDone = true
+			-- (v11, PARK11) le kiosque devient un vrai KIOSQUE À MUSIQUE (client)
+			parkScene(nature, geo, "Bandstand", frame(spot[1], spot[2]), 16, 505)
+			table.insert(features, { Pos = p, R = 12, Name = "Gazebo" })
 			break
+		end
+	end
+	if not bandstandDone then
+		local p = emptiest(geo, 16, r0)
+		if p then
+			parkScene(nature, geo, "Bandstand", faceCenter(p), 16, 505)
+			table.insert(features, { Pos = p, R = 12, Name = "Gazebo", Sign = true })
+		end
+	end
+	-- (v11, PARK11) NOUVEAUX LIEUX du parc, chacun dans le coin le plus vide :
+	-- place de la fontaine, tennis, parc à chiens, ping-pong, pique-nique
+	-- dans l'herbe, agrès (tous reliés au réseau par une allée)
+	for i, d in ipairs({
+		{ Kind = "FountainSquare", R = 25 },
+		{ Kind = "Tennis", R = 25 },
+		{ Kind = "DogPark", R = 23 },
+		{ Kind = "PingPong", R = 16 },
+		{ Kind = "Picnic", R = 14 },
+		{ Kind = "Fitness", R = 12 },
+	}) do
+		local p = emptiest(geo, d.R, r0)
+		if p then
+			parkScene(nature, geo, d.Kind, faceCenter(p), d.R, 510 + i)
+			table.insert(features, { Pos = p, R = d.R, Name = d.Kind, Sign = true })
+		else
+			table.insert(unplacedScenes, d.Kind)
 		end
 	end
 	local greens = TownKit.Model(nature, "ParkGreens")
@@ -1097,6 +1062,7 @@ function TownNature.Build(folder: Instance, geo: TownKit.Geo): number
 	nature:SetAttribute("Linked", linked)
 	nature:SetAttribute("Unlinked", table.concat(unlinked, ","))
 	nature:SetAttribute("Features", #features)
+	nature:SetAttribute("ParkUnplaced", table.concat(unplacedScenes, ","))
 	local trees = scatterTrees(nature, geo, math.clamp(math.floor(depth * 0.28), 22, geo.Slots >= 11 and 46 or 36))
 	belt(nature, geo)
 	hills(nature, geo)

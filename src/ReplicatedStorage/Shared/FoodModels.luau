@@ -19,9 +19,18 @@
 	sous le cornet).
 	~12 à 30 pièces par aliment, aucune lumière, aucun son.
 
-	FoodModels.GRIP : Tool.Grip conseillé (voir FoodService) : aucune
-	rotation (l'aliment reste DEBOUT dans la pose "outil" R15 et R6) et le
-	poing centré sur la prise.
+	FoodModels.GRIP : prise dans le repère DU MODÈLE (le poing centré sur la
+	prise, aucune rotation : +Y du modèle = +Y de la prise).
+	FoodModels.ToolGrip(model, base) -> CFrame : le Tool.Grip à donner à l'outil.
+	(v11 ITEMS11, capture 31 "glace de travers") : Tool.Grip est exprimé dans
+	le repère de la PIÈCE Handle, pas du modèle. Or le Handle du cornet (et de
+	la barbe à papa, des churros, de la crêpe, du milkshake, de la pomme
+	d'amour) est un cylindre tourné de 90° (UPRIGHT : l'axe d'un cylindre
+	Roblox est X). v10 donnait Tool.Grip = GRIP : le HAUT de l'aliment était
+	le +X de la poignée = la DROITE de la main -> la glace sortait du poing à
+	l'horizontale, sur le côté, dans TOUTES les poses (vérifié :
+	items11/cause_bundle.luau). Correctif : Grip = HandleLocal⁻¹ * GRIP.
+	(La pose du bras, elle, est tenue par Client/World/FairEat + FoodHold.)
 ]]
 
 local FoodModels = {}
@@ -34,6 +43,12 @@ local UPRIGHT = CFrame.Angles(0, 0, math.rad(90)) -- cylindre debout (axe X -> Y
 -- (Grip = C1 de la soudure RightGrip : poignée = main * C0 * Grip⁻¹ ; ici
 -- l'aliment remonte de 0,05 dans le poing et avance de 0,02 : aucune rotation)
 FoodModels.GRIP = CFrame.new(0, -0.05, 0.02)
+-- (v11) échelle de l'aliment TENU : les recettes (cornet 2,4 studs de la
+-- pointe à la cerise) cachaient le visage une fois tenues debout devant le
+-- buste ; x0,75 (cornet ~1,8) reste nettement plus gros que la taille réelle
+-- x1,3 de SCALE11, à la mesure du poing Roblox (1 stud de large).
+-- Comptoirs des stands (FairFx) : leur propre échelle (1,1).
+FoodModels.HELD_SCALE = 0.75
 
 type Add = (name: string, size: Vector3, cf: CFrame, color: Color3, material: Enum.Material?, shape: Enum.PartType?, className: string?) -> BasePart
 
@@ -222,14 +237,24 @@ RECIPES.Taco = function(add)
 	end
 end
 
--- Milkshake : gobelet évasé (logo), couvercle dôme transparent, chantilly
--- en spirale, cerise, paille rayée
+-- Milkshake (v11 : gobelet TRANSPARENT, on voit le niveau baisser quand on
+-- sirote) : gobelet en plastique clair, milkshake rose dedans ("Shake" :
+-- FoodHold le fait baisser), manchon en carton (logo cœur), couvercle dôme,
+-- chantilly en spirale (Bite3..Bite1), cerise, paille rayée ("Straw" : elle
+-- reste jusqu'au bout)
 RECIPES.Milkshake = function(add)
-	add("Handle", Vector3.new(0.7, 0.5, 0.5), CFrame.new(0, 0, 0) * UPRIGHT, rgb(255, 176, 206), M.SmoothPlastic, CYL)
-	add("CupLow", Vector3.new(0.2, 0.44, 0.44), CFrame.new(0, -0.42, 0) * UPRIGHT, rgb(255, 160, 196), M.SmoothPlastic, CYL)
-	add("CupTop", Vector3.new(0.34, 0.56, 0.56), CFrame.new(0, 0.5, 0) * UPRIGHT, rgb(255, 186, 212), M.SmoothPlastic, CYL)
-	add("Logo", Vector3.new(0.3, 0.22, 0.02), CFrame.new(0, 0.1, -0.255), rgb(255, 255, 255), M.SmoothPlastic)
-	add("LogoHeart", Vector3.new(0.12, 0.12, 0.02), CFrame.new(0, 0.1, -0.265), rgb(236, 72, 140), M.SmoothPlastic, BALL)
+	local cup = add("Handle", Vector3.new(0.7, 0.5, 0.5), CFrame.new(0, 0, 0) * UPRIGHT, rgb(236, 246, 255), M.Glass, CYL)
+	cup.Transparency = 0.55
+	add("CupLow", Vector3.new(0.2, 0.44, 0.44), CFrame.new(0, -0.42, 0) * UPRIGHT, rgb(226, 236, 248), M.SmoothPlastic, CYL)
+	local top = add("CupTop", Vector3.new(0.3, 0.56, 0.56), CFrame.new(0, 0.5, 0) * UPRIGHT, rgb(236, 246, 255), M.Glass, CYL)
+	top.Transparency = 0.55
+	add("CupRim", Vector3.new(0.04, 0.58, 0.58), CFrame.new(0, 0.66, 0) * UPRIGHT, rgb(250, 252, 255), M.SmoothPlastic, CYL)
+	-- le milkshake (fraise), du fond (-0,32) au bord (0,62)
+	add("Shake", Vector3.new(0.94, 0.44, 0.44), CFrame.new(0, 0.15, 0) * UPRIGHT, rgb(255, 160, 196), M.SmoothPlastic, CYL)
+	-- manchon en carton + logo
+	add("Sleeve", Vector3.new(0.34, 0.52, 0.52), CFrame.new(0, -0.02, 0) * UPRIGHT, rgb(236, 72, 140), M.SmoothPlastic, CYL)
+	add("Logo", Vector3.new(0.24, 0.2, 0.02), CFrame.new(0, -0.02, -0.262), rgb(255, 255, 255), M.SmoothPlastic)
+	add("LogoHeart", Vector3.new(0.11, 0.11, 0.02), CFrame.new(0, -0.02, -0.272), rgb(236, 72, 140), M.SmoothPlastic, BALL)
 	local lid = add("Lid", Vector3.new(0.3, 0.6, 0.6), CFrame.new(0, 0.82, 0) * UPRIGHT, rgb(240, 248, 255), M.Glass, CYL)
 	lid.Transparency = 0.6
 	-- chantilly en spirale (disques de plus en plus petits + pointe)
@@ -240,9 +265,9 @@ RECIPES.Milkshake = function(add)
 	add("Bite1", Vector3.new(0.15, 0.15, 0.15), CFrame.new(0.02, 1.08, 0), rgb(200, 24, 44), M.SmoothPlastic, BALL)
 	-- paille rayée (2 couleurs, inclinée)
 	local straw = CFrame.new(0.12, 1.02, 0.06) * CFrame.Angles(math.rad(12), 0, math.rad(-14))
-	add("Bite3", Vector3.new(0.9, 0.07, 0.07), straw * UPRIGHT, rgb(255, 255, 255), M.SmoothPlastic, CYL)
-	add("Bite3", Vector3.new(0.12, 0.075, 0.075), straw * CFrame.new(0, 0.2, 0) * UPRIGHT, rgb(80, 170, 255), M.SmoothPlastic, CYL)
-	add("Bite3", Vector3.new(0.12, 0.075, 0.075), straw * CFrame.new(0, -0.05, 0) * UPRIGHT, rgb(80, 170, 255), M.SmoothPlastic, CYL)
+	add("Straw", Vector3.new(0.9, 0.07, 0.07), straw * UPRIGHT, rgb(255, 255, 255), M.SmoothPlastic, CYL)
+	add("Straw", Vector3.new(0.12, 0.075, 0.075), straw * CFrame.new(0, 0.2, 0) * UPRIGHT, rgb(80, 170, 255), M.SmoothPlastic, CYL)
+	add("Straw", Vector3.new(0.12, 0.075, 0.075), straw * CFrame.new(0, -0.05, 0) * UPRIGHT, rgb(80, 170, 255), M.SmoothPlastic, CYL)
 end
 
 -- Hot dog dans sa barquette en papier : pain brioché (2 moitiés bombées),
@@ -341,6 +366,45 @@ function FoodModels.Build(id: string, cf: CFrame?, scale: number?): Model?
 	end)
 	model.PrimaryPart = handle
 	return model
+end
+
+-- Tool.Grip d'un aliment construit par Build(id, base) : la poignée (pièce
+-- "Handle") peut être tournée par rapport au modèle (cylindre debout)
+function FoodModels.ToolGrip(model: Model, base: CFrame): CFrame
+	local handle = model.PrimaryPart
+	if not handle then
+		return FoodModels.GRIP
+	end
+	local handleLocal = base:ToObjectSpace(handle.CFrame)
+	return handleLocal:Inverse() * FoodModels.GRIP
+end
+
+-- Repère de la poignée dans le repère du modèle construit à l'échelle
+-- `scale` (pour retrouver le modèle depuis la poignée :
+-- modèle = Handle.CFrame * HandleLocal(id, scale)⁻¹)
+local handleLocals: { [string]: CFrame } = {}
+function FoodModels.HandleLocal(id: string, scale: number?): CFrame
+	local s = scale or 1
+	local key = id .. "@" .. tostring(s)
+	local cached = handleLocals[key]
+	if cached then
+		return cached
+	end
+	local result = CFrame.identity
+	local recipe = RECIPES[id]
+	if recipe then
+		local found = false
+		recipe(function(name, size, loc)
+			if name == "Handle" and not found then
+				found = true
+				result = CFrame.new(loc.Position * s) * loc.Rotation
+			end
+			-- (pièce factice : la recette ne lit que .Transparency / .Reflectance)
+			return { Transparency = 0, Reflectance = 0, Size = size } :: any
+		end)
+	end
+	handleLocals[key] = result
+	return result
 end
 
 function FoodModels.Has(id: string): boolean

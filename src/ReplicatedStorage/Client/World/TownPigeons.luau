@@ -263,38 +263,53 @@ local function perches(plaza: Instance): { Vector3 }
 	return list
 end
 
-function TownPigeons.Build(folder: Instance, plaza: Instance): any
+-- Une COLONIE de pigeons (v11, PARK11) : spec = { Center, Homes = {Vector3},
+-- Perches = {Vector3}, PerFlock?, TourR?, TourH?, Seed?, KeepOut? (fonction
+-- (Vector3) -> boolean : jamais de pigeon là), Name? }
+function TownPigeons.BuildAt(folder: Instance, spec: any): any
 	local model = Instance.new("Model")
-	model.Name = "Pigeons"
+	model.Name = spec.Name or "Pigeons"
 	model.Parent = folder
+	local keepOut = spec.KeepOut
 	local P = {
 		List = {},
 		Flocks = {},
 		Parts = {},
 		Frames = {},
 		Homes = {},
-		Perches = perches(plaza),
+		Perches = {},
 		Taken = {},
 		Time = 0,
-		Center = vec3Attr(plaza, "FxCenter") or Vector3.new(0, 0, 0),
+		Center = spec.Center or Vector3.new(0, 0, 0),
+		TourR = spec.TourR or 23,
+		TourH = spec.TourH or 10.5,
+		KeepOut = keepOut,
+		HomeR = spec.HomeR,
+		Model = model,
 	}
-	for i = 1, 4 do
-		local home = vec3Attr(plaza, "FxFlock" .. i)
-		if home then
-			table.insert(P.Homes, home + Vector3.new(0, 0.12, 0))
+	for _, home in ipairs(spec.Homes or {}) do
+		if not (keepOut and keepOut(home)) then
+			table.insert(P.Homes, home)
 		end
 	end
+	for _, perch in ipairs(spec.Perches or {}) do
+		if not (keepOut and keepOut(perch)) then
+			table.insert(P.Perches, perch)
+		end
+	end
+	local base = spec.Seed or 0
+	local perFlock = spec.PerFlock or PER_FLOCK
 	for h, home in ipairs(P.Homes) do
 		local flock = { Id = h, Home = home, Air = false, Timer = 20 + h * 17, Birds = {} }
 		table.insert(P.Flocks, flock)
-		for j = 1, PER_FLOCK do
-			local seed = h * 10 + j
-			local rng = Random.new(h * 31 + j * 7)
+		for j = 1, perFlock do
+			local seed = h * 10 + j + base
+			local rng = Random.new(h * 31 + j * 7 + base * 101)
 			-- place de départ libre (LAND_GAP de tout autre pigeon, quel que soit le cap)
 			local pos = home
 			for try = 1, 40 do
 				local a = rng:NextNumber(0, math.pi * 2)
-				local r = math.sqrt(rng:NextNumber()) * (HOME_R + math.floor(try / 12))
+				local r = math.sqrt(rng:NextNumber()) * ((P.HomeR or HOME_R) + math.floor(try / 12))
 				local p = home + Vector3.new(math.cos(a) * r, 0, math.sin(a) * r)
 				local ok = true
 				for _, other in ipairs(P.List) do
@@ -352,6 +367,26 @@ function TownPigeons.Build(folder: Instance, plaza: Instance): any
 		end
 	end
 	return P
+end
+
+-- Les pigeons de la place centrale (attributs Fx du dossier Plaza) ; la
+-- scène de musique et son public sont interdits (WorldLayout : MusicStage,
+-- MusicCrowd) : ni groupe, ni perchoir, ni promenade là
+function TownPigeons.Build(folder: Instance, plaza: Instance): any
+	local homes = {}
+	for i = 1, 4 do
+		local home = vec3Attr(plaza, "FxFlock" .. i)
+		if home then
+			table.insert(homes, home + Vector3.new(0, 0.12, 0))
+		end
+	end
+	return TownPigeons.BuildAt(folder, {
+		Center = vec3Attr(plaza, "FxCenter") or Vector3.new(0, 0, 0),
+		Homes = homes,
+		Perches = perches(plaza),
+		KeepOut = TownPigeons.KeepOut,
+		Name = "Pigeons",
+	})
 end
 
 function TownPigeons.Count(P: any): number
@@ -424,8 +459,8 @@ local function tourPlan(P: any, bird: any, to: Vector3, delay: number): any
 	-- décalages de formation (chaque pigeon a son couloir : jamais l'un dans l'autre)
 	local lateral = ((slot - 1) % 3 - 1) * 1.7
 	local vertical = math.floor((slot - 1) / 3) * 1.3 - 0.6 + (bird.Flock.Id % 2) * 0.7
-	local R = 23 + lateral + bird.Flock.Id * 0.9
-	local H = C.Y + 10.5 + vertical
+	local R = (P.TourR or 23) + lateral + bird.Flock.Id * 0.9
+	local H = C.Y + (P.TourH or 10.5) + vertical
 	local function orbitPoint(a: number): (Vector3, Vector3)
 		local p = Vector3.new(C.X + math.sin(a) * R, H, C.Z + math.cos(a) * R)
 		-- (sens horaire vu du dessus : a décroît)
@@ -502,7 +537,7 @@ local function freeSpot(P: any, me: any, center: Vector3, radius: number, rng: R
 		local a = rng:NextNumber(0, math.pi * 2)
 		local r = math.sqrt(rng:NextNumber()) * radius
 		local p = center + Vector3.new(math.cos(a) * r, 0, math.sin(a) * r)
-		if clearOf(P, me, p, gap or (2 * BIRD_R + 0.15)) then
+		if clearOf(P, me, p, gap or (2 * BIRD_R + 0.15)) and not (P.KeepOut and P.KeepOut(p)) then
 			return p
 		end
 	end
@@ -572,7 +607,7 @@ local function flockTakeOff(P: any, flock: any, threat: Vector3?)
 				end
 			end
 			if not dest then
-				dest = freeSpot(P, bird, best, HOME_R - 0.5, rng, LAND_GAP) or (best + Vector3.new(rng:NextNumber(-3, 3), 0, rng:NextNumber(-3, 3)))
+				dest = freeSpot(P, bird, best, (P.HomeR or HOME_R) - 0.5, rng, LAND_GAP) or (best + Vector3.new(rng:NextNumber(-3, 3), 0, rng:NextNumber(-3, 3)))
 			end
 			-- (réaction décalée : ils ne partent pas tous à la même image)
 			startFly(bird, tourPlan(P, bird, dest :: Vector3, (k - 1) * 0.16 + rng:NextNumber(0, 0.12)), dest :: Vector3, perched)
@@ -626,7 +661,7 @@ local function chooseGround(P: any, bird: any)
 	if r < 0.3 then
 		bird.Mode, bird.Timer = "peck", rng:NextNumber(0.9, 1.8)
 	elseif r < 0.62 then
-		local spot = freeSpot(P, bird, bird.Flock.Home, HOME_R, rng)
+		local spot = freeSpot(P, bird, bird.Flock.Home, (P.HomeR or HOME_R), rng)
 		if spot and (spot - bird.Pos).Magnitude > 0.6 then
 			bird.Mode, bird.Timer = "walk", 6
 			bird.Target = spot
@@ -754,7 +789,7 @@ local function pose(P: any, bird: any, dt: number)
 				if bird.Watch <= 0 then
 					bird.Watch = 0.15
 					if not clearOf(P, bird, s.P1, LAND_GAP - 0.1) then
-						local spot = freeSpot(P, bird, s.P1, 2.5, bird.Rng, LAND_GAP) or freeSpot(P, bird, bird.Flock.Home, HOME_R + 1.5, bird.Rng, LAND_GAP)
+						local spot = freeSpot(P, bird, s.P1, 2.5, bird.Rng, LAND_GAP) or freeSpot(P, bird, bird.Flock.Home, (P.HomeR or HOME_R) + 1.5, bird.Rng, LAND_GAP)
 						if spot then
 							local p0, v0 = hermite(s, plan.T)
 							local ns = seg("land", p0, v0, spot, s.V1, math.max(0.9, s.Dur - plan.T))
@@ -838,7 +873,7 @@ local function pose(P: any, bird: any, dt: number)
 					blocked = cNext < CAPSULE_MARGIN and cNext < bodyClear(P, bird, bird.Pos, bird.Yaw)
 				end
 				if blocked then
-					bird.Target = freeSpot(P, bird, bird.Flock.Home, HOME_R, rng)
+					bird.Target = freeSpot(P, bird, bird.Flock.Home, (P.HomeR or HOME_R), rng)
 					if not bird.Target then
 						bird.Mode, bird.Timer = "idle", 0.6
 					end
@@ -1086,6 +1121,13 @@ function TownPigeons.Step(P: any, dt: number, avatar: Vector3?)
 	for _, q in ipairs(P.People or {}) do
 		table.insert(threats, { Pos = q, Scale = 0.7 })
 	end
+	-- (v11) voitures proches (relues avec les passants)
+	if P.PeopleClock == 0.25 then
+		P.Cars = TownPigeons.CarThreats(P.Center, 40)
+	end
+	for _, q in ipairs(P.Cars or {}) do
+		table.insert(threats, { Pos = q, Scale = 1.9 })
+	end
 	-- groupes : envol si quelqu'un arrive trop près, ou de temps en temps
 	for _, flock in ipairs(P.Flocks) do
 		if not flock.Air then
@@ -1102,7 +1144,7 @@ function TownPigeons.Step(P: any, dt: number, avatar: Vector3?)
 							-- on s'écarte en marchant (vite)
 							local away = horizontal(bird.Pos - t.Pos)
 							local spot = bird.Pos + away * 1.6
-							if clearOf(P, bird, spot, 2 * BIRD_R + 0.1) then
+							if clearOf(P, bird, spot, 2 * BIRD_R + 0.1) and not (P.KeepOut and P.KeepOut(spot)) then
 								bird.Mode, bird.Timer, bird.Clock = "walk", 2, 0
 								bird.Target = spot
 								bird.Hurry = 1.5
@@ -1134,7 +1176,7 @@ function TownPigeons.Step(P: any, dt: number, avatar: Vector3?)
 		if bird.Mode == "perch" and bird.Timer <= 0 then
 			-- on redescend picorer près de son groupe
 			releasePerch(P, bird)
-			local spot = freeSpot(P, bird, bird.Flock.Home, HOME_R, bird.Rng, LAND_GAP) or bird.Flock.Home
+			local spot = freeSpot(P, bird, bird.Flock.Home, (P.HomeR or HOME_R), bird.Rng, LAND_GAP) or bird.Flock.Home
 			startFly(bird, hopPlan(bird.Pos, spot, 0.2), spot, false)
 		elseif bird.Mode ~= "fly" and bird.Mode ~= "perch" and bird.Timer <= 0 then
 			chooseGround(P, bird)
@@ -1177,6 +1219,291 @@ function TownPigeons.Step(P: any, dt: number, avatar: Vector3?)
 		write(bird, frames)
 	end
 	workspace:BulkMoveTo(P.Parts, frames, Enum.BulkMoveMode.FireCFrameChanged)
+end
+
+----------------------------------------------------------------------
+-- (v11, PARK11) Zones interdites (place) et PIGEONS DANS TOUTE LA VILLE
+----------------------------------------------------------------------
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local okWL, WorldLayout = pcall(require, ReplicatedStorage.Shared.WorldLayout)
+local okTL, TrainLine = pcall(function()
+	return require(ReplicatedStorage.Shared:FindFirstChild("TrainLine") :: any)
+end)
+
+local function plotCount(): number
+	local town = workspace:FindFirstChild("DopamineTown")
+	local n = town and town:GetAttribute("PlotCount")
+	return type(n) == "number" and n or 8
+end
+
+local zoneCache: { any }? = nil
+-- Scène de musique et son public : jamais de pigeon (MUSIC11)
+function TownPigeons.KeepOut(p: Vector3): boolean
+	if not okWL or type(WorldLayout) ~= "table" then
+		return false
+	end
+	if not zoneCache then
+		local list = {}
+		local count = plotCount()
+		for _, id in ipairs({ "MusicStage", "MusicCrowd" }) do
+			local ok, z = pcall(WorldLayout.Facility, count, id)
+			if ok and z then
+				table.insert(list, z)
+			end
+		end
+		zoneCache = list
+	end
+	local O = WorldLayout.Origin()
+	for _, z in ipairs(zoneCache :: { any }) do
+		local ok, inside = pcall(WorldLayout.InZone, z, p.X - O.X, p.Z - O.Z, 3)
+		if ok and inside then
+			return true
+		end
+	end
+	return false
+end
+
+-- Lieux possibles d'une colonie (déterministes, calculés une fois) :
+-- squares, places, terrasses, bancs des trottoirs (TownStreetLife), lieux
+-- du parc central (TownNature : NearDetail)
+type Site = { Pos: Vector3, Spec: any }
+local city = { Started = false, Sites = nil :: { Site }?, Colonies = {} :: { any }, Folder = nil :: Folder?, Clock = 0, Tries = 0 }
+
+local CITY_IN, CITY_OUT = 100, 140
+local MAX_COLONIES = 3
+
+local function benchPerches(F: CFrame, xs: { number }): { Vector3 }
+	local out = {}
+	for _, x in ipairs(xs) do
+		table.insert(out, (F * CFrame.new(x, 3.72, 0.98)).Position)
+	end
+	return out
+end
+
+local function siteFor(kind: string, F: CFrame, seed: number): any?
+	-- (y : dessus du sol à cet endroit, pieds posés dessus)
+	local function at(x: number, z: number, y: number?): Vector3
+		return (F * CFrame.new(x, y or 0.06, z)).Position
+	end
+	if kind == "FountainSquare" then
+		local perches = {}
+		for k = 0, 7 do
+			local a = (k + 0.5) / 8 * math.pi * 2
+			table.insert(perches, (F * CFrame.new(math.cos(a) * 10.4, 1.85, math.sin(a) * 10.4)).Position)
+		end
+		return { Homes = { at(math.cos(0.4) * 14, math.sin(0.4) * 14), at(math.cos(3.5) * 14, math.sin(3.5) * 14) }, Perches = perches, PerFlock = 4, TourR = 16, TourH = 14 }
+	elseif kind == "RoseGarden" then
+		return { Homes = { at(0, -15), at(15, 0) }, Perches = {}, PerFlock = 4, TourR = 16, TourH = 14 }
+	elseif kind == "PicnicTables" then
+		return { Homes = { at(-4.5, -6, 0), at(4.5, 6, 0) }, Perches = {}, PerFlock = 4, TourR = 15, TourH = 13 }
+	elseif kind == "Picnic" then
+		return { Homes = { at(0, -8, 0), at(0, 8, 0) }, Perches = {}, PerFlock = 3, TourR = 14, TourH = 13 }
+	elseif kind == "BenchRow" then
+		return { Homes = { at(-2.5, -3.4, 0), at(3, -3.4, 0) }, Perches = benchPerches(F, { -5.4, -2.6, 2.6, 5.4 }), PerFlock = 3, HomeR = 1.8, TourR = 13, TourH = 13 }
+	elseif kind == "Bandstand" then
+		return { Homes = { at(0, -13, 0) }, Perches = {}, PerFlock = 4, TourR = 15, TourH = 16 }
+	elseif kind == "PocketPark" then
+		return { Homes = { at(6, -10), at(-6, -10) }, Perches = {}, PerFlock = 4, TourR = 16, TourH = 16 }
+	elseif kind == "TwnSquare" or kind == "MarketSquare" or kind == "CtgGreen" then
+		return { Homes = { at(4, -4), at(-4, 4) }, Perches = {}, PerFlock = 4, HomeR = 3, TourR = 15, TourH = 16 }
+	elseif kind == "Bench" then
+		-- (devant le banc du trottoir, au pied ; perchés sur le dossier)
+		return { Homes = { at(0, -2.6, 0) }, Perches = benchPerches(F, { -1.6, 1.6 }), PerFlock = 4, HomeR = 1.5, TourR = 12, TourH = 14 }
+	end
+	local _ = seed
+	return nil
+end
+
+local function gatherSites(): { Site }
+	local sites: { Site } = {}
+	local town = workspace:FindFirstChild("DopamineTown")
+	if not town then
+		return sites
+	end
+	local count = plotCount()
+	local function add(kind: string, F: CFrame, seed: number)
+		local spec = siteFor(kind, F, seed)
+		if not spec then
+			return
+		end
+		local p = F.Position
+		if okTL and type(TrainLine) == "table" and okWL and type(WorldLayout) == "table" then
+			local O = WorldLayout.Origin()
+			local okN, near = pcall(TrainLine.Near, count, p.X - O.X, p.Z - O.Z, 10)
+			if okN and near then
+				return
+			end
+		end
+		if TownPigeons.KeepOut(p) then
+			return
+		end
+		spec.Center = p
+		spec.Seed = 1000 + #sites * 13
+		spec.KeepOut = TownPigeons.KeepOut
+		table.insert(sites, { Pos = p, Spec = spec })
+	end
+	-- lieux du parc central
+	for _, d in ipairs(town:GetDescendants()) do
+		if d:IsA("Model") then
+			local kind = d:GetAttribute("NearDetail")
+			local cf = d:GetAttribute("DetailCF")
+			if type(kind) == "string" and typeof(cf) == "CFrame" then
+				add(kind, cf, tonumber(d:GetAttribute("DetailSeed")) or 1)
+			end
+		end
+	end
+	-- squares, places, bancs de la ville (un banc sur trois)
+	local mod = script.Parent:FindFirstChild("TownStreetLife")
+	local ok, TSL = false, nil
+	if mod then
+		ok, TSL = pcall(require, mod)
+	end
+	if ok and type(TSL) == "table" and type(TSL.Spots) == "function" then
+		for _, kind in ipairs({ "PocketPark", "TwnSquare", "MarketSquare", "CtgGreen", "Bench" }) do
+			local okS, list = pcall(TSL.Spots, kind)
+			if okS and type(list) == "table" then
+				for i, sp in ipairs(list) do
+					if kind ~= "Bench" or i % 3 == 1 then
+						add(kind, sp.CF, sp.Seed or i)
+					end
+				end
+			end
+		end
+	end
+	return sites
+end
+
+function TownPigeons.CityStart(parent: Instance?)
+	if city.Started then
+		return
+	end
+	city.Started = true
+	city.Sites = nil
+	city.Tries = 0
+	local f = Instance.new("Folder")
+	f.Name = "CityPigeons"
+	f.Parent = parent or workspace
+	city.Folder = f
+end
+
+function TownPigeons.CityStop()
+	city.Started = false
+	for _, c in ipairs(city.Colonies) do
+		if c.P and c.P.Model then
+			c.P.Model:Destroy()
+		end
+	end
+	table.clear(city.Colonies)
+	if city.Folder then
+		city.Folder:Destroy()
+		city.Folder = nil
+	end
+	city.Sites = nil
+	zoneCache = nil
+end
+
+-- Flux (4 fois / s) : colonies construites près de l'avatar, détruites au loin
+function TownPigeons.CityStream(pos: Vector3, scale: number?)
+	if not city.Started or not city.Folder then
+		return
+	end
+	if not city.Sites or (#(city.Sites :: { Site }) == 0 and city.Tries < 40) then
+		city.Tries += 1
+		if city.Tries % 4 == 1 then
+			city.Sites = gatherSites()
+		end
+	end
+	local sites = city.Sites
+	if not sites then
+		return
+	end
+	local k = scale or 1
+	-- détruire au loin
+	for i = #city.Colonies, 1, -1 do
+		local c = city.Colonies[i]
+		if (c.Site.Pos - pos).Magnitude > CITY_OUT * k then
+			if c.P and c.P.Model then
+				c.P.Model:Destroy()
+			end
+			table.remove(city.Colonies, i)
+		end
+	end
+	if #city.Colonies >= MAX_COLONIES then
+		return
+	end
+	-- le site libre le plus proche
+	local best, bestD = nil, CITY_IN * k
+	for _, site in ipairs(sites) do
+		local d = (site.Pos - pos).Magnitude
+		if d < bestD then
+			local used = false
+			for _, c in ipairs(city.Colonies) do
+				if c.Site == site or (c.Site.Pos - site.Pos).Magnitude < 30 then
+					used = true
+					break
+				end
+			end
+			if not used then
+				best, bestD = site, d
+			end
+		end
+	end
+	if best then
+		local ok, P = pcall(TownPigeons.BuildAt, city.Folder :: Folder, best.Spec)
+		if ok and P then
+			table.insert(city.Colonies, { Site = best, P = P, Acc = 0 })
+		end
+	end
+end
+
+-- Animation (chaque image) : de près à chaque image, plus loin à ~30 Hz
+function TownPigeons.CityStep(dt: number, avatar: Vector3?)
+	for _, c in ipairs(city.Colonies) do
+		local near = avatar and (c.Site.Pos - avatar).Magnitude < 70
+		c.Acc += dt
+		if near or c.Acc >= 1 / 30 then
+			local ok = pcall(TownPigeons.Step, c.P, c.Acc, avatar)
+			c.Acc = 0
+			if not ok then
+				c.Broken = true
+			end
+		end
+	end
+end
+
+-- Menace des voitures de la circulation proches (s'envolent devant elles)
+function TownPigeons.CarThreats(center: Vector3, radius: number): { Vector3 }
+	local out = {}
+	local folder = workspace:FindFirstChild("TownTraffic")
+	if folder then
+		for _, m in ipairs(folder:GetChildren()) do
+			if m:IsA("Model") and (m.Name == "TrafficCar" or m.Name == "TrafficBus") then
+				local pp = m.PrimaryPart
+				if pp and (pp.Position - center).Magnitude < radius then
+					table.insert(out, pp.Position)
+				end
+			end
+		end
+	end
+	return out
+end
+
+function TownPigeons.CityColonies(): { any }
+	local out = {}
+	for _, c in ipairs(city.Colonies) do
+		table.insert(out, c.P)
+	end
+	return out
+end
+
+function TownPigeons.CityDebug(): any
+	local birds, parts = 0, 0
+	for _, c in ipairs(city.Colonies) do
+		birds += #c.P.List
+		parts += #c.P.Parts
+	end
+	return { Sites = city.Sites and #(city.Sites :: { Site }) or 0, Colonies = #city.Colonies, Birds = birds, Parts = parts }
 end
 
 -- Mesures (émulateur / tests) : écart mini entre deux pigeons au sol (centres

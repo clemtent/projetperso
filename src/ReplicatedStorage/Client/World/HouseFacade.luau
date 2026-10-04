@@ -1456,6 +1456,8 @@ local function gardenLights(ctx: Ctx, pathPoints: { { number } })
 end
 
 -- Garage / abri attenant (à droite de la maison), allée carrossable jusqu'à la rue
+local GARAGE_D1 = 23.8 -- (v11) fond du garage attenant (était 21)
+HouseFacade.GARAGE_D1 = GARAGE_D1
 local function sideGarage(ctx: Ctx)
 	if not ctx.SideGarage then
 		return
@@ -1463,7 +1465,9 @@ local function sideGarage(ctx: Ctx)
 	HouseDetail.Phase(ctx.Kit, "Walls")
 	local x0 = ctx.Right + WorldLayout.WALL_T + 0.05
 	local x1 = x0 + 17
-	HouseDetail.Garage(ctx.Kit, x0, x1, 1.2, 21, {
+	-- (v11 HOUSE11 : voitures x1,3 -> place >= 9,5 x 21 : 16,2 x 21,0 dedans ;
+	-- porte 12,6 x 8,2)
+	HouseDetail.Garage(ctx.Kit, x0, x1, 1.2, GARAGE_D1, {
 		Kind = ctx.Spec.Garage,
 		Wall = ctx.Wall,
 		WallMat = ctx.WallMat,
@@ -1974,7 +1978,9 @@ local function garageWing(ctx: Ctx)
 		{ Solid = true, Query = false, T = 1, Shadow = false }, "WedgePart")
 	-- murs (enduit de la façade) : fond, côtés (fenêtre cintrée côté fontaine), façade percée de 3 portes
 	kit:Box("GarageBack", X0, X1, 0, H, D1 - W, D1, wall, M.Plaster, { Solid = true })
-	local winD0, winD1, winY0, winY1 = -17.5, -12.5, 3.2, 7
+	-- (v11 : fenêtre au milieu du côté, quelles que soient les cotes de GarageLayout)
+	local winMid = (D0 + D1) / 2
+	local winD0, winD1, winY0, winY1 = winMid - 2.5, winMid + 2.5, 3.2, 7
 	kit:WallD("GarageSide", X0, X0 + W, 0, H, D0, D1, { { winD0, winD1, winY0, winY1 } }, wall, M.Plaster, { Solid = true })
 	kit:Box("GarageSideGlass", X0 + 0.25, X0 + 0.55, winY0, winY1, winD0, winD1, P.Glass, M.Glass, { T = 0.35, Shadow = false })
 	kit:Box("GarageSideSill", X0 - 0.35, X0 + 0.1, winY0 - 0.35, winY0 + 0.06, winD0 - 0.4, winD1 + 0.4, TRIM, M.Limestone, { Shadow = false })

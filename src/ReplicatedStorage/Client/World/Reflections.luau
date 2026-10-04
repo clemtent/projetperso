@@ -2,76 +2,95 @@
 	Reflections (ModuleScript)
 	Emplacement : ReplicatedStorage > Client > World > Reflections
 
-	v9.8 (REALISM98) 🪞 VRAIS miroirs (reflet plan) + reflets discrets.
+	v11 (REALISM11) 🪞 MIROIRS ROBUSTES — refaits de zéro.
+	Le joueur : "les miroirs sont TOUJOURS complètement cassés". Les v9.8 /
+	v9.9 clonaient la géométrie de la pièce (jusqu'à 650 copies, coupées au
+	plan, maillages, SurfaceGui, unions...) : trop de cas où une copie se
+	retrouvait au mauvais endroit. Et trois pièges du VRAI moteur :
+	  - la SurfaceGui (PlayerGui) avait ResetOnSpawn = true : détruite à
+	    chaque (ré)apparition du personnage (entrée en ville !) -> écran gris
+	    figé, plus jamais de reflet ;
+	  - miroirs ovales : CanvasGroup + ViewportFrame (pas sûr d'être dessiné
+	    dans Roblox) et disque "elliptique" en Cylinder (un cylindre Roblox
+	    est TOUJOURS rond : min(Y, Z)) ;
+	  - copie du personnage appariée par l'ORDRE des enfants (un enfant non
+	    archivable décalait tout : copie figée à la position réelle, DEVANT
+	    la glace = un personnage géant en travers du miroir).
+	Nouvelle conception, faite pour qu'aucun artefact ne soit POSSIBLE :
+	  1) Ce qu'on voit dans le miroir = UNIQUEMENT
+	     a) un DÉCOR SIMPLE construit à partir des mesures de la pièce
+	        (5 lancers de rayon depuis le miroir : sol, plafond, murs de côté,
+	        mur d'en face ; couleurs / matière des surfaces touchées) : une
+	        BOÎTE fermée (sol, plafond, 3 murs, plinthes, corniche, plafonnier)
+	        entièrement DERRIÈRE le plan de la glace, plus large que la glace :
+	        tout rayon qui entre par la glace touche forcément une face ;
+	     b) les PERSONNAGES (le joueur + jusqu'à 3 joueurs proches, devant le
+	        miroir) : copies pièce par pièce (table source -> copie, jamais
+	        l'ordre des enfants), placées réfléchies AVANT d'entrer dans le
+	        monde du reflet ; une pièce dont le centre passe derrière la glace
+	        est cachée.
+	     Rien d'autre (pas de meubles clonés) : pas de géométrie arbitraire.
+	  2) Affichage : une plaque OPAQUE (client, dans la caméra, ni rayons ni
+	     collisions) posée 0,04 stud devant la glace, de la forme EXACTE de la
+	     glace (rectangle ; ovale = "stade" : bloc + 2 cylindres ronds ; arche
+	     = rectangle + demi-disque), et juste devant elle une toile invisible
+	     portant la SurfaceGui (ResetOnSpawn = false, reconstruite si elle
+	     disparaît). Couches de la SurfaceGui :
+	       Glass  : verre "statique" joli (dégradé plafond -> mur -> sol de la
+	                pièce) = ce qu'on voit si le reflet vivant est coupé ;
+	       Strips : la ViewportFrame du reflet, dans des cadres RECTANGULAIRES
+	                (ClipsDescendants, la seule découpe sûre de Roblox) ;
+	                rectangle : 1 bande ; ovale / arche : bandes horizontales
+	                (2m - 1 / m + 1) qui couvrent la forme intérieure, chaque
+	                coin qui dépasse étant caché par le biseau ;
+	       Sheen  : reflet de lumière diagonal qui glisse avec l'angle de vue ;
+	       Bevel  : biseau chromé (UIStroke sur cadre arrondi) entre la forme
+	                intérieure et le bord de la glace (ovale, arche).
+	     Aucun pixel du reflet ne peut sortir de la glace (vérifié : tests
+	     RealismMirror) et rien n'est jamais entre la caméra du reflet et la
+	     glace.
+	  3) Mathématiques (inchangées, vérifiées numériquement) :
+	     plan : centre M, normale n, axes de la toile u (droite vue de face),
+	     v (haut), u x v = n ; réflexion p' = p - 2 ((p - M) . n) n ;
+	     réflexion d'un CFrame : position réfléchie, axes (-H X, H Y, H Z),
+	     H = I - 2 n nᵀ (rotation PROPRE, axe X local retourné) ;
+	     caméra du reflet = position de la VRAIE caméra, qui regarde -n : son
+	     plan image est parallèle à la glace, la projection sur la glace est
+	     affine ; ViewportFrame centrée sur le pied de la perpendiculaire
+	     (cx, cy), demi-taille (|cx| + W/2, |cy| + H/2),
+	     FieldOfView = 2 atan(demi-hauteur / D), D = (C - M) . n.
+	     STRICT : si la vue ne peut pas couvrir TOUTE la glace (trop près,
+	     trop de biais, champ > 118°), on n'affiche pas le reflet vivant : la
+	     couche Glass (jolie) reste, jamais un morceau de reflet tronqué.
+	  4) Budget : MaxMirrors miroirs vivants (GraphicsQuality : 1, ou 2 en
+	     "Tout" + Détail élevé), le plus grand à l'écran, ~30 images / s ;
+	     pixels de toutes les bandes d'un miroir ≤ PIXEL_BUDGET ; en pause s'il
+	     est caché, derrière un mur, de dos ou à plus de 45 studs. Jusqu'à 4
+	     autres miroirs proches en verre "statique" joli (aussi quand Reflets
+	     = Aucun : jamais le ciel bleu dans un miroir d'intérieur).
+	5) Reflets "Tout" (inchangé) : voile de verre sur les écrans, sols des
+	   pièces légèrement brillants.
 
-	1) Miroirs. Contrat (RECIPES98 / CATALOG98) : dans le modèle d'un objet
-	   miroir, une BasePart (bloc mince) nommée "Mirror", attributs
-	   Mirror = true, MirrorFace = "Front" (face qui réfléchit ; sa normale
-	   = LookVector, vers la pièce), MirrorShape = "Rect" | "Oval". Sa taille
-	   X / Y = la surface qui réfléchit. Sans reflets : son verre statique
-	   (Reflectance) reste visible = le repli.
-	   Reflet "vivant" : une SurfaceGui sur la face du miroir, avec une
-	   ViewportFrame qui filme un MONDE RÉFLÉCHI :
-	     (SurfaceGui dans le PlayerGui, Adornee = "Mirror" : rien dans le Workspace)
-	     - le décor proche (pièces de la maison / de la vue, devant le plan du
-	       miroir, ≤ 36 studs, ≤ 650 pièces) cloné UNE fois et réfléchi par
-	       rapport au plan (mis en cache, reconstruit si la pièce change) ;
-	     - une copie légère du personnage local (Humanoid + vêtements, sans
-	       scripts ni joints) dont les CFrame sont recopiées réfléchies à
-	       chaque image (30 images / s au plus).
-	   Mathématiques (vérifiées numériquement, voir le rapport REALISM98) :
-	     plan : centre M, normale n, axes de la toile u (vers la droite vue
-	     de face) et v (haut), u x v = n ;
-	     réflexion d'un point : p' = p - 2 ((p - M) . n) n ;
-	     réflexion d'un CFrame : position réfléchie, axes (-H X, H Y, H Z)
-	     avec H = I - 2 n nᵀ (on retourne l'axe X local : rotation propre,
-	     les blocs / boules / cylindres / pentes sont symétriques en X) ;
-	     caméra de la ViewportFrame = position de la VRAIE caméra, qui
-	     regarde -n (perpendiculaire au miroir : son plan image est
-	     parallèle au miroir, donc la projection sur la face est affine) ;
-	     la ViewportFrame est centrée sur le pied de la perpendiculaire
-	     (cx, cy) = ((C - M) . u, (C - M) . v), de demi-taille
-	     (|cx| + w/2, |cy| + h/2) dans le plan, et
-	     FieldOfView = 2 atan(demi-hauteur / D), D = (C - M) . n ;
-	     un cadre "Clip" (ClipsDescendants) la découpe à la taille du miroir.
-	     Limites : FieldOfView ≤ 110° (très près : seule la partie autour du
-	     pied est couverte, c'est aussi la seule visible), toile ≤ 2048 px
-	     (densité réduite quand on regarde de très biais), en dessous de
-	     6 px / stud le miroir repasse en verre statique.
-	   v9.9 (REALISM99) — bug de la capture 28 (dalles sombres en biais,
-	   morceaux flottants quand on lève la caméra) : les copies à cheval sur
-	   le plan du miroir étaient copiées ENTIÈRES ; leur partie située
-	   derrière la glace, une fois réfléchie, se retrouvait DEVANT elle (sol,
-	   plafond, murs, dalles de la façade, cadre, tringles...). Désormais
-	   chaque copie est coupée au plan (ClipToPlane) : rien n'est jamais entre
-	   la caméra du reflet et la glace. Et le reflet est posé sur un ÉCRAN
-	   OPAQUE (client, 0,04 stud devant la glace, disque pour les ovales) :
-	   aucune autre SurfaceGui (papier peint à cœurs...) ni verre ne peut
-	   plus se dessiner par-dessus.
-	   Coût : 1 miroir vivant à la fois (2 en "Tout" + Détail élevé), le
-	   plus grand à l'écran ; en pause s'il est caché, derrière un mur, de
-	   dos ou à plus de 45 studs.
-	2) Reflets "Tout" (Graphismes > Reflets = Tout) :
-	   - écrans ("Screen" de House3DSetup / attribut Glossy) : voile de
-	     verre discret (dégradé en diagonale qui glisse avec l'angle de vue),
-	     10 écrans proches au plus ;
-	   - sols des pièces ("Floor" des RoomShell / Room_<n>) : Reflectance légère
-	     (bois 0,05, marbre / carrelage 0,1), remise à l'arrêt.
+	Contrat des objets (RECIPES / CATALOG) : une BasePart "Mirror" (bloc
+	mince), attributs Mirror = true, MirrorFace = "Front" | "Back" | "Left" |
+	"Right" (face qui réfléchit), MirrorShape = "Rect" | "Oval" | "Arch".
+	Rect + un cylindre de verre posé sur son bord haut (BigWallMirror) =
+	arche détectée automatiquement.
 
 	API :
-	  Reflections.Acquire(owner) / Reflections.Release(owner)   ("Town", "House3D"...)
-	  Reflections.IsActive() -> boolean
-	  Reflections.Live() -> { { Part, Gui, Viewport, World, Camera, View } }  (tests)
-	  Fonctions pures (tests) :
-	  Reflections.ReflectPoint(p, M, n) -> Vector3
-	  Reflections.ReflectCFrame(cf, M, n) -> CFrame
+	  Reflections.Acquire(owner) / Release(owner) / IsActive()
+	  Reflections.Live() -> { Display }   Reflections.ForceStep()   Reflections.Counts()
+	  Pures (tests) :
+	  Reflections.ReflectPoint(p, M, n) ; ReflectCFrame(cf, M, n)
 	  Reflections.PlaneOf(part) -> Plane?
-	  Reflections.ComputeView(cameraPosition, plane, pps) -> View?
-	  Reflections.ProjectToCanvas(view, plane, worldPoint) -> Vector2?  (pixel de la toile)
-	  Reflections.Extent(cf, size, center, n) -> (arrière, avant)          (v9.9)
-	  Reflections.ClipToPlane(cf, size, shape, center, n) -> (cf?, size?)  (v9.9)
-	  Reflections.ScreenCFrame(plane, oval) -> (CFrame, Vector3)            (v9.9)
-	Aucun son. Rien n'est créé quand les reflets sont coupés.
+	  Reflections.ShapeOf(kind, halfW, halfH) -> Shape
+	  Reflections.CanvasPlane(plane, shape) -> Plane
+	  Reflections.Strips(shape, pps?) -> { Strip }, inset
+	  Reflections.ComputeView(camPos, canvasPlane, pps?, strips?) -> View?
+	  Reflections.ProjectToCanvas(view, canvasPlane, worldPoint) -> Vector2?
+	  Reflections.BackdropSpecs(canvasPlane, room) -> { { CFrame, Size, Color, Material, Name } }
+	  Reflections.ScreenSpecs(plane, shape) -> { { CFrame, Size, Shape } }, canvasCFrame, canvasSize
+	Aucun son.
 ]]
 
 local Players = game:GetService("Players")
@@ -83,27 +102,41 @@ local GraphicsQuality = require(ReplicatedStorage.Shared.GraphicsQuality)
 
 local Reflections = {}
 
-local MAX_FOV = 110
+local MAX_FOV = 118 -- (Camera.FieldOfView ≤ 120)
+local MAX_HTAN = math.tan(math.rad(80)) -- demi-champ horizontal ≤ 80°
+local MAX_ASPECT = 8
 local MAX_CANVAS = 2048
+local PIXEL_BUDGET = 2.6e6 -- pixels de toutes les bandes d'un miroir
 local BASE_PPS = 56
 local MIN_PPS = 6
-local STATIC_RADIUS = 36
-local STATIC_MAX = 650
+local MIN_DEPTH = 0.25 -- caméra collée à la glace : verre statique
 local LIVE_RANGE = 45
+local STATIC_RANGE = 34
+local STATIC_MAX = 4
+local CHAR_RANGE = 30
 local FRAME_RATE = 1 / 30
 local SELECT_EVERY = 0.25
+local ROOM_EVERY = 6
 local GLOSS_EVERY = 0.1
 local GLOSS_RANGE = 40
 local GLOSS_MAX = 10
+local OVAL_BANDS = 5 -- m : bandes par demi-calotte
+local SHAPE_MIN_PPS = 28 -- densité minimale d'un reflet vivant ovale / en arche
+local SCREEN_GAP = 0.04
+local SCREEN_T = 0.02
+local CANVAS_GAP = 0.006
 local RENDER_NAME = "DopamineMirrors"
-local GLASS_TINT = Color3.fromRGB(176, 192, 206)
+local BEVEL_COLOR = Color3.fromRGB(214, 224, 234)
+local DEFAULT_WALL = Color3.fromRGB(236, 228, 220)
+local DEFAULT_FLOOR = Color3.fromRGB(160, 120, 90)
+local DEFAULT_CEILING = Color3.fromRGB(246, 244, 240)
 
 ----------------------------------------------------------------------
 -- Mathématiques (pures)
 ----------------------------------------------------------------------
 
 export type Plane = {
-	Center: Vector3, -- centre de la face qui réfléchit
+	Center: Vector3, -- centre de la face qui réfléchit (ou de la toile)
 	U: Vector3, -- axe X de la toile (vers la droite, vu de face)
 	V: Vector3, -- axe Y de la toile (vers le haut)
 	N: Vector3, -- normale (vers la pièce)
@@ -118,8 +151,24 @@ export type View = {
 	FrameSize: Vector2, -- taille de la ViewportFrame (pixels)
 	PPS: number, -- pixels par stud de la toile
 	D: number, -- distance caméra -> plan
-	Foot: Vector2, -- pied de la perpendiculaire (studs, repère du miroir)
+	Foot: Vector2, -- pied de la perpendiculaire (studs, repère de la toile)
 }
+
+-- Forme de la glace, repère de la TOILE (origine au centre, y vers le haut)
+--   Rect : la toile entière ; Oval : "stade" (rayon des coins = min(CW, CH)) ;
+--   Arch : rectangle (bas, hauteur 2 Hr) + demi-disque de rayon CW au-dessus
+export type Shape = {
+	Kind: string,
+	CW: number, -- demi-largeur de la toile
+	CH: number, -- demi-hauteur de la toile
+	OffV: number, -- centre de la toile = centre de la glace "Mirror" + V * OffV
+	Hr: number, -- (Arch) demi-hauteur du rectangle
+}
+
+-- bande |x| ≤ A, Y0 ≤ y ≤ Y1 (studs) ; JTop / JBottom : bord sur la jonction
+-- rectangle / arche (arrondi vers le BAS de la toile : le rectangle ne
+-- dépasse jamais dans l'arche)
+export type Strip = { Y0: number, Y1: number, A: number, JTop: boolean?, JBottom: boolean? }
 
 function Reflections.ReflectPoint(p: Vector3, center: Vector3, n: Vector3): Vector3
 	return p - n * (2 * (p - center):Dot(n))
@@ -155,7 +204,10 @@ function Reflections.PlaneOf(part: BasePart): Plane?
 	else
 		return nil
 	end
-	-- axe X de la toile d'une SurfaceGui sur une face de côté : haut x normale
+	if w < 0.05 or size.Y < 0.05 then
+		return nil
+	end
+	-- axe X de la toile d'une SurfaceGui vue de face : haut x normale
 	local u = up:Cross(n)
 	return {
 		Center = cf.Position + n * offset,
@@ -167,26 +219,121 @@ function Reflections.PlaneOf(part: BasePart): Plane?
 	}
 end
 
--- Caméra + cadre de la ViewportFrame pour une caméra à `camPos`
-function Reflections.ComputeView(camPos: Vector3, plane: Plane, pps: number?): View?
+function Reflections.ShapeOf(kind: string, halfW: number, halfH: number): Shape
+	if kind == "Oval" then
+		return { Kind = "Oval", CW = halfW, CH = halfH, OffV = 0, Hr = halfH }
+	elseif kind == "Arch" then
+		-- toile : du bas du rectangle au sommet de l'arche
+		return { Kind = "Arch", CW = halfW, CH = halfH + halfW / 2, OffV = halfW / 2, Hr = halfH }
+	end
+	return { Kind = "Rect", CW = halfW, CH = halfH, OffV = 0, Hr = halfH }
+end
+
+function Reflections.CanvasPlane(plane: Plane, shape: Shape): Plane
+	return {
+		Center = plane.Center + plane.V * shape.OffV,
+		U = plane.U,
+		V = plane.V,
+		N = plane.N,
+		HalfW = shape.CW,
+		HalfH = shape.CH,
+	}
+end
+
+-- Largeur du biseau (studs) : couvre le plus grand dépassement des coins
+-- des bandes + 1,5 pixel (arrondis) à la densité MINIMALE du reflet vivant
+-- `pps` (géométrie valable pour toute densité ≥ pps). Le biseau est un
+-- UIStroke tracé DEHORS (Outer : comportement historique de Roblox, et
+-- BorderStrokePosition = Outer quand la propriété existe) : il couvre
+-- [rho', rho' + T] = le bord de la glace.
+local OVER_K = math.sqrt(1 + 1 / OVAL_BANDS) - 1 -- dépassement / rayon intérieur
+local function insetFor(rho: number, pps: number): number
+	local margin = 1.5 / math.max(pps, 1)
+	-- T = k (rho - T) + marge  ->  T = (k rho + marge) / (1 + k)
+	return math.min(rho * 0.4, (OVER_K * rho + margin) / (1 + OVER_K))
+end
+
+-- Densité minimale (px / stud) d'un reflet vivant pour cette forme : en
+-- dessous, le biseau serait trop large -> verre statique
+function Reflections.MinPPS(shape: Shape): number
+	if shape.Kind == "Rect" then
+		return MIN_PPS
+	end
+	local rho = if shape.Kind == "Oval" then math.min(shape.CW, shape.CH) else shape.CW
+	-- (k rho + 1.5 / pps) / (1 + k) <= 0.3 rho
+	local room = rho * (0.3 * (1 + OVER_K) - OVER_K)
+	return math.max(SHAPE_MIN_PPS, 1.5 / math.max(room, 1e-6))
+end
+
+--[[
+	Bandes du reflet vivant (pures). Rect : 1 bande = toute la toile.
+	Ovale : forme intérieure = stade (a', b') de rayon rho' = min(a', b'),
+	rétrécie du biseau T ; calottes découpées à s_k = rho' sqrt(k / m)
+	(pas égaux en s² : chaque bande dépasse au plus de rho' (sqrt(1 + 1/m) - 1)
+	à ses coins, sous le biseau) ; bande centrale pleine largeur.
+	Arche : rectangle plein + m bandes dans le demi-disque de rayon CW - T.
+	-> ({ Strip }, T)
+]]
+function Reflections.Strips(shape: Shape, pps: number?): ({ Strip }, number)
+	local density = pps or BASE_PPS
+	local m = OVAL_BANDS
+	if shape.Kind == "Oval" then
+		local rho = math.min(shape.CW, shape.CH)
+		local t = insetFor(rho, density)
+		local a, b = shape.CW - t, shape.CH - t
+		local r = math.min(a, b)
+		local flat = b - r -- demi-hauteur de la partie droite (stade haut)
+		local base = a - r -- demi-largeur droite (stade large)
+		local strips: { Strip } = {}
+		local s1 = r * math.sqrt(1 / m)
+		table.insert(strips, { Y0 = -(flat + s1), Y1 = flat + s1, A = a })
+		for k = 1, m - 1 do
+			local sk = r * math.sqrt(k / m)
+			local sn = r * math.sqrt((k + 1) / m)
+			local half = base + math.sqrt(math.max(0, r * r - sk * sk))
+			table.insert(strips, { Y0 = flat + sk, Y1 = flat + sn, A = half })
+			table.insert(strips, { Y0 = -(flat + sn), Y1 = -(flat + sk), A = half })
+		end
+		return strips, t
+	elseif shape.Kind == "Arch" then
+		local t = insetFor(shape.CW, density)
+		local r = shape.CW - t
+		local yj = -shape.CH + 2 * shape.Hr -- jonction rectangle / arche
+		local strips: { Strip } = { { Y0 = -shape.CH, Y1 = yj, A = shape.CW, JTop = true } }
+		for k = 0, m - 1 do
+			local sk = r * math.sqrt(k / m)
+			local sn = r * math.sqrt((k + 1) / m)
+			table.insert(strips, { Y0 = yj + sk, Y1 = yj + sn, A = math.sqrt(math.max(0, r * r - sk * sk)), JBottom = k == 0 })
+		end
+		return strips, t
+	end
+	return { { Y0 = -shape.CH, Y1 = shape.CH, A = shape.CW } }, 0
+end
+
+-- Caméra + cadre de la ViewportFrame pour une caméra à `camPos` (STRICT : la
+-- vue couvre TOUTE la toile, sinon nil)
+function Reflections.ComputeView(camPos: Vector3, plane: Plane, pps: number?, strips: number?, minPPS: number?): View?
 	local rel = camPos - plane.Center
 	local d = rel:Dot(plane.N)
-	if d < 0.05 then
-		return nil -- derrière le miroir (ou collé dessus)
+	if d ~= d or d < MIN_DEPTH then
+		return nil -- derrière le miroir, ou collé dessus
 	end
 	local cx, cy = rel:Dot(plane.U), rel:Dot(plane.V)
 	local hx = math.abs(cx) + plane.HalfW
 	local hy = math.abs(cy) + plane.HalfH
-	-- champ vertical limité : très près, on ne couvre que l'entour du pied
-	local maxHalf = d * math.tan(math.rad(MAX_FOV / 2))
-	hy = math.min(hy, maxHalf)
-	hx = math.min(hx, maxHalf * 8, hy * 8)
-	hy = math.max(hy, hx / 8)
-	local density = math.min(pps or BASE_PPS, MAX_CANVAS / (2 * hx), MAX_CANVAS / (2 * hy))
-	if density < MIN_PPS then
-		return nil -- trop de biais : verre statique
+	if hx / d > MAX_HTAN then
+		return nil -- trop de biais
 	end
+	hy = math.max(hy, hx / MAX_ASPECT)
 	local fov = math.deg(2 * math.atan(hy / d))
+	if fov > MAX_FOV then
+		return nil -- trop près / trop haut : le champ ne couvrirait pas la glace
+	end
+	local count = math.max(1, strips or 1)
+	local density = math.min(pps or BASE_PPS, MAX_CANVAS / (2 * hx), MAX_CANVAS / (2 * hy), math.sqrt(PIXEL_BUDGET / (count * 4 * hx * hy)))
+	if density < math.max(MIN_PPS, minPPS or 0) then
+		return nil -- trop peu de pixels : verre statique
+	end
 	return {
 		CameraCF = CFrame.fromMatrix(camPos, plane.U, plane.V, plane.N),
 		FieldOfView = fov,
@@ -198,9 +345,8 @@ function Reflections.ComputeView(camPos: Vector3, plane: Plane, pps: number?): V
 	}
 end
 
--- Où un point du MONDE RÉFLÉCHI (ex. une copie réfléchie) apparaît sur la
--- toile du miroir, d'après la projection de la caméra de la ViewportFrame
--- (même formule que Roblox : champ vertical, rapport largeur / hauteur du cadre)
+-- Où un point du MONDE RÉFLÉCHI apparaît sur la toile (pixels), d'après la
+-- projection de la caméra de la ViewportFrame (champ vertical, rapport du cadre)
 function Reflections.ProjectToCanvas(view: View, _plane: Plane, worldPoint: Vector3): Vector2?
 	local rel = view.CameraCF:PointToObjectSpace(worldPoint)
 	local depth = -rel.Z
@@ -214,35 +360,164 @@ function Reflections.ProjectToCanvas(view: View, _plane: Plane, worldPoint: Vect
 	return Vector2.new(view.FramePos.X + (ndcX + 1) / 2 * view.FrameSize.X, view.FramePos.Y + (1 - ndcY) / 2 * view.FrameSize.Y)
 end
 
+-- Repère du miroir : (u, v, n) -> monde (n > 0 = côté pièce)
+local function frameAt(plane: Plane, u: number, v: number, n: number): CFrame
+	local p = plane.Center + plane.U * u + plane.V * v + plane.N * n
+	return CFrame.fromMatrix(p, plane.U, plane.V) -- X = U, Y = V, Z = U x V = N
+end
+
+-- Plaque opaque (forme exacte de la glace) + toile invisible de la SurfaceGui
+-- (pures) -> (pièces { CFrame, Size, Shape }, CFrame de la toile, taille)
+function Reflections.ScreenSpecs(plane: Plane, shape: Shape): ({ { CFrame: CFrame, Size: Vector3, Shape: string } }, CFrame, Vector3)
+	local cp = Reflections.CanvasPlane(plane, shape)
+	local n0 = SCREEN_GAP + SCREEN_T / 2
+	local specs = {}
+	local function block(u: number, v: number, w: number, h: number, depth: number)
+		table.insert(specs, { CFrame = frameAt(cp, u, v, n0 - depth), Size = Vector3.new(w, h, SCREEN_T), Shape = "Block" })
+	end
+	local function disc(u: number, v: number, diameter: number, depth: number)
+		-- cylindre : axe X le long de la normale (face Right/Left = disque)
+		local p = cp.Center + cp.U * u + cp.V * v + cp.N * (n0 - depth)
+		table.insert(specs, { CFrame = CFrame.fromMatrix(p, cp.N, cp.V), Size = Vector3.new(SCREEN_T, diameter, diameter), Shape = "Cylinder" })
+	end
+	if shape.Kind == "Oval" then
+		local r = math.min(shape.CW, shape.CH)
+		if shape.CW - r > 1e-3 then
+			block(0, 0, 2 * (shape.CW - r), 2 * shape.CH, 0)
+			disc(-(shape.CW - r), 0, 2 * r, 0.004)
+			disc(shape.CW - r, 0, 2 * r, 0.006)
+		elseif shape.CH - r > 1e-3 then
+			block(0, 0, 2 * shape.CW, 2 * (shape.CH - r), 0)
+			disc(0, -(shape.CH - r), 2 * r, 0.004)
+			disc(0, shape.CH - r, 2 * r, 0.006)
+		else
+			disc(0, 0, 2 * r, 0)
+		end
+	elseif shape.Kind == "Arch" then
+		block(0, -shape.CH + shape.Hr, 2 * shape.CW, 2 * shape.Hr, 0)
+		disc(0, -shape.CH + 2 * shape.Hr, 2 * shape.CW, 0.004)
+	else
+		block(0, 0, 2 * shape.CW, 2 * shape.CH, 0)
+	end
+	-- toile : bloc invisible juste devant, face Front = normale, axe X de la
+	-- toile = U (RightVector = -U)
+	local cpos = cp.Center + cp.N * (SCREEN_GAP + SCREEN_T + CANVAS_GAP)
+	local canvasCF = CFrame.fromMatrix(cpos, -cp.U, cp.V, -cp.N)
+	return specs, canvasCF, Vector3.new(2 * shape.CW, 2 * shape.CH, 0.01)
+end
+
+export type Room = {
+	Left: number, -- distances depuis le centre de la toile (studs)
+	Right: number,
+	Floor: number,
+	Ceiling: number,
+	Depth: number, -- jusqu'au mur d'en face
+	Wall: Color3,
+	SideL: Color3,
+	SideR: Color3,
+	FloorColor: Color3,
+	FloorMaterial: Enum.Material,
+	CeilingColor: Color3,
+}
+
+local function darken(c: Color3, k: number): Color3
+	return Color3.new(c.R * (1 - k), c.G * (1 - k), c.B * (1 - k))
+end
+
+local function lighten(c: Color3, k: number): Color3
+	return c:Lerp(Color3.new(1, 1, 1), k)
+end
+
+--[[
+	Décor du reflet (pur) : la pièce RÉFLÉCHIE, boîte fermée derrière le plan
+	(n ≤ 0) : sol, plafond, murs gauche / droit, mur d'en face (= le mur
+	derrière le joueur), plinthes, corniche, plafonnier. Dalles de 0,2 stud
+	posées DEHORS (leurs faces intérieures = les faces de la boîte) et
+	arrêtées à 0,002 stud du plan. -> { { CFrame, Size, Color, Material, Name } }
+]]
+function Reflections.BackdropSpecs(cp: Plane, room: Room): { { CFrame: CFrame, Size: Vector3, Color: Color3, Material: Enum.Material, Name: string } }
+	local t = 0.2
+	local L, R = math.max(room.Left, cp.HalfW + 0.3), math.max(room.Right, cp.HalfW + 0.3)
+	local F, C = math.max(room.Floor, cp.HalfH + 0.3), math.max(room.Ceiling, cp.HalfH + 0.3)
+	local D = math.max(room.Depth, 1)
+	local E = 0.002 -- arrêt avant le plan
+	local specs = {}
+	local function slab(name: string, u0: number, u1: number, v0: number, v1: number, n0: number, n1: number, color: Color3, material: Enum.Material?)
+		table.insert(specs, {
+			CFrame = frameAt(cp, (u0 + u1) / 2, (v0 + v1) / 2, (n0 + n1) / 2),
+			Size = Vector3.new(u1 - u0, v1 - v0, n1 - n0),
+			Color = color,
+			Material = material or Enum.Material.SmoothPlastic,
+			Name = name,
+		})
+	end
+	local back = -D
+	-- (n de -D - t à -E)
+	slab("Floor", -L - t, R + t, -F - t, -F, back - t, -E, room.FloorColor, room.FloorMaterial)
+	slab("Ceiling", -L - t, R + t, C, C + t, back - t, -E, room.CeilingColor)
+	slab("WallLeft", -L - t, -L, -F, C, back - t, -E, room.SideL)
+	slab("WallRight", R, R + t, -F, C, back - t, -E, room.SideR)
+	slab("WallFar", -L, R, -F, C, back - t, back, room.Wall)
+	-- plinthes (dans la boîte, adossées aux murs)
+	local hb = math.clamp((F + C) * 0.045, 0.25, 0.7)
+	local tb = 0.08
+	local trim = lighten(room.Wall, 0.55)
+	slab("BaseLeft", -L, -L + tb, -F, -F + hb, back, -E, trim)
+	slab("BaseRight", R - tb, R, -F, -F + hb, back, -E, trim)
+	slab("BaseFar", -L + tb, R - tb, -F, -F + hb, back, back + tb, trim)
+	-- corniche
+	local hc = hb * 0.6
+	slab("CrownLeft", -L, -L + tb, C - hc, C, back, -E, lighten(room.CeilingColor, 0.3))
+	slab("CrownRight", R - tb, R, C - hc, C, back, -E, lighten(room.CeilingColor, 0.3))
+	slab("CrownFar", -L + tb, R - tb, C - hc, C, back, back + tb, lighten(room.CeilingColor, 0.3))
+	-- plafonnier (disque clair au milieu du plafond)
+	local lamp = math.clamp(math.min(L + R, D) * 0.12, 0.6, 2.2)
+	local mid = (R - L) / 2
+	slab("Lamp", mid - lamp / 2, mid + lamp / 2, C - 0.12, C, back / 2 - lamp / 2, back / 2 + lamp / 2, Color3.fromRGB(255, 246, 222), Enum.Material.Neon)
+	return specs
+end
+
 ----------------------------------------------------------------------
 -- Registre (miroirs, écrans, sols) : DescendantAdded filtré par nom
 ----------------------------------------------------------------------
 
-type Live = {
+type CharCopy = { Model: Model, Version: number, Count: number, Pairs: { { Src: BasePart, Dst: BasePart, Base: number } }, Built: number }
+
+type StripObj = {
+	Spec: Strip,
+	Clip: Frame,
+	Viewport: ViewportFrame,
+	Camera: Camera,
+	World: WorldModel,
+	Backdrop: Model,
+	Chars: { [Model]: CharCopy },
+	Px: Vector2, -- coin haut-gauche (pixels de la toile)
+}
+
+type Display = {
 	Part: BasePart,
 	Plane: Plane,
+	Canvas: Plane,
+	Shape: Shape,
+	Live: boolean,
+	Screen: Folder,
+	CanvasPart: BasePart,
 	Gui: SurfaceGui,
-	Clip: GuiObject,
-	Viewport: ViewportFrame,
-	World: WorldModel,
-	Camera: Camera,
-	Static: Model,
-	Screen: BasePart,
-	Oval: boolean,
-	StaticClipped: number,
-	StaticBuilt: number,
-	StaticDirty: boolean,
-	StaticCount: number,
-	Scope: Instance?,
-	ScopeConns: { RBXScriptConnection },
-	CharModel: Model?,
-	CharSource: Model?,
-	CharPairs: { { Src: BasePart, Dst: BasePart } },
-	CharCount: number,
+	Root: Frame,
+	Glass: Frame,
+	GlassGradient: UIGradient,
+	Strips: { StripObj },
+	StripsFrame: Frame,
+	Sheen: Frame,
+	SheenGradient: UIGradient,
+	Bevel: UIStroke?,
+	Inset: number,
+	MinPPS: number,
+	Room: Room?,
+	RoomAt: number,
 	PPS: number,
 	View: View?,
-	Visible: boolean,
-	LastCam: CFrame?,
+	Shown: boolean,
 }
 
 local owners: { [string]: boolean } = {}
@@ -252,7 +527,7 @@ local screens: { [BasePart]: boolean } = {}
 local floors: { [BasePart]: boolean } = {}
 local floorSaved: { [BasePart]: number } = {}
 local sheens: { [BasePart]: { Gui: SurfaceGui, Gradient: UIGradient } } = {}
-local lives: { [BasePart]: Live } = {}
+local displays: { [BasePart]: Display } = {}
 local addedConn: RBXScriptConnection? = nil
 local qualityConn: any = nil
 local selectClock = 0
@@ -260,27 +535,25 @@ local frameClock = 0
 local glossClock = 0
 local glossOn = false
 local floorsDirty = false
+local charVersion: { [Model]: number } = {}
+local charConns: { [Model]: { RBXScriptConnection } } = {}
+local frameNo = 0 -- images vivantes (≈ 30 / s)
 
--- Les SurfaceGui (miroirs, voiles) vont dans le PlayerGui avec Adornee = la
--- pièce (comme LiveProps) : les copies réfléchies ne sont JAMAIS dans le
--- Workspace (ni dans le modèle de l'objet : audits, LiveProps, rayons...)
-local function guiParent(part: BasePart): Instance
+-- SurfaceGui dans le PlayerGui (Adornee = la toile) ; jamais remise à zéro
+-- à la réapparition du personnage (ResetOnSpawn = false)
+local function guiParent(fallback: Instance): Instance
 	local player = Players.LocalPlayer
 	local playerGui = player and player:FindFirstChildOfClass("PlayerGui")
-	return playerGui or part
+	return playerGui or fallback
 end
 
--- (v9.9 REALISM99) ÉCRAN du miroir vivant : une plaque OPAQUE (client, dans
--- la caméra : ni rayons ni collisions) posée 0,04 stud devant la glace, qui
--- porte la SurfaceGui. Elle écrit la profondeur : rien de ce qui est
--- derrière (papier peint à motifs en SurfaceGui, verre, pièce "Mirror"
--- invisible des miroirs ovales) ne peut plus se dessiner PAR-DESSUS le
--- reflet (les SurfaceGui ne se trient pas entre elles). Ovale : disque
--- elliptique (cylindre) ; cachée dès que le miroir n'est plus vivant.
-local SCREEN_GAP = 0.04
-local SCREEN_T = 0.02
-local screenFolder: Instance? = nil
+local function quiet(gui: LayerCollector)
+	pcall(function()
+		(gui :: any).ResetOnSpawn = false
+	end)
+end
 
+local screenFolder: Instance? = nil
 local function screenParent(): Instance
 	local cam = workspace.CurrentCamera
 	local folder = screenFolder
@@ -292,41 +565,6 @@ local function screenParent(): Instance
 	f.Parent = cam or workspace
 	screenFolder = f
 	return f
-end
-
--- Place / taille de l'écran d'après le plan du miroir (pur : tests)
-function Reflections.ScreenCFrame(plane: Plane, oval: boolean): (CFrame, Vector3)
-	local pos = plane.Center + plane.N * (SCREEN_GAP + SCREEN_T / 2)
-	if oval then
-		-- cylindre : axe X = normale (face Right = la glace)
-		return CFrame.fromMatrix(pos, plane.N, plane.V), Vector3.new(SCREEN_T, plane.HalfH * 2, plane.HalfW * 2)
-	end
-	-- bloc : face Front (LookVector) = normale ; axe X de la toile = U
-	return CFrame.fromMatrix(pos, -plane.U, plane.V, -plane.N), Vector3.new(plane.HalfW * 2, plane.HalfH * 2, SCREEN_T)
-end
-
-local function newScreen(plane: Plane, oval: boolean): BasePart
-	local screen = Instance.new("Part")
-	screen.Name = "MirrorScreen"
-	screen.Anchored = true
-	screen.CanCollide = false
-	screen.CanQuery = false
-	screen.CanTouch = false
-	screen.CastShadow = false
-	screen.Material = Enum.Material.SmoothPlastic
-	screen.Color = GLASS_TINT
-	screen.TopSurface = Enum.SurfaceType.Smooth
-	screen.BottomSurface = Enum.SurfaceType.Smooth
-	if oval then
-		screen.Shape = Enum.PartType.Cylinder
-	end
-	local cf, size = Reflections.ScreenCFrame(plane, oval)
-	screen.Size = size
-	screen.CFrame = cf
-	screen.Transparency = 1
-	screen:SetAttribute("MirrorScreen", true)
-	screen.Parent = screenParent()
-	return screen
 end
 
 local function consider(d: Instance)
@@ -345,7 +583,7 @@ local function consider(d: Instance)
 		-- (coque "RoomShell" ; renommée "Room_<n>" par HouseBuilder en ville)
 		if parent and (parent.Name == "RoomShell" or string.match(parent.Name, "^Room_%d+$") ~= nil) then
 			floors[d] = true
-			floorsDirty = true -- (pièce construite pendant que les reflets sont actifs)
+			floorsDirty = true
 		end
 	end
 end
@@ -357,7 +595,211 @@ local function scanAll()
 end
 
 ----------------------------------------------------------------------
--- Copies réfléchies
+-- Forme réelle d'un miroir (arche détectée : cylindre de verre sur le haut)
+----------------------------------------------------------------------
+
+local function kindOf(part: BasePart, plane: Plane): string
+	local shape = part:GetAttribute("MirrorShape")
+	-- (arche : le rectangle doit être au moins aussi haut que le rayon de
+	-- l'arche, sinon le disque de la plaque opaque dépasserait en bas)
+	local archOk = 2 * plane.HalfH >= plane.HalfW
+	if shape == "Oval" then
+		return shape
+	elseif shape == "Arch" then
+		return archOk and "Arch" or "Rect"
+	end
+	if not archOk then
+		return "Rect"
+	end
+	local parent = part.Parent
+	if parent then
+		local top = plane.Center + plane.V * plane.HalfH
+		for _, sibling in ipairs(parent:GetChildren()) do
+			if sibling ~= part and sibling:IsA("Part") and sibling.Shape == Enum.PartType.Cylinder
+				and (sibling.Material == Enum.Material.Glass or sibling.Reflectance >= 0.3) then
+				local axis = sibling.CFrame.RightVector
+				local diameter = math.min(sibling.Size.Y, sibling.Size.Z)
+				local off = sibling.Position - top
+				local inPlane = Vector2.new(off:Dot(plane.U), off:Dot(plane.V))
+				if math.abs(axis:Dot(plane.N)) > 0.98 and math.abs(diameter - 2 * plane.HalfW) <= 0.12 * plane.HalfW
+					and inPlane.Magnitude <= 0.15 * plane.HalfW and math.abs(off:Dot(plane.N)) <= 0.5 then
+					return "Arch"
+				end
+			end
+		end
+	end
+	return "Rect"
+end
+
+----------------------------------------------------------------------
+-- Mesure de la pièce (5 lancers de rayon, surfaces assez grandes seulement)
+----------------------------------------------------------------------
+
+local function characterOf(inst: Instance): boolean
+	for _, player in ipairs(Players:GetPlayers()) do
+		local character = player.Character
+		if character and inst:IsDescendantOf(character) then
+			return true
+		end
+	end
+	return false
+end
+
+local function secondLargest(size: Vector3): number
+	local a, b, c = size.X, size.Y, size.Z
+	if a < b then
+		a, b = b, a
+	end
+	if b < c then
+		b = c
+	end
+	if a < b then
+		b = a
+	end
+	return b
+end
+
+-- Couleur VUE d'une surface : la pièce + son papier peint / motif de sol en
+-- SurfaceGui (cadres colorés : moyenne pondérée par la surface couverte)
+local function surfaceColor(part: BasePart): Color3
+	local base = part.Color
+	local r, g, b, weight, area = 0, 0, 0, 0, 0
+	local seen = 0
+	for _, gui in ipairs(part:GetChildren()) do
+		if gui:IsA("SurfaceGui") and gui.Enabled then
+			local cw, ch = gui.CanvasSize.X, gui.CanvasSize.Y
+			if gui.SizingMode == Enum.SurfaceGuiSizingMode.PixelsPerStud then
+				cw, ch = part.Size.X * gui.PixelsPerStud, part.Size.Y * gui.PixelsPerStud
+			end
+			cw, ch = math.max(cw, 1), math.max(ch, 1)
+			area += cw * ch
+			for _, d in ipairs(gui:GetDescendants()) do
+				seen += 1
+				if seen > 400 then
+					break
+				end
+				if d:IsA("Frame") and d.Visible and d.BackgroundTransparency < 0.95 then
+					local size = d.Size
+					local w = math.clamp(size.X.Scale * cw + size.X.Offset, 0, cw)
+					local h = math.clamp(size.Y.Scale * ch + size.Y.Offset, 0, ch)
+					local k = w * h * (1 - d.BackgroundTransparency)
+					local c = d.BackgroundColor3
+					r += c.R * k
+					g += c.G * k
+					b += c.B * k
+					weight += k
+				end
+			end
+		end
+	end
+	if weight <= 0 or area <= 0 then
+		return base
+	end
+	-- (le reste de la toile laisse voir la pièce)
+	local rest = math.max(0, area - weight)
+	local total = weight + rest
+	return Color3.new((r + base.R * rest) / total, (g + base.G * rest) / total, (b + base.B * rest) / total)
+end
+Reflections.SurfaceColor = surfaceColor
+
+local function measureRoom(part: BasePart, cp: Plane): Room
+	local origin = cp.Center + cp.N * 0.4
+	local exclude: { Instance } = {}
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player.Character then
+			table.insert(exclude, player.Character)
+		end
+	end
+	if part.Parent then
+		table.insert(exclude, part.Parent)
+	end
+	local sf = screenFolder
+	if sf then
+		table.insert(exclude, sf)
+	end
+	local weather = workspace:FindFirstChild("DopamineWeather")
+	if weather then
+		table.insert(exclude, weather)
+	end
+	local minSize = math.clamp(2 * math.max(cp.HalfW, cp.HalfH), 3, 6)
+	local function cast(dir: Vector3, maxDist: number, facing: number): RaycastResult?
+		local list = table.clone(exclude)
+		local params = RaycastParams.new()
+		params.FilterType = Enum.RaycastFilterType.Exclude
+		params.IgnoreWater = true
+		for _ = 1, 10 do
+			params.FilterDescendantsInstances = list
+			local ok, hit = pcall(function()
+				return workspace:Raycast(origin, dir * maxDist, params)
+			end)
+			if not ok or not hit then
+				return nil
+			end
+			local inst = hit.Instance
+			local good = inst:IsA("Terrain") and facing > 0.5
+			if not good and inst:IsA("BasePart") and inst.Transparency < 0.35 and not characterOf(inst) then
+				good = secondLargest(inst.Size) >= minSize and hit.Normal:Dot(-dir) >= facing
+			end
+			if good then
+				return hit
+			end
+			table.insert(list, inst)
+		end
+		return nil
+	end
+	local function colorOf(hit: RaycastResult?, default: Color3): Color3
+		if hit and hit.Instance:IsA("BasePart") and not hit.Instance:IsA("Terrain") then
+			return surfaceColor(hit.Instance :: BasePart)
+		end
+		if hit and hit.Instance:IsA("Terrain") then
+			return Color3.fromRGB(110, 150, 90)
+		end
+		return default
+	end
+	local far = cast(cp.N, 80, 0.6)
+	local left = cast(-cp.U, 50, 0.6)
+	local right = cast(cp.U, 50, 0.6)
+	local down = cast(-cp.V, 40, 0.7)
+	local up = cast(cp.V, 50, 0.7)
+	local floorDist = down and down.Distance or cp.HalfH + 2.5
+	local floorMat = Enum.Material.SmoothPlastic
+	if down and down.Instance:IsA("BasePart") and not down.Instance:IsA("Terrain") then
+		local mat = (down.Instance :: BasePart).Material
+		if mat == Enum.Material.Wood or mat == Enum.Material.WoodPlanks or mat == Enum.Material.Marble or mat == Enum.Material.Fabric
+			or mat == Enum.Material.Carpet or mat == Enum.Material.Slate or mat == Enum.Material.Granite then
+			floorMat = mat
+		end
+	end
+	local wall = colorOf(far, colorOf(left, colorOf(right, DEFAULT_WALL)))
+	return {
+		Left = math.clamp(left and left.Distance or 9, cp.HalfW + 0.3, 40),
+		Right = math.clamp(right and right.Distance or 9, cp.HalfW + 0.3, 40),
+		Floor = math.clamp(floorDist, cp.HalfH + 0.3, 30),
+		Ceiling = math.clamp(up and up.Distance or math.max(cp.HalfH + 0.3, 13 - floorDist), cp.HalfH + 0.3, 40),
+		Depth = math.clamp(far and (far.Distance + 0.4) or 22, 3, 80),
+		Wall = wall,
+		SideL = colorOf(left, wall),
+		SideR = colorOf(right, wall),
+		FloorColor = colorOf(down, DEFAULT_FLOOR),
+		FloorMaterial = floorMat,
+		CeilingColor = colorOf(up, DEFAULT_CEILING),
+	}
+end
+
+local function sameRoom(a: Room?, b: Room): boolean
+	if not a then
+		return false
+	end
+	local function close(x: number, y: number): boolean
+		return math.abs(x - y) < 0.25
+	end
+	return close(a.Left, b.Left) and close(a.Right, b.Right) and close(a.Floor, b.Floor) and close(a.Ceiling, b.Ceiling)
+		and close(a.Depth, b.Depth) and a.Wall == b.Wall and a.FloorColor == b.FloorColor and a.CeilingColor == b.CeilingColor
+		and a.SideL == b.SideL and a.SideR == b.SideR
+end
+
+----------------------------------------------------------------------
+-- Copies des personnages (pièce par pièce, table source -> copie)
 ----------------------------------------------------------------------
 
 local KEEP_CHILD: { [string]: boolean } = {
@@ -368,9 +810,51 @@ local KEEP_CHILD: { [string]: boolean } = {
 	Texture = true,
 	SurfaceAppearance = true,
 }
+local KEEP_TOP: { [string]: boolean } = {
+	Shirt = true,
+	Pants = true,
+	ShirtGraphic = true,
+	BodyColors = true,
+	CharacterMesh = true,
+}
 
--- Copie d'une pièce : seulement ce qui se voit (maillage, décalque, apparence)
-local function cloneVisual(part: BasePart): BasePart?
+local function watchCharacter(model: Model)
+	if charConns[model] then
+		return
+	end
+	charVersion[model] = charVersion[model] or 1
+	local function bump()
+		charVersion[model] = (charVersion[model] or 1) + 1
+	end
+	charConns[model] = {
+		model.DescendantAdded:Connect(bump),
+		model.DescendantRemoving:Connect(bump),
+		model.AncestryChanged:Connect(function()
+			if model.Parent == nil then
+				local conns = charConns[model]
+				if conns then
+					for _, c in ipairs(conns) do
+						c:Disconnect()
+					end
+				end
+				charConns[model] = nil
+				charVersion[model] = nil
+			end
+		end),
+	}
+end
+
+local function unwatchAll()
+	for _, conns in pairs(charConns) do
+		for _, c in ipairs(conns) do
+			c:Disconnect()
+		end
+	end
+	table.clear(charConns)
+	table.clear(charVersion)
+end
+
+local function clonePart(part: BasePart): BasePart?
 	local ok, copy = pcall(function()
 		return part:Clone()
 	end)
@@ -394,346 +878,208 @@ local function cloneVisual(part: BasePart): BasePart?
 	return c
 end
 
--- Racine de la zone à copier : la maison (Interiors + Exterior : le mur de
--- façade d'une pièce est dans Exterior), sinon l'enfant du Workspace
-local function scopeOf(part: BasePart): Instance?
-	local node: Instance? = part.Parent
-	local top: Instance? = nil
-	while node and node ~= workspace do
-		if node.Name == "Interiors" then
-			return node.Parent or node
-		end
-		top = node
-		node = node.Parent
-	end
-	return top
+-- Une pièce de la source est-elle visible dans le reflet ? (centre devant la glace)
+local function inFront(src: BasePart, plane: Plane): boolean
+	return (src.Position - plane.Center):Dot(plane.N) > 0.05
 end
 
-local function characterOf(inst: Instance): boolean
+local function buildCopy(source: Model, world: WorldModel, plane: Plane): CharCopy
+	local model = Instance.new("Model")
+	model.Name = "Reflet"
+	local copy: CharCopy = { Model = model, Version = charVersion[source] or 1, Count = #source:GetDescendants(), Pairs = {}, Built = frameNo }
+	pcall(function()
+		local hum = Instance.new("Humanoid")
+		hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+		hum.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+		hum.Parent = model
+	end)
+	for _, child in ipairs(source:GetChildren()) do
+		if KEEP_TOP[child.ClassName] then
+			local ok, c = pcall(function()
+				return child:Clone()
+			end)
+			if ok and c then
+				c.Parent = model
+			end
+		end
+	end
+	for _, d in ipairs(source:GetDescendants()) do
+		if d:IsA("BasePart") and d.Name ~= "HumanoidRootPart" and d.Transparency < 0.98 then
+			local size = d.Size
+			if math.max(size.X, size.Y, size.Z) <= 14 then
+				local c = clonePart(d)
+				if c then
+					-- placée réfléchie AVANT d'entrer dans le monde du reflet
+					c.CFrame = Reflections.ReflectCFrame(d.CFrame, plane.Center, plane.N)
+					if not inFront(d, plane) then
+						c.Transparency = 1
+					end
+					c.Parent = model
+					table.insert(copy.Pairs, { Src = d, Dst = c, Base = d.Transparency })
+				end
+			end
+		end
+	end
+	model.Parent = world
+	return copy
+end
+
+local function moveCopy(copy: CharCopy, plane: Plane, parts: { BasePart }, cframes: { CFrame })
+	for _, p in ipairs(copy.Pairs) do
+		local src, dst = p.Src, p.Dst
+		if src.Parent then
+			table.insert(parts, dst)
+			table.insert(cframes, Reflections.ReflectCFrame(src.CFrame, plane.Center, plane.N))
+			local want = if inFront(src, plane) then src.Transparency else 1
+			if dst.Transparency ~= want then
+				dst.Transparency = want
+			end
+		elseif dst.Transparency ~= 1 then
+			dst.Transparency = 1
+		end
+	end
+end
+
+-- Personnages à refléter devant ce miroir : le joueur + les plus proches
+local function sourcesFor(plane: Plane, maxOthers: number): { Model }
+	local list: { Model } = {}
+	local others: { { Model: Model, Dist: number } } = {}
+	local me = Players.LocalPlayer
 	for _, player in ipairs(Players:GetPlayers()) do
 		local character = player.Character
-		if character and inst:IsDescendantOf(character) then
-			return true
-		end
-	end
-	return false
-end
-
--- Étendue d'une pièce le long de la normale du plan : (arrière, avant)
--- en studs signés (> 0 = devant le miroir, côté pièce)
-function Reflections.Extent(cf: CFrame, size: Vector3, center: Vector3, n: Vector3): (number, number)
-	local nLocal = cf:VectorToObjectSpace(n)
-	local reach = math.abs(nLocal.X) * size.X / 2 + math.abs(nLocal.Y) * size.Y / 2 + math.abs(nLocal.Z) * size.Z / 2
-	local c = (cf.Position - center):Dot(n)
-	return c - reach, c + reach
-end
-
---[[
-	(v9.9 REALISM99) CAUSE du bug de la capture 28 : un vrai miroir plan ne
-	montre QUE ce qui est devant lui. La v9.8 copiait toute pièce qui
-	dépassait un peu devant le plan (sol, plafond, murs latéraux, plinthes,
-	dalles et toit de la façade, tringles, cadre du miroir...) EN ENTIER :
-	une fois réfléchie, leur partie située DERRIÈRE le miroir (dans le mur,
-	la pièce voisine, dehors : jusqu'à 25 studs) passait DEVANT le plan,
-	entre la caméra du reflet et la glace : grandes dalles sombres en biais
-	et morceaux flottants par-dessus le reflet, surtout caméra levée / de
-	biais / miroir posé loin du mur (80 copies fautives sur 650 dans la
-	scène de test). Roblox n'a pas de plan de coupe pour la caméra d'une
-	ViewportFrame : on COUPE donc chaque copie au plan du miroir.
-	ClipToPlane(cf, size, shape, center, n) -> (cf, size)? :
-	  - entièrement devant : inchangée ;
-	  - entièrement derrière : nil ;
-	  - à cheval : bloc (ou cylindre coupé le long de son axe) dont un axe
-	    local est parallèle à la normale -> raccourci pour s'arrêter au plan ;
-	    autre forme : gardée seulement si elle ne dépasse derrière que d'un
-	    rien (≤ SLIVER), sinon écartée.
-]]
-local SLIVER = 0.06
-local AXIS_EPS = 0.999
-function Reflections.ClipToPlane(cf: CFrame, size: Vector3, shape: string, center: Vector3, n: Vector3): (CFrame?, Vector3?)
-	local back, front = Reflections.Extent(cf, size, center, n)
-	if front <= 0.01 then
-		return nil, nil
-	end
-	if back >= -SLIVER then
-		return cf, size
-	end
-	-- axe local parallèle à la normale ?
-	local nLocal = cf:VectorToObjectSpace(n)
-	local ax, ay, az = math.abs(nLocal.X), math.abs(nLocal.Y), math.abs(nLocal.Z)
-	local axis: string? = nil
-	if ax >= AXIS_EPS then
-		axis = "X"
-	elseif ay >= AXIS_EPS then
-		axis = "Y"
-	elseif az >= AXIS_EPS then
-		axis = "Z"
-	end
-	local clippable = shape == "Block" or (shape == "Cylinder" and axis == "X")
-	if not axis or not clippable then
-		return nil, nil
-	end
-	-- on garde la face avant ; longueur L le long de l'axe telle que
-	-- l'arrière de la boîte (axe presque parallèle : on tient compte du
-	-- léger biais des 2 autres axes) s'arrête AU plan
-	local e: Vector3, a: number, old: number, other: number
-	if axis == "X" then
-		e, a, old, other = cf.RightVector, ax, size.X, ay * size.Y / 2 + az * size.Z / 2
-	elseif axis == "Y" then
-		e, a, old, other = cf.UpVector, ay, size.Y, ax * size.X / 2 + az * size.Z / 2
-	else
-		e, a, old, other = -cf.LookVector, az, size.Z, ax * size.X / 2 + ay * size.Y / 2
-	end
-	local keep = (front - 2 * other) / a
-	if keep < 0.02 then
-		return nil, nil
-	end
-	keep = math.min(keep, old)
-	local newSize = Vector3.new(axis == "X" and keep or size.X, axis == "Y" and keep or size.Y, axis == "Z" and keep or size.Z)
-	local toward = if e:Dot(n) >= 0 then e else -e
-	return cf + toward * ((old - keep) / 2), newSize
-end
-
--- Forme "coupable" d'une copie (bloc simple ; les maillages spéciaux non)
-local function shapeOf(part: BasePart): string
-	if part:FindFirstChildOfClass("SpecialMesh") or part:FindFirstChildOfClass("CylinderMesh") then
-		return "Mesh"
-	end
-	if part.ClassName == "Part" then
-		local shape = (part :: Part).Shape
-		if shape == Enum.PartType.Block then
-			return "Block"
-		elseif shape == Enum.PartType.Cylinder then
-			return "Cylinder"
-		end
-		return "Round"
-	end
-	if part:IsA("SpawnLocation") or part.ClassName == "Seat" then
-		return "Block"
-	end
-	return part.ClassName
-end
-
-local function buildStatic(live: Live)
-	live.Static:ClearAllChildren()
-	local scope = live.Scope
-	if not scope or scope.Parent == nil then
-		live.StaticCount = 0
-		return
-	end
-	local plane = live.Plane
-	local candidates: { { Part: BasePart, Dist: number, CF: CFrame, Size: Vector3 } } = {}
-	local r2 = STATIC_RADIUS * STATIC_RADIUS
-	local clipped = 0
-	for _, d in ipairs(scope:GetDescendants()) do
-		-- (v9.9 : ni voilages / vitres presque transparents, ni anneaux de tringle : budget)
-		if d:IsA("BasePart") and d ~= live.Part and d.Transparency < 0.6 and d:GetAttribute("Mirror") ~= true
-			and d:GetAttribute("MirrorScreen") ~= true and d.Name ~= "CurtainRing" then
-			local offset = d.Position - plane.Center
-			-- (grandes pièces : sol, plafond, murs -> distance au bord de la boîte)
-			local size = d.Size
-			local radius = math.max(size.X, size.Y, size.Z) / 2
-			local dist = math.max(0, offset.Magnitude - radius)
-			if dist * dist <= r2 and not characterOf(d) then
-				-- (v9.9) coupée au plan du miroir : rien ne passe devant la glace
-				local cf, cut = Reflections.ClipToPlane(d.CFrame, size, shapeOf(d), plane.Center, plane.N)
-				if cf and cut then
-					if cut ~= size then
-						clipped += 1
-					end
-					table.insert(candidates, { Part = d, Dist = dist, CF = cf, Size = cut })
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		if character and root and root:IsA("BasePart") then
+			local rel = root.Position - plane.Center
+			if rel.Magnitude <= CHAR_RANGE and rel:Dot(plane.N) > 0.3 then
+				if player == me then
+					table.insert(list, 1, character)
+				else
+					table.insert(others, { Model = character, Dist = rel.Magnitude })
 				end
 			end
 		end
 	end
-	table.sort(candidates, function(a, b)
+	table.sort(others, function(a, b)
 		return a.Dist < b.Dist
 	end)
-	local count = 0
-	for _, entry in ipairs(candidates) do
-		if count >= STATIC_MAX then
-			break
-		end
-		local copy = cloneVisual(entry.Part)
-		if copy then
-			copy.Size = entry.Size
-			copy.CFrame = Reflections.ReflectCFrame(entry.CF, plane.Center, plane.N)
-			copy.Parent = live.Static
-			count += 1
-		end
+	for i = 1, math.min(maxOthers, #others) do
+		table.insert(list, others[i].Model)
 	end
-	live.StaticCount = count
-	live.StaticClipped = clipped
-	live.StaticBuilt = os.clock()
-	live.StaticDirty = false
-end
-
-local function watchScope(live: Live)
-	for _, conn in ipairs(live.ScopeConns) do
-		conn:Disconnect()
-	end
-	table.clear(live.ScopeConns)
-	local scope = live.Scope
-	if not scope then
-		return
-	end
-	local function touched(d: Instance)
-		if d:IsA("BasePart") and d.Parent ~= nil then
-			if (d.Position - live.Plane.Center).Magnitude <= STATIC_RADIUS + 20 then
-				live.StaticDirty = true
-			end
-		elseif d:IsA("BasePart") then
-			live.StaticDirty = true
-		end
-	end
-	table.insert(live.ScopeConns, scope.DescendantAdded:Connect(touched))
-	table.insert(live.ScopeConns, scope.DescendantRemoving:Connect(function(d)
-		if d:IsA("BasePart") then
-			live.StaticDirty = true
-		end
-	end))
-end
-
--- Copie légère du personnage local (Humanoid + vêtements, sans scripts / joints)
-local function buildCharacter(live: Live)
-	if live.CharModel then
-		live.CharModel:Destroy()
-		live.CharModel = nil
-	end
-	table.clear(live.CharPairs)
-	live.CharSource = nil
-	live.CharCount = 0
-	local character = Players.LocalPlayer and Players.LocalPlayer.Character
-	if not character then
-		return
-	end
-	local archivable = character.Archivable
-	character.Archivable = true
-	local ok, copy = pcall(function()
-		return character:Clone()
-	end)
-	character.Archivable = archivable
-	if not ok or copy == nil then
-		return
-	end
-	-- paires source / copie : parcours parallèle AVANT de nettoyer
-	local function pair(src: Instance, dst: Instance)
-		local a, b = src:GetChildren(), dst:GetChildren()
-		if #a ~= #b then
-			return
-		end
-		for i = 1, #a do
-			if a[i].Name == b[i].Name then
-				if a[i]:IsA("BasePart") and b[i]:IsA("BasePart") then
-					table.insert(live.CharPairs, { Src = a[i] :: BasePart, Dst = b[i] :: BasePart })
-				end
-				pair(a[i], b[i])
-			end
-		end
-	end
-	pair(character, copy)
-	for _, d in ipairs(copy:GetDescendants()) do
-		if d:IsA("Script") or d:IsA("LocalScript") or d:IsA("Sound") or d:IsA("JointInstance") or d:IsA("Constraint")
-			or d:IsA("WeldConstraint") or d:IsA("Animator") or d:IsA("ForceField") or d:IsA("ProximityPrompt")
-			or d:IsA("BillboardGui") or d:IsA("ParticleEmitter") or d:IsA("Light") then
-			pcall(d.Destroy, d)
-		elseif d:IsA("BasePart") then
-			d.Anchored = true
-			d.CanCollide = false
-			d.CanQuery = false
-			d.CanTouch = false
-		elseif d:IsA("Humanoid") then
-			pcall(function()
-				d.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
-				d.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
-			end)
-		end
-	end
-	copy.Name = "Reflection"
-	copy.Parent = live.World
-	live.CharModel = copy
-	live.CharSource = character
-	live.CharCount = #character:GetDescendants()
-end
-
-local function updateCharacter(live: Live)
-	local character = Players.LocalPlayer and Players.LocalPlayer.Character
-	local root = character and character:FindFirstChild("HumanoidRootPart")
-	local near = root and root:IsA("BasePart") and (root.Position - live.Plane.Center).Magnitude < STATIC_RADIUS
-		and (root.Position - live.Plane.Center):Dot(live.Plane.N) > -1
-	if not near then
-		if live.CharModel then
-			live.CharModel:Destroy()
-			live.CharModel = nil
-			table.clear(live.CharPairs)
-		end
-		return
-	end
-	if live.CharSource ~= character or live.CharModel == nil or (character and #character:GetDescendants() ~= live.CharCount) then
-		buildCharacter(live)
-	end
-	local plane = live.Plane
-	local parts, cframes = {}, {}
-	for _, p in ipairs(live.CharPairs) do
-		if p.Src.Parent then
-			table.insert(parts, p.Dst)
-			table.insert(cframes, Reflections.ReflectCFrame(p.Src.CFrame, plane.Center, plane.N))
-		end
-	end
-	if #parts > 0 then
-		local ok = pcall(function()
-			live.World:BulkMoveTo(parts, cframes, Enum.BulkMoveMode.FireCFrameChanged)
-		end)
-		if not ok then
-			for i, part in ipairs(parts) do
-				part.CFrame = cframes[i]
-			end
-		end
-	end
+	return list
 end
 
 ----------------------------------------------------------------------
--- Miroirs vivants
+-- Affichage d'un miroir (plaque opaque + toile + SurfaceGui)
 ----------------------------------------------------------------------
 
-local function newLive(part: BasePart, plane: Plane): Live
-	local oval = part:GetAttribute("MirrorShape") == "Oval"
-	local screen = newScreen(plane, oval)
-	local gui = Instance.new("SurfaceGui")
-	gui.Name = "DopamineMirror"
-	-- (v9.9) sur l'écran opaque : face Front (bloc) / Right (disque ovale)
-	gui.Face = oval and Enum.NormalId.Right or Enum.NormalId.Front
-	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	gui.PixelsPerStud = BASE_PPS
-	gui.LightInfluence = 0
-	gui.Brightness = 1
-	gui.MaxDistance = LIVE_RANGE + 15
-	gui.ClipsDescendants = true
-	gui.ZOffset = 1
-	gui.Adornee = screen
-	-- (ovale : un CanvasGroup arrondi découpe la ViewportFrame en ellipse ;
-	-- un simple Frame + UICorner ne découpe PAS ses enfants dans Roblox)
-	local clip: GuiObject
-	if oval then
-		clip = Instance.new("CanvasGroup")
-		local corner = Instance.new("UICorner")
-		corner.CornerRadius = UDim.new(0.5, 0)
-		corner.Parent = clip
-	else
-		clip = Instance.new("Frame")
-		clip.ClipsDescendants = true
+local function newPart(class: string, name: string): BasePart
+	local p = Instance.new(class) :: BasePart
+	p.Name = name
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.CastShadow = false
+	p.Material = Enum.Material.SmoothPlastic
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	return p
+end
+
+local function glassColors(room: Room?): ColorSequence
+	local wall = room and room.Wall or DEFAULT_WALL
+	local ceiling = room and room.CeilingColor or DEFAULT_CEILING
+	local floor = room and room.FloorColor or DEFAULT_FLOOR
+	local tint = Color3.fromRGB(222, 232, 242)
+	return ColorSequence.new({
+		ColorSequenceKeypoint.new(0, lighten(ceiling, 0.1):Lerp(tint, 0.35)),
+		ColorSequenceKeypoint.new(0.2, lighten(wall, 0.12):Lerp(tint, 0.3)),
+		ColorSequenceKeypoint.new(0.62, wall:Lerp(tint, 0.25)),
+		ColorSequenceKeypoint.new(0.74, darken(floor, 0.05):Lerp(tint, 0.2)),
+		ColorSequenceKeypoint.new(1, darken(floor, 0.15):Lerp(tint, 0.2)),
+	})
+end
+
+local function screenColor(room: Room?): Color3
+	local wall = room and room.Wall or DEFAULT_WALL
+	return wall:Lerp(Color3.fromRGB(222, 232, 242), 0.3)
+end
+
+-- Éclairage des ViewportFrames (pas d'ombres ni de lampes : ambiance douce du lieu)
+local function lightStrip(s: StripObj, plane: Plane)
+	local clock = Lighting.ClockTime
+	local night = clock < 6.3 or clock > 18.7
+	local k = night and 0.82 or 1
+	s.Viewport.Ambient = Color3.new(0.6 * k, 0.6 * k, 0.62 * k)
+	s.Viewport.LightColor = Color3.new(0.5 * k, 0.49 * k, 0.46 * k)
+	-- du plafond vers le sol, un peu vers le mur d'en face (réfléchi)
+	s.Viewport.LightDirection = (-plane.V * 1 - plane.N * 0.35 + plane.U * 0.2).Unit
+end
+
+local function buildBackdrop(s: StripObj, cp: Plane, room: Room)
+	s.Backdrop:ClearAllChildren()
+	for _, spec in ipairs(Reflections.BackdropSpecs(cp, room)) do
+		local p = newPart("Part", spec.Name)
+		p.Size = spec.Size
+		p.CFrame = spec.CFrame
+		p.Color = spec.Color
+		p.Material = spec.Material
+		p.Parent = s.Backdrop
 	end
-	clip.Name = "Clip"
-	clip.Size = UDim2.fromScale(1, 1)
-	clip.BackgroundColor3 = GLASS_TINT
-	clip.BackgroundTransparency = oval and 1 or 0
+end
+
+local function placeStrips(disp: Display)
+	local pps = disp.PPS
+	local shape = disp.Shape
+	local canvasH = 2 * shape.CH * pps
+	for _, s in ipairs(disp.Strips) do
+		local spec = s.Spec
+		local x0 = math.floor((shape.CW - spec.A) * pps)
+		local x1 = math.ceil((shape.CW + spec.A) * pps)
+		-- (bords horizontaux arrondis au plus près : deux bandes voisines ont
+		-- EXACTEMENT le même bord -> ni fente ni recouvrement)
+		local y0 = math.floor((shape.CH - spec.Y1) * pps + 0.5)
+		local y1 = math.floor((shape.CH - spec.Y0) * pps + 0.5)
+		if spec.JTop then
+			y0 = math.ceil((shape.CH - spec.Y1) * pps)
+		end
+		if spec.JBottom then
+			y1 = math.ceil((shape.CH - spec.Y0) * pps)
+		end
+		if #disp.Strips == 1 then
+			y0, y1 = 0, math.ceil(canvasH)
+		end
+		s.Px = Vector2.new(x0, y0)
+		s.Clip.Position = UDim2.fromOffset(x0, y0)
+		s.Clip.Size = UDim2.fromOffset(math.max(1, x1 - x0), math.max(1, y1 - y0))
+	end
+	if disp.Bevel then
+		disp.Bevel.Thickness = math.max(1, disp.Inset * pps)
+	end
+end
+
+local function destroyDisplay(disp: Display)
+	pcall(disp.Gui.Destroy, disp.Gui)
+	pcall(disp.Screen.Destroy, disp.Screen)
+	pcall(disp.CanvasPart.Destroy, disp.CanvasPart)
+	displays[disp.Part] = nil
+end
+
+local function newStrip(spec: Strip, parent: Instance, index: number): StripObj
+	local clip = Instance.new("Frame")
+	clip.Name = "Strip" .. index
+	clip.BackgroundTransparency = 1
 	clip.BorderSizePixel = 0
-	clip.Parent = gui
+	clip.ClipsDescendants = true
+	clip.ZIndex = 2
+	clip.Parent = parent
 	local viewport = Instance.new("ViewportFrame")
 	viewport.Name = "Reflection"
-	viewport.BackgroundTransparency = 1
+	viewport.BackgroundColor3 = DEFAULT_WALL
+	viewport.BackgroundTransparency = 0 -- (opaque : jamais de trou)
 	viewport.BorderSizePixel = 0
-	viewport.ImageColor3 = Color3.fromRGB(236, 242, 248) -- verre légèrement froid
+	viewport.ZIndex = 2
+	viewport.ImageColor3 = Color3.fromRGB(238, 243, 248) -- verre légèrement froid
 	viewport.Parent = clip
 	local camera = Instance.new("Camera")
 	camera.Name = "MirrorCamera"
@@ -742,141 +1088,381 @@ local function newLive(part: BasePart, plane: Plane): Live
 	local world = Instance.new("WorldModel")
 	world.Name = "World"
 	world.Parent = viewport
-	local static = Instance.new("Model")
-	static.Name = "Static"
-	static.Parent = world
-	-- voile de verre (reflet diagonal très discret)
-	local sheen = Instance.new("Frame")
-	sheen.Name = "Sheen"
-	sheen.Size = UDim2.fromScale(1, 1)
+	local backdrop = Instance.new("Model")
+	backdrop.Name = "Room"
+	backdrop.Parent = world
+	return { Spec = spec, Clip = clip, Viewport = viewport, Camera = camera, World = world, Backdrop = backdrop, Chars = {}, Px = Vector2.zero }
+end
+
+local function newDisplay(part: BasePart, plane: Plane, live: boolean): Display
+	local kind = kindOf(part, plane)
+	local shape = Reflections.ShapeOf(kind, plane.HalfW, plane.HalfH)
+	local cp = Reflections.CanvasPlane(plane, shape)
+	local room = measureRoom(part, cp)
+	-- plaque opaque (forme exacte) + toile
+	local folder = Instance.new("Folder")
+	folder.Name = "MirrorScreen"
+	local specs, canvasCF, canvasSize = Reflections.ScreenSpecs(plane, shape)
+	for i, spec in ipairs(specs) do
+		local p = newPart("Part", "Screen" .. i) :: Part
+		if spec.Shape == "Cylinder" then
+			p.Shape = Enum.PartType.Cylinder
+		end
+		p.Size = spec.Size
+		p.CFrame = spec.CFrame
+		p.Color = screenColor(room)
+		p:SetAttribute("MirrorScreen", true)
+		p.Parent = folder
+	end
+	folder.Parent = screenParent()
+	local canvas = newPart("Part", "MirrorCanvas")
+	canvas.Size = canvasSize
+	canvas.CFrame = canvasCF
+	canvas.Transparency = 1
+	canvas:SetAttribute("MirrorScreen", true)
+	canvas.Parent = folder
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "DopamineMirror"
+	quiet(gui)
+	gui.Face = Enum.NormalId.Front
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = BASE_PPS
+	gui.LightInfluence = 0
+	gui.Brightness = 1
+	gui.AlwaysOnTop = false
+	gui.MaxDistance = LIVE_RANGE + 20
+	gui.ZOffset = 0
+	pcall(function()
+		(gui :: any).ClipsDescendants = true
+	end)
+	gui.Adornee = canvas
+	local root = Instance.new("Frame")
+	root.Name = "Root"
+	root.Size = UDim2.fromScale(1, 1)
+	root.BackgroundTransparency = 1
+	root.BorderSizePixel = 0
+	root.ClipsDescendants = true
+	root.Parent = gui
+	-- forme de la glace en échelle de la toile (Scale : indépendant de la densité)
+	local function shaped(name: string, z: number, insetStuds: number): Frame
+		local f = Instance.new("Frame")
+		f.Name = name
+		f.BorderSizePixel = 0
+		f.ZIndex = z
+		f.BackgroundTransparency = 1
+		f.Parent = root
+		local a = (shape.CW - insetStuds) / shape.CW
+		if kind == "Oval" then
+			local b = (shape.CH - insetStuds) / shape.CH
+			f.AnchorPoint = Vector2.new(0.5, 0.5)
+			f.Position = UDim2.fromScale(0.5, 0.5)
+			f.Size = UDim2.fromScale(a, b)
+			local corner = Instance.new("UICorner")
+			corner.CornerRadius = UDim.new(0.5, 0) -- stade : rayon = moitié du petit côté
+			corner.Parent = f
+		elseif kind == "Arch" then
+			-- rectangle du bas seulement (l'arche a son propre disque)
+			f.AnchorPoint = Vector2.new(0.5, 1)
+			f.Position = UDim2.fromScale(0.5, 1)
+			f.Size = UDim2.fromScale(1, (2 * shape.Hr) / (2 * shape.CH))
+		else
+			f.Size = UDim2.fromScale(1, 1)
+		end
+		return f
+	end
+	local glass = shaped("Glass", 1, 0)
+	glass.BackgroundTransparency = 0
+	glass.BackgroundColor3 = Color3.new(1, 1, 1)
+	local glassGradient = Instance.new("UIGradient")
+	glassGradient.Rotation = 90
+	glassGradient.Color = glassColors(room)
+	glassGradient.Parent = glass
+	if kind == "Arch" then
+		-- demi-disque de l'arche (cadre coupé à la jonction)
+		local top = Instance.new("Frame")
+		top.Name = "ArchClip"
+		top.BackgroundTransparency = 1
+		top.BorderSizePixel = 0
+		top.ClipsDescendants = true
+		top.Size = UDim2.fromScale(1, (shape.CW) / (2 * shape.CH))
+		top.ZIndex = 1
+		top.Parent = root
+		local disc = Instance.new("Frame")
+		disc.Name = "ArchGlass"
+		disc.BorderSizePixel = 0
+		disc.BackgroundColor3 = Color3.new(1, 1, 1)
+		disc.Size = UDim2.fromScale(1, 2)
+		disc.ZIndex = 1
+		disc.Parent = top
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0.5, 0)
+		corner.Parent = disc
+		local g2 = glassGradient:Clone()
+		g2.Parent = disc
+	end
+	local stripsFrame = Instance.new("Frame")
+	stripsFrame.Name = "Strips"
+	stripsFrame.Size = UDim2.fromScale(1, 1)
+	stripsFrame.BackgroundTransparency = 1
+	stripsFrame.BorderSizePixel = 0
+	stripsFrame.ZIndex = 2
+	stripsFrame.Visible = false
+	stripsFrame.Parent = root
+	local minPPS = Reflections.MinPPS(shape)
+	local stripSpecs, inset = Reflections.Strips(shape, minPPS)
+	local strips: { StripObj } = {}
+	if live then
+		for i, spec in ipairs(stripSpecs) do
+			local s = newStrip(spec, stripsFrame, i)
+			s.Viewport.BackgroundColor3 = room.Wall
+			buildBackdrop(s, cp, room)
+			lightStrip(s, cp)
+			table.insert(strips, s)
+		end
+	end
+	-- reflet de lumière (diagonale qui glisse)
+	local sheen = shaped("Sheen", 4, inset)
+	sheen.BackgroundTransparency = 0
 	sheen.BackgroundColor3 = Color3.new(1, 1, 1)
-	sheen.BorderSizePixel = 0
-	sheen.ZIndex = 3
-	sheen.Parent = clip
-	local gradient = Instance.new("UIGradient")
-	gradient.Rotation = 28
-	gradient.Transparency = NumberSequence.new({
+	local sheenGradient = Instance.new("UIGradient")
+	sheenGradient.Rotation = 28
+	sheenGradient.Transparency = NumberSequence.new({
 		NumberSequenceKeypoint.new(0, 1),
 		NumberSequenceKeypoint.new(0.34, 0.97),
-		NumberSequenceKeypoint.new(0.46, 0.9),
-		NumberSequenceKeypoint.new(0.56, 0.95),
+		NumberSequenceKeypoint.new(0.45, 0.88),
+		NumberSequenceKeypoint.new(0.5, 0.93),
+		NumberSequenceKeypoint.new(0.58, 0.96),
 		NumberSequenceKeypoint.new(1, 1),
 	})
-	gradient.Parent = sheen
-	gui.Parent = guiParent(screen)
-	local live: Live = {
+	sheenGradient.Parent = sheen
+	-- biseau chromé (ovale : tout autour ; arche : sur l'arc)
+	local bevel: UIStroke? = nil
+	if kind == "Oval" or kind == "Arch" then
+		local holder: Frame
+		if kind == "Oval" then
+			holder = shaped("Bevel", 5, inset)
+		else
+			local clipTop = Instance.new("Frame")
+			clipTop.Name = "BevelClip"
+			clipTop.BackgroundTransparency = 1
+			clipTop.BorderSizePixel = 0
+			clipTop.ClipsDescendants = true
+			clipTop.ZIndex = 5
+			clipTop.Size = UDim2.fromScale(1, (shape.CW) / (2 * shape.CH))
+			clipTop.Parent = root
+			holder = Instance.new("Frame")
+			holder.Name = "Bevel"
+			holder.BackgroundTransparency = 1
+			holder.BorderSizePixel = 0
+			holder.ZIndex = 5
+			local r = (shape.CW - inset) / shape.CW
+			holder.AnchorPoint = Vector2.new(0.5, 0.5)
+			holder.Position = UDim2.fromScale(0.5, 1)
+			holder.Size = UDim2.fromScale(r, 2 * r)
+			local corner = Instance.new("UICorner")
+			corner.CornerRadius = UDim.new(0.5, 0)
+			corner.Parent = holder
+			holder.Parent = clipTop
+		end
+		local stroke = Instance.new("UIStroke")
+		stroke.Color = Color3.new(1, 1, 1)
+		stroke.Thickness = math.max(1, inset * BASE_PPS)
+		stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		stroke.LineJoinMode = Enum.LineJoinMode.Round
+		pcall(function()
+			(stroke :: any).BorderStrokePosition = (Enum :: any).BorderStrokePosition.Outer
+		end)
+		local chrome = Instance.new("UIGradient")
+		chrome.Rotation = 45
+		chrome.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, lighten(BEVEL_COLOR, 0.5)),
+			ColorSequenceKeypoint.new(0.35, BEVEL_COLOR),
+			ColorSequenceKeypoint.new(0.6, darken(BEVEL_COLOR, 0.18)),
+			ColorSequenceKeypoint.new(1, lighten(BEVEL_COLOR, 0.3)),
+		})
+		chrome.Parent = stroke
+		stroke.Parent = holder
+		bevel = stroke
+	end
+	gui.Parent = guiParent(canvas)
+	local disp: Display = {
 		Part = part,
 		Plane = plane,
+		Canvas = cp,
+		Shape = shape,
+		Live = live,
+		Screen = folder,
+		CanvasPart = canvas,
 		Gui = gui,
-		Clip = clip,
-		Viewport = viewport,
-		World = world,
-		Camera = camera,
-		Static = static,
-		Screen = screen,
-		Oval = oval,
-		StaticClipped = 0,
-		StaticBuilt = 0,
-		StaticDirty = true,
-		StaticCount = 0,
-		Scope = scopeOf(part),
-		ScopeConns = {},
-		CharModel = nil,
-		CharSource = nil,
-		CharPairs = {},
-		CharCount = 0,
+		Root = root,
+		Glass = glass,
+		GlassGradient = glassGradient,
+		Strips = strips,
+		StripsFrame = stripsFrame,
+		Sheen = sheen,
+		SheenGradient = sheenGradient,
+		Bevel = bevel,
+		Inset = inset,
+		MinPPS = minPPS,
+		Room = room,
+		RoomAt = os.clock(),
 		PPS = BASE_PPS,
 		View = nil,
-		Visible = true,
-		LastCam = nil,
+		Shown = false,
 	}
-	watchScope(live)
-	return live
+	gui.PixelsPerStud = disp.PPS
+	placeStrips(disp)
+	return disp
 end
 
-local function dropLive(live: Live)
-	for _, conn in ipairs(live.ScopeConns) do
-		conn:Disconnect()
+-- La forme / la place du miroir a changé ?
+local function moved(a: Plane, b: Plane): boolean
+	return (a.Center - b.Center).Magnitude > 0.01 or a.N:Dot(b.N) < 0.9999 or a.V:Dot(b.V) < 0.9999
+		or math.abs(a.HalfW - b.HalfW) > 0.01 or math.abs(a.HalfH - b.HalfH) > 0.01
+end
+
+local function updateSheen(disp: Display, camPos: Vector3)
+	local cp = disp.Canvas
+	local toCam = camPos - cp.Center
+	if toCam.Magnitude < 1e-3 then
+		return
 	end
-	table.clear(live.ScopeConns)
-	pcall(live.Gui.Destroy, live.Gui)
-	pcall(live.Screen.Destroy, live.Screen)
-	lives[live.Part] = nil
+	toCam = toCam.Unit
+	local side = toCam:Dot(cp.U)
+	local vertical = toCam:Dot(cp.V)
+	disp.SheenGradient.Offset = Vector2.new(math.clamp(-side * 0.5, -0.5, 0.5), math.clamp(vertical * 0.3, -0.3, 0.3))
 end
 
--- Éclairage de la ViewportFrame (pas d'ombres ni de lampes : ambiance du lieu)
-local function lightViewport(live: Live)
-	local ambient = Lighting.Ambient
-	local bright = math.clamp(Lighting.Brightness / 2, 0.35, 1.1)
-	local base = Color3.new(math.min(1, ambient.R * 1.7 + 0.28), math.min(1, ambient.G * 1.7 + 0.28), math.min(1, ambient.B * 1.7 + 0.3))
-	live.Viewport.Ambient = base
-	live.Viewport.LightColor = Color3.new(0.62 * bright, 0.6 * bright, 0.57 * bright)
-	live.Viewport.LightDirection = Vector3.new(-0.35, -1, -0.45)
-end
-
--- Reflet affiché (écran opaque + SurfaceGui) ou caché (verre statique)
-local function setShown(live: Live, shown: boolean)
-	live.Gui.Enabled = shown
-	local t = shown and 0 or 1
-	if live.Screen.Transparency ~= t then
-		live.Screen.Transparency = t
+local function setLiveShown(disp: Display, shown: boolean)
+	if disp.Shown ~= shown then
+		disp.Shown = shown
+		disp.StripsFrame.Visible = shown
 	end
 end
 
-local function updateLive(live: Live, camCF: CFrame)
-	local part = live.Part
+local function updateChars(disp: Display)
+	local plane = disp.Plane
+	local sources = sourcesFor(plane, if #disp.Strips > 1 then 1 else 3)
+	local want: { [Model]: boolean } = {}
+	for _, source in ipairs(sources) do
+		want[source] = true
+		watchCharacter(source)
+	end
+	-- (filet de sécurité si un DescendantAdded manque : nombre de descendants, 2 fois / s)
+	local counts: { [Model]: number } = {}
+	if frameNo % 15 == 0 then
+		for _, source in ipairs(sources) do
+			counts[source] = #source:GetDescendants()
+		end
+	end
+	for _, s in ipairs(disp.Strips) do
+		-- copies périmées / en trop
+		for source, copy in pairs(s.Chars) do
+			if not want[source] or not source:IsDescendantOf(workspace) then
+				copy.Model:Destroy()
+				s.Chars[source] = nil
+			elseif frameNo - copy.Built >= 9 and (copy.Version ~= (charVersion[source] or 1) or (counts[source] ~= nil and counts[source] ~= copy.Count)) then
+				-- (accessoire / outil ajouté ou retiré : copie refaite)
+				copy.Model:Destroy()
+				s.Chars[source] = nil
+			end
+		end
+		local parts, cframes = {}, {}
+		for _, source in ipairs(sources) do
+			local copy = s.Chars[source]
+			if not copy then
+				copy = buildCopy(source, s.World, plane)
+				s.Chars[source] = copy
+			end
+			moveCopy(copy, plane, parts, cframes)
+		end
+		if #parts > 0 then
+			local ok = pcall(function()
+				s.World:BulkMoveTo(parts, cframes, Enum.BulkMoveMode.FireCFrameChanged)
+			end)
+			if not ok then
+				for i, part in ipairs(parts) do
+					part.CFrame = cframes[i]
+				end
+			end
+		end
+	end
+end
+
+local function updateDisplay(disp: Display, camCF: CFrame)
+	local part = disp.Part
 	local plane = Reflections.PlaneOf(part)
-	if not plane then
-		setShown(live, false)
+	if not plane or moved(plane, disp.Plane) then
+		-- (le miroir a bougé / changé : tout est refait à la prochaine sélection)
+		destroyDisplay(disp)
 		return
 	end
-	-- (le miroir a bougé : copies à refaire, écran replacé)
-	if (plane.Center - live.Plane.Center).Magnitude > 0.01 or plane.N:Dot(live.Plane.N) < 0.9999
-		or math.abs(plane.HalfW - live.Plane.HalfW) > 0.01 or math.abs(plane.HalfH - live.Plane.HalfH) > 0.01 then
-		live.Plane = plane
-		live.StaticDirty = true
-		local cf, size = Reflections.ScreenCFrame(plane, live.Oval)
-		live.Screen.Size = size
-		live.Screen.CFrame = cf
+	if disp.Gui.Parent == nil or disp.Screen.Parent == nil then
+		destroyDisplay(disp)
+		return
 	end
-	if live.Screen.Parent == nil then
-		live.Screen.Parent = screenParent()
+	updateSheen(disp, camCF.Position)
+	-- pièce re-mesurée de temps en temps (murs repeints, pièce refaite)
+	if os.clock() - disp.RoomAt > ROOM_EVERY then
+		disp.RoomAt = os.clock()
+		local room = measureRoom(part, disp.Canvas)
+		if not sameRoom(disp.Room, room) then
+			disp.Room = room
+			disp.GlassGradient.Color = glassColors(room)
+			for _, d in ipairs(disp.Screen:GetChildren()) do
+				if d:IsA("BasePart") and d ~= disp.CanvasPart then
+					d.Color = screenColor(room)
+				end
+			end
+			for _, s in ipairs(disp.Strips) do
+				s.Viewport.BackgroundColor3 = room.Wall
+				buildBackdrop(s, disp.Canvas, room)
+				lightStrip(s, disp.Canvas)
+			end
+		end
 	end
-	if live.StaticDirty and os.clock() - live.StaticBuilt > 0.5 then
-		buildStatic(live)
-		lightViewport(live)
+	if not disp.Live or #disp.Strips == 0 then
+		setLiveShown(disp, false)
+		return
 	end
-	local view = Reflections.ComputeView(camCF.Position, live.Plane, BASE_PPS)
+	local view = Reflections.ComputeView(camCF.Position, disp.Canvas, BASE_PPS, #disp.Strips, disp.MinPPS)
 	if not view then
-		setShown(live, false)
-		live.View = nil
+		setLiveShown(disp, false)
+		disp.View = nil
 		return
 	end
-	-- densité de la toile : par paliers (évite de tout remettre en page à chaque image)
-	local pps = view.PPS
-	if math.abs(pps - live.PPS) / live.PPS > 0.15 then
-		live.PPS = pps
-		live.Gui.PixelsPerStud = pps
+	-- densité de la toile par paliers (évite de tout remettre en page à chaque image)
+	if math.abs(view.PPS - disp.PPS) / disp.PPS > 0.15 or view.PPS < disp.PPS - 1e-6 then
+		disp.PPS = view.PPS
+		disp.Gui.PixelsPerStud = view.PPS
+		placeStrips(disp)
 	end
-	-- recalcul avec la densité retenue (cadre en pixels de CETTE toile)
-	local fitted = Reflections.ComputeView(camCF.Position, live.Plane, live.PPS)
-	if fitted and fitted.PPS < live.PPS - 1e-6 then
-		live.PPS = fitted.PPS
-		live.Gui.PixelsPerStud = fitted.PPS
+	local fitted = Reflections.ComputeView(camCF.Position, disp.Canvas, disp.PPS, #disp.Strips, disp.MinPPS)
+	if not fitted then
+		setLiveShown(disp, false)
+		disp.View = nil
+		return
 	end
-	view = fitted or view
-	live.View = view
-	setShown(live, true)
-	live.Viewport.Position = UDim2.fromOffset(view.FramePos.X, view.FramePos.Y)
-	live.Viewport.Size = UDim2.fromOffset(view.FrameSize.X, view.FrameSize.Y)
-	live.Camera.FieldOfView = view.FieldOfView
-	live.Camera.CFrame = view.CameraCF
-	updateCharacter(live)
+	disp.View = fitted
+	local fx, fy = math.floor(fitted.FramePos.X + 0.5), math.floor(fitted.FramePos.Y + 0.5)
+	local fw, fh = math.max(1, math.floor(fitted.FrameSize.X + 0.5)), math.max(1, math.floor(fitted.FrameSize.Y + 0.5))
+	for _, s in ipairs(disp.Strips) do
+		s.Viewport.Position = UDim2.fromOffset(fx - s.Px.X, fy - s.Px.Y)
+		s.Viewport.Size = UDim2.fromOffset(fw, fh)
+		s.Camera.FieldOfView = fitted.FieldOfView
+		s.Camera.CFrame = fitted.CameraCF
+	end
+	updateChars(disp)
+	setLiveShown(disp, true)
 end
+
+----------------------------------------------------------------------
+-- Sélection : miroirs vivants + miroirs "statiques" jolis
+----------------------------------------------------------------------
 
 -- Le miroir est-il visible (devant, à l'écran, pas derrière un mur) ?
-local function visibleScore(part: BasePart, cam: Camera, occlusion: boolean): number
-	if part.Parent == nil then
+local function visibleScore(part: BasePart, cam: Camera, range: number): number
+	if not part:IsDescendantOf(workspace) then
 		return -1
 	end
 	local plane = Reflections.PlaneOf(part)
@@ -887,7 +1473,7 @@ local function visibleScore(part: BasePart, cam: Camera, occlusion: boolean): nu
 	local rel = camPos - plane.Center
 	local dist = rel.Magnitude
 	local d = rel:Dot(plane.N)
-	if d < 0.1 or dist > LIVE_RANGE then
+	if d < 0.1 or dist > range then
 		return -1
 	end
 	local onScreen = false
@@ -907,29 +1493,27 @@ local function visibleScore(part: BasePart, cam: Camera, occlusion: boolean): nu
 	if not onScreen then
 		return -1
 	end
-	if occlusion then
-		local ok, hit = pcall(function()
-			local params = RaycastParams.new()
-			params.FilterType = Enum.RaycastFilterType.Exclude
-			local list: { Instance } = {}
-			local character = Players.LocalPlayer and Players.LocalPlayer.Character
-			if character then
-				table.insert(list, character)
-			end
-			local item = part.Parent
-			if item then
-				table.insert(list, item)
-			end
-			local weather = workspace:FindFirstChild("DopamineWeather")
-			if weather then
-				table.insert(list, weather)
-			end
-			params.FilterDescendantsInstances = list
-			return workspace:Raycast(camPos, (plane.Center - camPos) * 0.97, params)
-		end)
-		if ok and hit and hit.Instance:IsA("BasePart") and hit.Instance.Transparency < 0.6 then
-			return -1
+	local ok, hit = pcall(function()
+		local params = RaycastParams.new()
+		params.FilterType = Enum.RaycastFilterType.Exclude
+		local list: { Instance } = {}
+		local character = Players.LocalPlayer and Players.LocalPlayer.Character
+		if character then
+			table.insert(list, character)
 		end
+		local item = part.Parent
+		if item then
+			table.insert(list, item)
+		end
+		local weather = workspace:FindFirstChild("DopamineWeather")
+		if weather then
+			table.insert(list, weather)
+		end
+		params.FilterDescendantsInstances = list
+		return workspace:Raycast(camPos, (plane.Center - camPos) * 0.97, params)
+	end)
+	if ok and hit and hit.Instance:IsA("BasePart") and hit.Instance.Transparency < 0.6 then
+		return -1
 	end
 	-- grand à l'écran = prioritaire
 	return (plane.HalfW * plane.HalfH) * (d / dist) / (dist * dist + 1)
@@ -938,38 +1522,49 @@ end
 local function selectMirrors(cam: Camera)
 	local q = GraphicsQuality.Get()
 	local want: { { Part: BasePart, Score: number } } = {}
-	if q.MaxMirrors > 0 then
-		for part in pairs(mirrors) do
-			if part.Parent == nil then
-				mirrors[part] = nil
-			else
-				local score = visibleScore(part, cam, true)
-				if score > 0 then
-					table.insert(want, { Part = part, Score = score })
-				end
+	for part in pairs(mirrors) do
+		if not part:IsDescendantOf(workspace) then
+			mirrors[part] = nil
+		else
+			local score = visibleScore(part, cam, math.max(LIVE_RANGE, STATIC_RANGE))
+			if score > 0 then
+				table.insert(want, { Part = part, Score = score })
 			end
 		end
-		table.sort(want, function(a, b)
-			return a.Score > b.Score
-		end)
 	end
-	local keep: { [BasePart]: boolean } = {}
-	for i = 1, math.min(q.MaxMirrors, #want) do
-		keep[want[i].Part] = true
-	end
-	for part, live in pairs(lives) do
-		if not keep[part] then
-			dropLive(live)
+	table.sort(want, function(a, b)
+		return a.Score > b.Score
+	end)
+	local mode: { [BasePart]: boolean } = {} -- true = vivant, false = statique
+	local liveLeft = q.MaxMirrors
+	local staticLeft = STATIC_MAX
+	local camPos = cam.CFrame.Position
+	for _, entry in ipairs(want) do
+		local dist = (entry.Part.Position - camPos).Magnitude
+		if liveLeft > 0 and dist <= LIVE_RANGE then
+			liveLeft -= 1
+			mode[entry.Part] = true
+		elseif staticLeft > 0 and dist <= STATIC_RANGE then
+			staticLeft -= 1
+			mode[entry.Part] = false
 		end
 	end
-	for part in pairs(keep) do
-		if not lives[part] then
+	for part, disp in pairs(displays) do
+		local m = mode[part]
+		if m == nil or m ~= disp.Live then
+			destroyDisplay(disp)
+		end
+	end
+	for part, live in pairs(mode) do
+		if not displays[part] then
 			local plane = Reflections.PlaneOf(part)
 			if plane then
-				local live = newLive(part, plane)
-				lives[part] = live
-				buildStatic(live)
-				lightViewport(live)
+				local ok, result = pcall(newDisplay, part, plane, live)
+				if ok and result then
+					displays[part] = result
+				else
+					warn("[Reflections] " .. tostring(result))
+				end
 			end
 		end
 	end
@@ -994,7 +1589,7 @@ local FLOOR_GLOSS: { [Enum.Material]: number } = {
 local function setFloors(on: boolean)
 	if on then
 		for part in pairs(floors) do
-			if part.Parent == nil then
+			if not part:IsDescendantOf(workspace) then
 				floors[part] = nil
 			else
 				local gloss = FLOOR_GLOSS[part.Material]
@@ -1027,6 +1622,7 @@ end
 local function addSheen(part: BasePart)
 	local gui = Instance.new("SurfaceGui")
 	gui.Name = "DopamineSheen"
+	quiet(gui)
 	gui.Face = Enum.NormalId.Front
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	gui.PixelsPerStud = 20
@@ -1079,7 +1675,7 @@ local function stepGloss(cam: Camera)
 	local camPos = camCF.Position
 	local near: { { Part: BasePart, Dist: number } } = {}
 	for part in pairs(screens) do
-		if part.Parent == nil then
+		if not part:IsDescendantOf(workspace) then
 			screens[part] = nil
 			removeSheen(part)
 		else
@@ -1098,7 +1694,7 @@ local function stepGloss(cam: Camera)
 		keep[near[i].Part] = true
 	end
 	for part in pairs(sheens) do
-		if not keep[part] then
+		if not keep[part] or sheens[part].Gui.Parent == nil then
 			removeSheen(part)
 		end
 	end
@@ -1106,7 +1702,6 @@ local function stepGloss(cam: Camera)
 		if not sheens[part] then
 			addSheen(part)
 		end
-		-- le reflet glisse avec l'angle de vue (parallaxe douce)
 		local sheen = sheens[part]
 		if sheen then
 			local toCam = (camPos - part.Position).Unit
@@ -1144,15 +1739,17 @@ local function step(dt: number)
 		return
 	end
 	frameClock = 0
+	frameNo += 1
 	local camCF = cam.CFrame
-	for _, live in pairs(lives) do
-		if live.Part.Parent == nil then
-			dropLive(live)
+	for _, disp in pairs(displays) do
+		if not disp.Part:IsDescendantOf(workspace) then
+			destroyDisplay(disp)
 		else
-			local ok, err = pcall(updateLive, live, camCF)
+			local ok, err = pcall(updateDisplay, disp, camCF)
 			if not ok then
 				warn("[Reflections] " .. tostring(err))
-				pcall(setShown, live, false)
+				-- (jamais un reflet à moitié à jour : on cache la couche vivante)
+				pcall(setLiveShown, disp, false)
 			end
 		end
 	end
@@ -1189,14 +1786,15 @@ local function stop()
 		qualityConn:Disconnect()
 		qualityConn = nil
 	end
-	for _, live in pairs(lives) do
-		dropLive(live)
+	for _, disp in pairs(displays) do
+		destroyDisplay(disp)
 	end
 	for part in pairs(sheens) do
 		removeSheen(part)
 	end
 	setFloors(false)
 	glossOn = false
+	unwatchAll()
 	if screenFolder then
 		pcall(screenFolder.Destroy, screenFolder)
 		screenFolder = nil
@@ -1224,11 +1822,11 @@ function Reflections.IsActive(): boolean
 	return active
 end
 
--- (tests / rendus) miroirs vivants
+-- (tests / rendus) miroirs affichés
 function Reflections.Live(): { any }
 	local list = {}
-	for _, live in pairs(lives) do
-		table.insert(list, live)
+	for _, disp in pairs(displays) do
+		table.insert(list, disp)
 	end
 	return list
 end
@@ -1239,9 +1837,16 @@ function Reflections.ForceStep()
 	step(0)
 end
 
+-- (tests) relit tout le Workspace (miroirs ajoutés sans DescendantAdded)
+function Reflections.Rescan()
+	if active then
+		scanAll()
+	end
+end
+
 -- (tests) compteurs
 function Reflections.Counts(): { [string]: number }
-	local n = { Mirrors = 0, Screens = 0, Floors = 0, Live = 0, Sheens = 0, FloorsGlossy = 0, Clipped = 0 }
+	local n = { Mirrors = 0, Screens = 0, Floors = 0, Live = 0, Static = 0, Sheens = 0, FloorsGlossy = 0, Strips = 0, Copies = 0 }
 	for _ in pairs(mirrors) do
 		n.Mirrors += 1
 	end
@@ -1251,9 +1856,18 @@ function Reflections.Counts(): { [string]: number }
 	for _ in pairs(floors) do
 		n.Floors += 1
 	end
-	for _, live in pairs(lives) do
-		n.Live += 1
-		n.Clipped += live.StaticClipped
+	for _, disp in pairs(displays) do
+		if disp.Live then
+			n.Live += 1
+		else
+			n.Static += 1
+		end
+		n.Strips += #disp.Strips
+		for _, s in ipairs(disp.Strips) do
+			for _ in pairs(s.Chars) do
+				n.Copies += 1
+			end
+		end
 	end
 	for _ in pairs(sheens) do
 		n.Sheens += 1

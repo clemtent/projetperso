@@ -493,8 +493,71 @@ underObstacle = function(p: Vector3, pad: number): boolean
 	return false
 end
 
--- `F` au pied (dessus du sol), seed = sel du choix ; jusqu'à 4 lames vers
--- les lieux les plus proches (au-delà de 25 studs), un par type de lieu
+-- (v11, CITY11) obstacles hauts autour d'un poteau : lampadaires du serveur
+-- (modèles "Lamp" de TownKit, lus une fois) + mobilier publié (obstacles)
+local serverLamps: { Vector3 }? = nil
+local function lampsNear(here: Vector3, r: number): { { any } }
+	if not serverLamps then
+		local list = {}
+		local town = workspace:FindFirstChild("DopamineTown")
+		if town then
+			for _, d in ipairs(town:GetDescendants()) do
+				if d:IsA("Model") and (d.Name == "Lamp" or d.Name == "Lamppost") then
+					local pole = d:FindFirstChild("Pole") or d:FindFirstChild("Foot")
+					if pole and pole:IsA("BasePart") then
+						table.insert(list, pole.Position)
+					end
+				end
+			end
+		end
+		serverLamps = list
+	end
+	local out = {}
+	for _, q in ipairs(serverLamps :: { Vector3 }) do
+		if Vector3.new(q.X - here.X, 0, q.Z - here.Z).Magnitude < r then
+			table.insert(out, { q, 0.65 }) -- (pied du lampadaire : 1,3)
+		end
+	end
+	for _, o in ipairs(obstacles) do
+		local q: Vector3 = o[1]
+		local d = Vector3.new(q.X - here.X, 0, q.Z - here.Z).Magnitude
+		if d > 0.3 and d < r and o[2] > 0 then
+			table.insert(out, { q, math.min(o[2], 1.2) })
+		end
+	end
+	return out
+end
+
+TownRoads.LampsNear = lampsNear -- (v11) TownStreetLife : trottoirs jamais pincés
+
+-- distance (plan) d'un point au segment [a, b]
+local function segDist(p: Vector3, a: Vector3, b: Vector3): number
+	local ab = Vector3.new(b.X - a.X, 0, b.Z - a.Z)
+	local ap = Vector3.new(p.X - a.X, 0, p.Z - a.Z)
+	local l2 = ab:Dot(ab)
+	local t = l2 > 0 and math.clamp(ap:Dot(ab) / l2, 0, 1) or 0
+	return (ap - ab * t).Magnitude
+end
+
+-- Poteau indicateur (v11, CITY11, refait — capture 33 : flèches qui
+-- "flottaient" à côté du poteau, pointes à l'envers, lames dans les
+-- lampadaires voisins). Maintenant :
+--   - socle en fonte + collerette, fût Ø 0,42, bagues, épi de faîtage ;
+--   - chaque lame est ENFILÉE dans un collier serré sur le fût (elle part
+--     de l'axe : aucun jour entre le poteau et la lame), bordure claire,
+--     vraie POINTE de flèche (deux coins, même épaisseur que la lame,
+--     collés au bout : un seul contour) ;
+--   - lames espacées de 1,25 (hauteur 0,95 : jamais l'une sur l'autre) ;
+--   - une lame qui passerait dans un lampadaire / un abribus voisin est
+--     remplacée par le lieu suivant (jamais de chevauchement) ;
+--   - texte des deux côtés (nom à gauche, distance dans une pastille).
+-- `F` au pied (dessus du sol) ; jusqu'à 4 lames vers les lieux les plus
+-- proches (au-delà de 25 studs), un par type de lieu
+local BLADE_LEN = 4.1 -- (depuis l'axe du poteau)
+local BLADE_TIP = 0.7
+local BLADE_H = 0.95
+local BLADE_T = 0.14
+local BLADE_GAP = 1.25
 local function buildDirection(m: Model, F: CFrame, seed: number)
 	local here = F.Position
 	local cand = {}
@@ -512,34 +575,113 @@ local function buildDirection(m: Model, F: CFrame, seed: number)
 		table.insert(cand, v)
 	end
 	table.sort(cand, function(a, b)
-		-- (les grands lieux d'abord, puis les plus proches)
+		-- (les grands lieux d'abord, puis les plus proches ; ordre stable)
 		local pa = (a.Dest.Id <= 8) and 0 or 1
 		local pb = (b.Dest.Id <= 8) and 0 or 1
 		if pa ~= pb then
 			return pa < pb
 		end
-		return a.Dist < b.Dist
+		if math.abs(a.Dist - b.Dist) > 1e-3 then
+			return a.Dist < b.Dist
+		end
+		return a.Dest.Id < b.Dest.Id
 	end)
-	local pole = rgb(40, 44, 52)
-	newPart(m, "DirPole", Vector3.new(10.6, 0.36, 0.36), F * CFrame.new(0, 5.25, 0) * UPRIGHT, pole, M.Metal, "Cyl", true)
-	newPart(m, "DirCap", Vector3.new(0.5, 0.5, 0.5), F * CFrame.new(0, 10.6, 0), pole, M.Metal, "Ball")
-	newPart(m, "DirFoot", Vector3.new(0.5, 0.8, 0.8), F * CFrame.new(0, 0.2, 0) * UPRIGHT, pole, M.Metal, "Cyl")
-	local colors = { rgb(30, 78, 150), rgb(30, 110, 80), rgb(150, 50, 80), rgb(120, 70, 150) }
-	for i = 1, math.min(4, #cand) do
-		local c = cand[i]
+	local pole = rgb(34, 40, 50)
+	local gold = rgb(200, 168, 92)
+	local up = CFrame.new(here)
+	-- socle, collerette, fût, bagues, épi
+	newPart(m, "DirBase", Vector3.new(0.5, 1.15, 1.15), up * CFrame.new(0, 0.2, 0) * UPRIGHT, pole, M.Metal, "Cyl", true)
+	newPart(m, "DirCollar", Vector3.new(0.8, 0.7, 0.7), up * CFrame.new(0, 0.8, 0) * UPRIGHT, pole, M.Metal, "Cyl")
+	newPart(m, "DirPole", Vector3.new(10.6, 0.42, 0.42), up * CFrame.new(0, 5.5, 0) * UPRIGHT, pole, M.Metal, "Cyl", true)
+	newPart(m, "DirRing", Vector3.new(0.18, 0.54, 0.54), up * CFrame.new(0, 2.6, 0) * UPRIGHT, gold, M.Metal, "Cyl")
+	newPart(m, "DirCapRing", Vector3.new(0.22, 0.56, 0.56), up * CFrame.new(0, 10.75, 0) * UPRIGHT, gold, M.Metal, "Cyl")
+	newPart(m, "DirCap", Vector3.new(0.62, 0.62, 0.62), up * CFrame.new(0, 11.1, 0), pole, M.Metal, "Ball")
+	newPart(m, "DirFinial", Vector3.new(0.34, 0.34, 0.34), up * CFrame.new(0, 11.55, 0), gold, M.Metal, "Ball")
+	-- lames : on garde les lieux dont la lame passe libre
+	local near = lampsNear(here, BLADE_LEN + BLADE_TIP + 2)
+	local colors = { rgb(26, 74, 140), rgb(28, 104, 78), rgb(146, 44, 74), rgb(110, 64, 146) }
+	local placed = 0
+	for _, c in ipairs(cand) do
+		if placed >= 4 then
+			break
+		end
 		local rel = c.Dest.Pos - here
-		local yaw = math.atan2(-rel.X, -rel.Z) -- (lame vers -Z du repère tourné)
-		local y = 9.6 - (i - 1) * 1.05
-		local R = CFrame.new(here) * CFrame.Angles(0, yaw, 0)
-		-- la lame part du poteau vers le lieu : X local = à travers, -Z = vers le lieu
-		local blade = newPart(m, "DirBlade", Vector3.new(0.12, 0.8, 4.6), R * CFrame.new(0, y, -2.6), colors[(i + seed) % #colors + 1], M.Metal)
-		wedge(m, "DirTip", Vector3.new(0.12, 0.4, 0.5), R * CFrame.new(0, y + 0.2, -5.15) * CFrame.Angles(0, math.pi, 0), blade.Color, M.Metal)
-		wedge(m, "DirTip", Vector3.new(0.12, 0.4, 0.5), R * CFrame.new(0, y - 0.2, -5.15) * CFrame.Angles(math.pi, 0, 0), blade.Color, M.Metal)
-		local place = TownRoads.PLACES[c.Dest.Id]
-		local meters = math.floor(c.Dist * 0.33 / 10 + 0.5) * 10
-		local text = place[1] .. " " .. Locale.T(place[2]) .. "  " .. meters .. " m"
-		surfaceText(blade, Enum.NormalId.Left, text, WHITE, blade.Color, Enum.Font.GothamBold, 70)
-		surfaceText(blade, Enum.NormalId.Right, text, WHITE, blade.Color, Enum.Font.GothamBold, 70)
+		local dir = Vector3.new(rel.X, 0, rel.Z).Unit
+		local tip = here + dir * (BLADE_LEN + BLADE_TIP)
+		local clear = true
+		for _, o in ipairs(near) do
+			if segDist(o[1], here, tip) < o[2] + 0.55 then
+				clear = false
+				break
+			end
+		end
+		if clear then
+			placed += 1
+			local yaw = math.atan2(-rel.X, -rel.Z) -- (lame vers -Z du repère tourné)
+			local y = 9.95 - (placed - 1) * BLADE_GAP
+			local R = up * CFrame.Angles(0, yaw, 0) * CFrame.new(0, y, 0)
+			local color = colors[(placed + seed) % #colors + 1]
+			-- collier serré sur le fût (la lame y entre)
+			newPart(m, "DirClamp", Vector3.new(BLADE_H + 0.12, 0.6, 0.6), R * UPRIGHT, pole, M.Metal, "Cyl")
+			-- lame : de l'axe du poteau (z = 0) jusqu'à -BLADE_LEN
+			local blade = newPart(m, "DirBlade", Vector3.new(BLADE_T, BLADE_H, BLADE_LEN), R * CFrame.new(0, 0, -BLADE_LEN / 2), color, M.SmoothPlastic)
+			-- pointe : moitié haute + moitié basse, collées au bout de la lame
+			local zt = -BLADE_LEN - BLADE_TIP / 2
+			wedge(m, "DirTip", Vector3.new(BLADE_T, BLADE_H / 2, BLADE_TIP), R * CFrame.new(0, BLADE_H / 4, zt), color, M.SmoothPlastic)
+			wedge(m, "DirTip", Vector3.new(BLADE_T, BLADE_H / 2, BLADE_TIP), R * CFrame.new(0, -BLADE_H / 4, zt) * CFrame.Angles(0, 0, math.pi), color, M.SmoothPlastic)
+			local place = TownRoads.PLACES[c.Dest.Id]
+			local meters = math.max(10, math.floor(c.Dist * 0.33 / 10 + 0.5) * 10)
+			-- texte : des deux côtés, à l'écart du collier (0,45) ; nom + pastille
+			for _, face in ipairs({ Enum.NormalId.Left, Enum.NormalId.Right }) do
+				local gui = Instance.new("SurfaceGui")
+				gui.Name = "Text"
+				gui.Face = face
+				gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+				gui.PixelsPerStud = 48
+				gui.LightInfluence = 0.65
+				gui.MaxDistance = 90
+				gui.Parent = blade
+				-- bordure claire (liseré dessiné : aucune pièce en plus)
+				local edge = Instance.new("Frame")
+				edge.Name = "Edge"
+				edge.BackgroundTransparency = 1
+				edge.Position = UDim2.fromScale(face == Enum.NormalId.Right and 0.45 / BLADE_LEN or 0.01, 0.06)
+				edge.Size = UDim2.fromScale(1 - 0.45 / BLADE_LEN - 0.01, 0.88)
+				edge.Parent = gui
+				local stroke = Instance.new("UIStroke")
+				stroke.Color = rgb(246, 244, 236)
+				stroke.Thickness = 3
+				stroke.Parent = edge
+				-- (face Right : on lit vers la pointe ; face Left : vers le poteau)
+				local towardTip = face == Enum.NormalId.Right
+				local pad = 0.45 / BLADE_LEN
+				local name = Instance.new("TextLabel")
+				name.Name = "Name"
+				name.BackgroundTransparency = 1
+				name.Position = UDim2.fromScale(towardTip and pad + 0.02 or 0.3, 0.12)
+				name.Size = UDim2.fromScale(0.68 - pad, 0.76)
+				name.TextScaled = true
+				name.Font = Enum.Font.GothamBold
+				name.TextColor3 = WHITE
+				name.TextXAlignment = towardTip and Enum.TextXAlignment.Left or Enum.TextXAlignment.Right
+				name.Text = place[1] .. " " .. Locale.T(place[2])
+				name.Parent = gui
+				local pill = Instance.new("TextLabel")
+				pill.Name = "Distance"
+				pill.BackgroundColor3 = rgb(250, 248, 240)
+				pill.BorderSizePixel = 0
+				pill.Position = UDim2.fromScale(towardTip and 0.72 or 0.02, 0.2)
+				pill.Size = UDim2.fromScale(0.25, 0.6)
+				pill.TextScaled = true
+				pill.Font = Enum.Font.GothamBlack
+				pill.TextColor3 = color
+				pill.Text = meters .. " m"
+				pill.Parent = gui
+				local corner = Instance.new("UICorner")
+				corner.CornerRadius = UDim.new(0.4, 0)
+				corner.Parent = pill
+			end
+		end
 	end
 end
 

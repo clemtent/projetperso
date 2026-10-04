@@ -226,7 +226,11 @@ local function buildSeg(m: Model, F: CFrame, seed: number, spot: any)
 			Box(m, "ParapetCap", F, edge - dir * 1.35, edge + dir * 0.15, top + 3.2, top + 3.5, -Lx / 2, Lx / 2, CONCRETE_D, M.Concrete)
 			Box(m, "Cornice", F, edge, edge + dir * 0.6, top - 2.2, top + 0.4, -Lx / 2, Lx / 2, CONCRETE_D, M.Concrete)
 		elseif not d.NoRail then
-			guardrail(m, F, edge - dir * 1.0, L, dir, top, s0, extra)
+			-- (v11, CARS11) bretelles : lisse NON allongée aux joints en biais (dans
+			-- un virage serré, le bout allongé côté intérieur traversait la voie)
+			-- (et posée sur l'accotement, 0,6 au-delà du bord : les tronçons droits
+			-- d'une bretelle qui tourne ne pincent plus la voie)
+			guardrail(m, F, if p.Oneway then edge + dir * 0.6 else edge - dir * 1.0, L, dir, top, s0, if p.Oneway then 0 else extra)
 			delineators(m, F, edge - dir * 0.2, L, top, s0, dir)
 		end
 	end
@@ -241,9 +245,36 @@ local function buildSeg(m: Model, F: CFrame, seed: number, spot: any)
 	end
 end
 
+-- (v11, CARS11) "BARRAGE" à l'entrée de l'autoroute : le 1er tronçon d'une
+-- bretelle part du CENTRE du carrefour de la route locale ; sa glissière
+-- (26 studs, solide) traversait la route d'accès et la bouche de la bretelle.
+-- Plus de glissière à moins de 40 studs d'un carrefour de la ville.
+local WorldLayout = require(ReplicatedStorage.Shared.WorldLayout)
+local function nearCityJunction(F: CFrame, L: number): boolean
+	local town = workspace:FindFirstChild("DopamineTown")
+	local count = town and town:GetAttribute("PlotCount")
+	if type(count) ~= "number" then
+		count = 8
+	end
+	local O = WorldLayout.Origin()
+	for _, z in ipairs({ -L / 2, 0, L / 2 }) do
+		local p = (F * CFrame.new(0, 0, z)).Position - O
+		local ok, node = pcall(WorldLayout.NearestNode, count, p.X, p.Z, function(n: any): boolean
+			return n.Kind == "Junction" or n.Kind == "Roundabout"
+		end)
+		if ok and node and (node.X - p.X) ^ 2 + (node.Z - p.Z) ^ 2 < 40 * 40 then
+			return true
+		end
+	end
+	return false
+end
+
 -- bretelle : même profil, 1 voie, sens unique
 local function buildRamp(m: Model, F: CFrame, seed: number, spot: any)
 	local d = table.clone(spot and spot.Data or {})
+	if not d.NoRail and nearCityJunction(F, spot and spot.Size and spot.Size.Z or 26) then
+		d.NoRail = true
+	end
 	d.Oneway = true
 	d.Lanes = d.Lanes or 1
 	d.ShL = d.ShL or 1.5

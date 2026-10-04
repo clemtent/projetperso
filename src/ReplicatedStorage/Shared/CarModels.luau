@@ -159,10 +159,18 @@ local SPECS: { [string]: Spec } = {
 	Pickup = { L = 13, W = 6.0, WheelD = 2.6, TyreW = 1.05, Clear = 0.75, Low = 3.1, Belt = 3.7, Roof = 5.5, AxleF = -4.1, AxleR = 3.95, Ws = -2.9, R0 = -1.1, R1 = 1.5, Rw = 1.5, Inset = 0.55, HoodF = 3.3, HoodR = 3.6, Deck = 3.75, BeltRise = 0, Tumble = 0.28, NoseR = 0.7, TailR = 0.5, NoseLow = 2.95, Doors = 2, Style = "Pickup" },
 	SUV = { L = 12.8, W = 5.8, WheelD = 2.45, TyreW = 1.0, Clear = 0.62, Low = 2.85, Belt = 3.45, Roof = 5.3, AxleF = -3.9, AxleR = 4.0, Ws = -3.2, R0 = -0.8, R1 = 4.7, Rw = 5.85, Inset = 0.72, HoodF = 3.0, HoodR = 3.35, Deck = 3.6, BeltRise = 0.1, Tumble = 0.32, NoseR = 0.85, TailR = 0.9, NoseLow = 2.65, Doors = 4, Style = "SUV" },
 	Van = { L = 13, W = 5.8, WheelD = 2.2, TyreW = 0.88, Clear = 0.52, Low = 2.55, Belt = 3.35, Roof = 6.0, AxleF = -4.3, AxleR = 4.15, Ws = -5.4, R0 = -4.0, R1 = 6.1, Rw = 6.42, Inset = 0.5, HoodF = 2.75, HoodR = 3.2, Deck = 3.5, BeltRise = 0, Tumble = 0.3, NoseR = 1.0, TailR = 0.85, NoseLow = 2.4, Doors = 2, Style = "Van" },
-	SportsCar = { L = 12.8, W = 5.9, WheelD = 2.15, TyreW = 1.1, Clear = 0.32, Low = 2.35, Belt = 2.7, Roof = 3.65, AxleF = -3.9, AxleR = 3.75, Ws = -1.35, R0 = -0.25, R1 = 1.8, Rw = 2.3, Inset = 0.5, HoodF = 1.95, HoodR = 2.45, Deck = 2.65, BeltRise = 0.1, Tumble = 0.3, NoseR = 1.2, TailR = 1.2, NoseLow = 1.65, Doors = 2, Style = "Sports" },
+	SportsCar = { L = 12.8, W = 5.9, WheelD = 2.15, TyreW = 1.1, Clear = 0.32, Low = 2.35, Belt = 2.7, Roof = 3.95, AxleF = -3.9, AxleR = 3.75, Ws = -1.35, R0 = -0.25, R1 = 1.8, Rw = 2.3, Inset = 0.5, HoodF = 1.95, HoodR = 2.45, Deck = 2.65, BeltRise = 0.1, Tumble = 0.3, NoseR = 1.2, TailR = 1.2, NoseLow = 1.65, Doors = 2, Style = "Sports" },
 	Limo = { L = 15.2, W = 5.7, WheelD = 2.25, TyreW = 0.92, Clear = 0.45, Low = 2.5, Belt = 3.05, Roof = 4.6, AxleF = -4.95, AxleR = 4.85, Ws = -3.5, R0 = -1.0, R1 = 3.5, Rw = 5.0, Inset = 0.78, HoodF = 2.5, HoodR = 2.9, Deck = 3.15, BeltRise = 0, Tumble = 0.32, NoseR = 0.9, TailR = 1.0, NoseLow = 2.2, Doors = 4, Style = "Limo" },
 }
-CarModels.Specs = SPECS
+CarModels.Specs = SPECS -- (dimensions "modèle" : multiplier par CarModels.SCALE pour le monde)
+
+-- (v11, CARS11) ÉCHELLE ROBLOX : "je suis trop grand quand je conduis". Un
+-- avatar R15 assis sur un Seat a la tête à siège + 3,7 : les voitures (toutes :
+-- joueurs, circulation, garées, concession, IA de course) sont construites
+-- ×1,3 (CarModels.Build l'applique toujours ; option Scale = facteur EN PLUS).
+-- Dimensions, WheelPositions et attributs (Length, Width, Height, SeatCF,
+-- WheelRadius) sont donnés à l'échelle du monde.
+CarModels.SCALE = 1.3
 CarModels.Kinds = { "BubbleCar", "CityCar", "Hatchback", "Pickup", "SUV", "Van", "SportsCar", "Limo" }
 
 -- Couleurs fixes
@@ -209,12 +217,12 @@ end
 
 function CarModels.Dimensions(carId: string?): Vector3
 	local s = SPECS[kindOf(carId)]
-	return Vector3.new(s.W, s.Roof, s.L)
+	return Vector3.new(s.W, s.Roof, s.L) * CarModels.SCALE
 end
 
 -- (v9.9) roues DANS les passages : face extérieure du pneu 0,22 en retrait du
 -- flanc (la jante bombée et le cache-moyeu arrivent à l'aplomb de la caisse)
-function CarModels.WheelPositions(carId: string?): { Vector3 }
+local function wheelPositionsRaw(carId: string?): { Vector3 }
 	local s = SPECS[kindOf(carId)]
 	local x = s.W / 2 - s.TyreW / 2 - 0.22
 	local out = {}
@@ -226,13 +234,76 @@ function CarModels.WheelPositions(carId: string?): { Vector3 }
 	return out
 end
 
+-- (v11) positions des roues À L'ÉCHELLE DU MONDE (repère du pivot)
+function CarModels.WheelPositions(carId: string?): { Vector3 }
+	local out = wheelPositionsRaw(carId)
+	for i, p in ipairs(out) do
+		out[i] = p * CarModels.SCALE
+	end
+	return out
+end
+
+-- (v11, CARS11) peinture par id : les 12 couleurs gratuites (Config.CarColorsById)
+-- OU une peinture de luxe 💎 de la banque (Config.Bank.Luxury, Kind = "Paint")
+-- -> entrée { Id, Name, Color, Icon? , Luxury = true? } ou nil
+local luxuryPaints: { [string]: any }? = nil
+function CarModels.PaintEntry(id: any): any?
+	if type(id) ~= "string" then
+		return nil
+	end
+	local byId = Config.CarColorsById or {}
+	if byId[id] then
+		return byId[id]
+	end
+	-- (v11) couleur PERSONNALISÉE de l'atelier : "#RRGGBB" (gratuite)
+	if #id == 7 and string.match(id, "^#%x%x%x%x%x%x$") then
+		local r, g, b = tonumber(string.sub(id, 2, 3), 16), tonumber(string.sub(id, 4, 5), 16), tonumber(string.sub(id, 6, 7), 16)
+		if r and g and b then
+			return { Id = id, Name = "Custom colour", Color = Color3.fromRGB(r, g, b), Custom = true }
+		end
+	end
+	if luxuryPaints == nil then
+		local map = {}
+		local bank = (Config :: any).Bank
+		for _, item in ipairs(bank and bank.Luxury or {}) do
+			if item.Kind == "Paint" and typeof(item.Color) == "Color3" then
+				map[item.Id] = { Id = item.Id, Name = item.Name, Color = item.Color, Icon = item.Icon, Price = item.Price, Luxury = true }
+			end
+		end
+		luxuryPaints = map
+	end
+	return (luxuryPaints :: any)[id]
+end
+
+-- (v11) id d'une couleur personnalisée ("#RRGGBB")
+function CarModels.CustomPaintId(color: Color3): string
+	local function hex(v: number): string
+		return string.format("%02X", math.clamp(math.floor(v * 255 + 0.5), 0, 255))
+	end
+	return "#" .. hex(color.R) .. hex(color.G) .. hex(color.B)
+end
+
+-- (v11) peintures de luxe, dans l'ordre de la boutique
+function CarModels.LuxuryPaints(): { any }
+	local list = {}
+	local bank = (Config :: any).Bank
+	for _, item in ipairs(bank and bank.Luxury or {}) do
+		local entry = item.Kind == "Paint" and CarModels.PaintEntry(item.Id)
+		if entry then
+			table.insert(list, entry)
+		end
+	end
+	return list
+end
+
 function CarModels.ColorOf(carId: string?, color: any?): Color3
 	if typeof(color) == "Color3" then
 		return color
 	end
 	local byId = Config.CarColorsById or {}
-	if type(color) == "string" and byId[color] then
-		return byId[color].Color
+	local paintEntry = CarModels.PaintEntry(color)
+	if paintEntry then
+		return paintEntry.Color
 	end
 	local car = type(carId) == "string" and Config.CarsById and Config.CarsById[carId] or nil
 	local default = car and byId[car.DefaultColor]
@@ -554,6 +625,15 @@ local function newPart(b: B, className: string, name: string, size: Vector3, cf:
 		p.Color = b.GlassColor
 		p.Transparency = b.GlassT
 		p.Reflectance = if b.Lod >= 3 then 0.2 else 0.12
+		if b.Lod <= 1 then
+			-- (v11, CARS11) version "Low" (de loin, voitures garées du serveur) : un
+			-- habitacle VIDE derrière du verre transparent laissait voir la route à
+			-- travers la cabine ("des trucs invisibles" sur les camionnettes / pick-up) :
+			-- verre teinté presque opaque, comme une vitre vue de loin
+			p.Color = b.GlassColor:Lerp(Color3.fromRGB(18, 22, 30), 0.45)
+			p.Transparency = math.min(b.GlassT, 0.08)
+			p.Reflectance = 0.18
+		end
 	end
 	if b.WheelTag then
 		p:SetAttribute("Wheel", b.WheelTag)
@@ -1279,10 +1359,18 @@ local function buildLow(b: B, s: Spec, g: Geo, paint: Color3, roofColor: Color3,
 		wedge(b, "Windshield", -gw, gw, s.Belt, s.Roof - 0.12, s.Ws + 0.05, s.R0, true, GLASS, M.Glass)
 		box(b, "SideGlass", -gw, gw, s.Belt, s.Roof - 0.12, s.R0, s.R1, GLASS, M.Glass)
 		box(b, "Roof", -gw + 0.05, gw - 0.05, s.Roof - 0.12, s.Roof, s.R0 - 0.05, s.R1 + 0.05, roofColor)
+		-- (v11) montants de portes (B, et C pour les longues cabines) : la cabine
+		-- se lit comme une vraie cabine, plus comme une boîte de verre
+		local span = s.R1 - s.R0
+		local posts = if span > 7 then { 0.34, 0.67 } elseif span > 3.2 then { 0.5 } else {}
+		for _, f in ipairs(posts) do
+			local z = s.R0 + span * f
+			box(b, "Pillar", -gw - 0.06, gw + 0.06, s.Belt, s.Roof - 0.1, z - 0.22, z + 0.22, roofColor)
+		end
 		if s.Rw - s.R1 > 0.1 then
 			wedge(b, "RearGlass", -gw, gw, s.Belt, s.Roof - 0.12, s.R1, s.Rw, false, GLASS, M.Glass)
 		else
-			box(b, "RearWall", -gw, gw, s.Belt, s.Roof - 0.12, s.R1 - 0.02, s.R1 + 0.1, paint)
+			box(b, "RearWall", -gw + 0.04, gw - 0.04, s.Belt, s.Roof - 0.12, s.R1 - 0.02, s.R1 + 0.1, paint)
 		end
 	end
 	-- phares, feux, calandre, plaque, rétroviseurs
@@ -1309,6 +1397,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 	elseif type(options.Scale) == "number" and options.Scale > 0 then
 		scale = Vector3.new(options.Scale, options.Scale, options.Scale)
 	end
+	scale *= CarModels.SCALE -- (v11) échelle Roblox
 	local model = Instance.new("Model")
 	model.Name = "Car_" .. kind
 	-- (v10, CARS10) options de l'atelier (Config.Cars.Mods ; inconnues ignorées)
@@ -1419,7 +1508,9 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 	root.PivotOffset = CFrame.new(0, -((rootBottom + rootTop) / 2) * scale.Y, 0)
 
 	-- siège du conducteur
-	local seatTop = math.min(s.Roof - 3.65, s.Clear + 1.85)
+	-- (v11) coussin assez haut pour les jambes, et ≥ 3,85 studs (monde) sous le
+	-- pavillon intérieur : l'avatar assis (tête à siège + 3,7) tient dedans
+	local seatTop = math.min(s.Roof - 0.14 - 3.85 / CarModels.SCALE, s.Clear + 1.4)
 	local seatZ = s.R0 + (s.R1 - s.R0) * 0.42
 	if style == "Van" then
 		seatTop = 2.35
@@ -1427,7 +1518,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 	elseif pickup then
 		seatZ = s.R0 + 1.35
 	elseif sports then
-		seatTop = s.Clear + 0.6
+		seatTop = s.Clear + 0.45
 		seatZ = s.R1 - 0.95
 	elseif style == "Limo" then
 		seatZ = s.R0 + 1.45
@@ -1831,10 +1922,13 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 		end
 		local rValTop = g.sill + 0.5
 		for _, sx in ipairs({ -1, 1 }) do
-			local tx0, tx1 = sx * (if pickup then tfx - 0.6 elseif style == "Van" then s.W * 0.2 else tailIn), sx * (tfx - 0.04)
+			-- (v11 : ×1,3 -> bord extérieur du feu 0,06 et du cadre 0,03 en retrait
+			-- du flanc : aucune face confondue avec la caisse ni entre eux)
+			local tx0, tx1 = sx * (if pickup then tfx - 0.6 elseif style == "Van" then s.W * 0.2 else tailIn), sx * (tfx - 0.06)
 			local lo, hi = math.min(tx0, tx1), math.max(tx0, tx1)
 			if full then
-				box(b, "TailBezel", lo - 0.05, hi + 0.04, tailBot - 0.05, tailTop + 0.04, zB - 0.1, zB + 0.03, HOUSING)
+				local bx0, bx1 = tx0 - sx * 0.05, sx * (tfx - 0.03)
+				box(b, "TailBezel", math.min(bx0, bx1), math.max(bx0, bx1), tailBot - 0.05, tailTop + 0.04, zB - 0.1, zB + 0.03, HOUSING)
 			end
 			box(b, "Taillight", lo, hi, tailBot, tailTop, zB - 0.1, zB + 0.07, TAIL, M.SmoothPlastic)
 			if full then
@@ -1846,7 +1940,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 				end
 				local rv0, rv1 = if sx > 0 then lo + 0.07 else hi - 0.4, if sx > 0 then lo + 0.4 else hi - 0.07
 				box(b, "ReverseLight", rv0, rv1, tailBot + 0.06, tailBot + 0.22, zB + 0.03, zB + 0.11, REVERSE, M.SmoothPlastic)
-				local ind = box(b, "RearIndicator", if sx > 0 then hi - 0.38 else lo + 0.07, if sx > 0 then hi - 0.07 else lo + 0.38, tailBot + 0.06, tailBot + 0.22, zB + 0.03, zB + 0.11, AMBER)
+				local ind = box(b, "RearIndicator", if sx > 0 then hi - 0.38 else lo + 0.07, if sx > 0 then hi - 0.07 else lo + 0.38, tailBot + 0.06, tailBot + 0.22, zB + 0.03, zB + 0.13, AMBER)
 				ind:SetAttribute("Side", sx)
 				local wTop = math.min(tailTop, tfy - 0.04)
 				if T1 and not pickup and wTop - tailBot > 0.2 then
@@ -2053,7 +2147,8 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 				for _, z in ipairs(seams) do
 					local y0 = math.max(g.sill + 0.25, archY(z) + 0.05)
 					local S = sectionAt(st, z)
-					local x0, x1 = sx * (hw - 0.02), sx * (hw + 0.012)
+					-- (v11 : ×1,3 -> surfaces plus grandes : joint 0,025 au-dessus du flanc, jamais coplanaire)
+					local x0, x1 = sx * (hw - 0.02), sx * (hw + 0.025)
 					if S.fy - y0 > 0.1 then
 						box(b, "DoorSeam", math.min(x0, x1), math.max(x0, x1), y0, S.fy - 0.02, z - 0.022, z + 0.022, GAP)
 					end
@@ -2097,7 +2192,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			end
 			if style == "Van" then
 				-- coin salon du combi : banquette + petite table
-				box(b, "VanBench", -wc + 0.1, wc - 0.1, seatTop - 0.35, seatTop, s.R1 - 2.6, s.R1 - 1.3, seatCol2, M.Fabric)
+				box(b, "VanBench", -wc + 0.1, wc - 0.1, seatTop - 0.3, seatTop, s.R1 - 2.6, s.R1 - 1.3, seatCol2, M.Fabric)
 				slab(b, "VanBenchBack", 0, wc * 2 - 0.2, seatTop, s.R1 - 1.25, seatTop + 1.9, s.R1 - 0.95, 0.3, seatCol2, M.Fabric)
 				box(b, "VanTable", -1.0, 1.0, seatTop + 0.6, seatTop + 0.72, s.R1 - 4.4, s.R1 - 3.2, Color3.fromRGB(196, 160, 120), M.Wood)
 			end
@@ -2108,11 +2203,49 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			box(b, "Dashboard", -wc, wc, by0 - 0.55, by0 + 0.06, dashZ0, dashZ1, TRIM)
 			box(b, "DashTop", -wc + 0.1, wc - 0.1, by0 + 0.06, by0 + 0.12, dashZ0 + 0.1, dashZ1 - 0.2, GRAPHITE, M.Fabric)
 			box(b, "Screen", -0.5, 0.5, by0 + 0.12, by0 + 0.52, dashZ1 - 0.45, dashZ1 - 0.37, SCREEN, M.Glass)
-			local swZ = math.min(seatZ - 1.45, dashZ1 + 0.35)
-			local sw = cylZ(b, "SteeringWheel", seatX, by0 + 0.08, swZ, 0.1, 1.0, HOUSING)
-			sw.CFrame = sw.CFrame * CFrame.Angles(0, 0, math.rad(-22))
-			cylZ(b, "WheelHub", seatX, by0 + 0.08, swZ + 0.08, 0.1, 0.32, GRAPHITE)
-			rod(b, "SteeringColumn", V3(seatX, by0 - 0.25, dashZ1 - 0.1), V3(seatX, by0 + 0.02, swZ + 0.1), 0.16, GRAPHITE)
+			-- (v11, CARS11) volant À PORTÉE DES MAINS du conducteur (comme le
+			-- repère NPCModels.Driver : 1,5 au-dessus et 1,15 devant le coussin,
+			-- incliné de 0,35 rad), jante + moyeu + 3 branches ; il tourne avec
+			-- la direction (CarClient / TownTraffic : attribut "SteerWheel")
+			local wheelCF = CFrame.new(P(b, seatX, seatTop + 1.5 / CarModels.SCALE, seatZ - 1.15 / CarModels.SCALE)) * CFrame.Angles(-0.35, 0, 0)
+			local m = math.min(b.S.X, b.S.Y)
+			local rimR = 0.62 * m / CarModels.SCALE -- (0,62 studs à l'échelle 1,3)
+			local function wpart(name: string, size: Vector3, cf: CFrame, color: Color3, cyl: boolean): BasePart
+				local p = newPart(b, "Part", name, size, cf, color, M.SmoothPlastic)
+				if cyl then
+					(p :: Part).Shape = Enum.PartType.Cylinder
+				end
+				p:SetAttribute("SteerWheel", true)
+				return p
+			end
+			local seg = 12
+			for k = 0, seg - 1 do
+				local a = (k + 0.5) / seg * 2 * PI
+				local len = 2 * rimR * math.sin(PI / seg) + 0.02
+				wpart("SteeringWheel", Vector3.new(0.12 * m, 0.12 * m, len), wheelCF * CFrame.Angles(0, 0, a) * CFrame.new(0, rimR, 0) * CFrame.Angles(0, PI / 2, 0), HOUSING, false)
+			end
+			wpart("WheelHub", Vector3.new(0.14 * m, 0.34 * m, 0.34 * m), wheelCF * CFrame.new(0, 0, 0.04 * m) * CFrame.Angles(0, PI / 2, 0), GRAPHITE, true)
+			for _, a in ipairs({ PI / 2, -PI / 2, PI }) do
+				wpart("WheelSpoke", Vector3.new(0.07 * m, rimR - 0.1 * m, 0.14 * m), wheelCF * CFrame.Angles(0, 0, a) * CFrame.new(0, rimR / 2 + 0.04 * m, 0.03 * m), GRAPHITE, false)
+			end
+			-- colonne : du moyeu vers la planche de bord
+			local hubW = wheelCF * CFrame.new(0, 0, 0.12 * m)
+			local colEnd = P(b, seatX, by0 - 0.3, dashZ1 - 0.1)
+			if (colEnd - hubW.Position).Magnitude > 1.7 * m then
+				-- (colonne courte : elle entre dans le bloc de commandes sous la planche)
+				colEnd = hubW.Position + (colEnd - hubW.Position).Unit * 1.7 * m
+				-- bloc de commandes (combiné d'instruments) prolongeant la planche jusqu'à la colonne
+				local cz = colEnd.Z / b.S.Z
+				if cz > dashZ1 + 0.05 then
+					box(b, "SteeringPod", seatX - 0.55, seatX + 0.55, by0 - 0.5, math.min(by0 - 0.04, colEnd.Y / b.S.Y + 0.22), dashZ1 - 0.02, cz + 0.1, TRIM)
+				end
+			end
+			local colLen = (colEnd - hubW.Position).Magnitude
+			if colLen > 0.05 then
+				newPart(b, "Part", "SteeringColumn", Vector3.new(0.16 * m, 0.16 * m, colLen), CFrame.lookAt((hubW.Position + colEnd) / 2, colEnd), GRAPHITE, M.SmoothPlastic)
+			end
+			model:SetAttribute("WheelCF", wheelCF)
+			model:SetAttribute("WheelRimR", rimR)
 			if style ~= "Van" then
 				box(b, "Console", -0.32, 0.32, g.sill + 0.12, seatTop - 0.05, dashZ1 - 0.02, seatZ + 0.3, TRIM)
 				ell(b, "GearKnob", 0, seatTop + 0.18, seatZ - 0.8, 0.2, 0.24, 0.2, CHROME, M.Metal)
@@ -2360,7 +2493,7 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 	end
 
 	-- ░ roues ░
-	for index, pos in ipairs(CarModels.WheelPositions(kind)) do
+	for index, pos in ipairs(wheelPositionsRaw(kind)) do
 		wheel(b, s, index, pos.X, pos.Z, look)
 	end
 
@@ -2372,6 +2505,8 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 	model:SetAttribute("Height", s.Roof * scale.Y)
 	model:SetAttribute("WheelRadius", s.WheelD / 2 * math.min(scale.Y, scale.Z))
 	model:SetAttribute("SeatCF", CFrame.new(P(b, seatX, seatTop, seatZ)))
+	-- (v11) hauteur du coussin au-dessus du plancher (NPCModels.Driver : Floor)
+	model:SetAttribute("SeatFloor", math.max(0.6, (seatTop - (g.sill + 0.02)) * scale.Y))
 	model:SetAttribute("Lod", lod)
 	model:SetAttribute("PartCount", b.Count)
 	-- (v10) finition (Repaint la garde) et options de l'atelier
@@ -2486,7 +2621,9 @@ export type WheelSet = {
 	Steer: { BasePart },
 	SteerOff: { CFrame },
 }
-export type Rig = { Body: { BasePart }, BodyOff: { CFrame }, Wheels: { WheelSet }, Parts: { BasePart }, Frames: { CFrame } }
+-- (v11) SteerIdx : [indice dans Body] = repère de la pièce dans celui du volant
+-- (WheelCF, repère du pivot) -> on tourne le volant : WheelCF * Angles(0, 0, a)
+export type Rig = { Body: { BasePart }, BodyOff: { CFrame }, Wheels: { WheelSet }, Parts: { BasePart }, Frames: { CFrame }, SteerIdx: { [number]: CFrame }?, WheelCF: CFrame? }
 
 function CarModels.WheelRig(model: Model): Rig
 	-- (générique : toute maquette dont les pièces de roue portent "Wheel" /
@@ -2510,9 +2647,18 @@ function CarModels.WheelRig(model: Model): Rig
 		end
 	end
 	local rig: Rig = { Body = body, BodyOff = {}, Wheels = {}, Parts = {}, Frames = {} }
-	for _, p in ipairs(body) do
+	local wheelCF = model:GetAttribute("WheelCF")
+	local steerIdx: { [number]: CFrame } = {}
+	for i, p in ipairs(body) do
 		table.insert(rig.BodyOff, pivot:ToObjectSpace(p.CFrame))
 		table.insert(rig.Parts, p)
+		if typeof(wheelCF) == "CFrame" and p:GetAttribute("SteerWheel") then
+			steerIdx[i] = wheelCF:ToObjectSpace(pivot:ToObjectSpace(p.CFrame))
+		end
+	end
+	if typeof(wheelCF) == "CFrame" and next(steerIdx) then
+		rig.SteerIdx = steerIdx
+		rig.WheelCF = wheelCF
 	end
 	local indices = {}
 	for index in pairs(groups) do
@@ -2568,13 +2714,23 @@ end
 -- Pose : pivot (monde), rotation des roues `spin` (rad), braquage `steer`
 -- (rad, roues avant), `bob` = CFrame de caisse (suspension). Renvoie les
 -- listes à passer à workspace:BulkMoveTo.
+-- (v11) angle du VOLANT (rad, + = à gauche) pour un braquage des roues avant
+-- (rad, + = à gauche comme CFrame.Angles(0, a, 0)) : ×4, borné à ±2,2
+function CarModels.SteeringWheelAngle(roadSteer: number): number
+	return math.clamp(roadSteer * 4, -2.2, 2.2)
+end
+
 function CarModels.PoseRig(rig: Rig, pivot: CFrame, spin: number, steer: number, bob: CFrame?): ({ BasePart }, { CFrame })
 	local frames = rig.Frames
 	local i = 0
 	local body = if bob then pivot * bob else pivot
-	for _, off in ipairs(rig.BodyOff) do
+	-- (v11) volant tourné avec les roues (×2,5, borné ; + = à gauche)
+	local sIdx, wcf = rig.SteerIdx, rig.WheelCF
+	local wheelTurned = if sIdx and wcf then body * wcf * CFrame.Angles(0, 0, CarModels.SteeringWheelAngle(steer)) else nil
+	for k, off in ipairs(rig.BodyOff) do
 		i += 1
-		frames[i] = body * off
+		local w = if sIdx and wheelTurned then sIdx[k] else nil
+		frames[i] = if w and wheelTurned then wheelTurned * w else body * off
 	end
 	local spinCF = CFrame.Angles(-spin, 0, 0)
 	for _, set in ipairs(rig.Wheels) do

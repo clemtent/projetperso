@@ -250,6 +250,20 @@ function TownShops.Shop(parent: Instance, cf: CFrame, spec: ShopSpec, seed: numb
 	end
 	part(model, "Drainpipe", Vector3.new(0.4, height, 0.4), cf * CFrame.new(-hw + 0.5, height / 2, -0.3), C.MetalLight, M.Metal, "deco")
 	attributes(model, spec, "Items", cf * CFrame.new(0, FLOOR_TOP, D / 2), Vector3.new(W - 2, CEIL - FLOOR_TOP, D - 2), cf * CFrame.new(0, FLOOR_TOP, 0))
+	-- (v11, CITY11) arrière et côtés finis côté client (TownFacades, style
+	-- "EnterShop" : fenêtres, porte de service, jardinet) : plus de dos nus
+	model:SetAttribute("FacadeStyle", "EnterShop")
+	model:SetAttribute("FacadeCF", cf)
+	model:SetAttribute("W", W)
+	model:SetAttribute("D", D)
+	model:SetAttribute("Floors", 2)
+	model:SetAttribute("Height", height)
+	model:SetAttribute("Seed", seed)
+	model:SetAttribute("Wall", wall)
+	model:SetAttribute("Trim", trim)
+	model:SetAttribute("Accent", spec.Awning[1])
+	model:SetAttribute("GroundH", BODY_Y)
+	model:SetAttribute("FloorH", UPPER_H)
 	return model
 end
 
@@ -269,20 +283,27 @@ local APRON_Y = WorldLayout.ROAD_Y + 0.05 - WorldLayout.WALK_Y -- dessus du parv
 TownShops.DEALER_H = DEALER_H
 TownShops.DEALER_SLOTS = 8
 TownShops.TURNTABLE = Vector3.new(-14, 0.35, -18) -- plateau tournant (repère de la façade)
-TownShops.TURNTABLE_R = 8
+TownShops.TURNTABLE_R = 10.5 -- (v11, CARS11 : voitures x 1,3)
 
 -- Places des 8 voitures (repère du hall : x, z du centre, lacet en degrés)
 -- 2 rangées de 4 de part et d'autre d'une large allée centrale (porte ->
 -- bureau de vente) ; podiums de 13 studs, voitures tournées vers l'allée
-local SLOT_X = { -24, -10, 10, 24 }
-local SLOT_Z = { 15, 33 }
+-- (v11, CITY11 pour CARS11 : voitures x 1,3, limousine 19,8) podiums de 16,
+-- plus espacés ; les podiums extérieurs 0,04 plus haut (les disques voisins
+-- se recouvrent d'un stud : jamais deux dessus confondus). Contrôle : une
+-- voiture de 19,8 x 8 tournée de 22° tient en |x| ≤ 33,4 (mur à 34), en
+-- z ∈ [2,4 ; 46,6] (vitrine à 1, fond à 49), et deux rangées ne se touchent pas
+local SLOT_X = { -26, -11, 11, 26 }
+local SLOT_Z = { 13, 36 }
+TownShops.SLOT_DISC = 16
 
 function TownShops.SlotFrames(cf: CFrame): { CFrame }
 	local list = {}
 	for row, z in ipairs(SLOT_Z) do
 		for i, x in ipairs(SLOT_X) do
 			local yaw = (i <= 2 and -1 or 1) * (row == 1 and 22 or 16)
-			table.insert(list, cf * CFrame.new(x, FLOOR_TOP + 0.35, z) * CFrame.Angles(0, math.rad(yaw), 0))
+			local lift = (i == 1 or i == #SLOT_X) and 0.04 or 0
+			table.insert(list, cf * CFrame.new(x, FLOOR_TOP + 0.35 + lift, z) * CFrame.Angles(0, math.rad(yaw), 0))
 		end
 	end
 	return list
@@ -360,7 +381,7 @@ function TownShops.Dealership(parent: Instance, cf: CFrame): Model
 	TownKit.Label(ss, "Title", spec.Sign, 0.06, 0.1, 0.88, 0.8, accent, Enum.Font.FredokaOne, true)
 	-- podiums des voitures (le client y pose les voitures et les couronnes)
 	for index, slotCF in ipairs(TownShops.SlotFrames(cf)) do
-		local disc = part(model, "CarSlot_" .. index, Vector3.new(0.35, 13, 13), slotCF * CFrame.new(0, -0.175, 0) * CFrame.Angles(0, 0, math.rad(90)), white, M.Marble, "deco")
+		local disc = part(model, "CarSlot_" .. index, Vector3.new(0.35, TownShops.SLOT_DISC, TownShops.SLOT_DISC), slotCF * CFrame.new(0, -0.175, 0) * CFrame.Angles(0, 0, math.rad(90)), white, M.Marble, "deco")
 		;(disc :: Part).Shape = Enum.PartType.Cylinder
 		disc:SetAttribute("CarCF", slotCF)
 		disc:SetAttribute("Slot", index)

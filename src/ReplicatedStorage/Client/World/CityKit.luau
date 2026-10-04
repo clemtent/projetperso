@@ -188,18 +188,65 @@ function CityKit.Blob(gui: Instance, x: number, y: number, w: number, h: number,
 	return f
 end
 
+-- (v11, CITY11) Mur percé : rectangle (x0..x1, y0..y1) dans l'épaisseur
+-- z0..z1 du repère F, moins les ouvertures { {x0, x1, y0, y1} } ; découpé
+-- en bandes horizontales (aucune pièce ne se chevauche)
+function CityKit.WallWithHoles(m: Instance, name: string, F: CFrame, x0: number, x1: number, y0: number, y1: number, z0: number, z1: number, holes: { { number } }, color: Color3, mat: Enum.Material, solid: boolean?)
+	local ys = { y0, y1 }
+	for _, h in ipairs(holes) do
+		table.insert(ys, math.clamp(h[3], y0, y1))
+		table.insert(ys, math.clamp(h[4], y0, y1))
+	end
+	table.sort(ys)
+	local uniq = {}
+	for _, y in ipairs(ys) do
+		if #uniq == 0 or y - uniq[#uniq] > 1e-3 then
+			table.insert(uniq, y)
+		end
+	end
+	for i = 1, #uniq - 1 do
+		local a, b = uniq[i], uniq[i + 1]
+		local mid = (a + b) / 2
+		local cuts = {}
+		for _, h in ipairs(holes) do
+			if h[3] < mid and h[4] > mid then
+				table.insert(cuts, { math.max(h[1], x0), math.min(h[2], x1) })
+			end
+		end
+		table.sort(cuts, function(p, q)
+			return p[1] < q[1]
+		end)
+		local x = x0
+		for _, c in ipairs(cuts) do
+			if c[1] - x > 0.02 then
+				CityKit.Box(m, name, F, x, c[1], a, b, z0, z1, color, mat, solid ~= false)
+			end
+			x = math.max(x, c[2])
+		end
+		if x1 - x > 0.02 then
+			CityKit.Box(m, name, F, x, x1, a, b, z0, z1, color, mat, solid ~= false)
+		end
+	end
+end
+
 ----------------------------------------------------------------------
 -- Personnages (NPCModels) et acteurs animés
 ----------------------------------------------------------------------
 
 -- Personnage posé (pivot = entre les pieds, regard -Z) ; `solid` : capsule
 -- de collision locale (NPCModels) ; nil si NPCModels est absent
-function CityKit.Npc(m: Instance, style: string, seed: number, cf: CFrame, prop: string?, solid: boolean?): Model?
+-- (v11) `lite` : personnage d'arrière-plan (intérieurs) — option Lite de
+-- NPCModels (moins de pièces) si elle existe, ignorée sinon
+function CityKit.Npc(m: Instance, style: string, seed: number, cf: CFrame, prop: string?, solid: boolean?, lite: boolean?): Model?
 	if not okNpc or type(NPCModels) ~= "table" then
 		return nil
 	end
+	local opts: any = { Seed = seed, Prop = prop or "none", Solid = solid == true }
+	if lite then
+		opts.Lite = true
+	end
 	local ok, model = pcall(function()
-		return NPCModels.Build(style, { Seed = seed, Prop = prop or "none", Solid = solid == true })
+		return NPCModels.Build(style, opts)
 	end)
 	if not ok or not model then
 		return nil
@@ -307,19 +354,23 @@ function CityKit.Lantern(m: Instance, F: CFrame, h: number?, color: Color3?)
 	CityKit.Ball(m, "LanternFinial", (F * CFrame.new(0, H + 0.5, 0)).Position, 0.24, c, M.Metal)
 end
 
--- Banc de parc (lattes bois, pieds fonte) ; siège à 1,4 (échelle avatar)
+-- Banc de parc (lattes bois, pieds fonte) ; (v11, SCALE11 : échelle Roblox)
+-- assise à 1,85 (CityKit.BENCH_TOP), profondeur 2,0, dossier jusqu'à 3,8 ;
+-- au moins 5,6 de long (2 places)
+CityKit.BENCH_TOP = 1.85
 function CityKit.Bench(m: Instance, F: CFrame, len: number?)
-	local L = len or 5
+	local L = math.max(5.6, len or 5.6)
 	local wood = Color3.fromRGB(150, 104, 66)
+	local top = CityKit.BENCH_TOP
 	for _, x in ipairs({ -L / 2 + 0.4, L / 2 - 0.4 }) do
-		CityKit.Box(m, "BenchLeg", F, x - 0.12, x + 0.12, 0, 1.3, -0.7, 0.7, IRON, M.Metal, true)
-		CityKit.Box(m, "BenchArm", F, x - 0.12, x + 0.12, 2.0, 2.12, -0.75, 0.55, IRON, M.Metal)
+		CityKit.Box(m, "BenchLeg", F, x - 0.12, x + 0.12, 0, top - 0.15, -0.95, 0.85, IRON, M.Metal, true)
+		CityKit.Box(m, "BenchArm", F, x - 0.12, x + 0.12, top + 0.7, top + 0.82, -1.0, 0.75, IRON, M.Metal)
+	end
+	for i = 0, 3 do
+		CityKit.Box(m, "BenchSlat", F, -L / 2, L / 2, top - 0.15, top, -1.15 + i * 0.5, -0.75 + i * 0.5, wood, M.Wood, i == 1 or i == 2)
 	end
 	for i = 0, 2 do
-		CityKit.Box(m, "BenchSlat", F, -L / 2, L / 2, 1.3, 1.44, -0.62 + i * 0.44, -0.3 + i * 0.44, wood, M.Wood, i == 1)
-	end
-	for i = 0, 1 do
-		CityKit.Box(m, "BenchBack", F, -L / 2, L / 2, 1.8 + i * 0.5, 2.1 + i * 0.5, 0.62 + i * 0.1, 0.76 + i * 0.1, wood, M.Wood)
+		CityKit.Box(m, "BenchBack", F, -L / 2, L / 2, top + 0.35 + i * 0.55, top + 0.75 + i * 0.55, 0.85 + i * 0.06, 0.99 + i * 0.06, wood, M.Wood)
 	end
 end
 

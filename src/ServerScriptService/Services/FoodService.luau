@@ -185,7 +185,8 @@ local function finish(player: Player, holding: Holding)
 end
 
 local function makeTool(food: any): Tool?
-	local model = FoodModels.Build(food.Id, CFrame.new(0, 200, 0))
+	local base = CFrame.new(0, 200, 0)
+	local model = FoodModels.Build(food.Id, base, FoodModels.HELD_SCALE)
 	if not model then
 		return nil
 	end
@@ -199,13 +200,14 @@ local function makeTool(food: any): Tool?
 	tool.CanBeDropped = false
 	tool.RequiresHandle = true
 	tool.ToolTip = food.Icon .. " " .. food.Name
-	-- (v9.9, FAIR99) prise : aucune rotation -> l'aliment reste DEBOUT dans
-	-- la pose "outil" (R15 : RightGripAttachment ; R6 : RightGrip C0 =
-	-- (0, -1, 0) * Angles(-90°, 0, 0) : son +Y = l'avant du bras = le haut
-	-- quand le bras est tendu) ; le repère des modèles est le centre du
-	-- poing (FoodModels.GRIP). v9.8 : prise sous le cornet -> l'aliment
-	-- flottait au-dessus de la main et penchait avec le poignet.
-	tool.Grip = FoodModels.GRIP
+	-- (v11, ITEMS11 : capture 31) Tool.Grip est exprimé dans le repère de la
+	-- pièce Handle : v10 oubliait que le Handle du cornet (cylindre) est
+	-- tourné de 90° -> la glace sortait du poing à l'horizontale, sur le
+	-- côté, dans toutes les poses. Grip = HandleLocal⁻¹ * GRIP : le +Y du
+	-- MODÈLE = le +Y de la prise (= l'avant du bras : debout quand le bras
+	-- est tendu). La pose du bras (tenue, geste) est faite par chaque client
+	-- (Client/World/FairEat + FoodHold) : debout quelle que soit l'animation.
+	tool.Grip = FoodModels.ToolGrip(model, base)
 	tool:SetAttribute("FoodId", food.Id)
 	tool:SetAttribute("BitesLeft", food.Bites)
 	tool:SetAttribute("BiteAt", 0)

@@ -48,6 +48,7 @@ local RunService = game:GetService("RunService")
 
 local Locale = require(ReplicatedStorage.Shared.Locale)
 local ParkMotion = require(ReplicatedStorage.Shared.ParkMotion)
+local ParkKit = require(script.Parent.ParkKit) -- (v11, PARK11) banc de parc commun
 
 local ParkPlay = {}
 
@@ -998,7 +999,8 @@ local function buildSandbox(park: Park)
 	f.Parent = park.Folder
 end
 
--- 🪑 bancs des parents (fonte + lattes, assise à 1,45)
+-- 🪑 bancs des parents : banc de parc commun (ParkKit.Bench, v11 SCALE11 :
+-- assise à 1,85, profondeur 2,0, 2 places de 2,6)
 local function buildBenches(park: Park)
 	local g = park.G
 	local B = ParkMotion.BENCH
@@ -1006,24 +1008,7 @@ local function buildBenches(park: Park)
 		local cf = g * ParkMotion.BenchFrame(b)
 		local f = Instance.new("Model")
 		f.Name = "ParkBench" .. b
-		local H = B.SeatTop
-		local L = B.Length
-		for k = 0, 2 do
-			local z = -0.55 + k * 0.5
-			newPart(f, "SeatSlat", Vector3.new(L, 0.14, 0.42), cf * CFrame.new(0, H - 0.07, z), WOOD, M.Wood, nil, true)
-		end
-		local back = cf * CFrame.new(0, H + 0.05, 0.62) * CFrame.Angles(rad(12), 0, 0)
-		for _, y in ipairs({ 0.55, 1.15 }) do
-			newPart(f, "BackSlat", Vector3.new(L, 0.42, 0.12), back * CFrame.new(0, y, 0), WOOD, M.Wood, nil, true)
-		end
-		for _, sx in ipairs({ -1, 1 }) do
-			local x = sx * (L / 2 - 0.35)
-			newPart(f, "FrontLeg", Vector3.new(0.18, H + 0.62, 0.18), cf * CFrame.new(x, (H + 0.62) / 2, -0.62), IRON, M.Metal)
-			newPart(f, "RearLeg", Vector3.new(0.18, H, 0.18), cf * CFrame.new(x, H / 2, 0.55), IRON, M.Metal)
-			newPart(f, "BackPost", Vector3.new(0.16, 1.55, 0.14), back * CFrame.new(x, 0.75, -0.13), IRON, M.Metal)
-			newPart(f, "SeatRail", Vector3.new(0.16, 0.16, 1.4), cf * CFrame.new(x, H - 0.22, -0.02), IRON, M.Metal)
-			newPart(f, "ArmRest", Vector3.new(0.24, 0.12, 1.3), cf * CFrame.new(sx * (L / 2 - 0.3), H + 0.68, -0.08), IRON, M.Metal)
-		end
+		ParkKit.Bench(f, cf, B.Length, WOOD, IRON)
 		f.Parent = park.Folder
 	end
 end

@@ -113,6 +113,23 @@ test("NumberFormatter.WithSpaces / Time / Multiplier", function(check)
 	eq(check, N.Multiplier(2500), "x2.5K")
 end)
 
+test("NumberFormatter.Long v11 (nombres en toutes lettres)", function(check)
+	eq(check, N.Long(999), "999")
+	eq(check, N.Long(1500), "1.5 thousand")
+	eq(check, N.Long(1.39e15), "1.39 quadrillion")
+	eq(check, N.Long(1.39e15, "fr"), "1,39 billiard")
+	eq(check, N.Long(1e6, "fr"), "1 million")
+	eq(check, N.Long(2.5e9, "fr"), "2,5 milliards")
+	eq(check, N.Long(5000, "fr"), "5 mille")
+	eq(check, N.Long(-2e12), "-2 trillion")
+	eq(check, N.Long(0 / 0), "0")
+	eq(check, N.Long(1e300), N.Format(1e300))
+	for e = 3, 35 do
+		local s = N.Long(10 ^ e, "fr")
+		check(s:match("^10* %a+$") ~= nil, "10^" .. e .. " -> " .. s)
+	end
+end)
+
 ------------------------------------------------------------------ Config
 test("Config : cohérence des améliorations", function(check)
 	local ids = {}
@@ -237,15 +254,80 @@ test("Formulas.GetUpgradeCost (Detox compris)", function(check)
 	eq(check, Formulas.GetRebirthMultiplier(1), 1 + R.MultiplierPerRebirth, "mult 1")
 	check(near(Formulas.GetRebirthMultiplier(2), 1 + R.MultiplierPerRebirth * (1 + (R.MultiplierDecay or 1))), "mult 2")
 	local lastMult, lastGain = 1, math.huge
+	local late = R.LateFrom or math.huge
 	for r = 1, 30 do
 		local m = Formulas.GetRebirthMultiplier(r)
 		check(m > lastMult, "multiplicateur croissant " .. r)
-		check(m - lastMult <= lastGain + 1e-9, "gain par visite décroissant " .. r)
+		if r <= late then
+			-- visites 1..LateFrom : +MultiplierPerRebirth (de moins en moins)
+			check(m - lastMult <= lastGain + 1e-9, "gain par visite décroissant " .. r)
+		else
+			-- (v11) fin de partie : x LateMultiplierGrowth par visite
+			check(near(m / lastMult, R.LateMultiplierGrowth), "x LateMultiplierGrowth " .. r)
+		end
 		lastGain = m - lastMult
 		lastMult = m
-		-- Chaque visite coûte bien plus que la précédente, plus vite que le multiplicateur ne grandit
-		check(Formulas.GetRebirthCost(r) / Formulas.GetRebirthCost(r - 1) > m / Formulas.GetRebirthMultiplier(r - 1), "océan plus cher que le gain " .. r)
+		-- Chaque visite coûte plus que la précédente, au moins autant que le multiplicateur grandit
+		check(Formulas.GetRebirthCost(r) / Formulas.GetRebirthCost(r - 1) >= m / Formulas.GetRebirthMultiplier(r - 1) - 1e-9, "océan plus cher que le gain " .. r)
 	end
+end)
+
+-- (v11, ECON11) Fin de partie : visites 1..10 inchangées, ensuite tout grandit
+-- en proportion ; personne ne perd rien par rapport à l'ancienne formule
+test("Formulas v11 : renaissances après la 10e (prix, multiplicateur, diamants, ancienne formule)", function(check)
+	local R = Config.Rebirth
+	check(R.LateFrom == 10, "LateFrom = 10")
+	-- Anciennes formules (v9.3 à v10), recopiées telles quelles
+	local function oldCost(r) return R.BaseCost * R.CostGrowth ^ r * (1 + r) ^ R.CostPower end
+	local function oldScale(r) return (R.PriceGrowth or 1) ^ r * (1 + r) ^ R.PricePower end
+	local function oldMult(r) return 1 + R.MultiplierPerRebirth * r end
+	for r = 0, 10 do
+		check(near(Formulas.GetRebirthMultiplier(r), oldMult(r)), "multiplicateur inchangé " .. r)
+		check(near(Formulas.GetUpgradePriceScale(r), oldScale(r)), "échelle des prix inchangée " .. r)
+		if r < 10 then
+			check(near(Formulas.GetRebirthCost(r), oldCost(r)), "océan inchangé " .. r)
+		end
+	end
+	for r = 11, 120 do
+		local m, s = Formulas.GetRebirthMultiplier(r), Formulas.GetUpgradePriceScale(r)
+		-- jamais moins de gains, et (prix des améliorations / gains) jamais pire qu'avant
+		check(m >= oldMult(r), "multiplicateur >= ancien " .. r)
+		check(s / m <= oldScale(r) / oldMult(r) + 1e-9, "prix / gains <= ancien " .. r)
+		-- l'océan ne coûte jamais plus qu'avant
+		check(Formulas.GetRebirthCost(r - 1) <= oldCost(r - 1) * (1 + 1e-9), "océan <= ancien " .. r)
+		check(near(Formulas.GetRebirthCost(r) / Formulas.GetRebirthCost(r - 1), R.LateCostGrowth), "x LateCostGrowth " .. r)
+		check(m == m and m < math.huge and s == s and s < math.huge, "fini " .. r)
+	end
+	-- Chiffres lisibles : jamais de Sx (1e21) avant la 60e visite, ni de Qi (1e18) avant la 40e
+	check(Formulas.GetRebirthCost(39) < 1e18, "40e visite < 1 Qi : " .. N.Format(Formulas.GetRebirthCost(39)))
+	check(Formulas.GetRebirthCost(59) < 1e21, "60e visite < 1 Sx : " .. N.Format(Formulas.GetRebirthCost(59)))
+	check(Formulas.GetRebirthCost(19) < oldCost(19) / 1e5, "20e visite : " .. N.Format(Formulas.GetRebirthCost(19)) .. " au lieu de " .. N.Format(oldCost(19)))
+	check(Formulas.GetRebirthCost(1e9) == Formulas.GetRebirthCost(1000), "visites bornées")
+	-- Diamants des visites
+	local D = R.Diamonds
+	eq(check, Formulas.GetOceanDiamonds(D.From - 1), 0, "pas de 💎 avant From")
+	eq(check, Formulas.GetOceanDiamonds(D.From), D.Base, "💎 à From")
+	eq(check, Formulas.GetOceanDiamonds(0 / 0), 0, "💎 NaN")
+	local last = 0
+	for r = D.From, 200 do
+		local n = Formulas.GetOceanDiamonds(r)
+		check(n >= last and n <= D.Max and math.floor(n) == n, "💎 croissants et bornés " .. r)
+		last = n
+	end
+	eq(check, last, D.Max, "💎 plafond")
+	-- Nouveautés de fin de partie : une porte au moins toutes les 5 visites jusqu'à 40
+	local gates = {}
+	for _, u in ipairs(Config.Upgrades) do
+		if u.RequiresRebirths then gates[u.RequiresRebirths] = true end
+	end
+	local lastGate = 0
+	for g = 1, 40 do
+		if gates[g] then
+			check(g - lastGate <= 5, "trou de portes entre " .. lastGate .. " et " .. g)
+			lastGate = g
+		end
+	end
+	eq(check, lastGate, 40, "dernière nouveauté à la 40e visite")
 end)
 
 test("Formulas.GetVisibleUpgrades : progression", function(check)
@@ -259,7 +341,7 @@ test("Formulas.GetVisibleUpgrades : progression", function(check)
 	end
 	local gate, gateCount = Formulas.GetNextRebirthUnlocks(d)
 	check(gate == 1 and gateCount >= 1, "prochaine nouveauté à la 1re visite")
-	d.Rebirths = 10
+	d.Rebirths = 40 -- (v11) toutes les nouveautés débloquées (dernière porte : 40 visites)
 	-- Achète toujours la moins chère visible (hors océan) jusqu'à tout avoir
 	local seen = {}
 	local steps = 0
@@ -1272,7 +1354,14 @@ do
 	local WL = wlFn()
 	local fakeModules = { Config = Config, Formulas = Formulas, NumberFormatter = N, Net = fakeNet, WorldLayout = WL,
 		RateLimiter = { Check = function() return true end } }
-	local shared = { Config = "Config", Formulas = "Formulas", NumberFormatter = "NumberFormatter", Net = "Net", WorldLayout = "WorldLayout" }
+	local shared = { Config = "Config", Formulas = "Formulas", NumberFormatter = "NumberFormatter", Net = "Net", WorldLayout = "WorldLayout",
+		HouseSwitches = "HouseSwitches" }
+	-- (v11 HOUSE11) 💡 / 🪟 une par une : Shared/HouseSwitches (source telle quelle)
+	local hswFn, hswErr = loadstring(HS_SWITCHES_SRC, "=HouseSwitches")
+	assert(hswFn, hswErr)
+	setfenv(hswFn, setmetatable({ game = { GetService = function() return { Shared = shared } end }, require = function(key) return fakeModules[key] end },
+		{ __index = getfenv(0) }))
+	fakeModules.HouseSwitches = hswFn()
 	local env = {
 		game = { GetService = function() return { Shared = shared } end },
 		script = { Parent = { RateLimiter = "RateLimiter" } },
@@ -1577,7 +1666,10 @@ def house_service_test():
     wl = read(os.path.join(SHARED, "WorldLayout.luau"))
     if "]=====]" in wl:
         raise ValueError("délimiteur ]=====] interdit dans WorldLayout.luau")
-    return "local HOUSE_SERVICE_SRC = [=====[%s]=====]\nlocal HS_WORLD_LAYOUT_SRC = [=====[%s]=====]\n%s" % (body, wl, HOUSE_SERVICE_TESTS)
+    hsw = read(os.path.join(SHARED, "HouseSwitches.luau"))  # (v11 HOUSE11)
+    if "]=====]" in hsw:
+        raise ValueError("délimiteur ]=====] interdit dans HouseSwitches.luau")
+    return "local HOUSE_SERVICE_SRC = [=====[%s]=====]\nlocal HS_WORLD_LAYOUT_SRC = [=====[%s]=====]\nlocal HS_SWITCHES_SRC = [=====[%s]=====]\n%s" % (body, wl, hsw, HOUSE_SERVICE_TESTS)
 
 
 def house_surfaces_test():
@@ -2897,6 +2989,11 @@ def garage_test():
         max_l = max(max_l, float(m.group(2)))
         max_w = max(max_w, float(m.group(3)))
         max_h = max(max_h, float(m.group(5)))
+    # (v11, CARS11) voitures construites à l'échelle CarModels.SCALE
+    sc = re.search(r"^CarModels\.SCALE = ([\d.]+)", models, re.M)
+    if sc:
+        k = float(sc.group(1))
+        max_w, max_l, max_h = round(max_w * k, 3), round(max_l * k, 3), round(max_h * k, 3)
     # textes à traduire (Config.Cars + garage) : clés présentes dans Shared/Lang
     config = read(os.path.join(SHARED, "Config.luau"))
     start = config.find("Config.Cars = {")
@@ -2932,14 +3029,15 @@ do
 	local Sim = req("EconomySim")
 
 	test("Économie (simulateur) : rythme des renaissances, joueur actif sans Robux", function(check)
-		local result = Sim.Run("Active", { MaxHours = 40, MaxRebirths = 10 })
+		-- (v11) une seule simulation jusqu'à R40 (déterministe : R1..R10 identiques)
+		local result = Sim.Cached("Active", Sim.Targets.LateRebirths, 120)
 		local runs = Sim.RunMinutes(result)
 		local parts = {}
 		for n = 1, 10 do
 			table.insert(parts, "R" .. n .. "=" .. (runs[n] and tostring(math.floor(runs[n] + 0.5)) or "-"))
 		end
 		print("    parties (min) : " .. table.concat(parts, " "))
-		check(result.Rebirths >= 10, "10 visites en moins de 40 h de jeu : " .. result.Rebirths)
+		check(result.RebirthAt[10] ~= nil and result.RebirthAt[10] < 40 * 3600, "10 visites en moins de 40 h de jeu")
 		-- Chaque partie dure au moins autant que la précédente (tolérance 2 %)
 		for n = 2, 10 do
 			if runs[n] and runs[n - 1] then
@@ -2965,6 +3063,70 @@ do
 		-- Tout le contenu prend des jours : R10 jamais avant Sim.Targets.MinTotalHours h de jeu actif
 		local total = result.RebirthAt[10]
 		check(total ~= nil and total >= Sim.Targets.MinTotalHours * 3600, "R10 trop tôt : " .. tostring(total and math.floor(total / 60)) .. " min")
+	end)
+
+	-- (v11, ECON11) « À partir de la 20e renaissance c'est beaucoup trop long » :
+	-- chaque partie R11..R40 reste dans une plage sensée, de plus en plus courte
+	test("Économie v11 (simulateur) : fin de partie R11..R40, parties dans la plage, chiffres lisibles", function(check)
+		local T = Sim.Targets
+		local result = Sim.Cached("Active", T.LateRebirths, 120)
+		local runs = Sim.RunMinutes(result)
+		local parts = {}
+		for n = 11, T.LateRebirths, 3 do
+			table.insert(parts, "R" .. n .. "=" .. (runs[n] and tostring(math.floor(runs[n] + 0.5)) or "-"))
+		end
+		local at = result.RebirthAt[T.LateRebirths]
+		print("    fin de partie (min) : " .. table.concat(parts, " ") .. string.format("  | R%d à %s de jeu actif", T.LateRebirths, at and N.Time(at) or "-"))
+		check(result.Rebirths >= T.LateRebirths, "R" .. T.LateRebirths .. " atteinte : " .. result.Rebirths)
+		for n = 11, T.LateRebirths do
+			local minutes = runs[n]
+			check(minutes ~= nil and minutes >= T.LateRunMinutes[1] and minutes <= T.LateRunMinutes[2],
+				string.format("partie R%d : %s min hors [%d, %d]", n, tostring(minutes and math.floor(minutes + 0.5)), T.LateRunMinutes[1], T.LateRunMinutes[2]))
+			if minutes and runs[n - 1] then
+				check(minutes <= runs[n - 1] * 1.03, string.format("partie R%d (%.0f min) plus longue que R%d (%.0f min)", n, minutes, n - 1, runs[n - 1]))
+			end
+		end
+		check(at ~= nil and at >= T.LateTotalHours[1] * 3600 and at <= T.LateTotalHours[2] * 3600,
+			"R" .. T.LateRebirths .. " à " .. tostring(at and N.Time(at)) .. " hors [" .. T.LateTotalHours[1] .. ", " .. T.LateTotalHours[2] .. "] h")
+		-- Chaque nouveauté de fin de partie est achetée pendant la partie où elle apparaît
+		-- (la simulation s'arrête à l'océan n°40 : les cartes de la porte 40 ne sont pas encore jouées)
+		for _, u in ipairs(Config.Upgrades) do
+			if (u.RequiresRebirths or 0) >= 10 and u.RequiresRebirths < T.LateRebirths then
+				local first = result.FirstBuy[u.Id]
+				check(first ~= nil and first.Rebirths == u.RequiresRebirths,
+					u.Id .. " achetée à la visite " .. tostring(first and first.Rebirths) .. " (porte " .. u.RequiresRebirths .. ")")
+			end
+		end
+		-- Chiffres : la plus grosse Dopamine en banque reste lisible (jamais Sx)
+		local bank = 0
+		for _, s in ipairs(result.Samples) do
+			bank = math.max(bank, s.Bank)
+		end
+		check(bank < 1e21, "banque max " .. N.Format(bank))
+	end)
+
+	test("Économie v11 (simulateur) : pire cas casses + diamants + courses (2 h/jour), chaque partie >= 70 % du jeu actif", function(check)
+		local T = Sim.Targets
+		local active = Sim.RunMinutes(Sim.Cached("Active", T.LateRebirths, 120))
+		local extra = 1 + T.ExtrasSecondsPerDay / (T.ExtrasDayHours * 3600)
+		Config.GamePassesById.__ExtrasTest = { Id = "__ExtrasTest", Multiplier = extra }
+		local ok, result = pcall(Sim.Run, { Name = "Actif + casses, diamants et courses au max", ClicksPerSecond = 6, ClickDuty = 0.75,
+			Passes = { "__ExtrasTest" }, AutoClicks = 0 }, { MaxHours = 80, MaxRebirths = 25 })
+		Config.GamePassesById.__ExtrasTest = nil
+		check(ok, tostring(result))
+		if not ok then
+			return
+		end
+		local runs = Sim.RunMinutes(result)
+		local parts = {}
+		for n = 1, 25, 3 do
+			table.insert(parts, "R" .. n .. "=" .. (runs[n] and tostring(math.floor(runs[n] + 0.5)) or "-"))
+		end
+		print(string.format("    tout le reste au max (x%.2f), parties (min) : %s", extra, table.concat(parts, " ")))
+		for n = 1, 25 do
+			check(runs[n] ~= nil and active[n] ~= nil and runs[n] >= active[n] * T.ExtrasMinRatio,
+				string.format("R%d : %s min < %d %% de %s min", n, tostring(runs[n] and math.floor(runs[n])), T.ExtrasMinRatio * 100, tostring(active[n] and math.floor(active[n]))))
+		end
 	end)
 
 	test("Économie (simulateur) : les Robux accélèrent sans casser la courbe", function(check)
@@ -3112,7 +3274,7 @@ def run_sim():
         f.write("\n".join(parts))
         path = f.name
     try:
-        proc = subprocess.run([LUAU, path], capture_output=True, text=True, timeout=900)
+        proc = subprocess.run([LUAU, path], capture_output=True, text=True, timeout=2400)
     finally:
         os.unlink(path)
     sys.stdout.write(proc.stdout)
@@ -3302,7 +3464,7 @@ do
 
 	test("Courses v10 : Config.Race (parcours, récompenses, anti-triche, IA)", function(check)
 		local R = Config.Race
-		check(type(R) == "table" and #R.Routes >= 3 and #R.Routes <= 5, "3 à 5 parcours")
+		check(type(R) == "table" and #R.Routes >= 3 and #R.Routes <= 8, "3 à 8 parcours (v11 : 7)")
 		local ids = {}
 		for _, def in ipairs(R.Routes) do
 			check(not ids[def.Id], "parcours en double " .. tostring(def.Id))
@@ -3327,7 +3489,7 @@ do
 				local tag = count .. "/" .. r.Id
 				check(not r.Fallback, tag .. " : graphe de LAYOUT10 (pas le secours)")
 				local L = r.Line
-				check(L.Total >= 1200 and L.Total <= 9000, tag .. " : longueur " .. math.floor(L.Total))
+				check(L.Total >= (if r.Laps >= 3 then 1000 else 1200) and L.Total <= 9000, tag .. " : longueur " .. math.floor(L.Total))
 				check(r.RaceDistance >= 2000 and r.RaceDistance <= 10000, tag .. " : distance de course " .. math.floor(r.RaceDistance))
 				-- trajectoire sur l'asphalte (1 stud de tolérance), virages sans demi-tour
 				local off, worstTurn = 0, 0
@@ -3472,6 +3634,113 @@ do
 		end
 		check(runs[5] ~= nil and runs[1] ~= nil and runs[5] >= runs[1] * 1.3, "la courbe reste croissante")
 	end)
+
+	-- 🏁 RACE11 (v11) : nouveaux parcours, médailles, virages, XP / rangs,
+	-- fantôme, nitro, historique
+	test("Courses v11 : 7 parcours, départs séparés, médailles et virages (1..50 parcelles)", function(check)
+		for _, count in ipairs({ 1, 8, 20, 50 }) do
+			RR.ClearCache()
+			local routes = RR.All(count)
+			local starts = {}
+			for _, r in ipairs(routes) do
+				local tag = count .. "/" .. r.Id
+				local x, z = RU.PointAt(r.Line, r.StartS)
+				for _, q in ipairs(starts) do
+					check(math.sqrt((x - q[1]) ^ 2 + (z - q[2]) ^ 2) >= 89, tag .. " : départ trop près de " .. q[3])
+				end
+				table.insert(starts, { x, z, r.Id })
+				if not r.Closed then
+					local fx, fz = RU.PointAt(r.Line, r.Line.Total)
+					table.insert(starts, { fx, fz, r.Id .. "/arrivée" })
+				end
+				check(type(r.Par) == "number" and r.Par > 20 and r.Par < 300, tag .. " : temps de référence " .. tostring(r.Par))
+				local m = r.Medals
+				check(m.Gold > r.Par and m.Silver > m.Gold and m.Bronze > m.Silver, tag .. " : médailles ordonnées")
+				check(type(r.Corners) == "table" and r.PerLap >= 2, tag .. " : virages / portes par tour")
+				for _, c in ipairs(r.Corners) do
+					check(c.Turn == 1 or c.Turn == -1, tag .. " : sens d'un virage")
+				end
+			end
+			check(RR.Get("Belt", count) ~= nil and RR.Get("Loft", count) ~= nil and RR.Get("Endurance", count) ~= nil, count .. " : nouveaux parcours")
+			check(RR.Get("Loft", count).Laps == 3 and RR.Get("Endurance", count).Closed, count .. " : tours")
+		end
+		RR.ClearCache()
+		-- médaille d'un temps
+		local med = RU.Medals(100)
+		eq(check, RU.MedalFor(100, med), 1, "or")
+		eq(check, RU.MedalFor(110, med), 2, "argent")
+		eq(check, RU.MedalFor(130, med), 3, "bronze")
+		eq(check, RU.MedalFor(200, med), 0, "rien")
+		eq(check, RU.MedalFor(nil, med), 0, "pas de temps")
+	end)
+
+	test("Courses v11 : XP et rangs (Bronze III -> Diamant), sans effet sur l'économie", function(check)
+		local x1 = RU.XpFor({ Place = 1, Finished = true, Humans = 2, Medal = 1, Record = true, Overtakes = 4 })
+		local x4 = RU.XpFor({ Place = 4, Finished = true, Humans = 0, Medal = 0 })
+		local xd = RU.XpFor({ Finished = false, Dnf = true })
+		check(x1 > x4 and x4 > xd and xd > 0, "1er > 4e > abandon " .. x1 .. " " .. x4 .. " " .. xd)
+		eq(check, RU.XpFor({ Finished = false }), 0, "rien sans avoir couru")
+		check(RU.XpFor({ Place = 1, Finished = true, Overtakes = 1e6 }) <= 40 + 60 + Config.Race.Xp.Overtake * Config.Race.Xp.MaxOvertakes, "dépassements plafonnés")
+		local r0 = RU.Rank(0)
+		check(r0.Id == "Bronze" and r0.Division == 3 and r0.Label == "Bronze III" and r0.Progress == 0, "départ : Bronze III")
+		local prev = -1
+		local lastIndex = 1
+		for xp = 0, 12000, 50 do
+			local r = RU.Rank(xp)
+			local score = r.Index * 10 + (4 - (if r.Division == 0 then 4 else r.Division))
+			check(score >= prev, "rang croissant à " .. xp)
+			check(r.Progress >= 0 and r.Progress <= 1 and xp >= r.Min and (r.Next == nil or xp < r.Next), "progression à " .. xp)
+			prev = score
+			lastIndex = r.Index
+		end
+		eq(check, lastIndex, #Config.Race.Ranks, "sommet atteint")
+		eq(check, RU.Rank(Config.Race.Ranks[#Config.Race.Ranks].Min).Id, "Diamond", "Diamant")
+		check(RU.Rank(0 / 0).Id == "Bronze" and RU.Rank(-5).Id == "Bronze", "valeurs folles")
+		check(r0.Color ~= nil, "couleur du rang")
+	end)
+
+	test("Courses v11 : fantôme du meilleur tour, nitro (dérapage, aspiration), historique, données", function(check)
+		local g = RU.CleanGhost({ T = { 10, 20, 30 }, D = { 200, 380, 600 }, Car = "SportsCar" })
+		check(g ~= nil and g.Time == 30 and g.Car == "SportsCar", "fantôme propre")
+		eq(check, RU.GhostAt(g, 5), 100, "fantôme à 5 s")
+		eq(check, RU.GhostAt(g, 25), 490, "fantôme à 25 s")
+		eq(check, RU.GhostAt(g, 99), 600, "fantôme au bout")
+		eq(check, RU.GhostTimeAt(g, 290), 15, "temps du fantôme à 290 studs")
+		check(RU.GhostTimeAt(g, 700) == nil, "au-delà du tour")
+		check(RU.CleanGhost({ T = { 10, 5 }, D = { 1, 2 } }) == nil and RU.CleanGhost({ T = { 1 }, D = { 1 } }) == nil and RU.CleanGhost("x") == nil, "fantômes invalides refusés")
+		-- dérapage
+		check(math.abs(RU.SlipAngle(0, -1, 0, -10) - 0) < 1e-6 and math.abs(RU.SlipAngle(0, -1, 10, 0) - 90) < 1e-6, "angle de glisse")
+		eq(check, RU.DriftRate(5, 50), 0, "pas de dérapage sous l'angle min")
+		eq(check, RU.DriftRate(30, 10), 0, "pas de dérapage à l'arrêt")
+		check(RU.DriftRate(30, 50) > 0, "dérapage")
+		check(RU.InDraft(15, 1) and not RU.InDraft(4, 0) and not RU.InDraft(15, 6), "aspiration")
+		local N = Config.Race.Nitro
+		local c, ga = RU.NitroGain(1, 0.5, N.DriftPoints * 0.6, 0)
+		check(c == 2 and math.abs(ga - 0.1) < 1e-6, "jauge -> charge " .. c .. " " .. ga)
+		local cm, gm = RU.NitroGain(N.Max, 0, 1e9, 1e9)
+		check(cm == N.Max and gm < 1, "charges plafonnées")
+		check(RU.BoostFactor() > 1 and RU.BoostFactor() <= 1.25, "boost raisonnable")
+		-- l'anti-triche tolère le boost (vitesse x boost) mais pas plus
+		local top = 60
+		eq(check, RU.CheckMove(top * RU.BoostFactor(), 1, top * RU.BoostFactor()), "ok", "boost accepté")
+		eq(check, RU.CheckMove(top * 1.9, 1, top * RU.BoostFactor()), "fast", "au-delà du boost")
+		-- historique borné + données v11
+		local rd = RU.SanitizeData(nil, 5)
+		for k = 1, 30 do RU.PushHistory(rd, { R = "City", P = (k % 4) + 1, N = 4, T = 60 + k, X = 50 }) end
+		eq(check, #rd.History, Config.Race.HistorySize, "historique borné")
+		eq(check, rd.History[1].T, 90, "plus récent en tête")
+		rd.Ghost.City = g
+		rd.Ghost.Nope = g
+		rd.Routes.City = { R = 3, W = 1, P = 2, T = 70.5, C = "SportsCar", M = 2 }
+		rd.Routes.Bad = { R = 1 }
+		rd.Xp = 123.7
+		local d2 = RU.SanitizeData(rd, 5)
+		check(d2.Ghost.City ~= nil and d2.Ghost.Nope == nil, "fantômes par parcours valides")
+		check(d2.Routes.City.W == 1 and d2.Routes.City.T == 70.5 and d2.Routes.Bad == nil, "stats par parcours")
+		check(d2.Xp == 123 and #d2.History == Config.Race.HistorySize, "XP / historique gardés")
+		local old = RU.SanitizeData({ Day = 5, Rewarded = 2, Races = 4, Wins = 1, Podiums = 2, Best = { City = 70 } }, 5)
+		check(old.Xp == 0 and #old.History == 0 and next(old.Routes) == nil and old.Best.City == 70, "vieille sauvegarde v10")
+	end)
 end
 """
 
@@ -3485,6 +3754,28 @@ def race_test():
     return "\n".join(parts) + RACE_TESTS
 
 
+
+def rainbow_test():
+    """Tests REALISM11 (v11) : arc-en-ciel + pot d'or (tests/rainbow_tests.py)."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import rainbow_tests
+    return rainbow_tests.rainbow_test(read, SHARED)
+
+
+def bank_test():
+    """Tests BANK11 (v11) : 💎 diamants, banque, casses (tests/bank_tests.py)."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import bank_tests
+    return bank_tests.bank_test(read, SHARED)
+
+
+def train_test():
+    """Tests TRAIN11 (v11) : 🚂 ligne de ceinture, horaire, passages à niveau (tests/train_tests.py)."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import train_tests
+    return train_tests.train_test(read, SHARED)
+
+
 def main():
     if not os.path.exists(LUAU):
         print("FAIL : Luau CLI introuvable (%s)" % LUAU)
@@ -3495,12 +3786,15 @@ def main():
                           + "\n" + economy_test() + "\n" + world_layout_test() + "\n" + garden_snapshot_test() + "\n" + garage_test()
                           + "\n" + desk_runner_test()
                           + "\n" + food_test()
-                          + "\n" + race_test())
+                          + "\n" + race_test()
+                          + "\n" + rainbow_test()
+                          + "\n" + bank_test()
+                          + "\n" + train_test())
     with tempfile.NamedTemporaryFile("w", suffix=".luau", delete=False, encoding="utf-8") as f:
         f.write(bundle)
         path = f.name
     try:
-        proc = subprocess.run([LUAU, path], capture_output=True, text=True, timeout=300)
+        proc = subprocess.run([LUAU, path], capture_output=True, text=True, timeout=2400)
     finally:
         os.unlink(path)
     sys.stdout.write(proc.stdout)
