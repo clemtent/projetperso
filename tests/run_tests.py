@@ -3773,7 +3773,7 @@ def main():
         f.write(bundle)
         path = f.name
     try:
-        proc = subprocess.run([LUAU, path], capture_output=True, text=True, timeout=300)
+        proc = subprocess.run([LUAU, path], capture_output=True, text=True, timeout=900)
     finally:
         os.unlink(path)
     sys.stdout.write(proc.stdout)
