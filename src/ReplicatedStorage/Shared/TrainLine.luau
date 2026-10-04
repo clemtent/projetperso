@@ -14,7 +14,7 @@
 	(axe à R = WorldLayout.BeltR(count)) et l'autoroute, pour TOUS les
 	nombres de parcelles (la boucle grandit avec R) :
 	  - décalage de l'axe de la voie depuis l'axe de l'avenue de ceinture :
-	    OFF_MID (26) au milieu de chaque côté (|le long| <= MID_HALF), où la
+	    OFF_MID (29) au milieu de chaque côté (|le long| <= MID_HALF), où la
 	    voie coupe À NIVEAU la route qui part vers l'échangeur (4 PASSAGES À
 	    NIVEAU : barrières + feux clignotants), puis s'écarte en douceur
 	    (cosinus) jusqu'à OFF_OUT (70) pour |le long| >= TRANS_END : la voie
@@ -86,7 +86,7 @@ local TrainLine = {}
 -- Constantes (studs, secondes)
 ----------------------------------------------------------------------
 
-TrainLine.OFF_MID = 26 -- axe de la voie au passage à niveau (depuis l'axe de l'avenue de ceinture)
+TrainLine.OFF_MID = 29 -- axe de la voie au passage à niveau (depuis l'axe de l'avenue de ceinture) ; v11 : 26 -> 29 (lignes d'arrêt hors du carrefour de la ceinture : CARS11)
 TrainLine.OFF_OUT = 70 -- axe de la voie ailleurs
 TrainLine.MID_HALF = 40 -- |le long| <= ça : décalage OFF_MID
 TrainLine.TRANS_END = 140 -- |le long| >= ça : décalage OFF_OUT
@@ -122,7 +122,7 @@ TrainLine.WARN_DIST = 560 -- les feux clignotent
 TrainLine.CLOSED_DIST = 420 -- barrières baissées (abaissement entre les deux)
 TrainLine.CLEAR_AFTER = 30 -- après la queue : barrières encore baissées
 TrainLine.RAISE_LEN = 60 -- puis remontée sur ces studs de marche
-TrainLine.STOP_DIST = 15 -- ligne d'arrêt des voitures (depuis l'axe de la voie)
+TrainLine.STOP_DIST = 10 -- ligne d'arrêt des voitures (depuis l'axe de la voie : juste derrière les barrières, à ±9)
 
 TrainLine.CARS = {
 	Loco = { Len = 48, Seats = 0 },
