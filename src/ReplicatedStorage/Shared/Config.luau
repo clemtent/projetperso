@@ -2884,7 +2884,7 @@ Config.Race = {
 	-- (v11) nitro : +Boost de vitesse de pointe pendant Seconds ; charges : Start
 	-- au départ, au plus Max ; la jauge se remplit en dérapant (DriftPoints
 	-- points = 1 charge) et dans l'aspiration d'une voiture (DraftSeconds s = 1 charge)
-	Nitro = { Start = 1, Max = 3, Boost = 0.18, Seconds = 2.6, DriftPoints = 1400, DraftSeconds = 7 },
+	Nitro = { Start = 1, Max = 3, Boost = 0.18, Seconds = 2.6, DriftPoints = 1000, DraftSeconds = 7 },
 	-- (v11) dérapage mesuré par le serveur : angle de glisse (degrés) et vitesse minimale
 	Drift = { MinAngle = 9, MaxAngle = 65, MinSpeed = 22 },
 	-- (v11) XP de course (rang cosmétique, sans effet sur l'économie)

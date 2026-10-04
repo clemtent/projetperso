@@ -825,7 +825,7 @@ function RaceRules.DriftRate(angle: number, speed: number): number
 	if v < (d.MinSpeed or 22) or a < (d.MinAngle or 9) or a > (d.MaxAngle or 65) then
 		return 0
 	end
-	return v * math.sin(math.rad(a)) * 2.2
+	return v * math.sin(math.rad(a)) * 6
 end
 
 -- Aspiration : `gap` studs derrière une voiture (même file à ±3,5 studs) ?

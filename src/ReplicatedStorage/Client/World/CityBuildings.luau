@@ -114,7 +114,7 @@ CityBuildings.FOR_STYLE = {
 -- Pièces communes
 ----------------------------------------------------------------------
 
-type Ctx = { M: Model, F: CFrame, Spec: Spec, Seed: number, W: number, D: number, G: number, H: number, Floors: number, Wall: Color3, Trim: Color3, Roof: Color3, Kind: string, Sign: string, FZ: number, DoorX: number }
+type Ctx = { Podium: boolean?, M: Model, F: CFrame, Spec: Spec, Seed: number, W: number, D: number, G: number, H: number, Floors: number, Wall: Color3, Trim: Color3, Roof: Color3, Kind: string, Sign: string, FZ: number, DoorX: number }
 
 -- fenêtre de façade (verre, appui, linteau) ; une sur trois allumée la nuit
 local function frontWindow(c: Ctx, x: number, y0: number, ww: number, hh: number, k: number)
@@ -135,7 +135,9 @@ local function paintedFace(c: Ctx, R: CFrame, w: number, y0: number, y1: number,
 	local gui = CityKit.Canvas(skin, Enum.NormalId.Front, 320, 3)
 	local H = y1 - y0
 	for r = 0, rows - 1 do
-		local yc = 1 - ((GROUND - c.G) * 0 + (r * storey + storey * 0.55 + (r == 0 and 0 or c.G - storey)) / H)
+		-- milieu de la fenêtre : rez-de-chaussée à mi-hauteur, étages à 55 %
+		local y = r == 0 and c.G * 0.5 or c.G + (r - 1) * storey + storey * 0.55
+		local yc = 1 - (y - y0) / H
 		for k = 0, cols - 1 do
 			local xc = (k + 0.5) / cols
 			local lit = hash(c.Seed + k * 3, r + 50) < 0.25
@@ -203,6 +205,12 @@ local function pierced(c: Ctx, holes: { { any } }, color: Color3, mat: Enum.Mate
 	local list = {}
 	for _, h in ipairs(holes) do
 		table.insert(list, { h[1], h[2], h[3], h[4] })
+	end
+	for i, h in ipairs(holes) do
+		-- (porte / garage : percée jusqu'au sol, le seuil fait le sol)
+		if h[5] ~= "glass" then
+			list[i][3] = 0
+		end
 	end
 	CityKit.WallWithHoles(c.M, "Front", c.F, -hw, hw, 0, c.G, z0, z1, list, color, mat, true)
 	for i, h in ipairs(holes) do
@@ -287,8 +295,9 @@ local function roof(c: Ctx)
 	local top = H + 0.7
 	if kind == "Gable" then
 		local h = math.min(9, D * 0.42)
-		Wedge(c.M, "Gable", Vector3.new(W, h, hd), c.F * CFrame.new(0, top + h / 2, -hd / 2) * CFrame.Angles(0, math.pi, 0), c.Wall, c.Spec.Mat)
-		Wedge(c.M, "Gable", Vector3.new(W, h, hd), c.F * CFrame.new(0, top + h / 2, hd / 2), c.Wall, c.Spec.Mat)
+		-- (pignons : le haut au faîtage, z = 0)
+		Wedge(c.M, "Gable", Vector3.new(W, h, hd), c.F * CFrame.new(0, top + h / 2, -hd / 2), c.Wall, c.Spec.Mat)
+		Wedge(c.M, "Gable", Vector3.new(W, h, hd), c.F * CFrame.new(0, top + h / 2, hd / 2) * CFrame.Angles(0, math.pi, 0), c.Wall, c.Spec.Mat)
 		local len = math.sqrt(hd * hd + h * h)
 		local a = math.atan2(h, hd)
 		for _, s in ipairs({ -1, 1 }) do
@@ -300,8 +309,8 @@ local function roof(c: Ctx)
 	elseif kind == "Mansard" then
 		local mh, md = 6, 2.2
 		Box(c.M, "MansardCore", c.F, -hw + 0.1, hw - 0.1, top, top + mh, -hd + md, hd - md, c.Roof, M.Slate)
-		Wedge(c.M, "Mansard", Vector3.new(W - 0.2, mh, md), c.F * CFrame.new(0, top + mh / 2, -hd + md / 2) * CFrame.Angles(0, math.pi, 0), c.Roof, M.Slate)
-		Wedge(c.M, "Mansard", Vector3.new(W - 0.2, mh, md), c.F * CFrame.new(0, top + mh / 2, hd - md / 2), c.Roof, M.Slate)
+		Wedge(c.M, "Mansard", Vector3.new(W - 0.2, mh, md), c.F * CFrame.new(0, top + mh / 2, -hd + md / 2), c.Roof, M.Slate)
+		Wedge(c.M, "Mansard", Vector3.new(W - 0.2, mh, md), c.F * CFrame.new(0, top + mh / 2, hd - md / 2) * CFrame.Angles(0, math.pi, 0), c.Roof, M.Slate)
 		Box(c.M, "MansardCap", c.F, -hw + 0.3, hw - 0.3, top + mh, top + mh + 0.4, -hd + md - 0.2, hd - md + 0.2, c.Roof:Lerp(WHITE, 0.2), M.Metal)
 		-- lucarnes
 		local n = math.max(2, math.floor(W / 7))
@@ -390,9 +399,10 @@ local function grandFront(c: Ctx)
 		end
 	end
 	pierced(c, holes, c.Wall, c.Spec.Mat)
-	-- marches devant la porte
-	for k = 0, 1 do
-		Box(c.M, "Steps", c.F, -dw / 2 - 2 + k * 0.6, dw / 2 + 2 - k * 0.6, -0.1, 0.15 + k * 0.15, c.FZ - 3 + k * 1.2, c.FZ - 1.2 + k * 0.0, STONE, M.Marble, true)
+	-- marches devant la porte (sauf sur un podium / stylobate)
+	if not c.Podium then
+		Box(c.M, "Steps", c.F, -dw / 2 - 2, dw / 2 + 2, -0.1, 0.15, c.FZ - 3, c.FZ - 1.8, STONE, M.Marble, true)
+		Box(c.M, "Steps", c.F, -dw / 2 - 1.4, dw / 2 + 1.4, -0.1, 0.3, c.FZ - 1.8, c.FZ - 1.2, STONE, M.Marble, true)
 	end
 	signBoard(c, math.min(W - 6, 18), G - 2.2, c.Spec.Front == "Grand" and INK or WHITE, c.Trim)
 end
@@ -439,8 +449,11 @@ EXTRAS.Library = function(c)
 		Box(c.M, "Capital", c.F, x - 1, x + 1, c.G - 0.4, c.G, z - 1, z + 1, c.Trim, M.Marble)
 	end
 	Box(c.M, "Entablature", c.F, -9.5, 9.5, c.G, c.G + 1.8, z - 1.3, c.FZ, c.Trim, M.Marble)
-	Wedge(c.M, "Pediment", Vector3.new(19, 4.5, 0.01 + (c.FZ - (z - 1.3)) / 2), c.F * CFrame.new(0, c.G + 1.8 + 2.25, (z - 1.3 + c.FZ) / 2 - (c.FZ - (z - 1.3)) / 4) * CFrame.Angles(0, math.pi, 0), c.Trim, M.Marble)
-	Wedge(c.M, "Pediment", Vector3.new(19, 4.5, 0.01 + (c.FZ - (z - 1.3)) / 2), c.F * CFrame.new(0, c.G + 1.8 + 2.25, (z - 1.3 + c.FZ) / 2 + (c.FZ - (z - 1.3)) / 4), c.Trim, M.Marble)
+	-- fronton : deux coins (triangle dans le plan de la façade), le haut au milieu
+	local pz = (z - 1.3 + c.FZ) / 2
+	local pd = c.FZ - (z - 1.3)
+	Wedge(c.M, "Pediment", Vector3.new(pd, 4.5, 9.5), c.F * CFrame.new(-4.75, c.G + 1.8 + 2.25, pz) * CFrame.Angles(0, math.pi / 2, 0), c.Trim, M.Marble)
+	Wedge(c.M, "Pediment", Vector3.new(pd, 4.5, 9.5), c.F * CFrame.new(4.75, c.G + 1.8 + 2.25, pz) * CFrame.Angles(0, -math.pi / 2, 0), c.Trim, M.Marble)
 	Box(c.M, "Podium", c.F, -9.8, 9.8, -0.1, 0.3, z - 1.6, c.FZ, STONE, M.Marble, true)
 	for _, x in ipairs({ -11.5, 11.5 }) do
 		CityKit.Lantern(c.M, c.F * CFrame.new(x, 0, c.FZ - 2.5), 9)
@@ -450,7 +463,7 @@ EXTRAS.School = function(c)
 	-- pignon central avec horloge (vraie horloge : TownDisplays), mât et drapeau, marelle
 	local z = c.FZ
 	Box(c.M, "Gable", c.F, -5, 5, c.H + 0.7, c.H + 6, z - 0.4, z + 0.6, c.Wall, c.Spec.Mat)
-	Wedge(c.M, "GableTop", Vector3.new(10, 3, 1.0), c.F * CFrame.new(0, c.H + 7.5, z + 0.1) * CFrame.Angles(0, -math.pi / 2, 0) * CFrame.Angles(0, math.pi / 2, 0), c.Wall, c.Spec.Mat)
+	Box(c.M, "GableCap", c.F, -5.4, 5.4, c.H + 6, c.H + 6.5, z - 0.6, z + 0.8, c.Trim, M.Concrete)
 	local clock = Box(c.M, "SchoolClock", c.F, -2, 2, c.H + 1.2, c.H + 5.2, z - 0.5, z - 0.4, WHITE, M.SmoothPlastic)
 	clock:SetAttribute("TownClock", "Wall")
 	Column(c.M, "FlagPole", c.F, c.W / 2 + 1.5, z - 2, 0, 16, 0.25, rgb(200, 204, 210), M.Metal, true)
@@ -495,7 +508,7 @@ EXTRAS.Clinic = function(c)
 end
 EXTRAS.Post = function(c)
 	Box(c.M, "YellowBand", c.F, -c.W / 2 - 0.1, c.W / 2 + 0.1, c.G + 0.5, c.G + 1.1, c.FZ - 0.12, c.FZ, rgb(250, 196, 30), M.SmoothPlastic)
-	local x = -c.DoorX * 0.2 + (c.DoorX > 0 and -5 or 5)
+	local x = c.DoorX > 0 and -c.W / 4 or c.W / 4
 	Box(c.M, "MailboxBody", c.F, x - 0.8, x + 0.8, 3.0, 5.2, c.FZ - 1.0, c.FZ, rgb(250, 196, 30), M.Metal, true)
 	Box(c.M, "MailboxSlot", c.F, x - 0.5, x + 0.5, 4.6, 4.75, c.FZ - 1.02, c.FZ - 0.98, INK, M.SmoothPlastic)
 	Column(c.M, "MailboxPost", c.F, x, c.FZ - 0.5, 0, 3.0, 0.35, IRON, M.Metal)
@@ -551,8 +564,13 @@ EXTRAS.Cinema = function(c)
 	local V = c.F * CFrame.new(-c.W / 2 + 1.2, c.G + 6, c.FZ - 1.4)
 	local v = Box(c.M, "VerticalSign", V, -0.3, 0.3, -5, 5, -1.3, 1.3, rgb(200, 40, 60), M.SmoothPlastic)
 	Glow(v)
-	Text(v, Enum.NormalId.Left, "C\nI\nN\nÉ", rgb(255, 230, 150), rgb(200, 40, 60), Enum.Font.GothamBlack, 120, 20)
-	Text(v, Enum.NormalId.Right, "C\nI\nN\nÉ", rgb(255, 230, 150), rgb(200, 40, 60), Enum.Font.GothamBlack, 120, 20)
+	local letters = {}
+	for _, code in utf8.codes(Locale.T("CINEMA")) do
+		table.insert(letters, utf8.char(code))
+	end
+	local word = table.concat(letters, "\n")
+	Text(v, Enum.NormalId.Left, word, rgb(255, 230, 150), rgb(200, 40, 60), Enum.Font.GothamBlack, 120, 20)
+	Text(v, Enum.NormalId.Right, word, rgb(255, 230, 150), rgb(200, 40, 60), Enum.Font.GothamBlack, 120, 20)
 end
 EXTRAS.Garage = function(c)
 	for k = 0, 3 do
@@ -582,9 +600,9 @@ end
 local function church(c: Ctx)
 	local W, D = c.W, c.D
 	local hw, hd = W / 2, D / 2
-	local tw = 7 -- clocher (devant, au centre)
+	local tw = 6 -- clocher carré (devant, au centre)
 	local nave = { -hw, hw }
-	c.FZ = -hd + tw - 1 -- façade de la nef derrière le clocher
+	c.FZ = -hd + tw -- façade de la nef, contre le dos du clocher
 	c.G = 16
 	c.H = 16
 	-- nef : murs (fenêtres hautes en ogive peintes), toit à forte pente
@@ -612,14 +630,15 @@ local function church(c: Ctx)
 	local a = math.atan2(h, hw)
 	local mid = (fz + hd) / 2
 	local L = hd - fz
-	Wedge(c.M, "Gable", Vector3.new(L, h, hw), c.F * CFrame.new(-hw / 2, G + h / 2, mid) * CFrame.Angles(0, -math.pi / 2, 0), c.Wall, c.Spec.Mat)
-	Wedge(c.M, "Gable", Vector3.new(L, h, hw), c.F * CFrame.new(hw / 2, G + h / 2, mid) * CFrame.Angles(0, math.pi / 2, 0), c.Wall, c.Spec.Mat)
+	-- (pignons : le haut au faîtage, x = 0)
+	Wedge(c.M, "Gable", Vector3.new(L, h, hw), c.F * CFrame.new(-hw / 2, G + h / 2, mid) * CFrame.Angles(0, math.pi / 2, 0), c.Wall, c.Spec.Mat)
+	Wedge(c.M, "Gable", Vector3.new(L, h, hw), c.F * CFrame.new(hw / 2, G + h / 2, mid) * CFrame.Angles(0, -math.pi / 2, 0), c.Wall, c.Spec.Mat)
 	for _, s in ipairs({ -1, 1 }) do
 		local cf = c.F * CFrame.new(s * hw / 2, G + h / 2, mid) * CFrame.Angles(0, 0, -s * a) * CFrame.new(0, 0.25, 0)
 		Part(c.M, "RoofPlane", Vector3.new(len + 0.9, 0.35, L + 1), cf, c.Roof, M.Slate)
 	end
 	-- clocher : base percée (porte), étages, abat-sons, flèche
-	local tz0, tz1 = -hd, -hd + tw
+	local tz0, tz1 = -hd, fz
 	local tx0, tx1 = -tw / 2, tw / 2
 	CityKit.WallWithHoles(c.M, "Tower", c.F, tx0, tx1, 0, G + 4, tz0, tz0 + WALL, { { -2.4, 2.4, FLOOR, 10 } }, c.Wall, c.Spec.Mat, true)
 	for _, sx in ipairs({ -1, 1 }) do
@@ -627,6 +646,7 @@ local function church(c: Ctx)
 		Box(c.M, "Tower", c.F, math.min(a2, b2), math.max(a2, b2), 0, G + 14, tz0 + WALL, tz1, c.Wall, c.Spec.Mat, true)
 	end
 	Box(c.M, "TowerUpper", c.F, tx0, tx1, G + 4, G + 14, tz0, tz0 + WALL, c.Wall, c.Spec.Mat)
+	Box(c.M, "TowerBack", c.F, tx0 + WALL, tx1 - WALL, G, G + 14, tz1 - WALL, tz1, c.Wall, c.Spec.Mat)
 	Box(c.M, "TowerFloor", c.F, tx0 + WALL, tx1 - WALL, FLOOR - 0.45, FLOOR, tz0 + WALL, tz1, info.Floor, info.FloorMat, true)
 	Box(c.M, "TowerCeiling", c.F, tx0 + WALL, tx1 - WALL, 11.5, 11.9, tz0 + WALL, tz1, c.Wall, c.Spec.Mat)
 	-- abat-sons + horloge
@@ -640,8 +660,8 @@ local function church(c: Ctx)
 	for r = 0, 1 do
 		local rot = CFrame.Angles(0, r * math.pi / 2, 0)
 		local T = c.F * CFrame.new(0, G + 14.6 + 6, (tz0 + tz1) / 2) * rot
-		Wedge(c.M, "Spire", Vector3.new(tw, 12, tw / 2), T * CFrame.new(0, 0, -tw / 4) * CFrame.Angles(0, math.pi, 0), c.Roof, M.Slate)
-		Wedge(c.M, "Spire", Vector3.new(tw, 12, tw / 2), T * CFrame.new(0, 0, tw / 4), c.Roof, M.Slate)
+		Wedge(c.M, "Spire", Vector3.new(tw, 12, tw / 2), T * CFrame.new(0, 0, -tw / 4), c.Roof, M.Slate)
+		Wedge(c.M, "Spire", Vector3.new(tw, 12, tw / 2), T * CFrame.Angles(0, math.pi, 0) * CFrame.new(0, 0, -tw / 4), c.Roof, M.Slate)
 	end
 	CityKit.Ball(c.M, "SpireBall", (c.F * CFrame.new(0, G + 27, (tz0 + tz1) / 2)).Position, 0.8, GOLD, M.Metal)
 	-- rosace sur la façade de la nef (de part et d'autre du clocher)
@@ -696,6 +716,7 @@ local function build(typ: string, m: Model, F: CFrame, seed: number)
 		church(c)
 		return
 	end
+	c.Podium = typ == "Library" or typ == "Museum"
 	groundShell(c)
 	if spec.Front == "Shop" then
 		shopFront(c, (typ == "Cafe" or typ == "Restaurant" or typ == "Bakery" or typ == "Shop") and CityInteriors.Info(kind).Sign or nil)
@@ -753,7 +774,7 @@ for typ, spec in pairs(CityBuildings.TYPES) do
 	CityBuildings.IMPOSTORS[key] = function(m: Model, F: CFrame, seed: number)
 		impostor(typ, m, F, seed)
 	end
-	CityBuildings.FOOT[key] = Vector2.new(spec.W + (typ == "Library" and 0 or 0), spec.D + ((typ == "Library" or typ == "Museum" or typ == "Clinic" or typ == "Hotel") and 6 or 2))
+	CityBuildings.FOOT[key] = Vector2.new(spec.W + (typ == "Library" and 0 or 0), spec.D + ((typ == "Library" or typ == "Museum" or typ == "Clinic" or typ == "Hotel" or typ == "Cinema") and 6 or 2))
 	CityBuildings.BIG[key] = true
 	CityBuildings.NEAR[key] = 150
 end

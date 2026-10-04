@@ -159,7 +159,7 @@ local SPECS: { [string]: Spec } = {
 	Pickup = { L = 13, W = 6.0, WheelD = 2.6, TyreW = 1.05, Clear = 0.75, Low = 3.1, Belt = 3.7, Roof = 5.5, AxleF = -4.1, AxleR = 3.95, Ws = -2.9, R0 = -1.1, R1 = 1.5, Rw = 1.5, Inset = 0.55, HoodF = 3.3, HoodR = 3.6, Deck = 3.75, BeltRise = 0, Tumble = 0.28, NoseR = 0.7, TailR = 0.5, NoseLow = 2.95, Doors = 2, Style = "Pickup" },
 	SUV = { L = 12.8, W = 5.8, WheelD = 2.45, TyreW = 1.0, Clear = 0.62, Low = 2.85, Belt = 3.45, Roof = 5.3, AxleF = -3.9, AxleR = 4.0, Ws = -3.2, R0 = -0.8, R1 = 4.7, Rw = 5.85, Inset = 0.72, HoodF = 3.0, HoodR = 3.35, Deck = 3.6, BeltRise = 0.1, Tumble = 0.32, NoseR = 0.85, TailR = 0.9, NoseLow = 2.65, Doors = 4, Style = "SUV" },
 	Van = { L = 13, W = 5.8, WheelD = 2.2, TyreW = 0.88, Clear = 0.52, Low = 2.55, Belt = 3.35, Roof = 6.0, AxleF = -4.3, AxleR = 4.15, Ws = -5.4, R0 = -4.0, R1 = 6.1, Rw = 6.42, Inset = 0.5, HoodF = 2.75, HoodR = 3.2, Deck = 3.5, BeltRise = 0, Tumble = 0.3, NoseR = 1.0, TailR = 0.85, NoseLow = 2.4, Doors = 2, Style = "Van" },
-	SportsCar = { L = 12.8, W = 5.9, WheelD = 2.15, TyreW = 1.1, Clear = 0.32, Low = 2.35, Belt = 2.7, Roof = 3.65, AxleF = -3.9, AxleR = 3.75, Ws = -1.35, R0 = -0.25, R1 = 1.8, Rw = 2.3, Inset = 0.5, HoodF = 1.95, HoodR = 2.45, Deck = 2.65, BeltRise = 0.1, Tumble = 0.3, NoseR = 1.2, TailR = 1.2, NoseLow = 1.65, Doors = 2, Style = "Sports" },
+	SportsCar = { L = 12.8, W = 5.9, WheelD = 2.15, TyreW = 1.1, Clear = 0.32, Low = 2.35, Belt = 2.7, Roof = 3.85, AxleF = -3.9, AxleR = 3.75, Ws = -1.35, R0 = -0.25, R1 = 1.8, Rw = 2.3, Inset = 0.5, HoodF = 1.95, HoodR = 2.45, Deck = 2.65, BeltRise = 0.1, Tumble = 0.3, NoseR = 1.2, TailR = 1.2, NoseLow = 1.65, Doors = 2, Style = "Sports" },
 	Limo = { L = 15.2, W = 5.7, WheelD = 2.25, TyreW = 0.92, Clear = 0.45, Low = 2.5, Belt = 3.05, Roof = 4.6, AxleF = -4.95, AxleR = 4.85, Ws = -3.5, R0 = -1.0, R1 = 3.5, Rw = 5.0, Inset = 0.78, HoodF = 2.5, HoodR = 2.9, Deck = 3.15, BeltRise = 0, Tumble = 0.32, NoseR = 0.9, TailR = 1.0, NoseLow = 2.2, Doors = 4, Style = "Limo" },
 }
 CarModels.Specs = SPECS -- (dimensions "modèle" : multiplier par CarModels.SCALE pour le monde)
@@ -2145,11 +2145,40 @@ function CarModels.Build(carId: string?, color: any?, opts: any?): Model
 			box(b, "Dashboard", -wc, wc, by0 - 0.55, by0 + 0.06, dashZ0, dashZ1, TRIM)
 			box(b, "DashTop", -wc + 0.1, wc - 0.1, by0 + 0.06, by0 + 0.12, dashZ0 + 0.1, dashZ1 - 0.2, GRAPHITE, M.Fabric)
 			box(b, "Screen", -0.5, 0.5, by0 + 0.12, by0 + 0.52, dashZ1 - 0.45, dashZ1 - 0.37, SCREEN, M.Glass)
-			local swZ = math.min(seatZ - 1.45, dashZ1 + 0.35)
-			local sw = cylZ(b, "SteeringWheel", seatX, by0 + 0.08, swZ, 0.1, 1.0, HOUSING)
-			sw.CFrame = sw.CFrame * CFrame.Angles(0, 0, math.rad(-22))
-			cylZ(b, "WheelHub", seatX, by0 + 0.08, swZ + 0.08, 0.1, 0.32, GRAPHITE)
-			rod(b, "SteeringColumn", V3(seatX, by0 - 0.25, dashZ1 - 0.1), V3(seatX, by0 + 0.02, swZ + 0.1), 0.16, GRAPHITE)
+			-- (v11, CARS11) volant À PORTÉE DES MAINS du conducteur (comme le
+			-- repère NPCModels.Driver : 1,5 au-dessus et 1,15 devant le coussin,
+			-- incliné de 0,35 rad), jante + moyeu + 3 branches ; il tourne avec
+			-- la direction (CarClient / TownTraffic : attribut "SteerWheel")
+			local wheelCF = CFrame.new(P(b, seatX, seatTop + 1.5 / CarModels.SCALE, seatZ - 1.15 / CarModels.SCALE)) * CFrame.Angles(-0.35, 0, 0)
+			local m = math.min(b.S.X, b.S.Y)
+			local rimR = 0.62 * m / CarModels.SCALE -- (0,62 studs à l'échelle 1,3)
+			local function wpart(name: string, size: Vector3, cf: CFrame, color: Color3, cyl: boolean): BasePart
+				local p = newPart(b, "Part", name, size, cf, color, M.SmoothPlastic)
+				if cyl then
+					(p :: Part).Shape = Enum.PartType.Cylinder
+				end
+				p:SetAttribute("SteerWheel", true)
+				return p
+			end
+			local seg = 12
+			for k = 0, seg - 1 do
+				local a = (k + 0.5) / seg * 2 * PI
+				local len = 2 * rimR * math.sin(PI / seg) + 0.02
+				wpart("SteeringWheel", Vector3.new(0.12 * m, 0.12 * m, len), wheelCF * CFrame.Angles(0, 0, a) * CFrame.new(0, rimR, 0) * CFrame.Angles(0, PI / 2, 0), HOUSING, false)
+			end
+			wpart("WheelHub", Vector3.new(0.14 * m, 0.34 * m, 0.34 * m), wheelCF * CFrame.new(0, 0, 0.04 * m) * CFrame.Angles(0, PI / 2, 0), GRAPHITE, true)
+			for _, a in ipairs({ PI / 2, -PI / 2, PI }) do
+				wpart("WheelSpoke", Vector3.new(0.07 * m, rimR - 0.1 * m, 0.14 * m), wheelCF * CFrame.Angles(0, 0, a) * CFrame.new(0, rimR / 2 + 0.04 * m, 0.03 * m), GRAPHITE, false)
+			end
+			-- colonne : du moyeu vers la planche de bord
+			local hubW = wheelCF * CFrame.new(0, 0, 0.12 * m)
+			local colEnd = P(b, seatX, by0 - 0.3, dashZ1 - 0.1)
+			local colLen = (colEnd - hubW.Position).Magnitude
+			if colLen > 0.05 then
+				newPart(b, "Part", "SteeringColumn", Vector3.new(0.16 * m, 0.16 * m, colLen), CFrame.lookAt((hubW.Position + colEnd) / 2, colEnd), GRAPHITE, M.SmoothPlastic)
+			end
+			model:SetAttribute("WheelCF", wheelCF)
+			model:SetAttribute("WheelRimR", rimR)
 			if style ~= "Van" then
 				box(b, "Console", -0.32, 0.32, g.sill + 0.12, seatTop - 0.05, dashZ1 - 0.02, seatZ + 0.3, TRIM)
 				ell(b, "GearKnob", 0, seatTop + 0.18, seatZ - 0.8, 0.2, 0.24, 0.2, CHROME, M.Metal)
@@ -2523,7 +2552,9 @@ export type WheelSet = {
 	Steer: { BasePart },
 	SteerOff: { CFrame },
 }
-export type Rig = { Body: { BasePart }, BodyOff: { CFrame }, Wheels: { WheelSet }, Parts: { BasePart }, Frames: { CFrame } }
+-- (v11) SteerIdx : [indice dans Body] = repère de la pièce dans celui du volant
+-- (WheelCF, repère du pivot) -> on tourne le volant : WheelCF * Angles(0, 0, a)
+export type Rig = { Body: { BasePart }, BodyOff: { CFrame }, Wheels: { WheelSet }, Parts: { BasePart }, Frames: { CFrame }, SteerIdx: { [number]: CFrame }?, WheelCF: CFrame? }
 
 function CarModels.WheelRig(model: Model): Rig
 	-- (générique : toute maquette dont les pièces de roue portent "Wheel" /
@@ -2547,9 +2578,18 @@ function CarModels.WheelRig(model: Model): Rig
 		end
 	end
 	local rig: Rig = { Body = body, BodyOff = {}, Wheels = {}, Parts = {}, Frames = {} }
-	for _, p in ipairs(body) do
+	local wheelCF = model:GetAttribute("WheelCF")
+	local steerIdx: { [number]: CFrame } = {}
+	for i, p in ipairs(body) do
 		table.insert(rig.BodyOff, pivot:ToObjectSpace(p.CFrame))
 		table.insert(rig.Parts, p)
+		if typeof(wheelCF) == "CFrame" and p:GetAttribute("SteerWheel") then
+			steerIdx[i] = wheelCF:ToObjectSpace(pivot:ToObjectSpace(p.CFrame))
+		end
+	end
+	if typeof(wheelCF) == "CFrame" and next(steerIdx) then
+		rig.SteerIdx = steerIdx
+		rig.WheelCF = wheelCF
 	end
 	local indices = {}
 	for index in pairs(groups) do
@@ -2605,13 +2645,23 @@ end
 -- Pose : pivot (monde), rotation des roues `spin` (rad), braquage `steer`
 -- (rad, roues avant), `bob` = CFrame de caisse (suspension). Renvoie les
 -- listes à passer à workspace:BulkMoveTo.
+-- (v11) angle du VOLANT (rad, + = à gauche) pour un braquage des roues avant
+-- (rad, + = à gauche comme CFrame.Angles(0, a, 0)) : ×2,5, borné à ±2,2
+function CarModels.SteeringWheelAngle(roadSteer: number): number
+	return math.clamp(roadSteer * 2.5 * 2.2 / 0.95, -2.2, 2.2)
+end
+
 function CarModels.PoseRig(rig: Rig, pivot: CFrame, spin: number, steer: number, bob: CFrame?): ({ BasePart }, { CFrame })
 	local frames = rig.Frames
 	local i = 0
 	local body = if bob then pivot * bob else pivot
-	for _, off in ipairs(rig.BodyOff) do
+	-- (v11) volant tourné avec les roues (×2,5, borné ; + = à gauche)
+	local sIdx, wcf = rig.SteerIdx, rig.WheelCF
+	local wheelTurned = if sIdx and wcf then body * wcf * CFrame.Angles(0, 0, CarModels.SteeringWheelAngle(steer)) else nil
+	for k, off in ipairs(rig.BodyOff) do
 		i += 1
-		frames[i] = body * off
+		local w = if sIdx and wheelTurned then sIdx[k] else nil
+		frames[i] = if w and wheelTurned then wheelTurned * w else body * off
 	end
 	local spinCF = CFrame.Angles(-spin, 0, 0)
 	for _, set in ipairs(rig.Wheels) do
