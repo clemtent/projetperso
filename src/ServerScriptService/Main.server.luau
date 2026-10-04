@@ -47,6 +47,7 @@ local ORDER = {
 	"RaceService", -- 🏁 courses de rue (v10 ; après CarService : RaceSpawn / SetFrozen / RaceRelease)
 	"RainbowService", -- 🌈 v11 pot d'or au pied de l'arc-en-ciel (après WorldService / GameService)
 	"BankService", -- 🏦 v11 banque + 💎 diamants + casses (HeistKit) (après GameService / WorldService ; AVANT TrainService)
+	"TrainService", -- 🚂 v11 train de la ville + braquage du convoi de diamants (après BankService : HeistKit ; après WorldService / ImpactService)
 	"QuestService",
 	"AchievementService",
 	"DailyRewardService",

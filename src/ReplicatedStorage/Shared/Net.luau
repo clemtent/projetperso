@@ -42,6 +42,7 @@ Net.Events = {
 	"MusicEvent", -- C <-> S (kind, ...) : 🎵 scène musicale de la place (notes relayées aux voisins, morceaux, radio) (TownMusic, v9.9)
 	"BankEvent", -- S -> C (kind, payload) : 🏦 banque (état du compte 💎, toasts, prochain casse) (BankService, v11 BANK11)
 	"HeistEvent", -- S -> C (kind, payload) : 🕶️ casses (liste, état de l'équipe, résultat) (HeistKit : banque + train, v11)
+	"TrainEvent", -- C <-> S (kind, ...) : 🚂 train de la ville (monter, s'asseoir, descendre, convoi de diamants) (TrainService, v11 TRAIN11)
 }
 
 Net.Functions = {

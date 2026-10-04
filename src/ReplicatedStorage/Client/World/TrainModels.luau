@@ -508,13 +508,13 @@ local function loco(rec: CarRec, livery: any, npcSeat: { CFrame })
 		-- grilles d'aération (3 panneaux à lames)
 		for g = 0, 2 do
 			local zg = mz0 + 6 + g * 9
-			cp(rec, "Grille", Vector3.new(0.08, 3.2, 6.5), L(sx * (HW + 0.04), FL + 6.4, zg), rgb(52, 54, 60), M.Metal)
+			cp(rec, "Grille", Vector3.new(0.08, 3.2, 6.5), L(sx * (HW + 0.04), FL + 6.5, zg), rgb(52, 54, 60), M.Metal)
 			for s = -2, 2 do
-				cp(rec, "Louvre", Vector3.new(0.14, 0.18, 6.3), L(sx * (HW + 0.1), FL + 6.4 + s * 0.6, zg), rgb(30, 30, 34), M.Metal)
+				cp(rec, "Louvre", Vector3.new(0.14, 0.18, 6.3), L(sx * (HW + 0.1), FL + 6.5 + s * 0.6, zg), rgb(30, 30, 34), M.Metal)
 			end
 		end
 		-- grand nom sur le flanc
-		local nameCanvas = cp(rec, "SideName", Vector3.new(0.05, 1.6, 22), L(sx * (HW + 0.06), FL + 4.6, mzc + 2), WHITE)
+		local nameCanvas = cp(rec, "SideName", Vector3.new(0.05, 1.6, 22), L(sx * (HW + 0.06), FL + 4.0, mzc + 2), WHITE)
 		local g2 = canvasGui(nameCanvas, if sx > 0 then Enum.NormalId.Right else Enum.NormalId.Left, 24)
 		label(g2, livery.Text, livery.Band, Enum.Font.GothamBlack)
 	end
@@ -900,8 +900,9 @@ function TrainModels.TrackChunk(parent: Instance, count: number, s0: number, s1:
 		while s < s1 do
 			local x, z, dx, dz = TrainLine.PointAt(count, s)
 			if not onCrossing(count, x, z, 1) then
-				local p = Vector3.new(O.X + x, y0 + sleeperTop - 0.13, O.Z + z)
-				part(model, "Sleeper", Vector3.new(7.6, 0.26, 0.9), CFrame.lookAt(p, p + Vector3.new(dx, 0, dz)), SLEEPER, M.Concrete)
+				-- (posée SUR le ballast : aucune face commune avec les bouts de ballast)
+				local p = Vector3.new(O.X + x, y0 + (sleeperTop + ballastTop) / 2, O.Z + z)
+				part(model, "Sleeper", Vector3.new(7.6, sleeperTop - ballastTop, 0.9), CFrame.lookAt(p, p + Vector3.new(dx, 0, dz)), SLEEPER, M.Concrete)
 			end
 			s += 3
 		end

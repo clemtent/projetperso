@@ -134,7 +134,7 @@ function CarService.Sanitize(data: any)
 	end
 	if type(raw.Colors) == "table" then
 		for id, colorId in pairs(raw.Colors) do
-			if owned[id] and type(colorId) == "string" and Config.CarColorsById[colorId] then
+			if owned[id] and type(colorId) == "string" and CarModels.PaintEntry(colorId) then
 				colors[id] = colorId
 			end
 		end
@@ -203,7 +203,7 @@ end
 local function colorOf(data: any, carId: string): string
 	local colors = data and data.Cars and data.Cars.Colors
 	local colorId = colors and colors[carId]
-	if type(colorId) == "string" and Config.CarColorsById[colorId] then
+	if type(colorId) == "string" and CarModels.PaintEntry(colorId) then
 		return colorId
 	end
 	local car = Config.CarsById[carId]
@@ -919,8 +919,21 @@ local function buyGarage(player: Player, data: any): (boolean, string, number?)
 end
 
 local function setColor(player: Player, data: any, carId: any, colorId: any): (boolean, string)
-	if type(carId) ~= "string" or not data.Cars.Owned[carId] or type(colorId) ~= "string" or not Config.CarColorsById[colorId] then
+	local paintEntry = CarModels.PaintEntry(colorId)
+	if type(carId) ~= "string" or not data.Cars.Owned[carId] or type(colorId) ~= "string" or not paintEntry then
 		return false, T(player, "Invalid request")
+	end
+	-- (v11, CARS11) peinture de luxe 💎 : achetée à la boutique de luxe de la banque
+	if paintEntry.Luxury then
+		local bank = services and services.BankService
+		local owned = false
+		if bank and type(bank.OwnsLuxury) == "function" then
+			local ok, result = pcall(bank.OwnsLuxury, bank, player, colorId)
+			owned = ok and result == true
+		end
+		if not owned then
+			return false, T(player, "💎 Buy it at the bank's luxury boutique")
+		end
 	end
 	data.Cars.Colors[carId] = colorId
 	sendState(player)
@@ -931,8 +944,7 @@ local function setColor(player: Player, data: any, carId: any, colorId: any): (b
 	if car and car.CarId == carId then
 		CarModels.Repaint(car.Model, carId, colorId)
 	end
-	local paint = Config.CarColorsById[colorId]
-	return true, T(player, "🎨 %s applied", T(player, paint.Name))
+	return true, T(player, "🎨 %s applied", T(player, paintEntry.Name))
 end
 
 local function select_(player: Player, data: any, carId: any): (boolean, string)

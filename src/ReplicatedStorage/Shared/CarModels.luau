@@ -243,13 +243,52 @@ function CarModels.WheelPositions(carId: string?): { Vector3 }
 	return out
 end
 
+-- (v11, CARS11) peinture par id : les 12 couleurs gratuites (Config.CarColorsById)
+-- OU une peinture de luxe 💎 de la banque (Config.Bank.Luxury, Kind = "Paint")
+-- -> entrée { Id, Name, Color, Icon? , Luxury = true? } ou nil
+local luxuryPaints: { [string]: any }? = nil
+function CarModels.PaintEntry(id: any): any?
+	if type(id) ~= "string" then
+		return nil
+	end
+	local byId = Config.CarColorsById or {}
+	if byId[id] then
+		return byId[id]
+	end
+	if luxuryPaints == nil then
+		local map = {}
+		local bank = (Config :: any).Bank
+		for _, item in ipairs(bank and bank.Luxury or {}) do
+			if item.Kind == "Paint" and typeof(item.Color) == "Color3" then
+				map[item.Id] = { Id = item.Id, Name = item.Name, Color = item.Color, Icon = item.Icon, Price = item.Price, Luxury = true }
+			end
+		end
+		luxuryPaints = map
+	end
+	return (luxuryPaints :: any)[id]
+end
+
+-- (v11) peintures de luxe, dans l'ordre de la boutique
+function CarModels.LuxuryPaints(): { any }
+	local list = {}
+	local bank = (Config :: any).Bank
+	for _, item in ipairs(bank and bank.Luxury or {}) do
+		local entry = item.Kind == "Paint" and CarModels.PaintEntry(item.Id)
+		if entry then
+			table.insert(list, entry)
+		end
+	end
+	return list
+end
+
 function CarModels.ColorOf(carId: string?, color: any?): Color3
 	if typeof(color) == "Color3" then
 		return color
 	end
 	local byId = Config.CarColorsById or {}
-	if type(color) == "string" and byId[color] then
-		return byId[color].Color
+	local paintEntry = CarModels.PaintEntry(color)
+	if paintEntry then
+		return paintEntry.Color
 	end
 	local car = type(carId) == "string" and Config.CarsById and Config.CarsById[carId] or nil
 	local default = car and byId[car.DefaultColor]

@@ -122,6 +122,7 @@ local musicStageWarned = false -- (v9.9) une seule alerte si MusicStage.Step éc
 local constructionWarned = false -- (v10) une seule alerte si HouseConstruction.Step échoue
 local raceClientWarned = false -- (v10) une seule alerte si RaceClient.Step échoue
 local bankClientWarned = false -- (v11) une seule alerte si BankClient.Step échoue
+local trainClientWarned = false -- (v11) une seule alerte si TrainClient.Step échoue
 
 ----------------------------------------------------------------------
 -- Utilitaires
@@ -456,6 +457,7 @@ local KEEP_GUIS: { [string]: boolean } = {
 	RaceGui = true, -- v10 🏁 courses de rue : menu, HUD de course, résultats (RaceHud, RACE10)
 	BankGui = true, -- v11 🏦 pastille 💎 + fenêtre de la banque (BankUI, BANK11)
 	HeistGui = true, -- v11 🕶️ HUD des casses, mini-jeux, résultat (HeistClient, BANK11)
+	TrainGui = true, -- v11 🚂 carte de gare, voyage (Descendre), bandeau du convoi de diamants (TrainHud, TRAIN11)
 	FairGui = true, -- v9.8 🍦 menu des stands, badge du boost, bouton Croquer (FairFx, FAIR98)
 	GardenEditGui = true, -- v9.8 🌷 mode édition du jardin (GardenEdit, GARDEN98)
 	TownGraphicsGui = true, -- v9.8 🎨 fenêtre Graphismes en ville (TownGraphics, REALISM98)
@@ -939,6 +941,15 @@ local function step(dt: number)
 			warn("[Town] BankClient.Step : " .. tostring(errBank))
 		end
 	end
+	-- v11 🚂 train de la ville (TrainClient, TRAIN11) : flux, invites, HUD, tableaux des départs
+	local trainClient = optionalModule("TrainClient")
+	if trainClient and type(trainClient.Step) == "function" then
+		local okTrain, errTrain = pcall(trainClient.Step, dt)
+		if not okTrain and not trainClientWarned then
+			trainClientWarned = true
+			warn("[Town] TrainClient.Step : " .. tostring(errTrain))
+		end
+	end
 	-- v10 🏗️ chantiers des parcelles libres + maisons qui se construisent (HouseConstruction, CONSTRUCT10)
 	local construction = optionalModule("HouseConstruction")
 	if construction and type(construction.Step) == "function" then
@@ -1362,6 +1373,14 @@ local function enter(options: any)
 				warn("[Town] BankClient.Start : " .. tostring(errBank))
 			end
 		end
+		-- v11 🚂 train de la ville (TrainClient, TRAIN11) : voie, gares, 2 trains, passages à niveau, planques
+		local trainClient = optionalModule("TrainClient")
+		if trainClient and type(trainClient.Start) == "function" then
+			local okTrain, errTrain = pcall(trainClient.Start, { Toast = toast })
+			if not okTrain then
+				warn("[Town] TrainClient.Start : " .. tostring(errTrain))
+			end
+		end
 		-- v9.7 🌳 nature : détails de près (arbres, lac, aire de jeux) côté client (NATURE97)
 		local greenery = optionalModule("TownGreenery")
 		if greenery and type(greenery.Start) == "function" then
@@ -1576,6 +1595,11 @@ local function teardown()
 	local bankClient = optionalModule("BankClient")
 	if bankClient and type(bankClient.Stop) == "function" then
 		pcall(bankClient.Stop)
+	end
+	-- v11 🚂 train : décor, trains et HUD retirés
+	local trainClient = optionalModule("TrainClient")
+	if trainClient and type(trainClient.Stop) == "function" then
+		pcall(trainClient.Stop)
 	end
 	-- v9.6 🚗 on descend de voiture, HUD retiré (avant de rendre la caméra)
 	local car = optionalModule("CarClient")
