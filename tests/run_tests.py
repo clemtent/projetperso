@@ -2989,6 +2989,11 @@ def garage_test():
         max_l = max(max_l, float(m.group(2)))
         max_w = max(max_w, float(m.group(3)))
         max_h = max(max_h, float(m.group(5)))
+    # (v11, CARS11) voitures construites à l'échelle CarModels.SCALE
+    sc = re.search(r"^CarModels\.SCALE = ([\d.]+)", models, re.M)
+    if sc:
+        k = float(sc.group(1))
+        max_w, max_l, max_h = round(max_w * k, 3), round(max_l * k, 3), round(max_h * k, 3)
     # textes à traduire (Config.Cars + garage) : clés présentes dans Shared/Lang
     config = read(os.path.join(SHARED, "Config.luau"))
     start = config.find("Config.Cars = {")

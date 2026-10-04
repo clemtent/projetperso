@@ -42,7 +42,7 @@ local BankService = {}
 BankService.HeistKit = HeistKit
 
 -- Sources de 💎 HORS plafond quotidien des casses
-local UNCAPPED = { Ocean = true, Interest = true, Admin = true }
+local UNCAPPED = { Ocean = true, Interest = true, Admin = true, Race = true } -- (Race : 1 💎 par médaille d'or, 7 au plus pour toujours)
 local BANK_RANGE = 12 -- (studs) marge autour de la banque pour les opérations
 local FIRST_HEIST_DELAY = 45 -- (s) après le démarrage du serveur
 

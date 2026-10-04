@@ -121,6 +121,7 @@ local fairFxWarned = false -- (v9.8) une seule alerte si FairFx.Step échoue
 local musicStageWarned = false -- (v9.9) une seule alerte si MusicStage.Step échoue
 local constructionWarned = false -- (v10) une seule alerte si HouseConstruction.Step échoue
 local raceClientWarned = false -- (v10) une seule alerte si RaceClient.Step échoue
+local bankClientWarned = false -- (v11) une seule alerte si BankClient.Step échoue
 
 ----------------------------------------------------------------------
 -- Utilitaires
@@ -453,6 +454,8 @@ local KEEP_GUIS: { [string]: boolean } = {
 	MusicStageGui = true, -- v9.9 🎵 panneau de jeu des instruments, choix des morceaux (MusicStage, MUSIC99)
 	HouseFacadeEditor = true, -- v10 🏠 éditeur 3D de l'extérieur de la maison (HOUSE10)
 	RaceGui = true, -- v10 🏁 courses de rue : menu, HUD de course, résultats (RaceHud, RACE10)
+	BankGui = true, -- v11 🏦 pastille 💎 + fenêtre de la banque (BankUI, BANK11)
+	HeistGui = true, -- v11 🕶️ HUD des casses, mini-jeux, résultat (HeistClient, BANK11)
 	FairGui = true, -- v9.8 🍦 menu des stands, badge du boost, bouton Croquer (FairFx, FAIR98)
 	GardenEditGui = true, -- v9.8 🌷 mode édition du jardin (GardenEdit, GARDEN98)
 	TownGraphicsGui = true, -- v9.8 🎨 fenêtre Graphismes en ville (TownGraphics, REALISM98)
@@ -927,6 +930,15 @@ local function step(dt: number)
 			warn("[Town] RaceClient.Step : " .. tostring(errRace))
 		end
 	end
+	-- v11 🏦 banque (flux, invites, casse, objets de luxe portés)
+	local bankClient = optionalModule("BankClient")
+	if bankClient and type(bankClient.Step) == "function" then
+		local okBank, errBank = pcall(bankClient.Step, dt)
+		if not okBank and not bankClientWarned then
+			bankClientWarned = true
+			warn("[Town] BankClient.Step : " .. tostring(errBank))
+		end
+	end
 	-- v10 🏗️ chantiers des parcelles libres + maisons qui se construisent (HouseConstruction, CONSTRUCT10)
 	local construction = optionalModule("HouseConstruction")
 	if construction and type(construction.Step) == "function" then
@@ -1342,6 +1354,14 @@ local function enter(options: any)
 				warn("[Town] RaceClient.Start : " .. tostring(errRace))
 			end
 		end
+		-- v11 🏦 banque Dopamine, 💎, casses (BankClient, BANK11 ; démarre aussi HeistClient + LuxuryWear)
+		local bankClient = optionalModule("BankClient")
+		if bankClient and type(bankClient.Start) == "function" then
+			local okBank, errBank = pcall(bankClient.Start, { Toast = toast })
+			if not okBank then
+				warn("[Town] BankClient.Start : " .. tostring(errBank))
+			end
+		end
 		-- v9.7 🌳 nature : détails de près (arbres, lac, aire de jeux) côté client (NATURE97)
 		local greenery = optionalModule("TownGreenery")
 		if greenery and type(greenery.Start) == "function" then
@@ -1551,6 +1571,11 @@ local function teardown()
 	local raceClient = optionalModule("RaceClient")
 	if raceClient and type(raceClient.Stop) == "function" then
 		pcall(raceClient.Stop)
+	end
+	-- v11 🏦 banque : bâtiment, HUD des casses et objets de luxe retirés
+	local bankClient = optionalModule("BankClient")
+	if bankClient and type(bankClient.Stop) == "function" then
+		pcall(bankClient.Stop)
 	end
 	-- v9.6 🚗 on descend de voiture, HUD retiré (avant de rendre la caméra)
 	local car = optionalModule("CarClient")

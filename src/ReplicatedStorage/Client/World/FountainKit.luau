@@ -100,16 +100,24 @@ end
 local function addRipples(W: Water, p: Vector3, r: number, phase: number, count: number?)
 	-- (chaque rond à sa hauteur : 4 niveaux espacés de 0,03, jamais deux faces
 	-- confondues ; l'écume au-dessus)
-	local wAny: any = W
 	for k = 0, (count or 2) - 1 do
-		wAny.RippleN = (wAny.RippleN or 0) + 1
-		local lift = 0.03 + (wAny.RippleN % 4) * 0.03
-		local q = p + Vector3.new(0, lift, 0)
+		-- niveau libre : aucun rond voisin (qui pourrait le recouvrir) au même niveau
+		local used = {}
+		for _, other in ipairs(W.Ripples) do
+			if Vector3.new(other.P.X - p.X, 0, other.P.Z - p.Z).Magnitude < other.R + r + 0.6 and math.abs(other.Base - p.Y) < 0.5 then
+				used[other.Level] = true
+			end
+		end
+		local level = 0
+		while used[level] and level < 6 do
+			level += 1
+		end
+		local q = p + Vector3.new(0, 0.03 + level * 0.025, 0)
 		local ring = waterPart(W.Parent, "Ripple", Vector3.new(0.02, 0.4, 0.4), CFrame.new(q) * ParkKit.UPRIGHT, FOAM, 0.4, "Cyl")
-		table.insert(W.Ripples, { Part = ring, P = q, R = r, Phase = phase + k / (count or 2) })
+		table.insert(W.Ripples, { Part = ring, P = q, R = r, Phase = phase + k / (count or 2), Level = level, Base = p.Y })
 	end
 	-- (écume au point d'impact)
-	local foam = waterPart(W.Parent, "Foam", Vector3.new(0.03, r * 0.55, r * 0.55), CFrame.new(p + Vector3.new(0, 0.19, 0)) * ParkKit.UPRIGHT, FOAM, 0.35, "Cyl")
+	local foam = waterPart(W.Parent, "Foam", Vector3.new(0.03, r * 0.55, r * 0.55), CFrame.new(p + Vector3.new(0, 0.34, 0)) * ParkKit.UPRIGHT, FOAM, 0.35, "Cyl")
 	table.insert(W.Sparkles, { Part = foam, Base = 0.3, Amp = 0.15, Speed = 9 + phase * 3, Phase = phase * 7 })
 end
 
@@ -179,7 +187,7 @@ function FountainKit.Sheet(W: Water, F: CFrame, r0: number, y0: number, r1: numb
 	local sh = { F = F, R0 = r0, Y0 = y0, R1 = r1, Drop = drop, R2 = r2, Y1 = y1, Panels = panels, Streaks = streaks }
 	table.insert(W.Sheets, sh)
 	-- couronne d'écume au pied du voile + quelques ronds
-	local foamRing = Ring(W.Parent, "SheetFoam", F, r2 + 0.15, 0.7, y1 + 0.24, y1 + 0.3, math.min(count, 16), FOAM, M.Glass)
+	local foamRing = Ring(W.Parent, "SheetFoam", F, r2 + 0.15, 0.7, y1 + 0.24, y1 + 0.29, math.min(count, 16), FOAM, M.Glass)
 	for _, p in ipairs(foamRing) do
 		p.Transparency = 0.3
 		p.CastShadow = false
@@ -188,7 +196,8 @@ function FountainKit.Sheet(W: Water, F: CFrame, r0: number, y0: number, r1: numb
 	for k = 0, 3 do
 		local a = (k + 0.25) / 4 * TAU
 		local rr = rippleR or (r2 + 1.0)
-		addRipples(W, F.Position + Vector3.new(math.cos(a) * rr, y1 + 0.02, math.sin(a) * rr), math.min(1.4, rr * 0.5), k * 0.37, 1)
+		-- (dans une vasque : petits ronds qui ne débordent pas sur le rebord)
+		addRipples(W, F.Position + Vector3.new(math.cos(a) * rr, y1 + 0.02, math.sin(a) * rr), if rippleR then math.min(0.55, rr * 0.5) else math.min(1.4, rr * 0.5), k * 0.37, 1)
 	end
 	return sh
 end
@@ -469,7 +478,7 @@ local function buildTiered(m: Model, F: CFrame, seed: number): Water
 	ParkKit.Ball(m, "Knob", (F * CFrame.new(0, 7.1, 0)).Position, 1.5, STONE_L, M.Limestone)
 	acanthus(m, F, 7.7, 0.55, 0.8, STONE_L)
 	bowl(m, W, F, 8.9, 2.3, STONE)
-	FountainKit.Sheet(W, F, 2.35, 9.0, 2.65, 0.4, 2.85, 6.0, 16)
+	FountainKit.Sheet(W, F, 2.35, 9.0, 2.65, 0.4, 2.85, 6.0, 16, 3.35)
 	-- lotus de bronze + gerbe en ombrelle qui retombe dans la vasque haute
 	for k = 0, 5 do
 		local a = k / 6 * TAU

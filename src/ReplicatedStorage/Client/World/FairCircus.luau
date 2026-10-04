@@ -661,7 +661,7 @@ end
 
 local function buildShow(r: RideFx, folder: Instance, booth: CFrame): any
 	local NPC = ParkKit.NPC()
-	local show: any = { Npcs = {}, Parts = {}, Frames = {}, Fans = {}, Band = {}, Queue = {} }
+	local show: any = { Npcs = {}, Parts = {}, Frames = {}, Fans = {}, Band = {}, Queue = {}, HideIndex = {} }
 	if not NPC or type(NPC.Build) ~= "function" then
 		return show
 	end
@@ -831,6 +831,16 @@ local function stepShow(r: RideFx, show: any, t: number, near: boolean, fx: any)
 	local function place(m: Model?, cf: CFrame, anim: string, at: number)
 		if not m or not NPC then
 			return
+		end
+		if cf == HIDE then
+			-- (chacun sa cachette sous le sol : jamais deux PNJ l'un dans l'autre)
+			local k = show.HideIndex[m]
+			if not k then
+				show.HideCount = (show.HideCount or 0) + 1
+				k = show.HideCount
+				show.HideIndex[m] = k
+			end
+			cf = HIDE * CFrame.new(k * 3, 0, 0)
 		end
 		if NPC.Place then
 			NPC.Place(m, B * cf)

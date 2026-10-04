@@ -131,7 +131,7 @@ do
 	test("Banque v11 : données propres (valeurs folles, objets inconnus, jour suivant, même table)", function(check)
 		local d = D.Sanitize(nil, 100)
 		check(d.Wallet == 0 and d.Vault == 0 and d.Day == 100 and #d.History == 0 and next(d.Owned) == nil, "neuf")
-		local raw = { Wallet = 0 / 0, Vault = -5, Earned = 1e300 * 10, Day = 99, DayEarned = 70, Exchanged = 9, InterestDay = 99,
+		local raw = { Wallet = 0 / 0, Vault = -5, Earned = math.huge, Day = 99, DayEarned = 70, Exchanged = 9, InterestDay = 99,
 			Owned = { DiamondCrown = true, Nope = true, GoldChain = "yes" }, Equipped = { Head = "DiamondCrown", Neck = "GoldChain", Back = "Nope", Face = "DiamondCrown" },
 			History = { { T = 5, K = "Bank", A = 12, N = "" }, { K = 5 }, "x" } }
 		local same = raw

@@ -99,6 +99,10 @@ local TEMPLATE = {
 	Food = { Multiplier = 1, EndsAt = 0, Food = "" },
 	-- 🏁 (v10 RACE10) courses de rue : jour, gains du jour, courses, victoires, podiums, meilleurs tours
 	Race = { Day = 0, Rewarded = 0, Races = 0, Wins = 0, Podiums = 0, Best = {}, Xp = 0, History = {}, Routes = {}, Ghost = {} }, -- (v11 RACE11) XP, historique, fantôme
+	-- 💎 (v11 BANK11) diamants : poche, coffre, totaux, compteurs du jour, historique, objets de luxe (Shared/Diamonds) ; jamais remis à zéro par l'océan
+	Diamonds = { Wallet = 0, Vault = 0, Earned = 0, Spent = 0, Day = 0, DayEarned = 0, Exchanged = 0, InterestDay = 0, History = {}, Owned = {}, Equipped = {} },
+	-- 🕶️ (v11 BANK11) casses : jour, casses payés aujourd'hui (banque / train), faits, réussis, meilleur butin (%)
+	Heist = { Day = 0, Bank = 0, Train = 0, Done = 0, Success = 0, Best = 0 },
 	Stats = {
 		TotalClicks = 0,
 		LifetimeDopamine = 0, -- Dopamine gagnée depuis toujours (classement)

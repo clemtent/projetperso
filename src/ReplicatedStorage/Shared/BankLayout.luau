@@ -107,15 +107,16 @@ function BankLayout.Points(count: number): { [string]: any }
 	end
 	local L = BankLayout.LocalPoints()
 	local out = {}
+	local LISTS = { Counters = true, ATMs = true, Piles = true }
 	for k, v in pairs(L) do
-		if typeof(v) == "Vector3" then
-			out[k] = w(v)
-		elseif type(v) == "table" then
+		if LISTS[k] then
 			local list = {}
 			for i, p in ipairs(v) do
 				list[i] = w(p)
 			end
 			out[k] = list
+		else
+			out[k] = w(v)
 		end
 	end
 	return out
