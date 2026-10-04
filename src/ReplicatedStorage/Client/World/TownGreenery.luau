@@ -15,7 +15,12 @@
 	    canards et cygnes qui glissent doucement sur l'eau, roseaux et
 	    touffes d'herbe en plus sur la rive ;
 	  - AIRE DE JEUX ("NearDetail" = "Playground") : v9.9 (PARK99) toute
-	    l'aire de jeux réaliste et animée (ParkPlay).
+	    l'aire de jeux réaliste et animée (ParkPlay) ;
+	  - v11 (PARK11) LIEUX DU PARC ("NearDetail" = Basketball, Football,
+	    Tennis, PingPong, RoseGarden, Bandstand, FountainSquare, DogPark,
+	    Picnic, PicnicTables, Fitness, BenchRow) : ParkSports / ParkScenes ;
+	  - v11 (PARK11) PIGEONS DANS TOUTE LA VILLE : colonies en flux près de
+	    l'avatar (TownPigeons.CityStream / CityStep).
 	Tout est ancré, sans collision ni requête, sans ombre pour les petites
 	pièces. Construction étalée (quelques arbres par pas), destruction au-delà
 	d'une marge (hystérésis) ; seuls les oiseaux bougent (≤ 15 Hz, CFrame),

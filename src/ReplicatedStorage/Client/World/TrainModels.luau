@@ -338,7 +338,7 @@ local function coach(rec: CarRec, livery: any)
 			-- linteau au-dessus de la porte
 			cp(rec, "Lintel", Vector3.new(0.3, WALL_TOP - FL - DOOR_H, DOOR_W), L(xw, (FL + DOOR_H + WALL_TOP) / 2, sz * zd), livery.Body, M.Metal)
 			-- voyant de porte
-			local lamp = cp(rec, "DoorLamp", Vector3.new(0.12, 0.3, 0.6), L(sx * (HW + 0.06), FL + DOOR_H + 0.35, sz * zd), rgb(255, 170, 40))
+			local lamp = cp(rec, "DoorLamp", Vector3.new(0.12, 0.3, 0.6), L(sx * (HW + 0.06), FL + DOOR_H + 0.12, sz * zd), rgb(255, 170, 40))
 			neon(lamp)
 			-- bande de livrée sur l'extrémité
 			cp(rec, "StripeEnd", Vector3.new(0.06, 0.4, zEnd1 - zEnd0), L(sx * (HW + 0.03), FL + 2.2, sz * (zEnd0 + zEnd1) / 2), livery.Stripe)
@@ -508,9 +508,9 @@ local function loco(rec: CarRec, livery: any, npcSeat: { CFrame })
 		-- grilles d'aération (3 panneaux à lames)
 		for g = 0, 2 do
 			local zg = mz0 + 6 + g * 9
-			cp(rec, "Grille", Vector3.new(0.08, 3.2, 6.5), L(sx * (HW + 0.04), FL + 7.6, zg), rgb(52, 54, 60), M.Metal)
+			cp(rec, "Grille", Vector3.new(0.08, 3.2, 6.5), L(sx * (HW + 0.04), FL + 6.4, zg), rgb(52, 54, 60), M.Metal)
 			for s = -2, 2 do
-				cp(rec, "Louvre", Vector3.new(0.14, 0.18, 6.3), L(sx * (HW + 0.1), FL + 7.6 + s * 0.6, zg), rgb(30, 30, 34), M.Metal)
+				cp(rec, "Louvre", Vector3.new(0.14, 0.18, 6.3), L(sx * (HW + 0.1), FL + 6.4 + s * 0.6, zg), rgb(30, 30, 34), M.Metal)
 			end
 		end
 		-- grand nom sur le flanc
@@ -881,7 +881,10 @@ function TrainModels.TrackChunk(parent: Instance, count: number, s0: number, s1:
 				local bh = ballastTop - WorldLayout.GROUND_Y + 0.25
 				part(model, "Ballast", Vector3.new(8.6, bh, seg), look * CFrame.new(0, ballastTop - bh / 2, 0), BALLAST, M.Pebble)
 				if level >= 2 then
-					part(model, "BallastShoulder", Vector3.new(11, 0.14, seg), look * CFrame.new(0, WorldLayout.GROUND_Y + 0.02, 0), rgb(104, 96, 88), M.Pebble)
+					-- accotements (de part et d'autre du ballast, sans le recouvrir)
+					for _, sx in ipairs({ -1, 1 }) do
+						part(model, "BallastShoulder", Vector3.new(1.4, 0.14, seg), look * CFrame.new(sx * (4.3 + 0.7), WorldLayout.GROUND_Y + 0.02, 0), rgb(104, 96, 88), M.Pebble)
+					end
 				end
 			end
 			for _, sx in ipairs({ -1, 1 }) do
@@ -952,7 +955,7 @@ function TrainModels.Crossing(parent: Instance, c: any): CrossingRec
 		-- sa droite : (look = -side * X) -> droite = ... poteau du côté -Z * side
 		local postZ = -side * (roadHalf + 1.6)
 		local postCF = F * CFrame.new(along, 0, postZ)
-		part(model, "Post", Vector3.new(0.6, 4.6, 0.6), postCF * CFrame.new(0, road + 2.3, 0), WHITE, M.Metal)
+		part(model, "Post", Vector3.new(0.6, 4.6, 0.6), postCF * CFrame.new(0, road + 2.5, 0), WHITE, M.Metal)
 		part(model, "PostBase", Vector3.new(1.4, 0.8, 1.4), postCF * CFrame.new(0, road + 0.4, 0), rgb(150, 150, 150), M.Concrete)
 		part(model, "Motor", Vector3.new(1.2, 1.4, 1.0), postCF * CFrame.new(0, road + 3.6, 0), rgb(230, 230, 230), M.Metal)
 		-- bras : pivote autour d'un axe horizontal (le long de la voie), du vertical à l'horizontal
@@ -969,7 +972,7 @@ function TrainModels.Crossing(parent: Instance, c: any): CrossingRec
 		end
 		local lamp = part(model, "BoomLamp", Vector3.new(0.25, 0.25, 0.25), pivot, rgb(120, 20, 20), M.SmoothPlastic, "Ball")
 		table.insert(segs, { Part = lamp, Offset = armLen - 0.3, Up = 0.3 })
-		local counter = part(model, "Counterweight", Vector3.new(0.6, 0.9, 1.2), pivot, rgb(60, 60, 60), M.Metal)
+		local counter = part(model, "Counterweight", Vector3.new(0.9, 0.9, 1.2), pivot, rgb(60, 60, 60), M.Metal)
 		table.insert(segs, { Part = counter, Offset = -0.9 })
 		table.insert(booms, { Pivot = pivot, Dir = if postZ > 0 then -1 else 1, Segs = segs })
 		-- feux + croix de Saint-André (sur un mât, face aux voitures qui arrivent)
@@ -1096,7 +1099,7 @@ function TrainModels.Station(parent: Instance, count: number, st: any, detail: b
 				g.Transparency = 0.45
 				g.CanCollide = true
 				-- arc de briques claires au-dessus de la baie
-				part(hall, "BayArch", Vector3.new(1.1, 0.6, winW + 0.4), G * CFrame.new(xw, floorY + 11.8, sz * zc), STONE, M.Slate)
+				part(hall, "BayArch", Vector3.new(1.1, 0.6, winW + 0.4), G * CFrame.new(xw, floorY + 11.83, sz * zc), STONE, M.Slate)
 				part(hall, "Mullion", Vector3.new(0.3, 8, 0.25), G * CFrame.new(xw, floorY + 7.5, sz * zc), rgb(60, 60, 70), M.Metal)
 			end
 		end
@@ -1140,7 +1143,7 @@ function TrainModels.Station(parent: Instance, count: number, st: any, detail: b
 	local tread = (stepsX1 - stepsX0) / nSteps
 	for k = 1, nSteps do
 		local top = floorY + rise * k / nSteps
-		local s = part(model, "Step", Vector3.new(tread + 0.02, top - ground, 16), G * CFrame.new(stepsX0 + (k - 0.5) * tread, (top + ground) / 2, 0), rgb(186, 180, 170), M.Concrete)
+		local s = part(model, "Step", Vector3.new(tread, top - ground, 16), G * CFrame.new(stepsX0 + (k - 0.5) * tread, (top + ground) / 2, 0), rgb(186, 180, 170), M.Concrete)
 		s.CanCollide = true
 	end
 	-- main courante des marches
@@ -1168,7 +1171,7 @@ function TrainModels.Station(parent: Instance, count: number, st: any, detail: b
 	end
 	local canopy = part(model, "Canopy", Vector3.new(14.5, 0.4, cLen + 4), G * CFrame.new(cx + 1, PY + 10.4, 0) * CFrame.Angles(0, 0, math.rad(4)), rgb(180, 210, 220), M.Glass)
 	canopy.Transparency = 0.3
-	part(model, "CanopyBeam", Vector3.new(0.5, 0.8, cLen + 4), G * CFrame.new(cx + 1, PY + 10.0, 0), rgb(40, 70, 60), M.Metal)
+	part(model, "CanopyBeam", Vector3.new(0.5, 0.8, cLen + 3), G * CFrame.new(cx + 1, PY + 10.0, 0), rgb(40, 70, 60), M.Metal)
 	part(model, "Valance", Vector3.new(0.2, 1.0, cLen + 4), G * CFrame.new(cx + 8.2, PY + 10.4, 0), rgb(232, 226, 210), M.Wood)
 	-- éclairage doux sous la marquise (verres "NightGlow")
 	for k = -3, 3 do
@@ -1202,7 +1205,7 @@ function TrainModels.Station(parent: Instance, count: number, st: any, detail: b
 			part(model, "SignPole", Vector3.new(0.3, 9, 0.3), pole * CFrame.new(2.4, 4.5, 0), rgb(40, 50, 60), M.Metal)
 			part(model, "PlatformSign", Vector3.new(5.6, 1.4, 0.2), pole * CFrame.new(0, 8.4, 0), rgb(24, 40, 70))
 			for _, face in ipairs({ -1, 1 }) do
-				local cv = part(model, "PlatformSignCanvas", Vector3.new(5.4, 1.2, 0.04), pole * CFrame.new(0, 8.4, face * 0.13), WHITE)
+				local cv = part(model, "PlatformSignCanvas", Vector3.new(5.4, 1.2, 0.04), pole * CFrame.new(0, 8.4, face * 0.18), WHITE)
 				local g = canvasGui(cv, if face < 0 then Enum.NormalId.Front else Enum.NormalId.Back, 50)
 				label(g, Locale.T(st.Name), WHITE, Enum.Font.GothamBold)
 			end
@@ -1256,7 +1259,7 @@ function TrainModels.Station(parent: Instance, count: number, st: any, detail: b
 	local clock = nil
 	if clockKit and type(clockKit.Build) == "function" then
 		pcall(function()
-			clock = clockKit.Build(model, G * CFrame.new(cx + 1, PY + 8.2, 10) * CFrame.Angles(0, math.pi / 2, 0), 2.4, { Style = "Station" })
+			clock = clockKit.Build(model, G * CFrame.new(cx + 1.45, PY + 8.2, 10) * CFrame.Angles(0, math.pi / 2, 0), 2.4, { Style = "Station" })
 		end)
 	end
 	model.Parent = parent

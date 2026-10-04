@@ -14,6 +14,15 @@
 	    puis des arbres semés sans jamais toucher les rues ni les zones ;
 	  - une ceinture de bois derrière les parcelles, des collines, des
 	    montagnes enneigées et une ville lointaine (TownBuildings.Skyline).
+	v11 (PARK11) — le PARC CENTRAL refait ("trop de choses sans rapport ou
+	trop de la même") : des lieux cohérents construits côté CLIENT (ParkSports
+	/ ParkScenes via TownGreenery, attribut NearDetail) : terrain de basket,
+	terrain de foot, court de tennis, ping-pong où les PNJ JOUENT ; roseraie
+	à la française avec fontaine ; kiosque à musique et son orchestre ; place
+	de la grande fontaine ; parc à chiens ; tables de pique-nique et
+	pique-nique dans l'herbe ; agrès ; bancs occupés le long des allées. Le
+	serveur ne garde que la réserve, un imposteur plat pour les terrains et
+	les Seats des places libres (TownPark.ScenePlaces).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
