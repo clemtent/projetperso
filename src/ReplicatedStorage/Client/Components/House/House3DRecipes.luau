@@ -45,6 +45,8 @@ local House3DKit = require(script.Parent.House3DKit)
 local House3DScale = require(script.Parent.House3DScale)
 -- (v9.9 SCALE99) aiguilles à l'heure réelle, page du calendrier du jour
 local House3DTime = require(script.Parent.House3DTime)
+-- (v11 ITEMS11) poissons vivants des aquariums
+local House3DFish = require(script.Parent.House3DFish)
 
 type Builder = House3DKit.Builder
 
@@ -2832,17 +2834,26 @@ R.Aquarium = function(b, ctx)
 		b.Tube(px, tankY + 3, -12, px + 3, tankY + 20 + index * 3, -13, 2.4, index % 2 == 0 and LEAF_DARK or LEAF)
 		b.Tube(px + 3, tankY + 20 + index * 3, -13, px - 1, tankY + 30 + index * 2, -12, 2, LEAF)
 	end
-	for index = 1, 3 do
-		local fc = ({ rgb(255, 150, 60), PINK, BUTTER })[index]
-		local fx, fy, fz = -24 + index * 14, tankY + 12 + index * 5, (index % 2) * 10 - 5
-		local fish = b.Egg(fx, fy, fz, 10, 6, 4, fc)
-		fish.CastShadow = false
-		b.Wedge(fx - 6, fy - 3, fz, 4, 6, 2, fc, "Left")
+	-- (v11) aquarium d'eau douce vivant : poisson rouge, scalaire, guppy,
+	-- banc de néons ; bulles du bulleur
+	local fishes = {
+		House3DFish.Fish(b, "Goldfish", -20, tankY + 18, 4, 11, 1),
+		House3DFish.Fish(b, "Angel", 6, tankY + 24, -4, 10, -1),
+		House3DFish.Fish(b, "Guppy", 20, tankY + 14, 6, 7, 1),
+	}
+	for k = 0, 2 do
+		local f = House3DFish.Fish(b, "Neon", -6 + k * 4, tankY + 30 - k * 2, 2 + k * 3, 5, -1)
+		f.School = 1
+		table.insert(fishes, f)
 	end
+	local bubbles = {}
 	for index = 0, 3 do
 		local bubble = b.Ball(34, tankY + 8 + index * 8, 8, 2 + index * 0.4, WHITE, M.Glass)
 		bubble.Transparency = 0.4
+		table.insert(bubbles, bubble)
 	end
+	House3DFish.Tank(b, water, fishes, { Kind = "Box", Floor = 0.3, Bubbles = bubbles, Bubbler = Vector3.new(34, tankY + 6, 8),
+		RefCenter = Vector3.new(0, tankY + 2 + (tankH - 8) / 2, 0), RefSize = Vector3.new(86, tankH - 8, 36) })
 	b.Box(0, top - 2, 0, 94, 2, 44, darken(wood, 0.1), M.Wood)
 	local lamp = b.Box(0, top - 2.6, 0, 70, 0.6, 6, rgb(220, 240, 255))
 	b.Neon(lamp)
@@ -2850,8 +2861,28 @@ R.Aquarium = function(b, ctx)
 	b.Top(1, 0, top, 0, 80, 36)
 	b.Footprint(94, 44, top)
 end
+-- (v11) petit aquarium rond sur son socle : bocal, eau, sable, plante,
+-- 2 petits poissons VIVANTS (guppy, néon), bulles
 R.MiniAquarium = function(b, _ctx)
-	critter("Fish")(b, _ctx)
+	b.Cyl(0, 0, 0, 50, 6, rgb(200, 170, 250))
+	local bowl = b.Ball(0, 40, 0, 80, GLASS, M.Glass)
+	bowl.Transparency = 0.6
+	bowl.CastShadow = false
+	local water = b.Egg(0, 36, 0, 70, 54, 70, rgb(150, 210, 255), M.Glass)
+	water.Transparency = 0.45
+	water.CastShadow = false
+	b.Egg(0, 10, 0, 52, 8, 52, rgb(250, 230, 180), M.Sand)
+	b.EggR(CFrame.new(-16, 22, -8) * CFrame.Angles(0, 0, 0.12), 4, 20, 4, rgb(90, 200, 120), M.SmoothPlastic)
+	b.EggR(CFrame.new(-12, 20, -10) * CFrame.Angles(0, 0, -0.2), 3, 14, 3, rgb(70, 170, 100), M.SmoothPlastic)
+	local fishes = { House3DFish.Fish(b, "Guppy", 6, 40, 4, 14, 1), House3DFish.Fish(b, "Neon", -8, 30, -6, 12, -1) }
+	local bubbles = {}
+	for index = 0, 2 do
+		local bubble = b.Ball(14, 20 + index * 12, 10, 3 + index * 0.6, WHITE, M.Glass)
+		bubble.Transparency = 0.4
+		table.insert(bubbles, bubble)
+	end
+	House3DFish.Tank(b, water, fishes, { Kind = "Bowl", Bubbles = bubbles, Bubbler = Vector3.new(14, 18, 10), RefCenter = Vector3.new(0, 36, 0), RefSize = Vector3.new(70, 54, 70) })
+	b.Footprint(80, 80, 82)
 end
 
 -- DÉCO / TABLE / JOUETS (petits objets) -------------------------------------
@@ -4416,18 +4447,20 @@ R.SharkTank = function(b, _ctx)
 	for index = 0, 3 do
 		b.Egg(-34 + index * 22, 32, -12, 14, 10, 12, ({ rgb(170, 160, 180), rgb(255, 120, 130), rgb(255, 170, 90), rgb(160, 150, 170) })[index + 1], M.Slate)
 	end
-	for index, spec in ipairs({ { -18, 56, -6 }, { 18, 42, 8 } }) do
-		local cf = CFrame.new(spec[1], spec[2], spec[3]) * CFrame.Angles(0, index * 0.4, 0)
-		local shark = b.EggR(cf, 28, 10, 10, rgb(130, 150, 190), M.SmoothPlastic)
-		shark.CastShadow = false
-		b.EggR(cf * CFrame.new(2, -2, 0), 20, 5, 8, rgb(230, 236, 246), M.SmoothPlastic)
-		b.Wedge(spec[1], spec[2] + 4, spec[3], 6, 8, 3, rgb(130, 150, 190), "Front")
-		b.BoxR(cf * CFrame.new(-15, 0, 0) * CFrame.Angles(0, 0, 0.4), 3, 12, 2, rgb(120, 140, 180), M.SmoothPlastic)
-	end
+	-- (v11) 2 requins qui patrouillent (corps, ventre blanc, aileron,
+	-- queue en croissant qui bat) + un petit chirurgien ; bulles
+	local fishes = {
+		House3DFish.Fish(b, "Shark", -18, 56, -6, 30, 1),
+		House3DFish.Fish(b, "Shark", 18, 42, 8, 26, -1),
+		House3DFish.Fish(b, "Tang", 0, 60, 4, 9, 1),
+	}
+	local bubbles = {}
 	for index = 0, 3 do
 		local bubble = b.Ball(36, 34 + index * 11, 10, 2.4 + index * 0.4, WHITE, M.Glass)
 		bubble.Transparency = 0.4
+		table.insert(bubbles, bubble)
 	end
+	House3DFish.Tank(b, water, fishes, { Kind = "Box", Floor = 0.22, Bubbles = bubbles, Bubbler = Vector3.new(36, 30, 10), RefCenter = Vector3.new(0, 56, 0), RefSize = Vector3.new(90, 56, 40) })
 	b.Box(0, 92, 0, 98, 4, 48, CARBON, M.SmoothPlastic)
 	local lamp = b.Box(0, 91.4, 0, 80, 0.6, 8, rgb(210, 236, 255))
 	b.Neon(lamp)

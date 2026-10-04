@@ -1277,10 +1277,14 @@ local function hipsWorld(rig: Rig, t: CFrame): Vector3?
 end
 
 -- Cible des hanches : dessous des cuisses sur le dessus de l'assise, bassin
--- reculé vers le dossier (repère du dessus de l'assise : +Z = vers l'arrière)
-local function snapTarget(rig: Rig, ref: CFrame, size: Vector3): Vector3
+-- reculé vers le dossier (repère du dessus de l'assise : +Z = vers l'arrière).
+-- En largeur, on garde la place choisie par la soudure (banc partagé avec un
+-- PNJ : NPCSeatGuard décale la soudure vers la place libre), sans déborder.
+local function snapTarget(rig: Rig, ref: CFrame, size: Vector3, hips: Vector3): Vector3
 	local back = math.clamp(size.Z / 2 - rig.Thigh * 0.55, 0, 0.6)
-	return (ref * CFrame.new(0, rig.Thigh / 2, back)).Position
+	local side = math.max(0, size.X / 2 - 0.6 * rig.Scale)
+	local x = math.clamp(ref:PointToObjectSpace(hips).X, -side, side)
+	return (ref * CFrame.new(x, rig.Thigh / 2, back)).Position
 end
 
 local function snapToSeat(pose: Pose, anim: Anim, w: number)
@@ -1293,7 +1297,7 @@ local function snapToSeat(pose: Pose, anim: Anim, w: number)
 	if not ref or not size or not hips then
 		return
 	end
-	local delta = rig.Root.CFrame:VectorToObjectSpace(snapTarget(rig, ref, size) - hips)
+	local delta = rig.Root.CFrame:VectorToObjectSpace(snapTarget(rig, ref, size, hips) - hips)
 	local dy = math.clamp(delta.Y, -SNAP_MAX_Y, SNAP_MAX_Y)
 	local flat = Vector3.new(delta.X, 0, delta.Z)
 	if flat.Magnitude > SNAP_MAX_XZ then

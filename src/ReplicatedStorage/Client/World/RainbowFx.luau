@@ -302,11 +302,11 @@ local function buildPot(parent: Instance): Model
 	-- colonne de lumière dorée (repère de loin)
 	local a0 = Instance.new("Attachment")
 	a0.Name = "BeaconBase"
-	a0.Position = Vector3.new(0, 0.5, 0)
+	a0.CFrame = CFrame.new(0, 0.5, 0)
 	a0.Parent = gold
 	local a1 = Instance.new("Attachment")
 	a1.Name = "BeaconTop"
-	a1.Position = Vector3.new(0, 140, 0)
+	a1.CFrame = CFrame.new(0, 140, 0)
 	a1.Parent = gold
 	local beacon = Instance.new("Beam")
 	beacon.Name = "Beacon"

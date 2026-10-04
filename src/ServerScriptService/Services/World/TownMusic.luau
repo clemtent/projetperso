@@ -629,10 +629,10 @@ function TownMusic.Build(parent: Instance, cf: CFrame): Folder
 		end
 	end))
 	-- 2 projecteurs de face, doux (la nuit seulement : TownAtmosphere)
-	for _, x in ipairs({ -5, 5 }) do
-		local host = part(folder, "StageLight", Vector3.new(0.4, 0.4, 0.4), cf * CFrame.new(x, MusicData.TRUSS_H - 0.6, -2.4) * CFrame.Angles(math.rad(-28), 0, 0), Color3.new(1, 1, 1), M.SmoothPlastic, "deco")
+	for _, x in ipairs({ -6, 6 }) do
+		local host = part(folder, "StageLight", Vector3.new(0.4, 0.4, 0.4), cf * CFrame.new(x, MusicData.TRUSS_H - 0.6, MusicData.TRUSS_TOWERS[1].Z + 0.8) * CFrame.Angles(math.rad(-32), 0, 0), Color3.new(1, 1, 1), M.SmoothPlastic, "deco")
 		host.Transparency = 1
-		TownKit.Light(host, Color3.fromRGB(255, 226, 190), 20, 0.8, "Spot")
+		TownKit.Light(host, Color3.fromRGB(255, 226, 190), 26, 0.8, "Spot")
 	end
 
 	folder:SetAttribute("Parts", TownKit.Stats.Parts - partsBefore)

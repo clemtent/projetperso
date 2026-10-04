@@ -289,7 +289,7 @@ local function onSeat(house: any, slot: number, model: Model, seatPart: BasePart
 			return
 		end
 	end
-	sit(seatPart.CFrame * CFrame.new(0, seatPart.Size.Y / 2, 0), nil)
+	sit(seatPart.CFrame * CFrame.new(0, seatPart.Size.Y / 2 - 0.1, 0), nil) -- (v11 SCALE11) le dessus du Seat tombe sur le coussin
 end
 
 local function syncHouses()

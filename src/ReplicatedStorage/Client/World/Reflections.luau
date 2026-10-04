@@ -1785,6 +1785,13 @@ function Reflections.ForceStep()
 	step(0)
 end
 
+-- (tests) relit tout le Workspace (miroirs ajoutés sans DescendantAdded)
+function Reflections.Rescan()
+	if active then
+		scanAll()
+	end
+end
+
 -- (tests) compteurs
 function Reflections.Counts(): { [string]: number }
 	local n = { Mirrors = 0, Screens = 0, Floors = 0, Live = 0, Static = 0, Sheens = 0, FloorsGlossy = 0, Strips = 0, Copies = 0 }

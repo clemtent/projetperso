@@ -25,6 +25,8 @@
 local House3DKit = require(script.Parent.House3DKit)
 -- (v9.9 SCALE99) aiguilles à l'heure réelle
 local House3DTime = require(script.Parent.House3DTime)
+-- (v11 ITEMS11) poissons vivants des aquariums
+local House3DFish = require(script.Parent.House3DFish)
 
 type Builder = House3DKit.Builder
 
@@ -120,13 +122,6 @@ end
 -- Feuille plate (ovale fin) au bout d'une tige, orientée par (yaw, pitch)
 local function leafAt(b: Builder, x: number, y: number, z: number, w: number, h: number, color: Color3, yaw: number, tilt: number)
 	b.EggR(CFrame.new(x, y, z) * CFrame.Angles(0, yaw, 0) * CFrame.Angles(0, 0, tilt), w, h, 2.2, color, M.SmoothPlastic)
-end
-
--- Petit poisson (ovale + queue) orienté vers +x (dir = 1) ou -x
-local function fish(b: Builder, x: number, y: number, z: number, size: number, color: Color3, dir: number)
-	b.Egg(x, y, z, size, size * 0.56, size * 0.34, color, M.SmoothPlastic)
-	b.Wedge(x - dir * size * 0.62, y - size * 0.2, z, size * 0.34, size * 0.4, size * 0.12, darken(color, 0.1), dir > 0 and "Left" or "Right", M.SmoothPlastic)
-	b.Ball(x + dir * size * 0.26, y + size * 0.06, z + size * 0.14, size * 0.12, rgb(30, 30, 40), M.SmoothPlastic)
 end
 
 -- Coussin carré posé (y = bas)
@@ -1621,7 +1616,7 @@ R.AquariumWall = function(b, _ctx)
 	end
 	-- eau + fond + sable
 	b.Box(0, 18, -depth / 2 + 2, 90, 76, 2, WATER_DEEP, M.SmoothPlastic)
-	glass(b.Box(0, 18, 0, 90, 76, depth - 4, b.Map(WATER), M.Glass), 0.55)
+	local water = glass(b.Box(0, 18, 0, 90, 76, depth - 4, b.Map(WATER), M.Glass), 0.55)
 	b.Box(0, 18, 0, 89, 6, depth - 5, rgb(236, 214, 160), M.Sand)
 	-- coraux, algues, rochers
 	for index, s in ipairs({ { -32, rgb(255, 110, 120) }, { -14, rgb(255, 170, 80) }, { 16, rgb(200, 110, 230) }, { 34, rgb(255, 130, 160) } }) do
@@ -1635,11 +1630,28 @@ R.AquariumWall = function(b, _ctx)
 		b.EggR(CFrame.new(x, 44, -8) * CFrame.Angles(0, 0, 0.1), 5, 40, 2, LEAF, M.SmoothPlastic)
 	end
 	b.Egg(-4, 26, 0, 16, 10, 12, STONE_DARK, M.Rock)
-	fish(b, -22, 72, 4, 12, rgb(255, 150, 40), 1)
-	fish(b, 18, 62, 2, 10, rgb(255, 220, 60), -1)
-	fish(b, -2, 50, 6, 14, rgb(60, 140, 255), 1)
-	fish(b, 30, 82, -2, 9, rgb(255, 100, 140), -1)
-	fish(b, -34, 54, -4, 8, WHITE, -1)
+	-- (v11) récif vivant : chirurgien, scalaire, 2 poissons-clowns, banc de
+	-- néons ; ils nagent dans l'eau au-dessus des coraux, bulles du bulleur
+	local school = {}
+	for k = 0, 2 do
+		local f = House3DFish.Fish(b, "Neon", 24 + k * 4, 70 - k * 3, -4 + k * 3, 6, -1)
+		f.School = 1
+		table.insert(school, f)
+	end
+	local fishes = {
+		House3DFish.Fish(b, "Tang", -22, 72, 4, 13, 1),
+		House3DFish.Fish(b, "Angel", 10, 58, 2, 12, -1),
+		House3DFish.Fish(b, "Clown", -2, 50, 6, 9, 1),
+		House3DFish.Fish(b, "Clown", -30, 56, -4, 8, -1),
+	}
+	for _, f in ipairs(school) do
+		table.insert(fishes, f)
+	end
+	local bubbles = {}
+	for k = 0, 4 do
+		table.insert(bubbles, glass(b.Ball(38, 26 + k * 12, 8, 1.6 + (k % 3) * 0.5, WHITE, M.Glass), 0.4))
+	end
+	House3DFish.Tank(b, water, fishes, { Kind = "Box", Floor = 0.34, Bubbles = bubbles, Bubbler = Vector3.new(38, 26, 8), RefCenter = Vector3.new(0, 18 + 38, 0), RefSize = Vector3.new(90, 76, depth - 4) })
 	-- lumière douce au-dessus de l'eau
 	local lamp = glow(b, b.Box(0, 92.6, 0, 80, 1.2, 8, rgb(200, 240, 255), M.Neon))
 	b.Light(lamp, rgb(170, 230, 255), 14, 0.6)
@@ -1836,15 +1848,32 @@ R.AquariumTunnel = function(b, _ctx)
 	for _, sx in ipairs({ -1, 1 }) do
 		b.Box(sx * (radius + band / 2), 0, 0, band + 4, 4, depth, frame, M.Metal)
 	end
-	-- vie marine dans la bande d'eau
-	local sea = { { 150, 0.3, rgb(255, 150, 40), 1 }, { 30, 0.5, rgb(255, 220, 60), -1 }, { 100, 0.9, rgb(60, 140, 255), 1 }, { 60, 0.15, rgb(255, 100, 140), -1 },
-		{ 120, 0.7, WHITE, 1 }, { 20, 0.2, rgb(255, 170, 80), -1 } }
+	-- (v11) vie marine qui nage DANS la bande d'eau, le long de l'arche et
+	-- d'un bout à l'autre du tunnel : requin, chirurgiens, poissons-clowns,
+	-- scalaire, banc de néons
+	local sea = { { 150, 0.3, "Tang", 9 }, { 30, 0.5, "Clown", 7 }, { 100, 0.9, "Shark", 16 }, { 60, 0.15, "Angel", 8 }, { 120, 0.7, "Tang", 8 }, { 20, 0.2, "Clown", 7 } }
+	local fishes = {}
 	for index, s in ipairs(sea) do
 		local a = math.rad(s[1])
 		local r = radius + band / 2
-		fish(b, math.cos(a) * r, 3 + math.sin(a) * r, (s[2] - 0.5) * (depth - 16), 8, s[3], s[4])
-		local _ = index
+		table.insert(fishes, House3DFish.Fish(b, s[3], math.cos(a) * r, 3 + math.sin(a) * r, (s[2] - 0.5) * (depth - 16), s[4], if index % 2 == 0 then -1 else 1))
 	end
+	for k = 0, 3 do
+		local a = math.rad(70 + k * 5)
+		local r = radius + band / 2 + (k % 2) * 2
+		local f = House3DFish.Fish(b, "Neon", math.cos(a) * r, 3 + math.sin(a) * r, -10 + k * 4, 5, 1)
+		f.School = 1
+		table.insert(fishes, f)
+	end
+	-- (boîte de référence invisible autour de l'arche : le volume d'eau)
+	local outer = radius + band
+	local ref = b.Box(0, 3, 0, 2 * outer, outer, depth - 4, WATER, M.Glass)
+	ref.Name = "FishVolume"
+	ref.Transparency = 1
+	ref.CanQuery = false
+	ref.CastShadow = false
+	House3DFish.Tank(b, ref, fishes, { Kind = "Arch", Arch = { Center = Vector3.new(0, 3, 0), Radius = radius, Band = band, Depth = depth - 4 },
+		RefCenter = Vector3.new(0, 3 + outer / 2, 0), RefSize = Vector3.new(2 * outer, outer, depth - 4) })
 	-- raie manta au sommet
 	local top = 3 + radius + band / 2
 	b.BoxR(CFrame.new(0, top, 6) * CFrame.Angles(0, math.pi / 4, 0), 12, 1.4, 12, rgb(60, 70, 110), M.SmoothPlastic)

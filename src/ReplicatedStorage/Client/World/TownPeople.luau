@@ -1505,6 +1505,35 @@ function TownPeople.Lanes(pathName: string?, sPos: number?): any
 	return { Rects = #s.Rects, SolidParts = s.SolidParts, Computed = s.Computed, Stuck = s.Stuck, Zones = #s.Zones, PlazaDetour = s.PlazaDetour }
 end
 
+-- (tests) distance (XZ) de `pos` au plus proche obstacle fixe solide ou réservé
+-- (négative = dedans), et sa sorte
+function TownPeople.Probe(pos: Vector3): (number, number)
+	local s = state
+	if not s or not s.Grid then
+		return math.huge, 0
+	end
+	local key = math.floor(pos.X / CELL) * 100003 + math.floor(pos.Z / CELL)
+	local best, kind = math.huge, 0
+	for _, idx in ipairs(s.Grid[key] or {}) do
+		local r: Rect = s.Rects[idx]
+		if r.Kind ~= 2 then
+			local rx, rz = pos.X - r.CX, pos.Z - r.CZ
+			local lx = math.abs(rx * r.AX + rz * r.AZ) - r.HX
+			local lz = math.abs(-rx * r.AZ + rz * r.AX) - r.HZ
+			local d
+			if lx > 0 or lz > 0 then
+				d = math.sqrt(math.max(lx, 0) ^ 2 + math.max(lz, 0) ^ 2)
+			else
+				d = math.max(lx, lz)
+			end
+			if d < best then
+				best, kind = d, r.Kind
+			end
+		end
+	end
+	return best, kind
+end
+
 function TownPeople.Debug(): any
 	local s = state
 	if not s then
