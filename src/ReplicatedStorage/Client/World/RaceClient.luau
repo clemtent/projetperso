@@ -1414,8 +1414,12 @@ local function stepGhost(route: any, myRow: any, t: number)
 	local tau = t - myRow.LS
 	if tau > (data.Time or 0) + 1.5 then
 		-- fantôme arrivé au bout du tour : on le range
-		if ghost.Model then
-			ghost.Model:PivotTo(CFrame.new(0, -500, 0))
+		if ghost.Model and ghost.Parts then
+			local hidden = CFrame.new(0, -500, 0)
+			for i, off in ipairs(ghost.Offsets) do
+				ghost.Frames[i] = hidden * off
+			end
+			workspace:BulkMoveTo(ghost.Parts, ghost.Frames, Enum.BulkMoveMode.FireCFrameChanged)
 		end
 		return
 	end
@@ -1427,10 +1431,22 @@ local function stepGhost(route: any, myRow: any, t: number)
 		RaceProps.Ghostify(model)
 		model.Parent = folder
 		ghost.Model = model
+		-- (déplacement rigide : décalages figés, une seule BulkMoveTo par image)
+		local pivot = model:GetPivot()
+		ghost.Parts, ghost.Offsets, ghost.Frames = {}, {}, {}
+		for _, d in ipairs(model:GetDescendants()) do
+			if d:IsA("BasePart") then
+				table.insert(ghost.Parts, d)
+				table.insert(ghost.Offsets, pivot:ToObjectSpace(d.CFrame))
+			end
+		end
 	end
 	local d = (tonumber(myRow.LD) or 0) + RaceRules.GhostAt(data, tau)
 	local cf = RaceRoutes.CFrameAtD(route, math.min(d, route.RaceDistance), 0)
-	ghost.Model:PivotTo(cf)
+	for i, off in ipairs(ghost.Offsets) do
+		ghost.Frames[i] = cf * off
+	end
+	workspace:BulkMoveTo(ghost.Parts, ghost.Frames, Enum.BulkMoveMode.FireCFrameChanged)
 	ghost.D = d
 end
 

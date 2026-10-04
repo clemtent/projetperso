@@ -486,4 +486,28 @@ function ParkKit.Hand(model: Model?, side: string): CFrame?
 	return cf
 end
 
+-- Repère de la TÊTE d'un PNJ posé (groupe NpcG 2), point (0, 4,84, 0) du
+-- repos : centre du crâne (chapeau, nez de clown...) ; nil si inconnu
+local headCache: { [Model]: { Part: BasePart, Rest: CFrame } } = setmetatable({}, { __mode = "k" }) :: any
+function ParkKit.Head(model: Model?): CFrame?
+	if not model then
+		return nil
+	end
+	local entry = headCache[model]
+	if not entry or not entry.Part.Parent then
+		for _, d in ipairs(model:GetChildren()) do
+			if d:IsA("BasePart") and d:GetAttribute("NpcG") == 2 and typeof(d:GetAttribute("NpcRest")) == "CFrame" then
+				entry = { Part = d, Rest = d:GetAttribute("NpcRest") :: CFrame }
+				break
+			end
+		end
+		if not entry then
+			return nil
+		end
+		headCache[model] = entry
+	end
+	local s = tonumber(model:GetAttribute("NpcScale")) or 1
+	return entry.Part.CFrame * entry.Rest:Inverse() * CFrame.new(0, 4.84 * s, 0)
+end
+
 return ParkKit

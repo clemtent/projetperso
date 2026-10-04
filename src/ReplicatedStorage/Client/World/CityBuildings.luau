@@ -126,7 +126,8 @@ type Ctx = { Podium: boolean?, M: Model, F: CFrame, Spec: Spec, Seed: number, W:
 local function frontWindow(c: Ctx, x: number, y0: number, ww: number, hh: number, k: number)
 	local z = c.FZ
 	local lit = hash(c.Seed, k) < 0.33
-	local g = Box(c.M, "Window", c.F, x - ww / 2, x + ww / 2, y0, y0 + hh, z - 0.08, z, lit and WARM or GLASS, M.Glass)
+	-- (verre allumé : teinte chaude discrète le jour, néon la nuit — TownAtmosphere)
+	local g = Box(c.M, "Window", c.F, x - ww / 2, x + ww / 2, y0, y0 + hh, z - 0.08, z, lit and GLASS:Lerp(WARM, 0.45) or GLASS, M.Glass)
 	g.Reflectance = 0.12
 	if lit then
 		Glow(g)
@@ -387,7 +388,9 @@ local function glassFront(c: Ctx)
 	table.insert(holes, { -hw + 1.2, -dw / 2 - 0.8, 1.0, top, "glass" })
 	table.insert(holes, { dw / 2 + 0.8, hw - 1.2, 1.0, top, "glass" })
 	pierced(c, holes, c.Trim:Lerp(c.Wall, 0.5), M.Concrete)
-	signBoard(c, math.min(W - 4, 16), G - 2.5, WHITE, c.Trim)
+	if c.Kind ~= "Cinema" then -- (le cinéma a sa marquise)
+		signBoard(c, math.min(W - 4, 16), G - 2.5, WHITE, c.Trim)
+	end
 end
 
 -- façade "noble" : porte haute au centre, hautes fenêtres, marches
@@ -566,7 +569,7 @@ EXTRAS.Cinema = function(c)
 	Box(c.M, "Marquee", c.F, -c.W / 2 + 2, c.W / 2 - 2, c.G - 1.4, c.G + 0.6, c.FZ - 4.5, c.FZ, INK, M.Metal)
 	local bulbs = Box(c.M, "MarqueeBulbs", c.F, -c.W / 2 + 2.1, c.W / 2 - 2.1, c.G - 1.3, c.G + 0.5, c.FZ - 4.56, c.FZ - 4.5, rgb(255, 230, 150), M.SmoothPlastic)
 	Glow(bulbs)
-	Text(bulbs, Enum.NormalId.Front, "🎬 " .. Locale.T("NOW SHOWING") .. " · 🦖 · 🚀 · 👻", INK, rgb(255, 230, 150), Enum.Font.GothamBlack, 120, 20)
+	Text(bulbs, Enum.NormalId.Front, "🎬 " .. Locale.T("Cinema") .. " · " .. Locale.T("NOW SHOWING") .. " · 🦖 🚀 👻", INK, rgb(255, 230, 150), Enum.Font.GothamBlack, 120, 20)
 	local V = c.F * CFrame.new(-c.W / 2 + 1.2, c.G + 6, c.FZ - 1.4)
 	local v = Box(c.M, "VerticalSign", V, -0.3, 0.3, -5, 5, -1.3, 1.3, rgb(200, 40, 60), M.SmoothPlastic)
 	Glow(v)

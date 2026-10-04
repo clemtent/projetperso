@@ -91,6 +91,14 @@ local LocalPlayer = Players.LocalPlayer
 
 local CarClient = {}
 
+-- (v11, CARS11) pose de conduite procédurale (facultatif)
+local okDP, DriverPose = pcall(function()
+	return require(script.Parent:FindFirstChild("DriverPose") :: any)
+end)
+if not okDP or type(DriverPose) ~= "table" then
+	DriverPose = nil
+end
+
 CarClient.GARAGE_TAG = "DopamineGarage"
 CarClient.GUI_NAME = "CarGui"
 
@@ -2040,6 +2048,7 @@ type WheelAnim = {
 	SteerNow: number,
 	Radius: number,
 	Base: number,
+	WheelMotor: Motor6D?, -- (v11) volant (CarService : SteerWheelMotor)
 }
 local wheelAnims: { [Model]: WheelAnim | false } = {}
 local MAX_STEER = math.rad(30)
@@ -2078,7 +2087,10 @@ local function wheelAnimOf(model: Model): WheelAnim?
 		return nil
 	end
 	local positions = CarModels.WheelPositions(tostring(model:GetAttribute("CarId") or ""))
+	local hub = model:FindFirstChild("SteerHub")
+	local wheelMotor = hub and hub:FindFirstChild("SteerWheelMotor")
 	local anim: WheelAnim = {
+		WheelMotor = if wheelMotor and wheelMotor:IsA("Motor6D") then wheelMotor else nil,
 		Root = root,
 		Steer = steer,
 		Spin = spin,
@@ -2124,6 +2136,10 @@ local function animateWheels(dt: number)
 				local spinCF = CFrame.Angles(-a.Angle, 0, 0)
 				for _, motor in pairs(a.Spin) do
 					motor.Transform = spinCF
+				end
+				-- (v11) le volant tourne avec les roues (+ = à gauche)
+				if a.WheelMotor and a.WheelMotor.Parent then
+					a.WheelMotor.Transform = CFrame.Angles(0, 0, CarModels.SteeringWheelAngle(a.SteerNow))
 				end
 			end
 		end
@@ -2247,6 +2263,13 @@ function CarClient.Start(startOptions: any?)
 			watchCarsFolder(child)
 		end
 	end))
+	-- (v11, CARS11) pose de conduite (mains sur le volant, regard en marche arrière)
+	if DriverPose then
+		pcall(DriverPose.Start, function(model: Model): number
+			local a = wheelAnims[model]
+			return if a then a.SteerNow else 0
+		end)
+	end
 	local targetClock, hudClock = 0, 0
 	track(RunService.Heartbeat:Connect(function(dt: number)
 		if driving then
@@ -2297,6 +2320,9 @@ function CarClient.Stop()
 	end
 	started = false
 	stopDriving()
+	if DriverPose then
+		pcall(DriverPose.Stop)
+	end
 	for _, c in ipairs(connections) do
 		c:Disconnect()
 	end

@@ -409,17 +409,21 @@ local function computeSample(s: any, path: Path, i: number): { number }
 	if not cands then
 		return {}
 	end
+	local srcs = {}
+	local pad = BODY_PAD
 	local function collect(maxKind: number): { number }
 		local list = {}
+		table.clear(srcs)
 		for _, idx in ipairs(cands) do
 			local rect: Rect = s.Rects[idx]
 			if rect.Kind <= maxKind or rect.Kind == 3 then
 				for _, o in ipairs({ -0.45, 0, 0.45 }) do
 					local q = p + f * o
-					local t0, t1 = rayRect(q.X, q.Z, r.X, r.Z, rect, BODY_PAD)
+					local t0, t1 = rayRect(q.X, q.Z, r.X, r.Z, rect, pad)
 					if t0 and t1 and t1 > -BAND and t0 < BAND then
 						table.insert(list, math.max(t0, -BAND - 0.5))
 						table.insert(list, math.min(t1, BAND + 0.5))
+						srcs[rect.Src or "zone"] = string.format("%.1f..%.1f", t0, t1)
 					end
 				end
 			end
@@ -428,11 +432,28 @@ local function computeSample(s: any, path: Path, i: number): { number }
 	end
 	local m = collect(2)
 	if fullyBlocked(m) then
+		-- (passage étroit : on se faufile, épaules rentrées)
+		pad = 0.48
+		m = collect(2)
+	end
+	if fullyBlocked(m) then
 		-- (passage piéton : la bordure coupe le chemin) sans les bordures
+		pad = BODY_PAD
 		m = collect(1)
+		if fullyBlocked(m) then
+			pad = 0.48
+			m = collect(1)
+		end
 		if fullyBlocked(m) then
 			-- (rien ne passe : on ignore tout pour ne jamais rester planté)
 			s.Stuck += 1
+			if #s.StuckInfo < 40 then
+				local parts = {}
+				for k, v in pairs(srcs) do
+					table.insert(parts, k .. "[" .. v .. "]")
+				end
+				table.insert(s.StuckInfo, path.Name .. "@" .. math.floor(sPos) .. " " .. table.concat(parts, " "))
+			end
 			m = {}
 		end
 	end
@@ -456,6 +477,7 @@ end
 -- Relevé des obstacles fixes (une fois, au chargement)
 local function collectObstacles(s: any, town: Instance, data: Instance, count: number)
 	s.Rects, s.Grid, s.Stuck, s.Computed = {}, {}, 0, 0
+	s.StuckInfo = {}
 	local ny = 0
 	-- 1) mobilier publié (+ bordures de trottoir)
 	for _, cell in ipairs(data:GetChildren()) do
@@ -1188,41 +1210,73 @@ local function clearance(s: any, pos: Vector3): (number, number, string?)
 	return best, kind, src
 end
 
--- (v11) tour de la place : rayon choisi pour chaque direction afin de
--- contourner les obstacles fixes (massifs de fleurs, manège, scène et
--- public du concert…), puis lissé
+-- (v11) tour de la place : pour chaque direction, un rayon LIBRE (loin des
+-- massifs de fleurs, du manège, de la scène et du public du concert…),
+-- choisi pour rester proche de 26 et varier en douceur (Viterbi sur deux
+-- tours : la boucle se referme sans saut)
 local function plazaRing(s: any, plaza: CFrame): { Vector3 }
 	local N = 72
 	local need = BODY_PAD + 0.9
-	local radii = table.create(N, 26)
+	local R0, R1, DR = 9, 62, 0.5
+	local nr = math.floor((R1 - R0) / DR) + 1
+	local okR: { { boolean } } = table.create(N)
 	for i = 1, N do
 		local ang = (i - 1) / N * math.pi * 2
-		local r = 26
-		while r <= 62 do
+		local row = table.create(nr, false)
+		for k = 1, nr do
+			local r = R0 + (k - 1) * DR
 			local p = plaza.Position + Vector3.new(math.sin(ang) * r, 0, math.cos(ang) * r)
-			if clearance(s, p) > need then
-				break
-			end
-			r += 0.5
+			row[k] = clearance(s, p) > need
 		end
-		radii[i] = math.min(r, 62)
+		okR[i] = row
 	end
-	-- (lissage : on s'écarte progressivement autour d'un détour)
-	local smooth = table.create(N, 26)
-	for i = 1, N do
-		local best = radii[i]
-		for k = -4, 4 do
-			local j = (i - 1 + k) % N + 1
-			best = math.max(best, radii[j] - math.abs(k) * 2.6)
+	local BIG = 1e9
+	local cost = table.create(nr, 0)
+	local back: { { number } } = {}
+	for k = 1, nr do
+		cost[k] = 0
+	end
+	for step = 1, 2 * N do
+		local i = (step - 1) % N + 1
+		local row = okR[i]
+		local nc = table.create(nr, BIG)
+		local bk = table.create(nr, 1)
+		for k = 1, nr do
+			local r = R0 + (k - 1) * DR
+			local base = (row[k] and 0 or 400) + math.abs(r - 26) * 0.15
+			local best, arg = BIG, k
+			for k2 = math.max(1, k - 4), math.min(nr, k + 4) do
+				local c = cost[k2] + ((k - k2) * DR) ^ 2 * 0.35
+				if c < best then
+					best, arg = c, k2
+				end
+			end
+			nc[k] = best + base
+			bk[k] = arg
 		end
-		smooth[i] = best
+		cost = nc
+		back[step] = bk
+	end
+	-- remontée : on garde le second tour
+	local k = 1
+	for kk = 2, nr do
+		if cost[kk] < cost[k] then
+			k = kk
+		end
+	end
+	local radii = table.create(N, 26)
+	for step = 2 * N, N + 1, -1 do
+		radii[(step - 1) % N + 1] = R0 + (k - 1) * DR
+		k = back[step][k]
 	end
 	local ring = {}
+	local detour = 0
 	for i = 1, N do
 		local ang = (i - 1) / N * math.pi * 2
-		table.insert(ring, plaza.Position + Vector3.new(math.sin(ang) * smooth[i], 0.08, math.cos(ang) * smooth[i]))
+		detour = math.max(detour, math.abs(radii[i] - 26))
+		table.insert(ring, plaza.Position + Vector3.new(math.sin(ang) * radii[i], 0.08, math.cos(ang) * radii[i]))
 	end
-	s.PlazaDetour = math.max(table.unpack(smooth)) - 26
+	s.PlazaDetour = detour
 	return ring
 end
 
@@ -1555,7 +1609,7 @@ function TownPeople.Lanes(pathName: string?, sPos: number?): any
 		end
 		return nil
 	end
-	return { Rects = #s.Rects, SolidParts = s.SolidParts, Computed = s.Computed, Stuck = s.Stuck, Zones = #s.Zones, PlazaDetour = s.PlazaDetour }
+	return { Rects = #s.Rects, SolidParts = s.SolidParts, Computed = s.Computed, Stuck = s.Stuck, Zones = #s.Zones, PlazaDetour = s.PlazaDetour, StuckInfo = s.StuckInfo }
 end
 
 -- (tests) distance (XZ) de `pos` au plus proche obstacle fixe solide ou réservé

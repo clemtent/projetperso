@@ -250,6 +250,20 @@ function TownShops.Shop(parent: Instance, cf: CFrame, spec: ShopSpec, seed: numb
 	end
 	part(model, "Drainpipe", Vector3.new(0.4, height, 0.4), cf * CFrame.new(-hw + 0.5, height / 2, -0.3), C.MetalLight, M.Metal, "deco")
 	attributes(model, spec, "Items", cf * CFrame.new(0, FLOOR_TOP, D / 2), Vector3.new(W - 2, CEIL - FLOOR_TOP, D - 2), cf * CFrame.new(0, FLOOR_TOP, 0))
+	-- (v11, CITY11) arrière et côtés finis côté client (TownFacades, style
+	-- "EnterShop" : fenêtres, porte de service, jardinet) : plus de dos nus
+	model:SetAttribute("FacadeStyle", "EnterShop")
+	model:SetAttribute("FacadeCF", cf)
+	model:SetAttribute("W", W)
+	model:SetAttribute("D", D)
+	model:SetAttribute("Floors", 2)
+	model:SetAttribute("Height", height)
+	model:SetAttribute("Seed", seed)
+	model:SetAttribute("Wall", wall)
+	model:SetAttribute("Trim", trim)
+	model:SetAttribute("Accent", spec.Awning[1])
+	model:SetAttribute("GroundH", BODY_Y)
+	model:SetAttribute("FloorH", UPPER_H)
 	return model
 end
 

@@ -151,15 +151,23 @@ local function solveArm(S: Vector3, T: Vector3, a: number, b: number, pole: Vect
 	return E, W
 end
 
--- Repère d'un segment : son +Y va de `lo` (bout bas) vers `hi` (articulation
--- haute), son -Z du côté où se plie l'articulation suivante (`bendTo`)
-local function segmentFrame(hi: Vector3, lo: Vector3, bendTo: Vector3): CFrame
+-- Rotation d'un segment : la direction locale `down` (de l'articulation haute
+-- vers la basse, repère de la pièce) va de `hi` vers `lo` (monde), le -Z de la
+-- pièce du côté où se plie l'articulation suivante (`bendTo`)
+local function segmentFrame(hi: Vector3, lo: Vector3, bendTo: Vector3, down: Vector3): CFrame
 	local y = hi - lo
 	y = if y.Magnitude > 1e-4 then y.Unit else Vector3.yAxis
 	local f = bendTo - y * bendTo:Dot(y)
 	local z = if f.Magnitude > 1e-4 then -f.Unit else Vector3.zAxis
 	local x = y:Cross(z)
-	return CFrame.fromMatrix(Vector3.zero, x, y, z)
+	local world = CFrame.fromMatrix(Vector3.zero, x, y, z)
+	-- base locale équivalente (le bras R15 pend avec un petit décalage en X)
+	local yl = if down.Magnitude > 1e-4 then -down.Unit else Vector3.yAxis
+	local zl = Vector3.zAxis - yl * yl.Z
+	zl = if zl.Magnitude > 1e-4 then zl.Unit else Vector3.zAxis
+	local xl = yl:Cross(zl)
+	local localB = CFrame.fromMatrix(Vector3.zero, xl, yl, zl)
+	return world * localB:Inverse()
 end
 
 local function poseArm(e: Entry, side: string, upperCF: CFrame, target: Vector3, pole: Vector3, weight: number)
@@ -175,15 +183,15 @@ local function poseArm(e: Entry, side: string, upperCF: CFrame, target: Vector3,
 	local S = (upperCF * sh.Motor.C0).Position
 	local E, W = solveArm(S, target, a, b, pole)
 	-- bras : +Y de l'épaule vers le haut du segment, plié vers l'avant-bras
-	local rotU = segmentFrame(S, E, W - E)
+	local downU = el.Motor.C0.Position - sh.Motor.C1.Position
+	local downL = wr.Motor.C0.Position - el.Motor.C1.Position
+	local rotU = segmentFrame(S, E, W - E, downU)
 	local upperArm = CFrame.new(S) * rotU * CFrame.new(-sh.Motor.C1.Position)
-	-- (épaule exactement à S : décalage par le point d'attache C1)
-	upperArm = upperArm * CFrame.new(0, 0, 0)
 	local tS = transformFor(upperCF, sh.Motor, upperArm)
 	tS = tS - tS.Position -- (rotation seule : jamais d'étirement)
 	local armCF = child(upperCF, sh.Motor, tS)
 	local Eact = (armCF * el.Motor.C0).Position
-	local rotL = segmentFrame(Eact, W, -(rotU.LookVector))
+	local rotL = segmentFrame(Eact, W, -(rotU.LookVector), downL)
 	local lowerArm = CFrame.new(Eact) * rotL * CFrame.new(-el.Motor.C1.Position)
 	local tE = transformFor(armCF, el.Motor, lowerArm)
 	tE = tE - tE.Position

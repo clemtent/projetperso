@@ -537,7 +537,7 @@ local glossOn = false
 local floorsDirty = false
 local charVersion: { [Model]: number } = {}
 local charConns: { [Model]: { RBXScriptConnection } } = {}
-local lastCount = 0
+local frameNo = 0 -- images vivantes (≈ 30 / s)
 
 -- SurfaceGui dans le PlayerGui (Adornee = la toile) ; jamais remise à zéro
 -- à la réapparition du personnage (ResetOnSpawn = false)
@@ -843,7 +843,7 @@ end
 local function buildCopy(source: Model, world: WorldModel, plane: Plane): CharCopy
 	local model = Instance.new("Model")
 	model.Name = "Reflet"
-	local copy: CharCopy = { Model = model, Version = charVersion[source] or 1, Count = #source:GetDescendants(), Pairs = {}, Built = os.clock() }
+	local copy: CharCopy = { Model = model, Version = charVersion[source] or 1, Count = #source:GetDescendants(), Pairs = {}, Built = frameNo }
 	pcall(function()
 		local hum = Instance.new("Humanoid")
 		hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
@@ -1305,11 +1305,9 @@ local function updateChars(disp: Display)
 		want[source] = true
 		watchCharacter(source)
 	end
-	local now = os.clock()
 	-- (filet de sécurité si un DescendantAdded manque : nombre de descendants, 2 fois / s)
 	local counts: { [Model]: number } = {}
-	if now - lastCount > 0.5 then
-		lastCount = now
+	if frameNo % 15 == 0 then
 		for _, source in ipairs(sources) do
 			counts[source] = #source:GetDescendants()
 		end
@@ -1320,7 +1318,7 @@ local function updateChars(disp: Display)
 			if not want[source] or not source:IsDescendantOf(workspace) then
 				copy.Model:Destroy()
 				s.Chars[source] = nil
-			elseif now - copy.Built > 0.3 and (copy.Version ~= (charVersion[source] or 1) or (counts[source] ~= nil and counts[source] ~= copy.Count)) then
+			elseif frameNo - copy.Built >= 9 and (copy.Version ~= (charVersion[source] or 1) or (counts[source] ~= nil and counts[source] ~= copy.Count)) then
 				-- (accessoire / outil ajouté ou retiré : copie refaite)
 				copy.Model:Destroy()
 				s.Chars[source] = nil
@@ -1698,6 +1696,7 @@ local function step(dt: number)
 		return
 	end
 	frameClock = 0
+	frameNo += 1
 	local camCF = cam.CFrame
 	for _, disp in pairs(displays) do
 		if not disp.Part:IsDescendantOf(workspace) then

@@ -1168,8 +1168,9 @@ local function grantGoldDiamond(player: Player, rd: any, routeId: string): boole
 	if not bank or type(bank.GrantDiamonds) ~= "function" then
 		return false
 	end
+	-- (BANK11) BankService:GrantDiamonds(player, amount, source, quiet) -> diamants donnés (0 : plafond du jour)
 	local ok, granted = pcall(bank.GrantDiamonds, bank, player, 1, "Race", true)
-	if ok and granted ~= false then
+	if ok and (tonumber(granted) or 0) > 0 then
 		stat.G = true
 		return true
 	end

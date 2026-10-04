@@ -932,6 +932,12 @@ local function jobsFor(b: Building, parent: Model): { () -> () }
 			hallExtras(b, parent)
 		end)
 		return jobs
+	elseif b.Style == "EnterShop" then
+		-- (v11, CITY11) boutique où l'on entre (TownShops) : arrière + côtés finis
+		table.insert(jobs, function()
+			decorShopExtras(b, parent)
+		end)
+		return jobs
 	elseif b.Style == "DecorShop" then
 		-- (v11, CITY11) boutique de la place ouverte : on y entre
 		local spec = string.match(b.Model.Name, "^Shop_(.+)$") or ""
