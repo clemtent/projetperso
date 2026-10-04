@@ -353,9 +353,9 @@ step("Grid", function(self)
 	local roofC = Color3.fromRGB(64, 64, 72)
 	local roofW = (T[2].X - T[1].X) + 1.8
 	local z0, z1 = T[1].Z - 0.9, T[3].Z + 0.9
-	local zm, half = (z0 + z1) / 2, (z1 - z0) / 2
-	newPart(self, "RoofFront", Vector3.new(roofW, rise, half), self.CF * CFrame.new(0, roofY + rise / 2, z0 + half / 2), roofC, M.Fabric, nil, "WedgePart")
-	newPart(self, "RoofBack", Vector3.new(roofW, rise, half), self.CF * CFrame.new(0, roofY + rise / 2, z1 - half / 2) * CFrame.Angles(0, math.pi, 0), roofC, M.Fabric, nil, "WedgePart")
+	local zm, roofHalf = (z0 + z1) / 2, (z1 - z0) / 2
+	newPart(self, "RoofFront", Vector3.new(roofW, rise, roofHalf), self.CF * CFrame.new(0, roofY + rise / 2, z0 + roofHalf / 2), roofC, M.Fabric, nil, "WedgePart")
+	newPart(self, "RoofBack", Vector3.new(roofW, rise, roofHalf), self.CF * CFrame.new(0, roofY + rise / 2, z1 - roofHalf / 2) * CFrame.Angles(0, math.pi, 0), roofC, M.Fabric, nil, "WedgePart")
 	box(self, "RoofRidge", Vector3.new(roofW + 0.2, 0.16, 0.36), CFrame.new(0, roofY + rise + 0.02, zm), Color3.fromRGB(210, 210, 216), M.Metal)
 	box(self, "FasciaFront", Vector3.new(roofW + 0.2, 0.36, 0.12), CFrame.new(0, roofY + 0.1, z0 - 0.07), PINK, M.SmoothPlastic)
 	box(self, "FasciaBack", Vector3.new(roofW + 0.2, 0.36, 0.12), CFrame.new(0, roofY + 0.1, z1 + 0.07), PINK, M.SmoothPlastic)
